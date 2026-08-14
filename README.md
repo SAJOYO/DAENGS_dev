@@ -1,1 +1,112 @@
-# final_proj
+# DAENGS
+
+Next.js 프론트엔드를 PM2 + nginx 로 자체 서버에 배포합니다.
+
+```
+브라우저 :80 → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next)
+```
+
+## 요구 사항
+
+- Node.js 20 이상
+- Docker Desktop (**Linux 컨테이너 모드**)
+- PM2 (`npm install -g pm2`)
+
+## 로컬 개발 (개발 PC)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+→ http://localhost:3000
+
+## 배포
+
+- `dev` 브랜치에 push/merge 하면 자동으로 배포됩니다.
+- Actions 탭에서 수동 실행도 가능합니다.
+- 배포는 **서버 PC 에 등록된 self-hosted 러너**가 수행하므로,
+  러너가 실행 중이 아니면 작업이 대기 상태로 멈춥니다.
+
+## 서버 PC 재부팅 후 (수동 실행)
+
+재부팅하면 아래 둘은 **자동으로 올라오지 않습니다.**
+서버 PC 에서 PowerShell 을 열어 직접 실행하세요. (의도적으로 자동화하지 않았습니다)
+
+### 1. PM2 — 서비스 기동
+
+```powershell
+pm2 resurrect
+```
+
+`pm2 save` 로 저장해 둔 프로세스 목록을 복원합니다. 목록이 비어 있다면 직접 시작하세요.
+
+```powershell
+cd C:\IDE\actions-runner\_work\DAENGS_dev\DAENGS_dev
+pm2 start ecosystem.config.js
+```
+
+### 2. GitHub Actions 러너 — 배포 대기
+
+```powershell
+cd C:\ide\actions-runner
+./run.cmd
+```
+
+이 창을 닫으면 러너가 멈춰 배포가 되지 않습니다. 계속 열어 두세요.
+
+> **순서를 지켜 주세요.** PM2 데몬을 러너보다 먼저 띄워야 합니다.
+> 러너 안에서 PM2 데몬이 처음 생성되면, 배포 작업이 끝날 때 데몬이 함께 종료되어
+> 배포는 성공했는데 서비스가 내려가 있는 상태가 됩니다.
+
+nginx 는 `restart: unless-stopped` 설정이라 Docker Desktop 이 시작되면 자동으로 살아납니다.
+
+## 운영 명령어 (서버 PC)
+
+아래 명령은 모두 서버 PC 에서 실행합니다.
+
+### PM2
+
+```powershell
+pm2 list                  # 프로세스 목록
+pm2 logs daengs-web       # 실시간 로그
+pm2 monit                 # CPU / 메모리 대시보드
+pm2 reload daengs-web     # 무중단 재시작
+pm2 restart daengs-web    # 전부 내렸다 올림 (순간 끊김)
+```
+
+### nginx
+
+```powershell
+docker compose up -d      # 기동 / 설정 반영
+docker compose ps         # 상태 확인
+docker compose logs -f    # 로그
+docker compose down       # 중지
+```
+
+`nginx/default.conf` 를 수정했다면 `docker compose up -d` 를 다시 실행해야 반영됩니다.
+
+### 롤백
+
+배포는 커밋 해시별 폴더에 쌓이고 `current` 링크가 그중 하나를 가리킵니다.
+링크만 되돌리면 재빌드 없이 이전 버전으로 돌아갑니다.
+
+```powershell
+Get-ChildItem C:\deploy\daengs\releases      # 되돌릴 버전 확인
+
+cmd /c rmdir "C:\deploy\daengs\current"
+New-Item -ItemType Junction -Path "C:\deploy\daengs\current" `
+         -Target "C:\deploy\daengs\releases\<커밋해시>"
+pm2 reload daengs-web
+```
+
+## 프로젝트 구조
+
+```
+frontend/                 Next.js 앱
+nginx/default.conf        리버스 프록시 설정
+docker-compose.yml        nginx 컨테이너
+ecosystem.config.js       PM2 설정
+.github/workflows/        배포 워크플로우
+```

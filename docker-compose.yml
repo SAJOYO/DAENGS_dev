@@ -1,0 +1,20 @@
+services:
+  nginx:
+    image: nginx:1.31.1
+    container_name: daengs-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    # 컨테이너 안에서 호스트(이 PC)로 접속하기 위한 이름.
+    # Docker Desktop 은 기본 제공하지만, 리눅스 서버에서도 동작하도록 명시해 둡니다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 나중에 FastAPI 를 붙일 자리
+  # backend:
+  #   build: ./backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"

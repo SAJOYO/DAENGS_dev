@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: # Actions 탭에서 수동 실행
+
+# 배포가 겹치지 않도록. 새 배포가 오면 진행 중인 건 취소합니다.
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
+    runs-on: [self-hosted, Windows, X64]
+
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@v5
+        with:
+          # 기본값(true)이면 git clean -ffdx 가 돌아서
+          # node_modules 와 .next/cache 까지 지워집니다. 매번 콜드 빌드가 되므로 끕니다.
+          clean: false
+
+      - name: PM2 설치 확인
+        run: |
+          if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+            npm install -g pm2
+          }
+          pm2 -v
+
+      - name: 의존성 설치
+        working-directory: frontend
+        run: npm ci
+
+      - name: 빌드
+        working-directory: frontend
+        run: npm run build
+
+      - name: standalone 에 정적 파일 복사
+        run: |
+          # standalone 산출물은 public 과 .next/static 을 포함하지 않으므로
+          # 직접 넣어 줘야 이미지/CSS 가 정상적으로 서빙됩니다.
+          $sa = "frontend\.next\standalone"
+          if (Test-Path "$sa\public")       { Remove-Item "$sa\public"       -Recurse -Force }
+          if (Test-Path "$sa\.next\static") { Remove-Item "$sa\.next\static" -Recurse -Force }
+          Copy-Item "frontend\public"       "$sa\public"       -Recurse -Force
+          Copy-Item "frontend\.next\static" "$sa\.next\static" -Recurse -Force
+
+      - name: PM2 무중단 재시작
+        run: |
+          # 처음이면 start, 이미 떠 있으면 reload(워커를 하나씩 교체 → 무중단)
+          pm2 startOrReload ecosystem.config.js --update-env
+          pm2 save
+          pm2 list

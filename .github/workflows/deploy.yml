@@ -10,6 +10,10 @@ concurrency:
   group: deploy
   cancel-in-progress: true
 
+env:
+  DEPLOY_ROOT: 'C:\deploy\daengs'
+  KEEP_RELEASES: 3 # 롤백용으로 남겨 둘 이전 릴리스 개수
+
 jobs:
   deploy:
     # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
@@ -43,22 +47,58 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: standalone 에 정적 파일 복사
+      - name: 릴리스 폴더 구성
         run: |
-          # standalone 산출물은 public 과 .next/static 을 포함하지 않으므로
-          # 직접 넣어 줘야 이미지/CSS 가 정상적으로 서빙됩니다.
-          $sa = "frontend\.next\standalone"
-          if (Test-Path "$sa\public")       { Remove-Item "$sa\public"       -Recurse -Force }
-          if (Test-Path "$sa\.next\static") { Remove-Item "$sa\.next\static" -Recurse -Force }
-          Copy-Item "frontend\public"       "$sa\public"       -Recurse -Force
-          Copy-Item "frontend\.next\static" "$sa\.next\static" -Recurse -Force
+          $rel = Join-Path $env:DEPLOY_ROOT "releases\${{ github.sha }}"
+          if (Test-Path $rel) { Remove-Item $rel -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $rel | Out-Null
+
+          # standalone 산출물 (server.js, .next, node_modules)
+          Copy-Item "frontend\.next\standalone\*" $rel -Recurse -Force
+
+          # standalone 에는 아래 둘이 포함되지 않으므로 직접 넣어 줘야
+          # CSS 와 이미지가 정상적으로 서빙됩니다.
+          Copy-Item "frontend\.next\static" "$rel\.next\static" -Recurse -Force
+          Copy-Item "frontend\public"       "$rel\public"       -Recurse -Force
+
+          Write-Host "릴리스 준비 완료: $rel"
+
+      - name: current 링크 교체
+        run: |
+          $cur = Join-Path $env:DEPLOY_ROOT "current"
+          $rel = Join-Path $env:DEPLOY_ROOT "releases\${{ github.sha }}"
+
+          # ⚠ junction 을 지울 때 Remove-Item -Recurse 를 쓰면 링크가 아니라
+          #   "링크가 가리키는 실제 폴더의 내용"이 지워질 수 있습니다.
+          #   rmdir 은 (/s 없이 쓰면) 링크만 제거하므로 안전합니다.
+          if (Test-Path $cur) { cmd /c rmdir "$cur" }
+
+          New-Item -ItemType Junction -Path $cur -Target $rel | Out-Null
+          Write-Host "current --> $rel"
 
       - name: PM2 무중단 재시작
         run: |
-          # 처음이면 start, 이미 떠 있으면 reload(워커를 하나씩 교체 → 무중단)
+          # 처음이면 start, 이미 떠 있으면 reload(워커를 하나씩 교체 → 무중단).
+          # 새로 뜨는 워커가 방금 갈아끼운 current 를 읽습니다.
           pm2 startOrReload ecosystem.config.js --update-env
           pm2 save
           pm2 list
+
+      - name: 오래된 릴리스 정리
+        run: |
+          $dir = Join-Path $env:DEPLOY_ROOT "releases"
+          Get-ChildItem $dir -Directory |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip ([int]$env:KEEP_RELEASES) |
+            ForEach-Object {
+              # 아직 워커가 붙잡고 있는 폴더는 지워지지 않습니다. 다음 배포 때 정리됩니다.
+              try {
+                Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
+                Write-Host "삭제: $($_.Name)"
+              } catch {
+                Write-Host "건너뜀(사용 중): $($_.Name)"
+              }
+            }
 
       - name: nginx 기동 / 설정 반영
         run: |

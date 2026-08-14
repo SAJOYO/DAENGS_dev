@@ -59,3 +59,10 @@ jobs:
           pm2 startOrReload ecosystem.config.js --update-env
           pm2 save
           pm2 list
+
+      - name: nginx 기동 / 설정 반영
+        run: |
+          # nginx/default.conf 를 고쳤으면 여기서 반영됩니다.
+          # 이미 떠 있고 변경이 없으면 아무 일도 하지 않습니다.
+          docker compose up -d
+          docker compose ps

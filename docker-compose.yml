@@ -11,10 +11,3 @@ services:
     # Docker Desktop 은 기본 제공하지만, 리눅스 서버에서도 동작하도록 명시해 둡니다.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-  # 나중에 FastAPI 를 붙일 자리
-  # backend:
-  #   build: ./backend
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8000:8000"

@@ -1,0 +1,23 @@
+[project]
+name = "daengs-backend"
+version = "0.1.0"
+description = "DAENGS 백엔드 API"
+readme = "README.md"
+authors = [
+    { name = "choiyc05", email = "choiyc05@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "pydantic-settings>=2.15.0",
+]
+
+# uv run dev / uv run run 으로 부릅니다.
+# 각각 fastapi dev / fastapi run 과 같은 설정입니다.
+[project.scripts]
+dev = "daengs_backend.main:dev"
+run = "daengs_backend.main:run"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"

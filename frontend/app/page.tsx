@@ -19,9 +19,9 @@ const consoleSections = [
 
 const documents = [
   {
-    title: "8/22 멘토링 — 하이브리드 RAG 실험",
+    title: "8/22 멘토링 — 오늘 확인할 의사결정 3건",
     description:
-      "견주 질문 20건으로 벡터 검색과 벡터+그래프 검색을 비교한 결과와 논의할 질문.",
+      "다견 컨텍스트 분리, 오케스트레이션 계약, Neo4j 그래프 실험. 앞의 두 건은 순서대로 이어지고 그래프는 별도 기술 검토입니다.",
     href: "/mentoring/0822.html",
   },
 ];

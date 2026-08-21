@@ -147,6 +147,7 @@ frontend/                 Next.js 앱
 backend/                  FastAPI 앱 (uv, Python 3.12)
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        nginx + pgvector 컨테이너
+docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)
 db/init/                  DB 최초 기동 시 실행되는 SQL (확장 / 스키마 / 트리거)
 db/indexes.sql            인덱스. 적재 후 수동 실행
 .env.example              환경 변수 서식 (최상단은 compose 용, backend/ 는 앱 용)

@@ -15,6 +15,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) 컨테이너 |
+| `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지. `docker build -t uv:1 docker/uv` |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |

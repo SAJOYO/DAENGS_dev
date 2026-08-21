@@ -55,7 +55,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로
   변경분이 보이면 그냥 같이 커밋하면 됩니다. `frontend/CLAUDE.md` 는 그 파일을 참조만 합니다.
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
-  접속 정보는 `.env` (서식은 `.env.example`). `db/init/` 은 최초 1회만 실행되므로,
+  접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
@@ -65,6 +65,9 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `LIKE` 인덱스와 비교 속도에서 유리합니다. 영문 대소문자나 한글·영문 혼합 정렬이
   필요한 쿼리에서만 `ORDER BY x COLLATE "ko-KR-x-icu"` 를 붙이세요.
   DB 기본값을 바꾸려면 볼륨을 지우고 다시 만들어야 합니다.
+- **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
+  `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
+  backend 는 아직 DB 를 쓰지 않습니다 — 붙일 때 접속 정보를 어디에 둘지 정하세요.
 - **CORS 는 로컬 개발용입니다.** 배포 환경에서는 nginx 가 `/api/` 를 같은 오리진으로
   프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는

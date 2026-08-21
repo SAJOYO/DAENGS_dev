@@ -1,15 +1,21 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
+# 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
-    """환경 변수 / .env 로 덮어쓸 수 있는 설정.
+    """환경 변수 / backend/.env 로 덮어쓸 수 있는 설정.
 
     예) DAENGS_CORS_ORIGINS='["http://localhost:3000","https://daengs.example"]'
     """
 
     model_config = SettingsConfigDict(
         env_prefix="DAENGS_",
-        env_file=".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )

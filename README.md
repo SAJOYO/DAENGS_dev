@@ -29,11 +29,15 @@ npm run dev
 
 ```powershell
 cd backend
+Copy-Item .env.example .env
 uv sync
 uv run dev
 ```
 
 의존성은 `uv add <패키지>` 로 추가합니다. `pyproject.toml` 을 직접 고치면 `uv.lock` 과 어긋납니다.
+
+환경 변수 파일은 두 개입니다. 최상단 `.env` 는 compose(Postgres, pgAdmin)가, `backend/.env` 는
+앱이 읽습니다. 각 폴더의 `.env.example` 을 복사해서 채우세요.
 
 ## 배포
 
@@ -111,7 +115,7 @@ docker compose exec pgvector psql -U postgres -d vectordb   # 콘솔
 docker compose --profile tools up -d                        # pgAdmin 함께 (http://localhost:5050)
 ```
 
-접속 정보는 `.env` 로 지정합니다. `.env.example` 을 복사해서 쓰세요.
+DB 접속 정보는 최상단 `.env` 로 지정합니다. `.env.example` 을 복사해서 쓰세요.
 
 ```powershell
 Copy-Item .env.example .env
@@ -145,7 +149,7 @@ nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        nginx + pgvector 컨테이너
 db/init/                  DB 최초 기동 시 실행되는 SQL (확장 / 스키마 / 트리거)
 db/indexes.sql            인덱스. 적재 후 수동 실행
-.env.example              환경 변수 서식
+.env.example              환경 변수 서식 (최상단은 compose 용, backend/ 는 앱 용)
 ecosystem.config.js       PM2 설정 (프론트)
 docs/                     프로젝트 문서
 .github/workflows/        배포 워크플로우

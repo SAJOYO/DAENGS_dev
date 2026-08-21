@@ -3,8 +3,8 @@
 Next.js 프론트엔드와 FastAPI 백엔드를 PM2 + nginx 로 자체 서버에 배포합니다.
 
 ```
-브라우저 :80 → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next)
-                              → host.docker.internal:8000 → FastAPI   (배포 연동 예정)
+daengs.~     :80   → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next, 호스트)
+daengback.~  :8000 → nginx 컨테이너 → backend:8000              (FastAPI, 컨테이너)
 ```
 
 ## 요구 사항
@@ -96,7 +96,7 @@ pm2 restart daengs-web    # 전부 내렸다 올림 (순간 끊김)
 ### 컨테이너 (nginx + pgvector)
 
 ```powershell
-docker compose up -d          # 전체 기동 / 설정 반영 (nginx + pgvector)
+docker compose up -d          # 전체 기동 / 설정 반영 (nginx + backend + pgvector)
 docker compose ps             # 상태 확인
 docker compose logs -f        # 로그
 docker compose down           # 중지 (데이터는 남습니다)
@@ -107,6 +107,19 @@ docker compose up -d nginx    # 하나만 올리기
 `nginx/default.conf` 를 수정했다면 `docker compose up -d` 를 다시 실행해야 반영됩니다.
 
 컨테이너는 둘 다 `restart: unless-stopped` 라 Docker Desktop 이 시작되면 자동으로 살아납니다.
+
+### backend
+
+```powershell
+docker compose logs -f backend      # 로그
+docker compose restart backend      # 의존성(uv.lock)을 바꿨을 때
+```
+
+소스는 `backend/src` 를 마운트해서 씁니다. 파일을 고치면 컨테이너 안에서 자동으로
+리로드되므로 재시작이 필요 없습니다. **의존성을 바꿨을 때만** 위 restart 를 실행하세요.
+(`uv sync` 는 컨테이너가 뜰 때만 돕니다)
+
+backend 컨테이너는 포트를 열지 않습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
 
 ### pgvector (PostgreSQL 18)
 

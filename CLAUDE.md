@@ -15,7 +15,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) 컨테이너 |
-| `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지. `docker build -t uv:1 docker/uv` |
+| `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |
@@ -55,6 +55,12 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로
   변경분이 보이면 그냥 같이 커밋하면 됩니다. `frontend/CLAUDE.md` 는 그 파일을 참조만 합니다.
+- **backend 는 compose 로 띄우고 개발 모드로 돕니다.** `backend/src` 를 마운트해
+  파일을 고치면 컨테이너가 리로드합니다. 재시작이 필요한 건 의존성을 바꿨을 때뿐이고,
+  그때는 `docker compose restart backend` 를 직접 실행하세요 (워크플로우는 건드리지 않습니다).
+- **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
+  `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라
+  CORS 가 필요합니다 — `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.

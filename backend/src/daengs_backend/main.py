@@ -1,7 +1,13 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
+
+# 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
+# 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
+SRC_DIR = Path(__file__).resolve().parents[1]
 
 app = FastAPI(title="DAENGS API")
 
@@ -25,9 +31,10 @@ def dev() -> None:
 
     uvicorn.run(
         "daengs_backend.main:app",
-        host="127.0.0.1",
-        port=8000,
+        host=settings.host,
+        port=settings.port,
         reload=True,
+        reload_dirs=[str(SRC_DIR)],
     )
 
 
@@ -38,7 +45,7 @@ def run() -> None:
     uvicorn.run(
         "daengs_backend.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=settings.port,
         reload=False,
     )
 

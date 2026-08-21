@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8/22 멘토링 — 강아지 훈련 하이브리드 RAG 실험</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root{--bg:#faf9f5;--card:#fff;--text:#1a1a18;--muted:#6b6a63;--rule:#e3e1d9;--accent:#b5651d;--soft:#f4e6d7;--code:#f1efe7;--head:#efeadd}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#17160f;--card:#201f17;--text:#ece9df;--muted:#a6a294;--rule:#37352a;--accent:#e2a76f;--soft:#332818;--code:#262418;--head:#2b2919}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.68 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif}.wrap{max-width:860px;margin:auto;padding:52px 24px 90px}header{margin-bottom:36px}h1{margin:0 0 14px;font-size:1.7em;line-height:1.35}h2{margin:0 0 16px;font-size:1.2em;display:flex;gap:10px;align-items:baseline}h2 .num{color:var(--accent)}h3{margin:22px 0 10px;font-size:.88em;color:var(--muted)}p{margin:0 0 12px}ul{margin:0 0 6px;padding-left:20px}li{margin-bottom:6px}code{background:var(--code);padding:1px 5px;border-radius:4px;font:.88em/1.4 "SF Mono",Menlo,Consolas,monospace}.intro,.key{background:var(--soft);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:13px 16px}.intro{margin-bottom:18px}.key{margin-bottom:18px}.label{display:block;margin-bottom:4px;color:var(--accent);font-size:.78em;font-weight:700}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.metric{padding:13px 14px;background:var(--card);border:1px solid var(--rule);border-radius:9px}.metric strong{display:block;color:var(--accent);font-size:1.35em}section{margin-top:48px}hr{border:0;border-top:1px solid var(--rule);margin:48px 0 0}table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;margin:12px 0 16px;border:1px solid var(--rule);border-radius:8px;font-size:.92em}th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule)}tr:last-child td{border-bottom:0}th{background:var(--head)}td{background:var(--card)}.mermaid-box{margin:12px 0 16px;padding:16px;overflow-x:auto;background:var(--card);border:1px solid var(--rule);border-radius:10px}.notes{padding:14px 16px;background:var(--card);border:1px solid var(--rule);border-radius:9px}details{margin-top:14px;background:var(--card);border:1px solid var(--rule);border-radius:9px}summary{cursor:pointer;padding:12px 15px;color:var(--accent);font-weight:700}.details-body{padding:0 15px 14px}.questions{display:grid;gap:10px}.question{padding:13px 15px;background:var(--card);border:1px solid var(--rule);border-radius:9px}.qnum{color:var(--accent);font-weight:700}footer{margin-top:54px;padding-top:18px;border-top:1px solid var(--rule);color:var(--muted);text-align:center;font-size:.82em}@media(max-width:640px){.metrics{grid-template-columns:1fr}}
+.question-map{margin:12px 0 16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>강아지 훈련 RAG<br>벡터 검색의 누락을 그래프가 보완할 수 있는가</h1>
+  <div class="intro"><strong>실험 목적</strong><br>견주가 실제로 물을 법한 질문 20건을 설계하고 질문 성격에 따라 기대 검색 경로를 나눴습니다. 이후 벡터 검색과 벡터+그래프 하이브리드 검색을 비교해, 그래프가 누락된 근거를 찾아 최종 답변에 보탤 수 있는지 확인했습니다.</div>
+  <div class="question question-map"><span class="qnum">멘토링에서 확인할 세 축</span><br>① 검색 개선 우선순위 &nbsp; ② 훈련 지식 그래프 스키마 &nbsp; ③ LLM 추출 재현성</div>
+  <div class="metrics">
+    <div class="metric"><strong>20건</strong>4개 범주의 견주 질문</div>
+    <div class="metric"><strong>6건</strong>부족한 근거 문서 추가</div>
+    <div class="metric"><strong>2건</strong>완전 답변 가능으로 전환</div>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">1.</span> 질문 20건에 기대 검색 경로를 먼저 지정했다</h2>
+  <div class="key"><span class="label">핵심</span>단순 절차 질문은 벡터 검색, 여러 단서를 연결해야 하는 질문은 그래프 확장, 답변하면 안 되는 요청은 거절 대상으로 설계했습니다.</div>
+  <table>
+    <thead><tr><th>질문 성격</th><th>건수</th><th>기대 경로</th><th>예시</th></tr></thead>
+    <tbody>
+      <tr><td>단일 절차·훈련법</td><td>5</td><td>VECTOR</td><td>켄넬 적응의 단계별 순서는?</td></tr>
+      <tr><td>문제행동 원인 추론</td><td>5</td><td>GRAPH</td><td>짖는 원인을 구분하고 훈련법을 제안해 달라</td></tr>
+      <tr><td>증상·질환 감별이 필요한 질문</td><td>6</td><td>GRAPH + STRONG GUARD</td><td>노령견의 야간 헛짖음에 분리불안 훈련이 효과적인가?</td></tr>
+      <tr><td>처방 요청·범위 밖 질문</td><td>4</td><td>REFUSE</td><td>증상에 맞는 약이나 처방식을 추천해 달라</td></tr>
+    </tbody>
+  </table>
+  <p><code>VECTOR/GRAPH/REFUSE</code>는 평가용 기대 경로입니다. 실제 검색 파이프라인은 모든 질문에서 벡터 검색을 먼저 수행하고, 조건을 충족할 때만 그래프 후보를 추가합니다.</p>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>평가 세트: <code>owner_fixtures.jsonl</code>, Q01–Q20</li>
+    <li>설계 필드: <code>hop_type</code>, <code>router_target</code>, <code>guard_level</code>, <code>expected_outcome</code></li>
+    <li>범주 경계에서 위 필드가 함께 바뀌도록 사전에 설계했습니다. 결과를 본 뒤 질문을 재분류한 것이 아닙니다.</li>
+    <li>의료 감별 질문은 검색 자체를 막지 않고 <code>STRONG GUARD</code>를 적용합니다. 직접 처방·사료 추천처럼 범위를 벗어난 요청만 <code>REFUSE</code>로 처리합니다.</li>
+  </ul></div></details>
+  <h3>발표 노트</h3>
+  <div class="notes">질문 20개를 네 범주로 나누고 기대 경로를 먼저 지정했습니다. 단순 훈련 절차는 벡터, 여러 증상과 원인을 연결해야 하는 질문은 그래프, 직접 처방을 요구하는 질문은 거절 대상입니다. 이 구분을 기준으로 실제 검색 결과가 기대한 동작을 했는지 평가했습니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">2.</span> 실제 실행은 벡터 검색 후 필요한 경우에만 그래프를 확장한다</h2>
+  <div class="key"><span class="label">핵심</span>그래프는 답을 만들지 않습니다. 벡터 Top-5에 없던 관련 청크를 후보로 추가하고, LLM은 병합된 근거만 읽어 답합니다.</div>
+  <div class="mermaid-box"><pre class="mermaid">
+flowchart TD
+    Q["견주 질문"] --> V["벡터 검색<br/>유사 청크 Top-5"]
+    V --> R{"그래프 확장 조건 충족?"}
+    R -->|아니오| M["근거 청크 확정"]
+    R -->|예| G["엔티티 매칭·2-hop 탐색"]
+    G --> C["연결된 원문 청크 회수"]
+    C --> M
+    M --> L["LLM 답변 생성<br/>의료·거절 가드 적용"]
+  </pre></div>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li><code>graph_search()</code>가 방문한 노드·엣지의 <code>source_chunks</code>를 회수합니다: <code>scripts/run_combined_retrieval_eval.py:302-331</code></li>
+    <li><code>hybrid_merge()</code>가 벡터 Top-5와 그래프 후보를 병합하고 중복을 제거합니다: 같은 파일 <code>:334-344</code></li>
+    <li><code>generate_answers.py</code>가 병합 결과를 답변 프롬프트에 전달합니다: <code>:837-854</code></li>
+    <li>그래프 후보에는 별도 정답 점수나 순위가 없습니다. 어떤 근거를 사용할지는 답변 모델이 결정합니다.</li>
+    <li>현재는 <code>score_gap</code>을 그래프 실행 게이트로 사용합니다. 검색 결과의 점수 차이를 이용해 그래프 확장 여부를 결정하는 실험용 신호입니다.</li>
+  </ul></div></details>
+  <h3>발표 노트</h3>
+  <div class="notes">실제 실행에서는 모든 질문을 먼저 벡터 검색에 보냅니다. 그래프 확장 조건을 통과하면 질문에서 엔티티를 찾고 2홉을 탐색해 연결된 원문 청크를 추가합니다. 벡터와 그래프가 가져온 청크를 합친 뒤 LLM이 답변하며, 그래프 자체는 정답을 판단하거나 문장을 생성하지 않습니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">3.</span> 문서를 보강했지만 완전 답변 가능으로 바뀐 질문은 2건이었다</h2>
+  <div class="key"><span class="label">핵심</span>기존 코퍼스에서는 20건 모두 근거가 부족했습니다. 부족한 문서 6건을 추가한 뒤 Q06·Q16만 완전 답변 가능 상태로 바뀌었습니다.</div>
+  <div class="mermaid-box"><pre class="mermaid">
+flowchart LR
+    A["질문 20건 평가"] --> B["완전 답변 가능 0건"]
+    B --> C["부족 문서 6건 추가"]
+    C --> D["완전 답변 가능 2건<br/>Q06·Q16"]
+  </pre></div>
+  <p>Q13은 완전 답변 가능 판정까지 도달하지는 않았습니다. 다만 그래프가 벡터 검색에서 누락된 감별 문서를 찾아 최종 답변에 반영한 정성적 개선 사례였습니다.</p>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>기존 코퍼스 평가: answerable 0, partial 4(Q05·Q09·Q14·Q15), missing 16 — <code>reports/owner_fixtures_coverage.md</code></li>
+    <li>추가 문서 6건: 자동 크롤 3건 + 수동 수집 3건 — <code>docs/acquisition_list.md</code></li>
+    <li>외이염 자료는 크롤 718건 중 10건에 단편적으로 언급됐지만, 귓병 통증에 따른 행동 변화를 직접 다룬 문서는 없어 수동으로 보강했습니다.</li>
+    <li>추가 문서가 해당 질문의 벡터 Top-5에 들어왔는지도 함께 확인했습니다. Q06·Q16은 완전 답변 가능으로 바뀌었고, 나머지는 부분 답변 또는 답변 불가 상태였습니다.</li>
+  </ul></div></details>
+  <h3>발표 노트</h3>
+  <div class="notes">먼저 기존 코퍼스로 20개 질문을 평가했지만 완전하게 답할 수 있는 질문은 없었습니다. 부족한 근거를 겨냥해 문서 6건을 추가했지만 완전 답변 가능으로 바뀐 질문은 2건뿐이었습니다. 문서 수를 늘리는 것만으로 검색과 답변 문제가 모두 해결되지는 않았습니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">4.</span> Q13에서는 그래프가 누락된 감별 근거를 보완했다</h2>
+  <div class="key"><span class="label">핵심</span>벡터 검색은 질문에 직접 포함된 ‘분리불안’과 가까운 청크에 집중했습니다. 그래프는 노령견·야간 짖음·인지기능장애의 관계를 따라 감별 문서를 추가했습니다.</div>
+  <p><strong>질문:</strong> “12살 노령견인데 밤마다 서성거리며 벽을 보고 헛짖음을 시작했어요. 분리불안 훈련이 효과가 있을까요?”</p>
+  <table>
+    <thead><tr><th>비교</th><th>벡터 검색만 사용</th><th>하이브리드 검색</th></tr></thead>
+    <tbody>
+      <tr><td>검색 근거</td><td>Top-5 모두 분리불안 훈련 문서</td><td>벡터 5건 + 그래프 후보 13건</td></tr>
+      <tr><td>답변 방향</td><td>분리불안 훈련 방법 제시</td><td>인지기능장애 가능성 안내 및 수의사 상담 권고</td></tr>
+      <tr><td>차이</td><td>치매·관절통증 감별 근거 누락</td><td>‘밤에 짖는 강아지’ 문서를 찾아 실제 답변에 인용</td></tr>
+    </tbody>
+  </table>
+  <div class="mermaid-box"><pre class="mermaid">
+flowchart LR
+    A["노령견의 야간 헛짖음"] --> B["분리불안 가능성"]
+    A --> C["인지기능장애 감별"]
+    C --> D["수의사 상담 권고"]
+  </pre></div>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>통합 코퍼스 83청크에서 노드 284개, 엣지 102개를 추출했습니다: <code>docs/handoff_neo4j.md</code></li>
+    <li>Q13의 매칭 시드는 노령견·분리불안·불안·짖음 등 7개였고 그래프 후보 13건을 회수했습니다.</li>
+    <li>‘밤에 짖는 강아지’ 청크가 최종 답변에서 실제로 인용됐습니다: <code>reports/demo_outputs_0820.md</code> 2절</li>
+    <li>그래프가 해당 문서를 정답으로 선택한 것은 아닙니다. 그래프는 후보만 확장했고, LLM이 후보 중 감별 근거를 사용했습니다.</li>
+  </ul></div></details>
+  <h3>발표 노트</h3>
+  <div class="notes">Q13에서 벡터 Top-5는 모두 분리불안 훈련 문서였습니다. 그래프는 노령견과 야간 짖음의 관계를 따라 인지기능장애 감별 문서를 후보에 추가했고, 이 근거가 최종 답변에 실제로 반영됐습니다. 완전 답변 가능 판정은 아니지만, 그래프 확장이 답변의 방향을 바꾼 사례입니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">5.</span> 실패 원인은 검색 한 단계가 아니라 네 단계에 나뉘어 있었다</h2>
+  <div class="key"><span class="label">핵심</span>그래프를 추가하는 것만으로는 해결되지 않았습니다. 근거 부족, 시드 매칭, 실행 게이트, 벡터 순위가 각각 다른 실패를 만들었습니다.</div>
+  <table>
+    <thead><tr><th>단계</th><th>문제</th><th>대표 사례</th></tr></thead>
+    <tbody>
+      <tr><td>코퍼스</td><td>필요한 근거 문서 자체가 없음</td><td>Q12: ‘서열 훈련’ 개념을 설명할 근거 부족</td></tr>
+      <tr><td>시드 매칭</td><td>표현이 다르면 그래프 시작점을 찾지 못함</td><td>Q14: 시드 0개, 그래프 후보 0건</td></tr>
+      <tr><td>그래프 실행 게이트</td><td>임계값이 질문을 구분하지 못함</td><td>20건 모두 PASS해 판별력 상실</td></tr>
+      <tr><td>벡터 순위</td><td>관련 문서가 근소한 차이로 Top-5 밖에 위치</td><td>Q15: 목표 문서가 Top-5 경계에서 제외</td></tr>
+    </tbody>
+  </table>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>시드 매칭은 현재 리터럴 포함 방식이어서 동의어·표현 변형에 취약합니다: <code>match_seeds()</code></li>
+    <li><code>score_gap ≥ 0.024</code> 게이트는 견주 질문 20건을 모두 PASS시켰습니다. 실제 Top-1 점수가 오른 질문은 8건이어서 실행 조건으로서 판별력이 부족했습니다: <code>reports/combined_corpus_coverage.md</code></li>
+    <li>별도 검색 평가 세트의 <code>q003</code>은 0.000553 차이로 Top-5에서 제외됐습니다: <code>reports/q003_top5_investigation_0820.md</code></li>
+    <li>견주 질문 평가 세트의 Q15는 벡터 순위와 그래프 시드 매칭이 동시에 실패했습니다.</li>
+  </ul></div></details>
+  <div class="question"><span class="qnum">발표 후 논의 질문 1.</span> 코퍼스·시드 매칭·실행 게이트·벡터 순위 문제를 개선한다면, 리랭커·쿼리 확장·게이트 교체 중 무엇부터 검증하는 것이 적절할까요?</div>
+  <h3>발표 노트</h3>
+  <div class="notes">실패를 ‘그래프가 못 찾았다’고 묶을 수는 없었습니다. 문서가 없는 경우, 질문 표현과 그래프 엔티티가 맞지 않는 경우, 그래프 실행 조건이 무너진 경우, 관련 문서가 벡터 Top-5 밖으로 밀린 경우가 각각 있었습니다. 따라서 리랭커 하나만 추가하는 방식으로는 모두 해결되지 않습니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">6.</span> 현재 그래프는 훈련 절차보다 질환 감별을 더 잘 표현한다</h2>
+  <div class="key"><span class="label">핵심</span>추가한 문서와 관계 스키마가 감별에 치우쳐, 단계별 훈련 순서와 금지 행동은 그래프에 충분히 남지 않았습니다.</div>
+  <ul>
+    <li><strong>데이터 편향:</strong> 추가 문서 6건 중 4건이 질환 감별 자료였습니다.</li>
+    <li><strong>관계 부족:</strong> 현재 관계 타입에는 ‘다음 단계’가 없어 STEP 1→6의 순서를 표현하지 못합니다.</li>
+    <li><strong>추출 실패:</strong> “이동장을 잠그거나 홀로 두면 안 된다” 같은 부정 명령문이 금기 관계로 추출되지 않았습니다.</li>
+  </ul>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>엣지 102개 중 <code>감별필요</code>가 60개(59%)였습니다.</li>
+    <li>현재 관계 타입: <code>완화한다</code>, <code>악화시킨다</code>, <code>선행조건</code>, <code>금기</code>, <code>감별필요</code></li>
+    <li>켄넬 STEP 문서에서는 단계별 훈련법 엔티티가 추출됐지만 청크 간 연결 엣지는 0건이었습니다: <code>data/graph/extractions_stage2.jsonl</code></li>
+    <li>관계의 source와 target을 같은 청크 안으로 제한한 규칙도 단계 간 연결을 막습니다: <code>scripts/extract_entities.py</code> RULES 2</li>
+    <li>부정문 미추출 사례: <code>docchunk-7f889386</code>. 그래프 전체의 금기 엣지는 1개뿐입니다.</li>
+  </ul></div></details>
+  <div class="question"><span class="qnum">발표 후 논의 질문 2.</span> 훈련 절차와 금지 행동을 표현하려면 관계 타입 확장으로 충분한가요, 아니면 현재 그래프 스키마를 다시 설계해야 할까요?</div>
+  <h3>발표 노트</h3>
+  <div class="notes">훈련 지식 그래프를 목표했지만 현재 결과는 질환 감별 그래프에 더 가깝습니다. 감별 자료를 많이 넣었고, 단계 순서를 나타낼 관계가 없으며, 금지 행동이 관계로 추출되지 않았기 때문입니다. 다음 실험에서는 데이터 구성과 스키마를 함께 수정해야 합니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">7.</span> 같은 입력에서도 추출 결과가 달라져 스냅샷을 고정했다</h2>
+  <div class="key"><span class="label">핵심</span>LLM 기반 그래프 추출은 재실행할 때 결과가 달라졌습니다. 이번 발표에서는 특정 추출 결과를 고정해 사용했지만, 제3자가 같은 결과를 복원할 수 있는 재현성은 아직 확보하지 못했습니다.</div>
+  <details><summary>기술 근거 보기</summary><div class="details-body"><ul>
+    <li>Stage 2는 증분 처리가 아니라 코퍼스 전체를 매번 다시 추출합니다.</li>
+    <li>같은 입력과 <code>reasoning_effort: low</code> 조건에서도 분리불안 경로 수가 27→22로 변했습니다. 슬개골 경로는 19개로 동일했습니다.</li>
+    <li><code>frozen_stage2_0820.jsonl</code>과 <code>frozen_entity_aliases_0820.json</code>을 고정해 발표 결과를 복원했습니다.</li>
+    <li>현재 동결 파일이 저장소 밖에 있어 팀 단위 재현성은 미완료 상태입니다. 추후 버전 관리 또는 아티팩트 저장소와 체크섬이 필요합니다.</li>
+  </ul></div></details>
+  <div class="question"><span class="qnum">발표 후 논의 질문 3.</span> LLM 추출의 비결정성을 실무에서는 증분 추출, 다중 추출 합의, 결과 버전 관리 중 어떤 방식으로 통제하나요?</div>
+  <h3>발표 노트</h3>
+  <div class="notes">그래프 추출을 다시 실행하면 같은 입력에서도 결과가 달라졌습니다. 발표 결과가 바뀌지 않도록 특정 추출 결과를 고정했지만, 이 파일이 아직 저장소 밖에 있어 다른 개발자가 동일 결과를 복원할 수 있는 수준의 재현성은 확보하지 못했습니다.</div>
+</section>
+
+<hr>
+<section>
+  <h2><span class="num">8.</span> 시간이 제한된다면 이 순서로 피드백을 받고 싶다</h2>
+  <div class="questions">
+    <div class="question"><span class="qnum">1순위.</span> 검색 개선 순서 — 지금 바로 다음 실험을 정하기 위해</div>
+    <div class="question"><span class="qnum">2순위.</span> 그래프 스키마 — 훈련 절차와 금지 행동을 제대로 표현하기 위해</div>
+    <div class="question"><span class="qnum">3순위.</span> 추출 재현성 — 팀 단위 운영 방식으로 확장하기 위해</div>
+  </div>
+</section>
+
+<footer>dog-training-rag-retrieval · 8/22 멘토링용 핵심본</footer>
+</div>
+<script>mermaid.initialize({startOnLoad:true,theme:"neutral",securityLevel:"loose"});</script>
+</body>
+</html>

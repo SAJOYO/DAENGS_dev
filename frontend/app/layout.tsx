@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DAENGS",
-  description: "반려견과의 하루를 기록하는 가장 쉬운 방법",
+  title: "DAENGS 관리자",
+  description: "DAENGS 운영을 위한 내부 관리자 콘솔",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

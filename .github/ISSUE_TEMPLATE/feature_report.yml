@@ -1,0 +1,69 @@
+name: "🚀 Feature Request"
+description: "새로운 기능을 제안하거나 구현 계획을 공유합니다."
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 💡 새로운 기능 제안
+        팀의 프로젝트를 더 가치 있게 만들 새로운 아이디어를 환영합니다!
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: "📖 기능 설명"
+      description: "어떤 기능을 만들고 싶은지, 왜 이 기능이 필요한지 설명해 주세요."
+      placeholder: "예: 사용자가 탄소 배출 데이터를 기간별로 조회할 수 있는 대시보드 기능을 추가합니다."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "🔥 우선순위"
+      description: "이 기능이 프로젝트 일정에서 얼마나 중요한가요?"
+      options:
+        - High (핵심 기능)
+        - Medium (권장 기능)
+        - Low (추가 고려 사항)
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "✅ 작업할 내용 (Checklist)"
+      description: "구현해야 할 세부 항목들을 체크박스(`- [ ]`) 형태로 작성해 주세요."
+      value: |
+        - [ ] 
+        - [ ] 
+        - [ ] 
+      placeholder: "예: - [ ] FastAPI 엔드포인트 구현"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: related-area
+    attributes:
+      label: "📍 관련 영역"
+      options:
+        - FE (Frontend)
+        - BE (Backend)
+        - DB (Database)
+        - AI (Model/Logic)
+        - Infra / Deploy
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-note
+    attributes:
+      label: "⚙️ 기술적 고려 사항"
+      description: "사용할 라이브러리, API 명세, 혹은 기존 코드와의 충돌 가능성 등을 적어주세요."
+      placeholder: "예: React-Chartjs-2 라이브러리를 사용하여 시각화 구현 예정"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "🔗 참고 자료"
+      description: "디자인 시안(Figma), 벤치마킹 서비스 링크, 혹은 관련 문서가 있다면 첨부해 주세요."

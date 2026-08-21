@@ -1,0 +1,66 @@
+name: "♻️ Update & Refactor"
+description: "기존 기능을 수정하거나 코드 로직을 업데이트합니다."
+labels: ["update"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🔄 기능 업데이트 및 수정 안내
+        기존 로직의 변경 사항이 있다면 팀원들이 영향도를 파악할 수 있도록 상세히 적어주세요.
+
+  - type: textarea
+    id: update-description
+    attributes:
+      label: "📝 변경 내용 설명"
+      description: "어떤 기능을 수정하는지, 변경의 이유(Background)는 무엇인지 작성해 주세요."
+      placeholder: "예: 기존의 탄소 배출량 계산 로직에 새로운 ESG 가중치를 적용합니다."
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "✅ 작업 상세 내용"
+      description: "수정해야 할 세부 항목들을 체크박스(`- [ ]`) 형태로 작성해 주세요."
+      value: |
+        - [ ] 
+        - [ ] 
+      placeholder: "예: - [ ] API 응답 스키마 변경"
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-changes
+    attributes:
+      label: "💻 코드 변경점 (Before & After)"
+      description: "기존 로직에서 변경된 핵심 부분을 비교해서 작성해 주세요."
+      value: |
+        - **기존 로직:**
+
+        - **변경 로직:**
+      placeholder: "예: 기존 유효성 검사 로직을 FastAPI의 Depends 모듈로 이관"
+
+  - type: dropdown
+    id: impact-level
+    attributes:
+      label: "⚠️ 변경 영향도"
+      description: "이 수정이 기존 기능에 미치는 영향은 어느 정도인가요?"
+      options:
+        - Critical (기존 API/UI 파괴적 변경)
+        - Major (로직 대폭 수정)
+        - Minor (단순 코드 개선 및 리팩토링)
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: "📌 추가 요구사항"
+      description: "작업 과정에서 추가로 고려해야 할 사항이 있다면 작성해 주세요."
+      placeholder: "예: 관련 환경 변수(`.env`) 업데이트 필요"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "🔗 참고 자료"
+      description: "수정과 관련된 기존 이슈 번호(#)나 참고 문서를 적어주세요."

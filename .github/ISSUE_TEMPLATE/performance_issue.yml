@@ -1,0 +1,74 @@
+name: "⚡ Performance Issue"
+description: "시스템 성능 저하, 병목 현상, 응답 지연 문제를 보고합니다."
+labels: ["performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🚀 성능 문제 보고 가이드
+        성능 문제는 추측보다 **수치와 데이터**를 바탕으로 작성하는 것이 중요합니다.
+
+  - type: textarea
+    id: problem-summary
+    attributes:
+      label: "❓ 문제 상황"
+      description: "어떤 작업에서 속도 저하(느림)나 병목 현상이 발생하나요?"
+      placeholder: "예: ESG 대시보드 로딩 시 10초 이상 소요됨, 특정 API 호출 시 CPU 점유율 급증 등"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "📍 관련 영역"
+      options:
+        - FE (Frontend Rendering)
+        - BE (API / Logic)
+        - DB (Query Performance)
+        - AI (Inference / Fine-tuning)
+        - Infra / Network
+        - DevOps / Deploy
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: "📊 측정 지표"
+      description: "응답 시간(Response Time), TPS, 리소스 사용량(CPU/RAM) 등 확인된 수치를 적어주세요."
+      placeholder: "예: 평균 응답 시간 500ms -> 5000ms로 증가, TPS 10 이하로 저하"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "🔄 재현 방법"
+      description: "어떤 과정을 거쳤을 때 성능 문제가 발생하는지 적어주세요."
+      placeholder: "1. 1만 건 이상의 데이터를 업로드한다. 2. 전체 통계 조회 버튼을 클릭한다."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-cause
+    attributes:
+      label: "🕵️ 해결 방안"
+      description: "본인이 생각하는 해결방안을 제시하거나 실제로 해결할수 있는 방안등을 적어주세요."
+      placeholder: "예: db쪽 primary_key 지정, backend 코딩 이슈 해결 등"
+
+  - type: textarea
+    id: logs-screenshots
+    attributes:
+      label: "📑 로그 및 모니터링 스크린샷"
+      description: "브라우저 개발자 도구(Network 탭), 서버 로그, 혹은 모니터링 도구(Grafana 등)의 캡처본을 첨부해 주세요."
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "🔥 심각도"
+      options:
+        - Critical (전체 서비스 마비)
+        - Major (특정 기능 사용 불가 수준의 지연)
+        - Minor (사용자 불편을 야기하는 미세한 지연)
+    validations:
+      required: true

@@ -1,0 +1,66 @@
+name: "🛡️ Security Issue"
+description: "보안 취약점 및 위협 요소를 보고하고 대응합니다."
+labels: ["security", "critical"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚠️ 보안 주의사항
+        보안 이슈는 민감한 정보를 포함할 수 있습니다. 필요한 경우 이슈를 생성한 직후 **비공개(Private)** 설정으로 전환하거나, 팀장(서버 리드)에게 별도로 직접 보고해 주세요.
+
+  - type: textarea
+    id: vulnerability-description
+    attributes:
+      label: "🔐 취약점 설명"
+      description: "어떤 종류의 보안 취약점이 발견되었나요? (예: SQL Injection, XSS, 권한 우회 등)"
+      placeholder: "예: 특정 API 엔드포인트에서 인증 토큰 없이 사용자 개인정보 조회가 가능함"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact-scope
+    attributes:
+      label: "🌐 영향 범위"
+      description: "이 취약점이 어디까지 영향을 미치나요?"
+      options:
+        - Entire System (시스템 전체)
+        - User Data (사용자 개인정보 유출 가능성)
+        - Specific Module (특정 기능에 국한)
+        - Internal Infrastructure (내부 인프라 및 서버)
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "🔄 재현 방법"
+      description: "취약점을 확인하기 위한 단계를 상세히 적어주세요."
+      placeholder: "1. 로그인을 하지 않은 상태에서 /api/v1/user/123 으로 GET 요청을 보낸다."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity-owasp
+    attributes:
+      label: "🔥 심각도 (OWASP 기준)"
+      description: "위험 수준을 선택해 주세요."
+      options:
+        - Critical (즉각적인 조치 필요, 시스템 장악 위험)
+        - High (중요 데이터 노출 위험)
+        - Medium (조건부 정보 유출 가능성)
+        - Low (이론적 위험 또는 정보 노출 수준)
+    validations:
+      required: true
+
+  - type: textarea
+    id: countermeasure
+    attributes:
+      label: "🛡️ 대응 방안"
+      description: "예상되는 조치 방법이나 즉시 적용 가능한 임시 방편을 적어주세요."
+      placeholder: "예: API 엔드포인트에 인증 미들웨어(Depends) 추가, 입력값 유효성 검사 강화"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "🔗 관련 자료"
+      description: "참고한 OWASP 항목 번호나 관련 보안 취약점 레포트 링크가 있다면 남겨주세요."

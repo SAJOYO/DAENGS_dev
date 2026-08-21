@@ -1,0 +1,65 @@
+name: "🔍 Troubleshooting"
+description: "문제 해결 과정과 지식을 기록하고 공유합니다."
+labels: ["troubleshooting"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 💡 문제 해결 기록
+        발생한 문제와 해결 방법을 기록하여 팀의 지식 자산으로 활용합니다.
+
+  - type: textarea
+    id: problem-context
+    attributes:
+      label: "❓ 발생한 문제"
+      description: "어떤 작업을 하다가 어떤 문제가 발생했나요?"
+      placeholder: "예: Docker Compose 실행 중 포트 충돌 발생"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "📍 관련 영역"
+      options:
+        - FE (Frontend)
+        - BE (Backend)
+        - DB (Database)
+        - AI (Model/Logic)
+        - Infra / Deploy
+        - Local Environment
+    validations:
+      required: true
+
+  - type: textarea
+    id: causes
+    attributes:
+      label: "🕵️ 원인 분석"
+      description: "파악된 문제의 원인을 적어주세요."
+      placeholder: "예: 로컬의 다른 프로세스가 8000번 포트를 이미 점유 중"
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "✅ 해결 방법"
+      description: "어떻게 해결했는지 구체적인 방법이나 명령어를 공유해 주세요."
+      render: bash
+      value: |
+        ### 해결 단계
+        1. 
+        2. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: prevention
+    attributes:
+      label: "🛡️ 재발 방지 대책"
+      description: "앞으로 같은 문제가 발생하지 않게 하려면 어떻게 해야 할까요?"
+      placeholder: "예: .env.example 파일에 포트 설정 가이드 추가"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "🔗 참고한 링크"
+      description: "해결에 도움이 된 StackOverflow, 공식 문서 등의 링크를 남겨주세요."

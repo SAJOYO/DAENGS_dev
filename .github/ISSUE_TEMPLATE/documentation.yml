@@ -1,0 +1,53 @@
+name: "📝 Documentation (문서 작업)"
+description: "문서 신규 작성, 수정 또는 API 명세 업데이트 시 사용합니다."
+title: "[DOC] "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 📑 문서 작업 안내
+        팀 내 일관성 있는 문서화를 위해 아래 양식을 작성해 주세요.
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: "📌 문서 유형"
+      options:
+        - "요구사항 명세서"
+        - "WBS (Work Breakdown Structure)"
+        - "API 명세서"
+        - "기능정의서"
+    validations:
+      required: true
+
+  - type: input
+    id: doc_location
+    attributes:
+      label: "📍 문서 위치"
+      placeholder: "예: /docs/api-v1.md 또는 노션 페이지 링크"
+    validations:
+      required: true
+
+  - type: textarea
+    id: doc_content
+    attributes:
+      label: "🔄 수정/추가 내용"
+      placeholder: "어떤 부분이 변경되거나 추가되었는지 간략히 설명해 주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: "✅ 완료 체크리스트"
+      value: |
+        - [ ] 최신 정보 반영 확인
+        - [ ] 오타 및 링크 깨짐 확인
+        - [ ] 관련 팀원 공유 완료
+
+  - type: input
+    id: related_issue
+    attributes:
+      label: "🔗 관련 이슈 (선택)"
+      placeholder: "예: #123"

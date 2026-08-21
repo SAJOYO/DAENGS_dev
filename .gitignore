@@ -216,3 +216,30 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ─────────────────────────────────────────────────────────────
+# DAENGS 프로젝트 추가분
+# 위쪽은 GitHub 의 Python 템플릿 그대로입니다. 이 저장소는 Node + Python
+# 혼합이라 아래에서 부족한 부분을 채우고, 과하게 잡히는 것을 되돌립니다.
+# (frontend/ 는 node_modules, .next 등을 자기 .gitignore 에서 처리합니다)
+# ─────────────────────────────────────────────────────────────
+
+# 환경 변수 — .env.example 은 커밋합니다
+.env.local
+.env.*.local
+!.env.example
+
+# Docker / DB 로컬 데이터
+.pgvector/
+.docker-data/
+pgdata/
+
+# 편집기 / OS
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 위 Python 템플릿의 lib/ 는 경로가 고정돼 있지 않아 어느 깊이에서든 걸립니다.
+# Next.js 에서 app/lib, src/lib 는 흔한 소스 폴더라 되돌려 둡니다.
+!frontend/**/lib/

@@ -1,18 +1,23 @@
 # DAENGS
 
-Next.js 프론트엔드를 PM2 + nginx 로 자체 서버에 배포합니다.
+Next.js 프론트엔드와 FastAPI 백엔드를 PM2 + nginx 로 자체 서버에 배포합니다.
 
 ```
 브라우저 :80 → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next)
+                              → host.docker.internal:8000 → FastAPI   (배포 연동 예정)
 ```
 
 ## 요구 사항
 
 - Node.js 20 이상
+- Python 은 따로 설치하지 않아도 됩니다 — uv 가 3.12 를 받아 씁니다
+- [uv](https://docs.astral.sh/uv/)
 - Docker Desktop (**Linux 컨테이너 모드**)
 - PM2 (`npm install -g pm2`)
 
 ## 로컬 개발 (개발 PC)
+
+프론트엔드 → http://localhost:3000
 
 ```powershell
 cd frontend
@@ -20,7 +25,15 @@ npm install
 npm run dev
 ```
 
-→ http://localhost:3000
+백엔드 → http://127.0.0.1:8000 (문서는 `/docs`)
+
+```powershell
+cd backend
+uv sync
+uv run dev
+```
+
+의존성은 `uv add <패키지>` 로 추가합니다. `pyproject.toml` 을 직접 고치면 `uv.lock` 과 어긋납니다.
 
 ## 배포
 
@@ -105,8 +118,10 @@ pm2 reload daengs-web
 
 ```
 frontend/                 Next.js 앱
+backend/                  FastAPI 앱 (uv, Python 3.12)
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        nginx 컨테이너
-ecosystem.config.js       PM2 설정
+ecosystem.config.js       PM2 설정 (프론트)
+docs/                     프로젝트 문서
 .github/workflows/        배포 워크플로우
 ```

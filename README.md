@@ -165,6 +165,6 @@ db/init/                  DB 최초 기동 시 실행되는 SQL (확장 / 스키
 db/indexes.sql            인덱스. 적재 후 수동 실행
 .env.example              환경 변수 서식 (최상단은 compose 용, backend/ 는 앱 용)
 ecosystem.config.js       PM2 설정 (프론트)
-docs/                     프로젝트 문서
+docs/decisions.md         의사결정 기록
 .github/workflows/        배포 워크플로우
 ```

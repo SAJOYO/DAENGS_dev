@@ -18,6 +18,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
+| `docs/decisions.md` | 의사결정 기록. 되돌리기 번거로운 결정은 여기에 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |

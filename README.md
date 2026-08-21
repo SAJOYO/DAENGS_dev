@@ -73,7 +73,7 @@ cd C:\ide\actions-runner
 > 러너 안에서 PM2 데몬이 처음 생성되면, 배포 작업이 끝날 때 데몬이 함께 종료되어
 > 배포는 성공했는데 서비스가 내려가 있는 상태가 됩니다.
 
-nginx 는 `restart: unless-stopped` 설정이라 Docker Desktop 이 시작되면 자동으로 살아납니다.
+nginx 와 pgvector 는 `restart: unless-stopped` 설정이라 Docker Desktop 이 시작되면 자동으로 살아납니다.
 
 ## 운영 명령어 (서버 PC)
 
@@ -89,16 +89,38 @@ pm2 reload daengs-web     # 무중단 재시작
 pm2 restart daengs-web    # 전부 내렸다 올림 (순간 끊김)
 ```
 
-### nginx
+### 컨테이너 (nginx + pgvector)
 
 ```powershell
-docker compose up -d      # 기동 / 설정 반영
-docker compose ps         # 상태 확인
-docker compose logs -f    # 로그
-docker compose down       # 중지
+docker compose up -d          # 전체 기동 / 설정 반영 (nginx + pgvector)
+docker compose ps             # 상태 확인
+docker compose logs -f        # 로그
+docker compose down           # 중지 (데이터는 남습니다)
+
+docker compose up -d nginx    # 하나만 올리기
 ```
 
 `nginx/default.conf` 를 수정했다면 `docker compose up -d` 를 다시 실행해야 반영됩니다.
+
+컨테이너는 둘 다 `restart: unless-stopped` 라 Docker Desktop 이 시작되면 자동으로 살아납니다.
+
+### pgvector (PostgreSQL 18)
+
+```powershell
+docker compose exec pgvector psql -U postgres -d vectordb   # 콘솔
+docker compose --profile tools up -d                        # pgAdmin 함께 (http://localhost:5050)
+```
+
+접속 정보는 `.env` 로 지정합니다. `.env.example` 을 복사해서 쓰세요.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+- `db/init/` 의 SQL(확장, 스키마, 트리거)은 **최초 기동 때 한 번만** 실행됩니다.
+  이미 만들어진 볼륨에는 반영되지 않으니, 직접 psql 로 적용하세요.
+- 인덱스는 `db/indexes.sql` 에 따로 있습니다. 데이터를 적재한 **뒤에** 수동으로 실행하세요.
+- 데이터는 `pgdata` 볼륨에 있습니다. `docker compose down -v` 를 쓰면 **전부 지워집니다.**
 
 ### 롤백
 
@@ -120,7 +142,10 @@ pm2 reload daengs-web
 frontend/                 Next.js 앱
 backend/                  FastAPI 앱 (uv, Python 3.12)
 nginx/default.conf        리버스 프록시 설정
-docker-compose.yml        nginx 컨테이너
+docker-compose.yml        nginx + pgvector 컨테이너
+db/init/                  DB 최초 기동 시 실행되는 SQL (확장 / 스키마 / 트리거)
+db/indexes.sql            인덱스. 적재 후 수동 실행
+.env.example              환경 변수 서식
 ecosystem.config.js       PM2 설정 (프론트)
 docs/                     프로젝트 문서
 .github/workflows/        배포 워크플로우

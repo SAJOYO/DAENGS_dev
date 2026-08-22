@@ -3,6 +3,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
+| [ml-progress.md](ml-progress.md) | ML 모델 진행상황 · 멘토링 피드백 · 다음 계획 |
 
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.

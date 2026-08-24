@@ -100,7 +100,7 @@ Project 3 (`orgs/SAJOYO/projects/3`) 은 `Open Pull Requests` 기준으로 관�
 
 | 필드 | 기준 |
 | --- | --- |
-| Priority | P0 ~ P3. **사람이 정합니다** |
+| Priority | P0 ~ P3. **사람이 정합니다.** 프로젝트 자체 필드입니다 — 조직 issue field 에서 파생된 Priority(Urgent ~ Low)는 이슈에만 값이 들어가서 PR · draft 카드에는 못 씁니다 |
 | Size | 나를 위한 게 아니라 **남을 위한 것.** 구현이 그려지면 XS / S, 설계도 안 떠오르면 L / XL |
 | Iteration | 3~4일. 카드 하나가 하나의 Iteration 안에 끝나야 합니다 |
 | Status | **`Hold` 를 둡니다.** 필요 없어진 것과 정의가 안 된 것을 구분해 두면 리뷰 때 백로그로 되돌릴지 정할 수 있습니다 |

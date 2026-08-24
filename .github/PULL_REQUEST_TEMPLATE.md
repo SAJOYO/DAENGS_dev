@@ -13,11 +13,13 @@ Iteration 은 3~4일이고, 그 안에서 이 PR 을 열고 끝나면 dev 로 �
 Claude Code 에게:
 - 작업 전에 `gh pr view --json title,body -q '.title, .body'` 로 이 본문을 먼저 읽으세요.
   Project 필드까지 봐야 하면 `gh project item-list 3 --owner SAJOYO`.
+  (`gh auth refresh -h github.com -s project` 를 한 번 해 두어야 돕니다.)
 - 아래 `##` 제목은 고정입니다. 제목은 두고 내용만 채우세요.
   해당 없는 섹션은 `- 없음` 한 줄로 두고, 섹션 자체를 지우지는 마세요.
 - 작업 중 본문이 낡으면 `gh pr edit --body-file <파일>` 로 갱신하세요.
   특히 `## 컨텍스트 메모` 는 다음 세션의 Claude 가 읽는 유일한 인수인계입니다.
 - 되돌리기 번거로운 결정은 여기 말고 `docs/decisions.md` 에 적고 번호(D-0xx)만 남기세요.
+- 협업 규칙(우선순위 · Iteration · PR 기준 · 회고)은 `docs/collaboration.md` 에 있습니다.
 -->
 
 ## 무엇을 / 왜

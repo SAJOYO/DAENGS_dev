@@ -110,6 +110,12 @@ Project 3 (`orgs/SAJOYO/projects/3`) 은 `Open Pull Requests` 기준으로 관�
 - `gh` 로 Project 를 읽고 쓰려면 `gh auth refresh -s project` 를 한 번 해 두어야 합니다.
   PR 템플릿이 Claude 에게 시키는 `gh project item-list` 도 이 권한이 있어야 돕니다.
 
+### 브랜치
+
+- 작업 브랜치는 `dev` 에서 따고 PR 로 `dev` 에 머지합니다. 머지된 브랜치는 자동 삭제됩니다 (저장소 설정).
+- `main` 은 릴리즈 스냅샷입니다. 완성 단위마다 `dev → main` PR 로 올립니다. `dev` 가 default 라
+  이 머지로 `dev` 가 지워지지는 않습니다 — **default 를 `main` 으로 바꾸지 마세요.**
+
 ## 5. 데일리 스크럼
 
 세 줄이면 됩니다. **15~30분, 짧게.** 뒤에 기다리는 사람이 있어야 끝납니다.

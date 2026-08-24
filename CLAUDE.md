@@ -47,7 +47,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 ## 규칙
 
 - **브랜치는 `dev` 가 기본입니다.** `dev` 에 push/merge 하면 self-hosted 러너가 자동 배포합니다.
-  main 브랜치는 쓰지 않습니다.
+  `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **백엔드는 uv 기본 src 레이아웃**입니다. 코드는 `src/daengs_backend/` 안에 두고

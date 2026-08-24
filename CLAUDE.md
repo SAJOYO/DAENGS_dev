@@ -19,6 +19,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
 | `docs/decisions.md` | 의사결정 기록. 되돌리기 번거로운 결정은 여기에 |
+| `docs/collaboration.md` | 협업 규칙. 우선순위 · Iteration · PR 기준 · 회고 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
@@ -46,7 +47,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 ## 규칙
 
 - **브랜치는 `dev` 가 기본입니다.** `dev` 에 push/merge 하면 self-hosted 러너가 자동 배포합니다.
-  main 브랜치는 쓰지 않습니다.
+  `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **백엔드는 uv 기본 src 레이아웃**입니다. 코드는 `src/daengs_backend/` 안에 두고
@@ -80,3 +81,5 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는
   루트 `README.md` 참고 (러너를 먼저 띄우면 배포 후 서비스가 내려갑니다).
+- **협업 규칙은 `docs/collaboration.md` 에 있습니다.** 우선순위(P0~P3) · Iteration 기간 · Hold 판단은
+  사람이 정합니다. Claude 는 제안까지만 하고, 작업 단위는 PR 본문의 `## 작업 목록` 을 기준으로 합니다.

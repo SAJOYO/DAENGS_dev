@@ -166,5 +166,6 @@ db/indexes.sql            인덱스. 적재 후 수동 실행
 .env.example              환경 변수 서식 (최상단은 compose 용, backend/ 는 앱 용)
 ecosystem.config.js       PM2 설정 (프론트)
 docs/decisions.md         의사결정 기록
+docs/collaboration.md     협업 규칙
 .github/workflows/        배포 워크플로우
 ```

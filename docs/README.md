@@ -3,6 +3,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
+| [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.

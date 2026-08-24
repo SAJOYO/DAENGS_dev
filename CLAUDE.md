@@ -19,6 +19,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
 | `docs/decisions.md` | 의사결정 기록. 되돌리기 번거로운 결정은 여기에 |
+| `docs/collaboration.md` | 협업 규칙. 우선순위 · Iteration · PR 기준 · 회고 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
@@ -80,3 +81,5 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는
   루트 `README.md` 참고 (러너를 먼저 띄우면 배포 후 서비스가 내려갑니다).
+- **협업 규칙은 `docs/collaboration.md` 에 있습니다.** 우선순위(P0~P3) · Iteration 기간 · Hold 판단은
+  사람이 정합니다. Claude 는 제안까지만 하고, 작업 단위는 PR 본문의 `## 작업 목록` 을 기준으로 합니다.

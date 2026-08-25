@@ -90,7 +90,9 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   DB 기본값을 바꾸려면 볼륨을 지우고 다시 만들어야 합니다.
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
-  backend 는 아직 DB 를 쓰지 않습니다 — 붙일 때 접속 정보를 어디에 둘지 정하세요.
+  `backend/.env` 의 `DAENGS_DATABASE_URL` 은 **개발 PC 에서 `uv run dev` 로 띄울 때**
+  쓰는 값입니다. 서버 컨테이너에서는 compose 의 `environment` 가 같은 이름으로
+  덮어써서 최상단 `.env` 의 `POSTGRES_*` 로 조립합니다 (D-009).
 - **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
   `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
   `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,

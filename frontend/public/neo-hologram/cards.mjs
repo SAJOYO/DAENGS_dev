@@ -23,6 +23,9 @@
 //       **지금 구현된 건 immersive 하나뿐이다.** 나머지는 배정만 적어 둔 것이고
 //       화면에는 전부 기본 풀아트로 보인다. 다음 PR 에서 하나씩 붙인다.
 // scene  : immersive 카드만 갖는다. 무대에 넘길 값 (immersive.mjs 가 읽는다).
+//       back/subject 는 art/*.webp 와 별개인 **레이어 원화**다. 카드 그림이 아니라
+//       프레임 없는 배경 한 장과 알파가 있는 주인공 한 장 — tools/neo-hologram-layers.py
+//       로 뽑는다. 없으면 카드 그림으로 때우는데 보기엔 이상하다.
 
 export const CARDS = [
   {
@@ -45,6 +48,8 @@ export const CARDS = [
     rarity: "immersive",
     scene: {
       place: "이슬 맺힌 텃밭 · 해 뜨기 직전",
+      back: "art/cabbage-back.webp",
+      subject: "art/cabbage-subject.webp",
       motes: 34,
       leaves: 7,
     },

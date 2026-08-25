@@ -114,11 +114,8 @@
   --px: 0;
   --py: 0;
 
-  /* style.css 의 .foil / .glare 가 이 셋을 상속으로 받아 쓴다.
-     px 를 그대로 넘기면 카드 위 광원이 시선과 같이 움직인다. */
-  --mouse-x: calc(50% + var(--px) * 30%);
-  --mouse-y: calc(50% + var(--py) * 30%);
-  --glare: .8;
+  /* 예전엔 여기서 --mouse-x/--glare 를 넘겨 style.css 의 .foil/.glare 를 굴렸다.
+     주인공이 카드가 아니라 누끼가 되면서 포일을 얹을 표면이 없어져 전부 걷어냈다. */
 
   position: absolute;
   inset: 0;
@@ -166,22 +163,36 @@
     linear-gradient(178deg, #0b1a11 0%, #06100a 46%, #020604 100%);
 }
 
-/* 1. 색 환경 — 카드 그림 자체를 크게 흐려서 깐다.
-   레이어 원화가 없어 배경을 그릴 수 없는 대신 같은 그림에서 색을 빌려 온다.
-   프레임까지 인쇄된 카드라도 blur(72px) 면 색 덩어리로만 남는다. */
-.dio-wash .dio-move {
-  --par: 10;
-  --k: 1.35;
-  background: var(--wash) center / cover no-repeat;
-  filter: blur(72px) saturate(1.6) brightness(.6);
-  opacity: .9;
+/* 1. 배경 — 텃밭 원화. 사실상 이 연출의 전부다.
+   잎사귀 하나하나, 이랑, 지평선처럼 **윤곽이 있는** 것들이라 밀리면 눈에 보인다.
+   예전엔 같은 카드 그림을 blur(72px) 로 깔았는데, 흐린 덩어리는 아무리 밀어도
+   움직이는 게 보이지 않았다 — 패럴랙스는 눈이 따라갈 기준점이 있어야 성립한다. */
+.dio-back .dio-move {
+  --par: 12;
+  --k: 1.2;
+  background: var(--back) center / cover no-repeat;
+}
+
+/* 원화가 755x670 밖에 안 돼서 화면을 채우려면 3배 넘게 늘려야 한다. 늘어나 흐려진 걸
+   가리고 주인공을 띄우려고 어둡게 깔고 비네팅을 씌운다.
+   이건 레이어(.dio-back)에 건다 — .dio-move 에 걸면 비네팅까지 같이 밀려서
+   화면 한쪽 구석이 밝아진다. */
+.dio-back::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 66% 56% at 50% 44%, transparent 28%, rgba(2, 6, 3, .74) 100%),
+    linear-gradient(to top, rgba(2, 6, 3, .88) 0%, transparent 44%);
 }
 
 /* 2. 빛줄기 — 아주 천천히 돈다. 회전은 ::before 가 맡는다.
    .dio-move 의 transform 은 패럴랙스가 이미 쓰고 있어서 여기에 또 걸 수 없다. */
+/* 배경이 흐린 덩어리였을 땐 빛줄기가 화면을 채워 줬는데, 이제 배경에 잎사귀가
+   가득해서 세게 걸면 다 씻겨 나간다. 있는 듯 없는 듯한 정도로만 남긴다. */
 .dio-rays {
   mix-blend-mode: screen;
-  opacity: .55;
+  opacity: .3;
 }
 
 .dio-rays .dio-move { --par: 18; --k: 1.1; }
@@ -221,24 +232,26 @@
   to { transform: translate3d(calc(var(--dx) * 1px), calc(var(--dy) * 1px), 0); }
 }
 
-/* 4. 주인공 — 카드 한 장이 통째로 이 평면이다 */
+/* 4. 주인공 — 카드가 아니라 **누끼**다.
+   프레임도 제목바도 없이 배추만 장면 안에 서 있다. 이게 "배경 위의 직사각형"과
+   "장면 안의 배추"를 가르는 지점이다. 그래서 여기엔 .foil/.glare 를 얹지 않는다 —
+   포일은 카드 표면의 성질이고, 지금 표면이라는 게 없다.
+
+   그림자는 box-shadow 가 아니라 drop-shadow 를 쓴다. box-shadow 는 사각형을 따라가고
+   drop-shadow 는 **알파 실루엣**을 따라가서, 잎사귀 윤곽대로 그림자가 진다. */
 .dio-subject .dio-move {
-  --par: 46;
+  --par: 52;
   perspective: 1500px;
 }
 
-.dio-card {
-  position: relative;
-  height: min(62svh, 620px);
-  aspect-ratio: var(--ar);
-  border-radius: 3.05% / 2.2%;
-  overflow: hidden;
-  transform-style: preserve-3d;
-  transform: rotateX(calc(var(--py) * -9deg)) rotateY(calc(var(--px) * 12deg));
-  box-shadow:
-    0 42px 90px rgba(0, 0, 0, .72),
-    0 0 0 1px rgba(255, 255, 255, .22),
-    0 0 100px color-mix(in srgb, var(--accent) 28%, transparent);
+.dio-hero {
+  display: block;
+  height: min(58svh, 560px);
+  width: auto;
+  transform: rotateX(calc(var(--py) * -6deg)) rotateY(calc(var(--px) * 9deg));
+  filter:
+    drop-shadow(0 24px 38px rgba(0, 0, 0, .62))
+    drop-shadow(0 0 64px color-mix(in srgb, var(--accent) 38%, transparent));
 }
 
 /* 5. 자막 — 카드보다 조금 앞. 이름·코드만 여기 있고, 조작하는 것(닫기 버튼)은
@@ -365,7 +378,7 @@
 }
 
 @media (max-width: 760px) {
-  .dio-card { height: min(52svh, 440px); }
+  .dio-hero { height: min(46svh, 400px); }
   .dio-meta { left: 20px; bottom: 78px; }
   .dio-tip { left: 20px; right: auto; bottom: 22px; }
 }
@@ -373,7 +386,7 @@
 @media (prefers-reduced-motion: reduce) {
   .stage.is-holding::after { animation: none; background: rgba(255, 255, 255, .3); }
   .dio-move,
-  .dio-card { transform: none; }
+  .dio-hero { transform: none; }
   .mote,
   .leaf,
   .dio-rays .dio-move::before { animation: none; }

@@ -96,23 +96,18 @@ function build(card) {
   el.className = "dio";
   el.style.setProperty("--accent", card.accent);
   el.style.setProperty("--accent2", card.accent2);
-  el.style.setProperty("--ar", (card.w / card.h).toFixed(4));
-  el.style.setProperty("--wash", `url("${card.art}")`);
+  // 레이어 원화가 없으면 카드 그림으로 때운다. 보기엔 이상하지만 터지지는 않는다.
+  el.style.setProperty("--back", `url("${scene.back ?? card.art}")`);
 
   // --i 는 진입 시차 순번이다. 뒤에서 앞으로 0..6.
   el.innerHTML = `
     <div class="dio-layer dio-sky" style="--i:0"><div class="dio-move"></div></div>
-    <div class="dio-layer dio-wash" style="--i:1"><div class="dio-move"></div></div>
+    <div class="dio-layer dio-back" style="--i:1"><div class="dio-move"></div></div>
     <div class="dio-layer dio-rays" style="--i:2"><div class="dio-move"></div></div>
     <div class="dio-layer dio-motes" style="--i:3"><div class="dio-move"></div></div>
     <div class="dio-layer dio-subject" style="--i:4"><div class="dio-move">
-      <div class="dio-card" role="img" aria-label="${esc(altText(card))}">
-        <img class="art" src="${esc(card.art)}" width="${card.w}" height="${card.h}" alt="" decoding="async">
-        <span class="foil" aria-hidden="true"></span>
-        <span class="glare" aria-hidden="true"></span>
-        <span class="grain" aria-hidden="true"></span>
-        <span class="edge" aria-hidden="true"></span>
-      </div>
+      <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
+           alt="${esc(altText(card))}" decoding="async">
     </div></div>
     <div class="dio-layer dio-hud" style="--i:5"><div class="dio-move">
       <div class="dio-meta">

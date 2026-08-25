@@ -52,7 +52,15 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **백엔드는 uv 기본 src 레이아웃**입니다. 코드는 `src/daengs_backend/` 안에 두고
   `from daengs_backend.config import settings` 처럼 패키지 이름으로 import 합니다.
-  폴더 구분(MVC 등)은 아직 정하지 않았습니다 — 당분간 패키지 안에 평평하게 둡니다.
+  패키지 안은 **MVC2 계층**으로 나눕니다 (D-011).
+  `routers`=Controller / `services`=Service / `repositories`=DAO /
+  `models`(SQLAlchemy)+`schemas`(Pydantic)=Model. View 는 Next.js 가 가져갑니다.
+  각 폴더의 `__init__.py` 에 "무엇을 넣고 무엇을 넣지 말 것"이 적혀 있습니다.
+  `src/` 밑에 패키지를 더 둘지(`daengs_rag` 등)는 **아직 정하지 않았습니다.**
+- **DB 접근은 SQLAlchemy 2.0 async + asyncpg** 입니다 (D-011). 세션은
+  `core.database.get_session` 의존성으로 받고, `commit` 은 services 계층에서 합니다.
+  **스키마 원본은 `db/init/*.sql` 이고 Alembic 은 쓰지 않습니다** — `models/` 는 SQL 을
+  따라가는 쪽이라, SQL 을 고쳤으면 모델도 손으로 맞춰야 합니다.
 - **Python 은 3.12 로 고정**입니다 (`requires-python = ">=3.12,<3.13"`, `backend/.python-version`).
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로
@@ -66,6 +74,11 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
+- **compose 는 서버 PC 에서만 띄웁니다.** DB 는 팀에 하나뿐이고 서버 PC 에 있습니다
+  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx 와 pgvector 가
+  또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB 가 생깁니다.
+  개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DATABASE_URL` 이 서버 DB 를
+  보게 하세요.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
   기본값이 아닌 값으로 지정하세요. pgAdmin(tools 프로파일)은 로그인 없는 모드라

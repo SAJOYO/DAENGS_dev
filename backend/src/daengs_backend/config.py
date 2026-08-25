@@ -34,5 +34,19 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
+    # SQLAlchemy 접속 URL. 드라이버까지 포함해야 합니다 (`+asyncpg`).
+    #
+    # 이 기본값은 사실상 자리표시자입니다. 어느 쪽에서 띄우든 덮어써집니다.
+    #   개발 PC : DB 가 서버 PC 에 하나뿐이므로 backend/.env 에 그 IP 를 적습니다.
+    #             localhost 로는 안 붙습니다.
+    #   서버 PC : 컨테이너 안에서는 localhost 가 컨테이너 자신이라, compose 가
+    #             같은 이름의 환경 변수로 덮어써 pgvector 서비스를 보게 합니다.
+    database_url: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/vectordb"
+    )
+
+    # 실행되는 SQL 을 로그로 찍습니다. 쿼리를 들여다볼 때만 켜세요.
+    db_echo: bool = False
+
 
 settings = Settings()

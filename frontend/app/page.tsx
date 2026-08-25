@@ -24,6 +24,12 @@ const documents = [
       "다견 컨텍스트 분리, 오케스트레이션 계약, Neo4j 그래프 실험. 앞의 두 건은 순서대로 이어지고 그래프는 별도 기술 검토입니다.",
     href: "/mentoring/0822.html",
   },
+  {
+    title: "네오 채소 도감 — 홀로그램 카드 데모",
+    description:
+      "채소가 된 네오 카드 6장. 마우스를 올리면 홀로그램이 돌고, 누르면 카드가 제자리에서 가운데로 날아옵니다. 프레임워크 없이 HTML·CSS·JS 만으로 만든 화면입니다.",
+    href: "/neo-hologram/index.html",
+  },
 ];
 
 const stack = [

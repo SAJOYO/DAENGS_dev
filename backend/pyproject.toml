@@ -22,6 +22,8 @@ dependencies = [
 [project.scripts]
 dev = "daengs_backend.main:dev"
 run = "daengs_backend.main:run"
+# 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
+seed-admin = "daengs_backend.cli.seed_admin:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

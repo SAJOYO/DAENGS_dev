@@ -99,6 +99,19 @@ function build(card) {
   // 레이어 원화가 없으면 카드 그림으로 때운다. 보기엔 이상하지만 터지지는 않는다.
   el.style.setProperty("--back", `url("${scene.back ?? card.art}")`);
 
+  // 들어올 때 겹칠 카드의 자리. scene.fit 이 "카드 안에서 누끼가 차지하는 자리"이므로
+  // 뒤집으면 "누끼에 맞추려면 카드가 어디 있어야 하는지"가 된다.
+  // 단위는 전부 누끼 높이의 배수다 — CSS 가 --hh 를 곱한다.
+  const fit = scene.fit;
+  if (fit) {
+    const ch = 100 / fit.h;                    // 카드 높이
+    const cw = ch * (card.w / card.h);         // 카드 폭
+    const hw = (fit.w / 100) * cw;             // 누끼 폭
+    el.style.setProperty("--card-h", ch.toFixed(4));
+    el.style.setProperty("--card-x", (-hw / 2 - (fit.x / 100) * cw).toFixed(4));
+    el.style.setProperty("--card-y", (-0.5 - (fit.y / 100) * ch).toFixed(4));
+  }
+
   // --i 는 진입 시차 순번이다. 뒤에서 앞으로 0..6.
   el.innerHTML = `
     <div class="dio-layer dio-sky" style="--i:0"><div class="dio-move"></div></div>
@@ -106,9 +119,12 @@ function build(card) {
     <div class="dio-layer dio-rays" style="--i:2"><div class="dio-move"></div></div>
     <div class="dio-layer dio-motes" style="--i:3"><div class="dio-move"></div></div>
     <div class="dio-layer dio-subject" style="--i:4"><div class="dio-move">
-      <span class="dio-ground" aria-hidden="true"></span>
-      <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
-           alt="${esc(altText(card))}" decoding="async">
+      <div class="dio-plate">
+        <span class="dio-ground" aria-hidden="true"></span>
+        ${fit ? `<img class="dio-plate-art" src="${esc(card.art)}" alt="" aria-hidden="true" decoding="async">` : ""}
+        <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
+             alt="${esc(altText(card))}" decoding="async">
+      </div>
     </div></div>
     <div class="dio-layer dio-hud" style="--i:5"><div class="dio-move">
       <div class="dio-meta">
@@ -167,7 +183,39 @@ function build(card) {
 
 export const isImmersive = (card) => card?.rarity === "immersive";
 
-export function openImmersive(card) {
+/**
+ * 눌린 카드에서 큰 카드로 가는 변형을 재서 --flip-t 에 넣는다.
+ *
+ * 판(.dio-plate)을 판 중심 P 기준으로 s 배 줄이면 카드 중심 A 는 P + s*(A-P) 로 간다.
+ * 그게 눌린 카드의 중심 F 가 되도록 남은 만큼을 밀어 준다. 판과 카드의 중심이 서로
+ * 다르기 때문에(카드가 판 안에서 위쪽으로 치우쳐 있다) 이 보정이 필요하다.
+ */
+function setFlight(root, fromRect) {
+  const plate = root.querySelector(".dio-plate");
+  const art = root.querySelector(".dio-plate-art");
+  if (!plate || !art || !fromRect?.width) return;
+
+  const p = plate.getBoundingClientRect();
+  const a = art.getBoundingClientRect();
+  if (!a.width) return;
+
+  const s = fromRect.width / a.width;
+  const tx0 = (fromRect.left + fromRect.width / 2) - (p.left + p.width / 2)
+            - s * ((a.left + a.width / 2) - (p.left + p.width / 2));
+  const ty0 = (fromRect.top + fromRect.height / 2) - (p.top + p.height / 2)
+            - s * ((a.top + a.height / 2) - (p.top + p.height / 2));
+
+  plate.style.setProperty(
+    "--flip-t",
+    `translate(${tx0.toFixed(1)}px, ${ty0.toFixed(1)}px) scale(${s.toFixed(4)})`);
+}
+
+/**
+ * @param {object} card
+ * @param {DOMRect} [fromRect] 눌린 카드의 화면 위 자리. 여기서 출발한다.
+ *   키보드(★★★ 버튼)로 들어오면 없어도 되고, 그때는 그냥 작게 시작한다.
+ */
+export function openImmersive(card, fromRect) {
   if (!dialog || dialog.open || !isImmersive(card)) return;
 
   dialog.replaceChildren(build(card));
@@ -178,9 +226,11 @@ export function openImmersive(card) {
   document.body.classList.add("is-immersed");
 
   if (!reducedMotion) {
+    // 재는 건 is-entering 을 붙이기 **전에**. 붙고 나면 이미 변형된 상태라 못 잰다.
+    setFlight(dio, fromRect);
     dialog.classList.add("is-entering");
-    // 마지막 평면이 들어오는 시각 = 620 + 6*55 = 950ms
-    setTimeout(() => dialog.classList.remove("is-entering"), 1000);
+    // 마지막 배경 평면이 들어오는 시각 = 300 + 6*55 + 620 = 1250ms, 판은 1300ms
+    setTimeout(() => dialog.classList.remove("is-entering"), 1360);
   }
 
   bindScene(dio);

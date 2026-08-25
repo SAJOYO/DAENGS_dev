@@ -247,12 +247,36 @@
    drop-shadow 는 **알파 실루엣**을 따라가서, 잎사귀 윤곽대로 그림자가 진다. */
 .dio-subject .dio-move {
   --par: 52;
+  --hh: min(58svh, 560px);   /* 누끼 높이. 이 평면의 모든 크기가 여기서 나온다 */
   perspective: 1500px;
+}
+
+/* 카드와 누끼를 같이 담는 판. 들어올 때 이 판이 통째로 날아오고 확대된다.
+   둘이 한 판에 있어야 확대되는 동안 서로 어긋나지 않는다. */
+.dio-plate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* 원본 카드(프레임 포함). 평소엔 안 보이고 들어오는 동안만 나타났다 녹는다.
+   위치는 **누끼에 맞춰 역산**한다 — cards.mjs 의 scene.fit 이 "카드 안에서 누끼가
+   차지하는 자리"라, 그걸 뒤집으면 "누끼에 맞추려면 카드가 어디 있어야 하는지"가 나온다.
+   --card-x/y/h 는 immersive.mjs 가 누끼 높이의 배수로 계산해 넣는다.
+   이게 맞아야 틀이 녹는 동안 캐릭터가 한 픽셀도 안 움직인다. */
+.dio-plate-art {
+  position: absolute;
+  left: calc(50% + var(--card-x) * var(--hh));
+  top: calc(50% + var(--card-y) * var(--hh));
+  height: calc(var(--card-h) * var(--hh));
+  width: auto;
+  opacity: 0;
 }
 
 .dio-hero {
   display: block;
-  height: min(58svh, 560px);
+  height: var(--hh);
   width: auto;
   transform: rotateX(calc(var(--py) * -6deg)) rotateY(calc(var(--px) * 9deg));
   /* 배추 원화는 대낮 조명인데 장면은 해 뜨기 직전이다. 광원이 안 맞으면 아무리
@@ -271,9 +295,9 @@
 .dio-ground {
   position: absolute;
   left: 50%;
-  top: calc(50% + min(25svh, 242px));
-  width: min(34svh, 330px);
-  height: min(7svh, 66px);
+  top: calc(50% + var(--hh) * .43);   /* 누끼 아래쪽 끝이 .5, 살짝 겹치게 */
+  width: calc(var(--hh) * .58);
+  height: calc(var(--hh) * .11);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(ellipse,
@@ -381,27 +405,72 @@
   }
 }
 
-/* ── 들어가고 나가기 ───────────────────────────────────────
-   뒤 평면부터 앞으로 55ms 씩 늦게 들어온다. 평평한 카드가 공간으로 펼쳐지는 느낌은
-   전부 이 시차에서 나온다 — 일곱 장이 동시에 나타나면 그냥 화면 전환이다.
+/* ── 들어가기 ──────────────────────────────────────────────
+   이 1.3초가 이 기능의 전부다. 그냥 다른 화면이 뜨면 "카드 안으로 들어갔다"가 아니라
+   "화면이 바뀌었다"가 된다. 눌린 그 카드에서 출발해야 연결이 생긴다.
 
-   애니메이션이 끝난 상태(opacity 1, transform none)가 .dio-layer 의 평소 값과
-   같아서, 도중에 클래스를 떼도 튀지 않는다. */
+       0 ─ 34%   눌린 자리에서 가운데로 날아오며 커진다 (FLIP)
+      34 ─ 100%  계속 확대된다. 카드가 화면보다 커지면서 안으로 들어가는 느낌이 난다
+      40 ─ 78%   카드(프레임)가 녹는다
+      44 ─ 76%   누끼가 그 자리에 나타난다
+      23% 부터   배경 평면들이 뒤에서 앞으로 55ms 씩 시차를 두고 열린다
+
+   40~78% 와 44~76% 가 겹치는 게 핵심이다. 카드와 누끼가 같은 판(.dio-plate) 위에
+   겹쳐 있고 자리가 정확히 맞아서, 틀만 사라지고 캐릭터는 제자리에 남는다.
+
+   끝난 상태가 각 요소의 평소 값과 같아서 도중에 클래스를 떼도 튀지 않는다. */
+
+@keyframes plate-in {
+  0% {
+    /* immersive.mjs 가 눌린 카드를 재서 넣는다. 없으면(키보드 진입) 그냥 작게 시작 */
+    transform: var(--flip-t, scale(.3));
+    animation-timing-function: cubic-bezier(.2, .78, .3, 1);
+  }
+  34% {
+    transform: scale(.62);
+    animation-timing-function: cubic-bezier(.45, 0, .25, 1);
+  }
+  100% { transform: scale(1); }
+}
+
+@keyframes plate-art-out {
+  0%, 40% { opacity: 1; }
+  78%, 100% { opacity: 0; }
+}
+
+@keyframes hero-in {
+  0%, 44% { opacity: 0; }
+  76%, 100% { opacity: 1; }
+}
 
 @keyframes dio-in {
   from { opacity: 0; transform: scale(.86); filter: blur(7px); }
   to { opacity: 1; transform: none; filter: blur(0); }
 }
 
-.immersive.is-entering .dio-layer {
+.immersive.is-entering .dio-plate { animation: plate-in 1300ms both; }
+.immersive.is-entering .dio-plate-art { animation: plate-art-out 1300ms linear both; }
+
+.immersive.is-entering .dio-hero,
+.immersive.is-entering .dio-ground { animation: hero-in 1300ms linear both; }
+
+/* 주인공 평면은 위에서 따로 짰으므로 이 시차에서 뺀다 */
+.immersive.is-entering .dio-layer:not(.dio-subject) {
   animation: dio-in 620ms cubic-bezier(.16, .84, .28, 1) both;
-  animation-delay: calc(var(--i) * 55ms);
+  animation-delay: calc(300ms + var(--i) * 55ms);
 }
 
-/* 나갈 때는 시차를 뒤집는다 — 앞에서부터 접힌다 */
+/* ── 나가기 ────────────────────────────────────────────────
+   들어올 때를 되감지 않는다. 되감으면 나가는 데도 1.3초가 걸리는데, 닫기는 빨라야 한다.
+   앞 평면부터 접히도록 시차만 뒤집는다. */
+
+@keyframes dio-out {
+  to { opacity: 0; transform: scale(.94); filter: blur(5px); }
+}
+
 .immersive.is-leaving .dio-layer {
-  animation: dio-in 260ms ease reverse both;
-  animation-delay: calc((6 - var(--i)) * 22ms);
+  animation: dio-out 240ms ease both;
+  animation-delay: calc((6 - var(--i)) * 18ms);
 }
 
 @media (max-width: 760px) {
@@ -417,6 +486,10 @@
   .mote,
   .leaf,
   .dio-rays .dio-move::before { animation: none; }
-  .immersive.is-entering .dio-layer,
-  .immersive.is-leaving .dio-layer { animation: none; }
+  .immersive.is-entering .dio-layer:not(.dio-subject),
+  .immersive.is-leaving .dio-layer,
+  .immersive.is-entering .dio-plate,
+  .immersive.is-entering .dio-plate-art,
+  .immersive.is-entering .dio-hero,
+  .immersive.is-entering .dio-ground { animation: none; }
 }

@@ -162,13 +162,15 @@ CARDS.forEach((card, i) => {
   if (isImmersive(card)) {
     // --accent 는 .stage 안에 갇혀 있어 캡션이 못 본다. 배지가 카드 색을 타도록 li 에 얹는다.
     li.style.setProperty("--accent", card.accent);
-    bindLongPress(stage, stage.querySelector(".card"), () => openImmersive(card));
+    // 자리는 누를 때마다 다시 잰다 — 그리드가 스크롤됐을 수 있다
+    bindLongPress(stage, stage.querySelector(".card"),
+      () => openImmersive(card, stage.getBoundingClientRect()));
 
     const badge = document.createElement("button");
     badge.type = "button";
     badge.className = "im-badge";
     badge.textContent = "★★★ 꾹 눌러서 들어가기";
-    badge.addEventListener("click", () => openImmersive(card));
+    badge.addEventListener("click", () => openImmersive(card, stage.getBoundingClientRect()));
     caption.append(badge);
   }
 

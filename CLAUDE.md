@@ -41,6 +41,7 @@ npm run lint
 uv sync                    # .venv 동기화
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
+uv run pytest              # 테스트 (backend/tests/)
 uv add <패키지>            # 의존성 추가 (pip install 대신)
 ```
 
@@ -74,10 +75,25 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
+- **`POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` 도 볼륨이 빌 때만 반영됩니다.**
+  `db/init/` 과 같습니다. 이미 돌고 있는 DB 에서 이 값을 바꾸면 컨테이너만 새 값을 쓰고
+  DB 안의 계정은 그대로라, backend 가 `password authentication failed` 로 죽습니다
+  (없는 롤이든 비밀번호가 틀렸든 메시지가 같습니다). 계정을 바꾸려면 psql 로 직접 하세요:
+
+  ```powershell
+  docker compose exec -it pgvector psql -U postgres
+  ```
+  ```
+  \du                 -- 볼륨에 실제로 있는 롤 확인
+  \password <계정>     -- 비밀번호 변경 (화면·히스토리·로그에 안 남습니다)
+  ```
+
+  롤을 새로 만들었으면 `ALTER DEFAULT PRIVILEGES` 까지 걸어 두세요. 안 그러면
+  **나중에 다른 계정으로 만든 테이블이 앱 계정에 안 보입니다.**
 - **compose 는 서버 PC 에서만 띄웁니다.** DB 는 팀에 하나뿐이고 서버 PC 에 있습니다
   (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx 와 pgvector 가
   또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB 가 생깁니다.
-  개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DATABASE_URL` 이 서버 DB 를
+  개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DB_HOST` 가 서버 DB 를
   보게 하세요.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
@@ -89,7 +105,18 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   DB 기본값을 바꾸려면 볼륨을 지우고 다시 만들어야 합니다.
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
-  backend 는 아직 DB 를 쓰지 않습니다 — 붙일 때 접속 정보를 어디에 둘지 정하세요.
+  `backend/.env` 의 `DAENGS_DB_*` 는 **개발 PC 에서 `uv run dev` 로 띄울 때** 쓰는
+  값입니다. 서버 컨테이너에서는 compose 의 `environment` 가 같은 이름으로 덮어써서
+  최상단 `.env` 의 `POSTGRES_*` 를 넘깁니다 (D-009).
+  **접속 정보는 URL 한 줄이 아니라 조각으로 받습니다** — `db_host` / `db_port` /
+  `db_user` / `db_password` / `db_name` 을 `config.py` 가 `URL.create` 로 조립합니다.
+  이어 붙이지 않는 이유는 비밀번호의 특수문자 때문입니다 (D-013).
+  옛 `DAENGS_DATABASE_URL` 이 `.env` 에 남아 있으면 backend 가 뜨지 않고 알려 줍니다.
+- **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
+  `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
+  `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,
+  관리자 비밀번호는 `core/password.py` 를 쓰고, 둘을 바꿔 쓰지 마세요 (D-012).
+  **AES 키를 잃으면 암호문을 영영 못 엽니다.** 서버의 `.env` 는 백업해 두세요.
 - **CORS 는 로컬 개발용입니다.** 배포 환경에서는 nginx 가 `/api/` 를 같은 오리진으로
   프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는

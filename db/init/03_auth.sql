@@ -33,7 +33,7 @@ CREATE TABLE admin_users (
     -- (app_users.name_enc 와 다르다 - 그쪽은 서비스 이용자의 개인정보)
     name VARCHAR(50) NOT NULL,
 
-    -- 권한 5단계. PG ENUM 이 아니라 VARCHAR + CHECK 인 이유는 D-013.
+    -- 권한 5단계. PG ENUM 이 아니라 VARCHAR + CHECK 인 이유는 D-014.
     -- 지금 실제로 발급하는 것은 ADMIN 하나이고 나머지 넷은 자리만 잡아 둔다.
     --   ADMIN     계정·권한 관리까지 전부
     --   OPERATOR  운영 데이터 CRUD + 개인정보 복호화 (계정 관리 제외)
@@ -198,7 +198,7 @@ COMMENT ON COLUMN admin_users.login_id         IS '로그인 아이디 (이메�
 COMMENT ON COLUMN admin_users.password_hash    IS 'Argon2id PHC 문자열 / 가역 암호화 금지';
 COMMENT ON COLUMN admin_users.name             IS '관리자 이름 (사내 계정이라 평문)';
 COMMENT ON COLUMN admin_users.role             IS
-'권한 5단계 (D-013. 지금 발급하는 것은 ADMIN 뿐):
+'권한 5단계 (D-014. 지금 발급하는 것은 ADMIN 뿐):
  ADMIN=전부 / OPERATOR=운영 CRUD+복호화 / CURATOR=지식베이스
  ANALYST=지표 조회 / VIEWER=조회(개인정보 마스킹)';
 COMMENT ON COLUMN admin_users.status           IS '계정 상태 active/suspended (새 로그인 차단용)';

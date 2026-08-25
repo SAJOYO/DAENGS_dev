@@ -5,4 +5,22 @@ Alembic 을 쓰지 않으므로 이 모델은 SQL 을 '따라가는' 쪽입니�
 SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 
 바깥으로 나가는 응답 형태는 schemas/ 에 따로 있습니다. 섞지 마세요.
+
+새 모델은 아래 import 에도 추가하세요. 매퍼가 한 번은 로드되어야
+관계 문자열 참조와 `Base.metadata` 가 온전해집니다.
 """
+
+from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
+from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
+from daengs_backend.models.base import Base
+from daengs_backend.models.refresh_token import RefreshToken
+
+__all__ = [
+    "ADMIN_ROLES",
+    "ADMIN_STATUSES",
+    "APP_USER_STATUSES",
+    "AdminUser",
+    "AppUser",
+    "Base",
+    "RefreshToken",
+]

@@ -16,6 +16,7 @@
 | [D-009](#d-009) | 환경 변수 파일을 compose 용과 앱 용으로 분리 | 2026-08-21 |
 | [D-010](#d-010) | pg_trgm 은 지금 넣지 않음 | 2026-08-21 |
 | [D-011](#d-011) | 백엔드 DB 층은 SQLAlchemy 2.0 async, 패키지 안은 MVC2 계층 | 2026-08-25 |
+| [D-013](#d-013) | 관리자 권한 5단계를 PG ENUM 이 아닌 `VARCHAR + CHECK` 로 | 2026-08-25 |
 
 ---
 
@@ -308,3 +309,64 @@ asyncpg 를 고른 것은 pgvector 파이썬 패키지가 asyncpg 를 지원해�
 연결 실패는 `SQLAlchemyError` 로 감싸이지 않고 asyncpg 예외나 `OSError` 가
 그대로 올라오므로, 상태 확인에서는 예외를 넓게 잡아야 합니다.
 
+---
+
+## D-013
+### 관리자 권한 5단계를 PG ENUM 이 아닌 `VARCHAR + CHECK` 로
+
+`admin_users.role` 을 이렇게 잡았습니다.
+
+```sql
+role VARCHAR(20) NOT NULL
+    CHECK (role IN ('ADMIN','OPERATOR','CURATOR','ANALYST','VIEWER'))
+```
+
+**다섯 단계.**
+
+| | |
+| --- | --- |
+| `ADMIN` | 계정·권한 관리까지 전부 |
+| `OPERATOR` | 운영 데이터 CRUD + 개인정보 복호화 (계정 관리 제외) |
+| `CURATOR` | 지식베이스 문서 + 검색 점검. 개인정보 접근 없음 |
+| `ANALYST` | 지표·검색 점검 조회. 쓰기 없음 |
+| `VIEWER` | 조회만. 개인정보는 마스킹 |
+
+**지금 실제로 발급하는 것은 `ADMIN` 하나입니다.** 나머지 넷은 자리만 잡아 둔 것이고,
+권한 체크 로직도 아직 없습니다. 그런데도 미리 적어 두는 이유는, 나중에 단계를 넣을 때
+바뀌는 것이 값 목록이 아니라 **"이 화면은 누가 볼 수 있나"라는 판단 전부**이기 때문입니다.
+축을 미리 정해 두면 그때 제약만 갈아끼우면 됩니다.
+
+**왜 ENUM 이 아닌가.** PG ENUM 은 값 추가(`ALTER TYPE ... ADD VALUE`)는 되는데
+그 다음이 불편합니다.
+
+- 값 삭제가 없습니다. 쓰지 않게 된 값이 타입에 영원히 남습니다.
+- 이름 변경(`RENAME VALUE`)은 되지만 순서 변경은 안 됩니다.
+- `ADD VALUE` 는 PG 12 부터 트랜잭션 안에서 되지만, 추가한 값을 **같은 트랜잭션 안에서
+  바로 쓸 수는 없습니다.** 마이그레이션 스크립트를 두 번에 나눠야 합니다.
+
+이 컬럼의 목적 자체가 "나중에 구성을 바꿀 여지를 남긴다"인데 ENUM 은 그 반대 방향입니다.
+`CHECK` 은 제약을 떨구고 다시 거는 것이 전부입니다.
+
+```sql
+ALTER TABLE admin_users DROP CONSTRAINT admin_users_role_check;
+ALTER TABLE admin_users ADD CONSTRAINT admin_users_role_check
+    CHECK (role IN (...));
+```
+
+**대가**는 두 가지입니다. 값 목록이 타입 하나가 아니라 제약 안에 문자열로 들어가서
+`\dT` 같은 것으로 한눈에 볼 수 없고(그래서 `COMMENT ON COLUMN` 에 적어 뒀습니다),
+같은 목록을 쓰는 컬럼이 여러 개가 되면 제약을 각각 고쳐야 합니다.
+지금은 `role` 하나뿐이라 후자는 문제가 아닙니다.
+
+같은 이유로 `admin_users.status` / `app_users.status` 도 `VARCHAR + CHECK` 입니다.
+`documents.category` 가 이미 이 방식이라 저장소 전체가 한 가지 방식으로 통일됩니다.
+
+**파이썬 쪽은 문자열입니다.** `models/admin_user.py` 의 `ADMIN_ROLES` 튜플이 같은 값을
+들고 있지만, 이것은 리터럴을 흩뿌리지 않으려는 상수일 뿐 `Enum` 타입이 아닙니다.
+SQLAlchemy 의 `Enum` 타입을 쓰면 DB 에 타입을 만들려 들기 때문에 쓰지 않았습니다.
+**SQL 의 CHECK 을 고치면 이 튜플도 손으로 맞춰야 합니다** (D-011 - Alembic 이 없어
+모델이 SQL 을 따라가는 구조의 대가입니다).
+
+**관련**: 관리자(`admin_users`)와 앱 회원(`app_users`)을 한 테이블로 합치지 않은 것,
+`app_users` 의 개인정보 컬럼을 암호문 + blind index 로 나눈 것은 PR `#7` 본문의
+`## 컨텍스트 메모` 에 적었습니다.

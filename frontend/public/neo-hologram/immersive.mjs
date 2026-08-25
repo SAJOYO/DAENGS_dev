@@ -106,6 +106,7 @@ function build(card) {
     <div class="dio-layer dio-rays" style="--i:2"><div class="dio-move"></div></div>
     <div class="dio-layer dio-motes" style="--i:3"><div class="dio-move"></div></div>
     <div class="dio-layer dio-subject" style="--i:4"><div class="dio-move">
+      <span class="dio-ground" aria-hidden="true"></span>
       <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
            alt="${esc(altText(card))}" decoding="async">
     </div></div>

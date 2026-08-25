@@ -2,8 +2,9 @@
 
 두 가지를 한다.
 
-    subject  주인공만 알파로 따 내고 알파 경계에 딱 맞게 자른다
-    back     배경 원화에서 카드 프레임(제목바·스탯바·은색 테두리)을 잘라내 그림만 남긴다
+    subject  카드 그림에서 주인공을 **색으로 갈라** 알파를 만든다 (알파가 없는 원본용)
+    trim     **이미 알파가 있는** 원화를 다듬는다 — 먼지 털고 딱 맞게 자른다 (손누끼용)
+    back     배경 원화에서 카드 프레임을 잘라내고, 좌우를 거울로 넓혀 가로 화면에 맞춘다
 
 둘 다 **아트 창 좌표를 손으로 준다.** 카드마다 프레임 두께가 달라서 자동으로 찾는 것보다
 미리보기를 보고 맞추는 게 빠르다. 실행하면 `*_preview.png` 가 같이 나오니 그걸 보면 된다.
@@ -18,7 +19,7 @@
 
 배추(No.01) 에 쓴 값:
 
-    subject  frontend/public/neo-hologram/art/cabbage.webp   32 175 778 892   (810x1125 기준)
+    trim     tools/art-src/cabbage_neo_subject_2.png                          (좌표 불필요)
     back     tools/art-src/cabbage_neo_back.png              60 235 815 905   (875x1216 기준)
 
 subject 원리: 아트 창 배경이 흰 은색 홀로 광선(어느 색이든 아주 밝다)이고 주인공은 채도
@@ -112,16 +113,87 @@ def do_subject(src, out, box):
     prev.save(str(out).rsplit(".", 1)[0] + "_preview.png")
 
 
-def do_back(src, out, box):
+def do_trim(src, out, _box=None):
+    """이미 알파가 있는 원화를 다듬는다 — 먼지 같은 반투명 점을 털고 딱 맞게 자른다.
+
+    손으로 딴 누끼를 받았을 때 쓴다. 눈에 안 보이는 알파 1~2 짜리 픽셀이 구석에 남아
+    있으면 경계 상자가 캔버스 전체가 돼서 CSS 에서 크기를 못 잡는다.
+    """
+    img = Image.open(src).convert("RGBA")
+    al = np.asarray(img.getchannel("A")).astype(int)
+    print(f"  원본 {img.size}, 경계 상자 {img.getbbox()}")
+
+    solid = al > 10
+    solid = ndimage.binary_opening(solid, np.ones((3, 3)))
+    lab, n = ndimage.label(solid)
+    if n:
+        sizes = ndimage.sum(solid, lab, range(1, n + 1))
+        keep = [j + 1 for j, sz in enumerate(sizes) if sz > 4000]
+        print(f"  덩어리 {n} 개 중 {len(keep)} 개 남김 (상위 {sorted(sizes)[-3:]})")
+        solid = np.isin(lab, keep)
+
+    # 살릴 덩어리 언저리는 원래 알파를 그대로 둔다 — 가장자리 반투명이 이 원화의 장점이다
+    grow = ndimage.binary_dilation(solid, np.ones((7, 7)), iterations=2)
+    al = np.where(grow, al, 0)
+
+    img.putalpha(Image.fromarray(al.astype(np.uint8), "L"))
+    bbox = img.getbbox()
+    img = img.crop(bbox)
+    print(f"  다듬은 뒤 {bbox} -> {img.size}")
+
+    img.save(out, lossless=False, quality=92, method=6)
+    prev = Image.new("RGB", img.size, (255, 0, 190))
+    prev.paste(img, (0, 0), img)
+    prev.save(str(out).rsplit(".", 1)[0] + "_preview.png")
+
+
+def do_back(src, out, box, ratio=2.0):
+    """프레임을 잘라내고, 화면 비율에 맞게 좌우로 넓힌다.
+
+    원화(아트 창)는 세로형인데 PC 화면은 가로형이다. 그대로 background:cover 로 깔면
+    좌우를 맞추느라 위아래가 잘려서 **하늘이 사라지고 텃밭만** 남는다. 그래서 좌우
+    날개를 붙여 2:1 로 만든다 — 날개는 가장자리를 거울처럼 뒤집은 것이다.
+
+    잎사귀처럼 반복되는 무늬라 거울 이음매는 거의 안 보인다. 좌우 대칭이 눈에 띌 수는
+    있는데, 그 자리는 어차피 비네팅으로 어두워지는 구석이다.
+    """
     img = Image.open(src).convert("RGB").crop(box)
-    print(f"  프레임 잘라냄 -> {img.size} (가로세로 {img.size[0] / img.size[1]:.2f})")
+    w, hgt = img.size
+    print(f"  프레임 잘라냄 -> {img.size} (가로세로 {w / hgt:.2f})")
+
+    target_w = int(round(hgt * ratio))
+    wing = max(0, (target_w - w) // 2)
+    if wing:
+        left = img.crop((0, 0, wing, hgt)).transpose(Image.FLIP_LEFT_RIGHT)
+        right = img.crop((w - wing, 0, w, hgt)).transpose(Image.FLIP_LEFT_RIGHT)
+        wide = Image.new("RGB", (w + wing * 2, hgt))
+        wide.paste(left, (0, 0))
+        wide.paste(img, (wing, 0))
+        wide.paste(right, (w + wing, 0))
+        img = wide
+        print(f"  거울 날개 {wing}px 씩 -> {img.size} (가로세로 {img.size[0] / img.size[1]:.2f})")
+
+        # 거울 자체는 티가 안 나는데 **좌우 대칭**이 눈에 띈다 (특히 배추처럼 큰 덩어리가
+        # 나비 날개처럼 짝을 이룬다). 바깥으로 갈수록 흐리고 어둡게 해서 주변시야로
+        # 밀어낸다 — 대칭이 안 읽히고, 덤으로 피사계심도가 생겨 가운데가 앞으로 나온다.
+        w2, h2 = img.size
+        x = np.abs(np.linspace(-1, 1, w2))
+        t = np.clip((x - 0.40) / 0.60, 0, 1) ** 1.4
+        mask = Image.fromarray((np.tile(t, (h2, 1)) * 255).astype(np.uint8), "L")
+        img = Image.composite(img.filter(ImageFilter.GaussianBlur(9)), img, mask)
+        shade = (1 - 0.42 * np.tile(t, (h2, 1)))[..., None]
+        img = Image.fromarray((np.asarray(img) * shade).astype(np.uint8))
+        print(f"  바깥 {int((1 - 0.40) * 50)}% 를 흐리고 어둡게")
+
     img.save(out, lossless=False, quality=88, method=6)
     img.save(str(out).rsplit(".", 1)[0] + "_preview.png")
 
 
+MODES = {"subject": do_subject, "back": do_back, "trim": do_trim}
+
 if __name__ == "__main__":
     mode, src, out, *nums = sys.argv[1:]
-    box = tuple(int(x) for x in nums)
+    box = tuple(int(x) for x in nums) if nums else None
     print(f"{mode}: {src} -> {out}  box={box}")
-    (do_subject if mode == "subject" else do_back)(src, out, box)
+    MODES[mode](src, out, box)
     print("  됐다")

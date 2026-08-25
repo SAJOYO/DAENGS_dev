@@ -167,9 +167,12 @@
    잎사귀 하나하나, 이랑, 지평선처럼 **윤곽이 있는** 것들이라 밀리면 눈에 보인다.
    예전엔 같은 카드 그림을 blur(72px) 로 깔았는데, 흐린 덩어리는 아무리 밀어도
    움직이는 게 보이지 않았다 — 패럴랙스는 눈이 따라갈 기준점이 있어야 성립한다. */
+/* --k 를 크게 잡으면 안 된다. 원화를 일부러 2:1 로 넓혀 놨는데 여기서 또 확대하면
+   cover 가 좌우를 맞추면서 위아래를 잘라내 **하늘이 사라지고 텃밭만** 남는다.
+   패럴랙스로 밀리는 12px 을 덮을 만큼만 키운다. */
 .dio-back .dio-move {
   --par: 12;
-  --k: 1.2;
+  --k: 1.06;
   background: var(--back) center / cover no-repeat;
 }
 
@@ -177,13 +180,16 @@
    가리고 주인공을 띄우려고 어둡게 깔고 비네팅을 씌운다.
    이건 레이어(.dio-back)에 건다 — .dio-move 에 걸면 비네팅까지 같이 밀려서
    화면 한쪽 구석이 밝아진다. */
+/* 위아래를 다르게 덮는다. 사방을 고르게 어둡게 하면 하늘까지 뭉개져서 장면이
+   텃밭 한 덩어리로 보인다. 흙(아래)은 깊게 눌러 주인공을 띄우고, 하늘(위)은 살린다. */
 .dio-back::after {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 66% 56% at 50% 44%, transparent 28%, rgba(2, 6, 3, .74) 100%),
-    linear-gradient(to top, rgba(2, 6, 3, .88) 0%, transparent 44%);
+    linear-gradient(to top,
+      rgba(2, 6, 3, .84) 0%, rgba(2, 6, 3, .22) 34%, transparent 58%),
+    radial-gradient(ellipse 92% 80% at 50% 54%, transparent 46%, rgba(2, 6, 3, .5) 100%);
 }
 
 /* 2. 빛줄기 — 아주 천천히 돈다. 회전은 ::before 가 맡는다.
@@ -249,9 +255,30 @@
   height: min(58svh, 560px);
   width: auto;
   transform: rotateX(calc(var(--py) * -6deg)) rotateY(calc(var(--px) * 9deg));
+  /* 배추 원화는 대낮 조명인데 장면은 해 뜨기 직전이다. 광원이 안 맞으면 아무리
+     자리를 잘 잡아도 오려 붙인 것처럼 보인다. 살짝 눌러 새벽 쪽으로 당긴다. */
   filter:
+    brightness(.92) saturate(1.03) contrast(1.02)
     drop-shadow(0 24px 38px rgba(0, 0, 0, .62))
-    drop-shadow(0 0 64px color-mix(in srgb, var(--accent) 38%, transparent));
+    drop-shadow(0 0 64px color-mix(in srgb, var(--accent) 34%, transparent));
+}
+
+/* 접지 그림자 — "따로 논다"의 진짜 원인은 색이 아니라 **떠 있다**는 것이다.
+   지면에 닿은 자국이 있어야 놓여 있는 걸로 읽힌다.
+   .dio-move 는 grid place-items:center 라 그냥 두면 이 타원도 한가운데 서 버린다.
+   그래서 absolute 로 빼서 주인공 밑동 높이에 맞춘다 — 주인공이 min(58svh,560px)
+   높이로 가운데 서 있으니 그 절반만큼 내려온 자리가 밑동이다. */
+.dio-ground {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + min(25svh, 242px));
+  width: min(34svh, 330px);
+  height: min(7svh, 66px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse,
+    rgba(0, 0, 0, .62), rgba(0, 0, 0, .26) 52%, transparent 74%);
+  filter: blur(12px);
 }
 
 /* 5. 자막 — 카드보다 조금 앞. 이름·코드만 여기 있고, 조작하는 것(닫기 버튼)은

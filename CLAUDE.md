@@ -3,8 +3,8 @@
 Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + nginx 로 배포합니다.
 
 ```
-브라우저 :80 → nginx(도커) → host.docker.internal:3000 → PM2 (Next)
-                           → host.docker.internal:8000 → FastAPI   (예정: nginx/default.conf 의 /api/ 블록 주석 해제)
+daengs.~     :80   → nginx(도커) → host.docker.internal:3000 → PM2 (Next, 호스트)
+daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨테이너)
 ```
 
 ## 폴더
@@ -116,9 +116,14 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
   `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,
   관리자 비밀번호는 `core/password.py` 를 쓰고, 둘을 바꿔 쓰지 마세요 (D-012).
-  **AES 키를 잃으면 암호문을 영영 못 엽니다.** 서버의 `.env` 는 백업해 두세요.
-- **CORS 는 로컬 개발용입니다.** 배포 환경에서는 nginx 가 `/api/` 를 같은 오리진으로
-  프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
+  **셋 다 개발 PC 전부와 서버가 같은 값을 씁니다** — DB 가 팀에 하나뿐이라, 키가
+  다르면 한쪽이 암호화·조회한 데이터를 다른 쪽이 못 읽습니다. git 에는 올리지 않고
+  팀 채널로 공유하세요. **AES 키를 잃으면 암호문을 영영 못 엽니다** — 어딘가 백업해
+  두세요.
+- **CORS 는 지금 배포 환경에도 필요합니다.** `daengs.~`(80) 와 `daengback.~`(8000) 는
+  오리진이 달라서입니다. 로그인 API 카드에서 `nginx/default.conf` 의 `/api/` 블록
+  주석을 열어 같은 오리진으로 묶을 예정이고(httpOnly 쿠키가 가려면 필요합니다),
+  그 전까지는 오리진 추가를 `DAENGS_CORS_ORIGINS` 환경 변수로 하세요.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는
   루트 `README.md` 참고 (러너를 먼저 띄우면 배포 후 서비스가 내려갑니다).
 - **협업 규칙은 `docs/collaboration.md` 에 있습니다.** 우선순위(P0~P3) · Iteration 기간 · Hold 판단은

@@ -36,8 +36,14 @@ uv run dev
 
 의존성은 `uv add <패키지>` 로 추가합니다. `pyproject.toml` 을 직접 고치면 `uv.lock` 과 어긋납니다.
 
-환경 변수 파일은 두 개입니다. 최상단 `.env` 는 compose(Postgres, pgAdmin)가, `backend/.env` 는
-앱이 읽습니다. 각 폴더의 `.env.example` 을 복사해서 채우세요.
+개발 PC 에서는 `backend/.env` 만 있으면 됩니다 (`backend/.env.example` 복사). 최상단
+`.env` 는 compose(Postgres, pgAdmin) 용이라 **서버 PC 에서 compose 를 띄울 때만**
+씁니다 — 개발 PC 에 만들 필요가 없습니다.
+
+DB 는 팀에 하나뿐이라(서버에만 있음) `backend/.env` 의 `DAENGS_DB_HOST` 에 서버 IP를,
+`DAENGS_DB_USER` / `DAENGS_DB_PASSWORD` 에 서버가 실제로 쓰는 계정을 넣어야 합니다.
+암호화 키 3개(`DAENGS_JWE_KEY` 등)도 서버와 같은 값이어야 합니다 — 전부 팀 채널로
+공유받으세요. 자세한 이유는 `backend/.env.example` 의 주석에 있습니다.
 
 ## 배포
 

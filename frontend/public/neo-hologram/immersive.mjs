@@ -121,7 +121,7 @@ function build(card) {
     <div class="dio-layer dio-subject" style="--i:4"><div class="dio-move">
       <div class="dio-plate">
         <span class="dio-ground" aria-hidden="true"></span>
-        ${fit ? `<img class="dio-plate-art" src="${esc(card.art)}" alt="" aria-hidden="true" decoding="async">` : ""}
+        ${fit ? `<img class="dio-plate-art" src="${esc(scene.card ?? card.art)}" alt="" aria-hidden="true" decoding="async">` : ""}
         <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
              alt="${esc(altText(card))}" decoding="async">
       </div>
@@ -208,6 +208,11 @@ function setFlight(root, fromRect) {
   plate.style.setProperty(
     "--flip-t",
     `translate(${tx0.toFixed(1)}px, ${ty0.toFixed(1)}px) scale(${s.toFixed(4)})`);
+
+  // 중간에 한 번 "카드 크기"로 서는 지점. 고정값을 쓰면 안 된다 — 모바일은 그리드
+  // 카드가 이미 화면만 해서 s 가 0.7 을 넘는데, 거기서 0.62 로 가면 날아오다가
+  // 오히려 **작아졌다가** 커진다. 출발 크기보다 항상 크도록 잡는다.
+  plate.style.setProperty("--mid-s", Math.min(.92, Math.max(s * 1.25, .62)).toFixed(3));
 }
 
 /**
@@ -229,8 +234,8 @@ export function openImmersive(card, fromRect) {
     // 재는 건 is-entering 을 붙이기 **전에**. 붙고 나면 이미 변형된 상태라 못 잰다.
     setFlight(dio, fromRect);
     dialog.classList.add("is-entering");
-    // 마지막 배경 평면이 들어오는 시각 = 300 + 6*55 + 620 = 1250ms, 판은 1300ms
-    setTimeout(() => dialog.classList.remove("is-entering"), 1360);
+    // 마지막 배경 평면이 들어오는 시각 = 420 + 6*80 + 900 = 1800ms, 판은 2100ms
+    setTimeout(() => dialog.classList.remove("is-entering"), 2160);
   }
 
   bindScene(dio);

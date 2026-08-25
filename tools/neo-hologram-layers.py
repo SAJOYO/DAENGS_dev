@@ -5,6 +5,7 @@
     subject  카드 그림에서 주인공을 **색으로 갈라** 알파를 만든다 (알파가 없는 원본용)
     trim     **이미 알파가 있는** 원화를 다듬는다 — 먼지 털고 딱 맞게 자른다 (손누끼용)
     back     배경 원화에서 카드 프레임을 잘라내고, 좌우를 거울로 넓혀 가로 화면에 맞춘다
+    card     카드 그림의 둥근 모서리 바깥(검정)을 알파로 지운다 — 확대할 때 귀퉁이가 검게 남는다
 
 둘 다 **아트 창 좌표를 손으로 준다.** 카드마다 프레임 두께가 달라서 자동으로 찾는 것보다
 미리보기를 보고 맞추는 게 빠르다. 실행하면 `*_preview.png` 가 같이 나오니 그걸 보면 된다.
@@ -32,7 +33,7 @@ subject 원리: 아트 창 배경이 흰 은색 홀로 광선(어느 색이든 �
 import sys
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage
 
 
@@ -189,7 +190,37 @@ def do_back(src, out, box, ratio=2.0):
     img.save(str(out).rsplit(".", 1)[0] + "_preview.png")
 
 
-MODES = {"subject": do_subject, "back": do_back, "trim": do_trim}
+def do_card(src, out, nums=None):
+    """카드 그림의 둥근 모서리 **바깥**을 알파로 지운다.
+
+    원본 파일은 직사각형인데 인쇄된 카드는 모서리가 둥글어서, 그 바깥이 검정으로
+    채워져 있다. 도감 그리드에서는 .card 의 border-radius 가 잘라 주니 안 보이지만,
+    이머시브 진입에서 카드를 화면만 하게 확대하면 네 귀퉁이에 검은 삼각형이 남는다.
+
+    반지름은 눈으로 재면 된다 — 맨 윗줄에서 검정이 어디까지 이어지는지가 곧 반지름이다.
+    배추 카드(810x1125)는 30px 쯤이라 32 로 잡았다. inset 은 모서리를 두른 검은
+    실선 한 겹까지 같이 걷어내려고 안쪽으로 더 깎는 양이다.
+    """
+    r, inset = (tuple(nums) + (32, 1))[:2] if nums else (32, 1)
+    img = Image.open(src).convert("RGBA")
+    w, h = img.size
+
+    # 4배로 그렸다가 줄인다 — 안 그러면 둥근 모서리가 계단으로 남는다
+    s = 4
+    m = Image.new("L", (w * s, h * s), 0)
+    ImageDraw.Draw(m).rounded_rectangle(
+        (inset * s, inset * s, (w - inset) * s - 1, (h - inset) * s - 1),
+        radius=r * s, fill=255)
+    img.putalpha(m.resize((w, h), Image.LANCZOS))
+    print(f"  {img.size}, 반지름 {r}px, 안쪽으로 {inset}px")
+
+    img.save(out, lossless=False, quality=92, method=6)
+    prev = Image.new("RGB", img.size, (255, 0, 190))
+    prev.paste(img, (0, 0), img)
+    prev.save(str(out).rsplit(".", 1)[0] + "_preview.png")
+
+
+MODES = {"subject": do_subject, "back": do_back, "trim": do_trim, "card": do_card}
 
 if __name__ == "__main__":
     mode, src, out, *nums = sys.argv[1:]

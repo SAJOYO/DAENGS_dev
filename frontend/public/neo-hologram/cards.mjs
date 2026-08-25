@@ -50,6 +50,9 @@ export const CARDS = [
       place: "이슬 맺힌 텃밭 · 해 뜨기 직전",
       back: "art/cabbage-back.webp",
       subject: "art/cabbage-subject.webp",
+      // 진입 때만 쓰는 카드 그림. art/cabbage.webp 와 같은데 둥근 모서리 바깥의
+      // 검정을 알파로 지운 것이다 — 화면만 하게 확대하면 네 귀퉁이가 검게 남는다.
+      card: "art/cabbage-card.webp",
       // 원본 카드 그림 안에서 누끼가 차지하는 자리 (카드 크기 대비 %).
       // 들어갈 때 카드와 누끼를 겹쳐 놓고 카드만 지우는데, 이 값이 맞아야
       // 틀이 녹는 동안 캐릭터가 한 픽셀도 안 움직인다. 둘이 같은 원화라 계산이 나온다 —

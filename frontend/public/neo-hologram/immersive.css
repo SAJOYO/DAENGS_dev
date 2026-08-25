@@ -406,17 +406,20 @@
 }
 
 /* ── 들어가기 ──────────────────────────────────────────────
-   이 1.3초가 이 기능의 전부다. 그냥 다른 화면이 뜨면 "카드 안으로 들어갔다"가 아니라
+   이 2.1초가 이 기능의 전부다. 그냥 다른 화면이 뜨면 "카드 안으로 들어갔다"가 아니라
    "화면이 바뀌었다"가 된다. 눌린 그 카드에서 출발해야 연결이 생긴다.
 
-       0 ─ 34%   눌린 자리에서 가운데로 날아오며 커진다 (FLIP)
-      34 ─ 100%  계속 확대된다. 카드가 화면보다 커지면서 안으로 들어가는 느낌이 난다
-      40 ─ 78%   카드(프레임)가 녹는다
-      44 ─ 76%   누끼가 그 자리에 나타난다
-      23% 부터   배경 평면들이 뒤에서 앞으로 55ms 씩 시차를 두고 열린다
+       0 ─ 24%   눌린 자리에서 가운데로 날아오며 커진다 (FLIP)
+      24 ─ 100%  천천히 계속 확대된다. 카드가 화면보다 커지며 안으로 들어가는 느낌이 난다
+      46 ─ 80%   카드(프레임)가 녹는다
+      50 ─ 78%   누끼가 그 자리에 나타난다
+      20% 부터   배경 평면들이 뒤에서 앞으로 80ms 씩 시차를 두고 열린다
 
-   40~78% 와 44~76% 가 겹치는 게 핵심이다. 카드와 누끼가 같은 판(.dio-plate) 위에
+   46~80% 와 50~78% 가 겹치는 게 핵심이다. 카드와 누끼가 같은 판(.dio-plate) 위에
    겹쳐 있고 자리가 정확히 맞아서, 틀만 사라지고 캐릭터는 제자리에 남는다.
+
+   길다 싶어도 줄이지 말 것 — 사람이 지루해하는 건 **꾹 누르는 시간**(520ms)이지
+   연출 시간이 아니다. 여기서 서두르면 확대되는 게 아니라 튀어 오르는 걸로 보인다.
 
    끝난 상태가 각 요소의 평소 값과 같아서 도중에 클래스를 떼도 튀지 않는다. */
 
@@ -426,21 +429,23 @@
     transform: var(--flip-t, scale(.3));
     animation-timing-function: cubic-bezier(.2, .78, .3, 1);
   }
-  34% {
-    transform: scale(.62);
-    animation-timing-function: cubic-bezier(.45, 0, .25, 1);
+  24% {
+    /* 중간에 한 번 카드 크기로 선다. 값은 immersive.mjs 가 출발 크기를 보고 정한다 —
+       모바일은 그리드 카드가 이미 화면만 해서 고정값을 쓰면 도중에 작아진다. */
+    transform: scale(var(--mid-s, .62));
+    animation-timing-function: cubic-bezier(.42, 0, .3, 1);
   }
   100% { transform: scale(1); }
 }
 
 @keyframes plate-art-out {
-  0%, 40% { opacity: 1; }
-  78%, 100% { opacity: 0; }
+  0%, 46% { opacity: 1; }
+  80%, 100% { opacity: 0; }
 }
 
 @keyframes hero-in {
-  0%, 44% { opacity: 0; }
-  76%, 100% { opacity: 1; }
+  0%, 50% { opacity: 0; }
+  78%, 100% { opacity: 1; }
 }
 
 @keyframes dio-in {
@@ -448,16 +453,16 @@
   to { opacity: 1; transform: none; filter: blur(0); }
 }
 
-.immersive.is-entering .dio-plate { animation: plate-in 1300ms both; }
-.immersive.is-entering .dio-plate-art { animation: plate-art-out 1300ms linear both; }
+.immersive.is-entering .dio-plate { animation: plate-in 2100ms both; }
+.immersive.is-entering .dio-plate-art { animation: plate-art-out 2100ms linear both; }
 
 .immersive.is-entering .dio-hero,
-.immersive.is-entering .dio-ground { animation: hero-in 1300ms linear both; }
+.immersive.is-entering .dio-ground { animation: hero-in 2100ms linear both; }
 
 /* 주인공 평면은 위에서 따로 짰으므로 이 시차에서 뺀다 */
 .immersive.is-entering .dio-layer:not(.dio-subject) {
-  animation: dio-in 620ms cubic-bezier(.16, .84, .28, 1) both;
-  animation-delay: calc(300ms + var(--i) * 55ms);
+  animation: dio-in 900ms cubic-bezier(.16, .84, .28, 1) both;
+  animation-delay: calc(420ms + var(--i) * 80ms);
 }
 
 /* ── 나가기 ────────────────────────────────────────────────
@@ -474,7 +479,10 @@
 }
 
 @media (max-width: 760px) {
-  .dio-hero { height: min(46svh, 400px); }
+  /* .dio-hero 의 height 를 직접 덮으면 안 된다. 이 평면의 카드 자리·접지 그림자가
+     전부 --hh 로 계산돼 있어서, 누끼만 줄이면 진입할 때 카드와 캐릭터가 어긋난다
+     (틀이 녹는 순간 캐릭터가 26% 튀었다). 크기는 --hh 하나로만 바꾼다. */
+  .dio-subject .dio-move { --hh: min(46svh, 400px); }
   .dio-meta { left: 20px; bottom: 78px; }
   .dio-tip { left: 20px; right: auto; bottom: 22px; }
 }

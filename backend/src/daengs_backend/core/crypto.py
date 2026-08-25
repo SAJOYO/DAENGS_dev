@@ -10,7 +10,6 @@
 DB 를 모릅니다. str 을 받아 bytes 를 돌려주는 순수 함수뿐입니다.
 """
 
-import base64
 import hashlib
 import hmac
 import os
@@ -18,8 +17,8 @@ import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from daengs_backend.config import settings
+from daengs_backend.core.keys import load_key
 
-KEY_SIZE = 32  # AES-256
 NONCE_SIZE = 12  # GCM 권장 길이(96비트)
 
 # 암호문 맨 앞에 붙는 키 버전. 지금은 1 하나뿐입니다.
@@ -31,33 +30,13 @@ NONCE_SIZE = 12  # GCM 권장 길이(96비트)
 CURRENT_KEY_VERSION = 1
 
 
-def _load_key(env_name: str, encoded: str) -> bytes:
-    """base64 문자열을 32바이트 키로 풉니다.
-
-    앱이 뜰 때 한 번 돌고, 잘못된 키면 여기서 바로 죽습니다.
-    첫 암복호화 요청까지 미뤄 두면 문제를 훨씬 늦게 발견합니다.
-    """
-    try:
-        key = base64.urlsafe_b64decode(encoded)
-    except ValueError as exc:  # binascii.Error 가 ValueError 입니다
-        raise ValueError(f"{env_name} 가 base64 가 아닙니다.") from exc
-
-    if len(key) != KEY_SIZE:
-        # 값 자체는 절대 메시지에 넣지 마세요. 로그로 새어 나갑니다.
-        raise ValueError(
-            f"{env_name} 는 {KEY_SIZE}바이트여야 합니다 (지금 {len(key)}바이트). "
-            "secrets.token_bytes(32) 를 urlsafe base64 로 인코딩한 값을 넣으세요."
-        )
-    return key
-
-
 # 버전 → 키. 복호화는 암호문 첫 바이트를 보고 여기서 키를 고릅니다.
 _KEYS: dict[int, bytes] = {
-    1: _load_key("DAENGS_AES_KEY", settings.aes_key.get_secret_value()),
+    1: load_key("DAENGS_AES_KEY", settings.aes_key.get_secret_value()),
 }
 
 # AES 키와 반드시 다른 키입니다. 같은 값을 쓰면 나눠 둔 의미가 없습니다.
-_BLIND_INDEX_KEY = _load_key(
+_BLIND_INDEX_KEY = load_key(
     "DAENGS_BLIND_INDEX_KEY", settings.blind_index_key.get_secret_value()
 )
 

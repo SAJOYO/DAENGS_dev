@@ -18,6 +18,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
+| `tools/` | 일회성 에셋·유틸 스크립트. `uv run --no-project` 로 돌린다 (전역 설치 없음) |
 | `docs/decisions.md` | 의사결정 기록. 되돌리기 번거로운 결정은 여기에 |
 | `docs/collaboration.md` | 협업 규칙. 우선순위 · Iteration · PR 기준 · 회고 |
 | `ecosystem.config.js` | PM2 설정 (프론트) |

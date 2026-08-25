@@ -41,6 +41,7 @@ npm run lint
 uv sync                    # .venv 동기화
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
+uv run pytest              # 테스트 (backend/tests/)
 uv add <패키지>            # 의존성 추가 (pip install 대신)
 ```
 
@@ -90,6 +91,11 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
   backend 는 아직 DB 를 쓰지 않습니다 — 붙일 때 접속 정보를 어디에 둘지 정하세요.
+- **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
+  `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
+  `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,
+  관리자 비밀번호는 `core/password.py` 를 쓰고, 둘을 바꿔 쓰지 마세요 (D-012).
+  **AES 키를 잃으면 암호문을 영영 못 엽니다.** 서버의 `.env` 는 백업해 두세요.
 - **CORS 는 로컬 개발용입니다.** 배포 환경에서는 nginx 가 `/api/` 를 같은 오리진으로
   프록시하므로 필요 없습니다. 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는

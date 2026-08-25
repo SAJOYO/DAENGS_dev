@@ -26,3 +26,17 @@ run = "daengs_backend.main:run"
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+# uv run pytest 로 부릅니다. 테스트는 backend/tests/ 에 둡니다
+# (패키지 안이 아니라 밖입니다 — 배포 아티팩트에 테스트가 들어가지 않게).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# async 테스트에 @pytest.mark.asyncio 를 매번 붙이지 않아도 되게 합니다.
+# 지금은 async 테스트가 없지만, DB·API 카드부터 바로 필요합니다.
+asyncio_mode = "auto"

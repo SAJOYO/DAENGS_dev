@@ -38,6 +38,11 @@ services:
       WATCHFILES_FORCE_POLLING: "true"
       # 컨테이너 안에서는 루프백이 아니라 전체 인터페이스에 바인딩해야 합니다.
       DAENGS_HOST: 0.0.0.0
+      # backend/.env 의 값을 덮어씁니다 (environment 가 env_file 보다 우선).
+      # backend/.env 는 로컬에서 uv run dev 로 띄울 때 쓰는 localhost 주소를 갖고,
+      # 컨테이너는 여기서 compose 네트워크의 서비스명으로 바꿔 받습니다.
+      # 접속 정보를 최상단 .env 하나로 모아 두려는 것이기도 합니다 (D-009).
+      DAENGS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgvector:5432/${POSTGRES_DB:-vectordb}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -48,6 +53,9 @@ services:
       - ./backend/src:/app/src
       - backend-venv:/opt/venv
       - uv-cache:/root/.cache/uv
+    depends_on:
+      pgvector:
+        condition: service_healthy
     # uv sync 는 컨테이너가 뜰 때만 돕니다.
     # 의존성을 바꿨다면 docker compose restart backend 를 직접 실행하세요.
     command: sh -c "uv sync --frozen && exec uv run dev"

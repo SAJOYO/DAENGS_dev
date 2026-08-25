@@ -1,15 +1,30 @@
+"""앱 조립. 라우터 등록과 미들웨어까지만 하고, 로직은 두지 않습니다."""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
+from daengs_backend.core.database import engine
+from daengs_backend.routers import health
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
 # 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
 SRC_DIR = Path(__file__).resolve().parents[1]
 
-app = FastAPI(title="DAENGS API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    yield
+    # 커넥션 풀을 정리합니다. 리로드가 잦은 개발 모드(D-006)에서
+    # 이게 없으면 죽은 워커가 잡고 있던 연결이 남습니다.
+    await engine.dispose()
+
+
+app = FastAPI(title="DAENGS API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,10 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(health.router)
 
 
 def dev() -> None:

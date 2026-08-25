@@ -15,6 +15,7 @@
 | [D-008](#d-008) | DB collation 을 `C` 로 유지 | 2026-08-21 |
 | [D-009](#d-009) | 환경 변수 파일을 compose 용과 앱 용으로 분리 | 2026-08-21 |
 | [D-010](#d-010) | pg_trgm 은 지금 넣지 않음 | 2026-08-21 |
+| [D-011](#d-011) | 백엔드 DB 층은 SQLAlchemy 2.0 async, 패키지 안은 MVC2 계층 | 2026-08-25 |
 
 ---
 
@@ -252,3 +253,58 @@ CREATE INDEX idx_documents_content_trgm ON documents USING gin (content gin_trgm
 인덱스는 `db/indexes.sql` 에 넣습니다(적재 후 생성 원칙).
 **주의**: `db/init/` 은 볼륨이 비어 있을 때만 실행되므로, 이미 만들어진 DB 에는
 psql 로 직접 실행해야 합니다.
+
+---
+
+## D-011
+### 백엔드 DB 층은 SQLAlchemy 2.0 async, 패키지 안은 MVC2 계층
+
+`sqlalchemy[asyncio]` + `asyncpg`. `src/daengs_backend/` 안을
+`core / models / schemas / repositories / services / routers` 로 나눕니다.
+
+D-002 에서 "폴더 구분은 아직 정하지 않았다"고 미뤄 둔 것을, 관리자 인증을 붙이면서
+정했습니다.
+
+**드라이버·ORM.** 생 SQL(psycopg3)도 후보였습니다. 지금 스키마 원본이 손으로 쓴
+`db/init/*.sql` 이라 그쪽이 결이 맞는 면도 있습니다. 그래도 ORM 을 고른 이유는
+**Repository 계층을 두기로 했기 때문**입니다. 생 SQL 로 Repository 를 만들면
+결국 손으로 ORM 을 다시 쓰게 됩니다. 인증만 해도 테이블 서넛이 서로 엮입니다.
+
+asyncpg 를 고른 것은 pgvector 파이썬 패키지가 asyncpg 를 지원해서,
+나중에 벡터 검색을 ORM 으로 붙일 때 드라이버를 갈아엎지 않아도 되기 때문입니다.
+
+**계층 구분.** 후보는 셋이었습니다.
+
+| | |
+| --- | --- |
+| 계층 우선 (MVC2) | 폴더가 `routers/ services/ ...`. 어디에 넣을지 고민이 없고 자바 배경이면 바로 읽힘 |
+| 기능 우선 | 폴더가 `auth/ documents/ ...`. 기능 하나가 한 폴더라 팀원끼리 안 부딪힘 |
+| 헥사고날 | 도메인이 프레임워크를 모름. 이 규모에선 보일러플레이트가 로직보다 많아짐 |
+
+**계층 우선을 골랐습니다.** 팀에 자바 배경이 있어 이해 비용이 가장 낮습니다.
+기능 우선이 팀 작업에는 유리하지만, 지금 기능이 하나뿐이라 이득이 안 보입니다.
+
+**되돌리기 쉽습니다.** 계층 우선 → 기능 우선은 파일 이동과 import 경로 수정이
+전부입니다. 다만 시간이 지나면 비싸지는 건 이동이 아니라 **얽힘**입니다.
+계층 우선에서는 `services/a.py` 가 `repositories/b.py` 를 불러도 경계를 넘었다고
+말해 주는 것이 없어서, 쌓이고 나면 옮기는 게 아니라 푸는 작업이 됩니다.
+파일 20~30개가 넘어가면 다시 보세요.
+
+**Alembic 은 넣지 않습니다.** 스키마 원본은 계속 `db/init/*.sql` 이고, `models/` 는
+그것을 따라갑니다. 둘이 어긋날 수 있다는 게 이 선택의 대가입니다.
+마이그레이션 도구는 **여러 명이 스키마를 각자 고치기 시작할 때** 값이 생깁니다.
+그때 `documents` 를 초기 리비전으로 잡고 도입하면 됩니다.
+`Base.metadata.create_all` 은 부르지 마세요 — SQL 파일과 원본이 둘로 갈립니다.
+
+**접속 정보.** `backend/.env` 의 `DAENGS_DATABASE_URL` 은 **로컬에서 `uv run dev`**
+로 띄울 때 쓰는 값입니다. 컨테이너 안에서는 `localhost` 가 컨테이너 자신이라
+닿지 않으므로, compose 의 `environment:` 가 같은 이름으로 덮어씁니다
+(`environment` 가 `env_file` 보다 우선). 컨테이너 쪽 값은 최상단 `.env` 의
+`POSTGRES_*` 로 조립하므로 **접속 정보가 두 군데로 갈리지 않습니다** (D-009).
+
+**`/health` 는 DB 가 죽으면 503 입니다.** 200 에 `db: "down"` 만 넣으면 모니터링이
+실패를 못 잡습니다. compose 의 backend 에는 healthcheck 를 걸지 않았으니
+이 503 으로 컨테이너가 재시작되지는 않습니다.
+연결 실패는 `SQLAlchemyError` 로 감싸이지 않고 asyncpg 예외나 `OSError` 가
+그대로 올라오므로, 상태 확인에서는 예외를 넓게 잡아야 합니다.
+

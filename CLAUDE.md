@@ -52,7 +52,15 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **백엔드는 uv 기본 src 레이아웃**입니다. 코드는 `src/daengs_backend/` 안에 두고
   `from daengs_backend.config import settings` 처럼 패키지 이름으로 import 합니다.
-  폴더 구분(MVC 등)은 아직 정하지 않았습니다 — 당분간 패키지 안에 평평하게 둡니다.
+  패키지 안은 **MVC2 계층**으로 나눕니다 (D-011).
+  `routers`=Controller / `services`=Service / `repositories`=DAO /
+  `models`(SQLAlchemy)+`schemas`(Pydantic)=Model. View 는 Next.js 가 가져갑니다.
+  각 폴더의 `__init__.py` 에 "무엇을 넣고 무엇을 넣지 말 것"이 적혀 있습니다.
+  `src/` 밑에 패키지를 더 둘지(`daengs_rag` 등)는 **아직 정하지 않았습니다.**
+- **DB 접근은 SQLAlchemy 2.0 async + asyncpg** 입니다 (D-011). 세션은
+  `core.database.get_session` 의존성으로 받고, `commit` 은 services 계층에서 합니다.
+  **스키마 원본은 `db/init/*.sql` 이고 Alembic 은 쓰지 않습니다** — `models/` 는 SQL 을
+  따라가는 쪽이라, SQL 을 고쳤으면 모델도 손으로 맞춰야 합니다.
 - **Python 은 3.12 로 고정**입니다 (`requires-python = ">=3.12,<3.13"`, `backend/.python-version`).
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로

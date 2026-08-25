@@ -9,7 +9,6 @@ conftest.py 대로 DB 에는 붙지 않습니다. repositories 를 메모리 가
 """
 
 import uuid
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -21,56 +20,8 @@ from daengs_backend.core.token import (
     decode_access_token,
     hash_refresh_token,
 )
-from daengs_backend.repositories import admin_user as admin_user_repo
-from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.services import auth, login_attempts
-
-PASSWORD = "correct-horse-battery-staple"
-IP = "192.168.0.31"
-OTHER_IP = "192.168.0.42"
-
-
-@dataclass
-class FakeAdmin:
-    """AdminUser 대역. 서비스가 건드리는 속성만 있습니다."""
-
-    id: uuid.UUID = field(default_factory=uuid.uuid4)
-    login_id: str = "daengs"
-    password_hash: str = ""
-    role: str = "ADMIN"
-    status: str = "active"
-    last_login_at: datetime | None = None
-
-
-@dataclass
-class FakeToken:
-    """RefreshToken 대역."""
-
-    admin_user_id: uuid.UUID
-    token_hash: str
-    expires_at: datetime
-    revoked_at: datetime | None = None
-    user_agent: str | None = None
-    ip: str | None = None
-
-
-class FakeSession:
-    """commit 만 셉니다. 진짜 쿼리는 아래 가짜 저장소가 가로챕니다."""
-
-    def __init__(self) -> None:
-        self.commits = 0
-
-    async def commit(self) -> None:
-        self.commits += 1
-
-
-class Store:
-    """가짜 저장소의 뒷단. 관리자 한 명과 refresh 행들을 들고 있습니다."""
-
-    def __init__(self, admin: FakeAdmin) -> None:
-        self.admin = admin
-        self.tokens: dict[str, FakeToken] = {}
-
+from fakes import IP, OTHER_IP, PASSWORD, FakeAdmin, FakeSession, Store, install
 
 @pytest.fixture
 def admin() -> FakeAdmin:
@@ -79,49 +30,8 @@ def admin() -> FakeAdmin:
 
 @pytest.fixture
 def store(admin: FakeAdmin, monkeypatch: pytest.MonkeyPatch) -> Store:
-    """repositories 를 메모리 dict 로 바꿉니다."""
-    st = Store(admin)
-
-    async def get_by_login_id(session, login_id):  # noqa: ANN001, ANN202
-        return st.admin if login_id == st.admin.login_id else None
-
-    async def get_by_id(session, admin_id):  # noqa: ANN001, ANN202
-        return st.admin if admin_id == st.admin.id else None
-
-    async def create(session, **kw):  # noqa: ANN001, ANN003, ANN202
-        token = FakeToken(
-            admin_user_id=kw["admin_user_id"],
-            token_hash=kw["token_hash"],
-            expires_at=kw["expires_at"],
-            user_agent=kw.get("user_agent"),
-            ip=kw.get("ip"),
-        )
-        st.tokens[token.token_hash] = token
-        return token
-
-    async def get_by_hash(session, token_hash):  # noqa: ANN001, ANN202
-        return st.tokens.get(token_hash)
-
-    async def revoke(session, token, at):  # noqa: ANN001, ANN202
-        token.revoked_at = at
-
-    async def delete_one(session, token):  # noqa: ANN001, ANN202
-        st.tokens.pop(token.token_hash, None)
-
-    async def delete_all_for_admin(session, admin_user_id):  # noqa: ANN001, ANN202
-        gone = [h for h, t in st.tokens.items() if t.admin_user_id == admin_user_id]
-        for h in gone:
-            del st.tokens[h]
-        return len(gone)
-
-    monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
-    monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)
-    monkeypatch.setattr(refresh_token_repo, "create", create)
-    monkeypatch.setattr(refresh_token_repo, "get_by_hash", get_by_hash)
-    monkeypatch.setattr(refresh_token_repo, "revoke", revoke)
-    monkeypatch.setattr(refresh_token_repo, "delete_one", delete_one)
-    monkeypatch.setattr(refresh_token_repo, "delete_all_for_admin", delete_all_for_admin)
-    return st
+    """repositories 를 메모리 dict 로 바꿉니다 (tests/fakes.py)."""
+    return install(Store(admin), monkeypatch)
 
 
 @pytest.fixture(autouse=True)

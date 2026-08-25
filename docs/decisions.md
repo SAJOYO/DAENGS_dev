@@ -17,6 +17,7 @@
 | [D-010](#d-010) | pg_trgm 은 지금 넣지 않음 | 2026-08-21 |
 | [D-011](#d-011) | 백엔드 DB 층은 SQLAlchemy 2.0 async, 패키지 안은 MVC2 계층 | 2026-08-25 |
 | [D-012](#d-012) | 개인정보는 앱단 AES-256-GCM, 키는 용도별로 셋 | 2026-08-25 |
+| [D-013](#d-013) | DB 접속 정보는 URL 한 줄이 아니라 조각으로 | 2026-08-25 |
 
 ---
 
@@ -297,7 +298,8 @@ asyncpg 를 고른 것은 pgvector 파이썬 패키지가 asyncpg 를 지원해�
 그때 `documents` 를 초기 리비전으로 잡고 도입하면 됩니다.
 `Base.metadata.create_all` 은 부르지 마세요 — SQL 파일과 원본이 둘로 갈립니다.
 
-**접속 정보.** `backend/.env` 의 `DAENGS_DATABASE_URL` 은 **로컬에서 `uv run dev`**
+**접속 정보.** (D-013 에서 URL 한 줄 → 조각으로 바뀌었습니다. 아래는 당시 기록입니다.)
+`backend/.env` 의 `DAENGS_DATABASE_URL` 은 **로컬에서 `uv run dev`**
 로 띄울 때 쓰는 값입니다. 컨테이너 안에서는 `localhost` 가 컨테이너 자신이라
 닿지 않으므로, compose 의 `environment:` 가 같은 이름으로 덮어씁니다
 (`environment` 가 `env_file` 보다 우선). 컨테이너 쪽 값은 최상단 `.env` 의
@@ -365,3 +367,41 @@ asyncpg 를 고른 것은 pgvector 파이썬 패키지가 asyncpg 를 지원해�
 **되돌리기**: 암호화를 걷어내는 것은 컬럼 전수 복호화라 데이터가 쌓이기 전이 쌉니다.
 키 교체는 버전 바이트 덕에 언제든 되지만, 재암호화가 끝날 때까지 옛 키를 `_KEYS` 에
 남겨 둬야 합니다.
+
+---
+
+## D-013
+### DB 접속 정보는 URL 한 줄이 아니라 조각으로
+
+`db_host` · `db_port` · `db_user` · `db_password` · `db_name` 을 따로 받고,
+`config.py` 의 `database_url` property 가 SQLAlchemy `URL.create` 로 조립합니다.
+D-011 의 `DAENGS_DATABASE_URL` 을 대체합니다.
+
+**개발 PC 와 서버는 호스트만 다릅니다.** 개발 PC 는 서버 IP, 서버 컨테이너는 compose
+네트워크의 `pgvector`. URL 한 줄로 받으면 그 한 조각 때문에 접속 정보 **전체**를
+`backend/.env` 와 `docker-compose.yml` 두 군데에 각각 적게 됩니다. 조각으로 받으면
+compose 는 `DAENGS_DB_HOST: pgvector` 만 덮어쓰면 됩니다.
+
+**이어 붙인 URL 은 비밀번호에 `@` `/` `#` 가 들어가면 깨집니다.** compose 가
+`postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgvector:...` 로 문자열을
+만들고 있었는데, D-007 때문에 `POSTGRES_PASSWORD` 는 기본값이 아닌 값을 쓰게 되어
+있어서 언제든 밟을 수 있었습니다. `URL.create` 는 조각을 받아 이스케이프까지 합니다.
+
+**접속 정보의 원본은 여전히 최상단 `.env` 하나입니다** (D-009 유지). 전달 방식만
+바뀝니다. compose 가 `POSTGRES_*` 를 읽어 `DAENGS_DB_*` 로 넘깁니다.
+
+**옛 `DAENGS_DATABASE_URL` 은 조용히 무시하지 않습니다.** `extra="ignore"` 라 그냥
+두면 무시되는데, 그러면 개발 PC 가 기본 호스트로 붙어 인증 실패를 봅니다 — 원인이
+`.env` 의 옛 줄이라는 걸 알아채기 어렵습니다. 그 변수가 보이면 뜨지 않고 무엇을
+바꿔야 하는지 알려 줍니다. 팀 전원이 `.env` 를 옮기고 나면 지워도 되는 코드입니다.
+
+**계기.** `#8` 배포 때 `password authentication failed for user "daengs"` 로 backend 가
+DB 에 못 붙었습니다. 원인은 최상단 `.env` 의 `POSTGRES_USER` 를 바꿨는데 pgvector
+볼륨은 이미 `postgres` 로 초기화된 뒤였던 것입니다 (이 값들은 `db/init/` 과 마찬가지로
+볼륨이 빌 때 한 번만 반영됩니다). 접속 정보 자체와는 다른 원인이었지만, 값이 어디서
+어떻게 조립되는지 한눈에 안 보인다는 게 그때 드러났습니다.
+
+**대가.** 설정 항목이 하나에서 다섯으로 늘었고, `sqlite://` 같은 다른 URL 을 통째로
+넣는 길이 막혔습니다. 테스트에서 그럴 일이 생기면 그때 `database_url` 을 덮어쓰는
+탈출구를 두면 됩니다. **지금 미리 두지는 않습니다** — 두 방식이 공존하면 어느 쪽이
+이겼는지 매번 확인해야 합니다.

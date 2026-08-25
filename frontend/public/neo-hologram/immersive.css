@@ -1,0 +1,373 @@
+/* ── ☆☆☆ 이머시브 ─────────────────────────────────────────
+   평범한 확대 뷰(dialog#viewer)가 카드를 크게 보여준다면, 여기서는 카드 "안으로"
+   들어간다. 하늘 / 색 환경 / 빛줄기 / 먼지 / 카드 / 자막 / 앞잎사귀가 각각 다른
+   평면에 놓이고, 마우스나 폰 기울기에 따라 서로 다른 속도로 움직인다.
+
+   정직하게 적어 둘 것 — 진짜 이머시브 카드는 원화를 레이어로 나눠 그린다.
+   여기 art/*.webp 는 프레임까지 인쇄된 완성 카드 한 장이라 배추만 오려낼 수가 없다.
+   그래서 카드는 통째로 '주인공 평면' 하나를 차지하고, 앞뒤 여섯 평면은 전부 CSS 로
+   만들어 냈다(색 환경은 같은 그림을 크게 흐려 깐 것). 레이어 원화가 생기면
+   .dio-subject 하나만 여러 장으로 쪼개면 되고, 나머지 구조는 그대로 쓴다.
+
+   style.css 는 건드리지 않고 여기서만 얹는다. 다음 PR 이 다른 레어도(ex / 각인 /
+   크라운)를 붙일 때 기본 카드 코드와 섞여 있지 않아야 되돌리기 쉽다. */
+
+/* ── 꾹 누르기 게이지 ───────────────────────────────────────
+   "꾹 누르면 뭔가 된다"는 건 눌러보기 전엔 알 수가 없다. 누르는 동안 테두리가
+   차오르지 않으면 사용자는 카드가 멈춘 줄 안다.
+
+   @property 가 없는 브라우저에서는 conic-gradient 안의 var(--hold-p) 가 무효라
+   링이 아예 안 그려진다. 그래서 .card 의 밝기 변화를 따로 둔다 — 링이 없어도
+   "반응하고 있다"는 신호는 남는다. */
+
+@property --hold-p {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* 꾹 누르는 동안 글자가 잡히거나 iOS 의 길게 누르기 팝업이 뜨면 제스처가 끊긴다 */
+.card {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.stage.is-holding .card { filter: brightness(1.08) saturate(1.12); }
+
+.stage.is-holding::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  z-index: 3;
+  padding: 2px;
+  border-radius: 5% / 3.6%;
+  pointer-events: none;
+  background: conic-gradient(from -90deg,
+    color-mix(in srgb, var(--accent2) 90%, #ffffff) var(--hold-p),
+    rgba(255, 255, 255, .1) 0);
+  /* 안쪽을 뚫어 테두리만 남긴다 — padding 이 곧 선 두께가 된다 */
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  animation: hold-fill var(--hold-ms, 520ms) linear forwards;
+}
+
+@keyframes hold-fill {
+  from { --hold-p: 0deg; }
+  to { --hold-p: 360deg; }
+}
+
+/* 캡션의 진입 버튼. 꾹 누르기는 발견해야 아는 제스처라 유일한 길이면 안 된다 —
+   키보드와 스크린리더에는 이 버튼이 유일한 길이다.
+   --accent 는 .stage 안에 갇혀 있어서 캡션이 못 본다. main.js 가 li 에 한 번 더 얹는다. */
+.im-badge {
+  margin-top: 7px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #ffffff) 40%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--accent, #ffffff) 70%, #ffffff);
+  background: rgba(255, 255, 255, .04);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.im-badge:hover,
+.im-badge:focus-visible {
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--accent, #ffffff) 80%, transparent);
+}
+
+/* ── 무대 ──────────────────────────────────────────────────
+   구조가 두 겹인 이유: .dio-layer 는 진입 애니메이션이 transform 을 쓰고,
+   .dio-move 는 패럴랙스가 transform 을 쓴다. 한 요소에 둘을 걸면 서로 덮어쓴다. */
+
+.immersive {
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: clip;
+  color: var(--ink);
+  background: #040603;
+}
+
+.immersive[open] { display: block; }
+
+/* style.css 의 .viewer 와 같은 제약이다 — 여기에 backdrop-filter 를 걸면 Chrome 이
+   별도의 backdrop root 를 만들고, 그 안에서는 자식의 mix-blend-mode 가 무시된다.
+   .foil / .glare 가 블렌딩 없이 덮여서 카드 그림이 안 보인다. */
+.immersive::backdrop { background: #000000; }
+
+.is-immersed { overflow: hidden; }
+.is-immersed .page { filter: blur(6px); pointer-events: none; }
+
+.dio {
+  /* 패럴랙스 입력. -1 ~ 1. immersive.mjs 가 매 프레임 갱신한다. */
+  --px: 0;
+  --py: 0;
+
+  /* style.css 의 .foil / .glare 가 이 셋을 상속으로 받아 쓴다.
+     px 를 그대로 넘기면 카드 위 광원이 시선과 같이 움직인다. */
+  --mouse-x: calc(50% + var(--px) * 30%);
+  --mouse-y: calc(50% + var(--py) * 30%);
+  --glare: .8;
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;   /* 끌어서 장면을 돌린다 — 스크롤로 넘겨 주면 안 된다 */
+}
+
+.dio:active { cursor: grabbing; }
+
+.dio-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dio-move {
+  --par: 0;   /* 패럴랙스 세기(px). 뒤에서 앞으로 갈수록 커진다 */
+  --k: 1;     /* 레이어별 확대 */
+  position: absolute;
+  inset: -14%;   /* 밀려나도 가장자리가 비지 않을 만큼의 여유 */
+  display: grid;
+  place-items: center;
+  transform:
+    translate3d(calc(var(--px) * var(--par) * 1px),
+                calc(var(--py) * var(--par) * .68px),
+                0)
+    scale(var(--k));
+  will-change: transform;
+}
+
+/* 0. 새벽 하늘 */
+.dio-sky .dio-move {
+  --par: 5;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 6%,
+      color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
+    radial-gradient(ellipse 95% 60% at 18% 104%,
+      color-mix(in srgb, var(--accent2) 22%, transparent), transparent 72%),
+    linear-gradient(178deg, #0b1a11 0%, #06100a 46%, #020604 100%);
+}
+
+/* 1. 색 환경 — 카드 그림 자체를 크게 흐려서 깐다.
+   레이어 원화가 없어 배경을 그릴 수 없는 대신 같은 그림에서 색을 빌려 온다.
+   프레임까지 인쇄된 카드라도 blur(72px) 면 색 덩어리로만 남는다. */
+.dio-wash .dio-move {
+  --par: 10;
+  --k: 1.35;
+  background: var(--wash) center / cover no-repeat;
+  filter: blur(72px) saturate(1.6) brightness(.6);
+  opacity: .9;
+}
+
+/* 2. 빛줄기 — 아주 천천히 돈다. 회전은 ::before 가 맡는다.
+   .dio-move 의 transform 은 패럴랙스가 이미 쓰고 있어서 여기에 또 걸 수 없다. */
+.dio-rays {
+  mix-blend-mode: screen;
+  opacity: .55;
+}
+
+.dio-rays .dio-move { --par: 18; }
+
+.dio-rays .dio-move::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  background: conic-gradient(from 200deg at 50% 45%,
+    transparent 0deg, rgba(255, 255, 255, .18) 7deg, transparent 19deg,
+    transparent 44deg, rgba(255, 255, 255, .11) 53deg, transparent 63deg,
+    transparent 176deg, rgba(255, 255, 255, .09) 184deg, transparent 194deg,
+    transparent 298deg, rgba(255, 255, 255, .14) 310deg, transparent 320deg);
+  filter: blur(24px);
+  animation: dio-spin 70s linear infinite;
+}
+
+@keyframes dio-spin { to { transform: rotate(1turn); } }
+
+/* 3. 먼지 — 카드 뒤 */
+.dio-motes .dio-move { --par: 30; }
+
+.mote {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: calc(var(--s) * 1px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: var(--o);
+  background: color-mix(in srgb, var(--accent2) 65%, #ffffff);
+  box-shadow: 0 0 calc(var(--s) * 3px) color-mix(in srgb, var(--accent2) 55%, transparent);
+  animation: mote-drift calc(var(--t) * 1s) ease-in-out calc(var(--d) * -1s) infinite alternate;
+}
+
+@keyframes mote-drift {
+  to { transform: translate3d(calc(var(--dx) * 1px), calc(var(--dy) * 1px), 0); }
+}
+
+/* 4. 주인공 — 카드 한 장이 통째로 이 평면이다 */
+.dio-subject .dio-move {
+  --par: 46;
+  perspective: 1500px;
+}
+
+.dio-card {
+  position: relative;
+  height: min(62svh, 620px);
+  aspect-ratio: var(--ar);
+  border-radius: 3.05% / 2.2%;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(var(--py) * -9deg)) rotateY(calc(var(--px) * 12deg));
+  box-shadow:
+    0 42px 90px rgba(0, 0, 0, .72),
+    0 0 0 1px rgba(255, 255, 255, .22),
+    0 0 100px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* 5. 자막 */
+.dio-hud .dio-move { --par: 64; }
+
+.dio-meta {
+  position: absolute;
+  left: clamp(20px, 5vw, 54px);
+  bottom: clamp(20px, 5vh, 52px);
+  display: grid;
+  gap: 3px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .9);
+}
+
+.dio-rank {
+  color: color-mix(in srgb, var(--accent2) 70%, #ffffff);
+  font-size: 12px;
+  letter-spacing: .3em;
+}
+
+.dio-meta strong {
+  font-size: clamp(20px, 3.4vw, 30px);
+  letter-spacing: -.04em;
+}
+
+.dio-code {
+  color: var(--ink-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.dio-place {
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--accent) 55%, #ffffff);
+  font-size: 12px;
+}
+
+.dio-exit,
+.dio-tip { position: absolute; }
+
+.dio-exit {
+  top: clamp(16px, 3vh, 30px);
+  right: clamp(16px, 4vw, 34px);
+  padding: 8px 15px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, .42);
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;   /* .dio-layer 가 pointer-events:none 이라 여기서 되살린다 */
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.dio-exit:hover,
+.dio-exit:focus-visible {
+  border-color: rgba(255, 255, 255, .5);
+  background: rgba(0, 0, 0, .62);
+}
+
+.dio-tip {
+  right: clamp(20px, 5vw, 54px);
+  bottom: clamp(22px, 5vh, 54px);
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+
+/* 6. 앞 잎사귀 — 카드 앞을 지나간다. 흐린 게 핵심이다.
+   카메라가 카드에 초점을 맞춘 것처럼 읽혀서 깊이가 생긴다. */
+.dio-fore .dio-move { --par: 100; }
+
+.leaf {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: calc(var(--s) * 1px);
+  height: calc(var(--s) * 1.45px);
+  border-radius: 0 100% 0 100%;
+  opacity: var(--o);
+  background: linear-gradient(150deg,
+    var(--accent), color-mix(in srgb, var(--accent) 25%, #000000));
+  filter: blur(calc(var(--b) * 1px));
+  animation: leaf-sway calc(var(--t) * 1s) ease-in-out calc(var(--d) * -1s) infinite alternate;
+}
+
+@keyframes leaf-sway {
+  from { transform: rotate(calc(var(--r) * 1deg)); }
+  to {
+    transform:
+      rotate(calc(var(--r) * 1deg + 13deg))
+      translate3d(calc(var(--dx) * 1px), calc(var(--dy) * 1px), 0);
+  }
+}
+
+/* ── 들어가고 나가기 ───────────────────────────────────────
+   뒤 평면부터 앞으로 55ms 씩 늦게 들어온다. 평평한 카드가 공간으로 펼쳐지는 느낌은
+   전부 이 시차에서 나온다 — 일곱 장이 동시에 나타나면 그냥 화면 전환이다.
+
+   애니메이션이 끝난 상태(opacity 1, transform none)가 .dio-layer 의 평소 값과
+   같아서, 도중에 클래스를 떼도 튀지 않는다. */
+
+@keyframes dio-in {
+  from { opacity: 0; transform: scale(.86); filter: blur(7px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+.immersive.is-entering .dio-layer {
+  animation: dio-in 620ms cubic-bezier(.16, .84, .28, 1) both;
+  animation-delay: calc(var(--i) * 55ms);
+}
+
+/* 나갈 때는 시차를 뒤집는다 — 앞에서부터 접힌다 */
+.immersive.is-leaving .dio-layer {
+  animation: dio-in 260ms ease reverse both;
+  animation-delay: calc((6 - var(--i)) * 22ms);
+}
+
+@media (max-width: 760px) {
+  .dio-card { height: min(52svh, 440px); }
+  .dio-meta { left: 20px; bottom: 78px; }
+  .dio-tip { left: 20px; right: auto; bottom: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage.is-holding::after { animation: none; background: rgba(255, 255, 255, .3); }
+  .dio-move,
+  .dio-card { transform: none; }
+  .mote,
+  .leaf,
+  .dio-rays .dio-move::before { animation: none; }
+  .immersive.is-entering .dio-layer,
+  .immersive.is-leaving .dio-layer { animation: none; }
+}

@@ -10,6 +10,19 @@
 //       (0.80 넉 장, 0.72 두 장). CSS 가 이 값으로 카드마다 aspect-ratio 를 잡는다.
 // accent/accent2 : 카드 뒤 글로우와 테두리에 쓸 색. 그림에서 뽑았다.
 // frame : 프레임 디자인. 크롬(chrome) 넉 장, 초록 홀로(leaf) 두 장.
+// rarity : 레어도. 등급표가 아니라 **연출 방식**이다 — 포켓몬 카드 게임 포켓의 체계를
+//       빌렸는데, "위로 갈수록 더 반짝이게"가 아니라 티어마다 서로 다른 렌더링 기법을
+//       쓰도록 나눴다. 기법이 겹치면 시험할 게 없어지기 때문이다.
+//         flat      ◇◇◇   포일 없음. 기울기와 그림자만 — 이머시브의 대조군
+//         ex        ◇◇◇◇  mask-image 로 아트 창에만 홀로
+//         fullart   ☆     무지개 conic 포일 — style.css 의 기본값
+//         etched    ☆☆    글레어가 지나갈 때만 드러나는 각인 텍스처
+//         crown     ♛     금속 금박. 색상환을 안 돌고 명도만 오르내리는 이방성이라
+//                          기존 포일 코드를 그대로 못 쓴다
+//         immersive ☆☆☆   꾹 누르면 카드 안으로 들어간다 (immersive.css / .mjs)
+//       **지금 구현된 건 immersive 하나뿐이다.** 나머지는 배정만 적어 둔 것이고
+//       화면에는 전부 기본 풀아트로 보인다. 다음 PR 에서 하나씩 붙인다.
+// scene  : immersive 카드만 갖는다. 무대에 넘길 값 (immersive.mjs 가 읽는다).
 
 export const CARDS = [
   {
@@ -29,6 +42,12 @@ export const CARDS = [
     art: "art/cabbage.webp",
     w: 810,
     h: 1125,
+    rarity: "immersive",
+    scene: {
+      place: "이슬 맺힌 텃밭 · 해 뜨기 직전",
+      motes: 34,
+      leaves: 7,
+    },
     accent: "#8fd94a",
     accent2: "#d8f07a",
     frame: "leaf",
@@ -50,6 +69,7 @@ export const CARDS = [
     art: "art/pepper.webp",
     w: 900,
     h: 1125,
+    rarity: "etched",
     accent: "#ffd838",
     accent2: "#e27016",
     frame: "chrome",
@@ -71,6 +91,7 @@ export const CARDS = [
     art: "art/eggplant.webp",
     w: 900,
     h: 1125,
+    rarity: "fullart",
     accent: "#a86bff",
     accent2: "#e0a3ff",
     frame: "chrome",
@@ -92,6 +113,7 @@ export const CARDS = [
     art: "art/carrot.webp",
     w: 900,
     h: 1125,
+    rarity: "crown",
     accent: "#ff8a2b",
     accent2: "#ffc46b",
     frame: "chrome",
@@ -113,6 +135,7 @@ export const CARDS = [
     art: "art/danhobak.webp",
     w: 900,
     h: 1125,
+    rarity: "ex",
     accent: "#7d9b46",
     accent2: "#d8bb4e",
     frame: "chrome",
@@ -134,6 +157,7 @@ export const CARDS = [
     art: "art/mushroom.webp",
     w: 810,
     h: 1125,
+    rarity: "flat",
     accent: "#cbb08a",
     accent2: "#9fd06a",
     frame: "leaf",

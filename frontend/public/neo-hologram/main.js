@@ -1,4 +1,5 @@
 import { CARDS, altText } from "./cards.mjs";
+import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive } from "./immersive.mjs";
 
 const dexEl = document.querySelector("#dex");
 const countEl = document.querySelector("#count");
@@ -106,6 +107,7 @@ function makeStage(card, { lazy = true, button = true } = {}) {
   stage.style.setProperty("--ar", (card.w / card.h).toFixed(4));
   stage.style.setProperty("--accent", card.accent);
   stage.style.setProperty("--accent2", card.accent2);
+  stage.dataset.rarity = card.rarity ?? "fullart";
 
   const shell = button
     ? '<button class="card" type="button">'
@@ -154,6 +156,22 @@ CARDS.forEach((card, i) => {
     `<span class="stat">${esc(card.statLabel)} ${card.stat}</span>`;
 
   stage.querySelector(".card").addEventListener("click", () => open(i));
+
+  // ☆☆☆ 는 꾹 눌러 안으로 들어간다. 게이지가 다 차기 전에 떼면 위의 click 이 살아서
+  // 평범한 확대 뷰가 열린다 — 기존 동작은 그대로 남는다.
+  if (isImmersive(card)) {
+    // --accent 는 .stage 안에 갇혀 있어 캡션이 못 본다. 배지가 카드 색을 타도록 li 에 얹는다.
+    li.style.setProperty("--accent", card.accent);
+    bindLongPress(stage, stage.querySelector(".card"), () => openImmersive(card));
+
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "im-badge";
+    badge.textContent = "★★★ 꾹 눌러서 들어가기";
+    badge.addEventListener("click", () => openImmersive(card));
+    caption.append(badge);
+  }
+
   li.append(frameEl, caption);
   dexEl.append(li);
 });
@@ -432,3 +450,7 @@ viewer.addEventListener("keydown", (e) => {
 
 viewer.addEventListener("cancel", afterClose);
 viewer.addEventListener("close", afterClose);
+
+/* ?im=<카드 id> 로 열면 이머시브로 바로 들어간다 — live-server 가 새로 고칠 때마다
+   다시 꾹 누르지 않아도 되도록. 개발 편의용이고 평소 경로에는 영향이 없다. */
+autoOpenFromQuery();

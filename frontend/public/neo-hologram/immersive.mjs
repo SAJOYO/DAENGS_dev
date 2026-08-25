@@ -121,10 +121,10 @@ function build(card) {
         <span class="dio-code">${esc(card.code)} · ${esc(card.edition)}</span>
         ${scene.place ? `<span class="dio-place">${esc(scene.place)}</span>` : ""}
       </div>
-      <button type="button" class="dio-exit">닫기 (Esc)</button>
-      <p class="dio-tip">기울이거나 끌어서 둘러보세요</p>
     </div></div>
-    <div class="dio-layer dio-fore" style="--i:6"><div class="dio-move"></div></div>`;
+    <div class="dio-layer dio-fore" style="--i:6"><div class="dio-move"></div></div>
+    <button type="button" class="dio-exit">닫기 (Esc)</button>
+    <p class="dio-tip">기울이거나 끌어서 둘러보세요</p>`;
 
   // 먼지 — 카드 뒤에서 느리게 떠다닌다
   const motes = el.querySelector(".dio-motes .dio-move");

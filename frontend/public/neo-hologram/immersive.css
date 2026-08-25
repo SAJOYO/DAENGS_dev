@@ -135,11 +135,15 @@
   pointer-events: none;
 }
 
+/* inset 은 반드시 0 이어야 한다. 처음엔 -14% 로 키워서 패럴랙스에 밀려도 가장자리가
+   비지 않게 했는데, 그러면 이 안의 자막·버튼이 "화면"이 아니라 "커진 상자" 기준으로
+   붙어서 전부 뷰포트 밖으로 나간다. 가장자리 여유는 크기(--k)로 벌고 위치는 건드리지
+   않는다 — 배경 평면만 키우면 되고, 자막이 있는 평면은 --k 를 1 로 둔다. */
 .dio-move {
   --par: 0;   /* 패럴랙스 세기(px). 뒤에서 앞으로 갈수록 커진다 */
-  --k: 1;     /* 레이어별 확대 */
+  --k: 1;     /* 가장자리 여유. 밀려나는 만큼만 키운다 */
   position: absolute;
-  inset: -14%;   /* 밀려나도 가장자리가 비지 않을 만큼의 여유 */
+  inset: 0;
   display: grid;
   place-items: center;
   transform:
@@ -153,6 +157,7 @@
 /* 0. 새벽 하늘 */
 .dio-sky .dio-move {
   --par: 5;
+  --k: 1.04;
   background:
     radial-gradient(ellipse 70% 55% at 50% 6%,
       color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
@@ -179,7 +184,7 @@
   opacity: .55;
 }
 
-.dio-rays .dio-move { --par: 18; }
+.dio-rays .dio-move { --par: 18; --k: 1.1; }
 
 .dio-rays .dio-move::before {
   content: "";
@@ -197,7 +202,7 @@
 @keyframes dio-spin { to { transform: rotate(1turn); } }
 
 /* 3. 먼지 — 카드 뒤 */
-.dio-motes .dio-move { --par: 30; }
+.dio-motes .dio-move { --par: 30; --k: 1.16; }
 
 .mote {
   position: absolute;
@@ -236,8 +241,9 @@
     0 0 100px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-/* 5. 자막 */
-.dio-hud .dio-move { --par: 64; }
+/* 5. 자막 — 카드보다 조금 앞. 이름·코드만 여기 있고, 조작하는 것(닫기 버튼)은
+   패럴랙스에서 빼 뒀다. 누르려는 버튼이 시선 따라 움직이면 못 누른다. */
+.dio-hud .dio-move { --par: 30; }
 
 .dio-meta {
   position: absolute;
@@ -273,8 +279,12 @@
   font-size: 12px;
 }
 
+/* 이 둘은 .dio 의 직계 자식이라 화면 기준으로 붙는다 (레이어 안이 아니다) */
 .dio-exit,
-.dio-tip { position: absolute; }
+.dio-tip {
+  position: absolute;
+  z-index: 2;
+}
 
 .dio-exit {
   top: clamp(16px, 3vh, 30px);
@@ -286,7 +296,6 @@
   background: rgba(0, 0, 0, .42);
   font-size: 12px;
   cursor: pointer;
-  pointer-events: auto;   /* .dio-layer 가 pointer-events:none 이라 여기서 되살린다 */
   transition: border-color .18s ease, background-color .18s ease;
 }
 
@@ -307,7 +316,7 @@
 
 /* 6. 앞 잎사귀 — 카드 앞을 지나간다. 흐린 게 핵심이다.
    카메라가 카드에 초점을 맞춘 것처럼 읽혀서 깊이가 생긴다. */
-.dio-fore .dio-move { --par: 100; }
+.dio-fore .dio-move { --par: 100; --k: 1.3; }
 
 .leaf {
   position: absolute;

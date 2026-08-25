@@ -1,0 +1,567 @@
+/* 네오 채소 도감 — 홀로그램 효과는 neo/pepper_neo_hologram.html 에서 옮겨왔다.
+   원본과 달라진 핵심 한 가지: 마우스/기울기 변수(--mouse-x, --rotate-x, --glare …)가
+   원본에선 :root 에 붙어 있었다. 카드가 한 장일 땐 그래도 되지만 도감에선 6장이
+   같은 변수를 공유해 전부 같이 기울어진다. 그래서 변수를 .stage 단위로 내렸다.
+   자식(.card/.foil/.glare)은 상속으로 받으므로 효과 코드 자체는 원본 그대로다. */
+
+/* 원래 gohome 레포의 shared/base.css 를 함께 링크해 쓰던 페이지다. 여기서는 그 파일이
+   없고, public/ 에 통째로 떨어뜨려 두는 정적 데모라 폴더 하나로 자족해야 해서
+   실제로 쓰던 규칙만 옮겨 왔다. 색 변수는 이 페이지가 자기 팔레트를 쓰므로 안 가져온다.
+   button 줄이 빠지면 확대 뷰의 이전/다음/닫기 버튼이 브라우저 기본 폰트로 튄다. */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { line-height: 1.6; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img { max-width: 100%; height: auto; }
+
+:root {
+  color-scheme: dark;
+  --ink: #eefaf1;
+  --ink-dim: #99aaa1;
+  --ink-faint: #6f7d76;
+  --line-soft: rgba(255, 255, 255, .12);
+}
+
+/* ── 페이지 셸 ─────────────────────────────────────────── */
+
+/* 카드 뒤 글로우(.stage::before)는 좌우로 15% 삐져나가도록 되어 있어서, 좁은 화면에서
+   막아주지 않으면 가로 스크롤이 생긴다. body 에만 걸면 뷰포트로 전파되지 않아
+   실제로 안 잘리므로 html 에 건다. clip 은 hidden 과 달리 세로축을 스크롤
+   컨테이너로 만들지 않는다. */
+html { overflow-x: clip; }
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  overflow-x: clip;
+  color: var(--ink);
+  font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 216, 56, .10), transparent 34rem),
+    radial-gradient(circle at 8% 22%, rgba(0, 217, 255, .09), transparent 28rem),
+    radial-gradient(circle at 92% 68%, rgba(255, 50, 193, .10), transparent 30rem),
+    linear-gradient(160deg, #151206 0%, #0e0b05 46%, #050402 100%);
+  background-attachment: fixed;
+}
+
+/* 원본의 점 패턴 오버레이 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image: radial-gradient(rgba(255, 255, 255, .16) .65px, transparent .65px);
+  background-size: 5px 5px;
+  mask-image: linear-gradient(to bottom, black, transparent 92%);
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 20px clamp(16px, 4vw, 40px) 64px;
+  filter: blur(0);
+  transition: filter 280ms ease;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: clamp(28px, 6vw, 52px);
+}
+
+.back {
+  color: var(--ink-dim);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color .2s ease;
+}
+
+.back:hover,
+.back:focus-visible { color: var(--ink); }
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+
+.masthead { text-align: center; }
+
+.masthead h1 {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 44px);
+  line-height: 1.06;
+  letter-spacing: -.045em;
+}
+
+.count {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: #b7c7bf;
+  background: rgba(255, 255, 255, .04);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.hint {
+  margin: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--ink-dim);
+  font-size: 13px;
+  letter-spacing: -.01em;
+}
+
+.hint::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffe34f;
+  box-shadow: 0 0 12px #ffe34f;
+}
+
+/* ── 도감 그리드 ───────────────────────────────────────── */
+
+.dex {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: clamp(26px, 4vw, 44px) clamp(18px, 3vw, 34px);
+  margin: clamp(34px, 7vw, 64px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 셀은 폭·높이가 균일하고, 그 안에서 카드가 자기 비율대로 가운데 선다.
+   카드 높이는 전부 같고 폭만 비율만큼 달라진다 — 실물 카드 바인더와 같은 정렬이라
+   한 픽셀도 자르지 않으면서 행이 어긋나지 않는다. */
+.slot {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+  justify-items: center;
+}
+
+.slot .frame {
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.caption {
+  text-align: center;
+  line-height: 1.35;
+}
+
+.caption .no {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .18em;
+}
+
+.caption .name {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.caption .stat {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 카드 무대 ─────────────────────────────────────────── */
+
+.stage {
+  /* 원본에선 :root 에 있던 값들. 카드마다 따로 굴러야 해서 여기로 내렸다. */
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --rotate-x: 0deg;
+  --rotate-y: 0deg;
+  --glare: 0;
+  --shadow-x: 0px;
+  --shadow-y: 22px;
+
+  position: relative;
+  height: 100%;
+  aspect-ratio: var(--ar);
+  perspective: 1150px;
+  touch-action: manipulation;
+  isolation: isolate;
+}
+
+/* 카드 뒤 글로우 — 색은 카드마다 다르다 (--accent) */
+.stage::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: 10% -15% -8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse,
+    color-mix(in srgb, var(--accent) 34%, transparent),
+    color-mix(in srgb, var(--accent2) 12%, transparent) 48%,
+    transparent 72%);
+  filter: blur(30px);
+  transform: translateY(8%) scale(calc(1 + var(--glare) * .08));
+  transition: transform .4s ease;
+}
+
+.card {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  overflow: hidden;
+  border-radius: 3.05% / 2.2%;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) translateZ(0);
+  transition: transform 620ms cubic-bezier(.2, .8, .2, 1), filter 400ms ease;
+  box-shadow:
+    var(--shadow-x) var(--shadow-y) 55px rgba(0, 0, 0, .58),
+    0 22px 44px rgba(0, 0, 0, .48),
+    0 0 0 1px rgba(255, 255, 255, .18),
+    inset 0 0 0 1px rgba(255, 255, 255, .2);
+}
+
+/* will-change 는 활성 카드에만 — 6장 전부에 걸면 레이어가 6개 생긴다 */
+.stage:is(:hover, :focus-within) .card {
+  transition: transform 85ms linear, filter 180ms ease;
+  filter: saturate(1.07) contrast(1.03);
+  will-change: transform;
+}
+
+.stage:active .card { cursor: grabbing; }
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;      /* 셀 비율 = 이미지 비율이라 늘어나지 않는다 */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.foil,
+.glare,
+.grain,
+.edge {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.foil {
+  opacity: calc(.11 + var(--glare) * .5);
+  background:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255, 255, 255, .92) 0 2%, rgba(255, 255, 255, .24) 8%, transparent 27%),
+    conic-gradient(from 210deg at var(--mouse-x) var(--mouse-y),
+      transparent 0deg, rgba(255, 49, 180, .55) 42deg, rgba(75, 235, 255, .72) 85deg,
+      rgba(255, 247, 84, .58) 130deg, transparent 175deg, rgba(134, 76, 255, .48) 245deg,
+      rgba(61, 255, 164, .58) 305deg, transparent 360deg),
+    repeating-linear-gradient(125deg,
+      rgba(255, 65, 191, .2) 0 8px, rgba(55, 232, 255, .21) 8px 16px,
+      rgba(255, 232, 68, .18) 16px 24px, rgba(112, 255, 164, .2) 24px 32px);
+  background-size: 100% 100%, 145% 145%, 220% 220%;
+  background-position: center, var(--mouse-x) var(--mouse-y), var(--mouse-x) var(--mouse-y);
+  mix-blend-mode: color-dodge;
+  filter: saturate(1.5) contrast(1.18);
+  transform: translateZ(1px);
+}
+
+.glare {
+  opacity: calc(.04 + var(--glare) * .86);
+  background:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y),
+      rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .46) 5%,
+      rgba(184, 255, 230, .14) 17%, transparent 39%),
+    linear-gradient(113deg,
+      transparent 18%, rgba(255, 255, 255, .08) 33%, rgba(255, 255, 255, .7) 46%,
+      rgba(157, 255, 239, .18) 54%, transparent 72%);
+  background-size: 100% 100%, 230% 230%;
+  background-position: center, var(--mouse-x) var(--mouse-y);
+  mix-blend-mode: screen;
+  transform: translateZ(2px);
+}
+
+.grain {
+  opacity: .12;
+  background:
+    repeating-radial-gradient(circle at 23% 31%, rgba(255, 255, 255, .7) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(92deg, transparent 0 3px, rgba(255, 255, 255, .16) 3px 4px);
+  background-size: 43px 47px, 100% 100%;
+  mix-blend-mode: overlay;
+  transform: translateZ(2.5px);
+}
+
+/* 테두리 광택 — 아래쪽 색만 카드 accent 를 탄다 */
+.edge {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, .4),
+    inset 12px 0 22px -20px rgba(255, 255, 255, .9),
+    inset -12px 0 22px -20px rgba(68, 255, 211, .8),
+    inset 0 -12px 25px -22px color-mix(in srgb, var(--accent2) 90%, transparent);
+  transform: translateZ(3px);
+}
+
+/* ── 확대 뷰 ───────────────────────────────────────────── */
+
+/* dialog 를 스크롤 컨테이너로 쓰지 않는다.
+   예전엔 여기에 overflow:auto 를 걸었는데, .stage::before 글로우가 아래로 8% 삐져나가
+   있어서 내용이 전부 보이는데도 스크롤바가 생겼다(953px 화면에서 내용 620px,
+   scrollHeight 679px). 굴려봐야 나오는 건 없고 카드만 위로 밀려 잘렸다.
+   그래서 dialog 는 뷰포트를 덮는 고정 무대로 두고, 넘칠 수 있는 설명 패널 안에만
+   스크롤을 둔다. 카드는 어떤 경우에도 안 움직이고 안 잘린다. */
+.viewer {
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: clip;
+  color: var(--ink);
+  background: transparent;
+}
+
+/* display 는 [open] 에만 — 안 그러면 UA 의 dialog:not([open]){display:none} 을
+   덮어써서 닫혀 있을 때도 보인다. */
+.viewer[open] {
+  display: grid;
+  place-items: center;
+}
+
+/* 여기에 backdrop-filter 를 걸면 안 된다. Chrome 이 backdrop-filter 를 만나면
+   별도의 backdrop root 를 만드는데, 그 안에서는 dialog 자식들의 mix-blend-mode 가
+   무시된다 — foil/glare 가 블렌딩 없이 그냥 덮여서 카드 그림이 안 보인다.
+   배경 흐림은 dialog 바깥의 .page 에 filter 로 건다 (아래 .is-viewing 참고). */
+.viewer::backdrop {
+  background: rgba(4, 4, 2, .9);
+}
+
+.viewer-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 300px);
+  align-items: center;
+  gap: clamp(20px, 4vw, 48px);
+  padding: clamp(18px, 3vw, 30px);
+  max-height: 100dvh;
+}
+
+.viewer .stage {
+  height: min(72svh, 680px);
+  justify-self: center;
+}
+
+/* 스크롤이 필요하면 여기서만 굴러간다 — 사진은 휠에 반응하지 않는다 */
+.detail {
+  max-height: calc(100dvh - 2 * clamp(18px, 3vw, 30px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 확대 뷰가 열려 있는 동안 뒤 그리드를 흐린다. 카드가 날아가는 시간에 맞춰
+   서서히 들어오고 나가도록 transition 은 .page 쪽(페이지 셸)에 걸어 뒀다. */
+.is-viewing .page {
+  filter: blur(5px);
+  pointer-events: none;
+}
+
+.detail h2 {
+  margin: 0;
+  font-size: clamp(22px, 3.4vw, 32px);
+  line-height: 1.08;
+  letter-spacing: -.04em;
+}
+
+.detail .tagline {
+  margin: 0 0 6px;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.detail dl {
+  margin: 22px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 18px;
+  font-size: 13px;
+}
+
+.detail dt {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.detail dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 기술 설명 — cabbage/mushroom 카드에만 인쇄돼 있다 */
+.detail dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.detail .flavor {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.detail .edition {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 6px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--accent) 65%, #ffffff);
+  background: rgba(255, 255, 255, .04);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.viewer-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 26px;
+}
+
+.viewer-nav button {
+  padding: 8px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  background: rgba(255, 255, 255, .04);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.viewer-nav button:hover,
+.viewer-nav button:focus-visible {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, .3);
+}
+
+.viewer-nav .close { margin-left: auto; }
+
+@media (max-width: 760px) {
+  /* 카드 줄은 자기 높이 그대로, 설명 줄이 남는 높이를 받아 그 안에서만 스크롤한다 */
+  .viewer-inner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+    justify-items: center;
+    height: 100dvh;
+  }
+
+  .viewer .stage { height: min(44svh, 400px); }
+
+  .detail {
+    width: 100%;
+    max-width: 420px;
+    max-height: 100%;
+    text-align: center;
+  }
+
+  .detail dl { margin-top: 16px; justify-content: center; }
+  .detail .flavor { margin-top: 16px; padding-top: 12px; }
+  .viewer-nav { margin-top: 18px; justify-content: center; }
+  .viewer-nav .close { margin-left: 0; }
+}
+
+/* ── 열고 닫는 전환 ───────────────────────────────────────
+   카드 자체는 main.js 가 FLIP(그리드 슬롯 ↔ 가운데)으로 날려 보낸다.
+   배경과 설명 패널은 거기에 맞춰 페이드만 시킨다. */
+
+@keyframes viewer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.viewer[open]::backdrop { animation: viewer-fade 280ms ease both; }
+.viewer.is-closing::backdrop { animation: viewer-fade 220ms ease reverse both; }
+
+/* 설명은 열 때만 떠오른다. ←/→ 로 카드를 넘길 때까지 매번 깜빡이면 산만하다. */
+.viewer.is-opening .detail { animation: detail-in 280ms 60ms ease both; }
+.viewer.is-closing .detail { animation: detail-in 180ms ease reverse both; }
+
+/* ── 키보드 ────────────────────────────────────────────
+   포커스만으로도 홀로그램이 보이도록 살짝 기울여 둔다. 포인터가 올라오면
+   인라인 스타일이 이 값들을 덮으므로 마우스 조작이 항상 우선한다. */
+.slot .stage:has(.card:focus-visible) {
+  --glare: .32;
+  --rotate-x: -3.5deg;
+  --rotate-y: 5deg;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; transform: none !important; }
+  .stage::before { transition: none; }
+  .foil, .glare { opacity: .16; }
+  .page { transition: none; }
+  .slot .stage:has(.card:focus-visible) { --rotate-x: 0deg; --rotate-y: 0deg; }
+
+  .viewer[open]::backdrop,
+  .viewer.is-closing::backdrop,
+  .viewer.is-opening .detail,
+  .viewer.is-closing .detail { animation: none; }
+}

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
@@ -47,6 +48,22 @@ class Settings(BaseSettings):
 
     # 실행되는 SQL 을 로그로 찍습니다. 쿼리를 들여다볼 때만 켜세요.
     db_echo: bool = False
+
+    # ── 암호화 키 ─────────────────────────────────────────────────────
+    # 셋 다 32바이트 난수를 urlsafe base64 로 인코딩한 문자열입니다.
+    #
+    #   uv run python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+    #
+    # 기본값을 두지 않습니다 — 키가 없으면 앱이 뜨지 않는 것이 맞습니다.
+    # 개발용 기본값을 하나 박아 두면 그게 그대로 서버에 올라갑니다.
+    #
+    # SecretStr 이라 로그·예외 메시지에는 '**********' 로 찍힙니다.
+    # 실제 값은 .get_secret_value() 로 꺼내며, 꺼내는 곳은 core/crypto.py 뿐입니다.
+    #
+    # 셋을 나눠 둔 이유는 잃었을 때의 결과가 전부 다르기 때문입니다 (D-012).
+    jwe_key: SecretStr  # 토큰 암호화. 아직 안 씁니다 — 로그인 API 카드에서.
+    aes_key: SecretStr  # 개인정보 컬럼 암복호화
+    blind_index_key: SecretStr  # HMAC pepper. AES 키와 같은 값을 쓰면 안 됩니다.
 
 
 settings = Settings()

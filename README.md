@@ -136,6 +136,13 @@ Copy-Item .env.example .env
 
 - `db/init/` 의 SQL(확장, 스키마, 트리거)은 **최초 기동 때 한 번만** 실행됩니다.
   이미 만들어진 볼륨에는 반영되지 않으니, 직접 psql 로 적용하세요.
+  파일을 새로 추가했을 때(예: `03_auth.sql`)도 마찬가지입니다.
+
+  ```powershell
+  docker compose exec -T pgvector psql -v ON_ERROR_STOP=1 -U postgres -d vectordb `
+      < db/init/03_auth.sql
+  ```
+
 - 인덱스는 `db/indexes.sql` 에 따로 있습니다. 데이터를 적재한 **뒤에** 수동으로 실행하세요.
 - 데이터는 `pgdata` 볼륨에 있습니다. `docker compose down -v` 를 쓰면 **전부 지워집니다.**
 

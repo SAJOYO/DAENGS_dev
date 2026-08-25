@@ -36,10 +36,11 @@ class Settings(BaseSettings):
 
     # SQLAlchemy 접속 URL. 드라이버까지 포함해야 합니다 (`+asyncpg`).
     #
-    # 기본값은 '로컬에서 uv run dev 로 띄울 때' 기준입니다.
-    # 컨테이너 안에서는 localhost 가 컨테이너 자신이라 닿지 않으므로,
-    # compose 가 DAENGS_DATABASE_URL 을 넘겨 이 값을 덮어씁니다.
-    # (호스트가 pgvector 로 바뀝니다 - docker-compose.yml 참고)
+    # 이 기본값은 사실상 자리표시자입니다. 어느 쪽에서 띄우든 덮어써집니다.
+    #   개발 PC : DB 가 서버 PC 에 하나뿐이므로 backend/.env 에 그 IP 를 적습니다.
+    #             localhost 로는 안 붙습니다.
+    #   서버 PC : 컨테이너 안에서는 localhost 가 컨테이너 자신이라, compose 가
+    #             같은 이름의 환경 변수로 덮어써 pgvector 서비스를 보게 합니다.
     database_url: str = (
         "postgresql+asyncpg://postgres:postgres@localhost:5432/vectordb"
     )

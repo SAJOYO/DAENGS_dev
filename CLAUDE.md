@@ -74,6 +74,11 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
+- **compose 는 서버 PC 에서만 띄웁니다.** DB 는 팀에 하나뿐이고 서버 PC 에 있습니다
+  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx 와 pgvector 가
+  또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB 가 생깁니다.
+  개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DATABASE_URL` 이 서버 DB 를
+  보게 하세요.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
   기본값이 아닌 값으로 지정하세요. pgAdmin(tools 프로파일)은 로그인 없는 모드라

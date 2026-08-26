@@ -591,8 +591,11 @@ body::before {
 
   .detail { z-index: 2; }
 
-  /* 좌우 넘기기 버튼. 쓸어서도 넘어가지만 그건 알아야 쓰는 동작이라, 눈에 보이는
-     길을 같이 둔다. 문지르는 동안에는 비켜 준다 — 포일을 보려는데 눈에 걸린다. */
+  /* 좌우 넘기기 버튼. **폰에서 카드를 넘기는 유일한 길이다** — 쓸어서 넘기기는
+     포일 구경과 구분이 안 돼서 뺐다 (main.js 의 제스처 주석 참고).
+
+     그렇다고 계속 띄워 두면 카드를 가린다. 확대한 직후와 카드에서 손을 뗄 때만
+     잠깐 나왔다 사라진다 (show-nav, main.js 의 peekNav). */
   .edge-nav {
     display: grid;
     place-items: center;
@@ -610,16 +613,21 @@ body::before {
     color: var(--ink);
     font-size: 24px;
     line-height: 1;
-    opacity: .8;
-    transition: opacity 180ms ease;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
   }
 
   .edge-nav.prev { left: 6px; }
   .edge-nav.next { right: 6px; }
 
-  .viewer.is-touching .edge-nav { opacity: .1; }
+  .viewer.show-nav .edge-nav {
+    opacity: .82;
+    pointer-events: auto;
+  }
 
-  /* 설명이 열리면 시트 안에 이전/다음이 이미 있다 */
+  /* 설명이 열리면 시트 안에 이전/다음이 이미 있다. peekNav 가 애초에 안 띄우지만,
+     여는 순간 이미 떠 있던 걸 즉시 걷으려면 이 규칙이 필요하다. */
   .viewer.show-detail .edge-nav { opacity: 0; pointer-events: none; }
 
   /* 항상 보이는 닫기 버튼. 예전에는 닫기가 설명 시트 안에만 있어서, 닫으려면 먼저

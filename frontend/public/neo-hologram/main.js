@@ -389,7 +389,7 @@ function render() {
     '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
     '<button type="button" class="edge-nav prev" data-nav="-1" aria-label="이전 카드">‹</button>' +
     '<button type="button" class="edge-nav next" data-nav="1" aria-label="다음 카드">›</button>' +
-    '<p class="sheet-hint">문지르면 포일 · 쓸면 다음 장 · 탭하면 상세</p>');
+    '<p class="sheet-hint">문지르면 포일 · 탭하면 상세</p>');
   viewer.append(inner);
 }
 
@@ -445,6 +445,7 @@ function open(i) {
     setTimeout(() => viewer.classList.remove("is-opening"), FLIGHT.duration + 80);
   }
   showGridStage(index, false);
+  if (!wasOpen) peekNav(NAV_PEEK.open);
 
   const big = viewer.querySelector(".stage");
   if (!wasOpen && from && big && !reducedMotion) {
@@ -515,6 +516,7 @@ function go(delta) {
   showGridStage(index, false);
 
   viewer.classList.remove("show-detail");
+  peekNav();
   const incoming = viewer.querySelector(".stage");
   incoming?.querySelector(".card")?.focus();
   slide(outgoing, fromRect, incoming, delta);
@@ -532,7 +534,8 @@ function afterClose() {
   if (viewer.open) return;
   closing = false;
   flight = null;
-  viewer.classList.remove("is-closing", "is-opening", "show-detail");
+  clearTimeout(navPeekTimer);
+  viewer.classList.remove("is-closing", "is-opening", "show-detail", "show-nav");
   document.body.classList.remove("is-viewing");
   showGridStage(index, true);
   // 넘겨 봤다면 처음 연 카드가 아니라 마지막으로 보던 카드로 돌아간다
@@ -599,97 +602,72 @@ viewer.addEventListener("keydown", (e) => {
    폰에서는 카드가 화면을 가득 채우고 설명은 감춰져 있다 (style.css 의 760px 블록).
 
      문지르기       포일 구경 — PC 에서 마우스를 올리는 것과 같다 (bindTilt 가 처리)
-     빠르게 쓸기     이전 / 다음 카드
      짧게 탭        설명 열기 / 닫기
+     좌우 ‹ › 버튼   이전 / 다음 카드
      ✕ · 뒤로가기    닫기
 
-   **같은 손가락 드래그를 '구경'과 '넘기기'로 가르는 게 이 코드의 전부다.**
-   포일을 보는 손짓은 느리고 헤매고, 넘기는 손짓은 빠르고 곧다 — 그 차이로 가른다.
-   문턱을 거리로만 잡으면(예전 방식) 포일을 구경하는 동안 매번 카드가 넘어가서,
-   정작 이 데모에서 제일 보여주고 싶은 걸 못 보게 된다.
+   **쓸어서 넘기기는 뺐다.** 한동안 "느리면 구경, 빠르면 넘기기"로 속도를 재서 갈랐는데,
+   실기에서 안 됐다 — **포일을 구경하다 보면 손이 저절로 빨라진다.** 카드가 화면 폭을
+   꽉 채우고 있어서 구경하는 동작 자체가 큰 드래그이고, 어떤 문턱을 잡아도 그 안에
+   들어온다. 문턱을 올리면 이번엔 넘기기가 안 먹는다.
 
-   **기준점은 250ms 짜리 창으로 계속 미끄러진다.** pointerdown 자리에 고정하면
-   한참 문지르다가 넘기려 할 때 안 먹고, 반대로 누적 거리로 보면 천천히 문지른 것도
-   결국 문턱을 넘는다. 느리게 움직이는 동안에는 기준점이 계속 따라와서 거리가
-   안 쌓이고, 홱 움직일 때만 창 안에서 거리가 벌어진다.
-
-   아래로 쓸어서 닫기는 뺐다 — 포일을 구경하면 세로로도 계속 움직여서 닫기 문턱을
-   매번 건드렸다. 닫기는 ✕ 와 안드로이드 뒤로가기가 맡는다.
+   **둘 중 하나는 포기해야 하고, 포일이 이 데모의 본체다.** 그래서 카드 안쪽 드래그는
+   전부 구경에 주고, 넘기기는 눈에 보이는 버튼으로 뺐다. 되살리고 싶으면 속도 말고
+   다른 축(가장자리에서 시작한 손짓만, 두 손가락 등)을 찾아야 한다 — 속도로는 안 된다.
 
    데스크톱은 이 블록 전체가 놀고 있다. */
 
 const phoneViewer = matchMedia("(max-width: 760px)");
 
-/* 넘기기로 칠 문턱. **이 셋이 조절 손잡이 전부다.**
-   창(windowMs) 안에서 가로로 side 이상 벌어지고, 그 움직임이 세로보다 ratio 배 이상
-   가로여야 넘긴다. 즉 "350px/s 이상으로, 옆으로, 곧게" 가 넘기기의 정의다.
+/** 이 안에서 멈추면 탭. 손가락은 마우스보다 흔들려서 넉넉히 잡는다 */
+const TAP = { dist: 16, ms: 700 };
 
-   손짓을 흉내 내어 맞춘 값이다 (2026-08-26):
-     46px / 250ms  포일을 문지르는 동작이 **전부** 넘김으로 잡힌다. 처음 값이었고 틀렸다
-     70px / 200ms  느긋하거나 좁게 문지르면 안 걸리고, 보통 세기의 플릭은 걸린다  ← 지금
-     84px / 180ms  문지르기는 절대 안 걸리는데 아주 세게 튕겨야만 넘어간다
-
-   **애매하면 '구경' 쪽으로 기울이는 게 맞다.** 넘기는 길은 좌우 ‹ › 버튼으로도 있지만,
-   포일을 보는 길은 문지르기 하나뿐이고 그게 이 데모의 본체다. */
-const SWIPE = {
-  side: 70,
-  windowMs: 200,
-  ratio: 1.6,
-  tap: 16,      // 이 안에서 멈추면 탭. 손가락은 마우스보다 흔들려서 넉넉히 잡는다
-  tapMs: 700,
-};
+/* 좌우 버튼이 저절로 사라지기까지 (ms). 카드를 가리지 않게 잠깐만 보여 준다.
+   **처음 열 때와 그 뒤가 다르다.** 처음은 "여기 버튼이 있다"고 알려주기만 하면 되니
+   짧아도 되는데, 그 뒤에는 실제로 눌러야 하는 시간이라 같은 값을 쓰면 다음 장을
+   연달아 보려 할 때마다 카드를 만졌다 떼야 한다. */
+const NAV_PEEK = { open: 300, again: 1600 };
 
 let gesture = null;
+let navPeekTimer = 0;
 
-const endTouch = () => { gesture = null; viewer.classList.remove("is-touching"); };
+/** 좌우 버튼을 잠깐 띄운다. **버튼이 유일한 이동 수단이라 다시 부를 길이 있어야 한다** —
+ *  확대한 직후와, 카드에서 손을 뗄 때마다 나온다. 설명이 열려 있으면 시트 안에
+ *  이전/다음이 이미 있으므로 띄우지 않는다. */
+function peekNav(ms = NAV_PEEK.again) {
+  clearTimeout(navPeekTimer);
+  if (!phoneViewer.matches || viewer.classList.contains("show-detail")) {
+    return viewer.classList.remove("show-nav");
+  }
+  viewer.classList.add("show-nav");
+  navPeekTimer = setTimeout(() => viewer.classList.remove("show-nav"), ms);
+}
 
 viewer.addEventListener("pointerdown", (e) => {
   gesture = null;
   if (!phoneViewer.matches || !viewer.open) return;
   // 설명 시트 안은 스크롤해야 하고, 버튼은 눌려야 한다
   if (e.target.closest(".detail, button")) return;
-  const at = { x: e.clientX, y: e.clientY, t: e.timeStamp };
-  // start = 처음 댄 자리 (탭 판정용, 안 바뀐다)
-  // pts   = 최근 windowMs 자취 (넘기기 판정용, 앞에서부터 버려진다)
-  gesture = { start: at, pts: [at] };
-  viewer.classList.add("is-touching");
+
+  // 만지는 동안에는 버튼을 치운다 — 포일을 보려는데 눈에 걸린다
+  clearTimeout(navPeekTimer);
+  viewer.classList.remove("show-nav");
+  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp };
 });
 
-viewer.addEventListener("pointercancel", endTouch);
-
-viewer.addEventListener("pointermove", (e) => {
-  const g = gesture;
-  if (!g) return;
-
-  /* 최근 windowMs 동안의 자취만 남겨 두고, 그 구간에서 얼마나 벌었는지 본다.
-     **기준점 하나를 옮겨 다니는 방식으로 하면 안 된다** — 창이 지나는 순간이 하필
-     손짓 한가운데면 기준이 리셋되면서 그 플릭을 통째로 잃는다. 문지르다가 넘기려
-     할 때 안 먹는 게 그 증상이다. */
-  g.pts.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-  while (g.pts.length > 2 && e.timeStamp - g.pts[0].t > SWIPE.windowMs) g.pts.shift();
-
-  const dx = e.clientX - g.pts[0].x;
-  const dy = e.clientY - g.pts[0].y;
-
-  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > SWIPE.ratio * Math.abs(dy)) {
-    endTouch();
-    go(dx < 0 ? 1 : -1);   // 왼쪽으로 밀면 다음 장 — 사진첩과 같은 방향
-  }
-});
+viewer.addEventListener("pointercancel", () => { gesture = null; });
 
 viewer.addEventListener("pointerup", (e) => {
   const g = gesture;
-  endTouch();
+  gesture = null;
   if (!g) return;
 
-  /* 여기까지 왔으면 넘기기는 아니다. **처음 댄 자리**에서 거의 안 움직였으면 탭이다 —
-     g.pts[0] 은 창에서 밀려나며 계속 바뀌므로 그걸 쓰면 안 된다. 한참 문지르다 뗀 것도
-     탭으로 잡혀서, 포일을 보려던 손짓 끝마다 설명이 튀어나온다. */
-  const { start } = g;
-  if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < SWIPE.tap
-      && e.timeStamp - start.t < SWIPE.tapMs) {
+  // 처음 댄 자리에서 거의 안 움직였으면 탭 — 설명을 여닫는다.
+  // 그보다 움직였으면 포일을 구경한 것이고, 아무 일도 일어나지 않는다.
+  if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < TAP.dist && e.timeStamp - g.t < TAP.ms) {
     viewer.classList.toggle("show-detail");
   }
+  peekNav();   // 설명을 열었다면 peekNav 가 알아서 안 띄운다
 });
 
 viewer.addEventListener("cancel", afterClose);

@@ -9,7 +9,7 @@
 바꿀 때마다 코드 전체를 뒤지게 됩니다. 아래 ROLE_PERMISSIONS 한 곳만 고치면 되도록
 한 겹을 둡니다.
 
-**토큰이 관리자 것인지부터 봅니다.** 발급기(`core/token.py`)는 앱 회원 토큰도 같은
+**토큰이 누구 것인지부터 봅니다.** 발급기(`core/token.py`)는 앱 회원 토큰도 같은
 키로 만들기 때문에, 종류를 확인하지 않으면 앱 회원이 관리자 API 에 그대로 들어옵니다.
 `sub` 는 어느 쪽이든 UUID 한 개라 그것만으로는 구분되지 않습니다.
 
@@ -169,6 +169,57 @@ async def current_admin(request: Request) -> Principal:
 
 
 CurrentAdmin = Annotated[Principal, Depends(current_admin)]
+
+
+@dataclass(frozen=True)
+class AppPrincipal:
+    """지금 요청을 보낸 앱 회원. **role 이 없습니다.**
+
+    앱 회원은 자기 것만 봅니다 — 권한 등급이 필요한 화면이 없어서 `Perm` 도,
+    `require(...)` 도 쓰지 않습니다. "남의 것을 보려 하는가"는 각 엔드포인트가
+    `app_user_id` 로 직접 확인합니다.
+    """
+
+    app_user_id: uuid.UUID
+
+
+async def current_app_user(request: Request) -> AppPrincipal:
+    """access token 을 풀어 AppPrincipal 로. 못 믿을 토큰이면 401 입니다.
+
+    `current_admin` 의 거울상입니다 — 저쪽이 앱 회원 토큰을 막듯이, 여기서는
+    **관리자 토큰을 막습니다.** 관리자가 앱 API 로 들어오는 것이 당장 위험하지는
+    않지만, 그 토큰의 `sub` 는 `admin_users` 의 UUID 라 `app_users` 에서 조회하면
+    없는 회원이 됩니다. 그 자리를 404 나 500 으로 만나지 말고 여기서 끊습니다.
+    """
+    token = _extract_token(request)
+    if token is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
+
+    try:
+        claims = decode_access_token(token)
+    except TokenExpiredError:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "인증이 만료되었습니다."
+        ) from None
+    except TokenInvalidError:
+        logger.warning("신뢰할 수 없는 access token (ip=%s)", _client_host(request))
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다."
+        ) from None
+
+    if claims.subject_type is not SubjectType.APP:
+        logger.warning(
+            "앱 API 에 %s 토큰 (subject=%s, ip=%s)",
+            claims.subject_type.value,
+            claims.subject_id,
+            _client_host(request),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
+
+    return AppPrincipal(app_user_id=claims.subject_id)
+
+
+CurrentAppUser = Annotated[AppPrincipal, Depends(current_app_user)]
 
 
 def require(*perms: Perm):  # noqa: ANN201

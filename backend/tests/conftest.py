@@ -26,6 +26,10 @@ def _key(filler: int) -> str:
 os.environ["DAENGS_DB_HOST"] = "localhost"
 os.environ["DAENGS_DB_PASSWORD"] = "test-password"
 
+# 카카오 REST API 키. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 값으로
+# 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).
+os.environ["DAENGS_KAKAO_REST_API_KEY"] = "test-rest-api-key"
+
 os.environ["DAENGS_AES_KEY"] = _key(1)
 os.environ["DAENGS_BLIND_INDEX_KEY"] = _key(2)
 os.environ["DAENGS_JWE_KEY"] = _key(3)

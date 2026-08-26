@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
-from daengs_backend.routers import auth, health
+from daengs_backend.routers import app_auth, auth, health
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
 # 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
@@ -36,6 +36,8 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+# 앱 회원(카카오)용. 관리자와 경로가 겹치지 않게 /auth/app/* 입니다.
+app.include_router(app_auth.router)
 
 
 def dev() -> None:

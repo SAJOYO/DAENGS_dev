@@ -27,11 +27,16 @@ from daengs_backend.core.deps import (
     require,
 )
 from daengs_backend.core.password import hash_password
-from daengs_backend.core.token import hash_refresh_token
+from daengs_backend.core.subject import SubjectType
+from daengs_backend.core.token import (
+    create_access_token,
+    generate_refresh_token,
+    hash_refresh_token,
+)
 from daengs_backend.routers import auth as auth_router
 from daengs_backend.routers.auth import REFRESH_COOKIE
 from daengs_backend.services import login_attempts
-from fakes import PASSWORD, FakeAdmin, FakeSession, Store, install
+from fakes import PASSWORD, FakeAdmin, FakeSession, FakeToken, Store, install
 
 
 @pytest.fixture
@@ -308,6 +313,59 @@ class TestPermissions:
 
         assert client.get("/_pii").status_code == 403
         assert client.get("/_any").status_code == 200  # 로그인 자체는 유효합니다
+
+
+class TestSubjectSeparation:
+    """앱 회원 토큰이 관리자 API 로 들어오지 못해야 합니다 (D-016).
+
+    발급기가 하나이고 키도 하나라, **진짜 우리 서버가 만든 토큰**입니다.
+    위조가 아니라서 서명 검증은 전부 통과합니다 — 걸러 내는 것은 `typ` 뿐입니다.
+    """
+
+    def _app_token(self) -> str:
+        """앱 회원 access token. 정상적으로 발급된 것입니다."""
+        return create_access_token(uuid.uuid4(), SubjectType.APP)
+
+    def test_앱_토큰으로_me_를_부르면_401(self, client: TestClient) -> None:
+        res = client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {self._app_token()}"}
+        )
+
+        assert res.status_code == 401
+
+    def test_권한을_안_거는_엔드포인트도_막는다(self, client: TestClient) -> None:
+        """**이 테스트가 이 카드의 핵심입니다.**
+
+        `require(...)` 를 붙인 곳은 role 이 ROLE_PERMISSIONS 에 없어서 우연히
+        403 으로 막힙니다. 하지만 `CurrentAdmin` 만 받는 엔드포인트는 그 그물이
+        없어서, typ 검사가 빠지면 앱 회원이 그대로 들어옵니다.
+        """
+        res = client.get(
+            "/_any", headers={"Authorization": f"Bearer {self._app_token()}"}
+        )
+
+        assert res.status_code == 401
+
+    def test_앱_토큰은_쿠키로_와도_막는다(self, client: TestClient) -> None:
+        """전달 방식이 달라진다고 통과하면 안 됩니다."""
+        client.cookies.set(ACCESS_COOKIE, self._app_token())
+
+        assert client.get("/auth/me").status_code == 401
+
+    def test_앱_refresh_로_관리자_재발급은_401(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """관리자 role 이 담긴 access token 이 나가면 안 됩니다."""
+        token = generate_refresh_token()
+        store.tokens[hash_refresh_token(token)] = FakeToken(
+            subject_type=SubjectType.APP,
+            subject_id=uuid.uuid4(),
+            token_hash=hash_refresh_token(token),
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+        client.cookies.set(REFRESH_COOKIE, token)
+
+        assert client.post("/auth/refresh").status_code == 401
 
 
 class TestRolePermissionMatrix:

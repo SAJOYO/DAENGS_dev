@@ -24,6 +24,7 @@ from joserfc.jwk import OctKey
 
 from daengs_backend.config import settings
 from daengs_backend.core.keys import load_key
+from daengs_backend.core.subject import SubjectType
 
 __all__ = [
     "ACCESS_TTL",
@@ -73,9 +74,12 @@ _KEY = OctKey.import_key(
 _REGISTRY = JWERegistry()
 
 # 검증할 때 반드시 있어야 하는 클레임. exp 는 registry 가 시간까지 대조합니다.
+#
+# role 은 여기 없습니다 — 앱 회원 토큰에는 role 이 없기 때문입니다.
+# "관리자면 role 이 있어야 한다"는 종류별 규칙이라 decode_access_token 이 봅니다.
 _CLAIMS = jwt.JWTClaimsRegistry(
     sub={"essential": True},
-    role={"essential": True},
+    typ={"essential": True},
     exp={"essential": True},
 )
 
@@ -107,28 +111,49 @@ class AccessClaims:
 
     최대 ACCESS_TTL 만큼 낡을 수 있습니다 — role 을 바꾸거나 계정을 정지시켜도
     이미 나간 토큰에는 옛 값이 들어 있습니다. 지금 DB 상태가 필요하면
-    (예: `GET /auth/me`) 이걸 믿지 말고 admin_id 로 다시 조회하세요.
+    (예: `GET /auth/me`) 이걸 믿지 말고 subject_id 로 다시 조회하세요.
+
+    **`subject_id` 는 `subject_type` 없이는 뜻이 없습니다.** 어느 테이블의 UUID 인지가
+    그 값에 달려 있어서, 둘을 떼어 놓고 쓰면 `admin_users` 조회에 앱 회원 UUID 를
+    넘기는 코드가 나옵니다. 그래서 이름이 `admin_id` 가 아닙니다.
     """
 
-    admin_id: uuid.UUID
-    role: str
+    subject_type: SubjectType
+    subject_id: uuid.UUID
+    #: 관리자만 가집니다. 앱 회원은 None 입니다 (`app_users` 에 role 이 없습니다).
+    role: str | None
     expires_at: datetime
 
 
-def create_access_token(admin_id: uuid.UUID, role: str) -> str:
+def create_access_token(
+    subject_id: uuid.UUID,
+    subject_type: SubjectType,
+    role: str | None = None,
+) -> str:
     """access token 을 만듭니다. 5분짜리입니다.
 
     role 을 넣는 이유는 권한 검사마다 DB 를 보지 않기 위해서입니다. 그게 무상태
     토큰을 쓰는 이유 전부이고, 대가로 role 변경이 최대 5분 늦게 반영됩니다.
+
+    role 의 유무는 **주체 종류가 정합니다.** 어긋나면 ValueError 로 즉시 터뜨립니다 —
+    호출하는 쪽의 실수이지 사용자 입력이 아니라, 조용히 보정하면 role 없는 관리자
+    토큰이 나가고 그 사람은 아무 권한도 없는 채로 로그인에 성공합니다.
     """
+    if subject_type is SubjectType.ADMIN and not role:
+        raise ValueError("관리자 토큰에는 role 이 있어야 합니다.")
+    if subject_type is SubjectType.APP and role is not None:
+        raise ValueError("앱 회원 토큰에는 role 이 없어야 합니다.")
+
     now = datetime.now(UTC)
     expires_at = now + ACCESS_TTL
     claims = {
-        "sub": str(admin_id),
-        "role": role,
+        "sub": str(subject_id),
+        "typ": subject_type.value,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
+    if role is not None:
+        claims["role"] = role
     return jwt.encode(_HEADER, claims, _KEY, registry=_REGISTRY)
 
 
@@ -154,15 +179,30 @@ def decode_access_token(token: str) -> AccessClaims:
 
     claims = decoded.claims
     try:
-        admin_id = uuid.UUID(claims["sub"])
+        subject_id = uuid.UUID(claims["sub"])
     except (ValueError, AttributeError, TypeError) as exc:
         # 우리가 만든 토큰이면 여기 올 수 없습니다. 왔다면 키가 새어 나가
         # 남이 만든 토큰이라는 뜻이라, 통과시키면 안 됩니다.
         raise TokenInvalidError("sub 가 UUID 가 아닙니다.") from exc
 
+    try:
+        subject_type = SubjectType(claims["typ"])
+    except ValueError as exc:
+        # 모르는 종류입니다. **아무 쪽으로도 넘기지 않습니다** — 여기서 기본값을
+        # 관리자로 두면 typ 를 지운 토큰이 관리자로 통과합니다.
+        raise TokenInvalidError("모르는 주체 종류입니다.") from exc
+
+    role = claims.get("role")
+    if subject_type is SubjectType.ADMIN and not role:
+        raise TokenInvalidError("관리자 토큰에 role 이 없습니다.")
+    if subject_type is SubjectType.APP and role is not None:
+        # 앱 회원에게는 role 이 없습니다. 붙어 있다면 권한을 얻으려고 손댄 것입니다.
+        raise TokenInvalidError("앱 회원 토큰에 role 이 있습니다.")
+
     return AccessClaims(
-        admin_id=admin_id,
-        role=claims["role"],
+        subject_type=subject_type,
+        subject_id=subject_id,
+        role=role,
         expires_at=datetime.fromtimestamp(claims["exp"], UTC),
     )
 
@@ -170,7 +210,7 @@ def decode_access_token(token: str) -> AccessClaims:
 def generate_refresh_token() -> str:
     """refresh token 원문. 32바이트 난수를 urlsafe base64 로 한 43자입니다.
 
-    **뜻이 없는 문자열입니다.** 안에 admin_id 도 만료도 들어 있지 않습니다 —
+    **뜻이 없는 문자열입니다.** 안에 주인도 만료도 들어 있지 않습니다 —
     그 정보는 전부 DB 행에 있고, 이 값은 그 행을 찾는 열쇠일 뿐입니다.
     그래서 서버가 행을 지우거나 revoked_at 을 찍는 것만으로 즉시 무효가 됩니다.
 

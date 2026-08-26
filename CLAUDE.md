@@ -17,6 +17,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
+| `db/migrations/` | **이미 돌고 있는 DB** 에 손으로 적용하는 SQL. 스키마를 바꾸면 `db/init/` 과 같이 고칩니다 |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
 | `tools/` | 일회성 에셋·유틸 스크립트. `uv run --no-project` 로 돌린다 (전역 설치 없음) |
 | `docs/decisions.md` | 의사결정 기록. 되돌리기 번거로운 결정은 여기에 |
@@ -63,6 +64,10 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `core.database.get_session` 의존성으로 받고, `commit` 은 services 계층에서 합니다.
   **스키마 원본은 `db/init/*.sql` 이고 Alembic 은 쓰지 않습니다** — `models/` 는 SQL 을
   따라가는 쪽이라, SQL 을 고쳤으면 모델도 손으로 맞춰야 합니다.
+  **`db/init/` 은 볼륨이 빌 때만 실행되므로 서버 DB 에는 반영되지 않습니다.**
+  이미 있는 DB 를 바꾸는 SQL 은 `db/migrations/` 에 파일로 남기고 배포 후 직접
+  적용하세요. 버전 테이블이 없어 **무엇이 적용됐는지 DB 가 기억하지 않으니**,
+  여러 번 돌려도 안전하게 쓰세요 (`IF NOT EXISTS` 등).
 - **Python 은 3.12 로 고정**입니다 (`requires-python = ">=3.12,<3.13"`, `backend/.python-version`).
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로

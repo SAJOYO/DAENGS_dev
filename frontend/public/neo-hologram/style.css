@@ -360,6 +360,9 @@ body::before {
 
 /* ── 확대 뷰 ───────────────────────────────────────────── */
 
+/* 폰 전용 제스처 안내. 데스크톱에는 마우스와 버튼이 있으므로 안 띄운다. */
+.sheet-hint { display: none; }
+
 /* dialog 를 스크롤 컨테이너로 쓰지 않는다.
    예전엔 여기에 overflow:auto 를 걸었는데, .stage::before 글로우가 아래로 8% 삐져나가
    있어서 내용이 전부 보이는데도 스크롤바가 생겼다(953px 화면에서 내용 620px,
@@ -520,28 +523,97 @@ body::before {
 .viewer-nav .close { margin-left: auto; }
 
 @media (max-width: 760px) {
-  /* 카드 줄은 자기 높이 그대로, 설명 줄이 남는 높이를 받아 그 안에서만 스크롤한다 */
+  /* ── 폰: 카드를 화면 가득, 설명은 아래에서 올라오는 시트로 ────
+     예전엔 카드(44svh)와 설명을 위아래로 나눠 담았는데, 그러면 폰에서 카드가
+     작아서 포일이 거의 안 보였다. 이 데모는 카드를 보라고 만든 것이므로 카드에
+     화면을 다 주고 설명은 감춘다.
+
+     제스처 배정은 main.js 에 있다 — 탭=설명, 좌우=카드 넘기기, 아래로=닫기. */
   .viewer-inner {
+    position: relative;          /* 설명 시트를 여기에 붙인다 */
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    align-items: start;
-    justify-items: center;
+    grid-template-rows: 1fr;
+    place-items: center;
+    width: 100%;
     height: 100dvh;
+    gap: 0;
+    padding: 10px;
+    transition: padding 300ms cubic-bezier(.2, .8, .2, 1);
   }
 
-  .viewer .stage { height: min(44svh, 400px); }
+  /* 높이로도 폭으로도 안 넘치게 — 둘 중 작은 쪽이 이긴다. 카드마다 비율이
+     달라서(0.72 / 0.725 / 0.80) 폭 한계는 --ar 로 계산한다.
+     **transform 이 아니라 height 로 줄인다** — .stage 의 transform 은 여닫을 때
+     날아가는 FLIP 애니메이션이 쓰고 있어서 같은 속성을 두고 싸우게 된다. */
+  .viewer .stage {
+    height: min(88svh, calc((100vw - 20px) / var(--ar)));
+    transition: height 300ms cubic-bezier(.2, .8, .2, 1);
+  }
+
+  /* 설명이 올라오면 카드는 위로 비켜 준다 */
+  .viewer.show-detail .viewer-inner { align-items: start; padding-top: 3vh; }
+  .viewer.show-detail .stage { height: min(38svh, calc((100vw - 20px) / var(--ar))); }
 
   .detail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
-    max-width: 420px;
-    max-height: 100%;
+    max-width: none;
+    max-height: 74dvh;
+    margin: 0;
+    padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
     text-align: center;
+    background: rgba(12, 10, 5, .94);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -18px 44px rgba(0, 0, 0, .6);
+    transform: translateY(101%);
+    transition: transform 300ms cubic-bezier(.2, .8, .2, 1);
+    will-change: transform;
   }
 
-  .detail dl { margin-top: 16px; justify-content: center; }
-  .detail .flavor { margin-top: 16px; padding-top: 12px; }
-  .viewer-nav { margin-top: 18px; justify-content: center; }
+  .viewer.show-detail .detail { transform: none; }
+
+  /* 시트 손잡이. 이게 있어야 "위로 올라온 판"으로 읽힌다 */
+  .detail::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 0 auto 14px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, .3);
+  }
+
+  /* 열 때 떠오르는 연출은 데스크톱용이다. 여기서는 시트가 translateY 로 올라오는데
+     그 애니메이션이 끝나면서 transform:none 을 남겨서, 닫혀 있어야 할 시트가
+     열린 채로 굳는다. */
+  .viewer.is-opening .detail,
+  .viewer.is-closing .detail { animation: none; }
+
+  .detail dl { margin-top: 14px; justify-content: center; }
+  .detail .flavor { margin-top: 14px; padding-top: 10px; }
+  .viewer-nav { margin-top: 16px; justify-content: center; }
   .viewer-nav .close { margin-left: 0; }
+
+  /* 제스처를 알려 주는 한 줄. 설명이 열리면 시트가 대신 말해주므로 사라진다. */
+  .sheet-hint {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    margin: 0;
+    color: var(--ink-faint);
+    font-size: 12px;
+    text-align: center;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, .9);
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+
+  .viewer.show-detail .sheet-hint { opacity: 0; }
 }
 
 /* ── 열고 닫는 전환 ───────────────────────────────────────

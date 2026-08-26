@@ -385,6 +385,8 @@ function render() {
   inner.className = "viewer-inner";
   inner.append(makeStage(card, { lazy: false, button: false }));
   inner.insertAdjacentHTML("beforeend", detailMarkup(card));
+  inner.insertAdjacentHTML("beforeend",
+    '<p class="sheet-hint">탭하면 상세 · 좌우로 넘기기 · 아래로 쓸어내려 닫기</p>');
   viewer.append(inner);
 }
 
@@ -509,6 +511,7 @@ function go(delta) {
   render();
   showGridStage(index, false);
 
+  viewer.classList.remove("show-detail");
   const incoming = viewer.querySelector(".stage");
   incoming?.querySelector(".card")?.focus();
   slide(outgoing, fromRect, incoming, delta);
@@ -526,7 +529,7 @@ function afterClose() {
   if (viewer.open) return;
   closing = false;
   flight = null;
-  viewer.classList.remove("is-closing", "is-opening");
+  viewer.classList.remove("is-closing", "is-opening", "show-detail");
   document.body.classList.remove("is-viewing");
   showGridStage(index, true);
   // 넘겨 봤다면 처음 연 카드가 아니라 마지막으로 보던 카드로 돌아간다
@@ -583,6 +586,67 @@ viewer.addEventListener("keydown", (e) => {
   // Esc 는 dialog 가 알아서 닫지만, 정리까지 확실히 하려고 직접 처리한다.
   // 네이티브가 먼저 닫아버려도 afterClose 가 멱등이라 결과는 같다.
   else if (e.key === "Escape") { e.preventDefault(); closeViewer(); }
+});
+
+
+/* ── 폰 확대 뷰 제스처 ────────────────────────────────────
+   폰에서는 카드가 화면을 가득 채우고 설명은 감춰져 있다 (style.css 의 760px 블록).
+   감춘 걸 도로 꺼내는 길과, 카드를 넘기는 길이 필요하다.
+
+     탭          설명 열기/닫기
+     좌우 스와이프  이전 / 다음 카드
+     아래로 스와이프 닫기
+
+   **좌우를 '설명 열기'가 아니라 '카드 넘기기'에 준 이유**: 화면을 채운 사진에서
+   좌우로 미는 건 사진첩·스토리·카드 앱에서 거의 예외 없이 '다음 항목'이다. 여기에
+   설명을 걸면 사람들이 제일 먼저 해보는 동작이 엉뚱하게 반응한다.
+
+   **제스처는 카드(.stage) 위에서 시작한 것만 받는다.** 배경을 탭하면 닫히는 기존
+   동작(viewer 의 click 처리)과 부딪히지 않게 하려는 것이다. 설명 시트 안은 스크롤
+   해야 하므로 애초에 여기까지 오지 않는다.
+
+   데스크톱은 이 블록 전체가 놀고 있다 — 마우스로 드래그해도 아무 일도 안 일어난다. */
+
+const phoneViewer = matchMedia("(max-width: 760px)");
+
+/** 손가락이 이만큼 움직여야 스와이프로 친다 (px) */
+const SWIPE = {
+  side: 46,     // 좌우 — 카드 넘기기
+  down: 90,     // 아래 — 닫기. 넘기기보다 크게 잡아야 비스듬한 손짓이 안 닫는다
+  tap: 12,      // 이 안에서 멈추면 탭
+  tapMs: 700,   // 오래 누르고 있다 떼는 건 탭으로 안 친다
+};
+
+let gesture = null;
+
+viewer.addEventListener("pointerdown", (e) => {
+  gesture = null;
+  if (!phoneViewer.matches || !viewer.open) return;
+  if (!e.target.closest(".stage")) return;
+  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+});
+
+viewer.addEventListener("pointercancel", () => { gesture = null; });
+
+viewer.addEventListener("pointerup", (e) => {
+  const g = gesture;
+  gesture = null;
+  if (!g) return;
+
+  const dx = e.clientX - g.x;
+  const dy = e.clientY - g.y;
+
+  // 아래로 크게 쓸어내리면 닫는다. 세로가 가로보다 확실히 커야 한다 —
+  // 안 그러면 비스듬히 넘기려던 게 닫혀 버린다.
+  if (dy > SWIPE.down && Math.abs(dy) > Math.abs(dx)) return closeViewer();
+
+  // 좌우로 밀면 카드를 넘긴다. 왼쪽으로 밀면 다음 장이다 (사진첩과 같은 방향).
+  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > Math.abs(dy)) return go(dx < 0 ? 1 : -1);
+
+  // 거의 안 움직였으면 탭 — 설명을 여닫는다
+  if (Math.hypot(dx, dy) < SWIPE.tap && e.timeStamp - g.t < SWIPE.tapMs) {
+    viewer.classList.toggle("show-detail");
+  }
 });
 
 viewer.addEventListener("cancel", afterClose);

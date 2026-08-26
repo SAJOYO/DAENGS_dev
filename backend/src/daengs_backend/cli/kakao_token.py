@@ -21,8 +21,17 @@ Redirect URI 등록이 필요합니다.
 **운영 흐름(네이티브 앱 SDK)에는 이 등록이 필요 없습니다** — 앱은 커스텀 스킴을 씁니다.
 이건 앱 없이 테스트하려고 REST 키를 쓰기 때문에 필요한 것입니다 (D-017).
 
-콘솔에서 **OpenID Connect 를 켜 두어야** 합니다. 안 켜져 있으면 아래 `scope` 에
+콘솔에서 **OpenID Connect 를 켜 두어야** 합니다. 안 켜져 있으면 `scope` 에
 `openid` 를 넣어도 `id_token` 이 오지 않고, 이 스크립트가 그렇다고 알려 줍니다.
+
+## KOE205 가 뜬다면
+
+"설정하지 않은 동의 항목" 오류입니다. **켜지 않은 동의 항목을 요청**했다는 뜻이고,
+사용자가 거절한 것과는 다릅니다 (로그인 화면이 아예 안 뜹니다).
+
+기본 `scope` 는 `openid` 하나뿐이라 OIDC 만 켜져 있으면 걸리지 않습니다.
+`--scope` 로 항목을 추가했다면 그 항목을 콘솔의 [카카오 로그인] → [동의항목]에서
+먼저 켜세요. `openid` 만으로도 KOE205 가 뜬다면 **OIDC 가 안 켜진 것**입니다.
 """
 
 import argparse
@@ -43,9 +52,16 @@ TOKEN_URL = "https://kauth.kakao.com/oauth/token"
 
 DEFAULT_PORT = 8910
 
-# openid 가 없으면 id_token 이 나오지 않습니다. **이게 가장 흔한 실수입니다.**
-# account_email 은 선택 동의라, 사용자가 거절하면 이메일 없이 진행됩니다.
-SCOPE = "openid,account_email"
+# **콘솔에서 켜 둔 동의 항목만 요청할 수 있습니다.** 안 켠 것을 넣으면 로그인 화면
+# 대신 KOE205("설정하지 않은 동의 항목")가 뜹니다 — 사용자가 거절하는 것과 다릅니다.
+#
+# 그래서 기본은 `openid` 하나입니다. id_token 을 받는 데 필요한 최소이고,
+# OIDC 를 켰다면 별도 동의 항목 설정 없이 바로 됩니다.
+#
+# 이메일을 받으려면 콘솔의 [카카오 로그인] → [동의항목]에서 '카카오계정(이메일)'을
+# 선택 동의로 켠 **뒤에** `--scope openid,account_email` 로 돌리세요.
+# 안 켜도 됩니다 — 이메일 없이 가입되고 `email_enc`/`email_hash` 는 NULL 입니다.
+DEFAULT_SCOPE = "openid"
 
 # bytes 리터럴에는 한글을 못 넣습니다. str 로 두고 내보낼 때 인코딩합니다.
 _DONE_PAGE = """<!doctype html><meta charset="utf-8">
@@ -181,6 +197,13 @@ def main() -> None:
         "**실제 계정의 신원 증명입니다** — 어디에 붙여넣을지 생각하고 쓰세요.",
     )
     parser.add_argument(
+        "--scope",
+        default=DEFAULT_SCOPE,
+        help=f"요청할 동의 항목 (기본 '{DEFAULT_SCOPE}'). "
+        "**콘솔에서 켜 둔 것만** 넣을 수 있습니다. 이메일까지 받으려면 "
+        "동의항목에서 켠 뒤 'openid,account_email'.",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=180.0,
@@ -194,12 +217,13 @@ def main() -> None:
             "client_id": settings.kakao_rest_api_key,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": SCOPE,
+            "scope": args.scope,
         }
     )
     url = f"{AUTHORIZE_URL}?{query}"
 
     print(f"Redirect URI : {redirect_uri}")
+    print(f"scope        : {args.scope}")
     print("  → 이 값이 카카오 콘솔에 **그대로** 등록되어 있어야 합니다.\n")
     print("브라우저를 엽니다. 열리지 않으면 아래 주소를 직접 여세요.\n")
     print(url + "\n")
@@ -219,7 +243,7 @@ def main() -> None:
             "응답에 id_token 이 없습니다.\n\n"
             "카카오 콘솔에서 **OpenID Connect 가 꺼져 있을 때** 이렇게 됩니다.\n"
             "  내 애플리케이션 → 카카오 로그인 → OpenID Connect → 활성화\n"
-            f"(scope 는 이 스크립트가 '{SCOPE}' 로 이미 보냈습니다)"
+            f"(scope 는 '{args.scope}' 로 보냈습니다)"
         )
 
     _describe(id_token, print_token=args.print_token)

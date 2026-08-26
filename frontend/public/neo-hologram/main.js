@@ -392,7 +392,7 @@ function render() {
     '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
     '<button type="button" class="edge-nav prev" data-nav="-1" aria-label="이전 카드">‹</button>' +
     '<button type="button" class="edge-nav next" data-nav="1" aria-label="다음 카드">›</button>' +
-    '<p class="sheet-hint">문지르면 포일 · 가운데 탭 상세 · 가장자리 탭 넘기기</p>');
+    '<p class="sheet-hint">탭하여 상세보기</p>');
   viewer.append(inner);
 }
 

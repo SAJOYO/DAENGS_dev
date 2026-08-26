@@ -10,6 +10,22 @@
 //       (0.80 넉 장, 0.72 두 장). CSS 가 이 값으로 카드마다 aspect-ratio 를 잡는다.
 // accent/accent2 : 카드 뒤 글로우와 테두리에 쓸 색. 그림에서 뽑았다.
 // frame : 프레임 디자인. 크롬(chrome) 넉 장, 초록 홀로(leaf) 두 장.
+// rarity : 레어도. 등급표가 아니라 **연출 방식**이다 — 포켓몬 카드 게임 포켓의 체계를
+//       빌렸는데, "위로 갈수록 더 반짝이게"가 아니라 티어마다 서로 다른 렌더링 기법을
+//       쓰도록 나눴다. 기법이 겹치면 시험할 게 없어지기 때문이다.
+//         flat      ◇◇◇   포일 없음. 기울기와 그림자만 — 이머시브의 대조군
+//         ex        ◇◇◇◇  mask-image 로 아트 창에만 홀로
+//         fullart   ☆     무지개 conic 포일 — style.css 의 기본값
+//         etched    ☆☆    글레어가 지나갈 때만 드러나는 각인 텍스처
+//         crown     ♛     금속 금박. 색상환을 안 돌고 명도만 오르내리는 이방성이라
+//                          기존 포일 코드를 그대로 못 쓴다
+//         immersive ☆☆☆   꾹 누르면 카드 안으로 들어간다 (immersive.css / .mjs)
+//       **지금 구현된 건 immersive 하나뿐이다.** 나머지는 배정만 적어 둔 것이고
+//       화면에는 전부 기본 풀아트로 보인다. 다음 PR 에서 하나씩 붙인다.
+// scene  : immersive 카드만 갖는다. 무대에 넘길 값 (immersive.mjs 가 읽는다).
+//       back/subject 는 art/*.webp 와 별개인 **레이어 원화**다. 카드 그림이 아니라
+//       프레임 없는 배경 한 장과 알파가 있는 주인공 한 장 — tools/neo-hologram-layers.py
+//       로 뽑는다. 없으면 카드 그림으로 때우는데 보기엔 이상하다.
 
 export const CARDS = [
   {
@@ -29,6 +45,33 @@ export const CARDS = [
     art: "art/cabbage.webp",
     w: 810,
     h: 1125,
+    rarity: "immersive",
+    scene: {
+      place: "이슬 맺힌 텃밭 · 해 뜨기 직전",
+      back: "art/cabbage-back.webp",
+      subject: "art/cabbage-subject.webp",
+      // 진입 때만 쓰는 카드 그림. art/cabbage.webp 와 같은데 둥근 모서리 바깥의
+      // 검정을 알파로 지운 것이다 — 화면만 하게 확대하면 네 귀퉁이가 검게 남는다.
+      card: "art/cabbage-card.webp",
+      // 원본 카드 그림 안에서 누끼가 차지하는 자리 (카드 크기 대비 %).
+      // 들어갈 때 카드와 누끼를 겹쳐 놓고 카드만 지우는데, 이 값이 맞아야
+      // 틀이 녹는 동안 캐릭터가 한 픽셀도 안 움직인다. 둘이 같은 원화라 계산이 나온다 —
+      // 누끼 캔버스(875x1216)의 경계상자를 카드 캔버스(810x1125) 배율로 나눈 값이다.
+      fit: { x: 6.06, y: 14.15, w: 87.43, h: 62.70 },
+      motes: 52,      // 떠다니는 초록빛
+      leaves: 7,
+      dew: 15,        // 렌즈 유리에 맺힌 이슬
+      dewRun: 3,      // 그중 흘러내리는 것
+      skinDew: 11,    // 배추 표면에 맺힌 이슬
+      // 겉잎 겹. z = 속에서 띄우는 높이(px), r0~r1 = 안쪽에서 나타나는 구간(%),
+      // r2~r3 = 바깥으로 사라지는 구간(%, 없으면 끝까지), shadow = 그림자 진하기.
+      // 뒤 겹일수록 경계를 넓게 잡고 그림자를 옅게 준다 — 뒤에서 또렷한 테두리가
+      // 보이면 잎이 겹친 게 아니라 원을 오려 붙인 걸로 보인다.
+      shells: [
+        { z: 34, r0: 14, r1: 44, r2: 54, r3: 86, shadow: .22 },   // 중간 잎
+        { z: 70, r0: 44, r1: 62, r2: 62, r3: 72 },                 // 바깥 잎
+      ],
+    },
     accent: "#8fd94a",
     accent2: "#d8f07a",
     frame: "leaf",
@@ -50,6 +93,7 @@ export const CARDS = [
     art: "art/pepper.webp",
     w: 900,
     h: 1125,
+    rarity: "etched",
     accent: "#ffd838",
     accent2: "#e27016",
     frame: "chrome",
@@ -71,6 +115,7 @@ export const CARDS = [
     art: "art/eggplant.webp",
     w: 900,
     h: 1125,
+    rarity: "fullart",
     accent: "#a86bff",
     accent2: "#e0a3ff",
     frame: "chrome",
@@ -92,6 +137,7 @@ export const CARDS = [
     art: "art/carrot.webp",
     w: 900,
     h: 1125,
+    rarity: "crown",
     accent: "#ff8a2b",
     accent2: "#ffc46b",
     frame: "chrome",
@@ -113,6 +159,7 @@ export const CARDS = [
     art: "art/danhobak.webp",
     w: 900,
     h: 1125,
+    rarity: "ex",
     accent: "#7d9b46",
     accent2: "#d8bb4e",
     frame: "chrome",
@@ -134,6 +181,7 @@ export const CARDS = [
     art: "art/mushroom.webp",
     w: 810,
     h: 1125,
+    rarity: "flat",
     accent: "#cbb08a",
     accent2: "#9fd06a",
     frame: "leaf",

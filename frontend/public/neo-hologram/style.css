@@ -14,6 +14,23 @@ body { line-height: 1.6; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 img { max-width: 100%; height: auto; }
 
+/* 폰에서 카드를 꾹 누르면 iOS 는 "이미지 저장" 팝업(-webkit-touch-callout)을, 안드로이드는
+   이미지 선택·드래그를 띄운다. 그 순간 꾹 누르기 제스처가 끊기고 파란 선택 블록만 남는다.
+   이 페이지는 읽어서 복사할 문서가 아니라 만지는 화면이라 통째로 끈다.
+   접두사 붙은 -webkit-user-select 는 iOS Safari 가 아직 표준 이름을 안 보므로 함께 쓴다.
+   CSS 로 막히는 건 iOS 뿐이라, 안드로이드의 길게 누르기 메뉴는 main.js 에서 따로 막는다.
+   dialog 를 따로 적는 이유: 확대 뷰와 이머시브는 <dialog> 라 top layer 로 올라가고,
+   그때 html 에서 내려오던 상속이 끊겨 user-select 가 text 로 되돌아간다. */
+html, dialog {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 데스크톱에서 사진을 끌어다 놓는 것까지 막는다 */
+img { -webkit-user-drag: none; }
+
 :root {
   color-scheme: dark;
   --ink: #eefaf1;
@@ -220,6 +237,10 @@ body::before {
   position: absolute;
   z-index: -2;
   inset: 10% -15% -8%;
+  /* 카드 밖으로 좌우 15% · 아래 8% 삐져나가는 장식이라 클릭을 먹으면 안 된다.
+     빼먹으면 확대 뷰에서 이 글로우가 '이전' 버튼 왼쪽 절반을 덮어, 눌러도 버튼이
+     아니라 .stage 가 잡혀 카드만 기울어진다. 그리드에서도 옆 카드의 hover 를 훔친다. */
+  pointer-events: none;
   border-radius: 50%;
   background: radial-gradient(ellipse,
     color-mix(in srgb, var(--accent) 34%, transparent),

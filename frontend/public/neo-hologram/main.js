@@ -1,4 +1,5 @@
 import { CARDS, altText } from "./cards.mjs";
+import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive } from "./immersive.mjs";
 
 const dexEl = document.querySelector("#dex");
 const countEl = document.querySelector("#count");
@@ -106,6 +107,7 @@ function makeStage(card, { lazy = true, button = true } = {}) {
   stage.style.setProperty("--ar", (card.w / card.h).toFixed(4));
   stage.style.setProperty("--accent", card.accent);
   stage.style.setProperty("--accent2", card.accent2);
+  stage.dataset.rarity = card.rarity ?? "fullart";
 
   const shell = button
     ? '<button class="card" type="button">'
@@ -154,6 +156,24 @@ CARDS.forEach((card, i) => {
     `<span class="stat">${esc(card.statLabel)} ${card.stat}</span>`;
 
   stage.querySelector(".card").addEventListener("click", () => open(i));
+
+  // ☆☆☆ 는 꾹 눌러 안으로 들어간다. 게이지가 다 차기 전에 떼면 위의 click 이 살아서
+  // 평범한 확대 뷰가 열린다 — 기존 동작은 그대로 남는다.
+  if (isImmersive(card)) {
+    // --accent 는 .stage 안에 갇혀 있어 캡션이 못 본다. 배지가 카드 색을 타도록 li 에 얹는다.
+    li.style.setProperty("--accent", card.accent);
+    // 자리는 누를 때마다 다시 잰다 — 그리드가 스크롤됐을 수 있다
+    bindLongPress(stage, stage.querySelector(".card"),
+      () => openImmersive(card, stage.getBoundingClientRect()));
+
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "im-badge";
+    badge.textContent = "★★★ 꾹 눌러서 들어가기";
+    badge.addEventListener("click", () => openImmersive(card, stage.getBoundingClientRect()));
+    caption.append(badge);
+  }
+
   li.append(frameEl, caption);
   dexEl.append(li);
 });
@@ -432,3 +452,22 @@ viewer.addEventListener("keydown", (e) => {
 
 viewer.addEventListener("cancel", afterClose);
 viewer.addEventListener("close", afterClose);
+
+/* ── 꾹 눌렀을 때 브라우저가 끼어드는 것 막기 ─────────────
+   선택·드래그는 style.css 가 CSS 로 끈다. 남는 건 길게 누르기 메뉴인데, 안드로이드
+   크롬은 -webkit-touch-callout 을 보지 않아 사진 위에서 "이미지 다운로드" 메뉴가
+   그대로 뜨고 그러면 이머시브로 들어가는 꾹 누르기가 끊긴다. 그래서 사진·카드
+   위에서만 메뉴를 막는다 — 페이지 나머지(링크·글)에서는 오른쪽 버튼이 그대로 산다.
+   immersive.mjs 도 꾹 누르는 동안 같은 걸 막지만 그건 게이지가 도는 순간뿐이라,
+   확대 뷰나 이머시브 장면의 사진은 여기서만 걸린다. */
+const NO_MENU = "img, .card, .stage, .dio, .viewer";
+
+for (const ev of ["contextmenu", "dragstart"]) {
+  document.addEventListener(ev, (e) => {
+    if (e.target instanceof Element && e.target.closest(NO_MENU)) e.preventDefault();
+  });
+}
+
+/* ?im=<카드 id> 로 열면 이머시브로 바로 들어간다 — live-server 가 새로 고칠 때마다
+   다시 꾹 누르지 않아도 되도록. 개발 편의용이고 평소 경로에는 영향이 없다. */
+autoOpenFromQuery();

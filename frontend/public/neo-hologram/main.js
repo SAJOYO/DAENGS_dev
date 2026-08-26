@@ -1,10 +1,13 @@
-import { CARDS, altText } from "./cards.mjs";
+import { CARDS, CARDS_CSS_EFFECTS, altText, statText } from "./cards.mjs";
 import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive } from "./immersive.mjs";
 
 const dexEl = document.querySelector("#dex");
 const countEl = document.querySelector("#count");
 const viewer = document.querySelector("#viewer");
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** 폰 레이아웃인지. style.css 의 760px 블록과 같은 기준을 써야 어긋나지 않는다. */
+const phoneViewer = matchMedia("(max-width: 760px)");
 
 const esc = (s = "") =>
   String(s).replace(/[&<>"']/g, (c) =>
@@ -16,10 +19,45 @@ const pad2 = (n) => String(n).padStart(2, "0");
    rAF 는 카드마다 두지 않고 하나만 돌린다. 포인터는 어차피 한 번에 한 장 위에만
    있으므로, 가장 최근 입력만 남겨 두었다가 다음 프레임에 그 카드만 갱신한다. */
 
-const MOTION_VARS = ["--mouse-x", "--mouse-y", "--rotate-x", "--rotate-y", "--glare", "--shadow-x", "--shadow-y"];
+const MOTION_VARS = [
+  "--mouse-x", "--mouse-y", "--rotate-x", "--rotate-y", "--glare", "--shadow-x", "--shadow-y",
+  // cards-css 포일이 읽는 값. 이름도 계산식도 그쪽 규약이라 우리 쪽에서 안 쓰더라도
+  // 같이 지워야 카드에서 손을 뗐을 때 정면 상태로 돌아간다.
+  "--pointer-from-left", "--pointer-from-top", "--pointer-from-center",
+];
 
 let pending = null;
 let frame = 0;
+/** 지금 포인터가 올라가 있는 카드. 자이로가 이 카드는 건드리지 않는다. */
+let pointerStage = null;
+
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+/**
+ * 기울기를 실제로 CSS 변수에 쓰는 곳. **입력 소스가 뭐든 결국 여기로 들어온다** —
+ * 포인터든, 폰 자이로든, 네이티브 앱이 밀어 넣는 센서 값이든 마찬가지다.
+ * 그래서 소스를 늘릴 때 이 함수는 안 건드린다.
+ *
+ * @param {number} px 카드 안에서의 가로 위치 0~1 (0=왼쪽 끝)
+ * @param {number} py 세로 위치 0~1
+ * @param {number} intensity 포일 세기 0~1
+ */
+function writeTilt(stage, px, py, intensity) {
+  stage.style.setProperty("--mouse-x", `${(px * 100).toFixed(2)}%`);
+  stage.style.setProperty("--mouse-y", `${(py * 100).toFixed(2)}%`);
+  stage.style.setProperty("--rotate-x", `${((0.5 - py) * 22).toFixed(2)}deg`);
+  stage.style.setProperty("--rotate-y", `${((px - 0.5) * 25).toFixed(2)}deg`);
+  stage.style.setProperty("--glare", intensity);
+  stage.style.setProperty("--shadow-x", `${((0.5 - px) * 38).toFixed(1)}px`);
+  stage.style.setProperty("--shadow-y", `${(18 + (0.5 - py) * 28).toFixed(1)}px`);
+
+  // cards-css 포일용. 0~1 의 맨숫자(단위 없음)라 위의 % · deg 와 섞이지 않는다.
+  // from-center 는 모서리가 1 이 아니라 반지름 0.5 를 1 로 보는 값이다 — reverse 가
+  // 이걸로 가운데를 죽이고 가장자리를 살리므로, 정규화를 바꾸면 그 티어가 무너진다.
+  stage.style.setProperty("--pointer-from-left", px.toFixed(3));
+  stage.style.setProperty("--pointer-from-top", py.toFixed(3));
+  stage.style.setProperty("--pointer-from-center", Math.min(Math.hypot(px - 0.5, py - 0.5) / 0.5, 1).toFixed(3));
+}
 
 function flush() {
   frame = 0;
@@ -31,16 +69,7 @@ function flush() {
   const rect = stage.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
 
-  const px = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
-  const py = Math.max(0, Math.min(1, (y - rect.top) / rect.height));
-
-  stage.style.setProperty("--mouse-x", `${(px * 100).toFixed(2)}%`);
-  stage.style.setProperty("--mouse-y", `${(py * 100).toFixed(2)}%`);
-  stage.style.setProperty("--rotate-x", `${((0.5 - py) * 22).toFixed(2)}deg`);
-  stage.style.setProperty("--rotate-y", `${((px - 0.5) * 25).toFixed(2)}deg`);
-  stage.style.setProperty("--glare", intensity);
-  stage.style.setProperty("--shadow-x", `${((0.5 - px) * 38).toFixed(1)}px`);
-  stage.style.setProperty("--shadow-y", `${(18 + (0.5 - py) * 28).toFixed(1)}px`);
+  writeTilt(stage, clamp01((x - rect.left) / rect.width), clamp01((y - rect.top) / rect.height), intensity);
 }
 
 function paint(stage, x, y, intensity = 1) {
@@ -62,10 +91,13 @@ function reset(stage) {
  *   확대 뷰에서는 아예 끈다.
  */
 function bindTilt(stage, { arrowTilt = true } = {}) {
-  stage.addEventListener("pointerenter", (e) => paint(stage, e.clientX, e.clientY, 0.8));
-  stage.addEventListener("pointermove", (e) => paint(stage, e.clientX, e.clientY, 1));
-  stage.addEventListener("pointerleave", () => reset(stage));
-  stage.addEventListener("pointercancel", () => reset(stage));
+  const grab = (e, intensity) => { pointerStage = stage; paint(stage, e.clientX, e.clientY, intensity); };
+  const release = () => { if (pointerStage === stage) pointerStage = null; reset(stage); };
+
+  stage.addEventListener("pointerenter", (e) => grab(e, 0.8));
+  stage.addEventListener("pointermove", (e) => grab(e, 1));
+  stage.addEventListener("pointerleave", release);
+  stage.addEventListener("pointercancel", release);
 
   const card = stage.querySelector(".card");
   card.addEventListener("blur", () => reset(stage));
@@ -93,6 +125,104 @@ function bindTilt(stage, { arrowTilt = true } = {}) {
   });
 }
 
+/* ── 기울기 입력 (2) 자이로 · 네이티브 ────────────────────
+   **카드를 눌러 확대한 상태에서만** 폰을 기울이면 카드가 따라 기운다. 그리드는
+   손대지 않는다. **PC 도 아무것도 안 바뀐다** — 데스크톱에는 센서가 없어서 이벤트가
+   한 번도 안 오고, 위의 포인터 코드가 그대로 돈다.
+
+   값이 들어오는 문은 두 개다.
+     - 브라우저: `deviceorientation` 이벤트
+     - 네이티브 앱: WebView 에서 `window.__neoTilt(beta, gamma)` 를 부른다
+   둘 다 아래 feedOrientation() 하나로 모이고, 거기서 writeTilt() 로 나간다.
+
+   **브라우저 쪽은 secure context 에서만 켜진다.** HTTPS 이거나 localhost 여야 하고,
+   지금 배포(nginx :80)는 둘 다 아니다 — 폰에서 daengs.~ 로 들어가면 에러 없이 그냥
+   조용히 안 켜진다. 개발 중에는 USB 로 `adb reverse tcp:3000 tcp:3000` 을 걸고
+   폰에서 localhost:3000 으로 보면 인증서 없이 확인된다.
+   네이티브 브릿지(`__neoTilt`)는 웹 API 를 안 거치므로 이 제약이 없다. */
+
+/** 이 각도(도)만큼 기울이면 카드가 끝까지 돈다. 키우면 둔해지고 줄이면 예민해진다. */
+const TILT_RANGE = 20;
+
+/** **확대 뷰에 떠 있는 한 장에만 적용한다.** 그리드에서는 열두 장이 한꺼번에 같은
+ *  각도로 도는데, 폰에서 매 프레임 열두 장을 갱신하는 비용도 크고 보기에도 산만하다.
+ *  카드 한 장을 들고 기울여 보는 게 원래 하려던 동작이기도 하다.
+ *
+ *  참조를 들고 있지 않고 그때그때 찾는다 — 확대 뷰의 .stage 는 ‹ › 로 카드를 넘길
+ *  때마다 새로 만들어지므로, 붙잡아 두면 넘긴 뒤 죽은 노드를 기울이게 된다. */
+const tiltTarget = () => (viewer.open ? viewer.querySelector(".stage") : null);
+
+let tiltBase = null;      // 처음 들어온 값을 '정면'으로 삼는다
+let tiltPending = null;
+let tiltFrame = 0;
+
+function tiltFlush() {
+  tiltFrame = 0;
+  const job = tiltPending;
+  tiltPending = null;
+  if (!job) return;
+
+  const stage = tiltTarget();
+  // 손가락이 올라가 있으면 포인터가 이긴다. 두 소스가 같은 카드를 두고 매 프레임
+  // 싸우는 걸 막는다 — 폰에서도 화면을 문지르면 그쪽이 우선이다.
+  if (!stage || stage === pointerStage) return;
+  writeTilt(stage, job.px, job.py, 1);
+}
+
+/**
+ * @param {number} beta  앞뒤 기울기 (deviceorientation 규약, 도 단위)
+ * @param {number} gamma 좌우 기울기
+ */
+function feedOrientation(beta, gamma) {
+  if (reducedMotion) return;
+  if (typeof beta !== "number" || typeof gamma !== "number") return;
+  if (Number.isNaN(beta) || Number.isNaN(gamma)) return;
+
+  // 절대 각도가 아니라 '처음 든 자세에서 얼마나 움직였는지'를 쓴다. 폰을 눕혀서 보든
+  // 세워서 보든 처음 자세가 정면이 되므로, 들자마자 카드가 홱 돌아가지 않는다.
+  if (!tiltBase) tiltBase = { beta, gamma };
+  let dx = gamma - tiltBase.gamma;   // 좌우
+  let dy = beta - tiltBase.beta;     // 앞뒤
+
+  // 가로로 눕히면 센서 축과 화면 축이 어긋난다. 화면이 돈 만큼 되돌려 준다.
+  switch (screen.orientation?.angle ?? 0) {
+    case 90:  [dx, dy] = [dy, -dx]; break;
+    case 180: [dx, dy] = [-dx, -dy]; break;
+    case 270: [dx, dy] = [-dy, dx]; break;
+    default: break;
+  }
+
+  tiltPending = {
+    px: clamp01(0.5 + dx / TILT_RANGE / 2),
+    py: clamp01(0.5 + dy / TILT_RANGE / 2),
+  };
+  if (!tiltFrame) tiltFrame = requestAnimationFrame(tiltFlush);
+}
+
+/** 네이티브 앱용 문. Android 쪽에서 SensorManager 값을 그대로 넘기면 된다:
+ *  `webView.evaluateJavascript("window.__neoTilt(" + beta + "," + gamma + ")", null)` */
+window.__neoTilt = feedOrientation;
+
+/* 브라우저 자이로 붙이기. iOS 13+ 는 사용자 제스처 안에서 권한을 물어야 해서, 첫
+   탭까지 기다렸다가 붙인다. 안드로이드는 물을 게 없어서 바로 붙는다.
+   권한을 거절해도 아무 일도 안 일어난다 — 포인터가 그대로 남는다. */
+function startDeviceOrientation() {
+  window.addEventListener("deviceorientation", (e) => feedOrientation(e.beta, e.gamma));
+}
+
+if (!reducedMotion && typeof DeviceOrientationEvent !== "undefined") {
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    document.addEventListener("pointerdown", function ask() {
+      document.removeEventListener("pointerdown", ask);
+      DeviceOrientationEvent.requestPermission()
+        .then((r) => { if (r === "granted") startDeviceOrientation(); })
+        .catch(() => {});
+    }, { once: true });
+  } else {
+    startDeviceOrientation();
+  }
+}
+
 /* ── 카드 만들기 ───────────────────────────────────────── */
 
 /**
@@ -109,14 +239,22 @@ function makeStage(card, { lazy = true, button = true } = {}) {
   stage.style.setProperty("--accent2", card.accent2);
   stage.dataset.rarity = card.rarity ?? "fullart";
 
+  // cards-css 는 `.holo-card[data-effect="x"] .holo-card__shine` 을 찾는다. vendor 의
+  // CSS 를 한 글자도 안 고치려고, 선택자를 바꾸는 대신 우리 요소에 그쪽 이름을 얹는다.
+  // rarity 가 CARDS_CSS_EFFECTS 에 있을 때만 붙는다 — 지금은 No.01(immersive)만 빠진다.
+  if (CARDS_CSS_EFFECTS.has(stage.dataset.rarity)) {
+    stage.classList.add("holo-card");
+    stage.dataset.effect = stage.dataset.rarity;
+  }
+
   const shell = button
     ? '<button class="card" type="button">'
     : '<div class="card" tabindex="0" role="img">';
   stage.innerHTML = `
     ${shell}
       <img class="art" width="${card.w}" height="${card.h}" decoding="async"${lazy ? ' loading="lazy"' : ""}>
-      <span class="foil" aria-hidden="true"></span>
-      <span class="glare" aria-hidden="true"></span>
+      <span class="foil holo-card__shine" aria-hidden="true"></span>
+      <span class="glare holo-card__glare" aria-hidden="true"></span>
       <span class="grain" aria-hidden="true"></span>
       <span class="edge" aria-hidden="true"></span>
     ${button ? "</button>" : "</div>"}`;
@@ -153,7 +291,7 @@ CARDS.forEach((card, i) => {
   caption.innerHTML =
     `<span class="no">No. ${pad2(card.no)}</span>` +
     `<span class="name">${esc(card.name)}</span>` +
-    `<span class="stat">${esc(card.statLabel)} ${card.stat}</span>`;
+    `<span class="stat">${esc(statText(card))}</span>`;
 
   stage.querySelector(".card").addEventListener("click", () => open(i));
 
@@ -230,7 +368,7 @@ function detailMarkup(card) {
         <dt>Code</dt><dd>${esc(card.code)}</dd>
         <dt>Type</dt><dd>${esc(card.type)}</dd>
         <dt>Move</dt><dd>${move}</dd>
-        <dt>${esc(card.statLabel)}</dt><dd>${card.stat}</dd>
+        <dt>${esc(card.statLabel || "Stat")}</dt><dd>${card.stat}</dd>
       </dl>
       <p class="flavor">${esc(card.flavor)}</p>
       <span class="edition">${esc(card.edition)}</span>
@@ -250,6 +388,11 @@ function render() {
   inner.className = "viewer-inner";
   inner.append(makeStage(card, { lazy: false, button: false }));
   inner.insertAdjacentHTML("beforeend", detailMarkup(card));
+  inner.insertAdjacentHTML("beforeend",
+    '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
+    '<button type="button" class="edge-nav prev" data-nav="-1" aria-label="이전 카드">‹</button>' +
+    '<button type="button" class="edge-nav next" data-nav="1" aria-label="다음 카드">›</button>' +
+    '<p class="sheet-hint">탭하여 상세보기</p>');
   viewer.append(inner);
 }
 
@@ -305,6 +448,7 @@ function open(i) {
     setTimeout(() => viewer.classList.remove("is-opening"), FLIGHT.duration + 80);
   }
   showGridStage(index, false);
+  if (!wasOpen) peekNav(NAV_PEEK.open);
 
   const big = viewer.querySelector(".stage");
   if (!wasOpen && from && big && !reducedMotion) {
@@ -355,10 +499,17 @@ function slide(outgoing, fromRect, incoming, delta) {
     SLIDE
   );
 
-  // 설명도 같이 살짝 떠오르게 — 카드만 움직이고 글자가 툭 바뀌면 어긋나 보인다
+  /* 설명도 같이 살짝 떠오르게 — 카드만 움직이고 글자가 툭 바뀌면 어긋나 보인다.
+
+     **폰에서는 transform 을 건드리면 안 된다.** 거기서 설명은 translateY(101%) 로
+     화면 밖에 숨어 있는 시트인데, 여기서 transform 을 덮어쓰면 그 숨김이 풀려서
+     카드를 넘기는 220ms 동안 시트가 나타났다 사라진다. 넘길 때마다 상세가 번쩍하는
+     증상이 이것이다. 폰에서는 흐려졌다 진해지는 것만 한다. */
   viewer.querySelector(".detail")?.animate(
-    [{ opacity: 0, transform: `translateX(${dir * 14}px)` },
-     { opacity: 1, transform: "translateX(0)" }],
+    phoneViewer.matches
+      ? [{ opacity: .4 }, { opacity: 1 }]   // 0 에서 올리면 펴 둔 시트가 통째로 깜빡인다
+      : [{ opacity: 0, transform: `translateX(${dir * 14}px)` },
+         { opacity: 1, transform: "translateX(0)" }],
     { duration: 220, easing: SLIDE.easing }
   );
 }
@@ -374,6 +525,10 @@ function go(delta) {
   render();
   showGridStage(index, false);
 
+  // **보던 상태를 그대로 들고 간다.** 전체 보기에서 넘기면 전체 보기로, 상세를 펴 둔
+  // 채로 넘기면 다음 카드도 상세가 펴진 채로 나온다 — 스탯을 비교하며 넘길 때
+  // 매번 다시 펴지 않아도 된다. 새로 열 때는 afterClose 가 접어 두므로 항상 전체 보기다.
+  peekNav();   // 상세가 펴져 있으면 peekNav 가 알아서 안 띄운다
   const incoming = viewer.querySelector(".stage");
   incoming?.querySelector(".card")?.focus();
   slide(outgoing, fromRect, incoming, delta);
@@ -391,7 +546,8 @@ function afterClose() {
   if (viewer.open) return;
   closing = false;
   flight = null;
-  viewer.classList.remove("is-closing", "is-opening");
+  clearTimeout(navPeekTimer);
+  viewer.classList.remove("is-closing", "is-opening", "show-detail", "show-nav");
   document.body.classList.remove("is-viewing");
   showGridStage(index, true);
   // 넘겨 봤다면 처음 연 카드가 아니라 마지막으로 보던 카드로 돌아간다
@@ -434,12 +590,15 @@ function closeViewer() {
 }
 
 viewer.addEventListener("click", (e) => {
-  // 딱 dialog 자신이 눌렸다면 카드 바깥 = 배경을 누른 것
-  if (e.target === viewer) return closeViewer();
-
   const nav = e.target.closest("[data-nav]");
   if (nav) return go(Number(nav.dataset.nav));
-  if (e.target.closest("[data-close]")) closeViewer();
+  if (e.target.closest("[data-close]")) return closeViewer();
+
+  // 카드도 설명도 버튼도 아닌 곳 = 배경. **데스크톱에서만 닫는다.**
+  // 폰에서는 카드가 화면 폭에 맞춰지느라 위아래로 빈 띠가 넓게 남는데, 그걸 배경으로
+  // 치면 설명을 열려고 탭하다 빗나갈 때마다 창이 꺼진다. 폰에서는 그 자리도 위의
+  // 제스처가 탭으로 받아 설명을 여닫는다.
+  if (!phoneViewer.matches && !e.target.closest(".stage, .detail, button")) closeViewer();
 });
 
 viewer.addEventListener("keydown", (e) => {
@@ -448,6 +607,100 @@ viewer.addEventListener("keydown", (e) => {
   // Esc 는 dialog 가 알아서 닫지만, 정리까지 확실히 하려고 직접 처리한다.
   // 네이티브가 먼저 닫아버려도 afterClose 가 멱등이라 결과는 같다.
   else if (e.key === "Escape") { e.preventDefault(); closeViewer(); }
+});
+
+
+/* ── 폰 확대 뷰 제스처 ────────────────────────────────────
+   폰에서는 카드가 화면을 가득 채우고 설명은 감춰져 있다 (style.css 의 760px 블록).
+
+     문지르기       포일 구경 — PC 에서 마우스를 올리는 것과 같다 (bindTilt 가 처리)
+     짧게 탭        설명 열기 / 닫기
+     좌우 ‹ › 버튼   이전 / 다음 카드
+     ✕ · 뒤로가기    닫기
+
+   **쓸어서 넘기기는 뺐다.** 한동안 "느리면 구경, 빠르면 넘기기"로 속도를 재서 갈랐는데,
+   실기에서 안 됐다 — **포일을 구경하다 보면 손이 저절로 빨라진다.** 카드가 화면 폭을
+   꽉 채우고 있어서 구경하는 동작 자체가 큰 드래그이고, 어떤 문턱을 잡아도 그 안에
+   들어온다. 문턱을 올리면 이번엔 넘기기가 안 먹는다.
+
+   **둘 중 하나는 포기해야 하고, 포일이 이 데모의 본체다.** 그래서 카드 안쪽 드래그는
+   전부 구경에 주고, 넘기기는 눈에 보이는 버튼으로 뺐다. 되살리고 싶으면 속도 말고
+   다른 축(가장자리에서 시작한 손짓만, 두 손가락 등)을 찾아야 한다 — 속도로는 안 된다.
+
+   데스크톱은 이 블록 전체가 놀고 있다. */
+
+/** 이 안에서 멈추면 탭. 손가락은 마우스보다 흔들려서 넉넉히 잡는다 */
+const TAP = { dist: 16, ms: 700 };
+
+/* 좌우 버튼이 저절로 사라지기까지 (ms). 카드를 가리지 않게 잠깐만 보여 준다.
+   **처음 열 때와 그 뒤가 다르다.** 처음은 "여기 버튼이 있다"고 알려주기만 하면 되니
+   짧아도 되는데, 그 뒤에는 실제로 눌러야 하는 시간이라 같은 값을 쓰면 다음 장을
+   연달아 보려 할 때마다 카드를 만졌다 떼야 한다. */
+const NAV_PEEK = { open: 750, again: 1600 };
+
+/* 화면 좌우 이 폭 안을 **탭**하면 버튼이 안 보여도 넘어간다 (px).
+   버튼이 떠 있는 자리와 대충 겹치므로, 잠깐 보였다 사라지는 그 순간이 "여기가
+   눌리는 자리"라고 알려주는 역할을 한다. 사라진 뒤에도 자리는 살아 있다.
+
+   **버튼 자체를 계속 눌리게 두는 방식이 아니다.** 버튼은 카드 위에 떠 있어서,
+   그렇게 하면 그 자리에서 포일을 문지를 수 없는 죽은 띠가 양쪽에 생긴다.
+   여기서 보는 건 '탭'뿐이라 드래그는 카드 어디서든 온전히 구경으로 간다.
+
+   넓힐수록 넘기기가 쉬워지지만 설명을 여는 가운데가 좁아진다. 412px 폰에서
+   72px 이면 양쪽 합쳐 35% 쯤이다. */
+const NAV_ZONE = 72;
+
+let gesture = null;
+let navPeekTimer = 0;
+
+/** 좌우 버튼을 잠깐 띄운다. **버튼이 유일한 이동 수단이라 다시 부를 길이 있어야 한다** —
+ *  확대한 직후와, 카드에서 손을 뗄 때마다 나온다. 설명이 열려 있으면 시트 안에
+ *  이전/다음이 이미 있으므로 띄우지 않는다. */
+function peekNav(ms = NAV_PEEK.again) {
+  clearTimeout(navPeekTimer);
+  if (!phoneViewer.matches || viewer.classList.contains("show-detail")) {
+    return viewer.classList.remove("show-nav");
+  }
+  viewer.classList.add("show-nav");
+  navPeekTimer = setTimeout(() => viewer.classList.remove("show-nav"), ms);
+}
+
+viewer.addEventListener("pointerdown", (e) => {
+  gesture = null;
+  if (!phoneViewer.matches || !viewer.open) return;
+  // 설명 시트 안은 스크롤해야 하고, 버튼은 눌려야 한다
+  if (e.target.closest(".detail, button")) return;
+
+  // 만지는 동안에는 버튼을 치운다 — 포일을 보려는데 눈에 걸린다
+  clearTimeout(navPeekTimer);
+  viewer.classList.remove("show-nav");
+  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+});
+
+viewer.addEventListener("pointercancel", () => { gesture = null; });
+
+viewer.addEventListener("pointerup", (e) => {
+  const g = gesture;
+  gesture = null;
+  if (!g) return;
+
+  // 처음 댄 자리에서 거의 안 움직였으면 탭.
+  // 그보다 움직였으면 포일을 구경한 것이고, 아무 일도 일어나지 않는다.
+  const tapped = Math.hypot(e.clientX - g.x, e.clientY - g.y) < TAP.dist
+    && e.timeStamp - g.t < TAP.ms;
+
+  if (tapped) {
+    // 설명이 열려 있으면 가장자리 탭도 끈다 — 그때 넘기기는 시트 안의 이전/다음이
+    // 맡고, 카드 위에서 할 수 있는 건 포일 구경과 설명 닫기뿐이다.
+    const edge = viewer.classList.contains("show-detail") ? 0
+      : e.clientX < NAV_ZONE ? -1
+      : e.clientX > window.innerWidth - NAV_ZONE ? 1
+      : 0;
+
+    if (edge) return go(edge);   // go 가 알아서 buttons 를 다시 띄운다
+    viewer.classList.toggle("show-detail");
+  }
+  peekNav();   // 설명을 열었다면 peekNav 가 알아서 안 띄운다
 });
 
 viewer.addEventListener("cancel", afterClose);

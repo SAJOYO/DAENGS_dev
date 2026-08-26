@@ -6,26 +6,59 @@
 // 확대 뷰 캡션과 alt 텍스트가 이걸 쓰기 때문에 그림을 못 봐도 내용이 전달된다.
 //
 // no  : 도감 번호. 원본 PNG 를 만든 순서(파일 수정시각) 그대로다.
-// w/h : art/*.webp 의 실제 픽셀. 크롭을 안 했으므로 비율이 두 종류로 갈린다
-//       (0.80 넉 장, 0.72 두 장). CSS 가 이 값으로 카드마다 aspect-ratio 를 잡는다.
+// w/h : art/*.webp 의 실제 픽셀. 크롭을 안 했으므로 비율이 세 종류로 갈린다
+//       (0.80 다섯 장, 0.72 두 장, 0.725 다섯 장). CSS 가 이 값으로 카드마다
+//       aspect-ratio 를 잡는다. 0.72 와 0.725 는 눈으로는 같아 보이지만, 원본을
+//       늘이지 않는 게 원칙이라 실제 픽셀을 그대로 적는다.
 // accent/accent2 : 카드 뒤 글로우와 테두리에 쓸 색. 그림에서 뽑았다.
 // frame : 프레임 디자인. 크롬(chrome) 넉 장, 초록 홀로(leaf) 두 장.
 // rarity : 레어도. 등급표가 아니라 **연출 방식**이다 — 포켓몬 카드 게임 포켓의 체계를
-//       빌렸는데, "위로 갈수록 더 반짝이게"가 아니라 티어마다 서로 다른 렌더링 기법을
+//       빌렸는데, "위로 갈수록 더 반짝이게"가 아니라 카드마다 서로 다른 렌더링 기법을
 //       쓰도록 나눴다. 기법이 겹치면 시험할 게 없어지기 때문이다.
-//         flat      ◇◇◇   포일 없음. 기울기와 그림자만 — 이머시브의 대조군
-//         ex        ◇◇◇◇  mask-image 로 아트 창에만 홀로
-//         fullart   ☆     무지개 conic 포일 — style.css 의 기본값
-//         etched    ☆☆    글레어가 지나갈 때만 드러나는 각인 텍스처
-//         crown     ♛     금속 금박. 색상환을 안 돌고 명도만 오르내리는 이방성이라
-//                          기존 포일 코드를 그대로 못 쓴다
-//         immersive ☆☆☆   꾹 누르면 카드 안으로 들어간다 (immersive.css / .mjs)
-//       **지금 구현된 건 immersive 하나뿐이다.** 나머지는 배정만 적어 둔 것이고
-//       화면에는 전부 기본 풀아트로 보인다. 다음 PR 에서 하나씩 붙인다.
+//
+//       **No.01 만 우리가 짠 것이고, 나머지 열 장은 @kongyo2/cards-css 의 포일이다.**
+//       그래서 여기 이름은 우리가 지은 게 아니라 그쪽 포일 이름 그대로이고, 그대로
+//       DOM 의 data-effect 값이 된다 — 바꾸려면 vendor/cards-css/ 에 그 이름의 파일이
+//       있어야 하고 index.html 에 링크도 있어야 한다. 목록은 CARDS_CSS_EFFECTS.
+//
+//         01 immersive  꾹 누르면 카드 안으로 들어간다 (immersive.css / .mjs — 우리 것)
+//         02 prism      무지개가 각도로 쪼개지는 분광
+//         03 crystal    결정 패싯. 면마다 따로 꺾인다
+//         04 gold       금박. 색상환을 안 돌고 명도만 오르내리는 이방성
+//         05 oilslick   어두운 기름막 무지개. 밝은 원화 위에서는 안 보인다
+//         06 sunburst   중심에서 뻗는 광선
+//         07 holo       무지개 밴드 + 세로 스캔라인 (제일 고전적인 홀로)
+//         08 reverse    가운데를 죽이고 가장자리를 살리는 역전 폴오프
+//         09 aurora     넓고 부드러운 색 띠
+//         10 cosmos     성운 결
+//         11 mosaic     격자로 잘린 타일. 유일하게 무늬가 기하학이다
+//         12 metal      세로로 긁힌 브러시드 결. 색상환을 안 돌고 명도만 오르내린다
+//
+//       **여기 없는 포일도 있다.** cards-css 는 14종인데, 그중 glitter 와 rainbow 만
+//       CSS 로 못 쓴다 — 반짝이 텍스처(`--glitter`)를 JS 가 런타임에 만들어 넣기
+//       때문이다. radiant 는 못 쓰는 게 아니라 안 고른 것이다 — reverse 와 느낌이
+//       겹쳐서 11번에서 뺐다.
+//
+//       **`flat`(포일 없는 대조군)은 지금 아무 카드도 안 쓴다.** 규칙은 rarity.css 에
+//       남아 있으니 되살리려면 여기 값만 바꾸면 된다.
 // scene  : immersive 카드만 갖는다. 무대에 넘길 값 (immersive.mjs 가 읽는다).
 //       back/subject 는 art/*.webp 와 별개인 **레이어 원화**다. 카드 그림이 아니라
 //       프레임 없는 배경 한 장과 알파가 있는 주인공 한 장 — tools/neo-hologram-layers.py
 //       로 뽑는다. 없으면 카드 그림으로 때우는데 보기엔 이상하다.
+
+/**
+ * rarity 값 중 @kongyo2/cards-css 가 그리는 것들. 여기 있는 이름은 그대로
+ * DOM 의 data-effect 가 되고, vendor/cards-css/<이름>.css 가 그 선택자를 가진다.
+ * 셋 다(이 목록 · vendor 파일 · index.html 링크) 맞아야 화면에 나온다.
+ *
+ * 텍스처를 JS 로 생성해야 하는 포일(glitter / mosaic / rainbow / gold)은 뺐다 —
+ * 우리는 CSS 만 가져왔으므로 그것들은 거의 안 보인다.
+ */
+export const CARDS_CSS_EFFECTS = new Set([
+  "prism", "crystal", "gold", "oilslick", "sunburst",   // No.02~06
+  "holo", "reverse", "aurora", "cosmos", "mosaic",      // No.07~11
+  "metal",                                              // No.12
+]);
 
 export const CARDS = [
   {
@@ -93,7 +126,7 @@ export const CARDS = [
     art: "art/pepper.webp",
     w: 900,
     h: 1125,
-    rarity: "etched",
+    rarity: "prism",
     accent: "#ffd838",
     accent2: "#e27016",
     frame: "chrome",
@@ -115,7 +148,7 @@ export const CARDS = [
     art: "art/eggplant.webp",
     w: 900,
     h: 1125,
-    rarity: "fullart",
+    rarity: "crystal",
     accent: "#a86bff",
     accent2: "#e0a3ff",
     frame: "chrome",
@@ -137,7 +170,7 @@ export const CARDS = [
     art: "art/carrot.webp",
     w: 900,
     h: 1125,
-    rarity: "crown",
+    rarity: "gold",
     accent: "#ff8a2b",
     accent2: "#ffc46b",
     frame: "chrome",
@@ -159,7 +192,7 @@ export const CARDS = [
     art: "art/danhobak.webp",
     w: 900,
     h: 1125,
-    rarity: "ex",
+    rarity: "oilslick",
     accent: "#7d9b46",
     accent2: "#d8bb4e",
     frame: "chrome",
@@ -181,14 +214,150 @@ export const CARDS = [
     art: "art/mushroom.webp",
     w: 810,
     h: 1125,
-    rarity: "flat",
+    rarity: "sunburst",
     accent: "#cbb08a",
     accent2: "#9fd06a",
     frame: "leaf",
   },
+  {
+    no: 7,
+    id: "broccoli",
+    name: "Broccoli Neo",
+    ko: "브로콜리 네오",
+    tagline: "왕관은 큰데 판단력은 작은",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "FLORET FORCE",
+    moveNote: "Big crown. Tiny judgment.",
+    statLabel: "MYCELIUM MASH",
+    stat: 850,
+    flavor: "Big crown. Tiny judgment.",
+    edition: "Floret Force Edition",
+    art: "art/broccoli.webp",
+    w: 816,
+    h: 1125,
+    rarity: "holo",
+    accent: "#7bbf3a",
+    accent2: "#cfe89a",
+    frame: "leaf",
+  },
+  {
+    no: 8,
+    id: "cucumber",
+    name: "Cucumber Neo",
+    ko: "큐컴버 네오",
+    tagline: "거의 물인데 태도만은 확실한",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "COOL CRUNCH",
+    moveNote: "Mostly water. Entirely attitude.",
+    statLabel: "MYCELIUM MASH",
+    stat: 810,
+    flavor: "Mostly water. Entirely attitude.",
+    edition: "Cool Crunch Edition",
+    art: "art/cucumber.webp",
+    w: 816,
+    h: 1125,
+    rarity: "reverse",
+    accent: "#4fae52",
+    accent2: "#bde89e",
+    frame: "leaf",
+  },
+  {
+    no: 9,
+    id: "spinach",
+    name: "Spinach Neo",
+    ko: "스피니치 네오",
+    tagline: "잎은 부드러운데 힘이 말이 안 되는",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "IRON LEAF",
+    moveNote: "Soft leaf. Unreasonable power.",
+    statLabel: "MYCELIUM MASH",
+    stat: 860,
+    flavor: "Part pup. Part fungi. Totally bizarre. Watch for spores.",
+    edition: "Iron Leaf Edition",
+    art: "art/spinach.webp",
+    w: 816,
+    h: 1125,
+    rarity: "aurora",
+    accent: "#3f8f3f",
+    accent2: "#a8d97a",
+    frame: "leaf",
+  },
+  {
+    no: 10,
+    id: "sweet-potato",
+    name: "Sweet Potato Neo",
+    ko: "스위트포테이토 네오",
+    tagline: "깊이 묻혀 있다가 더 깊이 차려입고 나온",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "ROOT RUMBLE",
+    moveNote: "Buried deep. Dressed deeper.",
+    statLabel: "MYCELIUM MASH",
+    stat: 830,
+    flavor: "Buried deep. Dressed deeper.",
+    edition: "Root Rumble Edition",
+    art: "art/sweet-potato.webp",
+    w: 816,
+    h: 1125,
+    rarity: "cosmos",
+    accent: "#a0656f",
+    accent2: "#d8a89e",
+    frame: "leaf",
+  },
+  {
+    no: 11,
+    id: "tomato",
+    name: "Tomato Neo",
+    ko: "토마토 네오",
+    tagline: "잘 익고 둥글고 준비까지 끝난",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "JUICY BLAST",
+    moveNote: "",
+    // 이 카드만 스탯 바에 라벨이 안 찍혀 있다. 숫자와 별만 있다 — 지어내지 않고 비워 둔다.
+    statLabel: "",
+    stat: 840,
+    flavor: "Ripe, round, and ready.",
+    edition: "Juicy Blast Edition",
+    art: "art/tomato.webp",
+    w: 816,
+    h: 1125,
+    rarity: "mosaic",
+    accent: "#cc351a",
+    accent2: "#f29483",
+    frame: "leaf",
+  },
+  {
+    no: 12,
+    id: "lettuce",
+    name: "Lettuce Neo",
+    ko: "레터스 네오",
+    tagline: "잎은 제멋대로인데 웃음만 큰",
+    code: "NEO-0824",
+    type: "VEGGIE DOG",
+    move: "LEAF PARADE",
+    moveNote: "Loose leaves strut in a fresh breeze.",
+    statLabel: "FRESH FLUTTER",
+    stat: 800,
+    flavor: "Loose leaves. Loud smile.",
+    edition: "Leaf Parade Edition",
+    art: "art/lettuce.webp",
+    w: 900,
+    h: 1125,
+    rarity: "metal",
+    accent: "#b2d121",
+    accent2: "#e3f493",
+    frame: "leaf",
+  },
 ];
+
+/** 스탯 표기. No.11 Tomato 는 그림에 라벨이 안 찍혀 있어 숫자만 나온다. */
+export const statText = (card) => (card.statLabel ? `${card.statLabel} ${card.stat}` : String(card.stat));
 
 /** 스크린리더용 카드 설명. 그림 속 인쇄 문구를 그대로 읽어준다. */
 export const altText = (card) =>
   `${card.name} — ${card.type}, ${card.code}. ` +
-  `기술 ${card.move}, ${card.statLabel} ${card.stat}. ${card.flavor}`;
+  `기술 ${card.move}, ${statText(card)}. ${card.flavor}`;

@@ -6,6 +6,9 @@ const countEl = document.querySelector("#count");
 const viewer = document.querySelector("#viewer");
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** 폰 레이아웃인지. style.css 의 760px 블록과 같은 기준을 써야 어긋나지 않는다. */
+const phoneViewer = matchMedia("(max-width: 760px)");
+
 const esc = (s = "") =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -496,10 +499,17 @@ function slide(outgoing, fromRect, incoming, delta) {
     SLIDE
   );
 
-  // 설명도 같이 살짝 떠오르게 — 카드만 움직이고 글자가 툭 바뀌면 어긋나 보인다
+  /* 설명도 같이 살짝 떠오르게 — 카드만 움직이고 글자가 툭 바뀌면 어긋나 보인다.
+
+     **폰에서는 transform 을 건드리면 안 된다.** 거기서 설명은 translateY(101%) 로
+     화면 밖에 숨어 있는 시트인데, 여기서 transform 을 덮어쓰면 그 숨김이 풀려서
+     카드를 넘기는 220ms 동안 시트가 나타났다 사라진다. 넘길 때마다 상세가 번쩍하는
+     증상이 이것이다. 폰에서는 흐려졌다 진해지는 것만 한다. */
   viewer.querySelector(".detail")?.animate(
-    [{ opacity: 0, transform: `translateX(${dir * 14}px)` },
-     { opacity: 1, transform: "translateX(0)" }],
+    phoneViewer.matches
+      ? [{ opacity: .4 }, { opacity: 1 }]   // 0 에서 올리면 펴 둔 시트가 통째로 깜빡인다
+      : [{ opacity: 0, transform: `translateX(${dir * 14}px)` },
+         { opacity: 1, transform: "translateX(0)" }],
     { duration: 220, easing: SLIDE.easing }
   );
 }
@@ -515,8 +525,10 @@ function go(delta) {
   render();
   showGridStage(index, false);
 
-  viewer.classList.remove("show-detail");
-  peekNav();
+  // **보던 상태를 그대로 들고 간다.** 전체 보기에서 넘기면 전체 보기로, 상세를 펴 둔
+  // 채로 넘기면 다음 카드도 상세가 펴진 채로 나온다 — 스탯을 비교하며 넘길 때
+  // 매번 다시 펴지 않아도 된다. 새로 열 때는 afterClose 가 접어 두므로 항상 전체 보기다.
+  peekNav();   // 상세가 펴져 있으면 peekNav 가 알아서 안 띄운다
   const incoming = viewer.querySelector(".stage");
   incoming?.querySelector(".card")?.focus();
   slide(outgoing, fromRect, incoming, delta);
@@ -616,8 +628,6 @@ viewer.addEventListener("keydown", (e) => {
    다른 축(가장자리에서 시작한 손짓만, 두 손가락 등)을 찾아야 한다 — 속도로는 안 된다.
 
    데스크톱은 이 블록 전체가 놀고 있다. */
-
-const phoneViewer = matchMedia("(max-width: 760px)");
 
 /** 이 안에서 멈추면 탭. 손가락은 마우스보다 흔들려서 넉넉히 잡는다 */
 const TAP = { dist: 16, ms: 700 };

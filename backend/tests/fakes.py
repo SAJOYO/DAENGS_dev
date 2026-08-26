@@ -8,12 +8,14 @@ SQL 이 맞는지는 여기서 알 수 없습니다 — `uv run dev` 로 실제 
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 
 PASSWORD = "correct-horse-battery-staple"
@@ -32,6 +34,24 @@ class FakeAdmin:
     role: str = "ADMIN"
     status: str = "active"
     last_login_at: datetime | None = None
+
+
+@dataclass
+class FakeAppUser:
+    """AppUser 대역. **`*_enc` 는 진짜 암호문입니다** — 서비스가 core/crypto.py 로
+    암호화한 결과가 그대로 들어옵니다. 평문이 새는지 테스트가 볼 수 있어야 합니다.
+    """
+
+    kakao_id: int
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    email_enc: bytes | None = None
+    email_hash: str | None = None
+    phone_enc: bytes | None = None
+    name_enc: bytes | None = None
+    status: str = "active"
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
+    )
 
 
 @dataclass
@@ -57,17 +77,27 @@ class FakeSession:
 
     def __init__(self) -> None:
         self.commits = 0
+        self.rollbacks = 0
 
     async def commit(self) -> None:
         self.commits += 1
 
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
 
 class Store:
-    """가짜 저장소의 뒷단. 관리자 한 명과 refresh 행들을 들고 있습니다."""
+    """가짜 저장소의 뒷단. 관리자 한 명, 앱 회원들, refresh 행들을 들고 있습니다."""
 
     def __init__(self, admin: FakeAdmin) -> None:
         self.admin = admin
         self.tokens: dict[str, FakeToken] = {}
+        #: kakao_id → 회원. 앱 회원은 여러 명일 수 있습니다.
+        self.app_users: dict[int, FakeAppUser] = {}
+
+    def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
+        self.app_users[user.kakao_id] = user
+        return user
 
 
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
@@ -109,6 +139,35 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         for h in gone:
             del store.tokens[h]
         return len(gone)
+
+    async def app_get_by_kakao_id(session, kakao_id):  # noqa: ANN001, ANN202
+        return store.app_users.get(kakao_id)
+
+    async def app_get_by_id(session, app_user_id):  # noqa: ANN001, ANN202
+        for user in store.app_users.values():
+            if user.id == app_user_id:
+                return user
+        return None
+
+    async def app_create(session, **kw):  # noqa: ANN001, ANN003, ANN202
+        # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
+        # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
+        email_hash = kw.get("email_hash")
+        if email_hash is not None and any(
+            u.email_hash == email_hash for u in store.app_users.values()
+        ):
+            raise IntegrityError("app_users_email_hash_key", None, Exception())
+        return store.add_app_user(
+            FakeAppUser(
+                kakao_id=kw["kakao_id"],
+                email_enc=kw.get("email_enc"),
+                email_hash=email_hash,
+            )
+        )
+
+    monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
+    monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
+    monkeypatch.setattr(app_user_repo, "create", app_create)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)

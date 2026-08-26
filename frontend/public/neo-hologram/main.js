@@ -389,7 +389,7 @@ function render() {
     '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
     '<button type="button" class="edge-nav prev" data-nav="-1" aria-label="이전 카드">‹</button>' +
     '<button type="button" class="edge-nav next" data-nav="1" aria-label="다음 카드">›</button>' +
-    '<p class="sheet-hint">문지르면 포일 · 탭하면 상세</p>');
+    '<p class="sheet-hint">문지르면 포일 · 가운데 탭 상세 · 가장자리 탭 넘기기</p>');
   viewer.append(inner);
 }
 
@@ -628,6 +628,18 @@ const TAP = { dist: 16, ms: 700 };
    연달아 보려 할 때마다 카드를 만졌다 떼야 한다. */
 const NAV_PEEK = { open: 750, again: 1600 };
 
+/* 화면 좌우 이 폭 안을 **탭**하면 버튼이 안 보여도 넘어간다 (px).
+   버튼이 떠 있는 자리와 대충 겹치므로, 잠깐 보였다 사라지는 그 순간이 "여기가
+   눌리는 자리"라고 알려주는 역할을 한다. 사라진 뒤에도 자리는 살아 있다.
+
+   **버튼 자체를 계속 눌리게 두는 방식이 아니다.** 버튼은 카드 위에 떠 있어서,
+   그렇게 하면 그 자리에서 포일을 문지를 수 없는 죽은 띠가 양쪽에 생긴다.
+   여기서 보는 건 '탭'뿐이라 드래그는 카드 어디서든 온전히 구경으로 간다.
+
+   넓힐수록 넘기기가 쉬워지지만 설명을 여는 가운데가 좁아진다. 412px 폰에서
+   72px 이면 양쪽 합쳐 35% 쯤이다. */
+const NAV_ZONE = 72;
+
 let gesture = null;
 let navPeekTimer = 0;
 
@@ -662,9 +674,20 @@ viewer.addEventListener("pointerup", (e) => {
   gesture = null;
   if (!g) return;
 
-  // 처음 댄 자리에서 거의 안 움직였으면 탭 — 설명을 여닫는다.
+  // 처음 댄 자리에서 거의 안 움직였으면 탭.
   // 그보다 움직였으면 포일을 구경한 것이고, 아무 일도 일어나지 않는다.
-  if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < TAP.dist && e.timeStamp - g.t < TAP.ms) {
+  const tapped = Math.hypot(e.clientX - g.x, e.clientY - g.y) < TAP.dist
+    && e.timeStamp - g.t < TAP.ms;
+
+  if (tapped) {
+    // 설명이 열려 있으면 가장자리 탭도 끈다 — 그때 넘기기는 시트 안의 이전/다음이
+    // 맡고, 카드 위에서 할 수 있는 건 포일 구경과 설명 닫기뿐이다.
+    const edge = viewer.classList.contains("show-detail") ? 0
+      : e.clientX < NAV_ZONE ? -1
+      : e.clientX > window.innerWidth - NAV_ZONE ? 1
+      : 0;
+
+    if (edge) return go(edge);   // go 가 알아서 buttons 를 다시 띄운다
     viewer.classList.toggle("show-detail");
   }
   peekNav();   // 설명을 열었다면 peekNav 가 알아서 안 띄운다

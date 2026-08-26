@@ -25,20 +25,21 @@ const MOTION_VARS = [
 
 let pending = null;
 let frame = 0;
+/** 지금 포인터가 올라가 있는 카드. 자이로가 이 카드는 건드리지 않는다. */
+let pointerStage = null;
 
-function flush() {
-  frame = 0;
-  const job = pending;
-  pending = null;
-  if (!job) return;
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
-  const { stage, x, y, intensity } = job;
-  const rect = stage.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-
-  const px = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
-  const py = Math.max(0, Math.min(1, (y - rect.top) / rect.height));
-
+/**
+ * 기울기를 실제로 CSS 변수에 쓰는 곳. **입력 소스가 뭐든 결국 여기로 들어온다** —
+ * 포인터든, 폰 자이로든, 네이티브 앱이 밀어 넣는 센서 값이든 마찬가지다.
+ * 그래서 소스를 늘릴 때 이 함수는 안 건드린다.
+ *
+ * @param {number} px 카드 안에서의 가로 위치 0~1 (0=왼쪽 끝)
+ * @param {number} py 세로 위치 0~1
+ * @param {number} intensity 포일 세기 0~1
+ */
+function writeTilt(stage, px, py, intensity) {
   stage.style.setProperty("--mouse-x", `${(px * 100).toFixed(2)}%`);
   stage.style.setProperty("--mouse-y", `${(py * 100).toFixed(2)}%`);
   stage.style.setProperty("--rotate-x", `${((0.5 - py) * 22).toFixed(2)}deg`);
@@ -53,6 +54,19 @@ function flush() {
   stage.style.setProperty("--pointer-from-left", px.toFixed(3));
   stage.style.setProperty("--pointer-from-top", py.toFixed(3));
   stage.style.setProperty("--pointer-from-center", Math.min(Math.hypot(px - 0.5, py - 0.5) / 0.5, 1).toFixed(3));
+}
+
+function flush() {
+  frame = 0;
+  const job = pending;
+  pending = null;
+  if (!job) return;
+
+  const { stage, x, y, intensity } = job;
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  writeTilt(stage, clamp01((x - rect.left) / rect.width), clamp01((y - rect.top) / rect.height), intensity);
 }
 
 function paint(stage, x, y, intensity = 1) {
@@ -74,10 +88,13 @@ function reset(stage) {
  *   확대 뷰에서는 아예 끈다.
  */
 function bindTilt(stage, { arrowTilt = true } = {}) {
-  stage.addEventListener("pointerenter", (e) => paint(stage, e.clientX, e.clientY, 0.8));
-  stage.addEventListener("pointermove", (e) => paint(stage, e.clientX, e.clientY, 1));
-  stage.addEventListener("pointerleave", () => reset(stage));
-  stage.addEventListener("pointercancel", () => reset(stage));
+  const grab = (e, intensity) => { pointerStage = stage; paint(stage, e.clientX, e.clientY, intensity); };
+  const release = () => { if (pointerStage === stage) pointerStage = null; reset(stage); };
+
+  stage.addEventListener("pointerenter", (e) => grab(e, 0.8));
+  stage.addEventListener("pointermove", (e) => grab(e, 1));
+  stage.addEventListener("pointerleave", release);
+  stage.addEventListener("pointercancel", release);
 
   const card = stage.querySelector(".card");
   card.addEventListener("blur", () => reset(stage));
@@ -103,6 +120,104 @@ function bindTilt(stage, { arrowTilt = true } = {}) {
     const rect = stage.getBoundingClientRect();
     paint(stage, rect.left + rect.width * (0.5 + kx / 100), rect.top + rect.height * (0.5 + ky / 100), 1);
   });
+}
+
+/* ── 기울기 입력 (2) 자이로 · 네이티브 ────────────────────
+   **카드를 눌러 확대한 상태에서만** 폰을 기울이면 카드가 따라 기운다. 그리드는
+   손대지 않는다. **PC 도 아무것도 안 바뀐다** — 데스크톱에는 센서가 없어서 이벤트가
+   한 번도 안 오고, 위의 포인터 코드가 그대로 돈다.
+
+   값이 들어오는 문은 두 개다.
+     - 브라우저: `deviceorientation` 이벤트
+     - 네이티브 앱: WebView 에서 `window.__neoTilt(beta, gamma)` 를 부른다
+   둘 다 아래 feedOrientation() 하나로 모이고, 거기서 writeTilt() 로 나간다.
+
+   **브라우저 쪽은 secure context 에서만 켜진다.** HTTPS 이거나 localhost 여야 하고,
+   지금 배포(nginx :80)는 둘 다 아니다 — 폰에서 daengs.~ 로 들어가면 에러 없이 그냥
+   조용히 안 켜진다. 개발 중에는 USB 로 `adb reverse tcp:3000 tcp:3000` 을 걸고
+   폰에서 localhost:3000 으로 보면 인증서 없이 확인된다.
+   네이티브 브릿지(`__neoTilt`)는 웹 API 를 안 거치므로 이 제약이 없다. */
+
+/** 이 각도(도)만큼 기울이면 카드가 끝까지 돈다. 키우면 둔해지고 줄이면 예민해진다. */
+const TILT_RANGE = 20;
+
+/** **확대 뷰에 떠 있는 한 장에만 적용한다.** 그리드에서는 열두 장이 한꺼번에 같은
+ *  각도로 도는데, 폰에서 매 프레임 열두 장을 갱신하는 비용도 크고 보기에도 산만하다.
+ *  카드 한 장을 들고 기울여 보는 게 원래 하려던 동작이기도 하다.
+ *
+ *  참조를 들고 있지 않고 그때그때 찾는다 — 확대 뷰의 .stage 는 ‹ › 로 카드를 넘길
+ *  때마다 새로 만들어지므로, 붙잡아 두면 넘긴 뒤 죽은 노드를 기울이게 된다. */
+const tiltTarget = () => (viewer.open ? viewer.querySelector(".stage") : null);
+
+let tiltBase = null;      // 처음 들어온 값을 '정면'으로 삼는다
+let tiltPending = null;
+let tiltFrame = 0;
+
+function tiltFlush() {
+  tiltFrame = 0;
+  const job = tiltPending;
+  tiltPending = null;
+  if (!job) return;
+
+  const stage = tiltTarget();
+  // 손가락이 올라가 있으면 포인터가 이긴다. 두 소스가 같은 카드를 두고 매 프레임
+  // 싸우는 걸 막는다 — 폰에서도 화면을 문지르면 그쪽이 우선이다.
+  if (!stage || stage === pointerStage) return;
+  writeTilt(stage, job.px, job.py, 1);
+}
+
+/**
+ * @param {number} beta  앞뒤 기울기 (deviceorientation 규약, 도 단위)
+ * @param {number} gamma 좌우 기울기
+ */
+function feedOrientation(beta, gamma) {
+  if (reducedMotion) return;
+  if (typeof beta !== "number" || typeof gamma !== "number") return;
+  if (Number.isNaN(beta) || Number.isNaN(gamma)) return;
+
+  // 절대 각도가 아니라 '처음 든 자세에서 얼마나 움직였는지'를 쓴다. 폰을 눕혀서 보든
+  // 세워서 보든 처음 자세가 정면이 되므로, 들자마자 카드가 홱 돌아가지 않는다.
+  if (!tiltBase) tiltBase = { beta, gamma };
+  let dx = gamma - tiltBase.gamma;   // 좌우
+  let dy = beta - tiltBase.beta;     // 앞뒤
+
+  // 가로로 눕히면 센서 축과 화면 축이 어긋난다. 화면이 돈 만큼 되돌려 준다.
+  switch (screen.orientation?.angle ?? 0) {
+    case 90:  [dx, dy] = [dy, -dx]; break;
+    case 180: [dx, dy] = [-dx, -dy]; break;
+    case 270: [dx, dy] = [-dy, dx]; break;
+    default: break;
+  }
+
+  tiltPending = {
+    px: clamp01(0.5 + dx / TILT_RANGE / 2),
+    py: clamp01(0.5 + dy / TILT_RANGE / 2),
+  };
+  if (!tiltFrame) tiltFrame = requestAnimationFrame(tiltFlush);
+}
+
+/** 네이티브 앱용 문. Android 쪽에서 SensorManager 값을 그대로 넘기면 된다:
+ *  `webView.evaluateJavascript("window.__neoTilt(" + beta + "," + gamma + ")", null)` */
+window.__neoTilt = feedOrientation;
+
+/* 브라우저 자이로 붙이기. iOS 13+ 는 사용자 제스처 안에서 권한을 물어야 해서, 첫
+   탭까지 기다렸다가 붙인다. 안드로이드는 물을 게 없어서 바로 붙는다.
+   권한을 거절해도 아무 일도 안 일어난다 — 포인터가 그대로 남는다. */
+function startDeviceOrientation() {
+  window.addEventListener("deviceorientation", (e) => feedOrientation(e.beta, e.gamma));
+}
+
+if (!reducedMotion && typeof DeviceOrientationEvent !== "undefined") {
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    document.addEventListener("pointerdown", function ask() {
+      document.removeEventListener("pointerdown", ask);
+      DeviceOrientationEvent.requestPermission()
+        .then((r) => { if (r === "granted") startDeviceOrientation(); })
+        .catch(() => {});
+    }, { once: true });
+  } else {
+    startDeviceOrientation();
+  }
 }
 
 /* ── 카드 만들기 ───────────────────────────────────────── */

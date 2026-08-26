@@ -125,6 +125,100 @@ vendor 파일은 건드리지 말고 `rarity.css` 아래쪽에서 `--hc-*` 로�
 **원화를 갈아끼우면 숫자를 다시 봐야 합니다.** 배경이 어두운 원화가 오면 눌러 둔 만큼
 심심해집니다.
 
+## 기울기 입력 — 포인터 · 자이로 · 네이티브
+
+카드를 기울이는 값이 들어오는 문은 셋인데, **전부 `main.js` 의 `writeTilt()` 하나로
+모입니다.** 소스를 늘려도 이 함수는 안 건드립니다.
+
+| 소스 | 언제 | 어디에 |
+| --- | --- | --- |
+| 포인터 (마우스 · 터치 · Shift+화살표) | 항상 | 지금 만지는 카드 한 장 |
+| `deviceorientation` (폰 자이로) | secure context 일 때만 | **확대 뷰에 떠 있는 한 장** |
+| `window.__neoTilt(beta, gamma)` | 네이티브가 부를 때 | 위와 같음 |
+
+**자이로는 카드를 눌러 확대했을 때만 듭니다.** 그리드에서는 안 듭니다 — 열두 장이
+한꺼번에 같은 각도로 도는 게 산만하고, 폰에서 매 프레임 열두 장을 갱신하는 비용도
+큽니다. 손가락이 카드에 올라가 있으면 그 프레임은 포인터가 이깁니다.
+
+**PC 는 아무것도 안 바뀝니다.** 데스크톱에는 센서가 없어서 이벤트가 한 번도 안 오고,
+포인터 코드가 그대로 돕니다.
+
+세기는 `main.js` 의 `TILT_RANGE`(기본 20도)로 조절합니다 — 키우면 둔해지고 줄이면
+예민해집니다. 절대 각도가 아니라 **처음 들어온 자세를 정면으로 삼은 상대값**이라,
+폰을 눕혀 보든 세워 보든 들자마자 카드가 홱 돌아가지 않습니다.
+
+### secure context 가 아니면 조용히 안 켜집니다
+
+브라우저는 `deviceorientation` 을 **secure context 에서만** 줍니다. HTTPS 이거나
+`localhost` 여야 합니다. **지금 배포(nginx `:80`)는 둘 다 아닙니다** — 폰에서
+`daengs.~` 로 들어가면 에러도 경고도 없이 그냥 안 켜집니다. 코드를 의심하기 딱
+좋은 형태이니 먼저 주소부터 보세요.
+
+iOS 13+ 는 여기에 더해 `DeviceOrientationEvent.requestPermission()` 을 **사용자
+제스처 안에서** 불러야 합니다. 화면을 처음 탭할 때 물어보게 해 뒀습니다. 거절해도
+아무 일도 안 일어납니다 — 포인터가 그대로 남습니다.
+
+네이티브 브릿지(`__neoTilt`)는 웹 API 를 안 거치므로 이 제약이 전부 무관합니다.
+
+### 폰에서 확인하기
+
+**둘 다 개발용입니다.** 배포에서 켜려면 nginx 에 TLS 를 붙여야 하고, 그건 되돌리기
+번거로운 결정이라 `docs/decisions.md` 감입니다.
+
+**안드로이드 — USB 가 제일 간단합니다.** 인증서가 필요 없습니다.
+
+```powershell
+cd frontend; npm run dev          # 평범한 HTTP 로 띄웁니다
+adb reverse tcp:3000 tcp:3000     # 폰의 3000 → PC 의 3000
+```
+
+폰 크롬에서 `http://localhost:3000/neo-hologram/index.html`. 폰 입장에서 주소가
+`localhost` 라 secure context 로 쳐 줍니다. PC 크롬의 `chrome://inspect` 로 그
+페이지를 그대로 디버깅할 수 있습니다.
+
+**아이폰 — 로컬 HTTPS 가 필요합니다.**
+
+```powershell
+cd frontend; npm run dev:https
+```
+
+`frontend/certificates/` 의 인증서로 `https://192.168.0.25:3000` 이 열립니다
+(`certificates/` 는 gitignore 입니다). 인증서는 mkcert 가 만든 로컬 CA 로 서명돼
+있어서, **그 CA 를 아이폰에 한 번 설치해야** 경고 없이 열립니다.
+
+1. `C:\Users\<사용자>\AppData\Local\mkcert\rootCA.pem` 을 아이폰으로 보냅니다
+   (AirDrop · 메일 · 카톡 아무거나)
+2. 설정 → **프로파일이 다운로드됨** → 설치
+3. 설정 → 일반 → 정보 → **인증서 신뢰 설정** 에서 mkcert 항목을 켭니다
+   — **이 3번을 빼먹으면 설치해도 계속 경고가 뜹니다**
+
+**LAN IP 가 바뀌면 인증서를 다시 만들어야 합니다.** 인증서에 IP 가 박혀 있어서
+DHCP 로 주소가 바뀌면 안 맞습니다. `next dev --experimental-https` 가 자동 생성하는
+인증서는 `localhost` 만 담고 IP 를 안 담으므로, 직접 만들어야 합니다:
+
+```powershell
+cd frontend/certificates
+$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like '192.168.*' } | Select-Object -First 1).IPAddress
+& "$env:LOCALAPPDATA\mkcert\mkcert-v1.4.4-windows-amd64.exe" -key-file localhost-key.pem -cert-file localhost.pem localhost 127.0.0.1 ::1 $ip
+```
+
+`next.config.ts` 의 `allowedDevOrigins` 도 여기에 걸립니다. Next 는 localhost 가 아닌
+곳에서 오는 dev 리소스 요청을 기본으로 막는데, 막히면 앱 페이지가 하얗게 뜹니다
+(이 데모는 `public/` 정적 파일이라 막혀도 열리긴 합니다).
+
+### 네이티브 앱에서
+
+WebView 로 띄운다면 값을 직접 밀어 넣는 게 제일 확실합니다 — secure context 도,
+권한 대화상자도 없습니다.
+
+```java
+webView.evaluateJavascript("window.__neoTilt(" + beta + "," + gamma + ")", null);
+```
+
+Capacitor 처럼 `https://localhost` 스킴으로 번들 에셋을 서빙하는 방식이면 브라우저
+자이로가 그냥 켜집니다 (스킴은 설정으로 바뀌니 실제로 붙일 때 확인하세요).
+원격 URL 을 로드하는 WebView 는 브라우저와 같은 규칙이라 HTTPS 가 필요합니다.
+
 ## 카드 한 장 추가하기
 
 1. 원본 PNG 를 `tools/art-src/` 에 두고, **webp 로 변환**해서 `art/` 에 넣습니다.
@@ -179,9 +273,9 @@ grep -oh 'var(--[a-z0-9-]*' vendor/cards-css/<이름>.css | sort -u
 - **겉잎이 아직 진짜 레이어가 아닙니다.** 속과 같은 픽셀을 고리로 오려 쓰고 있어서,
   비켜도 새로 드러나는 게 없습니다. 겹마다 그린 원화가 오면 `.dio-rind` 의 마스크만
   빼고 `scene.shells` 에 `src` 를 넣으면 됩니다
-- **자이로 기울기.** 지금은 포인터로만 기웁니다. 받는 변수는 이미 다 있고, iOS 의
-  `DeviceOrientationEvent.requestPermission()` 은 사용자 제스처 안에서 불려야 하는데
-  이머시브 진입용 꾹 누르기 520ms 가 이미 그 제스처입니다
+- **자이로가 배포에서는 안 켜집니다.** nginx 가 `:80` 이라 secure context 가 아닙니다.
+  코드는 들어가 있으니 TLS 만 붙으면 켜집니다 (위 '기울기 입력' 참고)
+- **이머시브 뷰에는 자이로가 안 붙어 있습니다.** 확대 뷰까지만 붙였습니다
 
 ## 라이선스
 

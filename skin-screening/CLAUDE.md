@@ -19,7 +19,9 @@ uv run --extra model python tests/test_screening_message.py   # 문구 감시 (t
 
 - **이 폴더는 사본입니다.** 원본은
   [gayeoniee/deeplearning_test](https://github.com/gayeoniee/deeplearning_test)(공개)
-  이고 복사 시점 커밋은 `4a8c200` 입니다. **고칠 일이 생기면 원본을 고치고 다시
+  이고 복사 시점 커밋은 `4a8c200` 입니다 (**`serve.py` 두 곳은 사본이 앞섭니다** —
+  Windows 에서 서버가 안 뜨던 것과 `--mock` 이 전부 재촬영으로 나오던 것.
+  README 에 자세히 적어 뒀고, 원본에도 반영해야 합니다). **고칠 일이 생기면 원본을 고치고 다시
   복사하세요** — 여기서 고치면 갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.
 - **`backend/` 에 넣지 않습니다** (D-016). torch 가 backend 컨테이너로 들어가면

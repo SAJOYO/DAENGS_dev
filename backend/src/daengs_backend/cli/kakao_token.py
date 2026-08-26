@@ -165,7 +165,49 @@ def _exchange(code: str, redirect_uri: str, client_secret: str | None) -> dict:
     sys.exit(f"토큰 교환 실패 ({response.status_code}): {body}{hint}")
 
 
-def _describe(token: str, *, print_token: bool) -> None:
+
+def _call_api(base: str, token: str) -> None:
+    """받은 id_token 으로 우리 API 를 실제로 찔러 봅니다.
+
+    **토큰이 이 PC 밖으로 나가지 않습니다** — 화면에 찍지 않고 바로 보냅니다.
+    검증기를 통과했다는 것과 "가입까지 실제로 되는가"는 다른 이야기라,
+    DB 가 붙은 서버에 한 번은 보내 봐야 합니다.
+    """
+    base = base.rstrip("/")
+    print(f"\n--- {base} 에 실제로 보내 봅니다 ---")
+
+    try:
+        res = httpx.post(
+            f"{base}/auth/app/kakao", json={"id_token": token}, timeout=10.0
+        )
+    except httpx.HTTPError as exc:
+        print(f"[실패] 서버에 연결하지 못했습니다: {exc}")
+        return
+
+    print(f"POST /auth/app/kakao -> {res.status_code}")
+    if res.status_code != 200:
+        print(f"  본문: {res.text}")
+        return
+
+    body = res.json()
+    print(f"  app_user_id   : {body['app_user_id']}")
+    print(f"  token_type    : {body['token_type']}")
+    print(f"  access_token  : {'있음' if body.get('access_token') else '없음'}")
+    print(f"  refresh_token : {'있음' if body.get('refresh_token') else '없음'}")
+
+    me = httpx.get(
+        f"{base}/auth/app/me",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+        timeout=10.0,
+    )
+    print(f"GET /auth/app/me -> {me.status_code}")
+    if me.status_code == 200:
+        info = me.json()
+        print(f"  kakao_id : {info['kakao_id']}")
+        print(f"  email    : {info['email'] if info['email'] else '(없음)'}")
+        print(f"  status   : {info['status']}")
+
+def _describe(token: str, *, print_token: bool, call_api: str | None) -> None:
     """우리 검증기를 그대로 돌려 결과를 보여 줍니다."""
     try:
         identity = asyncio.run(verify_id_token(token))
@@ -193,11 +235,15 @@ def _describe(token: str, *, print_token: bool) -> None:
         + (identity.email if identity.email else "(동의 안 함 — NULL 로 저장됩니다)")
     )
     print(f"  nonce              : {identity.nonce or '(없음)'}")
-    print(
-        "\n이제 이 회원번호로 POST /auth/app/kakao 가 회원을 만듭니다.\n"
-        "실제로 찔러 보려면 --print-token 으로 토큰을 꺼내 쓰세요 "
-        "(수명이 짧습니다)."
-    )
+    if call_api:
+        _call_api(call_api, token)
+    else:
+        print(
+            "\n이 회원번호로 POST /auth/app/kakao 가 회원을 만듭니다."
+            "\n서버에 실제로 보내 보려면 --call-api http://127.0.0.1:8000 처럼"
+            "\n주소를 주세요. 토큰을 화면에 꺼내지 않고 바로 보냅니다."
+        )
+
     if print_token:
         print(f"\nid_token:\n{token}")
 
@@ -233,6 +279,13 @@ def main() -> None:
         help=f"요청할 동의 항목 (기본 '{DEFAULT_SCOPE}'). "
         "**콘솔에서 켜 둔 것만** 넣을 수 있습니다. 이메일까지 받으려면 "
         "동의항목에서 켠 뒤 'openid,account_email'.",
+    )
+    parser.add_argument(
+        "--call-api",
+        default=None,
+        metavar="BASE_URL",
+        help="받은 id_token 으로 우리 API 를 실제로 찔러 봅니다 "
+        "(예: http://127.0.0.1:8899). 토큰은 화면에 찍지 않고 바로 보냅니다.",
     )
     parser.add_argument(
         "--timeout",
@@ -283,7 +336,7 @@ def main() -> None:
             f"(scope 는 '{args.scope}' 로 보냈습니다)"
         )
 
-    _describe(id_token, print_token=args.print_token)
+    _describe(id_token, print_token=args.print_token, call_api=args.call_api)
 
 
 if __name__ == "__main__":

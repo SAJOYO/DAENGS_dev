@@ -664,12 +664,6 @@ body::before {
     background: rgba(255, 255, 255, .3);
   }
 
-  /* 열 때 떠오르는 연출은 데스크톱용이다. 여기서는 시트가 translateY 로 올라오는데
-     그 애니메이션이 끝나면서 transform:none 을 남겨서, 닫혀 있어야 할 시트가
-     열린 채로 굳는다. */
-  .viewer.is-opening .detail,
-  .viewer.is-closing .detail { animation: none; }
-
   .detail dl { margin-top: 14px; justify-content: center; }
   .detail .flavor { margin-top: 14px; padding-top: 10px; }
   .viewer-nav { margin-top: 16px; justify-content: center; }
@@ -714,6 +708,18 @@ body::before {
 /* 설명은 열 때만 떠오른다. ←/→ 로 카드를 넘길 때까지 매번 깜빡이면 산만하다. */
 .viewer.is-opening .detail { animation: detail-in 280ms 60ms ease both; }
 .viewer.is-closing .detail { animation: detail-in 180ms ease reverse both; }
+
+/* **이 규칙은 반드시 위 두 줄보다 뒤에 있어야 한다.** 특정도가 똑같아서(0,3,0)
+   순서로만 갈린다 — 폰 블록(760px) 안에 써 두면 그쪽이 앞이라 아무 힘이 없다.
+
+   폰에서는 설명이 아래에 숨어 있다가 translateY 로 올라오는 시트다. 위 애니메이션은
+   `both` 라 끝난 자리에 transform:none 을 남기는데, 그러면 **숨어 있어야 할 시트가
+   카드를 여는 동안 잠깐 나타났다가** is-opening 이 걷히면서 도로 내려간다.
+   "확대할 때 상세가 번쩍했다 사라진다"가 이 증상이다. */
+@media (max-width: 760px) {
+  .viewer.is-opening .detail,
+  .viewer.is-closing .detail { animation: none; }
+}
 
 /* ── 키보드 ────────────────────────────────────────────
    포커스만으로도 홀로그램이 보이도록 살짝 기울여 둔다. 포인터가 올라오면

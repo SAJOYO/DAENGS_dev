@@ -626,7 +626,7 @@ const TAP = { dist: 16, ms: 700 };
    **처음 열 때와 그 뒤가 다르다.** 처음은 "여기 버튼이 있다"고 알려주기만 하면 되니
    짧아도 되는데, 그 뒤에는 실제로 눌러야 하는 시간이라 같은 값을 쓰면 다음 장을
    연달아 보려 할 때마다 카드를 만졌다 떼야 한다. */
-const NAV_PEEK = { open: 300, again: 1600 };
+const NAV_PEEK = { open: 750, again: 1600 };
 
 let gesture = null;
 let navPeekTimer = 0;

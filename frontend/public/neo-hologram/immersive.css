@@ -26,12 +26,6 @@
   initial-value: 0deg;
 }
 
-/* 꾹 누르는 동안 글자가 잡히거나 iOS 의 길게 누르기 팝업이 뜨면 제스처가 끊긴다 */
-.card {
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
 .stage.is-holding .card { filter: brightness(1.08) saturate(1.12); }
 
 .stage.is-holding::after {

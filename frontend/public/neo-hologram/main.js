@@ -453,6 +453,21 @@ viewer.addEventListener("keydown", (e) => {
 viewer.addEventListener("cancel", afterClose);
 viewer.addEventListener("close", afterClose);
 
+/* ── 꾹 눌렀을 때 브라우저가 끼어드는 것 막기 ─────────────
+   선택·드래그는 style.css 가 CSS 로 끈다. 남는 건 길게 누르기 메뉴인데, 안드로이드
+   크롬은 -webkit-touch-callout 을 보지 않아 사진 위에서 "이미지 다운로드" 메뉴가
+   그대로 뜨고 그러면 이머시브로 들어가는 꾹 누르기가 끊긴다. 그래서 사진·카드
+   위에서만 메뉴를 막는다 — 페이지 나머지(링크·글)에서는 오른쪽 버튼이 그대로 산다.
+   immersive.mjs 도 꾹 누르는 동안 같은 걸 막지만 그건 게이지가 도는 순간뿐이라,
+   확대 뷰나 이머시브 장면의 사진은 여기서만 걸린다. */
+const NO_MENU = "img, .card, .stage, .dio, .viewer";
+
+for (const ev of ["contextmenu", "dragstart"]) {
+  document.addEventListener(ev, (e) => {
+    if (e.target instanceof Element && e.target.closest(NO_MENU)) e.preventDefault();
+  });
+}
+
 /* ?im=<카드 id> 로 열면 이머시브로 바로 들어간다 — live-server 가 새로 고칠 때마다
    다시 꾹 누르지 않아도 되도록. 개발 편의용이고 평소 경로에는 영향이 없다. */
 autoOpenFromQuery();

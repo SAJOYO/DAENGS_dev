@@ -12,6 +12,7 @@ from datetime import datetime
 
 import pytest
 
+from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 
@@ -35,9 +36,15 @@ class FakeAdmin:
 
 @dataclass
 class FakeToken:
-    """RefreshToken 대역."""
+    """RefreshToken 대역.
 
-    admin_user_id: uuid.UUID
+    진짜 모델은 소유자 컬럼이 둘이고 그중 하나만 채웁니다 (D-016). 여기서는 한 쌍으로
+    들고 있되 **읽는 이름을 모델과 똑같이** 맞춰 둡니다 — 서비스가 `subject_type` /
+    `subject_id` 로만 읽기 때문에, 이름이 어긋나면 테스트만 통과하고 실제로는 터집니다.
+    """
+
+    subject_type: SubjectType
+    subject_id: uuid.UUID
     token_hash: str
     expires_at: datetime
     revoked_at: datetime | None = None
@@ -74,7 +81,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     async def create(session, **kw):  # noqa: ANN001, ANN003, ANN202
         token = FakeToken(
-            admin_user_id=kw["admin_user_id"],
+            subject_type=kw["subject_type"],
+            subject_id=kw["subject_id"],
             token_hash=kw["token_hash"],
             expires_at=kw["expires_at"],
             user_agent=kw.get("user_agent"),
@@ -92,8 +100,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def delete_one(session, token):  # noqa: ANN001, ANN202
         store.tokens.pop(token.token_hash, None)
 
-    async def delete_all_for_admin(session, admin_user_id):  # noqa: ANN001, ANN202
-        gone = [h for h, t in store.tokens.items() if t.admin_user_id == admin_user_id]
+    async def delete_all_for_subject(session, subject_type, subject_id):  # noqa: ANN001, ANN202
+        gone = [
+            h
+            for h, t in store.tokens.items()
+            if t.subject_type == subject_type and t.subject_id == subject_id
+        ]
         for h in gone:
             del store.tokens[h]
         return len(gone)
@@ -104,5 +116,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(refresh_token_repo, "get_by_hash", get_by_hash)
     monkeypatch.setattr(refresh_token_repo, "revoke", revoke)
     monkeypatch.setattr(refresh_token_repo, "delete_one", delete_one)
-    monkeypatch.setattr(refresh_token_repo, "delete_all_for_admin", delete_all_for_admin)
+    monkeypatch.setattr(
+        refresh_token_repo, "delete_all_for_subject", delete_all_for_subject
+    )
     return store

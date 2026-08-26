@@ -5,6 +5,10 @@ HTTP 를 모릅니다 — 여기서 나가는 것은 예외와 TokenPair 뿐이�
 
 **토큰을 만드는 법은 core/token.py, 저장하는 법은 repositories/refresh_token.py 에 있습니다.**
 여기 있는 것은 "이 사람이 로그인해도 되나", "이 토큰을 아직 믿어도 되나" 하는 판단뿐입니다.
+
+**여기 있는 login / refresh / logout 은 관리자용입니다.** 앱 회원(카카오)의 로그인은
+같은 회전 규칙을 쓰지만 자격 확인 방법이 달라서 별도 서비스로 갑니다 —
+공유되는 것은 아래 `_issue` 와 `refresh` 의 회전·재사용 감지입니다 (D-016).
 """
 
 import logging
@@ -20,6 +24,7 @@ from daengs_backend.core.password import (
     needs_rehash,
     verify_password,
 )
+from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import (
     ACCESS_TTL,
     REFRESH_REUSE_GRACE,
@@ -82,31 +87,40 @@ class TokenPair:
     refresh_token: str
     access_expires_at: datetime
     refresh_expires_at: datetime
-    admin_id: uuid.UUID
-    role: str
+    subject_type: SubjectType
+    subject_id: uuid.UUID
+    #: 관리자만 가집니다. 앱 회원은 None 입니다.
+    role: str | None
 
 
 async def _issue(
     session: AsyncSession,
-    admin: AdminUser,
     *,
+    subject_type: SubjectType,
+    subject_id: uuid.UUID,
+    role: str | None,
     refresh_expires_at: datetime,
     user_agent: str | None,
     ip: str | None,
 ) -> TokenPair:
     """토큰 한 쌍을 만들고 refresh 를 DB 에 남깁니다. commit 은 부르는 쪽이 합니다.
 
+    **주체 종류를 가리지 않습니다.** 앱 회원 로그인도 이 함수를 씁니다 — 회전과
+    재사용 감지 규칙(D-015)을 한 벌로 유지하려는 것이 D-016 의 요지입니다.
+
     refresh 의 만료를 인자로 받는 이유는 **회전할 때 연장하지 않기 위해서**입니다.
     로그인은 now + REFRESH_TTL 을 넘기고, 회전은 옛 행의 expires_at 을 그대로 넘깁니다.
     여기서 계산해 버리면 회전할 때마다 7일이 새로 시작돼 상한이 사라집니다.
     """
-    access_token = create_access_token(admin.id, admin.role)
+    access_token = create_access_token(subject_id, subject_type, role)
     refresh_token = generate_refresh_token()
 
     await refresh_token_repo.create(
         session,
-        admin_user_id=admin.id,
-        # 원문이 아니라 해시를 넘깁니다. 원문은 쿠키로만 나가고 DB 에 남지 않습니다.
+        subject_type=subject_type,
+        subject_id=subject_id,
+        # 원문이 아니라 해시를 넘깁니다. 원문은 쿠키(관리자)나 응답 바디(앱)로만
+        # 나가고 DB 에 남지 않습니다.
         token_hash=hash_refresh_token(refresh_token),
         expires_at=refresh_expires_at,
         user_agent=user_agent,
@@ -118,8 +132,9 @@ async def _issue(
         refresh_token=refresh_token,
         access_expires_at=datetime.now(UTC) + ACCESS_TTL,
         refresh_expires_at=refresh_expires_at,
-        admin_id=admin.id,
-        role=admin.role,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        role=role,
     )
 
 
@@ -174,7 +189,9 @@ async def login(
 
     pair = await _issue(
         session,
-        admin,
+        subject_type=SubjectType.ADMIN,
+        subject_id=admin.id,
+        role=admin.role,
         refresh_expires_at=now + REFRESH_TTL,
         user_agent=user_agent,
         ip=ip,
@@ -211,36 +228,50 @@ async def refresh(
         logger.info("재발급 실패: 모르는 토큰 (ip=%s)", ip)
         raise InvalidRefreshTokenError
 
+    if row.subject_type is not SubjectType.ADMIN:
+        # 앱 회원의 refresh 를 관리자 엔드포인트로 보낸 것입니다. 여기서 통과시키면
+        # 관리자 role 이 담긴 access token 이 나갑니다.
+        # 앱 회원의 재발급은 별도 서비스가 맡습니다 (카카오 카드).
+        logger.warning(
+            "재발급 거부: 관리자 아님 (subject=%s/%s, ip=%s)",
+            row.subject_type.value,
+            row.subject_id,
+            ip,
+        )
+        raise InvalidRefreshTokenError
+
     if row.expires_at <= now:
-        logger.info("재발급 실패: 만료된 토큰 (admin=%s)", row.admin_user_id)
+        logger.info("재발급 실패: 만료된 토큰 (admin=%s)", row.subject_id)
         raise InvalidRefreshTokenError
 
     if row.revoked_at is not None:
         # 불변식: revoked_at 이 있다는 것은 '회전으로 교체됨'을 뜻합니다.
         # 로그아웃·강제 폐기는 행을 지우므로 여기까지 오지 않습니다.
         if now - row.revoked_at > REFRESH_REUSE_GRACE:
-            count = await refresh_token_repo.delete_all_for_admin(
-                session, row.admin_user_id
+            count = await refresh_token_repo.delete_all_for_subject(
+                session, row.subject_type, row.subject_id
             )
             await session.commit()
             logger.warning(
                 "재사용 감지: 세션 %d개를 폐기했습니다 (admin=%s, ip=%s)",
                 count,
-                row.admin_user_id,
+                row.subject_id,
                 ip,
             )
             raise TokenReuseDetectedError
         # 유예 안입니다. 같은 쿠키를 쓰는 탭 두 개가 동시에 재발급을 시도한 것으로
         # 보고 통과시킵니다. 진 쪽도 자기 몫의 새 토큰을 받아 갑니다.
-        logger.debug("재발급 경합 (admin=%s)", row.admin_user_id)
+        logger.debug("재발급 경합 (admin=%s)", row.subject_id)
 
-    admin = await admin_user_repo.get_by_id(session, row.admin_user_id)
+    admin = await admin_user_repo.get_by_id(session, row.subject_id)
     if admin is None or admin.status != "active":
         # 계정이 사라졌거나 정지되었습니다. 남은 세션을 여기서 정리합니다 —
         # status 는 '새 로그인'을 막을 뿐이라, 이미 나간 세션은 이렇게 끊어야 합니다.
-        await refresh_token_repo.delete_all_for_admin(session, row.admin_user_id)
+        await refresh_token_repo.delete_all_for_subject(
+            session, SubjectType.ADMIN, row.subject_id
+        )
         await session.commit()
-        logger.warning("재발급 거부: 쓸 수 없는 계정 (admin=%s)", row.admin_user_id)
+        logger.warning("재발급 거부: 쓸 수 없는 계정 (admin=%s)", row.subject_id)
         raise InvalidRefreshTokenError
 
     if row.revoked_at is None:
@@ -248,7 +279,9 @@ async def refresh(
 
     pair = await _issue(
         session,
-        admin,
+        subject_type=SubjectType.ADMIN,
+        subject_id=admin.id,
+        role=admin.role,
         # **연장하지 않습니다.** 옛 행의 만료를 그대로 물려받아, 계속 쓰더라도
         # 처음 로그인한 시각 기준 REFRESH_TTL 이 지나면 다시 로그인해야 합니다.
         refresh_expires_at=row.expires_at,
@@ -274,7 +307,7 @@ async def logout(session: AsyncSession, *, refresh_token: str) -> None:
     if row is None:
         return
 
-    admin_id = row.admin_user_id
+    subject_type, subject_id = row.subject_type, row.subject_id
     await refresh_token_repo.delete_one(session, row)
     await session.commit()
-    logger.info("로그아웃 (admin=%s)", admin_id)
+    logger.info("로그아웃 (%s=%s)", subject_type.value, subject_id)

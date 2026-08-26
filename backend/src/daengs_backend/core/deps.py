@@ -9,6 +9,10 @@
 바꿀 때마다 코드 전체를 뒤지게 됩니다. 아래 ROLE_PERMISSIONS 한 곳만 고치면 되도록
 한 겹을 둡니다.
 
+**토큰이 관리자 것인지부터 봅니다.** 발급기(`core/token.py`)는 앱 회원 토큰도 같은
+키로 만들기 때문에, 종류를 확인하지 않으면 앱 회원이 관리자 API 에 그대로 들어옵니다.
+`sub` 는 어느 쪽이든 UUID 한 개라 그것만으로는 구분되지 않습니다.
+
 **여기서는 DB 를 보지 않습니다.** access token 을 푸는 것으로 끝입니다 —
 그게 무상태 토큰을 쓰는 이유 전부입니다. 대가로 role 변경과 계정 정지가
 최대 ACCESS_TTL(5분) 늦게 반영됩니다. 지금 DB 상태가 필요한 곳(`GET /auth/me`)은
@@ -23,6 +27,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import (
     TokenExpiredError,
     TokenInvalidError,
@@ -142,7 +147,25 @@ async def current_admin(request: Request) -> Principal:
             status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다."
         ) from None
 
-    return Principal(admin_id=claims.admin_id, role=claims.role)
+    if claims.subject_type is not SubjectType.ADMIN:
+        # 진짜 우리 토큰이지만 **관리자 것이 아닙니다.** 앱 회원이 자기 토큰으로
+        # 관리자 API 를 부른 것이라, 만료와 달리 재발급해도 달라지지 않습니다.
+        #
+        # 그래도 401 입니다 (403 이 아닙니다) — 403 은 "누구인지는 맞는데 권한이
+        # 모자라다"는 뜻이고, 여기는 애초에 이 문으로 들어올 사람이 아닙니다.
+        # 응답 메시지도 인증 실패와 똑같이 둡니다. "당신은 앱 회원이군요"를
+        # 알려 줄 이유가 없습니다.
+        logger.warning(
+            "관리자 API 에 %s 토큰 (subject=%s, ip=%s)",
+            claims.subject_type.value,
+            claims.subject_id,
+            _client_host(request),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
+
+    # decode_access_token 이 관리자 토큰에 role 이 있는 것을 보장합니다.
+    assert claims.role is not None
+    return Principal(admin_id=claims.subject_id, role=claims.role)
 
 
 CurrentAdmin = Annotated[Principal, Depends(current_admin)]

@@ -82,6 +82,26 @@ def _set_session_cookies(response: Response, pair: auth_service.TokenPair) -> No
     )
 
 
+def _session_response(pair: auth_service.TokenPair) -> SessionResponse:
+    """TokenPair 를 관리자 세션 응답으로. **토큰 문자열은 담기지 않습니다.**
+
+    `pair.role` 은 주체 종류에 따라 None 일 수 있는데(앱 회원), 이 라우터로는
+    관리자 pair 만 옵니다. 그래도 확인하는 이유는 빈 문자열로 뭉개면 프론트가
+    아무 권한도 없는 화면을 그리면서 원인은 아무 데도 안 남기 때문입니다.
+    여기 걸리면 서비스 계층이 잘못 부른 것이라 500 이 맞습니다.
+    """
+    if pair.role is None:
+        raise RuntimeError(
+            f"관리자 라우터에 {pair.subject_type.value} 세션이 왔습니다."
+        )
+    return SessionResponse(
+        admin_id=pair.subject_id,
+        role=pair.role,
+        access_expires_at=pair.access_expires_at,
+        refresh_expires_at=pair.refresh_expires_at,
+    )
+
+
 def _clear_session_cookies(response: Response) -> None:
     """쿠키를 지웁니다. 굽을 때와 **같은 path** 여야 지워집니다."""
     for name in (ACCESS_COOKIE, REFRESH_COOKIE):
@@ -128,12 +148,7 @@ async def login(
         ) from None
 
     _set_session_cookies(response, pair)
-    return SessionResponse(
-        admin_id=pair.admin_id,
-        role=pair.role,
-        access_expires_at=pair.access_expires_at,
-        refresh_expires_at=pair.refresh_expires_at,
-    )
+    return _session_response(pair)
 
 
 @router.post("/refresh")
@@ -173,12 +188,7 @@ async def refresh(
         ) from None
 
     _set_session_cookies(response, pair)
-    return SessionResponse(
-        admin_id=pair.admin_id,
-        role=pair.role,
-        access_expires_at=pair.access_expires_at,
-        refresh_expires_at=pair.refresh_expires_at,
-    )
+    return _session_response(pair)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

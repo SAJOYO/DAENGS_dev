@@ -13,6 +13,7 @@ from joserfc import jwt
 from joserfc.jwe import JWERegistry
 from joserfc.jwk import OctKey
 
+from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import (
     ACCESS_TTL,
     AccessClaims,
@@ -35,10 +36,13 @@ def _encode_with(key: OctKey, claims: dict) -> str:
 class TestAccessToken:
     def test_왕복(self) -> None:
         admin_id = uuid.uuid4()
-        claims = decode_access_token(create_access_token(admin_id, "ADMIN"))
+        claims = decode_access_token(
+            create_access_token(admin_id, SubjectType.ADMIN, "ADMIN")
+        )
 
         assert isinstance(claims, AccessClaims)
-        assert claims.admin_id == admin_id
+        assert claims.subject_type is SubjectType.ADMIN
+        assert claims.subject_id == admin_id
         assert claims.role == "ADMIN"
 
     def test_JWE_라서_다섯_조각이다(self) -> None:
@@ -47,15 +51,18 @@ class TestAccessToken:
         registry 를 빠뜨리면 joserfc 가 조용히 JWS 로 빠지는데, 그때 나가는 토큰은
         base64 디코딩만으로 role 이 읽힙니다. 에러가 안 나므로 조각 수로 잡습니다.
         """
-        assert len(create_access_token(uuid.uuid4(), "ADMIN").split(".")) == 5
+        token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "ADMIN")
+        assert len(token.split(".")) == 5
 
     def test_내용이_평문으로_보이지_않는다(self) -> None:
-        token = create_access_token(uuid.uuid4(), "ADMIN")
+        token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "ADMIN")
         assert "ADMIN" not in token
 
     def test_수명은_ACCESS_TTL_이다(self) -> None:
         before = datetime.now(UTC)
-        claims = decode_access_token(create_access_token(uuid.uuid4(), "VIEWER"))
+        claims = decode_access_token(
+            create_access_token(uuid.uuid4(), SubjectType.ADMIN, "VIEWER")
+        )
 
         # 초 단위로 자르므로 1초 오차를 허용합니다.
         assert abs((claims.expires_at - (before + ACCESS_TTL)).total_seconds()) <= 1
@@ -65,14 +72,14 @@ class TestAccessToken:
         with patch("daengs_backend.core.token.datetime") as clock:
             clock.now.return_value = past
             clock.fromtimestamp = datetime.fromtimestamp
-            expired = create_access_token(uuid.uuid4(), "ADMIN")
+            expired = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "ADMIN")
 
         with pytest.raises(TokenExpiredError):
             decode_access_token(expired)
 
     def test_변조되면_TokenInvalidError(self) -> None:
         """GCM 이 위변조를 잡아 주는 것이 이 테스트입니다."""
-        token = create_access_token(uuid.uuid4(), "ADMIN")
+        token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "ADMIN")
 
         with pytest.raises(TokenInvalidError):
             decode_access_token(token[:-4] + "AAAA")
@@ -86,7 +93,12 @@ class TestAccessToken:
         other = OctKey.import_key(bytes([9]) * 32)
         forged = _encode_with(
             other,
-            {"sub": str(uuid.uuid4()), "role": "ADMIN", "exp": 9999999999},
+            {
+                "sub": str(uuid.uuid4()),
+                "typ": "admin",
+                "role": "ADMIN",
+                "exp": 9999999999,
+            },
         )
 
         with pytest.raises(TokenInvalidError):
@@ -101,9 +113,12 @@ class TestAccessToken:
         from daengs_backend.core.token import _KEY
 
         for claims in [
-            {"sub": str(uuid.uuid4()), "exp": 9999999999},  # role 없음
-            {"role": "ADMIN", "exp": 9999999999},  # sub 없음
-            {"sub": str(uuid.uuid4()), "role": "ADMIN"},  # exp 없음
+            # role 없음 (관리자인데)
+            {"sub": str(uuid.uuid4()), "typ": "admin", "exp": 9999999999},
+            {"typ": "admin", "role": "ADMIN", "exp": 9999999999},  # sub 없음
+            {"sub": str(uuid.uuid4()), "typ": "admin", "role": "ADMIN"},  # exp 없음
+            # typ 없음. **옛 토큰이 여기 걸립니다** (D-016 이전 발급분).
+            {"sub": str(uuid.uuid4()), "role": "ADMIN", "exp": 9999999999},
         ]:
             with pytest.raises(TokenInvalidError):
                 decode_access_token(_encode_with(_KEY, claims))
@@ -112,10 +127,64 @@ class TestAccessToken:
         from daengs_backend.core.token import _KEY
 
         bad = _encode_with(
-            _KEY, {"sub": "admin", "role": "ADMIN", "exp": 9999999999}
+            _KEY,
+            {"sub": "admin", "typ": "admin", "role": "ADMIN", "exp": 9999999999},
         )
         with pytest.raises(TokenInvalidError):
             decode_access_token(bad)
+
+
+class TestSubjectType:
+    """관리자와 앱 회원이 **같은 키로** 토큰을 발급받는 데서 오는 위험 (D-016).
+
+    여기가 뚫리면 앱 회원이 관리자 API 에 들어옵니다. `core/deps.py` 가 한 겹 더
+    막지만, 그 한 겹만 남기지 않으려고 발급기에서도 막습니다.
+    """
+
+    def test_앱_회원_토큰에는_role_이_없다(self) -> None:
+        user_id = uuid.uuid4()
+        claims = decode_access_token(create_access_token(user_id, SubjectType.APP))
+
+        assert claims.subject_type is SubjectType.APP
+        assert claims.subject_id == user_id
+        assert claims.role is None
+
+    def test_관리자인데_role_이_없으면_만들지_않는다(self) -> None:
+        """조용히 만들면 아무 권한도 없는 관리자 토큰이 나가고, 로그인은 성공합니다."""
+        with pytest.raises(ValueError):
+            create_access_token(uuid.uuid4(), SubjectType.ADMIN)
+
+    def test_앱_회원인데_role_이_있으면_만들지_않는다(self) -> None:
+        with pytest.raises(ValueError):
+            create_access_token(uuid.uuid4(), SubjectType.APP, "ADMIN")
+
+    def test_앱_토큰에_role_을_끼워_넣으면_거부한다(self) -> None:
+        """우리 키를 가진 사람만 만들 수 있지만, 형태가 어긋나면 통과시키지 않습니다."""
+        from daengs_backend.core.token import _KEY
+
+        forged = _encode_with(
+            _KEY,
+            {
+                "sub": str(uuid.uuid4()),
+                "typ": "app",
+                "role": "ADMIN",
+                "exp": 9999999999,
+            },
+        )
+        with pytest.raises(TokenInvalidError):
+            decode_access_token(forged)
+
+    def test_모르는_주체_종류는_거부한다(self) -> None:
+        """**아무 쪽으로도 넘기지 않습니다.** 기본값을 관리자로 두면 여기가 문이 됩니다."""
+        from daengs_backend.core.token import _KEY
+
+        for typ in ["", "ADMIN", "superuser", "app "]:
+            forged = _encode_with(
+                _KEY,
+                {"sub": str(uuid.uuid4()), "typ": typ, "exp": 9999999999},
+            )
+            with pytest.raises(TokenInvalidError):
+                decode_access_token(forged)
 
 
 class TestRefreshToken:

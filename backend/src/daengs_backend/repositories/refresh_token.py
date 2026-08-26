@@ -4,7 +4,7 @@
 
     회전            revoke()      revoked_at 을 찍고 행은 남깁니다
     로그아웃        delete()      행을 지웁니다
-    강제 로그아웃   delete_all_for_admin()
+    강제 로그아웃   delete_all_for_subject()
 
 로그아웃이 행을 남기지 않는 이유는 재사용 감지의 유예 창 때문입니다.
 services/auth.py 는 "폐기된 지 얼마 안 된 토큰"을 탭 경합으로 보고 통과시키는데,
@@ -15,6 +15,12 @@ services/auth.py 는 "폐기된 지 얼마 안 된 토큰"을 탭 경합으로 �
 대량 폐기도 같은 이유로 지웁니다. revoked_at 으로 하면 다른 세션들이 10초 안에
 재발급을 시도할 때 유예 창을 타고 새 토큰을 받아 갑니다 — 끊으려던 것이 안 끊깁니다.
 
+**소유자 컬럼이 둘입니다** (`admin_user_id` / `app_user_id`, D-016). 여기 함수들은
+컬럼 이름 대신 `subject_type` + `subject_id` 를 받고, 어느 컬럼에 넣을지는
+`_SUBJECT_COLUMN` 한 곳에서만 정합니다. 바깥에서 컬럼을 직접 고르게 두면
+"관리자 세션을 끊는 코드"와 "앱 세션을 끊는 코드"가 따로 생기고,
+그중 하나만 고치는 날이 옵니다.
+
 commit 은 하지 않습니다. 트랜잭션 경계는 services 가 잡습니다.
 """
 
@@ -23,22 +29,31 @@ from datetime import datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
+from daengs_backend.core.subject import SubjectType
 from daengs_backend.models import RefreshToken
 
 __all__ = [
     "create",
-    "delete_all_for_admin",
+    "delete_all_for_subject",
     "delete_one",
     "get_by_hash",
     "revoke",
 ]
 
+# 주체 종류 → 그 주체를 담는 컬럼. **분기는 여기 하나뿐입니다.**
+_SUBJECT_COLUMN: dict[SubjectType, InstrumentedAttribute[uuid.UUID | None]] = {
+    SubjectType.ADMIN: RefreshToken.admin_user_id,
+    SubjectType.APP: RefreshToken.app_user_id,
+}
+
 
 async def create(
     session: AsyncSession,
     *,
-    admin_user_id: uuid.UUID,
+    subject_type: SubjectType,
+    subject_id: uuid.UUID,
     token_hash: str,
     expires_at: datetime,
     user_agent: str | None = None,
@@ -46,12 +61,14 @@ async def create(
 ) -> RefreshToken:
     """세션 한 줄을 만듭니다. 로그인과 회전이 둘 다 씁니다.
 
-    받는 것은 **원문이 아니라 해시**입니다. 원문은 쿠키로만 나가고 어디에도 남지 않습니다.
+    받는 것은 **원문이 아니라 해시**입니다. 원문은 쿠키(관리자) 나 응답 바디(앱)로만
+    나가고 어디에도 남지 않습니다.
     user_agent / ip 는 세션 목록 화면에 보여 줄 표시용입니다 —
     클라이언트가 바꿀 수 있는 값이라 인증 판단에 쓰면 안 됩니다.
     """
     token = RefreshToken(
-        admin_user_id=admin_user_id,
+        # 반대쪽 컬럼은 건드리지 않습니다 — 기본값 NULL 이라야 CHECK 를 통과합니다.
+        **{_SUBJECT_COLUMN[subject_type].key: subject_id},
         token_hash=token_hash,
         expires_at=expires_at,
         user_agent=user_agent,
@@ -93,17 +110,18 @@ async def delete_one(session: AsyncSession, token: RefreshToken) -> None:
     await session.delete(token)
 
 
-async def delete_all_for_admin(
-    session: AsyncSession, admin_user_id: uuid.UUID
+async def delete_all_for_subject(
+    session: AsyncSession, subject_type: SubjectType, subject_id: uuid.UUID
 ) -> int:
-    """그 계정의 세션을 전부 없앱니다. 지운 행 수를 돌려줍니다.
+    """그 주체의 세션을 전부 없앱니다. 지운 행 수를 돌려줍니다.
 
     쓰는 곳은 둘입니다 — 탈취가 의심될 때(재사용 감지)와 관리자가 강제로 끊을 때.
-    계정을 공유하고 있으므로 **팀 전원이 다시 로그인하게 됩니다.** 토큰이 털렸다면
-    그 계정 전체가 위험한 것이라 이게 맞는 대응입니다.
+    관리자 계정은 팀이 공유하고 있으므로 **전원이 다시 로그인하게 됩니다.** 토큰이
+    털렸다면 그 계정 전체가 위험한 것이라 이게 맞는 대응입니다.
 
-    idx_refresh_tokens_admin 인덱스가 이 쿼리를 위한 것입니다 (03_auth.sql).
+    idx_refresh_tokens_admin / idx_refresh_tokens_app 인덱스가 이 쿼리를 위한
+    것입니다 (03_auth.sql).
     """
-    stmt = delete(RefreshToken).where(RefreshToken.admin_user_id == admin_user_id)
+    stmt = delete(RefreshToken).where(_SUBJECT_COLUMN[subject_type] == subject_id)
     result = await session.execute(stmt)
     return result.rowcount

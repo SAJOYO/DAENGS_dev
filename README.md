@@ -150,6 +150,8 @@ Copy-Item .env.example .env
   ```
 
 - 인덱스는 `db/indexes.sql` 에 따로 있습니다. 데이터를 적재한 **뒤에** 수동으로 실행하세요.
+- `db/init/` 은 **볼륨이 빌 때 한 번만** 돕니다. 이미 만들어진 DB 의 스키마를 바꾸는
+  SQL 은 `db/migrations/` 에 있고, 배포한 뒤 직접 적용해야 합니다 (`db/migrations/README.md`).
 - 데이터는 `pgdata` 볼륨에 있습니다. `docker compose down -v` 를 쓰면 **전부 지워집니다.**
 
 ### 롤백
@@ -175,6 +177,7 @@ nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        nginx + pgvector 컨테이너
 docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)
 db/init/                  DB 최초 기동 시 실행되는 SQL (확장 / 스키마 / 트리거)
+db/migrations/            이미 돌고 있는 DB 에 손으로 적용하는 SQL
 db/indexes.sql            인덱스. 적재 후 수동 실행
 .env.example              환경 변수 서식 (최상단은 compose 용, backend/ 는 앱 용)
 ecosystem.config.js       PM2 설정 (프론트)

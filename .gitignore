@@ -229,6 +229,11 @@ __marimo__/
 .env.*.local
 !.env.example
 
+# 레이어 원화 원본. 수 MB 짜리 PNG 라 git 에 두지 않습니다 — 팀 드라이브에 보관하고,
+# 여기서 뽑아낸 결과물(frontend/public/**/art/*.webp)만 커밋합니다.
+# tools/neo-hologram-layers.py 를 다시 돌리려면 원본을 이 폴더에 내려받으세요.
+tools/art-src/
+
 # Docker / DB 로컬 데이터
 .pgvector/
 .docker-data/

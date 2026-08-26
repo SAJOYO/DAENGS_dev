@@ -387,7 +387,9 @@ function render() {
   inner.insertAdjacentHTML("beforeend", detailMarkup(card));
   inner.insertAdjacentHTML("beforeend",
     '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
-    '<p class="sheet-hint">탭하면 상세 · 좌우로 넘기기 · 아래로 쓸어내려 닫기</p>');
+    '<button type="button" class="edge-nav prev" data-nav="-1" aria-label="이전 카드">‹</button>' +
+    '<button type="button" class="edge-nav next" data-nav="1" aria-label="다음 카드">›</button>' +
+    '<p class="sheet-hint">문지르면 포일 · 쓸면 다음 장 · 탭하면 상세</p>');
   viewer.append(inner);
 }
 
@@ -577,10 +579,11 @@ viewer.addEventListener("click", (e) => {
   if (nav) return go(Number(nav.dataset.nav));
   if (e.target.closest("[data-close]")) return closeViewer();
 
-  // 카드도 설명도 버튼도 아닌 곳 = 배경.
-  // 예전엔 `e.target === viewer` 로 봤는데, 폰에서 .viewer-inner 가 화면을 다 덮게
-  // 되면서 그 조건이 영영 참이 되지 않았다 — 배경을 눌러도 안 닫히는 원인이었다.
-  if (!e.target.closest(".stage, .detail, button")) closeViewer();
+  // 카드도 설명도 버튼도 아닌 곳 = 배경. **데스크톱에서만 닫는다.**
+  // 폰에서는 카드가 화면 폭에 맞춰지느라 위아래로 빈 띠가 넓게 남는데, 그걸 배경으로
+  // 치면 설명을 열려고 탭하다 빗나갈 때마다 창이 꺼진다. 폰에서는 그 자리도 위의
+  // 제스처가 탭으로 받아 설명을 여닫는다.
+  if (!phoneViewer.matches && !e.target.closest(".stage, .detail, button")) closeViewer();
 });
 
 viewer.addEventListener("keydown", (e) => {
@@ -594,75 +597,97 @@ viewer.addEventListener("keydown", (e) => {
 
 /* ── 폰 확대 뷰 제스처 ────────────────────────────────────
    폰에서는 카드가 화면을 가득 채우고 설명은 감춰져 있다 (style.css 의 760px 블록).
-   감춘 걸 도로 꺼내는 길과, 카드를 넘기는 길이 필요하다.
 
-     탭          설명 열기/닫기
-     좌우 스와이프  이전 / 다음 카드
-     아래로 스와이프 닫기
+     문지르기       포일 구경 — PC 에서 마우스를 올리는 것과 같다 (bindTilt 가 처리)
+     빠르게 쓸기     이전 / 다음 카드
+     짧게 탭        설명 열기 / 닫기
+     ✕ · 뒤로가기    닫기
 
-   **좌우를 '설명 열기'가 아니라 '카드 넘기기'에 준 이유**: 화면을 채운 사진에서
-   좌우로 미는 건 사진첩·스토리·카드 앱에서 거의 예외 없이 '다음 항목'이다. 여기에
-   설명을 걸면 사람들이 제일 먼저 해보는 동작이 엉뚱하게 반응한다.
+   **같은 손가락 드래그를 '구경'과 '넘기기'로 가르는 게 이 코드의 전부다.**
+   포일을 보는 손짓은 느리고 헤매고, 넘기는 손짓은 빠르고 곧다 — 그 차이로 가른다.
+   문턱을 거리로만 잡으면(예전 방식) 포일을 구경하는 동안 매번 카드가 넘어가서,
+   정작 이 데모에서 제일 보여주고 싶은 걸 못 보게 된다.
 
-   **제스처는 카드(.stage) 위에서 시작한 것만 받는다.** 배경을 탭하면 닫히는 기존
-   동작(viewer 의 click 처리)과 부딪히지 않게 하려는 것이다. 설명 시트 안은 스크롤
-   해야 하므로 애초에 여기까지 오지 않는다.
+   **기준점은 250ms 짜리 창으로 계속 미끄러진다.** pointerdown 자리에 고정하면
+   한참 문지르다가 넘기려 할 때 안 먹고, 반대로 누적 거리로 보면 천천히 문지른 것도
+   결국 문턱을 넘는다. 느리게 움직이는 동안에는 기준점이 계속 따라와서 거리가
+   안 쌓이고, 홱 움직일 때만 창 안에서 거리가 벌어진다.
 
-   데스크톱은 이 블록 전체가 놀고 있다 — 마우스로 드래그해도 아무 일도 안 일어난다. */
+   아래로 쓸어서 닫기는 뺐다 — 포일을 구경하면 세로로도 계속 움직여서 닫기 문턱을
+   매번 건드렸다. 닫기는 ✕ 와 안드로이드 뒤로가기가 맡는다.
+
+   데스크톱은 이 블록 전체가 놀고 있다. */
 
 const phoneViewer = matchMedia("(max-width: 760px)");
 
-/** 손가락이 이만큼 움직여야 스와이프로 친다 (px) */
+/* 넘기기로 칠 문턱. **이 셋이 조절 손잡이 전부다.**
+   창(windowMs) 안에서 가로로 side 이상 벌어지고, 그 움직임이 세로보다 ratio 배 이상
+   가로여야 넘긴다. 즉 "350px/s 이상으로, 옆으로, 곧게" 가 넘기기의 정의다.
+
+   손짓을 흉내 내어 맞춘 값이다 (2026-08-26):
+     46px / 250ms  포일을 문지르는 동작이 **전부** 넘김으로 잡힌다. 처음 값이었고 틀렸다
+     70px / 200ms  느긋하거나 좁게 문지르면 안 걸리고, 보통 세기의 플릭은 걸린다  ← 지금
+     84px / 180ms  문지르기는 절대 안 걸리는데 아주 세게 튕겨야만 넘어간다
+
+   **애매하면 '구경' 쪽으로 기울이는 게 맞다.** 넘기는 길은 좌우 ‹ › 버튼으로도 있지만,
+   포일을 보는 길은 문지르기 하나뿐이고 그게 이 데모의 본체다. */
 const SWIPE = {
-  side: 46,     // 좌우 — 카드 넘기기
-  down: 90,     // 아래 — 닫기. 넘기기보다 크게 잡아야 비스듬한 손짓이 안 닫는다
-  tap: 12,      // 이 안에서 멈추면 탭
-  tapMs: 700,   // 오래 누르고 있다 떼는 건 탭으로 안 친다
+  side: 70,
+  windowMs: 200,
+  ratio: 1.6,
+  tap: 16,      // 이 안에서 멈추면 탭. 손가락은 마우스보다 흔들려서 넉넉히 잡는다
+  tapMs: 700,
 };
 
 let gesture = null;
 
+const endTouch = () => { gesture = null; viewer.classList.remove("is-touching"); };
+
 viewer.addEventListener("pointerdown", (e) => {
   gesture = null;
   if (!phoneViewer.matches || !viewer.open) return;
-  if (!e.target.closest(".stage")) return;
-  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // 설명 시트 안은 스크롤해야 하고, 버튼은 눌려야 한다
+  if (e.target.closest(".detail, button")) return;
+  const at = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // start = 처음 댄 자리 (탭 판정용, 안 바뀐다)
+  // pts   = 최근 windowMs 자취 (넘기기 판정용, 앞에서부터 버려진다)
+  gesture = { start: at, pts: [at] };
+  viewer.classList.add("is-touching");
 });
 
-viewer.addEventListener("pointercancel", () => { gesture = null; });
+viewer.addEventListener("pointercancel", endTouch);
 
-/* 스와이프는 **손을 떼기 전에**, 문턱을 넘는 순간 판정한다. pointerup 을 기다리면
-   브라우저가 도중에 제스처를 가져갈 때(pointercancel) 아무 일도 안 일어난 채 끝난다.
-   CSS 의 touch-action:none 으로 그 가로채기를 막아 뒀지만, 여기서도 일찍 끊는 편이
-   손맛도 낫다 — 다 밀기 전에 카드가 넘어가기 시작한다. */
 viewer.addEventListener("pointermove", (e) => {
   const g = gesture;
   if (!g) return;
 
-  const dx = e.clientX - g.x;
-  const dy = e.clientY - g.y;
+  /* 최근 windowMs 동안의 자취만 남겨 두고, 그 구간에서 얼마나 벌었는지 본다.
+     **기준점 하나를 옮겨 다니는 방식으로 하면 안 된다** — 창이 지나는 순간이 하필
+     손짓 한가운데면 기준이 리셋되면서 그 플릭을 통째로 잃는다. 문지르다가 넘기려
+     할 때 안 먹는 게 그 증상이다. */
+  g.pts.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+  while (g.pts.length > 2 && e.timeStamp - g.pts[0].t > SWIPE.windowMs) g.pts.shift();
 
-  // 아래로 크게 쓸어내리면 닫는다. 세로가 가로보다 확실히 커야 한다 —
-  // 안 그러면 비스듬히 넘기려던 게 닫혀 버린다.
-  if (dy > SWIPE.down && dy > Math.abs(dx)) {
-    gesture = null;
-    return closeViewer();
-  }
+  const dx = e.clientX - g.pts[0].x;
+  const dy = e.clientY - g.pts[0].y;
 
-  // 좌우로 밀면 카드를 넘긴다. 왼쪽으로 밀면 다음 장이다 (사진첩과 같은 방향).
-  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > Math.abs(dy)) {
-    gesture = null;
-    return go(dx < 0 ? 1 : -1);
+  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > SWIPE.ratio * Math.abs(dy)) {
+    endTouch();
+    go(dx < 0 ? 1 : -1);   // 왼쪽으로 밀면 다음 장 — 사진첩과 같은 방향
   }
 });
 
 viewer.addEventListener("pointerup", (e) => {
   const g = gesture;
-  gesture = null;
+  endTouch();
   if (!g) return;
 
-  // 여기까지 왔으면 스와이프 문턱을 안 넘은 것이다. 거의 안 움직였으면 탭 — 설명을 여닫는다
-  if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < SWIPE.tap && e.timeStamp - g.t < SWIPE.tapMs) {
+  /* 여기까지 왔으면 넘기기는 아니다. **처음 댄 자리**에서 거의 안 움직였으면 탭이다 —
+     g.pts[0] 은 창에서 밀려나며 계속 바뀌므로 그걸 쓰면 안 된다. 한참 문지르다 뗀 것도
+     탭으로 잡혀서, 포일을 보려던 손짓 끝마다 설명이 튀어나온다. */
+  const { start } = g;
+  if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < SWIPE.tap
+      && e.timeStamp - start.t < SWIPE.tapMs) {
     viewer.classList.toggle("show-detail");
   }
 });

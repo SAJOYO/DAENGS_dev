@@ -360,9 +360,10 @@ body::before {
 
 /* ── 확대 뷰 ───────────────────────────────────────────── */
 
-/* 폰 전용. 데스크톱에는 마우스와 버튼이 있으므로 안 띄운다. */
+/* 폰 전용. 데스크톱에는 마우스와 설명 패널 안의 버튼이 있으므로 안 띄운다. */
 .sheet-hint,
-.viewer-close { display: none; }
+.viewer-close,
+.edge-nav { display: none; }
 
 /* dialog 를 스크롤 컨테이너로 쓰지 않는다.
    예전엔 여기에 overflow:auto 를 걸었는데, .stage::before 글로우가 아래로 8% 삐져나가
@@ -589,6 +590,37 @@ body::before {
   .viewer.show-detail .detail { transform: none; }
 
   .detail { z-index: 2; }
+
+  /* 좌우 넘기기 버튼. 쓸어서도 넘어가지만 그건 알아야 쓰는 동작이라, 눈에 보이는
+     길을 같이 둔다. 문지르는 동안에는 비켜 준다 — 포일을 보려는데 눈에 걸린다. */
+  .edge-nav {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 50%;
+    translate: 0 -50%;
+    z-index: 3;
+    width: 44px;
+    height: 44px;
+    padding: 0 0 3px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(8, 7, 4, .5);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+    color: var(--ink);
+    font-size: 24px;
+    line-height: 1;
+    opacity: .8;
+    transition: opacity 180ms ease;
+  }
+
+  .edge-nav.prev { left: 6px; }
+  .edge-nav.next { right: 6px; }
+
+  .viewer.is-touching .edge-nav { opacity: .1; }
+
+  /* 설명이 열리면 시트 안에 이전/다음이 이미 있다 */
+  .viewer.show-detail .edge-nav { opacity: 0; pointer-events: none; }
 
   /* 항상 보이는 닫기 버튼. 예전에는 닫기가 설명 시트 안에만 있어서, 닫으려면 먼저
      설명을 열어야 했다. */

@@ -386,6 +386,7 @@ function render() {
   inner.append(makeStage(card, { lazy: false, button: false }));
   inner.insertAdjacentHTML("beforeend", detailMarkup(card));
   inner.insertAdjacentHTML("beforeend",
+    '<button type="button" class="viewer-close" data-close aria-label="닫기">✕</button>' +
     '<p class="sheet-hint">탭하면 상세 · 좌우로 넘기기 · 아래로 쓸어내려 닫기</p>');
   viewer.append(inner);
 }
@@ -572,12 +573,14 @@ function closeViewer() {
 }
 
 viewer.addEventListener("click", (e) => {
-  // 딱 dialog 자신이 눌렸다면 카드 바깥 = 배경을 누른 것
-  if (e.target === viewer) return closeViewer();
-
   const nav = e.target.closest("[data-nav]");
   if (nav) return go(Number(nav.dataset.nav));
-  if (e.target.closest("[data-close]")) closeViewer();
+  if (e.target.closest("[data-close]")) return closeViewer();
+
+  // 카드도 설명도 버튼도 아닌 곳 = 배경.
+  // 예전엔 `e.target === viewer` 로 봤는데, 폰에서 .viewer-inner 가 화면을 다 덮게
+  // 되면서 그 조건이 영영 참이 되지 않았다 — 배경을 눌러도 안 닫히는 원인이었다.
+  if (!e.target.closest(".stage, .detail, button")) closeViewer();
 });
 
 viewer.addEventListener("keydown", (e) => {
@@ -628,9 +631,12 @@ viewer.addEventListener("pointerdown", (e) => {
 
 viewer.addEventListener("pointercancel", () => { gesture = null; });
 
-viewer.addEventListener("pointerup", (e) => {
+/* 스와이프는 **손을 떼기 전에**, 문턱을 넘는 순간 판정한다. pointerup 을 기다리면
+   브라우저가 도중에 제스처를 가져갈 때(pointercancel) 아무 일도 안 일어난 채 끝난다.
+   CSS 의 touch-action:none 으로 그 가로채기를 막아 뒀지만, 여기서도 일찍 끊는 편이
+   손맛도 낫다 — 다 밀기 전에 카드가 넘어가기 시작한다. */
+viewer.addEventListener("pointermove", (e) => {
   const g = gesture;
-  gesture = null;
   if (!g) return;
 
   const dx = e.clientX - g.x;
@@ -638,13 +644,25 @@ viewer.addEventListener("pointerup", (e) => {
 
   // 아래로 크게 쓸어내리면 닫는다. 세로가 가로보다 확실히 커야 한다 —
   // 안 그러면 비스듬히 넘기려던 게 닫혀 버린다.
-  if (dy > SWIPE.down && Math.abs(dy) > Math.abs(dx)) return closeViewer();
+  if (dy > SWIPE.down && dy > Math.abs(dx)) {
+    gesture = null;
+    return closeViewer();
+  }
 
   // 좌우로 밀면 카드를 넘긴다. 왼쪽으로 밀면 다음 장이다 (사진첩과 같은 방향).
-  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > Math.abs(dy)) return go(dx < 0 ? 1 : -1);
+  if (Math.abs(dx) > SWIPE.side && Math.abs(dx) > Math.abs(dy)) {
+    gesture = null;
+    return go(dx < 0 ? 1 : -1);
+  }
+});
 
-  // 거의 안 움직였으면 탭 — 설명을 여닫는다
-  if (Math.hypot(dx, dy) < SWIPE.tap && e.timeStamp - g.t < SWIPE.tapMs) {
+viewer.addEventListener("pointerup", (e) => {
+  const g = gesture;
+  gesture = null;
+  if (!g) return;
+
+  // 여기까지 왔으면 스와이프 문턱을 안 넘은 것이다. 거의 안 움직였으면 탭 — 설명을 여닫는다
+  if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < SWIPE.tap && e.timeStamp - g.t < SWIPE.tapMs) {
     viewer.classList.toggle("show-detail");
   }
 });

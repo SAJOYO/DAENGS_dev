@@ -31,6 +31,36 @@ function rngFrom(seed) {
 const vars = (o) =>
   Object.entries(o).map(([k, v]) => `--${k}:${v}`).join(";");
 
+const spanWith = (cls, css) => {
+  const el = document.createElement("span");
+  el.className = cls;
+  el.style.cssText = css;
+  return el;
+};
+
+/* 방울 종류. 대부분은 평범한 방울로 두고 일부만 다른 모양으로 만든다 —
+   반반 섞으면 종류가 아니라 그냥 제각각인 얼룩으로 보인다. */
+function dewKind(rng) {
+  const v = rng();
+  if (v < .17) return "is-streak";   // 흘러내리다 멈춘 자국
+  if (v < .36) return "is-twin";     // 옆에 작은 게 붙은 것
+  return "";
+}
+
+/* 화면 한가운데를 피해 자리를 잡는다 — 이슬이 주인공 얼굴에 앉으면 캐릭터가 안 읽힌다.
+   가운데 타원 안에 걸리면 다시 뽑되, 씨가 나쁠 때 무한히 도는 일이 없도록 횟수를 막는다
+   (타원이 화면의 3분의 1이라 보통 한두 번이면 빠져나온다). */
+function offCenter(rng) {
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < 8; i++) {
+    x = rng() * 100;
+    y = rng() * 100;
+    if (Math.hypot((x - 50) / 30, (y - 48) / 38) >= 1) break;
+  }
+  return [x, y];
+}
+
 /* ── 시선 ──────────────────────────────────────────────────
    목표(tx, ty)를 정해 두고 현재값(cx, cy)이 관성으로 따라간다. 마우스를 그대로
    꽂으면 배경이 손을 따라 뚝뚝 끊기고, 자이로는 값이 떨려서 그대로 쓸 수 없다. */
@@ -124,6 +154,7 @@ function build(card) {
         ${fit ? `<img class="dio-plate-art" src="${esc(scene.card ?? card.art)}" alt="" aria-hidden="true" decoding="async">` : ""}
         <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
              alt="${esc(altText(card))}" decoding="async">
+        <span class="dio-skin" aria-hidden="true"></span>
       </div>
     </div></div>
     <div class="dio-layer dio-hud" style="--i:5"><div class="dio-move">
@@ -135,25 +166,26 @@ function build(card) {
       </div>
     </div></div>
     <div class="dio-layer dio-fore" style="--i:6"><div class="dio-move"></div></div>
+    <div class="dio-layer dio-dew" style="--i:7"><div class="dio-move"></div></div>
     <button type="button" class="dio-exit">닫기 (Esc)</button>
     <p class="dio-tip">기울이거나 끌어서 둘러보세요</p>`;
 
   // 먼지 — 카드 뒤에서 느리게 떠다닌다
   const motes = el.querySelector(".dio-motes .dio-move");
   for (let i = 0; i < (scene.motes ?? 30); i++) {
-    const m = document.createElement("span");
-    m.className = "mote";
-    m.style.cssText = vars({
+    motes.append(spanWith("mote", vars({
       x: (rng() * 100).toFixed(1),
       y: (rng() * 100).toFixed(1),
-      s: (1.4 + rng() * 3.2).toFixed(1),
-      o: (.22 + rng() * .6).toFixed(2),
+      s: (1.3 + rng() * 4.4).toFixed(1),
+      o: (.24 + rng() * .62).toFixed(2),
       t: (7 + rng() * 9).toFixed(1),
       d: (rng() * 14).toFixed(1),
       dx: (-22 + rng() * 44).toFixed(0),
       dy: (-28 + rng() * 14).toFixed(0),
-    });
-    motes.append(m);
+      // 밝아지는 주기. 흐르는 주기(--t)와 일부러 다른 값을 줘서 둘이 안 겹치게 한다
+      gt: (3.4 + rng() * 5.2).toFixed(1),
+      gd: (rng() * 8).toFixed(1),
+    })));
   }
 
   // 앞 잎사귀 — 크고 흐리게. 초점이 카드에 맞은 것처럼 보이게 하는 층이다
@@ -174,6 +206,102 @@ function build(card) {
       dy: (-10 + rng() * 26).toFixed(0),
     });
     fore.append(l);
+  }
+
+  // 겉잎 겹. 바깥일수록 높이 띄운다 — 배추는 잎이 여러 겹이라 계단이 하나면
+  // "두 장"으로 보이고, 두세 단이면 두께로 읽힌다.
+  // --k 는 원근이 키우는 만큼을 되돌리는 배율이다. 1500 은 immersive.css 의
+  // .dio-subject .dio-move 에 걸린 perspective 값이라 **둘이 같이 움직여야 한다.**
+  const shells = scene.shells ?? [];
+  const plate = el.querySelector(".dio-plate");
+  const skinEl = el.querySelector(".dio-skin");
+  const heroSrc = esc(scene.subject ?? card.art);
+
+  for (const sh of shells) {
+    const layer = document.createElement("div");
+    layer.className = "dio-rind";
+    layer.setAttribute("aria-hidden", "true");
+    layer.style.cssText = vars({
+      z: sh.z,
+      k: ((1500 - sh.z) / 1500).toFixed(4),
+      r0: sh.r0,
+      r1: sh.r1,
+      ...(sh.r2 == null ? {} : { r2: sh.r2, r3: sh.r3 }),
+      ...(sh.shadow == null ? {} : { sa: sh.shadow }),
+    });
+    layer.innerHTML = `<img src="${heroSrc}" alt="" decoding="async">`;
+    plate.insertBefore(layer, skinEl);
+  }
+
+  // 캐릭터에 맺힌 이슬 — 렌즈가 아니라 **배추 표면**에 붙어 있다. 그래서 이 방울들만
+  // 주인공 평면 안에 있고, 배추가 기울면 같이 기운다.
+  // 자리는 잎이 있는 바깥 고리로 한정한다. 가운데는 강아지 얼굴이라 방울이 앉으면
+  // 표정이 안 읽힌다 — 얼굴 반지름이 22% 쯤이라 28% 부터 시작한다.
+  const skin = el.querySelector(".dio-skin");
+  const frontZ = shells.reduce((m, sh) => Math.max(m, sh.z), 0);
+  for (let i = 0; i < (scene.skinDew ?? 11); i++) {
+    const a = rng() * Math.PI * 2;
+    const r = 28 + rng() * 14;
+    const kind = dewKind(rng);
+    const drop = spanWith("dew", vars({
+      x: (50 + Math.cos(a) * r).toFixed(1),
+      y: (46 + Math.sin(a) * r).toFixed(1),
+      // 여기서 --s 는 px 이 아니라 **누끼 높이의 %** 다 (immersive.css 의 .dio-skin .dew)
+      s: (1.05 + rng() * 1.7).toFixed(2),
+      e: kind === "is-streak" ? (1.9 + rng() * .8).toFixed(2) : (1.02 + rng() * .2).toFixed(2),
+      o: (.55 + rng() * .37).toFixed(2),
+      // 표면에서 띄우는 높이. **제일 앞 겹보다 높아야** 겉잎 뒤로 안 숨는다.
+      // 크게 줄수록 기울일 때 원화와 많이 어긋나지만, 원근이 방울을 바깥으로도
+      // 밀어내서 너무 키우면 배추 실루엣 밖으로 새어 나간다.
+      z: (frontZ + 6 + rng() * 24).toFixed(0),
+    }));
+    if (kind) drop.classList.add(kind);
+    skin.append(drop);
+  }
+
+  // 누끼의 가로세로비. .dio-skin 이 누끼와 똑같은 상자여야 방울을 % 로 찍을 수 있다.
+  const heroImg = el.querySelector(".dio-hero");
+  const setAspect = () => {
+    if (heroImg.naturalHeight) {
+      el.style.setProperty("--subject-ar", (heroImg.naturalWidth / heroImg.naturalHeight).toFixed(4));
+    }
+  };
+  if (heroImg.complete) setAspect();
+  else heroImg.addEventListener("load", setAspect, { once: true });
+
+  // 이슬 — 카메라 유리에 맺힌 것처럼 **패럴랙스 없이** 제자리에 있다(--par 0).
+  // 뒤 세상이 통째로 밀리는데 이것만 안 움직여서, 화면과 나 사이에 유리가 한 장
+  // 있다는 게 읽힌다. 밀리게 하면 그냥 떠다니는 동그라미가 된다.
+  const dew = el.querySelector(".dio-dew .dio-move");
+  const runners = scene.dewRun ?? 3;
+  for (let i = 0; i < (scene.dew ?? 15); i++) {
+    const [x, y] = offCenter(rng);
+    const size = 8 + rng() * 18;
+    const kind = dewKind(rng);
+    const drop = spanWith("dew", vars({
+      x: x.toFixed(1),
+      y: y.toFixed(1),
+      s: size.toFixed(1),
+      // 자국은 세로로 길게 늘어진다. 나머지는 중력에 살짝 처지는 정도
+      e: kind === "is-streak" ? (1.9 + rng() * .8).toFixed(2) : (1.02 + rng() * .2).toFixed(2),
+      o: (.5 + rng() * .4).toFixed(2),
+    }));
+    if (kind) drop.classList.add(kind);
+    // 큰 방울일수록 렌즈에 가깝다 = 초점에서 더 벗어난다. 몇 개가 흐려야
+    // 나머지 또렷한 방울이 "유리에 붙어 있다"로 읽힌다.
+    const soft = size > 23 ? 1.3 : size > 20 ? .5 : 0;   // 15개 중 서너 개만
+    if (soft) {
+      drop.classList.add("is-soft");
+      drop.style.setProperty("--b", soft);
+    }
+    // 몇 개만 흘러내린다. 전부 움직이면 비 오는 창문이 되고, 여긴 이슬이다.
+    if (i < runners) {
+      drop.classList.add("is-run");
+      drop.style.setProperty("--fall", (18 + rng() * 26).toFixed(0));
+      drop.style.setProperty("--t", (9 + rng() * 7).toFixed(1));
+      drop.style.setProperty("--d", (rng() * 9).toFixed(1));
+    }
+    dew.append(drop);
   }
 
   return el;

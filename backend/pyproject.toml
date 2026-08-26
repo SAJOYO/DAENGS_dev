@@ -25,6 +25,8 @@ dev = "daengs_backend.main:dev"
 run = "daengs_backend.main:run"
 # 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
 seed-admin = "daengs_backend.cli.seed_admin:main"
+# 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
+kakao-token = "daengs_backend.cli.kakao_token:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

@@ -1,0 +1,229 @@
+"""`uv run kakao-token` — 앱 없이 카카오 `id_token` 을 받아 우리 검증을 돌려 봅니다.
+
+앱이 아직 없을 때 **콘솔 설정이 실제로 맞는지** 확인하는 용도입니다.
+브라우저를 열어 카카오 로그인을 하고, 돌아온 인가 코드를 토큰으로 바꾼 뒤,
+그 `id_token` 을 `core/kakao.py` 의 진짜 검증기에 그대로 넣어 봅니다.
+
+    uv run kakao-token
+
+**토큰이 이 PC 밖으로 나가지 않습니다.** 기본적으로 화면에도 찍지 않고 검증 결과만
+보여 줍니다. `id_token` 은 실제 카카오 계정의 신원 증명이고 안에 이메일이 들어 있어서,
+채팅이나 PR 에 붙여넣을 물건이 아닙니다. 정말 필요하면 `--print-token` 을 쓰세요.
+
+## 미리 해 둘 것
+
+이 스크립트는 **REST API 키**로 도는 웹 로그인 흐름을 씁니다. 그래서 콘솔에
+Redirect URI 등록이 필요합니다.
+
+    카카오 개발자 콘솔 → 내 애플리케이션 → 카카오 로그인 → Redirect URI
+    http://localhost:8910/callback
+
+**운영 흐름(네이티브 앱 SDK)에는 이 등록이 필요 없습니다** — 앱은 커스텀 스킴을 씁니다.
+이건 앱 없이 테스트하려고 REST 키를 쓰기 때문에 필요한 것입니다 (D-017).
+
+콘솔에서 **OpenID Connect 를 켜 두어야** 합니다. 안 켜져 있으면 아래 `scope` 에
+`openid` 를 넣어도 `id_token` 이 오지 않고, 이 스크립트가 그렇다고 알려 줍니다.
+"""
+
+import argparse
+import asyncio
+import http.server
+import sys
+import threading
+import urllib.parse
+import webbrowser
+
+import httpx
+
+from daengs_backend.config import settings
+from daengs_backend.core.kakao import KakaoIdTokenError, verify_id_token
+
+AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize"
+TOKEN_URL = "https://kauth.kakao.com/oauth/token"
+
+DEFAULT_PORT = 8910
+
+# openid 가 없으면 id_token 이 나오지 않습니다. **이게 가장 흔한 실수입니다.**
+# account_email 은 선택 동의라, 사용자가 거절하면 이메일 없이 진행됩니다.
+SCOPE = "openid,account_email"
+
+# bytes 리터럴에는 한글을 못 넣습니다. str 로 두고 내보낼 때 인코딩합니다.
+_DONE_PAGE = """<!doctype html><meta charset="utf-8">
+<body style="font-family:sans-serif;padding:3rem">
+<h2>받았습니다</h2><p>터미널로 돌아가세요. 이 창은 닫아도 됩니다.</p></body>""".encode()
+
+
+class _CallbackHandler(http.server.BaseHTTPRequestHandler):
+    """인가 코드를 한 번만 받고 끝나는 핸들러."""
+
+    code: str | None = None
+    error: str | None = None
+
+    def do_GET(self) -> None:  # noqa: N802  (BaseHTTPRequestHandler 규약)
+        query = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(query)
+
+        _CallbackHandler.code = (params.get("code") or [None])[0]
+        _CallbackHandler.error = (
+            params.get("error_description") or params.get("error") or [None]
+        )[0]
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(_DONE_PAGE)
+
+    def log_message(self, *args: object) -> None:
+        """접근 로그를 끕니다. 여기에 인가 코드가 그대로 찍힙니다."""
+
+
+def _wait_for_code(port: int, timeout: float) -> str:
+    """로컬에 한 번만 받는 서버를 띄우고 인가 코드를 기다립니다."""
+    _CallbackHandler.code = None
+    _CallbackHandler.error = None
+
+    try:
+        server = http.server.HTTPServer(("127.0.0.1", port), _CallbackHandler)
+    except OSError as exc:
+        sys.exit(
+            f"127.0.0.1:{port} 를 열 수 없습니다 ({exc}).\n"
+            "다른 프로그램이 쓰고 있으면 --port 로 바꾸고, "
+            "콘솔의 Redirect URI 도 같은 포트로 등록하세요."
+        )
+
+    server.timeout = timeout
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    server.server_close()
+
+    if _CallbackHandler.error:
+        sys.exit(f"카카오가 거절했습니다: {_CallbackHandler.error}")
+    if not _CallbackHandler.code:
+        sys.exit(
+            f"{timeout:.0f}초 안에 인가 코드가 오지 않았습니다.\n"
+            "브라우저에서 로그인을 끝냈는지, Redirect URI 가 콘솔에 등록되어 있는지 "
+            "확인하세요."
+        )
+    return _CallbackHandler.code
+
+
+def _exchange(code: str, redirect_uri: str, client_secret: str | None) -> dict:
+    """인가 코드를 토큰으로 바꿉니다."""
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": settings.kakao_rest_api_key,
+        "redirect_uri": redirect_uri,
+        "code": code,
+    }
+    if client_secret:
+        # 콘솔의 '보안 → Client Secret' 을 켰다면 필요합니다.
+        data["client_secret"] = client_secret
+
+    response = httpx.post(TOKEN_URL, data=data, timeout=10.0)
+    if response.status_code != 200:
+        # 카카오의 오류 본문에는 우리 앱 키가 들어 있지 않습니다. 그대로 보여 줍니다.
+        sys.exit(f"토큰 교환 실패 ({response.status_code}): {response.text}")
+    return response.json()
+
+
+def _describe(token: str, *, print_token: bool) -> None:
+    """우리 검증기를 그대로 돌려 결과를 보여 줍니다."""
+    try:
+        identity = asyncio.run(verify_id_token(token))
+    except KakaoIdTokenError as exc:
+        print(f"\n[실패] 우리 검증기가 거부했습니다: {exc}")
+        print(
+            "\n가장 흔한 원인은 aud 불일치입니다 — backend/.env 의 "
+            "DAENGS_KAKAO_REST_API_KEY 가 이 로그인에 쓴 앱의 REST API 키와 "
+            "같은지 확인하세요."
+        )
+        raise SystemExit(1) from None
+
+    print("\n[성공] 우리 검증기를 통과했습니다.")
+    print(f"  회원번호(kakao_id) : {identity.kakao_id}")
+    print(
+        "  이메일             : "
+        + (identity.email if identity.email else "(동의 안 함 — NULL 로 저장됩니다)")
+    )
+    print(f"  nonce              : {identity.nonce or '(없음)'}")
+    print(
+        "\n이제 이 회원번호로 POST /auth/app/kakao 가 회원을 만듭니다.\n"
+        "실제로 찔러 보려면 --print-token 으로 토큰을 꺼내 쓰세요 "
+        "(수명이 짧습니다)."
+    )
+    if print_token:
+        print(f"\nid_token:\n{token}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="카카오 id_token 을 받아 우리 검증기로 확인합니다 (앱 없이).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"콜백을 받을 로컬 포트 (기본 {DEFAULT_PORT}). "
+        "바꾸면 콘솔의 Redirect URI 도 같이 바꿔야 합니다.",
+    )
+    parser.add_argument(
+        "--client-secret",
+        default=None,
+        help="콘솔에서 Client Secret 을 켰다면 그 값. 안 켰으면 생략하세요.",
+    )
+    parser.add_argument(
+        "--print-token",
+        action="store_true",
+        help="검증 결과와 함께 id_token 원문도 찍습니다. "
+        "**실제 계정의 신원 증명입니다** — 어디에 붙여넣을지 생각하고 쓰세요.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=180.0,
+        help="브라우저 로그인을 기다릴 시간(초). 기본 180.",
+    )
+    args = parser.parse_args()
+
+    redirect_uri = f"http://localhost:{args.port}/callback"
+    query = urllib.parse.urlencode(
+        {
+            "client_id": settings.kakao_rest_api_key,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": SCOPE,
+        }
+    )
+    url = f"{AUTHORIZE_URL}?{query}"
+
+    print(f"Redirect URI : {redirect_uri}")
+    print("  → 이 값이 카카오 콘솔에 **그대로** 등록되어 있어야 합니다.\n")
+    print("브라우저를 엽니다. 열리지 않으면 아래 주소를 직접 여세요.\n")
+    print(url + "\n")
+
+    try:
+        webbrowser.open(url)
+    except (webbrowser.Error, OSError):
+        pass  # 주소를 이미 찍었으니 손으로 열면 됩니다.
+
+    print(f"로그인을 기다립니다... (최대 {args.timeout:.0f}초)")
+    code = _wait_for_code(args.port, args.timeout)
+
+    tokens = _exchange(code, redirect_uri, args.client_secret)
+    id_token = tokens.get("id_token")
+    if not id_token:
+        sys.exit(
+            "응답에 id_token 이 없습니다.\n\n"
+            "카카오 콘솔에서 **OpenID Connect 가 꺼져 있을 때** 이렇게 됩니다.\n"
+            "  내 애플리케이션 → 카카오 로그인 → OpenID Connect → 활성화\n"
+            f"(scope 는 이 스크립트가 '{SCOPE}' 로 이미 보냈습니다)"
+        )
+
+    _describe(id_token, print_token=args.print_token)
+
+
+if __name__ == "__main__":
+    main()

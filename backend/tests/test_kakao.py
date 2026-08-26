@@ -96,8 +96,11 @@ class TestReject:
             await verify_id_token(_token(signing_key, {"iss": "https://evil.example"}))
 
     async def test_만료되면_거부한다(self, signing_key: RSAKey) -> None:
+        """**시계 오차 허용치(60초)보다 확실히 지난 값**이어야 합니다.
+        10초 전으로 두면 leeway 안이라 통과합니다 (그게 의도한 동작입니다).
+        """
         with pytest.raises(KakaoIdTokenInvalidError):
-            await verify_id_token(_token(signing_key, {"exp": _now() - 10}))
+            await verify_id_token(_token(signing_key, {"exp": _now() - 3600}))
 
     async def test_다른_키로_서명하면_거부한다(self) -> None:
         other = RSAKey.generate_key(2048, parameters={"kid": KID})
@@ -158,6 +161,40 @@ class TestReject:
     ) -> None:
         with pytest.raises(KakaoIdTokenInvalidError):
             await verify_id_token(_token(signing_key), expected_nonce="something")
+
+
+class TestClockSkew:
+    """시계가 어긋나도 로그인이 죽지 않아야 합니다.
+
+    이걸 안 넣으면 우리 시계가 카카오보다 1초만 뒤처져도 `iat` 가 미래가 되어
+    **모든 로그인이 실패**합니다. 실제로 겪었고, 에러가 "우리 앱의 것이 아님"으로
+    보여서 원인을 찾기 어려웠습니다.
+    """
+
+    async def test_발급_시각이_조금_미래여도_통과한다(
+        self, signing_key: RSAKey
+    ) -> None:
+        """우리 시계가 카카오보다 뒤처진 상황입니다."""
+        identity = await verify_id_token(
+            _token(signing_key, {"iat": _now() + 30, "exp": _now() + 600})
+        )
+
+        assert identity.kakao_id == 1234567890
+
+    async def test_방금_만료된_것도_허용치_안이면_통과한다(
+        self, signing_key: RSAKey
+    ) -> None:
+        """카카오 id_token 은 로그인 직후 한 번 쓰고 버리는 값이라 여유를 둡니다."""
+        identity = await verify_id_token(_token(signing_key, {"exp": _now() - 10}))
+
+        assert identity.kakao_id == 1234567890
+
+    async def test_한참_미래면_거부한다(self, signing_key: RSAKey) -> None:
+        """허용치는 시계 오차를 위한 것이지 검증을 무르게 하려는 것이 아닙니다."""
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(
+                _token(signing_key, {"iat": _now() + 3600, "exp": _now() + 7200})
+            )
 
 
 class TestKeyCache:

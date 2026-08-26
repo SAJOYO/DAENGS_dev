@@ -58,6 +58,21 @@ _REFETCH_MIN_INTERVAL = timedelta(minutes=1)
 
 _HTTP_TIMEOUT = httpx.Timeout(5.0)
 
+# 시계 오차 허용치.
+#
+# **없으면 우리 시계가 카카오보다 1초만 뒤처져도 모든 로그인이 실패합니다.**
+# id_token 의 `iat`(발급 시각)가 우리 기준으로 미래가 되어 "미래에 발급된 토큰"으로
+# 거부되기 때문입니다. 실제로 개발 PC 에서 이 상태를 만났고, 에러가
+# "우리 앱의 것이 아님"으로 보여서 aud 를 한참 들여다봤습니다.
+#
+# 서버도 같은 Windows PC 라 똑같이 겪습니다. NTP 동기화가 답이지만, 동기화가
+# 잠깐 어긋난다고 로그인이 통째로 죽으면 안 됩니다.
+#
+# 60초는 `exp`(만료) 쪽에도 같이 적용됩니다 — 만료된 토큰을 1분 더 받아 주는 셈인데,
+# 카카오 id_token 은 로그인 직후 한 번만 쓰고 버리는 값이라 위험이 거의 없습니다.
+# 우리가 발급하는 access token(core/token.py)에는 이 여유를 주지 않습니다.
+_CLOCK_SKEW_LEEWAY = 60
+
 # **알고리즘을 RS256 하나로 못박습니다.**
 #
 # 열어 두면 알고리즘 혼동 공격이 열립니다 — 공격자가 헤더의 alg 를 HS256 으로 바꾸고
@@ -175,6 +190,7 @@ def _claims_registry() -> jwt.JWTClaimsRegistry:
     (테스트가 키를 바꿔 끼울 수 있어야 합니다).
     """
     return jwt.JWTClaimsRegistry(
+        leeway=_CLOCK_SKEW_LEEWAY,
         iss={"essential": True, "value": ISSUER},
         aud={"essential": True, "value": settings.kakao_rest_api_key},
         sub={"essential": True},

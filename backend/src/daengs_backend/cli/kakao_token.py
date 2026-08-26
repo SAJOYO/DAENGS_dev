@@ -172,9 +172,17 @@ def _describe(token: str, *, print_token: bool) -> None:
     except KakaoIdTokenError as exc:
         print(f"\n[실패] 우리 검증기가 거부했습니다: {exc}")
         print(
-            "\n가장 흔한 원인은 aud 불일치입니다 — backend/.env 의 "
-            "DAENGS_KAKAO_REST_API_KEY 가 이 로그인에 쓴 앱의 REST API 키와 "
-            "같은지 확인하세요."
+            "\n**바로 위에 찍힌 경고 줄에 진짜 이유가 있습니다.**"
+            "\n응답 메시지는 일부러 뭉뚱그려 둡니다 — 무엇이 틀렸는지 알려 주면"
+            "\n검증을 통과하는 조건을 알려 주는 셈이라서요."
+            "\n"
+            "\n자주 나오는 것:"
+            "\n  aud 불일치      backend/.env 의 DAENGS_KAKAO_REST_API_KEY 가"
+            "\n                  방금 로그인한 앱의 REST API 키인지 확인하세요."
+            "\n  issued in the future / expired"
+            "\n                  이 PC 시계가 어긋나 있습니다. 60초까지는 봐주지만"
+            "\n                  그보다 크면 Windows 시간 동기화를 돌리세요."
+            "\n  signature       공개키 문제입니다. 거의 나오지 않습니다."
         )
         raise SystemExit(1) from None
 

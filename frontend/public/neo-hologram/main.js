@@ -1,4 +1,4 @@
-import { CARDS, altText } from "./cards.mjs";
+import { CARDS, CARDS_CSS_EFFECTS, altText, statText } from "./cards.mjs";
 import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive } from "./immersive.mjs";
 
 const dexEl = document.querySelector("#dex");
@@ -16,7 +16,12 @@ const pad2 = (n) => String(n).padStart(2, "0");
    rAF 는 카드마다 두지 않고 하나만 돌린다. 포인터는 어차피 한 번에 한 장 위에만
    있으므로, 가장 최근 입력만 남겨 두었다가 다음 프레임에 그 카드만 갱신한다. */
 
-const MOTION_VARS = ["--mouse-x", "--mouse-y", "--rotate-x", "--rotate-y", "--glare", "--shadow-x", "--shadow-y"];
+const MOTION_VARS = [
+  "--mouse-x", "--mouse-y", "--rotate-x", "--rotate-y", "--glare", "--shadow-x", "--shadow-y",
+  // cards-css 포일이 읽는 값. 이름도 계산식도 그쪽 규약이라 우리 쪽에서 안 쓰더라도
+  // 같이 지워야 카드에서 손을 뗐을 때 정면 상태로 돌아간다.
+  "--pointer-from-left", "--pointer-from-top", "--pointer-from-center",
+];
 
 let pending = null;
 let frame = 0;
@@ -41,6 +46,13 @@ function flush() {
   stage.style.setProperty("--glare", intensity);
   stage.style.setProperty("--shadow-x", `${((0.5 - px) * 38).toFixed(1)}px`);
   stage.style.setProperty("--shadow-y", `${(18 + (0.5 - py) * 28).toFixed(1)}px`);
+
+  // cards-css 포일용. 0~1 의 맨숫자(단위 없음)라 위의 % · deg 와 섞이지 않는다.
+  // from-center 는 모서리가 1 이 아니라 반지름 0.5 를 1 로 보는 값이다 — reverse 가
+  // 이걸로 가운데를 죽이고 가장자리를 살리므로, 정규화를 바꾸면 그 티어가 무너진다.
+  stage.style.setProperty("--pointer-from-left", px.toFixed(3));
+  stage.style.setProperty("--pointer-from-top", py.toFixed(3));
+  stage.style.setProperty("--pointer-from-center", Math.min(Math.hypot(px - 0.5, py - 0.5) / 0.5, 1).toFixed(3));
 }
 
 function paint(stage, x, y, intensity = 1) {
@@ -109,14 +121,22 @@ function makeStage(card, { lazy = true, button = true } = {}) {
   stage.style.setProperty("--accent2", card.accent2);
   stage.dataset.rarity = card.rarity ?? "fullart";
 
+  // cards-css 는 `.holo-card[data-effect="x"] .holo-card__shine` 을 찾는다. vendor 의
+  // CSS 를 한 글자도 안 고치려고, 선택자를 바꾸는 대신 우리 요소에 그쪽 이름을 얹는다.
+  // rarity 가 CARDS_CSS_EFFECTS 에 있을 때만 붙는다 — 지금은 No.01(immersive)만 빠진다.
+  if (CARDS_CSS_EFFECTS.has(stage.dataset.rarity)) {
+    stage.classList.add("holo-card");
+    stage.dataset.effect = stage.dataset.rarity;
+  }
+
   const shell = button
     ? '<button class="card" type="button">'
     : '<div class="card" tabindex="0" role="img">';
   stage.innerHTML = `
     ${shell}
       <img class="art" width="${card.w}" height="${card.h}" decoding="async"${lazy ? ' loading="lazy"' : ""}>
-      <span class="foil" aria-hidden="true"></span>
-      <span class="glare" aria-hidden="true"></span>
+      <span class="foil holo-card__shine" aria-hidden="true"></span>
+      <span class="glare holo-card__glare" aria-hidden="true"></span>
       <span class="grain" aria-hidden="true"></span>
       <span class="edge" aria-hidden="true"></span>
     ${button ? "</button>" : "</div>"}`;
@@ -153,7 +173,7 @@ CARDS.forEach((card, i) => {
   caption.innerHTML =
     `<span class="no">No. ${pad2(card.no)}</span>` +
     `<span class="name">${esc(card.name)}</span>` +
-    `<span class="stat">${esc(card.statLabel)} ${card.stat}</span>`;
+    `<span class="stat">${esc(statText(card))}</span>`;
 
   stage.querySelector(".card").addEventListener("click", () => open(i));
 
@@ -230,7 +250,7 @@ function detailMarkup(card) {
         <dt>Code</dt><dd>${esc(card.code)}</dd>
         <dt>Type</dt><dd>${esc(card.type)}</dd>
         <dt>Move</dt><dd>${move}</dd>
-        <dt>${esc(card.statLabel)}</dt><dd>${card.stat}</dd>
+        <dt>${esc(card.statLabel || "Stat")}</dt><dd>${card.stat}</dd>
       </dl>
       <p class="flavor">${esc(card.flavor)}</p>
       <span class="edition">${esc(card.edition)}</span>

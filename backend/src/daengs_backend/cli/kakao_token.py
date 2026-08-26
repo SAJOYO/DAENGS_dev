@@ -24,6 +24,15 @@ Redirect URI 등록이 필요합니다.
 콘솔에서 **OpenID Connect 를 켜 두어야** 합니다. 안 켜져 있으면 `scope` 에
 `openid` 를 넣어도 `id_token` 이 오지 않고, 이 스크립트가 그렇다고 알려 줍니다.
 
+## KOE010 (invalid_client) 이 뜬다면
+
+인가 코드는 받았는데 토큰 교환만 실패한 것입니다. 그 단계까지 왔다는 것은
+REST API 키가 맞다는 뜻이므로, 원인은 거의 항상 **Client Secret** 입니다.
+콘솔에서 켜 두었다면 `--client-secret` 을 붙여 다시 돌리세요.
+
+**이건 이 스크립트만의 문제입니다.** 우리 서버는 인가 코드를 토큰으로 교환하지
+않습니다 — 앱이 받아 온 id_token 을 검증만 하므로 Client Secret 과 무관합니다.
+
 ## KOE205 가 뜬다면
 
 "설정하지 않은 동의 항목" 오류입니다. **켜지 않은 동의 항목을 요청**했다는 뜻이고,
@@ -36,6 +45,7 @@ Redirect URI 등록이 필요합니다.
 
 import argparse
 import asyncio
+import getpass
 import http.server
 import sys
 import threading
@@ -137,10 +147,22 @@ def _exchange(code: str, redirect_uri: str, client_secret: str | None) -> dict:
         data["client_secret"] = client_secret
 
     response = httpx.post(TOKEN_URL, data=data, timeout=10.0)
-    if response.status_code != 200:
-        # 카카오의 오류 본문에는 우리 앱 키가 들어 있지 않습니다. 그대로 보여 줍니다.
-        sys.exit(f"토큰 교환 실패 ({response.status_code}): {response.text}")
-    return response.json()
+    if response.status_code == 200:
+        return response.json()
+
+    # 카카오의 오류 본문에는 우리 앱 키가 들어 있지 않습니다. 그대로 보여 줍니다.
+    body = response.text
+    hint = ""
+    if "KOE010" in body and not client_secret:
+        # 인가 코드까지 받았는데 교환만 실패했다는 것은 client_id 는 맞다는 뜻입니다.
+        # 그 상태의 invalid_client 는 거의 항상 Client Secret 누락입니다.
+        hint = """
+
+인가 코드는 받았으니 REST API 키 자체는 맞습니다.
+콘솔에서 **Client Secret 이 켜져 있을 때** 이 오류가 납니다:
+  내 애플리케이션 → 카카오 로그인 → 보안 → Client Secret
+켜져 있다면 `--client-secret` 을 붙여 다시 돌리세요 (값은 따로 물어봅니다)."""
+    sys.exit(f"토큰 교환 실패 ({response.status_code}): {body}{hint}")
 
 
 def _describe(token: str, *, print_token: bool) -> None:
@@ -187,8 +209,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--client-secret",
-        default=None,
-        help="콘솔에서 Client Secret 을 켰다면 그 값. 안 켰으면 생략하세요.",
+        action="store_true",
+        help="콘솔에서 Client Secret 을 켰다면 붙이세요. **값은 여기 적지 않습니다** — "
+        "붙이면 따로 물어봅니다 (셸 히스토리에 남지 않게).",
     )
     parser.add_argument(
         "--print-token",
@@ -210,6 +233,12 @@ def main() -> None:
         help="브라우저 로그인을 기다릴 시간(초). 기본 180.",
     )
     args = parser.parse_args()
+
+    # 값을 인자로 받지 않습니다. seed_admin.py 와 같은 이유입니다 — 인자로 받는 순간
+    # 셸 히스토리와 프로세스 목록에 평문이 남습니다.
+    client_secret = (
+        getpass.getpass("Client Secret: ") if args.client_secret else None
+    )
 
     redirect_uri = f"http://localhost:{args.port}/callback"
     query = urllib.parse.urlencode(
@@ -236,7 +265,7 @@ def main() -> None:
     print(f"로그인을 기다립니다... (최대 {args.timeout:.0f}초)")
     code = _wait_for_code(args.port, args.timeout)
 
-    tokens = _exchange(code, redirect_uri, args.client_secret)
+    tokens = _exchange(code, redirect_uri, client_secret)
     id_token = tokens.get("id_token")
     if not id_token:
         sys.exit(

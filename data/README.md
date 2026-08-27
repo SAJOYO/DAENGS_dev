@@ -209,6 +209,11 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 | 지자체 지원사업 | `policy` | `subsidy` | `official` |
 | 펫보험 | `policy` | `insurance` | `official` |
 
+> **`documents.category` 는 바꿀 필요가 없다** (2026-08-28 확인). CHECK 는 `('policy','travel','food')` 이고
+> 남은 도메인이 전부 그 안에 들어간다 — 펫보험 `policy`/`insurance`, 동반이동 `travel`/`transport-*`.
+> PR #34 메모가 *"CHECK 에 펫보험이 들어갈 값이 없다"* 고 적었지만 위 표가 답을 갖고 있었다.
+> **`db/migrations/` 파일이 필요 없다.**
+
 법령 원문은 한 문서가 여러 도메인을 걸친다 (동물보호법 = 등록 + 맹견). 그래서 문서 단위 subcategory는
 법령 이름으로 두고, `registration`·`leash-muzzle` 같은 세부 분류는 **조문 단위로 쪼갠 뒤**(RAG-004) 붙인다.
 

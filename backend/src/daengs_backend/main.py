@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
-from daengs_backend.core.deps import current_app_user
+from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.routers import app_auth, auth, health, training
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
@@ -67,9 +67,19 @@ app.include_router(training.router)
 # 이 레포의 인증 없이는 못 도는 물건이 됩니다 (RAG-001 원칙 1 · D-018).
 # `include_router(dependencies=...)` 가 그 선을 넘지 않고 문을 잠그는 자리입니다.
 #
-# 관리자가 아니라 **앱 회원**입니다 — `/training/chat` 과 같은 판단입니다.
-# `current_app_user` 는 관리자 토큰도 401 로 막습니다 (그 `sub` 는 app_users 에 없습니다).
-app.include_router(walk.router, dependencies=[Depends(current_app_user)])
+# **앱 회원과 관리자를 함께 받습니다.** `#23` 은 `current_app_user` 로 앱 회원만 받았는데,
+# 관리자도 콘솔에서 산책 판정을 확인할 수 있어야 해서 문을 넓혔습니다 (`#30`).
+#
+# 그래도 안전한 이유: `get_walk` 은 principal 을 **받기만 하고 쓰지 않습니다.** 좌표만
+# 보고 답하므로, 관리자 `sub` 가 `app_users` 에 없어서 404/500 이 되는 자리가 없습니다.
+# 신원으로 남의 것을 걸러야 하는 API 라면 이 의존성을 쓰면 안 됩니다.
+#
+# `Perm.READ` 는 VIEWER 까지 전부 가지므로 **로그인한 관리자면 누구나** 통과합니다.
+# 권한을 좁히고 싶으면 여기 한 곳만 고치면 됩니다.
+#
+# ⚠ `/training/chat` 과는 **결론이 다릅니다.** 저쪽은 `#25` 가 만든 임시 게이트웨이라
+# 앱 클라이언트가 없어서 관리자 전용으로 좁혔습니다 (`routers/training.py`).
+app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
 
 
 def dev() -> None:

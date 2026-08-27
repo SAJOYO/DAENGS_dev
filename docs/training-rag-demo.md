@@ -6,7 +6,7 @@
 RAG에 직접 접근하지 않는다.
 
 ```text
-DAENGS 메인 화면 (Next.js)
+DAENGS 관리자 콘솔 `검색 점검` 화면 (Next.js)
   -> /api/training/chat
 DAENGS 메인 FastAPI
   -> Training RAG FastAPI /chat
@@ -46,9 +46,13 @@ Content-Type: application/json
 요청 식별자·상태·인용 수만 기록한다. 내부 RAG의 `REFUSE`는 외부 계약에서 `UNCERTAIN`으로
 정규화한다.
 
-기본값은 기존 앱 access token을 요구한다. 로그인 화면이 연결되지 않은 로컬 데모에서만
-`DAENGS_TRAINING_RAG_ALLOW_ANONYMOUS_DEMO=true`를 명시해 익명 호출을 허용할 수 있다. 이 값은
-공유·운영 환경에서 `true`로 두면 안 된다.
+기본값은 **관리자 토큰**과 `Perm.SEARCH_INSPECT` 권한을 요구한다 (#30). 부르는 곳이 콘솔의
+`검색 점검` 화면 하나뿐인 임시 게이트웨이라 앱 회원 경로는 열어 두지 않는다 — 앱이 쓰는
+`/walk` 과 다른 점이다. 권한이 없는 관리자는 403, 앱 회원 토큰은 401 이다.
+
+`DAENGS_TRAINING_RAG_ALLOW_ANONYMOUS_DEMO=true` 는 RAG 를 단독으로 만질 때만 쓴다. 이 값은
+공유·운영 환경에서 `true`로 두면 안 되고, `docker-compose.yml` 이 backend 로 넘기지 않으므로
+서버에서는 최상단 `.env` 로 켤 수도 없다.
 
 ## 환경 변수
 
@@ -108,13 +112,13 @@ DAENGS Compose는 RAG DB를 만들거나 변경하지 않는다.
    ```powershell
    cd C:\Users\804\Documents\workspace\DAENGS_dev\backend
    Copy-Item .env.example .env
-   # .env의 DB/키 값을 채우고, 로컬 UI 데모일 때만 아래 값을 true로 설정한다.
-   # DAENGS_TRAINING_RAG_ALLOW_ANONYMOUS_DEMO=true
+   # .env의 DB/키 값을 채운다. 관리자로 로그인해 부를 것이므로 익명 플래그는 false로 둔다.
+   # RAG 를 단독으로 만질 때만: DAENGS_TRAINING_RAG_ALLOW_ANONYMOUS_DEMO=true
    uv sync
    uv run dev
    ```
 
-3. 프론트엔드를 실행하고 `http://localhost:3000`을 연다.
+3. 프론트엔드를 실행하고 `http://localhost:3000/console/search` 를 연다. 관리자로 로그인해야 열린다.
 
    ```powershell
    cd C:\Users\804\Documents\workspace\DAENGS_dev\frontend
@@ -169,7 +173,7 @@ npm run build
 - `backend/src/daengs_backend/services/training_rag.py`
 - `backend/src/daengs_backend/schemas/training.py`
 - `backend/src/daengs_backend/main.py`
-- `frontend/app/components/training-chat.tsx`, `frontend/app/page.tsx`
+- `frontend/app/components/training-chat.tsx`, `frontend/app/console/search/page.tsx`
 - 관련 환경 변수와 `docker-compose.yml`
 
 그 뒤 backend와 frontend를 재시작한다.

@@ -51,6 +51,9 @@ services:
       DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
       DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      # Training RAG는 별도 host-side FastAPI다. main backend만 이 URL로 호출하며
+      # frontend는 nginx /api/ 경로를 통해서만 접근한다.
+      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro

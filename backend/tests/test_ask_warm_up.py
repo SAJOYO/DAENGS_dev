@@ -17,6 +17,7 @@ import logging
 import threading
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from daengs_backend.config import settings
@@ -165,36 +166,108 @@ def test_예열에_성공하면_대조까지_간다(monkeypatch: pytest.MonkeyPa
     assert "BAAI/bge-m3" in caplog.text, "예열이 성공했으면 대조 경고까지 나와야 한다"
 
 
-def test_모델을_한_벌만_올린다(monkeypatch: pytest.MonkeyPatch, corpus) -> None:
-    """**동시 미스가 두 벌을 올리면 그 순간 RAM 이 2배다** — 상주 2.4GB 가 이 카드의 유일한
-    상시 비용이라(D-021) 그게 서버를 스왑으로 민다. `lru_cache` 는 캐시만 스레드 안전하고
-    동시 미스는 막지 않아서, `deps._ENCODER_LOCK` 이 그 자리를 맡는다.
+def test_예열_중_요청은_기다리지_않고_503_이고_두_벌도_아니다(
+        monkeypatch: pytest.MonkeyPatch, corpus) -> None:
+    """**두 가지를 한 자리에서 본다** — 대기하지 않는 것과, 그래도 두 벌은 아닌 것.
 
-    예열(백그라운드)과 요청(`/ask`)이 정확히 그렇게 부딪힌다.
+    ① **기다리지 않는다** (#37). 예전에는 여기서 락을 기다렸다가 같은 한 벌을 받았는데, 그
+    대가가 나빴다 — `hf-cache` 가 빈 첫 배포에서는 로드에 1.2GB 다운로드가 얹혀 nginx 의
+    `proxy_read_timeout`(60초)을 넘고, 사용자는 60초를 물고서 **우리가 내지 않은** HTML 504 를
+    받는다 (2026-08-27 실측). 즉시 503 + `Retry-After` 면 프론트가 말을 할 수 있다.
+
+    ② **그래도 두 벌은 아니다.** 원래 목적은 그대로다 — `lru_cache` 는 캐시만 스레드 안전하고
+    동시 미스를 막지 않아서, 락이 없으면 예열과 요청이 각각 1.2GB 를 올린다. 상주 2.4GB 가
+    D-021 의 유일한 상시 비용인데 그 순간 2배가 된다. **바뀐 것은 락이 아니라 락을 기다리는
+    방식**이라, 락이 사라지지 않았음을 `calls` 가 지킨다.
+
+    로드를 `wait(0.3)` 이 아니라 이벤트로 붙잡는 이유는 시간에 기대지 않기 위해서다 — 요청이
+    돌아오는 시점에 로드는 **아직 도는 중**이어야 이 테스트가 대기 여부를 본 것이 된다.
     """
     corpus([(QWEN_REPO, 1)])
     calls: list[int] = []
-    started = threading.Event()
+    started, release = threading.Event(), threading.Event()
 
-    def slow_load(*_a, **_k):
+    def blocking_load(*_a, **_k):
         calls.append(1)
         started.set()
-        threading.Event().wait(0.3)     # 로드가 도는 동안 다른 스레드가 들어오게 둔다
+        release.wait(10)                # 놓아 줄 때까지 락을 물고 있는다
         return object()
 
-    monkeypatch.setattr(embed, "load_model", slow_load)
+    monkeypatch.setattr(embed, "load_model", blocking_load)
     deps.release_encoder()
     try:
         warm = threading.Thread(target=deps.warm_up_encoder)
         warm.start()
         assert started.wait(5), "예열이 시작되지 않았다"
-        got = deps.get_encoder()        # 로드가 도는 중에 들어온 '요청'
+
+        with pytest.raises(HTTPException) as caught:
+            deps.get_encoder()          # 로드가 도는 중에 들어온 '요청'
+
+        assert caught.value.status_code == 503
+        assert (caught.value.headers or {}).get("Retry-After"),             "언제 다시 물을지를 줘야 프론트가 재시도할 수 있다"
+
+        release.set()
         warm.join(10)
+        got = deps.get_encoder()        # 예열이 끝난 뒤에는 그냥 받는다
     finally:
+        release.set()
         deps.release_encoder()
 
     assert len(calls) == 1, f"모델을 {len(calls)}벌 올렸다 — 락이 안 걸렸다"
-    assert got.key == "qwen3-embedding-0.6b"
+    assert got.key == QWEN_KEY
+
+
+def test_예열이_꺼져_있으면_요청이_기다린다(monkeypatch: pytest.MonkeyPatch, corpus) -> None:
+    """**위 테스트의 가드다** (#37 의 함정). `DAENGS_WARM_UP_ENCODER=false` 인 개발 PC 에서는
+    아무도 예열하지 않으므로 **첫 요청이 로드를 무는 것이 설계**이고, 그때 락을 들고 있는 것은
+    같은 처지의 다른 요청이라 기다리는 편이 맞다.
+
+    "락이 잡혀 있다"만 보고 503 을 내면 여기서 두 번째 요청이 엉뚱하게 503 을 받고, 예열이
+    꺼져 있는 한 그게 계속된다 — `/ask` 가 그 PC 에서 영영 안 되는 것으로 보인다. 그래서
+    `deps._WARM_UP_IN_PROGRESS` 가 **누가 잡고 있는지**를 가른다.
+    """
+    corpus([(QWEN_REPO, 1)])
+    calls: list[int] = []
+    started, release = threading.Event(), threading.Event()
+
+    def blocking_load(*_a, **_k):
+        calls.append(1)
+        started.set()
+        release.wait(10)
+        return object()
+
+    monkeypatch.setattr(embed, "load_model", blocking_load)
+    deps.release_encoder()
+    first: list[object] = []
+    second: list[object] = []
+
+    def request(into: list[object]) -> None:
+        try:
+            into.append(deps.get_encoder())
+        except HTTPException as e:      # 503 이면 여기 담겨서 아래 단언이 잡는다
+            into.append(e)
+
+    try:
+        one = threading.Thread(target=request, args=(first,))
+        one.start()
+        assert started.wait(5), "첫 요청이 로드를 물지 않았다 — 예열이 꺼져 있으면 그게 설계다"
+
+        two = threading.Thread(target=request, args=(second,))
+        two.start()
+        two.join(0.2)
+        assert two.is_alive(), "두 번째 요청이 기다리지 않고 돌아왔다"
+
+        release.set()
+        one.join(10)
+        two.join(10)
+    finally:
+        release.set()
+        deps.release_encoder()
+
+    assert first and not isinstance(first[0], HTTPException), f"첫 요청이 실패했다 — {first}"
+    assert second and not isinstance(second[0], HTTPException),         f"기다려야 할 요청이 503 을 받았다 — {second}"
+    assert second[0] is first[0], "기다렸으면 같은 한 벌을 받아야 한다"
+    assert len(calls) == 1, f"모델을 {len(calls)}벌 올렸다 — 락이 안 걸렸다"
 
 
 # ---------------------------------------------------------------- 배선 (설정으로 끌 수 있는가)

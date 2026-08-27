@@ -1,0 +1,323 @@
+/* ── 터치 기기에서 그리드의 효과 예산 줄이기 ─────────────────
+   **PC 는 한 픽셀도 안 바뀐다.** 이 파일 전체가 미디어 쿼리 하나 안에 있고,
+   그 안에서도 그리드(.slot) 안의 카드만 건드린다. 확대 뷰(.viewer .stage)와
+   이머시브(.dio)는 손대지 않는다 — 거기가 포일을 실제로 문질러 보는 자리라
+   깎으면 이 데모의 본론이 사라진다.
+
+   ## 왜 필요한가
+
+   안드로이드 크롬에서 도감을 빠르게 굴리면 카드 자리가 잠깐 비거나 회색으로
+   떴다가 뒤늦게 채워졌다. 렌더링 버그가 아니라 크롬의 **타일 폐기**다 —
+   래스터가 스크롤 속도를 못 따라가면 아직 안 구워진 타일을 그대로 내보낸다.
+
+   원인은 폰이 카드를 **더 크게** 그리기 때문이다. .dex 가 1열로 떨어지면서
+   카드 하나가 화면 폭을 다 먹는다:
+
+     PC  4열 1180px → 카드 222×306 CSS px, DPR 2 → 0.27 Mpx
+     폰  1열  390px → 카드 325×448 CSS px, DPR 3 → 1.31 Mpx   (약 5배)
+
+   여기에 카드마다 mix-blend-mode + filter 를 함께 가진 레이어가 6~7장 쌓여
+   있었다. 그 조합은 GPU 합성 경로를 못 타고 레이어마다 독립 render surface 로
+   따로 구워야 한다. 픽셀이 5배인데 굽는 장수는 그대로였던 것.
+
+   ## 무엇을 뺐나 — 카드당 6~7장 → 2장
+
+   vendor 의 포일은 같은 무늬를 위상만 어긋나게 세 겹(본체 · ::before · ::after)
+   겹쳐 층을 만든다. **그런데 폰 그리드에는 hover 가 없다.** --glare 가 0 에
+   붙박이라 --card-opacity 가 .14 로 고정되고, 그 상태에서는 세 겹의 위상차가
+   거의 드러나지 않는다. 비용은 3배인데 얻는 게 거의 없어서 본체만 남긴다.
+   **본체 레이어에는 11개 포일 전부 무늬가 들어 있으므로 카드가 비지 않는다**
+   (holo 는 background-image 가 변수 블록 아래에 있어서 얼핏 없어 보인다).
+
+   되돌리려면 index.html 의 링크 한 줄과 이 파일을 지우면 끝이다. style.css 와
+   rarity.css 는 건드리지 않았다. */
+
+@media (hover: none) and (pointer: coarse) {
+
+  /* 화면 폭이 아니라 (hover: none) 으로 가르는 이유: 문제는 좁은 화면이 아니라
+     약한 GPU + hover 부재다. max-width 로 잡으면 가로모드 폰(800px)이나 태블릿이
+     새고, 반대로 좁게 띄운 데스크톱 창이 애먼 손해를 본다. */
+
+  /* (1) 겹쳐 놓은 포일 두 겹. 카드당 render surface 2장이 여기서 빠진다.
+     특정도가 (0,4,1) 이라 vendor 의 (0,3,1) 을 순서와 무관하게 이긴다. */
+  .slot .stage[data-effect] .foil::before,
+  .slot .stage[data-effect] .foil::after { display: none; }
+
+  /* (2) glare 한 겹 더. cosmos(No.10) · holo(No.07) · reverse(No.08) 에만 있다.
+     셋 다 .glare 본체가 따로 무늬를 갖고 있어서 없어도 빈 칸이 안 생긴다. */
+  .slot .stage[data-effect] .glare::after { display: none; }
+
+  /* (3) 종이 결. mix-blend-mode: overlay 라 이것도 제 surface 를 하나 차지하는데,
+     타일이 43×47px 이라 폰 그리드 크기에서는 있으나 없으나 눈에 안 띈다.
+     확대 뷰에서는 카드가 커져서 실제로 보이므로 거기서는 남겨 둔다. */
+  .slot .stage .grain { display: none; }
+
+  /* (4) 카드 뒤 글로우의 blur(30px). 블러는 폰에서 특히 비싸고 12장 전부에 항상
+     켜져 있었다. **blur(0) 로 두면 안 된다** — 값이 0 이어도 필터용 렌더 표면이
+     생긴다 (README '다시 밟지 말 것' 참고). filter 를 통째로 없앤다.
+
+     radial-gradient 는 그 자체로 부드럽게 번지므로 블러가 빠져도 테두리가 서지
+     않는다. 다만 블러가 하던 만큼 퍼져 보이도록 정점을 낮추고 페이드를 늘렸다.
+     정지점은 0 → 34% → 82% 로 커지는 순서다 (거꾸로 두면 하드컷이 된다). */
+  .slot .stage::before {
+    filter: none;
+    background: radial-gradient(ellipse,
+      color-mix(in srgb, var(--accent) 24%, transparent),
+      color-mix(in srgb, var(--accent2) 9%, transparent) 34%,
+      transparent 82%);
+  }
+
+  /* (5) 확대 뷰를 여는 순간의 배경 블러.
+
+     style.css 는 확대 뷰가 열려 있는 동안 뒤 그리드를 `filter: blur(5px)` 로 흐린다.
+     그러려면 브라우저가 **12장 + 그 아래 모든 블렌드 레이어를 한 장의 텍스처로
+     합성한 뒤** 블러를 걸어야 한다. 그것도 하필 FLIP 비행이 도는 그 프레임에.
+     폰에서 확대를 누르는 순간 뚝 끊기던 게 이것이다.
+
+     `.page` 의 평소 `filter: blur(0)` 도 같이 없앤다. 값이 0 이어도 요소마다 필터용
+     렌더 표면이 생기므로(README '다시 밟지 말 것'), 페이지 전체가 항상 제 표면을
+     하나 물고 있던 셈이다. 여기서는 그 위를 블러로 갈아탈 일이 없으니 통째로 끈다.
+
+     블러 대신 `visibility: hidden` 을 쓴다. dialog 가 화면을 다 덮고 ::backdrop 이
+     rgba(4,4,2,.9) 로 사실상 불투명이라 어차피 안 보이는 자리이고, 숨겨 두면 그동안
+     페이지를 아예 안 굽는다. **display: none 은 안 된다** — FLIP 이 돌아갈 자리를
+     getBoundingClientRect() 로 재는데 그러면 전부 0 이 되어 왕복 비행이 깨진다.
+     visibility 는 레이아웃을 남기므로 안전하다.
+
+     지연을 거는 이유: 클래스가 붙는 즉시 숨기면 백드롭이 아직 투명한 280ms 동안
+     나머지 열한 장이 팍 사라지는 게 보인다. 그래서 비행이 끝나고 백드롭이 다 덮은
+     뒤에 숨는다. **transition 을 이 규칙 안에만 두는 게 핵심이다** — 클래스가
+     떨어지면 이 선언째로 사라져서 지연 없이 즉시 다시 보인다. 닫을 때는
+     closeViewer() 가 날아가기 **전에** is-viewing 을 떼므로(배경이 같이 선명해지는
+     연출), 여기에 지연이 남아 있으면 카드가 빈 그리드로 날아가 버린다. */
+  .page {
+    filter: none;
+    transition: none;
+  }
+
+  .is-viewing .page {
+    filter: none;
+    visibility: hidden;
+    transition: visibility 0s linear 280ms;   /* main.js 의 FLIGHT.duration 과 같은 값 */
+  }
+
+  /* (6) 탭 뒤에 들러붙는 hover / focus.
+
+     **안드로이드 크롬은 탭한 요소에 :hover 를 남긴다.** 다른 데를 탭하기 전까지
+     안 떨어진다. 게다가 .card 는 <button> 이라 탭하면 포커스도 받고, 확대 뷰를
+     닫을 때 afterClose() 가 그 카드로 포커스를 되돌려 주기까지 한다. 그래서
+     style.css 의 `.stage:is(:hover, :focus-within) .card` 가 **방금 본 카드에
+     계속 걸린 채로 남는다.**
+
+     걸려 있는 게 하필 비싼 둘이다:
+       filter: saturate/contrast  → 카드 전체(+아래 블렌드 자식들)가 제 렌더 표면을
+                                    하나 더 물고, 스크롤 내내 그걸 다시 굽는다
+       will-change: transform     → 그 카드만 합성 레이어로 승격된 채 남는다
+                                    (README: 카드 전부에 걸지 말 것 — 여기선 한 장이지만
+                                     터치에서는 얻는 게 0 이라 그냥 없애는 게 맞다)
+
+     터치에는 애초에 hover 라는 상태가 없고, 포커스 기울기는 :focus-visible 을 쓰는
+     별도 규칙이 맡는데 그건 탭으로는 안 켜진다. 그러니 여기서 얻는 연출이 없다.
+     transition 은 건드리지 않는다 — 값이 뭐든 폰 그리드에서는 바뀔 transform 이 없다. */
+  .slot .stage:is(:hover, :focus-within) .card {
+    filter: none;
+    will-change: auto;
+  }
+
+  /* (7) 확대 뷰에서 **문지르는 동안에만** 겹을 접는다.
+
+     여기가 이 페이지에서 제일 무거운 순간이다. 폰에서 확대한 카드는 화면 폭을 다
+     먹어서, 상세를 연 상태(38svh)보다 래스터 면적이 3.4배다:
+
+       확대 직후 88svh → 370×510 CSS px, DPR3 → 1.70 Mpx
+       상세 열림 38svh → 201×277 CSS px, DPR3 → 0.50 Mpx
+
+     가만히 두면 한 번 굽고 끝이라 공짜다. 문제는 손가락으로 문지를 때다 —
+     --pointer-* 가 매 프레임 바뀌면서 포일 겹을 저 면적으로 전부 다시 굽는다.
+     래스터가 못 따라가면 깜빡인다. 상세를 열면 매끄러웠던 건 카드가 작아져서다.
+
+     **그리드처럼 상시로 깎지 않는 이유**: 확대 뷰가 이 데모의 본론이다. 그래서
+     비용을 내는 순간(=움직이는 동안)에만 깎고, 손을 떼면 곧바로 풀 효과로 돌아온다.
+
+     ## 어느 겹을 접을지 — vendor 열한 개를 다 열어서 정했다
+
+     처음엔 겹을 전부 접었더니 "효과가 아예 달라진" 것처럼 빈약해졌다. 파일을
+     열어보니 구조가 거의 통일돼 있었다:
+
+       __shine          본체 무늬
+       __shine::before  **두 번째 무늬 겹** — 시그니처가 거의 항상 여기 있다
+       __shine::after   radial 빛번짐 (mix-blend-mode: luminosity) — 장식
+       __glare          윤기
+       __glare::after   빛번짐 하나 더
+
+     그래서 규칙은 하나다: **무늬 겹(::before)은 남기고 빛번짐(::after)만 접는다.**
+     빛번짐은 본체의 밝기로도 어느 정도 읽히지만, 무늬가 빠지면 그 포일이 왜 그
+     포일인지가 사라진다. 실제로 빈약해졌던 다섯 장(03·05·07·10·11)이 전부
+     ::before 에 시그니처를 두고 있었다:
+
+       05 oilslick  mix-blend-mode: exclusion — 기름막 반전 무지개. 본체(color-dodge)로는 안 난다
+       07 holo      간섭 띠(bars), hard-light. 이게 없으면 그냥 무지개 그라디언트다
+       10 cosmos    위상만 어긋난 둘째 겹. 이 포일의 깊이는 엇갈려 겹치는 데서 나온다
+       11 mosaic    **반전된** 체커보드. 격자는 타일끼리의 대비로 생기므로 상대가 필요하다
+                    (rarity.css 의 mosaic 주석에 이미 적혀 있던 성질이다)
+
+     **08 reverse 는 __shine 에 겹이 아예 없다.** 원래부터 2겹이라 접을 게 없다. */
+  .stage.is-rubbing[data-effect] .foil::after,
+  .stage.is-rubbing[data-effect] .glare::after,
+  .stage.is-rubbing .grain { display: none; }
+
+  /* (8) …crystal 만 반대다.
+
+     03 crystal 은 유일하게 ::before 가 정적인 repeating-linear 세 겹이고,
+     **결정면인 repeating-conic 이 ::after 에** 들어 있다. opacity 도
+     `.25 + pointer-from-center * .6` 이라 문지를 때 제일 살아나야 할 겹이다.
+     통칙대로 ::after 를 접으면 이 포일이 왜 crystal 인지가 사라진다.
+
+     **이 블록은 반드시 위 규칙보다 뒤에 있어야 한다.** 특정도가 (0,4,1) 로 똑같아서
+     순서로만 갈린다 — 위로 올리면 아무 힘이 없다. style.css 에서 폰 규칙을 앞에
+     뒀다가 못 껐던 것과 같은 함정이다 (README '다시 밟지 말 것'). */
+  .stage.is-rubbing[data-effect="crystal"] .foil::before { display: none; }
+  .stage.is-rubbing[data-effect="crystal"] .foil::after { display: block; }
+
+  /* ── 이머시브: 광선 평면(.dio-rays) ────────────────────────
+     이머시브에서 배경이 네모 단위로 안 보이거나 깜빡이던 것의 주범이다.
+     한 요소에 비싼 게 넷 겹쳐 있었다:
+
+       inset: -35%          레이어의 170% x 170%. 430x900 폰에서 730x1530 CSS px,
+                            DPR3 기준 **10 Mpx** — 확대 뷰 카드(1.7 Mpx)의 6배다
+       filter: blur(24px)   그 10 Mpx 를 블러
+       mix-blend-mode       그리드에서 배운 그것. 블렌드+필터는 독립 render surface라
+                            GPU 합성 경로를 못 탄다
+       animation ... infinite   그 표면이 계속 돈다 → 매 프레임 다시 굽는다
+
+     셋을 걷어낸다.
+
+     **(1) screen 블렌드를 뺀다 — 어두운 장면에서는 거의 같은 그림이다.**
+     screen(d,s) = 1-(1-d)(1-s). 배경이 어둡고(d≈.05) 광선이 옅으면(실효 알파 ≈ .05)
+     결과가 ≈ .10 인데, 평범한 알파 합성도 .05*.95 + .054 ≈ .10 이다. 수식이 만나는
+     구간이라 눈으로 구분이 안 된다. 대신 이걸 빼야 레이어가 합성될 수 있다.
+     screen 이 조금 더 밝게 올려주던 만큼 opacity 로 갚는다.
+
+     **(2) 회전을 멈춘다.** 70초에 한 바퀴 = 초당 5도다. 몇 초 머무는 화면에서 눈에
+     보이는 움직임이 아닌데, 그것 때문에 표면이 영원히 갱신된다. 정지시키면 한 번만
+     굽고 그 뒤로는 패럴랙스 이동(transform)만 남아 합성으로 끝난다.
+
+     **(3) 그래서 inset 도 필요 없어진다.** -35% 는 회전할 때 모서리가 드러나지 않게
+     키워 둔 여유였다. 안 돌면 뷰포트만 덮으면 되고, 패럴랙스로 밀리는 18px 은
+     .dio-move 의 --k: 1.1 이 이미 감당한다. 면적이 10 → 3.5 Mpx 로 준다.
+     원뿔 그라디언트는 각도로 그려지므로 상자가 작아져도 광선 각도는 그대로다.
+
+     블러는 남긴다. 이제 한 번만 굽는 정적 레이어라 비싸지 않고, 빼면 광선이 중심으로
+     모이는 데서 뾰족한 쐐기가 된다. */
+  .dio .dio-rays {
+    mix-blend-mode: normal;
+    opacity: .38;
+  }
+
+  .dio .dio-rays .dio-move::before {
+    inset: 0;
+    animation: none;
+  }
+
+  /* ── 이머시브: 여닫을 때의 블러 ────────────────────────────
+     immersive.css 의 dio-in 은 `filter: blur(7px) → 0` 으로 초점이 맞는 느낌을 준다.
+     문제는 그게 **평면 여덟 장 전부에** 900ms 씩 시차를 두고 걸린다는 것이다.
+     들어가는 2.1초 내내 풀스크린 블러가 여러 장 동시에 애니메이션한다 — 진입이
+     이 화면에서 가장 무거운 구간인 이유다. 나가는 dio-out 도 blur(5px) 로 같은 짓을
+     240ms 동안 한다.
+
+     블러만 뺀 판을 따로 만들어 이름만 갈아 끼운다. **@keyframes 는 부분만 덮을 수
+     없어서** 통째로 하나 더 두는 수밖에 없다. opacity 와 scale 은 그대로라 연출의
+     뼈대(뒤에서 앞으로 열린다)는 남는다.
+
+     지금은 8장이 각자 자기 표면을 블러하느라 진입 프레임을 다 잡아먹는데, 그 대가로
+     얻는 게 "살짝 흐렸다가 또렷해진다" 하나다. 폰에서는 그걸 포기한다.
+     되돌리려면 아래 두 규칙만 지우면 된다 — 원본 keyframes 는 안 건드렸다. */
+  @keyframes dio-in-flat {
+    from { opacity: 0; transform: scale(var(--in-s, .86)); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes dio-out-flat {
+    to { opacity: 0; transform: scale(.94); }
+  }
+
+  .immersive.is-entering .dio-layer:not(.dio-subject) { animation-name: dio-in-flat; }
+  .immersive.is-leaving .dio-layer { animation-name: dio-out-flat; }
+
+  /* ── 이머시브: 안 움직이는 평면은 승격시키지 않는다 ────────
+     immersive.css 는 `.dio-move` **전부**에 will-change: transform 을 건다.
+     평면이 여덟 장이고 하나하나가 화면을 덮으므로, 430x900 폰(DPR3)에서 장당
+     약 14MB — --k 로 커진 몫까지 더하면 상시 100MB 를 넘는다. 중급 안드로이드의
+     타일 예산이 그 언저리라, 천장에 닿으면 크롬이 타일을 버리고 그 자리가
+     네모로 비어 보인다. 이머시브에서 배경이 네모나게 깜빡이던 게 이것이다.
+
+     그런데 그중 둘은 승격이 아무 일도 안 한다:
+
+       .dio-dew   --par: 0  → transform 이 translate3d(0,0,0) scale(1) 로 **상수**다.
+                  절대 안 변하는 값에 "곧 변할 것"이라는 힌트를 주고 있었다
+       .dio-sky   --par: 5  → 최대 5px 움직인다. 게다가 평면을 하나씩 꺼 가며 재 보니
+                  이 평면은 화면에 **거의 기여하지 않는다** (38만 픽셀 중 30개,
+                  0.01%). .dio-back 의 사진이 cover 로 완전히 덮기 때문이다
+
+     둘만 빼도 ~29MB 다. 움직임이 큰 평면(.dio-fore 100px · .dio-motes 30px)은
+     그대로 둔다 — 거기서 빼면 끌 때 합성이 끊긴다.
+
+     구조는 안 바뀐다. `.dio-move` 는 어차피 transform 을 갖고 있어서 스택 컨텍스트와
+     컨테이닝 블록이 이미 거기서 생긴다. will-change 는 힌트 역할만 하고 있었다. */
+  .dio .dio-dew .dio-move,
+  .dio .dio-sky .dio-move { will-change: auto; }
+
+  /* ── 이머시브: 하늘 평면을 배경으로 내린다 ──────────────────
+     .dio-sky 는 화면에 거의 기여하지 않는다. 평면을 하나씩 꺼 가며 재 보니
+     38만 픽셀 중 **30개**만 달라졌다 (0.01%) — .dio-back 의 사진이 cover 로
+     완전히 덮기 때문이다.
+
+     그런데 **진입할 때는 이야기가 다르다.** 여덟 평면이 동시에 애니메이션하는
+     2.1초 동안은 크롬이 그것들을 전부 승격시키므로, 그 순간이 메모리 최고점이다.
+     안 보이는 평면 하나가 거기 끼어 있을 이유가 없다.
+
+     그렇다고 통째로 지우지는 않는다. 배경 사진이 아직 안 왔거나 못 받았을 때
+     이 어두운 물빛이 바닥을 깔아 준다 — 없으면 새까만 화면이 된다. 그래서
+     **같은 그림을 .dio 자체의 배경으로 내린다.** .dio 는 이미 있는 표면이라
+     평면이 하나 줄고, 잃는 건 --par: 5(최대 5px)짜리 패럴랙스뿐이다.
+     오히려 진입 첫 프레임부터 깔려 있어서 검은 화면에서 시작하지 않는다.
+
+     **주의: 아래 그라디언트는 immersive.css 의 `.dio-sky .dio-move` 를 그대로
+     옮겨 적은 것이다.** 하늘색을 고칠 일이 생기면 두 곳을 같이 고쳐야 한다.
+     --accent / --accent2 는 .dio 에 선언돼 있어서 여기서도 그대로 풀린다. */
+  .dio .dio-sky { display: none; }
+
+  .dio {
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 6%,
+        color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
+      radial-gradient(ellipse 95% 60% at 18% 104%,
+        color-mix(in srgb, var(--accent2) 22%, transparent), transparent 72%),
+      linear-gradient(178deg, #0b1a11 0%, #06100a 46%, #020604 100%);
+  }
+
+  /* ── 이머시브: 누끼 글로우의 반경을 줄인다 ─────────────────
+     .dio-hero 의 filter 에는 drop-shadow 가 둘 있다.
+
+       drop-shadow(0 24px 38px 검정)      접지 그림자 — 캐릭터를 땅에 붙인다
+       drop-shadow(0 0 64px accent 34%)   림 글로우 — 캐릭터를 장면에 녹인다
+
+     둘째가 비싸다. 864x1200(DPR3) 알파에 64px 블러를 돌리는 것도 그렇지만,
+     **필터가 레이어 경계를 사방으로 부풀린다** — 블러 반경의 3배쯤이라 192 CSS px,
+     DPR3 이면 576 device px 씩이다. 누끼 표면이 실제 그림보다 한참 커진다.
+
+     처음엔 이걸 뒤에 깐 원형 그라디언트로 대체해 봤다. 재 보니 화면의 12.7% 가
+     달라졌다 — 이 글로우는 잎사귀 갈래갈래를 따라 도는 것이라 원으로는 흉내가
+     안 난다. **없애는 대신 반경만 줄인다.** 64 → 30px 이면 블러 비용도 경계
+     확장도 절반 이하로 내려가면서 실루엣은 그대로 따라간다. 좁아진 만큼 어두워
+     보이므로 알파를 34% → 44% 로 올려 밝기를 맞춘다.
+
+     접지 그림자는 안 건드린다. 그건 **위치**를 말하는 신호라 흐릿하게 넓어야 한다. */
+  .dio .dio-hero {
+    filter:
+      brightness(.92) saturate(1.03) contrast(1.02)
+      drop-shadow(0 24px 38px rgba(0, 0, 0, .62))
+      drop-shadow(0 0 30px color-mix(in srgb, var(--accent) 44%, transparent));
+  }
+}

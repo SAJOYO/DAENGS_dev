@@ -108,6 +108,22 @@
   --px: 0;
   --py: 0;
 
+  /* 주인공 평면(.dio-subject)의 패럴랙스 세기(px). **창이 같은 값을 읽는다.**
+     창은 카드라는 물체에 뚫린 구멍이라 그 물체와 같이 움직여야 한다. 여기 두는
+     이유가 그것이다 — .dio-subject .dio-move 안에 숫자로 박아 두면 자루(.dio-world)가
+     못 읽어서, 틀만 밀리고 창은 제자리인 채로 그 차이가 검은 틈이 된다.
+     세로는 가로의 --par-y 배만 민다. 화면이 가로로 넓어서 같은 양을 세로로 주면
+     너무 크게 흔들린다. */
+  --subject-par: 52;
+  --par-y: .68;
+
+  /* 누끼 높이. 이 장면의 크기 기준자다 — 주인공·카드·접지그림자·표면 이슬,
+     그리고 앞 잎사귀까지 전부 여기서 나온다.
+     **여기(.dio)에 있어야 한다.** 예전엔 .dio-subject .dio-move 에 있었는데,
+     그러면 주인공 평면 밖에서는 못 읽어서 앞 잎사귀가 px 로 남았다. 화면이 작아져도
+     잎만 안 줄어드니 폰에서 누끼 대비 20~59% 를 덮었다 (데스크톱은 14~42%). */
+  --hh: min(58svh, 560px);
+
   /* 예전엔 여기서 --mouse-x/--glare 를 넘겨 style.css 의 .foil/.glare 를 굴렸다.
      주인공이 카드가 아니라 누끼가 되면서 포일을 얹을 표면이 없어져 전부 걷어냈다. */
 
@@ -116,6 +132,115 @@
   overflow: hidden;
   cursor: grab;
   touch-action: none;   /* 끌어서 장면을 돌린다 — 스크롤로 넘겨 주면 안 된다 */
+}
+
+/* ── 창 ────────────────────────────────────────────────────
+   "카드 안으로 들어간다" 를 만드는 장치. --winK 는 **창이 몇 배로 벌어졌나**이고,
+   1 이면 카드의 그림 영역 크기, 커질수록 화면 밖으로 벌어진다.
+
+   @property 로 선언해야 애니메이션이 된다. 커스텀 속성은 기본적으로 문자열이라
+   1 에서 4 로 "보간" 이 안 되고 툭 튄다. syntax 를 <number> 로 못박아야 숫자로 센다.
+   inherits: true 라서 .dio 에 건 애니메이션이 .dio-world 와 틀 이미지에 같이 내려간다 —
+   **둘이 같은 값을 읽는 게 이 연출의 핵심이다.** 창은 px 로, 틀은 scale 로 커지지만
+   기준점(창 중심)이 같아서 결과가 정확히 일치한다. 따로 맞추려 들면 반드시 어긋난다.
+
+   @property 를 모르는 브라우저에서는 --winK 가 1 에 머물러 창이 안 열린다. 그래도
+   is-entering 이 걷히면 clip 자체가 사라지므로 장면은 정상으로 끝난다. */
+@property --winK {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* 창 밖. 검은 자리를 없애는 판이다.
+
+   창은 카드의 그림 영역이라 거의 정사각인데(462x453) 화면은 아니다(1905x897).
+   창은 축마다 **같은** 배율로 벌어져야 한다 — 축마다 다르게 벌리면 같은 배율을
+   읽는 틀 이미지가 늘어나 테두리가 찌그러진다. 그래서 짧은 축이 먼저 화면을 덮고
+   긴 축은 한참 남는다. 실측으로 위아래는 1570ms 에, 좌우는 1764ms 에 덮였다 —
+   그 사이 **194ms 동안 좌우가 각각 화면의 17% 씩 검게 비었다.** 폰이면 반대로
+   위아래가 빈다. 화면이 넓을수록 이 구간이 길어진다.
+
+   창을 더 빨리 벌려서 해결할 수는 없다. 그건 짧은 축이 화면 밖으로 더 나갈 뿐
+   긴 축이 따라잡는 순서를 못 바꾼다. 그러니 창을 손대지 말고 **빈 자리 쪽을
+   채운다** — 같은 텃밭을 어둡고 흐리게 깐 판을 자루 밖에 한 장 둔다.
+   창 안은 또렷하고 밖은 초점이 나간 상태가 되어, 검은 구멍이 아니라 깊이로 읽힌다.
+
+   자루(.dio-world) **밖**에 있어야 한다. 안에 넣으면 같이 잘려서 아무 의미가 없다.
+   창이 다 열리면 밝은 .dio-back 이 위를 덮으므로 알아서 안 보이게 된다 —
+   끄는 코드는 필요 없다.
+
+   blur 는 화면만 한 레이어에 거는 거라 싸지 않다. 터치 기기에서는 뺀다 —
+   원화(1376x768)가 이미 3배 넘게 늘어나 있어서 어둡게만 깔아도 충분히 물러난다. */
+.dio-void {
+  position: absolute;
+  inset: 0;
+  background: var(--back) center / cover no-repeat;
+  filter: blur(12px) brightness(.32) saturate(.7);
+  transform: scale(1.09);   /* blur 가 가장자리를 비우므로 그만큼 키운다 */
+  pointer-events: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .dio-void { filter: brightness(.32) saturate(.7); transform: scale(1.03); }
+}
+
+/* 판이 제 크기로 돌아온 몫. 1 이면 아직 --set-s 로 서 있는 상태, --set-inv 면 다 컸다.
+
+   판(.dio-plate)은 카드가 화면에 들어오도록 --set-s 로 줄어든 채 서 있다가, 창을
+   통과하면서 배율 1 로 돌아온다. 그런데 **틀은 판 안에 있고 자루는 판 밖에 있다.**
+   판만 커지면 틀은 따라 커지는데 자루는 제자리라, 그 차이가 창 가장자리에 검은
+   띠로 드러난다. 그래서 자루도 이 값을 곱해서 읽는다.
+
+   --winK 와 같은 원칙이고, 한 걸음 더 갔다: 판의 배율 자체를 이 변수로 쓴다
+   (.dio-plate 의 마지막 키프레임이 scale(--set-s * --pg) 다). 판과 자루가 **같은
+   변수 하나**를 읽으므로 애니메이션 두 개의 시작 시각이나 이징이 어긋날 여지가
+   아예 없다. 따로 맞추려 들면 반드시 어긋난다. */
+@property --pg {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* 세상을 담는 자루. 이게 있어야 "창 안에만 세상이 보이는" 상태를 만들 수 있다.
+   **주인공 평면(.dio-subject)은 일부러 이 밖에 있다** — 틀은 창을 두르고 있어서
+   창으로 자르면 틀 자체가 지워지고, 누끼는 창보다 작아서 자를 일이 없다.
+   앞뒤로 두 자루인 이유도 그것이다: 앞잎·이슬은 주인공보다 앞에 그려져야 한다. */
+.dio-world {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 창 = 틀에서 뒤가 비치는 자리. 중심과 반지름을 immersive.mjs 가 재서 넣고, 여기서
+   배율만 곱한다. inset() 의 %는 이 상자(=.dio) 기준이라 100% 를 그대로 쓸 수 있다.
+
+   배율은 --winK(창이 벌어진 몫)와 --pg(판이 커진 몫)의 **곱**이다. 틀은 판 안에서
+   --winK 로 커지고 판 자신이 --pg 로 커지니, 화면에서 틀의 배율이 곧 이 곱이다.
+   자루가 같은 곱을 읽어야 둘이 안 어긋난다.
+
+   중심에는 두 가지가 더해진다.
+
+   하나는 패럴랙스다. 틀이 든 주인공 평면은 마우스·자이로를 따라 최대 가로 52px,
+   세로 35px 밀리는데 자루는 안 밀려서, 예전엔 그 차이가 그대로 창 가장자리의 검은
+   틈이 됐다 (px=-1 에서 왼쪽 52px, py=-1 에서 위쪽 35px). 같은 --subject-par 을
+   읽어 같이 민다. 이 이동은 판 밖(.dio-move)에 걸리므로 --pg 를 안 곱한다.
+
+   다른 하나는 판이 커진 몫이다. 판은 **자기 중심(=화면 중심)** 기준으로 커지므로, 화면
+   중심에서 벗어나 있는 창 중심은 그만큼 밀려난다. 창이 누끼 경계상자보다 아래로
+   넓어지면서(카드 아래쪽 판들까지 덮느라) 화면 중심과 42px 벌어져 있어서, 안 옮기면
+   그 몫이 그대로 어긋난다. inset() 의 50% 는 각 변이 알아서 폭/높이로 푼다. */
+.immersive.is-entering .has-window .dio-world {
+  --winKp: calc(var(--winK) * var(--pg));
+  --wcx: calc(50% + (var(--win-cx) - 50%) * var(--pg)
+               + var(--px) * var(--subject-par) * 1px);
+  --wcy: calc(50% + (var(--win-cy) - 50%) * var(--pg)
+               + var(--py) * var(--subject-par) * var(--par-y) * 1px);
+  clip-path: inset(
+    calc(var(--wcy) - var(--win-hh) * var(--winKp))
+    calc(100% - var(--wcx) - var(--win-hw) * var(--winKp))
+    calc(100% - var(--wcy) - var(--win-hh) * var(--winKp))
+    calc(var(--wcx) - var(--win-hw) * var(--winKp)));
 }
 
 .dio:active { cursor: grabbing; }
@@ -139,7 +264,7 @@
   place-items: center;
   transform:
     translate3d(calc(var(--px) * var(--par) * 1px),
-                calc(var(--py) * var(--par) * .68px),
+                calc(var(--py) * var(--par) * var(--par-y) * 1px),
                 0)
     scale(var(--k));
   will-change: transform;
@@ -253,8 +378,7 @@
    그림자는 box-shadow 가 아니라 drop-shadow 를 쓴다. box-shadow 는 사각형을 따라가고
    drop-shadow 는 **알파 실루엣**을 따라가서, 잎사귀 윤곽대로 그림자가 진다. */
 .dio-subject .dio-move {
-  --par: 52;
-  --hh: min(58svh, 560px);   /* 누끼 높이. 이 평면의 모든 크기가 여기서 나온다 */
+  --par: var(--subject-par);
   perspective: 1500px;
 }
 
@@ -276,6 +400,23 @@
    차지하는 자리"라, 그걸 뒤집으면 "누끼에 맞추려면 카드가 어디 있어야 하는지"가 나온다.
    --card-x/y/h 는 immersive.mjs 가 누끼 높이의 배수로 계산해 넣는다.
    이게 맞아야 틀이 녹는 동안 캐릭터가 한 픽셀도 안 움직인다. */
+/* 틀. 카드 그림과 **똑같은 상자**에 깔려 있다가, 카드가 녹으면 드러난다.
+   left/top/height 를 카드와 한 글자도 다르지 않게 쓰는 게 중요하다 — 어긋나면
+   카드가 녹는 순간 틀이 덜컥 움직인다. (두 원화의 비율이 0.7196 대 0.7200 으로
+   0.06% 다른데, 638px 높이에서 폭 0.3px 차이라 눈에 안 띈다.)
+
+   창 중심(--win-ox/oy)을 기준으로 --winK 만큼 커진다. 창과 같은 변수라 항상 붙어 다닌다. */
+.dio-plate-frame {
+  position: absolute;
+  left: calc(50% + var(--card-x) * var(--hh));
+  top: calc(50% + var(--card-y) * var(--hh));
+  height: calc(var(--card-h) * var(--hh));
+  width: auto;
+  opacity: 0;
+  transform-origin: var(--win-ox, 50%) var(--win-oy, 46%);
+  transform: scale(var(--winK, 1));
+}
+
 .dio-plate-art {
   position: absolute;
   left: calc(50% + var(--card-x) * var(--hh));
@@ -486,13 +627,22 @@
   position: absolute;
   left: calc(var(--x) * 1%);
   top: calc(var(--y) * 1%);
-  width: calc(var(--s) * 1px);
-  height: calc(var(--s) * 1.45px);
+  /* --s 와 --b 는 px 이 아니라 **누끼 높이의 %** 다 (.dio-skin .dew 와 같은 단위).
+     px 로 두면 화면이 작아질 때 잎만 안 줄어서 캐릭터를 덮는다 — 표면 이슬이 이미
+     같은 이유로 비율을 쓰고 있었는데 잎만 빠져 있었다. --k: 1.3 이 여기에 곱해지는
+     것까지 감안한 값이다. */
+  width: calc(var(--s) * var(--hh) * .01);
+  height: calc(var(--s) * var(--hh) * .0145);
+  /* (--x, --y) 를 잎의 **중심**으로 삼는다. 모서리 기준이면 offCenter 로 가운데를
+     피해 놔도 큰 잎이 그대로 얼굴까지 뻗어서 피한 의미가 없다.
+     transform 은 leaf-sway 가 통째로 쓰고 있으므로 margin 으로 당긴다. */
+  margin-left: calc(var(--s) * var(--hh) * -.005);
+  margin-top: calc(var(--s) * var(--hh) * -.00725);
   border-radius: 0 100% 0 100%;
   opacity: var(--o);
   background: linear-gradient(150deg,
     var(--accent), color-mix(in srgb, var(--accent) 25%, #000000));
-  filter: blur(calc(var(--b) * 1px));
+  filter: blur(calc(var(--b) * var(--hh) * .01));
   animation: leaf-sway calc(var(--t) * 1s) ease-in-out calc(var(--d) * -1s) infinite alternate;
 }
 
@@ -622,13 +772,19 @@
    "화면이 바뀌었다"가 된다. 눌린 그 카드에서 출발해야 연결이 생긴다.
 
        0 ─ 24%   눌린 자리에서 가운데로 날아오며 커진다 (FLIP)
-      24 ─ 100%  천천히 계속 확대된다. 카드가 화면보다 커지며 안으로 들어가는 느낌이 난다
-      46 ─ 80%   카드(프레임)가 녹는다
-      50 ─ 78%   누끼가 그 자리에 나타난다
-      20% 부터   배경 평면들이 뒤에서 앞으로 80ms 씩 시차를 두고 열린다
+      24 ─ 44%   제자리 크기까지 커지고 **거기서 멈춘다**
+      44 ─ 62%   카드 그림이 녹아 밑의 틀만 남는다
+      46 ─ 64%   누끼가 그 자리에 나타나고, 창 안으로 배경이 들어온다
+      62 ─ 100%  창과 틀이 같이 벌어져 화면 밖으로 나간다 → 통과
 
-   46~80% 와 50~78% 가 겹치는 게 핵심이다. 카드와 누끼가 같은 판(.dio-plate) 위에
-   겹쳐 있고 자리가 정확히 맞아서, 틀만 사라지고 캐릭터는 제자리에 남는다.
+   **44~64% 구간에는 아무것도 움직이지 않는다.** 이게 설계의 전부다. 카드와 누끼는
+   같은 판 위에 픽셀까지 맞춰 겹쳐 있어서, 배율이 같은 동안에는 크로스페이드가
+   눈에 안 보인다 — 틀만 사라지고 캐릭터는 제자리에 남는 것처럼 읽힌다. 그래서
+   판을 44% 에 세워 두고, 움직이는 일(창 열기)은 그 뒤로 미룬다.
+
+   한 번은 카드 그림 자체를 화면 밖까지 부풀려 봤다. 통과감은 생겼지만 카드 속
+   인쇄된 배추가 같이 커지면서 누끼와 배율이 어긋나 **큰 배추 위에 작은 배추**가
+   겹쳐 뿌옇게 됐다. 정렬이 필요한 구간과 움직이는 구간은 반드시 갈라야 한다.
 
    길다 싶어도 줄이지 말 것 — 사람이 지루해하는 건 **꾹 누르는 시간**(520ms)이지
    연출 시간이 아니다. 여기서 서두르면 확대되는 게 아니라 튀어 오르는 걸로 보인다.
@@ -647,23 +803,88 @@
     transform: scale(var(--mid-s, .62));
     animation-timing-function: cubic-bezier(.42, 0, .3, 1);
   }
-  100% { transform: scale(1); }
+  /* **여기서 멈춰 서 있어야 한다.** 창의 자리는 immersive.mjs 가 이 배율 기준으로
+     한 번 재서 넣은 값이라, 창이 열리는 62% 이후에도 판이 계속 커지면 어긋난다.
+     예전엔 100% 까지 천천히 커졌는데 그 역할은 이제 창이 대신한다.
+
+     배율이 1 이 아니라 --set-s 인 이유: 판의 1 은 **카드가 화면보다 큰 크기**다
+     (카드 높이가 누끼 높이의 1.59배). 예전엔 카드가 1 에 닿기 전에 녹아서 그게
+     드러나지 않았지만, 이제는 서서 그대로 보이므로 화면에 맞춰 줄여야 한다. */
+  /* 끝값이 곧 **평소 값(변형 없음)** 이어야 한다. --set-s 로 서서 끝나게 뒀더니
+     is-entering 이 걷히는 순간 판이 --set-s 에서 1 로 툭 튀었다. --pg 가 마지막에
+     --set-inv(=1/--set-s)가 되므로 여기 곱은 정확히 1 로 끝난다.
+
+     되돌리는 시각을 --pg 가 정한다(plate-pg). 배율 식을 여기 두는 게 요점이다 —
+     판과 자루가 같은 변수를 읽어야 틀이 창과 안 어긋난다. */
+  44%, 100% { transform: scale(calc(var(--set-s, 1) * var(--pg, 1))); }
+}
+
+/* 판이 제 크기로 돌아온다. **창이 열리는 구간과 같이 간다.**
+
+   예전엔 84~100% 에 몰아서 돌렸다. 튀지는 않았지만 **배경이 다 들어오고 창도 다
+   열린 뒤에 캐릭터만 240ms 동안 커지는** 순서라, 결국 "갑자기 커진다"로 보였다.
+   데스크톱에서 +16%, 폰에서는 카드가 화면 폭에 눌려 --set-s 가 0.6 근처까지
+   내려가므로 +68% 다. 다 끝난 화면에서 그만큼 움직이면 눈에 안 띌 수가 없다.
+
+   그래서 창이 벌어지기 시작하는 62% 에 같이 출발한다. 카메라가 창을 통과하는 동안
+   주인공도 같이 다가오는 것이 되어, 두 사건이 아니라 한 번의 달리로 읽힌다.
+
+   곡선은 창(--winK)의 가속 곡선을 그대로 쓰면 안 된다. 그건 뒤로 갈수록 가파른데,
+   그러면 커지는 양의 69% 가 창이 화면을 다 덮은 **뒤에** 몰려서 결국 "다 끝나고
+   혼자 커진다"가 된다. 실제로 그렇게 재 봤다. 완만한 ease-in-out 으로 펴면 창이
+   화면을 덮는 시점(84%)에 이미 73% 가 진행돼 있어서, 나머지는 착지로 읽힌다.
+
+   이징이 --winK 와 정확히 같을 필요는 없다. 정합은 판과 자루가 **같은 --pg 를
+   읽는다**는 데서 나오지 곡선이 같아서 나오는 게 아니다. 곡선은 느낌만 정한다. */
+@keyframes plate-pg {
+  0%, 62% { --pg: 1; animation-timing-function: cubic-bezier(.4, 0, .45, 1); }
+  100% { --pg: var(--set-inv, 1); }
 }
 
 @keyframes plate-art-out {
-  0%, 46% { opacity: 1; }
-  80%, 100% { opacity: 0; }
+  0%, 44% { opacity: 1; }
+  62%, 100% { opacity: 0; }
 }
 
 @keyframes hero-in {
+  0%, 46% { opacity: 0; }
+  64%, 100% { opacity: 1; }
+}
+
+/* 창이 벌어진다. 배율은 immersive.mjs 가 화면을 재서 넣는다 (--win-k) —
+   창은 거의 정사각인데 화면은 가로로 길어서, 다 덮는 데 필요한 배율이 화면마다
+   다르다. 고정값(예전의 4.5)을 쓰면 조금만 넓거나 낮은 화면에서 **좌우에 검은 띠가
+   남은 채로 연출이 끝난다.**
+   가속 곡선인 건 카메라가 창을 통과하는 느낌이라 그렇다 — 등속이면 창이 열리는
+   게 아니라 화면이 확대되는 걸로 보인다.
+
+   84% 에 딱 다 덮고, 나머지 16% 는 화면 밖으로 더 나간다. 다 덮은 뒤에도 계속
+   벌어져야 "통과했다"가 되고, 여기서부터는 틀이 화면 밖이라 뭘 해도 안 보인다. */
+@keyframes window-open {
+  0%, 62% { --winK: 1; animation-timing-function: cubic-bezier(.45, 0, .75, .5); }
+  84% { --winK: var(--win-k, 4.5); animation-timing-function: cubic-bezier(.3, 0, .7, 1); }
+  100% { --winK: var(--win-k-end, 5.5); }
+}
+
+/* 창 밖 판이 깔린다. **좌우가 비기 시작하는 1570ms 전에 다 깔려 있어야** 한다.
+   74% = 1554ms 라 딱 그 직전이다. 그 전에는 카드가 어두운 방에 혼자 서 있는
+   그림이고 그건 일부러 그런 것이라, 날아오는 동안에는 깔지 않는다. */
+@keyframes void-in {
   0%, 50% { opacity: 0; }
-  78%, 100% { opacity: 1; }
+  74%, 100% { opacity: 1; }
 }
 
 @keyframes dio-in {
-  from { opacity: 0; transform: scale(.86); filter: blur(7px); }
+  from { opacity: 0; transform: scale(var(--in-s, .86)); filter: blur(7px); }
   to { opacity: 1; transform: none; filter: blur(0); }
 }
+
+/* 창 배율은 .dio 에서 한 번만 돌린다. --winK 가 상속되므로 자루(clip-path)와
+   틀(scale)이 같은 값을 읽는다. 틀 에셋이 없는 카드는 has-window 가 안 붙어서
+   예전 연출 그대로 돈다. */
+.immersive.is-entering .has-window { animation: window-open 2100ms both, plate-pg 2100ms both; }
+.immersive.is-entering .has-window .dio-plate-frame { opacity: 1; }
+.immersive.is-entering .dio-void { animation: void-in 2100ms linear both; }
 
 .immersive.is-entering .dio-plate { animation: plate-in 2100ms both; }
 .immersive.is-entering .dio-plate-art { animation: plate-art-out 2100ms linear both; }
@@ -676,9 +897,36 @@
 
 /* 주인공 평면은 위에서 따로 짰으므로 이 시차에서 뺀다 */
 .immersive.is-entering .dio-layer:not(.dio-subject) {
-  animation: dio-in 900ms cubic-bezier(.16, .84, .28, 1) both;
-  animation-delay: calc(420ms + var(--i) * 80ms);
+  animation: dio-in 620ms cubic-bezier(.16, .84, .28, 1) both;
+  /* 880ms = 42%. 판이 44% 에 서므로 그 직전부터 들어온다 — 창의 자리는 배율 1
+     기준으로 잰 값이라, 판이 아직 커지는 동안 배경이 보이면 창과 어긋나 보인다. */
+  animation-delay: calc(880ms + var(--i) * 45ms);
 }
+
+/* 들어오는 배율을 평면마다 다르게 준다 (--in-s).
+
+   예전엔 여덟 장이 전부 `.86 → 1` 이었다. 다 같은 비율로 커지는 건 **줌**이지
+   **달리**가 아니다 — 카메라가 실제로 앞으로 가면 가까운 것은 크게, 먼 것은 조금
+   커진다. 그 차이가 "공간을 통과했다"를 만든다. 값이 작을수록 멀리서 크게 다가온다.
+
+   **--i 로 일괄 계산하면 안 된다.** 뒤에서 앞이라는 순서와 거리가 일치하지 않는
+   평면이 둘 있다:
+
+     .dio-dew  렌즈에 맺힌 이슬이다. 카메라에 붙어 있으므로(거리 0) 앞으로 가도
+               크기가 안 변한다. 여기서 크게 밀면 이슬이 유리에 있는 게 아니라
+               허공에 떠 있는 게 된다 — --par: 0 으로 애써 만든 효과가 무너진다
+     .dio-hud  자막이다. 장면 안의 물건이 아니라 화면에 얹은 UI라 달리를 안 탄다
+
+   나머지는 --par(패럴랙스 세기)과 같은 순서로 준다. 그게 곧 거리다.
+   숫자는 눈으로 맞춘 값이다. 앞잎(.dio-fore)이 이 연출을 제일 크게 판다 —
+   --par 이 100 으로 제일 크고, 화면 기여도도 32% 로 1위인 평면이다. */
+.immersive.is-entering .dio-sky   { --in-s: .96; }   /* --par 5   가장 멀다 */
+.immersive.is-entering .dio-back  { --in-s: .92; }   /* --par 12 */
+.immersive.is-entering .dio-rays  { --in-s: .88; }   /* --par 18 */
+.immersive.is-entering .dio-motes { --in-s: .80; }   /* --par 30 */
+.immersive.is-entering .dio-fore  { --in-s: .62; }   /* --par 100  가장 가깝다 */
+.immersive.is-entering .dio-hud   { --in-s: .95; }   /* 자막 — 달리에서 뺀다 */
+.immersive.is-entering .dio-dew   { --in-s: .98; }   /* 렌즈 위 — 카메라와 함께 간다 */
 
 /* ── 나가기 ────────────────────────────────────────────────
    들어올 때를 되감지 않는다. 되감으면 나가는 데도 1.3초가 걸리는데, 닫기는 빨라야 한다.
@@ -697,7 +945,7 @@
   /* .dio-hero 의 height 를 직접 덮으면 안 된다. 이 평면의 카드 자리·접지 그림자가
      전부 --hh 로 계산돼 있어서, 누끼만 줄이면 진입할 때 카드와 캐릭터가 어긋난다
      (틀이 녹는 순간 캐릭터가 26% 튀었다). 크기는 --hh 하나로만 바꾼다. */
-  .dio-subject .dio-move { --hh: min(46svh, 400px); }
+  .dio { --hh: min(46svh, 400px); }
   .dio-meta { left: 20px; bottom: 78px; }
   .dio-tip { left: 20px; right: auto; bottom: 22px; }
 }
@@ -714,6 +962,7 @@
   .dio-rays .dio-move::before { animation: none; }
   .immersive.is-entering .dio-layer:not(.dio-subject),
   .immersive.is-leaving .dio-layer,
+  .immersive.is-entering .dio-void,
   .immersive.is-entering .dio-plate,
   .immersive.is-entering .dio-plate-art,
   .immersive.is-entering .dio-hero,

@@ -37,15 +37,27 @@ seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
 kakao-token = "daengs_backend.cli.kakao_token:main"
 
-# torch 는 win32 에서만 CUDA 휠을 쓴다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
+# torch 를 플랫폼별로 다른 인덱스에서 받는다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
 # `explicit = true` 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스에서 받는다.
+#
+# **리눅스를 안 적으면 CUDA 판이 온다.** PyPI 의 기본 torch 휠은 NVIDIA 런타임을 동봉하고
+# 있어서, 마커가 win32 뿐이면 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받는다. D-021 로
+# 서버에 torch 가 생기면서 실제로 물리는 자리가 됐다.
 [[tool.uv.index]]
 name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
+torch = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

@@ -26,14 +26,22 @@ def _prepared_or_skip(key: str = "bge-m3"):
     return load.prepare(key)
 
 
-# ---------------------------------------------------------------- 기본값 = 결정 (RAG-024 판정 이후)
-def test_default_model_is_the_baseline_not_the_winner() -> None:
-    """첫 관통은 기준선으로 간다. **판정을 뒤집는 게 아니라 판정과 다르게 운영하는 것**이다.
+# ---------------------------------------------------------------- 기본값 = 결정 (RAG-024 · D-021)
+def test_default_model_is_the_decision_not_an_accident() -> None:
+    """기본값 한 줄이 곧 "교체가 싸다"의 장치다. **가드는 남기고 지키는 값만 바뀐다.**
 
-    이 기본값 한 줄이 곧 "교체가 싸다"의 장치다 — 9단계까지 닿으면 여기를(또는 `--model` 을)
-    바꾸는 것으로 승자 적재가 끝나야 한다.
+    전에 이 자리는 *"첫 관통은 기준선(`bge-m3`)으로 간다"* 였다 — RAG-024 가 판정 승자를
+    `qwen3` 로 내고도 **재적재 비용** 때문에 운영을 기준선으로 뒀기 때문이다. 코퍼스를 0에서
+    다시 만드는 지금(#34) 그 비용이 0 이라 조건이 사라졌고, 그래서 승자로 올린다.
+
+    **이 테스트가 실제로 붙잡는 것은 이름이 실재하는가**(`embed.MODELS` 안에 있는가)이다.
+    오타는 적재·서빙 양쪽에서 `KeyError` 로 늦게 죽는다.
+
+    **서빙 키가 코퍼스와 같은지는 여기서 못 본다** — 그건 DB 를 봐야 알고, 어긋나도 차원이
+    같아서(셋 다 1024) 예외가 안 난다. 그 자리의 가드는 기동 때 도는
+    `daengs_life.app.deps.warn_if_corpus_uses_another_model` 이다.
     """
-    assert config.settings.embedding_model_key == "bge-m3"
+    assert config.settings.embedding_model_key == "qwen3-embedding-0.6b"
     assert config.settings.embedding_model_key in embed.MODELS
 
 

@@ -43,9 +43,15 @@ class Settings(BaseSettings):
     postgres_password: str = ""
     postgres_db: str = "lifedb"
 
-    # 7단계 첫 관통이 쓰는 모델. **판정 승자(qwen3)가 아니라 기준선이다** — RAG-024 `판정 이후`.
-    # 교체는 이 기본값 한 줄이거나 `--model` 한 번이어야 한다("교체가 싸다"의 실제 장치)
-    embedding_model_key: str = "bge-m3"
+    # 서빙과 적재가 **같은 모델이어야 한다.** 2026-08-27 에 `qwen3-embedding-0.6b` 로 올린다 —
+    # RAG-024 가 교체 조건을 발동시켜 놓고 재적재 비용 때문에 미뤄 뒀는데, 코퍼스를 0에서 다시
+    # 만드는 지금(#34) 그 비용이 0 이다. 가중치도 1.2GB 로 `bge-m3`(6.5GB)의 1/5 이라 상주
+    # 비용이 줄고, 차원은 셋 다 1024 라 `db/init` 스키마는 그대로다.
+    # 교체는 이 기본값 한 줄이거나 `--model` 한 번이어야 한다("교체가 싸다"의 실제 장치).
+    #
+    # ⚠ **이 값이 코퍼스와 어긋나면 조용히 틀린다.** 차원이 같아서 예외가 안 나고, 그럴듯한
+    # 순위가 그냥 나온다. 기동 때 `deps.warm_up_encoder` 가 DB 와 대조해 경고를 남기는 이유다.
+    embedding_model_key: str = "qwen3-embedding-0.6b"
 
     # 9단계 생성 (RAG-028). 키는 `backend/.env` 에 이미 있다 — env 이름이 그대로 필드명이다.
     # **모델명을 상수로 박지 않는 이유**: 세대가 바뀌면 이름이 바뀌는데, 그때 코드를 고치는 것과
@@ -53,7 +59,22 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     # 실측 2026-08-25 — `gemini-2.5-flash` 는 404 를 내며 *"no longer available to new users,
     # use models/gemini-3.6-flash"* 라고 API 가 직접 알려줬다. 상수로 안 박아 둔 판단이 첫날 값을 했다.
-    gemini_model: str = "gemini-3.6-flash"
+    #
+    # 2026-08-27 — `gemini-3.1-flash-lite` 로 내린다. 9단계는 아직 관찰 단계라 체급보다 회전이
+    # 중요하고, **되돌리기가 `.env` 한 줄**이라 싸다. 실재하는 이름인지는 `models.list()` 로
+    # 확인했다(preview 판과 별도로 있다) — 위 404 가 남긴 습관이다.
+    # ⚠ 프롬프트가 일부러 순진해서(RAG-029 를 한 랩 미뤘다) 체급이 조항 인용에 그대로 드러난다.
+    # 그것을 숫자로 보는 자리는 검문소④의 `ungrounded` 비율이고, 거기서 3.6-flash 와 비교한다.
+    gemini_model: str = "gemini-3.1-flash-lite"
+
+    # Gemini 호출 타임아웃. **이름에 단위를 박아 둔다** — google-genai 의 `HttpOptions.timeout`
+    # 은 초가 아니라 **밀리초**다(SDK 설명: *"Timeout for the request in milliseconds"*).
+    # 30 을 넣으면 30밀리초가 돼서 전부 504 가 되는데, 그 실수는 이름 없이는 안 보인다.
+    #
+    # 30초인 이유: flash 급이 근거 5건을 받아 답을 쓰는 데 보통 수 초라 여유가 있고, nginx 기본
+    # `proxy_read_timeout`(60초) 안쪽이라 **우리가 먼저 504 를 낸다** — 상류 판정이 우리 손에 남는다.
+    # 걸어 두지 않으면 무제한이라, 상류가 물리면 스레드풀 워커를 그대로 잡고 있는다.
+    gemini_timeout_ms: int = 30_000
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,

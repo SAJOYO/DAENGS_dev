@@ -19,10 +19,11 @@ import pytest
 from daengs_life.rag.core import io
 from daengs_life.rag.stages import goldenset
 
-# 2026-08-24 실측. 라벨을 고치면 여기서 먼저 깨지도록 박아 둔다
-ITEMS = 15
-MUST_TOTAL = 43
-BY_ORIGIN = {"hand": 7, "easylaw": 8}
+# 2026-08-24 실측. 라벨을 고치면 여기서 먼저 깨지도록 박아 둔다.
+# 2026-08-27 갱신 — 지자체 지원 3문항(S1~S3) 추가 (RAG-031 ⑥). hand 7 → 10, 필수 43 → 46.
+ITEMS = 18
+MUST_TOTAL = 46
+BY_ORIGIN = {"hand": 10, "easylaw": 8}
 
 
 @pytest.fixture(scope="module")

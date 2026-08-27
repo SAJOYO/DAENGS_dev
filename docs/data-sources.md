@@ -21,14 +21,17 @@
 | 예방접종 | 2 | 0 | 0 (⚠️ 2건 URL 확인 필요) | 법령(광견병) + 검역본부 |
 | 목줄·입마개·맹견 | 2 | 0 | 2 | 동물보호법·시행규칙 + 보도자료 |
 | 동반 이동 | 4 | 0 | 0 (⚠️ 4건 URL 확인 필요) | 운송약관 원문 |
-| 지자체 지원 | 4 | 0 | 1 | 보조금24 API + 조례 전수 |
+| 지자체 지원 | 4 | **1** (조례 208건) | 1 | 보조금24 API + 조례 전수 |
 | 펫보험 | 3 | 0 | 0 (⚠️ 3건 URL 확인 필요) | 보험사 약관 PDF |
 | **문서형 소계** | **23** | **4** | **6** | |
 | 실시간 (저장 X) | 7 | — | — | 기상청 + 에어코리아 + 카카오 |
 | **합계** | **30** | | | |
 
 **병목 3가지**
-1. 키 미발급 — `DATA_GO_KR_KEY` 3건(+실시간 5건). `LAW_OC` 는 발급 완료 (§9)
+1. ~~키 미발급~~ → **키는 전부 발급됐다. 남은 것은 data.go.kr 의 API 별 "활용신청"** 이다 (§9).
+   `LAW_OC`·`DATA_GO_KR_KEY` 둘 다 `.env` 에 있고, `LAW_OC` 는 target 전부가 한 키로 열리는 반면
+   `DATA_GO_KR_KEY` 는 **데이터셋마다 따로 신청**해야 한다 — `benefit24-services`(15113968) ·
+   `data-registration-lookup`(15098913) 2건이 그 상태다
 2. ⚠️요확인 9건 — 운송약관 4 · 보험 3 · 접종 2. `easylaw-pet` 도 `verified` 였는데 실제 URL 이 죽어 있었음 → **수집 착수 전 URL 확인을 기본 절차로** (§10)
 3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(RAG-004) 확정 후
 
@@ -142,10 +145,16 @@
 **① 구조화 · 커버리지**
 - [ ] **`benefit24-services`** — 보조금24 / 행안부 대한민국 공공서비스(혜택) 정보 · `api` · 🔑`DATA_GO_KR_KEY` · ✅확인 · https://www.data.go.kr/data/15113968/openapi.do
       중앙+지자체 **7,500여 개** 서비스 목록·상세. "반려" "동물등록" "중성화" "내장형" 키워드 필터링
+      ⛔ **활용신청 대기 중** — 키는 있는데 이 데이터셋에 신청이 안 됐다 (§9). 엔드포인트는
+      `api.odcloud.kr/api/gov24/v3/{serviceList,serviceDetail,supportConditions}` 로 확인됐다
+      (없는 경로는 `-3`, 이 셋은 `-4` 를 준다 = 경로는 살아 있고 권한만 없다)
 
 **② 안정 · 법적 근거**
-- [ ] **`ordinance-search`** — 자치법규 API `target=ordin&query=반려동물` · `api` · 🔑`LAW_OC` · ✅확인
-      전국 지원 조례 전수. 공고보다 변동이 적어 RAG 기본 코퍼스로 적합
+- [x] **`ordinance-search`** ✅ **208건 수집 완료 (2026-08-27)** — 자치법규 API `target=ordin&query=반려동물` · `api` · 🔑`LAW_OC`
+      제목검색(`search=1`) 전수 208건 = 조례 203 + 규칙 5, 지자체 135곳, 조문 약 2,150개.
+      **본문검색(`search=2`)이면 1,077건**이라 범위를 제목검색으로 끊었다 (근거는 RAG-031).
+      광역 17개 시·도는 34건(16%)뿐이라 **광역만 수집하는 선택지는 버렸다** — 지원 조례는
+      기초지자체가 만든다. 공고보다 변동이 적어 RAG 기본 코퍼스로 적합
 
 **③ 신선도 · 모니터링**
 - [ ] **`seoul-notice-api`** — 서울시 고시공고 정보 API (OA-2482) · `api` · 🔑서울 열린데이터 인증키(무료) · ✅확인 · https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do
@@ -224,13 +233,24 @@
 ## 9. 키 발급 체크리스트
 
 - [x] **`LAW_OC`** ✅ 발급 완료 (2026-08-20) — [open.law.go.kr](https://open.law.go.kr/LSO/openApi/guideResult.do) → OPEN API 신청 · 즉시 발급
-      → `law-drf-api` 수집 완료. 남은 것은 `ordinance-search`(조례 전수)
+      → `law-drf-api` · `ordinance-search`(조례 208건) 수집 완료. **키 하나로 target 전부가 열린다**
+      (`target=law` 와 `target=ordin` 에 별도 신청이 없다 — data.go.kr 과 다른 점이다)
       **IP/도메인 등록은 필요 없다.** 공식 매뉴얼의 샘플 키 `OC=test` 가 등록 없이 그냥 동작하는 것으로
       확인(2026-08-20). 인증 실패 시 나오는 "IP주소 및 도메인주소를 등록해 주세요" 는 원인을 특정하지
       않는 공통 안내문이라, OC 값이 틀렸을 때도 똑같이 나온다
       → `.env` 에 `LAW_OC=발급받은ID` 한 줄. crawler 가 `.env` 를 직접 읽는다
-- [ ] **`DATA_GO_KR_KEY`** — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
-      → 막고 있는 것: `data-registration-lookup`, `benefit24-services` + 실시간 5건
+- [x] **`DATA_GO_KR_KEY`** ✅ 발급 완료 — 실시간(파트②) 연동하면서 받았다. `.env` 에 들어 있다
+      ⚠️ **키 하나가 곧 전체 권한이 아니다.** data.go.kr 은 **API 별로 "활용신청"** 을 따로 받는다.
+      실측(2026-08-27) — 같은 키로 기상청 단기예보는 `HTTP 200`, 보조금24(15113968)는
+      `HTTP 401 {"code":-4,"msg":"등록되지 않은 인증키 입니다."}` 였다. **키가 죽은 것이 아니라
+      그 데이터셋에 신청이 안 된 것**인데 메시지가 둘을 구분하지 않는다.
+      경로가 틀렸을 때는 `HTTP 404 {"code":-3,"msg":"등록되지 않은 서비스 입니다."}` 라
+      **-3 과 -4 로 "경로 문제"와 "권한 문제"를 가를 수 있다.**
+      ⚠️ 포털이 키를 **Encoding / Decoding 두 벌**로 준다. `params` 에 넣을 때 맞는 것은
+      Decoding(88자) 쪽이고, Encoding(98자)을 그대로 주면 이중 인코딩으로 실패한다.
+      `realtime/config.py` 의 `normalize_key()` 가 그 일을 하는데 **`crawler/core/config.py` 에는
+      아직 없다** — crawler 쪽에서 이 키를 쓰는 첫 소스가 직접 정규화해야 한다
+      → 아직 신청 안 된 것: `benefit24-services`(15113968), `data-registration-lookup`(15098913)
 - [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시
       → 막고 있는 것: `kakao-local` (GPS→행정동, 좌표 변환)
 - [ ] **서울 열린데이터 인증키** — data.seoul.go.kr · 무료
@@ -276,8 +296,8 @@
 
 ### Phase 2 — 키 발급 후 (구조화 확장)
 - [x] `law-drf-api` — 조문 단위 XML (8건, 별표 본문 포함)
-- [ ] `benefit24-services` — 보조금24
-- [ ] `ordinance-search` — 조례 전수
+- [ ] `benefit24-services` — 보조금24 (⛔ 활용신청 대기)
+- [x] `ordinance-search` — 조례 전수 (208건. 제목검색 범위 — RAG-031)
 - [ ] `data-registration-lookup`
 - [ ] `insurer-terms-pdfs` — 보험 약관 PDF
 - [ ] 운송약관 4건 (`korail` / `srt` / `seoulmetro` / `airlines`)

@@ -22,8 +22,11 @@ from daengs_life.rag.stages.goldenset import logical
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 # 2026-08-24 실측. parsed 22건 기준
-TOTAL = 1_407
-BY_TYPE = {"article": 720, "aside": 22, "heading": 40, "para": 192, "qa": 10, "table": 423}
+# 2026-08-27 갱신 — 조례 208건 추가 (RAG-031). parsed 230건 기준.
+# 늘어난 몫은 전부 조례다: article +2,334 · para +52. 법령 쪽 수치(aside·heading·qa·table)는
+# 그대로다 — 조례 XML 에는 별표·서식이 없고 장·절도 Heading 으로 안 샌다(청킹 대상이 아니다).
+TOTAL = 3_793
+BY_TYPE = {"article": 3054, "aside": 22, "heading": 40, "para": 244, "qa": 10, "table": 423}
 
 
 @pytest.fixture(scope="module")
@@ -82,19 +85,22 @@ def test_hard_cap(chunks: list) -> None:
 
 
 def test_soft_cap_known_only(chunks: list) -> None:
-    """RAG-004 2,000자를 넘는 것은 **아는 3건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+    """RAG-004 2,000자를 넘는 것은 **아는 4건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+
+    조례에서 하나 늘었다 — `부칙-1제2조` 4,902자. 개정별로 쪼갠 뒤에도 남은 것이라
+    (RAG-031 ③) 그 부칙 하나가 정말로 긴 경우다. 하드 상한 7,500 안이라 막지 않는다.
 
     늘어나면 ④ 를 재개할 트리거다. 그래서 통과가 아니라 목록을 고정한다.
     """
     over = sorted(c.chunk_id.split("#")[-1] for c in chunks if c.chars > chunk.SOFT_CHARS)
-    assert over == ["별표 1의10-4-r0", "별표 1의10-6-r0", "제18조②"]
+    assert over == ["별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조", "제18조②"]
 
 
 # ---------------------------------------------------------------- ① 입력 범위
 def test_supplementary_marked(chunks: list) -> None:
     """부칙은 인덱싱하되 표시한다 — 6단계에서 재청킹 없이 필터로 끌 자리다 (①)."""
     sup = [c for c in chunks if c.part == "supplementary"]
-    assert len(sup) == 192
+    assert len(sup) == 244
     assert all(c.section.startswith("부칙 제") for c in sup)
 
 

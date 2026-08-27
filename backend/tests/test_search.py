@@ -49,11 +49,16 @@ def test_search_signature_is_the_boundary() -> None:
 
 # ---------------------------------------------------------------- 골든셋에서 질문을 읽는다 (RAG-026 ②)
 def test_questions_come_from_the_goldenset() -> None:
-    """검증질문 1~7 을 코드에 박지 않는다 — 박으면 질문 목록의 단일 소스가 둘이 된다."""
+    """검증질문을 코드에 박지 않는다 — 박으면 질문 목록의 단일 소스가 둘이 된다.
+
+    2026-08-27 에 지자체 지원 3문항(S1~S3)이 붙어 7 → 10 이 됐다 (RAG-031 ⑥).
+    **이 수를 갱신하는 것 자체가 이 테스트의 일이다** — `--questions` 가 도는 범위라
+    문항이 늘거나 줄면 검문소③④의 분모가 말없이 바뀐다.
+    """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 7
+    assert len(items) == 10
     assert all(q for _, q, _, _ in items)
 
 

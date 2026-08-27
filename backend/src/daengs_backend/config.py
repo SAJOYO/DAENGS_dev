@@ -102,16 +102,44 @@ class Settings(BaseSettings):
     blind_index_key: SecretStr  # HMAC pepper. AES 키와 같은 값을 쓰면 안 됩니다.
 
     # ── 카카오 ────────────────────────────────────────────────────────
-    # 카카오 개발자 콘솔의 **REST API 키**입니다. 앱이 보낸 id_token 의 `aud` 가
-    # 이 값과 같은지 확인하는 데 씁니다 — "이 토큰이 우리 앱에게 발급된 것인가".
+    # 앱이 보낸 id_token 의 `aud` 와 대조할 **앱 키 목록**입니다 —
+    # "이 토큰이 우리 앱에게 발급된 것인가" (D-017).
+    #
+    # **하나가 아니라 목록인 이유**: 카카오의 `aud` 는 인가 요청에 쓴 앱 키
+    # 그대로입니다. 같은 애플리케이션이라도 들어온 경로마다 값이 다릅니다.
+    #
+    #     Android / iOS SDK   네이티브 앱 키
+    #     JavaScript SDK      JavaScript 키
+    #     REST API            REST API 키   (cli/kakao_token.py 가 쓰는 흐름)
+    #
+    # 그래서 REST 키 하나만 대조하면 **앱 로그인이 전부 401 로 막힙니다.**
+    #
+    # **한 애플리케이션에서 나온 키만 넣으세요.** 카카오 회원번호(`sub`)는 앱 단위라,
+    # 다른 애플리케이션의 키를 섞으면 같은 사람이 서로 다른 회원으로 갈라집니다.
+    # 목록을 늘린다고 검사가 느슨해지는 것은 아닙니다 — 우리 앱'들'이 되는 것뿐입니다.
+    # 어드민 키는 넣지 마세요. aud 로 오지 않고, 그 키 하나로 전 회원을 조작합니다.
     #
     # **비밀이 아닙니다.** 앱에도 들어가 있고 카카오에 요청할 때 그대로 나갑니다.
-    # 그래도 SecretStr 을 쓰지 않는 대신 기본값도 두지 않습니다. 기본값을 두면
-    # 검증이 조용히 엉뚱한 aud 를 통과시키게 되는데, 그건 남의 앱 토큰으로
-    # 우리 서비스에 계정이 생긴다는 뜻입니다 (D-017).
+    # 그래도 기본값을 두지 않습니다. 기본값을 두면 검증이 조용히 엉뚱한 aud 를
+    # 통과시키게 되는데, 그건 남의 앱 토큰으로 우리 서비스에 계정이 생긴다는 뜻입니다.
     #
-    # 네이티브 앱 키 · JavaScript 키 · 어드민 키가 아닙니다. **REST API 키**입니다.
-    kakao_rest_api_key: str
+    # 값은 JSON 배열입니다: DAENGS_KAKAO_APP_KEYS=["<네이티브>","<REST>"]
+    #
+    # 필수 필드로 두지 않고 빈 목록을 기본값으로 둔 뒤 아래 validator 에서 막습니다.
+    # 필수로 두면 pydantic 이 "Field required" 로 먼저 끊어서, 옛 이름을 쓰고 있는
+    # 사람에게 **무엇으로 바뀌었는지** 알려 줄 기회가 없어집니다.
+    kakao_app_keys: list[str] = Field(default_factory=list)
+
+    # `cli/kakao_token.py` 전용입니다. **로그인 검증에는 쓰이지 않습니다.**
+    #
+    # 그 CLI 는 REST 흐름이라 `client_id` 자리에 **REST API 키**를 넣어야 하는데,
+    # 위 목록에서는 어느 것이 REST 키인지 알 수 없습니다 (넣은 순서에 기대면
+    # 언젠가 조용히 어긋납니다). 그래서 한 줄 더 둡니다.
+    #
+    # 없어도 됩니다 — 그 CLI 를 쓸 때만 필요하고, 서버는 이 값 없이 잘 돕니다.
+    # 하나만 받던 시절의 이름과 같아서, 이 값만 있고 위 목록이 비어 있으면
+    # 아래 validator 가 "이름이 바뀌었다"고 알려 줍니다.
+    kakao_rest_api_key: str | None = None
 
     @model_validator(mode="after")
     def _reject_legacy_database_url(self) -> "Settings":
@@ -123,6 +151,38 @@ class Settings(BaseSettings):
             )
         if not self.training_rag_base_url.startswith(("http://", "https://")):
             raise ValueError("DAENGS_TRAINING_RAG_BASE_URL must start with http:// or https://")
+        return self
+
+    @model_validator(mode="after")
+    def _check_kakao_app_keys(self) -> "Settings":
+        """앱 키 목록이 **비어 있지 않은지** 확인합니다. 이 검사가 핵심입니다.
+
+        joserfc 의 `JWTClaimsRegistry` 는 `values` 가 빈 목록이면 aud 검사를
+        **통째로 건너뜁니다** (`check_value` 의 `if not option_values: return`).
+        즉 `DAENGS_KAKAO_APP_KEYS=[]` 는 "앱 키가 없다"가 아니라
+        **"아무 카카오 앱의 토큰이나 통과"** 가 됩니다 — 남의 앱에서 받은 토큰으로
+        우리 서비스에 계정이 생깁니다. 필수 필드로 두는 것만으로는 못 막습니다.
+
+        빈 문자열도 같이 걸러 냅니다. `[""]` 는 목록이 비지 않았지만 어떤 aud 와도
+        맞지 않아, 전원 로그인 불가를 조용히 만듭니다.
+        """
+        if self.kakao_rest_api_key and not self.kakao_app_keys:
+            # 옛 이름만 남아 있는 .env 입니다. 위 필드는 이제 CLI 전용이라
+            # 이것만으로는 로그인 검증이 서지 않습니다.
+            raise ValueError(
+                "DAENGS_KAKAO_REST_API_KEY 는 DAENGS_KAKAO_APP_KEYS 로 바뀌었습니다. "
+                "카카오 id_token 의 aud 는 로그인에 쓴 앱 키라, 네이티브 SDK 로 들어온 "
+                "토큰은 REST API 키와 맞지 않습니다. backend/.env 에서 그 줄을 "
+                'DAENGS_KAKAO_APP_KEYS=["<네이티브 앱 키>","<REST API 키>"] 로 바꾸세요. '
+                "backend/.env.example 에 예시가 있습니다."
+            )
+
+        if not self.kakao_app_keys or any(not k.strip() for k in self.kakao_app_keys):
+            raise ValueError(
+                "DAENGS_KAKAO_APP_KEYS 가 비어 있습니다. 비워 두면 aud 검증이 통째로 "
+                "건너뛰어져 남의 카카오 앱 토큰으로도 우리 서비스에 계정이 생깁니다 "
+                '(D-017). 예) DAENGS_KAKAO_APP_KEYS=["<네이티브 앱 키>","<REST API 키>"]'
+            )
         return self
 
     @property

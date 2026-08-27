@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0b05">
+<title>홀로 스튜디오 · 네오 채소 도감</title>
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./rarity.css">
+<!-- 도감(index.html)과 **같은 순서**로 링크한다. vendor 는 rarity.css 의 '다리'
+     블록보다 뒤에 와야 덮어쓴다 — 특정도가 같아서 순서로 갈린다.
+     여기 링크 · vendor 의 파일 · studio.mjs 의 EFFECTS 셋이 맞아야 화면에 나온다.
+     이머시브(No.01)는 이 페이지에 없다 — immersive.css/.mjs 를 안 부른다. -->
+<link rel="stylesheet" href="./vendor/cards-css/prism.css">
+<link rel="stylesheet" href="./vendor/cards-css/crystal.css">
+<link rel="stylesheet" href="./vendor/cards-css/gold.css">
+<link rel="stylesheet" href="./vendor/cards-css/oilslick.css">
+<link rel="stylesheet" href="./vendor/cards-css/sunburst.css">
+<link rel="stylesheet" href="./vendor/cards-css/holo.css">
+<link rel="stylesheet" href="./vendor/cards-css/reverse.css">
+<link rel="stylesheet" href="./vendor/cards-css/aurora.css">
+<link rel="stylesheet" href="./vendor/cards-css/cosmos.css">
+<link rel="stylesheet" href="./vendor/cards-css/mosaic.css">
+<link rel="stylesheet" href="./vendor/cards-css/metal.css">
+<!-- touch.css 는 안 부른다. 저건 그리드(.slot) 열두 장을 동시에 그릴 때의 예산
+     조절인데, 여기는 카드가 한 장뿐이라 확대 뷰와 같은 조건이다. -->
+<link rel="stylesheet" href="./studio.css">
+</head>
+<body class="studio-body">
+  <div class="page">
+    <header class="topbar">
+      <a class="back" href="./index.html">← 도감</a>
+    </header>
+
+    <div class="masthead">
+      <p class="eyebrow">DAENGS · Holo Studio</p>
+      <h1>내 이미지로 홀로 카드 만들기</h1>
+      <p class="hint">이미지를 올리고 포일 12종을 골라 보세요 · 붙여넣기(Ctrl+V)와 끌어다 놓기도 됩니다</p>
+    </div>
+
+    <div class="studio" id="studio">
+      <section class="studio-stage" id="drop">
+        <div class="holder" id="holder">
+          <!-- 카드가 없을 때만 보이는 자리. 이미지가 들어오면 studio.mjs 가 카드로 갈아 끼운다. -->
+          <div class="dropzone" id="dropzone">
+            <span class="dropzone-icon" aria-hidden="true">🖼️</span>
+            <p class="dropzone-title">여기에 이미지를 놓으세요</p>
+            <p class="dropzone-sub">PNG · JPG · WebP · GIF(첫 프레임) — 세로로 긴 카드 비율이 제일 잘 어울립니다</p>
+            <button type="button" class="btn primary" id="pick-empty">이미지 고르기</button>
+          </div>
+        </div>
+        <p class="stage-note" id="stage-note" role="status"></p>
+      </section>
+
+      <aside class="studio-panel">
+        <div class="panel-block">
+          <h2>이미지</h2>
+          <input type="file" id="file" accept="image/*" hidden>
+          <div class="row">
+            <button type="button" class="btn" id="pick">이미지 고르기</button>
+            <button type="button" class="btn ghost" id="clear" disabled>비우기</button>
+          </div>
+          <p class="meta" id="file-meta">아직 올린 이미지가 없습니다.</p>
+        </div>
+
+        <div class="panel-block">
+          <h2>포일 <small>No.01 ~ No.12</small></h2>
+          <div class="effects" id="effects" role="radiogroup" aria-label="포일 고르기"></div>
+          <p class="meta" id="effect-desc"></p>
+        </div>
+
+        <div class="panel-block">
+          <h2>내보내기</h2>
+          <button type="button" class="btn primary" id="download" disabled>HTML 한 장으로 저장</button>
+          <p class="meta" id="download-meta">CSS·JS·이미지가 전부 들어간 파일 하나가 나옵니다. 그대로 열면 이 카드가 그대로 돕니다.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 기울기 엔진(포인터 · 키보드 · 자이로)은 고전 스크립트다. 모듈이 아니라서
+       내보내기가 이 파일 텍스트를 그대로 인라인할 수 있다 — 내보낸 HTML 한 장도
+       같은 코드로 돈다. 모듈은 defer 라 순서는 이대로 두면 항상 이쪽이 먼저다. -->
+  <script src="./tilt-engine.js"></script>
+  <script type="module" src="./studio.mjs"></script>
+</body>
+</html>

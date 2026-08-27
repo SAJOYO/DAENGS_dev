@@ -4,11 +4,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
+from daengs_backend.core.deps import current_app_user
 from daengs_backend.routers import app_auth, auth, health, training
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
@@ -59,7 +60,16 @@ app.include_router(app_auth.router)
 app.include_router(training.router)
 # 실시간 산책 적합도. nginx 는 `:8000` 을 통째로 이 앱에 보내므로
 # `daengback.~:8000/walk` 로 바로 나갑니다 (설정 변경 없음).
-app.include_router(walk.router)
+#
+# **인증은 라우터가 아니라 여기서 겁니다.** `walk.router` 는 `daengs_life` 것이고,
+# 저쪽이 `daengs_backend.core.deps` 를 import 하면 의존 방향이 뒤집혀
+# `daengs_life.app.main`(단독 ASGI 앱)과 `python -m daengs_life.realtime walk` 가
+# 이 레포의 인증 없이는 못 도는 물건이 됩니다 (RAG-001 원칙 1 · D-018).
+# `include_router(dependencies=...)` 가 그 선을 넘지 않고 문을 잠그는 자리입니다.
+#
+# 관리자가 아니라 **앱 회원**입니다 — `/training/chat` 과 같은 판단입니다.
+# `current_app_user` 는 관리자 토큰도 401 로 막습니다 (그 `sub` 는 app_users 에 없습니다).
+app.include_router(walk.router, dependencies=[Depends(current_app_user)])
 
 
 def dev() -> None:

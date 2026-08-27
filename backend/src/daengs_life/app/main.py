@@ -4,8 +4,14 @@
 엔드포인트를 여기 직접 붙이지 않는다: 파트①의 `/ask` 가 들어올 때 이 파일에서 겹치는 것이
 **등록 한 줄**이어야 두 브랜치가 안 부딪힌다 (RAG-027 마지막 절).
 
-`backend/main.py` 는 이 모듈을 가리키는 2줄 shim 으로 남아 있다. 완전 이동은 `feat/rag` 가
-합쳐진 뒤에 한다 — 지금 옮기면 rename-vs-modify 충돌이 난다.
+**이 앱은 `daengs_backend` 와 별개의 ASGI 앱이다** (D-018). 아직 그쪽에 등록하지 않았다 —
+아래 lifespan 이 임베딩 모델을 상주시켜서, 배포되는 API 프로세스에 그대로 붙이면 그 프로세스가
+모델 로드분을 같이 문다. 띄우려면 이 모듈을 직접 가리킨다:
+
+    uv run uvicorn daengs_life.app.main:app --port 8100
+
+옛 `backend/main.py` 2줄 shim 은 이관하며 없앴다 — `feat/rag` 와 `feat/realtime` 이 병렬로
+살아 있는 동안 rename-vs-modify 충돌을 막던 것이고, 그 조건이 끝났다.
 """
 from __future__ import annotations
 

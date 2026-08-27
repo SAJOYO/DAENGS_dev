@@ -4,12 +4,21 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
+from daengs_backend.core.deps import current_app_user
 from daengs_backend.routers import app_auth, auth, health, training
+
+# 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
+# `/walk` 에 한해서만 긋습니다 — 임베딩 모델을 쓰는 `/ask`(파트①)는 여기 없습니다.
+# `deps.get_encoder` 를 이 파일에서 부르는 순간 배포되는 API 프로세스가 torch 를
+# 요구하게 되고, 컨테이너에는 `ml` 그룹이 없어 아예 뜨지 않습니다.
+# `tests/test_main_stays_light.py` 가 그것을 기계로 막습니다.
+from daengs_life.app.controllers import walk
+from daengs_life.app.deps import get_cache
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
 # 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
@@ -18,10 +27,20 @@ SRC_DIR = Path(__file__).resolve().parents[1]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # 실시간 캐시를 미리 엽니다 (RT-001 ④-c). `get_cache` 는 lru_cache 라 여기서
+    # `Cache()` 가 만들어지고 그때 Redis 연결을 시도합니다. 첫 요청에 미루면 그 비용이
+    # 요청 하나에 통째로 붙습니다.
+    #
+    # **연결이 안 돼도 앱은 떠야 합니다** — `open_store()` 가 실패를 예외가 아니라
+    # 저하로 다뤄 프로세스 메모리로 떨어집니다. 다만 lru_cache 라 그 판단이 프로세스
+    # 생애에 한 번뿐이라, compose 에서 backend 가 redis 의 healthcheck 를 기다립니다.
+    get_cache()
     yield
     # 커넥션 풀을 정리합니다. 리로드가 잦은 개발 모드(D-006)에서
     # 이게 없으면 죽은 워커가 잡고 있던 연결이 남습니다.
     await engine.dispose()
+    # 같은 이유입니다 — lru_cache 가 `Cache` 를, 그게 Redis 커넥션 풀을 잡고 있습니다.
+    get_cache.cache_clear()
 
 
 app = FastAPI(title="DAENGS API", lifespan=lifespan)
@@ -39,6 +58,18 @@ app.include_router(auth.router)
 # 앱 회원(카카오)용. 관리자와 경로가 겹치지 않게 /auth/app/* 입니다.
 app.include_router(app_auth.router)
 app.include_router(training.router)
+# 실시간 산책 적합도. nginx 는 `:8000` 을 통째로 이 앱에 보내므로
+# `daengback.~:8000/walk` 로 바로 나갑니다 (설정 변경 없음).
+#
+# **인증은 라우터가 아니라 여기서 겁니다.** `walk.router` 는 `daengs_life` 것이고,
+# 저쪽이 `daengs_backend.core.deps` 를 import 하면 의존 방향이 뒤집혀
+# `daengs_life.app.main`(단독 ASGI 앱)과 `python -m daengs_life.realtime walk` 가
+# 이 레포의 인증 없이는 못 도는 물건이 됩니다 (RAG-001 원칙 1 · D-018).
+# `include_router(dependencies=...)` 가 그 선을 넘지 않고 문을 잠그는 자리입니다.
+#
+# 관리자가 아니라 **앱 회원**입니다 — `/training/chat` 과 같은 판단입니다.
+# `current_app_user` 는 관리자 토큰도 401 로 막습니다 (그 `sub` 는 app_users 에 없습니다).
+app.include_router(walk.router, dependencies=[Depends(current_app_user)])
 
 
 def dev() -> None:

@@ -51,12 +51,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # `reload=True` 로 돌고 배포가 마운트된 소스를 갈아 끼우므로 그 일이 backend 코드가
     # 바뀌는 배포마다 일어납니다.
     #
-    # `/ask` 만 기다리게 하는 장치는 여기가 아니라 `deps._ENCODER_LOCK` 입니다. 예열이
-    # 도는 중에 들어온 요청은 락에서 기다렸다가 **같은 한 벌**을 받습니다 (두 벌을 올리면
-    # 그 순간 RAM 이 2배입니다).
+    # 예열이 도는 동안 들어온 `/ask` 는 **기다리지 않고 즉시 503 + `Retry-After`** 입니다
+    # (#37). 기다리게 하면 콜드 캐시에서 nginx 의 60초를 넘겨 사용자가 HTML 504 를 받습니다.
+    # 그 판단은 여기가 아니라 `deps.get_encoder` 가 합니다 — 두 벌을 막는 `deps._ENCODER_LOCK`
+    # 은 그대로 있고, 바뀐 것은 그 락을 **기다리는 방식**뿐입니다.
     #
     # `settings.warm_up_encoder` 로 끌 수 있습니다 — 테스트와 개발 PC 용입니다. 끄면 모델이
-    # 안 뜨는 게 아니라 **첫 `/ask` 가 로드를 뭅니다.**
+    # 안 뜨는 게 아니라 **첫 `/ask` 가 로드를 뭅니다.** 그때는 아무도 예열하고 있지 않으므로
+    # 위의 503 이 아니라 기다리는 쪽이 맞습니다 (`deps._WARM_UP_IN_PROGRESS`).
     warm_up = (asyncio.create_task(asyncio.to_thread(warm_up_encoder))
                if settings.warm_up_encoder else None)
 

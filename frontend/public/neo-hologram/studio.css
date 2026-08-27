@@ -1,0 +1,222 @@
+/* ── 홀로 스튜디오 ─────────────────────────────────────────
+   올린 이미지 한 장에 도감의 포일을 입혀 보는 화면.
+
+   **카드 자체의 CSS 는 한 줄도 새로 안 쓴다.** .stage / .card / .foil / .glare 는
+   style.css 것이고, 포일은 rarity.css + vendor 것이다. 여기 있는 건 그 카드를
+   놓을 자리(왼쪽)와 조작판(오른쪽)뿐이다 — 그래야 도감에서 보이는 모습과
+   스튜디오에서 보이는 모습이 어긋나지 않는다.
+
+   딱 하나 카드에 손대는 규칙이 아래 `.studio .stage` 의 크기다. 도감은 셀 높이가
+   먼저 정해지고 카드가 거기 맞춰 서지만(.slot .frame), 여기는 이미지 비율을
+   미리 알 수 없어서 반대로 잡는다 — 높이를 상한으로 두고 폭을 비율에서 뽑되,
+   가로로 긴 그림이 판을 넘지 않도록 min() 으로 폭을 한 번 더 막는다. */
+
+.studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: clamp(20px, 4vw, 48px);
+  align-items: start;
+  margin-top: clamp(26px, 5vw, 52px);
+}
+
+@media (max-width: 900px) {
+  .studio { grid-template-columns: 1fr; }
+}
+
+/* ── 왼쪽: 카드가 서는 자리 ─────────────────────────────── */
+
+.studio-stage { min-width: 0; }
+
+.studio-stage .holder {
+  display: grid;
+  place-items: center;
+  min-height: min(64svh, 620px);
+  border-radius: 20px;
+  transition: background-color .2s ease, box-shadow .2s ease;
+}
+
+/* 끌어다 놓는 동안만 자리를 밝힌다 */
+.studio-stage.is-dragging .holder {
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 2px var(--accent, #6ee7a8);
+}
+
+/* 도감의 .slot .frame 을 대신하는 규칙. 위 파일 머리말 참고. */
+.studio .stage {
+  height: auto;
+  width: min(100%, calc(min(58svh, 560px) * var(--ar)));
+}
+
+/* 스튜디오 카드는 눌러서 열 게 없다 — 커서가 손가락이면 거짓말이 된다. */
+.studio .card { cursor: grab; }
+.studio .stage:active .card { cursor: grabbing; }
+
+.dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(100%, 420px);
+  padding: clamp(28px, 6vw, 52px) 24px;
+  border: 2px dashed var(--line-soft);
+  border-radius: 20px;
+  text-align: center;
+}
+
+.dropzone-icon { font-size: 34px; }
+
+.dropzone-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.dropzone-sub {
+  margin: 0 0 6px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stage-note {
+  margin: 14px 0 0;
+  min-height: 1.2em;
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.stage-note.is-error { color: #ff9c8f; }
+
+/* ── 오른쪽: 조작판 ────────────────────────────────────── */
+
+.studio-panel {
+  display: grid;
+  gap: 22px;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .03);
+}
+
+.panel-block h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.panel-block h2 small {
+  margin-left: 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+.panel-block .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta {
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.btn {
+  padding: 9px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, opacity .16s ease;
+}
+
+.btn:hover:not(:disabled),
+.btn:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .28);
+}
+
+.btn.primary {
+  border-color: transparent;
+  background: var(--ink);
+  color: #0e0b05;
+}
+
+.btn.primary:hover:not(:disabled),
+.btn.primary:focus-visible:not(:disabled) {
+  background: #fff;
+  border-color: transparent;
+}
+
+.btn.ghost { background: transparent; }
+
+.btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.btn.is-busy { opacity: .6; pointer-events: none; }
+
+/* ── 포일 고르기 ───────────────────────────────────────── */
+
+.effects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 6px;
+}
+
+.chip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .03);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, .08);
+}
+
+.chip .chip-no {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .06em;
+}
+
+.chip[aria-checked="true"] {
+  color: #0e0b05;
+  background: var(--ink);
+  border-color: transparent;
+}
+
+.chip[aria-checked="true"] .chip-no { color: rgba(14, 11, 5, .55); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .studio-stage .holder { transition: none; }
+}

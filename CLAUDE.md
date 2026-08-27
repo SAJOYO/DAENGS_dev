@@ -108,7 +108,8 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **Redis 도 LAN 에 열어 둡니다** (D-019). 실시간 산책의 캐시이자 **일 예산 카운터**라,
   개발 PC 도 서버 Redis 에 붙어야 data.go.kr 의 1,000회/일 을 하나로 셉니다. Redis 는
   기본이 무인증이므로 최상단 `.env` 의 `REDIS_PASSWORD` 를 **반드시** 채우세요 — 비어
-  있으면 `--requirepass ""` 가 되어 누구나 붙습니다. 접속은 `REDIS_URL` **한 줄**이라
+  있으면 `docker compose` 가 아예 멈춥니다 (`:?` 가드. `DAENGS_TRAINING_RAG_BASE_URL`
+  과 같은 장치입니다). 접속은 `REDIS_URL` **한 줄**이라
   (`backend/.env`) 비밀번호에 `@` `/` `#` 이 들어가면 깨집니다. 영숫자로만 지으세요.
   **`maxmemory` 는 일부러 안 겁니다** — 나중에 Celery 워커가 같은 인스턴스를 쓰는데,
   eviction 은 DB 번호가 아니라 인스턴스 단위라 큐가 조용히 지워집니다.

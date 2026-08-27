@@ -25,6 +25,10 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
+    # Training RAG는 Docker 바깥(host)에서 별도 FastAPI로 실행된다. Linux Docker에서도
+    # host.docker.internal 이름을 해석할 수 있도록 backend에 직접 매핑한다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
     env_file:
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
@@ -53,13 +57,14 @@ services:
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
       # Training RAG는 별도 host-side FastAPI다. main backend만 이 URL로 호출하며
       # frontend는 nginx /api/ 경로를 통해서만 접근한다.
-      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL}
+      # 빈 문자열을 주입하면 backend가 restart loop에 빠진다. 배포 전에 최상단 .env에
+      # 반드시 설정하도록 compose 단계에서 중단한다.
+      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL:?Set DAENGS_TRAINING_RAG_BASE_URL in the deployment root .env}
       # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
       # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
       #
       # DB 와 달리 조각이 아니라 URL 한 줄이라, 비밀번호에 @ / # 이 들어가면 깨집니다
       # (D-013 과 같은 함정). .env 에서 영숫자로만 지으세요.
-      # 값이 비면 인증 없이 붙고, 그래도 안 붙으면 프로세스 메모리로 떨어집니다 (D-019).
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
@@ -131,8 +136,13 @@ services:
       - redis-server
       # ports 로 LAN 에 열기 때문에 필수입니다. Redis 는 기본이 무인증이라
       # 이게 없으면 같은 네트워크의 누구나 FLUSHALL 할 수 있습니다.
+      # `:?` 는 #26 이 DAENGS_TRAINING_RAG_BASE_URL 에 쓴 것과 같은 장치입니다. 저기는
+      # 빈 값이면 backend 가 restart loop 에 빠지는 것을 막고, 여기는 **인증 없는 Redis 가
+      # LAN 에 열리는 것**을 막습니다. 안 뜨는 편이 열린 채로 뜨는 것보다 낫습니다.
+      # 파일 전체가 해석되고 나서 컨테이너가 뜨므로, 이 한 곳이면 아래 REDISCLI_AUTH 와
+      # backend 의 REDIS_URL 까지 같이 지켜집니다.
       - --requirepass
-      - ${REDIS_PASSWORD}
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the deployment root .env (LAN 에 열리는 포트입니다)}
       # RDB 스냅샷만 씁니다. 캐시 값은 사라져도 다시 받으면 그만이지만
       # 예산 카운터는 잃으면 그날 한도를 넘겨 부르게 됩니다.
       - --save

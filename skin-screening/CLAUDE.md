@@ -51,6 +51,8 @@ uv run --extra model python tests/test_screening_message.py   # 문구 감시 (t
   읽습니다 (`agent.crop_tag_from_exp`, `train.model_key_from_exp`).
 - **가중치(`*.pt`)와 사진은 커밋하지 않습니다.** `.gitignore` 가 막고 있습니다.
   `best.pt` 하나가 163MB / 189MB 라 GitHub 의 파일당 100MB 리밋에 걸려 push 가
-  통째로 거부됩니다. AI Hub 데이터는 재배포 금지입니다.
+  통째로 거부됩니다. **가중치 자체는 약관상 자유롭게 배포할 수 있습니다** —
+  막히는 건 파일 크기입니다. 반면 **크롭 이미지는 "원본을 단순 가공한 형태" 라
+  원본과 같이 제3자 제공이 금지됩니다.** 출처 표기는 README 참고.
 - **이 폴더는 아직 배포에 안 붙어 있습니다.** compose·nginx·deploy.yml 어디에도
   없습니다. 붙이는 건 별도 카드입니다 — README "출시할 때" 참고.

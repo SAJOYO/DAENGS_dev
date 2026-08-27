@@ -1,6 +1,6 @@
 # 데이터 소스 조사 — 제도·문서형 RAG
 
-> 조사일: 2026-08-19 · 최종 갱신: 2026-08-20
+> 조사일: 2026-08-19 · 최종 갱신: 2026-08-28
 > 도메인: 동물등록 / 예방접종 / 목줄·입마개(맹견) / 동반 이동 / 지자체 지원 / 펫보험
 > 기계용 시드 목록: [`data/manifests/seed_sources.yaml`](../data/manifests/seed_sources.yaml) · 저장 규칙: [`data/README.md`](../data/README.md)
 
@@ -21,17 +21,17 @@
 | 예방접종 | 2 | 0 | 0 (⚠️ 2건 URL 확인 필요) | 법령(광견병) + 검역본부 |
 | 목줄·입마개·맹견 | 2 | 0 | 2 | 동물보호법·시행규칙 + 보도자료 |
 | 동반 이동 | 4 | 0 | 0 (⚠️ 4건 URL 확인 필요) | 운송약관 원문 |
-| 지자체 지원 | 4 | **1** (조례 208건) | 1 | 보조금24 API + 조례 전수 |
+| 지자체 지원 | 4 | **2** (조례 208 + 보조금24 37) | 0 | 보조금24 API + 조례 전수 |
 | 펫보험 | 3 | 0 | 0 (⚠️ 3건 URL 확인 필요) | 보험사 약관 PDF |
 | **문서형 소계** | **23** | **4** | **6** | |
 | 실시간 (저장 X) | 7 | — | — | 기상청 + 에어코리아 + 카카오 |
 | **합계** | **30** | | | |
 
 **병목 3가지**
-1. ~~키 미발급~~ → **키는 전부 발급됐다. 남은 것은 data.go.kr 의 API 별 "활용신청"** 이다 (§9).
-   `LAW_OC`·`DATA_GO_KR_KEY` 둘 다 `.env` 에 있고, `LAW_OC` 는 target 전부가 한 키로 열리는 반면
-   `DATA_GO_KR_KEY` 는 **데이터셋마다 따로 신청**해야 한다 — `benefit24-services`(15113968) ·
-   `data-registration-lookup`(15098913) 2건이 그 상태다
+1. ~~키 미발급~~ → **키는 전부 발급됐다.** 남은 것은 data.go.kr 의 **API 별 "활용신청"** 이다 (§9).
+   `LAW_OC` 는 target 전부가 한 키로 열리는 반면 `DATA_GO_KR_KEY` 는 **데이터셋마다 따로 신청**해야
+   한다 — 키가 살아 있어도 신청 안 한 API 는 `401 -4` 다. `benefit24-services`(15113968)는
+   2026-08-28 에 신청을 마쳤고, `data-registration-lookup`(15098913)만 남았다
 2. ⚠️요확인 9건 — 운송약관 4 · 보험 3 · 접종 2. `easylaw-pet` 도 `verified` 였는데 실제 URL 이 죽어 있었음 → **수집 착수 전 URL 확인을 기본 절차로** (§10)
 3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(RAG-004) 확정 후
 
@@ -143,11 +143,14 @@
 > 전국 단일 소스가 없는 가장 지저분한 도메인. **3계층**으로 나눠 공략한다.
 
 **① 구조화 · 커버리지**
-- [ ] **`benefit24-services`** — 보조금24 / 행안부 대한민국 공공서비스(혜택) 정보 · `api` · 🔑`DATA_GO_KR_KEY` · ✅확인 · https://www.data.go.kr/data/15113968/openapi.do
-      중앙+지자체 **7,500여 개** 서비스 목록·상세. "반려" "동물등록" "중성화" "내장형" 키워드 필터링
-      ⛔ **활용신청 대기 중** — 키는 있는데 이 데이터셋에 신청이 안 됐다 (§9). 엔드포인트는
-      `api.odcloud.kr/api/gov24/v3/{serviceList,serviceDetail,supportConditions}` 로 확인됐다
-      (없는 경로는 `-3`, 이 셋은 `-4` 를 준다 = 경로는 살아 있고 권한만 없다)
+- [x] **`benefit24-services`** ✅ **37건 수집 완료 (2026-08-28)** — 보조금24 / 행안부 대한민국 공공서비스(혜택) 정보 · `api` · 🔑`DATA_GO_KR_KEY` · https://www.data.go.kr/data/15113968/openapi.do
+      엔드포인트는 `api.odcloud.kr/api/gov24/v3/{serviceList,serviceDetail,supportConditions}`.
+      **전체 10,958건**(카드가 적어 둔 "7,500여 개" 보다 늘었다) 중 키워드로 걸러 37건.
+      소관기관은 시군구 28 · 광역시도 8 · 중앙 1 — 조례와 같은 분포라 두 소스가 같은 지자체를
+      **근거(조례 `law`)와 집행(이쪽 `official`)** 양쪽에서 덮는다.
+      `cond[필드::LIKE]` 로 **서버가 걸러 준다** — 목록 16회 + 상세 37회 = **53회/일**로 끝난다.
+      ⚠️ **키워드에 `반려` 를 단독으로 쓰면 안 된다** — 행정 문서의 "반려"는 返戾(신청 반려)와
+      동음이의어라 C형간염 검사비·산모신생아·ICT 돌봄이 딸려 온다. 근거는 RAG-032
 
 **② 안정 · 법적 근거**
 - [x] **`ordinance-search`** ✅ **208건 수집 완료 (2026-08-27)** — 자치법규 API `target=ordin&query=반려동물` · `api` · 🔑`LAW_OC`
@@ -250,7 +253,12 @@
       Decoding(88자) 쪽이고, Encoding(98자)을 그대로 주면 이중 인코딩으로 실패한다.
       `realtime/config.py` 의 `normalize_key()` 가 그 일을 하는데 **`crawler/core/config.py` 에는
       아직 없다** — crawler 쪽에서 이 키를 쓰는 첫 소스가 직접 정규화해야 한다
-      → 아직 신청 안 된 것: `benefit24-services`(15113968), `data-registration-lookup`(15098913)
+      → `benefit24-services`(15113968) **활용신청 완료 · 37건 수집 완료 (2026-08-28)**
+      → `data-registration-lookup`(15098913) 은 아직 신청 안 함 (§2, 카드 밖)
+      ⚠️ **Encoding 키를 URL 에 그대로 박으면 안 된다.** `crawler/core/config.normalize_key()` 가
+      읽는 즉시 Decoding 형태로 바꾸는데, 그 값은 base64 라 `+` `/` `=` 를 품고 있어
+      쿼리스트링에 넣을 때 다시 인코딩해야 한다. 안 하면 `+` 가 공백이 되어
+      **`401 -4`(= 활용신청 안 함)와 똑같은 증상**이 난다 (2026-08-28 실측)
 - [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시
       → 막고 있는 것: `kakao-local` (GPS→행정동, 좌표 변환)
 - [ ] **서울 열린데이터 인증키** — data.seoul.go.kr · 무료
@@ -296,7 +304,7 @@
 
 ### Phase 2 — 키 발급 후 (구조화 확장)
 - [x] `law-drf-api` — 조문 단위 XML (8건, 별표 본문 포함)
-- [ ] `benefit24-services` — 보조금24 (⛔ 활용신청 대기)
+- [x] `benefit24-services` — 보조금24 (37건. 키워드 필터 — RAG-032)
 - [x] `ordinance-search` — 조례 전수 (208건. 제목검색 범위 — RAG-031)
 - [ ] `data-registration-lookup`
 - [ ] `insurer-terms-pdfs` — 보험 약관 PDF

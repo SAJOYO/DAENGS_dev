@@ -187,7 +187,7 @@
   method: api
   auth: data-go-kr
   status: verified
-  notes: "중앙+지자체 7,500여 서비스. 반려/동물등록/중성화/내장형 키워드 필터. 지원사업 1순위 소스"
+  notes: "전체 10,958건(2026-08-28 실측) 중 키워드로 37건. 키워드는 반드시 복합어 — 단독 '반려'는 返戾(신청 반려)와 동음이의어라 무관한 사업이 딸려온다 (RAG-032)"
 
 - id: ordinance-search
   domain: subsidy

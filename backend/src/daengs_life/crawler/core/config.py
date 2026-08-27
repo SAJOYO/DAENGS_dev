@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -103,11 +104,33 @@ def require_data_dir() -> Path:
     return DATA_DIR
 
 
+def normalize_key(value: str) -> str:
+    """`%` 가 있으면 URL 디코딩 1회, 없으면 그대로.
+
+    data.go.kr 이 **같은 키를 Encoding/Decoding 두 벌**로 보여준다. httpx 가 `params` 를 자동
+    인코딩하므로 맞는 것은 Decoding 형태이고, Encoding 키를 그대로 주면 `%2F` → `%252F` 이중
+    인코딩으로 **HTTP 403 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`** 가 난다 — 키가 죽은 것처럼
+    보이는 메시지라 원인을 엉뚱한 데서 찾게 된다 (2026-08-27 실측).
+
+    **판별이 확정적이라 오탐이 없다.** 키는 base64(`A-Za-z0-9+/=`) 아니면 hex 이고 두 알파벳
+    어디에도 `%` 가 없다. 그래서 키 전부를 같은 함수에 통과시킨다 — `LAW_OC`(이메일 ID)처럼
+    `%` 가 없는 값은 그대로 나온다.
+
+    `realtime/config.py` 에 같은 함수가 하나 더 있고 **일부러 합치지 않았다.** crawler 는
+    realtime 을 import 하지 않는다(RAG-009 의 한 방향 규칙). 열 줄을 아끼자고 그 방향을 뚫으면
+    D-021 이 싸다고 본 접점 크기가 커진다.
+    """
+    return unquote(value) if "%" in value else value
+
+
 # 마스킹 대상 — Settings 의 키 필드에서 만든다. 필드를 추가하면 여기에도 이름을 넣을 것.
 _SECRET_FIELDS = ["law_oc", "data_go_kr_key", "kakao_rest_key", "seoul_open_data_key", "kma_hub_key"]
-SECRETS = {name.upper(): (getattr(settings, name) or "").strip() for name in _SECRET_FIELDS}
+# **읽는 즉시 정규화한다.** 소스마다 하면 한 곳이 빠졌을 때 그 소스만 조용히 실패한다.
+SECRETS = {name.upper(): normalize_key((getattr(settings, name) or "").strip())
+           for name in _SECRET_FIELDS}
 
 LAW_OC = SECRETS["LAW_OC"]
+DATA_GO_KR_KEY = SECRETS["DATA_GO_KR_KEY"]
 
 
 # 키가 담기는 쿼리 파라미터 이름. 값 대신 이름으로 지우는 게 정확하다 —

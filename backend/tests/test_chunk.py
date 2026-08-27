@@ -25,8 +25,11 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 # 2026-08-27 갱신 — 조례 208건 추가 (RAG-031). parsed 230건 기준.
 # 늘어난 몫은 전부 조례다: article +2,334 · para +52. 법령 쪽 수치(aside·heading·qa·table)는
 # 그대로다 — 조례 XML 에는 별표·서식이 없고 장·절도 Heading 으로 안 샌다(청킹 대상이 아니다).
-TOTAL = 3_793
-BY_TYPE = {"article": 3054, "aside": 22, "heading": 40, "para": 244, "qa": 10, "table": 423}
+# 2026-08-28 갱신 — 보조금24 37건 추가 (RAG-032). parsed 267건 기준. article +206.
+# **보조금24도 article 이다** — 조문이 아니라 필드 묶음인데, `para` 로 내면 청커가 조용히
+# 버려서(`para: 소제목 밖`) 206청크가 0이 된다. RAG-032 ④ 의 그 결정이 이 수에 들어 있다.
+TOTAL = 3_999
+BY_TYPE = {"article": 3260, "aside": 22, "heading": 40, "para": 244, "qa": 10, "table": 423}
 
 
 @pytest.fixture(scope="module")

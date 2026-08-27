@@ -21,7 +21,7 @@
 ### 못 푸는 페르소나 (범위 밖, 지우지 않고 남김)
 
 **"비용 걱정형"** — 진료비를 모르고 과잉진료를 걱정한다. 경쟁 조사에서 가장 크게 잡힌 수요다
-([competitor-reviews](../research/2026-08-19-competitor-reviews.md): 마이펫플러스·펫트라슈가 파는 게 정확히 이것).
+([competitor-reviews](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/research/2026-08-19-competitor-reviews.md): 마이펫플러스·펫트라슈가 파는 게 정확히 이것).
 
 우리는 **진료비 데이터가 없고 만들 계획도 없다.** 영수증 수집은 다른 사업이고, 제휴 병원 가격만 보여주면
 같은 조사에서 "광고판·장사꾼"으로 읽힌 그 모델이 된다. 그래서 이 페르소나는 **의도적으로 안 푼다.**

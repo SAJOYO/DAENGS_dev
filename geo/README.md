@@ -16,7 +16,7 @@ fix·`WalkFacts`·정지/시설 occurrence 파생과 원좌표 purge를 구현�
 종료 시 서버 업로드까지 에뮬레이터에서 한 바퀴 관통을 확인했다(결정 #60). process-death 복구와
 배터리 대비 업로드 주기는 아직 구현하지 않았다.
 
-**다음 장소 발견 축: 2026-08-26.** [결정 #65](docs/decisions/2026-08-26-place-first-discovery.md)은
+**다음 장소 발견 축: 2026-08-26.** [결정 #65](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-26-place-first-discovery.md)은
 병원·약국·카페·여행·미용·숙박을 공통 `Place`로 보고, 원천 category에서 정규화한 `kind`를
 검색 입구로 삼는다. 기본 결과는 사실 기반이고 태그·AI는 사용자가 적용하는 제안층이다.
 공통 `POST /v2/places/search`는 종류별 독립 그룹·기본 거리순·반려견 입장 3상태 평가와
@@ -46,12 +46,12 @@ android/         Kotlin/Compose — 위치→검색→NAVER 지도 + walk foregr
 
 ## 현재 코어와 parked 구현
 
-현재 코어는 [결정 #51](docs/decisions/2026-08-22-walk-as-spine.md)에 따라 장소 데이터,
+현재 코어는 [결정 #51](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-22-walk-as-spine.md)에 따라 장소 데이터,
 위치 인프라, Android 위치→검색→지도 셸, 산책 사실 계약이다. 자연어 refine/LLM,
 suggested actions는 코드와 테스트가 있지만 제품 코어에서는
 **parked**다. 다시 채택하기 전까지 다음 구현 순서나 제품 차별점으로 세지 않는다.
 
-커뮤니티 근거·홈페이지 추출은 [결정 #63](docs/decisions/README.md)으로 **기각**했다 — 원천이
+커뮤니티 근거·홈페이지 추출은 [결정 #63](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/README.md)으로 **기각**했다 — 원천이
 없어서 재료가 생길 경로가 없다. 코드(`app/enrich/`)와 응답의 `evidence[]` 는 제거했다.
 
 parked된 LLM 경계는 `utterance`가 있을 때만 “말 → 툴 호출” 번역 한 겹으로 동작하며 병원
@@ -206,3 +206,20 @@ POST /hospital/search
 실행 가능한 것은 [scripts/README.md](scripts/README.md) 가 지도. 운영 도구(최상위) ·
 관통 검증 하네스(`verify/`) · 갈래별 측정 스파이크(`spikes/<갈래>/`)로 **수명**에 따라
 나뉘고, 스파이크는 갈래가 닫히면 폴더째 지운다.
+
+## 팀 모노레포로 내보내기
+
+이 저장소는 팀 모노레포([SAJOYO/DAENGS_dev](https://github.com/SAJOYO/DAENGS_dev))의 `geo/`
+에 **사본으로** 들어간다. **원본은 여기다** — 저쪽 `geo/` 를 고치면 다음 동기화 때 덮여
+사라진다. 고칠 일은 여기서 하고, 사본은 다시 내보낸다.
+
+```bash
+uv run python -m scripts.export_copy ../DAENGS_dev/geo
+```
+
+`android/` · `.github/` 와 **이 저장소의 작업 방식 문서**(`docs/{decisions,research,
+explorations}`)는 빼고 나간다. 받는 쪽은 결정 기록 체계가 따로 있어서, 같이 가면 번호가
+서로를 가리킨다. 바깥에 주는 `docs/contracts/` 는 남는다 — 사본이 존재하는 이유다.
+
+빠진 문서를 가리키던 링크는 스크립트가 원본 절대 URL 로 바꾼다. **사본을 손으로 만들지
+마라** — 그 변환이 빠지면 링크가 깨진 채 올라가고, diff 에서는 멀쩡한 마크다운으로 보인다.

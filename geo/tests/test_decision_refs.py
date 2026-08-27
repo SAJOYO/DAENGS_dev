@@ -6,13 +6,26 @@
 
 규칙은 "모든 테스트에 결정을 달아라"가 아니다. **"달았으면 실재해야 한다"** 이다.
 정책·제품 결정에서 직접 파생된 테스트에만 붙인다.
+
+**결정 문서가 없으면 통째로 skip 한다.** `docs/decisions/` 는 이 저장소의 작업 방식이고,
+사본으로 나간 곳(팀 모노레포의 `geo/`)에는 따라가지 않는다 — 저쪽은 결정 기록 체계가 따로
+있어서 둘이 섞이면 번호가 서로를 가리킨다. 이 가드는 **번호를 발급하는 곳**에서만 의미가
+있으므로 원본 CI 가 돌린다. 파일이 없을 때 실패하면, 사본에서 이 저장소의 규율을
+요구하는 셈이 된다.
 """
 
 import re
 from pathlib import Path
 
+import pytest
+
 TESTS_DIR = Path(__file__).parent
 DECISIONS_MD = TESTS_DIR.parent / "docs" / "decisions" / "README.md"
+
+pytestmark = pytest.mark.skipif(
+    not DECISIONS_MD.exists(),
+    reason="docs/decisions/ 는 원본 저장소에만 있다 — 결정 번호 가드는 거기서 돈다",
+)
 
 # 표의 첫 칸이 결정 번호다: `| 37 | **undo 의 단위는...` .
 _DECISION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)

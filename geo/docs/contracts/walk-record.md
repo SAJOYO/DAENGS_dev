@@ -4,8 +4,8 @@
 우리가 수집한 사실을 남(케어 밸런스 · 서술 · 보행체크 · 수의사 리포트)이 소비한다.
 소비자가 이 레포 안에 있을 수도 바깥 팀원일 수도 있다. 어느 쪽이든 **이 계약만 본다.**
 
-근거: [결정 — 병원은 산책의 모드, 산책이 척추](../decisions/2026-08-22-walk-as-spine.md) 7절,
-[연구 — 산책 데이터 신뢰도 등급](../research/2026-08-19-walk-data-evidence.md).
+근거: [결정 — 병원은 산책의 모드, 산책이 척추](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-22-walk-as-spine.md) 7절,
+[연구 — 산책 데이터 신뢰도 등급](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/research/2026-08-19-walk-data-evidence.md).
 
 ## 원칙
 
@@ -121,7 +121,7 @@ device/mock 혼합 업로드는 거부한다. 재생 세션도 계산은 가능�
 
 ## 예정 — 저장 정책이 선 뒤
 
-저장 **층**은 결정 #57 에서 정해졌다 ([문서](../decisions/2026-08-25-walk-data-retention.md)) —
+저장 **층**은 결정 #57 에서 정해졌다 ([문서](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-25-walk-data-retention.md)) —
 연속 궤적은 finish 이후 남기지 않고, 무좌표 집계는 장기 보관 후보, 좌표 동반 층은 기본이 짧다.
 아직 없는 것은 각 층의 **일수**와 사용자에게 보이는 삭제 표면이다. 아래 항목들은 그 뒤다.
 
@@ -138,6 +138,6 @@ device/mock 혼합 업로드는 거부한다. 재생 세션도 계산은 가능�
 | 칼로리 | 걷기 MAPE 35%. 숫자로 내면 거짓말 |
 | 걸음 수 | 폰은 사람 걸음. 소형견 보폭 3~4배 |
 | 냄새 맡기 | 검증된 행동 분류 8개에 없음. 목걸이가 있어도 |
-| 계단 · 육교 | TMAP 이 안 준다 — 288경로 0 ([조사](../research/2026-08-22-tmap-option-survey.md)) |
+| 계단 · 육교 | TMAP 이 안 준다 — 288경로 0 ([조사](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/research/2026-08-22-tmap-option-survey.md)) |
 | 목표 대비 · 보상 · 권유 | 사실이 아니라 판정. 소비자의 일 |
 | 서술 · 에피소드 | 옵션. 소비자의 일 |

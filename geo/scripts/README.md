@@ -1,6 +1,6 @@
 # scripts/ — 수명이 다른 셋을 섞지 않는다
 
-`app/` 은 [결정 #67](../docs/decisions/2026-08-26-package-architecture.md) 이 축을 잠갔고
+`app/` 은 [결정 #67](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-26-package-architecture.md) 이 축을 잠갔고
 `tests/` 는 계약 테스트가 지킨다. `scripts/` 에는 규칙이 없었고, 그래서 **수명이 다른 셋이
 한 레벨에 나란히** 쌓였다 — 계속 쓰는 도구, 재사용하는 검증 하네스, 갈래가 닫히면 사라질
 측정 스파이크. 폴더만 봐서는 어느 것이 끝난 실험인지 알 수 없었다.
@@ -40,7 +40,7 @@ git grep -n 'scripts/spikes/<갈래>'   # app · tests · docs · android 전부
 
 지울 때 재현성은 연구 문서가 받는다. 코드를 남기는 대신 **git history 포인터 한 줄**을
 그 문서의 `## 재현` 에 적는다. 선례가 있다 — `tmap_option_survey.py` 는 결정 #66 과 함께
-지웠고, [조사 문서](../docs/research/2026-08-22-tmap-option-survey.md) 가 `git log` 명령으로
+지웠고, [조사 문서](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/research/2026-08-22-tmap-option-survey.md) 가 `git log` 명령으로
 원문을 가리킨다. 안 도는 코드를 "언젠가 쓸지도 몰라서" 남기면 몇 달 뒤 import 경로가
 바뀌어 어차피 안 돈다. 그때는 지워야 한다는 것조차 안 보인다.
 
@@ -63,5 +63,11 @@ git grep -n 'scripts/spikes/<갈래>'   # app · tests · docs · android 전부
 
 최상위에 남는 것은 **README 나 문서가 실행을 지시하는 명령**뿐이다.
 `detect_schema_revision.py` 는 [README 의 스키마 절](../README.md)이,
-`facility_pet_coverage.py` 는 [pet-axes 갈래](../docs/explorations/facility/pet-axes.md)가
+`facility_pet_coverage.py` 는 [pet-axes 갈래](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/explorations/facility/pet-axes.md)가
 부른다. 소속이 애매하면 최상위가 아니라 `spikes/<갈래>/` 다.
+
+`export_copy.py` 는 [README 의 사본 절](../README.md)이 부른다. 이 저장소를 팀 모노레포의
+`geo/` 로 내보낸다 — `android/` · `.github/` · 이 저장소의 작업 방식 문서
+(`docs/{decisions,research,explorations}`)를 빼고, 그 문서를 가리키던 링크 47개를 원본
+절대 URL 로 바꾼다. **사본을 손으로 만들면 그 링크 변환이 빠지고, 깨진 링크는 diff 에서
+멀쩡한 마크다운으로 보인다.**

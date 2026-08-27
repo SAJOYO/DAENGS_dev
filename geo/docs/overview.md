@@ -4,7 +4,7 @@
 
 팀 기능 목록에서 이 레포의 이름은 둘이었다 — 병원/약국 찾기 AI, 게임(산책). 나흘 만에 그 둘이 **기능이 아니라
 데이터**라는 걸 확인했고 2026-08-24 결정 #51로 채택했다
-([병원은 산책의 모드, 산책이 척추](decisions/2026-08-22-walk-as-spine.md)).
+([병원은 산책의 모드, 산책이 척추](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-22-walk-as-spine.md)).
 
 이 레포가 소유하는 것:
 
@@ -14,7 +14,7 @@
 | **이용 과정의 데이터** | 산책 사실. (저장 정책 뒤) 어디서 뭘 찾았나 | [`contracts/walk-record.md`](contracts/walk-record.md) |
 | **위치 인프라** | PostGIS 반경 검색 · 영업 판정 · 경로 · 제공사 경계 · 유료 호출 게이트 | `app/geo` `app/journey` `app/providers` `app/usage` |
 
-[결정 #65](decisions/2026-08-26-place-first-discovery.md)은 이 장소들의 제품 최상위를 `Place`로
+[결정 #65](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/2026-08-26-place-first-discovery.md)은 이 장소들의 제품 최상위를 `Place`로
 고정했다. 웹 검증 지도와 Android 기본 장소 화면은 canonical `POST /v2/places/search`와
 `PlaceResult`를 함께 사용한다. 기존 의료·시설 endpoint와 Android 병원 상담은 소비자 전환이
 끝날 때까지 legacy 경로로 유지한다.
@@ -33,7 +33,7 @@ start → GPS 배치 → end → WalkFacts (시간·거리·속도·정지)
 ```
 
 의미를 붙이지 않는다. 목표 · 보상 · 트리거 · 서술은 `app/features/walk` 에 없고, 없다는 것을
-`tests/test_walk_contract.py` 가 지킨다. 3단 루프 · 케어 밸런스는 [탐색](explorations/walk/loop-and-balance.md)으로
+`tests/test_walk_contract.py` 가 지킨다. 3단 루프 · 케어 밸런스는 [탐색](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/explorations/walk/loop-and-balance.md)으로
 내렸다 — 수집이 돌고 baseline 이 쌓인 뒤에 데이터로 정한다.
 
 위 흐름은 실제로 돈다 — Android foreground service가 원본 fix를 Room에 쌓고, 산책을 끝내면
@@ -49,7 +49,7 @@ start → GPS 배치 → end → WalkFacts (시간·거리·속도·정지)
 
 공공 인허가 데이터는 영업시간 · 과목 · 야간을 주지 않는다. 답할 수 있는 건 거리 · 종류 · 영업 상태(인허가) 다.
 그래서 남는 기능은 검색 + 전화 + 지도 딥링크 + 추정 도보 시간이고, 대화로 조건을 편집하는 루프 · 커뮤니티 근거 ·
-옵션 비교는 걷어냈다 ([결정 #66](decisions/README.md) — 대화 루프는 보류, 커뮤니티 근거와 옵션 비교는 기각).
+옵션 비교는 걷어냈다 ([결정 #66](https://github.com/rkbuhtig/DAENGS_geo/blob/main/docs/decisions/README.md) — 대화 루프는 보류, 커뮤니티 근거와 옵션 비교는 기각).
 
 네이버 지도가 못 하는 병원 검색은 하나다 — "지금 산책 중, 집에서 1.2km, 노령견, 31℃". 그 맥락은 대화창이 아니라
 산책 세션이 갖고 있다. **응급 모드는 산책 사실의 소비자**고, 장소·위치·세션이 다 여기 있으니 여기서 만드는 게

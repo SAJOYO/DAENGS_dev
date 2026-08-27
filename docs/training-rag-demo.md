@@ -68,6 +68,15 @@ DAENGS backend를 Docker Compose로 실행하고 RAG를 Windows 호스트에서 
 DAENGS_TRAINING_RAG_BASE_URL=http://host.docker.internal:8010
 ```
 
+이 값은 `backend/.env`가 아니라 **Compose를 실행하는 배포 checkout의 최상단 `.env`**에
+반드시 있어야 한다. Compose의 `environment:`가 `env_file:`보다 우선하므로 최상단 값이
+없으면 빈 문자열이 backend 컨테이너에 주입된다. 배포 workflow는 이제 `docker compose config`
+단계에서 이 누락을 먼저 실패시킨다.
+
+Linux Docker에서는 backend 서비스가 `host.docker.internal:host-gateway`를 명시적으로
+매핑한다. RAG 프로세스가 호스트에서 실행된다면 컨테이너가 닿을 수 있도록 `0.0.0.0:8010`에
+바인딩하고, `http://127.0.0.1:8010/healthz`로 정상 응답하는지 확인한다.
+
 DAENGS의 `pgvector:5432/vectordb`와 RAG의 `dog-rag-pgvector:5433/dog_rag`는 서로 다른 데이터베이스다.
 DAENGS Compose는 RAG DB를 만들거나 변경하지 않는다.
 

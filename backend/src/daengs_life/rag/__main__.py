@@ -409,7 +409,7 @@ def cmd_load(args: argparse.Namespace) -> int:
             print(f"    {n:5d}행  {name}")
 
     print("\n인덱스는 적재 후에 수동으로 만든다 (db/indexes.sql):")
-    print("  docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB < db/indexes.sql")
+    print("  docker compose exec -T pgvector psql -U postgres -d vectordb < db/indexes.sql")
     return 0
 
 

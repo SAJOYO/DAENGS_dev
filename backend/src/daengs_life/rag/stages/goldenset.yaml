@@ -12,7 +12,10 @@
 schema_version: 1
 
 corpus:                            # 이 라벨을 판정한 코퍼스 스냅샷. 다르면 채점기가 경고한다
-  collected_on: 2026-08-20         # 법령 4소스 수집일 (easylaw 는 2026-08-19)
+  # 2026-08-27 재수집으로 갱신 (RAG-030). 라벨은 다시 쓰지 않았다 — **개정이 없었기** 때문이다:
+  # 요소 합계(article 629 · heading 97 · 서식 제외 126)와 청크 총량·제외 내역이 1랩과 같고,
+  # 조문 내용을 박아 둔 test_parse.py 19개 · test_chunk.py 27개가 전부 통과했다.
+  collected_on: 2026-08-27         # 법령 4소스 수집일 (1랩은 2026-08-20, easylaw 만 08-19)
   chunker_version: 1
   chunk_count: 1407
 

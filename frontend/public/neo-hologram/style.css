@@ -129,6 +129,11 @@ body::before {
 .back:hover,
 .back:focus-visible { color: var(--ink); }
 
+/* 도감 → 홀로 스튜디오(studio.html). 왼쪽의 '← DAENGS' 와 붙어 있으면 둘 다 뒤로
+   가는 링크처럼 보여서 오른쪽 끝으로 밀어 둔다. 스튜디오 쪽 topbar 에는 이 링크가
+   없으므로 저기서는 아무 일도 안 일어난다. */
+.studio-link { margin-left: auto; }
+
 .eyebrow {
   margin: 0 0 6px;
   color: var(--ink-faint);

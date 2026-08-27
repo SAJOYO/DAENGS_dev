@@ -224,15 +224,22 @@ def _table(el: dict, base: dict, title: str, dropped: Counter) -> list[Chunk]:
     return out
 
 
-# ---------------------------------------------------------------- easylaw / qa (③(라)(마))
-def _easylaw_caption(lastseg: str, h1: str | None, h2: str | None) -> str:
+# ---------------------------------------------------------------- 해설 / qa (③(라)(마))
+def _prose_caption(lastseg: str, h1: str | None, h2: str | None) -> str:
     """문서 마디 + h1 + h2.
 
     **h1 을 넣는다.** h2 41개 중 `이동장비에 넣는 등 안전조치를 취한 후 탑승하기` 가 4번 반복되고
     (시내버스·고속버스·전철·기차), `(h1, h2)` 쌍으로는 중복이 0 이라 넷을 구분하는 축이 h1 뿐이다.
     서술문 h1 이 형제 주제어를 흘리는 손해는 순위 흔들림이지만, 빼면 구분 자체가 불가능해진다.
+
+    **같은 문자열은 한 번만 넣는다.** 소제목이 없는 기사(정책브리핑)는 파서가 문서 제목으로 절을
+    세우므로 `lastseg` 와 `h2` 가 같아진다. 그대로 두면 캡션이 제목을 두 번 반복한다.
     """
-    return "\n".join(x for x in (lastseg, h1, h2) if x)
+    seen: list[str] = []
+    for x in (lastseg, h1, h2):
+        if x and x not in seen:
+            seen.append(x)
+    return "\n".join(seen)
 
 
 def _qa(el: dict, base: dict) -> list[Chunk]:
@@ -261,7 +268,11 @@ def chunk_doc(rows: list[dict]) -> Chunked:
     base = _doc_fields(head)
     title = head.get("document_title", "")
     lastseg = _last_segment(title)
-    is_easylaw = head.get("source_id") == "easylaw-pet"
+    # **소스 id 로 가르지 않는다** (RAG-031). 이 파일의 머리말이 "새 소스가 들어와도 분기가 생기면
+    # 안 된다" 고 못 박아 뒀는데 `source_id == "easylaw-pet"` 이 정확히 그 분기였다. 실제 기준은
+    # 사이트가 아니라 **문서의 모양**이다 — 조문이 경계를 확정해 주는 법령이냐(article),
+    # 제목+문단으로만 된 해설이냐. 해설이면 소제목을 그릇으로 삼아 문단을 모은다.
+    is_prose = not any(el.get("type") == "article" for el in rows[1:])
     res = Chunked()
 
     h1: str | None = None
@@ -272,7 +283,7 @@ def chunk_doc(rows: list[dict]) -> Chunked:
     def flush() -> None:
         nonlocal group, group_el
         if group_el and group:
-            cap = _easylaw_caption(lastseg, h1, h2)
+            cap = _prose_caption(lastseg, h1, h2)
             res.chunks.append(_make(
                 base, chunk_id=group_el["id"], content="\n".join([cap, *group]),
                 section=h2, citation=f"{lastseg} > {h2}" if h2 else lastseg, element=group_el))
@@ -287,7 +298,7 @@ def chunk_doc(rows: list[dict]) -> Chunked:
         elif t == "qa":
             res.chunks += _qa(el, base)
         elif t == "heading":
-            if not is_easylaw:
+            if not is_prose:
                 continue      # 법령의 장·절은 경계로만 쓴다 (RAG-004). 조문이 이미 법령명을 갖는다
             flush()
             if el.get("level") == 1:
@@ -295,12 +306,12 @@ def chunk_doc(rows: list[dict]) -> Chunked:
             else:
                 h2, group_el = el["text"], el
         elif t == "aside":
-            if not is_easylaw:
+            if not is_prose:
                 res.dropped["aside: 별표 유래"] += 1     # ① 이 제외한 도식·수식 박스
                 continue
             # 소제목 그룹에 흡수시키지 않고 독립 청크로 만든다 (③(마) 정정) — 질문 7 의 정답이
             # `※ 반려동물과 정부 지정 자연공원 이용하기` 박스인데 소제목과 주제가 다르다
-            cap = _easylaw_caption(lastseg, h1, h2)
+            cap = _prose_caption(lastseg, h1, h2)
             at = el.get("title") or ""
             body = "\n".join(el.get("lines", []))
             res.chunks.append(_make(
@@ -311,7 +322,7 @@ def chunk_doc(rows: list[dict]) -> Chunked:
         elif t == "para":
             if "부칙" in (el.get("section") or "") + (el.get("title") or ""):
                 res.chunks += _supplementary(el, base, title, res.dropped)
-            elif is_easylaw and group_el is not None:
+            elif is_prose and group_el is not None:
                 group.append(el["text"])
             else:
                 res.dropped["para: 소제목 밖"] += 1

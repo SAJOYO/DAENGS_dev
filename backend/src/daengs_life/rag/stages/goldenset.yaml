@@ -17,7 +17,9 @@ corpus:                            # 이 라벨을 판정한 코퍼스 스냅샷
   # 조문 내용을 박아 둔 test_parse.py 19개 · test_chunk.py 27개가 전부 통과했다.
   collected_on: 2026-08-27         # 법령 4소스 수집일 (1랩은 2026-08-20, easylaw 만 08-19)
   chunker_version: 1
-  chunk_count: 1407
+  # 2026-08-27 해설 소스 4건(gov24 · nias · 정책브리핑 · 서울시) 68청크가 더해져 1407 -> 1475.
+  # 라벨은 손대지 않았다 — 더해진 것이 전부 새 문서라 기존 라벨이 가리키는 청크는 그대로다.
+  chunk_count: 1475
 
 items:
 

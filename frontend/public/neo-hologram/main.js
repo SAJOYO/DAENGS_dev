@@ -1,5 +1,5 @@
 import { CARDS, CARDS_CSS_EFFECTS, altText, statText } from "./cards.mjs";
-import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive } from "./immersive.mjs";
+import { autoOpenFromQuery, bindLongPress, isImmersive, openImmersive, preloadScene } from "./immersive.mjs";
 
 const dexEl = document.querySelector("#dex");
 const countEl = document.querySelector("#count");
@@ -8,6 +8,10 @@ const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** 폰 레이아웃인지. style.css 의 760px 블록과 같은 기준을 써야 어긋나지 않는다. */
 const phoneViewer = matchMedia("(max-width: 760px)");
+
+/** 주 입력이 터치인가. touch.css 와 같은 기준이라 CSS 와 JS 가 같은 기기를 가리킨다.
+    화면 폭이 아니라 hover 유무로 가른다 — 문제는 좁은 화면이 아니라 hover 부재다. */
+const coarsePointer = matchMedia("(hover: none) and (pointer: coarse)");
 
 const esc = (s = "") =>
   String(s).replace(/[&<>"']/g, (c) =>
@@ -28,6 +32,25 @@ const MOTION_VARS = [
 
 let pending = null;
 let frame = 0;
+
+/**
+ * 터치에서 문지를 때 CSS 변수를 **몇 프레임에 한 번** 쓸지. 1 이면 매 프레임이다.
+ *
+ * 확대 뷰의 카드는 폰에서 화면 폭을 다 먹어 1.70 Mpx 다. 문지르는 동안 --pointer-*
+ * 가 바뀔 때마다 포일 겹을 그 면적으로 전부 다시 굽는데, 래스터가 못 따라가면
+ * 그린 적 없는 프레임이 그대로 나가서 깜빡인다.
+ *
+ * 겹을 더 깎는 대신 **프레임 수를 반으로** 줄인다. 총 래스터 작업이 절반이 되고
+ * 무늬는 그대로 남는다. 무늬가 30fps 로 미끄러지는 건 눈에 잘 안 띄는데, 지금은
+ * 애초에 프레임을 놓쳐서 불규칙하게 끊기던 상태라 오히려 고르게 보인다.
+ *
+ * **자이로는 이 값을 안 탄다.** 저쪽은 tiltFrame 이라는 별도 rAF 라서 60fps 그대로다.
+ * 이머시브도 자기 루프를 쓴다. 여기서 느려지는 건 '손가락으로 문지르기' 하나뿐이다.
+ *
+ * **되돌리려면 2 를 1 로 바꾸면 된다.** 다른 코드는 손댈 게 없다.
+ */
+const PAINT_EVERY = coarsePointer.matches ? 2 : 1;
+let tick = 0;
 /** 지금 포인터가 올라가 있는 카드. 자이로가 이 카드는 건드리지 않는다. */
 let pointerStage = null;
 
@@ -62,8 +85,16 @@ function writeTilt(stage, px, py, intensity) {
 function flush() {
   frame = 0;
   const job = pending;
-  pending = null;
   if (!job) return;
+
+  // 거르는 프레임이면 값을 들고 있다가 다음 프레임에 쓴다. 버리지 않고 미루는 것이라
+  // 마지막 위치는 항상 반영된다 — 손을 뗀 자리에서 무늬가 어긋난 채 멈추지 않는다.
+  // tick++ 이라 한 번 문지르기의 첫 프레임은 즉시 그린다 (시작이 굼떠 보이지 않게).
+  if (tick++ % PAINT_EVERY) {
+    frame = requestAnimationFrame(flush);
+    return;
+  }
+  pending = null;
 
   const { stage, x, y, intensity } = job;
   const rect = stage.getBoundingClientRect();
@@ -81,6 +112,7 @@ function paint(stage, x, y, intensity = 1) {
 /** 인라인으로 덮어썼던 값만 지우면 style.css 의 기본값(정면)으로 돌아간다. */
 function reset(stage) {
   if (pending?.stage === stage) pending = null;
+  tick = 0;                       // 다음 문지르기도 첫 프레임부터 그리도록
   for (const name of MOTION_VARS) stage.style.removeProperty(name);
 }
 
@@ -89,15 +121,42 @@ function reset(stage) {
  * @param {boolean} arrowTilt Shift+화살표로 기울일지. 맨 화살표는 카드 사이 이동에
  *   쓰이므로(그리드는 dexEl, 확대 뷰는 viewer 가 처리) 기울이기는 Shift 를 요구한다.
  *   확대 뷰에서는 아예 끈다.
+ * @param {boolean} pointerTilt 포인터로 기울일지. **폰 그리드에서만 끈다** —
+ *   makeStage 의 주석 참고. 확대 뷰에서는 반드시 켜져 있어야 한다.
  */
-function bindTilt(stage, { arrowTilt = true } = {}) {
-  const grab = (e, intensity) => { pointerStage = stage; paint(stage, e.clientX, e.clientY, intensity); };
-  const release = () => { if (pointerStage === stage) pointerStage = null; reset(stage); };
+function bindTilt(stage, { arrowTilt = true, pointerTilt = true } = {}) {
+  if (pointerTilt) {
+    const grab = (e, intensity) => { pointerStage = stage; paint(stage, e.clientX, e.clientY, intensity); };
+    const release = () => { if (pointerStage === stage) pointerStage = null; reset(stage); };
 
-  stage.addEventListener("pointerenter", (e) => grab(e, 0.8));
-  stage.addEventListener("pointermove", (e) => grab(e, 1));
-  stage.addEventListener("pointerleave", release);
-  stage.addEventListener("pointercancel", release);
+    stage.addEventListener("pointerenter", (e) => grab(e, 0.8));
+    stage.addEventListener("pointermove", (e) => grab(e, 1));
+    stage.addEventListener("pointerleave", release);
+    stage.addEventListener("pointercancel", release);
+
+    /* 터치에서 **문지르는 동안에만** 포일을 얇게 만든다 (touch.css 의 .is-rubbing).
+
+       확대 뷰의 카드는 폰에서 화면 폭을 다 먹는다 — 상세를 연 상태(38svh)보다
+       래스터 면적이 3.4배다. 가만히 두면 한 번 굽고 끝이라 공짜인데, 손가락으로
+       문지르면 --pointer-* 가 매 프레임 바뀌면서 포일 6~7장을 그 면적으로 전부
+       다시 굽는다. 래스터가 못 따라가서 깜빡이는 게 이것이다.
+       (상세를 열면 카드가 작아져서 따라잡히고, 그래서 그쪽은 매끄러웠다.)
+
+       그래서 움직이는 동안만 겹을 접고 손을 떼면 되돌린다. 멈춰서 감상할 때는
+       풀 효과가 그대로 나오므로, 비용을 내는 순간에만 비용을 깎는 셈이다.
+
+       **데스크톱에는 안 건다.** 거기서는 hover 가 곧 감상이라 문지르는 내내
+       얇아지면 효과를 보라고 만든 화면이 아니게 된다. GPU 도 충분하다. */
+    if (coarsePointer.matches) {
+      const rub = (on) => stage.classList.toggle("is-rubbing", on);
+      stage.addEventListener("pointerdown", () => rub(true));
+      // up 만으로는 안 된다. 확대 뷰에서 ‹ › 로 카드를 넘기면 render() 가 이 노드를
+      // 통째로 갈아치우고, 스와이프 도중 브라우저가 제스처를 가져가면 cancel 만 온다.
+      for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
+        stage.addEventListener(ev, () => rub(false));
+      }
+    }
+  }
 
   const card = stage.querySelector(".card");
   card.addEventListener("blur", () => reset(stage));
@@ -270,8 +329,24 @@ function makeStage(card, { lazy = true, button = true } = {}) {
     stage.querySelector(".card").setAttribute("aria-label", altText(card));
   }
 
-  // 확대 뷰에서는 화살표가 이전/다음 카드 이동에 쓰이므로 기울기에 안 쓴다
-  bindTilt(stage, { arrowTilt: button });
+  // 확대 뷰에서는 화살표가 이전/다음 카드 이동에 쓰이므로 기울기에 안 쓴다.
+  //
+  // 포인터 기울기는 **폰 그리드에서만** 끈다 (button 이 true 인 쪽이 그리드다).
+  // 터치에서는 카드에 손가락을 얹는 순간 pointerenter/pointermove 가 몇 프레임
+  // 날아오는데, 그때마다 writeTilt 가 CSS 변수 10개를 새로 쓴다. 포일 배경이
+  // 전부 --pointer-* 를 읽고 있어서 **변수 한 번 쓸 때마다 카드의 모든 포일
+  // 레이어를 다시 그려야 한다.** 곧이어 브라우저가 스크롤을 가져가며 보내는
+  // pointercancel 에 reset() 이 그 변수들을 다시 지우므로, 스크롤을 시작할
+  // 때마다 풀 리페인트가 두 번 터졌다.
+  //
+  // 그렇게 번 게 없다: 터치에는 hover 가 없어서 손가락이 닿아 있는 동안에만
+  // 기울고, 떼면 그 탭이 곧바로 확대 뷰를 연다. 아무도 못 보는 연출이었다.
+  // **확대 뷰는 그대로 둔다** — 거기가 포일을 실제로 문질러 보는 자리고,
+  // touch-action: none 이라 스크롤에 제스처를 뺏기지도 않는다.
+  bindTilt(stage, {
+    arrowTilt: button,
+    pointerTilt: !(button && coarsePointer.matches),
+  });
   return stage;
 }
 
@@ -304,10 +379,22 @@ CARDS.forEach((card, i) => {
     bindLongPress(stage, stage.querySelector(".card"),
       () => openImmersive(card, stage.getBoundingClientRect()));
 
+    // 장면 에셋 600KB 를 미리 받아 둔다. **꾹 누르는 520ms 가 그 시간이다** —
+    // 예전엔 꾹이 완성된 그 순간에 처음 받아서, 느린 망이면 틀이 녹는 동안 텃밭이
+    // 아직 안 와 있었다. preloadScene 은 여러 번 불려도 안전하다(한 번만 받는다).
+    //
+    // 그냥 탭만 해도 받아 버리는 건 알고 있다. 다만 한 페이지에서 딱 한 번이고,
+    // 이 카드의 캡션이 "★★★ 꾹 눌러서 들어가기" 라 누른 사람은 대개 들어간다.
+    // 아깝다 싶으면 여기에 150ms 짜리 취소 가능한 타이머를 끼우면 된다.
+    const prime = () => preloadScene(card);
+    stage.addEventListener("pointerdown", prime);
+
     const badge = document.createElement("button");
     badge.type = "button";
     badge.className = "im-badge";
     badge.textContent = "★★★ 꾹 눌러서 들어가기";
+    badge.addEventListener("pointerenter", prime);   // 데스크톱은 올려놓는 동안 받는다
+    badge.addEventListener("pointerdown", prime);
     badge.addEventListener("click", () => openImmersive(card, stage.getBoundingClientRect()));
     caption.append(badge);
   }

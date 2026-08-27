@@ -53,12 +53,40 @@ body {
   overflow-x: clip;
   color: var(--ink);
   font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif;
+  /* 평평한 바탕색만. 실제 그라디언트는 아래 ::after 가 그린다.
+     이 색이 캔버스로 전파돼 화면 전체의 바닥이 된다 (html 에 배경이 없으므로). */
+  background: #0e0b05;
+}
+
+/* 배경 그라디언트. 예전엔 body 에 직접 얹고 `background-attachment: fixed` 로
+   붙박이를 만들었는데, **그게 모바일 스크롤을 메인스레드로 끌어내렸다.** 크롬은
+   고정 배경을 가진 요소를 합성 스크롤에서 제외하고 스크롤 프레임마다 다시 그린다
+   (DevTools 의 Rendering → Scrolling performance issues 에 사유가 그대로 찍힌다).
+   4겹 그라디언트를 뷰포트 전체 크기로 매 프레임 다시 칠하던 셈이다.
+
+   그래서 같은 그림을 `position: fixed` 인 별도 레이어로 내렸다. 스크롤과 무관한
+   레이어라 크롬이 합성만 하면 되고, **화면은 픽셀 단위로 이전과 같다** —
+   attachment:fixed 든 fixed 요소든 그라디언트의 기준 상자가 똑같이 뷰포트라서다.
+   덤으로 iOS 사파리도 고쳐진다. 거기선 attachment:fixed 가 아예 안 먹었다.
+
+   z-index 는 body::before(점 패턴, 0) 와 .page(1) 아래로 내려가야 하므로 -1.
+   body 는 스택 컨텍스트를 안 만들어서 이 셋이 같은 판에서 순서대로 쌓인다. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  /* 안드로이드 크롬은 주소창이 접히면 화면이 세로로 커지는데, fixed 요소는 레이아웃
+     뷰포트에 붙어 있어서 아래쪽에 안 덮인 띠가 남는다. lvh(주소창이 접힌 상태의
+     높이)로 처음부터 큰 쪽에 맞춰 둔다. inset:0 이 함께 있으므로 lvh 를 모르는
+     브라우저에서도 height 가 auto 로 떨어져 뷰포트를 그대로 덮는다. */
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(circle at 50% 0%, rgba(255, 216, 56, .10), transparent 34rem),
     radial-gradient(circle at 8% 22%, rgba(0, 217, 255, .09), transparent 28rem),
     radial-gradient(circle at 92% 68%, rgba(255, 50, 193, .10), transparent 30rem),
     linear-gradient(160deg, #151206 0%, #0e0b05 46%, #050402 100%);
-  background-attachment: fixed;
 }
 
 /* 원본의 점 패턴 오버레이 */

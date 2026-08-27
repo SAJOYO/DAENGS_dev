@@ -63,20 +63,28 @@
   domain: registration
   org: 농림축산검역본부
   title: 국가동물보호정보시스템 (동물등록 안내/대행기관)
-  url: "https://www.animal.go.kr/"
+  url: "https://www.animal.go.kr/front/community/show.do?boardId=contents&seq=66&menuNo=2000000016"
   method: html
   auth: none
-  status: verified
+  status: blocked
+  notes: "2026-08-27 정찰: robots.txt 가 `User-agent: * / Disallow: /` 로 사이트 전체를 막는다.
+    본문 자체는 정적 HTML(#contents)이고 카드뉴스도 title 속성에 텍스트가 있어 품질은 좋다.
+    시드에 있던 https://www.animal.go.kr/ 는 JS 리다이렉트 2단(/front/ -> /front/index.do)이라
+    본문이 아니었고, 위 URL 이 실제 '동물등록제도 안내' 다. 같은 내용이 nias-pet 과 easylaw-pet 에
+    있으므로 이 소스는 수집하지 않는다 (docs/data-sources.md §12 robots 준수)."
 
 - id: gov24-registration
   domain: registration
   org: 행정안전부 정부24
   title: 동물등록제 안내(반려견 등록) 민원 안내
-  url: "https://www.gov.kr/portal/service/serviceInfo/PTR000051610"
+  url: "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=15410000003"
   method: html
   auth: none
   status: verified
-  notes: "절차/수수료/처리기관 구조화 정보"
+  notes: "절차/수수료/처리기관 구조화 정보. 2026-08-27 정찰로 URL 교체 — 옛 serviceInfo/PTR000051610 은
+    200 을 주면서 '서비스를 찾을 수 없습니다' 인 soft-404 였고, robots.txt 도 그 경로는 막고
+    /mw/AA020InfoCappView.do 만 연다. 인코딩 EUC-KR, 본문에 숫자 HTML 엔티티가 섞인다.
+    접속 대기열(큐) 페이지가 뜰 수 있다. 재발급 민원은 CappBizCD=15410000007."
 
 - id: data-registration-lookup
   domain: registration
@@ -91,11 +99,13 @@
   domain: registration
   org: 국립축산과학원
   title: 반려동물 포털 (행정/법률정보, 기르기 정보)
-  url: "https://www.nias.go.kr/companion/"
+  url: "https://www.nias.go.kr/companion/index.do"
   method: html
   auth: none
   status: verified
-  notes: "등록제 해설 + 품종/양육 정보. vaccination 도메인에도 활용"
+  notes: "등록제 해설 + 품종/양육 정보. vaccination 도메인에도 활용. 2026-08-27 정찰로 URL 교체 —
+    옛 /companion/ 은 200 을 주면서 '페이지를 찾을 수 없습니다' 인 soft-404 였다.
+    본문은 new_petBoard.do?cmCode=... 30여 장이고 조문 인용이 본문에 그대로 들어 있다."
 
 # ---------- 예방접종 ----------
 - id: qia-rabies

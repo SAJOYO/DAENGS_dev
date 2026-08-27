@@ -1,0 +1,55 @@
+services:
+  db:
+    build:
+      context: ./docker/postgres
+    image: daengs-postgres:18-postgis3.6-pgvector0.8.6
+    environment:
+      POSTGRES_USER: daengs
+      POSTGRES_PASSWORD: daengs
+      POSTGRES_DB: daengs
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # initdb의 임시 PostgreSQL도 pg_isready에는 성공한다. 두 확장이 실제로
+      # 활성화된 뒤에만 API를 시작해 초기화 도중 요청이 들어오는 레이스를 막는다.
+      test:
+        - CMD-SHELL
+        - >-
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
+          "SELECT 1 WHERE (SELECT count(*) FROM pg_extension
+          WHERE extname IN ('postgis', 'vector')) = 2" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      # migrations/ 를 initdb 에 마운트하지 않는다. 그건 볼륨 최초 생성 때만 돌아서
+      # 두 번째 변경부터 조용히 건너뛴다 — 스키마 적용은 alembic 한 경로로 모았다.
+      # PG18 공식 이미지의 VOLUME 은 /var/lib/postgresql 이다 (PGDATA 는 그 아래
+      # 18/docker). 상위 경로를 마운트해야 데이터가 보존된다.
+      - pgdata:/var/lib/postgresql
+  api:
+    build: .
+    env_file: .env
+    environment:
+      # .env 의 localhost 를 컨테이너 네트워크용으로 덮는다 (environment > env_file)
+      DAENGS_DATABASE_URL: postgresql+asyncpg://daengs:daengs@db:5432/daengs
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2).read()
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  pgdata:

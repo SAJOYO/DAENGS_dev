@@ -1,0 +1,372 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DAENGS 시설 — 우리 개가 갈 수 있는 곳</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --ink:#1a1a1a; --line:#d8d8d8; }
+  * { box-sizing:border-box }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink) }
+  #map { position:absolute; inset:0 }
+  .hud {
+    position:absolute; z-index:1000; top:12px; left:12px; width:290px;
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 13px;
+    box-shadow:0 3px 14px rgba(0,0,0,.14); max-height:calc(100vh - 24px); overflow:auto;
+  }
+  h1 { margin:0 0 8px; font-size:14px; letter-spacing:-.2px }
+  .row { display:flex; justify-content:space-between; gap:8px; padding:2px 0 }
+  .row b { font-variant-numeric:tabular-nums }
+  .muted { color:#6b6b6b; font-size:12px }
+  .cut { color:#b3261e; font-weight:600 }
+  .unknown { color:#a15c00; font-weight:600 }
+  .error { color:#b3261e; font-size:12px; margin-top:6px }
+  select, label { font:inherit }
+  select { width:100%; margin-top:6px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:#fff }
+  hr { border:0; border-top:1px solid var(--line); margin:10px 0 8px }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; vertical-align:-1px; margin-right:5px }
+  /* 카테고리 탭 — 한 번에 하나. 섞어서 뿌리면 점이 겹쳐 아무것도 안 읽힌다 */
+  .tabs { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px }
+  .tab {
+    font:12px/1 inherit; padding:5px 7px; border:1px solid var(--line); border-radius:14px;
+    background:#fff; cursor:pointer; color:#3c4043;
+  }
+  .tab[aria-selected="true"] { background:var(--ink); border-color:var(--ink); color:#fff; font-weight:600 }
+  .preference { display:flex; align-items:center; gap:7px; margin-top:10px; cursor:pointer }
+  .preference input { margin:0 }
+  .results { max-height:260px; overflow:auto; margin:6px 0 0; padding:0; list-style:none }
+  .result { margin:0 0 4px }
+  .result button {
+    display:grid; grid-template-columns:24px 1fr auto; gap:6px; width:100%; padding:6px;
+    border:1px solid var(--line); border-radius:6px; background:#fff; text-align:left; cursor:pointer;
+  }
+  .result button:hover, .result button:focus-visible { background:#f5f5f5; border-color:#999 }
+  .result-rank, .result-meta { color:#6b6b6b; font-size:11px; font-variant-numeric:tabular-nums }
+  .result-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .result-parking { grid-column:2 / 4; color:#6b6b6b; font-size:11px }
+</style>
+
+<div id="map"></div>
+<div class="hud">
+  <h1>시설 · 반려견 입장 조건</h1>
+
+  <label class="muted">카테고리 (하나씩)</label>
+  <div class="tabs" id="tabs"></div>
+
+  <label class="muted" style="display:block;margin-top:10px">데려갈 개</label>
+  <select id="dog">
+    <option value="">개 없이 (전체)</option>
+    <option value="kong">콩이 · 보더콜리믹스 18kg · medium</option>
+    <option value="dubu">두부 · 퍼그 9kg · small</option>
+    <option value="halmae">할매 · 말티즈 3.2kg · small</option>
+    <option value="bau">바우 · 골든리트리버 32kg · large</option>
+    <option value="bbogeul">뽀글 · 포메 2.1kg · small</option>
+    <option value="choco">초코 · 카발리에 7.5kg · small</option>
+    <option value="samwol">삼월 · 믹스 1.8kg · small</option>
+    <option value="janggun" selected>장군 · 셰퍼드 34kg · large</option>
+  </select>
+
+  <label class="muted">위치</label>
+  <select id="where">
+    <option value="37.7492,127.3629" selected>가평·청평 (크기 제약 밀집)</option>
+    <option value="37.5563,126.9236">홍대</option>
+    <option value="37.4979,127.0276">강남역</option>
+    <option value="33.4996,126.5312">제주시</option>
+  </select>
+
+  <label class="muted">반경</label>
+  <select id="radius">
+    <option value="1500">1.5 km</option>
+    <option value="3000" selected>3 km</option>
+    <option value="10000">10 km</option>
+    <option value="20000">20 km</option>
+  </select>
+
+  <label class="preference">
+    <input id="prefer-parking" type="checkbox">
+    <span>주차 가능 우선</span>
+  </label>
+  <div class="muted">장소를 빼지 않고 서버가 정한 거리 구간 안에서만 우선한다.</div>
+
+  <hr>
+  <div class="row"><span class="muted">이 카테고리</span><b id="n-all">–</b></div>
+  <div class="row"><span>입장 조건상 가능</span><b id="n-compatible">–</b></div>
+  <div class="row"><span class="cut">조건 불일치</span><b class="cut" id="n-incompatible">–</b></div>
+  <div class="row"><span class="unknown">확인 필요</span><b class="unknown" id="n-unknown">–</b></div>
+  <div class="muted" id="basis" style="margin-top:6px"></div>
+  <div class="muted" id="sort-basis" style="margin-top:6px" aria-live="polite"></div>
+  <div class="muted" id="parking-coverage" aria-live="polite"></div>
+  <div class="cut" id="trunc" style="display:none;margin-top:6px"></div>
+  <div class="error" id="error" style="display:none"></div>
+
+  <hr>
+  <div style="font-size:12px">
+    <div><i class="dot" id="lg-compatible"></i><span id="lg-compatible-label">입장 조건상 가능</span></div>
+    <div id="lg-incompatible-row"><i class="dot" style="background:#9aa0a6"></i>조건 불일치</div>
+    <div id="lg-unknown-row"><i class="dot" style="background:#f9a825"></i>정보 부족 · 확인 필요</div>
+  </div>
+  <div class="muted" style="margin-top:8px">
+    서버의 장소 사실과 요청별 3상태 평가를 함께 표시한다. 반려견 평가는 결과를 숨기거나
+    순서를 바꾸지 않고, 주차 선호는 명시적으로 켠 경우에만 순서를 바꾼다.
+  </div>
+
+  <hr>
+  <div class="row"><b>서버 정렬 순서</b><span class="muted">클릭하면 지도 이동</span></div>
+  <ol class="results" id="results"></ol>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// kind → 그룹 색. 서버가 icon_group 을 주므로 앱은 그 값만 본다 (app/geo/icons.py).
+const GROUP_COLOR = {
+  medical:"#c62828", supply:"#6a1b9a", food:"#ef6c00", stay:"#1565c0",
+  culture:"#00838f", outdoor:"#2e7d32", care:"#4527a0", etc:"#546e7a",
+};
+// 탭 하나 = kind 하나 = 호출 하나. 한 번에 하나만 그린다 — 섞으면 점이 겹쳐 안 읽힌다.
+// **부하 경계가 아니다.** 그건 서버 상한(MAX_RESULTS)이 세운다 (결정 #62).
+const CATS = [
+  ["pet_shop",    "펫샵",     "supply"],
+  ["shopping",    "일반 쇼핑", "supply"],
+  ["grooming",    "미용",     "supply"],
+  ["cafe",        "카페",     "food"],
+  ["restaurant",  "음식점",   "food"],
+  ["travel",      "여행지",   "outdoor"],
+  ["leisure",     "레저",     "outdoor"],
+  ["museum",      "박물관",   "culture"],
+  ["gallery",     "미술관",   "culture"],
+  ["arts_center", "문예회관", "culture"],
+  ["culture",     "문화시설", "culture"],
+  ["pension",     "펜션",     "stay"],
+  ["stay",        "숙박",     "stay"],
+  ["hotel",       "호텔",     "stay"],
+  ["boarding",    "위탁",     "care"],
+];
+let cat = "cafe";
+
+const map = L.map('map', {zoomControl:true});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const $ = id => document.getElementById(id);
+const resultMarkers = new Map();
+
+function buildTabs() {
+  $('tabs').innerHTML = '';
+  CATS.forEach(function (c) {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.textContent = c[1]; b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(c[0] === cat));
+    b.onclick = function () { cat = c[0]; buildTabs(); search(); };
+    $('tabs').appendChild(b);
+  });
+  const hit = CATS.find(function (c) { return c[0] === cat; });
+  $('lg-compatible').style.background = GROUP_COLOR[hit ? hit[2] : 'etc'];
+}
+
+function setEvaluationLegend(hasDog) {
+  $('lg-compatible-label').textContent = hasDog ? '입장 조건상 가능' : '장소 (평가 없음)';
+  $('lg-incompatible-row').style.display = hasDog ? 'block' : 'none';
+  $('lg-unknown-row').style.display = hasDog ? 'block' : 'none';
+}
+
+const EVALUATION_LABEL = {
+  compatible: '입장 조건상 가능',
+  incompatible: '조건 불일치',
+  unknown: '정보 부족 · 확인 필요',
+};
+
+const REASON_LABEL = {
+  size_allowed: '크기 등급 허용', size_exceeded: '크기 등급 초과',
+  weight_allowed: '무게 제한 허용', weight_exceeded: '무게 제한 초과',
+  weight_boundary_unknown: '미만·이하 경계 확인 필요',
+  dog_disallowed: '개 입장 불가', missing_dog_size: '개 크기 미상',
+  missing_dog_weight: '개 무게 미상', missing_restriction: '시설 제한 정보 없음',
+};
+
+function provenanceLine(label, provenance) {
+  if (!provenance || !provenance.source) return '';
+  return '<br><span style="color:#6b6b6b">' + label + ' ' + provenance.source.source +
+    (provenance.as_of ? ' · ' + provenance.as_of : '') + '</span>';
+}
+
+function marker(hit) {
+  const f = hit.place;
+  const evaluation = hit.evaluations && hit.evaluations.dog_access;
+  const state = evaluation ? evaluation.state : null;
+  const color = state === 'incompatible'
+    ? '#9aa0a6'
+    : state === 'unknown' ? '#f9a825' : (GROUP_COLOR[f.icon_group] || '#546e7a');
+  const m = L.circleMarker([f.lat, f.lng], {
+    radius: state === 'incompatible' ? 5 : state === 'unknown' ? 6 : 7,
+    color: '#fff', weight: 1.5, fillColor: color,
+    fillOpacity: state === 'incompatible' ? .55 : .95,
+  });
+  const ax = f.facts.pet_access || {};
+  const size = ax.size_class
+    ? ax.size_class + (ax.max_kg ? ' (상한 ' + ax.max_kg + 'kg · 미만/이하 미확인)' : '')
+    : '제한 표기 없음';
+  const primary = f.classifications.find(function (item) {
+    return item.source.source === f.key.source && item.source.ref === f.key.ref;
+  });
+  const fields = f.field_sources || {};
+  const evaluationText = evaluation
+    ? '<b style="color:' + (state === 'incompatible' ? '#b3261e' : state === 'unknown' ? '#a15c00' : '#1a1a1a') + '">' +
+      EVALUATION_LABEL[state] + '</b> · ' + (REASON_LABEL[evaluation.reason] || evaluation.reason) + '<br>'
+    : '';
+  const provenanceText =
+    provenanceLine('입장정보 출처', fields['facts.pet_access']) +
+    provenanceLine('주차정보 출처', fields['facts.parking']) +
+    provenanceLine('영업시간 출처', fields['facts.hours_text']);
+  m.bindPopup(
+    '<b>' + f.name + '</b><br>' +
+    '<span style="color:#6b6b6b">' + f.match.kind + ' · ' + f.distance_m + 'm</span><br>' +
+    evaluationText +
+    '크기: ' + size + '<br>' +
+    '주차: ' + parkingLabel(f.facts.parking) + '<br>' +
+    (ax.exclusive ? '반려동물 전용<br>' : '') +
+    (f.facts.hours_text ? '시간: ' + f.facts.hours_text + '<br>' : '') +
+    '<span style="color:#6b6b6b">대표 출처 ' + f.key.source +
+    (primary && primary.as_of ? ' · ' + primary.as_of : '') + '</span>' +
+    provenanceText
+  );
+  return m;
+}
+
+function placeKey(place) {
+  return place.key.source + '\u0000' + place.key.ref;
+}
+
+function parkingLabel(value) {
+  if (value === true) return '주차 가능';
+  if (value === false) return '주차 불가';
+  return '주차 정보 없음';
+}
+
+function renderResults(results) {
+  const list = $('results');
+  list.innerHTML = '';
+  results.forEach(function (hit, index) {
+    const f = hit.place;
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    const rank = document.createElement('span');
+    const name = document.createElement('span');
+    const distance = document.createElement('span');
+    const parking = document.createElement('span');
+    item.className = 'result';
+    button.type = 'button';
+    rank.className = 'result-rank'; rank.textContent = String(index + 1);
+    name.className = 'result-name'; name.textContent = f.name;
+    distance.className = 'result-meta'; distance.textContent = f.distance_m + 'm';
+    parking.className = 'result-parking'; parking.textContent = parkingLabel(f.facts.parking);
+    button.append(rank, name, distance, parking);
+    button.onclick = function () {
+      const hitMarker = resultMarkers.get(placeKey(f));
+      if (!hitMarker) return;
+      map.panTo(hitMarker.getLatLng());
+      hitMarker.openPopup();
+    };
+    item.appendChild(button);
+    list.appendChild(item);
+  });
+}
+
+function renderSort(sort, resultCount) {
+  if (!sort || sort.type === 'distance') {
+    $('sort-basis').textContent = '정렬: 가까운 순';
+    $('parking-coverage').textContent = '';
+    return;
+  }
+  const parkingApplied = (sort.applied || []).includes('parking');
+  if (!parkingApplied) {
+    $('sort-basis').textContent = '정렬: 서버 지정 순서';
+    $('parking-coverage').textContent = '';
+    return;
+  }
+  $('sort-basis').textContent = '정렬: ' + sort.band_m + 'm 거리 구간 안에서 주차 가능 우선';
+  const coverage = sort.coverage && sort.coverage.parking;
+  if (!coverage) {
+    $('parking-coverage').textContent = '주차 정보 보유량을 받지 못했습니다';
+    return;
+  }
+  if (resultCount > 0 && coverage.unknown === resultCount) {
+    $('parking-coverage').textContent = '반환 결과 ' + resultCount + '곳의 주차 정보가 모두 미상입니다';
+    return;
+  }
+  $('parking-coverage').textContent = '주차 정보: 가능 ' + coverage.known_true +
+    ' · 불가 ' + coverage.known_false + ' · 미상 ' + coverage.unknown;
+}
+
+function resetSearchState() {
+  layer.clearLayers();
+  resultMarkers.clear();
+  $('results').innerHTML = '';
+  ['all', 'compatible', 'incompatible', 'unknown'].forEach(function (name) {
+    $('n-' + name).textContent = '–';
+  });
+  $('basis').textContent = '검색 중…';
+  $('sort-basis').textContent = '';
+  $('parking-coverage').textContent = '';
+  $('trunc').style.display = 'none';
+  $('trunc').textContent = '';
+}
+
+let searchSequence = 0;
+
+async function search() {
+  const sequence = ++searchSequence;
+  const parts = $('where').value.split(',');
+  const lat = Number(parts[0]), lng = Number(parts[1]);
+  const radius = Number($('radius').value), dog = $('dog').value;
+  const body = {lat:lat, lng:lng, radius_m:radius, kinds:[cat]};
+  if (dog) body.conditions = {dog_id:dog};
+  if ($('prefer-parking').checked) body.preferences = {parking:true};
+
+  setEvaluationLegend(Boolean(dog));
+  resetSearchState();
+  $('error').style.display = 'none';
+  try {
+    const response = await fetch('/v2/places/search', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error('검색 실패 (' + response.status + ')');
+    const payload = await response.json();
+    if (sequence !== searchSequence) return;
+    const group = payload.groups.find(function (item) { return item.kind === cat; });
+    if (!group) throw new Error('서버 응답에 요청한 카테고리가 없습니다');
+
+    const counts = {compatible:0, incompatible:0, unknown:0};
+    group.results.forEach(function (hit) {
+      const evaluation = hit.evaluations && hit.evaluations.dog_access;
+      if (evaluation) counts[evaluation.state] += 1;
+      const hitMarker = marker(hit).addTo(layer);
+      resultMarkers.set(placeKey(hit.place), hitMarker);
+    });
+    renderResults(group.results);
+    renderSort(group.sort, group.results.length);
+
+    $('n-all').textContent = group.results.length;
+    ['compatible', 'incompatible', 'unknown'].forEach(function (state) {
+      $('n-' + state).textContent = dog ? counts[state] : '–';
+    });
+    const applied = payload.conditions;
+    $('basis').textContent = applied
+      ? '기준: ' + (applied.dog_size || '크기 미상') + ' · ' +
+        (applied.dog_weight_kg == null ? '무게 미상' : applied.dog_weight_kg + 'kg')
+      : '개를 고르면 입장 조건을 대조한다';
+    $('trunc').style.display = group.truncated ? 'block' : 'none';
+    $('trunc').textContent = group.truncated ? '상한 도달 — 일부만 표시' : '';
+    map.setView([lat, lng], radius <= 1500 ? 15 : radius <= 3000 ? 14 : 12);
+  } catch (error) {
+    if (sequence !== searchSequence) return;
+    $('basis').textContent = '검색 결과를 표시하지 못했습니다';
+    $('error').textContent = error.message || '검색 중 오류가 발생했습니다';
+    $('error').style.display = 'block';
+  }
+}
+
+['dog', 'where', 'radius', 'prefer-parking'].forEach(function (id) {
+  $(id).addEventListener('change', search);
+});
+buildTabs();
+search();
+</script>

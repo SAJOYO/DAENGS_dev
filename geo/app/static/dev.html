@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>DAENGS_geo dev console</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font: 13px/1.4 system-ui, sans-serif; display:grid; grid-template-columns: 420px 1fr; height:100vh; color:#222; }
+  #left { overflow:auto; border-right:1px solid #ddd; padding:10px; }
+  #map { height:100vh; }
+  #map-provider { position:fixed; z-index:10000; right:10px; top:10px; padding:5px 9px; border-radius:14px; background:#fff; box-shadow:0 1px 5px #0003; font-size:11px; color:#555; }
+  h3 { margin:10px 0 4px; font-size:12px; color:#666; text-transform:uppercase; letter-spacing:.04em; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:4px 0; }
+  .chip { border:1px solid #bbb; border-radius:14px; padding:2px 9px; cursor:pointer; background:#fff; font-size:12px; }
+  .chip.on { background:#222; color:#fff; border-color:#222; }
+  input[type=text] { width:100%; padding:6px 8px; border:1px solid #bbb; border-radius:6px; }
+  select, button { padding:4px 8px; }
+  .card { border:1px solid #ddd; border-radius:8px; padding:8px; margin:6px 0; cursor:pointer; }
+  .card.sel { border-color:#222; box-shadow:0 0 0 2px #2223; }
+  .card .name { font-weight:600; }
+  .muted { color:#777; }
+  .adv-ok { color:#1a7f37; } .adv-caution { color:#b26a00; } .adv-avoid { color:#c62828; font-weight:600; }
+  .changes { background:#f6f6f6; border-radius:6px; padding:6px 8px; margin:6px 0; white-space:pre-wrap; }
+  .q { background:#fff4d6; border-radius:6px; padding:6px 8px; margin:6px 0; }
+  .actions { display:flex; flex-wrap:wrap; gap:5px; margin:6px 0; }
+  .action { border:1px solid #1565c0; border-radius:14px; background:#fff; color:#1565c0; cursor:pointer; }
+  .action:hover { background:#e3f2fd; }
+  /* 안전 표면 — 장식이 아니라 계약이다 (app/discovery/trace.py) */
+  .safety { background:#fdecea; border:1px solid #f3b5ae; border-radius:6px; padding:8px; margin:6px 0; }
+  .safety b { color:#c62828; }
+  .safety button { margin-top:6px; }
+  .call { display:inline-block; border:1px solid #bbb; border-radius:12px; padding:1px 7px; margin-left:5px; color:#333; text-decoration:none; font-size:11px; }
+  .call.urgent { border-color:#c62828; background:#c62828; color:#fff; font-weight:600; }
+  .override { background:#fff4d6; border-left:3px solid #b26a00; border-radius:4px; padding:6px 8px; margin:6px 0; font-size:13px; }
+  .trace { font-size:12px; color:#666; margin:4px 0 8px; }
+  .trace summary { cursor:pointer; }
+  .trace li { margin:2px 0; }
+  .spot { display:flex; gap:6px; padding:3px 0; border-top:1px dashed #eee; }
+  .spot .n { width:18px; height:18px; border-radius:50%; background:#444; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .spot.warn .n { background:#c62828; }
+  .tag { font-size:11px; background:#eee; border-radius:4px; padding:0 4px; margin-right:3px; }
+  .hand a { margin-right:8px; font-size:12px; }
+  .pol { font-size:10px; border-radius:8px; padding:1px 6px; margin-left:4px; text-transform:none; letter-spacing:0; font-weight:400; }
+  .pol.t { background:#e3f2fd; color:#1565c0; } .pol.j { background:#e8f5e9; color:#2e7d32; }
+  .pol.c { background:#fff3e0; color:#e65100; }
+  .chg { display:flex; gap:6px; align-items:baseline; margin:2px 0; }
+</style>
+</head>
+<body>
+<div id="left">
+  <h3>페르소나 · 출발지 (지도 클릭)</h3>
+  <div class="row">
+    <select id="dog"><option value="halmae">할매 — 말티즈 13세·노령+관절 · 계단 불가</option><option value="janggun">장군 — 셰퍼드 11세 34kg · 못 안고·계단·대중교통 전부 불가</option><option value="bau">바우 — 리트리버 4세 32kg · 지하보도·탑승 거부</option><option value="bbogeul">뽀글 — 포메 2세 2.1kg · 슬개골인데 활발</option><option value="dubu">두부 — 퍼그 5세·단두종 · 여름 기온</option><option value="choco">초코 — 카발리에 9세·심장 (미배선)</option><option value="samwol">삼월 — 3개월 미접종 · 못 걸음 (미배선)</option><option value="kong">콩이 — 보더콜리 2세 · 다른 개 마주침</option><option value="">없음</option></select>
+    <span id="origin" class="muted">37.4979, 127.0276</span>
+    <button id="reset">초안</button>
+  </div>
+  <div class="row">
+    <label><input type="radio" name="comp" value="dog" checked> 🐕 동반</label>
+    <label><input type="radio" name="comp" value="none"> 🚶 나만 감 (약 타러 등)</label>
+    <span class="muted">→ companion. none이면 개 계수·노트·advice 없음</span>
+  </div>
+
+  <h3>어떤 상황인가 <span class="pol c">context · 둘 다의 입력</span></h3>
+  <div class="row">
+    <span class="chip" data-tool="set_urgency" data-args='{"level":"urgent"}' data-off='{"level":"normal"}' data-key="urgency">급한 상황</span>
+    <span class="muted">→ 조건을 좁히지 않는다. 병원 종류 요구는 아래 &lsquo;응급 표방&rsquo;</span>
+  </div>
+
+  <h3>어디를 갈까 <span class="pol t">target · 결과가 바뀜</span></h3>
+  <div class="row">
+    <span class="chip" data-tool="set_open_now" data-args='{"on":true}' data-off='{"on":false}' data-key="open_now">지금 영업중</span>
+    <span class="chip" data-tool="set_night_service" data-args='{"on":true}' data-off='{"on":false}' data-key="night_service">야간 표방</span>
+    <span class="chip" data-tool="set_emergency_service" data-args='{"on":true}' data-off='{"on":false}' data-key="emergency_service">응급 표방</span>
+    <span class="chip" data-tool="require" data-args='{"tags":["24h"]}' data-off-tool="unrequire" data-off='{"tags":["24h"]}' data-key="req=24h">24시</span>
+    <span class="chip" data-tool="require" data-args='{"tags":["center"]}' data-off-tool="unrequire" data-off='{"tags":["center"]}' data-key="req=center">의료센터</span>
+  </div>
+  <div class="row">반경 <input type="range" id="radius" min="300" max="5000" step="100" value="2000" style="flex:1"><span id="radiusv">2km</span></div>
+
+  <h3>어떻게 갈까 <span class="pol j">journey · 결과는 그대로</span></h3>
+  <div class="row">
+    <span class="chip" data-tool="set_mode" data-args='{"mode":"walk"}' data-off='{"mode":null}' data-key="mode=walk">도보</span>
+    <span class="chip" data-tool="set_mode" data-args='{"mode":"car"}' data-off='{"mode":null}' data-key="mode=car">차량</span>
+    <span class="chip" data-tool="set_mode" data-args='{"mode":"transit"}' data-off='{"mode":null}' data-key="mode=transit">대중교통</span>
+  </div>
+  <div class="row" style="margin-left:14px;border-left:2px solid #ddd;padding-left:8px">
+    <span class="muted" style="font-size:11px">└ 도보일 때만 (scope: walk) — 차량을 골라도 값은 남는다</span>
+  </div>
+  <div class="row" style="margin-left:14px;border-left:2px solid #ddd;padding-left:8px">
+    <span>도보 상한</span>
+    <input type="number" id="walkmax" min="0" step="5" placeholder="분" style="width:64px">
+    <button id="applywalkmax">적용</button>
+  </div>
+  <div class="row">
+    <span>전체 시간 상한</span>
+    <input type="number" id="maxmin" min="0" step="5" placeholder="분" style="width:70px">
+    <label><input type="checkbox" id="hard"> 초과 제외 <span class="muted">(끄면 표시만)</span></label>
+    <button id="applymax">적용</button>
+  </div>
+
+  <h3>자연어 (utterance)</h3>
+  <input type="text" id="utt" placeholder="예: 눈이 뿌옇고 걸어서 갈 수 있는 데 / 첫번째 거는 빼줘 / 아까대로">
+  <div class="row"><button id="send">보내기</button><span class="muted">Enter로도 전송</span></div>
+
+  <div id="safety" class="safety" style="display:none"></div>
+  <div id="overrides"></div>
+  <div id="changes" class="changes"></div>
+  <details id="trace" class="trace" style="display:none"><summary>이 결과가 정해진 과정</summary><ul id="tracelist"></ul></details>
+  <div id="question" class="q" style="display:none"></div>
+  <div id="actions" class="actions"></div>
+
+  <h3>결과 <span id="count" class="muted"></span></h3>
+  <div id="list"></div>
+</div>
+<div id="map"></div>
+<div id="map-provider">지도 준비 중</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = "/hospital/search";
+let state = null, shown = [], selected = null, origin = [37.4979, 127.0276];
+let lastSearch = null, journeys = {};   // journeys[id] = JourneyItem (실측)
+let geoMap = null;
+const companion = () => document.querySelector('input[name=comp]:checked').value;
+const TOP_N = 5;
+
+const $ = id => document.getElementById(id);
+
+function markerHtml(label, color, size = 22) {
+  return `<div style="background:${color};color:#fff;border:2px solid #fff;border-radius:50%;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-size:${size < 18 ? 9 : 12}px;font-weight:600;box-shadow:0 1px 4px #0005">${label}</div>`;
+}
+
+function telHref(raw) {
+  // 인허가 원천의 전화번호를 href 속성에 그대로 넣지 않는다. 숫자와 선행 +만 허용한다.
+  const compact = String(raw || '').replace(/[^\d+]/g, '');
+  return /^\+?\d{7,15}$/.test(compact) ? `tel:${compact}` : null;
+}
+
+function makeLeafletMap(reason = '') {
+  $('map').innerHTML = '';
+  const raw = L.map('map').setView(origin, 15);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap (dev only)'}).addTo(raw);
+  const layer = L.layerGroup().addTo(raw);
+  const start = L.circleMarker(origin, {radius: 8, color: '#1565c0', fillOpacity: .9}).addTo(raw).bindTooltip('출발');
+  $('map-provider').textContent = `OSM · 개발 폴백${reason ? ' · ' + reason : ''}`;
+  return {
+    onClick(fn) { raw.on('click', e => fn([e.latlng.lat, e.latlng.lng])); },
+    setOrigin(pos) { start.setLatLng(pos); },
+    clear() { layer.clearLayers(); },
+    polyline(pts, style, title) { L.polyline(pts, style).addTo(layer).bindTooltip(title); },
+    marker(pos, html, title, size = 22) {
+      L.marker(pos, {icon: L.divIcon({className: '', html, iconSize: [size, size]})}).addTo(layer).bindTooltip(title);
+    },
+    fit(pts, pad = .15) { if (pts.length) raw.fitBounds(L.latLngBounds(pts).pad(pad)); },
+  };
+}
+
+function makeNaverMap() {
+  const raw = new naver.maps.Map('map', {center: new naver.maps.LatLng(origin[0], origin[1]), zoom: 15});
+  const overlays = [];
+  const start = new naver.maps.Marker({
+    map: raw,
+    position: new naver.maps.LatLng(origin[0], origin[1]),
+    title: '출발',
+    icon: {content: markerHtml('●', '#1565c0', 22), anchor: new naver.maps.Point(11, 11)},
+  });
+  $('map-provider').textContent = 'NAVER Dynamic Map';
+  return {
+    onClick(fn) { naver.maps.Event.addListener(raw, 'click', e => fn([e.coord.lat(), e.coord.lng()])); },
+    setOrigin(pos) { start.setPosition(new naver.maps.LatLng(pos[0], pos[1])); },
+    clear() { overlays.splice(0).forEach(x => x.setMap(null)); },
+    polyline(pts, style) {
+      overlays.push(new naver.maps.Polyline({
+        map: raw,
+        path: pts.map(p => new naver.maps.LatLng(p[0], p[1])),
+        strokeColor: style.color,
+        strokeWeight: style.weight,
+        strokeOpacity: style.opacity,
+      }));
+    },
+    marker(pos, html, title, size = 22) {
+      overlays.push(new naver.maps.Marker({
+        map: raw,
+        position: new naver.maps.LatLng(pos[0], pos[1]),
+        title,
+        icon: {content: html, anchor: new naver.maps.Point(size / 2, size / 2)},
+      }));
+    },
+    fit(pts) {
+      if (!pts.length) return;
+      const lats = pts.map(p => p[0]), lngs = pts.map(p => p[1]);
+      raw.fitBounds(new naver.maps.LatLngBounds(
+        new naver.maps.LatLng(Math.min(...lats), Math.min(...lngs)),
+        new naver.maps.LatLng(Math.max(...lats), Math.max(...lngs)),
+      ));
+    },
+  };
+}
+
+function loadNaverMaps(keyId) {
+  return new Promise((resolve, reject) => {
+    const callback = '__daengsNaverMapReady';
+    const timeout = setTimeout(() => reject(new Error('NAVER SDK timeout')), 8000);
+    window[callback] = () => { clearTimeout(timeout); resolve(); };
+    window.navermap_authFailure = () => { clearTimeout(timeout); reject(new Error('NAVER 인증 실패')); };
+    const script = document.createElement('script');
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(keyId)}&callback=${callback}`;
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('NAVER SDK 로드 실패')); };
+    document.head.appendChild(script);
+  });
+}
+
+async function initGeoMap() {
+  let config = null;
+  try {
+    const response = await fetch('/map/client-config');
+    if (response.ok) config = await response.json();
+  } catch (_) { /* 아래 OSM 폴백 */ }
+
+  if (config?.provider === 'naver' && config.naver_key_id) {
+    try {
+      await loadNaverMaps(config.naver_key_id);
+      geoMap = makeNaverMap();
+    } catch (error) {
+      geoMap = makeLeafletMap(error.message);
+    }
+  } else {
+    const reason = config?.provider === 'naver' ? 'NAVER key 없음' : '공급자 미설정';
+    geoMap = makeLeafletMap(reason);
+  }
+
+  geoMap.onClick(pos => {
+    origin = pos;
+    geoMap.setOrigin(origin);
+    $('origin').textContent = origin.map(v => v.toFixed(4)).join(', ');
+    run({reset: true});
+  });
+}
+
+function decodePolyline(str, precision = 5) {
+  const f = 10 ** precision; let i = 0, lat = 0, lng = 0; const pts = [];
+  while (i < str.length) {
+    for (const which of [0, 1]) {
+      let shift = 0, result = 0, b;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const d = (result & 1) ? ~(result >> 1) : (result >> 1);
+      if (which === 0) lat += d; else lng += d;
+    }
+    pts.push([lat / f, lng / f]);
+  }
+  return pts;
+}
+const COLORS = ['#1565c0', '#2e7d32', '#6a1b9a', '#ef6c00', '#00838f', '#5d4037'];
+$('radius').oninput = e => $('radiusv').textContent = (e.target.value / 1000) + 'km';
+$('radius').onchange = e => run({edits: [{tool: 'set_radius', args: {m: +e.target.value}}]});
+$('applymax').onclick = () => { const v = $('maxmin').value; run({edits: [{tool: 'set_max_total_min', args: {minutes: v === '' ? null : +v, hard: $('hard').checked}}]}); };
+$('applywalkmax').onclick = () => { const v = $('walkmax').value; run({edits: [{tool: 'set_walk_max_min', args: {minutes: v === '' ? null : +v}}]}); };
+$('reset').onclick = () => run({reset: true});
+$('dog').onchange = () => run({reset: true});
+document.querySelectorAll('input[name=comp]').forEach(r => r.onchange = () => run({}));
+$('send').onclick = () => { const u = $('utt').value.trim(); if (u) run({utterance: u}); };
+$('utt').onkeydown = e => { if (e.key === 'Enter') $('send').click(); };
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  const on = c.classList.contains('on');
+  const args = JSON.parse(on ? (c.dataset.off || 'null') : c.dataset.args);
+  if (args === null) return;
+  const tool = on ? (c.dataset.offTool || c.dataset.tool) : c.dataset.tool;
+  run({edits: [{tool, args}]});
+});
+
+async function run({reset = false, edits = [], utterance = null} = {}) {
+  const body = {dog_id: $('dog').value || null, origin, edits, utterance, shown_ids: shown, companion: companion(), transport: 'estimate'};
+  if (!reset && state) body.state = state;
+  const r = await fetch(API, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (!r.ok) { $('changes').textContent = JSON.stringify(d, null, 1); return; }
+  state = d.state; shown = d.results.map(x => x.id); lastSearch = d;
+  if (selected && !shown.includes(selected)) selected = null;
+  $('utt').value = '';
+  journeys = {};
+  render(d);                                   // 1) 검색 결과 먼저 (휴리스틱)
+  await fetchJourneys(d.results.slice(0, TOP_N).map(x => x.id));   // 2) 상위 N 실측 → 선
+  render(d);
+}
+
+async function fetchJourneys(ids) {
+  if (!ids.length) return;
+  const body = {origin, dests: ids.map(id => ({id})), companion: companion(), dog_id: $('dog').value || null,
+                state: state || undefined, measured: true, with_polyline: true};
+  const r = await fetch('/journey', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) return;
+  const j = await r.json();
+  j.items.forEach(it => journeys[it.id] = it);
+}
+
+function tOf(x) { const j = journeys[x.id]; return j ? j.transport : (x.transport || {}); }
+
+function syncChips(st) {
+  const tg = st.target, jn = st.journey;
+  document.querySelectorAll('.chip').forEach(c => {
+    const k = c.dataset.key; let on = false;
+    if (k === 'open_now') on = tg.open_now;
+    else if (k === 'night_service') on = tg.night_service;
+    else if (k === 'emergency_service') on = tg.emergency_service;
+    else if (k === 'urgency') on = st.urgency === 'urgent';
+    else if (k.startsWith('req=')) on = (tg.require_tags || []).includes(k.split('=')[1]);
+    else if (k.startsWith('mode=')) on = jn.preferred_mode === k.split('=')[1];
+    c.classList.toggle('on', !!on);
+  });
+  $('radius').value = tg.radius_m; $('radiusv').textContent = (tg.radius_m / 1000) + 'km';
+  $('maxmin').value = jn.max_total_min == null ? '' : jn.max_total_min; $('hard').checked = !!jn.hard_limit;
+  $('walkmax').value = jn.walk.max_walk_min == null ? '' : jn.walk.max_walk_min;
+}
+
+// call_reasons 는 원시 코드다 (safety_urgency 가 reason 또는 origin 을 그대로 낸다).
+// 사용자에게 코드를 보여주면 안 된다 — 모르는 코드는 문장을 만들지 말고 통째로 생략한다.
+const CALL_REASON_TEXT = {
+  user: '급하다고 하셨어요',
+  breathing_safety_rule: '호흡 이상은 지체하면 위험할 수 있어요',
+  rule: '입력하신 증상이 응급 신호에 걸렸어요',
+};
+const AXIS_TEXT = { context: '상황', target: '찾는 곳', journey: '가는 길', view: '보기' };
+
+function renderSafety(d) {
+  // 1) 전화 CTA — 조건을 좁히는 대신 전화를 권한다 (semantics.safety_urgency)
+  const box = $('safety');
+  if (d.show_call_cta) {
+    const said = (d.call_reasons || []).map(c => CALL_REASON_TEXT[c]).filter(Boolean);
+    const unknownHours = (d.results || []).filter(x => x.open_now === null).length;
+    box.style.display = '';
+    box.innerHTML = `<b>지금 전화부터 권합니다</b>`
+      + (said.length ? `<div class="muted">${said.join(' · ')}</div>` : '')
+      + (unknownHours ? `<div class="muted">${unknownHours}곳은 영업시간 미상 — 전화로 확인하세요.</div>` : '');
+  } else { box.style.display = 'none'; box.innerHTML = ''; }
+
+  // 2) 상황이 사용자 설정을 눌렀으면 **반드시** 말한다. trace.py 의 존재 이유다 —
+  //    "사용자가 걸어둔 조건이 살아 있다고 믿게 두면 안 된다"
+  const res = d.resolution || [];
+  const overrode = res.filter(e => e.overrode);
+  $('overrides').innerHTML = overrode.map(e =>
+    `<div class="override">⚠ ${e.what}<div class="muted">${e.because} → <code>${e.overrode}</code> 무시됨</div></div>`
+  ).join('');
+
+  // 3) 나머지 trace 는 접어둔다. 디버깅·상세용이지 사용자 화면의 주인공이 아니다
+  const rest = res.filter(e => !e.overrode);
+  $('trace').style.display = rest.length ? '' : 'none';
+  $('tracelist').innerHTML = rest.map(e =>
+    `<li><b>${AXIS_TEXT[e.axis] || e.axis}</b> ${e.what}${e.because ? ` <span class="muted">(${e.because})</span>` : ''}</li>`
+  ).join('');
+}
+
+function renderActions(d) {
+  const box = $('actions');
+  box.replaceChildren();
+  (d.actions || []).filter(a => a.kind === 'edits').forEach(action => {
+    const button = document.createElement('button');
+    button.className = 'action';
+    button.type = 'button';
+    button.textContent = action.label;
+    button.title = action.source === 'assistant' ? 'AI 제안' : '현재 조건에서 가능한 제안';
+    button.onclick = async () => {
+      button.disabled = true;
+      try { await run({edits: action.edits}); }
+      finally { button.disabled = false; }
+    };
+    box.appendChild(button);
+  });
+}
+
+function render(d) {
+  syncChips(d.state);
+  renderSafety(d);
+  const g = d.changes_by_policy || {};
+  const line = (cls, label, arr) => (arr && arr.length) ? `<div class="chg"><span class="pol ${cls}">${label}</span><span>${arr.join(' · ')}</span></div>` : '';
+  $('changes').innerHTML = (line('c', '상황', g.context) + line('t', '찾는 곳', g.target) + line('j', '가는 길', g.journey) + line('t', '보기', g.view)
+     || `<div class="chg">${d.changes.join(' · ')}</div>`) + `<div class="muted">${d.reply}</div>`;
+  $('question').style.display = d.question ? '' : 'none'; $('question').textContent = d.question || '';
+  renderActions(d);
+  $('count').textContent = d.results.length + '곳';
+  geoMap.clear();
+  const list = $('list'); list.innerHTML = '';
+  // 1) 선이 먼저 — 실측된 모든 경로를 옅게. 카드 안 눌러도 "어느 쪽으로 얼마나"가 보인다
+  const allBounds = [];
+  d.results.forEach((x, i) => {
+    const w = (tOf(x)).walk;
+    if (w && w.polyline) {
+      const pts = decodePolyline(w.polyline);
+      const isSel = x.id === selected;
+      geoMap.polyline(pts, {color: COLORS[i % COLORS.length], weight: isSel ? 6 : 3, opacity: isSel ? .95 : (selected ? .25 : .6)},
+        `${String.fromCharCode(65 + i)} ${x.name} · 🚶${w.min}분`);
+      if (!selected) allBounds.push(...pts);
+    }
+  });
+  if (!selected && allBounds.length) geoMap.fit(allBounds, .15);
+  d.results.forEach((x, i) => {
+    const t = tOf(x), w = t.walk || {}, c = t.car || {}, tr = t.transit;
+    const label = String.fromCharCode(65 + i);
+    const callHref = telHref(x.phone);
+    geoMap.marker([x.lat, x.lng], markerHtml(label, x.id === selected ? '#c62828' : COLORS[i % COLORS.length]), x.name);
+    const card = document.createElement('div'); card.className = 'card' + (x.id === selected ? ' sel' : '');
+    const fac = w.facilities || {};
+    const advCls = 'adv-' + (w.advice || 'ok');
+    card.innerHTML = `
+      <div><span class="name">${label}. ${x.name}</span> <span class="muted">${x.distance_m}m · ${x.open_now === null ? '영업 미상' : x.open_now ? '영업중' : '영업종료'}</span>${callHref ? `<a class="call${d.show_call_cta ? ' urgent' : ''}" href="${callHref}">전화하기</a>` : ''}</div>
+      <div>${(x.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}${x.area_m2 ? `<span class="muted">${x.area_m2}㎡ · ${x.staff_count ?? '?'}인</span>` : ''}</div>
+      ${t.walk ? `<div>🚶 <b>${w.min}분</b>${w.provider_min ? `<span class="muted">(성인 ${w.provider_min})</span>` : ''} ${w.m}m <span class="tag">${w.status === 'measured' ? w.source : '약'}</span>${w.status !== 'measured' ? `<span class="tag muted">${w.status_reason || w.status}</span>` : ''}${w.advice ? `<span class="${advCls}">${w.advice}</span>` : ''}</div>` : ''}
+      ${w.road_mix && w.status === 'measured' ? `<div class="muted">이 길: 큰길 ${Math.round(w.road_mix.big_ratio * 100)}% · 큰길 횡단 ${w.road_mix.big_crossings}회 · 횡단 총 ${fac.crosswalk ?? 0}${fac.stairs ? ` · 계단 ${fac.stairs}` : ''}${fac.underpass ? ` · 지하 ${fac.underpass}` : ''}</div>` : ''}
+      ${(w.why || []).length ? `<div class="muted">${w.why.join(' / ')}</div>` : ''}
+      ${t.car ? `<div>🚗 ${c.min}분 ${c.m}m · 택시 ${c.taxi_fare ?? '-'}원 ${tr ? `· 🚌 ${tr.min}분 ${tr.fare}원` : ''}</div>` : ''}
+       <div class="spots"></div>`;
+    const call = card.querySelector('.call');
+    if (call) call.onclick = e => e.stopPropagation();
+    card.onclick = async () => { selected = (selected === x.id ? null : x.id); if (selected && !journeys[selected]) await fetchJourneys([selected]); render(lastSearch); };
+    if (x.id === selected && w.spots) {
+      const sp = card.querySelector('.spots');
+      sp.innerHTML = '<details open><summary style="cursor:pointer;color:#666;font-size:12px">걸리는 지점 (지도의 점) — 펼치기</summary>' + w.spots.map((s, j) => `<div class="spot ${s.warn ? 'warn' : ''}"><span class="n">${j + 1}</span><div>${s.text}<div class="muted">${s.note || ''}</div></div></div>`).join('')
+        + '</details>' + (w.handoff ? `<div class="hand" style="margin-top:6px">따라가기: <a href="${w.handoff.naver}">네이버</a><a href="${w.handoff.kakao}">카카오</a><a href="${w.handoff.tmap}">TMAP</a></div>` : '');
+      // spots는 선 위의 점. warn만 빨강, 나머지는 작게
+      w.spots.forEach((s, j) => {
+        const size = s.warn ? 18 : 14;
+        geoMap.marker([s.lat, s.lng], markerHtml(j + 1, s.warn ? '#c62828' : '#666', size), `${s.text}${s.note ? ' — ' + s.note : ''}`, size);
+      });
+      if (w.polyline) geoMap.fit(decodePolyline(w.polyline), .2);
+    }
+    list.appendChild(card);
+  });
+}
+initGeoMap().then(() => run({reset: true}));
+</script>
+</body>
+</html>

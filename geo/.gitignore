@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.jks
+android/*.keystore
+*.log
+.DS_Store
+Thumbs.db
+
+# TMAP 옵션 조사 원본 응답 — 재실행 캐시. summary.md · rows.csv 만 커밋한다
+docs/research/tmap-option-survey/raw/
+
+# 스파이크 뷰어용 장면 데이터 — 스크립트로 언제든 다시 만든다
+docs/research/region-cell-fidelity-scenes.json

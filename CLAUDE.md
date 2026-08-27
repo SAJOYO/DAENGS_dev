@@ -13,6 +13,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
+| `geo/` | 지오 백엔드 — 병원·약국 찾기 + 산책 기록 (FastAPI + PostGIS). **배포에 안 붙어 있고, [rkbuhtig/DAENGS_geo](https://github.com/rkbuhtig/DAENGS_geo) 의 사본입니다 — 고칠 일은 원본에서** |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |

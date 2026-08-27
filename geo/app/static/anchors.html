@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DAENGS 점령 앵커 — 전봇대 분포</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --ink:#1a1a1a; --line:#d8d8d8; }
+  * { box-sizing:border-box }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink) }
+  #map { position:absolute; inset:0 }
+  .hud {
+    position:absolute; z-index:1000; top:12px; left:12px; width:236px;
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 13px;
+    box-shadow:0 3px 14px rgba(0,0,0,.14);
+  }
+  .hud h1 { margin:0 0 8px; font-size:14px; letter-spacing:-.2px }
+  .row { display:flex; justify-content:space-between; gap:8px; padding:2px 0 }
+  .row b { font-variant-numeric:tabular-nums }
+  .muted { color:#6b6b6b; font-size:12px }
+  .warn { color:#b3261e; font-weight:600 }
+  select, label { font:inherit }
+  select { width:100%; margin-top:6px; padding:4px 6px; border:1px solid var(--line); border-radius:6px }
+  hr { border:0; border-top:1px solid var(--line); margin:10px 0 8px }
+  .pole svg { display:block; filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)) }
+</style>
+
+<div id="map"></div>
+<div class="hud">
+  <h1>점령 앵커 · 전봇대</h1>
+  <div class="row"><span class="muted">화면 안</span><b id="n">–</b></div>
+  <div class="row"><span class="muted">줌</span><b id="z">–</b></div>
+  <div class="row" id="trunc" style="display:none"><span class="warn">상한 도달</span><b class="warn">일부만</b></div>
+  <hr>
+  <label class="muted">설치형태</label>
+  <select id="kind">
+    <option value="">전체</option>
+    <option value="한전주">한전주 (진짜 전봇대)</option>
+    <option value="전용주">전용주</option>
+    <option value="건축물">건축물</option>
+    <option value="unknown">미상</option>
+  </select>
+  <hr>
+  <div class="muted">보안등 184만 → 육각 115m 격자 선별 → 앵커 48만.<br>줌 14 이상에서 표시.</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// 전봇대 SVG. 색은 설치형태별 — 한전주(진짜 전봇대)만 도드라지게 둔다.
+const COLOR = {'한전주':'#c2410c', '전용주':'#0369a1', '건축물':'#6d28d9', 'unknown':'#4b5563'};
+function poleIcon(kind) {
+  const c = COLOR[kind] || COLOR.unknown;
+  return L.divIcon({
+    className: 'pole', iconSize: [18, 26], iconAnchor: [9, 25],
+    html: `<svg width="18" height="26" viewBox="0 0 18 26">
+      <path d="M8.1 6h1.8l.7 19h-3.2z" fill="${c}"/>
+      <rect x="2.2" y="5.1" width="13.6" height="1.9" rx=".9" fill="${c}"/>
+      <rect x="4.2" y="1.6" width="9.6" height="1.7" rx=".8" fill="${c}"/>
+      <circle cx="4.2" cy="2.4" r="1.5" fill="${c}"/>
+      <circle cx="13.8" cy="2.4" r="1.5" fill="${c}"/>
+      <circle cx="2.6" cy="6" r="1.5" fill="${c}"/>
+      <circle cx="15.4" cy="6" r="1.5" fill="${c}"/>
+    </svg>`
+  });
+}
+
+const map = L.map('map', {preferCanvas: true}).setView([37.5665, 126.9780], 15);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
+
+const layer = L.layerGroup().addTo(map);
+const $ = id => document.getElementById(id);
+let timer = null;
+
+async function refresh() {
+  const z = map.getZoom();
+  $('z').textContent = z;
+  if (z < 14) { layer.clearLayers(); $('n').textContent = '줌 14+'; $('trunc').style.display='none'; return; }
+
+  const b = map.getBounds();
+  const q = new URLSearchParams({
+    south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast(), limit: 1500,
+  });
+  const kind = $('kind').value;
+  if (kind) q.set('kind', kind);
+
+  const data = await (await fetch('/anchor/search?' + q)).json();
+  layer.clearLayers();
+  for (const a of data.results) {
+    L.marker([a.lat, a.lng], {icon: poleIcon(a.kind)})
+      .bindPopup(`<b>${a.kind}</b><br>${a.cell}<br>${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}`)
+      .addTo(layer);
+  }
+  $('n').textContent = data.count.toLocaleString();
+  $('trunc').style.display = data.truncated ? 'flex' : 'none';
+}
+
+const debounced = () => { clearTimeout(timer); timer = setTimeout(refresh, 220); };
+map.on('moveend zoomend', debounced);
+$('kind').addEventListener('change', refresh);
+
+// 첫 조회는 레이아웃이 잡힌 뒤에. 컨테이너 크기가 0인 채로 부르면 bbox 가 비어
+// 결과 0건이 나오고, 그게 "이 동네엔 앵커가 없다"로 읽힌다.
+window.addEventListener('load', () => { map.invalidateSize(); refresh(); });
+</script>

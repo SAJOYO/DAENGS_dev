@@ -1,0 +1,586 @@
+<meta charset="utf-8">
+<title>셀로판 나란히 보기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+
+<style>
+:root{
+  --ground:#EFF3F1; --panel:#FBFDFC; --sunk:#E4EAE7;
+  --ink:#131A18; --muted:#65726D; --faint:#8D9994;
+  --line:#D2DBD7; --land:#0B6E5F; --path:#3F5A66; --home:#93301A;
+  --warm:#B4531F; --cool:#1F5F86;
+  --r:3px; --map-filter:saturate(.30) brightness(1.07) contrast(.9);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1211; --panel:#151C1A; --sunk:#0A0F0E;
+    --ink:#E3EAE7; --muted:#8B9994; --faint:#6B7873;
+    --line:#26312E; --land:#35B49C; --path:#8FA6B0; --home:#E4674A;
+    --warm:#E28B54; --cool:#5BA8D6;
+    --map-filter:invert(1) hue-rotate(180deg) saturate(.26) brightness(.8) contrast(1.06);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1211; --panel:#151C1A; --sunk:#0A0F0E;
+  --ink:#E3EAE7; --muted:#8B9994; --faint:#6B7873;
+  --line:#26312E; --land:#35B49C; --path:#8FA6B0; --home:#E4674A;
+  --warm:#E28B54; --cool:#5BA8D6;
+  --map-filter:invert(1) hue-rotate(180deg) saturate(.26) brightness(.8) contrast(1.06);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);line-height:1.6;
+     font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+     -webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin:0 auto;padding:26px 18px 56px;display:flex;flex-direction:column;gap:18px}
+
+header{display:flex;flex-direction:column;gap:9px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+h1{margin:0;font-size:clamp(23px,3.6vw,32px);font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.lede{margin:0;max-width:68ch;color:var(--muted);font-size:14.5px;font-weight:300}
+.lede b{color:var(--ink);font-weight:500}
+
+.controls{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:6px}
+.ctl>span{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.seg{display:flex;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:2px;gap:2px;flex-wrap:wrap}
+.seg button{font-family:inherit;font-size:12.5px;font-weight:500;background:none;border:0;color:var(--muted);
+  padding:6px 11px;border-radius:2px;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.09)}
+.seg button:focus-visible{outline:2px solid var(--land);outline-offset:1px}
+.seg button[disabled]{opacity:.3;cursor:not-allowed}
+
+.panes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:860px){.panes{grid-template-columns:1fr}}
+.pane{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
+.pane-head{display:flex;align-items:baseline;gap:10px;padding:10px 13px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pane-head .who{font-size:15px;font-weight:600}
+.pane-head .kind{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint)}
+.pane-head .n{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.stage{position:relative;background:var(--sunk)}
+canvas{display:block;width:100%;height:clamp(300px,42vh,430px)}
+.attrib{position:absolute;right:6px;bottom:4px;font-size:9.5px;color:#555;background:rgba(255,255,255,.72);
+        padding:1px 5px;border-radius:2px;font-family:"IBM Plex Mono",monospace}
+.pane-foot{display:flex;gap:14px;padding:9px 13px;border-top:1px solid var(--line);flex-wrap:wrap;
+           font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.pane-foot b{color:var(--ink);font-weight:600}
+
+.legend{display:flex;align-items:center;gap:10px;justify-content:center;
+        font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted)}
+.ramp{width:190px;height:8px;border-radius:4px}
+
+.callout{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:var(--panel);
+         border:1px solid var(--line);border-left:3px solid var(--land);border-radius:var(--r)}
+.callout p{margin:0;font-size:13px;color:var(--muted);font-weight:300;line-height:1.65}
+.callout p b{color:var(--ink);font-weight:600}
+.callout .badge{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;
+                text-transform:uppercase;color:var(--land);white-space:nowrap;padding-top:2px}
+
+.check{display:flex;flex-direction:column;gap:10px;padding:15px 17px;background:var(--panel);
+        border:1px solid var(--line);border-radius:var(--r)}
+.check-head{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.check-head h2{margin:0;font-size:14px;font-weight:600;white-space:nowrap}
+.check-head p{margin:0;flex:1;min-width:260px;font-size:12.5px;color:var(--muted);font-weight:300;line-height:1.6}
+.check-head p b{color:var(--ink);font-weight:600}
+.check-head button{font:inherit;font-size:12.5px;font-weight:500;padding:6px 14px;cursor:pointer;
+  background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);color:var(--ink)}
+.check-head button:hover{border-color:var(--land)}
+.check-head button:focus-visible{outline:2px solid var(--land);outline-offset:1px}
+.check-out{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.check-out:empty{display:none}
+.crow{background:var(--panel);padding:9px 13px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;
+      font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.crow .verdict{font-weight:600;letter-spacing:.06em;white-space:nowrap}
+.crow .verdict.ok{color:var(--land)} .crow .verdict.no{color:var(--home)}
+.crow .what{color:var(--ink);font-family:"IBM Plex Sans KR",sans-serif;font-size:12.5px;min-width:190px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:16px 26px;padding-top:14px;border-top:1px solid var(--line)}
+.note h3{margin:0 0 4px;font-size:13px;font-weight:600}
+.note p{margin:0;font-size:12.5px;line-height:1.65;color:var(--muted);font-weight:300}
+code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink);background:var(--sunk);padding:1px 4px;border-radius:2px}
+footer{font-size:11.5px;color:var(--faint);font-weight:300;line-height:1.7}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">DAENGS_geo 실험대 · 대치·도곡동 + 양재천 · 정답 심은 1년치</div>
+  <h1>셀로판 나란히 보기</h1>
+  <p class="lede">
+    산책 한 번이 셀로판 한 장이다. 조건으로 장을 골라 겹치면 그 조건에서의 행동이 지도가 된다.
+    <b>F1 과 F2 는 같은 집·같은 두 경로·같은 연간 횟수</b>를 쓰고 계절 배정만 정반대다 —
+    <b>전체</b>로 보면 같은 사람처럼 보이는데 <b>여름</b>과 <b>겨울</b>을 눌러 보면 갈라진다.
+  </p>
+</header>
+
+<div class="controls">
+  <label class="ctl"><span>왼쪽</span><div class="seg" id="segLeft"></div></label>
+  <label class="ctl"><span>오른쪽</span><div class="seg" id="segRight"></div></label>
+  <label class="ctl"><span>모드</span><div class="seg" id="segMode"></div></label>
+  <label class="ctl"><span>값</span><div class="seg" id="segMetric"></div></label>
+  <label class="ctl"><span>세기 문턱</span><div class="seg" id="segPeak"></div></label>
+  <label class="ctl"><span>겹칠 것</span><div class="seg" id="segPath"></div></label>
+</div>
+
+<div class="controls">
+  <label class="ctl" style="flex:1"><span id="sceneALabel">장면</span><div class="seg" id="segSceneA"></div></label>
+</div>
+<div class="controls" id="sceneBRow" hidden>
+  <label class="ctl" style="flex:1"><span>빼는 장면</span><div class="seg" id="segSceneB"></div></label>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-head">
+      <span class="who" id="whoL">—</span><span class="kind" id="kindL"></span>
+      <span class="n" id="nL"></span>
+    </div>
+    <div class="stage"><canvas id="mapL"></canvas><div class="attrib">© OpenStreetMap</div></div>
+    <div class="pane-foot" id="footL"></div>
+  </div>
+  <div class="pane">
+    <div class="pane-head">
+      <span class="who" id="whoR">—</span><span class="kind" id="kindR"></span>
+      <span class="n" id="nR"></span>
+    </div>
+    <div class="stage"><canvas id="mapR"></canvas><div class="attrib">© OpenStreetMap</div></div>
+    <div class="pane-foot" id="footR"></div>
+  </div>
+</div>
+
+<div class="legend"><span id="lo">—</span><div class="ramp" id="ramp"></div><span id="hi">—</span></div>
+
+<div class="callout">
+  <span class="badge" id="calloutTag">지금 보는 것</span>
+  <p id="callout"></p>
+</div>
+
+<section class="check">
+  <div class="check-head">
+    <h2>자가 점검</h2>
+    <p>연구 문서가 인용하는 숫자를 <b>이 페이지가 스스로 다시 잰다.</b> 화면을 캡처해 두 판을
+       픽셀 단위로 비교하므로, 렌더러가 바뀌면 값도 같이 바뀐다 — 결론과 증거가 갈라지지 않는다.</p>
+    <button type="button" id="runCheck">다시 재기</button>
+  </div>
+  <div id="checkOut" class="check-out"></div>
+</section>
+
+<div class="notes">
+  <div class="note">
+    <h3>모드 셋은 다른 질문이다</h3>
+    <p><b>물감</b>은 한 조건의 지도. <b>존재</b>는 "간 적 있나" 만 (칸이 있냐 없냐). <b>차이</b>는
+    두 조건의 <b>방문률</b> 차 — 여름 90% · 겨울 10% 로 가는 칸은 존재로는 양쪽에 다 있어
+    사라지지만 차이에는 +0.8 로 남는다.</p>
+  </div>
+  <div class="note">
+    <h3>세기 문턱</h3>
+    <p><code>전부</code>는 스치기만 해도 센다. <code>심만</code>은 붓 심(3m)에 든 통과만 센다 —
+    "자주 가는 길목 옆이라 자주 간 것처럼 보이는 칸" 이 빠진다. 슬라이더가 아니라 두 단계인
+    이유는 미리 겹쳐 둔 값만 있기 때문이다.</p>
+  </div>
+  <div class="note">
+    <h3>고정 목록인 이유</h3>
+    <p>임의 태그 조합 UI 로 만들면 미리 겹쳐 둔 것뿐인데 자유 질의처럼 보인다. 실제보다 되는
+    것처럼 보이는 화면은 만들지 않는다 — 임의 조합은 DB·API 로 갈 때 한다.</p>
+  </div>
+</div>
+
+<footer id="foot"></footer>
+
+</div>
+
+<script id="scenedata" type="application/json">__SCENES__</script>
+<script id="basedata" type="application/json">__BASE__</script>
+<script>
+(function(){
+"use strict";
+const S = JSON.parse(document.getElementById("scenedata").textContent);
+const B = JSON.parse(document.getElementById("basedata").textContent);
+const D2R = Math.PI/180, Z = B.zoom, N = Math.pow(2, Z) * 256;
+const projX = lng => (lng + 180) / 360 * N;
+const projY = lat => { const r = lat*D2R; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI)/2 * N; };
+
+const METRICS = [
+  {key:"walks", label:"빈도"},
+  {key:"peak",  label:"최대 세기"},
+  {key:"occ",   label:"물감량"},
+];
+const MODES = [
+  {key:"paint", label:"물감"},
+  {key:"support", label:"존재"},
+  {key:"diff", label:"차이"},
+];
+const byId = Object.fromEntries(S.personas.map(p => [p.id, p]));
+const state = {
+  left: byId.F1 ? "F1" : S.personas[0].id,
+  right: byId.F2 ? "F2" : S.personas[1].id,
+  mode: "paint", metric: "walks", peak: 0.0,
+  sceneA: "all", sceneB: "winter", path: false,
+};
+
+const el = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// 키는 파이썬이 f"{key}@{min_peak}" 로 쓴다 — 0.0 이 JS 에서 "0" 으로 굳으면 못 찾는다
+const layer = (pid, scene) => byId[pid].layers[scene + "@" + state.peak.toFixed(1)];
+
+/* ---- 색 ---------------------------------------------------------------------------- */
+const SEQ = [[ 46,124,148],[ 44,150,140],[ 92,170,110],[190,168, 66],[204,116, 48],[168, 48, 36]];
+function seqAt(t){
+  const x = Math.max(0,Math.min(.9999,t))*(SEQ.length-1), i = Math.floor(x), f = x-i;
+  const a = SEQ[i], b = SEQ[Math.min(i+1,SEQ.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+/* 차이 모드는 발산형 — 0 이 중립이어야 부호가 읽힌다 */
+function divAt(t){                      // t ∈ [-1, 1]
+  const cool = [31,95,134], warm = [180,83,31], mid = [232,236,234];
+  const k = Math.abs(Math.max(-1,Math.min(1,t)));
+  const end = t < 0 ? cool : warm;
+  return [mid[0]+(end[0]-mid[0])*k, mid[1]+(end[1]-mid[1])*k, mid[2]+(end[2]-mid[2])*k];
+}
+const SEQ_LUT = Array.from({length:256}, (_,i) => seqAt(i/255));
+
+/* ---- 값 계산 ------------------------------------------------------------------------ */
+function fieldFor(pid){
+  const person = byId[pid];
+  const a = layer(pid, state.sceneA);
+  const out = new Map();
+  if (state.mode === "diff"){
+    const b = layer(pid, state.sceneB);
+    const rate = (lay) => {
+      const m = new Map();
+      if (!lay.selected) return m;
+      for (const [i, walks] of lay.v) m.set(i, walks / lay.selected);
+      return m;
+    };
+    const ra = rate(a), rb = rate(b);
+    for (const i of new Set([...ra.keys(), ...rb.keys()]))
+      out.set(i, (ra.get(i) || 0) - (rb.get(i) || 0));
+    return {values: out, signed: true, person, layerA: a, layerB: b};
+  }
+  if (state.mode === "support"){
+    for (const [i] of a.v) out.set(i, 1);
+    return {values: out, signed: false, person, layerA: a};
+  }
+  const idx = state.metric === "walks" ? 1 : state.metric === "peak" ? 2 : 3;
+  const denom = state.metric === "walks" ? Math.max(1, a.selected) : 1;
+  for (const row of a.v) out.set(row[0], row[idx] / denom);
+  return {values: out, signed: false, person, layerA: a};
+}
+
+/* ---- 그리기 ------------------------------------------------------------------------- */
+const views = {};
+function drawPane(side, pid){
+  const canvas = el(side === "L" ? "mapL" : "mapR");
+  const ctx = canvas.getContext("2d");
+  const box = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(box.width*dpr); canvas.height = Math.round(box.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  /* 두 판이 같은 창을 봐야 비교가 된다 — bbox 는 공통 */
+  const [s,w,n,e] = S.bbox;
+  const minX = projX(w), maxX = projX(e), minY = projY(n), maxY = projY(s);
+  const pad = 16;
+  const k = Math.min((box.width-pad*2)/(maxX-minX), (box.height-pad*2)/(maxY-minY));
+  const cx = (minX+maxX)/2, cy = (minY+maxY)/2;
+  const sx = x => box.width/2 + (x-cx)*k, sy = y => box.height/2 + (y-cy)*k;
+  views[side] = {k, box, sx, sy, dpr};
+
+  const panel = css("--panel"), ink = css("--ink");
+  ctx.clearRect(0,0,box.width,box.height);
+  ctx.fillStyle = panel; ctx.fillRect(0,0,box.width,box.height);
+
+  ctx.save(); ctx.filter = css("--map-filter");
+  for (const t of B.tiles){
+    const img = images.get(t); if (!img) continue;
+    const x = sx(projX(t.w)), y = sy(projY(t.n));
+    ctx.drawImage(img, x, y, sx(projX(t.e))-x+.6, sy(projY(t.s))-y+.6);
+  }
+  ctx.restore();
+  ctx.fillStyle = panel; ctx.globalAlpha = .34; ctx.fillRect(0,0,box.width,box.height); ctx.globalAlpha = 1;
+
+  const {values, signed, person, layerA, layerB} = fieldFor(pid);
+
+  /* 필드 — 오프스크린에 밝기로 쌓고 색을 나중에 입힌다. 겹친 자리가 얼룩지지 않는다. */
+  const heat = document.createElement("canvas");
+  heat.width = canvas.width; heat.height = canvas.height;
+  const hx = heat.getContext("2d", {willReadFrequently:true});
+  const mPerPx = 156543.03392 * Math.cos(person.home[0]*D2R) / Math.pow(2, Z);
+  const spread = S.grid.radius_u * Math.cos(person.home[0]*D2R) * Math.sqrt(3) * 1.35;
+  const rPx = Math.max(3, (spread / mPerPx) * k * dpr);
+
+  const maxAbs = Math.max(...[...values.values()].map(Math.abs), 1e-9);
+  const paintSide = (pick) => {
+    hx.setTransform(1,0,0,1,0,0);
+    hx.clearRect(0,0,heat.width,heat.height);
+    hx.globalCompositeOperation = "lighter";
+    for (const [i, raw] of values){
+      const v = pick(raw); if (v <= 0) continue;
+      const [lat,lng] = person.cells[i];
+      const x = sx(projX(lng))*dpr, y = sy(projY(lat))*dpr;
+      const g = hx.createRadialGradient(x,y,0,x,y,rPx);
+      const a = Math.min(1, v);
+      g.addColorStop(0, `rgba(255,255,255,${a})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      hx.fillStyle = g; hx.beginPath(); hx.arc(x,y,rPx,0,7); hx.fill();
+    }
+    hx.globalCompositeOperation = "source-over";
+    return hx.getImageData(0,0,heat.width,heat.height);
+  };
+
+  const compose = (img, colour) => {
+    const px = img.data;
+    for (let i=0;i<px.length;i+=4){
+      const a = px[i+3]; if (!a) continue;
+      const c = colour(a);
+      px[i]=c[0]; px[i+1]=c[1]; px[i+2]=c[2];
+      px[i+3] = Math.round(a * (0.4 + 0.6*(a/255)));
+    }
+    const tint = document.createElement("canvas");
+    tint.width = heat.width; tint.height = heat.height;
+    tint.getContext("2d").putImageData(img,0,0);
+    ctx.globalAlpha = .78;
+    ctx.drawImage(tint, 0, 0, tint.width, tint.height, 0, 0, box.width, box.height);
+    ctx.globalAlpha = 1;
+  };
+
+  if (signed){
+    compose(paintSide(v => v > 0 ? v/maxAbs : 0), a => divAt(a/255));
+    compose(paintSide(v => v < 0 ? -v/maxAbs : 0), a => divAt(-a/255));
+  } else {
+    compose(paintSide(v => v/maxAbs), a => SEQ_LUT[a]);
+  }
+
+  if (state.path){
+    ctx.strokeStyle = css("--path"); ctx.lineWidth = .7; ctx.globalAlpha = .5;
+    ctx.lineJoin="round"; ctx.lineCap="round";
+    for (const route of person.routes){
+      ctx.beginPath();
+      route.forEach((p,i) => { const x=sx(projX(p[1])), y=sy(projY(p[0])); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const hxp = sx(projX(person.home[1])), hyp = sy(projY(person.home[0]));
+  ctx.strokeStyle = css("--home"); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(hxp,hyp,6.5,0,7); ctx.stroke();
+  ctx.fillStyle = css("--home"); ctx.font='600 11px "IBM Plex Sans KR",sans-serif';
+  ctx.fillText("집", hxp+11, hyp+4);
+
+  const bar = 200/mPerPx*k, bx = box.width-bar-12, by = box.height-14;
+  ctx.strokeStyle = ink; ctx.globalAlpha=.5; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(bx,by-4); ctx.lineTo(bx,by); ctx.lineTo(bx+bar,by); ctx.lineTo(bx+bar,by-4); ctx.stroke();
+  ctx.fillStyle = ink; ctx.font='9.5px "IBM Plex Mono",monospace'; ctx.textAlign="center";
+  ctx.fillText("200m", bx+bar/2, by-6); ctx.globalAlpha=1; ctx.textAlign="left";
+
+  el("who"+side).textContent = pid;
+  el("kind"+side).textContent = person.kind;
+  el("n"+side).textContent = state.mode === "diff"
+    ? `n ${layerA.selected} − ${layerB.selected} / ${layerA.total}`
+    : `n ${layerA.selected} / ${layerA.total}`;
+  el("foot"+side).innerHTML = [
+    `칸 <b>${values.size}</b>`,
+    state.mode === "diff"
+      ? `최대 차이 <b>${(maxAbs*100).toFixed(0)}%p</b>`
+      : `최대 <b>${fmtMax(maxAbs)}</b>`,
+    `spec <b>${layerA.fingerprint}</b>`,
+  ].join(" · ");
+}
+
+function fmtMax(v){
+  if (state.mode === "support") return "존재";
+  if (state.metric === "walks") return (v*100).toFixed(0) + "%";
+  return v.toFixed(2);
+}
+
+/* ---- 컨트롤 ------------------------------------------------------------------------- */
+function seg(host, items, get, set, disabled){
+  host.innerHTML = "";
+  for (const it of items){
+    const b = document.createElement("button");
+    b.type="button"; b.textContent = it.label;
+    b.setAttribute("aria-pressed", String(get() === it.value));
+    if (disabled && disabled(it.value)) b.disabled = true;
+    b.onclick = () => { set(it.value); render(); };
+    host.appendChild(b);
+  }
+}
+function paintControls(){
+  const people = S.personas.map(p => ({label:p.id, value:p.id}));
+  seg(el("segLeft"), people, () => state.left, v => state.left = v);
+  seg(el("segRight"), people, () => state.right, v => state.right = v);
+  seg(el("segMode"), MODES.map(m => ({label:m.label, value:m.key})), () => state.mode, v => state.mode = v);
+  seg(el("segMetric"), METRICS.map(m => ({label:m.label, value:m.key})), () => state.metric,
+      v => state.metric = v, () => state.mode !== "paint");
+  seg(el("segPeak"), [{label:"전부",value:0.0},{label:"심만",value:0.9}], () => state.peak, v => state.peak = v);
+  seg(el("segPath"), [{label:"경로 숨김",value:false},{label:"경로 보기",value:true}], () => state.path, v => state.path = v);
+  const scenes = S.scenarios.map(s => ({label:s.label, value:s.key}));
+  seg(el("segSceneA"), scenes, () => state.sceneA, v => state.sceneA = v);
+  seg(el("segSceneB"), scenes, () => state.sceneB, v => state.sceneB = v);
+  el("sceneBRow").hidden = state.mode !== "diff";
+  el("sceneALabel").textContent = state.mode === "diff" ? "기준 장면" : "장면";
+}
+
+function paintLegend(){
+  const stops = state.mode === "diff"
+    ? [-1,-.6,-.2,0,.2,.6,1].map(t => { const c=divAt(t); return `rgb(${c.map(Math.round).join(",")})` })
+    : [0,.2,.4,.6,.8,1].map(t => { const c=seqAt(t); return `rgb(${c.map(Math.round).join(",")})` });
+  el("ramp").style.background = `linear-gradient(90deg,${stops.join(",")})`;
+  const nameA = S.scenarios.find(s => s.key === state.sceneA).label;
+  const nameB = S.scenarios.find(s => s.key === state.sceneB).label;
+  el("lo").textContent = state.mode === "diff" ? `${nameB} 우세` : (state.mode === "support" ? "안 감" : "적음");
+  el("hi").textContent = state.mode === "diff" ? `${nameA} 우세` : (state.mode === "support" ? "간 적 있음" : "많음");
+}
+
+function paintCallout(){
+  const L = state.left, R = state.right, A = S.scenarios.find(s=>s.key===state.sceneA).label;
+  const mirror = (L === "F1" && R === "F2") || (L === "F2" && R === "F1");
+  let tag = "지금 보는 것", text;
+  if (mirror && state.mode === "diff"){
+    tag = "핵심 장면";
+    text = `<b>같은 집·같은 두 경로·같은 연간 횟수.</b> 그런데 두 판의 색이 거의 정확히 뒤집혀 있다 —
+      실험에서 잰 두 차이 field 의 코사인이 <b>−0.999</b> 였다. 계절 배정만 반대인 두 사람이다.`;
+  } else if (mirror && state.sceneA === "all"){
+    tag = "핵심 장면";
+    text = `<b>전체로 보면 같은 사람처럼 보인다.</b> 실제로 두 지도의 정규화 거리가 0.0158 로,
+      패턴 없는 사람의 조건 간 잡음(ε=0.0341)보다도 가깝다. <b>누적만 저장했다면 여기서 끝이다</b> —
+      이제 <b>여름</b>이나 <b>겨울</b>을, 또는 <b>차이</b> 모드를 눌러 보라.`;
+  } else if (state.sceneA === "summer_day" || state.sceneA === "summer_night"){
+    tag = "얽힌 태그";
+    text = `E 는 여름의 80%를 밤에 걷고 밤에는 하천으로 간다. 그래서 <b>여름</b>과 <b>밤</b>은 거의 같은
+      그림인데, <b>여름∩낮</b>으로 좁히면 하천이 사라진다(n=18). 얽힌 태그로도 사건 집합을 다시
+      자를 수 있다는 뜻이지, 원인을 갈랐다는 뜻은 아니다.`;
+  } else if (L === "A" || R === "A"){
+    tag = "대조군";
+    text = `A 는 계절·시간대·경로 횟수를 균형 고정해 만든 사람이다. <b>어느 장면을 눌러도 그림이
+      거의 안 변해야 한다</b> — 이 사람이 흔들리면 다른 사람들의 차이도 못 믿는다.`;
+  } else {
+    text = `<b>${L}</b> 와 <b>${R}</b> 를 <b>${A}</b> 조건에서 나란히 본다.
+      두 판은 같은 창·같은 축척이라 그대로 겹쳐 비교할 수 있다.`;
+  }
+  el("calloutTag").textContent = tag;
+  el("callout").innerHTML = text;
+}
+
+/* ---- 타일 --------------------------------------------------------------------------- */
+const images = new Map();
+let ready = false;
+function loadTiles(){
+  return Promise.all(B.tiles.map(t => new Promise(res => {
+    const img = new Image();
+    img.onload = () => { images.set(t, img); res(); };
+    img.onerror = res; img.src = t.b;
+  })));
+}
+
+function render(){
+  if (!ready) return;
+  paintControls();
+  drawPane("L", state.left);
+  drawPane("R", state.right);
+  paintLegend();
+  paintCallout();
+}
+
+el("foot").innerHTML =
+  `격자 ${S.grid.radius_u} 단위(위도 37.5°에서 실제 ${(S.grid.radius_u*Math.cos(37.5*D2R)).toFixed(1)}m) · ` +
+  `붓 ${S.grid.brush} (${S.grid.bands.join("·")}m) · 격자 ${S.grid.grid_version} · 붓 지문 ${S.grid.profile_fp}. ` +
+  `경로는 실제 OSM 보행 도로망 위에서 만들었고 GPS 지터 σ=8m 만 합성이다. 배경은 OSM 표준 타일 z${B.zoom} 을 미리 받아 넣은 것. ` +
+  `재현: <code>persona_year</code> → <code>persona_experiment</code> → <code>layer_scenes</code>`;
+
+/* ---- 자가 점검 -----------------------------------------------------------------------
+   문서가 인용하는 숫자를 페이지가 다시 잰다. 렌더러가 바뀌면 값도 바뀌므로 결론과 증거가
+   갈라지지 않는다. 두 판 비교는 **픽셀 단위 평균 절대차(MAD)** 다 — 밝기 합만 보면
+   "같은 총량, 다른 그림" 을 놓치고, 실제로 차이 모드에서 그 함정을 밟았다. */
+function panePixels(id){
+  const c = document.getElementById(id);
+  return c.getContext("2d").getImageData(0,0,c.width,c.height);
+}
+function pixelMAD(){
+  const a = panePixels("mapL"), b = panePixels("mapR");
+  if (a.width !== b.width || a.height !== b.height) return NaN;
+  let sum = 0, n = 0;
+  for (let i=0;i<a.data.length;i+=4){
+    sum += Math.abs(a.data[i]-b.data[i]) + Math.abs(a.data[i+1]-b.data[i+1])
+         + Math.abs(a.data[i+2]-b.data[i+2]);
+    n += 3;
+  }
+  return sum / n;                       // 0 = 픽셀까지 같음, 255 = 정반대
+}
+function warmShare(id){
+  const img = panePixels(id); let warm = 0, cool = 0;
+  for (let i=0;i<img.data.length;i+=4){
+    const r=img.data[i], b=img.data[i+2];
+    if (Math.abs(r-b) < 18) continue;   // 중립 회색은 안 센다
+    if (r > b) warm++; else cool++;
+  }
+  return warm / (warm + cool || 1);
+}
+function set(next){ Object.assign(state, next); render(); }
+
+function selfCheck(){
+  const rows = [];
+  const keep = {...state};
+  const has = id => Boolean(byId[id]);
+
+  if (has("F1") && has("F2")){
+    set({left:"F1", right:"F2", mode:"paint", metric:"walks", peak:0.0, sceneA:"all"});
+    const same = pixelMAD();
+    rows.push({ok: same < 2, what:"전체 장면에서 F1·F2 가 같은가",
+      detail:`픽셀 평균 절대차 ${same.toFixed(2)} / 255 — 0 에 가까울수록 같은 그림`});
+
+    set({sceneA:"summer"});
+    const summer = pixelMAD();
+    set({sceneA:"winter"});
+    const winter = pixelMAD();
+    rows.push({ok: summer > same * 5 && winter > same * 5,
+      what:"계절 버튼 하나로 갈라지는가",
+      detail:`여름 ${summer.toFixed(2)} · 겨울 ${winter.toFixed(2)} — 전체(${same.toFixed(2)}) 보다 커야 한다`});
+
+    set({mode:"diff", sceneA:"summer", sceneB:"winter"});
+    const wl = warmShare("mapL"), wr = warmShare("mapR");
+    rows.push({ok: (wl > 0.6 && wr < 0.4) || (wl < 0.4 && wr > 0.6),
+      what:"차이 모드에서 부호가 반대인가",
+      detail:`따뜻함 비율 F1 ${wl.toFixed(3)} · F2 ${wr.toFixed(3)} — 한쪽이 높고 한쪽이 낮아야 한다`});
+  }
+
+  if (has("A")){
+    set({left:"A", right:"A", mode:"paint", sceneA:"summer"});
+    const a1 = panePixels("mapL");
+    set({sceneA:"winter"});
+    const a2 = panePixels("mapL");
+    let sum=0, n=0;
+    for (let i=0;i<a1.data.length;i+=4){
+      sum += Math.abs(a1.data[i]-a2.data[i]) + Math.abs(a1.data[i+1]-a2.data[i+1])
+           + Math.abs(a1.data[i+2]-a2.data[i+2]); n += 3;
+    }
+    const drift = sum/n;
+    rows.push({ok: drift < 6, what:"대조군 A 는 장면을 바꿔도 그대로인가",
+      detail:`여름 대 겨울 픽셀 평균 절대차 ${drift.toFixed(2)} — 이게 흔들리면 위 셋도 못 믿는다`});
+  }
+
+  if (has("E")){
+    set({left:"E", right:"E", mode:"paint", sceneA:"summer_night"});
+    const night = layer("E","summer_night");
+    set({sceneA:"summer_day"});
+    const day = layer("E","summer_day");
+    rows.push({ok: day.selected >= 10 && night.selected > day.selected,
+      what:"얽힌 태그를 자를 때 분모가 보이는가",
+      detail:`여름∩밤 n=${night.selected} · 여름∩낮 n=${day.selected} — 얇은 쪽이 두 자릿수여야 한다`});
+  }
+
+  set(keep);
+  document.getElementById("checkOut").innerHTML = rows.map(r =>
+    `<div class="crow"><span class="verdict ${r.ok ? "ok" : "no"}">${r.ok ? "통과" : "실패"}</span>` +
+    `<span class="what">${r.what}</span><span>${r.detail}</span></div>`).join("");
+}
+document.getElementById("runCheck").onclick = selfCheck;
+
+let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(render, 100); });
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change", render);
+loadTiles().then(() => { ready = true; render(); selfCheck(); });
+})();
+</script>

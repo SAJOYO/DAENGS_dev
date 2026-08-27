@@ -1,0 +1,316 @@
+# =====================================================================
+# 크롤링 시드 소스 목록 (2026-08-19 조사 기준)
+# method : api | html | pdf-entry (목록/안내 페이지에서 PDF 수집)
+# auth   : none | data-go-kr (활용신청, 자동승인) | law-oc (open.law.go.kr OC 신청)
+#          | kma-hub (apihub 가입키) | kakao (REST 키)
+# status : verified (2026-08-19 URL/제공여부 확인) | unverified (요확인)
+# 상세 설명: docs/data-sources.md, docs/realtime-apis.md
+# =====================================================================
+
+# ---------- 공통: 법령 ----------
+- id: law-drf-api
+  domain: law
+  org: 법제처 국가법령정보센터
+  title: 국가법령정보 공동활용 Open API (lawSearch/lawService)
+  url: "http://www.law.go.kr/DRF/lawSearch.do"
+  guide: "https://open.law.go.kr/LSO/openApi/guideResult.do"
+  method: api
+  auth: law-oc
+  status: verified
+  notes: "target=law(법령)/ordin(자치법규)/admrul(행정규칙)/expc(해석례)/licbyl(별표서식). 조문 단위 XML 제공"
+
+- id: law-animal-protection
+  domain: law
+  org: 법제처
+  title: 동물보호법 / 시행령 / 시행규칙 (웹 원문)
+  url: "https://www.law.go.kr/법령/동물보호법"
+  method: html
+  auth: none
+  status: verified
+  notes: "등록(제15조), 안전조치, 맹견(사육허가/입마개/책임보험), 과태료. 시행규칙 제2조에 맹견 5종.
+    법/시행령/시행규칙 3건을 함께 받는다.
+    (2026-08-20 정찰: 이 URL 은 iframe 껍데기다. iframe src 의 lsiSeq+efYd 로 lsInfoR.do 를 부르면
+    조문이 서버 렌더링되어 나온다 — lsInfoP.do 는 AJAX 라 본문이 비어 있다. RAG-011)"
+
+- id: law-livestock-epidemic
+  domain: law
+  org: 법제처
+  title: 가축전염병 예방법 (광견병 예방접종 의무 근거)
+  url: "https://www.law.go.kr/법령/가축전염병예방법"
+  method: html
+  auth: none
+  status: verified
+  notes: "광견병=제2종 가축전염병, 시장/군수 예방접종 명령. 법/시행령/시행규칙 3건.
+    제2종 지정은 시행규칙 제2조, 접종 명령 절차는 하위법령에 있어 셋 다 필요하다.
+    (2026-08-20 URL 확인 + 수집 완료. 정식 법령명은 '가축전염병 예방법' 으로 띄어쓰기가 있으나
+    붙여쓴 URL 도 law.go.kr 이 받아준다)"
+
+- id: easylaw-pet
+  domain: law
+  org: 법제처 찾기쉬운 생활법령정보
+  title: 반려동물과 생활하기 (종합 해설 - 등록/외출/대중교통/사육)
+  url: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=1&cciNo=1&cnpClsNo=1"
+  method: html
+  auth: none
+  status: verified
+  notes: "법령 조문+해설 통합. 정적 HTML이라 크롤 난도 낮음. Phase 1 최우선.
+    본문 7p(CnpClsMain ccfNo/cciNo/cnpClsNo) + 카드뉴스 6p(EasyLawInfoR easySeq 2766~2771).
+    URL 목록은 sitemap.xml에서 csmSeq=1809 필터로 얻는다.
+    (2026-08-19 정정: 기존 popMenu=ov&csmSeq=1809 단독 URL은 '페이지 오류' 반환)"
+
+# ---------- 동물등록 ----------
+- id: animal-go-kr
+  domain: registration
+  org: 농림축산검역본부
+  title: 국가동물보호정보시스템 (동물등록 안내/대행기관)
+  url: "https://www.animal.go.kr/"
+  method: html
+  auth: none
+  status: verified
+
+- id: gov24-registration
+  domain: registration
+  org: 행정안전부 정부24
+  title: 동물등록제 안내(반려견 등록) 민원 안내
+  url: "https://www.gov.kr/portal/service/serviceInfo/PTR000051610"
+  method: html
+  auth: none
+  status: verified
+  notes: "절차/수수료/처리기관 구조화 정보"
+
+- id: data-registration-lookup
+  domain: registration
+  org: 농림축산검역본부
+  title: 동물등록 정보조회 서비스 (Open API)
+  url: "https://www.data.go.kr/data/15098913/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: nias-pet
+  domain: registration
+  org: 국립축산과학원
+  title: 반려동물 포털 (행정/법률정보, 기르기 정보)
+  url: "https://www.nias.go.kr/companion/"
+  method: html
+  auth: none
+  status: verified
+  notes: "등록제 해설 + 품종/양육 정보. vaccination 도메인에도 활용"
+
+# ---------- 예방접종 ----------
+- id: qia-rabies
+  domain: vaccination
+  org: 농림축산검역본부
+  title: 동물방역(광견병) / 동물검역(출입국) 안내
+  url: "https://www.qia.go.kr/"
+  method: html
+  auth: none
+  status: unverified
+  notes: "출입국 검역 요건은 transport 도메인과 공유"
+
+- id: kvma-guideline
+  domain: vaccination
+  org: 대한수의사회
+  title: 반려견 예방접종 프로그램 (수의학 가이드라인)
+  url: "https://www.kvma.or.kr/"
+  method: html
+  auth: none
+  status: unverified
+  notes: "trust_level=guideline. 종합백신(DHPPL)/코로나/켄넬코프 스케줄"
+
+# ---------- 목줄·입마개·맹견 ----------
+- id: mafra-press
+  domain: leash-muzzle
+  org: 농림축산식품부
+  title: 보도자료/정책자료 (검색어 - 맹견, 기질평가, 반려)
+  url: "https://www.mafra.go.kr/"
+  method: html
+  auth: none
+  status: verified
+  notes: "맹견사육허가제(2024.4.27 시행) 해설 자료"
+
+- id: korea-kr-policy
+  domain: leash-muzzle
+  org: 문화체육관광부 정책브리핑
+  title: 정책뉴스 (맹견사육허가제 등)
+  url: "https://www.korea.kr/"
+  method: html
+  auth: none
+  status: verified
+
+# ---------- 동반 이동 ----------
+- id: korail-terms
+  domain: transport
+  org: 한국철도공사
+  title: 여객운송약관 (동물 휴대 규정)
+  url: "https://www.letskorail.com/"
+  method: pdf-entry
+  auth: none
+  status: unverified
+  notes: "사이트 하단 이용약관 > 여객운송약관 PDF"
+
+- id: srt-terms
+  domain: transport
+  org: 에스알
+  title: SRT 여객운송약관
+  url: "https://etk.srail.kr/"
+  method: pdf-entry
+  auth: none
+  status: unverified
+
+- id: seoulmetro-terms
+  domain: transport
+  org: 서울교통공사
+  title: 여객운송약관 (동물 반입 조항)
+  url: "http://www.seoulmetro.co.kr/"
+  method: pdf-entry
+  auth: none
+  status: unverified
+  notes: "용기 격납+불쾌감 없을 것 조건부 허용. 타 도시철도공사(부산/대구/인천 등)도 동일 패턴"
+
+- id: airlines-pet-pages
+  domain: transport
+  org: 국적 항공사 9개
+  title: 반려동물 운송 안내 페이지 (기내반입/위탁 기준, 요금)
+  url: "https://www.koreanair.com/"
+  method: html
+  auth: none
+  status: unverified
+  notes: "대한항공/아시아나(flyasiana.com)/제주항공(jejuair.net)/진에어(jinair.com)/티웨이(twayair.com)/에어부산(airbusan.com)/에어서울(flyairseoul.com)/이스타(eastarjet.com)/에어프레미아(airpremia.com). 딥링크는 자주 바뀌므로 사이트 내 반려동물 검색으로 수집"
+
+# ---------- 지자체 지원 ----------
+- id: benefit24-services
+  domain: subsidy
+  org: 행정안전부
+  title: 대한민국 공공서비스(혜택) 정보 - 보조금24 (Open API)
+  url: "https://www.data.go.kr/data/15113968/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "중앙+지자체 7,500여 서비스. 반려/동물등록/중성화/내장형 키워드 필터. 지원사업 1순위 소스"
+
+- id: ordinance-search
+  domain: subsidy
+  org: 법제처
+  title: 자치법규(조례) 검색 - 반려동물 지원 조례 전수
+  url: "http://www.law.go.kr/DRF/lawSearch.do?target=ordin&query=반려동물"
+  method: api
+  auth: law-oc
+  status: verified
+  notes: "지원사업의 법적 근거. 사업 공고보다 변동 적어 안정적"
+
+- id: seoul-notice-api
+  domain: subsidy
+  org: 서울특별시
+  title: 서울시 고시공고 정보 (열린데이터광장 API)
+  url: "https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do"
+  method: api
+  auth: none
+  status: verified
+  notes: "공고문 모니터링용. 열린데이터광장 인증키 별도(무료). 키워드 필터 - 반려/동물"
+
+- id: seoul-microchip-support
+  domain: subsidy
+  org: 서울특별시
+  title: 내장형 동물등록 지원사업 (자부담 1만원, 서울시수의사회 협력)
+  url: "https://news.seoul.go.kr/env/archives/522690"
+  method: html
+  auth: none
+  status: verified
+  notes: "대표 사례 문서. 연도별 공고 갱신 확인 필요"
+
+# ---------- 펫보험 ----------
+- id: e-insmarket
+  domain: insurance
+  org: 손해보험협회/생명보험협회
+  title: 보험다모아 (온라인 보험슈퍼마켓 - 반려동물보험 비교)
+  url: "https://e-insmarket.or.kr/"
+  method: html
+  auth: none
+  status: unverified
+  notes: "반려동물보험 메뉴 경로 요확인"
+
+- id: knia-disclosure
+  domain: insurance
+  org: 손해보험협회
+  title: 상품비교공시
+  url: "https://kpub.knia.or.kr/"
+  method: html
+  auth: none
+  status: unverified
+
+- id: insurer-terms-pdfs
+  domain: insurance
+  org: 각 손해보험사
+  title: 상품공시실 약관 PDF (펫보험 판매사)
+  url: ""
+  method: pdf-entry
+  auth: none
+  status: unverified
+  notes: "삼성화재/메리츠(펫퍼민트)/현대해상/DB/KB/NH농협/한화/롯데/캐롯. 각 사 공시실 > 상품공시 > 판매중 상품 > 약관. 100p+ PDF가 RAG 핵심 코퍼스(보장한도/자기부담금/면책조항)"
+
+# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
+- id: kma-vilage-fcst
+  domain: realtime
+  org: 기상청
+  title: 단기예보 조회서비스 (초단기실황/초단기예보/단기예보, 5km 격자)
+  url: "https://www.data.go.kr/data/15084084/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: kma-weather-warning
+  domain: realtime
+  org: 기상청
+  title: 기상특보 조회서비스 (폭염 등 12종, 178개 시군 구역)
+  url: "https://www.data.go.kr/data/15000415/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: kma-life-index
+  domain: realtime
+  org: 기상청
+  title: 생활기상지수 조회서비스 3.0 (자외선지수/대기정체지수)
+  url: "https://www.data.go.kr/data/15085288/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "체감온도(대상/환경별) 서비스는 2026-05-01 종료. 체감온도는 자체 계산"
+
+- id: airkorea-realtime
+  domain: realtime
+  org: 한국환경공단
+  title: 에어코리아 대기오염정보 (측정소별 실시간 + 예보통보)
+  url: "https://www.data.go.kr/data/15073861/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: airkorea-stations
+  domain: realtime
+  org: 한국환경공단
+  title: 에어코리아 측정소정보 (TM좌표 근접측정소)
+  url: "https://www.data.go.kr/data/15073877/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "측정소 목록은 data/reference/에 캐시"
+
+- id: kma-apihub
+  domain: realtime
+  org: 기상청
+  title: 기상청 API허브 (AWS 지점 분 단위 관측 - 선택)
+  url: "https://apihub.kma.go.kr/"
+  method: api
+  auth: kma-hub
+  status: verified
+
+- id: kakao-local
+  domain: realtime
+  org: 카카오
+  title: Kakao Local API (coord2regioncode - GPS to 행정동 / transcoord - WGS84 to TM)
+  url: "https://developers.kakao.com/docs/latest/ko/local/dev-guide"
+  method: api
+  auth: kakao
+  status: verified

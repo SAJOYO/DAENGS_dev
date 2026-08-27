@@ -24,6 +24,12 @@ from daengs_life.app import deps
 from daengs_life.rag.stages import embed, load
 
 
+# **DB 에 실제로 들어가는 값은 키가 아니라 정식 식별자다** (RAG-008 · `load.py` 의 `model.repo`).
+# 여기에 키를 적어 두면 대조가 키끼리 비교하는 줄 알고 통과해 버린다 — 실제로 그렇게 틀렸다.
+QWEN_KEY = "qwen3-embedding-0.6b"
+QWEN_REPO = embed.MODELS[QWEN_KEY].repo
+
+
 class FakeConn:
     def __init__(self) -> None:
         self.closed = False
@@ -56,22 +62,43 @@ def corpus(monkeypatch: pytest.MonkeyPatch):
 def test_불일치면_두_이름을_다_말한다(corpus, caplog: pytest.LogCaptureFixture) -> None:
     """**어느 쪽을 고쳐야 하는지는 둘을 다 봐야 정해진다.** 서빙만 찍으면 재적재를 할지
     설정을 바꿀지 판단할 수 없다."""
-    corpus([("bge-m3", 1407)])
+    corpus([("BAAI/bge-m3", 1407)])
     with caplog.at_level(logging.WARNING):
-        deps.warn_if_corpus_uses_another_model("qwen3-embedding-0.6b")
+        deps.warn_if_corpus_uses_another_model(QWEN_KEY)
 
     msg = caplog.text
-    assert "qwen3-embedding-0.6b" in msg and "bge-m3" in msg
+    assert QWEN_REPO in msg and "BAAI/bge-m3" in msg
+    assert QWEN_KEY in msg, "고칠 때 손대는 것은 키(EMBEDDING_MODEL_KEY)라 그것도 있어야 한다"
     assert "1407" in msg, "몇 건이 그 모델로 들어 있는지까지 봐야 규모를 안다"
 
 
 def test_일치하면_경고하지_않는다(corpus, caplog: pytest.LogCaptureFixture) -> None:
     """정상 경로에서 경고가 나면 **경고가 무시되기 시작한다.** 그러면 진짜 불일치도 묻힌다."""
-    corpus([("qwen3-embedding-0.6b", 1407)])
+    corpus([(QWEN_REPO, 1407)])
     with caplog.at_level(logging.WARNING):
-        deps.warn_if_corpus_uses_another_model("qwen3-embedding-0.6b")
+        deps.warn_if_corpus_uses_another_model(QWEN_KEY)
 
     assert caplog.records == []
+
+
+def test_키가_아니라_정식_식별자로_비교한다(corpus, caplog: pytest.LogCaptureFixture) -> None:
+    """**실제 DB 가 잡아낸 버그의 회귀 테스트다** (2026-08-27).
+
+    `load.py` 는 `metadata.embedding_model` 에 `model.repo`(`Qwen/Qwen3-Embedding-0.6B`)를
+    넣는다 — 파일명용 키(`qwen3-embedding-0.6b`)가 아니다 (RAG-008). 처음엔 키끼리 비교하도록
+    적었고, `#34` 가 적재한 서버 DB 를 보고서야 드러났다.
+
+    **틀리는 방향이 나쁘다.** 정상인데 매번 "불일치" 를 외치므로 사람이 경고를 무시하게 되고,
+    그러면 진짜 불일치까지 묻힌다 — 경고를 다는 목적 자체가 사라진다.
+
+    픽스처를 손으로 지어내지 않고 `embed.MODELS` 에서 꺼내는 이유이기도 하다. 저기서
+    베끼면 이 테스트가 같은 착각을 한 번 더 하게 된다.
+    """
+    corpus([(QWEN_REPO, 1402)])          # #34 가 실제로 적재한 모양
+    with caplog.at_level(logging.WARNING):
+        deps.warn_if_corpus_uses_another_model(QWEN_KEY)
+
+    assert caplog.records == [], "같은 모델인데 불일치라고 했다 — 키와 repo 를 비교하고 있다"
 
 
 def test_코퍼스가_비면_그걸_말한다(corpus, caplog: pytest.LogCaptureFixture) -> None:
@@ -79,7 +106,7 @@ def test_코퍼스가_비면_그걸_말한다(corpus, caplog: pytest.LogCaptureF
     "질문이 나빠서"가 아니라 "적재가 아직"이라는 것을 로그가 말해 줘야 한다."""
     corpus([])
     with caplog.at_level(logging.WARNING):
-        deps.warn_if_corpus_uses_another_model("qwen3-embedding-0.6b")
+        deps.warn_if_corpus_uses_another_model(QWEN_KEY)
 
     assert "비어" in caplog.text
 
@@ -89,7 +116,7 @@ def test_DB_가_안_되면_경고만_하고_넘어간다(corpus, caplog: pytest.
     `Cache` 가 Redis 없이 뜨는 것과 같은 태도다."""
     corpus([], connect_fails=True)
     with caplog.at_level(logging.WARNING):
-        deps.warn_if_corpus_uses_another_model("qwen3-embedding-0.6b")
+        deps.warn_if_corpus_uses_another_model(QWEN_KEY)
 
     assert "확인하지 못했다" in caplog.text
 
@@ -97,8 +124,8 @@ def test_DB_가_안_되면_경고만_하고_넘어간다(corpus, caplog: pytest.
 def test_커넥션을_반드시_닫는다(corpus) -> None:
     """요청당 하나인 `get_conn` 과 달리 이건 기동 때 한 번이다. 그래도 안 닫으면
     풀에 하나가 영영 남는다 — 리로드가 잦은 개발 모드에서 그게 쌓인다."""
-    conns = corpus([("qwen3-embedding-0.6b", 1)])
-    deps.warn_if_corpus_uses_another_model("qwen3-embedding-0.6b")
+    conns = corpus([(QWEN_REPO, 1)])
+    deps.warn_if_corpus_uses_another_model(QWEN_KEY)
     assert conns and all(c.closed for c in conns)
 
 
@@ -126,7 +153,7 @@ def test_예열에_성공하면_대조까지_간다(monkeypatch: pytest.MonkeyPa
                                        caplog: pytest.LogCaptureFixture) -> None:
     """예열과 대조를 한 함수에 둔 이유 — **모델 키는 올려 봐야 확정된다.** 따로 두면
     설정만 읽고 대조하게 되고, 그러면 로드가 실패한 프로세스도 "일치한다"고 말한다."""
-    corpus([("bge-m3", 5)])
+    corpus([("BAAI/bge-m3", 5)])
     monkeypatch.setattr(embed, "load_model", lambda *_a, **_k: object())
     deps.release_encoder()
     try:
@@ -135,7 +162,7 @@ def test_예열에_성공하면_대조까지_간다(monkeypatch: pytest.MonkeyPa
     finally:
         deps.release_encoder()
 
-    assert "bge-m3" in caplog.text, "예열이 성공했으면 대조 경고까지 나와야 한다"
+    assert "BAAI/bge-m3" in caplog.text, "예열이 성공했으면 대조 경고까지 나와야 한다"
 
 
 def test_모델을_한_벌만_올린다(monkeypatch: pytest.MonkeyPatch, corpus) -> None:
@@ -145,7 +172,7 @@ def test_모델을_한_벌만_올린다(monkeypatch: pytest.MonkeyPatch, corpus)
 
     예열(백그라운드)과 요청(`/ask`)이 정확히 그렇게 부딪힌다.
     """
-    corpus([("qwen3-embedding-0.6b", 1)])
+    corpus([(QWEN_REPO, 1)])
     calls: list[int] = []
     started = threading.Event()
 

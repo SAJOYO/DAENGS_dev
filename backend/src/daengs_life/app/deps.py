@@ -134,8 +134,16 @@ def warn_if_corpus_uses_another_model(key: str) -> None:
 
     **막지는 않는다.** `load.existing_models()` 가 적재 전에 보여 주기만 하는 것과 같은 태도다
     (RAG-025 ①) — 교체는 정상 경로이고, 조용한 것만이 문제다.
+
+    ⚠ **비교 대상은 키가 아니라 `repo` 다.** `load.py` 가 `metadata.embedding_model` 에 넣는 것은
+    정식 식별자(`Qwen/Qwen3-Embedding-0.6B`)이지 파일명용 키(`qwen3-embedding-0.6b`)가 아니다
+    (RAG-008). 키로 비교하면 **정상인데도 매번 불일치 경고가 나고**, 그러면 경고가 무시되기
+    시작해서 진짜 불일치까지 묻힌다 — 경고를 다는 목적 자체가 사라진다.
     """
-    from daengs_life.rag.stages import load
+    from daengs_life.rag.stages import embed, load
+
+    model = embed.MODELS.get(key)
+    serving = model.repo if model else key
 
     try:
         conn = load.connect()
@@ -156,16 +164,16 @@ def warn_if_corpus_uses_another_model(key: str) -> None:
         logger.warning("코퍼스가 비어 있다 — /ask 는 404 `근거를 찾지 못했다` 만 낸다")
         return
 
-    others = [f"{m}({n}건)" for m, n in rows if m != key]
+    others = [f"{m}({n}건)" for m, n in rows if m != serving]
     if others:
         logger.warning(
-            "⚠ 임베딩 모델 불일치 — 서빙은 %s 인데 코퍼스는 %s 다. "
+            "⚠ 임베딩 모델 불일치 — 서빙은 %s(%s) 인데 코퍼스는 %s 다. "
             "검색이 **에러 없이** 무의미한 순위를 낸다 — 같은 모델로 다시 적재하거나 "
-            "embedding_model_key 를 코퍼스에 맞출 것",
-            key, ", ".join(others),
+            "EMBEDDING_MODEL_KEY 를 코퍼스에 맞출 것",
+            serving, key, ", ".join(others),
         )
     else:
-        logger.info("코퍼스 임베딩 모델 일치: %s (%d건)", key, sum(n for _, n in rows))
+        logger.info("코퍼스 임베딩 모델 일치: %s (%d건)", serving, sum(n for _, n in rows))
 
 
 def get_conn() -> Iterator[Any]:

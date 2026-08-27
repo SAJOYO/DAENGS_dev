@@ -5,12 +5,18 @@
 `data/` 는 git 미추적이라(RAG-017) 다른 PC 에는 없을 수 있다. 원본이 없으면 실패가 아니라 skip 이다
 — "크롤러를 먼저 돌려라"는 상태이지 코드가 틀린 것이 아니다.
 
+**그 skip 이 이관 버그를 한 번 숨겼다.** D-018 로 패키지가 `daengs_life/` 밑으로 들어갈 때
+`registry.module_name` 의 문자열 경로만 옛 이름으로 남아 `rag parse` 가 조용히 0건이 됐는데,
+원본이 없는 PC 에서는 이 파일이 통째로 skip 이라 아무도 못 봤다. 그래서 맨 앞의 '파서 해석'
+절은 **원본 없이 돈다** — 모듈을 찾는 일에는 파일이 필요 없다.
+
 수치를 그대로 박아 둔 이유 — 법령이 개정되면 이 테스트가 깨진다. 그게 목적이다.
 청크 수가 조용히 달라진 채 6단계 점수만 떨어지는 것보다, 여기서 "원문이 바뀌었다"고 알려야 한다.
 """
 from __future__ import annotations
 
 import collections
+import pathlib
 
 import pytest
 
@@ -19,6 +25,49 @@ from daengs_life.rag.stages.parse import registry
 from daengs_life.rag.core.ir import ELEMENT_ADAPTER
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
+# ------------------------------------------------------------------ 파서 해석 (원본 없이 돈다)
+PARSERS_PKG = registry.module_name("x", "y").rsplit(".", 2)[0]      # ...parse.parsers
+PARSERS_DIR = pathlib.Path(registry.__file__).parent / "parsers"
+
+
+def _implemented() -> list[tuple[str, str]]:
+    """디스크에 있는 파서 → (domain, source_id). 경로를 계산하는 registry 와 반대로 훑는다."""
+    return [(d.name.replace("_", "-"), f.stem.replace("_", "-"))
+            for d in sorted(PARSERS_DIR.iterdir()) if d.is_dir() and d.name != "__pycache__"
+            for f in sorted(d.glob("*.py")) if f.name != "__init__.py"]
+
+
+def test_module_name_is_rooted_at_the_installed_package() -> None:
+    """접두사가 빠지면 import 가 `ModuleNotFoundError` → resolve 가 '미구현' 으로 흡수한다 (D-018)."""
+    assert PARSERS_PKG == f"{registry.__name__.rsplit('.', 1)[0]}.parsers"
+    assert registry.module_name("law", "law-drf-api") == f"{PARSERS_PKG}.law.law_drf_api"
+
+
+@pytest.mark.parametrize(("domain", "source_id"), _implemented())
+def test_every_parser_on_disk_resolves(domain: str, source_id: str) -> None:
+    """`.py` 가 있는데 None 이면 경로 계산이 틀린 것이다 — 실행하면 파싱이 0건으로 끝난다."""
+    assert registry.resolve(domain, source_id) is not None
+
+
+def test_missing_dependency_is_not_mistaken_for_an_unimplemented_parser(monkeypatch) -> None:
+    """bs4 가 안 깔린 것과 파서가 없는 것은 다르다. 전자를 삼키면 파싱이 조용히 비어 나간다."""
+    def boom(name: str):
+        raise ModuleNotFoundError("No module named 'bs4'", name="bs4")
+
+    monkeypatch.setattr(registry.importlib, "import_module", boom)
+    with pytest.raises(ModuleNotFoundError):
+        registry.resolve("law", "law-drf-api")
+
+
+def test_sources_we_decided_not_to_index_have_no_parser() -> None:
+    """NOT_INDEXED 에 있는데 파서가 생기면 둘 중 하나가 낡은 것이다 (RAG-004/RAG-011)."""
+    implemented = {source_id for _, source_id in _implemented()}
+    assert implemented.isdisjoint(registry.NOT_INDEXED)
+
+
+# ------------------------------------------------------------------ 원본을 읽는 통합 테스트
 
 
 def _parse(source_id: str) -> dict[str, object]:

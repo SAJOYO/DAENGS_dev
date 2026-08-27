@@ -3,7 +3,7 @@
 **크롤러와 같은 규약이다** (RAG-009, RAG-018) — 폴더를 스캔하지 않고 경로를 계산한다.
 
   raw/law/law-drf-api-...xml + meta{"source_id":"law-drf-api"}
-    → rag.stages.parse.parsers.law.law_drf_api          (`-` → `_`)
+    → daengs_life.rag.stages.parse.parsers.law.law_drf_api    (`-` → `_`)
 
 domain 은 meta 에 없고 `raw/{domain}/` 폴더 이름이 곧 domain 이다.
 
@@ -23,7 +23,8 @@ NOT_INDEXED: dict[str, str] = {
 
 
 def module_name(domain: str, source_id: str) -> str:
-    return f"rag.stages.parse.parsers.{domain.replace('-', '_')}.{source_id.replace('-', '_')}"
+    return (f"daengs_life.rag.stages.parse.parsers.{domain.replace('-', '_')}"
+            f".{source_id.replace('-', '_')}")
 
 
 def resolve(domain: str, source_id: str) -> ModuleType | None:

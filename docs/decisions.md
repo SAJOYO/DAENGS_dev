@@ -22,6 +22,9 @@
 | [D-015](#d-015) | access 는 JWE, refresh 는 DB 에 두는 불투명 토큰 | 2026-08-25 |
 | [D-016](#d-016) | 관리자와 앱 회원이 토큰·세션 테이블을 공유하고, 종류는 `typ` 로 가른다 | 2026-08-26 |
 | [D-017](#d-017) | 카카오 로그인은 OIDC `id_token` 을 서버가 직접 검증한다 | 2026-08-26 |
+| [D-018](#d-018) | 생활비서 RAG·실시간 산책은 `src/daengs_life/` 한 겹으로 들여온다 | 2026-08-27 |
+| [D-019](#d-019) | Redis 를 compose 에 올리고, LAN 에 열되 비밀번호를 건다 | 2026-08-27 |
+| [D-020](#d-020) | nginx 는 backend 를 매 요청 다시 DNS 로 푼다 | 2026-08-27 |
 
 ---
 
@@ -918,3 +921,73 @@ uv run python -m daengs_life.realtime config
 타임아웃(윈도우 20초대)을 통째로 뭅니다. "없어도 돈다"가 "없으면 20초 늦게 돈다"가 되면
 같은 약속이 아닙니다. `socket_connect_timeout=1.0` · `socket_timeout=2.0` 을 걸어 저하까지
 1초로 줄였습니다 (`realtime/cache.py`). 붙어 있을 때는 밀리초 단위라 영향이 없습니다.
+---
+
+## D-020
+### nginx 는 backend 를 매 요청 다시 DNS 로 푼다
+
+`daengback.~:8000` 과 `daengs.~/api/` 가 502 였습니다 (#31). backend 컨테이너가
+재생성될 때마다 재발했고, 서버 PC 에서 `docker compose restart nginx` 를 해야 풀렸습니다.
+
+원인은 nginx 가 `upstream` 블록의 이름을 **기동할 때 딱 한 번** 풀고 그 IP 를 프로세스가
+죽을 때까지 쓰기 때문입니다. `daengs-backend` 는 compose 가 재생성할 때마다 IP 가 바뀌는데
+(`environment` 를 고치면 재생성됩니다) nginx 는 그것을 모릅니다. 프론트가 멀쩡했던 것이
+진단의 근거였습니다 — 그쪽 업스트림은 `host.docker.internal`, 즉 **안 바뀌는 게이트웨이
+IP** 라 같은 파일 안에서 한쪽만 깨졌습니다.
+
+```nginx
+resolver 127.0.0.11 ipv6=off valid=10s;   # Docker 내장 DNS
+
+set $fastapi_upstream backend:8000;
+proxy_pass http://$fastapi_upstream;      # 변수가 있어야 매 요청 다시 푼다
+```
+
+`resolver` 와 **`proxy_pass` 의 변수는 세트**입니다. 변수 없이 `resolver` 만 적으면
+아무 일도 일어나지 않습니다. 그래서 `fastapi` upstream 블록은 지웠습니다 — 이름이
+upstream 으로 정의돼 있으면 변수가 DNS 보다 그 블록을 먼저 집어서, 변수를 써도 옛 IP 를
+그대로 씁니다.
+
+#### 대신 `/api` 접두사 제거가 `rewrite` 로 옮겨졌습니다
+
+**이 결정의 값은 대부분 여기 있습니다.** 전에는 `proxy_pass http://fastapi/;` 의 **끝
+슬래시**가 `/api/auth/login` → `/auth/login` 을 했습니다. `proxy_pass` 에 변수를 쓰면
+그 규칙이 적용되지 않아, 끝 슬래시를 붙여도 접두사가 안 떨어지고 백엔드가
+`/api/auth/login` 을 받아 404 를 냅니다. 그래서 명시적으로 바꿨습니다:
+
+```nginx
+location /api/ {
+    set $fastapi_upstream backend:8000;   # rewrite 보다 **먼저**
+    rewrite ^/api/(.*)$ /$1 break;
+    proxy_pass http://$fastapi_upstream;
+}
+```
+
+`set` 이 `rewrite` 앞에 와야 합니다. 둘 다 rewrite 모듈이고 `break` 가 그 단계를 거기서
+끊기 때문에, 뒤에 두면 `set` 이 아예 실행되지 않습니다. 변수가 빈 채로 남아 500 이 나고
+로그에 `invalid URL prefix in "http://"` 가 찍힙니다 — 작업 중 실제로 밟았습니다.
+
+**여기를 틀리면 관리자 로그인이 통째로 깨집니다** (D-015). 그 블록이 프론트와 API 를
+같은 오리진으로 묶어 httpOnly 쿠키를 보내는 유일한 길입니다. `:8000` 쪽 `location /` 은
+접두사를 안 떼므로 변수만 바꿨습니다.
+
+#### 프론트 업스트림은 그대로 둡니다
+
+`upstream nextjs { server host.docker.internal:3000; }` 는 안 건드렸습니다. 게이트웨이
+IP 는 컨테이너 재생성으로 바뀌지 않아 이 문제를 겪지 않고, 굳이 같이 바꾸면 멀쩡한 경로에
+변경 위험만 얹습니다.
+
+#### 기각: 배포마다 nginx 재시작
+
+`deploy.yml` 에 `docker compose restart nginx` 한 줄이면 되고 더 간단합니다. 그런데
+**원인이 아니라 증상을 미는 것**이라, 컨테이너를 손으로 재생성할 때는 (`docker compose up
+-d --force-recreate backend`) 여전히 깨집니다. 배포마다 프론트까지 잠깐 끊기는 것도 대가입니다.
+
+#### 검증
+
+일회용 네트워크에 가짜 backend 와 nginx 를 띄우고, backend 를 재생성해 IP 를 바꾼 뒤
+(옛 IP 는 다른 컨테이너가 물려받게 해서 #31 의 "즉시 502" 까지 재현) nginx 를 **재시작하지
+않고** 불렀습니다. 같은 이벤트에서 **옛 설정은 502, 새 설정은 200** 이었습니다.
+
+**되돌리려면**: `upstream fastapi` 블록을 되살리고 `proxy_pass http://fastapi/;` 로 돌린 뒤
+`/api/` 의 `rewrite` 와 `set` 두 줄을 지웁니다. 세 가지가 한 묶음이라 일부만 되돌리면
+로그인이 깨집니다.

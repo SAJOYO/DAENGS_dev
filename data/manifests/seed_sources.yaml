@@ -115,8 +115,10 @@
   url: "https://www.qia.go.kr/"
   method: html
   auth: none
-  status: unverified
-  notes: "출입국 검역 요건은 transport 도메인과 공유"
+  status: blocked
+  notes: "2026-08-28 정찰: robots.txt 가 `User-agent: * / Disallow: /` 로 사이트 전체를 막는다.
+    animal-go-kr 과 같은 기관(검역본부)이고 정책도 같다. 광견병 법정 의무는 가축전염병 예방법
+    (law-drf-api 로 이미 수집)이 커버하므로 코퍼스 공백은 크지 않다."
 
 - id: kvma-guideline
   domain: vaccination
@@ -125,8 +127,10 @@
   url: "https://www.kvma.or.kr/"
   method: html
   auth: none
-  status: unverified
-  notes: "trust_level=guideline. 종합백신(DHPPL)/코로나/켄넬코프 스케줄"
+  status: not-found
+  notes: "2026-08-28 정찰: 사이트는 살아 있지만(robots 없음 = 허용) 접종 스케줄 가이드라인을 공개 문서로
+    확인하지 못했다. 있는 것은 보도자료·검역 안내·방문진료/길고양이 중성화 가이드라인이다.
+    권장 스케줄 계층은 nias-pet 의 건강관리 묶음(이미 수집 가능)이나 WSAVA(영문)로 대체한다."
 
 # ---------- 목줄·입마개·맹견 ----------
 - id: mafra-press
@@ -153,30 +157,40 @@
   domain: transport
   org: 한국철도공사
   title: 여객운송약관 (동물 휴대 규정)
-  url: "https://www.letskorail.com/"
-  method: pdf-entry
+  url: "https://info.korail.com/info/contents.do?key=922"
+  method: html
   auth: none
-  status: unverified
-  notes: "사이트 하단 이용약관 > 여객운송약관 PDF"
+  status: verified
+  notes: "2026-08-28 정찰: 목록은 HTML 이고 본문은 PDF 첨부다.
+    다운로드는 /downloadContentsFile.do?key=922&fileNo=NNNN — 현행 1406, 시행예정 1405, 광역철도 1245.
+    fileNo 는 개정 때마다 바뀌므로 목록 페이지에서 링크 텍스트로 골라야 한다.
+    페이지가 1406 을 현행으로 표시하지만 1405 가 2026-08-01 시행분이다 — 라벨을 믿지 말 것.
+    28p 22p 44p, 텍스트 레이어 있음(스캔 아님)."
 
 - id: srt-terms
   domain: transport
   org: 에스알
   title: SRT 여객운송약관
-  url: "https://etk.srail.kr/"
-  method: pdf-entry
+  url: "https://etk.srail.kr/cms/archive.do?pageId=TK0402090000"
+  method: html
   auth: none
-  status: unverified
+  status: verified
+  notes: "2026-08-28 정찰: 약관 PDF 보다 반려동물 동반탑승 안내 페이지가 값이 크다 —
+    이동장 45x30x25cm, 이동장 포함 10kg 이내, 광견병 예방접종 요건이 본문에 있다. 본문 .sub_con_area.
+    약관 PDF(pageId=TK0501020000)는 JBCMS.downloadAttach(pageId, 8) 뒤에 있고
+    www.srail.or.kr/cms/attach/download.do 로 가는데 파라미터 이름을 못 찾았다 — 운송약관 카드에서 확인."
 
 - id: seoulmetro-terms
   domain: transport
   org: 서울교통공사
   title: 여객운송약관 (동물 반입 조항)
-  url: "http://www.seoulmetro.co.kr/"
-  method: pdf-entry
+  url: "http://www.seoulmetro.co.kr/kr/page.do?menuIdx=528"
+  method: html
   auth: none
-  status: unverified
-  notes: "용기 격납+불쾌감 없을 것 조건부 허용. 타 도시철도공사(부산/대구/인천 등)도 동일 패턴"
+  status: verified
+  notes: "2026-08-28 정찰: PDF 가 아니라 HTML 본문이다 — pdf-entry 분류가 틀렸다.
+    휴대금지 물품 조항에 애완동물 예외(전용 이동장, 불쾌한 냄새 없을 것, 장애인보조견)가 그대로 있다.
+    HTTPS 가 열리지 않는다. http 로만 접근된다. 9호선 2·3단계는 menuIdx=779 로 따로 있다."
 
 - id: airlines-pet-pages
   domain: transport
@@ -185,8 +199,12 @@
   url: "https://www.koreanair.com/"
   method: html
   auth: none
-  status: unverified
-  notes: "대한항공/아시아나(flyasiana.com)/제주항공(jejuair.net)/진에어(jinair.com)/티웨이(twayair.com)/에어부산(airbusan.com)/에어서울(flyairseoul.com)/이스타(eastarjet.com)/에어프레미아(airpremia.com). 딥링크는 자주 바뀌므로 사이트 내 반려동물 검색으로 수집"
+  status: partial
+  notes: "2026-08-28 정찰(robots 만): 9곳 중 크롤러에 열려 있는 곳은 5곳이다.
+    에어부산·이스타·에어프레미아·진에어 허용, 에어서울은 Disallow:/ + Allow:/CW/*.do (longest-match 필요).
+    대한항공·아시아나는 크롤러 UA 에 ReadTimeout, 제주항공·티웨이는 robots.txt 가 403.
+    진에어 robots 에 Content-Signal: search=yes,ai-train=no,use=reference 가 있다 —
+    우리 용도(출처 표기 참조)는 use=reference 에 해당하고 학습은 하지 않는다. 딥링크는 운송 카드에서."
 
 # ---------- 지자체 지원 ----------
 - id: benefit24-services
@@ -241,8 +259,9 @@
   url: "https://e-insmarket.or.kr/"
   method: html
   auth: none
-  status: unverified
-  notes: "반려동물보험 메뉴 경로 요확인"
+  status: blocked
+  notes: "2026-08-28 정찰: 크롤러 UA 는 무한 리다이렉트(50회 초과), 브라우저 UA 는 403.
+    WAF 로 자동 접근을 막는 것으로 보인다. 비교 공시는 knia-disclosure 로 대체를 검토한다."
 
 - id: knia-disclosure
   domain: insurance
@@ -260,8 +279,12 @@
   url: ""
   method: pdf-entry
   auth: none
-  status: unverified
-  notes: "삼성화재/메리츠(펫퍼민트)/현대해상/DB/KB/NH농협/한화/롯데/캐롯. 각 사 공시실 > 상품공시 > 판매중 상품 > 약관. 100p+ PDF가 RAG 핵심 코퍼스(보장한도/자기부담금/면책조항)"
+  status: verified
+  notes: "2026-08-28 정찰: 삼성화재 약관 PDF 를 실제로 받아 파서 비교에 썼다(202p, 11.8MB, 텍스트 레이어 있음).
+    예: /publication/pdf/ZPB316050_0_20240401_file1.pdf (위풍댕댕).
+    robots — 삼성화재·NH농협 전면 허용, 현대해상·롯데·캐롯 일부 경로만 차단, 메리츠는 robots 가 HTML,
+    DB손보·한화손보는 User-agent 줄 없는 allow-list(표준상 그룹 밖 규칙은 무시되지만 의도는 제한이다),
+    KB손보는 Yeti(네이버) 그룹만 있다. 9사 딥링크는 펫보험 카드에서."
 
 # ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
 - id: kma-vilage-fcst

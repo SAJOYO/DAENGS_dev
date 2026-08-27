@@ -13,9 +13,11 @@
 """
 from __future__ import annotations
 
+import httpx
 from fastapi import HTTPException
 
 from daengs_life.app.dto.ask import AskOut, HitOut
+from daengs_life.rag.core import config
 from daengs_life.rag.stages import generate
 from daengs_life.rag.stages.search import Hit
 
@@ -24,6 +26,20 @@ from daengs_life.rag.stages.search import Hit
 # 정하면서 *"9단계 서빙의 기본값은 그때 따로 정한다"* 고 미뤄 뒀다.
 SERVING_K = 5                       # 검문소③·RAG-024 ②의 판정 k 와 같은 수. 다르면 인상이 어긋난다
 SERVING_SUPPLEMENTARY = True        # 부칙 포함. 1랩 실측에서 부칙을 빼도 결과가 안 바뀌었다(RAG-026 ①)
+
+
+# ---------------------------------------------------------------- 에러 매핑에 쓰는 타임아웃 타입
+# **한 타입으로 못 적는다.** google-genai 는 전송에 `httpx` 를 쓰는데 `_api_client` 가 `httpx2`
+# 경로도 함께 갖고 있어서, 저것이 깔려 있으면 올라오는 예외가 저쪽 타입이 된다. 지금은 안 깔려
+# 있지만 starlette 가 이미 `httpx2` 를 권하고 있어 어느 날 딸려 들어올 수 있고, 그때 조용히
+# 502 로 새는 것보다 여기서 둘 다 잡는 편이 싸다.
+_TIMEOUTS: tuple[type[BaseException], ...] = (httpx.TimeoutException,)
+try:
+    import httpx2                               # noqa: F401 — 있으면 타입을 하나 더 잡는다
+except ImportError:
+    pass
+else:
+    _TIMEOUTS += (httpx2.TimeoutException,)
 
 
 def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None) -> AskOut:
@@ -45,6 +61,14 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
     except RuntimeError as e:
         # `_client()` 가 키 없음으로 죽는 경우 — 설정 문제지 요청 문제가 아니다
         raise HTTPException(status_code=503, detail=str(e)) from e
+    except _TIMEOUTS as e:
+        # **아래 502 보다 위여야 한다.** 순서가 뒤집히면 타임아웃이 502 에 먹혀,
+        # "상류가 느린 것"과 "상류가 죽은 것"이 한 코드로 뭉개진다.
+        # 검문소(그리고 나중의 게이트웨이)가 그 둘을 갈라 읽는다 — 메모 ⑪ 의 대가 셋 중 하나다.
+        raise HTTPException(
+            status_code=504,
+            detail=f"Gemini 응답이 {config.settings.gemini_timeout_ms / 1000:g}초 안에 안 왔다",
+        ) from e
     except Exception as e:
         # 검색(DB)이든 생성(Gemini)이든 상류가 죽은 것이다. 어느 쪽인지는 메시지로 남긴다 —
         # 502 로 뭉뚱그리면 "DB 가 죽었나 Gemini 가 죽었나"를 로그 없이는 못 가른다

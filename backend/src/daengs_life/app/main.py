@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from daengs_life.app.controllers import ask, walk
-from daengs_life.app.deps import get_cache, get_encoder
+from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 
 @asynccontextmanager
@@ -39,14 +39,15 @@ async def lifespan(_: FastAPI):
     # 임베딩 모델도 **앱이 뜰 때 한 벌** 올린다 (RAG-028 ①). 호출마다 올렸다 내리면 요청당 5~7초다.
     # **실패해도 앱은 뜬다** — `ml` 그룹(torch)이 없는 환경에서도 `/walk` 는 돌아야 하고,
     # 캐시가 Redis 없이 뜨는 것과 같은 태도다. 그 경우 `/ask` 만 503 이 된다.
-    try:
-        get_encoder()
-    except Exception as e:                       # noqa: BLE001 — 무엇이든 앱을 못 세우면 안 된다
-        print(f"[lifespan] 임베딩 모델을 못 올렸다 — /ask 는 503 이 된다: {type(e).__name__}: {e}")
+    #
+    # **여기서는 동기로 부른다.** 이 앱은 `/ask` 전용에 가까워서 모델이 올라오기 전에 뜰 이유가
+    # 없다. 로그인·`/walk` 와 한 프로세스인 `daengs_backend` 쪽은 그럴 이유가 있어서
+    # 백그라운드로 돌린다 (D-021) — 삼키는 방식과 로그는 `warm_up_encoder` 가 공유한다.
+    warm_up_encoder()
 
     yield
     get_cache.cache_clear()
-    get_encoder.cache_clear()
+    release_encoder()
 
 
 def create_app() -> FastAPI:

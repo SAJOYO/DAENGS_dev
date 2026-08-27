@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -107,6 +108,52 @@ def test_upstream_failure_says_which_upstream(client: TestClient,
     monkeypatch.setattr(service.generate, "ask", boom)
     r = client.post("/ask", json={"question": "q"})
     assert r.status_code == 502 and "TimeoutError" in r.json()["detail"]
+
+
+def test_gemini_timeout_is_504_not_502(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**우리가 건 타임아웃**은 504 다 (D-021). 502("상류가 죽었다")와 갈라 둔다.
+
+    ⚠️ 바로 위 테스트와 헷갈리기 쉬운 자리라 같이 읽어야 한다. 저기 쓰인 것은 **내장**
+    `TimeoutError` 이고 그건 502 로 남는다 — 소켓이 끊긴 것일 수도, DB 가 안 받는 것일
+    수도 있어서 *생성이 느렸다* 고 말할 근거가 없다. 여기서 504 로 올리는 것은
+    `_client()` 가 `HttpOptions(timeout=...)` 로 **직접 건** 시계가 울린 경우뿐이고,
+    그 타입은 전송 계층(`httpx`)의 것이다.
+
+    `_TIMEOUTS` 가 `except Exception` 보다 **위**에 있어야 이 구분이 산다. 순서가 뒤집히면
+    조용히 502 로 먹히고, 검문소(와 나중의 게이트웨이)가 "느린 것"과 "죽은 것"을 못 가른다.
+    """
+    def boom(*a, **k):
+        raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(service.generate, "ask", boom)
+    r = client.post("/ask", json={"question": "q"})
+    assert r.status_code == 504
+    assert "30" in r.json()["detail"], "몇 초 안에 안 왔는지를 말해 준다"
+
+
+def test_the_timeout_reaches_the_client_in_milliseconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**단위를 여기서 한 번 고정한다.** google-genai 의 `HttpOptions.timeout` 은 초가 아니라
+    밀리초다. 30 을 넣으면 30밀리초가 되어 전부 504 가 되는데, 그 실수는 눈으로 안 보인다 —
+    설정 이름이 `gemini_timeout_ms` 인 것과 이 테스트가 한 쌍이다.
+
+    변환을 끼우지 않는 것도 같이 고정된다. 어딘가에서 초↔밀리초를 바꾸기 시작하면
+    설정과 SDK 가 서로를 믿어야 한다.
+    """
+    from google import genai
+
+    from daengs_life.rag.core import config
+    from daengs_life.rag.stages import generate
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+    monkeypatch.setattr(genai, "Client", FakeClient)
+    generate._client(api_key="키가-있는-척")
+    assert seen["http_options"].timeout == config.settings.gemini_timeout_ms
+    assert seen["http_options"].timeout == 30_000
 
 
 def test_walk_still_registered() -> None:

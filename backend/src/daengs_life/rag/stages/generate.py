@@ -120,13 +120,25 @@ def ungrounded_articles(text: str, hits: list[Hit]) -> list[str]:
 
 # ---------------------------------------------------------------- 생성
 def _client(api_key: str | None = None):
-    """지연 생성. 키가 없으면 여기서 죽는다 — 검색까지 다 해 놓고 마지막에 죽지 않게."""
+    """지연 생성. 키가 없으면 여기서 죽는다 — 검색까지 다 해 놓고 마지막에 죽지 않게.
+
+    **타임아웃을 여기서 건다.** 안 걸면 무제한이라, 상류가 물리면 `/ask` 를 돌리는 스레드풀
+    워커를 그대로 잡고 있는다 — FastAPI 가 `def` 컨트롤러를 스레드풀에서 돌리므로(RAG-028 ④)
+    그 워커는 다른 요청도 못 받는다.
+
+    ⚠ `HttpOptions.timeout` 은 **밀리초**다. 설정 이름이 `gemini_timeout_ms` 인 이유이고,
+    여기서 단위를 바꾸지 않는다 — 변환을 한 번 끼우면 두 곳이 서로를 믿어야 한다.
+    """
     from google import genai
+    from google.genai import types
 
     key = api_key or config.settings.gemini_api_key
     if not key:
         raise RuntimeError("GEMINI_API_KEY 가 없다 — backend/.env 를 확인할 것")
-    return genai.Client(api_key=key)
+    return genai.Client(
+        api_key=key,
+        http_options=types.HttpOptions(timeout=config.settings.gemini_timeout_ms),
+    )
 
 
 def answer(question: str, hits: list[Hit], *, client=None, model: str | None = None,

@@ -66,6 +66,22 @@ services:
       # DB 와 달리 조각이 아니라 URL 한 줄이라, 비밀번호에 @ / # 이 들어가면 깨집니다
       # (D-013 과 같은 함정). .env 에서 영숫자로만 지으세요.
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # `/ask` 의 검색이 읽는 접속 정보입니다 (D-021).
+      #
+      # **`DAENGS_DB_*` 와 별개입니다** — `daengs_life.rag` 는 자기 Settings 를 갖고
+      # `POSTGRES_*`(또는 DATABASE_URL)를 읽습니다. 위 `DAENGS_DB_*` 는 `daengs_backend` 것이라
+      # rag 는 그 이름을 모릅니다. 안 넣으면 컨테이너 안에서 `localhost:5432` 로 가서,
+      # `/ask` 만 502 가 됩니다 (다른 API 는 멀쩡해서 더 헷갈립니다).
+      #
+      # 조각으로 넘기는 것은 위와 같은 이유입니다 (D-013) — `Settings.dsn` 이 `quote_plus` 로
+      # 이스케이프합니다. **두 이름 체계를 통일하는 것은 이 카드가 아닙니다**: D-018 이 미뤄 둔
+      # 규약 정합 작업이고, 2단계에서 `/ask` 를 별도 프로세스로 떼면 그쪽이 자기 접속을
+      # 가져야 해서 지금 합치면 나중에 되돌립니다.
+      POSTGRES_IP: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -76,6 +92,10 @@ services:
       - ./backend/src:/app/src
       - backend-venv:/opt/venv
       - uv-cache:/root/.cache/uv
+      # 임베딩 모델 가중치(약 1.2GB)를 컨테이너 밖에 둡니다 (D-021).
+      # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
+      # 같은 이유이고, 여기는 단위가 GB 입니다.
+      - hf-cache:/root/.cache/huggingface
     depends_on:
       pgvector:
         condition: service_healthy
@@ -88,7 +108,22 @@ services:
         condition: service_healthy
     # uv sync 는 컨테이너가 뜰 때만 돕니다.
     # 의존성을 바꿨다면 docker compose restart backend 를 직접 실행하세요.
-    command: sh -c "uv sync --frozen && exec uv run dev"
+    #
+    # **`--group ml` 이 붙었습니다** (D-021). `/ask` 의 임베딩 모델이 이 프로세스에 상주하므로
+    # torch 가 필요합니다. 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의 `pytorch-cpu`
+    # 인덱스가 그것이고, 안 그러면 GPU 를 안 쓰는데 NVIDIA 라이브러리를 수 GB 받습니다.
+    #
+    # ⚠ **`ml` 을 걷어내는 것은 `uv run` 이 아니라 인자 없는 `uv sync` 입니다** (uv 0.12.5 실측).
+    #   · `uv run`  → inexact 동기화. 남는 패키지를 **안 지웁니다** — `ml` 이 살아남습니다.
+    #   · `uv sync` → exact 동기화. 기본 그룹에 없는 것을 **지웁니다** — `ml` 이 사라집니다.
+    #
+    # 그래서 이 줄은 안전하지만, **컨테이너 안에서 `uv sync` 를 인자 없이 돌리면 안 됩니다.**
+    # 그러면 torch 가 빠지고 `/ask` 만 503 이 되는데, 다른 API 는 멀쩡해서 로그에는
+    # 아무 문제도 안 보입니다. 고칠 때는 `uv sync --group ml` 로 부르세요.
+    #
+    # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
+    # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
+    command: sh -c "uv sync --frozen --group ml && exec uv run --no-sync dev"
 
   pgvector:
     image: pgvector/pgvector:pg18
@@ -197,3 +232,4 @@ volumes:
   redis-data:
   backend-venv:
   uv-cache:
+  hf-cache:

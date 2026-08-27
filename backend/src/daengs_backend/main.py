@@ -1,7 +1,8 @@
 """앱 조립. 라우터 등록과 미들웨어까지만 하고, 로직은 두지 않습니다."""
 
+import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -13,12 +14,19 @@ from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.routers import app_auth, auth, health, training
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
-# `/walk` 에 한해서만 긋습니다 — 임베딩 모델을 쓰는 `/ask`(파트①)는 여기 없습니다.
-# `deps.get_encoder` 를 이 파일에서 부르는 순간 배포되는 API 프로세스가 torch 를
-# 요구하게 되고, 컨테이너에는 `ml` 그룹이 없어 아예 뜨지 않습니다.
-# `tests/test_main_stays_light.py` 가 그것을 기계로 막습니다.
-from daengs_life.app.controllers import walk
-from daengs_life.app.deps import get_cache
+# 여기서만 긋습니다 — 접점은 **등록 두 줄과 예열 한 줄**이 전부입니다.
+#
+# `/ask` 는 임베딩 모델을 씁니다. 그래도 여기 붙이는 것이 D-021 의 결정입니다 — 모델을
+# 배포되는 API 프로세스에 그대로 상주시키고(약 2.4GB), 2단계에서 조건이 오면
+# `daengs_life.app.main:app`(이미 독립 ASGI 앱)을 따로 띄우고 이 자리를 게이트웨이로 바꿉니다.
+# 이사가 싼 채로 남으려면 **접점이 이 세 줄을 넘으면 안 됩니다.**
+#
+# 그래도 **import 는 여전히 가벼워야 합니다.** `daengs_life` 쪽이 torch·psycopg 를 전부
+# 함수 안에서 부르므로 모듈을 읽는 것만으로는 아무것도 안 올라옵니다 — 그 사실을
+# `tests/test_main_stays_light.py` 가 기계로 지킵니다. 무거워지는 것은 import 가 아니라
+# 아래 lifespan 의 예열이고, 그래서 그것만 백그라운드로 돌립니다.
+from daengs_life.app.controllers import ask, walk
+from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
 # 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
@@ -35,7 +43,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 저하로 다뤄 프로세스 메모리로 떨어집니다. 다만 lru_cache 라 그 판단이 프로세스
     # 생애에 한 번뿐이라, compose 에서 backend 가 redis 의 healthcheck 를 기다립니다.
     get_cache()
+
+    # 임베딩 모델은 **백그라운드로** 올립니다 (D-021).
+    #
+    # 여기서 동기로 부르면 안 됩니다 — 이 프로세스에는 로그인·`/walk`·`/training` 이 같이
+    # 살고, 가중치를 RAM 으로 올리는 5~7초 동안 **API 전체가 502** 입니다. 컨테이너가
+    # `reload=True` 로 돌고 배포가 마운트된 소스를 갈아 끼우므로 그 일이 backend 코드가
+    # 바뀌는 배포마다 일어납니다.
+    #
+    # `/ask` 만 기다리게 하는 장치는 여기가 아니라 `deps._ENCODER_LOCK` 입니다. 예열이
+    # 도는 중에 들어온 요청은 락에서 기다렸다가 **같은 한 벌**을 받습니다 (두 벌을 올리면
+    # 그 순간 RAM 이 2배입니다).
+    #
+    # `settings.warm_up_encoder` 로 끌 수 있습니다 — 테스트와 개발 PC 용입니다. 끄면 모델이
+    # 안 뜨는 게 아니라 **첫 `/ask` 가 로드를 뭅니다.**
+    warm_up = (asyncio.create_task(asyncio.to_thread(warm_up_encoder))
+               if settings.warm_up_encoder else None)
+
     yield
+
+    # 예열이 아직 도는 중이면 기다리지 않습니다. 스레드는 자기 일을 마치고 끝나지만,
+    # 종료를 그 5~7초만큼 붙잡을 이유가 없습니다.
+    if warm_up is not None:
+        warm_up.cancel()
+        with suppress(asyncio.CancelledError):
+            await warm_up
+    # 상주 모델을 놓습니다. 리로드가 잦은 개발 모드에서 이게 없으면 죽은 워커의 1.2GB 가
+    # 새 워커의 것과 함께 남습니다 — `engine.dispose()` 와 같은 이유이고, 여기서는 단위가 GB 입니다.
+    release_encoder()
     # 커넥션 풀을 정리합니다. 리로드가 잦은 개발 모드(D-006)에서
     # 이게 없으면 죽은 워커가 잡고 있던 연결이 남습니다.
     await engine.dispose()
@@ -80,6 +115,13 @@ app.include_router(training.router)
 # ⚠ `/training/chat` 과는 **결론이 다릅니다.** 저쪽은 `#25` 가 만든 임시 게이트웨이라
 # 앱 클라이언트가 없어서 관리자 전용으로 좁혔습니다 (`routers/training.py`).
 app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+
+# 제도·문서형 질의응답. **`/walk` 과 같은 판단입니다** (메모 ⑦) — 인증을 라우터가 아니라
+# 등록 시점에 걸고, 앱 회원과 관리자를 함께 받습니다.
+#
+# `post_ask` 도 principal 을 **받지 않으므로** 관리자 `sub` 가 `app_users` 에 없어서 깨지는
+# 자리가 없습니다. 질문만 보고 답하는 API 라 신원으로 남의 것을 걸러야 할 일이 없습니다.
+app.include_router(ask.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
 
 
 def dev() -> None:

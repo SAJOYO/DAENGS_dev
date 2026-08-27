@@ -5,6 +5,7 @@
 그 확인을 테스트로 박는다 — 정답이 사라지면 6단계 점수가 아니라 **여기서 먼저 깨진다.**
 
 `data/` 는 git 미추적이라(RAG-017) 다른 PC 에는 없다. parsed 가 없으면 실패가 아니라 skip 이다.
+재수집하면 `chunk_id` 의 날짜가 바뀌므로 **주소는 논리 주소로 대조한다** — `_find` 참고.
 
 수치를 박아 둔 이유는 `test_parse.py` 와 같다 — 법령이 개정되면 여기서 알려야 한다.
 """
@@ -16,6 +17,7 @@ import pytest
 
 from daengs_life.rag.core import io
 from daengs_life.rag.stages import chunk
+from daengs_life.rag.stages.goldenset import logical
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -42,8 +44,15 @@ def by_id(chunks: list) -> dict:
 
 
 def _find(chunks: list, id_part: str, *must: str) -> list:
+    """주소는 **논리 주소**(수집 날짜를 뺀 것)로 대조한다 — 골든셋과 같은 규약이다 (RAG-022 ⑥B).
+
+    `chunk_id` 에는 수집 날짜가 박혀 있어(``) 재수집하는 순간 값이 바뀐다. 실제 id 로
+    적어 두면 코퍼스를 다시 만들 때마다 사람이 아래 12줄을 손으로 고쳐야 하고, 그 손질이
+    "정답이 사라졌다"와 "날짜가 바뀌었다"를 구분하지 못하게 만든다. 조문 번호는 재수집해도
+    그대로이므로 날짜만 떼면 주소는 그대로 유효하다.
+    """
     return [c for c in chunks
-            if id_part in c.chunk_id and all(m in c.content for m in must)]
+            if id_part in logical(c.chunk_id) and all(m in c.content for m in must)]
 
 
 # ---------------------------------------------------------------- 총량
@@ -169,18 +178,18 @@ def test_row_self_contained(chunks: list) -> None:
 # RAG-004 가 원문에서 확인한 정답 위치다. 이 목록이 곧 검문소①이고,
 # 하나라도 깨지면 RAG-021 의 해당 절을 재개해야 한다.
 ANSWERS = [
-    ("Q1 등록 의무",        "animal-protection-act__20260820#제15조",   ["등록하여야 한다"]),
-    ("Q1 과태료 100만원",   "animal-protection-act__20260820#제101조",  ["100만원 이하의 과태료"]),
-    ("Q1 별표4 라목 금액",  "animal-protection-decree__20260820#별표 4", ["제15조제1항", "20", "40", "60"]),
-    ("Q2 변경신고 30일",    "animal-protection-act__20260820#제15조",   ["30일 이내"]),
-    ("Q3 목줄 안전조치",    "animal-protection-act__20260820#제16조",   ["안전조치"]),
-    ("Q3 목줄 2미터",       "animal-protection-rule__20260820#제11조",  ["2미터"]),
-    ("Q3 easylaw 목줄",     "easylaw-pet-2-2-1__20260819#h2",          ["목줄"]),
-    ("Q4 로트와일러(법)",   "animal-protection-act__20260820#제2조",    ["로트와일러"]),
-    ("Q4 맹견 범위(규칙)",  "animal-protection-rule__20260820#제2조",   ["로트와일러"]),
-    ("Q5 맹견사육허가",     "animal-protection-act__20260820#제18조",   ["맹견사육허가"]),
-    ("Q6 광견병 예방접종",  "livestock-epidemic-act__20260820#제15조",  ["예방접종"]),
-    ("Q7 국립공원 ※박스",   "easylaw-pet-2-2-1__20260819#note",        ["자연공원"]),
+    ("Q1 등록 의무",        "animal-protection-act#제15조",   ["등록하여야 한다"]),
+    ("Q1 과태료 100만원",   "animal-protection-act#제101조",  ["100만원 이하의 과태료"]),
+    ("Q1 별표4 라목 금액",  "animal-protection-decree#별표 4", ["제15조제1항", "20", "40", "60"]),
+    ("Q2 변경신고 30일",    "animal-protection-act#제15조",   ["30일 이내"]),
+    ("Q3 목줄 안전조치",    "animal-protection-act#제16조",   ["안전조치"]),
+    ("Q3 목줄 2미터",       "animal-protection-rule#제11조",  ["2미터"]),
+    ("Q3 easylaw 목줄",     "easylaw-pet-2-2-1#h2",          ["목줄"]),
+    ("Q4 로트와일러(법)",   "animal-protection-act#제2조",    ["로트와일러"]),
+    ("Q4 맹견 범위(규칙)",  "animal-protection-rule#제2조",   ["로트와일러"]),
+    ("Q5 맹견사육허가",     "animal-protection-act#제18조",   ["맹견사육허가"]),
+    ("Q6 광견병 예방접종",  "livestock-epidemic-act#제15조",  ["예방접종"]),
+    ("Q7 국립공원 ※박스",   "easylaw-pet-2-2-1#note",        ["자연공원"]),
 ]
 
 
@@ -195,5 +204,5 @@ def test_q4_subitem_survives(chunks: list) -> None:
     `item.text` 에 목이 들어 있지 않으므로 조립에서 `subitems` 를 빼면 **로트와일러가 사라진다.**
     이 테스트는 그 회귀를 막는다 (구현 중 실측으로 발견).
     """
-    c = _find(chunks, "animal-protection-act__20260820#제2조", "로트와일러")[0]
+    c = _find(chunks, "animal-protection-act#제2조", "로트와일러")[0]
     assert "도사견" in c.content and "핏불테리어" in c.content

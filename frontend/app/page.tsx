@@ -1,3 +1,5 @@
+import TrainingChat from "./components/training-chat";
+
 const consoleSections = [
   {
     title: "지식 베이스",
@@ -65,6 +67,9 @@ export default function Home() {
             견주가 쓰는 화면은 안드로이드 앱으로 만듭니다. 이 웹은 지식 베이스와
             검색 품질을 들여다보는 운영용이며, 로그인을 붙인 뒤 열립니다.
           </p>
+          <div className="mt-10 max-w-3xl">
+            <TrainingChat />
+          </div>
         </section>
 
         <section className="border-t border-zinc-200 dark:border-zinc-800">

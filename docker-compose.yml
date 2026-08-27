@@ -25,6 +25,10 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
+    # Training RAG는 Docker 바깥(host)에서 별도 FastAPI로 실행된다. Linux Docker에서도
+    # host.docker.internal 이름을 해석할 수 있도록 backend에 직접 매핑한다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
     env_file:
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
@@ -53,7 +57,9 @@ services:
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
       # Training RAG는 별도 host-side FastAPI다. main backend만 이 URL로 호출하며
       # frontend는 nginx /api/ 경로를 통해서만 접근한다.
-      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL}
+      # 빈 문자열을 주입하면 backend가 restart loop에 빠진다. 배포 전에 최상단 .env에
+      # 반드시 설정하도록 compose 단계에서 중단한다.
+      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL:?Set DAENGS_TRAINING_RAG_BASE_URL in the deployment root .env}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro

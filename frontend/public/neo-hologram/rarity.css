@@ -1,0 +1,264 @@
+/* ── 레어도별 카드 표면 ─────────────────────────────────────
+   카드 "표면"에 얹는 연출만 여기 둔다. 이머시브(☆☆☆)는 카드가 아니라 화면 전체를
+   무대로 쓰는 별개의 뷰라서 immersive.css 로 따로 나가 있다.
+
+   배정표는 cards.mjs 주석에 있다. No.02~11 은 이 파일 아래쪽 '다리' 블록을 거쳐
+   vendor/cards-css/ 가 그리므로, 여기 직접 쓴 규칙은 아래 flat 하나뿐이다.
+
+   style.css 는 건드리지 않고 여기서만 덮어쓴다. 티어를 붙이고 빼는 일이
+   기본 카드 코드와 섞이지 않아야 되돌리기 쉽다. */
+
+/* ── ◇◇◇ 무광 ─────────────────────────────────────────────
+   **지금은 아무 카드도 이걸 안 쓴다.** No.06 Mushroom 이 대조군이었는데 sunburst 로
+   갈아탔다. 지우지 않고 두는 건 "포일 없는 한 장"이 필요해질 때 되살리기 위해서다 —
+   cards.mjs 에서 rarity 를 "flat" 으로 바꾸면 그대로 돈다. 아래 설명은 그때의 근거다.
+
+   대조군. 이게 옆에 있어야 나머지가 "특별한 카드"로 읽힌다.
+
+   포일과 글레어만 걷어내는 게 아니라 그림자와 뒤 글로우까지 같이 죽인다 —
+   빛나는 물건이 아니라 그냥 인쇄된 종이여야 해서다. 기울기는 남긴다.
+   실물 카드도 무광이라고 안 움직이는 건 아니니까.
+
+   No.01 Cabbage 와 No.06 Mushroom 은 둘 다 leaf 프레임이다. 최상위와 최하위가
+   같은 프레임으로 붙어서, 프레임이 같은데 처리만 다른 비교가 공짜로 생긴다.
+   배정을 바꿀 땐 이 점을 같이 고려할 것. */
+
+.stage[data-rarity="flat"] .foil,
+.stage[data-rarity="flat"] .glare { display: none; }
+
+/* 종이 결은 오히려 남긴다. 완전히 매끈하면 인쇄물이 아니라 화면처럼 보인다. */
+.stage[data-rarity="flat"] .grain { opacity: .07; }
+
+.stage[data-rarity="flat"] .edge {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13);
+}
+
+.stage[data-rarity="flat"] .card {
+  box-shadow:
+    var(--shadow-x) var(--shadow-y) 38px rgba(0, 0, 0, .5),
+    0 14px 28px rgba(0, 0, 0, .4),
+    0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+/* 뒤 글로우도 거의 끈다. 아주 없애면 검은 배경에서 카드가 떠 있질 않아 어색하다. */
+.stage[data-rarity="flat"]::before { opacity: .3; }
+
+/* 호버해도 채도가 오르지 않는다 — style.css 의 기본은 살짝 화사해진다 */
+.stage[data-rarity="flat"]:is(:hover, :focus-within) .card { filter: none; }
+
+
+/* ── @kongyo2/cards-css 로 가는 다리 ─────────────────────────
+   No.07~11 의 포일은 우리가 그리지 않고 vendor/cards-css/ 의 원본 CSS 가 그린다.
+   그쪽 파일은 **한 글자도 고치지 않는다** — 버전을 올릴 때 통째로 갈아끼우려고 그렇다.
+   대신 여기서 두 가지를 맞춰 준다.
+
+     1) 이름   우리 --mouse-x 를 저쪽 --pointer-x 로 넘긴다
+     2) 배치   저쪽은 grid 로 겹치는 구조인데 우리는 absolute 다
+
+   원본의 base.css(9.5KB)는 안 가져왔다. 거기에는 기울기 · 그림자 · 카드 뒤집기까지
+   들어 있어서, 가져오면 style.css 의 .stage / .card 와 정면으로 부딪힌다. 포일 파일이
+   실제로 읽는 변수와 겹침 규칙만 아래에 옮겨 적었다.
+
+   **--rotate-x / --rotate-y 는 양쪽에 같은 이름으로 있다.** 우리 것은 .stage 에서
+   카드를 기울이는 값이고, 저쪽 것은 .holo-card__rotator 용이다. 지금은 가져온 포일
+   다섯 개가 rotate 를 안 읽어서 아무 일도 안 일어나지만, vendor 에 파일을 더
+   추가할 때는 그 파일이 rotate 를 읽는지 먼저 확인할 것. 읽으면 카드가 두 번 돈다.
+
+   data-effect 를 붙이는 건 main.js 다. 카드의 rarity 가 CARDS_CSS_EFFECTS 에
+   있을 때만 붙으므로, No.01~06 은 이 블록 전체가 적용되지 않는다. */
+
+.stage[data-effect] {
+  /* (1) 이름만 바꿔 넘기는 값 */
+  --pointer-x: var(--mouse-x);
+  --pointer-y: var(--mouse-y);
+  --background-x: var(--mouse-x);
+  --background-y: var(--mouse-y);
+
+  /* 원본은 쉴 때 0(완전히 안 보임)이지만, 우리 도감은 열한 장이 한 화면에 같이 있어서
+     그러면 다섯 장만 죽은 것처럼 보인다. style.css 의 .foil 이 쉴 때 .11 인 것에 맞춰
+     바닥을 깔아 준다. */
+  --card-opacity: calc(.14 + var(--glare) * .86);
+
+  /* 포인터가 없을 때의 값. main.js 가 인라인으로 덮어쓰고, 손을 떼면 여기로 돌아온다.
+     from-center 만 0 인 게 맞다 — 가운데(=.5, .5)에서의 중심거리가 0 이기 때문이다. */
+  --pointer-from-left: .5;
+  --pointer-from-top: .5;
+  --pointer-from-center: 0;
+
+  /* base.css 의 .holo-card 기본값 중, 가져온 다섯 포일이 실제로 읽는 것만 */
+  --space: 5%;
+  --angle: 133deg;
+  --foil: none;
+
+  /* mosaic 의 타일 한 칸 크기. 이름에 glitter 가 들어 있지만 텍스처가 아니라 그냥
+     길이다 — JS 가 만드는 --glitter 와 헷갈리지 말 것. 키우면 타일이 굵어진다. */
+  --glittersize: 25%;
+
+  --hc-brightness: 1;
+  --hc-contrast: 1;
+  --hc-saturate: 1;
+  --hc-shine-opacity: 1;
+  --hc-glare-opacity: 1;
+
+  --red: #f80e35;
+  --yellow: #eedf10;
+  --green: #21e985;
+  --blue: #0dbde9;
+  --violet: #c929f1;
+
+  --sunpillar-1: hsl(2, 100%, 73%);
+  --sunpillar-2: hsl(53, 100%, 69%);
+  --sunpillar-3: hsl(93, 100%, 69%);
+  --sunpillar-4: hsl(176, 100%, 76%);
+  --sunpillar-5: hsl(228, 100%, 74%);
+  --sunpillar-6: hsl(283, 100%, 73%);
+
+  /* crystal / prism / sunburst 는 -1..-6 이 아니라 이 별칭을 읽는다. 원본이 굳이 한 겹을
+     더 둔 건 ::before / ::after 에서 순서를 돌려 쓰기 위해서다 (바로 아래 규칙). */
+  --sunpillar-clr-1: var(--sunpillar-1);
+  --sunpillar-clr-2: var(--sunpillar-2);
+  --sunpillar-clr-3: var(--sunpillar-3);
+  --sunpillar-clr-4: var(--sunpillar-4);
+  --sunpillar-clr-5: var(--sunpillar-5);
+  --sunpillar-clr-6: var(--sunpillar-6);
+
+  /* 기울기를 안 넘긴다. 우리 --rotate-x/y 는 카드를 실제로 돌리는 각도(deg)이고
+     저쪽 --tilt-x/y 는 무늬를 미는 맨숫자다. 그대로 이으면 단위가 안 맞아 무늬가
+     통째로 사라진다 (var() 가 계산 단계에서 무효가 되면 그 선언이 통째로 죽는다).
+     0 이면 gold 의 쓸어가는 금빛 띠가 세로로 서고, 그 상태로도 충분히 보인다. */
+  --tilt-x: 0;
+  --tilt-y: 0;
+
+  /* gold 만 읽는다. 원본은 JS 가 만든 노이즈 텍스처를 여기 넣는데, 우리는 JS 를 안
+     가져왔으므로 CSS 로 비슷한 결을 만들어 준다. none 을 넣어도 되지만 그러면
+     금박이 유리처럼 매끈해진다 — 금속은 결이 있어야 금속으로 보인다. */
+  --grain:
+    repeating-radial-gradient(circle at 17% 29%, rgba(255, 255, 255, .5) 0 1px, transparent 1px 5px),
+    repeating-radial-gradient(circle at 71% 63%, rgba(0, 0, 0, .35) 0 1px, transparent 1px 7px);
+}
+
+/* base.css 가 ::before / ::after 에서 색 순서를 돌려 쓴다. 이게 있어야 세 겹이 서로 다른
+   위상으로 겹쳐 무지개가 층진다 — 빼면 세 겹이 같은 색이라 그냥 한 겹으로 보인다. */
+.stage[data-effect] .foil::before,
+.stage[data-effect] .foil::after {
+  --sunpillar-clr-1: var(--sunpillar-5);
+  --sunpillar-clr-2: var(--sunpillar-6);
+  --sunpillar-clr-3: var(--sunpillar-1);
+  --sunpillar-clr-4: var(--sunpillar-2);
+  --sunpillar-clr-5: var(--sunpillar-3);
+  --sunpillar-clr-6: var(--sunpillar-4);
+}
+
+.stage[data-effect] .foil::after {
+  --sunpillar-clr-1: var(--sunpillar-6);
+  --sunpillar-clr-2: var(--sunpillar-1);
+  --sunpillar-clr-3: var(--sunpillar-2);
+  --sunpillar-clr-4: var(--sunpillar-3);
+  --sunpillar-clr-5: var(--sunpillar-4);
+  --sunpillar-clr-6: var(--sunpillar-5);
+}
+
+/* (2) style.css 가 .foil 에 그려 둔 자체 포일을 걷어내고, 그 자리에 base.css 의
+   .holo-card__shine 기본값을 놓는다. 여기까지가 "빈 캔버스"이고 실제 무늬는
+   vendor 파일이 덮어쓴다 — 그래서 index.html 에서 vendor 링크가 이 파일보다
+   **뒤에** 와야 한다. 특정도가 똑같아서(0,3,0) 순서로만 갈린다. */
+.stage[data-effect] .foil {
+  background: none;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  filter:
+    brightness(calc(.85 * var(--hc-brightness)))
+    contrast(calc(2.75 * var(--hc-contrast)))
+    saturate(calc(.65 * var(--hc-saturate)));
+  mix-blend-mode: color-dodge;
+  opacity: calc(var(--card-opacity) * var(--hc-shine-opacity));
+}
+
+.stage[data-effect] .glare {
+  background: var(--glare-image,
+    radial-gradient(farthest-corner circle at var(--pointer-x) var(--pointer-y),
+      hsla(0, 0%, 100%, .8) 10%, hsla(0, 0%, 100%, .65) 20%, hsla(0, 0%, 0%, .5) 90%));
+  background-size: cover;
+  background-position: center;
+  opacity: calc(var(--card-opacity) * var(--hc-glare-opacity));
+  mix-blend-mode: var(--glare-blend, overlay);
+}
+
+/* 원본에선 .holo-card__rotator * 가 grid 라 ::before/::after 가 저절로 같은 칸에
+   포개진다. 우리 .foil 은 absolute 라 그 겹침을 여기서 직접 만들어 준다.
+   content 는 각 포일 파일이 넣으므로 여기서 넣지 않는다 — 넣으면 이 효과를 안 쓰는
+   카드에도 빈 레이어가 생긴다. */
+.stage[data-effect] .foil::before,
+.stage[data-effect] .foil::after,
+.stage[data-effect] .glare::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+/* ── 원화에 맞춰 세기 줄이기 ─────────────────────────────
+   **원본 값이 틀린 게 아니라 원화가 다른 것이다.**
+
+   cards-css 의 데모 카드는 어두운 벡터 그림이다. 우리 원화는 정반대로 ─ 이미
+   홀로그램이 인쇄돼 있어 바탕부터 밝고, 주인공이 **흰 강아지**다. 포일 대부분이
+   `color-dodge`(gold 는 `hard-light`)라 밝은 데에 얹으면 흰색으로 클리핑되고,
+   그러면 제일 먼저 사라지는 게 얼굴이다. 카드마다 얼굴이 남는 선까지 눌렀다.
+
+   vendor 파일은 손대지 않는다. 원본이 그러라고 열어 둔 --hc-* 로만 조절하고,
+   .foil 의 opacity 는 ::before / ::after 까지 한 덩어리로 내리므로 포일 파일 안에
+   박혀 있는 개별 opacity 도 이 한 손잡이에 같이 딸려 온다.
+
+   숫자는 눈으로 맞춘 값이다. **원화를 갈아끼우면 다시 봐야 한다** — 특히 배경이
+   어두운 원화가 오면 눌러 둔 만큼 심심해진다. 어느 카드가 왜 셌는지는 각 줄에.
+
+   **여기 없는 카드 셋은 일부러 원본 값 그대로 둔 것이다.** 나중에 "얘넨 왜 안 눌렀지"
+   하고 채워 넣지 말 것:
+     02 prism    노란 파프리카가 단색이라 분광이 얼굴을 안 덮는다
+     03 crystal  얼굴이 좀 뜨는데, 그게 낫다고 사람이 골랐다 (2026-08-26)
+     05 oilslick 위와 같다. 무지개가 다 뜨는 쪽을 골랐다 */
+
+/* 04 금박. 유일하게 hard-light 라 제일 세다 — 안 누르면 카드가 통째로 금덩어리가 된다.
+   brightness 로 누르면 hard-light 가 곱하기 쪽으로 넘어가 탁해지므로 opacity 로 뺀다 */
+.stage[data-effect="gold"] {
+  --hc-brightness: .92;
+  --hc-saturate: .8;
+  --hc-shine-opacity: .28;
+  --hc-glare-opacity: .6;
+}
+
+/* 06 광선. 버섯이 베이지라 바탕이 이미 밝다 */
+.stage[data-effect="sunburst"] {
+  --hc-brightness: .52;
+  --hc-shine-opacity: .4;
+  --hc-glare-opacity: .7;
+}
+
+/* 12 브러시드 금속. gold 와 같은 hard-light 라 역시 세다. 세로 결도 mosaic 의 격자처럼
+   **대비로 생기는 무늬**여서 brightness 로 누르면 결이 같이 사라진다 — 그래서 gold 처럼
+   opacity 를 주로 쓴다. gold 만큼 내리지는 않는데, 은색이라 금색보다 덜 튄다. */
+.stage[data-effect="metal"] {
+  --hc-brightness: .9;
+  --hc-shine-opacity: .3;
+  --hc-glare-opacity: .65;
+}
+
+/* 11 격자 타일. **여기만 brightness 를 안 건드리고 opacity 로만 누른다.**
+   이 포일의 격자는 타일끼리의 대비로 생기는 거라, 다른 카드처럼 brightness 를 내리면
+   빨강이 돌아오는 대신 격자가 같이 뭉개진다 — 그러면 이 티어를 고른 이유가 없어진다.
+   opacity 는 무늬 안쪽 대비는 그대로 두고 원화와 섞는 비율만 바꾸므로 격자가 남는다. */
+.stage[data-effect="mosaic"] {
+  --hc-shine-opacity: .5;
+  --hc-glare-opacity: .8;
+}
+
+/* 09 민트~시안 띠가 넓게 깔린다. 시금치가 초록이라 제일 심하게 떴다 */
+.stage[data-effect="aurora"] {
+  --hc-brightness: .52;
+  --hc-saturate: .85;
+  --hc-shine-opacity: .42;
+  --hc-glare-opacity: .7;
+}

@@ -1,6 +1,8 @@
 -- =====================================================================
 -- 03_auth.sql
--- 인증/계정 스키마 - admin_users / refresh_tokens / app_users
+-- 인증/계정 스키마 - admin_users / app_users / refresh_tokens
+--
+-- refresh_tokens 가 app_users 를 FK 로 참조하므로 순서가 이렇다 (D-016).
 -- 실행 순서: 01_schema.sql -> 02_trigger.sql -> 03_auth.sql -> (적재) -> indexes.sql
 --
 -- 02_trigger.sql 의 set_updated_at() 을 여기서 재사용하므로 02 보다 뒤여야 한다.
@@ -57,50 +59,6 @@ CREATE TABLE admin_users (
 
 
 -- ---------------------------------------------------------------------
--- refresh_tokens : 재발급 토큰. 강제 로그아웃을 위해 DB 에 둔다.
---
--- access token 은 DB 에 두지 않는다 (짧은 수명 + 검증만으로 끝난다).
--- refresh token 만 DB 에 두는 이유는 '서버가 세션을 끊을 수 있어야' 해서다.
--- 토큰이 self-contained 면 만료 전까지 서버가 손쓸 방법이 없다.
---
--- 지금은 관리자 세션만 담는다. 앱 회원(카카오) 로그인은 Hold 상태라
--- 그 카드를 열 때 '컬럼을 더할지 / 테이블을 나눌지'를 정한다.
--- 미리 subject_type + subject_id 로 만들어 두면 FK 무결성을 지금 포기하게 된다.
--- ---------------------------------------------------------------------
-CREATE TABLE refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    -- 계정을 지우면 세션도 같이 사라져야 한다.
-    -- (다만 위 status 주석대로, 운영에서는 지우기보다 suspended 로 막는다)
-    admin_user_id UUID NOT NULL
-        REFERENCES admin_users(id) ON DELETE CASCADE,
-
-    -- 토큰 원문의 SHA-256 hex 64자. 원문은 저장하지 않는다.
-    -- DB 가 통째로 새어도 그것만으로 유효한 토큰이 되지는 않게 하려는 것.
-    -- 비밀번호와 달리 Argon2 가 아니라 SHA-256 인 이유: 토큰은 서버가 만든
-    -- 고엔트로피 난수라 사전 공격 대상이 아니고, 재발급마다 조회해야 해서 빨라야 한다.
-    token_hash CHAR(64) NOT NULL UNIQUE,
-
-    -- 만료 시각. 지났으면 거부하고, 배치로 지운다 (남겨 둬도 무해하지만 쌓인다).
-    expires_at TIMESTAMPTZ NOT NULL,
-
-    -- 폐기 시각. NULL 이면 살아 있는 세션이다.
-    -- 행을 지우지 않고 시각을 남기는 이유는 '재사용 감지' 때문이다 -
-    -- 폐기된 토큰이 다시 들어오면 탈취를 의심하고 그 계정의 세션을 전부 끊을 수 있다.
-    revoked_at TIMESTAMPTZ,
-
-    -- 세션 목록 화면에서 "어디서 로그인했는지"를 보여 주기 위한 것.
-    -- 인증 판단에는 쓰지 않는다 (둘 다 클라이언트가 바꿀 수 있는 값이다).
-    user_agent TEXT,
-    ip INET,
-
-    -- created_at 이 곧 발급 시각이다 (issued_at 을 따로 두지 않는다).
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-
--- ---------------------------------------------------------------------
 -- app_users : 앱 회원. 카카오 소셜 로그인. role 이 없고 status 만 있다.
 --
 -- 개인정보 컬럼은 앱단에서 AES-256-GCM 으로 암호화해 BYTEA 로 넣는다.
@@ -148,6 +106,67 @@ CREATE TABLE app_users (
 
 
 -- ---------------------------------------------------------------------
+-- refresh_tokens : 재발급 토큰. 강제 로그아웃을 위해 DB 에 둔다.
+--
+-- access token 은 DB 에 두지 않는다 (짧은 수명 + 검증만으로 끝난다).
+-- refresh token 만 DB 에 두는 이유는 '서버가 세션을 끊을 수 있어야' 해서다.
+-- 토큰이 self-contained 면 만료 전까지 서버가 손쓸 방법이 없다.
+--
+-- 관리자와 앱 회원의 세션을 **한 테이블에** 담는다 (D-016). 소유자 컬럼을 둘 두고
+-- CHECK 로 '정확히 하나'를 강제한다. 앞서 미뤄 둔 '컬럼을 더할지 / 테이블을 나눌지'의
+-- 답이다.
+--
+-- subject_type + subject_id 한 쌍으로 하면 컬럼은 깔끔해지지만 FK 를 걸 수 없다 -
+-- 계정을 지워도 세션이 남고, 그걸 지우는 책임이 앱으로 넘어온다.
+--
+-- 테이블을 나누지 않는 이유는 회전과 재사용 감지 규칙(D-015)이 양쪽 똑같기 때문이다.
+-- 나누면 그 미묘한 규칙이 두 벌이 되고, 그중 한쪽만 고치는 날이 온다.
+--
+-- app_users 를 이 테이블보다 **먼저** 만드는 이유도 이것이다 (FK 대상이라).
+-- ---------------------------------------------------------------------
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- 소유자. **둘 중 정확히 하나만** 채운다 (맨 아래 CHECK).
+    -- NULL 이 허용되는 것은 '없어도 된다'가 아니라 '다른 쪽이 채워졌다'는 뜻이다.
+    --
+    -- 계정을 지우면 세션도 같이 사라져야 해서 ON DELETE CASCADE 다.
+    -- (다만 위 status 주석대로, 운영에서는 지우기보다 suspended 로 막는다)
+    admin_user_id UUID REFERENCES admin_users(id) ON DELETE CASCADE,
+    app_user_id   UUID REFERENCES app_users(id)   ON DELETE CASCADE,
+
+    -- 토큰 원문의 SHA-256 hex 64자. 원문은 저장하지 않는다.
+    -- DB 가 통째로 새어도 그것만으로 유효한 토큰이 되지는 않게 하려는 것.
+    -- 비밀번호와 달리 Argon2 가 아니라 SHA-256 인 이유: 토큰은 서버가 만든
+    -- 고엔트로피 난수라 사전 공격 대상이 아니고, 재발급마다 조회해야 해서 빨라야 한다.
+    token_hash CHAR(64) NOT NULL UNIQUE,
+
+    -- 만료 시각. 지났으면 거부하고, 배치로 지운다 (남겨 둬도 무해하지만 쌓인다).
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    -- 폐기 시각. NULL 이면 살아 있는 세션이다.
+    -- 행을 지우지 않고 시각을 남기는 이유는 '재사용 감지' 때문이다 -
+    -- 폐기된 토큰이 다시 들어오면 탈취를 의심하고 그 계정의 세션을 전부 끊을 수 있다.
+    revoked_at TIMESTAMPTZ,
+
+    -- 세션 목록 화면에서 "어디서 로그인했는지"를 보여 주기 위한 것.
+    -- 인증 판단에는 쓰지 않는다 (둘 다 클라이언트가 바꿀 수 있는 값이다).
+    user_agent TEXT,
+    ip INET,
+
+    -- created_at 이 곧 발급 시각이다 (issued_at 을 따로 두지 않는다).
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- 소유자가 정확히 하나여야 한다. 둘 다 NULL 이면 주인 없는 세션이 남고,
+    -- 둘 다 차 있으면 "이 세션은 누구 것이냐"의 답이 코드마다 달라진다.
+    -- num_nonnulls() 는 NULL 이 아닌 인자의 개수를 센다 (PostgreSQL 내장).
+    CONSTRAINT refresh_tokens_one_subject_check
+        CHECK (num_nonnulls(admin_user_id, app_user_id) = 1)
+);
+
+
+-- ---------------------------------------------------------------------
 -- 인덱스
 --
 -- documents 와 달리 여기 인덱스는 indexes.sql 이 아니라 이 파일에 둔다.
@@ -158,9 +177,16 @@ CREATE TABLE app_users (
 -- 만들므로 여기 다시 적지 않는다.
 -- ---------------------------------------------------------------------
 
--- "이 관리자의 세션 전부" - 강제 로그아웃과 세션 목록 화면.
+-- "이 사람의 세션 전부" - 강제 로그아웃과 세션 목록 화면.
 -- FK 는 인덱스를 자동으로 만들지 않으므로 직접 걸어야 한다.
-CREATE INDEX idx_refresh_tokens_admin ON refresh_tokens (admin_user_id);
+--
+-- 부분 인덱스(WHERE ... IS NOT NULL)인 이유는 각 행이 둘 중 한 컬럼만 채우기
+-- 때문이다. 그냥 걸면 인덱스마다 '반대쪽 주체의 행 전부'가 NULL 로 들어간다.
+-- 조회는 WHERE admin_user_id = ? 형태라 부분 인덱스로도 그대로 탄다.
+CREATE INDEX idx_refresh_tokens_admin ON refresh_tokens (admin_user_id)
+    WHERE admin_user_id IS NOT NULL;
+CREATE INDEX idx_refresh_tokens_app ON refresh_tokens (app_user_id)
+    WHERE app_user_id IS NOT NULL;
 
 -- 만료 토큰 정리 배치용.
 CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens (expires_at);
@@ -206,10 +232,11 @@ COMMENT ON COLUMN admin_users.last_login_at    IS '마지막 로그인 성공 �
 COMMENT ON COLUMN admin_users.created_at       IS '생성 시각';
 COMMENT ON COLUMN admin_users.updated_at       IS '수정 시각';
 
-COMMENT ON TABLE  refresh_tokens               IS '관리자 재발급 토큰 / 강제 로그아웃용';
+COMMENT ON TABLE  refresh_tokens               IS '재발급 토큰 (관리자 + 앱 회원) / 강제 로그아웃용';
 
 COMMENT ON COLUMN refresh_tokens.id            IS '토큰 행 고유 ID';
-COMMENT ON COLUMN refresh_tokens.admin_user_id IS '소유 관리자 (계정 삭제 시 CASCADE)';
+COMMENT ON COLUMN refresh_tokens.admin_user_id IS '소유 관리자 (계정 삭제 시 CASCADE) / app_user_id 와 배타';
+COMMENT ON COLUMN refresh_tokens.app_user_id   IS '소유 앱 회원 (계정 삭제 시 CASCADE) / admin_user_id 와 배타';
 COMMENT ON COLUMN refresh_tokens.token_hash    IS '토큰 원문의 SHA-256 hex 64자 / 원문은 저장 안 함';
 COMMENT ON COLUMN refresh_tokens.expires_at    IS '만료 시각';
 COMMENT ON COLUMN refresh_tokens.revoked_at    IS '폐기 시각 / NULL 이면 살아 있는 세션. 재사용 감지에 씀';

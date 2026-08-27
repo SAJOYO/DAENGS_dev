@@ -5,6 +5,16 @@ import type { NextConfig } from "next";
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // 같은 네트워크의 폰에서 개발 서버를 열 수 있게 합니다 (`npm run dev:https`).
+  //
+  // Next 는 기본적으로 localhost 가 아닌 곳에서 오는 dev 리소스 요청(`/_next/...`, HMR)을
+  // 막습니다. 막혀도 `public/` 정적 파일은 그냥 열리지만, 앱 페이지는 청크를 못 받아
+  // 하얗게 뜹니다. 폰 실기 확인 때 이것 때문에 한 번 헤맵니다.
+  //
+  // **개발용입니다.** `next dev` 에서만 읽고 운영 빌드와는 무관합니다.
+  // 192.168.0.* 는 팀의 LAN 대역이라, DHCP 로 IP 가 바뀌어도 계속 맞습니다.
+  allowedDevOrigins: ["192.168.0.*"],
+
   // PM2 cluster 모드로 띄우려면 순수 Node 진입점이 필요합니다.
   // 이 설정을 켜면 빌드 후 .next/standalone/server.js 가 생성됩니다.
   output: "standalone",

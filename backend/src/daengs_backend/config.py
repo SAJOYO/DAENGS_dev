@@ -87,9 +87,21 @@ class Settings(BaseSettings):
     # 실제 값은 .get_secret_value() 로 꺼내며, 꺼내는 곳은 core/crypto.py 뿐입니다.
     #
     # 셋을 나눠 둔 이유는 잃었을 때의 결과가 전부 다르기 때문입니다 (D-012).
-    jwe_key: SecretStr  # 토큰 암호화. 아직 안 씁니다 — 로그인 API 카드에서.
+    jwe_key: SecretStr  # 토큰 암호화 (access token)
     aes_key: SecretStr  # 개인정보 컬럼 암복호화
     blind_index_key: SecretStr  # HMAC pepper. AES 키와 같은 값을 쓰면 안 됩니다.
+
+    # ── 카카오 ────────────────────────────────────────────────────────
+    # 카카오 개발자 콘솔의 **REST API 키**입니다. 앱이 보낸 id_token 의 `aud` 가
+    # 이 값과 같은지 확인하는 데 씁니다 — "이 토큰이 우리 앱에게 발급된 것인가".
+    #
+    # **비밀이 아닙니다.** 앱에도 들어가 있고 카카오에 요청할 때 그대로 나갑니다.
+    # 그래도 SecretStr 을 쓰지 않는 대신 기본값도 두지 않습니다. 기본값을 두면
+    # 검증이 조용히 엉뚱한 aud 를 통과시키게 되는데, 그건 남의 앱 토큰으로
+    # 우리 서비스에 계정이 생긴다는 뜻입니다 (D-017).
+    #
+    # 네이티브 앱 키 · JavaScript 키 · 어드민 키가 아닙니다. **REST API 키**입니다.
+    kakao_rest_api_key: str
 
     @model_validator(mode="after")
     def _reject_legacy_database_url(self) -> "Settings":

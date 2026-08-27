@@ -58,7 +58,7 @@ class TestLogin:
     async def test_성공하면_토큰_한_쌍(self, session, store) -> None:  # noqa: ANN001
         pair = await _login(session, store)
 
-        assert decode_access_token(pair.access_token).admin_id == store.admin.id
+        assert decode_access_token(pair.access_token).subject_id == store.admin.id
         assert hash_refresh_token(pair.refresh_token) in store.tokens
         assert store.admin.last_login_at is not None
 

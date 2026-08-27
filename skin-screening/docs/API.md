@@ -106,7 +106,7 @@ GET  /docs             FastAPI 자동 생성 문서
 holdout 에서 2단계가 고른 이름이 **56.6% 틀렸습니다.** 필드로 주면 앱은 그걸 화면
 제일 크게 띄웁니다. 그래서 계약에서 아예 뺐고, `tests/test_agent.py` 가 `top1`
 `predicted` `diagnosis` 같은 키가 생기는지 감시합니다. 근거는
-[`docs/decisions.md`](../../docs/decisions.md) **D-017**.
+[`docs/decisions.md`](../../docs/decisions.md) **D-019**.
 
 ### 앱 쪽 화면 규칙
 

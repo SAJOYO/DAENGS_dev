@@ -27,9 +27,13 @@ os.environ["DAENGS_DB_HOST"] = "localhost"
 os.environ["DAENGS_DB_PASSWORD"] = "test-password"
 os.environ["DAENGS_TRAINING_RAG_BASE_URL"] = "http://training-rag.test"
 
-# 카카오 REST API 키. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 값으로
-# 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).
-os.environ["DAENGS_KAKAO_REST_API_KEY"] = "test-rest-api-key"
+# 카카오 앱 키 허용 목록. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 중
+# 하나로 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).
+#
+# **둘을 넣습니다.** 하나만 넣으면 "목록 중 아무거나 맞으면 통과"가 실제로 되는지
+# 확인할 수 없고, value 하나로 되돌려 놔도 테스트가 그냥 통과합니다.
+# 실제 운영에서도 앱(네이티브 키)과 CLI(REST 키)가 함께 들어옵니다.
+os.environ["DAENGS_KAKAO_APP_KEYS"] = '["test-native-app-key","test-rest-api-key"]'
 
 os.environ["DAENGS_AES_KEY"] = _key(1)
 os.environ["DAENGS_BLIND_INDEX_KEY"] = _key(2)

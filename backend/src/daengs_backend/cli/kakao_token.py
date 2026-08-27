@@ -24,6 +24,17 @@ Redirect URI 등록이 필요합니다.
 콘솔에서 **OpenID Connect 를 켜 두어야** 합니다. 안 켜져 있으면 `scope` 에
 `openid` 를 넣어도 `id_token` 이 오지 않고, 이 스크립트가 그렇다고 알려 줍니다.
 
+## 어느 앱 키를 쓰나 — 헷갈리기 쉬운 자리
+
+이 CLI 가 `client_id` 로 보내는 것은 **REST API 키 하나**입니다
+(`DAENGS_KAKAO_REST_API_KEY` 또는 `--client-id`). 네이티브 앱 키를 넣으면
+authorize 단계에서 거절당합니다.
+
+서버가 로그인 때 대조하는 것은 **`DAENGS_KAKAO_APP_KEYS` 라는 별개의 허용 목록**입니다.
+카카오의 `aud` 는 로그인에 쓴 앱 키 그대로라, 앱(네이티브 키)과 이 CLI(REST 키)가
+서로 다른 값을 보냅니다. **그래서 이 CLI 로 검증까지 보려면 목록에 REST API 키도
+들어 있어야 합니다** — 네이티브 키만 넣어 두면 앱은 되는데 이 CLI 만 막힙니다.
+
 ## KOE010 (invalid_client) 이 뜬다면
 
 인가 코드는 받았는데 토큰 교환만 실패한 것입니다. 그 단계까지 왔다는 것은
@@ -134,11 +145,13 @@ def _wait_for_code(port: int, timeout: float) -> str:
     return _CallbackHandler.code
 
 
-def _exchange(code: str, redirect_uri: str, client_secret: str | None) -> dict:
-    """인가 코드를 토큰으로 바꿉니다."""
+def _exchange(
+    code: str, redirect_uri: str, client_secret: str | None, client_id: str
+) -> dict:
+    """인가 코드를 토큰으로 바꿉니다. `client_id` 는 authorize 때와 같아야 합니다."""
     data = {
         "grant_type": "authorization_code",
-        "client_id": settings.kakao_rest_api_key,
+        "client_id": client_id,
         "redirect_uri": redirect_uri,
         "code": code,
     }
@@ -219,8 +232,11 @@ def _describe(token: str, *, print_token: bool, call_api: str | None) -> None:
             "\n검증을 통과하는 조건을 알려 주는 셈이라서요."
             "\n"
             "\n자주 나오는 것:"
-            "\n  aud 불일치      backend/.env 의 DAENGS_KAKAO_REST_API_KEY 가"
-            "\n                  방금 로그인한 앱의 REST API 키인지 확인하세요."
+            "\n  aud 불일치      backend/.env 의 DAENGS_KAKAO_APP_KEYS 에 방금 로그인한"
+            "\n                  앱의 **REST API 키**가 들어 있는지 확인하세요."
+            "\n                  이 CLI 는 REST 흐름이라 aud 로 REST API 키가"
+            "\n                  옵니다. 네이티브 앱 키만 넣어 두면 앱은 되는데"
+            "\n                  이 CLI 만 여기서 막힙니다."
             "\n  issued in the future / expired"
             "\n                  이 PC 시계가 어긋나 있습니다. 60초까지는 봐주지만"
             "\n                  그보다 크면 Windows 시간 동기화를 돌리세요."
@@ -288,6 +304,14 @@ def main() -> None:
         "(예: http://127.0.0.1:8899). 토큰은 화면에 찍지 않고 바로 보냅니다.",
     )
     parser.add_argument(
+        "--client-id",
+        default=None,
+        help="authorize · 토큰 교환에 쓸 **REST API 키**. 생략하면 backend/.env 의 "
+        "DAENGS_KAKAO_REST_API_KEY 를 씁니다. **네이티브 앱 키를 넣으면 안 됩니다** — "
+        "이건 REST 흐름이라 authorize 단계에서 거절당합니다. "
+        "(로그인 검증에 쓰는 DAENGS_KAKAO_APP_KEYS 와는 다른 값입니다.)",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=180.0,
@@ -301,10 +325,22 @@ def main() -> None:
         getpass.getpass("Client Secret: ") if args.client_secret else None
     )
 
+    # **DAENGS_KAKAO_APP_KEYS 가 아닙니다.** 그건 아무 순서로나 들어오는 허용 목록이라
+    # 어느 것이 REST 키인지 알 수 없고, 네이티브 앱 키를 client_id 로 보내면
+    # authorize 단계에서 거절당합니다.
+    client_id = args.client_id or settings.kakao_rest_api_key
+    if not client_id:
+        sys.exit(
+            "REST API 키가 없습니다. 이 CLI 는 REST 흐름이라 client_id 가 필요합니다.\n\n"
+            "  backend/.env 에  DAENGS_KAKAO_REST_API_KEY=<REST API 키> 를 넣거나\n"
+            "  --client-id <REST API 키> 로 넘기세요.\n\n"
+            "DAENGS_KAKAO_APP_KEYS(로그인 검증용 허용 목록)와는 다른 값입니다."
+        )
+
     redirect_uri = f"http://localhost:{args.port}/callback"
     query = urllib.parse.urlencode(
         {
-            "client_id": settings.kakao_rest_api_key,
+            "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": args.scope,
@@ -326,7 +362,7 @@ def main() -> None:
     print(f"로그인을 기다립니다... (최대 {args.timeout:.0f}초)")
     code = _wait_for_code(args.port, args.timeout)
 
-    tokens = _exchange(code, redirect_uri, client_secret)
+    tokens = _exchange(code, redirect_uri, client_secret, client_id)
     id_token = tokens.get("id_token")
     if not id_token:
         sys.exit(

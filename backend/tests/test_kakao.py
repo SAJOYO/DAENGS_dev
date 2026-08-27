@@ -22,7 +22,10 @@ from daengs_backend.core.kakao import (
     verify_id_token,
 )
 
-AUD = "test-rest-api-key"  # conftest.py 가 넣는 DAENGS_KAKAO_REST_API_KEY 와 같아야 합니다
+# conftest.py 가 넣는 DAENGS_KAKAO_APP_KEYS 의 두 값과 같아야 합니다.
+# 앱은 네이티브 키로, cli/kakao_token.py 는 REST 키로 로그인합니다 — 둘 다 통과해야 합니다.
+AUD = "test-native-app-key"
+AUD_REST = "test-rest-api-key"
 KID = "kakao-test-key"
 
 
@@ -78,6 +81,22 @@ class TestVerify:
         identity = await verify_id_token(_token(signing_key, {"email": ""}))
         assert identity.email is None
 
+    async def test_목록에_있는_다른_앱_키도_통과한다(self, signing_key: RSAKey) -> None:
+        """**이 카드의 이유.**
+
+        카카오의 `aud` 는 로그인에 쓴 앱 키 그대로입니다 — 네이티브 SDK 는 네이티브
+        앱 키, JS SDK 는 JavaScript 키, REST 는 REST API 키. 하나로 못박아 두면
+        나머지 경로가 통째로 401 이 됩니다. 실제로 앱이 네이티브 SDK 로 붙으면서
+        전부 막혔습니다.
+        """
+        identity = await verify_id_token(_token(signing_key, {"aud": AUD_REST}))
+        assert identity.kakao_id == 1234567890
+
+    async def test_aud_가_배열로_와도_통과한다(self, signing_key: RSAKey) -> None:
+        """JWT 의 `aud` 는 배열일 수도 있습니다 (RFC 7519). joserfc 가 교집합으로 봅니다."""
+        token = _token(signing_key, {"aud": ["somebody-elses-app", AUD]})
+        assert (await verify_id_token(token)).kakao_id == 1234567890
+
 
 class TestReject:
     """**여기가 이 파일의 본체입니다.** 아래가 하나라도 통과하면 인증이 뚫립니다."""
@@ -90,6 +109,23 @@ class TestReject:
         """
         with pytest.raises(KakaoIdTokenInvalidError):
             await verify_id_token(_token(signing_key, {"aud": "somebody-elses-app"}))
+
+    async def test_허용_목록이_비면_아무나_통과한다(
+        self, signing_key: RSAKey, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """**통과하는 것이 정답인 유일한 거부 테스트입니다.** 읽고 놀라지 마세요.
+
+        joserfc 의 `check_value` 는 `values` 가 빈 목록이면 `return` 으로 빠져나가
+        aud 검사를 아예 하지 않습니다. 그래서 여기서는 남의 앱 토큰이 통과합니다 —
+        `verify_id_token` 이 스스로 막을 수 없다는 뜻입니다.
+
+        **막는 것은 config 입니다** (`test_config.py` 의 `test_빈_목록은_거부한다`).
+        이 테스트는 그 validator 를 지우면 무엇이 열리는지 못박아 둡니다. 언젠가
+        joserfc 가 이 동작을 바꿔서 여기가 깨지면, 그때는 좋은 소식입니다.
+        """
+        monkeypatch.setattr(kakao.settings, "kakao_app_keys", [])
+        identity = await verify_id_token(_token(signing_key, {"aud": "somebody-elses-app"}))
+        assert identity.kakao_id == 1234567890
 
     async def test_발급자가_다르면_거부한다(self, signing_key: RSAKey) -> None:
         with pytest.raises(KakaoIdTokenInvalidError):

@@ -14,6 +14,10 @@
 "이 토큰이 우리 앱 것인가"를 `/v1/user/access_token_info` 로 따로 확인해야 합니다.
 그걸 빠뜨리면 **다른 카카오 앱에서 받은 토큰으로도 우리 서비스에 계정이 생깁니다.**
 id_token 은 `aud` 검증이 그 역할을 대신합니다.
+
+**`aud` 는 앱 키 하나가 아닙니다.** 카카오는 인가 요청에 쓴 앱 키를 그대로 넣어 주므로,
+같은 애플리케이션이라도 네이티브 SDK · JS SDK · REST 가 서로 다른 값을 보냅니다.
+허용 목록은 `config.py` 의 `kakao_app_keys` 입니다.
 """
 
 import asyncio
@@ -186,13 +190,23 @@ def _claims_registry() -> jwt.JWTClaimsRegistry:
     그 토큰의 `sub` 는 그 앱 기준의 회원번호라, 우리 DB 에는 **엉뚱한 새 회원**이
     생깁니다. 서명 검증만으로 끝났다고 생각하기 쉬운 자리입니다.
 
+    **`value` 가 아니라 `values` 입니다.** 카카오의 `aud` 는 인가 요청에 쓴 앱 키
+    그대로라, 같은 애플리케이션이라도 들어온 경로마다 값이 다릅니다 — 네이티브 SDK 는
+    네이티브 앱 키, JS SDK 는 JavaScript 키, REST 는 REST API 키. 하나로 못박으면
+    나머지 경로가 통째로 401 이 됩니다. 어느 키를 허용할지는 설정이 정합니다
+    (`config.py` 의 `kakao_app_keys`).
+
+    **목록이 비면 joserfc 가 aud 검사를 통째로 건너뜁니다** (`check_value` 의
+    `if not option_values: return`). 즉 여기서 빈 목록은 "아무나 통과"입니다.
+    그래서 `config.py` 가 기동 때 빈 목록을 거부합니다 — 이 함수는 그걸 믿습니다.
+
     매번 만드는 이유는 `settings` 를 import 시점이 아니라 호출 시점에 읽기 위해서입니다
     (테스트가 키를 바꿔 끼울 수 있어야 합니다).
     """
     return jwt.JWTClaimsRegistry(
         leeway=_CLOCK_SKEW_LEEWAY,
         iss={"essential": True, "value": ISSUER},
-        aud={"essential": True, "value": settings.kakao_rest_api_key},
+        aud={"essential": True, "values": settings.kakao_app_keys},
         sub={"essential": True},
         exp={"essential": True},
     )

@@ -10,13 +10,27 @@ from __future__ import annotations
 
 import argparse
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
-from . import config, geo
+from . import cache, config, geo
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler·rag CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def _mask(url: str) -> str:
+    """`REDIS_URL` 에서 비밀번호를 지운다 — 값은 찍지 않는다 (RAG-012)."""
+    if not url:
+        return ""
+    parts = urlsplit(url)
+    if parts.password is None:
+        return url
+    host = parts.hostname or ""
+    port = f":{parts.port}" if parts.port else ""
+    return urlunsplit((parts.scheme, f"{parts.username or ''}:***@{host}{port}",
+                       parts.path, parts.query, parts.fragment))
 
 
 def cmd_config(args: argparse.Namespace) -> int:
@@ -39,6 +53,18 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     print("\n예산")
     print(f"  요청 하나 {config.REQUEST_BUDGET_SEC}s · 개별 호출 {config.REQUEST_TIMEOUT_SEC}s  (RT-001 ⑤-b)")
+
+    # **실제로 붙여 본다.** 연결 실패를 예외가 아니라 저하로 다루기 때문에(④-c),
+    # REDIS_URL 이 틀려도 앱은 아무 말 없이 뜨고 조용히 메모리로 떨어진다.
+    # 비밀번호 오타 하나가 "일 예산 카운터가 왜 안 쌓이지"로 돌아오는 것을 여기서 끊는다.
+    print("")
+    print("캐시")
+    print(f"  REDIS_URL      {_mask(config.REDIS_URL) or '(비어 있음)'}")
+    if type(cache.open_store()).__name__ == "MemoryStore":
+        print("  [ ] 메모리 폴백 — 앱은 돌지만 일 예산 카운터가 재시작마다 리셋된다.")
+        print("      **비밀번호가 틀려도 여기로 떨어진다** (연결 실패와 구분되지 않는다).")
+    else:
+        print("  [x] Redis 에 붙었다")
 
     missing = [n for n, v in config.KEYS.items() if not v]
     if missing:

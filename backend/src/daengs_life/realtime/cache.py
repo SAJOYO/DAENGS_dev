@@ -265,14 +265,33 @@ class RedisStore:
         self._r.delete(f"{PREFIX}:lock:{key}")
 
 
+# 저하로 떨어지기까지 기다리는 시간. **기본값(무제한)으로 두면 안 된다** — 이 판단은
+# lifespan 에서 한 번 일어나고, 그동안 앱이 안 뜬다. 기본값에서는 닫힌 포트에 4.2초,
+# 응답 없는 호스트면 OS 의 SYN 타임아웃(윈도우 기준 20초대)을 통째로 문다. "Redis 를 쓰되
+# 없어도 돈다"(④-c)가 "없으면 20초 늦게 돈다"가 되면 그 약속이 아니다.
+CONNECT_TIMEOUT_SEC = 1.0
+# 붙은 뒤의 개별 명령. 살아 있는 Redis 는 밀리초 단위라 여기 걸릴 일이 없고,
+# 걸린다면 그건 판정을 포기해야 하는 상황이다 — ⑤-b 의 요청 예산이 8초뿐이다.
+OP_TIMEOUT_SEC = 2.0
+
+
 def open_store(url: str | None = None) -> Store:
-    """Redis 가 있으면 Redis, 없으면 메모리. **연결 실패는 예외가 아니라 저하다** (④-c)."""
+    """Redis 가 있으면 Redis, 없으면 메모리. **연결 실패는 예외가 아니라 저하다** (④-c).
+
+    ⚠ **인증 실패도 여기로 떨어진다.** 비밀번호가 틀려도 예외를 밖으로 내지 않으므로
+    앱은 그대로 뜨고 일 예산 카운터만 조용히 안 쌓인다 (D-019). 확인할 자리를 따로
+    두었다 — `python -m daengs_life.realtime config` 가 실제로 붙여 보고 알려 준다.
+    """
     url = REDIS_URL if url is None else url
     if not url:
         return MemoryStore()
     try:
         import redis                                     # 선택 의존이 아니라 지연 import 다 —
-        client = redis.Redis.from_url(url)               # Redis 없이도 이 모듈이 import 돼야 한다
+        client = redis.Redis.from_url(                   # Redis 없이도 이 모듈이 import 돼야 한다
+            url,
+            socket_connect_timeout=CONNECT_TIMEOUT_SEC,
+            socket_timeout=OP_TIMEOUT_SEC,
+        )
         client.ping()
         return RedisStore(client)
     except Exception:                                    # noqa: BLE001 — 연결 실패 종류를 안 가린다
@@ -447,5 +466,6 @@ def _day(now: datetime) -> str:
     return now.astimezone(KST).strftime("%Y%m%d")
 
 
-__all__ = ["Cache", "Cached", "Entry", "Feed", "MemoryStore", "POLICY", "Policy",
-           "RedisStore", "Store", "load_policy", "open_store", "split_key"]
+__all__ = ["Cache", "Cached", "CONNECT_TIMEOUT_SEC", "Entry", "Feed", "MemoryStore",
+           "OP_TIMEOUT_SEC", "POLICY", "Policy", "RedisStore", "Store", "load_policy",
+           "open_store", "split_key"]

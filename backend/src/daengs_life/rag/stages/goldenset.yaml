@@ -1,0 +1,229 @@
+# 골든셋 시드 (RAG-022) — 6단계 3파전과 8단계 검문소③이 이 파일로 채점된다.
+#
+# 라벨에는 **수집 날짜를 뺀 논리 주소**를 적는다 (RAG-022 ⑥B). 실제 chunk_id 는
+# `law-drf-api-...-act__20260820#제15조` 이지만 `__20260820` 은 수집일이라 재수집하면 바뀐다.
+# 채점기가 `__\d{8}` 를 벗겨 대조하므로 여기서는 날짜 없이 적는다.
+#
+# must  = 없으면 최종 답변이 틀리는 청크. Recall 의 분자·분모가 이것이다
+# nice  = 있으면 인용이 단단해지지만 없어도 답이 성립. 점수에 들어가지 않는다
+# unavailable = 코퍼스 밖 참조. **분모에서 뺀다** — 세 모델이 같은 코퍼스를 쓰므로 모델 차이가 아니다.
+#               적어 두는 이유는 그 법령을 수집하면 must 로 올라가야 하기 때문이다
+
+schema_version: 1
+
+corpus:                            # 이 라벨을 판정한 코퍼스 스냅샷. 다르면 채점기가 경고한다
+  collected_on: 2026-08-20         # 법령 4소스 수집일 (easylaw 는 2026-08-19)
+  chunker_version: 1
+  chunk_count: 1407
+
+items:
+
+  # ------------------------------------------------------------------ 검증질문 7 (origin: hand)
+  # RAG-004 가 원문에서 정답 위치를 확인한 문항들이다. 법제처 라벨이 없어 필수/보강은 사람 판단이고,
+  # 판단이 갈린 자리는 Q1·Q3·Q4 셋뿐이다 (RAG-022 ⑤).
+
+  - id: Q1
+    added_on: 2026-08-24
+    origin: hand
+    question: 강아지 등록 안 하면 어떻게 되나요?
+    must:
+      - law-drf-api-animal-protection-act#제101조③        # 100만원 이하 — 처벌 상한
+      - law-drf-api-animal-protection-decree#별표 4-2-라   # 실제 부과액 20/40/60. 빠지면 금액이 틀린다
+    nice:
+      - law-drf-api-animal-protection-act#제15조          # 등록 의무. "어떻게 되나요"는 처벌을 묻는다
+    unavailable: []
+
+  - id: Q2
+    added_on: 2026-08-24
+    origin: hand
+    question: 등록정보 변경 언제까지 신고해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조          # 30일 이내 — 기한 그 자체
+    nice:
+      - law-drf-api-animal-protection-decree#제11조       # 변경신고 대상·절차
+      - law-drf-api-animal-protection-act#제101조④        # 50만원 이하. "언제까지"는 처벌을 묻지 않는다
+    unavailable: []
+
+  - id: Q3
+    added_on: 2026-08-24
+    origin: hand
+    question: 목줄 안 하면 과태료 얼마인가요?
+    must:
+      - law-drf-api-animal-protection-act#제16조          # ②1호 안전조치 의무 — 인용의 근거
+      - law-drf-api-animal-protection-act#제101조④        # ④4호 50만원 이하 — 금액. 검문소① 라벨에는 없었다
+    nice:
+      - law-drf-api-animal-protection-rule#제11조         # 목줄 2미터. "얼마"를 물었지 기준을 묻지 않았다
+      - easylaw-pet-2-2-1#h2-1                           # 반려견 목줄 등 안전조치하기
+    unavailable: []
+
+  - id: Q4
+    added_on: 2026-08-24
+    origin: hand
+    question: 로트와일러인데 맹견인가요?
+    must:
+      # 법 제2조제5호가목은 "도사견, 핏불테리어, 로트와일러 **등** ... 농림축산식품부령으로 정하는 개" 라
+      # 로트와일러가 예시로만 나온다. 확정 목록은 시행규칙 제2조 제5호다 — 둘 다 있어야 인용이 성립한다
+      - law-drf-api-animal-protection-act#제2조           # 맹견의 정의 + 부령 위임
+      - law-drf-api-animal-protection-rule#제2조          # 맹견의 범위 — 확정 견종 목록
+    nice: []
+    unavailable: []
+
+  - id: Q5
+    added_on: 2026-08-24
+    origin: hand
+    question: 맹견 사육 허가 필요한가요?
+    must:
+      - law-drf-api-animal-protection-act#제18조          # 맹견사육허가 등
+    nice: []
+    unavailable: []
+
+  - id: Q6
+    added_on: 2026-08-24
+    origin: hand
+    question: 광견병 접종 의무인가요?
+    must:
+      # 광견병 접종을 직접 의무화한 단일 조문이 없다 (RAG-004). 셋이 모여야
+      # "상시 의무는 아니고 조례·명령으로 부과된다"는 답이 된다 — 하나만으로는 답이 틀린다
+      - law-drf-api-livestock-epidemic-act#제15조         # ① "필요하다고 인정하면 ... 명할 수 있다" — 명령 근거
+      - law-drf-api-animal-protection-act#제16조          # ③ 시·도 조례로 예방접종. 조 단위 청크라 Q3 과 같은 주소다
+      - law-drf-api-livestock-epidemic-act#제20조         # ④ 미접종 개 억류·살처분 — 실질 불이익
+    nice: []
+    unavailable: []
+
+  - id: Q7
+    added_on: 2026-08-24
+    origin: hand
+    question: 국립공원에 강아지 데리고 갈 수 있나요?
+    must:
+      # 이 청크 하나만 검색돼도 KPI(출처 링크 + 조항 인용)가 충족된다 — 본문에 인용이 함께 들어 있다.
+      # 인용된 자연공원법 제29조·제86조는 코퍼스에 있지만 **두 조문 어디에도 "반려동물"·"개"가 없다.**
+      # 그 단어는 미수집 시행령에만 있어 dense 로는 사실상 도달 불가다 (RAG-022 ⑤)
+      - easylaw-pet-2-2-1#note-1                         # ※ 반려동물과 정부 지정 자연공원 이용하기
+    nice:
+      - law-drf-api-natural-park-act#제29조               # ① 공원관리청의 행위 제한·금지
+      - law-drf-api-natural-park-act#제86조               # ①6호 200만원 이하 과태료
+    unavailable:
+      - ref: 자연공원법 시행령 제26조제4호
+        reason: 미수집
+
+  # ------------------------------------------------------------------ easylaw Q/A 8 (origin: easylaw)
+  # must 는 Q/A 청크 끝의 `관련 법령` 을 그대로 옮긴 것이다 — **사람 판단이 들어가지 않았다** (RAG-022 ②).
+  # nice 의 qa 청크는 질문 문장을 첫 줄에 통째로 담고 있어 세 모델이 전부 1위로 찾는다.
+  # 그래서 필수가 아니고, 실제 서빙에서도 top-k 한 칸을 먹는다는 사실만 반영한다.
+
+  - id: QA1
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 도시의 아파트도 아닌 시골 마당에서 키우려는 경우에도 동물등록을 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제8호 등록대상동물의 정의
+      - law-drf-api-animal-protection-act#제101조③        # ③4호 100만원 이하
+      - law-drf-api-animal-protection-decree#제4조        # 등록대상동물의 범위
+      - law-drf-api-animal-protection-decree#제10조       # ⑤ 등록사항 및 방법
+    nice:
+      - easylaw-pet-1-1-2-qna#qa-1
+    unavailable: []
+
+  - id: QA2
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견을 잃어버려 등록대상동물 변경 신고를 했는데 반려견을 찾았습니다. 이 경우도 신고해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조
+      - law-drf-api-animal-protection-act#제101조④        # ④1호 50만원 이하
+      - law-drf-api-animal-protection-decree#제11조       # ① 변경신고
+    nice:
+      - easylaw-pet-1-1-2-qna#qa-2
+    unavailable: []
+
+  - id: QA3
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 맹견은 책임보험이라는게 있던데요. 책임보험 가입은 선택사항 인가요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제5호 맹견의 정의
+      - law-drf-api-animal-protection-act#제23조          # ① 보험의 가입 등
+      - law-drf-api-animal-protection-act#제101조②        # ②5호 300만원 이하
+      - law-drf-api-animal-protection-rule#제2조          # 맹견의 범위
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-1
+    unavailable: []
+
+  - id: QA4
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견과 외출할 때 인식표 부착을 꼭 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제16조          # ②2호 인식표 부착
+      - law-drf-api-animal-protection-act#제101조④        # ④5호 50만원 이하
+      - law-drf-api-animal-protection-rule#제12조         # 인식표의 부착
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-2
+    unavailable: []
+
+  - id: QA5
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견 목줄 착용 외에 다른 안전조치 방법은 없나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제16조          # ②1호 안전조치
+      - law-drf-api-animal-protection-act#제101조④        # ④4호 50만원 이하
+      - law-drf-api-animal-protection-rule#제11조         # 안전조치 — 목줄·가슴줄·이동장치
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-3
+    unavailable: []
+
+  - id: QA6
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 옆집 사람이 본인이 키우는 개를 버리고 이사를 가 버렸습니다. 버려진 개가 너무 안쓰러운데 어떻게 도와줄 수 있나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제10조          # ④1호 유기 금지
+      - law-drf-api-animal-protection-act#제39조          # ①2호 신고
+      - law-drf-api-animal-protection-act#제97조⑤         # ⑤1호 300만원 이하 벌금
+      - law-drf-api-animal-protection-act#제97조②         # ②2호
+    nice:
+      - easylaw-pet-3-1-1-qna#qa-1
+    unavailable:
+      - ref: 동물보호법 시행령 제44조제1항
+        reason: 2023 전부개정 이전 조문번호 — 현행 시행령은 45개 조문이고 제4x조대는 제4조뿐이다
+      - ref: 유실물법 제1조제1항
+        reason: 미수집
+      - ref: 유실물법 제12조
+        reason: 미수집
+      - ref: 유실물법 시행령 제1조제1항
+        reason: 미수집
+
+  - id: QA7
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 주인을 잃고 배회하는 고양이를 발견했는데요. 이 고양이를 데려가서 제가 판매해도 되나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제10조          # ③ 포획·판매 금지
+      - law-drf-api-animal-protection-act#제97조①         # ①2호 3년 이하 징역
+      - law-drf-api-animal-protection-act#제97조②         # ②1호
+    nice:
+      - easylaw-pet-3-1-1-qna#qa-2
+    unavailable: []
+
+  - id: QA8
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견이 동물병원에서 치료를 받다가 죽었습니다. 사체는 어떻게 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조          # ②2호 사망 시 말소신고
+      - law-drf-api-animal-protection-act#제69조          # ①4호 동물장묘업 허가
+      - law-drf-api-animal-protection-decree#제11조       # ①8호
+      - law-drf-api-animal-protection-rule#제38조         # 4호 허가영업의 세부 범위
+    nice:
+      - easylaw-pet-4-1-1-qna#qa-2
+    unavailable:
+      - ref: 폐기물관리법 제2조제1호
+        reason: 미수집
+      - ref: 폐기물관리법 제14조제1항
+        reason: 미수집
+      - ref: 폐기물관리법 제18조제1항
+        reason: 미수집

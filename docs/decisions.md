@@ -758,3 +758,83 @@ NTP 동기화가 근본 해법이지만, 동기화가 잠깐 어긋난다고 로
   그 키 하나로 전 회원을 조작할 수 있어서, 편의를 위해 늘릴 물건이 아닙니다.
 - `app_users.name_enc` 는 비워 둡니다. 카카오 기본 제공은 닉네임이고 실명은 별도 심사
   대상인데, 닉네임은 카카오 밖에서 의미가 옅어 암호화해 보관할 이득이 적습니다.
+
+
+## D-018
+### 생활비서 RAG·실시간 산책은 `src/daengs_life/` 한 겹으로 들여온다
+
+`choiyc05/daengs-life` 의 백엔드(패키지 5개 · 테스트 36파일)를 이 레포로 옮기면서
+`backend/src/daengs_life/` 를 새로 만들고 **`crawler` · `rag` · `realtime` · `tasks` · `app`
+다섯을 형제 그대로** 그 안에 넣었습니다. `daengs_backend` 안에 섞지 않았습니다.
+
+#### 왜 한 겹인가
+
+이름 후보는 `daengs_rag` 였습니다. 그런데 옮기는 다섯 중 `realtime`(3,348줄)이
+`rag`(3,621줄)와 덩치가 같아서, 전부를 rag 라 부르면 절반을 잘못 부르는 것이 됩니다.
+
+그렇다고 `daengs_rag` + `daengs_realtime` 으로 쪼개면 **둘 다 `crawler` 에 의존한다**는
+문제가 걸립니다. `crawler` 를 어느 쪽에 둘지, 아니면 세 번째 패키지로 뺄지를 정해야 하고,
+무엇보다 **의존 방향 가드 두 개가 패키지를 가로지르게 되어 다시 설계해야 합니다.**
+그 가드는 `rag` 가 `crawler.core.{config,textutil}` 까지만, `realtime`·`tasks`·`app` 은
+`crawler.core.config` 하나만 보도록 강제하는 장치이고 — "실시간은 저장하지 않는다"(RAG-012)를
+사람의 규율이 아니라 코드로 지키는 물건입니다.
+
+한 겹으로 묶으면 다섯이 형제로 남아 **그 가드의 뜻이 그대로 보존**됩니다. import 는
+접두사 한 겹만 붙고(`from rag.stages.x` → `from daengs_life.rag.stages.x`, 33파일),
+가드는 스캔 경로와 접두사 벗기기 두 군데만 고치면 됩니다.
+
+경계선을 다시 긋는 것 — `controllers`→`routers`, `dto`→`schemas`, psycopg 직접 SQL 을
+SQLAlchemy 로 옮길지 — 은 **이 카드에서 하지 않았습니다.** 그건 이 레포의 MVC2 규약(D-011)과
+저쪽 RAG-027 을 맞추는 별도의 작업이고, 한 PR 에 같이 넣으면 리뷰가 불가능해집니다.
+
+이름을 원본 레포와 같게 둔 것은 의도입니다. 핸드오프 노트와 `RAG-`·`RT-` ADR 들이 전부
+"daengs-life" 로 적혀 있어, 그대로 두면 서류 자국이 번역 없이 이어집니다.
+
+#### 서빙은 아직 앱에 붙이지 않았습니다
+
+`daengs_backend` 는 `daengs_life` 를 **어디에서도 import 하지 않습니다.** `dev` 머지가
+곧 배포인데, 저쪽 서빙은 lifespan 에서 임베딩 모델을 CPU 로 상주시킵니다(RAG-028 ①).
+그대로 등록하면 **돌고 있는 API 프로세스가 모델 로드분(수 초 + 메모리)을 같이 뭅니다.**
+같은 프로세스에 둘지 워커·별도 서비스로 뺄지는 붙이기 전에 정할 일이라 다음 카드로 뺐습니다.
+
+#### 곁딸린 결정 넷
+
+- **ADR 접두사는 `RAG-`·`RT-` 로 갈라 둡니다.** 원래 저쪽도 `D-` 에 `docs/decisions.md` 라
+  파일명·번호가 같은데 뜻이 남남이었습니다(이 레포 `D-011`=SQLAlchemy·MVC2 / 저쪽
+  `D-011`=법령 웹 원문 경로). 저쪽이 이관 직전에 개명했고 **번호는 유지**했습니다
+  (`D-027`=`RAG-027`). ⚠ 그 이전의 저쪽 커밋 메시지와 PR 본문은 옛 `D-` 표기입니다.
+- **env 이름에 `DAENGS_` 접두사를 붙이지 않았습니다.** `rag` 는 최상단 `.env` 의
+  `POSTGRES_*` 를 **compose 값 그대로** 읽는데, 그 이름은 pgvector 컨테이너와 공유하는
+  것이라 접두사를 붙이면 DB 를 못 찾습니다. API 키도 발급 기관이 부르는 이름 그대로가
+  `docs/data-sources.md` §9 와 1:1 입니다. 두 Settings 는 `extra="ignore"` 라 한 `.env`
+  안에 섞여 있어도 서로를 무시하고, 실제로 겹치는 이름은 **하나도 없습니다**(확인함).
+  통일이 필요해지면 `AliasChoices` 로 두 이름을 다 받는 쪽이 맞습니다 — 지금 바꾸면
+  서버 `.env` 를 손으로 고쳐야 하는데 얻는 것이 이름 모양뿐입니다.
+- **`data/` 는 새로 크롤링합니다.** 통째로 복사하지 않았습니다(RAG-017). ⚠ **복사와
+  재수집을 섞으면 안 됩니다** — `chunk_id` 에 수집 날짜가 박혀 있어
+  (`crawler/core/store.py`, `easylaw-pet-1-1-1__20260819#note-1`) 오늘 받으면 모든 ID 가
+  바뀌고 옛 parquet 3종과 `documents` 행이 함께 무효가 됩니다. 골든셋 라벨은 수집 날짜를
+  뺀 논리 주소라 안전합니다(RAG-022 ⑥). `data/processed/answers/lap1.jsonl` 만 예외로
+  추적합니다 — LLM 출력이라 재현이 안 되는데 RAG-028 ⑥ 이 1랩↔2랩 비교 축으로 정했습니다.
+- **저쪽 `.gitattributes` 는 가져오지 않았습니다.** `* text=auto eol=lf` 라 이 레포 전체를
+  LF 로 재정규화해 버립니다. `tests/fixtures/.gitattributes`(`* -text`, API 응답 바이트
+  보존용)만 남겼습니다.
+
+#### 옮기면서 실제로 어긋난 것 셋
+
+전부 "개발 모드에서는 안 드러나는" 종류였습니다.
+
+1. **`PACKAGE_ROOT` 가 `parents[2]`** 였습니다. `backend/` 를 가리키던 것이 `src/daengs_life/`
+   두 겹이 끼면서 `parents[4]` 가 됐습니다. 안 고치면 `backend/.env` 를 못 찾습니다.
+2. **휠에 `daengs_life` 가 빠졌습니다.** `uv_build` 는 프로젝트 이름에서 유추한 모듈
+   하나(`daengs_backend`)만 담습니다. `[tool.uv.build-backend] module-name` 에 둘 다
+   적었습니다 — 컨테이너가 `backend/src` 를 마운트해 도는 지금은 안 드러납니다.
+3. **`test_cache.py` 가 `realtime/cache.yaml` 경로를 손으로 조립**하고 있었습니다.
+   모듈이 쥔 `CACHE_FILE` 을 쓰게 바꿨습니다.
+
+#### 한 줄 처방 하나
+
+`psycopg.connect` 에 `connect_timeout=3` 을 넣었습니다(`rag/stages/load.py`). 없으면 DB 가
+안 떠 있을 때 libpq 기본 타임아웃을 통째로 무는데, `_conn_or_skip()` 은 **실패한 뒤에야**
+skip 하므로 DB 테스트 수만큼 그 시간이 곱해져 "멈춘 것처럼" 보입니다. 저쪽 실측이
+DB 기동 35초 / 미기동 사실상 정지였고, **이 레포는 DB 가 원격(서버 PC)이라 더 자주 겪습니다.**

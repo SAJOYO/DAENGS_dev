@@ -1,6 +1,6 @@
 # 데이터 소스 조사 — 제도·문서형 RAG
 
-> 조사일: 2026-08-19 · 최종 갱신: 2026-08-20
+> 조사일: 2026-08-19 · 최종 갱신: 2026-08-27
 > 도메인: 동물등록 / 예방접종 / 목줄·입마개(맹견) / 동반 이동 / 지자체 지원 / 펫보험
 > 기계용 시드 목록: [`data/manifests/seed_sources.yaml`](../data/manifests/seed_sources.yaml) · 저장 규칙: [`data/README.md`](../data/README.md)
 
@@ -17,20 +17,21 @@
 | 파트 | 시드 | 수집 | Phase 1 즉시 가능 | 1순위 소스 |
 |---|---|---|---|---|
 | 공통 · 법령 | 4 | **4 ✅ 완료** | — | 국가법령정보 Open API (조문 단위) |
-| 동물등록 | 4 | 0 | 3 | animal.go.kr + 정부24 |
+| 동물등록 | 4 | 2 | 0 (animal.go.kr 은 robots 차단) | 정부24 + 국립축산과학원 |
 | 예방접종 | 2 | 0 | 0 (⚠️ 2건 URL 확인 필요) | 법령(광견병) + 검역본부 |
-| 목줄·입마개·맹견 | 2 | 0 | 2 | 동물보호법·시행규칙 + 보도자료 |
+| 목줄·입마개·맹견 | 2 | 1 | 1 | 동물보호법·시행규칙 + 보도자료 |
 | 동반 이동 | 4 | 0 | 0 (⚠️ 4건 URL 확인 필요) | 운송약관 원문 |
-| 지자체 지원 | 4 | 0 | 1 | 보조금24 API + 조례 전수 |
+| 지자체 지원 | 4 | 1 | 0 | 보조금24 API + 조례 전수 |
 | 펫보험 | 3 | 0 | 0 (⚠️ 3건 URL 확인 필요) | 보험사 약관 PDF |
-| **문서형 소계** | **23** | **4** | **6** | |
+| **문서형 소계** | **23** | **8** | **1** | |
 | 실시간 (저장 X) | 7 | — | — | 기상청 + 에어코리아 + 카카오 |
 | **합계** | **30** | | | |
 
-**병목 3가지**
-1. 키 미발급 — `DATA_GO_KR_KEY` 3건(+실시간 5건). `LAW_OC` 는 발급 완료 (§9)
+**병목 (2026-08-27 갱신)**
+1. ~~키 미발급~~ — **해소.** 키 5개가 전부 `.env` 에 있다 (§9). 실시간 연동 때 발급됐다
 2. ⚠️요확인 9건 — 운송약관 4 · 보험 3 · 접종 2. `easylaw-pet` 도 `verified` 였는데 실제 URL 이 죽어 있었음 → **수집 착수 전 URL 확인을 기본 절차로** (§10)
 3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(RAG-004) 확정 후
+4. **robots.txt 차단** — `animal.go.kr` 이 사이트 전체를 막는다 (§2). 새로 생긴 축이다
 
 ---
 
@@ -76,9 +77,18 @@
 
 ## 2. 동물등록 (4)
 
-- [ ] **`animal-go-kr`** — 국가동물보호정보시스템 (검역본부) · `html` · 키없음 · ✅확인 · https://www.animal.go.kr/
-- [ ] **`gov24-registration`** — 정부24 동물등록제 민원안내 · `html` · 키없음 · ✅확인 · https://www.gov.kr/portal/service/serviceInfo/PTR000051610
-- [ ] **`nias-pet`** — 국립축산과학원 반려동물 포털 · `html` · 키없음 · ✅확인 · https://www.nias.go.kr/companion/
+- [ ] 🚫 **`animal-go-kr`** — 국가동물보호정보시스템 (검역본부) · `html` · 키없음 · **robots.txt 전면 차단**
+      → 2026-08-27 정찰: `User-agent: * / Disallow: /`. 본문 품질은 좋았지만(정적 HTML, 카드뉴스도
+      `title` 속성에 전문) §12 예절 규칙상 수집하지 않는다. 받으려면 **검역본부에 허가**를 받아야 한다.
+      같은 내용이 `nias-pet`·`easylaw-pet` 에 있어 코퍼스 손실은 크지 않다. 시드에 `status: blocked` 로 남김
+- [x] **`gov24-registration`** — 정부24 동물등록 민원안내 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 2건** (신청·변경신고 / 재발급). 수수료(내장형 10,000원 · 외장형 3,000원)와
+      처리기간·구비서류가 여기에만 있다. URL 은 `/mw/AA020InfoCappView.do?CappBizCD=...` 로 교체 —
+      옛 `serviceInfo/PTR000051610` 은 200 을 주는 soft-404 였고 robots 도 그 경로는 막는다
+- [x] **`nias-pet`** — 국립축산과학원 반려동물 포털 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 7건** (행정/법률 정보 5 + 사육 기본사항 + 분실·유기).
+      진입점은 `/companion/index.do` — 시드의 `/companion/` 은 soft-404 였다.
+      조문 인용이 본문에 그대로 있어 `cites` 가 문서당 2~4건씩 나온다
 - [ ] **`data-registration-lookup`** — 동물등록 정보조회 Open API · `api` · 🔑`DATA_GO_KR_KEY` · ✅확인 · https://www.data.go.kr/data/15098913/openapi.do
 
 ### 노트
@@ -106,7 +116,9 @@
 ## 4. 목줄·입마개·맹견 (2)
 
 - [ ] **`mafra-press`** — 농식품부 보도자료 검색("맹견", "기질평가") · `html` · 키없음 · ✅확인 · https://www.mafra.go.kr/
-- [ ] **`korea-kr-policy`** — 정책브리핑 맹견사육허가제 해설 · `html` · 키없음 · ✅확인 · https://www.korea.kr/news/policyNewsView.do?newsId=148900501
+- [x] **`korea-kr-policy`** — 정책브리핑 맹견사육허가제 해설 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 3건** — 도입(2022 법 통과) · 시행 상세(2024.4.27) · 계도기간(~2025.10.26).
+      하나만 받으면 "지금 어떻게 되어 있나"에 답이 안 된다
 
 ### 노트
 법령 본문은 §1 (`law-animal-protection` / `law-drf-api`) 이 담당하고, 여기는 해설·시행 안내 계층이다.
@@ -149,7 +161,11 @@
 
 **③ 신선도 · 모니터링**
 - [ ] **`seoul-notice-api`** — 서울시 고시공고 정보 API (OA-2482) · `api` · 🔑서울 열린데이터 인증키(무료) · ✅확인 · https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do
-- [ ] **`seoul-microchip-support`** — 서울시 내장형 동물등록 지원 안내 · `html` · 키없음 · ✅확인 · https://news.seoul.go.kr/env/archives/522690 — 자부담 1만원, 서울시수의사회 협력
+- [x] **`seoul-microchip-support`** — 서울시 동물등록 안내 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 2건** — 등록 방법·수수료·과태료(544026) + 2026년 자진신고기간(569082).
+      시드의 522690 은 2023년 글이라 뺐다. **지원 금액은 해마다 바뀌므로 낡은 값이 코퍼스에 있으면
+      `/ask` 가 자신 있게 틀린 금액을 답한다** — 연 1회 사람이 확인할 것.
+      `567583`(우리동네 동물병원)은 지자체 지원 카드 몫으로 남겨 뒀다
 - [ ] 타 지자체 게시판 크롤 — 후순위, 필요 지역만. 시드 미등록
 
 ---
@@ -229,14 +245,14 @@
       확인(2026-08-20). 인증 실패 시 나오는 "IP주소 및 도메인주소를 등록해 주세요" 는 원인을 특정하지
       않는 공통 안내문이라, OC 값이 틀렸을 때도 똑같이 나온다
       → `.env` 에 `LAW_OC=발급받은ID` 한 줄. crawler 가 `.env` 를 직접 읽는다
-- [ ] **`DATA_GO_KR_KEY`** — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
-      → 막고 있는 것: `data-registration-lookup`, `benefit24-services` + 실시간 5건
-- [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시
-      → 막고 있는 것: `kakao-local` (GPS→행정동, 좌표 변환)
-- [ ] **서울 열린데이터 인증키** — data.seoul.go.kr · 무료
-      → 막고 있는 것: `seoul-notice-api`
-- [ ] **`KMA_HUB_KEY`** — apihub.kma.go.kr 가입 · 즉시 · (선택)
-      → 막고 있는 것: `kma-apihub`
+- [x] **`DATA_GO_KR_KEY`** ✅ 발급 완료 — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
+      → 이제 `data-registration-lookup` · `benefit24-services` 를 바로 칠 수 있다
+- [x] **`KAKAO_REST_KEY`** ✅ 발급 완료 — developers.kakao.com · 즉시
+- [x] **서울 열린데이터 인증키** ✅ 발급 완료 — data.seoul.go.kr · 무료 (`SEOUL_OPEN_DATA_KEY`)
+- [x] **`KMA_HUB_KEY`** ✅ 발급 완료 — apihub.kma.go.kr
+
+> **2026-08-27 확인: 다섯 개가 전부 `.env` 에 들어 있다.** 실시간(파트②) 연동 때 발급된 것으로 보이는데
+> 이 문서가 갱신되지 않아 "키 미발급"이 병목 1번으로 남아 있었다. **더 이상 막고 있는 것이 없다.**
 
 발급 후 `.env` 에 추가, `.env.example` 에는 키 이름만 반영.
 
@@ -267,12 +283,12 @@
 - [x] `easylaw-pet` (14건)
 - [x] `law-animal-protection` (3건)
 - [x] `law-livestock-epidemic` (3건)
-- [ ] `animal-go-kr`
-- [ ] `gov24-registration`
-- [ ] `nias-pet`
-- [ ] `mafra-press`
-- [ ] `korea-kr-policy`
-- [ ] `seoul-microchip-support`
+- [ ] 🚫 `animal-go-kr` — robots 차단 (§2). 허가를 받지 않는 한 Phase 1 에서 뺀다
+- [x] `gov24-registration` (2건)
+- [x] `nias-pet` (7건)
+- [ ] `mafra-press` — 검색 페이징이 필요하고 성격이 신선도 모니터링이라 Phase 3 으로 미룸
+- [x] `korea-kr-policy` (3건)
+- [x] `seoul-microchip-support` (2건)
 
 ### Phase 2 — 키 발급 후 (구조화 확장)
 - [x] `law-drf-api` — 조문 단위 XML (8건, 별표 본문 포함)
@@ -291,7 +307,10 @@
 
 ## 12. 수집 예절 / 법적 주의
 
-- robots.txt 준수, 요청 간격 1~2초(현재 크롤러 기본 1.5s), UA 에 연락처 명시
+- robots.txt 준수, 요청 간격 1~2초(현재 크롤러 기본 1.5s), UA 에 연락처 명시.
+  **판정은 표준(RFC 9309 §2.2.2)의 longest-match 다** — `Disallow: /` 아래에 `Allow: /특정경로` 를
+  적는 사이트(정부24)가 있어서, 먼저 적힌 규칙이 이기는 `urllib.robotparser` 로는 열려 있는 경로를
+  스스로 막는다. `crawler/core/fetch.py` 의 `Robots` 가 이것을 구현한다 (2026-08-27)
 - 공공저작물은 대부분 **공공누리 제1유형(출처표시)** — 페이지별 유형을 `.meta.json` 에 기록
 - 약관·항공사 안내는 사실정보 위주라 내부 RAG 활용은 무리 없으나, **서비스 표출 시 출처 표기 필수** (KPI 와도 일치)
 - 원본은 git 미추적, `.meta.json` 필수, meta 없으면 인덱싱 금지 — [RAG-008](decisions-rag.md)

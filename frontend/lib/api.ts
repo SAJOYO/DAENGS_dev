@@ -22,12 +22,30 @@ export class ApiError extends Error {
   readonly status: number;
   /** 429 일 때 서버가 알려 준 재시도까지 남은 초. */
   readonly retryAfter: number | null;
+  /**
+   * 파싱된 응답 본문 그대로. **`message` 로 요약되지 않는 정보가 여기 남습니다.**
+   *
+   * `detailOf` 는 `detail` 이 **문자열일 때만** 문구로 씁니다. 그런데 `/walk` 은
+   * 기상청 격자가 통째로 없을 때 **503 + `detail` 에 응답 본문 전체**를 싣습니다 —
+   * "200 으로 '모른다'를 주면 클라이언트가 정상 응답으로 다루므로, 대신 어느 출처가
+   * 죽었는지(`sources`) 보이게 한다"는 계약입니다 (RT-001 ⑥).
+   * 이 필드가 없으면 점검 화면에서 **정확히 그 정보가 사라집니다.**
+   *
+   * 타입은 `unknown` 입니다. 어떤 모양인지는 부르는 화면이 압니다.
+   */
+  readonly body: unknown;
 
-  constructor(status: number, message: string, retryAfter: number | null = null) {
+  constructor(
+    status: number,
+    message: string,
+    retryAfter: number | null = null,
+    body: unknown = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryAfter = retryAfter;
+    this.body = body;
   }
 }
 
@@ -113,6 +131,7 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
       response.status,
       detailOf(body, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
       retryAfterOf(response),
+      body,
     );
   }
   return body as T;

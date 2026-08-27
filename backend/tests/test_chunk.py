@@ -21,9 +21,11 @@ from daengs_life.rag.stages.goldenset import logical
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
-# 2026-08-24 실측. parsed 22건 기준
-TOTAL = 1_407
-BY_TYPE = {"article": 720, "aside": 22, "heading": 40, "para": 192, "qa": 10, "table": 423}
+# 2026-08-27 실측. parsed 36건 기준 (법령 22 + 해설 소스 4건의 14)
+# heading 40 -> 108 만 늘고 나머지가 그대로인 것이, 청커의 해설 분기를 소스 id 에서 문서 모양으로
+# 바꾼 변경(RAG-031)이 기존 코퍼스를 건드리지 않았다는 증거다.
+TOTAL = 1_475
+BY_TYPE = {"article": 720, "aside": 22, "heading": 108, "para": 192, "qa": 10, "table": 423}
 
 
 @pytest.fixture(scope="module")
@@ -82,12 +84,14 @@ def test_hard_cap(chunks: list) -> None:
 
 
 def test_soft_cap_known_only(chunks: list) -> None:
-    """RAG-004 2,000자를 넘는 것은 **아는 3건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+    """RAG-004 2,000자를 넘는 것은 **아는 4건뿐**이다 (④ — 폴백을 두지 않기로 했다).
 
     늘어나면 ④ 를 재개할 트리거다. 그래서 통과가 아니라 목록을 고정한다.
+    `h2-1` 은 nias-pet 의 분실·유기 절(2,116자)이다. 해설 소스에서 처음 나온 초과로,
+    소제목 하나에 분실신고·습득신고·유기 셋이 들어 있다. 넷째가 더 생기면 ④ 를 다시 본다.
     """
     over = sorted(c.chunk_id.split("#")[-1] for c in chunks if c.chars > chunk.SOFT_CHARS)
-    assert over == ["별표 1의10-4-r0", "별표 1의10-6-r0", "제18조②"]
+    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "제18조②"]
 
 
 # ---------------------------------------------------------------- ① 입력 범위

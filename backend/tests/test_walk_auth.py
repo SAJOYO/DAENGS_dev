@@ -1,4 +1,4 @@
-"""`GET /walk` 은 로그인한 앱 회원만 부를 수 있다 (#23).
+"""`GET /walk` 은 로그인한 앱 회원과 관리자만 부를 수 있다 (#23 · #30).
 
 **여기서 보는 것은 문(門)뿐이다.** 응답 계약과 저하 경로는 `test_walk_api.py` 가
 `daengs_life` 쪽 앱을 세워서 이미 본다 — 그 파일은 인증을 모르고, 알 필요도 없다.
@@ -72,15 +72,31 @@ def test_망가진_토큰이면_401(client: TestClient) -> None:
     assert got.status_code == 401
 
 
-def test_관리자_토큰으로는_못_부른다(client: TestClient) -> None:
-    """진짜 우리 토큰이지만 앱 회원 것이 아니다 (`core/deps.py` 의 거울상 규칙).
+def test_관리자_토큰이면_핸들러까지_간다(client: TestClient, service_reached: None) -> None:
+    """**`#23` 의 결정을 `#30` 이 뒤집은 자리다.**
 
-    403 이 아니라 401 인 것까지 고정한다 — 관리자에게 "권한이 모자라다"고 답하면
-    클라이언트가 재발급을 시도하며 도는데, 재발급해도 종류는 안 바뀐다.
+    저 카드는 여기서 401 을 못박아 뒀다 — `current_app_user` 의 거울상 규칙이었다.
+    관리자도 콘솔에서 산책 판정을 확인할 수 있어야 해서 문을 넓혔다. `#23` 이
+    틀렸던 것이 아니라 요구가 바뀐 것이다.
+
+    넓혀도 되는 이유는 `get_walk` 이 principal 을 **안 쓰기** 때문이다. 좌표만 보고
+    답하므로 관리자 `sub` 가 `app_users` 에 없어서 깨지는 자리가 없다.
     """
+    with pytest.raises(Reached):
+        client.get("/walk", params=SEOUL,
+                   headers={"Authorization": f"Bearer {_admin_token()}"})
+
+
+def test_권한_없는_role_이면_403(client: TestClient) -> None:
+    """모르는 role 은 아무 권한도 못 받는다 (`ROLE_PERMISSIONS` 의 fail-closed).
+
+    401 이 아니라 403 인 것까지 고정한다 — 종류는 맞고 권한이 모자란 것이라,
+    401 을 주면 프론트(`lib/api.ts`)가 재발급하며 돈다.
+    """
+    token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "NOT_A_ROLE")
     got = client.get("/walk", params=SEOUL,
-                     headers={"Authorization": f"Bearer {_admin_token()}"})
-    assert got.status_code == 401
+                     headers={"Authorization": f"Bearer {token}"})
+    assert got.status_code == 403
 
 
 def test_앱_회원_토큰이면_핸들러까지_간다(client: TestClient, service_reached: None) -> None:

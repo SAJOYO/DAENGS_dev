@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useAuth } from "../components/auth-provider";
 import type { Permission } from "@/lib/auth";
 
@@ -12,6 +14,14 @@ const consoleSections: Array<{
   title: string;
   description: string;
   permission: Permission;
+  /**
+   * 화면이 있는 메뉴만 가집니다. 없으면 "준비 중" 카드로 그립니다.
+   *
+   * `string` 이 아니라 **실제 경로의 리터럴**인 이유: Next 의 typedRoutes 가
+   * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
+   * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
+   */
+  href?: "/console/search";
 }> = [
   {
     title: "지식 베이스",
@@ -22,6 +32,7 @@ const consoleSections: Array<{
     title: "검색 점검",
     description: "질문을 넣어 벡터·그래프 검색 경로와 근거 문서를 비교합니다.",
     permission: "search:inspect",
+    href: "/console/search",
   },
   {
     title: "회원 · 반려견",
@@ -45,26 +56,42 @@ export default function ConsoleHome() {
         {admin?.name}님, 반갑습니다
       </h1>
       <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-        아직 화면이 없습니다. 무엇을 담을지만 적어 둔 자리입니다.
+        열려 있는 메뉴만 눌러서 들어갈 수 있습니다. 나머지는 무엇을 담을지만 적어 둔 자리입니다.
       </p>
 
       <div className="mt-10 grid gap-6 sm:grid-cols-2">
-        {visible.map((section) => (
-          <div
-            key={section.title}
-            className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-medium">{section.title}</h2>
-              <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                준비 중
-              </span>
+        {visible.map((section) => {
+          const body = (
+            <>
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="font-medium group-hover:underline">{section.title}</h2>
+                <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                  {section.href ? "열기" : "준비 중"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                {section.description}
+              </p>
+            </>
+          );
+
+          return section.href ? (
+            <Link
+              key={section.title}
+              href={section.href}
+              className="group rounded-xl border border-zinc-200 p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+            >
+              {body}
+            </Link>
+          ) : (
+            <div
+              key={section.title}
+              className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800"
+            >
+              {body}
             </div>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              {section.description}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {visible.length === 0 && (

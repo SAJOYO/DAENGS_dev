@@ -10,7 +10,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from daengs_backend.core.deps import AppPrincipal
+from daengs_backend.core.deps import Principal
+from daengs_backend.core.subject import SubjectType
+from daengs_backend.core.token import create_access_token
 from daengs_backend.routers.training import (
     get_training_rag_client,
     require_training_access,
@@ -111,21 +113,59 @@ class _FakeTrainingRagClient:
 def _gateway_client(result: TrainingChatResponse | Exception) -> TestClient:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[require_training_access] = lambda: AppPrincipal(uuid.uuid4())
+    app.dependency_overrides[require_training_access] = lambda: Principal(uuid.uuid4(), "ADMIN")
     app.dependency_overrides[get_training_rag_client] = lambda: _FakeTrainingRagClient(result)
     return TestClient(app)
 
 
-def test_gateway_requires_existing_app_access_by_default() -> None:
+def _authenticated_client() -> TestClient:
+    """**인증을 우회하지 않는** 클라이언트.
+
+    위의 `_gateway_client` 는 `require_training_access` 를 통째로 갈아끼우므로
+    인증 분기를 한 줄도 지나지 않는다. `#30` 이 그 분기를 앱 회원에서 관리자로
+    바꿨으니, 그것만은 진짜 토큰을 만들어 확인한다.
+    """
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_training_rag_client] = lambda: _FakeTrainingRagClient(
         TrainingChatResponse(decision="ANSWER", answer="answer", citations=[])
     )
+    return TestClient(app)
 
-    response = TestClient(app).post("/training/chat", json={"question": "질문"})
 
-    assert response.status_code == 401
+def _post(client: TestClient, token: str | None = None):  # noqa: ANN202
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return client.post("/training/chat", json={"question": "질문"}, headers=headers)
+
+
+def test_gateway_requires_authentication_by_default() -> None:
+    assert _post(_authenticated_client()).status_code == 401
+
+
+def test_gateway_admits_admin_with_search_inspect() -> None:
+    """`/training/chat` 은 **관리자 전용**이다 (`#30`).
+
+    `#25` 가 랜딩 시연용으로 만든 임시 게이트웨이이고 앱 클라이언트가 없다.
+    기준은 role 이 아니라 `Perm.SEARCH_INSPECT` — 콘솔의 `검색 점검` 메뉴와 같다.
+    """
+    token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "ADMIN")
+
+    assert _post(_authenticated_client(), token).status_code == 200
+
+
+def test_gateway_rejects_admin_without_search_inspect() -> None:
+    """VIEWER 는 `READ` 뿐이라 못 들어온다. 401 이 아니라 403 인 것까지 고정한다 —
+    401 을 주면 프론트(`lib/api.ts`)가 재발급하며 돈다."""
+    token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "VIEWER")
+
+    assert _post(_authenticated_client(), token).status_code == 403
+
+
+def test_gateway_rejects_app_member() -> None:
+    """`/walk` 과 달리 앱 회원은 못 부른다. 401 이다 — 재발급해도 토큰 종류는 안 바뀐다."""
+    token = create_access_token(uuid.uuid4(), SubjectType.APP)
+
+    assert _post(_authenticated_client(), token).status_code == 401
 
 
 @pytest.mark.parametrize("decision", ["ANSWER", "UNCERTAIN", "MEDICAL_REFUSAL"])

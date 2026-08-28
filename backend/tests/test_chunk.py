@@ -28,8 +28,11 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 # 늘어난 몫은 전부 `article` 과 조례 `para`(부칙)다. **보조금24도 article 이다** — 조문이
 # 아니라 필드 묶음인데, `para` 로 내면 청커가 조용히 버려서(`para: 소제목 밖`) 206청크가
 # 0이 된다. RAG-034 ④ 의 그 결정이 이 수에 들어 있다.
-TOTAL = 4_067
-BY_TYPE = {"article": 3260, "aside": 22, "heading": 108, "para": 244, "qa": 10, "table": 423}
+# 2026-08-28 갱신 — 운송약관 3건(RAG-036). parsed 284건 기준. +118 = article 85 · table 32 ·
+# heading 1. **서울교통공사가 해설이 아니라 조문형이라서** article 로 들어온다 — 시드의
+# `pdf-entry` 분류가 틀렸다는 것이 이 수에 들어 있다. heading 1 은 SRT 한 장짜리 안내다.
+TOTAL = 4_185
+BY_TYPE = {"article": 3345, "aside": 22, "heading": 109, "para": 244, "qa": 10, "table": 455}
 
 
 @pytest.fixture(scope="module")
@@ -96,9 +99,15 @@ def test_soft_cap_known_only(chunks: list) -> None:
     늘어나면 ④ 를 재개할 트리거다. 그래서 통과가 아니라 목록을 고정한다.
     `h2-1` 은 nias-pet 의 분실·유기 절(2,116자)이다. 해설 소스에서 처음 나온 초과로,
     소제목 하나에 분실신고·습득신고·유기 셋이 들어 있다. 넷째가 더 생기면 ④ 를 다시 본다.
+
+    `제3조제1항` 둘은 서울교통공사 약관의 정의 조다(1~8호선 3,640자 · 9호선 3,626자, RAG-036 ④).
+    항이 하나뿐인데 그 안에 호가 26개라 **항 단위 분할이 아무것도 못 쪼갠다.** 호로 더 쪼개는
+    것은 RAG-004 가 금지한 방향이고(금액이 항 두문에만 있다), 정의 조는 용어를 한 자리에서
+    보는 편이 낫다고 판단해 그대로 둔다. 하드 상한 7,500 안이다.
     """
     over = sorted(c.chunk_id.split("#")[-1] for c in chunks if c.chars > chunk.SOFT_CHARS)
-    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조", "제18조②"]
+    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조",
+                    "제18조②", "제3조제1항", "제3조제1항"]
 
 
 # ---------------------------------------------------------------- ① 입력 범위

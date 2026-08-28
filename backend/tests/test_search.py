@@ -85,7 +85,7 @@ def test_questions_come_from_the_goldenset() -> None:
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 12
+    assert len(items) == 15
     assert all(q for _, q, _, _ in items)
 
 

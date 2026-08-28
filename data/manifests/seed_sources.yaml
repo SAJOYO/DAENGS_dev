@@ -175,10 +175,11 @@
   method: html
   auth: none
   status: verified
-  notes: "2026-08-28 정찰: 약관 PDF 보다 반려동물 동반탑승 안내 페이지가 값이 크다 —
-    이동장 45x30x25cm, 이동장 포함 10kg 이내, 광견병 예방접종 요건이 본문에 있다. 본문 .sub_con_area.
-    약관 PDF(pageId=TK0501020000)는 JBCMS.downloadAttach(pageId, 8) 뒤에 있고
-    www.srail.or.kr/cms/attach/download.do 로 가는데 파라미터 이름을 못 찾았다 — 운송약관 카드에서 확인."
+  notes: "2026-08-28 수집 완료(RAG-036). 이동장 45x30x25cm, 이동장 포함 10kg 이내, 광견병 예방접종 요건.
+    ⚠️ .sub_con_area 의 텍스트는 제목 17자뿐이고 내용 전부가 <img alt> 안에 있다 — alt 를 안 읽으면
+    빈 문서를 적재한다. 원문에 오기가 있다(보저견=보조견). 고치지 않고 그대로 둔다.
+    첨부 다운로드는 JBCMS.downloadAttach(pageId, 순번) — 이 페이지 안내문은 (TK0402090000, 1) 이다.
+    내용은 alt 로 얻으므로 PDF 는 받지 않았다."
 
 - id: seoulmetro-terms
   domain: transport
@@ -188,9 +189,11 @@
   method: html
   auth: none
   status: verified
-  notes: "2026-08-28 정찰: PDF 가 아니라 HTML 본문이다 — pdf-entry 분류가 틀렸다.
+  notes: "2026-08-28 수집 완료(RAG-036). PDF 가 아니라 HTML 본문이고 해설이 아니라 조문형이다 —
+    장(h4)/조(h5)/항(ol.list1) 이 그대로 있어 법령과 같은 article 로 판다.
     휴대금지 물품 조항에 애완동물 예외(전용 이동장, 불쾌한 냄새 없을 것, 장애인보조견)가 그대로 있다.
-    HTTPS 가 열리지 않는다. http 로만 접근된다. 9호선 2·3단계는 menuIdx=779 로 따로 있다."
+    HTTPS 가 열리지 않는다. http 로만 접근된다.
+    9호선 2·3단계는 menuIdx=779 로 문서가 따로이고 조 번호도 다르다 (1~8호선 제35조 = 9호선 제34조)."
 
 - id: airlines-pet-pages
   domain: transport

@@ -29,10 +29,14 @@
 스크린샷은 헤드리스 크롬으로 찍는다 (`--dump-dom` 은 윈도에서 stdout 이 안 잡히지만
 `--screenshot` 은 된다. 파일이 몇 초 늦게 쓰이니 기다렸다 확인할 것):
 
-    chrome.exe --headless=new --disable-gpu --window-size=430,900       --virtual-time-budget=12000 --screenshot=<경로>       "http://localhost:3000/neo-hologram/index.html?im=cabbage"
+    chrome.exe --headless=new --disable-gpu --window-size=430,900       --virtual-time-budget=12000 --screenshot=<경로>       "https://cards.weareithero.cloud/?im=cabbage"
 
 `?im=<카드 id>` 가 이머시브를 바로 연다. 끝나면 **크롬 프로세스를 반드시 죽일 것** —
 안 죽이면 크롬 업데이트가 완료되지 않는다.
+
+위 숫자들은 도감이 이 저장소에 있던 시절에 잰 것이다. 도감은 `SAJOYO/DAENGS_CARDS` 로
+나갔고(D-025) 로컬에서 다시 재려면 그 저장소를 클론해 `py -m http.server` 로 띄운다.
+이 스크립트 자체는 도감 전용이 아니라 PNG 두 장을 비교하는 도구다 — 그래서 여기 남는다.
 
 ## 제약
 

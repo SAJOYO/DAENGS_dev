@@ -27,6 +27,10 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
 
+도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
+나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).
+랜딩(`frontend/app/page.tsx`)의 카드는 그 주소를 가리키는 외부 링크입니다.
+
 ## 명령어
 
 프론트엔드 (`frontend/`):

@@ -230,7 +230,7 @@ __marimo__/
 !.env.example
 
 # 레이어 원화 원본. 수 MB 짜리 PNG 라 git 에 두지 않습니다 — 팀 드라이브에 보관하고,
-# 여기서 뽑아낸 결과물(frontend/public/**/art/*.webp)만 커밋합니다.
+# 여기서 뽑아낸 결과물(art/*.webp)은 SAJOYO/DAENGS_CARDS 에 커밋합니다 (D-025).
 # tools/neo-hologram-layers.py 를 다시 돌리려면 원본을 이 폴더에 내려받으세요.
 tools/art-src/
 

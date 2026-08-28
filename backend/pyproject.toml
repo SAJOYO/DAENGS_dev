@@ -84,6 +84,16 @@ ml = [
     "torch>=2.6",
     "transformers<5",
 ]
+# **AGPL 이라 그룹으로 가둔다** (RAG-032 ②). PyMuPDF 는 AGPL-3.0 이고, backend 이미지에
+# 들어가면 서비스 전체가 그 조건을 안게 된다. 이 그룹은 **오프라인 파이프라인 전용**이다 —
+# `rag parse` 가 개발 PC 에서 돌 때만 필요하고 서빙(`/ask`)은 파싱 결과만 읽는다.
+#
+# ⚠️ `docker-compose.yml` 의 backend `command` 가 `uv sync --frozen --group ml` 이라
+# 이 그룹은 컨테이너에 안 깔린다. **그 줄에 `--group pdf` 를 더하면 격리가 깨진다.**
+# 확인: `docker compose exec backend uv pip list | grep -i mupdf` 가 비어야 한다.
+pdf = [
+    "pymupdf>=1.28.2",
+]
 
 # uv run pytest 로 부릅니다. 테스트는 backend/tests/ 에 둡니다
 # (패키지 안이 아니라 밖입니다 — 배포 아티팩트에 테스트가 들어가지 않게).

@@ -161,7 +161,10 @@
   method: html
   auth: none
   status: verified
-  notes: "2026-08-28 정찰: 목록은 HTML 이고 본문은 PDF 첨부다.
+  notes: "2026-08-28 수집: 목록은 HTML 이고 본문은 PDF 첨부다.
+    ⚠️ 링크 라벨의 '현행' 을 믿으면 안 된다 — 8/28 기준 '시행예정'인 1405 가 이미 시행 중이고
+    페이지가 라벨을 안 고쳤다. 라벨의 날짜를 읽어 오늘 이하 중 가장 나중 것을 고른다.
+    (원래 메모) 목록은 HTML 이고 본문은 PDF 첨부다.
     다운로드는 /downloadContentsFile.do?key=922&fileNo=NNNN — 현행 1406, 시행예정 1405, 광역철도 1245.
     fileNo 는 개정 때마다 바뀌므로 목록 페이지에서 링크 텍스트로 골라야 한다.
     페이지가 1406 을 현행으로 표시하지만 1405 가 2026-08-01 시행분이다 — 라벨을 믿지 말 것.
@@ -269,11 +272,22 @@
 - id: knia-disclosure
   domain: insurance
   org: 손해보험협회
-  title: 상품비교공시
-  url: "https://kpub.knia.or.kr/"
+  title: 상품비교공시 (반려동물보험 PB27)
+  url: "https://kpub.knia.or.kr/popup/disclosureList.do?tabType=1&tptyCode=PB27"
   method: html
   auth: none
-  status: unverified
+  status: verified
+  notes: "2026-08-28 정찰(#50): 펫보험 공시 있다 — `반려동물보험` 탭이 tptyCode=PB27 이고
+    7사 216상품이 실린다. robots 허용.
+    화면(`/popup/disclosurePopup.do`)은 표가 비어 있고 데이터는 `/popup/disclosureList.do` 가 준다
+    (GET, 같은 쿼리, 225KB). content-type 은 text/plain 인데 **JSON 이 아니라 JS 객체 리터럴**이다
+    (키 무따옴표·값 홑따옴표) — json.loads 로 안 열리니 파서를 따로 써야 한다.
+    필드: TP_NAME(상품명) P_CODE_NM(회사) TP_ETC(특이사항·자기부담금·할인조건)
+    TP_PAY_NAME/TP_PAY_REASON(담보명·지급사유) TP_W_BILL/TP_M_BILL(보험료)
+    TP_URL(회사 공시실 딥링크) SUMMARY_SEQ(상품요약서).
+    ⚠ **약관 원문은 없다** — 보장내용·지급기준·이율의 비교 수치다. insurer-terms-pdfs 를 대체하지 못하고 보완한다.
+    ⚠ **회사가 7사다** (메리츠 N01 · 삼성 N08 · 현대 N09 · KB N10 · DB N11 · 카카오페이 N70 · 농협 N71).
+    한화·롯데·캐롯은 이 공시에 없고, 대신 **카카오페이손해보험이 있다** — 시드의 9사 목록이 어긋나 있었다."
 
 - id: insurer-terms-pdfs
   domain: insurance
@@ -287,7 +301,20 @@
     예: /publication/pdf/ZPB316050_0_20240401_file1.pdf (위풍댕댕).
     robots — 삼성화재·NH농협 전면 허용, 현대해상·롯데·캐롯 일부 경로만 차단, 메리츠는 robots 가 HTML,
     DB손보·한화손보는 User-agent 줄 없는 allow-list(표준상 그룹 밖 규칙은 무시되지만 의도는 제한이다),
-    KB손보는 Yeti(네이버) 그룹만 있다. 9사 딥링크는 펫보험 카드에서."
+    KB손보는 Yeti(네이버) 그룹만 있다.
+    2026-08-28 정찰(#50) — **딥링크를 knia 가 준다** (disclosureList.do 의 TP_URL). 손으로 찾을 필요가 없었다:
+      메리츠  https://www.meritzfire.com/disclosure/product-announcement/product-list.do
+      삼성    https://www.samsungfire.com/vh/page/VH.REIF0011.do  (VH.HPIF0103.do 로 리다이렉트)
+      현대    https://www.hi.co.kr/bin/CI/ON/CION3200G.jsp        🚫 **robots 차단** (그 `일부 경로`가 이 경로다)
+      KB      http://www.kbinsure.co.kr/CG802030001.ec · /CG803000012.ec
+      DB      https://www.idbins.com/FWMAIV1534.do
+      농협    https://www.nhfire.co.kr/announce/productAnnounce/retrieveInsuranceProductsAnnounce.nhfire
+      카카오페이 https://kakaopayinscorp.co.kr/products/pet
+    ⚠ **8개 중 약관 PDF 링크를 초기 HTML 로 주는 곳이 하나도 없다.** 상품표가 전부 AJAX 이고
+    (DB 406KB·농협 362KB 는 대부분 전역 네비게이션이다), 엔드포인트가 사별로 달라 **사마다 따로 역추적**해야 한다.
+    카카오페이·메리츠는 SPA 껍데기(805B·hash 라우팅)라 정적 수집으로는 목록조차 안 나온다.
+    ✅ 시드에 적힌 삼성 PDF 는 아직 산다 — 200, 11,870,258B(11.3MB), `%PDF-`. 202p.
+    ⚠ 회사 목록 정정: 이 도메인의 판매사는 **7사**이고 한화·롯데·캐롯이 아니라 **카카오페이손보**가 들어간다 (knia PB27 기준)."
 
 # ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
 - id: kma-vilage-fcst

@@ -207,6 +207,7 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 | 목줄·입마개·맹견 | `policy` | `leash-muzzle` | `law` |
 | 동반 이동 (철도/지하철/버스/항공/검역) | `travel` | `transport-rail` 등 | `official` |
 | 지자체 지원사업 | `policy` | `subsidy` | `official` |
+| 지자체 지원 조례 (자치법규) | `policy` | `ordinance` | `law` |
 | 펫보험 | `policy` | `insurance` | `official` |
 
 > **`documents.category` 는 바꿀 필요가 없다** (2026-08-28 확인). CHECK 는 `('policy','travel','food')` 이고
@@ -216,6 +217,14 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 
 법령 원문은 한 문서가 여러 도메인을 걸친다 (동물보호법 = 등록 + 맹견). 그래서 문서 단위 subcategory는
 법령 이름으로 두고, `registration`·`leash-muzzle` 같은 세부 분류는 **조문 단위로 쪼갠 뒤**(RAG-004) 붙인다.
+
+`subsidy` 와 `ordinance` 를 나눈 이유 — 같은 지자체 지원을 다루지만 `trust_level` 이 다르다.
+조례는 지원의 **법적 근거**(`law`)이고 보조금24·공고는 **올해의 집행**(`official`)이다. 답변에서
+"근거 조례가 있다"와 "올해 이만큼 준다"는 사용자에게 다른 정보이고, 조례는 연도가 바뀌어도
+살아 있는 반면 사업 공고는 매년 죽는다. 한 값으로 묶으면 그 구분이 사라진다 (RAG-033 · RAG-034).
+
+두 소스가 실제로 같은 지자체를 양쪽에서 덮는다 — `benefit24-services` 의 상세에 있는
+`자치법규` 필드가 `ordinance-search` 로 받아 둔 조례 이름과 **같은 문자열**이다 (RAG-034 ⑥).
 
 접종 스케줄이 `care`에서 `policy`로 옮겨진 이유 — `care`를 없앤 대신 **`trust_level`이 그 구분을 대신한다.**
 `guideline`은 원래 "접종 스케줄처럼 법정 근거가 없는 문서" 구분용으로 만든 등급이라 역할이 겹쳤다.

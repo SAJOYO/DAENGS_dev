@@ -42,9 +42,36 @@ def test_search_signature_is_the_boundary() -> None:
 
     이 목록이 바뀌면 CLI·9단계·FastAPI 가 같이 바뀐다는 뜻이고, 그때는 의도한 변경인지
     확인해야 한다.
+
+    **2026-08-28 에 한 번 바뀌었다** (`query_vector` → `query`, RAG-035). 하이브리드의
+    렉시컬 축은 벡터로 못 하고 **질의 텍스트가 있어야** 해서다. 규약의 뜻인 "호출부가 검색
+    방식을 알면 안 된다"는 지켜졌다 — 호출부는 여전히 `search(encode(질문))` 이고,
+    `Query` 가 벡터와 토큰을 함께 들고 다니므로 한쪽만 넘기는 실수를 할 수 없다.
     """
     params = list(inspect.signature(search.search).parameters)
-    assert params == ["query_vector", "k", "include_supplementary", "category", "conn"]
+    assert params == ["query", "k", "include_supplementary", "category", "conn"]
+
+
+def test_query_carries_both_axes() -> None:
+    """`Query` 가 벡터와 토큰을 함께 들고 다닌다 (RAG-035).
+
+    따로 넘기게 두면 벡터만 넘기는 호출이 생기고 **렉시컬 축이 조용히 빠진다** — dense 가
+    결과를 채워 주니 검색이 되는 것처럼 보인다. `make_query` 를 통과시키는 것이 계약이다.
+    """
+    q = search.make_query("부산 동래구는 내장형 동물등록 비용을 지원해 주나요?", [0.0] * 8)
+    assert q.vector == [0.0] * 8
+    assert "동래구" in q.tsquery
+    assert " | " in q.tsquery          # AND 가 아니라 OR 다 (RAG-035)
+    assert q.text.startswith("부산 동래구")
+
+
+def test_empty_tsquery_falls_back_to_dense() -> None:
+    """토큰이 하나도 안 남는 질의(기호뿐)에서 렉시컬 축은 그냥 비어야 한다.
+
+    `to_tsquery('simple', '')` 는 예외를 내므로 SQL 이 `NULLIF` 로 0행을 만든다 —
+    질의가 통째로 실패하는 것과 dense 단독으로 도는 것은 다르다.
+    """
+    assert search.make_query("!!! ???", [0.0] * 8).tsquery == ""
 
 
 # ---------------------------------------------------------------- 골든셋에서 질문을 읽는다 (RAG-026 ②)

@@ -54,18 +54,47 @@ release/
 
 CPU 로 사진 한 장에 0.6~3초입니다 (실측 615ms). 데모에는 충분합니다.
 
-### 출시할 때 (아직 안 함 — 별도 카드)
+### 서버에 켜기 — compose 에 이미 붙어 있습니다 (D-024)
 
-가중치는 **코드와 따로** 갑니다. `.env` 와 암호화 키를 다루는 방식 그대로입니다.
+`docker-compose.yml` 에 `skin-screening` 서비스가, `nginx/default.conf` 에
+`listen 8001` 블록이 **이미 들어가 있습니다.** 다만 **꺼져 있습니다** —
+profile 뒤에 있고 nginx 포트도 안 열려 있습니다.
+
+가중치는 **코드와 따로** 갑니다 (`.env`·암호화 키와 같은 취급).
 
 ```
 git (이 저장소)   코드만 — serve.py · src/ · demo/
-서버 PC 디스크     C:\deploy\daengs\models\release\   ← 한 번 두면 재배포해도 안 지워짐
+서버 PC 디스크     C:\deploy\daengs\modelselease\   ← 배포 폴더 밖. 재배포해도 안 지워짐
 개발 PC           필요한 사람만 팀 채널로 받아 --release 로 지정
 ```
 
-붙일 때 정해야 할 것: 서버 PC 의 GPU 유무(없으면 CPU), torch 이미지가 몇 GB 라
-`backend` 컨테이너와 **분리된 compose 서비스**로 띄워야 한다는 것, nginx 경로.
+켜는 순서 (서버 PC 에서):
+
+```powershell
+# 1) 가중치를 배포 폴더 **밖**에 둡니다
+#    release/stage1_threshold.json + release/checkpoints/*/best.pt
+
+# 2) 최상단 .env
+#    SCREENING_RELEASE_DIR=C:\deploy\daengs\modelselease
+
+# 3) docker-compose.yml 의 nginx ports 에 한 줄 추가
+#      - "8001:8001"
+#    ⚠️ 이때 nginx 컨테이너가 재생성되면서 80·8000 이 몇 초 끊깁니다
+
+# 4) 켜기
+docker compose --profile screening up -d
+docker compose ps
+curl http://localhost:8001/healthz     # {"ok":true,"mock":false,...}
+```
+
+⚠️ **8001 을 여는 순간 인증 없는 업로드 엔드포인트가 열립니다.** `serve.py` 는
+데모 서버라 인증·레이트 리밋·HTTPS 가 없습니다. 방화벽으로 사내망만 열거나,
+공개하기 전에 인증을 붙이는 별도 카드가 필요합니다.
+
+첫 기동은 `uv sync --extra model` 이 torch 를 받느라 몇 분 걸립니다 (두 번째부터는
+`uv-cache` 볼륨 덕에 빠릅니다). 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의
+`pytorch-cpu` 인덱스가 그것이고, 없으면 GPU 를 안 쓰는데 NVIDIA 라이브러리를 수 GB
+받습니다.
 
 ---
 

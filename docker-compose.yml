@@ -202,6 +202,53 @@ services:
       retries: 5
       start_period: 10s
 
+  # 반려견 피부 병변 스크리닝 (D-024). **기본 up -d 에서는 안 뜹니다** —
+  # pgadmin 의 profiles: ["tools"] 와 같은 방식입니다.
+  #
+  #   docker compose --profile screening up -d
+  #
+  # 켜기 전에 서버 디스크에 가중치를 두고 최상단 .env 에 SCREENING_RELEASE_DIR 을
+  # 지정하세요. 없으면 컨테이너가 재시작 루프에 빠집니다 (다른 서비스는 멀쩡합니다).
+  # 절차는 skin-screening/README.md.
+  skin-screening:
+    profiles: ["screening"]
+    # backend 와 같은 uv 베이스 이미지를 씁니다 (docker/uv/Dockerfile).
+    # python 3.12 라 skin-screening 의 requires-python 과 맞습니다.
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-skin-screening
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
+    # nginx 의 8001 을 열어야 실제로 도달합니다 — 지금은 안 열려 있습니다.
+    environment:
+      # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+    volumes:
+      # 폴더째가 아니라 필요한 것만 (D-004).
+      - ./skin-screening/pyproject.toml:/app/pyproject.toml:ro
+      - ./skin-screening/uv.lock:/app/uv.lock:ro
+      - ./skin-screening/serve.py:/app/serve.py:ro
+      - ./skin-screening/src:/app/src:ro
+      - ./skin-screening/demo:/app/demo:ro
+      - ./skin-screening/tools:/app/tools:ro
+      # ★ 가중치. **저장소에 없습니다** — best.pt 가 163MB / 189MB 라 GitHub 의
+      #   파일당 100MB 리밋에 걸립니다. 서버 디스크에 두고 여기로 물립니다.
+      #   배포 폴더(releases/<커밋해시>) **바깥**이라 재배포해도 안 지워집니다.
+      #   추론 경로에 파일 쓰기가 없어서 :ro 로 충분합니다.
+      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
+      - screening-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    # backend 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와 어긋나면
+    # 여기서 멈춥니다. --extra model 이 torch·torchvision·timm 을 받고,
+    # 리눅스에서는 pyproject 의 pytorch-cpu 인덱스가 CPU 판을 집습니다.
+    command: >
+      sh -c "uv sync --frozen --extra model &&
+             exec uv run --no-sync python serve.py
+                  --release /models/release --host 0.0.0.0 --port 8000"
+
   # GUI가 필요할 때만: docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:9.17
@@ -231,5 +278,6 @@ volumes:
   pgadmin-data:
   redis-data:
   backend-venv:
+  screening-venv:
   uv-cache:
   hf-cache:

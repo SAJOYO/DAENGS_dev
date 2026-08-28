@@ -31,6 +31,25 @@ model = [
     "timm>=1.0.9",               # 백본 팩토리 (effnetv2_s / convnextv2 / resnet50)
 ]
 
+# ─────────────────────────────────────────────────────────────────
+# torch 를 어디서 받을지. backend/pyproject.toml 과 같은 장치입니다.
+#
+# ⚠️ **리눅스를 안 적으면 CUDA 판이 옵니다.** PyPI 의 기본 torch 휠은 NVIDIA
+#    런타임을 동봉하고 있어서, 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받습니다.
+#    compose 의 skin-screening 이 리눅스라 여기가 실제로 물리는 자리입니다.
+#
+# Windows(개발 PC)는 마커에 안 걸려 지금처럼 PyPI 기본에서 받습니다.
+# explicit = true 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스를 씁니다.
+# ─────────────────────────────────────────────────────────────────
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [tool.uv]
 # src/ 는 `from src import agent` 로 **경로에서 직접** 임포트합니다 (serve.py 가
 # 폴더 루트를 sys.path 에 넣습니다). 설치 대상 패키지가 아니라 빌드하지 않습니다.

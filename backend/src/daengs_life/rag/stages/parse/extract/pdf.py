@@ -36,6 +36,7 @@ PDF 에 공백 글리프가 없는, 한국어 PDF 의 흔한 성질이다.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 from daengs_life.rag.core.ir import AnyElement, Article, Heading, Para, Table
@@ -81,6 +82,20 @@ def _section(no: str, branch: str | None, terms: str | None) -> str:
     return f"{terms} {base}" if terms else base
 
 
+def _same_document(terms_line: str, title: str) -> bool:
+    """첫 약관 이름이 문서 제목과 같은 것을 가리키는가.
+
+    공백을 지우고, 뒤에 붙은 `보통약관`/`약관` 을 떼고 비교한다. 뗀 뒤가 비면(`보통약관`
+    한 단어) 그것도 문서 자신을 가리키는 것으로 본다.
+    """
+    a = terms_line.replace(" ", "")
+    b = title.replace(" ", "")
+    if a == b:
+        return True
+    core = re.sub(r"(?:보통)?약관$", "", a)
+    return not core or core in b
+
+
 def _valid_table(rows: list[list[str | None]]) -> bool:
     """RAG-032 의 유효표 판정. 레이아웃 박스를 표로 오인하지 않기 위한 것."""
     if len(rows) < 2:
@@ -94,13 +109,38 @@ def _valid_table(rows: list[list[str | None]]) -> bool:
     return empty < len(cells) / 2
 
 
-def elements(doc, doc_id: str, *, title: str = "") -> Parsed:
+def elements(doc, doc_id: str, *, title: str = "",
+             pages: range | None = None,
+             terms_re: re.Pattern[str] | None = None) -> Parsed:
     """PyMuPDF `Document` → 요소 목록. **원문 순서 그대로.**
 
     `title` 은 문서 제목이다. 합본의 **첫 약관**은 보통 이것과 같아서, 그때는 섹션에 약관
     이름을 안 붙인다 — `여객운송약관 제1조` 대신 `제1조` 가 되어 인용이 짧아진다.
+
+    `pages` 는 **읽을 페이지 범위**다 (0-based). `None` 이면 전부.
+    `terms_re` 는 **약관 경계 정규식**을 갈아 끼운다. `None` 이면 `_RE_TERMS`.
+
+    둘 다 선택 인자이고 기본값이 종전 동작이라 **코레일 쪽은 아무것도 안 바뀐다.** 넣은
+    이유는 보험약관이다 (RAG-041):
+
+      **⑤ 보험약관 PDF 는 한 파일에 성격이 다른 세 덩어리가 들어 있다.** 앞에 안내 책자
+      (`약관이용 Guide Book`), 가운데 약관 본문, 뒤에 **관계법령 전문**(신용정보법·
+      국민건강보험법·상법 …)이 붙는다. 뒤엣것을 그대로 읽으면 `제32조` 가 **"펫보험 약관
+      제32조"** 로 인용되는데 실제로는 신용정보법이다 — 분량이 아니라 **틀린 인용**을 만든다.
+      앞엣것은 조 **참조**가 표로 실려 있어(`제8조(보험금의 지급절차) … p.35`) 그 참조가
+      조 머리로 잡히고 뒤따르는 안내문을 통째로 삼킨다 (실측 11,239자, 하드 상한 초과).
+      경계 마커가 **보험사 문서의 성질**이라 포맷 층이 아니라 사이트 층이 안다. 그래서
+      여기는 "어디를 읽을지" 만 받는다.
+
+      **⑥ 보험 특별약관 이름에는 공백이 있다.** `_RE_TERMS` 는 공백 없는 4~30자를 받는데
+      (코레일 `정기승차권이용에관한약관`), 보험은 `반려묘 수술비(치과및구강질환포함)
+      확대보장(재가입형) 특별약관` 처럼 공백이 있고 43자다. 그대로 두면 **경계를 0개 잡고**
+      조 번호가 문서 안에서 24~48번 재시작한 채 chunk_id 가 겹친다. 정규식을 여기서 넓히지
+      않고 갈아 끼우게 한 이유는 **코레일이 그 넓은 규칙을 지나가지 않게** 하기 위해서다.
     """
     out = Parsed()
+    seen_section: Counter[str] = Counter()   # 섹션 이름 → 몇 번째인지 (id 유일성 보장)
+    seen_table: Counter[str] = Counter()     # 섹션 → 그 안의 표 번호 (쪽을 넘어가며 이어 센다)
     terms: str | None = None          # 지금 읽고 있는 약관 (첫 약관이면 None)
     seen_terms = 0
     cur: Article | None = None
@@ -136,7 +176,13 @@ def elements(doc, doc_id: str, *, title: str = "") -> Parsed:
             out.elements.append(cur.model_copy(update={"head": head, "chars": len(head)}))
         cur, body = None, []
 
-    for pno, page in enumerate(doc):
+    terms_rx = terms_re or _RE_TERMS
+    # `pages` 가 없으면 **문서를 그대로 순회한다** — `doc.page_count` 를 거치지 않는 이유는
+    # 테스트가 페이지 목록만 흉내 낸 가짜 문서를 넘기기 때문이다 (`test_pdf_extract`).
+    # 범위를 받았을 때만 인덱스로 집는다.
+    numbered = enumerate(doc) if pages is None else ((i, doc[i]) for i in pages)
+
+    for pno, page in numbered:
         text = page.get_text()
         if not text.strip():
             # ④ 스캔 페이지 후보. 멈추지 않고 남긴다 — 나머지 쪽은 쓸 수 있다
@@ -156,23 +202,43 @@ def elements(doc, doc_id: str, *, title: str = "") -> Parsed:
                 continue
 
             # 부칙을 읽는 중이면 조도 본문이 아니라 부칙 줄이다
-            if add_lines and not _RE_TERMS.match(line):
+            if add_lines and not terms_rx.match(line):
                 add_lines.append(line)
                 continue
 
             # 약관 경계 — 조 번호가 여기서 재시작한다
-            if _RE_TERMS.match(line) and not _RE_ARTICLE.match(line):
+            if terms_rx.match(line) and not _RE_ARTICLE.match(line):
                 flush()
                 flush_add()
                 seen_terms += 1
-                # 첫 약관이 문서 제목과 같으면 접두어를 안 붙인다 (인용이 짧아진다)
-                terms = None if (seen_terms == 1 and line.replace(" ", "") == title.replace(" ", "")) else line
+                # 첫 약관이 문서 제목과 **겹치면** 접두어를 안 붙인다 (인용이 짧아진다).
+                #
+                # 코레일은 둘이 똑같았지만(`여객운송약관`), 보험은 제목이 상품명이고 약관 이름은
+                # 그 상품명 뒤에 `보통약관` 이 붙은 꼴이라 **같지 않은데 겹친다** —
+                #   제목 `무배당 삼성화재 다이렉트 착한펫보험(강아지)(2605.1)(재가입계약용)`
+                #   약관 `착한펫보험(강아지)(2605.1)(재가입계약용)보통약관`
+                # 그대로 두면 인용이 `…(재가입계약용) …(재가입계약용)보통약관 제25조` 가 되어
+                # 상품명이 두 번 나온다. **답변에 실리는 문자열이라 눈에 띈다.**
+                terms = None if (seen_terms == 1 and _same_document(line, title)) else line
                 out.elements.append(Heading(id=f"{doc_id}#{line}", level=1, text=line, section=line))
                 continue
 
             if m := _RE_ARTICLE.match(line):
                 flush()
                 section = _section(m.group(1), m.group(2), terms)
+                # **같은 섹션이 문서 안에서 되풀이되면 순번을 붙인다.**
+                #
+                # 조 번호는 약관이 바뀔 때마다 재시작하고, 그 경계를 100% 잡는 것은 PDF 에서
+                # 불가능에 가깝다 — 줄바꿈이 문장을 아무 데서나 끊어서 `…때에는 특별약관` 같은
+                # **본문 조각이 약관 이름처럼 보인다** (RAG-041 ⑤). 경계를 놓치면 두 약관의
+                # 제1조가 같은 id 를 갖는데, **그 중복은 조용하다** — 청크는 둘 다 남고
+                # 골든셋 라벨만 어느 쪽을 뜻하는지 잃는다 (RAG-019 · RAG-022 ⑥B).
+                #
+                # 그래서 경계 검출과 **무관하게** 유일성을 보장한다. 코레일은 약관 이름 접두어로
+                # 이미 겹침이 없어 이 순번이 붙지 않는다 — 붙는다면 그건 경계를 놓쳤다는 신호다.
+                seen_section[section] += 1
+                nth = seen_section[section]
+                section = section if nth == 1 else f"{section}-{nth}"
                 cur = Article(id=f"{doc_id}#{section}", section=section,
                               title=_clean(m.group(3) or "") or None, head=line,
                               paragraphs=[], chars=len(line))
@@ -191,16 +257,20 @@ def elements(doc, doc_id: str, *, title: str = "") -> Parsed:
             # 조 밖의 줄(표지·목차·쪽 번호)은 버린다. 남기면 본문에 쪽 번호가 섞인다
 
         # 표는 줄 흐름과 별개로 페이지 단위로 뽑는다
-        for i, tbl in enumerate(page.find_tables().tables, 1):
+        for tbl in page.find_tables().tables:
             rows = [[(c or "").strip() for c in r] for r in tbl.extract()]
             if not _valid_table(rows):
                 out.counts["표: 무효(레이아웃 박스)"] = out.counts.get("표: 무효(레이아웃 박스)", 0) + 1
                 continue
             sec = cur.section if cur is not None else f"p{pno + 1}"
+            # **번호는 조 단위로 이어 센다.** 페이지마다 1부터 세면 **한 조가 두 쪽에 걸칠 때**
+            # 두 표가 똑같이 `표1` 이 된다 (실측: `제도성 특별약관 제4조-4-표1` 두 번).
+            # 조가 짧은 문서에서는 안 드러나던 자리다.
+            seen_table[sec] += 1
             # `Table.title` 은 필수다. 조 제목이 없으면 섹션을 그대로 쓴다 —
             # 비워 두면 청커가 인용 문자열을 못 만든다
             out.elements.append(Table(
-                id=f"{doc_id}#{sec}-표{i}", title=(cur.title if cur else None) or sec,
+                id=f"{doc_id}#{sec}-표{seen_table[sec]}", title=(cur.title if cur else None) or sec,
                 section=sec, header=rows[0], rows=rows[1:]))
 
     flush()

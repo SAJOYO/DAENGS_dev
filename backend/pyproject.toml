@@ -17,6 +17,7 @@ dependencies = [
     "google-genai>=2.18.1",
     "httpx>=0.28.1",
     "joserfc>=1.7.4",
+    "kiwipiepy>=0.23.2",
     "lxml>=6.1.2",
     "pgvector>=0.3",
     "psycopg[binary]>=3.2",

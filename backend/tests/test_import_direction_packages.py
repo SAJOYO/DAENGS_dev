@@ -39,7 +39,10 @@ ALLOWED: dict[str, set[str]] = {
     # 경로 탐색(RAG-018·RAG-014) + 「법령」 조항 인용 파싱. 후자는 의도된 확장이다 —
     # `cites()` 에 허위 인용 19건을 잡아낸 규칙이 들어 있어 복사하면 그 지식이 갈라진다
     # (`rag/README.md` 설계 메모).
-    "rag": {"crawler.core.config", "crawler.core.textutil"},
+    # `jsobject` 도 같은 종류의 확장이다 — 손해보험협회 공시가 JSON 이 아니라 JS 객체
+    # 리터럴로 오는데, 그 리더를 파서 쪽에 복사하면 **따옴표·이스케이프 처리가 두 벌**이 되고
+    # 한쪽만 고쳐지는 날 수집과 파싱이 서로 다른 것을 읽는다.
+    "rag": {"crawler.core.config", "crawler.core.textutil", "crawler.core.jsobject"},
     # 경로 탐색 하나뿐 (RT-001 ①-2). `textutil` 은 한국 법령 문서용이라 realtime 이 쓸 일이
     # 없고, 목록이 갈려 있어야 그게 새로 들어오는 날 여기서 잡힌다.
     "realtime": {"crawler.core.config"},

@@ -14,7 +14,7 @@ data/
 │   ├── leash-muzzle/ # 목줄·입마개·맹견
 │   ├── transport/    # 대중교통·항공 동반 이동
 │   ├── subsidy/      # 지자체 지원사업 (공고문·조례·보조금24)
-│   └── insurance/    # 펫보험 약관
+│   └── insurance/    # 펫보험 — 협회 비교공시(knia) + 보험사 약관
 ├── processed/        # 가공 산출물 — 단계별 분리
 │   ├── parsed/       #   구조 추출 (jsonl) — 원본 1건 = 1파일, 1행 헤더 + 요소 (RAG-019)
 │   ├── chunks/       #   청킹 (jsonl) — DB 적재 입력

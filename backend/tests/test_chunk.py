@@ -31,8 +31,11 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 # 2026-08-28 갱신 — 코레일 약관 PDF 2건 추가 (RAG-036). parsed 283건 기준.
 # article +72 · para +22(부칙) · table +22. **표가 늘어난 것이 PDF 소스의 표시다** —
 # 법령 별표와 달리 `find_tables()` 로 뽑은 것이고, 유효표 판정을 통과한 것만 들어 있다.
-TOTAL = 4_183
-BY_TYPE = {"article": 3332, "aside": 22, "heading": 108, "para": 266, "qa": 10, "table": 445}
+# 2026-08-28 갱신 — 손해보험협회 반려동물보험 공시 7건 (RAG-038). parsed 290건 기준.
+# article +48 · table +62. **상품 하나가 요소 둘**이라 그렇다 — 개요(article)와 보장내용(table).
+# 표 48개가 청크 62개가 된 것은 큰 표만 `헤더: 값` 으로 갈렸다는 뜻이다 (RAG-004 ③(나)).
+TOTAL = 4_293
+BY_TYPE = {"article": 3380, "aside": 22, "heading": 108, "para": 266, "qa": 10, "table": 507}
 
 
 @pytest.fixture(scope="module")

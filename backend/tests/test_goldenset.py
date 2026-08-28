@@ -20,8 +20,8 @@ from daengs_life.rag.core import io
 from daengs_life.rag.stages import goldenset
 
 # 2026-08-24 실측. 라벨을 고치면 여기서 먼저 깨지도록 박아 둔다.
-# 2026-08-27 갱신 — 지자체 지원 3문항(S1~S3) 추가 (RAG-031 ⑥). hand 7 → 10, 필수 43 → 46.
-# 2026-08-28 갱신 — 보조금24 2문항(S4·S5) 추가 (RAG-032). hand 10 → 12, 필수 46 → 49.
+# 2026-08-27 갱신 — 지자체 지원 3문항(S1~S3) 추가 (RAG-033 ⑥). hand 7 → 10, 필수 43 → 46.
+# 2026-08-28 갱신 — 보조금24 2문항(S4·S5) 추가 (RAG-034). hand 10 → 12, 필수 46 → 49.
 ITEMS = 20
 MUST_TOTAL = 49
 BY_ORIGIN = {"hand": 12, "easylaw": 8}

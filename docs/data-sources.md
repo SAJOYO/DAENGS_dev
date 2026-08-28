@@ -17,23 +17,27 @@
 | 파트 | 시드 | 수집 | Phase 1 즉시 가능 | 1순위 소스 |
 |---|---|---|---|---|
 | 공통 · 법령 | 4 | **4 ✅ 완료** | — | 국가법령정보 Open API (조문 단위) |
-| 동물등록 | 4 | 0 | 3 | animal.go.kr + 정부24 |
-| 예방접종 | 2 | 0 | 0 (⚠️ 2건 URL 확인 필요) | 법령(광견병) + 검역본부 |
-| 목줄·입마개·맹견 | 2 | 0 | 2 | 동물보호법·시행규칙 + 보도자료 |
-| 동반 이동 | 4 | 0 | 0 (⚠️ 4건 URL 확인 필요) | 운송약관 원문 |
+| 동물등록 | 4 | 2 | 0 (animal.go.kr 은 robots 차단) | 정부24 + 국립축산과학원 |
+| 예방접종 | 2 | 0 | **0 (2건 다 막힘 — §3)** | 법령(광견병). 권장 스케줄은 `nias-pet` 로 대체 |
+| 목줄·입마개·맹견 | 2 | 1 | 1 | 동물보호법·시행규칙 + 보도자료 |
+| 동반 이동 | 4 | 0 | **3** (`srt`·`seoulmetro` 는 HTML, 항공사 5곳) | SRT 반려동물 안내 + 서울교통공사 약관 |
 | 지자체 지원 | 4 | **2** (조례 208 + 보조금24 37) | 0 | 보조금24 API + 조례 전수 |
-| 펫보험 | 3 | 0 | 0 (⚠️ 3건 URL 확인 필요) | 보험사 약관 PDF |
-| **문서형 소계** | **23** | **4** | **6** | |
+| 펫보험 | 3 | 0 | 1 (보험사 공시실) | 보험사 약관 PDF |
+| **문서형 소계** | **23** | **9** | **5** | |
 | 실시간 (저장 X) | 7 | — | — | 기상청 + 에어코리아 + 카카오 |
 | **합계** | **30** | | | |
 
-**병목 3가지**
-1. ~~키 미발급~~ → **키는 전부 발급됐다.** 남은 것은 data.go.kr 의 **API 별 "활용신청"** 이다 (§9).
-   `LAW_OC` 는 target 전부가 한 키로 열리는 반면 `DATA_GO_KR_KEY` 는 **데이터셋마다 따로 신청**해야
-   한다 — 키가 살아 있어도 신청 안 한 API 는 `401 -4` 다. `benefit24-services`(15113968)는
-   2026-08-28 에 신청을 마쳤고, `data-registration-lookup`(15098913)만 남았다
+**병목 (2026-08-27 갱신)**
+1. ~~키 미발급~~ — **해소.** 키 5개가 전부 `.env` 에 있다 (§9). 실시간 연동 때 발급됐다.
+   ⚠️ 다만 **`DATA_GO_KR_KEY` 는 키가 있어도 API 마다 "활용신청"을 따로** 해야 한다 —
+   안 한 API 는 `401 -4` 이고 메시지가 "인증키" 라 키가 죽은 것처럼 보인다 (§9).
+   `benefit24-services` 는 2026-08-28 에 신청을 마쳤고 `data-registration-lookup` 만 남았다
 2. ⚠️요확인 9건 — 운송약관 4 · 보험 3 · 접종 2. `easylaw-pet` 도 `verified` 였는데 실제 URL 이 죽어 있었음 → **수집 착수 전 URL 확인을 기본 절차로** (§10)
-3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(RAG-004) 확정 후
+3. ~~PDF 파서 미정~~ — **해소.** `PyMuPDF` 로 확정 (RAG-034). 그리고 **`pdf-entry` 가 7건이 아니다** —
+   정찰 결과 `seoulmetro` 는 HTML 이고 `srt` 도 핵심 정보가 HTML 이라, PDF 파서를 기다리는 것은
+   코레일과 보험약관뿐이다
+4. **robots.txt 차단** — `animal.go.kr`(§2) · `qia.go.kr`(§3) · `e-insmarket`(§7). 검역본부 두 사이트는
+   같은 기관이라 허가를 받으려면 한 번에 물어야 한다. **항공사는 9곳 중 5곳만 열려 있다** (§5)
 
 ---
 
@@ -79,9 +83,18 @@
 
 ## 2. 동물등록 (4)
 
-- [ ] **`animal-go-kr`** — 국가동물보호정보시스템 (검역본부) · `html` · 키없음 · ✅확인 · https://www.animal.go.kr/
-- [ ] **`gov24-registration`** — 정부24 동물등록제 민원안내 · `html` · 키없음 · ✅확인 · https://www.gov.kr/portal/service/serviceInfo/PTR000051610
-- [ ] **`nias-pet`** — 국립축산과학원 반려동물 포털 · `html` · 키없음 · ✅확인 · https://www.nias.go.kr/companion/
+- [ ] 🚫 **`animal-go-kr`** — 국가동물보호정보시스템 (검역본부) · `html` · 키없음 · **robots.txt 전면 차단**
+      → 2026-08-27 정찰: `User-agent: * / Disallow: /`. 본문 품질은 좋았지만(정적 HTML, 카드뉴스도
+      `title` 속성에 전문) §12 예절 규칙상 수집하지 않는다. 받으려면 **검역본부에 허가**를 받아야 한다.
+      같은 내용이 `nias-pet`·`easylaw-pet` 에 있어 코퍼스 손실은 크지 않다. 시드에 `status: blocked` 로 남김
+- [x] **`gov24-registration`** — 정부24 동물등록 민원안내 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 2건** (신청·변경신고 / 재발급). 수수료(내장형 10,000원 · 외장형 3,000원)와
+      처리기간·구비서류가 여기에만 있다. URL 은 `/mw/AA020InfoCappView.do?CappBizCD=...` 로 교체 —
+      옛 `serviceInfo/PTR000051610` 은 200 을 주는 soft-404 였고 robots 도 그 경로는 막는다
+- [x] **`nias-pet`** — 국립축산과학원 반려동물 포털 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 7건** (행정/법률 정보 5 + 사육 기본사항 + 분실·유기).
+      진입점은 `/companion/index.do` — 시드의 `/companion/` 은 soft-404 였다.
+      조문 인용이 본문에 그대로 있어 `cites` 가 문서당 2~4건씩 나온다
 - [ ] **`data-registration-lookup`** — 동물등록 정보조회 Open API · `api` · 🔑`DATA_GO_KR_KEY` · ✅확인 · https://www.data.go.kr/data/15098913/openapi.do
 
 ### 노트
@@ -91,8 +104,14 @@
 
 ## 3. 예방접종 (2)
 
-- [ ] **`qia-rabies`** — 농림축산검역본부 동물방역 안내 · `html` · 키없음 · ⚠️요확인 · qia.go.kr
-- [ ] **`kvma-guideline`** — 대한수의사회 접종 가이드라인 · `html` · 키없음 · ⚠️요확인 · kvma.or.kr
+- [ ] 🚫 **`qia-rabies`** — 농림축산검역본부 동물방역 안내 · **robots.txt 전면 차단** (2026-08-28 확인)
+      → `animal-go-kr`(§2)과 **같은 기관·같은 정책**이다. 수집 허가는 두 소스를 묶어서 요청한다
+- [ ] ❓ **`kvma-guideline`** — 대한수의사회 · 사이트는 살아 있으나 **접종 스케줄 가이드라인 문서를 찾지 못함**
+      → 있는 것은 보도자료·검역 안내·방문진료/길고양이 중성화 가이드라인이다
+
+> **이 도메인은 두 소스가 다 막혔다.** 법정 의무(광견병)는 가축전염병 예방법이 이미 커버하고(§1),
+> 권장 스케줄 계층은 **`nias-pet` 의 건강관리 묶음**(이미 수집 가능)이나 WSAVA 로 대체한다.
+> 새 소스를 찾기보다 이미 열려 있는 것을 쓰는 편이 싸다 (RAG-034 ④).
 - [ ] (참고) WSAVA 백신 가이드라인 — 영문, 종합백신(DHPPL)·코로나·켄넬코프 스케줄. 시드 미등록
 
 ### 노트 — trust_level 구분이 이 도메인의 핵심
@@ -109,7 +128,9 @@
 ## 4. 목줄·입마개·맹견 (2)
 
 - [ ] **`mafra-press`** — 농식품부 보도자료 검색("맹견", "기질평가") · `html` · 키없음 · ✅확인 · https://www.mafra.go.kr/
-- [ ] **`korea-kr-policy`** — 정책브리핑 맹견사육허가제 해설 · `html` · 키없음 · ✅확인 · https://www.korea.kr/news/policyNewsView.do?newsId=148900501
+- [x] **`korea-kr-policy`** — 정책브리핑 맹견사육허가제 해설 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 3건** — 도입(2022 법 통과) · 시행 상세(2024.4.27) · 계도기간(~2025.10.26).
+      하나만 받으면 "지금 어떻게 되어 있나"에 답이 안 된다
 
 ### 노트
 법령 본문은 §1 (`law-animal-protection` / `law-drf-api`) 이 담당하고, 여기는 해설·시행 안내 계층이다.
@@ -123,10 +144,21 @@
 
 > 전부 키 불필요. **운송약관 PDF/HTML** 이 1차 소스, `easylaw-pet`(§1) 이 종합 해설.
 
-- [ ] **`korail-terms`** — 코레일 여객운송약관 · `pdf-entry` · ⚠️요확인 · letskorail.com — 케이지 격납 조건부 허용
-- [ ] **`srt-terms`** — 에스알 여객운송약관 · `pdf-entry` · ⚠️요확인 · etk.srail.kr
-- [ ] **`seoulmetro-terms`** — 서울교통공사 여객운송약관 · `pdf-entry` · ⚠️요확인 — 용기 격납 + 불쾌감 없을 것. 부산·대구·인천 등 지역 공사도 동일 패턴
-- [ ] **`airlines-pet-pages`** — 항공사 9곳 반려동물 안내 · `html` · ⚠️요확인 — 대한항공·아시아나·제주항공·진에어·티웨이·에어부산·에어서울·이스타·에어프레미아. 기내반입/위탁 기준(케이지 포함 무게), 요금
+- [ ] **`korail-terms`** — 코레일 여객운송약관 · ✅확인 (2026-08-28) · https://info.korail.com/info/contents.do?key=922
+      → 목록은 HTML, 본문은 PDF 첨부(`/downloadContentsFile.do?key=922&fileNo=NNNN`). 현행 1406 · 시행예정 1405 · 광역철도 1245.
+      ⚠️ **페이지가 1406 을 현행으로 표시하지만 1405 가 2026-08-01 시행분이다** — 라벨을 믿지 말 것.
+      **운송 4건 중 PDF 파서가 필요한 것은 이 하나뿐이다**
+- [ ] **`srt-terms`** — 에스알 · ✅확인 · https://etk.srail.kr/cms/archive.do?pageId=TK0402090000
+      → **약관 PDF 보다 `반려동물 동반탑승` 안내 페이지가 값이 크다** — 이동장 45×30×25cm · 이동장 포함 10kg 이내 ·
+      광견병 예방접종 요건이 본문에 있다. 본문 `.sub_con_area`.
+      약관 PDF 는 `JBCMS.downloadAttach(pageId, 8)` 뒤이고 파라미터 이름을 못 찾았다
+- [ ] **`seoulmetro-terms`** — 서울교통공사 · ✅확인 · http://www.seoulmetro.co.kr/kr/page.do?menuIdx=528
+      → **PDF 가 아니라 HTML 본문이다.** 휴대금지 물품 조항에 애완동물 예외가 그대로 있다.
+      ⚠️ HTTPS 가 열리지 않는다(http 만). 9호선 2·3단계는 `menuIdx=779`
+- [ ] ◐ **`airlines-pet-pages`** — 항공사 9곳 · **5곳만 크롤러에 열려 있다** (2026-08-28, robots 기준)
+      → 열림: 에어부산 · 이스타 · 에어프레미아 · 진에어 · 에어서울(`Disallow:/` + `Allow:/CW/*.do`).
+      막힘/불가: 대한항공 · 아시아나(크롤러 UA 에 ReadTimeout), 제주항공 · 티웨이(robots.txt 403).
+      ⚠️ 진에어 robots 에 `Content-Signal: search=yes,ai-train=no,use=reference` — §12 참고
 
 ### 다른 파트에서 커버되는 이동 관련 소스
 - [ ] 출입국 동물검역 (qia.go.kr) — 국가별 요건: 마이크로칩, 광견병 항체검사 등. 시드 미등록
@@ -150,27 +182,35 @@
       **근거(조례 `law`)와 집행(이쪽 `official`)** 양쪽에서 덮는다.
       `cond[필드::LIKE]` 로 **서버가 걸러 준다** — 목록 16회 + 상세 37회 = **53회/일**로 끝난다.
       ⚠️ **키워드에 `반려` 를 단독으로 쓰면 안 된다** — 행정 문서의 "반려"는 返戾(신청 반려)와
-      동음이의어라 C형간염 검사비·산모신생아·ICT 돌봄이 딸려 온다. 근거는 RAG-032
+      동음이의어라 C형간염 검사비·산모신생아·ICT 돌봄이 딸려 온다. 근거는 RAG-034
 
 **② 안정 · 법적 근거**
 - [x] **`ordinance-search`** ✅ **208건 수집 완료 (2026-08-27)** — 자치법규 API `target=ordin&query=반려동물` · `api` · 🔑`LAW_OC`
       제목검색(`search=1`) 전수 208건 = 조례 203 + 규칙 5, 지자체 135곳, 조문 약 2,150개.
-      **본문검색(`search=2`)이면 1,077건**이라 범위를 제목검색으로 끊었다 (근거는 RAG-031).
+      **본문검색(`search=2`)이면 1,077건**이라 범위를 제목검색으로 끊었다 (근거는 RAG-033).
       광역 17개 시·도는 34건(16%)뿐이라 **광역만 수집하는 선택지는 버렸다** — 지원 조례는
       기초지자체가 만든다. 공고보다 변동이 적어 RAG 기본 코퍼스로 적합
 
 **③ 신선도 · 모니터링**
 - [ ] **`seoul-notice-api`** — 서울시 고시공고 정보 API (OA-2482) · `api` · 🔑서울 열린데이터 인증키(무료) · ✅확인 · https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do
-- [ ] **`seoul-microchip-support`** — 서울시 내장형 동물등록 지원 안내 · `html` · 키없음 · ✅확인 · https://news.seoul.go.kr/env/archives/522690 — 자부담 1만원, 서울시수의사회 협력
+- [x] **`seoul-microchip-support`** — 서울시 동물등록 안내 · `html` · 키없음 · ✅확인
+      → **2026-08-27 수집 완료: 2건** — 등록 방법·수수료·과태료(544026) + 2026년 자진신고기간(569082).
+      시드의 522690 은 2023년 글이라 뺐다. **지원 금액은 해마다 바뀌므로 낡은 값이 코퍼스에 있으면
+      `/ask` 가 자신 있게 틀린 금액을 답한다** — 연 1회 사람이 확인할 것.
+      `567583`(우리동네 동물병원)은 지자체 지원 카드 몫으로 남겨 뒀다
 - [ ] 타 지자체 게시판 크롤 — 후순위, 필요 지역만. 시드 미등록
 
 ---
 
 ## 7. 펫보험 (3)
 
-- [ ] **`e-insmarket`** — 보험다모아 반려동물보험 비교 · `html` · ⚠️요확인 · https://e-insmarket.or.kr/ — 메뉴 경로 확인 필요
-- [ ] **`knia-disclosure`** — 손해보험협회 상품비교공시 · `html` · ⚠️요확인 · https://kpub.knia.or.kr/ — 펫보험 공시 여부 확인 필요
-- [ ] **`insurer-terms-pdfs`** — 각 보험사 상품공시실 약관 PDF · `pdf-entry` · ⚠️요확인 — **RAG 핵심 코퍼스**
+- [ ] 🚫 **`e-insmarket`** — 보험다모아 · **WAF 차단** (2026-08-28) — 크롤러 UA 는 무한 리다이렉트, 브라우저 UA 는 403
+- [ ] ◐ **`knia-disclosure`** — 손해보험협회 · 사이트는 200 · **펫보험 공시 유무 미확인**
+      → `e-insmarket` 이 막혀서 **비교 공시 계층은 여기 하나만 남았다**
+- [ ] **`insurer-terms-pdfs`** — 각 보험사 상품공시실 약관 PDF · ✅확인 — **RAG 핵심 코퍼스**
+      → 삼성화재 약관 PDF 실물 확보(202p, 11.8MB, 텍스트 레이어 있음). RAG-034 의 파서 비교 표본이 이것이다.
+      robots — 삼성화재·NH농협 전면 허용 · 현대해상·롯데·캐롯 일부 경로만 차단 · 메리츠는 robots 가 HTML ·
+      DB손보·한화손보는 `User-agent:` 줄 없는 allow-list · KB손보는 Yeti 그룹만. **9사 딥링크는 다음 카드**
 
 ### 보험사별 약관 (9개사)
 - [ ] 삼성화재
@@ -242,29 +282,24 @@
       확인(2026-08-20). 인증 실패 시 나오는 "IP주소 및 도메인주소를 등록해 주세요" 는 원인을 특정하지
       않는 공통 안내문이라, OC 값이 틀렸을 때도 똑같이 나온다
       → `.env` 에 `LAW_OC=발급받은ID` 한 줄. crawler 가 `.env` 를 직접 읽는다
-- [x] **`DATA_GO_KR_KEY`** ✅ 발급 완료 — 실시간(파트②) 연동하면서 받았다. `.env` 에 들어 있다
-      ⚠️ **키 하나가 곧 전체 권한이 아니다.** data.go.kr 은 **API 별로 "활용신청"** 을 따로 받는다.
-      실측(2026-08-27) — 같은 키로 기상청 단기예보는 `HTTP 200`, 보조금24(15113968)는
-      `HTTP 401 {"code":-4,"msg":"등록되지 않은 인증키 입니다."}` 였다. **키가 죽은 것이 아니라
-      그 데이터셋에 신청이 안 된 것**인데 메시지가 둘을 구분하지 않는다.
-      경로가 틀렸을 때는 `HTTP 404 {"code":-3,"msg":"등록되지 않은 서비스 입니다."}` 라
-      **-3 과 -4 로 "경로 문제"와 "권한 문제"를 가를 수 있다.**
-      ⚠️ 포털이 키를 **Encoding / Decoding 두 벌**로 준다. `params` 에 넣을 때 맞는 것은
-      Decoding(88자) 쪽이고, Encoding(98자)을 그대로 주면 이중 인코딩으로 실패한다.
-      `realtime/config.py` 의 `normalize_key()` 가 그 일을 하는데 **`crawler/core/config.py` 에는
-      아직 없다** — crawler 쪽에서 이 키를 쓰는 첫 소스가 직접 정규화해야 한다
-      → `benefit24-services`(15113968) **활용신청 완료 · 37건 수집 완료 (2026-08-28)**
-      → `data-registration-lookup`(15098913) 은 아직 신청 안 함 (§2, 카드 밖)
-      ⚠️ **Encoding 키를 URL 에 그대로 박으면 안 된다.** `crawler/core/config.normalize_key()` 가
-      읽는 즉시 Decoding 형태로 바꾸는데, 그 값은 base64 라 `+` `/` `=` 를 품고 있어
-      쿼리스트링에 넣을 때 다시 인코딩해야 한다. 안 하면 `+` 가 공백이 되어
+- [x] **`DATA_GO_KR_KEY`** ✅ 발급 완료 — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
+      ⚠️ **키 하나가 곧 전체 권한이 아니다.** 실측(2026-08-27) — 같은 키로 기상청 단기예보는
+      `HTTP 200`, 보조금24(15113968)는 `HTTP 401 {"code":-4,"msg":"등록되지 않은 인증키 입니다."}`
+      였다. **키가 죽은 것이 아니라 그 데이터셋에 신청이 안 된 것**인데 메시지가 둘을 구분하지
+      않는다. 경로가 틀리면 `404 {"code":-3}` 이라 **`-3`/`-4` 로 "경로 문제"와 "권한 문제"를
+      가를 수 있다.**
+      ⚠️ 포털이 키를 **Encoding(98자) / Decoding(88자) 두 벌**로 준다. `crawler/core/config.py`
+      의 `normalize_key()` 가 읽는 즉시 Decoding 으로 바꾸는데, 그 값은 base64 라 `+` `/` `=` 를
+      품고 있어 **URL 에 넣을 때 다시 인코딩해야 한다.** 안 하면 `+` 가 공백이 되어
       **`401 -4`(= 활용신청 안 함)와 똑같은 증상**이 난다 (2026-08-28 실측)
-- [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시
-      → 막고 있는 것: `kakao-local` (GPS→행정동, 좌표 변환)
-- [ ] **서울 열린데이터 인증키** — data.seoul.go.kr · 무료
-      → 막고 있는 것: `seoul-notice-api`
-- [ ] **`KMA_HUB_KEY`** — apihub.kma.go.kr 가입 · 즉시 · (선택)
-      → 막고 있는 것: `kma-apihub`
+      → `benefit24-services`(15113968) **활용신청 완료 · 37건 수집 완료 (2026-08-28)**
+      → `data-registration-lookup`(15098913) 은 아직 신청 안 함 (§2)
+- [x] **`KAKAO_REST_KEY`** ✅ 발급 완료 — developers.kakao.com · 즉시
+- [x] **서울 열린데이터 인증키** ✅ 발급 완료 — data.seoul.go.kr · 무료 (`SEOUL_OPEN_DATA_KEY`)
+- [x] **`KMA_HUB_KEY`** ✅ 발급 완료 — apihub.kma.go.kr
+
+> **2026-08-27 확인: 다섯 개가 전부 `.env` 에 들어 있다.** 실시간(파트②) 연동 때 발급된 것으로 보이는데
+> 이 문서가 갱신되지 않아 "키 미발급"이 병목 1번으로 남아 있었다. **더 이상 막고 있는 것이 없다.**
 
 발급 후 `.env` 에 추가, `.env.example` 에는 키 이름만 반영.
 
@@ -272,16 +307,21 @@
 
 ## 10. ⚠️ 요확인 체크리스트 (수집 착수 전 URL 검증)
 
+**2026-08-28 로 9건 전부 확인했다** (RAG-034 ④). 살아 있는 것 4 · 막힌 것 3 · 부분 2.
+
 - [x] ~~`law-livestock-epidemic`~~ — 2026-08-20 확인 + 수집 완료
-- [ ] `qia-rabies` — 검역본부 동물방역 안내 경로
-- [ ] `kvma-guideline` — 대한수의사회 접종 가이드라인 경로
-- [ ] `korail-terms` — 코레일 약관 PDF 딥링크
-- [ ] `srt-terms` — SRT 약관 PDF 딥링크
-- [ ] `seoulmetro-terms` — 서울교통공사 약관 PDF 딥링크
-- [ ] `airlines-pet-pages` — 항공사 9곳. JS 렌더링이면 Playwright 폴백
-- [ ] `e-insmarket` — 보험다모아 반려동물보험 메뉴 경로
-- [ ] `knia-disclosure` — kpub 펫보험 공시 여부
-- [ ] `insurer-terms-pdfs` — 보험사 9곳 공시실 경로
+- [x] `qia-rabies` — 🚫 robots 전면 차단
+- [x] `kvma-guideline` — ❓ 가이드라인 문서 없음
+- [x] `korail-terms` — ✅ `fileNo` 로 PDF 첨부
+- [x] `srt-terms` — ✅ 반려동물 안내 페이지가 본체
+- [x] `seoulmetro-terms` — ✅ HTML 이었다
+- [x] `airlines-pet-pages` — ◐ 9곳 중 5곳
+- [x] `e-insmarket` — 🚫 WAF
+- [x] `knia-disclosure` — ◐ 접근은 되나 공시 유무 미확인
+- [x] `insurer-terms-pdfs` — ✅ 삼성화재 실물 확보
+
+> **HTTP 200 을 생존으로 치지 않는다.** #38 정찰에서 200 을 주면서 본문이 '서비스를 찾을 수 없습니다' 인
+> soft-404 가 둘 나왔다. 제목까지 봐야 한다.
 
 > `easylaw-pet` 은 `status: verified` 였는데도 시드 URL 이 '페이지 오류' 를 반환했다. **`status` 는 조사 시점 기준일 뿐** — 소스 모듈 작성 전에 항상 재확인한다.
 
@@ -295,17 +335,17 @@
 - [x] `easylaw-pet` (14건)
 - [x] `law-animal-protection` (3건)
 - [x] `law-livestock-epidemic` (3건)
-- [ ] `animal-go-kr`
-- [ ] `gov24-registration`
-- [ ] `nias-pet`
-- [ ] `mafra-press`
-- [ ] `korea-kr-policy`
-- [ ] `seoul-microchip-support`
+- [ ] 🚫 `animal-go-kr` — robots 차단 (§2). 허가를 받지 않는 한 Phase 1 에서 뺀다
+- [x] `gov24-registration` (2건)
+- [x] `nias-pet` (7건)
+- [ ] `mafra-press` — 검색 페이징이 필요하고 성격이 신선도 모니터링이라 Phase 3 으로 미룸
+- [x] `korea-kr-policy` (3건)
+- [x] `seoul-microchip-support` (2건)
 
 ### Phase 2 — 키 발급 후 (구조화 확장)
 - [x] `law-drf-api` — 조문 단위 XML (8건, 별표 본문 포함)
-- [x] `benefit24-services` — 보조금24 (37건. 키워드 필터 — RAG-032)
-- [x] `ordinance-search` — 조례 전수 (208건. 제목검색 범위 — RAG-031)
+- [x] `benefit24-services` — 보조금24 (37건. 키워드 필터 — RAG-034)
+- [x] `ordinance-search` — 조례 전수 (208건. 제목검색 범위 — RAG-033)
 - [ ] `data-registration-lookup`
 - [ ] `insurer-terms-pdfs` — 보험 약관 PDF
 - [ ] 운송약관 4건 (`korail` / `srt` / `seoulmetro` / `airlines`)
@@ -319,7 +359,17 @@
 
 ## 12. 수집 예절 / 법적 주의
 
-- robots.txt 준수, 요청 간격 1~2초(현재 크롤러 기본 1.5s), UA 에 연락처 명시
+- robots.txt 준수, 요청 간격 1~2초(현재 크롤러 기본 1.5s), UA 에 연락처 명시.
+  **판정은 표준(RFC 9309 §2.2.2)의 longest-match 다** — `Disallow: /` 아래에 `Allow: /특정경로` 를
+  적는 사이트(정부24)가 있어서, 먼저 적힌 규칙이 이기는 `urllib.robotparser` 로는 열려 있는 경로를
+  스스로 막는다. `crawler/core/fetch.py` 의 `Robots` 가 이것을 구현한다 (2026-08-27).
+  같은 형태를 **에어서울**에서 또 만났다 (§5)
+- **`Content-Signal` 을 같이 읽는다** (2026-08-28). 진에어 robots 는 `Allow: /` 를 주면서
+  `Content-Signal: search=yes,ai-train=no,use=reference` 를 적어 두고 GPTBot·ClaudeBot 등은 막는다.
+  우리 용도는 **출처를 표기한 참조**라 `use=reference` 에 해당하고 학습은 하지 않는다.
+  **allow/disallow 만 보면 놓치는 층이다** (RAG-034 ⑤)
+- **`User-agent:` 줄이 없는 allow-list** (DB손보·한화손보)는 표준상 무시되지만 **사이트의 의도는 제한**이다.
+  공공기관이 아닌 곳은 의도 쪽으로 보수적으로 읽는다
 - 공공저작물은 대부분 **공공누리 제1유형(출처표시)** — 페이지별 유형을 `.meta.json` 에 기록
 - 약관·항공사 안내는 사실정보 위주라 내부 RAG 활용은 무리 없으나, **서비스 표출 시 출처 표기 필수** (KPI 와도 일치)
 - 원본은 git 미추적, `.meta.json` 필수, meta 없으면 인덱싱 금지 — [RAG-008](decisions-rag.md)

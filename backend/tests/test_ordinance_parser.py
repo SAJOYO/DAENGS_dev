@@ -1,4 +1,4 @@
-"""조례(자치법규) XML 파서 단위 테스트 — **`data/raw/` 없이 돈다** (RAG-030 ①, RAG-031 ③).
+"""조례(자치법규) XML 파서 단위 테스트 — **`data/raw/` 없이 돈다** (RAG-030 ①, RAG-033 ③).
 
 `test_parse.py` 는 실물 원본을 읽고 없으면 skip 한다. 그 skip 이 이관 버그를 한 번 숨겼고,
 RAG-030 이 거기서 *"회귀 테스트는 `data/` 없이 도는 것으로 넣는다"* 를 남겼다. 이 파일은 그
@@ -115,7 +115,7 @@ def test_article_head_keeps_the_whole_text_and_chars_matches(parsed) -> None:
 
 # ------------------------------------------------------------------ ③ 문서 헤더
 def test_citation_url_is_the_name_url_not_the_serial_url(parsed) -> None:
-    """`ordinSeq` 는 개정마다 바뀌어 링크가 늙는다 (RAG-031 ④). 이름 URL 을 쓴다."""
+    """`ordinSeq` 는 개정마다 바뀌어 링크가 늙는다 (RAG-033 ④). 이름 URL 을 쓴다."""
     assert parsed.citation_url == (
         "https://www.law.go.kr/자치법규/"
         "%EA%B0%95%EC%9B%90%ED%8A%B9%EB%B3%84%EC%9E%90%EC%B9%98%EB%8F%84"

@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..core import config, io
+from ..core import config, io, tokenize
 from . import embed
 from .chunk import content_hash
 
@@ -31,8 +31,12 @@ VERSION = 1
 
 # 컬럼으로 가는 것과 metadata 로 가는 것 (RAG-008 표준 키 + RAG-025 ④).
 # **한 곳에만 적는다** — 두 목록이 갈리면 "이 값이 왜 metadata 에 없지"를 두 파일에서 찾게 된다.
-COLUMNS = ("content", "content_hash", "embedding", "category", "subcategory", "source",
-           "source_type", "source_url", "document_title", "section", "metadata")
+#
+# ⚠️ 아래 INSERT 문이 이 튜플로 조립된다. 예전에는 SQL 에 컬럼을 손으로 한 번 더 적었는데,
+# `content_tokens` 를 더할 때 이 튜플만 고치고 SQL 을 안 고쳐 **토큰이 전부 빈 채로
+# 적재가 성공했다** (RAG-035 에서 실제로 겪었다). 목록을 하나로 만들어 그 실수를 없앴다.
+COLUMNS = ("content", "content_hash", "embedding", "content_tokens", "category", "subcategory",
+           "source", "source_type", "source_url", "document_title", "section", "metadata")
 
 # metadata 로 옮기는 청크 필드. 표준 키(raw_file·format·trust_level·published_at·license)와
 # 우리 키(chunk_id·citation·citation_url·element_type·chars·doc_id·source_id)를 나눠 적지 않는다 —
@@ -94,6 +98,9 @@ def prepare(model_key: str) -> Prepared:
             "content": chunk["content"],
             "content_hash": h,
             "embedding": vector,
+            # 렉시컬 축 (RAG-003). **임베딩과 같은 자리에서 만든다** — 둘이 다른 단계로
+            # 갈라지면 한쪽만 채워진 행이 생기고, 그 상태는 dense 로는 안 보인다.
+            "content_tokens": tokenize.tokenized(chunk["content"]),
             "category": chunk.get("category") or "",
             "subcategory": chunk.get("subcategory") or "",
             "source": chunk.get("source") or None,
@@ -147,14 +154,16 @@ def existing_models(conn) -> list[tuple[str, int]]:
 
 
 UPSERT = """
-INSERT INTO documents (content, content_hash, embedding, category, subcategory, source,
-                       source_type, source_url, document_title, section, metadata)
-VALUES (%(content)s, %(content_hash)s, %(embedding)s, %(category)s, %(subcategory)s, %(source)s,
-        %(source_type)s, %(source_url)s, %(document_title)s, %(section)s, %(metadata)s)
+INSERT INTO documents ({cols})
+VALUES ({vals})
 ON CONFLICT (content_hash) DO UPDATE SET
-    embedding = EXCLUDED.embedding,
-    metadata  = EXCLUDED.metadata
-"""
+    embedding      = EXCLUDED.embedding,
+    -- 토큰은 **갱신한다.** 토큰화 규칙(`core/tokenize.py`)을 고치면 `content` 는 그대로인데
+    -- 토큰만 바뀌는데, 갱신 목록에 없으면 옛 토큰이 남는다 — `embedding` 을 갱신하는 것과
+    -- 똑같은 이유이고, 증상도 똑같이 조용하다 (RAG-035)
+    content_tokens = EXCLUDED.content_tokens,
+    metadata       = EXCLUDED.metadata
+""".format(cols=", ".join(COLUMNS), vals=", ".join(f"%({c})s" for c in COLUMNS))
 
 
 def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> None:

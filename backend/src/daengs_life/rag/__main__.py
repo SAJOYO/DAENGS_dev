@@ -458,7 +458,10 @@ def cmd_search(args: argparse.Namespace) -> int:
     model = embed.MODELS[key]
     st = embed.load_model(model)
     try:
-        vectors = [(qid, q, must, nice, embed.encode_query(model, q, st=st))
+        # 벡터를 여기서 만들지만 **토큰화는 searcher 가 한다** — 문서 쪽과 같은 함수를
+        # 쓰게 하려는 것이고, 그래서 `make_query` 를 거친다 (RAG-035)
+        vectors = [(qid, q, must, nice,
+                    searcher.make_query(q, embed.encode_query(model, q, st=st)))
                    for qid, q, must, nice in items]
     finally:
         del st

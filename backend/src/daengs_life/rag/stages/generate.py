@@ -175,11 +175,12 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     """
     key = model_key or config.settings.embedding_model_key
     if st is None:
-        vector = search.encode(question, model_key=key)
+        query = search.encode(question, model_key=key)
     else:
-        vector = embed.encode_query(embed.MODELS[key], question, st=st)
+        # 모델이 이미 올라와 있는 경로(--questions). 토큰화는 `make_query` 가 맡는다 (RAG-035)
+        query = search.make_query(question, embed.encode_query(embed.MODELS[key], question, st=st))
 
-    hits = search.search(vector, k=k, include_supplementary=include_supplementary,
+    hits = search.search(query, k=k, include_supplementary=include_supplementary,
                          category=category, conn=conn)
     return answer(question, hits, client=client, model=model, embedding_model=key)
 

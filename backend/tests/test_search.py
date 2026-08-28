@@ -127,7 +127,7 @@ def vector():
 def test_returns_k_hits_ranked(vector) -> None:
     """**앞의 k 개**는 순위 1..k, 점수 내림차순.
 
-    ⚠️ **2026-08-28 에 계약이 늘었다** (RAG-039 인용 확장). `search()` 는 이제 top-k **뒤에**
+    ⚠️ **2026-08-28 에 계약이 늘었다** (RAG-040 인용 확장). `search()` 는 이제 top-k **뒤에**
     확장분을 덧붙이므로 길이가 k 보다 클 수 있다. `k` 의 뜻은 그대로 "검색 top-k" 이고,
     확장분은 `cited_by` 가 채워져 있어 앞의 k 개와 구분된다 — 그래서 여기서도 앞 k 개만 본다.
     확장분까지 순위·점수 순서를 요구하면 안 된다: 그것은 순위 밖에서 인용을 따라 들어온 것이고,
@@ -163,7 +163,7 @@ def test_category_filter(vector) -> None:
     """지금 코퍼스는 전부 policy 라 결과가 줄지 않아야 한다 — 필터가 오작동하면 여기서 걸린다.
 
     길이가 아니라 **검색분(`cited_by is None`)의 수**를 센다 — 확장분은 인용을 따라 들어온 것이라
-    카테고리 필터의 관심사가 아니다 (RAG-039).
+    카테고리 필터의 관심사가 아니다 (RAG-040).
     """
     with _ready_or_skip() as conn:
         hits = search.search(vector, k=5, category="policy", conn=conn)
@@ -171,7 +171,7 @@ def test_category_filter(vector) -> None:
         assert search.search(vector, k=5, category="food", conn=conn) == []
 
 
-# ---------------------------------------------------------------- 인용 확장 (RAG-039)
+# ---------------------------------------------------------------- 인용 확장 (RAG-040)
 def test_refs_in_text_reads_the_three_notations() -> None:
     """세 표기를 다 읽는다 — 코퍼스에 실제로 있는 문장 그대로다.
 
@@ -201,7 +201,7 @@ def test_refs_in_text_ignores_prose_without_a_law() -> None:
 
 
 def test_expansion_pulls_the_cited_article() -> None:
-    """보조금24 `근거법령` 청크가 가리키는 조문이 실제로 딸려 온다 (RAG-039).
+    """보조금24 `근거법령` 청크가 가리키는 조문이 실제로 딸려 온다 (RAG-040).
 
     `Q6`("광견병 접종 의무인가요?")가 이 카드의 판정 문항이었다 — 코퍼스에 `광견병` 과 `의무` 를
     함께 말하는 청크는 없지만, 보조금24 청크가 *"법령: 가축전염병 예방법(제15조)"* 로 **어디에

@@ -80,7 +80,7 @@ class Hit:
     # None = 그 축의 후보에 없었다는 뜻이다.
     dense_rank: int | None = None
     lexical_rank: int | None = None
-    # 인용 확장으로 딸려 온 청크면 **그것을 끌어온 청크의 `chunk_id`** (RAG-039).
+    # 인용 확장으로 딸려 온 청크면 **그것을 끌어온 청크의 `chunk_id`** (RAG-040).
     # 두 축이 모두 None 인 히트가 왜 거기 있는지를 이 칸 하나로 설명한다.
     cited_by: str | None = None
 
@@ -146,7 +146,7 @@ LIMIT %(k)s
 """
 
 
-# ---------------------------------------------------------------- 인용 확장 (RAG-039)
+# ---------------------------------------------------------------- 인용 확장 (RAG-040)
 # **답을 아는 청크가 아니라, 답이 어디 있는지 아는 청크가 먼저 올라오는 경우가 있다.**
 #
 # `Q6`("광견병 접종 의무인가요?")가 그 자리였다. 코퍼스에 `광견병` 과 `의무` 를 함께 말하는
@@ -338,7 +338,7 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     검사 도구와 서빙이 같은 기본값을 쓸 이유가 없다.
     """
     filters, lex_filters = [], []
-    # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-039). 한 번의 쿼리로 끝낸다 —
+    # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-040). 한 번의 쿼리로 끝낸다 —
     # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/ask` 마다 붙는다
     params: dict[str, Any] = {"q": query.vector, "k": max(k, EXPAND_SCAN_N), "n": CANDIDATE_N,
                               "rrf": RRF_K, "wlex": LEXICAL_WEIGHT, "tsq": query.tsquery}
@@ -365,7 +365,7 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
                 in enumerate(cur.fetchall())
             ]
             hits = scanned[:k]
-        # **인용 확장을 인자로 빼지 않는다** (RAG-039). 빼면 CLI·9단계·FastAPI 가 각자 켜고
+        # **인용 확장을 인자로 빼지 않는다** (RAG-040). 빼면 CLI·9단계·FastAPI 가 각자 켜고
         # 끄게 되고, 그 순간 검문소③이 본 것과 서빙이 하는 것이 갈린다 — 이 파일이 처음부터
         # 막고 있는 그 자리다. `test_search` 가 단언하는 시그니처도 그대로 남는다.
         return expand_citations(hits, query, scan=scanned,

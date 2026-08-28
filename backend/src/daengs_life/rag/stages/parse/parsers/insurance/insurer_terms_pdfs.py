@@ -144,7 +144,7 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
     if len(body) == total_pages:
         # 마커를 못 찾았다. 관계법령이 약관 조로 섞여 들어갔을 수 있으니 조용히 넘기지 않는다
         warnings.append(
-            "약관 본문 경계를 못 찾아 전체를 읽었다 — 관계법령이 섞였을 수 있다 (RAG-039 ⑤)")
+            "약관 본문 경계를 못 찾아 전체를 읽었다 — 관계법령이 섞였을 수 있다 (RAG-041 ⑤)")
     return Parsed(
         elements=out.elements,
         document_title=title,

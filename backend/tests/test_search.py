@@ -85,7 +85,7 @@ def test_questions_come_from_the_goldenset() -> None:
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 12
+    assert len(items) == 15
     assert all(q for _, q, _, _ in items)
 
 
@@ -125,12 +125,21 @@ def vector():
 
 
 def test_returns_k_hits_ranked(vector) -> None:
-    """순위는 1부터 k 까지, 점수는 내림차순."""
+    """**앞의 k 개**는 순위 1..k, 점수 내림차순.
+
+    ⚠️ **2026-08-28 에 계약이 늘었다** (RAG-040 인용 확장). `search()` 는 이제 top-k **뒤에**
+    확장분을 덧붙이므로 길이가 k 보다 클 수 있다. `k` 의 뜻은 그대로 "검색 top-k" 이고,
+    확장분은 `cited_by` 가 채워져 있어 앞의 k 개와 구분된다 — 그래서 여기서도 앞 k 개만 본다.
+    확장분까지 순위·점수 순서를 요구하면 안 된다: 그것은 순위 밖에서 인용을 따라 들어온 것이고,
+    점수 칸은 여전히 코사인이라 top-k 보다 높을 수도 낮을 수도 있다.
+    """
     with _ready_or_skip() as conn:
         hits = search.search(vector, k=5, conn=conn)
-    assert [h.rank for h in hits] == [1, 2, 3, 4, 5]
-    assert all(a.score >= b.score for a, b in zip(hits, hits[1:]))
+    top = [h for h in hits if h.cited_by is None]
+    assert [h.rank for h in top] == [1, 2, 3, 4, 5]
+    assert all(a.score >= b.score for a, b in zip(top, top[1:]))
     assert all(-1.0 <= h.score <= 1.0 for h in hits)
+    assert all(h.rank > 5 for h in hits if h.cited_by is not None)
 
 
 def test_hits_carry_the_citation_fields(vector) -> None:
@@ -151,10 +160,79 @@ def test_no_supplementary_actually_filters(vector) -> None:
 
 
 def test_category_filter(vector) -> None:
-    """지금 코퍼스는 전부 policy 라 결과가 줄지 않아야 한다 — 필터가 오작동하면 여기서 걸린다."""
+    """지금 코퍼스는 전부 policy 라 결과가 줄지 않아야 한다 — 필터가 오작동하면 여기서 걸린다.
+
+    길이가 아니라 **검색분(`cited_by is None`)의 수**를 센다 — 확장분은 인용을 따라 들어온 것이라
+    카테고리 필터의 관심사가 아니다 (RAG-040).
+    """
     with _ready_or_skip() as conn:
-        assert len(search.search(vector, k=5, category="policy", conn=conn)) == 5
+        hits = search.search(vector, k=5, category="policy", conn=conn)
+        assert len([h for h in hits if h.cited_by is None]) == 5
         assert search.search(vector, k=5, category="food", conn=conn) == []
+
+
+# ---------------------------------------------------------------- 인용 확장 (RAG-040)
+def test_refs_in_text_reads_the_three_notations() -> None:
+    """세 표기를 다 읽는다 — 코퍼스에 실제로 있는 문장 그대로다.
+
+    괄호(보조금24) · 낫표(해설 본문) · 맨몸(법령 본문). 하나라도 놓치면 다리가 끊긴다.
+    """
+    cases = {
+        "부산광역시 영도구 광견병 예방접종 시술비 지원 법령: 수의사법(제30조) / 가축전염병 예방법(제15조)":
+            [("수의사법", "제30조"), ("가축전염병 예방법", "제15조")],
+        "인천광역시 광견병 예방접종비 지원 법령: 가축전염병 예방법 시행령(제13조, 제1항)":
+            [("가축전염병 예방법 시행령", "제13조")],
+        "「동물보호법」 제2조에 따라 등록해야 합니다": [("동물보호법", "제2조")],
+        "경기도 의왕시 … 법령: 수의사법 시행규칙(제22조의14)": [("수의사법 시행규칙", "제22조의14")],
+    }
+    for text, want in cases.items():
+        assert search.refs_in_text(text) == want, text
+
+
+def test_refs_in_text_ignores_prose_without_a_law() -> None:
+    """조문 번호가 없으면 아무것도 안 나온다.
+
+    ⚠️ **이 테스트는 성능 회귀도 잡는다.** 처음 구현은 법령명을 한 정규식으로 잡았는데
+    (`[가-힣]+(?:\\s*[가-힣]+)*?…법`), 법령명이 **없는** 긴 한글 문장에서 중첩 수량자가 폭주해
+    사실상 정지했다. 지금은 조문 번호를 먼저 찾고 앞 40자만 되짚으므로 구간이 상수다.
+    """
+    long_prose = "광견병 예방접종 시술비 지원 사업 안내 " * 200
+    assert search.refs_in_text(long_prose) == []
+
+
+def test_expansion_pulls_the_cited_article() -> None:
+    """보조금24 `근거법령` 청크가 가리키는 조문이 실제로 딸려 온다 (RAG-040).
+
+    `Q6`("광견병 접종 의무인가요?")가 이 카드의 판정 문항이었다 — 코퍼스에 `광견병` 과 `의무` 를
+    함께 말하는 청크는 없지만, 보조금24 청크가 *"법령: 가축전염병 예방법(제15조)"* 로 **어디에
+    있는지**를 말한다. 검색은 그 다리를 이미 top-8 에 올려놓고도 건너지 않았다.
+
+    **`vector` 픽스처를 안 쓴다.** 확장은 질의 벡터를 `ORDER BY` 에만 쓰므로 DB 에 있는 임베딩
+    아무거나면 충분하고, 그러면 `*.parquet` 이 없는 워크트리에서도 이 검사가 실제로 돈다 —
+    `data/` 가 비어 skip 되는 검사가 이미 많다.
+    """
+    with _ready_or_skip() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT metadata->>'chunk_id', metadata->>'citation', section,
+                       document_title, content, embedding
+                FROM documents
+                WHERE content LIKE '%가축전염병 예방법(제15조)%' LIMIT 1
+            """)
+            row = cur.fetchone()
+        if row is None:
+            pytest.skip("보조금24 근거법령 청크가 코퍼스에 없다 — `#39` 가 적재한 것이다")
+        cid, cit, section, title, content, emb = row
+        hit = search.Hit(rank=1, score=0.5, chunk_id=cid, citation=cit or "", citation_url=None,
+                         section=section, document_title=title or "", content=content,
+                         part=None, dense_rank=1)
+        assert ("가축전염병 예방법", "제15조") in search.cited_refs([hit])
+
+        out = search.expand_citations([hit], search.Query(vector=emb), conn=conn)
+
+    pulled = [h for h in out if h.cited_by == cid]
+    assert any(h.document_title == "가축전염병 예방법" and h.section == "제15조" for h in pulled)
+    assert out[0] is hit                      # 원래 순위는 손대지 않는다
 
 
 def test_checkpoint3_finds_the_maengyeon_article(vector) -> None:

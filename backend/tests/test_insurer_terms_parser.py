@@ -3,7 +3,7 @@
 `test_pdf_extract.py` 와 같은 규칙이다. 파서가 문서에서 쓰는 것은 `page.get_text()` 뿐이라
 (포맷 층에 넘기기 전 페이지 범위를 재는 데만 쓴다) 그것만 흉내 내는 가짜를 넘긴다.
 
-여기서 지키려는 것은 **한 파일 안의 세 덩어리를 가르는 규칙**이다 (RAG-039 ②③) — 어디서
+여기서 지키려는 것은 **한 파일 안의 세 덩어리를 가르는 규칙**이다 (RAG-041 ②③) — 어디서
 시작하고 어디서 끊는지, 그리고 그 판정이 목차·본문 문장에 속지 않는지. 실물 약관을 커밋할 수
 없기도 하지만(저작권 — data-sources §12), 지켜야 하는 것이 특정 문장이 아니라 규칙이라 그렇다.
 """
@@ -76,7 +76,7 @@ def test_empty_pages_do_not_break_the_scan() -> None:
     "제도성 특별약관",
 ])
 def test_terms_boundary_accepts_real_headings(line: str) -> None:
-    """포맷 층 기본값(공백 없는 4~30자)은 이것들을 **0개** 잡았다 (RAG-039 ⑤)."""
+    """포맷 층 기본값(공백 없는 4~30자)은 이것들을 **0개** 잡았다 (RAG-041 ⑤)."""
     assert ins._RE_INSURANCE_TERMS.match(line)
 
 

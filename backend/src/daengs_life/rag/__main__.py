@@ -20,6 +20,7 @@
   python -m rag generate "목줄 안 하면 과태료 얼마"    # 9단계 검색+Gemini (RAG-028)
   python -m rag generate --questions                  # 검증질문 1~7 전부 = **검문소④** + 1랩 덤프
   python -m rag generate --questions --dry-run        # 덤프를 쓰지 않는다
+  python -m rag score-laps                            # 저장된 랩을 전부 새 지표로 소급 채점 (RAG-029)
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ from .core import config, io
 from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
 from .stages import load as loader
+from .stages import score as scorer
 from .stages import search as searcher
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -494,8 +496,12 @@ def cmd_generate(args: argparse.Namespace) -> int:
     여기는 출력과 덤프만 한다** (RAG-023 이 parse 에서 정리한 모양 그대로).
 
     `--questions` 가 **검문소④**다. 판정 문항을 사후에 만들지 않으려고 미리 못 박아 뒀다
-    (RAG-024 ①의 사전 등록과 같은 장치) — **답변에 등장한 조항 번호 중 컨텍스트에 실재하지 않는
-    것의 개수.** 0이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다(RAG-029).
+    (RAG-024 ①의 사전 등록과 같은 장치).
+
+    지표는 둘을 나란히 찍는다 — **`cited`/`ungrounded`**(답변에 등장한 조항 번호가 컨텍스트에
+    실재하는가, 1랩부터 쓴 것)와 **`grounded`**(답변이 `[N]` 으로 지목한 근거가 골든셋 `must`
+    를 가리키는가, RAG-029). 앞의 것은 지어냈는지만 보고 정답인지는 안 본다 — 그래서 물러선
+    답변이 무관한 조항을 나열해도 '인용'으로 셌다. `grounded` 가 그것을 고친다.
     """
     key = args.model or config.settings.embedding_model_key
     if key not in embed.MODELS:
@@ -544,6 +550,11 @@ def cmd_generate(args: argparse.Namespace) -> int:
                         print(f"  ⚠️ 컨텍스트에 없음: {', '.join(a.ungrounded)}")
                     else:
                         print("  근거 안에 전부 있음")
+                # RAG-029 — 조 번호가 아니라 **문서**를 본다. must 가 없는 자유 질의에서는
+                # 늘 False 라 문항이 라벨을 가질 때만 찍는다 (골든셋 없인 잴 수 없다)
+                if must:
+                    grounded = scorer.grounds_the_answer(a.text, a.hits, must)
+                    print(f"  근거로 정답을 인용함: {'예' if grounded else '아니오'} (RAG-029)")
 
             if not args.dry_run:
                 header = generator.dump_header(args.lap, answers, args.k, conn=conn)
@@ -560,11 +571,44 @@ def cmd_generate(args: argparse.Namespace) -> int:
         bad = sum(1 for _, a, _, _ in answers if a.ungrounded)
         total = sum(len(a.ungrounded) for _, a, _, _ in answers)
         cited = sum(1 for _, a, _, _ in answers if a.cited)
+        # RAG-029 — must 가 없는 자유 질의는 분모에서 뺀다. 그 문항은 애초에 잴 수 없다
+        labeled = [(a, must) for _, a, must, _ in answers if must]
+        grounded = sum(1 for a, must in labeled if scorer.grounds_the_answer(a.text, a.hits, must))
         print()
         print("=" * 70)
-        print(f"검문소④  조항을 인용한 문항 {cited}/{len(answers)}  ·  "
+        print(f"검문소④  조항을 인용한 문항 {cited}/{len(answers)} (1랩부터 쓴 지표)  ·  "
               f"컨텍스트에 없는 조항을 든 문항 {bad}/{len(answers)} (조항 수 {total})")
-        print("  0 이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다 (RAG-029)")
+        if labeled:
+            print(f"  근거로 정답을 인용한 문항 {grounded}/{len(labeled)} (RAG-029 — 문서까지 대조한다)")
+        print("  RAG-029 가 위 두 지표가 서는 자리와 새는 자리를 기록해 뒀다."
+              " `python -m rag score-laps` 로 저장된 랩을 소급 비교할 수 있다.")
+    return 0
+
+
+def cmd_score_laps(_: argparse.Namespace) -> int:
+    """저장된 모든 랩(`lap1`~)을 새 지표(`grounded`, RAG-029)로 소급 채점한다.
+
+    **DB 도 임베딩도 코퍼스도 필요 없다** — `data/processed/answers/*.jsonl` 만 읽는다.
+    `hits[].tier` 가 적재 시점에 이미 골든셋과 대조돼 저장돼 있어서다. 그래서 이 도구는
+    2026-08-28 이전에 만들어진 `lap1`~`lap3`(7문항) · `lap4`~`lap6`(12문항)도 그대로 재본다.
+
+    새 소스 카드(`#50` 펫보험 · `#51` 운송약관)가 새 랩을 뜨면 이 표에 한 줄이 늘어난다 —
+    문항 수·`must` 라벨이 달라도 상관없다. 표가 랩마다 자기 문항 수로 나눈 비율이라서다.
+    """
+    paths = io.answer_files()
+    if not paths:
+        print("data/processed/answers 에 랩이 없다 — `rag generate --questions --lap <이름>` 로 먼저 만들 것")
+        return 1
+
+    print(f"{'랩':6} {'문항':>4}   {'현행(cited)':>12}   {'근거인용(grounded, RAG-029)':>28}")
+    print("-" * 60)
+    for path in paths:
+        header, rows = io.read_answers(path)
+        s = scorer.score_rows(rows)
+        n = s["n"]
+        if not n:
+            continue
+        print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
     return 0
 
 
@@ -653,6 +697,9 @@ def main(argv: list[str] | None = None) -> int:
     gen.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")
     gen.set_defaults(fn=cmd_generate)
     sr.set_defaults(fn=cmd_search, supplementary=True)
+
+    scl = sub.add_parser("score-laps", help="저장된 모든 랩을 새 지표로 소급 채점 (RAG-029)")
+    scl.set_defaults(fn=cmd_score_laps)
 
     args = p.parse_args(argv)
     return args.fn(args)

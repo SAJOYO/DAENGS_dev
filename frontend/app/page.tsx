@@ -11,7 +11,8 @@ const documents = [
     title: "네오 채소 도감 — 홀로그램 카드 데모",
     description:
       "채소가 된 네오 카드 12장. 마우스를 올리면 홀로그램이 돌고, 누르면 카드가 제자리에서 가운데로 날아옵니다. 안의 '홀로 스튜디오' 에서는 내 사진을 올려 포일 12종을 갈아 끼워 보고 HTML 한 장으로 뽑을 수 있습니다. 프레임워크 없이 HTML·CSS·JS 만으로 만든 화면입니다.",
-    href: "/neo-hologram/index.html",
+    // 이 저장소가 아니라 SAJOYO/DAENGS_CARDS 의 GitHub Pages 입니다 (D-025).
+    href: "https://cards.weareithero.cloud/",
   },
 ];
 
@@ -58,10 +59,13 @@ export default function Home() {
             <h2 className="text-2xl font-semibold tracking-tight">문서</h2>
             <div className="mt-10 grid gap-6">
               {documents.map((doc) => (
-                // public/ 의 정적 HTML 이라 Link 가 아닌 a 로 그냥 넘깁니다.
+                // 정적 HTML(public/) 이거나 아예 다른 도메인이라 Link 가 아닌 a 로 넘깁니다.
                 <a
                   key={doc.href}
                   href={doc.href}
+                  {...(doc.href.startsWith("http")
+                    ? { target: "_blank", rel: "noreferrer" }
+                    : {})}
                   className="group rounded-xl border border-zinc-200 p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
                 >
                   <h3 className="font-medium group-hover:underline">

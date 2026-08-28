@@ -28,8 +28,11 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 # 늘어난 몫은 전부 `article` 과 조례 `para`(부칙)다. **보조금24도 article 이다** — 조문이
 # 아니라 필드 묶음인데, `para` 로 내면 청커가 조용히 버려서(`para: 소제목 밖`) 206청크가
 # 0이 된다. RAG-034 ④ 의 그 결정이 이 수에 들어 있다.
-TOTAL = 4_067
-BY_TYPE = {"article": 3260, "aside": 22, "heading": 108, "para": 244, "qa": 10, "table": 423}
+# 2026-08-28 갱신 — 코레일 약관 PDF 2건 추가 (RAG-036). parsed 283건 기준.
+# article +72 · para +22(부칙) · table +22. **표가 늘어난 것이 PDF 소스의 표시다** —
+# 법령 별표와 달리 `find_tables()` 로 뽑은 것이고, 유효표 판정을 통과한 것만 들어 있다.
+TOTAL = 4_183
+BY_TYPE = {"article": 3332, "aside": 22, "heading": 108, "para": 266, "qa": 10, "table": 445}
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +91,10 @@ def test_hard_cap(chunks: list) -> None:
 
 
 def test_soft_cap_known_only(chunks: list) -> None:
-    """RAG-004 2,000자를 넘는 것은 **아는 4건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+    """RAG-004 2,000자를 넘는 것은 **아는 6건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+
+    2026-08-28 에 둘 늘었다 — 광역철도약관 `제3조`(2,423자) · `제6조`(2,445자).
+    약관의 조는 법령보다 길고, PDF 라 항 단위로 더 쪼갤 태그도 없다 (RAG-036).
 
     조례에서 하나 늘었다 — `부칙-1제2조` 4,902자. 개정별로 쪼갠 뒤에도 남은 것이라
     (RAG-033 ③) 그 부칙 하나가 정말로 긴 경우다. 하드 상한 7,500 안이라 막지 않는다.
@@ -98,14 +104,15 @@ def test_soft_cap_known_only(chunks: list) -> None:
     소제목 하나에 분실신고·습득신고·유기 셋이 들어 있다. 넷째가 더 생기면 ④ 를 다시 본다.
     """
     over = sorted(c.chunk_id.split("#")[-1] for c in chunks if c.chars > chunk.SOFT_CHARS)
-    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조", "제18조②"]
+    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조",
+                    "제18조②", "제3조", "제6조"]
 
 
 # ---------------------------------------------------------------- ① 입력 범위
 def test_supplementary_marked(chunks: list) -> None:
     """부칙은 인덱싱하되 표시한다 — 6단계에서 재청킹 없이 필터로 끌 자리다 (①)."""
     sup = [c for c in chunks if c.part == "supplementary"]
-    assert len(sup) == 244
+    assert len(sup) == 266
     assert all(c.section.startswith("부칙 제") for c in sup)
 
 

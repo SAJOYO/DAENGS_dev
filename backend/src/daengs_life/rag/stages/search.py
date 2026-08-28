@@ -20,6 +20,7 @@ RAG-003(하이브리드·리랭커)이 들어와도 **바뀌는 것은 이 파�
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -79,6 +80,9 @@ class Hit:
     # None = 그 축의 후보에 없었다는 뜻이다.
     dense_rank: int | None = None
     lexical_rank: int | None = None
+    # 인용 확장으로 딸려 온 청크면 **그것을 끌어온 청크의 `chunk_id`** (RAG-040).
+    # 두 축이 모두 None 인 히트가 왜 거기 있는지를 이 칸 하나로 설명한다.
+    cited_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -142,6 +146,158 @@ LIMIT %(k)s
 """
 
 
+# ---------------------------------------------------------------- 인용 확장 (RAG-040)
+# **답을 아는 청크가 아니라, 답이 어디 있는지 아는 청크가 먼저 올라오는 경우가 있다.**
+#
+# `Q6`("광견병 접종 의무인가요?")가 그 자리였다. 코퍼스에 `광견병` 과 `의무` 를 함께 말하는
+# 청크는 하나도 없는데, `#39` 가 넣은 보조금24 청크는 이렇게 되어 있다:
+#
+#     "부산광역시 영도구 광견병 예방접종 시술비 지원 법령: 수의사법(제30조) / 가축전염병 예방법(제15조)"
+#
+# `광견병` 이 희소 토큰이라 이 청크들이 렉시컬 상위를 독차지하는데(RAG-034 ⑦), 정작 의무를
+# 만드는 `제15조` 본문은 39위였다. **검색이 다리를 이미 올려놓고 건너지 않은 것이다.**
+# 그래서 늘리는 것은 코퍼스가 아니라 홉이다 — top-k 가 가리키는 조문을 한 번 더 가져온다.
+#
+# ⚠️ **`metadata` 에 `cites` 가 없다.** 크롤러의 `Extracted.cites` 가 적재까지 실려 있지 않아
+# 본문에서 정규식으로 뽑는다. 재적재하면 지울 군더더기지만 그 재적재는 이 카드 밖이다.
+
+# `법령명 + 제N조` 를 잡는다. 세 표기를 다 만난다 —
+#   보조금24  "… 가축전염병 예방법(제15조)"     ← 괄호
+#   해설 본문 "「동물보호법」 제2조"             ← 낫표
+#   법령 본문 "동물보호법 제15조"               ← 맨몸
+#
+# **한 방에 잡지 않고 두 걸음으로 간다.** 처음에는 `[가-힣]+(?:\s*[가-힣]+)*?…법` 한 줄로 썼는데,
+# 법령명이 **안 나오는** 긴 한글 문장에서 중첩 수량자가 폭주했다 (`제15조` 없는 청크 하나에서
+# 사실상 정지). 조문 번호를 먼저 찾고 **그 앞 40자만** 되짚으면 후보 구간이 상수라 폭주할 수 없다.
+_ARTICLE_RE = re.compile(r"제\d+조(?:의\d+)?")
+# 조문 바로 앞에서 법령명을 떼어 낸다. 낱말 4개까지만 본다 — "가축전염병 예방법 시행령" 이 셋이다.
+_LAW_TAIL_RE = re.compile(r"([가-힣]+(?:\s[가-힣]+){0,3})\s*[」』]?\s*\(?\s*$")
+# 떼어 낸 것이 정말 법령명인가. `…법`·`…법률` 로 끝나고 `시행령`·`시행규칙` 이 붙을 수 있다.
+_LAW_OK_RE = re.compile(r"(?:법|법률)(?:\s*시행령|\s*시행규칙)?$")
+# 조문 앞을 얼마나 되짚을지. "가축전염병 예방법 시행령(" 이 넉넉히 들어가는 길이다.
+_LOOKBACK = 40
+
+
+def refs_in_text(text: str) -> list[tuple[str, str]]:
+    """텍스트가 가리키는 `(법령명, 조문)` — 등장 순, 중복 포함."""
+    out: list[tuple[str, str]] = []
+    for m in _ARTICLE_RE.finditer(text):
+        window = text[max(0, m.start() - _LOOKBACK):m.start()]
+        tail = _LAW_TAIL_RE.search(window)
+        if not tail:
+            continue
+        law = " ".join(tail.group(1).split())
+        if _LAW_OK_RE.search(law):
+            out.append((law, m.group()))
+    return out
+
+
+# 한 번에 몇 개까지 딸려 올 것인가. **작게 잡는다** — 확장은 근거를 늘리는 만큼 프롬프트를
+# 밀어내고 조 단위 청크는 길다. 실측에서 Q6 에 필요한 것은 `제15조` 하나였다.
+MAX_EXPANDED = 3
+
+# **인용을 훑는 깊이는 반환하는 k 보다 깊다.**
+#
+# Q6 실측(2026-08-28) — 제15조를 가리키는 영도구 `근거법령` 청크가 **7위**였다. 서빙 k 가 5라
+# 훑는 깊이를 k 에 묶으면 다리를 코앞에서 놓친다. 반대로 k 를 20으로 올리는 것은 답이 아니다:
+# 프롬프트에 보조금24 신청방법 20건이 들어가고 그것은 의무를 묻는 질문에 잡음이다.
+# 그래서 **읽는 깊이와 싣는 깊이를 가른다** — 20위까지 인용만 훑고, 근거로 싣는 것은 top-k 다.
+EXPAND_SCAN_N = 20
+
+# 확장분 조회. `(법령명, 조문)` **쌍**으로 맞춘다 — `section` 만으로 찾으면 안 된다.
+# `제2조` 는 법·시행령·시행규칙에 다 있어서, 법령명을 빼면 엉뚱한 법의 같은 번호가 붙는다.
+#
+# `score` 는 여기서도 코사인이다. 순위 밖에서 들어온 청크라 RRF 점수가 없지만, 점수 칸의 뜻이
+# 히트마다 달라지면 검문소③을 눈으로 읽을 수 없다.
+_EXPAND_SQL = """
+SELECT 1 - (d.embedding <=> %(q)s) AS score,
+       d.metadata->>'chunk_id', d.metadata->>'citation', d.metadata->>'citation_url',
+       d.section, d.document_title, d.content, d.metadata->>'part'
+FROM documents d
+JOIN unnest(%(titles)s::text[], %(sections)s::text[]) AS want(title, section)
+  ON d.document_title = want.title AND d.section = want.section
+WHERE d.embedding IS NOT NULL
+  {filters}
+ORDER BY d.embedding <=> %(q)s
+LIMIT %(limit)s
+"""
+
+
+def _refs_in(hit: Hit) -> list[tuple[str, str]]:
+    """히트 하나가 가리키는 `(법령명, 조문)`. `citation` 도 같이 본다 — 보조금24 는 서비스명이
+    `citation` 에 있고 조문은 `content` 에 있어서, 둘을 이어 붙여야 한 문장으로 읽힌다."""
+    return refs_in_text(f"{hit.citation}\n{hit.content}")
+
+
+def cited_refs(hits: list[Hit]) -> list[tuple[str, str]]:
+    """히트들이 가리키는 조문 — 등장 순, 중복 제거.
+
+    **이미 들어와 있는 조문은 뺀다.** 안 빼면 같은 청크를 두 번 싣고 `MAX_EXPANDED` 를
+    그것으로 다 써 버린다.
+    """
+    have = {(h.document_title, h.section) for h in hits}
+    seen: dict[tuple[str, str], None] = {}
+    for h in hits:
+        for ref in _refs_in(h):
+            if ref not in have:
+                seen.setdefault(ref, None)
+    return list(seen)
+
+
+def expand_citations(hits: list[Hit], query: Query, *, scan: list[Hit] | None = None,
+                     include_supplementary: bool = True, limit: int = MAX_EXPANDED,
+                     conn=None) -> list[Hit]:
+    """`hits` 가 가리키는 조문 청크를 **뒤에 덧붙인다.** 원래 순위는 손대지 않는다.
+
+    `scan` 은 **인용을 훑을 범위**다 (기본값은 `hits` 자신). 반환할 근거보다 깊게 훑기 위해
+    갈라 뒀다 — `EXPAND_SCAN_N` 참고. 훑기만 하고 싣지는 않는다.
+
+    확장분은 `rank` 를 이어받고 `cited_by` 로 표시된다. 순위를 다시 매기지 않는 이유는
+    검문소③ 때문이다 — 확장이 없었으면 무엇이 top-k 였는지가 그대로 보여야 한다.
+    """
+    scan = scan or hits
+    refs = cited_refs(scan)[:limit]
+    if not refs:
+        return hits
+
+    filters = []
+    params: dict[str, Any] = {"q": query.vector, "limit": limit,
+                              "titles": [r[0] for r in refs], "sections": [r[1] for r in refs]}
+    if not include_supplementary:
+        filters.append("AND d.metadata->>'part' IS DISTINCT FROM 'supplementary'")
+
+    own = conn is None
+    conn = conn or load.connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(_EXPAND_SQL.format(filters="\n  ".join(filters)), params)
+            rows = cur.fetchall()
+    finally:
+        if own:
+            conn.close()
+
+    def puller(title: str, section: str | None) -> str | None:
+        """이 조문을 끌어온 히트. 같은 조문을 여러 히트가 가리키면 **가장 높은 순위**를 돌린다.
+
+        top-k 밖일 수 있다 — Q6 의 다리가 7위였다. 그래서 근거에 안 실린 청크의 `chunk_id` 가
+        나올 수 있는데, 그것이 사실이고 검문소③이 알아야 할 것이다.
+        """
+        for h in scan:
+            if (title, section) in _refs_in(h):
+                return h.chunk_id
+        return None
+
+    known = {h.chunk_id for h in hits}
+    extra = [
+        Hit(rank=len(hits) + i + 1, score=float(score), chunk_id=cid, citation=cit or "",
+            citation_url=url, section=section, document_title=title or "", content=content,
+            part=part, cited_by=puller(title or "", section))
+        for i, (score, cid, cit, url, section, title, content, part) in enumerate(rows)
+        if cid not in known
+    ]
+    return hits + extra
+
+
 def encode(query: str, model_key: str | None = None):
     """질의 → 벡터. **모델을 올렸다 내린다.**
 
@@ -182,7 +338,9 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     검사 도구와 서빙이 같은 기본값을 쓸 이유가 없다.
     """
     filters, lex_filters = [], []
-    params: dict[str, Any] = {"q": query.vector, "k": k, "n": CANDIDATE_N,
+    # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-040). 한 번의 쿼리로 끝낸다 —
+    # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/ask` 마다 붙는다
+    params: dict[str, Any] = {"q": query.vector, "k": max(k, EXPAND_SCAN_N), "n": CANDIDATE_N,
                               "rrf": RRF_K, "wlex": LEXICAL_WEIGHT, "tsq": query.tsquery}
     if not include_supplementary:
         # part 는 metadata 안에 있고, 부칙이 아닌 청크는 아예 키가 없다 (exclude_none 으로 쓴다)
@@ -199,13 +357,19 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
         with conn.cursor() as cur:
             cur.execute(_SQL.format(filters="\n      ".join(filters),
                                     lex_filters="\n      ".join(lex_filters)), params)
-            return [
+            scanned = [
                 Hit(rank=i + 1, score=float(score), chunk_id=cid, citation=cit or "",
                     citation_url=url, section=section, document_title=title or "",
                     content=content, part=part, dense_rank=drn, lexical_rank=lrn)
                 for i, (score, cid, cit, url, section, title, content, part, drn, lrn)
                 in enumerate(cur.fetchall())
             ]
+            hits = scanned[:k]
+        # **인용 확장을 인자로 빼지 않는다** (RAG-040). 빼면 CLI·9단계·FastAPI 가 각자 켜고
+        # 끄게 되고, 그 순간 검문소③이 본 것과 서빙이 하는 것이 갈린다 — 이 파일이 처음부터
+        # 막고 있는 그 자리다. `test_search` 가 단언하는 시그니처도 그대로 남는다.
+        return expand_citations(hits, query, scan=scanned,
+                                include_supplementary=include_supplementary, conn=conn)
     finally:
         if own:
             conn.close()

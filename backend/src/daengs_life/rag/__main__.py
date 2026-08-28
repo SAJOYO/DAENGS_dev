@@ -425,7 +425,10 @@ def _print_hits(hits, must=frozenset(), nice=frozenset(), width: int = 150) -> N
         tier = searcher.tier_of(h.chunk_id, set(must), set(nice))
         mark = {"must": "★", "nice": "·"}.get(tier, " ")
         sup = "  [부칙]" if h.part == "supplementary" else ""
-        print(f"  {mark} {h.rank}. {h.score:.4f}  {h.citation or h.document_title}{sup}")
+        # 인용 확장으로 딸려 온 줄임을 표시한다 (RAG-036). 안 찍으면 두 축이 모두 비어 있는
+        # 히트가 왜 top-k 뒤에 붙어 있는지 검문소③이 알 수 없다
+        via = f"  ← 인용 확장 ({h.cited_by})" if h.cited_by else ""
+        print(f"  {mark} {h.rank}. {h.score:.4f}  {h.citation or h.document_title}{sup}{via}")
         body = " ".join(h.content.split())
         print(f"        {body[:width]}{'…' if len(body) > width else ''}")
         print(f"        {h.chunk_id}")

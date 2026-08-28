@@ -34,8 +34,12 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 # 2026-08-28 갱신 — 손해보험협회 반려동물보험 공시 7건 (RAG-038). parsed 290건 기준.
 # article +48 · table +62. **상품 하나가 요소 둘**이라 그렇다 — 개요(article)와 보장내용(table).
 # 표 48개가 청크 62개가 된 것은 큰 표만 `헤더: 값` 으로 갈렸다는 뜻이다 (RAG-004 ③(나)).
-TOTAL = 4_293
-BY_TYPE = {"article": 3380, "aside": 22, "heading": 108, "para": 266, "qa": 10, "table": 507}
+# 2026-08-29 갱신 — 삼성화재 약관 PDF 11건 (RAG-039). parsed 301건 기준.
+# article +1806 · table +151. **부록을 잘라낸 뒤의 수다** — 안 자르면 article 이 4,693 이고
+# 그 차이가 전부 관계법령 전문이다(신용정보법·상법 …). 그건 우리 문서가 아니라 인용을
+# 틀리게 만든다 (RAG-039 ②). `heading` 이 안 는 것은 청커가 heading 을 청크로 안 내기 때문이다.
+TOTAL = 6_250
+BY_TYPE = {"article": 5186, "aside": 22, "heading": 108, "para": 266, "qa": 10, "table": 658}
 
 
 @pytest.fixture(scope="module")

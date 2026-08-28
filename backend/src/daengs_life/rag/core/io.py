@@ -186,6 +186,31 @@ def write_answers(header: BaseModel, items: list[BaseModel], stem: str = "lap1")
             f.write(json.dumps(model.model_dump(exclude_none=True), ensure_ascii=False) + "\n")
     return path
 
+
+def answer_files() -> list[Path]:
+    """저장된 모든 랩. 파일명 정렬이 곧 랩 순서다 (`lap1` < `lap2` < … < `lap10` 은 아니지만
+    지금까지 두 자리를 넘긴 적이 없다 — 넘기면 정렬 방식을 바꿀 일이다).
+
+    `RAG-029` 의 소급 채점기가 쓴다. **DB 도 `data/raw`·`data/processed` 도 필요 없다** —
+    이 폴더만 있으면 된다.
+    """
+    config.require_data_dir()
+    return sorted(config.ANSWER_DIR.glob("*.jsonl"))
+
+
+def read_answers(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """랩 파일 하나 → (헤더, 문항 목록). `write_answers` 가 쓴 모양(1행 헤더 + 문항)을 그대로 되돌린다.
+
+    pydantic 모델이 아니라 **dict** 로 돌려준다 — 소급 채점은 옛 랩(스키마가 지금과 다를 수 있는)도
+    읽어야 하므로, 없는 필드에 `KeyError` 대신 `.get()` 으로 넘어갈 수 있는 쪽이 맞다.
+    """
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = [json.loads(line) for line in lines]
+    if not rows:
+        raise ValueError(f"{path} 가 비었다 — 헤더도 없다")
+    return rows[0], rows[1:]
+
+
 def read_chunks(path: Path) -> Iterator[dict[str, Any]]:
     """헤더를 건너뛰고 청크 행만. 4단계 임베더는 파일 경계를 무시하고 이것만 이어 붙인다."""
     for row in read(path):

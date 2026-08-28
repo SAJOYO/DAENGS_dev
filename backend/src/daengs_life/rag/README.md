@@ -22,12 +22,17 @@ rag/
     │   ├── __init__.py   status() / parse_doc() — CLI 는 출력만 한다
     │   ├── registry.py   meta 의 source_id → 파서 모듈 (스캔하지 않고 경로를 계산)
     │   ├── extract/                             ← ① 포맷 층. 사이트를 모른다
-    │   │   └── boxtable.py  괘선 아트 표 파서 (RAG-020)
+    │   │   ├── boxtable.py   괘선 아트 표 파서 (RAG-020)
+    │   │   ├── prose.py      HTML 해설 → heading/para (RAG-018)
+    │   │   └── htmltable.py  HTML <table> → header+rows. colspan/rowspan 전개 (RAG-036)
     │   └── parsers/                             ← ② 사이트 층
     │       ├── base.py   NAME / VERSION / parse() 계약
-    │       └── law/
-    │           ├── law_drf_api.py   법령 API XML — 조문·항·호·목 / 부칙 / 별표
-    │           └── easylaw_pet.py   생활법령 해설 HTML — 소제목 계층 / 100문100답
+    │       ├── law/
+    │       │   ├── law_drf_api.py   법령 API XML — 조문·항·호·목 / 부칙 / 별표
+    │       │   └── easylaw_pet.py   생활법령 해설 HTML — 소제목 계층 / 100문100답
+    │       └── transport/
+    │           ├── seoulmetro_terms.py  여객운송약관 HTML — 법령이 아닌데 조문형이다
+    │           └── srt_terms.py         반려동물 안내 — 본문이 <img alt> 하나다
     ├── chunk.py      3단계 ★ 타입 기반 단일 청커 (RAG-021) — 소스별 분기가 생기면 안 된다
     ├── embed.py      4단계 모델 3종 레지스트리 · 토큰 가드 · parquet (RAG-002)
     ├── goldenset.py  5단계 채점 기준표 로드·검증 (RAG-022)

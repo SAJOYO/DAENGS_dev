@@ -118,6 +118,69 @@ function stopGyro() {
 
 /* ── 장면 조립 ─────────────────────────────────────────── */
 
+/* ── 장면 에셋 선로딩 ───────────────────────────────────────
+   이머시브는 배경·누끼·카드 그림 세 장(합쳐 600KB)을 쓰는데, 예전엔 꾹이 완성된
+   **그 순간에 처음** 받았다. 느린 망에서는 틀이 녹는 동안 텃밭이 아직 안 와서 빈
+   화면이 보였다. 꾹 누르는 520ms 는 어차피 기다리는 시간이니 거기에 받아 둔다.
+
+   **blob 으로 들고 있는 이유**: 개발 서버가 `Cache-Control: no-store` 를 보낸다
+   (고친 게 바로 반영돼야 해서 일부러 그렇게 뒀다). 그래서 `new Image()` 로 미리
+   받아 봐야 브라우저가 저장하지 않고, 정작 <img> 를 만들 때 **다시 받는다.**
+   바이트를 blob 으로 쥐고 있으면 캐시 정책과 무관하게 두 번 안 받는다.
+   배경은 CSS background-image 라 요소를 재사용할 수도 없으니 이 방법이어야 한다.
+
+   decode() 까지 해 둔다. 받아만 놓으면 첫 페인트에서 디코딩을 기다리는데, 이 그림들은
+   1376x768 · 875x1216 짜리라 그것도 눈에 띈다.
+
+   실패하면 지도에서 지운다 — 그러면 asset() 이 원래 주소를 돌려주고 평소대로 돈다.
+   선로딩은 어디까지나 앞당기기지, 없으면 안 되는 게 아니다. */
+const scenePreload = new Map();   // 원래 주소 → { url, img } · 진행 중이면 null
+
+/** 주 입력이 터치인가. main.js · touch.css 와 같은 기준이라 셋이 같은 기기를 가리킨다. */
+const coarsePointer = matchMedia("(hover: none) and (pointer: coarse)");
+
+/**
+ * 터치에서는 입자를 절반으로 줄인다.
+ *
+ * 이 장면은 먼지 52 · 이슬 15 · 배추 이슬 11 · 잎 7 로 **88개**를 만든다. 하나하나는
+ * 작지만 전부 무한 애니메이션을 달고 있어서(먼지는 흐르기와 밝아지기 두 개) 크롬이
+ * 대부분 개별 합성 레이어로 승격시킨다. 게다가 먼지는 box-shadow 가 두 겹이고 반경이
+ * `--s * 9px` 라, 4px 짜리 점 하나가 훨씬 큰 텍스처를 차지한다.
+ *
+ * 절반으로 줄여도 밀도가 눈에 띄게 빠지지는 않는다 — 원래 무작위로 흩뿌린 것이라
+ * 개수보다 "여기저기 있다"가 읽히면 된다. 최소값을 두는 건 너무 줄어서 **한둘만
+ * 떠 있는 게 보이는** 상태를 막기 위해서다. 그건 없느니만 못하다.
+ *
+ * 되돌리려면 0.5 를 1 로 바꾸면 된다.
+ */
+const count = (n, min) =>
+  coarsePointer.matches ? Math.max(min, Math.round(n * 0.5)) : n;
+
+const sceneUrls = (card) => {
+  const s = card?.scene;
+  return s ? [s.back, s.subject, s.card, s.frame].filter(Boolean) : [];
+};
+
+/** 여러 번 불러도 안전하다. 이미 받았거나 받는 중이면 그냥 넘어간다. */
+export function preloadScene(card) {
+  for (const u of sceneUrls(card)) {
+    if (scenePreload.has(u)) continue;
+    scenePreload.set(u, null);
+    (async () => {
+      const res = await fetch(u);
+      if (!res.ok) throw new Error(`${res.status} ${u}`);
+      const url = URL.createObjectURL(await res.blob());
+      const img = new Image();
+      img.src = url;
+      await img.decode().catch(() => {});   // 디코딩 실패해도 바이트는 쓸 수 있다
+      scenePreload.set(u, { url, img });    // img 를 같이 쥐어 디코딩 결과를 붙잡아 둔다
+    })().catch(() => scenePreload.delete(u));
+  }
+}
+
+/** 선로딩이 끝났으면 blob 주소, 아니면 원래 주소. 둘 다 그냥 쓰면 된다. */
+const asset = (u) => scenePreload.get(u)?.url ?? u;
+
 function build(card) {
   const rng = rngFrom(seedOf(card.id));
   const scene = card.scene || {};
@@ -127,7 +190,7 @@ function build(card) {
   el.style.setProperty("--accent", card.accent);
   el.style.setProperty("--accent2", card.accent2);
   // 레이어 원화가 없으면 카드 그림으로 때운다. 보기엔 이상하지만 터지지는 않는다.
-  el.style.setProperty("--back", `url("${scene.back ?? card.art}")`);
+  el.style.setProperty("--back", `url("${asset(scene.back ?? card.art)}")`);
 
   // 들어올 때 겹칠 카드의 자리. scene.fit 이 "카드 안에서 누끼가 차지하는 자리"이므로
   // 뒤집으면 "누끼에 맞추려면 카드가 어디 있어야 하는지"가 된다.
@@ -144,35 +207,41 @@ function build(card) {
 
   // --i 는 진입 시차 순번이다. 뒤에서 앞으로 0..6.
   el.innerHTML = `
-    <div class="dio-layer dio-sky" style="--i:0"><div class="dio-move"></div></div>
-    <div class="dio-layer dio-back" style="--i:1"><div class="dio-move"></div></div>
-    <div class="dio-layer dio-rays" style="--i:2"><div class="dio-move"></div></div>
-    <div class="dio-layer dio-motes" style="--i:3"><div class="dio-move"></div></div>
+    <div class="dio-void" aria-hidden="true"></div>
+    <div class="dio-world">
+      <div class="dio-layer dio-sky" style="--i:0"><div class="dio-move"></div></div>
+      <div class="dio-layer dio-back" style="--i:1"><div class="dio-move"></div></div>
+      <div class="dio-layer dio-rays" style="--i:2"><div class="dio-move"></div></div>
+      <div class="dio-layer dio-motes" style="--i:3"><div class="dio-move"></div></div>
+    </div>
     <div class="dio-layer dio-subject" style="--i:4"><div class="dio-move">
       <div class="dio-plate">
         <span class="dio-ground" aria-hidden="true"></span>
-        ${fit ? `<img class="dio-plate-art" src="${esc(scene.card ?? card.art)}" alt="" aria-hidden="true" decoding="async">` : ""}
-        <img class="dio-hero" src="${esc(scene.subject ?? card.art)}"
+        ${scene.frame ? `<img class="dio-plate-frame" src="${esc(asset(scene.frame))}" alt="" aria-hidden="true" decoding="async">` : ""}
+        ${fit ? `<img class="dio-plate-art" src="${esc(asset(scene.card ?? card.art))}" alt="" aria-hidden="true" decoding="async">` : ""}
+        <img class="dio-hero" src="${esc(asset(scene.subject ?? card.art))}"
              alt="${esc(altText(card))}" decoding="async">
         <span class="dio-skin" aria-hidden="true"></span>
       </div>
     </div></div>
-    <div class="dio-layer dio-hud" style="--i:5"><div class="dio-move">
-      <div class="dio-meta">
-        <span class="dio-rank" aria-hidden="true">★★★</span>
-        <strong>${esc(card.name)}</strong>
-        <span class="dio-code">${esc(card.code)} · ${esc(card.edition)}</span>
-        ${scene.place ? `<span class="dio-place">${esc(scene.place)}</span>` : ""}
-      </div>
-    </div></div>
-    <div class="dio-layer dio-fore" style="--i:6"><div class="dio-move"></div></div>
-    <div class="dio-layer dio-dew" style="--i:7"><div class="dio-move"></div></div>
+    <div class="dio-world">
+      <div class="dio-layer dio-hud" style="--i:5"><div class="dio-move">
+        <div class="dio-meta">
+          <span class="dio-rank" aria-hidden="true">★★★</span>
+          <strong>${esc(card.name)}</strong>
+          <span class="dio-code">${esc(card.code)} · ${esc(card.edition)}</span>
+          ${scene.place ? `<span class="dio-place">${esc(scene.place)}</span>` : ""}
+        </div>
+      </div></div>
+      <div class="dio-layer dio-fore" style="--i:6"><div class="dio-move"></div></div>
+      <div class="dio-layer dio-dew" style="--i:7"><div class="dio-move"></div></div>
+    </div>
     <button type="button" class="dio-exit">닫기 (Esc)</button>
     <p class="dio-tip">기울이거나 끌어서 둘러보세요</p>`;
 
   // 먼지 — 카드 뒤에서 느리게 떠다닌다
   const motes = el.querySelector(".dio-motes .dio-move");
-  for (let i = 0; i < (scene.motes ?? 30); i++) {
+  for (let i = 0; i < count(scene.motes ?? 30, 12); i++) {
     motes.append(spanWith("mote", vars({
       x: (rng() * 100).toFixed(1),
       y: (rng() * 100).toFixed(1),
@@ -188,17 +257,27 @@ function build(card) {
     })));
   }
 
-  // 앞 잎사귀 — 크고 흐리게. 초점이 카드에 맞은 것처럼 보이게 하는 층이다
+  // 앞 잎사귀 — 크고 흐리게. 초점이 카드에 맞은 것처럼 보이게 하는 층이다.
+  //
+  // 자리는 이슬과 같은 규칙으로 가운데를 피한다. 예전엔 화면 전체에 균등하게
+  // 뿌려서 얼굴 위에 그대로 앉았다 — 이 층은 주인공보다 **앞**에 그려지므로
+  // 가리면 캐릭터가 안 읽힌다. 렌즈 이슬(offCenter)과 표면 이슬(반지름 28~42%
+  // 고리)은 진작 그렇게 하고 있었는데 잎만 빠져 있었다.
+  //
+  // 크기(--s)와 번짐(--b)의 단위는 px 이 아니라 **누끼 높이의 %** 다. immersive.css
+  // 의 .leaf 가 --hh 를 곱한다. px 로 두면 폰에서 화면만 작아지고 잎은 그대로라
+  // 캐릭터를 덮는다.
   const fore = el.querySelector(".dio-fore .dio-move");
-  for (let i = 0; i < (scene.leaves ?? 7); i++) {
+  for (let i = 0; i < count(scene.leaves ?? 7, 3); i++) {
     const l = document.createElement("span");
     l.className = "leaf";
+    const [lx, ly] = offCenter(rng);
     l.style.cssText = vars({
-      x: (rng() * 108 - 6).toFixed(1),
-      y: (rng() * 108 - 6).toFixed(1),
-      s: (60 + rng() * 120).toFixed(0),
+      x: lx.toFixed(1),
+      y: ly.toFixed(1),
+      s: (11 + rng() * 22).toFixed(1),
       o: (.16 + rng() * .26).toFixed(2),
-      b: (7 + rng() * 12).toFixed(1),
+      b: (1.25 + rng() * 2.2).toFixed(2),
       r: (rng() * 360).toFixed(0),
       t: (9 + rng() * 8).toFixed(1),
       d: (rng() * 16).toFixed(1),
@@ -215,7 +294,7 @@ function build(card) {
   const shells = scene.shells ?? [];
   const plate = el.querySelector(".dio-plate");
   const skinEl = el.querySelector(".dio-skin");
-  const heroSrc = esc(scene.subject ?? card.art);
+  const heroSrc = esc(asset(scene.subject ?? card.art));
 
   for (const sh of shells) {
     const layer = document.createElement("div");
@@ -239,7 +318,7 @@ function build(card) {
   // 표정이 안 읽힌다 — 얼굴 반지름이 22% 쯤이라 28% 부터 시작한다.
   const skin = el.querySelector(".dio-skin");
   const frontZ = shells.reduce((m, sh) => Math.max(m, sh.z), 0);
-  for (let i = 0; i < (scene.skinDew ?? 11); i++) {
+  for (let i = 0; i < count(scene.skinDew ?? 11, 4); i++) {
     const a = rng() * Math.PI * 2;
     const r = 28 + rng() * 14;
     const kind = dewKind(rng);
@@ -273,8 +352,8 @@ function build(card) {
   // 뒤 세상이 통째로 밀리는데 이것만 안 움직여서, 화면과 나 사이에 유리가 한 장
   // 있다는 게 읽힌다. 밀리게 하면 그냥 떠다니는 동그라미가 된다.
   const dew = el.querySelector(".dio-dew .dio-move");
-  const runners = scene.dewRun ?? 3;
-  for (let i = 0; i < (scene.dew ?? 15); i++) {
+  const runners = count(scene.dewRun ?? 3, 1);   // 흘러내리는 것은 dew 의 부분집합
+  for (let i = 0; i < count(scene.dew ?? 15, 5); i++) {
     const [x, y] = offCenter(rng);
     const size = 8 + rng() * 18;
     const kind = dewKind(rng);
@@ -340,7 +419,93 @@ function setFlight(root, fromRect) {
   // 중간에 한 번 "카드 크기"로 서는 지점. 고정값을 쓰면 안 된다 — 모바일은 그리드
   // 카드가 이미 화면만 해서 s 가 0.7 을 넘는데, 거기서 0.62 로 가면 날아오다가
   // 오히려 **작아졌다가** 커진다. 출발 크기보다 항상 크도록 잡는다.
-  plate.style.setProperty("--mid-s", Math.min(.92, Math.max(s * 1.25, .62)).toFixed(3));
+  // 착지 배율(--set-s)보다 크면 날아오다가 오히려 **작아졌다가** 서게 된다.
+  const set = parseFloat(getComputedStyle(plate).getPropertyValue("--set-s")) || 1;
+  plate.style.setProperty(
+    "--mid-s", Math.min(set * .95, Math.max(s * 1.25, .62)).toFixed(3));
+}
+
+/**
+ * 그림 창이 화면 어디인지 재서 `--win-*` 에 넣는다.
+ *
+ * **카드가 제자리에 섰을 때(판 배율 1) 기준이다.** is-entering 을 붙이기 전에 재므로
+ * 그 상태가 그대로 잡힌다. 그래서 창이 열리는 구간(62% 이후)에는 판이 이미 배율 1 에
+ * 멈춰 있어야 한다 — plate-in 이 44% 에 1 로 서서 그대로 있는 이유가 이것이다.
+ *
+ * clip-path 가 이 값으로 창을 그리고 **틀 이미지는 같은 --winK 로 커진다.** 둘이 같은
+ * 변수를 읽으므로 어긋날 수가 없다. 창은 "중심에서 반너비 x 배율" 로, 틀은 창 중심을
+ * 기준으로 한 scale 로 커지는데, 기준점이 같아서 결과가 일치한다.
+ *
+ * 카드가 화면에 들어오는 배율(--set-s)도 여기서 정한다. **판의 배율 1 은 카드가
+ * 화면보다 큰 크기다** — 카드 높이가 누끼 높이(--hh)의 1.59배라 폰에서 459x638 이
+ * 되어 430 폭을 넘는다. 예전엔 카드가 배율 1 에 닿기 전에 녹아 없어져서 그 사실이
+ * 드러나지 않았는데, 이제 판이 44% 에 서서 그대로 보이므로 맞춰 줘야 한다.
+ *
+ * @param {object} card cards.mjs 의 카드. scene.window 와 w/h 비율을 쓴다.
+ */
+function setWindow(root, card) {
+  const win = card.scene?.window;
+  const art = root.querySelector(".dio-plate-art");
+  if (!art || !win) return;
+
+  // **이미지가 안 와도 잴 수 있어야 한다.** offsetHeight 는 calc(--card-h * --hh) 라
+  // 이미지와 무관하지만 offsetWidth 는 width:auto 라 원본 비율을 알아야 나온다.
+  // 그 비율은 cards.mjs 에 이미 있으므로 계산으로 대신한다.
+  //
+  // getBoundingClientRect 를 안 쓰는 이유: 그건 transform 이 반영된 값이라
+  // plate-in 이 도는 중에 재면 엉뚱한 크기가 잡힌다. offset* 은 레이아웃 값이다.
+  const h0 = art.offsetHeight;
+  if (!h0) return;
+  const w0 = h0 * (card.w / card.h);
+
+  const vw = root.clientWidth;
+  const vh = root.clientHeight;
+  if (!vw || !vh) return;
+
+  const set = Math.min(1, (vw * 0.86) / w0, (vh * 0.80) / h0);
+  root.style.setProperty("--set-s", set.toFixed(4));
+  // 판이 제 크기로 돌아왔을 때의 --pg. 판의 배율이 --set-s * --pg 라 이 값이 끝값이고,
+  // 곱이 정확히 1 이 되어야 is-entering 이 걷힐 때 안 튄다. 자릿수를 넉넉히 준다 —
+  // 4 자리로 자르면 곱이 0.9999 가 되어 폰에서 반 픽셀쯤 어긋난다.
+  root.style.setProperty("--set-inv", (1 / set).toFixed(6));
+
+  // 창의 자리. 판은 **자기 중심(=화면 중심) 기준**으로 set 배가 되므로 그만큼 옮긴다.
+  const cx0 = vw / 2;
+  const cy0 = vh / 2;
+  const cx = art.offsetLeft + w0 * (win.x + win.w / 2) / 100;
+  const cy = art.offsetTop + h0 * (win.y + win.h / 2) / 100;
+
+  const wx = cx0 + (cx - cx0) * set;
+  const wy = cy0 + (cy - cy0) * set;
+  const hw = w0 * win.w / 200 * set;
+  const hh = h0 * win.h / 200 * set;
+
+  root.style.setProperty("--win-cx", `${wx.toFixed(1)}px`);
+  root.style.setProperty("--win-cy", `${wy.toFixed(1)}px`);
+  root.style.setProperty("--win-hw", `${hw.toFixed(1)}px`);
+  root.style.setProperty("--win-hh", `${hh.toFixed(1)}px`);
+
+  // 창이 화면 네 변을 다 넘어서는 배율. **이걸 고정값으로 박으면 안 된다.**
+  // 창은 카드 그림 영역이라 거의 정사각인데 화면은 가로로 길어서, 같은 배율로
+  // 벌리면 위아래가 먼저 끝나고 좌우가 한참 남는다. 예전엔 4.5 를 박아 뒀는데
+  // 그 값이 딱 맞는 건 재 본 화면 하나뿐이고, 조금만 넓거나 낮아도 연출이 끝날
+  // 때까지 **좌우에 검은 띠가 남았다.** 창은 자기 중심에서 벌어지므로 중심에서
+  // 먼 쪽 변까지의 거리를 반너비로 나눈 값이 곧 필요한 배율이다.
+  const cover = Math.max(
+    Math.max(wx, vw - wx) / hw,
+    Math.max(wy, vh - wy) / hh);
+  root.style.setProperty("--win-k", cover.toFixed(3));
+  // 다 덮고 나서도 조금 더 벌어져야 "통과했다"가 된다. 여기서부터는 화면 밖이라
+  // 판이 제 크기로 돌아오는 구간(plate-in 84~100%)과 겹쳐도 아무것도 안 보인다.
+  root.style.setProperty("--win-k-end", (cover * 1.22).toFixed(3));
+
+  // 틀 이미지 자기 좌표에서의 창 중심 — 여기를 기준으로 커져야 창과 같이 벌어진다.
+  // 판이 set 배로 줄어도 기준점은 비율이라 그대로다.
+  root.style.setProperty("--win-ox", `${(win.x + win.w / 2).toFixed(2)}%`);
+  root.style.setProperty("--win-oy", `${(win.y + win.h / 2).toFixed(2)}%`);
+
+  // 값이 다 준비됐을 때만 창 연출을 켠다. 틀이 없는 카드는 예전 연출로 돈다.
+  root.classList.add("has-window");
 }
 
 /**
@@ -360,10 +525,24 @@ export function openImmersive(card, fromRect) {
 
   if (!reducedMotion) {
     // 재는 건 is-entering 을 붙이기 **전에**. 붙고 나면 이미 변형된 상태라 못 잰다.
+    setWindow(dio, card);      // --set-s 를 먼저 정한다 (setFlight 가 읽는다)
     setFlight(dio, fromRect);
+
+    // 들어오는 2.1초 안에 화면 크기가 바뀌면(폰에서 주소창이 접히는 게 대표적)
+    // 창은 **옛 화면 기준**으로 남아 틀과 어긋난다. 그 어긋남은 창 가장자리에
+    // 검은 띠로 드러나고, 창이 벌어질수록 같이 두꺼워진다.
+    // CSS 가 --win-* 와 --set-s 를 var() 로 읽으므로 다시 재서 넣기만 하면
+    // 도는 중에도 따라온다 (offset* 은 레이아웃 값이라 변형과 무관하게 잴 수 있다).
+    const el = dio;
+    reflow = () => setWindow(el, card);
+    addEventListener("resize", reflow);
+
     dialog.classList.add("is-entering");
-    // 마지막 배경 평면이 들어오는 시각 = 420 + 6*80 + 900 = 1800ms, 판은 2100ms
-    setTimeout(() => dialog.classList.remove("is-entering"), 2160);
+    // 창이 다 열리는 시각이 2100ms 로 제일 늦다 (배경 평면은 880 + 7*45 + 620 = 1815ms)
+    // 타이머를 들고 있어야 한다 — 닫았다 바로 다시 열면 **먼저 걸린 타이머가 새 판의
+    // is-entering 을 도중에 걷어내서** 연출이 중간에 툭 끊긴다.
+    clearTimeout(enterTimer);
+    enterTimer = setTimeout(() => dialog.classList.remove("is-entering"), 2160);
   }
 
   bindScene(dio);
@@ -375,9 +554,17 @@ export function openImmersive(card, fromRect) {
    테스트한 Chrome 에서 close 가 발화하지 않았다. 닫는 길을 전부 여기로 모으고
    close/cancel 은 보조 수단으로만 둔다. finish 는 여러 번 불려도 안전하다. */
 let closing = false;
+let enterTimer = 0;
+let reflow = null;      // 들어오는 동안만 붙어 있는 resize 핸들러
 
 function finish() {
   closing = false;
+  clearTimeout(enterTimer);
+  enterTimer = 0;
+  if (reflow) {
+    removeEventListener("resize", reflow);
+    reflow = null;
+  }
   dialog.classList.remove("is-entering", "is-leaving");
   if (dialog.open) dialog.close();
   dialog.replaceChildren();

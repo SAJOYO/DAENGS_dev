@@ -13,9 +13,9 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
-| `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-018 |
+| `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
-| `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) 컨테이너 |
+| `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) + redis 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/migrations/` | **이미 돌고 있는 DB** 에 손으로 적용하는 SQL. 스키마를 바꾸면 `db/init/` 과 같이 고칩니다 |
@@ -76,10 +76,27 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **backend 는 compose 로 띄우고 개발 모드로 돕니다.** `backend/src` 를 마운트해
   파일을 고치면 컨테이너가 리로드합니다. 재시작이 필요한 건 의존성을 바꿨을 때뿐이고,
   그때는 `docker compose restart backend` 를 직접 실행하세요 (워크플로우는 건드리지 않습니다).
+- **`/ask` 의 임베딩 모델은 backend 프로세스에 상주합니다** (D-021). 그래서 컨테이너의
+  `command` 가 `uv sync --frozen --group ml && uv run --no-sync dev` 입니다.
+  ⚠ **컨테이너 안에서 `uv sync` 를 인자 없이 돌리지 마세요** — 그건 exact 동기화라 `ml` 을
+  지웁니다(`uv run` 은 inexact 라 안 지웁니다. uv 0.12.5 실측). 그러면 torch 가 빠져
+  `/ask` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에 아무 문제도 안 보입니다.
+  고칠 때는 `uv sync --group ml` 로 부르세요.
+  상시 비용은 **RAM 약 2.4GB** 이고, 그것이 서버 여유를 위협하면 그때 별도 프로세스로 뗍니다
+  (D-021 의 재개 조건 ⓐ~ⓓ). **개발 PC 는 `uv sync` 만 해도 backend 가 뜹니다** — `ml` 이
+  없으면 `/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
+- **서빙 임베딩 모델과 코퍼스가 어긋나면 조용히 틀립니다.** 문서 벡터와 질의 벡터가 다른
+  모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
+  `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
+  `임베딩 모델 불일치` 경고가 그것을 알려 줍니다.
+- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 `main.py` 의 세 줄뿐입니다** —
+  등록 두 줄(`/walk` · `/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
+  (`/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
+  `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
   `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라
   CORS 가 필요합니다 — `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
-- **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx 와 pgvector 를 함께 올립니다.
+- **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx · pgvector · redis 를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
 - **`POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` 도 볼륨이 빌 때만 반영됩니다.**
@@ -98,7 +115,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   롤을 새로 만들었으면 `ALTER DEFAULT PRIVILEGES` 까지 걸어 두세요. 안 그러면
   **나중에 다른 계정으로 만든 테이블이 앱 계정에 안 보입니다.**
 - **compose 는 서버 PC 에서만 띄웁니다.** DB 는 팀에 하나뿐이고 서버 PC 에 있습니다
-  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx 와 pgvector 가
+  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx · pgvector · redis 가
   또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB 가 생깁니다.
   개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DB_HOST` 가 서버 DB 를
   보게 하세요.
@@ -106,6 +123,14 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
   기본값이 아닌 값으로 지정하세요. pgAdmin(tools 프로파일)은 로그인 없는 모드라
   띄워 둔 동안에는 누구나 들어올 수 있습니다.
+- **Redis 도 LAN 에 열어 둡니다** (D-019). 실시간 산책의 캐시이자 **일 예산 카운터**라,
+  개발 PC 도 서버 Redis 에 붙어야 data.go.kr 의 1,000회/일 을 하나로 셉니다. Redis 는
+  기본이 무인증이므로 최상단 `.env` 의 `REDIS_PASSWORD` 를 **반드시** 채우세요 — 비어
+  있으면 `docker compose` 가 아예 멈춥니다 (`:?` 가드. `DAENGS_TRAINING_RAG_BASE_URL`
+  과 같은 장치입니다). 접속은 `REDIS_URL` **한 줄**이라
+  (`backend/.env`) 비밀번호에 `@` `/` `#` 이 들어가면 깨집니다. 영숫자로만 지으세요.
+  **`maxmemory` 는 일부러 안 겁니다** — 나중에 Celery 워커가 같은 인스턴스를 쓰는데,
+  eviction 은 DB 번호가 아니라 인스턴스 단위라 큐가 조용히 지워집니다.
 - **DB collation 은 `C` 입니다** (의도한 설정). 한글끼리의 정렬은 C 에서도 정확하고,
   `LIKE` 인덱스와 비교 속도에서 유리합니다. 영문 대소문자나 한글·영문 혼합 정렬이
   필요한 쿼리에서만 `ORDER BY x COLLATE "ko-KR-x-icu"` 를 붙이세요.

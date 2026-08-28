@@ -10,12 +10,21 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "argon2-cffi>=25.1.0",
     "asyncpg>=0.31.0",
+    "beautifulsoup4>=4.15.0",
+    "celery>=5.5",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
+    "google-genai>=2.18.1",
     "httpx>=0.28.1",
     "joserfc>=1.7.4",
+    "lxml>=6.1.2",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "redis>=6.0",
     "sqlalchemy[asyncio]>=2.0.52",
+    "tzdata>=2026.3",
 ]
 
 # uv run dev / uv run run 으로 부릅니다.
@@ -28,14 +37,51 @@ seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
 kakao-token = "daengs_backend.cli.kakao_token:main"
 
+# torch 를 플랫폼별로 다른 인덱스에서 받는다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
+# `explicit = true` 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스에서 받는다.
+#
+# **리눅스를 안 적으면 CUDA 판이 온다.** PyPI 의 기본 torch 휠은 NVIDIA 런타임을 동봉하고
+# 있어서, 마커가 win32 뿐이면 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받는다. D-021 로
+# 서버에 torch 가 생기면서 실제로 물리는 자리가 됐다.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+# src/ 밑에 패키지가 둘이라 이름을 적어 준다. 기본값은 프로젝트 이름에서 유추한
+# `daengs_backend` 하나뿐이어서, 안 적으면 **휠에 `daengs_life` 가 조용히 빠진다**
+# — 컨테이너가 `backend/src` 를 마운트해 도는 개발 모드에서는 안 드러난다.
+[tool.uv.build-backend]
+module-name = ["daengs_backend", "daengs_life"]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+]
+# 앱 런타임과 섞지 않으려고 그룹으로 뺀다. `uv sync --group ml` 을 해야 설치되고,
+# **기본 `uv sync` 에는 안 붙는다** — 서버 backend 컨테이너가 torch 10GB 를 받으면 안 된다.
+ml = [
+    "numpy>=2",
+    "pyarrow>=18",
+    "sentence-transformers>=3.4",
+    "torch>=2.6",
+    "transformers<5",
 ]
 
 # uv run pytest 로 부릅니다. 테스트는 backend/tests/ 에 둡니다
@@ -43,5 +89,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # async 테스트에 @pytest.mark.asyncio 를 매번 붙이지 않아도 되게 합니다.
-# 지금은 async 테스트가 없지만, DB·API 카드부터 바로 필요합니다.
 asyncio_mode = "auto"
+# 가중치를 로드하는 테스트는 기본 실행에서 뺍니다 — bge-m3 하나가 6.5GB 라
+# pytest 가 분 단위로 느려지면 아무도 안 돌립니다. 따로: `uv run pytest -m slow`
+# (marker 가 없는 테스트는 `not slow` 를 통과하므로 나머지는 그대로 돕니다.)
+markers = ["slow: 임베딩 모델 가중치를 실제로 로드한다"]
+addopts = "-m 'not slow'"

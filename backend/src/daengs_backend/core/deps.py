@@ -29,6 +29,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import (
+    AccessClaims,
     TokenExpiredError,
     TokenInvalidError,
     decode_access_token,
@@ -121,21 +122,23 @@ def _extract_token(request: Request) -> str | None:
     return None
 
 
-async def current_admin(request: Request) -> Principal:
-    """access token 을 풀어 Principal 로. 못 믿을 토큰이면 401 입니다.
+def _claims_of(request: Request) -> AccessClaims:
+    """요청에서 access token 을 꺼내 풉니다. 못 믿을 토큰이면 401 입니다.
 
-    만료와 위조를 **응답에서는 구분하지 않습니다** — 클라이언트가 할 일은 둘 다
+    아래 세 개의 문(`current_admin` · `current_app_user` · `admin_or_app_user`)이
+    공유합니다. **"누구인가"까지만 하고 "들어와도 되는가"는 하지 않습니다** —
+    종류를 어디까지 받을지는 부르는 쪽마다 다릅니다.
+
+    만료와 위조를 **응답에서 구분하지 않습니다** — 클라이언트가 할 일은 둘 다
     "재발급하고 다시" 로 같습니다. 다만 로그는 구분합니다. 만료는 5분마다 일어나는
     정상이고, 위조는 누가 토큰을 손댔다는 뜻입니다.
     """
     token = _extract_token(request)
     if token is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다."
-        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
 
     try:
-        claims = decode_access_token(token)
+        return decode_access_token(token)
     except TokenExpiredError:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "인증이 만료되었습니다."
@@ -146,6 +149,15 @@ async def current_admin(request: Request) -> Principal:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다."
         ) from None
+
+
+async def current_admin(request: Request) -> Principal:
+    """access token 을 풀어 Principal 로. 못 믿을 토큰이면 401 입니다.
+
+    토큰을 푸는 것 자체는 `_claims_of` 가 합니다. 여기서 보는 것은 **그게 관리자
+    것이냐** 하나뿐입니다.
+    """
+    claims = _claims_of(request)
 
     if claims.subject_type is not SubjectType.ADMIN:
         # 진짜 우리 토큰이지만 **관리자 것이 아닙니다.** 앱 회원이 자기 토큰으로
@@ -190,22 +202,11 @@ async def current_app_user(request: Request) -> AppPrincipal:
     **관리자 토큰을 막습니다.** 관리자가 앱 API 로 들어오는 것이 당장 위험하지는
     않지만, 그 토큰의 `sub` 는 `admin_users` 의 UUID 라 `app_users` 에서 조회하면
     없는 회원이 됩니다. 그 자리를 404 나 500 으로 만나지 말고 여기서 끊습니다.
-    """
-    token = _extract_token(request)
-    if token is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
 
-    try:
-        claims = decode_access_token(token)
-    except TokenExpiredError:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "인증이 만료되었습니다."
-        ) from None
-    except TokenInvalidError:
-        logger.warning("신뢰할 수 없는 access token (ip=%s)", _client_host(request))
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다."
-        ) from None
+    **둘을 함께 받아야 하는 엔드포인트는 `admin_or_app_user` 를 쓰세요.** 이 함수를
+    고쳐서 관리자를 통과시키면 그것을 쓰는 앱 API 가 전부 같이 열립니다.
+    """
+    claims = _claims_of(request)
 
     if claims.subject_type is not SubjectType.APP:
         logger.warning(
@@ -228,24 +229,68 @@ def require(*perms: Perm):  # noqa: ANN201
         @router.delete("/admins/{admin_id}")
         async def remove(admin: Annotated[Principal, Depends(require(Perm.ADMIN_MANAGE))]):
 
-    403 입니다 (401 이 아닙니다). 누구인지는 확인됐고 권한이 모자란 것이라,
-    다시 로그인해도 달라지지 않습니다 — 401 을 주면 클라이언트가 재발급을
-    시도하며 무한히 돕니다.
+    **관리자 전용입니다.** 앱 회원 토큰은 `CurrentAdmin` 에서 401 로 막힙니다.
+    둘을 함께 받아야 하면 `admin_or_app_user` 를 쓰세요.
     """
 
     async def dependency(admin: CurrentAdmin) -> Principal:
-        missing = [p for p in perms if not admin.can(p)]
-        if missing:
-            logger.info(
-                "권한 없음 (admin=%s, role=%s, 필요=%s)",
-                admin.admin_id,
-                admin.role,
-                [p.value for p in missing],
-            )
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "권한이 없습니다.")
+        _deny_unless_permitted(admin, perms)
         return admin
 
     return dependency
+
+
+def admin_or_app_user(*perms: Perm):  # noqa: ANN201
+    """관리자와 앱 회원을 **둘 다** 받는 문. 관리자에게만 권한을 요구합니다.
+
+        app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+
+    `current_admin` 과 `current_app_user` 가 서로를 막는 것과 반대로 보이지만, 규칙이
+    느슨해진 것이 아니라 **엔드포인트의 성격이 다릅니다.** 여기를 쓸 수 있는 것은
+    principal 을 받기만 하고 **쓰지 않는** 엔드포인트뿐입니다 — 지금은 `/walk` 하나이고,
+    저기는 좌표만 보고 답합니다.
+
+    **신원으로 남의 것을 걸러야 하는 API 에는 쓰지 마세요.** 관리자 `sub` 는
+    `admin_users` 의 UUID 라 `app_users` 에서 조회하면 없는 회원이 되고, 그때
+    `current_app_user` 가 막아 주던 404·500 을 그대로 만납니다.
+
+    앱 회원에게는 권한을 묻지 않습니다. `AppPrincipal` 에는 role 이 없습니다 —
+    등급이 필요한 화면이 없어서 처음부터 두지 않았습니다.
+    """
+
+    async def dependency(request: Request) -> Principal | AppPrincipal:
+        claims = _claims_of(request)
+
+        if claims.subject_type is SubjectType.APP:
+            return AppPrincipal(app_user_id=claims.subject_id)
+
+        # decode_access_token 이 관리자 토큰에 role 이 있는 것을 보장합니다.
+        assert claims.role is not None
+        admin = Principal(admin_id=claims.subject_id, role=claims.role)
+        _deny_unless_permitted(admin, perms)
+        return admin
+
+    return dependency
+
+
+def _deny_unless_permitted(admin: Principal, perms: tuple[Perm, ...]) -> None:
+    """권한이 하나라도 모자라면 403. `require` 와 `admin_or_app_user` 가 공유합니다.
+
+    403 입니다 (401 이 아닙니다). 누구인지는 확인됐고 권한이 모자란 것이라, 다시
+    로그인해도 달라지지 않습니다 — 401 을 주면 클라이언트가 재발급을 시도하며
+    무한히 돕니다 (`frontend/lib/api.ts`).
+    """
+    missing = [p for p in perms if not admin.can(p)]
+    if not missing:
+        return
+
+    logger.info(
+        "권한 없음 (admin=%s, role=%s, 필요=%s)",
+        admin.admin_id,
+        admin.role,
+        [p.value for p in missing],
+    )
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "권한이 없습니다.")
 
 
 def _client_host(request: Request) -> str:

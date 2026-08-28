@@ -5,6 +5,21 @@
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 
+생활비서 RAG(①)·실시간 산책(②) 문서는 `choiyc05/daengs-life` 에서 이관했습니다 (D-018).
+**ADR 접두사가 `RAG-` · `RT-` 로 갈려 있는 것은 의도입니다** — 위 `decisions.md` 의 `D-` 와
+번호가 겹치면서 뜻이 남남이었기 때문입니다 (`D-011` 이 양쪽에서 다른 결정이었습니다).
+
+| 파일 | 내용 |
+| --- | --- |
+| [decisions-rag.md](decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-028) — 임베딩 후보·청킹·오케스트레이션·저장 규약·골든셋·적재·검색·서빙 |
+| [decisions-realtime.md](decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
+| [data-sources.md](data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-27 기준 11개만 수집** |
+| [realtime-apis.md](realtime-apis.md) | ② 날씨·대기질 API 정리 + 실측 로그. §1~§5 와 어긋나면 **§6 이 맞습니다** |
+
+저쪽 `docs/workflow.md`(작업 방식)는 **가져오지 않았습니다** — 위 `collaboration.md` 가
+같은 규칙을 더 자세히 담고 있어, 두면 같은 규칙의 두 번째 주장이 생깁니다.
+이관 노트(`handoff-daengs-dev.md`)도 원본 레포에 남겨 뒀습니다. 결과는 D-018 에 있습니다.
+
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.
 

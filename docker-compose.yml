@@ -25,6 +25,10 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
+    # Training RAG는 Docker 바깥(host)에서 별도 FastAPI로 실행된다. Linux Docker에서도
+    # host.docker.internal 이름을 해석할 수 있도록 backend에 직접 매핑한다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
     env_file:
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
@@ -51,6 +55,33 @@ services:
       DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
       DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      # Training RAG는 별도 host-side FastAPI다. main backend만 이 URL로 호출하며
+      # frontend는 nginx /api/ 경로를 통해서만 접근한다.
+      # 빈 문자열을 주입하면 backend가 restart loop에 빠진다. 배포 전에 최상단 .env에
+      # 반드시 설정하도록 compose 단계에서 중단한다.
+      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL:?Set DAENGS_TRAINING_RAG_BASE_URL in the deployment root .env}
+      # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
+      # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
+      #
+      # DB 와 달리 조각이 아니라 URL 한 줄이라, 비밀번호에 @ / # 이 들어가면 깨집니다
+      # (D-013 과 같은 함정). .env 에서 영숫자로만 지으세요.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # `/ask` 의 검색이 읽는 접속 정보입니다 (D-021).
+      #
+      # **`DAENGS_DB_*` 와 별개입니다** — `daengs_life.rag` 는 자기 Settings 를 갖고
+      # `POSTGRES_*`(또는 DATABASE_URL)를 읽습니다. 위 `DAENGS_DB_*` 는 `daengs_backend` 것이라
+      # rag 는 그 이름을 모릅니다. 안 넣으면 컨테이너 안에서 `localhost:5432` 로 가서,
+      # `/ask` 만 502 가 됩니다 (다른 API 는 멀쩡해서 더 헷갈립니다).
+      #
+      # 조각으로 넘기는 것은 위와 같은 이유입니다 (D-013) — `Settings.dsn` 이 `quote_plus` 로
+      # 이스케이프합니다. **두 이름 체계를 통일하는 것은 이 카드가 아닙니다**: D-018 이 미뤄 둔
+      # 규약 정합 작업이고, 2단계에서 `/ask` 를 별도 프로세스로 떼면 그쪽이 자기 접속을
+      # 가져야 해서 지금 합치면 나중에 되돌립니다.
+      POSTGRES_IP: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -61,12 +92,38 @@ services:
       - ./backend/src:/app/src
       - backend-venv:/opt/venv
       - uv-cache:/root/.cache/uv
+      # 임베딩 모델 가중치(약 1.2GB)를 컨테이너 밖에 둡니다 (D-021).
+      # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
+      # 같은 이유이고, 여기는 단위가 GB 입니다.
+      - hf-cache:/root/.cache/huggingface
     depends_on:
       pgvector:
         condition: service_healthy
+      # Redis 가 없어도 앱은 뜹니다 — 캐시가 메모리로 떨어질 뿐입니다.
+      # 그런데도 healthy 를 기다리는 이유: 그 판단이 프로세스 생애에 **한 번뿐**입니다
+      # (lru_cache 로 감싼 get_cache 가 lifespan 에서 한 번 열립니다).
+      # backend 가 먼저 뜨면 Redis 가 1초 뒤에 올라와도 그 프로세스는 재시작 전까지
+      # 영영 메모리 폴백이고, 그러면 일 예산 카운터가 안 쌓입니다 (D-019).
+      redis:
+        condition: service_healthy
     # uv sync 는 컨테이너가 뜰 때만 돕니다.
     # 의존성을 바꿨다면 docker compose restart backend 를 직접 실행하세요.
-    command: sh -c "uv sync --frozen && exec uv run dev"
+    #
+    # **`--group ml` 이 붙었습니다** (D-021). `/ask` 의 임베딩 모델이 이 프로세스에 상주하므로
+    # torch 가 필요합니다. 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의 `pytorch-cpu`
+    # 인덱스가 그것이고, 안 그러면 GPU 를 안 쓰는데 NVIDIA 라이브러리를 수 GB 받습니다.
+    #
+    # ⚠ **`ml` 을 걷어내는 것은 `uv run` 이 아니라 인자 없는 `uv sync` 입니다** (uv 0.12.5 실측).
+    #   · `uv run`  → inexact 동기화. 남는 패키지를 **안 지웁니다** — `ml` 이 살아남습니다.
+    #   · `uv sync` → exact 동기화. 기본 그룹에 없는 것을 **지웁니다** — `ml` 이 사라집니다.
+    #
+    # 그래서 이 줄은 안전하지만, **컨테이너 안에서 `uv sync` 를 인자 없이 돌리면 안 됩니다.**
+    # 그러면 torch 가 빠지고 `/ask` 만 503 이 되는데, 다른 API 는 멀쩡해서 로그에는
+    # 아무 문제도 안 보입니다. 고칠 때는 `uv sync --group ml` 로 부르세요.
+    #
+    # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
+    # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
+    command: sh -c "uv sync --frozen --group ml && exec uv run --no-sync dev"
 
   pgvector:
     image: pgvector/pgvector:pg18
@@ -96,6 +153,55 @@ services:
       retries: 5
       start_period: 30s
 
+  redis:
+    image: redis:8.2-alpine
+    container_name: daengs-redis
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # 실시간 산책(②)이 씁니다 — 값 캐시 · **일 예산 카운터** · 활성 키 집합 (RT-001 ④).
+    # 뒤의 둘이 진짜 이유입니다: 예산이 프로세스 메모리에 있으면 재시작마다 리셋이라
+    # data.go.kr 의 1,000회/일 제약이 지켜지지 않습니다.
+    #
+    # ⚠ maxmemory 를 일부러 두지 않습니다. 캐시 항목은 전부 TTL 이 붙어 스스로
+    # 사라지는데, 여기에 allkeys-lru 를 걸면 나중에 Celery 를 띄웠을 때 **큐에 들어간
+    # 태스크가 evict** 됩니다. eviction 은 DB 번호가 아니라 인스턴스 단위라
+    # DB 를 나눠도 안 풀립니다 (D-019).
+    command:
+      - redis-server
+      # ports 로 LAN 에 열기 때문에 필수입니다. Redis 는 기본이 무인증이라
+      # 이게 없으면 같은 네트워크의 누구나 FLUSHALL 할 수 있습니다.
+      # `:?` 는 #26 이 DAENGS_TRAINING_RAG_BASE_URL 에 쓴 것과 같은 장치입니다. 저기는
+      # 빈 값이면 backend 가 restart loop 에 빠지는 것을 막고, 여기는 **인증 없는 Redis 가
+      # LAN 에 열리는 것**을 막습니다. 안 뜨는 편이 열린 채로 뜨는 것보다 낫습니다.
+      # 파일 전체가 해석되고 나서 컨테이너가 뜨므로, 이 한 곳이면 아래 REDISCLI_AUTH 와
+      # backend 의 REDIS_URL 까지 같이 지켜집니다.
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the deployment root .env (LAN 에 열리는 포트입니다)}
+      # RDB 스냅샷만 씁니다. 캐시 값은 사라져도 다시 받으면 그만이지만
+      # 예산 카운터는 잃으면 그날 한도를 넘겨 부르게 됩니다.
+      - --save
+      - "900 1"
+      - --appendonly
+      - "no"
+    environment:
+      # healthcheck 의 redis-cli 가 읽습니다. -a 로 넘기면 호출마다 경고가 로그에 쌓입니다.
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      # pgvector 와 같은 이유로 0.0.0.0 바인딩입니다 — 개발 PC 에서도 서버 Redis 에
+      # 붙어야 일 예산 카운터가 하나로 모입니다. 그래서 REDIS_PASSWORD 는 .env 에서
+      # 반드시 지정하세요.
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # GUI가 필요할 때만: docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:9.17
@@ -123,5 +229,7 @@ networks:
 volumes:
   pgdata:
   pgadmin-data:
+  redis-data:
   backend-venv:
   uv-cache:
+  hf-cache:

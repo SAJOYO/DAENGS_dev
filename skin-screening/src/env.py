@@ -517,13 +517,32 @@ def _search_roots() -> list[Path]:
     return out
 
 
+def _has_crops(d: Path) -> bool:
+    """크롭이 **한 장이라도** 들어 있는 태그 폴더가 있는가."""
+    c = d / "crops"
+    return c.is_dir() and any(t.is_dir() and next(t.rglob("*.jpg"), None) is not None
+                              for t in c.iterdir())
+
+
+def _has_manifest(d: Path) -> bool:
+    m = d / "manifests"
+    return m.is_dir() and next(m.glob("*.parquet"), None) is not None
+
+
 def _looks_prepared(d: Path) -> bool:
-    return (d / "crops").is_dir() and (d / "manifests").is_dir()
+    """크롭과 매니페스트가 **내용까지** 있는가.
+
+    ⚠️ 폴더 존재만 보면 안 됩니다. `ensure_dirs()` 가 `crops/` 와 `manifests/`
+       를 **빈 폴더로 미리 만듭니다.** 노트북 첫 셀의 `env.describe()` 가 그걸
+       부르므로, 존재만 보면 zip 을 받아놓고도 "이미 준비됨" 으로 건너뛰고
+       나중에 `manifest_final.parquet` 을 못 찾아 죽습니다 (런팟에서 당했습니다).
+    """
+    return _has_crops(d) and _has_manifest(d)
 
 
 def _looks_partial(d: Path) -> bool:
-    """`crops/` 만 있고 매니페스트는 없는 폴더 — 태그를 나눠 올린 경우."""
-    return (d / "crops").is_dir() and not (d / "manifests").is_dir()
+    """크롭만 있고 매니페스트는 없는 폴더 — 태그를 나눠 올린 경우."""
+    return _has_crops(d) and not _has_manifest(d)
 
 
 def find_prepared(dest: Path | None = None) -> tuple[Path, str]:
@@ -707,6 +726,16 @@ def load_prepared(
     dest = Path(dest) if dest else work_root()
     dest.mkdir(parents=True, exist_ok=True)
 
+    # ★ 이미 work_root 에 크롭+매니페스트가 있으면 **할 일이 없습니다.**
+    #    ⚠️ 이 검사는 find_prepared_all() **앞에** 있어야 합니다. 그 함수는
+    #       dest 자신을 후보에서 빼기 때문에(아래 `r == dest.resolve()`),
+    #       런팟처럼 데이터를 work_root 에 직접 넣은 경우 "못 찾았습니다" 로
+    #       **먼저 죽습니다.** 뒤에 두면 이 줄에 영영 도달하지 못합니다.
+    if zip_path is None and _looks_prepared(dest):
+        n = sum(1 for _ in (dest / "crops").iterdir() if _.is_dir())
+        print(f"[env] 이미 준비돼 있습니다: {dest}  (크롭 태그 {n}종) — 그대로 씁니다.")
+        return dest
+
     if zip_path is None:
         sources = find_prepared_all(dest)
     elif isinstance(zip_path, (list, tuple)):
@@ -717,13 +746,6 @@ def load_prepared(
 
     if len(sources) > 1:
         print(f"[env] 입력 {len(sources)}개를 합칩니다: {[s.name for s, _ in sources]}")
-
-    # ★ 이미 work_root 에 크롭+매니페스트가 있으면 **할 일이 없습니다.**
-    #    런팟처럼 데이터를 직접 넣는 환경에서 여기서 죽으면 안 됩니다.
-    if zip_path is None and _looks_prepared(dest):
-        n = sum(1 for _ in (dest / "crops").iterdir() if _.is_dir())
-        print(f"[env] 이미 준비돼 있습니다: {dest}  (크롭 태그 {n}종) — 그대로 씁니다.")
-        return dest
 
     marker = dest / ".prepared_from"
     seen_before = set(marker.read_text().splitlines()) if marker.exists() else set()

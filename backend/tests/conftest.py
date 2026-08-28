@@ -25,11 +25,27 @@ def _key(filler: int) -> str:
 # 설정 로딩이 실패합니다 — 그건 의도한 동작입니다 (D-013). .env 를 고치세요.
 os.environ["DAENGS_DB_HOST"] = "localhost"
 os.environ["DAENGS_DB_PASSWORD"] = "test-password"
+os.environ["DAENGS_TRAINING_RAG_BASE_URL"] = "http://training-rag.test"
 
-# 카카오 REST API 키. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 값으로
-# 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).
-os.environ["DAENGS_KAKAO_REST_API_KEY"] = "test-rest-api-key"
+# 카카오 앱 키 허용 목록. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 중
+# 하나로 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).
+#
+# **둘을 넣습니다.** 하나만 넣으면 "목록 중 아무거나 맞으면 통과"가 실제로 되는지
+# 확인할 수 없고, value 하나로 되돌려 놔도 테스트가 그냥 통과합니다.
+# 실제 운영에서도 앱(네이티브 키)과 CLI(REST 키)가 함께 들어옵니다.
+os.environ["DAENGS_KAKAO_APP_KEYS"] = '["test-native-app-key","test-rest-api-key"]'
 
 os.environ["DAENGS_AES_KEY"] = _key(1)
 os.environ["DAENGS_BLIND_INDEX_KEY"] = _key(2)
 os.environ["DAENGS_JWE_KEY"] = _key(3)
+
+# `/ask` 의 임베딩 모델을 기동 때 올리지 않습니다.
+#
+# `with TestClient(app)` 로 lifespan 을 여는 테스트가 여럿인데(test_walk_auth · test_ask_auth ·
+# test_main_stays_light), 켜 두면 `ml` 그룹이 깔린 PC 에서 그때마다 1.2GB 를 올리고
+# 대조하느라 **실서버 DB 에까지 붙습니다.** 테스트는 DB 에 안 붙는다는 이 파일의 약속(위)이
+# 그대로 깨지는 자리입니다.
+#
+# 예열 자체의 동작은 `test_ask_warm_up.py` 가 함수를 직접 불러서 봅니다 — lifespan 을 통해
+# 보려 하면 스레드와 취소가 끼어 느리고 불안정해집니다.
+os.environ["DAENGS_WARM_UP_ENCODER"] = "false"

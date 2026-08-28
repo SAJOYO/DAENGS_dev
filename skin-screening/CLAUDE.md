@@ -19,14 +19,14 @@ uv run --extra model python tests/test_screening_message.py   # 문구 감시 (t
 
 - **이 폴더는 사본입니다.** 원본은
   [gayeoniee/deeplearning_test](https://github.com/gayeoniee/deeplearning_test)(공개)
-  이고 복사 시점 커밋은 `f150274` 입니다.
+  이고 복사 시점 커밋은 `a38e6fe` 입니다.
   **고칠 일이 생기면 원본을 고치고 다시 복사하세요** — 여기서 고치면
   갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.
-- **`backend/` 에 넣지 않습니다** (D-018). torch 가 backend 컨테이너로 들어가면
+- **`backend/` 에 넣지 않습니다** (D-022). torch 가 backend 컨테이너로 들어가면
   이미지가 몇 GB 가 되고, `backend` 는 포트도 안 열고 MVC2 계층 규칙(D-011)이
   걸려 있는 자리입니다. 여기는 그 규칙을 따르지 않습니다 — 원본 구조 그대로입니다.
-- **응답에 "1등 병변" 필드를 추가하지 마세요** (D-019). 주는 순간 앱은 그걸 제일
+- **응답에 "1등 병변" 필드를 추가하지 마세요** (D-023). 주는 순간 앱은 그걸 제일
   크게 띄웁니다 — holdout 에서 **56.6% 틀리는** 이름을요.
   `tests/test_agent.py` 가 `top1` `predicted` `diagnosis` 같은 키를 감시합니다.
 - **크롭 창을 직접 계산하지 마세요.** `src/crop.py` 의 `crop_window()` 가

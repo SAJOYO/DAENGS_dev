@@ -163,3 +163,32 @@ jobs:
           }
           if (-not $limited) { throw 'Place rate limit did not return HTTP 429' }
           Write-Host 'Place rate limit verified'
+
+      - name: Journey 공개 경로 확인
+        run: |
+          # 현재 APP이 보내는 dog_id 없는 좌표 요청입니다. 외부 키가 없어도 원본 계약대로
+          # 명시적인 estimate 응답과 지도 앱 handoff를 반환해야 합니다.
+          $body = '{"origin":[37.5665,126.9780],"dests":[{"lat":37.5700,"lng":126.9820,"name":"destination"}],"companion":"dog","measured":true,"with_polyline":false}'
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Post `
+                -Uri 'http://127.0.0.1:8000/journey' `
+                -ContentType 'application/json' `
+                -Body $body `
+                -TimeoutSec 30
+              $item = @($response.items)[0]
+              $walk = $item.transport.walk
+              if ($response.companion -eq 'dog' -and
+                  $null -ne $walk -and
+                  $walk.status -in @('measured', 'estimate') -and
+                  $walk.handoff.naver -like 'nmap://route/walk*') {
+                Write-Host 'Journey APP contract verified'
+                break
+              }
+              throw 'Journey response does not match APP contract'
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }

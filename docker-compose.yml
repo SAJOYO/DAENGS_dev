@@ -396,6 +396,36 @@ services:
       exec uv run --no-sync uvicorn app.search_main:app
       --host 0.0.0.0 --port 8000"
 
+  # 장소 카드를 누른 뒤의 단발 이동 스냅샷. DAENGS_geo main@c5f0d5f에서 APP이
+  # 실제 사용하는 좌표 기반 `/journey` 경로만 옮겼습니다. Place DB나 Dog Profile을
+  # 조회하지 않으며, 외부 경로 제공사 호출은 원본 Usage Gate를 통과합니다.
+  journey-service:
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-journey
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_WALK_ROUTE_PROVIDER: ${JOURNEY_WALK_ROUTE_PROVIDER:-fake}
+      DAENGS_CAR_ROUTE_PROVIDER: ${JOURNEY_CAR_ROUTE_PROVIDER:-fake}
+      DAENGS_TRANSIT_ROUTE_PROVIDER: ${JOURNEY_TRANSIT_ROUTE_PROVIDER:-fake}
+      DAENGS_USAGE_POLICY: ${JOURNEY_USAGE_POLICY:-deny-all}
+      DAENGS_TMAP_APP_KEY: ${JOURNEY_TMAP_APP_KEY:-}
+      TZ: Asia/Seoul
+    working_dir: /app
+    volumes:
+      - ./journey-service/pyproject.toml:/app/pyproject.toml:ro
+      - ./journey-service/uv.lock:/app/uv.lock:ro
+      - ./journey-service/app:/app/app:ro
+      - journey-service-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    command: >
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
   # GUI가 필요할 때만: docker compose --profile tools up -d
   # ------------------------------------------------------------------ 크롤러 (RAG-044)
   #
@@ -547,5 +577,6 @@ volumes:
   # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.
   gait-data:
   place-search-venv:
+  journey-service-venv:
   uv-cache:
   hf-cache:

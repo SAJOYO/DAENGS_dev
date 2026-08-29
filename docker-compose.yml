@@ -255,6 +255,63 @@ services:
       exec uv run --no-sync python serve.py
       --release /models/release --host 0.0.0.0 --port 8000"
 
+  # 강아지 보행 영상 분석. **기본 up -d 에서는 안 뜹니다** — skin-screening 과 같은 방식입니다.
+  #
+  #   docker compose --profile gait up -d
+  #
+  # 켜기 전에 서버 디스크에 가중치 2개를 두고 최상단 .env 에 GAIT_RELEASE_DIR 을
+  # 지정하세요. 없으면 컨테이너는 뜨지만 /healthz 가 ready:false 를 냅니다
+  # (다른 서비스는 멀쩡합니다). 절차는 gait-analysis/README.md.
+  gait-analysis:
+    profiles: ["gait"]
+    # backend · skin-screening 과 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-gait-analysis
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
+    # nginx 의 daengback 블록에 있는 location /gait/ 가 여기로 넘깁니다.
+    #   http://daengback.~/gait/v1/analyze  →  이 컨테이너의 /v1/analyze
+    environment:
+      # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # 가중치와 데이터 위치를 컨테이너 안 경로로 알려 줍니다.
+      # 코드에는 경로가 박혀 있지 않습니다 (원본 walk_demo 는 하드코딩이었습니다).
+      GAIT_RELEASE_DIR: /models/release
+      GAIT_DATA_DIR: /data
+    volumes:
+      # 폴더째가 아니라 필요한 것만 (D-004).
+      - ./gait-analysis/pyproject.toml:/app/pyproject.toml:ro
+      - ./gait-analysis/uv.lock:/app/uv.lock:ro
+      - ./gait-analysis/serve.py:/app/serve.py:ro
+      - ./gait-analysis/src:/app/src:ro
+      # ★ 가중치. **저장소에 없습니다** — 원본 walk_demo 에서도 gitignore 였습니다.
+      #   best.pt(약 50.7MB, 12kp pose) 와 yolov8n.pt(약 6.2MB, crop-assist) 두 개를
+      #   서버 디스크에 두고 여기로 물립니다. 배포 폴더(releases/<커밋해시>) **바깥**이라
+      #   재배포해도 안 지워집니다 — .env·암호화 키와 같은 취급입니다.
+      #   추론 경로에 파일 쓰기가 없어서 :ro 로 충분합니다.
+      - ${GAIT_RELEASE_DIR:-./gait-analysis/_models/release}:/models/release:ro
+      # 분석 기록(JSON) · overlay 영상 · 업로드 원본. 아직 DB 가 아니라 파일입니다
+      # (gait-analysis/README.md 의 TBD). 컨테이너를 다시 만들어도 남아야 합니다.
+      - gait-data:/data
+      - gait-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    # backend · skin-screening 과 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와
+    # 어긋나면 여기서 멈춥니다. --extra model 이 torch·ultralytics·opencv 를 받고,
+    # 리눅스에서는 pyproject 의 pytorch-cpu 인덱스가 CPU 판을 집습니다.
+    #
+    # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다. YAML 의 `>` 는 더 깊이 들여쓴 줄의
+    #    줄바꿈을 살려 둬서, 인자를 보기 좋게 들여쓰면 sh 가 여러 줄짜리 스크립트를 받고
+    #    exec 뒤의 인자가 영영 실행되지 않습니다 (#55 에서 스크리닝이 실제로 겪었습니다).
+    #
+    # ⚠️ URL 업로드 기능을 켜려면 `--extra url` 을 더하세요. 유지할지는 아직 미정입니다.
+    command: >
+      sh -c "uv sync --frozen --extra model &&
+      exec uv run --no-sync python serve.py --host 0.0.0.0 --port 8000"
+
   # GUI가 필요할 때만: docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:9.17
@@ -285,5 +342,9 @@ volumes:
   redis-data:
   backend-venv:
   screening-venv:
+  gait-venv:
+  # 보행 분석 기록(JSON) · overlay 영상 · 업로드 원본.
+  # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.
+  gait-data:
   uv-cache:
   hf-cache:

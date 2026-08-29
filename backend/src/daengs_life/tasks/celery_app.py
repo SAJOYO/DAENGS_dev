@@ -12,12 +12,14 @@ RAG-001 은 "Celery + Beat + Redis" 를 2026-08-19 에 확정했지만 그동안
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from daengs_life.realtime.config import REDIS_URL
 
 # 브로커가 없어도 import 는 되어야 한다 — 테스트가 이 모듈을 읽고 스케줄을 검사한다.
 # 연결은 워커가 뜰 때 처음 시도된다.
-app = Celery("daengs", broker=REDIS_URL or "memory://", include=["daengs_life.tasks.realtime"])
+app = Celery("daengs", broker=REDIS_URL or "memory://",
+             include=["daengs_life.tasks.realtime", "daengs_life.tasks.crawl"])
 
 app.conf.update(
     timezone="Asia/Seoul",          # 발표 주기가 전부 KST 다 (④-b)
@@ -39,6 +41,17 @@ app.conf.beat_schedule = {
     "warm-active-grids": {
         "task": "daengs_life.tasks.realtime.warm_active",
         "schedule": 60.0,
+    },
+    # 크롤 쪽도 **등록은 하나뿐**이다 (RAG-001 원칙 4). 소스 30개의 주기를 여기 30줄로 옮겨
+    # 적지 않는다 — 무엇이 밀렸는지는 `crawler.core.cadence` 가 시드와 `crawl_log.jsonl` 을
+    # 보고 정한다. 위의 프리페치와 같은 이유로 스케줄과 판정을 갈라 둔다.
+    #
+    # 하루 한 번, KST 04:00. 새벽인 이유는 상대 서버가 한가한 시간이어서고(요청 간격 1.5초를
+    # 지켜도 소스 12개면 수십 분이다), 04시인 이유는 자정 직후를 피해서다 — 공공 사이트의
+    # 정기 점검이 0~3시에 몰려 있어 그때 받으면 HTTP 503 이 정상 응답처럼 쌓인다.
+    "crawl-due-sources": {
+        "task": "daengs_life.tasks.crawl.crawl_due",
+        "schedule": crontab(hour=4, minute=0),
     },
 }
 

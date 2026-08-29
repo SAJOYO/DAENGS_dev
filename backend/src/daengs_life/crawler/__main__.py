@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-import traceback
 
-from .core import config, registry
-from .core.fetch import Fetcher
-from .core.store import Store
+from . import run as run_mod
+from .core import registry
 
 # 윈도우 콘솔의 기본 인코딩(cp949)으로는 한글 안내 메시지가 깨지고 일부 기호는 아예 예외를 낸다.
 # errors="replace" 라 어떤 터미널에서도 출력 때문에 죽지는 않는다.
@@ -21,6 +19,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
+# 화면에 찍을 이름. 키는 `run.TargetOutcome.state` 다.
 STATE_LABEL = {
     "new": "NEW",
     "changed": "CHANGED",
@@ -39,71 +38,51 @@ def cmd_list(_: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    src = registry.build(args.source)
-    store = Store(dry_run=args.dry_run, force=args.force)
-    n_fetched = n_changed = n_failed = n_skipped = n_restored = 0
+    """**수집 자체는 `run.run()` 이 한다** (RAG-044). 여기 남은 것은 화면 출력뿐이다.
 
-    with Fetcher() as fetcher:
-        try:
-            targets = src.discover(fetcher)
-        except RuntimeError as e:
-            # 키 미설정·시드 URL 사망처럼 '고쳐야 실행되는' 조건. 스택트레이스 대신 안내만 낸다.
-            print(f"[{src.id}] 수집 불가\n  {e}", file=sys.stderr)
-            return 2
-        print(f"[{src.id}] discover: {len(targets)} targets" + (f" (limit {args.limit})" if args.limit else ""))
-        if args.limit:
-            targets = targets[: args.limit]
+    옮기기 전에는 이 함수 안에 루프가 있어 Celery 태스크가 부를 것이 없었다. 콜백으로 찍는
+    이유는 받는 즉시 한 줄씩 나와야 해서다 — 대상당 1.5초 이상이라 다 끝나고 찍으면 멈춘 것처럼
+    보인다.
+    """
+    def on_discover(n: int, limit: int) -> None:
+        print(f"[{args.source}] discover: {n} targets" + (f" (limit {limit})" if limit else ""))
 
-        for i, t in enumerate(targets, 1):
-            tag = f"[{i}/{len(targets)}] {t.slug}"
-            if not fetcher.allowed(t.url):
-                print(f"{tag}  SKIP robots.txt disallow  {config.redact(t.url)}")
-                store.log(src, t, status=None, result=None, error="robots disallow")
-                n_skipped += 1
-                continue
-            try:
-                res = fetcher.get(t.url)
-            except Exception as e:                        # 재시도 끝에도 실패
-                print(f"{tag}  FAIL {e}")
-                store.log(src, t, status=None, result=None, error=str(e))
-                n_failed += 1
-                continue
-            if not res.ok:
-                print(f"{tag}  HTTP {res.status}  {config.redact(t.url)}")
-                store.log(src, t, status=res.status, result=None, error=f"HTTP {res.status}")
-                n_failed += 1
-                continue
-
-            try:
-                ext = src.extract(res, t)
-            except Exception:
-                print(f"{tag}  EXTRACT ERROR\n{traceback.format_exc()}")
-                store.log(src, t, status=res.status, result=None, error="extract error")
-                n_failed += 1
-                continue
-
-            result = store.save(src, t, res, ext)
-            store.log(src, t, status=res.status, result=result)
-            n_fetched += 1
-            n_changed += int(result.changed)
-            n_restored += int(result.reason == "raw-missing")
-
-            state = STATE_LABEL[result.reason]
-            print(f"{tag}  {state:11s} {res.status} {len(res.content):>7,}B  {res.elapsed_sec:.1f}s")
-            if args.dry_run or args.verbose:
+    def on_target(o: run_mod.TargetOutcome) -> None:
+        tag = f"[{o.index}/{o.total}] {o.slug}"
+        if o.state == "robots":
+            print(f"{tag}  SKIP robots.txt disallow  {o.url}")
+        elif o.state == "net-fail":
+            print(f"{tag}  FAIL {o.error}")
+        elif o.state == "http-fail":
+            print(f"{tag}  HTTP {o.status}  {o.url}")
+        elif o.state == "extract-fail":
+            print(f"{tag}  EXTRACT ERROR\n{o.detail}")
+        else:
+            print(f"{tag}  {STATE_LABEL[o.state]:11s} {o.status} {o.bytes:>7,}B  {o.elapsed_sec:.1f}s")
+            ext = o.extracted
+            if (args.dry_run or args.verbose) and ext is not None:
                 print(f"        title   : {ext.title}")
                 print(f"        chars   : {len(ext.text):,}   published_at: {ext.published_at}")
                 print(f"        cites   : {len(ext.cites)}  {ext.cites[:4]}")
                 print(f"        preview : {ext.text[:160].replace(chr(10), ' ')}")
                 if ext.extra:
                     print(f"        extra   : {ext.extra}")
-            elif result.raw_file:
-                print(f"        -> raw/{result.raw_file}")
+            elif o.raw_file:
+                print(f"        -> raw/{o.raw_file}")
 
-    print(f"\n[{src.id}] fetched {n_fetched}, changed {n_changed}, failed {n_failed}, skipped {n_skipped}"
-          + (f", restored {n_restored} (meta only, raw was missing)" if n_restored else "")
-          + ("   (dry-run: nothing written)" if args.dry_run else f"   run_id={store.run_id}"))
-    return 1 if n_failed else 0
+    result = run_mod.run(args.source, limit=args.limit, dry_run=args.dry_run, force=args.force,
+                         on_discover=on_discover, on_target=on_target)
+
+    if result.unavailable:
+        # 키 미설정·시드 URL 사망처럼 '고쳐야 실행되는' 조건. 스택트레이스 대신 안내만 낸다.
+        print(f"[{result.source_id}] 수집 불가\n  {result.unavailable}", file=sys.stderr)
+        return 2
+
+    print(f"\n[{result.source_id}] fetched {result.fetched}, changed {result.changed}, "
+          f"failed {result.failed}, skipped {result.skipped}"
+          + (f", restored {result.restored} (meta only, raw was missing)" if result.restored else "")
+          + ("   (dry-run: nothing written)" if args.dry_run else f"   run_id={result.run_id}"))
+    return 1 if result.failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:

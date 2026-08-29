@@ -338,6 +338,105 @@ services:
       --host 0.0.0.0 --port 8000"
 
   # GUI가 필요할 때만: docker compose --profile tools up -d
+  # ------------------------------------------------------------------ 크롤러 (RAG-044)
+  #
+  # **기본으로 뜨지 않습니다** — `profiles: ["crawler"]` 라 `docker compose up -d` 는 그대로입니다.
+  # 켜려면 `docker compose --profile crawler up -d`.
+  #
+  # 꺼둔 이유는 **서버에 코퍼스가 없어서**입니다. `data/`(raw 원본 + `crawl_log.jsonl`)는 지금
+  # 개발 PC 에만 있고, 워커는 그 로그의 '소스별 마지막 성공 시각'으로 due 를 판정합니다. 로그가
+  # 비어 있으면 **전 소스가 due** 라 서버가 처음부터 다 받아 개발 PC 와 별개의 코퍼스를 만듭니다.
+  # 원본은 불변이고 개정되는 문서라 나중에 합칠 수도 없습니다 (RAG-008 · RAG-017).
+  # 코퍼스를 서버로 옮기는 카드에서 이 profile 을 뗍니다.
+  #
+  # ⚠ **`backend-venv` 를 같이 쓰지 않습니다.** backend 는 `--group ml`(torch 1.2GB)로 동기화하고
+  #   크롤러는 그것이 필요 없는데, **같은 볼륨에 인자 없는 `uv sync` 를 돌리면 exact 동기화라
+  #   torch 가 지워집니다** (uv 0.12.5 실측, CLAUDE.md). 그러면 `/ask` 만 503 이 되고 다른 API 는
+  #   멀쩡해서 로그에 아무 문제도 안 보입니다. 볼륨을 나누는 것이 그 사고를 **구조적으로** 막는
+  #   유일한 방법입니다 — 명령줄을 조심하는 것으로는 언젠가 뚫립니다.
+  crawler-worker:
+    profiles: ["crawler"]
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-crawler-worker
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # 레포 밖이 아니라 컨테이너 안이라 자동 탐색이 안 됩니다. 아래 볼륨과 짝입니다.
+      DAENGS_DATA_DIR: /data
+      # 브로커. backend 와 **같은 인스턴스·같은 DB 번호**입니다 (D-019) — 큐가 갈리면
+      # Beat 가 보낸 것을 이 워커가 못 받습니다.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src
+      # **원본이 쌓이는 곳.** 바인드 마운트라 컨테이너를 지워도 남습니다 — 코퍼스는
+      # 재수집으로 복구되지 않습니다(개정되는 원문이라 재수집은 곧 다른 코퍼스입니다).
+      - ./data:/data
+      - crawler-venv:/opt/venv          # ⚠ backend-venv 가 아닙니다 (위 경고)
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      redis:
+        condition: service_healthy
+    # `--group ml` 이 **없습니다.** 크롤러는 torch 를 안 씁니다 — 붙이면 이미지 밖으로
+    # 1.2GB 를 더 받고 워커 상주 RAM 이 2.4GB 늘어납니다 (D-021).
+    #
+    # `--concurrency 1` 인 이유: 크롤 예절입니다. 워커를 늘리면 같은 호스트로 동시에 나가
+    # `request_delay_sec` 1.5초가 무의미해집니다 (docs/data-sources.md §12).
+    command: >-
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync celery -A daengs_life.tasks.celery_app worker
+      --loglevel info --concurrency 1 --queues celery"
+
+  # Beat 는 **스케줄을 보내기만** 합니다. 태스크를 실행하지 않으므로 프로세스가 하나여야
+  # 합니다 — 둘이 뜨면 같은 시각에 두 번 보냅니다.
+  crawler-beat:
+    profiles: ["crawler"]
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-crawler-beat
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_DATA_DIR: /data
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src
+      # Beat 자신은 data/ 를 안 읽습니다(판정은 워커가 합니다). 그래도 마운트하는 이유는
+      # `crawler.core.config` 가 import 시점에 경로를 잡기 때문입니다 — 없어도 뜨지만
+      # (require_data_dir 은 실제로 쓸 때 부릅니다) 두 컨테이너의 설정을 갈라 두면
+      # "왜 워커에서만 되지"를 나중에 한 번 더 겪습니다.
+      - ./data:/data
+      - crawler-beat-venv:/opt/venv
+      - crawler-beat-state:/var/lib/celery
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      redis:
+        condition: service_healthy
+    # 마지막 발사 시각을 볼륨에 남깁니다. 안 남기면 컨테이너를 새로 만들 때마다 스케줄이
+    # 초기화되어 재시작 직후 한 번 더 쏠 수 있습니다.
+    command: >-
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync celery -A daengs_life.tasks.celery_app beat
+      --loglevel info --schedule /var/lib/celery/beat-schedule"
+
   pgadmin:
     image: dpage/pgadmin4:9.17
     container_name: pgadmin
@@ -367,6 +466,12 @@ volumes:
   pgadmin-data:
   redis-data:
   backend-venv:
+  # ⚠ backend-venv 와 나눠 둡니다 — 합치면 크롤러의 `uv sync` 가 backend 의 torch 를
+  #   지웁니다 (crawler-worker 주석 참고).
+  crawler-venv:
+  crawler-beat-venv:
+  # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
+  crawler-beat-state:
   screening-venv:
   place-search-venv:
   uv-cache:

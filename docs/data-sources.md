@@ -409,9 +409,15 @@
 - [ ] 운송약관 3건 (`srt` / `seoulmetro` / `airlines`) — #51 진행 중
 
 ### Phase 3 — 지속 운영 (Celery Beat, RAG-001)
-- [ ] `seoul-notice-api` 고시공고 모니터링 — 신규 지원사업 탐지
-- [ ] 법령 개정 체크 — 시행일자 비교
-- [ ] 약관 개정 체크 — 분기 1회
+- [x] **due 소스 선별 태스크** (RAG-044, #61) — Beat 등록은 하나(`crawl-due-sources`, KST 04:00)고
+      무엇이 밀렸는지는 `crawler.core.cadence` 가 시드 + `crawl_log.jsonl` 로 정한다.
+      **cadence 기본값은 코드에 있고 시드에는 예외만 적는다** — `domain=law → manual` ·
+      `method=pdf-entry → quarterly` · 나머지 `weekly`.
+      수집까지만 하고 멈춘다 — 바뀐 문서는 알림으로만 남는다 (RAG-002 · RAG-025).
+      ⚠ 워커는 compose profile `crawler` 뒤에 있어 **서버에서 아직 안 뜬다** (코퍼스 위치)
+- [ ] `seoul-notice-api` 고시공고 모니터링 — 신규 지원사업 탐지. 같은 Beat 에 태스크 하나 더
+- [ ] 법령 개정 체크 — 시행일자 비교. RAG-044 가 남기는 `changed_docs` 알림 위에 얹는다
+- [ ] 약관 개정 체크 — 분기 1회 (`insurer-terms-pdfs` 가 이미 `quarterly` 다)
 
 ---
 

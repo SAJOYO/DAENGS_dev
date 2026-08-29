@@ -38,6 +38,9 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
     record = {
         "record_id": None,
         "source_file": video_path.name,
+        # 저장된 원본 파일 경로 (uuid 이름). 화면에 보여줄 이름은 source_file 이고,
+        # 이 경로는 원본 재생·향후 삭제 시 지울 대상을 가리키는 용도입니다.
+        "original_video": str(video_path),
         "date": date,
         "note": note,
         "dog_id": dog_id,

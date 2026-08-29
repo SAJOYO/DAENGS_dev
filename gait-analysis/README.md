@@ -94,10 +94,22 @@ docker compose exec nginx nginx -s reload   # 무중단 반영
 | | |
 | --- | --- |
 | `GET /healthz` | 가중치가 실제로 있는지까지 봅니다 (`ready`) |
-| `POST /v1/analyze` | multipart: `video` (필수), `date` · `note` · `dog_id` (선택) → 기록 |
+| `POST /v1/analyze` | multipart: `video` (필수), `date` · `note` · `dog_id` (선택) → 기록. 413 은 아래 참고 |
 | `GET /v1/records/{id}` | 기록 조회 |
 | `POST /v1/compare` | `{record_id_a, record_id_b}` → 두 기록 비교 |
 | `GET /v1/records/{id}/overlay` | 분석 결과를 그린 영상 (mp4) |
+
+기록 목록 조회(강아지별)·원본 영상 재생·기록 삭제 엔드포인트는 아직 없습니다 —
+`docs/gait-record-data-design.md` 의 API 설계안 참고 (daengs_backend 역할 분리가
+먼저 정해져야 이 서비스 쪽 계약이 확정됩니다).
+
+### 업로드 크기 제한 (413)
+
+`GAIT_MAX_UPLOAD_BYTES` (기본 150MB). skin-screening 의 12MB(사진 한 장)를 그대로
+쓰지 않은 이유와 근거는 `docs/gait-record-data-design.md` 참고. `nginx/default.conf`
+의 `location /gait/` 가 `client_max_body_size 200m` 로 바깥 상한을 잡아 두었으므로
+**이 값은 항상 그보다 낮게** 유지하세요 — 그래야 nginx 의 맨 HTML 대신 앱이 이유가
+담긴 JSON 413 을 먼저 돌려줍니다.
 
 ### 앱이 지켜야 할 것
 
@@ -154,7 +166,12 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
 - **기록을 DB 로 옮길지.** 지금은 `GAIT_DATA_DIR` 아래 JSON 파일입니다(walk_demo 그대로).
   DAENGS 에는 PostgreSQL + SQLAlchemy 가 있지만, 이 서비스가 DB 를 직접 볼지 아니면
   `daengs_backend` 가 기록의 주인이 될지가 먼저 정해져야 합니다. 스크리닝이 DB 를 안 보는
-  무상태 서비스인 것과 같은 자리입니다.
+  무상태 서비스인 것과 같은 자리입니다. 역할 분리안·gait record 스키마안·삭제 시 정리
+  범위는 `docs/gait-record-data-design.md` 에 설계만 해 두었습니다 — 이 카드에서
+  실제 테이블·migration 은 만들지 않았습니다.
+- **원본 영상 자동 삭제는 하지 않습니다 (제품 요구사항).** `record["original_video"]`
+  로 경로를 기록에 남기지만(2026-08-29 추가), 지우는 코드는 어디에도 없습니다 — 삭제는
+  사람이 부르는 API 가 생겼을 때만 (설계안 참고).
 - **URL 업로드(`yt-dlp`)를 유지할지.** 유지하지 않으면 `--extra url` 을 통째로 뺄 수 있습니다.
   현재 `serve.py` 에는 엔드포인트를 두지 않았습니다.
 - **`dog_id` 검증.** 지금은 넘어온 값을 그대로 믿습니다. 두 기록이 정말 같은 개인지

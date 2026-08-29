@@ -282,6 +282,9 @@ services:
       # 코드에는 경로가 박혀 있지 않습니다 (원본 walk_demo 는 하드코딩이었습니다).
       GAIT_RELEASE_DIR: /models/release
       GAIT_DATA_DIR: /data
+      # 비어 있으면 애플리케이션 기본값(150MB)을 씁니다. nginx 의 client_max_body_size
+      # (200m, default.conf 의 location /gait/)보다 낮게 유지하세요.
+      GAIT_MAX_UPLOAD_BYTES: ${GAIT_MAX_UPLOAD_BYTES:-}
     volumes:
       # 폴더째가 아니라 필요한 것만 (D-004).
       - ./gait-analysis/pyproject.toml:/app/pyproject.toml:ro

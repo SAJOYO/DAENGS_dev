@@ -26,11 +26,32 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from src import config  # noqa: E402
+
+
+def _reject_if_too_large(content_length: str | None, actual_bytes: int) -> None:
+    """413 처리.
+
+    `Content-Length` 헤더로 먼저 보고(있으면 본문을 읽기 전에 거절), 헤더가 없거나
+    틀린 경우를 대비해 실제로 읽은 바이트 수로 다시 확인합니다 — skin-screening 의
+    "읽고 나서 검사" 방식과 같은 이중 확인입니다.
+    """
+    limit = config.MAX_UPLOAD_BYTES
+    declared = int(content_length) if content_length and content_length.isdigit() else None
+    size = max(declared or 0, actual_bytes)
+    if size > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"영상이 너무 큽니다 ({size / 1e6:.1f}MB > "
+                f"{limit / 1e6:.0f}MB). 촬영 시간을 줄이거나 해상도를 낮춰 다시 "
+                "업로드해 주세요."
+            ),
+        )
 
 
 class CompareRequest(BaseModel):
@@ -68,6 +89,7 @@ def build_app() -> FastAPI:
 
     @app.post("/v1/analyze")
     async def analyze(
+        request: Request,
         video: UploadFile = File(...),
         date: str | None = Form(None),
         note: str | None = Form(None),
@@ -78,12 +100,21 @@ def build_app() -> FastAPI:
         ⚠️ `dog_id` 는 넘어온 값을 그대로 신뢰합니다. 두 기록이 정말 같은 개인지 검증하는
            로직이 없습니다 — 계정·반려견 프로필과 엮는 것은 아직 정하지 않았습니다.
         """
-        from src.pipeline import process_video
-        from src.video_intake import save_upload
+        # ⚠️ **크기·빈 파일 검사가 import 보다 먼저입니다.** 아래 두 모듈은 torch·
+        #    ultralytics 를 끌고 오는데(`--extra model`), 거절할 요청 때문에 그것을
+        #    올릴 이유가 없습니다. 순서를 되돌리면 기본 설치(`uv sync`, torch 없음)에서
+        #    413 이어야 할 응답이 ImportError 로 바뀝니다 — 테스트가 지키고 있습니다.
+        #
+        # 본문을 다 읽기 전에 Content-Length 로 먼저 거절할 수 있으면 거절합니다.
+        _reject_if_too_large(request.headers.get("content-length"), 0)
 
         content = await video.read()
         if not content:
             raise HTTPException(status_code=400, detail="빈 파일입니다.")
+        _reject_if_too_large(None, len(content))
+
+        from src.pipeline import process_video
+        from src.video_intake import save_upload
 
         try:
             saved_path = save_upload(content, video.filename or "upload.mp4")

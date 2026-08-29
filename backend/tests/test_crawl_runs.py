@@ -109,35 +109,34 @@ def _fake_result(source_id: str):
                                _FakeOutcome("same", "doc-2", False)])
 
 
-def test_crawl_due_records_each_source(db_or_skip, monkeypatch) -> None:
-    """수동 트리거 한 번이 소스마다 한 행을 남긴다 — 행 단위가 '태스크'가 아니라 '소스'다."""
+def test_crawl_source_records_one_row(db_or_skip, monkeypatch) -> None:
+    """소스 하나에 한 행 — 행 단위가 '태스크'가 아니라 '소스'다 (RAG-047)."""
     monkeypatch.setattr(crawl.crawler_run, "run", _fake_result)
-    out = crawl.crawl_due(source_ids=[SRC])
-    assert out["mode"] == "manual"
+    crawl.crawl_source(SRC, "manual")
     (status, run_id, fetched, changed, *_rest), = _rows(db_or_skip)
     assert (status, run_id) == ("ok", "20260830-999999")
     assert (fetched, changed) == (2, 1)
 
 
-def test_crawl_due_records_a_failed_source(db_or_skip, monkeypatch) -> None:
-    """한 소스가 죽어도 나머지는 받는다(원칙 5의 절반) — 그리고 죽은 것도 남는다."""
+def test_a_failed_source_is_recorded_before_it_retries(db_or_skip, monkeypatch) -> None:
+    """죽은 것도 남는다. **재시도는 시도마다 한 행**이라 여기서 합치지 않는다."""
     def _boom(source_id: str):
         raise RuntimeError("사이트가 죽었다")
     monkeypatch.setattr(crawl.crawler_run, "run", _boom)
-    crawl.crawl_due(source_ids=[SRC])
+    with pytest.raises(RuntimeError):           # autoretry_for 가 잡을 수 있게 다시 올린다
+        crawl.crawl_source(SRC, "due")
     (status, _run_id, *_rest, error, finished_at), = _rows(db_or_skip)
     assert status == "failed"
     assert "사이트가 죽었다" in error and finished_at is not None
 
 
 def test_recording_failure_does_not_stop_the_crawl(monkeypatch) -> None:
-    """DB 가 통째로 죽어도 `crawl_due` 는 수집 결과를 정상으로 돌려준다.
+    """DB 가 통째로 죽어도 수집은 정상으로 끝난다.
 
     이것이 이 카드에서 제일 중요한 단언이다 — 이력을 붙이면서 **크롤이 DB 에 의존하게 되는
     것**이 가장 흔한 사고다.
     """
     monkeypatch.setattr(crawl_runs, "_connect", lambda: (_ for _ in ()).throw(OSError("no db")))
     monkeypatch.setattr(crawl.crawler_run, "run", _fake_result)
-    out = crawl.crawl_due(source_ids=[SRC])
-    assert out["results"][SRC]["fetched"] == 2
-    assert out["changed_docs"] == {SRC: ["doc-1"]}
+    out = crawl.crawl_source(SRC, "manual")
+    assert out["fetched"] == 2 and out["changed_slugs"] == ["doc-1"]

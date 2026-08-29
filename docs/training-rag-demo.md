@@ -36,11 +36,23 @@ Content-Type: application/json
 }
 ```
 
-`decision`은 다음 세 경우만 공개한다.
+`decision`은 다음 네 경우만 공개한다.
 
 - `ANSWER`: 근거 기반 훈련 안내
 - `UNCERTAIN`: 현재 문서만으로 정확한 안내가 어려움
+- `SAFETY_REFUSAL`: 체벌·임의 투약처럼 안내하지 않기로 한 요청
 - `MEDICAL_REFUSAL`: 수의학적 판단이 필요한 질문
+
+`SAFETY_REFUSAL`과 `UNCERTAIN`을 가르는 것은 상류 RAG의 `reason`이다. 둘 다 상류에서는
+`REFUSE`로 오지만 사용자에게 뜻이 다르다 — `UNCERTAIN`은 자료가 모자라다는 뜻이라 자료가
+늘면 답할 수 있고, `SAFETY_REFUSAL`은 자료가 늘어도 답하지 않는다. 한 상태로 접으면 안전
+거절이 "현재 자료 범위 안내"로 표시된다.
+
+| 상류 `decision` | 상류 `reason` | 공개 `decision` |
+| --- | --- | --- |
+| `REFUSE` | `safety_boundary_training_harm` | `SAFETY_REFUSAL` |
+| `REFUSE` | `safety_boundary_medical` | `MEDICAL_REFUSAL` |
+| `REFUSE` | `no_results` · 그 밖 · 없음 | `UNCERTAIN` |
 
 응답과 장애 응답에는 `X-Request-ID`가 포함된다. 메인 백엔드는 질문 원문을 로그에 남기지 않고,
 요청 식별자·상태·인용 수만 기록한다. 내부 RAG의 `REFUSE`는 외부 계약에서 `UNCERTAIN`으로

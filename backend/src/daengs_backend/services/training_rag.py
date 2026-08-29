@@ -35,7 +35,22 @@ class _UpstreamResponse(BaseModel):
     request_id: str
     answer: str
     decision: Literal["ANSWER", "UNCERTAIN", "REFUSE", "MEDICAL_REFUSAL"]
+    # 상류가 REFUSE를 내는 이유는 두 가지고 사용자에게 뜻이 다르다. 없으면 빈 문자열로
+    # 두어 reason을 아직 안 싣는 상류에서도 계약이 깨지지 않게 한다.
+    reason: str = ""
     evidence: list[_UpstreamEvidence] = Field(default_factory=list)
+
+
+#: 상류 gate의 REFUSE reason -> DAENGS 공개 판정.
+#:
+#: REFUSE 하나를 전부 UNCERTAIN("현재 자료 범위")으로 접으면 **안전 거절이 자료 부족
+#: 으로 표시된다.** 체벌·임의 투약을 거절한 응답에 "지금 자료로는 어렵다"는 라벨이
+#: 붙으면, 사용자는 자료가 더 있으면 답해 준다는 뜻으로 읽는다. 상류는 두 경우에 서로
+#: 다른 reason과 서로 다른 answer 문구를 이미 보낸다.
+_REFUSE_REASON_DECISIONS = {
+    "safety_boundary_training_harm": "SAFETY_REFUSAL",
+    "safety_boundary_medical": "MEDICAL_REFUSAL",
+}
 
 
 def _citation_label(evidence: _UpstreamEvidence) -> str:
@@ -82,9 +97,12 @@ class TrainingRagClient:
             logger.warning("training_rag invalid_response trace_id=%s", trace_id)
             raise TrainingRagUnavailableError from exc
 
-        # REFUSE는 Training RAG의 내부 안전/gate 상태다. DAENGS 공개 계약에는
-        # ANSWER·UNCERTAIN·MEDICAL_REFUSAL만 두며, 의료 거절은 그대로 보존한다.
-        decision = "UNCERTAIN" if upstream.decision == "REFUSE" else upstream.decision
+        # REFUSE는 Training RAG의 내부 gate 상태다. 공개 계약으로 옮길 때 reason을 봐야
+        # 한다 — 안전 경계에 막힌 것과 코퍼스에 근거가 없는 것은 사용자에게 다른 사실이다.
+        # reason을 못 읽으면(옛 상류) 종전대로 UNCERTAIN이다.
+        decision = upstream.decision
+        if decision == "REFUSE":
+            decision = _REFUSE_REASON_DECISIONS.get(upstream.reason, "UNCERTAIN")
         citations = [
             TrainingCitation(rank=item.rank, label=_citation_label(item))
             for item in upstream.evidence

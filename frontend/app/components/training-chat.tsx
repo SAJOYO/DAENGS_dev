@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 
 import { ApiError, apiJson } from "@/lib/api";
 
-type Decision = "ANSWER" | "UNCERTAIN" | "MEDICAL_REFUSAL";
+type Decision = "ANSWER" | "UNCERTAIN" | "SAFETY_REFUSAL" | "MEDICAL_REFUSAL";
 
 type TrainingChatResponse = {
   decision: Decision;
@@ -12,9 +12,15 @@ type TrainingChatResponse = {
   citations: Array<{ rank: number; label: string }>;
 };
 
+/**
+ * `UNCERTAIN` 은 **자료가 모자란다**는 뜻입니다. 안전 경계에 막힌 답변에 이 라벨을
+ * 붙이면 "자료가 더 있으면 답해 준다"로 읽히므로 `SAFETY_REFUSAL` 을 따로 둡니다 —
+ * 체벌·임의 투약은 자료가 늘어도 안내하지 않습니다.
+ */
 const DECISION_LABEL: Record<Decision, string> = {
   ANSWER: "훈련 근거 기반 안내",
   UNCERTAIN: "현재 자료 범위 안내",
+  SAFETY_REFUSAL: "안전 경계 안내",
   MEDICAL_REFUSAL: "수의학 상담 안내",
 };
 

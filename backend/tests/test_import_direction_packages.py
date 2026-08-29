@@ -46,10 +46,23 @@ ALLOWED: dict[str, set[str]] = {
     # 경로 탐색 하나뿐 (RT-001 ①-2). `textutil` 은 한국 법령 문서용이라 realtime 이 쓸 일이
     # 없고, 목록이 갈려 있어야 그게 새로 들어오는 날 여기서 잡힌다.
     "realtime": {"crawler.core.config"},
-    # Celery 워커·Beat (RAG-009 의 형제 패키지). **realtime 과 같은 폭으로 좁힌다**
-    # (RT-002 ②-b) — 넓히면 워커가 `store`·`Fetcher` 를 끌고 들어와 "실시간은 저장하지
-    # 않는다"가 웹이 아니라 워커 쪽에서 조용히 뚫린다.
-    "tasks": {"crawler.core.config"},
+    # Celery 워커·Beat (RAG-009 의 형제 패키지).
+    #
+    # **RAG-044 에서 셋을 넓혔다.** 크롤러 Beat 가 들어오면서 워커가 실제로 크롤을 부르게
+    # 됐고, 그때 필요한 것이 딱 이 셋이다:
+    #   · `crawler.run`          — 수집 진입점. **CLI 와 같은 함수**다. 전용 경로를 태스크에
+    #                              새로 만들면 새 소스가 CLI 에서만 되고 Beat 에서는 조용히
+    #                              안 되는 날이 온다
+    #   · `crawler.core.cadence` — due 판정. 판정 자체는 crawler 안에 있어야 `python -m crawler`
+    #                              만으로도 "무엇이 밀렸나"를 볼 수 있다 (RAG-001 원칙 1)
+    #   · `crawler.core.registry`— 시드 목록과 구현 여부. cadence 가 registry 를 부르지 않고
+    #                              인자로 받게 해 둬서, 그 조립을 태스크가 한다
+    #
+    # **`store`·`fetch` 는 여전히 밖이다.** 워커가 그것을 직접 잡으면 `run` 을 우회하는 두 번째
+    # 수집 경로가 생기고, 위의 "같은 함수" 가 그날로 무너진다. 넓힐 일이 또 생기면 그 줄이
+    # `run` 안으로 들어갈 수 있는지 먼저 볼 것.
+    "tasks": {"crawler.core.config", "crawler.core.cadence", "crawler.core.registry",
+              "crawler.run"},
     # 서빙 (RAG-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
     # 그래도 목록에 두는 이유는 **새로 들어오는 날 잡히게** 하기 위해서다.
     "app": {"crawler.core.config"},

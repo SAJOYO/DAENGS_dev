@@ -70,7 +70,8 @@ http://daengback.~/screen/v1/screen
 
 ```
 git (이 저장소)   코드만 — serve.py · src/ · demo/
-서버 PC 디스크     C:\deploy\daengs\modelselease\   ← 배포 폴더 밖. 재배포해도 안 지워짐
+서버 PC 디스크     C:\deploy\daengs\models
+elease\   ← 배포 폴더 밖. 재배포해도 안 지워짐
 개발 PC           필요한 사람만 팀 채널로 받아 --release 로 지정
 ```
 
@@ -81,20 +82,28 @@ git (이 저장소)   코드만 — serve.py · src/ · demo/
 #    release\stage1_threshold.json  +  release\checkpoints\*est.pt
 
 # 2) 최상단 .env
-#    SCREENING_RELEASE_DIR=C:\deploy\daengs\modelselease
+#    SCREENING_RELEASE_DIR=C:\deploy\daengs\models
+elease
 
 # 3) 켜기
 docker compose --profile screening up -d
 
-# 4) nginx 가 새 경로를 읽게 (설정 파일 내용만 바뀌면 자동 반영이 안 됩니다)
-docker compose restart nginx
+# 4) nginx 가 새 경로를 읽게 합니다
+#    설정 파일은 얹혀만 있어서, 내용이 바뀌어도 compose 가 컨테이너를 다시
+#    만들지 않고 nginx 도 스스로 다시 읽지 않습니다. 한 번 알려줘야 합니다.
+docker compose exec nginx nginx -t          # 문법 검사부터
+docker compose exec nginx nginx -s reload   # 무중단 반영
 
 # 5) 확인
 curl http://daengback.weareithero.cloud/screen/healthz
 #    {"ok":true,"mock":false,"contract_version":"1.0",...}
 ```
 
-⚠️ 4번에서 nginx 가 **몇 초 끊깁니다** (80·8000). 사람이 적은 시간에 하세요.
+⚠️ **`restart nginx` 말고 `reload` 를 쓰세요.** 두 가지가 다릅니다.
+* `restart` 는 컨테이너를 내렸다 올려서 80·8000 이 몇 초 끊깁니다.
+  `reload` 는 기존 연결을 유지한 채 새 워커로 갈아탑니다
+* `reload` 는 **새 설정을 먼저 검사**하고, 깨져 있으면 옛 설정으로 계속 돕니다.
+  `restart` 였으면 nginx 가 못 뜨고 사이트가 통째로 내려갑니다
 
 ⚠️ **켜는 순간 인증 없는 업로드 엔드포인트가 열립니다.** `serve.py` 는 데모 서버라
 인증·레이트 리밋이 없습니다. 인증을 붙이는 것은 별도 카드입니다.

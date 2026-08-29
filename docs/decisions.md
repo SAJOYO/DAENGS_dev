@@ -1307,6 +1307,22 @@ profile 뒤에 두면 머지가 서버 상태를 **하나도 안 바꿉니다.**
 위에서 말한 **사본이라 고칠 수 없습니다**. 그 화면은 개발·명세용이라 각자 PC 에서
 `serve.py` 로 띄워 보면 됩니다 — 제품은 앱입니다.
 
+#### 설정 반영은 `reload` 로 한다
+
+`nginx/default.conf` 는 컨테이너에 **얹혀만** 있습니다. 내용이 바뀌어도 컨테이너
+명세가 그대로라 `docker compose up -d` 가 nginx 를 다시 만들지 않고, nginx 는
+설정을 **뜰 때 한 번** 읽으므로 스스로 다시 읽지도 않습니다. **그래서 이 설정이
+들어간 커밋을 머지해도 서버는 그대로입니다** — 켤 때 한 번 알려주면 됩니다.
+
+```powershell
+docker compose exec nginx nginx -t          # 문법 검사
+docker compose exec nginx nginx -s reload   # 무중단 반영
+```
+
+`restart` 가 아니라 `reload` 인 이유: 끊기지 않고, **새 설정이 깨져 있으면 바꾸지
+않고 옛 설정으로 계속 돕니다.** `restart` 는 그 경우 nginx 가 못 떠서 사이트가
+통째로 내려갑니다.
+
 #### 그래도 켜는 시점은 사람이 고른다
 
 `serve.py` 는 **인증·레이트 리밋이 없는 데모 서버**입니다. profile 을 켜는 순간

@@ -15,7 +15,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
 | `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
-| `gait-analysis/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 — D-028 |
+| `gait-analysis/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 — D-029 |
 | `place-search/` | Place 검색 (FastAPI + PostGIS). nginx 의 `/v2/places/`로 공개되며 자기 DB(place-db)와 Alembic 을 가집니다 — D-026, D-027. backend·Dog Profile과 독립입니다. 원본·소유권은 `place-search/UPSTREAM.md` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db 컨테이너 |

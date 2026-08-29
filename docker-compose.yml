@@ -245,10 +245,15 @@ services:
     # backend 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와 어긋나면
     # 여기서 멈춥니다. --extra model 이 torch·torchvision·timm 을 받고,
     # 리눅스에서는 pyproject 의 pytorch-cpu 인덱스가 CPU 판을 집습니다.
+    # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다. YAML 의 `>` 는 더 깊이
+    #    들여쓴 줄의 줄바꿈을 살려 두기 때문입니다. 보기 좋으라고 인자를 들여쓰면
+    #    sh 가 세 줄짜리 스크립트를 받고, `exec ... serve.py` 에서 셸이 교체되면서
+    #    다음 줄의 `--release` 가 영영 실행되지 않습니다. serve.py 는 인자 없이
+    #    떠서 usage 를 뱉고 죽고, restart 정책 때문에 무한 재시작합니다.
     command: >
       sh -c "uv sync --frozen --extra model &&
-             exec uv run --no-sync python serve.py
-                  --release /models/release --host 0.0.0.0 --port 8000"
+      exec uv run --no-sync python serve.py
+      --release /models/release --host 0.0.0.0 --port 8000"
 
   # GUI가 필요할 때만: docker compose --profile tools up -d
   pgadmin:

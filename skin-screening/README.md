@@ -54,11 +54,17 @@ release/
 
 CPU 로 사진 한 장에 0.6~3초입니다 (실측 615ms). 데모에는 충분합니다.
 
-### 서버에 켜기 — compose 에 이미 붙어 있습니다 (D-024)
+### 서버에 켜기 — compose·nginx 에 이미 붙어 있습니다 (D-024)
 
-`docker-compose.yml` 에 `skin-screening` 서비스가, `nginx/default.conf` 에
-`listen 8001` 블록이 **이미 들어가 있습니다.** 다만 **꺼져 있습니다** —
-profile 뒤에 있고 nginx 포트도 안 열려 있습니다.
+`docker-compose.yml` 에 `skin-screening` 서비스가, `nginx/default.conf` 의
+`listen 8000` 블록에 `location /screen/` 이 **이미 들어가 있습니다.**
+다만 서비스가 **profile 뒤에 있어 안 뜹니다.**
+
+앱이 부를 주소는 이렇게 됩니다 — **새 포트도 DNS 도 방화벽도 필요 없습니다.**
+
+```
+http://daengback.~/screen/v1/screen
+```
 
 가중치는 **코드와 따로** 갑니다 (`.env`·암호화 키와 같은 취급).
 
@@ -71,30 +77,34 @@ git (이 저장소)   코드만 — serve.py · src/ · demo/
 켜는 순서 (서버 PC 에서):
 
 ```powershell
-# 1) 가중치를 배포 폴더 **밖**에 둡니다
-#    release/stage1_threshold.json + release/checkpoints/*/best.pt
+# 1) 가중치를 배포 폴더 **밖**에 풀어 둡니다
+#    release\stage1_threshold.json  +  release\checkpoints\*est.pt
 
 # 2) 최상단 .env
 #    SCREENING_RELEASE_DIR=C:\deploy\daengs\modelselease
 
-# 3) docker-compose.yml 의 nginx ports 에 한 줄 추가
-#      - "8001:8001"
-#    ⚠️ 이때 nginx 컨테이너가 재생성되면서 80·8000 이 몇 초 끊깁니다
-
-# 4) 켜기
+# 3) 켜기
 docker compose --profile screening up -d
-docker compose ps
-curl http://localhost:8001/healthz     # {"ok":true,"mock":false,...}
+
+# 4) nginx 가 새 경로를 읽게 (설정 파일 내용만 바뀌면 자동 반영이 안 됩니다)
+docker compose restart nginx
+
+# 5) 확인
+curl http://daengback.weareithero.cloud/screen/healthz
+#    {"ok":true,"mock":false,"contract_version":"1.0",...}
 ```
 
-⚠️ **8001 을 여는 순간 인증 없는 업로드 엔드포인트가 열립니다.** `serve.py` 는
-데모 서버라 인증·레이트 리밋·HTTPS 가 없습니다. 방화벽으로 사내망만 열거나,
-공개하기 전에 인증을 붙이는 별도 카드가 필요합니다.
+⚠️ 4번에서 nginx 가 **몇 초 끊깁니다** (80·8000). 사람이 적은 시간에 하세요.
+
+⚠️ **켜는 순간 인증 없는 업로드 엔드포인트가 열립니다.** `serve.py` 는 데모 서버라
+인증·레이트 리밋이 없습니다. 인증을 붙이는 것은 별도 카드입니다.
+
+⚠️ **웹 데모 화면은 서버에서 안 돕니다.** `demo/index.html` 이 오리진 루트를 부르는데
+`/screen/` 아래에서는 어긋나기 때문입니다 (그 파일은 사본이라 못 고칩니다).
+화면을 보려면 각자 PC 에서 `serve.py --mock` 으로 띄우세요.
 
 첫 기동은 `uv sync --extra model` 이 torch 를 받느라 몇 분 걸립니다 (두 번째부터는
-`uv-cache` 볼륨 덕에 빠릅니다). 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의
-`pytorch-cpu` 인덱스가 그것이고, 없으면 GPU 를 안 쓰는데 NVIDIA 라이브러리를 수 GB
-받습니다.
+`uv-cache` 볼륨 덕에 빠릅니다). 리눅스에서는 CPU 판을 받습니다.
 
 ---
 

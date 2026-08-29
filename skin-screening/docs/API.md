@@ -22,6 +22,24 @@ GET  /                 데모 화면
 GET  /docs             FastAPI 자동 생성 문서
 ```
 
+### 배포된 서버의 주소
+
+nginx 가 `daengback` 아래 `/screen/` 으로 넘깁니다 (D-024). 앱이 부를 곳은:
+
+```
+http://daengback.weareithero.cloud/screen/v1/screen
+```
+
+앱 설정(`local.properties`)에는 **접두사까지만** 넣고, 코드가 `/v1/screen` 을 붙입니다.
+
+```
+daengs.screenUrl=http://daengback.weareithero.cloud/screen
+```
+
+⚠️ **데모 화면(`GET /`)은 배포 서버에서 안 열립니다.** 그 화면이 오리진 루트로
+`fetch('/healthz')` 를 부르는데 `/screen/` 아래에서는 어긋나기 때문입니다.
+화면을 볼 일이 있으면 각자 PC 에서 `serve.py --mock` 으로 띄우세요.
+
 **`box` 를 주세요.** 그 네모가 그대로 bbox 가 되어 학습과 **같은 함수**로 잘립니다.
 안 주면 화면 중앙으로 물러서는데, 1단계는 중심만 쓰므로 큰 차이가 없지만 2단계는
 학습 크롭과 어긋납니다 (`meta.box_source` 가 `"center"` 로 옵니다).

@@ -18,17 +18,22 @@ import numpy as np
 from src.config import COMPARE_DIFF_THRESHOLD, GAIT_FILTER_VERSION, OVERLAYS_DIR
 from src.features import build_features
 from src.keypoint_infer import run_keypoint_inference
-from src.overlay import render_overlay_video
+from src.overlay import OverlayEncodeError, render_overlay_video
 from src.quality_gate import check_quality
 from src.record_store import load_record, save_record
 from src.trajectory import build_trajectories
 
 
 def process_video(video_path, date: str | None = None, note: str | None = None,
-                  dog_id: str | None = None) -> dict:
+                  dog_id: str | None = None, original_filename: str | None = None) -> dict:
     """영상 하나 → 보행 기록 (이미 저장된 상태로 반환).
 
     `dog_id` 는 같은 개체의 기록을 묶기 위한 선택 필드입니다. 없어도 동작합니다.
+
+    `original_filename` 은 사용자가 올린 원본 이름입니다. 디스크의 `video_path` 는
+    uuid 이름이라 화면에 보여줄 수 없어서 따로 받습니다. **반드시 저장 전에 넣어야
+    합니다** — 저장 뒤에 반환된 dict 만 고치면 응답과 저장본이 갈라져, 앱이 새로고침할
+    때 이름이 uuid 로 바뀝니다.
     """
     video_path = Path(video_path)
 
@@ -37,7 +42,8 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
 
     record = {
         "record_id": None,
-        "source_file": video_path.name,
+        # 화면에 보여줄 이름. 원본 이름을 못 받았을 때만 디스크의 uuid 이름으로 떨어집니다.
+        "source_file": original_filename or video_path.name,
         # 저장된 원본 파일 경로 (uuid 이름). 화면에 보여줄 이름은 source_file 이고,
         # 이 경로는 원본 재생·향후 삭제 시 지울 대상을 가리키는 용도입니다.
         "original_video": str(video_path),
@@ -60,14 +66,24 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
         record["record_id"] = record_id
         return record
 
+    # overlay 는 **곁딸린 산출물**입니다. 인코딩이 실패했다고 분 단위가 걸린 추론 결과를
+    # 통째로 버리지는 않습니다. 다만 실패했으면 `overlay_video` 를 **넣지 않습니다** —
+    # 넣으면 기록이 없는 영상을 있다고 광고하고, 사용자는 404 만 받습니다.
     overlay_path = OVERLAYS_DIR / f"{video_path.stem}_overlay.mp4"
-    render_overlay_video(video_path, records, overlay_path)
+    overlay_video = None
+    overlay_error = None
+    try:
+        overlay_video = render_overlay_video(video_path, records, overlay_path)
+    except OverlayEncodeError as exc:
+        overlay_error = str(exc)
 
     trajectories = build_trajectories(records)
     features = build_features(records)
 
     record.update({
-        "overlay_video": str(overlay_path),
+        "overlay_video": overlay_video,
+        # 실패했을 때만 채워집니다. 왜 overlay 가 없는지 기록에 남겨 두는 자리입니다.
+        "overlay_error": overlay_error,
         "trajectories": trajectories,
         "features": features,
     })
@@ -122,6 +138,26 @@ def compare_records(record_id_a: str, record_id_b: str) -> dict:
             },
         }
 
+    # 화면 문구는 **위에서 실제로 계산한 결과에서 유도합니다.** 고정 문자열로 두면 모든
+    # 관절이 "비슷함" 이어도, 심지어 같은 기록끼리 비교해도 "차이가 관찰됩니다" 가
+    # 나갑니다. 이 서비스는 진단이 아니라 같은 개체의 시간 변화 관찰이므로, 화면에 나가는
+    # 주장은 계산 결과와 어긋나면 안 됩니다.
+    #
+    # "비교 가능한 관절이 하나도 없음" 을 "비슷함" 으로 뭉치지 않습니다 — 데이터가 없는
+    # 것을 변화가 없다고 말하게 되기 때문입니다.
+    _notes = [
+        n for jc in joint_comparison.values() for n in jc["comparison_note"].values()
+    ]
+    _comparable = [n for n in _notes if n in ("차이 관찰됨", "비슷함")]
+    if not _comparable:
+        message_for_ui = (
+            "두 기록에 공통으로 비교할 수 있는 관절 지표가 없어 변화를 말할 수 없습니다."
+        )
+    elif any(n == "차이 관찰됨" for n in _comparable):
+        message_for_ui = "이전 기록과 비교해 일부 움직임 지표에서 차이가 관찰됩니다."
+    else:
+        message_for_ui = "이전 기록과 비교해 뚜렷한 차이는 관찰되지 않았습니다."
+
     low_tier_records = [
         r["record_id"] for r in (a, b) if r["quality"].get("quality_tier") != "good"
     ]
@@ -169,7 +205,7 @@ def compare_records(record_id_a: str, record_id_b: str) -> dict:
         "recommendation": None,
         "record_a": {"record_id": a["record_id"], "date": a["date"]},
         "record_b": {"record_id": b["record_id"], "date": b["date"]},
-        "message_for_ui": "이전 기록과 비교해 일부 움직임 지표의 차이가 관찰됩니다.",
+        "message_for_ui": message_for_ui,
         "reliability_note": reliability_note,
         "version_warning": version_warning,
         "diff_threshold_note": (

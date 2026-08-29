@@ -55,13 +55,27 @@ def _draw_frame(frame, rec):
     return frame
 
 
+class OverlayEncodeError(RuntimeError):
+    """overlay 인코딩이 실패했습니다 — 산출물을 믿으면 안 되는 상태."""
+
+
 def render_overlay_video(video_path, records: list, out_path) -> str:
     cap = cv2.VideoCapture(str(video_path))
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     # 추론과 같은 서브샘플 규칙이어야 프레임 인덱스가 맞습니다.
     step = max(1, round(native_fps / OVERLAY_FPS))
+
+    # ⚠️ **크기는 `CAP_PROP_FRAME_WIDTH/HEIGHT` 가 아니라 실제로 디코드된 프레임에서
+    #    가져옵니다.** 회전 메타데이터가 붙은 영상(안드로이드 세로 촬영 — 이 서비스가
+    #    상정하는 입력입니다)은 OpenCV 의 FFMPEG 백엔드가 `read()` 에서 자동으로 세워
+    #    주는데, `CAP_PROP` 은 회전 전 컨테이너 값을 그대로 냅니다. 그 값을 ffmpeg 의
+    #    `-s` 에 넣으면 파이프로 흘려보내는 `frame.tobytes()` 와 stride 가 어긋나
+    #    **overlay 가 비스듬히 찢어지는데 예외는 하나도 안 납니다.**
+    ret, first_frame = cap.read()
+    if not ret:
+        cap.release()
+        raise OverlayEncodeError(f"영상에서 프레임을 하나도 읽지 못했습니다: {video_path}")
+    height, width = first_frame.shape[:2]
 
     by_fidx = {r["frame_idx"]: r for r in records}
     out_path = Path(out_path)
@@ -70,6 +84,9 @@ def render_overlay_video(video_path, records: list, out_path) -> str:
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     cmd = [
         ffmpeg_exe, "-y",
+        # stderr 를 PIPE 로 받으므로 출력량을 줄입니다. 진행률(-stats)까지 흘리면
+        # 파이프 버퍼가 차서 교착이 날 수 있습니다.
+        "-loglevel", "error", "-nostats",
         "-f", "rawvideo", "-vcodec", "rawvideo",
         "-pix_fmt", "bgr24", "-s", f"{width}x{height}", "-r", str(OVERLAY_FPS),
         "-i", "-",
@@ -77,21 +94,62 @@ def render_overlay_video(video_path, records: list, out_path) -> str:
         str(out_path),
     ]
     proc = subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
     )
 
+    expected_nbytes = width * height * 3
+    frame = first_frame
     fidx = 0
     frame_pos = 0
+    broken_pipe = False
     while True:
+        if frame_pos % step == 0:
+            frame = _draw_frame(frame, by_fidx.get(fidx))
+            buf = frame.tobytes()
+            if len(buf) != expected_nbytes:
+                # 프레임 크기가 도중에 달라지면 이후 전부가 어긋납니다. 조용히 찢어진
+                # 영상을 내놓느니 여기서 멈춥니다.
+                proc.stdin.close()
+                proc.stderr.close()
+                proc.kill()
+                cap.release()
+                raise OverlayEncodeError(
+                    f"프레임 크기가 도중에 바뀌었습니다 "
+                    f"(기대 {width}x{height}, 프레임 {frame_pos}: "
+                    f"{frame.shape[1]}x{frame.shape[0]})."
+                )
+            try:
+                proc.stdin.write(buf)
+            except OSError:
+                # ffmpeg 가 먼저 죽은 경우입니다. 아래에서 종료 코드와 stderr 로 봅니다.
+                # ⚠️ `BrokenPipeError` 만 잡으면 안 됩니다 — 윈도우에서는 같은 상황이
+                #    `OSError: [Errno 22] Invalid argument` 로 옵니다.
+                broken_pipe = True
+                break
+            fidx += 1
+        frame_pos += 1
         ret, frame = cap.read()
         if not ret:
             break
-        if frame_pos % step == 0:
-            frame = _draw_frame(frame, by_fidx.get(fidx))
-            proc.stdin.write(frame.tobytes())
-            fidx += 1
-        frame_pos += 1
     cap.release()
-    proc.stdin.close()
-    proc.wait()
+
+    try:
+        proc.stdin.close()
+    except OSError:
+        # 위와 같습니다 — 죽은 파이프를 닫을 때 윈도우는 Errno 22 를 냅니다.
+        pass
+    stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
+    proc.stderr.close()
+    returncode = proc.wait()
+
+    # ⚠️ **종료 코드를 반드시 봅니다.** 예전에는 이것을 버리고 경로를 그대로 반환해서,
+    #    인코딩이 실패해도 기록이 `overlay_video` 를 있다고 광고했습니다. 사용자는
+    #    404 를 받는데 서버에는 이유가 아무 데도 안 남았습니다.
+    if returncode != 0 or broken_pipe:
+        raise OverlayEncodeError(
+            f"ffmpeg 인코딩 실패 (exit {returncode})"
+            + (f": {stderr[-2000:]}" if stderr else "")
+        )
+    if not out_path.exists() or out_path.stat().st_size == 0:
+        raise OverlayEncodeError(f"overlay 파일이 만들어지지 않았습니다: {out_path}")
     return str(out_path)

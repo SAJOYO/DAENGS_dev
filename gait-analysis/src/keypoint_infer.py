@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -28,18 +30,25 @@ from src.crop_assist import get_general_model, try_crop_assisted_pose
 from src.gait_filter import apply_gait_filter
 
 _MODEL_CACHE: dict = {}
+# ⚠️ serve.py 가 `process_video` 를 threadpool 로 돌리므로 **분석 요청이 동시에 들어옵니다.**
+#    잠금 없이 "없으면 올린다" 를 하면 두 스레드가 동시에 통과해 torch 모델을 두 벌
+#    올립니다 — 결과가 오염되지는 않지만 메모리가 두 배가 됩니다.
+_MODEL_LOCK = threading.Lock()
 
 
 def get_model() -> YOLO:
     """전용 12kp pose 모델을 프로세스당 한 번만 올립니다."""
     if "model" not in _MODEL_CACHE:
-        if not POSE_WEIGHTS.exists():
-            raise FileNotFoundError(
-                f"12kp pose 가중치를 찾을 수 없습니다: {POSE_WEIGHTS}\n"
-                "GAIT_RELEASE_DIR 또는 GAIT_POSE_WEIGHTS 를 확인하세요 "
-                "(가중치는 저장소에 없습니다 — README 참고)."
-            )
-        _MODEL_CACHE["model"] = YOLO(str(POSE_WEIGHTS))
+        with _MODEL_LOCK:
+            # 잠금을 잡는 동안 다른 스레드가 이미 올렸을 수 있어 한 번 더 봅니다.
+            if "model" not in _MODEL_CACHE:
+                if not POSE_WEIGHTS.exists():
+                    raise FileNotFoundError(
+                        f"12kp pose 가중치를 찾을 수 없습니다: {POSE_WEIGHTS}\n"
+                        "GAIT_RELEASE_DIR 또는 GAIT_POSE_WEIGHTS 를 확인하세요 "
+                        "(가중치는 저장소에 없습니다 — README 참고)."
+                    )
+                _MODEL_CACHE["model"] = YOLO(str(POSE_WEIGHTS))
     return _MODEL_CACHE["model"]
 
 

@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile  # noqa: E402
+from fastapi.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
@@ -123,15 +124,29 @@ def build_app() -> FastAPI:
                 status_code=400, detail=f"영상을 읽을 수 없습니다: {exc}"
             ) from exc
 
+        # ⚠️ **`process_video` 를 이 코루틴 안에서 그냥 부르면 안 됩니다.** 영상 전체를
+        #    훑는 동기 CPU 작업이라 분 단위가 걸리는데, 그동안 uvicorn 의 이벤트 루프가
+        #    통째로 묶여 두 번째 분석은 물론 `/healthz` 와 기록 조회까지 응답이 안 나갑니다
+        #    (헬스 프로브에는 서비스가 죽은 것으로 보입니다). 원본 walk_demo 는
+        #    ThreadingHTTPServer 라 요청마다 스레드가 붙어 이 문제가 없었으므로, 이것은
+        #    FastAPI 로 옮기면서 생긴 회귀입니다.
+        #
+        #    핸들러는 `async def` 로 둡니다 — 위의 `await video.read()` 가 필요해서입니다.
+        #    무거운 호출만 스레드로 뺍니다.
         try:
-            record = process_video(saved_path, date=date, note=note, dog_id=dog_id)
+            record = await run_in_threadpool(
+                process_video,
+                saved_path,
+                date=date,
+                note=note,
+                dog_id=dog_id,
+                original_filename=video.filename,
+            )
         except FileNotFoundError as exc:
             # 가중치가 없는 경우입니다. 요청이 틀린 게 아니라 환경이 덜 갖춰진 것이라 503 입니다
             # (backend 의 `/ask` 가 ml 그룹 없을 때 503 을 내는 것과 같은 규칙).
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-        # 사용자가 올린 원본 이름을 남깁니다 (저장은 uuid 이름으로 했습니다).
-        record["source_file"] = video.filename
         return record
 
     @app.get("/v1/records/{record_id}")

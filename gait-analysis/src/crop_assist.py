@@ -18,6 +18,8 @@ crop 된 이미지에 적용할 뿐입니다.
 
 from __future__ import annotations
 
+import threading
+
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -31,18 +33,23 @@ from src.config import (
 )
 
 _general_model_cache: dict = {}
+# keypoint_infer._MODEL_LOCK 과 같은 이유입니다 — threadpool 에서 동시에 들어오면
+# 잠금 없이는 검출기를 두 벌 올립니다.
+_general_model_lock = threading.Lock()
 
 
 def get_general_model() -> YOLO:
     """범용 검출기를 프로세스당 한 번만 올립니다."""
     if "model" not in _general_model_cache:
-        if not DETECTOR_WEIGHTS.exists():
-            raise FileNotFoundError(
-                f"crop-assist 검출기 가중치를 찾을 수 없습니다: {DETECTOR_WEIGHTS}\n"
-                "GAIT_RELEASE_DIR 또는 GAIT_DETECTOR_WEIGHTS 를 확인하세요 "
-                "(가중치는 저장소에 없습니다 — README 참고)."
-            )
-        _general_model_cache["model"] = YOLO(str(DETECTOR_WEIGHTS))
+        with _general_model_lock:
+            if "model" not in _general_model_cache:
+                if not DETECTOR_WEIGHTS.exists():
+                    raise FileNotFoundError(
+                        f"crop-assist 검출기 가중치를 찾을 수 없습니다: {DETECTOR_WEIGHTS}\n"
+                        "GAIT_RELEASE_DIR 또는 GAIT_DETECTOR_WEIGHTS 를 확인하세요 "
+                        "(가중치는 저장소에 없습니다 — README 참고)."
+                    )
+                _general_model_cache["model"] = YOLO(str(DETECTOR_WEIGHTS))
     return _general_model_cache["model"]
 
 

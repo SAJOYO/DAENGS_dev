@@ -52,6 +52,14 @@ app.conf.beat_schedule = {
     "crawl-due-sources": {
         "task": "daengs_life.tasks.crawl.crawl_due",
         "schedule": crontab(hour=4, minute=0),
+        # **큐를 나눈다.** 이 Beat 는 앱 전체 것이라 위의 프리페치도 같이 쏘는데, 둘이 같은
+        # 큐에 있으면 크롤 워커(`--concurrency 1`)가 둘 다 먹는다. 그러면 04:00 크롤이 도는
+        # 10~15분(후보 282대상 × 요청 간격 1.5초) 동안 프리페치가 줄을 서고, 끝나는 순간
+        # 10여 개가 몰아서 실행되며 **팀 공용 data.go.kr 일 예산**을 쓴다 (D-019).
+        #
+        # 크롤 워커는 `--queues crawl` 로 이 큐만 먹는다. `warm_active` 는 기본 `celery` 큐에
+        # 그대로 두고, 그 소비자는 RT-002 의 워커가 뜰 때 생긴다.
+        "options": {"queue": "crawl"},
     },
 }
 

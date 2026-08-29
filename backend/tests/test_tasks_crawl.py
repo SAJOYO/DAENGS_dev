@@ -277,6 +277,18 @@ def test_the_worker_actually_loads_the_crawl_module() -> None:
     assert "daengs_life.tasks.crawl.crawl_due" in app.tasks
 
 
+def test_the_crawl_schedule_goes_to_its_own_queue() -> None:
+    """크롤과 프리페치가 같은 큐에 있으면 `--concurrency 1` 워커가 둘 다 먹는다.
+
+    그러면 04:00 크롤이 도는 10~15분 동안 프리페치가 줄을 서고, 끝나는 순간 10여 개가 몰아서
+    실행되며 팀 공용 일 예산을 쓴다 (D-019). 큐가 갈려 있어야 크롤 워커가 크롤만 먹는다.
+    """
+    crawl_entry = app.conf.beat_schedule["crawl-due-sources"]
+    assert crawl_entry["options"]["queue"] == "crawl"
+    # 프리페치는 기본 큐 그대로다 — 옮기면 RT-002 의 워커가 못 받는다.
+    assert "options" not in app.conf.beat_schedule["warm-active-grids"]
+
+
 def test_the_schedule_is_daily_at_dawn_kst() -> None:
     entry = app.conf.beat_schedule["crawl-due-sources"]["schedule"]
     assert entry.hour == {4} and entry.minute == {0}

@@ -394,10 +394,18 @@ services:
     command: >-
       sh -c "uv sync --frozen &&
       exec uv run --no-sync celery -A daengs_life.tasks.celery_app worker
-      --loglevel info --concurrency 1 --queues celery"
+      --loglevel info --concurrency 1 --queues crawl"
 
   # Beat 는 **스케줄을 보내기만** 합니다. 태스크를 실행하지 않으므로 프로세스가 하나여야
   # 합니다 — 둘이 뜨면 같은 시각에 두 번 보냅니다.
+  #
+  # ⚠ **이름은 crawler-beat 지만 발사하는 것은 앱 전체 스케줄입니다.** `beat_schedule` 에는
+  #   크롤(하루 1회)과 실시간 프리페치 `warm-active-grids`(60초, RT-002)가 같이 있습니다.
+  #   이 profile 을 켜면 **프리페치 메시지도 같이 발사됩니다.** 크롤 워커는 `--queues crawl`
+  #   이라 그것을 먹지 않으므로 크롤을 방해하지는 않지만, 소비자가 없는 동안 기본 `celery`
+  #   큐에 쌓입니다 (하루 1,440개, 1.5MB 남짓). Redis 에 `maxmemory` 를 안 건 것이 바로 이
+  #   종류를 조용히 지우지 않기 위해서입니다 (D-019) — 쌓이는 것 자체는 의도된 동작입니다.
+  #   소비자는 RT-002 의 워커가 뜰 때 생기고, 그 워커를 언제 띄울지는 그 카드의 결정입니다.
   crawler-beat:
     profiles: ["crawler"]
     build:
@@ -424,7 +432,10 @@ services:
       # (require_data_dir 은 실제로 쓸 때 부릅니다) 두 컨테이너의 설정을 갈라 두면
       # "왜 워커에서만 되지"를 나중에 한 번 더 겪습니다.
       - ./data:/data
-      - crawler-beat-venv:/opt/venv
+      # 워커와 **같은 볼륨**입니다. 둘의 `uv sync` 인자가 글자까지 같아 내용이 같고,
+      # 어긋나도 기동 로그에 바로 터집니다 — backend 와 나눈 것과는 성격이 다릅니다
+      # (그쪽은 내용이 다르고 조용히 틀립니다).
+      - crawler-venv:/opt/venv
       - crawler-beat-state:/var/lib/celery
       - uv-cache:/root/.cache/uv
     depends_on:
@@ -469,7 +480,6 @@ volumes:
   # ⚠ backend-venv 와 나눠 둡니다 — 합치면 크롤러의 `uv sync` 가 backend 의 torch 를
   #   지웁니다 (crawler-worker 주석 참고).
   crawler-venv:
-  crawler-beat-venv:
   # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
   crawler-beat-state:
   screening-venv:

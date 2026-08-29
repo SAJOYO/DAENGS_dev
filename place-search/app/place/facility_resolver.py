@@ -47,8 +47,8 @@ class FacilityParams(BaseModel):
     # 원하면 그때 명시한다. 어느 쪽이든 잘리면 `truncated` 로 말한다.
     limit: int | None = Field(None, ge=1, le=MAX_RESULTS)
     # 개 크기. 시설의 상한이 아니라 **데려갈 개**의 크기다 — 서버가 받을 수 있는 등급으로 편다.
-    # identity(dog_id)가 아니라 값이다 — 프로필 → 크기 projection 은 프로필 소유자의 일이고,
-    # resolver 는 장소 후보만 안다.
+    # identity(dog_id)가 아니라 호출자가 알고 있을 때 보내는 선택적 값이다.
+    # resolver 는 프로필 저장소 없이 장소 후보만 안다.
     dog_size: DogSize | None = None
     # 종을 열거하면서 개를 뺀 시설을 제외한다. place 검색의 `only_dog_ok` 와 같은 뜻.
     only_dog_ok: bool = True

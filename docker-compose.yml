@@ -255,13 +255,10 @@ services:
       exec uv run --no-sync python serve.py
       --release /models/release --host 0.0.0.0 --port 8000"
 
-  # Place 검색 (D-026). D-024 와 같은 방식 — profile 로 꺼둔 채 들여왔습니다.
-  # 기본 `docker compose up -d` 에서는 안 뜹니다. 켜기: docker compose --profile place up -d
-  # nginx 라우팅이 **없습니다** — 공개 연결은 실제 APP 계약을 확인하는 별도 카드입니다.
-  # backend 나 반려견 프로필은 이 서비스의 선행 조건이 아닙니다. 켠 뒤 스키마는 Alembic 으로:
-  #   docker compose --profile place run --rm place-search uv run --no-sync alembic upgrade head
+  # Place 검색 (D-026, D-027). APP 의 기존 `/v2/places/search` 계약에 연결되어
+  # 기본 compose 기동에 포함됩니다. backend 나 반려견 프로필은 선행 조건이 아닙니다.
+  # 스키마는 place-search 기동 명령이 Alembic 으로 먼저 맞춥니다.
   place-db:
-    profiles: ["place"]
     image: postgis/postgis:18-3.6
     container_name: daengs-place-db
     restart: unless-stopped
@@ -269,16 +266,12 @@ services:
       - daengs-network
     environment:
       POSTGRES_USER: ${PLACE_POSTGRES_USER:-place}
-      # ⚠ 기본값은 개발 편의용입니다. LAN 에 여는 순간(.env 의 PLACE_POSTGRES_PORT 주석 참고)
-      #   pgvector 와 같은 이유로 반드시 .env 에서 다른 값을 지정하세요.
+      # 기본값은 compose 내부 전용입니다. place-db 는 호스트 포트를 열지 않습니다.
       POSTGRES_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
       POSTGRES_DB: ${PLACE_POSTGRES_DB:-place}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
       TZ: Asia/Seoul
       PGTZ: Asia/Seoul
-    ports:
-      # pgvector(5432)와 같은 의도의 LAN 개방 — 팀원·배치가 붙습니다. 포트만 5433.
-      - "${PLACE_POSTGRES_PORT:-5433}:5432"
     volumes:
       # PG18 이미지의 VOLUME 은 /var/lib/postgresql 입니다. 상위 경로를 마운트해야
       # 데이터가 보존됩니다 (pgvector 와 같음). db/init 은 물리지 않습니다 —
@@ -300,7 +293,6 @@ services:
       start_period: 5s
 
   place-search:
-    profiles: ["place"]
     # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
     build:
       context: ./docker/uv
@@ -309,7 +301,7 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
-    # ports 가 없습니다. 현재는 compose 네트워크 안에서만 닿고 공개 ingress 는 없습니다.
+    # ports 가 없습니다. 외부 요청은 nginx 의 8000 포트만 통과합니다 (D-027).
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DATABASE_URL: postgresql+asyncpg://${PLACE_POSTGRES_USER:-place}:${PLACE_POSTGRES_PASSWORD:-place}@place-db:5432/${PLACE_POSTGRES_DB:-place}
@@ -330,9 +322,11 @@ services:
     depends_on:
       place-db:
         condition: service_healthy
-    # skin-screening 과 같은 모양입니다. 이어지는 줄의 들여쓰기 주의도 같습니다.
+    # DB 가 처음 뜬 배포에서도 수동 조치가 남지 않게 마이그레이션 뒤 서버를 띄웁니다.
+    # 이어지는 줄은 첫 줄과 같은 칸이어야 한 셸 명령으로 접힙니다.
     command: >
       sh -c "uv sync --frozen &&
+      uv run --no-sync alembic upgrade head &&
       exec uv run --no-sync uvicorn app.search_main:app
       --host 0.0.0.0 --port 8000"
 

@@ -111,7 +111,30 @@ jobs:
 
       - name: nginx 기동 / 설정 반영
         run: |
-          # nginx/default.conf 를 고쳤으면 여기서 반영됩니다.
-          # 이미 떠 있고 변경이 없으면 아무 일도 하지 않습니다.
+          # compose 서비스와 마운트된 nginx 설정을 함께 반영합니다.
           docker compose up -d
           docker compose ps
+          docker compose exec -T nginx nginx -t
+          docker compose exec -T nginx nginx -s reload
+
+      - name: Place 공개 경로 확인
+        run: |
+          # place-search 첫 기동은 의존성 설치와 Alembic 적용을 거치므로 준비될 때까지 재시도합니다.
+          $body = '{"lat":37.5665,"lng":126.9780,"kinds":["hospital"],"limit_per_kind":1}'
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-WebRequest -UseBasicParsing `
+                -Method Post `
+                -Uri 'http://127.0.0.1:8000/v2/places/search' `
+                -ContentType 'application/json' `
+                -Body $body `
+                -TimeoutSec 10
+              if ($response.StatusCode -eq 200) {
+                Write-Host 'Place 공개 경로 확인 완료'
+                break
+              }
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }

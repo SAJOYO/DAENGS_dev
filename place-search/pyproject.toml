@@ -1,0 +1,41 @@
+[project]
+name = "daengs-place-search"
+version = "0.1.0"
+description = "DAENGS Place 검색 — 공공데이터 ingest + PostGIS 반경 검색 + 반려견 조건 평가"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "geoalchemy2>=0.15",
+    "httpx>=0.27",
+    "tzdata>=2026.3",
+    "alembic>=1.19",
+    # 마이그레이션 전용 동기 드라이버. 앱은 asyncpg 를 그대로 쓴다 — alembic/env.py 참고.
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

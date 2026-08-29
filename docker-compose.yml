@@ -255,6 +255,88 @@ services:
       exec uv run --no-sync python serve.py
       --release /models/release --host 0.0.0.0 --port 8000"
 
+  # Place 검색 (D-026). D-024 와 같은 방식 — profile 로 꺼둔 채 들여왔습니다.
+  # 기본 `docker compose up -d` 에서는 안 뜹니다. 켜기: docker compose --profile place up -d
+  # nginx 라우팅이 **없습니다** — 이 API 는 내부 계약이고, 공개 계약(인증 + dog_id → 값
+  # projection)은 backend 가 소유합니다 (다음 카드). 켠 뒤 스키마는 Alembic 으로:
+  #   docker compose --profile place run --rm place-search uv run --no-sync alembic upgrade head
+  place-db:
+    profiles: ["place"]
+    image: postgis/postgis:18-3.6
+    container_name: daengs-place-db
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      POSTGRES_USER: ${PLACE_POSTGRES_USER:-place}
+      # ⚠ 기본값은 개발 편의용입니다. LAN 에 여는 순간(.env 의 PLACE_POSTGRES_PORT 주석 참고)
+      #   pgvector 와 같은 이유로 반드시 .env 에서 다른 값을 지정하세요.
+      POSTGRES_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
+      POSTGRES_DB: ${PLACE_POSTGRES_DB:-place}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    ports:
+      # pgvector(5432)와 같은 의도의 LAN 개방 — 팀원·배치가 붙습니다. 포트만 5433.
+      - "${PLACE_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # PG18 이미지의 VOLUME 은 /var/lib/postgresql 입니다. 상위 경로를 마운트해야
+      # 데이터가 보존됩니다 (pgvector 와 같음). db/init 은 물리지 않습니다 —
+      # place 스키마의 원본은 place-search/alembic 입니다 (D-026, dev DB 규칙의 예외).
+      - place-pgdata:/var/lib/postgresql:rw
+    shm_size: 1gb
+    healthcheck:
+      # initdb 의 임시 PostgreSQL 도 pg_isready 에는 성공합니다. postgis 확장이 실제로
+      # 활성화된 뒤에만 healthy 가 되게 합니다 (원본 geo compose 의 장치).
+      test:
+        - CMD-SHELL
+        - >-
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
+          "SELECT 1 WHERE (SELECT count(*) FROM pg_extension
+          WHERE extname = 'postgis') = 1" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  place-search:
+    profiles: ["place"]
+    # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-place-search
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. backend 가 compose 네트워크 안에서 place-search:8000 으로만
+    # 부릅니다 — 바깥 경계는 backend 의 공개 계약 하나입니다.
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_DATABASE_URL: postgresql+asyncpg://${PLACE_POSTGRES_USER:-place}:${PLACE_POSTGRES_PASSWORD:-place}@place-db:5432/${PLACE_POSTGRES_DB:-place}
+      # 공공데이터 키 — 배치(ingest) 전용. 서버 기동에는 필요 없습니다 (D-026).
+      DAENGS_DATA_GO_KR_SERVICE_KEY: ${PLACE_DATA_GO_KR_SERVICE_KEY:-}
+      DAENGS_KTO_SERVICE_KEY: ${PLACE_KTO_SERVICE_KEY:-}
+      TZ: Asia/Seoul
+    working_dir: /app
+    volumes:
+      # 폴더째가 아니라 필요한 것만 (D-004 와 같은 이유). tests 는 컨테이너에 필요 없습니다.
+      - ./place-search/pyproject.toml:/app/pyproject.toml:ro
+      - ./place-search/uv.lock:/app/uv.lock:ro
+      - ./place-search/alembic.ini:/app/alembic.ini:ro
+      - ./place-search/alembic:/app/alembic:ro
+      - ./place-search/app:/app/app:ro
+      - place-search-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      place-db:
+        condition: service_healthy
+    # skin-screening 과 같은 모양입니다. 이어지는 줄의 들여쓰기 주의도 같습니다.
+    command: >
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync uvicorn app.search_main:app
+      --host 0.0.0.0 --port 8000"
+
   # GUI가 필요할 때만: docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:9.17
@@ -281,9 +363,11 @@ networks:
 
 volumes:
   pgdata:
+  place-pgdata:
   pgadmin-data:
   redis-data:
   backend-venv:
   screening-venv:
+  place-search-venv:
   uv-cache:
   hf-cache:

@@ -6,6 +6,7 @@ Next.js 프론트엔드와 FastAPI 백엔드를 PM2 + nginx 로 자체 서버에
 daengs.~     :80   → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next, 호스트)
 daengback.~  :8000 → nginx 컨테이너 → backend:8000              (기본 API 경로)
                                       → place-search:8000         (`/v2/places/`만)
+                                      → journey-service:8000      (`/journey`만)
 ```
 
 ## 요구 사항
@@ -188,6 +189,20 @@ gh workflow run place-search-ingest.yml -f mode=full
 gh workflow run place-search-ingest.yml -f mode=incremental
 ```
 
+### Journey
+
+장소 카드를 선택한 뒤 APP은 공개 `POST /journey`로 거리·시간의 실측/추정 상태와 지도 앱
+handoff를 받습니다. 이 서비스는 Place DB와 Dog Profile을 조회하지 않으며, 원본
+`DAENGS_geo main@c5f0d5f`의 현재 APP 좌표 요청만 처리합니다.
+
+```powershell
+docker compose logs -f journey-service
+```
+
+기본 route provider는 키 없는 `fake`라 결과가 `estimate`로 표시됩니다. TMAP 보행 실측을
+사용할 때만 최상단 `.env`의 `JOURNEY_WALK_ROUTE_PROVIDER=tmap`,
+`JOURNEY_USAGE_POLICY=dev`, `JOURNEY_TMAP_APP_KEY`를 설정합니다.
+
 ### 롤백
 
 배포는 커밋 해시별 폴더에 쌓이고 `current` 링크가 그중 하나를 가리킵니다.
@@ -208,6 +223,7 @@ pm2 reload daengs-web
 frontend/                 Next.js 앱
 backend/                  FastAPI 앱 (uv, Python 3.12)
 place-search/             Place 검색 API + Alembic (별도 PostGIS 사용)
+journey-service/          장소 선택 뒤 단발 이동 스냅샷 + 지도 앱 handoff
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        서버용 컨테이너 구성
 docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)

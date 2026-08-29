@@ -72,9 +72,23 @@ def _no_crawl_runs_writes(request, monkeypatch):
     if "db_or_skip" in request.fixturenames:
         return                                  # 명시적으로 DB 를 받은 테스트는 건드리지 않는다
 
-    from daengs_life.tasks import crawl_runs
+    from daengs_life.tasks import crawl, crawl_runs
 
     def _blocked():
         raise RuntimeError("테스트는 crawl_runs 에 쓰지 않는다 — 필요하면 db_or_skip 을 받을 것")
 
     monkeypatch.setattr(crawl_runs, "_connect", _blocked)
+
+    # **브로커도 막는다.** DB 만 막았더니 `crawl_due` 가 fan-out 으로 바뀐 뒤
+    # `crawl_source.apply_async` 가 **실서버 Redis 로 나갔다** — 2026-08-30 에 테스트 메시지
+    # 3건이 운영 `crawl` 큐에 쌓였고, 워커가 안 떠 있어서 아무도 몰랐다. 떠 있었다면 없는
+    # 소스로 3번 시도하고 재시도까지 돌았을 것이다.
+    #
+    # RAG-047 ⑤ 와 같은 병이 **공유 인프라 한 겹 옆에서** 다시 난 것이다. `documents` →
+    # `crawl_runs` → 브로커. 그래서 여기서는 "테스트가 팀 공용 자원에 내보내지 않는다"를
+    # 통째로 막는다. 발사를 봐야 하는 테스트는 `apply_async` 를 자기가 monkeypatch 한다
+    # (`test_tasks_crawl.py` 의 `dispatched` fixture).
+    def _no_dispatch(*_a, **_k):
+        raise RuntimeError("테스트는 실서버 브로커로 발사하지 않는다 — apply_async 를 직접 대체할 것")
+
+    monkeypatch.setattr(crawl.crawl_source, "apply_async", _no_dispatch)

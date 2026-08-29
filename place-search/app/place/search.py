@@ -70,10 +70,10 @@ if _DECLARED_KINDS != _RESOLVER_KINDS:
 class PlaceSearchConditions(BaseModel):
     """사용자가 명시한 대조 조건. 장소를 제거하거나 순서를 바꾸지 않는다.
 
-    **identity 가 아니라 값만 받는다.** dog_id → 크기·무게·나이 projection 은 프로필
-    소유자(호출자 쪽 게이트웨이)의 일이다 — 이 레포는 프로필을 소유하지 않는다
-    (docs/contracts/dog-profile.md). 준 값을 그대로 평가에 쓰고 응답에 그대로 되돌리므로
-    "무엇을 기준으로 대조했나"가 항상 요청과 일치한다.
+    **identity 가 아니라 값만 받는다.** 호출자가 대조할 값이 있을 때만 선택적으로 보내며,
+    값이 없으면 conditions 없이 검색한다. 준 값은 그대로 평가에 쓰고 응답에 그대로
+    되돌리므로 "무엇을 기준으로 대조했나"가 항상 요청과 일치한다. 이 계약은 프로필
+    저장소나 dog_id 를 요구하지 않는다.
 
     모르는 키는 422 다 — `preferences` 와 같은 이유(extra="forbid")다. 판정 의미가 있는
     입력에서 오타(`dog_weigth_kg`)나 옛 계약(`dog_id`)을 조용히 무시하면 덜 개인화된
@@ -84,8 +84,7 @@ class PlaceSearchConditions(BaseModel):
 
     dog_size: DogSize | None = None
     dog_weight_kg: float | None = Field(None, gt=0, le=200)
-    # `deny:age` 술어를 대조하는 유일한 재료. 나이도 프로필의 사실이므로 견주가 매번
-    # 적는 값이 아니라 호출자가 프로필에서 계산해 보내는 값이다.
+    # `deny:age` 술어를 대조하는 유일한 재료. 호출자가 알고 있을 때만 보낸다.
     dog_age_years: float | None = Field(None, ge=0, le=40)
 
     @model_validator(mode="after")

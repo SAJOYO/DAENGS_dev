@@ -31,7 +31,8 @@
 | [D-024](#d-024) | 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다 | 2026-08-28 |
 | [D-025](#d-025) | 홀로그램 도감을 조직 public 저장소 + GitHub Pages 로 분리 | 2026-08-28 |
 | [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
-| [D-027](#d-027) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
+| [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
+| [D-028](#d-028) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
 
 ---
 
@@ -1392,10 +1393,11 @@ DAENGS_geo 에서 검증을 마친 Place 검색을 최상위 `place-search/` 로
 D-022(최상위 폴더)·D-024(compose profile 로 꺼둔 착륙)와 같은 방식입니다.
 `profiles: ["place"]` 라 기본 `docker compose up -d` 에서는 아무것도 안 뜹니다.
 
-경계는 이렇습니다.
+현재 착륙 범위는 이렇습니다.
 
 ```
-DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → place-search → place-db
+place-search → place-db
+DAENGS_APP  -X→ 공개 경로 없음
 ```
 
 #### backend 에 넣지 않은 이유
@@ -1406,9 +1408,8 @@ DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → pl
 - in-process 로 넣으면 패키지 이름·설정·세션 체계를 이관과 **동시에** 갈아야 하고,
   장애 도메인도 합쳐집니다 (D-024 가 스크리닝을 밖에 둔 이유와 같습니다).
   나중에 정말 필요하면 in-process 로 접는 것은 쉽고, 반대는 비쌉니다.
-- backend 는 place-search 기동에 **종속되지 않습니다**. place 가 죽으면
-  `/places/search` 만 503 이고 auth/ask 는 정상이어야 합니다 (게이트웨이 카드의
-  수용 기준).
+- backend 는 place-search 기동에 **종속되지 않습니다**. place profile 을 켜지 않아도
+  auth/ask 를 포함한 기존 서비스는 이전과 똑같이 떠야 합니다.
 
 #### place-db 를 pgvector 와 합치지 않은 이유
 
@@ -1422,14 +1423,14 @@ place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
 쌉니다 — `place-search/UPSTREAM.md`).
 
-#### API 를 nginx 에 노출하지 않는 이유
+#### API 는 아직 nginx 에 노출하지 않았다
 
 D-024 의 profile 패턴만 차용하고 `/screen/` 같은 public ingress 는 복제하지 않습니다.
 place-search 의 `/v2/places/search` 는 **내부 계약**입니다 — 인증이 없고, 개의
-identity 가 아니라 값(size/weight/age)을 받습니다. 사용자·강아지를 아는 것은 backend
-뿐이어야 하고, 공개 계약은 backend 가 소유합니다. backend 가 place-search 를 부르는
-접점은 라우터 하나 + HTTP 클라이언트 하나로 유지합니다 (daengs_life 접점 규칙과
-같은 정신).
+identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 없어도 검색합니다.
+이번 착륙에서는 공개 연결을 만들지 않았습니다. APP 이 어떤 경로로 호출할지는 실제
+클라이언트 계약을 확인한 별도 PR 에서 정하며, backend 나 반려견 프로필을 선행 조건으로
+두지 않습니다.
 
 #### 이관 이후의 소유권
 
@@ -1441,6 +1442,31 @@ Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본�
 ---
 
 ## D-027
+### APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달한다
+
+D-026에서 착륙만 끝낸 Place 검색을 DAENGS_APP의 현재 계약에 연결합니다. APP과
+place-search가 이미 같은 `POST /v2/places/search` 요청·응답을 쓰므로 nginx는 URI나
+본문을 번역하지 않습니다.
+
+```
+DAENGS_APP → daengback:8000/v2/places/search → nginx → place-search → place-db
+                                                    backend -X→
+                                                Dog Profile -X→
+```
+
+- `location /v2/places/`만 place-search로 보내며 나머지 8000번 경로는 계속 backend로 갑니다.
+- 요청에 `conditions`가 없어도 되는 기존 browse-mode 계약을 유지합니다. Dog Profile을
+  조회하거나 검색 입력으로 만들어 주는 중계 계층은 두지 않습니다.
+- 실제 배포에서 요청을 받을 수 있도록 place-search와 place-db의 `place` profile을
+  해제합니다. 스키마는 place-search가 뜨기 전에 기존 Alembic 이력을 적용합니다.
+- place-db는 호스트 포트를 열지 않습니다. 검색 서비스는 compose 네트워크에서만 DB에
+  붙고, 외부 진입점은 nginx 하나뿐이라는 기존 인프라 경계를 따릅니다.
+- 공공데이터 키는 여전히 적재 배치에만 필요합니다. 빈 DB에서도 검색 서버와 공개 API는
+  정상 기동하며, 데이터 적재 시점이나 추천 정책을 이 연결 PR에서 새로 정하지 않습니다.
+
+---
+
+## D-028
 ### 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다
 
 `YH-KIKI/walk_demo` 의 강아지 보행 영상 분석을 `gait-analysis/` 최상위 폴더로 들여왔습니다.

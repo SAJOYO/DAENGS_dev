@@ -5,13 +5,15 @@
 ```
 crawler/
 ├── __init__.py        패키지 설명 (최상위만 둔다. core/·sources/ 는 빈 __init__ 없이 namespace 서브패키지)
-├── __main__.py        CLI: list / run  — `python -m crawler` 의 진입점
+├── __main__.py        CLI: list / run  — `python -m crawler` 의 진입점. **출력만 한다**
+├── run.py             run(source_id) — 수집 루프. CLI 와 Celery 태스크가 **같이 타는 한 경로**
 ├── core/                                  ← 모든 소스가 공유. 고치면 전부에 적용된다
 │   ├── config.py      Settings(pydantic-settings) — .env, API 키, 경로, UA, 요청 간격
 │   ├── fetch.py       Fetcher — UA·호스트별 1.5s 간격·재시도·robots.txt
 │   ├── store.py       raw/ 저장 + .meta.json + crawl_log.jsonl, sha256 변경 감지
 │   ├── textutil.py    블록 단위 본문 추출 + 「법령」 조항 인용 파싱 (한국 법령 문서 공통)
-│   └── registry.py    seed_sources.yaml 로드, id → sources/ 모듈 매핑
+│   ├── registry.py    seed_sources.yaml 로드, id → sources/ 모듈 매핑
+│   └── cadence.py     재수집 주기 기본값 + due 판정 (crawl_log.jsonl 의 마지막 성공 시각)
 └── sources/                               ← 사이트 고유 지식만. 폴더 = yaml 의 domain
     ├── base.py        Source / Target / Extracted 계약
     └── law/
@@ -23,7 +25,15 @@ crawler/
 ```
 
 `registration/` `vaccination/` `leash-muzzle/` `transport/` `subsidy/` `insurance/` 도 같은 방식으로 생긴다.
-(`realtime` 은 저장하지 않고 API 직조회라 소스 모듈이 없다.)
+(`realtime` 은 저장하지 않고 API 직조회라 소스 모듈이 없다 — 그래서 `cadence` 의 due 후보에서도 빠진다.)
+
+> **주기 실행은 `tasks/crawl.py` 가 부른다** (RAG-044). 이 패키지는 여전히 오케스트레이터를
+> 모른다 — Celery 를 import 하는 것은 저쪽 한 방향이고, `python -m crawler` 는 브로커 없이 돈다.
+> 무엇이 밀렸는지는 여기서도 볼 수 있다:
+>
+> ```powershell
+> uv run python -c "from datetime import datetime; from daengs_life.crawler.core import cadence, config, registry; \n>   seeds = registry.load_seeds(); \n>   print(cadence.due_sources(seeds, implemented={s for s, v in seeds.items() if registry.resolve(v)}))"
+> ```
 
 **레이어는 셋이다.**
 

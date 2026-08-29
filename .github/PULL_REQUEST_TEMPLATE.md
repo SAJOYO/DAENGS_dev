@@ -50,7 +50,7 @@ Claude Code 에게:
 <!-- dev 에 머지되는 순간 self-hosted 러너가 배포합니다. 해당하는 것만 체크. -->
 
 - [ ] 없음 — 코드만 바뀜, 추가 조치 불필요
-- [ ] `nginx/default.conf` 변경 → 서버에서 `docker compose up -d`
+- [ ] `nginx/default.conf` 변경 → 자동 배포에서 `nginx -t` 후 reload
 - [ ] backend 의존성 변경 → 서버에서 `docker compose restart backend`
 - [ ] compose / 환경 변수 변경 → 서버의 `.env` 를 손으로 갱신해야 함
 - [ ] `db/init/` 변경 → **기존 볼륨에는 반영되지 않음.** 조치 방법을 아래에 적을 것

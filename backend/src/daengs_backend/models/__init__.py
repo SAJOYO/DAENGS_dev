@@ -13,6 +13,7 @@ SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
+from daengs_backend.models.dog import DOG_SEXES, DOG_SIZE_CLASSES, Dog
 from daengs_backend.models.refresh_token import RefreshToken
 
 __all__ = [
@@ -22,5 +23,8 @@ __all__ = [
     "AdminUser",
     "AppUser",
     "Base",
+    "DOG_SEXES",
+    "DOG_SIZE_CLASSES",
+    "Dog",
     "RefreshToken",
 ]

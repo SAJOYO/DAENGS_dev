@@ -409,7 +409,7 @@ def cmd_load(args: argparse.Namespace) -> int:
         total = loader.count(conn)
         print(f"  {'upserted':11s} {len(prepared.rows)}행  ·  documents 총 {total}행")
 
-        # 이번 적재가 안 건드린 행 = 사라진 청크 (RAG-044 ①). upsert 는 지우지 않는다.
+        # 이번 적재가 안 건드린 행 = 사라진 청크 (RAG-045 ①). upsert 는 지우지 않는다.
         left = loader.stale(conn, prepared.rows)
         if left:
             print(f"  ! {'stale':9s} {len(left)}행이 이번 적재에 없다 — 개정으로 사라진 청크다.")
@@ -692,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--dry-run", action="store_true", help="DB 를 열지 않고 만들 행만 확인")
     ld.add_argument("--show", type=int, default=5, help="dry-run·stale 에서 보여 줄 행 수")
     ld.add_argument("--prune", action="store_true",
-                    help="이번 적재에 없는 행(사라진 청크)을 지운다. 기본은 세어서 경고만 (RAG-044)")
+                    help="이번 적재에 없는 행(사라진 청크)을 지운다. 기본은 세어서 경고만 (RAG-045)")
     ld.set_defaults(fn=cmd_load)
 
     sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, RAG-026)")

@@ -28,7 +28,9 @@ target_metadata = None
 
 
 def migration_url() -> str:
-    return settings.database_url.replace("+asyncpg", "+psycopg")
+    return settings.sqlalchemy_url.set(drivername="postgresql+psycopg").render_as_string(
+        hide_password=False
+    )
 
 
 def run_migrations_offline() -> None:

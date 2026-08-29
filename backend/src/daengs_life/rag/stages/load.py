@@ -183,7 +183,7 @@ def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> None:
 
 
 def stale(conn, rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    """**이번 적재가 안 건드린 행.** `(content_hash, chunk_id)` 로 돌려준다 (RAG-044 ①).
+    """**이번 적재가 안 건드린 행.** `(content_hash, chunk_id)` 로 돌려준다 (RAG-045 ①).
 
     `upsert` 는 `content_hash` 로 `ON CONFLICT DO UPDATE` 할 뿐 **사라진 청크를 지우지 않는다.**
     문서가 개정돼 청크가 없어지면 옛 행이 인덱스에 그대로 남고, 검색은 더 이상 나오면 안 되는
@@ -204,7 +204,7 @@ def stale(conn, rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
 
 
 def prune(conn, targets: list[tuple[str, str]], batch: int = 500) -> int:
-    """`stale()` 이 찾은 행을 지운다. **명시적으로 부를 때만 지운다** (RAG-044 ①).
+    """`stale()` 이 찾은 행을 지운다. **명시적으로 부를 때만 지운다** (RAG-045 ①).
 
     기본 동작을 삭제로 두지 않은 이유는 하나다 — 적재가 절반만 준비된 상태에서 돌면
     `stale()` 이 코퍼스 전체를 "사라졌다"고 볼 수 있고, 그 사고는 되돌릴 수 없다.

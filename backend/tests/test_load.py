@@ -7,7 +7,7 @@
 **여기서 지키는 것 중 가장 중요한 하나는 `metadata.embedding_model` 이 "실제로 쓴 모델"이라는
 것이다.** 그 둘이 어긋나면 DB 안의 벡터가 무엇으로 만들어졌는지를 아무도 못 믿게 된다.
 
-**모델은 `config.settings.embedding_model_key` 에서 받는다 — 여기에 적지 않는다** (RAG-044).
+**모델은 `config.settings.embedding_model_key` 에서 받는다 — 여기에 적지 않는다** (RAG-045).
 예전에는 `bge-m3` 를 박아 뒀고 그때는 맞았다(적재가 기준선으로 돌던 시기다). 2026-08-28 에
 적재가 `qwen3` 로 바뀌었는데 **이 파일이 안 따라와서**, 테스트가 `bge-m3` 로 질의해 qwen3 인덱스를
 뒤지는 상태가 됐다. 차원이 같아(1024) 예외는 안 나고 검색 결과만 무의미해진다 — 그 어긋남을
@@ -26,7 +26,7 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 class _Rollback(Exception):
-    """`test_upsert_is_idempotent` 이 **운영 DB 에 흔적을 안 남기려고** 쓰는 탈출구 (RAG-044).
+    """`test_upsert_is_idempotent` 이 **운영 DB 에 흔적을 안 남기려고** 쓰는 탈출구 (RAG-045).
 
     DB 는 팀에 하나뿐이라(CLAUDE.md) 누가 `pytest` 만 돌려도 인덱스가 바뀌면 안 된다. 실제로
     2026-08-29 에 이 테스트가 `benefit24-services` 20행을 다른 모델의 벡터로 덮었고, **행 수만
@@ -181,7 +181,7 @@ def test_one_model_in_the_column() -> None:
 
 
 def test_stale_finds_rows_this_load_did_not_touch() -> None:
-    """`stale()` 은 **이번 적재에 없는 행**을 찾는다 — 개정으로 사라진 청크다 (RAG-044 ①).
+    """`stale()` 은 **이번 적재에 없는 행**을 찾는다 — 개정으로 사라진 청크다 (RAG-045 ①).
 
     행 하나를 일부러 빼고 부르면 그 행이 나와야 한다. `upsert` 가 지우지 않는다는 사실을
     뒤집어 확인하는 자리다.
@@ -198,7 +198,7 @@ def test_stale_finds_rows_this_load_did_not_touch() -> None:
 
 
 def test_prune_deletes_only_what_stale_returned() -> None:
-    """`prune()` 은 넘긴 것만 지운다. **되돌려 확인한다** — 운영 DB 다 (RAG-044 ③)."""
+    """`prune()` 은 넘긴 것만 지운다. **되돌려 확인한다** — 운영 DB 다 (RAG-045 ③)."""
     p = _prepared_or_skip()
     with _conn_or_skip() as conn:
         if load.count(conn) == 0:

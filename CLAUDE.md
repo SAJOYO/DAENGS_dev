@@ -6,6 +6,7 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 daengs.~     :80   → nginx(도커) → host.docker.internal:3000 → PM2 (Next, 호스트)
 daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
                                   → place-search:8000 (`/v2/places/`만)
+                                  → journey-service:8000 (`/journey`만)
 ```
 
 ## 폴더
@@ -17,6 +18,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
 | `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
 | `gait-analysis/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 — D-029 |
 | `place-search/` | Place 검색 (FastAPI + PostGIS). nginx 의 `/v2/places/`로 공개되며 자기 DB(place-db)와 Alembic 을 가집니다 — D-026, D-027. backend·Dog Profile과 독립입니다. 원본·소유권은 `place-search/UPSTREAM.md` |
+| `journey-service/` | 장소 선택 뒤 단발 경로 스냅샷. nginx의 `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `journey-service/UPSTREAM.md` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |

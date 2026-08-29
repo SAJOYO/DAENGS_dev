@@ -208,11 +208,14 @@
   method: html
   auth: none
   status: partial
-  notes: "2026-08-28 정찰(robots 만): 9곳 중 크롤러에 열려 있는 곳은 5곳이다.
-    에어부산·이스타·에어프레미아·진에어 허용, 에어서울은 Disallow:/ + Allow:/CW/*.do (longest-match 필요).
-    대한항공·아시아나는 크롤러 UA 에 ReadTimeout, 제주항공·티웨이는 robots.txt 가 403.
-    진에어 robots 에 Content-Signal: search=yes,ai-train=no,use=reference 가 있다 —
-    우리 용도(출처 표기 참조)는 use=reference 에 해당하고 학습은 하지 않는다. 딥링크는 운송 카드에서."
+  notes: "2026-08-29 실측(#57): 9곳 중 실제로 받을 수 있는 곳은 2곳뿐이다.
+    ✅ 에어프레미아 www.airpremia.com/a/support/need/pet · 이스타 www.eastarjet.com/newstar/PGWIM00004.
+    ❌ 진에어·에어서울은 403 Cloudflare 챌린지, 에어부산은 TLS 핸드셰이크 거부,
+    대한항공·아시아나는 ReadTimeout, 제주항공·티웨이는 robots.txt 403.
+    ⚠️ 2026-08-28 에 '5곳 열림'으로 적었던 것은 robots.txt 만 본 값이다 — robots 는 정적 파일이라
+    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/data-sources.md §12).
+    진에어 robots 의 Content-Signal: search=yes,ai-train=no,use=reference 는 우리 용도
+    (출처 표기 참조)가 use=reference 에 해당하나, 어차피 페이지를 못 받는다."
 
 # ---------- 지자체 지원 ----------
 - id: benefit24-services

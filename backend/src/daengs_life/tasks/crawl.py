@@ -13,6 +13,11 @@
 ⚠ **적재로 이어 붙이지 않는다** (카드 메모 ③ · RAG-002 · RAG-025). 바뀐 것이 있으면 경고 한 줄을
 남기고 멈춘다. `parse → chunk → embed → load` 는 GPU 와 검문소가 걸려 있어 사람이 랩을 뜨고
 판단하는 자리다. 그 경고가 C3(법령·약관 개정 감지)의 입력이 된다.
+
+**실행 이력은 `crawl_runs` 로 간다** (RAG-047). 예전에는 반환값 dict 로만 남았는데
+`task_ignore_result=True` 라 **아무 데도 안 남았다** — 워커 로그를 사람이 읽지 않으면
+무엇이 언제 돌았는지 알 길이 없었다. 기록은 `tasks/crawl_runs.py` 가 하고,
+`crawler` 는 여전히 DB 를 모른다.
 """
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ from daengs_life.crawler import run as crawler_run
 from daengs_life.crawler.core import cadence, registry
 from daengs_life.crawler.core.config import KST
 
+from . import crawl_runs
 from .celery_app import app
 
 log = logging.getLogger(__name__)
@@ -51,28 +57,36 @@ def crawl_due(source_ids: list[str] | None = None) -> dict[str, object]:
     changed_docs: dict[str, list[str]] = {}
 
     for source_id in selected:
+        # 시작을 먼저 남긴다. 실패하면 None 이 오고 아래 finish 가 알아서 넘긴다 —
+        # **기록이 크롤을 죽이지 않는다** (crawl_runs 모듈의 계약).
+        row_id = crawl_runs.start(source_id, mode)
+
         try:
             result = crawler_run.run(source_id)
         except Exception as e:                  # noqa: BLE001 — 한 소스가 죽어도 나머지는 받는다
             log.exception("소스 %s 수집 실패", source_id)
             results[source_id] = {"error": f"{type(e).__name__}: {e}"}
+            crawl_runs.finish(row_id, "failed", error=f"{type(e).__name__}: {e}")
             continue
 
         if result.unavailable:
             # 키 미설정·시드 URL 사망. 실패가 아니라 **아직 못 하는 것**이라 사람이 고쳐야 한다.
             log.warning("소스 %s 수집 불가 — %s", source_id, result.unavailable)
             results[source_id] = {"unavailable": result.unavailable}
+            crawl_runs.finish(row_id, "unavailable", error=result.unavailable)
             continue
 
-        results[source_id] = {
+        counts = {
             "fetched": result.fetched,
             "changed": result.changed,
             "failed": result.failed,
             "skipped": result.skipped,
-            "run_id": result.run_id,
         }
+        results[source_id] = {**counts, "run_id": result.run_id}
         if result.changed_slugs:
             changed_docs[source_id] = result.changed_slugs
+        crawl_runs.finish(row_id, "ok", run_id=result.run_id, counts=counts,
+                          changed_slugs=result.changed_slugs)
 
     if changed_docs:
         # **여기서 멈춘다.** 이 줄이 C3 의 입력이다 (메모 ③).

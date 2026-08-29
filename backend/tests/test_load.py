@@ -5,8 +5,13 @@
 컨테이너도 항상 떠 있지는 않다.
 
 **여기서 지키는 것 중 가장 중요한 하나는 `metadata.embedding_model` 이 "실제로 쓴 모델"이라는
-것이다.** 지금 적재는 판정 승자(`qwen3`)가 아니라 기준선(`bge-m3`)으로 도는데(RAG-024 `판정 이후`),
-그 둘이 어긋나면 DB 안의 벡터가 무엇으로 만들어졌는지를 아무도 못 믿게 된다.
+것이다.** 그 둘이 어긋나면 DB 안의 벡터가 무엇으로 만들어졌는지를 아무도 못 믿게 된다.
+
+**모델은 `config.settings.embedding_model_key` 에서 받는다 — 여기에 적지 않는다** (RAG-045).
+예전에는 `bge-m3` 를 박아 뒀고 그때는 맞았다(적재가 기준선으로 돌던 시기다). 2026-08-28 에
+적재가 `qwen3` 로 바뀌었는데 **이 파일이 안 따라와서**, 테스트가 `bge-m3` 로 질의해 qwen3 인덱스를
+뒤지는 상태가 됐다. 차원이 같아(1024) 예외는 안 나고 검색 결과만 무의미해진다 — 그 어긋남을
+`bge-m3.parquet` 이 없어 skip 되던 것이 가려 주고 있었다. 결정은 `config.py` 한 군데에만 둔다.
 """
 from __future__ import annotations
 
@@ -20,7 +25,21 @@ from daengs_life.rag.stages import embed, load
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
-def _prepared_or_skip(key: str = "bge-m3"):
+class _Rollback(Exception):
+    """`test_upsert_is_idempotent` 이 **운영 DB 에 흔적을 안 남기려고** 쓰는 탈출구 (RAG-045).
+
+    DB 는 팀에 하나뿐이라(CLAUDE.md) 누가 `pytest` 만 돌려도 인덱스가 바뀌면 안 된다. 실제로
+    2026-08-29 에 이 테스트가 `benefit24-services` 20행을 다른 모델의 벡터로 덮었고, **행 수만
+    보는 단언이라 통과했다.** `load.upsert` 가 자기 `conn.transaction()` 을 열므로 여기서 바깥
+    트랜잭션을 한 겹 두르면 그쪽이 savepoint 가 되고, 이 예외로 빠져나가면 통째로 되돌아간다.
+    """
+
+
+#: 서빙 모델은 결정이다 (RAG-024 · D-021). 테스트도 그 결정을 읽지, 따로 고르지 않는다.
+MODEL_KEY = config.settings.embedding_model_key
+
+
+def _prepared_or_skip(key: str = MODEL_KEY):
     if not embed.parquet_path(key).is_file():
         pytest.skip(f"{key}.parquet 이 없다 — `python -m rag embed` 먼저")
     return load.prepare(key)
@@ -161,6 +180,49 @@ def test_one_model_in_the_column() -> None:
         assert len(models) == 1, f"모델이 섞여 있다: {models}"
 
 
+def test_stale_finds_rows_this_load_did_not_touch() -> None:
+    """`stale()` 은 **이번 적재에 없는 행**을 찾는다 — 개정으로 사라진 청크다 (RAG-045 ①).
+
+    행 하나를 일부러 빼고 부르면 그 행이 나와야 한다. `upsert` 가 지우지 않는다는 사실을
+    뒤집어 확인하는 자리다.
+    """
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        victim = p.rows[0]
+        left = load.stale(conn, p.rows[1:])
+        assert victim["content_hash"] in {h for h, _ in left}
+        # 전량을 넘기면 그 행은 빠진다 — 나머지는 실제 유령이라 개수를 박지 않는다
+        assert victim["content_hash"] not in {h for h, _ in load.stale(conn, p.rows)}
+
+
+def test_prune_deletes_only_what_stale_returned() -> None:
+    """`prune()` 은 넘긴 것만 지운다. **되돌려 확인한다** — 운영 DB 다 (RAG-045 ③)."""
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        before = load.count(conn)
+        target = [(p.rows[0]["content_hash"], p.rows[0]["metadata"]["chunk_id"])]
+        try:
+            with conn.transaction():
+                assert load.prune(conn, target) == 1
+                assert load.count(conn) == before - 1
+                raise _Rollback
+        except _Rollback:
+            pass
+        assert load.count(conn) == before
+
+
+def test_prune_on_empty_list_is_a_no_op() -> None:
+    """빈 목록에 `DELETE ... = ANY('{}')` 를 보내지 않는다 — 실수로 전량을 지울 자리다."""
+    with _conn_or_skip() as conn:
+        before = load.count(conn)
+        assert load.prune(conn, []) == 0
+        assert load.count(conn) == before
+
+
 def test_upsert_is_idempotent() -> None:
     """같은 명령을 다시 돌려도 행이 늘지 않는다 — `content_hash` 가 자연키다 (RAG-008).
 
@@ -172,5 +234,11 @@ def test_upsert_is_idempotent() -> None:
         if load.count(conn) == 0:
             pytest.skip("아직 적재하지 않았다")
         before = load.count(conn)
-        load.upsert(conn, p.rows[:20])
-        assert load.count(conn) == before
+        try:
+            with conn.transaction():                 # ← 바깥 트랜잭션
+                load.upsert(conn, p.rows[:20])       #    upsert 의 것은 savepoint 가 된다
+                assert load.count(conn) == before
+                raise _Rollback                      #    확인이 끝나면 되돌린다
+        except _Rollback:
+            pass
+        assert load.count(conn) == before            # 되돌린 뒤에도 그대로

@@ -31,6 +31,7 @@
 | [D-024](#d-024) | 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다 | 2026-08-28 |
 | [D-025](#d-025) | 홀로그램 도감을 조직 public 저장소 + GitHub Pages 로 분리 | 2026-08-28 |
 | [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
+| [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
 
 ---
 
@@ -1436,3 +1437,28 @@ Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본�
 연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
 경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
 진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
+
+---
+
+## D-027
+### APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달한다
+
+D-026에서 착륙만 끝낸 Place 검색을 DAENGS_APP의 현재 계약에 연결합니다. APP과
+place-search가 이미 같은 `POST /v2/places/search` 요청·응답을 쓰므로 nginx는 URI나
+본문을 번역하지 않습니다.
+
+```
+DAENGS_APP → daengback:8000/v2/places/search → nginx → place-search → place-db
+                                                    backend -X→
+                                                Dog Profile -X→
+```
+
+- `location /v2/places/`만 place-search로 보내며 나머지 8000번 경로는 계속 backend로 갑니다.
+- 요청에 `conditions`가 없어도 되는 기존 browse-mode 계약을 유지합니다. Dog Profile을
+  조회하거나 검색 입력으로 만들어 주는 중계 계층은 두지 않습니다.
+- 실제 배포에서 요청을 받을 수 있도록 place-search와 place-db의 `place` profile을
+  해제합니다. 스키마는 place-search가 뜨기 전에 기존 Alembic 이력을 적용합니다.
+- place-db는 호스트 포트를 열지 않습니다. 검색 서비스는 compose 네트워크에서만 DB에
+  붙고, 외부 진입점은 nginx 하나뿐이라는 기존 인프라 경계를 따릅니다.
+- 공공데이터 키는 여전히 적재 배치에만 필요합니다. 빈 DB에서도 검색 서버와 공개 API는
+  정상 기동하며, 데이터 적재 시점이나 추천 정책을 이 연결 PR에서 새로 정하지 않습니다.

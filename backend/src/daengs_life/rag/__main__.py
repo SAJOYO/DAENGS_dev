@@ -14,6 +14,7 @@
   python -m rag load                                  # 7단계 documents 적재 (RAG-025)
   python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
   python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
+  python -m rag load --prune                          # 개정으로 사라진 청크의 행까지 지운다
   python -m rag search "목줄 안 하면 과태료 얼마"      # 8단계 dense 검색 (RAG-026)
   python -m rag search --questions                    # 검증질문 1~7 전부 = 검문소③
   python -m rag search --questions --no-supplementary # 부칙을 뺀 결과와 비교
@@ -407,6 +408,23 @@ def cmd_load(args: argparse.Namespace) -> int:
         loader.upsert(conn, prepared.rows)
         total = loader.count(conn)
         print(f"  {'upserted':11s} {len(prepared.rows)}행  ·  documents 총 {total}행")
+
+        # 이번 적재가 안 건드린 행 = 사라진 청크 (RAG-044 ①). upsert 는 지우지 않는다.
+        left = loader.stale(conn, prepared.rows)
+        if left:
+            print(f"  ! {'stale':9s} {len(left)}행이 이번 적재에 없다 — 개정으로 사라진 청크다.")
+            for _, cid in left[:args.show]:
+                print(f"      {cid}")
+            if len(left) > args.show:
+                print(f"      … {len(left) - args.show}행 더")
+            if args.prune:
+                print(f"  {'pruned':11s} {loader.prune(conn, left)}행 삭제")
+                print(f"  {'':11s} documents 총 {loader.count(conn)}행")
+            else:
+                print("    검색이 이것들을 계속 후보로 본다. 지우려면 --prune 를 붙여 다시 실행할 것")
+        else:
+            print(f"  {'stale':11s} 없음 — DB 가 코퍼스와 일치한다")
+
         for name, n in loader.existing_models(conn):
             print(f"    {n:5d}행  {name}")
 
@@ -669,9 +687,12 @@ def main(argv: list[str] | None = None) -> int:
     ev.set_defaults(fn=cmd_evaluate)
 
     ld = sub.add_parser("load", help="7단계 — chunks+embeddings → documents (RAG-025)")
-    ld.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후). 교체는 이 인자 하나")
+    ld.add_argument("--model", help=f"기본 {config.settings.embedding_model_key}"
+                                    " (RAG-024 판정 승자). 교체는 이 인자 하나")
     ld.add_argument("--dry-run", action="store_true", help="DB 를 열지 않고 만들 행만 확인")
-    ld.add_argument("--show", type=int, default=5, help="dry-run 에서 보여 줄 행 수")
+    ld.add_argument("--show", type=int, default=5, help="dry-run·stale 에서 보여 줄 행 수")
+    ld.add_argument("--prune", action="store_true",
+                    help="이번 적재에 없는 행(사라진 청크)을 지운다. 기본은 세어서 경고만 (RAG-044)")
     ld.set_defaults(fn=cmd_load)
 
     sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, RAG-026)")

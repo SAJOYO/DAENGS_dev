@@ -180,6 +180,49 @@ def test_one_model_in_the_column() -> None:
         assert len(models) == 1, f"모델이 섞여 있다: {models}"
 
 
+def test_stale_finds_rows_this_load_did_not_touch() -> None:
+    """`stale()` 은 **이번 적재에 없는 행**을 찾는다 — 개정으로 사라진 청크다 (RAG-044 ①).
+
+    행 하나를 일부러 빼고 부르면 그 행이 나와야 한다. `upsert` 가 지우지 않는다는 사실을
+    뒤집어 확인하는 자리다.
+    """
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        victim = p.rows[0]
+        left = load.stale(conn, p.rows[1:])
+        assert victim["content_hash"] in {h for h, _ in left}
+        # 전량을 넘기면 그 행은 빠진다 — 나머지는 실제 유령이라 개수를 박지 않는다
+        assert victim["content_hash"] not in {h for h, _ in load.stale(conn, p.rows)}
+
+
+def test_prune_deletes_only_what_stale_returned() -> None:
+    """`prune()` 은 넘긴 것만 지운다. **되돌려 확인한다** — 운영 DB 다 (RAG-044 ③)."""
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        before = load.count(conn)
+        target = [(p.rows[0]["content_hash"], p.rows[0]["metadata"]["chunk_id"])]
+        try:
+            with conn.transaction():
+                assert load.prune(conn, target) == 1
+                assert load.count(conn) == before - 1
+                raise _Rollback
+        except _Rollback:
+            pass
+        assert load.count(conn) == before
+
+
+def test_prune_on_empty_list_is_a_no_op() -> None:
+    """빈 목록에 `DELETE ... = ANY('{}')` 를 보내지 않는다 — 실수로 전량을 지울 자리다."""
+    with _conn_or_skip() as conn:
+        before = load.count(conn)
+        assert load.prune(conn, []) == 0
+        assert load.count(conn) == before
+
+
 def test_upsert_is_idempotent() -> None:
     """같은 명령을 다시 돌려도 행이 늘지 않는다 — `content_hash` 가 자연키다 (RAG-008).
 

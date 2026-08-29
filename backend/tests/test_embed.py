@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from daengs_life.rag.core import config
 from daengs_life.rag.stages import embed
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -80,10 +81,40 @@ def test_guard_passes_real_chunks() -> None:
 
 
 # ---------------------------------------------------------------- 산출물 계약
+#: 실제로 서빙에 쓰이는 모델. 결정은 `config.py` 한 군데에 있다 (RAG-024 · RAG-045 ②).
+SERVING = config.settings.embedding_model_key
+
+
 def _meta_or_skip(key: str) -> dict:
+    """parquet 메타. **낡았으면 서빙 모델만 실패하고 나머지는 skip 한다** (RAG-047 ⑧).
+
+    `embed.is_current` 가 청크 **전체**의 지문 하나로 판단해서, 소스가 하나 늘면 세 모델이
+    전부 낡는다. 그런데 재인코딩은 모델당 20~40분이라(GPU 경합 시 두 배) 소스를 더할 때마다
+    셋을 다 돌리는 것은 균형이 안 맞는다 — RAG-024 가 승자를 정한 뒤로 나머지 둘은
+    **"다시 재 볼 때만"** 필요하기 때문이다.
+
+    그래서 기준을 가른다:
+
+      · 서빙 모델(`config.settings.embedding_model_key`) — **반드시 최신이어야 한다.**
+        여기가 낡으면 문서 벡터와 질의 벡터가 다른 코퍼스를 가리키는데 **차원이 같아서
+        (1024) 예외가 하나도 안 난다** (CLAUDE.md · RAG-024). 조용히 틀리는 자리다
+      · 베이크오프 모델 — 낡았으면 skip 하고 **이유를 말한다.** 서빙에 안 쓰이므로 빨간
+        불로 둘 이유가 없고, 반대로 조용히 통과시키면 "3파전을 다시 재도 된다"고 착각한다
+
+    `data/` 가 미추적이라(RAG-017) 파일 자체가 없으면 예전처럼 그냥 skip 이다.
+    """
     meta = embed.read_meta(key)
     if not meta:
         pytest.skip(f"{key}.parquet 이 없다 — `python -m rag embed` 먼저")
+    if not embed.is_current(key, embed.chunks_fingerprint()):
+        n = len(embed.load_chunks())
+        stale = f"{key}.parquet 이 낡았다 — 코퍼스 {n}청크 / parquet {meta.get('chunk_count')}청크"
+        if key == SERVING:
+            pytest.fail(
+                f"{stale}. **서빙 모델은 낡으면 안 된다** — 질의와 문서가 다른 코퍼스를 "
+                f"가리키는데 차원이 같아 예외가 안 난다. `rag embed --model {key}` 로 다시 만들 것"
+            )
+        pytest.skip(f"{stale}. 베이크오프용이라 서빙에는 안 쓰인다 — 3파전을 다시 잴 때 만들면 된다")
     return meta
 
 
@@ -106,10 +137,8 @@ def test_normalized_and_aligned(key: str) -> None:
     import numpy as np
     import pyarrow.parquet as pq
 
-    path = embed.parquet_path(key)
-    if not path.is_file():
-        pytest.skip(f"{key}.parquet 이 없다")
-    table = pq.read_table(path)
+    _meta_or_skip(key)              # 없거나 낡았으면 여기서 갈린다 (서빙만 실패)
+    table = pq.read_table(embed.parquet_path(key))
     vectors = np.stack(table["embedding"].to_pylist()).astype("float32")
     assert vectors.shape == (table.num_rows, embed.DIM)
     norms = np.linalg.norm(vectors, axis=1)
@@ -121,19 +150,30 @@ def test_normalized_and_aligned(key: str) -> None:
 
 
 def test_three_files_same_chunks() -> None:
-    """세 파일이 **같은 청크 한 벌**에서 나왔는지. 다르면 3파전이 성립하지 않는다."""
+    """세 파일이 **같은 청크 한 벌**에서 나왔는지. 다르면 3파전이 성립하지 않는다.
+
+    **3파전을 실제로 재는 시점에만 뜻이 있다.** 서빙 모델만 최신인 상태(소스를 더한 직후)가
+    정상이므로, 그때는 skip 한다 — 여기서 실패시키면 "베이크오프용을 다시 만들라"는 압력이
+    소스를 더할 때마다 생긴다 (RAG-047 ⑧).
+    """
+    fingerprint = embed.chunks_fingerprint()
     metas = [embed.read_meta(k) for k in embed.MODELS]
     if not all(metas):
         pytest.skip("parquet 3종이 다 있어야 비교한다")
+    if not all(embed.is_current(k, fingerprint) for k in embed.MODELS):
+        pytest.skip("3종이 다 최신일 때만 비교한다 — 지금은 서빙 모델만 최신이다")
     assert len({m["chunks_sha256"] for m in metas}) == 1
 
 
 def test_skip_is_fingerprint_based() -> None:
-    """재실행 스킵은 상류 산출물의 해시로 판단한다 — 별도 상태 파일이 없다 (RAG-001 원칙 2)."""
-    if not embed.read_meta("bge-m3"):
-        pytest.skip("bge-m3.parquet 이 없다")
-    assert embed.is_current("bge-m3", embed.chunks_fingerprint())
-    assert not embed.is_current("bge-m3", "다른지문")
+    """재실행 스킵은 상류 산출물의 해시로 판단한다 — 별도 상태 파일이 없다 (RAG-001 원칙 2).
+
+    **서빙 모델로 본다.** 아무 모델이나 쓰면 그 모델이 낡은 날 이 테스트가 "지문 판정이
+    깨졌다"고 말하는데, 실제로는 판정이 제대로 동작한 것이다.
+    """
+    _meta_or_skip(SERVING)
+    assert embed.is_current(SERVING, embed.chunks_fingerprint())
+    assert not embed.is_current(SERVING, "다른지문")
 
 
 # ---------------------------------------------------------------- 실제 인코딩 (느림)

@@ -57,7 +57,7 @@ async def db_session():
     - `statement_timeout`: 멈추더라도 테이블을 붙잡고 있지 않게.
     """
     engine = create_async_engine(
-        settings.database_url, poolclass=NullPool,
+        settings.sqlalchemy_url, poolclass=NullPool,
         connect_args={"server_settings": {"statement_timeout": "15000"}},
     )
     session = async_sessionmaker(engine, expire_on_commit=False)()

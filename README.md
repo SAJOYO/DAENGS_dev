@@ -171,6 +171,17 @@ docker compose logs -f place-search
 docker compose exec place-db psql -U place -d place
 ```
 
+장소 DB 적재는 Actions의 **Place data sync**를 수동 실행합니다. `kcisa`는 공식
+2025-03-24 CSV를 SHA-256으로 확인해 적재하므로 키 없이 실행할 수 있고 APP 기본 탭인
+카페까지 채웁니다. `full`과 `incremental`은 최상단 `.env`의 두 공공데이터 키를 사용해
+기존 MOIS·KTO 적재기를 실행합니다. 사용자 검색 중에는 외부 원천을 호출하지 않습니다.
+
+```powershell
+gh workflow run place-search-ingest.yml -f mode=kcisa
+gh workflow run place-search-ingest.yml -f mode=full
+gh workflow run place-search-ingest.yml -f mode=incremental
+```
+
 ### 롤백
 
 배포는 커밋 해시별 폴더에 쌓이고 `current` 링크가 그중 하나를 가리킵니다.

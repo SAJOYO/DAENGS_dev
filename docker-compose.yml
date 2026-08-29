@@ -304,7 +304,13 @@ services:
     # ports 가 없습니다. 외부 요청은 nginx 의 8000 포트만 통과합니다 (D-027).
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
-      DAENGS_DATABASE_URL: postgresql+asyncpg://${PLACE_POSTGRES_USER:-place}:${PLACE_POSTGRES_PASSWORD:-place}@place-db:5432/${PLACE_POSTGRES_DB:-place}
+      # URL 한 줄로 조립하지 않습니다. 비밀번호의 @ / # 를 SQLAlchemy URL.create가
+      # 안전하게 다루도록 조각으로 넘깁니다 (D-028).
+      DAENGS_DB_HOST: place-db
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${PLACE_POSTGRES_USER:-place}
+      DAENGS_DB_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
+      DAENGS_DB_NAME: ${PLACE_POSTGRES_DB:-place}
       # 공공데이터 키 — 배치(ingest) 전용. 서버 기동에는 필요 없습니다 (D-026).
       DAENGS_DATA_GO_KR_SERVICE_KEY: ${PLACE_DATA_GO_KR_SERVICE_KEY:-}
       DAENGS_KTO_SERVICE_KEY: ${PLACE_KTO_SERVICE_KEY:-}

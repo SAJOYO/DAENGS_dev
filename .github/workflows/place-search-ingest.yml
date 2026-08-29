@@ -1,0 +1,130 @@
+name: Place data sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "kcisa: 공개 CSV만 최초 적재, full: 세 원천 전체, incremental: API 원천 변경분"
+        required: true
+        default: kcisa
+        type: choice
+        options:
+          - kcisa
+          - full
+          - incremental
+
+concurrency:
+  group: place-data-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: [self-hosted, Windows, X64]
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@v5
+        with:
+          # 서버 전용 .env는 저장소 밖으로 지우거나 덮지 않습니다.
+          clean: false
+
+      - name: Compose 설정 및 Place 기동
+        run: |
+          docker compose config --quiet
+          docker compose up -d place-db place-search nginx
+
+      - name: 검색 서버 준비 확인
+        run: |
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-WebRequest -UseBasicParsing `
+                -Uri 'http://127.0.0.1:8000/v2/places/search' `
+                -Method Post `
+                -ContentType 'application/json' `
+                -Body '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}' `
+                -TimeoutSec 10
+              if ($response.StatusCode -eq 200) { break }
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
+      - name: API 원천 키 확인
+        if: inputs.mode != 'kcisa'
+        run: |
+          docker compose exec -T place-search uv run --no-sync python -c `
+            "from app.core.config import settings; assert settings.data_go_kr_service_key, 'DAENGS_DATA_GO_KR_SERVICE_KEY is required'; assert settings.kto_service_key, 'DAENGS_KTO_SERVICE_KEY is required'"
+
+      - name: KCISA 2025-03-24 스냅샷 적재
+        if: inputs.mode != 'incremental'
+        run: |
+          $csv = Join-Path $env:RUNNER_TEMP 'kcisa-place-20250324.csv'
+          $url = 'https://www.data.go.kr/cmm/cmm/fileDownload.do?atchFileId=FILE_000000003214426&fileDetailSn=1&insertDataPrcus=N'
+          $expected = '2F88BEDFF41A8B9F032ABD16CE2FB0BC31D91EC28EE559E6E79C2559A2F45928'
+
+          Invoke-WebRequest -UseBasicParsing $url -OutFile $csv
+          $actual = (Get-FileHash -Algorithm SHA256 $csv).Hash
+          if ($actual -ne $expected) {
+            throw "KCISA 스냅샷 SHA-256 불일치: $actual"
+          }
+
+          docker cp $csv 'daengs-place-search:/tmp/kcisa-place-20250324.csv'
+          try {
+            docker compose exec -T place-search uv run --no-sync python -m app.ingest.kcisa `
+              --csv /tmp/kcisa-place-20250324.csv --snapshot 2025-03-24
+          } finally {
+            docker compose exec -T place-search rm -f /tmp/kcisa-place-20250324.csv
+            Remove-Item -LiteralPath $csv -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: MOIS 병원·약국 전체 적재
+        if: inputs.mode == 'full'
+        run: docker compose exec -T place-search uv run --no-sync python -m app.ingest full
+
+      - name: KTO 반려동물 동반여행 전체 적재
+        if: inputs.mode == 'full'
+        run: >-
+          docker compose exec -T place-search uv run --no-sync
+          python -m app.ingest.kto --mode full
+
+      - name: MOIS·KTO 증분 적재
+        if: inputs.mode == 'incremental'
+        run: |
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest incremental
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest.kto
+
+      - name: KCISA 파생 사실 갱신
+        if: inputs.mode == 'kcisa'
+        run: |
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes --all --source kcisa
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions --all --source kcisa
+
+      - name: 전체 파생 사실 갱신
+        if: inputs.mode == 'full'
+        run: |
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes --all
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions --all
+
+      - name: 증분 파생 사실 갱신
+        if: inputs.mode == 'incremental'
+        run: |
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes
+          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions
+
+      - name: APP 기본 카페 검색 확인
+        run: |
+          $response = Invoke-RestMethod `
+            -Uri 'http://127.0.0.1:8000/v2/places/search' `
+            -Method Post `
+            -ContentType 'application/json' `
+            -Body '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}' `
+            -TimeoutSec 20
+          $group = @($response.groups | Where-Object kind -eq 'cafe')
+          if ($group.Count -ne 1 -or @($group[0].results).Count -lt 1) {
+            throw 'KCISA 적재 뒤 서울시청 3km 카페 검색 결과가 비어 있습니다.'
+          }
+          Write-Host "Place 카페 검색 확인 완료: $(@($group[0].results).Count)건"

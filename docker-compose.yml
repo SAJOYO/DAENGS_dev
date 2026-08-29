@@ -257,8 +257,8 @@ services:
 
   # Place 검색 (D-026). D-024 와 같은 방식 — profile 로 꺼둔 채 들여왔습니다.
   # 기본 `docker compose up -d` 에서는 안 뜹니다. 켜기: docker compose --profile place up -d
-  # nginx 라우팅이 **없습니다** — 이 API 는 내부 계약이고, 공개 계약(인증 + dog_id → 값
-  # projection)은 backend 가 소유합니다 (다음 카드). 켠 뒤 스키마는 Alembic 으로:
+  # nginx 라우팅이 **없습니다** — 공개 연결은 실제 APP 계약을 확인하는 별도 카드입니다.
+  # backend 나 반려견 프로필은 이 서비스의 선행 조건이 아닙니다. 켠 뒤 스키마는 Alembic 으로:
   #   docker compose --profile place run --rm place-search uv run --no-sync alembic upgrade head
   place-db:
     profiles: ["place"]
@@ -309,8 +309,7 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
-    # ports 가 없습니다. backend 가 compose 네트워크 안에서 place-search:8000 으로만
-    # 부릅니다 — 바깥 경계는 backend 의 공개 계약 하나입니다.
+    # ports 가 없습니다. 현재는 compose 네트워크 안에서만 닿고 공개 ingress 는 없습니다.
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DATABASE_URL: postgresql+asyncpg://${PLACE_POSTGRES_USER:-place}:${PLACE_POSTGRES_PASSWORD:-place}@place-db:5432/${PLACE_POSTGRES_DB:-place}

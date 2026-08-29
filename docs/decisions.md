@@ -1391,10 +1391,11 @@ DAENGS_geo 에서 검증을 마친 Place 검색을 최상위 `place-search/` 로
 D-022(최상위 폴더)·D-024(compose profile 로 꺼둔 착륙)와 같은 방식입니다.
 `profiles: ["place"]` 라 기본 `docker compose up -d` 에서는 아무것도 안 뜹니다.
 
-경계는 이렇습니다.
+현재 착륙 범위는 이렇습니다.
 
 ```
-DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → place-search → place-db
+place-search → place-db
+DAENGS_APP  -X→ 공개 경로 없음
 ```
 
 #### backend 에 넣지 않은 이유
@@ -1405,9 +1406,8 @@ DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → pl
 - in-process 로 넣으면 패키지 이름·설정·세션 체계를 이관과 **동시에** 갈아야 하고,
   장애 도메인도 합쳐집니다 (D-024 가 스크리닝을 밖에 둔 이유와 같습니다).
   나중에 정말 필요하면 in-process 로 접는 것은 쉽고, 반대는 비쌉니다.
-- backend 는 place-search 기동에 **종속되지 않습니다**. place 가 죽으면
-  `/places/search` 만 503 이고 auth/ask 는 정상이어야 합니다 (게이트웨이 카드의
-  수용 기준).
+- backend 는 place-search 기동에 **종속되지 않습니다**. place profile 을 켜지 않아도
+  auth/ask 를 포함한 기존 서비스는 이전과 똑같이 떠야 합니다.
 
 #### place-db 를 pgvector 와 합치지 않은 이유
 
@@ -1421,14 +1421,14 @@ place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
 쌉니다 — `place-search/UPSTREAM.md`).
 
-#### API 를 nginx 에 노출하지 않는 이유
+#### API 는 아직 nginx 에 노출하지 않았다
 
 D-024 의 profile 패턴만 차용하고 `/screen/` 같은 public ingress 는 복제하지 않습니다.
 place-search 의 `/v2/places/search` 는 **내부 계약**입니다 — 인증이 없고, 개의
-identity 가 아니라 값(size/weight/age)을 받습니다. 사용자·강아지를 아는 것은 backend
-뿐이어야 하고, 공개 계약은 backend 가 소유합니다. backend 가 place-search 를 부르는
-접점은 라우터 하나 + HTTP 클라이언트 하나로 유지합니다 (daengs_life 접점 규칙과
-같은 정신).
+identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 없어도 검색합니다.
+이번 착륙에서는 공개 연결을 만들지 않았습니다. APP 이 어떤 경로로 호출할지는 실제
+클라이언트 계약을 확인한 별도 PR 에서 정하며, backend 나 반려견 프로필을 선행 조건으로
+두지 않습니다.
 
 #### 이관 이후의 소유권
 

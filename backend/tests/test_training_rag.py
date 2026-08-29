@@ -26,10 +26,11 @@ from daengs_backend.services.training_rag import (
 )
 
 
-def _upstream_response(*, decision: str = "ANSWER") -> dict[str, object]:
+def _upstream_response(*, decision: str = "ANSWER", reason: str = "") -> dict[str, object]:
     return {
         "request_id": "rag-request-1",
         "decision": decision,
+        "reason": reason,
         "answer": "근거 기반 답변입니다.",
         "evidence": [
             {"rank": 1, "heading_path": ["반려동물", "예절교육"]},
@@ -65,8 +66,47 @@ async def test_adapter_maps_answer_and_hides_internal_fields() -> None:
     assert "chunk_id" not in response.model_dump_json()
 
 
+async def _ask_refuse(reason: str) -> str:
+    """상류 REFUSE 하나를 reason 별로 공개 판정에 옮긴다."""
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_upstream_response(decision="REFUSE", reason=reason))
+
+    client = TrainingRagClient(
+        base_url="http://training-rag.test",
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        transport=httpx.MockTransport(handler),
+    )
+    response = await client.ask(question="질문", trace_id="trace-refuse")
+    return response.decision
+
+
+@pytest.mark.asyncio
+async def test_safety_boundary_refuse_is_not_shown_as_a_material_shortage() -> None:
+    """체벌·임의 투약 거절이 `UNCERTAIN`("현재 자료 범위")으로 뜨면 안 된다.
+
+    자료가 더 있으면 답해 준다는 뜻으로 읽히는데, 이 거절은 자료의 문제가 아니다.
+    상류(`scripts/pgvector_runtime.gate`)가 두 경우에 다른 reason 을 준다.
+    """
+    assert await _ask_refuse("safety_boundary_training_harm") == "SAFETY_REFUSAL"
+
+
+@pytest.mark.asyncio
+async def test_medical_boundary_refuse_keeps_the_medical_label() -> None:
+    assert await _ask_refuse("safety_boundary_medical") == "MEDICAL_REFUSAL"
+
+
+@pytest.mark.asyncio
+async def test_empty_retrieval_refuse_is_still_uncertain() -> None:
+    """근거가 정말로 없을 때는 종전 그대로다."""
+    assert await _ask_refuse("no_results") == "UNCERTAIN"
+
+
 @pytest.mark.asyncio
 async def test_adapter_normalizes_internal_refuse_to_uncertain() -> None:
+    """reason 이 없는 상류(옛 버전)에서도 계약이 깨지지 않는다."""
+
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=_upstream_response(decision="REFUSE"))
 
@@ -168,7 +208,7 @@ def test_gateway_rejects_app_member() -> None:
     assert _post(_authenticated_client(), token).status_code == 401
 
 
-@pytest.mark.parametrize("decision", ["ANSWER", "UNCERTAIN", "MEDICAL_REFUSAL"])
+@pytest.mark.parametrize("decision", ["ANSWER", "UNCERTAIN", "SAFETY_REFUSAL", "MEDICAL_REFUSAL"])
 def test_gateway_preserves_public_decisions(decision: str) -> None:
     client = _gateway_client(
         TrainingChatResponse(decision=decision, answer="안내", citations=[])

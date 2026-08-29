@@ -30,7 +30,8 @@
 | [D-023](#d-023) | 스크리닝 응답에 "1등 병변" 필드를 두지 않음 | 2026-08-28 |
 | [D-024](#d-024) | 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다 | 2026-08-28 |
 | [D-025](#d-025) | 홀로그램 도감을 조직 public 저장소 + GitHub Pages 로 분리 | 2026-08-28 |
-| [D-026](#d-026) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
+| [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
+| [D-027](#d-027) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
 
 ---
 
@@ -1385,6 +1386,61 @@ webp 변환기는 개인 저장소 `choiyc05/gohome` 에만 있습니다 — 원
 ---
 
 ## D-026
+### Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다
+
+DAENGS_geo 에서 검증을 마친 Place 검색을 최상위 `place-search/` 로 들여옵니다 —
+D-022(최상위 폴더)·D-024(compose profile 로 꺼둔 착륙)와 같은 방식입니다.
+`profiles: ["place"]` 라 기본 `docker compose up -d` 에서는 아무것도 안 뜹니다.
+
+경계는 이렇습니다.
+
+```
+DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → place-search → place-db
+```
+
+#### backend 에 넣지 않은 이유
+
+- 선행 조건이 이미 코드로 증명돼 있습니다. 원본 쪽 정리(rkbuhtig/DAENGS_geo#148:
+  profile 역참조 제거, #149: provider/walk/journey 없는 전용 진입점)로 이 유닛은
+  **PostGIS 만 있으면 뜹니다.** 별도 컨테이너의 비용이 사실상 사라진 상태입니다.
+- in-process 로 넣으면 패키지 이름·설정·세션 체계를 이관과 **동시에** 갈아야 하고,
+  장애 도메인도 합쳐집니다 (D-024 가 스크리닝을 밖에 둔 이유와 같습니다).
+  나중에 정말 필요하면 in-process 로 접는 것은 쉽고, 반대는 비쌉니다.
+- backend 는 place-search 기동에 **종속되지 않습니다**. place 가 죽으면
+  `/places/search` 만 503 이고 auth/ask 는 정상이어야 합니다 (게이트웨이 카드의
+  수용 기준).
+
+#### place-db 를 pgvector 와 합치지 않은 이유
+
+place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(Alembic 리비전
+0001~0020)를 갖고 있습니다. 최초 통합에서 DB 통합·이미지 교체·마이그레이션 번역을
+코드 이관과 동시에 하면 문제가 났을 때 원인 축이 늘어납니다. 합치는 것은 서버 PC 의
+메모리가 실측으로 부족해질 때 다시 봅니다.
+
+**"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
+place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스토리를 개조하지
+않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
+쌉니다 — `place-search/UPSTREAM.md`).
+
+#### API 를 nginx 에 노출하지 않는 이유
+
+D-024 의 profile 패턴만 차용하고 `/screen/` 같은 public ingress 는 복제하지 않습니다.
+place-search 의 `/v2/places/search` 는 **내부 계약**입니다 — 인증이 없고, 개의
+identity 가 아니라 값(size/weight/age)을 받습니다. 사용자·강아지를 아는 것은 backend
+뿐이어야 하고, 공개 계약은 backend 가 소유합니다. backend 가 place-search 를 부르는
+접점은 라우터 하나 + HTTP 클라이언트 하나로 유지합니다 (daengs_life 접점 규칙과
+같은 정신).
+
+#### 이관 이후의 소유권
+
+Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본은 동결이며(그쪽 산책
+연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
+경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
+진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
+
+---
+
+## D-027
 ### 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다
 
 `YH-KIKI/walk_demo` 의 강아지 보행 영상 분석을 `gait-analysis/` 최상위 폴더로 들여왔습니다.
@@ -1480,3 +1536,4 @@ Git LFS 는 쓰지 않습니다 — 저장소가 안 쓰고 있고, 팀원 전�
 없습니다. 인증도 없습니다(스크리닝과 같은 상태라 profile 을 켜는 시점은 사람이 정합니다).
 URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았습니다 — 빼면 `--extra url`
 을 통째로 제거할 수 있습니다.
+

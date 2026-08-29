@@ -1,0 +1,54 @@
+# place-search 의 테스트를 실제 PostGIS 위에서 돌립니다 (D-026).
+#
+# GitHub-hosted 러너를 씁니다 — self-hosted 러너(deploy.yml)는 배포 전용이고,
+# 서버 PC 에서 테스트용 PostGIS 컨테이너를 띄웠다 지우게 하고 싶지 않습니다.
+# 단위 테스트만 돌리면 SQL 이 실제 PostGIS 에서 도는지 아무도 모릅니다 —
+# 이관해 온 테스트의 절반이 integration 인 이유가 그것입니다.
+name: place-search tests
+
+on:
+  pull_request:
+    paths:
+      - "place-search/**"
+      - ".github/workflows/place-search-tests.yml"
+  push:
+    branches: [dev]
+    paths:
+      - "place-search/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: place-search
+    services:
+      place-db:
+        image: postgis/postgis:18-3.6
+        env:
+          POSTGRES_USER: place
+          POSTGRES_PASSWORD: place
+          POSTGRES_DB: place
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U place -d place"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DAENGS_DATABASE_URL: postgresql+asyncpg://place:place@localhost:5432/place
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "place-search/uv.lock"
+      - name: 의존성
+        run: uv sync --frozen
+      - name: 스키마 (Alembic 0001~0020 전체가 실제로 적용되는지도 여기서 검증됩니다)
+        run: uv run alembic upgrade head
+      - name: 테스트
+        run: uv run pytest -q
+      - name: 린트
+        run: uv run ruff check app tests

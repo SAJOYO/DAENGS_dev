@@ -24,9 +24,11 @@ from daengs_life.rag.stages import goldenset
 # 2026-08-28 갱신 — 보조금24 2문항(S4·S5) 추가 (RAG-034). hand 10 → 12, 필수 46 → 49.
 # 2026-08-28 갱신 — 운송 3문항(T1~T3) 추가 (RAG-036). hand 12 → 15, 필수 49 → 53.
 # T1 만 필수가 둘인 것은 **서울교통공사가 1~8호선·9호선 2·3단계 두 약관**이기 때문이다.
-ITEMS = 23
-MUST_TOTAL = 53
-BY_ORIGIN = {"hand": 15, "easylaw": 8}
+# 2026-08-30 갱신 — 펫보험 5문항(I1~I5) + 항공 2문항(T4·T5) 추가 (RAG-049). hand 15 → 22, 필수 53 → 63.
+# 필수가 둘인 것은 I1(삼성·DB손보 공시)·T4·T5(에어프레미아·이스타) — T1 과 같은 이유로 **회사마다 수치가 다르다**.
+ITEMS = 30
+MUST_TOTAL = 63
+BY_ORIGIN = {"hand": 22, "easylaw": 8}
 
 
 @pytest.fixture(scope="module")
@@ -93,9 +95,10 @@ def test_unavailable_is_recorded_not_dropped(gs: goldenset.GoldenSet) -> None:
 
     부분 보유 2문항(유기견 신고 · 병원 사체처리)과 질문 7 이 여기 걸린다.
     T1·T3 이 더해졌다 — 지역 도시철도공사와 코레일이 아직 코퍼스 밖이다 (RAG-036).
+    I1(타사 약관 원문 — A2 #58 몫)·T4·T5(대형 항공사 — RAG-046) 가 더해졌다 (RAG-049).
     """
     have = {i.id for i in gs.items if i.unavailable}
-    assert have == {"Q7", "QA6", "QA8", "T1", "T3"}, f"분모 제외를 가진 문항이 달라졌다: {sorted(have)}"
+    assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5"}, f"분모 제외를 가진 문항이 달라졌다: {sorted(have)}"
 
 
 # ---------------------------------------------------------------- 코퍼스와 대조 (청크 필요)

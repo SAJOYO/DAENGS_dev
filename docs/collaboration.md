@@ -93,6 +93,14 @@ Project 3 (`orgs/SAJOYO/projects/3`) 은 `Open Pull Requests` 기준으로 관�
    열어 둔 사이에 다른 카드가 그 번호를 가져갑니다. PR 본문에만 적으면 먼저 머지하는 쪽이 이기고
    나중이 renumber 합니다 (#53 이 번호와 랩을 두 번 옮겼습니다. RAG-042).
 
+   **`dev` 의 표만 보면 부족합니다** — 남이 예약해 둔 줄이 아직 그 사람 브랜치에만 있을 수 있습니다
+   (RAG-045 ⑦ 에서 실제로 부딪혔습니다). 예약 커밋은 **제목을 `chore: 착수 — RAG-0NN 예약 (#카드)`
+   로 고정**하고, 잡기 전에 열린 브랜치까지 한 줄로 확인하세요:
+
+   ```powershell
+   git fetch origin; git log --all --oneline --grep="예약"
+   ```
+
 2. Project 3 에 카드를 넣고 필드(담당자 / Priority / Size / Iteration)를 채웁니다.
    본문에는 필드가 담을 수 없는 것만 적습니다 — 두 군데가 되면 반드시 어긋납니다.
 3. 작업 중 본문을 갱신합니다. 특히 `## 컨텍스트 메모` 는 다음 세션의 Claude 가 읽는

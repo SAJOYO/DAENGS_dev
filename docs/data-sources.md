@@ -406,7 +406,8 @@
 - [x] `insurer-terms-pdfs` — 보험 약관 PDF **삼성 11건 완료** (RAG-041). 남은 6사는 별도 카드
       (AJAX 3 · SPA 2 · **현대해상 robots 차단 1**)
 - [x] `korail-terms` — 코레일 운송약관 2건 (RAG-036, #49). **PDF 포맷 층이 여기서 나왔다**
-- [ ] 운송약관 3건 (`srt` / `seoulmetro` / `airlines`) — #51 진행 중
+- [x] 운송약관 2건 (`srt-terms` / `seoulmetro-terms`) — SRT · 서울교통공사 (#51, 머지됨)
+- [ ] `airlines-pet-pages` — 항공사 5곳 반려동물 안내. #57 로 떼어 뒀다 (모듈 아직 없음)
 
 ### Phase 3 — 지속 운영 (Celery Beat, RAG-001)
 - [x] **due 소스 선별 태스크** (RAG-044, #61) — Beat 등록은 하나(`crawl-due-sources`, KST 04:00)고

@@ -42,7 +42,11 @@ ALLOWED: dict[str, set[str]] = {
     # `jsobject` 도 같은 종류의 확장이다 — 손해보험협회 공시가 JSON 이 아니라 JS 객체
     # 리터럴로 오는데, 그 리더를 파서 쪽에 복사하면 **따옴표·이스케이프 처리가 두 벌**이 되고
     # 한쪽만 고쳐지는 날 수집과 파싱이 서로 다른 것을 읽는다.
-    "rag": {"crawler.core.config", "crawler.core.textutil", "crawler.core.jsobject"},
+    # `nextpayload` 도 `jsobject` 와 **같은 이유**로 들어왔다 (RAG-046). 에어프레미아는
+    # Next.js 라 요금·케이지 규격이 DOM 에 없고 RSC 페이로드 안에 있는데, 그 리더를 파서 쪽에
+    # 복사하면 이스케이프 처리가 두 벌이 되어 **크롤러는 요금을 보는데 파서는 못 보는** 날이 온다.
+    "rag": {"crawler.core.config", "crawler.core.textutil", "crawler.core.jsobject",
+            "crawler.core.nextpayload"},
     # 경로 탐색 하나뿐 (RT-001 ①-2). `textutil` 은 한국 법령 문서용이라 realtime 이 쓸 일이
     # 없고, 목록이 갈려 있어야 그게 새로 들어오는 날 여기서 잡힌다.
     "realtime": {"crawler.core.config"},

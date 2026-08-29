@@ -1,4 +1,4 @@
-"""항공사 반려동물 안내 — **사별 정규화 규칙** (RAG-045).
+"""항공사 반려동물 안내 — **사별 정규화 규칙** (RAG-046).
 
 `data/raw/` 도 네트워크도 안 탄다 (RAG-030 ①). 아래 HTML 은 실물에서 이 테스트가 보는 부분만
 남긴 것이다.
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pytest
 
+from daengs_life.crawler.core import nextpayload
 from daengs_life.crawler.core.fetch import FetchResult
 from daengs_life.crawler.sources.base import Target
 from daengs_life.crawler.sources.transport import airlines_pet_pages as air
@@ -118,20 +119,20 @@ def test_the_fare_comes_from_the_payload_not_the_dom() -> None:
 
 
 def test_payload_tags_and_unicode_escapes_are_unwrapped() -> None:
-    values = air._payload_values(AIRPREMIA_HTML.encode("utf-8"))
+    values = nextpayload.values(AIRPREMIA_HTML, air.PAYLOAD_PREFIX)
     joined = "\n".join(values)
     assert "\\u003c" not in joined and "<br" not in joined
 
 
 def test_duplicate_payload_keys_keep_the_first_value() -> None:
     """같은 키가 두 번 나오면 첫 것만 쓴다 — 그래야 지문이 흔들리지 않는다."""
-    values = air._payload_values(AIRPREMIA_HTML.encode("utf-8"))
+    values = nextpayload.values(AIRPREMIA_HTML, air.PAYLOAD_PREFIX)
     assert "KRW 130,000" in values and "KRW 999,999" not in values
 
 
 def test_payload_order_is_document_order() -> None:
     """정렬하거나 set 으로 돌리면 사이트가 안 바뀌어도 지문이 흔들린다."""
-    values = air._payload_values(AIRPREMIA_HTML.encode("utf-8"))
+    values = nextpayload.values(AIRPREMIA_HTML, air.PAYLOAD_PREFIX)
     assert values.index("KRW 130,000") < values.index("KRW 580,000")
 
 
@@ -199,3 +200,127 @@ def test_the_pinned_page_is_verified_by_content() -> None:
     # 길이만 모자라도 아니다 — 페이지가 껍데기가 된 경우
     thin = "<html><body><article class='wrap'><h3>반려동물</h3></article></body></html>"
     assert air._looks_like_pet_page(FakeFetcher(thin), "https://x/") is False
+
+
+# ═════════════════════════════════════════════════════════════ 파서 (parse 단계)
+#
+# 크롤러가 원본을 저장하고, 파서는 **그 원본을 다시 읽어** IR 을 만든다. 그래서 같은 판단을
+# 양쪽이 해야 하고, 어긋나면 지문과 본문이 다른 것을 가리킨다.
+
+from daengs_life.rag.core.io import RawDoc                                    # noqa: E402
+from daengs_life.rag.stages.parse.parsers.transport import (                  # noqa: E402
+    airlines_pet_pages as parser,
+)
+
+
+def rawdoc(url: str, title: str) -> RawDoc:
+    from pathlib import Path
+    return RawDoc(meta={"source_url": url, "document_title": title,
+                        "source": "국적 항공사 9개", "source_id": "airlines-pet-pages"},
+                  path=Path("transport/airlines-pet-pages-x__20260829.html"),
+                  meta_path=Path("x.meta.json"))
+
+
+def test_parser_and_crawler_share_the_language_rule() -> None:
+    """**두 벌이 어긋나면 여기서 잡는다.** 크롤러가 지운 언어를 파서가 안 지우면 지문에는 없는
+    일본어가 코퍼스에는 들어간다 — 어느 쪽 로그에도 안 보이는 어긋남이다.
+    """
+    assert parser.FOREIGN_SUFFIXES == air.FOREIGN_SUFFIXES
+    assert parser.PAYLOAD_PREFIX == air.PAYLOAD_PREFIX
+    assert parser.EASTAR_CONTAINER == air.EASTAR_CONTAINER
+    assert parser.AIRPREMIA_PANEL == air.AIRPREMIA_PANEL
+
+
+def test_the_airline_is_told_apart_by_host_not_by_a_new_meta_field() -> None:
+    """`.meta.json` 에는 `airline_key` 가 없다 — 호스트는 원본 안에 이미 있는 사실이다."""
+    assert parser._airline_key(rawdoc("https://www.airpremia.com/a/ko/x", "t")) == "airpremia"
+    assert parser._airline_key(rawdoc("https://www.eastarjet.com/newstar/x", "t")) == "eastar"
+    with pytest.raises(RuntimeError, match="모르는 항공사"):
+        parser.parse(b"<html></html>", rawdoc("https://www.koreanair.com/", "t"))
+
+
+def test_the_fare_table_is_rebuilt_as_region_by_weight() -> None:
+    """평문으로 흘리면 `KRW 580,000` 이 어느 칸의 값인지가 문장 안에서 사라진다."""
+    got = parser.parse(AIRPREMIA_HTML.encode("utf-8"),
+                       rawdoc("https://www.airpremia.com/a/ko/support/need/pet",
+                              "에어프레미아 반려동물 동반 손님"))
+    tables = [e for e in got.elements if e.type == "table"]
+    assert len(tables) == 1
+    t = tables[0]
+    assert t.header == ["구분", "32 kg 이하", "33 kg ~ 45 kg"]
+    assert ["동북아 · 한국 출발", "KRW 130,000", ""] in [r for r in t.rows]
+    assert ["미주 · 한국 출발", "", "KRW 580,000"] in [r for r in t.rows]
+
+
+def test_an_unknown_region_code_is_reported_not_silently_dropped() -> None:
+    """`REGIONS` 에 없는 구간은 표에서 통째로 빠진다. 조용히 빠지면 요금 한 줄이 사라진다."""
+    html = AIRPREMIA_HTML.replace(
+        '\\"need_pet_fare_33kg_useu_kr\\":\\"KRW 580,000\\"',
+        '\\"need_pet_fare_33kg_afr_kr\\":\\"KRW 700,000\\"')
+    got = parser.parse(html.encode("utf-8"),
+                       rawdoc("https://www.airpremia.com/x", "에어프레미아"))
+    assert any("afr" in w for w in got.warnings)
+
+
+def test_the_service_animal_tab_is_dropped_on_the_payload_side_too() -> None:
+    """DOM 에서는 `#need_pet_panel2` 를 빼는데 페이로드에는 그 탭 문구도 실려 있다.
+
+    여기서 안 빼면 **DOM 과 페이로드가 서로 다른 문서를 만든다.**
+    """
+    html = AIRPREMIA_HTML.replace(
+        '\\"need_pet_popup_ferocious_species\\":\\"도사견, 핏불 테리어\\"',
+        '\\"need_pet_help_guide_dscprt1\\":\\"보조서비스를 제공합니다\\"')
+    got = parser.parse(html.encode("utf-8"), rawdoc("https://www.airpremia.com/x", "에어프레미아"))
+    assert "보조서비스를 제공합니다" not in "\n".join(
+        e.text for e in got.elements if e.type == "para")
+
+
+def test_an_unknown_key_is_kept_not_thrown_away() -> None:
+    """새 절이 생겼을 때 조용히 사라지면 다음 개정에서 그 절만 코퍼스에 없는 상태가 된다."""
+    html = AIRPREMIA_HTML.replace(
+        '\\"need_pet_popup_ferocious_species\\":\\"도사견, 핏불 테리어\\"',
+        '\\"need_pet_brandnew_thing\\":\\"새로 생긴 안내\\"')
+    got = parser.parse(html.encode("utf-8"), rawdoc("https://www.airpremia.com/x", "에어프레미아"))
+    assert "새로 생긴 안내" in "\n".join(e.text for e in got.elements if e.type == "para")
+    assert any("기타 안내" in w for w in got.warnings)
+
+
+def test_the_screen_order_puts_the_heading_before_its_description() -> None:
+    """페이로드 순서가 화면 순서가 아니다 — 그대로 두면 설명 뒤에 제목이 온다."""
+    keys = ["need_pet_guide_1_1_dscrpt1", "need_pet_guide_1_1",
+            "need_pet_guide_1_2_cargo_a", "need_pet_guide_1_2_onboard_a",
+            "need_pet_guide_1_10", "need_pet_guide_1_2"]
+    ordered = sorted(keys, key=parser._screen_order)
+    assert ordered.index("need_pet_guide_1_1") < ordered.index("need_pet_guide_1_1_dscrpt1")
+    # 화면은 기내 → 위탁 순인데 알파벳으로는 cargo 가 앞이다
+    assert (ordered.index("need_pet_guide_1_2_onboard_a")
+            < ordered.index("need_pet_guide_1_2_cargo_a"))
+    # `_10` 은 `_2` 보다 뒤다 (문자열 비교면 앞으로 온다)
+    assert ordered.index("need_pet_guide_1_2") < ordered.index("need_pet_guide_1_10")
+
+
+def test_the_eastar_header_borrows_names_but_keeps_the_row() -> None:
+    """`['구분','내용','내용']` 이면 청크에 `내용: … 내용: …` 이 찍혀 국내선인지 국제선인지 사라진다.
+
+    ⚠️ 이름만 빌려 오고 **행은 지우지 않는다** — 그 행에 `위탁 운송 불가` 가 붙어 있다.
+    """
+    header = ["구분", "내용", "내용"]
+    rows = [["운송 가능 노선", "국내선 (기내 반입만 가능, 위탁 운송 불가)", "국제선 (기내 반입만)"]]
+    assert parser._eastar_header(header, rows) == ["구분", "국내선", "국제선"]
+    assert parser._eastar_header(["구분", "국내선", "국제선"], rows) == ["구분", "국내선", "국제선"]
+
+
+def test_the_eastar_table_title_does_not_repeat_the_document_title() -> None:
+    """캡션이 문서 제목과 같아서 청크 머리가 겹친다 — 겹친 말은 검색에 보탬이 없다."""
+    got = parser.parse(EASTAR_HTML.encode("utf-8"),
+                       rawdoc("https://www.eastarjet.com/newstar/PGWIM00004",
+                              "이스타항공 반려동물을 동반하는 고객"))
+    table = [e for e in got.elements if e.type == "table"][0]
+    assert table.title not in got.document_title
+
+
+def test_the_title_does_not_get_the_seed_org_glued_on() -> None:
+    """시드의 `org` 는 `국적 항공사 9개` 라 `with_org` 를 쓰면 제목이 망가진다."""
+    got = parser.parse(EASTAR_HTML.encode("utf-8"),
+                       rawdoc("https://www.eastarjet.com/x", "이스타항공 반려동물을 동반하는 고객"))
+    assert got.document_title == "이스타항공 반려동물을 동반하는 고객"

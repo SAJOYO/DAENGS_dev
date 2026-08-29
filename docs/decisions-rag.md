@@ -27,7 +27,7 @@
 
 | 카드 | 예약한 결정 | 랩 |
 | --- | --- | --- |
-| [#57](https://github.com/SAJOYO/DAENGS_dev/pull/57) | `RAG-045` | `lap10` |
+| [#57](https://github.com/SAJOYO/DAENGS_dev/pull/57) | `RAG-046` | `lap10` |
 
 ---
 

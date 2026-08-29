@@ -72,38 +72,16 @@ import re
 
 from bs4 import BeautifulSoup
 
-from ...core import textutil
+from ...core import nextpayload, textutil
 from ...core.fetch import FetchResult, Fetcher
 from ..base import Extracted, Source, Target
 
-# 언어 접미사가 붙은 클래스만 지운다. 한국어(_KR)와 영어(접미사 없음)는 남긴다 (위 ⚠️).
-_FOREIGN_SUFFIX = re.compile(r"_(JP|CN|TW|TH|VN)$")
+# 지울 언어. 한국어(`_KR`)와 영어(접미사 없음)는 남긴다 (위 ⚠️).
+# 지우는 것 자체는 `textutil.drop_class_suffix` 가 한다 — **파서도 같은 함수를 쓴다.**
+FOREIGN_SUFFIXES = ("JP", "CN", "TW", "TH", "VN")
 
-
-# 페이로드 안에서 `\"key\":\"value\"` 로 한 번 더 이스케이프되어 있다 (RSC flight 청크).
-_PAYLOAD_PAIR = re.compile(r'\\"(need_pet[a-zA-Z0-9_]*)\\":\\"((?:[^\\]|\\[^"])*)\\"')
-_UNI_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
-_TAG = re.compile(r"<[^>]+>")
-
-
-def _payload_values(html: bytes) -> list[str]:
-    """`need_pet_*` i18n 값들을 **문서 순서 그대로** 돌려준다 (중복 키는 첫 것만).
-
-    순서를 유지하는 이유는 지문 때문이다 — 정렬하거나 set 으로 돌리면 사이트가 바뀌지 않아도
-    파이썬 판이 바뀔 때 지문이 흔들린다.
-    """
-    raw = html.decode("utf-8", "replace")
-    out: dict[str, str] = {}
-    for key, value in _PAYLOAD_PAIR.findall(raw):
-        if key in out:
-            continue
-        v = _UNI_ESCAPE.sub(lambda m: chr(int(m.group(1), 16)), value)
-        v = v.replace('\\"', '"').replace("\\n", " ").replace("\\/", "/")
-        v = _TAG.sub(" ", v)                       # <br> · <a> · <u> 가 값 안에 섞여 있다
-        v = textutil.squeeze(v).strip()
-        if v:
-            out[key] = v
-    return list(out.values())
+# 에어프레미아 i18n 페이로드에서 읽을 키 접두사. 읽는 것은 `core.nextpayload` 가 한다
+PAYLOAD_PREFIX = "need_pet"
 
 
 # --------------------------------------------------------------- 에어프레미아
@@ -180,18 +158,14 @@ def _looks_like_pet_page(fetcher: Fetcher, url: str) -> bool:
 
 # ------------------------------------------------------------------- 공통
 def _korean_text(html: bytes, container: str) -> str:
-    """컨테이너 안의 본문. 언어 접미사가 붙은 블록만 지운다 (`_FOREIGN_SUFFIX`)."""
+    """컨테이너 안의 본문. 언어 접미사가 붙은 블록만 지운다 (`FOREIGN_SUFFIXES`)."""
     soup = BeautifulSoup(html, "lxml")
     box = soup.select_one(container)
     if box is None:
         return ""
     for tag in box.select("script, style"):
         tag.decompose()
-    # 먼저 모아 두고 지운다 — 순회 중에 지우면 부모가 사라진 노드를 다시 만난다
-    victims = [el for el in box.select("[class]")
-               if any(_FOREIGN_SUFFIX.search(c) for c in (el.get("class") or []))]
-    for el in victims:
-        el.decompose()
+    textutil.drop_class_suffix(box, FOREIGN_SUFFIXES)
     return textutil.squeeze(textutil.block_text(box))
 
 
@@ -246,7 +220,7 @@ class AirlinesPetPages(Source):
         parts = [dom_text]
 
         if target.meta.get("payload"):
-            values = _payload_values(res.content)
+            values = nextpayload.values(res.content, PAYLOAD_PREFIX)
             extra["payload_keys"] = len(values)
             if len(values) < AIRPREMIA_MIN_PAYLOAD:
                 # 여기서 멈추지 않고 경고만 남긴다 — DOM 만이라도 받아 두는 편이, 아무것도 못 받고

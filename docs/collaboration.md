@@ -88,6 +88,17 @@ Project 3 (`orgs/SAJOYO/projects/3`) 은 `Open Pull Requests` 기준으로 관�
    gh pr create --draft --base dev      # 제목을 묻고, 본문은 템플릿을 고릅니다
    ```
 
+   ⚠️ **미리 열어 둔 카드에 착수할 때는 브랜치를 새로 파지 마세요.** 그 카드에는 이미 브랜치가
+   있습니다. `git switch -c` 로 새 이름을 만들면 커밋이 전부 거기 쌓이고, PR 은 **원래의 빈
+   브랜치를 그대로 머지**합니다 — 에러가 하나도 안 나고 `dev` 에는 아무것도 안 들어갑니다.
+   2026-08-30 에 `#68` 이 그렇게 빈 채로 머지됐고, 작업 8커밋이 다른 브랜치에 남았습니다.
+   착수 전에 **PR 이 쓰는 브랜치 이름부터 확인**하세요:
+
+   ```powershell
+   gh pr view <번호> --json headRefName -q .headRefName
+   git fetch origin; git switch <그 이름>; git merge origin/dev
+   ```
+
    `RAG-` 결정 번호나 랩(`lapN`)을 쓸 카드면 **`docs/decisions-rag.md` 머리의 "예약 중" 표에
    한 줄 넣습니다.** 카드를 미리 열어 두는 경우엔 여는 시점이 아니라 **착수할 때** 넣으세요 —
    열어 둔 사이에 다른 카드가 그 번호를 가져갑니다. PR 본문에만 적으면 먼저 머지하는 쪽이 이기고

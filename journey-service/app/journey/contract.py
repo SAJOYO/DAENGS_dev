@@ -19,7 +19,10 @@ class JourneyPlan:
     origin_lat: float
     origin_lng: float
     resolved_at: datetime
+    departure_at: datetime
     companion: Companion = "dog"
     measured: bool = False
     mode_priority: tuple[Mode, ...] = field(default_factory=tuple)
+    max_total_min: int | None = None
+    hard_limit: bool = False
     walk: WalkPlan = field(default_factory=WalkPlan)

@@ -69,7 +69,7 @@ jobs:
           Invoke-WebRequest -UseBasicParsing $url -OutFile $csv
           $actual = (Get-FileHash -Algorithm SHA256 $csv).Hash
           if ($actual -ne $expected) {
-            throw "KCISA 스냅샷 SHA-256 불일치: $actual"
+            throw "KCISA snapshot SHA-256 mismatch: $actual"
           }
 
           docker cp $csv 'daengs-place-search:/tmp/kcisa-place-20250324.csv'
@@ -125,6 +125,6 @@ jobs:
             -TimeoutSec 20
           $group = @($response.groups | Where-Object kind -eq 'cafe')
           if ($group.Count -ne 1 -or @($group[0].results).Count -lt 1) {
-            throw 'KCISA 적재 뒤 서울시청 3km 카페 검색 결과가 비어 있습니다.'
+            throw 'Cafe search returned no results after KCISA sync.'
           }
-          Write-Host "Place 카페 검색 확인 완료: $(@($group[0].results).Count)건"
+          Write-Host "Place cafe search verified: $(@($group[0].results).Count) result(s)"

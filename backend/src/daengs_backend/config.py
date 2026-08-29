@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic import Field, SecretStr, ValidationError, model_validator
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -21,6 +22,20 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    # --- Celery 브로커 ---------------------------------------------------
+    # 관리자 수동 트리거가 크롤 태스크를 **이름으로** 보냅니다 (RAG-047).
+    #
+    # ⚠ `daengs_life.tasks` 를 import 하지 않습니다. CLAUDE.md 가 "`daengs_backend` 가
+    # `daengs_life` 를 부르는 접점은 main.py 의 세 줄뿐" 이라고 못박아 두었고, 그 선을
+    # 태스크 하나 부르자고 넘으면 D-021 2단계(`/ask` 를 별도 프로세스로)가 그만큼 비싸집니다.
+    # 대신 브로커에 태스크 **이름 문자열**을 던집니다 — 태스크가 `@app.task(name=...)` 로
+    # 그 이름을 명시하고 있어서 그것이 계약입니다.
+    #
+    # 이름은 접두사 없는 `REDIS_URL` 입니다 (`daengs_life` 쪽과 같은 값을 읽습니다).
+    # 둘을 한 이름으로 합치지 않는 이유는 `POSTGRES_*`/`DAENGS_DB_*` 와 같습니다 —
+    # 두 패키지가 같은 env 를 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
+    redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
 
     # 개발 서버가 바인딩할 주소.
     # 호스트에서 띄울 때는 루프백이면 충분하지만,

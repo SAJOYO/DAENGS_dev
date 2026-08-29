@@ -86,6 +86,12 @@ cd C:\ide\actions-runner
 
 compose 서비스들은 `restart: unless-stopped` 설정이라 Docker Desktop 이 시작되면 자동으로 살아납니다.
 
+> **크롤러 워커·Beat(`crawler-worker` · `crawler-beat`)는 지금 뜨지 않습니다.**
+> `profiles: ["crawler"]` 라 `docker compose up -d` 에 안 걸립니다 (RAG-044). 서버에 코퍼스
+> (`data/`)가 없어서 켜면 **전 소스가 due** 로 잡혀 개발 PC 와 별개의 코퍼스를 처음부터 새로
+> 만듭니다. 코퍼스를 서버로 옮기는 카드에서 profile 을 떼고, 그때 이 절차에 재기동을 적습니다.
+> 그 전까지 크롤은 개발 PC 에서 `python -m daengs_life.crawler run --source X` 로 합니다.
+
 ## 운영 명령어 (서버 PC)
 
 아래 명령은 모두 서버 PC 에서 실행합니다.

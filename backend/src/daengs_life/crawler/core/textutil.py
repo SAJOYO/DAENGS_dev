@@ -40,6 +40,30 @@ def block_text(box: Any) -> str:
     return "\n".join(ln for ln in lines if ln)
 
 
+def drop_class_suffix(box: Any, suffixes: tuple[str, ...]) -> int:
+    """클래스 이름이 `_JP` 처럼 끝나는 요소를 지운다. 지운 개수를 돌려준다.
+
+    **다국어 페이지에서 원하는 언어만 남기는 장치**다. 이스타항공은 표 한 셀에 한/일/중/대만/태를
+    쌓아 두고 클래스로만 구분한다(`PNWIM00004_JP`) — 안 지우면 본문이 6,703자로 부풀고
+    렉시컬 검색이 일본어를 친다 (RAG-046).
+
+    ⚠️ **라틴 문자 비율 같은 휴리스틱으로 거르면 안 되는 이유가 여기 있다.** 같은 페이지에서
+    운송 요금이 영어 문장에만 있다(`KRW 30,000 per segment`). 휴리스틱은 그 줄과 공항 코드
+    (NRT · KIX)까지 지운다. **표시된 것만 지운다**는 규칙이 그래서 중요하다.
+
+    수집과 파싱이 **같은 함수**를 타야 한다 — 한쪽만 고쳐지면 지문과 본문이 어긋난다.
+
+    `box` 를 제자리에서 수정한다. 먼저 모아 두고 지우는 이유는 순회 중에 지우면 부모가 사라진
+    노드를 다시 만나기 때문이다.
+    """
+    pattern = re.compile(rf"_({'|'.join(suffixes)})$")
+    victims = [el for el in box.select("[class]")
+               if any(pattern.search(c) for c in (el.get("class") or []))]
+    for el in victims:
+        el.decompose()
+    return len(victims)
+
+
 def squeeze(text: str) -> str:
     """줄 앞뒤 공백·중복 공백·빈 줄 정리. 노이즈 제거를 끝낸 뒤 마지막에 부른다."""
     text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)

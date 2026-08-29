@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import collections
+import json
 
 import pytest
 
@@ -21,39 +22,119 @@ from daengs_life.rag.stages.goldenset import logical
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
-# 2026-08-27 실측. parsed 36건 기준 (법령 22 + 해설 소스 4건의 14)
-# heading 40 -> 108 만 늘고 나머지가 그대로인 것이, 청커의 해설 분기를 소스 id 에서 문서 모양으로
-# 바꾼 변경(RAG-031)이 기존 코퍼스를 건드리지 않았다는 증거다.
-# 2026-08-28 갱신 — 조례 208건(RAG-033) + 보조금24 37건(RAG-034). parsed 281건 기준.
-# 늘어난 몫은 전부 `article` 과 조례 `para`(부칙)다. **보조금24도 article 이다** — 조문이
-# 아니라 필드 묶음인데, `para` 로 내면 청커가 조용히 버려서(`para: 소제목 밖`) 206청크가
-# 0이 된다. RAG-034 ④ 의 그 결정이 이 수에 들어 있다.
-# 2026-08-28 갱신 — 코레일 약관 PDF 2건 추가 (RAG-036). parsed 283건 기준.
-# article +72 · para +22(부칙) · table +22. **표가 늘어난 것이 PDF 소스의 표시다** —
-# 법령 별표와 달리 `find_tables()` 로 뽑은 것이고, 유효표 판정을 통과한 것만 들어 있다.
-# 2026-08-28 갱신 — 손해보험협회 반려동물보험 공시 7건 (RAG-038). parsed 290건 기준.
-# article +48 · table +62. **상품 하나가 요소 둘**이라 그렇다 — 개요(article)와 보장내용(table).
-# 표 48개가 청크 62개가 된 것은 큰 표만 `헤더: 값` 으로 갈렸다는 뜻이다 (RAG-004 ③(나)).
-# 2026-08-28 갱신 — 운송약관 HTML 3건 (RAG-041). parsed 293건 기준. +118 = article 85 ·
-# table 32 · heading 1. **서울교통공사가 해설이 아니라 조문형이라서** article 로 들어온다 —
-# 시드의 `pdf-entry` 분류가 틀렸다는 것이 이 수에 들어 있다. heading 1 은 SRT 한 장짜리 안내다.
-# 2026-08-29 갱신 — 삼성화재 약관 PDF 11건 (RAG-041). article +1806 · table +151.
-# **부록을 잘라낸 뒤의 수다** — 안 자르면 article 이 4,693 이고 그 차이가 전부 관계법령
-# 전문(신용정보법·상법 …)이다. 우리 문서가 아니라 인용을 틀리게 만든다 (RAG-041 ②).
-TOTAL = 6_368
-BY_TYPE = {"article": 5271, "aside": 22, "heading": 109, "para": 266, "qa": 10, "table": 690}
+# ---------------------------------------------------------------- 소스별 스냅샷 (RAG-042)
+# **스냅샷은 소스별이다.** 합계 한 줄(`TOTAL` · `BY_TYPE`)이던 것을 쪼갰다 — 코퍼스를 늘리는
+# 카드가 전부 그 한 줄에서 충돌했기 때문이다 (머지된 6개 중 4개. RAG-042). 이제 카드는
+# **자기 소스 줄만** 더하고, 합계와 타입별은 아래에서 코드가 낸다.
+#
+# `docs` 는 **parsed 문서 수**다 (청크를 낸 문서 수가 아니다 — `NO_CHUNK_DOCS` 참고).
+# 소스가 통째로 빠진 것(원본이 없는 PC)과 청크만 줄어든 것을 가른다.
+#
+# 이력 — 무엇이 언제 들어왔고 그 수에 **어떤 판단이 들어 있는지.** 줄을 고칠 때 같이 읽는다:
+#  · 2026-08-27 `RAG-031` — 청커의 해설 분기를 소스 id 에서 문서 모양으로 바꿨다. `heading` 만
+#    40 → 108 로 늘고 나머지가 그대로인 것이, 그 변경이 기존 코퍼스를 안 건드렸다는 증거다.
+#  · 2026-08-28 `RAG-033` 조례 208건 · `RAG-034` 보조금24 37건 — 늘어난 몫이 전부 `article` 과
+#    조례 `para`(부칙)다. **보조금24도 `article` 이다** — 조문이 아니라 필드 묶음인데 `para` 로
+#    내면 청커가 조용히 버려서(`para: 소제목 밖`) 206청크가 0이 된다. RAG-034 ④ 가 이 수에 있다.
+#  · 2026-08-28 `RAG-036` 코레일 약관 PDF 2건 — **표가 늘어난 것이 PDF 소스의 표시다.**
+#    법령 별표와 달리 `find_tables()` 로 뽑은 것이고, 유효표 판정을 통과한 것만 들어 있다.
+#  · 2026-08-28 `RAG-038` 손해보험협회 공시 7건 — **상품 하나가 요소 둘**이라 개요(`article`)와
+#    보장내용(`table`)이다. 표 48개가 청크 62개인 것은 큰 표만 `헤더: 값` 으로 갈렸다는 뜻이다
+#    (RAG-004 ③(나)).
+#  · 2026-08-28 `RAG-039` 운송약관 HTML 3건 — **서울교통공사가 해설이 아니라 조문형이라서**
+#    `article` 로 들어온다. 시드의 `pdf-entry` 분류가 틀렸다는 것이 이 수에 들어 있다.
+#    `srt-terms` 의 `heading` 1 은 한 장짜리 안내다.
+#  · 2026-08-29 `RAG-041` 삼성화재 약관 PDF 11건 — **부록을 잘라낸 뒤의 수다.** 안 자르면
+#    `article` 이 4,693 이고 그 차이가 전부 관계법령 전문(신용정보법·상법 …)이다. 우리 문서가
+#    아니라 인용을 틀리게 만든다 (RAG-041 ②).
+BY_SOURCE: dict[str, dict] = {
+    # ---- 2026-08-29 실측 (이 워크트리에서 `chunk_file` 로 직접 셌다)
+    "easylaw-pet":             {"docs": 14, "chunks": {"aside": 22, "heading": 40, "qa": 10}},
+    "gov24-registration":      {"docs": 2,  "chunks": {"heading": 17}},
+    "insurer-terms-pdfs":      {"docs": 11, "chunks": {"article": 1806, "table": 151}},
+    "knia-disclosure":         {"docs": 7,  "chunks": {"article": 48, "table": 62}},
+    "korea-kr-policy":         {"docs": 3,  "chunks": {"heading": 3}},
+    "law-drf-api":             {"docs": 8,  "chunks": {"article": 720, "para": 192, "table": 423}},
+    "nias-pet":                {"docs": 7,  "chunks": {"heading": 42}},
+    "seoul-microchip-support": {"docs": 2,  "chunks": {"heading": 6}},
+
+    # ---- 이 워크트리에는 원본이 없어 청킹으로는 못 쟀고, **서버 DB 의 적재분에서 확인했다**
+    #      (RAG-042 ②). `documents.metadata` 에 `source_id` · `element_type` 이 그대로 있어
+    #      타입별까지 대조된다. 다섯 줄 모두 단일 적재이고 `merged_from` 이 0 이라 적재 행 수가
+    #      곧 청크 수다. 다시 세려면:
+    #        select metadata->>'source_id', metadata->>'element_type', count(*)
+    #        from documents group by 1, 2;
+    "ordinance-search":        {"docs": 208, "chunks": {"article": 2334, "para": 52}},
+    "benefit24-services":      {"docs": 37,  "chunks": {"article": 206}},
+    "korail-terms":            {"docs": 2,   "chunks": {"article": 72, "para": 22, "table": 22}},
+    "seoulmetro-terms":        {"docs": 2,   "chunks": {"article": 85, "table": 32}},
+    "srt-terms":               {"docs": 1,   "chunks": {"heading": 1}},
+}
+
+# 요소가 하나도 없어 **청크를 0건 내는** parsed 문서. 100문100답 페이지인데 QnA 가 안 실린
+# 둘이다. 목록으로 고정하는 이유는 RAG-030 ① 과 같다 — 조용히 0건이 되는 것을 합계 뒤에
+# 숨기지 않는다. 늘어나면 파서 회귀를 먼저 의심한다.
+NO_CHUNK_DOCS = {"easylaw-pet-2-1-1-qna", "easylaw-pet-2-2-2-qna"}
+
+# ④ 소프트 상한(2,000자)을 넘는 청크 수. **막지 않고 세기만 한다** — RAG-004 ④ 가 폴백을 두지
+# 않기로 했고, 늘어나면 그 결정을 재개하는 트리거다. 옆 주석이 무엇이 넘는지 말한다.
+SOFT_CAP_OVER = {
+    "insurer-terms-pdfs": 91,   # 특별약관의 정의·보상 조. RAG-041 ⑦ 이 "경고만" 으로 둔 그것
+    "korail-terms": 2,          # 광역철도약관 제3조·제6조 — PDF 라 항으로 더 쪼갤 태그가 없다
+    "law-drf-api": 3,           # 별표 1의10-4 · 1의10-6 · 제18조②
+    "nias-pet": 1,              # 분실·유기 절 — 소제목 하나에 분실신고·습득신고·유기 셋
+    "ordinance-search": 1,      # 부칙-1제2조 4,902자 — 개정별로 쪼갠 뒤에도 남은 긴 부칙
+    "seoulmetro-terms": 2,      # 정의 조 — 항이 하나인데 그 안에 호가 26개다 (RAG-041 ④)
+}
+
+DOC_COUNT = sum(v["docs"] for v in BY_SOURCE.values())                    # 304
+TOTAL = sum(sum(v["chunks"].values()) for v in BY_SOURCE.values())        # 6,368 (DB 와 일치)
+BY_TYPE = dict(sorted(sum((collections.Counter(v["chunks"]) for v in BY_SOURCE.values()),
+                          collections.Counter()).items()))
 
 
 @pytest.fixture(scope="module")
-def chunks() -> list:
-    paths = io.parsed_files()
-    if not paths:
+def paths() -> list:
+    out = io.parsed_files()
+    if not out:
         pytest.skip("data/processed/parsed 가 비었다 — `python -m rag parse` 먼저")
+    return out
+
+
+@pytest.fixture(scope="module")
+def chunks(paths: list) -> list:
     out = []
     for p in paths:
         _, res = chunk.chunk_file(p)
         out += res.chunks
     return out
+
+
+@pytest.fixture(scope="module")
+def parsed_docs(paths: list) -> dict:
+    """소스별 parsed 문서 수. 헤더 한 줄만 읽는다 — 청크를 안 낸 문서도 여기서는 세어진다."""
+    out: dict[str, set] = collections.defaultdict(set)
+    for path in paths:
+        with path.open(encoding="utf-8") as fh:
+            head = json.loads(fh.readline())
+        out[head["source_id"]].add(logical(head["doc_id"]))
+    return out
+
+
+@pytest.fixture(scope="module")
+def full_corpus(paths: list) -> bool:
+    """전체 코퍼스가 있는 PC 인가. **전체에서만 뜻이 있는 단언을 여기서 가른다** (RAG-042).
+
+    `data/` 는 git 미추적이라(RAG-017) PC 마다 가진 소스가 다르다. 합계·목록형 단언은
+    전체가 아니면 틀리는 게 정상이므로 skip 하고, 소스별 단언은 **가진 소스에 대해서는
+    그대로 건다** — 그래야 조례가 없는 PC 에서도 자기가 건드린 소스는 지켜진다.
+    """
+    return len(paths) == DOC_COUNT
+
+
+def _require_full(full_corpus: bool, paths: list) -> None:
+    if not full_corpus:
+        pytest.skip(f"부분 코퍼스다 — parsed {len(paths)}건, 스냅샷은 {DOC_COUNT}건 기준")
 
 
 @pytest.fixture(scope="module")
@@ -74,12 +155,49 @@ def _find(chunks: list, id_part: str, *must: str) -> list:
 
 
 # ---------------------------------------------------------------- 총량
-def test_total(chunks: list) -> None:
+def test_by_source(chunks: list) -> None:
+    """소스별 스냅샷 — **가진 소스만 대조한다** (RAG-042).
+
+    부분 코퍼스 PC 에서도 자기가 건드린 소스는 여기서 지켜진다. 반대로 소스가 통째로
+    사라진 것은 이 테스트가 못 잡는다 — 그건 `test_total` 이 전체 PC 에서 잡는다.
+    """
+    seen: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    for c in chunks:
+        seen[c.source_id][c.element_type] += 1
+
+    unknown = sorted(set(seen) - set(BY_SOURCE))
+    assert unknown == [], f"스냅샷에 없는 소스다 — `BY_SOURCE` 에 줄을 더해라: {unknown}"
+
+    diff = {sid: {"실측": dict(sorted(cnt.items())), "스냅샷": BY_SOURCE[sid]["chunks"]}
+            for sid, cnt in seen.items()
+            if dict(sorted(cnt.items())) != BY_SOURCE[sid]["chunks"]}
+    assert diff == {}
+
+
+def test_doc_count_per_source(parsed_docs: dict) -> None:
+    """문서 수도 소스별로 본다 — 청크 수만 보면 **문서 하나가 통째로 빠진 것**을 놓친다."""
+    assert set(parsed_docs) <= set(BY_SOURCE)   # 새 소스는 test_by_source 가 먼저 알려 준다
+    diff = {sid: (len(v), BY_SOURCE[sid]["docs"]) for sid, v in parsed_docs.items()
+            if len(v) != BY_SOURCE[sid]["docs"]}
+    assert diff == {}, f"소스별 parsed 문서 수가 다르다 (실측, 스냅샷): {diff}"
+
+
+def test_no_new_empty_docs(chunks: list, parsed_docs: dict) -> None:
+    """청크를 0건 내는 문서가 늘지 않았다 — 합계 하나였을 때는 안 보이던 자리다 (RAG-042)."""
+    chunked = {logical(c.doc_id) for c in chunks}
+    empty = {d for v in parsed_docs.values() for d in v} - chunked
+    assert empty <= NO_CHUNK_DOCS, f"청크를 0건 낸 문서가 새로 생겼다: {sorted(empty - NO_CHUNK_DOCS)}"
+
+
+def test_total(chunks: list, paths: list, full_corpus: bool) -> None:
+    """합계는 **전체 코퍼스에서만** 본다. 값은 `BY_SOURCE` 가 낸다 — 손으로 고칠 자리가 아니다."""
+    _require_full(full_corpus, paths)
     assert len(chunks) == TOTAL
 
 
-def test_by_type(chunks: list) -> None:
-    assert dict(collections.Counter(c.element_type for c in chunks)) == BY_TYPE
+def test_by_type(chunks: list, paths: list, full_corpus: bool) -> None:
+    _require_full(full_corpus, paths)
+    assert dict(sorted(collections.Counter(c.element_type for c in chunks).items())) == BY_TYPE
 
 
 def test_chunk_id_unique(chunks: list) -> None:
@@ -100,33 +218,32 @@ def test_hard_cap(chunks: list) -> None:
 
 
 def test_soft_cap_known_only(chunks: list) -> None:
-    """RAG-004 2,000자를 넘는 것은 **아는 9건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+    """RAG-004 2,000자를 넘는 것은 **아는 것뿐**이다 (④ — 폴백을 두지 않기로 했다).
 
-    2026-08-28 에 둘 늘었다 — 광역철도약관 `제3조`(2,423자) · `제6조`(2,445자).
-    약관의 조는 법령보다 길고, PDF 라 항 단위로 더 쪼갤 태그도 없다 (RAG-036).
+    **목록이 아니라 소스별 건수로 고정한다** (RAG-042). 옛날에는 `chunk_id` 9개를 적어 뒀는데
+    RAG-041 이 삼성 약관으로 91건을 들여오면서 못 쓰게 됐고, `#53` 이 그 목록을 갱신하지 않아
+    **전체 코퍼스가 있는 PC 에서 계속 실패하고 있었다.** 91개를 나열하는 대신 소스별로 세면
+    카드가 자기 줄만 고치면 되고, "늘어나면 ④ 를 재개한다"는 트리거는 그대로 산다.
 
-    조례에서 하나 늘었다 — `부칙-1제2조` 4,902자. 개정별로 쪼갠 뒤에도 남은 것이라
-    (RAG-033 ③) 그 부칙 하나가 정말로 긴 경우다. 하드 상한 7,500 안이라 막지 않는다.
-
-    늘어나면 ④ 를 재개할 트리거다. 그래서 통과가 아니라 목록을 고정한다.
-    `h2-1` 은 nias-pet 의 분실·유기 절(2,116자)이다. 해설 소스에서 처음 나온 초과로,
-    소제목 하나에 분실신고·습득신고·유기 셋이 들어 있다. 넷째가 더 생기면 ④ 를 다시 본다.
-
-    `제3조제1항` 둘은 서울교통공사 약관의 정의 조다(1~8호선 3,647자 · 9호선 3,633자, RAG-041 ④).
-    항이 하나뿐인데 그 안에 호가 26개라 **항 단위 분할이 아무것도 못 쪼갠다.** 호로 더 쪼개는 것은
-    RAG-004 가 금지한 방향이고(금액이 항 두문에만 있다), 정의 조는 용어를 한 자리에서 보는 편이
-    낫다고 판단해 그대로 둔다. 하드 상한 7,500 안이다.
+    무엇이 넘는지는 `SOFT_CAP_OVER` 옆 주석에 있다. 하드 상한(7,500자)은 `test_hard_cap` 이
+    따로 지키고, DB 전수로 확인해 초과 0건이다.
     """
-    over = sorted(c.chunk_id.split("#")[-1] for c in chunks if c.chars > chunk.SOFT_CHARS)
-    assert over == ["h2-1", "별표 1의10-4-r0", "별표 1의10-6-r0", "부칙-1제2조", "제18조②",
-                    "제3조", "제3조제1항", "제3조제1항", "제6조"]
+    seen = collections.Counter(c.source_id for c in chunks if c.chars > chunk.SOFT_CHARS)
+    present = {c.source_id for c in chunks}
+    expect = {sid: n for sid, n in SOFT_CAP_OVER.items() if sid in present}
+    assert dict(sorted(seen.items())) == dict(sorted(expect.items()))
 
 
 # ---------------------------------------------------------------- ① 입력 범위
 def test_supplementary_marked(chunks: list) -> None:
-    """부칙은 인덱싱하되 표시한다 — 6단계에서 재청킹 없이 필터로 끌 자리다 (①)."""
+    """부칙은 인덱싱하되 표시한다 — 6단계에서 재청킹 없이 필터로 끌 자리다 (①).
+
+    기대값은 `BY_SOURCE` 의 `para` 에서 낸다 — **부칙이 곧 `para` 다.** 박아 두면 코퍼스를
+    늘리는 카드가 스냅샷과 여기 두 군데를 고쳐야 하고, 그 둘은 반드시 어긋난다 (RAG-042).
+    """
     sup = [c for c in chunks if c.part == "supplementary"]
-    assert len(sup) == 266
+    seen = {c.source_id for c in chunks}
+    assert len(sup) == sum(BY_SOURCE[s]["chunks"].get("para", 0) for s in seen)
     assert all(c.section.startswith("부칙 제") for c in sup)
 
 

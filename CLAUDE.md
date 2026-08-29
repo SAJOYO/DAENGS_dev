@@ -14,6 +14,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
 | `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
+| `place-search/` | Place 검색 (FastAPI + PostGIS). **compose profile `place` 로 꺼둔 채** — D-026. 자기 DB(place-db)와 Alembic 을 가집니다 ("Alembic 안 씀" 규칙은 dev DB 한정). 원본·소유권은 `place-search/UPSTREAM.md` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) + redis 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
@@ -139,6 +140,13 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `LIKE` 인덱스와 비교 속도에서 유리합니다. 영문 대소문자나 한글·영문 혼합 정렬이
   필요한 쿼리에서만 `ORDER BY x COLLATE "ko-KR-x-icu"` 를 붙이세요.
   DB 기본값을 바꾸려면 볼륨을 지우고 다시 만들어야 합니다.
+- **워크트리에서 작업해도 `data/` 는 한 곳에 쌓으세요.** `data/` 는 git 미추적이라(RAG-017)
+  워크트리마다 따로 생기고 **워크트리를 지우면 코퍼스가 같이 지워집니다.** 실제로 parsed
+  250건(조례 208 · 보조금24 37 · 운송 5)을 그렇게 잃었고, 어느 PC 에도 없어 재수집으로만
+  복구됩니다 — 개정되는 원문은 재수집이 곧 다른 코퍼스라 그건 복구가 아닙니다.
+  `backend/.env` 의 `DAENGS_DATA_DIR` 을 메인 체크아웃의 절대 경로로 고정하면
+  어느 워크트리에서 수집하든 한 곳에 쌓입니다. 새 워크트리에 `.env` 를 복사할 때
+  그 줄이 같이 갑니다.
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
   `backend/.env` 의 `DAENGS_DB_*` 는 **개발 PC 에서 `uv run dev` 로 띄울 때** 쓰는

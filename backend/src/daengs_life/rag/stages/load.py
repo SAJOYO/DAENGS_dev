@@ -182,6 +182,42 @@ def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> None:
                 cur.executemany(UPSERT, payload[i:i + batch])
 
 
+def stale(conn, rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """**이번 적재가 안 건드린 행.** `(content_hash, chunk_id)` 로 돌려준다 (RAG-045 ①).
+
+    `upsert` 는 `content_hash` 로 `ON CONFLICT DO UPDATE` 할 뿐 **사라진 청크를 지우지 않는다.**
+    문서가 개정돼 청크가 없어지면 옛 행이 인덱스에 그대로 남고, 검색은 더 이상 나오면 안 되는
+    것을 계속 후보로 본다. 에러가 안 나서 아무도 모른다 — 2026-08-28 에 118행, 08-29 에 26행이
+    그렇게 남았고 둘 다 사람이 우연히 발견했다.
+
+    **`content_hash` 로 비교하는 것이 핵심이다.** `chunk_id` 에는 수집일이 박혀 있어(RAG-022 ⑥B)
+    재수집하면 주소가 전부 바뀌지만, 해시는 `content` 만 보므로 내용이 같으면 그대로다. `doc_id`
+    로 비교하면 재수집 때마다 전량 삭제·전량 삽입이 된다.
+
+    `prepare()` 가 코퍼스 전체를 만들기 때문에(`load` 에 소스 단위 옵션이 없다) 이 집합 차이가
+    곧 "사라진 청크"다. **소스 단위 적재가 생기면 이 전제가 깨지므로** 그때 범위를 함께 받아야 한다.
+    """
+    keep = {r["content_hash"] for r in rows}
+    with conn.cursor() as cur:
+        cur.execute("SELECT content_hash, metadata->>'chunk_id' FROM documents")
+        return [(h, cid) for h, cid in cur.fetchall() if h not in keep]
+
+
+def prune(conn, targets: list[tuple[str, str]], batch: int = 500) -> int:
+    """`stale()` 이 찾은 행을 지운다. **명시적으로 부를 때만 지운다** (RAG-045 ①).
+
+    기본 동작을 삭제로 두지 않은 이유는 하나다 — 적재가 절반만 준비된 상태에서 돌면
+    `stale()` 이 코퍼스 전체를 "사라졌다"고 볼 수 있고, 그 사고는 되돌릴 수 없다.
+    """
+    if not targets:
+        return 0
+    hashes = [h for h, _ in targets]
+    with conn.transaction(), conn.cursor() as cur:
+        for i in range(0, len(hashes), batch):
+            cur.execute("DELETE FROM documents WHERE content_hash = ANY(%s)", (hashes[i:i + batch],))
+    return len(hashes)
+
+
 def count(conn) -> int:
     with conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM documents")

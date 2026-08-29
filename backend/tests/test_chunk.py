@@ -57,6 +57,9 @@ BY_SOURCE: dict[str, dict] = {
     "law-drf-api":             {"docs": 8,  "chunks": {"article": 720, "para": 192, "table": 423}},
     "nias-pet":                {"docs": 7,  "chunks": {"heading": 42}},
     "seoul-microchip-support": {"docs": 2,  "chunks": {"heading": 6}},
+    # 항공 2곳 (RAG-046, #57). `table` 이 많은 것은 **문서가 곧 표**여서다 — 이스타는 표 하나가
+    # 문서 전체이고(행마다 청크), 에어프레미아는 요금표를 페이로드에서 다시 세운 것이다.
+    "airlines-pet-pages":      {"docs": 2,  "chunks": {"heading": 6, "table": 15}},
 
     # ---- 이 워크트리에는 원본이 없어 청킹으로는 못 쟀고, **서버 DB 의 적재분에서 확인했다**
     #      (RAG-042 ②). `documents.metadata` 에 `source_id` · `element_type` 이 그대로 있어

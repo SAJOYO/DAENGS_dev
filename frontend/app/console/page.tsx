@@ -21,7 +21,7 @@ const consoleSections: Array<{
    * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
    * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
    */
-  href?: "/console/search";
+  href?: "/console/search" | "/console/crawl";
 }> = [
   {
     title: "지식 베이스",
@@ -38,6 +38,16 @@ const consoleSections: Array<{
     // 훈련 갈래는 화면 안에서 가립니다 (`inspect-tabs.tsx`).
     permission: "read",
     href: "/console/search",
+  },
+  {
+    title: "수집 / 크롤",
+    description: "소스별 마지막 수집 결과를 보고, 필요하면 직접 부릅니다. 수집까지만 하고 적재는 사람이 판단합니다.",
+    // **`ops:write` 가 아니라 `read` 입니다.** 위 `기능 / 검색 점검` 과 같은 이유 —
+    // 이력 조회는 `read` 로 열려 있고 트리거만 `ops:write` 입니다. 카드를 `ops:write` 로
+    // 잠그면 API 는 이력을 보여 주는데 화면만 안 보이는 계정이 생깁니다.
+    // 트리거 버튼은 화면 안에서 가립니다 (`crawl-console.tsx`).
+    permission: "read",
+    href: "/console/crawl",
   },
   {
     title: "회원 · 반려견",

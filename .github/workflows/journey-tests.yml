@@ -1,0 +1,52 @@
+name: journey tests
+
+on:
+  pull_request:
+    paths:
+      - "journey-service/**"
+      - "docker-compose.yml"
+      - "nginx/default.conf"
+      - ".env.example"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/journey-tests.yml"
+  push:
+    branches: [dev]
+    paths:
+      - "journey-service/**"
+      - "docker-compose.yml"
+      - "nginx/default.conf"
+      - ".env.example"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/journey-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: journey-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose 설정
+        working-directory: ${{ github.workspace }}
+        env:
+          DAENGS_TRAINING_RAG_BASE_URL: http://host.docker.internal:8010
+          REDIS_PASSWORD: ci-only-password
+        run: docker compose config --quiet
+      - name: nginx 설정
+        working-directory: ${{ github.workspace }}
+        run: >-
+          docker run --rm
+          --add-host host.docker.internal:host-gateway
+          -v "${{ github.workspace }}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"
+          nginx:1.31.1 nginx -t
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "journey-service/uv.lock"
+      - name: 의존성
+        run: uv sync --frozen
+      - name: 테스트
+        run: uv run pytest -q
+      - name: 린트
+        run: uv run ruff check app tests

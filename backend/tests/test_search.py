@@ -13,6 +13,7 @@ import inspect
 
 import pytest
 
+from daengs_life.rag.core import config
 from daengs_life.rag.stages import embed, evaluate, goldenset, load, search
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -117,27 +118,54 @@ def _ready_or_skip():
 
 @pytest.fixture(scope="module")
 def vector():
-    """질의 벡터 하나. 모델 로드가 무거워 모듈당 한 번만 만든다."""
-    key = "bge-m3"
+    """질의 벡터 하나. 모델 로드가 무거워 모듈당 한 번만 만든다.
+
+    **모델은 `config` 에서 받는다 — 여기에 박지 않는다** (RAG-045). 질의 모델이 적재 모델과
+    다르면 코사인이 무의미해지는데 **차원이 같아(1024) 예외가 하나도 안 난다.** 그러면 아래
+    단언들이 "검색이 고장 났다"고 말하지만 실제로 고장 난 것은 이 한 줄이다 — 2026-08-29 에
+    `test_checkpoint3_finds_the_maengyeon_article` 이 정확히 그렇게 깨졌다.
+    """
+    key = config.settings.embedding_model_key
     if not embed.parquet_path(key).is_file():
         pytest.skip(f"{key}.parquet 이 없다")
     return search.encode("맹견 사육 허가 필요한가요?", model_key=key)
 
 
+def _rrf(h) -> float:
+    """SQL 이 **정렬에 쓰는 그 값** 을 그대로 재현한다 (RAG-035).
+
+    `dense_rank`/`lexical_rank` 가 `None` 이면 그 축의 후보에 없었다는 뜻이라 0 을 더한다 —
+    SQL 의 `COALESCE(..., 0)` 과 같다.
+    """
+    d = 1.0 / (search.RRF_K + h.dense_rank) if h.dense_rank is not None else 0.0
+    lx = search.LEXICAL_WEIGHT / (search.RRF_K + h.lexical_rank) if h.lexical_rank is not None else 0.0
+    return d + lx
+
+
 def test_returns_k_hits_ranked(vector) -> None:
-    """**앞의 k 개**는 순위 1..k, 점수 내림차순.
+    """**앞의 k 개**는 순위 1..k, 그리고 **RRF 내림차순**이다.
+
+    ⚠️ **점수(코사인) 내림차순이 아니다** (RAG-045 에서 고쳤다). 예전에는 그렇게 단언했고
+    순수 dense 였던 시절(RAG-026)에는 맞았는데, RAG-035 가 하이브리드로 바꾸면서
+    `ORDER BY f.rrf DESC, embedding <=> q` 가 됐다. **정렬 키는 RRF 이고 `score` 칸은 여전히
+    코사인**이라, 형태소 축이 끌어올린 문서는 코사인이 낮아도 위에 온다 — 실측으로 4위 0.751 ·
+    5위 0.752 가 나온다. 낡은 단언이 살아 있었던 것은 `bge-m3.parquet` 이 없어 이 모듈이 통째로
+    skip 되고 있었기 때문이다(RAG-045 ②와 같은 자리).
 
     ⚠️ **2026-08-28 에 계약이 늘었다** (RAG-040 인용 확장). `search()` 는 이제 top-k **뒤에**
     확장분을 덧붙이므로 길이가 k 보다 클 수 있다. `k` 의 뜻은 그대로 "검색 top-k" 이고,
     확장분은 `cited_by` 가 채워져 있어 앞의 k 개와 구분된다 — 그래서 여기서도 앞 k 개만 본다.
-    확장분까지 순위·점수 순서를 요구하면 안 된다: 그것은 순위 밖에서 인용을 따라 들어온 것이고,
-    점수 칸은 여전히 코사인이라 top-k 보다 높을 수도 낮을 수도 있다.
+    확장분까지 순위 순서를 요구하면 안 된다: 그것은 순위 밖에서 인용을 따라 들어온 것이다.
     """
     with _ready_or_skip() as conn:
         hits = search.search(vector, k=5, conn=conn)
     top = [h for h in hits if h.cited_by is None]
     assert [h.rank for h in top] == [1, 2, 3, 4, 5]
-    assert all(a.score >= b.score for a, b in zip(top, top[1:]))
+    # RRF 는 내림차순. 동점이면 코사인이 tie-break 다 — SQL 의 ORDER BY 두 칸 그대로.
+    for a, b in zip(top, top[1:]):
+        assert (_rrf(a), a.score) >= (_rrf(b) - 1e-9, b.score - 1e-9), (
+            f"{a.rank}위 rrf={_rrf(a):.6f} score={a.score:.3f} 뒤에 "
+            f"{b.rank}위 rrf={_rrf(b):.6f} score={b.score:.3f} 가 왔다")
     assert all(-1.0 <= h.score <= 1.0 for h in hits)
     assert all(h.rank > 5 for h in hits if h.cited_by is not None)
 

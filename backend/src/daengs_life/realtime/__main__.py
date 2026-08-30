@@ -39,7 +39,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     for name, value in config.KEYS.items():
         raw = getattr(config.settings, name.lower()).strip()
         if not value:
-            print(f"  [ ] {name:16s} 없음 — 발급처는 docs/data-sources.md §9")
+            print(f"  [ ] {name:16s} 없음 — 발급처는 docs/life/data-sources.md §9")
             continue
         # 정규화가 실제로 걸렸는지가 이 명령의 존재 이유다. Encoding 키를 넣어 두고
         # "왜 403 이지"로 한나절을 쓰는 것이 §6.1 함정 1 이 실제로 일으킨 일이다.

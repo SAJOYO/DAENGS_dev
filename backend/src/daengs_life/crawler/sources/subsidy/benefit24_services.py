@@ -83,7 +83,7 @@ KEYWORDS = ("반려동물", "반려견", "반려묘", "동물등록", "중성화
 KEY_MISSING = (
     "DATA_GO_KR_KEY 미설정. data.go.kr 회원가입 후 이 API 의 '활용신청' 을 누르면\n"
     "  자동승인으로 즉시 열린다: https://www.data.go.kr/data/15113968/openapi.do\n"
-    "  발급 후 .env 에 `DATA_GO_KR_KEY=발급받은키` 한 줄. (docs/data-sources.md §9)"
+    "  발급 후 .env 에 `DATA_GO_KR_KEY=발급받은키` 한 줄. (docs/life/data-sources.md §9)"
 )
 
 

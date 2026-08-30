@@ -93,7 +93,7 @@ def get_json(path: str, params: dict[str, Any], *, budget: Budget | None = None)
 def _key() -> str:
     if not config.KMA_HUB_KEY:
         raise Rejected("KMA_HUB_KEY 없음",
-                       hint="활용신청은 **오퍼레이션 단위**다 (§6.8 ①). 발급처는 docs/data-sources.md §9")
+                       hint="활용신청은 **오퍼레이션 단위**다 (§6.8 ①). 발급처는 docs/life/data-sources.md §9")
     return config.KMA_HUB_KEY
 
 

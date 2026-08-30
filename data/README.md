@@ -45,7 +45,7 @@ data/
 **meta 도 커밋하지 않는 이유 (RAG-017)** — meta 는 "이미 받은 것을 또 받지 않기" 위한 **로컬 상태**다.
 `crawl_log.jsonl` 과 성격이 같아 같이 취급한다. 커밋해도 실행에는 아무 도움이 안 되고
 (새 PC 에서는 어차피 원본이 없어 전부 다시 받는다), 오히려 meta 만 있고 원본이 없는 어긋난 상태를
-만든다. 수집 현황은 사람이 읽는 `docs/data-sources.md` 체크리스트가 담당한다.
+만든다. 수집 현황은 사람이 읽는 `docs/life/data-sources.md` 체크리스트가 담당한다.
 
 **상태가 로컬이라는 것의 뜻** — `data/` 를 지우면 변경 감지 근거가 사라져 전부 다시 받는다.
 Celery 워커를 컨테이너로 띄울 때 `data/` 는 **반드시 영속 볼륨**이어야 한다. 아니면 배치가 돌 때마다
@@ -265,5 +265,5 @@ parse 단계를 import 하지 않는다. `[dependency-groups]` 의 `pdf` 그룹�
 ---
 
 시드 소스 목록: [manifests/seed_sources.yaml](manifests/seed_sources.yaml)
-소스 조사 문서: [../docs/data-sources.md](../docs/data-sources.md)
-결정 기록: [../docs/decisions-rag.md](../docs/decisions-rag.md)
+소스 조사 문서: [../docs/life/data-sources.md](../docs/life/data-sources.md)
+결정 기록: [../docs/life/decisions-rag.md](../docs/life/decisions-rag.md)

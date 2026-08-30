@@ -5,6 +5,15 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 개별 함정의 상세(왜 그 줄이 그렇게 생겼는지)는 각 파일의 주석이 원본이고, 여기서는
 구조와 "왜 이렇게 나눴는지"만 다룹니다.
 
+문서는 셋으로 나뉩니다. **이 파일** = 물리 토폴로지(§1~§5, 전부 CURRENT 사실) +
+논리 오케스트레이션 구조(§6~, CURRENT 와 TARGET 을 구분해 표기).
+**[orchestration-contracts.md](orchestration-contracts.md)** = 오케스트레이터 공통 계약 제안.
+**[orchestration-routing.md](orchestration-routing.md)** = 라우팅 정책과 미결 사항.
+
+> 표기: **CURRENT** = 지금 사실 · **TARGET** = 승인된 목표 상태(아직 구현 안 됨) ·
+> **CONFIRMED** = 확정된 설계 제약 · **OPEN** = 사람 결정 대기 · **PENDING** = 검증 대기 ·
+> **FOLLOW-UP** = 별도 카드로 후속.
+
 ## 실행 주체는 넷입니다
 
 서버 PC(Windows) 한 대 위에서 네 가지 방식으로 프로세스가 돕니다. 하나로 합치지 않은
@@ -144,6 +153,118 @@ Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절�
   조용합니다 (CLAUDE.md 의 `uv sync` 함정).
 - backend 재생성 직후 최대 10초는 nginx 가 옛 IP 로 갈 수 있습니다 (resolver `valid=10s`).
 
+## 논리 오케스트레이션 — 직접 API 와 `/assistant/query`
+
+여기서부터는 프로세스가 아니라 **요청의 종류**를 다룹니다. 위 물리 지도는 전부 CURRENT
+사실이고, 이 절부터는 CURRENT 와 TARGET 이 섞이므로 표기를 지킵니다.
+
+**CURRENT** — 오케스트레이터는 없습니다. 모든 기능이 각자의 직접 API 이고, 어떤 능력을
+부를지는 전부 프론트 UI 가 정합니다. 능력별 현실은 §7 의 표가 원본입니다.
+
+**TARGET (CONFIRMED)** — 대화형 진입점 `/assistant/query` 를 하나 두고, 그 뒤의 흐름
+제어를 **LangGraph** 가 맡습니다. 경계는 다음과 같습니다.
+
+- **LangGraph 는 오케스트레이터입니다** — 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.
+  그래프는 라우팅·실행 순서·결과 수집이라는 흐름 제어만 소유합니다.
+- **명시적 기능 UI 플로우는 기존 직접 API 를 그대로 씁니다.** 산책 기록 화면이 `/walk` 를
+  부르는 것은 바뀌지 않습니다. `/assistant/query` 는 자연어·모호·다중 능력 요청 전용입니다.
+- **인증은 그래프 밖입니다.** 기존 FastAPI 의존성 계층(D-015 · D-016)이 토큰을 검증하고,
+  그래프는 **인증이 끝난 principal** 을 받아 능력별 **인가**만 판단합니다. 토큰이 그래프
+  상태에 들어가지 않습니다 (계약 불변식 — orchestration-contracts.md).
+- **도메인 안전·거절 결정은 각 능력이 소유합니다.** 오케스트레이터는 상류의 REFUSED 를
+  ERROR 나 "근거 부족"으로 재해석하지 않습니다. Training 의
+  SAFETY_REFUSAL/MEDICAL_REFUSAL 구분(docs/training-rag-demo.md)이 그대로 통과해야 합니다.
+- **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화로 "피부 사진 봐줘"가
+  들어오면 실행이 아니라 해당 업로드/UI 플로우로 **HANDOFF** 합니다 (orchestration-routing.md).
+- **능력별 생성 모델을 통일하지 않습니다.** Training 은 gemma3:4b, Life 는 Gemini 인
+  채로 갑니다. 공유해야 하는 것은 모델 공급자가 아니라 **계약 · 안전 시맨틱 · 인가 ·
+  라우팅 · 관측**입니다.
+- **GraphRAG / Neo4j 는 폐기됐고 이 작업과 무관합니다.** LangGraph(흐름 제어 프레임워크)와
+  GraphRAG(그래프 지식베이스)는 이름만 비슷한 남남입니다. 폐기된 산출물은 이관하지 않습니다.
+
+**v1 범위 (CONFIRMED)** — 실행 가능 능력은 **Training + Life + Walk** 셋입니다.
+Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 대상이 아닙니다 (§7).
+
+**v1 LangGraph 프리미티브 (CONFIRMED)** — `StateGraph` · 일반 edge · 조건부 edge, 그리고
+`Send` 는 동적 다중 능력 fan-out 이 **실제로 필요할 때만**. `Command` 는 나중 선택지.
+서브그래프 · checkpointer · interrupt 는 v1 요구사항이 아닙니다.
+
+## 능력 현실 (CURRENT)
+
+능력들이 대칭이라고 가정하면 설계가 틀어집니다. 지금 실제 모습:
+
+| 능력 | 경로 · 프로세스 | 생성/추론 | 거절·안전 시맨틱 | v1 오케스트레이션 |
+| --- | --- | --- | --- | --- |
+| **Training** | backend `POST /training/chat`(관리자 게이트, #30) → HTTP → 별도 Training RAG FastAPI (호스트 `:8010`, 개인 저장소) | Ollama **gemma3:4b** / 검색 intfloat/multilingual-e5-base + PGVector | **상류가 소유** — ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (training-rag-demo.md) | 실행 대상 ✅ |
+| **Life** | backend `POST /ask` — **같은 프로세스 안** (daengs_life.rag, D-018 · D-021) | **Gemini** / 상주 임베딩 | **동등한 거절 계약이 없음** — 아키텍처 관심사이지 문서에서 지어낼 것이 아님 (OPEN, orchestration-routing.md) | 실행 대상 ✅ |
+| **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime) | 없음 — **결정적** | 자체 규칙 계층이 소유 (RT- 결정들) | 실행 대상 ✅ |
+| **Skin** | nginx `/screen/` → skin-screening 컨테이너 — **profile 이라 기본 꺼짐** (D-024) | PyTorch 분류 | 인증 경계가 backend 와 **동등하지 않음** | 실행 대상 아님 — 어댑터 문서만 |
+| **Gait** | nginx `/gait/` → gait-analysis 컨테이너 — **profile 이라 기본 꺼짐** (D-029) | 분 단위 영상 추론 | — | 동기 실행 대상 아님 — 미래 비동기/PENDING 시맨틱 후보 |
+
+Skin·Gait 를 v1 에서 뺀 것은 미구현이라서가 아닙니다(둘 다 구현돼 있습니다).
+배포가 꺼져 있고, 인증 경계가 다르고(Skin), 동기 대화 응답 시간에 안 맞아서(Gait)입니다.
+Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터 경로(orchestration-contracts.md)를
+씁니다 — 그 자리를 계약에 미리 잡아 두는 이유입니다.
+
+## Training 토폴로지 — CURRENT vs TARGET
+
+**CURRENT** — Training RAG 는 이 저장소 밖(개인 dog-training-rag 저장소)의 코드로,
+서버에서는 호스트 단독 FastAPI(`:8010`)로 뜨고 backend 가 HTTP 로만 부릅니다 (§1 의 표).
+
+**TARGET (CONFIRMED, 검증된 이관 후)** — 소스 코드가 DAENGS_dev 안의 전용 training-rag
+유닛으로 들어옵니다. 단, **저장소 통합 ≠ 프로세스 통합**입니다:
+
+- 런타임/프로세스는 daengs_backend 와 **계속 분리**됩니다.
+- 기존 HTTP 능력 경계(`DAENGS_TRAINING_RAG_BASE_URL`)를 초기에는 그대로 유지합니다.
+- 이 이관은 **아직 완료되지 않았습니다.** 완료된 것처럼 적힌 문서가 보이면 그 문서가 틀린 것입니다.
+
+### 이관 출처와 경계 (CONFIRMED)
+
+검증된 Training 소스는 다음 한 지점입니다.
+
+- commit `22495d28bc9a8869ba132d0b98206b10a9e8fbc3`
+- tag `training-runtime-freeze-2026-08-30`
+- R2 이관 판정: **CLEAR WITH RESTRICTION**
+
+| 허용 | 금지 |
+| --- | --- |
+| freeze 태그의 clean checkout | dog-training-rag **Git 히스토리 반입** (subtree·히스토리 이관·브랜치 이관·fork 이식 전부) |
+| 승인된 운영 서브셋의 **파일 단위 복사** | **raw/원문 코퍼스 커밋** |
+| DAENGS_dev 안에서 **새로 만든 커밋** | 원문 텍스트가 든 과거 평가 스냅샷 이관 |
+| | GraphRAG · Neo4j 산출물 (폐기됨) |
+
+커밋되는 산출물에 **원문/청크 전문이 들어가지 않는다**는 불변식은 이관 후에도
+유지/재도입합니다. 그리고 **백업 패키지 ≠ 배포 패키지**입니다 — 외부 전체 ZIP 은
+개인 재해 복구 백업이고, 그것이 자동으로 운영 서버 코퍼스가 되지 않습니다. 공유/서버
+인프라로의 코퍼스 배포는 미해결 소스들의 권리·출처 검증을 **따로** 통과해야 합니다.
+
+### 서버 재구축 상태
+
+아래는 **완료되지 않았습니다.** 월요일 서버 리허설 후 이 절을 갱신합니다.
+
+| 항목 | 상태 |
+| --- | --- |
+| 신규 서버 PGVector 재구축 | **PENDING** |
+| 서버 지연시간 검증 | **PENDING** |
+| 최종 Training 포트 · 서버 GPU 동작 · Docker 리소스 제한 | **PENDING** |
+| 운영 타임아웃 정합 (backend 의 read timeout 등) | **FOLLOW-UP** |
+
+## 프롬프트·로케일 정책 (미래 제약 — 런타임 무변경)
+
+멘토 컨벤션은 **런타임 지시 프롬프트 = 영어 + Markdown** 입니다. 현재 Training 런타임
+프롬프트 `grounded-answer-ko-v2` 는 이 컨벤션을 아직 만족하지 않습니다. 그래도
+**freeze/이관 중에는 다시 쓰지 않습니다** — 프롬프트를 바꾸면 gemma3:4b 의 출력 행동,
+인용 행동, `model_reported_no_evidence` 탐지, 동결 평가와의 동등성이 전부 흔들려서
+"이관이 잘 됐는지"를 잴 기준이 사라집니다. 순서는 고정입니다:
+
+```
+이관 동등성 확인 → 별도 프롬프트 변경 카드 → 회귀 테스트 → 동결 평가 재실행
+```
+
+로케일은 계약에 자리만 잡습니다: 지금은 `locale = "ko-KR"` 하나, 미래에 `"en-US"`
+(orchestration-contracts.md). 영어 UI · 영어 코퍼스 · 영어 가드레일 행동은 이 문서
+세트의 범위가 아니고 **지금 구현하지 않습니다.**
+
 ## 더 읽을 곳
 
 | 주제 | 원본 |
@@ -155,3 +276,5 @@ Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절�
 | 코드·환경 변수 규칙 | 루트 `CLAUDE.md` |
 | 결정 배경 (D- / RAG- / RT-) | `docs/decisions.md` · `docs/decisions-rag.md` · `docs/decisions-realtime.md` |
 | Training RAG 통합 | `docs/training-rag-demo.md` |
+| 오케스트레이터 공통 계약 (제안) | `docs/orchestration-contracts.md` |
+| 라우팅 정책과 미결 사항 | `docs/orchestration-routing.md` |

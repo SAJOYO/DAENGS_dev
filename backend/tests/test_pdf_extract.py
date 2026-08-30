@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
@@ -211,3 +212,53 @@ def test_non_pdf_raises() -> None:
     doc = RawDoc(meta={}, path=path, meta_path=path.with_suffix(".meta.json"))
     with pytest.raises(RuntimeError, match="PDF 가 아니다"):
         korail_terms.parse(b"<html>", doc)
+
+
+# ------------------------------------------------------------------ ⑧ 약관 경계 콜백 (RAG-051)
+# 보험 대형 판의 실물을 줄인 것. 줄바꿈이 문장을 `…때에는 특별약관` 에서 끊어 그 조각이 정규식에
+# 걸리고, 진짜 경계 `특별약관 일반사항` 은 `약관` 으로 끝나지 않아 안 걸린다. 콜백은 레이아웃(폰트
+# 크기)을 아는 사이트 층이 준다 — 여기서는 그 결과만 흉내 낸다
+_INS = re.compile(r"^(?![①-⑳\d])(?=.{4,60}$).*(?:보통약관|특별약관)$")
+FRAGMENT = "작성한 때에는 특별약관"
+HINTED = [
+    ["보통약관", "제1조(목적) 이 보험계약은", "① 계약자가 중요사항을 고의로 사실과 다르게",
+     FRAGMENT, "의 보장을 받지 못합니다."],
+    ["특별약관 일반사항", "제1조(목적) 이 특별약관 일반사항은"],
+    ["반려견 의료비(재가입형) 특별약관", "제1조(보험금의 지급사유) 회사는"],
+]
+_HINTS = {0: {"보통약관"}, 1: {"특별약관 일반사항"}, 2: {"반려견 의료비(재가입형) 특별약관"}}
+
+
+def _hint_by_page(pages):
+    index = {id(p): i for i, p in enumerate(pages)}
+    return lambda page: _HINTS[index[id(page)]]
+
+
+def test_boundary_hint_replaces_the_regex_on_that_page() -> None:
+    """콜백이 집어 준 줄만 경계다 — 정규식에 걸리는 본문 조각은 경계가 아니고,
+    정규식에 안 걸리는 `특별약관 일반사항` 은 경계다."""
+    pages = [_Page(p) for p in HINTED]
+    parsed = pdfx.elements(_doc(*pages), "d", title="펫보험", terms_re=_INS,
+                           boundary_hint=_hint_by_page(pages))
+    assert [a.section for a in _by_type(parsed, "article")] == \
+        ["제1조", "특별약관 일반사항 제1조", "반려견 의료비(재가입형) 특별약관 제1조"]
+    assert parsed.counts["약관"] == 3
+    body = next(a for a in _by_type(parsed, "article") if a.section == "제1조").head
+    assert FRAGMENT in body and "보장을 받지 못합니다" in body       # 조각이 조 안에 남는다
+
+
+def test_boundary_hint_none_falls_back_to_the_regex() -> None:
+    """콜백이 `None` 을 주는 쪽(레이아웃 정보가 없는 쪽)은 종전대로 정규식이다."""
+    pages = [_Page(p) for p in HINTED]
+    parsed = pdfx.elements(_doc(*pages), "d", title="펫보험", terms_re=_INS,
+                           boundary_hint=lambda page: None)
+    sections = [a.section for a in _by_type(parsed, "article")]
+    assert f"{FRAGMENT} 제1조" in sections                        # 조각이 경계가 된다 (종전 동작)
+    assert "특별약관 일반사항 제1조" not in sections                # 정규식은 이것을 못 잡는다
+
+
+def test_without_a_hint_nothing_changes(parsed) -> None:
+    """콜백을 안 넘기면 코레일 쪽은 한 줄도 다르지 않다 — 위 ①~③ 의 단언이 그 계약이다."""
+    again = pdfx.elements(_doc(_Page(SAMPLE, tables=[_Table([["항목", "금액"], ["운임", "10000"]])])),
+                          "korail-terms-passenger__20260828", title="여객운송약관")
+    assert [e.id for e in again.elements] == [e.id for e in parsed.elements]

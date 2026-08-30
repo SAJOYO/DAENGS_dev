@@ -207,3 +207,96 @@ def test_missing_title_fails_instead_of_inventing_one() -> None:
     doc = RawDoc(meta={}, path=path, meta_path=path.with_suffix(".meta.json"))
     with pytest.raises(RuntimeError, match="document_title"):
         ins.parse(b"%PDF-1.4 ...", doc)
+
+
+# ------------------------------------------------------------------ ④ 레이아웃 경계 (RAG-051, 위 ⑧)
+class _StyledPage(_Page):
+    """`get_text("dict")` 까지 흉내 낸 쪽. `(텍스트, 크기)` 로 받는다."""
+    def __init__(self, styled):
+        super().__init__([t for t, _ in styled])
+        self._styled = styled
+
+    def get_text(self, kind=None):
+        if kind is None:
+            return self._text
+        return {"blocks": [{"type": 0, "lines": [
+            {"spans": [{"text": t, "size": s}]} for t, s in self._styled]}]}
+
+
+BODY_SIZE = 9.0
+# 삼성 대형 판의 실물을 줄인 것 — 본문 9.0 · 조 머리 9.1 · 관 10.6 · 약관 이름 10.6 · 구분 표제 14.2
+SAMSUNG = [
+    [("무배당 삼성화재 다이렉트", 14.2), ("착한펫보험(강아지)(2605.1)(재가입계약용)보통약관", 14.2)],
+    [("제1관 목적 및 용어의 정의", 11.4), ("제1조 (목적)", 9.1), ("이 보험계약은 …", 9.0),
+     ("고의로 사실과 다르게 작성한 때에는 특별약관", 9.0), ("의 보장을 받지 못합니다.", 9.0),
+     *[(f"② 회사는 다음 중 어느 한 가지의 경우에 보험금을 지급합니다 ({i})", 9.0) for i in range(8)],
+     ("21 / 130", 10.0)],
+    [("특별약관 일반사항", 14.2)],
+    [("1.  펫 관련 특별약관", 14.2)],
+    [("1-1. 반려견의료비(치과및구강질환포함)(수술당일제외,", 10.6), ("검사비포함)(재가입형) 특별약관", 10.6),
+     ("제1조 (보험금의지급사유)", 9.1), ("①회사는…", 9.0), ("60 / 130", 10.0)],
+    [("2-2 지정대리청구서비스Ⅲ특별약관", 10.6), ("제1관 일반사항", 10.6), ("제1조 (목적)", 9.1)],
+]
+
+
+def _layout_doc(pages, title="무배당 삼성화재 다이렉트 착한펫보험(강아지)(2605.1)(재가입계약용)"):
+    class _Doc(list):
+        page_count = property(len)
+    return ins._StrippedDoc(_Doc(_StyledPage(p) for p in pages), title, range(len(pages)))
+
+
+def test_body_size_is_the_char_weighted_mode() -> None:
+    assert _layout_doc(SAMSUNG)._body_size == BODY_SIZE
+
+
+def test_wrapped_name_is_joined_and_numbered_prefix_is_dropped() -> None:
+    """두 줄로 감긴 이름은 한 줄이 되고 목차식 번호(`1-1. `)는 떨어진다 — 인용에 실리는 문자열이다."""
+    page = _layout_doc(SAMSUNG)[4]
+    assert page.boundaries() == {"반려견의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관"}
+    assert page.get_text().split("\n")[0] == "반려견의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관"
+
+
+def test_body_fragment_at_body_size_is_not_a_boundary() -> None:
+    """`…때에는 특별약관` 은 정규식에 걸리지만 본문 크기다 — 그 쪽의 경계는 비어 있고 줄은 그대로다."""
+    page = _layout_doc(SAMSUNG)[1]
+    assert page.boundaries() == set()
+    assert "고의로 사실과 다르게 작성한 때에는 특별약관" in page.get_text().split("\n")
+
+
+def test_general_terms_divider_and_group_titles_are_boundaries() -> None:
+    """`특별약관 일반사항` 은 `약관` 으로 안 끝나지만 제1조부터 다시 세는 진짜 경계다."""
+    doc = _layout_doc(SAMSUNG)
+    assert doc[2].boundaries() == {"특별약관 일반사항"}
+    assert doc[3].boundaries() == {"펫 관련 특별약관"}                  # `1.  ` 가 떨어진다
+
+
+def test_title_page_lines_are_joined_into_the_full_product_name() -> None:
+    """표제 두 줄이 이어져야 `_same_document` 가 문서 제목과 겹친다고 보고 첫 약관에 접두어를 안 붙인다."""
+    page = _layout_doc(SAMSUNG)[0]
+    (name,) = page.boundaries()
+    assert name == "무배당 삼성화재 다이렉트 착한펫보험(강아지)(2605.1)(재가입계약용)보통약관"
+
+
+def test_division_head_at_display_size_is_not_joined_into_the_name() -> None:
+    """`제1관 일반사항` 은 이름과 같은 크기(10.6)로 바로 뒤에 오지만 관 머리라 잇지 않는다.
+    마침표 없는 번호(`2-2 `)도 떨어진다."""
+    page = _layout_doc(SAMSUNG)[5]
+    assert page.boundaries() == {"지정대리청구서비스Ⅲ특별약관"}
+    assert page.get_text().split("\n")[:2] == ["지정대리청구서비스Ⅲ특별약관", "제1관 일반사항"]
+
+
+def test_pages_without_dict_fall_back_to_the_plain_path() -> None:
+    """가짜 쪽(`get_text()` 만)이 하나라도 있으면 문서 전체가 종전 경로 — 경계는 `None`, 줄은 그대로."""
+    class _Doc(list):
+        page_count = property(len)
+    doc = ins._StrippedDoc(_Doc([_Page(["보통약관", "제1조(목적)"])]), "x", range(1))
+    assert doc._body_size is None
+    assert doc[0].boundaries() is None
+    assert doc[0].get_text() == "보통약관\n제1조(목적)"
+
+
+def test_layout_is_only_wired_for_measured_firms() -> None:
+    """문턱은 판형이 정한다 — 크기 분포를 잰 삼성만. KB·농협은 정규식 그대로다."""
+    assert ins._firm_key("insurer-terms-pdfs-samsung-ZPY008010_0_20260701__20260828") in ins._LAYOUT_FIRMS
+    assert ins._firm_key("insurer-terms-pdfs-kb-25343_1_1__20260830") not in ins._LAYOUT_FIRMS
+    assert ins._firm_key("insurer-terms-pdfs-nh-F004262903__20260830") not in ins._LAYOUT_FIRMS

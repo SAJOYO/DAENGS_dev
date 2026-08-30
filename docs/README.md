@@ -11,9 +11,10 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| [decisions-rag.md](decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-028) — 임베딩 후보·청킹·오케스트레이션·저장 규약·골든셋·적재·검색·서빙 |
+| [life-roadmap.md](life-roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~F · 순서 · 하지 않기로 한 것. 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
+| [decisions-rag.md](decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-052, `037` 결번) — 임베딩·청킹·저장 규약·골든셋·적재·검색·서빙·크롤 운영·PDF 약관 |
 | [decisions-realtime.md](decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
-| [data-sources.md](data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-27 기준 11개만 수집** |
+| [data-sources.md](data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-30 기준 문서형 23 중 16 수집, 남은 7은 막힘** |
 | [realtime-apis.md](realtime-apis.md) | ② 날씨·대기질 API 정리 + 실측 로그. §1~§5 와 어긋나면 **§6 이 맞습니다** |
 
 저쪽 `docs/workflow.md`(작업 방식)는 **가져오지 않았습니다** — 위 `collaboration.md` 가

@@ -152,9 +152,9 @@ docs/data-sources.md §5와 동일 키 재사용: `DATA_GO_KR_KEY`(한 키로 �
 |---|---|---|---|
 | `kma-vilage-fcst` | `getUltraSrtNcst` · `getUltraSrtFcst` · `getVilageFcst` | ✅ 3/3 | 8·66·798건 |
 | `kma-weather-warning` | `getWthrWrnList` · `getPwnStatus` | ✅ 2/2 | |
-| `kma-life-index` | `getUVIdxV3` · `getAirDiffusionIdxV3` | ⏸ 경로 확정, **apihub 활용신청 대기** | §6.4 |
+| `kma-life-index` | `getUVIdxV3` · `getAirDiffusionIdxV3` | ✅ `getUVIdxV3` 200 (§6.9 · 2026-08-25) · `getAirDiffusionIdxV3` 는 403 이지만 부르지 않는다 | §6.4 · §6.9 |
 | `kma-apihub` | `kma_sfctm2.php`(ASOS 시간) | ✅ | 텍스트/CSV 확인 |
-| | `awsh.php`(AWS) | ⏸ 403 활용신청 필요 | |
+| | ~~`awsh.php`~~ → `cgi-bin/url/nph-aws2_min`(AWS) | ✅ 경로 자체가 틀렸던 것 (§6.8 ②) · `stn_inf` 승인 2026-08-25 | §6.8 |
 | `airkorea-stations` | `getNearbyMsrstnList` · `getMsrstnList` | ✅ 2/2 | |
 | `airkorea-realtime` | `getMsrstnAcctoRltmMesureDnsty` · `getMinuDustFrcstDspth` | ✅ 2/2 | |
 | `kakao-local` | `coord2regioncode` · `transcoord` | ✅ 2/2 | TM `(202370.9, 443966.0)` |
@@ -287,7 +287,7 @@ RT-001 ③ 산책 적합도 룰을 상상이 아니라 이 실측으로 검증�
 
 ### 6.7 남은 작업 (사람)
 
-- [ ] apihub — **`getUVIdxV3` 활용신청** (§6.8 — 신청은 **오퍼레이션 단위**다)
+- [x] apihub — **`getUVIdxV3` 활용신청** (§6.8 — 신청은 **오퍼레이션 단위**다) → **§6.9 에서 200** (2026-08-25)
 
 ### 6.8 apihub 2차 실측 (2026-08-24 저녁) — 신청 단위·경로·인코딩
 

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
-from daengs_backend.routers import app_auth, auth, dogs, health, training
+from daengs_backend.routers import app_auth, auth, crawl, health, training
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
 # 여기서만 긋습니다 — 접점은 **등록 두 줄과 예열 한 줄**이 전부입니다.
@@ -94,9 +94,9 @@ app.include_router(health.router)
 app.include_router(auth.router)
 # 앱 회원(카카오)용. 관리자와 경로가 겹치지 않게 /auth/app/* 입니다.
 app.include_router(app_auth.router)
-# 반려견 프로필 (앱 회원 전용). Place 게이트웨이와 에이전트 컨텍스트가 읽는 원본입니다.
-app.include_router(dogs.router)
 app.include_router(training.router)
+# 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
+app.include_router(crawl.router)
 # 실시간 산책 적합도. nginx 는 `:8000` 을 통째로 이 앱에 보내므로
 # `daengback.~:8000/walk` 로 바로 나갑니다 (설정 변경 없음).
 #

@@ -300,7 +300,7 @@ async def test_v2_groups_kinds_and_sorts_only_inside_each_candidate_set():
             await session.commit()
 
             # 장군(셰퍼드 large · 34kg)의 값. identity 가 아니라 값으로 보낸다 —
-            # dog_id → 프로필 projection 은 이 서비스 밖(프로필 소유자)의 일이다.
+            # 검색은 identity를 받지 않고, 호출자가 준 선택적 값만 대조한다.
             for_dog = await search_place_groups(session, PlaceSearchRequest(
                 lat=TEST_ORIGIN[0],
                 lng=TEST_ORIGIN[1],

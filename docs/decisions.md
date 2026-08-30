@@ -31,6 +31,9 @@
 | [D-024](#d-024) | 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다 | 2026-08-28 |
 | [D-025](#d-025) | 홀로그램 도감을 조직 public 저장소 + GitHub Pages 로 분리 | 2026-08-28 |
 | [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
+| [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
+| [D-028](#d-028) | Place 공개 경로는 호출량을 제한하고 기존 세 원천만 배치 적재 | 2026-08-29 |
+| [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
 
 ---
 
@@ -1391,10 +1394,11 @@ DAENGS_geo 에서 검증을 마친 Place 검색을 최상위 `place-search/` 로
 D-022(최상위 폴더)·D-024(compose profile 로 꺼둔 착륙)와 같은 방식입니다.
 `profiles: ["place"]` 라 기본 `docker compose up -d` 에서는 아무것도 안 뜹니다.
 
-경계는 이렇습니다.
+현재 착륙 범위는 이렇습니다.
 
 ```
-DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → place-search → place-db
+place-search → place-db
+DAENGS_APP  -X→ 공개 경로 없음
 ```
 
 #### backend 에 넣지 않은 이유
@@ -1405,9 +1409,8 @@ DAENGS_APP → backend(공개 계약: 인증 + dog_id → 값 projection) → pl
 - in-process 로 넣으면 패키지 이름·설정·세션 체계를 이관과 **동시에** 갈아야 하고,
   장애 도메인도 합쳐집니다 (D-024 가 스크리닝을 밖에 둔 이유와 같습니다).
   나중에 정말 필요하면 in-process 로 접는 것은 쉽고, 반대는 비쌉니다.
-- backend 는 place-search 기동에 **종속되지 않습니다**. place 가 죽으면
-  `/places/search` 만 503 이고 auth/ask 는 정상이어야 합니다 (게이트웨이 카드의
-  수용 기준).
+- backend 는 place-search 기동에 **종속되지 않습니다**. place profile 을 켜지 않아도
+  auth/ask 를 포함한 기존 서비스는 이전과 똑같이 떠야 합니다.
 
 #### place-db 를 pgvector 와 합치지 않은 이유
 
@@ -1421,14 +1424,14 @@ place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
 쌉니다 — `place-search/UPSTREAM.md`).
 
-#### API 를 nginx 에 노출하지 않는 이유
+#### API 는 아직 nginx 에 노출하지 않았다
 
 D-024 의 profile 패턴만 차용하고 `/screen/` 같은 public ingress 는 복제하지 않습니다.
 place-search 의 `/v2/places/search` 는 **내부 계약**입니다 — 인증이 없고, 개의
-identity 가 아니라 값(size/weight/age)을 받습니다. 사용자·강아지를 아는 것은 backend
-뿐이어야 하고, 공개 계약은 backend 가 소유합니다. backend 가 place-search 를 부르는
-접점은 라우터 하나 + HTTP 클라이언트 하나로 유지합니다 (daengs_life 접점 규칙과
-같은 정신).
+identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 없어도 검색합니다.
+이번 착륙에서는 공개 연결을 만들지 않았습니다. APP 이 어떤 경로로 호출할지는 실제
+클라이언트 계약을 확인한 별도 PR 에서 정하며, backend 나 반려견 프로필을 선행 조건으로
+두지 않습니다.
 
 #### 이관 이후의 소유권
 
@@ -1436,3 +1439,154 @@ Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본�
 연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
 경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
 진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
+
+---
+
+## D-027
+### APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달한다
+
+D-026에서 착륙만 끝낸 Place 검색을 DAENGS_APP의 현재 계약에 연결합니다. APP과
+place-search가 이미 같은 `POST /v2/places/search` 요청·응답을 쓰므로 nginx는 URI나
+본문을 번역하지 않습니다.
+
+```
+DAENGS_APP → daengback:8000/v2/places/search → nginx → place-search → place-db
+                                                    backend -X→
+                                                Dog Profile -X→
+```
+
+- `location /v2/places/`만 place-search로 보내며 나머지 8000번 경로는 계속 backend로 갑니다.
+- 요청에 `conditions`가 없어도 되는 기존 browse-mode 계약을 유지합니다. Dog Profile을
+  조회하거나 검색 입력으로 만들어 주는 중계 계층은 두지 않습니다.
+- 실제 배포에서 요청을 받을 수 있도록 place-search와 place-db의 `place` profile을
+  해제합니다. 스키마는 place-search가 뜨기 전에 기존 Alembic 이력을 적용합니다.
+- place-db는 호스트 포트를 열지 않습니다. 검색 서비스는 compose 네트워크에서만 DB에
+  붙고, 외부 진입점은 nginx 하나뿐이라는 기존 인프라 경계를 따릅니다.
+- 공공데이터 키는 여전히 적재 배치에만 필요합니다. 빈 DB에서도 검색 서버와 공개 API는
+  정상 기동하며, 데이터 적재 시점이나 추천 정책을 이 연결 PR에서 새로 정하지 않습니다.
+
+---
+
+## D-028
+### Place 공개 경로는 호출량을 제한하고 기존 세 원천만 배치 적재한다
+
+D-027에서 공개한 검색은 APP이 한 요청씩 보내는 읽기 경로입니다. 인터넷 클라이언트가
+PostGIS를 반복 호출해 같은 8000번 포트의 기존 API까지 굶기지 않도록 IP별 초당 5회,
+순간 10회의 nginx 제한을 둡니다. 정상 APP 요청 계약과 본문은 바꾸지 않습니다.
+
+데이터 생산자는 이관 전부터 검증한 셋으로 고정합니다.
+
+- KCISA: 공공데이터포털 파일 `15111389`, 2025-03-24 스냅샷. 원문 SHA-256은
+  `2F88BEDFF41A8B9F032ABD16CE2FB0BC31D91EC28EE559E6E79C2559A2F45928`입니다.
+- KTO: 기존 `app.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
+- MOIS: 기존 `app.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
+
+배치는 `.github/workflows/place-search-ingest.yml`의 수동 실행점 하나로 모읍니다. 호출
+주기를 새로 정하지 않았으므로 schedule은 두지 않습니다. KCISA는 공개 파일이라 단독
+실행할 수 있고, KTO·MOIS는 서버 `.env`의 기존 키가 있을 때만 실행합니다. 검색 요청
+중 외부 원천을 호출하거나, 실패를 임의 데이터로 메우지 않습니다.
+
+place-db는 계속 compose 네트워크 안에만 둡니다. 호스트·팀원이 DB 포트로 직접 배치를
+실행하는 대신 같은 이미지·설정·스키마를 쓰는 `place-search` 컨테이너에서 기존 CLI를
+실행합니다. 이것이 PR #71에서 제거한 호스트 포트를 되살리지 않고 적재 경로를 명시하는
+이유입니다.
+
+---
+
+## D-029
+### 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다
+
+`YH-KIKI/walk_demo` 의 강아지 보행 영상 분석을 `gait-analysis/` 최상위 폴더로 들여왔습니다.
+`skin-screening` 과 같은 모양입니다 — 자체 `pyproject.toml`·`uv.lock`, compose
+`profiles: ["gait"]` 로 꺼둔 채, nginx 는 새 포트 대신 `daengback` 아래 `/gait/`,
+가중치는 git 밖(서버 디스크 + `:ro` 마운트).
+
+#### 왜 `backend/` 가 아닌가
+
+D-022·D-024 와 같은 이유이고, 한 가지가 더 붙습니다.
+
+- **torch·ultralytics 무게.** `backend` 컨테이너는 개발 모드로 reload 를 돌고(D-006)
+  이미 임베딩 모델이 상주합니다(D-021, 약 2.4GB). 여기에 pose 가중치를 더 얹을 이유가 없습니다.
+- **프로세스가 죽는 범위.** 보행 분석이 넘어지면 로그인과 `/ask` 까지 같이 넘어집니다.
+- **영상은 사진과 다릅니다** (이게 스크리닝에 없던 이유입니다). 한 장에 0.6~3초인
+  스크리닝과 달리, 영상 전체를 5fps 로 훑고 overlay 까지 인코딩해서 **분 단위**입니다.
+  그 요청을 배포되는 API 프로세스가 물고 있을 이유가 없습니다.
+
+#### `skin-screening` 과 **다른** 점 — 여기서는 구조를 바꿨습니다
+
+D-022 가 스크리닝의 구조를 원본 그대로 둔 이유는 그것이 **외부 저장소의 사본**이라
+구조를 바꾸면 재동기화가 diff 로 안 되기 때문입니다. **여기에는 그 제약이 없습니다** —
+walk_demo 는 연구가 끝난 실험 저장소이고 이쪽으로의 **일방향 이전**이라 되돌려 보낼 일이
+없습니다. 그래서 정리해서 가져왔고, 그럴 이유가 실제로 있었습니다.
+
+원본의 `src/gait_demo/` 는 같은 폴더의 실험 스크립트를 **루트에서 직접 import** 하고
+있었습니다(`e3_common` · `e13_external_video_pilot` · `e14_gait_segment_filter` ·
+`e3_trajectory_features` · `keypoint_extractor`). 이름과 docstring 상 "실험 스크립트"인데
+실제로는 production 코드였고, 동시에 module 최상단에서 `pandas` · `scipy` ·
+`scikit-learn` 과 다른 실험 모듈까지 끌고 왔습니다 — **알고리즘은 그중 아무것도 쓰지
+않습니다.** 실제로 쓰는 상수·함수만 뽑아 `src/config.py` · `gait_filter.py` ·
+`feature_engine.py` 로 재구성했고, 무거운 셋이 `uv.lock` 에서 완전히 빠졌습니다.
+
+**계산은 한 줄도 바꾸지 않았습니다.** 같은 영상을 원본과 이전본으로 각각 분석해
+대조했고 feature vector 121차원 · quality 통계 · `exclude_reason` · trajectory 가
+전부 일치했습니다(`unavailable` 로 끝나는 영상과 `ok` 로 끝나는 영상 각 1개 — 전자만
+보면 feature 경로가 검증되지 않습니다). 유일한 차이는 사용자 문구에서 walk_demo 연구
+문서의 절 번호(`§21`) 참조를 뺀 것으로, 그 문서가 이 저장소에 없어 가리킬 곳이 없기
+때문입니다.
+
+#### 가중치는 스크리닝과 **같은 방식으로 통일**했습니다
+
+`best.pt`(50.7MB, 12kp pose) 와 `yolov8n.pt`(6.2MB, crop-assist) 둘 다 100MB 하드
+리밋 **안쪽**이라 git 에 넣을 수도 있었습니다. 그래도 서버 디스크로 정한 이유:
+
+- **저장소가 12MB 인데 가중치가 57MB 입니다** — 약 5.7배가 됩니다.
+- **git 히스토리는 영구적입니다.** 모델 재학습 재개 지점이 정리돼 있어서(`walk_demo`
+  의 `MODEL_EXPERIMENT_SUMMARY.md`) 나중에 새 `best.pt` 를 커밋하면 옛 것도 그대로
+  남습니다. 두세 번 갈면 150~200MB 이고, 되돌리려면 히스토리 재작성뿐입니다.
+- `best.pt` 가 하필 50.7MB 로 **GitHub 경고선(50MB)을 살짝 넘습니다.**
+- **정책이 갈리지 않습니다.** 스크리닝이 그렇게 된 이유는 하드 리밋(163/189MB)이라
+  달랐지만, AI 서비스 둘의 가중치 정책이 서로 다르면 매번 어느 쪽인지 확인하게 됩니다.
+
+Git LFS 는 쓰지 않습니다 — 저장소가 안 쓰고 있고, 팀원 전원이 `git-lfs` 를 깔아야 하며
+무료 할당량 관리가 새로 생깁니다. 57MB 때문에 감수할 값이 아닙니다.
+
+원본은 가중치 경로를 `Path(__file__)` 기준 상대경로로 **하드코딩**하고 있었고 거기에
+한글 폴더명과 원본 데이터셋 구조가 박혀 있었습니다. `GAIT_RELEASE_DIR` 환경변수로 뺐습니다.
+
+⚠ walk_demo 의 `models/experimental/*.pt`(6개, 각 ~50MB)는 **미채택 실험 가중치**입니다.
+크기가 비슷해 헷갈리기 쉬우니 가져오지 마세요. production 은 위 둘뿐이고, 프로젝트 시작
+이후 한 번도 교체되지 않았습니다(대체 실험 셋은 전부 기각).
+
+#### nginx — 영상이라 이 블록만 제한을 올립니다
+
+`location /gait/` **안에서만** `client_max_body_size` 20m → 200m,
+`proxy_read_timeout` 60s → 600s 입니다. 서버 기본값이면 스마트폰 산책 영상이 413 이
+되고(실측 표본 5~60MB), 정상 분석이 604 초를 못 넘겨 504 로 끊깁니다.
+**다른 경로까지 넓히면 그쪽 업로드 제한이 같이 풀리므로** 블록 안에 둡니다.
+
+#### 조용히 틀리는 자리
+
+- **`apply_gait_filter` 의 `sample_fps` 에 `TARGET_FPS` 를 넣으면 안 됩니다.** 실제
+  샘플링 fps 는 `native_fps / step` 이고 step 이 정수라 반올림 오차가 있습니다.
+  그 차이가 정지 판정(시간 기반)에 그대로 들어갑니다.
+- **정지 판정은 "거리"가 아니라 "속도"입니다.** 거리로 비교하던 시절 30fps 영상에서
+  정지 오탐이 급증했습니다(usable 128 → 93). 되돌리지 마세요.
+- **`config.TARGET_FPS` 를 추론과 overlay 가 함께 씁니다.** 갈라 놓고 한쪽만 고치면
+  그림과 원본 프레임이 어긋나는데 예외가 안 납니다.
+- **임계값을 바꾸면 `GAIT_FILTER_VERSION` 도 올려야 합니다.** 안 올리면 옛 기록과 새
+  기록이 같은 기준인 척 비교됩니다 — 같은 영상인데 관절 이동범위가 달라 보이는 것을
+  실측으로 확인했고, `compare_records` 가 이 값으로 경고를 붙입니다.
+
+#### 아직 정하지 않은 것
+
+**기록의 주인이 누구인가** — 지금은 walk_demo 그대로 `GAIT_DATA_DIR` 아래 JSON
+파일입니다. 갈림길은 "`daengs_backend` 가 게이트웨이가 되어 인증하고 Postgres 에 기록을
+두는가"(`routers/training.py` 와 같은 모양) vs "`gait-analysis` 가 DB 를 직접 보는가"
+입니다. 이것이 **앱이 부르는 URL 을 정하므로** 앱 연동 전에 정해야 합니다.
+
+곁딸린 것: `dog_id` 는 지금 넘어온 값을 그대로 믿습니다 — **반려견 프로필 테이블이 아직
+없어서**(DB 에 `documents`·`admin_users`·`app_users`·`refresh_tokens` 넷뿐) FK 를 걸 수
+없습니다. 인증도 없습니다(스크리닝과 같은 상태라 profile 을 켜는 시점은 사람이 정합니다).
+URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았습니다 — 빼면 `--extra url`
+을 통째로 제거할 수 있습니다.
+

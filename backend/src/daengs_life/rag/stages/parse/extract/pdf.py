@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 
 from daengs_life.rag.core.ir import AnyElement, Article, Heading, Para, Table
@@ -60,6 +61,9 @@ _RE_TERMS = re.compile(r"^(?![①-⑳\d])[^\s]{4,30}약관$")
 # 부칙 머리. `부칙` 한 줄이거나 `부칙 <제2024-1호>` 처럼 온다.
 # **부칙 안의 조는 본문 조와 번호가 겹친다** — 본문 제1조(목적)와 부칙 제1조(시행일)가 그렇다
 _RE_ADDENDUM = re.compile(r"^부\s?칙(\s|<|$)")
+# 본문 한가운데 끼어드는 별표. **쪽의 첫 줄일 때만** 별표 머리로 본다 — 본문 문장도 `【별표1】『…』에
+# 따릅니다.` 처럼 줄 머리에 별표를 달고 이어질 수 있어서다 (농협·KB 실측). 쪽 첫 줄은 그럴 수 없다
+_RE_ANNEX = re.compile(r"^[\[【]별\s?표\s*\d*[\]】]")
 
 _WS = re.compile(r"\s+")
 
@@ -111,7 +115,8 @@ def _valid_table(rows: list[list[str | None]]) -> bool:
 
 def elements(doc, doc_id: str, *, title: str = "",
              pages: range | None = None,
-             terms_re: re.Pattern[str] | None = None) -> Parsed:
+             terms_re: re.Pattern[str] | None = None,
+             boundary_hint: Callable[[object], Collection[str] | None] | None = None) -> Parsed:
     """PyMuPDF `Document` → 요소 목록. **원문 순서 그대로.**
 
     `title` 은 문서 제목이다. 합본의 **첫 약관**은 보통 이것과 같아서, 그때는 섹션에 약관
@@ -119,8 +124,11 @@ def elements(doc, doc_id: str, *, title: str = "",
 
     `pages` 는 **읽을 페이지 범위**다 (0-based). `None` 이면 전부.
     `terms_re` 는 **약관 경계 정규식**을 갈아 끼운다. `None` 이면 `_RE_TERMS`.
+    `boundary_hint` 는 **쪽마다 약관 경계 줄을 집어 주는 콜백**이다 (⑧). 쪽을 받아 그 쪽의
+    경계 줄(`get_text()` 에 그대로 있는 줄)의 모음을 돌려주면 그 쪽에서는 정규식 대신 그것을
+    쓰고, `None` 을 돌려주면 그 쪽은 정규식으로 돌아간다. 인자를 안 주면 늘 정규식이다.
 
-    둘 다 선택 인자이고 기본값이 종전 동작이라 **코레일 쪽은 아무것도 안 바뀐다.** 넣은
+    셋 다 선택 인자이고 기본값이 종전 동작이라 **코레일 쪽은 아무것도 안 바뀐다.** 넣은
     이유는 보험약관이다 (RAG-041):
 
       **⑤ 보험약관 PDF 는 한 파일에 성격이 다른 세 덩어리가 들어 있다.** 앞에 안내 책자
@@ -137,6 +145,23 @@ def elements(doc, doc_id: str, *, title: str = "",
       확대보장(재가입형) 특별약관` 처럼 공백이 있고 43자다. 그대로 두면 **경계를 0개 잡고**
       조 번호가 문서 안에서 24~48번 재시작한 채 chunk_id 가 겹친다. 정규식을 여기서 넓히지
       않고 갈아 끼우게 한 이유는 **코레일이 그 넓은 규칙을 지나가지 않게** 하기 위해서다.
+
+      **⑦ 본문 한가운데의 별표는 조가 아니다** (RAG-048). 별표는 보통 문서 끝에 몰려 있어 사이트
+      층이 쪽 범위로 잘라내지만, KB 구형 약관은 특별약관 사이에 `[별표1] 동물보호법 시행규칙 …`
+      표가 끼어 있다. 줄 흐름으로는 앞 조의 본문이라 `제2조(준용규정)` 이 10,432자가 됐다.
+      쪽 첫 줄이 별표 머리면 다음 조·약관 경계까지를 별표로 모아 부칙처럼 `Para` 로 낸다.
+      선택 인자가 아닌데도 코레일이 안 바뀌는 이유는, 코레일 PDF 에 쪽 첫 줄 별표가 없어서다
+      (`test_pdf_extract` 통과 · `test_chunk` 스냅샷 동일).
+
+      **⑧ 약관 경계는 글자만으로는 못 가른다** (RAG-051). PDF 줄바꿈이 문장을 아무 데서나
+      끊어 `…때에는 특별약관` 같은 **본문 조각이 정규식에 걸리고**, 정작 진짜 구분선
+      `특별약관 일반사항` 은 `약관` 으로 끝나지 않아 안 걸린다. 가르는 것은 **레이아웃**
+      (폰트 크기)이고 그것은 `get_text("dict")` 에만 있다 — 그런데 크기 문턱은 판형마다 달라
+      (삼성 소형 본문 11.6pt · 대형 9.0pt) 사이트 층이 안다. 그래서 여기는 정규식 자리에
+      **콜백 하나**만 열어 둔다. 콜백이 집어 준 줄은 정규식을 거치지 않고 경계가 되고, 콜백이
+      **빈 모음**을 주면 그 쪽에는 경계가 없다 — 본문 조각이 정규식에 걸리는 길이 그래서 막힌다.
+      콜백이 없거나 `None` 을 주면 정규식이다. 테스트의 가짜 쪽은 `get_text()` 만 흉내 내므로
+      콜백을 안 넘기고, 그러면 이 함수는 종전과 한 줄도 다르지 않게 돈다.
     """
     out = Parsed()
     seen_section: Counter[str] = Counter()   # 섹션 이름 → 몇 번째인지 (id 유일성 보장)
@@ -148,6 +173,8 @@ def elements(doc, doc_id: str, *, title: str = "",
     n_div = 0
     add_lines: list[str] = []         # 지금 모으고 있는 부칙. **제자리에서 비운다** (아래 참고)
     n_add = 0
+    annex_lines: list[str] = []       # 지금 모으고 있는 별표 (⑦). 부칙과 같은 방식이다
+    n_annex = 0
 
     def flush_add() -> None:
         """부칙 하나를 `Para` 로 낸다.
@@ -168,6 +195,22 @@ def elements(doc, doc_id: str, *, title: str = "",
                                      section="부칙"))
         add_lines.clear()
 
+    def flush_annex() -> None:
+        """본문 안의 별표 하나를 `Para` 로 낸다 (⑦).
+
+        조에 넣지 않는 이유 — KB 구형 약관에서 `[별표1] 동물보호법 시행규칙 별표 3의2 …` 가 특별약관
+        `제2조(준용규정)` 뒤에 바로 이어져, 표 셀 450줄이 그 조에 붙어 **10,432자**가 됐다 (하드 상한
+        7,500 초과로 문서 전체가 청킹 실패). 표 자체는 `find_tables` 가 따로 뽑으므로 여기 텍스트는
+        보조다. 별표를 버리지 않고 `Para` 로 두는 이유는 부칙과 같다 — 청커가 `para` 를 알고 있다.
+        """
+        nonlocal n_annex
+        if annex_lines:
+            n_annex += 1
+            out.elements.append(Para(id=f"{doc_id}#별표-{n_annex}", title=annex_lines[0],
+                                     text="\n".join(annex_lines[1:]) or annex_lines[0],
+                                     section="별표"))
+        annex_lines.clear()
+
     def flush() -> None:
         """모아 둔 줄을 지금 조에 넣는다."""
         nonlocal cur, body
@@ -177,6 +220,10 @@ def elements(doc, doc_id: str, *, title: str = "",
         cur, body = None, []
 
     terms_rx = terms_re or _RE_TERMS
+    hints: set[str] | None = None            # 지금 쪽의 경계 줄 (⑧). None 이면 정규식
+
+    def is_terms(line: str) -> bool:
+        return (line in hints) if hints is not None else bool(terms_rx.match(line))
     # `pages` 가 없으면 **문서를 그대로 순회한다** — `doc.page_count` 를 거치지 않는 이유는
     # 테스트가 페이지 목록만 흉내 낸 가짜 문서를 넘기기 때문이다 (`test_pdf_extract`).
     # 범위를 받았을 때만 인덱스로 집는다.
@@ -189,10 +236,30 @@ def elements(doc, doc_id: str, *, title: str = "",
             out.warnings.append(f"{pno + 1}쪽에 텍스트가 없다 (스캔 페이지일 수 있다 — D-006)")
             continue
 
+        if boundary_hint is not None:
+            got = boundary_hint(page)
+            hints = None if got is None else {_clean(h) for h in got}
+        first_line = True                 # 쪽의 첫 줄인가 (⑦ 별표 머리 판정)
         for raw in text.split("\n"):
             line = _clean(raw)
             if not line:
                 continue
+
+            # 별표 머리 (⑦) — 쪽 첫 줄에서만. 다음 약관 경계나 조 머리가 나올 때까지 별표다
+            if first_line and _RE_ANNEX.match(line):
+                flush()
+                flush_add()
+                flush_annex()
+                annex_lines.append(line)
+                first_line = False
+                continue
+            first_line = False
+            if annex_lines:
+                if _RE_ARTICLE.match(line) or is_terms(line):
+                    flush_annex()                # 별표가 끝났다 — 이 줄은 아래에서 평소대로 처리
+                else:
+                    annex_lines.append(line)
+                    continue
 
             # 부칙 머리 — 여기부터 조 번호가 본문과 겹치기 시작한다
             if _RE_ADDENDUM.match(line):
@@ -202,12 +269,12 @@ def elements(doc, doc_id: str, *, title: str = "",
                 continue
 
             # 부칙을 읽는 중이면 조도 본문이 아니라 부칙 줄이다
-            if add_lines and not terms_rx.match(line):
+            if add_lines and not is_terms(line):
                 add_lines.append(line)
                 continue
 
             # 약관 경계 — 조 번호가 여기서 재시작한다
-            if terms_rx.match(line) and not _RE_ARTICLE.match(line):
+            if is_terms(line) and not _RE_ARTICLE.match(line):
                 flush()
                 flush_add()
                 seen_terms += 1
@@ -275,6 +342,9 @@ def elements(doc, doc_id: str, *, title: str = "",
 
     flush()
     flush_add()
+    flush_annex()
     out.counts["약관"] = seen_terms
     out.counts["부칙"] = n_add
+    if n_annex:
+        out.counts["별표"] = n_annex
     return out

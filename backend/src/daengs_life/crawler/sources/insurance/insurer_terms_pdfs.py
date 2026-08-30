@@ -314,6 +314,7 @@ class InsurerTermsPdfs(Source):
     # ⚠️ 공공누리가 아니다 — 보험사 저작물이다. 원본은 `data/` 에만 두고(RAG-017),
     # 서비스 표출 시 출처 표기가 필수이며 인용 범위를 넘지 않게 해야 한다 (data-sources §12)
     license = "보험사 저작물 — 인용 시 출처 표기"
+    revision_key = "slug"                    # 판이 slug 에 박힌다 — 같은 상품의 새 slug 가 곧 개정 (RAG-054)
 
     # ------------------------------------------------------------ discover
     def discover(self, fetcher: Fetcher) -> list[Target]:

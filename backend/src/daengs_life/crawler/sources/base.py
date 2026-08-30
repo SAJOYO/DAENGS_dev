@@ -45,6 +45,10 @@ class Source(ABC):
     format: str                              # pdf | hwp | hwpx | html | xml | json
     trust_level: str                         # law | official | guideline
     license: str = ""
+    # 개정 판정의 근거 (core/revision.py, RAG-054). 없으면 이 소스의 변경은 "바뀜"으로만 남는다.
+    #   "published_at"  같은 slug 의 시행일자가 달라지면 개정 — 법령
+    #   "slug"          같은 제목의 새 slug 가 나타나면 옛 판이 대체된 것 — 약관 (판이 파일명에 있다)
+    revision_key: str | None = None
 
     def __init__(self, seed: dict[str, Any]) -> None:
         self.seed = seed                     # yaml 항목 원본 (org, title, url, notes …)

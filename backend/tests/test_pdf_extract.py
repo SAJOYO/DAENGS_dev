@@ -144,6 +144,31 @@ def test_spaces_are_not_restored(parsed) -> None:
 
 
 # ------------------------------------------------------------------ ④ 표 판정
+# ------------------------------------------------------------------ ⑦ 본문 한가운데의 별표 (RAG-048)
+def test_annex_at_page_top_is_a_para_until_the_next_article() -> None:
+    """KB 구형 약관 — `[별표1] …` 표 450줄이 앞 조 `제2조(준용규정)` 에 붙어 10,432자가 됐다."""
+    doc = _doc(_Page(["제2조(준용규정) 이 추가특별약관에 정하지 않은 사항은 보통약관을 따릅니다."]),
+               _Page(["[별표1] 동물보호법 시행규칙 별표 3의2 제1호", "등급", "보험금액", "1급", "8천만원"]),
+               _Page(["2급", "7천2백만원", "반려동물위탁비용특별약관", "제1조(보상하는 손해) 회사는 …"]))
+    parsed = pdfx.elements(doc, "d", title="KB반려행복펫보험")
+    arts = [e for e in parsed.elements if e.type == "article"]
+    assert [a.section for a in arts] == ["제2조", "반려동물위탁비용특별약관 제1조"]
+    assert "등급" not in arts[0].head and "2급" not in arts[0].head
+    paras = [e for e in parsed.elements if e.type == "para"]
+    assert [p.section for p in paras] == ["별표"]
+    assert paras[0].title.startswith("[별표1]") and "7천2백만원" in paras[0].text
+    assert parsed.counts["별표"] == 1
+
+
+def test_annex_reference_mid_page_is_body() -> None:
+    """농협·KB 신형 본문은 `【별표1】『…』에 따릅니다.` 처럼 줄 머리에 별표를 달고 이어진다 — 쪽 첫 줄이 아니면 본문이다."""
+    doc = _doc(_Page(["제5조(보험금의 지급) 회사는", "【별표1】『보험금을 지급할 때의 적립이율 계산』에 따릅니다.", "② 다음 항"]))
+    parsed = pdfx.elements(doc, "d", title="x")
+    arts = [e for e in parsed.elements if e.type == "article"]
+    assert len(arts) == 1 and "적립이율" in arts[0].head
+    assert not [e for e in parsed.elements if e.type == "para"]
+
+
 def test_layout_box_is_not_a_table() -> None:
     """행 2 · 열 2 · 빈 셀 절반 미만 (RAG-032). 레이아웃 박스를 표로 오인하면
     빈 격자가 청크가 된다."""

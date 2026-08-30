@@ -58,9 +58,107 @@ def test_cut_at_laws_when_there_is_no_annex() -> None:
 
 
 def test_no_markers_reads_everything() -> None:
-    """**못 찾으면 자르지 않는다.** 임의로 자르면 약관 본문을 통째로 날릴 수 있다."""
-    doc = _doc(["표지"], ["제1조 (목적)"], ["제2조 (정의)"])
+    """**못 찾으면 자르지 않는다.** 임의로 자르면 약관 본문을 통째로 날릴 수 있다.
+
+    `제1조(` 는 이제 머리 후보라(RAG-048 ⑤) 그것도 없는 문서로 본다."""
+    doc = _doc(["표지"], ["제2조 (정의)"], ["제3조 (보상)"])
     assert ins._body_pages(doc) == range(0, 3)
+
+
+# ------------------------------------------------------------------ ①-2 얇은 표제가 없는 판 (RAG-048 ⑤⑥)
+LEGACY_TOC = ["- 3 -", "제7관 분쟁의 조정 등·······················13", "제31조(분쟁의 조정) ··········13",
+              "단체취급특별약관(II) ······················91"]
+LEGACY_BODY = ["- 1 -", "KB반려행복펫보험 보통약관", "제1관 목적 및 용어의 정의", "제1조(목적)", "이 보험계약은 …"]
+LEGACY_LAWS = ["- 40 -", "【법규1】개인정보 보호법", "제1조(목적)"]
+
+
+def test_falls_back_to_first_article_page_when_there_is_no_thin_divider() -> None:
+    """KB 구형·농협은 표제 없이 `- 1 -` 뒤에 바로 `제1관 / 제1조(목적)` 이 온다."""
+    doc = _doc(["KB반려행복펫보험"], LEGACY_TOC, LEGACY_BODY, ["- 2 -", "제2조(용어의 정의)"], LEGACY_LAWS)
+    assert ins._body_pages(doc) == range(2, 4)
+
+
+def test_fallback_skips_a_toc_without_dot_leaders() -> None:
+    """삼성 소형 문서의 목차는 점선 없이 `… 목차 / 제1조(목적)` 이다 — 표제로 가른다."""
+    doc = _doc(["반려견보험 애니펫 목차", "제1관 목적 및 용어의 정의", "제1조(목적)"],
+               ["제1관 목적 및 용어의 정의", "제1조(목적)", "이 보험계약은 …"], LEGACY_LAWS)
+    assert ins._body_pages(doc) == range(1, 2)
+
+
+def test_thin_divider_wins_over_fallback() -> None:
+    """순서가 중요하다 — 삼성은 얇은 표제가 먼저 잡혀 `제1조(` 규칙을 안 탄다 (11건 회귀 없음)."""
+    doc = _doc(["표지"], TOC, GUIDE, ["제1조(목적)", "p.35"], DIVIDER, BODY, ANNEX, LAWS)
+    assert ins._body_pages(doc) == range(4, 6)
+
+
+@pytest.mark.parametrize("line", ["별표", "별 표", "별  표"])
+def test_annex_marker_accepts_nh_spacing(line: str) -> None:
+    """농협은 `별  표`(공백 둘)다."""
+    doc = _doc(DIVIDER, BODY, [line, "【별표1】"], LAWS)
+    assert ins._body_pages(doc) == range(0, 2)
+
+
+@pytest.mark.parametrize("line", ["[법규1] 의료법", "【법규1】 개인정보 보호법", "【법규19】 어린이놀이시설 안전관리법 시행령"])
+def test_law_marker_accepts_fullwidth_brackets(line: str) -> None:
+    """삼성 `[법규1]` · KB·농협 `【법규1】`."""
+    doc = _doc(DIVIDER, BODY, [line, "제2조(정의)"])
+    assert ins._body_pages(doc) == range(0, 2)
+
+
+# ------------------------------------------------------------------ ①-3 머리글·꼬리글·옆탭 제거 (RAG-048 ⑦)
+KB_TITLE = "KB 금쪽같은 펫보험(강아지)(무배당)(26.07)"
+NH_TITLE = "무배당 NH다이렉트펫앤미든든보험2604"
+
+
+FILLER = [f"본문 {i}" for i in range(12)]          # 자리 규칙은 본문 쪽(얇지 않은 쪽)에서만 돈다
+
+
+def _stripped(lines, title):
+    return ins._StrippedPage(_Page(lines), ins._squash(title)).get_text().split("\n")
+
+
+def test_kb_even_page_header_is_three_positional_lines() -> None:
+    """쪽번호 / 상품명 / 현재 절 — 셋째 줄은 절 이름이라 규칙으로 못 가르고 자리로 뗀다."""
+    assert _stripped(["54", KB_TITLE, "보통약관", "제1조(목적)", *FILLER], KB_TITLE) == ["제1조(목적)", *FILLER]
+    # 앞 두 줄이 안 맞으면 셋째 줄을 건드리지 않는다 — 진짜 본문일 수 있다
+    assert _stripped(["보통약관", "제1조(목적)", *FILLER], KB_TITLE) == ["보통약관", "제1조(목적)", *FILLER]
+
+
+def test_kb_odd_page_side_tab_is_single_characters() -> None:
+    assert _stripped(["공", "통", "사", "항", "제2조(정의)", "본문"], KB_TITLE) == ["제2조(정의)", "본문"]
+
+
+def test_a_lone_single_character_line_is_content() -> None:
+    """줄바꿈에 걸린 마지막 음절(삼성 `킴`)은 남는다 — 둘 이상 잇달아야 탭이다."""
+    assert _stripped(["제2조(정의)", "…을 지", "킴", "다음 줄"], KB_TITLE) == ["제2조(정의)", "…을 지", "킴", "다음 줄"]
+
+
+def test_samsung_thin_divider_survives_the_kb_header_rule() -> None:
+    """삼성 소형 문서의 표제 쪽은 정확히 `쪽번호 / 상품명 / 보통약관` 세 줄 — KB 머리 규칙이 먹으면
+    약관 경계가 사라진다. 얇은 쪽에는 자리 규칙을 걸지 않는다."""
+    assert _stripped(["3", "반려견보험 애니펫", "보통약관"], "반려견보험 애니펫") == ["보통약관"]
+
+
+def test_nh_running_headers_and_trailing_side_tab() -> None:
+    """옆탭 `보통약관` 이 약관 경계로 잡히면 다음 쪽 본문이 조 밖으로 떨어진다 — 그래서 뗀다."""
+    got = _stripped(["▶▶▶ 무배당 NH다이렉트펫앤미든든보험2604 약관", "- 44 -", *FILLER,
+                     "무배당 NH다이렉트펫앤미든든보험2604 보통약관 ◀◀◀", NH_TITLE, "보통약관"], NH_TITLE)
+    assert got == FILLER
+
+
+def test_page_numbers_of_every_style_are_dropped() -> None:
+    assert _stripped(["7", "33 / 229", "- 42 -", "-78-", "제3조(보상)"], KB_TITLE) == ["제3조(보상)"]
+
+
+def test_a_bare_number_inside_the_page_is_content() -> None:
+    """삼성 본문의 표를 편 번호 줄(`1`·`2`·…)은 쪽 한가운데 있다 — 첫 줄일 때만 쪽 번호다."""
+    assert _stripped(["공", "통", "55", "제3조(보상)", "1", "2"], KB_TITLE) == ["제3조(보상)", "1", "2"]
+
+
+def test_stripping_leaves_a_real_sentence_that_mentions_the_title() -> None:
+    """상품명이 **들어간** 본문 줄은 남는다 — 상품명 **그 자체**인 줄만 뗀다."""
+    line = "이 특별약관에 정하지 않은 사항은 무배당 NH다이렉트펫앤미든든보험2604"
+    assert _stripped([line, "보통약관 및 해당 특별약관을 따릅니다."], NH_TITLE) == [line, "보통약관 및 해당 특별약관을 따릅니다."]
 
 
 def test_empty_pages_do_not_break_the_scan() -> None:

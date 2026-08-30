@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [orchestration-architecture.md](orchestration-architecture.md) | 오케스트레이션 전체 지도 — 실행 주체 4개 · nginx 라우팅 · compose/profile · 배포 · 기동 순서 |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 

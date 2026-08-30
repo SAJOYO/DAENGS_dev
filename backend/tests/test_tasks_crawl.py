@@ -213,51 +213,95 @@ def fake_crawl(monkeypatch):
     return called
 
 
-def test_beat_picks_only_the_due_ones(fake_crawl) -> None:
+@pytest.fixture
+def dispatched(monkeypatch):
+    """`crawl_source` 를 발사하는 대신 인자를 모은다.
+
+    **RAG-047 에서 태스크가 둘로 갈렸다** — `crawl_due` 는 고르기만 하고 수집은
+    `crawl_source` 가 한다. 그래서 여기서 보는 것은 "무엇을 골랐나"이고, "그것을 어떻게
+    수집하나"는 아래 `crawl_source` 쪽 테스트가 본다.
+    """
+    sent: list[tuple] = []
+
+    class _Sent:
+        id = "task-fake"
+
+    def fake_apply_async(args=(), queue=None, **kw):
+        sent.append((*args, queue))
+        return _Sent()
+
+    monkeypatch.setattr(crawl.crawl_source, "apply_async", fake_apply_async)
+    return sent
+
+
+def test_beat_picks_only_the_due_ones(fake_crawl, dispatched) -> None:
     out = crawl.crawl_due()
-    assert fake_crawl == ["stale"]                  # fresh 는 기한 전, kma·law-x 는 후보 밖
-    assert out["mode"] == "due"
-    assert out["changed_docs"] == {"stale": ["doc-1"]}
+    assert dispatched == [("stale", "due", "crawl")]  # fresh 는 기한 전, kma·law-x 는 후보 밖
+    assert out["mode"] == "due" and out["selected"] == ["stale"]
+    assert fake_crawl == []                           # 고르기만 한다. 수집은 별도 태스크다
 
 
-def test_source_ids_skips_the_due_check_entirely(fake_crawl) -> None:
+def test_source_ids_skips_the_due_check_entirely(fake_crawl, dispatched) -> None:
     """수동 트리거는 **같은 경로**를 override 한다 (RAG-001 요구사항 ②③).
 
     거르지도 않는다 — 사람이 이름을 대고 부른 manual 소스를 'manual 이라서' 안 받으면
     법령은 영영 못 받는다.
     """
     out = crawl.crawl_due(source_ids=["fresh", "law-x"])
-    assert fake_crawl == ["fresh", "law-x"]
+    assert [d[0] for d in dispatched] == ["fresh", "law-x"]
+    assert all(d[1] == "manual" for d in dispatched)   # trigger 가 행에 그대로 남는다
     assert out["mode"] == "manual"
 
 
-def test_one_dead_source_does_not_stop_the_rest(monkeypatch, fake_crawl) -> None:
-    """원칙 5 의 절반 — fan-out 은 아직 없지만 한 소스가 전체를 막지는 않는다."""
-    def boom(source_id, **kw):
-        fake_crawl.append(source_id)
-        if source_id == "b":
-            raise KeyError(f"unknown source id: {source_id}")
-        return FakeResult()
+def test_dispatch_goes_to_the_crawl_queue(fake_crawl, dispatched) -> None:
+    """기본 `celery` 큐로 보내면 실시간 워커가 가져가려다 실패하거나 아무도 안 가져간다."""
+    crawl.crawl_due(source_ids=["fresh"])
+    assert dispatched[0][-1] == crawl.QUEUE == "crawl"
 
-    monkeypatch.setattr(crawl.crawler_run, "run", boom)
+
+def test_one_undeliverable_source_does_not_stop_the_rest(fake_crawl, monkeypatch) -> None:
+    """원칙 5 의 절반 — 이제는 **발사 단계**에서 지킨다."""
+    def flaky(args=(), queue=None, **kw):
+        if args[0] == "b":
+            raise OSError("브로커가 죽었다")
+        return type("R", (), {"id": f"task-{args[0]}"})()
+
+    monkeypatch.setattr(crawl.crawl_source, "apply_async", flaky)
     out = crawl.crawl_due(source_ids=["a", "b", "c"])
-    assert fake_crawl == ["a", "b", "c"]
-    assert "error" in out["results"]["b"] and "KeyError" in out["results"]["b"]["error"]
-    assert out["results"]["a"]["fetched"] == 3
+    assert out["selected"] == ["a", "b", "c"]
+    assert out["dispatched"][0] == "task-a" and out["dispatched"][2] == "task-c"
+    assert "발사 실패" in out["dispatched"][1] and "OSError" in out["dispatched"][1]
 
 
-def test_unavailable_is_reported_but_is_not_a_failure(monkeypatch, fake_crawl) -> None:
-    """키 미설정은 실패가 아니라 사람이 고쳐야 하는 것이다."""
+# ------------------------------------------------------------------- crawl_source
+
+def test_crawl_source_reports_unavailable_without_retrying(monkeypatch, fake_crawl) -> None:
+    """키 미설정은 실패가 아니라 사람이 고쳐야 하는 것이다 — 예외가 아니라 정상 반환이다.
+
+    예외로 올리면 `autoretry_for` 가 세 번 더 걸어서 같은 결과를 세 번 더 받는다.
+    """
     monkeypatch.setattr(crawl.crawler_run, "run",
                         lambda sid, **kw: FakeResult(unavailable="LAW_OC 가 없다"))
-    out = crawl.crawl_due(source_ids=["law-x"])
-    assert out["results"]["law-x"] == {"unavailable": "LAW_OC 가 없다"}
+    out = crawl.crawl_source("law-x", "manual")
+    assert out == {"source_id": "law-x", "unavailable": "LAW_OC 가 없다"}
 
 
-def test_the_task_stops_at_collection(fake_crawl) -> None:
+def test_crawl_source_stops_at_collection(fake_crawl) -> None:
     """**적재로 이어 붙이지 않는다** (메모 ③). 바뀐 것은 알리기만 한다."""
-    out = crawl.crawl_due(source_ids=["stale"])
-    assert out["changed_docs"] == {"stale": ["doc-1"]}
+    out = crawl.crawl_source("stale", "due")
+    assert out["changed_slugs"] == ["doc-1"]
+    assert out["fetched"] == 3 and out["run_id"] == "20260829-040000"
+
+
+def test_crawl_source_retries_are_bounded(fake_crawl) -> None:
+    """재시도는 **지수 백오프로 3회까지** 다 (RAG-001 원칙 5). 무한히 걸면 예절을 깬다."""
+    assert crawl.crawl_source.max_retries == 3
+    assert crawl.crawl_source.retry_backoff is True
+
+
+def test_crawl_source_does_not_reach_into_loading(fake_crawl) -> None:
+    """반환값에 적재 흔적이 없다 — 수집에서 멈춘다는 것을 계약으로 박아 둔다 (메모 ③)."""
+    out = crawl.crawl_source("stale", "due")
     assert "loaded" not in out and "chunks" not in out
 
 

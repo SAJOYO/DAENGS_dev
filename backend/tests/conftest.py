@@ -11,6 +11,8 @@ setdefault 가 아니라 그냥 덮어씁니다. 환경 변수가 backend/.env �
 import base64
 import os
 
+import pytest
+
 
 def _key(filler: int) -> str:
     """32바이트 고정 키. 테스트용이라 난수일 필요가 없습니다."""
@@ -49,3 +51,44 @@ os.environ["DAENGS_JWE_KEY"] = _key(3)
 # 예열 자체의 동작은 `test_ask_warm_up.py` 가 함수를 직접 불러서 봅니다 — lifespan 을 통해
 # 보려 하면 스레드와 취소가 끼어 느리고 불안정해집니다.
 os.environ["DAENGS_WARM_UP_ENCODER"] = "false"
+
+
+@pytest.fixture(autouse=True)
+def _no_crawl_runs_writes(request, monkeypatch):
+    """**기본값은 "운영 DB 에 안 쓴다"** 다 (RAG-047 · RAG-045 ③ 의 재발 방지).
+
+    `crawl_due` 에 실행 이력을 붙이는 순간, 그 태스크를 부르던 **기존 테스트 전부가** 팀에
+    하나뿐인 DB 에 행을 남기게 됐다 — `test_tasks_crawl.py` 가 실제로 `stale`·`fresh`·`law-x`
+    같은 가짜 소스로 8행을 남겼고, 그 행들이 관리자 화면에 가짜 실행으로 뜬다.
+
+    RAG-045 ③ 에서 `documents` 로 똑같은 일이 있었고 그때 배운 것은 **"쓰지 않는 쪽이 기본이어야
+    한다"** 는 것이다. 테스트를 하나씩 고치면 다음에 `crawl_due` 를 부르는 테스트가 새로 생기는
+    날 다시 뚫린다. 그래서 여기서 통째로 막고, 진짜로 DB 가 필요한 테스트만 `db_or_skip` 을
+    받아서 **명시적으로 열어** 쓴다 (`test_crawl_runs.py`).
+
+    막는 방법이 예외인 것은 의도다 — `crawl_runs.start()` 는 실패를 삼키고 `None` 을 돌려주므로
+    (그 모듈의 계약), 기록만 조용히 빠지고 크롤 태스크의 동작은 그대로다.
+    """
+    if "db_or_skip" in request.fixturenames:
+        return                                  # 명시적으로 DB 를 받은 테스트는 건드리지 않는다
+
+    from daengs_life.tasks import crawl, crawl_runs
+
+    def _blocked():
+        raise RuntimeError("테스트는 crawl_runs 에 쓰지 않는다 — 필요하면 db_or_skip 을 받을 것")
+
+    monkeypatch.setattr(crawl_runs, "_connect", _blocked)
+
+    # **브로커도 막는다.** DB 만 막았더니 `crawl_due` 가 fan-out 으로 바뀐 뒤
+    # `crawl_source.apply_async` 가 **실서버 Redis 로 나갔다** — 2026-08-30 에 테스트 메시지
+    # 3건이 운영 `crawl` 큐에 쌓였고, 워커가 안 떠 있어서 아무도 몰랐다. 떠 있었다면 없는
+    # 소스로 3번 시도하고 재시도까지 돌았을 것이다.
+    #
+    # RAG-047 ⑤ 와 같은 병이 **공유 인프라 한 겹 옆에서** 다시 난 것이다. `documents` →
+    # `crawl_runs` → 브로커. 그래서 여기서는 "테스트가 팀 공용 자원에 내보내지 않는다"를
+    # 통째로 막는다. 발사를 봐야 하는 테스트는 `apply_async` 를 자기가 monkeypatch 한다
+    # (`test_tasks_crawl.py` 의 `dispatched` fixture).
+    def _no_dispatch(*_a, **_k):
+        raise RuntimeError("테스트는 실서버 브로커로 발사하지 않는다 — apply_async 를 직접 대체할 것")
+
+    monkeypatch.setattr(crawl.crawl_source, "apply_async", _no_dispatch)

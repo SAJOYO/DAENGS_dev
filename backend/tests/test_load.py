@@ -40,8 +40,24 @@ MODEL_KEY = config.settings.embedding_model_key
 
 
 def _prepared_or_skip(key: str = MODEL_KEY):
+    """`prepare()` 한 벌. **낡은 parquet 은 서빙 모델만 실패시킨다** (RAG-047 ⑧).
+
+    `test_embed._meta_or_skip` 과 같은 규칙이다 — `embed.is_current` 가 청크 전체 지문
+    하나로 판단해서 소스가 하나 늘면 세 모델이 다 낡는데, 재인코딩이 모델당 20~40분이라
+    소스를 더할 때마다 셋을 다 돌리는 것은 균형이 안 맞는다. 서빙에 쓰는 것만 최신을
+    요구하고, 베이크오프용은 skip 하고 이유를 말한다.
+
+    낡은 채로 `load.prepare()` 를 부르면 `ValueError: chunk_id 순서가 chunks/ 와 다르다`
+    로 죽는다 — 맞는 동작이지만 여기서는 "적재 계약이 깨졌다"가 아니라 "저 모델을 아직 안
+    다시 만들었다"는 뜻이라, 실패로 두면 신호가 뒤바뀐다.
+    """
     if not embed.parquet_path(key).is_file():
         pytest.skip(f"{key}.parquet 이 없다 — `python -m rag embed` 먼저")
+    if not embed.is_current(key, embed.chunks_fingerprint()):
+        stale = f"{key}.parquet 이 낡았다 — 코퍼스가 그 뒤로 움직였다"
+        if key == MODEL_KEY:
+            pytest.fail(f"{stale}. **서빙 모델은 낡으면 안 된다** — `rag embed --model {key}`")
+        pytest.skip(f"{stale}. 베이크오프용이라 서빙에는 안 쓰인다")
     return load.prepare(key)
 
 

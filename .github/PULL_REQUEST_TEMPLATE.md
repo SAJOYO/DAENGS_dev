@@ -15,12 +15,29 @@ Claude Code 에게:
   Project 필드까지 봐야 하면 `gh project item-list 3 --owner SAJOYO`.
   (`gh auth refresh -h github.com -s project` 를 한 번 해 두어야 돕니다.)
 - 아래 `##` 제목은 고정입니다. 제목은 두고 내용만 채우세요.
+  `## 착수 절차` 는 카드를 여는 시점이 아니라 **실제로 시작할 때** 체크합니다.
   해당 없는 섹션은 `- 없음` 한 줄로 두고, 섹션 자체를 지우지는 마세요.
 - 작업 중 본문이 낡으면 `gh pr edit --body-file <파일>` 로 갱신하세요.
   특히 `## 컨텍스트 메모` 는 다음 세션의 Claude 가 읽는 유일한 인수인계입니다.
 - 되돌리기 번거로운 결정은 여기 말고 `docs/decisions.md` 에 적고 번호(D-0xx)만 남기세요.
 - 협업 규칙(우선순위 · Iteration · PR 기준 · 회고)은 `docs/collaboration.md` 에 있습니다.
 -->
+
+## 착수 절차
+
+<!-- 카드를 여는 시점이 아니라 **실제로 시작할 때** 밟습니다. 며칠 뒤일 수 있습니다. -->
+
+- [ ] Project 카드 Status → **In progress**
+- [ ] **이 PR 이 쓰는 브랜치로 이동합니다. 새로 파지 마세요.**
+      `gh pr view <번호> --json headRefName -q .headRefName`
+      새 이름으로 파면 커밋이 거기 쌓이고 PR 은 **원래의 빈 브랜치를 머지**합니다 —
+      에러가 안 나고 `dev` 에는 아무것도 안 들어갑니다 (2026-08-30 `#68`, RAG-047 ⑧)
+- [ ] `git fetch origin && git merge origin/dev` — 열어 둔 사이 dev 가 움직였습니다
+- [ ] `RAG-` 결정 번호나 랩(`lapN`)을 쓸 카드면 **여기서 예약**합니다.
+      `dev` 만 보면 부족합니다 — 남의 예약이 아직 그 사람 브랜치에만 있을 수 있습니다:
+      `git fetch origin && git log --all --oneline --grep="예약"`
+      예약 커밋 제목은 `chore: 착수 — RAG-0NN 예약 (#카드)` 로 고정합니다
+- [ ] 이 본문을 다시 읽습니다 — 열어 둔 사이 다른 카드가 전제를 바꿨을 수 있습니다
 
 ## 무엇을 / 왜
 

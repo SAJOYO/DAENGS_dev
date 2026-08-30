@@ -242,7 +242,10 @@ JS 렌더링 폴백은 필요 없었다 — 둘 다 서버 렌더링이다.
       기초지자체가 만든다. 공고보다 변동이 적어 RAG 기본 코퍼스로 적합
 
 **③ 신선도 · 모니터링**
-- [ ] **`seoul-notice-api`** — 서울시 고시공고 정보 API (OA-2482) · `api` · 🔑서울 열린데이터 인증키(무료) · ✅확인 · https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do
+- [x] **`seoul-notice-api`** — 서울시 고시공고 API · `api` · 🔑서울 열린데이터 인증키(무료) · ✅수집 (RAG-053) · https://data.seoul.go.kr/dataList/OA-23050/A/1/datasetView.do
+      ⚠ 원래 적어 둔 OA-2482(`ListNewsNotice`)는 **종료예정·최근 50건뿐**이라 후속 OA-23050 `tvvWcmBoardB0277New` 로 바꿨다.
+      필터 인자가 없어 최신 1,000건(≈6개월, 하루 7.5건)을 한 요청으로 받아 복합 키워드로 거른다 — 6개월에 **1건**.
+      첨부(seoulboard.seoul.go.kr)는 robots `Disallow: /` 라 주소만 남긴다 (§12). 구 단위 API(송파·관악·노원·은평)는 후보.
 - [x] **`seoul-microchip-support`** — 서울시 동물등록 안내 · `html` · 키없음 · ✅확인
       → **2026-08-27 수집 완료: 2건** — 등록 방법·수수료·과태료(544026) + 2026년 자진신고기간(569082).
       시드의 522690 은 2023년 글이라 뺐다. **지원 금액은 해마다 바뀌므로 낡은 값이 코퍼스에 있으면
@@ -455,7 +458,8 @@ JS 렌더링 폴백은 필요 없었다 — 둘 다 서버 렌더링이다.
       `method=pdf-entry → quarterly` · 나머지 `weekly`.
       수집까지만 하고 멈춘다 — 바뀐 문서는 알림으로만 남는다 (RAG-002 · RAG-025).
       ⚠ 워커는 compose profile `crawler` 뒤에 있어 **서버에서 아직 안 뜬다** (코퍼스 위치)
-- [ ] `seoul-notice-api` 고시공고 모니터링 — 신규 지원사업 탐지. 같은 Beat 에 태스크 하나 더
+- [x] `seoul-notice-api` 고시공고 모니터링 (RAG-053, #67) — 태스크를 따로 두지 않았다. 소스 모듈 + 시드
+      `cadence: daily`(첫 예외)로 **같은 `crawl-due-sources` 가 매일 받는다.** 수확은 6개월에 1건
 - [ ] 법령 개정 체크 — 시행일자 비교. RAG-044 가 남기는 `changed_docs` 알림 위에 얹는다
 - [ ] 약관 개정 체크 — 분기 1회 (`insurer-terms-pdfs` 가 이미 `quarterly` 다)
 

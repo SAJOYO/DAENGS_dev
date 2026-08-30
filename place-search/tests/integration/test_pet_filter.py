@@ -216,7 +216,7 @@ async def test_borrowed_dog_exclusion_is_used_by_default_filter():
 
 
 async def test_dog_size_value_drives_the_size_filter():
-    """크기는 **값**으로 받는다 — dog_id → 프로필 projection 은 resolver 의 일이 아니다.
+    """크기는 호출자가 알고 있을 때 **값**으로 받는다 — 프로필 저장소는 필요 없다.
 
     대형견 값이면 소형 전용을 거르고, 소형견 값이면 그대로 통과한다. 무엇으로 걸렀는지는
     응답 params 에 그대로 남는다 — 빈 목록이 데이터 부족으로 읽히면 안 된다.

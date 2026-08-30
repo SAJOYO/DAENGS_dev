@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..core import config, tokenize
+from ..core import config, tokenize, transport
 from . import embed, load
 
 VERSION = 2          # 1 = dense 단독 / 2 = 하이브리드 (RAG-035)
@@ -336,6 +336,11 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     정답이었던 적이 없지만, **검문소③은 사람이 눈으로 보는 검사 자리라 기본값이 이미 걸러진
     결과면 무엇이 걸러졌는지를 볼 수 없다.** 서빙(9단계)의 기본값은 여기서 정하지 않는다 —
     검사 도구와 서빙이 같은 기본값을 쓸 이유가 없다.
+
+    **교통수단 배제는 인자가 아니다** (RAG-052). `query.text` 에 수단이 하나 적혀 있으면 그 수단이
+    아닌 교통 `subcategory` 를 뺀다 (`core.transport`). 인자로 빼지 않는 이유는 인용 확장(RAG-040)과
+    같다 — 빼면 CLI·9단계·FastAPI 가 각자 켜고 끄게 되고 검문소③이 본 것과 서빙이 갈린다. 신호가
+    없으면 아무것도 안 뺀다. 검문소③은 `rag search` 가 신호 줄을 찍어 준다.
     """
     filters, lex_filters = [], []
     # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-040). 한 번의 쿼리로 끝낸다 —
@@ -350,6 +355,11 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
         filters.append("AND category = %(category)s")
         lex_filters.append("AND d.category = %(category)s")
         params["category"] = category
+    if excluded := transport.exclusions(query.text):
+        # 두 축 모두에 건다 — 한 축에만 걸면 RRF 가 다른 축에서 그 문서를 도로 끌어온다
+        filters.append("AND subcategory <> ALL(%(excluded)s)")
+        lex_filters.append("AND d.subcategory <> ALL(%(excluded)s)")
+        params["excluded"] = list(excluded)
 
     own = conn is None
     conn = conn or load.connect()

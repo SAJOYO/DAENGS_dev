@@ -84,7 +84,7 @@ def test_v2_openapi_exposes_the_shared_place_kind_vocabulary():
     assert request_schema["properties"]["kinds"]["maxItems"] == 6
     assert "conditions" in request_schema["properties"]
     assert "preferences" in request_schema["properties"]
-    # identity(dog_id)는 계약에 없다 — 프로필 → 값 projection 은 호출자(게이트웨이)의 일이다.
+    # identity(dog_id)는 계약에 없고 값도 선택적이다. 프로필 저장소는 필요 없다.
     assert set(schema["PlaceSearchConditions"]["properties"]) == {
         "dog_size", "dog_weight_kg", "dog_age_years",
     }

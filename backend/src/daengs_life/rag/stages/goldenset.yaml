@@ -290,8 +290,8 @@ items:
       # 두 약관이 다 필요했다), DB손보는 같은 문구의 행이 6개라 하나를 must 로 찍으면 뽑기가 된다 (RAG-049 ②)
       - knia-disclosure-N11#N11PB278672-보장내용
       - knia-disclosure-N11#N11PB278670-보장내용                                      # lap12 가 실제로 가져온 행
-      # 약관 층의 같은 말 — 특별약관이라 주소가 순번형이다. B2 가 경계를 고치면 여기가 먼저 바뀐다
-      - "insurer-terms-pdfs-samsung-ZPB320090_0_20260701#검사비포함)(재가입형) 특별약관 제3조"
+      # 약관 층의 같은 말. #60(RAG-051) 이 경계를 레이아웃으로 잡아 주소가 특별약관 이름을 갖게 됐다
+      - "insurer-terms-pdfs-samsung-ZPB320090_0_20260701#반려견 의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관 제3조"
     unavailable:
       - ref: DB손보 약관 원문
         reason: RAG-048 ① — robots 의 의도를 존중해 사람이 뺐다. 공시 행(위 nice)까지만 있다
@@ -334,7 +334,7 @@ items:
     nice:
       - insurer-terms-pdfs-samsung-ZPB320090_0_20260701#제5조                     # 2601.6 판 — 제5조
       - insurer-terms-pdfs-samsung-ZPY006010_0_20260701#제6조                     # 위풍댕댕 2605.1
-      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제7조-2                   # 특별약관 일반사항의 같은 조 — 순번 주소
+      - "insurer-terms-pdfs-samsung-ZPY008010_0_20260701#특별약관 일반사항 제7조"    # 특별약관 일반사항의 같은 조 (#60 전에는 순번 주소 `제7조-2`)
     unavailable: []
 
   - id: I5
@@ -348,7 +348,7 @@ items:
     nice:
       - knia-disclosure-N08#N08PB272529-보장내용-r1                                 # 수술당일 담보 300만원
       - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제3조                     # "1일당 보상한도액을 한도로"
-      - "insurer-terms-pdfs-samsung-ZPY008010_0_20260701#검사비포함)(재가입형) 특별약관 제1조"   # 연간 총 보상한도액
+      - "insurer-terms-pdfs-samsung-ZPY008010_0_20260701#반려견의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관 제1조"   # 연간 총 보상한도액
     unavailable: []
 
   # ------------------------------------------------------------------ 항공 2 (RAG-046 · RAG-049, origin: hand)

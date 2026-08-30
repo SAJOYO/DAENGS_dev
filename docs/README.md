@@ -3,8 +3,8 @@
 | 파일 | 내용 |
 | --- | --- |
 | [orchestration-architecture.md](orchestration-architecture.md) | 오케스트레이션 전체 지도 — 물리 토폴로지(실행 주체 4개 · 라우팅 · 배포 · 기동 순서) + 논리 구조(직접 API vs `/assistant/query` · v1 범위 · Training 토폴로지 CURRENT/TARGET) |
-| [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 제안 — OrchestratorState · RoutePlan · CapabilityRequest/Result · AssistantResponse · 불변식 · locale |
-| [orchestration-routing.md](orchestration-routing.md) | 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY/HANDOFF · 라우터 벤치마크 정책 · **미결 사람 결정(O-1~O-6)** |
+| [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 |
+| [orchestration-routing.md](orchestration-routing.md) | 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 

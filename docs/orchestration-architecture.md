@@ -7,8 +7,8 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 
 문서는 셋으로 나뉩니다. **이 파일** = 물리 토폴로지(§1~§5, 전부 CURRENT 사실) +
 논리 오케스트레이션 구조(§6~, CURRENT 와 TARGET 을 구분해 표기).
-**[orchestration-contracts.md](orchestration-contracts.md)** = 오케스트레이터 공통 계약 제안.
-**[orchestration-routing.md](orchestration-routing.md)** = 라우팅 정책과 미결 사항.
+**[orchestration-contracts.md](orchestration-contracts.md)** = 오케스트레이터 공통 계약 (확정).
+**[orchestration-routing.md](orchestration-routing.md)** = 라우팅 정책 · 인가 매트릭스 · 사람 결정 이력.
 
 > 표기: **CURRENT** = 지금 사실 · **TARGET** = 승인된 목표 상태(아직 구현 안 됨) ·
 > **CONFIRMED** = 확정된 설계 제약 · **OPEN** = 사람 결정 대기 · **PENDING** = 검증 대기 ·
@@ -162,18 +162,27 @@ Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절�
 부를지는 전부 프론트 UI 가 정합니다. 능력별 현실은 §7 의 표가 원본입니다.
 
 **TARGET (CONFIRMED)** — 대화형 진입점 `/assistant/query` 를 하나 두고, 그 뒤의 흐름
-제어를 **LangGraph** 가 맡습니다. 경계는 다음과 같습니다.
+제어를 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30 어드버서리얼 아키텍처 리뷰
+(읽기 전용, `origin/dev` 코드 대조)를 거쳐 **사람이 최종 승인**한 것입니다
+(D-030~D-037 · orchestration-routing.md §6 의 결정 이력).
 
 - **LangGraph 는 오케스트레이터입니다** — 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.
   그래프는 라우팅·실행 순서·결과 수집이라는 흐름 제어만 소유합니다.
 - **명시적 기능 UI 플로우는 기존 직접 API 를 그대로 씁니다.** 산책 기록 화면이 `/walk` 를
   부르는 것은 바뀌지 않습니다. `/assistant/query` 는 자연어·모호·다중 능력 요청 전용입니다.
 - **인증은 그래프 밖입니다.** 기존 FastAPI 의존성 계층(D-015 · D-016)이 토큰을 검증하고,
-  그래프는 **인증이 끝난 principal** 을 받아 능력별 **인가**만 판단합니다. 토큰이 그래프
-  상태에 들어가지 않습니다 (계약 불변식 — orchestration-contracts.md).
+  그래프는 **인증이 끝난 principal** 을 받아 능력별 **인가**만 판단합니다. 인가는 중앙
+  매트릭스 한 곳이 정하며(D-036 · orchestration-routing.md §5), 토큰이 그래프 상태에
+  들어가지 않습니다 (계약 불변식 — orchestration-contracts.md).
 - **도메인 안전·거절 결정은 각 능력이 소유합니다.** 오케스트레이터는 상류의 REFUSED 를
-  ERROR 나 "근거 부족"으로 재해석하지 않습니다. Training 의
-  SAFETY_REFUSAL/MEDICAL_REFUSAL 구분(docs/training-rag-demo.md)이 그대로 통과해야 합니다.
+  ERROR 로 재해석하지 않고, **자료 부족 기권(ABSTAINED)을 거절(REFUSED)로 접지도
+  않습니다** (D-033). Training 의 SAFETY_REFUSAL/MEDICAL_REFUSAL 구분
+  (docs/training-rag-demo.md)이 그대로 통과해야 합니다.
+- **backend↔daengs_life 접점 규칙(D-018 의 "세 줄", `tests/test_main_stays_light.py` 로
+  기계 강제)은 약화하거나 지우지 않습니다.** 오케스트레이션의 Life 어댑터가 **유일하게
+  새로 승인된 접점**이고(D-035, O-11), 구현 시작 시 경계 테스트를 그 한 곳만 허용하도록
+  갱신해 **다시 기계로 강제**합니다. 그 밖의 daengs_backend → daengs_life import 는
+  여전히 금지입니다.
 - **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화로 "피부 사진 봐줘"가
   들어오면 실행이 아니라 해당 업로드/UI 플로우로 **HANDOFF** 합니다 (orchestration-routing.md).
 - **능력별 생성 모델을 통일하지 않습니다.** Training 은 gemma3:4b, Life 는 Gemini 인
@@ -195,9 +204,9 @@ Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 �
 
 | 능력 | 경로 · 프로세스 | 생성/추론 | 거절·안전 시맨틱 | v1 오케스트레이션 |
 | --- | --- | --- | --- | --- |
-| **Training** | backend `POST /training/chat`(관리자 게이트, #30) → HTTP → 별도 Training RAG FastAPI (호스트 `:8010`, 개인 저장소) | Ollama **gemma3:4b** / 검색 intfloat/multilingual-e5-base + PGVector | **상류가 소유** — ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (training-rag-demo.md) | 실행 대상 ✅ |
-| **Life** | backend `POST /ask` — **같은 프로세스 안** (daengs_life.rag, D-018 · D-021) | **Gemini** / 상주 임베딩 | **동등한 거절 계약이 없음** — 아키텍처 관심사이지 문서에서 지어낼 것이 아님 (OPEN, orchestration-routing.md) | 실행 대상 ✅ |
-| **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime) | 없음 — **결정적** | 자체 규칙 계층이 소유 (RT- 결정들) | 실행 대상 ✅ |
+| **Training** | backend `POST /training/chat`(관리자+SEARCH_INSPECT 게이트, #25·#30) → HTTP → 별도 Training RAG FastAPI (호스트 `:8010`, 개인 저장소) | Ollama **gemma3:4b** / 검색 intfloat/multilingual-e5-base + PGVector | **상류가 소유** — ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (training-rag-demo.md) | 실행 대상 ✅ (assistant 경유는 앱 회원도 — D-036) |
+| **Life** | backend `POST /ask` — **같은 프로세스 안** (daengs_life.rag, D-018 · D-021). 인증: 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | **Gemini** / 상주 임베딩 | 기계 신호로는 **무근거 기권**(404 "근거를 찾지 못했다" — 서빙 층의 명시적 도메인 정책)과 `ungrounded` 품질 지표가 있음. **없는 것**은 Training 급 안전 분류와 산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035, 후속 카드) | 실행 대상 ✅ |
+| **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증: 앱 회원+관리자 (동일) | 없음 — **결정적** | 자체 규칙 계층이 소유 (RT- 결정들). 판정 불가는 `unknown`(503+본문) | 실행 대상 ✅ |
 | **Skin** | nginx `/screen/` → skin-screening 컨테이너 — **profile 이라 기본 꺼짐** (D-024) | PyTorch 분류 | 인증 경계가 backend 와 **동등하지 않음** | 실행 대상 아님 — 어댑터 문서만 |
 | **Gait** | nginx `/gait/` → gait-analysis 컨테이너 — **profile 이라 기본 꺼짐** (D-029) | 분 단위 영상 추론 | — | 동기 실행 대상 아님 — 미래 비동기/PENDING 시맨틱 후보 |
 
@@ -276,5 +285,5 @@ Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터 경
 | 코드·환경 변수 규칙 | 루트 `CLAUDE.md` |
 | 결정 배경 (D- / RAG- / RT-) | `docs/decisions.md` · `docs/decisions-rag.md` · `docs/decisions-realtime.md` |
 | Training RAG 통합 | `docs/training-rag-demo.md` |
-| 오케스트레이터 공통 계약 (제안) | `docs/orchestration-contracts.md` |
-| 라우팅 정책과 미결 사항 | `docs/orchestration-routing.md` |
+| 오케스트레이터 공통 계약 (확정) | `docs/orchestration-contracts.md` |
+| 라우팅 정책 · 인가 매트릭스 · 결정 이력 | `docs/orchestration-routing.md` |

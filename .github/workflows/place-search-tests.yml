@@ -54,6 +54,8 @@ jobs:
         env:
           DAENGS_TRAINING_RAG_BASE_URL: http://host.docker.internal:8010
           REDIS_PASSWORD: ci-only-password
+          # 서버 폴더 가드(`:?`, RAG-050). CI 는 크롤러를 띄우지 않으니 렌더만 통과하면 된다.
+          DAENGS_CORPUS_DIR: ./data
         run: docker compose config --quiet
       - name: nginx 설정
         working-directory: ${{ github.workspace }}

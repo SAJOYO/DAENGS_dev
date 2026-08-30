@@ -131,6 +131,7 @@ SECRETS = {name.upper(): normalize_key((getattr(settings, name) or "").strip())
 
 LAW_OC = SECRETS["LAW_OC"]
 DATA_GO_KR_KEY = SECRETS["DATA_GO_KR_KEY"]
+SEOUL_OPEN_DATA_KEY = SECRETS["SEOUL_OPEN_DATA_KEY"]
 
 
 # 키가 담기는 쿼리 파라미터 이름. 값 대신 이름으로 지우는 게 정확하다 —

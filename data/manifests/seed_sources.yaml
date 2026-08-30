@@ -241,12 +241,20 @@
 - id: seoul-notice-api
   domain: subsidy
   org: 서울특별시
-  title: 서울시 고시공고 정보 (열린데이터광장 API)
-  url: "https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do"
+  title: 서울시 고시공고 (열린데이터광장 API)
+  url: "https://data.seoul.go.kr/dataList/OA-23050/A/1/datasetView.do"
   method: api
-  auth: none
+  auth: seoul-open-data
   status: verified
-  notes: "공고문 모니터링용. 열린데이터광장 인증키 별도(무료). 키워드 필터 - 반려/동물"
+  # 공고는 매일 올라온다 (하루 7.5건 실측). 기본값 weekly 를 시드 예외로 덮는 첫 사례 (RAG-044 ② · RAG-053).
+  cadence: daily
+  notes: "신규 지원사업 탐지용. 서비스명 tvvWcmBoardB0277New (OA-23050) — 2026-08-30 정찰: 원래 시드 OA-2482 `ListNewsNotice` 는
+    카탈로그(SearchOpenAPIService)에 '(종료예정)' 이고 최근 50건뿐이라 후속 데이터셋으로 바꿨다. 서비스명은 페이지에 안 나오고
+    카탈로그 API 로만 알 수 있다. 필터 인자 없음 → 최신 1,000건(≈6개월)을 한 요청으로 받아 복합 키워드로 거른다
+    (_pet_keywords, RAG-034). 6개월에 1건 걸렸다 — 수확이 적은 소스. 원본 1건 = 한 행짜리 응답({i}/{i}), 지문은 텍스트
+    (응답의 list_total_count 가 매일 바뀜). 첨부(seoulboard)는 robots Disallow: / 라 주소만 남긴다. 인용은
+    https://www.seoul.go.kr/news/news_notice.do#view/{BOARD_ID}. 구 단위 고시공고 API(송파 SpNtfc · 관악 GwanakGosiList ·
+    노원 NowonNewsGosiList · 은평 EminwonPblanc)가 따로 있다 — 지원사업 공고는 구가 더 많을 수 있어 후보."
 
 - id: seoul-microchip-support
   domain: subsidy

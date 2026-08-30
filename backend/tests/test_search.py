@@ -79,15 +79,54 @@ def test_empty_tsquery_falls_back_to_dense() -> None:
 def test_questions_come_from_the_goldenset() -> None:
     """검증질문을 코드에 박지 않는다 — 박으면 질문 목록의 단일 소스가 둘이 된다.
 
-    2026-08-27 에 조례 3문항(S1~S3)이, 08-28 에 보조금24 2문항(S4·S5)이 붙어 7 → 12 가 됐다.
+    2026-08-27 에 조례 3문항(S1~S3)이, 08-28 에 보조금24 2문항(S4·S5)이 붙어 7 → 12 가 됐고,
+    08-30 에 펫보험 5문항(I1~I5)·항공 2문항(T4·T5)이 붙어 22 가 됐다 (RAG-049).
     **이 수를 갱신하는 것 자체가 이 테스트의 일이다** — `--questions` 가 도는 범위라
     문항이 늘거나 줄면 검문소③④의 분모가 말없이 바뀐다.
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 15
+    assert len(items) == 22
     assert all(q for _, q, _, _ in items)
+
+
+# ---------------------------------------------------------------- 교통수단 배제 (RAG-052)
+class _Cursor:
+    def __init__(self, log): self._log = log
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def execute(self, sql, params): self._log.append((sql, params))
+    def fetchall(self): return []
+
+
+class _Conn:
+    """`search()` 가 DB 에 보내는 SQL 을 받아 적는 가짜 연결. 결과는 늘 0행이다."""
+    def __init__(self): self.log = []
+    def cursor(self): return _Cursor(self.log)
+
+
+def _sql_for(text: str):
+    conn = _Conn()
+    search.search(search.Query(vector=[0.0] * 4, tsquery="", text=text), k=5, conn=conn)
+    sql, params = conn.log[0]
+    return sql, params
+
+
+def test_transport_signal_excludes_the_other_mode_on_both_axes() -> None:
+    """기차 질의는 `transport-air` 를 **dense·렉시컬 양쪽에서** 뺀다 — 한 축에만 걸면 RRF 가 도로 끌어온다.
+
+    인자가 아니라 `query.text` 에서 읽는다 (RAG-040 과 같은 이유) — 시그니처 단언이 그대로인 것이 그 증거다."""
+    sql, params = _sql_for("기차에 반려동물은 몇 kg까지 태울 수 있나요?")
+    assert params["excluded"] == ["transport-air"]
+    assert sql.count("subcategory <> ALL(%(excluded)s)") == 2
+
+
+def test_no_transport_signal_means_no_exclusion_clause() -> None:
+    """`#75` 메모 ③ — 수단이 안 적힌 질의는 필터가 안 걸린다."""
+    sql, params = _sql_for("반려동물 데리고 여행 갈 때 준비물")
+    assert "excluded" not in params
+    assert "subcategory <> ALL" not in sql
 
 
 def test_every_hand_question_has_a_must_label() -> None:

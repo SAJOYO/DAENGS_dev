@@ -5649,6 +5649,10 @@ named volume 을 버린 이유는 **서버에 SSH 도 SMB 도 없어서**다 (�
 즉 PM2 를 건드리기 전에 배포가 멈춘다. `SCREENING_RELEASE_DIR` 이 `C:\deploy\daengs\models` 에 있는
 것과 같은 자리(`C:\deploy\daengs\corpus`)에 둔다 — "배포 폴더 바깥의 서버 상태"는 이미 그 관례가 있다.
 
+`:?` 는 CI 도 막는다 — `journey-tests` · `place-search-tests` 가 `docker compose config --quiet` 를
+돌리는데 첫 푸시에서 바로 거기서 떨어졌다. `REDIS_PASSWORD: ci-only-password` 와 같은 자리에
+`DAENGS_CORPUS_DIR: ./data` 를 준다. CI 는 크롤러를 띄우지 않으니 렌더만 통과하면 된다.
+
 ### ② 로그가 없으면 워커가 뜨지 않는다
 
 `crawler-worker` 의 command 첫 줄이 `test -f /data/manifests/crawl_log.jsonl || exit 1` 이다.

@@ -96,7 +96,7 @@ def test_unavailable_is_recorded_not_dropped(gs: goldenset.GoldenSet) -> None:
 
     부분 보유 2문항(유기견 신고 · 병원 사체처리)과 질문 7 이 여기 걸린다.
     T1·T3 이 더해졌다 — 지역 도시철도공사와 코레일이 아직 코퍼스 밖이다 (RAG-036).
-    I1(타사 약관 원문 — A2 #58 몫)·T4·T5(대형 항공사 — RAG-046) 가 더해졌다 (RAG-049).
+    I1(DB손보 약관 — RAG-048 ① 이 뺐다)·T4·T5(대형 항공사 — RAG-046) 가 더해졌다 (RAG-049).
     """
     have = {i.id for i in gs.items if i.unavailable}
     assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5"}, f"분모 제외를 가진 문항이 달라졌다: {sorted(have)}"

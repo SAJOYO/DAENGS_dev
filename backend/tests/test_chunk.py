@@ -47,11 +47,13 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 #  · 2026-08-29 `RAG-041` 삼성화재 약관 PDF 11건 — **부록을 잘라낸 뒤의 수다.** 안 자르면
 #    `article` 이 4,693 이고 그 차이가 전부 관계법령 전문(신용정보법·상법 …)이다. 우리 문서가
 #    아니라 인용을 틀리게 만든다 (RAG-041 ②).
+#  · 2026-08-30 `RAG-048` KB 9건 · 농협 3건을 더해 23건 — 삼성 11건의 요소 수는 그대로다
+#    (머리글·쪽 번호 줄만 빠졌다). KB 구형 2건의 본문 속 별표는 `para` 로 나와 청크로는 안 센다.
 BY_SOURCE: dict[str, dict] = {
     # ---- 2026-08-29 실측 (이 워크트리에서 `chunk_file` 로 직접 셌다)
     "easylaw-pet":             {"docs": 14, "chunks": {"aside": 22, "heading": 40, "qa": 10}},
     "gov24-registration":      {"docs": 2,  "chunks": {"heading": 17}},
-    "insurer-terms-pdfs":      {"docs": 11, "chunks": {"article": 1806, "table": 151}},
+    "insurer-terms-pdfs":      {"docs": 23, "chunks": {"article": 4404, "table": 615}},
     "knia-disclosure":         {"docs": 7,  "chunks": {"article": 48, "table": 62}},
     "korea-kr-policy":         {"docs": 3,  "chunks": {"heading": 3}},
     "law-drf-api":             {"docs": 8,  "chunks": {"article": 720, "para": 192, "table": 423}},
@@ -82,7 +84,7 @@ NO_CHUNK_DOCS = {"easylaw-pet-2-1-1-qna", "easylaw-pet-2-2-2-qna"}
 # ④ 소프트 상한(2,000자)을 넘는 청크 수. **막지 않고 세기만 한다** — RAG-004 ④ 가 폴백을 두지
 # 않기로 했고, 늘어나면 그 결정을 재개하는 트리거다. 옆 주석이 무엇이 넘는지 말한다.
 SOFT_CAP_OVER = {
-    "insurer-terms-pdfs": 91,   # 특별약관의 정의·보상 조. RAG-041 ⑦ 이 "경고만" 으로 둔 그것
+    "insurer-terms-pdfs": 177,  # 특별약관의 정의·보상 조. RAG-041 ⑦ 이 "경고만" 으로 둔 그것 (KB·농협 12건을 더해 91 → 177)
     "korail-terms": 2,          # 광역철도약관 제3조·제6조 — PDF 라 항으로 더 쪼갤 태그가 없다
     "law-drf-api": 3,           # 별표 1의10-4 · 1의10-6 · 제18조②
     "nias-pet": 1,              # 분실·유기 절 — 소제목 하나에 분실신고·습득신고·유기 셋

@@ -4,7 +4,9 @@ Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + 
 
 ```
 daengs.~     :80   → nginx(도커) → host.docker.internal:3000 → PM2 (Next, 호스트)
-daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨테이너)
+daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
+                                  → place-search:8000 (`/v2/places/`만)
+                                  → journey-service:8000 (`/journey`만)
 ```
 
 ## 폴더
@@ -14,8 +16,11 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (컴포즈 서비스, 컨�
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
 | `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
+| `gait-analysis/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 — D-029 |
+| `place-search/` | Place 검색 (FastAPI + PostGIS). nginx 의 `/v2/places/`로 공개되며 자기 DB(place-db)와 Alembic 을 가집니다 — D-026, D-027. backend·Dog Profile과 독립입니다. 원본·소유권은 `place-search/UPSTREAM.md` |
+| `journey-service/` | 장소 선택 뒤 단발 경로 스냅샷. nginx의 `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `journey-service/UPSTREAM.md` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
-| `docker-compose.yml` | nginx + pgvector(PostgreSQL 18) + redis 컨테이너 |
+| `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/migrations/` | **이미 돌고 있는 DB** 에 손으로 적용하는 SQL. 스키마를 바꾸면 `db/init/` 과 같이 고칩니다 |
@@ -100,7 +105,8 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
   `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라
   CORS 가 필요합니다 — `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
-- **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx · pgvector · redis 를 함께 올립니다.
+- **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx · backend · pgvector · redis와
+  Place 검색(place-search · place-db)을 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
 - **`POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` 도 볼륨이 빌 때만 반영됩니다.**
@@ -119,8 +125,8 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   롤을 새로 만들었으면 `ALTER DEFAULT PRIVILEGES` 까지 걸어 두세요. 안 그러면
   **나중에 다른 계정으로 만든 테이블이 앱 계정에 안 보입니다.**
 - **compose 는 서버 PC 에서만 띄웁니다.** DB 는 팀에 하나뿐이고 서버 PC 에 있습니다
-  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 nginx · pgvector · redis 가
-  또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB 가 생깁니다.
+  (`POSTGRES_IP`). 개발 PC 에서 `docker compose up -d` 를 돌리면 서버용 컨테이너들이
+  또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB들이 생깁니다.
   개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DB_HOST` 가 서버 DB 를
   보게 하세요.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
@@ -139,6 +145,13 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `LIKE` 인덱스와 비교 속도에서 유리합니다. 영문 대소문자나 한글·영문 혼합 정렬이
   필요한 쿼리에서만 `ORDER BY x COLLATE "ko-KR-x-icu"` 를 붙이세요.
   DB 기본값을 바꾸려면 볼륨을 지우고 다시 만들어야 합니다.
+- **워크트리에서 작업해도 `data/` 는 한 곳에 쌓으세요.** `data/` 는 git 미추적이라(RAG-017)
+  워크트리마다 따로 생기고 **워크트리를 지우면 코퍼스가 같이 지워집니다.** 실제로 parsed
+  250건(조례 208 · 보조금24 37 · 운송 5)을 그렇게 잃었고, 어느 PC 에도 없어 재수집으로만
+  복구됩니다 — 개정되는 원문은 재수집이 곧 다른 코퍼스라 그건 복구가 아닙니다.
+  `backend/.env` 의 `DAENGS_DATA_DIR` 을 메인 체크아웃의 절대 경로로 고정하면
+  어느 워크트리에서 수집하든 한 곳에 쌓입니다. 새 워크트리에 `.env` 를 복사할 때
+  그 줄이 같이 갑니다.
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
   `backend/.env` 의 `DAENGS_DB_*` 는 **개발 PC 에서 `uv run dev` 로 띄울 때** 쓰는

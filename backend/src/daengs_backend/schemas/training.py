@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-TrainingDecision = Literal["ANSWER", "UNCERTAIN", "MEDICAL_REFUSAL"]
+TrainingDecision = Literal["ANSWER", "UNCERTAIN", "SAFETY_REFUSAL", "MEDICAL_REFUSAL"]
 
 
 class TrainingChatRequest(BaseModel):

@@ -208,11 +208,14 @@
   method: html
   auth: none
   status: partial
-  notes: "2026-08-28 정찰(robots 만): 9곳 중 크롤러에 열려 있는 곳은 5곳이다.
-    에어부산·이스타·에어프레미아·진에어 허용, 에어서울은 Disallow:/ + Allow:/CW/*.do (longest-match 필요).
-    대한항공·아시아나는 크롤러 UA 에 ReadTimeout, 제주항공·티웨이는 robots.txt 가 403.
-    진에어 robots 에 Content-Signal: search=yes,ai-train=no,use=reference 가 있다 —
-    우리 용도(출처 표기 참조)는 use=reference 에 해당하고 학습은 하지 않는다. 딥링크는 운송 카드에서."
+  notes: "2026-08-29 실측(#57): 9곳 중 실제로 받을 수 있는 곳은 2곳뿐이다.
+    ✅ 에어프레미아 www.airpremia.com/a/support/need/pet · 이스타 www.eastarjet.com/newstar/PGWIM00004.
+    ❌ 진에어·에어서울은 403 Cloudflare 챌린지, 에어부산은 TLS 핸드셰이크 거부,
+    대한항공·아시아나는 ReadTimeout, 제주항공·티웨이는 robots.txt 403.
+    ⚠️ 2026-08-28 에 '5곳 열림'으로 적었던 것은 robots.txt 만 본 값이다 — robots 는 정적 파일이라
+    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/data-sources.md §12).
+    진에어 robots 의 Content-Signal: search=yes,ai-train=no,use=reference 는 우리 용도
+    (출처 표기 참조)가 use=reference 에 해당하나, 어차피 페이지를 못 받는다."
 
 # ---------- 지자체 지원 ----------
 - id: benefit24-services
@@ -326,7 +329,15 @@
     ⚠ 회사 공시실(11건)이 협회 공시(6건)보다 넓다.
     ⚠ **약관 PDF 한 파일에 관계법령 전문이 붙어 있다** — 안 자르면 신용정보법 조문이 `펫보험 약관 제32조`로
     인용된다. 앞의 안내 책자와 뒤의 별표·관계법령을 잘라낸다 (RAG-039 ②).
-    실측 11건 25.1MB · 1,530쪽 · 스캔 0건(0자 페이지 1.2%). 남은 6사는 별도 카드."
+    실측 11건 25.1MB · 1,530쪽 · 스캔 0건(0자 페이지 1.2%). 남은 6사는 별도 카드.
+    2026-08-30 수집(#58 · RAG-048) — **KB 9건 · 농협 3건 완료.** 합계 23건.
+    KB: 목록 POST 폼이 GET 을 받되 조건은 hidden 이 아니라 화면 입력 필드(search_goods_nm · search_onsale_yn, euc-kr).
+      상세가 판매 이력 표라 판매종료일 빈 행의 약관 링크(/CG802030003.ec?fileNm=…)를 읽는다 — 조립하지 않는다.
+      ⚠ 25200(다이렉트 금쪽같은 펫보험 고양이 재가입용)은 약관 자리에 8쪽 특이사항(_1_3.pdf)이 걸려 있어 건너뛴다.
+    농협: ajax 세 단 GET (retrievePdtCd → retrievePdtInfo?fileType=05 → /imageView/downloadFile.ajax). 1·2·3종이 합본 한 PDF.
+    ⚠ **DB손보는 뺐다** — robots 가 User-agent 없는 allow-list + Disallow: / 이고 공시실 경로가 allow-list 에 없다.
+      표준상 통과하지만 의도를 존중한다 (사람이 정함, RAG-048 ①).
+    ⚠ 마커는 회사가 아니라 판형이 정한다 — KB 구형(2018)은 농협처럼 얇은 표제 없이 바로 제1조(목적)다 (RAG-048 ④)."
 
 # ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
 - id: kma-vilage-fcst

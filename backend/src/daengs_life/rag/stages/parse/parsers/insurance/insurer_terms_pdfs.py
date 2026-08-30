@@ -63,17 +63,58 @@ KB·농협을 더하며 (2026-08-30, #58 · RAG-048) — 마커는 **회사가 �
 것은 `get_text()` 와 `find_tables()` 뿐이라(테스트의 가짜 페이지가 그 계약이다) 그 둘만 흉내 낸다.
 좌표(여백 블록)로 떼는 쪽도 봤지만, 삼성은 본문이 위 7%·아래 92% 까지 차고 KB 머리글은 10% 에
 있어 **회사마다 문턱이 달라진다** — 글자 규칙이 더 안전했다.
+
+────────────────────────────────────────────────────────────────────────────
+특별약관 경계는 레이아웃으로 (2026-08-30, #60 · RAG-051) — 글자로는 못 가른다
+────────────────────────────────────────────────────────────────────────────
+**⑧ 정규식(`_RE_INSURANCE_TERMS`)은 삼성 대형 8건에서 경계를 거의 못 잡았다.** 세 가지가 겹쳤다.
+    ⓐ 본문 조각이 걸린다 — 줄바꿈이 `…고의로 사실과 다르게 작성한 때에는 특별약관` 에서 끊긴다
+    ⓑ 긴 이름은 두 줄로 감긴다 — `1-1. 반려견 의료비(…)(수술당일제외,` / `검사비포함)(재가입형) 특별약관`.
+       앞줄은 번호로 시작해 막히고 **뒷줄만** 경계가 된다 (골든셋 라벨이 그 조각을 가리키고 있었다)
+    ⓒ 진짜 구분선 `특별약관 일반사항` 은 `약관` 으로 끝나지 않아 안 걸린다
+그 결과 조 번호가 문서 안에서 되풀이되어 **순번 접미사(`제1조-2`)가 8건 합계 683개**였고, 인용이
+"몇 번째 제1조" 까지만 말했다.
+
+가르는 축은 **폰트 크기**다 (11건 실측 · `get_text("dict")`):
+
+    판형        본문    조 머리   관        약관 이름        구분 표제(얇은 쪽)
+    소형 3건    11.6    13.6     17.4      17.4             23.5 (`보통약관`·`특별약관`)
+    대형 8건    9.0     9.1      10.6/11.4 10.6/11.4        14.2 (`특별약관 일반사항`·`N. … 특별약관`·`제도성 특별약관`)
+
+대형 판에서 10.6 과 11.4 가 섞이는 것은 그룹 차이다 — 상해·질병 그룹은 이름 11.4 · 그 안의 관 10.6,
+펫·제도성 그룹은 이름 10.6 이고 관이 없다. **어느 쪽이든 이름은 조 머리보다 크고 본문 조각은 본문
+크기다** — 그것만 있으면 된다. 감긴 이름 두 줄은 같은 블록·같은 크기로 이어진다.
+
+규칙 (`_StrippedPage._layout`):
+    1. 문서 본문 크기 = 본문 쪽 전체의 글자 수 가중 최빈 크기
+    2. 본문보다 `_DISPLAY_STEP`(1pt) 이상 큰 줄이 **표시 줄**. 조·관 머리와 쪽 번호는 뺀다
+    3. 잇달아 오는 같은 크기의 표시 줄은 **한 줄로 잇는다** (ⓑ)
+    4. 이은 줄에서 목차식 번호(`1-1. `·`1. `)를 떼고, `보통약관`·`특별약관` 으로 끝나거나
+       `특별약관 일반사항` 이면 **경계**다. 그 줄은 `get_text()` 에 이은 모양으로 실리고 포맷 층에는
+       `boundary_hint` 로 같은 문자열을 준다 — 포맷 층은 그 쪽에서 정규식을 안 쓴다 (ⓐ 가 막힌다)
+    5. `get_text("dict")` 가 없으면(테스트의 가짜 쪽) 종전 경로 — 줄 그대로 · 정규식 그대로
+
+`get_text()` 의 줄과 dict 의 줄은 11건 1,694쪽에서 **한 줄도 다르지 않았다** — 그래서 dict 로
+줄을 다시 만들어도 본문은 안 바뀌고, 바뀌는 것은 경계로 판정된 줄의 모양뿐이다.
+
+**KB·농협에는 아직 안 건다** (`_LAYOUT_FIRMS`). 문턱은 회사가 아니라 판형이 정하는데(위 ⑤~⑦ 과
+같은 이유) KB 구형·농협 판형의 크기 분포는 재지 않았다. 재서 넣기 전까지 그쪽은 정규식이다.
+
+경계를 잡고도 남는 순번 접미사가 있다 — 본문 줄이 `제19조(계약내용의 변경 등) 제1항의 절차에 따라`
+처럼 **조 참조로 시작**하면 조 머리로 잡힌다. 그것은 경계가 아니라 조 머리 판정의 문제고 같은 크기
+신호로 가를 수 있지만(참조는 본문 크기, 머리는 한 단계 크다) 이 카드의 범위 밖이다.
 """
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from daengs_life.rag.core.io import RawDoc
 from daengs_life.rag.stages.parse.extract import pdf
 from ..base import Parsed
 
 NAME = "insurer_terms_pdf"
-VERSION = 3                                   # 3: KB·농협 판형 (머리 대체 규칙 · 꼬리 정규식 · 머리글 제거)
+VERSION = 4                                   # 4: 특별약관 경계를 레이아웃(폰트 크기)으로 (⑧)
 
 # ── 약관 본문의 앞뒤를 끊는 마커 (11건 전수 검증, 2026-08-28)
 #
@@ -123,6 +164,13 @@ _ROOMS = {
 # 함께 막는다 — 포맷 층 기본값이 쓰던 그 장치를 그대로 가져왔다.
 _RE_INSURANCE_TERMS = re.compile(r"^(?![①-⑳\d])(?=.{4,60}$).*(?:보통약관|특별약관)$")
 
+# 레이아웃 경계 (위 ⑧). 표시 줄을 이어 붙인 뒤 목차식 번호를 떼고 꼬리로 판정한다
+_DISPLAY_STEP = 1.0                                        # 본문보다 이만큼 크면 표시 줄
+_RE_HEADING_NO = re.compile(r"^\d+(?:-\d+)?(?:\.\s*|\s+)")   # `1-1. ` · `1. ` · `2-2 ` (마침표가 빠진 판이 있다)
+_RE_TERMS_TAIL = re.compile(r"(?:보통약관|특별약관)$")
+_RE_GENERAL_TERMS = re.compile(r"^특별약관\s*일반사항$")   # 특별약관 공통 조문 — 제1조부터 다시 센다
+_RE_ARTICLE_OR_DIVISION = re.compile(r"^제\s*\d+\s*(?:조|[편장절관])")   # 조·관 머리는 표시 줄이어도 경계가 아니다
+_LAYOUT_FIRMS = {"samsung"}                                # 크기 분포를 실측한 판형만
 
 
 def _open(raw: bytes):
@@ -188,14 +236,93 @@ def _squash(s: str) -> str:
     return _WS.sub("", s)
 
 
-class _StrippedPage:
-    """머리글·꼬리글·옆탭을 뗀 페이지 (위 ⑦). 포맷 층이 쓰는 `get_text()` · `find_tables()` 만 있다."""
+def _styled_lines(page) -> list[tuple[str, float]] | None:
+    """쪽의 줄을 (텍스트, 크기) 로. `get_text("dict")` 가 없으면(가짜 쪽) `None`.
 
-    def __init__(self, page, title_key: str) -> None:
+    줄의 크기는 **그 줄에서 가장 큰 span** 이다 — 이름 줄 안에 작은 첨자가 섞여도 줄은 이름이다.
+    빈 span 은 세지 않는다 — 삼성 표제 쪽의 공백 span 이 37.8pt 라 그것을 세면 `보통약관` 이 표제
+    크기가 된다 (실측)."""
+    try:
+        d = page.get_text("dict")
+    except TypeError:
+        return None
+    if not isinstance(d, dict):
+        return None
+    out: list[tuple[str, float]] = []
+    for block in d.get("blocks", ()):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", ()):
+            spans = [sp for sp in line.get("spans", ()) if sp.get("text", "").strip()]
+            if not spans:
+                continue
+            text = "".join(sp["text"] for sp in spans).strip()
+            out.append((text, round(max(sp["size"] for sp in spans), 1)))
+    return out
+
+
+class _StrippedPage:
+    """머리글·꼬리글·옆탭을 뗀 페이지 (위 ⑦). 포맷 층이 쓰는 `get_text()` · `find_tables()` 만 있다.
+
+    `styled` 와 `body_size` 가 오면 약관 경계를 레이아웃으로 판정한다 (위 ⑧) — 그때 `get_text()`
+    의 줄은 dict 에서 다시 만들고, 경계로 판정된 줄만 이어 붙인 모양으로 바뀐다. `boundaries()` 가
+    그 줄들을 포맷 층에 준다. 둘 중 하나라도 없으면 종전 경로다.
+    """
+
+    def __init__(self, page, title_key: str,
+                 styled: list[tuple[str, float]] | None = None,
+                 body_size: float | None = None) -> None:
         self._page, self._title = page, title_key
+        self._styled = styled if body_size is not None else None
+        self._body_size = body_size
+        self._layout_cache: tuple[list[str], set[str]] | None = None
+
+    def _layout(self) -> tuple[list[str], set[str]]:
+        """(줄 목록, 경계 줄 모음). 표시 줄을 같은 크기끼리 이어 붙이고 꼬리로 경계를 가른다 (⑧ 규칙 2~4)."""
+        if self._layout_cache is not None:
+            return self._layout_cache
+        lines: list[str] = []
+        bounds: set[str] = set()
+        run: list[str] = []                   # 지금 잇고 있는 표시 줄
+        run_size: float | None = None
+
+        def close() -> None:
+            nonlocal run_size
+            if run:
+                name = _RE_HEADING_NO.sub("", _WS.sub(" ", " ".join(run)).strip())
+                if _RE_TERMS_TAIL.search(name) or _RE_GENERAL_TERMS.match(name):
+                    lines.append(name)
+                    bounds.add(name)
+                else:
+                    lines.extend(run)         # 경계가 아니면 원래 줄 그대로 (본문이 안 바뀐다)
+            run.clear()
+            run_size = None
+
+        for text, size in self._styled or ():
+            display = (size >= self._body_size + _DISPLAY_STEP
+                       and not _RE_ARTICLE_OR_DIVISION.match(text) and not _RE_PAGE_NO.match(text))
+            if display and (run_size is None or size == run_size):
+                run.append(text)
+                run_size = size
+                continue
+            close()
+            if display:
+                run.append(text)
+                run_size = size
+            else:
+                lines.append(text)
+        close()
+        self._layout_cache = (lines, bounds)
+        return self._layout_cache
+
+    def boundaries(self) -> set[str] | None:
+        """이 쪽의 약관 경계 줄. 레이아웃 정보가 없으면 `None` — 포맷 층이 정규식으로 돌아간다."""
+        if self._styled is None:
+            return None
+        return self._layout()[1]
 
     def get_text(self) -> str:
-        lines = _lines(self._page)
+        lines = self._layout()[0] if self._styled is not None else _lines(self._page)
         # KB 신형 짝수쪽 머리 3줄: 쪽번호 / 상품명 / 현재 절 이름. 셋째 줄은 절 이름이라 규칙으로는
         # 못 가르고 **자리**로 뗀다 — 앞 두 줄이 맞을 때만, 그리고 **본문 쪽에서만**. 삼성 소형 3건의
         # 표제 쪽이 정확히 `쪽번호 / 상품명 / 보통약관` 세 줄이라, 얇은 쪽에 이 규칙을 걸면 그 표제
@@ -235,11 +362,29 @@ class _StrippedPage:
 
 
 class _StrippedDoc:
-    def __init__(self, pdf_doc, title: str) -> None:
+    """`pages` 가 오면 그 범위의 줄 크기를 미리 읽어 문서 본문 크기를 잰다 (⑧ 규칙 1).
+    한 쪽이라도 dict 를 못 주면 문서 전체가 종전 경로다 — 쪽마다 규칙이 다르면 경계가 들쭉날쭉해진다."""
+
+    def __init__(self, pdf_doc, title: str, pages: range | None = None) -> None:
         self._doc, self._title = pdf_doc, _squash(title)
+        self._styled: dict[int, list[tuple[str, float]]] = {}
+        self._body_size: float | None = None
+        if pages is None:
+            return
+        weight: Counter[float] = Counter()
+        for i in pages:
+            styled = _styled_lines(pdf_doc[i])
+            if styled is None:
+                self._styled.clear()
+                return
+            self._styled[i] = styled
+            for text, size in styled:
+                weight[size] += len(text)
+        if weight:
+            self._body_size = weight.most_common(1)[0][0]
 
     def __getitem__(self, i: int) -> _StrippedPage:
-        return _StrippedPage(self._doc[i], self._title)
+        return _StrippedPage(self._doc[i], self._title, self._styled.get(i), self._body_size)
 
     @property
     def page_count(self) -> int:
@@ -272,8 +417,10 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
 
     with _open(raw) as pdf_doc:
         body = _body_pages(pdf_doc)
-        out = pdf.elements(_StrippedDoc(pdf_doc, title), doc.doc_id, title=title,
-                           pages=body, terms_re=_RE_INSURANCE_TERMS)
+        layout = _firm_key(doc.doc_id) in _LAYOUT_FIRMS          # 위 ⑧ — 실측한 판형만
+        out = pdf.elements(_StrippedDoc(pdf_doc, title, body if layout else None), doc.doc_id,
+                           title=title, pages=body, terms_re=_RE_INSURANCE_TERMS,
+                           boundary_hint=_StrippedPage.boundaries if layout else None)
         total_pages = pdf_doc.page_count
 
     if not out.elements:

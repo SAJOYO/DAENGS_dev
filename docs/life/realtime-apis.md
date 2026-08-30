@@ -89,7 +89,7 @@ GPS (위경도, WGS84)
 
 ## 4. 키 발급 체크리스트
 
-docs/data-sources.md §5와 동일 키 재사용: `DATA_GO_KR_KEY`(한 키로 신청한 API 전부), `KAKAO_REST_KEY`, (선택) `KMA_HUB_KEY`
+docs/life/data-sources.md §5와 동일 키 재사용: `DATA_GO_KR_KEY`(한 키로 신청한 API 전부), `KAKAO_REST_KEY`, (선택) `KMA_HUB_KEY`
 
 ## 5. 참고 — 위치기반 정적 데이터 (선택 확장)
 
@@ -392,7 +392,7 @@ tm            stn  WD1    WS1  WDS    WSS  WD10   WS10 TA    RE     RN-15m/60m/1
 
 ### 6.10 연동 확인 (2026-08-25) — 실서버 `GET /walk` 3지역
 
-`uvicorn main:app` 에 역삼·해운대·제주를 날린 결과다. **`docs/data-sources.md` §8 의 근거가 이것이다.**
+`uvicorn main:app` 에 역삼·해운대·제주를 날린 결과다. **`docs/life/data-sources.md` §8 의 근거가 이것이다.**
 
 | 지역 | 격자 | 측정소 | AWS | 판정 | 권장 구간 |
 |---|---|---|---|---|---|

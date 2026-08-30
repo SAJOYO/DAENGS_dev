@@ -866,7 +866,7 @@ SQLAlchemy 로 옮길지 — 은 **이 카드에서 하지 않았습니다.** �
 - **env 이름에 `DAENGS_` 접두사를 붙이지 않았습니다.** `rag` 는 최상단 `.env` 의
   `POSTGRES_*` 를 **compose 값 그대로** 읽는데, 그 이름은 pgvector 컨테이너와 공유하는
   것이라 접두사를 붙이면 DB 를 못 찾습니다. API 키도 발급 기관이 부르는 이름 그대로가
-  `docs/data-sources.md` §9 와 1:1 입니다. 두 Settings 는 `extra="ignore"` 라 한 `.env`
+  `docs/life/data-sources.md` §9 와 1:1 입니다. 두 Settings 는 `extra="ignore"` 라 한 `.env`
   안에 섞여 있어도 서로를 무시하고, 실제로 겹치는 이름은 **하나도 없습니다**(확인함).
   통일이 필요해지면 `AliasChoices` 로 두 이름을 다 받는 쪽이 맞습니다 — 지금 바꾸면
   서버 `.env` 를 손으로 고쳐야 하는데 얻는 것이 이름 모양뿐입니다.

@@ -2,7 +2,7 @@
 
 > 조사일: 2026-08-19 · 최종 갱신: 2026-08-30
 > 도메인: 동물등록 / 예방접종 / 목줄·입마개(맹견) / 동반 이동 / 지자체 지원 / 펫보험
-> 기계용 시드 목록: [`data/manifests/seed_sources.yaml`](../data/manifests/seed_sources.yaml) · 저장 규칙: [`data/README.md`](../data/README.md)
+> 기계용 시드 목록: [`data/manifests/seed_sources.yaml`](../../data/manifests/seed_sources.yaml) · 저장 규칙: [`data/README.md`](../../data/README.md)
 
 **표기**
 - 체크박스 = **수집 완료 여부** (실제 기록은 `data/manifests/crawl_log.jsonl`, 여기는 사람이 보는 요약)
@@ -324,7 +324,7 @@ JS 렌더링 폴백은 필요 없었다 — 둘 다 서버 렌더링이다.
 
 ## 8. 실시간 조회형 (7) — 저장하지 않고 API 직조회
 
-> 상세: [`docs/realtime-apis.md`](realtime-apis.md). 코퍼스가 아니므로 수집 체크 대상이 아니고, **연동 완료** 체크로 관리한다.
+> 상세: [`docs/life/realtime-apis.md`](realtime-apis.md). 코퍼스가 아니므로 수집 체크 대상이 아니고, **연동 완료** 체크로 관리한다.
 
 **연동 확인 방법** — 실서버(`uvicorn main:app`)에 `GET /walk` 을 **세 지역**(역삼·해운대·제주)으로
 날려 각 provider 가 `sources` 에 `ok` 로 찍히는지 본다. `/walk` 이 안 부르는 오퍼레이션만 따로 찌른다.

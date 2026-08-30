@@ -99,7 +99,7 @@ def get(path: str, params: dict[str, Any], *, budget: Budget | None = None) -> A
     """
     if not config.DATA_GO_KR_KEY:
         raise Rejected("DATA_GO_KR_KEY 없음",
-                       hint="발급·활용신청은 docs/data-sources.md §9. **Decoding 키**를 쓴다")
+                       hint="발급·활용신청은 docs/life/data-sources.md §9. **Decoding 키**를 쓴다")
 
     query = {
         "serviceKey": config.DATA_GO_KR_KEY,

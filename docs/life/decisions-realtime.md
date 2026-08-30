@@ -16,7 +16,7 @@
 
 ## RT-001. 실시간 엔진 — 계층·관측 모델·판정 룰·캐시 — ✅ 확정 (2026-08-24, 하위 18결정 전부 — 파일 끝의 정리 참조. 헤더는 2026-08-30 에 정정)
 
-**배경** — 파트②는 조사(`docs/realtime-apis.md`, 2026-08-19)만 끝나 있고 **코드도 결정도 없다.**
+**배경** — 파트②는 조사(`docs/life/realtime-apis.md`, 2026-08-19)만 끝나 있고 **코드도 결정도 없다.**
 RAG-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 잡아 뒀고, RAG-012 가 "realtime 도메인은
 저장하지 않아 크롤러 소스 모듈이 생기지 않는다", RAG-001 이 "Redis 를 API 응답 TTL 캐시로 재활용 예정"이라
 예고했을 뿐이다. P1(메인 피처)은 **조사한 API 7종 전부 연동**으로 잡았다.
@@ -108,7 +108,7 @@ backend/realtime/
 
 - **provider 는 API *서비스* 하나 = 모듈 하나다. 오퍼레이션 단위가 아니다.** 단기예보 서비스의
   `getUltraSrtNcst`·`getUltraSrtFcst`·`getVilageFcst` 셋은 같은 봉투·같은 격자 입력이라 한 모듈 안의
-  함수 셋이다. 그래서 provider 7개가 `docs/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다
+  함수 셋이다. 그래서 provider 7개가 `docs/life/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다
 - **`geo.py` 를 provider 밖에 둔 이유** — 격자·TM 변환은 어느 API 의 것도 아니다. 카카오 `transcoord`
   로도 되고 자체 계산으로도 되는데 **자체 계산이 기본이고 카카오는 대체재**다. 그래야 `KAKAO_REST_KEY`
   가 없어도 관통되고, 카카오는 "○○동" 표기라는 UX 역할만 남는다
@@ -149,7 +149,7 @@ realtime 에는 존재하지 않는다.
 > `typ01/url/*.php` 는 텍스트/CSV, `typ02/openApi/<서비스>/<오퍼레이션>` 은 data.go.kr 과 **같은
 > 서비스명·오퍼레이션명 체계의 JSON** 이다. 실패 봉투는 두 계열 공통으로 `{result:{status,message}}` 라
 > data.go.kr(`cmmMsgHeader`)·kakao(`errorType`)와 또 다르다. 그리고 **생활기상지수는 data.go.kr 이 아니라
-> 이 typ02 계열에 있다** (`LivingWthrIdxServiceV3`, docs/realtime-apis.md §6.4).
+> 이 typ02 계열에 있다** (`LivingWthrIdxServiceV3`, docs/life/realtime-apis.md §6.4).
 >
 > **①의 결정은 그대로 유효하고 근거는 오히려 강해졌다** — 기상청 하나가 이제 전송 계약 **셋**에 걸쳐 있다
 > (data.go.kr · apihub typ01 · apihub typ02). 기관 축으로 자르면 `kma.py` 안에 인증 2종·응답 포맷 3종이
@@ -159,7 +159,7 @@ realtime 에는 존재하지 않는다.
 ### ①-2 `realtime` → `crawler` 참조 — ✅ 허용, 범위는 `crawler.core.config` 하나 (2026-08-24)
 
 **왜 필요한가** — `airkorea-stations` 의 측정소 목록은 이전·증설이 있어 월 1회 갱신하는 정적 메타이고,
-`docs/realtime-apis.md` §1 이 이미 `data/reference/` 에 두기로 했다. 그러려면 `DATA_DIR` 이 필요한데
+`docs/life/realtime-apis.md` §1 이 이미 `data/reference/` 에 두기로 했다. 그러려면 `DATA_DIR` 이 필요한데
 그 탐색은 `crawler/core/config.py` 에만 있다 (RAG-014 "경로 탐색은 한 곳"). **`rag` 가 RAG-018 에서 정확히
 같은 이유로 같은 예외를 받았다** — 두 번째 사례이므로 이제 일회성 예외가 아니라 **패턴**으로 기록한다.
 
@@ -207,7 +207,7 @@ realtime 에는 존재하지 않는다.
 
 7개 API 응답을 무엇으로 정규화할 것인가. 재논의 비용이 🔴 라 여기서 시간을 쓴다.
 **말로 정하지 않았다** — 키 3종을 넣고 실제로 호출해 응답 모양 5종을 확보한 뒤 시작했다
-(`docs/realtime-apis.md` §6). 다섯 하위 결정으로 쪼갠다. 뒤가 앞을 되돌리지 않는 순서다.
+(`docs/life/realtime-apis.md` §6). 다섯 하위 결정으로 쪼갠다. 뒤가 앞을 되돌리지 않는 순서다.
 
 | 순 | 하위 결정 | 상태 | 이 자리인 이유 |
 |---|---|---|---|
@@ -1222,7 +1222,7 @@ GET /walk?lat=37.4979&lon=127.0276
 이미 정해져 있다: LCC 변환 → 3번, 키 정규화·`05` 재시도 → 4번, EUC-KR 디코딩 → 4번,
 저장된 원본 응답 → 검문소 B 픽스처.
 
-**말로 정하지 않는다 — 실측을 먼저 확보했다 (2026-08-24, `docs/realtime-apis.md` §6).** 키 3종을 넣고
+**말로 정하지 않는다 — 실측을 먼저 확보했다 (2026-08-24, `docs/life/realtime-apis.md` §6).** 키 3종을 넣고
 17회 호출해 12건을 받았고, ②의 입력이 되는 **응답 모양 5종**(격자 관측 1점 / 격자 예보 시계열 /
 자연어 특보 / 측정소 값+등급 / 권역 등급 예보)을 실물로 확인했다. ②를 가리는 기준은 이제
 "A~E 를 각 후보 모델로 표현했을 때 룰 코드에 `category`·`pm10Grade1h` 같은 **API 고유 이름이 나오는가**"다.

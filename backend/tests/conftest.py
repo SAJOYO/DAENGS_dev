@@ -27,7 +27,6 @@ def _key(filler: int) -> str:
 # 설정 로딩이 실패합니다 — 그건 의도한 동작입니다 (D-013). .env 를 고치세요.
 os.environ["DAENGS_DB_HOST"] = "localhost"
 os.environ["DAENGS_DB_PASSWORD"] = "test-password"
-os.environ["DAENGS_TRAINING_RAG_BASE_URL"] = "http://training-rag.test"
 
 # 카카오 앱 키 허용 목록. id_token 의 aud 와 대조하는 값이라, 테스트에서는 이 중
 # 하나로 서명된 가짜 토큰을 만듭니다 (tests/test_kakao.py).

@@ -68,7 +68,7 @@ build-backend = "uv_build"
 # `daengs_backend` 하나뿐이어서, 안 적으면 **휠에 `daengs_life` 가 조용히 빠진다**
 # — 컨테이너가 `backend/src` 를 마운트해 도는 개발 모드에서는 안 드러난다.
 [tool.uv.build-backend]
-module-name = ["daengs_backend", "daengs_life"]
+module-name = ["daengs_backend", "daengs_life", "daengs_training"]
 
 [dependency-groups]
 dev = [

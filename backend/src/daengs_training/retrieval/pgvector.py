@@ -2,9 +2,8 @@
 from __future__ import annotations
 import argparse,json,re,sys
 from dataclasses import dataclass
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from daengs_training.resources import RUNTIME_ROOT
 
 #: Minimum characters for any term in SAFETY_BOUNDARY_TERMS.
 #:
@@ -26,7 +25,7 @@ MIN_BOUNDARY_TERM_CHARS = 2
 #: fields: "체벌 요청 거절" (oq0033) and "사람 약 거절" (oq0034).
 #:
 #: **Medical vocabulary does not belong here.**  That judgement is owned by
-#: scripts/medical_guardrail.classify_input_v2, which checks the training
+#: daengs_training.guardrails.medical.classify_input_v2, which checks the training
 #: whitelist first, and _medical_verdict() below delegates to it rather than
 #: keeping a second opinion.  Two lexicons for one question is what let this
 #: gate overrule a whitelist PASS.
@@ -34,7 +33,7 @@ MIN_BOUNDARY_TERM_CHARS = 2
 #: These two entries are not medical vocabulary in that sense: the frozen set
 #: labels them refuse_boundary and expects REFUSE, while a classify_input_v2
 #: hit produces MEDICAL_REFUSAL.  They ask for a harmful *action*, which is this
-#: gate's own remit — the same split scripts/medical_guardrail.py's docstring
+#: gate's own remit — the same split daengs_training.guardrails.medical's docstring
 #: describes ("if a caller wants training-harm coverage, that is a new lexicon
 #: and a new stage, not an extension of MEDICAL_TERMS").
 #:
@@ -79,7 +78,7 @@ def _medical_verdict(question: str):
 
     Returns None when the hand-authored lexicon files cannot be read, which
     leaves the medical stage out rather than failing a retrieval call.  The
-    serving path does not depend on this: scripts/rag_api.py loads the same two
+    serving path does not depend on this: daengs_training.service loads the same two
     lexicons at construction time and refuses medical questions before any
     search happens, so a None here cannot open a hole there.
 
@@ -90,14 +89,11 @@ def _medical_verdict(question: str):
     global _MEDICAL_LEXICONS
     if _MEDICAL_LEXICONS is None:
         try:
-            try:
-                from scripts import medical_guardrail
-            except ImportError:  # direct-script execution, same as rag_api.py
-                import medical_guardrail
+            from daengs_training.guardrails import medical as medical_guardrail
             _MEDICAL_LEXICONS = (
                 medical_guardrail,
-                medical_guardrail.load_medical_terms_v2(REPO_ROOT / "data/guardrail/medical_terms_v2.json"),
-                medical_guardrail.load_training_whitelist(REPO_ROOT / "data/guardrail/training_whitelist_v1.json"),
+                medical_guardrail.load_medical_terms_v2(RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"),
+                medical_guardrail.load_training_whitelist(RUNTIME_ROOT / "data/guardrail/training_whitelist_v1.json"),
             )
         except Exception:  # noqa: BLE001 - missing/malformed lexicon or import path
             _MEDICAL_LEXICONS = ()

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
-from scripts import medical_guardrail
+from daengs_training.guardrails import medical as medical_guardrail
 
 PROMPT_VERSION = 'grounded-answer-ko-v2'
 

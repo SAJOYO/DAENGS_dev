@@ -12,24 +12,25 @@
 
 ## 지금 상태 한 줄
 
-`daengs_gait` 는 **`dev` 에 머지되어 있고 서버에서는 꺼져 있습니다**(`profiles: ["gait"]`).
-소스를 backend 로 옮기는 PR #98 이 **draft 로 열려 있습니다.**
+**서버에서 gait 컨테이너가 돌고 있습니다** (2026-08-31 기동, `ready:true`).
+소스를 backend 로 옮기는 PR #98 은 **아직 draft** 라 서버 코드는 이관 전(PR #62) 상태입니다.
 
 ## 미해결 — 다음에 이어야 할 것
 
 | # | 무엇 | 왜 아직 | 어디서 이어지나 |
 | --- | --- | --- | --- |
-| 1 | **서버에서 gait 컨테이너 실기동** | 개발 PC 에 Docker 데몬이 안 떠 있어 `compose config` 검증으로만 갈음 | PR #98 |
-| 2 | **production 가중치로 실제 inference** | 서버에 올려 둔 가중치가 개발 PC 것과 같은 파일인지 **SHA256 대조가 아직 안 됨** | PR #62 → #98 |
+| 1 | ~~서버에서 gait 컨테이너 실기동~~ | ✅ **2026-08-31 완료** (아래) | — |
+| 2 | **서버에서 실제 영상 추론 1회** | 컨테이너 기동·가중치 로딩까지만 확인. 분석 요청은 아직 안 보냄 | PR #62 |
 | 3 | **원본 walk_demo 대비 parity 실측** | 이관 전후 대조는 했으나(아래) 원본과의 재대조는 미수행 | PR #62 |
+| 3-1 | **PR #98 머지 후 서버 재확인** | 이관 구조(`--group gait`)는 아직 서버에 없음 | PR #98 |
 | 4 | **기록 저장 구조 확정 (DB vs 파일)** | 설계안까지만 나옴. 앱이 부르는 URL 을 정하는 결정이라 앱 연동 전에 정해야 함 | `gait-record-data-design.md` |
 | 5 | **인증** | 켜는 순간 `/gait/` 가 인증 없는 업로드 엔드포인트가 됨 (스크리닝과 같은 상태) | D-024 · D-029 |
 | 6 | `bbox_center` 정의 이원화 | 고치면 수치가 바뀌어 parity 주장이 흔들림 — 사람 판단 필요 | PR #62 리뷰 |
 | 7 | record_id 8-hex 충돌 · 경로 검증 · Content-Length 선검사 | 머지를 막을 수준이 아니라 후속으로 미룸 | PR #62 리뷰 |
 
-⚠️ **2번이 1번보다 먼저입니다.** 서버 가중치가 다른 파일(예: walk_demo 의
-`models/experimental/*.pt` — 미채택 실험 가중치 6개)이면 켜도 결과가 다릅니다.
-개발 PC 에서 검증에 쓴 파일의 해시는 아래에 적어 두었습니다.
+⚠️ 서버 가중치가 개발 PC 검증본과 **바이트 단위로 같은 것을 확인**했습니다
+(53,169,600 / 6,549,796). walk_demo 의 `models/experimental/*.pt`(미채택 실험 가중치 6개)와
+헷갈릴 위험은 없어졌습니다.
 
 ## 검증에 쓴 가중치 (개발 PC)
 
@@ -122,3 +123,33 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
   이 되는데 다른 API 는 멀쩡해서 로그에 아무것도 안 뜹니다.
 - 코드에는 안 보이는 알고리즘 주의사항은 `backend/src/daengs_gait/CLAUDE.md` 에 있습니다
   (임계값 · `GAIT_FILTER_VERSION` · `sample_fps` · `OVERLAY_FPS`).
+
+## 2026-08-31 — 서버에서 gait 컨테이너 첫 기동 ✅
+
+서버(`192.168.0.22`)의 `C:\IDEctions-runner\_work\DAENGS_dev\DAENGS_dev` 에서
+**`gait-analysis` 서비스만 지정해** 띄웠습니다 (`up -d` 만 쓰면 11개를 전부 건드립니다).
+
+```powershell
+Add-Content .env "`nGAIT_RELEASE_DIR=C:\deploy\daengs\modelselease\gait-analysis"
+docker compose --profile gait up -d gait-analysis
+curl.exe -s http://localhost:8000/gait/healthz
+```
+
+확인된 것:
+
+| 항목 | 결과 |
+| --- | --- |
+| 리눅스 컨테이너 의존성 설치 | `torch==2.13.0+cpu` — **CPU 판을 집음** (CUDA 판이면 수 GB 더 받음) |
+| production 가중치 로딩 | `pose`·`detector` 둘 다 `found:true` |
+| FastAPI 기동 | `Application startup complete` |
+| **nginx `/gait/` 라우팅** | ✅ `localhost:8000/gait/...` 로 물었으므로 nginx 경유가 함께 검증됨 |
+| `gait_filter_version` | `v5-stationary-speed-based-20260826` |
+
+⚠️ **이것은 이관 전 코드(PR #62)입니다.** `--extra model` 로 설치됐습니다. 다만 실제
+설치된 패키지(torch·torchvision·ultralytics·opencv)가 PR #98 의 `gait` 그룹 내용과
+같아서, 머지 후에도 같은 결과가 나올 것으로 봅니다.
+
+⚠️ 서버 `.env` 의 `SCREENING_RELEASE_DIR` 이 `C:\deploy\daengs\modelselease` 이고
+gait 가 그 **하위 폴더**입니다. 동작에는 문제없지만(스크리닝은 `checkpoints/stage1_*`
+패턴만 찾습니다) 스크리닝이 가중치를 못 찾을 때의 에러 목록에 `gait-analysis/` 가 같이
+뜹니다. 나중에 헷갈릴 수 있는 자리입니다.

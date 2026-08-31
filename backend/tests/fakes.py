@@ -281,6 +281,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     async def pet_delete(session, pet):
         store.pets.remove(pet)
+        # DB 의 walk_pets ON DELETE CASCADE 자리. 그 아이만 연결에서 빠지고
+        # 산책 자체는 남습니다.
+        for walk in store.walks:
+            walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
@@ -318,6 +322,16 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def walk_delete_walks_only_with(session, pet_id):
+        solo = [
+            w
+            for w in store.walks
+            if w.pets and all(link.pet_id == pet_id for link in w.pets)
+        ]
+        for walk in solo:
+            store.walks.remove(walk)
+        return len(solo)
+
     def walk_add(session, walk):
         if walk.id is None:
             walk.id = uuid.uuid4()
@@ -332,6 +346,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return {p.client_seq for p in walk.points} if walk else set()
 
     monkeypatch.setattr(walk_repo, "add", walk_add)
+    monkeypatch.setattr(
+        walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
+    )
     monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
 
     return store

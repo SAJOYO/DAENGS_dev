@@ -6,6 +6,7 @@ DB 는 쓰지 않습니다. `fakes.py` 가 리포지토리를 바꿔치기하므
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 import pytest
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import pet as pet_router
 from daengs_backend.services import pet as pet_service
-from fakes import FakeAdmin, FakeAppUser, FakePet, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeWalk, FakeWalkPet, Store, install
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
@@ -139,3 +140,51 @@ def test_목록은_상한을_같이_알려_준다(client: TestClient) -> None:
     r = client.get("/app/pets").json()
     assert r["max_pets"] == pet_service.MAX_PETS_PER_USER
     assert len(r["pets"]) == 1
+
+
+def _walk(store: Store, *pet_ids: uuid.UUID) -> FakeWalk:
+    """그 아이들과 나간 산책 하나를 store 에 둡니다."""
+    walk = FakeWalk(
+        app_user_id=OWNER,
+        client_session_id=uuid.uuid4(),
+        started_at=datetime(2026, 8, 31, 9, tzinfo=UTC),
+        ended_at=datetime(2026, 8, 31, 10, tzinfo=UTC),
+        pets=[FakeWalkPet(pet_id=p) for p in pet_ids],
+    )
+    store.walks.append(walk)
+    return walk
+
+
+def test_그_아이와만_나간_산책은_같이_지운다(client: TestClient, store: Store) -> None:
+    """아이를 지웠는데 그 아이의 산책만 남으면 "누구와 갔는지 모르는 기록" 이 됩니다."""
+    neong = client.post("/app/pets", json=_body("네옹")).json()
+    solo = _walk(store, uuid.UUID(neong["id"]))
+
+    assert client.delete(f"/app/pets/{neong['id']}").status_code == 204
+
+    assert solo not in store.walks
+
+
+def test_다른_아이와_같이_나간_산책은_남긴다(client: TestClient, store: Store) -> None:
+    """그 산책은 **남은 아이의 기록이기도 합니다.**
+
+    지우면 남은 아이의 운동량이 통째로 빕니다. 그 산책에서 지운 아이만 빠집니다.
+    """
+    neong = client.post("/app/pets", json=_body("네옹")).json()
+    dang = client.post("/app/pets", json=_body("댕댕")).json()
+    together = _walk(store, uuid.UUID(neong["id"]), uuid.UUID(dang["id"]))
+
+    client.delete(f"/app/pets/{neong['id']}")
+
+    assert together in store.walks
+    assert together.pet_ids == [uuid.UUID(dang["id"])]
+
+
+def test_아무도_안_붙은_산책은_건드리지_않는다(client: TestClient, store: Store) -> None:
+    """강아지를 등록하기 전에 걸은 산책입니다. **사람이 걸은 것은 걸은 것입니다.**"""
+    neong = client.post("/app/pets", json=_body("네옹")).json()
+    alone = _walk(store)
+
+    client.delete(f"/app/pets/{neong['id']}")
+
+    assert alone in store.walks

@@ -6,14 +6,15 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from daengs_backend.models import Walk, WalkPoint
+from daengs_backend.models import Walk, WalkPet, WalkPoint
 
 __all__ = [
     "add",
+    "delete_walks_only_with",
     "existing_seqs",
     "get_by_client_session",
     "get_owned",
@@ -75,6 +76,32 @@ async def get_by_client_session(
         .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
+
+
+async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:
+    """**그 아이와만** 나간 산책을 지웁니다.
+
+    강아지를 지울 때 부릅니다. 다른 아이와 같이 나간 산책은 **남깁니다** — 그 산책은
+    남은 아이의 기록이기도 해서, 지우면 그 아이의 운동량이 통째로 빕니다. 그 산책에서
+    이 아이만 빠지는 것은 조인 행의 `ON DELETE CASCADE` 가 알아서 합니다.
+
+    아무도 안 붙은 산책은 애초에 조인 행이 없어 여기 걸리지 않습니다.
+
+    :returns: 지운 산책 수.
+    """
+    others = WalkPet.__table__.alias("others")
+    solo = (
+        select(WalkPet.walk_id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            ~exists().where(
+                others.c.walk_id == WalkPet.walk_id,
+                others.c.pet_id != pet_id,
+            ),
+        )
+    )
+    result = await session.execute(delete(Walk).where(Walk.id.in_(solo)))
+    return result.rowcount or 0
 
 
 def add(session: AsyncSession, walk: Walk) -> Walk:

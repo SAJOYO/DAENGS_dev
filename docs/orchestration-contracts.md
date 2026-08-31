@@ -94,6 +94,12 @@ CapabilityRequest:
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
 
+`timeout_ms` 는 **오케스트레이션 응답 기한**이지 하위 작업의 강제 취소 보장이 아닙니다.
+`asyncio.to_thread()` 로 위임한 블로킹 작업은 TIMEOUT 응답 뒤에도 능력 자체의 provider/domain
+타임아웃 안에서 완료 중일 수 있습니다. 따라서 즉시 stateless 재시도는 이전 실행과 잠시
+겹치거나 그 뒤에 대기할 수 있으며, 재시도 정책이 이를 고려해야 합니다. 특히 현재 Training
+실행은 process-local lock 으로 직렬화되므로 끝나지 않은 실행 뒤에 재시도가 대기할 수 있습니다.
+
 **만능 공용 페이로드를 만들지 않습니다 (CONFIRMED).** `question + dog_profile` 하나로 모든
 능력을 덮으려던 v1 계약이 Walk(좌표·시각) 앞에서 이미 안 맞았습니다. 페이로드 타입은
 능력이 소유하고, 오케스트레이터는 그 내용을 해석하지 않고 전달만 합니다.

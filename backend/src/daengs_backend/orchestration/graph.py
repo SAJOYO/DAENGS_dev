@@ -132,6 +132,10 @@ class OrchestrationEngine:
                 if request.timeout_ms is None:
                     result = await pending
                 else:
+                    # This is a response deadline, not hard cancellation: blocking
+                    # asyncio.to_thread() work may continue. Domain/provider timeouts
+                    # remain the execution bound, so retry policy must allow for a
+                    # timed-out invocation that is still completing.
                     result = await asyncio.wait_for(pending, timeout=request.timeout_ms / 1_000)
             except TimeoutError:
                 result = CapabilityResult(

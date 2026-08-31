@@ -14,6 +14,11 @@ from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminU
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
+from daengs_backend.models.pet import (
+    PET_BIRTH_DATE_KINDS,
+    PET_SEXES,
+    Pet,
+)
 from daengs_backend.models.refresh_token import RefreshToken
 
 __all__ = [
@@ -26,5 +31,8 @@ __all__ = [
     "AdminUser",
     "AppUser",
     "Base",
+    "PET_BIRTH_DATE_KINDS",
+    "PET_SEXES",
+    "Pet",
     "RefreshToken",
 ]

@@ -20,7 +20,7 @@ PARSED_DIR: Path | None = PROCESSED_DIR / "parsed" if PROCESSED_DIR else None
 CHUNK_DIR: Path | None = PROCESSED_DIR / "chunks" if PROCESSED_DIR else None
 EMBED_DIR: Path | None = PROCESSED_DIR / "embeddings" if PROCESSED_DIR else None
 # 6단계 3파전 덤프. **미추적이다** — 기계 산출물이고 chunk_id 의 수집 날짜에 묶여 재수집하면
-# 통째로 낡는다. 판단이 남는 자리는 `docs/decisions-rag.md` 의 RAG-024 다 (RAG-024 ④).
+# 통째로 낡는다. 판단이 남는 자리는 `docs/life/decisions-rag.md` 의 RAG-024 다 (RAG-024 ④).
 EVAL_DIR: Path | None = PROCESSED_DIR / "eval" if PROCESSED_DIR else None
 # 9단계 1랩 답변 덤프 (RAG-028 ⑥). **미추적**이고 2랩(소스 확장 후 재관통) 비교의 재료다.
 # eval/ 과 같은 이유로 여기 둔다 — 기계 산출물이고 재수집하면 chunk_id 가 바뀌어 통째로 낡는다.

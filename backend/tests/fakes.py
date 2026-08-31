@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest
+
+from daengs_backend.repositories import pet as pet_repo
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
@@ -49,6 +51,8 @@ class FakeAppUser:
     phone_enc: bytes | None = None
     name_enc: bytes | None = None
     status: str = "active"
+    #: 대표 강아지. pets 쪽이 아니라 계정 쪽에 있습니다 (05_pets.sql).
+    primary_pet_id: uuid.UUID | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -78,6 +82,15 @@ class FakeSession:
     def __init__(self) -> None:
         self.commits = 0
         self.rollbacks = 0
+        self.flushes = 0
+
+    async def flush(self) -> None:
+        """진짜 세션은 여기서 DB 기본값(id)을 받아 옵니다.
+
+        가짜는 셀 뿐입니다 — `FakePet` 이 만들어질 때 id 를 이미 갖고 있어서,
+        서비스가 flush 뒤에 id 를 쓰는 흐름이 그대로 돕니다.
+        """
+        self.flushes += 1
 
     async def commit(self) -> None:
         self.commits += 1
@@ -94,10 +107,28 @@ class Store:
         self.tokens: dict[str, FakeToken] = {}
         #: kakao_id → 회원. 앱 회원은 여러 명일 수 있습니다.
         self.app_users: dict[int, FakeAppUser] = {}
+        #: 등록 순서대로 담습니다 — 진짜 리포지토리가 created_at 으로 정렬하는 것과
+        #: 같은 순서라, "대표를 지우면 먼저 등록한 아이가 승계한다"를 볼 수 있습니다.
+        self.pets: list[FakePet] = []
 
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
         return user
+
+
+@dataclass
+class FakePet:
+    """Pet 대역. 암호화 컬럼이 없어 그대로 담습니다 (05_pets.sql 주석)."""
+
+    app_user_id: uuid.UUID
+    name: str
+    breed: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    sex: str | None = None
+    neutered: bool | None = None
+    weight_kg: object | None = None
+    birth_date: object | None = None
+    birth_date_kind: str | None = None
 
 
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
@@ -178,4 +209,35 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(
         refresh_token_repo, "delete_all_for_subject", delete_all_for_subject
     )
+
+    # -- pets --------------------------------------------------------------
+    async def pet_list_for_owner(session, app_user_id):  # noqa: ANN001, ANN202
+        return [p for p in store.pets if p.app_user_id == app_user_id]
+
+    async def pet_get_owned(session, app_user_id, pet_id):  # noqa: ANN001, ANN202
+        return next(
+            (p for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
+            None,
+        )
+
+    async def pet_count_for_owner(session, app_user_id):  # noqa: ANN001, ANN202
+        return len([p for p in store.pets if p.app_user_id == app_user_id])
+
+    def pet_add(session, pet):  # noqa: ANN001, ANN202
+        # 진짜 DB 는 `gen_random_uuid()` 로 id 를 채웁니다. 가짜가 그 역할을 합니다 —
+        # 안 채우면 서비스가 flush 뒤에 쓰는 `pet.id` 가 None 입니다.
+        if pet.id is None:
+            pet.id = uuid.uuid4()
+        store.pets.append(pet)
+        return pet
+
+    async def pet_delete(session, pet):  # noqa: ANN001, ANN202
+        store.pets.remove(pet)
+
+    monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
+    monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
+    monkeypatch.setattr(pet_repo, "add", pet_add)
+    monkeypatch.setattr(pet_repo, "delete", pet_delete)
+
     return store

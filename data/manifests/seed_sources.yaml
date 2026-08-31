@@ -4,7 +4,7 @@
 # auth   : none | data-go-kr (활용신청, 자동승인) | law-oc (open.law.go.kr OC 신청)
 #          | kma-hub (apihub 가입키) | kakao (REST 키)
 # status : verified (2026-08-19 URL/제공여부 확인) | unverified (요확인)
-# 상세 설명: docs/data-sources.md, docs/realtime-apis.md
+# 상세 설명: docs/life/data-sources.md, docs/life/realtime-apis.md
 # =====================================================================
 
 # ---------- 공통: 법령 ----------
@@ -71,7 +71,7 @@
     본문 자체는 정적 HTML(#contents)이고 카드뉴스도 title 속성에 텍스트가 있어 품질은 좋다.
     시드에 있던 https://www.animal.go.kr/ 는 JS 리다이렉트 2단(/front/ -> /front/index.do)이라
     본문이 아니었고, 위 URL 이 실제 '동물등록제도 안내' 다. 같은 내용이 nias-pet 과 easylaw-pet 에
-    있으므로 이 소스는 수집하지 않는다 (docs/data-sources.md §12 robots 준수)."
+    있으므로 이 소스는 수집하지 않는다 (docs/life/data-sources.md §12 robots 준수)."
 
 - id: gov24-registration
   domain: registration
@@ -213,7 +213,7 @@
     ❌ 진에어·에어서울은 403 Cloudflare 챌린지, 에어부산은 TLS 핸드셰이크 거부,
     대한항공·아시아나는 ReadTimeout, 제주항공·티웨이는 robots.txt 403.
     ⚠️ 2026-08-28 에 '5곳 열림'으로 적었던 것은 robots.txt 만 본 값이다 — robots 는 정적 파일이라
-    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/data-sources.md §12).
+    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/life/data-sources.md §12).
     진에어 robots 의 Content-Signal: search=yes,ai-train=no,use=reference 는 우리 용도
     (출처 표기 참조)가 use=reference 에 해당하나, 어차피 페이지를 못 받는다."
 
@@ -241,12 +241,20 @@
 - id: seoul-notice-api
   domain: subsidy
   org: 서울특별시
-  title: 서울시 고시공고 정보 (열린데이터광장 API)
-  url: "https://data.seoul.go.kr/dataList/OA-2482/S/1/datasetView.do"
+  title: 서울시 고시공고 (열린데이터광장 API)
+  url: "https://data.seoul.go.kr/dataList/OA-23050/A/1/datasetView.do"
   method: api
-  auth: none
+  auth: seoul-open-data
   status: verified
-  notes: "공고문 모니터링용. 열린데이터광장 인증키 별도(무료). 키워드 필터 - 반려/동물"
+  # 공고는 매일 올라온다 (하루 7.5건 실측). 기본값 weekly 를 시드 예외로 덮는 첫 사례 (RAG-044 ② · RAG-053).
+  cadence: daily
+  notes: "신규 지원사업 탐지용. 서비스명 tvvWcmBoardB0277New (OA-23050) — 2026-08-30 정찰: 원래 시드 OA-2482 `ListNewsNotice` 는
+    카탈로그(SearchOpenAPIService)에 '(종료예정)' 이고 최근 50건뿐이라 후속 데이터셋으로 바꿨다. 서비스명은 페이지에 안 나오고
+    카탈로그 API 로만 알 수 있다. 필터 인자 없음 → 최신 1,000건(≈6개월)을 한 요청으로 받아 복합 키워드로 거른다
+    (_pet_keywords, RAG-034). 6개월에 1건 걸렸다 — 수확이 적은 소스. 원본 1건 = 한 행짜리 응답({i}/{i}), 지문은 텍스트
+    (응답의 list_total_count 가 매일 바뀜). 첨부(seoulboard)는 robots Disallow: / 라 주소만 남긴다. 인용은
+    https://www.seoul.go.kr/news/news_notice.do#view/{BOARD_ID}. 구 단위 고시공고 API(송파 SpNtfc · 관악 GwanakGosiList ·
+    노원 NowonNewsGosiList · 은평 EminwonPblanc)가 따로 있다 — 지원사업 공고는 구가 더 많을 수 있어 후보."
 
 - id: seoul-microchip-support
   domain: subsidy
@@ -329,9 +337,17 @@
     ⚠ 회사 공시실(11건)이 협회 공시(6건)보다 넓다.
     ⚠ **약관 PDF 한 파일에 관계법령 전문이 붙어 있다** — 안 자르면 신용정보법 조문이 `펫보험 약관 제32조`로
     인용된다. 앞의 안내 책자와 뒤의 별표·관계법령을 잘라낸다 (RAG-039 ②).
-    실측 11건 25.1MB · 1,530쪽 · 스캔 0건(0자 페이지 1.2%). 남은 6사는 별도 카드."
+    실측 11건 25.1MB · 1,530쪽 · 스캔 0건(0자 페이지 1.2%). 남은 6사는 별도 카드.
+    2026-08-30 수집(#58 · RAG-048) — **KB 9건 · 농협 3건 완료.** 합계 23건.
+    KB: 목록 POST 폼이 GET 을 받되 조건은 hidden 이 아니라 화면 입력 필드(search_goods_nm · search_onsale_yn, euc-kr).
+      상세가 판매 이력 표라 판매종료일 빈 행의 약관 링크(/CG802030003.ec?fileNm=…)를 읽는다 — 조립하지 않는다.
+      ⚠ 25200(다이렉트 금쪽같은 펫보험 고양이 재가입용)은 약관 자리에 8쪽 특이사항(_1_3.pdf)이 걸려 있어 건너뛴다.
+    농협: ajax 세 단 GET (retrievePdtCd → retrievePdtInfo?fileType=05 → /imageView/downloadFile.ajax). 1·2·3종이 합본 한 PDF.
+    ⚠ **DB손보는 뺐다** — robots 가 User-agent 없는 allow-list + Disallow: / 이고 공시실 경로가 allow-list 에 없다.
+      표준상 통과하지만 의도를 존중한다 (사람이 정함, RAG-048 ①).
+    ⚠ 마커는 회사가 아니라 판형이 정한다 — KB 구형(2018)은 농협처럼 얇은 표제 없이 바로 제1조(목적)다 (RAG-048 ④)."
 
-# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
+# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/life/realtime-apis.md) ----------
 - id: kma-vilage-fcst
   domain: realtime
   org: 기상청

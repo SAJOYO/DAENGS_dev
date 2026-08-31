@@ -24,7 +24,7 @@ SERVICE = "http://www.law.go.kr/DRF/lawService.do"
 OC_MISSING = (
     "LAW_OC 미설정. open.law.go.kr 에서 OPEN API 를 신청하면 즉시 발급된다(무료).\n"
     "  발급 후 레포 루트 .env 에 `LAW_OC=발급받은_이메일ID` 한 줄을 추가하면 된다.\n"
-    "  (docs/data-sources.md §9)"
+    "  (docs/life/data-sources.md §9)"
 )
 
 

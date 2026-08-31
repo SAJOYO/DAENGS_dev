@@ -1,7 +1,7 @@
 # realtime/
 
-파트② **실시간 조회형** 엔진 — 산책 적합 날씨·미세먼지. 설계 전체는 `docs/decisions-realtime.md`
-**RT-001**(하위 18결정 확정)에 있고, 그 근거는 전부 `docs/realtime-apis.md` **§6 실측**이다.
+파트② **실시간 조회형** 엔진 — 산책 적합 날씨·미세먼지. 설계 전체는 `docs/life/decisions-realtime.md`
+**RT-001**(하위 18결정 확정)에 있고, 그 근거는 전부 `docs/life/realtime-apis.md` **§6 실측**이다.
 
 ```
 GPS ──geo──▶ 조회 키(격자·측정소·행정동) ──providers──▶ 공통 관측 모델 ──rules──▶ 산책 적합도
@@ -59,7 +59,7 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 
 **provider 는 API *서비스* 하나 = 모듈 하나다. 오퍼레이션 단위가 아니다.** 단기예보의
 `getUltraSrtNcst`·`getUltraSrtFcst`·`getVilageFcst` 는 같은 봉투·같은 격자 입력이라 한 모듈 안의
-함수 셋이다. 그래서 7개가 `docs/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다.
+함수 셋이다. 그래서 7개가 `docs/life/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다.
 
 ## 의존 방향
 

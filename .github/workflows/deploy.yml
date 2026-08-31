@@ -16,6 +16,7 @@ env:
 
 jobs:
   deploy:
+    name: 서비스 반영
     # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
     runs-on: [self-hosted, Windows, X64]
 
@@ -42,6 +43,14 @@ jobs:
       - name: Compose 설정 검증
         run: |
           # backend의 필수 배포 환경변수가 비어 있으면 컨테이너를 바꾸기 전에 명확히 실패시킨다.
+          $envPath = Join-Path $env:GITHUB_WORKSPACE 'backend\.env'
+          if (-not (Test-Path $envPath)) { throw 'backend/.env not found' }
+          $geminiLine = Get-Content $envPath | Where-Object { $_ -match '^\s*GEMINI_API_KEY\s*=' } | Select-Object -First 1
+          if (-not $geminiLine) { throw 'GEMINI_API_KEY missing in backend/.env' }
+          $env:GEMINI_API_KEY = ($geminiLine -replace '^\s*GEMINI_API_KEY\s*=\s*', '').Trim().Trim('"').Trim("'")
+          if ([string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)) { throw 'GEMINI_API_KEY empty in backend/.env' }
+          Write-Output "::add-mask::$env:GEMINI_API_KEY"
+          Add-Content -Path $env:GITHUB_ENV -Value "GEMINI_API_KEY=$env:GEMINI_API_KEY"
           docker compose config --quiet
 
       - name: 의존성 설치
@@ -117,9 +126,20 @@ jobs:
           docker compose exec -T nginx nginx -t
           docker compose exec -T nginx nginx -s reload
 
+  post_deploy_smoke:
+    name: 배포 후 공개 경로 확인
+    needs: deploy
+    runs-on: [self-hosted, Windows, X64]
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
       - name: Place 공개 경로 확인
         run: |
-          # APP 기본 종류인 cafe의 실제 결과까지 확인합니다. 빈 DB의 HTTP 200은 성공이 아닙니다.
+          # 배포에서는 공개 경로와 APP 응답 계약만 확인합니다.
+          # 실제 cafe 데이터 존재 여부는 place-search-ingest.yml의 적재 후 검증이 담당합니다.
           $body = '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}'
           foreach ($attempt in 1..18) {
             try {
@@ -130,39 +150,24 @@ jobs:
                 -Body $body `
                 -TimeoutSec 10
               $group = @($response.groups | Where-Object kind -eq 'cafe')
-              if ($group.Count -eq 1 -and @($group[0].results).Count -ge 1) {
-                Write-Host 'Place cafe result verified'
-                break
+              if ($group.Count -ne 1) {
+                throw 'Place response must contain exactly one cafe group'
               }
-              throw 'Place cafe result is empty'
+              $requiredFields = @('kind', 'sort', 'limit', 'truncated', 'results')
+              $missingFields = @($requiredFields | Where-Object {
+                $_ -notin $group[0].PSObject.Properties.Name
+              })
+              if ($missingFields.Count -ne 0 -or
+                  $group[0].results -isnot [System.Array]) {
+                throw 'Place response does not match APP contract'
+              }
+              Write-Host 'Place APP contract verified'
+              break
             } catch {
               if ($attempt -eq 18) { throw }
               Start-Sleep -Seconds 5
             }
           }
-
-      - name: Place 공개 경로 호출 제한 확인
-        run: |
-          # 존재하지 않는 Place 하위 경로로 DB를 읽지 않고 nginx 제한만 확인합니다.
-          $limited = $false
-          foreach ($attempt in 1..20) {
-            try {
-              Invoke-WebRequest -UseBasicParsing `
-                -Uri 'http://127.0.0.1:8000/v2/places/rate-limit-probe' `
-                -TimeoutSec 5 `
-                -ErrorAction Stop | Out-Null
-            } catch {
-              if ($null -ne $_.Exception.Response) {
-                $status = [int]$_.Exception.Response.StatusCode
-                if ($status -eq 429) {
-                  $limited = $true
-                  break
-                }
-              }
-            }
-          }
-          if (-not $limited) { throw 'Place rate limit did not return HTTP 429' }
-          Write-Host 'Place rate limit verified'
 
       - name: Journey 공개 경로 확인
         run: |

@@ -24,7 +24,7 @@ class CrawlRun(Base):
     __tablename__ = "crawl_runs"
 
     __table_args__ = (
-        CheckConstraint("trigger IN ('due','manual')", name="crawl_runs_trigger_check"),
+        CheckConstraint("trigger IN ('due','manual','revision')", name="crawl_runs_trigger_check"),
         CheckConstraint("status IN ('running','ok','failed','unavailable')",
                         name="crawl_runs_status_check"),
     )

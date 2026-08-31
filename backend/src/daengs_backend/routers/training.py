@@ -11,20 +11,15 @@ from daengs_backend.config import settings
 from daengs_backend.core.deps import Perm, Principal, current_admin, require
 from daengs_backend.schemas.training import TrainingChatRequest, TrainingChatResponse
 from daengs_backend.services.training_rag import (
-    TrainingRagClient,
-    TrainingRagTimeoutError,
+    TrainingRagService,
     TrainingRagUnavailableError,
 )
 
 router = APIRouter(prefix="/training", tags=["training"])
 
 
-def get_training_rag_client() -> TrainingRagClient:
-    return TrainingRagClient(
-        base_url=settings.training_rag_base_url,
-        connect_timeout_seconds=settings.training_rag_connect_timeout_seconds,
-        read_timeout_seconds=settings.training_rag_read_timeout_seconds,
-    )
+def get_training_rag_service() -> TrainingRagService:
+    return TrainingRagService()
 
 
 #: 콘솔의 `검색 점검` 메뉴와 같은 기준입니다 (`frontend/app/console/page.tsx`).
@@ -52,19 +47,13 @@ async def chat(
     payload: TrainingChatRequest,
     response: Response,
     _user: Annotated[Principal | None, Depends(require_training_access)],
-    client: Annotated[TrainingRagClient, Depends(get_training_rag_client)],
+    service: Annotated[TrainingRagService, Depends(get_training_rag_service)],
 ) -> TrainingChatResponse:
-    """질문을 별도 RAG 서비스로 전달하고 사용자용 상태로 정규화한다."""
+    """질문을 로컬 Training 컴포넌트로 전달하고 사용자용 상태로 정규화한다."""
     trace_id = str(uuid.uuid4())
     response.headers["X-Request-ID"] = trace_id
     try:
-        return await client.ask(question=payload.question.strip(), trace_id=trace_id)
-    except TrainingRagTimeoutError:
-        raise HTTPException(
-            status.HTTP_504_GATEWAY_TIMEOUT,
-            "훈련 도우미 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.",
-            headers={"X-Request-ID": trace_id},
-        ) from None
+        return await service.ask(question=payload.question.strip(), trace_id=trace_id)
     except TrainingRagUnavailableError:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

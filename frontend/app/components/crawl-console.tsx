@@ -15,7 +15,7 @@ type CrawlRun = {
   id: number;
   run_id: string | null;
   source_id: string;
-  trigger: "due" | "manual";
+  trigger: "due" | "manual" | "revision";
   status: "running" | "ok" | "failed" | "unavailable";
   docs_fetched: number;
   docs_changed: number;
@@ -40,7 +40,8 @@ const STATUS: Record<CrawlRun["status"], { label: string; className: string }> =
   unavailable: { label: "손봐야 함", className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
 };
 
-const TRIGGER: Record<CrawlRun["trigger"], string> = { due: "주기", manual: "수동" };
+// "개정" 은 Beat 가 시행일자 변화를 보고 깨운 수집 — 법령은 주기가 없어 이 길로만 받습니다 (RAG-054).
+const TRIGGER: Record<CrawlRun["trigger"], string> = { due: "주기", manual: "수동", revision: "개정" };
 
 /** 5초. 크롤 하나가 분 단위라 더 자주 물어도 볼 것이 없습니다. */
 const POLL_MS = 5000;
@@ -108,6 +109,12 @@ export default function CrawlConsole() {
       const body = { source_ids: sourceIds };
       await apiJson<{ task_id: string }>("/api/admin/crawl", {
         method: "POST",
+        // **`apiJson` 은 헤더를 붙여 주지 않습니다.** 빼면 브라우저가 문자열 본문에
+        // `text/plain` 을 달고, FastAPI 는 maintype 이 `application` 이 아니면 본문을
+        // JSON 으로 파싱하지 않아 422 가 납니다. 그 422 의 `detail` 은 문자열이 아니라
+        // **목록**이라 `detailOf` 가 기본 문구로 흘리고, 화면에는 "요청을 처리하지
+        // 못했습니다"만 남습니다 — 예외도 로그도 없이 버튼이 죽은 것처럼 보입니다.
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       setNotice(

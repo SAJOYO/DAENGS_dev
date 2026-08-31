@@ -13,6 +13,7 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     LargeBinary,
     String,
     Uuid,
@@ -52,6 +53,15 @@ class AppUser(Base):
     name_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
 
     status: Mapped[str] = mapped_column(String(20), server_default=text("'active'"))
+
+    # 대표 강아지. 상단바·챗봇 얼굴이 이 아이를 따릅니다.
+    #
+    # **pets 쪽에 is_primary 를 두지 않은 이유**는 05_pets.sql 에 적어 두었습니다 —
+    # 요약하면 계정에 한 칸을 두어야 "한 마리만 대표"를 DB 가 저절로 보장합니다.
+    # 그 강아지가 지워지면 NULL 이 되고, 승계는 서비스 계층이 합니다.
+    primary_pet_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("pets.id", ondelete="SET NULL")
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

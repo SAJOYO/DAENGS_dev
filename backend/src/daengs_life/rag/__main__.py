@@ -35,6 +35,7 @@ from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
 from .stages import load as loader
 from .stages import score as scorer
+from .core import transport
 from .stages import search as searcher
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -356,7 +357,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     print()
     print(evaluate.markdown(summaries, verdict, gs, fingerprint, len(index)))
     print()
-    print("  ^ 위 markdown 을 docs/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
+    print("  ^ 위 markdown 을 docs/life/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
     print("    덤프는 미추적이라 이것이 뒤에 남는 전부다.")
     return 0
 
@@ -497,6 +498,9 @@ def cmd_search(args: argparse.Namespace) -> int:
             print(f"\n{head}{q}")
             if must:
                 print(f"      필수 {len(must)}개: {', '.join(sorted(must))}")
+            if excluded := transport.exclusions(q):
+                # 검문소③이 "왜 항공이 안 보이나"를 눈으로 알 수 있게 (RAG-052)
+                print(f"      교통수단 {'/'.join(sorted(transport.modes(q)))} → {', '.join(excluded)} 배제")
             hits = searcher.search(vec, k=args.k, conn=conn,
                                    include_supplementary=args.supplementary,
                                    category=args.category)

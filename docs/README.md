@@ -2,11 +2,14 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [orchestration-architecture.md](orchestration-architecture.md) | 오케스트레이션 전체 지도 — 물리 토폴로지(실행 주체 3개 · 라우팅 · 배포 · 기동 순서) + 논리 구조(직접 API vs `/assistant/query` · v1 범위 · **능력 준비도 표(단일 원본)** · Training 토폴로지 이관 완료) |
+| [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 |
+| [orchestration-routing.md](orchestration-routing.md) | 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `skin-screening` · `gait-analysis` · 오케스트레이션)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
 지금은 `life/` · `training/` 을 옮겼고 나머지 유닛은 별도 카드입니다(#82).

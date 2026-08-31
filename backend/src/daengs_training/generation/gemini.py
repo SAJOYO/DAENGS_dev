@@ -33,6 +33,10 @@ CONTEXT_ONLY_RULE = '6. <사용자사례>는 보호자가 상담에서 직접 �
 class GenerationError(RuntimeError):
     """Raised when inputs, settings or the answer client are unusable."""
 
+
+class GenerationTimeoutError(GenerationError):
+    """Raised when Gemini exceeds the configured provider deadline."""
+
 @dataclass(frozen=True)
 class ClientInfo:
     name: str
@@ -131,6 +135,10 @@ def load_gemini_answer_client(
                 )
                 response.raise_for_status()
                 data = response.json()
+            except httpx.TimeoutException as exc:
+                raise GenerationTimeoutError(
+                    f'Gemini call timed out for {selected_model}'
+                ) from exc
             except Exception as exc:
                 raise GenerationError(
                     f'Gemini call failed for {selected_model}: {str(exc)[:400]}'

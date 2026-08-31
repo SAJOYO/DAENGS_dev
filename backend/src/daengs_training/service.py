@@ -116,6 +116,10 @@ class ChatResponse(BaseModel):
     output_guardrail_blocked: bool
 
 
+class TrainingTimeoutError(RuntimeError):
+    """The Training domain exceeded an upstream generation deadline."""
+
+
 class RAGService:
     """One process-local runtime with bounded retrieval/generation concurrency."""
 
@@ -261,7 +265,10 @@ class RAGService:
                 "answer",
             )
             record: dict[str, Any] = {"question": question, "usage": None}
-            raw_answer = self.client.complete(prompt, record)
+            try:
+                raw_answer = self.client.complete(prompt, record)
+            except generation.GenerationTimeoutError as exc:
+                raise TrainingTimeoutError("Training generation timed out") from exc
             if not raw_answer:
                 raise generation.GenerationError("generation returned an empty answer")
             output = generation.medical_guardrail.apply_output_guardrail(

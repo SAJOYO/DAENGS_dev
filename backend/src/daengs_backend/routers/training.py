@@ -53,7 +53,8 @@ async def chat(
     trace_id = str(uuid.uuid4())
     response.headers["X-Request-ID"] = trace_id
     try:
-        return await service.ask(question=payload.question.strip(), trace_id=trace_id)
+        result = await service.ask(question=payload.question.strip(), trace_id=trace_id)
+        return result.to_public_response()
     except TrainingRagUnavailableError:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

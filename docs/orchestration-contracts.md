@@ -2,9 +2,9 @@
 
 `/assistant/query` 뒤 LangGraph 오케스트레이션([orchestration-architecture.md](orchestration-architecture.md) §논리
 오케스트레이션)이 쓸 공통 계약입니다. **2026-08-30 어드버서리얼 아키텍처 리뷰를 거쳐
-사람이 승인한 확정 계약**입니다 (D-033 · D-034) — 구현은 없습니다. 이 PR 은 문서만이고,
-필드 이름·세부 타입은 구현 카드에서 다듬을 수 있지만 **상태 모델과 불변식(§6)은 다듬는
-대상이 아닙니다.**
+사람이 승인한 확정 계약**입니다 (D-033 · D-034). 실제 Pydantic/TypedDict 정의는
+`backend/src/daengs_backend/orchestration/contracts.py` 에 있으며, 필드의 Python 표현은
+구체화됐지만 **상태 모델과 불변식(§6)은 바뀌지 않았습니다.**
 
 이 계약의 전신은 2026-08-22 멘토링에서 팀이 논의한 v1 도구 계약
 (`question, dog_profile → answer/evidence/refused/reason`, `frontend/public/mentoring/0822.html`)입니다.
@@ -14,7 +14,7 @@
 되묻지 않고 오케스트레이터가 후속 질문을 담당한다"는 그때의 원칙은 CLARIFY(§2)로 이어집니다.
 
 > 표기는 architecture 문서와 같습니다: CONFIRMED / OPEN / PENDING.
-> 아래 코드는 전부 **의사 스키마**입니다 — 실제 Pydantic/TypedDict 정의가 아닙니다.
+> 아래 코드는 읽기 쉬운 **의사 스키마**이며 실제 정의는 위 구현 경로가 원본입니다.
 
 ## 1. OrchestratorState
 
@@ -139,13 +139,14 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Training `UNCERTAIN` | **ABSTAINED** |
 | Training `SAFETY_REFUSAL` | REFUSED (`refusal.code` 에 상류 분류 보존) |
 | Training `MEDICAL_REFUSAL` | REFUSED (동일) |
-| Training 실패 (현재 단일 503) | ERROR — ⚠️ 아래 "Training 실패 구분" 참고 |
+| Training 실제 생성 타임아웃 | TIMEOUT |
+| Training 공급자·검색·런타임 실패 | ERROR |
 | Life 근거 있는 200 응답 | OK (`ungrounded` 지표는 품질 메타데이터로 전파 가능) |
 | Life 무근거 404 (`근거를 찾지 못했다`) | **ABSTAINED** (`abstention.code = no_evidence`) |
 | Life 상류/시스템 실패 (502·503) | ERROR |
 | Life 타임아웃 (504) | TIMEOUT |
 | Walk 정상 판정 — **GOOD·CAUTION·UNSAFE 전부** | OK — **UNSAFE 는 성공한 도메인 판정**이지 REFUSED 가 아닙니다 |
-| Walk 판정 불가 (`unknown` — 관측 공급자 부재/실패, 503 + 전체 본문) | ABSTAINED 후보 — 어댑터 구현 카드에서 확정 |
+| Walk 판정 불가 (`unknown` — 관측 공급자 부재/실패, 503 + 전체 본문) | ABSTAINED |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL
   구분(공개 decision — `schemas/training.py` · docs/training/rag-demo.md)이 `refusal.code`
@@ -153,17 +154,15 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 - **Training 은 in-process 경계를 씁니다** (#94 이후). 어댑터의 호출 지점은
   `daengs_backend/services/training_rag.py` 게이트웨이(공개 4-decision 계약)이지,
   `daengs_training.service.RAGService`·PGVector·Gemini 내부가 아닙니다.
-- **⚠️ Training 실패 구분 — 구현 카드의 정밀 관심사 (2026-08-31 코드 검증).** 현재
-  Training 경계는 모든 실패(Gemini 타임아웃 · Gemini/공급자 오류 · PGVector 실패 ·
-  런타임 초기화 실패)를 **단일 `TrainingRagUnavailableError` → 503 하나로 접습니다** —
-  이 계약의 ERROR/TIMEOUT 구분을 낼 기계 신호가 상류에 없습니다. Life `/ask` 는 같은
-  구분을 이미 냅니다 (503 설정 / **504 타임아웃** / 502 상류 — `daengs_life/app/services/ask.py`).
-  구현 카드에서 Training 어댑터가 TIMEOUT 을 구분하려면 그 신호를 어디서 낼지(게이트웨이
-  예외 세분화 등)를 정해야 합니다 — **이 문서 PR 에서는 코드를 바꾸지 않고 갭만 기록합니다.**
-- 부수 사실(같은 검증에서): Training 내부의 `REFUSE(no_results)` 와 생성 후 출력
-  가드레일 차단은 공개 decision 으로는 `UNCERTAIN` 에 접혀 나옵니다 — 어댑터가 공개
-  계약만 소비하면 후자가 ABSTAINED 로 보입니다. 상류 재설계 없이 갈지, 게이트웨이
-  reason 을 더 노출할지는 구현 카드에서 판단합니다 (도메인 동작 변경은 이 PR 범위 밖).
+- **Training 실패 구분은 Card 1 에서 해결했습니다.** 실제 생성 타임아웃은
+  `GenerationTimeoutError → TrainingTimeoutError → TrainingRagTimeoutError` 로 경계를 따라
+  보존되고 어댑터가 TIMEOUT 으로 번역합니다. 공급자·PGVector·런타임 실패는
+  `TrainingRagUnavailableError` 를 거쳐 ERROR 가 됩니다. 공개 `/training/chat` 은 기존 503
+  응답 호환성을 유지하므로 공급자 구현 세부가 API 계약으로 새지 않습니다.
+- Training 내부의 `REFUSE(no_results)` 만 UNCERTAIN → ABSTAINED 로 번역합니다.
+  `safety_boundary_training_harm`, `safety_boundary_medical`, `output_safety_guardrail` 과
+  해석되지 않은 다른 REFUSE reason 은 상류 reason 을 보존한 REFUSED 입니다. 알 수 없는
+  거절을 자료 부족으로 추측하지 않습니다.
 - **Life 는 재설계하지 않습니다** (O-3, D-035). 어댑터가 **이미 있는 기계 신호만**
   매핑합니다 — 무근거 404 는 서빙 층의 명시적 도메인 정책이고(`app/services/ask.py`),
   `ungrounded` 는 품질 신호입니다. **수용된 v1 한계**: Life 가 산문으로만 물러서는

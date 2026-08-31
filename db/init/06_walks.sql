@@ -28,9 +28,8 @@ CREATE TABLE IF NOT EXISTS walks (
     -- 산책 경로는 집과 생활권을 그대로 드러낸다.
     app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
 
-    -- 누구와 걸었나. **강아지를 지워도 산책은 남는다** — 무지개다리를 건넌 아이와의
-    -- 산책이 그 아이를 지웠다고 없던 일이 되면 안 된다. 기록은 사람의 것이다.
-    pet_id UUID REFERENCES pets(id) ON DELETE SET NULL,
+    -- 누구와 걸었나는 walk_pets 에 있다 (아래). 한 번에 두 마리를 데리고 나가므로
+    -- 한 칸으로는 못 담는다.
 
     -- 기기가 만든 세션 id 를 그대로 받는다. 기기의 로컬 DB 와 **같은 값**이라
     -- 올릴 때도 되찾을 때도 같은 id 로 맞춰 본다.
@@ -87,3 +86,28 @@ CREATE TABLE IF NOT EXISTS walk_points (
 
     PRIMARY KEY (walk_id, client_seq)
 );
+
+-- ---------------------------------------------------------------------
+-- walk_pets : 그 산책에 누가 나갔나
+-- ---------------------------------------------------------------------
+-- **한 번에 여러 마리를 데리고 나간다.** walks.pet_id 한 칸이던 것을 조인으로
+-- 옮긴 이유다 — 두 마리를 데리고 나갔는데 한 아이의 기록만 남으면, 나중에 챗봇이
+-- "이 아이 이번 주 운동량"을 말할 때 나머지 아이의 산책이 통째로 빈다.
+--
+-- 아무도 안 붙은 산책이 있을 수 있다. 강아지를 등록하기 전에 걸었거나, 고르지
+-- 않고 나선 경우다. **그래도 산책은 기록이다** — 사람이 걸은 것은 걸은 것이다.
+CREATE TABLE IF NOT EXISTS walk_pets (
+    walk_id UUID NOT NULL REFERENCES walks(id) ON DELETE CASCADE,
+
+    -- **여기서는 CASCADE 다.** 단수 pet_id 일 때는 SET NULL 이었다 — 무지개다리를
+    -- 건넌 아이와의 산책이 없던 일이 되면 안 되니까. 그 뜻은 그대로다: 강아지를
+    -- 지우면 이 연결만 사라지고 **산책 자체는 남는다.** 조인 행에 NULL 을 남기면
+    -- "누군지 모를 아이" 라는 뜻 없는 줄이 쌓인다.
+    pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
+
+    -- 같은 아이를 두 번 붙여도 한 줄이다. 앱이 재시도해도 연결이 안 늘어난다.
+    PRIMARY KEY (walk_id, pet_id)
+);
+
+-- "이 아이가 나간 산책" 을 되짚는 쪽. 챗봇이 아이별 운동량을 물을 자리다.
+CREATE INDEX IF NOT EXISTS walk_pets_pet_idx ON walk_pets (pet_id);

@@ -110,7 +110,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | A3 | **골든셋 스키마 확장 + 경계 신호** — `must` OR 목록 · `expect: abstain` · `expect: handoff(target)` 문항, 그리고 Life 가 그 신호를 내는 코드 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · #80 "Life 안전/거절 분류는 별도 카드" · §2 의 경계를 테스트로 | 없음 | M | ⬜ |
 | A4 | **`/ask` 응답 축소** — `answer` · `citation` · `citation_url` · 품질 플래그만. `content` 전문 · `score` · 내부 id 제거 | RAG-028 ② 유보 · #80 O-9 (불변식 5) | A3 와 같은 카드 가능 | S | ⬜ |
 | A5 | **특보구역명 ↔ 행정구역 매핑표** (`data/reference/`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/walk` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ⬜ |
-| A6 | Walk `unknown` → ABSTAINED 확정 · `?verbose=1` | #80 계약 표 "후보 — 어댑터 카드에서 확정" · RT-001 ⑥ | B1 과 같은 카드 | XS | ⬜ |
+| A6 | Walk `unknown` → ABSTAINED 확정 · `?verbose=1` | #80 계약 표 · RT-001 ⑥ | B1 과 같은 카드 | XS | 🟨 Card 1 에서 매핑 확정 · `?verbose=1` 은 남음 |
 | A7 | **`insurance` 를 `policy` 에서 독립 category 로** | 4,673/8,990 이 한 칸에 몰려 category 필터의 격리 효과가 없음. RAG-028 이 "값이 없다"고 지목한 자리 | A1 (재적재는 메타만이지만 스냅샷·라벨이 움직임) | S | ⬜ 사람 결정 2026-08-30 "나중에 뺀다" |
 
 ### B. 어댑터 준비 — Card 1 앞
@@ -118,8 +118,8 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | B1 | `LifePayload(question, region?, dog?)` · `WalkPayload(lat, lon, at?)` 를 `daengs_life.app.dto` 에 | 페이로드는 능력 소유 (#80 불변식 6). 만능 공용 페이로드 금지 | A2 · A3 의 입력이 정해진 뒤 | S | ⬜ |
-| B2 | 어댑터 — `services.ask.ask()` / `services.walk.walk()` in-process 호출, `HTTPException` → status 번역(404→ABSTAINED · 502/503→ERROR · 504→TIMEOUT · `unknown`→ABSTAINED), `elapsed_ms`, 질문 원문 비로깅 | D-035 · #80 불변식 7 · 11 | 없음 — 두 서비스는 이미 HTTP 무관(encoder·conn·client 주입) | S | ⬜ |
-| B3 | 접점 테스트 갱신 — `daengs_backend → daengs_life` import 를 **어댑터 한 곳만** 허용 | D-018 "세 줄" · D-035 O-11 | B2 | XS | ⬜ |
+| B2 | 어댑터 — `services.ask.ask()` / `services.walk.walk()` in-process 호출, `HTTPException` → status 번역(404→ABSTAINED · 502/503→ERROR · 504→TIMEOUT · `unknown`→ABSTAINED), `elapsed_ms`, 질문 원문 비로깅 | D-035 · #80 불변식 7 · 11 | 없음 — 두 서비스는 이미 HTTP 무관(encoder·conn·client 주입) | S | ✅ Card 1 |
+| B3 | 접점 테스트 갱신 — `daengs_backend → daengs_life` import 를 **어댑터 한 곳만** 허용 | D-018 "세 줄" · D-035 O-11 | B2 | XS | ✅ Card 1 |
 | B4 | 반려견 컨텍스트 소비 — 견종(맹견 5종) · 나이(보험 가입) · 등록 여부 · **기본 위치** | #64 프로필 도메인 · #80 O-4(`active_dog_id` 는 context 예약 키까지) | #64 가 켜진 뒤. 소유권 검증은 이 파트 밖 | M | ⬜ |
 
 ### C. 운영 — 다른 날 · 다른 자리

@@ -22,9 +22,11 @@ D-021 이 그것을 정했다: **`/ask` 는 여기 붙고, `ml` 은 컨테이너
 """
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from daengs_life.app.deps import get_cache
 
@@ -111,3 +113,25 @@ def test_lifespan_opens_the_cache_up_front() -> None:
     with TestClient(app):
         assert get_cache.cache_info().currsize == 1, "lifespan 이 캐시를 미리 열지 않았다"
     assert get_cache.cache_info().currsize == 0, "lifespan 이 캐시를 놓지 않았다"
+
+
+def test_backend_to_life_imports_stay_at_the_approved_boundaries() -> None:
+    """D-035: main wiring plus one orchestration adapter module are the only contacts."""
+    package = Path(__file__).parents[1] / "src" / "daengs_backend"
+    contacts = set()
+    for path in package.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imports_life = any(
+            (
+                isinstance(node, ast.ImportFrom)
+                and (node.module or "").startswith("daengs_life")
+            )
+            or (
+                isinstance(node, ast.Import)
+                and any(alias.name.startswith("daengs_life") for alias in node.names)
+            )
+            for node in ast.walk(tree)
+        )
+        if imports_life:
+            contacts.add(path.relative_to(package).as_posix())
+    assert contacts == {"main.py", "orchestration/adapters/life.py"}

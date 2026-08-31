@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import subprocess
 import sys
@@ -14,10 +13,17 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import Principal
-from daengs_backend.routers.training import get_training_rag_service, require_training_access, router
+from daengs_backend.routers.training import (
+    get_training_rag_service,
+    require_training_access,
+    router,
+)
 from daengs_backend.services import training_rag
-from daengs_backend.services.training_rag import TrainingRagService, TrainingRagUnavailableError
-from daengs_training.service import ChatResponse, EvidenceCard
+from daengs_backend.services.training_rag import (
+    TrainingRagService,
+    TrainingRagTimeoutError,
+)
+from daengs_training.service import ChatResponse, EvidenceCard, TrainingTimeoutError
 
 
 @pytest.fixture(autouse=True)
@@ -78,6 +84,8 @@ def client_for(result: ChatResponse | Exception) -> tuple[TestClient, FakeRuntim
         ("REFUSE", "safety_boundary_training_harm", "SAFETY_REFUSAL"),
         ("REFUSE", "safety_boundary_medical", "MEDICAL_REFUSAL"),
         ("REFUSE", "no_results", "UNCERTAIN"),
+        ("REFUSE", "output_safety_guardrail", "SAFETY_REFUSAL"),
+        ("REFUSE", "future_safety_reason", "SAFETY_REFUSAL"),
     ],
 )
 def test_public_chat_preserves_decision_mapping(internal: str, reason: str, public: str) -> None:
@@ -95,6 +103,19 @@ def test_public_chat_preserves_decision_mapping(internal: str, reason: str, publ
 def test_training_exception_maps_to_503() -> None:
     client, _ = client_for(RuntimeError("database unavailable"))
     assert client.post("/training/chat", json={"question": "질문"}).status_code == 503
+
+
+def test_training_timeout_keeps_public_503_compatibility() -> None:
+    client, _ = client_for(TrainingTimeoutError("provider deadline"))
+    assert client.post("/training/chat", json={"question": "질문"}).status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_training_boundary_preserves_timeout_type(monkeypatch) -> None:
+    runtime = FakeRuntime(TrainingTimeoutError("provider deadline"))
+    monkeypatch.setattr(training_rag, "get_training_runtime", lambda: runtime)
+    with pytest.raises(TrainingRagTimeoutError):
+        await TrainingRagService().ask(question="질문", trace_id="trace")
 
 
 @pytest.mark.asyncio

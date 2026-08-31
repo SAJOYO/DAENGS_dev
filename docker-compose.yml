@@ -559,6 +559,11 @@ services:
       # (개정되는 원문이라 재수집은 곧 다른 코퍼스입니다). 비어 있으면 compose 가 멈춥니다
       # (`:?`) — REDIS_PASSWORD 와 같은 장치입니다. 기본값을 두면 `./data` 로 조용히 떨어집니다.
       - ${DAENGS_CORPUS_DIR:?Set DAENGS_CORPUS_DIR in the deployment root .env (server folder holding raw/ and manifests/crawl_log.jsonl)}:/data
+      # **시드는 코퍼스가 아닙니다** — git 추적 파일이라 정본이 체크아웃에 있고, 코퍼스 폴더에는
+      # 없습니다 (이관 zip 은 raw/ 와 crawl_log.jsonl 만 담습니다). 파일 하나만 코퍼스 마운트 위에
+      # 겹쳐 마운트합니다 — 배포가 체크아웃을 갱신하면 시드도 따라옵니다. 이것이 없으면
+      # `load_seeds()` 가 FileNotFoundError 로 죽어 `crawl_due` 가 아무것도 못 고릅니다.
+      - ./data/manifests/seed_sources.yaml:/data/manifests/seed_sources.yaml:ro
       - crawler-venv:/opt/venv          # ⚠ backend-venv 가 아닙니다 (위 경고)
       - uv-cache:/root/.cache/uv
     depends_on:
@@ -618,6 +623,8 @@ services:
       # (require_data_dir 은 실제로 쓸 때 부릅니다) 두 컨테이너의 설정을 갈라 두면
       # "왜 워커에서만 되지"를 나중에 한 번 더 겪습니다.
       - ${DAENGS_CORPUS_DIR:?Set DAENGS_CORPUS_DIR in the deployment root .env (server folder holding raw/ and manifests/crawl_log.jsonl)}:/data
+      # 워커와 같은 이유의 시드 겹쳐 마운트 — 두 컨테이너의 설정을 갈라 두지 않습니다 (위 문단).
+      - ./data/manifests/seed_sources.yaml:/data/manifests/seed_sources.yaml:ro
       # 워커와 **같은 볼륨**입니다. 둘의 `uv sync` 인자가 글자까지 같아 내용이 같고,
       # 어긋나도 기동 로그에 바로 터집니다 — backend 와 나눈 것과는 성격이 다릅니다
       # (그쪽은 내용이 다르고 조용히 틀립니다).

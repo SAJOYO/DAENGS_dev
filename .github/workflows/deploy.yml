@@ -7,7 +7,7 @@ on:
 
 # 배포가 겹치지 않도록. 새 배포가 오면 진행 중인 건 취소합니다.
 concurrency:
-  group: deploy
+  group: ${{ github.event_name == 'workflow_dispatch' && 'client-ip-diagnostic' || 'deploy' }}
   cancel-in-progress: true
 
 env:
@@ -17,6 +17,7 @@ env:
 jobs:
   deploy:
     name: 서비스 반영
+    if: github.event_name == 'push'
     # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
     runs-on: [self-hosted, Windows, X64]
 
@@ -189,3 +190,94 @@ jobs:
               Start-Sleep -Seconds 5
             }
           }
+
+  discover_public_endpoint:
+    name: 진단 — 서버 공인 주소 확인
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, Windows, X64]
+    outputs:
+      public_ip: ${{ steps.endpoint.outputs.public_ip }}
+      marker: ${{ steps.endpoint.outputs.marker }}
+
+    steps:
+      - name: 진단 값 준비
+        id: endpoint
+        shell: powershell
+        run: |
+          $publicIp = (Invoke-RestMethod `
+            -Uri 'https://api.ipify.org' `
+            -TimeoutSec 15).Trim()
+          if ($publicIp -notmatch '^\d{1,3}(\.\d{1,3}){3}$') {
+            throw 'Server public IPv4 address was not detected'
+          }
+          $marker = 'daengs-client-ip-probe-${{ github.run_id }}-${{ github.run_attempt }}'
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "public_ip=$publicIp"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "marker=$marker"
+
+  external_client_probe:
+    name: 진단 — 외부 Place 요청
+    needs: discover_public_endpoint
+    runs-on: ubuntu-latest
+    outputs:
+      caller_ip: ${{ steps.probe.outputs.caller_ip }}
+
+    steps:
+      - name: 외부 요청 전송
+        id: probe
+        env:
+          PUBLIC_IP: ${{ needs.discover_public_endpoint.outputs.public_ip }}
+          MARKER: ${{ needs.discover_public_endpoint.outputs.marker }}
+        run: |
+          set -euo pipefail
+          caller_ip="$(curl -fsS --max-time 15 https://api.ipify.org)"
+          echo "caller_ip=$caller_ip" >> "$GITHUB_OUTPUT"
+          status="$(
+            curl -sS \
+              --retry 2 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --user-agent "$MARKER" \
+              --header 'Content-Type: application/json' \
+              --data '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}' \
+              "http://${PUBLIC_IP}:8000/v2/places/search"
+          )"
+          test "$status" = '200'
+          echo 'External Place request returned HTTP 200'
+
+  inspect_nginx_client_ip:
+    name: 진단 — nginx source IP 비교
+    needs: [discover_public_endpoint, external_client_probe]
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - name: access log 판정
+        shell: powershell
+        env:
+          MARKER: ${{ needs.discover_public_endpoint.outputs.marker }}
+          EXPECTED_IP: ${{ needs.external_client_probe.outputs.caller_ip }}
+        run: |
+          $containers = @(docker ps `
+            --filter 'label=com.docker.compose.service=nginx' `
+            --format '{{.ID}}')
+          if ($containers.Count -ne 1) {
+            throw "Expected one running compose nginx container, found $($containers.Count)"
+          }
+
+          $matched = @(docker logs --since 10m $containers[0] 2>&1 |
+            Select-String -SimpleMatch $env:MARKER |
+            Select-Object -Last 1)
+          if ($matched.Count -ne 1) {
+            throw 'External probe was not found in nginx access log'
+          }
+          if ($matched[0].Line -notmatch '^(?<ip>\S+)\s+-\s+-\s+\[') {
+            throw 'Could not parse source IP from nginx access log'
+          }
+
+          $observedIp = $Matches.ip
+          if ($observedIp -ne $env:EXPECTED_IP) {
+            throw "CLIENT_IP_MISMATCH: nginx observed $observedIp"
+          }
+          Write-Host "CLIENT_IP_PRESERVED: nginx observed $observedIp"

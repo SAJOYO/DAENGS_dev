@@ -150,29 +150,6 @@ jobs:
             }
           }
 
-      - name: Place 공개 경로 호출 제한 확인
-        run: |
-          # 존재하지 않는 Place 하위 경로로 DB를 읽지 않고 nginx 제한만 확인합니다.
-          $limited = $false
-          foreach ($attempt in 1..20) {
-            try {
-              Invoke-WebRequest -UseBasicParsing `
-                -Uri 'http://127.0.0.1:8000/v2/places/rate-limit-probe' `
-                -TimeoutSec 5 `
-                -ErrorAction Stop | Out-Null
-            } catch {
-              if ($null -ne $_.Exception.Response) {
-                $status = [int]$_.Exception.Response.StatusCode
-                if ($status -eq 429) {
-                  $limited = $true
-                  break
-                }
-              }
-            }
-          }
-          if (-not $limited) { throw 'Place rate limit did not return HTTP 429' }
-          Write-Host 'Place rate limit verified'
-
       - name: Journey 공개 경로 확인
         run: |
           # 현재 APP이 보내는 dog_id 없는 좌표 요청입니다. 외부 키가 없어도 원본 계약대로

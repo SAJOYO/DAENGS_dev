@@ -1,11 +1,12 @@
 """Runtime-only grounded generation extracted from freeze 22495d2.
 GraphRAG/evaluation/OpenAI research dependencies are intentionally excluded.
-Prompt wording and Ollama behavior remain frozen.
+Prompt wording remains frozen; grounded generation uses the Gemini API.
 """
 from __future__ import annotations
-import json
 import os
-import urllib.request
+import time
+
+import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
@@ -22,9 +23,10 @@ HEDGE_RULE = '6. 아래 자료는 질문과의 관련성이 낮게 측정되었�
 
 PROFILE_NOTE = '아래 프로필은 질문자가 알려준 반려견의 상황 정보입니다. 답변할 때 이 정보를 반영해 이 반려견의 상황에 맞게 조언을 조정하세요. 다만 답변에 쓰는 근거는 반드시 <자료>에서만 가져와야 하고, 프로필은 그 근거로 쓸 수 없습니다. 프로필에 적힌 질환명이 있어도 그것을 근거 없이 진단처럼 언급하지 마세요.'
 
-OLLAMA_GENERATION_MODEL = os.getenv('OLLAMA_GENERATION_MODEL', 'gemma3:4b')
-
-OLLAMA_MAX_OUTPUT_TOKENS = 2000
+DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite'
+DEFAULT_GEMINI_TIMEOUT_MS = 30_000
+GEMINI_MAX_OUTPUT_TOKENS = 2000
+GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 
 CONTEXT_ONLY_RULE = '6. <사용자사례>는 보호자가 상담에서 직접 쓴 글입니다. 전문가의 권고가 아니며 근거로 인용하면 안 됩니다. 번호를 붙여 참조하지 마세요. 질문자의 상황을 이해하는 데만 쓰고, 답변의 근거는 <자료>에서만 가져오세요. 사용자가 시도했다고 적은 방법이 효과적이라는 뜻은 아닙니다.'
 
@@ -55,37 +57,114 @@ MEDICAL_REFUSAL_TEMPLATE = medical_guardrail.SystemAuthoredText(
     "\uac71\uc815\uc774 \ub9ce\uc73c\uc2dc\uaca0\uc5b4\uc694. " + medical_guardrail.VET_REFERRAL_MESSAGE
 )
 
-def load_ollama_answer_client(endpoint: str | None=None) -> AnswerClient:
-    """Use the adopted local model through the already-running Ollama service."""
-    model = os.getenv('OLLAMA_GENERATION_MODEL') or OLLAMA_GENERATION_MODEL
-    try:
-        from dotenv import dotenv_values
-        model = (dotenv_values(Path('.env')) or {}).get('OLLAMA_GENERATION_MODEL') or model
-    except ImportError:
-        pass
-    endpoint = endpoint or os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+def load_gemini_answer_client(
+    api_key: str | None = None,
+    model: str | None = None,
+    timeout_ms: int | None = None,
+    endpoint: str | None = None,
+) -> AnswerClient:
+    """Use Gemini only for grounded answer generation.
 
-    class OllamaAnswerClient:
-        model_id = model
-        reasoning_effort = 'disabled'
+    Retrieval, evidence gating and medical guardrails remain outside the model.
+    The API key is supplied through the process environment; it is never written
+    to prompts, logs or response records.
+    """
+    key = (api_key or os.getenv('GEMINI_API_KEY', '')).strip()
+    if not key:
+        raise GenerationError('GEMINI_API_KEY is required for Training RAG generation')
+
+    selected_model = (
+        model
+        or os.getenv('GEMINI_MODEL')
+        or DEFAULT_GEMINI_MODEL
+    ).strip()
+
+    if timeout_ms is None:
+        raw_timeout = os.getenv('GEMINI_TIMEOUT_MS', str(DEFAULT_GEMINI_TIMEOUT_MS))
+        try:
+            timeout_ms = int(raw_timeout)
+        except ValueError as exc:
+            raise GenerationError('GEMINI_TIMEOUT_MS must be an integer') from exc
+
+    if timeout_ms <= 0:
+        raise GenerationError('GEMINI_TIMEOUT_MS must be positive')
+
+    base_url = (
+        endpoint
+        or os.getenv('GEMINI_API_BASE_URL')
+        or GEMINI_API_BASE_URL
+    ).rstrip('/')
+    url = f'{base_url}/models/{selected_model}:generateContent'
+
+    class GeminiAnswerClient:
+        model_id = selected_model
+        reasoning_effort = 'provider_default'
 
         @property
         def info(self) -> ClientInfo:
-            return ClientInfo(name=f'ollama:{model}')
+            return ClientInfo(name=f'gemini:{selected_model}')
 
         def complete(self, prompt: str, record: dict[str, Any]) -> str | None:
-            payload = {'model': model, 'prompt': prompt, 'stream': False, 'think': False, 'options': {'temperature': 0, 'seed': 42, 'num_predict': OLLAMA_MAX_OUTPUT_TOKENS, 'num_ctx': 8192}}
-            request = urllib.request.Request(endpoint.rstrip('/') + '/api/generate', data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+            payload = {
+                'contents': [
+                    {
+                        'role': 'user',
+                        'parts': [{'text': prompt}],
+                    }
+                ],
+                'generationConfig': {
+                    'temperature': 0,
+                    'maxOutputTokens': GEMINI_MAX_OUTPUT_TOKENS,
+                },
+            }
+
+            started = time.perf_counter_ns()
             try:
-                with urllib.request.urlopen(request, timeout=180) as response:
-                    data = json.loads(response.read().decode('utf-8'))
+                response = httpx.post(
+                    url,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': key,
+                    },
+                    json=payload,
+                    timeout=timeout_ms / 1000,
+                )
+                response.raise_for_status()
+                data = response.json()
             except Exception as exc:
-                raise GenerationError(f'Ollama call failed for {model}: {str(exc)[:400]}') from exc
-            prompt_tokens = data.get('prompt_eval_count', 0) or 0
-            output_tokens = data.get('eval_count', 0) or 0
-            record['usage'] = {'input_tokens': prompt_tokens, 'output_tokens': output_tokens, 'prompt_eval_count': prompt_tokens, 'eval_count': output_tokens, 'total_duration_ns': data.get('total_duration', 0), 'done_reason': data.get('done_reason')}
-            return data.get('response', '') or None
-    return OllamaAnswerClient()
+                raise GenerationError(
+                    f'Gemini call failed for {selected_model}: {str(exc)[:400]}'
+                ) from exc
+
+            candidates = data.get('candidates') or []
+            if not candidates:
+                return None
+
+            candidate = candidates[0] or {}
+            content = candidate.get('content') or {}
+            parts = content.get('parts') or []
+            text = '\n'.join(
+                str(part.get('text', ''))
+                for part in parts
+                if isinstance(part, dict) and part.get('text')
+            ).strip()
+
+            usage = data.get('usageMetadata') or {}
+            prompt_tokens = int(usage.get('promptTokenCount') or 0)
+            output_tokens = int(usage.get('candidatesTokenCount') or 0)
+
+            record['usage'] = {
+                'input_tokens': prompt_tokens,
+                'output_tokens': output_tokens,
+                'prompt_eval_count': prompt_tokens,
+                'eval_count': output_tokens,
+                'total_tokens': int(usage.get('totalTokenCount') or 0),
+                'total_duration_ns': time.perf_counter_ns() - started,
+                'done_reason': candidate.get('finishReason'),
+            }
+            return text or None
+
+    return GeminiAnswerClient()
 
 def _context_label(chunk: dict[str, Any]) -> str:
     """<사용자사례> 항목의 라벨. 인용 번호가 아니라 출처 표시다."""

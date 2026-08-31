@@ -37,9 +37,9 @@ class FakeRetriever:
 
 
 class FakeClient:
-    model_id = "gemma3:4b"
+    model_id = "gemini-3.1-flash-lite"
     reasoning_effort = "disabled"
-    info = generation.ClientInfo(name="ollama:gemma3:4b")
+    info = generation.ClientInfo(name="gemini:gemini-3.1-flash-lite")
 
     def __init__(self, answer: str = "[1] 산책은 짧고 차분하게 시작해 보세요.") -> None:
         self.calls = 0
@@ -95,7 +95,7 @@ class RAGApiTests(unittest.TestCase):
         body = response.json()
         self.assertEqual("ANSWER", body["decision"])
         self.assertTrue(body["generated"])
-        self.assertEqual("gemma3:4b", body["model"])
+        self.assertEqual("gemini-3.1-flash-lite", body["model"])
         self.assertEqual("chunk-1", body["evidence"][0]["chunk_id"])
         self.assertEqual(1, retriever.search_calls)
         self.assertEqual(1, model.calls)
@@ -176,5 +176,5 @@ class RAGApiTests(unittest.TestCase):
             response = client.get("/healthz")
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual("gemma3:4b", response.json()["generation_model"])
+        self.assertEqual("gemini-3.1-flash-lite", response.json()["generation_model"])
         self.assertEqual(0, model.calls)

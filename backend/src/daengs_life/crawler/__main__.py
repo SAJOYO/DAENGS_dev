@@ -1,6 +1,7 @@
 """CLI.
 
   python -m crawler list                                   # yaml 소스 목록 + 구현 여부
+  python -m crawler due                                    # 지금 due 인 소스 — Beat 가 볼 것과 같은 판정
   python -m crawler run --source easylaw-pet --dry-run --limit 3
   python -m crawler run --source easylaw-pet [--force]
 """
@@ -8,9 +9,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 
 from . import run as run_mod
-from .core import registry
+from .core import cadence, config, registry
 
 # 윈도우 콘솔의 기본 인코딩(cp949)으로는 한글 안내 메시지가 깨지고 일부 기호는 아예 예외를 낸다.
 # errors="replace" 라 어떤 터미널에서도 출력 때문에 죽지는 않는다.
@@ -34,6 +36,40 @@ def cmd_list(_: argparse.Namespace) -> int:
     for sid, s in seeds.items():
         impl = "x" if registry.resolve(s) else " "       # ASCII 고정 — 윈도우 cp949 콘솔이 못 찍는다
         print(f"[{impl}] {sid:28s} {s['domain']:13s} {s['method']:9s} auth={s['auth']:11s} {s['status']}")
+    return 0
+
+
+def cmd_due(_: argparse.Namespace) -> int:
+    """**아무것도 받지 않고** 판정만 찍는다. Beat 의 `crawl_due` 가 고르는 것과 같은 함수를 탄다.
+
+    코퍼스를 옮긴 직후 "로그가 같이 왔나"를 확인하는 자리다 (RAG-050). 로그가 안 왔으면 후보
+    전부가 `[due]` 로 뜬다 — 그 상태로 04:00 을 넘기면 서버가 처음부터 다 받아 개발 PC 와 다른
+    코퍼스를 만든다. `crawl_log.jsonl` 이 아예 없으면 첫 줄에 그렇게 말한다.
+    """
+    seeds = registry.load_seeds()
+    now = datetime.now(config.KST)
+    log_path = config.CRAWL_LOG
+    if log_path is None or not log_path.is_file():
+        print(f"crawl_log.jsonl 이 없다 ({log_path}) — 후보 전부가 due 다", file=sys.stderr)
+    last = cadence.last_success()
+
+    due = candidates = 0
+    for sid, s in seeds.items():
+        implemented = registry.resolve(s) is not None
+        reason = cadence.skip_reason(s, implemented=implemented)
+        if reason is not None:
+            print(f"[skip] {sid:28s} {reason}")
+            continue
+        candidates += 1
+        when = last.get(sid)
+        if cadence.is_due(s, when, now):
+            due += 1
+            tag = "[due] "
+        else:
+            tag = "[    ]"
+        ago = f"{(now - when).days}d ago" if when else "never"
+        print(f"{tag} {sid:28s} {cadence.cadence_of(s):9s} last={when.isoformat(timespec='minutes') if when else '-':26s} {ago}")
+    print(f"\ndue {due} / 후보 {candidates} / 시드 {len(seeds)}")
     return 0
 
 
@@ -90,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list", help="seed_sources.yaml 소스 목록과 구현 여부").set_defaults(fn=cmd_list)
+    sub.add_parser("due", help="지금 due 인 소스 — 받지 않고 판정만 (Beat 와 같은 함수)").set_defaults(fn=cmd_due)
 
     r = sub.add_parser("run", help="소스 하나 수집")
     r.add_argument("--source", required=True, help="seed_sources.yaml 의 id")

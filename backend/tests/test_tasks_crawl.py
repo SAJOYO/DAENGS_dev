@@ -330,7 +330,17 @@ def test_the_crawl_schedule_goes_to_its_own_queue() -> None:
     crawl_entry = app.conf.beat_schedule["crawl-due-sources"]
     assert crawl_entry["options"]["queue"] == "crawl"
     # 프리페치는 기본 큐 그대로다 — 옮기면 RT-002 의 워커가 못 받는다.
-    assert "options" not in app.conf.beat_schedule["warm-active-grids"]
+    assert "queue" not in app.conf.beat_schedule["warm-active-grids"].get("options", {})
+
+
+def test_stale_prefetch_messages_are_dropped_not_run() -> None:
+    """RAG-050 ③ — 소비자가 없는 동안 쌓인 프리페치는 워커가 뜨는 날 몰아서 실행되면 안 된다.
+
+    `expires` 가 주기(60초)보다 짧아야 "다음 틱 전에 못 집으면 버린다"가 된다. 주기 이상이면
+    쌓인 것 중 일부가 실행되어 팀 공용 일 예산(D-019)을 쓴다.
+    """
+    entry = app.conf.beat_schedule["warm-active-grids"]
+    assert 0 < entry["options"]["expires"] < entry["schedule"]
 
 
 def test_the_schedule_is_daily_at_dawn_kst() -> None:

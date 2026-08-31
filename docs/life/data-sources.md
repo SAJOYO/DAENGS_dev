@@ -455,7 +455,8 @@ JS 렌더링 폴백은 필요 없었다 — 둘 다 서버 렌더링이다.
       **cadence 기본값은 코드에 있고 시드에는 예외만 적는다** — `domain=law → manual` ·
       `method=pdf-entry → quarterly` · 나머지 `weekly`.
       수집까지만 하고 멈춘다 — 바뀐 문서는 알림으로만 남는다 (RAG-002 · RAG-025).
-      ⚠ 워커는 compose profile `crawler` 뒤에 있어 **서버에서 아직 안 뜬다** — 코퍼스가 서버에 없어서다. `#65` 가 옮기고 profile 을 뗀다
+      워커·Beat 는 **서버 compose 에 같이 뜬다** (RAG-050, #65) — 코퍼스는 서버 폴더 `DAENGS_CORPUS_DIR`,
+      정본은 서버. 확인·이관 절차는 루트 README "크롤러 · 코퍼스".
 - [ ] `seoul-notice-api` 고시공고 모니터링 — 신규 지원사업 탐지. 같은 Beat 에 태스크 하나 더
 - [ ] 법령 개정 체크 — 시행일자 비교. RAG-044 가 남기는 `changed_docs` 알림 위에 얹는다
 - [ ] 약관 개정 체크 — 분기 1회 (`insurer-terms-pdfs` 가 이미 `quarterly` 다)

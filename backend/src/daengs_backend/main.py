@@ -12,6 +12,7 @@ from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.routers import app_auth, auth, crawl, health, pet, training
+from daengs_backend.services.training_rag import release_training_runtime
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
 # 여기서만 긋습니다 — 접점은 **등록 두 줄과 예열 한 줄**이 전부입니다.
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 상주 모델을 놓습니다. 리로드가 잦은 개발 모드에서 이게 없으면 죽은 워커의 1.2GB 가
     # 새 워커의 것과 함께 남습니다 — `engine.dispose()` 와 같은 이유이고, 여기서는 단위가 GB 입니다.
     release_encoder()
+    release_training_runtime()
     # 커넥션 풀을 정리합니다. 리로드가 잦은 개발 모드(D-006)에서
     # 이게 없으면 죽은 워커가 잡고 있던 연결이 남습니다.
     await engine.dispose()

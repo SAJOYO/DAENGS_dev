@@ -27,7 +27,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO = Path(__file__).resolve().parents[2]
-PACKAGE_PREFIX = "training-rag/"
+PACKAGE_PREFIX = "backend/src/daengs_training/"
 
 # 청크를 식별하는 키. 이 중 하나를 가진 객체는 청크를 가리키는 레코드다.
 CHUNK_KEYS = ("chunk_id", "chunk_index")
@@ -50,7 +50,7 @@ KNOWN_LEGACY: set[str] = set()
 
 def tracked_files() -> list[str]:
     out = subprocess.run(
-        ["git", "ls-files", "-z", "--", "training-rag"], cwd=REPO, capture_output=True, check=True
+        ["git", "ls-files", "-z", "--", PACKAGE_PREFIX], cwd=REPO, capture_output=True, check=True
     ).stdout.decode("utf-8")
     return [p for p in out.split("\0") if p]
 

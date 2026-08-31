@@ -923,8 +923,8 @@ DB 기동 35초 / 미기동 사실상 정지였고, **이 레포는 DB 가 원�
 열어 두고 비밀번호가 없으면 같은 네트워크의 누구나 `FLUSHALL` 할 수 있습니다.
 `REDIS_PASSWORD` 가 비면 `--requirepass ""` 가 되어 인증이 꺼집니다. 그래서 compose 에
 `${REDIS_PASSWORD:?...}` 가드를 걸어 **값이 없으면 아예 안 뜨게** 했습니다 — #26 이
-`DAENGS_TRAINING_RAG_BASE_URL` 에 쓴 것과 같은 장치이고, 저기가 "빈 값이면 restart loop"
-를 막듯이 여기는 "인증 없는 Redis 가 LAN 에 열리는 것"을 막습니다. 컨테이너가 안 뜨는 편이
+필수 환경 변수가 비어 있으면 compose 단계에서 중단하는 장치이며, 여기서는
+"인증 없는 Redis 가 LAN 에 열리는 것"을 막습니다. 컨테이너가 안 뜨는 편이
 열린 채로 뜨는 것보다 낫습니다. compose 는 파일 전체를 해석하고 나서 컨테이너를 만들므로
 가드 한 곳이면 `REDISCLI_AUTH` 와 backend 의 `REDIS_URL` 까지 같이 지켜집니다.
 

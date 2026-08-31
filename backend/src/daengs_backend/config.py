@@ -92,12 +92,7 @@ class Settings(BaseSettings):
     # 실행되는 SQL 을 로그로 찍습니다. 쿼리를 들여다볼 때만 켜세요.
     db_echo: bool = False
 
-    # ---- 별도 Training RAG service -----------------------------------------
-    # 메인 backend에 모델·벡터 검색기를 넣지 않는다. 반드시 별도 FastAPI service
-    # URL을 환경변수로 받으며, 컨테이너와 로컬 개발의 주소 차이는 env로만 해결한다.
-    training_rag_base_url: str
-    training_rag_connect_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
-    training_rag_read_timeout_seconds: float = Field(default=45.0, gt=0, le=120)
+    # ---- Process-local Training RAG -----------------------------------------
     # 인증 화면이 아직 연결되지 않은 로컬 데모에서만 명시적으로 true로 둔다.
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
@@ -175,8 +170,6 @@ class Settings(BaseSettings):
                 "그 줄을 지우고 DAENGS_DB_HOST / DAENGS_DB_PASSWORD 를 넣으세요. "
                 "backend/.env.example 에 예시가 있습니다."
             )
-        if not self.training_rag_base_url.startswith(("http://", "https://")):
-            raise ValueError("DAENGS_TRAINING_RAG_BASE_URL must start with http:// or https://")
         return self
 
     @model_validator(mode="after")

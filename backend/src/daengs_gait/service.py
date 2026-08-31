@@ -1,10 +1,18 @@
-"""보행 분석 HTTP 서비스.
+"""보행 분석 HTTP 서비스 — 이 패키지의 진입점.
 
-    uv run --no-sync python serve.py --host 0.0.0.0 --port 8000
+    uv run --no-sync gait-serve --host 0.0.0.0 --port 8000
+    uv run --no-sync python -m daengs_gait.service --host 0.0.0.0 --port 8000
 
 원본 walk_demo 는 표준 라이브러리 `ThreadingHTTPServer` 로 만든 데모 어댑터였습니다.
 여기서는 FastAPI 로 다시 감쌌습니다 — 스크리닝(`skin-screening/serve.py`)과 같은 모양이라
 nginx 뒤에 붙는 방식과 운영 절차가 같습니다.
+
+⚠️ **이 앱은 `daengs_backend` 프로세스에 붙지 않습니다** (D-038). 코드와 의존성만
+   backend 로 통합했고 런타임은 그대로 갈라 둡니다 — compose 의 `gait-analysis` 서비스가
+   이 모듈을 자기 프로세스로 띄웁니다. 그래서 `daengs_backend` 쪽에 라우터도 서비스
+   접점도 두지 않습니다. 여기에 `daengs_backend` 를 import 하지 마세요. 그 순간
+   격리가 깨지고 D-029 가 지키려던 것(추론이 넘어질 때 로그인·`/ask` 까지 넘어지지
+   않는 것)이 사라집니다.
 
 ⚠️ **인증이 없습니다.** 스크리닝과 같은 상태이고, 그래서 compose profile 뒤에 꺼둔 채로
    들어옵니다. 켜는 순간 `daengback/gait/` 가 인증 없는 업로드 엔드포인트가 됩니다 —
@@ -17,21 +25,14 @@ nginx 뒤에 붙는 방식과 운영 절차가 같습니다.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-# `from src import ...` 로 부르기 위해 이 폴더를 경로에 넣습니다.
-# skin-screening 과 같은 레이아웃입니다 (설치 대상 패키지가 아닙니다).
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile  # noqa: E402
-from fastapi.concurrency import run_in_threadpool  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
-
-from src import config  # noqa: E402
+from daengs_gait import config
 
 
 def _reject_if_too_large(content_length: str | None, actual_bytes: int) -> None:
@@ -114,8 +115,8 @@ def build_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="빈 파일입니다.")
         _reject_if_too_large(None, len(content))
 
-        from src.pipeline import process_video
-        from src.video_intake import save_upload
+        from daengs_gait.pipeline import process_video
+        from daengs_gait.video_intake import save_upload
 
         try:
             saved_path = save_upload(content, video.filename or "upload.mp4")
@@ -151,7 +152,7 @@ def build_app() -> FastAPI:
 
     @app.get("/v1/records/{record_id}")
     def get_record(record_id: str):
-        from src.record_store import load_record, record_exists
+        from daengs_gait.record_store import load_record, record_exists
 
         if not record_exists(record_id):
             raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
@@ -163,8 +164,8 @@ def build_app() -> FastAPI:
 
         ⚠️ 응답의 `_dev_only_*` 필드는 **UI 에 노출하면 안 됩니다.**
         """
-        from src.pipeline import compare_records
-        from src.record_store import record_exists
+        from daengs_gait.pipeline import compare_records
+        from daengs_gait.record_store import record_exists
 
         for rid in (req.record_id_a, req.record_id_b):
             if not record_exists(rid):
@@ -174,7 +175,7 @@ def build_app() -> FastAPI:
     @app.get("/v1/records/{record_id}/overlay")
     def get_overlay(record_id: str):
         """분석 결과를 그린 영상. 원본보다 느리게 재생됩니다(5fps 로 서브샘플하므로)."""
-        from src.record_store import load_record, record_exists
+        from daengs_gait.record_store import load_record, record_exists
 
         if not record_exists(record_id):
             raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.config import KP_MIN_CONF, MIN_FRAMES_FOR_PERIODICITY
+from daengs_gait.config import KP_MIN_CONF, MIN_FRAMES_FOR_PERIODICITY
 
 
 def _stats(name: str, values) -> dict:

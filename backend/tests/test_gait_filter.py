@@ -9,19 +9,13 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from src import config  # noqa: E402
-from src.feature_engine import build_tracks, static_features_from_records  # noqa: E402
-from src.gait_filter import apply_gait_filter, split_interleaved_usable  # noqa: E402
-from src.quality_gate import check_quality  # noqa: E402
+from daengs_gait import config  # noqa: E402
+from daengs_gait.feature_engine import build_tracks, static_features_from_records  # noqa: E402
+from daengs_gait.gait_filter import apply_gait_filter, split_interleaved_usable  # noqa: E402
+from daengs_gait.quality_gate import check_quality  # noqa: E402
 
 
 def _frame(fidx, *, detected=True, n_conf=12, bbox_frac=0.2, center=(100.0, 100.0),
@@ -155,7 +149,7 @@ def test_summary_keys_match_feature_engine_naming():
 
     여기가 어긋나면 UI 요약이 조용히 텅 빕니다 — 예외가 안 나서 알아채기 어렵습니다.
     """
-    from src.features import _feature_key, build_features
+    from daengs_gait.features import _feature_key, build_features
 
     records = [_frame(i, center=(100.0 + i * 80.0, 100.0)) for i in range(10)]
     apply_gait_filter(records, DIAG, sample_fps=config.TARGET_FPS)

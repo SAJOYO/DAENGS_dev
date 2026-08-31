@@ -33,7 +33,7 @@
 | [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
 | [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
 | [D-028](#d-028) | Place 공개 경로는 호출량을 제한하고 기존 세 원천만 배치 적재 | 2026-08-29 |
-| [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
+| [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 (소스 배치는 D-038 이 대체) | 2026-08-29 |
 | [D-030](#d-030) | 대화형 요청은 LangGraph 오케스트레이터로, 기능 UI 는 직접 API 유지 | 2026-08-30 |
 | [D-031](#d-031) | 결정적 라우팅은 기계 신호에만, 자연어는 LLM 라우터 — 모델은 벤치마크로 | 2026-08-30 |
 | [D-032](#d-032) | Training RAG 이관은 검증된 freeze 태그의 파일 복사로만 — 히스토리·코퍼스 반입 금지 | 2026-08-30 |
@@ -42,6 +42,7 @@
 | [D-035](#d-035) | Life 는 어댑터 뒤 in-process — 접점 규칙은 한 곳만 넓혀 다시 기계 강제 | 2026-08-30 |
 | [D-036](#d-036) | assistant 능력 인가 매트릭스 — 앱 회원 Training 은 의도된 확대 | 2026-08-30 |
 | [D-037](#d-037) | 오케스트레이션 관측에 질문 원문을 남기지 않는다 | 2026-08-30 |
+| [D-038](#d-038) | 보행 분석 소스는 backend 로, 런타임 격리는 유지 | 2026-08-31 |
 | [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 
@@ -1547,6 +1548,13 @@ place-db는 계속 compose 네트워크 안에만 둡니다. 호스트·팀원�
 ## D-029
 ### 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다
 
+> ⚠️ **부분적으로 대체됨 — 소스 배치만 [D-038](#d-038) 이 뒤집었습니다** (2026-08-31).
+> 아래의 "최상위 독립 폴더 + 자체 `pyproject.toml`·`uv.lock`" 은 더 이상 사실이 아닙니다
+> (`backend/src/daengs_gait/` 로 옮겼습니다). **런타임 격리는 그대로입니다** — 별도
+> 컨테이너 · 별도 FastAPI 프로세스 · 별도 venv · 별도 데이터 볼륨. 아래 "왜 `backend/`
+> 가 아닌가" 의 근거 셋 중 **프로세스가 죽는 범위**와 **영상은 분 단위**는 D-038 이
+> 그대로 받아들였고, **torch·ultralytics 무게**만 다시 판단했습니다.
+
 `YH-KIKI/walk_demo` 의 강아지 보행 영상 분석을 `gait-analysis/` 최상위 폴더로 들여왔습니다.
 `skin-screening` 과 같은 모양입니다 — 자체 `pyproject.toml`·`uv.lock`, compose
 `profiles: ["gait"]` 로 꺼둔 채, nginx 는 새 포트 대신 `daengback` 아래 `/gait/`,
@@ -1640,8 +1648,6 @@ Git LFS 는 쓰지 않습니다 — 저장소가 안 쓰고 있고, 팀원 전�
 없습니다. 인증도 없습니다(스크리닝과 같은 상태라 profile 을 켜는 시점은 사람이 정합니다).
 URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았습니다 — 빼면 `--extra url`
 을 통째로 제거할 수 있습니다.
-
----
 
 ## D-030
 ### 대화형 요청은 LangGraph 오케스트레이터로, 기능 UI 는 직접 API 유지
@@ -1922,6 +1928,77 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 옵트인(별도 플래그·별도 저장·보존 기한)을 설계하는 카드로 — 기본값을 뒤집는 것이
 아니라 예외를 설계하는 방향이어야 합니다.
 
+## D-038
+### 보행 분석 소스는 backend 로, 런타임 격리는 유지
+
+`gait-analysis/` 최상위 폴더를 없애고 `backend/src/daengs_gait/` 로 옮깁니다.
+의존성은 `backend/pyproject.toml` 의 **`gait` 그룹** 하나로 관리합니다.
+
+**뒤집는 것은 [D-029](#d-029) 의 "소스 배치"뿐입니다.** 런타임은 그대로 갈라 둡니다 —
+별도 컨테이너 · 별도 FastAPI 프로세스 · 별도 venv(`gait-venv`) · 별도 데이터
+볼륨(`gait-data`) · nginx `/gait/` · `profiles: ["gait"]`. 앱이 부르는 주소도 그대로입니다.
+
+#### 왜 소스만 합치나
+
+D-029 가 최상위 폴더를 고른 이유는 셋이었는데, 그중 하나만 사정이 바뀌었습니다.
+
+- **torch·ultralytics 무게** — D-021 로 backend 가 이미 `ml` 그룹에 torch 를 갖고 있고,
+  이 레포에서 **의존성은 이미지가 아니라 venv 볼륨에 삽니다.** `docker/uv/Dockerfile` 은
+  20줄이고 애플리케이션 코드도 의존성도 없습니다 — 7개 서비스가 전부 `image: uv:1`
+  하나를 쓰고, `command` 의 `uv sync` 가 각자의 named volume 에 설치합니다. 그래서
+  **`pyproject.toml` 을 공유해도 backend 컨테이너에는 ultralytics 가 안 들어갑니다.**
+  `crawler-worker` 가 이미 반대 방향으로 같은 일을 하고 있습니다 — backend 와 같은
+  `pyproject.toml`·`uv.lock` 을 마운트하면서 `--group ml` 을 빼서 torch 를 안 받습니다.
+- **프로세스가 죽는 범위** — **그대로 유효합니다.** 보행 분석이 넘어질 때 로그인과
+  `/ask` 까지 같이 넘어지면 안 됩니다.
+- **영상은 사진과 다르다** — **그대로 유효합니다.** 실측으로 2.6MB 클립에 CPU 152초입니다.
+  `069cf0d` 가 `run_in_threadpool` 로 이벤트 루프를 풀어 줬지만, 같은 프로세스에 두면
+  그 스레드와 CPU 를 로그인·`/ask` 와 다투게 됩니다.
+
+뒤의 둘이 남아 있으므로 **`daengs_training`(#94)처럼 프로세스를 합치지는 않습니다.**
+저쪽은 요청이 짧아 합치는 값이 있었고, 여기는 없습니다.
+
+#### 접점을 0 개로 둡니다
+
+`daengs_training` 은 프로세스를 합쳤기 때문에 `routers/training.py` +
+`services/training_rag.py` 접점이 필요했습니다. **여기는 만들지 않습니다** —
+`daengs_gait` 가 자기 FastAPI 앱을 직접 띄우므로 `daengs_backend` 가 그것을 알 이유가
+없습니다. 양방향 모두 import 하지 않습니다. D-021 이 `daengs_life` 접점을 세 줄로 좁혀
+둔 것과 같은 규율이고, 여기서는 아예 0 입니다.
+
+⚠️ 반대 방향도 막아야 합니다. `daengs_backend` 가 `daengs_gait` 를 최상단 import 하면
+   **기본 설치(`uv sync`, gait 그룹 없음)의 backend 가 ImportError 로 죽습니다.**
+
+#### 의존성은 `gait` 그룹 하나 — `ml` 을 붙이지 않습니다
+
+gait 소스의 서드파티 import 를 전수 조사한 결과 `cv2` · `fastapi` · `imageio_ffmpeg` ·
+`numpy` · `pydantic` · `ultralytics` · `uvicorn` 뿐입니다. **`torch` 는 직접 import 하지
+않습니다** — ultralytics 가 끌고 옵니다. `ml` 의 `sentence-transformers` ·
+`transformers` · `pyarrow` 는 하나도 쓰지 않으므로 `--group ml --group gait` 가 아니라
+**`--group gait`** 하나로 갑니다. `fastapi`·`uvicorn`·`python-multipart` 는 backend 기본
+`dependencies` 의 `fastapi[standard]` 가 이미 줍니다.
+
+`[tool.uv.sources]` 의 torch 인덱스 바인딩(리눅스=CPU 판)은 **패키지 단위**라 어느 그룹이
+요구하든 적용됩니다 — 컨테이너가 CUDA 판을 받을 위험은 없습니다.
+
+#### 조용히 틀릴 수 있는 자리
+
+- **`gait-venv` 를 `backend-venv` 와 공유하면 안 됩니다.** `uv sync` 는 exact 동기화라
+  같은 볼륨에 다른 그룹으로 돌리면 서로를 지웁니다. `crawler-worker` 가 `crawler-venv` 를
+  따로 쓰는 것과 같은 이유입니다.
+- **compose 의 `--group gait` 와 `pyproject.toml` 의 그룹 이름이 어긋나면 `/gait/` 만
+  503 이 되는데 다른 API 는 멀쩡해서 로그에 아무 문제도 안 보입니다.**
+- **`*.pt` 방어를 전역으로 올렸습니다.** 규칙이 `gait-analysis/.gitignore` 에만 있었고
+  `backend/.gitignore` 도 최상단에도 없었습니다 — 폴더를 지우면 가중치 57MB 를 커밋할 수
+  있는 상태가 됩니다. D-029 의 "가중치는 git 에 안 넣는다"는 그대로 유지합니다.
+- **`config.py` 의 `ROOT` 가 `parents[2]`(= `backend/`) 로 바뀌었습니다.** 로컬 기본값의
+  기준점이고, 컨테이너에서는 `GAIT_RELEASE_DIR`·`GAIT_DATA_DIR` 이 덮어써서 안 드러납니다.
+
+#### 하지 않은 것
+
+알고리즘 · 임계값 · `GAIT_FILTER_VERSION` · 가중치 선택 · API 경로와 의미는 **한 줄도
+바꾸지 않았습니다.** 이번 작업의 목적은 구조 이관입니다.
+
 ---
 
 ## D-039
@@ -2005,3 +2082,4 @@ extra로 두고 `place-search`가 `uv sync --extra place`로 선택합니다.
 `backend/tools/sync_screening.py <원본경로>` 가 원본에서 15개 파일을 가져오고
 import 를 기계적으로 치환합니다. 돌린 뒤 `git diff` 가 비면 원본과 같다는 뜻입니다.
 **`serve.py` 는 안 가져옵니다** — 원본은 단독 서버, 여기는 라우터라 모양이 다릅니다.
+

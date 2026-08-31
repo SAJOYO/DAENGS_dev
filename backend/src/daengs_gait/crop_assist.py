@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from src.config import (
+from daengs_gait.config import (
     COCO_DOG_CLASS_ID,
     DETECTOR_WEIGHTS,
     GENERAL_CONF_THRESH,

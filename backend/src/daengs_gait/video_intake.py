@@ -19,7 +19,7 @@ from pathlib import Path
 
 import imageio_ffmpeg
 
-from src.config import UPLOADS_DIR
+from daengs_gait.config import UPLOADS_DIR
 
 
 def ensure_dir() -> Path:

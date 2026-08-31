@@ -22,7 +22,7 @@ from pathlib import Path
 import cv2
 import imageio_ffmpeg
 
-from src.config import KP_MIN_CONF, SKELETON_CHAIN, TARGET_FPS
+from daengs_gait.config import KP_MIN_CONF, SKELETON_CHAIN, TARGET_FPS
 
 SKELETON_EDGES = list(zip(SKELETON_CHAIN[:-1], SKELETON_CHAIN[1:]))
 

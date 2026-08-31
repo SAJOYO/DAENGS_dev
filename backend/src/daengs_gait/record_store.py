@@ -15,7 +15,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from src.config import RECORDS_DIR
+from daengs_gait.config import RECORDS_DIR
 
 
 def _ensure_dir() -> None:

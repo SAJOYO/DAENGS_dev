@@ -10,8 +10,8 @@
 
 from __future__ import annotations
 
-from src.config import PRIORITY_JOINTS
-from src.feature_engine import static_features_from_records
+from daengs_gait.config import PRIORITY_JOINTS
+from daengs_gait.feature_engine import static_features_from_records
 
 
 def _feature_key(joint: str) -> str:

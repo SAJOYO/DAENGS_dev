@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from src.config import MIN_USABLE_FRAMES
+from daengs_gait.config import MIN_USABLE_FRAMES
 
 
 def check_quality(records: list) -> dict:

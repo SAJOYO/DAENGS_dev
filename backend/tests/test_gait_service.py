@@ -1,8 +1,8 @@
 """PR #62 리뷰 지적 ① — `/v1/analyze` 가 이벤트 루프를 막지 않는다.
 
-**가중치도 torch 도 없이 돕니다.** `src.pipeline` 을 대역 모듈로 갈아 끼우므로
+**가중치도 torch 도 없이 돕니다.** `daengs_gait.pipeline` 을 대역 모듈로 갈아 끼우므로
 cv2·ultralytics 가 필요 없습니다 — `test_upload_limit.py` 와 같은 장치이고, 기본
-설치(`uv sync`, `--extra model` 없음)에서도 이 회귀가 잡혀야 하기 때문입니다.
+설치(`uv sync`, `--group gait` 없음)에서도 이 회귀가 잡혀야 하기 때문입니다.
 
 모델이 실제로 필요한 나머지 회귀(overlay·비교 문구·파일명)는
 `test_review_fixes_model.py` 에 있습니다.
@@ -14,13 +14,8 @@ import asyncio
 import sys
 import time
 import types
-from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 
 ANALYZE_SECONDS = 2.0
@@ -28,12 +23,12 @@ ANALYZE_SECONDS = 2.0
 
 @pytest.fixture()
 def stubbed_serve(monkeypatch, tmp_path):
-    """`src.pipeline` · `src.video_intake` 를 대역으로 바꾼 app.
+    """`daengs_gait.pipeline` · `daengs_gait.video_intake` 를 대역으로 바꾼 app.
 
     대역의 `process_video` 는 **동기로 잠듭니다** — 진짜 추론이 하는 일(영상 전체를
     훑는 동기 CPU 작업)의 최소 재현입니다.
     """
-    fake_pipeline = types.ModuleType("src.pipeline")
+    fake_pipeline = types.ModuleType("daengs_gait.pipeline")
 
     def slow_process_video(path, **kw):
         time.sleep(ANALYZE_SECONDS)
@@ -41,13 +36,13 @@ def stubbed_serve(monkeypatch, tmp_path):
 
     fake_pipeline.process_video = slow_process_video
 
-    fake_intake = types.ModuleType("src.video_intake")
+    fake_intake = types.ModuleType("daengs_gait.video_intake")
     fake_intake.save_upload = lambda content, filename: tmp_path / "saved.mp4"
 
-    monkeypatch.setitem(sys.modules, "src.pipeline", fake_pipeline)
-    monkeypatch.setitem(sys.modules, "src.video_intake", fake_intake)
+    monkeypatch.setitem(sys.modules, "daengs_gait.pipeline", fake_pipeline)
+    monkeypatch.setitem(sys.modules, "daengs_gait.video_intake", fake_intake)
 
-    import serve
+    from daengs_gait import service as serve
 
     return serve.build_app()
 

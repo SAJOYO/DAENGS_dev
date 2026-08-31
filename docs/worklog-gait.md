@@ -329,6 +329,37 @@ API 버전 규칙 자체가 없습니다(decisions.md · collaboration.md · 오
 기본 설치(torch 없음) 38 passed · 1 skipped / 모델 환경 49 passed /
 실제 영상 E2E 9항목 PASS (analyze → 단건 → 목록 → compare → overlay → 삭제 → 404).
 
+## 2026-08-31 — Swagger 가 남의 API 를 보여주던 버그 (root_path, PR #111)
+
+`http://daengback.~/gait/docs` 에서 **gait API 가 안 보인다**는 제보로 찾았습니다.
+
+```
+브라우저가 /gait/docs 를 염
+  → Swagger HTML 안에 url: '/openapi.json'   ← 절대 경로
+  → 브라우저가 daengback.~/openapi.json 을 요청
+  → nginx 의 location / 이 그걸 backend 로 보냄
+  → "DAENGS API"(backend 것)가 뜸          ← gait 가 아님
+```
+
+nginx 가 `/gait` 를 떼고 넘기므로 FastAPI 는 **자기가 도메인 루트에 있다고 믿습니다.**
+
+⚠️ **페이지는 200 으로 열리고 화면도 멀쩡해 보입니다. 내용만 남의 것입니다.**
+   처음에 `/gait/docs → HTTP 200` 만 보고 "정상"이라고 판단했다가 틀렸습니다 —
+   **상태 코드로는 못 잡는 종류**입니다.
+
+**고침**: `FastAPI(root_path=config.PUBLIC_PREFIX)`. 프록시가 접두사를 떼는 구조를 위한
+표준 옵션이고, docs·openapi.json·redoc 주소를 접두사 기준으로 생성합니다.
+**라우트 정의는 안 바뀝니다** — 컨테이너는 여전히 `/analyze` 로 받습니다.
+
+**같은 병을 이미 한 번 막았었습니다.** `overlay_url` 도 같은 자리였는데 그건 손으로
+`PUBLIC_PREFIX` 를 붙여 막았고, **Swagger 는 FastAPI 가 자동 생성해서 놓쳤습니다.**
+prefix stripping 구조에서는 "서비스가 자기 주소를 만드는 자리"를 전부 세어 봐야 합니다.
+
+⚠️ 테스트에서 알게 된 것: **Starlette 은 `root_path` 를 관대하게 처리해서
+`/gait/records/…` 도 200 을 냅니다.** 라우트에 접두사를 잘못 박아도 양쪽 다 200 이라
+**테스트가 실수를 못 잡습니다.** openapi 의 경로 집합으로 고정했습니다 — 거기에
+`/gait/...` 가 나타나면 이중 접두사입니다.
+
 ## Swagger 가 두 개인 이유
 
 `http://daengback.~/docs` 는 **backend 프로세스의 문서**라 **gait 가 안 나옵니다.**

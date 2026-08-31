@@ -283,3 +283,58 @@ def test_healthz_unchanged(gait):
     body = gait.client.get("/healthz").json()
     assert body["status"] == "ok"
     assert set(body["weights"]) == {"pose", "detector"}
+
+
+# --------------------------------------------------------------------------
+# Swagger / OpenAPI — 프록시가 접두사를 떼는 구조
+# --------------------------------------------------------------------------
+def test_docs_html_points_at_gait_openapi(gait):
+    """⚠️ **`root_path` 가 없으면 `/gait/docs` 가 backend 의 API 를 보여줍니다.**
+
+    nginx 가 `/gait` 를 떼므로 FastAPI 는 자기가 루트에 있다고 믿고 Swagger HTML 에
+    `/openapi.json` 을 절대 경로로 박습니다. 브라우저는 그것을 도메인 기준으로 풀어
+    `daengback.~/openapi.json` → **backend** 를 부릅니다.
+
+    페이지는 200 으로 열리고 화면도 멀쩡해 보여서 **상태 코드만 봐서는 못 잡습니다.**
+    그래서 여기서는 HTML 이 가리키는 주소를 직접 봅니다.
+    """
+    html = gait.client.get("/docs").text
+    assert "/gait/openapi.json" in html
+    assert "url: '/openapi.json'" not in html
+
+
+def test_openapi_advertises_gait_prefix(gait):
+    """`servers` 에 접두사가 들어가야 앱·문서가 올바른 주소를 만듭니다."""
+    spec = gait.client.get("/openapi.json").json()
+    assert spec["servers"][0]["url"] == "/gait"
+
+
+def test_openapi_lists_only_gait_endpoints(gait):
+    """gait 것만 있어야 합니다 — backend 의 `/auth/*`·`/app/*` 가 섞이면 안 됩니다."""
+    paths = set(gait.client.get("/openapi.json").json()["paths"])
+    assert paths == {
+        "/healthz",
+        "/analyze",
+        "/records",
+        "/records/{record_id}",
+        "/records/{record_id}/overlay",
+        "/compare",
+    }
+
+
+def test_root_path_does_not_change_route_paths(gait):
+    """`root_path` 는 **문서 주소를 위한 것**이고 라우트 정의는 그대로입니다.
+
+    nginx 가 이미 `/gait` 를 떼고 넘기므로 컨테이너가 실제로 받는 경로는 `/records`
+    입니다. 그 경로가 계속 동작해야 합니다 — 여기가 깨지면 서비스 전체가 404 입니다.
+
+    ⚠️ Starlette 은 `root_path` 를 **접두사가 붙은 요청도 받아주는 쪽**으로 처리해서
+       `/gait/records/…` 도 200 이 됩니다. 관대한 동작이라 **테스트가 실수를 못 잡습니다** —
+       라우트에 접두사를 잘못 박아도 양쪽 다 200 이라 안 드러납니다. 그래서 이 파일은
+       위의 openapi 경로 집합(`test_openapi_lists_only_gait_endpoints`)으로 그것을
+       고정합니다. 거기에 `/gait/...` 가 나타나면 이중 접두사입니다.
+    """
+    gait.make(ID_A, "dog-1")
+    assert gait.client.get(f"/records/{ID_A}").status_code == 200      # nginx 가 넘기는 경로
+    assert gait.client.get("/records", params={"dog_id": "dog-1"}).status_code == 200
+    assert gait.client.get("/healthz").status_code == 200

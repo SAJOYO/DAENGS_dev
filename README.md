@@ -252,6 +252,9 @@ docker compose exec redis redis-cli -a <REDIS_PASSWORD> LLEN celery     # 소비
    (Get-ChildItem C:/deploy/daengs/corpus/raw -Recurse -File).Count           # 1 의 raw 개수와 같아야
    (Get-Content C:/deploy/daengs/corpus/manifests/crawl_log.jsonl).Count      # 1 의 줄 수와 같아야
    ```
+   `seed_sources.yaml` 은 여기 **없는 것이 맞습니다** — git 추적 파일이라 정본이 체크아웃이고,
+   compose 가 체크아웃의 것을 `/data/manifests/` 위에 겹쳐 마운트합니다. 코퍼스 폴더에
+   복사해 두면 배포가 갱신하는 시드와 갈라집니다.
 4. 서버의 최상단 `.env`(러너 체크아웃 안) 에 한 줄 — `.env.example` 참고:
    ```
    DAENGS_CORPUS_DIR=C:/deploy/daengs/corpus

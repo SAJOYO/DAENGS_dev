@@ -5760,6 +5760,14 @@ pytest                  test_tasks_crawl 35 + test_crawler_cli_due 3 통과
 재개 조건) · 서버 → 개발 PC 동기화의 자동화(SSH 를 열지부터) · `crawl_runs` 의 `running` 잔존 행 정리
 (RAG-047 ⑦).
 
+**정정** (2026-08-31, 서버 실측) — **시드가 코퍼스 마운트에 가려졌다.** `/data` 를 통째로
+`DAENGS_CORPUS_DIR` 로 바꾸면서 git 추적 파일인 `manifests/seed_sources.yaml` 까지 코퍼스 폴더에서
+찾게 됐는데, 이관 zip 은 raw/ 와 로그만 담으므로(위 "processed 미포함"과 같은 설계) 서버에서
+`load_seeds()` 가 FileNotFoundError 로 죽었다 — 개발 PC 는 `data/` 에 둘 다 있어 실측(위)이 못 잡은
+자리다. 체크아웃의 시드 **파일 하나만** `/data/manifests/` 위에 겹쳐 마운트해서 고쳤다(ro) — 정본은
+git 그대로고, 배포가 체크아웃을 갱신하면 시드도 따라온다. 코퍼스 폴더에 시드를 복사하는 것은
+답이 아니다 — 배포와 갈라진다.
+
 ---
 
 ## RAG-051. 특별약관 경계는 레이아웃(폰트 크기)으로 — 정규식이 못 가르는 세 가지 — ✅ 확정 (2026-08-30)

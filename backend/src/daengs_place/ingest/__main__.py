@@ -1,0 +1,72 @@
+"""`python -m daengs_place.ingest {full|incremental|pet-axes|restrictions}` 실행점.
+
+`pet-axes` 와 `restrictions` 는 이미 저장된 `facility.pet` 에서 다시 파생할 뿐 원천을
+호출하지 않는다 — 그래서 서비스 키를 요구하지 않는다.
+"""
+
+import argparse
+import asyncio
+import json
+
+from daengs_place.core.config import settings
+from daengs_place.core.db import SessionLocal
+from daengs_place.ingest.mois import MoisClient
+from daengs_place.ingest.mois_store import MoisStore
+from daengs_place.ingest.mois_sync import SyncMode, sync_source
+from daengs_place.ingest.pet_axes import derive_all
+from daengs_place.ingest.restrictions import derive_all as derive_restrictions
+from daengs_place.place.source_catalog import MOIS_SOURCES as SOURCES
+
+# 원천을 호출하지 않는 모드. 서비스 키 검사에서 빠진다.
+LOCAL_MODES = ("pet-axes", "restrictions")
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="공공데이터를 PostGIS에 동기화")
+    parser.add_argument("mode", choices=("full", "incremental", "pet-axes", "restrictions"))
+    parser.add_argument("--kind", choices=("all", "hospital", "pharmacy"), default="all")
+    parser.add_argument("--source", action="append",
+                        help="pet-axes·restrictions: 이 원천만 (여러 번 지정 가능). 미지정 = 전부")
+    parser.add_argument("--all", action="store_true",
+                        help="pet-axes·restrictions: 미처리만이 아니라 전량 재파생")
+    return parser
+
+
+async def _run_local(mode: str, redo: bool, sources: list[str] | None) -> None:
+    """저장된 값에서 다시 파생하는 모드들. 외부 호출 0 이라 Usage Gate 와 무관하다."""
+    run = derive_all if mode == "pet-axes" else derive_restrictions
+    async with SessionLocal() as session:
+        stats = await run(session, redo=redo, sources=tuple(sources) if sources else None)
+    print(json.dumps(stats.to_dict(), ensure_ascii=False))
+
+
+async def _run(mode: SyncMode, kind: str) -> None:
+    selected = list(SOURCES.values()) if kind == "all" else [SOURCES[kind]]
+    async with MoisClient(
+        settings.data_go_kr_service_key,
+        page_size=settings.mois_page_size,
+    ) as client:
+        for source in selected:
+            async with SessionLocal() as session:
+                stats = await sync_source(
+                    client,
+                    MoisStore(session),
+                    source,
+                    mode=mode,
+                    overlap_days=settings.mois_sync_overlap_days,
+                )
+                print(json.dumps(stats.to_dict(), ensure_ascii=False))
+
+
+def main() -> None:
+    args = _parser().parse_args()
+    if args.mode in LOCAL_MODES:
+        asyncio.run(_run_local(args.mode, args.all, args.source))
+        return
+    if not settings.data_go_kr_service_key:
+        raise SystemExit("DAENGS_DATA_GO_KR_SERVICE_KEY is required")
+    asyncio.run(_run(args.mode, args.kind))
+
+
+if __name__ == "__main__":
+    main()

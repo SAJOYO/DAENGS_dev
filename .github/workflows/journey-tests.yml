@@ -3,7 +3,10 @@ name: journey tests
 on:
   pull_request:
     paths:
-      - "journey-service/**"
+      - "backend/src/daengs_journey/**"
+      - "backend/tests/journey/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
       - ".env.example"
@@ -12,7 +15,10 @@ on:
   push:
     branches: [dev]
     paths:
-      - "journey-service/**"
+      - "backend/src/daengs_journey/**"
+      - "backend/tests/journey/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
       - ".env.example"
@@ -24,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: journey-service
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - name: Compose 설정
@@ -45,10 +51,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "journey-service/uv.lock"
+          cache-dependency-glob: "backend/uv.lock"
       - name: 의존성
         run: uv sync --frozen
       - name: 테스트
-        run: uv run pytest -q
+        run: uv run pytest -q tests/journey
       - name: 린트
-        run: uv run ruff check app tests
+        run: uv run ruff check src/daengs_journey tests/journey

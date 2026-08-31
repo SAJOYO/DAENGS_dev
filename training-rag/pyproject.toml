@@ -8,5 +8,17 @@ dependencies = [
     "psycopg[binary]==3.3.4",
     "python-dotenv==1.2.3",
     "sentence-transformers==5.7.0",
+    "torch==2.13.0",
     "uvicorn==0.52.4",
 ]
+
+# Training RAG embedding runs on CPU inside Docker.
+# Ollama remains host-side and uses the server GPU.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+

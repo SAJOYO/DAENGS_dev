@@ -357,7 +357,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     print()
     print(evaluate.markdown(summaries, verdict, gs, fingerprint, len(index)))
     print()
-    print("  ^ 위 markdown 을 docs/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
+    print("  ^ 위 markdown 을 docs/life/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
     print("    덤프는 미추적이라 이것이 뒤에 남는 전부다.")
     return 0
 

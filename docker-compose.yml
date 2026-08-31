@@ -497,7 +497,7 @@ services:
     # 1.2GB 를 더 받고 워커 상주 RAM 이 2.4GB 늘어납니다 (D-021).
     #
     # `--concurrency 1` 인 이유: 크롤 예절입니다. 워커를 늘리면 같은 호스트로 동시에 나가
-    # `request_delay_sec` 1.5초가 무의미해집니다 (docs/data-sources.md §12).
+    # `request_delay_sec` 1.5초가 무의미해집니다 (docs/life/data-sources.md §12).
     #
     # 첫 줄의 `test -f` 가 위 ⚠ 의 가드입니다. 로그 파일의 **존재**만 봅니다(크기가 아니라) —
     # 빈 파일은 "알고 비웠다"는 뜻이라 통과시킵니다.

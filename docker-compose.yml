@@ -158,15 +158,13 @@ services:
     restart: unless-stopped
     networks:
       - daengs-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     working_dir: /app
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       PYTHONPATH: /app
-      GENERATION_MODE: ollama
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_GENERATION_MODEL: gemma3:4b
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
       RAG_PGVECTOR_DSN: postgresql://dog_rag:dog_rag_local@training-rag-pgvector:5432/dog_rag
       TZ: Asia/Seoul
     volumes:

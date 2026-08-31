@@ -4,7 +4,7 @@ Run locally:
     uv run uvicorn scripts.rag_api:app --host 127.0.0.1 --port 8000
 
 The endpoint deliberately does not persist questions or model answers.  It uses
-the evaluated PGVector corpus, serializes local inference for the 6 GB GPU, and
+the evaluated PGVector corpus, calls Gemini for grounded generation, and
 keeps the medical and output guardrails outside the model's control.
 """
 from __future__ import annotations
@@ -63,7 +63,7 @@ _SAFETY_BOUNDARY_REASONS = frozenset(
 def model_reported_no_evidence(answer: str) -> bool:
     """Recognize a short, uncited model statement that the context is insufficient.
 
-    Gemma may paraphrase the fallback instead of emitting one fixed sentence.
+    The generation model may paraphrase the fallback instead of emitting one fixed sentence.
     Detect the shared structure (context/evidence negation, no citation) rather
     than a question-specific string. Substantive answers remain eligible when
     they contain a numbered citation.
@@ -127,7 +127,7 @@ class ChatResponse(BaseModel):
 
 
 class RAGService:
-    """One process-local runtime; local GPU inference is intentionally serial."""
+    """One process-local runtime with bounded retrieval/generation concurrency."""
 
     def __init__(
         self,
@@ -145,7 +145,7 @@ class RAGService:
             dsn=os.getenv("RAG_PGVECTOR_DSN", DEFAULT_DSN),
             document_ids=self.serving_document_ids,
         )
-        self.client = client or generation.load_ollama_answer_client()
+        self.client = client or generation.load_gemini_answer_client()
         self.medical_terms = list(medical_terms) if medical_terms is not None else (
             generation.medical_guardrail.load_medical_terms_v2()
         )
@@ -216,9 +216,9 @@ class RAGService:
             raise ValueError("question must not be blank")
         request_id = str(uuid.uuid4())
 
-        # SentenceTransformer and the local Ollama model share limited GPU/RAM.
-        # Serializing a request prevents two users from turning a usable 20-second
-        # answer into OOMs or unbounded queue contention.
+        # Keep retrieval + external generation serialized in this small runtime.
+        # E5 stays process-local, and bounded concurrency avoids duplicate model
+        # loads or an accidental burst of paid Gemini requests.
         with self._lock:
             medical = generation.medical_guardrail.classify_input_v2(
                 question, self.medical_terms, self.whitelist_terms
@@ -273,7 +273,7 @@ class RAGService:
             record: dict[str, Any] = {"question": question, "usage": None}
             raw_answer = self.client.complete(prompt, record)
             if not raw_answer:
-                raise generation.GenerationError("local generation returned an empty answer")
+                raise generation.GenerationError("generation returned an empty answer")
             output = generation.medical_guardrail.apply_output_guardrail(
                 raw_answer, self.medical_terms, self.whitelist_terms
             )

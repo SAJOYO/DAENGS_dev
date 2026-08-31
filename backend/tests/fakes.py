@@ -310,6 +310,11 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
+    async def walk_existing_seqs(session, walk_id):
+        walk = next((w for w in store.walks if w.id == walk_id), None)
+        return {p.client_seq for p in walk.points} if walk else set()
+
     monkeypatch.setattr(walk_repo, "add", walk_add)
+    monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
 
     return store

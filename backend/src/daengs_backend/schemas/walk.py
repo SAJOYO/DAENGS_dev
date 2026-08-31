@@ -76,6 +76,26 @@ class WalkUpload(BaseModel):
         return self
 
 
+class WalkPointsAppend(BaseModel):
+    """좌표만 이어 붙입니다. **긴 산책을 나눠 올릴 때** 씁니다.
+
+    두 시간 산책이면 좌표가 5천 점 가까이 되고, 좌표가 촘촘히 잡히면 만 점도 넘습니다
+    (JSON 1MB 초과). 그러면 nginx 기본 바디 한도에 걸려 **그 산책이 영영 안 올라갑니다.**
+
+    나눠 보내도 안전한 이유는 `client_seq` 가 PK 의 일부라서입니다 — 같은 점을 두 번
+    보내도 한 줄이고, 순서가 뒤바뀌어 도착해도 결과가 같습니다.
+    """
+
+    points: list[WalkPointUpload] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _unique_seq(self) -> Self:
+        seqs = [point.client_seq for point in self.points]
+        if len(seqs) != len(set(seqs)):
+            raise ValueError("client_seq 가 겹칩니다.")
+        return self
+
+
 class WalkPointResponse(BaseModel):
     client_seq: int
     chain_index: int

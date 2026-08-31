@@ -164,3 +164,57 @@ def test_날씨를_못_받은_산책도_올라간다(client: TestClient) -> None
 
     assert data["weather_code"] is None
     assert data["temperature_c"] is None
+
+
+def point(seq: int) -> dict:
+    return {
+        "client_seq": seq,
+        "chain_index": 0,
+        "at": (STARTED + timedelta(seconds=seq)).isoformat(),
+        "lat": "37.497900",
+        "lng": "127.027600",
+        "accuracy_m": 8.0,
+        "is_mock": False,
+    }
+
+
+def test_좌표를_나눠_올릴_수_있다(client: TestClient) -> None:
+    """두 시간 산책이면 좌표가 5천 점이라 한 번에 보내면 바디 한도에 걸립니다."""
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+
+    response = client.post(
+        f"/app/walks/{created['id']}/points",
+        json={"points": [point(2), point(3)]},
+    )
+
+    assert response.status_code == 200
+    assert [p["client_seq"] for p in response.json()["points"]] == [0, 1, 2, 3]
+
+
+def test_같은_묶음을_다시_보내도_안_늘어난다(client: TestClient) -> None:
+    """앱이 응답을 못 받고 다시 보내는 것은 재시도지 오류가 아닙니다."""
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    payload = {"points": [point(2), point(3)]}
+
+    client.post(f"/app/walks/{created['id']}/points", json=payload)
+    again = client.post(f"/app/walks/{created['id']}/points", json=payload)
+
+    assert again.status_code == 200
+    assert [p["client_seq"] for p in again.json()["points"]] == [0, 1, 2, 3]
+
+
+def test_남의_산책에는_좌표를_못_붙인다(client: TestClient, store: Store) -> None:
+    other = FakeWalk(
+        app_user_id=STRANGER,
+        client_session_id=uuid.uuid4(),
+        started_at=STARTED,
+        ended_at=ENDED,
+    )
+    store.walks.append(other)
+
+    response = client.post(
+        f"/app/walks/{other.id}/points", json={"points": [point(0)]}
+    )
+
+    assert response.status_code == 404
+    assert other.points == []

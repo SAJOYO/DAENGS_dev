@@ -21,6 +21,7 @@ from daengs_backend.schemas.walk import (
     WalkDetailResponse,
     WalkListResponse,
     WalkPointResponse,
+    WalkPointsAppend,
     WalkResponse,
     WalkUpload,
 )
@@ -104,4 +105,27 @@ async def get_walk(
         walk = await walk_service.get_walk(session, user.app_user_id, walk_id)
     except walk_service.WalkNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다.") from None
+    return _to_detail(walk)
+
+
+@router.post("/{walk_id}/points", response_model=WalkDetailResponse)
+async def append_points(
+    walk_id: uuid.UUID,
+    body: WalkPointsAppend,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> WalkDetailResponse:
+    """좌표를 이어 붙입니다. **긴 산책을 나눠 올릴 때** 씁니다.
+
+    두 시간 산책이 좌표 5천 점(약 650KB)이고 촘촘히 잡히면 1MB 를 넘습니다. 한 번에
+    보내면 nginx 바디 한도에 걸려 그 산책이 영영 안 올라갑니다.
+
+    같은 묶음을 다시 보내도 안전합니다 — 이미 있는 순번은 넘어갑니다.
+    """
+    try:
+        walk = await walk_service.append_points(session, user.app_user_id, walk_id, body)
+    except walk_service.WalkNotFoundError:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다."
+        ) from None
     return _to_detail(walk)

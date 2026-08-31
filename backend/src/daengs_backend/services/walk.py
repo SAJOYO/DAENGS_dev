@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.models import Walk, WalkPoint
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
-from daengs_backend.schemas.walk import WalkUpload
+from daengs_backend.schemas.walk import WalkPointsAppend, WalkUpload
 
 
 class WalkNotFoundError(Exception):
@@ -90,3 +90,42 @@ async def upload_walk(
     walk_repo.add(session, walk)
     await session.commit()
     return walk, True
+
+
+async def append_points(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    walk_id: uuid.UUID,
+    body: WalkPointsAppend,
+) -> Walk:
+    """좌표를 이어 붙입니다. **긴 산책을 나눠 올릴 때** 씁니다.
+
+    두 시간 산책이면 좌표가 5천 점 가까이 되고 촘촘히 잡히면 만 점도 넘어, 한 번에
+    보내면 nginx 바디 한도(기본 1MB)에 걸립니다. 걸리면 그 산책은 영영 안 올라갑니다.
+
+    **이미 있는 순번은 조용히 넘깁니다.** 앱이 같은 묶음을 다시 보내는 것은 재시도지
+    오류가 아닙니다 — DB 의 PK 가 막아 주기는 하지만 그건 500 으로 터지는 방식입니다.
+    """
+    walk = await walk_repo.get_owned(session, app_user_id, walk_id)
+    if walk is None:
+        raise WalkNotFoundError
+
+    already = await walk_repo.existing_seqs(session, walk_id)
+    fresh = [p for p in body.points if p.client_seq not in already]
+    if not fresh:
+        return walk
+
+    walk.points.extend(
+        WalkPoint(
+            client_seq=point.client_seq,
+            chain_index=point.chain_index,
+            at=point.at,
+            lat=point.lat,
+            lng=point.lng,
+            accuracy_m=point.accuracy_m,
+            is_mock=point.is_mock,
+        )
+        for point in sorted(fresh, key=lambda p: p.client_seq)
+    )
+    await session.commit()
+    return walk

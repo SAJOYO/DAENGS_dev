@@ -10,9 +10,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from daengs_backend.models import Walk
+from daengs_backend.models import Walk, WalkPoint
 
-__all__ = ["add", "get_by_client_session", "get_owned", "list_for_owner"]
+__all__ = [
+    "add",
+    "existing_seqs",
+    "get_by_client_session",
+    "get_owned",
+    "list_for_owner",
+]
 
 
 async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[Walk]:
@@ -70,3 +76,13 @@ async def get_by_client_session(
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk
+
+
+async def existing_seqs(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:
+    """이미 저장된 좌표 순번.
+
+    나눠 올릴 때 **같은 묶음이 두 번 와도** 조용히 넘기려고 씁니다. DB 의 PK 가
+    막아 주기는 하지만, 그건 예외로 터지는 방식이라 재시도가 500 이 됩니다.
+    """
+    stmt = select(WalkPoint.client_seq).where(WalkPoint.walk_id == walk_id)
+    return set(await session.scalars(stmt))

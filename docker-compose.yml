@@ -51,11 +51,20 @@ services:
       DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
       DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
-      # Training RAG runs in this process while retaining its isolated PGVector.
+      # Training RAG 는 이 backend 프로세스 안에서 돕니다. DB 는 공용 pgvector
+      # 클러스터의 **별도 dog_rag 데이터베이스**입니다 — 전용 컨테이너는 없앴지만
+      # vectordb 와 테이블이 섞이는 것은 아닙니다. 같은 클러스터, 다른 DB 이고
+      # 접속 role 은 그 dog_rag DB 만 소유하는 non-superuser LOGIN 입니다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
-      RAG_PGVECTOR_DSN: postgresql://dog_rag:dog_rag_local@training-rag-pgvector:5432/dog_rag
+      # 비밀번호는 최상단 .env 의 TRAINING_RAG_DB_PASSWORD 로만 받습니다. 값이
+      # 비어 있으면 `:?` 가드가 컨테이너를 바꾸기 전에 배포를 멈춥니다
+      # (REDIS_PASSWORD 와 같은 장치입니다).
+      #
+      # ⚠ DAENGS_DB_* 와 달리 URL 한 줄이라 비밀번호에 @ / # 이 들어가면 깨집니다
+      #   (D-013 과 같은 함정). 영숫자로만 지으세요.
+      RAG_PGVECTOR_DSN: postgresql://dog_rag:${TRAINING_RAG_DB_PASSWORD:?Set TRAINING_RAG_DB_PASSWORD in deployment root .env}@pgvector:5432/dog_rag
       # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
       # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
       #
@@ -98,9 +107,8 @@ services:
       # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
       - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
     depends_on:
+      # Training RAG 의 dog_rag DB 도 이 컨테이너 안에 있습니다.
       pgvector:
-        condition: service_healthy
-      training-rag-pgvector:
         condition: service_healthy
       # Redis 가 없어도 앱은 뜹니다 — 캐시가 메모리로 떨어질 뿐입니다.
       # 그런데도 healthy 를 기다리는 이유: 그 판단이 프로세스 생애에 **한 번뿐**입니다
@@ -127,31 +135,6 @@ services:
     # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
     # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
     command: sh -c "uv sync --frozen --group ml --group screening && exec uv run --no-sync dev"
-
-
-  # Training RAG: main backend? runtime/DB ??? ????.
-  # Corpus? provenance ?? ??? DB? ???? ???.
-  training-rag-pgvector:
-    image: pgvector/pgvector:pg18
-    container_name: daengs-training-pgvector
-    restart: unless-stopped
-    networks:
-      - daengs-network
-    environment:
-      POSTGRES_DB: dog_rag
-      POSTGRES_USER: dog_rag
-      POSTGRES_PASSWORD: dog_rag_local
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
-      TZ: Asia/Seoul
-      PGTZ: Asia/Seoul
-    volumes:
-      - training-rag-pgdata:/var/lib/postgresql
-      - ./backend/infra/training_pgvector/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dog_rag -d dog_rag"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
 
   pgvector:
     image: pgvector/pgvector:pg18
@@ -594,6 +577,5 @@ volumes:
   gait-data:
   place-search-venv:
   journey-service-venv:
-  training-rag-pgdata:
   uv-cache:
   hf-cache:

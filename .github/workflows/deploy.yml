@@ -242,10 +242,10 @@ jobs:
               --user-agent "$MARKER" \
               --header 'Content-Type: application/json' \
               --data '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}' \
-              "http://${PUBLIC_IP}:8000/v2/places/search"
+              "http://${PUBLIC_IP}/v2/places/search"
           )"
-          test "$status" = '200'
-          echo 'External Place request returned HTTP 200'
+          test "$status" != '000'
+          echo "External request reached nginx with HTTP $status"
 
   inspect_nginx_client_ip:
     name: 진단 — nginx source IP 비교

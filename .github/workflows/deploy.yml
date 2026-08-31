@@ -16,6 +16,7 @@ env:
 
 jobs:
   deploy:
+    name: 서비스 반영
     # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
     runs-on: [self-hosted, Windows, X64]
 
@@ -117,6 +118,16 @@ jobs:
           docker compose exec -T nginx nginx -t
           docker compose exec -T nginx nginx -s reload
 
+  post_deploy_smoke:
+    name: 배포 후 공개 경로 확인
+    needs: deploy
+    runs-on: [self-hosted, Windows, X64]
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
       - name: Place 공개 경로 확인
         run: |
           # 배포에서는 공개 경로와 APP 응답 계약만 확인합니다.

@@ -18,7 +18,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
-from src.config import CFG, CLASSES
+from daengs_screening.config import CFG, CLASSES
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -292,7 +292,7 @@ def hair_sampler(ds: SkinDataset, alpha: float = 1.0,
     """
     import numpy as np
 
-    from src import texture
+    from daengs_screening import texture
 
     w = np.ones(len(ds), dtype=np.float64)
     if alpha <= 0:
@@ -360,7 +360,7 @@ def build_loaders(
     if cfg.balance_strategy == "weighted_sampler":
         sampler = weighted_sampler(ds_tr)
     elif cfg.balance_strategy == "hair_weighted":
-        from src import env as _env
+        from daengs_screening import env as _env
 
         sampler = hair_sampler(
             ds_tr, alpha=getattr(cfg, "hair_alpha", 1.0),

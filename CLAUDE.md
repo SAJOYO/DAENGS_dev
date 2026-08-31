@@ -14,8 +14,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
 | 경로 | 내용 |
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
-| `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 |
-| `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
+| `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening** 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 |
 | `gait-analysis/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 — D-029 |
 | `backend/src/daengs_place/` | Place 검색 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `backend/docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `backend/docs/journey/UPSTREAM.md` — D-039 |

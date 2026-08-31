@@ -18,7 +18,7 @@
     1단계   정상 22,815 / 이상 23,070   ← 거의 5:5, 학습이 수월합니다
     2단계   A2 7,693 … A5 1,464         ← 5.3배 불균형, class weight 필요
 
-    from src import stages
+    from daengs_screening import stages
     s1 = stages.to_stage1(df)      # 전체, 라벨이 A7/ABNORMAL 로 바뀜
     s2 = stages.to_stage2(df)      # A1~A6 만
 """
@@ -28,7 +28,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.config import CLASSES, CLASSES_STAGE1, NORMAL_LABEL
+from daengs_screening.config import CLASSES, CLASSES_STAGE1, NORMAL_LABEL
 
 ABNORMAL_LABEL = "ABNORMAL"
 
@@ -72,7 +72,7 @@ def stage1_scores(logits, classes: list[str] | None = None) -> np.ndarray:
 
     임계값 조정과 binary_report 에 넣을 점수입니다.
     """
-    from src.evaluate import softmax_np
+    from daengs_screening.evaluate import softmax_np
 
     classes = classes or CLASSES_STAGE1
     probs = softmax_np(logits)
@@ -98,7 +98,7 @@ def pipeline_predict(s1_scores: np.ndarray, s2_logits, threshold: float):
 
     돌려주는 것: (pred_idx  PIPELINE_CLASSES 기준 0~6,  conf  최종 확률)
     """
-    from src.evaluate import softmax_np
+    from daengs_screening.evaluate import softmax_np
 
     s1 = np.asarray(s1_scores, dtype=float)
     p2 = softmax_np(s2_logits)
@@ -173,8 +173,8 @@ def pipeline_report(
     }
 
     if show:
-        from src.config import CLASS_KO
-        from src.evaluate import pad_ko
+        from daengs_screening.config import CLASS_KO
+        from daengs_screening.evaluate import pad_ko
 
         print("\n" + "=" * 66)
         print(" 전체 파이프라인 — 사용자가 실제로 겪는 성능 (최종 7종)")
@@ -244,7 +244,7 @@ def report_pipeline(
     """
     from sklearn.metrics import f1_score, recall_score
 
-    from src.evaluate import softmax_np
+    from daengs_screening.evaluate import softmax_np
 
     passed = s1_scores >= threshold            # 1단계가 '이상' 이라고 판단
     真_이상 = s1_true == 1

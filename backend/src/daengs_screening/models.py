@@ -4,7 +4,7 @@ timm 모델 이름은 버전마다 바뀝니다. "1년 전 블로그에서 본 �
 없어서 노트북이 죽는 일이 흔합니다. 그래서 여기서는 **실행 시점에** 존재를
 확인하고, 없으면 fallback 으로 조용히 갈아탑니다 (경고는 찍습니다).
 
-    from src import models
+    from daengs_screening import models
     m = models.build("convnextv2_base", n_classes=6)
     models.available()          # 이 환경에서 실제로 쓸 수 있는 모델 목록
 """
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from src.config import MODEL_BY_KEY, MODEL_ZOO, CFG, ModelSpec
+from daengs_screening.config import MODEL_BY_KEY, MODEL_ZOO, CFG, ModelSpec
 
 
 # ──────────────────────────────────────────────────────────────

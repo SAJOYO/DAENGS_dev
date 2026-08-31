@@ -2,7 +2,7 @@
 
 노트북 첫 셀에서 이것만 부르면 나머지 코드는 환경을 몰라도 됩니다.
 
-    from src import env
+    from daengs_screening import env
     E = env.describe()          # 환경 요약 출력
     ROOT = env.data_root()      # 데이터가 놓일 곳
     KEY  = env.secret("AIHUB_API_KEY")

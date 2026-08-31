@@ -17,7 +17,7 @@
   · `compose_message`            — 단일 모델(Engine) 용. 1등 이름을 말합니다
   · `compose_screening_message`  — ★ 2단계 파이프라인 용. 이름을 말하지 않습니다
 
-    from src import infer
+    from daengs_screening import infer
     engine = infer.Engine.load("checkpoints/convnextv2_base/best.pt")
     print(engine.explain("my_dog.jpg"))
 """
@@ -30,11 +30,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.config import CFG, CLASS_KO, CLASSES, NORMAL_LABEL
+from daengs_screening.config import CFG, CLASS_KO, CLASSES, NORMAL_LABEL
 
 # 문구 생성은 src/message.py 로 옮겼습니다 (torch 없이 쓰려고).
-# 여기서 재수출하므로 `from src.infer import compose_message` 는 그대로 됩니다.
-from src.message import (                                          # noqa: F401,E402
+# 여기서 재수출하므로 `from daengs_screening.infer import compose_message` 는 그대로 됩니다.
+from daengs_screening.message import (                                          # noqa: F401,E402
     DISCLAIMER,
     Prediction,
     _cells,
@@ -58,7 +58,7 @@ class Engine:
         self.cfg = cfg
         self.classes = classes
         self.T = temperature
-        from src.data import transforms_for_model
+        from daengs_screening.data import transforms_for_model
 
         base = model.models[0] if hasattr(model, "models") else model
         self.tf = transforms_for_model(cfg, base, train=False)
@@ -66,7 +66,7 @@ class Engine:
     @classmethod
     def load(cls, ckpt_path: str | Path, spec=None, temperature: float | None = None,
              device: str | None = None) -> "Engine":
-        from src.models import build
+        from daengs_screening.models import build
 
         ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         cfg = CFG.from_dict(ck.get("cfg", {}))
@@ -144,7 +144,7 @@ class Engine:
         ax[0].imshow(pil); ax[0].axis("off"); ax[0].set_title("입력")
 
         try:
-            from src.explain import cam_for, overlay
+            from daengs_screening.explain import cam_for, overlay
 
             base = self.model.models[0] if hasattr(self.model, "models") else self.model
             ci = self.classes.index(pred.topk[0][0]) if pred.topk else 0
@@ -184,7 +184,7 @@ class TwoStageEngine:
     """
 
     def __init__(self, stage1: Engine, stage2: Engine, threshold: float = 0.5):
-        from src.stages import ABNORMAL_LABEL
+        from daengs_screening.stages import ABNORMAL_LABEL
 
         self.s1, self.s2, self.thr = stage1, stage2, threshold
         self._ab = ABNORMAL_LABEL

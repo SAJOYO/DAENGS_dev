@@ -65,6 +65,12 @@ torch = [
     { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
     { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
 ]
+# ⚠️ torchvision 도 같이 지목해야 합니다 (D-040). torch 만 CPU 로 잡고 이걸 두면
+#    torchvision 이 PyPI 기본에서 와서 NVIDIA 런타임을 다시 끌고 옵니다.
+torchvision = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
@@ -79,6 +85,7 @@ module-name = [
     "daengs_journey",
     "daengs_life",
     "daengs_place",
+    "daengs_screening",
     "daengs_training",
 ]
 
@@ -106,6 +113,21 @@ ml = [
 # 확인: `docker compose exec backend uv pip list | grep -i mupdf` 가 비어야 한다.
 pdf = [
     "pymupdf>=1.28.2",
+]
+
+# 피부 스크리닝 (D-040). torch·numpy 는 위 `ml` 에 이미 있으므로 여기엔 그 위에
+# 얹히는 것만 둡니다 — timm 은 모델 정의 모음이라 가볍습니다.
+#
+# ⚠️ **`docker-compose.yml` 의 backend `command` 에 `--group screening` 이 같이
+#    있어야 합니다.** 빠뜨리면 `/screen/` 만 503 이 되는데 다른 API 는 멀쩡해서
+#    로그에 아무 문제도 안 보입니다 (`pdf` 그룹 주석과 같은 함정).
+#    확인: `docker compose exec backend uv pip list | grep -i timm` 가 비면 안 됩니다.
+screening = [
+    "timm>=1.0.9",
+    "torchvision>=0.17",
+    "pillow>=10.2",
+    "pandas>=2.1",
+    "tqdm>=4.66",
 ]
 
 [tool.ruff]

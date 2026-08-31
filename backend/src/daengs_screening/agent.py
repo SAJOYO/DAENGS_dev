@@ -10,14 +10,14 @@
 holdout 에서 그 이름이 56.6% 틀렸습니다. 앱이 고를 수 없게 계약에서 아예 뺐습니다.
 `docs/cautions/03_의료AI_안전설계_원칙.md` §7-B 를 먼저 읽어주세요.
 
-    from src.agent import ScreeningAgent
+    from daengs_screening.agent import ScreeningAgent
     agent = ScreeningAgent.load("ckpt/stage1_.../best.pt", "ckpt/stage2_.../best.pt",
                                 threshold=0.1823)
     agent.screen("my_dog.jpg")            # → dict (JSON 직렬화 가능)
 
 가중치 없이 화면만 보려면:
 
-    from src.agent import MockAgent
+    from daengs_screening.agent import MockAgent
     MockAgent().screen("any.jpg")
 """
 
@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from src.config import CLASS_EN, CLASS_KO, CLASSES, NORMAL_LABEL
+from daengs_screening.config import CLASS_EN, CLASS_KO, CLASSES, NORMAL_LABEL
 
 CONTRACT_VERSION = "1.0"
 
@@ -126,7 +126,7 @@ def crop_for(im, bbox, tag: str):
     bbox 가 None 이면 그 함수가 알아서 물러섭니다:
       f320 → 이미지 중앙에서 320px,  m2.5 → 중앙 정사각.
     """
-    from src import crop as _crop
+    from daengs_screening import crop as _crop
 
     w, h = im.size
     win = _crop.crop_window({"bbox": bbox, "img_w": w, "img_h": h}, tag=tag)
@@ -164,7 +164,7 @@ def contract(verdict: str, *, abnormal_p: float | None = None,
     추가하는 순간 앱은 그걸 화면에 크게 띄웁니다 — 그게 우리가 막으려던 것입니다.
     `tests/test_agent.py` 가 금지 키 목록을 들고 감시합니다.
     """
-    from src.message import DISCLAIMER
+    from daengs_screening.message import DISCLAIMER
 
     if verdict not in {"normal", "abnormal", "retake"}:
         raise ValueError(f"verdict 는 normal/abnormal/retake 중 하나입니다 — {verdict!r}")
@@ -222,7 +222,7 @@ class ScreeningAgent:
         # stage2 가 None 이면 **1단계만** 돕니다 (정상/이상까지).
         self.s1, self.s2, self.thr = stage1, stage2, float(threshold)
         self.tag1, self.tag2 = stage1_tag, stage2_tag
-        from src.stages import ABNORMAL_LABEL
+        from daengs_screening.stages import ABNORMAL_LABEL
 
         self._ab = ABNORMAL_LABEL
         if self._ab not in stage1.classes:
@@ -301,7 +301,7 @@ class ScreeningAgent:
         """
         import json
 
-        from src.infer import Engine
+        from daengs_screening.infer import Engine
 
         if threshold is None:
             for p in (Path(ckpt1).parent / "stage1_threshold.json",
@@ -337,7 +337,7 @@ class ScreeningAgent:
 
         from PIL import Image
 
-        from src.message import Prediction, band, compose_screening_message
+        from daengs_screening.message import Prediction, band, compose_screening_message
 
         t0 = time.perf_counter()
         try:
@@ -444,7 +444,7 @@ def crop_tag_from_exp(name: str) -> str | None:
         stage1_effnetv2_s_f320_384_moderate_photometric → 'f320'
         stage2_convnextv2_base_m2.5_384_moderate        → 'm2.5'
     """
-    from src import crop as _crop
+    from daengs_screening import crop as _crop
 
     if not isinstance(name, str):
         return None
@@ -474,7 +474,7 @@ class MockAgent:
         self.tag1, self.tag2 = STAGE1_TAG, STAGE2_TAG
 
     def screen(self, image: "str | Path | Any", box=None) -> dict:
-        from src.message import Prediction, band, compose_screening_message
+        from daengs_screening.message import Prediction, band, compose_screening_message
 
         t0 = time.perf_counter()
         try:

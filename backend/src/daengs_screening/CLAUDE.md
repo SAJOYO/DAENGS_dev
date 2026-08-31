@@ -1,4 +1,4 @@
-# skin-screening
+# daengs_screening
 
 반려견 피부 병변 **스크리닝 보조**. 사진 한 장 → ① 정상/이상 → ② 병변 6종 분포.
 **진단이 아닙니다.** 띄우는 법과 지표는 [README.md](README.md), 응답 계약은
@@ -7,12 +7,12 @@
 ## 명령어
 
 ```powershell
-uv sync                                        # 화면·계약만 (torch 없음)
-uv run python serve.py --mock                  # http://127.0.0.1:8000/
-uv sync --extra model                          # torch·timm (~2GB)
-uv run python serve.py --release <경로>        # 진짜 가중치
-uv run python tests/test_agent.py              # 계약 감시
-uv run --extra model python tests/test_screening_message.py   # 문구 감시 (torch 필요)
+cd backend
+uv sync --group ml --group screening                     # torch·timm
+uv run dev                                               # /screen/healthz
+uv run python tests/test_screening_agent.py              # 계약 감시 (99개)
+uv run python tests/test_screening_message.py            # 문구 감시 (34개)
+uv run python tools/sync_screening.py <원본경로>          # 원본에서 가져오기
 ```
 
 ## 규칙
@@ -23,7 +23,7 @@ uv run --extra model python tests/test_screening_message.py   # 문구 감시 (t
   **고칠 일이 생기면 원본을 고치고 다시 복사하세요** — 여기서 고치면
   갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.
-- **`backend/` 에 넣지 않습니다** (D-022). torch 가 backend 컨테이너로 들어가면
+- ⚠️ **D-022 는 뒤집혔습니다** (D-039) — 이제 backend 안입니다. 대신 torch 가 backend 컨테이너로 들어가면
   이미지가 몇 GB 가 되고, `backend` 는 포트도 안 열고 MVC2 계층 규칙(D-011)이
   걸려 있는 자리입니다. 여기는 그 규칙을 따르지 않습니다 — 원본 구조 그대로입니다.
 - **응답에 "1등 병변" 필드를 추가하지 마세요** (D-023). 주는 순간 앱은 그걸 제일

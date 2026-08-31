@@ -14,7 +14,7 @@
   ⚠️ 반드시 **검증셋**으로 T 를 학습하고 **테스트셋**에서 효과를 확인하세요.
      테스트셋으로 T 를 맞추면 그건 또 다른 형태의 과적합입니다.
 
-    from src import calibrate
+    from daengs_screening import calibrate
     T = calibrate.fit_temperature(val_logits, val_y)
     cal = calibrate.apply(test_logits, T)
 """
@@ -146,7 +146,7 @@ def reliability_diagram(probs_before: np.ndarray, probs_after: np.ndarray | None
 
 def report(logits_val, y_val, logits_test, y_test, verbose: bool = True) -> dict:
     """검증셋으로 T 를 학습하고 테스트셋에서 효과를 확인합니다."""
-    from src.evaluate import softmax_np
+    from daengs_screening.evaluate import softmax_np
 
     T = fit_temperature(logits_val, y_val, verbose=verbose)
     yt = np.asarray(y_test.numpy() if hasattr(y_test, "numpy") else y_test)

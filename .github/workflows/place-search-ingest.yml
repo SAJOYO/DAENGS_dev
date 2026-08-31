@@ -57,7 +57,7 @@ jobs:
         if: inputs.mode != 'kcisa'
         run: |
           docker compose exec -T place-search uv run --no-sync python -c `
-            "from app.core.config import settings; assert settings.data_go_kr_service_key, 'DAENGS_DATA_GO_KR_SERVICE_KEY is required'; assert settings.kto_service_key, 'DAENGS_KTO_SERVICE_KEY is required'"
+            "from daengs_place.core.config import settings; assert settings.data_go_kr_service_key, 'DAENGS_DATA_GO_KR_SERVICE_KEY is required'; assert settings.kto_service_key, 'DAENGS_KTO_SERVICE_KEY is required'"
 
       - name: KCISA 2025-03-24 스냅샷 적재
         if: inputs.mode != 'incremental'
@@ -74,7 +74,7 @@ jobs:
 
           docker cp $csv 'daengs-place-search:/tmp/kcisa-place-20250324.csv'
           try {
-            docker compose exec -T place-search uv run --no-sync python -m app.ingest.kcisa `
+            docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest.kcisa `
               --csv /tmp/kcisa-place-20250324.csv --snapshot 2025-03-24
           } finally {
             docker compose exec -T place-search rm -f /tmp/kcisa-place-20250324.csv
@@ -83,37 +83,37 @@ jobs:
 
       - name: MOIS 병원·약국 전체 적재
         if: inputs.mode == 'full'
-        run: docker compose exec -T place-search uv run --no-sync python -m app.ingest full
+        run: docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest full
 
       - name: KTO 반려동물 동반여행 전체 적재
         if: inputs.mode == 'full'
         run: >-
           docker compose exec -T place-search uv run --no-sync
-          python -m app.ingest.kto --mode full
+          python -m daengs_place.ingest.kto --mode full
 
       - name: MOIS·KTO 증분 적재
         if: inputs.mode == 'incremental'
         run: |
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest incremental
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest.kto
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest incremental
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest.kto
 
       - name: KCISA 파생 사실 갱신
         if: inputs.mode == 'kcisa'
         run: |
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes --all --source kcisa
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions --all --source kcisa
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest pet-axes --all --source kcisa
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest restrictions --all --source kcisa
 
       - name: 전체 파생 사실 갱신
         if: inputs.mode == 'full'
         run: |
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes --all
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions --all
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest pet-axes --all
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest restrictions --all
 
       - name: 증분 파생 사실 갱신
         if: inputs.mode == 'incremental'
         run: |
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest pet-axes
-          docker compose exec -T place-search uv run --no-sync python -m app.ingest restrictions
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest pet-axes
+          docker compose exec -T place-search uv run --no-sync python -m daengs_place.ingest restrictions
 
       - name: APP 기본 카페 검색 확인
         run: |

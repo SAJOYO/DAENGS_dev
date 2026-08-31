@@ -357,7 +357,7 @@ services:
     volumes:
       # PG18 이미지의 VOLUME 은 /var/lib/postgresql 입니다. 상위 경로를 마운트해야
       # 데이터가 보존됩니다 (pgvector 와 같음). db/init 은 물리지 않습니다 —
-      # place 스키마의 원본은 place-search/alembic 입니다 (D-026, dev DB 규칙의 예외).
+      # place 스키마의 원본은 backend/infra/place/alembic 입니다 (D-026, dev DB 규칙의 예외).
       - place-pgdata:/var/lib/postgresql:rw
     shm_size: 1gb
     healthcheck:
@@ -399,12 +399,13 @@ services:
       TZ: Asia/Seoul
     working_dir: /app
     volumes:
-      # 폴더째가 아니라 필요한 것만 (D-004 와 같은 이유). tests 는 컨테이너에 필요 없습니다.
-      - ./place-search/pyproject.toml:/app/pyproject.toml:ro
-      - ./place-search/uv.lock:/app/uv.lock:ro
-      - ./place-search/alembic.ini:/app/alembic.ini:ro
-      - ./place-search/alembic:/app/alembic:ro
-      - ./place-search/app:/app/app:ro
+      # backend 의 단일 프로젝트 정의를 공유하되 venv 는 서비스별로 분리합니다.
+      # tests 와 다른 인프라 파일은 컨테이너에 필요 없습니다.
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./backend/infra/place:/app/infra/place:ro
       - place-search-venv:/opt/venv
       - uv-cache:/root/.cache/uv
     depends_on:
@@ -413,9 +414,9 @@ services:
     # DB 가 처음 뜬 배포에서도 수동 조치가 남지 않게 마이그레이션 뒤 서버를 띄웁니다.
     # 이어지는 줄은 첫 줄과 같은 칸이어야 한 셸 명령으로 접힙니다.
     command: >
-      sh -c "uv sync --frozen &&
-      uv run --no-sync alembic upgrade head &&
-      exec uv run --no-sync uvicorn app.search_main:app
+      sh -c "uv sync --frozen --extra place &&
+      uv run --no-sync alembic -c infra/place/alembic.ini upgrade head &&
+      exec uv run --no-sync uvicorn daengs_place.main:app
       --host 0.0.0.0 --port 8000"
 
   # 장소 카드를 누른 뒤의 단발 이동 스냅샷. DAENGS_geo main@c5f0d5f에서 APP이
@@ -439,14 +440,15 @@ services:
       TZ: Asia/Seoul
     working_dir: /app
     volumes:
-      - ./journey-service/pyproject.toml:/app/pyproject.toml:ro
-      - ./journey-service/uv.lock:/app/uv.lock:ro
-      - ./journey-service/app:/app/app:ro
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
       - journey-service-venv:/opt/venv
       - uv-cache:/root/.cache/uv
     command: >
       sh -c "uv sync --frozen &&
-      exec uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      exec uv run --no-sync uvicorn daengs_journey.main:app --host 0.0.0.0 --port 8000"
 
   # GUI가 필요할 때만: docker compose --profile tools up -d
   # ------------------------------------------------------------------ 크롤러 (RAG-044 · RAG-050)

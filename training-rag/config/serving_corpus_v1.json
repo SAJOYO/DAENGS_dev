@@ -1,0 +1,20 @@
+{
+  "schema_version": "serving-corpus-v1",
+  "purpose": "Initial production corpus for owner-facing dog-training answers. Raw PGVector data is retained separately; this allow-list contains the human-reviewed NIAS training documents used by the approved training evaluation set.",
+  "document_ids": [
+    "nias_companion-26d52052aa3ff602",
+    "nias_companion-2e4a33d03a8d5bc8",
+    "nias_companion-32c5682c7eb39284",
+    "nias_companion-3c1431f2af87a841",
+    "nias_companion-54fd98359c85433b",
+    "nias_companion-627620d637f836fa",
+    "nias_companion-64753005533c25a4",
+    "nias_companion-86bf306b74f5cc30",
+    "nias_companion-a482e864fc1f0e5c",
+    "nias_companion-a6aebb4414a5a5c5",
+    "nias_companion-be506b63d8f2e843",
+    "nias_companion-bf1602808edafe52",
+    "nias_companion-e7cfa3e48368e6ce",
+    "nias_companion-f5109fa4184b7763"
+  ]
+}

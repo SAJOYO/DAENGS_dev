@@ -59,7 +59,7 @@ services:
       # frontend는 nginx /api/ 경로를 통해서만 접근한다.
       # 빈 문자열을 주입하면 backend가 restart loop에 빠진다. 배포 전에 최상단 .env에
       # 반드시 설정하도록 compose 단계에서 중단한다.
-      DAENGS_TRAINING_RAG_BASE_URL: ${DAENGS_TRAINING_RAG_BASE_URL:?Set DAENGS_TRAINING_RAG_BASE_URL in the deployment root .env}
+      DAENGS_TRAINING_RAG_BASE_URL: "http://training-rag:8010"
       # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
       # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
       #
@@ -124,6 +124,77 @@ services:
     # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
     # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
     command: sh -c "uv sync --frozen --group ml && exec uv run --no-sync dev"
+
+
+  # Training RAG: main backend? runtime/DB ??? ????.
+  # Corpus? provenance ?? ??? DB? ???? ???.
+  training-rag-pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: daengs-training-pgvector
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      POSTGRES_DB: dog_rag
+      POSTGRES_USER: dog_rag
+      POSTGRES_PASSWORD: dog_rag_local
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    volumes:
+      - training-rag-pgdata:/var/lib/postgresql/data
+      - ./training-rag/infra/pgvector/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dog_rag -d dog_rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  training-rag:
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-training-rag
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    working_dir: /app
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      PYTHONPATH: /app
+      GENERATION_MODE: ollama
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_GENERATION_MODEL: gemma3:4b
+      RAG_PGVECTOR_DSN: postgresql://dog_rag:dog_rag_local@training-rag-pgvector:5432/dog_rag
+      TZ: Asia/Seoul
+    volumes:
+      - ./training-rag/pyproject.toml:/app/pyproject.toml:ro
+      - ./training-rag/uv.lock:/app/uv.lock:ro
+      - ./training-rag/scripts:/app/scripts:ro
+      - ./training-rag/config:/app/config:ro
+      - ./training-rag/data/guardrail:/app/data/guardrail:ro
+      - training-rag-venv:/opt/venv
+      - training-rag-hf-cache:/root/.cache/huggingface
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      training-rag-pgvector:
+        condition: service_healthy
+    command: >
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync uvicorn scripts.rag_api:app
+      --host 0.0.0.0 --port 8010"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz', timeout=3).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   pgvector:
     image: pgvector/pgvector:pg18
@@ -578,5 +649,8 @@ volumes:
   gait-data:
   place-search-venv:
   journey-service-venv:
+  training-rag-pgdata:
+  training-rag-venv:
+  training-rag-hf-cache:
   uv-cache:
   hf-cache:

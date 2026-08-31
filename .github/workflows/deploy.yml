@@ -119,7 +119,8 @@ jobs:
 
       - name: Place 공개 경로 확인
         run: |
-          # APP 기본 종류인 cafe의 실제 결과까지 확인합니다. 빈 DB의 HTTP 200은 성공이 아닙니다.
+          # 배포에서는 공개 경로와 APP 응답 계약만 확인합니다.
+          # 실제 cafe 데이터 존재 여부는 place-search-ingest.yml의 적재 후 검증이 담당합니다.
           $body = '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}'
           foreach ($attempt in 1..18) {
             try {
@@ -130,11 +131,19 @@ jobs:
                 -Body $body `
                 -TimeoutSec 10
               $group = @($response.groups | Where-Object kind -eq 'cafe')
-              if ($group.Count -eq 1 -and @($group[0].results).Count -ge 1) {
-                Write-Host 'Place cafe result verified'
-                break
+              if ($group.Count -ne 1) {
+                throw 'Place response must contain exactly one cafe group'
               }
-              throw 'Place cafe result is empty'
+              $requiredFields = @('kind', 'sort', 'limit', 'truncated', 'results')
+              $missingFields = @($requiredFields | Where-Object {
+                $_ -notin $group[0].PSObject.Properties.Name
+              })
+              if ($missingFields.Count -ne 0 -or
+                  $group[0].results -isnot [System.Array]) {
+                throw 'Place response does not match APP contract'
+              }
+              Write-Host 'Place APP contract verified'
+              break
             } catch {
               if ($attempt -eq 18) { throw }
               Start-Sleep -Seconds 5

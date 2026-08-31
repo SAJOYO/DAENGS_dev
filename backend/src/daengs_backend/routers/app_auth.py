@@ -21,9 +21,11 @@ from daengs_backend.core.crypto import decrypt
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.kakao import KakaoIdTokenInvalidError, KakaoUnavailableError
+from daengs_backend.models import AppUser
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.schemas.app_auth import (
     AppMeResponse,
+    AppProfileUpdate,
     AppSessionResponse,
     KakaoLoginRequest,
     RefreshRequest,
@@ -173,6 +175,35 @@ async def me(
         logger.warning("app me: 쓸 수 없는 회원 (app_user=%s)", user.app_user_id)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.")
 
+    return _to_me(row)
+
+
+@router.patch("/me")
+async def update_me(
+    body: AppProfileUpdate,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AppMeResponse:
+    """회원이 스스로 고치는 것. 지금은 미니룸 이름표뿐입니다.
+
+    **`room_name` 을 null(또는 공백)로 보내면 되돌립니다** — 다시 대표 강아지를
+    따라갑니다. 빈 문자열로 저장하지 않는 이유는, 그러면 "아직 안 정했다" 와
+    "정해서 지웠다" 가 같은 값이 되어 앱이 무엇을 그릴지 못 정하기 때문입니다.
+
+    이름을 서버가 지어 주지 않습니다. 받침에 따라 "이네"/"네" 가 갈리는 것은 한국어
+    규칙이라 앱의 것이고, 서버가 같이 지으면 규칙이 두 벌이 됩니다.
+    """
+    row = await app_user_repo.get_by_id(session, user.app_user_id)
+    if row is None or row.status != "active":
+        logger.warning("app patch me: 쓸 수 없는 회원 (app_user=%s)", user.app_user_id)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.")
+
+    row.room_name = body.room_name
+    await session.commit()
+    return _to_me(row)
+
+
+def _to_me(row: AppUser) -> AppMeResponse:
     return AppMeResponse(
         app_user_id=row.id,
         kakao_id=row.kakao_id,
@@ -180,6 +211,7 @@ async def me(
         email=decrypt(row.email_enc) if row.email_enc else None,
         status=row.status,
         created_at=row.created_at,
+        room_name=row.room_name,
     )
 
 

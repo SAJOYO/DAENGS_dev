@@ -53,6 +53,9 @@ class FakeAppUser:
     status: str = "active"
     #: 대표 강아지. pets 쪽이 아니라 계정 쪽에 있습니다 (05_pets.sql).
     primary_pet_id: uuid.UUID | None = None
+
+    #: 미니룸 이름표. None 이면 아직 안 정한 것입니다.
+    room_name: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )

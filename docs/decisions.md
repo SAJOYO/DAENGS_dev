@@ -34,7 +34,8 @@
 | [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
 | [D-028](#d-028) | Place 공개 경로는 호출량을 제한하고 기존 세 원천만 배치 적재 | 2026-08-29 |
 | [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
-| [D-039](#d-039) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
+| [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
+| [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 
 ---
 
@@ -1206,10 +1207,10 @@ DB 접속을 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하�
 ## D-022
 ### 스크리닝 모델을 `backend/` 가 아닌 최상위 폴더로
 
-> ⚠️ **뒤집혔습니다 (2026-08-31, D-039).** 팀이 최상위 독립 서비스를
-> backend 패키지로 모으는 방향을 택했습니다 (#94 Training RAG 선례).
-> 아래 내용은 그때의 판단이며, 무엇이 바뀌었고 무엇이 그대로 유효한지는
-> [D-039](#d-039) 에 적었습니다. **기록으로 남겨 둡니다.**
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
 
 피부 병변 스크리닝을 `skin-screening/` 최상위 폴더에 독립 서비스로 두었습니다.
 `backend/` 안에 넣지 않았습니다.
@@ -1306,10 +1307,10 @@ reload 를 돌리는 컨테이너(D-006)가 그만큼 무거워집니다. 스크
 ## D-024
 ### 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다
 
-> ⚠️ **뒤집혔습니다 (2026-08-31, D-039).** 팀이 최상위 독립 서비스를
-> backend 패키지로 모으는 방향을 택했습니다 (#94 Training RAG 선례).
-> 아래 내용은 그때의 판단이며, 무엇이 바뀌었고 무엇이 그대로 유효한지는
-> [D-039](#d-039) 에 적었습니다. **기록으로 남겨 둡니다.**
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
 
 `skin-screening` 을 compose 서비스로 정의하되 `profiles: ["screening"]` 을 걸어
 **기본 `docker compose up -d` 에서는 안 뜨게** 했습니다. nginx 에는 `daengback`
@@ -1462,9 +1463,9 @@ place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(
 메모리가 실측으로 부족해질 때 다시 봅니다.
 
 **"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
-place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스토리를 개조하지
+place-db 의 스키마 원본은 `backend/infra/place/alembic` 이고, 리비전 히스토리를 개조하지
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
-쌉니다 — `place-search/UPSTREAM.md`).
+쌉니다 — `backend/docs/place/UPSTREAM.md`).
 
 #### API 는 아직 nginx 에 노출하지 않았다
 
@@ -1479,7 +1480,7 @@ identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 �
 
 Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본은 동결이며(그쪽 산책
 연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
-경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
+경계를 지키는 것은 문서가 아니라 `backend/tests/place/test_boundary.py` 입니다 —
 진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
 
 ---
@@ -1520,8 +1521,8 @@ PostGIS를 반복 호출해 같은 8000번 포트의 기존 API까지 굶기지 
 
 - KCISA: 공공데이터포털 파일 `15111389`, 2025-03-24 스냅샷. 원문 SHA-256은
   `2F88BEDFF41A8B9F032ABD16CE2FB0BC31D91EC28EE559E6E79C2559A2F45928`입니다.
-- KTO: 기존 `app.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
-- MOIS: 기존 `app.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
+- KTO: `daengs_place.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
+- MOIS: `daengs_place.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
 
 배치는 `.github/workflows/place-search-ingest.yml`의 수동 실행점 하나로 모읍니다. 호출
 주기를 새로 정하지 않았으므로 schedule은 두지 않습니다. KCISA는 공개 파일이라 단독
@@ -1635,6 +1636,35 @@ URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았�
 ---
 
 ## D-039
+### Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리한다
+
+최상위 `place-search/`와 `journey-service/`에 각각 있던 Python 프로젝트를
+`backend/src/daengs_place/`, `backend/src/daengs_journey/`로 옮깁니다. 생활·훈련 코드가
+이미 `daengs_life`·`daengs_training` 패키지로 같은 `src/`에 있으므로, 팀이 소유하는 일반
+Python 서비스는 같은 패키지 레이아웃과 `backend/pyproject.toml`·`backend/uv.lock` 한 벌을
+사용합니다. 원본의 일반명 `app`도 두 서비스를 한 환경에 설치할 수 있도록 고유 패키지명으로
+바꿉니다.
+
+이 결정은 **코드와 의존성의 정본을 합치는 것**이지 프로세스를 합치는 것이 아닙니다.
+Place는 PostGIS·Alembic과 함께 `place-search`, Journey는 외부 경로 Usage Gate와 함께
+`journey-service` 컨테이너에서 계속 따로 실행합니다. 따라서 D-026의 별도 장애 도메인·별도
+PostGIS 결정과 D-027의 nginx 공개 경로는 유지합니다. 외부 API(`/v2/places/search`,
+`/journey`)와 compose 서비스 이름도 바꾸지 않습니다.
+
+`venv`는 프로젝트 정의가 아니라 실행 결과입니다. 두 컨테이너가 같은 lock을 읽더라도
+`place-search-venv`와 `journey-service-venv` named volume은 분리합니다. uv의 exact sync가
+한 서비스의 extra를 다른 서비스 환경에서 지우는 일을 막고, 나중에 런타임을 합치거나 다시
+나눌 때 소스 위치를 또 옮기지 않게 합니다. Place만 필요한 GeoAlchemy2·Alembic은 `place`
+extra로 두고 `place-search`가 `uv sync --extra place`로 선택합니다.
+
+스크리닝처럼 외부 저장소 사본을 그대로 동기화해야 하거나, 보행처럼 대형 모델 의존성과
+분 단위 CPU 작업을 가진 유닛은 이 결정만으로 자동 이관하지 않습니다. 그 예외는 D-022·D-029의
+운영 제약을 별도로 판단합니다.
+
+
+---
+
+## D-040
 ### 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음)
 
 최상위 `skin-screening/` 컨테이너를 없애고 backend 안의 패키지로 옮겼습니다.

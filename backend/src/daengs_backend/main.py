@@ -12,6 +12,11 @@ from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.routers import app_auth, auth, crawl, health, pet, training
+
+# ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
+# import 하는데, 그쪽이 나중에 와서 이걸 가려 버립니다 — 그러면 include_router 가
+# 조용히 엉뚱한 라우터를 두 번 등록합니다. 기록은 `/app/walks`, 적합도는 `/walk` 입니다.
+from daengs_backend.routers import walk as app_walks
 from daengs_backend.services.training_rag import release_training_runtime
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
@@ -27,11 +32,12 @@ from daengs_backend.services.training_rag import release_training_runtime
 # `tests/test_main_stays_light.py` 가 기계로 지킵니다. 무거워지는 것은 import 가 아니라
 # 아래 lifespan 의 예열이고, 그래서 그것만 백그라운드로 돌립니다.
 from daengs_life.app.controllers import ask, walk
+from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
+
 # ⚠️ 스크리닝도 같은 규칙입니다 — 이 import 로 torch 가 딸려 오면 안 됩니다.
 #    `service.py` 최상단은 fastapi 와 `agent`(config 만 씀)뿐이고, 가중치는
 #    첫 요청 때 올라옵니다 (D-039).
 from daengs_screening.service import router as screening_router
-from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
 # 범위를 좁혀 두지 않으면 CPU 를 계속 씁니다.
@@ -102,6 +108,8 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
+app.include_router(app_walks.router)
 app.include_router(training.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)

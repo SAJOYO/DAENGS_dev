@@ -11,14 +11,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest
-
-from daengs_backend.repositories import pet as pet_repo
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
+from daengs_backend.repositories import walk as walk_repo
 
 PASSWORD = "correct-horse-battery-staple"
 IP = "192.168.0.31"
@@ -111,6 +111,9 @@ class Store:
         #: 같은 순서라, "대표를 지우면 먼저 등록한 아이가 승계한다"를 볼 수 있습니다.
         self.pets: list[FakePet] = []
 
+        #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
+        self.walks: list[FakeWalk] = []
+
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
         return user
@@ -131,16 +134,45 @@ class FakePet:
     birth_date_kind: str | None = None
 
 
+@dataclass
+class FakeWalkPoint:
+    """WalkPoint 대역."""
+
+    client_seq: int
+    chain_index: int
+    at: object
+    lat: object
+    lng: object
+    accuracy_m: float | None = None
+    is_mock: bool = False
+
+
+@dataclass
+class FakeWalk:
+    """Walk 대역. 좌표를 리스트로 들고 있습니다 (진짜는 relationship)."""
+
+    app_user_id: uuid.UUID
+    client_session_id: uuid.UUID
+    started_at: object
+    ended_at: object
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    pet_id: uuid.UUID | None = None
+    weather_code: int | None = None
+    is_day: bool | None = None
+    temperature_c: object | None = None
+    points: list[FakeWalkPoint] = field(default_factory=list)
+
+
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     """repositories 의 함수들을 store 를 쓰는 것으로 바꿉니다."""
 
-    async def get_by_login_id(session, login_id):  # noqa: ANN001, ANN202
+    async def get_by_login_id(session, login_id):
         return store.admin if login_id == store.admin.login_id else None
 
-    async def get_by_id(session, admin_id):  # noqa: ANN001, ANN202
+    async def get_by_id(session, admin_id):
         return store.admin if admin_id == store.admin.id else None
 
-    async def create(session, **kw):  # noqa: ANN001, ANN003, ANN202
+    async def create(session, **kw):
         token = FakeToken(
             subject_type=kw["subject_type"],
             subject_id=kw["subject_id"],
@@ -152,16 +184,16 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.tokens[token.token_hash] = token
         return token
 
-    async def get_by_hash(session, token_hash):  # noqa: ANN001, ANN202
+    async def get_by_hash(session, token_hash):
         return store.tokens.get(token_hash)
 
-    async def revoke(session, token, at):  # noqa: ANN001, ANN202
+    async def revoke(session, token, at):
         token.revoked_at = at
 
-    async def delete_one(session, token):  # noqa: ANN001, ANN202
+    async def delete_one(session, token):
         store.tokens.pop(token.token_hash, None)
 
-    async def delete_all_for_subject(session, subject_type, subject_id):  # noqa: ANN001, ANN202
+    async def delete_all_for_subject(session, subject_type, subject_id):
         gone = [
             h
             for h, t in store.tokens.items()
@@ -171,16 +203,16 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             del store.tokens[h]
         return len(gone)
 
-    async def app_get_by_kakao_id(session, kakao_id):  # noqa: ANN001, ANN202
+    async def app_get_by_kakao_id(session, kakao_id):
         return store.app_users.get(kakao_id)
 
-    async def app_get_by_id(session, app_user_id):  # noqa: ANN001, ANN202
+    async def app_get_by_id(session, app_user_id):
         for user in store.app_users.values():
             if user.id == app_user_id:
                 return user
         return None
 
-    async def app_create(session, **kw):  # noqa: ANN001, ANN003, ANN202
+    async def app_create(session, **kw):
         # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
         # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
         email_hash = kw.get("email_hash")
@@ -211,19 +243,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     )
 
     # -- pets --------------------------------------------------------------
-    async def pet_list_for_owner(session, app_user_id):  # noqa: ANN001, ANN202
+    async def pet_list_for_owner(session, app_user_id):
         return [p for p in store.pets if p.app_user_id == app_user_id]
 
-    async def pet_get_owned(session, app_user_id, pet_id):  # noqa: ANN001, ANN202
+    async def pet_get_owned(session, app_user_id, pet_id):
         return next(
             (p for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
             None,
         )
 
-    async def pet_count_for_owner(session, app_user_id):  # noqa: ANN001, ANN202
+    async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
-    def pet_add(session, pet):  # noqa: ANN001, ANN202
+    def pet_add(session, pet):
         # 진짜 DB 는 `gen_random_uuid()` 로 id 를 채웁니다. 가짜가 그 역할을 합니다 —
         # 안 채우면 서비스가 flush 뒤에 쓰는 `pet.id` 가 None 입니다.
         if pet.id is None:
@@ -231,7 +263,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.pets.append(pet)
         return pet
 
-    async def pet_delete(session, pet):  # noqa: ANN001, ANN202
+    async def pet_delete(session, pet):
         store.pets.remove(pet)
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
@@ -239,5 +271,45 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
+
+    # -- walks -------------------------------------------------------------
+    async def walk_list_for_owner(session, app_user_id):
+        mine = [w for w in store.walks if w.app_user_id == app_user_id]
+        # 진짜 리포지토리가 started_at 내림차순으로 줍니다.
+        return sorted(mine, key=lambda w: w.started_at, reverse=True)
+
+    async def walk_get_owned(session, app_user_id, walk_id):
+        return next(
+            (
+                w
+                for w in store.walks
+                if w.id == walk_id and w.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def walk_get_by_client_session(
+        session, app_user_id, client_session_id
+    ):
+        return next(
+            (
+                w
+                for w in store.walks
+                if w.client_session_id == client_session_id
+                and w.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    def walk_add(session, walk):
+        if walk.id is None:
+            walk.id = uuid.uuid4()
+        store.walks.append(walk)
+        return walk
+
+    monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
+    monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
+    monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
+    monkeypatch.setattr(walk_repo, "add", walk_add)
 
     return store

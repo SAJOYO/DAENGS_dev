@@ -45,7 +45,12 @@ class Source(ABC):
     format: str                              # pdf | hwp | hwpx | html | xml | json
     trust_level: str                         # law | official | guideline
     license: str = ""
+    # 변경 감지 지문을 무엇으로 낼지. 기본은 원본 바이트고 html 은 늘 텍스트다 (store.py 머리).
+    # `"text"` 로 두면 다른 format 도 `extract().text` 로 지문을 낸다 — 응답에 총건수·타임스탬프처럼
+    # **문서와 무관하게 매번 바뀌는 값**이 박혀 오는 API 가 쓴다 (seoul-notice-api, RAG-053).
+    fingerprint: str = "bytes"               # bytes | text
     # 개정 판정의 근거 (core/revision.py, RAG-054). 없으면 이 소스의 변경은 "바뀜"으로만 남는다.
+    # fingerprint 와 층이 다르다 — 저것은 "무엇으로 sha 를 내나"(저장), 이것은 "sha 차이가 개정인가"(판정).
     #   "published_at"  같은 slug 의 시행일자가 달라지면 개정 — 법령
     #   "slug"          같은 제목의 새 slug 가 나타나면 옛 판이 대체된 것 — 약관 (판이 파일명에 있다)
     revision_key: str | None = None

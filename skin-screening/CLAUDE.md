@@ -19,7 +19,7 @@ uv run --extra model python tests/test_screening_message.py   # 문구 감시 (t
 
 - **이 폴더는 사본입니다.** 원본은
   [gayeoniee/deeplearning_test](https://github.com/gayeoniee/deeplearning_test)(공개)
-  이고 복사 시점 커밋은 `a38e6fe` 입니다.
+  이고 복사 시점 커밋은 `3a61595` 입니다.
   **고칠 일이 생기면 원본을 고치고 다시 복사하세요** — 여기서 고치면
   갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.

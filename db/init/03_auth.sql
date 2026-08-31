@@ -100,6 +100,17 @@ CREATE TABLE app_users (
     status VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (status IN ('active','suspended','withdrawn')),
 
+    -- 미니룸 앞에 걸리는 이름표. 사용자가 직접 정한다 ("네옹이네").
+    --
+    -- **NULL 은 "아직 안 정했다"** 이고, 그때 앱이 대표 강아지 이름으로 짓는다.
+    -- 빈 문자열로 저장하지 않는다 — 그러면 "정해서 지웠다"와 구분이 안 된다.
+    --
+    -- 개인정보로 보지 않아 평문이다. 사용자가 스스로 지어 방에 거는 별명이고,
+    -- 강아지 이름(pets.name)도 같은 이유로 평문이다.
+    --
+    -- 20자는 이름표가 방 그림 위에 걸리는 자리라서다. 더 길면 방을 덮는다.
+    room_name VARCHAR(20),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -253,6 +264,7 @@ COMMENT ON COLUMN app_users.email_enc          IS '이메일 AES-256-GCM 암호�
 COMMENT ON COLUMN app_users.email_hash         IS '이메일 blind index / HMAC-SHA256 hex 64자. 검색은 이쪽으로';
 COMMENT ON COLUMN app_users.phone_enc          IS '전화번호 AES-256-GCM 암호문 (검색 불가)';
 COMMENT ON COLUMN app_users.name_enc           IS '이름 AES-256-GCM 암호문 (검색 불가)';
-COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspended/withdrawn';
+COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspended/withdrawn';
+COMMENT ON COLUMN app_users.room_name          IS '미니룸 이름표 / NULL 이면 앱이 대표 강아지 이름으로 짓는다';
 COMMENT ON COLUMN app_users.created_at         IS '가입 시각';
 COMMENT ON COLUMN app_users.updated_at         IS '수정 시각';

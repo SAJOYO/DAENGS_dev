@@ -223,6 +223,57 @@ class TestSessionFlow:
         assert body["kakao_id"] == KAKAO_ID
         assert body["email"] == "dog@daengs.test"
 
+    def test_이름표는_처음에_없다(self, client: TestClient) -> None:
+        """None 은 "아직 안 정했다" 입니다. 서버가 대신 지어 주지 않습니다."""
+        access = _login(client).json()["access_token"]
+
+        body = client.get(
+            "/auth/app/me", headers={"Authorization": f"Bearer {access}"}
+        ).json()
+
+        assert body["room_name"] is None
+
+    def test_이름표를_정하면_남는다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        saved = client.patch(
+            "/auth/app/me", json={"room_name": "네옹이네"}, headers=headers
+        )
+
+        assert saved.status_code == 200
+        assert saved.json()["room_name"] == "네옹이네"
+        assert client.get("/auth/app/me", headers=headers).json()["room_name"] == "네옹이네"
+
+    def test_공백만_보내면_되돌린다(self, client: TestClient) -> None:
+        """빈 이름표를 걸 수는 없습니다.
+
+        빈 문자열로 저장하면 "아직 안 정했다" 와 "정해서 지웠다" 가 같은 값이 되어
+        앱이 무엇을 그릴지 못 정합니다. **되돌리기는 None 입니다.**
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"room_name": "네옹이네"}, headers=headers)
+
+        cleared = client.patch("/auth/app/me", json={"room_name": "   "}, headers=headers)
+
+        assert cleared.json()["room_name"] is None
+
+    def test_이름표는_20자까지다(self, client: TestClient) -> None:
+        """이름표가 방 그림 위에 걸리는 자리라 더 길면 방을 덮습니다."""
+        access = _login(client).json()["access_token"]
+
+        res = client.patch(
+            "/auth/app/me",
+            json={"room_name": "가" * 21},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.status_code == 422
+
+    def test_로그인하지_않으면_이름표를_못_고친다(self, client: TestClient) -> None:
+        assert client.patch("/auth/app/me", json={"room_name": "남의방"}).status_code == 401
+
     def test_탈퇴하면_개인정보가_지워지고_세션이_끊긴다(
         self, client: TestClient, store: Store
     ) -> None:

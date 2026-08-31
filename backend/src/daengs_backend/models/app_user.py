@@ -54,6 +54,12 @@ class AppUser(Base):
 
     status: Mapped[str] = mapped_column(String(20), server_default=text("'active'"))
 
+    # 미니룸 앞에 걸리는 이름표. 사용자가 직접 정합니다.
+    #
+    # **None 은 "아직 안 정했다"** 이고, 그때 앱이 대표 강아지 이름으로 짓습니다.
+    # 빈 문자열로 두지 않습니다 — "정해서 지웠다" 와 구분이 안 됩니다.
+    room_name: Mapped[str | None] = mapped_column(String(20))
+
     # 대표 강아지. 상단바·챗봇 얼굴이 이 아이를 따릅니다.
     #
     # **pets 쪽에 is_primary 를 두지 않은 이유**는 05_pets.sql 에 적어 두었습니다 —

@@ -15,7 +15,7 @@ type CrawlRun = {
   id: number;
   run_id: string | null;
   source_id: string;
-  trigger: "due" | "manual";
+  trigger: "due" | "manual" | "revision";
   status: "running" | "ok" | "failed" | "unavailable";
   docs_fetched: number;
   docs_changed: number;
@@ -40,7 +40,8 @@ const STATUS: Record<CrawlRun["status"], { label: string; className: string }> =
   unavailable: { label: "손봐야 함", className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
 };
 
-const TRIGGER: Record<CrawlRun["trigger"], string> = { due: "주기", manual: "수동" };
+// "개정" 은 Beat 가 시행일자 변화를 보고 깨운 수집 — 법령은 주기가 없어 이 길로만 받습니다 (RAG-054).
+const TRIGGER: Record<CrawlRun["trigger"], string> = { due: "주기", manual: "수동", revision: "개정" };
 
 /** 5초. 크롤 하나가 분 단위라 더 자주 물어도 볼 것이 없습니다. */
 const POLL_MS = 5000;

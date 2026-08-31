@@ -4,6 +4,7 @@
   python -m crawler due                                    # 지금 due 인 소스 — Beat 가 볼 것과 같은 판정
   python -m crawler run --source easylaw-pet --dry-run --limit 3
   python -m crawler run --source easylaw-pet [--force]
+  python -m crawler revisions [--source law-drf-api]     # 개정 판정만 — 받지 않는다 (RAG-054)
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import sys
 from datetime import datetime
 
 from . import run as run_mod
-from .core import cadence, config, registry
+from .core import cadence, config, registry, revision
 
 # 윈도우 콘솔의 기본 인코딩(cp949)으로는 한글 안내 메시지가 깨지고 일부 기호는 아예 예외를 낸다.
 # errors="replace" 라 어떤 터미널에서도 출력 때문에 죽지는 않는다.
@@ -121,6 +122,35 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 1 if result.failed else 0
 
 
+def cmd_revisions(args: argparse.Namespace) -> int:
+    """개정 판정 — **원본을 받지 않고** 시행일자만 대조한다. Beat 의 `crawl_due` 가 매일 하는 것과 같은 함수.
+
+    기본은 cadence `manual` 인 소스(법령)다. `--source` 로 하나를 집으면 cadence 와 무관하게 본다.
+    종료 코드는 판정 결과와 무관하게 0 이다 — 개정이 있다는 것은 실패가 아니다.
+    """
+    seeds = registry.load_seeds()
+    if args.source:
+        if args.source not in seeds:
+            print(f"unknown source id: {args.source}", file=sys.stderr)
+            return 2
+        seeds = {args.source: seeds[args.source]}
+    verdicts = revision.probe_sources(seeds, only_manual=not args.source)
+    if not verdicts:
+        print("판정할 소스가 없다 — revision_key 가 있는 manual 소스가 없거나 --source 가 그런 소스가 아니다")
+        return 0
+    total = 0
+    for sid, vs in verdicts.items():
+        if not vs:
+            print(f"[{sid}] 조회 실패 또는 대상 없음 (위 경고 참고)")
+            continue
+        for v in vs:
+            tag = {"same": "[    ]", "new": "[new ]", "revised": "[REV ]"}.get(v.kind, f"[{v.kind}]")
+            print(f"{tag} {sid:24s} {v.slug:44s} {v.previous or '-':10s} → {v.current or '-'}")
+            total += v.actionable
+    print(f"\n받아야 할 것 {total}건")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m crawler")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -135,6 +165,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--force", action="store_true", help="sha256 같아도 새 파일로 저장")
     r.add_argument("-v", "--verbose", action="store_true")
     r.set_defaults(fn=cmd_run)
+
+    v = sub.add_parser("revisions", help="개정 판정 — 시행일자만 대조, 받지 않음 (기본: cadence manual 소스)")
+    v.add_argument("--source", help="이 소스 하나만 (cadence 무관)")
+    v.set_defaults(fn=cmd_revisions)
 
     args = p.parse_args(argv)
     return args.fn(args)

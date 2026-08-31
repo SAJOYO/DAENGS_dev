@@ -182,9 +182,10 @@ def test_the_real_log_is_readable() -> None:
 class FakeResult:
     """`crawler.run.RunResult` 중 태스크가 읽는 것만."""
 
-    def __init__(self, changed_slugs=(), unavailable=None) -> None:
+    def __init__(self, changed_slugs=(), unavailable=None, new_slugs=()) -> None:
         self.fetched, self.failed, self.skipped, self.run_id = 3, 0, 0, "20260829-040000"
         self.changed_slugs = list(changed_slugs)
+        self.new_slugs = list(new_slugs)
         self.changed = len(self.changed_slugs)
         self.unavailable = unavailable
 
@@ -210,6 +211,9 @@ def fake_crawl(monkeypatch):
         return FakeResult(changed_slugs=["doc-1"] if source_id == "stale" else [])
 
     monkeypatch.setattr(crawl.crawler_run, "run", fake_run)
+    # 개정 조회는 기본으로 **아무것도 없음**. 가짜 시드는 revision_key 가 없어 어차피 안 보지만,
+    # 여기서 명시해 두면 아래 테스트가 무엇을 덮어쓰는지 보인다 (RAG-054).
+    monkeypatch.setattr(crawl.revision, "probe_sources", lambda seeds, **kw: {})
     return called
 
 
@@ -271,6 +275,53 @@ def test_one_undeliverable_source_does_not_stop_the_rest(fake_crawl, monkeypatch
     assert out["selected"] == ["a", "b", "c"]
     assert out["dispatched"][0] == "task-a" and out["dispatched"][2] == "task-c"
     assert "발사 실패" in out["dispatched"][1] and "OSError" in out["dispatched"][1]
+
+
+# ------------------------------------------------------------- 개정 감지 (RAG-054)
+
+def _verdict(sid, slug, kind, prev=None, cur=None):
+    from daengs_life.crawler.core.revision import Verdict
+    return Verdict(sid, slug, kind, None, cur, prev)
+
+
+def test_revised_law_is_dispatched_with_the_revision_trigger(fake_crawl, dispatched, monkeypatch) -> None:
+    """법령은 cadence manual 이라 주기로는 영영 안 받힌다 — 시행일자가 바뀐 것만 이 길로 받는다."""
+    monkeypatch.setattr(crawl.revision, "probe_sources", lambda seeds, **kw: {
+        "law-x": [_verdict("law-x", "law-x-act", "revised", "2026-07-07", "2026-10-01"),
+                  _verdict("law-x", "law-x-decree", "same", "2026-06-03", "2026-06-03")],
+        "law-y": [_verdict("law-y", "law-y-act", "same", "2026-01-01", "2026-01-01")],
+    })
+    out = crawl.crawl_due()
+    assert dispatched == [("stale", "due", "crawl"), ("law-x", "revision", "crawl")]
+    assert out["revised"] == ["law-x"] and out["selected"] == ["stale"]
+
+
+def test_a_dead_probe_does_not_stop_the_due_dispatch(fake_crawl, dispatched, monkeypatch) -> None:
+    """법제처가 점검 중이면 개정은 내일 보고, 오늘의 due 는 그대로 받는다."""
+    def boom(seeds, **kw):
+        raise OSError("법제처 점검 중")
+    monkeypatch.setattr(crawl.revision, "probe_sources", boom)
+    out = crawl.crawl_due()
+    assert dispatched == [("stale", "due", "crawl")] and out["revised"] == []
+
+
+def test_manual_trigger_does_not_probe(fake_crawl, dispatched, monkeypatch) -> None:
+    """관리자가 이름을 대고 부른 것은 그것만 받는다 — 조회를 끼워 넣으면 수동 트리거가 느려진다."""
+    monkeypatch.setattr(crawl.revision, "probe_sources",
+                        lambda seeds, **kw: (_ for _ in ()).throw(AssertionError("불리면 안 된다")))
+    crawl.crawl_due(source_ids=["fresh"])
+    assert [d[0] for d in dispatched] == ["fresh"]
+
+
+def test_crawl_source_reports_superseded_editions(fake_crawl, monkeypatch) -> None:
+    """약관: 새 판 slug 가 같은 상품의 옛 slug 를 대체했다 — 받은 뒤에 판정하고 결과에 담는다."""
+    monkeypatch.setattr(crawl.crawler_run, "run",
+                        lambda sid, **kw: FakeResult(changed_slugs=["t-new"], new_slugs=["t-new"]))
+    monkeypatch.setattr(crawl.registry, "build", lambda sid: object())
+    monkeypatch.setattr(crawl.revision, "superseded",
+                        lambda src, new: [_verdict("stale", "t-old", "superseded", "t-old", "t-new")])
+    out = crawl.crawl_source("stale", "due")
+    assert out["superseded"] == [("t-old", "t-new")]
 
 
 # ------------------------------------------------------------------- crawl_source

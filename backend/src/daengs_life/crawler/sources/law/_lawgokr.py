@@ -44,6 +44,7 @@ class LawGoKrSource(Source):
     format = "html"
     trust_level = "law"
     license = "공공누리 제1유형"
+    revision_key = "published_at"            # 시행일자(efYd)가 곧 판이다 (RAG-054)
 
     LAWS: list[tuple[str, str]] = []          # (법령명, slug 접미사)
 
@@ -69,7 +70,9 @@ class LawGoKrSource(Source):
                 url=f"{BASE}/LSW/lsInfoR.do?lsiSeq={lsi_seq}&efYd={ef_yd}",
                 slug=f"{self.id}-{suffix}",
                 ext="html",
-                meta={"title": name, "lsiSeq": lsi_seq, "efYd": ef_yd, "shell_url": shell_url},
+                meta={"title": name, "lsiSeq": lsi_seq, "efYd": ef_yd, "shell_url": shell_url,
+                      # 개정 판정이 저장된 meta 의 published_at 과 대조한다 — 받기 전에 안다 (RAG-054)
+                      "published_at": f"{ef_yd[:4]}-{ef_yd[4:6]}-{ef_yd[6:8]}" if len(ef_yd) == 8 else None},
             ))
         return targets
 

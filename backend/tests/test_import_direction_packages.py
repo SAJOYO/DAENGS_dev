@@ -62,11 +62,16 @@ ALLOWED: dict[str, set[str]] = {
     #   · `crawler.core.registry`— 시드 목록과 구현 여부. cadence 가 registry 를 부르지 않고
     #                              인자로 받게 해 둬서, 그 조립을 태스크가 한다
     #
+    # **RAG-054 에서 하나 더** — `crawler.core.revision`. 개정 판정이다. cadence 와 같은 종류라
+    # 같은 근거다: 판정은 crawler 안에 있어야 `python -m crawler revisions` 만으로도 "무엇이
+    # 개정됐나"가 보이고, 태스크는 그 결과로 무엇을 보낼지만 정한다. 원본을 받지 않으므로
+    # `run` 을 우회하는 수집 경로가 아니다.
+    #
     # **`store`·`fetch` 는 여전히 밖이다.** 워커가 그것을 직접 잡으면 `run` 을 우회하는 두 번째
     # 수집 경로가 생기고, 위의 "같은 함수" 가 그날로 무너진다. 넓힐 일이 또 생기면 그 줄이
     # `run` 안으로 들어갈 수 있는지 먼저 볼 것.
     "tasks": {"crawler.core.config", "crawler.core.cadence", "crawler.core.registry",
-              "crawler.run"},
+              "crawler.core.revision", "crawler.run"},
     # 서빙 (RAG-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
     # 그래도 목록에 두는 이유는 **새로 들어오는 날 잡히게** 하기 위해서다.
     "app": {"crawler.core.config"},

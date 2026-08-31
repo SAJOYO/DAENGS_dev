@@ -91,6 +91,11 @@ class RunResult:
         return sum(1 for o in self.outcomes if o.state == "raw-missing")
 
     @property
+    def new_slugs(self) -> list[str]:
+        """처음 받은 문서. 약관처럼 판이 slug 에 박힌 소스에서 옛 판을 대체했는지 볼 때 쓴다 (RAG-054)."""
+        return [o.slug for o in self.outcomes if o.state == "new"]
+
+    @property
     def changed_slugs(self) -> list[str]:
         """바뀐 문서의 slug. **C3(개정 감지)의 입력이 이것이다** — 카드 메모 ③.
 

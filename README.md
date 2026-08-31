@@ -174,7 +174,8 @@ Copy-Item .env.example .env
 
 ### Place 검색
 
-`place-search`와 별도 PostGIS인 `place-db`는 기본 `docker compose up -d`에 포함됩니다.
+`backend/src/daengs_place`를 실행하는 `place-search`와 별도 PostGIS인 `place-db`는
+기본 `docker compose up -d`에 포함됩니다.
 기동 전에 기존 Alembic 이력이 자동 적용되며, 외부 요청은 nginx의
 `POST /v2/places/search`로만 받습니다. place-db 자체 포트는 호스트에 열지 않습니다.
 
@@ -197,7 +198,8 @@ gh workflow run place-search-ingest.yml -f mode=incremental
 ### Journey
 
 장소 카드를 선택한 뒤 APP은 공개 `POST /journey`로 거리·시간의 실측/추정 상태와 지도 앱
-handoff를 받습니다. 이 서비스는 Place DB와 Dog Profile을 조회하지 않으며, 원본
+handoff를 받습니다. `backend/src/daengs_journey`는 별도 컨테이너에서 실행되며 Place DB와
+Dog Profile을 조회하지 않습니다. 원본
 `DAENGS_geo main@c5f0d5f`의 현재 APP 좌표 요청만 처리합니다.
 
 ```powershell
@@ -312,9 +314,13 @@ pm2 reload daengs-web
 
 ```
 frontend/                 Next.js 앱
-backend/                  FastAPI 앱 (uv, Python 3.12)
-place-search/             Place 검색 API + Alembic (별도 PostGIS 사용)
-journey-service/          장소 선택 뒤 단발 이동 스냅샷 + 지도 앱 handoff
+backend/                  Python 패키지·테스트·단일 pyproject/uv.lock (uv, Python 3.12)
+  src/daengs_backend/     인증·회원·공통 FastAPI
+  src/daengs_life/        생활비서·실시간 산책
+  src/daengs_training/    훈련 RAG
+  src/daengs_place/       Place 검색 API·적재기 (별도 컨테이너)
+  src/daengs_journey/     단발 이동 스냅샷 (별도 컨테이너)
+  infra/place/            Place 전용 Alembic (별도 PostGIS)
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        서버용 컨테이너 구성
 docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)

@@ -92,6 +92,11 @@ services:
       # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
       # 같은 이유이고, 여기는 단위가 GB 입니다.
       - hf-cache:/root/.cache/huggingface
+      # 피부 스크리닝 가중치 (D-039). **저장소에 없습니다** — best.pt 가
+      # 163MB / 189MB 라 GitHub 의 파일당 100MB 리밋에 걸립니다. 서버 디스크의
+      # 배포 폴더 **바깥**에 두고 여기로 물립니다. 추론 경로에 쓰기가 없어 :ro 로
+      # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
+      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
     depends_on:
       pgvector:
         condition: service_healthy
@@ -121,7 +126,7 @@ services:
     #
     # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
     # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
-    command: sh -c "uv sync --frozen --group ml && exec uv run --no-sync dev"
+    command: sh -c "uv sync --frozen --group ml --group screening && exec uv run --no-sync dev"
 
 
   # Training RAG: main backend? runtime/DB ??? ????.
@@ -224,69 +229,9 @@ services:
       retries: 5
       start_period: 10s
 
-  # 반려견 피부 병변 스크리닝 (D-024). **기본 up -d 에서는 안 뜹니다** —
-  # pgadmin 의 profiles: ["tools"] 와 같은 방식입니다.
-  #
-  #   docker compose --profile screening up -d
-  #
-  # 켜기 전에 서버 디스크에 가중치를 두고 최상단 .env 에 SCREENING_RELEASE_DIR 을
-  # 지정하세요. 없으면 컨테이너가 재시작 루프에 빠집니다 (다른 서비스는 멀쩡합니다).
-  # 절차는 skin-screening/README.md.
-  skin-screening:
-    profiles: ["screening"]
-    # backend 와 같은 uv 베이스 이미지를 씁니다 (docker/uv/Dockerfile).
-    # python 3.12 라 skin-screening 의 requires-python 과 맞습니다.
-    build:
-      context: ./docker/uv
-    image: uv:1
-    container_name: daengs-skin-screening
-    restart: unless-stopped
-    networks:
-      - daengs-network
-    # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
-    # nginx 의 daengback 블록에 있는 location /screen/ 이 여기로 넘깁니다.
-    #   http://daengback.~/screen/v1/screen  →  이 컨테이너의 /v1/screen
-    environment:
-      # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
-      UV_PROJECT_ENVIRONMENT: /opt/venv
-    volumes:
-      # 폴더째가 아니라 필요한 것만 (D-004).
-      - ./skin-screening/pyproject.toml:/app/pyproject.toml:ro
-      - ./skin-screening/uv.lock:/app/uv.lock:ro
-      - ./skin-screening/serve.py:/app/serve.py:ro
-      - ./skin-screening/src:/app/src:ro
-      - ./skin-screening/demo:/app/demo:ro
-      - ./skin-screening/tools:/app/tools:ro
-      # ★ 가중치. **저장소에 없습니다** — best.pt 가 163MB / 189MB 라 GitHub 의
-      #   파일당 100MB 리밋에 걸립니다. 서버 디스크에 두고 여기로 물립니다.
-      #   배포 폴더(releases/<커밋해시>) **바깥**이라 재배포해도 안 지워집니다.
-      #   추론 경로에 파일 쓰기가 없어서 :ro 로 충분합니다.
-      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
-      - screening-venv:/opt/venv
-      - uv-cache:/root/.cache/uv
-    # backend 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와 어긋나면
-    # 여기서 멈춥니다. --extra model 이 torch·torchvision·timm 을 받고,
-    # 리눅스에서는 pyproject 의 pytorch-cpu 인덱스가 CPU 판을 집습니다.
-    # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다. YAML 의 `>` 는 더 깊이
-    #    들여쓴 줄의 줄바꿈을 살려 두기 때문입니다. 보기 좋으라고 인자를 들여쓰면
-    #    sh 가 세 줄짜리 스크립트를 받고, `exec ... serve.py` 에서 셸이 교체되면서
-    #    다음 줄의 `--release` 가 영영 실행되지 않습니다. serve.py 는 인자 없이
-    #    떠서 usage 를 뱉고 죽고, restart 정책 때문에 무한 재시작합니다.
-    command: >
-      sh -c "uv sync --frozen --extra model &&
-      exec uv run --no-sync python serve.py
-      --release /models/release --host 0.0.0.0 --port 8000"
-
-  # 강아지 보행 영상 분석 (D-029). **기본 up -d 에서는 안 뜹니다** — skin-screening 과 같은 방식입니다.
-  #
-  #   docker compose --profile gait up -d
-  #
-  # 켜기 전에 서버 디스크에 가중치 2개를 두고 최상단 .env 에 GAIT_RELEASE_DIR 을
-  # 지정하세요. 없으면 컨테이너는 뜨지만 /healthz 가 ready:false 를 냅니다
-  # (다른 서비스는 멀쩡합니다). 절차는 gait-analysis/README.md.
   gait-analysis:
     profiles: ["gait"]
-    # backend · skin-screening 과 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
+    # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
     build:
       context: ./docker/uv
     image: uv:1
@@ -324,7 +269,7 @@ services:
       - gait-data:/data
       - gait-venv:/opt/venv
       - uv-cache:/root/.cache/uv
-    # backend · skin-screening 과 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와
+    # backend 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와
     # 어긋나면 여기서 멈춥니다. --extra model 이 torch·ultralytics·opencv 를 받고,
     # 리눅스에서는 pyproject 의 pytorch-cpu 인덱스가 CPU 판을 집습니다.
     #
@@ -357,7 +302,7 @@ services:
     volumes:
       # PG18 이미지의 VOLUME 은 /var/lib/postgresql 입니다. 상위 경로를 마운트해야
       # 데이터가 보존됩니다 (pgvector 와 같음). db/init 은 물리지 않습니다 —
-      # place 스키마의 원본은 place-search/alembic 입니다 (D-026, dev DB 규칙의 예외).
+      # place 스키마의 원본은 backend/infra/place/alembic 입니다 (D-026, dev DB 규칙의 예외).
       - place-pgdata:/var/lib/postgresql:rw
     shm_size: 1gb
     healthcheck:
@@ -399,12 +344,13 @@ services:
       TZ: Asia/Seoul
     working_dir: /app
     volumes:
-      # 폴더째가 아니라 필요한 것만 (D-004 와 같은 이유). tests 는 컨테이너에 필요 없습니다.
-      - ./place-search/pyproject.toml:/app/pyproject.toml:ro
-      - ./place-search/uv.lock:/app/uv.lock:ro
-      - ./place-search/alembic.ini:/app/alembic.ini:ro
-      - ./place-search/alembic:/app/alembic:ro
-      - ./place-search/app:/app/app:ro
+      # backend 의 단일 프로젝트 정의를 공유하되 venv 는 서비스별로 분리합니다.
+      # tests 와 다른 인프라 파일은 컨테이너에 필요 없습니다.
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./backend/infra/place:/app/infra/place:ro
       - place-search-venv:/opt/venv
       - uv-cache:/root/.cache/uv
     depends_on:
@@ -413,9 +359,9 @@ services:
     # DB 가 처음 뜬 배포에서도 수동 조치가 남지 않게 마이그레이션 뒤 서버를 띄웁니다.
     # 이어지는 줄은 첫 줄과 같은 칸이어야 한 셸 명령으로 접힙니다.
     command: >
-      sh -c "uv sync --frozen &&
-      uv run --no-sync alembic upgrade head &&
-      exec uv run --no-sync uvicorn app.search_main:app
+      sh -c "uv sync --frozen --extra place &&
+      uv run --no-sync alembic -c infra/place/alembic.ini upgrade head &&
+      exec uv run --no-sync uvicorn daengs_place.main:app
       --host 0.0.0.0 --port 8000"
 
   # 장소 카드를 누른 뒤의 단발 이동 스냅샷. DAENGS_geo main@c5f0d5f에서 APP이
@@ -439,14 +385,15 @@ services:
       TZ: Asia/Seoul
     working_dir: /app
     volumes:
-      - ./journey-service/pyproject.toml:/app/pyproject.toml:ro
-      - ./journey-service/uv.lock:/app/uv.lock:ro
-      - ./journey-service/app:/app/app:ro
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
       - journey-service-venv:/opt/venv
       - uv-cache:/root/.cache/uv
     command: >
       sh -c "uv sync --frozen &&
-      exec uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      exec uv run --no-sync uvicorn daengs_journey.main:app --host 0.0.0.0 --port 8000"
 
   # GUI가 필요할 때만: docker compose --profile tools up -d
   # ------------------------------------------------------------------ 크롤러 (RAG-044 · RAG-050)
@@ -626,7 +573,6 @@ volumes:
   crawler-venv:
   # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
   crawler-beat-state:
-  screening-venv:
   gait-venv:
   # 보행 분석 기록(JSON) · overlay 영상 · 업로드 원본.
   # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.

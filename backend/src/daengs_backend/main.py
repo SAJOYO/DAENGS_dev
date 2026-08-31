@@ -27,6 +27,10 @@ from daengs_backend.services.training_rag import release_training_runtime
 # `tests/test_main_stays_light.py` 가 기계로 지킵니다. 무거워지는 것은 import 가 아니라
 # 아래 lifespan 의 예열이고, 그래서 그것만 백그라운드로 돌립니다.
 from daengs_life.app.controllers import ask, walk
+# ⚠️ 스크리닝도 같은 규칙입니다 — 이 import 로 torch 가 딸려 오면 안 됩니다.
+#    `service.py` 최상단은 fastapi 와 `agent`(config 만 씀)뿐이고, 가중치는
+#    첫 요청 때 올라옵니다 (D-039).
+from daengs_screening.service import router as screening_router
 from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 # 리로드 감시 대상. 폴링으로 도는 환경(컨테이너 + 바인드 마운트)에서
@@ -101,6 +105,7 @@ app.include_router(pet.router)
 app.include_router(training.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
+app.include_router(screening_router)
 # 실시간 산책 적합도. nginx 는 `:8000` 을 통째로 이 앱에 보내므로
 # `daengback.~:8000/walk` 로 바로 나갑니다 (설정 변경 없음).
 #

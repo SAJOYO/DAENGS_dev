@@ -42,6 +42,8 @@
 | [D-035](#d-035) | Life 는 어댑터 뒤 in-process — 접점 규칙은 한 곳만 넓혀 다시 기계 강제 | 2026-08-30 |
 | [D-036](#d-036) | assistant 능력 인가 매트릭스 — 앱 회원 Training 은 의도된 확대 | 2026-08-30 |
 | [D-037](#d-037) | 오케스트레이션 관측에 질문 원문을 남기지 않는다 | 2026-08-30 |
+| [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
+| [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 
 ---
 
@@ -1213,6 +1215,11 @@ DB 접속을 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하�
 ## D-022
 ### 스크리닝 모델을 `backend/` 가 아닌 최상위 폴더로
 
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
+
 피부 병변 스크리닝을 `skin-screening/` 최상위 폴더에 독립 서비스로 두었습니다.
 `backend/` 안에 넣지 않았습니다.
 
@@ -1307,6 +1314,11 @@ reload 를 돌리는 컨테이너(D-006)가 그만큼 무거워집니다. 스크
 
 ## D-024
 ### 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다
+
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
 
 `skin-screening` 을 compose 서비스로 정의하되 `profiles: ["screening"]` 을 걸어
 **기본 `docker compose up -d` 에서는 안 뜨게** 했습니다. nginx 에는 `daengback`
@@ -1459,9 +1471,9 @@ place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(
 메모리가 실측으로 부족해질 때 다시 봅니다.
 
 **"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
-place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스토리를 개조하지
+place-db 의 스키마 원본은 `backend/infra/place/alembic` 이고, 리비전 히스토리를 개조하지
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
-쌉니다 — `place-search/UPSTREAM.md`).
+쌉니다 — `backend/docs/place/UPSTREAM.md`).
 
 #### API 는 아직 nginx 에 노출하지 않았다
 
@@ -1476,7 +1488,7 @@ identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 �
 
 Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본은 동결이며(그쪽 산책
 연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
-경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
+경계를 지키는 것은 문서가 아니라 `backend/tests/place/test_boundary.py` 입니다 —
 진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
 
 ---
@@ -1517,8 +1529,8 @@ PostGIS를 반복 호출해 같은 8000번 포트의 기존 API까지 굶기지 
 
 - KCISA: 공공데이터포털 파일 `15111389`, 2025-03-24 스냅샷. 원문 SHA-256은
   `2F88BEDFF41A8B9F032ABD16CE2FB0BC31D91EC28EE559E6E79C2559A2F45928`입니다.
-- KTO: 기존 `app.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
-- MOIS: 기존 `app.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
+- KTO: `daengs_place.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
+- MOIS: `daengs_place.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
 
 배치는 `.github/workflows/place-search-ingest.yml`의 수동 실행점 하나로 모읍니다. 호출
 주기를 새로 정하지 않았으므로 schedule은 두지 않습니다. KCISA는 공개 파일이라 단독
@@ -1908,3 +1920,86 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 옵트인(별도 플래그·별도 저장·보존 기한)을 설계하는 카드로 — 기본값을 뒤집는 것이
 아니라 예외를 설계하는 방향이어야 합니다.
 
+---
+
+## D-039
+### Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리한다
+
+최상위 `place-search/`와 `journey-service/`에 각각 있던 Python 프로젝트를
+`backend/src/daengs_place/`, `backend/src/daengs_journey/`로 옮깁니다. 생활·훈련 코드가
+이미 `daengs_life`·`daengs_training` 패키지로 같은 `src/`에 있으므로, 팀이 소유하는 일반
+Python 서비스는 같은 패키지 레이아웃과 `backend/pyproject.toml`·`backend/uv.lock` 한 벌을
+사용합니다. 원본의 일반명 `app`도 두 서비스를 한 환경에 설치할 수 있도록 고유 패키지명으로
+바꿉니다.
+
+이 결정은 **코드와 의존성의 정본을 합치는 것**이지 프로세스를 합치는 것이 아닙니다.
+Place는 PostGIS·Alembic과 함께 `place-search`, Journey는 외부 경로 Usage Gate와 함께
+`journey-service` 컨테이너에서 계속 따로 실행합니다. 따라서 D-026의 별도 장애 도메인·별도
+PostGIS 결정과 D-027의 nginx 공개 경로는 유지합니다. 외부 API(`/v2/places/search`,
+`/journey`)와 compose 서비스 이름도 바꾸지 않습니다.
+
+`venv`는 프로젝트 정의가 아니라 실행 결과입니다. 두 컨테이너가 같은 lock을 읽더라도
+`place-search-venv`와 `journey-service-venv` named volume은 분리합니다. uv의 exact sync가
+한 서비스의 extra를 다른 서비스 환경에서 지우는 일을 막고, 나중에 런타임을 합치거나 다시
+나눌 때 소스 위치를 또 옮기지 않게 합니다. Place만 필요한 GeoAlchemy2·Alembic은 `place`
+extra로 두고 `place-search`가 `uv sync --extra place`로 선택합니다.
+
+스크리닝처럼 외부 저장소 사본을 그대로 동기화해야 하거나, 보행처럼 대형 모델 의존성과
+분 단위 CPU 작업을 가진 유닛은 이 결정만으로 자동 이관하지 않습니다. 그 예외는 D-022·D-029의
+운영 제약을 별도로 판단합니다.
+
+
+---
+
+## D-040
+### 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음)
+
+최상위 `skin-screening/` 컨테이너를 없애고 backend 안의 패키지로 옮겼습니다.
+`#94`(Training RAG → `daengs_training`) 와 같은 모양이고, `#98`(보행)·`#99`(Place)가
+같은 방향을 예고하고 있어 스크리닝만 남으면 혼자 다른 모양이 됩니다.
+
+#### 무엇이 D-022 를 바꿨나
+
+| D-022 의 근거 | 지금 |
+| --- | --- |
+| torch 가 backend 에 들어오면 무겁다 | **약해졌습니다.** D-021 로 backend 는 이미 `ml` 그룹에 torch 를 갖고 있습니다. 새로 붙는 건 `timm`(모델 정의 모음) · `torchvision` 뿐입니다 |
+| **죽는 범위** | **그대로 유효합니다.** 스크리닝이 넘어지면 로그인과 `/ask` 도 같이 넘어집니다 |
+| 사본 구조가 깨진다 | **맞습니다.** 패키지 이름이 `src` → `daengs_screening` 으로 바뀌어 "그냥 복사" 가 안 됩니다 → `backend/tools/sync_screening.py` 로 대신합니다 |
+
+**GCP 로 옮길 예정**이라는 것이 결정적이었습니다. 클라우드에서는 상시 떠 있는
+컨테이너 수가 곧 비용이고, `screening-venv` 볼륨이 **backend 와 별개로 torch 를
+한 벌 더** 갖고 있었습니다. 합치면서 그 사본이 사라집니다.
+
+#### 대가로 안고 가는 것
+
+* **죽는 범위** — 위 표 ②. 팀이 알고 택한 방향이라 여기 적어 둡니다
+* **메모리** — 임베딩 모델(D-021) 옆에 가중치 350MB 가 더 올라갑니다.
+  그래서 **첫 요청 때 올립니다** (`service.py` 의 `_agent()`). 기동 때 올리면
+  로그인·`/ask` 까지 같이 늦어지고, 아무도 안 쓰는 동안 메모리를 잡습니다
+* **CPU 경합** — 사진 한 장에 0.6~3초. `run_in_threadpool` 로 이벤트 루프는
+  지키지만 워커 스레드는 `/ask`·로그인과 나눠 씁니다
+
+#### 앱은 손댈 것이 없습니다
+
+부르는 주소가 그대로입니다 — `http://daengback.~/screen/v1/screen`.
+바뀐 것은 nginx 의 upstream 뿐입니다 (`skin-screening:8000` → `backend:8000`).
+
+⚠️ **nginx 의 `rewrite` 를 뺐습니다.** 라우터가 `prefix="/screen"` 을 갖게 돼서,
+접두사를 떼면 backend 에 그 경로가 없어 404 입니다.
+
+#### ⚠️ 의존성 그룹을 빠뜨리면 조용히 죽습니다
+
+`backend/pyproject.toml` 에 `screening` 그룹을 새로 만들었고, compose 의 backend
+`command` 가 `uv sync --frozen --group ml --group screening` 입니다.
+**둘 중 하나만 고치면 `/screen/` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에
+아무 문제도 안 보입니다** (`pdf` 그룹이 경고하는 그 함정).
+확인: `docker compose exec backend uv pip list | grep -i timm` 가 비면 안 됩니다.
+
+`torchvision` 도 `[tool.uv.sources]` 에 같이 지목했습니다 — `torch` 만 CPU 로
+잡아 두면 torchvision 이 PyPI 기본에서 와서 NVIDIA 런타임을 다시 끌고 옵니다.
+
+#### 사본은 스크립트로 유지합니다
+
+`backend/tools/sync_screening.py <원본경로>` 가 원본에서 15개 파일을 가져오고
+import 를 기계적으로 치환합니다. 돌린 뒤 `git diff` 가 비면 원본과 같다는 뜻입니다.
+**`serve.py` 는 안 가져옵니다** — 원본은 단독 서버, 여기는 라우터라 모양이 다릅니다.

@@ -9,7 +9,11 @@ name: place-search tests
 on:
   pull_request:
     paths:
-      - "place-search/**"
+      - "backend/src/daengs_place/**"
+      - "backend/tests/place/**"
+      - "backend/infra/place/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
       - ".github/workflows/deploy.yml"
@@ -18,7 +22,11 @@ on:
   push:
     branches: [dev]
     paths:
-      - "place-search/**"
+      - "backend/src/daengs_place/**"
+      - "backend/tests/place/**"
+      - "backend/infra/place/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
       - ".github/workflows/deploy.yml"
@@ -30,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: place-search
+        working-directory: backend
     services:
       place-db:
         image: postgis/postgis:18-3.6
@@ -86,12 +94,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "place-search/uv.lock"
+          cache-dependency-glob: "backend/uv.lock"
       - name: 의존성
-        run: uv sync --frozen
+        run: uv sync --frozen --extra place
       - name: 스키마 (Alembic 0001~0020 전체가 실제로 적용되는지도 여기서 검증됩니다)
-        run: uv run alembic upgrade head
+        run: uv run alembic -c infra/place/alembic.ini upgrade head
       - name: 테스트
-        run: uv run pytest -q
+        run: uv run pytest -q tests/place
       - name: 린트
-        run: uv run ruff check app tests
+        run: uv run ruff check src/daengs_place tests/place

@@ -224,7 +224,7 @@ services:
       - daengs-network
     # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
     # nginx 의 daengback 블록에 있는 location /gait/ 가 여기로 넘깁니다.
-    #   http://daengback.~/gait/v1/analyze  →  이 컨테이너의 /v1/analyze
+    #   http://daengback.~/gait/analyze  →  이 컨테이너의 /analyze
     environment:
       # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
       UV_PROJECT_ENVIRONMENT: /opt/venv

@@ -60,6 +60,22 @@ DETECTOR_WEIGHTS = Path(
 # 기록은 아직 JSON 파일입니다 — walk_demo 의 동작을 그대로 옮긴 것입니다.
 # DAENGS 의 PostgreSQL 로 옮길지는 아직 정하지 않았습니다 (README 의 TBD 참고).
 # ──────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────
+# 앱이 보는 경로 접두사
+#
+# FastAPI 안의 경로는 `/analyze` · `/records/…` 인데, 앱이 부르는 주소에는 `/gait` 가
+# 앞에 붙습니다 — **nginx 가 그것을 떼고 넘기기 때문**입니다
+# (`nginx/default.conf` 의 `rewrite ^/gait/(.*)$ /$1 break`).
+#
+# 응답에 담는 URL(`overlay_url`)은 **앱 기준**이어야 그대로 쓸 수 있으므로 여기서 붙입니다.
+#
+# ⚠️ nginx 의 `location /gait/` 를 바꾸면 이 값도 같이 바꿔야 합니다. 소스에 박지 않고
+#    환경변수로 둔 이유가 그것입니다 — 박혀 있으면 그때 **조용히 틀립니다**
+#    (앱이 404 나는 URL 을 받는데 서버 로그에는 아무 문제도 안 보입니다).
+# ──────────────────────────────────────────────────────────────────
+PUBLIC_PREFIX = os.environ.get("GAIT_PUBLIC_PREFIX", "/gait").rstrip("/")
+
+
 DATA_DIR = Path(os.environ.get("GAIT_DATA_DIR") or (ROOT / "_data"))
 RECORDS_DIR = DATA_DIR / "records"
 OVERLAYS_DIR = DATA_DIR / "overlays"

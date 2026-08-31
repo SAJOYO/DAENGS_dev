@@ -102,6 +102,22 @@ def build_app() -> FastAPI:
             "강아지 보행 영상에서 관절 움직임을 기록하고, 같은 개체의 이전 기록과 "
             "비교합니다. **진단이 아닙니다** — 시간에 따른 변화를 관찰하는 기능입니다."
         ),
+        # ⚠️ **이게 없으면 `/gait/docs` 가 backend 의 API 를 보여줍니다.**
+        #
+        # nginx 가 `/gait` 를 떼고 넘기므로(`rewrite ^/gait/(.*)$`) FastAPI 는 자기가
+        # 도메인 루트에 있다고 믿습니다. 그러면 Swagger HTML 에 openapi 주소를
+        # **`/openapi.json`** 으로 절대 경로로 박는데, 브라우저는 그것을 도메인 기준으로
+        # 해석해서 `daengback.~/openapi.json` 을 부릅니다 — nginx 의 `location /` 가
+        # 그것을 **backend 로** 보내므로 "DAENGS API" 가 뜹니다.
+        #
+        # 페이지는 200 으로 열리고 화면도 멀쩡해 보입니다. **내용만 남의 것입니다** —
+        # 그래서 상태 코드만 봐서는 못 잡습니다 (2026-08-31 실제로 그렇게 놓쳤습니다).
+        #
+        # `root_path` 를 주면 FastAPI 가 docs · openapi.json · redoc 의 주소를 전부
+        # 이 접두사 기준으로 생성합니다. 프록시가 접두사를 떼는 구조를 위해 있는
+        # 표준 옵션이고, **라우트 경로 자체는 바꾸지 않습니다** — 컨테이너는 여전히
+        # `/analyze` 로 받습니다.
+        root_path=config.PUBLIC_PREFIX,
     )
 
     @app.get("/healthz")

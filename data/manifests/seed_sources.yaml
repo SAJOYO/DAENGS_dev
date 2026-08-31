@@ -4,7 +4,7 @@
 # auth   : none | data-go-kr (활용신청, 자동승인) | law-oc (open.law.go.kr OC 신청)
 #          | kma-hub (apihub 가입키) | kakao (REST 키)
 # status : verified (2026-08-19 URL/제공여부 확인) | unverified (요확인)
-# 상세 설명: docs/data-sources.md, docs/realtime-apis.md
+# 상세 설명: docs/life/data-sources.md, docs/life/realtime-apis.md
 # =====================================================================
 
 # ---------- 공통: 법령 ----------
@@ -71,7 +71,7 @@
     본문 자체는 정적 HTML(#contents)이고 카드뉴스도 title 속성에 텍스트가 있어 품질은 좋다.
     시드에 있던 https://www.animal.go.kr/ 는 JS 리다이렉트 2단(/front/ -> /front/index.do)이라
     본문이 아니었고, 위 URL 이 실제 '동물등록제도 안내' 다. 같은 내용이 nias-pet 과 easylaw-pet 에
-    있으므로 이 소스는 수집하지 않는다 (docs/data-sources.md §12 robots 준수)."
+    있으므로 이 소스는 수집하지 않는다 (docs/life/data-sources.md §12 robots 준수)."
 
 - id: gov24-registration
   domain: registration
@@ -213,7 +213,7 @@
     ❌ 진에어·에어서울은 403 Cloudflare 챌린지, 에어부산은 TLS 핸드셰이크 거부,
     대한항공·아시아나는 ReadTimeout, 제주항공·티웨이는 robots.txt 403.
     ⚠️ 2026-08-28 에 '5곳 열림'으로 적었던 것은 robots.txt 만 본 값이다 — robots 는 정적 파일이라
-    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/data-sources.md §12).
+    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/life/data-sources.md §12).
     진에어 robots 의 Content-Signal: search=yes,ai-train=no,use=reference 는 우리 용도
     (출처 표기 참조)가 use=reference 에 해당하나, 어차피 페이지를 못 받는다."
 
@@ -347,7 +347,7 @@
       표준상 통과하지만 의도를 존중한다 (사람이 정함, RAG-048 ①).
     ⚠ 마커는 회사가 아니라 판형이 정한다 — KB 구형(2018)은 농협처럼 얇은 표제 없이 바로 제1조(목적)다 (RAG-048 ④)."
 
-# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/realtime-apis.md) ----------
+# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/life/realtime-apis.md) ----------
 - id: kma-vilage-fcst
   domain: realtime
   org: 기상청

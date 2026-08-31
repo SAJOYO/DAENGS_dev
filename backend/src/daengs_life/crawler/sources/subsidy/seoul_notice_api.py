@@ -23,7 +23,7 @@
 
 **원본 1건 = 한 행짜리 응답.** 공고 하나를 따로 받는 URL 이 없다 — 시청 게시판은
 `#view/{BOARD_ID}` 해시 라우팅(SPA)이라 본문이 HTML 에 없고, 첨부(seoulboard.seoul.go.kr)는
-robots 가 `Disallow: /` 라 받지 않는다 (docs/data-sources.md §12). 남는 것이 목록의 `{i}/{i}/`
+robots 가 `Disallow: /` 라 받지 않는다 (docs/life/data-sources.md §12). 남는 것이 목록의 `{i}/{i}/`
 슬라이스다. 인덱스는 새 글이 올라오면 밀리므로 **`extract()` 가 `BOARD_ID` 를 대조해서 다르면
 시끄럽게 실패한다** — 새벽 4시에 공고가 올라오는 일은 드물지만 조용히 엉뚱한 글을 저장하는
 것보다 실패가 낫다. 여러 개가 걸려도 요청은 각각 1회다.
@@ -55,7 +55,7 @@ WINDOW = 1000
 KEY_MISSING = (
     "SEOUL_OPEN_DATA_KEY 미설정. 서울 열린데이터광장(data.seoul.go.kr) 로그인 → 마이페이지 →\n"
     "  인증키 신청(무료, 즉시). 발급 후 .env 에 `SEOUL_OPEN_DATA_KEY=발급받은키` 한 줄.\n"
-    "  (docs/data-sources.md §9)"
+    "  (docs/life/data-sources.md §9)"
 )
 
 

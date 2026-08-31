@@ -234,7 +234,7 @@ items:
     nice: []
     unavailable:
       - ref: 부산·대구·인천 등 지역 도시철도공사 여객운송약관
-        reason: 미수집 — 서울만 받았다 (docs/data-sources.md §5)
+        reason: 미수집 — 서울만 받았다 (docs/life/data-sources.md §5)
 
   - id: T2
     added_on: 2026-08-28

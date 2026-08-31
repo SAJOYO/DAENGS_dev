@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.config import (
+from daengs_gait.config import (
     KP_MIN_CONF,
     MAX_BBOX_FRAC,
     MIN_BBOX_FRAC,

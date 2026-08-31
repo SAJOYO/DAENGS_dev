@@ -19,8 +19,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# 이 폴더(gait-analysis/)의 루트. serve.py 와 같은 높이입니다.
-ROOT = Path(__file__).resolve().parent.parent
+# backend/ 프로젝트 루트. `backend/src/daengs_gait/config.py` 에서 세 단계 위입니다.
+#
+# ⚠️ **로컬 개발에서만 쓰는 기본값의 기준점입니다.** 컨테이너에서는 아래 두 경로를
+#    `GAIT_RELEASE_DIR` · `GAIT_DATA_DIR` 이 덮어쓰므로 이 값이 쓰이지 않습니다
+#    (compose 가 `/models/release` · `/data` 를 넘깁니다).
+#    폴더 깊이를 바꾸면 여기도 같이 고쳐야 합니다 — 안 고치면 예외 없이 엉뚱한 곳에
+#    `_models/` 와 `_data/` 가 생깁니다.
+ROOT = Path(__file__).resolve().parents[2]
 
 
 # ──────────────────────────────────────────────────────────────────

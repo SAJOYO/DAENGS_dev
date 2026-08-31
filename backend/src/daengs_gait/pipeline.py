@@ -15,13 +15,13 @@ from pathlib import Path
 
 import numpy as np
 
-from src.config import COMPARE_DIFF_THRESHOLD, GAIT_FILTER_VERSION, OVERLAYS_DIR
-from src.features import build_features
-from src.keypoint_infer import run_keypoint_inference
-from src.overlay import OverlayEncodeError, render_overlay_video
-from src.quality_gate import check_quality
-from src.record_store import load_record, save_record
-from src.trajectory import build_trajectories
+from daengs_gait.config import COMPARE_DIFF_THRESHOLD, GAIT_FILTER_VERSION, OVERLAYS_DIR
+from daengs_gait.features import build_features
+from daengs_gait.keypoint_infer import run_keypoint_inference
+from daengs_gait.overlay import OverlayEncodeError, render_overlay_video
+from daengs_gait.quality_gate import check_quality
+from daengs_gait.record_store import load_record, save_record
+from daengs_gait.trajectory import build_trajectories
 
 
 def process_video(video_path, date: str | None = None, note: str | None = None,

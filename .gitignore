@@ -260,3 +260,29 @@ data/processed/*/*
 # 안 나오는데 RAG-028 ⑥ 이 1랩↔2랩 비교 축으로 지정했다. 한 랩에 16KB.
 !data/processed/answers/*.jsonl
 data/manifests/crawl_log.jsonl
+
+# ── 보행 분석 (D-038 로 backend/src/daengs_gait 로 이관) ────────────────────
+# 원래 gait-analysis/.gitignore 에 있던 규칙입니다. 그 폴더가 없어지면서 **전역으로
+# 올렸습니다** — 여기 없으면 아무 데서도 안 막힙니다 (backend/.gitignore 는 없고
+# 최상단에도 *.pt 방어가 없었습니다).
+#
+# ⚠ **가중치는 git 에 넣지 않습니다** (D-029 → D-038 이 유지). best.pt 50.7MB +
+#   yolov8n.pt 6.2MB = 57MB 인데 저장소가 그보다 작고, git 은 바이너리를 델타로 못
+#   줄여 재학습본을 커밋할 때마다 옛 것이 히스토리에 영구히 남습니다.
+#   서버 디스크에 두고 GAIT_RELEASE_DIR 로 :ro 마운트합니다.
+#
+# ⚠ walk_demo 의 models/experimental/*.pt (6개)는 **미채택 실험 가중치**입니다.
+#   production 과 크기가 비슷해 헷갈리기 쉬우니 가져오지 마세요 — best.pt 와
+#   yolov8n.pt 둘뿐입니다.
+*.pt
+*.pth
+*.onnx
+# 로컬 개발에서 가중치와 분석 산출물이 떨어지는 자리 (config.py 의 기본값).
+# 컨테이너에서는 GAIT_RELEASE_DIR · GAIT_DATA_DIR 이 덮어씁니다.
+_models/
+_data/
+# 업로드 원본 · overlay 산출물. 개인 데이터가 들어갑니다.
+*.mp4
+*.webm
+*.mov
+*.avi

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from src.config import KP_MIN_CONF, PRIORITY_JOINTS
+from daengs_gait.config import KP_MIN_CONF, PRIORITY_JOINTS
 
 
 def build_trajectories(records: list, joints: list | None = None, min_conf: float = KP_MIN_CONF) -> list:

@@ -118,9 +118,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-DEFAULT_LEXICON_PATH = Path("data/guardrail/medical_terms_v1.json")
-DEFAULT_LEXICON_V2_PATH = Path("data/guardrail/medical_terms_v2.json")
-DEFAULT_WHITELIST_PATH = Path("data/guardrail/training_whitelist_v1.json")
+from daengs_training.resources import RUNTIME_ROOT
+
+DEFAULT_LEXICON_PATH = RUNTIME_ROOT / "data/guardrail/medical_terms_v1.json"
+DEFAULT_LEXICON_V2_PATH = RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"
+DEFAULT_WHITELIST_PATH = RUNTIME_ROOT / "data/guardrail/training_whitelist_v1.json"
 
 MIN_TERM_CHARS = 2
 

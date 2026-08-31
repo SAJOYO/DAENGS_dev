@@ -1,9 +1,6 @@
 ﻿"""Production-shaped local API for the PGVector + grounded-generation RAG.
 
-Run locally:
-    uv run uvicorn scripts.rag_api:app --host 127.0.0.1 --port 8000
-
-The endpoint deliberately does not persist questions or model answers.  It uses
+This process-local component deliberately does not persist questions or model answers. It uses
 the evaluated PGVector corpus, calls Gemini for grounded generation, and
 keeps the medical and output guardrails outside the model's control.
 """
@@ -13,28 +10,21 @@ import logging
 import os
 import re
 import uuid
-from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
-try:  # Supports both `uvicorn scripts.rag_api:app` and direct script execution.
-    from scripts import runtime_generation as generation
-    from scripts.pgvector_runtime import RuntimeRetriever
-except ModuleNotFoundError:  # pragma: no cover - convenience path for CLI users
-    import runtime_generation as generation
-    from pgvector_runtime import RuntimeRetriever
+from daengs_training.generation import gemini as generation
+from daengs_training.resources import RUNTIME_ROOT
+from daengs_training.retrieval.pgvector import RuntimeRetriever
 
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DSN = "postgresql://dog_rag:dog_rag_local@localhost:5433/dog_rag"
 MAX_QUESTION_CHARS = 1_000
-DEFAULT_SERVING_CORPUS = Path(__file__).resolve().parents[1] / "config" / "serving_corpus_v1.json"
+DEFAULT_SERVING_CORPUS = RUNTIME_ROOT / "config/serving_corpus_v1.json"
 
 # These are intentionally system-authored rather than model output.  The model
 # is never called when retrieval is uncertain or the question crosses a safety
@@ -318,81 +308,3 @@ class RAGService:
                 usage=record.get("usage"),
                 output_guardrail_blocked=False,
             )
-
-
-def _cors_origins() -> list[str]:
-    configured = os.getenv(
-        "CORS_ALLOW_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-    )
-    return [origin.strip() for origin in configured.split(",") if origin.strip()]
-
-
-def create_app(service: RAGService | None = None) -> FastAPI:
-    """Create an injectable app; tests provide a fake service without loading models."""
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        if app.state.rag_service is None:
-            app.state.rag_service = RAGService()
-        yield
-
-    app = FastAPI(
-        title="Dog Training RAG API",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-    app.state.rag_service = service
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_cors_origins(),
-        allow_credentials=False,
-        allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
-    )
-
-    def current_service(request: Request) -> RAGService:
-        runtime = request.app.state.rag_service
-        if runtime is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="RAG runtime is starting",
-            )
-        return runtime
-
-    @app.get("/healthz")
-    async def healthz(request: Request) -> dict[str, str]:
-        runtime = current_service(request)
-        return {
-            "status": "ok",
-            "embedding_model": str(getattr(runtime.retriever, "model_name", "unknown")),
-            "generation_model": runtime.model_name,
-            "serving_document_count": str(len(runtime.serving_document_ids)),
-        }
-
-    @app.post("/chat", response_model=ChatResponse)
-    async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-        if not payload.question.strip():
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="question must not be blank",
-            )
-        runtime = current_service(request)
-        try:
-            return await run_in_threadpool(runtime.answer, payload.question, payload.top_k)
-        except generation.GenerationError as exc:
-            LOGGER.warning("RAG runtime unavailable: %s", str(exc)[:200])
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="RAG generation is temporarily unavailable",
-            ) from exc
-        except Exception as exc:  # noqa: BLE001 - dependency failures are heterogeneous
-            LOGGER.exception("RAG request failed")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="RAG retrieval is temporarily unavailable",
-            ) from exc
-
-    return app
-
-
-app = create_app()

@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
-from scripts import runtime_generation as generation
-from scripts import rag_api
-from scripts.pgvector_runtime import RuntimeRetriever
-from scripts.rag_api import RAGService, create_app, load_serving_document_ids
+from daengs_training import service as rag_service
+from daengs_training.service import RAGService, load_serving_document_ids
+from daengs_training.generation import gemini as generation
+from daengs_training.retrieval.pgvector import RuntimeRetriever
 
 
 class FakeRetriever:
@@ -55,7 +53,7 @@ def client_for(
     decision: str = "PASS", *, medical_terms: list[str] | None = None,
     answer: str = "[1] 산책은 짧고 차분하게 시작해 보세요.",
     reason: str = "fixture",
-) -> tuple[TestClient, FakeRetriever, FakeClient]:
+) -> tuple[RAGService, FakeRetriever, FakeClient]:
     retriever = FakeRetriever(decision, reason)
     model = FakeClient(answer)
     service = RAGService(
@@ -65,7 +63,7 @@ def client_for(
         whitelist_terms=[],
         serving_document_ids=("fixture-doc",),
     )
-    return TestClient(create_app(service)), retriever, model
+    return service, retriever, model
 
 
 class RAGApiTests(unittest.TestCase):
@@ -87,12 +85,8 @@ class RAGApiTests(unittest.TestCase):
         ))
 
     def test_chat_generates_only_after_a_pass_and_returns_evidence_cards(self):
-        client, retriever, model = client_for()
-        with client:
-            response = client.post("/chat", json={"question": "산책 훈련은 어떻게 시작하나요?"})
-
-        self.assertEqual(200, response.status_code)
-        body = response.json()
+        service, retriever, model = client_for()
+        body = service.answer("산책 훈련은 어떻게 시작하나요?").model_dump()
         self.assertEqual("ANSWER", body["decision"])
         self.assertTrue(body["generated"])
         self.assertEqual("gemini-3.1-flash-lite", body["model"])
@@ -101,35 +95,26 @@ class RAGApiTests(unittest.TestCase):
         self.assertEqual(1, model.calls)
 
     def test_uncertain_retrieval_does_not_call_the_model(self):
-        client, _, model = client_for("UNCERTAIN")
-        with client:
-            response = client.post("/chat", json={"question": "근거 없는 질문"})
-
-        self.assertEqual(200, response.status_code)
-        self.assertEqual("UNCERTAIN", response.json()["decision"])
-        self.assertFalse(response.json()["generated"])
+        service, _, model = client_for("UNCERTAIN")
+        response = service.answer("근거 없는 질문")
+        self.assertEqual("UNCERTAIN", response.decision)
+        self.assertFalse(response.generated)
         self.assertEqual(0, model.calls)
 
     def test_model_no_evidence_fallback_is_not_reported_as_an_answer(self):
-        client, _, model = client_for(
+        service, _, model = client_for(
             answer="제공된 자료에는 이 질문에 대한 내용이 없습니다."
         )
-        with client:
-            response = client.post("/chat", json={"question": "범위 밖 질문"})
-
-        self.assertEqual(200, response.status_code)
-        self.assertEqual("UNCERTAIN", response.json()["decision"])
-        self.assertFalse(response.json()["generated"])
+        response = service.answer("범위 밖 질문")
+        self.assertEqual("UNCERTAIN", response.decision)
+        self.assertFalse(response.generated)
         self.assertEqual(1, model.calls)
 
     def test_medical_input_is_refused_before_retrieval_or_generation(self):
-        client, retriever, model = client_for(medical_terms=["약용 샴푸"])
-        with client:
-            response = client.post("/chat", json={"question": "약용 샴푸를 추천해 주세요"})
-
-        self.assertEqual(200, response.status_code)
-        self.assertEqual("MEDICAL_REFUSAL", response.json()["decision"])
-        self.assertFalse(response.json()["generated"])
+        service, retriever, model = client_for(medical_terms=["약용 샴푸"])
+        response = service.answer("약용 샴푸를 추천해 주세요")
+        self.assertEqual("MEDICAL_REFUSAL", response.decision)
+        self.assertFalse(response.generated)
         self.assertEqual(0, retriever.search_calls)
         self.assertEqual(0, model.calls)
 
@@ -141,40 +126,28 @@ class RAGApiTests(unittest.TestCase):
         may well cover the topic — and it was the only text every gate REFUSE
         sent, so the reader was given the wrong reason for the refusal.
         """
-        client, _, model = client_for("REFUSE", reason="safety_boundary_training_harm")
-        with client:
-            response = client.post("/chat", json={"question": "체벌해도 되나요?"})
-
-        body = response.json()
+        service, _, model = client_for("REFUSE", reason="safety_boundary_training_harm")
+        body = service.answer("체벌해도 되나요?").model_dump()
         self.assertEqual("REFUSE", body["decision"])
-        self.assertEqual(rag_api.SAFETY_BOUNDARY_TEXT, body["answer"])
+        self.assertEqual(rag_service.SAFETY_BOUNDARY_TEXT, body["answer"])
         self.assertNotIn("제공된 자료에는", body["answer"])
         self.assertEqual("safety_boundary_training_harm", body["reason"])
         self.assertEqual(0, model.calls)
 
     def test_empty_retrieval_still_says_the_corpus_had_nothing(self):
         """The other half of the split: no_results keeps the original wording."""
-        client, _, model = client_for("REFUSE", reason="no_results")
-        with client:
-            response = client.post("/chat", json={"question": "코퍼스 밖 주제"})
-
-        body = response.json()
+        service, _, model = client_for("REFUSE", reason="no_results")
+        body = service.answer("코퍼스 밖 주제").model_dump()
         self.assertEqual("REFUSE", body["decision"])
         self.assertEqual(generation.REFUSAL_TEXT, body["answer"])
         self.assertEqual(0, model.calls)
 
-    def test_blank_question_is_rejected_at_the_http_boundary(self):
-        client, _, _ = client_for()
-        with client:
-            response = client.post("/chat", json={"question": "   "})
+    def test_blank_question_is_rejected_by_the_service(self):
+        service, _, _ = client_for()
+        with self.assertRaises(ValueError):
+            service.answer("   ")
 
-        self.assertEqual(422, response.status_code)
-
-    def test_healthz_identifies_the_active_models_without_a_model_call(self):
-        client, _, model = client_for()
-        with client:
-            response = client.get("/healthz")
-
-        self.assertEqual(200, response.status_code)
-        self.assertEqual("gemini-3.1-flash-lite", response.json()["generation_model"])
+    def test_runtime_identifies_generation_model_without_calling_it(self):
+        service, _, model = client_for()
+        self.assertEqual("gemini-3.1-flash-lite", service.model_name)
         self.assertEqual(0, model.calls)

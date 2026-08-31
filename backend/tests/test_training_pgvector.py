@@ -1,17 +1,16 @@
 import json
-import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "scripts"))
-from pgvector_runtime import (  # noqa: E402
+from daengs_training.retrieval.pgvector import (
     MIN_BOUNDARY_TERM_CHARS,
     RETRIEVAL_FLOOR_SCORE,
     SAFETY_BOUNDARY_TERMS,
     RuntimeRetriever,
 )
 
-import medical_guardrail  # noqa: E402
+from daengs_training.guardrails import medical as medical_guardrail
+from daengs_training.resources import RUNTIME_ROOT
 
 PASS_CONTROL_FILE = REPO / "data/eval/queries/gate_pass_controls_v1.jsonl"
 FROZEN_FILE = REPO / "data/eval/queries/training_api_eval_v1.jsonl"
@@ -135,8 +134,8 @@ def test_whitelist_pass_is_not_overruled_by_the_gate():
     question = "산책 중에 병원 앞을 지날 때 줄을 어떻게 잡아야 하나요?"
     verdict = medical_guardrail.classify_input_v2(
         question,
-        medical_guardrail.load_medical_terms_v2(REPO / "data/guardrail/medical_terms_v2.json"),
-        medical_guardrail.load_training_whitelist(REPO / "data/guardrail/training_whitelist_v1.json"),
+        medical_guardrail.load_medical_terms_v2(RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"),
+        medical_guardrail.load_training_whitelist(RUNTIME_ROOT / "data/guardrail/training_whitelist_v1.json"),
     )
     assert not verdict.is_medical
     assert verdict.whitelist_matched, "화이트리스트가 걸리지 않으면 이 테스트는 의미가 없다"
@@ -227,6 +226,6 @@ def test_boundary_terms_do_not_duplicate_medical_vocabulary():
     removed from the dictionary.  Medical questions reach this gate through
     classify_input_v2, never through a private copy of its words.
     """
-    medical = set(medical_guardrail.load_medical_terms_v2(REPO / "data/guardrail/medical_terms_v2.json"))
+    medical = set(medical_guardrail.load_medical_terms_v2(RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"))
     overlap = sorted(set(SAFETY_BOUNDARY_TERMS) & medical)
     assert not overlap, f"의료 사전과 중복된 경계 어휘: {overlap}"

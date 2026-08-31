@@ -22,7 +22,7 @@ from daengs_life.crawler.core.config import DATA_DIR, KST, require_data_dir  # n
 # realtime 만 조용히 달라진다. 공개 이름이 필요해지면 crawler 쪽에서 개명한다.
 from daengs_life.crawler.core.config import _ENV_FILES
 
-# 측정소 목록처럼 월 1회 갱신하는 **정적 메타**만 여기 둔다 (docs/realtime-apis.md §1).
+# 측정소 목록처럼 월 1회 갱신하는 **정적 메타**만 여기 둔다 (docs/life/realtime-apis.md §1).
 # 실황·예보는 절대 오지 않는다 — 그것이 이 패키지가 crawler 를 안 닮는 지점이다.
 REFERENCE_DIR: Path | None = DATA_DIR / "reference" if DATA_DIR else None
 
@@ -32,7 +32,7 @@ def normalize_key(value: str) -> str:
 
     data.go.kr 포털이 **같은 키를 Encoding/Decoding 두 벌**로 보여준다. httpx 가 `params` 를
     자동 인코딩하므로 맞는 것은 Decoding 형태이고, Encoding 키를 그대로 주면 `%2F` → `%252F`
-    이중 인코딩으로 실패한다 (docs/realtime-apis.md §6.1 함정 1 — 실측).
+    이중 인코딩으로 실패한다 (docs/life/realtime-apis.md §6.1 함정 1 — 실측).
 
     **판별이 확정적이라 오탐이 없다.** 키는 base64(`A-Za-z0-9+/=`) 아니면 hex 이고 두 알파벳
     어디에도 `%` 가 없다. 두 벌로 발급하는 것이 실측된 곳은 data.go.kr 하나지만, 알파벳 근거가
@@ -42,7 +42,7 @@ def normalize_key(value: str) -> str:
 
 
 class Settings(BaseSettings):
-    """realtime 이 쓰는 값 전부. 이름은 docs/data-sources.md §9 발급 체크리스트와 같다."""
+    """realtime 이 쓰는 값 전부. 이름은 docs/life/data-sources.md §9 발급 체크리스트와 같다."""
 
     # --- API 키 (RT-001 ① 전송 계약 3종과 1:1) ---
     # 미발급이면 빈 문자열이다. 없다고 import 시점에 터뜨리지 않는다 — 키 하나가 비어도

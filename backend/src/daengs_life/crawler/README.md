@@ -55,7 +55,7 @@ registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클
 
 ## API 키와 경로
 
-`backend/.env` 에 넣는다 (`backend/.env.example` 참고). 이름은 `docs/data-sources.md` §9 와 같다.
+`backend/.env` 에 넣는다 (`backend/.env.example` 참고). 이름은 `docs/life/data-sources.md` §9 와 같다.
 
 `core/config.py` 의 `Settings(BaseSettings)` 가 **pydantic-settings** 로 읽는다 (RAG-015).
 값을 추가하려면 필드를 선언하면 되고, 키라면 `_SECRET_FIELDS` 에도 이름을 넣어 마스킹 대상으로 만든다.
@@ -111,7 +111,7 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 
    API 소스는 여기서 `.meta.json` 의 `source_url` 에 키가 가려졌는지 반드시 눈으로 확인.
 4. **수집** — `run --source {id}`. `data/raw/{domain}/` 에 원본 + meta, `crawl_log.jsonl` 에 한 줄씩.
 5. **기록** — `data/` 의 수집 결과물은 **커밋하지 않는다** (원본·meta·크롤로그 전부 로컬, RAG-017).
-   대신 `docs/data-sources.md` 체크리스트에 수집 완료를 표시하고,
+   대신 `docs/life/data-sources.md` 체크리스트에 수집 완료를 표시하고,
    `data/README.md` 값 사전(subcategory 표)에 새 값을 추가한다.
 
 소스 모듈은 site-specific 지식만 가진다. 받기·저장·로그·변경 감지·예절은 전부 `core/` — 고치면 모든 소스에 적용된다.

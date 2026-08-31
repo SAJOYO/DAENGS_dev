@@ -51,9 +51,9 @@ _ENV_FILES = tuple(p for p in ((REPO_ROOT / ".env") if REPO_ROOT else None,
 
 
 class Settings(BaseSettings):
-    """crawler 가 쓰는 값 전부. 이름은 docs/data-sources.md §9 발급 체크리스트와 같다."""
+    """crawler 가 쓰는 값 전부. 이름은 docs/life/data-sources.md §9 발급 체크리스트와 같다."""
 
-    # --- 크롤 예절 (docs/data-sources.md §12) ---
+    # --- 크롤 예절 (docs/life/data-sources.md §12) ---
     user_agent: str = "daengs-life-crawler/0.1 (+mailto:choiyc05@gmail.com)"
     request_delay_sec: float = 1.5          # 같은 호스트 연속 요청 간격
     request_timeout_sec: float = 30

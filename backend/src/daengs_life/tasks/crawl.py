@@ -11,7 +11,7 @@
 
 ⚠ **쪼갠 이유는 병렬성이 아니다.** 워커는 `--concurrency 1 --queues crawl` 그대로이고 태스크들은
 순서대로 돈다. 동시성을 올리면 같은 호스트로 요청이 겹쳐 나가 `request_delay_sec` 1.5초가
-무의미해진다 (`docs/data-sources.md` §12).
+무의미해진다 (`docs/life/data-sources.md` §12).
 
 ⚠ **적재로 이어 붙이지 않는다** (카드 메모 ③ · RAG-002 · RAG-025). 바뀐 것이 있으면 경고 한 줄을
 남기고 멈춘다. `parse → chunk → embed → load` 는 GPU 와 검문소가 걸려 있어 사람이 랩을 뜨고
@@ -55,7 +55,7 @@ def crawl_source(self, source_id: str, trigger: str = "due") -> dict[str, object
     `crawl_due` 에서 떼어낸 이유는 재시도와 이력이지 **병렬성이 아니다.** 워커는 여전히
     `--concurrency 1 --queues crawl` 로 뜨고, 그래서 이 태스크들은 순서대로 돈다.
     동시성을 올리면 같은 호스트로 요청이 겹쳐 나가 `request_delay_sec` 1.5초가 무의미해지고,
-    그건 크롤 예절 위반이다 (`docs/data-sources.md` §12). **쪼갠 이유가 코드에 안 보이므로
+    그건 크롤 예절 위반이다 (`docs/life/data-sources.md` §12). **쪼갠 이유가 코드에 안 보이므로
     여기 적어 둔다** (RAG-047).
 
     **재시도는 시도마다 `crawl_runs` 에 한 행을 남긴다.** 합치지 않는 것이 의도다 — 세 번

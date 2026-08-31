@@ -1663,8 +1663,10 @@ URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았�
 - **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화형 요청은 해당
   업로드/UI 플로우로 HANDOFF 합니다.
 - **v1 실행 범위는 Training + Life + Walk.** Skin·Gait 는 인터페이스/어댑터 문서까지만 —
-  배포가 profile 뒤에 있고(D-024 · D-029), Skin 은 인증 경계가 동등하지 않고, Gait 는
-  분 단위 추론이라 동기 대화에 안 맞습니다.
+  Skin 은 #100/D-040 이후 main backend 에서 기술적으로 호출 가능해졌지만 multipart
+  업로드·통제 문구와 인증 경계 때문에 HANDOFF 역할을 유지하고, Gait 는 profile 뒤의
+  분 단위 추론이라 동기 대화에 안 맞습니다. Place·Journey 의 #99 소스 통합도 이 범위를
+  넓히지 않습니다.
 - **v1 프리미티브는 StateGraph · 일반 edge · 조건부 edge, `Send` 는 동적 fan-out 이
   실제로 필요할 때만.** `Command` 는 나중 선택지, 서브그래프 · checkpointer ·
   interrupt 는 v1 요구가 아닙니다.

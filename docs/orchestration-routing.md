@@ -131,8 +131,11 @@ Training 인지 Walk 인지 둘 다인지 단어로는 갈리지 않습니다 �
 ### 나머지 규칙
 
 - **Skin · Gait 로는 EXECUTE 하지 않습니다.** 대화에서 그 도메인이 감지되면 HANDOFF 입니다.
-  배포도 profile 뒤라 기본 꺼져 있습니다 (D-024 · D-029) — 라우팅이 가능해도 실행 대상이
-  없는 상태입니다.
+  Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
+  multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
+  HANDOFF 입니다. Gait 는 여전히 `gait` profile 뒤의 별도 프로세스이고 #98도 미머지입니다.
+  Place·Journey 역시 #99로 소스가 backend 프로젝트에 합쳐졌을 뿐 Card 1 EXECUTE 대상이
+  아닙니다. **기술 가용성은 오케스트레이션 범위 승인이 아닙니다.**
 - Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의 PENDING + job
   메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다.
 - 능력의 의존성이 일시적으로 죽어 있을 때(예: Training 의 전용 PGVector 컨테이너나

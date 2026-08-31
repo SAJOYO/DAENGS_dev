@@ -131,7 +131,7 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 (`services/training_rag.py` 의 내부 reason→공개 decision 매핑)가 이미 상류에서 갈라 둔
 구분입니다.
 
-### v1 매핑 (CONFIRMED — 상류 사실은 2026-08-31 dev 코드로 재검증)
+### v1 매핑 (CONFIRMED — 상류 사실은 2026-08-31 dev #101 코드로 재검증)
 
 | 상류 결과 | CapabilityResult |
 | --- | --- |

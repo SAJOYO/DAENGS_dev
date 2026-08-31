@@ -9,7 +9,7 @@
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `skin-screening` · `gait-analysis` · 오케스트레이션)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
 지금은 `life/` · `training/` 을 옮겼고 나머지 유닛은 별도 카드입니다(#82).

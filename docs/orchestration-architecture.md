@@ -26,6 +26,12 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 | **PM2 (호스트)** | Next.js 프론트 (`daengs-web`, cluster ×2) | standalone 빌드를 releases 폴더로 무중단 교체하는 배포 방식(아래 §4)이 호스트 프로세스를 전제로 합니다 |
 | **self-hosted GitHub Actions 러너** | 배포 워크플로우 (`deploy.yml`) | 배포 대상이 이 PC 자신이라 러너도 이 PC 에 있습니다. 러너가 꺼져 있으면 배포는 대기 상태로 멈춥니다 |
 
+기본 기동에서 FastAPI 프로세스는 **셋**입니다: `backend`, `place-search`,
+`journey-service`. Training·Life·Walk·Skin 은 `backend` 한 프로세스 안의 모듈/라우터이고,
+Place·Journey 는 소스와 lock 만 backend 프로젝트에 합쳤을 뿐 각자 별도 프로세스를
+유지합니다 (D-039). `gait-analysis` 는 `gait` profile 을 켰을 때만 추가되는 넷째
+FastAPI 프로세스입니다. self-hosted 러너는 배포 주체이지 요청 처리 프로세스가 아닙니다.
+
 크롤링(Celery worker · beat)은 #65 로 profile 이 떨어져 기본 세트로 뜹니다 — 매일
 KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-050, 루트 README 참고).
 
@@ -33,7 +39,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
 
 바깥에 열린 포트는 nginx 의 **80 과 8000 둘뿐**입니다. 백엔드 계열 컨테이너는 포트를
 열지 않고(D-005), 새 서비스가 생겨도 포트를 늘리지 않고 8000 에 경로를 얹습니다 —
-공유기 포트포워딩·방화벽·DNS 를 건드릴 일이 없고 HTTPS 도 나중에 한 번에 붙습니다 (D-024).
+공유기 포트포워딩·방화벽·DNS 를 건드릴 일이 없고 HTTPS 도 나중에 한 번에 붙습니다.
 
 ```
                      서버 PC (Windows)
@@ -44,11 +50,12 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
                      │                                                │
  daengback.~ :8000 ─▶│   /v2/places/* ─▶ place-search:8000  (rate limit)
                      │   /journey     ─▶ journey-service:8000         │
-                     │   /screen/*    ─▶ skin-screening:8000  (profile)
+                     │   /screen/*    ─▶ backend:8000  (daengs_screening)
                      │   /gait/*      ─▶ gait-analysis:8000   (profile)
                      │   그 외        ─▶ backend:8000                 │
                      └────────────────────────────────────────────────┘
-                          backend ─▶ pgvector:5432 · redis:6379
+                          backend (Training · Life · Walk · Skin)
+                                  ─▶ pgvector:5432 · redis:6379
                                   ─▶ training-rag-pgvector:5432 (Training 전용 PGVector)
                                   ─▶ Gemini API (Training·Life 생성)
                           place-search ─▶ place-db:5432 (자기 전용 PostGIS)
@@ -62,7 +69,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
 | :80 | `/api/*` | backend | 접두사를 rewrite 로 뗍니다. 로그인(httpOnly 쿠키)의 전제인 같은-오리진 경로 (D-015) |
 | :8000 | `/v2/places/*` | place-search | 공개 검색이라 IP 당 5r/s 제한 (D-028). 접두사 제거 없음 |
 | :8000 | `/journey` | journey-service | URI·본문 무변환. Place 의 rate limit 을 여기로 넓히지 않습니다 |
-| :8000 | `/screen/*` | skin-screening | profile 뒤 — 꺼져 있으면 이 경로만 502 |
+| :8000 | `/screen/*` | backend (`daengs_screening`) | 접두사 제거 없음. main backend 의 무인증 multipart 라우터이며 가중치는 첫 요청에 지연 로딩 (D-040) |
 | :8000 | `/gait/*` | gait-analysis | profile 뒤. 여기만 body 200m · timeout 600s (영상) |
 | :8000 | 그 외 | backend | 접두사 제거 없음 |
 
@@ -78,6 +85,12 @@ compose 가 컨테이너를 재생성하면 IP 가 바뀌는데, upstream 블록
 **기본 기동** — nginx · backend · pgvector · **training-rag-pgvector** · redis ·
 place-search · place-db · journey-service · crawler-worker · crawler-beat
 
+- Skin 은 더 이상 별도 compose 서비스/profile 이 아닙니다 (#100, D-040). 소스는
+  `backend/src/daengs_screening/`, 라우터는 main backend 의 `/screen/*` 에 등록되고,
+  가중치 디렉터리도 backend 에 read-only 로 마운트됩니다. backend 는 기동 때
+  `ml` 과 `screening` dependency group 을 함께 동기화하며, #101 이 빠져 있던 screening
+  lock 항목을 복구했습니다. 모델은 backend 기동이 아니라 첫 `/screen/v1/screen`
+  요청 때 로드됩니다.
 - backend 는 pgvector·**training-rag-pgvector**·redis 의 **healthy 를 기다립니다.**
   training-rag-pgvector 는 Training 능력 전용 PGVector 로, 본체 DB 와 컨테이너·볼륨
   (`training-rag-pgdata`)·스키마(`backend/infra/training_pgvector/schema.sql`, 768차원)가
@@ -95,7 +108,6 @@ place-search · place-db · journey-service · crawler-worker · crawler-beat
 
 | profile | 서비스 | 상태와 이유 |
 | --- | --- | --- |
-| `screening` | skin-screening | 가중치(163/189MB)가 저장소에 없어 서버 디스크의 `SCREENING_RELEASE_DIR` 를 물려야 합니다 (D-022 · D-024) |
 | `gait` | gait-analysis | 같은 방식. 가중치 2개를 `GAIT_RELEASE_DIR` 로 물립니다 (D-029) |
 | `tools` | pgadmin | GUI 가 필요할 때만. 로그인 없는 모드라 띄워 둔 동안 누구나 접근 가능합니다 |
 
@@ -107,7 +119,7 @@ crawler-worker · crawler-beat 의 `crawler` profile 은 #65(코퍼스 서버 �
 소스는 이미지에 굽지 않고 바인드 마운트라, 코드 수정은 리로드로 반영되고 재시작이
 필요한 것은 의존성이 바뀌었을 때뿐입니다.
 
-venv 는 서비스마다 **별도 named volume** 입니다. 특히 backend(`--group ml`, torch 포함)와
+venv 는 서비스마다 **별도 named volume** 입니다. 특히 backend(`--group ml --group screening`, torch 포함)와
 크롤러는 볼륨을 합치면 크롤러의 exact `uv sync` 가 torch 를 지워 `/ask` 만 조용히 503 이
 됩니다 — 볼륨 분리가 그 사고를 구조적으로 막는 장치입니다 (상세는 compose 의
 crawler-worker 주석과 CLAUDE.md).
@@ -153,7 +165,10 @@ C:\deploy\daengs\
 
 부분 장애의 모양을 알아두면 진단이 빠릅니다:
 
-- profile 서비스가 꺼져 있으면 **그 경로만 502**, 나머지는 멀쩡합니다.
+- `gait` profile 이 꺼져 있으면 **`/gait/*` 만 502**, 나머지는 멀쩡합니다.
+- Screening 가중치가 없거나 손상되면 `/screen/v1/screen` 은 503 입니다. Skin 은 이제
+  backend 와 프로세스를 공유하므로 backend 자체가 죽으면 로그인·`/ask` 를 포함한 main
+  API 전체가 함께 영향을 받습니다 (D-040).
 - backend 의 `ml` 그룹이 지워지면 **`/ask` 만 503**, 다른 API 는 멀쩡하고 로그도
   조용합니다 (CLAUDE.md 의 `uv sync` 함정).
 - backend 재생성 직후 최대 10초는 nginx 가 옛 IP 로 갈 수 있습니다 (resolver `valid=10s`).
@@ -208,24 +223,28 @@ Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 �
 `Send` 는 동적 다중 능력 fan-out 이 **실제로 필요할 때만**. `Command` 는 나중 선택지.
 서브그래프 · checkpointer · interrupt 는 v1 요구사항이 아닙니다.
 
-## 능력 현실 · 준비도 (CURRENT — 2026-08-31, dev #97 기준)
+## 능력 현실 · 준비도 (CURRENT — 2026-08-31, dev #101 기준)
 
 능력들이 대칭이라고 가정하면 설계가 틀어집니다. 이 표가 **능력 준비도의 단일 원본**입니다
 — 다른 문서는 여기로 링크하고 같은 표를 두 번 만들지 않습니다.
 
-| 능력 | 지금 저장소·배포 상태 | v1 역할 | 호출 형태 | 지금 실행 가능? | 막는 것 · 비고 |
+| 능력 | 현재 소스·런타임 가용성 | Card 1 오케스트레이션 역할 | 호출 형태 | 현재 기술 호출 가능? | 막는 것 · 비고 |
 | --- | --- | --- | --- | --- | --- |
 | **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 전용 PGVector 컨테이너 | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). ⚠️ 실패가 단일 503 로 접혀 TIMEOUT/ERROR 구분 불가 (contracts §4 의 구현 관심사) |
 | **Life** | backend `POST /ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가만 `unknown`(503+전체 본문) — ABSTAINED 후보 (어댑터 카드에서 확정) |
-| **Skin** | 구현·compose·nginx 연결 완료, **profile 이라 기본 꺼짐** (D-024). `/screen/v1/screen` 은 **무인증 업로드** (#79) | HANDOFF 만 | — (실행 안 함) | 아니오 — HANDOFF 전용 | 인수인계 계약은 PR #79: `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음 (D-023), 이력 기능은 저장소 결정(#78) 뒤. 무인증 엔드포인트는 켜기 전 별도 카드 |
-| **Gait** | 구현·compose·nginx 연결 완료, **profile 이라 기본 꺼짐** (D-029). 무인증. backend 편입 브랜치(`refactor/gait-into-backend`)는 **미머지** | HANDOFF 만 | — (실행 안 함) | 아니오 — HANDOFF 전용 | 분 단위 영상 추론이라 동기 대화에 안 맞음 — 들어올 때는 PENDING + job 메타데이터 경로 (orchestration-contracts.md) |
-| **Place** | place-search + journey-service — 기본 기동·배포 스모크 대상. 무인증 공개 API (rate limit 만, D-028) | v1 실행 대상 아님 — `handoffs[].target` 후보 (`place`, docs/life/roadmap.md §2 제안) | — | 아니오 (v1 범위 밖) | 장소 데이터는 place 소유 (D-026). 핸드오프 식별자 표 확정은 통합 때 사람 결정 (roadmap §6) |
+| **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
+| **Gait** | 구현은 최상위 `gait-analysis/` 별도 FastAPI/venv/볼륨에 있고 `gait` profile 로 기본 꺼짐(D-029). backend-src 이관 PR #98은 **OPEN/미머지** | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖춰야 직접 API 호출 가능 | 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (orchestration-contracts.md) |
+| **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. `/v2/places/*` 공개 API는 rate limit 적용 | v1 실행 대상 아님 — `handoffs[].target` 후보 (`place`, docs/life/roadmap.md §2 제안) | 별도 프로세스 직접 API | **예** | 소스/project 통합은 런타임 또는 Card 1 편입이 아닙니다. 장소 데이터는 Place 소유(D-026·D-039); 핸드오프 식별자 확정은 통합 카드의 사람 결정 |
+| **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
 
-Skin·Gait 를 v1 에서 뺀 것은 미구현이라서가 아닙니다(둘 다 구현돼 있습니다).
-배포가 꺼져 있고, 인증 경계가 다르고(Skin — 무인증 업로드), 동기 대화 응답 시간에 안
-맞아서(Gait)입니다. Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터
-경로(orchestration-contracts.md)를 씁니다 — 그 자리를 계약에 미리 잡아 두는 이유입니다.
+Skin 이 main backend 에서 기술적으로 호출 가능해진 것은 **런타임 사실의 변화**이지
+Card 1 역할의 변화가 아닙니다. multipart 이미지 획득과 통제 문구 보존이 필요한 전용
+플로우라 대화 진입은 계속 HANDOFF 입니다. 인증·rate limit 이 없는 위험도 별도 컨테이너를
+켜는 순간의 문제가 아니라 **현재 main backend 라우터의 보안 후속**으로 남습니다.
+Gait 도 구현돼 있지만 profile·가중치가 필요하고 동기 대화 시간에 맞지 않아 HANDOFF 입니다.
+미래에 실행할 때는 CapabilityResult 의 PENDING + job 메타데이터 경로를 씁니다. Place와
+Journey 역시 기술적으로 호출 가능하지만 승인된 Card 1 실행 범위에는 들어오지 않습니다.
 
 **Skin 결과를 다른 능력과 합성할 때도** (PR #79 의 2번 — 스크리닝 결과 + Life 제도 정보)
 Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM 이 요약·재작성하지

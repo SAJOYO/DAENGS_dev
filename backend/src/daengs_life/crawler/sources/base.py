@@ -45,6 +45,10 @@ class Source(ABC):
     format: str                              # pdf | hwp | hwpx | html | xml | json
     trust_level: str                         # law | official | guideline
     license: str = ""
+    # 변경 감지 지문을 무엇으로 낼지. 기본은 원본 바이트고 html 은 늘 텍스트다 (store.py 머리).
+    # `"text"` 로 두면 다른 format 도 `extract().text` 로 지문을 낸다 — 응답에 총건수·타임스탬프처럼
+    # **문서와 무관하게 매번 바뀌는 값**이 박혀 오는 API 가 쓴다 (seoul-notice-api, RAG-053).
+    fingerprint: str = "bytes"               # bytes | text
 
     def __init__(self, seed: dict[str, Any]) -> None:
         self.seed = seed                     # yaml 항목 원본 (org, title, url, notes …)

@@ -111,6 +111,45 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
 | openapi 경로 5개 | 이관 전과 동일 |
 | 추론 시간 | 152초 → 142초 (같은 수준, CPU) |
 
+## 2026-08-31 — 서버 첫 추론에서 버그 발견: opencv GUI 빌드
+
+서버에서 실제 영상으로 `/v1/analyze` 를 처음 부르자 **500** 이 났습니다.
+
+```
+ImportError: libxcb.so.1: cannot open shared object file
+  ← daengs_gait/keypoint_infer.py 의 `import cv2`
+```
+
+`opencv-python` 은 **GUI 빌드**라 X11 공유 라이브러리(libxcb·libGL 등)를 요구하는데
+`python:3.12-slim` 컨테이너에는 없습니다.
+
+**왜 지금까지 몰랐나** — 세 겹으로 가려져 있었습니다.
+
+1. **개발 PC 는 Windows** 라 그 의존성이 필요 없습니다. 테스트 30개도, 실제 추론
+   (121차원 feature, overlay 생성)도 전부 통과했습니다.
+2. **`/healthz` 는 `cv2` 를 import 하지 않습니다** — 가중치 파일 존재만 봅니다.
+   그래서 컨테이너가 `ready:true` 를 내며 멀쩡해 보였습니다.
+3. **`serve.py` 가 무거운 import 를 함수 안으로 미뤄 둡니다**(업로드 한도 검사를
+   import 보다 먼저 하려고). 그래서 기동 시점이 아니라 **첫 분석 요청**에서 터집니다.
+
+즉 **컨테이너에서 실제 분석을 한 번 돌려야만 나오는 버그**였습니다.
+
+**고친 방법** — `opencv-python-headless` 로 교체. gait 코드가 쓰는 cv2 함수를 전수
+조사했더니 `VideoCapture`·`line`·`circle`·`putText`·`resize`·`cvtColor`·`Laplacian`
+뿐이고 **GUI 함수(`imshow`·`waitKey` 등)는 하나도 없어서** 동작이 같습니다.
+
+⚠️ **`ultralytics` 가 `opencv-python` 을 필수 의존성으로 끌고 옵니다.** 그래서 그룹
+선언만 바꾸면 GUI 판과 headless 판이 **둘 다** 깔리고, 같은 `cv2` 네임스페이스를
+다퉈서 GUI 판이 이기면 다시 터집니다. `[tool.uv] override-dependencies` 로 GUI 판을
+막았습니다 — **그 override 와 그룹 선언은 한 쌍이라 하나만 지우면 재발합니다.**
+
+⚠️ **이 버그는 `dev` 에 배포된 코드(PR #62)에도 있습니다.** PR #98 이 만든 게 아닙니다.
+#98 이 머지되면 같이 고쳐집니다.
+
+대안으로 `docker/uv/Dockerfile` 에 X11 라이브러리를 넣는 방법도 있었지만, **그
+Dockerfile 을 7개 서비스가 공유**해서 backend·place-search·crawler 까지 안 쓰는
+라이브러리를 받게 되므로 택하지 않았습니다.
+
 ## 알아 두면 좋은 것 (반복해서 부딪힌 자리)
 
 - **결정 번호는 착수할 때 예약하세요.** `dev` 의 목차만 보면 부족합니다 — 열린 브랜치가
@@ -130,7 +169,8 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
 **`gait-analysis` 서비스만 지정해** 띄웠습니다 (`up -d` 만 쓰면 11개를 전부 건드립니다).
 
 ```powershell
-Add-Content .env "`nGAIT_RELEASE_DIR=C:\deploy\daengs\modelselease\gait-analysis"
+Add-Content .env "`nGAIT_RELEASE_DIR=C:\deploy\daengs\models
+elease\gait-analysis"
 docker compose --profile gait up -d gait-analysis
 curl.exe -s http://localhost:8000/gait/healthz
 ```
@@ -149,7 +189,8 @@ curl.exe -s http://localhost:8000/gait/healthz
 설치된 패키지(torch·torchvision·ultralytics·opencv)가 PR #98 의 `gait` 그룹 내용과
 같아서, 머지 후에도 같은 결과가 나올 것으로 봅니다.
 
-⚠️ 서버 `.env` 의 `SCREENING_RELEASE_DIR` 이 `C:\deploy\daengs\modelselease` 이고
+⚠️ 서버 `.env` 의 `SCREENING_RELEASE_DIR` 이 `C:\deploy\daengs\models
+elease` 이고
 gait 가 그 **하위 폴더**입니다. 동작에는 문제없지만(스크리닝은 `checkpoints/stage1_*`
 패턴만 찾습니다) 스크리닝이 가중치를 못 찾을 때의 에러 목록에 `gait-analysis/` 가 같이
 뜹니다. 나중에 헷갈릴 수 있는 자리입니다.

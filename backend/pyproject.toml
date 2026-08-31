@@ -47,6 +47,17 @@ kakao-token = "daengs_backend.cli.kakao_token:main"
 # **리눅스를 안 적으면 CUDA 판이 온다.** PyPI 의 기본 torch 휠은 NVIDIA 런타임을 동봉하고
 # 있어서, 마커가 win32 뿐이면 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받는다. D-021 로
 # 서버에 torch 가 생기면서 실제로 물리는 자리가 됐다.
+# `ultralytics` 가 `opencv-python`(GUI 빌드)을 **필수 의존성으로** 끌고 옵니다.
+# 그대로 두면 gait 그룹에 GUI 판과 headless 판이 **둘 다** 깔리고, 둘은 같은 `cv2`
+# 네임스페이스를 다퉈서 어느 쪽이 로드될지 설치 순서에 달립니다. GUI 판이 이기면
+# 컨테이너에서 `ImportError: libxcb.so.1` 로 죽습니다.
+#
+# override 로 headless 를 강제합니다 — 이 서비스는 창을 띄우지 않으므로 API 는 같습니다.
+# ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 ultralytics
+#   가 다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
+[tool.uv]
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
+
 [[tool.uv.index]]
 name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
@@ -108,7 +119,15 @@ ml = [
 gait = [
     "imageio-ffmpeg>=0.4",       # overlay 인코딩 · 업로드 mp4 변환 (정적 ffmpeg 바이너리)
     "numpy>=2",
-    "opencv-python>=4.8",
+    # ⚠ **`opencv-python` 이 아니라 `-headless` 입니다.** 전자는 GUI 빌드라 X11 공유
+    #   라이브러리(libxcb·libGL 등)를 요구하는데 `python:3.12-slim` 컨테이너에는 없습니다.
+    #   **개발 PC(Windows)에서는 절대 안 드러납니다** — 거기선 그 의존성이 필요 없어서
+    #   테스트도 추론도 다 통과합니다. 서버 컨테이너에서 첫 분석 요청을 보내야만
+    #   `ImportError: libxcb.so.1` 로 터집니다 (2026-08-31 실제로 겪음).
+    #   `/healthz` 는 파일 존재만 보고 cv2 를 import 하지 않아 `ready:true` 로 멀쩡히
+    #   나옵니다 — 그래서 기동만으로는 알 수 없습니다.
+    #   이 서비스는 화면을 띄우지 않으므로 headless 로 충분합니다(API 동일).
+    "opencv-python-headless>=4.8",
     "torch>=2.6",
     "ultralytics>=8.0",
 ]

@@ -1,0 +1,203 @@
+"""Approved orchestration contracts from D-033 and D-034 as Python types."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any, Literal, TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class ContractModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class CapabilityName(StrEnum):
+    TRAINING = "training"
+    LIFE = "life"
+    WALK = "walk"
+
+
+class CapabilityStatus(StrEnum):
+    OK = "OK"
+    ABSTAINED = "ABSTAINED"
+    REFUSED = "REFUSED"
+    PENDING = "PENDING"
+    ERROR = "ERROR"
+    TIMEOUT = "TIMEOUT"
+
+
+class AssistantStatus(StrEnum):
+    ANSWERED = "ANSWERED"
+    PARTIAL = "PARTIAL"
+    CLARIFY = "CLARIFY"
+    HANDOFF = "HANDOFF"
+    UNCERTAIN = "UNCERTAIN"
+    REFUSED = "REFUSED"
+    PENDING = "PENDING"
+    FAILED = "FAILED"
+
+
+class RouterKind(StrEnum):
+    DETERMINISTIC = "deterministic"
+    LLM = "llm"
+
+
+class PrincipalContext(ContractModel):
+    """Already-verified identity metadata; raw credentials have no field here."""
+
+    subject: str = Field(min_length=1)
+    kind: Literal["ADMIN", "APP_USER"]
+    permissions: tuple[str, ...] = ()
+
+
+class TrainingPayload(ContractModel):
+    question: str = Field(min_length=1, max_length=1_000)
+
+
+class LifePayload(ContractModel):
+    question: str = Field(min_length=1, max_length=500)
+
+
+class WalkPayload(ContractModel):
+    lat: float = Field(ge=33.0, le=39.0)
+    lon: float = Field(ge=124.0, le=132.0)
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload
+_PAYLOAD_TYPES = {
+    CapabilityName.TRAINING: TrainingPayload,
+    CapabilityName.LIFE: LifePayload,
+    CapabilityName.WALK: WalkPayload,
+}
+
+
+class CapabilityRequest(ContractModel):
+    capability: CapabilityName
+    payload: CapabilityPayload
+    timeout_ms: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_capability_payload(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        capability = CapabilityName(data.get("capability"))
+        payload_type = _PAYLOAD_TYPES[capability]
+        data["payload"] = payload_type.model_validate(data.get("payload"))
+        return data
+
+    @model_validator(mode="after")
+    def payload_matches_capability(self) -> CapabilityRequest:
+        expected = _PAYLOAD_TYPES[self.capability]
+        if not isinstance(self.payload, expected):
+            raise TypeError(f"{self.capability.value} requires {expected.__name__}")
+        return self
+
+
+class Handoff(ContractModel):
+    target: str = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class ClarifyRequest(ContractModel):
+    question: str = Field(min_length=1, max_length=500)
+    missing: list[str] = Field(min_length=1)
+
+
+class RoutePlan(ContractModel):
+    requests: list[CapabilityRequest] = Field(default_factory=list)
+    handoffs: list[Handoff] = Field(default_factory=list)
+    clarify: ClarifyRequest | None = None
+    router: RouterKind
+    model: str | None = None
+
+    @model_validator(mode="after")
+    def clarify_is_exclusive(self) -> RoutePlan:
+        if self.clarify is not None and (self.requests or self.handoffs):
+            raise ValueError("clarify is exclusive with requests and handoffs")
+        return self
+
+
+class OutcomeDetail(ContractModel):
+    code: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=1_000)
+
+
+class PendingJob(ContractModel):
+    job_id: str = Field(min_length=1, max_length=200)
+    poll: str = Field(min_length=1, max_length=1_000)
+
+
+class ErrorDetail(ContractModel):
+    kind: str = Field(min_length=1, max_length=200)
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class CapabilityResult(ContractModel):
+    capability: CapabilityName
+    status: CapabilityStatus
+    data: dict[str, Any] | None = None
+    abstention: OutcomeDetail | None = None
+    refusal: OutcomeDetail | None = None
+    job: PendingJob | None = None
+    error: ErrorDetail | None = None
+    elapsed_ms: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def status_has_matching_metadata(self) -> CapabilityResult:
+        required = {
+            CapabilityStatus.ABSTAINED: ("abstention", self.abstention),
+            CapabilityStatus.REFUSED: ("refusal", self.refusal),
+            CapabilityStatus.PENDING: ("job", self.job),
+            CapabilityStatus.ERROR: ("error", self.error),
+            CapabilityStatus.TIMEOUT: ("error", self.error),
+        }
+        if self.status == CapabilityStatus.OK and self.data is None:
+            raise ValueError("OK requires data")
+        if self.status in required and required[self.status][1] is None:
+            raise ValueError(f"{self.status.value} requires {required[self.status][0]}")
+        return self
+
+
+class AssistantResponse(ContractModel):
+    request_id: str = Field(min_length=1)
+    status: AssistantStatus
+    message: str
+    results: list[CapabilityResult] = Field(default_factory=list)
+    handoffs: list[Handoff] = Field(default_factory=list)
+    clarify: ClarifyRequest | None = None
+
+
+class OrchestratorState(TypedDict):
+    request_id: str
+    principal: PrincipalContext
+    query: str
+    locale: Literal["ko-KR"]
+    context: dict[str, Any]
+    route_plan: RoutePlan
+    results: list[CapabilityResult]
+    response: AssistantResponse | None
+
+
+__all__ = [
+    "AssistantResponse",
+    "AssistantStatus",
+    "CapabilityName",
+    "CapabilityRequest",
+    "CapabilityResult",
+    "CapabilityStatus",
+    "ClarifyRequest",
+    "ErrorDetail",
+    "Handoff",
+    "LifePayload",
+    "OrchestratorState",
+    "OutcomeDetail",
+    "PendingJob",
+    "PrincipalContext",
+    "RoutePlan",
+    "RouterKind",
+    "TrainingPayload",
+    "WalkPayload",
+]

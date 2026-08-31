@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
+
+import httpx
 
 from daengs_training import service as rag_service
-from daengs_training.service import RAGService, load_serving_document_ids
 from daengs_training.generation import gemini as generation
 from daengs_training.retrieval.pgvector import RuntimeRetriever
+from daengs_training.service import RAGService, TrainingTimeoutError, load_serving_document_ids
 
 
 class FakeRetriever:
@@ -49,6 +52,11 @@ class FakeClient:
         return self.answer
 
 
+class TimeoutClient(FakeClient):
+    def complete(self, prompt: str, record: dict) -> str:
+        raise generation.GenerationTimeoutError("provider deadline")
+
+
 def client_for(
     decision: str = "PASS", *, medical_terms: list[str] | None = None,
     answer: str = "[1] 산책은 짧고 차분하게 시작해 보세요.",
@@ -67,6 +75,27 @@ def client_for(
 
 
 class RAGApiTests(unittest.TestCase):
+    def test_gemini_timeout_keeps_a_typed_provider_signal(self):
+        client = generation.load_gemini_answer_client(api_key="test-key")
+        with patch.object(
+            generation.httpx,
+            "post",
+            side_effect=httpx.ReadTimeout("deadline"),
+        ), self.assertRaises(generation.GenerationTimeoutError):
+            client.complete("prompt", {})
+
+    def test_training_domain_preserves_generation_timeout(self):
+        retriever = FakeRetriever()
+        service = RAGService(
+            retriever=retriever,
+            client=TimeoutClient(),
+            medical_terms=[],
+            whitelist_terms=[],
+            serving_document_ids=("fixture-doc",),
+        )
+        with self.assertRaises(TrainingTimeoutError):
+            service.answer("산책 훈련은 어떻게 시작하나요?")
+
     def test_serving_corpus_is_a_nonempty_unique_reviewed_allow_list(self):
         document_ids = load_serving_document_ids()
         self.assertEqual(14, len(document_ids))

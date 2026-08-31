@@ -66,6 +66,11 @@ Training 인지 Walk 인지 둘 다인지 단어로는 갈리지 않습니다 �
 - HANDOFF 는 실패가 아닙니다. multipart 이미지·영상 워크플로(Skin·Gait)는 전용 API 에
   남는다는 확정 경계(architecture §논리 오케스트레이션)의 라우팅 쪽 표현입니다.
   대상 플로우 식별자를 각 `handoffs[].target` 에 담아 프론트가 이동시킬 수 있게 합니다.
+  Skin 핸드오프의 인수인계 계약은 **PR #79** 가 원본입니다 — "우리 개 피부가 이상해"
+  류 텍스트 진입 → 업로드 플로우 유도, 결과 문구(`headline`·`body`·`disclaimer` 등)
+  무수정 통과, 대화 이력 활용은 저장소 결정(#78) 뒤 (architecture §능력 현실 표).
+  Life 쪽 핸드오프 식별자 후보(`medical`·`emergency`·`training`·`place`)는
+  docs/life/roadmap.md §2·§6 의 제안이고 확정은 사람 몫입니다.
 - **stateless CLARIFY (CONFIRMED — O-8)**: v1 에 checkpointer 는 없습니다. CLARIFY 는
   현재 그래프 실행을 종료하고, 클라이언트가 **원 질의 + 새로 채운 구조화 컨텍스트**로
   새 `/assistant/query` 요청을 보냅니다. 서버는 그것을 새 요청으로 취급하며 continuation
@@ -130,12 +135,15 @@ Training 인지 Walk 인지 둘 다인지 단어로는 갈리지 않습니다 �
   없는 상태입니다.
 - Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의 PENDING + job
   메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다.
-- 능력이 일시적으로 죽어 있을 때(예: Training 호스트 프로세스 다운) 그 실패는 REFUSED 도
-  ABSTAINED 도 아니라 ERROR 입니다 (contracts §6 불변식 1). **실패한 능력을 무관한 능력으로
-  조용히 폴백하지 않고**, 성공한 독립 결과는 보존합니다 (O-10).
+- 능력의 의존성이 일시적으로 죽어 있을 때(예: Training 의 전용 PGVector 컨테이너나
+  Gemini 호출 실패 — #94 이후 Training 은 backend 프로세스 안이므로 "프로세스 다운"이
+  아니라 의존성 실패입니다) 그 실패는 REFUSED 도 ABSTAINED 도 아니라 ERROR 입니다
+  (contracts §6 불변식 1). **실패한 능력을 무관한 능력으로 조용히 폴백하지 않고**,
+  성공한 독립 결과는 보존합니다 (O-10).
 - 독립 능력의 동시 실행은 허용하되, 능력 선언형 정책 DSL 은 만들지 않습니다 — v1 은
   오케스트레이터 안의 단순 정적 상수로 충분합니다 (O-10). `Send` 는 구현이 실제로 득을
-  볼 때만 씁니다. 타임아웃 수치·서버 Training 동시성·GPU 한계는 서버 실측까지 PENDING.
+  볼 때만 씁니다. 타임아웃 수치·monolith 동시성 한계는 운영 실측까지 FOLLOW-UP
+  (#94 가 운영 관찰 항목으로 넘김 — architecture §서버 재구축 상태).
 
 ## 6. 사람 결정 이력 — 전부 해결됨 (2026-08-30)
 

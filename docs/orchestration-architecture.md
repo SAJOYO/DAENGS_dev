@@ -14,20 +14,20 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 > **CONFIRMED** = 확정된 설계 제약 · **OPEN** = 사람 결정 대기 · **PENDING** = 검증 대기 ·
 > **FOLLOW-UP** = 별도 카드로 후속.
 
-## 실행 주체는 넷입니다
+## 실행 주체는 셋입니다
 
-서버 PC(Windows) 한 대 위에서 네 가지 방식으로 프로세스가 돕니다. 하나로 합치지 않은
-것은 각각 이유가 있습니다.
+서버 PC(Windows) 한 대 위에서 세 가지 방식으로 프로세스가 돕니다. 하나로 합치지 않은
+것은 각각 이유가 있습니다. (Training RAG 가 호스트 단독 프로세스(`:8010`)였던 넷째 주체는
+#83·#94 로 사라졌습니다 — backend 프로세스 안의 `daengs_training` 모듈이 됐습니다.)
 
 | 주체 | 무엇을 띄우나 | 왜 여기인가 |
 | --- | --- | --- |
-| **Docker Compose** | nginx · backend · pgvector · redis · place-search · place-db (+ profile 뒤의 것들) | 리눅스 컨테이너로 통일된 런타임. `restart: unless-stopped` 라 Docker Desktop 이 뜨면 같이 살아납니다 |
+| **Docker Compose** | nginx · backend · pgvector · training-rag-pgvector · redis · place-search · place-db · journey-service · crawler-worker · crawler-beat (+ profile 뒤의 것들) | 리눅스 컨테이너로 통일된 런타임. `restart: unless-stopped` 라 Docker Desktop 이 뜨면 같이 살아납니다 |
 | **PM2 (호스트)** | Next.js 프론트 (`daengs-web`, cluster ×2) | standalone 빌드를 releases 폴더로 무중단 교체하는 배포 방식(아래 §4)이 호스트 프로세스를 전제로 합니다 |
-| **호스트 단독 프로세스** | Training RAG FastAPI (`:8010`) | DAENGS 저장소 바깥의 별도 서비스입니다. backend 가 `host.docker.internal:8010` 으로 호출만 합니다 (`docs/training-rag-demo.md`) |
 | **self-hosted GitHub Actions 러너** | 배포 워크플로우 (`deploy.yml`) | 배포 대상이 이 PC 자신이라 러너도 이 PC 에 있습니다. 러너가 꺼져 있으면 배포는 대기 상태로 멈춥니다 |
 
-크롤링(Celery worker · beat)은 Compose 안에 정의돼 있지만 `profiles: ["crawler"]` 뒤라
-지금은 뜨지 않고, 개발 PC 에서 수동 실행합니다 (RAG-044, 루트 README 참고).
+크롤링(Celery worker · beat)은 #65 로 profile 이 떨어져 기본 세트로 뜹니다 — 매일
+KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-050, 루트 README 참고).
 
 ## 요청이 지나는 길
 
@@ -49,7 +49,8 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
                      │   그 외        ─▶ backend:8000                 │
                      └────────────────────────────────────────────────┘
                           backend ─▶ pgvector:5432 · redis:6379
-                                  ─▶ host.docker.internal:8010 (Training RAG, 호스트)
+                                  ─▶ training-rag-pgvector:5432 (Training 전용 PGVector)
+                                  ─▶ Gemini API (Training·Life 생성)
                           place-search ─▶ place-db:5432 (자기 전용 PostGIS)
 ```
 
@@ -74,9 +75,13 @@ compose 가 컨테이너를 재생성하면 IP 가 바뀌는데, upstream 블록
 
 `docker compose up -d` 로 뜨는 기본 세트와, profile 을 명시해야 뜨는 것들이 나뉩니다.
 
-**기본 기동** — nginx · backend · pgvector · redis · place-search · place-db
+**기본 기동** — nginx · backend · pgvector · **training-rag-pgvector** · redis ·
+place-search · place-db · journey-service · crawler-worker · crawler-beat
 
-- backend 는 pgvector·redis 의 **healthy 를 기다립니다.** redis 는 없어도 앱이 뜨지만,
+- backend 는 pgvector·**training-rag-pgvector**·redis 의 **healthy 를 기다립니다.**
+  training-rag-pgvector 는 Training 능력 전용 PGVector 로, 본체 DB 와 컨테이너·볼륨
+  (`training-rag-pgdata`)·스키마(`backend/infra/training_pgvector/schema.sql`, 768차원)가
+  분리돼 있습니다 (#92·#94). redis 는 없어도 앱이 뜨지만,
   캐시 폴백 판단이 프로세스 생애에 한 번뿐이라 순서를 보장해야 일 예산 카운터가
   동작합니다 (D-019).
 - place-search 는 place-db(PostGIS) healthy 후 **Alembic 을 돌리고 나서** 서버를 띄웁니다.
@@ -92,8 +97,10 @@ compose 가 컨테이너를 재생성하면 IP 가 바뀌는데, upstream 블록
 | --- | --- | --- |
 | `screening` | skin-screening | 가중치(163/189MB)가 저장소에 없어 서버 디스크의 `SCREENING_RELEASE_DIR` 를 물려야 합니다 (D-022 · D-024) |
 | `gait` | gait-analysis | 같은 방식. 가중치 2개를 `GAIT_RELEASE_DIR` 로 물립니다 (D-029) |
-| `crawler` | crawler-worker · crawler-beat | **서버에 코퍼스(`data/`)가 없어서 꺼 둡니다.** 켜면 전 소스가 due 로 잡혀 개발 PC 와 별개의 코퍼스를 새로 만듭니다 (RAG-044). 코퍼스 이전 카드에서 profile 을 뗍니다 |
 | `tools` | pgadmin | GUI 가 필요할 때만. 로그인 없는 모드라 띄워 둔 동안 누구나 접근 가능합니다 |
+
+crawler-worker · crawler-beat 의 `crawler` profile 은 #65(코퍼스 서버 이관)가 뗐습니다 —
+이제 기본 세트입니다.
 
 파이썬 서비스 컨테이너는 전부 **같은 uv 베이스 이미지(`uv:1`)** 를 쓰고, 기동 시
 `uv sync --frozen [--group/--extra ...] && exec uv run --no-sync ...` 한 가지 모양입니다.
@@ -116,8 +123,9 @@ C:\deploy\daengs\
    current  ──(junction)──▶ releases\...\
 ```
 
-1. `docker compose config --quiet` — 필수 환경 변수(`DAENGS_TRAINING_RAG_BASE_URL` 등)가
-   비어 있으면 컨테이너를 건드리기 전에 실패시킵니다.
+1. 필수 환경 변수 검증 — `GEMINI_API_KEY` 가 서버 `backend/.env` 에 없거나 비어 있으면
+   컨테이너를 건드리기 전에 실패시키고, 이어 `docker compose config --quiet` 로 compose
+   정의를 검증합니다.
 2. `npm ci && npm run build` 후 standalone 산출물을 **새 릴리스 폴더**에 복사합니다.
    실행 중인 폴더와 빌드 폴더가 달라 Windows 파일 잠김(EBUSY)이 없습니다.
 3. `current` junction 만 새 폴더로 갈아끼우고 `pm2 startOrReload` — cluster 모드라 워커를
@@ -143,15 +151,15 @@ C:\deploy\daengs\
 같이 종료되어 "배포는 성공했는데 서비스는 내려간" 상태가 됩니다. 이 절차를 일부러
 자동화하지 않은 것까지 포함해 루트 README §서버 PC 재부팅 후가 원본입니다.
 
-Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절차는
-`docs/training-rag-demo.md`, 컨테이너에서 닿으려면 `0.0.0.0:8010` 바인딩이어야 합니다.
-
 부분 장애의 모양을 알아두면 진단이 빠릅니다:
 
 - profile 서비스가 꺼져 있으면 **그 경로만 502**, 나머지는 멀쩡합니다.
 - backend 의 `ml` 그룹이 지워지면 **`/ask` 만 503**, 다른 API 는 멀쩡하고 로그도
   조용합니다 (CLAUDE.md 의 `uv sync` 함정).
 - backend 재생성 직후 최대 10초는 nginx 가 옛 IP 로 갈 수 있습니다 (resolver `valid=10s`).
+- `/training/chat` 은 의존성이 무엇이 죽었든(Training PGVector · Gemini · 런타임 초기화)
+  **전부 같은 503 한 종류**입니다 — 원인은 서버 로그로만 갈립니다
+  (`services/training_rag.py` 의 단일 `TrainingRagUnavailableError`).
 
 ## 논리 오케스트레이션 — 직접 API 와 `/assistant/query`
 
@@ -177,7 +185,7 @@ Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절�
 - **도메인 안전·거절 결정은 각 능력이 소유합니다.** 오케스트레이터는 상류의 REFUSED 를
   ERROR 로 재해석하지 않고, **자료 부족 기권(ABSTAINED)을 거절(REFUSED)로 접지도
   않습니다** (D-033). Training 의 SAFETY_REFUSAL/MEDICAL_REFUSAL 구분
-  (docs/training-rag-demo.md)이 그대로 통과해야 합니다.
+  (docs/training/rag-demo.md · `schemas/training.py`)이 그대로 통과해야 합니다.
 - **backend↔daengs_life 접점 규칙(D-018 의 "세 줄", `tests/test_main_stays_light.py` 로
   기계 강제)은 약화하거나 지우지 않습니다.** 오케스트레이션의 Life 어댑터가 **유일하게
   새로 승인된 접점**이고(D-035, O-11), 구현 시작 시 경계 테스트를 그 한 곳만 허용하도록
@@ -185,8 +193,10 @@ Training RAG(호스트 `:8010`)도 재부팅 후 수동입니다 — 실행 절�
   여전히 금지입니다.
 - **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화로 "피부 사진 봐줘"가
   들어오면 실행이 아니라 해당 업로드/UI 플로우로 **HANDOFF** 합니다 (orchestration-routing.md).
-- **능력별 생성 모델을 통일하지 않습니다.** Training 은 gemma3:4b, Life 는 Gemini 인
-  채로 갑니다. 공유해야 하는 것은 모델 공급자가 아니라 **계약 · 안전 시맨틱 · 인가 ·
+- **능력별 생성 모델을 계약으로 통일하지 않습니다.** 지금은 Training(#93 이후
+  `gemini-3.1-flash-lite`)과 Life 가 둘 다 Gemini 지만, 그것은 각 능력의 도메인 선택이
+  우연히 겹친 것이지 공유 계약이 아닙니다 — 어느 쪽이 모델을 바꿔도 오케스트레이션은
+  무관해야 합니다. 공유해야 하는 것은 모델 공급자가 아니라 **계약 · 안전 시맨틱 · 인가 ·
   라우팅 · 관측**입니다.
 - **GraphRAG / Neo4j 는 폐기됐고 이 작업과 무관합니다.** LangGraph(흐름 제어 프레임워크)와
   GraphRAG(그래프 지식베이스)는 이름만 비슷한 남남입니다. 폐기된 산출물은 이관하지 않습니다.
@@ -198,38 +208,58 @@ Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 �
 `Send` 는 동적 다중 능력 fan-out 이 **실제로 필요할 때만**. `Command` 는 나중 선택지.
 서브그래프 · checkpointer · interrupt 는 v1 요구사항이 아닙니다.
 
-## 능력 현실 (CURRENT)
+## 능력 현실 · 준비도 (CURRENT — 2026-08-31, dev #97 기준)
 
-능력들이 대칭이라고 가정하면 설계가 틀어집니다. 지금 실제 모습:
+능력들이 대칭이라고 가정하면 설계가 틀어집니다. 이 표가 **능력 준비도의 단일 원본**입니다
+— 다른 문서는 여기로 링크하고 같은 표를 두 번 만들지 않습니다.
 
-| 능력 | 경로 · 프로세스 | 생성/추론 | 거절·안전 시맨틱 | v1 오케스트레이션 |
-| --- | --- | --- | --- | --- |
-| **Training** | backend `POST /training/chat`(관리자+SEARCH_INSPECT 게이트, #25·#30) → HTTP → 별도 Training RAG FastAPI (호스트 `:8010`, 개인 저장소) | Ollama **gemma3:4b** / 검색 intfloat/multilingual-e5-base + PGVector | **상류가 소유** — ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (training-rag-demo.md) | 실행 대상 ✅ (assistant 경유는 앱 회원도 — D-036) |
-| **Life** | backend `POST /ask` — **같은 프로세스 안** (daengs_life.rag, D-018 · D-021). 인증: 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | **Gemini** / 상주 임베딩 | 기계 신호로는 **무근거 기권**(404 "근거를 찾지 못했다" — 서빙 층의 명시적 도메인 정책)과 `ungrounded` 품질 지표가 있음. **없는 것**은 Training 급 안전 분류와 산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035, 후속 카드) | 실행 대상 ✅ |
-| **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증: 앱 회원+관리자 (동일) | 없음 — **결정적** | 자체 규칙 계층이 소유 (RT- 결정들). 판정 불가는 `unknown`(503+본문) | 실행 대상 ✅ |
-| **Skin** | nginx `/screen/` → skin-screening 컨테이너 — **profile 이라 기본 꺼짐** (D-024) | PyTorch 분류 | 인증 경계가 backend 와 **동등하지 않음** | 실행 대상 아님 — 어댑터 문서만 |
-| **Gait** | nginx `/gait/` → gait-analysis 컨테이너 — **profile 이라 기본 꺼짐** (D-029) | 분 단위 영상 추론 | — | 동기 실행 대상 아님 — 미래 비동기/PENDING 시맨틱 후보 |
+| 능력 | 지금 저장소·배포 상태 | v1 역할 | 호출 형태 | 지금 실행 가능? | 막는 것 · 비고 |
+| --- | --- | --- | --- | --- | --- |
+| **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 전용 PGVector 컨테이너 | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). ⚠️ 실패가 단일 503 로 접혀 TIMEOUT/ERROR 구분 불가 (contracts §4 의 구현 관심사) |
+| **Life** | backend `POST /ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
+| **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가만 `unknown`(503+전체 본문) — ABSTAINED 후보 (어댑터 카드에서 확정) |
+| **Skin** | 구현·compose·nginx 연결 완료, **profile 이라 기본 꺼짐** (D-024). `/screen/v1/screen` 은 **무인증 업로드** (#79) | HANDOFF 만 | — (실행 안 함) | 아니오 — HANDOFF 전용 | 인수인계 계약은 PR #79: `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음 (D-023), 이력 기능은 저장소 결정(#78) 뒤. 무인증 엔드포인트는 켜기 전 별도 카드 |
+| **Gait** | 구현·compose·nginx 연결 완료, **profile 이라 기본 꺼짐** (D-029). 무인증. backend 편입 브랜치(`refactor/gait-into-backend`)는 **미머지** | HANDOFF 만 | — (실행 안 함) | 아니오 — HANDOFF 전용 | 분 단위 영상 추론이라 동기 대화에 안 맞음 — 들어올 때는 PENDING + job 메타데이터 경로 (orchestration-contracts.md) |
+| **Place** | place-search + journey-service — 기본 기동·배포 스모크 대상. 무인증 공개 API (rate limit 만, D-028) | v1 실행 대상 아님 — `handoffs[].target` 후보 (`place`, docs/life/roadmap.md §2 제안) | — | 아니오 (v1 범위 밖) | 장소 데이터는 place 소유 (D-026). 핸드오프 식별자 표 확정은 통합 때 사람 결정 (roadmap §6) |
 
 Skin·Gait 를 v1 에서 뺀 것은 미구현이라서가 아닙니다(둘 다 구현돼 있습니다).
-배포가 꺼져 있고, 인증 경계가 다르고(Skin), 동기 대화 응답 시간에 안 맞아서(Gait)입니다.
-Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터 경로(orchestration-contracts.md)를
-씁니다 — 그 자리를 계약에 미리 잡아 두는 이유입니다.
+배포가 꺼져 있고, 인증 경계가 다르고(Skin — 무인증 업로드), 동기 대화 응답 시간에 안
+맞아서(Gait)입니다. Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터
+경로(orchestration-contracts.md)를 씁니다 — 그 자리를 계약에 미리 잡아 두는 이유입니다.
 
-## Training 토폴로지 — CURRENT vs TARGET
+**Skin 결과를 다른 능력과 합성할 때도** (PR #79 의 2번 — 스크리닝 결과 + Life 제도 정보)
+Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM 이 요약·재작성하지
+않고 그대로 통과합니다 — 2단계 모델의 병변명 오답률(56.6%, D-023) 때문에 문구 계층이
+지키는 방어를 합성 단계가 풀면 안 됩니다.
 
-**CURRENT** — Training RAG 는 이 저장소 밖(개인 dog-training-rag 저장소)의 코드로,
-서버에서는 호스트 단독 FastAPI(`:8010`)로 뜨고 backend 가 HTTP 로만 부릅니다 (§1 의 표).
+## Training 토폴로지 — 이관 완료 (CURRENT)
 
-**TARGET (CONFIRMED, 검증된 이관 후)** — 소스 코드가 DAENGS_dev 안의 전용 training-rag
-유닛으로 들어옵니다. 단, **저장소 통합 ≠ 프로세스 통합**입니다:
+**CURRENT (2026-08-31)** — Training RAG 이관은 **완료됐습니다.** 소스는
+`backend/src/daengs_training/` 모듈이고, backend 프로세스 안에서 in-process 로 돕니다
+(#83 런타임 이행 → #92 PGVector pg18 → #93 생성 Gemini 전환 → #94 modular monolith).
+호스트 단독 FastAPI(`:8010`)·`DAENGS_TRAINING_RAG_BASE_URL`·backend→Training HTTP 홉은
+더 이상 없습니다. 현재 호출 경로:
 
-- 런타임/프로세스는 daengs_backend 와 **계속 분리**됩니다.
-- 기존 HTTP 능력 경계(`DAENGS_TRAINING_RAG_BASE_URL`)를 초기에는 그대로 유지합니다.
-- 이 이관은 **아직 완료되지 않았습니다.** 완료된 것처럼 적힌 문서가 보이면 그 문서가 틀린 것입니다.
+```
+frontend → backend POST /training/chat
+         → services/training_rag.py (asyncio.to_thread, lazy 싱글턴)
+         → daengs_training.service.RAGService (top_k=4)
+         → training-rag-pgvector(전용 컨테이너) / Gemini API
+```
 
-### 이관 출처와 경계 (CONFIRMED)
+E5 검색·evidence gate·의료 가드레일·Gemini 생성은 전부 `daengs_training` 이 소유하고,
+`daengs_backend` 가 import 하는 것은 게이트웨이 한 곳뿐입니다
+(`test_training_rag_monolith.py` 가 기계 강제 — main import 시 torch 비로딩 포함).
 
-검증된 Training 소스는 다음 한 지점입니다.
+이 결과는 D-032 가 적어 둔 초기 TARGET("저장소 통합 ≠ 프로세스 통합, HTTP 경계 초기
+유지")보다 한 걸음 더 간 것입니다 — #94 가 프로세스 통합(modular monolith)까지 팀
+승인으로 수행했고, 운영 실측에서 부담이 확인될 때만 서비스 분리를 재검토합니다
+(경계는 `services/training_rag.py` 한 곳이라 분리 전환이 어댑터 교체로 끝나는 성질은
+유지됩니다). 서빙 계약 원본은 docs/training/rag-demo.md.
+
+### 이관 출처와 경계 (CONFIRMED — 이관은 이 경계 안에서 수행됨)
+
+검증된 Training 소스는 다음 한 지점이었고, 실제 이관(#83~#94)이 이 경계를 지켰습니다.
 
 - commit `22495d28bc9a8869ba132d0b98206b10a9e8fbc3`
 - tag `training-runtime-freeze-2026-08-30`
@@ -247,27 +277,25 @@ Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터 경
 개인 재해 복구 백업이고, 그것이 자동으로 운영 서버 코퍼스가 되지 않습니다. 공유/서버
 인프라로의 코퍼스 배포는 미해결 소스들의 권리·출처 검증을 **따로** 통과해야 합니다.
 
-### 서버 재구축 상태
-
-아래는 **완료되지 않았습니다.** 월요일 서버 리허설 후 이 절을 갱신합니다.
+### 서버 재구축 상태 (2026-08-31 갱신)
 
 | 항목 | 상태 |
 | --- | --- |
-| 신규 서버 PGVector 재구축 | **PENDING** |
-| 서버 지연시간 검증 | **PENDING** |
-| 최종 Training 포트 · 서버 GPU 동작 · Docker 리소스 제한 | **PENDING** |
-| 운영 타임아웃 정합 (backend 의 read timeout 등) | **FOLLOW-UP** |
+| 신규 서버 PGVector 재구축 | **완료** — `training-rag-pgvector` 컨테이너 + `training-rag-pgdata` 볼륨, 서빙 스코프 14문서/83청크 유지 (#92·#94 — 배포에서 재적재·재임베딩 안 함) |
+| Training 포트 | **해소(무의미)** — 별도 프로세스가 없어 포트 자체가 사라짐 (#94) |
+| monolith RSS · 첫 요청 지연 · 동시성 실측 | **FOLLOW-UP** — #94 가 merge blocker 로 두지 않고 운영 관찰 항목으로 넘김. 부담 확인 시에만 서비스 분리 재검토 |
+| 운영 타임아웃 정합 (Gemini `GEMINI_TIMEOUT_MS` 등) | **FOLLOW-UP** |
 
 ## 프롬프트·로케일 정책 (미래 제약 — 런타임 무변경)
 
 멘토 컨벤션은 **런타임 지시 프롬프트 = 영어 + Markdown** 입니다. 현재 Training 런타임
-프롬프트 `grounded-answer-ko-v2` 는 이 컨벤션을 아직 만족하지 않습니다. 그래도
-**freeze/이관 중에는 다시 쓰지 않습니다** — 프롬프트를 바꾸면 gemma3:4b 의 출력 행동,
-인용 행동, `model_reported_no_evidence` 탐지, 동결 평가와의 동등성이 전부 흔들려서
-"이관이 잘 됐는지"를 잴 기준이 사라집니다. 순서는 고정입니다:
+프롬프트 `grounded-answer-ko-v2`(`daengs_training/generation/gemini.py`)는 이 컨벤션을
+아직 만족하지 않습니다 — #94 도 프롬프트 이행을 명시적으로 범위 밖에 뒀습니다.
+프롬프트를 바꾸면 생성 모델의 출력 행동, 인용 행동, 근거 부족 자기보고 탐지, 평가와의
+동등성이 전부 흔들리므로 별도 카드로만 합니다. 순서는 고정입니다:
 
 ```
-이관 동등성 확인 → 별도 프롬프트 변경 카드 → 회귀 테스트 → 동결 평가 재실행
+별도 프롬프트 변경 카드 → 회귀 테스트 → 평가 재실행
 ```
 
 로케일은 계약에 자리만 잡습니다: 지금은 `locale = "ko-KR"` 하나, 미래에 `"en-US"`
@@ -283,7 +311,8 @@ Gait 가 들어올 때는 CapabilityResult 의 PENDING + job 메타데이터 경
 | 배포 단계 상세 | `.github/workflows/deploy.yml` · `ecosystem.config.js` |
 | 운영 명령어 · 재부팅 절차 · 롤백 | 루트 `README.md` |
 | 코드·환경 변수 규칙 | 루트 `CLAUDE.md` |
-| 결정 배경 (D- / RAG- / RT-) | `docs/decisions.md` · `docs/decisions-rag.md` · `docs/decisions-realtime.md` |
-| Training RAG 통합 | `docs/training-rag-demo.md` |
+| 결정 배경 (D- / RAG- / RT-) | `docs/decisions.md` · `docs/life/decisions-rag.md` · `docs/life/decisions-realtime.md` |
+| Training RAG 서빙 계약 | `docs/training/rag-demo.md` (색인: `docs/training/README.md`) |
+| 생활 파트(Life·Walk) 로드맵 — 어댑터 준비 트랙 포함 | `docs/life/roadmap.md` |
 | 오케스트레이터 공통 계약 (확정) | `docs/orchestration-contracts.md` |
 | 라우팅 정책 · 인가 매트릭스 · 결정 이력 | `docs/orchestration-routing.md` |

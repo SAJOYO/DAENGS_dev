@@ -42,9 +42,11 @@ OrchestratorState:
   상태에는 인용 라벨·식별자 수준만 올라옵니다 (Training 공개 계약의 `citations` 가 선례).
 
 **반려견 컨텍스트 (CONFIRMED — O-4)** — `active_dog_id` 는 v1 상태의 **타입 필드가
-아닙니다.** `context` 의 **예약 키 이름으로만** 문서화합니다 — 지금은 권위 있는 반려견
-프로필/소유권 원천이 없고(D-029: DB 에 프로필 테이블 없음) 어떤 능력도 이 값을 소비하지
-않아서, 필드를 미리 두면 거짓 확신만 만듭니다. 규칙:
+아닙니다.** `context` 의 **예약 키 이름으로만** 문서화합니다. (사실 갱신 2026-08-31:
+#88 이 `pets` 테이블·`/app/pets` API·서비스 층 소유자 확인을 넣어 "DB 에 프로필 테이블
+없음"은 더 이상 사실이 아닙니다. 그래도 이 결정은 유지됩니다 — **어떤 능력도 아직 이
+값을 소비하지 않고**, 오케스트레이션이 그 소유권 해석을 소비하는 것은 여전히 별도
+카드(FOLLOW-UP, docs/life/roadmap.md B4)라, 필드를 미리 두면 거짓 확신만 만듭니다.) 규칙:
 
 - dog 식별자는 **소유권 증명이 아닙니다.** 라우팅·개인화 힌트일 뿐입니다.
 - 전체 반려견 목록·프로필 스냅샷은 그래프 상태에 넣지 않습니다.
@@ -126,9 +128,10 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 
 **ABSTAINED 를 REFUSED 로 접지 않습니다.** 접으면 "자료가 늘면 답할 수 있는 것"에
 "답하지 않기로 했다"는 라벨이 붙습니다 — 멘토링 v1 이 지적했고 Training 게이트웨이
-(`services/training_rag.py` 의 `_REFUSE_REASON_DECISIONS`)가 이미 상류에서 갈라 둔 구분입니다.
+(`services/training_rag.py` 의 내부 reason→공개 decision 매핑)가 이미 상류에서 갈라 둔
+구분입니다.
 
-### v1 매핑 (CONFIRMED)
+### v1 매핑 (CONFIRMED — 상류 사실은 2026-08-31 dev 코드로 재검증)
 
 | 상류 결과 | CapabilityResult |
 | --- | --- |
@@ -136,16 +139,31 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Training `UNCERTAIN` | **ABSTAINED** |
 | Training `SAFETY_REFUSAL` | REFUSED (`refusal.code` 에 상류 분류 보존) |
 | Training `MEDICAL_REFUSAL` | REFUSED (동일) |
+| Training 실패 (현재 단일 503) | ERROR — ⚠️ 아래 "Training 실패 구분" 참고 |
 | Life 근거 있는 200 응답 | OK (`ungrounded` 지표는 품질 메타데이터로 전파 가능) |
 | Life 무근거 404 (`근거를 찾지 못했다`) | **ABSTAINED** (`abstention.code = no_evidence`) |
 | Life 상류/시스템 실패 (502·503) | ERROR |
 | Life 타임아웃 (504) | TIMEOUT |
-| Walk 정상 판정 | OK |
-| Walk 판정 불가 (`unknown` — 격자 데이터 부재) | ABSTAINED 후보 — 어댑터 구현 카드에서 확정 |
+| Walk 정상 판정 — **GOOD·CAUTION·UNSAFE 전부** | OK — **UNSAFE 는 성공한 도메인 판정**이지 REFUSED 가 아닙니다 |
+| Walk 판정 불가 (`unknown` — 관측 공급자 부재/실패, 503 + 전체 본문) | ABSTAINED 후보 — 어댑터 구현 카드에서 확정 |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL
-  구분(training-rag-demo.md)이 `refusal.code` 로 그대로 올라옵니다. 오케스트레이터가
-  이것을 합치거나 바꿔 말하지 않습니다.
+  구분(공개 decision — `schemas/training.py` · docs/training/rag-demo.md)이 `refusal.code`
+  로 그대로 올라옵니다. 오케스트레이터가 이것을 합치거나 바꿔 말하지 않습니다.
+- **Training 은 in-process 경계를 씁니다** (#94 이후). 어댑터의 호출 지점은
+  `daengs_backend/services/training_rag.py` 게이트웨이(공개 4-decision 계약)이지,
+  `daengs_training.service.RAGService`·PGVector·Gemini 내부가 아닙니다.
+- **⚠️ Training 실패 구분 — 구현 카드의 정밀 관심사 (2026-08-31 코드 검증).** 현재
+  Training 경계는 모든 실패(Gemini 타임아웃 · Gemini/공급자 오류 · PGVector 실패 ·
+  런타임 초기화 실패)를 **단일 `TrainingRagUnavailableError` → 503 하나로 접습니다** —
+  이 계약의 ERROR/TIMEOUT 구분을 낼 기계 신호가 상류에 없습니다. Life `/ask` 는 같은
+  구분을 이미 냅니다 (503 설정 / **504 타임아웃** / 502 상류 — `daengs_life/app/services/ask.py`).
+  구현 카드에서 Training 어댑터가 TIMEOUT 을 구분하려면 그 신호를 어디서 낼지(게이트웨이
+  예외 세분화 등)를 정해야 합니다 — **이 문서 PR 에서는 코드를 바꾸지 않고 갭만 기록합니다.**
+- 부수 사실(같은 검증에서): Training 내부의 `REFUSE(no_results)` 와 생성 후 출력
+  가드레일 차단은 공개 decision 으로는 `UNCERTAIN` 에 접혀 나옵니다 — 어댑터가 공개
+  계약만 소비하면 후자가 ABSTAINED 로 보입니다. 상류 재설계 없이 갈지, 게이트웨이
+  reason 을 더 노출할지는 구현 카드에서 판단합니다 (도메인 동작 변경은 이 PR 범위 밖).
 - **Life 는 재설계하지 않습니다** (O-3, D-035). 어댑터가 **이미 있는 기계 신호만**
   매핑합니다 — 무근거 404 는 서빙 층의 명시적 도메인 정책이고(`app/services/ask.py`),
   `ungrounded` 는 품질 신호입니다. **수용된 v1 한계**: Life 가 산문으로만 물러서는

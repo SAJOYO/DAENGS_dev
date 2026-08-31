@@ -1662,6 +1662,14 @@ URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았�
 **GraphRAG / Neo4j 와 무관합니다.** 그쪽은 폐기됐고, LangGraph(흐름 제어)와
 GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출물은 이관하지 않습니다.
 
+> **사실 갱신 (2026-08-31)** — "Training=gemma3:4b" 는 #93 으로 낡았습니다. Training
+> 생성은 Gemini(`gemini-3.1-flash-lite`)로 전환됐고, 이제 Life 와 같은 공급자입니다.
+> 결정의 본질(모델 공급자를 계약으로 공유하지 않는다)은 그대로입니다 — 겹침은 각
+> 능력의 도메인 선택이 우연히 일치한 것입니다. 또한 O-4 의 근거였던 "DB 에 프로필
+> 테이블 없음"(D-029 인용)은 #88(`pets` 테이블·`/app/pets`)로 낡았지만, **소비하는
+> 능력이 아직 없다**는 사실은 그대로라 O-4 결정 자체는 유지됩니다
+> (`docs/orchestration-contracts.md` §1).
+
 **미결이었던 것들은 2026-08-30 에 전부 해결됐습니다.** 어드버서리얼 아키텍처 리뷰
 (읽기 전용, `origin/dev` 코드 대조) 후 사람이 일괄 승인 — 결정 이력 표는
 `docs/orchestration-routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
@@ -1742,6 +1750,17 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 
 **서버 재구축(신규 PGVector · 지연 검증 · 포트 · GPU · 리소스 제한)은 미완**이며 월요일
 서버 리허설 후 `docs/orchestration-architecture.md` §서버 재구축 상태를 갱신합니다.
+
+> **사실 갱신 (2026-08-31)** — 이관은 **완료됐습니다** (#83 런타임 이행 → #92 PGVector
+> pg18 → #93 생성 Gemini 전환 → #94 modular monolith). 위 허용/금지 경계는 지켜졌고
+> (freeze 태그 출처의 새 커밋, 히스토리·raw 코퍼스 반입 없음 — #94 체크리스트),
+> 결과는 이 결정의 초기 TARGET("프로세스 분리 + HTTP 경계 유지")보다 한 걸음 더 간
+> **in-process modular monolith** 입니다 — #94 가 팀 승인으로 수행했고, 운영 실측에서
+> 부담이 확인될 때만 서비스 분리를 재검토합니다. `:8010`·`DAENGS_TRAINING_RAG_BASE_URL`
+> 은 코드에서 사라졌고, Training PGVector 는 전용 컨테이너(`training-rag-pgvector`)로
+> 분리 유지됩니다. 프롬프트(`grounded-answer-ko-v2`) 이행은 여전히 별도 카드입니다.
+> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration-architecture.md`
+> §Training 토폴로지.
 
 ---
 

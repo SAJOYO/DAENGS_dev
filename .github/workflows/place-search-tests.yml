@@ -59,11 +59,30 @@ jobs:
         run: docker compose config --quiet
       - name: nginx 설정
         working-directory: ${{ github.workspace }}
-        run: >-
-          docker run --rm
-          --add-host host.docker.internal:host-gateway
-          -v "${{ github.workspace }}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"
-          nginx:1.31.1 nginx -t
+        run: |
+          set -euo pipefail
+          nginx_config="$(
+            docker run --rm \
+              --add-host host.docker.internal:host-gateway \
+              -v "${{ github.workspace }}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+              nginx:1.31.1 nginx -T 2>&1
+          )"
+          printf '%s\n' "$nginx_config"
+
+          grep -Fq \
+            'limit_req_zone $binary_remote_addr zone=place_search_per_ip:10m rate=5r/s;' \
+            <<< "$nginx_config"
+
+          place_location="$(
+            awk '
+              $1 == "location" && $2 == "/v2/places/" && $3 == "{" { inside = 1 }
+              inside { print }
+              inside && $1 == "}" { exit }
+            ' <<< "$nginx_config"
+          )"
+          grep -Fq 'limit_req zone=place_search_per_ip burst=10 nodelay;' \
+            <<< "$place_location"
+          grep -Fq 'limit_req_status 429;' <<< "$place_location"
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true

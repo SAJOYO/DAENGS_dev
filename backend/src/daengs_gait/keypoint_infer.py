@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from src.config import (
+from daengs_gait.config import (
     BLUR_VAR_THRESH,
     CONF_THRESH,
     FAR_BBOX_FRAC_THRESH,
@@ -26,8 +26,8 @@ from src.config import (
     POSE_WEIGHTS,
     TARGET_FPS,
 )
-from src.crop_assist import get_general_model, try_crop_assisted_pose
-from src.gait_filter import apply_gait_filter
+from daengs_gait.crop_assist import get_general_model, try_crop_assisted_pose
+from daengs_gait.gait_filter import apply_gait_filter
 
 _MODEL_CACHE: dict = {}
 # ⚠️ serve.py 가 `process_video` 를 threadpool 로 돌리므로 **분석 요청이 동시에 들어옵니다.**

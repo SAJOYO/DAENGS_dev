@@ -1,6 +1,6 @@
 """PR #62 리뷰 지적 ②③④⑤ — overlay 인코딩 · 비교 문구 · 저장된 파일명.
 
-**`--extra model` 이 있어야 돕니다** (cv2 · imageio-ffmpeg). 기본 설치에서는 통째로
+**`--group gait` 이 있어야 돕니다** (cv2 · imageio-ffmpeg). 기본 설치에서는 통째로
 skip 됩니다 — pyproject 의 "기본 = 화면과 계약만" 가름을 지키는 자리입니다.
 이벤트 루프 회귀(①)는 모델 없이도 도는 `test_review_fixes.py` 에 있습니다.
 """
@@ -9,23 +9,18 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-cv2 = pytest.importorskip("cv2", reason="overlay 검증에는 --extra model 이 필요합니다")
+cv2 = pytest.importorskip("cv2", reason="overlay 검증에는 --group gait 이 필요합니다")
 imageio_ffmpeg = pytest.importorskip(
-    "imageio_ffmpeg", reason="overlay 검증에는 --extra model 이 필요합니다"
+    "imageio_ffmpeg", reason="overlay 검증에는 --group gait 이 필요합니다"
 )
 np = pytest.importorskip("numpy")
 
-from src import config  # noqa: E402
-from src.overlay import OverlayEncodeError, render_overlay_video  # noqa: E402
+from daengs_gait import config  # noqa: E402
+from daengs_gait.overlay import OverlayEncodeError, render_overlay_video  # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -97,7 +92,7 @@ def test_overlay_size_comes_from_decoded_frame_not_cap_prop(tmp_path, monkeypatc
         def release(self):
             return self._cap.release()
 
-    monkeypatch.setattr("src.overlay.cv2.VideoCapture", LyingCapture)
+    monkeypatch.setattr("daengs_gait.overlay.cv2.VideoCapture", LyingCapture)
 
     out = tmp_path / "overlay.mp4"
     render_overlay_video(src, [], out)
@@ -146,10 +141,10 @@ def test_pipeline_omits_overlay_path_when_encoding_fails(tmp_path, monkeypatch):
 
     분 단위가 걸린 추론 결과는 버리지 않되, `overlay_video` 는 비워 둡니다.
     """
-    import src.pipeline as pipeline
+    import daengs_gait.pipeline as pipeline
 
     monkeypatch.setattr(config, "RECORDS_DIR", tmp_path / "records")
-    monkeypatch.setattr("src.record_store.RECORDS_DIR", tmp_path / "records")
+    monkeypatch.setattr("daengs_gait.record_store.RECORDS_DIR", tmp_path / "records")
     monkeypatch.setattr(
         pipeline, "run_keypoint_inference",
         lambda p: ([], {"width": 1, "height": 1, "native_fps": 30.0}),
@@ -179,7 +174,7 @@ def test_pipeline_omits_overlay_path_when_encoding_fails(tmp_path, monkeypatch):
 @pytest.fixture()
 def records_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "RECORDS_DIR", tmp_path / "records")
-    monkeypatch.setattr("src.record_store.RECORDS_DIR", tmp_path / "records")
+    monkeypatch.setattr("daengs_gait.record_store.RECORDS_DIR", tmp_path / "records")
     return tmp_path / "records"
 
 
@@ -202,7 +197,7 @@ def _write_record(rid: str, joints: dict) -> None:
 
 def test_message_says_no_difference_when_all_joints_similar(records_dir):
     """모든 관절이 '비슷함' 인데 '차이가 관찰됩니다' 가 나가면 안 됩니다."""
-    from src.pipeline import compare_records
+    from daengs_gait.pipeline import compare_records
 
     joints = {"hip": {"x_range": 10.0, "y_range": 10.0}}
     _write_record("aaaaaaaa", joints)
@@ -215,7 +210,7 @@ def test_message_says_no_difference_when_all_joints_similar(records_dir):
 
 def test_message_reports_difference_when_a_joint_differs(records_dir):
     """실제로 차이가 있으면 그대로 말해야 합니다."""
-    from src.pipeline import compare_records
+    from daengs_gait.pipeline import compare_records
 
     _write_record("aaaaaaaa", {"hip": {"x_range": 10.0, "y_range": 10.0}})
     _write_record("bbbbbbbb", {"hip": {"x_range": 1000.0, "y_range": 10.0}})
@@ -228,7 +223,7 @@ def test_message_distinguishes_nothing_comparable_from_similar(records_dir):
 
     데이터가 없는 것을 '변화가 없다' 고 말하게 되는 자리입니다.
     """
-    from src.pipeline import compare_records
+    from daengs_gait.pipeline import compare_records
 
     _write_record("aaaaaaaa", {})
     _write_record("bbbbbbbb", {})
@@ -240,7 +235,7 @@ def test_message_distinguishes_nothing_comparable_from_similar(records_dir):
 
 def test_message_for_ui_has_no_diagnostic_wording(records_dir):
     """진단·건강점수처럼 읽히는 낱말이 화면 문구에 들어가면 안 됩니다."""
-    from src.pipeline import compare_records
+    from daengs_gait.pipeline import compare_records
 
     banned = ["정상", "건강", "이상 없", "호전", "악화", "점수", "진단"]
     cases = [
@@ -263,7 +258,7 @@ def test_message_for_ui_has_no_diagnostic_wording(records_dir):
 # --------------------------------------------------------------------------
 def test_original_filename_is_persisted_not_just_returned(records_dir, tmp_path, monkeypatch):
     """응답과 저장본이 갈라지면 앱이 새로고침할 때 이름이 uuid 로 바뀝니다."""
-    import src.pipeline as pipeline
+    import daengs_gait.pipeline as pipeline
 
     monkeypatch.setattr(
         pipeline, "run_keypoint_inference",
@@ -289,7 +284,7 @@ def test_original_filename_is_persisted_not_just_returned(records_dir, tmp_path,
 
 def test_original_filename_falls_back_to_disk_name(records_dir, tmp_path, monkeypatch):
     """원본 이름을 못 받으면 예전처럼 디스크 이름으로 떨어져야 합니다."""
-    import src.pipeline as pipeline
+    import daengs_gait.pipeline as pipeline
 
     monkeypatch.setattr(
         pipeline, "run_keypoint_inference",

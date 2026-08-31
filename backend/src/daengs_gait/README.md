@@ -14,18 +14,19 @@
 
 ```powershell
 cd gait-analysis
+cd backend
 uv sync
-uv run python serve.py            # http://127.0.0.1:8000/docs
+uv run gait-serve                 # http://127.0.0.1:8000/docs
 ```
 
 `/healthz` 가 `ready: false` 를 냅니다 — 가중치가 없으니 정상입니다.
 
-실제로 분석하려면 가중치를 놓고 `--extra model` 로 받습니다:
+실제로 분석하려면 가중치를 놓고 `--group gait` 로 받습니다:
 
 ```powershell
-uv sync --extra model             # torch·ultralytics·opencv (약 2GB)
+uv sync --group gait              # torch·ultralytics·opencv (약 2GB)
 $env:GAIT_RELEASE_DIR = "C:\어딘가\release"
-uv run python serve.py
+uv run gait-serve
 ```
 
 테스트 (가중치 없이 돕니다):
@@ -135,12 +136,12 @@ production 코드였고, 동시에 module 최상단에서 `pandas` · `scipy` ·
 
 | 원본 | 여기 |
 | --- | --- |
-| `e3_common.KEYPOINT_NAMES`, `e13.TARGET_FPS`/`CONF_THRESH`/`KP_MIN_CONF`, `e14` 임계값 전부, `keypoint_extractor.DEFAULT_KEYPOINT_WEIGHTS` | `src/config.py` |
-| `e14.apply_gait_filter`, `e14._kp_spread_ratio` | `src/gait_filter.py` |
-| `e13.build_tracks`, `e3_trajectory_features._track_static_temporal`/`_stats`, `e14.kp_static_feats_from_recs` | `src/feature_engine.py` |
-| `gait_demo/*.py` | `src/*.py` (같은 이름) |
-| `frontend/server.py` 의 `_ensure_mp4` · `_download_url` | `src/video_intake.py` |
-| `frontend/server.py` (HTTP 어댑터) | `serve.py` (FastAPI 로 새로) |
+| `e3_common.KEYPOINT_NAMES`, `e13.TARGET_FPS`/`CONF_THRESH`/`KP_MIN_CONF`, `e14` 임계값 전부, `keypoint_extractor.DEFAULT_KEYPOINT_WEIGHTS` | `config.py` |
+| `e14.apply_gait_filter`, `e14._kp_spread_ratio` | `gait_filter.py` |
+| `e13.build_tracks`, `e3_trajectory_features._track_static_temporal`/`_stats`, `e14.kp_static_feats_from_recs` | `feature_engine.py` |
+| `gait_demo/*.py` | `daengs_gait/*.py` (같은 이름) |
+| `frontend/server.py` 의 `_ensure_mp4` · `_download_url` | `video_intake.py` |
+| `frontend/server.py` (HTTP 어댑터) | `service.py` (FastAPI 로 새로) |
 
 **계산은 한 줄도 바꾸지 않았습니다.** 같은 영상을 두 구현으로 분석해 대조했고,
 feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습니다.
@@ -152,7 +153,7 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
 
 ## 임계값을 바꿀 때
 
-`src/config.py` 의 값은 전부 walk_demo 에서 **실측으로** 정해진 것입니다. 결과를 보기
+`config.py` 의 값은 전부 walk_demo 에서 **실측으로** 정해진 것입니다. 결과를 보기
 전에 고정하고 사후 조정하지 않는다는 원칙으로 잡혀서, 임의로 바꾸면 그 검증이 무의미해집니다.
 
 바꿔야 한다면 **`GAIT_FILTER_VERSION` 을 함께 올리세요.** 같은 영상이라도 이 값이 다르면
@@ -173,7 +174,7 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
   로 경로를 기록에 남기지만(2026-08-29 추가), 지우는 코드는 어디에도 없습니다 — 삭제는
   사람이 부르는 API 가 생겼을 때만 (설계안 참고).
 - **URL 업로드(`yt-dlp`)를 유지할지.** 유지하지 않으면 `--extra url` 을 통째로 뺄 수 있습니다.
-  현재 `serve.py` 에는 엔드포인트를 두지 않았습니다.
+  현재 `service.py` 에는 엔드포인트를 두지 않았습니다.
 - **`dog_id` 검증.** 지금은 넘어온 값을 그대로 믿습니다. 두 기록이 정말 같은 개인지
   확인하는 로직이 어디에도 없습니다 — 계정·반려견 프로필과 엮어 서버에서 강제할지.
 - **인증.** 위 "서버에서 켜기" 의 경고 참고.

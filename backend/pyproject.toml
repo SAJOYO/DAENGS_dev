@@ -33,6 +33,9 @@ dependencies = [
 [project.scripts]
 dev = "daengs_backend.main:dev"
 run = "daengs_backend.main:run"
+# 보행 분석은 **별도 프로세스**입니다 (D-038). backend 앱에 붙지 않으므로 진입점이 따로입니다.
+# compose 의 gait-analysis 서비스가 이것을 부릅니다.
+gait-serve = "daengs_gait.service:main"
 # 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
 seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
@@ -68,7 +71,7 @@ build-backend = "uv_build"
 # `daengs_backend` 하나뿐이어서, 안 적으면 **휠에 `daengs_life` 가 조용히 빠진다**
 # — 컨테이너가 `backend/src` 를 마운트해 도는 개발 모드에서는 안 드러난다.
 [tool.uv.build-backend]
-module-name = ["daengs_backend", "daengs_life", "daengs_training"]
+module-name = ["daengs_backend", "daengs_life", "daengs_training", "daengs_gait"]
 
 [dependency-groups]
 dev = [
@@ -83,6 +86,31 @@ ml = [
     "sentence-transformers>=3.4",
     "torch>=2.6",
     "transformers<5",
+]
+# 보행 분석(D-038). **`ml` 과 겹치지 않는 독립 그룹**이다 — gait 컨테이너는
+# `uv sync --frozen --group gait` 하나만 돌린다.
+#
+# `ml` 을 같이 붙이지 않는 이유: gait 소스의 서드파티 import 를 전수 조사하면
+# cv2 · fastapi · imageio_ffmpeg · numpy · pydantic · ultralytics · uvicorn 뿐이고,
+# `ml` 의 sentence-transformers · transformers · pyarrow 는 **하나도 쓰지 않는다.**
+# 붙이면 gait 컨테이너가 임베딩 모델 스택을 통째로 더 받는다.
+#
+# torch 를 명시하는 이유는 두 가지다. ① ultralytics 가 어차피 끌고 오지만 버전을
+# `ml` 과 같은 선(>=2.6)에 묶어 둔다 ② 아래 [tool.uv.sources] 의 인덱스 바인딩이
+# **패키지 단위**라 어느 그룹이 요구하든 리눅스에서 CPU 판을 받는다는 것을 여기서 보이게 한다.
+#
+# ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 `/gait/` 만 503 이 된다** —
+#   다른 API 는 멀쩡해서 로그에 아무 문제도 안 보인다. 이름을 바꾸면
+#   docker-compose.yml 의 gait-analysis `command` 도 같이 고쳐라.
+#
+# ⚠ **`gait-venv` 를 `backend-venv` 와 공유하면 안 된다.** 인자 없는 `uv sync` 는 exact
+#   동기화라 같은 볼륨에 돌리면 서로의 그룹을 지운다 (crawler-worker 주석과 같은 함정).
+gait = [
+    "imageio-ffmpeg>=0.4",       # overlay 인코딩 · 업로드 mp4 변환 (정적 ffmpeg 바이너리)
+    "numpy>=2",
+    "opencv-python>=4.8",
+    "torch>=2.6",
+    "ultralytics>=8.0",
 ]
 # **AGPL 이라 그룹으로 가둔다** (RAG-032 ②). PyMuPDF 는 AGPL-3.0 이고, backend 이미지에
 # 들어가면 서비스 전체가 그 조건을 안게 된다. 이 그룹은 **오프라인 파이프라인 전용**이다 —

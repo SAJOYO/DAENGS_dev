@@ -1,4 +1,4 @@
-"""PR #62 리뷰 지적 ① — `/v1/analyze` 가 이벤트 루프를 막지 않는다.
+"""PR #62 리뷰 지적 ① — `/analyze` 가 이벤트 루프를 막지 않는다.
 
 **가중치도 torch 도 없이 돕니다.** `daengs_gait.pipeline` 을 대역 모듈로 갈아 끼우므로
 cv2·ultralytics 가 필요 없습니다 — `test_upload_limit.py` 와 같은 장치이고, 기본
@@ -62,7 +62,7 @@ def test_healthz_responds_while_analyze_is_running(stubbed_serve):
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             analyze = asyncio.create_task(
                 c.post(
-                    "/v1/analyze",
+                    "/analyze",
                     files={"video": ("walk_0829.mp4", b"0123456789", "video/mp4")},
                     timeout=30.0,
                 )
@@ -92,7 +92,7 @@ def test_analyze_passes_original_filename_through(stubbed_serve):
     from fastapi.testclient import TestClient
 
     resp = TestClient(stubbed_serve).post(
-        "/v1/analyze",
+        "/analyze",
         files={"video": ("walk_0829.mp4", b"0123456789", "video/mp4")},
     )
     assert resp.status_code == 200

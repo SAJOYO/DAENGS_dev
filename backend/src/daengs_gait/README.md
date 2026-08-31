@@ -77,7 +77,7 @@ docker compose --profile gait up -d
 docker compose logs -f gait-analysis
 ```
 
-앱이 부르는 주소는 `http://daengback.~/gait/v1/analyze` 입니다 — 새 포트를 쓰지 않고
+앱이 부르는 주소는 `http://daengback.~/gait/analyze` 입니다 — 새 포트를 쓰지 않고
 이미 열려 있는 8000 에 경로만 얹었습니다 (D-024 와 같은 판단).
 
 `nginx/default.conf` 를 고쳤다면 반영이 필요합니다:
@@ -96,13 +96,13 @@ docker compose exec nginx nginx -s reload   # 무중단 반영
 
 | | |
 | --- | --- |
-| `GET /healthz` | 가중치가 실제로 있는지까지 봅니다 (`ready`) |
-| `POST /v1/analyze` | multipart: `video` (필수), `date` · `note` · `dog_id` (선택) → 기록. 413 은 아래 참고 |
-| `GET /v1/records` | 강아지별 기록 목록. **`dog_id` 필수**, `limit` · `cursor`. 요약만 냅니다 |
-| `GET /v1/records/{id}` | 기록 단건 |
-| `DELETE /v1/records/{id}` | 기록과 영상(원본·overlay)을 즉시 삭제 |
-| `POST /v1/compare` | `{record_id_a, record_id_b}` → 두 기록 비교 |
-| `GET /v1/records/{id}/overlay` | 분석 결과를 그린 영상 (mp4) |
+| `GET /gait/healthz` | 가중치가 실제로 있는지까지 봅니다 (`ready`) |
+| `POST /gait/analyze` | multipart: `video` (필수), `date` · `note` · `dog_id` (선택) → 기록. 413 은 아래 참고 |
+| `GET /gait/records` | 강아지별 기록 목록. **`dog_id` 필수**, `limit` · `cursor`. 요약만 냅니다 |
+| `GET /gait/records/{id}` | 기록 단건 |
+| `DELETE /gait/records/{id}` | 기록과 영상(원본·overlay)을 즉시 삭제 |
+| `POST /gait/compare` | `{record_id_a, record_id_b}` → 두 기록 비교 |
+| `GET /gait/records/{id}/overlay` | 분석 결과를 그린 영상 (mp4) |
 
 - **`record_id` 는 32자 소문자 16진수**입니다 (`uuid4().hex`).
 - **응답에 디스크 경로가 나가지 않습니다.** `overlay_video` 대신 `has_overlay` 와
@@ -111,7 +111,7 @@ docker compose exec nginx nginx -s reload   # 무중단 반영
 - ⚠️ **`dog_id` 는 보안 장치가 아닙니다.** 소유권 검증은 `daengs_backend` 의 auth
   계층 몫입니다 — `API.md` §소유권.
 
-원본 영상 재생(`GET /v1/records/{id}/original`)은 아직 없습니다 — 앱 요구사항이
+원본 영상 재생(`GET /gait/records/{id}/original`)은 아직 없습니다 — 앱 요구사항이
 확정되면 추가합니다.
 
 ### 업로드 크기 제한 (413)
@@ -181,7 +181,7 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
   범위는 `docs/gait-record-data-design.md` 에 설계만 해 두었습니다 — 이 카드에서
   실제 테이블·migration 은 만들지 않았습니다.
 - **자동 삭제(보관 기간)는 아직 없습니다.** 사용자가 부르는
-  `DELETE /v1/records/{id}` 는 있고 원본·overlay 까지 지웁니다. 하지만 **기간이 지나면
+  `DELETE /gait/records/{id}` 는 있고 원본·overlay 까지 지웁니다. 하지만 **기간이 지나면
   스스로 지우는 코드는 없습니다** — 보관 정책(동의 문구·기간·탈퇴 시 파기)이 정해져야
   하는 자리이고, 공용 저장소 카드(#78)가 그것을 다룹니다.
   ⚠️ 그때까지는 `gait-data` 볼륨이 **계속 쌓입니다.** 영상 10초가 5~20MB 라

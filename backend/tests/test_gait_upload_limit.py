@@ -1,4 +1,4 @@
-"""`/v1/analyze` 의 업로드 크기 제한(413) 스모크 테스트.
+"""`/analyze` 의 업로드 크기 제한(413) 스모크 테스트.
 
 **가중치도 torch 도 없이 돌아야 합니다.** 크기·빈 파일 검사는 `daengs_gait.pipeline`
 (torch·ultralytics 의존)을 import 하기 **전에** 끝나기 때문입니다 — 기본 설치
@@ -32,7 +32,7 @@ def client(monkeypatch):
 def test_oversized_upload_returns_413(client):
     content = b"x" * 2_000_000  # 2MB > 1MB 한도
     resp = client.post(
-        "/v1/analyze",
+        "/analyze",
         files={"video": ("dog.mp4", content, "video/mp4")},
     )
     assert resp.status_code == 413
@@ -43,7 +43,7 @@ def test_oversized_upload_returns_413(client):
 
 def test_empty_upload_returns_400(client):
     resp = client.post(
-        "/v1/analyze",
+        "/analyze",
         files={"video": ("dog.mp4", b"", "video/mp4")},
     )
     assert resp.status_code == 400
@@ -60,7 +60,7 @@ def test_rejects_oversized_without_model_extra(client, monkeypatch):
     monkeypatch.setitem(sys.modules, "daengs_gait.video_intake", None)
 
     resp = client.post(
-        "/v1/analyze",
+        "/analyze",
         files={"video": ("dog.mp4", b"x" * 2_000_000, "video/mp4")},
     )
     assert resp.status_code == 413

@@ -76,16 +76,22 @@ _INTERNAL_FIELDS = ("original_video", "overlay_video")
 def _public(record: dict) -> dict:
     """기록을 **앱이 볼 모양**으로 바꿉니다.
 
-    ⚠️ `overlay_url` 은 **이 서비스 기준 경로**입니다. 앱이 실제로 부르는 주소는 nginx 가
-       붙이는 `/gait` 접두사가 앞에 옵니다 (`daengback.~/gait/v1/records/…/overlay`).
-       접두사를 여기서 박지 않는 이유는 이 서비스가 자기 바깥의 라우팅을 모르기
-       때문입니다 — 아는 척하면 nginx 설정이 바뀔 때 조용히 틀립니다.
+    `overlay_url` 은 **앱이 그대로 붙여 쓸 수 있는 경로**입니다 —
+    `{PUBLIC_PREFIX}/records/{record_id}/overlay`.
+
+    ⚠️ FastAPI 안의 경로는 `/records/…` 인데 여기서는 `/gait` 가 붙습니다. 어긋난 게
+       아니라 **nginx 가 `/gait/` 를 떼고 넘기기 때문**입니다 (`rewrite ^/gait/(.*)$`).
+       앱이 보는 주소와 컨테이너가 받는 주소가 그만큼 다릅니다. 접두사를 소스에 박지
+       않고 `config.PUBLIC_PREFIX` 로 둔 이유는, nginx 의 location 이 바뀌면 여기도
+       같이 바뀌어야 하는데 **소스에 박혀 있으면 그때 조용히 틀리기** 때문입니다.
     """
     out = {k: v for k, v in record.items() if k not in _INTERNAL_FIELDS}
     record_id = record.get("record_id")
     has_overlay = bool(record.get("overlay_video"))
     out["has_overlay"] = has_overlay
-    out["overlay_url"] = f"/v1/records/{record_id}/overlay" if has_overlay else None
+    out["overlay_url"] = (
+        f"{config.PUBLIC_PREFIX}/records/{record_id}/overlay" if has_overlay else None
+    )
     return out
 
 
@@ -117,7 +123,7 @@ def build_app() -> FastAPI:
             "gait_filter_version": config.GAIT_FILTER_VERSION,
         }
 
-    @app.post("/v1/analyze")
+    @app.post("/analyze")
     async def analyze(
         request: Request,
         video: UploadFile = File(...),
@@ -178,7 +184,7 @@ def build_app() -> FastAPI:
 
         return _public(record)
 
-    @app.get("/v1/records")
+    @app.get("/records")
     def list_dog_records(
         dog_id: str | None = None,
         limit: int = 20,
@@ -221,7 +227,7 @@ def build_app() -> FastAPI:
             "next_cursor": page[-1].get("record_id") if (page and has_more) else None,
         }
 
-    @app.get("/v1/records/{record_id}")
+    @app.get("/records/{record_id}")
     def get_record(record_id: str):
         from daengs_gait.record_store import load_record, record_exists
 
@@ -229,7 +235,7 @@ def build_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
         return _public(load_record(record_id))
 
-    @app.delete("/v1/records/{record_id}")
+    @app.delete("/records/{record_id}")
     def delete_gait_record(record_id: str):
         """기록과 딸린 영상(원본·overlay)을 **즉시 지웁니다.**
 
@@ -260,7 +266,7 @@ def build_app() -> FastAPI:
             )
         return {"record_id": record_id, "deleted": deleted}
 
-    @app.post("/v1/compare")
+    @app.post("/compare")
     def compare(req: CompareRequest):
         """같은 개체의 두 기록 비교.
 
@@ -280,7 +286,7 @@ def build_app() -> FastAPI:
 
         return compare_records(req.record_id_a, req.record_id_b)
 
-    @app.get("/v1/records/{record_id}/overlay")
+    @app.get("/records/{record_id}/overlay")
     def get_overlay(record_id: str):
         """분석 결과를 그린 영상. 원본보다 느리게 재생됩니다(5fps 로 서브샘플하므로)."""
         from daengs_gait.record_store import load_record, record_exists

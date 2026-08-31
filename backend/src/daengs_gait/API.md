@@ -3,9 +3,12 @@
 앱이 이 서비스에 붙을 때 지켜야 하는 것. 코드는 `service.py` 이고
 `backend/tests/test_gait_*.py` 가 감시합니다.
 
-`skin-screening` 과 같은 모양으로 nginx 뒤에 붙습니다 — 앱이 부르는 주소는
-**`http://daengback.~/gait/...`** 이고, nginx 가 `/gait` 접두사를 떼서 넘깁니다.
-아래 경로는 전부 접두사를 뗀 뒤 기준입니다.
+`skin-screening` 과 같은 모양으로 nginx 뒤에 붙습니다. **아래 경로는 전부 앱이
+부르는 주소 기준**입니다 — 그대로 `http://daengback.~` 뒤에 붙이면 됩니다.
+
+> 서버 쪽 참고: nginx 가 `/gait` 접두사를 떼고 넘기므로 **FastAPI 안의 경로에는 그것이
+> 없습니다** (`/analyze` · `/records/…`). 컨테이너에 직접 붙어 디버깅할 때는 접두사
+> 없이 부르세요. 응답의 `overlay_url` 은 **앱 기준**이라 접두사가 붙어 있습니다.
 
 ⚠️ **분석은 분 단위입니다.** 사진 한 장이 아니라 영상 전체를 5fps 로 훑고 overlay 까지
    인코딩합니다 (실측: 480×854 · 37초 영상에 CPU 약 2분). nginx 가
@@ -19,13 +22,13 @@
 
 | Method · Path | 용도 |
 | --- | --- |
-| `POST /v1/analyze` | 영상 업로드 + 분석 |
-| `GET /v1/records` | 기록 목록 (`dog_id` 필수) |
-| `GET /v1/records/{record_id}` | 기록 단건 |
-| `GET /v1/records/{record_id}/overlay` | 스켈레톤 영상 |
-| `DELETE /v1/records/{record_id}` | 기록 삭제 (영상 포함) |
-| `POST /v1/compare` | 두 기록 비교 |
-| `GET /healthz` | 상태 · 가중치 유무 |
+| `POST /gait/analyze` | 영상 업로드 + 분석 |
+| `GET /gait/records` | 기록 목록 (`dog_id` 필수) |
+| `GET /gait/records/{record_id}` | 기록 단건 |
+| `GET /gait/records/{record_id}/overlay` | 스켈레톤 영상 |
+| `DELETE /gait/records/{record_id}` | 기록 삭제 (영상 포함) |
+| `POST /gait/compare` | 두 기록 비교 |
+| `GET /gait/healthz` | 상태 · 가중치 유무 |
 
 ---
 
@@ -42,10 +45,10 @@
 
 ---
 
-## `POST /v1/analyze`
+## `POST /gait/analyze`
 
 ```
-POST /v1/analyze        multipart/form-data
+POST /gait/analyze     multipart/form-data
   video    (필수)  영상 파일. 기본 150MB 까지 (GAIT_MAX_UPLOAD_BYTES)
   dog_id   (선택)  같은 개체의 기록을 묶는 값
   date     (선택)  촬영일 "YYYY-MM-DD"
@@ -89,7 +92,7 @@ POST /v1/analyze        multipart/form-data
   "gait_filter_version": "v5-stationary-speed-based-20260826",
 
   "has_overlay": true,
-  "overlay_url": "/v1/records/5389c92e…/overlay",   // 앱은 /gait 를 앞에 붙여 부릅니다
+  "overlay_url": "/gait/records/5389c92e…/overlay",  // 그대로 붙여 쓰면 됩니다
   "overlay_error": null,                             // 인코딩 실패 시 사유
 
   "trajectories": [ … ],                 // 관절별 좌표 시계열
@@ -110,7 +113,7 @@ POST /v1/analyze        multipart/form-data
 사용자는 그것을 **건강 점수로 읽습니다.** 이 서비스는 진단이 아니라 **같은 개체의
 시간 변화 관찰**입니다.
 
-화면에 쓸 것은 `features.summary_for_ui` 와 `/v1/compare` 의 `message_for_ui` 입니다.
+화면에 쓸 것은 `features.summary_for_ui` 와 `/gait/compare` 의 `message_for_ui` 입니다.
 
 ### 오류
 
@@ -122,10 +125,10 @@ POST /v1/analyze        multipart/form-data
 
 ---
 
-## `GET /v1/records`
+## `GET /gait/records`
 
 ```
-GET /v1/records?dog_id=dog-123&limit=20&cursor=<record_id>
+GET /gait/records?dog_id=dog-123&limit=20&cursor=<record_id>
 ```
 
 | 파라미터 | 필수 | 기본 | |
@@ -149,7 +152,7 @@ GET /v1/records?dog_id=dog-123&limit=20&cursor=<record_id>
       "quality_tier": "low",              // status=unavailable 이면 null
       "gait_filter_version": "v5-…",
       "has_overlay": true,
-      "comparable": true                  // /v1/compare 대상이 될 수 있는가
+      "comparable": true                  // /gait/compare 대상이 될 수 있는가
     }
   ],
   "next_cursor": null                     // 더 없으면 null
@@ -169,7 +172,7 @@ GET /v1/records?dog_id=dog-123&limit=20&cursor=<record_id>
 
 ---
 
-## `DELETE /v1/records/{record_id}`
+## `DELETE /gait/records/{record_id}`
 
 기록 JSON 과 **영상 파일(원본·overlay)까지 즉시 지웁니다.**
 
@@ -202,10 +205,10 @@ GET /v1/records?dog_id=dog-123&limit=20&cursor=<record_id>
 
 ---
 
-## `POST /v1/compare`
+## `POST /gait/compare`
 
 ```jsonc
-POST /v1/compare
+POST /gait/compare
 {"record_id_a": "…", "record_id_b": "…"}
 ```
 
@@ -226,7 +229,7 @@ POST /v1/compare
 
 ---
 
-## `GET /healthz`
+## `GET /gait/healthz`
 
 ```jsonc
 {"status": "ok",
@@ -285,7 +288,7 @@ POST /v1/compare
 
 | | 왜 |
 | --- | --- |
-| `GET /v1/records/{id}/original` (원본 재생) | 앱 요구사항이 확정되지 않았습니다. 필요해질 때 추가합니다 |
+| `GET /gait/records/{id}/original` (원본 재생) | 앱 요구사항이 확정되지 않았습니다. 필요해질 때 추가합니다 |
 | 비동기 job/poll | 지금은 동기입니다. 미래 모양은 `docs/orchestration-contracts.md` 의 `job: {job_id, poll}` |
 | 인증·소유권 | 위 참고 |
 | URL 업로드 (`yt-dlp`) | 코드는 있으나 엔드포인트를 두지 않았습니다 |

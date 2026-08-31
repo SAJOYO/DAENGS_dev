@@ -225,7 +225,7 @@ jobs:
       - name: 외부 요청 전송
         id: probe
         env:
-          PUBLIC_IP: ${{ needs.discover_public_endpoint.outputs.public_ip }}
+          PUBLIC_HOST: daengback.weareithero.cloud
           MARKER: ${{ needs.discover_public_endpoint.outputs.marker }}
         run: |
           set -euo pipefail
@@ -242,10 +242,10 @@ jobs:
               --user-agent "$MARKER" \
               --header 'Content-Type: application/json' \
               --data '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}' \
-              "http://${PUBLIC_IP}/v2/places/search"
+              "http://${PUBLIC_HOST}/v2/places/search"
           )"
-          test "$status" != '000'
-          echo "External request reached nginx with HTTP $status"
+          test "$status" = '200'
+          echo 'External Place request returned HTTP 200'
 
   inspect_nginx_client_ip:
     name: 진단 — nginx source IP 비교

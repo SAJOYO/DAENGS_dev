@@ -39,9 +39,15 @@ class WalkUpload(BaseModel):
     #: 같은 값으로 다시 올리면 서버가 이미 있는 것을 돌려줍니다.
     client_session_id: uuid.UUID
 
-    #: 누구와 걸었나. 등록한 강아지가 없으면 `None` 입니다 —
-    #: **아무 강아지나 갖다 붙이지 않습니다.**
-    pet_id: uuid.UUID | None = None
+    #: 그 산책에 데리고 나간 아이들. 한 번에 여러 마리를 데리고 나갑니다.
+    #:
+    #: **빈 목록이어도 됩니다** — 강아지를 등록하기 전에 걸었거나 고르지 않고 나선
+    #: 경우입니다. 그래도 산책은 기록입니다. 같은 아이를 두 번 적어도 한 마리이고,
+    #: 남의 `pet_id` 는 서버가 조용히 뺍니다.
+    #:
+    #: 한도는 한 사람이 기를 수 있는 마릿수(`MAX_PETS_PER_USER`)의 두 배입니다 —
+    #: 딱 맞춰 두면 상한을 올릴 때 여기를 같이 못 고쳐 요청이 422 로 막힙니다.
+    pet_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
 
     started_at: datetime
     ended_at: datetime
@@ -115,7 +121,9 @@ class WalkResponse(BaseModel):
 
     id: uuid.UUID
     client_session_id: uuid.UUID
-    pet_id: uuid.UUID | None
+
+    #: 그 산책에 나간 아이들. **내 강아지만** 들어 있습니다. 비어 있을 수 있습니다.
+    pet_ids: list[uuid.UUID]
     started_at: datetime
     ended_at: datetime
     weather_code: int | None

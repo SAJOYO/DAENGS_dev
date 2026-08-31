@@ -8,7 +8,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.models import Walk, WalkPoint
+from daengs_backend.models import Walk, WalkPet, WalkPoint
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import WalkPointsAppend, WalkUpload
@@ -47,9 +47,12 @@ async def upload_walk(
     **덮어쓰지 않습니다.** 끝난 기록은 바뀌지 않으므로 다시 온 것은 재시도일 뿐이고,
     좌표를 다시 넣으면 이미 저장한 원본을 흔들 위험만 있습니다.
 
-    강아지는 **내 강아지일 때만** 붙입니다. 남의 pet_id 를 실어 보내도 그 강아지에
-    산책이 붙으면 안 됩니다. 내 것이 아니면 조용히 `None` 으로 둡니다 — 산책 자체는
+    강아지는 **내 강아지만** 붙입니다. 남의 pet_id 를 실어 보내도 그 강아지에
+    산책이 붙으면 안 됩니다. 내 것이 아닌 id 는 조용히 뺍니다 — 산책 자체는
     사용자의 것이라 거절할 이유가 없습니다.
+
+    **아무도 안 붙어도 저장합니다.** 강아지를 등록하기 전에 걸었거나 고르지 않고
+    나선 경우인데, 그래도 사람이 걸은 것은 걸은 것입니다.
 
     :returns: (산책, 이번에 새로 만들었는가)
     """
@@ -59,15 +62,10 @@ async def upload_walk(
     if existing is not None:
         return existing, False
 
-    pet_id = body.pet_id
-    if pet_id is not None:
-        owned = await pet_repo.get_owned(session, app_user_id, pet_id)
-        if owned is None:
-            pet_id = None
+    mine = await pet_repo.owned_ids(session, app_user_id, body.pet_ids)
 
     walk = Walk(
         app_user_id=app_user_id,
-        pet_id=pet_id,
         client_session_id=body.client_session_id,
         started_at=body.started_at,
         ended_at=body.ended_at,
@@ -75,6 +73,9 @@ async def upload_walk(
         is_day=body.is_day,
         temperature_c=body.temperature_c,
     )
+    # **pet_id 순으로 담습니다.** 관계가 그 순서로 다시 읽히기 때문입니다 —
+    # 방금 올린 응답과 나중에 받아 온 응답의 순서가 다르면 앱이 "바뀌었다" 로 읽습니다.
+    walk.pets = [WalkPet(pet_id=pet_id) for pet_id in sorted(mine)]
     walk.points = [
         WalkPoint(
             client_seq=point.client_seq,

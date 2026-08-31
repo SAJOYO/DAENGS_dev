@@ -25,11 +25,15 @@ async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[
     """내 산책 전부, **최근 순.**
 
     좌표는 안 붙입니다 — 목록에 좌표까지 실으면 스무 건에 수만 점이 딸려 옵니다.
+    나간 아이들(`pets`)은 붙입니다. 산책당 많아야 몇 줄이고, 안 붙이면 응답을 만들다
+    지연 로딩에서 터집니다.
+
     `started_at` 이 같을 수 있어 `id` 로 한 번 더 정렬합니다.
     """
     stmt = (
         select(Walk)
         .where(Walk.app_user_id == app_user_id)
+        .options(selectinload(Walk.pets))
         .order_by(Walk.started_at.desc(), Walk.id)
     )
     return list(await session.scalars(stmt))
@@ -43,13 +47,13 @@ async def get_owned(
     소유자 조건을 이 함수 안에 묶어 두면 부르는 쪽이 잊을 자리가 없습니다
     (`repositories/pet.py` 와 같은 이유).
 
-    `selectinload` 로 좌표를 같이 읽습니다. 지연 로딩이면 비동기 세션에서 접근하는
-    순간 터집니다.
+    `selectinload` 로 좌표와 나간 아이들을 같이 읽습니다. 지연 로딩이면 비동기
+    세션에서 접근하는 순간 터집니다.
     """
     stmt = (
         select(Walk)
         .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
-        .options(selectinload(Walk.points))
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 
@@ -68,7 +72,7 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
-        .options(selectinload(Walk.points))
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 

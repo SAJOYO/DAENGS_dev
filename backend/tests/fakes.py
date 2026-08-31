@@ -148,19 +148,31 @@ class FakeWalkPoint:
 
 
 @dataclass
+class FakeWalkPet:
+    """WalkPet 대역. 그 산책에 나간 아이 하나입니다."""
+
+    pet_id: uuid.UUID
+
+
+@dataclass
 class FakeWalk:
-    """Walk 대역. 좌표를 리스트로 들고 있습니다 (진짜는 relationship)."""
+    """Walk 대역. 좌표와 나간 아이들을 리스트로 들고 있습니다 (진짜는 relationship)."""
 
     app_user_id: uuid.UUID
     client_session_id: uuid.UUID
     started_at: object
     ended_at: object
     id: uuid.UUID = field(default_factory=uuid.uuid4)
-    pet_id: uuid.UUID | None = None
     weather_code: int | None = None
     is_day: bool | None = None
     temperature_c: object | None = None
     points: list[FakeWalkPoint] = field(default_factory=list)
+    pets: list[FakeWalkPet] = field(default_factory=list)
+
+    @property
+    def pet_ids(self) -> list[uuid.UUID]:
+        """진짜 모델과 같은 모양. 라우터가 이걸로 응답을 만듭니다."""
+        return [link.pet_id for link in self.pets]
 
 
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
@@ -252,6 +264,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def pet_owned_ids(session, app_user_id, pet_ids):
+        mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
+        return mine & set(pet_ids)
+
     async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
@@ -268,6 +284,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)

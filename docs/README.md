@@ -6,10 +6,10 @@
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `place-search` · `skin-screening` · `gait-analysis` · 오케스트레이션)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `skin-screening` · `gait-analysis` · 오케스트레이션)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `life/` 만 옮겼고 나머지 유닛은 별도 카드입니다.
+지금은 `life/` · `training/` 을 옮겼고 나머지 유닛은 별도 카드입니다(#82).
 
 ### `life/` — 생활 파트 (① 제도·문서 RAG `/ask` · ② 실시간 산책 `/walk`)
 
@@ -28,6 +28,16 @@
 저쪽 `docs/workflow.md`(작업 방식)는 **가져오지 않았습니다** — 위 `collaboration.md` 가
 같은 규칙을 더 자세히 담고 있어, 두면 같은 규칙의 두 번째 주장이 생깁니다.
 이관 노트(`handoff-daengs-dev.md`)도 원본 레포에 남겨 뒀습니다. 결과는 D-018 에 있습니다.
+
+### `training/` — 훈련 파트 (훈련 RAG `/training/chat`)
+
+훈련 RAG 문서는 `frankie516c/dog-training-rag` 에서 **선별 이관**했습니다 (2026-08-31, 파트별
+합치는 날). 색인은 [training/README.md](training/README.md) — 서빙 계약([training/rag-demo.md](training/rag-demo.md),
+원래 `docs/training-rag-demo.md`) · 소스/수집 · 설계/결정 문서 17건과 근거 리포트
+`training/reports/` 12건입니다. GraphRAG→벡터 전환, 환경축 폐기 같은 "왜"가 여기에 있고,
+검색 품질 미해결 건은 `training/retrieval-gate/STATUS.md` 가 현재 상태입니다.
+발표 대본·폐기된 그래프 설계·실험 과정 리포트는 원본 레포에 남겼습니다 — 무엇을 왜
+안 가져왔는지는 색인의 "가져오지 않은 것" 절에 있습니다.
 
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.

@@ -14,14 +14,13 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
 | 경로 | 내용 |
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
-| `backend/` | FastAPI 앱, uv 로 관리 (Python 3.12). 패키지는 `src/daengs_backend/` |
-| `skin-screening/` | 피부 병변 스크리닝 (FastAPI + PyTorch). **배포에 안 붙어 있습니다** — D-022 |
-| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). **소스·의존성은 backend 와 한 몸, 런타임은 별도 컨테이너·프로세스** — D-038. compose `profile: gait` 라 기본으로는 안 뜹니다. 가중치는 저장소에 없습니다 |
-| `place-search/` | Place 검색 (FastAPI + PostGIS). nginx 의 `/v2/places/`로 공개되며 자기 DB(place-db)와 Alembic 을 가집니다 — D-026, D-027. backend·Dog Profile과 독립입니다. 원본·소유권은 `place-search/UPSTREAM.md` |
-| `journey-service/` | 장소 선택 뒤 단발 경로 스냅샷. nginx의 `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `journey-service/UPSTREAM.md` |
+| `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening**·**gait** 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 · D-038 |
+| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 `gait-analysis` 컨테이너로 따로 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
+| `backend/src/daengs_place/` | Place 검색 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `backend/docs/place/UPSTREAM.md` |
+| `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `backend/docs/journey/UPSTREAM.md` — D-039 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
-| `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
+| `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/migrations/` | **이미 돌고 있는 DB** 에 손으로 적용하는 SQL. 스키마를 바꾸면 `db/init/` 과 같이 고칩니다 |
 | `db/indexes.sql` | 인덱스. 적재가 끝난 뒤 수동 실행 |
@@ -50,10 +49,12 @@ npm run lint
 백엔드 (`backend/`):
 
 ```powershell
-uv sync                    # .venv 동기화
+uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
 uv run pytest              # 테스트 (backend/tests/)
+uv run pytest tests/place  # Place 테스트만
+uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)
 ```
 
@@ -63,28 +64,31 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
-- **백엔드는 uv 기본 src 레이아웃**입니다. 코드는 `src/daengs_backend/` 안에 두고
+- **Python 코드는 uv 기본 src 레이아웃**입니다. 팀 소유 패키지는 `backend/src/daengs_*`에 두고
   `from daengs_backend.config import settings` 처럼 패키지 이름으로 import 합니다.
-  패키지 안은 **MVC2 계층**으로 나눕니다 (D-011).
+  일반명 `app` 패키지를 만들지 않습니다. `daengs_backend` 안은 **MVC2 계층**으로 나눕니다 (D-011).
   `routers`=Controller / `services`=Service / `repositories`=DAO /
   `models`(SQLAlchemy)+`schemas`(Pydantic)=Model. View 는 Next.js 가 가져갑니다.
   각 폴더의 `__init__.py` 에 "무엇을 넣고 무엇을 넣지 말 것"이 적혀 있습니다.
-  `src/` 밑에 패키지를 더 둘지(`daengs_rag` 등)는 **아직 정하지 않았습니다.**
+  코드 위치와 프로세스 경계는 별개입니다. `daengs_place`와 `daengs_journey`는 같은 lock을
+  쓰지만 별도 컨테이너·별도 venv 볼륨으로 실행합니다 (D-039).
 - **DB 접근은 SQLAlchemy 2.0 async + asyncpg** 입니다 (D-011). 세션은
   `core.database.get_session` 의존성으로 받고, `commit` 은 services 계층에서 합니다.
-  **스키마 원본은 `db/init/*.sql` 이고 Alembic 은 쓰지 않습니다** — `models/` 는 SQL 을
+  **기본 DB의 스키마 원본은 `db/init/*.sql` 이고 Alembic 은 쓰지 않습니다** — `models/` 는 SQL 을
   따라가는 쪽이라, SQL 을 고쳤으면 모델도 손으로 맞춰야 합니다.
   **`db/init/` 은 볼륨이 빌 때만 실행되므로 서버 DB 에는 반영되지 않습니다.**
   이미 있는 DB 를 바꾸는 SQL 은 `db/migrations/` 에 파일로 남기고 배포 후 직접
   적용하세요. 버전 테이블이 없어 **무엇이 적용됐는지 DB 가 기억하지 않으니**,
   여러 번 돌려도 안전하게 쓰세요 (`IF NOT EXISTS` 등).
+  예외로 별도 PostGIS인 place-db는 이관해 온 리비전 역사를 유지하므로
+  `backend/infra/place/alembic/`이 스키마 원본입니다 (D-026, D-039).
 - **Python 은 3.12 로 고정**입니다 (`requires-python = ">=3.12,<3.13"`, `backend/.python-version`).
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로
   변경분이 보이면 그냥 같이 커밋하면 됩니다. `frontend/CLAUDE.md` 는 그 파일을 참조만 합니다.
-- **backend 는 compose 로 띄우고 개발 모드로 돕니다.** `backend/src` 를 마운트해
+- **Python 서비스는 compose에서 `backend/src`와 단일 lock을 공유합니다.** backend는 개발 모드로 돕니다. `backend/src` 를 마운트해
   파일을 고치면 컨테이너가 리로드합니다. 재시작이 필요한 건 의존성을 바꿨을 때뿐이고,
-  그때는 `docker compose restart backend` 를 직접 실행하세요 (워크플로우는 건드리지 않습니다).
+  그때는 영향받는 `backend`·`place-search`·`journey-service`를 재생성하세요.
 - **`/ask` 의 임베딩 모델은 backend 프로세스에 상주합니다** (D-021). 그래서 컨테이너의
   `command` 가 `uv sync --frozen --group ml && uv run --no-sync dev` 입니다.
   ⚠ **컨테이너 안에서 `uv sync` 를 인자 없이 돌리지 마세요** — 그건 exact 동기화라 `ml` 을

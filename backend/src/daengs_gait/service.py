@@ -25,6 +25,7 @@ nginx 뒤에 붙는 방식과 운영 절차가 같습니다.
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -33,6 +34,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from daengs_gait import config
+
+log = logging.getLogger(__name__)
 
 
 def _reject_if_too_large(content_length: str | None, actual_bytes: int) -> None:
@@ -59,6 +62,31 @@ def _reject_if_too_large(content_length: str | None, actual_bytes: int) -> None:
 class CompareRequest(BaseModel):
     record_id_a: str
     record_id_b: str
+
+
+# 응답에서 지우는 내부 필드. **디스크 경로는 앱에 나가지 않습니다** (API.md v1).
+#
+# 왜 지우나: ① 컨테이너 안 경로(`/data/uploads/…`)라 앱에서 쓸 수가 없습니다
+#            ② 파일이 공용 저장소(S3 등, #78)로 옮겨지면 **전부 거짓말이 됩니다**
+#            ③ 파일 이름은 `record_id` 와 다른 uuid 라 노출할 이유가 없습니다
+# 대신 `record_id` 로 만든 조회용 URL 과 `has_overlay` 를 냅니다.
+_INTERNAL_FIELDS = ("original_video", "overlay_video")
+
+
+def _public(record: dict) -> dict:
+    """기록을 **앱이 볼 모양**으로 바꿉니다.
+
+    ⚠️ `overlay_url` 은 **이 서비스 기준 경로**입니다. 앱이 실제로 부르는 주소는 nginx 가
+       붙이는 `/gait` 접두사가 앞에 옵니다 (`daengback.~/gait/v1/records/…/overlay`).
+       접두사를 여기서 박지 않는 이유는 이 서비스가 자기 바깥의 라우팅을 모르기
+       때문입니다 — 아는 척하면 nginx 설정이 바뀔 때 조용히 틀립니다.
+    """
+    out = {k: v for k, v in record.items() if k not in _INTERNAL_FIELDS}
+    record_id = record.get("record_id")
+    has_overlay = bool(record.get("overlay_video"))
+    out["has_overlay"] = has_overlay
+    out["overlay_url"] = f"/v1/records/{record_id}/overlay" if has_overlay else None
+    return out
 
 
 def build_app() -> FastAPI:
@@ -148,7 +176,50 @@ def build_app() -> FastAPI:
             # (backend 의 `/ask` 가 ml 그룹 없을 때 503 을 내는 것과 같은 규칙).
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-        return record
+        return _public(record)
+
+    @app.get("/v1/records")
+    def list_dog_records(
+        dog_id: str | None = None,
+        limit: int = 20,
+        cursor: str | None = None,
+    ):
+        """한 강아지의 기록 목록. **요약만** 냅니다.
+
+        ⚠️ **`dog_id` 는 보안 장치가 아닙니다.** 남의 기록이 전부 쏟아지는 것을 막는
+           최소한일 뿐, 그 값이 부르는 사람의 것인지 이 서비스는 **검증하지 않습니다.**
+           소유권 검증은 `daengs_backend` 의 auth 계층 몫입니다 (API.md §소유권).
+           그래서 `dog_id` 없는 전체 조회는 **열지 않습니다** — 열면 그 최소한마저
+           없어집니다.
+        """
+        from daengs_gait.record_store import records_for_dog, summarize
+
+        if not dog_id:
+            raise HTTPException(status_code=400, detail="dog_id 가 필요합니다.")
+        if limit < 1 or limit > 100:
+            raise HTTPException(status_code=400, detail="limit 은 1~100 입니다.")
+
+        records = records_for_dog(dog_id)
+
+        # 커서는 **정렬된 목록에서의 위치**입니다. 그 record_id 를 못 찾으면(삭제됐다면)
+        # 조용히 처음부터 주지 않고 400 을 냅니다 — 앱이 같은 항목을 두 번 받는 것보다
+        # 다시 처음부터 받는 편이 낫고, 무엇보다 그 사실을 알아야 합니다.
+        start = 0
+        if cursor:
+            ids = [r.get("record_id") for r in records]
+            if cursor not in ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail="cursor 가 유효하지 않습니다 (지워진 기록일 수 있습니다).",
+                )
+            start = ids.index(cursor) + 1
+
+        page = records[start : start + limit]
+        has_more = start + limit < len(records)
+        return {
+            "records": [summarize(r) for r in page],
+            "next_cursor": page[-1].get("record_id") if (page and has_more) else None,
+        }
 
     @app.get("/v1/records/{record_id}")
     def get_record(record_id: str):
@@ -156,7 +227,38 @@ def build_app() -> FastAPI:
 
         if not record_exists(record_id):
             raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
-        return load_record(record_id)
+        return _public(load_record(record_id))
+
+    @app.delete("/v1/records/{record_id}")
+    def delete_gait_record(record_id: str):
+        """기록과 딸린 영상(원본·overlay)을 **즉시 지웁니다.**
+
+        ⚠️ **부분 실패를 성공으로 감추지 않습니다.** 개인 데이터 삭제라, 파일이 남았으면
+           앱이 그것을 알아야 합니다 — 하나라도 실패하면 500 과 함께 무엇이 지워지고
+           무엇이 남았는지 돌려주고 서버 로그에도 남깁니다. 조용히 200 을 내면 사용자는
+           지워진 줄 알고 서버에는 영상이 남습니다.
+        """
+        from daengs_gait.record_store import delete_record, record_exists
+
+        if not record_exists(record_id):
+            raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+
+        deleted, errors = delete_record(record_id)
+        if errors:
+            log.error(
+                "기록 삭제가 완전히 끝나지 않았습니다: record_id=%s deleted=%s errors=%s",
+                record_id, deleted, errors,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "기록 삭제가 완전히 끝나지 않았습니다.",
+                    "record_id": record_id,
+                    "deleted": deleted,
+                    "errors": errors,
+                },
+            )
+        return {"record_id": record_id, "deleted": deleted}
 
     @app.post("/v1/compare")
     def compare(req: CompareRequest):
@@ -164,12 +266,18 @@ def build_app() -> FastAPI:
 
         ⚠️ 응답의 `_dev_only_*` 필드는 **UI 에 노출하면 안 됩니다.**
         """
-        from daengs_gait.pipeline import compare_records
+        # ⚠️ **존재 확인이 import 보다 먼저입니다.** `/v1/analyze` 의 크기 검사와 같은
+        #    규칙입니다 — `daengs_gait.pipeline` 이 torch·ultralytics 를 끌고 오는데,
+        #    거절할 요청 때문에 그것을 올릴 이유가 없습니다. 순서를 되돌리면 기본 설치
+        #    (`uv sync`, gait 그룹 없음)에서 **404 여야 할 응답이 ImportError 로 바뀝니다.**
         from daengs_gait.record_store import record_exists
 
         for rid in (req.record_id_a, req.record_id_b):
             if not record_exists(rid):
                 raise HTTPException(status_code=404, detail=f"기록을 찾을 수 없습니다: {rid}")
+
+        from daengs_gait.pipeline import compare_records
+
         return compare_records(req.record_id_a, req.record_id_b)
 
     @app.get("/v1/records/{record_id}/overlay")

@@ -20,7 +20,7 @@ daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
 | `place-search/` | Place 검색 (FastAPI + PostGIS). nginx 의 `/v2/places/`로 공개되며 자기 DB(place-db)와 Alembic 을 가집니다 — D-026, D-027. backend·Dog Profile과 독립입니다. 원본·소유권은 `place-search/UPSTREAM.md` |
 | `journey-service/` | 장소 선택 뒤 단발 경로 스냅샷. nginx의 `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `journey-service/UPSTREAM.md` |
 | `nginx/default.conf` | 리버스 프록시 설정 |
-| `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db 컨테이너 |
+| `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). backend 컨테이너가 씁니다 |
 | `db/init/` | DB 최초 기동 때 한 번 실행되는 SQL (확장 / 스키마 / 트리거) |
 | `db/migrations/` | **이미 돌고 있는 DB** 에 손으로 적용하는 SQL. 스키마를 바꾸면 `db/init/` 과 같이 고칩니다 |
@@ -106,7 +106,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라
   CORS 가 필요합니다 — `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx · backend · pgvector · redis와
-  Place 검색(place-search · place-db)을 함께 올립니다.
+  Place 검색(place-search · place-db), 크롤러 워커·Beat(crawler-worker · crawler-beat)를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
   이미 만들어진 볼륨에는 반영되지 않습니다.
 - **`POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` 도 볼륨이 빌 때만 반영됩니다.**
@@ -129,6 +129,14 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   또 뜨면서 포트가 겹치고, 아무도 안 쓰는 빈 DB들이 생깁니다.
   개발 PC 에서는 `uv run dev` 로 앱만 띄우고 `DAENGS_DB_HOST` 가 서버 DB 를
   보게 하세요.
+- **크롤은 서버가 합니다** (RAG-050). compose 의 워커·Beat 가 매일 KST 04:00 에 due 소스만 받고
+  **수집에서 멈춥니다** — 파싱·청킹·임베딩·적재는 개발 PC 에서 사람이 합니다 (RAG-044 ⑤).
+  코퍼스(`raw/` + `manifests/crawl_log.jsonl`)는 서버 디스크의 `DAENGS_CORPUS_DIR`(최상단 `.env`,
+  러너 체크아웃 밖)에 있고 **서버가 정본**입니다. 개발 PC 에서 `crawler run` 으로 공유 `data/` 를
+  채우지 마세요 — 서버와 갈라지고 `data/` 는 git 미추적이라 아무도 알려주지 않습니다. 개발 중
+  수집은 임시 `DAENGS_DATA_DIR` 로, 적재할 원본은 서버에서 가져옵니다 (루트 `README.md`
+  "크롤러 · 코퍼스"). 워커는 로그 파일이 없으면 **일부러 뜨지 않습니다** — 로그 없이 뜨면 전 소스가
+  due 로 잡혀 다른 코퍼스를 만들기 때문입니다.
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
   기본값이 아닌 값으로 지정하세요. pgAdmin(tools 프로파일)은 로그인 없는 모드라
@@ -150,8 +158,9 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   250건(조례 208 · 보조금24 37 · 운송 5)을 그렇게 잃었고, 어느 PC 에도 없어 재수집으로만
   복구됩니다 — 개정되는 원문은 재수집이 곧 다른 코퍼스라 그건 복구가 아닙니다.
   `backend/.env` 의 `DAENGS_DATA_DIR` 을 메인 체크아웃의 절대 경로로 고정하면
-  어느 워크트리에서 수집하든 한 곳에 쌓입니다. 새 워크트리에 `.env` 를 복사할 때
-  그 줄이 같이 갑니다.
+  어느 워크트리에서 돌리든 한 곳을 봅니다. 새 워크트리에 `.env` 를 복사할 때
+  그 줄이 같이 갑니다. 그 `data/` 에서 개발 PC 가 가진 정본은 **`processed/` 뿐**입니다 —
+  `raw/` 와 로그의 정본은 서버입니다 (위 "크롤은 서버가 합니다").
 - **환경 변수 파일은 두 개입니다.** 최상단 `.env` 는 compose(Postgres, pgAdmin) 용,
   `backend/.env` 는 앱 용입니다. 각각 옆에 `.env.example` 이 있습니다.
   `backend/.env` 의 `DAENGS_DB_*` 는 **개발 PC 에서 `uv run dev` 로 띄울 때** 쓰는

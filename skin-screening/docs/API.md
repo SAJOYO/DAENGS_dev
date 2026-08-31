@@ -88,6 +88,8 @@ daengs.screenUrl=http://daengback.weareithero.cloud/screen
     "stage1_crop": "f320", "stage2_crop": "m2.5",
     "stage1_temperature": 1.0,
     "box_source": "user",             // "user" | "center"
+    "stage2_low_confidence": false,   // 종류를 가리기 어려웠나 (아래 참고)
+    "stage2_top_prob": 0.8843,        // 분포 1등의 확률. 이름은 안 줍니다
     "guide": {"ok": true, "reason": "", "width_frac": 0.4, "center_off": 0.0},
     "crop_note": "…"                  // 그때그때 남는 한계를 글로
   }
@@ -100,9 +102,30 @@ daengs.screenUrl=http://daengback.weareithero.cloud/screen
 | --- | --- | --- |
 | `normal` | 1단계가 임계값 미만 | "정상으로 보입니다" + 면책. 분포 없음 |
 | `abnormal` | 1단계가 임계값 이상, 2단계가 거절 안 함 | 이상 가능성 + **분포** + 진료 권함 |
-| `retake` | 네모가 밴드 밖 **또는** 2단계 확신이 너무 낮음 | "다시 찍어주세요" + 이유. 분포 없음 |
+| `retake` | **모델을 돌리기 전** 판단 — 이미지를 못 열었거나 네모가 밴드 밖 | "다시 찍어주세요" + 이유. 분포 없음 |
 
 `stage2.shown` 이 `false` 면 분포 영역을 **통째로 그리지 않으면** 됩니다.
+
+⚠️ **2단계가 확신이 없어도 `retake` 로 오지 않습니다** (2026-08-31 고침, D-023).
+1단계가 "이상" 이라고 했으면 언제나 `abnormal` 이고 분포도 실립니다 — 종류를
+모른다는 게 괜찮다는 뜻은 아니니까요. 확신이 낮다는 사실은 아래 `meta` 로 옵니다.
+
+예전에는 이 경우 판정이 통째로 `retake` 로 덮여서, 1단계가 **95.6%** 로 이상이라고
+본 사진이 "다시 찍어주세요" 를 받았습니다. **앱은 고칠 게 없었고 계약이 틀렸던
+것입니다.**
+
+### 2단계 확신이 낮을 때
+
+| 필드 | 뜻 |
+| --- | --- |
+| `meta.stage2_low_confidence` | `true` 면 종류를 가리기 특히 어려웠다는 뜻 |
+| `meta.stage2_top_prob` | 분포 1등의 확률 (= `distribution[0].prob`) |
+| `meta.stage2_abstain_threshold` | 그 판단에 쓴 문턱 |
+
+앱이 이걸로 할 수 있는 것: 분포 영역을 더 흐리게 하거나, "특히 불확실" 한 줄을
+덧붙이는 정도. **⚠️ "다시 찍어주세요" 로 바꾸지 마세요** — 2단계의 불확실은 사진
+탓이 아니라 모델 한계라(서로 다른 구조가 0.0026 차이로 겹칩니다) 다시 찍어도
+좋아지지 않습니다. 계속 다시 찍게 만들 뿐입니다.
 
 ### 병변 6종
 

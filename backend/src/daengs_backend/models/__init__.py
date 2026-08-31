@@ -19,7 +19,7 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
-from daengs_backend.models.walk import Walk, WalkPoint
+from daengs_backend.models.walk import Walk, WalkPet, WalkPoint
 from daengs_backend.models.refresh_token import RefreshToken
 
 __all__ = [
@@ -37,5 +37,6 @@ __all__ = [
     "Pet",
     "RefreshToken",
     "Walk",
+    "WalkPet",
     "WalkPoint",
 ]

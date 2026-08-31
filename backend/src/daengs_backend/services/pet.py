@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.models import AppUser, Pet
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.pet import PetUpsert
 
 #: 한 계정에 등록할 수 있는 마릿수.
@@ -95,6 +96,11 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
     pet = await pet_repo.get_owned(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
+
+    # **그 아이와만 나간 산책은 같이 지웁니다.** 아이를 지웠는데 그 아이의 산책만
+    # 주인 없이 남으면 목록에 "누구와 갔는지 모르는 기록" 이 쌓입니다.
+    # 다른 아이와 같이 나간 산책은 **남깁니다** — 그건 남은 아이의 기록이기도 합니다.
+    await walk_repo.delete_walks_only_with(session, pet.id)
 
     user = await app_user_repo.get_by_id(session, app_user_id)
     was_primary = user is not None and user.primary_pet_id == pet.id

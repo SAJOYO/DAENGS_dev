@@ -34,7 +34,7 @@ def _to_response(walk: Walk) -> WalkResponse:
     return WalkResponse(
         id=walk.id,
         client_session_id=walk.client_session_id,
-        pet_id=walk.pet_id,
+        pet_ids=walk.pet_ids,
         started_at=walk.started_at,
         ended_at=walk.ended_at,
         weather_code=walk.weather_code,

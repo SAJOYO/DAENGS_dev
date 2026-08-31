@@ -258,7 +258,7 @@ def pick(n: int, seed: int) -> list[dict]:
     """
     import pandas as pd
 
-    from src import crop, env
+    from daengs_screening import crop, env
 
     mf = env.work_root() / "manifests" / "manifest_final.parquet"
     if not mf.exists():

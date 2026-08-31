@@ -11,9 +11,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src import infer                                             # noqa: E402
-from src.config import CLASS_KO, NORMAL_LABEL, URGENCY_HINT       # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from daengs_screening import infer                                             # noqa: E402
+from daengs_screening.config import CLASS_KO, NORMAL_LABEL, URGENCY_HINT       # noqa: E402
 
 ok = fail = 0
 

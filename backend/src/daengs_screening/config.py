@@ -3,7 +3,7 @@
 노트북에서 하이퍼파라미터를 직접 고치지 마세요. 여기서 고치고 노트북은 읽기만 하면
 어떤 설정으로 어떤 결과가 나왔는지 나중에 추적할 수 있습니다.
 
-    from src.config import CFG, CLASSES
+    from daengs_screening.config import CFG, CLASSES
     cfg = CFG()                          # 기본값
     cfg = CFG(img_size=384, epochs=20)   # 일부만 바꾸기
 """
@@ -188,7 +188,7 @@ class CFG:
     def resolved_batch_size(self) -> int:
         if self.batch_size > 0:
             return self.batch_size
-        from src import env
+        from daengs_screening import env
 
         scale = _infer_scale(self.model_name)
         # 백본별 메모리 보정 — timm 이름으로 MODEL_ZOO 를 되짚습니다
@@ -203,7 +203,7 @@ class CFG:
         """-1 이면 CPU 코어 수에 맞춰 정합니다."""
         if self.num_workers >= 0:
             return self.num_workers
-        from src import env
+        from daengs_screening import env
 
         return env.suggest_workers()
 

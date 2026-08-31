@@ -7,7 +7,7 @@
 그래서 bbox/polygon 주변만 잘라 512px 로 저장하고, 학습은 이 크롭본으로 합니다.
 부수 효과로 용량도 크게 줄어 Colab/Drive 에 얹기 쉬워집니다.
 
-    from src import crop
+    from daengs_screening import crop
     df2 = crop.run(df, margin=1.5)          # 크롭 생성 + crop_path 컬럼 추가
     crop.preview(df2, n=8)                  # 눈으로 확인 (필수!)
 """
@@ -22,8 +22,8 @@ from pathlib import Path
 import pandas as pd
 from tqdm.auto import tqdm
 
-from src import env
-from src.config import CFG
+from daengs_screening import env
+from daengs_screening.config import CFG
 
 
 def expand_box(
@@ -600,7 +600,7 @@ def audit(df: pd.DataFrame, n_sample: int = 400, seed: int = 0,
     import numpy as np
     from PIL import Image
 
-    from src.config import CLASS_KO, NORMAL_LABEL
+    from daengs_screening.config import CLASS_KO, NORMAL_LABEL
 
     cfg = cfg or CFG()
     out: dict = {}
@@ -785,7 +785,7 @@ def full_crop_loss(df: pd.DataFrame, tag: str = "full", cfg: CFG | None = None,
     """
     import numpy as np
 
-    from src.config import CLASS_KO, NORMAL_LABEL
+    from daengs_screening.config import CLASS_KO, NORMAL_LABEL
 
     cfg = cfg or CFG()
     sub = df[df["bbox"].notna()]
@@ -896,7 +896,7 @@ def shortcut_baseline(df: pd.DataFrame, cfg: CFG | None = None, fold: int = 0,
     from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.metrics import f1_score, precision_recall_fscore_support, roc_auc_score
 
-    from src.config import CLASS_KO, CLASSES, NORMAL_LABEL
+    from daengs_screening.config import CLASS_KO, CLASSES, NORMAL_LABEL
 
     cfg = cfg or CFG()
     if features not in FEATURE_SETS:
@@ -992,7 +992,7 @@ def shortcut_baseline(df: pd.DataFrame, cfg: CFG | None = None, fold: int = 0,
                   f"(무작위 ≈ {random_f1:.3f})")
             _, rec, _, sup = precision_recall_fscore_support(
                 y2va, p2, labels=list(range(len(CLASSES))), zero_division=0)
-            from src.evaluate import pad_ko
+            from daengs_screening.evaluate import pad_ko
             print(f"  {pad_ko('클래스', 30)}{'recall':>9}{'n':>8}")
             for i, c in enumerate(CLASSES):
                 mark = "  ← 배율로 맞힘" if rec[i] > 0.5 else ""
@@ -1028,7 +1028,7 @@ def contact_sheet(df: pd.DataFrame, per_class: int = 6, seed: int = 0,
     import numpy as np
     from PIL import Image
 
-    from src.config import CLASS_KO
+    from daengs_screening.config import CLASS_KO
 
     labs = sorted(df["label"].dropna().unique())
     if not labs:

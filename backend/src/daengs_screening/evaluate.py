@@ -9,7 +9,7 @@
 그래서 기본 보고 지표는 **macro-F1** 과 **클래스별 recall** 입니다.
 (docs/basics/07_평가지표_의료AI_관점.md)
 
-    from src import evaluate as ev
+    from daengs_screening import evaluate as ev
     rep = ev.full_report(logits, y, classes)
 """
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 
-from src.config import CLASS_KO
+from daengs_screening.config import CLASS_KO
 
 
 # ──────────────────────────────────────────────────────────────

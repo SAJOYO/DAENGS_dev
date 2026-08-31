@@ -12,11 +12,11 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import inspect                                                   # noqa: E402
 
-from src import agent                                            # noqa: E402
-from src.config import CLASS_KO, CLASSES                         # noqa: E402
+from daengs_screening import agent                                            # noqa: E402
+from daengs_screening.config import CLASS_KO, CLASSES                         # noqa: E402
 
 ok = fail = 0
 
@@ -97,7 +97,7 @@ check("crop_note 두 갈래가 다 있음", set(agent.CROP_NOTE) == {"user_box",
 print("\n[4] 서빙 크롭이 학습 크롭과 같은가")
 from PIL import Image                                            # noqa: E402
 
-from src import crop                                             # noqa: E402
+from daengs_screening import crop                                             # noqa: E402
 
 W, H = 1920, 1080                       # AI Hub 원본
 BBOX = [900.0, 470.0, 1020.0, 610.0]    # 라벨 bbox (120×140)
@@ -168,7 +168,7 @@ check("허용 경계 안쪽(28%)은 통과",
 
 # ── 5. MockAgent — 진짜와 같은 모양 ───────────────────────────
 print("\n[5] MockAgent")
-tmp = Path(__file__).resolve().parents[1] / "README.md"
+tmp = Path(__file__).resolve().parents[1] / "src" / "daengs_screening" / "README.md"
 m = agent.MockAgent()
 r1, r2 = m.screen(tmp), m.screen(tmp)
 
@@ -202,7 +202,7 @@ check("한계를 계약에 실어 보냄",
 # normal 로 떨어지는 입력도 하나 찾아 확인합니다
 found = None
 for i in range(300):
-    p = Path(__file__).resolve().parents[1] / "src" / "agent.py"
+    p = Path(__file__).resolve().parents[1] / "src" / "daengs_screening" / "agent.py"
     r = agent.MockAgent(threshold=0.99).screen(p)
     found = r
     break
@@ -212,12 +212,13 @@ check("normal 이면 분포가 비어 있음", not found["stage2"]["distribution
 # ── 6. torch 없이 import 되는가 ───────────────────────────────
 print("\n[6] torch 의존")
 check("agent 가 torch 를 import 하지 않음", "torch" not in sys.modules)
-import src.message                                               # noqa: E402
+import daengs_screening.message                                               # noqa: E402
 
 check("message 도 torch 없이 됨", "torch" not in sys.modules)
 check("infer 가 message 를 재수출함",
-      "from src.message import" in (Path(__file__).resolve().parents[1]
-                                    / "src" / "infer.py").read_text(encoding="utf-8"))
+      "from daengs_screening.message import" in (Path(__file__).resolve().parents[1]
+                                    / "src" / "daengs_screening"
+                                    / "infer.py").read_text(encoding="utf-8"))
 
 # ── 7. ScreeningAgent 안전장치 ────────────────────────────────
 print("\n[7] 임계값 안전장치")
@@ -243,8 +244,7 @@ check("학습 픽셀 공간으로 먼저 맞춤", "to_train_space" in src_screen
 
 # ── 8. 네모 오차 → 이미 잰 교란으로 환산 (tools/box_error.py) ──
 print("\n[8] 네모 오차 환산")
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-import box_error as be                                          # noqa: E402
+from daengs_screening import box_error as be                                          # noqa: E402
 
 T = [0.45, 0.45, 0.55, 0.55]          # 정답: 가운데 0.10 크기
 check("딱 맞으면 줌 1.0", abs(be.to_perturbation([.45, .45, .10, .10], T)["zoom"] - 1) < 1e-9)
@@ -323,7 +323,7 @@ with tempfile.TemporaryDirectory() as td:
         agent.ScreeningAgent.load = real
 
 # 1단계만일 때의 문구
-from src import message as _msg                                  # noqa: E402
+from daengs_screening import message as _msg                                  # noqa: E402
 
 only_txt = _msg.compose_screening_message(
     _msg.Prediction(topk=[], stage1_abnormal=0.62, confidence_band="보통"))

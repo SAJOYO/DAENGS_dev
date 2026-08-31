@@ -5,7 +5,7 @@
   · 데모 서버를 **torch 없이** 띄우려면 (`serve.py --mock`) 문구가 torch 와
     같은 파일에 있으면 안 됩니다
 
-`from src.infer import compose_message` 는 그대로 됩니다 — infer 가 재수출합니다.
+`from daengs_screening.infer import compose_message` 는 그대로 됩니다 — infer 가 재수출합니다.
 
 지켜야 할 원칙은 `docs/cautions/03_의료AI_안전설계_원칙.md` 에 있고,
 2단계 파이프라인 규격은 그 문서 §7-B 입니다.
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.config import CLASS_EN, CLASS_KO, NORMAL_LABEL, URGENCY_HINT
+from daengs_screening.config import CLASS_EN, CLASS_KO, NORMAL_LABEL, URGENCY_HINT
 
 
 DISCLAIMER = (

@@ -106,7 +106,7 @@ class PerformanceObservation(StrictModel):
 class CaseResult(StrictModel):
     case_id: str
     prompt_version: PromptVersion
-    model: Literal["gemini-3.5-flash-lite"]
+    model: Literal["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
     attempt_count: int = Field(ge=1, le=2)
     first_pass_schema_valid: bool
     final_schema_valid: bool

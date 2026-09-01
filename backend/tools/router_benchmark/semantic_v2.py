@@ -77,6 +77,7 @@ def assemble_route_plan(
     *,
     query: str,
     context: dict[str, Any],
+    model_id: str = "gemini-3.5-flash-lite",
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values."""
     missing = _missing_walk_coordinates(context) if "walk" in decision.execute else []
@@ -87,7 +88,7 @@ def assemble_route_plan(
                 "handoffs": [],
                 "clarify": {"question": _clarify_question(missing), "missing": missing},
                 "router": "llm",
-                "model": "gemini-3.5-flash-lite",
+                "model": model_id,
             }
         )
 
@@ -113,7 +114,7 @@ def assemble_route_plan(
             ],
             "clarify": None,
             "router": "llm",
-            "model": "gemini-3.5-flash-lite",
+            "model": model_id,
         }
     )
 

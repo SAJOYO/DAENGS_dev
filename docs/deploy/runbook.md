@@ -31,7 +31,26 @@ sudo npm i -g pm2
 sudo mkdir -p /srv/daengs/{models/release,gait/release,letsencrypt,dumps,corpus-unused}
 sudo chown -R $USER /srv/daengs
 
-git clone -b main https://github.com/SAJOYO/DAENGS_dev.git ~/daengs
+# 저장소는 GitHub 에서 직접 clone 하지 않습니다 — 아래 "git push 배포" 참고
+git init --bare --initial-branch=main ~/repo.git
+```
+
+**git push 배포** — 조직 정책으로 이 레포의 deploy key 가 비활성이고, 사용자 전체 권한
+토큰을 공개 서버에 두는 것은 피하려고, GitHub 를 거치지 않고 **개발 PC 가 VM 으로
+직접 push** 합니다 (GitHub 자격증명이 VM 에 없습니다):
+
+```powershell
+# 개발 PC 에서 1회 설정
+git remote add gcp ssh://daengs@34.64.233.102/home/daengs/repo.git
+# $env:GIT_SSH_COMMAND = "ssh -i C:/Users/<사용자>/.ssh/google_compute_engine"
+
+# 최초 배포
+git switch main; git pull; git push gcp main
+```
+
+```bash
+# VM 에서 1회: bare 저장소에서 작업 트리 생성
+git clone -b main ~/repo.git ~/daengs
 ```
 
 ## 2. 상태 이전
@@ -142,7 +161,8 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 
 ## 6. 운영
 
-- **수동 배포**: `git pull origin main` → 의존성이 바뀐 경우만 해당 컨테이너 재생성
+- **수동 배포** (git push 배포 — §1): 개발 PC 에서 `git switch main && git pull && git push gcp main`
+  → VM 에서 `git -C ~/daengs pull` → 의존성이 바뀐 경우만 해당 컨테이너 재생성
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)

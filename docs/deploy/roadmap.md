@@ -39,16 +39,18 @@
 ## 3. 브랜치 · PR 흐름
 
 ```
-평소 작업(문서·설정·코드) : dev 기준 토픽 브랜치 → PR → dev 머지   ← 지금까지와 동일
-이관 직전 (Phase 1 시작)  : dev → main 스냅샷 PR 1회               ← 이관 산출물이 main 에 실림
-GCP VM                   : main 을 clone. 이후 배포는 git pull origin main (수동)
-main → dev 역머지        : 하지 않는다 — main 에는 스냅샷 머지 커밋뿐, 내용은 dev 와 같다
-로컬 서버                : dev 자동배포(self-hosted 러너) 그대로 — 개발 환경으로 계속 동작
+이관 작업(docs/deploy/ · GCP 전용 설정) : main 기준 토픽 브랜치 → PR → main 머지
+일반 개발(기능·수정)                    : dev 기준 → PR → dev (로컬 서버 자동배포) ← 기존 그대로
+서비스 코드의 main 반영                 : 완성 단위마다 dev → main 스냅샷 PR (#114 가 첫 번째)
+GCP VM                                 : main 을 clone. 이후 배포는 git pull origin main (수동)
+로컬 서버                              : dev 자동배포(self-hosted 러너) 그대로 — 개발 환경으로 계속
 ```
 
-이관 관련 파일(절차서·GCP 오버레이)도 **평소처럼 dev 로 머지**하면 된다. main 에는
-"이관을 실제로 시작하는 날" dev → main 스냅샷 한 번으로 함께 올라간다. 스냅샷 PR 은
-리뷰 부담이 없는 fast-forward 라 자주 올려도 비용이 없다.
+이관 산출물을 main 직행으로 두는 이유 — 소비자가 GCP VM(main clone)뿐이라 dev 를
+거칠 이유가 없고, dev 스냅샷 타이밍과 무관하게 이관을 진행할 수 있다. 이관 파일은
+로컬 서버 배포(dev)에 영향을 주지 않는다(`-f` 로 명시해야 적용되는 오버레이).
+main 에만 있는 커밋이 생기므로, 이관 문서·설정이 dev 에서도 필요해지면 그때
+main → dev 머지 1회로 가져온다 (지금은 불필요).
 
 ## 4. 단계 로드맵
 

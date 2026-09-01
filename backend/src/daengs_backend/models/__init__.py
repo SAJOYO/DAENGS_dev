@@ -13,6 +13,12 @@ SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
+from daengs_backend.models.chat import (
+    CHAT_MESSAGE_ROLES,
+    ChatMessage,
+    ChatSession,
+    ChatSummary,
+)
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
 from daengs_backend.models.pet import (
     PET_BIRTH_DATE_KINDS,
@@ -24,6 +30,10 @@ from daengs_backend.models.refresh_token import RefreshToken
 
 __all__ = [
     "ADMIN_ROLES",
+    "CHAT_MESSAGE_ROLES",
+    "ChatMessage",
+    "ChatSession",
+    "ChatSummary",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",
     "CrawlRun",

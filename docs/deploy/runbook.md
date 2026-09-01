@@ -3,15 +3,20 @@
 **명령어 수준 절차서**입니다. 무엇을/왜/일정은 [roadmap.md](roadmap.md) 가 정본이고
 여기 다시 적지 않습니다. GCP 전용 구성은 `docker-compose.gcp.yml` + `nginx/gcp.conf` (D-042).
 
-> ⚠ 서브도메인은 `daengs.weareithero.cloud` / `daengback.weareithero.cloud` 로 가정하고
-> 씁니다. **가비아 실제 값 확인 후** 다르면 `nginx/gcp.conf` 의 `server_name`·인증서
-> 경로와 이 문서의 도메인을 함께 고치세요.
+> 서브도메인은 팀 결정(2026-09-01)으로 **클라우드 전용 새 이름**입니다 —
+> `daengapp.weareithero.cloud`(프런트) / `daengapi.weareithero.cloud`(백엔드).
+> 기존 `daengs`·`daengback` 은 로컬(개발) 서버가 그대로 쓰므로 **가비아 기존 레코드는
+> 건드리지 않습니다.** 덕분에 DNS 컷오버가 없습니다 — 새 레코드는 고정 IP 예약 직후
+> 바로 만들 수 있습니다(아직 아무도 안 쓰는 이름이라 전파를 기다릴 일이 없습니다).
 
 ## 0. 사전 (콘솔 — roadmap Phase 0)
 
 예산 알림 50/80/100% · 고정 IP 예약(asia-northeast3) · VM e2-standard-4 / Ubuntu 24.04 LTS /
 100GB pd-balanced · 방화벽 인바운드 **80·443 만 전체 공개**, SSH(22)는 IAP 또는 내 IP.
 **5432 · 6379 · 8000 은 열지 않습니다** — 8000 은 호스트 내부(Next 서버사이드 프록시)용.
+
+고정 IP 가 나오면 **가비아에 새 A 레코드 2개를 바로 추가**합니다 (기존 레코드는 안 건드림):
+`daengapp` → 고정 IP · `daengapi` → 고정 IP, TTL 300.
 
 ## 1. VM 셋업
 
@@ -73,7 +78,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 
 | 항목 | GCP 값 |
 | --- | --- |
-| `DAENGS_CORS_ORIGINS` | `https://daengs.weareithero.cloud` (프론트 도메인 — Phase 2 에서) |
+| `DAENGS_CORS_ORIGINS` | `https://daengapp.weareithero.cloud` (프론트 도메인 — Phase 2 에서) |
 
 임베딩 모델(hf-cache 1.2GB)은 옮기지 않습니다 — 첫 기동 때 자동 다운로드.
 `EMBEDDING_MODEL_KEY` 는 바꾸지 마세요 (코퍼스와 어긋나면 차원이 같아 조용히 틀립니다).
@@ -105,30 +110,31 @@ pm2 start ../ecosystem.config.js && pm2 save && pm2 startup
 backend 는 아직 개발 모드(소스 마운트 + `uv sync` 후 기동)입니다 — 이미지 굽기는 2차
 (roadmap §7). 첫 기동은 의존성 동기화 + 모델 다운로드로 느립니다.
 
-## 4. DNS + TLS
+## 4. TLS
 
-인증서는 80 포트 인증(standalone)이라 **DNS 전환이 먼저**입니다.
-
-1. 가비아: 두 서브도메인 A 레코드 → 고정 IP (TTL 은 Phase 0 에서 미리 300초로)
-2. `nslookup daengback.weareithero.cloud` 로 전파 확인 후:
+인증서는 80 포트 인증(standalone)이라 **A 레코드(§0)가 먼저 있어야** 합니다.
+`nslookup daengapi.weareithero.cloud` 가 고정 IP 를 돌려주는지 확인 후:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml stop nginx
 docker run --rm -p 80:80 -v /srv/daengs/letsencrypt:/etc/letsencrypt certbot/certbot \
   certonly --standalone --agree-tos --no-eff-email -m <팀 이메일> \
-  -d daengs.weareithero.cloud -d daengback.weareithero.cloud
+  -d daengapp.weareithero.cloud -d daengapi.weareithero.cloud
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d nginx
 ```
 
-3. `backend/.env` 의 `DAENGS_CORS_ORIGINS` 를 https 도메인으로 → `docker compose ... restart backend`
-4. 앱 담당자에게 `https://daengback.weareithero.cloud` 전달 (앱에 박히는 값 — IP 금지)
+⚠ `-d` 순서를 지키세요 — **첫 번째(daengapp)가 인증서 폴더 이름**이 되고,
+`nginx/gcp.conf` 의 경로가 그 이름을 가리킵니다.
+
+1. `backend/.env` 의 `DAENGS_CORS_ORIGINS` 를 https 도메인으로 → `docker compose ... restart backend`
+2. 앱 담당자에게 `https://daengapi.weareithero.cloud` 전달 (앱에 박히는 값 — IP 금지)
 
 ## 5. 스모크 (완료 기준은 roadmap §6)
 
 ```bash
-curl -sI https://daengs.weareithero.cloud/            # 200, 자물쇠
-curl -sI http://daengs.weareithero.cloud/             # 301 → https
-curl -s  https://daengback.weareithero.cloud/docs     # FastAPI 문서
+curl -sI https://daengapp.weareithero.cloud/           # 200, 자물쇠
+curl -sI http://daengapp.weareithero.cloud/            # 301 → https
+curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 ```
 
 `/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.

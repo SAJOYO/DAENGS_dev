@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from daengs_backend.services.walk import WalkEvidencePoint
-from daengs_backend.services.walk.facts import compute_walk_facts
+from daengs_walk import WalkEvidencePoint
+from daengs_walk.facts import compute_walk_facts
 
 
 def _compute(walk_id, started_at, points, ended_s=150):

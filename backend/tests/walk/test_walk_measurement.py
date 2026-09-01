@@ -3,10 +3,10 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from daengs_backend.services.walk import analyze_walk
-from daengs_backend.services.walk.contracts import MeasurementReceipt
-from daengs_backend.services.walk.facts import compute_walk_facts
-from daengs_backend.services.walk.measurement import build_measurement_receipt
+from daengs_walk import analyze_walk
+from daengs_walk.contracts import MeasurementReceipt
+from daengs_walk.facts import compute_walk_facts
+from daengs_walk.measurement import build_measurement_receipt
 
 
 def test_receipt_preserves_denominators_and_both_accuracy_distributions(walk_id, started_at, point):

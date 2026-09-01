@@ -197,6 +197,9 @@ def test_skin_핸드오프는_의미_경로를_통해_실행_없이_고정_사�
     assert body["handoffs"] == [{"target": "skin", "reason": "image_upload_required"}]
     assert body["results"] == []
     assert len(transport.prompts) == 1  # semantic path was actually used here
+    # message 는 사람이 읽을 문장이지, 라우팅 내부 값(target/reason)이 아니다.
+    assert "skin" not in body["message"]
+    assert "image_upload_required" not in body["message"]
 
 
 # --------------------------------------------------------- 6. Gait HANDOFF (semantic path)
@@ -216,6 +219,8 @@ def test_gait_핸드오프는_의미_경로를_통해_실행_없이_고정_사�
     assert body["status"] == "HANDOFF"
     assert body["handoffs"] == [{"target": "gait", "reason": "video_upload_required"}]
     assert body["results"] == []
+    assert "gait" not in body["message"]
+    assert "video_upload_required" not in body["message"]
 
 
 # ------------------------------------------------------- 7. Mixed EXECUTE + HANDOFF
@@ -236,6 +241,10 @@ def test_training_실행과_gait_핸드오프가_공존하고_상태는_실행_�
     assert len(body["results"]) == 1
     assert body["handoffs"] == [{"target": "gait", "reason": "video_upload_required"}]
     assert training.calls  # Training 은 실행됐다
+    # 실행 답변은 남고, handoff 안내는 내부 코드 없이 이어붙는다.
+    assert "훈련 답변" in body["message"]
+    assert "gait" not in body["message"]
+    assert "video_upload_required" not in body["message"]
     # Gait 에는 애초에 어댑터가 없다 — 실행됐다면 그래프가 unsupported_capability ERROR 를
     # results 에 냈을 것이다. results 가 training 결과 하나뿐이라는 assert 가 이미 그것을 막는다.
 

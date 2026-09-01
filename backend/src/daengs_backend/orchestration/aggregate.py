@@ -17,6 +17,16 @@ _LABELS = {
     CapabilityName.WALK: "산책",
 }
 
+# HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라
+# (planner._HANDOFF_REASONS) message 에 그대로 섞으면 안 된다 — 구조화 필드는
+# AssistantResponse.handoffs 로 이미 나가고 있으니 여기서는 사람이 읽을 문장만 짓는다.
+_HANDOFF_MESSAGES = {
+    "skin": "피부 사진을 등록해 함께 확인해 볼게요.",
+    "gait": "보행 영상을 등록해 함께 확인해 볼게요.",
+}
+# 아직 모르는 target 이 와도(v1 밖 확장) 내부 값을 노출하지 않는 안전한 문장.
+_UNKNOWN_HANDOFF_MESSAGE = "추가 입력이 필요한 전용 기능으로 안내할게요."
+
 
 def aggregate_results(
     *, request_id: str, route_plan: RoutePlan, results: list[CapabilityResult]
@@ -103,7 +113,7 @@ def _result_message(result: CapabilityResult, *, multiple: bool) -> str:
 
 def _handoff_message(route_plan: RoutePlan) -> str:
     return "\n".join(
-        f"다음 전용 흐름으로 이동해 주세요: {handoff.target} ({handoff.reason})"
+        _HANDOFF_MESSAGES.get(handoff.target, _UNKNOWN_HANDOFF_MESSAGE)
         for handoff in route_plan.handoffs
     )
 

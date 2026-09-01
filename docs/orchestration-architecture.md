@@ -185,8 +185,11 @@ C:\deploy\daengs\
 
 **CURRENT** — `backend/src/daengs_backend/orchestration/` 에 이미 만들어진 `RoutePlan` 을
 소비하는 내부 LangGraph 실행 코어가 있습니다. Training·Life·Walk 어댑터, 순차 실행,
-HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. 의미 라우터와 공개
-`/assistant/query` 는 아직 없고, 기존 직접 API 및 프론트 흐름은 바뀌지 않았습니다.
+HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. Card 2B 로 production 의미 라우터도
+같은 패키지에 들어왔습니다 — `semantic.py`(Gemini 의미 선택 + O-14 1회 재시도) ·
+`planner.py`(결정적 신호 해소와 결정론적 RoutePlan 조립) · `service.py`(계획 → 기존 실행
+코어 호출). 공개 `/assistant/query` 는 아직 없고(Card 3), 기존 직접 API 및 프론트 흐름은
+바뀌지 않았습니다.
 
 **TARGET (CONFIRMED)** — 대화형 진입점 `/assistant/query` 를 하나 두고, 그 뒤의 흐름
 제어를 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30 어드버서리얼 아키텍처 리뷰

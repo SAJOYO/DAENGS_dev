@@ -90,8 +90,9 @@ docker cp daengs-place-db:/tmp/place.dump .
 | 항목 | GCP 값 |
 | --- | --- |
 | `SCREENING_RELEASE_DIR` | `/srv/daengs/models/release` |
-| `GAIT_RELEASE_DIR` | `/srv/daengs/gait/release` |
+| `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
+| `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:
 
@@ -110,20 +111,33 @@ cd ~/daengs
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d pgvector place-db
 
 # ② 롤 → 데이터 (--clean 이 init 스키마를 덤프 것으로 갈아 끼웁니다)
+# ⚠ 서버와 달리 GCP 의 수퍼유저는 postgres 가 아니라 daengs 입니다 — 빈 볼륨을
+#   POSTGRES_USER=daengs 로 초기화했기 때문. 그래서 전부 -U daengs 로 부릅니다.
+#   globals.sql 의 "ALTER ROLE daengs ... NOSUPERUSER" 가 permission denied 로
+#   실패하는 것은 **의도된 결과**입니다 — GCP 에선 daengs 가 관리자로 남아야 합니다.
 docker cp /srv/daengs/dumps/globals.sql pgvector:/tmp/
-docker compose exec pgvector psql -U postgres -f /tmp/globals.sql
+docker compose exec pgvector psql -U daengs -d vectordb -f /tmp/globals.sql
 docker cp /srv/daengs/dumps/vectordb.dump pgvector:/tmp/
-docker compose exec pgvector pg_restore -U postgres -d vectordb --clean --if-exists /tmp/vectordb.dump
+docker compose exec pgvector pg_restore -U daengs -d vectordb --clean --if-exists /tmp/vectordb.dump
 docker cp /srv/daengs/dumps/place.dump daengs-place-db:/tmp/
 docker compose exec place-db pg_restore -U place -d place --clean --if-exists /tmp/place.dump
 
 # ③ 서비스 — 크롤러(worker·beat)는 일부러 목록에 없습니다 (코퍼스 정본은 로컬 서버)
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-  up -d nginx backend place-search journey-service gait-analysis
+# ⚠ 여기서는 gcp 오버레이를 **얹지 않습니다.** gcp.conf 는 인증서 파일을 참조하는데
+#   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
+#   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
+docker compose --profile gait up -d nginx backend place-search journey-service gait-analysis
 
-# ④ 프론트 (PM2, 로컬 서버와 같은 모양)
+# ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
+#   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
 cd frontend && npm ci && npm run build
-pm2 start ../ecosystem.config.js && pm2 save && pm2 startup
+SHA=$(git -C ~/daengs rev-parse --short HEAD)
+REL=/srv/daengs/web/releases/${SHA}-manual1
+mkdir -p "$REL" "$REL/.next"
+cp -r .next/standalone/. "$REL/"; cp -r .next/static "$REL/.next/static"; cp -r public "$REL/public"
+ln -sfn "$REL" /srv/daengs/web/current
+DAENGS_DEPLOY_ROOT=/srv/daengs/web pm2 start ~/daengs/ecosystem.config.js && pm2 save
+sudo env PATH=/usr/local/bin:/usr/bin:/bin pm2 startup systemd -u daengs --hp /home/daengs
 ```
 
 backend 는 아직 개발 모드(소스 마운트 + `uv sync` 후 기동)입니다 — 이미지 굽기는 2차
@@ -135,18 +149,22 @@ backend 는 아직 개발 모드(소스 마운트 + `uv sync` 후 기동)입니�
 `nslookup daengapi.weareithero.cloud` 가 고정 IP 를 돌려주는지 확인 후:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml stop nginx
+docker compose stop nginx
 docker run --rm -p 80:80 -v /srv/daengs/letsencrypt:/etc/letsencrypt certbot/certbot \
-  certonly --standalone --agree-tos --no-eff-email -m <팀 이메일> \
+  certonly --standalone --agree-tos --register-unsafely-without-email -n \
   -d daengapp.weareithero.cloud -d daengapi.weareithero.cloud
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d nginx
+# 발급 후에야 gcp 오버레이(443, gcp.conf)로 nginx 를 재생성합니다.
+# gait 도 같이 — 오버레이의 cpus 제한이 이때 적용됩니다.
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx gait-analysis
 ```
 
-⚠ `-d` 순서를 지키세요 — **첫 번째(daengapp)가 인증서 폴더 이름**이 되고,
-`nginx/gcp.conf` 의 경로가 그 이름을 가리킵니다.
-
-1. `backend/.env` 의 `DAENGS_CORS_ORIGINS` 를 https 도메인으로 → `docker compose ... restart backend`
-2. 앱 담당자에게 `https://daengapi.weareithero.cloud` 전달 (앱에 박히는 값 — IP 금지)
+- 이메일 없이 등록하는 이유: Let's Encrypt 는 만료 안내 메일 서비스를 종료했고(2025-06),
+  갱신은 어차피 §6 대로 수동입니다.
+- ⚠ `-d` 순서를 지키세요 — **첫 번째(daengapp)가 인증서 폴더 이름**이 되고,
+  `nginx/gcp.conf` 의 경로가 그 이름을 가리킵니다.
+- `backend/.env` 의 `DAENGS_CORS_ORIGINS` 가 https 프론트 도메인인지 확인
+  (§2 에서 미리 넣었으면 조치 없음)
+- 앱 담당자에게 `https://daengapi.weareithero.cloud` 전달 (앱에 박히는 값 — IP 금지)
 
 ## 5. 스모크 (완료 기준은 roadmap §6)
 
@@ -161,8 +179,28 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 
 ## 6. 운영
 
-- **수동 배포** (git push 배포 — §1): 개발 PC 에서 `git switch main && git pull && git push gcp main`
-  → VM 에서 `git -C ~/daengs pull` → 의존성이 바뀐 경우만 해당 컨테이너 재생성
+- **배포 절차 (git push 배포 — §1).** dev → main 스냅샷 PR 이 머지된 상태에서:
+
+  ```powershell
+  # ① 개발 PC — main 을 VM 으로 push
+  git switch main; git pull; git push gcp main
+  ```
+  ```bash
+  # ② VM — 체크아웃 갱신
+  git -C ~/daengs pull
+  ```
+
+  여기서 갈립니다:
+  - **백엔드 코드만 바뀜** → 조치 없음. 컨테이너가 `backend/src` 를 마운트한 개발
+    모드(reload)라 pull 만으로 자동 반영됩니다.
+  - **백엔드 의존성(`uv.lock`) 바뀜** → 영향받는 컨테이너 재생성:
+    `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d --force-recreate backend place-search journey-service gait-analysis`
+  - **프론트 바뀜** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로
+    (`-manual2`, `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 —
+    reload 가 클러스터 무중단 교체입니다).
+  - **compose·nginx 설정 바뀜** → `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d` (바뀐 것만 재생성됨)
+  - **`db/migrations/` 추가됨** → 해당 SQL 을 pgvector 컨테이너에서 `-U daengs` 로 수동 실행
+- **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)

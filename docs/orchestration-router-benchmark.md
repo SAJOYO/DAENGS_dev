@@ -63,6 +63,10 @@ CLARIFY는 필요한 구조화 정보가 실제로 빠졌을 때만 쓰며 배�
 따라서 EXECUTE, payload, HANDOFF target, CLARIFY 여부나 누락 필드 차이는 무시되지 않습니다.
 precision/recall은 케이스 경계를 보존한 micro 집계입니다. 구현 지표는 다음과 같습니다.
 
+Training/Life payload에는 원 사용자 질의를 그대로 전달합니다. Card 2A는 라우팅을 평가하며
+subquery decomposition을 구현하거나 평가하지 않습니다. 다중 의도의 downstream 검색 품질은
+end-to-end orchestration evaluation에서 확인합니다.
+
 - 스키마: first-pass valid rate, retry recovery count, one-retry final valid rate, unrecovered count
 - 전체: exact RoutePlan semantic match
 - EXECUTE: micro precision/recall, Training/Life/Walk별 precision/recall
@@ -95,9 +99,11 @@ Phase 1에서 동결한 hard gates는 다음과 같습니다.
 | executable precision | >= 95% |
 | executable recall | >= 95% |
 | multi-capability recall | >= 90% |
+| exact executable-set accuracy on multi cases | >= 90% |
 | Skin HANDOFF recall | = 100% |
 | Gait HANDOFF recall | = 100% |
 | overall handoff precision | >= 95% |
+| exact mixed EXECUTE+HANDOFF match | >= 90% |
 | CLARIFY precision | >= 90% |
 | CLARIFY recall | >= 90% |
 

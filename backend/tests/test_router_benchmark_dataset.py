@@ -131,9 +131,11 @@ def test_config_freezes_one_model_prompt_retry_and_numeric_gates() -> None:
         "executable_precision": 0.95,
         "executable_recall": 0.95,
         "multi_execute_recall": 0.90,
+        "exact_executable_set_accuracy_multi": 0.90,
         "skin_handoff_recall": 1.0,
         "gait_handoff_recall": 1.0,
         "handoff_precision": 0.95,
+        "exact_mixed_execute_handoff_match": 0.90,
         "clarify_precision": 0.90,
         "clarify_recall": 0.90,
     }

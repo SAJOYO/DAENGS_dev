@@ -1,7 +1,7 @@
 from datetime import timedelta
 
-from daengs_backend.services.walk.facts import compute_walk_facts
-from daengs_backend.services.walk.observation import (
+from daengs_walk.facts import compute_walk_facts
+from daengs_walk.observation import (
     CANDIDATE_SPEED_MPS,
     extract_micro_observations,
     moving_speed_profile,

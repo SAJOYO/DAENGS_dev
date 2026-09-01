@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from daengs_backend.services.walk.contracts import (
+from daengs_walk.contracts import (
     CanonicalWalkFacts,
     FixQualityCounts,
     MeasurementReceipt,
@@ -14,13 +14,13 @@ from daengs_backend.services.walk.contracts import (
     MovingSpeedProfile,
     WalkEvidencePoint,
 )
-from daengs_backend.services.walk.facts import (
+from daengs_walk.facts import (
     CanonicalSegment,
     GapSpan,
     compute_walk_facts,
 )
-from daengs_backend.services.walk.measurement import build_measurement_receipt
-from daengs_backend.services.walk.observation import (
+from daengs_walk.measurement import build_measurement_receipt
+from daengs_walk.observation import (
     extract_micro_observations,
     moving_speed_profile,
 )

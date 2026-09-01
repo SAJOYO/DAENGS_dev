@@ -46,6 +46,7 @@
 | [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 | [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
+| [D-042](#d-042) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
 
 ---
 
@@ -2111,4 +2112,43 @@ HANDOFF는 Skin·Gait입니다. Training/Life 원문 payload, trusted Walk 좌�
 **PASS**했습니다. 이는 공급자/모델 비교의 증거가 아니며, `mixed_09` 한 건의 사람 확인
 annotation 정정은 버전 overlay로 남겨 과거 결과를 보존했습니다. PASS 뒤 prompt/gold/gate를
 더 조정하거나 Gemini를 다시 실행하지 않습니다.
+
+
+---
+
+## D-042
+### Walk는 in-process 제품 패키지로 두고 Place·Journey는 능력 경계로 소비한다
+
+산책 측정과 공간 일기의 정본은 `backend/src/daengs_walk/`에 둡니다. 이것은 별도
+컨테이너나 독립 서비스가 아니라 backend 프로세스 안에서 호출되는 **제품 기능 패키지**입니다.
+HTTP 인증·요청 수명·DB 트랜잭션은 계속 `daengs_backend`가 소유하고, 산책 lifecycle
+서비스가 `daengs_walk`의 공개 진입점을 호출합니다.
+
+패키지의 계산 코어는 한층 더 좁습니다. 좌표 정규화, 측정 사실, 관측 후보, 계측 영수증,
+hex-v1, Cellophane 생산은 FastAPI·SQLAlchemy·DB·시계·난수와 Place·Journey를 모르는
+결정론적 모듈로 유지합니다. Cellophane은 **산책에서 직접 측정한 macro 공간 자료**라서
+장소 검색 결과나 일기 문맥을 그 안에 굽지 않습니다. 그래야 같은 산책을 같은 계산 세대로
+재현하고, 계절·날씨·반려견 같은 조건으로 장을 나중에 골라 겹칠 수 있습니다.
+
+반면 `daengs_walk` 패키지 전체가 영원히 순수하거나 별개인 것은 아닙니다. 이후 공간 일기의
+Capsule·Context 응용부는 Place의 주변 특성이나 Journey의 일기 능력을 사용할 수 있습니다.
+그때는 좁은 capability/adapter 계약을 두고 다음 방향으로만 연결합니다.
+
+```text
+daengs_backend (HTTP · auth · DB transaction)
+    └── daengs_walk application
+          ├── deterministic walk calculation core
+          ├── Place capability adapter  ──> daengs_place runtime/API
+          └── Journey capability adapter ─> daengs_journey runtime/API
+```
+
+Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합니다. Journey는 D-039의
+별도 런타임과 외부 경로 Usage Gate를 계속 소유합니다. Walk가 두 패키지의 구현 코드나
+테이블을 복사하거나, 내부 함수를 직접 불러 그 경계를 우회하지 않습니다. 같은 프로세스로
+합치는 선택을 나중에 하더라도 호출부는 어댑터 뒤에 두어 소유권과 정책을 유지합니다.
+
+이번 결정에서 adapter 인터페이스를 미리 만들지는 않습니다. 아직 어떤 Capsule/Context가
+어떤 Place·Journey 결과를 요구하는지 정해지지 않았기 때문입니다. 구체 소비자가 생길 때
+최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
+producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
 

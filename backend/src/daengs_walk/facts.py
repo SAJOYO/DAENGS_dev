@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from daengs_backend.services.walk.contracts import (
+from daengs_walk.contracts import (
     CanonicalWalkFacts,
     FixQualityCounts,
     MotionEventOccurrence,

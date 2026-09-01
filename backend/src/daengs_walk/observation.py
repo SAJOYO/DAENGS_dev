@@ -6,12 +6,12 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC
 
-from daengs_backend.services.walk.contracts import (
+from daengs_walk.contracts import (
     MicroObservation,
     MovingSpeedProfile,
     WalkEvidencePoint,
 )
-from daengs_backend.services.walk.facts import CanonicalSegment, GapSpan, haversine_m
+from daengs_walk.facts import CanonicalSegment, GapSpan, haversine_m
 
 CANDIDATE_SPEED_MPS = 1.0
 CANDIDATE_MIN_S = 3.0

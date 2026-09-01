@@ -3,11 +3,11 @@
 import math
 from collections.abc import Sequence
 
-from daengs_backend.services.walk.contracts import (
+from daengs_walk.contracts import (
     MeasurementReceipt,
     WalkEvidencePoint,
 )
-from daengs_backend.services.walk.facts import ComputedWalkFacts
+from daengs_walk.facts import ComputedWalkFacts
 
 
 def _percentile(ordered: list[float], quantile: float) -> float:

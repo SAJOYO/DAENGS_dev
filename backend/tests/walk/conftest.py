@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from daengs_backend.services.walk import WalkEvidencePoint
+from daengs_walk import WalkEvidencePoint
 
 
 @pytest.fixture

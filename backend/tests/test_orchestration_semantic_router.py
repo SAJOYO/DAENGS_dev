@@ -317,6 +317,7 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
         context={
             "location": {"lat": 37.5665, "lon": 126.978},
             "source": "assistant",
+            "action": "chat_send",
             "active_dog_id": "dog-1",
             "note": "unapproved",
         },
@@ -327,8 +328,42 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
     )
     assert json.loads(metadata_line[len("ROUTING_METADATA:") :]) == {
         "source": "assistant",
+        "action": "chat_send",
         "active_dog_id": "dog-1",
     }
+
+
+async def test_valid_string_routing_metadata_still_routes() -> None:
+    service, transport, adapters = build_service(decision(["training"]))
+    response = await service.run(
+        query=QUERY,
+        principal=PRINCIPAL,
+        context={"source": "assistant", "action": "chat_send", "active_dog_id": "dog-1"},
+    )
+    assert response.status == AssistantStatus.ANSWERED
+    assert len(adapters[CapabilityName.TRAINING].calls) == 1
+    assert '"active_dog_id": "dog-1"' in transport.prompts[0]
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        {"source": {"screen": "assistant"}},
+        {"action": ["chat_send"]},
+        {"active_dog_id": "   "},
+    ],
+    ids=["dict_source", "list_action", "blank_active_dog_id"],
+)
+async def test_malformed_routing_metadata_is_rejected_before_provider_execution(
+    context: dict,
+) -> None:
+    """Card 2A validated these keys as non-empty strings; the guard is restored."""
+    transport = ScriptedTransport(decision(["training"]))
+    router = GeminiSemanticRouter(generate=transport)
+    with pytest.raises(ValueError, match="routing metadata"):
+        await router.select(query=QUERY, context=context)
+    # Rejection happens before any prompt is built, so nothing reached the provider.
+    assert transport.prompts == []
 
 
 def test_importing_the_planning_layer_stays_light() -> None:

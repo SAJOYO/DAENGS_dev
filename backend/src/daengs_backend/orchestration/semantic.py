@@ -81,7 +81,16 @@ lists empty."""
 def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
     if not query.strip():
         raise ValueError("query must not be blank")
-    metadata = {key: context[key] for key in _ROUTING_METADATA_KEYS if key in context}
+    # Card 2A validated routing metadata as non-empty strings; malformed internal
+    # context (a dict/list/blank under an approved key) must never reach the prompt.
+    metadata: dict[str, str] = {}
+    for key in _ROUTING_METADATA_KEYS:
+        if key not in context:
+            continue
+        value = context[key]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"routing metadata {key} must be a non-empty string")
+        metadata[key] = value
     schema = json.dumps(
         SemanticRoutingDecision.model_json_schema(), ensure_ascii=False, sort_keys=True
     )

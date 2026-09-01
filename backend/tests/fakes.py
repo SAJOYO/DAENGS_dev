@@ -8,7 +8,7 @@ SQL 이 맞는지는 여기서 알 수 없습니다 — `uv run dev` 로 실제 
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
@@ -117,6 +118,21 @@ class Store:
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
 
+        #: 대화 세션·메시지·저장된 요약. 만든 순서대로 담고, 정렬은 가짜
+        #: 리포지토리가 진짜와 같은 기준(updated_at 내림차순)으로 합니다.
+        self.chat_sessions: list[FakeChatSession] = []
+        self.chat_messages: list[FakeChatMessage] = []
+        self.chat_summaries: list[FakeChatSummary] = []
+
+        #: `touch_session` 이 부를 때마다 1초씩 앞으로 갑니다. 진짜는 DB 의
+        #: `NOW()` 지만, 가짜에서 같은 시각을 주면 "최근 갱신 순"을 볼 수 없습니다.
+        self.clock = datetime(2026, 9, 1, tzinfo=UTC)
+
+    def tick(self) -> datetime:
+        """다음 시각. 순서를 보는 테스트가 이것에 기댑니다."""
+        self.clock += timedelta(seconds=1)
+        return self.clock
+
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
         return user
@@ -176,6 +192,64 @@ class FakeWalk:
     def pet_ids(self) -> list[uuid.UUID]:
         """진짜 모델과 같은 모양. 라우터가 이걸로 응답을 만듭니다."""
         return [link.pet_id for link in self.pets]
+
+
+@dataclass
+class FakeChatSession:
+    """ChatSession 대역."""
+
+    app_user_id: uuid.UUID
+    pet_id: uuid.UUID
+    title: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    agent_categories: list[str] = field(default_factory=list)
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+    updated_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+
+
+@dataclass
+class FakeChatMessage:
+    """ChatMessage 대역."""
+
+    session_id: uuid.UUID
+    role: str
+    content: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    agent_categories: list[str] = field(default_factory=list)
+    assistant_status: str | None = None
+    request_id: str | None = None
+    client_message_id: str | None = None
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+
+
+@dataclass
+class FakeChatSummary:
+    """ChatSummary 대역. **`session_id` 가 nullable 인 것이 요점입니다.**"""
+
+    app_user_id: uuid.UUID
+    pet_id: uuid.UUID
+    title: str
+    question_summary: str
+    answer_summary: str
+    model: str
+    prompt_version: str
+    source_message_count: int
+    client_request_id: str
+    session_id: uuid.UUID | None = None
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    key_points: list[str] = field(default_factory=list)
+    cautions: list[str] = field(default_factory=list)
+    source_citations: list[str] = field(default_factory=list)
+    agent_categories: list[str] = field(default_factory=list)
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
 
 
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
@@ -353,5 +427,151 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )
     monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
+
+    # -- chats -------------------------------------------------------------
+    def _sorted_sessions(app_user_id, pet_id):
+        """진짜 리포지토리와 같은 기준 — updated_at 내림차순, 같으면 id 내림차순."""
+        mine = [
+            s
+            for s in store.chat_sessions
+            if s.app_user_id == app_user_id and s.pet_id == pet_id
+        ]
+        return sorted(mine, key=lambda s: (s.updated_at, s.id), reverse=True)
+
+    async def chat_get_owned_pet_id(session, app_user_id, pet_id):
+        return next(
+            (
+                p.id
+                for p in store.pets
+                if p.id == pet_id and p.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def chat_lock_owned_pet(session, app_user_id, pet_id):
+        # 가짜에는 잠글 것이 없습니다. 진짜의 FOR UPDATE 는 동시성용이고,
+        # 여기서 보는 것은 **소유권 판정**입니다.
+        return await chat_get_owned_pet_id(session, app_user_id, pet_id)
+
+    async def chat_list_sessions(session, app_user_id, pet_id, limit):
+        return _sorted_sessions(app_user_id, pet_id)[:limit]
+
+    async def chat_get_owned_session(session, app_user_id, chat_session_id):
+        return next(
+            (
+                s
+                for s in store.chat_sessions
+                if s.id == chat_session_id and s.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def chat_oldest_sessions_beyond(session, app_user_id, pet_id, keep):
+        return _sorted_sessions(app_user_id, pet_id)[keep:]
+
+    def chat_add_session(session, chat_session):
+        if chat_session.id is None:
+            chat_session.id = uuid.uuid4()
+        # 진짜는 DB 의 DEFAULT NOW() 입니다. 만든 순서를 볼 수 있게 시계를 씁니다.
+        chat_session.created_at = chat_session.updated_at = store.tick()
+        store.chat_sessions.append(chat_session)
+        return chat_session
+
+    def chat_touch_session(session, chat_session):
+        chat_session.updated_at = store.tick()
+
+    async def chat_delete_session(session, chat_session):
+        """**DB 의 FK 동작을 그대로 흉내 냅니다.**
+
+        메시지는 `ON DELETE CASCADE` 로 같이 지워지고, 저장된 요약은
+        `ON DELETE SET NULL` 이라 **남고 연결만 끊깁니다.** 이 두 줄이 뒤바뀌면
+        사용자가 저장해 둔 요약이 5개 유지에 조용히 사라집니다.
+
+        ⚠️ 여기서 흉내 내는 것이지 SQL 을 검증하는 것은 아닙니다 — 실제 DDL 이
+        맞는지는 `test_chat_schema.py` 가 모델과 `db/init/07_chats.sql` 로 봅니다.
+        """
+        store.chat_sessions.remove(chat_session)
+        store.chat_messages = [
+            m for m in store.chat_messages if m.session_id != chat_session.id
+        ]
+        for summary in store.chat_summaries:
+            if summary.session_id == chat_session.id:
+                summary.session_id = None
+
+    async def chat_list_messages(session, chat_session_id):
+        mine = [m for m in store.chat_messages if m.session_id == chat_session_id]
+        return sorted(mine, key=lambda m: (m.created_at, m.id))
+
+    async def chat_count_messages(session, chat_session_id):
+        return len([m for m in store.chat_messages if m.session_id == chat_session_id])
+
+    async def chat_message_by_idempotency_key(
+        session, chat_session_id, client_message_id
+    ):
+        return next(
+            (
+                m
+                for m in store.chat_messages
+                if m.session_id == chat_session_id
+                and m.client_message_id == client_message_id
+            ),
+            None,
+        )
+
+    def chat_add_message(session, message):
+        if message.id is None:
+            message.id = uuid.uuid4()
+        message.created_at = store.tick()
+        store.chat_messages.append(message)
+        return message
+
+    async def chat_list_summaries(session, app_user_id, pet_id):
+        # **session_id 로 거르지 않습니다** — 원본이 사라진 요약도 보관함에 남습니다.
+        mine = [
+            s
+            for s in store.chat_summaries
+            if s.app_user_id == app_user_id and s.pet_id == pet_id
+        ]
+        return sorted(mine, key=lambda s: (s.created_at, s.id), reverse=True)
+
+    async def chat_summary_by_idempotency_key(session, app_user_id, client_request_id):
+        return next(
+            (
+                s
+                for s in store.chat_summaries
+                if s.app_user_id == app_user_id
+                and s.client_request_id == client_request_id
+            ),
+            None,
+        )
+
+    def chat_add_summary(session, summary):
+        if summary.id is None:
+            summary.id = uuid.uuid4()
+        summary.created_at = store.tick()
+        store.chat_summaries.append(summary)
+        return summary
+
+    monkeypatch.setattr(chat_repo, "get_owned_pet_id", chat_get_owned_pet_id)
+    monkeypatch.setattr(chat_repo, "lock_owned_pet", chat_lock_owned_pet)
+    monkeypatch.setattr(chat_repo, "list_sessions", chat_list_sessions)
+    monkeypatch.setattr(chat_repo, "get_owned_session", chat_get_owned_session)
+    monkeypatch.setattr(
+        chat_repo, "oldest_sessions_beyond", chat_oldest_sessions_beyond
+    )
+    monkeypatch.setattr(chat_repo, "add_session", chat_add_session)
+    monkeypatch.setattr(chat_repo, "touch_session", chat_touch_session)
+    monkeypatch.setattr(chat_repo, "delete_session", chat_delete_session)
+    monkeypatch.setattr(chat_repo, "list_messages", chat_list_messages)
+    monkeypatch.setattr(chat_repo, "count_messages", chat_count_messages)
+    monkeypatch.setattr(
+        chat_repo, "message_by_idempotency_key", chat_message_by_idempotency_key
+    )
+    monkeypatch.setattr(chat_repo, "add_message", chat_add_message)
+    monkeypatch.setattr(chat_repo, "list_summaries", chat_list_summaries)
+    monkeypatch.setattr(
+        chat_repo, "summary_by_idempotency_key", chat_summary_by_idempotency_key
+    )
+    monkeypatch.setattr(chat_repo, "add_summary", chat_add_summary)
 
     return store

@@ -51,20 +51,13 @@ services:
       DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
       DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
-      # Training RAG 는 이 backend 프로세스 안에서 돕니다. DB 는 공용 pgvector
-      # 클러스터의 **별도 dog_rag 데이터베이스**입니다 — 전용 컨테이너는 없앴지만
-      # vectordb 와 테이블이 섞이는 것은 아닙니다. 같은 클러스터, 다른 DB 이고
-      # 접속 role 은 그 dog_rag DB 만 소유하는 non-superuser LOGIN 입니다.
+      # Training RAG 는 이 backend 프로세스 안에서 돕니다. 데이터는 공용 pgvector의
+      # vectordb.public.training_rag_documents / training_rag_chunks 에 있습니다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
-      # 비밀번호는 최상단 .env 의 TRAINING_RAG_DB_PASSWORD 로만 받습니다. 값이
-      # 비어 있으면 `:?` 가드가 컨테이너를 바꾸기 전에 배포를 멈춥니다
-      # (REDIS_PASSWORD 와 같은 장치입니다).
-      #
-      # ⚠ DAENGS_DB_* 와 달리 URL 한 줄이라 비밀번호에 @ / # 이 들어가면 깨집니다
-      #   (D-013 과 같은 함정). 영숫자로만 지으세요.
-      RAG_PGVECTOR_DSN: postgresql://dog_rag:${TRAINING_RAG_DB_PASSWORD:?Set TRAINING_RAG_DB_PASSWORD in deployment root .env}@pgvector:5432/dog_rag
+      # backend 기본 DB와 같은 POSTGRES_* 접속 정보를 사용합니다.
+      RAG_PGVECTOR_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgvector:5432/${POSTGRES_DB:-vectordb}
       # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
       # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
       #
@@ -107,7 +100,7 @@ services:
       # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
       - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
     depends_on:
-      # Training RAG 의 dog_rag DB 도 이 컨테이너 안에 있습니다.
+      # Training RAG 테이블도 이 컨테이너의 vectordb 안에 있습니다.
       pgvector:
         condition: service_healthy
       # Redis 가 없어도 앱은 뜹니다 — 캐시가 메모리로 떨어질 뿐입니다.

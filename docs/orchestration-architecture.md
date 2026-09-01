@@ -188,8 +188,12 @@ C:\deploy\daengs\
 HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. Card 2B 로 production 의미 라우터도
 같은 패키지에 들어왔습니다 — `semantic.py`(Gemini 의미 선택 + O-14 1회 재시도) ·
 `planner.py`(결정적 신호 해소와 결정론적 RoutePlan 조립) · `service.py`(계획 → 기존 실행
-코어 호출). 공개 `/assistant/query` 는 아직 없고(Card 3), 기존 직접 API 및 프론트 흐름은
-바뀌지 않았습니다.
+코어 호출). Card 3 로 공개 `POST /assistant/query` 진입점도 붙었습니다 —
+`routers/assistant.py`(인증·외부 DTO 검증·`PrincipalContext` 조립) ·
+`schemas/assistant.py`(`extra="forbid"` 외부 요청 계약, `/walk` 과 같은 좌표 범위).
+인증은 `/walk`·`/ask` 와 같은 `admin_or_app_user(Perm.READ)` 이고, 응답은
+`AssistantResponse` 를 그대로 돌려줍니다 — 재해석하지 않습니다. 기존 직접 API 및
+프론트 흐름은 바뀌지 않았습니다.
 
 **TARGET (CONFIRMED)** — 대화형 진입점 `/assistant/query` 를 하나 두고, 그 뒤의 흐름
 제어를 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30 어드버서리얼 아키텍처 리뷰

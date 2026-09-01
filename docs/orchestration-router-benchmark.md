@@ -132,3 +132,9 @@ v1은 semantic classification과 trusted-data assembly를 분리해야 함을 �
 LLM의 역할을 Training/Life/Walk와 Skin/Gait의 의미 선택으로 제한합니다. 원 질의 payload,
 Walk 좌표, 좌표 누락 CLARIFY, Skin/Gait reason은 benchmark-local 결정론적 assembler가 같은
 Card 1 `RoutePlan`으로 만듭니다. 골드, 수용 게이트, 모델과 v1 결과는 변경하지 않습니다.
+
+v2 결과의 사람 검토에서 `mixed_09`는 훈련 방법이 아니라 환경 적합성(Walk)과 영상 분석(Gait)을
+묻는 annotation error로 확정했습니다. 원본과 과거 결과를 덮어쓰지 않고 v3 correction overlay에
+한 건만 기록합니다. `semantic-router-ko-v3`에는 Walk가 현재 날씨·기온·비·대기질 같은 환경
+적합성 요청일 때만 선택되고 Training/Gait의 배경이 산책이라는 이유만으로 선택되지 않는다는
+일반 경계 한 줄만 추가합니다. 골드 예시나 키워드 fallback은 추가하지 않습니다.

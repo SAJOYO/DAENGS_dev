@@ -13,6 +13,7 @@ from daengs_backend.orchestration.contracts import RoutePlan
 
 BENCHMARK_DIR = Path(__file__).resolve().parents[2] / "evals" / "orchestration_router"
 GOLD_V1_PATH = BENCHMARK_DIR / "gold_v1.jsonl"
+GOLD_V3_CORRECTIONS_PATH = BENCHMARK_DIR / "gold_v3_corrections.json"
 CONFIG_V1_PATH = BENCHMARK_DIR / "benchmark_v1.yaml"
 
 Category = Literal[
@@ -25,7 +26,11 @@ Category = Literal[
     "clarify",
     "boundary_adversarial",
 ]
-PromptVersion = Literal["semantic-router-ko-v1", "semantic-router-ko-v2"]
+PromptVersion = Literal[
+    "semantic-router-ko-v1",
+    "semantic-router-ko-v2",
+    "semantic-router-ko-v3",
+]
 
 
 class StrictModel(BaseModel):
@@ -189,6 +194,34 @@ def load_gold_cases(path: Path = GOLD_V1_PATH) -> list[GoldCase]:
             raise ValueError(f"invalid JSONL at {path}:{line_number}") from exc
         cases.append(GoldCase.model_validate(raw))
     return cases
+
+
+def load_gold_v3_cases() -> list[GoldCase]:
+    """Apply the one human-confirmed annotation correction without overwriting v1 gold."""
+    document = json.loads(GOLD_V3_CORRECTIONS_PATH.read_text(encoding="utf-8"))
+    if document.get("base_gold") != GOLD_V1_PATH.name:
+        raise ValueError("v3 correction overlay must reference gold_v1.jsonl")
+    corrections = document.get("annotation_corrections")
+    if not isinstance(corrections, list) or len(corrections) != 1:
+        raise ValueError("v3 must contain exactly one reviewed annotation correction")
+    correction = corrections[0]
+    if correction.get("case_id") != "mixed_09":
+        raise ValueError("the only approved v3 correction is mixed_09")
+
+    cases = load_gold_cases()
+    for index, case in enumerate(cases):
+        if case.case_id != "mixed_09":
+            continue
+        if correction.get("query") != case.query:
+            raise ValueError("mixed_09 correction query does not match frozen v1")
+        cases[index] = case.model_copy(
+            update={
+                "gold_route_plan": RoutePlan.model_validate(correction["gold_route_plan"]),
+                "rationale": correction["rationale"],
+            }
+        )
+        return cases
+    raise ValueError("mixed_09 is missing from frozen v1 gold")
 
 
 def load_benchmark_config(path: Path = CONFIG_V1_PATH) -> BenchmarkConfig:

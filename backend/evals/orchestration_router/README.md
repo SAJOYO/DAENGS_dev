@@ -22,3 +22,8 @@ v1 demonstrated that semantic classification and trusted-data assembly should be
 limits Gemini to selecting EXECUTE/HANDOFF names and deterministically assembles the same Card 1
 `RoutePlan` from the original query and permitted structured context. The v1 evidence remains
 unchanged; v2 writes separate `results_v2.jsonl`, `summary_v2.json`, and `phase2_v2_report.md` files.
+
+Human review after v2 confirmed that only `mixed_09` had an annotation error: its request is
+Walk+Gait, not Training+Walk+Gait. `gold_v3_corrections.json` records that single correction as an
+overlay on immutable `gold_v1.jsonl`; it is an annotation fix, not model tuning. The final run uses
+`semantic-router-ko-v3` and separate v3 result files.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +43,7 @@ def run_cases(
     cases: Sequence[GoldCase],
     *,
     client: Any,
+    prompt_builder: Callable[..., str] = build_semantic_router_prompt,
 ) -> tuple[dict[str, list[AttemptValidation]], dict[str, PerformanceObservation]]:
     """Run sequentially; retry only an invalid SemanticRoutingDecision."""
     attempts_by_case: dict[str, list[AttemptValidation]] = {}
@@ -59,7 +60,7 @@ def run_cases(
             started = time.perf_counter()
             response = client.models.generate_content(
                 model=MODEL_ID,
-                contents=build_semantic_router_prompt(query=case.query, context=case.context),
+                contents=prompt_builder(query=case.query, context=case.context),
                 config=config,
             )
             elapsed_ms += (time.perf_counter() - started) * 1000

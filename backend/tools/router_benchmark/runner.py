@@ -154,9 +154,12 @@ def build_artifacts(
     *,
     prompt_version: str = PROMPT_VERSION,
     generation_config: dict[str, Any] = GENERATION_CONFIG,
+    benchmark_id: str | None = None,
+    gold_version: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
     """Reuse the frozen evaluator and shape its output into auditable artifacts."""
     config = load_benchmark_config()
+    result_benchmark_id = benchmark_id or config.benchmark_id
     evaluation = evaluate_benchmark(
         cases,
         attempts_by_case,
@@ -175,18 +178,20 @@ def build_artifacts(
             failure_counts[bucket] += 1
         attempts = attempts_by_case[result.case_id]
         record = {
-            "benchmark_id": config.benchmark_id,
+            "benchmark_id": result_benchmark_id,
             "freeze_commit": FREEZE_COMMIT,
             "category": case.category,
             **result.model_dump(mode="json"),
             "failure_bucket": bucket,
             "attempt_errors": [attempt.error_category for attempt in attempts],
         }
+        if gold_version is not None:
+            record["gold_version"] = gold_version
         records.append(record)
 
     total_attempts = sum(len(attempts) for attempts in attempts_by_case.values())
     summary = {
-        "benchmark_id": config.benchmark_id,
+        "benchmark_id": result_benchmark_id,
         "freeze_commit": FREEZE_COMMIT,
         "model": MODEL_ID,
         "prompt_version": prompt_version,
@@ -201,6 +206,8 @@ def build_artifacts(
         "failing_case_ids": [record["case_id"] for record in records if not record["exact_match"]],
         "failure_categories": dict(sorted(failure_counts.items())),
     }
+    if gold_version is not None:
+        summary["gold_version"] = gold_version
     return records, summary, _markdown_report(summary)
 
 

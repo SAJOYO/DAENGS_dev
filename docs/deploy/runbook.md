@@ -179,8 +179,28 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 
 ## 6. 운영
 
-- **수동 배포** (git push 배포 — §1): 개발 PC 에서 `git switch main && git pull && git push gcp main`
-  → VM 에서 `git -C ~/daengs pull` → 의존성이 바뀐 경우만 해당 컨테이너 재생성
+- **배포 절차 (git push 배포 — §1).** dev → main 스냅샷 PR 이 머지된 상태에서:
+
+  ```powershell
+  # ① 개발 PC — main 을 VM 으로 push
+  git switch main; git pull; git push gcp main
+  ```
+  ```bash
+  # ② VM — 체크아웃 갱신
+  git -C ~/daengs pull
+  ```
+
+  여기서 갈립니다:
+  - **백엔드 코드만 바뀜** → 조치 없음. 컨테이너가 `backend/src` 를 마운트한 개발
+    모드(reload)라 pull 만으로 자동 반영됩니다.
+  - **백엔드 의존성(`uv.lock`) 바뀜** → 영향받는 컨테이너 재생성:
+    `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d --force-recreate backend place-search journey-service gait-analysis`
+  - **프론트 바뀜** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로
+    (`-manual2`, `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 —
+    reload 가 클러스터 무중단 교체입니다).
+  - **compose·nginx 설정 바뀜** → `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d` (바뀐 것만 재생성됨)
+  - **`db/migrations/` 추가됨** → 해당 SQL 을 pgvector 컨테이너에서 `-U daengs` 로 수동 실행
+- **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)

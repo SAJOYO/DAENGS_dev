@@ -1,0 +1,33 @@
+{
+  "benchmark_id": "orchestration-router-v3",
+  "base_gold": "gold_v1.jsonl",
+  "annotation_corrections": [
+    {
+      "case_id": "mixed_09",
+      "query": "오늘 밖에서 리드줄 연습 가능한 날씨인지 보고, 걷는 영상도 보행 분석해줘",
+      "gold_route_plan": {
+        "requests": [
+          {
+            "capability": "walk",
+            "payload": {
+              "lat": 36.3504,
+              "lon": 127.3845
+            },
+            "timeout_ms": null
+          }
+        ],
+        "handoffs": [
+          {
+            "target": "gait",
+            "reason": "video_upload_required"
+          }
+        ],
+        "clarify": null,
+        "router": "llm",
+        "model": "gemini-3.5-flash-lite"
+      },
+      "rationale": "현재 환경에서 리드줄 연습이 가능한지 묻는 Walk 요청과 영상 기반 Gait 분석 요청이며, 훈련 방법을 요청하지 않는다.",
+      "correction_reason": "human_confirmed_annotation_error"
+    }
+  ]
+}

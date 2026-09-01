@@ -45,6 +45,7 @@
 | [D-038](#d-038) | 보행 분석 소스는 backend 로, 런타임 격리는 유지 | 2026-08-31 |
 | [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
+| [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
 
 ---
 
@@ -2082,4 +2083,32 @@ extra로 두고 `place-search`가 `uv sync --extra place`로 선택합니다.
 `backend/tools/sync_screening.py <원본경로>` 가 원본에서 15개 파일을 가져오고
 import 를 기계적으로 치환합니다. 돌린 뒤 `git diff` 가 비면 원본과 같다는 뜻입니다.
 **`serve.py` 는 안 가져옵니다** — 원본은 단독 서버, 여기는 라우터라 모양이 다릅니다.
+
+
+---
+
+## D-041
+### v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립으로 수용한다
+
+DAENGS v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.5-flash-lite`** 를 사용합니다.
+Card 2A는 공급자나 모델을 비교해 승자를 고르는 실험이 아닙니다. 모델 출력 전에
+80개 한국어 골드 RoutePlan, `semantic-router-ko-v1` 프롬프트, 결정론적 지표와 수용
+게이트를 함께 동결하고, 선택된 모델을 그 기준에 대해 **PASS/FAIL**로만 판정합니다.
+
+Phase 1은 이 기준을 만드는 오프라인 작업이며 Gemini를 호출하지 않습니다. Phase 2에서
+FAIL이 나와도 모델을 자동 교체하지 않습니다. 실패 유형을 기록한 뒤 프롬프트 개선,
+스키마·컨텍스트 개선, 아키텍처 명확화 중 다음 조치를 사람이 결정합니다. Phase 2 결과를
+보고 v1 프롬프트나 게이트를 제자리 수정하지 않으며, 변경이 필요하면 버전을 올리고 전체
+벤치마크를 다시 실행합니다.
+
+**Card 2A 결과로 개정 (2026-09-01)** — v1 의미 라우터는 `gemini-3.5-flash-lite`를
+**capability/handoff 의도 선택에만** 사용합니다. 모델이 선택할 EXECUTE는 Training·Life·Walk,
+HANDOFF는 Skin·Gait입니다. Training/Life 원문 payload, trusted Walk 좌표, 좌표 누락 CLARIFY와
+그 배타성, 고정 Skin/Gait reason, 최종 Card 1 `RoutePlan` 구성은 결정론적 오케스트레이션
+책임입니다. 모델은 payload 문구·좌표·CLARIFY·reason 또는 도메인 답변을 생성하지 않습니다.
+
+이 경계에서 `semantic-router-ko-v3`를 같은 80문항과 동결 gate로 한 번 실행해 최종
+**PASS**했습니다. 이는 공급자/모델 비교의 증거가 아니며, `mixed_09` 한 건의 사람 확인
+annotation 정정은 버전 overlay로 남겨 과거 결과를 보존했습니다. PASS 뒤 prompt/gold/gate를
+더 조정하거나 Gemini를 다시 실행하지 않습니다.
 

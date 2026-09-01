@@ -17,3 +17,8 @@ file in this directory at the human-freeze point.
 After human freeze approval, the one authorized Phase 2 run produced `results_v1.jsonl`,
 `summary_v1.json`, and `phase2_report.md`. These contain normalized predictions, deterministic
 metrics/gate checks, and a concise result; they contain no raw credentials or provider reasoning.
+
+v1 demonstrated that semantic classification and trusted-data assembly should be separate. v2
+limits Gemini to selecting EXECUTE/HANDOFF names and deterministically assembles the same Card 1
+`RoutePlan` from the original query and permitted structured context. The v1 evidence remains
+unchanged; v2 writes separate `results_v2.jsonl`, `summary_v2.json`, and `phase2_v2_report.md` files.

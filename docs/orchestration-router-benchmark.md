@@ -125,3 +125,10 @@ provider thought는 저장하지 않습니다. cold start는 제외하고 warm p
 Phase 2 결과가 FAIL이면 모델을 자동 교체하지 않습니다. 실패 유형을 분석해 사람이 다음 조치를
 정합니다. 결과를 본 뒤 프롬프트를 고치면 `semantic-router-ko-v2`, 골드나 게이트를 고치면 새
 benchmark version을 만들고 전체 80문항을 다시 실행합니다. v1 파일은 제자리 수정하지 않습니다.
+
+## v2 semantic boundary remediation
+
+v1은 semantic classification과 trusted-data assembly를 분리해야 함을 보여 주었습니다. v2는
+LLM의 역할을 Training/Life/Walk와 Skin/Gait의 의미 선택으로 제한합니다. 원 질의 payload,
+Walk 좌표, 좌표 누락 CLARIFY, Skin/Gait reason은 benchmark-local 결정론적 assembler가 같은
+Card 1 `RoutePlan`으로 만듭니다. 골드, 수용 게이트, 모델과 v1 결과는 변경하지 않습니다.

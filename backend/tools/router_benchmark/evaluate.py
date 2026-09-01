@@ -22,6 +22,7 @@ from .schemas import (
     GateCheck,
     GoldCase,
     PerformanceObservation,
+    PromptVersion,
 )
 
 PROMPT_VERSION = "semantic-router-ko-v1"
@@ -63,6 +64,8 @@ def evaluate_benchmark(
     gold_cases: Sequence[GoldCase],
     attempts_by_case: Mapping[str, Sequence[AttemptValidation | object]],
     performance_by_case: Mapping[str, PerformanceObservation] | None = None,
+    *,
+    prompt_version: PromptVersion = PROMPT_VERSION,
 ) -> BenchmarkEvaluation:
     """Evaluate final plans and retry behavior against gold without an LLM judge."""
     case_ids = [case.case_id for case in gold_cases]
@@ -88,7 +91,7 @@ def evaluate_benchmark(
         performance = performance_by_case.get(case.case_id, PerformanceObservation())
         result = CaseResult(
             case_id=case.case_id,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=prompt_version,
             model=MODEL_ID,
             attempt_count=len(attempts),
             first_pass_schema_valid=attempts[0].schema_valid,

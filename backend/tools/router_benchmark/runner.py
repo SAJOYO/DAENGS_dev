@@ -151,10 +151,18 @@ def build_artifacts(
     cases: Sequence[GoldCase],
     attempts_by_case: dict[str, list[AttemptValidation]],
     performance_by_case: dict[str, PerformanceObservation],
+    *,
+    prompt_version: str = PROMPT_VERSION,
+    generation_config: dict[str, Any] = GENERATION_CONFIG,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
     """Reuse the frozen evaluator and shape its output into auditable artifacts."""
     config = load_benchmark_config()
-    evaluation = evaluate_benchmark(cases, attempts_by_case, performance_by_case)
+    evaluation = evaluate_benchmark(
+        cases,
+        attempts_by_case,
+        performance_by_case,
+        prompt_version=prompt_version,
+    )
     verdict = apply_acceptance_gates(evaluation.summary, config)
     by_id = {case.case_id: case for case in cases}
     records: list[dict[str, Any]] = []
@@ -181,8 +189,8 @@ def build_artifacts(
         "benchmark_id": config.benchmark_id,
         "freeze_commit": FREEZE_COMMIT,
         "model": MODEL_ID,
-        "prompt_version": PROMPT_VERSION,
-        "generation_config": GENERATION_CONFIG,
+        "prompt_version": prompt_version,
+        "generation_config": generation_config,
         "scored_cases": len(cases),
         "total_provider_attempts": total_attempts,
         "retry_count": total_attempts - len(cases),
@@ -196,18 +204,26 @@ def build_artifacts(
     return records, summary, _markdown_report(summary)
 
 
-def write_artifacts(records: list[dict[str, Any]], summary: dict[str, Any], report: str) -> None:
-    RESULTS_PATH.write_text(
+def write_artifacts(
+    records: list[dict[str, Any]],
+    summary: dict[str, Any],
+    report: str,
+    *,
+    results_path: Path = RESULTS_PATH,
+    summary_path: Path = SUMMARY_PATH,
+    report_path: Path = REPORT_PATH,
+) -> None:
+    results_path.write_text(
         "".join(
             json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
             for record in records
         ),
         encoding="utf-8",
     )
-    SUMMARY_PATH.write_text(
+    summary_path.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    REPORT_PATH.write_text(report, encoding="utf-8")
+    report_path.write_text(report, encoding="utf-8")
 
 
 def _markdown_report(summary: dict[str, Any]) -> str:

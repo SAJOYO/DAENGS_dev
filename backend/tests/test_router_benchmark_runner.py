@@ -90,12 +90,12 @@ def test_runner_only_calls_gemini_and_reuses_frozen_evaluator(monkeypatch) -> No
     client = FakeClient([_valid_response(case)])
     called = False
 
-    def fake_evaluate(cases, attempts, performance):
+    def fake_evaluate(cases, attempts, performance, **kwargs):
         nonlocal called
         called = True
         from tools.router_benchmark.evaluate import evaluate_benchmark
 
-        return evaluate_benchmark(cases, attempts, performance)
+        return evaluate_benchmark(cases, attempts, performance, **kwargs)
 
     monkeypatch.setattr("tools.router_benchmark.runner.evaluate_benchmark", fake_evaluate)
     attempts, performance = run_cases([case], client=client)

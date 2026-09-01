@@ -110,7 +110,7 @@ def test_only_phase_2_runner_references_provider_or_network_client() -> None:
                 continue
             for root in roots & forbidden_roots:
                 found.append(f"{path.name}:{root}")
-    assert found == ["runner.py:google", "runner.py:google", "runner.py:google"]
+    assert set(found) == {"runner.py:google", "runner_v2.py:google"}
 
 
 def test_benchmark_imports_stay_lightweight_and_offline() -> None:

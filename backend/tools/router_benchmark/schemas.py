@@ -25,6 +25,7 @@ Category = Literal[
     "clarify",
     "boundary_adversarial",
 ]
+PromptVersion = Literal["semantic-router-ko-v1", "semantic-router-ko-v2"]
 
 
 class StrictModel(BaseModel):
@@ -99,7 +100,7 @@ class PerformanceObservation(StrictModel):
 
 class CaseResult(StrictModel):
     case_id: str
-    prompt_version: Literal["semantic-router-ko-v1"]
+    prompt_version: PromptVersion
     model: Literal["gemini-3.5-flash-lite"]
     attempt_count: int = Field(ge=1, le=2)
     first_pass_schema_valid: bool

@@ -27,8 +27,10 @@
 4. **서빙만 옮긴다.** 크롤러·코퍼스 정본은 로컬 서버 잔류 — 앱이 읽는 것은 적재가 끝난
    pgvector 뿐이고, 적재는 GPU 때문에 어차피 개발 PC. 컷오버 리스크를 발표 전에 지지
    않는다. GCP 유지 확정 시 2차로 이전 (§7).
-5. **DB 는 dev/prod 로 갈라진다.** GCP 3대(덤프 복원)가 운영 정본, 로컬 서버 DB 는
-   개발용으로 남는다. 따라서 GCP 는 5432/6379 를 인터넷에 열지 않는다.
+5. **DB 는 dev/prod 로 갈라진다.** GCP 2대(pgvector·place-db, 덤프 복원)가 운영 정본,
+   로컬 서버 DB 는 개발용으로 남는다. 따라서 GCP 는 5432/6379 를 인터넷에 열지 않는다.
+   Training RAG 는 별도 DB 가 아니다 — #112 로 vectordb 안 `training_rag_*` 테이블로
+   통합됐다 (전용 컨테이너·볼륨 삭제).
 6. **TLS 는 certbot(Let's Encrypt, 무료).** DNS 는 가비아 유지, A 레코드만 GCP 고정
    IP 로. 인증서 구매 불필요.
 7. **앱에 박는 API 주소는 도메인** (`https://daengback.~`, IP 금지) — 9/21 이후 VM 을
@@ -73,7 +75,7 @@ main → dev 머지 1회로 가져온다 (지금은 불필요).
 
 | 상태 | 원본 위치 | 비고 |
 | --- | --- | --- |
-| Postgres 3대 덤프 | 로컬 서버 (pgvector · place-db · training-rag) | `pg_dump` + **`pg_dumpall --globals-only`** — 손으로 만든 `daengs` 롤은 덤프에 안 담긴다. 덤프 전에 `db/migrations/` 최근분 적용 여부 확인 |
+| Postgres 2대 덤프 | 로컬 서버 (pgvector 의 vectordb · place-db) | `pg_dump` + **`pg_dumpall --globals-only`** — 손으로 만든 `daengs` 롤은 덤프에 안 담긴다. vectordb 에는 Training RAG 테이블(`training_rag_*`)도 들어 있다(#112). **덤프 전에 `db/migrations/` 최근분(특히 2026-09-01 training_rag 통합) 적용 여부 확인** |
 | 모델 가중치 4개 | 서버 디스크 (git 에 없음) | 스크리닝 2 + gait 2(best.pt·yolov8n.pt). 배포 폴더 밖에 두고 마운트 |
 | `.env` 2개 | 최상단 + backend/ | CORS 를 https 도메인으로, RELEASE_DIR 경로들, **`DAENGS_CORPUS_DIR` 는 더미 경로 필요**(크롤러를 안 띄워도 compose 가 해석 시점에 `:?` 가드를 평가) |
 | 암호화 키 3개 | 팀 채널 | **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 연다 |
@@ -84,8 +86,9 @@ main → dev 머지 1회로 가져온다 (지금은 불필요).
 ## 6. 스모크 테스트 (완료 기준)
 
 프론트 렌더(자물쇠) · 로그인(`/api/` 동일 오리진 경로) · `/ask`(첫 요청은 예열로 느림) ·
-`/v2/places/search` · `/journey` · `/screen/v1/screen`(사진) · `/gait/analyze`(영상, 분 단위) ·
-80→443 리다이렉트 · **앱 실기기에서 API 호출**(앱 담당자).
+`/assistant/query`(오케스트레이션, 인증 필수 — #115) · `/v2/places/search` · `/journey` ·
+`/screen/v1/screen`(사진) · `/gait/analyze`(영상, 분 단위) · 80→443 리다이렉트 ·
+**앱 실기기에서 API 호출**(앱 담당자).
 
 ## 7. 2차 로드맵 — GCP 유지 확정 시 (9/21 이후)
 
@@ -104,6 +107,6 @@ main → dev 머지 1회로 가져온다 (지금은 불필요).
 ⚠ **정지로는 과금이 계속된다** — 디스크·미연결 고정 IP 는 정지 중에도 청구되고,
 크레딧 만료(11/17) 뒤에는 말없이 실비다.
 
-1. 최종 `pg_dump` 3개 로컬 회수
+1. 최종 `pg_dump` 2개(vectordb·place) 로컬 회수
 2. 앱을 유지한다면 가비아 A 레코드를 집 서버로 회귀 + 집에서 TLS 재구성 (앱에는 도메인이 박혀 있어 주소는 그대로 산다)
 3. VM 삭제 → 디스크 삭제 확인 → 고정 IP **해제** → 스냅샷 정리 → 예산 화면 ₩0 확인

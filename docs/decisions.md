@@ -2113,6 +2113,22 @@ HANDOFF는 Skin·Gait입니다. Training/Life 원문 payload, trusted Walk 좌�
 annotation 정정은 버전 overlay로 남겨 과거 결과를 보존했습니다. PASS 뒤 prompt/gold/gate를
 더 조정하거나 Gemini를 다시 실행하지 않습니다.
 
+**모델 선정 정정 (2026-09-01, PR #130)** — 위 "팀 결정"은 실제로는 사람의 모델 선정
+기억 착오에서 비롯됐습니다. 원래 의도된 팀 라우터 모델은 `gemini-3.1-flash-lite`였습니다.
+착오를 프로덕션에 반영하기 전에, 동일한 80개 v3 gold·`semantic-router-ko-v3` 프롬프트·
+동결 gate로 `gemini-3.1-flash-lite`를 재실행했습니다(`runner_v4.py`,
+`backend/evals/orchestration_router/summary_v4.json`): 80건 시도, 재시도 0회, 15개
+게이트 전부 **PASS**, `exact_route_plan_match` 98.75%(`gemini-3.5-flash-lite`와 동일하게
+`mixed_09` 1건만 불일치), schema validity 100%, executable precision 98.68%/recall 100%,
+Skin/Gait handoff recall 100%로 정확도는 사실상 동등합니다. 지연은 `gemini-3.1-flash-lite`가
+더 느립니다 — warm p50 859.28ms vs 784.71ms(+9.5%), warm p95 1143.53ms vs 947.53ms(+20.7%).
+이 지연 증가는 의사결정권자가 명시적으로 수용했습니다. 이 근거로 production
+`ROUTER_MODEL_ID`를 `gemini-3.1-flash-lite`로 교정했습니다. `gemini-3.5-flash-lite`
+벤치마크 기록(`summary_v3.json` 등)은 지우지 않고 감사 근거로 보존합니다.
+`gemini-3.1-flash-lite`는 Training/Life 생성에도 쓰이지만(`docs/life/roadmap.md`,
+별도 프롬프트·런타임 경로) 그것과 라우터로서의 이번 채택은 서로 다른 책임이며,
+채택 근거는 이 절의 v4 수용 벤치마크입니다.
+
 
 ---
 

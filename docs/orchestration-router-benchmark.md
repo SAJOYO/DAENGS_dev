@@ -171,3 +171,29 @@ PASS는 100% 의미 정확도를 뜻하지 않습니다. 최종 실행에서 `mi
 
 **PASS로 Card 2A tuning은 끝납니다. Card 2B에서 수용할 production 경계는 LLM의 의미 선택과
 결정론적 RoutePlan 조립입니다.**
+
+## v4 모델 선정 정정 — `gemini-3.1-flash-lite` (2026-09-01, PR #130)
+
+위 v1~v3의 `gemini-3.5-flash-lite`는 사람의 모델 선정 기억 착오에서 비롯됐습니다. 원래
+의도된 팀 라우터 모델은 `gemini-3.1-flash-lite`였습니다. 착오를 프로덕션에 반영하기 전에,
+같은 80개 v3 gold·`semantic-router-ko-v3` 프롬프트·동결 gate로 `gemini-3.1-flash-lite`만
+바꿔 재실행했습니다(`runner_v4.py`).
+
+| 항목 | v3 (`gemini-3.5-flash-lite`) | v4 (`gemini-3.1-flash-lite`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity | 100% | 100% |
+| exact RoutePlan match | 98.75% | 98.75% |
+| executable precision / recall | 98.68% / 100% | 98.68% / 100% |
+| Skin / Gait HANDOFF recall | 100% / 100% | 100% / 100% |
+| CLARIFY precision / recall | 100% / 100% | 100% / 100% |
+| non-exact case | `mixed_09` | `mixed_09` (동일) |
+| warm p50 | 784.71 ms | 859.28 ms (+9.5%) |
+| warm p95 | 947.53 ms | 1143.53 ms (+20.7%) |
+| verdict | PASS | **PASS** |
+
+정확도는 사실상 동등하고 지연은 `gemini-3.1-flash-lite`가 더 느립니다. 이 지연 증가는
+의사결정권자가 명시적으로 수용했으며, 이 결과를 근거로 production
+`ROUTER_MODEL_ID`를 `gemini-3.1-flash-lite`로 교정했습니다(D-041). v3 결과 파일
+(`summary_v3.json`, `results_v3.jsonl`, `phase2_v3_report.md`)은 감사 근거로 보존하며
+제자리 수정하지 않았습니다.

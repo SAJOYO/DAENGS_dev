@@ -66,7 +66,7 @@ RoutePlan:
   handoffs:  list[{target: str, reason: str}]  # 전용 플로우 안내 — 0개 이상
   clarify:   {question: str, missing: list[str]} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
-  model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.5-flash-lite` (routing 문서 §4)
+  model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.1-flash-lite` (routing 문서 §4)
 ```
 
 규칙 (CONFIRMED):

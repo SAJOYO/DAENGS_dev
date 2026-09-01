@@ -99,13 +99,18 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
   token 은 v1 에 필요 없습니다. 인가·소유권을 함의하는 컨텍스트는 권위 있는 원천이
   생기는 시점부터 서버에서 재검증합니다.
 
-## 4. 라우터 모델 — `gemini-3.5-flash-lite` 수용 완료 (CONFIRMED — D-041)
+## 4. 라우터 모델 — `gemini-3.1-flash-lite` 수용 완료 (CONFIRMED — D-041, 2026-09-01 정정)
 
-v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.5-flash-lite`** 를 사용합니다. 이 선택은
-Card 2A의 모델 비교 결과가 아닙니다. Card 2A는 모델을 고르는 실험이 아니라, 결과를 보기
-전에 골드 RoutePlan·프롬프트·수용 게이트를 함께 동결하고 이 모델이 생산 수용 기준을
-충족하는지 **PASS/FAIL**로 판정한 acceptance benchmark이며 최종 결과는 **PASS**입니다.
-수용된 경계는 LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
+v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.1-flash-lite`** 를 사용합니다. Card 2A
+최초 구현은 사람의 모델 선정 기억 착오로 `gemini-3.5-flash-lite`를 썼고 그 상태로
+PASS했지만, 원래 의도된 팀 결정은 3.1이었습니다. 착오를 프로덕션에 반영하기 전에
+`gemini-3.1-flash-lite`를 **동일한** 80개 골드 RoutePlan·`semantic-router-ko-v3` 프롬프트·
+동결 gate에 대해 재실행해 **PASS**를 확인했습니다(PR #130,
+`backend/evals/orchestration_router/summary_v4.json`) — 자세한 수치는 D-041 참고.
+이 선택은 Card 2A의 모델 비교 결과가 아닙니다. Card 2A는 모델을 고르는 실험이 아니라,
+결과를 보기 전에 골드 RoutePlan·프롬프트·수용 게이트를 함께 동결하고 이 모델이 생산
+수용 기준을 충족하는지 **PASS/FAIL**로 판정한 acceptance benchmark입니다. 수용된 경계는
+LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 
 측정 항목:
 

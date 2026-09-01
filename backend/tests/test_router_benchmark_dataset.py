@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from difflib import SequenceMatcher
-from pathlib import Path
 
 from daengs_backend.orchestration.contracts import RoutePlan
 from tools.router_benchmark.schemas import BENCHMARK_DIR, load_benchmark_config, load_gold_cases
@@ -141,7 +141,19 @@ def test_config_freezes_one_model_prompt_retry_and_numeric_gates() -> None:
     }
 
 
-def test_human_freeze_contains_no_results_or_runner() -> None:
+def test_benchmark_directory_contains_no_winner_or_dashboard_artifacts() -> None:
     names = {path.name for path in BENCHMARK_DIR.iterdir()}
-    assert names == {"README.md", "benchmark_v1.yaml", "gold_v1.jsonl"}
-    assert not (Path(__file__).parents[1] / "tools" / "router_benchmark" / "runner.py").exists()
+    assert not any("winner" in name or name.endswith(".html") for name in names)
+
+
+def test_phase_2_result_artifacts_parse_and_cover_the_frozen_set() -> None:
+    records = [
+        json.loads(line)
+        for line in (BENCHMARK_DIR / "results_v1.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    summary = json.loads((BENCHMARK_DIR / "summary_v1.json").read_text(encoding="utf-8"))
+    assert len(records) == 80
+    assert {record["case_id"] for record in records} == {case.case_id for case in load_gold_cases()}
+    assert summary["scored_cases"] == 80
+    assert summary["verdict"] in {"PASS", "FAIL"}

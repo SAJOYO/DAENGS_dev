@@ -96,7 +96,7 @@ def test_benchmark_modules_do_not_reference_engine_or_capability_adapters() -> N
     assert found == []
 
 
-def test_benchmark_source_has_no_provider_or_network_client() -> None:
+def test_only_phase_2_runner_references_provider_or_network_client() -> None:
     forbidden_roots = {"google", "httpx", "requests", "urllib"}
     found: list[str] = []
     for path in TOOLS_DIR.glob("*.py"):
@@ -110,7 +110,7 @@ def test_benchmark_source_has_no_provider_or_network_client() -> None:
                 continue
             for root in roots & forbidden_roots:
                 found.append(f"{path.name}:{root}")
-    assert found == []
+    assert found == ["runner.py:google", "runner.py:google", "runner.py:google"]
 
 
 def test_benchmark_imports_stay_lightweight_and_offline() -> None:

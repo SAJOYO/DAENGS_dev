@@ -22,7 +22,7 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 
 | 주체 | 무엇을 띄우나 | 왜 여기인가 |
 | --- | --- | --- |
-| **Docker Compose** | nginx · backend · pgvector · training-rag-pgvector · redis · place-search · place-db · journey-service · crawler-worker · crawler-beat (+ profile 뒤의 것들) | 리눅스 컨테이너로 통일된 런타임. `restart: unless-stopped` 라 Docker Desktop 이 뜨면 같이 살아납니다 |
+| **Docker Compose** | nginx · backend · pgvector · redis · place-search · place-db · journey-service · crawler-worker · crawler-beat (+ profile 뒤의 것들) | 리눅스 컨테이너로 통일된 런타임. `restart: unless-stopped` 라 Docker Desktop 이 뜨면 같이 살아납니다 |
 | **PM2 (호스트)** | Next.js 프론트 (`daengs-web`, cluster ×2) | standalone 빌드를 releases 폴더로 무중단 교체하는 배포 방식(아래 §4)이 호스트 프로세스를 전제로 합니다 |
 | **self-hosted GitHub Actions 러너** | 배포 워크플로우 (`deploy.yml`) | 배포 대상이 이 PC 자신이라 러너도 이 PC 에 있습니다. 러너가 꺼져 있으면 배포는 대기 상태로 멈춥니다 |
 
@@ -55,8 +55,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
                      │   그 외        ─▶ backend:8000                 │
                      └────────────────────────────────────────────────┘
                           backend (Training · Life · Walk · Skin)
-                                  ─▶ pgvector:5432 · redis:6379
-                                  ─▶ training-rag-pgvector:5432 (Training 전용 PGVector)
+                                  ─▶ pgvector:5432 (vectordb · dog_rag) · redis:6379
                                   ─▶ Gemini API (Training·Life 생성)
                           place-search ─▶ place-db:5432 (자기 전용 PostGIS)
 ```
@@ -82,8 +81,8 @@ compose 가 컨테이너를 재생성하면 IP 가 바뀌는데, upstream 블록
 
 `docker compose up -d` 로 뜨는 기본 세트와, profile 을 명시해야 뜨는 것들이 나뉩니다.
 
-**기본 기동** — nginx · backend · pgvector · **training-rag-pgvector** · redis ·
-place-search · place-db · journey-service · crawler-worker · crawler-beat
+**기본 기동** — nginx · backend · pgvector · redis · place-search · place-db ·
+journey-service · crawler-worker · crawler-beat
 
 - Skin 은 더 이상 별도 compose 서비스/profile 이 아닙니다 (#100, D-040). 소스는
   `backend/src/daengs_screening/`, 라우터는 main backend 의 `/screen/*` 에 등록되고,
@@ -91,10 +90,13 @@ place-search · place-db · journey-service · crawler-worker · crawler-beat
   `ml` 과 `screening` dependency group 을 함께 동기화하며, #101 이 빠져 있던 screening
   lock 항목을 복구했습니다. 모델은 backend 기동이 아니라 첫 `/screen/v1/screen`
   요청 때 로드됩니다.
-- backend 는 pgvector·**training-rag-pgvector**·redis 의 **healthy 를 기다립니다.**
-  training-rag-pgvector 는 Training 능력 전용 PGVector 로, 본체 DB 와 컨테이너·볼륨
-  (`training-rag-pgdata`)·스키마(`backend/infra/training_pgvector/schema.sql`, 768차원)가
-  분리돼 있습니다 (#92·#94). redis 는 없어도 앱이 뜨지만,
+- backend 는 pgvector·redis 의 **healthy 를 기다립니다.** PGVector 컨테이너는 이제
+  **하나**입니다 — Training 전용이던 `training-rag-pgvector` 는 #105 로 없어졌고,
+  Training 은 같은 pgvector 클러스터 안의 **별도 `dog_rag` DB** 를 씁니다. 클러스터를
+  공유할 뿐 `rag_documents`·`rag_chunks` 가 `vectordb` 로 섞여 들어가는 것은 아닙니다.
+  스키마 원본은 여전히 `backend/infra/training_pgvector/schema.sql`(768차원)이지만,
+  전용 컨테이너가 없어져 init 디렉터리로 마운트되지는 않습니다 (#92·#94·#105).
+  redis 는 없어도 앱이 뜨지만,
   캐시 폴백 판단이 프로세스 생애에 한 번뿐이라 순서를 보장해야 일 예산 카운터가
   동작합니다 (D-019).
 - place-search 는 place-db(PostGIS) healthy 후 **Alembic 을 돌리고 나서** 서버를 띄웁니다.
@@ -232,7 +234,7 @@ Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 �
 
 | 능력 | 현재 소스·런타임 가용성 | Card 1 오케스트레이션 역할 | 호출 형태 | 현재 기술 호출 가능? | 막는 것 · 비고 |
 | --- | --- | --- | --- | --- | --- |
-| **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 전용 PGVector 컨테이너 | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). 내부 경계가 실제 생성 타임아웃과 그 밖의 실패를 구분하며 공개 `/training/chat` 의 503 호환성은 유지합니다 (contracts §4) |
+| **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 공용 pgvector 클러스터의 전용 `dog_rag` DB (#105) | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). 내부 경계가 실제 생성 타임아웃과 그 밖의 실패를 구분하며 공개 `/training/chat` 의 503 호환성은 유지합니다 (contracts §4) |
 | **Life** | backend `POST /ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
@@ -257,7 +259,8 @@ Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM
 
 **CURRENT (2026-08-31)** — Training RAG 이관은 **완료됐습니다.** 소스는
 `backend/src/daengs_training/` 모듈이고, backend 프로세스 안에서 in-process 로 돕니다
-(#83 런타임 이행 → #92 PGVector pg18 → #93 생성 Gemini 전환 → #94 modular monolith).
+(#83 런타임 이행 → #92 PGVector pg18 → #93 생성 Gemini 전환 → #94 modular monolith
+→ #105 PGVector 공용 클러스터 통합).
 호스트 단독 FastAPI(`:8010`)·`DAENGS_TRAINING_RAG_BASE_URL`·backend→Training HTTP 홉은
 더 이상 없습니다. 현재 호출 경로:
 
@@ -265,8 +268,22 @@ Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM
 frontend → backend POST /training/chat
          → services/training_rag.py (asyncio.to_thread, lazy 싱글턴)
          → daengs_training.service.RAGService (top_k=4)
-         → training-rag-pgvector(전용 컨테이너) / Gemini API
+         → pgvector:5432/dog_rag (공용 클러스터의 전용 DB) / Gemini API
 ```
+
+**DB 토폴로지 (#105)** — 전용 `training-rag-pgvector` 컨테이너와 `training-rag-pgdata`
+런타임 볼륨은 더 이상 없습니다. PostgreSQL 클러스터 하나를 공용으로 쓰되 DB 는 나눕니다:
+
+```
+공용 pgvector 컨테이너 / PostgreSQL 클러스터
+├─ vectordb  — 본체 DAENGS DB
+└─ dog_rag   — Training RAG DB (rag_documents · rag_chunks)
+```
+
+클러스터를 공유하는 것이지 테이블을 섞는 것이 아닙니다. Training 은 그 `dog_rag` DB
+하나만 소유하는 **non-superuser `dog_rag` LOGIN role** 로 붙고, 비밀번호는 최상단
+`.env` 의 `TRAINING_RAG_DB_PASSWORD` 를 compose 의 `:?` 가드로 받습니다. 본체는 종전대로
+`DAENGS_DB_*`/`POSTGRES_*` 로 `vectordb` 에 붙어, 두 접속 경로가 겹치지 않습니다.
 
 E5 검색·evidence gate·의료 가드레일·Gemini 생성은 전부 `daengs_training` 이 소유하고,
 `daengs_backend` 가 import 하는 것은 게이트웨이 한 곳뿐입니다

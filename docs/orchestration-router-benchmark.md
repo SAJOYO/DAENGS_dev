@@ -40,7 +40,9 @@ CLARIFY는 필요한 구조화 정보가 실제로 빠졌을 때만 쓰며 배�
 
 ## 입력과 골드 격리
 
-모델 입력은 고정 정책, 실제 RoutePlan JSON Schema, 질의, 허용된 구조화 컨텍스트뿐입니다.
+동결 v1 모델 입력은 고정 정책, 실제 RoutePlan JSON Schema, 질의, 허용된 구조화 컨텍스트뿐입니다.
+v1 FAIL 뒤 역할을 분리한 v2/v3 모델 입력은 의미 선택 schema, 질의, 허용된 라우팅
+메타데이터뿐이며 payload·좌표·CLARIFY·handoff reason은 결정론적 조립 코드가 소유합니다.
 컨텍스트 최상위 키는 `location`, `source`, `action`, 예약된 `active_dog_id`로 제한합니다.
 토큰·쿠키·업로드 바이너리·검색 청크·프로필 스냅샷을 넣지 않습니다.
 
@@ -138,3 +140,34 @@ v2 결과의 사람 검토에서 `mixed_09`는 훈련 방법이 아니라 환경
 한 건만 기록합니다. `semantic-router-ko-v3`에는 Walk가 현재 날씨·기온·비·대기질 같은 환경
 적합성 요청일 때만 선택되고 Training/Gait의 배경이 산책이라는 이유만으로 선택되지 않는다는
 일반 경계 한 줄만 추가합니다. 골드 예시나 키워드 fallback은 추가하지 않습니다.
+
+## 실행 이력과 최종 PASS
+
+- **v1 FAIL** — LLM이 의미 분류뿐 아니라 원문 payload 복사, 좌표, CLARIFY와 handoff reason까지
+  직접 작성해 schema validity, exact match, Gait recall과 CLARIFY recall gate를 통과하지 못했습니다.
+- **v2 FAIL** — LLM을 EXECUTE/HANDOFF 의미 선택으로 제한하고 trusted data로 실제 Card 1
+  `RoutePlan`을 결정론적으로 조립했습니다. exact match는 97.5%였지만 두 gate가 남았습니다.
+- **사람 annotation 정정** — `mixed_09`는 Training 방법 요청이 아니라 환경 적합성 Walk와
+  Gait 영상 분석 요청임을 확인했습니다. 원본/과거 결과를 덮어쓰지 않고 v3 overlay 한 건으로
+  기록했으며, 이는 모델 tuning이나 gate 변경이 아닙니다.
+- **최종 PASS** — 일반 Walk 의미 경계만 명확히 한 `semantic-router-ko-v3`를 같은 모델과
+  gate로 80문항에 정확히 한 번 실행했습니다.
+
+| 항목 | 최종 결과 |
+| --- | ---: |
+| model | `gemini-3.5-flash-lite` |
+| prompt | `semantic-router-ko-v3` |
+| cases / attempts / retries | 80 / 80 / 0 |
+| schema validity | 100% |
+| exact RoutePlan match | 98.75% |
+| executable precision / recall | 98.68% / 100% |
+| Skin / Gait HANDOFF recall | 100% / 100% |
+| CLARIFY precision / recall | 100% / 100% |
+| verdict | **PASS** |
+
+PASS는 100% 의미 정확도를 뜻하지 않습니다. 최종 실행에서 `mixed_09`가 Training을 하나 더
+선택한 non-exact 결과 한 건이 남았지만 모든 동결 gate를 통과했고 추가 실행이나 tuning은
+하지 않았습니다.
+
+**PASS로 Card 2A tuning은 끝납니다. Card 2B에서 수용할 production 경계는 LLM의 의미 선택과
+결정론적 RoutePlan 조립입니다.**

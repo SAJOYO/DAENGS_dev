@@ -216,3 +216,73 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ─────────────────────────────────────────────────────────────
+# DAENGS 프로젝트 추가분
+# 위쪽은 GitHub 의 Python 템플릿 그대로입니다. 이 저장소는 Node + Python
+# 혼합이라 아래에서 부족한 부분을 채우고, 과하게 잡히는 것을 되돌립니다.
+# (frontend/ 는 node_modules, .next 등을 자기 .gitignore 에서 처리합니다)
+# ─────────────────────────────────────────────────────────────
+
+# 환경 변수 — .env.example 은 커밋합니다
+.env.local
+.env.*.local
+!.env.example
+
+# 레이어 원화 원본. 수 MB 짜리 PNG 라 git 에 두지 않습니다 — 팀 드라이브에 보관하고,
+# 여기서 뽑아낸 결과물(art/*.webp)은 SAJOYO/DAENGS_CARDS 에 커밋합니다 (D-025).
+# tools/neo-hologram-layers.py 를 다시 돌리려면 원본을 이 폴더에 내려받으세요.
+tools/art-src/
+
+# Docker / DB 로컬 데이터
+.pgvector/
+.docker-data/
+pgdata/
+
+# 편집기 / OS
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 위 Python 템플릿의 lib/ 는 경로가 고정돼 있지 않아 어느 깊이에서든 걸립니다.
+# Next.js 에서 app/lib, src/lib 는 흔한 소스 폴더라 되돌려 둡니다.
+!frontend/**/lib/
+
+# ── 생활비서 RAG 데이터 (D-018 로 이관, RAG-017) ─────────────────────────
+# 받은 결과물(원본·meta·크롤 로그·가공물)은 어느 것도 커밋하지 않는다. 재수집으로 다시 만든다.
+# 'data/raw/' 로 쓰면 git 이 폴더 안으로 안 들어가 아래 예외가 안 먹으므로 '*/*' 를 쓴다.
+data/raw/*/*
+!data/raw/*/.gitkeep
+data/processed/*/*
+!data/processed/*/.gitkeep
+# 예외 — 랩 답변 덤프는 추적한다 (RAG-017 '예외' 절). LLM 출력이라 다시 돌려도 같은 글이
+# 안 나오는데 RAG-028 ⑥ 이 1랩↔2랩 비교 축으로 지정했다. 한 랩에 16KB.
+!data/processed/answers/*.jsonl
+data/manifests/crawl_log.jsonl
+
+# ── 보행 분석 (D-038 로 backend/src/daengs_gait 로 이관) ────────────────────
+# 원래 gait-analysis/.gitignore 에 있던 규칙입니다. 그 폴더가 없어지면서 **전역으로
+# 올렸습니다** — 여기 없으면 아무 데서도 안 막힙니다 (backend/.gitignore 는 없고
+# 최상단에도 *.pt 방어가 없었습니다).
+#
+# ⚠ **가중치는 git 에 넣지 않습니다** (D-029 → D-038 이 유지). best.pt 50.7MB +
+#   yolov8n.pt 6.2MB = 57MB 인데 저장소가 그보다 작고, git 은 바이너리를 델타로 못
+#   줄여 재학습본을 커밋할 때마다 옛 것이 히스토리에 영구히 남습니다.
+#   서버 디스크에 두고 GAIT_RELEASE_DIR 로 :ro 마운트합니다.
+#
+# ⚠ walk_demo 의 models/experimental/*.pt (6개)는 **미채택 실험 가중치**입니다.
+#   production 과 크기가 비슷해 헷갈리기 쉬우니 가져오지 마세요 — best.pt 와
+#   yolov8n.pt 둘뿐입니다.
+*.pt
+*.pth
+*.onnx
+# 로컬 개발에서 가중치와 분석 산출물이 떨어지는 자리 (config.py 의 기본값).
+# 컨테이너에서는 GAIT_RELEASE_DIR · GAIT_DATA_DIR 이 덮어씁니다.
+_models/
+_data/
+# 업로드 원본 · overlay 산출물. 개인 데이터가 들어갑니다.
+*.mp4
+*.webm
+*.mov
+*.avi

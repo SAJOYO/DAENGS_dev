@@ -1,0 +1,275 @@
+"""core/kakao.py — 카카오 id_token 검증.
+
+**네트워크에 나가지 않습니다.** 카카오 공개키 대신 여기서 만든 RSA 키를 캐시에
+꽂아 두고, 그 키로 서명한 가짜 id_token 을 검증합니다.
+
+여기서 지키려는 것은 "잘 되는 경우"가 아니라 **못 믿을 토큰이 통과하지 않는 것**입니다.
+특히 `aud` 와 알고리즘 고정 — 둘 다 빠뜨려도 정상 로그인은 멀쩡히 되기 때문에,
+테스트가 없으면 뚫린 줄 모릅니다.
+"""
+
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+from joserfc import jwt
+from joserfc.jwk import KeySet, OctKey, RSAKey
+
+from daengs_backend.core import kakao
+from daengs_backend.core.kakao import (
+    KakaoIdTokenInvalidError,
+    KakaoUnavailableError,
+    verify_id_token,
+)
+
+# conftest.py 가 넣는 DAENGS_KAKAO_APP_KEYS 의 두 값과 같아야 합니다.
+# 앱은 네이티브 키로, cli/kakao_token.py 는 REST 키로 로그인합니다 — 둘 다 통과해야 합니다.
+AUD = "test-native-app-key"
+AUD_REST = "test-rest-api-key"
+KID = "kakao-test-key"
+
+
+def _now() -> int:
+    return int(datetime.now(UTC).timestamp())
+
+
+@pytest.fixture
+def signing_key() -> RSAKey:
+    key = RSAKey.generate_key(2048, parameters={"kid": KID})
+    return key
+
+
+@pytest.fixture(autouse=True)
+def _install_keys(signing_key: RSAKey, monkeypatch: pytest.MonkeyPatch) -> None:
+    """카카오 공개키 자리에 우리 키를 꽂습니다. 매 테스트마다 새 캐시입니다."""
+    cache = kakao._KeyCache()
+    cache._keys = KeySet([signing_key])
+    cache._fetched_at = datetime.now(UTC)
+    monkeypatch.setattr(kakao, "_cache", cache)
+
+
+def _token(key: RSAKey, claims: dict | None = None, *, alg: str = "RS256") -> str:
+    """카카오가 발급한 것처럼 생긴 id_token 을 만듭니다."""
+    payload = {
+        "iss": kakao.ISSUER,
+        "aud": AUD,
+        "sub": "1234567890",
+        "exp": _now() + 300,
+        "iat": _now(),
+    }
+    payload.update(claims or {})
+    return jwt.encode({"alg": alg, "kid": KID}, payload, key)
+
+
+class TestVerify:
+    async def test_왕복(self, signing_key: RSAKey) -> None:
+        identity = await verify_id_token(_token(signing_key, {"email": "a@x.com"}))
+
+        assert identity.kakao_id == 1234567890
+        assert identity.email == "a@x.com"
+
+    async def test_회원번호는_정수다(self, signing_key: RSAKey) -> None:
+        """`app_users.kakao_id` 가 BIGINT 라 문자열이면 안 됩니다."""
+        identity = await verify_id_token(_token(signing_key))
+        assert isinstance(identity.kakao_id, int)
+
+    async def test_이메일_동의를_안_받으면_None(self, signing_key: RSAKey) -> None:
+        assert (await verify_id_token(_token(signing_key))).email is None
+
+    async def test_이메일이_빈_문자열이어도_None(self, signing_key: RSAKey) -> None:
+        """빈 문자열을 그대로 두면 blind index 가 만들어져 UNIQUE 가 충돌합니다."""
+        identity = await verify_id_token(_token(signing_key, {"email": ""}))
+        assert identity.email is None
+
+    async def test_목록에_있는_다른_앱_키도_통과한다(self, signing_key: RSAKey) -> None:
+        """**이 카드의 이유.**
+
+        카카오의 `aud` 는 로그인에 쓴 앱 키 그대로입니다 — 네이티브 SDK 는 네이티브
+        앱 키, JS SDK 는 JavaScript 키, REST 는 REST API 키. 하나로 못박아 두면
+        나머지 경로가 통째로 401 이 됩니다. 실제로 앱이 네이티브 SDK 로 붙으면서
+        전부 막혔습니다.
+        """
+        identity = await verify_id_token(_token(signing_key, {"aud": AUD_REST}))
+        assert identity.kakao_id == 1234567890
+
+    async def test_aud_가_배열로_와도_통과한다(self, signing_key: RSAKey) -> None:
+        """JWT 의 `aud` 는 배열일 수도 있습니다 (RFC 7519). joserfc 가 교집합으로 봅니다."""
+        token = _token(signing_key, {"aud": ["somebody-elses-app", AUD]})
+        assert (await verify_id_token(token)).kakao_id == 1234567890
+
+
+class TestReject:
+    """**여기가 이 파일의 본체입니다.** 아래가 하나라도 통과하면 인증이 뚫립니다."""
+
+    async def test_다른_앱의_토큰은_거부한다(self, signing_key: RSAKey) -> None:
+        """`aud` 검증. **서명은 멀쩡한 진짜 카카오 토큰입니다.**
+
+        이걸 통과시키면 다른 카카오 앱에서 받은 id_token 으로 우리 서비스에 계정이
+        생깁니다. 그 토큰의 sub 는 그 앱 기준 회원번호라 엉뚱한 새 회원이 됩니다.
+        """
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(signing_key, {"aud": "somebody-elses-app"}))
+
+    async def test_허용_목록이_비면_아무나_통과한다(
+        self, signing_key: RSAKey, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """**통과하는 것이 정답인 유일한 거부 테스트입니다.** 읽고 놀라지 마세요.
+
+        joserfc 의 `check_value` 는 `values` 가 빈 목록이면 `return` 으로 빠져나가
+        aud 검사를 아예 하지 않습니다. 그래서 여기서는 남의 앱 토큰이 통과합니다 —
+        `verify_id_token` 이 스스로 막을 수 없다는 뜻입니다.
+
+        **막는 것은 config 입니다** (`test_config.py` 의 `test_빈_목록은_거부한다`).
+        이 테스트는 그 validator 를 지우면 무엇이 열리는지 못박아 둡니다. 언젠가
+        joserfc 가 이 동작을 바꿔서 여기가 깨지면, 그때는 좋은 소식입니다.
+        """
+        monkeypatch.setattr(kakao.settings, "kakao_app_keys", [])
+        identity = await verify_id_token(_token(signing_key, {"aud": "somebody-elses-app"}))
+        assert identity.kakao_id == 1234567890
+
+    async def test_발급자가_다르면_거부한다(self, signing_key: RSAKey) -> None:
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(signing_key, {"iss": "https://evil.example"}))
+
+    async def test_만료되면_거부한다(self, signing_key: RSAKey) -> None:
+        """**시계 오차 허용치(60초)보다 확실히 지난 값**이어야 합니다.
+        10초 전으로 두면 leeway 안이라 통과합니다 (그게 의도한 동작입니다).
+        """
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(signing_key, {"exp": _now() - 3600}))
+
+    async def test_다른_키로_서명하면_거부한다(self) -> None:
+        other = RSAKey.generate_key(2048, parameters={"kid": KID})
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(other))
+
+    async def test_HS256_으로_바꿔치면_거부한다(self, signing_key: RSAKey) -> None:
+        """**알고리즘 혼동 공격.**
+
+        공격자가 alg 를 HS256 으로 바꾸고 **공개키를 HMAC 비밀키 삼아** 서명하면,
+        검증하는 쪽이 같은 공개키로 검증해서 통과시킵니다. 공개키는 누구나
+        가져올 수 있으므로 이건 서명 없이 토큰을 만드는 것과 같습니다.
+        `JWSRegistry(algorithms=["RS256"])` 가 막습니다.
+        """
+        public_pem = signing_key.as_pem(private=False)
+        forged = jwt.encode(
+            {"alg": "HS256", "kid": KID},
+            {
+                "iss": kakao.ISSUER,
+                "aud": AUD,
+                "sub": "1234567890",
+                "exp": _now() + 300,
+            },
+            OctKey.import_key(public_pem),
+        )
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(forged)
+
+    async def test_필수_클레임이_빠지면_거부한다(self, signing_key: RSAKey) -> None:
+        for missing in ("iss", "aud", "sub", "exp"):
+            claims = {
+                "iss": kakao.ISSUER,
+                "aud": AUD,
+                "sub": "1",
+                "exp": _now() + 300,
+            }
+            del claims[missing]
+            token = jwt.encode({"alg": "RS256", "kid": KID}, claims, signing_key)
+            with pytest.raises(KakaoIdTokenInvalidError):
+                await verify_id_token(token)
+
+    async def test_sub_가_회원번호가_아니면_거부한다(self, signing_key: RSAKey) -> None:
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(signing_key, {"sub": "not-a-number"}))
+
+    async def test_빈_토큰과_쓰레기값은_거부한다(self) -> None:
+        for junk in ["", "not-a-token", "a.b.c"]:
+            with pytest.raises(KakaoIdTokenInvalidError):
+                await verify_id_token(junk)
+
+    async def test_nonce_가_다르면_거부한다(self, signing_key: RSAKey) -> None:
+        token = _token(signing_key, {"nonce": "from-kakao"})
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(token, expected_nonce="what-the-app-sent")
+
+    async def test_nonce_를_기대했는데_없으면_거부한다(
+        self, signing_key: RSAKey
+    ) -> None:
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(_token(signing_key), expected_nonce="something")
+
+
+class TestClockSkew:
+    """시계가 어긋나도 로그인이 죽지 않아야 합니다.
+
+    이걸 안 넣으면 우리 시계가 카카오보다 1초만 뒤처져도 `iat` 가 미래가 되어
+    **모든 로그인이 실패**합니다. 실제로 겪었고, 에러가 "우리 앱의 것이 아님"으로
+    보여서 원인을 찾기 어려웠습니다.
+    """
+
+    async def test_발급_시각이_조금_미래여도_통과한다(
+        self, signing_key: RSAKey
+    ) -> None:
+        """우리 시계가 카카오보다 뒤처진 상황입니다."""
+        identity = await verify_id_token(
+            _token(signing_key, {"iat": _now() + 30, "exp": _now() + 600})
+        )
+
+        assert identity.kakao_id == 1234567890
+
+    async def test_방금_만료된_것도_허용치_안이면_통과한다(
+        self, signing_key: RSAKey
+    ) -> None:
+        """카카오 id_token 은 로그인 직후 한 번 쓰고 버리는 값이라 여유를 둡니다."""
+        identity = await verify_id_token(_token(signing_key, {"exp": _now() - 10}))
+
+        assert identity.kakao_id == 1234567890
+
+    async def test_한참_미래면_거부한다(self, signing_key: RSAKey) -> None:
+        """허용치는 시계 오차를 위한 것이지 검증을 무르게 하려는 것이 아닙니다."""
+        with pytest.raises(KakaoIdTokenInvalidError):
+            await verify_id_token(
+                _token(signing_key, {"iat": _now() + 3600, "exp": _now() + 7200})
+            )
+
+
+class TestKeyCache:
+    async def test_공개키를_못_받아오면_Unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """**401 이 아닙니다.** 사용자가 다시 로그인해도 똑같이 실패합니다."""
+        monkeypatch.setattr(kakao, "_cache", kakao._KeyCache())
+
+        async def boom(*args: object, **kwargs: object) -> None:
+            raise httpx.ConnectError("no network")
+
+        monkeypatch.setattr(httpx.AsyncClient, "get", boom)
+
+        with pytest.raises(KakaoUnavailableError):
+            await verify_id_token("anything")
+
+    async def test_모르는_kid_면_한_번_다시_받아온다(
+        self, signing_key: RSAKey, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """카카오가 키를 갈면 캐시에 없는 kid 가 옵니다. 영원히 캐시하면
+        그 순간부터 전원이 로그인 불가가 됩니다."""
+        stale = RSAKey.generate_key(2048, parameters={"kid": "old-key"})
+        cache = kakao._KeyCache()
+        cache._keys = KeySet([stale])
+        # 재요청 최소 간격에 걸리지 않도록 오래전에 받아온 것으로 둡니다.
+        cache._fetched_at = datetime.now(UTC) - timedelta(minutes=10)
+
+        fetched = 0
+
+        async def fake_fetch() -> KeySet:
+            nonlocal fetched
+            fetched += 1
+            return KeySet([signing_key])
+
+        monkeypatch.setattr(cache, "_fetch", fake_fetch)
+        monkeypatch.setattr(kakao, "_cache", cache)
+
+        identity = await verify_id_token(_token(signing_key))
+
+        assert identity.kakao_id == 1234567890
+        assert fetched == 1, "JWKS 를 정확히 한 번만 다시 받아와야 합니다"

@@ -1,0 +1,505 @@
+# 골든셋 시드 (RAG-022) — 6단계 3파전과 8단계 검문소③이 이 파일로 채점된다.
+#
+# 라벨에는 **수집 날짜를 뺀 논리 주소**를 적는다 (RAG-022 ⑥B). 실제 chunk_id 는
+# `law-drf-api-...-act__20260820#제15조` 이지만 `__20260820` 은 수집일이라 재수집하면 바뀐다.
+# 채점기가 `__\d{8}` 를 벗겨 대조하므로 여기서는 날짜 없이 적는다.
+#
+# must  = 없으면 최종 답변이 틀리는 청크. Recall 의 분자·분모가 이것이다
+# nice  = 있으면 인용이 단단해지지만 없어도 답이 성립. 점수에 들어가지 않는다
+# unavailable = 코퍼스 밖 참조. **분모에서 뺀다** — 세 모델이 같은 코퍼스를 쓰므로 모델 차이가 아니다.
+#               적어 두는 이유는 그 법령을 수집하면 must 로 올라가야 하기 때문이다
+
+schema_version: 1
+
+corpus:                            # 이 라벨을 판정한 코퍼스 스냅샷. 다르면 채점기가 경고한다
+  # 2026-08-27 재수집으로 갱신 (RAG-030). 라벨은 다시 쓰지 않았다 — **개정이 없었기** 때문이다:
+  # 요소 합계(article 629 · heading 97 · 서식 제외 126)와 청크 총량·제외 내역이 1랩과 같고,
+  # 조문 내용을 박아 둔 test_parse.py 19개 · test_chunk.py 27개가 전부 통과했다.
+  # 2026-08-27 해설 소스 4건(gov24 · nias · 정책브리핑 · 서울시) 68청크가 더해져 1407 -> 1475.
+  # 2026-08-28 조례 208건(RAG-033) + 보조금24 37건(RAG-034) + 코레일 약관 2건(RAG-036).
+  # **셋 다 라벨을 손대지 않았다** — 더해진 것이 전부 새 문서라 기존 라벨이 가리키는 청크의
+  # 주소가 안 바뀐다. 이 값은 "라벨을 판정한 코퍼스"의 표식이지 정답이 아니라, 소스가 늘 때마다
+  # 다시 세면 된다.
+  # 2026-08-28 손해보험협회 공시 7건(RAG-038) + 운송약관 HTML 3건(RAG-039)이 더해졌다.
+  # 여기도 라벨을 손대지 않았다 — 전부 새 문서다.
+  # 2026-08-29 삼성화재 약관 PDF 11건(RAG-041) 1,957청크. **#53 이 이 줄을 안 고쳤다** —
+  # 4411 은 RAG-039 까지의 값이었다 (RAG-042 ③). 라벨은 여기서도 안 건드렸다.
+  #
+  # ⚠ **이 값은 `test_chunk.py` 의 `BY_SOURCE` 합계와 같아야 한다** — 저기는 parsed 를 그 자리에서
+  # 청킹한 수고 여기는 `chunks/*.jsonl` 에 적재된 수라, 둘이 다르면 재청킹이 덜 됐다는 뜻이다.
+  #
+  # ⚠ **DB 행 수와 같아지는 값이 아니다.** 2026-08-29 까지 여기 "서버 DB 적재분과 일치 확인"
+  # 이라고 적혀 있었는데 틀린 말이었다 (#69 가 정정, RAG-046 에서 확인). 바른 불변식은:
+  #
+  #     chunk_count == BY_SOURCE 합계 == chunks/*.jsonl 의 **콘텐츠 행** 수
+  #     DB documents 행 수 == chunk_count − prepare().merged − (아직 적재 안 한 청크)
+  #
+  # 실측 2026-08-30: 청크 6,389 · merged 112 · 항공 21 은 아직 적재 전 → DB 6,256. 셋이 맞는다.
+  # ("콘텐츠 행"인 이유는 파일마다 첫 줄이 헤더여서다 — 날 것으로 세면 306줄이 더 나온다.)
+  #
+  # 옛 적재가 남아 6,414 로 세어지던 것(RAG-042 ⑤)은 **이제 아니다** — #69 가 `rag load --prune`
+  # 으로 393행을 지워 DB 가 `prepare()` 와 정확히 같아졌다 (RAG-045 ①).
+  #
+  # 두 자리를 손으로 맞추고 있는 것이 어긋남의 원인이므로 **한 자리로 모으는 것이 남은 일이다**
+  # (RAG-042 ③ — `BY_SOURCE` 를 패키지 안으로 옮기고 여기서 파생시킨다).
+  # 2026-08-29 항공 2건(RAG-046, #57) 21청크가 더해져 6368 -> 6389. **라벨은 안 건드렸다** —
+  # 전부 새 문서라 기존 라벨이 가리키는 청크의 주소가 안 바뀐다. 항공 문항 자체는 B1(#59) 몫이다
+  # (이 카드의 메모 ⑤ — 그쪽이 `unavailable` 로 뒀다가 이 카드가 머지되면 `must` 로 올린다).
+  # 2026-08-30 KB·농협 약관 12건(RAG-048, #58) 3,062청크가 더해져 6389 -> 9451. **라벨은 안 건드렸다** —
+  # 삼성 11건은 청크 id 가 그대로이고(쪽 번호 줄만 빠졌다) 보험 문항은 아직 없다 (B1 #59 몫).
+  collected_on: 2026-08-30         # KB·농협 약관 수집일 (항공은 08-29, 보조금24·운송약관은 08-28, 법령·조례는 08-27)
+  chunker_version: 1
+  chunk_count: 9451                # BY_SOURCE 합계 = 청크 콘텐츠 행 수 (보험 약관 23건 5,019 포함)
+
+items:
+
+  # ------------------------------------------------------------------ 검증질문 7 (origin: hand)
+  # RAG-004 가 원문에서 정답 위치를 확인한 문항들이다. 법제처 라벨이 없어 필수/보강은 사람 판단이고,
+  # 판단이 갈린 자리는 Q1·Q3·Q4 셋뿐이다 (RAG-022 ⑤).
+
+  - id: Q1
+    added_on: 2026-08-24
+    origin: hand
+    question: 강아지 등록 안 하면 어떻게 되나요?
+    must:
+      - law-drf-api-animal-protection-act#제101조③        # 100만원 이하 — 처벌 상한
+      - law-drf-api-animal-protection-decree#별표 4-2-라   # 실제 부과액 20/40/60. 빠지면 금액이 틀린다
+    nice:
+      - law-drf-api-animal-protection-act#제15조          # 등록 의무. "어떻게 되나요"는 처벌을 묻는다
+    unavailable: []
+
+  - id: Q2
+    added_on: 2026-08-24
+    origin: hand
+    question: 등록정보 변경 언제까지 신고해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조          # 30일 이내 — 기한 그 자체
+    nice:
+      - law-drf-api-animal-protection-decree#제11조       # 변경신고 대상·절차
+      - law-drf-api-animal-protection-act#제101조④        # 50만원 이하. "언제까지"는 처벌을 묻지 않는다
+    unavailable: []
+
+  - id: Q3
+    added_on: 2026-08-24
+    origin: hand
+    question: 목줄 안 하면 과태료 얼마인가요?
+    must:
+      - law-drf-api-animal-protection-act#제16조          # ②1호 안전조치 의무 — 인용의 근거
+      - law-drf-api-animal-protection-act#제101조④        # ④4호 50만원 이하 — 금액. 검문소① 라벨에는 없었다
+    nice:
+      - law-drf-api-animal-protection-rule#제11조         # 목줄 2미터. "얼마"를 물었지 기준을 묻지 않았다
+      - easylaw-pet-2-2-1#h2-1                           # 반려견 목줄 등 안전조치하기
+    unavailable: []
+
+  - id: Q4
+    added_on: 2026-08-24
+    origin: hand
+    question: 로트와일러인데 맹견인가요?
+    must:
+      # 법 제2조제5호가목은 "도사견, 핏불테리어, 로트와일러 **등** ... 농림축산식품부령으로 정하는 개" 라
+      # 로트와일러가 예시로만 나온다. 확정 목록은 시행규칙 제2조 제5호다 — 둘 다 있어야 인용이 성립한다
+      - law-drf-api-animal-protection-act#제2조           # 맹견의 정의 + 부령 위임
+      - law-drf-api-animal-protection-rule#제2조          # 맹견의 범위 — 확정 견종 목록
+    nice: []
+    unavailable: []
+
+  - id: Q5
+    added_on: 2026-08-24
+    origin: hand
+    question: 맹견 사육 허가 필요한가요?
+    must:
+      - law-drf-api-animal-protection-act#제18조          # 맹견사육허가 등
+    nice: []
+    unavailable: []
+
+  - id: Q6
+    added_on: 2026-08-24
+    origin: hand
+    question: 광견병 접종 의무인가요?
+    must:
+      # 광견병 접종을 직접 의무화한 단일 조문이 없다 (RAG-004). 셋이 모여야
+      # "상시 의무는 아니고 조례·명령으로 부과된다"는 답이 된다 — 하나만으로는 답이 틀린다
+      - law-drf-api-livestock-epidemic-act#제15조         # ① "필요하다고 인정하면 ... 명할 수 있다" — 명령 근거
+      - law-drf-api-animal-protection-act#제16조          # ③ 시·도 조례로 예방접종. 조 단위 청크라 Q3 과 같은 주소다
+      - law-drf-api-livestock-epidemic-act#제20조         # ④ 미접종 개 억류·살처분 — 실질 불이익
+    nice: []
+    unavailable: []
+
+  - id: Q7
+    added_on: 2026-08-24
+    origin: hand
+    question: 국립공원에 강아지 데리고 갈 수 있나요?
+    must:
+      # 이 청크 하나만 검색돼도 KPI(출처 링크 + 조항 인용)가 충족된다 — 본문에 인용이 함께 들어 있다.
+      # 인용된 자연공원법 제29조·제86조는 코퍼스에 있지만 **두 조문 어디에도 "반려동물"·"개"가 없다.**
+      # 그 단어는 미수집 시행령에만 있어 dense 로는 사실상 도달 불가다 (RAG-022 ⑤)
+      - easylaw-pet-2-2-1#note-1                         # ※ 반려동물과 정부 지정 자연공원 이용하기
+    nice:
+      - law-drf-api-natural-park-act#제29조               # ① 공원관리청의 행위 제한·금지
+      - law-drf-api-natural-park-act#제86조               # ①6호 200만원 이하 과태료
+    unavailable:
+      - ref: 자연공원법 시행령 제26조제4호
+        reason: 미수집
+
+  # ------------------------------------------------------------------ 지자체 지원 3 (origin: hand)
+  # RAG-033 로 조례 208건이 들어오면서 추가한 문항이다. 앞의 7문항과 성격이 하나 다르다 —
+  # **정답이 지자체마다 따로 있다.** 법령은 전국에 하나라 "제15조"가 유일한 정답이지만, 조례는
+  # 같은 취지의 조가 135개 지자체에 흩어져 있어 "빠지면 답이 틀리는 청크"를 하나로 못 집는다.
+  #
+  # 그래서 must 는 **그 지자체를 명시한 질문**에만 건다. "우리 동네" 류를 must 로 만들면 라벨이
+  # 사실상 임의 선택이 되고, Recall 이 모델 차이가 아니라 뽑기 운을 재게 된다. 지역을 안 밝힌
+  # 질문의 채점은 이 파일이 아니라 검문소④(답변이 지역을 되묻는지)가 맡는다.
+  #
+  # 이 셋이 실제로 보려는 것은 **`trust_level` 이 답에서 구분되는가**다 (카드 #39 ③).
+  # 조례(`law`)와 지자체 안내문(`official`)은 근거의 무게가 다른데, 지금 코퍼스에는 조례만
+  # 있어 이 축이 아직 시험되지 않는다. `benefit24-services` 가 들어오면 그때 성립한다.
+
+  - id: S1
+    added_on: 2026-08-27
+    origin: hand
+    question: 당진시에서 반려동물 진료비를 얼마까지 지원받을 수 있나요?
+    must:
+      # 연 20만원 한도와 두 가지 조건(동물등록·지정 동물병원)이 이 조 하나에 다 있다.
+      # 빠지면 금액이 틀린다 — Q1 의 별표 4-2-라 와 같은 성격의 라벨이다
+      - ordinance-search-2168687#제26조
+    nice: []
+    unavailable: []
+
+  - id: S2
+    added_on: 2026-08-27
+    origin: hand
+    question: 서울 구로구에서 중성화 수술비를 지원하나요?
+    must:
+      # `중성화` 는 조례 **제목**에 한 건도 없다 (RAG-033 ①) — 본문에만 있다.
+      # 제목검색으로 수집한 코퍼스가 본문 단어에 도달하는지를 보는 문항이다
+      - ordinance-search-2259585#제5조
+    nice: []
+    unavailable: []
+
+  - id: S3
+    added_on: 2026-08-27
+    origin: hand
+    question: 부산 동래구는 내장형 동물등록 비용을 지원해 주나요?
+    must:
+      # ④항이 "내장형 무선식별장치 시술 비용 지원" 이다. 조가 616자로 길어 등록 절차(①~③)와
+      # 지원(④)이 한 청크에 같이 들어 있다 — 조례는 항 단위로 못 쪼갠다(RAG-033 ③)는 결정이
+      # 검색에 어떻게 나타나는지 보이는 자리다
+      - ordinance-search-2182010#제8조
+    nice: []
+    unavailable: []
+
+  - id: S4
+    added_on: 2026-08-28
+    origin: hand
+    question: 서울 동대문구 취약계층 반려동물 의료비는 얼마까지 지원되나요?
+    must:
+      # 마리당 20만원·보호자 1만원 부담이 이 청크에만 있다.
+      # **이 문항은 소관기관명을 제목에 붙인 처방(RAG-034 ⑥)의 판정 문항이다** — 붙이기 전에는
+      # 사업명이 그냥 `취약계층 반려동물 의료비 지원` 이라 1위가 **충청북도** 것이었다
+      - benefit24-services-305000000130#지원내용
+    nice: []
+    unavailable: []
+
+  - id: S5
+    added_on: 2026-08-28
+    origin: hand
+    question: 수원시에서 반려동물 진료비를 지원받을 수 있나요? 근거가 뭔가요?
+    must:
+      # **`trust_level` 이 답에서 구분되는지 보는 문항이다** (카드 #39 가 이 도메인의 핵심으로
+      # 꼽은 축). 같은 수원시 지원을 두 소스가 다르게 말한다 —
+      #   조례(`law`)      = 왜 줄 수 있는가. 연도가 바뀌어도 산다
+      #   보조금24(`official`) = 올해 얼마를 어떻게. 해마다 죽는다
+      # 둘 중 하나만 나오면 답이 반쪽이다: 조례만이면 금액이 없고, 사업만이면 근거가 없다
+      - ordinance-search-2253349#제4조
+      - benefit24-services-374000000596#지원내용
+    nice:
+      - benefit24-services-374000000596#근거법령      # 상세의 `자치법규` 가 위 조례 이름과 같다
+    unavailable: []
+
+  # ------------------------------------------------------------------ 운송 3 (RAG-039, origin: hand)
+  # `transport` 도메인의 판정 문항이다. 이 축은 **법령이 답을 갖고 있지 않다** — 「동물보호법」에
+  # 지하철·기차 이야기가 없고, 답은 운송사업자의 약관·안내에만 있다. 그래서 이 셋의 must 는
+  # 전부 신규 소스이고, 못 맞히면 검색이 아니라 **코퍼스가 없어서**다 (Q6 이 그랬다).
+
+  - id: T1
+    added_on: 2026-08-28
+    origin: hand
+    question: 지하철에 강아지를 데려가도 되나요?
+    must:
+      # 휴대금지품 조의 단서가 답이다 — "전용 이동장에 넣어 보이지 않게 하고 불쾌한 냄새가
+      # 없을 것". **1~8호선과 9호선 2·3단계가 서로 다른 약관이고 조 번호도 다르다**
+      # (1~8호선 제35조 · 9호선 제34조). 한쪽만 맞히면 절반은 틀린 답이라 둘 다 필수다
+      - seoulmetro-terms-line1-8#제35조
+      - seoulmetro-terms-line9#제34조
+    nice: []
+    unavailable:
+      - ref: 부산·대구·인천 등 지역 도시철도공사 여객운송약관
+        reason: 미수집 — 서울만 받았다 (docs/life/data-sources.md §5)
+
+  - id: T2
+    added_on: 2026-08-28
+    origin: hand
+    question: SRT 반려동물 이동장 크기 제한이 어떻게 되나요?
+    must:
+      # 45×30×25cm 가 이 청크에만 있다. **본문이 이미지 `alt` 였다** (RAG-036 ②) —
+      # alt 를 안 읽는 파서로 되돌아가면 이 문항이 먼저 죽는다
+      - srt-terms-pet#h2-0
+    nice: []
+    unavailable: []
+
+  - id: T3
+    added_on: 2026-08-28
+    origin: hand
+    question: 기차에 반려동물은 몇 kg까지 태울 수 있나요?
+    must:
+      # 이동장 포함 10kg. T2 와 같은 청크를 가리키는데, 문서가 500자대라 청크가 하나여서다.
+      # 두 문항을 따로 두는 이유는 **질문의 축이 다르기 때문**이다 — 코레일을 수집하면
+      # (아래 unavailable) 이 문항의 정답이 늘어나고 T2 는 그대로다
+      - srt-terms-pet#h2-0
+    nice: []
+    unavailable:
+      - ref: 한국철도공사 여객운송약관 (KTX·일반열차)
+        reason: PDF 본문이라 파서 도입 카드(#49)에서 수집
+
+  # ------------------------------------------------------------------ 펫보험 5 (RAG-049, origin: hand)
+  # 보험 코퍼스 2,067청크(협회 공시 110 · 삼성 약관 1,957)를 재는 첫 문항이다. 이 축은 **같은 질문에
+  # 두 층이 따로 답한다** — 협회 공시(`knia-disclosure`)는 담보명·지급액·특이사항이고, 약관(`insurer-terms`)
+  # 은 정의·계산식·면책이다 (RAG-038 ②). 그래서 문항을 "공시로도 되는 것"(I1·I2·I5)과 "약관에만 있는
+  # 것"(I3·I4)으로 섞었다 — 한 층이 빠지면 어느 문항이 떨어지는지로 **어느 층이 빠졌는지** 보인다.
+  #
+  # 약관 must 는 **보통약관 조항만** 건다. 특별약관 청크의 주소는 `…특별약관 제1조` 처럼 잘린 특약명에
+  # 순번이 붙는 형태라(RAG-041 ⑤) B2(#60)가 경계를 고치면 바뀐다. 그래서 특별약관은 nice 로만 둔다.
+  # 강아지 상품(`ZPY008010` 다이렉트 착한펫 2605.1 재가입용)을 must 로, 같은 조항의 다른 판(2601.6 은
+  # 조 번호가 다르다 — 보험나이가 제22조, 면책이 제5조)과 위풍댕댕은 nice 로 둔다.
+  #
+  # "가입 나이 상한" 은 일부러 안 넣었다. 삼성 약관에 그 값이 없어 **물러서는 것이 정답**인데(lap9-age),
+  # 이 스키마는 must 가 빈 문항을 허용하지 않는다 (test_every_item_has_a_must). RAG-029 후속이다.
+
+  - id: I1
+    added_on: 2026-08-30
+    origin: hand
+    question: 펫보험으로 슬개골 탈구 치료비 보장되나요?
+    must:
+      # 삼성 다이렉트 착한펫(강아지) 2601.6 공시 — "계약일부터 1년 이내 슬관절탈구는 지급하지 않음,
+      # 재가입은 예외". 보장은 되지만 **대기 1년**이 답의 핵심이라 이 행이 없으면 답이 틀린다
+      - knia-disclosure-N08#N08PB272479-보장내용-r2
+    nice:
+      - knia-disclosure-N08#N08PB272479-보장내용-r3                                   # 같은 단서, 수술당일제외 담보
+      # DB손보 — 담보명에 `슬관절/고관절탈구포함(1년이후)` 가 박혀 있다. 처음엔 must 로 뒀다가 내렸다:
+      # 질문이 "펫보험" 일반이라 삼성 하나로 답이 성립하고(T1 은 질문이 서울 지하철 하나를 가리켜서
+      # 두 약관이 다 필요했다), DB손보는 같은 문구의 행이 6개라 하나를 must 로 찍으면 뽑기가 된다 (RAG-049 ②)
+      - knia-disclosure-N11#N11PB278672-보장내용
+      - knia-disclosure-N11#N11PB278670-보장내용                                      # lap12 가 실제로 가져온 행
+      # 약관 층의 같은 말. #60(RAG-051) 이 경계를 레이아웃으로 잡아 주소가 특별약관 이름을 갖게 됐다
+      - "insurer-terms-pdfs-samsung-ZPB320090_0_20260701#반려견 의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관 제3조"
+    unavailable:
+      - ref: DB손보 약관 원문
+        reason: RAG-048 ① — robots 의 의도를 존중해 사람이 뺐다. 공시 행(위 nice)까지만 있다
+
+  - id: I2
+    added_on: 2026-08-30
+    origin: hand
+    question: 펫보험 자기부담금은 얼마인가요?
+    must:
+      # "가입시 선택한 1일당 자기부담금 … 30만원 한도(자기부담금 3만원)". 금액과 "가입 시 선택"이
+      # 한 행에 있다 — 공시만으로 답이 되는 문항 (RAG-038 ②)
+      - knia-disclosure-N08#N08PB272529-보장내용-r2
+    nice:
+      - knia-disclosure-N08#N08PB272529                                             # 특이사항: 자기부담금 3만원
+      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제2조                     # 4호 자기부담금의 정의
+      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제3조                     # 지급보험금 계산 — 1일당 차감
+    unavailable: []
+
+  - id: I3
+    added_on: 2026-08-30
+    origin: hand
+    question: 펫보험에서 반려견의 보험나이는 어떻게 계산하나요?
+    must:
+      # 제24조 (보험나이 등) — 만나이 기준, 매년 계약해당일에 증가, 정정 시 보험금 삭감. 공시에는 없다.
+      # ⚠ 카드 본문의 "제25조" 는 옛 판(2601.x 위풍댕댕·의기냥냥)의 번호다 — 2605.1 재가입용은 전부 제24조
+      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제24조
+    nice:
+      - insurer-terms-pdfs-samsung-ZPB320090_0_20260701#제22조                    # 같은 상품 2601.6 판 — 조 번호가 다르다
+      - insurer-terms-pdfs-samsung-ZPY006010_0_20260701#제24조                    # 위풍댕댕 2605.1
+    unavailable: []
+
+  - id: I4
+    added_on: 2026-08-30
+    origin: hand
+    question: 펫보험에서 보험금을 지급하지 않는 경우는 언제인가요?
+    must:
+      # 제6조 (보험금을 지급하지 않는 사유) — 고의·전쟁·천재지변부터 "최초계약일 이전 발병"·"선천적
+      # 유전적 질병"까지. 면책은 약관에만 있다
+      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제6조
+    nice:
+      - insurer-terms-pdfs-samsung-ZPB320090_0_20260701#제5조                     # 2601.6 판 — 제5조
+      - insurer-terms-pdfs-samsung-ZPY006010_0_20260701#제6조                     # 위풍댕댕 2605.1
+      - "insurer-terms-pdfs-samsung-ZPY008010_0_20260701#특별약관 일반사항 제7조"    # 특별약관 일반사항의 같은 조 (#60 전에는 순번 주소 `제7조-2`)
+    unavailable: []
+
+  - id: I5
+    added_on: 2026-08-30
+    origin: hand
+    question: 펫보험 의료비는 하루에 얼마까지, 1년에 얼마까지 보장되나요?
+    must:
+      # "1일당 한도/연간 총한도 : 10만/1000만, 15만/1500만, 30만/1500만". I2 와 같은 행인데 축이 다르다 —
+      # T2·T3 처럼 한 청크가 두 질문에 답한다. 약관은 "보험증권에 기재된 한도액"이라고만 하고 숫자가 없다
+      - knia-disclosure-N08#N08PB272529-보장내용-r2
+    nice:
+      - knia-disclosure-N08#N08PB272529-보장내용-r1                                 # 수술당일 담보 300만원
+      - insurer-terms-pdfs-samsung-ZPY008010_0_20260701#제3조                     # "1일당 보상한도액을 한도로"
+      - "insurer-terms-pdfs-samsung-ZPY008010_0_20260701#반려견의료비(치과및구강질환포함)(수술당일제외, 검사비포함)(재가입형) 특별약관 제1조"   # 연간 총 보상한도액
+    unavailable: []
+
+  # ------------------------------------------------------------------ 항공 2 (RAG-046 · RAG-049, origin: hand)
+  # A1(#57) 이 넣은 에어프레미아·이스타 21청크의 판정 문항이다. T1 과 같은 구조 — **두 회사의 수치가
+  # 다르다** (무게 7kg / 9kg, 케이지 38×22×23 / 합 100cm). 한쪽만 맞히면 "그 항공사만" 이라 둘 다 must 다.
+  # 에어프레미아는 무게와 규격이 한 청크(`h3-2` 반입규정)에 같이 있고, 이스타는 표 행이 나뉜다.
+
+  - id: T4
+    added_on: 2026-08-30
+    origin: hand
+    question: 비행기 기내에 강아지를 데리고 탈 때 무게 제한이 어떻게 되나요?
+    must:
+      - airlines-pet-pages-airpremia#h3-2                 # 용기 포함 7kg 이하
+      - airlines-pet-pages-eastar#t-1-r3                  # 반려동물+운송용기 총합 9kg 이내
+    nice:
+      - airlines-pet-pages-eastar#t-1-r13                 # 초과하면 운송 불가
+    unavailable:
+      - ref: 대한항공·아시아나·제주항공·진에어·티웨이 반려동물 안내
+        reason: 미수집 — 본문이 DOM 에 없는 곳이 있다 (RAG-046). 들어오면 must 로 올린다
+
+  - id: T5
+    added_on: 2026-08-30
+    origin: hand
+    question: 기내 반입용 반려동물 케이지 크기 규격은 어떻게 되나요?
+    must:
+      - airlines-pet-pages-airpremia#h3-2                 # 38×22×23cm(하드)/26cm(소프트)
+      - airlines-pet-pages-eastar#t-1-r10                 # 세 변의 합 100cm, 하드 37×–×23 / 소프트 43×–×25
+    nice:
+      - airlines-pet-pages-eastar#t-1-r11                 # 용기 조건 — 환기·방수·잠금
+    unavailable:
+      - ref: 대한항공·아시아나·제주항공·진에어·티웨이 반려동물 안내
+        reason: 미수집 (T4 와 같다)
+
+  # ------------------------------------------------------------------ easylaw Q/A 8 (origin: easylaw)
+  # must 는 Q/A 청크 끝의 `관련 법령` 을 그대로 옮긴 것이다 — **사람 판단이 들어가지 않았다** (RAG-022 ②).
+  # nice 의 qa 청크는 질문 문장을 첫 줄에 통째로 담고 있어 세 모델이 전부 1위로 찾는다.
+  # 그래서 필수가 아니고, 실제 서빙에서도 top-k 한 칸을 먹는다는 사실만 반영한다.
+
+  - id: QA1
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 도시의 아파트도 아닌 시골 마당에서 키우려는 경우에도 동물등록을 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제8호 등록대상동물의 정의
+      - law-drf-api-animal-protection-act#제101조③        # ③4호 100만원 이하
+      - law-drf-api-animal-protection-decree#제4조        # 등록대상동물의 범위
+      - law-drf-api-animal-protection-decree#제10조       # ⑤ 등록사항 및 방법
+    nice:
+      - easylaw-pet-1-1-2-qna#qa-1
+    unavailable: []
+
+  - id: QA2
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견을 잃어버려 등록대상동물 변경 신고를 했는데 반려견을 찾았습니다. 이 경우도 신고해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조
+      - law-drf-api-animal-protection-act#제101조④        # ④1호 50만원 이하
+      - law-drf-api-animal-protection-decree#제11조       # ① 변경신고
+    nice:
+      - easylaw-pet-1-1-2-qna#qa-2
+    unavailable: []
+
+  - id: QA3
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 맹견은 책임보험이라는게 있던데요. 책임보험 가입은 선택사항 인가요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제5호 맹견의 정의
+      - law-drf-api-animal-protection-act#제23조          # ① 보험의 가입 등
+      - law-drf-api-animal-protection-act#제101조②        # ②5호 300만원 이하
+      - law-drf-api-animal-protection-rule#제2조          # 맹견의 범위
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-1
+    unavailable: []
+
+  - id: QA4
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견과 외출할 때 인식표 부착을 꼭 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제16조          # ②2호 인식표 부착
+      - law-drf-api-animal-protection-act#제101조④        # ④5호 50만원 이하
+      - law-drf-api-animal-protection-rule#제12조         # 인식표의 부착
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-2
+    unavailable: []
+
+  - id: QA5
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견 목줄 착용 외에 다른 안전조치 방법은 없나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제16조          # ②1호 안전조치
+      - law-drf-api-animal-protection-act#제101조④        # ④4호 50만원 이하
+      - law-drf-api-animal-protection-rule#제11조         # 안전조치 — 목줄·가슴줄·이동장치
+    nice:
+      - easylaw-pet-2-2-1-qna#qa-3
+    unavailable: []
+
+  - id: QA6
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 옆집 사람이 본인이 키우는 개를 버리고 이사를 가 버렸습니다. 버려진 개가 너무 안쓰러운데 어떻게 도와줄 수 있나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제10조          # ④1호 유기 금지
+      - law-drf-api-animal-protection-act#제39조          # ①2호 신고
+      - law-drf-api-animal-protection-act#제97조⑤         # ⑤1호 300만원 이하 벌금
+      - law-drf-api-animal-protection-act#제97조②         # ②2호
+    nice:
+      - easylaw-pet-3-1-1-qna#qa-1
+    unavailable:
+      - ref: 동물보호법 시행령 제44조제1항
+        reason: 2023 전부개정 이전 조문번호 — 현행 시행령은 45개 조문이고 제4x조대는 제4조뿐이다
+      - ref: 유실물법 제1조제1항
+        reason: 미수집
+      - ref: 유실물법 제12조
+        reason: 미수집
+      - ref: 유실물법 시행령 제1조제1항
+        reason: 미수집
+
+  - id: QA7
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 주인을 잃고 배회하는 고양이를 발견했는데요. 이 고양이를 데려가서 제가 판매해도 되나요?
+    must:
+      - law-drf-api-animal-protection-act#제2조           # 제2조제2호 소유자등
+      - law-drf-api-animal-protection-act#제10조          # ③ 포획·판매 금지
+      - law-drf-api-animal-protection-act#제97조①         # ①2호 3년 이하 징역
+      - law-drf-api-animal-protection-act#제97조②         # ②1호
+    nice:
+      - easylaw-pet-3-1-1-qna#qa-2
+    unavailable: []
+
+  - id: QA8
+    added_on: 2026-08-24
+    origin: easylaw
+    question: 반려견이 동물병원에서 치료를 받다가 죽었습니다. 사체는 어떻게 해야 하나요?
+    must:
+      - law-drf-api-animal-protection-act#제15조          # ②2호 사망 시 말소신고
+      - law-drf-api-animal-protection-act#제69조          # ①4호 동물장묘업 허가
+      - law-drf-api-animal-protection-decree#제11조       # ①8호
+      - law-drf-api-animal-protection-rule#제38조         # 4호 허가영업의 세부 범위
+    nice:
+      - easylaw-pet-4-1-1-qna#qa-2
+    unavailable:
+      - ref: 폐기물관리법 제2조제1호
+        reason: 미수집
+      - ref: 폐기물관리법 제14조제1항
+        reason: 미수집
+      - ref: 폐기물관리법 제18조제1항
+        reason: 미수집

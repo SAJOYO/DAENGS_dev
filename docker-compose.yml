@@ -1,0 +1,574 @@
+services:
+  nginx:
+    image: nginx:1.31.1
+    container_name: daengs-nginx
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    ports:
+      - "80:80"       # daengs.~   프론트
+      - "8000:8000"   # daengback.~ API. backend 컨테이너는 직접 노출하지 않습니다
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    # 컨테이너 안에서 호스트(이 PC)로 접속하기 위한 이름.
+    # Docker Desktop 은 기본 제공하지만, 리눅스 서버에서도 동작하도록 명시해 둡니다.
+    # (프론트는 아직 PM2 로 호스트에서 돕니다)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    # docker/uv/Dockerfile 로 굽습니다. 이미지가 없으면 compose 가 알아서 빌드합니다.
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-backend
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
+    env_file:
+      # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
+      - path: ./backend/.env
+        required: false
+    environment:
+      # venv 를 마운트 경로 밖에 둡니다.
+      # /app 안에 두면 호스트의 Windows 용 .venv 와 섞여 깨집니다.
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # 바인드 마운트에서는 inotify 이벤트가 전달되지 않아 리로드가 안 돕니다.
+      WATCHFILES_FORCE_POLLING: "true"
+      # 컨테이너 안에서는 루프백이 아니라 전체 인터페이스에 바인딩해야 합니다.
+      DAENGS_HOST: 0.0.0.0
+      # backend/.env 의 값을 덮어씁니다 (environment 가 env_file 보다 우선).
+      # backend/.env 는 개발 PC 에서 uv run dev 로 띄울 때 쓰는 호스트를 갖고,
+      # 컨테이너는 여기서 compose 네트워크의 서비스명으로 바꿔 받습니다.
+      # 접속 정보를 최상단 .env 하나로 모아 두려는 것이기도 합니다 (D-009).
+      #
+      # URL 을 통째로 넘기지 않고 조각으로 넘깁니다 (D-013).
+      # 이어 붙인 URL 은 비밀번호에 @ / # 가 들어가면 깨지는데,
+      # 조각으로 주면 config.py 의 URL.create 가 이스케이프해 줍니다.
+      DAENGS_DB_HOST: pgvector
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
+      DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      # Training RAG 는 이 backend 프로세스 안에서 돕니다. 데이터는 공용 pgvector의
+      # vectordb.public.training_rag_documents / training_rag_chunks 에 있습니다.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
+      # backend 기본 DB와 같은 POSTGRES_* 접속 정보를 사용합니다.
+      RAG_PGVECTOR_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgvector:5432/${POSTGRES_DB:-vectordb}
+      # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
+      # daengs_life 쪽 Settings 는 발급 기관/도구가 부르는 이름을 그대로 씁니다.
+      #
+      # DB 와 달리 조각이 아니라 URL 한 줄이라, 비밀번호에 @ / # 이 들어가면 깨집니다
+      # (D-013 과 같은 함정). .env 에서 영숫자로만 지으세요.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # `/ask` 의 검색이 읽는 접속 정보입니다 (D-021).
+      #
+      # **`DAENGS_DB_*` 와 별개입니다** — `daengs_life.rag` 는 자기 Settings 를 갖고
+      # `POSTGRES_*`(또는 DATABASE_URL)를 읽습니다. 위 `DAENGS_DB_*` 는 `daengs_backend` 것이라
+      # rag 는 그 이름을 모릅니다. 안 넣으면 컨테이너 안에서 `localhost:5432` 로 가서,
+      # `/ask` 만 502 가 됩니다 (다른 API 는 멀쩡해서 더 헷갈립니다).
+      #
+      # 조각으로 넘기는 것은 위와 같은 이유입니다 (D-013) — `Settings.dsn` 이 `quote_plus` 로
+      # 이스케이프합니다. **두 이름 체계를 통일하는 것은 이 카드가 아닙니다**: D-018 이 미뤄 둔
+      # 규약 정합 작업이고, 2단계에서 `/ask` 를 별도 프로세스로 떼면 그쪽이 자기 접속을
+      # 가져야 해서 지금 합치면 나중에 되돌립니다.
+      POSTGRES_IP: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+    volumes:
+      # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      # pyproject 의 readme 항목 때문에 패키지 빌드에 필요합니다.
+      # 없으면 uv sync 가 실패합니다.
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src
+      - backend-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+      # 임베딩 모델 가중치(약 1.2GB)를 컨테이너 밖에 둡니다 (D-021).
+      # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
+      # 같은 이유이고, 여기는 단위가 GB 입니다.
+      - hf-cache:/root/.cache/huggingface
+      # 피부 스크리닝 가중치 (D-039). **저장소에 없습니다** — best.pt 가
+      # 163MB / 189MB 라 GitHub 의 파일당 100MB 리밋에 걸립니다. 서버 디스크의
+      # 배포 폴더 **바깥**에 두고 여기로 물립니다. 추론 경로에 쓰기가 없어 :ro 로
+      # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
+      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
+    depends_on:
+      # Training RAG 테이블도 이 컨테이너의 vectordb 안에 있습니다.
+      pgvector:
+        condition: service_healthy
+      # Redis 가 없어도 앱은 뜹니다 — 캐시가 메모리로 떨어질 뿐입니다.
+      # 그런데도 healthy 를 기다리는 이유: 그 판단이 프로세스 생애에 **한 번뿐**입니다
+      # (lru_cache 로 감싼 get_cache 가 lifespan 에서 한 번 열립니다).
+      # backend 가 먼저 뜨면 Redis 가 1초 뒤에 올라와도 그 프로세스는 재시작 전까지
+      # 영영 메모리 폴백이고, 그러면 일 예산 카운터가 안 쌓입니다 (D-019).
+      redis:
+        condition: service_healthy
+    # uv sync 는 컨테이너가 뜰 때만 돕니다.
+    # 의존성을 바꿨다면 docker compose restart backend 를 직접 실행하세요.
+    #
+    # **`--group ml` 이 붙었습니다** (D-021). `/ask` 의 임베딩 모델이 이 프로세스에 상주하므로
+    # torch 가 필요합니다. 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의 `pytorch-cpu`
+    # 인덱스가 그것이고, 안 그러면 GPU 를 안 쓰는데 NVIDIA 라이브러리를 수 GB 받습니다.
+    #
+    # ⚠ **`ml` 을 걷어내는 것은 `uv run` 이 아니라 인자 없는 `uv sync` 입니다** (uv 0.12.5 실측).
+    #   · `uv run`  → inexact 동기화. 남는 패키지를 **안 지웁니다** — `ml` 이 살아남습니다.
+    #   · `uv sync` → exact 동기화. 기본 그룹에 없는 것을 **지웁니다** — `ml` 이 사라집니다.
+    #
+    # 그래서 이 줄은 안전하지만, **컨테이너 안에서 `uv sync` 를 인자 없이 돌리면 안 됩니다.**
+    # 그러면 torch 가 빠지고 `/ask` 만 503 이 되는데, 다른 API 는 멀쩡해서 로그에는
+    # 아무 문제도 안 보입니다. 고칠 때는 `uv sync --group ml` 로 부르세요.
+    #
+    # `--no-sync` 는 그래서 방어선이 아니라 **중복 제거**입니다 — 바로 앞에서 이미 맞췄으므로
+    # 한 번 더 볼 이유가 없습니다. 그룹 이름을 한 곳에만 적어 두는 효과도 같이 얻습니다.
+    command: sh -c "uv sync --frozen --group ml --group screening && exec uv run --no-sync dev"
+
+  pgvector:
+    image: pgvector/pgvector:pg18
+    container_name: pgvector
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    ports:
+      # 0.0.0.0 바인딩입니다. 같은 네트워크의 팀원이 붙을 수 있도록 의도한 것입니다.
+      # 그래서 POSTGRES_PASSWORD 는 .env 에서 반드시 기본값이 아닌 값으로 지정하세요.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql:rw
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-vectordb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:8.2-alpine
+    container_name: daengs-redis
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # 실시간 산책(②)이 씁니다 — 값 캐시 · **일 예산 카운터** · 활성 키 집합 (RT-001 ④).
+    # 뒤의 둘이 진짜 이유입니다: 예산이 프로세스 메모리에 있으면 재시작마다 리셋이라
+    # data.go.kr 의 1,000회/일 제약이 지켜지지 않습니다.
+    #
+    # ⚠ maxmemory 를 일부러 두지 않습니다. 캐시 항목은 전부 TTL 이 붙어 스스로
+    # 사라지는데, 여기에 allkeys-lru 를 걸면 나중에 Celery 를 띄웠을 때 **큐에 들어간
+    # 태스크가 evict** 됩니다. eviction 은 DB 번호가 아니라 인스턴스 단위라
+    # DB 를 나눠도 안 풀립니다 (D-019).
+    command:
+      - redis-server
+      # ports 로 LAN 에 열기 때문에 필수입니다. Redis 는 기본이 무인증이라
+      # 이게 없으면 같은 네트워크의 누구나 FLUSHALL 할 수 있습니다.
+      # `:?` 는 필수 환경 변수가 비어 있으면 compose 단계에서 중단하는 장치입니다. 여기서는 **인증 없는 Redis 가
+      # LAN 에 열리는 것**을 막습니다. 안 뜨는 편이 열린 채로 뜨는 것보다 낫습니다.
+      # 파일 전체가 해석되고 나서 컨테이너가 뜨므로, 이 한 곳이면 아래 REDISCLI_AUTH 와
+      # backend 의 REDIS_URL 까지 같이 지켜집니다.
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the deployment root .env (LAN 에 열리는 포트입니다)}
+      # RDB 스냅샷만 씁니다. 캐시 값은 사라져도 다시 받으면 그만이지만
+      # 예산 카운터는 잃으면 그날 한도를 넘겨 부르게 됩니다.
+      - --save
+      - "900 1"
+      - --appendonly
+      - "no"
+    environment:
+      # healthcheck 의 redis-cli 가 읽습니다. -a 로 넘기면 호출마다 경고가 로그에 쌓입니다.
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      # pgvector 와 같은 이유로 0.0.0.0 바인딩입니다 — 개발 PC 에서도 서버 Redis 에
+      # 붙어야 일 예산 카운터가 하나로 모입니다. 그래서 REDIS_PASSWORD 는 .env 에서
+      # 반드시 지정하세요.
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  gait-analysis:
+    profiles: ["gait"]
+    # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-gait-analysis
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
+    # nginx 의 daengback 블록에 있는 location /gait/ 가 여기로 넘깁니다.
+    #   http://daengback.~/gait/analyze  →  이 컨테이너의 /analyze
+    environment:
+      # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # 가중치와 데이터 위치를 컨테이너 안 경로로 알려 줍니다.
+      # 코드에는 경로가 박혀 있지 않습니다 (원본 walk_demo 는 하드코딩이었습니다).
+      GAIT_RELEASE_DIR: /models/release
+      GAIT_DATA_DIR: /data
+      # 비어 있으면 애플리케이션 기본값(150MB)을 씁니다. nginx 의 client_max_body_size
+      # (200m, default.conf 의 location /gait/)보다 낮게 유지하세요.
+      GAIT_MAX_UPLOAD_BYTES: ${GAIT_MAX_UPLOAD_BYTES:-}
+    volumes:
+      # 폴더째가 아니라 필요한 것만 (D-004).
+      #
+      # ⚠ **backend 와 같은 파일을 봅니다** (D-038). 소스와 의존성만 backend 로 통합했고
+      #   런타임은 갈라 둔 구조라, crawler-worker 와 같은 모양입니다 — 같은
+      #   pyproject·lock·src 를 마운트하고 **그룹 선택과 venv 볼륨만 다릅니다.**
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      # pyproject 의 readme 항목 때문에 패키지 빌드에 필요합니다 (backend 와 같은 이유).
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      # ★ 가중치. **저장소에 없습니다** — 원본 walk_demo 에서도 gitignore 였습니다.
+      #   best.pt(약 50.7MB, 12kp pose) 와 yolov8n.pt(약 6.2MB, crop-assist) 두 개를
+      #   서버 디스크에 두고 여기로 물립니다. 배포 폴더(releases/<커밋해시>) **바깥**이라
+      #   재배포해도 안 지워집니다 — .env·암호화 키와 같은 취급입니다.
+      #   추론 경로에 파일 쓰기가 없어서 :ro 로 충분합니다.
+      - ${GAIT_RELEASE_DIR:-./backend/_models/release}:/models/release:ro
+      # 분석 기록(JSON) · overlay 영상 · 업로드 원본. 아직 DB 가 아니라 파일입니다
+      # (daengs_gait/README.md 의 TBD). 컨테이너를 다시 만들어도 남아야 합니다.
+      - gait-data:/data
+      # ⚠ **`backend-venv` 가 아닙니다.** backend 는 `--group ml`, 여기는 `--group gait` 로
+      #   동기화하는데, 같은 볼륨에 돌리면 `uv sync` 가 exact 동기화라 서로의 그룹을
+      #   지웁니다 (crawler-worker 가 `crawler-venv` 를 따로 쓰는 것과 같은 이유).
+      - gait-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    # backend · crawler-worker 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와
+    # 어긋나면 여기서 멈춥니다.
+    #
+    # **`--group gait` 하나입니다** (D-038). `--group ml` 을 붙이지 않습니다 — gait 소스가
+    # 쓰는 서드파티는 cv2 · fastapi · imageio_ffmpeg · numpy · pydantic · ultralytics ·
+    # uvicorn 뿐이고, `ml` 의 sentence-transformers · transformers · pyarrow 는 하나도
+    # 안 씁니다. torch 는 ultralytics 가 끌고 오며, 리눅스에서는 pyproject 의
+    # pytorch-cpu 인덱스가 CPU 판을 집습니다 (인덱스 바인딩은 패키지 단위라 그룹과 무관).
+    #
+    # ⚠️ **이 그룹 이름은 backend/pyproject.toml 의 `[dependency-groups] gait` 와 같아야
+    #    합니다.** 어긋나면 `/gait/` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에 아무
+    #    문제도 안 보입니다.
+    #
+    # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다. YAML 의 `>` 는 더 깊이 들여쓴 줄의
+    #    줄바꿈을 살려 둬서, 인자를 보기 좋게 들여쓰면 sh 가 여러 줄짜리 스크립트를 받고
+    #    exec 뒤의 인자가 영영 실행되지 않습니다 (#55 에서 스크리닝이 실제로 겪었습니다).
+    command: >
+      sh -c "uv sync --frozen --group gait &&
+      exec uv run --no-sync gait-serve --host 0.0.0.0 --port 8000"
+
+  # Place 검색 (D-026, D-027). APP 의 기존 `/v2/places/search` 계약에 연결되어
+  # 기본 compose 기동에 포함됩니다. backend 나 반려견 프로필은 선행 조건이 아닙니다.
+  # 스키마는 place-search 기동 명령이 Alembic 으로 먼저 맞춥니다.
+  place-db:
+    image: postgis/postgis:18-3.6
+    container_name: daengs-place-db
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      POSTGRES_USER: ${PLACE_POSTGRES_USER:-place}
+      # 기본값은 compose 내부 전용입니다. place-db 는 호스트 포트를 열지 않습니다.
+      POSTGRES_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
+      POSTGRES_DB: ${PLACE_POSTGRES_DB:-place}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    volumes:
+      # PG18 이미지의 VOLUME 은 /var/lib/postgresql 입니다. 상위 경로를 마운트해야
+      # 데이터가 보존됩니다 (pgvector 와 같음). db/init 은 물리지 않습니다 —
+      # place 스키마의 원본은 backend/infra/place/alembic 입니다 (D-026, dev DB 규칙의 예외).
+      - place-pgdata:/var/lib/postgresql:rw
+    shm_size: 1gb
+    healthcheck:
+      # initdb 의 임시 PostgreSQL 도 pg_isready 에는 성공합니다. postgis 확장이 실제로
+      # 활성화된 뒤에만 healthy 가 되게 합니다 (원본 geo compose 의 장치).
+      test:
+        - CMD-SHELL
+        - >-
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
+          "SELECT 1 WHERE (SELECT count(*) FROM pg_extension
+          WHERE extname = 'postgis') = 1" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  place-search:
+    # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-place-search
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 외부 요청은 nginx 의 8000 포트만 통과합니다 (D-027).
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # URL 한 줄로 조립하지 않습니다. 비밀번호의 @ / # 를 SQLAlchemy URL.create가
+      # 안전하게 다루도록 조각으로 넘깁니다 (D-028).
+      DAENGS_DB_HOST: place-db
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${PLACE_POSTGRES_USER:-place}
+      DAENGS_DB_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
+      DAENGS_DB_NAME: ${PLACE_POSTGRES_DB:-place}
+      # 공공데이터 키 — 배치(ingest) 전용. 서버 기동에는 필요 없습니다 (D-026).
+      DAENGS_DATA_GO_KR_SERVICE_KEY: ${PLACE_DATA_GO_KR_SERVICE_KEY:-}
+      DAENGS_KTO_SERVICE_KEY: ${PLACE_KTO_SERVICE_KEY:-}
+      TZ: Asia/Seoul
+    working_dir: /app
+    volumes:
+      # backend 의 단일 프로젝트 정의를 공유하되 venv 는 서비스별로 분리합니다.
+      # tests 와 다른 인프라 파일은 컨테이너에 필요 없습니다.
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./backend/infra/place:/app/infra/place:ro
+      - place-search-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      place-db:
+        condition: service_healthy
+    # DB 가 처음 뜬 배포에서도 수동 조치가 남지 않게 마이그레이션 뒤 서버를 띄웁니다.
+    # 이어지는 줄은 첫 줄과 같은 칸이어야 한 셸 명령으로 접힙니다.
+    command: >
+      sh -c "uv sync --frozen --extra place &&
+      uv run --no-sync alembic -c infra/place/alembic.ini upgrade head &&
+      exec uv run --no-sync uvicorn daengs_place.main:app
+      --host 0.0.0.0 --port 8000"
+
+  # 장소 카드를 누른 뒤의 단발 이동 스냅샷. DAENGS_geo main@c5f0d5f에서 APP이
+  # 실제 사용하는 좌표 기반 `/journey` 경로만 옮겼습니다. Place DB나 Dog Profile을
+  # 조회하지 않으며, 외부 경로 제공사 호출은 원본 Usage Gate를 통과합니다.
+  journey-service:
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-journey
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_WALK_ROUTE_PROVIDER: ${JOURNEY_WALK_ROUTE_PROVIDER:-fake}
+      DAENGS_CAR_ROUTE_PROVIDER: ${JOURNEY_CAR_ROUTE_PROVIDER:-fake}
+      DAENGS_TRANSIT_ROUTE_PROVIDER: ${JOURNEY_TRANSIT_ROUTE_PROVIDER:-fake}
+      DAENGS_USAGE_POLICY: ${JOURNEY_USAGE_POLICY:-deny-all}
+      DAENGS_TMAP_APP_KEY: ${JOURNEY_TMAP_APP_KEY:-}
+      TZ: Asia/Seoul
+    working_dir: /app
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - journey-service-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    command: >
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync uvicorn daengs_journey.main:app --host 0.0.0.0 --port 8000"
+
+  # GUI가 필요할 때만: docker compose --profile tools up -d
+  # ------------------------------------------------------------------ 크롤러 (RAG-044 · RAG-050)
+  #
+  # `docker compose up -d` 에 **같이 뜹니다** (RAG-050 에서 profile 을 뗐습니다). 매일 KST 04:00 에
+  # Beat 가 `crawl-due-sources` 를 쏘고 워커가 due 소스만 받습니다. 수집에서 멈추고 적재는 사람이
+  # 합니다 (RAG-044 ⑤).
+  #
+  # **코퍼스는 서버 디스크의 `DAENGS_CORPUS_DIR` 입니다** — 러너 체크아웃 밖, 최상단 `.env` 로
+  # 지정합니다 (SCREENING_RELEASE_DIR 과 같은 취급). 체크아웃 밑 `./data` 에 두지 않는 이유는
+  # `data/` 가 git 미추적이라 `git clean` 한 번에 통째로 사라지기 때문입니다 — 워크트리에서 실제로
+  # 그렇게 한 번 잃었습니다 (CLAUDE.md). named volume 을 안 쓴 이유는 개발 PC 가 그 안의 원본을
+  # 꺼내 와야 해서입니다 (서버에 SSH·SMB 가 없어 파일로 옮깁니다. README "코퍼스" 절).
+  #
+  # ⚠ **워커는 `crawl_log.jsonl` 이 없으면 뜨지 않습니다** (아래 command 의 test). 로그가 없으면
+  #   **전 소스가 due** 라 처음부터 다 받아 개발 PC 와 별개의 코퍼스를 만드는데, 원본은 불변이고
+  #   개정되는 문서라 나중에 합칠 수 없습니다 (RAG-008 · RAG-017). 빈 마운트(경로 오타 · 볼륨 새로
+  #   만듦 · 이관 전 기동)에서 그 사고가 조용히 나지 않게 재시작 루프로 시끄럽게 실패합니다.
+  #   `docker compose ps` 에 Restarting 으로 보입니다. 정말로 빈 코퍼스에서 시작하려면 빈
+  #   `manifests/crawl_log.jsonl` 을 만들어 두세요 — 그것이 "알고 한다"는 표시입니다.
+  #
+  # ⚠ **`backend-venv` 를 같이 쓰지 않습니다.** backend 는 `--group ml`(torch 1.2GB)로 동기화하고
+  #   크롤러는 그것이 필요 없는데, **같은 볼륨에 인자 없는 `uv sync` 를 돌리면 exact 동기화라
+  #   torch 가 지워집니다** (uv 0.12.5 실측, CLAUDE.md). 그러면 `/ask` 만 503 이 되고 다른 API 는
+  #   멀쩡해서 로그에 아무 문제도 안 보입니다. 볼륨을 나누는 것이 그 사고를 **구조적으로** 막는
+  #   유일한 방법입니다 — 명령줄을 조심하는 것으로는 언젠가 뚫립니다.
+  crawler-worker:
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-crawler-worker
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      # 레포 밖이 아니라 컨테이너 안이라 자동 탐색이 안 됩니다. 아래 볼륨과 짝입니다.
+      DAENGS_DATA_DIR: /data
+      # 브로커. backend 와 **같은 인스턴스·같은 DB 번호**입니다 (D-019) — 큐가 갈리면
+      # Beat 가 보낸 것을 이 워커가 못 받습니다.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # 실행 이력 `crawl_runs` 를 쓰는 접속 (RAG-047). backend 와 같은 이유로 `POSTGRES_*` 조각입니다
+      # (`daengs_life.rag.core.config` 가 읽습니다). **안 넣으면 기록만 조용히 빠집니다** —
+      # 기록 실패는 크롤을 죽이지 않는 설계라(RAG-047 ②) 컨테이너 안에서 `localhost:5432` 로
+      # 가서 실패해도 크롤은 돌고, 관리자 화면에 실행이 안 보일 뿐입니다.
+      POSTGRES_IP: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src
+      # **원본이 쌓이는 곳.** 서버 디스크의 폴더를 바인드 마운트합니다 — 컨테이너를 지워도,
+      # 러너가 체크아웃을 갈아엎어도 남습니다. 코퍼스는 재수집으로 복구되지 않습니다
+      # (개정되는 원문이라 재수집은 곧 다른 코퍼스입니다). 비어 있으면 compose 가 멈춥니다
+      # (`:?`) — REDIS_PASSWORD 와 같은 장치입니다. 기본값을 두면 `./data` 로 조용히 떨어집니다.
+      - ${DAENGS_CORPUS_DIR:?Set DAENGS_CORPUS_DIR in the deployment root .env (server folder holding raw/ and manifests/crawl_log.jsonl)}:/data
+      # **시드는 코퍼스가 아닙니다** — git 추적 파일이라 정본이 체크아웃에 있고, 코퍼스 폴더에는
+      # 없습니다 (이관 zip 은 raw/ 와 crawl_log.jsonl 만 담습니다). 파일 하나만 코퍼스 마운트 위에
+      # 겹쳐 마운트합니다 — 배포가 체크아웃을 갱신하면 시드도 따라옵니다. 이것이 없으면
+      # `load_seeds()` 가 FileNotFoundError 로 죽어 `crawl_due` 가 아무것도 못 고릅니다.
+      - ./data/manifests/seed_sources.yaml:/data/manifests/seed_sources.yaml:ro
+      - crawler-venv:/opt/venv          # ⚠ backend-venv 가 아닙니다 (위 경고)
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      redis:
+        condition: service_healthy
+    # `--group ml` 이 **없습니다.** 크롤러는 torch 를 안 씁니다 — 붙이면 이미지 밖으로
+    # 1.2GB 를 더 받고 워커 상주 RAM 이 2.4GB 늘어납니다 (D-021).
+    #
+    # `--concurrency 1` 인 이유: 크롤 예절입니다. 워커를 늘리면 같은 호스트로 동시에 나가
+    # `request_delay_sec` 1.5초가 무의미해집니다 (docs/life/data-sources.md §12).
+    #
+    # 첫 줄의 `test -f` 가 위 ⚠ 의 가드입니다. 로그 파일의 **존재**만 봅니다(크기가 아니라) —
+    # 빈 파일은 "알고 비웠다"는 뜻이라 통과시킵니다.
+    command: >-
+      sh -c "test -f /data/manifests/crawl_log.jsonl ||
+      { echo '코퍼스가 없습니다: /data/manifests/crawl_log.jsonl 이 없어 뜨지 않습니다.
+      로그 없이 뜨면 전 소스가 due 로 잡혀 개발 PC 와 다른 코퍼스를 만듭니다 (RAG-050).
+      DAENGS_CORPUS_DIR 에 raw/ 와 manifests/crawl_log.jsonl 을 옮긴 뒤 다시 띄우세요.' >&2;
+      exit 1; } &&
+      uv sync --frozen &&
+      exec uv run --no-sync celery -A daengs_life.tasks.celery_app worker
+      --loglevel info --concurrency 1 --queues crawl"
+
+  # Beat 는 **스케줄을 보내기만** 합니다. 태스크를 실행하지 않으므로 프로세스가 하나여야
+  # 합니다 — 둘이 뜨면 같은 시각에 두 번 보냅니다.
+  #
+  # ⚠ **이름은 crawler-beat 지만 발사하는 것은 앱 전체 스케줄입니다.** `beat_schedule` 에는
+  #   크롤(하루 1회)과 실시간 프리페치 `warm-active-grids`(60초, RT-002)가 같이 있습니다.
+  #   그래서 **프리페치 메시지도 같이 발사됩니다.** 크롤 워커는 `--queues crawl` 이라 그것을
+  #   먹지 않으므로 크롤을 방해하지는 않지만, 소비자가 없는 동안 기본 `celery` 큐에 쌓입니다
+  #   (하루 1,440개, 1.5MB 남짓 — `docker compose exec redis redis-cli -a $REDIS_PASSWORD LLEN celery`
+  #   로 보입니다). Redis 에 `maxmemory` 를 안 건 것이 바로 이 종류를 조용히 지우지 않기
+  #   위해서입니다 (D-019). RT-002 의 워커는 **이 카드에서 띄우지 않았습니다** (RAG-050 ③) —
+  #   그 워커가 뜨는 날 쌓인 것은 `expires` 로 실행 없이 버려집니다 (celery_app.py).
+  crawler-beat:
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-crawler-beat
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_DATA_DIR: /data
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src
+      # Beat 자신은 data/ 를 안 읽습니다(판정은 워커가 합니다). 그래도 마운트하는 이유는
+      # `crawler.core.config` 가 import 시점에 경로를 잡기 때문입니다 — 없어도 뜨지만
+      # (require_data_dir 은 실제로 쓸 때 부릅니다) 두 컨테이너의 설정을 갈라 두면
+      # "왜 워커에서만 되지"를 나중에 한 번 더 겪습니다.
+      - ${DAENGS_CORPUS_DIR:?Set DAENGS_CORPUS_DIR in the deployment root .env (server folder holding raw/ and manifests/crawl_log.jsonl)}:/data
+      # 워커와 같은 이유의 시드 겹쳐 마운트 — 두 컨테이너의 설정을 갈라 두지 않습니다 (위 문단).
+      - ./data/manifests/seed_sources.yaml:/data/manifests/seed_sources.yaml:ro
+      # 워커와 **같은 볼륨**입니다. 둘의 `uv sync` 인자가 글자까지 같아 내용이 같고,
+      # 어긋나도 기동 로그에 바로 터집니다 — backend 와 나눈 것과는 성격이 다릅니다
+      # (그쪽은 내용이 다르고 조용히 틀립니다).
+      - crawler-venv:/opt/venv
+      - crawler-beat-state:/var/lib/celery
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      redis:
+        condition: service_healthy
+    # 마지막 발사 시각을 볼륨에 남깁니다. 안 남기면 컨테이너를 새로 만들 때마다 스케줄이
+    # 초기화되어 재시작 직후 한 번 더 쏠 수 있습니다.
+    command: >-
+      sh -c "uv sync --frozen &&
+      exec uv run --no-sync celery -A daengs_life.tasks.celery_app beat
+      --loglevel info --schedule /var/lib/celery/beat-schedule"
+
+  pgadmin:
+    image: dpage/pgadmin4:9.17
+    container_name: pgadmin
+    profiles: ["tools"]
+    restart: unless-stopped
+    networks:
+      - daengs-network
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin:rw
+    depends_on:
+      pgvector:
+        condition: service_healthy
+
+networks:
+  daengs-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  place-pgdata:
+  pgadmin-data:
+  redis-data:
+  backend-venv:
+  # ⚠ backend-venv 와 나눠 둡니다 — 합치면 크롤러의 `uv sync` 가 backend 의 torch 를
+  #   지웁니다 (crawler-worker 주석 참고).
+  crawler-venv:
+  # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
+  crawler-beat-state:
+  gait-venv:
+  # 보행 분석 기록(JSON) · overlay 영상 · 업로드 원본.
+  # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.
+  gait-data:
+  place-search-venv:
+  journey-service-venv:
+  uv-cache:
+  hf-cache:

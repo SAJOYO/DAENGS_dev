@@ -1,0 +1,199 @@
+name: Deploy
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: # Actions 탭에서 수동 실행
+
+# 배포가 겹치지 않도록. 새 배포가 오면 진행 중인 건 취소합니다.
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  DEPLOY_ROOT: 'C:\deploy\daengs'
+  KEEP_RELEASES: 3 # 롤백용으로 남겨 둘 이전 릴리스 개수
+
+jobs:
+  deploy:
+    name: 서비스 반영
+    # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
+    runs-on: [self-hosted, Windows, X64]
+
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@v5
+        with:
+          # 기본값(true)이면 git clean -ffdx 가 돌아서
+          # node_modules 와 .next/cache 까지 지워집니다. 매번 콜드 빌드가 되므로 끕니다.
+          clean: false
+
+      - name: PM2 설치 확인
+        run: |
+          if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+            npm install -g pm2
+          }
+          pm2 -v
+
+      - name: Compose 설정 검증
+        run: |
+          # backend의 필수 배포 환경변수가 비어 있으면 컨테이너를 바꾸기 전에 명확히 실패시킨다.
+          $envPath = Join-Path $env:GITHUB_WORKSPACE 'backend\.env'
+          if (-not (Test-Path $envPath)) { throw 'backend/.env not found' }
+          $geminiLine = Get-Content $envPath | Where-Object { $_ -match '^\s*GEMINI_API_KEY\s*=' } | Select-Object -First 1
+          if (-not $geminiLine) { throw 'GEMINI_API_KEY missing in backend/.env' }
+          $env:GEMINI_API_KEY = ($geminiLine -replace '^\s*GEMINI_API_KEY\s*=\s*', '').Trim().Trim('"').Trim("'")
+          if ([string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)) { throw 'GEMINI_API_KEY empty in backend/.env' }
+          Write-Output "::add-mask::$env:GEMINI_API_KEY"
+          Add-Content -Path $env:GITHUB_ENV -Value "GEMINI_API_KEY=$env:GEMINI_API_KEY"
+          docker compose config --quiet
+
+      - name: 의존성 설치
+        working-directory: frontend
+        run: npm ci
+
+      - name: 빌드
+        working-directory: frontend
+        run: npm run build
+
+      - name: 릴리스 폴더 구성
+        run: |
+          # 폴더 이름에 run_number 를 붙여 실행마다 새 폴더를 씁니다.
+          # 해시만 쓰면 같은 커밋을 재배포할 때 $rel 이 "지금 서비스 중인 폴더"가 되고,
+          # PM2 워커가 그 폴더를 cwd 로 붙잡고 있어 아래 Remove-Item 이 실패합니다.
+          # (standalone server.js 가 기동하면서 자기 폴더로 chdir 합니다)
+          $rel = Join-Path $env:DEPLOY_ROOT "releases\${{ github.sha }}-${{ github.run_number }}"
+          if (Test-Path $rel) { Remove-Item $rel -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $rel | Out-Null
+
+          # standalone 산출물 (server.js, .next, node_modules)
+          Copy-Item "frontend\.next\standalone\*" $rel -Recurse -Force
+
+          # standalone 에는 아래 둘이 포함되지 않으므로 직접 넣어 줘야
+          # CSS 와 이미지가 정상적으로 서빙됩니다.
+          Copy-Item "frontend\.next\static" "$rel\.next\static" -Recurse -Force
+          Copy-Item "frontend\public"       "$rel\public"       -Recurse -Force
+
+          Write-Host "릴리스 준비 완료: $rel"
+
+      - name: current 링크 교체
+        run: |
+          $cur = Join-Path $env:DEPLOY_ROOT "current"
+          $rel = Join-Path $env:DEPLOY_ROOT "releases\${{ github.sha }}-${{ github.run_number }}"
+
+          # ⚠ junction 을 지울 때 Remove-Item -Recurse 를 쓰면 링크가 아니라
+          #   "링크가 가리키는 실제 폴더의 내용"이 지워질 수 있습니다.
+          #   rmdir 은 (/s 없이 쓰면) 링크만 제거하므로 안전합니다.
+          if (Test-Path $cur) { cmd /c rmdir "$cur" }
+
+          New-Item -ItemType Junction -Path $cur -Target $rel | Out-Null
+          Write-Host "current --> $rel"
+
+      - name: PM2 무중단 재시작
+        run: |
+          # 처음이면 start, 이미 떠 있으면 reload(워커를 하나씩 교체 → 무중단).
+          # 새로 뜨는 워커가 방금 갈아끼운 current 를 읽습니다.
+          pm2 startOrReload ecosystem.config.js --update-env
+          pm2 save
+          pm2 list
+
+      - name: 오래된 릴리스 정리
+        run: |
+          $dir = Join-Path $env:DEPLOY_ROOT "releases"
+          Get-ChildItem $dir -Directory |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip ([int]$env:KEEP_RELEASES) |
+            ForEach-Object {
+              # 아직 워커가 붙잡고 있는 폴더는 지워지지 않습니다. 다음 배포 때 정리됩니다.
+              try {
+                Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
+                Write-Host "삭제: $($_.Name)"
+              } catch {
+                Write-Host "건너뜀(사용 중): $($_.Name)"
+              }
+            }
+
+      - name: nginx 기동 / 설정 반영
+        run: |
+          # compose 서비스와 마운트된 nginx 설정을 함께 반영합니다.
+          docker compose up -d
+          docker compose ps
+          docker compose exec -T nginx nginx -t
+          docker compose exec -T nginx nginx -s reload
+
+  post_deploy_smoke:
+    name: 배포 후 공개 경로 확인
+    needs: deploy
+    runs-on: [self-hosted, Windows, X64]
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Place 공개 경로 확인
+        run: |
+          # 배포에서는 공개 경로와 APP 응답 계약만 확인합니다.
+          # 실제 cafe 데이터 존재 여부는 place-search-ingest.yml의 적재 후 검증이 담당합니다.
+          $body = '{"lat":37.5665,"lng":126.9780,"kinds":["cafe"],"limit_per_kind":1}'
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Post `
+                -Uri 'http://127.0.0.1:8000/v2/places/search' `
+                -ContentType 'application/json' `
+                -Body $body `
+                -TimeoutSec 10
+              $group = @($response.groups | Where-Object kind -eq 'cafe')
+              if ($group.Count -ne 1) {
+                throw 'Place response must contain exactly one cafe group'
+              }
+              $requiredFields = @('kind', 'sort', 'limit', 'truncated', 'results')
+              $missingFields = @($requiredFields | Where-Object {
+                $_ -notin $group[0].PSObject.Properties.Name
+              })
+              if ($missingFields.Count -ne 0 -or
+                  $group[0].results -isnot [System.Array]) {
+                throw 'Place response does not match APP contract'
+              }
+              Write-Host 'Place APP contract verified'
+              break
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
+      - name: Journey 공개 경로 확인
+        run: |
+          # 현재 APP이 보내는 dog_id 없는 좌표 요청입니다. 외부 키가 없어도 원본 계약대로
+          # 명시적인 estimate 응답과 지도 앱 handoff를 반환해야 합니다.
+          $body = '{"origin":[37.5665,126.9780],"dests":[{"lat":37.5700,"lng":126.9820,"name":"destination"}],"companion":"dog","measured":true,"with_polyline":false}'
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Post `
+                -Uri 'http://127.0.0.1:8000/journey' `
+                -ContentType 'application/json' `
+                -Body $body `
+                -TimeoutSec 30
+              $item = @($response.items)[0]
+              $walk = $item.transport.walk
+              if ($response.companion -eq 'dog' -and
+                  $null -ne $walk -and
+                  $walk.status -in @('measured', 'estimate') -and
+                  $walk.handoff.naver -like 'nmap://route/walk*') {
+                Write-Host 'Journey APP contract verified'
+                break
+              }
+              throw 'Journey response does not match APP contract'
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }

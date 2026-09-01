@@ -1,0 +1,414 @@
+# =====================================================================
+# 크롤링 시드 소스 목록 (2026-08-19 조사 기준)
+# method : api | html | pdf-entry (목록/안내 페이지에서 PDF 수집)
+# auth   : none | data-go-kr (활용신청, 자동승인) | law-oc (open.law.go.kr OC 신청)
+#          | kma-hub (apihub 가입키) | kakao (REST 키)
+# status : verified (2026-08-19 URL/제공여부 확인) | unverified (요확인)
+# 상세 설명: docs/life/data-sources.md, docs/life/realtime-apis.md
+# =====================================================================
+
+# ---------- 공통: 법령 ----------
+- id: law-drf-api
+  domain: law
+  org: 법제처 국가법령정보센터
+  title: 국가법령정보 공동활용 Open API (lawSearch/lawService)
+  url: "http://www.law.go.kr/DRF/lawSearch.do"
+  guide: "https://open.law.go.kr/LSO/openApi/guideResult.do"
+  method: api
+  auth: law-oc
+  status: verified
+  notes: "target=law(법령)/ordin(자치법규)/admrul(행정규칙)/expc(해석례)/licbyl(별표서식). 조문 단위 XML 제공"
+
+- id: law-animal-protection
+  domain: law
+  org: 법제처
+  title: 동물보호법 / 시행령 / 시행규칙 (웹 원문)
+  url: "https://www.law.go.kr/법령/동물보호법"
+  method: html
+  auth: none
+  status: verified
+  notes: "등록(제15조), 안전조치, 맹견(사육허가/입마개/책임보험), 과태료. 시행규칙 제2조에 맹견 5종.
+    법/시행령/시행규칙 3건을 함께 받는다.
+    (2026-08-20 정찰: 이 URL 은 iframe 껍데기다. iframe src 의 lsiSeq+efYd 로 lsInfoR.do 를 부르면
+    조문이 서버 렌더링되어 나온다 — lsInfoP.do 는 AJAX 라 본문이 비어 있다. RAG-011)"
+
+- id: law-livestock-epidemic
+  domain: law
+  org: 법제처
+  title: 가축전염병 예방법 (광견병 예방접종 의무 근거)
+  url: "https://www.law.go.kr/법령/가축전염병예방법"
+  method: html
+  auth: none
+  status: verified
+  notes: "광견병=제2종 가축전염병, 시장/군수 예방접종 명령. 법/시행령/시행규칙 3건.
+    제2종 지정은 시행규칙 제2조, 접종 명령 절차는 하위법령에 있어 셋 다 필요하다.
+    (2026-08-20 URL 확인 + 수집 완료. 정식 법령명은 '가축전염병 예방법' 으로 띄어쓰기가 있으나
+    붙여쓴 URL 도 law.go.kr 이 받아준다)"
+
+- id: easylaw-pet
+  domain: law
+  org: 법제처 찾기쉬운 생활법령정보
+  title: 반려동물과 생활하기 (종합 해설 - 등록/외출/대중교통/사육)
+  url: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=1&cciNo=1&cnpClsNo=1"
+  method: html
+  auth: none
+  status: verified
+  notes: "법령 조문+해설 통합. 정적 HTML이라 크롤 난도 낮음. Phase 1 최우선.
+    본문 7p(CnpClsMain ccfNo/cciNo/cnpClsNo) + 카드뉴스 6p(EasyLawInfoR easySeq 2766~2771).
+    URL 목록은 sitemap.xml에서 csmSeq=1809 필터로 얻는다.
+    (2026-08-19 정정: 기존 popMenu=ov&csmSeq=1809 단독 URL은 '페이지 오류' 반환)"
+
+# ---------- 동물등록 ----------
+- id: animal-go-kr
+  domain: registration
+  org: 농림축산검역본부
+  title: 국가동물보호정보시스템 (동물등록 안내/대행기관)
+  url: "https://www.animal.go.kr/front/community/show.do?boardId=contents&seq=66&menuNo=2000000016"
+  method: html
+  auth: none
+  status: blocked
+  notes: "2026-08-27 정찰: robots.txt 가 `User-agent: * / Disallow: /` 로 사이트 전체를 막는다.
+    본문 자체는 정적 HTML(#contents)이고 카드뉴스도 title 속성에 텍스트가 있어 품질은 좋다.
+    시드에 있던 https://www.animal.go.kr/ 는 JS 리다이렉트 2단(/front/ -> /front/index.do)이라
+    본문이 아니었고, 위 URL 이 실제 '동물등록제도 안내' 다. 같은 내용이 nias-pet 과 easylaw-pet 에
+    있으므로 이 소스는 수집하지 않는다 (docs/life/data-sources.md §12 robots 준수)."
+
+- id: gov24-registration
+  domain: registration
+  org: 행정안전부 정부24
+  title: 동물등록제 안내(반려견 등록) 민원 안내
+  url: "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=15410000003"
+  method: html
+  auth: none
+  status: verified
+  notes: "절차/수수료/처리기관 구조화 정보. 2026-08-27 정찰로 URL 교체 — 옛 serviceInfo/PTR000051610 은
+    200 을 주면서 '서비스를 찾을 수 없습니다' 인 soft-404 였고, robots.txt 도 그 경로는 막고
+    /mw/AA020InfoCappView.do 만 연다. 인코딩 EUC-KR, 본문에 숫자 HTML 엔티티가 섞인다.
+    접속 대기열(큐) 페이지가 뜰 수 있다. 재발급 민원은 CappBizCD=15410000007."
+
+- id: data-registration-lookup
+  domain: registration
+  org: 농림축산검역본부
+  title: 동물등록 정보조회 서비스 (Open API)
+  url: "https://www.data.go.kr/data/15098913/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: nias-pet
+  domain: registration
+  org: 국립축산과학원
+  title: 반려동물 포털 (행정/법률정보, 기르기 정보)
+  url: "https://www.nias.go.kr/companion/index.do"
+  method: html
+  auth: none
+  status: verified
+  notes: "등록제 해설 + 품종/양육 정보. vaccination 도메인에도 활용. 2026-08-27 정찰로 URL 교체 —
+    옛 /companion/ 은 200 을 주면서 '페이지를 찾을 수 없습니다' 인 soft-404 였다.
+    본문은 new_petBoard.do?cmCode=... 30여 장이고 조문 인용이 본문에 그대로 들어 있다."
+
+# ---------- 예방접종 ----------
+- id: qia-rabies
+  domain: vaccination
+  org: 농림축산검역본부
+  title: 동물방역(광견병) / 동물검역(출입국) 안내
+  url: "https://www.qia.go.kr/"
+  method: html
+  auth: none
+  status: blocked
+  notes: "2026-08-28 정찰: robots.txt 가 `User-agent: * / Disallow: /` 로 사이트 전체를 막는다.
+    animal-go-kr 과 같은 기관(검역본부)이고 정책도 같다. 광견병 법정 의무는 가축전염병 예방법
+    (law-drf-api 로 이미 수집)이 커버하므로 코퍼스 공백은 크지 않다.
+    2026-08-28(#42): 수집 허가 문의 초안까지 썼으나 회신을 기다릴 수 없어 보내지 않았다.
+    초안은 PR #42 코멘트에 있다. 대신 인용 확장으로 코퍼스 안에서 답을 조립한다 (RAG-040)."
+
+- id: kvma-guideline
+  domain: vaccination
+  org: 대한수의사회
+  title: 반려견 예방접종 프로그램 (수의학 가이드라인)
+  url: "https://www.kvma.or.kr/"
+  method: html
+  auth: none
+  status: not-found
+  notes: "2026-08-28 정찰: 사이트는 살아 있지만(robots 없음 = 허용) 접종 스케줄 가이드라인을 공개 문서로
+    확인하지 못했다. 있는 것은 보도자료·검역 안내·방문진료/길고양이 중성화 가이드라인이다.
+    권장 스케줄 계층은 nias-pet 의 건강관리 묶음(이미 수집 가능)이나 WSAVA(영문)로 대체한다."
+
+# ---------- 목줄·입마개·맹견 ----------
+- id: mafra-press
+  domain: leash-muzzle
+  org: 농림축산식품부
+  title: 보도자료/정책자료 (검색어 - 맹견, 기질평가, 반려)
+  url: "https://www.mafra.go.kr/"
+  method: html
+  auth: none
+  status: verified
+  notes: "맹견사육허가제(2024.4.27 시행) 해설 자료"
+
+- id: korea-kr-policy
+  domain: leash-muzzle
+  org: 문화체육관광부 정책브리핑
+  title: 정책뉴스 (맹견사육허가제 등)
+  url: "https://www.korea.kr/news/policyNewsView.do?newsId=148926123"
+  method: html
+  auth: none
+  status: verified
+
+# ---------- 동반 이동 ----------
+- id: korail-terms
+  domain: transport
+  org: 한국철도공사
+  title: 여객운송약관 (동물 휴대 규정)
+  url: "https://info.korail.com/info/contents.do?key=922"
+  method: html
+  auth: none
+  status: verified
+  notes: "2026-08-28 수집: 목록은 HTML 이고 본문은 PDF 첨부다.
+    ⚠️ 링크 라벨의 '현행' 을 믿으면 안 된다 — 8/28 기준 '시행예정'인 1405 가 이미 시행 중이고
+    페이지가 라벨을 안 고쳤다. 라벨의 날짜를 읽어 오늘 이하 중 가장 나중 것을 고른다.
+    (원래 메모) 목록은 HTML 이고 본문은 PDF 첨부다.
+    다운로드는 /downloadContentsFile.do?key=922&fileNo=NNNN — 현행 1406, 시행예정 1405, 광역철도 1245.
+    fileNo 는 개정 때마다 바뀌므로 목록 페이지에서 링크 텍스트로 골라야 한다.
+    페이지가 1406 을 현행으로 표시하지만 1405 가 2026-08-01 시행분이다 — 라벨을 믿지 말 것.
+    28p 22p 44p, 텍스트 레이어 있음(스캔 아님)."
+
+- id: srt-terms
+  domain: transport
+  org: 에스알
+  title: SRT 여객운송약관
+  url: "https://etk.srail.kr/cms/archive.do?pageId=TK0402090000"
+  method: html
+  auth: none
+  status: verified
+  notes: "2026-08-28 수집 완료(RAG-036). 이동장 45x30x25cm, 이동장 포함 10kg 이내, 광견병 예방접종 요건.
+    ⚠️ .sub_con_area 의 텍스트는 제목 17자뿐이고 내용 전부가 <img alt> 안에 있다 — alt 를 안 읽으면
+    빈 문서를 적재한다. 원문에 오기가 있다(보저견=보조견). 고치지 않고 그대로 둔다.
+    첨부 다운로드는 JBCMS.downloadAttach(pageId, 순번) — 이 페이지 안내문은 (TK0402090000, 1) 이다.
+    내용은 alt 로 얻으므로 PDF 는 받지 않았다."
+
+- id: seoulmetro-terms
+  domain: transport
+  org: 서울교통공사
+  title: 여객운송약관 (동물 반입 조항)
+  url: "http://www.seoulmetro.co.kr/kr/page.do?menuIdx=528"
+  method: html
+  auth: none
+  status: verified
+  notes: "2026-08-28 수집 완료(RAG-036). PDF 가 아니라 HTML 본문이고 해설이 아니라 조문형이다 —
+    장(h4)/조(h5)/항(ol.list1) 이 그대로 있어 법령과 같은 article 로 판다.
+    휴대금지 물품 조항에 애완동물 예외(전용 이동장, 불쾌한 냄새 없을 것, 장애인보조견)가 그대로 있다.
+    HTTPS 가 열리지 않는다. http 로만 접근된다.
+    9호선 2·3단계는 menuIdx=779 로 문서가 따로이고 조 번호도 다르다 (1~8호선 제35조 = 9호선 제34조)."
+
+- id: airlines-pet-pages
+  domain: transport
+  org: 국적 항공사 9개
+  title: 반려동물 운송 안내 페이지 (기내반입/위탁 기준, 요금)
+  url: "https://www.koreanair.com/"
+  method: html
+  auth: none
+  status: partial
+  notes: "2026-08-29 실측(#57): 9곳 중 실제로 받을 수 있는 곳은 2곳뿐이다.
+    ✅ 에어프레미아 www.airpremia.com/a/support/need/pet · 이스타 www.eastarjet.com/newstar/PGWIM00004.
+    ❌ 진에어·에어서울은 403 Cloudflare 챌린지, 에어부산은 TLS 핸드셰이크 거부,
+    대한항공·아시아나는 ReadTimeout, 제주항공·티웨이는 robots.txt 403.
+    ⚠️ 2026-08-28 에 '5곳 열림'으로 적었던 것은 robots.txt 만 본 값이다 — robots 는 정적 파일이라
+    CDN 이 그냥 내주고 챌린지는 본문 페이지에서만 걸린다 (docs/life/data-sources.md §12).
+    진에어 robots 의 Content-Signal: search=yes,ai-train=no,use=reference 는 우리 용도
+    (출처 표기 참조)가 use=reference 에 해당하나, 어차피 페이지를 못 받는다."
+
+# ---------- 지자체 지원 ----------
+- id: benefit24-services
+  domain: subsidy
+  org: 행정안전부
+  title: 대한민국 공공서비스(혜택) 정보 - 보조금24 (Open API)
+  url: "https://www.data.go.kr/data/15113968/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "전체 10,958건(2026-08-28 실측) 중 키워드로 37건. 키워드는 반드시 복합어 — 단독 '반려'는 返戾(신청 반려)와 동음이의어라 무관한 사업이 딸려온다 (RAG-034)"
+
+- id: ordinance-search
+  domain: subsidy
+  org: 법제처
+  title: 자치법규(조례) 검색 - 반려동물 지원 조례 전수
+  url: "http://www.law.go.kr/DRF/lawSearch.do?target=ordin&query=반려동물"
+  method: api
+  auth: law-oc
+  status: verified
+  notes: "지원사업의 법적 근거. 사업 공고보다 변동 적어 안정적"
+
+- id: seoul-notice-api
+  domain: subsidy
+  org: 서울특별시
+  title: 서울시 고시공고 (열린데이터광장 API)
+  url: "https://data.seoul.go.kr/dataList/OA-23050/A/1/datasetView.do"
+  method: api
+  auth: seoul-open-data
+  status: verified
+  # 공고는 매일 올라온다 (하루 7.5건 실측). 기본값 weekly 를 시드 예외로 덮는 첫 사례 (RAG-044 ② · RAG-053).
+  cadence: daily
+  notes: "신규 지원사업 탐지용. 서비스명 tvvWcmBoardB0277New (OA-23050) — 2026-08-30 정찰: 원래 시드 OA-2482 `ListNewsNotice` 는
+    카탈로그(SearchOpenAPIService)에 '(종료예정)' 이고 최근 50건뿐이라 후속 데이터셋으로 바꿨다. 서비스명은 페이지에 안 나오고
+    카탈로그 API 로만 알 수 있다. 필터 인자 없음 → 최신 1,000건(≈6개월)을 한 요청으로 받아 복합 키워드로 거른다
+    (_pet_keywords, RAG-034). 6개월에 1건 걸렸다 — 수확이 적은 소스. 원본 1건 = 한 행짜리 응답({i}/{i}), 지문은 텍스트
+    (응답의 list_total_count 가 매일 바뀜). 첨부(seoulboard)는 robots Disallow: / 라 주소만 남긴다. 인용은
+    https://www.seoul.go.kr/news/news_notice.do#view/{BOARD_ID}. 구 단위 고시공고 API(송파 SpNtfc · 관악 GwanakGosiList ·
+    노원 NowonNewsGosiList · 은평 EminwonPblanc)가 따로 있다 — 지원사업 공고는 구가 더 많을 수 있어 후보."
+
+- id: seoul-microchip-support
+  domain: subsidy
+  org: 서울특별시
+  title: 내장형 동물등록 지원사업 (자부담 1만원, 서울시수의사회 협력)
+  url: "https://news.seoul.go.kr/env/archives/544026"
+  method: html
+  auth: none
+  status: verified
+  notes: "대표 사례 문서. **연도별 공고 갱신 확인 필요 — 연 1회 사람이 본다.**
+    2026-08-27: 시드에 있던 522690 은 2023년 글이라 교체했다. 지원 금액·마릿수가 해마다 바뀌는데
+    낡은 값이 코퍼스에 들어가면 /ask 가 자신 있게 틀린 금액을 답한다.
+    받는 것은 544026(등록 방법·수수료·과태료)과 569082(2026 자진신고기간) 둘.
+    567583(우리동네 동물병원)은 지자체 지원 카드 몫으로 남겨 뒀다."
+
+# ---------- 펫보험 ----------
+- id: e-insmarket
+  domain: insurance
+  org: 손해보험협회/생명보험협회
+  title: 보험다모아 (온라인 보험슈퍼마켓 - 반려동물보험 비교)
+  url: "https://e-insmarket.or.kr/"
+  method: html
+  auth: none
+  status: blocked
+  notes: "2026-08-28 정찰: 크롤러 UA 는 무한 리다이렉트(50회 초과), 브라우저 UA 는 403.
+    WAF 로 자동 접근을 막는 것으로 보인다. 비교 공시는 knia-disclosure 로 대체를 검토한다."
+
+- id: knia-disclosure
+  domain: insurance
+  org: 손해보험협회
+  title: 상품비교공시 (반려동물보험 PB27)
+  url: "https://kpub.knia.or.kr/popup/disclosureList.do?tabType=1&tptyCode=PB27"
+  method: html
+  auth: none
+  status: verified
+  notes: "2026-08-28 정찰(#50): 펫보험 공시 있다 — `반려동물보험` 탭이 tptyCode=PB27 이고
+    7사 216상품이 실린다. robots 허용.
+    화면(`/popup/disclosurePopup.do`)은 표가 비어 있고 데이터는 `/popup/disclosureList.do` 가 준다
+    (GET, 같은 쿼리, 225KB). content-type 은 text/plain 인데 **JSON 이 아니라 JS 객체 리터럴**이다
+    (키 무따옴표·값 홑따옴표) — json.loads 로 안 열리니 파서를 따로 써야 한다.
+    필드: TP_NAME(상품명) P_CODE_NM(회사) TP_ETC(특이사항·자기부담금·할인조건)
+    TP_PAY_NAME/TP_PAY_REASON(담보명·지급사유) TP_W_BILL/TP_M_BILL(보험료)
+    TP_URL(회사 공시실 딥링크) SUMMARY_SEQ(상품요약서).
+    ⚠ **약관 원문은 없다** — 보장내용·지급기준·이율의 비교 수치다. insurer-terms-pdfs 를 대체하지 못하고 보완한다.
+    ⚠ **회사가 7사다** (메리츠 N01 · 삼성 N08 · 현대 N09 · KB N10 · DB N11 · 카카오페이 N70 · 농협 N71).
+    한화·롯데·캐롯은 이 공시에 없고, 대신 **카카오페이손해보험이 있다** — 시드의 9사 목록이 어긋나 있었다."
+
+- id: insurer-terms-pdfs
+  domain: insurance
+  org: 각 손해보험사
+  title: 상품공시실 약관 PDF (펫보험 판매사)
+  # 삼성 목록 엔드포인트. 회사마다 다르므로 소스 모듈의 어댑터가 자기 것을 안다 (RAG-039 ①)
+  url: "https://www.samsungfire.com/vh/sfmi/ui/wshomepage/search/search_law_xml.jsp"
+  method: pdf-entry
+  auth: none
+  status: verified
+  notes: "2026-08-28 정찰: 삼성화재 약관 PDF 를 실제로 받아 파서 비교에 썼다(202p, 11.8MB, 텍스트 레이어 있음).
+    예: /publication/pdf/ZPB316050_0_20240401_file1.pdf (위풍댕댕).
+    robots — 삼성화재·NH농협 전면 허용, 현대해상·롯데·캐롯 일부 경로만 차단, 메리츠는 robots 가 HTML,
+    DB손보·한화손보는 User-agent 줄 없는 allow-list(표준상 그룹 밖 규칙은 무시되지만 의도는 제한이다),
+    KB손보는 Yeti(네이버) 그룹만 있다.
+    2026-08-28 정찰(#50) — **딥링크를 knia 가 준다** (disclosureList.do 의 TP_URL). 손으로 찾을 필요가 없었다:
+      메리츠  https://www.meritzfire.com/disclosure/product-announcement/product-list.do
+      삼성    https://www.samsungfire.com/vh/page/VH.REIF0011.do  (VH.HPIF0103.do 로 리다이렉트)
+      현대    https://www.hi.co.kr/bin/CI/ON/CION3200G.jsp        🚫 **robots 차단** (그 `일부 경로`가 이 경로다)
+      KB      http://www.kbinsure.co.kr/CG802030001.ec · /CG803000012.ec
+      DB      https://www.idbins.com/FWMAIV1534.do
+      농협    https://www.nhfire.co.kr/announce/productAnnounce/retrieveInsuranceProductsAnnounce.nhfire
+      카카오페이 https://kakaopayinscorp.co.kr/products/pet
+    ⚠ **8개 중 약관 PDF 링크를 초기 HTML 로 주는 곳이 하나도 없다.** 상품표가 전부 AJAX 이고
+    (DB 406KB·농협 362KB 는 대부분 전역 네비게이션이다), 엔드포인트가 사별로 달라 **사마다 따로 역추적**해야 한다.
+    카카오페이·메리츠는 SPA 껍데기(805B·hash 라우팅)라 정적 수집으로는 목록조차 안 나온다.
+    ✅ 시드에 적힌 삼성 PDF 는 아직 산다 — 200, 11,870,258B(11.3MB), `%PDF-`. 202p.
+    ⚠ 회사 목록 정정: 이 도메인의 판매사는 **7사**이고 한화·롯데·캐롯이 아니라 **카카오페이손보**가 들어간다 (knia PB27 기준).
+    2026-08-29 수집(#53 · RAG-039) — **삼성 완료.** 목록은 공시실 SPA 가 아니라 그 페이지의 스크립트
+    (`/sfmi/v2/ui/info/IH_IF_Terms.js`)에 적힌 `search_law_xml.jsp` 가 준다. JS 는 POST 로 부르지만
+    **GET 도 같은 XML** 을 줘서 Fetcher 를 안 고쳤다. XML 이 PDF 경로를 직접 준다
+    (n_policy=약관 / n_method=사업방법서 / n_summary=상품요약서). SearchNlawResult=판매중만 받는다.
+    ⚠ kwd 하나로는 다 안 걸린다 — `펫`은 반려묘보험을, `반려묘`는 착한펫보험을 놓친다. 네 키워드 합집합으로 11건.
+    ⚠ 회사 공시실(11건)이 협회 공시(6건)보다 넓다.
+    ⚠ **약관 PDF 한 파일에 관계법령 전문이 붙어 있다** — 안 자르면 신용정보법 조문이 `펫보험 약관 제32조`로
+    인용된다. 앞의 안내 책자와 뒤의 별표·관계법령을 잘라낸다 (RAG-039 ②).
+    실측 11건 25.1MB · 1,530쪽 · 스캔 0건(0자 페이지 1.2%). 남은 6사는 별도 카드.
+    2026-08-30 수집(#58 · RAG-048) — **KB 9건 · 농협 3건 완료.** 합계 23건.
+    KB: 목록 POST 폼이 GET 을 받되 조건은 hidden 이 아니라 화면 입력 필드(search_goods_nm · search_onsale_yn, euc-kr).
+      상세가 판매 이력 표라 판매종료일 빈 행의 약관 링크(/CG802030003.ec?fileNm=…)를 읽는다 — 조립하지 않는다.
+      ⚠ 25200(다이렉트 금쪽같은 펫보험 고양이 재가입용)은 약관 자리에 8쪽 특이사항(_1_3.pdf)이 걸려 있어 건너뛴다.
+    농협: ajax 세 단 GET (retrievePdtCd → retrievePdtInfo?fileType=05 → /imageView/downloadFile.ajax). 1·2·3종이 합본 한 PDF.
+    ⚠ **DB손보는 뺐다** — robots 가 User-agent 없는 allow-list + Disallow: / 이고 공시실 경로가 allow-list 에 없다.
+      표준상 통과하지만 의도를 존중한다 (사람이 정함, RAG-048 ①).
+    ⚠ 마커는 회사가 아니라 판형이 정한다 — KB 구형(2018)은 농협처럼 얇은 표제 없이 바로 제1조(목적)다 (RAG-048 ④)."
+
+# ---------- 실시간 (저장 X, API 직조회 - 상세: docs/life/realtime-apis.md) ----------
+- id: kma-vilage-fcst
+  domain: realtime
+  org: 기상청
+  title: 단기예보 조회서비스 (초단기실황/초단기예보/단기예보, 5km 격자)
+  url: "https://www.data.go.kr/data/15084084/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: kma-weather-warning
+  domain: realtime
+  org: 기상청
+  title: 기상특보 조회서비스 (폭염 등 12종, 178개 시군 구역)
+  url: "https://www.data.go.kr/data/15000415/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: kma-life-index
+  domain: realtime
+  org: 기상청
+  title: 생활기상지수 조회서비스 3.0 (자외선지수/대기정체지수)
+  url: "https://www.data.go.kr/data/15085288/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "체감온도(대상/환경별) 서비스는 2026-05-01 종료. 체감온도는 자체 계산"
+
+- id: airkorea-realtime
+  domain: realtime
+  org: 한국환경공단
+  title: 에어코리아 대기오염정보 (측정소별 실시간 + 예보통보)
+  url: "https://www.data.go.kr/data/15073861/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+
+- id: airkorea-stations
+  domain: realtime
+  org: 한국환경공단
+  title: 에어코리아 측정소정보 (TM좌표 근접측정소)
+  url: "https://www.data.go.kr/data/15073877/openapi.do"
+  method: api
+  auth: data-go-kr
+  status: verified
+  notes: "측정소 목록은 data/reference/에 캐시"
+
+- id: kma-apihub
+  domain: realtime
+  org: 기상청
+  title: 기상청 API허브 (AWS 지점 분 단위 관측 - 선택)
+  url: "https://apihub.kma.go.kr/"
+  method: api
+  auth: kma-hub
+  status: verified
+
+- id: kakao-local
+  domain: realtime
+  org: 카카오
+  title: Kakao Local API (coord2regioncode - GPS to 행정동 / transcoord - WGS84 to TM)
+  url: "https://developers.kakao.com/docs/latest/ko/local/dev-guide"
+  method: api
+  auth: kakao
+  status: verified

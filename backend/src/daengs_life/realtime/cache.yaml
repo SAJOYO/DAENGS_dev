@@ -1,0 +1,103 @@
+# 캐시 신선도·예산 (RT-001 ④ · ⑤-c)
+#
+# `thresholds.yaml` 과 같은 규율을 쓴다 — **값마다 출처를 붙이고, 근거 없는 숫자는 `우리 선택`
+# 이라고 명시한다.** 다만 여기는 임계가 아니라 **주기**이고, 주기는 ④-b 가 실측 발표 시각에서
+# 유도했으므로 비인용 숫자가 거의 없다.
+#
+# **비인용 숫자는 셋뿐이다** — 전부 `우리 선택` 으로 표시돼 있다:
+#   `stale.discard_periods` 3 · `stale.ttl_periods` 4 · `feeds.airkorea-realtime:frcst` 의 주기
+# 그 밖에 `prefetch.active_keys` 10 은 임의값이 아니라 ④-f 가 예산에서 역산한 **운영 상수**다.
+#
+# 파일이 `thresholds.yaml` 과 갈려 있는 이유 — 저기는 "얼마나 더우면 위험한가"(판정)이고
+# 여기는 "언제 다시 부르나"(조회)다. 섞으면 룰을 고칠 때 예산이 같이 흔들린다.
+
+# ---------------------------------------------------------------- 발표 주기 (④-b)
+#
+# `period_min` 은 새 값이 생기는 간격, `phase_min` 은 KST 자정에서 첫 발표까지의 분이다.
+# 이 둘이면 발표 시각이 전부 나온다 — `stale` 은 "그 사이 발표를 몇 번 놓쳤나"로 재고(⑤-c),
+# 재호출 시점도 같은 눈금에서 나온다. **시간이 아니라 발표 횟수로 재는 것이 요점이다.**
+#
+# `budget` 은 ④-e 의 한도가 **API(활용신청)별**이라 provider 가 아니라 그 축으로 묶는다.
+feeds:
+  kma-vilage-fcst:ncst:
+    period_min: 60
+    phase_min: 40           # 매시 정각 관측 → **:40 제공** (§6 실측)
+    budget: datagokr-vilage-fcst
+
+  kma-vilage-fcst:ultra:
+    period_min: 60
+    phase_min: 45           # 매시 :30 발표 → :45 제공 (§6 실측)
+    budget: datagokr-vilage-fcst
+
+  kma-vilage-fcst:village:
+    period_min: 180
+    phase_min: 130          # 02·05·…·23시 발표 → :10 제공 → 02:10 = 130분 (§6 실측)
+    budget: datagokr-vilage-fcst
+
+  airkorea-realtime:dnsty:
+    period_min: 60
+    phase_min: 0            # 매시 (④-b 표)
+    budget: datagokr-airkorea
+
+  airkorea-realtime:frcst:
+    period_min: 360         # 우리 선택 — ④-b 표에 없는 유일한 값이다. 미세먼지 예보통보는
+    phase_min: 0            # 1일 4회 발표로 알려져 있으나 **발표 시각을 실측하지 않았다.**
+    budget: datagokr-airkorea   # 6시간은 그 4회를 균등하게 본 보수적 근사다. 실측하면 고칠 것
+
+  kma-warning:pwn:
+    period_min: 5           # ④-b — 특보는 **비정기**라 주기가 없다. 고정 5분은 그 절이
+    phase_min: 0            # 스스로 "이 절의 유일한 임의 숫자"라고 표시한 값이다
+    budget: datagokr-warning
+
+  kma-life-index:senta:
+    period_min: 180         # 생활기상지수는 3시간 단위로 발표된다 (`time=YYYYMMDDHH`, 3시간 간격)
+    phase_min: 120          # 02시 기준 발표. 대조용이라 판정을 막지 않는다
+    budget: apihub
+
+  kma-apihub:aws:
+    period_min: 1           # **매분** (§6.8 실측 — 17:35 관측을 17:3x 에 받았다)
+    phase_min: 0
+    budget: apihub
+
+  # --- 조회 키를 만드는 provider (②-a 근거 2) — 값이 아니라 다음 호출의 인자를 만든다 ---
+  airkorea-stations:list:
+    period_min: 43200       # 30일 (④-b 표 — 이전·증설이 월 단위다)
+    phase_min: 0
+    budget: datagokr-stations
+
+  kma-apihub:stn_inf:
+    period_min: 43200       # 30일 — 위와 같은 성격 (RT-002 ②-c)
+    phase_min: 0
+    budget: apihub
+
+  kakao-local:region:
+    period_min: 43200       # 행정구역명은 사실상 안 변한다. 표기 전용이라 틀려도 관통된다
+    phase_min: 0
+    budget: kakao
+
+# ---------------------------------------------------------------- stale (⑤-c)
+stale:
+  discard_periods: 3   # 우리 선택 — ⑤-c 가 스스로 "이 절의 유일한 비인용 숫자"라고 표시한 값.
+                       # 발표를 3번 놓친 값은 버린다
+  ttl_periods: 4       # 우리 선택 — **폐기 상한보다 커야 한다.** 같으면 TTL 로 사라진 값이
+                       # 폐기 판정에 도달하지 못해 ⑤-c 가 얹힐 자리가 없어진다 (④-b 의 요지)
+
+# ---------------------------------------------------------------- 일 예산 (④-e)
+#
+# 한도는 **API(활용신청)별**이다. data.go.kr 개발계정 1,000회/일 — 2026-08-25 사용자 결정으로
+# 운영계정 전환은 하지 않는다. `null` 은 "한도를 모른다"이지 "무제한"이 아니다.
+budgets:
+  datagokr-vilage-fcst: 1000   # 실황+초단기예보+단기예보가 **한 서비스**다 (④-e — 병목)
+  datagokr-airkorea: 1000      # 대기오염정보 (실시간 + 예보통보)
+  datagokr-warning: 1000       # 기상특보
+  datagokr-stations: 1000      # 측정소정보 (월 1회라 사실상 안 쓴다)
+  apihub: null                 # 기상청 API허브 — 공개된 일 한도를 확인하지 못했다
+  kakao: null                  # 카카오 Local — 쿼터가 있으나 표기 전용이라 병목이 아니다
+
+# ---------------------------------------------------------------- 프리페치 (④-d · ④-f)
+prefetch:
+  active_keys: 10        # ④-f 가 예산에서 역산한 **운영 상수**. 임시값이 아니다 —
+                         # 56회/일 기준으로 10개면 560회, pull 여유분 440회가 남는다
+  idle_drop_hours: 24    # ④-d — 24시간 미요청이면 활성 집합에서 뺀다
+  lock_sec: 20           # single-flight 락 수명. 한 요청의 전체 예산 8초(⑤-b)보다 넉넉해야
+                         # 정상 조회 중에 락이 먼저 풀리지 않는다

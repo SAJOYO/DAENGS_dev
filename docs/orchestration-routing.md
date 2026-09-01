@@ -26,7 +26,9 @@ Training 인지 Walk 인지 둘 다인지 단어로는 갈리지 않습니다 �
 
 ## 2. 의미 라우팅 — LLM 폴백
 
-결정적 신호가 없으면(대부분의 자연어 입력) 다음 경로를 탑니다 (D-041, Card 2A PASS):
+결정적 신호가 없으면(대부분의 자연어 입력) 다음 경로를 탑니다 (D-041, Card 2A PASS —
+production 구현은 Card 2B 의 `backend/src/daengs_backend/orchestration/` `semantic.py` ·
+`planner.py` · `service.py`):
 
 ```text
 자연어 원문 + 허용된 라우팅 메타데이터

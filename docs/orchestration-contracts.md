@@ -66,7 +66,7 @@ RoutePlan:
   handoffs:  list[{target: str, reason: str}]  # 전용 플로우 안내 — 0개 이상
   clarify:   {question: str, missing: list[str]} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
-  model:     str | None                # router=llm 일 때 사용 모델 (미정 — routing 문서 §4)
+  model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.5-flash-lite` (routing 문서 §4)
 ```
 
 규칙 (CONFIRMED):
@@ -262,3 +262,50 @@ AssistantResponse:
 모양이면 충분합니다. **영어 UI · 영어 코퍼스 · 영어 가드레일 행동은 지금 구현하지
 않습니다.** 프롬프트 언어 컨벤션(영어 + Markdown)과 그 전환 순서는 architecture 문서
 §프롬프트·로케일 정책이 소유합니다.
+
+## 8. 공개 진입 계약 — `POST /assistant/query` (CURRENT — Card 3, PR #115)
+
+이 절 위의 §1~§6 은 그래프 안쪽 계약입니다. 여기는 그 앞의 **HTTP 경계**가 무엇을
+검증하고 무엇을 절대 신뢰하지 않는지를 고정합니다. 원본 코드는
+`backend/src/daengs_backend/schemas/assistant.py`(요청 DTO) ·
+`backend/src/daengs_backend/routers/assistant.py`(엔드포인트) — 아래는 그 계약의
+의사 스키마이지 Pydantic 소스를 그대로 옮긴 것이 아닙니다.
+
+**인증** — `admin_or_app_user(Perm.READ)`, `/walk`·`/ask` 와 같은 문입니다. 인증되지
+않은 요청은 오케스트레이션에 닿기 전에 401 입니다.
+
+```
+AssistantQueryRequest:            # extra="forbid" — 목록에 없는 필드는 전부 422
+  query:                  str                     # 필수
+  requested_capability:   str | None = None
+  source:                 str | None = None
+  action:                 str | None = None
+  active_dog_id:          str | None = None
+  location:               LocationIn | None = None
+
+LocationIn:                       # extra="forbid"
+  lat: float   # 33..39
+  lon: float   # 124..132
+```
+
+검증 규칙 (CONFIRMED):
+
+- **`query` 는 `.strip()` 기준으로 비어있으면 422 입니다.** `"   "` 만으로는 통과하지
+  못합니다. 검증은 trim 된 값으로 판단하지만 **오케스트레이션으로 넘기는 값은 원문
+  그대로**입니다 — 원문 보존은 orchestration 이 소유합니다(§2 위 규칙과 같은 이유).
+- `source`·`action`·`active_dog_id` 는 있으면 trim 후 비어있지 않은 문자열이어야
+  합니다. dict·list·숫자·bool 같은 다른 모양은 Pydantic 타입 검증에서 이미 422 입니다
+  — `semantic.py` 의 내부 fail-fast(`ValueError`)에 닿기 전에 이 경계가 막습니다.
+- `location` 이 있으면 `lat`/`lon` 범위는 `/walk` 과 `WalkPayload`(§3)가 이미 쓰는
+  범위와 같습니다. 새 지리 정책이 아닙니다.
+- **`location` 이 없어도 유효한 요청입니다.** Walk 가 나중에 선택되면 CLARIFY 는
+  기존 결정론적 planner 가 냅니다(§2) — HTTP 검증이 미리 막지 않습니다.
+- **클라이언트가 보낼 수 있는 임의의 `context` 딕셔너리는 없습니다.** 구조화
+  컨텍스트는 위 필드에서만, 서버가 명시적으로 조립합니다.
+- **`token`·`authorization`·`credentials`·`user`·`principal`·`permissions` 같은 신원
+  필드는 요청 본문에서 받지 않습니다.** `extra="forbid"` 가 422 로 거부하고, 애초에
+  `PrincipalContext` 는 본문이 아니라 인증된 의존성에서만 서버가 만듭니다.
+- `requested_capability` 는 라우팅 신호일 뿐 인가가 아닙니다(불변식 12) — 새 능력을
+  만들지 않고, planner 가 모르는 값이면 의미 라우팅으로 그대로 넘깁니다.
+- 응답은 `AssistantResponse` 를 **그대로** 돌려줍니다 — 별도 래퍼도, `FAILED` 를
+  포함한 상태 재해석도 없습니다. 의미 상태는 이 문서 §5 가 소유합니다.

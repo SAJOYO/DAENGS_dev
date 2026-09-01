@@ -6,14 +6,15 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from daengs_backend.models import Walk, WalkPoint
+from daengs_backend.models import Walk, WalkPet, WalkPoint
 
 __all__ = [
     "add",
+    "delete_walks_only_with",
     "existing_seqs",
     "get_by_client_session",
     "get_owned",
@@ -25,11 +26,15 @@ async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[
     """내 산책 전부, **최근 순.**
 
     좌표는 안 붙입니다 — 목록에 좌표까지 실으면 스무 건에 수만 점이 딸려 옵니다.
+    나간 아이들(`pets`)은 붙입니다. 산책당 많아야 몇 줄이고, 안 붙이면 응답을 만들다
+    지연 로딩에서 터집니다.
+
     `started_at` 이 같을 수 있어 `id` 로 한 번 더 정렬합니다.
     """
     stmt = (
         select(Walk)
         .where(Walk.app_user_id == app_user_id)
+        .options(selectinload(Walk.pets))
         .order_by(Walk.started_at.desc(), Walk.id)
     )
     return list(await session.scalars(stmt))
@@ -43,13 +48,13 @@ async def get_owned(
     소유자 조건을 이 함수 안에 묶어 두면 부르는 쪽이 잊을 자리가 없습니다
     (`repositories/pet.py` 와 같은 이유).
 
-    `selectinload` 로 좌표를 같이 읽습니다. 지연 로딩이면 비동기 세션에서 접근하는
-    순간 터집니다.
+    `selectinload` 로 좌표와 나간 아이들을 같이 읽습니다. 지연 로딩이면 비동기
+    세션에서 접근하는 순간 터집니다.
     """
     stmt = (
         select(Walk)
         .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
-        .options(selectinload(Walk.points))
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 
@@ -68,9 +73,35 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
-        .options(selectinload(Walk.points))
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
+
+
+async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:
+    """**그 아이와만** 나간 산책을 지웁니다.
+
+    강아지를 지울 때 부릅니다. 다른 아이와 같이 나간 산책은 **남깁니다** — 그 산책은
+    남은 아이의 기록이기도 해서, 지우면 그 아이의 운동량이 통째로 빕니다. 그 산책에서
+    이 아이만 빠지는 것은 조인 행의 `ON DELETE CASCADE` 가 알아서 합니다.
+
+    아무도 안 붙은 산책은 애초에 조인 행이 없어 여기 걸리지 않습니다.
+
+    :returns: 지운 산책 수.
+    """
+    others = WalkPet.__table__.alias("others")
+    solo = (
+        select(WalkPet.walk_id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            ~exists().where(
+                others.c.walk_id == WalkPet.walk_id,
+                others.c.pet_id != pet_id,
+            ),
+        )
+    )
+    result = await session.execute(delete(Walk).where(Walk.id.in_(solo)))
+    return result.rowcount or 0
 
 
 def add(session: AsyncSession, walk: Walk) -> Walk:

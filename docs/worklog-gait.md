@@ -12,9 +12,13 @@
 
 ## 지금 상태 한 줄
 
-**서버에서 실제 추론까지 성공했습니다** (2026-08-31). PR #98 머지 완료(`6ef691c`)로
-`backend/src/daengs_gait/` + `--group gait` 구조가 서버에 반영돼 있고, `profiles: ["gait"]`
-뒤에 있어 기본 배포로는 안 뜹니다 — 켤 때는 서비스 이름을 지정해야 합니다.
+**앱이 붙을 수 있는 API 가 갖춰졌습니다** (2026-08-31). 목록·삭제까지 생겨
+업로드→분석→조회→비교→삭제 흐름이 전부 됩니다. 계약 정본은
+`backend/src/daengs_gait/API.md` 입니다.
+
+⚠️ **서버는 아직 옛 코드입니다.** 머지(`c3013ab`)만으로는 반영되지 않습니다 —
+`profiles` 뒤라 배포가 안 건드립니다. `docker compose --profile gait up -d
+--force-recreate gait-analysis` 를 한 번 돌려야 합니다.
 
 ## 미해결 — 다음에 이어야 할 것
 
@@ -24,7 +28,12 @@
 | 2 | ~~서버에서 실제 영상 추론~~ | ✅ 2026-08-31 완료 (아래) | — |
 | 3 | **원본 walk_demo 대비 parity 실측** | 이관 전후 대조는 했으나 원본과의 재대조는 미수행 | PR #62 |
 | 3-1 | ~~PR #98 머지 후 서버 재확인~~ | ✅ 완료 — 이관 구조로 추론 성공 | — |
-| 3-2 | **AV1 등 못 읽는 코덱에 잘못된 안내** | 아래 참고. 실사용(스마트폰 H.264)에는 영향 없어 후속으로 뺌 | 신규 |
+| 3-2 | **AV1 등 못 읽는 코덱에 잘못된 안내** | 실사용(스마트폰 H.264)에는 영향 없어 후속으로 뺌 | 신규 |
+| 4 | **PR #109 를 서버에 반영** | 머지했지만 `--force-recreate` 를 아직 안 돌림 | PR #109 |
+| 5 | **인증·소유권** | gait 가 아니라 **backend auth 계층 몫**으로 정리됨. 그쪽 카드가 필요 | API.md §소유권 |
+| 6 | **보관 정책 · 공용 저장소** | 사람이 정할 일. gait 도 같은 저장소를 쓰게 됨 | **#78** (담당자 지명됨) |
+| 7 | **원본 영상 재생 엔드포인트** | 앱 요구사항이 확정되면 | — |
+| 8 | **비동기 job/poll** | 지금은 동기 2~4분. 미래 모양은 orchestration-contracts.md | — |
 | 4 | **기록 저장 구조 확정 (DB vs 파일)** | 설계안까지만 나옴. 앱이 부르는 URL 을 정하는 결정이라 앱 연동 전에 정해야 함 | `gait-record-data-design.md` |
 | 5 | **인증** | 켜는 순간 `/gait/` 가 인증 없는 업로드 엔드포인트가 됨 (스크리닝과 같은 상태) | D-024 · D-029 |
 | 6 | `bbox_center` 정의 이원화 | 고치면 수치가 바뀌어 parity 주장이 흔들림 — 사람 판단 필요 | PR #62 리뷰 |
@@ -253,3 +262,116 @@ gait 를 건드리지 않아서, 머지만으로는 새 코드가 반영되지 �
 스마트폰 촬영본은 H.264 라 **실사용 경로에는 영향이 없어** 후속으로 뺐습니다.
 고친다면 ⓐ 프레임을 하나도 못 읽었을 때 "촬영 문제"가 아니라 "이 영상 형식을 읽을 수
 없습니다"로 구분하거나 ⓑ `ensure_mp4` 가 코덱을 확인해 필요하면 재인코딩하는 쪽입니다.
+
+## 2026-08-31 — 기록 목록·삭제 API 와 외부 계약 정리 (PR #109, `c3013ab`)
+
+앱 흐름(업로드→분석→조회→**목록**→overlay→**삭제**)에서 **목록과 삭제가 없어서**
+이 서비스의 존재 이유인 "이전 기록과 비교"가 성립하지 않던 것을 채웠습니다.
+`/compare` 를 쓰려면 `record_id` 두 개가 필요한데 앱이 그걸 알아낼 방법이 없었습니다.
+
+**계약 정본을 `backend/src/daengs_gait/API.md` 로 만들었습니다** — `skin-screening/API.md`
+와 같은 자리·같은 모양("앱이 볼 문서"). 구현 전에 계약을 먼저 확정하고 시작했습니다.
+
+### 외부 계약 (앱이 부르는 주소)
+
+```
+POST   /gait/analyze
+GET    /gait/records?dog_id=&limit=&cursor=
+GET    /gait/records/{record_id}
+GET    /gait/records/{record_id}/overlay
+DELETE /gait/records/{record_id}
+POST   /gait/compare
+GET    /gait/healthz
+```
+
+### 정한 것
+
+| | 결정 | 이유 |
+| --- | --- | --- |
+| `record_id` | 8자 → **32자** `uuid4().hex` | 32비트는 수천 건에서 생일 문제로 충돌하고 `save_record` 가 덮어써서 **다른 개 기록이 조용히 사라집니다.** 소비자가 없는 지금이 공짜 |
+| 응답의 파일 경로 | `/data/…` 제거 → `has_overlay` · `overlay_url` | 컨테이너 안 경로라 앱이 못 쓰고, 파일이 S3(#78)로 가면 거짓이 됩니다 |
+| 삭제 | 즉시 물리 삭제 | gait 가 기록·파일을 다 갖고 있어 소프트 삭제의 전제가 없습니다 |
+| 페이지네이션 | 처음부터 포함 | 나중에 붙이면 앱이 바뀝니다 |
+| 전체 조회 | 열지 않음 | 인증이 없어 남의 기록이 다 보입니다 |
+| **소유권 검증** | **gait 가 아니라 backend auth 계층** | 계정·세션·소유 관계를 아는 것은 backend 입니다. 여기 넣으면 그 지식이 두 곳으로 갈라집니다 |
+
+### `/v1` 을 뗀 이유 — 원본에서 온 게 아니었습니다
+
+backend 의 다른 API 가 전부 도메인 prefix 로 시작하는데(`/auth/…` · `/app/pets/…` ·
+`/training/…` · `/screen/…`) gait 만 `/v1/…` 이라 튀었습니다.
+
+확인해 보니 **walk_demo 원본은 `/api/upload` · `/api/records` · `/api/compare` 였습니다.**
+`/v1` 은 이 레포로 이전할 때(#62) 새로 붙은 것이고 근거가 어디에도 없습니다 — 레포에
+API 버전 규칙 자체가 없습니다(decisions.md · collaboration.md · 오케스트레이션 문서
+전부 확인). **관례에 의한 모방이지 합의된 규칙이 아니었습니다.**
+
+⚠️ **nginx 는 한 줄도 안 고쳤습니다.** `rewrite ^/gait/(.*)$` 가 이미 접두사를 뗍니다.
+   그래서 **앱이 보는 주소와 FastAPI 안의 경로가 다릅니다** — `/gait/analyze` vs
+   `/analyze`. 컨테이너에 직접 붙어 디버깅할 때 헷갈리는 자리입니다.
+
+⚠️ `overlay_url` 은 **앱 기준**으로 냅니다 (`config.PUBLIC_PREFIX`, 기본 `/gait`).
+   내부 경로를 내면 앱이 `/gait` 를 손으로 붙여야 하고 그건 틀리기 쉽습니다. 소스에
+   박지 않은 이유는 nginx location 이 바뀔 때 **조용히 틀리기** 때문입니다 — 앱은
+   404 나는 URL 을 받는데 서버 로그에는 아무 문제도 안 보입니다.
+
+### 곁다리로 잡은 것
+
+- **`/compare` 가 존재 확인보다 무거운 import 를 먼저** 했습니다. 기본 설치에서
+  404 여야 할 응답이 ImportError 가 됩니다 — `/analyze` 가 이미 지키던 규칙인데
+  compare 만 빠져 있었습니다. **신규 테스트가 잡았습니다.**
+- `record_exists` 에 형식 검증을 넣어 **경로 조작**(윈도우 개발 실행에서 역슬래시로
+  `RECORDS_DIR` 를 벗어나던 것, PR #62 리뷰 낮음 ③)도 같이 막혔습니다.
+- **원본 walk_demo 에는 `/api/records` 목록이 이미 있었습니다.** 이전할 때 함수
+  (`records_for_dog`)만 옮기고 엔드포인트를 빠뜨린 것이었습니다.
+
+### 검증
+
+기본 설치(torch 없음) 38 passed · 1 skipped / 모델 환경 49 passed /
+실제 영상 E2E 9항목 PASS (analyze → 단건 → 목록 → compare → overlay → 삭제 → 404).
+
+## 2026-08-31 — Swagger 가 남의 API 를 보여주던 버그 (root_path, PR #111)
+
+`http://daengback.~/gait/docs` 에서 **gait API 가 안 보인다**는 제보로 찾았습니다.
+
+```
+브라우저가 /gait/docs 를 염
+  → Swagger HTML 안에 url: '/openapi.json'   ← 절대 경로
+  → 브라우저가 daengback.~/openapi.json 을 요청
+  → nginx 의 location / 이 그걸 backend 로 보냄
+  → "DAENGS API"(backend 것)가 뜸          ← gait 가 아님
+```
+
+nginx 가 `/gait` 를 떼고 넘기므로 FastAPI 는 **자기가 도메인 루트에 있다고 믿습니다.**
+
+⚠️ **페이지는 200 으로 열리고 화면도 멀쩡해 보입니다. 내용만 남의 것입니다.**
+   처음에 `/gait/docs → HTTP 200` 만 보고 "정상"이라고 판단했다가 틀렸습니다 —
+   **상태 코드로는 못 잡는 종류**입니다.
+
+**고침**: `FastAPI(root_path=config.PUBLIC_PREFIX)`. 프록시가 접두사를 떼는 구조를 위한
+표준 옵션이고, docs·openapi.json·redoc 주소를 접두사 기준으로 생성합니다.
+**라우트 정의는 안 바뀝니다** — 컨테이너는 여전히 `/analyze` 로 받습니다.
+
+**같은 병을 이미 한 번 막았었습니다.** `overlay_url` 도 같은 자리였는데 그건 손으로
+`PUBLIC_PREFIX` 를 붙여 막았고, **Swagger 는 FastAPI 가 자동 생성해서 놓쳤습니다.**
+prefix stripping 구조에서는 "서비스가 자기 주소를 만드는 자리"를 전부 세어 봐야 합니다.
+
+⚠️ 테스트에서 알게 된 것: **Starlette 은 `root_path` 를 관대하게 처리해서
+`/gait/records/…` 도 200 을 냅니다.** 라우트에 접두사를 잘못 박아도 양쪽 다 200 이라
+**테스트가 실수를 못 잡습니다.** openapi 의 경로 집합으로 고정했습니다 — 거기에
+`/gait/...` 가 나타나면 이중 접두사입니다.
+
+## Swagger 가 두 개인 이유
+
+`http://daengback.~/docs` 는 **backend 프로세스의 문서**라 **gait 가 안 나옵니다.**
+gait 는 별도 프로세스라 자기 문서를 따로 가집니다:
+
+```
+http://daengback.~/gait/docs
+```
+
+screening 과 정반대입니다 — 저쪽은 D-040 으로 런타임까지 backend 에 합쳐서 `/screen/*`
+가 backend `/docs` 에 나오고, gait 는 D-038 로 런타임을 갈라 뒀습니다(영상이 분 단위라
+동기 대화·같은 프로세스에 안 맞음). **버그가 아니라 그 결정의 결과입니다.**
+
+⚠️ `/gait/docs` 안에 보이는 경로는 **컨테이너 내부 경로**(`/analyze`)입니다. 앱에 줄
+   주소는 `API.md` 쪽(`/gait/analyze`)이 정본입니다.

@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet
 
-__all__ = ["add", "count_for_owner", "delete", "get_owned", "list_for_owner"]
+__all__ = [
+    "add",
+    "count_for_owner",
+    "delete",
+    "get_owned",
+    "list_for_owner",
+    "owned_ids",
+]
 
 
 async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[Pet]:
@@ -39,6 +46,22 @@ async def get_owned(
     """
     stmt = select(Pet).where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
     return await session.scalar(stmt)
+
+
+async def owned_ids(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    """주어진 id 중 **내 강아지인 것**만.
+
+    한 마리씩 `get_owned` 를 부르면 마릿수만큼 왕복합니다. 산책 하나를 올릴 때마다
+    그러면 아깝습니다.
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return set()
+    stmt = select(Pet.id).where(Pet.app_user_id == app_user_id, Pet.id.in_(pet_ids))
+    return set(await session.scalars(stmt))
 
 
 async def count_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:

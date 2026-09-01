@@ -41,10 +41,10 @@ def client(store: Store) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def body(session_id: uuid.UUID, *, pet_id: uuid.UUID | None = None) -> dict:
+def body(session_id: uuid.UUID, *, pet_ids: list[uuid.UUID] | None = None) -> dict:
     return {
         "client_session_id": str(session_id),
-        "pet_id": str(pet_id) if pet_id else None,
+        "pet_ids": [str(p) for p in pet_ids or []],
         "started_at": STARTED.isoformat(),
         "ended_at": ENDED.isoformat(),
         "weather_code": 61,
@@ -127,17 +127,63 @@ def test_목록은_최근_순이고_좌표가_없다(client: TestClient, store: 
 def test_내_강아지만_붙는다(client: TestClient, store: Store) -> None:
     """남의 pet_id 를 실어 보내도 그 강아지에 산책이 붙으면 안 됩니다.
 
-    산책 자체는 사용자의 것이라 거절하지 않고 **강아지만 떼고** 저장합니다.
+    산책 자체는 사용자의 것이라 거절하지 않고 **그 아이만 떼고** 저장합니다.
     """
     mine = FakePet(app_user_id=OWNER, name="네옹", breed="dog_beagle")
     theirs = FakePet(app_user_id=STRANGER, name="남의개", breed="dog_pug")
     store.pets += [mine, theirs]
 
-    ok = client.post("/app/walks", json=body(uuid.uuid4(), pet_id=mine.id)).json()
-    stolen = client.post("/app/walks", json=body(uuid.uuid4(), pet_id=theirs.id)).json()
+    ok = client.post("/app/walks", json=body(uuid.uuid4(), pet_ids=[mine.id])).json()
+    mixed = client.post(
+        "/app/walks", json=body(uuid.uuid4(), pet_ids=[mine.id, theirs.id])
+    ).json()
+    stolen = client.post("/app/walks", json=body(uuid.uuid4(), pet_ids=[theirs.id])).json()
 
-    assert ok["pet_id"] == str(mine.id)
-    assert stolen["pet_id"] is None
+    assert ok["pet_ids"] == [str(mine.id)]
+    # 섞어 보내도 남의 아이는 빠지고, 산책은 거절되지 않습니다.
+    assert mixed["pet_ids"] == [str(mine.id)]
+    assert stolen["pet_ids"] == []
+
+
+def test_여러_마리를_데리고_나간다(client: TestClient, store: Store) -> None:
+    """두 마리를 데리고 나갔으면 **둘 다** 붙어야 합니다.
+
+    한 아이만 남으면 나중에 챗봇이 나머지 아이의 운동량을 통째로 못 봅니다.
+    """
+    neong = FakePet(app_user_id=OWNER, name="네옹", breed="dog_beagle")
+    dang = FakePet(app_user_id=OWNER, name="댕댕", breed="dog_pug")
+    store.pets += [neong, dang]
+
+    walk = client.post(
+        "/app/walks", json=body(uuid.uuid4(), pet_ids=[neong.id, dang.id])
+    ).json()
+
+    assert set(walk["pet_ids"]) == {str(neong.id), str(dang.id)}
+    # 순서는 다시 읽어도 같아야 합니다 — 뒤바뀌면 앱이 "바뀌었다" 로 읽습니다.
+    again = client.get(f"/app/walks/{walk['id']}").json()
+    assert again["pet_ids"] == walk["pet_ids"]
+
+
+def test_같은_아이를_두_번_적어도_한_마리다(client: TestClient, store: Store) -> None:
+    """조인 행의 PK 가 (walk_id, pet_id) 라 겹치면 DB 가 500 으로 터집니다."""
+    neong = FakePet(app_user_id=OWNER, name="네옹", breed="dog_beagle")
+    store.pets.append(neong)
+
+    walk = client.post(
+        "/app/walks", json=body(uuid.uuid4(), pet_ids=[neong.id, neong.id])
+    ).json()
+
+    assert walk["pet_ids"] == [str(neong.id)]
+
+
+def test_아무도_안_골라도_산책은_기록된다(client: TestClient) -> None:
+    """강아지를 등록하기 전에 걸었거나 고르지 않고 나선 경우입니다.
+
+    **사람이 걸은 것은 걸은 것입니다.** 빈 목록을 거절하면 그 산책이 영영 안 올라갑니다.
+    """
+    walk = client.post("/app/walks", json=body(uuid.uuid4())).json()
+
+    assert walk["pet_ids"] == []
 
 
 def test_끝이_시작보다_앞서면_422(client: TestClient) -> None:

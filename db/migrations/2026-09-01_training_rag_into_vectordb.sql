@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
-
 CREATE TABLE IF NOT EXISTS training_rag_documents (
   document_id text PRIMARY KEY,
   source_id text NOT NULL,
@@ -25,4 +23,5 @@ CREATE TABLE IF NOT EXISTS training_rag_chunks (
 
 CREATE INDEX IF NOT EXISTS training_rag_chunks_embedding_hnsw
   ON training_rag_chunks USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS training_rag_chunks_document_idx ON training_rag_chunks(document_id);
+CREATE INDEX IF NOT EXISTS training_rag_chunks_document_idx
+  ON training_rag_chunks(document_id);

@@ -22,7 +22,7 @@ from daengs_training.retrieval.pgvector import RuntimeRetriever
 
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_DSN = "postgresql://dog_rag:dog_rag_local@localhost:5433/dog_rag"
+DEFAULT_DSN = "postgresql://postgres:postgres@localhost:5432/vectordb"
 MAX_QUESTION_CHARS = 1_000
 DEFAULT_SERVING_CORPUS = RUNTIME_ROOT / "config/serving_corpus_v1.json"
 

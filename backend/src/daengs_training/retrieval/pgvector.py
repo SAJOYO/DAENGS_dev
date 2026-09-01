@@ -104,7 +104,7 @@ def _medical_verdict(question: str):
 
 @dataclass
 class RuntimeRetriever:
-    dsn: str = "postgresql://dog_rag:dog_rag_local@localhost:5433/dog_rag"
+    dsn: str = "postgresql://postgres:postgres@localhost:5432/vectordb"
     model_name: str = "intfloat/multilingual-e5-base"
     embedding_label: str | None = None
     document_ids: tuple[str, ...] | None = None
@@ -153,7 +153,7 @@ class RuntimeRetriever:
                 where += " and document_id = any(%s)"
                 params.append(list(self.document_ids))
             params.extend([vector,candidate_limit])
-            cur.execute(f"select chunk_id,document_id,chunk_index,text,metadata,1-(embedding <=> %s::vector) from rag_chunks where {where} order by embedding <=> %s::vector limit %s",params)
+            cur.execute(f"select chunk_id,document_id,chunk_index,text,metadata,1-(embedding <=> %s::vector) from training_rag_chunks where {where} order by embedding <=> %s::vector limit %s",params)
             rows=[]
             seen=set()
             for r in cur.fetchall():

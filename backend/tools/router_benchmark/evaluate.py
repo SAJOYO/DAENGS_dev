@@ -66,6 +66,7 @@ def evaluate_benchmark(
     performance_by_case: Mapping[str, PerformanceObservation] | None = None,
     *,
     prompt_version: PromptVersion = PROMPT_VERSION,
+    model_id: str = MODEL_ID,
 ) -> BenchmarkEvaluation:
     """Evaluate final plans and retry behavior against gold without an LLM judge."""
     case_ids = [case.case_id for case in gold_cases]
@@ -92,7 +93,7 @@ def evaluate_benchmark(
         result = CaseResult(
             case_id=case.case_id,
             prompt_version=prompt_version,
-            model=MODEL_ID,
+            model=model_id,
             attempt_count=len(attempts),
             first_pass_schema_valid=attempts[0].schema_valid,
             final_schema_valid=final.schema_valid,

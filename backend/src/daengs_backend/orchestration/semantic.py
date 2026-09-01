@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from daengs_backend.config import settings
 
 PROMPT_VERSION = "semantic-router-ko-v3"
-ROUTER_MODEL_ID = "gemini-3.5-flash-lite"
+ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # The only routing metadata the model may see. Coordinates deliberately stay out:
 # WalkPayload is built from trusted structured context, never from model output.

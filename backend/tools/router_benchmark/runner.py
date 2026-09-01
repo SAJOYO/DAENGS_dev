@@ -156,6 +156,7 @@ def build_artifacts(
     generation_config: dict[str, Any] = GENERATION_CONFIG,
     benchmark_id: str | None = None,
     gold_version: str | None = None,
+    model_id: str = MODEL_ID,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
     """Reuse the frozen evaluator and shape its output into auditable artifacts."""
     config = load_benchmark_config()
@@ -165,6 +166,7 @@ def build_artifacts(
         attempts_by_case,
         performance_by_case,
         prompt_version=prompt_version,
+        model_id=model_id,
     )
     verdict = apply_acceptance_gates(evaluation.summary, config)
     by_id = {case.case_id: case for case in cases}
@@ -193,7 +195,7 @@ def build_artifacts(
     summary = {
         "benchmark_id": result_benchmark_id,
         "freeze_commit": FREEZE_COMMIT,
-        "model": MODEL_ID,
+        "model": model_id,
         "prompt_version": prompt_version,
         "generation_config": generation_config,
         "scored_cases": len(cases),

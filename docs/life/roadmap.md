@@ -212,4 +212,8 @@ D · E 는 틈에.  F0 정찰은 A3 와 병렬.  F2 분실 툴은 독립.  F3 �
 - **`insurance` 독립 category** — 2026-08-30 "나중에 뺀다"로 방향만. 시점은 A1 뒤 (A7).
 - **지역 필터의 형태** — RAG-033 ⑥ 의 셋(org 사전필터 / BM25 신호 / 되묻기) 중 무엇을 기본으로 할지. A2 카드가 실측으로 제안한다.
 - **핸드오프 식별자 표** — `medical` `emergency` `training` `place` 는 이 문서의 제안. 통합 때 파트별 "답한다 / 답하지 않는다 / 넘긴다" 세 줄로 확정.
-- **라우터 모델** — v1은 `gemini-3.5-flash-lite`로 확정(D-041). Card 2A는 모델 비교가 아니라 동결된 기준에 대한 수용성 검증이다. `gemini-3.1-flash-lite`는 Training **생성** 모델로 별개다.
+- **라우터 모델** — v1은 `gemini-3.1-flash-lite`로 확정(D-041, 2026-09-01 정정 — 최초
+  Card 2A/production 구현은 사람의 모델 선정 기억 착오로 `gemini-3.5-flash-lite`를 썼다).
+  Card 2A/v4는 모델 비교가 아니라 동결된 기준에 대한 수용성 검증이다. `gemini-3.1-flash-lite`는
+  Training **생성**에도 쓰이지만(별도 프롬프트·런타임 경로), 라우터로서의 채택 근거는
+  `docs/orchestration-router-benchmark.md`의 v4 수용 벤치마크다.

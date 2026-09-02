@@ -539,3 +539,37 @@ screening 과 정반대입니다 — 저쪽은 D-040 으로 런타임까지 back
 
 ⚠️ `/gait/docs` 안에 보이는 경로는 **컨테이너 내부 경로**(`/analyze`)입니다. 앱에 줄
    주소는 `API.md` 쪽(`/gait/analyze`)이 정본입니다.
+
+## 다음 단계 — GCP backend 배포 이후 (Hold)
+
+**선행 조건이 둘 다 사람 결정입니다.** 그래서 카드를 Hold 로 둡니다:
+
+1. **#78** — GCS 버킷·리전·보관/파기 정책
+2. **GCP backend 배포** — 테스터 릴리즈 빌드가 보는 `daengapi` 에는 아직 `/app/gait/…` 가
+   없습니다 (2026-09-02 실측: `/app/gait/records` → 404, 옛 `/gait/records` → 200 무인증).
+   자체 서버(`daengback`)만 새 계약이 돕니다.
+
+### 왜 지금 못 하나
+
+오늘 카드(#64 · D-043)의 목적은 **테스터 빌드의 gait 인증 문제 해결**이었고, 앱·자체 서버
+쪽은 실기기 왕복까지 끝났습니다. 남은 것은 전부 **GCP 환경이 서야** 손댈 수 있습니다 —
+버킷이 없으면 GCS 연동을 검증할 수 없고, 그쪽 backend 가 옛 코드면 릴리즈 앱이 새 경로를
+부를 수 없습니다.
+
+그때까지 릴리즈 빌드는 `daengs.gaitUrlRelease` 를 비워 **보행만 꺼 둡니다** — 그러면
+화면이 "보행 분석은 아직 준비 중이에요"라고 말합니다 (DAENGS_APP#64 에서 그 장치를
+되살렸습니다. 그전에는 꺼도 Mock 이 가짜 결과를 그렸습니다).
+
+### 이어서 할 것
+
+- [ ] GCP backend 배포 후 **release gait 기능 활성화** (`gaitUrlRelease` 채우기)
+- [ ] release 앱에서 `/app/gait/…` **실제 연결 및 실기기 재검증**
+- [ ] 기존 외부 `/gait/…` **410 차단 상태 확인** (PR #145)
+- [ ] GCS 저장 연동 완료 후 **임시 LocalBridge 제거** — `gait-bridge` 볼륨,
+      `_bridge/*` 엔드포인트, `find_by_storage_key`, `GAIT_LOCAL_STORAGE_DIR`·
+      `GAIT_BRIDGE_BASE_URL` 이 한 묶음으로 사라집니다
+- [ ] 최종 **queue/worker 구조 정리** — 지금은 backend 자체 Celery 앱(`gait` 큐)이고
+      `daengs_life` 것과 브로커만 공유합니다 (D-021 의 접점을 안 넓히려고)
+- [ ] **gait FastAPI 제거 및 worker-only 전환** — `gait-analysis` 서비스·`gait-serve`
+      진입점·nginx `/gait/` 블록을 걷어냅니다. 옛 기록(`gait-data` 볼륨의 JSON)을
+      어떻게 할지 먼저 정해야 합니다

@@ -20,26 +20,36 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
-from daengs_backend.models.walk import Walk, WalkPet, WalkPointChunk
 from daengs_backend.models.refresh_token import RefreshToken
+from daengs_backend.models.walk import (
+    WALK_ANALYSIS_STATES,
+    Walk,
+    WalkAnalysis,
+    WalkCellophaneSheet,
+    WalkPet,
+    WalkPointChunk,
+)
 
 __all__ = [
-    "GAIT_STATUSES",
-    "GaitRecord",
     "ADMIN_ROLES",
-    "CRAWL_STATUSES",
-    "CRAWL_TRIGGERS",
-    "CrawlRun",
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
+    "CRAWL_STATUSES",
+    "CRAWL_TRIGGERS",
+    "GAIT_STATUSES",
+    "PET_BIRTH_DATE_KINDS",
+    "PET_SEXES",
+    "WALK_ANALYSIS_STATES",
     "AdminUser",
     "AppUser",
     "Base",
-    "PET_BIRTH_DATE_KINDS",
-    "PET_SEXES",
+    "CrawlRun",
+    "GaitRecord",
     "Pet",
     "RefreshToken",
     "Walk",
+    "WalkAnalysis",
+    "WalkCellophaneSheet",
     "WalkPet",
     "WalkPointChunk",
 ]

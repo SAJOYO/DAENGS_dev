@@ -17,9 +17,11 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
+    String,
     UniqueConstraint,
     Uuid,
     text,
@@ -29,12 +31,18 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from daengs_backend.models.base import Base
 
+WALK_ANALYSIS_STATES = ("collecting", "derived")
+
 
 class Walk(Base):
     __tablename__ = "walks"
 
     __table_args__ = (
         CheckConstraint("ended_at >= started_at", name="walks_time_order"),
+        CheckConstraint(
+            "analysis_state IN ('collecting','derived')",
+            name="walks_analysis_state_check",
+        ),
         # **재시도가 안전해야 합니다.** 앱은 네트워크가 끊기면 다음에 다시 올리는데,
         # 그때 같은 산책이 두 건이 되면 안 됩니다.
         UniqueConstraint(
@@ -67,6 +75,16 @@ class Walk(Base):
     is_day: Mapped[bool | None] = mapped_column(Boolean)
     temperature_c: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
 
+    # 좌표 입력을 더 받을 수 있는지 나타냅니다. 계산 세대는 아래 WalkAnalysis가 따로
+    # 가지므로, 새 정책으로 재분석한다고 이 값을 되돌리지 않습니다.
+    # 기존 DB migration은 배포 후 수동 적용하므로 평소 select(Walk)에서는 뺀다.
+    # finalize 서비스는 migration 적용 후 undefer해 행 잠금과 같이 읽어야 한다.
+    analysis_state: Mapped[str] = mapped_column(
+        String(16),
+        server_default=text("'collecting'"),
+        deferred=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )
@@ -75,6 +93,12 @@ class Walk(Base):
         back_populates="walk",
         cascade="all, delete-orphan",
         order_by="WalkPointChunk.seq_from",
+    )
+
+    analyses: Mapped[list["WalkAnalysis"]] = relationship(
+        back_populates="walk",
+        cascade="all, delete-orphan",
+        order_by="WalkAnalysis.derived_at",
     )
 
     # 그 산책에 나간 아이들. 순서는 pet_id 로 고정합니다 — 목록이 새로고침할 때마다
@@ -136,6 +160,149 @@ class WalkPointChunk(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
     walk: Mapped[Walk] = relationship(back_populates="points")
+
+
+class WalkAnalysis(Base):
+    """봉인된 한 입력을 한 Walk 계산 세대로 해석한 불변 결과."""
+
+    __tablename__ = "walk_analyses"
+
+    __table_args__ = (
+        CheckConstraint(
+            "input_fingerprint ~ '^sha256:[0-9a-f]{64}$'",
+            name="walk_analyses_input_fingerprint_check",
+        ),
+        CheckConstraint("point_count >= 0", name="walk_analyses_point_count_check"),
+        CheckConstraint(
+            "(point_count = 0 AND terminal_client_seq IS NULL) OR "
+            "(point_count > 0 AND terminal_client_seq = point_count - 1)",
+            name="walk_analyses_terminal_sequence_check",
+        ),
+        CheckConstraint(
+            "facts_record_version > 0 AND calculation_version > 0 "
+            "AND receipt_version > 0 AND observation_version > 0",
+            name="walk_analyses_versions_positive",
+        ),
+        CheckConstraint(
+            "moving_distance_m >= 0 AND moving_s >= 0 AND stop_count >= 0",
+            name="walk_analyses_summary_nonnegative",
+        ),
+        CheckConstraint("jsonb_typeof(facts) = 'object'", name="walk_analyses_facts_object"),
+        CheckConstraint(
+            "jsonb_typeof(measurement_receipt) = 'object'",
+            name="walk_analyses_receipt_object",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(motion_events) = 'array'",
+            name="walk_analyses_events_array",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(micro_observations) = 'array'",
+            name="walk_analyses_observations_array",
+        ),
+        UniqueConstraint(
+            "walk_id",
+            "input_fingerprint",
+            "facts_record_version",
+            "calculation_version",
+            "receipt_version",
+            "observation_version",
+            name="walk_analyses_identity_unique",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    walk_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("walks.id", ondelete="CASCADE"),
+    )
+    input_fingerprint: Mapped[str] = mapped_column(String(71))
+    point_count: Mapped[int] = mapped_column(Integer)
+    terminal_client_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    facts_record_version: Mapped[int] = mapped_column(Integer)
+    calculation_version: Mapped[int] = mapped_column(Integer)
+    receipt_version: Mapped[int] = mapped_column(Integer)
+    observation_version: Mapped[int] = mapped_column(Integer)
+
+    # 목록·집계가 먼저 요구할 세 값만 밖으로 꺼냅니다. 전체 계약은 JSONB가 보존합니다.
+    moving_distance_m: Mapped[int] = mapped_column(Integer)
+    moving_s: Mapped[int] = mapped_column(Integer)
+    stop_count: Mapped[int] = mapped_column(Integer)
+
+    facts: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    measurement_receipt: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    motion_events: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    micro_observations: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+
+    derived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("NOW()"),
+    )
+
+    walk: Mapped[Walk] = relationship(back_populates="analyses")
+    cellophane_sheets: Mapped[list["WalkCellophaneSheet"]] = relationship(
+        back_populates="analysis",
+        cascade="all, delete-orphan",
+        order_by="WalkCellophaneSheet.paint_fp",
+    )
+
+
+class WalkCellophaneSheet(Base):
+    """한 분석 결과를 특정 Paint spec으로 칠한 compact canonical sheet."""
+
+    __tablename__ = "walk_cellophane_sheets"
+
+    __table_args__ = (
+        CheckConstraint(
+            "sheet_schema_version > 0 AND paint_version > 0",
+            name="walk_cellophane_versions_positive",
+        ),
+        CheckConstraint(
+            "radius_u > 0 AND sample_step_m > 0",
+            name="walk_cellophane_spec_positive",
+        ),
+        CheckConstraint(
+            "paint_fp <> '' AND grid_version <> '' AND profile <> '' AND profile_fp <> ''",
+            name="walk_cellophane_identity_nonempty",
+        ),
+        CheckConstraint("cell_count >= 0", name="walk_cellophane_cell_count_check"),
+        CheckConstraint(
+            "sheet_fingerprint ~ '^sha256:[0-9a-f]{64}$'",
+            name="walk_cellophane_fingerprint_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(payload) = 'object'",
+            name="walk_cellophane_payload_object",
+        ),
+    )
+
+    analysis_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("walk_analyses.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    paint_fp: Mapped[str] = mapped_column(String(128), primary_key=True)
+    sheet_schema_version: Mapped[int] = mapped_column(Integer)
+    paint_version: Mapped[int] = mapped_column(Integer)
+    grid_version: Mapped[str] = mapped_column(String(64))
+    radius_u: Mapped[float] = mapped_column(Float)
+    profile: Mapped[str] = mapped_column(String(128))
+    profile_fp: Mapped[str] = mapped_column(String(128))
+    sample_step_m: Mapped[float] = mapped_column(Float)
+    cell_count: Mapped[int] = mapped_column(Integer)
+    sheet_fingerprint: Mapped[str] = mapped_column(String(71))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    derived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("NOW()"),
+    )
+
+    analysis: Mapped[WalkAnalysis] = relationship(back_populates="cellophane_sheets")
 
 
 class WalkPet(Base):

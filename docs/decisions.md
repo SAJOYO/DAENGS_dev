@@ -2258,3 +2258,32 @@ backend→life 접점이 넓어진다. 같은 Redis 브로커에 **앱 인스턴
   값은 `pets.id` UUID FK 를 만족하지 못한다.
 - ⚠️ **앱 전환(#64) 전까지 무인증 `/gait/*` 가 열려 있다.** 완화는 앱 쪽
   "비공개 테스트 빌드에서 끄기"이고, nginx location 제거는 전환 검증 뒤다.
+
+
+---
+
+## D-044
+### 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다
+
+`walks.analysis_state`는 원본 입력의 변경 가능성만 표현합니다. `collecting`에서는 좌표와
+계산 입력을 받을 수 있고, `derived`는 현재 입력이 봉인됐다는 뜻입니다. 계산 정책이 바뀌어
+재분석하더라도 원본을 다시 여는 것이 아니므로 상태를 `collecting`으로 되돌리지 않습니다.
+동기 계산을 한 트랜잭션에서 수행하는 동안에는 별도 `finalizing`·`failed` 상태를 만들지 않습니다.
+
+계산 결과의 identity는 `walk_analyses`가 소유합니다. 같은 `walk_id`라도 입력 fingerprint나
+Facts·Receipt·Observation 버전이 다르면 새 행으로 쌓고 이전 결과를 덮어쓰지 않습니다.
+자주 목록·집계할 `moving_distance_m`, `moving_s`, `stop_count`만 컬럼으로 꺼내며 전체
+canonical 계약은 JSONB로 함께 보존합니다. Event와 Observation도 실제 개별 행 질의가 생기기
+전까지는 정렬된 JSON 배열로 둡니다.
+
+Paint는 Facts 계산과 독립된 세대입니다. 한 `walk_analysis` 아래
+`walk_cellophane_sheets (analysis_id, paint_fp)`를 여러 장 둘 수 있게 해, Paint만 바뀌었을 때
+Facts·Receipt를 복제하지 않습니다. sheet payload는 storage schema v1의 정렬된
+`[q, r, occupancy_s, peak]` 배열과 전체 SHA-256 fingerprint를 가집니다. 현재 제품에는 한
+산책의 장 전체를 쓰고 읽는 경로만 있으므로 셀당 한 행은 만들지 않습니다. 특정 셀 검색이나
+셀별 누적 집계가 실제 소비자로 생기면 canonical JSONB를 유지한 채 검색용 index를 별도로
+물질화합니다.
+
+원본 좌표 보관은 기존 결정대로 계정 삭제 시까지 유지합니다. Geo의 purge 전제나 셀 행 저장
+형태를 운영 저장소에 그대로 복제하지 않습니다. finalize API는 다음 PR에서 Walk 행 잠금 아래
+분석·sheet 저장과 `derived` 전환을 한 트랜잭션으로 묶습니다.

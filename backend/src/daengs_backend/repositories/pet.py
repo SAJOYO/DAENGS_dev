@@ -6,6 +6,7 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 
 import uuid
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,7 @@ __all__ = [
     "add",
     "count_for_owner",
     "delete",
+    "delete_all_for_owner",
     "get_owned",
     "list_for_owner",
     "owned_ids",
@@ -77,3 +79,15 @@ def add(session: AsyncSession, pet: Pet) -> Pet:
 
 async def delete(session: AsyncSession, pet: Pet) -> None:
     await session.delete(pet)
+
+
+async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """탈퇴한 회원의 강아지를 전부 지웁니다.
+
+    산책은 먼저 지워야 합니다. 강아지를 먼저 지우면 ``walk_pets`` 연결만 CASCADE로
+    사라지고, 사람 소유인 ``walks``와 그 좌표는 그대로 남기 때문입니다.
+    """
+    result = await session.execute(
+        sql_delete(Pet).where(Pet.app_user_id == app_user_id)
+    )
+    return result.rowcount or 0

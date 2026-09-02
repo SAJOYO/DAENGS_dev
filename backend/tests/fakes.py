@@ -290,12 +290,23 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         for walk in store.walks:
             walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
 
+    async def pet_delete_all_for_owner(session, app_user_id):
+        owned_ids = {pet.id for pet in store.pets if pet.app_user_id == app_user_id}
+        store.pets = [pet for pet in store.pets if pet.app_user_id != app_user_id]
+        for walk in store.walks:
+            walk.pets = [link for link in walk.pets if link.pet_id not in owned_ids]
+        for user in store.app_users.values():
+            if user.primary_pet_id in owned_ids:
+                user.primary_pet_id = None
+        return len(owned_ids)
+
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
+    monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
 
     # -- walks -------------------------------------------------------------
     async def walk_list_for_owner(session, app_user_id):
@@ -336,6 +347,11 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             store.walks.remove(walk)
         return len(solo)
 
+    async def walk_delete_all_for_owner(session, app_user_id):
+        owned = [walk for walk in store.walks if walk.app_user_id == app_user_id]
+        store.walks = [walk for walk in store.walks if walk.app_user_id != app_user_id]
+        return len(owned)
+
     def walk_add(session, walk):
         if walk.id is None:
             walk.id = uuid.uuid4()
@@ -353,6 +369,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )
+    monkeypatch.setattr(walk_repo, "delete_all_for_owner", walk_delete_all_for_owner)
     monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
 
     return store

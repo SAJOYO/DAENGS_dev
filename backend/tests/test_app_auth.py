@@ -8,10 +8,23 @@
 "검증을 통과했을 때 무슨 일이 일어나는가"만 보려는 것이 더 큽니다.
 """
 
+import asyncio
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 import pytest
+from fakes import (
+    FakeAdmin,
+    FakeAppUser,
+    FakePet,
+    FakeSession,
+    FakeWalk,
+    FakeWalkPet,
+    FakeWalkPointChunk,
+    Store,
+    install,
+)
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
@@ -27,9 +40,27 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
 from daengs_backend.services import app_auth as app_auth_service
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
 
 KAKAO_ID = 987654321
+
+
+def _walk(owner_id: uuid.UUID, pet_id: uuid.UUID) -> FakeWalk:
+    now = datetime(2026, 9, 2, tzinfo=UTC)
+    return FakeWalk(
+        app_user_id=owner_id,
+        client_session_id=uuid.uuid4(),
+        started_at=now,
+        ended_at=now,
+        pets=[FakeWalkPet(pet_id=pet_id)],
+        points=[
+            FakeWalkPointChunk(
+                seq_from=0,
+                seq_to=0,
+                point_count=1,
+                payload={"v": 1, "pts": [[0, 0, 0, 37.5, 127.0, None, 0]]},
+            )
+        ],
+    )
 
 
 @pytest.fixture
@@ -292,6 +323,82 @@ class TestSessionFlow:
         assert client.post(
             "/auth/app/refresh", json={"refresh_token": refresh}
         ).status_code == 401
+
+    def test_탈퇴하면_내_강아지와_산책_좌표만_지운다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        mine = FakePet(app_user_id=owner.id, name="네옹", breed="poodle")
+        store.pets.append(mine)
+        my_walk = _walk(owner.id, mine.id)
+        store.walks.append(my_walk)
+
+        other = store.add_app_user(FakeAppUser(kakao_id=111))
+        theirs = FakePet(app_user_id=other.id, name="두찌", breed="maltese")
+        store.pets.append(theirs)
+        their_walk = _walk(other.id, theirs.id)
+        store.walks.append(their_walk)
+
+        response = client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        )
+
+        assert response.status_code == 204
+        assert mine not in store.pets
+        assert my_walk not in store.walks
+        # 좌표는 산책 소유 행 안에 있으므로 산책과 함께 도달 불가능해집니다.
+        assert all(walk.id != my_walk.id for walk in store.walks)
+        assert theirs in store.pets
+        assert their_walk in store.walks
+        assert their_walk.points
+
+    def test_탈퇴_뒤_재로그인해도_강아지와_산책은_복원되지_않는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="네옹", breed="poodle")
+        store.pets.append(pet)
+        store.walks.append(_walk(owner.id, pet.id))
+
+        assert client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        ).status_code == 204
+        assert _login(client).status_code == 200
+
+        assert store.app_users[KAKAO_ID].status == "active"
+        assert [row for row in store.pets if row.app_user_id == owner.id] == []
+        assert [row for row in store.walks if row.app_user_id == owner.id] == []
+
+    def test_탈퇴_데이터_삭제가_실패하면_전체를_롤백한다(
+        self, store: Store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user = store.add_app_user(
+            FakeAppUser(kakao_id=KAKAO_ID, email_enc=b"cipher", email_hash="hash")
+        )
+        session = FakeSession()
+
+        async def delete_walks(_session, _app_user_id):
+            return 1
+
+        async def fail_pet_delete(_session, _app_user_id):
+            raise RuntimeError("pet delete failed")
+
+        monkeypatch.setattr(
+            app_auth_service.walk_repo, "delete_all_for_owner", delete_walks
+        )
+        monkeypatch.setattr(
+            app_auth_service.pet_repo, "delete_all_for_owner", fail_pet_delete
+        )
+
+        with pytest.raises(RuntimeError, match="pet delete failed"):
+            asyncio.run(app_auth_service.withdraw(session, app_user_id=user.id))
+
+        assert session.rollbacks == 1
+        assert session.commits == 0
+        assert user.status == "active"
+        assert user.email_enc == b"cipher"
 
 
 class TestSubjectSeparation:

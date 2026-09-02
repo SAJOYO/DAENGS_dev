@@ -243,9 +243,13 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             )
         )
 
+    async def app_delete(session, user):
+        store.app_users.pop(user.kakao_id, None)
+
     monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
     monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
     monkeypatch.setattr(app_user_repo, "create", app_create)
+    monkeypatch.setattr(app_user_repo, "delete", app_delete)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)
@@ -292,9 +296,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
+    async def pet_delete_for_owner(session, app_user_id):
+        mine = [p for p in store.pets if p.app_user_id == app_user_id]
+        for pet in mine:
+            store.pets.remove(pet)
+            # walk_pets 의 ON DELETE CASCADE 대역 — 산책 자체는 남깁니다.
+            for walk in store.walks:
+                walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
+        return len(mine)
+
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
+    monkeypatch.setattr(pet_repo, "delete_for_owner", pet_delete_for_owner)
 
     # -- walks -------------------------------------------------------------
     async def walk_list_for_owner(session, app_user_id):
@@ -341,6 +355,14 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.walks.append(walk)
         return walk
 
+    async def walk_delete_for_owner(session, app_user_id):
+        # 좌표·나간 아이는 FakeWalk 가 리스트로 들고 있어 산책과 같이 사라집니다
+        # (진짜 DB 의 walk_points · walk_pets 캐스케이드와 같은 결과).
+        mine = [w for w in store.walks if w.app_user_id == app_user_id]
+        for walk in mine:
+            store.walks.remove(walk)
+        return len(mine)
+
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
@@ -352,6 +374,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )
+    monkeypatch.setattr(walk_repo, "delete_for_owner", walk_delete_for_owner)
     monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
 
     return store

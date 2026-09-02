@@ -65,3 +65,13 @@ async def create(
     # 여기서 flush 해 둡니다 (commit 은 아닙니다 — 롤백은 그대로 됩니다).
     await session.flush()
     return user
+
+
+async def delete(session: AsyncSession, user: AppUser) -> None:
+    """회원 한 줄을 지웁니다. 탈퇴의 마지막 단계입니다.
+
+    **자식 행은 먼저 비우고 부르세요.** 강아지·산책은 DB 캐스케이드가 따라 지우긴
+    하지만, 그 수를 세어 로그에 남기는 것은 services 가 하므로 순서가 거꾸로면
+    "몇 건 지웠는지"를 모릅니다. refresh_tokens 도 같습니다.
+    """
+    await session.delete(user)

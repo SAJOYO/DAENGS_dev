@@ -104,6 +104,19 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
     return result.rowcount or 0
 
 
+async def delete_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """한 회원의 산책을 **좌표까지 전부** 지웁니다. 탈퇴에서 부릅니다.
+
+    좌표(`walk_points`)와 나간 아이(`walk_pets`)는 DB 의 `ON DELETE CASCADE` 가
+    따라 지웁니다 (06_walks.sql). 여기서 점을 하나씩 지우지 않는 이유입니다 —
+    산책 하나에 수천 점이라 ORM 으로 돌면 탈퇴 한 번이 분 단위가 됩니다.
+
+    :returns: 지운 산책 수.
+    """
+    result = await session.execute(delete(Walk).where(Walk.app_user_id == app_user_id))
+    return result.rowcount or 0
+
+
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk

@@ -24,7 +24,9 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import REFRESH_TTL
 from daengs_backend.models import AppUser
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
+from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.services import session as session_service
 from daengs_backend.services.session import (
     InvalidRefreshTokenError,
@@ -142,11 +144,10 @@ async def login_with_kakao(
         logger.warning("로그인 거부: 정지된 회원 (app_user=%s, ip=%s)", user.id, ip)
         raise SuspendedError
     elif user.status == "withdrawn":
-        # **탈퇴했다가 다시 로그인한 경우 되살립니다.** 카카오 회원번호가 같으므로
-        # 새 행을 만들 수 없고(UNIQUE), 거부하면 그 사람은 영영 못 들어옵니다.
-        # 탈퇴 때 개인정보를 지웠으므로 아래 _sync_profile 이 다시 채웁니다.
-        # created_at 은 최초 가입 시각으로 남습니다 — 재가입 시각이 필요해지면
-        # 그때 컬럼을 더하세요.
+        # **예전 방식으로 탈퇴한 행**입니다. 지금 withdraw 는 행을 지우므로 새로
+        # 생기지 않지만, 2026-09-02 이전에 탈퇴한 회원의 행이 DB 에 남아 있을 수
+        # 있습니다. 카카오 회원번호가 UNIQUE 라 새 행을 만들 수 없고, 거부하면 그
+        # 사람은 영영 못 들어옵니다. 되살리되 개인정보는 _sync_profile 이 다시 채웁니다.
         user.status = "active"
         logger.info("탈퇴 회원 재가입 (app_user=%s)", user.id)
         await _sync_profile(user, identity)
@@ -227,29 +228,45 @@ async def logout(session: AsyncSession, *, refresh_token: str) -> None:
 
 
 async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
-    """탈퇴. 개인정보를 파기하고 세션을 전부 끊습니다. 행은 남깁니다.
+    """탈퇴. 강아지·산책(좌표 포함)·세션을 지우고 **회원 행까지 지웁니다.**
 
-    **행을 지우지 않는 이유**는 `kakao_id` 로 "이미 탈퇴한 사람"을 알아보기 위해서입니다.
-    지우면 재가입할 때 완전히 새 사람이 되고, 운영 데이터의 참조도 끊깁니다.
+    공개 삭제 안내(daengs-legal `delete.html`)가 "계정 정보 · 반려동물 · 산책 기록과
+    좌표 전부 · 세션이 바로 삭제된다"고 약속합니다. 구글은 그 문서와 데이터 안전
+    양식을 앱 동작과 대조하고, 개인정보보호법도 탈퇴 뒤의 목적 없는 보관을 막습니다.
+    그래서 소프트 삭제(status='withdrawn' + 암호문 비우기)에서 진짜 삭제로 바꿨습니다 —
+    예전 방식은 pets·walks 의 `ON DELETE CASCADE` 가 한 번도 발동하지 않아 좌표가
+    전부 남았고, 재로그인하면 그대로 되살아났습니다 (2026-09-02 출시 점검).
+
+    **순서가 있습니다.** 산책 → 강아지 → 세션 → 회원. 회원 행만 지워도 DB 캐스케이드가
+    나머지를 따라 지우지만, 몇 건을 지웠는지 로그에 남기려면 먼저 세어야 합니다.
+    `walk_points`·`walk_pets` 는 walks 의 캐스케이드가, `primary_pet_id` 는 회원 행이
+    같이 사라지므로 따로 손대지 않습니다.
+
+    같은 카카오 계정으로 다시 로그인하면 **새 회원**이 됩니다 (created_at 도 새로).
+    "이미 탈퇴했던 사람"을 서버가 기억하지 않는 것이 의도입니다 — 기억하려면
+    kakao_id 를 남겨야 하는데 그것도 개인정보입니다.
 
     **카카오 연결 끊기(unlink)는 여기서 하지 않습니다.** 앱이 SDK 로 합니다 —
     서버가 하려면 어드민 키를 둬야 하는데, 그 키 하나로 전 회원을 조작할 수 있습니다.
-    그래서 앱이 unlink 에 실패해도 우리 쪽 탈퇴는 그대로 진행됩니다. 사용자가 카카오
-    설정에서 연결된 앱 목록을 보면 남아 있을 수 있는데, 다시 로그인하면 위
-    login_with_kakao 가 되살립니다.
+    그래서 앱이 unlink 에 실패해도 우리 쪽 탈퇴는 그대로 진행됩니다.
+
+    **access 토큰은 만료(5분)까지 살아 있습니다.** `CurrentAppUser` 가 DB 를 보지 않아서
+    그렇습니다 — 회원 행이 없으니 그 토큰으로 할 수 있는 것은 빈 목록 조회뿐입니다.
     """
     user = await app_user_repo.get_by_id(session, app_user_id)
     if user is None:
         # 이미 없습니다. 탈퇴는 여러 번 불러도 같은 결과여야 합니다.
         return
 
-    user.status = "withdrawn"
-    # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
-    user.email_enc = None
-    user.email_hash = None
-    user.phone_enc = None
-    user.name_enc = None
-
-    count = await session_service.drop_all(session, SubjectType.APP, user.id)
+    walks = await walk_repo.delete_for_owner(session, user.id)
+    pets = await pet_repo.delete_for_owner(session, user.id)
+    sessions = await session_service.drop_all(session, SubjectType.APP, user.id)
+    await app_user_repo.delete(session, user)
     await session.commit()
-    logger.info("앱 회원 탈퇴 (app_user=%s, 끊은 세션 %d개)", user.id, count)
+    logger.info(
+        "앱 회원 탈퇴 (app_user=%s, 산책 %d건 · 강아지 %d마리 · 세션 %d개 삭제)",
+        app_user_id,
+        walks,
+        pets,
+        sessions,
+    )

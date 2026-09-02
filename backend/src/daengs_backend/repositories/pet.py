@@ -77,3 +77,15 @@ def add(session: AsyncSession, pet: Pet) -> Pet:
 
 async def delete(session: AsyncSession, pet: Pet) -> None:
     await session.delete(pet)
+
+
+async def delete_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """한 회원의 강아지를 **전부** 지웁니다. 탈퇴에서 부릅니다.
+
+    산책과의 조인 행(`walk_pets`)은 DB 의 `ON DELETE CASCADE` 가 따라 지웁니다.
+    산책 자체는 여기서 안 건드립니다 — 그건 walk 리포지토리의 몫입니다.
+
+    :returns: 지운 마릿수.
+    """
+    result = await session.execute(delete(Pet).where(Pet.app_user_id == app_user_id))
+    return result.rowcount or 0

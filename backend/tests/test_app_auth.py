@@ -27,7 +27,17 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
 from daengs_backend.services import app_auth as app_auth_service
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
+from fakes import (
+    FakeAdmin,
+    FakeAppUser,
+    FakePet,
+    FakeSession,
+    FakeWalk,
+    FakeWalkPet,
+    FakeWalkPoint,
+    Store,
+    install,
+)
 
 KAKAO_ID = 987654321
 
@@ -274,24 +284,60 @@ class TestSessionFlow:
     def test_로그인하지_않으면_이름표를_못_고친다(self, client: TestClient) -> None:
         assert client.patch("/auth/app/me", json={"room_name": "남의방"}).status_code == 401
 
-    def test_탈퇴하면_개인정보가_지워지고_세션이_끊긴다(
+    def test_탈퇴하면_회원_강아지_산책_세션이_전부_지워진다(
         self, client: TestClient, store: Store
     ) -> None:
+        """공개 삭제 안내(delete.html)가 약속한 그대로입니다 — 계정 · 반려동물 ·
+        산책(좌표 포함) · 세션. 하나라도 남으면 데이터 안전 양식과 어긋납니다."""
         body = _login(client).json()
         access, refresh = body["access_token"], body["refresh_token"]
+        me = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=me.id, name="네옹", breed="toy_poodle_light_brown")
+        store.pets.append(pet)
+        store.walks.append(
+            FakeWalk(
+                app_user_id=me.id,
+                client_session_id=uuid.uuid4(),
+                started_at=None,
+                ended_at=None,
+                points=[FakeWalkPoint(1, 0, None, "37.4979", "127.0276")],
+                pets=[FakeWalkPet(pet_id=pet.id)],
+            )
+        )
+        # 남의 것은 남아야 합니다.
+        other = store.add_app_user(FakeAppUser(kakao_id=KAKAO_ID + 1))
+        store.pets.append(FakePet(app_user_id=other.id, name="두찌", breed="shiba"))
 
         res = client.post(
             "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
         )
 
         assert res.status_code == 204
-        user = store.app_users[KAKAO_ID]
-        assert user.status == "withdrawn"
-        assert user.email_enc is None and user.email_hash is None
-        # 세션도 같이 끊겨야 합니다 — status 는 '새 로그인'만 막습니다.
+        assert KAKAO_ID not in store.app_users
+        assert [p.name for p in store.pets] == ["두찌"]
+        assert store.walks == []
         assert client.post(
             "/auth/app/refresh", json={"refresh_token": refresh}
         ).status_code == 401
+
+    def test_탈퇴는_두_번_불러도_204(self, client: TestClient) -> None:
+        """앱이 응답을 못 받고 재시도할 수 있습니다. 두 번째가 404 면 앱은 실패로 봅니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+
+    def test_탈퇴_뒤_다시_로그인하면_새_회원이다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """되살리지 않습니다. 되살리면 "지웠다"는 말이 거짓이 됩니다."""
+        access = _login(client).json()["access_token"]
+        old_id = store.app_users[KAKAO_ID].id
+        client.post("/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"})
+
+        assert _login(client).status_code == 200
+        assert store.app_users[KAKAO_ID].id != old_id
 
 
 class TestSubjectSeparation:

@@ -149,7 +149,7 @@ async def get_record(
 async def delete_record(
     user: CurrentAppUser, session: Session, record_id: uuid.UUID
 ) -> GaitDeleteResponse:
-    """soft delete → cleanup 태스크가 GCS object 를 지웁니다."""
+    """원본·overlay 정리가 성공한 뒤 기록을 지웁니다."""
     try:
         record = await gait_service.soft_delete(session, user.app_user_id, record_id)
     except gait_service.NotFoundError:

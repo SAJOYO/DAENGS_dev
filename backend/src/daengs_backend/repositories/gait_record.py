@@ -29,10 +29,35 @@ def _owned(app_user_id: uuid.UUID):
 
 
 async def get_owned(
-    session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    record_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> GaitRecord | None:
     stmt = _owned(app_user_id).where(GaitRecord.id == record_id)
+    if for_update:
+        stmt = stmt.with_for_update(of=GaitRecord)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def list_for_pets_for_update(
+    session: AsyncSession, pet_ids: list[uuid.UUID]
+) -> list[GaitRecord]:
+    """반려견 삭제 전에 정리할 모든 기록을 잠급니다 (soft-deleted 행 포함).
+
+    소유권은 호출자가 잠근 pets 행으로 이미 확인했습니다. deleted_at 으로 거르지 않는
+    이유는 이전 cleanup 실패 뒤 남은 행도 이번 재시도에서 반드시 정리해야 해서입니다.
+    """
+    if not pet_ids:
+        return []
+    stmt = (
+        select(GaitRecord)
+        .where(GaitRecord.pet_id.in_(pet_ids))
+        .order_by(GaitRecord.id)
+        .with_for_update()
+    )
+    return list((await session.execute(stmt)).scalars())
 
 
 async def find_by_storage_key(

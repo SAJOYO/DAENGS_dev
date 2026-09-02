@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
@@ -231,6 +232,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
                 return user
         return None
 
+    async def app_get_active_for_update(session, app_user_id):
+        user = await app_get_by_id(session, app_user_id)
+        return user if user is not None and user.status == "active" else None
+
     async def app_create(session, **kw):
         # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
         # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
@@ -249,6 +254,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
     monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
+    monkeypatch.setattr(
+        app_user_repo, "get_active_for_update", app_get_active_for_update
+    )
     monkeypatch.setattr(app_user_repo, "create", app_create)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
@@ -265,7 +273,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def pet_list_for_owner(session, app_user_id):
         return [p for p in store.pets if p.app_user_id == app_user_id]
 
-    async def pet_get_owned(session, app_user_id, pet_id):
+    async def pet_get_owned(session, app_user_id, pet_id, *, for_update=False):
         return next(
             (p for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
             None,
@@ -304,12 +312,24 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return len(owned_ids)
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
+    monkeypatch.setattr(
+        pet_repo, "list_for_owner_for_update", pet_list_for_owner
+    )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
+
+    # D-043 gait 행은 별도 focused tests 가 대역을 넣습니다. 일반 pet/auth 테스트에는
+    # 보행 기록이 없으므로 빈 잠금 결과를 돌려 storage 설정과 무관하게 둡니다.
+    async def gait_list_for_pets_for_update(session, pet_ids):
+        return []
+
+    monkeypatch.setattr(
+        gait_repo, "list_for_pets_for_update", gait_list_for_pets_for_update
+    )
 
     # -- walks -------------------------------------------------------------
     async def walk_list_for_owner(session, app_user_id):

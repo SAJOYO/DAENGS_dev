@@ -63,6 +63,16 @@ def build_object_key(pet_id: uuid.UUID, *, kind: str, source_file: str) -> str:
     return f"gait/{pet_id}/{kind}/{uuid.uuid4().hex}{suffix}"
 
 
+def build_overlay_object_key(pet_id: uuid.UUID, record_id: uuid.UUID) -> str:
+    """워커 overlay 의 결정적 키.
+
+    업로드는 성공했지만 마지막 DB commit 이 실패해도 pet_id 와 record_id 만으로 정리
+    대상을 다시 계산할 수 있어야 합니다. 원본 티켓처럼 임의 UUID 를 새로 만들면 그
+    실패 창에서 키가 DB 에 남지 않아 object 가 영구 고아가 됩니다.
+    """
+    return f"gait/{pet_id}/overlay/{record_id.hex}.mp4"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""
@@ -104,7 +114,6 @@ class LocalBridgeStorage:
         self._base_url = base_url.rstrip("/")
 
     def _path(self, storage_key: str):
-        from pathlib import Path
 
         # key 는 backend 가 만든 `gait/<uuid>/...` 라 조작 위험이 없지만, 방어적으로
         # 루트 밖으로 못 나가게 확인합니다.
@@ -200,7 +209,15 @@ class GcsStorage:
 
     def delete(self, storage_key):
         # 없는 것을 지워도 실패로 보지 않습니다 (idempotent — 재시도·중복 정리 대비).
-        self._bucket().blob(storage_key).delete(if_generation_match=None)
+        try:
+            self._bucket().blob(storage_key).delete(if_generation_match=None)
+        except Exception as exc:
+            # google.api_core.exceptions.NotFound 를 모듈 import 없이 판별합니다. storage.py
+            # 의 지연-import 경계를 유지하고, google 모듈을 대역으로 쓰는 테스트도 GCS
+            # 패키지 전체를 올리지 않게 하기 위해서입니다.
+            if exc.__class__.__name__ == "NotFound" and getattr(exc, "code", 404) == 404:
+                return
+            raise
 
     def upload_bytes(self, storage_key: str, data: bytes, *, content_type: str) -> None:
         """워커가 overlay 를 올릴 때 씁니다 (앱이 아니라 서버 쪽 업로드라 Signed URL 이

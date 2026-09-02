@@ -13,10 +13,9 @@
 키로 만들기 때문에, 종류를 확인하지 않으면 앱 회원이 관리자 API 에 그대로 들어옵니다.
 `sub` 는 어느 쪽이든 UUID 한 개라 그것만으로는 구분되지 않습니다.
 
-**여기서는 DB 를 보지 않습니다.** access token 을 푸는 것으로 끝입니다 —
-그게 무상태 토큰을 쓰는 이유 전부입니다. 대가로 role 변경과 계정 정지가
-최대 ACCESS_TTL(5분) 늦게 반영됩니다. 지금 DB 상태가 필요한 곳(`GET /auth/me`)은
-admin_id 로 직접 조회하세요.
+관리자 의존성은 DB 를 보지 않습니다. 앱 회원 의존성은 예외입니다 — 탈퇴 뒤에도
+access token 서명은 최대 ACCESS_TTL(5분) 유효하므로, user-owned API 공통 경계에서
+active 상태와 탈퇴 동시 쓰기를 DB 잠금으로 확인합니다.
 """
 
 import logging
@@ -26,7 +25,9 @@ from enum import StrEnum
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from daengs_backend.core.database import get_session
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import (
     AccessClaims,
@@ -34,6 +35,7 @@ from daengs_backend.core.token import (
     TokenInvalidError,
     decode_access_token,
 )
+from daengs_backend.repositories import app_user as app_user_repo
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +189,8 @@ CurrentAdmin = Annotated[Principal, Depends(current_admin)]
 class AppPrincipal:
     """지금 요청을 보낸 앱 회원. **role 이 없습니다.**
 
-    앱 회원은 자기 것만 봅니다 — 권한 등급이 필요한 화면이 없어서 `Perm` 도,
+    앱 회원은 자기 것만 봅니다. 이 객체가 만들어졌다면 DB 에서 active 상태도 확인한
+    것입니다 — 권한 등급이 필요한 화면이 없어서 `Perm` 도,
     `require(...)` 도 쓰지 않습니다. "남의 것을 보려 하는가"는 각 엔드포인트가
     `app_user_id` 로 직접 확인합니다.
     """
@@ -195,7 +198,10 @@ class AppPrincipal:
     app_user_id: uuid.UUID
 
 
-async def current_app_user(request: Request) -> AppPrincipal:
+async def current_app_user(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AppPrincipal:
     """access token 을 풀어 AppPrincipal 로. 못 믿을 토큰이면 401 입니다.
 
     `current_admin` 의 거울상입니다 — 저쪽이 앱 회원 토큰을 막듯이, 여기서는
@@ -217,13 +223,26 @@ async def current_app_user(request: Request) -> AppPrincipal:
         )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
 
+    # access token 은 무상태라 탈퇴 뒤에도 최대 ACCESS_TTL 동안 서명 자체는 유효합니다.
+    # 모든 앱 소유 데이터 API 가 지나는 이 한 곳에서 현재 상태를 확인합니다. FOR UPDATE
+    # 잠금은 탈퇴와 동시 쓰기도 직렬화합니다: 먼저 끝난 쓰기는 탈퇴가 지우고, 탈퇴가
+    # 먼저 끝났으면 아래 조회가 active 행을 찾지 못합니다.
+    user = await app_user_repo.get_active_for_update(session, claims.subject_id)
+    if user is None:
+        logger.warning(
+            "앱 API 에 쓸 수 없는 회원 (subject=%s, ip=%s)",
+            claims.subject_id,
+            _client_host(request),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.")
+
     return AppPrincipal(app_user_id=claims.subject_id)
 
 
 CurrentAppUser = Annotated[AppPrincipal, Depends(current_app_user)]
 
 
-def require(*perms: Perm):  # noqa: ANN201
+def require(*perms: Perm):
     """이 권한들을 **전부** 가져야 통과하는 의존성을 만듭니다.
 
         @router.delete("/admins/{admin_id}")
@@ -240,7 +259,7 @@ def require(*perms: Perm):  # noqa: ANN201
     return dependency
 
 
-def admin_or_app_user(*perms: Perm):  # noqa: ANN201
+def admin_or_app_user(*perms: Perm):
     """관리자와 앱 회원을 **둘 다** 받는 문. 관리자에게만 권한을 요구합니다.
 
         app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])

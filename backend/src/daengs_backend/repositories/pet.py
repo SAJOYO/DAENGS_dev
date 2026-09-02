@@ -19,6 +19,7 @@ __all__ = [
     "delete_all_for_owner",
     "get_owned",
     "list_for_owner",
+    "list_for_owner_for_update",
     "owned_ids",
 ]
 
@@ -38,8 +39,25 @@ async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[
     return list(await session.scalars(stmt))
 
 
+async def list_for_owner_for_update(
+    session: AsyncSession, app_user_id: uuid.UUID
+) -> list[Pet]:
+    """탈퇴가 지울 반려견을 잠가 새 gait FK 참조가 끼어들지 못하게 합니다."""
+    stmt = (
+        select(Pet)
+        .where(Pet.app_user_id == app_user_id)
+        .order_by(Pet.created_at, Pet.id)
+        .with_for_update()
+    )
+    return list(await session.scalars(stmt))
+
+
 async def get_owned(
-    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> Pet | None:
     """**내 것일 때만** 돌려줍니다.
 
@@ -47,6 +65,8 @@ async def get_owned(
     소유자 조건을 이 함수 안에 묶어 둬서, 부르는 쪽이 잊을 자리를 없앱니다.
     """
     stmt = select(Pet).where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
+    if for_update:
+        stmt = stmt.with_for_update()
     return await session.scalar(stmt)
 
 

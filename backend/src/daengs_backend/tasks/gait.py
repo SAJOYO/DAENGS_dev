@@ -55,7 +55,7 @@ def analyze(self, record_id: str) -> None:
 
 @app.task(name="gait.cleanup", bind=True, max_retries=0)
 def cleanup(self, record_id: str) -> None:
-    """soft delete 된 기록의 GCS object 를 지우고 행을 물리 삭제합니다.
+    """삭제 표시된 기록의 storage object 를 지우고 행을 물리 삭제합니다.
 
     사용자 직접 삭제 · 탈퇴 · 보관기간 만료 · confirm 안 온 고아 — 파기가 필요한
     모든 경로가 이 태스크로 모입니다 (services.gait 의 발행부 참고).

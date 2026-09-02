@@ -11,7 +11,6 @@
 import asyncio
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
 
 import pytest
 from fakes import (
@@ -25,12 +24,12 @@ from fakes import (
     Store,
     install,
 )
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from daengs_backend.core.crypto import blind_index, decrypt, encrypt
+from daengs_backend.core.crypto import blind_index, decrypt
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.kakao import (
     KakaoIdentity,
     KakaoIdTokenInvalidError,
@@ -39,6 +38,8 @@ from daengs_backend.core.kakao import (
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
+from daengs_backend.routers import pet as pet_router
+from daengs_backend.routers import walk as walk_router
 from daengs_backend.services import app_auth as app_auth_service
 
 KAKAO_ID = 987654321
@@ -79,7 +80,7 @@ def _fake_kakao(
 ) -> None:
     """검증을 통과한 것으로 칩니다. 개별 테스트가 다시 덮어쓸 수 있습니다."""
 
-    async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+    async def verify(token, *, expected_nonce=None):
         return identity
 
     monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -89,6 +90,8 @@ def _fake_kakao(
 def app() -> FastAPI:
     test_app = FastAPI()
     test_app.include_router(app_auth_router.router)
+    test_app.include_router(pet_router.router)
+    test_app.include_router(walk_router.router)
 
     @test_app.get("/_app_only")
     async def _app_only(user: CurrentAppUser) -> dict[str, str]:
@@ -106,7 +109,7 @@ def client(app: FastAPI, store: Store) -> TestClient:
     return TestClient(app)
 
 
-def _login(client: TestClient, id_token: str = "any-id-token"):  # noqa: ANN202
+def _login(client: TestClient, id_token: str = "any-id-token"):
     return client.post("/auth/app/kakao", json={"id_token": id_token})
 
 
@@ -162,7 +165,7 @@ class TestKakaoLogin:
     ) -> None:
         """**email_hash 가 UNIQUE 라 빈 문자열을 넣으면 두 번째 회원부터 막힙니다.**"""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             return KakaoIdentity(kakao_id=KAKAO_ID, email=None, nonce=None)
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -199,7 +202,7 @@ class TestKakaoLogin:
     def test_못_믿을_id_token_이면_401(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoIdTokenInvalidError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -211,7 +214,7 @@ class TestKakaoLogin:
         """**401 로 뭉개면 안 됩니다.** 앱이 '로그인 실패'로 알아듣고 다시 시도하는데,
         다시 해도 똑같이 실패합니다."""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoUnavailableError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -324,6 +327,52 @@ class TestSessionFlow:
             "/auth/app/refresh", json={"refresh_token": refresh}
         ).status_code == 401
 
+    def test_탈퇴_뒤_남은_access_token으로_강아지를_만들_수_없다(
+        self, client: TestClient
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+
+        response = client.post(
+            "/app/pets",
+            headers=headers,
+            json={"name": "고아가 될 아이", "breed": "mix"},
+        )
+
+        assert response.status_code == 401
+
+    def test_탈퇴_뒤_남은_access_token으로_산책과_좌표를_만들_수_없다(
+        self, client: TestClient
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+        now = datetime(2026, 9, 2, 5, tzinfo=UTC)
+
+        response = client.post(
+            "/app/walks",
+            headers=headers,
+            json={
+                "client_session_id": str(uuid.uuid4()),
+                "pet_ids": [],
+                "started_at": now.isoformat(),
+                "ended_at": now.isoformat(),
+                "points": [
+                    {
+                        "client_seq": 0,
+                        "chain_index": 0,
+                        "at": now.isoformat(),
+                        "lat": "37.5",
+                        "lng": "127.0",
+                        "is_mock": False,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 401
+
     def test_탈퇴하면_내_강아지와_산책_좌표만_지운다(
         self, client: TestClient, store: Store
     ) -> None:
@@ -389,7 +438,7 @@ class TestSessionFlow:
             app_auth_service.walk_repo, "delete_all_for_owner", delete_walks
         )
         monkeypatch.setattr(
-            app_auth_service.pet_repo, "delete_all_for_owner", fail_pet_delete
+            app_auth_service.pet_service, "delete_all_for_owner", fail_pet_delete
         )
 
         with pytest.raises(RuntimeError, match="pet delete failed"):

@@ -199,7 +199,13 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
     (`-manual2`, `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 —
     reload 가 클러스터 무중단 교체입니다).
   - **compose·nginx 설정 바뀜** → `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d` (바뀐 것만 재생성됨)
-  - **`db/migrations/` 추가됨** → 해당 SQL 을 pgvector 컨테이너에서 `-U daengs` 로 수동 실행
+  - **`db/migrations/` 추가됨** → 해당 SQL 을 pgvector 컨테이너에서 `-U daengs` 로 수동 실행.
+    버전 테이블이 없어 **무엇이 적용됐는지 DB 가 기억하지 않습니다** — 로컬 서버와 GCP 에
+    각각 적용해야 하므로 어디까지 했는지는 사람이 기억합니다 (roadmap §2-5)
+  - **코퍼스를 재적재함(`rag load`)** → **GCP 는 바뀌지 않습니다.** 개발 PC 는 로컬 서버 DB 를
+    보고 두 DB 사이에 복제가 없습니다 (roadmap §2-5). 반영하려면 §2 의 덤프를 다시 뜨고
+    §3 ② 의 복원을 다시 돌립니다 — 아직 한 번도 해 본 적이 없어 전용 절차는 쓰지 않았습니다.
+    처음 돌릴 때 걸린 것을 여기에 적으세요
 - **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로

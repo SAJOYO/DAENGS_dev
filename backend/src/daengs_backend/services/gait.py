@@ -143,10 +143,12 @@ async def _cleanup(record_id: uuid.UUID) -> None:
     """
     from sqlalchemy import delete, select
 
-    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.core.database import worker_session
     from daengs_backend.core.storage import get_storage
 
-    async with SessionLocal() as session:
+    # ⚠️ SessionLocal 이 아니라 worker_session 입니다 — 이유는 그 함수 docstring 참고
+    #    (이 함수가 바로 그 버그로 서버에서 실패했습니다).
+    async with worker_session() as session:
         record = (
             await session.execute(select(GaitRecord).where(GaitRecord.id == record_id))
         ).scalar_one_or_none()
@@ -205,9 +207,11 @@ def run_analysis_sync(record_id: str) -> None:
 async def _run_analysis(record_id: uuid.UUID) -> None:
     from sqlalchemy import select
 
-    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.core.database import worker_session
 
-    async with SessionLocal() as session:
+    # ⚠️ SessionLocal 이 아닙니다 — 워커의 두 번째 태스크부터 이벤트 루프가 갈립니다
+    #    (core/database.worker_session docstring).
+    async with worker_session() as session:
         record = (
             await session.execute(select(GaitRecord).where(GaitRecord.id == record_id))
         ).scalar_one_or_none()

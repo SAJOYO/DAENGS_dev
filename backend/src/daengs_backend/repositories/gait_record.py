@@ -35,6 +35,32 @@ async def get_owned(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def find_by_storage_key(
+    session: AsyncSession, storage_key: str, *, status: str | None = None
+) -> GaitRecord | None:
+    """저장 키로 기록을 찾습니다 — **임시 LocalBridge 전용** (D-043).
+
+    ⚠️ **소유권 JOIN 이 없는 유일한 조회입니다. 위 규칙의 의도된 예외입니다.**
+       bridge 는 GCS Signed URL 을 흉내 내는 자리라 인증 헤더를 받지 않습니다
+       (받게 하면 GCS 로 바꿀 때 앱 코드가 또 바뀝니다). 대신 **키 자체가 자격**입니다:
+       키는 backend 가 만든 uuid4 라 추측할 수 없고, 발급받은 사람은 소유자뿐입니다.
+
+       이 함수의 진짜 목적은 **임의 경로 쓰기를 막는 것**입니다. 이게 없으면 bridge 가
+       아무 경로나 받아 줘서, 인증 없이 서버 디스크를 채울 수 있습니다.
+       `status="PENDING"` 을 주면 티켓이 아직 살아 있는 것에만 씁니다 — confirm 뒤에
+       같은 키로 덮어쓰는 것도 막힙니다.
+
+    GCS 로 넘어가면 bridge 와 함께 사라질 함수입니다.
+    """
+    stmt = select(GaitRecord).where(
+        GaitRecord.original_storage_key == storage_key,
+        GaitRecord.deleted_at.is_(None),
+    )
+    if status is not None:
+        stmt = stmt.where(GaitRecord.status == status)
+    return (await session.execute(stmt)).scalars().first()
+
+
 async def list_for_pet(
     session: AsyncSession,
     app_user_id: uuid.UUID,

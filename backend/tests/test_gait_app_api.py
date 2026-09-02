@@ -281,6 +281,54 @@ def test_task_module_imports_without_gait_deps():
     assert "torch" not in sys.modules
 
 
+# ── 임시 bridge 의 자격 검사 (2026-09-02 서버에서 무인증으로 열려 있었습니다) ──
+@pytest.fixture()
+def bridge(client, monkeypatch, tmp_path):
+    """gait_storage=local 로 만들어 bridge 엔드포인트를 켭니다."""
+    from daengs_backend.core.storage import LocalBridgeStorage
+    from daengs_backend.routers import gait as gait_router
+
+    storage = LocalBridgeStorage(str(tmp_path), base_url="")
+    monkeypatch.setattr(gait_router, "_local_bridge", lambda: storage)
+    return storage
+
+
+def test_bridge_upload_rejects_unissued_key(bridge, client, monkeypatch):
+    """**임의 경로로 디스크를 채울 수 없어야 합니다.** 인증 헤더가 없는 자리라,
+    발급된 적 없는 키를 받아 주면 아무나 서버에 파일을 쌓을 수 있습니다."""
+    async def none(session, storage_key, *, status=None):
+        return None
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", none)
+    r = client.put("/app/gait/_bridge/upload/gait/x/original/attacker.mp4", content=b"junk")
+    assert r.status_code == 404
+    assert not list(bridge.local_path("").rglob("*.mp4"))  # 아무것도 안 쓰였습니다
+
+
+def test_bridge_upload_accepts_issued_pending_key(bridge, client, monkeypatch):
+    key = "gait/pet/original/abc.mp4"
+    seen = {}
+
+    async def found(session, storage_key, *, status=None):
+        seen["key"], seen["status"] = storage_key, status
+        return _record(status="PENDING", original_storage_key=key)
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", found)
+    r = client.put(f"/app/gait/_bridge/upload/{key}", content=b"video-bytes")
+    assert r.status_code == 200
+    # PENDING 으로 좁혀 찾습니다 — confirm 뒤 같은 키 덮어쓰기가 막히는 근거입니다.
+    assert seen == {"key": key, "status": "PENDING"}
+    assert bridge.local_path(key).read_bytes() == b"video-bytes"
+
+
+def test_bridge_download_rejects_unissued_key(bridge, client, monkeypatch):
+    async def none(session, storage_key, *, status=None):
+        return None
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", none)
+    assert client.get("/app/gait/_bridge/download/gait/x/original/a.mp4").status_code == 404
+
+
 def test_storage_not_configured_fails_loudly():
     """미설정 저장소는 no-op 이 아니라 명확한 실패입니다 — 조용히 성공하면
     confirm 이 거짓말을 하고 워커가 없는 파일을 받으러 갑니다."""

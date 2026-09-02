@@ -123,7 +123,7 @@ Get-Content db\migrations\2026-09-02_gait_records.sql -Raw |
 # 1) 서버 최상단 .env 에 LocalBridge 를 켜는 값 추가 (오늘 검증용 — GCS 오면 지웁니다)
 #    GAIT_STORAGE=local
 #    GAIT_LOCAL_STORAGE_DIR=/data/gait-bridge
-#    GAIT_BRIDGE_BASE_URL=https://daengback.<도메인>
+#    GAIT_BRIDGE_BASE_URL=http://daengback.weareithero.cloud   # 지금은 평문 http
 
 # 2) backend(새 env·볼륨 반영) + gait-worker 를 띄웁니다.
 docker compose up -d backend                       # GAIT_* env·gait-bridge 볼륨 반영
@@ -139,6 +139,59 @@ docker compose exec nginx nginx -s reload
 ```
 
 이후 5번(앱 #64 전환) → 실기기 검증 → 6번(무인증 `/gait/*` 차단) 순서입니다.
+
+### 2026-09-02(3) — 서버 왕복 통과 ✅ 그리고 그것이 잡아낸 버그 2개
+
+`IMG_8631.mov`(116MB)로 실제 서버에서 왕복했습니다. **인증(401) · 소유권(404) ·
+analyze(201) · 업로드(200) · confirm(UPLOADED) · 별도 워커 분석(DONE) · 조회 · 삭제(404)**
+전부 통과했습니다.
+
+| 항목 | 서버 | 개발 PC |
+| --- | --- | --- |
+| `n_frames_sampled` | 298 | 298 |
+| `n_frames_detected` | 100 | 99 |
+| `n_frames_gait_usable` | 2 | 3 |
+| `video_meta` | `1080x1920 / 30fps` | 같음 |
+
+⚠️ **"완전 일치"가 아니라 ±1 입니다.** 임계값 근처 프레임이 플랫폼 부동소수점 차이
+(Windows torch vs 리눅스 CPU torch)로 갈린 것으로 봅니다. `sampled` 가 정확히 같으므로
+**입력은 동일**합니다 — 원본 `.mov` 를 재인코딩 없이 읽었다는 뜻입니다(#132). 예전
+망가진 기록의 `-1x-1 / sampled 0` 과 대조됩니다.
+
+**이 왕복이 아니었으면 못 잡았을 버그 둘:**
+
+**① 워커의 두 번째 태스크부터 전부 죽습니다 (이벤트 루프)**
+
+```
+RuntimeError: Task <_cleanup() ...> got Future attached to a different loop
+```
+
+`core/database.py` 의 **모듈 전역 엔진**은 풀에 커넥션을 남기고, 그 커넥션은 **그것을
+만든 이벤트 루프**에 묶입니다. Celery 태스크는 `asyncio.run()` 으로 매번 새 루프를 열고
+그 루프는 끝나면 닫히므로, 다음 태스크가 죽은 루프의 커넥션을 꺼내며 터집니다.
+
+**첫 태스크는 항상 성공합니다** — 그래서 분석은 되는데 뒤이은 cleanup 만 실패하는
+모습으로 나타났고, 실제로는 **두 번째 분석 요청도 같은 이유로 죽습니다.** `pool_pre_ping`
+때문에 스택이 ping 에서 끝나 원인이 더 가려집니다.
+
+고침: `core/database.worker_session()` — 태스크마다 `NullPool` 엔진을 새로 만들고
+`finally` 에서 dispose. 워커 경로(`_run_analysis` · `_cleanup`)가 그것을 씁니다.
+테스트로 고정했습니다(`asyncio.run` 두 번 = 엔진 두 개).
+
+**② 임시 bridge 가 무인증 임의 경로 쓰기였습니다**
+
+`PUT /app/gait/_bridge/upload/<아무 경로>` 가 토큰 없이 200 이었습니다. 공개 도메인이라
+**아무나 서버 디스크를 채울 수 있는 상태**로 잠깐 배포됐습니다(오늘 검증 중). "local 은
+신뢰된 환경에서만 켠다"는 전제를 공개 서버에서 켜면서 깨뜨린 것입니다.
+
+고침: 인증 헤더를 요구하지 **않고**(그러면 GCS 전환 때 앱이 또 바뀝니다),
+**backend 가 실제로 발급한 키인지**를 DB 로 확인합니다 —
+`gait_repo.find_by_storage_key(..., status="PENDING")`. 키는 uuid4 라 추측할 수 없고,
+발급받은 사람은 소유자뿐이며, confirm 뒤에는 덮어쓰기도 막힙니다. 다운로드도 같습니다.
+
+⚠️ **워커 코드가 바뀌었으므로 `gait-worker` 재시작이 필요합니다** — backend 웹은
+`--reload` 라 배포가 알아서 반영하지만 celery 는 아닙니다:
+`docker compose --profile gait restart gait-worker`
 
 ## 이력
 

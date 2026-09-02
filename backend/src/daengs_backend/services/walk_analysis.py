@@ -139,6 +139,7 @@ def decode_analysis_model(analysis: WalkAnalysis) -> DecodedWalkAnalysis:
         facts.record_version != analysis.facts_record_version
         or facts.calculation_version != analysis.calculation_version
         or receipt.receipt_version != analysis.receipt_version
+        or analysis.observation_version != MICRO_OBSERVATION_VERSION
         or any(item.generation != analysis.observation_version for item in observations)
     ):
         raise ValueError("저장된 산책 분석 version 컬럼과 payload가 다릅니다.")

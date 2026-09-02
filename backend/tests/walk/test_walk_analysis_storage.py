@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, UniqueConstraint, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
@@ -125,6 +125,10 @@ def test_empty_walk_still_has_a_versioned_empty_sheet() -> None:
     assert stored_sheet.payload["cells"] == []
     assert decode_stored_cellophane(stored_sheet) == sheet
 
+    analysis.observation_version = 999
+    with pytest.raises(ValueError, match="version"):
+        decode_analysis_model(analysis)
+
 
 def test_compact_sheet_is_independent_of_dict_insertion_order() -> None:
     _prepared, _evidence, sheet = calculation()
@@ -178,6 +182,7 @@ def test_builder_rejects_a_receipt_from_another_input() -> None:
 def test_sqlalchemy_metadata_keeps_state_identity_and_cascade_contracts() -> None:
     assert Walk.__table__.c.analysis_state.nullable is False
     assert str(Walk.__table__.c.analysis_state.server_default.arg) == "'collecting'"
+    assert Walk.analysis_state.property.deferred is True
     assert "walks_analysis_state_check" in constraint_names(Walk.__table__)
 
     analysis_constraints = constraint_names(WalkAnalysis.__table__)
@@ -205,6 +210,12 @@ def test_sqlalchemy_metadata_keeps_state_identity_and_cascade_contracts() -> Non
     sheet_fk = next(iter(WalkCellophaneSheet.__table__.c.analysis_id.foreign_keys))
     assert sheet_fk.ondelete == "CASCADE"
     assert "walk_cellophane_payload_object" in constraint_names(WalkCellophaneSheet.__table__)
+
+
+def test_walk_select_stays_compatible_until_manual_migration_runs() -> None:
+    compiled = str(select(Walk).compile(dialect=postgresql.dialect()))
+
+    assert "walks.analysis_state" not in compiled
 
 
 def test_models_compile_to_postgresql_jsonb_contract() -> None:

@@ -77,9 +77,12 @@ class Walk(Base):
 
     # 좌표 입력을 더 받을 수 있는지 나타냅니다. 계산 세대는 아래 WalkAnalysis가 따로
     # 가지므로, 새 정책으로 재분석한다고 이 값을 되돌리지 않습니다.
+    # 기존 DB migration은 배포 후 수동 적용하므로 평소 select(Walk)에서는 뺀다.
+    # finalize 서비스는 migration 적용 후 undefer해 행 잠금과 같이 읽어야 한다.
     analysis_state: Mapped[str] = mapped_column(
         String(16),
         server_default=text("'collecting'"),
+        deferred=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -129,6 +129,11 @@ Get-Content db\migrations\2026-09-02_gait_records.sql -Raw |
 docker compose up -d backend                       # GAIT_* env·gait-bridge 볼륨 반영
 docker compose --profile gait up -d gait-worker    # 별도 워커(celery, gait 큐)
 
+# 2-1) nginx 의 /app/gait/ 블록(업로드 200m)을 반영. default.conf 는 bind-mount 라
+#      배포가 자동 reload 하지 않습니다 — 문법 확인 후 reload 합니다.
+docker compose exec nginx nginx -t
+docker compose exec nginx nginx -s reload
+
 # 3) 왕복: 인증→analyze→upload(bridge)→confirm→워커 분석→조회
 #    (인증 토큰이 필요합니다 — 앱 계정으로 로그인해 얻은 access 토큰을 씁니다)
 ```

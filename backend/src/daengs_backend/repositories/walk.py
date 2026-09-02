@@ -97,10 +97,10 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
-        # ⚠️ **좌표는 안 붙입니다.** 여기서 보는 것은 "이미 올라왔나" 뿐인데, 예전에는
-        # `selectinload(Walk.points)` 가 붙어 있어 **재시도할 때마다** 그 산책의 좌표를
-        # 전부 끌고 왔습니다. 30분 산책이면 수천 점입니다.
-        .options(selectinload(Walk.pets))
+        # 찾는 목적은 "이미 올라왔나"지만, 호출자는 기존 Walk를 곧바로 **좌표 포함
+        # 상세 응답**으로 돌려줍니다. 둘을 미리 읽지 않으면 async 세션의 응답 직렬화
+        # 단계에서 lazy load가 발생해 MissingGreenlet 500이 납니다.
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 

@@ -11,7 +11,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
-from daengs_backend.routers import app_auth, assistant, auth, crawl, health, pet, training
+from daengs_backend.routers import (
+    app_auth,
+    assistant,
+    auth,
+    crawl,
+    gait,
+    health,
+    pet,
+    training,
+)
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
 # import 하는데, 그쪽이 나중에 와서 이걸 가려 버립니다 — 그러면 include_router 가
@@ -108,6 +117,10 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
+# 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
+# lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**
+app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
 app.include_router(training.router)

@@ -47,6 +47,7 @@
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 | [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
 | [D-042](#d-042) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-043](#d-043) | 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다 | 2026-09-02 |
 
 ---
 
@@ -2168,3 +2169,66 @@ Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합�
 최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
 producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
 
+---
+
+## D-043
+### 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다
+
+앱이 gait 서비스를 직접 부르는 구조를 끝냅니다. 새 계약은 backend 의
+`/app/gait/*` 이고, 흐름은 이렇습니다:
+
+```
+앱 → /app/gait/*        backend (인증 · pet 소유권 · record/job · presigned 발급)
+앱 → cloud storage       직접 업로드 — 영상이 backend 를 지나가지 않는다
+backend → Redis 큐(gait) 작업 발행
+gait 워커(별도 프로세스) → storage 에서 읽어 분석 → backend DB 에 결과 반영
+```
+
+#### 무엇을 뒤집고 무엇을 유지하나
+
+| 기존 결정 | 뒤집는 부분 | 유지하는 부분 |
+| --- | --- | --- |
+| D-038 "접점 0개" | `daengs_backend → daengs_gait` **지연 import 한쪽**이 생긴다 (태스크가 분석 함수를 부른다) | **별도 프로세스 · 별도 venv(gait 그룹) · 런타임 격리** |
+| D-029 격리 근거 | — | 전부. 분 단위 추론은 여전히 워커에서만 돈다 |
+| gait `API.md` v1 (앱→gait 직접) | 앱은 `/app/gait/*` 만 본다. 기존 `/gait/*` 는 앱 전환(#64) 뒤 단계 제거 | 응답 필드 모양 대부분 (`comparable`·`has_overlay` 등 파생 필드 유지) |
+| 설계문서 §3 "gait 가 파일 물리 소유" | 파일이 cloud storage(#78) 로 | **DB 에 영상 바이트를 절대 넣지 않는다** |
+
+#### 왜 인증을 gait 에 붙이지 않았나
+
+`/gait/*` 의 모든 경로가 `dog_id` 하나로 동작하고 그 값을 검증하지 않았다 —
+남의 기록을 받아오고 지울 수 있었다 (앱 카드 DAENGS_APP#64 가 출시 서류를 쓰다 발견).
+검증에 필요한 것(계정·세션·`pets.app_user_id`)은 전부 backend 에 있고, gait 에
+인증을 넣으면 그 지식이 두 곳으로 갈라진다. **소유권은 `pet_id → pets.app_user_id`
+JOIN 으로 유도**하고 owner 를 중복 저장하지 않는다 — 반려견 양도에서 어긋난다.
+
+#### 상태는 두 축이다 — 섞으면 안내가 갈리지 않는다
+
+```
+status         : PENDING → UPLOADED → PROCESSING → DONE / FAILED   (파이프라인)
+quality_status : ok / unavailable                                   (DONE 안에서)
+```
+
+FAILED(워커가 죽음)는 **재시도**, unavailable(영상이 분석 부적합)은 **재촬영**이다.
+D-033 이 ABSTAINED≠REFUSED 를 가른 것과 같은 이유다.
+
+#### Celery 는 backend 자체 앱이다
+
+`daengs_life.tasks.celery_app` 에 태스크를 넣으면 D-021 이 세 줄로 못박은
+backend→life 접점이 넓어진다. 같은 Redis 브로커에 **앱 인스턴스만 따로** 두고
+큐 이름(`gait` vs `crawl`)이 가른다. 태스크 정의·DB 반영은 backend 소유,
+무거운 분석 함수만 `daengs_gait` 에서 **지연 import** 한다(방식 ⓒ) —
+`services/training_rag.py` 가 `daengs_training` 을 부르는 규율과 같고,
+`daengs_gait` 는 여전히 backend 를 모른다.
+
+⚠️ 그 지연 import 를 최상단으로 올리면 **기본 설치(backend, gait 그룹 없음)가
+   ImportError 로 죽는다.** 테스트가 지키고 있다 (`test_gait_app_api.py`).
+
+#### 하지 않은 것 · 기다리는 것
+
+- **임시 local-upload 폴백을 만들지 않았다** — 폴백이 있으면 그것이 사실상의 저장
+  정책이 되어 #78 의 결정을 앞질러 버린다. `StoragePort` 는 provider-neutral 계약과
+  "미설정이면 503" 구현체까지만이고, provider·버킷·리전·보관/파기는 #78 몫이다.
+- **기존 JSON 기록은 이관하지 않는다** — 전부 테스트 데이터이고 `dog_id="1"` 같은
+  값은 `pets.id` UUID FK 를 만족하지 못한다.
+- ⚠️ **앱 전환(#64) 전까지 무인증 `/gait/*` 가 열려 있다.** 완화는 앱 쪽
+  "비공개 테스트 빌드에서 끄기"이고, nginx location 제거는 전환 검증 뒤다.

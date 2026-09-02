@@ -14,6 +14,7 @@ from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminU
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
+from daengs_backend.models.gait_record import GAIT_STATUSES, GaitRecord
 from daengs_backend.models.pet import (
     PET_BIRTH_DATE_KINDS,
     PET_SEXES,
@@ -23,6 +24,8 @@ from daengs_backend.models.walk import Walk, WalkPet, WalkPoint
 from daengs_backend.models.refresh_token import RefreshToken
 
 __all__ = [
+    "GAIT_STATUSES",
+    "GaitRecord",
     "ADMIN_ROLES",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",

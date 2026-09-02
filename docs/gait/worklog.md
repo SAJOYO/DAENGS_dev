@@ -60,6 +60,24 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
   Format-List Path,Hash
 ```
 
+## 2026-09-02 — D-043: backend 가 record·job 을 소유, gait 는 내부 워커로 (PR #133)
+
+앱 카드(DAENGS_APP#64)가 무인증 `/gait/*` 를 발견한 것이 계기였고, 클라우드
+저장(#78)이 들어오면 "gait 에 인증을 어떻게 붙이나"라는 질문 자체가 사라진다는
+것이 결론이었습니다. 구조는 D-043 참고.
+
+만든 것: `gait_records` 테이블(SQL+모델) · `/app/gait/*` 라우터 · `StoragePort`
+(provider-neutral, 미설정 503) · backend 자체 Celery 앱(`gait` 큐) · 테스트 14개.
+
+⚠️ **아직 end-to-end 로 돌지 않습니다** — 저장소 구현이 #78 대기입니다.
+   `/app/gait/analyze` 는 지금 503 을 냅니다 (의도된 상태).
+
+⚠️ **무인증 `/gait/*` 는 앱 전환 전까지 열려 있습니다** — 미해결 5번이 이것이고,
+   완화는 앱 쪽 "테스트 빌드에서 끄기"입니다.
+
+남은 단계: 앱 전환(#64) → 검증 → nginx `location /gait/` 제거 → gait 의 FastAPI 를
+걷어내고 워커(`celery -A daengs_backend.tasks.gait worker --queues gait`)로 전환.
+
 ## 이력
 
 ### 2026-08-29 — 보행 분석을 독립 서비스로 들여옴 (PR #62, D-029)

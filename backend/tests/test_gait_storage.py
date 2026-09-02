@@ -17,6 +17,7 @@ from daengs_backend.core.storage import (
     NotConfiguredStorage,
     StorageNotConfiguredError,
     build_object_key,
+    build_overlay_object_key,
 )
 
 PET = uuid.uuid4()
@@ -41,6 +42,13 @@ def test_object_keys_are_unique():
     a = build_object_key(PET, kind="original", source_file="x.mp4")
     b = build_object_key(PET, kind="original", source_file="x.mp4")
     assert a != b
+
+
+def test_overlay_key_is_deterministic_from_record_identity():
+    record_id = uuid.uuid4()
+    expected = f"gait/{PET}/overlay/{record_id.hex}.mp4"
+    assert build_overlay_object_key(PET, record_id) == expected
+    assert build_overlay_object_key(PET, record_id) == expected
 
 
 # ── none ────────────────────────────────────────────────────────────────
@@ -136,13 +144,32 @@ def test_gcs_signed_upload_url(gcs):
 
 
 def test_gcs_exists_and_delete(gcs):
-    storage, store = gcs
+    storage, _ = gcs
     key = "gait/k/original/x.mp4"
     assert storage.exists(key) is False
     storage.upload_bytes(key, b"v", content_type="video/mp4")
     assert storage.exists(key) is True
     storage.delete(key)
     assert storage.exists(key) is False
+
+
+def test_gcs_delete_accepts_already_missing_object(gcs, monkeypatch):
+    storage, _ = gcs
+
+    class NotFound(Exception):
+        code = 404
+
+    class MissingBlob:
+        def delete(self, **kwargs):
+            raise NotFound
+
+    class MissingBucket:
+        def blob(self, key):
+            return MissingBlob()
+
+    monkeypatch.setattr(storage, "_bucket", lambda: MissingBucket())
+
+    storage.delete("gait/missing")
 
 
 def test_gcs_requires_bucket():

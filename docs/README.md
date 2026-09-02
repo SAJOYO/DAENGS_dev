@@ -8,6 +8,7 @@
 | [orchestration-router-benchmark.md](orchestration-router-benchmark.md) | Card 2A 의미 라우터 수용 벤치마크 (동결) — 80개 골드 RoutePlan · 결정론적 지표 · 1회 스키마 재시도 · 동결 게이트 · HUMAN FREEZE |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
+| [walk-finalize-operating-db-smoke.md](walk-finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke — 선행 migration 누락 발견, 932점 백업·chunk 이관, 최종 PASS |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션)의

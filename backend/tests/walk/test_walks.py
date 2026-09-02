@@ -97,6 +97,9 @@ def test_같은_산책을_두_번_올려도_한_건이다(client: TestClient, st
     # 두 번째는 새로 만든 게 아니라 있던 것입니다.
     assert second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
+    # 재시도 응답도 첫 응답과 같은 상세 계약입니다. 기존 Walk를 찾기만 하고
+    # points를 미리 읽지 않으면 실제 async DB에서 응답 직렬화가 500으로 터집니다.
+    assert second.json()["points"] == first.json()["points"]
     assert len(store.walks) == 1
     # 좌표는 **묶음**으로 담긴다. 세는 것은 묶음이 아니라 그 안의 점이다 —
     # 이 테스트가 보는 것은 "다시 올려도 좌표가 안 늘어난다" 이기 때문이다.

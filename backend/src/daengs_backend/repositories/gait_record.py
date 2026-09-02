@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models.gait_record import GaitRecord
@@ -29,14 +29,43 @@ def _owned(app_user_id: uuid.UUID):
 
 
 async def get_owned(
-    session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    record_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> GaitRecord | None:
     stmt = _owned(app_user_id).where(GaitRecord.id == record_id)
+    if for_update:
+        stmt = stmt.with_for_update(of=GaitRecord)
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def list_for_pets_for_update(
+    session: AsyncSession, pet_ids: list[uuid.UUID]
+) -> list[GaitRecord]:
+    """반려견 삭제 전에 정리할 모든 기록을 잠급니다 (soft-deleted 행 포함).
+
+    소유권은 호출자가 잠근 pets 행으로 이미 확인했습니다. deleted_at 으로 거르지 않는
+    이유는 이전 cleanup 실패 뒤 남은 행도 이번 재시도에서 반드시 정리해야 해서입니다.
+    """
+    if not pet_ids:
+        return []
+    stmt = (
+        select(GaitRecord)
+        .where(GaitRecord.pet_id.in_(pet_ids))
+        .order_by(GaitRecord.id)
+        .with_for_update()
+    )
+    return list((await session.execute(stmt)).scalars())
+
+
 async def find_by_storage_key(
-    session: AsyncSession, storage_key: str, *, status: str | None = None
+    session: AsyncSession,
+    storage_key: str,
+    *,
+    status: str | None = None,
+    allow_overlay: bool = False,
 ) -> GaitRecord | None:
     """저장 키로 기록을 찾습니다 — **임시 LocalBridge 전용** (D-043).
 
@@ -50,12 +79,20 @@ async def find_by_storage_key(
        `status="PENDING"` 을 주면 티켓이 아직 살아 있는 것에만 씁니다 — confirm 뒤에
        같은 키로 덮어쓰는 것도 막힙니다.
 
+    ⚠️ **`allow_overlay` 는 다운로드에만 켭니다.** 업로드는 원본 키만 받아야 합니다 —
+       overlay 키까지 열어 주면 앱이 **분석 결과 영상을 덮어쓸 수 있습니다.** overlay 를
+       만드는 것은 워커뿐이고, 워커는 이 bridge 를 지나지 않습니다(같은 볼륨에 직접 씁니다).
+
+       기본값이 False 인 이유가 그것입니다. 처음에는 원본만 보게 짰다가 **overlay 를 아예
+       못 꺼내는 버그**가 됐습니다 — 실기기 검증에서 overlay 다운로드가 404 로 잡혔습니다
+       (2026-09-02). 그때 "그럼 둘 다 열자"로 가면 위 위험이 열립니다.
+
     GCS 로 넘어가면 bridge 와 함께 사라질 함수입니다.
     """
-    stmt = select(GaitRecord).where(
-        GaitRecord.original_storage_key == storage_key,
-        GaitRecord.deleted_at.is_(None),
-    )
+    key_match = GaitRecord.original_storage_key == storage_key
+    if allow_overlay:
+        key_match = or_(key_match, GaitRecord.overlay_storage_key == storage_key)
+    stmt = select(GaitRecord).where(key_match, GaitRecord.deleted_at.is_(None))
     if status is not None:
         stmt = stmt.where(GaitRecord.status == status)
     return (await session.execute(stmt)).scalars().first()

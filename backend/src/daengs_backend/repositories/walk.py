@@ -15,6 +15,7 @@ from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
 __all__ = [
     "add",
     "add_analysis",
+    "delete_all_for_owner",
     "delete_walks_only_with",
     "existing_chunk_starts",
     "get_analysis_for_input",
@@ -97,10 +98,10 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
-        # ⚠️ **좌표는 안 붙입니다.** 여기서 보는 것은 "이미 올라왔나" 뿐인데, 예전에는
-        # `selectinload(Walk.points)` 가 붙어 있어 **재시도할 때마다** 그 산책의 좌표를
-        # 전부 끌고 왔습니다. 30분 산책이면 수천 점입니다.
-        .options(selectinload(Walk.pets))
+        # 찾는 목적은 "이미 올라왔나"지만, 호출자는 기존 Walk를 곧바로 **좌표 포함
+        # 상세 응답**으로 돌려줍니다. 둘을 미리 읽지 않으면 async 세션의 응답 직렬화
+        # 단계에서 lazy load가 발생해 MissingGreenlet 500이 납니다.
+        .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 
@@ -128,6 +129,18 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
         )
     )
     result = await session.execute(delete(Walk).where(Walk.id.in_(solo)))
+    return result.rowcount or 0
+
+
+async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """탈퇴한 회원의 산책을 전부 지웁니다.
+
+    ``walk_point_chunks``(또는 아직 이관 전 DB의 ``walk_points``)와 ``walk_pets``는
+    모두 ``walks.id ON DELETE CASCADE``라 이 DELETE 한 번에 같이 없어집니다.
+    """
+    result = await session.execute(
+        delete(Walk).where(Walk.app_user_id == app_user_id)
+    )
     return result.rowcount or 0
 
 

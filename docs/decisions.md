@@ -46,8 +46,10 @@
 | [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 | [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
-| [D-042](#d-042) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-042](#d-042) | 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬 잔류 | 2026-09-01 |
 | [D-043](#d-043) | 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다 | 2026-09-02 |
+| [D-044](#d-044) | 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다 | 2026-09-02 |
+| [D-045](#d-045) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
 
 ---
 
@@ -2134,40 +2136,41 @@ Skin/Gait handoff recall 100%로 정확도는 사실상 동등합니다. 지연�
 ---
 
 ## D-042
-### Walk는 in-process 제품 패키지로 두고 Place·Journey는 능력 경계로 소비한다
+### 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬에 남긴다
 
-산책 측정과 공간 일기의 정본은 `backend/src/daengs_walk/`에 둡니다. 이것은 별도
-컨테이너나 독립 서비스가 아니라 backend 프로세스 안에서 호출되는 **제품 기능 패키지**입니다.
-HTTP 인증·요청 수명·DB 트랜잭션은 계속 `daengs_backend`가 소유하고, 산책 lifecycle
-서비스가 `daengs_walk`의 공개 진입점을 호출합니다.
+앱 출시(HTTPS 필수)와 클라우드 배포 경험을 위해 서빙을 **GCP VM 1대**(e2-standard-4,
+asia-northeast3)로 옮깁니다. Cloud Run 이 아닌 이유(임베딩 상주·celery 상주·바인드
+마운트·비용 3배)와 비용 계산은 노션 "클라우드 이전 검토" 문서에 있습니다. 일정·단계는
+`docs/deploy/roadmap.md`, 명령 절차는 `docs/deploy/runbook.md`, GCP 전용 구성은
+`docker-compose.gcp.yml` + `nginx/gcp.conf` 입니다.
 
-패키지의 계산 코어는 한층 더 좁습니다. 좌표 정규화, 측정 사실, 관측 후보, 계측 영수증,
-hex-v1, Cellophane 생산은 FastAPI·SQLAlchemy·DB·시계·난수와 Place·Journey를 모르는
-결정론적 모듈로 유지합니다. Cellophane은 **산책에서 직접 측정한 macro 공간 자료**라서
-장소 검색 결과나 일기 문맥을 그 안에 굽지 않습니다. 그래야 같은 산책을 같은 계산 세대로
-재현하고, 계절·날씨·반려견 같은 조건으로 장을 나중에 골라 겹칠 수 있습니다.
+- **배포 소스는 `main` 브랜치**입니다 (PR #114 가 첫 스냅샷). 별도 배포 레포를 만들지
+  않습니다 — 정본이 둘이 되면 핫픽스가 갈라지고(D-032 가 피한 그 상황), 같은 목적을
+  기존 규칙(완성 단위마다 dev → main PR)이 이미 제공합니다. **이관 관련 파일만 예외로
+  main 기준 브랜치 → main 머지**로 작업합니다 — 소비자가 GCP VM(main clone)뿐이라
+  dev 를 거칠 이유가 없습니다 (roadmap §3).
+- **서빙만 옮깁니다.** 크롤러·코퍼스 정본은 로컬 서버에 남습니다 — 코퍼스 raw 는
+  서빙 경로에서 읽히지 않고(앱이 읽는 것은 적재가 끝난 pgvector 뿐), 적재는 GPU 때문에
+  어차피 개발 PC 라 옮겨도 일하는 곳이 안 바뀝니다. 대신 컷오버 리스크와 왕복 비용이
+  생깁니다. GCP 유지가 확정되면 그때 2차로 이전합니다 (roadmap §7).
+- **DB 는 dev/prod 로 갈라집니다.** GCP 2대(pgvector·place-db, 덤프 복원)가 운영 정본,
+  로컬 서버 DB 는 개발용으로 남습니다. Training RAG 는 별도 DB 가 아니라 vectordb 안
+  테이블입니다(#112). GCP 는 5432/6379 를 인터넷에 열지 않습니다 — 지금 compose 의
+  LAN 개방을 인터넷에 재현하지 않습니다.
+- **TLS 는 certbot(Let's Encrypt)** — 가비아 DNS 유지, A 레코드만 GCP 고정 IP 로.
+  앱에 박는 주소는 IP 가 아니라 **도메인**입니다. 그래야 9/21 이후 VM 을 지워도
+  DNS 회귀로 배포된 앱이 계속 삽니다.
+- **기한 제약** — 발표 9/21 까지 유지가 1차 목표. 크레딧(약 ₩435k)이 **2026-11-17
+  만료**되고 계정이 일반 계정이라 만료 후 자동 실비 청구입니다. 종료 시 정지가 아니라
+  **삭제**까지 해야 합니다(디스크·미연결 고정 IP 는 정지 중에도 과금).
 
-반면 `daengs_walk` 패키지 전체가 영원히 순수하거나 별개인 것은 아닙니다. 이후 공간 일기의
-Capsule·Context 응용부는 Place의 주변 특성이나 Journey의 일기 능력을 사용할 수 있습니다.
-그때는 좁은 capability/adapter 계약을 두고 다음 방향으로만 연결합니다.
-
-```text
-daengs_backend (HTTP · auth · DB transaction)
-    └── daengs_walk application
-          ├── deterministic walk calculation core
-          ├── Place capability adapter  ──> daengs_place runtime/API
-          └── Journey capability adapter ─> daengs_journey runtime/API
-```
-
-Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합니다. Journey는 D-039의
-별도 런타임과 외부 경로 Usage Gate를 계속 소유합니다. Walk가 두 패키지의 구현 코드나
-테이블을 복사하거나, 내부 함수를 직접 불러 그 경계를 우회하지 않습니다. 같은 프로세스로
-합치는 선택을 나중에 하더라도 호출부는 어댑터 뒤에 두어 소유권과 정책을 유지합니다.
-
-이번 결정에서 adapter 인터페이스를 미리 만들지는 않습니다. 아직 어떤 Capsule/Context가
-어떤 Place·Journey 결과를 요구하는지 정해지지 않았기 때문입니다. 구체 소비자가 생길 때
-최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
-producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
+**도메인 결정으로 개정 (2026-09-01 팀 회의)** — 클라우드는 기존 이름을 넘겨받지 않고
+**새 서브도메인**을 씁니다: 프런트 `daengapp.weareithero.cloud` · 백엔드
+`daengapi.weareithero.cloud`. 기존 `daengs`·`daengback` 은 로컬(개발) 서버가 그대로
+유지합니다 — 메인 프런트가 앱이라 웹 주소의 가치가 낮고, 이렇게 하면 **DNS 컷오버가
+아예 없습니다**(새 레코드 추가만 하고 기존 레코드는 안 건드림). 앱에 박는 주소는
+`https://daengapi.weareithero.cloud` 입니다. 와일드카드 DNS/인증서는 쓰지 않습니다 —
+가비아는 DNS-01 자동 갱신 수단이 마땅치 않아 와일드카드 인증서가 수동 갱신이 됩니다.
 
 ---
 
@@ -2287,3 +2290,44 @@ Facts·Receipt를 복제하지 않습니다. sheet payload는 storage schema v1�
 원본 좌표 보관은 기존 결정대로 계정 삭제 시까지 유지합니다. Geo의 purge 전제나 셀 행 저장
 형태를 운영 저장소에 그대로 복제하지 않습니다. finalize API는 다음 PR에서 Walk 행 잠금 아래
 분석·sheet 저장과 `derived` 전환을 한 트랜잭션으로 묶습니다.
+
+---
+
+## D-045
+### Walk는 in-process 제품 패키지로 두고 Place·Journey는 능력 경계로 소비한다
+
+산책 측정과 공간 일기의 정본은 `backend/src/daengs_walk/`에 둡니다. 이것은 별도
+컨테이너나 독립 서비스가 아니라 backend 프로세스 안에서 호출되는 **제품 기능 패키지**입니다.
+HTTP 인증·요청 수명·DB 트랜잭션은 계속 `daengs_backend`가 소유하고, 산책 lifecycle
+서비스가 `daengs_walk`의 공개 진입점을 호출합니다.
+
+패키지의 계산 코어는 한층 더 좁습니다. 좌표 정규화, 측정 사실, 관측 후보, 계측 영수증,
+hex-v1, Cellophane 생산은 FastAPI·SQLAlchemy·DB·시계·난수와 Place·Journey를 모르는
+결정론적 모듈로 유지합니다. Cellophane은 **산책에서 직접 측정한 macro 공간 자료**라서
+장소 검색 결과나 일기 문맥을 그 안에 굽지 않습니다. 그래야 같은 산책을 같은 계산 세대로
+재현하고, 계절·날씨·반려견 같은 조건으로 장을 나중에 골라 겹칠 수 있습니다.
+
+반면 `daengs_walk` 패키지 전체가 영원히 순수하거나 별개인 것은 아닙니다. 이후 공간 일기의
+Capsule·Context 응용부는 Place의 주변 특성이나 Journey의 일기 능력을 사용할 수 있습니다.
+그때는 좁은 capability/adapter 계약을 두고 다음 방향으로만 연결합니다.
+
+```text
+daengs_backend (HTTP · auth · DB transaction)
+    └── daengs_walk application
+          ├── deterministic walk calculation core
+          ├── Place capability adapter  ──> daengs_place runtime/API
+          └── Journey capability adapter ─> daengs_journey runtime/API
+```
+
+Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합니다. Journey는 D-039의
+별도 런타임과 외부 경로 Usage Gate를 계속 소유합니다. Walk가 두 패키지의 구현 코드나
+테이블을 복사하거나, 내부 함수를 직접 불러 그 경계를 우회하지 않습니다. 같은 프로세스로
+합치는 선택을 나중에 하더라도 호출부는 어댑터 뒤에 두어 소유권과 정책을 유지합니다.
+
+이번 결정에서 adapter 인터페이스를 미리 만들지는 않습니다. 아직 어떤 Capsule/Context가
+어떤 Place·Journey 결과를 요구하는지 정해지지 않았기 때문입니다. 구체 소비자가 생길 때
+최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
+producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
+
+**번호 재부여 (2026-09-02)** — 이 결정은 원래 D-042 로 발행됐습니다. 같은 날 `main` 에서 GCP 이관 결정이 같은 번호로 나갔고(PR #119, 09-01 14:02), 이 결정은 `dev` 에서 나왔습니다(PR #125, 09-01 17:30). 두 브랜치가 서로를 못 봐서 생긴 충돌이라 `docs/collaboration.md` §4 의 규칙대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-045 로 옮겼습니다. 같은 사고를 다시 내지 않으려고 이관 산출물의 main 직행 예외를 없앴습니다 — `docs/deploy/roadmap.md` §3.
+

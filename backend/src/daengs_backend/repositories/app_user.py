@@ -14,12 +14,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import AppUser
 
-__all__ = ["create", "get_by_email_hash", "get_by_id", "get_by_kakao_id"]
+__all__ = [
+    "create",
+    "get_active_for_update",
+    "get_by_email_hash",
+    "get_by_id",
+    "get_by_kakao_id",
+]
 
 
 async def get_by_id(session: AsyncSession, app_user_id: uuid.UUID) -> AppUser | None:
     """PK 로 한 명. 토큰의 subject 를 회원으로 되돌릴 때 씁니다."""
     return await session.get(AppUser, app_user_id)
+
+
+async def get_active_for_update(
+    session: AsyncSession, app_user_id: uuid.UUID
+) -> AppUser | None:
+    """활성 회원 한 명을 요청 트랜잭션이 끝날 때까지 잠급니다.
+
+    access token 은 탈퇴 뒤에도 최대 5분 유효합니다. 앱 소유 데이터 API 가 이 잠금을
+    공통으로 잡으면 탈퇴와 새 쓰기가 한 회원 안에서 직렬화됩니다. 먼저 끝난 쓰기는
+    탈퇴가 지우고, 탈퇴가 먼저 끝났으면 이 조회가 아무 행도 돌려주지 않습니다.
+    """
+    stmt = (
+        select(AppUser)
+        .where(AppUser.id == app_user_id, AppUser.status == "active")
+        .with_for_update()
+    )
+    return await session.scalar(stmt)
 
 
 async def get_by_kakao_id(session: AsyncSession, kakao_id: int) -> AppUser | None:

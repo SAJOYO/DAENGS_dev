@@ -8,16 +8,20 @@ import uuid
 
 from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
-from daengs_backend.models import Walk, WalkPet, WalkPoint
+from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
 
 __all__ = [
     "add",
+    "add_analysis",
+    "delete_all_for_owner",
     "delete_walks_only_with",
-    "existing_seqs",
+    "existing_chunk_starts",
+    "get_analysis_for_input",
     "get_by_client_session",
     "get_owned",
+    "get_owned_for_update",
     "list_for_owner",
 ]
 
@@ -59,6 +63,27 @@ async def get_owned(
     return await session.scalar(stmt)
 
 
+async def get_owned_for_update(
+    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
+) -> Walk | None:
+    """finalize·append가 공유하는 산책 행 잠금 조회.
+
+    ``analysis_state``는 수동 migration 전 기존 조회를 보호하려고 deferred로
+    매핑했다. 상태 전이를 하는 이 조회에서만 명시적으로 같이 읽는다.
+    """
+    stmt = (
+        select(Walk)
+        .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
+        .options(
+            undefer(Walk.analysis_state),
+            selectinload(Walk.points),
+            selectinload(Walk.pets),
+        )
+        .with_for_update()
+    )
+    return await session.scalar(stmt)
+
+
 async def get_by_client_session(
     session: AsyncSession, app_user_id: uuid.UUID, client_session_id: uuid.UUID
 ) -> Walk | None:
@@ -73,6 +98,9 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
+        # 찾는 목적은 "이미 올라왔나"지만, 호출자는 기존 Walk를 곧바로 **좌표 포함
+        # 상세 응답**으로 돌려줍니다. 둘을 미리 읽지 않으면 async 세션의 응답 직렬화
+        # 단계에서 lazy load가 발생해 MissingGreenlet 500이 납니다.
         .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
@@ -104,16 +132,60 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
     return result.rowcount or 0
 
 
+async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """탈퇴한 회원의 산책을 전부 지웁니다.
+
+    ``walk_point_chunks``(또는 아직 이관 전 DB의 ``walk_points``)와 ``walk_pets``는
+    모두 ``walks.id ON DELETE CASCADE``라 이 DELETE 한 번에 같이 없어집니다.
+    """
+    result = await session.execute(
+        delete(Walk).where(Walk.app_user_id == app_user_id)
+    )
+    return result.rowcount or 0
+
+
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk
 
 
-async def existing_seqs(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:
-    """이미 저장된 좌표 순번.
+def add_analysis(session: AsyncSession, analysis: WalkAnalysis) -> WalkAnalysis:
+    session.add(analysis)
+    return analysis
+
+
+async def get_analysis_for_input(
+    session: AsyncSession,
+    *,
+    walk_id: uuid.UUID,
+    input_fingerprint: str,
+) -> WalkAnalysis | None:
+    """같은 봉인 입력에서 처음 만든 분석.
+
+    계산 세대가 나중에 추가되어도 원래 finalize 재시도는 처음 응답과
+    같은 analysis_id를 돌려줘야 한다.
+    """
+    stmt = (
+        select(WalkAnalysis)
+        .where(
+            WalkAnalysis.walk_id == walk_id,
+            WalkAnalysis.input_fingerprint == input_fingerprint,
+        )
+        .order_by(WalkAnalysis.derived_at, WalkAnalysis.id)
+        .limit(1)
+    )
+    return await session.scalar(stmt)
+
+
+async def existing_chunk_starts(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:
+    """이미 저장된 묶음의 첫 순번.
 
     나눠 올릴 때 **같은 묶음이 두 번 와도** 조용히 넘기려고 씁니다. DB 의 PK 가
     막아 주기는 하지만, 그건 예외로 터지는 방식이라 재시도가 500 이 됩니다.
+
+    예전에는 좌표 순번을 전부 읽었습니다(`existing_seqs`). 30분 산책이면 1,842개를
+    읽어 집합으로 만들었는데, **묶음 단위로 판정하면 몇 개면 됩니다.** payload 를
+    풀지 않는 것도 같은 이유입니다.
     """
-    stmt = select(WalkPoint.client_seq).where(WalkPoint.walk_id == walk_id)
+    stmt = select(WalkPointChunk.seq_from).where(WalkPointChunk.walk_id == walk_id)
     return set(await session.scalars(stmt))

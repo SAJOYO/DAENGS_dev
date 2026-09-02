@@ -56,6 +56,22 @@ CREATE TABLE IF NOT EXISTS pets (
     CONSTRAINT pets_birth_date_pair
         CHECK ((birth_date IS NULL) = (birth_date_kind IS NULL)),
 
+    -- 배웅한 날. **NULL 이면 아직 함께 있는 아이다.**
+    --
+    -- 삭제와 다른 일이라 칸을 따로 둔다. 목록에서 지우는 것은 없던 일로 만드는 것이고,
+    -- 배웅은 있었던 일을 적어 두는 것이다 — 그래서 행을 안 지우고 이 날짜만 채운다.
+    -- 앱은 이 아이를 목록에 남기고 함께한 산책과 카드도 그대로 둔다.
+    --
+    -- birth_date 와 같이 **시각이 아니라 날짜**다. 몇 시에 갔는지는 묻지 않는다.
+    farewell_on DATE,
+
+    -- 앞날은 못 넣는다. 오타 한 자로 2033년이 적히면 "아직 안 온 날에 배웅했다"가 된다.
+    CONSTRAINT pets_farewell_not_future CHECK (farewell_on IS NULL OR farewell_on <= CURRENT_DATE),
+
+    -- 태어나기 전일 수도 없다. 생일을 모르는 아이(birth_date IS NULL)는 이 검사에서 빠진다.
+    CONSTRAINT pets_farewell_after_birth
+        CHECK (farewell_on IS NULL OR birth_date IS NULL OR farewell_on >= birth_date),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

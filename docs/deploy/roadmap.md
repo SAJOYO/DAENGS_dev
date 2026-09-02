@@ -31,6 +31,19 @@
    로컬 서버 DB 는 개발용으로 남는다. 따라서 GCP 는 5432/6379 를 인터넷에 열지 않는다.
    Training RAG 는 별도 DB 가 아니다 — #112 로 vectordb 안 `training_rag_*` 테이블로
    통합됐다 (전용 컨테이너·볼륨 삭제).
+
+   > **그 대가 — GCP 의 DB 는 2026-09-02 덤프의 스냅샷이다.** 두 DB 사이에 복제는
+   > 없다. 개발 PC 의 `rag load` 는 `POSTGRES_IP`(로컬 서버)를 보므로 **코퍼스를 다시
+   > 적재해도 GCP 에는 아무 일도 일어나지 않는다.** 적재는 성공하고 스모크도 통과하는데
+   > 앱에만 새 문서가 안 보이는 모양으로 만난다. 반영하려면 로컬 서버에서 `pg_dump` 한
+   > 것을 VM 에서 다시 복원하는 수밖에 없다 — runbook §2(덤프)·§3(복원)의 명령 그대로다.
+   > 재적재를 동반하는 생활 파트 카드(`docs/life/roadmap.md` 의 A1·A2·A7·F1·D3)에는
+   > 이 손작업이 실제 비용으로 붙는다. 구조적 해소는 §7-1(9/21 이후).
+   >
+   > **`db/migrations/` 도 두 DB 에 각각 손으로 적용한다.** 버전 테이블이 없어 무엇이
+   > 적용됐는지 DB 가 기억하지 않으므로(CLAUDE.md), 어디까지 적용했는지는 사람이 안다.
+   > GCP 에 미적용인 것은 09-02 덤프 이후에 추가된 분, 즉 **`main` 에 아직 없는
+   > `db/migrations/` 전부**이고 다음 dev→main 배포 때 적용한다 (runbook §6).
 6. **TLS 는 certbot(Let's Encrypt, 무료).** DNS 는 가비아 유지. 인증서 구매 불필요.
 7. **클라우드는 새 서브도메인을 쓴다** (2026-09-01 팀 회의) — 프런트
    `daengapp.weareithero.cloud` · 백엔드 `daengapi.weareithero.cloud`. 기존
@@ -43,18 +56,30 @@
 ## 3. 브랜치 · PR 흐름
 
 ```
-이관 작업(docs/deploy/ · GCP 전용 설정) : main 기준 토픽 브랜치 → PR → main 머지
-일반 개발(기능·수정)                    : dev 기준 → PR → dev (로컬 서버 자동배포) ← 기존 그대로
-서비스 코드의 main 반영                 : 완성 단위마다 dev → main 스냅샷 PR (#114 가 첫 번째)
-GCP VM                                 : main 을 clone. 이후 배포는 git pull origin main (수동)
-로컬 서버                              : dev 자동배포(self-hosted 러너) 그대로 — 개발 환경으로 계속
+모든 작업(GCP 전용 설정·문서 포함) : dev 기준 토픽 브랜치 → PR → dev (로컬 서버 자동배포)
+main 반영                          : 완성 단위마다 dev → main 스냅샷 PR (#114 가 첫 번째)
+GCP VM                             : main 을 clone. 이후 배포는 git pull (수동, runbook §6)
+로컬 서버                          : dev 자동배포(self-hosted 러너) — 개발 환경으로 계속
 ```
 
-이관 산출물을 main 직행으로 두는 이유 — 소비자가 GCP VM(main clone)뿐이라 dev 를
-거칠 이유가 없고, dev 스냅샷 타이밍과 무관하게 이관을 진행할 수 있다. 이관 파일은
-로컬 서버 배포(dev)에 영향을 주지 않는다(`-f` 로 명시해야 적용되는 오버레이).
-main 에만 있는 커밋이 생기므로, 이관 문서·설정이 dev 에서도 필요해지면 그때
-main → dev 머지 1회로 가져온다 (지금은 불필요).
+**흐름은 한 방향뿐이다 — 작업 브랜치 → dev → main.** `docs/collaboration.md` §브랜치
+그대로이고 이 문서에 예외는 없다.
+
+원래 이 절은 이관 산출물만 **main 직행**으로 뒀었다(2026-09-01). 소비자가 GCP VM(main
+clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였다. 그 예외를 2026-09-02 에
+없앤다 — 대가가 예상보다 컸다.
+
+- `main` 에만 있는 파일 5개(`docker-compose.gcp.yml` · `nginx/gcp.conf` ·
+  `nginx/api-locations.inc` · 이 폴더의 두 문서)가 생겼고, **dev 에서 일하는 사람은 그것을
+  볼 수 없었다.** 실제로 #133 이 `nginx/default.conf` 에 `/app/gait/` 블록(200m · 600s)을
+  넣었는데 GCP 가 쓰는 `api-locations.inc` 에는 안 들어갔다. 로컬은 멀쩡하고 GCP 에서만
+  영상 업로드가 413 이 되는, 배포 전에는 안 보이는 종류의 구멍이다.
+- 두 갈래가 서로를 못 봐서 **결정 번호가 겹쳤다** — GCP 이관이 D-042, 같은 날 dev 의
+  Walk 패키지 결정도 D-042. 나중 것을 D-045 로 renumber 했다(`docs/decisions.md`).
+
+대신 치르는 비용은 하나다: **GCP 전용 수정도 이제 dev→main 스냅샷을 타므로 즉시 반영이
+아니다.** 배포 직전 핫픽스는 스냅샷 PR 을 한 번 더 도는 것으로 처리한다 — main 에 직접
+커밋하면 위 두 사고가 그대로 재발한다.
 
 ## 4. 단계 로드맵
 
@@ -98,7 +123,9 @@ main → dev 머지 1회로 가져온다 (지금은 불필요).
 
 1. **크롤러·코퍼스·적재 이전** — `DAENGS_CORPUS_DIR` 정본 컷오버(+로컬 워커 정지 **같은 날**),
    crawler-worker·beat 기동, 증분 적재는 VM 에서 CPU 로(`rag load`), 전체 재적재만
-   스팟 GPU 또는 개발 PC. 이걸로 "코퍼스 갱신이 개발 PC 에 묶이는" 구조적 약점 해소
+   스팟 GPU 또는 개발 PC. 이걸로 "코퍼스 갱신이 개발 PC 에 묶이는" 구조적 약점 해소.
+   **그때까지의 임시 절차가 §2-5 의 수동 덤프→복원**이고, 이 항목이 없애는 것이 바로 그
+   손작업이다
 2. **이미지 굽기** — 지금은 기동 때마다 `uv sync` 하는 개발 편의 구조. 서비스별
    Dockerfile + Artifact Registry (멀티스테이지·레이어 캐시 학습)
 3. **CI/CD** — dev→main 머지 시 빌드·푸시·SSH 배포, **Workload Identity Federation**(키 파일 없는 인증)

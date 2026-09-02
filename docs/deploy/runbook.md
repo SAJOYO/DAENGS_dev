@@ -92,6 +92,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | `SCREENING_RELEASE_DIR` | `/srv/daengs/models/release` |
 | `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
+| `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | 기본은 셋 다 **비웁니다** (= `none`, `/app/gait/*` 가 503 — 안전합니다). 임시 LocalBridge 로 새 흐름을 검증할 때만 `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** 진짜 저장소는 GCS 이고 버킷은 #78 대기입니다 |
 | `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:
@@ -126,7 +127,8 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 # ⚠ 여기서는 gcp 오버레이를 **얹지 않습니다.** gcp.conf 는 인증서 파일을 참조하는데
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
-docker compose --profile gait up -d nginx backend place-search journey-service gait-analysis
+docker compose --profile gait up -d nginx backend place-search journey-service \
+  gait-analysis gait-worker
 
 # ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
 #   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
@@ -179,27 +181,73 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 
 ## 6. 운영
 
-- **배포 절차 (git push 배포 — §1).** dev → main 스냅샷 PR 이 머지된 상태에서:
+- **배포 절차 (git push 배포 — §1).** dev → main 스냅샷 PR 이 머지된 상태에서.
+
+  ⚠ **VM 의 `git pull` 이 곧 배포입니다.** backend 가 `fastapi dev`(reload)로 돌고
+  `backend/src` 를 바인드 마운트해서, 워크트리가 바뀌는 순간 새 코드가 섭니다. 그래서
+  **무엇이 바뀌는지 먼저 보고, DB 를 맞춘 뒤에** 워크트리를 옮깁니다.
 
   ```powershell
   # ① 개발 PC — main 을 VM 으로 push
   git switch main; git pull; git push gcp main
   ```
   ```bash
-  # ② VM — 체크아웃 갱신
-  git -C ~/daengs pull
+  # ② VM — 객체만 받는다 (워크트리는 아직 안 움직입니다)
+  cd ~/daengs && git fetch
+  git diff --stat HEAD origin/main
+  ```
+  ```bash
+  # ③ db/migrations/ 에 새 파일이 있으면 **pull 보다 먼저** 적용한다
+  git show origin/main:db/migrations/<파일>.sql \
+    | docker compose exec -T pgvector psql -U daengs -d vectordb
+  ```
+  ```bash
+  # ④ 워크트리 갱신 = 배포
+  git merge --ff-only origin/main
   ```
 
-  여기서 갈립니다:
-  - **백엔드 코드만 바뀜** → 조치 없음. 컨테이너가 `backend/src` 를 마운트한 개발
-    모드(reload)라 pull 만으로 자동 반영됩니다.
-  - **백엔드 의존성(`uv.lock`) 바뀜** → 영향받는 컨테이너 재생성:
-    `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d --force-recreate backend place-search journey-service gait-analysis`
-  - **프론트 바뀜** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로
-    (`-manual2`, `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 —
-    reload 가 클러스터 무중단 교체입니다).
-  - **compose·nginx 설정 바뀜** → `docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d` (바뀐 것만 재생성됨)
-  - **`db/migrations/` 추가됨** → 해당 SQL 을 pgvector 컨테이너에서 `-U daengs` 로 수동 실행
+  ③ 을 ④ 뒤로 미루면 **없는 테이블을 새 코드가 칩니다.** 리로드라 그 사이에 창이 없습니다.
+  계정이 `-U daengs` 인 것도 잊기 쉽습니다 — 이 VM 의 수퍼유저는 `postgres` 가 아닙니다(§3).
+  버전 테이블이 없어 **무엇을 적용했는지 DB 가 기억하지 않으니** 적용한 파일명은 사람이
+  적어 둡니다. 로컬 서버와 GCP 는 **각각 적용**합니다 — 한쪽에 돌렸다고 다른
+  쪽이 따라오지 않으므로 두 줄로 적어 둡니다 (roadmap §2-5).
+
+  ④ 뒤, 바뀐 종류별 조치:
+  - **백엔드 코드만** → 없음. ④ 로 끝입니다
+  - **`uv.lock` · compose** → 영향받는 컨테이너 재생성:
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker
+    ```
+
+    ⚠ **서비스 이름을 반드시 적습니다.** 인자 없이 `up -d` 하면 `crawler-worker`·
+    `crawler-beat` 까지 뜹니다 — #65 로 크롤러 profile 이 없어졌기 때문입니다. worker 는
+    로그 파일이 없으면 스스로 안 뜨지만 **beat 는 뜹니다.** 그러면 소비자 없는 큐에
+    프리페치가 1분마다 쌓이고(하루 1,440개), 코퍼스 정본이 로컬 서버인데 GCP 가 크롤
+    스케줄을 발사하게 됩니다.
+    ⚠ **`gait-worker`** 는 D-043 으로 생긴 서비스입니다. 빠뜨리면 웹만 새 코드가 되고
+    워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
+  - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → 설정은 마운트라
+    compose 가 변경을 못 봅니다. `up -d` 로는 아무것도 재생성되지 않으니 직접 reload:
+
+    ```bash
+    docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
+    ```
+
+    ⚠ GCP 가 읽는 것은 `default.conf` 가 **아닙니다** — 오버레이가 `gcp.conf` 를 그 자리에
+    끼웁니다. API 경로 블록은 `api-locations.inc` 한 곳에 있고 두 server 블록이 include
+    합니다. dev 에서 `default.conf` 만 고친 변경은 GCP 에 **없는 것과 같습니다** (#150).
+  - **프론트** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로(`-manual2`,
+    `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 — reload 가
+    클러스터 무중단 교체입니다)
+  - **`.env` 에 새 키가 생김** → `.env.example` 은 VM 에 따라오지 않습니다. §2 수정표를
+    보고 손으로 넣으세요. 기본값이 없는 설정이면 backend 가 ④ 직후 안 뜹니다
+- **코퍼스를 재적재했다면(`rag load`) — GCP 는 바뀌지 않습니다.** 개발 PC 는 로컬
+  서버 DB 를 보고 두 DB 사이에 복제가 없습니다 (roadmap §2-5). 적재는 성공하고
+  스모크도 통과하는데 앱에만 새 문서가 안 보입니다. 반영하려면 §2 의 덤프를 다시 뜨고
+  §3 ② 의 복원을 다시 돌립니다 — **아직 한 번도 해 본 적이 없어 전용 절차는 쓰지
+  않았습니다.** 처음 돌릴 때 걸린 것을 여기에 적으세요. 구조적 해소는 roadmap §7-1
 - **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로

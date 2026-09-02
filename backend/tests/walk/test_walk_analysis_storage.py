@@ -3,6 +3,7 @@ import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import CheckConstraint, UniqueConstraint, select
@@ -10,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
 from daengs_backend.models.walk import Walk, WalkAnalysis, WalkCellophaneSheet
+from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.services.walk_analysis import (
     CELLOPHANE_CELL_COLUMNS,
     CELLOPHANE_SHEET_SCHEMA_VERSION,
@@ -216,6 +218,18 @@ def test_walk_select_stays_compatible_until_manual_migration_runs() -> None:
     compiled = str(select(Walk).compile(dialect=postgresql.dialect()))
 
     assert "walks.analysis_state" not in compiled
+
+
+async def test_finalize_query_loads_state_and_locks_the_walk_row() -> None:
+    session = AsyncMock()
+    session.scalar.return_value = None
+
+    await walk_repo.get_owned_for_update(session, uuid.uuid4(), uuid.uuid4())
+
+    stmt = session.scalar.await_args.args[0]
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+    assert "walks.analysis_state" in compiled
+    assert "FOR UPDATE" in compiled
 
 
 def test_models_compile_to_postgresql_jsonb_contract() -> None:

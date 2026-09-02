@@ -16,10 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.models import Walk
-from daengs_backend.services.walk_chunk import decode_chunk
+from daengs_backend.models import Walk, WalkAnalysis
 from daengs_backend.schemas.walk import (
     WalkDetailResponse,
+    WalkFinalizeRequest,
+    WalkFinalizeResponse,
     WalkListResponse,
     WalkPointResponse,
     WalkPointsAppend,
@@ -27,6 +28,8 @@ from daengs_backend.schemas.walk import (
     WalkUpload,
 )
 from daengs_backend.services import walk as walk_service
+from daengs_backend.services.walk_chunk import decode_chunk
+from daengs_backend.services.walk_finalize import FinalizeInputError
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
 
@@ -62,6 +65,32 @@ def _to_detail(walk: Walk) -> WalkDetailResponse:
             for chunk in walk.points
             for point in decode_chunk(chunk.payload)
         ],
+    )
+
+
+def _to_finalize_response(analysis: WalkAnalysis) -> WalkFinalizeResponse:
+    return WalkFinalizeResponse(
+        walk_id=analysis.walk_id,
+        analysis_id=analysis.id,
+        input_fingerprint=analysis.input_fingerprint,
+        point_count=analysis.point_count,
+        terminal_client_seq=analysis.terminal_client_seq,
+        facts_record_version=analysis.facts_record_version,
+        calculation_version=analysis.calculation_version,
+        receipt_version=analysis.receipt_version,
+        observation_version=analysis.observation_version,
+        moving_distance_m=analysis.moving_distance_m,
+        moving_s=analysis.moving_s,
+        stop_count=analysis.stop_count,
+    )
+
+
+def _conflict(
+    exc: FinalizeInputError | walk_service.WalkStateConflictError,
+) -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        detail={"code": exc.code, "message": exc.detail},
     )
 
 
@@ -132,4 +161,37 @@ async def append_points(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다."
         ) from None
+    except walk_service.WalkStateConflictError as exc:
+        raise _conflict(exc) from None
     return _to_detail(walk)
+
+
+@router.post("/{walk_id}/finalize", response_model=WalkFinalizeResponse)
+async def finalize_walk(
+    walk_id: uuid.UUID,
+    body: WalkFinalizeRequest,
+    response: Response,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> WalkFinalizeResponse:
+    """전체 좌표열을 봉인하고 버전된 계산 결과를 저장합니다.
+
+    첫 완료는 201, 응답을 못 받아 같은 manifest로 다시 부른 경우는
+    200과 같은 ``analysis_id``를 돌려줍니다.
+    """
+    try:
+        analysis, created = await walk_service.finalize_walk(
+            session,
+            user.app_user_id,
+            walk_id,
+            body,
+        )
+    except walk_service.WalkNotFoundError:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다."
+        ) from None
+    except (FinalizeInputError, walk_service.WalkStateConflictError) as exc:
+        raise _conflict(exc) from None
+
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return _to_finalize_response(analysis)

@@ -25,24 +25,15 @@ location /screen/ {
     proxy_read_timeout    120s;
 }
 
-# 보행 영상 분석 — /gait 접두사를 뗍니다 (컨테이너는 /analyze 로 받음, D-038)
+# 보행 영상 분석 — **옛 무인증 경로. 닫혀 있습니다** (#64 · #145). 근거 주석의 원본은
+# default.conf 이고, 여기는 클라우드가 읽는 사본입니다.
+#
+# ⚠️ **여기를 열어 두면 집 서버만 닫히고 클라우드는 그대로 공개됩니다.** 실제로 그럴 뻔했고
+#    (#145 최초안이 default.conf 만 닫았습니다), 반대 방향의 같은 사고가 #150 이었습니다.
+#    이 파일과 default.conf 의 location 목록은 **항상 같아야 합니다.**
 location /gait/ {
-    set $gait_upstream gait-analysis:8000;
-    rewrite ^/gait/(.*)$ /$1 break;
-
-    proxy_pass http://$gait_upstream;
-    proxy_http_version 1.1;
-
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
-    # 영상 업로드(실측 5~60MB) + 분 단위 추론 — default.conf 의 근거 주석 참고
-    client_max_body_size 200m;
-    proxy_connect_timeout   5s;
-    proxy_send_timeout    600s;
-    proxy_read_timeout    600s;
+    default_type application/json;
+    return 410 '{"detail":"이 주소는 더 이상 쓰지 않습니다. 앱을 최신 버전으로 업데이트해 주세요."}';
 }
 
 # Place 검색 — 경로 변환 없음 (D-027)

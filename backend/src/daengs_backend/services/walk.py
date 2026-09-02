@@ -8,10 +8,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.models import Walk, WalkPet, WalkPoint
+from daengs_backend.models import Walk, WalkPet, WalkPointChunk
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import WalkPointsAppend, WalkUpload
+from daengs_backend.services.walk_chunk import encode_chunk
 
 
 class WalkNotFoundError(Exception):
@@ -76,18 +77,9 @@ async def upload_walk(
     # **pet_id 순으로 담습니다.** 관계가 그 순서로 다시 읽히기 때문입니다 —
     # 방금 올린 응답과 나중에 받아 온 응답의 순서가 다르면 앱이 "바뀌었다" 로 읽습니다.
     walk.pets = [WalkPet(pet_id=pet_id) for pet_id in sorted(mine)]
-    walk.points = [
-        WalkPoint(
-            client_seq=point.client_seq,
-            chain_index=point.chain_index,
-            at=point.at,
-            lat=point.lat,
-            lng=point.lng,
-            accuracy_m=point.accuracy_m,
-            is_mock=point.is_mock,
-        )
-        for point in sorted(body.points, key=lambda p: p.client_seq)
-    ]
+    # 좌표는 **묶음 하나**로 담는다. 앱이 2,000점씩 끊어 보내므로 요청 하나가
+    # 곧 묶음 하나다 (`WalkSync.POINTS_PER_REQUEST`).
+    walk.points = [_chunk(body.points)] if body.points else []
     walk_repo.add(session, walk)
     await session.commit()
     return walk, True
@@ -111,22 +103,29 @@ async def append_points(
     if walk is None:
         raise WalkNotFoundError
 
-    already = await walk_repo.existing_seqs(session, walk_id)
-    fresh = [p for p in body.points if p.client_seq not in already]
-    if not fresh:
+    # **묶음의 첫 순번으로 재시도를 판정한다.** 앱이 같은 묶음을 다시 보내는 것은
+    # 재시도지 오류가 아니다. 예전에는 좌표 순번을 전부 읽어 하나씩 걸렀는데,
+    # 묶음 단위면 몇 개만 읽으면 된다.
+    starts = await walk_repo.existing_chunk_starts(session, walk_id)
+    chunk = _chunk(body.points)
+    if chunk.seq_from in starts:
         return walk
 
-    walk.points.extend(
-        WalkPoint(
-            client_seq=point.client_seq,
-            chain_index=point.chain_index,
-            at=point.at,
-            lat=point.lat,
-            lng=point.lng,
-            accuracy_m=point.accuracy_m,
-            is_mock=point.is_mock,
-        )
-        for point in sorted(fresh, key=lambda p: p.client_seq)
-    )
+    walk.points.append(chunk)
     await session.commit()
     return walk
+
+
+def _chunk(points: list) -> WalkPointChunk:
+    """좌표 묶음 한 줄.
+
+    `seq_from` · `seq_to` · `point_count` 를 밖에 꺼내 두는 이유는 **payload 를 풀지
+    않고** 재시도를 판정하고 개수를 세기 위해서다.
+    """
+    seqs = [p.client_seq for p in points]
+    return WalkPointChunk(
+        seq_from=min(seqs),
+        seq_to=max(seqs),
+        point_count=len(points),
+        payload=encode_chunk(points),
+    )

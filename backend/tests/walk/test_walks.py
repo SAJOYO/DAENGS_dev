@@ -96,7 +96,9 @@ def test_같은_산책을_두_번_올려도_한_건이다(client: TestClient, st
     assert second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
     assert len(store.walks) == 1
-    assert len(store.walks[0].points) == 2
+    # 좌표는 **묶음**으로 담긴다. 세는 것은 묶음이 아니라 그 안의 점이다 —
+    # 이 테스트가 보는 것은 "다시 올려도 좌표가 안 늘어난다" 이기 때문이다.
+    assert sum(chunk.point_count for chunk in store.walks[0].points) == 2
 
 
 def test_남의_산책은_404(client: TestClient, store: Store) -> None:

@@ -44,6 +44,7 @@ def run_cases(
     *,
     client: Any,
     prompt_builder: Callable[..., str] = build_semantic_router_prompt,
+    model_id: str = MODEL_ID,
 ) -> tuple[dict[str, list[AttemptValidation]], dict[str, PerformanceObservation]]:
     """Run sequentially; retry only an invalid SemanticRoutingDecision."""
     attempts_by_case: dict[str, list[AttemptValidation]] = {}
@@ -59,14 +60,19 @@ def run_cases(
         for _attempt_number in range(2):
             started = time.perf_counter()
             response = client.models.generate_content(
-                model=MODEL_ID,
+                model=model_id,
                 contents=prompt_builder(query=case.query, context=case.context),
                 config=config,
             )
             elapsed_ms += (time.perf_counter() - started) * 1000
             semantic = validate_semantic_decision(_response_value(response))
             plan = (
-                assemble_route_plan(semantic.decision, query=case.query, context=case.context)
+                assemble_route_plan(
+                    semantic.decision,
+                    query=case.query,
+                    context=case.context,
+                    model_id=model_id,
+                )
                 if semantic.decision is not None
                 else None
             )

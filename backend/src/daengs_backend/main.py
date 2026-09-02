@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
-from daengs_backend.routers import app_auth, auth, crawl, health, pet, training
+from daengs_backend.routers import app_auth, assistant, auth, crawl, health, pet, training
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
 # import 하는데, 그쪽이 나중에 와서 이걸 가려 버립니다 — 그러면 include_router 가
@@ -111,6 +111,9 @@ app.include_router(pet.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
 app.include_router(training.router)
+# 오케스트레이션 진입점 (Card 3). 인증은 `/training/chat` 과 같은 자리 —
+# 엔드포인트 자체의 파라미터 의존성(`admin_or_app_user(Perm.READ)`)이 겁니다.
+app.include_router(assistant.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
 app.include_router(screening_router)

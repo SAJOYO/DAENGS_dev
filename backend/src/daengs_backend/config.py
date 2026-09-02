@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, SecretStr, ValidationError, model_validator
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -96,6 +95,22 @@ class Settings(BaseSettings):
     # 인증 화면이 아직 연결되지 않은 로컬 데모에서만 명시적으로 true로 둔다.
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
+
+    # ── 의미 라우터 (D-041) ───────────────────────────────────────────
+    # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
+    # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는
+    # 것이며, 위 redis_url 과 같은 판단입니다 — 두 패키지가 같은 env 를 각자 읽는
+    # 것이 서로를 import 하는 것보다 쌉니다 (backend↔life 접점은 기계 강제됩니다).
+    #
+    # 라우터 모델은 계약상 고정이라(.env 로 안 뺍니다) orchestration/semantic.py 의
+    # ROUTER_MODEL_ID 가 원본입니다. 키가 비면 앱은 뜨고, 의미 라우팅만 실패합니다.
+    # 타임아웃은 **밀리초**입니다 (google-genai HttpOptions.timeout — _MS 가 이유).
+    gemini_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("GEMINI_API_KEY")
+    )
+    gemini_timeout_ms: int = Field(
+        default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
+    )
 
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #

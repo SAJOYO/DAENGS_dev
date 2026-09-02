@@ -26,7 +26,9 @@ Training 인지 Walk 인지 둘 다인지 단어로는 갈리지 않습니다 �
 
 ## 2. 의미 라우팅 — LLM 폴백
 
-결정적 신호가 없으면(대부분의 자연어 입력) 다음 경로를 탑니다 (D-041, Card 2A PASS):
+결정적 신호가 없으면(대부분의 자연어 입력) 다음 경로를 탑니다 (D-041, Card 2A PASS —
+production 구현은 Card 2B 의 `backend/src/daengs_backend/orchestration/` `semantic.py` ·
+`planner.py` · `service.py`):
 
 ```text
 자연어 원문 + 허용된 라우팅 메타데이터
@@ -97,13 +99,18 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
   token 은 v1 에 필요 없습니다. 인가·소유권을 함의하는 컨텍스트는 권위 있는 원천이
   생기는 시점부터 서버에서 재검증합니다.
 
-## 4. 라우터 모델 — `gemini-3.5-flash-lite` 수용 완료 (CONFIRMED — D-041)
+## 4. 라우터 모델 — `gemini-3.1-flash-lite` 수용 완료 (CONFIRMED — D-041, 2026-09-01 정정)
 
-v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.5-flash-lite`** 를 사용합니다. 이 선택은
-Card 2A의 모델 비교 결과가 아닙니다. Card 2A는 모델을 고르는 실험이 아니라, 결과를 보기
-전에 골드 RoutePlan·프롬프트·수용 게이트를 함께 동결하고 이 모델이 생산 수용 기준을
-충족하는지 **PASS/FAIL**로 판정한 acceptance benchmark이며 최종 결과는 **PASS**입니다.
-수용된 경계는 LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
+v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.1-flash-lite`** 를 사용합니다. Card 2A
+최초 구현은 사람의 모델 선정 기억 착오로 `gemini-3.5-flash-lite`를 썼고 그 상태로
+PASS했지만, 원래 의도된 팀 결정은 3.1이었습니다. 착오를 프로덕션에 반영하기 전에
+`gemini-3.1-flash-lite`를 **동일한** 80개 골드 RoutePlan·`semantic-router-ko-v3` 프롬프트·
+동결 gate에 대해 재실행해 **PASS**를 확인했습니다(PR #130,
+`backend/evals/orchestration_router/summary_v4.json`) — 자세한 수치는 D-041 참고.
+이 선택은 Card 2A의 모델 비교 결과가 아닙니다. Card 2A는 모델을 고르는 실험이 아니라,
+결과를 보기 전에 골드 RoutePlan·프롬프트·수용 게이트를 함께 동결하고 이 모델이 생산
+수용 기준을 충족하는지 **PASS/FAIL**로 판정한 acceptance benchmark입니다. 수용된 경계는
+LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 
 측정 항목:
 
@@ -121,6 +128,39 @@ Card 2A의 모델 비교 결과가 아닙니다. Card 2A는 모델을 고르는 
 `backend/evals/orchestration_router/benchmark_v1.yaml`이 원본입니다. 지연은 관측하지만
 더 빠른 다른 모델을 고르는 규칙은 없습니다. 실패하면 모델을 조용히 바꾸지 않고 실패
 유형을 분석한 뒤 사람이 프롬프트·스키마/컨텍스트·아키텍처 중 다음 조치를 정합니다.
+
+### Production 구현 상태 (CURRENT — 2026-09-01, Card 2B·Card 3)
+
+이 정책 자체는 바뀌지 않았습니다 — 아래는 **구현이 이 정책을 실제로 지키는지**의
+상태 기록입니다.
+
+- **production 의미 라우터가 merge 됐습니다** (PR #113) — `semantic.py`(Gemini 의미
+  선택 + O-14 1회 재시도) · `planner.py`(결정론적 RoutePlan 조립) · `service.py`.
+- **인증된 `POST /assistant/query` 진입점이 merge 됐습니다** (PR #115,
+  orchestration-contracts.md §8) — 이 정책 §1~§5 가 설명하는 경로 전체(결정적 신호 →
+  의미 라우팅 → 결정론적 조립 → Card 1 실행 → 집계)가 이제 실제 HTTP 요청으로
+  도달 가능합니다.
+- **최종 경로에 포커스 E2E 검증이 있습니다** — 실제 `AssistantOrchestrationService` ·
+  planner · Card 1 그래프 · 집계를 그대로 쓰고 Gemini 전송과 능력 어댑터만 대체한
+  통합 테스트입니다(`backend/tests/test_assistant_orchestration_e2e.py`). Card 2A 의
+  80건 골드 벤치마크(`docs/orchestration-router-benchmark.md`)와는 다른 것이고, **이
+  closeout 이 그 벤치마크를 다시 돌리거나 동결을 해제하지 않습니다.**
+- **라이브 Gemini 스모크 3건** — 실제 `gemini-3.5-flash-lite` 로 production 경로가
+  실제로 붙어 있는지 확인한 소규모 스모크이지, 새 벤치마크가 아닙니다. Provider 원문
+  프롬프트/응답은 기록하지 않고 결과만 남깁니다.
+
+  | 의도 | 기대 라우팅/plan 결과 |
+  | --- | --- |
+  | Training 의도 | `execute=[training]` → RoutePlan.requests 에 training |
+  | Gait handoff 의도 | `handoffs=[gait]` → RoutePlan.handoffs 에 gait |
+  | Walk(좌표 없음) 의도 | `execute=[walk]` 선택 → 좌표 없음 → RoutePlan.clarify |
+
+  3/3 기대한 라우팅/plan 결과와 일치했습니다. 이 스모크는 벤치마크 지표(§4 위 표)를
+  갱신하지 않습니다.
+
+- **프론트를 `/assistant/query` 에 연결하는 것과, 배포된 서버 인프라에서 실제
+  Training/Life/Walk 로 스모크하는 것은 별도 후속 작업입니다.** 둘 다 이 라우팅
+  계약을 바꾸지 않습니다 — 이미 승인된 정책 위에 남은 통합/배포 작업입니다.
 
 ## 5. 능력 가용성 · v1 범위 · 인가 매트릭스
 

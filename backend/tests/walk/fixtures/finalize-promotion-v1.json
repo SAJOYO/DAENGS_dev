@@ -1,0 +1,58 @@
+{
+  "fixture_version": 1,
+  "provenance": {
+    "source_repo": "rkbuhtig/DAENGS_geo",
+    "source_commit": "e1cde879a296c70f9f617cc05e5cb807bf7e43c8",
+    "target_repo": "SAJOYO/DAENGS_dev",
+    "target_commits": [
+      "d9a7a846f829a1b37952bc48da8821d32d33b2f4",
+      "c1e2dbebb6f0df7b6e52d18971fc1bab0af7f76f"
+    ],
+    "covers": "raw points -> decoded evidence -> facts/receipt/events/observations -> cellophane"
+  },
+  "walk": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "started_at": "2026-09-01T09:00:00Z",
+    "ended_at": "2026-09-01T09:01:00Z"
+  },
+  "points": [
+    {"client_seq": 0, "chain_index": 0, "at": "2026-09-01T09:00:00Z", "lat": "37.500000", "lng": "127.000000", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 1, "chain_index": 0, "at": "2026-09-01T09:00:10Z", "lat": "37.500000", "lng": "127.000113", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 2, "chain_index": 0, "at": "2026-09-01T09:00:20Z", "lat": "37.500000", "lng": "127.000226", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 3, "chain_index": 0, "at": "2026-09-01T09:00:30Z", "lat": "37.500000", "lng": "127.000339", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 4, "chain_index": 0, "at": "2026-09-01T09:00:40Z", "lat": "37.500000", "lng": "127.000452", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 5, "chain_index": 0, "at": "2026-09-01T09:00:50Z", "lat": "37.500000", "lng": "127.000565", "accuracy_m": 8.0, "is_mock": false},
+    {"client_seq": 6, "chain_index": 0, "at": "2026-09-01T09:01:00Z", "lat": "37.500000", "lng": "127.000678", "accuracy_m": 8.0, "is_mock": false}
+  ],
+  "expected": {
+    "input_fingerprint": "sha256:60ff5c11729f696f5814ce9581960dfedd515f41f068769e1aee157c9969a149",
+    "facts": {
+      "record_version": 1,
+      "calculation_version": 4,
+      "evidence_origin": "device",
+      "duration_s": 60,
+      "distance_m": 60,
+      "moving_distance_m": 60,
+      "moving_s": 60,
+      "stop_count": 0,
+      "stop_s": 0,
+      "avg_speed_mps": 0.997,
+      "fix_count": 7
+    },
+    "receipt": {
+      "receipt_version": 1,
+      "received_fix_count": 7,
+      "accepted_fix_count": 7,
+      "rejected_low_accuracy_count": 0,
+      "rejected_out_of_order_count": 0,
+      "jump_break_count": 0,
+      "gap_break_count": 0,
+      "explicit_break_count": 0,
+      "mock_fix_count": 0
+    },
+    "event_count": 0,
+    "observation_count": 1,
+    "paint_fp": "3bb02412877d",
+    "cell_count": 33
+  }
+}

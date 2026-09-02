@@ -8,11 +8,18 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.models import Walk, WalkPet, WalkPointChunk
+from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
-from daengs_backend.schemas.walk import WalkPointsAppend, WalkUpload
+from daengs_backend.schemas.walk import (
+    WalkFinalizeRequest,
+    WalkPointsAppend,
+    WalkUpload,
+)
+from daengs_backend.services.walk_analysis import build_analysis_models
 from daengs_backend.services.walk_chunk import encode_chunk
+from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_walk import analyze_walk, build_cellophane
 
 
 class WalkNotFoundError(Exception):
@@ -21,6 +28,15 @@ class WalkNotFoundError(Exception):
     **남의 것일 때도 이 예외입니다** — 403 으로 나누면 "그 id 는 존재한다"를
     알려 주는 셈입니다 (`services/pet.py` 와 같은 판단).
     """
+
+
+class WalkStateConflictError(RuntimeError):
+    """현재 입력 봉인 상태와 요청이 충돌한다."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
 
 
 async def list_walks(session: AsyncSession, app_user_id: uuid.UUID) -> list[Walk]:
@@ -99,21 +115,89 @@ async def append_points(
     **이미 있는 순번은 조용히 넘깁니다.** 앱이 같은 묶음을 다시 보내는 것은 재시도지
     오류가 아닙니다 — DB 의 PK 가 막아 주기는 하지만 그건 500 으로 터지는 방식입니다.
     """
-    walk = await walk_repo.get_owned(session, app_user_id, walk_id)
-    if walk is None:
-        raise WalkNotFoundError
+    try:
+        walk = await walk_repo.get_owned_for_update(session, app_user_id, walk_id)
+        if walk is None:
+            raise WalkNotFoundError
+        if walk.analysis_state != "collecting":
+            raise WalkStateConflictError(
+                "walk_already_finalized",
+                "이미 봉인된 산책에는 좌표를 더할 수 없습니다.",
+            )
 
-    # **묶음의 첫 순번으로 재시도를 판정한다.** 앱이 같은 묶음을 다시 보내는 것은
-    # 재시도지 오류가 아니다. 예전에는 좌표 순번을 전부 읽어 하나씩 걸렀는데,
-    # 묶음 단위면 몇 개만 읽으면 된다.
-    starts = await walk_repo.existing_chunk_starts(session, walk_id)
-    chunk = _chunk(body.points)
-    if chunk.seq_from in starts:
+        # **묶음의 첫 순번으로 재시도를 판정한다.** 앱이 같은 묶음을 다시 보내는 것은
+        # 재시도지 오류가 아니다. 예전에는 좌표 순번을 전부 읽어 하나씩 걸렀는데,
+        # 묶음 단위면 몇 개만 읽으면 된다.
+        starts = await walk_repo.existing_chunk_starts(session, walk_id)
+        chunk = _chunk(body.points)
+        if chunk.seq_from in starts:
+            await session.commit()  # 변경 없이 행 잠금만 풀어 재시도를 완료한다.
+            return walk
+
+        walk.points.append(chunk)
+        await session.commit()
         return walk
+    except Exception:
+        await session.rollback()
+        raise
 
-    walk.points.append(chunk)
-    await session.commit()
-    return walk
+
+async def finalize_walk(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    walk_id: uuid.UUID,
+    manifest: WalkFinalizeRequest,
+) -> tuple[WalkAnalysis, bool]:
+    """완전한 좌표열을 계산하고 분석·sheet·봉인 상태를 한 번에 commit한다.
+
+    같은 finalize를 다시 부르면 이미 저장된 같은 identity를 돌려준다.
+    append와 같은 Walk 행을 잠그므로 두 요청이 동시에 입력을 바꾸지 못한다.
+    """
+    try:
+        walk = await walk_repo.get_owned_for_update(session, app_user_id, walk_id)
+        if walk is None:
+            raise WalkNotFoundError
+
+        prepared = prepare_finalized_walk(walk.points, manifest)
+        if walk.analysis_state == "derived":
+            existing = await walk_repo.get_analysis_for_input(
+                session,
+                walk_id=walk.id,
+                input_fingerprint=prepared.input_fingerprint,
+            )
+            if existing is None:
+                raise WalkStateConflictError(
+                    "finalized_analysis_not_found",
+                    "봉인 상태와 저장된 분석 결과가 맞지 않습니다.",
+                )
+            await session.commit()  # 변경 없이 행 잠금만 풀고 멱등 응답한다.
+            return existing, False
+
+        if walk.analysis_state != "collecting":
+            raise WalkStateConflictError(
+                "walk_state_invalid",
+                f"알 수 없는 산책 봉인 상태입니다: {walk.analysis_state!r}",
+            )
+
+        evidence = analyze_walk(
+            walk.id,
+            walk.started_at,
+            walk.ended_at,
+            prepared.points,
+        )
+        analysis = build_analysis_models(
+            prepared,
+            evidence,
+            build_cellophane(evidence),
+        )
+        walk_repo.add_analysis(session, analysis)
+        walk.analysis_state = "derived"
+        await session.flush()
+        await session.commit()
+        return analysis, True
+    except Exception:
+        await session.rollback()
+        raise
 
 
 def _chunk(points: list) -> WalkPointChunk:

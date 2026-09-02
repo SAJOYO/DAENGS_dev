@@ -45,9 +45,15 @@ CREATE TABLE IF NOT EXISTS walks (
     is_day BOOLEAN,
     temperature_c NUMERIC(4, 1),
 
+    -- collecting 동안만 좌표 입력을 바꿀 수 있다. derived는 현재 입력이 봉인됐다는
+    -- 뜻이고, 계산 세대 자체는 walk_analyses가 따로 식별한다.
+    analysis_state VARCHAR(16) NOT NULL DEFAULT 'collecting',
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT walks_time_order CHECK (ended_at >= started_at),
+    CONSTRAINT walks_analysis_state_check
+        CHECK (analysis_state IN ('collecting', 'derived')),
 
     -- **재시도가 안전해야 한다.** 앱은 네트워크가 끊기면 다음에 다시 올리는데,
     -- 그때 같은 산책이 두 건이 되면 안 된다. 이 제약이 그걸 DB 에서 막는다.
@@ -112,6 +118,107 @@ CREATE TABLE IF NOT EXISTS walk_point_chunks (
 
     PRIMARY KEY (walk_id, seq_from)
 );
+
+-- ---------------------------------------------------------------------
+-- walk_analyses : 봉인된 입력을 한 계산 세대로 해석한 불변 결과
+-- ---------------------------------------------------------------------
+-- 같은 원본도 계산 정책이 바뀌면 새 행으로 쌓는다. Paint는 이 결과를 소비하는 별도
+-- 세대라 아래 walk_cellophane_sheets가 맡는다 — Paint만 바뀌었다고 Facts를 복제하지 않는다.
+CREATE TABLE IF NOT EXISTS walk_analyses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    walk_id UUID NOT NULL REFERENCES walks(id) ON DELETE CASCADE,
+
+    input_fingerprint VARCHAR(71) NOT NULL,
+    point_count INTEGER NOT NULL,
+    terminal_client_seq INTEGER,
+
+    facts_record_version INTEGER NOT NULL,
+    calculation_version INTEGER NOT NULL,
+    receipt_version INTEGER NOT NULL,
+    observation_version INTEGER NOT NULL,
+
+    -- 목록·집계에서 먼저 쓸 값만 밖으로 꺼내고 전체 계약은 아래 JSONB로 보존한다.
+    moving_distance_m INTEGER NOT NULL,
+    moving_s INTEGER NOT NULL,
+    stop_count INTEGER NOT NULL,
+
+    facts JSONB NOT NULL,
+    measurement_receipt JSONB NOT NULL,
+    motion_events JSONB NOT NULL,
+    micro_observations JSONB NOT NULL,
+    derived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT walk_analyses_input_fingerprint_check
+        CHECK (input_fingerprint ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT walk_analyses_point_count_check CHECK (point_count >= 0),
+    CONSTRAINT walk_analyses_terminal_sequence_check CHECK (
+        (point_count = 0 AND terminal_client_seq IS NULL)
+        OR (point_count > 0 AND terminal_client_seq = point_count - 1)
+    ),
+    CONSTRAINT walk_analyses_versions_positive CHECK (
+        facts_record_version > 0
+        AND calculation_version > 0
+        AND receipt_version > 0
+        AND observation_version > 0
+    ),
+    CONSTRAINT walk_analyses_summary_nonnegative CHECK (
+        moving_distance_m >= 0 AND moving_s >= 0 AND stop_count >= 0
+    ),
+    CONSTRAINT walk_analyses_facts_object CHECK (jsonb_typeof(facts) = 'object'),
+    CONSTRAINT walk_analyses_receipt_object
+        CHECK (jsonb_typeof(measurement_receipt) = 'object'),
+    CONSTRAINT walk_analyses_events_array CHECK (jsonb_typeof(motion_events) = 'array'),
+    CONSTRAINT walk_analyses_observations_array
+        CHECK (jsonb_typeof(micro_observations) = 'array'),
+    CONSTRAINT walk_analyses_identity_unique UNIQUE (
+        walk_id,
+        input_fingerprint,
+        facts_record_version,
+        calculation_version,
+        receipt_version,
+        observation_version
+    )
+);
+
+CREATE INDEX IF NOT EXISTS walk_analyses_walk_derived_idx
+    ON walk_analyses (walk_id, derived_at DESC);
+
+-- ---------------------------------------------------------------------
+-- walk_cellophane_sheets : 분석 결과를 한 Paint spec으로 칠한 compact sheet
+-- ---------------------------------------------------------------------
+-- 셀당 한 행은 아직 만들지 않는다. 현재 필요한 것은 한 산책의 장 전체를 쓰고 읽는
+-- 경로뿐이라, 정렬된 [q,r,occupancy_s,peak] 배열을 JSONB 한 건으로 보존한다.
+CREATE TABLE IF NOT EXISTS walk_cellophane_sheets (
+    analysis_id UUID NOT NULL REFERENCES walk_analyses(id) ON DELETE CASCADE,
+    paint_fp VARCHAR(128) NOT NULL,
+    sheet_schema_version INTEGER NOT NULL,
+    paint_version INTEGER NOT NULL,
+    grid_version VARCHAR(64) NOT NULL,
+    radius_u DOUBLE PRECISION NOT NULL,
+    profile VARCHAR(128) NOT NULL,
+    profile_fp VARCHAR(128) NOT NULL,
+    sample_step_m DOUBLE PRECISION NOT NULL,
+    cell_count INTEGER NOT NULL,
+    sheet_fingerprint VARCHAR(71) NOT NULL,
+    payload JSONB NOT NULL,
+    derived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT walk_cellophane_versions_positive
+        CHECK (sheet_schema_version > 0 AND paint_version > 0),
+    CONSTRAINT walk_cellophane_spec_positive CHECK (radius_u > 0 AND sample_step_m > 0),
+    CONSTRAINT walk_cellophane_identity_nonempty CHECK (
+        paint_fp <> '' AND grid_version <> '' AND profile <> '' AND profile_fp <> ''
+    ),
+    CONSTRAINT walk_cellophane_cell_count_check CHECK (cell_count >= 0),
+    CONSTRAINT walk_cellophane_fingerprint_check
+        CHECK (sheet_fingerprint ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT walk_cellophane_payload_object CHECK (jsonb_typeof(payload) = 'object'),
+
+    PRIMARY KEY (analysis_id, paint_fp)
+);
+
+CREATE INDEX IF NOT EXISTS walk_cellophane_paint_fp_idx
+    ON walk_cellophane_sheets (paint_fp);
 
 -- ---------------------------------------------------------------------
 -- walk_pets : 그 산책에 누가 나갔나

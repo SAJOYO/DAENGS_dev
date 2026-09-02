@@ -1,4 +1,5 @@
 import ast
+import tomllib
 from pathlib import Path
 
 PURE_MODULES = {
@@ -38,3 +39,12 @@ def test_calculation_core_does_not_bypass_product_capabilities() -> None:
     }
 
     assert not violations, violations
+
+
+def test_calculation_core_is_configured_for_the_backend_wheel() -> None:
+    pyproject = Path(__file__).parents[2] / "pyproject.toml"
+    config = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+
+    packaged_modules = config["tool"]["uv"]["build-backend"]["module-name"]
+
+    assert "daengs_walk" in packaged_modules

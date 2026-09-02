@@ -12,13 +12,14 @@
 
 ## 지금 상태 한 줄
 
-**앱이 붙을 수 있는 API 가 갖춰졌습니다** (2026-08-31). 목록·삭제까지 생겨
-업로드→분석→조회→비교→삭제 흐름이 전부 됩니다. 계약 정본은
-`backend/src/daengs_gait/API.md` 입니다.
+**backend 소유의 새 인증 흐름 `/app/gait/*` 으로 넘어가는 중입니다** (D-043, PR #133,
+2026-09-02). 앱→backend(인증·소유권·record/job·업로드 티켓)→별도 `gait-worker`→저장소
+구조이고, 개발 PC LocalBridge 왕복이 통과했습니다. 저장소는 GCS 로 확정(자격증명·버킷은
+#78 대기), 오늘은 임시 LocalBridge 로 서버 왕복을 엽니다. 아래 D-043 절 참고.
 
-⚠️ **서버는 아직 옛 코드입니다.** 머지(`c3013ab`)만으로는 반영되지 않습니다 —
-`profiles` 뒤라 배포가 안 건드립니다. `docker compose --profile gait up -d
---force-recreate gait-analysis` 를 한 번 돌려야 합니다.
+⚠️ **옛 무인증 `/gait/*`(gait-analysis) 는 앱 #64 전환 전까지 그대로 둡니다** — 지금 앱이
+그걸 쓰기 때문입니다. 전환·검증이 끝나면 차단합니다(진행 순서 6번). 그 옛 계약 정본은
+여전히 `backend/src/daengs_gait/API.md` 이고, 새 계약은 `/app/gait/*` 라우터·스키마입니다.
 
 ## 미해결 — 다음에 이어야 할 것
 
@@ -59,6 +60,138 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
              "C:\deploy\daengs\models\release\gait-analysis\yolov8n.pt" -Algorithm SHA256 |
   Format-List Path,Hash
 ```
+
+## 2026-09-02 — D-043: backend 가 record·job 을 소유, gait 는 내부 워커로 (PR #133)
+
+앱 카드(DAENGS_APP#64)가 무인증 `/gait/*` 를 발견한 것이 계기였고, 클라우드
+저장(#78)이 들어오면 "gait 에 인증을 어떻게 붙이나"라는 질문 자체가 사라진다는
+것이 결론이었습니다. 구조는 D-043 참고.
+
+만든 것: `gait_records` 테이블(SQL+모델) · `/app/gait/*` 라우터 · `StoragePort`
+(provider-neutral, 미설정 503) · backend 자체 Celery 앱(`gait` 큐) · 테스트 14개.
+
+⚠️ **아직 end-to-end 로 돌지 않습니다** — 저장소 구현이 #78 대기입니다.
+   `/app/gait/analyze` 는 지금 503 을 냅니다 (의도된 상태).
+
+⚠️ **무인증 `/gait/*` 는 앱 전환 전까지 열려 있습니다** — 미해결 5번이 이것이고,
+   완화는 앱 쪽 "테스트 빌드에서 끄기"입니다.
+
+**확정된 진행 순서** (2026-09-02 사람 승인 — 이 순서대로 갑니다):
+
+1. **#78** ~~provider~~ (GCS 확정) + **보관/파기 정책·버킷·리전 세부** ← 사람 결정
+2. ~~`StoragePort` 실제 구현~~ ✅ GcsStorage 작성 완료 (자격증명·버킷은 #78 뒤 연결)
+3. ~~gait worker compose 전환~~ ✅ `gait-worker` 서비스 추가 완료
+   (`celery -A daengs_backend.tasks.gait worker --queues gait`, profile gait)
+4. `/app/gait/*` 업로드 → confirm → 분석 → 결과 조회 **왕복 검증**
+   — ✅ **개발 PC LocalBridge 왕복 통과** (아래), 서버 왕복은 진행 중
+5. 앱 #64 를 새 API 로 전환
+6. 새 앱 흐름 검증 후 기존 무인증 `/gait/*` 차단
+
+### 2026-09-02(2) — A 확정: LocalBridge 로 왕복을 열고 #133 을 머지한다
+
+앞선 "#133 은 4번 통과까지 draft" 를 **사람이 A 로 갱신**했습니다: GCS 자격증명(#78)을
+기다리지 않고, **임시 LocalBridge** 로 `/app/gait/*` 왕복을 먼저 통과시켜 그것을 #133 의
+Ready 조건으로 봅니다. 서버 기본값은 여전히 `GAIT_STORAGE=none`(503)이라 머지 자체는
+프로덕션에 영향이 없고, 오늘 검증에서만 서버 `.env` 로 local 을 **명시적으로** 켭니다.
+
+⚠️ **LocalBridge 는 오늘 검증을 위한 transitional path 입니다 — 최종 저장 방식이 아닙니다.**
+   영상이 backend 웹의 bridge 엔드포인트를 지나 `gait-bridge` 볼륨에 잠깐 머뭅니다(원칙 1
+   위반이지만 검증 한정). GCP/GCS 가 준비되면 `LocalBridge → GcsStorage` 로 바꾸고, 그때
+   **GCS Signed URL 실제 왕복을 별도로 검증**합니다.
+
+⚠️ **LocalBridge 를 써도 무거운 분석은 backend 가 하지 않습니다.** bridge 는 파일 I/O 만
+   backend 를 지나고, torch·`daengs_gait` 분석은 언제나 별도 `gait-worker` 프로세스에서만
+   돕니다 (test_main_stays_light 가 backend `main` 을 지킵니다). 이 격리가 LocalBridge/GCS
+   어느 쪽에서도 그대로인 것이 이 구조의 핵심입니다.
+
+**개발 PC LocalBridge 왕복 실측** (실제 `IMG_8631.mov` 116MB):
+
+    analyze(키 생성·티켓) → upload(원본 그대로) → confirm(exists 확인)
+    → 별도 분석 → sampled 298 · detected 99 · usable 3 (walk_demo 와 일치)
+
+**서버 왕복 runbook** (오늘, 서버 PC 에서 — 스텝 3·4). 배포는 `dev` push 로 자동이지만
+`gait-worker` 는 profile 뒤라 **명시적으로** 띄웁니다:
+
+```powershell
+# 0) gait_records 테이블을 서버 DB 에 1회 적용 (db/init 은 기존 볼륨엔 안 돕니다).
+#    PowerShell 은 `<` 입력 리디렉션이 없어 Get-Content 로 파이프하고, 계정·DB 이름은
+#    컨테이너 자신의 env 를 sh 가 확장하게 둡니다 (psql 은 -f 없으면 stdin 을 읽습니다).
+#    파일은 IF NOT EXISTS 라 여러 번 돌려도 안전합니다.
+Get-Content db\migrations\2026-09-02_gait_records.sql -Raw |
+  docker compose exec -T pgvector sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+# 1) 서버 최상단 .env 에 LocalBridge 를 켜는 값 추가 (오늘 검증용 — GCS 오면 지웁니다)
+#    GAIT_STORAGE=local
+#    GAIT_LOCAL_STORAGE_DIR=/data/gait-bridge
+#    GAIT_BRIDGE_BASE_URL=http://daengback.weareithero.cloud   # 지금은 평문 http
+
+# 2) backend(새 env·볼륨 반영) + gait-worker 를 띄웁니다.
+docker compose up -d backend                       # GAIT_* env·gait-bridge 볼륨 반영
+docker compose --profile gait up -d gait-worker    # 별도 워커(celery, gait 큐)
+
+# 2-1) nginx 의 /app/gait/ 블록(업로드 200m)을 반영. default.conf 는 bind-mount 라
+#      배포가 자동 reload 하지 않습니다 — 문법 확인 후 reload 합니다.
+docker compose exec nginx nginx -t
+docker compose exec nginx nginx -s reload
+
+# 3) 왕복: 인증→analyze→upload(bridge)→confirm→워커 분석→조회
+#    (인증 토큰이 필요합니다 — 앱 계정으로 로그인해 얻은 access 토큰을 씁니다)
+```
+
+이후 5번(앱 #64 전환) → 실기기 검증 → 6번(무인증 `/gait/*` 차단) 순서입니다.
+
+### 2026-09-02(3) — 서버 왕복 통과 ✅ 그리고 그것이 잡아낸 버그 2개
+
+`IMG_8631.mov`(116MB)로 실제 서버에서 왕복했습니다. **인증(401) · 소유권(404) ·
+analyze(201) · 업로드(200) · confirm(UPLOADED) · 별도 워커 분석(DONE) · 조회 · 삭제(404)**
+전부 통과했습니다.
+
+| 항목 | 서버 | 개발 PC |
+| --- | --- | --- |
+| `n_frames_sampled` | 298 | 298 |
+| `n_frames_detected` | 100 | 99 |
+| `n_frames_gait_usable` | 2 | 3 |
+| `video_meta` | `1080x1920 / 30fps` | 같음 |
+
+⚠️ **"완전 일치"가 아니라 ±1 입니다.** 임계값 근처 프레임이 플랫폼 부동소수점 차이
+(Windows torch vs 리눅스 CPU torch)로 갈린 것으로 봅니다. `sampled` 가 정확히 같으므로
+**입력은 동일**합니다 — 원본 `.mov` 를 재인코딩 없이 읽었다는 뜻입니다(#132). 예전
+망가진 기록의 `-1x-1 / sampled 0` 과 대조됩니다.
+
+**이 왕복이 아니었으면 못 잡았을 버그 둘:**
+
+**① 워커의 두 번째 태스크부터 전부 죽습니다 (이벤트 루프)**
+
+```
+RuntimeError: Task <_cleanup() ...> got Future attached to a different loop
+```
+
+`core/database.py` 의 **모듈 전역 엔진**은 풀에 커넥션을 남기고, 그 커넥션은 **그것을
+만든 이벤트 루프**에 묶입니다. Celery 태스크는 `asyncio.run()` 으로 매번 새 루프를 열고
+그 루프는 끝나면 닫히므로, 다음 태스크가 죽은 루프의 커넥션을 꺼내며 터집니다.
+
+**첫 태스크는 항상 성공합니다** — 그래서 분석은 되는데 뒤이은 cleanup 만 실패하는
+모습으로 나타났고, 실제로는 **두 번째 분석 요청도 같은 이유로 죽습니다.** `pool_pre_ping`
+때문에 스택이 ping 에서 끝나 원인이 더 가려집니다.
+
+고침: `core/database.worker_session()` — 태스크마다 `NullPool` 엔진을 새로 만들고
+`finally` 에서 dispose. 워커 경로(`_run_analysis` · `_cleanup`)가 그것을 씁니다.
+테스트로 고정했습니다(`asyncio.run` 두 번 = 엔진 두 개).
+
+**② 임시 bridge 가 무인증 임의 경로 쓰기였습니다**
+
+`PUT /app/gait/_bridge/upload/<아무 경로>` 가 토큰 없이 200 이었습니다. 공개 도메인이라
+**아무나 서버 디스크를 채울 수 있는 상태**로 잠깐 배포됐습니다(오늘 검증 중). "local 은
+신뢰된 환경에서만 켠다"는 전제를 공개 서버에서 켜면서 깨뜨린 것입니다.
+
+고침: 인증 헤더를 요구하지 **않고**(그러면 GCS 전환 때 앱이 또 바뀝니다),
+**backend 가 실제로 발급한 키인지**를 DB 로 확인합니다 —
+`gait_repo.find_by_storage_key(..., status="PENDING")`. 키는 uuid4 라 추측할 수 없고,
+발급받은 사람은 소유자뿐이며, confirm 뒤에는 덮어쓰기도 막힙니다. 다운로드도 같습니다.
+
+⚠️ **워커 코드가 바뀌었으므로 `gait-worker` 재시작이 필요합니다** — backend 웹은
+`--reload` 라 배포가 알아서 반영하지만 celery 는 아닙니다:
+`docker compose --profile gait restart gait-worker`
 
 ## 이력
 

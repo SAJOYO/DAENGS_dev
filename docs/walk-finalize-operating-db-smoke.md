@@ -93,8 +93,50 @@ cleanup을 한 번 더 실행했다.
 | 음수 Kakao user | 0행 |
 
 이로써 #140의 repository/service 경로와 운영 DB 스키마는 실제 PostgreSQL에서
-완주했다. 공개 HTTP·앱 인증·실기기 네트워크는 이 smoke의 범위가 아니므로,
-DAENGS_APP의 finalize 호출이 준비되면 별도 왕복 검증한다.
+완주했다.
+
+## Android 앱 왕복
+
+DAENGS_APP #71 (`71acb6f`)의 실제 debug APK와 계측 APK를 Pixel 8
+에뮬레이터에 `adb install -r`로 설치했다. 두 설치 모두 `Success`를 확인했고,
+설치된 base APK와 빌드 산출물의 SHA-256도 일치했다.
+
+공유 운영 DB에는 합성 AppUser 한 명만 잠깐 만들었다. 저장소의 빈 로컬 JWE 키를
+운영 키로 추측하거나 교체하지 않기 위해, 일회성 JWE 키를 가진 같은 backend
+코드를 개발 PC의 별도 8017 포트에 띄웠다. 앱은 `adb reverse`를 거쳐 이 HTTP
+서버에 접속했고, 서버는 위와 같은 공유 운영 DB를 사용했다. access token은 계측
+프로세스 인자로만 전달하고 출력하거나 파일에 저장하지 않았다.
+
+| 앱 호출 | HTTP | 결과 |
+| --- | ---: | --- |
+| 첫 `POST /app/walks` | 201 | PASS |
+| 첫 finalize | 201 | PASS, `derived`·7점 |
+| 같은 finalize 재시도 | 200 | PASS |
+| finalize 뒤 append | 409 | PASS, 앱에서 실패로 처리 |
+| 목록 pull | 200 | PASS |
+| 상세·7점 pull | 200 | PASS |
+
+계측 결과는 `OK (1 test)`였다. 실행 직후 합성 Walk 1행과 AppUser 1행을
+정확한 ID로 삭제했고, 잔존 합성 Walk·AppUser는 각각 0행, 운영 Walk는 기존
+9행으로 돌아왔다. 테스트용 서버·ADB reverse·계측 APK도 제거했으며 에뮬레이터에는
+공개 개발 주소를 보는 정상 #71 APK를 다시 설치해 `Success`와 해시 일치를 확인했다.
+
+### 왕복에서 발견한 별도 버그
+
+같은 `client_session_id`로 upload를 즉시 재시도하면 첫 요청은 201이지만 두 번째
+요청이 500이었다. `upload_walk()`이 기존 Walk를 반환한 뒤 라우터의
+`_to_detail()`이 eager-load되지 않은 `walk.points`를 읽어 async lazy load를
+시도하면서 `sqlalchemy.exc.MissingGreenlet`가 발생한다. finalize 멱등성은 위와
+같이 201 → 200으로 통과했지만, 앱 주석이 약속하는 **upload 멱등 재시도는 아직
+운영 가능한 상태가 아니다.**
+
+### 공개 배포 상태
+
+`http://daengback.weareithero.cloud`는 `/health` 200이고 공개 OpenAPI에 finalize
+경로가 있다. 반면 출시 주소 `https://daengapi.weareithero.cloud`는 `/health`는
+200이지만 같은 OpenAPI에 finalize 경로가 없다. 따라서 공개 nginx + 운영 JWE를
+포함한 최종 출시 왕복은 출시 backend를 #140 이상으로 배포하고 위 upload 재시도
+500을 고친 뒤 다시 확인해야 한다.
 
 ## 백업 보관 주의
 

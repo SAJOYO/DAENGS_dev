@@ -112,6 +112,45 @@ class Settings(BaseSettings):
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
 
+    # ── 보행 영상 저장소 (D-043) ──────────────────────────────────────
+    # provider 는 GCS 로 확정 (2026-09-02). 하지만 **세부값은 하드코딩하지 않습니다** —
+    # bucket·location·만료·보관 정책은 #78 이 정할 자리라 환경으로 뺍니다.
+    #
+    # `gait_storage` 가 저장소 구현을 고릅니다:
+    #   "none"  (기본) — 미설정. 모든 호출이 503. 서버에 아무 설정도 없을 때.
+    #   "local" — **임시 bridge.** GCS 자격증명이 없어도 `/app/gait/*` 왕복을
+    #             검증할 수 있게 로컬 디렉터리에 둡니다. 프로덕션이 아닙니다.
+    #   "gcs"   — 진짜. Signed URL 로 앱이 GCS 에 직접 올립니다.
+    gait_storage: str = Field(
+        default="none", validation_alias=AliasChoices("GAIT_STORAGE")
+    )
+    # GCS. bucket·location 은 #78 이 버킷을 파야 값이 생깁니다. 그 전엔 비어 있고,
+    # gait_storage="gcs" 인데 비어 있으면 기동이 아니라 첫 발급에서 명확히 실패합니다.
+    gait_gcs_bucket: str = Field(
+        default="", validation_alias=AliasChoices("GAIT_GCS_BUCKET")
+    )
+    gait_gcs_location: str = Field(
+        default="", validation_alias=AliasChoices("GAIT_GCS_LOCATION")
+    )
+    # Signed URL 만료(초). **잠정 기본값**입니다 — #78 이 정하면 그 값으로.
+    # 업로드는 큰 파일이라 넉넉히, 다운로드(재생)는 짧게.
+    gait_upload_url_ttl_seconds: int = Field(
+        default=15 * 60, validation_alias=AliasChoices("GAIT_UPLOAD_URL_TTL_SECONDS")
+    )
+    gait_download_url_ttl_seconds: int = Field(
+        default=10 * 60, validation_alias=AliasChoices("GAIT_DOWNLOAD_URL_TTL_SECONDS")
+    )
+    # local bridge 가 파일을 두는 곳. gait 워커와 backend 가 **같이 보는** 경로여야
+    # 합니다 (compose 에서 한 볼륨을 양쪽에 마운트). gait_storage="local" 일 때만 씁니다.
+    gait_local_storage_dir: str = Field(
+        default="", validation_alias=AliasChoices("GAIT_LOCAL_STORAGE_DIR")
+    )
+    # local bridge 의 업로드/다운로드 URL 앞부분 (앱 기준, nginx 접두사 포함).
+    # 예: http://daengback.~ — 앱이 여기에 /app/gait/_bridge/... 를 붙여 부릅니다.
+    gait_bridge_base_url: str = Field(
+        default="", validation_alias=AliasChoices("GAIT_BRIDGE_BASE_URL")
+    )
+
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #
     # extra="ignore" 라서 .env 에 남아 있어도 조용히 무시되는데, 그러면 개발 PC 가

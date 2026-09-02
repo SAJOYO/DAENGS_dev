@@ -49,22 +49,32 @@ class FakeSession:
         if getattr(obj, "id", None) is None:
             obj.id = uuid.uuid4()
         if getattr(obj, "created_at", None) is None:
-            obj.created_at = datetime.datetime.now(datetime.timezone.utc)
+            obj.created_at = datetime.datetime.now(datetime.UTC)
         if getattr(obj, "status", None) is None:
             obj.status = "PENDING"
 
 
 def _record(**over):
     """서비스·라우터가 읽는 필드만 가진 기록 대역."""
-    base = dict(
-        id=uuid.uuid4(), pet_id=PET, status="PENDING",
-        quality_status=None, quality_tier=None, gait_filter_version=None,
-        captured_at=None, source_file="walk.mp4", note=None,
-        created_at=datetime.datetime.now(datetime.timezone.utc),
-        original_storage_key="gait/x", overlay_storage_key=None,
-        quality=None, summary_for_ui=None, video_meta=None,
-        failure_reason=None, deleted_at=None,
-    )
+    base = {
+        "id": uuid.uuid4(),
+        "pet_id": PET,
+        "status": "PENDING",
+        "quality_status": None,
+        "quality_tier": None,
+        "gait_filter_version": None,
+        "captured_at": None,
+        "source_file": "walk.mp4",
+        "note": None,
+        "created_at": datetime.datetime.now(datetime.UTC),
+        "original_storage_key": "gait/x",
+        "overlay_storage_key": None,
+        "quality": None,
+        "summary_for_ui": None,
+        "video_meta": None,
+        "failure_reason": None,
+        "deleted_at": None,
+    }
     base.update(over)
     return type("R", (), base)()
 
@@ -213,7 +223,7 @@ def test_confirm_rejects_when_file_missing(client, monkeypatch):
 
 # ── 조회·삭제 ──────────────────────────────────────────────────────────
 def test_get_and_delete_unowned_are_404(client, monkeypatch):
-    async def none(session, app_user_id, record_id):
+    async def none(session, app_user_id, record_id, **kwargs):
         return None
 
     monkeypatch.setattr(gait_repo, "get_owned", none)

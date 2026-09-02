@@ -21,7 +21,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.core.storage import build_object_key, get_storage
+from daengs_backend.core.storage import (
+    build_object_key,
+    build_overlay_object_key,
+    get_storage,
+)
 from daengs_backend.models.gait_record import GaitRecord
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
@@ -104,27 +108,29 @@ async def confirm_upload(
 async def soft_delete(
     session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
 ) -> GaitRecord:
-    """지우기로 표시하고 **스토리지 파일 정리를 큐에 맡깁니다.**
+    """행을 잠근 채 object 를 먼저 지우고, 성공한 뒤 기록을 지웁니다.
 
-    행을 먼저 지우지 않는 이유: storage_key 를 잃으면 파일이 영영 고아가 됩니다.
-    그래서 deleted_at 만 찍고, 실제 GCS object 삭제는 워커가 `gait.cleanup` 으로
-    합니다 — 삭제가 느리거나(네트워크) 실패해도 사용자 응답을 붙잡지 않습니다.
+    PostgreSQL 과 object storage 사이에 원자성을 주장하지 않습니다. object 삭제 뒤
+    DB commit 이 실패하면 행과 키가 남아 재시도할 수 있고, 이미 없는 object 삭제는
+    성공입니다. 반대로 object 삭제가 실패하면 행을 지우지 않아 키를 잃지 않습니다.
 
     ⚠️ **파기 정책(보관 기간·탈퇴 시점)은 아직 #78 대기입니다.** 이 함수는 사용자가
-       **직접 삭제**를 눌렀을 때의 자리이고, 자동 파기는 별도 스케줄이 이 큐에 같은
-       cleanup 태스크를 발행하는 것으로 붙습니다 (아래 collect_orphans 참고).
+       **직접 삭제**를 눌렀을 때의 자리이고, 자동 파기는 별도 스케줄이 같은 cleanup
+       경로를 호출하는 것으로 붙습니다 (아래 collect_orphans 참고).
     """
-    record = await gait_repo.get_owned(session, app_user_id, record_id)
+    record = await gait_repo.get_owned(
+        session, app_user_id, record_id, for_update=True
+    )
     if record is None:
         raise NotFoundError("record")
-    from sqlalchemy import func
 
-    record.deleted_at = func.now()
-    await session.commit()
-
-    from daengs_backend.tasks.gait import cleanup
-
-    cleanup.delay(str(record.id))
+    try:
+        await _delete_record_objects(record)
+        await session.delete(record)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     return record
 
 
@@ -144,13 +150,16 @@ async def _cleanup(record_id: uuid.UUID) -> None:
     from sqlalchemy import delete, select
 
     from daengs_backend.core.database import worker_session
-    from daengs_backend.core.storage import get_storage
 
     # ⚠️ SessionLocal 이 아니라 worker_session 입니다 — 이유는 그 함수 docstring 참고
     #    (이 함수가 바로 그 버그로 서버에서 실패했습니다).
     async with worker_session() as session:
         record = (
-            await session.execute(select(GaitRecord).where(GaitRecord.id == record_id))
+            await session.execute(
+                select(GaitRecord)
+                .where(GaitRecord.id == record_id)
+                .with_for_update()
+            )
         ).scalar_one_or_none()
         if record is None:
             return
@@ -158,17 +167,47 @@ async def _cleanup(record_id: uuid.UUID) -> None:
             log.warning("gait.cleanup: 삭제 표시가 없는 기록 record_id=%s — 건너뜀", record_id)
             return
 
-        storage = get_storage()
-        for key in (record.original_storage_key, record.overlay_storage_key):
-            if key:
-                try:
-                    storage.delete(key)
-                except Exception as exc:  # noqa: BLE001 — 한 파일 실패가 다른 것을 막지 않게
-                    log.error("gait.cleanup: object 삭제 실패 key=%s: %s", key, exc)
-                    return  # 행은 남겨 두고 다음 정리 때 재시도 — 고아를 만들지 않습니다
+        try:
+            await _delete_record_objects(record)
+        except Exception as exc:  # noqa: BLE001 — 행과 키를 보존해 다음 정리가 재시도합니다
+            log.error("gait.cleanup: object 삭제 실패 record_id=%s: %s", record_id, exc)
+            await session.rollback()
+            return
 
         await session.execute(delete(GaitRecord).where(GaitRecord.id == record_id))
         await session.commit()
+
+
+def _cleanup_keys(record: GaitRecord) -> tuple[str, ...]:
+    """저장된 키와 DB commit 실패 때도 계산 가능한 overlay 키를 모두 돌려줍니다."""
+    keys = (
+        record.original_storage_key,
+        record.overlay_storage_key,
+        build_overlay_object_key(record.pet_id, record.id),
+    )
+    return tuple(dict.fromkeys(key for key in keys if key))
+
+
+async def _delete_record_objects(record: GaitRecord) -> None:
+    storage = get_storage()
+    for key in _cleanup_keys(record):
+        storage.delete(key)
+
+
+async def cleanup_for_pets(
+    session: AsyncSession, pet_ids: list[uuid.UUID]
+) -> list[GaitRecord]:
+    """pet 삭제와 같은 트랜잭션에서 모든 gait object 를 먼저 정리합니다.
+
+    gait 행을 ``FOR UPDATE`` 로 잠근 채 원본·저장된 overlay·결정적 overlay 후보를
+    삭제합니다. 모든 삭제가 성공해야 호출자가 pet 삭제로 진행할 수 있습니다. 행 자체는
+    여기서 지우지 않습니다. pet commit 의 FK CASCADE 가 마지막에 지우므로, 그 전까지
+    재시도에 필요한 키가 DB 에 보존됩니다.
+    """
+    records = await gait_repo.list_for_pets_for_update(session, pet_ids)
+    for record in records:
+        await _delete_record_objects(record)
+    return records
 
 
 async def collect_orphans(session: AsyncSession, *, older_than_minutes: int) -> list[uuid.UUID]:
@@ -185,7 +224,7 @@ async def collect_orphans(session: AsyncSession, *, older_than_minutes: int) -> 
 
     from sqlalchemy import select
 
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(
         minutes=older_than_minutes
     )
     stmt = select(GaitRecord.id).where(
@@ -213,7 +252,11 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
     #    (core/database.worker_session docstring).
     async with worker_session() as session:
         record = (
-            await session.execute(select(GaitRecord).where(GaitRecord.id == record_id))
+            await session.execute(
+                select(GaitRecord)
+                .where(GaitRecord.id == record_id)
+                .with_for_update()
+            )
         ).scalar_one_or_none()
         if record is None or record.deleted_at is not None:
             log.warning("gait.analyze: 기록이 없거나 삭제됨 record_id=%s", record_id)
@@ -228,14 +271,68 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
 
         try:
             result = await asyncio.to_thread(
-                _analyze_from_storage, record.pet_id, record.original_storage_key
+                _analyze_from_storage, record.original_storage_key
             )
         except Exception as exc:  # noqa: BLE001 — 실패 사유를 행에 남기는 것이 목적입니다
+            record = (
+                await session.execute(
+                    select(GaitRecord)
+                    .where(GaitRecord.id == record_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one_or_none()
+            if record is None or record.deleted_at is not None:
+                log.info("gait.analyze: 분석 실패 뒤 기록이 삭제됨 record_id=%s", record_id)
+                return
             record.status = "FAILED"
             record.failure_reason = str(exc)[:2000]
             await session.commit()
             log.error("gait.analyze 실패 record_id=%s: %s", record_id, exc)
             return
+
+        # 삭제도 같은 행을 FOR UPDATE 로 잡습니다. 삭제가 먼저 잠갔으면 pet CASCADE 뒤
+        # 행이 사라져 여기서 upload 하지 않고, 완료가 먼저 잠갔으면 삭제가 commit 을
+        # 기다렸다가 방금 저장한 overlay 키까지 읽어 정리합니다.
+        record = (
+            await session.execute(
+                select(GaitRecord)
+                .where(GaitRecord.id == record_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if record is None or record.deleted_at is not None:
+            log.info("gait.analyze: 완료 전에 기록이 삭제됨 record_id=%s", record_id)
+            return
+        if record.status != "PROCESSING":
+            log.info(
+                "gait.analyze: 완료 반영 건너뜀 status=%s record_id=%s",
+                record.status,
+                record_id,
+            )
+            return
+
+        overlay_data = result.pop("_overlay_bytes", None)
+        overlay_key = None
+        if overlay_data is not None:
+            overlay_key = build_overlay_object_key(record.pet_id, record.id)
+            storage = get_storage()
+            try:
+                if hasattr(storage, "upload_bytes"):
+                    storage.upload_bytes(overlay_key, overlay_data, content_type="video/mp4")
+                elif hasattr(storage, "write"):
+                    storage.write(overlay_key, overlay_data)
+            except Exception as exc:  # noqa: BLE001 — 결정적 키를 best-effort 로 되걷습니다
+                try:
+                    storage.delete(overlay_key)
+                except Exception:
+                    log.exception("gait.analyze: 실패한 overlay 정리도 실패 key=%s", overlay_key)
+                record.status = "FAILED"
+                record.failure_reason = str(exc)[:2000]
+                await session.commit()
+                log.error("gait.analyze overlay 업로드 실패 record_id=%s: %s", record_id, exc)
+                return
 
         record.status = "DONE"
         record.quality_status = result["quality"].get("status")
@@ -247,13 +344,25 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
         )
         record.gait_filter_version = result.get("gait_filter_version")
         record.video_meta = result.get("video_meta")
-        record.overlay_storage_key = result.get("overlay_storage_key")
+        record.overlay_storage_key = overlay_key
         record.failure_reason = None
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            if overlay_key is not None:
+                try:
+                    get_storage().delete(overlay_key)
+                except Exception:
+                    log.exception(
+                        "gait.analyze: DB commit 실패 뒤 overlay 정리 실패 key=%s",
+                        overlay_key,
+                    )
+            raise
 
 
-def _analyze_from_storage(pet_id, storage_key: str) -> dict:
-    """스토리지에서 받아 분석하고, overlay 가 나오면 스토리지에 올립니다 —
+def _analyze_from_storage(storage_key: str) -> dict:
+    """스토리지에서 받아 분석하고 overlay bytes 를 메모리로 돌려줍니다 —
     **무거운 것은 전부 여기서 지연 import** (ⓒ).
 
     이 함수는 gait 그룹(torch·ultralytics)이 설치된 워커에서만 불립니다. backend 웹
@@ -267,7 +376,7 @@ def _analyze_from_storage(pet_id, storage_key: str) -> dict:
     from urllib.request import urlretrieve
 
     from daengs_backend.config import settings
-    from daengs_backend.core.storage import build_object_key, get_storage
+    from daengs_backend.core.storage import get_storage
 
     storage = get_storage()
 
@@ -281,22 +390,20 @@ def _analyze_from_storage(pet_id, storage_key: str) -> dict:
             url = storage.download_url(
                 storage_key, expires_in_seconds=settings.gait_download_url_ttl_seconds
             )
-            urlretrieve(url, local)  # noqa: S310 — 우리 스토리지가 발급한 서명 URL 입니다
+            urlretrieve(url, local)
 
         from daengs_gait.pipeline import process_video  # 지연 — torch 가 여기서 올라옵니다
 
-        record = process_video(local)
+        # legacy HTTP 서비스는 JSON·overlay 를 GAIT_DATA_DIR 에 보존하지만, D-043 워커의
+        # 원장은 PostgreSQL/storage 입니다. persist=False 로 task 임시 디렉터리 밖에
+        # worker-side 사본을 만들지 않습니다.
+        record = process_video(local, persist=False)
 
-        # overlay 가 만들어졌으면 스토리지에 올리고 키만 남깁니다. DB 에는 영상 바이트를
-        # 넣지 않습니다 (원칙 4). local bridge 는 write(), gcs 는 upload_bytes().
+        # 업로드는 DB 행 잠금을 잡은 _run_analysis 가 합니다. 여기서 먼저 올리면 탈퇴
+        # cleanup 과 경합해 새 고아 object 를 만들 수 있습니다.
         overlay_path = record.pop("overlay_video", None)
-        overlay_key = None
+        overlay_data = None
         if overlay_path and Path(overlay_path).exists():
-            overlay_key = build_object_key(pet_id, kind="overlay", source_file="overlay.mp4")
-            data = Path(overlay_path).read_bytes()
-            if hasattr(storage, "upload_bytes"):
-                storage.upload_bytes(overlay_key, data, content_type="video/mp4")
-            elif hasattr(storage, "write"):
-                storage.write(overlay_key, data)
-        record["overlay_storage_key"] = overlay_key
+            overlay_data = Path(overlay_path).read_bytes()
+        record["_overlay_bytes"] = overlay_data
         return record

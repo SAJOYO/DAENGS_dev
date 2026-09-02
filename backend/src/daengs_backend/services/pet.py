@@ -13,6 +13,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.pet import PetUpsert
+from daengs_backend.services import gait as gait_service
 
 #: 한 계정에 등록할 수 있는 마릿수.
 #:
@@ -93,26 +94,43 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
     FK 가 `ON DELETE SET NULL` 이라 지우면 `primary_pet_id` 는 저절로 비지만,
     **누구를 대신 세울지는 정책이라 DB 가 못 정합니다.**
     """
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
     if pet is None:
         raise PetNotFoundError
 
-    # **그 아이와만 나간 산책은 같이 지웁니다.** 아이를 지웠는데 그 아이의 산책만
-    # 주인 없이 남으면 목록에 "누구와 갔는지 모르는 기록" 이 쌓입니다.
-    # 다른 아이와 같이 나간 산책은 **남깁니다** — 그건 남은 아이의 기록이기도 합니다.
-    await walk_repo.delete_walks_only_with(session, pet.id)
+    try:
+        # gait 행이 pet FK CASCADE 로 사라지기 전에, 잠근 행에서 원본·overlay 키를
+        # 읽어 모두 지웁니다. storage 실패면 아래 pet/walk 삭제로 진행하지 않습니다.
+        await gait_service.cleanup_for_pets(session, [pet.id])
 
-    user = await app_user_repo.get_by_id(session, app_user_id)
-    was_primary = user is not None and user.primary_pet_id == pet.id
+        # **그 아이와만 나간 산책은 같이 지웁니다.** 아이를 지웠는데 그 아이의 산책만
+        # 주인 없이 남으면 목록에 "누구와 갔는지 모르는 기록" 이 쌓입니다.
+        # 다른 아이와 같이 나간 산책은 **남깁니다** — 그건 남은 아이의 기록이기도 합니다.
+        await walk_repo.delete_walks_only_with(session, pet.id)
 
-    await pet_repo.delete(session, pet)
-    await session.flush()
+        user = await app_user_repo.get_by_id(session, app_user_id)
+        was_primary = user is not None and user.primary_pet_id == pet.id
 
-    if was_primary and user is not None:
-        remaining = await pet_repo.list_for_owner(session, app_user_id)
-        user.primary_pet_id = remaining[0].id if remaining else None
+        await pet_repo.delete(session, pet)
+        await session.flush()
 
-    await session.commit()
+        if was_primary and user is not None:
+            remaining = await pet_repo.list_for_owner(session, app_user_id)
+            user.primary_pet_id = remaining[0].id if remaining else None
+
+        await session.commit()
+    except Exception:
+        # object 삭제 뒤 DB commit 실패도 여기로 옵니다. DB 행·키는 rollback 으로 남고,
+        # 다음 요청은 이미 없는 object 를 성공으로 보고 다시 진행합니다.
+        await session.rollback()
+        raise
+
+
+async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """탈퇴용 bulk delete. 단일 삭제와 같은 gait cleanup 경로를 씁니다."""
+    pets = await pet_repo.list_for_owner_for_update(session, app_user_id)
+    await gait_service.cleanup_for_pets(session, [pet.id for pet in pets])
+    return await pet_repo.delete_all_for_owner(session, app_user_id)
 
 
 async def set_primary(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> AppUser:

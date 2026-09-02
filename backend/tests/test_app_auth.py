@@ -8,16 +8,28 @@
 "검증을 통과했을 때 무슨 일이 일어나는가"만 보려는 것이 더 큽니다.
 """
 
+import asyncio
 import uuid
-from typing import Annotated
+from datetime import UTC, datetime
 
 import pytest
-from fastapi import Depends, FastAPI
+from fakes import (
+    FakeAdmin,
+    FakeAppUser,
+    FakePet,
+    FakeSession,
+    FakeWalk,
+    FakeWalkPet,
+    FakeWalkPointChunk,
+    Store,
+    install,
+)
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from daengs_backend.core.crypto import blind_index, decrypt, encrypt
+from daengs_backend.core.crypto import blind_index, decrypt
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.kakao import (
     KakaoIdentity,
     KakaoIdTokenInvalidError,
@@ -26,10 +38,30 @@ from daengs_backend.core.kakao import (
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
+from daengs_backend.routers import pet as pet_router
+from daengs_backend.routers import walk as walk_router
 from daengs_backend.services import app_auth as app_auth_service
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
 
 KAKAO_ID = 987654321
+
+
+def _walk(owner_id: uuid.UUID, pet_id: uuid.UUID) -> FakeWalk:
+    now = datetime(2026, 9, 2, tzinfo=UTC)
+    return FakeWalk(
+        app_user_id=owner_id,
+        client_session_id=uuid.uuid4(),
+        started_at=now,
+        ended_at=now,
+        pets=[FakeWalkPet(pet_id=pet_id)],
+        points=[
+            FakeWalkPointChunk(
+                seq_from=0,
+                seq_to=0,
+                point_count=1,
+                payload={"v": 1, "pts": [[0, 0, 0, 37.5, 127.0, None, 0]]},
+            )
+        ],
+    )
 
 
 @pytest.fixture
@@ -48,7 +80,7 @@ def _fake_kakao(
 ) -> None:
     """검증을 통과한 것으로 칩니다. 개별 테스트가 다시 덮어쓸 수 있습니다."""
 
-    async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+    async def verify(token, *, expected_nonce=None):
         return identity
 
     monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -58,6 +90,8 @@ def _fake_kakao(
 def app() -> FastAPI:
     test_app = FastAPI()
     test_app.include_router(app_auth_router.router)
+    test_app.include_router(pet_router.router)
+    test_app.include_router(walk_router.router)
 
     @test_app.get("/_app_only")
     async def _app_only(user: CurrentAppUser) -> dict[str, str]:
@@ -75,7 +109,7 @@ def client(app: FastAPI, store: Store) -> TestClient:
     return TestClient(app)
 
 
-def _login(client: TestClient, id_token: str = "any-id-token"):  # noqa: ANN202
+def _login(client: TestClient, id_token: str = "any-id-token"):
     return client.post("/auth/app/kakao", json={"id_token": id_token})
 
 
@@ -131,7 +165,7 @@ class TestKakaoLogin:
     ) -> None:
         """**email_hash 가 UNIQUE 라 빈 문자열을 넣으면 두 번째 회원부터 막힙니다.**"""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             return KakaoIdentity(kakao_id=KAKAO_ID, email=None, nonce=None)
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -168,7 +202,7 @@ class TestKakaoLogin:
     def test_못_믿을_id_token_이면_401(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoIdTokenInvalidError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -180,7 +214,7 @@ class TestKakaoLogin:
         """**401 로 뭉개면 안 됩니다.** 앱이 '로그인 실패'로 알아듣고 다시 시도하는데,
         다시 해도 똑같이 실패합니다."""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoUnavailableError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -292,6 +326,128 @@ class TestSessionFlow:
         assert client.post(
             "/auth/app/refresh", json={"refresh_token": refresh}
         ).status_code == 401
+
+    def test_탈퇴_뒤_남은_access_token으로_강아지를_만들_수_없다(
+        self, client: TestClient
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+
+        response = client.post(
+            "/app/pets",
+            headers=headers,
+            json={"name": "고아가 될 아이", "breed": "mix"},
+        )
+
+        assert response.status_code == 401
+
+    def test_탈퇴_뒤_남은_access_token으로_산책과_좌표를_만들_수_없다(
+        self, client: TestClient
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        assert client.post("/auth/app/withdraw", headers=headers).status_code == 204
+        now = datetime(2026, 9, 2, 5, tzinfo=UTC)
+
+        response = client.post(
+            "/app/walks",
+            headers=headers,
+            json={
+                "client_session_id": str(uuid.uuid4()),
+                "pet_ids": [],
+                "started_at": now.isoformat(),
+                "ended_at": now.isoformat(),
+                "points": [
+                    {
+                        "client_seq": 0,
+                        "chain_index": 0,
+                        "at": now.isoformat(),
+                        "lat": "37.5",
+                        "lng": "127.0",
+                        "is_mock": False,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 401
+
+    def test_탈퇴하면_내_강아지와_산책_좌표만_지운다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        mine = FakePet(app_user_id=owner.id, name="네옹", breed="poodle")
+        store.pets.append(mine)
+        my_walk = _walk(owner.id, mine.id)
+        store.walks.append(my_walk)
+
+        other = store.add_app_user(FakeAppUser(kakao_id=111))
+        theirs = FakePet(app_user_id=other.id, name="두찌", breed="maltese")
+        store.pets.append(theirs)
+        their_walk = _walk(other.id, theirs.id)
+        store.walks.append(their_walk)
+
+        response = client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        )
+
+        assert response.status_code == 204
+        assert mine not in store.pets
+        assert my_walk not in store.walks
+        # 좌표는 산책 소유 행 안에 있으므로 산책과 함께 도달 불가능해집니다.
+        assert all(walk.id != my_walk.id for walk in store.walks)
+        assert theirs in store.pets
+        assert their_walk in store.walks
+        assert their_walk.points
+
+    def test_탈퇴_뒤_재로그인해도_강아지와_산책은_복원되지_않는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="네옹", breed="poodle")
+        store.pets.append(pet)
+        store.walks.append(_walk(owner.id, pet.id))
+
+        assert client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        ).status_code == 204
+        assert _login(client).status_code == 200
+
+        assert store.app_users[KAKAO_ID].status == "active"
+        assert [row for row in store.pets if row.app_user_id == owner.id] == []
+        assert [row for row in store.walks if row.app_user_id == owner.id] == []
+
+    def test_탈퇴_데이터_삭제가_실패하면_전체를_롤백한다(
+        self, store: Store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user = store.add_app_user(
+            FakeAppUser(kakao_id=KAKAO_ID, email_enc=b"cipher", email_hash="hash")
+        )
+        session = FakeSession()
+
+        async def delete_walks(_session, _app_user_id):
+            return 1
+
+        async def fail_pet_delete(_session, _app_user_id):
+            raise RuntimeError("pet delete failed")
+
+        monkeypatch.setattr(
+            app_auth_service.walk_repo, "delete_all_for_owner", delete_walks
+        )
+        monkeypatch.setattr(
+            app_auth_service.pet_service, "delete_all_for_owner", fail_pet_delete
+        )
+
+        with pytest.raises(RuntimeError, match="pet delete failed"):
+            asyncio.run(app_auth_service.withdraw(session, app_user_id=user.id))
+
+        assert session.rollbacks == 1
+        assert session.commits == 0
+        assert user.status == "active"
+        assert user.email_enc == b"cipher"
 
 
 class TestSubjectSeparation:

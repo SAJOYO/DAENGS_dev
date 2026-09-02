@@ -11,7 +11,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -143,6 +143,24 @@ class WalkFinalizeRequest(BaseModel):
                 "expected_point_count - 1이어야 합니다."
             )
         return self
+
+
+class WalkFinalizeResponse(BaseModel):
+    """입력 봉인과 계산 행을 앱이 안정적으로 재시도할 수 있는 요약."""
+
+    walk_id: uuid.UUID
+    analysis_id: uuid.UUID
+    analysis_state: Literal["derived"] = "derived"
+    input_fingerprint: str
+    point_count: int
+    terminal_client_seq: int | None
+    facts_record_version: int
+    calculation_version: int
+    receipt_version: int
+    observation_version: int
+    moving_distance_m: int
+    moving_s: int
+    stop_count: int
 
 
 class WalkPointResponse(BaseModel):

@@ -116,6 +116,8 @@ class Store:
 
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
+        #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
+        self.walk_analyses: list[object] = []
 
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
@@ -170,6 +172,7 @@ class FakeWalk:
     weather_code: int | None = None
     is_day: bool | None = None
     temperature_c: object | None = None
+    analysis_state: str = "collecting"
     points: list[FakeWalkPointChunk] = field(default_factory=list)
     pets: list[FakeWalkPet] = field(default_factory=list)
 
@@ -313,6 +316,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def walk_get_owned_for_update(session, app_user_id, walk_id):
+        return await walk_get_owned(session, app_user_id, walk_id)
+
     async def walk_get_by_client_session(
         session, app_user_id, client_session_id
     ):
@@ -339,17 +345,39 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     def walk_add(session, walk):
         if walk.id is None:
             walk.id = uuid.uuid4()
+        if walk.analysis_state is None:
+            walk.analysis_state = "collecting"
         store.walks.append(walk)
         return walk
 
+    def walk_add_analysis(session, analysis):
+        if analysis.id is None:
+            analysis.id = uuid.uuid4()
+        store.walk_analyses.append(analysis)
+        return analysis
+
+    async def walk_get_analysis_for_input(session, **identity):
+        return next(
+            (
+                analysis
+                for analysis in store.walk_analyses
+                if all(getattr(analysis, key) == value for key, value in identity.items())
+            ),
+            None,
+        )
+
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
+    monkeypatch.setattr(walk_repo, "get_owned_for_update", walk_get_owned_for_update)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
+
     async def walk_existing_chunk_starts(session, walk_id):
         walk = next((w for w in store.walks if w.id == walk_id), None)
         return {c.seq_from for c in walk.points} if walk else set()
 
     monkeypatch.setattr(walk_repo, "add", walk_add)
+    monkeypatch.setattr(walk_repo, "add_analysis", walk_add_analysis)
+    monkeypatch.setattr(walk_repo, "get_analysis_for_input", walk_get_analysis_for_input)
     monkeypatch.setattr(
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )

@@ -8,16 +8,19 @@ import uuid
 
 from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
-from daengs_backend.models import Walk, WalkPet, WalkPointChunk
+from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
 
 __all__ = [
     "add",
+    "add_analysis",
     "delete_walks_only_with",
     "existing_chunk_starts",
+    "get_analysis_for_input",
     "get_by_client_session",
     "get_owned",
+    "get_owned_for_update",
     "list_for_owner",
 ]
 
@@ -55,6 +58,27 @@ async def get_owned(
         select(Walk)
         .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
         .options(selectinload(Walk.points), selectinload(Walk.pets))
+    )
+    return await session.scalar(stmt)
+
+
+async def get_owned_for_update(
+    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
+) -> Walk | None:
+    """finalize·append가 공유하는 산책 행 잠금 조회.
+
+    ``analysis_state``는 수동 migration 전 기존 조회를 보호하려고 deferred로
+    매핑했다. 상태 전이를 하는 이 조회에서만 명시적으로 같이 읽는다.
+    """
+    stmt = (
+        select(Walk)
+        .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
+        .options(
+            undefer(Walk.analysis_state),
+            selectinload(Walk.points),
+            selectinload(Walk.pets),
+        )
+        .with_for_update()
     )
     return await session.scalar(stmt)
 
@@ -110,6 +134,34 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk
+
+
+def add_analysis(session: AsyncSession, analysis: WalkAnalysis) -> WalkAnalysis:
+    session.add(analysis)
+    return analysis
+
+
+async def get_analysis_for_input(
+    session: AsyncSession,
+    *,
+    walk_id: uuid.UUID,
+    input_fingerprint: str,
+) -> WalkAnalysis | None:
+    """같은 봉인 입력에서 처음 만든 분석.
+
+    계산 세대가 나중에 추가되어도 원래 finalize 재시도는 처음 응답과
+    같은 analysis_id를 돌려줘야 한다.
+    """
+    stmt = (
+        select(WalkAnalysis)
+        .where(
+            WalkAnalysis.walk_id == walk_id,
+            WalkAnalysis.input_fingerprint == input_fingerprint,
+        )
+        .order_by(WalkAnalysis.derived_at, WalkAnalysis.id)
+        .limit(1)
+    )
+    return await session.scalar(stmt)
 
 
 async def existing_chunk_starts(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:

@@ -199,7 +199,9 @@ async def _bridge_download(session: Session, storage_key: str):
     from fastapi.responses import FileResponse
 
     storage = _local_bridge()
-    if await gait_repo.find_by_storage_key(session, storage_key) is None:
+    # ⚠️ **overlay 도 받을 수 있어야 합니다** — 분석 결과 영상이 그것입니다.
+    #    업로드(위)는 원본 키만 받습니다: overlay 를 앱이 덮어쓰면 안 됩니다.
+    if await gait_repo.find_by_storage_key(session, storage_key, allow_overlay=True) is None:
         raise _NOT_FOUND
     path = storage.local_path(storage_key)
     if not path.exists():

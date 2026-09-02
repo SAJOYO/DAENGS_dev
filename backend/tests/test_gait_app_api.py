@@ -332,11 +332,39 @@ def test_bridge_upload_accepts_issued_pending_key(bridge, client, monkeypatch):
 
 
 def test_bridge_download_rejects_unissued_key(bridge, client, monkeypatch):
-    async def none(session, storage_key, *, status=None):
+    async def none(session, storage_key, *, status=None, allow_overlay=False):
         return None
 
     monkeypatch.setattr(gait_repo, "find_by_storage_key", none)
     assert client.get("/app/gait/_bridge/download/gait/x/original/a.mp4").status_code == 404
+
+
+def test_bridge_download_allows_overlay_but_upload_does_not(bridge, client, monkeypatch):
+    """**분석 결과(overlay)는 받을 수 있어야 하고, 덮어쓸 수는 없어야 합니다.**
+
+    처음에 원본 키만 대조하게 짜서 overlay 가 통째로 404 였습니다 (실기기 검증에서
+    잡혔습니다). 고치면서 업로드까지 열면 앱이 결과 영상을 덮어쓸 수 있게 됩니다 —
+    overlay 를 만드는 것은 워커뿐입니다.
+    """
+    key = "gait/pet/overlay/ov.mp4"
+    seen: list[bool] = []
+
+    async def found(session, storage_key, *, status=None, allow_overlay=False):
+        seen.append(allow_overlay)
+        return _record(overlay_storage_key=key) if allow_overlay else None
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", found)
+    bridge.write(key, b"overlay-bytes")
+
+    # 다운로드는 overlay 를 허용합니다.
+    r = client.get(f"/app/gait/_bridge/download/{key}")
+    assert r.status_code == 200
+    assert r.content == b"overlay-bytes"
+
+    # 업로드는 허용하지 않습니다 — 원본 키만 봅니다(allow_overlay 기본 False).
+    assert client.put(f"/app/gait/_bridge/upload/{key}", content=b"overwrite").status_code == 404
+    assert bridge.local_path(key).read_bytes() == b"overlay-bytes"  # 안 바뀌었습니다
+    assert seen == [True, False]
 
 
 def test_storage_not_configured_fails_loudly():

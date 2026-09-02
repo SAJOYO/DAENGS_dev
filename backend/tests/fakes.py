@@ -138,6 +138,7 @@ class FakePet:
     weight_kg: object | None = None
     birth_date: object | None = None
     birth_date_kind: str | None = None
+    farewell_on: object | None = None
 
 
 @dataclass

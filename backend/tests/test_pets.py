@@ -6,7 +6,7 @@ DB 는 쓰지 않습니다. `fakes.py` 가 리포지토리를 바꿔치기하므
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 import pytest
@@ -132,6 +132,47 @@ def test_날짜와_종류는_같이_와야_한다(client: TestClient) -> None:
     )
     assert both.status_code == 201
     assert both.json()["birth_date_kind"] == "family_day"
+
+
+def test_배웅한_날은_비어_있다(client: TestClient) -> None:
+    """새로 등록한 아이는 **아직 함께 있는 아이다.** 기본이 null 이어야 한다."""
+    r = client.post("/app/pets", json=_body()).json()
+    assert r["farewell_on"] is None
+
+
+def test_배웅한_날을_적는다(client: TestClient) -> None:
+    """삭제와 다른 일이라 **행이 안 지워진다** — 목록에 그대로 있고 날짜만 찬다."""
+    made = client.post("/app/pets", json=_body()).json()
+    r = client.put(
+        f"/app/pets/{made['id']}",
+        json=_body(birth_date="2020-01-01", birth_date_kind="birthday", farewell_on="2026-09-01"),
+    )
+    assert r.status_code == 200
+    assert r.json()["farewell_on"] == "2026-09-01"
+
+    listed = client.get("/app/pets").json()["pets"]
+    assert len(listed) == 1, "배웅은 지우는 것이 아니다"
+    assert listed[0]["farewell_on"] == "2026-09-01"
+
+
+def test_앞날은_못_적는다(client: TestClient) -> None:
+    """오타 한 자로 2033년이 적히면 아직 오지 않은 날에 배웅한 것이 된다."""
+    later = (date.today() + timedelta(days=1)).isoformat()
+    r = client.post("/app/pets", json=_body(farewell_on=later))
+    assert r.status_code == 422
+
+
+def test_태어나기_전은_못_적는다(client: TestClient) -> None:
+    """생일을 아는 아이만 걸린다. 모르는 아이는 이 검사에서 빠진다."""
+    bad = client.post(
+        "/app/pets",
+        json=_body(birth_date="2024-03-01", birth_date_kind="birthday", farewell_on="2023-01-01"),
+    )
+    assert bad.status_code == 422
+
+    # 생일을 모르면 통과한다 — 비교할 것이 없다.
+    ok = client.post("/app/pets", json=_body(farewell_on="2023-01-01"))
+    assert ok.status_code == 201
 
 
 def test_목록은_상한을_같이_알려_준다(client: TestClient) -> None:

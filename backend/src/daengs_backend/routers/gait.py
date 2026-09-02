@@ -161,9 +161,14 @@ async def delete_record(
 #
 # ⚠️ **프로덕션 경로가 아닙니다.** GCS(원칙 1)는 앱이 스토리지에 직접 올려 영상이
 #    backend 를 통과하지 않습니다. 이 두 엔드포인트는 GCS 자격증명 없이 `/app/gait/*`
-#    왕복을 검증하려는 dev/검증용이고, 배포에서는 `gait_storage="gcs"` 라 등록되지
-#    않습니다. 인증은 걸지 않습니다 — Signed URL 을 흉내 내는 것이라 URL 자체가
-#    자격이고, local 모드는 신뢰된 검증 환경에서만 켭니다.
+#    왕복을 검증하려는 검증용이고, `gait_storage="gcs"` 로 바꾸면 등록만 되어 있고
+#    아무 키도 받지 못합니다(아래 `_local_bridge` 가 404).
+#
+# ⚠️ **인증 헤더를 요구하지 않습니다 — 대신 키가 자격입니다.** Signed URL 을 흉내 내는
+#    자리라, 헤더를 요구하면 GCS 로 바꿀 때 앱 코드가 또 바뀝니다. 그래서 대신
+#    **backend 가 실제로 발급한 키인지**를 DB 로 확인합니다 (find_by_storage_key).
+#    이게 없으면 아무나 임의 경로로 서버 디스크를 채울 수 있습니다 — 실제로 그 상태로
+#    한 번 배포됐고(2026-09-02), 이 검사가 그것을 막습니다.
 
 
 def _local_bridge():
@@ -177,18 +182,25 @@ def _local_bridge():
 
 
 @router.put("/_bridge/upload/{storage_key:path}", include_in_schema=False)
-async def _bridge_upload(storage_key: str, request: Request):
+async def _bridge_upload(session: Session, storage_key: str, request: Request):
     from fastapi import Response
 
-    _local_bridge().write(storage_key, await request.body())
+    storage = _local_bridge()
+    # 발급된 적 없는 키 · 이미 confirm 된 키 = 없는 경로와 같은 404.
+    # (PENDING 으로 좁히므로 confirm 뒤 덮어쓰기도 막힙니다.)
+    if await gait_repo.find_by_storage_key(session, storage_key, status="PENDING") is None:
+        raise _NOT_FOUND
+    storage.write(storage_key, await request.body())
     return Response(status_code=200)
 
 
 @router.get("/_bridge/download/{storage_key:path}", include_in_schema=False)
-async def _bridge_download(storage_key: str):
+async def _bridge_download(session: Session, storage_key: str):
     from fastapi.responses import FileResponse
 
     storage = _local_bridge()
+    if await gait_repo.find_by_storage_key(session, storage_key) is None:
+        raise _NOT_FOUND
     path = storage.local_path(storage_key)
     if not path.exists():
         raise _NOT_FOUND

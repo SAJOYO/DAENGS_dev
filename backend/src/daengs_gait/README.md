@@ -117,7 +117,7 @@ docker compose exec nginx nginx -s reload   # 무중단 반영
 ### 업로드 크기 제한 (413)
 
 `GAIT_MAX_UPLOAD_BYTES` (기본 150MB). skin-screening 의 12MB(사진 한 장)를 그대로
-쓰지 않은 이유와 근거는 `docs/gait-record-data-design.md` 참고. `nginx/default.conf`
+쓰지 않은 이유와 근거는 `docs/gait/record-data-design.md` 참고. `nginx/default.conf`
 의 `location /gait/` 가 `client_max_body_size 200m` 로 바깥 상한을 잡아 두었으므로
 **이 값은 항상 그보다 낮게** 유지하세요 — 그래야 nginx 의 맨 HTML 대신 앱이 이유가
 담긴 JSON 413 을 먼저 돌려줍니다.
@@ -178,7 +178,7 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
   DAENGS 에는 PostgreSQL + SQLAlchemy 가 있지만, 이 서비스가 DB 를 직접 볼지 아니면
   `daengs_backend` 가 기록의 주인이 될지가 먼저 정해져야 합니다. 스크리닝이 DB 를 안 보는
   무상태 서비스인 것과 같은 자리입니다. 역할 분리안·gait record 스키마안·삭제 시 정리
-  범위는 `docs/gait-record-data-design.md` 에 설계만 해 두었습니다 — 이 카드에서
+  범위는 `docs/gait/record-data-design.md` 에 설계만 해 두었습니다 — 이 카드에서
   실제 테이블·migration 은 만들지 않았습니다.
 - **자동 삭제(보관 기간)는 아직 없습니다.** 사용자가 부르는
   `DELETE /gait/records/{id}` 는 있고 원본·overlay 까지 지웁니다. 하지만 **기간이 지나면

@@ -55,7 +55,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
                      │   그 외        ─▶ backend:8000                 │
                      └────────────────────────────────────────────────┘
                           backend (Training · Life · Walk · Skin)
-                                  ─▶ pgvector:5432 (vectordb · dog_rag) · redis:6379
+                                  ─▶ pgvector:5432 (vectordb, Training 전용 테이블 포함) · redis:6379
                                   ─▶ Gemini API (Training·Life 생성)
                           place-search ─▶ place-db:5432 (자기 전용 PostGIS)
 ```
@@ -90,13 +90,14 @@ journey-service · crawler-worker · crawler-beat
   `ml` 과 `screening` dependency group 을 함께 동기화하며, #101 이 빠져 있던 screening
   lock 항목을 복구했습니다. 모델은 backend 기동이 아니라 첫 `/screen/v1/screen`
   요청 때 로드됩니다.
-- backend 는 pgvector·redis 의 **healthy 를 기다립니다.** PGVector 컨테이너는 이제
-  **하나**입니다 — Training 전용이던 `training-rag-pgvector` 는 #105 로 없어졌고,
-  Training 은 같은 pgvector 클러스터 안의 **별도 `dog_rag` DB** 를 씁니다. 클러스터를
-  공유할 뿐 `rag_documents`·`rag_chunks` 가 `vectordb` 로 섞여 들어가는 것은 아닙니다.
-  스키마 원본은 여전히 `backend/infra/training_pgvector/schema.sql`(768차원)이지만,
-  전용 컨테이너가 없어져 init 디렉터리로 마운트되지는 않습니다 (#92·#94·#105).
-  redis 는 없어도 앱이 뜨지만,
+- backend 는 pgvector·redis 의 **healthy 를 기다립니다.** PGVector 컨테이너는
+  **하나**입니다 — Training 전용이던 `training-rag-pgvector` 컨테이너는 #105 로,
+  Training 전용 `dog_rag` **데이터베이스**는 #112 로 없어졌습니다. Training 은 이제
+  본체와 **같은 `vectordb` DB** 를 쓰고, `public.training_rag_documents`/
+  `training_rag_chunks` 테이블로만 나뉩니다. 스키마 원본은 여전히
+  `backend/infra/training_pgvector/schema.sql`(768차원)이고, 본체 DB 규칙과 같게
+  `db/init/05_training_rag.sql` 에도 같은 정의가 있습니다 (#92·#94·#105·#112 —
+  상세는 아래 "Training 토폴로지" 절). redis 는 없어도 앱이 뜨지만,
   캐시 폴백 판단이 프로세스 생애에 한 번뿐이라 순서를 보장해야 일 예산 카운터가
   동작합니다 (D-019).
 - place-search 는 place-db(PostGIS) healthy 후 **Alembic 을 돌리고 나서** 서버를 띄웁니다.
@@ -181,17 +182,45 @@ C:\deploy\daengs\
 ## 논리 오케스트레이션 — 직접 API 와 `/assistant/query`
 
 여기서부터는 프로세스가 아니라 **요청의 종류**를 다룹니다. 위 물리 지도는 전부 CURRENT
-사실이고, 이 절부터는 CURRENT 와 TARGET 이 섞이므로 표기를 지킵니다.
+사실입니다. 이 절 아래는 한때 TARGET(승인됐지만 미구현)이었던 것이 Card 1 → 2A → 2B →
+3(PR #113 · #115)으로 실제 구현되어 지금은 **CURRENT / CONFIRMED** 입니다 — 그 목표가
+무엇으로 승인됐는지의 기록은 지우지 않고, "아직 구현 안 됨"이라는 TARGET 표기만
+갱신합니다. 아직 실제로 미구현인 것(en-US 로케일, Place/Journey 편입 등)은 각자의
+자리에서 여전히 TARGET/FOLLOW-UP 으로 남습니다.
 
 **CURRENT** — `backend/src/daengs_backend/orchestration/` 에 이미 만들어진 `RoutePlan` 을
 소비하는 내부 LangGraph 실행 코어가 있습니다. Training·Life·Walk 어댑터, 순차 실행,
-HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. 의미 라우터와 공개
-`/assistant/query` 는 아직 없고, 기존 직접 API 및 프론트 흐름은 바뀌지 않았습니다.
+HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. Card 2B 로 production 의미 라우터도
+같은 패키지에 들어왔습니다 — `semantic.py`(Gemini 의미 선택 + O-14 1회 재시도) ·
+`planner.py`(결정적 신호 해소와 결정론적 RoutePlan 조립) · `service.py`(계획 → 기존 실행
+코어 호출). Card 3 로 공개 `POST /assistant/query` 진입점도 붙었습니다 —
+`routers/assistant.py`(인증·외부 DTO 검증·`PrincipalContext` 조립) ·
+`schemas/assistant.py`(`extra="forbid"` 외부 요청 계약, `/walk` 과 같은 좌표 범위).
+인증은 `/walk`·`/ask` 와 같은 `admin_or_app_user(Perm.READ)` 이고, 응답은
+`AssistantResponse` 를 그대로 돌려줍니다 — 재해석하지 않습니다. 기존 직접 API 및
+프론트 흐름은 바뀌지 않았습니다.
 
-**TARGET (CONFIRMED)** — 대화형 진입점 `/assistant/query` 를 하나 두고, 그 뒤의 흐름
-제어를 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30 어드버서리얼 아키텍처 리뷰
-(읽기 전용, `origin/dev` 코드 대조)를 거쳐 **사람이 최종 승인**한 것입니다
-(D-030~D-037 · orchestration-routing.md §6 의 결정 이력).
+**v1 완료 체크포인트 (2026-09-01)** — 오케스트레이션 v1(Card 1 → 2A → 2B → 3)이 `dev` 에
+merge 되어 있습니다.
+
+- PR #113 — production 의미 라우터 (`semantic.py` · `planner.py` · `service.py`)
+- PR #115 — 인증된 `POST /assistant/query` 진입점
+- 최종 백엔드 흐름이 인증부터 능력 실행/HANDOFF·집계까지 실제로 연결돼 있습니다
+- 포커스 E2E(실제 서비스/planner/그래프/집계, Gemini 전송·능력 어댑터만 대체) 통과
+- 라이브 Gemini 의미 라우팅 스모크 통과 (프로덕션 경로 확인용 소규모 스모크 — Card 2A
+  80건 벤치마크를 다시 도는 것이 아닙니다. 상세는 routing 문서 §4)
+- 병합된 `dev` 상태 그대로에서 돌린 포커스 회귀 통과
+
+검증 기준 커밋: `6227fddd58dab3bf6721eb6d1fca6111d9d1ad18` (Card 3 merge 직후 `dev`).
+프론트를 `/assistant/query` 에 연결하는 작업과, 배포된 서버 인프라에서의 실제
+Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레이션 구현의 범위 밖이며
+아직 남은 별도 후속 작업입니다 — 오케스트레이션 자체가 미완성이라는 뜻이 아닙니다.
+
+**CURRENT / CONFIRMED — v1 로 구현 완료** — 대화형 진입점 `/assistant/query` 하나를
+두고, 그 뒤의 흐름 제어는 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30
+어드버서리얼 아키텍처 리뷰(읽기 전용, `origin/dev` 코드 대조)를 거쳐 **사람이 최종
+승인**했고(D-030~D-037 · orchestration-routing.md §6 의 결정 이력), Card 1~3 구현이
+그대로 지킵니다.
 
 - **LangGraph 는 오케스트레이터입니다** — 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.
   그래프는 라우팅·실행 순서·결과 수집이라는 흐름 제어만 소유합니다.
@@ -220,21 +249,23 @@ HANDOFF/CLARIFY 처리와 결정적 집계까지 구현됐습니다. 의미 라�
 - **GraphRAG / Neo4j 는 폐기됐고 이 작업과 무관합니다.** LangGraph(흐름 제어 프레임워크)와
   GraphRAG(그래프 지식베이스)는 이름만 비슷한 남남입니다. 폐기된 산출물은 이관하지 않습니다.
 
-**v1 범위 (CONFIRMED)** — 실행 가능 능력은 **Training + Life + Walk** 셋입니다.
-Skin·Gait 는 인터페이스/어댑터 **문서까지만** 두고 v1 실행 대상이 아닙니다 (§7).
+**v1 범위 (CONFIRMED)** — EXECUTE 가능 능력은 **Training + Life + Walk** 셋입니다.
+Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입니다(`semantic.py` 의
+`handoffs.skin`/`handoffs.gait`, planner 의 고정 reason) — "아직 문서만 있고 라우터가
+모르는 것"이 아니라, **EXECUTE 로는 절대 선택되지 않는다**는 뜻입니다 (§7).
 
 **v1 LangGraph 프리미티브 (CONFIRMED)** — `StateGraph` · 일반 edge · 조건부 edge, 그리고
 `Send` 는 동적 다중 능력 fan-out 이 **실제로 필요할 때만**. `Command` 는 나중 선택지.
 서브그래프 · checkpointer · interrupt 는 v1 요구사항이 아닙니다.
 
-## 능력 현실 · 준비도 (CURRENT — 2026-08-31, dev #104 기준)
+## 능력 현실 · 준비도 (CURRENT — 2026-09-01, dev `6227fdd`(PR #115 merge) 기준)
 
 능력들이 대칭이라고 가정하면 설계가 틀어집니다. 이 표가 **능력 준비도의 단일 원본**입니다
 — 다른 문서는 여기로 링크하고 같은 표를 두 번 만들지 않습니다.
 
 | 능력 | 현재 소스·런타임 가용성 | Card 1 오케스트레이션 역할 | 호출 형태 | 현재 기술 호출 가능? | 막는 것 · 비고 |
 | --- | --- | --- | --- | --- | --- |
-| **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 공용 pgvector 클러스터의 전용 `dog_rag` DB (#105) | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). 내부 경계가 실제 생성 타임아웃과 그 밖의 실패를 구분하며 공개 `/training/chat` 의 503 호환성은 유지합니다 (contracts §4) |
+| **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94·#112). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 공용 pgvector 클러스터의 **`vectordb` DB**, `public.training_rag_documents`/`training_rag_chunks` 테이블 (#112, 아래 Training 토폴로지 절) | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). 내부 경계가 실제 생성 타임아웃과 그 밖의 실패를 구분하며 공개 `/training/chat` 의 503 호환성은 유지합니다 (contracts §4) |
 | **Life** | backend `POST /ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/walk` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
@@ -255,12 +286,12 @@ Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM
 않고 그대로 통과합니다 — 2단계 모델의 병변명 오답률(56.6%, D-023) 때문에 문구 계층이
 지키는 방어를 합성 단계가 풀면 안 됩니다.
 
-## Training 토폴로지 — 이관 완료 (CURRENT)
+## Training 토폴로지 — 이관 완료, PGVector 는 본체 DB 로 통합 (CURRENT)
 
-**CURRENT (2026-08-31)** — Training RAG 이관은 **완료됐습니다.** 소스는
+**CURRENT (2026-09-01, #112 반영)** — Training RAG 이관은 **완료됐습니다.** 소스는
 `backend/src/daengs_training/` 모듈이고, backend 프로세스 안에서 in-process 로 돕니다
 (#83 런타임 이행 → #92 PGVector pg18 → #93 생성 Gemini 전환 → #94 modular monolith
-→ #105 PGVector 공용 클러스터 통합).
+→ #105 PGVector 공용 클러스터 통합 → #112 `vectordb` 테이블 통합).
 호스트 단독 FastAPI(`:8010`)·`DAENGS_TRAINING_RAG_BASE_URL`·backend→Training HTTP 홉은
 더 이상 없습니다. 현재 호출 경로:
 
@@ -268,32 +299,44 @@ Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM
 frontend → backend POST /training/chat
          → services/training_rag.py (asyncio.to_thread, lazy 싱글턴)
          → daengs_training.service.RAGService (top_k=4)
-         → pgvector:5432/dog_rag (공용 클러스터의 전용 DB) / Gemini API
+         → pgvector:5432/vectordb (본체와 같은 DB, public.training_rag_* 테이블) / Gemini API
 ```
 
-**DB 토폴로지 (#105)** — 전용 `training-rag-pgvector` 컨테이너와 `training-rag-pgdata`
-런타임 볼륨은 더 이상 없습니다. PostgreSQL 클러스터 하나를 공용으로 쓰되 DB 는 나눕니다:
+**DB 토폴로지 (#112 — #105 의 전용 `dog_rag` DB 를 대체)** — Training 전용 `dog_rag`
+데이터베이스와 전용 role 은 더 이상 production 대상이 아닙니다. Training 은 본체와
+**같은 `vectordb` DB, 같은 접속 정보(`RAG_PGVECTOR_DSN` 기본값 = compose 의 본체
+`POSTGRES_*`)** 를 쓰고, 소유 테이블로만 나눕니다:
 
 ```
 공용 pgvector 컨테이너 / PostgreSQL 클러스터
-├─ vectordb  — 본체 DAENGS DB
-└─ dog_rag   — Training RAG DB (rag_documents · rag_chunks)
+└─ vectordb
+   ├─ (본체 DAENGS 테이블)
+   └─ public.training_rag_documents · public.training_rag_chunks   (Training 전용, #112)
 ```
 
-클러스터를 공유하는 것이지 테이블을 섞는 것이 아닙니다. Training 은 그 `dog_rag` DB
-하나만 소유하는 **non-superuser `dog_rag` LOGIN role** 로 붙고, 비밀번호는 최상단
-`.env` 의 `TRAINING_RAG_DB_PASSWORD` 를 compose 의 `:?` 가드로 받습니다. 본체는 종전대로
-`DAENGS_DB_*`/`POSTGRES_*` 로 `vectordb` 에 붙어, 두 접속 경로가 겹치지 않습니다.
+스키마 원본은 여전히 `backend/infra/training_pgvector/schema.sql`(768차원)이고, 본체 DB
+규칙과 같게 `db/init/05_training_rag.sql` 에도 같은 정의가 추가됐습니다(#112) — 빈
+볼륨에서 새로 뜨면 Training 테이블까지 한 번에 만들어집니다. 더 이상 전용
+`TRAINING_RAG_DB_PASSWORD`/`dog_rag` LOGIN role 이 없습니다.
+
+**저장소·런타임 설정과 서버의 실제 상태는 다른 질문입니다.** 위 내용은 이 저장소의
+코드·compose·`db/init/` 이 가리키는 대상이 `vectordb.training_rag_*` 라는 뜻입니다.
+**이미 떠 있는 서버 DB** 에는 `db/init/` 이 적용되지 않으므로(볼륨이 빌 때만 실행),
+`db/migrations/2026-09-01_training_rag_into_vectordb.sql` 을 배포 후 수동 적용해야
+실제로 반영됩니다(본체 DB 규칙과 동일 — CLAUDE.md "이미 있는 DB를 바꾸는 SQL"). 옛
+`dog_rag` DB 는 롤백 대비로 당분간 남아 있을 수 있지만 **더 이상 production 런타임
+대상이 아닙니다.** 서버에 이 마이그레이션이 실제로 적용됐는지는 이 문서가 검증하지
+않습니다 — 배포 확인이 필요한 별도 항목입니다.
 
 E5 검색·evidence gate·의료 가드레일·Gemini 생성은 전부 `daengs_training` 이 소유하고,
 `daengs_backend` 가 import 하는 것은 게이트웨이 한 곳뿐입니다
 (`test_training_rag_monolith.py` 가 기계 강제 — main import 시 torch 비로딩 포함).
 
 이 결과는 D-032 가 적어 둔 초기 TARGET("저장소 통합 ≠ 프로세스 통합, HTTP 경계 초기
-유지")보다 한 걸음 더 간 것입니다 — #94 가 프로세스 통합(modular monolith)까지 팀
-승인으로 수행했고, 운영 실측에서 부담이 확인될 때만 서비스 분리를 재검토합니다
-(경계는 `services/training_rag.py` 한 곳이라 분리 전환이 어댑터 교체로 끝나는 성질은
-유지됩니다). 서빙 계약 원본은 docs/training/rag-demo.md.
+유지")보다 한 걸음 더 간 것입니다 — #94 가 프로세스 통합(modular monolith)까지, #112 가
+DB 통합까지 팀 승인으로 수행했고, 운영 실측에서 부담이 확인될 때만 서비스 분리를
+재검토합니다(경계는 `services/training_rag.py` 한 곳이라 분리 전환이 어댑터 교체로
+끝나는 성질은 유지됩니다). 서빙 계약 원본은 docs/training/rag-demo.md.
 
 ### 이관 출처와 경계 (CONFIRMED — 이관은 이 경계 안에서 수행됨)
 
@@ -315,11 +358,12 @@ E5 검색·evidence gate·의료 가드레일·Gemini 생성은 전부 `daengs_t
 개인 재해 복구 백업이고, 그것이 자동으로 운영 서버 코퍼스가 되지 않습니다. 공유/서버
 인프라로의 코퍼스 배포는 미해결 소스들의 권리·출처 검증을 **따로** 통과해야 합니다.
 
-### 서버 재구축 상태 (2026-08-31 갱신)
+### 서버 재구축 상태 (2026-09-01 갱신)
 
 | 항목 | 상태 |
 | --- | --- |
-| 신규 서버 PGVector 재구축 | **완료** — `training-rag-pgvector` 컨테이너 + `training-rag-pgdata` 볼륨, 서빙 스코프 14문서/83청크 유지 (#92·#94 — 배포에서 재적재·재임베딩 안 함) |
+| 신규 서버 PGVector 재구축 | **완료** — 공용 pgvector 클러스터, 서빙 스코프 14문서/83청크 유지 (#92·#94 — 배포에서 재적재·재임베딩 안 함) |
+| `vectordb.training_rag_*` 테이블 통합 (#112) | **저장소/compose 설정 완료** — `db/init/05_training_rag.sql`·`RAG_PGVECTOR_DSN` 은 `vectordb` 를 가리킴. **서버의 기존 DB 에 `db/migrations/2026-09-01_training_rag_into_vectordb.sql` 을 실제로 적용했는지는 배포 확인 필요** — 이 문서가 대신 검증하지 않습니다 |
 | Training 포트 | **해소(무의미)** — 별도 프로세스가 없어 포트 자체가 사라짐 (#94) |
 | monolith RSS · 첫 요청 지연 · 동시성 실측 | **FOLLOW-UP** — #94 가 merge blocker 로 두지 않고 운영 관찰 항목으로 넘김. 부담 확인 시에만 서비스 분리 재검토 |
 | 운영 타임아웃 정합 (Gemini `GEMINI_TIMEOUT_MS` 등) | **FOLLOW-UP** |

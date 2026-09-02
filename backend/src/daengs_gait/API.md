@@ -61,7 +61,7 @@ POST /gait/analyze     multipart/form-data
 ⚠️ **H.264 로 올리세요.** 서버 컨테이너에 **AV1 디코더가 없습니다.** AV1 을 올리면
    프레임을 하나도 못 읽어 `quality.status: "unavailable"` 이 나오는데, 그 안내 문구가
    "다시 촬영해 주세요" 라 사용자가 원인을 알 수 없습니다 (알려진 문제 —
-   `docs/worklog-gait.md` 3-2). 스마트폰 촬영본은 H.264 라 보통 문제없습니다.
+   `docs/gait/worklog.md` 3-2). 스마트폰 촬영본은 H.264 라 보통 문제없습니다.
 
 ### 응답 200 — 분석 성공
 
@@ -275,7 +275,7 @@ POST /gait/compare
   목록·삭제가 전부 그 값을 통해 접근합니다.
 - **DB 로 옮길 때 `dog_id` 가 외래 키가 되는 자리입니다.** 지금은 검증 없는 문자열이지만
   구조상 관계를 맺을 지점이 이미 열려 있습니다 —
-  `docs/gait-record-data-design.md` 의 스키마 제안이 그 모양입니다.
+  `docs/gait/record-data-design.md` 의 스키마 제안이 그 모양입니다.
 - **이 서비스는 `dog_id` 의 의미를 해석하지 않습니다.** 묶는 열쇠로만 씁니다.
   그래야 상위가 어떤 인가 모델을 고르든 여기를 안 고칩니다.
 

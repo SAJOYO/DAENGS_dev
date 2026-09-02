@@ -43,6 +43,23 @@
 발표 대본·폐기된 그래프 설계·실험 과정 리포트는 원본 레포에 남겼습니다 — 무엇을 왜
 안 가져왔는지는 색인의 "가져오지 않은 것" 절에 있습니다.
 
+### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
+
+| | |
+| --- | --- |
+| [gait/worklog.md](gait/worklog.md) | **어디까지 했고 다음에 뭘 이어야 하나** — 미해결 목록과 각각이 어느 PR·결정으로 이어지는지, 반복해서 부딪힌 자리. 세션이 바뀌면 가장 먼저 사라지는 정보라 파일로 남깁니다 |
+| [gait/record-data-design.md](gait/record-data-design.md) | 기록 저장 정책·DB 구조 **설계안** (미확정 — 테이블·migration 은 아직 없습니다). 기록의 주인이 backend 냐 gait 냐가 갈림길이고 그것이 앱이 부르는 URL 을 정합니다 |
+| [gait/record-data-design-easy.md](gait/record-data-design-easy.md) | 위 문서를 쉬운 말로 |
+
+**코드 옆에 있는 것**은 여기 없습니다 — `backend/src/daengs_gait/` 의
+[API.md](../backend/src/daengs_gait/API.md)(앱이 볼 응답 계약) ·
+`README.md`(가중치 배치·운영) · `CLAUDE.md`(임의로 바꾸면 조용히 틀리는 자리).
+"어떻게 돌리나"는 코드 옆이 맞다는 규칙입니다.
+
+⚠️ 결정은 `decisions.md` 의 **D-029**(독립 서비스) → **D-038**(소스는 backend 로,
+런타임 격리는 유지)에 있습니다. 코드 위치만 보면 `daengs_training`·`daengs_screening`
+과 같아 보이지만 **gait 만 런타임을 안 합쳤습니다** — 영상 추론이 분 단위라서입니다.
+
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.
 

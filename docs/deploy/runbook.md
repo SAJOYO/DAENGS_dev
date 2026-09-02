@@ -176,8 +176,27 @@ curl -sI http://daengapp.weareithero.cloud/            # 301 → https
 curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 ```
 
+**경로별 기대 응답** — 배포 뒤 이 표대로 나오는지 봅니다. 인증이 필요한 경로는 **401 이
+정답**이고, 404 가 나오면 그 엔드포인트가 아직 이 서버에 없다는 뜻입니다:
+
+```bash
+for p in /health /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
+  printf "%-24s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
+done
+```
+
+| 경로 | 기대 | 아니면 |
+| --- | --- | --- |
+| `/health` | 200 (`{"status":"ok","db":"ok"}`) | backend 기동 실패 |
+| `/gait/records` | **410** — 옛 무인증 경로는 닫혀 있어야 합니다 (#145) | **400·200 이면 설정이 반영 안 된 것.** §6 의 inode 함정 |
+| `/app/gait/analyze` (POST) | 401 | 404 면 새 계약이 안 올라온 것 |
+| `/app/walks` (POST) | 401 | 〃 |
+| `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
+
 `/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
-`/gait/analyze` 는 영상으로 분 단위 — 504 가 나면 `nginx/gcp.conf` 의 gait 타임아웃 확인.
+
+`/app/gait/*` 의 영상 분석은 분 단위입니다 — 504 가 나면 `api-locations.inc` 의
+`/app/gait/` 타임아웃(600s)이 실제로 반영됐는지부터 보세요 (§6 의 inode 함정).
 
 ## 6. 운영
 
@@ -199,8 +218,12 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
   ```bash
   # ③ db/migrations/ 에 새 파일이 있으면 **pull 보다 먼저** 적용한다
   git show origin/main:db/migrations/<파일>.sql \
-    | docker compose exec -T pgvector psql -U daengs -d vectordb
+    | docker compose exec -T pgvector psql -U daengs -d vectordb -v ON_ERROR_STOP=1
   ```
+
+  ⚠ **`-v ON_ERROR_STOP=1` 을 빼지 마세요.** psql 기본값은 오류가 나도 다음 문장을 계속
+  실행하고 **종료 코드 0** 을 냅니다. 여러 장을 반복문으로 돌리면 실패한 것을 못 알아채고
+  ④ 로 넘어갑니다. 적용 뒤에는 같은 이름의 `verify_*.sql` 이 있으면 그것도 돌립니다.
   ```bash
   # ④ 워크트리 갱신 = 배포
   git merge --ff-only origin/main
@@ -228,16 +251,34 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
     스케줄을 발사하게 됩니다.
     ⚠ **`gait-worker`** 는 D-043 으로 생긴 서비스입니다. 빠뜨리면 웹만 새 코드가 되고
     워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
-  - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → 설정은 마운트라
-    compose 가 변경을 못 봅니다. `up -d` 로는 아무것도 재생성되지 않으니 직접 reload:
+  - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → **컨테이너를
+    재생성합니다. `reload` 로는 반영되지 않습니다.**
 
     ```bash
-    docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      up -d --force-recreate nginx
     ```
 
-    ⚠ GCP 가 읽는 것은 `default.conf` 가 **아닙니다** — 오버레이가 `gcp.conf` 를 그 자리에
+    ⚠️ **`nginx -s reload` 를 쓰지 마세요. 오류 없이 아무 일도 안 일어납니다.**
+    compose 가 설정을 **파일 하나씩** 마운트하는데, 파일 마운트는 경로가 아니라
+    **inode 를 뭅니다.** `git merge`(또는 편집기 저장)는 새 파일을 만들어 이름을
+    갈아끼우므로 새 inode 가 되고, 컨테이너의 마운트는 **옛 inode 를 계속 가리킵니다.**
+    그래서 `nginx -t` 는 옛 파일을 검사해 **통과**하고 `reload` 는 옛 파일을 **다시
+    읽습니다** — 로그에도 아무 문제가 안 보입니다.
+    2026-09-02 배포에서 실제로 밟았습니다: `/gait/records` 가 410 이어야 하는데 400 이었고,
+    호스트 파일에는 `return 410` 이 있는데 `docker compose exec nginx grep` 으로는 없었습니다.
+    `--force-recreate nginx` 로 즉시 해결.
+
+    ⚠️ `up -d` 를 **이름 없이** 부르면 nginx 는 compose 정의가 안 바뀌었으므로 그냥
+    넘어갑니다. 서비스 이름을 찍고 `--force-recreate` 를 붙여야 합니다.
+
+    ⚠️ 같은 함정이 **파일로 마운트하는 것 전부**에 있습니다 — `backend/pyproject.toml` ·
+    `backend/uv.lock` · `backend/README.md`. 반대로 `backend/src` 는 **디렉터리** 마운트라
+    해당 없습니다(그래서 코드 수정은 reload 로 반영됩니다).
+
+    ⚠️ GCP 가 읽는 것은 `default.conf` 가 **아닙니다** — 오버레이가 `gcp.conf` 를 그 자리에
     끼웁니다. API 경로 블록은 `api-locations.inc` 한 곳에 있고 두 server 블록이 include
-    합니다. dev 에서 `default.conf` 만 고친 변경은 GCP 에 **없는 것과 같습니다** (#150).
+    합니다. dev 에서 `default.conf` 만 고친 변경은 GCP 에 **없는 것과 같습니다** (#150 · #145).
   - **프론트** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로(`-manual2`,
     `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 — reload 가
     클러스터 무중단 교체입니다)

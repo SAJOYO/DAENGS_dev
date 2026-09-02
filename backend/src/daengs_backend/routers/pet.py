@@ -38,6 +38,7 @@ def _to_response(pet: Pet, primary_pet_id: uuid.UUID | None) -> PetResponse:
         weight_kg=pet.weight_kg,
         birth_date=pet.birth_date,
         birth_date_kind=pet.birth_date_kind,
+        farewell_on=pet.farewell_on,
         is_primary=pet.id == primary_pet_id,
     )
 

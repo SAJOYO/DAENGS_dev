@@ -75,8 +75,18 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
 ⚠️ **무인증 `/gait/*` 는 앱 전환 전까지 열려 있습니다** — 미해결 5번이 이것이고,
    완화는 앱 쪽 "테스트 빌드에서 끄기"입니다.
 
-남은 단계: 앱 전환(#64) → 검증 → nginx `location /gait/` 제거 → gait 의 FastAPI 를
-걷어내고 워커(`celery -A daengs_backend.tasks.gait worker --queues gait`)로 전환.
+**확정된 진행 순서** (2026-09-02 사람 승인 — 이 순서대로 갑니다):
+
+1. **#78** provider + 보관/파기 정책 확정 ← **여기 막혀 있음. 사람 결정**
+2. `StoragePort` 실제 구현
+3. gait worker compose 전환 (`celery -A daengs_backend.tasks.gait worker --queues gait`)
+   + 실제 queue 처리
+4. `/app/gait/*` 업로드 → confirm → 분석 → 결과 조회 **왕복 검증**
+5. 앱 #64 를 새 API 로 전환
+6. 새 앱 흐름 검증 후 기존 `/gait/*` 제거 + gait FastAPI 제거
+
+**#133 은 4번이 통과할 때까지 draft 로 둡니다** — `/app/gait/analyze` 가 지금
+저장소 미설정으로 503 인 것은 의도된 상태라, Ready 로 올려도 검증할 수 없습니다.
 
 ## 이력
 

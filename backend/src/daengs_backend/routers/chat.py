@@ -15,11 +15,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.core.database import get_session
+from daengs_backend.core.database import SessionLocal, get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.models import ChatMessage, ChatSession, ChatSummary
+from daengs_backend.models import ChatSession, ChatSummary, ChatTurn
 from daengs_backend.schemas.chat import (
-    ChatMessageResponse,
     ChatSessionCreate,
     ChatSessionDetailResponse,
     ChatSessionListResponse,
@@ -27,6 +26,7 @@ from daengs_backend.schemas.chat import (
     ChatSummaryCreate,
     ChatSummaryListResponse,
     ChatSummaryResponse,
+    ChatTurnResponse,
 )
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services.chat_summary import ChatSummaryError
@@ -52,18 +52,22 @@ def _session_response(chat_session: ChatSession) -> ChatSessionResponse:
         title=chat_session.title,
         agent_categories=list(chat_session.agent_categories),
         created_at=chat_session.created_at,
-        updated_at=chat_session.updated_at,
+        last_message_at=chat_session.last_message_at,
     )
 
 
-def _message_response(message: ChatMessage) -> ChatMessageResponse:
-    return ChatMessageResponse(
-        id=message.id,
-        role=message.role,
-        content=message.content,
-        agent_categories=list(message.agent_categories),
-        assistant_status=message.assistant_status,
-        created_at=message.created_at,
+def _turn_response(turn: ChatTurn) -> ChatTurnResponse:
+    return ChatTurnResponse(
+        id=turn.id,
+        client_message_id=turn.client_message_id,
+        processing_status=turn.processing_status,
+        user_content=turn.user_content,
+        assistant_content=turn.assistant_content,
+        agent_categories=list(turn.agent_categories),
+        assistant_status=turn.assistant_status,
+        error_code=turn.error_code,
+        completed_at=turn.completed_at,
+        created_at=turn.created_at,
     )
 
 
@@ -71,7 +75,8 @@ def _summary_response(summary: ChatSummary) -> ChatSummaryResponse:
     return ChatSummaryResponse(
         id=summary.id,
         pet_id=summary.pet_id,
-        session_id=summary.session_id,
+        source_session_id=summary.source_session_id,
+        source_turn_count=summary.source_turn_count,
         title=summary.title,
         question_summary=summary.question_summary,
         answer_summary=summary.answer_summary,
@@ -81,7 +86,7 @@ def _summary_response(summary: ChatSummary) -> ChatSummaryResponse:
         agent_categories=list(summary.agent_categories),
         model=summary.model,
         prompt_version=summary.prompt_version,
-        source_message_count=summary.source_message_count,
+        completed_at=summary.completed_at,
         created_at=summary.created_at,
     )
 
@@ -177,14 +182,14 @@ async def get_session_detail(
 ) -> ChatSessionDetailResponse:
     """카드를 눌렀을 때. 메시지를 오간 순서대로 돌려줍니다."""
     try:
-        chat_session, messages = await chat_service.get_session_with_messages(
+        chat_session, turns = await chat_service.get_session_with_turns(
             session, user.app_user_id, session_id
         )
     except chat_service.ChatSessionNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.") from None
     return ChatSessionDetailResponse(
         session=_session_response(chat_session),
-        messages=[_message_response(m) for m in messages],
+        turns=[_turn_response(turn) for turn in turns],
     )
 
 
@@ -228,7 +233,6 @@ async def create_summary(
     session_id: uuid.UUID,
     body: ChatSummaryCreate,
     user: CurrentAppUser,
-    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ChatSummaryResponse:
     """**사용자가 누를 때만 돕니다.** 답변마다 자동으로 다시 만들지 않습니다.
 
@@ -240,7 +244,7 @@ async def create_summary(
     """
     try:
         summary = await chat_service.create_summary(
-            session,
+            SessionLocal,
             user.app_user_id,
             session_id,
             client_request_id=body.client_request_id,
@@ -250,6 +254,26 @@ async def create_summary(
     except chat_service.EmptyConversationError:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "요약할 대화 내용이 없습니다."
+        ) from None
+    except chat_service.ExistingSummaryError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "SUMMARY_ALREADY_EXISTS", "summary_id": str(exc.summary_id)},
+        ) from None
+    except chat_service.SummaryProcessingError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "SUMMARY_PROCESSING", "summary_id": str(exc.summary_id)},
+        ) from None
+    except chat_service.SummaryRequestConflictError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "SUMMARY_REQUEST_ALREADY_FAILED"},
+        ) from None
+    except (chat_service.TurnLimitError, chat_service.TranscriptLimitError):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "SUMMARY_SOURCE_LIMIT_EXCEEDED"},
         ) from None
     except ChatSummaryError:
         # 원출력은 노출하지 않습니다 (O-14 와 같은 규칙).

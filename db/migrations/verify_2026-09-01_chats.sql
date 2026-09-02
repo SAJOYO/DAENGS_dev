@@ -1,48 +1,49 @@
--- verify_2026-09-01_chats.sql
--- 마이그레이션이 제대로 돌았는지 눈으로 본다. 아무것도 바꾸지 않는다.
---
---   docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - \
---       < db/migrations/verify_2026-09-01_chats.sql
+-- Read-only verification for the still-unapplied final chat schema.
 
--- 1) 세 테이블이 생겼는가. 세 줄이어야 한다.
+-- 1) Exactly these three product tables should exist.
 SELECT table_name
 FROM information_schema.tables
-WHERE table_name IN ('chat_sessions', 'chat_messages', 'chat_summaries')
+WHERE table_name IN ('chat_sessions', 'chat_turns', 'chat_summaries', 'chat_messages')
 ORDER BY table_name;
 
--- 2) **가장 중요한 확인** — 원본이 사라져도 요약이 남는가.
---    chat_messages.session_id 는 CASCADE, chat_summaries.session_id 는 SET NULL
---    이어야 한다. 여기가 뒤바뀌면 사용자가 저장한 요약이 5개 유지에 조용히 지워진다.
-SELECT
-    tc.table_name,
-    kcu.column_name,
-    rc.delete_rule
+-- 2) Turn deletion is CASCADE; saved-summary source deletion is SET NULL.
+SELECT tc.table_name, kcu.column_name, rc.delete_rule
 FROM information_schema.table_constraints tc
 JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
+  ON tc.constraint_name = kcu.constraint_name
 JOIN information_schema.referential_constraints rc
-    ON tc.constraint_name = rc.constraint_name
+  ON tc.constraint_name = rc.constraint_name
 WHERE tc.constraint_type = 'FOREIGN KEY'
-  AND tc.table_name IN ('chat_messages', 'chat_summaries')
-  AND kcu.column_name = 'session_id'
+  AND ((tc.table_name = 'chat_turns' AND kcu.column_name = 'session_id')
+    OR (tc.table_name = 'chat_summaries' AND kcu.column_name = 'source_session_id'))
 ORDER BY tc.table_name;
 
--- 3) 멱등 인덱스가 걸렸는가. 두 줄이어야 한다 —
---    chat_messages_idempotency_idx, chat_summaries_idempotency_idx.
-SELECT indexname
+-- 3) Partial unique definitions must show one draft and retryable failed summaries.
+SELECT indexname, indexdef
 FROM pg_indexes
-WHERE indexname LIKE 'chat_%_idempotency_idx'
+WHERE indexname IN (
+    'chat_sessions_one_draft_idx',
+    'chat_summaries_source_reservation_idx'
+)
 ORDER BY indexname;
 
--- 4) 목록 조회용 인덱스가 걸렸는가. 세 줄이어야 한다.
-SELECT indexname
+-- 4) FK/order and idempotency indexes/constraints.
+SELECT indexname, indexdef
 FROM pg_indexes
-WHERE tablename IN ('chat_sessions', 'chat_messages', 'chat_summaries')
-  AND indexname LIKE '%_idx'
-  AND indexname NOT LIKE '%idempotency%'
-ORDER BY indexname;
+WHERE tablename IN ('chat_sessions', 'chat_turns', 'chat_summaries')
+ORDER BY tablename, indexname;
 
--- 5) role CHECK 이 걸렸는가. 한 줄이어야 한다.
-SELECT conname
+-- 5) State and length/count CHECKs.
+SELECT conname, pg_get_constraintdef(oid)
 FROM pg_constraint
-WHERE conname = 'chat_messages_role_check';
+WHERE conname IN (
+    'chat_turns_processing_status_check',
+    'chat_turns_user_content_length_check',
+    'chat_turns_assistant_content_length_check',
+    'chat_turns_assistant_status_check',
+    'chat_turns_state_check',
+    'chat_summaries_processing_status_check',
+    'chat_summaries_source_turn_count_check',
+    'chat_summaries_state_check'
+)
+ORDER BY conname;

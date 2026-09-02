@@ -1,130 +1,131 @@
-"""대화 기록의 규칙. 트랜잭션 경계도 여기입니다.
+"""Short-transaction rules for product chat persistence (D-043).
 
-라우터는 HTTP 만 보고, 리포지토리는 쿼리만 합니다. "몇 개까지 남기나"·"어느 것을
-밀어내나"·"두 번 눌렀을 때 어떻게 하나"는 전부 여기 모입니다.
-
-**저장은 사용자+강아지 스코프입니다.** 소유권은 서버가 확인하고, 요청 본문의
-`app_user_id` 같은 신원 필드는 받지 않습니다 — 인증된 principal 만 씁니다.
+External orchestration/Gemini calls are intentionally absent from turn transactions. Summary
+generation uses reserve TX -> close session -> external call -> completion TX.
 """
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from daengs_backend.models import ChatMessage, ChatSession, ChatSummary
-from daengs_backend.orchestration.contracts import (
-    AssistantResponse,
-    AssistantStatus,
-    CapabilityStatus,
-)
+from daengs_backend.models import ChatSession, ChatSummary, ChatTurn
+from daengs_backend.orchestration.contracts import AssistantResponse, CapabilityStatus
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.services.chat_summary import (
     PROMPT_VERSION,
     SUMMARY_MODEL_ID,
+    ChatSummaryDraft,
     ChatSummaryError,
     GeminiChatSummarizer,
     render_transcript,
 )
 
-#: 사용자+강아지마다 남기는 **대화 세션**의 수. 메시지 5개가 아닙니다.
-#:
-#: ⚠️ 앱이 이 숫자를 박아 두지 않도록 목록 응답에 같이 실어 보냅니다
-#: (`MAX_PETS_PER_USER` 를 `PetListResponse.max_pets` 로 보내는 것과 같은 이유).
 MAX_SESSIONS_PER_PET = 5
-
-#: 카드 제목으로 자를 길이. `chat_sessions.title` 은 VARCHAR(120) 입니다.
+MAX_QUESTION_CHARS = 2_000
+MAX_ASSISTANT_CHARS = 8_000
+MAX_COMPLETED_TURNS = 30
+MAX_TRANSCRIPT_CHARS = 320_000
+STALE_PROCESSING_AFTER = timedelta(minutes=5)
 _TITLE_MAX = 120
-
-#: 답이 나오지 않은 상태들. **이 상태의 답은 저장하지 않습니다** —
-#: 실패를 완료된 답처럼 남기면 나중에 목록에서 그것을 진짜 답으로 읽습니다.
-_UNANSWERED = frozenset(
-    {AssistantStatus.FAILED, AssistantStatus.CLARIFY, AssistantStatus.PENDING}
-)
 
 
 class ChatSessionNotFoundError(Exception):
-    """내 대화가 아니거나 없습니다.
+    pass
 
-    **남의 것일 때도 이 예외입니다.** 403 으로 나누면 "그 id 는 존재한다"를
-    알려 주는 셈이라, 없는 것과 남의 것을 같은 404 로 뭉갭니다
-    (`services/pet.py PetNotFoundError` 와 같은 판단).
-    """
+
+class ChatTurnNotFoundError(Exception):
+    pass
 
 
 class PetNotOwnedError(Exception):
-    """내 강아지가 아니거나 없습니다. 라우터가 404 로 바꿉니다."""
+    pass
 
 
 class EmptyConversationError(Exception):
-    """요약할 말이 없습니다. 라우터가 409 로 바꿉니다.
+    pass
 
-    빈 대화를 모델에 보내면 모델은 **없는 대화를 지어냅니다.** 부르기 전에 막습니다.
-    """
+
+class ContentLimitError(Exception):
+    def __init__(self, field: str, limit: int) -> None:
+        super().__init__(f"{field} exceeds {limit} characters")
+        self.field = field
+        self.limit = limit
+
+
+class TurnLimitError(Exception):
+    pass
+
+
+class TranscriptLimitError(Exception):
+    pass
+
+
+class CompletionConflictError(Exception):
+    pass
+
+
+class ExistingSummaryError(Exception):
+    """The same successfully summarized source state already exists."""
+
+    def __init__(self, summary_id: uuid.UUID) -> None:
+        super().__init__(f"summary already exists: {summary_id}")
+        self.summary_id = summary_id
+
+
+class SummaryProcessingError(Exception):
+    def __init__(self, summary_id: uuid.UUID) -> None:
+        super().__init__(f"summary is already processing: {summary_id}")
+        self.summary_id = summary_id
+
+
+class SummaryRequestConflictError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class SummaryReservation:
+    summary_id: uuid.UUID
+    transcript: str
 
 
 def build_title(first_message: str) -> str:
-    """첫 사용자 메시지에서 카드 제목을 만듭니다. **LLM 을 부르지 않습니다.**
-
-    제목 때문에 대화마다 생성 비용을 물 이유가 없고, 요약은 사용자가 누를 때만
-    만든다는 것이 이 카드의 전제입니다. 줄바꿈은 카드가 한 줄로 보여 주므로
-    공백으로 접습니다.
-    """
     flattened = " ".join(first_message.split())
     if not flattened:
         return "새 대화"
     if len(flattened) <= _TITLE_MAX:
         return flattened
-    # 자른 티를 냅니다 — 잘린 문장이 원문인 것처럼 보이지 않게.
     return flattened[: _TITLE_MAX - 1] + "…"
 
 
 def categories_of(response: AssistantResponse) -> list[str]:
-    """이 답에 실제로 기여한 능력 이름들. **라우팅 메타데이터가 원천입니다.**
-
-    클라이언트가 보낸 값이나 질문 속 낱말로 정하지 않습니다 — 키워드 하드 라우팅은
-    D-031 이 금지한 것이고, 배지가 틀리면 사용자는 답 자체를 의심합니다.
-
-    **답을 낸 능력만 셉니다.** 기권(ABSTAINED)·거절(REFUSED)·오류는 배지에 넣지
-    않습니다. 넣으면 "훈련이 답했다" 는 배지가 붙은 카드를 열었을 때 훈련은 아무
-    말도 안 했던 것이 됩니다. 순서는 실행 순서를 그대로 둡니다.
-    """
-    seen: list[str] = []
+    categories: list[str] = []
     for result in response.results:
-        if result.status is not CapabilityStatus.OK:
-            continue
-        name = result.capability.value
-        if name not in seen:
-            seen.append(name)
-    return seen
+        if result.status is CapabilityStatus.OK and result.capability.value not in categories:
+            categories.append(result.capability.value)
+    return categories
 
 
-async def _lock_owned_pet(
-    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
-) -> None:
-    """쓰기 경로용 — 소유권을 확인하고 그 강아지의 세션 생성을 직렬화합니다."""
-    if await chat_repo.lock_owned_pet(session, app_user_id, pet_id) is None:
-        raise PetNotOwnedError
+def public_response_of(response: AssistantResponse) -> dict[str, object]:
+    """Only the already-public response contract; no prompts, exceptions, or provider payloads."""
+    return response.model_dump(mode="json")
 
 
 async def _require_owned_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> None:
-    """읽기 경로용 — 소유권만 봅니다. **잠그지 않습니다.**
-
-    목록 조회가 행을 잠그면 그 강아지의 대화 생성이 조회 트랜잭션 뒤에 줄을 섭니다.
-    잠금이 필요한 것은 5개 유지를 판정하는 쪽뿐입니다.
-    """
     if await chat_repo.get_owned_pet_id(session, app_user_id, pet_id) is None:
         raise PetNotOwnedError
 
 
 async def _require_owned_session(
-    session: AsyncSession, app_user_id: uuid.UUID, chat_session_id: uuid.UUID
+    session: AsyncSession, app_user_id: uuid.UUID, session_id: uuid.UUID
 ) -> ChatSession:
-    found = await chat_repo.get_owned_session(session, app_user_id, chat_session_id)
+    found = await chat_repo.get_owned_session(session, app_user_id, session_id)
     if found is None:
         raise ChatSessionNotFoundError
     return found
@@ -133,13 +134,8 @@ async def _require_owned_session(
 async def list_sessions(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSession]:
-    """최근 다섯 개, 최근 갱신 순.
-
-    소유권을 여기서도 확인합니다 — 남의 강아지 id 로 목록을 부르면 빈 목록이
-    아니라 404 여야 합니다. "그 강아지는 있지만 대화가 없다"를 알려 주지 않습니다.
-    """
     await _require_owned_pet(session, app_user_id, pet_id)
-    return await chat_repo.list_sessions(
+    return await chat_repo.list_active_sessions(
         session, app_user_id, pet_id, MAX_SESSIONS_PER_PET
     )
 
@@ -150,227 +146,411 @@ async def create_session(
     pet_id: uuid.UUID,
     title: str | None = None,
 ) -> ChatSession:
-    """새 대화. **여섯 번째를 만들면 그 스코프의 가장 오래된 것이 사라집니다.**
+    """Return the one draft for this owner/pet, creating it without a pet row lock."""
+    await _require_owned_pet(session, app_user_id, pet_id)
+    existing = await chat_repo.get_draft(session, app_user_id, pet_id)
+    if existing is not None:
+        return existing
 
-    지우는 범위는 `app_user_id + pet_id` 한 쌍뿐입니다 — 다른 사용자의 것도,
-    같은 사용자의 다른 강아지 것도 건드리지 않습니다.
-
-    `_lock_owned_pet` 이 `pets` 행을 잠그기 때문에(FOR UPDATE) 같은 강아지로
-    동시에 두 개가 들어와도 한 줄로 세워집니다. 안 그러면 둘 다 "지금 5개"를 보고
-    둘 다 하나만 지워서 **6개가 남습니다.**
-    """
-    await _lock_owned_pet(session, app_user_id, pet_id)
-
-    chat_session = ChatSession(
-        app_user_id=app_user_id,
-        pet_id=pet_id,
-        title=build_title(title or ""),
-        agent_categories=[],
+    draft = chat_repo.add_session(
+        session,
+        ChatSession(
+            app_user_id=app_user_id,
+            pet_id=pet_id,
+            title=build_title(title or ""),
+            agent_categories=[],
+            last_message_at=None,
+        ),
     )
-    chat_repo.add_session(session, chat_session)
-    await session.flush()
-
-    # 새로 만든 것까지 세어 상한을 넘는 만큼 걷어냅니다. 방금 만든 것은
-    # `updated_at` 이 가장 커서 절대 걸리지 않습니다.
-    for stale in await chat_repo.oldest_sessions_beyond(
-        session, app_user_id, pet_id, MAX_SESSIONS_PER_PET
-    ):
-        await chat_repo.delete_session(session, stale)
-
-    await session.commit()
-    return chat_session
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        winner = await chat_repo.get_draft(session, app_user_id, pet_id)
+        if winner is None:
+            raise
+        return winner
+    return draft
 
 
-async def get_session_with_messages(
-    session: AsyncSession, app_user_id: uuid.UUID, chat_session_id: uuid.UUID
-) -> tuple[ChatSession, list[ChatMessage]]:
-    """카드를 눌렀을 때. 그 대화의 메시지를 순서대로 되살립니다."""
-    chat_session = await _require_owned_session(session, app_user_id, chat_session_id)
-    messages = await chat_repo.list_messages(session, chat_session.id)
-    return chat_session, messages
+async def get_session_with_turns(
+    session: AsyncSession, app_user_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[ChatSession, list[ChatTurn]]:
+    chat_session = await _require_owned_session(session, app_user_id, session_id)
+    return chat_session, await chat_repo.list_turns(session, session_id)
 
 
 async def delete_session(
-    session: AsyncSession, app_user_id: uuid.UUID, chat_session_id: uuid.UUID
+    session: AsyncSession, app_user_id: uuid.UUID, session_id: uuid.UUID
 ) -> None:
-    """손으로 지웁니다. 메시지도 같이 사라집니다(FK CASCADE).
-
-    **저장해 둔 요약은 남습니다** — `chat_summaries.session_id` 가 SET NULL 이라
-    원본 연결만 끊깁니다.
-    """
-    chat_session = await _require_owned_session(session, app_user_id, chat_session_id)
+    chat_session = await _require_owned_session(session, app_user_id, session_id)
     await chat_repo.delete_session(session, chat_session)
     await session.commit()
 
 
-async def append_exchange(
+def _validate_question(question: str) -> None:
+    if not question:
+        raise ContentLimitError("question", MAX_QUESTION_CHARS)
+    if len(question) > MAX_QUESTION_CHARS:
+        raise ContentLimitError("question", MAX_QUESTION_CHARS)
+
+
+async def reserve_turn(
     session: AsyncSession,
     app_user_id: uuid.UUID,
-    chat_session_id: uuid.UUID,
+    session_id: uuid.UUID,
     *,
+    client_message_id: uuid.UUID,
     question: str,
-    response: AssistantResponse,
-    client_message_id: str | None = None,
-) -> list[ChatMessage]:
-    """질문과 답을 한 트랜잭션에 붙입니다.
+) -> ChatTurn:
+    """Reserve a turn and commit before any orchestrator call."""
+    _validate_question(question)
+    chat_session = await chat_repo.get_owned_session_for_update(
+        session, app_user_id, session_id
+    )
+    if chat_session is None:
+        raise ChatSessionNotFoundError
 
-    **같은 `client_message_id` 가 이미 있으면 아무것도 새로 만들지 않습니다** —
-    두 번 눌렀거나 네트워크가 재시도한 것이고, 그때 답이 두 벌 쌓이면 목록이
-    거짓말을 합니다. 이미 있는 그 교환을 그대로 돌려줍니다.
-
-    **답이 안 나온 상태(FAILED · CLARIFY · PENDING)면 질문만 남깁니다.** 실패를
-    완료된 답처럼 저장하면 나중에 그것을 진짜 답으로 읽습니다.
-    """
-    chat_session = await _require_owned_session(session, app_user_id, chat_session_id)
-
-    if client_message_id is not None:
-        existing = await chat_repo.message_by_idempotency_key(
-            session, chat_session.id, client_message_id
-        )
-        if existing is not None:
-            # 이미 처리된 요청입니다. 그때 저장된 것을 그대로 보여 줍니다.
-            return await chat_repo.list_messages(session, chat_session.id)
-
-    stored: list[ChatMessage] = [
-        chat_repo.add_message(
-            session,
-            ChatMessage(
-                session_id=chat_session.id,
-                role="user",
-                content=question,
-                agent_categories=[],
-                client_message_id=client_message_id,
-                request_id=response.request_id,
-            ),
-        )
-    ]
-
-    if response.status not in _UNANSWERED:
-        stored.append(
-            chat_repo.add_message(
-                session,
-                ChatMessage(
-                    session_id=chat_session.id,
-                    role="assistant",
-                    content=response.message,
-                    agent_categories=categories_of(response),
-                    assistant_status=response.status.value,
-                    request_id=response.request_id,
-                ),
-            )
-        )
-
-    # 세션의 배지는 지금까지 관여한 능력의 **합집합**입니다. 한 대화에서 훈련과
-    # 생활을 모두 물었으면 카드에 배지가 둘 붙어야 합니다 — 하나로 접으면
-    # 어느 쪽이든 틀립니다.
-    merged = list(chat_session.agent_categories)
-    for name in categories_of(response):
-        if name not in merged:
-            merged.append(name)
-    chat_session.agent_categories = merged
-
-    # 목록의 정렬 기준이자 5개 유지의 기준입니다. 말이 오갔으면 최근으로 올립니다.
-    chat_repo.touch_session(session, chat_session)
-
-    if chat_session.title == "새 대화" and question.strip():
-        chat_session.title = build_title(question)
-
-    try:
-        await session.commit()
-    except IntegrityError:
-        # 같은 멱등 키가 **동시에** 두 번 들어온 경우입니다. 위의 조회로는 못 잡는
-        # 좁은 틈이라 유니크 인덱스가 마지막으로 막습니다.
-        await session.rollback()
-        return await chat_repo.list_messages(session, chat_session.id)
-
-    return stored
-
-
-async def create_summary(
-    session: AsyncSession,
-    app_user_id: uuid.UUID,
-    chat_session_id: uuid.UUID,
-    *,
-    client_request_id: str,
-    summarizer: GeminiChatSummarizer | None = None,
-) -> ChatSummary:
-    """`AI 요약 후 저장`. **사용자가 누를 때만 돕니다.**
-
-    답변마다 자동으로 다시 만들지 않습니다 — 유료 호출이고, 사용자가 저장하기로
-    한 시점의 대화를 접는 것이 이 기능의 뜻입니다.
-
-    **멱등 키를 먼저 봅니다.** 두 번 눌렀으면 여기서 걸려 모델을 아예 안 부릅니다.
-    """
-    existing = await chat_repo.summary_by_idempotency_key(
-        session, app_user_id, client_request_id
+    existing = await chat_repo.get_turn_by_client_id(
+        session, session_id, client_message_id
     )
     if existing is not None:
         return existing
+    if await chat_repo.count_reserved_turns(session, session_id) >= MAX_COMPLETED_TURNS:
+        raise TurnLimitError
 
-    chat_session = await _require_owned_session(session, app_user_id, chat_session_id)
-    messages = await chat_repo.list_messages(session, chat_session.id)
-    if not messages:
+    completed = await chat_repo.list_turns(session, session_id, completed_only=True)
+    projected = _transcript_char_count(completed) + len(question)
+    if projected > MAX_TRANSCRIPT_CHARS:
+        raise TranscriptLimitError
+
+    turn = chat_repo.add_turn(
+        session,
+        ChatTurn(
+            session_id=session_id,
+            client_message_id=client_message_id,
+            processing_status="processing",
+            user_content=question,
+            agent_categories=[],
+        ),
+    )
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        winner = await chat_repo.get_turn_by_client_id(
+            session, session_id, client_message_id
+        )
+        if winner is None:
+            raise
+        return winner
+    return turn
+
+
+async def complete_turn(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    turn_id: uuid.UUID,
+    *,
+    response: AssistantResponse,
+) -> ChatTurn:
+    """Conditionally complete a reserved turn and activate/prune in one short TX."""
+    owned = await chat_repo.get_owned_turn(session, app_user_id, turn_id)
+    if owned is None:
+        raise ChatTurnNotFoundError
+    turn, chat_session = owned
+    if turn.processing_status != "processing":
+        raise CompletionConflictError
+    if not response.message or len(response.message) > MAX_ASSISTANT_CHARS:
+        await chat_repo.fail_turn_if_processing(
+            session, turn_id, error_code="ASSISTANT_CONTENT_TOO_LONG"
+        )
+        await session.commit()
+        raise ContentLimitError("assistant", MAX_ASSISTANT_CHARS)
+
+    completed = await chat_repo.list_turns(
+        session, chat_session.id, completed_only=True
+    )
+    if _transcript_char_count(completed) + len(turn.user_content) + len(
+        response.message
+    ) > MAX_TRANSCRIPT_CHARS:
+        await chat_repo.fail_turn_if_processing(
+            session, turn_id, error_code="TRANSCRIPT_TOO_LONG"
+        )
+        await session.commit()
+        raise TranscriptLimitError
+
+    first_activation = chat_session.last_message_at is None
+    if first_activation:
+        if (
+            await chat_repo.lock_owned_pet(
+                session, chat_session.app_user_id, chat_session.pet_id
+            )
+            is None
+        ):
+            raise PetNotOwnedError
+        refreshed = await chat_repo.get_owned_session_for_update(
+            session, app_user_id, chat_session.id
+        )
+        if refreshed is None:
+            raise ChatSessionNotFoundError
+        chat_session = refreshed
+        first_activation = chat_session.last_message_at is None
+
+    categories = categories_of(response)
+    stored = await chat_repo.complete_turn_if_processing(
+        session,
+        turn_id,
+        assistant_content=response.message,
+        assistant_status=response.status.value,
+        request_id=response.request_id,
+        agent_categories=categories,
+        public_response=public_response_of(response),
+    )
+    if stored is None:
+        await session.rollback()
+        raise CompletionConflictError
+
+    merged = list(chat_session.agent_categories)
+    for category in categories:
+        if category not in merged:
+            merged.append(category)
+    chat_repo.touch_active_session(session, chat_session, merged)
+    if chat_session.title == "새 대화":
+        chat_session.title = build_title(turn.user_content)
+
+    if first_activation:
+        for stale in await chat_repo.oldest_active_sessions_beyond(
+            session,
+            chat_session.app_user_id,
+            chat_session.pet_id,
+            MAX_SESSIONS_PER_PET,
+        ):
+            await chat_repo.delete_session(session, stale)
+
+    await session.commit()
+    return stored
+
+
+async def fail_turn(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    turn_id: uuid.UUID,
+    *,
+    error_code: str,
+) -> ChatTurn:
+    if await chat_repo.get_owned_turn(session, app_user_id, turn_id) is None:
+        raise ChatTurnNotFoundError
+    failed = await chat_repo.fail_turn_if_processing(
+        session, turn_id, error_code=error_code
+    )
+    if failed is None:
+        raise CompletionConflictError
+    await session.commit()
+    return failed
+
+
+def _transcript_char_count(turns: list[ChatTurn]) -> int:
+    return sum(len(turn.user_content) + len(turn.assistant_content or "") for turn in turns)
+
+
+def _render_completed_turns(turns: list[ChatTurn]) -> str:
+    messages: list[tuple[str, str]] = []
+    for turn in turns:
+        messages.append(("user", turn.user_content))
+        messages.append(("assistant", turn.assistant_content or ""))
+    return render_transcript(messages)
+
+
+def _raise_for_existing_summary(summary: ChatSummary) -> None:
+    if summary.processing_status == "completed":
+        raise ExistingSummaryError(summary.id)
+    if summary.processing_status == "processing":
+        raise SummaryProcessingError(summary.id)
+    raise SummaryRequestConflictError
+
+
+async def reserve_summary(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    client_request_id: uuid.UUID,
+    now: datetime | None = None,
+) -> SummaryReservation:
+    """Reserve and commit. The caller must close this AsyncSession before Gemini."""
+    chat_session = await _require_owned_session(session, app_user_id, session_id)
+    turns = await chat_repo.list_turns(session, session_id, completed_only=True)
+    if not turns:
         raise EmptyConversationError
+    if len(turns) > MAX_COMPLETED_TURNS:
+        raise TurnLimitError
+    transcript = _render_completed_turns(turns)
+    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+        raise TranscriptLimitError
 
-    # **이 세션의 메시지만** 넘어갑니다. 다른 대화를 끌어올 경로가 없습니다.
-    transcript = render_transcript([(m.role, m.content) for m in messages])
-    draft = await (summarizer or GeminiChatSummarizer()).summarize(transcript=transcript)
+    timestamp = now or datetime.now(UTC)
+    stale_count = await chat_repo.fail_stale_summaries(
+        session,
+        source_session_id=session_id,
+        cutoff=timestamp - STALE_PROCESSING_AFTER,
+    )
 
-    summary = ChatSummary(
-        app_user_id=app_user_id,
-        pet_id=chat_session.pet_id,
-        session_id=chat_session.id,
+    by_request = await chat_repo.summary_by_request_id(
+        session, app_user_id, client_request_id
+    )
+    if by_request is not None:
+        if stale_count:
+            await session.commit()
+        _raise_for_existing_summary(by_request)
+
+    source_count = len(turns)
+    existing = await chat_repo.active_summary_for_source(
+        session, session_id, source_count
+    )
+    if existing is not None:
+        _raise_for_existing_summary(existing)
+
+    summary = chat_repo.add_summary(
+        session,
+        ChatSummary(
+            app_user_id=app_user_id,
+            pet_id=chat_session.pet_id,
+            source_session_id=session_id,
+            source_turn_count=source_count,
+            client_request_id=client_request_id,
+            processing_status="processing",
+            agent_categories=list(chat_session.agent_categories),
+            processing_started_at=timestamp,
+        ),
+    )
+    try:
+        await session.flush()
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        winner = await chat_repo.active_summary_for_source(
+            session, session_id, source_count
+        )
+        if winner is not None:
+            _raise_for_existing_summary(winner)
+        by_request = await chat_repo.summary_by_request_id(
+            session, app_user_id, client_request_id
+        )
+        if by_request is not None:
+            _raise_for_existing_summary(by_request)
+        raise
+    return SummaryReservation(summary_id=summary.id, transcript=transcript)
+
+
+async def complete_summary(
+    session: AsyncSession, summary_id: uuid.UUID, draft: ChatSummaryDraft
+) -> ChatSummary:
+    citations = [citation.model_dump(mode="json") for citation in draft.source_citations]
+    completed = await chat_repo.complete_summary_if_processing(
+        session,
+        summary_id,
         title=draft.title,
         question_summary=draft.question_summary,
         answer_summary=draft.answer_summary,
         key_points=draft.key_points,
         cautions=draft.cautions,
-        source_citations=draft.source_citations,
-        # 요약의 배지는 원본 세션의 것을 그대로 물려받습니다. 요약 모델에게
-        # 능력 이름을 고르게 하지 않습니다 — 그건 라우팅이 이미 정한 사실입니다.
-        agent_categories=list(chat_session.agent_categories),
+        source_citations=citations,
         model=SUMMARY_MODEL_ID,
         prompt_version=PROMPT_VERSION,
-        source_message_count=len(messages),
-        client_request_id=client_request_id,
     )
-    chat_repo.add_summary(session, summary)
+    if completed is None:
+        await session.rollback()
+        raise CompletionConflictError
+    await session.commit()
+    return completed
+
+
+async def fail_summary(
+    session: AsyncSession, summary_id: uuid.UUID, *, error_code: str
+) -> None:
+    failed = await chat_repo.fail_summary_if_processing(
+        session, summary_id, error_code=error_code
+    )
+    if failed is not None:
+        await session.commit()
+    else:
+        await session.rollback()
+
+
+async def create_summary(
+    session_factory: async_sessionmaker[AsyncSession],
+    app_user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    client_request_id: uuid.UUID,
+    summarizer: GeminiChatSummarizer | None = None,
+) -> ChatSummary:
+    """Full workflow with no AsyncSession alive across the external call."""
+    async with session_factory() as reserve_session:
+        reservation = await reserve_summary(
+            reserve_session,
+            app_user_id,
+            session_id,
+            client_request_id=client_request_id,
+        )
 
     try:
-        await session.commit()
-    except IntegrityError:
-        # 같은 키로 동시에 두 번 눌린 경우. 먼저 들어간 것을 돌려줍니다.
-        await session.rollback()
-        winner = await chat_repo.summary_by_idempotency_key(
-            session, app_user_id, client_request_id
+        draft = await (summarizer or GeminiChatSummarizer()).summarize(
+            transcript=reservation.transcript
         )
-        if winner is None:
-            raise ChatSummaryError("summary insert conflicted but no row was found") from None
-        return winner
+    except ChatSummaryError:
+        async with session_factory() as failure_session:
+            await fail_summary(
+                failure_session,
+                reservation.summary_id,
+                error_code="SUMMARY_GENERATION_FAILED",
+            )
+        raise
 
-    return summary
+    async with session_factory() as completion_session:
+        return await complete_summary(completion_session, reservation.summary_id, draft)
 
 
 async def list_summaries(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSummary]:
-    """보관함. 원본이 사라진 요약도 그대로 나옵니다."""
     await _require_owned_pet(session, app_user_id, pet_id)
-    return await chat_repo.list_summaries(session, app_user_id, pet_id)
+    return await chat_repo.list_completed_summaries(session, app_user_id, pet_id)
 
 
 __all__ = [
+    "MAX_ASSISTANT_CHARS",
+    "MAX_COMPLETED_TURNS",
+    "MAX_QUESTION_CHARS",
     "MAX_SESSIONS_PER_PET",
+    "MAX_TRANSCRIPT_CHARS",
+    "STALE_PROCESSING_AFTER",
     "ChatSessionNotFoundError",
+    "ChatTurnNotFoundError",
+    "CompletionConflictError",
+    "ContentLimitError",
     "EmptyConversationError",
+    "ExistingSummaryError",
     "PetNotOwnedError",
-    "append_exchange",
+    "SummaryProcessingError",
+    "SummaryRequestConflictError",
+    "SummaryReservation",
+    "TranscriptLimitError",
+    "TurnLimitError",
     "build_title",
     "categories_of",
+    "complete_summary",
+    "complete_turn",
     "create_session",
     "create_summary",
     "delete_session",
-    "get_session_with_messages",
+    "fail_summary",
+    "fail_turn",
+    "get_session_with_turns",
     "list_sessions",
     "list_summaries",
+    "public_response_of",
+    "reserve_summary",
+    "reserve_turn",
 ]

@@ -31,9 +31,22 @@ PROMPT_VERSION = "chat-summary-ko-v1"
 #: 근거가 아직 없다. 바꾸려면 벤치마크가 먼저다 (D-031 의 선정 규칙).
 SUMMARY_MODEL_ID = "gemini-3.1-flash-lite"
 
+# Conservative safety estimate: UTF-8 bytes are used as an upper bound instead of silently
+# truncating. The provider tokenizer is deliberately not a runtime dependency.
+MAX_GEMINI_INPUT_TOKENS = 900_000
+
 #: 요약이 커져도 저장 칸을 넘지 않게 하는 선. DB 의 VARCHAR(120) 과 맞춘다.
 _TITLE_MAX = 120
 _LIST_MAX = 10
+
+
+class ChatCitation(BaseModel):
+    """A citation stays structured instead of being flattened into display text."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    label: str = Field(min_length=1, max_length=500)
+    url: str | None = Field(default=None, max_length=2_000)
 
 
 class ChatSummaryDraft(BaseModel):
@@ -47,7 +60,7 @@ class ChatSummaryDraft(BaseModel):
     key_points: list[str] = Field(default_factory=list, max_length=_LIST_MAX)
     #: **비어 있어도 된다.** 원문에 주의가 없었으면 지어내지 않는 것이 맞다.
     cautions: list[str] = Field(default_factory=list, max_length=_LIST_MAX)
-    source_citations: list[str] = Field(default_factory=list, max_length=_LIST_MAX)
+    source_citations: list[ChatCitation] = Field(default_factory=list, max_length=_LIST_MAX)
 
 
 class ChatSummaryError(Exception):
@@ -71,8 +84,9 @@ Hard rules:
 - Do not answer the user's question, continue the conversation, or offer a new consultation.
 - Preserve every warning, limitation, uncertainty, and refusal the assistant expressed. Put them in
   `cautions` verbatim in meaning. Never drop a caution to make the summary shorter.
-- Copy source citations exactly as they appear in the conversation into `source_citations`. Do not
-  invent, complete, guess, or reformat a URL or document name.
+- Copy source citations exactly as they appear into structured `source_citations` objects. Put the
+  visible source text in `label` and a URL in `url` only when that exact URL appears. Do not invent,
+  complete, guess, or reformat either field.
 - If the assistant abstained, refused, or failed, say so plainly in `answer_summary` instead of
   presenting an answer that was never given.
 - `title` is a short Korean noun phrase naming the topic, at most 120 characters.
@@ -177,6 +191,11 @@ class GeminiChatSummarizer:
 
     async def summarize(self, *, transcript: str) -> ChatSummaryDraft:
         prompt = build_summary_prompt(transcript=transcript)
+        estimated_tokens = len(prompt.encode("utf-8"))
+        if estimated_tokens > MAX_GEMINI_INPUT_TOKENS:
+            raise ChatSummaryError(
+                "chat summary input exceeds the 900000-token safety limit"
+            )
         for _attempt in range(2):  # 스키마 실패에만 한 번 더. 재시도 프레임워크를 만들지 않는다.
             try:
                 raw = await self._generate(prompt)
@@ -191,8 +210,10 @@ class GeminiChatSummarizer:
 
 
 __all__ = [
+    "MAX_GEMINI_INPUT_TOKENS",
     "PROMPT_VERSION",
     "SUMMARY_MODEL_ID",
+    "ChatCitation",
     "ChatSummaryDraft",
     "ChatSummaryError",
     "GeminiChatSummarizer",

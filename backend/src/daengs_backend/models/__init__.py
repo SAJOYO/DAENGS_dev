@@ -14,10 +14,11 @@ from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminU
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
 from daengs_backend.models.chat import (
-    CHAT_MESSAGE_ROLES,
-    ChatMessage,
+    CHAT_PROCESSING_STATUSES,
+    CHAT_SUMMARY_STATUSES,
     ChatSession,
     ChatSummary,
+    ChatTurn,
 )
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
 from daengs_backend.models.pet import (
@@ -25,25 +26,26 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
-from daengs_backend.models.walk import Walk, WalkPet, WalkPoint
 from daengs_backend.models.refresh_token import RefreshToken
+from daengs_backend.models.walk import Walk, WalkPet, WalkPoint
 
 __all__ = [
     "ADMIN_ROLES",
-    "CHAT_MESSAGE_ROLES",
-    "ChatMessage",
-    "ChatSession",
-    "ChatSummary",
-    "CRAWL_STATUSES",
-    "CRAWL_TRIGGERS",
-    "CrawlRun",
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
+    "CHAT_PROCESSING_STATUSES",
+    "CHAT_SUMMARY_STATUSES",
+    "CRAWL_STATUSES",
+    "CRAWL_TRIGGERS",
+    "PET_BIRTH_DATE_KINDS",
+    "PET_SEXES",
     "AdminUser",
     "AppUser",
     "Base",
-    "PET_BIRTH_DATE_KINDS",
-    "PET_SEXES",
+    "ChatSession",
+    "ChatSummary",
+    "ChatTurn",
+    "CrawlRun",
     "Pet",
     "RefreshToken",
     "Walk",

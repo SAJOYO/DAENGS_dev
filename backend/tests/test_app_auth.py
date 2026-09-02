@@ -9,15 +9,15 @@
 """
 
 import uuid
-from typing import Annotated
 
 import pytest
-from fastapi import Depends, FastAPI
+from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from daengs_backend.core.crypto import blind_index, decrypt, encrypt
+from daengs_backend.core.crypto import blind_index, decrypt
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.kakao import (
     KakaoIdentity,
     KakaoIdTokenInvalidError,
@@ -27,7 +27,6 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
 from daengs_backend.services import app_auth as app_auth_service
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
 
 KAKAO_ID = 987654321
 
@@ -48,7 +47,7 @@ def _fake_kakao(
 ) -> None:
     """검증을 통과한 것으로 칩니다. 개별 테스트가 다시 덮어쓸 수 있습니다."""
 
-    async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+    async def verify(token, *, expected_nonce=None):
         return identity
 
     monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -75,7 +74,7 @@ def client(app: FastAPI, store: Store) -> TestClient:
     return TestClient(app)
 
 
-def _login(client: TestClient, id_token: str = "any-id-token"):  # noqa: ANN202
+def _login(client: TestClient, id_token: str = "any-id-token"):
     return client.post("/auth/app/kakao", json={"id_token": id_token})
 
 
@@ -131,7 +130,7 @@ class TestKakaoLogin:
     ) -> None:
         """**email_hash 가 UNIQUE 라 빈 문자열을 넣으면 두 번째 회원부터 막힙니다.**"""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             return KakaoIdentity(kakao_id=KAKAO_ID, email=None, nonce=None)
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -168,7 +167,7 @@ class TestKakaoLogin:
     def test_못_믿을_id_token_이면_401(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoIdTokenInvalidError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -180,7 +179,7 @@ class TestKakaoLogin:
         """**401 로 뭉개면 안 됩니다.** 앱이 '로그인 실패'로 알아듣고 다시 시도하는데,
         다시 해도 똑같이 실패합니다."""
 
-        async def verify(token, *, expected_nonce=None):  # noqa: ANN001, ANN202
+        async def verify(token, *, expected_nonce=None):
             raise KakaoUnavailableError
 
         monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
@@ -279,6 +278,21 @@ class TestSessionFlow:
     ) -> None:
         body = _login(client).json()
         access, refresh = body["access_token"], body["refresh_token"]
+        owner = store.app_users[KAKAO_ID]
+        chat_session_id = uuid.uuid4()
+        store.chat_sessions.append(
+            type(
+                "StoredChatSession",
+                (),
+                {"id": chat_session_id, "app_user_id": owner.id},
+            )()
+        )
+        store.chat_turns.append(
+            type("StoredChatTurn", (), {"session_id": chat_session_id})()
+        )
+        store.chat_summaries.append(
+            type("StoredChatSummary", (), {"app_user_id": owner.id})()
+        )
 
         res = client.post(
             "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
@@ -288,6 +302,9 @@ class TestSessionFlow:
         user = store.app_users[KAKAO_ID]
         assert user.status == "withdrawn"
         assert user.email_enc is None and user.email_hash is None
+        assert store.chat_sessions == []
+        assert store.chat_turns == []
+        assert store.chat_summaries == []
         # 세션도 같이 끊겨야 합니다 — status 는 '새 로그인'만 막습니다.
         assert client.post(
             "/auth/app/refresh", json={"refresh_token": refresh}

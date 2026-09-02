@@ -24,6 +24,7 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import REFRESH_TTL
 from daengs_backend.models import AppUser
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.services import session as session_service
 from daengs_backend.services.session import (
@@ -250,6 +251,10 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
     user.phone_enc = None
     user.name_enc = None
 
+    # app_users rows are retained on withdrawal, so FK ON DELETE CASCADE never runs.
+    # Delete product chat explicitly in this same transaction. Pets/walks retain their
+    # pre-existing behavior; changing them is outside this PR.
+    await chat_repo.delete_all_for_user(session, user.id)
     count = await session_service.drop_all(session, SubjectType.APP, user.id)
     await session.commit()
     logger.info("앱 회원 탈퇴 (app_user=%s, 끊은 세션 %d개)", user.id, count)

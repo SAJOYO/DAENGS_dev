@@ -10,12 +10,12 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from daengs_backend.models import Walk, WalkPet, WalkPoint
+from daengs_backend.models import Walk, WalkPet, WalkPointChunk
 
 __all__ = [
     "add",
     "delete_walks_only_with",
-    "existing_seqs",
+    "existing_chunk_starts",
     "get_by_client_session",
     "get_owned",
     "list_for_owner",
@@ -73,7 +73,10 @@ async def get_by_client_session(
             Walk.app_user_id == app_user_id,
             Walk.client_session_id == client_session_id,
         )
-        .options(selectinload(Walk.points), selectinload(Walk.pets))
+        # ⚠️ **좌표는 안 붙입니다.** 여기서 보는 것은 "이미 올라왔나" 뿐인데, 예전에는
+        # `selectinload(Walk.points)` 가 붙어 있어 **재시도할 때마다** 그 산책의 좌표를
+        # 전부 끌고 왔습니다. 30분 산책이면 수천 점입니다.
+        .options(selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
 
@@ -109,11 +112,15 @@ def add(session: AsyncSession, walk: Walk) -> Walk:
     return walk
 
 
-async def existing_seqs(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:
-    """이미 저장된 좌표 순번.
+async def existing_chunk_starts(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:
+    """이미 저장된 묶음의 첫 순번.
 
     나눠 올릴 때 **같은 묶음이 두 번 와도** 조용히 넘기려고 씁니다. DB 의 PK 가
     막아 주기는 하지만, 그건 예외로 터지는 방식이라 재시도가 500 이 됩니다.
+
+    예전에는 좌표 순번을 전부 읽었습니다(`existing_seqs`). 30분 산책이면 1,842개를
+    읽어 집합으로 만들었는데, **묶음 단위로 판정하면 몇 개면 됩니다.** payload 를
+    풀지 않는 것도 같은 이유입니다.
     """
-    stmt = select(WalkPoint.client_seq).where(WalkPoint.walk_id == walk_id)
+    stmt = select(WalkPointChunk.seq_from).where(WalkPointChunk.walk_id == walk_id)
     return set(await session.scalars(stmt))

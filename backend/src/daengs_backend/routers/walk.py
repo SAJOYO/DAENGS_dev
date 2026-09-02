@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import Walk
+from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.schemas.walk import (
     WalkDetailResponse,
     WalkListResponse,
@@ -46,6 +47,8 @@ def _to_response(walk: Walk) -> WalkResponse:
 def _to_detail(walk: Walk) -> WalkDetailResponse:
     return WalkDetailResponse(
         **_to_response(walk).model_dump(),
+        # **응답 계약은 그대로다.** 저장을 묶음으로 바꿨어도 앱이 받는 모양은
+        # 점 하나씩이다 — 앱을 안 고치려고 여기서 푼다.
         points=[
             WalkPointResponse(
                 client_seq=point.client_seq,
@@ -56,7 +59,8 @@ def _to_detail(walk: Walk) -> WalkDetailResponse:
                 accuracy_m=point.accuracy_m,
                 is_mock=point.is_mock,
             )
-            for point in walk.points
+            for chunk in walk.points
+            for point in decode_chunk(chunk.payload)
         ],
     )
 

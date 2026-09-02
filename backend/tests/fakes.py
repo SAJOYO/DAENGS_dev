@@ -138,16 +138,17 @@ class FakePet:
 
 
 @dataclass
-class FakeWalkPoint:
-    """WalkPoint 대역."""
+class FakeWalkPointChunk:
+    """WalkPointChunk 대역. **좌표 묶음 한 줄**입니다.
 
-    client_seq: int
-    chain_index: int
-    at: object
-    lat: object
-    lng: object
-    accuracy_m: float | None = None
-    is_mock: bool = False
+    진짜와 같게 `payload` 는 `services/walk_chunk.py` 가 만든 모양이고, 순번과
+    개수는 밖에 꺼내 둡니다 — payload 를 풀지 않고 재시도를 판정하기 위해서입니다.
+    """
+
+    seq_from: int
+    seq_to: int
+    point_count: int
+    payload: dict
 
 
 @dataclass
@@ -169,7 +170,7 @@ class FakeWalk:
     weather_code: int | None = None
     is_day: bool | None = None
     temperature_c: object | None = None
-    points: list[FakeWalkPoint] = field(default_factory=list)
+    points: list[FakeWalkPointChunk] = field(default_factory=list)
     pets: list[FakeWalkPet] = field(default_factory=list)
 
     @property
@@ -344,14 +345,14 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
-    async def walk_existing_seqs(session, walk_id):
+    async def walk_existing_chunk_starts(session, walk_id):
         walk = next((w for w in store.walks if w.id == walk_id), None)
-        return {p.client_seq for p in walk.points} if walk else set()
+        return {c.seq_from for c in walk.points} if walk else set()
 
     monkeypatch.setattr(walk_repo, "add", walk_add)
     monkeypatch.setattr(
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )
-    monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
+    monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
 
     return store

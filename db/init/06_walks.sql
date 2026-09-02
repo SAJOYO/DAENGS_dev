@@ -59,32 +59,58 @@ CREATE INDEX IF NOT EXISTS walks_owner_started_idx
     ON walks (app_user_id, started_at DESC);
 
 -- ---------------------------------------------------------------------
--- walk_points : 기기가 준 **원본 좌표**
+-- walk_point_chunks : 기기가 준 **원본 좌표**를 묶음으로
 -- ---------------------------------------------------------------------
 -- 화면에 그리는 선은 흔들림을 걸러낸 것이지만 여기 올라오는 것은 거르기 전이다.
 -- 문턱값은 나중에 바뀔 수 있고, 그때 버린 점을 되살릴 수 있어야 한다 —
--- 기기의 로컬 DB 가 원본만 남기는 것과 같은 이유다.
-CREATE TABLE IF NOT EXISTS walk_points (
+-- 기기의 로컬 DB 가 원본만 남기는 것과 같은 이유다. **하나도 안 버린다.**
+--
+-- **왜 점마다 한 줄이 아닌가.** 예전에는 walk_points 가 좌표 한 점에 한 줄이었다.
+-- 실기기 실측으로 초당 1.02점이 쌓여서, 30분 산책이면 1,842줄이다. 그런데 이 좌표를
+-- 조건으로 거는 질의가 **하나도 없다** — 늘 "한 산책의 전부"를 통째로 읽어 JSON 으로
+-- 내보낼 뿐이다. 점당 실제 데이터는 12바이트쯤인데 행 하나에 124바이트(힙 88 +
+-- PK 인덱스 32)를 내고 있었다. 90%가 행 헤더였다.
+--
+-- **왜 jsonb 이고, 왜 배열인가.** 이진(bytea)으로 담으면 더 작지만 우리가 평생
+-- 관리할 인코더·디코더와 형식 버전이 생긴다. jsonb 는 psql 에서 눈으로 보이고,
+-- 숫자가 numeric 이라 부동소수점 반올림 걱정도 없다. 다만 **키를 점마다 반복하면
+-- 안 된다** — 객체로 담으면 일곱 개 키가 1,842번 들어가 압축 전 151바이트/점이다.
+-- 위치 배열로 담으면 62바이트/점이고, TOAST 압축까지 거치면 22바이트/점이다.
+--
+--   실측(131점 트랙) : 점당 한 줄 124 B → jsonb 배열 22 B  (5.6배)
+--
+-- ⚠️ TOAST 는 값이 2KB 를 넘어야 압축한다. 아주 짧은 산책은 압축 없이 남는다.
+--
+-- **보관 기간은 탈퇴 시까지다.** 아래 CASCADE 가 그것을 보장한다 — 따로 만료
+-- 배치를 두지 않는다 (2026-09-02 팀 결정).
+CREATE TABLE IF NOT EXISTS walk_point_chunks (
     walk_id UUID NOT NULL REFERENCES walks(id) ON DELETE CASCADE,
 
-    -- 기기가 한 산책 안에서 0부터 매긴 순번. **PK 의 일부다** — 같은 점을 두 번
-    -- 보내도 한 줄이다. 앱이 좌표를 나눠 올리게 되어도 이 성질이 유지된다.
-    client_seq INTEGER NOT NULL,
+    -- 이 묶음이 담은 첫 순번. **PK 의 일부다** — 앱이 같은 묶음을 다시 보내도
+    -- 한 줄이고, 순서가 뒤바뀌어 도착해도 결과가 같다. 예전 client_seq 가 하던 일을
+    -- 묶음 단위로 옮긴 것이다.
+    seq_from INTEGER NOT NULL,
 
-    -- 일시정지나 GPS 점프 뒤에 증가한다. 값이 다른 두 점을 직선으로 이으면
-    -- 걷지 않은 길이 그려지므로, 서버도 이 값을 그대로 보관한다.
-    chain_index INTEGER NOT NULL,
+    -- 이 묶음이 담은 마지막 순번. 재시도 판정을 payload 를 풀지 않고 하려고 둔다.
+    seq_to INTEGER NOT NULL,
 
-    at TIMESTAMPTZ NOT NULL,
-    lat NUMERIC(9, 6) NOT NULL,
-    lng NUMERIC(9, 6) NOT NULL,
-    accuracy_m REAL,
+    -- 묶음 안의 점 개수. 세려고 payload 를 풀지 않게 한다.
+    point_count INTEGER NOT NULL CHECK (point_count > 0),
 
-    -- 가상 위치로 만든 기록. 지우지 않고 표시만 해 둔다 — 나중에 점수나 랭킹이
-    -- 생기면 걸러야 할 값이고, 그때 원본이 없으면 가릴 수가 없다.
-    is_mock BOOLEAN NOT NULL DEFAULT FALSE,
+    -- 좌표 묶음. 모양은 아래 한 벌로 고정한다.
+    --
+    --   {"v": 1,
+    --    "cols": ["seq", "chain", "at", "lat", "lng", "acc", "mock"],
+    --    "pts": [[0, 0, 1788174280387, 37.566500, 126.977900, 5.7, 0], ...]}
+    --
+    -- `at` 은 epoch 밀리초, `acc` 는 미터(없으면 null), `mock` 은 0/1 이다.
+    -- **cols 를 같이 적는 이유**: 위치 배열은 스스로를 설명하지 못한다. 나중에 칸이
+    -- 늘거나 순서가 바뀌어도 읽는 쪽이 v 와 cols 를 보고 맞출 수 있어야 한다.
+    payload JSONB NOT NULL,
 
-    PRIMARY KEY (walk_id, client_seq)
+    CONSTRAINT walk_point_chunks_seq_order CHECK (seq_to >= seq_from),
+
+    PRIMARY KEY (walk_id, seq_from)
 );
 
 -- ---------------------------------------------------------------------

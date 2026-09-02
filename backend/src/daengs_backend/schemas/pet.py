@@ -42,6 +42,29 @@ class PetUpsert(BaseModel):
     birth_date: date | None = None
     birth_date_kind: BirthDateKind | None = None
 
+    #: 배웅한 날. **None 이면 아직 함께 있는 아이입니다.**
+    #:
+    #: 삭제와 다른 일입니다 — 이 날짜가 차도 아이는 목록에 남고 함께한 산책도 남습니다.
+    farewell_on: date | None = None
+
+    @model_validator(mode="after")
+    def _farewell_on(self) -> Self:
+        """배웅한 날은 **앞날일 수 없고 태어나기 전일 수도 없습니다.**
+
+        DB 에도 같은 CHECK 가 있지만 여기서 막아야 422 로 이유를 말해 줄 수 있습니다 —
+        DB 까지 가면 500 입니다 (`_birth_date_pair` 와 같은 이유).
+
+        오늘을 서버 시간으로 봅니다. 기기 시간대와 하루가 어긋날 수 있지만, 여기서
+        거르는 것은 "2033년" 같은 오타이지 하루 차이가 아닙니다.
+        """
+        if self.farewell_on is None:
+            return self
+        if self.farewell_on > date.today():
+            raise ValueError("배웅한 날은 오늘보다 뒤일 수 없습니다.")
+        if self.birth_date is not None and self.farewell_on < self.birth_date:
+            raise ValueError("배웅한 날은 태어난 날보다 앞설 수 없습니다.")
+        return self
+
     @model_validator(mode="after")
     def _birth_date_pair(self) -> Self:
         """날짜와 종류는 **같이 있거나 같이 없어야** 합니다.
@@ -64,6 +87,7 @@ class PetResponse(BaseModel):
     weight_kg: Decimal | None
     birth_date: date | None
     birth_date_kind: BirthDateKind | None
+    farewell_on: date | None
 
     #: 이 아이가 대표인가. `app_users.primary_pet_id` 에서 옵니다 —
     #: pets 테이블에는 그런 칸이 없습니다 (05_pets.sql 주석 참고).

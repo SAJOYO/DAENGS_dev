@@ -75,9 +75,9 @@ class FakeStorage:
     def __init__(self, exists: bool = True) -> None:
         self._exists = exists
 
-    def create_upload_ticket(self, *, key_hint, content_type):
+    def create_upload_ticket(self, *, object_key, content_type):
         return UploadTicket(
-            storage_key=key_hint, upload_url="https://storage.example/put",
+            storage_key=object_key, upload_url="https://storage.example/put",
             headers={"Content-Type": content_type}, expires_in_seconds=900,
         )
 
@@ -102,9 +102,8 @@ def client(monkeypatch):
 
     import daengs_backend.tasks.gait as gait_tasks
 
-    monkeypatch.setattr(
-        gait_tasks.analyze, "delay", lambda rid: sent.append(rid)
-    )
+    monkeypatch.setattr(gait_tasks.analyze, "delay", lambda rid: sent.append(rid))
+    monkeypatch.setattr(gait_tasks.cleanup, "delay", lambda rid: None)
     c = TestClient(app)
     c.fake_session = session
     c.sent_jobs = sent
@@ -289,4 +288,4 @@ def test_storage_not_configured_fails_loudly():
     with pytest.raises(StorageNotConfiguredError):
         s.exists("k")
     with pytest.raises(StorageNotConfiguredError):
-        s.create_upload_ticket(key_hint="k", content_type="video/mp4")
+        s.create_upload_ticket(object_key="k", content_type="video/mp4")

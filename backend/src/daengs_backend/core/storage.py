@@ -1,94 +1,238 @@
-"""파일 저장소 경계 — provider-neutral 계약 (D-043, #78 대기).
+"""파일 저장소 경계 — GCS 확정, provider-neutral 계약 (D-043, #78).
 
-앱이 영상을 **backend 를 거치지 않고** 클라우드에 직접 올리는 구조(#78 의 presigned
-방식)를 전제로, backend 가 저장소에 요구하는 것만 Protocol 로 좁혀 둡니다.
+앱이 영상을 **backend 를 거치지 않고** 저장소에 직접 올리는 구조입니다
+(Signed URL). backend 가 저장소에 요구하는 것만 Protocol 로 좁혀 둡니다.
 
-⚠️ **실구현이 아직 없습니다.** provider(S3/GCS) · 버킷 · 리전 · 보관/파기 정책이
-   #78 에서 사람이 정할 일이라, 여기서는 계약과 "미설정" 구현체까지만 둡니다.
-   임시 local-upload 폴백도 **일부러 만들지 않습니다** — 폴백이 있으면 그것이
-   사실상의 저장 정책이 되어 #78 의 결정을 앞질러 버립니다.
+provider 는 **GCS 로 확정**(2026-09-02). 다만 bucket·location·만료·보관 정책은
+#78 이 정할 값이라 전부 `settings` 로 뺐습니다 — 여기 하드코딩하지 않습니다.
 
-키(`storage_key`)는 불투명 문자열입니다. S3 든 GCS 든 키 모양만 다르고 이 계약은
-같습니다 — DB(`gait_records.original_storage_key`)도 text 로 받는 이유입니다.
+구현체 셋 (`settings.gait_storage` 로 고름):
+  none  — 미설정. 모든 호출이 503. (`NotConfiguredStorage`)
+  local — **임시 bridge.** GCS 자격증명 없이 왕복을 검증하려고 로컬 디렉터리에
+          둡니다. 프로덕션이 아닙니다. (`LocalBridgeStorage`)
+  gcs   — 진짜. Signed URL. (`GcsStorage`)
+
+⚠️ **object key 는 backend 가 만듭니다** (원칙 6). 앱이 임의 키를 지정하면 남의
+   경로를 덮어쓰거나 훔쳐볼 수 있습니다. `build_object_key()` 한 곳에서만 만듭니다.
 """
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
 
 class StorageNotConfiguredError(RuntimeError):
-    """저장소 provider 가 아직 설정되지 않았습니다 (#78 대기).
-
-    라우터는 이것을 503 으로 옮깁니다 — 요청이 틀린 게 아니라 환경이 덜 갖춰진
-    것입니다 (`/ask` 가 ml 그룹 없을 때 503 을 내는 것과 같은 규칙).
-    """
+    """저장소가 아직 설정되지 않았습니다 (#78 대기). 라우터가 503 으로 옮깁니다."""
 
 
 @dataclass
 class UploadTicket:
-    """앱이 스토리지에 직접 올릴 때 필요한 것 전부.
-
-    `upload_url` 로 PUT/POST 하고, 성공하면 backend 에 confirm 을 보냅니다.
-    `storage_key` 는 그 confirm 과 이후 워커가 파일을 찾는 열쇠입니다.
-    """
+    """앱이 저장소에 직접 올릴 때 필요한 것 전부."""
 
     storage_key: str
     upload_url: str
-    # provider 마다 요구 헤더가 다릅니다 (S3 의 Content-Type 강제 등).
     headers: dict[str, str]
     expires_in_seconds: int
 
 
 class StoragePort(Protocol):
-    """backend 가 저장소에 요구하는 것 전부. 이 넷을 넘는 요구가 생기면
-    provider 종속이 새는 것이니 여기서 막습니다."""
-
-    def create_upload_ticket(self, *, key_hint: str, content_type: str) -> UploadTicket:
-        """앱이 직접 올릴 자리를 만듭니다."""
+    def create_upload_ticket(self, *, object_key: str, content_type: str) -> UploadTicket:
         ...
 
     def exists(self, storage_key: str) -> bool:
-        """confirm 때 실제로 올라왔는지 확인합니다 — 앱의 말만 믿으면
-        빈 기록이 PROCESSING 으로 넘어갑니다."""
         ...
 
     def download_url(self, storage_key: str, *, expires_in_seconds: int) -> str:
-        """재생용 임시 URL. 응답에 storage_key 를 그대로 내보내지 않는 이유입니다."""
         ...
 
     def delete(self, storage_key: str) -> None:
-        """soft delete 된 기록의 파일 정리."""
         ...
 
 
-class NotConfiguredStorage:
-    """#78 이 정해지기 전의 자리 지킴이 — 모든 호출이 명확하게 실패합니다.
+def build_object_key(pet_id: uuid.UUID, *, kind: str, source_file: str) -> str:
+    """저장소 object key. **backend 만 만듭니다** (원칙 6).
 
-    조용히 no-op 하지 않습니다. no-op 이면 confirm 이 "올라왔다"고 거짓말하게 되고,
-    워커가 없는 파일을 받으러 갑니다.
+    `kind` 는 "original" | "overlay". 확장자는 원본 이름에서 따되 경로 조작을 막으려
+    basename 의 suffix 만 씁니다 — 앱이 준 이름을 경로로 쓰지 않습니다.
+    """
+    from pathlib import PurePosixPath
+
+    suffix = PurePosixPath(source_file).suffix.lower()[:10] or ".bin"
+    return f"gait/{pet_id}/{kind}/{uuid.uuid4().hex}{suffix}"
+
+
+# ── none: 미설정 ────────────────────────────────────────────────────────
+class NotConfiguredStorage:
+    """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""
+
+    _MSG = "파일 저장소가 아직 설정되지 않았습니다 — provider·정책이 정해지면(#78) 열립니다."
+
+    def create_upload_ticket(self, *, object_key, content_type):
+        raise StorageNotConfiguredError(self._MSG)
+
+    def exists(self, storage_key):
+        raise StorageNotConfiguredError(self._MSG)
+
+    def download_url(self, storage_key, *, expires_in_seconds):
+        raise StorageNotConfiguredError(self._MSG)
+
+    def delete(self, storage_key):
+        raise StorageNotConfiguredError(self._MSG)
+
+
+# ── local: 임시 bridge ──────────────────────────────────────────────────
+class LocalBridgeStorage:
+    """**임시 dev/검증용.** 로컬 디렉터리에 두고, 업로드는 backend 의 bridge 엔드포인트로
+    받습니다. GCS 자격증명 없이 `/app/gait/*` 왕복을 검증하려는 것뿐입니다.
+
+    ⚠️ **프로덕션 경로가 아닙니다.** 여기서는 영상이 bridge 엔드포인트(backend)를 지나
+       갑니다 — GCS 경로(원칙 1: backend 를 통과하지 않음)와 다릅니다. 그래서
+       `settings.gait_storage="local"` 일 때만 켜지고, 배포에서는 절대 안 씁니다.
+
+    backend 와 gait 워커가 **같은 디렉터리를 봐야** 합니다 (compose 에서 한 볼륨을
+    양쪽에 마운트, 또는 단일 머신 검증에서 같은 경로).
     """
 
-    _MSG = (
-        "파일 저장소가 아직 설정되지 않았습니다 — provider·보관 정책이 정해지면(#78) "
-        "열립니다."
-    )
+    def __init__(self, root: str, *, base_url: str = "") -> None:
+        from pathlib import Path
 
-    def create_upload_ticket(self, *, key_hint: str, content_type: str) -> UploadTicket:
-        raise StorageNotConfiguredError(self._MSG)
+        self._root = Path(root)
+        self._root.mkdir(parents=True, exist_ok=True)
+        # bridge 업로드/다운로드 URL 의 앞부분. 앱 기준이라 nginx 접두사가 붙습니다.
+        self._base_url = base_url.rstrip("/")
 
-    def exists(self, storage_key: str) -> bool:
-        raise StorageNotConfiguredError(self._MSG)
+    def _path(self, storage_key: str):
+        from pathlib import Path
 
-    def download_url(self, storage_key: str, *, expires_in_seconds: int) -> str:
-        raise StorageNotConfiguredError(self._MSG)
+        # key 는 backend 가 만든 `gait/<uuid>/...` 라 조작 위험이 없지만, 방어적으로
+        # 루트 밖으로 못 나가게 확인합니다.
+        p = (self._root / storage_key).resolve()
+        if not str(p).startswith(str(self._root.resolve())):
+            raise StorageNotConfiguredError("잘못된 storage_key")
+        return p
 
-    def delete(self, storage_key: str) -> None:
-        raise StorageNotConfiguredError(self._MSG)
+    def create_upload_ticket(self, *, object_key, content_type):
+        return UploadTicket(
+            storage_key=object_key,
+            upload_url=f"{self._base_url}/app/gait/_bridge/upload/{object_key}",
+            headers={"Content-Type": content_type},
+            expires_in_seconds=15 * 60,
+        )
+
+    def exists(self, storage_key):
+        return self._path(storage_key).exists()
+
+    def download_url(self, storage_key, *, expires_in_seconds):
+        return f"{self._base_url}/app/gait/_bridge/download/{storage_key}"
+
+    def delete(self, storage_key):
+        p = self._path(storage_key)
+        if p.exists():
+            p.unlink()
+
+    # bridge 엔드포인트가 직접 쓰는 헬퍼 (StoragePort 계약 밖 — local 전용).
+    def write(self, storage_key: str, data: bytes) -> None:
+        p = self._path(storage_key)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+
+    def local_path(self, storage_key: str):
+        return self._path(storage_key)
+
+
+# ── gcs: 진짜 ───────────────────────────────────────────────────────────
+class GcsStorage:
+    """Google Cloud Storage. Signed URL 로 앱이 직접 올리고 받습니다 (원칙 1·7).
+
+    ⚠️ **`google-cloud-storage` 를 지연 import 합니다** — backend 웹 프로세스의 `main`
+       import 를 가볍게 유지하는 규율이고(D-021), local/none 으로 도는 개발 PC 가
+       이 패키지 없이도 뜨게 합니다.
+
+    자격증명은 GCP 표준(ADC: `GOOGLE_APPLICATION_CREDENTIALS` 또는 워크로드 아이덴티티)을
+    따릅니다 — 코드에 키를 두지 않습니다. bucket·location 은 settings 에서 옵니다.
+    """
+
+    def __init__(self, *, bucket: str, location: str) -> None:
+        if not bucket:
+            raise StorageNotConfiguredError(
+                "GAIT_GCS_BUCKET 이 비어 있습니다 — 버킷이 생기면(#78) 채웁니다."
+            )
+        self._bucket_name = bucket
+        self._location = location
+        self._client = None
+
+    def _bucket(self):
+        if self._client is None:
+            from google.cloud import storage  # 지연 — 위 docstring 참고
+
+            self._client = storage.Client()
+        return self._client.bucket(self._bucket_name)
+
+    def create_upload_ticket(self, *, object_key, content_type):
+        from datetime import timedelta
+
+        blob = self._bucket().blob(object_key)
+        url = blob.generate_signed_url(
+            version="v4",
+            method="PUT",
+            expiration=timedelta(seconds=self._upload_ttl()),
+            content_type=content_type,
+        )
+        return UploadTicket(
+            storage_key=object_key,
+            upload_url=url,
+            headers={"Content-Type": content_type},
+            expires_in_seconds=self._upload_ttl(),
+        )
+
+    def exists(self, storage_key):
+        return self._bucket().blob(storage_key).exists()
+
+    def download_url(self, storage_key, *, expires_in_seconds):
+        from datetime import timedelta
+
+        return self._bucket().blob(storage_key).generate_signed_url(
+            version="v4", method="GET",
+            expiration=timedelta(seconds=expires_in_seconds),
+        )
+
+    def delete(self, storage_key):
+        # 없는 것을 지워도 실패로 보지 않습니다 (idempotent — 재시도·중복 정리 대비).
+        self._bucket().blob(storage_key).delete(if_generation_match=None)
+
+    def upload_bytes(self, storage_key: str, data: bytes, *, content_type: str) -> None:
+        """워커가 overlay 를 올릴 때 씁니다 (앱이 아니라 서버 쪽 업로드라 Signed URL 이
+        아니라 직접 씁니다)."""
+        self._bucket().blob(storage_key).upload_from_string(data, content_type=content_type)
+
+    @staticmethod
+    def _upload_ttl() -> int:
+        from daengs_backend.config import settings
+
+        return settings.gait_upload_url_ttl_seconds
 
 
 def get_storage() -> StoragePort:
-    """지금은 항상 미설정입니다. #78 이 정해지면 여기가 provider 구현체를 고릅니다
-    (환경변수로 갈라 taps — settings 에 넣는 것은 그때 일입니다)."""
+    """`settings.gait_storage` 로 구현을 고릅니다.
+
+    기본은 none — 아무것도 설정 안 하면 안전하게 503 입니다. local/gcs 는 **명시적으로**
+    켜야 합니다.
+    """
+    from daengs_backend.config import settings
+
+    kind = settings.gait_storage
+    if kind == "gcs":
+        return GcsStorage(
+            bucket=settings.gait_gcs_bucket, location=settings.gait_gcs_location
+        )
+    if kind == "local":
+        if not settings.gait_local_storage_dir:
+            raise StorageNotConfiguredError(
+                "GAIT_LOCAL_STORAGE_DIR 이 비어 있습니다 (gait_storage=local)."
+            )
+        return LocalBridgeStorage(
+            settings.gait_local_storage_dir, base_url=settings.gait_bridge_base_url
+        )
     return NotConfiguredStorage()

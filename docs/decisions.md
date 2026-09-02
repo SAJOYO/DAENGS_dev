@@ -2223,11 +2223,37 @@ backend→life 접점이 넓어진다. 같은 Redis 브로커에 **앱 인스턴
 ⚠️ 그 지연 import 를 최상단으로 올리면 **기본 설치(backend, gait 그룹 없음)가
    ImportError 로 죽는다.** 테스트가 지키고 있다 (`test_gait_app_api.py`).
 
+#### 저장소는 GCS — Signed URL, backend 가 키를 만든다 (2026-09-02 확정)
+
+```
+앱 → /app/gait/analyze → backend 가 object key 생성 + GCS Signed URL(PUT) 발급
+앱 → GCS 에 직접 PUT (영상이 backend 를 통과하지 않는다 — 원칙 1)
+앱 → confirm → backend 가 exists() 로 실존 확인 후 큐 발행
+워커 → GCS 에서 Signed URL(GET)로 받아 분석, overlay 는 GCS 에 upload
+```
+
+- **object key 는 backend 가 만든다** (`build_object_key`, 원칙 6). 앱은 표시용 이름만
+  주고 그 확장자만 키에 반영된다 — 앱이 키를 정하면 남의 경로를 덮거나 훔쳐본다.
+- **버킷은 public 으로 열지 않는다** (원칙 7). 접근은 전부 Signed URL. 자격증명은
+  코드에 두지 않고 ADC(GOOGLE_APPLICATION_CREDENTIALS / 워크로드 아이덴티티).
+- **bucket·location·만료·정책은 하드코딩하지 않는다** (원칙 8) — 전부 `settings`.
+  리전은 서울(asia-northeast3) — 해외면 국외이전 동의가 따로 필요하다.
+- **삭제·파기는 한 통로로 모은다** — 사용자 직접 삭제 · 탈퇴 · 보관기간 만료 · confirm
+  안 온 고아가 전부 `gait.cleanup` 태스크로 간다. soft delete 로 표시하고 워커가
+  object 를 지운 뒤 행을 물리 삭제한다 (키를 먼저 잃으면 파일이 고아가 된다).
+
+#### 임시 bridge — GCS 자격증명 전에 왕복을 검증하려고 (settings.gait_storage="local")
+
+`LocalBridgeStorage` 는 로컬 디렉터리에 두고 backend 의 `_bridge` 엔드포인트로
+업로드를 받는다. **프로덕션이 아니다** — 여기서는 영상이 bridge(backend)를 지나가므로
+원칙 1 과 다르고, `gait_storage="local"` 일 때만 켜진다. 실측으로 IMG_8631.mov 왕복
+(upload→confirm→분석)이 sampled 298·detected 99·usable 3 으로 walk_demo 와 일치했다.
+
 #### 하지 않은 것 · 기다리는 것
 
-- **임시 local-upload 폴백을 만들지 않았다** — 폴백이 있으면 그것이 사실상의 저장
-  정책이 되어 #78 의 결정을 앞질러 버린다. `StoragePort` 는 provider-neutral 계약과
-  "미설정이면 503" 구현체까지만이고, provider·버킷·리전·보관/파기는 #78 몫이다.
+- **provider 는 GCS 확정, 세부값은 #78 대기** — 버킷·리전 세부, Signed URL 만료의
+  최종값, 보관 기간, 탈퇴 시 파기 시점, 기록 삭제 시 원본/overlay 삭제 정책.
+  코드는 그 값들을 `settings`·태스크 통로로 **열어 두었을 뿐** 정책을 정하지 않았다.
 - **기존 JSON 기록은 이관하지 않는다** — 전부 테스트 데이터이고 `dog_id="1"` 같은
   값은 `pets.id` UUID FK 를 만족하지 못한다.
 - ⚠️ **앱 전환(#64) 전까지 무인증 `/gait/*` 가 열려 있다.** 완화는 앱 쪽

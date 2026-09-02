@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
@@ -149,9 +149,47 @@ async def get_record(
 async def delete_record(
     user: CurrentAppUser, session: Session, record_id: uuid.UUID
 ) -> GaitDeleteResponse:
-    """soft delete — 스토리지 파일 정리는 #78 뒤 비동기로 붙습니다."""
+    """soft delete → cleanup 태스크가 GCS object 를 지웁니다."""
     try:
         record = await gait_service.soft_delete(session, user.app_user_id, record_id)
     except gait_service.NotFoundError:
         raise _NOT_FOUND from None
     return GaitDeleteResponse(record_id=record.id, deleted=True)
+
+
+# ── 임시 bridge (gait_storage="local" 전용) ─────────────────────────────
+#
+# ⚠️ **프로덕션 경로가 아닙니다.** GCS(원칙 1)는 앱이 스토리지에 직접 올려 영상이
+#    backend 를 통과하지 않습니다. 이 두 엔드포인트는 GCS 자격증명 없이 `/app/gait/*`
+#    왕복을 검증하려는 dev/검증용이고, 배포에서는 `gait_storage="gcs"` 라 등록되지
+#    않습니다. 인증은 걸지 않습니다 — Signed URL 을 흉내 내는 것이라 URL 자체가
+#    자격이고, local 모드는 신뢰된 검증 환경에서만 켭니다.
+
+
+def _local_bridge():
+    from daengs_backend.core.storage import LocalBridgeStorage, get_storage
+
+    storage = get_storage()
+    if not isinstance(storage, LocalBridgeStorage):
+        # gcs/none 모드에서는 이 경로가 없는 것처럼 404.
+        raise _NOT_FOUND
+    return storage
+
+
+@router.put("/_bridge/upload/{storage_key:path}", include_in_schema=False)
+async def _bridge_upload(storage_key: str, request: Request):
+    from fastapi import Response
+
+    _local_bridge().write(storage_key, await request.body())
+    return Response(status_code=200)
+
+
+@router.get("/_bridge/download/{storage_key:path}", include_in_schema=False)
+async def _bridge_download(storage_key: str):
+    from fastapi.responses import FileResponse
+
+    storage = _local_bridge()
+    path = storage.local_path(storage_key)
+    if not path.exists():
+        raise _NOT_FOUND
+    return FileResponse(path)

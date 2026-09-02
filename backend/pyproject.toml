@@ -103,6 +103,7 @@ module-name = [
     "daengs_place",
     "daengs_screening",
     "daengs_training",
+    "daengs_walk",
 ]
 
 [dependency-groups]

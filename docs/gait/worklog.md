@@ -12,13 +12,14 @@
 
 ## 지금 상태 한 줄
 
-**앱이 붙을 수 있는 API 가 갖춰졌습니다** (2026-08-31). 목록·삭제까지 생겨
-업로드→분석→조회→비교→삭제 흐름이 전부 됩니다. 계약 정본은
-`backend/src/daengs_gait/API.md` 입니다.
+**backend 소유의 새 인증 흐름 `/app/gait/*` 으로 넘어가는 중입니다** (D-043, PR #133,
+2026-09-02). 앱→backend(인증·소유권·record/job·업로드 티켓)→별도 `gait-worker`→저장소
+구조이고, 개발 PC LocalBridge 왕복이 통과했습니다. 저장소는 GCS 로 확정(자격증명·버킷은
+#78 대기), 오늘은 임시 LocalBridge 로 서버 왕복을 엽니다. 아래 D-043 절 참고.
 
-⚠️ **서버는 아직 옛 코드입니다.** 머지(`c3013ab`)만으로는 반영되지 않습니다 —
-`profiles` 뒤라 배포가 안 건드립니다. `docker compose --profile gait up -d
---force-recreate gait-analysis` 를 한 번 돌려야 합니다.
+⚠️ **옛 무인증 `/gait/*`(gait-analysis) 는 앱 #64 전환 전까지 그대로 둡니다** — 지금 앱이
+그걸 쓰기 때문입니다. 전환·검증이 끝나면 차단합니다(진행 순서 6번). 그 옛 계약 정본은
+여전히 `backend/src/daengs_gait/API.md` 이고, 새 계약은 `/app/gait/*` 라우터·스키마입니다.
 
 ## 미해결 — 다음에 이어야 할 것
 
@@ -79,14 +80,60 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
 
 1. **#78** ~~provider~~ (GCS 확정) + **보관/파기 정책·버킷·리전 세부** ← 사람 결정
 2. ~~`StoragePort` 실제 구현~~ ✅ GcsStorage 작성 완료 (자격증명·버킷은 #78 뒤 연결)
-3. gait worker compose 전환 (`celery -A daengs_backend.tasks.gait worker --queues gait`)
-   + 실제 queue 처리
+3. ~~gait worker compose 전환~~ ✅ `gait-worker` 서비스 추가 완료
+   (`celery -A daengs_backend.tasks.gait worker --queues gait`, profile gait)
 4. `/app/gait/*` 업로드 → confirm → 분석 → 결과 조회 **왕복 검증**
+   — ✅ **개발 PC LocalBridge 왕복 통과** (아래), 서버 왕복은 진행 중
 5. 앱 #64 를 새 API 로 전환
-6. 새 앱 흐름 검증 후 기존 `/gait/*` 제거 + gait FastAPI 제거
+6. 새 앱 흐름 검증 후 기존 무인증 `/gait/*` 차단
 
-**#133 은 4번이 통과할 때까지 draft 로 둡니다** — `/app/gait/analyze` 가 지금
-저장소 미설정으로 503 인 것은 의도된 상태라, Ready 로 올려도 검증할 수 없습니다.
+### 2026-09-02(2) — A 확정: LocalBridge 로 왕복을 열고 #133 을 머지한다
+
+앞선 "#133 은 4번 통과까지 draft" 를 **사람이 A 로 갱신**했습니다: GCS 자격증명(#78)을
+기다리지 않고, **임시 LocalBridge** 로 `/app/gait/*` 왕복을 먼저 통과시켜 그것을 #133 의
+Ready 조건으로 봅니다. 서버 기본값은 여전히 `GAIT_STORAGE=none`(503)이라 머지 자체는
+프로덕션에 영향이 없고, 오늘 검증에서만 서버 `.env` 로 local 을 **명시적으로** 켭니다.
+
+⚠️ **LocalBridge 는 오늘 검증을 위한 transitional path 입니다 — 최종 저장 방식이 아닙니다.**
+   영상이 backend 웹의 bridge 엔드포인트를 지나 `gait-bridge` 볼륨에 잠깐 머뭅니다(원칙 1
+   위반이지만 검증 한정). GCP/GCS 가 준비되면 `LocalBridge → GcsStorage` 로 바꾸고, 그때
+   **GCS Signed URL 실제 왕복을 별도로 검증**합니다.
+
+⚠️ **LocalBridge 를 써도 무거운 분석은 backend 가 하지 않습니다.** bridge 는 파일 I/O 만
+   backend 를 지나고, torch·`daengs_gait` 분석은 언제나 별도 `gait-worker` 프로세스에서만
+   돕니다 (test_main_stays_light 가 backend `main` 을 지킵니다). 이 격리가 LocalBridge/GCS
+   어느 쪽에서도 그대로인 것이 이 구조의 핵심입니다.
+
+**개발 PC LocalBridge 왕복 실측** (실제 `IMG_8631.mov` 116MB):
+
+    analyze(키 생성·티켓) → upload(원본 그대로) → confirm(exists 확인)
+    → 별도 분석 → sampled 298 · detected 99 · usable 3 (walk_demo 와 일치)
+
+**서버 왕복 runbook** (오늘, 서버 PC 에서 — 스텝 3·4). 배포는 `dev` push 로 자동이지만
+`gait-worker` 는 profile 뒤라 **명시적으로** 띄웁니다:
+
+```powershell
+# 0) gait_records 테이블을 서버 DB 에 1회 적용 (db/init 은 기존 볼륨엔 안 돕니다).
+#    PowerShell 은 `<` 입력 리디렉션이 없어 Get-Content 로 파이프하고, 계정·DB 이름은
+#    컨테이너 자신의 env 를 sh 가 확장하게 둡니다 (psql 은 -f 없으면 stdin 을 읽습니다).
+#    파일은 IF NOT EXISTS 라 여러 번 돌려도 안전합니다.
+Get-Content db\migrations\2026-09-02_gait_records.sql -Raw |
+  docker compose exec -T pgvector sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+# 1) 서버 최상단 .env 에 LocalBridge 를 켜는 값 추가 (오늘 검증용 — GCS 오면 지웁니다)
+#    GAIT_STORAGE=local
+#    GAIT_LOCAL_STORAGE_DIR=/data/gait-bridge
+#    GAIT_BRIDGE_BASE_URL=https://daengback.<도메인>
+
+# 2) backend(새 env·볼륨 반영) + gait-worker 를 띄웁니다.
+docker compose up -d backend                       # GAIT_* env·gait-bridge 볼륨 반영
+docker compose --profile gait up -d gait-worker    # 별도 워커(celery, gait 큐)
+
+# 3) 왕복: 인증→analyze→upload(bridge)→confirm→워커 분석→조회
+#    (인증 토큰이 필요합니다 — 앱 계정으로 로그인해 얻은 access 토큰을 씁니다)
+```
+
+이후 5번(앱 #64 전환) → 실기기 검증 → 6번(무인증 `/gait/*` 차단) 순서입니다.
 
 ## 이력
 

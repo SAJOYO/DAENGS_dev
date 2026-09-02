@@ -82,10 +82,10 @@ Get-FileHash "C:\deploy\daengs\models\release\gait-analysis\best.pt",
 2. ~~`StoragePort` 실제 구현~~ ✅ GcsStorage 작성 완료 (자격증명·버킷은 #78 뒤 연결)
 3. ~~gait worker compose 전환~~ ✅ `gait-worker` 서비스 추가 완료
    (`celery -A daengs_backend.tasks.gait worker --queues gait`, profile gait)
-4. `/app/gait/*` 업로드 → confirm → 분석 → 결과 조회 **왕복 검증**
-   — ✅ **개발 PC LocalBridge 왕복 통과** (아래), 서버 왕복은 진행 중
-5. 앱 #64 를 새 API 로 전환
-6. 새 앱 흐름 검증 후 기존 무인증 `/gait/*` 차단
+4. ~~`/app/gait/*` 왕복 검증~~ ✅ **서버 실왕복 통과** (2026-09-02, 아래)
+5. 앱 #64 를 새 API 로 전환 ← **지금 여기**
+6. 새 앱 흐름 **실기기 검증 후** 기존 무인증 `/gait/*` 차단
+   ⚠️ **실기기 검증 전에는 `/gait/*` 를 지우지 않습니다** — 지금 앱이 그걸 씁니다.
 
 ### 2026-09-02(2) — A 확정: LocalBridge 로 왕복을 열고 #133 을 머지한다
 
@@ -140,7 +140,7 @@ docker compose exec nginx nginx -s reload
 
 이후 5번(앱 #64 전환) → 실기기 검증 → 6번(무인증 `/gait/*` 차단) 순서입니다.
 
-### 2026-09-02(3) — 서버 왕복 통과 ✅ 그리고 그것이 잡아낸 버그 2개
+### 2026-09-02(3) — 서버 왕복 통과 ✅ 그리고 그것이 잡아낸 함정 3개
 
 `IMG_8631.mov`(116MB)로 실제 서버에서 왕복했습니다. **인증(401) · 소유권(404) ·
 analyze(201) · 업로드(200) · confirm(UPLOADED) · 별도 워커 분석(DONE) · 조회 · 삭제(404)**
@@ -158,7 +158,11 @@ analyze(201) · 업로드(200) · confirm(UPLOADED) · 별도 워커 분석(DONE
 **입력은 동일**합니다 — 원본 `.mov` 를 재인코딩 없이 읽었다는 뜻입니다(#132). 예전
 망가진 기록의 `-1x-1 / sampled 0` 과 대조됩니다.
 
-**이 왕복이 아니었으면 못 잡았을 버그 둘:**
+**최종 왕복(수정 후)은 401 하나 없이 통과했습니다** — analyze 201 → 업로드 200 →
+confirm UPLOADED → 6s PROCESSING → **132s DONE** → 조회 → 삭제 200 → 404.
+검증 뒤 `gait_records` 는 0행입니다(테스트 흔적 없음, 영상 파일까지 정리).
+
+**이 왕복이 아니었으면 못 잡았을 함정 셋:**
 
 **① 워커의 두 번째 태스크부터 전부 죽습니다 (이벤트 루프)**
 
@@ -188,10 +192,37 @@ RuntimeError: Task <_cleanup() ...> got Future attached to a different loop
 **backend 가 실제로 발급한 키인지**를 DB 로 확인합니다 —
 `gait_repo.find_by_storage_key(..., status="PENDING")`. 키는 uuid4 라 추측할 수 없고,
 발급받은 사람은 소유자뿐이며, confirm 뒤에는 덮어쓰기도 막힙니다. 다운로드도 같습니다.
+수정 후 임의 경로 PUT 15/15 가 404 인 것을 서버에서 확인했습니다.
 
-⚠️ **워커 코드가 바뀌었으므로 `gait-worker` 재시작이 필요합니다** — backend 웹은
-`--reload` 라 배포가 알아서 반영하지만 celery 는 아닙니다:
-`docker compose --profile gait restart gait-worker`
+**③ 개발 PC 에서 만든 토큰이 절반쯤 401 이 됩니다 (시계 차이 — 검증 함정)**
+
+서버가 유효한 토큰을 간헐적으로 `"인증이 필요합니다"` 로 거부했습니다. **제품 버그가
+아니라 검증 방식의 함정입니다** — 개발 PC 에서 `create_access_token` 으로 직접 만들어
+썼는데, **이 PC 시계가 서버보다 1~2초 빨라** `iat` 가 서버 기준 **미래**였습니다.
+
+| 발급 후 | 결과 |
+| --- | --- |
+| 즉시 사용 | 6/12 실패 |
+| 1초 뒤 | 0/12 |
+| 3초 뒤 | 0/12 |
+
+전달 방식(Bearer / 쿠키 / 둘 다)과 무관했고, **한 번 만든 토큰을 재사용하면 15/15 성공**인
+것이 결정적 단서였습니다. 실제 앱은 토큰을 **서버가** 발급하므로(`/auth/app/kakao`)
+이 문제를 겪지 않습니다. 개발 PC 에서 API 를 직접 두드릴 때만 나옵니다 —
+**토큰을 만든 뒤 1~2초 재우거나 재사용하세요.**
+
+⚠️ 이 증상을 처음에 "업스트림이 여러 개일 것"으로 추측해 `--remove-orphans` 까지
+   제안했는데 **틀렸습니다.** `backend` 컨테이너는 하나뿐이었습니다. 간헐적 401 을 만나면
+   추측 전에 **같은 토큰을 재사용해 보는 것**이 가장 빠른 판별입니다.
+
+**배포 시 주의 (오늘 실측으로 바로잡은 것)**
+
+- **워커는 `--reload` 가 없습니다.** 워커 코드를 바꿨으면
+  `docker compose --profile gait restart gait-worker`.
+- ⚠️ **backend 웹도 자동 반영되지 않았습니다.** `dev()` 가 `reload=True` 인데도 배포 후
+  옛 코드가 계속 응답했습니다(윈도우 바인드 마운트 + 폴링). `docker compose restart backend`
+  를 해야 바뀌었습니다 — **"reload 니까 알아서 되겠지"로 넘기면 고친 줄 알고 안 고친 상태로
+  둡니다.** 실제로 그 사이 보안 구멍이 열린 채로 남아 있었습니다.
 
 ## 이력
 

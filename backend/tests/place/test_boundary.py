@@ -23,6 +23,7 @@ from daengs_place.core.db import get_session
 
 ALLOWED_PLACE_SUBPACKAGES = {"api", "core", "geo", "main", "place", "territory"}
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "src" / "daengs_place"
+DISCOVERY_DIR = PACKAGE_DIR / "place" / "discovery"
 INTENT_DIR = PACKAGE_DIR / "place" / "intent"
 PRESENTATION_DIR = PACKAGE_DIR / "place" / "presentation"
 FORBIDDEN_PACKAGES = {
@@ -41,6 +42,14 @@ FORBIDDEN_PRESENTATION_IMPORTS = FORBIDDEN_INTENT_IMPORTS | {
     "daengs_place.api",
     "daengs_place.ingest",
     "daengs_place.place.intent",
+}
+FORBIDDEN_DISCOVERY_IMPORTS = {
+    "fastapi",
+    "google",
+    "httpx",
+    "daengs_place.api",
+    "daengs_place.ingest",
+    "daengs_place.main",
 }
 
 _PROBE = """
@@ -138,6 +147,29 @@ def test_place_presentation_stays_provider_transport_and_intent_free():
                         f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}"
                     )
     assert not found, "Place presentation의 조기 runtime 결합:\n  " + "\n  ".join(found)
+
+
+def test_place_discovery_stays_provider_transport_and_global_orchestration_free():
+    """PR4 조립은 Place 안에서 닫고 HTTP·provider·전역 오케스트레이터를 모른다."""
+    found = []
+    for path in sorted(DISCOVERY_DIR.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                if name.split(".", 1)[0] in FORBIDDEN_PACKAGES or any(
+                    name == forbidden or name.startswith(f"{forbidden}.")
+                    for forbidden in FORBIDDEN_DISCOVERY_IMPORTS
+                ):
+                    found.append(
+                        f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}"
+                    )
+    assert not found, "Place discovery의 runtime 경계 침범:\n  " + "\n  ".join(found)
 
 
 async def _no_db():

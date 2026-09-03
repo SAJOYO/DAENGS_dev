@@ -56,11 +56,16 @@ else:
     _TIMEOUTS += (httpx2.TimeoutException,)
 
 
-def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None) -> AskOut:
+def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None,
+        breed: str | None = None, age_months: int | None = None) -> AskOut:
     """질문 하나 → 응답 하나.
 
     `encoder`·`conn`·`client` 는 **받아서 그대로 넘긴다** — 만들지도 닫지도 않는다(RAG-028 ①).
     수명을 아는 것은 이 층이 아니라 `deps.py` 와 lifespan 이다.
+
+    `breed`·`age_months` 는 로드맵 B4 다. **원시값으로 받는다** — 부르는 쪽(어댑터)의 타입을
+    여기서 알면 `daengs_life` 가 오케스트레이션을 의존하게 된다. 둘 다 `None` 이면 프롬프트가
+    B4 이전과 한 글자도 다르지 않고, 그래서 프로필 없는 요청의 답은 그대로다.
     """
     try:
         answer = generate.ask(
@@ -71,6 +76,7 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
             st=encoder.st if encoder else None,
             conn=conn,
             client=client,
+            dog=generate.DogProfile(breed=breed, age_months=age_months),
         )
     except RuntimeError as e:
         # `_client()` 가 키 없음으로 죽는 경우 — 설정 문제지 요청 문제가 아니다

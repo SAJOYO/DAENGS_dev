@@ -26,6 +26,7 @@ from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalC
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import chat as chat_service
+from daengs_backend.services import dog_context as dog_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -57,6 +58,30 @@ def _structured_context(body: AssistantQueryRequest) -> dict[str, Any]:
     if body.location is not None:
         context["location"] = {"lat": body.location.lat, "lon": body.location.lon}
     return context
+
+
+async def _with_dog_context(
+    context: dict[str, Any],
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """`context["dog"]` 를 채워 돌려준다 — `context["location"]` 과 같은 자리다 (B4).
+
+    payload 는 신뢰된 context 로만 조립된다(`planner.py`). 그래서 프로필 조회는 여기,
+    DB 를 아는 층에서 하고 어댑터는 얇게 둔다 (D-035).
+
+    **못 채워도 그냥 지나간다.** 관리자 토큰(pets 가 없다) · 활성 강아지 미지정 ·
+    지워진 강아지 전부 여기로 온다. 프로필이 없다고 답할 수 있는 질문을 실패시키지 않는다 —
+    B4 이전과 똑같은 답이 나갈 뿐이다.
+    """
+    active_dog_id = context.get("active_dog_id")
+    if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
+        return context
+    async with session_factory() as session:
+        dog = await dog_context_service.resolve(session, principal.app_user_id, active_dog_id)
+    if dog is None:
+        return context
+    return {**context, "dog": dog}
 
 
 @router.post(
@@ -113,7 +138,7 @@ async def query(
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context=context,
+            context=await _with_dog_context(context, principal, session_factory),
             requested_capability=body.requested_capability,
         )
 
@@ -125,10 +150,14 @@ async def query(
 
     async def orchestrate(active_dog_id: str) -> AssistantResponse:
         # 대화의 강아지가 힌트를 이긴다 — 서비스가 세션에서 읽은 pet_id 를 넘겨 준다.
+        # 프로필 조회도 그 값으로 한다. 여기서 세션을 여는 것이 안전한 이유는
+        # `run_persisted_turn` 이 예약 TX 를 닫고 부르기 때문이다 (그 docstring).
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context={**context, "active_dog_id": active_dog_id},
+            context=await _with_dog_context(
+                {**context, "active_dog_id": active_dog_id}, principal, session_factory
+            ),
             requested_capability=body.requested_capability,
         )
 

@@ -147,7 +147,7 @@ def test_life_execute_실제_그래프를_거쳐_실행된다() -> None:
 def _life_adapter_raising(exc: Exception):
     from daengs_backend.orchestration.adapters.life import LifeCapabilityAdapter
 
-    def ask(_: str):
+    def ask(_: str, **_kw):
         raise exc
 
     return LifeCapabilityAdapter(ask)

@@ -5,6 +5,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +18,10 @@ from daengs_backend.schemas.walk import (
     WalkUpload,
 )
 from daengs_backend.services.walk_analysis import build_analysis_models
+from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
-from daengs_walk import analyze_walk, build_cellophane
+from daengs_walk import analyze_walk, build_cellophane, build_walk_capsule
 
 
 class WalkNotFoundError(Exception):
@@ -170,7 +172,18 @@ async def finalize_walk(
                     "finalized_analysis_not_found",
                     "봉인 상태와 저장된 분석 결과가 맞지 않습니다.",
                 )
-            await session.commit()  # 변경 없이 행 잠금만 풀고 멱등 응답한다.
+            if existing.capsule is None:
+                # Capsule migration을 먼저 적용하고 코드를 배포하는 사이에도 이전
+                # 프로세스가 finalize할 수 있다. 그 짧은 창에 생긴 Analysis는 같은
+                # Walk 행 잠금 안에서 당시 메타데이터로 한 번만 복구한다.
+                _attach_capsule(
+                    walk,
+                    existing,
+                    sealed_at=existing.derived_at,
+                    provider="legacy_walk_metadata_v1",
+                )
+                await session.flush()
+            await session.commit()  # 필요하면 legacy seal을 복구하고 멱등 응답한다.
             return existing, False
 
         if walk.analysis_state != "collecting":
@@ -190,6 +203,12 @@ async def finalize_walk(
             evidence,
             build_cellophane(evidence),
         )
+        _attach_capsule(
+            walk,
+            analysis,
+            sealed_at=datetime.now(UTC),
+            provider="android_walk_upload_v1",
+        )
         walk_repo.add_analysis(session, analysis)
         walk.analysis_state = "derived"
         await session.flush()
@@ -198,6 +217,33 @@ async def finalize_walk(
     except Exception:
         await session.rollback()
         raise
+
+
+def _attach_capsule(
+    walk: Walk,
+    analysis: WalkAnalysis,
+    *,
+    sealed_at: datetime,
+    provider: str,
+) -> None:
+    """이미 저장된 Walk 원자만으로 Analysis에 Capsule seal을 붙인다."""
+
+    capsule = build_walk_capsule(
+        walk_id=walk.id,
+        facts_record_version=analysis.facts_record_version,
+        calculation_version=analysis.calculation_version,
+        receipt_version=analysis.receipt_version,
+        observation_version=analysis.observation_version,
+        walked_at=walk.started_at,
+        sealed_at=sealed_at,
+        weather_code=walk.weather_code,
+        is_day=walk.is_day,
+        temperature_c=(
+            float(walk.temperature_c) if walk.temperature_c is not None else None
+        ),
+        provider=provider,
+    )
+    analysis.capsule = build_capsule_model(analysis, capsule)
 
 
 def _chunk(points: list) -> WalkPointChunk:

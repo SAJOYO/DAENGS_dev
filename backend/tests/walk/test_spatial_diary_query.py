@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import FastAPI
@@ -351,7 +351,21 @@ def test_repository_index_query_scopes_owner_pet_kst_dates_and_limit():
     assert "CAST(timezone(" in sql
     assert "Asia/Seoul" in compiled.params.values()
     assert "walk_cellophane_sheets" in sql and "LEFT OUTER JOIN" in sql
+    assert "row_number() OVER (PARTITION BY walks.id" in sql
+    assert "walk_capsules.sealed_at DESC" in sql
+    assert "walk_cellophane_sheets.derived_at DESC NULLS LAST" in sql
+    assert "representative_rank" in sql
     assert 2_001 in compiled.params.values()
+
+
+def test_repository_total_counts_unique_walks_instead_of_analysis_generations():
+    stmt = diary_repo.capsule_count_statement(OWNER_ID, PET_ID)
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+
+    assert "count(distinct(walks.id))" in sql.lower()
+    assert "walks.app_user_id" in sql
+    assert "walk_pets.pet_id" in sql
 
 
 @pytest.mark.asyncio
@@ -450,6 +464,28 @@ def test_api_maps_missing_pet_and_limits_without_leaking_storage_detail(api_clie
     )
     assert large_response.status_code == 413
     assert large_response.json()["detail"]["code"] == "too_many"
+
+
+def test_api_logs_incomplete_capsule_without_exposing_storage_detail(api_client, monkeypatch):
+    async def incomplete(*args, **kwargs):
+        raise diary_service.IncompleteSpatialDiaryCapsuleError("raw storage detail")
+
+    log_exception = Mock()
+    monkeypatch.setattr(diary_service, "query_view", incomplete)
+    monkeypatch.setattr(diary_router.logger, "exception", log_exception)
+
+    response = api_client.post(
+        "/app/walks/spatial-diary/views/query",
+        json=_request(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "code": "spatial_diary_capsule_incomplete",
+        "message": "봉인된 산책 원판을 읽을 수 없습니다.",
+    }
+    log_exception.assert_called_once()
+    assert "raw storage detail" not in response.text
 
 
 def test_api_rejects_invalid_selector_before_service(api_client):

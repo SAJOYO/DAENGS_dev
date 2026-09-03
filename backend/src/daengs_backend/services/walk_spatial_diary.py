@@ -25,7 +25,7 @@ from daengs_walk.spatial_diary import (
 MAX_CANDIDATE_CAPSULES = 2_000
 MAX_SELECTED_CAPSULES = 400
 MAX_RAW_CELLS = 100_000
-MAX_RESULT_CELLS = 50_000
+MAX_RESULT_CELLS = 5_000
 
 
 class SpatialDiaryPetNotFoundError(LookupError):

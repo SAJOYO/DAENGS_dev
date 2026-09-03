@@ -1,5 +1,6 @@
 """앱 회원용 Walk 공간 일기 읽기 HTTP 경계."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,7 +20,10 @@ from daengs_backend.services import walk_spatial_diary as diary_service
 from daengs_walk.spatial_diary import (
     DuplicateWalkInViewError,
     MixedPaintGenerationError,
+    selector_fingerprint,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/app/walks/spatial-diary", tags=["walks"])
 
@@ -31,11 +35,12 @@ async def query_spatial_diary_view(
     session: Annotated[AsyncSession, Depends(get_snapshot_session)],
 ) -> SpatialDiaryViewResponse:
     """내 강아지의 봉인된 산책을 조건별 공간 field로 읽습니다."""
+    spec = body.to_spec()
     try:
         result = await diary_service.query_view(
             session,
             user.app_user_id,
-            body.to_spec(),
+            spec,
         )
     except diary_service.SpatialDiaryPetNotFoundError:
         raise HTTPException(
@@ -64,6 +69,12 @@ async def query_spatial_diary_view(
             },
         ) from None
     except diary_service.IncompleteSpatialDiaryCapsuleError:
+        logger.exception(
+            "spatial diary capsule incomplete (app_user=%s, pet=%s, selector=%s)",
+            user.app_user_id,
+            spec.walk_selector.pet_id,
+            selector_fingerprint(spec),
+        )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

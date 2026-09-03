@@ -58,6 +58,9 @@ receipt     total · selected · contributing · context known/unknown · 정책
 앱 인증 세션은 active 회원 확인을 위해 이미 DB statement를 실행한다. PostgreSQL에서는 그 뒤
 격리 수준을 바꿀 수 없으므로, View 조립은 별도의 read-only repeatable-read 세션에서 수행한다.
 소유권 확인, 전체 Capsule 수, 후보 index, 선택된 Cellophane payload가 같은 snapshot을 본다.
+재분석과 재도색 이력은 지우지 않는다. 조회에서는 Walk마다 가장 최근에 봉인된 Analysis와
+그 Analysis에서 가장 최근에 생성된 Paint sheet 한 장만 대표로 골라 분모 중복을 막는다.
+대표 sheet들의 `paint_fp`가 서로 다르면 좌표계가 같은지 추측하지 않고 409로 실패한다.
 
 동기 응답은 다음 상한을 넘으면 부분 결과 대신 413을 반환한다.
 
@@ -67,7 +70,7 @@ receipt     total · selected · contributing · context known/unknown · 정책
 | 후보 Capsule index | 2,000 |
 | 선택 Capsule | 400 |
 | 선택 원시 Cell | 100,000 |
-| 결과 Cell | 50,000 |
+| 결과 Cell | 5,000 |
 
 서로 다른 `paint_fp`가 선택되거나 같은 Walk가 중복되면 409다. 봉인된 Capsule과
 Cellophane의 identity·fingerprint·metadata가 어긋나면 손상된 서버 원판이므로 500으로

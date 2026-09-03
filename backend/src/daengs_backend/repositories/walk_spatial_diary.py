@@ -42,15 +42,19 @@ async def count_capsules_for_pet(
     app_user_id: uuid.UUID,
     pet_id: uuid.UUID,
 ) -> int:
-    stmt = (
-        select(func.count(WalkCapsule.analysis_id))
+    return int((await session.scalar(capsule_count_statement(app_user_id, pet_id))) or 0)
+
+
+def capsule_count_statement(app_user_id: uuid.UUID, pet_id: uuid.UUID) -> Select:
+    """재분석 Capsule이 아니라 공간 일기 분모가 될 고유 Walk 수를 셉니다."""
+    return (
+        select(func.count(func.distinct(Walk.id)))
         .select_from(WalkPet)
         .join(Walk, Walk.id == WalkPet.walk_id)
         .join(WalkAnalysis, WalkAnalysis.walk_id == Walk.id)
         .join(WalkCapsule, WalkCapsule.analysis_id == WalkAnalysis.id)
         .where(Walk.app_user_id == app_user_id, WalkPet.pet_id == pet_id)
     )
-    return int((await session.scalar(stmt)) or 0)
 
 
 def capsule_index_statement(
@@ -62,23 +66,34 @@ def capsule_index_statement(
     limit: int,
 ) -> Select:
     local_day = cast(func.timezone(DIARY_CALENDAR_TIMEZONE, Walk.started_at), Date)
-    stmt = (
+    representative_rank = func.row_number().over(
+        partition_by=Walk.id,
+        order_by=(
+            WalkCapsule.sealed_at.desc(),
+            WalkAnalysis.derived_at.desc(),
+            WalkAnalysis.id.desc(),
+            WalkCellophaneSheet.derived_at.desc().nulls_last(),
+            WalkCellophaneSheet.paint_fp.desc().nulls_last(),
+        ),
+    )
+    ranked = (
         select(
-            WalkAnalysis.id,
-            Walk.id,
-            Walk.started_at,
-            WalkCapsule.capsule_version,
-            WalkCapsule.context_version,
-            WalkCapsule.trail_context,
-            WalkCellophaneSheet.sheet_schema_version,
-            WalkCellophaneSheet.paint_version,
-            WalkCellophaneSheet.grid_version,
-            WalkCellophaneSheet.radius_u,
-            WalkCellophaneSheet.profile,
-            WalkCellophaneSheet.profile_fp,
-            WalkCellophaneSheet.sample_step_m,
-            WalkCellophaneSheet.paint_fp,
-            WalkCellophaneSheet.cell_count,
+            WalkAnalysis.id.label("analysis_id"),
+            Walk.id.label("walk_id"),
+            Walk.started_at.label("started_at"),
+            WalkCapsule.capsule_version.label("capsule_version"),
+            WalkCapsule.context_version.label("context_version"),
+            WalkCapsule.trail_context.label("trail_context"),
+            WalkCellophaneSheet.sheet_schema_version.label("sheet_schema_version"),
+            WalkCellophaneSheet.paint_version.label("paint_version"),
+            WalkCellophaneSheet.grid_version.label("grid_version"),
+            WalkCellophaneSheet.radius_u.label("radius_u"),
+            WalkCellophaneSheet.profile.label("profile"),
+            WalkCellophaneSheet.profile_fp.label("profile_fp"),
+            WalkCellophaneSheet.sample_step_m.label("sample_step_m"),
+            WalkCellophaneSheet.paint_fp.label("paint_fp"),
+            WalkCellophaneSheet.cell_count.label("cell_count"),
+            representative_rank.label("representative_rank"),
         )
         .select_from(WalkPet)
         .join(Walk, Walk.id == WalkPet.walk_id)
@@ -89,14 +104,40 @@ def capsule_index_statement(
             WalkCellophaneSheet.analysis_id == WalkAnalysis.id,
         )
         .where(Walk.app_user_id == app_user_id, WalkPet.pet_id == pet_id)
-        .order_by(Walk.started_at, Walk.id, WalkAnalysis.id, WalkCellophaneSheet.paint_fp)
-        .limit(limit)
     )
     if since is not None:
-        stmt = stmt.where(local_day >= since)
+        ranked = ranked.where(local_day >= since)
     if until is not None:
-        stmt = stmt.where(local_day <= until)
-    return stmt
+        ranked = ranked.where(local_day <= until)
+    ranked = ranked.subquery("ranked_spatial_diary_capsules")
+
+    return (
+        select(
+            ranked.c.analysis_id,
+            ranked.c.walk_id,
+            ranked.c.started_at,
+            ranked.c.capsule_version,
+            ranked.c.context_version,
+            ranked.c.trail_context,
+            ranked.c.sheet_schema_version,
+            ranked.c.paint_version,
+            ranked.c.grid_version,
+            ranked.c.radius_u,
+            ranked.c.profile,
+            ranked.c.profile_fp,
+            ranked.c.sample_step_m,
+            ranked.c.paint_fp,
+            ranked.c.cell_count,
+        )
+        .where(ranked.c.representative_rank == 1)
+        .order_by(
+            ranked.c.started_at,
+            ranked.c.walk_id,
+            ranked.c.analysis_id,
+            ranked.c.paint_fp,
+        )
+        .limit(limit)
+    )
 
 
 async def list_capsule_index(

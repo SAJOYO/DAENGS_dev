@@ -21,10 +21,8 @@ from fastapi.testclient import TestClient
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_life.app.controllers import walk as walk_controller
-from daengs_life.app.controllers import weather as weather_controller
 
 SEOUL = {"lat": 37.4979, "lon": 127.0276}
-WEATHER_AT = {**SEOUL, "observed_at": "2026-08-25T09:20:00+09:00"}
 
 
 class Reached(Exception):
@@ -52,14 +50,6 @@ def service_reached(monkeypatch: pytest.MonkeyPatch) -> None:
         raise Reached
 
     monkeypatch.setattr(walk_controller.service, "walk", boom)
-
-
-@pytest.fixture
-def weather_service_reached(monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(*_a, **_k):
-        raise Reached
-
-    monkeypatch.setattr(weather_controller.service, "weather_at", boom)
 
 
 def _app_token() -> str:
@@ -126,24 +116,6 @@ def test_인증이_좌표_검증보다_먼저다(client: TestClient) -> None:
     assert got.status_code == 401
 
 
-def test_과거_환경도_토큰_없이는_401(client: TestClient) -> None:
-    assert client.post("/weather/at", json=WEATHER_AT).status_code == 401
-
-
-@pytest.mark.parametrize("token", [_app_token(), _admin_token()])
-def test_과거_환경은_앱과_관리자_토큰이면_핸들러까지_간다(
-    client: TestClient,
-    weather_service_reached: None,
-    token: str,
-) -> None:
-    with pytest.raises(Reached):
-        client.post(
-            "/weather/at",
-            json=WEATHER_AT,
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-
 def test_daengs_life_단독_앱은_그대로_열려_있다() -> None:
     """의존 방향이 안 뒤집혔는지 (D-018 · RAG-001 원칙 1).
 
@@ -154,6 +126,3 @@ def test_daengs_life_단독_앱은_그대로_열려_있다() -> None:
 
     got = TestClient(create_app()).get("/walk", params={"lat": 0.0, "lon": 0.0})
     assert got.status_code == 422, "좌표 검증에 막혀야 한다 — 인증에 막히면 안 된다"
-
-    weather = TestClient(create_app()).post("/weather/at", json={})
-    assert weather.status_code == 422, "본문 검증에 막혀야 한다 — 인증에 막히면 안 된다"

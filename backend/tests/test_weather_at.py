@@ -179,6 +179,25 @@ def test_a_malformed_provider_value_is_a_failed_source(
     assert "파싱 실패" in (got.sources[0].reason or "")
 
 
+def test_a_different_provider_cycle_is_not_accepted_as_captured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """10시 회차 키에 09시 payload가 들어와도 과거 일기를 한 시간 전 값으로 채우지 않는다."""
+    wire(monkeypatch, ncst())  # 픽스처의 회차는 09:00
+
+    got = weather_at(
+        HERE,
+        datetime(2026, 8, 25, 10, 20, tzinfo=KST),
+        fetched_at=datetime(2026, 8, 25, 11, 0, tzinfo=KST),
+        cache=Cache(MemoryStore()),
+    )
+
+    assert got.status is WeatherAtStatus.FAILED
+    assert got.measurements == ()
+    assert got.sources[0].outcome is HistoricalSourceOutcome.ERROR
+    assert "요청 회차" in (got.sources[0].reason or "")
+
+
 def test_future_and_naive_times_fail_before_transport(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

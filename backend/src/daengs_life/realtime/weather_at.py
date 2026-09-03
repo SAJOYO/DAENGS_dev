@@ -138,7 +138,33 @@ def weather_at(
             ),
         )
 
-    selected = _select(point, grid, requested_at, parsed)
+    expected_spatial_ref = f"격자 {grid.nx},{grid.ny}"
+    exact = [
+        item
+        for item in parsed
+        if item.valid_at == hour and item.spatial_ref == expected_spatial_ref
+    ]
+    if parsed and not exact:
+        returned = sorted({item.valid_at.isoformat() for item in parsed})
+        returned_refs = sorted({item.spatial_ref for item in parsed})
+        return WeatherAtResult(
+            requested_at=requested_at,
+            fetched_at=fetched_at,
+            grid=grid,
+            status=WeatherAtStatus.FAILED,
+            measurements=(),
+            sources=(
+                HistoricalSourceResult(
+                    Source.NCST,
+                    HistoricalSourceOutcome.ERROR,
+                    f"요청 회차·격자 {hour.isoformat()} {expected_spatial_ref}와 "
+                    f"응답이 다릅니다: 회차={returned}, 공간={returned_refs}",
+                    got.calls,
+                ),
+            ),
+        )
+
+    selected = _select(point, grid, hour, exact)
     if not selected:
         status = WeatherAtStatus.UNKNOWN
         outcome = HistoricalSourceOutcome.NO_DATA
@@ -186,7 +212,7 @@ def weather_at_many(
 def _select(
     point: LatLon,
     grid: Grid,
-    requested_at: datetime,
+    expected_at: datetime,
     measurements: list[Measurement],
 ) -> tuple[Measurement, ...]:
     observations = Observations(
@@ -195,8 +221,8 @@ def _select(
             grid=grid,
             label=f"{point.lat:.4f}, {point.lon:.4f}",
         ),
-        # latest()가 미래 발표를 집지 않도록 조회한 현재가 아니라 산책 시각을 기준으로 한다.
-        fetched_at=requested_at,
+        # exact 회차만 남긴 뒤 같은 시각의 중복 원자에서 provider 우선순위를 적용한다.
+        fetched_at=expected_at,
         measurements=measurements,
     )
     return tuple(

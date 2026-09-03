@@ -30,7 +30,7 @@ from daengs_backend.routers import walk as app_walks
 from daengs_backend.services.training_rag import release_training_runtime
 
 # 이 앱이 `daengs_life` 를 부르는 **유일한 자리**입니다. D-018 이 일부러 안 그은 선을
-# 여기서만 긋습니다 — 접점은 **라우터 등록과 예열**이 전부입니다.
+# 여기서만 긋습니다 — 접점은 **등록 두 줄과 예열 한 줄**이 전부입니다.
 #
 # `/ask` 는 임베딩 모델을 씁니다. 그래도 여기 붙이는 것이 D-021 의 결정입니다 — 모델을
 # 배포되는 API 프로세스에 그대로 상주시키고(약 2.4GB), 2단계에서 조건이 오면
@@ -41,7 +41,7 @@ from daengs_backend.services.training_rag import release_training_runtime
 # 함수 안에서 부르므로 모듈을 읽는 것만으로는 아무것도 안 올라옵니다 — 그 사실을
 # `tests/test_main_stays_light.py` 가 기계로 지킵니다. 무거워지는 것은 import 가 아니라
 # 아래 lifespan 의 예열이고, 그래서 그것만 백그라운드로 돌립니다.
-from daengs_life.app.controllers import ask, walk, weather
+from daengs_life.app.controllers import ask, walk
 from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 # ⚠️ 스크리닝도 같은 규칙입니다 — 이 import 로 torch 가 딸려 오면 안 됩니다.
@@ -156,11 +156,6 @@ app.include_router(screening_router)
 # ⚠ `/training/chat` 과는 **결론이 다릅니다.** 저쪽은 `#25` 가 만든 임시 게이트웨이라
 # 앱 클라이언트가 없어서 관리자 전용으로 좁혔습니다 (`routers/training.py`).
 app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
-
-# 과거 환경 사실 조회. `/walk`와 같은 Life 경계·인증을 쓰되, 산책 적합도 라우터의 하위
-# 기능으로 숨기지 않습니다 (D-050). principal을 쓰지 않고 좌표·시각만 보므로 관리자와 앱
-# 회원을 함께 받는 판단도 같습니다.
-app.include_router(weather.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
 
 # 제도·문서형 질의응답. **`/walk` 과 같은 판단입니다** (메모 ⑦) — 인증을 라우터가 아니라
 # 등록 시점에 걸고, 앱 회원과 관리자를 함께 받습니다.

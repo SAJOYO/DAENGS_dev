@@ -33,7 +33,7 @@ from typing import Any, Protocol
 import yaml
 
 from .config import KST, REDIS_URL
-from .transport.base import TransportError
+from .transport.base import NoData, TransportError
 
 CACHE_FILE = Path(__file__).with_name("cache.yaml")
 
@@ -112,20 +112,34 @@ POLICY = load_policy()
 
 @dataclass(frozen=True)
 class Entry:
-    """API 응답 원본 + 받은 시각. 판정에 쓸 수 있는지는 `Feed.missed` 가 정한다."""
+    """API 응답 원본 + 받은 시각. snapshot은 비재시도성 실패도 잠시 담을 수 있다."""
 
     payload: Any
     fetched_at: datetime
+    failure_kind: str | None = None
+    reason: str | None = None
 
     def dumps(self) -> str:
-        return json.dumps({"payload": self.payload, "fetched_at": self.fetched_at.isoformat()},
-                          ensure_ascii=False)
+        return json.dumps(
+            {
+                "payload": self.payload,
+                "fetched_at": self.fetched_at.isoformat(),
+                "failure_kind": self.failure_kind,
+                "reason": self.reason,
+            },
+            ensure_ascii=False,
+        )
 
     @staticmethod
     def loads(raw: str | bytes) -> Entry | None:
         try:
             data = json.loads(raw)
-            return Entry(data["payload"], datetime.fromisoformat(data["fetched_at"]))
+            return Entry(
+                data["payload"],
+                datetime.fromisoformat(data["fetched_at"]),
+                failure_kind=data.get("failure_kind"),
+                reason=data.get("reason"),
+            )
         except (ValueError, TypeError, KeyError):
             return None          # 저장 포맷이 바뀐 옛 값. 버리고 다시 받는다
 
@@ -406,7 +420,11 @@ class Cache:
         key = self.snapshot_key(feed_id, lookup)
         entry = self.store.get(key)
         if entry is not None:
-            return Cached(entry.payload)
+            return Cached(
+                entry.payload,
+                reason=entry.reason,
+                failure_kind=entry.failure_kind,
+            )
 
         if not allow_call:
             return Cached(
@@ -437,12 +455,28 @@ class Cache:
         with lock:
             existing = self.store.get(key)
             if existing is not None:
-                return Cached(existing.payload)
+                return Cached(
+                    existing.payload,
+                    reason=existing.reason,
+                    failure_kind=existing.failure_kind,
+                )
 
             if not self.store.lock(key, self.policy.lock_sec):
                 waited = self._await_snapshot(key, wait_sec)
                 if waited is not None:
-                    return Cached(waited.payload)
+                    return Cached(
+                        waited.payload,
+                        reason=waited.reason,
+                        failure_kind=waited.failure_kind,
+                    )
+                # 과거 사실 조회는 즉시성보다 쿼터 보존이 우선이다. 다른 프로세스가 여전히
+                # provider를 부르는 동안 중복 호출하지 않고, 호출자가 명시적인 실패를 보고
+                # 재시도하게 한다. 락을 얻지 않았으므로 아래 finally에도 들어가지 않는다.
+                return Cached(
+                    None,
+                    reason="동일한 과거 관측 조회가 아직 진행 중입니다.",
+                    failure_kind="in_flight",
+                )
             try:
                 payload = fetch()
                 self.store.spend(feed.budget, _day(fetched_at))
@@ -454,11 +488,25 @@ class Cache:
                 return Cached(payload, calls=1)
             except TransportError as exc:
                 self.store.spend(feed.budget, _day(fetched_at))
+                failure_kind = type(exc).__name__.lower()
+                if isinstance(exc, NoData):
+                    # NoData는 전송층이 비재시도성으로 분류한 결과다. 한 발표 주기만 기억해
+                    # 동일 finalize·동시 요청이 같은 빈 회차에 쿼터를 반복 소모하지 않게 한다.
+                    self.store.set(
+                        key,
+                        Entry(
+                            None,
+                            fetched_at,
+                            failure_kind=failure_kind,
+                            reason=str(exc),
+                        ),
+                        feed.ttl_sec(1),
+                    )
                 return Cached(
                     None,
                     reason=str(exc),
                     calls=1,
-                    failure_kind=type(exc).__name__.lower(),
+                    failure_kind=failure_kind,
                 )
             finally:
                 self.store.unlock(key)

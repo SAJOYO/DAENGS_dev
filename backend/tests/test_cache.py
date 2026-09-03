@@ -273,15 +273,50 @@ def test_historical_no_data_is_not_replaced_with_a_current_or_stale_value() -> N
     current, _ = counting({"current": True})
     cache.get(NCST, "61,125", current, t(25, 10, 41))
 
+    calls: list[int] = []
+
     def no_data():
+        calls.append(1)
         raise NoData("그 시각 자료 없음")
 
     got = cache.get_snapshot(NCST, "61,125:202608250900", no_data, t(25, 10, 41))
+    repeated = cache.get_snapshot(NCST, "61,125:202608250900", no_data, t(25, 10, 42))
 
     assert got.payload is None
     assert got.stale is False
     assert got.failure_kind == "nodata"
     assert got.calls == 1
+    assert repeated.payload is None and repeated.failure_kind == "nodata"
+    assert repeated.calls == 0
+    assert calls == [1], "비재시도성 NoData를 같은 회차에 다시 호출했다"
+
+
+def test_a_snapshot_does_not_unlock_another_process_flight() -> None:
+    class BusyStore(MemoryStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.unlocks = 0
+
+        def lock(self, key: str, ttl_sec: int) -> bool:
+            return False
+
+        def unlock(self, key: str) -> None:
+            self.unlocks += 1
+
+    store = BusyStore()
+    fetch, calls = counting()
+
+    got = Cache(store).get_snapshot(
+        NCST,
+        "61,125:202608250900",
+        fetch,
+        t(25, 10, 41),
+        wait_sec=0,
+    )
+
+    assert got.payload is None and got.failure_kind == "in_flight"
+    assert calls == [], "다른 프로세스가 부르는 동안 중복 호출했다"
+    assert store.unlocks == 0, "획득하지 않은 분산 락을 해제했다"
 
 
 # ------------------------------------------------------------ 활성 키 (④-d · ④-f)
@@ -317,6 +352,11 @@ def test_an_entry_survives_a_round_trip_as_text() -> None:
     entry = Entry({"items": [{"category": "T1H", "obsrValue": "33.1"}]}, t(25, 14, 40))
     assert Entry.loads(entry.dumps()) == entry
     assert Entry.loads(Entry("텍스트/CSV 한 줄", t(25, 14)).dumps()).payload == "텍스트/CSV 한 줄"
+
+
+def test_a_negative_snapshot_entry_preserves_its_outcome() -> None:
+    entry = Entry(None, t(25, 14), failure_kind="nodata", reason="그 시각 자료 없음")
+    assert Entry.loads(entry.dumps()) == entry
 
 
 def test_a_corrupt_entry_is_dropped_not_raised() -> None:

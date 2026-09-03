@@ -79,7 +79,7 @@ def test_the_guard_would_notice_the_ml_stack() -> None:
     assert "torch" in set(json.loads(line[len("MODULES="):]))
 
 
-def test_walk_weather_ask_and_spatial_diary_are_registered() -> None:
+def test_walk_ask_and_spatial_diary_are_registered() -> None:
     """라우터가 실제로 붙었는지. 등록 한 줄이 사라져도 위 가드는 통과한다.
 
     `app.routes` 를 보지 않는 이유 — 지금 FastAPI 는 `include_router` 를 `_IncludedRouter`
@@ -95,9 +95,11 @@ def test_walk_weather_ask_and_spatial_diary_are_registered() -> None:
 
     paths = app.openapi()["paths"]
     assert "/walk" in paths
-    assert "/weather/at" in paths
     assert "/ask" in paths
     assert "/app/walks/spatial-diary/views/query" in paths
+    assert "/weather/at" not in paths, (
+        "소유 Walk 없이 임의 격자·회차를 부를 수 있는 API는 공용 KMA 쿼터를 소진한다"
+    )
 
 
 def test_lifespan_opens_the_cache_up_front() -> None:

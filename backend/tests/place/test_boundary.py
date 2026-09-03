@@ -23,11 +23,18 @@ from daengs_place.core.db import get_session
 
 ALLOWED_PLACE_SUBPACKAGES = {"api", "core", "geo", "main", "place", "territory"}
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "src" / "daengs_place"
+INTENT_DIR = PACKAGE_DIR / "place" / "intent"
 FORBIDDEN_PACKAGES = {
     "daengs_backend",
     "daengs_journey",
     "daengs_life",
     "daengs_training",
+}
+FORBIDDEN_INTENT_IMPORTS = {
+    "fastapi",
+    "google",
+    "httpx",
+    "sqlalchemy",
 }
 
 _PROBE = """
@@ -80,6 +87,28 @@ def test_place_does_not_import_other_product_packages():
                 if name.split(".", 1)[0] in FORBIDDEN_PACKAGES:
                     found.append(f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}")
     assert not found, "Place의 별도 런타임 경계를 넘는 import:\n  " + "\n  ".join(found)
+
+
+def test_place_intent_core_stays_provider_transport_and_presentation_free():
+    """PR2 코어는 provider·HTTP·DB와 아직 승격되지 않은 presentation을 모른다."""
+    found = []
+    for path in sorted(INTENT_DIR.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                if name.split(".", 1)[0] in FORBIDDEN_INTENT_IMPORTS or name.startswith(
+                    "daengs_place.place.presentation"
+                ):
+                    found.append(
+                        f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}"
+                    )
+    assert not found, "Place intent 코어의 조기 runtime 결합:\n  " + "\n  ".join(found)
 
 
 async def _no_db():

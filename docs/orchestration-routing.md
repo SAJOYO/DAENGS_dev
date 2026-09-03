@@ -66,7 +66,7 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
 라우터는 **분류기이지 답변자가 아닙니다.** 라우터가 도메인 답을 직접 생성하는 순간
 "도메인 안전·거절은 능력이 소유한다"(architecture §논리 오케스트레이션)가 깨집니다.
 
-### 순수 인사말 — `social_intent` (CONFIRMED — `semantic-router-ko-v4`, PR #163)
+### 순수 인사말 — `social_intent` (CONFIRMED — `semantic-router-ko-v4`, PR #163; v5 에서도 그대로)
 
 "고마워"·"안녕하세요"·"잘가"처럼 **요청이 통째로 인사말뿐**이면 예전에는 빈 결정 →
 빈 RoutePlan → `실행하거나 안내할 수 있는 기능이 없습니다.`(FAILED)가 났습니다. AI 비서가
@@ -121,12 +121,51 @@ weight_kg · birth_date 를 저장할 뿐 권고 로직이 없고, Training 의 
   `social_intent=null`)이고, 결정론적 계층은 그것을 그대로 FAILED + "실행하거나 안내할 수 있는
   기능이 없습니다." 로 냅니다 (위 social_intent 절의 "일반 미지원 UX" 와 같은 경로). Gemini
   사전학습 지식으로 답하지 않고, Training/Life/Walk 로 억지 배정하지도 않습니다.
-- **기계 강제:** `backend/tests/test_orchestration_care_boundary.py` — 위 두 질문을 포함한 7건의
-  수용 사례 표(`CARE_BOUNDARY_CASES`)로 결정론적 계층(planner·engine·aggregate)이 빈 결정을
-  Walk 로 승격하거나 키워드로 하드 라우팅하지 않음, 계약에 `care` 류 능력이 없음, 라우터가
-  그런 이름을 내면 기존 O-14 경로(1회 재시도 → FAILED)를 탐을 고정합니다. **이 테스트는 실제
-  분류기를 인증하지 않습니다** — 프롬프트·스키마는 이 카드에서 바뀌지 않았고 유료 호출도
-  하지 않았으므로, 위 두 질문에 대한 production 라우터의 실제 출력은 **미측정**입니다.
+- **기계 강제:** `backend/tests/test_orchestration_care_boundary.py` — 수용 사례 표
+  `CARE_BOUNDARY_CASES`(미지원 6 · Walk 2 · Training 1 · Life 3 · 인사 1)로 결정론적 계층
+  (planner·engine·aggregate)이 빈 결정을 Walk 로 승격하거나 키워드로 하드 라우팅하지 않음,
+  계약에 `care` 류 능력이 없음, 라우터가 그런 이름을 내면 기존 O-14 경로(1회 재시도 → FAILED)를
+  탐, 그리고 아래 v5 프롬프트 계약 문구를 고정합니다.
+
+**측정된 v4 결함 (2026-09-03, 유료 호출 2건).** production 모듈 그대로(`semantic-router-ko-v4`,
+`gemini-3.1-flash-lite`, temperature 0, 질문당 1회)로 보내자 **두 질문 모두 `execute=["life"]`**
+가 나왔습니다 — 스키마 유효, 재시도 없음. v4 의 Life 정의에 있던 "official guidance" 가 사육
+상식까지 흡수한 것입니다. 이것이 세 오라우팅 중 가장 위험한 경로인 이유는 위 Life 행 그대로입니다:
+`/ask` 는 hit 0건일 때만 404 라 무관한 조례·약관 5건 위에 **status OK 답변**이 사용자에게 나갑니다.
+
+**`semantic-router-ko-v5` (PR #172, 사람 결정 — 같은 카드에서 수정).** 모델(`gemini-3.1-flash-lite`)·
+스키마(`ExecuteName` 셋 · `HandoffName` 둘 · `social_intent`)·planner·graph·aggregate 는 그대로이고
+프롬프트만 두 곳이 바뀌었습니다:
+
+1. Life 정의를 **공식적(formal) 제도·법률·행정·정책·계약 근거**로 좁혔습니다 — 등록, 기관,
+   공식 절차, 자격, 정부·지원 프로그램, 요금, 기한, 법령·규제 요건, 보험 약관, 운송·여행 규정.
+   "official guidance" 는 **그런 공식 제도·정책 주제일 때만** Life 입니다.
+2. 일반 돌봄 권고(산책·운동 횟수·시간, 급여 횟수·양, 수면, 음수량, 일반 관리 상식, 견종·연령·
+   체격별 관리)는 v1 어느 목적지도 지원하지 않는다고 선언했습니다 — 기관·공식 출처·권장을
+   언급해도 Life 가 아니고, 산책이라서 Walk 도 아니며, 행동 변화·기술 교육이 아니면 Training 도
+   아닙니다. 해당하는 목적지가 없으면 두 목록을 비우고 `social_intent=null`.
+
+**v5 는 돌봄 질문에 답하지 않습니다.** 근거 없는 도메인으로 보내는 것을 막을 뿐이고, 사용자에게는
+기존 미지원 문구(FAILED)가 그대로 나갑니다. 그 문구 개선은 별도 UX 카드입니다.
+
+**v5 검증 (2026-09-03):**
+
+- 5건 라이브 프로브(production 모듈, 질문당 1회, 유료 5건): 위 두 질문 + "3개월 강아지는 얼마나
+  자야 해?" + "성견은 하루에 밥을 몇 번 줘?" → 전부 빈 결정, "오늘 미세먼지 심한데 산책 나가도
+  돼?" → Walk, "반려견 등록은 어디서 해?" → Life. **5/5.**
+- 동결 80건 회귀 1회(`runner_v6.py`, 유료 80건, `benchmark_v1.yaml` gate 그대로): **FAIL** —
+  `exact_mixed_execute_handoff_match` 0.80 < 0.90. 나머지 14개 gate 는 통과(exact 0.95, 스키마 100%,
+  social_intent non-null 0/80). non-exact 4건 중 `boundary_05`·`mixed_09` 는 v4·v5 run 에서도 흔들린
+  기존 경계 사례이고, **새로 틀린 것은 `mixed_10`("저녁 산책 시간 추천이랑 …")·`clarify_08`("오늘
+  산책 시간하고 …") 둘** — 둘 다 Walk 를 놓쳤습니다. gold 는 "오늘/저녁 산책 시간" 을 **오늘의 환경
+  창(window) = Walk** 로 보는데, v5 의 "walk or exercise frequency or duration … is not Walk merely
+  because it concerns walking" 문장이 그 "시간" 을 돌봄 상식으로 읽게 만든 것입니다.
+  상세: `docs/orchestration-router-benchmark.md` §v6.
+
+**현재 상태 (PENDING — 사람 결정).** v5 프롬프트는 이 브랜치에 있지만 **동결 gate 를 통과하지 못해
+수용되지 않았습니다.** 규칙대로 재조정 루프를 돌지 않았고 재실행도 하지 않았습니다. 다음 조치
+후보는 v5 의 미지원 문장에서 "오늘/지금의 산책 시간 창은 Walk" 를 명시해 Walk 경계를 원래대로
+되돌리는 한 문장 수정(v6 프롬프트 + 80건 회귀 1회)이며, 그 결정은 사람 몫입니다.
 
 **미래 계약 경계 (PENDING — 사람 결정, 이 카드가 구현하지 않음).** 실행 능력이 생기려면
 순서가 고정입니다: ① 인용 가능한 근거 소스 ② 그 소스를 소유하는 도메인 서비스 ③ 그 뒤에야

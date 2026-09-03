@@ -229,3 +229,48 @@ non-exact 로 gate 안입니다. 이 카드는 이 사례를 tuning 하지 않�
 않았습니다. 별도로 production `GeminiSemanticRouter` 로 순수/혼합 인사말 8건을 1회
 프로브해 8/8 기대 분류를 확인했습니다 (PR #163 본문). v1~v4 결과 파일은 제자리 수정하지
 않았습니다.
+
+## v6 프롬프트 회귀 — `semantic-router-ko-v5` 일반 돌봄 미지원 경계 (2026-09-03, PR #172) — **FAIL**
+
+production 라우터가 일반 돌봄 질문을 Life 로 보내는 결함이 2건 라이브 프로브로 확인돼(routing 문서
+§2 "일반 돌봄") 프롬프트를 v4 → **v5** 로 올렸습니다: Life 정의를 공식 제도·법률·행정·정책·계약
+근거로 좁히고, 일반 돌봄 권고(산책·운동 횟수·시간, 급여, 수면, 음수량, 견종·연령·체격별 관리)는
+어느 목적지도 아니라고 선언. 모델·스키마·gold·gate·1회 재시도 정책은 v5 run 과 동일하고, run 번호만
+**v6** 입니다(`runner_v6.py` — production 모듈 사용). 순서는 규칙대로: 5건 라이브 프로브(5/5 PASS)
+→ 80건 회귀 정확히 1회.
+
+| 항목 | v5 (`ko-v4`) | v6 (`ko-v5`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity (first-pass / final) | 100% / 100% | 100% / 100% |
+| exact RoutePlan match | 98.75% | 95.00% |
+| executable precision / recall | 98.68% / 100% | 96.10% / 98.67% |
+| multi-execute recall | 100% | 97.06% |
+| **exact mixed execute+handoff match (gate ≥ 0.90)** | 100% | **80.00% — FAIL** |
+| Skin / Gait HANDOFF recall | 100% / 100% | 100% / 100% |
+| CLARIFY precision / recall | 100% / 100% | 100% / 91.67% |
+| forbidden / invented capability count | 0 / 0 | 0 / 0 |
+| `social_intent` non-null | 0 / 80 | 0 / 80 |
+| non-exact cases | `boundary_05` | `boundary_05` · `mixed_09` · **`mixed_10`** · **`clarify_08`** |
+| verdict | PASS | **FAIL** (14/15 gate 통과) |
+
+non-exact 4건의 성격이 다릅니다:
+
+- `boundary_05`("오늘 산책 날씨는 말고 목줄 당김 교육만") — v5 run 과 같은 Walk 추가. 기존 경계 흔들림.
+- `mixed_09`("리드줄 연습 가능한 날씨인지 보고, 걷는 영상도") — v4 run 의 non-exact 가 돌아온 것. 기존
+  경계 흔들림.
+- **`mixed_10`**("저녁 산책 시간 추천이랑 반려견 철도 탑승 규정 …") gold Life+Walk+Gait → Life+Gait.
+- **`clarify_08`**("오늘 산책 시간하고 기차 이동장 규정 같이") gold Walk 선택 → 좌표 없음 CLARIFY 인데
+  Life 만 선택.
+
+뒤의 둘은 v5 가 새로 만든 회귀입니다. gold 는 "오늘/저녁 산책 시간" 을 **오늘의 환경 창 = Walk** 로
+보는데, v5 의 "walk or exercise frequency or duration … is not Walk merely because it concerns
+walking" 이 그 "시간" 을 돌봄 상식으로 읽게 했습니다. 같은 모양의 `walk_03`·`clarify_03` 은 이번 run
+에서 맞았으므로 경계가 완전히 무너진 것은 아니고 **의미가 모호해진** 것입니다.
+
+**조치: 규칙대로 STOP.** 프롬프트를 다시 만지지 않았고 재실행도 하지 않았습니다(재조정 루프 금지).
+v5 프롬프트는 브랜치에 있으나 **수용되지 않았습니다.** 다음 후보는 미지원 문장에 "오늘/지금의 산책
+시간 창은 Walk 그대로" 를 명시하는 한 문장 수정(→ `ko-v6`, run **v7**, 80건 1회)이고 사람 결정 뒤에만
+합니다. v1~v5 결과 파일은 제자리 수정하지 않았고 v6 결과 파일(`results_v6.jsonl` · `summary_v6.json` ·
+`phase2_v6_report.md`)은 FAIL 기록 그대로 보존합니다. 이 카드의 유료 호출 합계: 2(v4 진단) + 5(v5
+프로브) + 80(v6 회귀) = **87건.**

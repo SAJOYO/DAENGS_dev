@@ -5,13 +5,22 @@ Card: PR #172 (`feat/assistant-general-care-routing`). A real user asked
 (Walk), not behavior change (Training), and not institutional/procedural evidence
 (Life). The evidence-source audit found no executable source for walk frequency,
 feeding frequency, sleep, or water-intake norms (routing doc §2 "일반 돌봄"), so
-Option C applies: the gap is recorded here and in docs, no `care` capability is
-added, and the deterministic layer keeps the truthful unsupported behavior.
+Option C applies: no `care` capability is added.
 
-Every test uses a fake Gemini transport — no provider spend. The tests pin what
-the DETERMINISTIC layer does given the semantically correct destination decision;
-they cannot certify the live classifier (that is the frozen 80-case benchmark's
-job, and a paid probe of these cases is a separate human-approved step).
+Measured defect (2026-09-03, two paid calls, production `semantic-router-ko-v4`,
+`gemini-3.1-flash-lite`, temperature 0): BOTH "푸들 산책은 몇 회가 좋아?" and
+"강아지는 하루에 몇 번 산책해야 해?" came back `{"execute": ["life"]}` — Life's
+"official guidance" wording absorbed ordinary care advice, and Life's `/ask` only
+abstains on zero hits, so the user would get an OK answer over unrelated ordinance
+chunks. `semantic-router-ko-v5` narrows Life to formal institutional / legal /
+administrative / policy / contractual evidence and declares general husbandry
+unsupported (empty decision). v5 does NOT answer care questions.
+
+Every test uses a fake Gemini transport — no provider spend. They pin (a) what the
+DETERMINISTIC layer does given the semantically correct decision and (b) the v5
+prompt contract text. The live classifier is certified separately: a five-case
+production probe and one frozen 80-case regression (`runner_v6.py`), recorded in
+PR #172 and docs/orchestration-router-benchmark.md.
 """
 
 from __future__ import annotations
@@ -34,6 +43,8 @@ from daengs_backend.orchestration.contracts import (
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
 from daengs_backend.orchestration.semantic import (
+    PROMPT_VERSION,
+    ROUTER_MODEL_ID,
     GeminiSemanticRouter,
     SemanticRoutingDecision,
     build_semantic_router_prompt,
@@ -64,6 +75,31 @@ CARE_BOUNDARY_CASES: list[dict] = [
         "decision": {"execute": [], "handoffs": []},
         "expect": "unsupported",
     },
+    {
+        "id": "care_puppy_sleep",
+        "query": "3개월 강아지는 얼마나 자야 해?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
+    },
+    {
+        "id": "care_feeding_frequency",
+        "query": "성견은 하루에 밥을 몇 번 줘?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
+    },
+    {
+        "id": "care_water_intake",
+        "query": "강아지는 물을 얼마나 마시는 게 보통이야?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
+    },
+    # Still husbandry in v1: naming an institution does not make it Life.
+    {
+        "id": "care_walk_frequency_official_wording",
+        "query": "정부 기관에서 권장하는 강아지 하루 산책 횟수는?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
+    },
     # Existing boundaries stay exactly where they are.
     {
         "id": "walk_air_quality_now",
@@ -80,6 +116,18 @@ CARE_BOUNDARY_CASES: list[dict] = [
     {
         "id": "life_registration_where",
         "query": "반려견 등록은 어디서 해?",
+        "decision": {"execute": ["life"], "handoffs": []},
+        "expect": "life",
+    },
+    {
+        "id": "life_registration_penalty",
+        "query": "반려견 등록 의무를 어기면 과태료가 있어?",
+        "decision": {"execute": ["life"], "handoffs": []},
+        "expect": "life",
+    },
+    {
+        "id": "life_train_transport_rules",
+        "query": "기차에 반려견을 태울 때 규정이 어떻게 돼?",
         "decision": {"execute": ["life"], "handoffs": []},
         "expect": "life",
     },
@@ -145,7 +193,11 @@ def _run_case(case_id: str):
 # ------------------------------------------------- A–B: care questions stay unsupported
 
 
-@pytest.mark.parametrize("case_id", ["care_walk_frequency_breed", "care_walk_frequency"])
+UNSUPPORTED_IDS = [c["id"] for c in CARE_BOUNDARY_CASES if c["expect"] == "unsupported"]
+LIFE_IDS = [c["id"] for c in CARE_BOUNDARY_CASES if c["expect"] == "life"]
+
+
+@pytest.mark.parametrize("case_id", UNSUPPORTED_IDS)
 async def test_care_question_with_empty_decision_is_truthfully_unsupported(case_id: str) -> None:
     service, transport, adapters, case = _run_case(case_id)
     response = await service.run(query=case["query"], principal=PRINCIPAL, context=dict(LOCATION))
@@ -158,7 +210,7 @@ async def test_care_question_with_empty_decision_is_truthfully_unsupported(case_
     assert len(transport.prompts) == 1  # empty is schema-valid: no O-14 retry
 
 
-@pytest.mark.parametrize("case_id", ["care_walk_frequency_breed", "care_walk_frequency"])
+@pytest.mark.parametrize("case_id", UNSUPPORTED_IDS)
 def test_planner_does_not_promote_a_care_question_by_keyword(case_id: str) -> None:
     """The deterministic assembler adds nothing the decision did not select."""
     case = _BY_ID[case_id]
@@ -275,8 +327,9 @@ async def test_leash_pulling_question_is_training_not_walk() -> None:
     assert not adapters[CapabilityName.WALK].calls
 
 
-async def test_registration_question_is_life() -> None:
-    service, _, adapters, case = _run_case("life_registration_where")
+@pytest.mark.parametrize("case_id", LIFE_IDS)
+async def test_formal_institutional_question_is_life(case_id: str) -> None:
+    service, _, adapters, case = _run_case(case_id)
     response = await service.run(query=case["query"], principal=PRINCIPAL)
     assert response.status == AssistantStatus.ANSWERED
     [request] = adapters[CapabilityName.LIFE].calls
@@ -304,6 +357,76 @@ async def test_thanks_followed_by_current_rain_question_is_walk() -> None:
     response = await service.run(query=case["query"], principal=PRINCIPAL, context=dict(LOCATION))
     assert response.status == AssistantStatus.ANSWERED
     assert len(adapters[CapabilityName.WALK].calls) == 1
+
+
+# ------------------------------------------------------ v5 prompt contract (pinned)
+
+
+def _policy() -> str:
+    prompt = build_semantic_router_prompt(query="x", context={})
+    return prompt.split("USER_QUERY:")[0]
+
+
+def test_prompt_is_v5_with_the_same_model_and_schema() -> None:
+    assert PROMPT_VERSION == "semantic-router-ko-v5"
+    assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
+    assert "PROMPT_VERSION: semantic-router-ko-v5" in _policy()
+    # Schema unchanged: three EXECUTE names, two HANDOFF targets, social_intent enum.
+    schema = SemanticRoutingDecision.model_json_schema()
+    assert set(schema["properties"]) == {"execute", "handoffs", "social_intent"}
+    execute_enum = schema["properties"]["execute"]["items"]["enum"]
+    handoff_enum = schema["properties"]["handoffs"]["items"]["enum"]
+    assert execute_enum == ["training", "life", "walk"]
+    assert handoff_enum == ["skin", "gait"]
+
+
+def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:
+    policy = _policy()
+    life_line = next(block for block in policy.split("\n- ") if block.startswith("execute.life:"))
+    for topic in (
+        "FORMAL",
+        "registrations",
+        "official procedures",
+        "eligibility",
+        "fees",
+        "deadlines",
+        "statutory or regulatory requirements",
+        "insurance terms",
+        "transport or travel terms",
+    ):
+        assert topic in life_line, topic
+    # "official guidance" is no longer a bare Life trigger.
+    assert "Official guidance belongs to Life ONLY when it concerns such formal" in life_line
+
+
+def test_v5_declares_general_husbandry_unsupported_without_keyword_lists() -> None:
+    policy = " ".join(_policy().split())
+    assert "General pet husbandry or care recommendations are NOT supported" in policy
+    for example in (
+        "walk or exercise frequency or duration",
+        "feeding frequency or amount",
+        "sleep duration",
+        "water intake",
+        "grooming or care norms",
+        "breed-, age-, or body-size-specific care",
+    ):
+        assert example in policy, example
+    assert "even when it mentions an institution, an official source, or a recommendation" in policy
+    assert "return both lists empty and leave social_intent null" in policy
+    # Semantic rule only: no Korean keyword list and no answer instruction.
+    for keyword in ("산책", "급여", "수면", "정부", "권장", "푸들"):
+        assert keyword not in policy
+    assert "not an answer generator" in policy
+
+
+def test_v5_keeps_the_other_boundaries_verbatim() -> None:
+    policy = " ".join(_policy().split())
+    assert "execute.training: changing dog behavior or teaching skills." in policy
+    assert "execute.walk: current environmental walking suitability." in policy
+    assert "Select Walk only for current environmental walking suitability" in policy
+    assert "Skin and gait are handoffs only" in policy
+    assert "Preserve multi-intent" in policy
+    assert "purely social" in policy
 
 
 def test_acceptance_table_decisions_are_all_schema_valid() -> None:

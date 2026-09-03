@@ -3,12 +3,18 @@
 The LLM owns exactly one thing: which EXECUTE capabilities (training/life/walk)
 and HANDOFF targets (skin/gait) the query semantically requests. Payload text,
 coordinates, CLARIFY, handoff reasons, and the final RoutePlan are assembled
-deterministically in planner.py. The prompt below is `semantic-router-ko-v4`:
-the accepted v3 routing boundary plus one narrow classification — a PURELY
-social utterance (greeting/thanks/goodbye) — which never enters RoutePlan or
-LangGraph and is answered by fixed templates in social.py. The frozen v3
-benchmark copy under tools/router_benchmark/ is the acceptance record and stays
-untouched; the v4 regression against the same 80 gold cases is runner_v5.py.
+deterministically in planner.py. The prompt below is `semantic-router-ko-v5`:
+the accepted v3 routing boundary, the v4 PURELY social utterance classification
+(greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
+templates in social.py), plus one v5 boundary refinement (PR #172): Life is
+formal institutional/legal/administrative/policy/contractual evidence only, and
+general pet husbandry/care recommendations (walk frequency, feeding, sleep,
+water intake, breed/age/size-specific care) have NO destination in v1 — they
+must yield an empty decision instead of being absorbed by Life. v5 does not
+answer those questions; it only stops routing them to a domain whose evidence
+cannot support them. The frozen v3 benchmark copy under tools/router_benchmark/
+is the acceptance record and stays untouched; the v4 regression against the
+same 80 gold cases is runner_v5.py and the v5 regression is runner_v6.py.
 """
 
 from __future__ import annotations
@@ -23,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v4"
+PROMPT_VERSION = "semantic-router-ko-v5"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # The only routing metadata the model may see. Coordinates deliberately stay out:
@@ -75,8 +81,12 @@ object, or capability execution result.
 
 Select every semantically requested destination:
 - execute.training: changing dog behavior or teaching skills.
-- execute.life: evidence-backed information about rules, institutions, procedures, conditions,
-  fees, deadlines, official guidance, insurance terms, or pet travel rules.
+- execute.life: evidence-backed FORMAL institutional, legal, administrative, policy, or
+  contractual information — registrations, institutions, official procedures, eligibility,
+  government or support programs, fees, deadlines, statutory or regulatory requirements,
+  insurance terms, transport or travel terms, and other formal policy or contractual
+  requirements. Official guidance belongs to Life ONLY when it concerns such formal
+  institutional or policy topics.
 - execute.walk: current environmental walking suitability.
 - handoffs.skin: inspecting a visible skin condition through the dedicated image flow.
 - handoffs.gait: analyzing walking, limping, asymmetry, stride, posture, joint angles, or gait from
@@ -87,8 +97,15 @@ Preserve multi-intent. Natural-language negation overrides incidental vocabulary
 handoffs only. Select Walk only for current environmental walking suitability, such as weather,
 heat, cold, rain, air quality, or similar environmental conditions; do not select Walk merely
 because walking is the setting of a Training or Gait request. Route by meaning, not keyword
-occurrence. Do not invent names. If no supported destination is semantically requested, return both
-lists empty.
+occurrence. Do not invent names.
+
+General pet husbandry or care recommendations are NOT supported by any destination in v1: walk or
+exercise frequency or duration, feeding frequency or amount, sleep duration, water intake, general
+grooming or care norms, and breed-, age-, or body-size-specific care. Such a request is not Life even
+when it mentions an institution, an official source, or a recommendation, is not Walk merely because
+it concerns walking, and is not Training unless it asks to change behavior or teach a skill. If no
+Training, Life, Walk, Skin, or Gait destination is semantically requested, return both lists empty
+and leave social_intent null.
 
 social_intent is a classification only, never an answer. Set it to greeting, thanks, or goodbye
 ONLY when the entire request is purely social small talk toward the assistant with no actionable

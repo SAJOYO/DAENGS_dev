@@ -261,6 +261,17 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _expect(item) -> str:
+    """`expect` 가 기본(`answer`)이 아닌 문항만 화면에 표시한다 (RAG-055).
+
+    기본값을 안 찍는 것은 30문항 중 27개가 `answer` 라서다 — 전부 찍으면 **다른 셋이 묻힌다.**
+    """
+    if item.expect == "answer":
+        return ""
+    code = f" ({item.refusal_code})" if item.refusal_code else ""
+    return f"   → 기대: {item.expect}{code}"
+
+
 def cmd_goldenset(args: argparse.Namespace) -> int:
     """골든셋 라벨이 실제 청크를 가리키는지 검사한다 (RAG-022 ⑥).
 
@@ -272,17 +283,27 @@ def cmd_goldenset(args: argparse.Namespace) -> int:
     problems, warnings = goldenset.verify(gs, index)
 
     origin = collections.Counter(i.origin for i in gs.items)
+    expect = collections.Counter(i.expect for i in gs.items)
+    addresses = sum(len(i.must_flat) for i in gs.items)
     print(f"골든셋 {len(gs.items)}문항 (hand {origin['hand']} · easylaw {origin['easylaw']})  "
-          f"필수 {gs.must_total}  보강 {sum(len(i.nice) for i in gs.items)}  "
+          f"필수 {gs.must_total}요구/{addresses}주소  보강 {sum(len(i.nice) for i in gs.items)}  "
           f"분모 제외 {sum(len(i.unavailable) for i in gs.items)}")
+    # **요구와 주소를 갈라 찍는다** (RAG-055). 한 요구 안의 대안을 늘리면 주소만 늘고 요구는
+    # 그대로여야 하는데, 한 수만 찍으면 그 불변식이 화면에서 안 보인다
+    print(f"기대  답변 {expect['answer']}  ·  기권 {expect['abstain']}  ·  거절 {expect['refuse']}")
     print(f"코퍼스 {len(index)}청크  ·  라벨 기준 {gs.corpus.collected_on}")
 
     if args.verbose:
         for item in gs.items:
-            print(f"\n  [{item.id}] ({item.origin}) {item.question}")
-            for tier, addrs in (("must", item.must), ("nice", item.nice)):
-                for a in addrs:
-                    print(f"    {tier:4s} {'OK  ' if a in index else '없음 '}{a}")
+            print(f"\n  [{item.id}] ({item.origin}) {item.question}{_expect(item)}")
+            for n, group in enumerate(item.must, 1):
+                # **요구 번호를 찍는다** (RAG-055) — 안 찍으면 "대안이 둘"과 "요구가 둘"이
+                # 화면에서 똑같아 보이고, 그 둘은 Recall 분모가 다르다
+                for j, a in enumerate(group):
+                    tier = f"must{n}" if j == 0 else "또는"
+                    print(f"    {tier:>6s} {'OK  ' if a in index else '없음 '}{a}")
+            for a in item.nice:
+                print(f"    {'nice':>6s} {'OK  ' if a in index else '없음 '}{a}")
             for u in item.unavailable:
                 print(f"    ----      {u.ref}  ({u.reason})")
 
@@ -345,7 +366,9 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
         if args.verbose:
             k = evaluate.JUDGE_K
             for it in items:
-                ranks = ", ".join(str(m["rank"]) for m in it.must)
+                # 요구마다 **가장 좋은 대안**의 순위다 (RAG-055). `-` 는 top 밖이거나 코퍼스 밖
+                ranks = ", ".join(str(g["rank"]) if g["rank"] is not None else "-"
+                                  for g in it.must)
                 print(f"      [{it.item_id:4s}] hit@{k}={int(it.hit[k])} "
                       f"recall@{k}={it.recall[k]:.2f}  필수 순위 [{ranks}]  {it.question}")
 

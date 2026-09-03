@@ -5,7 +5,7 @@
 부른다. 의미 라우팅·결정론적 RoutePlan 조립·능력 실행·집계는 전부 Card 2B/Card 1
 의 것이다 (`orchestration/service.py` · `planner.py` · `semantic.py` · `graph.py`).
 
-**대화 저장은 이 엔드포인트 하나로 들어온다** (D-047). 본문에 `chat_session_id` 와
+**대화 저장은 이 엔드포인트 하나로 들어온다** (D-048). 본문에 `chat_session_id` 와
 `client_message_id` 가 함께 오면 같은 호출이 그 대화의 turn 으로 남고, 없으면 v0.0.0
 그대로 무상태다. `/app/chats/{id}/turns` 같은 두 번째 실행 경로를 만들지 않는다 —
 실행 경로가 둘이면 인증·라우팅·응답 계약이 둘이 된다. 저장의 규칙(예약 → 세션 닫기 →

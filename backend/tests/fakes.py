@@ -474,6 +474,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     def walk_add_analysis(session, analysis):
         if analysis.id is None:
             analysis.id = uuid.uuid4()
+        if analysis.derived_at is None:
+            analysis.derived_at = datetime.now(UTC)
         store.walk_analyses.append(analysis)
         return analysis
 

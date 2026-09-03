@@ -235,6 +235,73 @@ def test_get_storage_defaults_to_none(monkeypatch):
     assert isinstance(st.get_storage(), NotConfiguredStorage)
 
 
+# ── bridge 공개 주소 가드 (앱이 uploadUrl 을 그대로 씁니다) ──────────────
+#
+# ⚠️ **앱은 티켓의 upload_url 을 보정할 수 없습니다.** 서버가 이상한 값을 내려 주면
+#    앱에서야 터지고, 그때는 원인이 서버 설정이라는 것이 안 보입니다. 그래서 발급
+#    **전에** 막고, 여기서 그 계약을 고정합니다.
+
+
+def _local(monkeypatch, base_url):
+    from daengs_backend import config as cfg
+    from daengs_backend.core import storage as st
+
+    monkeypatch.setattr(cfg.settings, "gait_storage", "local")
+    monkeypatch.setattr(cfg.settings, "gait_local_storage_dir", "/tmp/gait")
+    monkeypatch.setattr(cfg.settings, "gait_bridge_base_url", base_url)
+    return st
+
+
+def test_bridge_base_url_https_is_fine(monkeypatch):
+    st = _local(monkeypatch, "https://daengapi.weareithero.cloud")
+    s = st.get_storage()
+    assert isinstance(s, LocalBridgeStorage)
+    t = s.create_upload_ticket(object_key="gait/p/original/a.mp4", content_type="video/mp4")
+    # 앱이 그대로 쓸 수 있는 절대 주소여야 합니다.
+    assert t.upload_url.startswith("https://daengapi.weareithero.cloud/app/gait/_bridge/upload/")
+
+
+def test_bridge_base_url_plain_http_is_allowed(monkeypatch):
+    """**http 를 막지 않습니다.** 지금 운영 중인 daengback 이 평문 http 라, 막으면
+    돌아가는 서버가 죽습니다. 경고만 남깁니다."""
+    st = _local(monkeypatch, "http://daengback.weareithero.cloud")
+    assert isinstance(st.get_storage(), LocalBridgeStorage)
+
+
+def test_bridge_base_url_empty_fails_loudly(monkeypatch):
+    """비면 호스트 없는 상대경로가 나가고, 앱의 URL() 이 거기서 예외를 냅니다."""
+    st = _local(monkeypatch, "")
+    with pytest.raises(StorageNotConfiguredError):
+        st.get_storage()
+
+
+def test_bridge_base_url_without_scheme_fails(monkeypatch):
+    """`daengback.weareithero.cloud` 처럼 스킴이 없으면 앱이 절대 URL 로 못 씁니다."""
+    st = _local(monkeypatch, "daengback.weareithero.cloud")
+    with pytest.raises(StorageNotConfiguredError):
+        st.get_storage()
+
+
+def test_bridge_base_url_with_path_fails(monkeypatch):
+    """옛 주소(`.../gait`)를 그대로 옮겨 적으면 `/gait/app/gait/...` 가 되어 404 입니다.
+    조용히 깨지는 모양이라 여기서 막습니다."""
+    st = _local(monkeypatch, "http://daengback.weareithero.cloud/gait")
+    with pytest.raises(StorageNotConfiguredError):
+        st.get_storage()
+
+
+def test_bridge_base_url_is_not_checked_for_gcs(monkeypatch, gcs):
+    """**GCS 모드에는 영향이 없어야 합니다.** GCS 는 Signed URL 이라 우리 주소를 안 씁니다."""
+    from daengs_backend import config as cfg
+    from daengs_backend.core import storage as st
+
+    monkeypatch.setattr(cfg.settings, "gait_storage", "gcs")
+    monkeypatch.setattr(cfg.settings, "gait_gcs_bucket", "daengs-gait")
+    monkeypatch.setattr(cfg.settings, "gait_gcs_location", "asia-northeast3")
+    monkeypatch.setattr(cfg.settings, "gait_bridge_base_url", "")  # 비어 있어도
+    assert st.get_storage().__class__.__name__ == "GcsStorage"
+
+
 def test_get_storage_local_needs_dir(monkeypatch):
     from daengs_backend import config as cfg
     from daengs_backend.core import storage as st

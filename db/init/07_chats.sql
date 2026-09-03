@@ -1,4 +1,4 @@
--- Product chat persistence (D-047). Raw content remains forbidden in logs/traces (D-037).
+-- Product chat persistence (D-048). Raw content remains forbidden in logs/traces (D-037).
 -- Order: 01_schema -> 02_trigger -> 03_auth -> 04_crawl_runs -> 05_pets -> 06_walks -> 07_chats
 
 CREATE TABLE IF NOT EXISTS chat_sessions (

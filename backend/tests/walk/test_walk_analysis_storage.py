@@ -10,7 +10,12 @@ from sqlalchemy import CheckConstraint, UniqueConstraint, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
-from daengs_backend.models.walk import Walk, WalkAnalysis, WalkCellophaneSheet
+from daengs_backend.models.walk import (
+    Walk,
+    WalkAnalysis,
+    WalkCapsule,
+    WalkCellophaneSheet,
+)
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.services.walk_analysis import (
     CELLOPHANE_CELL_COLUMNS,
@@ -186,6 +191,8 @@ def test_sqlalchemy_metadata_keeps_state_identity_and_cascade_contracts() -> Non
     assert str(Walk.__table__.c.analysis_state.server_default.arg) == "'collecting'"
     assert Walk.analysis_state.property.deferred is True
     assert "walks_analysis_state_check" in constraint_names(Walk.__table__)
+    assert "walks_weather_code_range" in constraint_names(Walk.__table__)
+    assert "walks_temperature_c_range" in constraint_names(Walk.__table__)
 
     analysis_constraints = constraint_names(WalkAnalysis.__table__)
     assert "walk_analyses_identity_unique" in analysis_constraints
@@ -213,6 +220,14 @@ def test_sqlalchemy_metadata_keeps_state_identity_and_cascade_contracts() -> Non
     assert sheet_fk.ondelete == "CASCADE"
     assert "walk_cellophane_payload_object" in constraint_names(WalkCellophaneSheet.__table__)
 
+    assert [column.name for column in WalkCapsule.__table__.primary_key.columns] == [
+        "analysis_id"
+    ]
+    capsule_fk = next(iter(WalkCapsule.__table__.c.analysis_id.foreign_keys))
+    assert capsule_fk.ondelete == "CASCADE"
+    assert "walk_capsules_capabilities_array" in constraint_names(WalkCapsule.__table__)
+    assert "walk_capsules_context_object" in constraint_names(WalkCapsule.__table__)
+
 
 def test_walk_select_stays_compatible_until_manual_migration_runs() -> None:
     compiled = str(select(Walk).compile(dialect=postgresql.dialect()))
@@ -239,11 +254,17 @@ def test_models_compile_to_postgresql_jsonb_contract() -> None:
     sheet_sql = str(
         CreateTable(WalkCellophaneSheet.__table__).compile(dialect=postgresql.dialect())
     )
+    capsule_sql = str(
+        CreateTable(WalkCapsule.__table__).compile(dialect=postgresql.dialect())
+    )
 
     assert "facts JSONB NOT NULL" in analysis_sql
     assert "motion_events JSONB NOT NULL" in analysis_sql
     assert "PRIMARY KEY (analysis_id, paint_fp)" in sheet_sql
     assert "FOREIGN KEY(analysis_id) REFERENCES walk_analyses (id) ON DELETE CASCADE" in sheet_sql
+    assert "capabilities JSONB NOT NULL" in capsule_sql
+    assert "trail_context JSONB NOT NULL" in capsule_sql
+    assert "PRIMARY KEY (analysis_id)" in capsule_sql
 
 
 def test_init_and_idempotent_migration_define_the_same_storage_boundary() -> None:
@@ -266,12 +287,30 @@ def test_init_and_idempotent_migration_define_the_same_storage_boundary() -> Non
     assert "CREATE TABLE IF NOT EXISTS walk_cellophane_cell (" not in init_sql
     assert "CREATE TABLE IF NOT EXISTS walk_cellophane_cell (" not in migration_sql
 
+    capsule_migration = (
+        REPO / "db/migrations/2026-09-03_walk_capsules.sql"
+    ).read_text(encoding="utf-8")
+    capsule_required = {
+        "CREATE TABLE IF NOT EXISTS walk_capsules",
+        "walk_capsules_versions_positive",
+        "walk_capsules_capabilities_array",
+        "walk_capsules_context_object",
+        "ON CONFLICT (analysis_id) DO NOTHING",
+    }
+    assert all(token in init_sql for token in capsule_required - {"ON CONFLICT (analysis_id) DO NOTHING"})
+    assert all(token in capsule_migration for token in capsule_required)
+
 
 def test_every_named_model_check_is_present_in_init_sql() -> None:
     init_sql = (REPO / "db/init/06_walks.sql").read_text(encoding="utf-8")
     checks = [
         constraint
-        for table in (Walk.__table__, WalkAnalysis.__table__, WalkCellophaneSheet.__table__)
+        for table in (
+            Walk.__table__,
+            WalkAnalysis.__table__,
+            WalkCellophaneSheet.__table__,
+            WalkCapsule.__table__,
+        )
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint)
     ]

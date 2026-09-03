@@ -44,6 +44,10 @@ async def get_owned_session_for_update(
     return await session.scalar(
         select(ChatSession)
         .where(ChatSession.id == session_id, ChatSession.app_user_id == app_user_id)
+        # The caller may already have loaded this row before waiting for the lock.
+        # Refresh the identity-map instance so first-activation and category decisions
+        # use the state committed by the transaction that released the lock.
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 

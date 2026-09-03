@@ -122,7 +122,7 @@ async def list_sessions(
     "",
     response_model=ChatSessionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="새 대화를 연다 (여섯 번째면 가장 오래된 것이 사라진다)",
+    summary="새 대화 초안을 연다 (첫 답변이 전달되면 최근 대화로 활성화)",
     responses={**_NEEDS_AUTH, **_NOT_MINE},
 )
 async def create_session(
@@ -130,10 +130,11 @@ async def create_session(
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ChatSessionResponse:
-    """**여섯 번째를 만들면 그 강아지의 가장 오래된 대화가 사라집니다.**
+    """초안은 최근 대화 다섯 개에 포함되지 않습니다.
 
-    지우는 범위는 `내 계정 + 이 강아지` 한 쌍뿐입니다 — 다른 사용자의 것도, 같은
-    사용자의 다른 강아지 것도 건드리지 않습니다. 저장해 둔 요약은 남습니다.
+    첫 답변이 사용자에게 전달되어 활성 대화가 여섯 개가 되는 순간, `내 계정 + 이
+    강아지` 범위의 가장 오래된 활성 대화가 사라집니다. 다른 사용자의 것도, 같은
+    사용자의 다른 강아지 것도 건드리지 않고, 저장해 둔 요약은 남습니다.
     """
     try:
         created = await chat_service.create_session(
@@ -236,8 +237,8 @@ async def create_summary(
 ) -> ChatSummaryResponse:
     """**사용자가 누를 때만 돕니다.** 답변마다 자동으로 다시 만들지 않습니다.
 
-    같은 `client_request_id` 로 다시 부르면 이미 만든 요약을 그대로 돌려주고
-    모델을 **아예 부르지 않습니다** — 두 번 눌렀거나 네트워크가 재시도한 것입니다.
+    같은 원본 상태를 이미 요약했거나 같은 `client_request_id`를 다시 보내면 409와
+    기존 요약 ID 또는 처리 상태를 돌려주고 모델을 **아예 부르지 않습니다**.
 
     요약은 **이 대화만** 봅니다. 새 RAG 검색도, 새 상담도 하지 않고, 원문의
     주의·한계·출처를 그대로 보존합니다.

@@ -10,9 +10,10 @@
    `chat_turns.processing` 한 행을 만든 뒤 commit합니다.
 2. **DB 세션 종료** — 예약에 쓴 `AsyncSession`을 닫습니다.
 3. **외부 호출** — 오케스트레이터를 호출합니다. DB 세션이나 row lock을 전달하지 않습니다.
-4. **완료 TX** — `processing`인 행만 조건부로 `completed` 또는 `failed`로 바꿉니다. 성공적으로
+4. **완료 TX** — 세션 행을 잠가 transcript 상한·카테고리 합집합·`last_message_at` 갱신을
+   직렬화하고, `processing`인 행만 조건부로 `completed` 또는 `failed`로 바꿉니다. 성공적으로
    전달할 `AssistantResponse`가 있을 때만 세션의 `last_message_at`을 올립니다. 첫 활성화라면 이
-   짧은 TX에서만 소유한 `pets` 행을 잠그고 활성 세션을 최근 5개로 정리합니다.
+   짧은 TX에서만 소유한 `pets` 행도 잠그고 활성 세션을 최근 5개로 정리합니다.
 
 `CLARIFY`·`HANDOFF`·`REFUSED`도 사용자에게 전달된 `AssistantResponse`이므로 활성화합니다.
 공급자·네트워크 실패는 turn을 실패로 닫을 뿐 draft를 활성화하지 않습니다. 완료 UPDATE가

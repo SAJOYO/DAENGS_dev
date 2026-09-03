@@ -259,6 +259,19 @@ async def complete_turn(
     if owned is None:
         raise ChatTurnNotFoundError
     turn, chat_session = owned
+
+    # Every completion updates session aggregates (last_message_at and the category
+    # union) and checks the shared transcript limit. Serialize those short writes per
+    # session; otherwise two different turns can both pass an outdated size check and
+    # overwrite each other's category update. populate_existing in the repository also
+    # refreshes a row that waited behind another completion.
+    locked_session = await chat_repo.get_owned_session_for_update(
+        session, app_user_id, chat_session.id
+    )
+    if locked_session is None:
+        raise ChatSessionNotFoundError
+    chat_session = locked_session
+
     if turn.processing_status != "processing":
         raise CompletionConflictError
     if not response.message or len(response.message) > MAX_ASSISTANT_CHARS:
@@ -281,21 +294,13 @@ async def complete_turn(
         raise TranscriptLimitError
 
     first_activation = chat_session.last_message_at is None
-    if first_activation:
-        if (
-            await chat_repo.lock_owned_pet(
-                session, chat_session.app_user_id, chat_session.pet_id
-            )
-            is None
-        ):
-            raise PetNotOwnedError
-        refreshed = await chat_repo.get_owned_session_for_update(
-            session, app_user_id, chat_session.id
+    if first_activation and (
+        await chat_repo.lock_owned_pet(
+            session, chat_session.app_user_id, chat_session.pet_id
         )
-        if refreshed is None:
-            raise ChatSessionNotFoundError
-        chat_session = refreshed
-        first_activation = chat_session.last_message_at is None
+        is None
+    ):
+        raise PetNotOwnedError
 
     categories = categories_of(response)
     stored = await chat_repo.complete_turn_if_processing(

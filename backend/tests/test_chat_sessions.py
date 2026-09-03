@@ -87,6 +87,39 @@ def test_pet_row_is_locked_only_on_first_activation(
     assert calls == 1
 
 
+def test_session_row_is_locked_for_every_completion(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    draft = create_draft()
+    activate(draft)
+    turn = asyncio.run(
+        chat_service.reserve_turn(
+            FakeSession(),
+            OWNER,
+            draft.id,
+            client_message_id=uuid.uuid4(),
+            question="두 번째 질문",
+        )
+    )
+
+    calls = 0
+    original = chat_repo.get_owned_session_for_update
+
+    async def counted(session, app_user_id, session_id):
+        nonlocal calls
+        calls += 1
+        return await original(session, app_user_id, session_id)
+
+    monkeypatch.setattr(chat_repo, "get_owned_session_for_update", counted)
+    asyncio.run(
+        chat_service.complete_turn(
+            FakeSession(), OWNER, turn.id, response=delivered(AssistantStatus.ANSWERED)
+        )
+    )
+
+    assert calls == 1
+
+
 def test_retention_keeps_five_active_sessions_and_not_the_draft(store: Store) -> None:
     for _ in range(6):
         draft = create_draft()

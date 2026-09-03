@@ -2,7 +2,8 @@
 
 ```
 origin:            rkbuhtig/DAENGS_geo
-source commit:     c5f0d5f738410e90cac294fd5f407cd88f5330ac  (main, 2026-08-29)
+source commit:     c5f0d5f738410e90cac294fd5f407cd88f5330ac  (Place, 2026-08-29)
+territory source:  4d384106a52c814faf006e4b033354f7d4e686fd               (main, 2026-09-03)
 핵심 선행 PR:      #148  검색은 identity가 아니라 값을 받는다 (dog_id 제거, extra="forbid")
                    #149  검색 전용 진입점 — provider/LLM 키 없이 PostGIS만으로 부팅
 경계 결정:         이 저장소 docs/decisions.md D-026
@@ -16,7 +17,8 @@ DAENGS_geo는 검색 실험을 계속할 수 있지만 그 변경이 자동으�
 ## 무엇을 가져왔나
 
 - `src/daengs_place/` — `main` 진입점의 import closure 전체(api/core/geo/place) + 장소
-  적재 배치(`ingest`, anchors 제외 — 그건 walk/territory 축이다)
+  적재 배치(`ingest`). 최초 이관에서는 제외했던 점령지 축을 운영 승격하면서
+  `territory`와 `ingest/territory_sites.py`로 별도 편입했다
 - `infra/place/alembic/` — 리비전 0001~0020 **그대로**. 중간의 walk/anchor 마이그레이션도 포함이다.
   히스토리를 개조하면 기존 geo DB와 갈라진다 — walk용 빈 테이블 몇 개가 생기는 것이
   히스토리 분기보다 싸다. place-db 를 새로 받는 이 저장소에서는 어차피 빈 테이블이다.

@@ -157,8 +157,10 @@ class SummaryRequestConflictError(Exception):
 class SummaryPersistenceError(Exception):
     """A generated summary could not be committed as a completed row.
 
-    The reservation was gone or no longer ``processing`` when the completion UPDATE ran —
-    withdrawal deleted it, or stale recovery already failed it. The generated draft is
+    The member is still active, but the reservation was no longer ``processing`` when the
+    completion UPDATE ran — stale recovery already failed it, for example. Withdrawal is not
+    a cause: the completion-stage active recheck raises ``AppUserNotActiveError`` (401)
+    before this UPDATE is attempted. The generated draft is
     never returned as a success and nothing is re-inserted; the client retries with a fresh
     ``client_request_id``. The persisted-turn twin is ``TurnPersistenceError``.
     """

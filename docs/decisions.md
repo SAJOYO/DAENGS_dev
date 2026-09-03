@@ -2462,8 +2462,8 @@ v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는
 호출 동안 요청 세션과 회원 잠금이 살아 있는 경계 위반이 그대로이기 때문입니다. 요청 세션을
 같이 받는 보통의 앱 API는 계속 `CurrentAppUser`입니다.
 
-같은 보강으로 요약 완료 실패 계약을 turn과 맞췄습니다: 완료 UPDATE가 0행이면(탈퇴 정리·stale
-회수) 생성된 요약을 201로 돌려주지 않고 503 `SUMMARY_PERSISTENCE_FAILED`(`summary_id` ·
+같은 보강으로 요약 완료 실패 계약을 turn과 맞췄습니다: 회원은 active인데 완료 UPDATE가 0행이면
+(5분 stale 회수 등) 생성된 요약을 201로 돌려주지 않고 503 `SUMMARY_PERSISTENCE_FAILED`(`summary_id` ·
 `persistence_error_code` · `retry_with_fresh_client_request_id: true`)로 끝냅니다.
 탈퇴가 예약 뒤·완료 전에 commit되면 완료 TX의 active 확인이 401로 끝나고, 지워진 대화·요약 행을
 다시 만들지 않습니다.

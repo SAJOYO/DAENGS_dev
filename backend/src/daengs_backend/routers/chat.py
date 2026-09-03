@@ -285,8 +285,9 @@ async def delete_session(
             "**부분 저장을 하지 않습니다** — 빈 껍데기가 보관함에 남으면 저장에 성공한 것으로 보입니다."
         },
         status.HTTP_503_SERVICE_UNAVAILABLE: {
-            "description": "요약은 만들어졌지만 completed 행으로 commit하지 못했습니다 — 예약이 "
-            "그 사이 사라졌거나(탈퇴 정리) 이미 닫혔습니다(5분 stale 회수). `detail.code`는 "
+            "description": "요약은 만들어졌지만 completed 행으로 commit하지 못했습니다 — 회원은 "
+            "active 인데 예약이 이미 `processing` 이 아닙니다(5분 stale 회수 등). 탈퇴는 여기가 "
+            "아니라 완료 단계의 active 확인에서 401 로 끝납니다. `detail.code`는 "
             "`SUMMARY_PERSISTENCE_FAILED`이고 `summary_id`, 내부 `persistence_error_code`, "
             "`retry_with_fresh_client_request_id: true`를 동봉합니다. **생성된 요약 본문은 "
             "성공 응답으로 반환하지 않고, 사라진 행을 다시 만들지도 않습니다** — "

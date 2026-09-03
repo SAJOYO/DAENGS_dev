@@ -11,12 +11,15 @@
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [walk-finalize-operating-db-smoke.md](walk-finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke — 선행 migration 누락 발견, 932점 백업·chunk 이관, 최종 PASS |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
+| [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
+| [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `life/` · `training/` · `gait/` 을 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
+지금은 `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
 **자리만** 만들어 두었습니다. 나머지(오케스트레이션)는 별도 카드입니다(#82).
 
 ### `life/` — 생활 파트 (① 제도·문서 RAG `/life/ask` · ② 실시간 산책 `/life/walk-conditions`)
@@ -47,6 +50,38 @@
 검색 품질 미해결 건은 `training/retrieval-gate/STATUS.md` 가 현재 상태입니다.
 발표 대본·폐기된 그래프 설계·실험 과정 리포트는 원본 레포에 남겼습니다 — 무엇을 왜
 안 가져왔는지는 색인의 "가져오지 않은 것" 절에 있습니다.
+
+### `place/` — 장소 검색·중립 점령지 읽기 (`/v2/places/*` · `/territory/sites/*`)
+
+| | |
+| --- | --- |
+| [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
+| [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
+| [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
+
+실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.
+Place는 별도 PostGIS와 Alembic을 소유하며, 그 물리·런타임 경계는
+[CLAUDE.md](../CLAUDE.md)와 `decisions.md`의 D-026 · D-027 · D-039에 있습니다.
+
+### `journey/` — 장소 선택 뒤 단발 경로 스냅샷 (`POST /journey`)
+
+| | |
+| --- | --- |
+| [journey/README.md](journey/README.md) | Journey의 역할·소유 범위와 실행 문서 안내 |
+| [journey/UPSTREAM.md](journey/UPSTREAM.md) | Geo 이주 기준점, 유지한 계약과 가져오지 않은 범위 |
+
+로컬 실행과 TMAP provider 설정은 코드 옆
+[README.md](../backend/src/daengs_journey/README.md)에 둡니다. Journey는 Place 검색,
+Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
+
+### `territory/` — 점령 방문 증거·상태 (`/app/territory/*`)
+
+| | |
+| --- | --- |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
+
+중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
+`VerifiedVisit`은 backend가 소유합니다. 실제 점령·방어·갱신 게임 정책은 아직 정하지 않았습니다.
 
 ### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
 

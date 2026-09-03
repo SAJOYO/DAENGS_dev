@@ -39,6 +39,24 @@ jobs:
           docker compose config --quiet
           docker compose up -d place-db place-search nginx
 
+      - name: 점령지 API 준비 확인
+        run: |
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Get `
+                -Uri 'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=50&limit=1' `
+                -TimeoutSec 10
+              if ($response.sites -isnot [System.Array]) {
+                throw 'Territory Site response does not match APP contract'
+              }
+              break
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
       - name: 점령지 스냅샷 검증·적재
         run: |
           $archive = Join-Path $env:RUNNER_TEMP $env:SNAPSHOT_ASSET

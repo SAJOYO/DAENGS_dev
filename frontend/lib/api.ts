@@ -25,7 +25,7 @@ export class ApiError extends Error {
   /**
    * 파싱된 응답 본문 그대로. **`message` 로 요약되지 않는 정보가 여기 남습니다.**
    *
-   * `detailOf` 는 `detail` 이 **문자열일 때만** 문구로 씁니다. 그런데 `/walk` 은
+   * `detailOf` 는 `detail` 이 **문자열일 때만** 문구로 씁니다. 그런데 `/life/walk-conditions` 는
    * 기상청 격자가 통째로 없을 때 **503 + `detail` 에 응답 본문 전체**를 싣습니다 —
    * "200 으로 '모른다'를 주면 클라이언트가 정상 응답으로 다루므로, 대신 어느 출처가
    * 죽었는지(`sources`) 보이게 한다"는 계약입니다 (RT-001 ⑥).

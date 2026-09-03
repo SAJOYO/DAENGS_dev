@@ -32,6 +32,9 @@ jobs:
           # 기본값(true)이면 git clean -ffdx 가 돌아서
           # node_modules 와 .next/cache 까지 지워집니다. 매번 콜드 빌드가 되므로 끕니다.
           clean: false
+          # 직전 dev와의 diff로 재생성이 필요한 서비스만 고릅니다. workflow_dispatch는
+          # 비교 기준이 없으므로 아래 단계에서 둘 다 재생성합니다.
+          fetch-depth: 0
 
       - name: PM2 설치 확인
         run: |
@@ -118,17 +121,47 @@ jobs:
               }
             }
 
-      - name: nginx 기동 / 설정 반영
+      - name: Compose 서비스 기동 / 변경 서비스 재시작·재생성
         run: |
-          # compose 서비스와 마운트된 nginx 설정을 함께 반영합니다.
-          # checkout이 bind mount 아래 파일을 한꺼번에 바꿀 때 Windows Docker의
-          # watchfiles polling이 변경을 놓칠 수 있으므로 backend 프로세스는 명시적으로
-          # 다시 띄웁니다. 그러지 않으면 Actions는 성공해도 옛 OpenAPI가 계속 서빙됩니다.
+          # 새 서비스는 올리되, 이미 떠 있는 컨테이너를 매번 전부 끊지는 않습니다.
           docker compose up -d
+
+          # checkout이 bind mount 아래 파일을 한꺼번에 바꿀 때 Windows Docker의
+          # watchfiles polling이 변경을 놓칠 수 있으므로 backend는 매번 다시 띄웁니다.
           docker compose restart backend
+
+          $forceAll = '${{ github.event_name }}' -eq 'workflow_dispatch'
+          $changed = @()
+          if (-not $forceAll) {
+            $before = '${{ github.event.before }}'
+            if ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
+              $forceAll = $true
+            } else {
+              $changed = @(git diff --name-only $before '${{ github.sha }}')
+              if ($LASTEXITCODE -ne 0) { throw '배포 변경 파일을 계산하지 못했습니다' }
+            }
+          }
+
+          $placeChanged = $forceAll -or @($changed | Where-Object {
+            $_ -like 'backend/src/daengs_place/*' -or
+            $_ -like 'backend/infra/place/*' -or
+            $_ -in @('backend/pyproject.toml', 'backend/uv.lock', 'docker-compose.yml')
+          }).Count -gt 0
+          $nginxChanged = $forceAll -or @($changed | Where-Object {
+            $_ -in @('nginx/default.conf', 'docker-compose.yml')
+          }).Count -gt 0
+
+          if ($placeChanged) {
+            # place-search는 uvicorn --reload가 아니며 Alembic도 기동 때만 돕니다.
+            docker compose up -d --no-deps --force-recreate place-search
+          }
+          if ($nginxChanged) {
+            # 단일 파일 bind mount는 호스트 파일 교체 뒤 reload만 하면 옛 inode를 봅니다.
+            docker compose up -d --no-deps --force-recreate nginx
+          }
+
           docker compose ps
           docker compose exec -T nginx nginx -t
-          docker compose exec -T nginx nginx -s reload
 
   post_deploy_smoke:
     name: 배포 후 공개 경로 확인
@@ -194,6 +227,35 @@ jobs:
               Start-Sleep -Seconds 5
             }
           }
+
+      - name: Territory Site 공개 경로 확인
+        run: |
+          # 현행 140u 게임판이 없으면 배포를 성공으로 표시하지 않습니다. 코드/마이그레이션
+          # 반영 뒤 territory-sites.md의 적재를 끝내고 이 workflow를 다시 실행해야 합니다.
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Get `
+                -Uri 'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=3000&limit=1' `
+                -TimeoutSec 10
+              $requiredFields = @('count', 'truncated', 'sites')
+              $missingFields = @($requiredFields | Where-Object {
+                $_ -notin $response.PSObject.Properties.Name
+              })
+              if ($missingFields.Count -ne 0 -or
+                  $response.sites -isnot [System.Array]) {
+                throw 'Territory Site response does not match APP contract'
+              }
+              break
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+          if (@($response.sites).Count -lt 1 -or $response.count -lt 1) {
+            throw 'Active 140u territory gameboard is empty; run the documented ingest first'
+          }
+          Write-Host "Territory Site data-ready verified: $($response.sites[0].site_id)"
 
       - name: Journey 공개 경로 확인
         run: |

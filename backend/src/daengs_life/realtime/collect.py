@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from . import warning_areas
 from .cache import Cache, split_key
 from .config import REQUEST_BUDGET_SEC, STATIC_BUDGET_SEC
 from .geo import Grid, LatLon, haversine_km, to_grid, to_latlon
@@ -138,12 +139,18 @@ def _sido_candidates(coords: dict[int, LatLon], addrs: dict[int, str],
     return list(dict.fromkeys(addrs[stn] for stn, _ in ranked if stn in addrs))
 
 
-def _label(run: _Run, point: LatLon) -> str:
-    """표기. **절대 판정을 막지 않는다** — 실패하면 좌표를 그대로 쓴다 (RT-001 ①)."""
+def _label_and_areas(run: _Run, point: LatLon) -> tuple[str, tuple[str, ...]]:
+    """표기 + 특보구역 후보. **한 번의 카카오 응답에서 둘 다 나온다.**
+
+    **절대 판정을 막지 않는다** — 카카오가 죽으면 좌표를 그대로 라벨로 쓰고 특보구역은
+    비운다 (RT-001 ①). 그 경우 특보 축은 시도 단축명으로만 찾게 되어 RT-003 이전과 같다.
+    """
     body = run.payload(Source.KAKAO, _point_key(point),
                        lambda: kakao_local.raw_region(point, budget=run.static))
-    name = kakao_local.parse_region(body) if body else None
-    return name or f"{point.lat:.4f}, {point.lon:.4f}"
+    sido, sigungu, dong = kakao_local.parse_region_parts(body) if body else (None, None, None)
+    # 시도 단축명으로 줄이는 것은 조립층의 일이다 — provider 는 서로를 모른다.
+    areas = warning_areas.lookup(sido=kma_apihub.sido_of(sido or ""), sigungu=sigungu, dong=dong)
+    return dong or f"{point.lat:.4f}, {point.lon:.4f}", areas
 
 
 def _point_key(point: LatLon) -> str:
@@ -162,15 +169,14 @@ def resolve(point: LatLon, run: _Run) -> tuple[ResolvedLocation, dict[int, LatLo
     picked = airkorea_stations.pick(stations, point) if stations else None
     station = picked[0] if picked else None
     aws = _aws_in_grid(coords, grid)
+    label, areas = _label_and_areas(run, point)
 
     return ResolvedLocation(
-        point=point, grid=grid, label=_label(run, point),
+        point=point, grid=grid, label=label,
         station=station.name if station else None,
         station_km=round(picked[1], 2) if picked else None,
         aws_station=str(aws) if aws is not None else None,
-        # 특보구역 매핑표가 아직 없다 (🟡). 이름을 지어내지 않고 비워 둔다 —
-        # `kma_warning` 은 아래 `_warning_areas` 가 넘기는 후보 이름으로 최선을 다한다
-        warning_area=None,
+        warning_areas=areas,
         region=_region_of(station),
     ), coords
 
@@ -200,11 +206,11 @@ def _region_of(station: airkorea_stations.Station | None) -> str | None:
 def _warning_areas(location: ResolvedLocation, station: str | None) -> list[str]:
     """특보 자연어에서 나를 찾을 후보 이름들.
 
-    ⚠️ **매핑표가 없어서 최선 탐색이다** (🟡 대기 중). `t6` 은 `'서울동남권'` 같은 특보구역명을
-    쓰는데 우리는 그 이름을 모른다. 시도 단축명(`'서울'`)은 대부분의 특보 문구에 그대로
-    들어가므로 여기까지가 매핑표 없이 정직하게 할 수 있는 전부다 — 구 단위 특보는 놓친다.
+    **매핑표가 앞에 선다** (RT-003) — `t6` 은 `'서울(서울동남권, 서울동북권)'` 처럼 광역명과
+    특보구역명을 함께 쓰므로 둘 다 후보로 둔다. 표가 답을 못 주는 곳(표에 없는 지역, 카카오
+    실패)에서는 뒤의 시도 단축명이 그대로 남아 RT-003 이전과 같은 커버리지가 된다.
     """
-    names = [location.region, station, location.label]
+    names = [*location.warning_areas, location.region, station, location.label]
     return [n for n in dict.fromkeys(names) if n]
 
 
@@ -263,7 +269,8 @@ def collect(point: LatLon, now: datetime, *, cache: Cache | None = None,
     if areas:
         states += run.parsed(Source.WARNING, "all",
                              lambda: kma_warning.raw_pwn(budget=run.budget),
-                             lambda body: kma_warning.parse_pwn(body, areas))
+                             lambda body: kma_warning.parse_pwn(
+                                 body, areas, precise=location.warning_areas))
 
     return Observations(location=location, fetched_at=now, measurements=measurements,
                         states=states, providers=run.results)

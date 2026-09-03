@@ -19,7 +19,7 @@
 지금은 `life/` · `training/` · `gait/` 을 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
 **자리만** 만들어 두었습니다. 나머지(오케스트레이션)는 별도 카드입니다(#82).
 
-### `life/` — 생활 파트 (① 제도·문서 RAG `/ask` · ② 실시간 산책 `/walk`)
+### `life/` — 생활 파트 (① 제도·문서 RAG `/life/ask` · ② 실시간 산책 `/life/walk-conditions`)
 
 생활비서 RAG(①)·실시간 산책(②) 문서는 `choiyc05/daengs-life` 에서 이관했습니다 (D-018).
 **ADR 접두사가 `RAG-` · `RT-` 로 갈려 있는 것은 의도입니다** — 위 `decisions.md` 의 `D-` 와

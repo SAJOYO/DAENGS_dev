@@ -12,7 +12,7 @@ import { useAuth } from "./auth-provider";
  * `기능 / 검색 점검` 안의 갈래 전환.
  *
  * **훈련 갈래만 권한으로 가립니다.** `/training/chat` 은 `Perm.SEARCH_INSPECT`(관리자
- * 전용)이고 `/ask`·`/walk` 은 `Perm.READ` 라, 두 갈래의 문턱이 다릅니다. 화면에서 가리는
+ * 전용)이고 `/life/ask`·`/life/walk-conditions` 는 `Perm.READ` 라, 두 갈래의 문턱이 다릅니다. 화면에서 가리는
  * 것은 UX 일 뿐이고 실제 차단은 백엔드가 같은 권한으로 합니다 (`lib/auth.ts`).
  *
  * **피부 갈래는 권한으로 안 가립니다.** `/screen/*` 라우터에는 dependency 가 없어서

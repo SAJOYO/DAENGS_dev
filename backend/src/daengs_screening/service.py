@@ -46,7 +46,7 @@ router = APIRouter(prefix="/screen", tags=["screening"])
 def _agent():
     """가중치를 **첫 요청 때** 올립니다.
 
-    ⚠️ 기동 때 올리면 안 됩니다. 이 프로세스에는 로그인과 `/ask` 가 같이 떠 있고
+    ⚠️ 기동 때 올리면 안 됩니다. 이 프로세스에는 로그인과 `/life/ask` 가 같이 떠 있고
        (D-021), 350MB 를 물고 오느라 기동이 늦어지면 그쪽까지 같이 늦어집니다.
        스크리닝을 아무도 안 부르는 동안 메모리를 잡고 있을 이유도 없습니다.
 
@@ -118,7 +118,7 @@ async def screen(photo: UploadFile = File(...), box: str = Form(default="")):
         raise _fail(exc) from exc
 
     # ⚠️ 사진 한 장에 CPU 로 0.6~3초입니다. 이벤트 루프를 막으면 그동안 로그인도
-    #    `/ask` 도 멈춥니다 — 같은 프로세스이기 때문입니다 (D-039).
+    #    `/life/ask` 도 멈춥니다 — 같은 프로세스이기 때문입니다 (D-039).
     from starlette.concurrency import run_in_threadpool
 
     return JSONResponse(await run_in_threadpool(agent.screen, im, b))

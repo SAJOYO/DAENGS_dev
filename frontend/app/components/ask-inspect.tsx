@@ -6,15 +6,20 @@ import { ApiError, apiJson } from "@/lib/api";
 import type { AskHit, AskResponse } from "@/lib/life-rag";
 
 /**
- * `POST /ask` 점검 패널.
+ * `POST /life/ask` 점검 패널.
  *
- * **응답을 줄이지 않고 그대로 그립니다.** `/ask` 가 근거를 통째로 싣는 이유가
+ * **응답을 줄이지 않고 그대로 그립니다.** `/life/ask` 가 근거를 통째로 싣는 이유가
  * *"인용한 조항이 실제로 컨텍스트에 있었나"* 를 보기 위해서인데(RAG-028 ②), 지금은 그것을
  * JSON 으로만 볼 수 있습니다. **`ungrounded` 배지가 검문소④ 그 자체입니다** — 0 이 아니면
  * 모델이 컨텍스트에 없는 조항을 지어낸 것입니다.
  *
- * ⚠️ **아직 배포된 API 에 `/ask` 가 없습니다** (#35). 그전까지 이 패널은 "라우트 없음"
- * 404 를 받습니다 — 서버가 주는 "근거 0건" 404 와 본문이 달라서 화면에서 구분합니다.
+ * **이 패널이 전문을 받는 유일한 소비자입니다.** 사용자에게 닿는 길은 `/assistant/query` 하나이고
+ * 거기서 어댑터가 응답을 줄이므로, 여기가 없으면 근거 전문을 볼 곳이 사라집니다. A4(#176)가
+ * 경로만 바꾸고 응답은 그대로 둔 이유입니다.
+ *
+ * ⚠️ **경로가 A4(#176)로 `/ask` → `/life/ask` 가 됐고 리다이렉트를 두지 않았습니다.** 프론트와
+ * 백엔드가 같은 배포에 같이 나가야 하고, 한쪽만 먼저 나가면 아래 "라우트 없음" 404 를 받습니다 —
+ * 서버가 주는 "근거 0건" 404 와 본문이 달라서 화면에서 구분합니다.
  */
 
 /** 서버가 근거 0건일 때 주는 문구 (`services/ask.py`). 라우트 없음 404 와 가르는 표시입니다. */
@@ -34,8 +39,8 @@ function outcomeOf(caught: unknown): Outcome {
       if (caught.message.includes(NO_EVIDENCE)) return { kind: "no-evidence" };
       return {
         kind: "error",
-        message: "이 서버에 /ask 라우트가 없습니다.",
-        hint: "백엔드에 아직 안 붙은 상태입니다 (#35). 붙고 나면 같은 404 라도 본문이 달라집니다.",
+        message: "이 서버에 /life/ask 라우트가 없습니다.",
+        hint: "프론트만 먼저 배포됐을 수 있습니다 — 경로가 #176 으로 /ask → /life/ask 로 바뀌었고 리다이렉트가 없습니다. 붙고 나면 같은 404 라도 본문이 달라집니다.",
       };
     }
     if (caught.status === 401) return { kind: "error", message: "세션이 만료되었습니다. 다시 로그인해 주세요." };
@@ -83,7 +88,7 @@ export default function AskInspect() {
 
     try {
       const parsedK = Number.parseInt(k, 10);
-      const data = await apiJson<AskResponse>("/api/ask", {
+      const data = await apiJson<AskResponse>("/api/life/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // `k` 를 비우면 **보내지 않습니다.** null 은 "서버 기본값을 쓴다"는 뜻이고,
@@ -114,7 +119,7 @@ export default function AskInspect() {
         <div>
           <p className="text-sm font-medium text-indigo-700 dark:text-indigo-400">생활 RAG · 제도·문서</p>
           <h2 id="ask-inspect-title" className="mt-1 text-2xl font-semibold tracking-tight">
-            질의응답 <code className="text-base font-normal text-zinc-500">POST /ask</code>
+            질의응답 <code className="text-base font-normal text-zinc-500">POST /life/ask</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             동물보호법·가축전염병예방법 등에서 근거를 찾아 답합니다. 무엇을 근거로 줬는지 전문까지 함께 봅니다.

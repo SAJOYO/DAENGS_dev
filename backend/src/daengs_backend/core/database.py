@@ -56,6 +56,17 @@ async def get_snapshot_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def get_chat_session_factory() -> async_sessionmaker[AsyncSession]:
+    """대화 저장용 세션 **공장**. 요청 수명의 `get_session` 이 아닙니다.
+
+    외부 호출(오케스트레이터·Gemini) 동안 살아 있는 AsyncSession 이 없어야 해서
+    (`docs/chat-transaction-flow.md`), 서비스가 짧은 TX 마다 하나씩 열고 닫습니다.
+    `/assistant/query` 의 저장 경로와 `/app/chats/{id}/summary` 가 같이 씁니다 —
+    테스트는 이 의존성 하나를 계측 공장으로 바꿔 두 라우터를 함께 봅니다.
+    """
+    return SessionLocal
+
+
 @contextlib.asynccontextmanager
 async def worker_session() -> AsyncGenerator[AsyncSession, None]:
     """**Celery 태스크 전용** 세션 — 태스크마다 엔진을 새로 만들고 끝나면 버립니다.

@@ -207,7 +207,7 @@ export default function SkinInspect() {
     setFailure(null);
     setElapsedMs(null);
     const controller = new AbortController();
-    // `/ask` 의 50초보다 깁니다 — 첫 요청이 가중치 350MB 를 올립니다.
+    // `/life/ask` 의 50초보다 깁니다 — 첫 요청이 가중치 350MB 를 올립니다.
     const timeout = window.setTimeout(() => controller.abort(), 60_000);
     const startedAt = performance.now();
 

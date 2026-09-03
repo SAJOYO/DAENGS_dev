@@ -11,9 +11,11 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import uuid
 
-# Walk 적합도(`GET /walk`)와 WalkPayload(orchestration/contracts.py)가 이미 쓰는
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Walk 적합도(`GET /life/walk-conditions`)와 WalkPayload(orchestration/contracts.py)가 이미 쓰는
 # 남한 좌표 범위. 새 지리 정책을 만들지 않는다 — 세 곳이 같은 값이어야 한다.
 _LAT_BOUNDS = (33.0, 39.0)
 _LON_BOUNDS = (124.0, 132.0)
@@ -49,6 +51,22 @@ class AssistantQueryRequest(BaseModel):
     # 소유권 증명이 아니라 라우팅/개인화 힌트일 뿐이다 (O-4, contracts §1).
     active_dog_id: str | None = None
     location: LocationIn | None = None
+    # 대화 저장 (D-048). **둘 다 있으면** 이 질문과 답이 그 대화의 turn 으로 남고, **둘 다
+    # 없으면** v0.0.0 그대로 무상태다 — 그 요청은 DB 를 한 번도 열지 않는다. 한쪽만 있는
+    # 것은 모양이 틀린 것이라 422. 앱 회원 전용이고, 대화의 `pet_id` 가 `active_dog_id` 보다
+    # 우선한다 (routers/assistant.py).
+    chat_session_id: uuid.UUID | None = None
+    client_message_id: uuid.UUID | None = None
+
+    @property
+    def persists(self) -> bool:
+        return self.chat_session_id is not None
+
+    @model_validator(mode="after")
+    def _persistence_fields_come_together(self) -> AssistantQueryRequest:
+        if (self.chat_session_id is None) != (self.client_message_id is None):
+            raise ValueError("chat_session_id and client_message_id must be sent together")
+        return self
 
     @field_validator("query")
     @classmethod

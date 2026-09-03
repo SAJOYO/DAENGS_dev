@@ -295,8 +295,18 @@ class ResolvedLocation:
     station: str | None = None            # 대기질 측정소명
     station_km: float | None = None
     aws_station: str | None = None        # 같은 격자 안의 AWS 지점 (없으면 None → ⑤-d 1순위 미발동)
-    warning_area: str | None = None       # 특보구역
+    warning_areas: tuple[str, ...] = ()   # 특보구역 — 좁은 것부터 (RT-003)
     region: str | None = None             # 미세먼지 예보 권역
+
+    @property
+    def warning_area(self) -> str | None:
+        """표기용 대표 특보구역 하나. 없으면 `None`.
+
+        **매칭에 쓰는 것은 `warning_areas` 전부다.** 고도(산지/평지)나 도서 제외처럼 우리가
+        모르는 축이 있어 하나로 줄일 수 없는 곳이 있고(`강릉`·`강릉평지`), 하나를 고르라고
+        강요하면 그 축에서 반드시 틀린다 — 그래서 좁히는 것은 표기에서만 한다 (RT-003).
+        """
+        return self.warning_areas[0] if self.warning_areas else None
 
 
 # -------------------------------------------------------------- 조회의 메타 (②-e)

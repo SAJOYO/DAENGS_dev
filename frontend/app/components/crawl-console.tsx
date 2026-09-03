@@ -168,6 +168,21 @@ export default function CrawlConsole() {
         )}
       </div>
 
+      {/*
+        **어느 배포에서 보고 있는지에 따라 이 화면의 뜻이 다릅니다.** 크롤러와 코퍼스
+        정본은 로컬 서버에만 두기로 했고(`docs/deploy/roadmap.md` §2-4), 운영(GCP)
+        서버에는 crawler-worker·beat 가 아예 안 뜹니다. 거기서는 표가 덤프 시점의
+        이력이고 트리거는 202 만 받고 아무 일도 일어나지 않습니다 — 눌러 본 사람이
+        "고장" 으로 읽지 않게 미리 적어 둡니다.
+
+        환경을 **감지**해서 버튼을 감추지 않는 이유는 지금 프론트가 그것을 알 방법이
+        없어서입니다. 상태 API 가 생기면 그때 가립니다 (`docs/console/roadmap.md` B1).
+      */}
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        크롤러(worker · Beat)와 코퍼스 정본은 로컬 서버에만 있습니다. 운영 서버에서 보고 있다면 이
+        표는 옮겨 온 시점의 이력이고, 수동 트리거는 동작하지 않습니다.
+      </p>
+
       {notice && (
         <p className="rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           {notice}

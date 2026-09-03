@@ -159,9 +159,9 @@ def test_DB_가_죽으면_크롤은_묻지_않는다(
     [
         (WarmUpPhase.READY, StatusState.OK),
         (WarmUpPhase.LOADING, StatusState.DEGRADED),
-        # **고장이 아니다.** 예열을 끈 개발 PC 에서는 첫 `/ask` 가 로드를 무는 것이 설계다.
+        # **고장이 아니다.** 예열을 끈 개발 PC 에서는 첫 `/life/ask` 가 로드를 무는 것이 설계다.
         (WarmUpPhase.DISABLED, StatusState.ABSENT),
-        # `ml` 그룹이 없을 때. `/ask` 만 죽고 다른 API 는 멀쩡하다 (D-021).
+        # `ml` 그룹이 없을 때. `/life/ask` 만 죽고 다른 API 는 멀쩡하다 (D-021).
         (WarmUpPhase.FAILED, StatusState.DOWN),
     ],
 )
@@ -229,3 +229,17 @@ def test_예산_그룹과_한도가_life_쪽_정책과_같다() -> None:
     assert {g for g, v in POLICY.budgets.items() if v is not None} == set(
         status_service.DAILY_BUDGETS
     )
+
+
+# ---------------------------------------------------------------- 예외 문구
+def test_메시지가_빈_예외는_콜론만_남기지_않는다() -> None:
+    """`httpx.ConnectTimeout` 은 `str(e)` 가 **빈 문자열**이다.
+
+    그대로 이어 붙이면 화면에 `ConnectTimeout:` 처럼 콜론만 남는다 — 2026-09-03 에
+    로컬 콘솔에서 실제로 그렇게 떴다. 종류 이름만으로도 원인이 읽히므로 그때는 이름만 쓴다.
+    """
+    import httpx
+
+    assert status_service._why(httpx.ConnectTimeout("")) == "ConnectTimeout"
+    assert status_service._why(httpx.ConnectError("연결 거부")) == "ConnectError: 연결 거부"
+    assert status_service._why(RuntimeError("어딘가 터졌다")) == "RuntimeError: 어딘가 터졌다"

@@ -72,6 +72,14 @@ KST = timezone(timedelta(hours=9))
 CRAWL_STALE_AFTER = timedelta(days=3)
 
 
+def _why(e: BaseException) -> str:
+    """예외를 한 줄로. **메시지가 비어 있을 수 있습니다** — `httpx.ConnectTimeout` 이
+    그렇고, 그대로 이어 붙이면 화면에 `ConnectTimeout:` 처럼 콜론만 남습니다
+    (2026-09-03 실측). 종류 이름만으로도 원인이 읽히므로 그때는 이름만 씁니다."""
+    said = str(e).strip()
+    return f"{type(e).__name__}: {said}" if said else type(e).__name__
+
+
 @dataclass(frozen=True)
 class StatusItem:
     name: str
@@ -136,7 +144,7 @@ async def _guard(name: str, label: str, work: Awaitable[tuple[StatusState, str]]
                           f"{ITEM_TIMEOUT_SEC:.0f}초 안에 답하지 않았습니다.")
     except Exception as e:                      # noqa: BLE001 — 항목 하나가 화면을 막으면 안 된다
         log.warning("상태 확인 실패 — %s: %s", name, e)
-        return StatusItem(name, label, StatusState.DOWN, f"확인하지 못했습니다 — {type(e).__name__}: {e}")
+        return StatusItem(name, label, StatusState.DOWN, f"확인하지 못했습니다 — {_why(e)}")
     return StatusItem(name, label, state, detail)
 
 
@@ -313,7 +321,7 @@ async def _probe(base_url: str, paths: Sequence[str]) -> tuple[StatusState, str]
             try:
                 response = await client.get(path)
             except httpx.HTTPError as e:
-                return StatusState.DOWN, f"{host} 에 닿지 못했습니다 — {type(e).__name__}: {e}"
+                return StatusState.DOWN, f"{host} 에 닿지 못했습니다 — {_why(e)}"
             checked.append((path, response.status_code))
 
     bad = [f"{path} → {code}" for path, code in checked if code >= 400]

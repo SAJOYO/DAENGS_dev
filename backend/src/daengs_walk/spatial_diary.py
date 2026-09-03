@@ -2,7 +2,7 @@
 
 DB에서 어떤 Capsule을 가져올지와 HTTP 모양은 ``daengs_backend``가 맡는다. 이 모듈은
 동결된 산책 당시 context를 현재의 필터 facet으로 분류하고, 이미 선택된 Cellophane을
-분모가 드러나는 두 metric으로 겹친다. Place·Journey·Pin 구현은 알지 못한다 (D-048).
+분모가 드러나는 두 metric으로 겹친다. Place·Journey·Pin 구현은 알지 못한다 (D-049).
 """
 
 from __future__ import annotations
@@ -12,9 +12,10 @@ import json
 import math
 import uuid
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
+from types import MappingProxyType
 from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
@@ -159,8 +160,8 @@ class SpatialField:
     """셀별 값과 그 값을 설명하는 공통 분모·Paint 세대."""
 
     metric: SpatialFieldMetric
-    values: dict[Cell, float]
-    numerators: dict[Cell, float]
+    values: Mapping[Cell, float]
+    numerators: Mapping[Cell, float]
     denominator: float
     selected: int
     contributing: int
@@ -169,6 +170,8 @@ class SpatialField:
     normalization: str
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "values", MappingProxyType(dict(self.values)))
+        object.__setattr__(self, "numerators", MappingProxyType(dict(self.numerators)))
         if self.selected < 0 or not 0 <= self.contributing <= self.selected:
             raise ValueError("contributing walks must fit selected walks")
         if not math.isfinite(self.denominator) or self.denominator < 0:

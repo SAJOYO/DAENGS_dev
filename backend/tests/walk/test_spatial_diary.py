@@ -17,6 +17,7 @@ from daengs_walk.spatial_diary import (
     MixedPaintGenerationError,
     SpatialDiaryViewReceipt,
     SpatialDiaryViewSpec,
+    SpatialField,
     WalkSelector,
     aggregate_spatial_field,
     build_view_receipt,
@@ -244,6 +245,31 @@ def test_field_rejects_duplicate_walks_and_other_paint_generations():
     )
     with pytest.raises(MixedPaintGenerationError):
         aggregate_spatial_field((_sheet(uuid.uuid4(), [], paint_spec=other),), "visit_rate")
+
+
+def test_field_maps_are_defensively_copied_and_read_only():
+    values = {(0, 0): 1.0}
+    numerators = {(0, 0): 1.0}
+    field = SpatialField(
+        metric="visit_rate",
+        values=values,
+        numerators=numerators,
+        denominator=1.0,
+        selected=1,
+        contributing=1,
+        paint_spec=CANONICAL_PAINT_SPEC,
+        unit="ratio",
+        normalization="selected_walks",
+    )
+
+    values[(0, 0)] = 99.0
+    numerators[(0, 0)] = 99.0
+    assert field.values[(0, 0)] == 1.0
+    assert field.numerators[(0, 0)] == 1.0
+    with pytest.raises(TypeError):
+        field.values[(0, 0)] = 99.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        field.numerators[(0, 0)] = 99.0  # type: ignore[index]
 
 
 def test_receipt_is_frozen_and_covers_every_selected_context():

@@ -253,6 +253,9 @@ Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레�
 Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입니다(`semantic.py` 의
 `handoffs.skin`/`handoffs.gait`, planner 의 고정 reason) — "아직 문서만 있고 라우터가
 모르는 것"이 아니라, **EXECUTE 로는 절대 선택되지 않는다**는 뜻입니다 (§7).
+견종·연령별 산책 횟수·급여·수면·음수량 같은 **일반 돌봄(사육) 정보는 어느 능력에도 속하지
+않고 실행 대상이 없습니다** — 인용 가능한 근거 소스가 저장소에 없어 `care` 류 능력을
+만들지 않았습니다 (routing 문서 §2 "일반 돌봄", PR #172).
 
 **v1 LangGraph 프리미티브 (CONFIRMED)** — `StateGraph` · 일반 edge · 조건부 edge, 그리고
 `Send` 는 동적 다중 능력 fan-out 이 **실제로 필요할 때만**. `Command` 는 나중 선택지.

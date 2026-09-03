@@ -1,0 +1,141 @@
+"""Walk 공간 일기 조회용 DAO. 선택 의미와 집계 판단은 service에 둡니다."""
+
+import uuid
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any
+
+from sqlalchemy import Date, Select, cast, func, select, tuple_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from daengs_backend.models import (
+    Walk,
+    WalkAnalysis,
+    WalkCapsule,
+    WalkCellophaneSheet,
+    WalkPet,
+)
+from daengs_walk.spatial_diary import DIARY_CALENDAR_TIMEZONE
+
+
+@dataclass(frozen=True)
+class SpatialDiaryIndexRow:
+    analysis_id: uuid.UUID
+    walk_id: uuid.UUID
+    started_at: datetime
+    capsule_version: int
+    context_version: int
+    trail_context: dict[str, Any]
+    sheet_schema_version: int | None
+    paint_version: int | None
+    grid_version: str | None
+    radius_u: float | None
+    profile: str | None
+    profile_fp: str | None
+    sample_step_m: float | None
+    paint_fp: str | None
+    cell_count: int | None
+
+
+async def count_capsules_for_pet(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+) -> int:
+    stmt = (
+        select(func.count(WalkCapsule.analysis_id))
+        .select_from(WalkPet)
+        .join(Walk, Walk.id == WalkPet.walk_id)
+        .join(WalkAnalysis, WalkAnalysis.walk_id == Walk.id)
+        .join(WalkCapsule, WalkCapsule.analysis_id == WalkAnalysis.id)
+        .where(Walk.app_user_id == app_user_id, WalkPet.pet_id == pet_id)
+    )
+    return int((await session.scalar(stmt)) or 0)
+
+
+def capsule_index_statement(
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    since: date | None,
+    until: date | None,
+    limit: int,
+) -> Select:
+    local_day = cast(func.timezone(DIARY_CALENDAR_TIMEZONE, Walk.started_at), Date)
+    stmt = (
+        select(
+            WalkAnalysis.id,
+            Walk.id,
+            Walk.started_at,
+            WalkCapsule.capsule_version,
+            WalkCapsule.context_version,
+            WalkCapsule.trail_context,
+            WalkCellophaneSheet.sheet_schema_version,
+            WalkCellophaneSheet.paint_version,
+            WalkCellophaneSheet.grid_version,
+            WalkCellophaneSheet.radius_u,
+            WalkCellophaneSheet.profile,
+            WalkCellophaneSheet.profile_fp,
+            WalkCellophaneSheet.sample_step_m,
+            WalkCellophaneSheet.paint_fp,
+            WalkCellophaneSheet.cell_count,
+        )
+        .select_from(WalkPet)
+        .join(Walk, Walk.id == WalkPet.walk_id)
+        .join(WalkAnalysis, WalkAnalysis.walk_id == Walk.id)
+        .join(WalkCapsule, WalkCapsule.analysis_id == WalkAnalysis.id)
+        .outerjoin(
+            WalkCellophaneSheet,
+            WalkCellophaneSheet.analysis_id == WalkAnalysis.id,
+        )
+        .where(Walk.app_user_id == app_user_id, WalkPet.pet_id == pet_id)
+        .order_by(Walk.started_at, Walk.id, WalkAnalysis.id, WalkCellophaneSheet.paint_fp)
+        .limit(limit)
+    )
+    if since is not None:
+        stmt = stmt.where(local_day >= since)
+    if until is not None:
+        stmt = stmt.where(local_day <= until)
+    return stmt
+
+
+async def list_capsule_index(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    since: date | None,
+    until: date | None,
+    limit: int,
+) -> list[SpatialDiaryIndexRow]:
+    rows = (
+        await session.execute(
+            capsule_index_statement(
+                app_user_id,
+                pet_id,
+                since=since,
+                until=until,
+                limit=limit,
+            )
+        )
+    ).all()
+    return [SpatialDiaryIndexRow(*row) for row in rows]
+
+
+async def list_cellophane_sheets(
+    session: AsyncSession,
+    keys: list[tuple[uuid.UUID, str]],
+) -> list[WalkCellophaneSheet]:
+    if not keys:
+        return []
+    stmt = (
+        select(WalkCellophaneSheet)
+        .where(
+            tuple_(
+                WalkCellophaneSheet.analysis_id,
+                WalkCellophaneSheet.paint_fp,
+            ).in_(keys)
+        )
+        .order_by(WalkCellophaneSheet.analysis_id, WalkCellophaneSheet.paint_fp)
+    )
+    return list(await session.scalars(stmt))

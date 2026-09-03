@@ -100,15 +100,21 @@ def test_unapplied_migration_creates_final_schema_without_alter() -> None:
     assert "BEGIN;" in sql and "COMMIT;" in sql
 
 
-def test_no_production_turn_ingestion_route_was_added() -> None:
-    from fastapi import FastAPI
+def test_turns_are_written_through_assistant_query_and_read_back_typed() -> None:
+    """The one execution path carries the chat fields; the read path carries the reply."""
+    from daengs_backend.main import app
 
-    from daengs_backend.routers import chat
+    spec = app.openapi()
+    request_ref = spec["paths"]["/assistant/query"]["post"]["requestBody"]["content"][
+        "application/json"
+    ]["schema"]["$ref"]
+    request_schema = spec["components"]["schemas"][request_ref.rsplit("/", 1)[1]]
+    assert {"chat_session_id", "client_message_id"} <= set(request_schema["properties"])
+    assert "chat_session_id" not in request_schema.get("required", [])
 
-    app = FastAPI()
-    app.include_router(chat.router)
-    paths = app.openapi()["paths"]
-    assert "/app/chats/{session_id}/turns" not in paths
+    turn_schema = spec["components"]["schemas"]["ChatTurnResponse"]
+    assert "public_response" in turn_schema["properties"]
+    assert "AssistantResponse" in str(turn_schema["properties"]["public_response"])
 
 
 def test_documented_limits_match_service_constants() -> None:

@@ -1,4 +1,8 @@
-"""Public schemas for chat session and summary APIs (turn ingestion is not routed yet)."""
+"""Public schemas for chat session and summary APIs.
+
+Turns are *written* through ``POST /assistant/query`` (``schemas/assistant.py``); this module
+only shapes how sessions, turns, and summaries are read back and how summaries are requested.
+"""
 
 import uuid
 from datetime import datetime

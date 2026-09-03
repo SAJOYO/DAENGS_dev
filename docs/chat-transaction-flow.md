@@ -24,15 +24,36 @@ turn의 늦은 완료도 여기서 막힙니다.
 
 ### 같은 `client_message_id`를 다시 받으면
 
-| 기존 turn | 질문 | 결과 |
-| --- | --- | --- |
-| 무엇이든 | **다르다** | `TurnIdempotencyConflictError` — 클라이언트 버그. 조용히 합치지 않습니다 |
-| `completed` | 같다 | 그 행을 돌려줍니다. 호출자는 저장된 `public_response`로 답하고 오케스트레이터를 부르지 않습니다 |
-| `processing` | 같다 | `TurnProcessingError` — 아직 답하는 중이니 기다립니다 |
-| `failed` (stale 포함) | 같다 | `TurnFailedError` — 그 UUID는 탄 것입니다. **새 UUID로** 다시 보냅니다 |
+| 기존 turn | 질문 | 결과 | `/assistant/query` |
+| --- | --- | --- | --- |
+| 무엇이든 | **다르다** | `TurnIdempotencyConflictError` — 클라이언트 버그. 조용히 합치지 않습니다 | 409 `CLIENT_MESSAGE_ID_REUSED` |
+| `completed` | 같다 | 그 행을 돌려줍니다. 호출자는 저장된 `public_response`로 답하고 오케스트레이터를 부르지 않습니다 | 200, 저장된 응답 그대로 |
+| `processing` | 같다 | `TurnProcessingError` — 아직 답하는 중이니 기다립니다 | 409 `TURN_PROCESSING` |
+| `failed` (stale 포함) | 같다 | `TurnFailedError` — 그 UUID는 탄 것입니다. **새 UUID로** 다시 보냅니다 | 409 `TURN_FAILED` (+ `error_code`) |
 
 stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UUID는 "처리 중"으로 보이지도,
 30개 상한을 차지하지도 않습니다.
+
+### `POST /assistant/query`가 이 흐름을 탑니다
+
+본문에 `chat_session_id`와 `client_message_id`가 **함께** 오면 그 호출이 위 네 단계를 밟습니다
+(`services/chat.py run_persisted_turn`). 둘 다 없으면 v0.0.0 그대로 무상태이고 DB를 한 번도
+열지 않습니다. 한쪽만 오면 422입니다. 두 번째 실행 경로(`/app/chats/{id}/turns` 같은 것)는
+만들지 않습니다 — 실행 경로가 둘이면 인증·라우팅·응답 계약이 둘이 됩니다.
+
+- **앱 회원만.** 관리자 토큰은 403 `CHAT_PERSISTENCE_APP_USER_ONLY`. `admin_or_app_user`는
+  토큰만 믿으므로 예약 TX 안에서 회원이 아직 active인지 `current_app_user`와 같은 방식으로
+  다시 확인합니다(아니면 401).
+- **대화의 `pet_id`가 정본.** `active_dog_id`가 다르면 행을 쓰기 전에 409 `ACTIVE_DOG_MISMATCH`,
+  없으면 오케스트레이터에 대화의 강아지를 넣어 줍니다.
+- 질문 2,000자 제한은 **저장하는 요청에만** 겁니다(422 `QUESTION_TOO_LONG`). 무상태 계약은
+  좁히지 않습니다.
+- 오케스트레이션이 예외를 내면 새 TX에서 `ORCHESTRATION_FAILED`로 닫고 예외는 무상태일 때와
+  똑같이 나갑니다. 응답 자체가 `FAILED`면 `ASSISTANT_FAILED`로 닫고 응답은 그대로 돌려줍니다 —
+  공급자 실패는 draft를 활성화하지 않습니다.
+- 완료 TX가 답을 저장하지 못해도(답 8,000자 초과·transcript 초과·이미 닫힌 행) **답은
+  돌려줍니다.** 행이 `error_code`로 이유를 남기고 세션은 활성화되지 않습니다. 전달된 답을
+  사후에 오류로 바꾸지 않습니다.
 
 ### 되살릴 때
 

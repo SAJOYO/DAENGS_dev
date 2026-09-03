@@ -1,12 +1,15 @@
 """Short-transaction rules for product chat persistence (D-046).
 
-External orchestration/Gemini calls are intentionally absent from turn transactions. Summary
-generation uses reserve TX -> close session -> external call -> completion TX.
+External orchestration/Gemini calls are intentionally absent from turn transactions. Both a
+persisted ``/assistant/query`` turn and summary generation use
+reserve TX -> close session -> external call -> completion TX (``run_persisted_turn``,
+``create_summary``).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -14,7 +17,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from daengs_backend.models import ChatSession, ChatSummary, ChatTurn
-from daengs_backend.orchestration.contracts import AssistantResponse, CapabilityStatus
+from daengs_backend.orchestration.contracts import (
+    AssistantResponse,
+    AssistantStatus,
+    CapabilityStatus,
+)
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.services.chat_summary import (
     PROMPT_VERSION,
@@ -44,6 +52,21 @@ class ChatTurnNotFoundError(Exception):
 
 class PetNotOwnedError(Exception):
     pass
+
+
+class AppUserNotActiveError(Exception):
+    """The token is still valid but the member is withdrawn or otherwise not active."""
+
+
+class ActiveDogMismatchError(Exception):
+    """The request's ``active_dog_id`` names a different dog than the conversation's pet.
+
+    The conversation is the durable record; a routing hint cannot re-home it.
+    """
+
+    def __init__(self, session_pet_id: uuid.UUID) -> None:
+        super().__init__(f"active_dog_id differs from the session pet {session_pet_id}")
+        self.session_pet_id = session_pet_id
 
 
 class EmptyConversationError(Exception):
@@ -427,6 +450,94 @@ def _transcript_char_count(turns: list[ChatTurn]) -> int:
     return sum(len(turn.user_content) + len(turn.assistant_content or "") for turn in turns)
 
 
+#: The external call. Receives the session's pet id (as the ``active_dog_id`` the
+#: orchestrator should see) and returns what the user will be shown.
+Orchestrate = Callable[[str], Awaitable[AssistantResponse]]
+
+#: Reasons a delivered answer can no longer be stored. Each one is already recorded on the
+#: turn row (or the row is gone), so the caller still returns the answer instead of turning
+#: a served response into an error after the fact.
+_NOT_STORABLE = (
+    ContentLimitError,
+    TranscriptLimitError,
+    CompletionConflictError,
+    ChatTurnNotFoundError,
+    PetNotOwnedError,
+)
+
+
+async def _close_failed(
+    session: AsyncSession, app_user_id: uuid.UUID, turn_id: uuid.UUID, error_code: str
+) -> None:
+    try:
+        await fail_turn(session, app_user_id, turn_id, error_code=error_code)
+    except (CompletionConflictError, ChatTurnNotFoundError):
+        # Stale recovery or a concurrent writer already closed the row. Never overwrite.
+        pass
+
+
+async def run_persisted_turn(
+    session_factory: async_sessionmaker[AsyncSession],
+    app_user_id: uuid.UUID,
+    *,
+    session_id: uuid.UUID,
+    client_message_id: uuid.UUID,
+    question: str,
+    active_dog_id: str | None,
+    orchestrate: Orchestrate,
+) -> AssistantResponse:
+    """``reserve TX -> close AsyncSession -> orchestrate -> completion/failure TX``.
+
+    No DB session or row lock is alive while ``orchestrate`` runs. An exact replay of a
+    completed turn answers from the stored ``public_response`` and never calls it. The
+    session's pet is authoritative: a conflicting ``active_dog_id`` is refused before any
+    row is written, and the orchestrator always sees the session's pet.
+    """
+    _validate_question(question)
+
+    async with session_factory() as reserve_session:
+        # ``admin_or_app_user`` trusts the token alone. This path filters by identity, so it
+        # repeats the check ``current_app_user`` makes for every other app-owned API: the
+        # member must still be active, and the FOR UPDATE serializes with withdrawal.
+        if await app_user_repo.get_active_for_update(reserve_session, app_user_id) is None:
+            raise AppUserNotActiveError
+        chat_session = await _require_owned_session(reserve_session, app_user_id, session_id)
+        pet_id = str(chat_session.pet_id)
+        if active_dog_id is not None and active_dog_id != pet_id:
+            raise ActiveDogMismatchError(chat_session.pet_id)
+        turn = await reserve_turn(
+            reserve_session,
+            app_user_id,
+            session_id,
+            client_message_id=client_message_id,
+            question=question,
+        )
+        if turn.processing_status == "completed":
+            return AssistantResponse.model_validate(turn.public_response)
+        turn_id = turn.id
+
+    try:
+        response = await orchestrate(pet_id)
+    except Exception:
+        async with session_factory() as failure_session:
+            await _close_failed(failure_session, app_user_id, turn_id, "ORCHESTRATION_FAILED")
+        raise
+
+    if response.status is AssistantStatus.FAILED:
+        # The orchestrator could not answer (router/provider failure). That is a provider
+        # failure with a polite message, not a delivered answer: keep the draft a draft.
+        async with session_factory() as failure_session:
+            await _close_failed(failure_session, app_user_id, turn_id, "ASSISTANT_FAILED")
+        return response
+
+    async with session_factory() as completion_session:
+        try:
+            await complete_turn(completion_session, app_user_id, turn_id, response=response)
+        except _NOT_STORABLE:
+            pass
+    return response
+
+
 def _render_completed_turns(turns: list[ChatTurn]) -> str:
     return render_transcript(
         [(turn.user_content, turn.assistant_content or "") for turn in turns]
@@ -619,6 +730,8 @@ __all__ = [
     "MAX_SESSIONS_PER_PET",
     "MAX_TRANSCRIPT_CHARS",
     "STALE_PROCESSING_AFTER",
+    "ActiveDogMismatchError",
+    "AppUserNotActiveError",
     "ChatSessionNotFoundError",
     "ChatSummaryNotFoundError",
     "ChatTurnNotFoundError",
@@ -626,6 +739,7 @@ __all__ = [
     "ContentLimitError",
     "EmptyConversationError",
     "ExistingSummaryError",
+    "Orchestrate",
     "PetNotOwnedError",
     "SummaryProcessingError",
     "SummaryRequestConflictError",
@@ -651,4 +765,5 @@ __all__ = [
     "public_response_of",
     "reserve_summary",
     "reserve_turn",
+    "run_persisted_turn",
 ]

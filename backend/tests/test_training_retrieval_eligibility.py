@@ -6,6 +6,9 @@ pagination strip.  After the markdown-link strip only the bold current page
 number ("**2**") remained, and a digit satisfied the old "any Hangul, letter or
 digit" check.  No corpus text is copied here; the fixtures mimic the shape only.
 No model and no database are involved.
+
+The invariant: evidence is prose, and prose has letters (Korean or Latin).  Bare
+numbers, markup or navigation residue are not evidence; English prose is.
 """
 
 from __future__ import annotations

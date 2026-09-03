@@ -19,8 +19,8 @@ REGION_PATH = "/v2/local/geo/coord2regioncode.json"
 TRANSCOORD_PATH = "/v2/local/geo/transcoord.json"
 
 
-def parse_region(payload: Any) -> str | None:
-    """행정동 이름. 없으면 `None`.
+def _document(payload: Any) -> dict | None:
+    """쓸 문서 하나.
 
     `region_type` 이 둘이다 — `'B'` 는 법정동, `'H'` 는 행정동. **행정동(H)을 고른다.**
     사람이 "우리 동네"라고 부르는 단위이고, 지자체 지원·특보구역 매핑도 행정 단위를 쓴다.
@@ -30,8 +30,34 @@ def parse_region(payload: Any) -> str | None:
     for want in ("H", "B"):
         for doc in documents:
             if doc.get("region_type") == want and doc.get("region_3depth_name"):
-                return str(doc["region_3depth_name"])
+                return doc
     return None
+
+
+def parse_region(payload: Any) -> str | None:
+    """행정동 이름. 없으면 `None`."""
+    doc = _document(payload)
+    return str(doc["region_3depth_name"]) if doc else None
+
+
+def parse_region_parts(payload: Any) -> tuple[str | None, str | None, str | None]:
+    """`(시도, 시군구, 행정동)`. 표기가 아니라 **조회 키**다 (RT-003).
+
+    특보구역 매핑표가 시군구(`'강남구'`)와 읍면동(`'문산읍'`) 두 단위를 섞어 쓰고, 같은
+    이름이 도시마다 있어(`'중구'`) 시도까지 있어야 가른다 — `warning_areas.lookup` 참조.
+    표기용 `parse_region` 과 갈라 두는 이유는 그쪽의 뜻(사람에게 보일 동네 이름)을 안 바꾸기
+    위해서다.
+
+    **시도는 정식명 그대로 낸다** (`'서울특별시'`). 단축명으로 줄이는 것은
+    `kma_apihub.sido_of` 인데, 그걸 여기서 부르면 provider 가 provider 를 알게 된다 —
+    "모듈 하나 = 서비스 하나"(`collect.py` 머리)가 깨지는 자리다. 정규화는 조립층이 한다.
+    """
+    doc = _document(payload)
+    if doc is None:
+        return None, None, None
+    sido = str(doc.get("region_1depth_name") or "") or None
+    sigungu = str(doc.get("region_2depth_name") or "") or None
+    return sido, sigungu, str(doc["region_3depth_name"])
 
 
 def parse_transcoord(payload: Any) -> tuple[float, float] | None:

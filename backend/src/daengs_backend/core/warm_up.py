@@ -10,7 +10,7 @@
 그래서 **이미 예열을 부르고 있는 `main.py` 가** 결과를 여기 담아 `app.state` 에 놓고,
 `services/status.py` 는 `daengs_life` 를 모른 채 그것만 읽습니다. 접점은 안 늘어납니다.
 
-D-021 2단계로 `/ask` 가 별도 프로세스로 나가면 이 항목은 place·journey 처럼
+D-021 2단계로 `/life/ask` 가 별도 프로세스로 나가면 이 항목은 place·journey 처럼
 HTTP 로 물어보는 항목이 됩니다 — 그때 지워질 모듈이라 작게 둡니다.
 """
 
@@ -28,22 +28,22 @@ class WarmUpPhase(StrEnum):
     """예열이 지금 어디에 있나.
 
     **`DISABLED` 는 고장이 아닙니다.** `DAENGS_WARM_UP_ENCODER=false` 인 개발 PC 에서는
-    아무도 예열하지 않고 **첫 `/ask` 요청이 로드를 무는 것이 설계**입니다
+    아무도 예열하지 않고 **첫 `/life/ask` 요청이 로드를 무는 것이 설계**입니다
     (`daengs_life/app/deps.py` 의 `_WARM_UP_IN_PROGRESS` 주석). 화면에서 이것을 빨갛게
     칠하면 개발 PC 가 늘 고장 나 보입니다.
 
-    **`FAILED` 는 대개 `ml` 그룹이 없는 것입니다.** 그때 죽는 것은 `/ask` 하나뿐이고
+    **`FAILED` 는 대개 `ml` 그룹이 없는 것입니다.** 그때 죽는 것은 `/life/ask` 하나뿐이고
     로그인도 `/walk` 도 멀쩡합니다 (D-021). 그래서 이 항목만 down 이고 다른 항목은
     영향을 받지 않습니다.
     """
 
-    #: 예열을 끄고 떴다. 첫 `/ask` 가 로드를 문다 (설계).
+    #: 예열을 끄고 떴다. 첫 `/life/ask` 가 로드를 문다 (설계).
     DISABLED = "disabled"
-    #: 올리는 중. 이 동안 들어온 `/ask` 는 기다리지 않고 503 + `Retry-After` 다 (#37).
+    #: 올리는 중. 이 동안 들어온 `/life/ask` 는 기다리지 않고 503 + `Retry-After` 다 (#37).
     LOADING = "loading"
     #: 올라왔다.
     READY = "ready"
-    #: 못 올렸다. `/ask` 만 503 이 된다.
+    #: 못 올렸다. `/life/ask` 만 503 이 된다.
     FAILED = "failed"
 
 

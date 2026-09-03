@@ -1,4 +1,4 @@
-"""`GET /walk` 의 공개 계약 (RT-001 ⑥ · RAG-027 의 V 층).
+"""`GET /life/walk-conditions` 의 공개 계약 (RT-001 ⑥ · RAG-027 의 V 층).
 
 **도메인 타입을 그대로 내보내지 않는 이유가 이 파일의 존재 이유다.** `Verdict` 를 직렬화해서
 보내면 ②-d(값의 표현)를 손대는 날 API 가 같이 깨진다 — `Interval` 을 다른 모양으로 바꾸거나
@@ -108,7 +108,7 @@ class SourceOut(BaseModel):
 
 
 class WalkOut(BaseModel):
-    """`GET /walk` 응답 전체. 엔드포인트가 **하나**이고 타임라인째로 준다 (⑥).
+    """`GET /life/walk-conditions` 응답 전체. 엔드포인트가 **하나**이고 타임라인째로 준다 (⑥).
 
     `now` 만 필요한 클라이언트는 `timeline` 을 무시하면 된다. 시각마다 부르게 만들면
     **추가 API 호출은 0인데 왕복만 24번** 는다.

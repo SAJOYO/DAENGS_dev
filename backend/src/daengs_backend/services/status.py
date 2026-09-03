@@ -150,7 +150,7 @@ async def _db(session: AsyncSession) -> tuple[StatusState, str]:
 
 def _warm_up_item(warm_up: WarmUp | None) -> StatusItem:
     """임베딩 예열. **`app.state` 만 읽습니다** (`core/warm_up.py` 가 이유를 갖고 있습니다)."""
-    name, label = "warm-up", "임베딩 모델 (/ask)"
+    name, label = "warm-up", "임베딩 모델 (/life/ask)"
     if warm_up is None:
         return StatusItem(name, label, StatusState.DEGRADED,
                           "예열 기록이 없습니다 — lifespan 을 거치지 않고 뜬 프로세스입니다.")
@@ -162,14 +162,14 @@ def _warm_up_item(warm_up: WarmUp | None) -> StatusItem:
                           else "올라와 있습니다.")
     if warm_up.phase is WarmUpPhase.LOADING:
         return StatusItem(name, label, StatusState.DEGRADED,
-                          f"올리는 중입니다 ({took:.0f}초째). 그동안 `/ask` 는 503 입니다."
-                          if took is not None else "올리는 중입니다. 그동안 `/ask` 는 503 입니다.")
+                          f"올리는 중입니다 ({took:.0f}초째). 그동안 `/life/ask` 는 503 입니다."
+                          if took is not None else "올리는 중입니다. 그동안 `/life/ask` 는 503 입니다.")
     if warm_up.phase is WarmUpPhase.DISABLED:
         return StatusItem(name, label, StatusState.ABSENT,
                           "예열을 끄고 떴습니다 (DAENGS_WARM_UP_ENCODER=false). "
-                          "첫 `/ask` 요청이 로드를 뭅니다 — 설계입니다.")
+                          "첫 `/life/ask` 요청이 로드를 뭅니다 — 설계입니다.")
     return StatusItem(name, label, StatusState.DOWN,
-                      "못 올렸습니다 — `/ask` 만 503 이고 다른 API 는 멀쩡합니다. "
+                      "못 올렸습니다 — `/life/ask` 만 503 이고 다른 API 는 멀쩡합니다. "
                       "대개 `ml` 그룹이 없는 것입니다 (`uv sync --group ml`).")
 
 
@@ -227,7 +227,10 @@ def _redis_budget_sync() -> dict[str, int]:
 
 
 async def _place() -> tuple[StatusState, str]:
-    return await _probe(settings.place_service_url, ["/health", "/health/ready"])
+    """**Place discovery 가 실제로 부르는 주소와 같은 설정**을 봅니다
+    (`config.place_search_base_url`). 상태 화면이 딴 곳을 두들기면 "살아 있다" 가
+    거짓이 됩니다."""
+    return await _probe(settings.place_search_base_url, ["/health", "/health/ready"])
 
 
 async def _journey() -> tuple[StatusState, str]:

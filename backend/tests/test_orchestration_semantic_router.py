@@ -20,6 +20,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityResult,
     CapabilityStatus,
     LifePayload,
+    PlacePayload,
     PrincipalContext,
     RouterKind,
     TrainingPayload,
@@ -33,6 +34,7 @@ from daengs_backend.orchestration.semantic import (
     SemanticRoutingDecision,
     SemanticRoutingError,
     build_semantic_router_prompt,
+    validate_semantic_decision,
 )
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
@@ -207,7 +209,11 @@ async def test_multiple_execute_with_multiple_handoffs() -> None:
     assert response.status == AssistantStatus.ANSWERED
     assert len(response.results) == 3
     assert [h.target for h in response.handoffs] == ["skin", "gait"]
-    assert all(len(adapter.calls) == 1 for adapter in adapters.values())
+    assert all(
+        len(adapters[name].calls) == 1
+        for name in (CapabilityName.TRAINING, CapabilityName.LIFE, CapabilityName.WALK)
+    )
+    assert adapters[CapabilityName.PLACE].calls == []
 
 
 async def test_empty_semantic_decision_preserves_empty_route_plan_behavior() -> None:
@@ -290,11 +296,46 @@ async def test_deterministic_handoff_signal_resolves_to_a_handoff() -> None:
     assert plan.requests == []
 
 
-async def test_unresolved_signal_falls_back_to_semantic_routing() -> None:
+async def test_unknown_signal_falls_back_to_semantic_routing() -> None:
     service, transport, _ = build_service(decision(["training"]))
-    response = await service.run(query=QUERY, principal=PRINCIPAL, requested_capability="place")
+    response = await service.run(query=QUERY, principal=PRINCIPAL, requested_capability="calendar")
     assert response.status == AssistantStatus.ANSWERED
     assert len(transport.prompts) == 1
+
+
+async def test_requested_place_resolves_without_changing_the_semantic_schema() -> None:
+    service, transport, adapters = build_service()
+    response = await service.run(
+        query="  조용한 곳  ",
+        principal=PRINCIPAL,
+        requested_capability="place",
+        context=dict(LOCATION),
+    )
+    assert response.status == AssistantStatus.ANSWERED
+    assert transport.prompts == []
+    [request] = adapters[CapabilityName.PLACE].calls
+    assert request.payload == PlacePayload(
+        query="  조용한 곳  ", lat=37.5665, lon=126.978
+    )
+
+
+async def test_requested_place_without_coordinates_clarifies_without_gemini() -> None:
+    service, transport, adapters = build_service()
+    response = await service.run(
+        query="조용한 곳", principal=PRINCIPAL, requested_capability="place"
+    )
+    assert response.status == AssistantStatus.CLARIFY
+    assert response.clarify is not None
+    assert response.clarify.missing == ["location.lat", "location.lon"]
+    assert transport.prompts == []
+    assert all(not adapter.calls for adapter in adapters.values())
+
+
+def test_place_is_not_yet_a_semantic_router_destination() -> None:
+    schema = SemanticRoutingDecision.model_json_schema()
+    execute_items = schema["properties"]["execute"]["items"]
+    assert execute_items["enum"] == ["training", "life", "walk"]
+    assert validate_semantic_decision(decision(["place"])) is None
 
 
 # ----------------------------------------------------------- plan/observability
@@ -322,7 +363,7 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
             "note": "unapproved",
         },
     )
-    assert QUERY in prompt and "semantic-router-ko-v4" in prompt
+    assert QUERY in prompt and "semantic-router-ko-v6" in prompt
     metadata_line = next(
         line for line in prompt.splitlines() if line.startswith("ROUTING_METADATA:")
     )

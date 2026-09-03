@@ -2,7 +2,7 @@
 
 **`daengs_life` 를 import 하지 않습니다.** CLAUDE.md 가 "`daengs_backend` 가 `daengs_life` 를
 부르는 접점은 `main.py` 의 세 줄뿐"이라고 못박아 두었고, 그 선을 태스크 하나 부르자고 넘으면
-D-021 2단계(`/ask` 를 별도 프로세스로 떼기)가 그만큼 비싸집니다. 대신 브로커에 **태스크 이름
+D-021 2단계(`/life/ask` 를 별도 프로세스로 떼기)가 그만큼 비싸집니다. 대신 브로커에 **태스크 이름
 문자열**을 던집니다 — 워커 쪽이 `@app.task(name="daengs_life.tasks.crawl.crawl_due")` 로 그
 이름을 명시하고 있어서 그 문자열이 계약입니다.
 

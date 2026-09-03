@@ -27,7 +27,31 @@ class TrainingCapabilityAdapter:
         self._service = service or TrainingRagService()
 
     async def run(self, request: CapabilityRequest, *, request_id: str) -> CapabilityResult:
+        """One capability run = one telemetry trace.
+
+        The trace id is random and request-scoped (telemetry module docstring); it is not
+        the orchestration ``request_id`` and never reaches the ``CapabilityResult``.  The
+        result itself is built exactly as before — the two records emitted here are the
+        only addition.  The import is function-local so the planning layer stays free of
+        ``daengs_training`` at import time (test_importing_the_planning_layer_stays_light).
+        """
+        from daengs_training import telemetry
+
         started = time.perf_counter()
+        with telemetry.training_trace() as trace:
+            result = await self._execute(request, request_id=request_id, started=started)
+            trace.emit(telemetry.EVENT_ADAPTER_TOTAL, duration_ms=_elapsed_ms(started))
+            trace.emit(
+                telemetry.EVENT_FINAL,
+                result_status=result.status.value,
+                code=_outcome_code(result),
+                elapsed_ms=result.elapsed_ms,
+            )
+        return result
+
+    async def _execute(
+        self, request: CapabilityRequest, *, request_id: str, started: float
+    ) -> CapabilityResult:
         payload = request.payload
         if not isinstance(payload, TrainingPayload):
             return self._error(started, "invalid_payload", "Training payload is invalid")
@@ -85,6 +109,17 @@ class TrainingCapabilityAdapter:
 
 def _elapsed_ms(started: float) -> int:
     return int((time.perf_counter() - started) * 1_000)
+
+
+def _outcome_code(result: CapabilityResult) -> str:
+    """The canonical reason/kind code already carried by the result — never its message."""
+    if result.abstention is not None:
+        return result.abstention.code
+    if result.refusal is not None:
+        return result.refusal.code
+    if result.error is not None:
+        return result.error.kind
+    return "-"
 
 
 __all__ = ["TrainingCapabilityAdapter"]

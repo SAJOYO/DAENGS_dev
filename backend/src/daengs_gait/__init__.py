@@ -12,7 +12,7 @@ compose 의 `gait-analysis` 서비스가 `daengs_gait.service` 를 자기 프로
     uv run --no-sync gait-serve --host 0.0.0.0 --port 8000
 
 ⚠️ **여기서 `daengs_backend` 를 import 하지 마세요.** 그 순간 격리가 깨집니다.
-   D-029 가 지키려던 것은 "영상 분석(분 단위 CPU)이 넘어질 때 로그인과 `/ask` 까지
+   D-029 가 지키려던 것은 "영상 분석(분 단위 CPU)이 넘어질 때 로그인과 `/life/ask` 까지
    같이 넘어지지 않는 것"이고, D-038 은 그 취지를 그대로 유지합니다.
    반대 방향(`daengs_backend` → `daengs_gait`)도 마찬가지입니다 — 지금 접점은 **0 개**이고,
    늘려야 할 것 같으면 그 전에 D-038 을 다시 보세요.

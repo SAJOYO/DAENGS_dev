@@ -313,6 +313,21 @@ class TestSessionFlow:
     ) -> None:
         body = _login(client).json()
         access, refresh = body["access_token"], body["refresh_token"]
+        owner = store.app_users[KAKAO_ID]
+        chat_session_id = uuid.uuid4()
+        store.chat_sessions.append(
+            type(
+                "StoredChatSession",
+                (),
+                {"id": chat_session_id, "app_user_id": owner.id},
+            )()
+        )
+        store.chat_turns.append(
+            type("StoredChatTurn", (), {"session_id": chat_session_id})()
+        )
+        store.chat_summaries.append(
+            type("StoredChatSummary", (), {"app_user_id": owner.id})()
+        )
 
         res = client.post(
             "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
@@ -322,6 +337,9 @@ class TestSessionFlow:
         user = store.app_users[KAKAO_ID]
         assert user.status == "withdrawn"
         assert user.email_enc is None and user.email_hash is None
+        assert store.chat_sessions == []
+        assert store.chat_turns == []
+        assert store.chat_summaries == []
         # 세션도 같이 끊겨야 합니다 — status 는 '새 로그인'만 막습니다.
         assert client.post(
             "/auth/app/refresh", json={"refresh_token": refresh}

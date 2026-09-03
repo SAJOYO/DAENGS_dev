@@ -212,8 +212,10 @@ o 폭염주의보 : 경기도(광명, 과천, …) …
 
 `getWthrWrnList` 도 `title` 에 `"[특보] 제08-290호 : 2026.08.24.10:00 / 폭염경보 변경·폭염주의보 발표"`
 로 들어온다. 구조화된 것은 `stnId`·`tmFc`·`tmSeq` 뿐이다. → 특보 provider 는 **텍스트 파싱 +
-"특보구역명 ↔ 내 행정구역" 매핑**을 져야 하고, `data/reference/` 캐시 대상이 측정소 목록 외에
-**하나 더 생긴다** (특보구역 매핑표).
+"특보구역명 ↔ 내 행정구역" 매핑**을 져야 한다. **RT-003 이 채웠다** — 출처는 날씨누리
+특보구역 안내(`weather.go.kr/w/forecast/guide/wrn-area.do?stn=`)이고, 표는 `data/reference/`
+가 아니라 `realtime/warning_areas.csv` 에 둔다(배포마다 `DATA_DIR` 이 다르다 — RT-003 ②).
+data.go.kr 의 특보구역 파일데이터는 코드·이름만 있고 관할 시군구가 없어 못 쓴다.
 
 **D 등급이 두 벌인 이유.** 강남구 측정소 실측 — PM10 `37` 인데 `pm10Grade=1`(좋음),
 `pm10Grade1h=2`(보통), `pm10Value24=27`. 즉 **`Grade` 는 24시간 평균 기준, `Grade1h` 가 현재 기준**이다.
@@ -390,7 +392,7 @@ tm            stn  WD1    WS1  WDS    WSS  WD10   WS10 TA    RE     RN-15m/60m/1
 반대로 `getUVIdxV3` 는 `requestCode` 값을 **무시한다**(A01·A07 어느 쪽이든 같은 응답) —
 둘이 같은 봉투를 쓰므로 한 곳에서 붙이되 무시되는 쪽에 해가 없다는 것을 확인했다.
 
-### 6.10 연동 확인 (2026-08-25) — 실서버 `GET /walk` 3지역
+### 6.10 연동 확인 (2026-08-25) — 실서버 `GET /walk` 3지역 (경로는 #176 으로 `/life/walk-conditions`)
 
 `uvicorn main:app` 에 역삼·해운대·제주를 날린 결과다. **`docs/life/data-sources.md` §8 의 근거가 이것이다.**
 

@@ -93,7 +93,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
 | `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | 기본은 셋 다 **비웁니다** (= `none`, `/app/gait/*` 가 503 — 안전합니다). 임시 LocalBridge 로 새 흐름을 검증할 때만 `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** 진짜 저장소는 GCS 이고 버킷은 #78 대기입니다 |
-| `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
+| `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/life/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:
 
@@ -128,7 +128,7 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker
+  gait-analysis gait-worker territory-vision-worker
 
 # ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
 #   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
@@ -193,7 +193,7 @@ done
 | `/app/walks` (POST) | 401 | 〃 |
 | `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
 
-`/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
+`/life/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
 
 `/app/gait/*` 의 영상 분석은 분 단위입니다 — 504 가 나면 `api-locations.inc` 의
 `/app/gait/` 타임아웃(600s)이 실제로 반영됐는지부터 보세요 (§6 의 inode 함정).
@@ -241,7 +241,8 @@ done
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker
+      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      territory-vision-worker
     ```
 
     ⚠ **서비스 이름을 반드시 적습니다.** 인자 없이 `up -d` 하면 `crawler-worker`·
@@ -251,6 +252,8 @@ done
     스케줄을 발사하게 됩니다.
     ⚠ **`gait-worker`** 는 D-043 으로 생긴 서비스입니다. 빠뜨리면 웹만 새 코드가 되고
     워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
+    **`territory-vision-worker`** 도 같은 배포 단위입니다. 빠뜨리면 confirm은 성공하지만
+    앱의 점령지 인증이 `VISION_PENDING`에서 끝나지 않습니다.
   - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → **컨테이너를
     재생성합니다. `reload` 로는 반영되지 않습니다.**
 

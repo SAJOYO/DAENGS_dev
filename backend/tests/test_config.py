@@ -38,6 +38,17 @@ def test_legacy_database_url_is_rejected() -> None:
         _settings(DAENGS_DATABASE_URL="postgresql+asyncpg://a:b@c:5432/d")
 
 
+def test_place_discovery_uses_compose_dns_and_an_independent_timeout_by_default() -> None:
+    configured = _settings()
+    assert configured.place_search_base_url == "http://place-search:8000"
+    assert configured.place_discovery_timeout_ms == 15_000
+
+
+def test_place_discovery_timeout_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        _settings(place_discovery_timeout_ms=0)
+
+
 def test_load_error_names_the_field_but_not_the_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

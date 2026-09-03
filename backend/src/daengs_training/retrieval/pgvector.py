@@ -132,7 +132,14 @@ class RuntimeRetriever:
             return False
         if re.search(r"[A-Za-z0-9+/=]{128,}", clean):
             return False
-        return bool(re.search(r"[가-힣A-Za-z0-9]", clean))
+        # A board's pagination strip survives the link strip as its current page
+        # number in bold ("**2**").  Measured 2026-09-03 on the serving corpus:
+        # three such chunks were eligible, and for short casual queries
+        # ("자꾸 깨물어요", "손 물어요", "옷을 물어뜯어요") they took one to three
+        # of the four evidence slots — a digit satisfied the old check.  Prose
+        # evidence in this corpus always carries Hangul; a chunk with none is
+        # navigation, not evidence.
+        return bool(re.search(r"[가-힣]", clean))
 
     def search(self, question: str, top_k: int=5):
         vec=self.model.encode("query: "+question,normalize_embeddings=True)

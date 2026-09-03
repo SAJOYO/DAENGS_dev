@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from daengs_place.ingest.territory_sites import replace, select
+from daengs_place.ingest.territory_sites import replace, select, validate_site_count
 from daengs_place.territory.grid import TERRITORY_SITE_RADIUS_U, hex_cell, site_id
 
 
@@ -56,3 +56,15 @@ def test_exact_coordinate_tie_uses_metadata_instead_of_input_order() -> None:
 async def test_empty_snapshot_cannot_delete_the_current_gameboard() -> None:
     with pytest.raises(ValueError, match="빈 점령지 스냅샷"):
         await replace([])
+
+
+def test_fixed_snapshot_requires_the_exact_selected_site_count() -> None:
+    validate_site_count(362_309, expected=362_309)
+
+    with pytest.raises(ValueError, match="예상 건수 362,309개와 다릅니다"):
+        validate_site_count(362_308, expected=362_309)
+
+
+def test_snapshot_below_the_production_floor_is_rejected() -> None:
+    with pytest.raises(ValueError, match="교체 하한 300,000개보다 작습니다"):
+        validate_site_count(299_999)

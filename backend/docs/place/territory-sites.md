@@ -21,25 +21,40 @@
 
 Alembic `0021`은 과거 `anchor` 테이블을 `territory_site`로, `cell`을 `site_id`로 바꾸되
 행의 격자 세대는 보존합니다. 115u 행을 140u로 재명명하지 않습니다. 현행 게임판은 원본
-보안등 NDJSON에서 다시 선별해 아래 명령으로 원자적으로 교체합니다.
+보안등 NDJSON에서 다시 선별해 원자적으로 교체합니다. 운영 서버에서는 Actions의
+**Territory Site gameboard sync**를 수동 실행합니다. 이 workflow가 아래 네 값을 코드에
+함께 고정하고, 하나라도 다르면 DB를 건드리기 전에 실패합니다.
+
+- Geo 공개 릴리스 태그와 파생 스냅샷 파일명
+- 압축 파일 SHA-256
+- 선별 결과의 정확한 건수(현행 362,309건)
+- `territory-site:hex-v1:140:*` 격자 세대
+
+스냅샷 변경은 workflow 상수 변경 PR로 리뷰합니다. 운영 입력을 자유 형식 URL로 받지 않습니다.
+[현행 140u 릴리스](https://github.com/rkbuhtig/DAENGS_geo/releases/tag/territory-sites-140u-20260903)는
+원본 전체가 아니라 셀당 한 시설만 남긴 파생 NDJSON이며, 적재가 끝나면 러너와 컨테이너의
+임시 파일을 모두 지웁니다. 로컬에서 같은 검증을 재현하려면 다음처럼 실행합니다.
 
 ```powershell
 $containerPath = '/tmp/territory-lamps.ndjson'
 docker cp <원본.ndjson> "daengs-place-search:${containerPath}"
 try {
   docker compose exec -T place-search uv run --no-sync `
-    python -m daengs_place.ingest.territory_sites $containerPath --dry-run
+    python -m daengs_place.ingest.territory_sites $containerPath `
+      --expected-sites 362309 --dry-run
   docker compose exec -T place-search uv run --no-sync `
-    python -m daengs_place.ingest.territory_sites $containerPath
+    python -m daengs_place.ingest.territory_sites $containerPath `
+      --expected-sites 362309
 } finally {
   docker compose exec -T place-search rm -f $containerPath
 }
 ```
 
 교체는 한 DB 트랜잭션입니다. 선별이나 INSERT가 실패하면 기존 `lamp` 게임판을 유지합니다.
-잘린 원본으로 전국 게임판을 덮지 않도록 기본 30만 개 미만 스냅샷도 거부합니다. 의도적으로
-더 작은 전국 스냅샷을 채택할 때만 측정 후 `--minimum-sites`를 명시적으로 낮춥니다. 원본 파일
-자체는 저장소와 컨테이너에 정본으로 남기지 않습니다.
+잘린 원본으로 전국 게임판을 덮지 않도록 기본 30만 개 미만 스냅샷도 거부합니다. 운영에서는
+하한뿐 아니라 `--expected-sites`로 정확한 건수까지 확인합니다. 의도적으로 더 작은 전국
+스냅샷을 채택할 때만 측정 후 `--minimum-sites`와 고정 건수를 함께 바꿉니다. 원본 파일 자체는
+저장소와 컨테이너에 정본으로 남기지 않습니다.
 
 ## 배포 확인
 

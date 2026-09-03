@@ -20,6 +20,7 @@ MOIS와 같은 원칙: 사용자 검색 시 호출 없음, 배치 전용. 좌표
 import argparse
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from urllib.parse import unquote
 
@@ -31,15 +32,29 @@ from daengs_place.core.config import settings
 from daengs_place.core.db import SessionLocal
 from daengs_place.ingest.facility_store import prune_unseen, update_pet_detail, upsert_rows
 from daengs_place.ingest.linking import rebuild_links
+from daengs_place.ingest.source_record_store import (
+    pending_detail_refs,
+    prune_source_records,
+    record_detail_result,
+    upsert_source_records,
+)
 from daengs_place.place.source_catalog import (
     KTO_KINDS as KINDS,
 )
+from daengs_place.place.source_facts.states import DetailAcquisitionState
 
 SOURCE = "public:kto:pet_tour"
 BASE_URL = "https://apis.data.go.kr/B551011/KorPetTourService2"
 
+
 class KtoApiError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class DetailFetchResult:
+    state: DetailAcquisitionState
+    detail: dict | None = None
 
 
 def _params(**extra: str) -> dict:
@@ -86,29 +101,29 @@ async def fetch_sync_list(client: httpx.AsyncClient) -> list[dict]:
         page += 1
 
 
-async def fetch_pet_detail(client: httpx.AsyncClient, content_id: str) -> dict | None:
-    """429(트래픽 제한)는 백오프 후 재시도, 그래도 안 되면 포기하고 None.
+async def fetch_pet_detail(client: httpx.AsyncClient, content_id: str) -> DetailFetchResult:
+    """상세 payload와 획득 실패/no-data를 구분한다.
 
     상세는 보강이지 본체가 아니다 — 상세 실패로 적재 전체가 죽으면 안 된다.
     """
     for attempt in range(4):
-        r = await client.get(
-            f"{BASE_URL}/detailPetTour2", params=_params(contentId=content_id)
-        )
+        r = await client.get(f"{BASE_URL}/detailPetTour2", params=_params(contentId=content_id))
         if r.status_code == 429:
             await asyncio.sleep(1.0 * (2**attempt))
             continue
         r.raise_for_status()
         break
     else:
-        return None
+        return DetailFetchResult(DetailAcquisitionState.FETCH_FAILED)
     item = (_body(r.json()).get("items") or {}).get("item") or []
     if isinstance(item, dict):
         item = [item]
     if not item:
-        return None
+        return DetailFetchResult(DetailAcquisitionState.NO_DATA)
     detail = {k: v for k, v in item[0].items() if v not in ("", None) and k != "contentid"}
-    return detail or None
+    if not detail:
+        return DetailFetchResult(DetailAcquisitionState.NO_DATA)
+    return DetailFetchResult(DetailAcquisitionState.FETCHED, detail)
 
 
 def parse_item(item: dict) -> dict | None:
@@ -147,7 +162,7 @@ def parse_item(item: dict) -> dict | None:
         "parking": None,
         "indoor": None,
         "outdoor": None,
-        "pet": "{}",                          # 빈 상세는 기존 상세를 덮지 않는다
+        "pet": "{}",  # 빈 상세는 기존 상세를 덮지 않는다
         "lat": lat,
         "lng": lng,
         "last_written": written,
@@ -156,35 +171,77 @@ def parse_item(item: dict) -> dict | None:
     }
 
 
+def source_records(items: list[dict]) -> list[dict]:
+    """제품 필터 전 KTO sync-list를 안정 contentid별 shadow record로 만든다."""
+
+    records: dict[str, dict] = {}
+    for item in items:
+        content_id = str(item.get("contentid") or "").strip()
+        if not content_id:
+            continue
+        if content_id in records:
+            records[content_id]["occurrence_count"] += 1
+            records[content_id]["listing_raw"] = dict(item)
+        else:
+            records[content_id] = {
+                "record_ref": content_id,
+                "source_ref": content_id,
+                "listing_raw": dict(item),
+                "occurrence_count": 1,
+            }
+    return list(records.values())
+
+
 def watermark_of(rows: list[dict]) -> str | None:
     stamps = [r["modified"] for r in rows if r.get("modified")]
     return max(stamps) if stamps else None
 
 
 async def _missing_detail_refs(session: AsyncSession, limit: int) -> list[str]:
-    """상세가 아직 없는 행부터 채운다 — 매 실행 같은 앞부분만 반복하지 않게."""
-    rows = await session.execute(
-        text("""SELECT source_ref FROM facility
-                WHERE source = 'kto' AND (pet IS NULL OR pet = '{}'::jsonb)
-                ORDER BY source_ref LIMIT :limit"""),
-        {"limit": limit},
-    )
-    return [r.source_ref for r in rows]
+    """shadow 획득 상태가 미시도·실패·legacy unknown인 행만 고른다."""
+
+    return await pending_detail_refs(session, "kto", limit, require_facility=True)
+
+
+async def _prune_after_listing(
+    session: AsyncSession, mode: str, observed_at: datetime
+) -> tuple[int, int]:
+    """제품은 full에서만, 전량 관측한 shadow는 성공한 매 실행마다 정리한다."""
+
+    product_pruned = await prune_unseen(session, "kto", observed_at) if mode == "full" else 0
+    source_pruned = await prune_source_records(session, "kto", observed_at)
+    return product_pruned, source_pruned
 
 
 async def _run(mode: str, details: int) -> None:
     synced_at = datetime.now(UTC)
     async with SessionLocal() as session:
-        prior = (await session.execute(
-            text("SELECT watermark FROM ingest_state WHERE source = :s"), {"s": SOURCE}
-        )).scalar_one_or_none()
+        prior = (
+            await session.execute(
+                text("SELECT watermark FROM ingest_state WHERE source = :s"), {"s": SOURCE}
+            )
+        ).scalar_one_or_none()
 
         async with httpx.AsyncClient(timeout=20.0) as client:
             items = await fetch_sync_list(client)
-            rows = [r for r in (parse_item(x) for x in items) if r is not None]
-            if not rows:
+            all_rows = [r for r in (parse_item(x) for x in items) if r is not None]
+            if not all_rows:
                 raise SystemExit("refusing empty KTO snapshot")
-            fetched = len(rows)
+            fetched = len(all_rows)
+            raw_records = source_records(items)
+            snapshot = synced_at.date().isoformat()
+            source_stored = await upsert_source_records(
+                session,
+                "kto",
+                raw_records,
+                snapshot,
+                synced_at,
+                detail_state=DetailAcquisitionState.NOT_FETCHED,
+                preserve_detail=True,
+                detail_version_field="modifiedtime",
+            )
+
+            rows = all_rows
             if mode == "incremental" and prior:
                 rows = [r for r in rows if r["modified"] > prior]
 
@@ -196,28 +253,50 @@ async def _run(mode: str, details: int) -> None:
                 session,
                 "kto",
                 rows,
-                synced_at.date().isoformat(),
+                snapshot,
                 synced_at,
                 preserve_empty_pet=True,
             )
-            # full 에서만 정리한다. 증분은 안 바뀐 행을 안 건드리므로 prune 하면 다 지워진다.
-            pruned = await prune_unseen(session, "kto", synced_at) if mode == "full" else 0
+            # 제품 rows는 증분 필터를 거쳤지만 raw_records는 매번 전체 목록을 관측했다.
+            pruned, source_pruned = await _prune_after_listing(session, mode, synced_at)
 
             got_details = 0
+            detail_no_data = 0
+            detail_failed = 0
             if details > 0:
                 await session.flush()
                 for ref in await _missing_detail_refs(session, details):
+                    attempted_at = datetime.now(UTC)
                     try:
-                        pet = await fetch_pet_detail(client, ref)
+                        result = await fetch_pet_detail(client, ref)
                     except (httpx.HTTPError, KtoApiError):
+                        detail_failed += await record_detail_result(
+                            session,
+                            "kto",
+                            ref,
+                            DetailAcquisitionState.FETCH_FAILED,
+                            attempted_at,
+                        )
                         continue
-                    if pet:
+                    await record_detail_result(
+                        session,
+                        "kto",
+                        ref,
+                        result.state,
+                        attempted_at,
+                        result.detail,
+                    )
+                    if result.state is DetailAcquisitionState.FETCHED:
                         got_details += await update_pet_detail(
                             session,
                             "kto",
                             ref,
-                            json.dumps(pet, ensure_ascii=False),
+                            json.dumps(result.detail, ensure_ascii=False),
                         )
+                    elif result.state is DetailAcquisitionState.NO_DATA:
+                        detail_no_data += 1
+                    else:
+                        detail_failed += 1
                     await asyncio.sleep(0.15)
 
         linked = await rebuild_links(session)
@@ -232,19 +311,38 @@ async def _run(mode: str, details: int) -> None:
             )
         await session.commit()
 
-    print(json.dumps(
-        {"source": SOURCE, "mode": mode, "since": prior, "received": len(items),
-         "usable": fetched, "applied": stored, "pruned": pruned,
-         "pet_details": got_details, "watermark": watermark, **linked},
-        ensure_ascii=False,
-    ))
+    print(
+        json.dumps(
+            {
+                "source": SOURCE,
+                "mode": mode,
+                "since": prior,
+                "received": len(items),
+                "usable": fetched,
+                "applied": stored,
+                "pruned": pruned,
+                "source_stored": source_stored,
+                "source_pruned": source_pruned,
+                "pet_details": got_details,
+                "detail_no_data": detail_no_data,
+                "detail_failed": detail_failed,
+                "watermark": watermark,
+                **linked,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="관광공사 반려동물 동반여행을 facility에 적재")
     parser.add_argument("--mode", choices=("incremental", "full"), default="incremental")
-    parser.add_argument("--details", type=int, default=0,
-                        help="detailPetTour2 보강 상한 (건당 1호출 — 일일 트래픽 주의)")
+    parser.add_argument(
+        "--details",
+        type=int,
+        default=0,
+        help="detailPetTour2 보강 상한 (건당 1호출 — 일일 트래픽 주의)",
+    )
     args = parser.parse_args()
     if not settings.kto_service_key:
         raise SystemExit("DAENGS_KTO_SERVICE_KEY is required")

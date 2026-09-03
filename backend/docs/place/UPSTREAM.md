@@ -8,9 +8,10 @@ source commit:     c5f0d5f738410e90cac294fd5f407cd88f5330ac  (main, 2026-08-29)
 경계 결정:         이 저장소 docs/decisions.md D-026
 ```
 
-**이관 이후 Place 검색의 canonical 구현은 이 저장소(SAJOYO/DAENGS_dev)다.**
-DAENGS_geo 쪽 사본은 동결이며 — geo의 산책(walk) 연구가 facility corpus를 참조해서
-삭제하지 못하고 남아 있는 것뿐이다 — 검색 관련 수정은 여기서만 한다.
+**운영 Place 검색의 canonical 구현은 이 저장소(SAJOYO/DAENGS_dev)다.**
+DAENGS_geo는 검색 실험을 계속할 수 있지만 그 변경이 자동으로 운영 코드가 되지는 않는다.
+검증된 실험은 아래처럼 source commit과 포함·제외 범위를 고정한 promotion PR로만 가져오며,
+승격 뒤의 운영 수정은 이 저장소에서 한다.
 
 ## 무엇을 가져왔나
 
@@ -35,3 +36,29 @@ DAENGS_geo 쪽 사본은 동결이며 — geo의 산책(walk) 연구가 facility
   Place v2 계약 테스트만 `daengs_place.main` 기준으로 이식
 - 최초 이관 때 유지했던 원본 패키지명 `app`은 D-039에서 `daengs_place`로 바꿨다.
   원본과 대조할 때는 이 파일에 기록된 source commit을 기준으로 한다.
+
+## Source facts 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo PR #217
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+source merge:      e3aea61aa7f0c12f041a9b0fb7c1874eb4df44f3
+target PR:         SAJOYO/DAENGS_dev #183
+```
+
+검색 결과를 꾸미기 전에 KTO와 KCISA가 실제로 제공한 사실을 잃지 않는 기반을 먼저
+승격했다. 제품 검색용 `facility`는 필터·연결·보강 결과이고 원천 자체가 아니므로,
+`facility_source_record`에 목록 원문과 상세 획득 상태를 별도로 보존한다.
+
+- 포함: KTO/KCISA shadow ingest, KTO detail 획득 lifecycle, 원천별 순수 projection,
+  후보별 variant/conflict bundle, 최대 1,000개 후보를 한 번에 읽는 내부 reader
+- 호환성: 기존 `/v2/places/search` 응답은 그대로이며 새 fact 계약은 아직 내부 전용이다.
+  `daengs_place`의 PostGIS-only 부팅과 `daengs_backend` 비의존 경계도 유지한다.
+- 기존 데이터: KTO `facility.raw`는 0022에서 backfill한다. 과거의 빈 `pet` 값은 원인을
+  복원할 수 없으므로 `unknown`으로 기록한다. 과거 KCISA 제품 행에는 CSV 원문이 없어
+  추측해 채우지 않고 다음 KCISA snapshot부터 shadow를 만든다.
+- 의도적 제외: Gemini/OpenAI proposer, intent/lens, presentation/assembly, lab UI,
+  intent 관측 migration(Geo 0025~0027·0031), orchestration 및 외부 HTTP 계약.
+  이들은 source facts를 소비하는 후속 promotion PR에서 각각 경계를 검증한다.
+- 동기화 방식: Geo 코드를 runtime import하거나 subtree로 연결하지 않는다. fixture와
+  parser 기대값을 함께 복사한 뒤 이 저장소의 고정 테스트가 운영 동작을 소유한다.

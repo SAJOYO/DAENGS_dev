@@ -676,6 +676,7 @@ def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
     """
     gs = goldenset.load()
     expects = {i.id: i.expect for i in gs.items}
+    codes = {i.id: i.refusal_code for i in gs.items if i.refusal_code}
     boundary = {i.id for i in gs.items if i.expect != "answer"}
     scored = [(stem, rows) for stem, rows in laps
               if boundary & {r.get("id") for r in rows}]
@@ -685,21 +686,33 @@ def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
         return 0
 
     for stem, rows in scored:
-        base = scorer.grade_expect(rows, expects, "none")
-        print(f"\n기대 채점 — {stem}  (채점 가능 {base['gradable']}문항 ·"
-              f" refuse {base['unmeasurable']}문항은 덤프로 못 잰다)")
+        base = scorer.grade_expect(rows, expects, "none", codes)
+        head = f"\n기대 채점 — {stem}  (채점 가능 {base['gradable']}문항"
+        if base["unmeasurable"]:
+            head += (f" · refuse {base['unmeasurable']}문항은 이 랩에 `boundary` 칸이 없어 못 잰다"
+                     " — 덤프 VERSION 2 부터 있다")
+        print(head + ")")
+
+        if base["refuse_n"]:
+            # **거절은 정책과 무관하다** — 생성이 질문을 보고 낸 값이라 기권 문턱을 바꿔도
+            # 안 변한다. 정책 표에 섞으면 같은 수가 줄마다 되풀이돼 읽는 사람을 헷갈리게 한다
+            print(f"  거절(생성이 낸 boundary) — 맞음 "
+                  f"{base['refuse_n'] - base['missed_refuse'] - base['wrong_code']}"
+                  f"/{base['refuse_n']}  ·  놓침 {base['missed_refuse']}"
+                  f"  ·  코드 다름 {base['wrong_code']}"
+                  f"  ·  경계 아닌데 거절 {base['false_refuse']}")
+
         print(f"  {'정책':24} {'통과':>7}   {'오기권':>18}   {'놓친 기권':>16}")
         print("  " + "-" * 72)
         for name in scorer.ABSTAIN_POLICIES:
-            g = scorer.grade_expect(rows, expects, name)
+            g = scorer.grade_expect(rows, expects, name, codes)
             mark = " ←현행" if name == "none" else ""
             print(f"  {name:24} {g['passed']:>3}/{g['gradable']:<3}"
                   f"   {g['false_abstain']:>8}/{g['answer_n']:<8}"
                   f"   {g['missed_abstain']:>7}/{g['abstain_n']:<7}{mark}")
         print("  오기권 = 답해야 하는데 기권(신호가 과하게 켜졌다) ·"
-              " 놓친 기권 = 기권해야 하는데 답함(신호가 안 켜졌다)")
-        print("  refuse 문항은 질문을 보고 갈라야 하고 그 분류는 생성 앞단에 있다 —"
-              " 랩 덤프에는 흔적이 없다 (RAG-055)")
+              " 놓친 기권 = 기권해야 하는데 답함(신호가 안 켜졐다)".replace("켜졐", "켜졌"))
+        print("  통과 수에는 거절 채점도 들어간다 — 정책이 같아도 랩이 다르면 이 칸이 움직인다")
     return 0
 
 

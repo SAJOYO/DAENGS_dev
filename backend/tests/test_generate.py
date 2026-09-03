@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from daengs_life.rag.stages import generate, search
@@ -35,15 +37,65 @@ class FakeResponse:
 
 
 class FakeClient:
-    """`client.models.generate_content(model=, contents=)` 만 흉내낸다."""
+    """`client.models.generate_content(model=, contents=, config=)` 만 흉내낸다.
 
-    def __init__(self, text: str) -> None:
+    **`text` 를 그대로 돌려주면 구조화 출력이 아니다** (RAG-055). 실물은 `Verdict` 스키마를
+    붙여 JSON 을 받으므로, 픽스처도 JSON 으로 감싼다 — 안 그러면 `parse_verdict` 가 매번
+    실패해 폴백 경로만 테스트하게 되고, 그 경로는 답변만 살리고 판단을 기본값으로 둔다.
+    """
+
+    def __init__(self, text: str, *, boundary: str = "none", covered: bool = True,
+                 raw: str | None = None) -> None:
         self.text, self.calls = text, []
         self.models = self
+        self._raw = raw if raw is not None else json.dumps(
+            {"answer": text, "boundary": boundary, "covered": covered}, ensure_ascii=False)
 
-    def generate_content(self, *, model: str, contents: str) -> FakeResponse:
+    def generate_content(self, *, model: str, contents: str, config=None) -> FakeResponse:
         self.calls.append((model, contents))
-        return FakeResponse(self.text)
+        return FakeResponse(self._raw)
+
+
+# ---------------------------------------------------------------- 구조화 출력 (RAG-055)
+def test_the_verdict_carries_the_answer_and_the_two_judgements() -> None:
+    """생성이 **한 호출**에서 답변과 판단 둘을 낸다 (RAG-055).
+
+    호출을 나누지 않은 것은 값이 아니라 정합성 때문이다 — 같은 컨텍스트를 본 같은 호출이
+    `covered` 를 말해야 "이 근거로 답했다"와 "이 근거로는 부족하다"가 같은 판단에서 나온다.
+    """
+    client = FakeClient("[1] 「동물보호법」 제15조에 따라 30일 이내입니다.",
+                        boundary="none", covered=True)
+    a = generate.answer("등록정보 변경 언제까지?", HITS, client=client, model="m")
+    assert a.boundary == "none" and a.covered is True
+    assert a.cited == ["제15조"]                 # 답변 모양은 안 바뀐다 — 랩 비교가 그것에 선다
+
+
+def test_a_boundary_question_comes_back_classified() -> None:
+    client = FakeClient("동물병원에 가세요.", boundary="emergency", covered=False)
+    a = generate.answer("초콜릿을 먹었어요", HITS, client=client, model="m")
+    assert (a.boundary, a.covered) == ("emergency", False)
+
+
+def test_a_broken_verdict_keeps_the_answer_and_defaults_to_answering() -> None:
+    """**파싱이 깨져도 답변을 버리지 않는다.** 다만 판단은 기본값이고 그 기본값은 "답한다"
+    쪽이다 (RAG-055) — 조용히 거절·기권으로 바뀌는 것이 더 나쁘기 때문이다. 위험한 쪽을
+    고르는 자리는 여기가 아니라 서빙이다.
+    """
+    client = FakeClient("무시된다", raw="모델이 산문으로 샜다 [1] 제15조")
+    a = generate.answer("q", HITS, client=client, model="m")
+    assert a.text == "모델이 산문으로 샜다 [1] 제15조"
+    assert (a.boundary, a.covered) == ("none", True)
+    assert generate.parse_verdict("산문") is None
+
+
+def test_the_prompt_asks_for_a_full_answer_not_a_summary() -> None:
+    """**lap16 이 남긴 회귀 방지다** (RAG-055). 판단 둘을 앞세운 첫 판에서 답변 평균 길이가
+    508자 → 198자로 반토막 나면서 `cited` 가 17/28 → 11/28 로 떨어졌다. 조항을 여럿 들어야
+    하는 보험·운송 문항이 통째로 인용을 잃었다 — 틀린 답이 된 게 아니라 **요약이 됐다.**
+    """
+    prompt = generate.build_prompt("q", HITS)
+    assert "줄이지 마세요" in prompt and "요약하지 말고" in prompt
+    assert "조항 번호" in prompt and "[1] 처럼" in prompt
 
 
 # ---------------------------------------------------------------- 프롬프트 (RAG-028 ②)

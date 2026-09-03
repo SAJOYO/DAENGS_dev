@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -28,14 +29,54 @@ from ..core import config
 from . import embed, goldenset, load, search
 from .search import Hit
 
-VERSION = 1
+VERSION = 2      # 2 = 생성이 낸 boundary·covered 가 행에 있다 (RAG-055)
+
+# 질문이 걸린 경계 (RAG-055). `medical`·`emergency` 는 로드맵 §2 가 "이 개의 몸에 대한 판단"
+# 으로 묶은 것이고 RAG-008 ③ 이 "문서가 아니라 판단"이라고 가른 자리다.
+Boundary = Literal["none", "medical", "emergency"]
 
 # 답변에 조항 번호를 요구한다 — KPI("출처 링크 + 조항 번호 인용") 자체이고, 요구하지 않으면
-# 검문소④가 셀 것이 없어진다. 거부는 **부탁하지 않는다**(RAG-029 가 그 자리다).
+# 검문소④가 셀 것이 없어진다.
+#
+# **판단 둘을 답변과 같은 호출에서 받는다** (RAG-055). 카드 #177 이 방식 (a)/(b) 를 열어 뒀고
+# lap15 가 (a) 를 가리켰다 — 문장을 읽는 신호로는 **조용한 재해석**을 못 잡기 때문이다. B2
+# ("우주선에 강아지 태우는 규정")에서 모델은 물러섰다는 말도, 고쳐 읽었다는 말도 없이 항공
+# 규정을 확신 있게 답했다. 밖에서 답변 텍스트를 아무리 읽어도 그 일은 안 보이고, **모델
+# 자신에게 묻는 것**만 남는다.
+#
+# 별도 분류 호출(b)을 안 고른 이유는 값이 아니라 정합성이다 — 같은 컨텍스트를 본 같은 호출이
+# `covered` 를 말해야 "이 근거로 답했다"와 "이 근거로는 부족하다"가 같은 판단에서 나온다.
+# 호출이 둘이면 분류기가 본 것과 답변이 선 것이 갈릴 수 있고, 그 어긋남은 로그에 안 보인다.
+#
+# ⚠️ **키워드 하드 규칙이 아니다** (#80 routing §1 이 금하는 것). `boundary` 는 모델이 질문을
+# 읽고 정하는 값이고, 여기 있는 것은 그 기준의 서술이다.
+#
+# ⚠️ **답변을 줄이지 말라는 문단이 장식이 아니다.** 처음 판(lap16)은 판단 둘의 설명이 앞에 오고
+# 답변 지시가 한 줄이었는데, 답변 평균 길이가 508자에서 198자로 반토막 나면서 `cited` 가
+# 17/28 → 11/28 로 떨어졌다. 조항을 여럿 들어야 하는 보험·운송 문항(I1·I2·I3·I5·T3)이 통째로
+# 인용을 잃었다 — **틀린 답이 된 게 아니라 요약이 됐다.** 구조화 출력을 붙일 때 답변 쪽 요구를
+# 같이 세워 두지 않으면 모델이 스키마를 채우는 일에 무게를 옮긴다.
 PROMPT = """당신은 한국의 반려동물 관련 제도를 안내하는 도우미입니다.
 
 아래 [참고자료]를 근거로 [질문]에 답하세요.
 답변에는 근거가 된 **법령명과 조항 번호**를 함께 밝히고, 사용한 자료의 번호를 [1] 처럼 표시하세요.
+
+**답변(`answer`)은 줄이지 마세요.** 질문에 걸리는 조항이 여럿이면 **전부** 들고, 금액·기한·
+조건 같은 구체적인 값을 자료에 있는 그대로 적으세요. 요약하지 말고 물은 것에 끝까지 답하세요.
+
+답변과 함께 판단 둘을 내세요.
+
+**boundary** — 이 질문이 어디에 속하는가.
+- `emergency`: 지금 이 동물에게 벌어진 일에 대한 대처를 묻는다. 이물질을 삼켰다, 다쳤다,
+  쓰러졌다처럼 시간이 걸린 상황.
+- `medical`: 이 동물의 몸에 대한 판단을 묻는다. 증상의 원인, 진단, 약의 종류나 용량.
+- `none`: 그 밖의 전부. 제도·비용·절차·이동·보험처럼 문서로 답할 수 있는 것.
+`emergency` 와 `medical` 둘 다에 해당하면 `emergency` 입니다.
+
+**covered** — [참고자료]가 [질문]이 물은 것에 실제로 답하는가.
+질문의 낱말을 다른 뜻으로 바꿔 읽어야 자료가 맞아떨어진다면 `false` 입니다.
+비슷한 주제일 뿐 물은 값이 자료에 없어도 `false` 입니다.
+자료로 답할 수 있으면 `true` 이고, 이때 답변을 줄일 이유는 없습니다.
 
 [참고자료]
 {context}
@@ -69,6 +110,10 @@ class Answer:
     embedding_model: str                # 검색에 쓴 임베딩 모델 — 둘 다 있어야 랩 비교가 성립한다
     cited: list[str] = field(default_factory=list)        # 답변에 등장한 조항 번호 (등장 순)
     ungrounded: list[str] = field(default_factory=list)   # 그중 컨텍스트에 없는 것 = 검문소④
+    # 생성이 함께 낸 판단 둘 (RAG-055). **기본값이 "답한다" 쪽인 것은 의도다** — 구조화 출력이
+    # 실패하거나 옛 덤프를 읽을 때 조용히 거절·기권으로 바뀌면 그것이 더 나쁘다
+    boundary: Boundary = "none"
+    covered: bool = True
 
     @property
     def grounded(self) -> list[str]:
@@ -94,6 +139,36 @@ def build_context(hits: list[Hit]) -> str:
 
 def build_prompt(question: str, hits: list[Hit]) -> str:
     return PROMPT.format(context=build_context(hits), question=question)
+
+
+class Verdict(BaseModel):
+    """생성이 한 호출에서 내는 것 전부 (RAG-055). Gemini 구조화 출력의 스키마 그대로다.
+
+    ⚠️ **`_Base` 를 안 쓴다.** `extra="forbid"` 가 JSON 스키마에 `additionalProperties` 로 나가는데
+    Gemini 가 그 낱말을 모른다 — `400 INVALID_ARGUMENT ... Unknown name "additional_properties"`.
+    이 파일의 다른 모델과 다른 이유가 그것이고, 여기서는 잃는 것도 없다: 이 스키마는 우리가
+    받는 쪽이지 우리가 쓰는 쪽이 아니라, 모델이 칸을 더 붙여도 무시하면 그만이다.
+
+    **`answer` 가 여기 들어와도 답변의 모양은 안 바뀐다** — 조항 번호와 `[N]` 표기를 그대로
+    요구하므로 `cited_articles` 와 `score.referenced_indices` 가 보던 것이 그대로 있다.
+    그것이 이 카드가 랩 비교를 유지하는 방법이다.
+    """
+    answer: str
+    boundary: Boundary
+    covered: bool
+
+
+def parse_verdict(raw: str) -> Verdict | None:
+    """구조화 출력 → `Verdict`. **못 읽으면 `None` 이고, 부르는 쪽이 물러선다.**
+
+    조용히 기본값을 만들지 않는 이유는 그 기본값이 "답한다" 쪽이어서다 — 파싱이 깨진 것을
+    "경계 아님 · 근거 충분"으로 읽으면 거절해야 할 질문이 통과한다. 부르는 쪽이 답변 텍스트는
+    살리되 판단 둘은 **기본값**으로 두고, 그 사실이 로그에 남는다.
+    """
+    try:
+        return Verdict.model_validate_json(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 # ---------------------------------------------------------------- 검문소④
@@ -149,14 +224,34 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
     프롬프트 조립과 검문소④ 산식을 붙잡을 수 있어야 하고, 그러려면 이 함수가 Gemini 말고는
     아무것도 필요로 하면 안 된다.
     """
+    from google.genai import types
+
     name = model or config.settings.gemini_model
     cli = client or _client()
-    resp = cli.models.generate_content(model=name, contents=build_prompt(question, hits))
-    text = (resp.text or "").strip()
+    resp = cli.models.generate_content(
+        model=name, contents=build_prompt(question, hits),
+        # **스키마를 붙여서 받는다** (RAG-055). 프롬프트로 JSON 을 부탁하는 것과 다르다 —
+        # 부탁은 모델이 산문으로 새면 그만이고, 그 새는 날이 하필 거절해야 할 질문일 수 있다
+        config=types.GenerateContentConfig(response_mime_type="application/json",
+                                           response_schema=Verdict),
+    )
+    verdict = parse_verdict((resp.text or "").strip())
+    if verdict is None:
+        # 판단은 못 받았지만 **답변까지 버리지는 않는다.** 기본값은 "답한다" 쪽이고,
+        # 그 선택이 위험한 자리는 서빙(`services/ask.py`)이 아니라 여기가 아니다
+        text = (resp.text or "").strip()
+        return Answer(
+            question=question, text=text, hits=hits, model=name,
+            embedding_model=embedding_model or config.settings.embedding_model_key,
+            cited=cited_articles(text), ungrounded=ungrounded_articles(text, hits),
+        )
+
+    text = verdict.answer.strip()
     return Answer(
         question=question, text=text, hits=hits, model=name,
         embedding_model=embedding_model or config.settings.embedding_model_key,
         cited=cited_articles(text), ungrounded=ungrounded_articles(text, hits),
+        boundary=verdict.boundary, covered=verdict.covered,
     )
 
 
@@ -221,6 +316,11 @@ class DumpRow(_Base):
     hits: list[DumpHit]
     cited: list[str]
     ungrounded: list[str]
+    # 생성이 낸 판단 둘 (RAG-055). **덤프에 남겨야 `score-laps` 가 잰다** — 이것이 없으면
+    # `expect: refuse` 는 영영 못 재고, `covered` 후보도 랩을 다시 떠야만 비교된다.
+    # 옛 랩(`lap1`~`lap15`)에는 이 칸이 없다. 읽는 쪽이 `.get()` 으로 넘어간다
+    boundary: Boundary = "none"
+    covered: bool = True
 
 
 def dump_rows(items: list[tuple[str, Answer, set[str], set[str]]]) -> list[DumpRow]:
@@ -232,6 +332,7 @@ def dump_rows(items: list[tuple[str, Answer, set[str], set[str]]]) -> list[DumpR
                           tier=search.tier_of(h.chunk_id, must, nice))
                   for h in a.hits],
             cited=a.cited, ungrounded=a.ungrounded,
+            boundary=a.boundary, covered=a.covered,
         )
         for qid, a, must, nice in items
     ]

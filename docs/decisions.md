@@ -53,6 +53,7 @@
 | [D-046](#d-046) | Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다 | 2026-09-03 |
 | [D-047](#d-047) | Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다 | 2026-09-03 |
 | [D-048](#d-048) | 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지 | 2026-09-03 |
+| [D-049](#d-049) | 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다 | 2026-09-03 |
 
 ---
 
@@ -2448,3 +2449,68 @@ v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는
 명시적 옵트인·별도 저장·보존 기한 조건을 만족하는 별도 결정을 먼저 만듭니다.
 
 **번호 재부여 (2026-09-03)** — 이 결정은 원래 D-043 으로 발행됐습니다. 이 브랜치가 `origin/dev` 를 86 커밋 뒤진 채로 있는 사이 dev 에서 D-043·D-044·D-045 가 먼저 머지됐습니다. `docs/collaboration.md` §4 대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-048 으로 옮겼습니다. 바로 위 D-045 도 같은 사고를 한 번 겪었습니다 — 브랜치를 오래 안 맞추면 반복됩니다.
+
+---
+
+## D-049
+### 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다
+
+공간 일기는 완성된 지도 snapshot을 저장하는 기능이 아니라, 봉인된 산책별 Capsule과
+Cellophane을 현재 조건으로 다시 고르고 겹치는 읽기 모델입니다. 첫 View selector는
+`pet_id`, KST 양끝 포함 기간, 당시 강수 형태와 낮·밤만 받습니다. 한 산책에 여러 강아지가
+참여하더라도 Capsule을 복제하지 않고, 실제 DB 조회 단계에서 `walk_pets`를 통해 각 강아지의
+cohort로 읽습니다.
+
+첫 field metric은 다음 두 개뿐입니다.
+
+```text
+visit_rate
+  해당 셀을 칠한 선택 산책 수 / 선택된 전체 Capsule 수
+  빈 Cellophane도 "방문하지 않은 산책"으로 분모에 남는다.
+
+walk_utilization
+  각 산책의 셀 시간 질량을 먼저 합 1로 만든 뒤 기여 산책을 동등 가중
+  빈 Cellophane은 정규화할 수 없어 이 metric의 기여 분모에서만 빠진다.
+```
+
+한 산책이 여러 Analysis나 pet join으로 두 번 들어오면 비율 분모가 부풀기 때문에 계산 코어가
+중복 `walk_id`를 거부합니다. 서로 다른 `paint_fp`도 같은 `(q, r)`가 같은 위치라는 보장이
+없으므로 한 field에 섞지 않습니다. 결과는 값뿐 아니라 분자, 이름 붙은 분모, Paint 지문,
+selector 지문, context known/unknown 수와 정책 버전을 함께 반환합니다.
+
+### Dev context facet policy v1
+
+Geo의 첫 View는 `precipitation_mm`과 `sun_elevation_deg`를 사용했지만, Dev가 현재 산책 당시
+동결하는 원자는 앱이 보낸 WMO `weather_code`, `is_day`, 기온입니다. 없는 원자를 현재 날씨나
+시각으로 추정하지 않고 `unknown`으로 둡니다. v1 분류는 다음과 같습니다.
+
+```text
+precipitation
+  dry      0, 1, 2, 3, 45, 48
+  rain     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99
+  snow     71, 73, 75, 77, 85, 86
+  unknown  값 없음 또는 WMO 표에서 정의하지 않은 0..99 값
+
+daylight
+  day      is_day=true
+  night    is_day=false
+  unknown  값 없음
+```
+
+어는 이슬비(56·57)와 어는 비(66·67)는 기상 현상 그대로 `rain`입니다. 앱의
+`OutsideApi.weatherOf()`가 이들을 눈으로 접는 것은 창문 그림의 시각 표현 정책이라, 과거 산책
+필터의 의미 정책으로 재사용하지 않습니다. facet 정책이 달라지면 원본 WMO 값을 고치지 않고
+정책 버전과 selector 지문을 올립니다.
+
+날짜는 `Asia/Seoul` 달력으로 해석하고 양끝이 모두 있는 동기 View 기간은 최대 366일입니다.
+여러 facet 축은 AND이고 한 축 안의 여러 값은 OR입니다. 필터에 사용한 축이 모두 알려졌을 때만
+그 Capsule의 context를 known으로 세며, context 필터가 없다면 현재 지원하는 두 축이 모두
+알려져야 known입니다.
+
+이번 결정은 순수 `daengs_walk` 계약과 계산까지만 채택합니다. SQLAlchemy 조회, 인증,
+repeatable-read snapshot, HTTP API와 앱 지도는 다음 조립 단계입니다. EntrySelector,
+EpisodeCandidate·Offer·Attestation·Pin, Memory Place, 일기 문장도 포함하지 않습니다.
+Place 주변 사실과 Journey 계획 경로는 이 계산에 필요하지 않으며 D-046의 capability 경계를
+그대로 유지합니다. 계절 facet은 한국 달력 정책과 실제 UI 소비가 생길 때 별도 버전으로
+추가합니다.
+

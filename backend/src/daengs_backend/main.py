@@ -21,6 +21,7 @@ from daengs_backend.routers import (
     health,
     pet,
     training,
+    walk_spatial_diary,
 )
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
@@ -124,6 +125,9 @@ app.include_router(pet.router)
 app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
+# 산책 기록을 조건별 공간 일기로 읽는 앱 전용 표면. 인증은 라우터가 받고,
+# Place·Journey·Pin을 호출하지 않은 채 Walk 원판만 조립합니다 (D-049).
+app.include_router(walk_spatial_diary.router)
 app.include_router(training.router)
 # 오케스트레이션 진입점 (Card 3). 인증은 `/training/chat` 과 같은 자리 —
 # 엔드포인트 자체의 파라미터 의존성(`admin_or_app_user(Perm.READ)`)이 겁니다.

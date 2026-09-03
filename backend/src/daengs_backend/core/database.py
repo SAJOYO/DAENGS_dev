@@ -7,6 +7,7 @@
 import contextlib
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -27,6 +28,10 @@ engine = create_async_engine(
 # 기본값(True)이면 commit 순간 속성이 만료돼, 다시 읽을 때 lazy load 가 돕니다.
 # 비동기에서는 그 lazy load 가 MissingGreenlet 으로 터집니다.
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+SnapshotSessionLocal = async_sessionmaker(
+    engine.execution_options(isolation_level="REPEATABLE READ"),
+    expire_on_commit=False,
+)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -36,6 +41,18 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     with 블록을 빠져나갈 때 세션이 닫히고, 커밋하지 않은 변경은 롤백됩니다.
     """
     async with SessionLocal() as session:
+        yield session
+
+
+async def get_snapshot_session() -> AsyncGenerator[AsyncSession, None]:
+    """여러 SELECT를 하나의 읽기 전용 repeatable-read snapshot으로 묶습니다.
+
+    앱 인증은 일반 요청 세션에서 이미 회원 행을 읽습니다. PostgreSQL은 첫 statement 뒤에
+    isolation level을 바꿀 수 없으므로, 일관된 다단계 읽기가 필요한 API는 이 별도 세션을
+    사용합니다. commit하지 않고 닫아 snapshot과 read-only transaction을 함께 버립니다.
+    """
+    async with SnapshotSessionLocal() as session:
+        await session.execute(text("SET TRANSACTION READ ONLY"))
         yield session
 
 

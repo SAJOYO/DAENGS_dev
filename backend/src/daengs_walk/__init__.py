@@ -9,13 +9,21 @@ from daengs_walk.capsule import WalkCapsuleArtifacts, build_walk_capsule
 from daengs_walk.cellophane import Cellophane, build_cellophane
 from daengs_walk.contracts import WalkEvidencePoint
 from daengs_walk.evidence import WalkEvidenceBundle, analyze_walk
+from daengs_walk.spatial_diary import (
+    SpatialDiaryViewSpec,
+    aggregate_spatial_field,
+    context_facets,
+)
 
 __all__ = [
     "Cellophane",
+    "SpatialDiaryViewSpec",
     "WalkCapsuleArtifacts",
     "WalkEvidenceBundle",
     "WalkEvidencePoint",
+    "aggregate_spatial_field",
     "analyze_walk",
     "build_cellophane",
     "build_walk_capsule",
+    "context_facets",
 ]

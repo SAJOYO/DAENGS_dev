@@ -66,6 +66,32 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
 라우터는 **분류기이지 답변자가 아닙니다.** 라우터가 도메인 답을 직접 생성하는 순간
 "도메인 안전·거절은 능력이 소유한다"(architecture §논리 오케스트레이션)가 깨집니다.
 
+### 순수 인사말 — `social_intent` (CONFIRMED — `semantic-router-ko-v4`, PR #163)
+
+"고마워"·"안녕하세요"·"잘가"처럼 **요청이 통째로 인사말뿐**이면 예전에는 빈 결정 →
+빈 RoutePlan → `실행하거나 안내할 수 있는 기능이 없습니다.`(FAILED)가 났습니다. AI 비서가
+인사에 기능 실패로 답하는 것을 막기 위해 프롬프트를 `semantic-router-ko-v3` → **v4** 로
+올리고 `SemanticRoutingDecision` 에 `social_intent: greeting | thanks | goodbye | null`
+(기본 null) 하나를 더했습니다. 위 "분류기이지 답변자가 아니다" 원칙은 그대로입니다:
+
+- **Gemini 는 분류만 합니다.** 사용자에게 보이는 문장은 `orchestration/social.py` 의
+  고정 한국어 템플릿 세 개가 냅니다. 추가 LLM 호출·대화 기억·checkpointer·새 능력은 없습니다.
+- **능력 의도가 항상 우선합니다.** "고마워, 근데 오늘 산책 나가도 돼?" 는 Walk(좌표 없으면
+  CLARIFY), "안녕, 강아지가 자꾸 손을 물어요" 는 Training, "고마워, 걷는 영상도 봐줘" 는 Gait
+  HANDOFF 로 — social_intent 는 null 입니다. 스키마 불변식이 이를 강제합니다:
+  `social_intent != null` 이면 `execute`·`handoffs` 가 모두 비어 있어야 하고, 섞인 출력은
+  스키마 무효라 기존 O-14 1회 재시도를 탑니다.
+- **LangGraph 에 들어가지 않습니다.** `AssistantOrchestrationService` 가 RoutePlan 을 만들기
+  전에 `AssistantResponse(status=ANSWERED, results=[], handoffs=[], clarify=null)` 로
+  바로 돌려줍니다. 가짜 `assistant` 능력을 만들지 않았고 `requested_capability` 결정적
+  경로는 이전과 똑같이 Gemini 를 건너뜁니다.
+- **범위는 greeting / thanks / goodbye 세 가지뿐입니다.** 날씨·잡담·일반 지식처럼 지원
+  범위 밖인 요청은 social_intent 가 null 이고, 기존 빈 RoutePlan 동작(FAILED + 위 문구)이
+  그대로 남습니다. 일반 미지원 UX 는 이 카드가 풀지 않았습니다.
+- 회귀 근거: 같은 80건 v3 gold·동결 gate·`gemini-3.1-flash-lite` 로 v4 프롬프트를 1회
+  재실행해 PASS (`backend/evals/orchestration_router/summary_v5.json`, 80건 모두
+  social_intent null) — `docs/orchestration-router-benchmark.md` §v5.
+
 ## 3. CLARIFY 와 HANDOFF 의 뜻
 
 세 행위는 RoutePlan 의 스칼라 mode 가 아니라 **목록 구조**로 표현됩니다

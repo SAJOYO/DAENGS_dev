@@ -50,23 +50,43 @@ _SAFETY_BOUNDARY_REASONS = frozenset(
 )
 
 
-def model_reported_no_evidence(answer: str) -> bool:
-    """Recognize a short, uncited model statement that the context is insufficient.
+#: A model statement that the supplied material lacks what was asked.  The model may
+#: paraphrase the canonical sentence (generation.NO_EVIDENCE_SENTENCE), so this matches
+#: the shared shape — material / (content|information|grounds) / negation — and also the
+#: clause-final negations ("없지만", "없으나", "없고") the reproduced defect used to pivot
+#: from "the material does not cover this" into advice about something else.
+_NO_EVIDENCE_STATEMENT = re.compile(
+    r"(?:제공된|검색된|지금\s+검색된)\s*자료[^.!?]{0,120}"
+    r"(?:내용|정보|근거)[^.!?]{0,40}"
+    r"(?:없(?:습니다|다|지만|으나|고|어서)|부족(?:합니다|하다|하지만)|충분하지\s*않)"
+)
 
-    The generation model may paraphrase the fallback instead of emitting one fixed sentence.
-    Detect the shared structure (context/evidence negation, no citation) rather
-    than a question-specific string. Substantive answers remain eligible when
-    they contain a numbered citation.
+#: How far into the answer an opening admission of missing evidence is looked for.
+#: Long enough for "제공된 자료에는 <restated problem>에 대한 직접적인 내용은 없습니다",
+#: short enough that a negation deep inside a grounded answer does not count.
+_NO_EVIDENCE_OPENING_CHARS = 200
+
+
+def model_reported_no_evidence(answer: str) -> bool:
+    """Recognize a model statement that the context does not cover the question.
+
+    Two shapes count.  (1) The whole answer is a short, uncited no-evidence
+    statement — the canonical sentence or a paraphrase of it.  (2) The answer
+    *opens* with such a statement and then keeps going.  Shape 2 is the
+    reproduced production defect: "제공된 자료에는 ~에 대한 직접적인 내용은
+    없습니다. 다만 ..." followed by cited advice for an adjacent problem the user
+    never described.  Once the model has said the material does not directly
+    cover what was asked, nothing after that sentence is grounded in the
+    question, so the answer is treated as insufficient evidence — the same
+    UNCERTAIN path as shape 1, not a new state.
+
+    Substantive answers that do not open by disclaiming the evidence remain
+    eligible, citations or not.
     """
     compact = " ".join(answer.split())
-    if len(compact) > 240 or re.search(r"\[\s*\d+\s*\]", compact):
-        return False
-    return bool(re.search(
-        r"(?:제공된|검색된|지금\s+검색된)\s*자료[^.!?]{0,120}"
-        r"(?:내용|정보|근거)[^.!?]{0,40}"
-        r"(?:없(?:습니다|다)|부족(?:합니다|하다)|충분하지\s*않)",
-        compact,
-    ))
+    if len(compact) <= 240 and not re.search(r"\[\s*\d+\s*\]", compact):
+        return bool(_NO_EVIDENCE_STATEMENT.search(compact))
+    return bool(_NO_EVIDENCE_STATEMENT.search(compact[:_NO_EVIDENCE_OPENING_CHARS]))
 
 
 def load_serving_document_ids(path: Path = DEFAULT_SERVING_CORPUS) -> tuple[str, ...]:

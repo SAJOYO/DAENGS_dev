@@ -24,6 +24,7 @@ from daengs_place.core.db import get_session
 ALLOWED_PLACE_SUBPACKAGES = {"api", "core", "geo", "main", "place", "territory"}
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "src" / "daengs_place"
 INTENT_DIR = PACKAGE_DIR / "place" / "intent"
+PRESENTATION_DIR = PACKAGE_DIR / "place" / "presentation"
 FORBIDDEN_PACKAGES = {
     "daengs_backend",
     "daengs_journey",
@@ -35,6 +36,11 @@ FORBIDDEN_INTENT_IMPORTS = {
     "google",
     "httpx",
     "sqlalchemy",
+}
+FORBIDDEN_PRESENTATION_IMPORTS = FORBIDDEN_INTENT_IMPORTS | {
+    "daengs_place.api",
+    "daengs_place.ingest",
+    "daengs_place.place.intent",
 }
 
 _PROBE = """
@@ -109,6 +115,29 @@ def test_place_intent_core_stays_provider_transport_and_presentation_free():
                         f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}"
                     )
     assert not found, "Place intent 코어의 조기 runtime 결합:\n  " + "\n  ".join(found)
+
+
+def test_place_presentation_stays_provider_transport_and_intent_free():
+    """PR3 표시는 사실·검색 계약만 소비하고 provider·transport·intent 구현을 모른다."""
+    found = []
+    for path in sorted(PRESENTATION_DIR.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                if any(
+                    name == forbidden or name.startswith(f"{forbidden}.")
+                    for forbidden in FORBIDDEN_PRESENTATION_IMPORTS
+                ):
+                    found.append(
+                        f"{path.relative_to(PACKAGE_DIR)}:{node.lineno} imports {name}"
+                    )
+    assert not found, "Place presentation의 조기 runtime 결합:\n  " + "\n  ".join(found)
 
 
 async def _no_db():

@@ -257,9 +257,13 @@ OpenAPI가 변하지 않는다.
 
 ### PR3 — presentation
 
-- presentation contract, information needs, policy, assembler 승격
+- presentation contract, information-need catalog, policy, assembler 승격
+- PR2에서 분리한 공용 `InformationNeedId`를 재사용하고 presentation 안에 중복 정의하지 않음
 - KTO/KCISA source-fact bundle과 검색 hit의 identity 일치 검증
 - 기존 `/v2/places/search` 응답 변경 금지
+
+완료 기준: 동일 원천의 검색 hit와 source-fact bundle만 조립되고, 사실의 상태·출처·연결
+receipt가 표시 계약에서 보존되며, 기존 Place 전체 테스트와 OpenAPI가 변하지 않는다.
 
 ### PR4 — 내부 discovery 조립
 

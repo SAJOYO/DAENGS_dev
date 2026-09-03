@@ -26,6 +26,7 @@ from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_walk import (
+    WalkEvidencePoint,
     analyze_walk,
     build_cellophane,
     build_walk_capsule,
@@ -248,13 +249,21 @@ def _attach_capsule(
     has_app_context = any(
         value is not None for value in (walk.weather_code, walk.is_day, app_temperature)
     )
-    has_observed_context = weather is not None and any(
-        value is not None
-        for value in (
-            weather.temperature_c,
-            weather.humidity_pct,
-            weather.precipitation_kind,
-            weather.precipitation_mm,
+    has_observed_context = (
+        weather is not None
+        and weather.status
+        in {
+            "captured",
+            "partial",
+        }
+        and any(
+            value is not None
+            for value in (
+                weather.temperature_c,
+                weather.humidity_pct,
+                weather.precipitation_kind,
+                weather.precipitation_mm,
+            )
         )
     )
     context_provider = provider
@@ -278,7 +287,9 @@ def _attach_capsule(
         is_day=walk.is_day,
         temperature_c=(
             weather.temperature_c
-            if weather is not None and weather.temperature_c is not None
+            if has_observed_context
+            and weather is not None
+            and weather.temperature_c is not None
             else app_temperature
         ),
         precipitation_kind=(weather.precipitation_kind if has_observed_context else None),
@@ -301,7 +312,7 @@ def _attach_capsule(
 
 async def _lookup_context_weather(
     lookup: WalkWeatherLookup | None,
-    anchor,
+    anchor: WalkEvidencePoint | None,
 ) -> WalkWeatherObservation | None:
     """외부 관측의 어떤 실패도 산책 분석 트랜잭션 밖으로 새지 않게 한다."""
 

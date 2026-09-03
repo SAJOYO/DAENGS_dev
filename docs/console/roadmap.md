@@ -140,9 +140,9 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| C1 | **`/assistant/query` 점검 탭** — 앱과 같은 경로 · 같은 축소 응답, `context`(location · active_dog_id) 입력, `results[]` status 와 라우팅 결과 표시 | 앱 ChatScreen 의 실제 경로인데 콘솔이 안 두들긴다. A0 스모크(#169)를 사람이 curl 로 했다 | 없음 (FE 만) | S | ⬜ |
+| C1 | **`/assistant/query` 점검 탭** — 앱과 같은 경로 · 같은 축소 응답, `context`(location · active_dog_id) 입력, `results[]` status 와 라우팅 결과 표시 | 앱 ChatScreen 의 실제 경로인데 콘솔이 안 두들긴다. A0 스모크(#169)를 사람이 curl 로 했다 | 없음 (FE 만) | S | ✅ #181. `RoutePlan` 이 공개 응답에 없어 **라우터 종류(deterministic/llm)·모델 이름은 화면에 안 뜬다** — 응답 계약을 늘려야 하는 별도 카드감 |
 | C2 | **준비 중 카드 문구 현실화** — 지식 베이스 설명에서 "그래프" 제거 · 크롤 카드에 "GCP 에서는 트리거 없음" 안내 · `href` 리터럴 유니온에 새 라우트 | §2 표 "어긋난 것" | 없음 | XS | ⬜ |
-| C3 | 생활 파트 A4(이름 정리 `/life/ask` · `/life/walk-conditions`)의 **콘솔 호출 경로 동반** | `docs/life/roadmap.md` A4 가 "콘솔 점검 탭 호출 경로 동반" 을 명시 | life A4 카드 안 | — | ⬜ life 소유 |
+| C3 | 생활 파트 A4(이름 정리 `/life/ask` · `/life/walk-conditions`)의 **콘솔 호출 경로 동반** | `docs/life/roadmap.md` A4 가 "콘솔 점검 탭 호출 경로 동반" 을 명시 | life A4 카드 안 | — | ✅ #176 |
 | C4 | 산책 기록(`/app/walks`) · gait · place · journey 점검 탭 | life A8 🚫 의 재개 조건 "콘솔에 산책 점검 탭이 생기면". 관리자 토큰으로는 본인 소유 API 를 못 부른다(`current_app_user`) → **테스트 회원 토큰**이 필요 | §7 | M | ⏸ 앱 API 가 본인 것만 주는 구조라 형태부터 정해야 |
 
 ### D. 보안 후속 — 콘솔 탭과 백엔드가 같이 간다

@@ -94,7 +94,7 @@ def test_a_body_question_is_refused_with_its_own_wording(
                      boundary="emergency", covered=False)
     monkeypatch.setattr(service.generate, "ask", lambda *a, **k: refused)
 
-    r = client.post("/ask", json={"question": "초콜릿을 먹었어요"})
+    r = client.post("/life/ask", json={"question": "초콜릿을 먹었어요"})
     assert r.status_code == 422
     detail = r.json()["detail"]
     assert detail["code"] == "emergency_boundary"
@@ -109,7 +109,7 @@ def test_refusal_comes_before_abstention(
     both = Answer(question="q", text="지금 병원으로 가세요.", hits=[], model="m",
                   embedding_model="bge-m3", boundary="emergency", covered=False)
     monkeypatch.setattr(service.generate, "ask", lambda *a, **k: both)
-    assert client.post("/ask", json={"question": "q"}).status_code == 422
+    assert client.post("/life/ask", json={"question": "q"}).status_code == 422
 
 
 def test_weak_evidence_abstains_even_with_hits(
@@ -124,7 +124,7 @@ def test_weak_evidence_abstains_even_with_hits(
                   embedding_model="bge-m3", boundary="none", covered=False)
     monkeypatch.setattr(service.generate, "ask", lambda *a, **k: weak)
 
-    r = client.post("/ask", json={"question": "q"})
+    r = client.post("/life/ask", json={"question": "q"})
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "no_evidence"
 

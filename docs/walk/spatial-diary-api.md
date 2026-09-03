@@ -24,12 +24,12 @@ POST /app/walks/spatial-diary/views/query
       {
         "axis": "precipitation",
         "values": ["rain"],
-        "policy_version": 1
+        "policy_version": 2
       },
       {
         "axis": "daylight",
         "values": ["night"],
-        "policy_version": 1
+        "policy_version": 2
       }
     ]
   },
@@ -39,6 +39,10 @@ POST /app/walks/spatial-diary/views/query
 
 날짜는 `Asia/Seoul` 달력의 양끝 포함 범위다. 기간은 최대 366일이며, facet 축끼리는
 AND, 같은 축의 값은 OR이다. 현재 metric은 `visit_rate`와 `walk_utilization`뿐이다.
+
+강수 facet policy v2는 KMA 관측의 `precipitation_kind`를 우선하고, 그 값이 없을 때만 앱이
+보낸 WMO `weather_code`를 사용한다. 값은 `rain`, `snow`, `mixed`, `dry`, `unknown`이며
+KMA의 비·눈 혼합 관측을 다른 형태로 접지 않고 `mixed`로 보존한다.
 
 ## 응답
 

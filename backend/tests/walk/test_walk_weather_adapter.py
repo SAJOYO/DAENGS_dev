@@ -11,7 +11,7 @@ import pytest
 
 from daengs_backend.orchestration.adapters import life as life_adapter
 from daengs_life.app import deps
-from daengs_life.realtime.cache import Cache, MemoryStore
+from daengs_life.realtime.cache import POLICY, Cache, MemoryStore
 from daengs_life.realtime.config import KST
 from daengs_life.realtime.providers import kma_vilage_fcst
 
@@ -103,3 +103,29 @@ def test_계약_범위를_벗어난_수치는_Walk_snapshot으로_새지_않는�
     assert got.temperature_c is None
     assert got.humidity_pct is None
     assert got.precipitation_mm is None
+
+
+def test_실시간_예약분에_닿으면_Walk는_외부_호출_없이_실패로_저하한다(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = MemoryStore()
+    cache = Cache(store)
+    feed = POLICY.feeds["kma-vilage-fcst:ncst"]
+    limit = POLICY.budgets[feed.budget]
+    assert limit is not None
+    for _ in range(limit - POLICY.snapshot_live_reserve_calls):
+        store.spend(feed.budget, "20260825")
+    calls: list[int] = []
+    monkeypatch.setattr(
+        kma_vilage_fcst,
+        "raw_ncst_at",
+        lambda *_a, **_k: calls.append(1) or ncst(),
+    )
+    monkeypatch.setattr(deps, "get_now", lambda: NOW)
+    monkeypatch.setattr(deps, "get_cache", lambda: cache)
+
+    got = life_adapter._weather_at_life(37.4979, 127.0276, OBSERVED_AT)
+
+    assert got.status == "failed"
+    assert got.failure_reason is not None and "예약분" in got.failure_reason
+    assert calls == []

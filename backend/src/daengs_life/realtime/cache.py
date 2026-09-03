@@ -85,6 +85,7 @@ class Policy:
     discard_periods: int
     ttl_periods: int
     budgets: dict[str, int | None]
+    snapshot_live_reserve_calls: int
     active_keys: int
     idle_drop_hours: int
     lock_sec: int
@@ -95,11 +96,12 @@ def load_policy(path: Path = CACHE_FILE) -> Policy:
     feeds = {fid: Feed(id=fid, period_min=float(spec["period_min"]),
                        phase_min=float(spec["phase_min"]), budget=str(spec["budget"]))
              for fid, spec in raw["feeds"].items()}
-    stale, pre = raw["stale"], raw["prefetch"]
+    stale, snapshot, pre = raw["stale"], raw["snapshot"], raw["prefetch"]
     return Policy(feeds=feeds,
                   discard_periods=int(stale["discard_periods"]),
                   ttl_periods=int(stale["ttl_periods"]),
                   budgets=dict(raw["budgets"]),
+                  snapshot_live_reserve_calls=int(snapshot["live_reserve_calls"]),
                   active_keys=int(pre["active_keys"]),
                   idle_drop_hours=int(pre["idle_drop_hours"]),
                   lock_sec=int(pre["lock_sec"]))
@@ -168,6 +170,7 @@ class Store(Protocol):
     def set(self, key: str, entry: Entry, ttl_sec: int) -> None: ...
     def used(self, group: str, day: str) -> int: ...
     def spend(self, group: str, day: str) -> int: ...
+    def reserve(self, group: str, day: str, ceiling: int) -> bool: ...
     def touch(self, key: str, at: datetime) -> None: ...
     def active(self, since: datetime, limit: int) -> list[str]: ...
     def lock(self, key: str, ttl_sec: int) -> bool: ...
@@ -212,6 +215,16 @@ class MemoryStore:
             count = self._budget.get((group, day), 0) + 1
             self._budget[(group, day)] = count
             return count
+
+    def reserve(self, group: str, day: str, ceiling: int) -> bool:
+        """상한 아래의 호출 슬롯 하나를 원자적으로 선점한다."""
+
+        with self._guard:
+            current = self._budget.get((group, day), 0)
+            if current >= ceiling:
+                return False
+            self._budget[(group, day)] = current + 1
+            return True
 
     def touch(self, key: str, at: datetime) -> None:
         with self._guard:
@@ -264,6 +277,29 @@ class RedisStore:
         if count == 1:
             self._r.expire(key, 60 * 60 * 48)    # 이틀 — 날짜가 넘어가면 카운터도 사라진다
         return count
+
+    def reserve(self, group: str, day: str, ceiling: int) -> bool:
+        """GET 뒤 INCR의 경쟁 없이 공용 호출 슬롯 하나를 선점한다."""
+
+        key = self._budget_key(group, day)
+        reserved = self._r.eval(
+            """
+            local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+            if current >= tonumber(ARGV[1]) then
+                return 0
+            end
+            local count = redis.call('INCR', KEYS[1])
+            if count == 1 then
+                redis.call('EXPIRE', KEYS[1], ARGV[2])
+            end
+            return 1
+            """,
+            1,
+            key,
+            ceiling,
+            60 * 60 * 48,
+        )
+        return bool(reserved)
 
     def touch(self, key: str, at: datetime) -> None:
         self._r.zadd(f"{PREFIX}:active", {key: at.timestamp()})
@@ -434,11 +470,11 @@ class Cache:
             )
 
         left = self.budget_left(feed_id, fetched_at)
-        if left is not None and left <= 0:
+        if left is not None and left <= self.policy.snapshot_live_reserve_calls:
             return Cached(
                 None,
-                reason=f"일 예산 소진 ({feed.budget})",
-                failure_kind="budget_exhausted",
+                reason=f"실시간 조회 예약분 보존 ({feed.budget})",
+                failure_kind="budget_reserved",
             )
 
         return self._snapshot_flight(feed, key, fetch, fetched_at, wait_sec)
@@ -478,8 +514,21 @@ class Cache:
                     failure_kind="in_flight",
                 )
             try:
+                limit = self.policy.budgets.get(feed.budget)
+                day = _day(fetched_at)
+                if limit is None:
+                    # 한도를 모르는 원천도 호출량은 기록한다. 실제 전송 전에 세야 예외도
+                    # 한 번의 시도로 남고, 알려진 한도는 아래 원자적 선점이 같은 일을 한다.
+                    self.store.spend(feed.budget, day)
+                else:
+                    ceiling = max(0, limit - self.policy.snapshot_live_reserve_calls)
+                    if not self.store.reserve(feed.budget, day, ceiling):
+                        return Cached(
+                            None,
+                            reason=f"실시간 조회 예약분 보존 ({feed.budget})",
+                            failure_kind="budget_reserved",
+                        )
                 payload = fetch()
-                self.store.spend(feed.budget, _day(fetched_at))
                 self.store.set(
                     key,
                     Entry(payload, fetched_at),
@@ -487,7 +536,6 @@ class Cache:
                 )
                 return Cached(payload, calls=1)
             except TransportError as exc:
-                self.store.spend(feed.budget, _day(fetched_at))
                 failure_kind = type(exc).__name__.lower()
                 if isinstance(exc, NoData):
                     # NoData는 전송층이 비재시도성으로 분류한 결과다. 한 발표 주기만 기억해
@@ -501,6 +549,12 @@ class Cache:
                             reason=str(exc),
                         ),
                         feed.ttl_sec(1),
+                    )
+                    return Cached(
+                        None,
+                        reason=str(exc),
+                        calls=1,
+                        failure_kind=failure_kind,
                     )
                 return Cached(
                     None,

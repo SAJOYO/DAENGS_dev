@@ -1,6 +1,6 @@
 """9단계 생성 — 검색 결과 위에 Gemini 로 답을 만든다 (RAG-028).
 
-**조립 순서가 사는 곳이 여기다** (RAG-028 ③). `/ask` 와 `rag generate` 가 같은 순서
+**조립 순서가 사는 곳이 여기다** (RAG-028 ③). `/life/ask` 와 `rag generate` 가 같은 순서
 (`인코딩 → search → 프롬프트 → Gemini`)를 밟는데, 그것을 라우터와 CLI 에 각각 적으면 RAG-003 이
 8·9단계 사이에 끼는 날 고칠 곳이 둘이 된다 — `pipeline.py` 가 이미 그 자리를 예고해 놨다.
 RAG-027 은 이 조립을 `app/services/ask.py` 에 두라고 하지만, `rag` 는 `app` 을 import 할 수 없어
@@ -110,7 +110,7 @@ class _Base(BaseModel):
 class Answer:
     """답변 하나 + **그 답을 만든 근거 전부**.
 
-    `hits` 를 들고 다니는 것이 RAG-028 ②다 — 1랩의 `/ask` 는 제품이 아니라 **검문소④가 읽는 관찰
+    `hits` 를 들고 다니는 것이 RAG-028 ②다 — 1랩의 `/life/ask` 는 제품이 아니라 **검문소④가 읽는 관찰
     도구**이고, 무엇을 컨텍스트로 줬는지 함께 말하지 않으면 "인용한 조항이 실재했나"를 셀 수 없다.
     """
     question: str
@@ -207,7 +207,7 @@ def ungrounded_articles(text: str, hits: list[Hit]) -> list[str]:
 def _client(api_key: str | None = None):
     """지연 생성. 키가 없으면 여기서 죽는다 — 검색까지 다 해 놓고 마지막에 죽지 않게.
 
-    **타임아웃을 여기서 건다.** 안 걸면 무제한이라, 상류가 물리면 `/ask` 를 돌리는 스레드풀
+    **타임아웃을 여기서 건다.** 안 걸면 무제한이라, 상류가 물리면 `/life/ask` 를 돌리는 스레드풀
     워커를 그대로 잡고 있는다 — FastAPI 가 `def` 컨트롤러를 스레드풀에서 돌리므로(RAG-028 ④)
     그 워커는 다른 요청도 못 받는다.
 

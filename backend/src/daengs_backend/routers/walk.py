@@ -4,7 +4,7 @@
 services/walk.py 가 정합니다.
 
 **경로가 `/app/walks` 인 이유**는 앱 회원 전용이기 때문입니다 (`/app/pets` 와 같은
-규칙). 이름이 `/walk` 와 비슷하지만 그쪽은 **산책 적합도(날씨 조언)** 라 하는 일이
+규칙). 이름이 `/life/walk-conditions` 와 비슷하지만 그쪽은 **산책 적합도(날씨 조언)** 라 하는 일이
 전혀 다릅니다 — 기록은 복수형 `walks` 입니다.
 """
 
@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import Walk, WalkAnalysis
+from daengs_backend.orchestration.adapters.life import (
+    WalkWeatherLookup,
+    lookup_walk_weather,
+)
 from daengs_backend.schemas.walk import (
     WalkDetailResponse,
     WalkFinalizeRequest,
@@ -32,6 +36,12 @@ from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.services.walk_finalize import FinalizeInputError
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
+
+
+def get_walk_weather_lookup() -> WalkWeatherLookup:
+    """테스트가 외부 날씨를 대체할 수 있는 얇은 조립 경계."""
+
+    return lookup_walk_weather
 
 
 def _to_response(walk: Walk) -> WalkResponse:
@@ -173,6 +183,7 @@ async def finalize_walk(
     response: Response,
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
+    weather_lookup: Annotated[WalkWeatherLookup, Depends(get_walk_weather_lookup)],
 ) -> WalkFinalizeResponse:
     """전체 좌표열을 봉인하고 버전된 계산 결과를 저장합니다.
 
@@ -185,6 +196,7 @@ async def finalize_walk(
             user.app_user_id,
             walk_id,
             body,
+            weather_lookup,
         )
     except walk_service.WalkNotFoundError:
         raise HTTPException(

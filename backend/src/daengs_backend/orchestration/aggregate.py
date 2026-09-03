@@ -17,6 +17,7 @@ _LABELS = {
     CapabilityName.TRAINING: "훈련",
     CapabilityName.LIFE: "생활 정보",
     CapabilityName.WALK: "산책",
+    CapabilityName.PLACE: "장소",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라

@@ -1,4 +1,4 @@
-# 생활 파트 로드맵 — ① 제도·문서 RAG (`/ask`) · ② 실시간 산책 (`/walk`)
+# 생활 파트 로드맵 — ① 제도·문서 RAG (`/life/ask`) · ② 실시간 산책 (`/life/walk-conditions`)
 
 > **living doc.** "지금 무엇이 끝났고 무엇이 열려 있나"만 말한다. 결정의 *왜*는 여기 없다 —
 > `RAG-` / `RT-` / `D-` 번호가 가리키는 곳에 있고, 여기서 다시 쓰지 않는다 (같은 결정의 두 번째 주장을
@@ -16,12 +16,12 @@
 
 ## 0. 한 장 요약
 
-- **답변 API 는 끝났다.** `/ask` 9단계 전부 · `/walk` 전부 구현·배포. 코퍼스 8,990문서 / 22문항 lap14 = cited 17 · grounded 13.
+- **답변 API 는 끝났다.** `/life/ask` 9단계 전부 · `/life/walk-conditions` 전부 구현·배포. 코퍼스 8,990문서 / 22문항 lap14 = cited 17 · grounded 13.
 - **수집은 닫혔다.** 문서형 시드 23 중 16 수집, 남은 7 은 robots·WAF·SPA·문서 부재로 우리 손 밖 (`data-sources.md` §0).
 - **운영 뼈대는 섰다** — #65(코퍼스 서버 이관) · #66(개정 감지) · #67(고시공고) 전부 2026-08-31 머지. 운영에 남은 것은 C5(워커 예열 · `crawl_runs` 잔존 행 · 알림 · HNSW) 뿐이다.
 - **다음은 "툴로서의 완성"이다.** #80 에서 이 파트는 에이전트가 아니라 **능력(capability)** 이고, Life·Walk 둘 다 v1 실행 대상.
   통합 첫날 실제로 도는 능력은 이 둘뿐이다 (§2). **Card 1 은 2026-08-31 에 착륙했고(#102) B 어댑터는 그 안에 들어갔다** — 남은 순서는 **A 툴 완성**이고 나머지 트랙은 틈에.
-- **사용자에게 닿는 길은 어댑터 하나다.** 앱(DAENGS_APP) ChatScreen 은 자유 텍스트를 전부 `POST /assistant/query` 로 보낸다. 직접 `/ask`·`/walk` 는
+- **사용자에게 닿는 길은 어댑터 하나다.** 앱(DAENGS_APP) ChatScreen 은 자유 텍스트를 전부 `POST /assistant/query` 로 보낸다. 직접 `/life/ask`·`/life/walk-conditions` 는
   콘솔 점검 도구로 남았다 (§1). 그래서 A 트랙의 값은 "어댑터를 지나 사용자에게 보이는가"로 잰다 — A4 축소 · A8 verbose 가 🚫 된 이유다.
 - **09-21 발표 · 09-18 main 프리즈까지는 `git pull` 카드만.** 재적재 카드(A1 · A2 · A7 · F1 · D3)는 55분 + GCP 덤프·복원이라 그 뒤 (§4).
 - **Walk 는 둘이다.** 이 문서의 Walk 는 Life 의 산책 *적합도*(능력 이름 `walk`)이고, `daengs_walk`(D-045~047)는 산책 *기록*·Capsule 이다 (§2).
@@ -39,9 +39,9 @@
 | 적재 | `load --prune` — 행 단위 upsert + 옛 행 청소. HNSW 인덱스 미생성(전수 스캔) | RAG-025 · 045 |
 | 검색 | 하이브리드(dense + Kiwi FTS, RRF 0.3) + 인용 확장(홉) + 교통 배제. **지역 필터 없음** | RAG-035 · 040 · 052 · 003 |
 | 골든셋·평가 | 22문항(법령 Q · 교통 T · 보험 I) · `score-laps` 두 지표. **judge·회귀 게이트 없음** | RAG-022 · 029 · 049 · 007 |
-| `/ask` 서빙 | `POST /ask` — 근거 0건이면 404. **그 외 기권·거절 신호 없음.** 응답에 `content` 전문 | RAG-028 · D-021 |
-| `/walk` | 결정적 · T+24h 타임라인 · `sources` 노출 · 판정 불가는 `unknown`(503) | RT-001 ⑥ |
-| 화면 | **앱 ChatScreen → `POST /assistant/query`** (DAENGS_APP `ui/chat/ChatScreen.kt`). 웹 콘솔은 검색 점검 탭이 직접 `/ask` 를 부른다. 앱이 `/ask`·`/walk` 를 직접 부르는 코드는 없다 | #115 · #36 · 2026-09-03 실측 |
+| `/life/ask` 서빙 | `POST /life/ask` — 근거 0건이면 404. **그 외 기권·거절 신호 없음.** 응답에 `content` 전문 | RAG-028 · D-021 |
+| `/life/walk-conditions` | 결정적 · T+24h 타임라인 · `sources` 노출 · 판정 불가는 `unknown`(503). **특보는 구 단위까지 잡는다** (#175) | RT-001 ⑥ · RT-003 |
+| 화면 | **앱 ChatScreen → `POST /assistant/query`** (DAENGS_APP `ui/chat/ChatScreen.kt`). 웹 콘솔은 검색 점검 탭이 직접 `/life/ask` 를 부른다. 앱이 `/life/ask`·`/life/walk-conditions` 를 직접 부르는 코드는 없다 | #115 · #36 · 2026-09-03 실측 |
 | 코퍼스 분포 | `policy` 8,735 (그중 insurance 4,673) · `travel` 255 · `food` 0 | 서버 DB 실측 |
 
 랩 추이 (같은 22문항은 lap12 부터): lap12 16·13 → lap13 16·12 → lap14 **17·13**. 보합권 — 수집으로 올릴 여지는 소진(RAG-040 이 실증).
@@ -73,18 +73,18 @@
 
 **용어 — Walk 가 둘이다.** 위 `WalkCapabilityAdapter` 와 능력 이름 `walk` 는 Life 의 **산책 적합도**(`daengs_life.realtime`, RT-)다.
 `backend/src/daengs_walk/`(D-045 · D-046 · D-047)는 GPS 산책 **기록**·Cellophane·Capsule 이고 `/app/walks` 로 나가며, 오케스트레이션의
-실행 대상이 아니다. 이 문서에서 "Walk" 는 전자다. HTTP 경로는 A4 로 `/life/walk-conditions` 가 되지만 **능력 이름 `walk` 는 09-21 전에
+실행 대상이 아니다. 이 문서에서 "Walk" 는 전자다. HTTP 경로는 A4(#176)로 `/life/walk-conditions` 가 됐지만 **능력 이름 `walk` 는 09-21 전에
 바꾸지 않는다** — 벤치마크 골드 80문항 · 앱이 읽는 `results[].capability` 가 그 값에 묶여 있다 (§5).
 
 ### 경계 — 주제가 아니라 **근거의 종류**로 긋는다
 
-"생활"은 주제로는 끝이 없다. 이 파트의 실제 경계는 처음부터 하나였다: **출처를 인용할 수 있는 답만 한다** (KPI · `/ask` 의 404 ·
+"생활"은 주제로는 끝이 없다. 이 파트의 실제 경계는 처음부터 하나였다: **출처를 인용할 수 있는 답만 한다** (KPI · `/life/ask` 의 404 ·
 RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 | Life 가 답한다 | 근거의 종류 |
 | --- | --- |
 | 규정 · 제도 · 절차 · 조건 · 요금 · 기한 | 법령 · 조례 · 고시 · 약관 · 기관 공식 안내 (`trust_level`: `law` > `official` > `guideline`) |
-| 지금/오늘의 조건 판정 | 공공 API 직조회 — `/walk`, (앞으로) 분실 조회 |
+| 지금/오늘의 조건 판정 | 공공 API 직조회 — `/life/walk-conditions`, (앞으로) 분실 조회 |
 
 | Life 가 답하지 않는다 | 이유 | 어떻게 거절·넘기나 (2026-09-03 계약 실물에 맞춤) |
 | --- | --- | --- |
@@ -101,7 +101,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 | 신호 | Life 현재 | Life 목표 | Walk 현재 | Walk 목표 |
 | --- | --- | --- | --- | --- |
-| OK | 200 | ✅ **어댑터가 축소한다** — answer · citations(label·url·title) · quality (`adapters/life.py`, O-9). 직접 `/ask` 는 전문 유지 (A4 · §5) | 200 | 200 |
+| OK | 200 | ✅ **어댑터가 축소한다** — answer · citations(label·url·title) · quality (`adapters/life.py`, O-9). 직접 `/life/ask` 는 전문 유지 (A4 · §5) | 200 | 200 |
 | ABSTAINED | ✅ 근거 0건 404 **+ 약한 근거 기권** — 생성이 낸 `covered` + 답변의 자기보고 (`covered+selfreport`, RAG-055) | 그대로. 오기권 셋은 검색 순위 구멍이라 D5 | HTTP 는 `unknown` → 503, **어댑터가 ABSTAINED 로 옮긴다** (#102) | ✅ 확정됨 — A6 |
 | REFUSED | ✅ **생성이 `boundary` 를 낸다** — `medical` · `emergency` → 422 + `code`, 어댑터가 REFUSED 로 (RAG-055). 문장도 Life 가 만든다 (불변식 3) | `place` 는 라우터 몫(A3b), `training` 은 다중 EXECUTE 라 불필요 | — | — |
 | ERROR / TIMEOUT | 502 / 504 | 그대로 | 503(예산 초과) | 그대로 |
@@ -122,11 +122,11 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | A0 | **GCP 에서 `/assistant/query` 경유 Life 스모크** — 앱 계정으로 제도 질문 하나, 기대 OK + citations | `orchestration-architecture.md` 가 "배포 인프라에서 실제 Life 능력 스모크"를 미완 후속으로 남겼다. Walk 는 앱의 CAUTION 문구 버그(859a691)로 GCP 경로가 검증됐지만 Life 는 아니다. `ml` 그룹이 빠지면 503→ERROR 인데 앱에는 "실패" 한 줄뿐이라 뒤 카드가 전부 헛돈다 | GCP 접근 | XS | ✅ #169 (2026-09-03) **인프라 PASS** — 4/4 200, 예열 503 없음, O-9 축소 확인, 의미 라우팅이 `life` 선택. 답변 품질에서 A3a 근거 둘: 산문 물러섬이 OK 로 통과(`cited == []`), `no_evidence` 기권이 사실상 안 남. 기록은 `assistant-life-gcp-smoke.md` §3 |
 | A3a ✅ | **Life 경계 신호 — REFUSED** — `services/ask.py` 가 `medical`·`emergency` 를 감지해 REFUSED 로 내고(`refusal.code` 보존), 골든셋에 `must` OR 목록 · `expect: abstain` · `expect: refuse` 문항 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · D-035 "Life 안전/거절 분류 신설은 별도 카드" · §2 의 경계를 테스트로. **A0 실측**(`assistant-life-gcp-smoke.md` §3): 목줄 과태료 질문이 "자료에 없다" 산문 + OK 로 나가고(`cited == []`), 근거 0건 문장도 검색이 항상 k 건을 돌려줘 `no_evidence` 가 안 난다 — **약한 근거 기권도 이 카드 범위** | A0 ✅ | M | ✅ **#177 (2026-09-03)** — 신호는 **생성이 낸다**(방식 a, RAG-055 ②): `boundary` 3/3 정확 · 오거절 0 (lap16·17·18 모두), 기권은 `covered+selfreport` 로 놓친 기권 0/2. 골든셋은 `must` OR · `expect` 로 늘렸고(36문항) `score-laps` 가 그것을 채점한다. 지표는 lap14 와 같은 22문항에서 grounded 13 → 15, cited 17 → 15(S5·T2 — 답은 맞고 소스에 조 번호가 없다, RAG-029 의 알려진 누수). 오기권 셋(Q3·S3·B1)은 **검색 순위 구멍**이라 D5 로 넘긴다 |
 | A3b | **라우터 HANDOFF 대상 `place` 추가** — `semantic.py` HandoffName · planner 고정 reason · aggregate 사용자 문구 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 (prompt/gold 는 제자리 수정 없이 버전을 올려 전체 재실행) | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. 이 파트는 필요와 문항을 낸다 |
-| A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/walk` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 12곳 동반 | S | ⬜ (옛 "응답 축소"는 🚫 — §5) |
-| A5 | **특보구역명 ↔ 행정구역 매핑표** (`data/reference/`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/walk` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ⬜ |
+| A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/life/walk-conditions` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 동반 | S | ✅ #176 (옛 "응답 축소"는 🚫 — §5) |
+| A5 | **특보구역명 ↔ 행정구역 매핑표** (`realtime/warning_areas.csv`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/life/walk-conditions` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ✅ #175 (2026-09-03) — RT-003. 출처는 날씨누리(공공데이터포털 파일데이터는 관할 시군구가 없다). **딸려 나온 정정 하나**: 묶음 머리(`서울(서울서남권, …)`)를 매칭해 서초구가 옆 권역 주의보를 자기 것으로 읽던 것 |
 | A6 | Walk `unknown` → ABSTAINED 매핑 | #80 계약 표 · RT-001 ⑥ | 없음 | XS | ✅ #102 (`orchestration/adapters/walk.py:52`) |
 | A7 | **`insurance` 를 `policy` 에서 독립 category 로** | 4,673/8,990 이 한 칸에 몰려 category 필터의 격리 효과가 없음. RAG-028 이 "값이 없다"고 지목한 자리 | A1 (재적재는 메타만이지만 스냅샷·라벨이 움직임) | S | ⬜ 사람 결정 2026-08-30 "나중에 뺀다" |
-| A8 | ~~**`/walk?verbose=1`** — 판정 근거(축 · 관측값 · stale) 노출~~ | A6 에서 갈라져 나온 잔여 · RT-001 ⑥ | — | XS | 🚫 2026-09-03 사람 확정 — 근거는 `results[].data.now.axes` 와 aggregate 문장(859a691)으로 이미 나간다. §5 |
+| A8 | ~~**`/life/walk-conditions?verbose=1`** — 판정 근거(축 · 관측값 · stale) 노출~~ | A6 에서 갈라져 나온 잔여 · RT-001 ⑥ | — | XS | 🚫 2026-09-03 사람 확정 — 근거는 `results[].data.now.axes` 와 aggregate 문장(859a691)으로 이미 나간다. §5 |
 
 ### B. 어댑터 — Card 1(#102)에 들어간 것과 남은 것
 
@@ -159,7 +159,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | D6 | RAG-007 축소판 — 재적재 후 자동 `score-laps` + 기준선 대비 하락 경고. judge 는 하지 않음 | RAG-007 (제안 상태) · RAG-006 | ⬜ C1 뒤 |
 | D7 | `rag status` · `BY_SOURCE` 단일화 · `test_evaluate` bge-m3 skip 가드 | RAG-023 · 042 ⑥ · 052 ⑥ | ⬜ |
 
-### E. `/walk` 검증 부채 — 실측 없이 코드에 들어간 것
+### E. `/life/walk-conditions` 검증 부채 — 실측 없이 코드에 들어간 것
 
 | # | 무엇 | 왜 | 상태 |
 | --- | --- | --- | --- |
@@ -177,7 +177,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | --- | --- | --- | --- | --- | --- |
 | F0 | **정찰** — 독성 식품 목록 · 공동주택 표준관리규약 · 재난 시 동반 지침 | — | URL · robots · 본문 유무 | — | ⬜ 먼저 |
 | F1 | **음식 · 사료** (`food`) | RAG | 사료관리법 · 반려동물 사료 표시기준 고시 → 법령 API 로 열림. 독성 목록은 검역본부 막힘(F0) | "먹었어요" 는 `emergency` REFUSED (A3a) | ⬜ A1 · A3a · F0 뒤 |
-| F2 | **분실 · 유기** | **툴** (`/walk` 형) + 기존 제도(변경신고 30일) | data.go.kr 유기동물 조회 API — 열림, 활용신청 | 없음 | ⬜ |
+| F2 | **분실 · 유기** | **툴** (`/life/walk-conditions` 형) + 기존 제도(변경신고 30일) | data.go.kr 유기동물 조회 API — 열림, 활용신청 | 없음 | ⬜ |
 | F3 | **사망 · 장례** | RAG — 골든셋 문항 몇 개 | 장묘업 허가 · 등록 말소 조항 **이미 코퍼스에** | 업체 위치는 `place` | ⬜ 가장 싸다 |
 | F4 | 주거 · 이웃 (관리규약 · 소음 민원) | RAG | 국토부 준칙 — F0 | 짖음 **교정**은 `training` | ⬜ F0 뒤 |
 | F5 | **일정 · 알림** — 변경신고 기한 · 접종 주기 · 보험 갱신 · **등록 말소 신고(사망 후 30일)** | proactive (제도 지식 + 프로필 + Beat) | 코퍼스 + #64 + **`pets.registered` 컬럼(신규 — DB 카드, 두 DB 손 적용, 앱 입력 화면 동반)**. `farewell_on` 은 이미 있다 | — | ⬜ Card 1 뒤. 등록 여부는 2026-09-03 B4 에서 여기로 옮김 — 그 값의 첫 소비자가 이 행이라서 |
@@ -188,7 +188,8 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 ```
 ── 09-21 전 (DB 무변경 · 배포 = git pull · main 프리즈 09-18) ──────────────────────────
-A0 GCP Life 스모크 → A3a REFUSED → A5 특보 매핑 → B4 견종·나이 → A4 이름 정리
+A0 GCP Life 스모크 ✅ #169 → A5 특보 매핑 ✅ #175 → A4 이름 정리 → A3a REFUSED → B4 견종·나이
+   └ 2026-09-03 A5·A4·A3a 를 병렬로 열었다 (#175 · #176 · #177). 파일이 안 겹치고 머지 순서만 A5 → A4 → A3a 다
 A3b place 핸드오프 = 라우터 카드 (담당 조율, 병렬)          E1 · E2 = 비 오는 날 (틈에)
 
 ── 09-21 뒤 (재적재 = 55분 + GCP 덤프·복원, migrations 두 DB 손 적용) ─────────────────
@@ -202,7 +203,7 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 ```
 
 - **A0 이 맨 앞인 이유** — 30분짜리인데, 실패하면 A3a · B4 가 사용자에게 안 보인다. Walk 는 GCP 경로가 앱 버그로 검증됐고 Life 는 아직이다.
-- **A3a 가 A5 앞인 이유** — 데모에서 "증상 물어봤더니 조문으로 답한다"가 "구 단위 특보를 놓친다"보다 먼저 눈에 띈다. 둘 다 M/S 라 순서만의 문제다.
+- **A5 를 A3a 앞에 실제로 넣은 이유** — 셋을 병렬로 열자 순서는 머지 순서만 남았고, S 인 A5·A4 를 먼저 넣어야 M 인 A3a 가 리베이스에서 흡수한다.
 - **A4 가 09-21 전 묶음의 끝인 이유** — 앱이 직접 안 부르니 리스크는 낮지만 급하지도 않다. 문서 12곳·콘솔 호출 경로가 같이 움직여 리뷰가 넓다.
 - **A1 을 소스 카드(A7 · F1 · D3) 앞에 두는 이유** — 그 셋이 각각 55분을 다시 내기 때문.
   **2026-09-02 부터는 여기에 GCP 몫이 붙는다** — 재적재는 집 서버 DB 만 바꾸고 GCP 는 09-02 스냅샷
@@ -229,8 +230,8 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 | 임베딩 모델 프로세스 분리 · AWS 이전 | D-021 재개 조건 ⓐ~ⓓ 미발동 · RAG-043 ⑤ |
 | `RAG-005` · `006` 의 확정 | 계획이지 결정이 아니었다 — 헤더는 제안으로 둔다 (2026-08-30 정정) |
 | **data.go.kr 운영계정 전환 신청 (C4)** | 2026-09-02 사람 확정. 그래서 **개발계정 일 1,000회가 상수로 남는다** — RT-001 ④-e 가 "근본 해결"로 꼽았던 4번이 빠지고, 남은 1~3(AWS 로 초단기실황 대체 · 프리페치 상한 `N` · provider 별 일 예산 차단)이 **유일한 대응**이 된다. ④-f 의 "운영계정(10만/일)이 승인되면 `N` 을 수백 단위로 재역산" 갈래도 함께 닫힌다 |
-| **직접 `/ask` 응답 축소 (옛 A4)** | 2026-09-03 사람 확정. 어댑터가 O-9 축소를 이미 한다(`adapters/life.py`). 직접 `/ask` 의 유일한 소비자인 콘솔 점검 탭은 `content` 전문이 있어야 검문소④를 본다 (RAG-028 ②). A4 는 이름 정리 카드로 바뀌었다 |
-| **`/walk?verbose=1` (A8)** | 2026-09-03 사람 확정. 앱은 `/walk` 를 직접 안 부르고, 근거는 `results[].data.now` 와 aggregate 의 같은 등급 축 문장(859a691)으로 이미 나간다. 콘솔에 산책 점검 탭이 생기면 그때 다시 본다 |
+| **직접 `/life/ask` 응답 축소 (옛 A4)** | 2026-09-03 사람 확정. 어댑터가 O-9 축소를 이미 한다(`adapters/life.py`). 직접 `/life/ask` 의 유일한 소비자인 콘솔 점검 탭은 `content` 전문이 있어야 검문소④를 본다 (RAG-028 ②). A4 는 이름 정리 카드로 바뀌었다 |
+| **`/life/walk-conditions?verbose=1` (A8)** | 2026-09-03 사람 확정. 앱은 `/life/walk-conditions` 를 직접 안 부르고, 근거는 `results[].data.now` 와 aggregate 의 같은 등급 축 문장(859a691)으로 이미 나간다. 콘솔에 산책 점검 탭이 생기면 그때 다시 본다 |
 | **Life → `training` 핸드오프** | training 은 EXECUTE 능력이라 라우터가 다중 선택으로 잡는다. 능력은 handoff 를 낼 수도 없다 (contracts §4 — `CapabilityResult` 에 필드 없음) |
 | **능력 이름 `walk` 변경 (09-21 전)** | 벤치마크 골드 80문항 · 앱의 `results[].capability` 파싱이 그 값에 묶여 있다. A4 는 HTTP 경로만 바꾼다. 능력 이름 정리는 09-21 뒤 라우터 담당과 |
 | **프로필 "기본 위치" 컬럼** | 앱이 `location` 을 매 요청 보낸다 (contracts §8). 컬럼을 두면 원천이 둘이 된다 |
@@ -244,7 +245,7 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 - **핸드오프 식별자** — 2026-09-03 정리: `place` 만 라우터 HANDOFF 대상 후보(A3b — 확정은 라우터 담당).
   `medical` · `emergency` 는 핸드오프가 아니라 Life 의 `refusal.code` (A3a). `training` 은 제거 (§5).
   남은 사람 몫은 **A3b 의 시점** — 09-21 전에 라우터 벤치마크를 다시 돌릴 여유가 있는지는 라우터 담당이 본다.
-- ~~**A4 착수 시점**~~ — 2026-09-03 닫힘. DAENGS_APP dev(`0290d23`, origin 과 동일)의 API 경로 전부를 훑어 `/ask`·`/walk` 직접 호출이
+- ~~**A4 착수 시점**~~ — 2026-09-03 닫힘. DAENGS_APP dev(`0290d23`, origin 과 동일)의 API 경로 전부를 훑어 `/life/ask`·`/life/walk-conditions` 직접 호출이
   없음을 확인했다. 앱이 읽는 것은 `/assistant/query` 응답의 `results[].capability == "walk"`(`assistant/WalkVerdict.kt`)뿐이라,
   **HTTP 경로는 바꿔도 능력 이름은 못 바꾼다**는 §5 의 판단이 코드로도 확인됐다.
 - ~~**페이로드를 누가 소유하는가**~~ — **2026-09-03 닫힘: 계약 계층 잔류 수용.** 이유: `LifePayload` 를

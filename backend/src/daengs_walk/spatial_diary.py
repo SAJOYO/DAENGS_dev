@@ -27,14 +27,14 @@ from daengs_walk.contracts import FrozenContract
 from daengs_walk.hex_grid import Cell
 
 SPATIAL_DIARY_VIEW_VERSION = 1
-CONTEXT_FACET_POLICY_VERSION = 1
+CONTEXT_FACET_POLICY_VERSION = 2
 SPATIAL_AGGREGATION_VERSION = 1
 DIARY_CALENDAR_TIMEZONE = "Asia/Seoul"
 MAX_VIEW_RANGE_DAYS = 366
 
 SpatialFieldMetric = Literal["visit_rate", "walk_utilization"]
 ContextFacetAxis = Literal["precipitation", "daylight"]
-PrecipitationFacet = Literal["rain", "snow", "dry", "unknown"]
+PrecipitationFacet = Literal["rain", "snow", "mixed", "dry", "unknown"]
 DaylightFacet = Literal["day", "night", "unknown"]
 
 # WMO weather interpretation codes. 이것은 창문 그림을 고르는 앱의 OutsideWeather 접기와
@@ -64,7 +64,7 @@ WMO_RAIN_CODES = frozenset(
 WMO_SNOW_CODES = frozenset({71, 73, 75, 77, 85, 86})
 
 FACET_VALUES: dict[str, frozenset[str]] = {
-    "precipitation": frozenset({"rain", "snow", "dry", "unknown"}),
+    "precipitation": frozenset({"rain", "snow", "mixed", "dry", "unknown"}),
     "daylight": frozenset({"day", "night", "unknown"}),
 }
 _DIARY_ZONE = ZoneInfo(DIARY_CALENDAR_TIMEZONE)
@@ -237,12 +237,16 @@ def context_facets(snapshot: TrailContextSnapshot) -> ContextFacets:
     if snapshot.status not in {ContextStatus.CAPTURED, ContextStatus.PARTIAL}:
         return ContextFacets(precipitation="unknown", daylight="unknown")
 
-    code = snapshot.weather_code
-    if code in WMO_RAIN_CODES:
-        precipitation: PrecipitationFacet = "rain"
-    elif code in WMO_SNOW_CODES:
+    kind = snapshot.precipitation_kind
+    if kind == "none":
+        precipitation: PrecipitationFacet = "dry"
+    elif kind in {"rain", "snow", "mixed"}:
+        precipitation = kind
+    elif snapshot.weather_code in WMO_RAIN_CODES:
+        precipitation = "rain"
+    elif snapshot.weather_code in WMO_SNOW_CODES:
         precipitation = "snow"
-    elif code in WMO_DRY_CODES:
+    elif snapshot.weather_code in WMO_DRY_CODES:
         precipitation = "dry"
     else:
         precipitation = "unknown"

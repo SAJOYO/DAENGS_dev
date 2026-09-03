@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.orchestration.adapters import (
     LifeCapabilityAdapter,
+    PlaceCapabilityAdapter,
     TrainingCapabilityAdapter,
     WalkCapabilityAdapter,
 )
@@ -48,6 +49,7 @@ class OrchestrationEngine:
                 CapabilityName.TRAINING: TrainingCapabilityAdapter(),
                 CapabilityName.LIFE: LifeCapabilityAdapter(),
                 CapabilityName.WALK: WalkCapabilityAdapter(),
+                CapabilityName.PLACE: PlaceCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         self.graph = self._build_graph()

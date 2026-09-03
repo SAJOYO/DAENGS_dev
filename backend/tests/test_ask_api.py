@@ -1,4 +1,4 @@
-"""`POST /ask` — API 레벨 (RAG-027 · RAG-028).
+"""`POST /life/ask` — API 레벨 (RAG-027 · RAG-028).
 
 **모델도 DB 도 Gemini 도 부르지 않는다.** `deps.py` 가 존재하는 두 번째 이유(*"테스트가 여기를
 갈아끼운다"*)를 그대로 쓴다 — `dependency_overrides` 로 인코더와 커넥션을 갈아끼우고, 생성은
@@ -49,7 +49,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
 
 def test_answers_with_its_evidence(client: TestClient) -> None:
     """**RAG-028 ② — 답변만 주면 검문소④를 만들 수 없다.** 무엇을 컨텍스트로 줬는지 함께 말한다."""
-    r = client.post("/ask", json={"question": "목줄 안 하면 과태료 얼마인가요?"})
+    r = client.post("/life/ask", json={"question": "목줄 안 하면 과태료 얼마인가요?"})
     assert r.status_code == 200
     d = r.json()
     assert d["answer"] and d["hits"] and d["cited"] == ["제101조"] and d["ungrounded"] == []
@@ -57,25 +57,25 @@ def test_answers_with_its_evidence(client: TestClient) -> None:
 
 def test_kpi_fields_survive_the_dto(client: TestClient) -> None:
     """KPI 는 **출처 링크 + 조항 번호**다. 둘 중 하나라도 DTO 에서 새면 제품이 성립하지 않는다."""
-    h = client.post("/ask", json={"question": "q"}).json()["hits"][0]
+    h = client.post("/life/ask", json={"question": "q"}).json()["hits"][0]
     assert h["citation"] and h["citation_url"]
 
 
 def test_content_is_not_truncated(client: TestClient) -> None:
     """근거 본문을 자르지 않는다 (RAG-028 ②). 자르면 인용이 옳은 읽기인지 판정할 수 없다."""
-    h = client.post("/ask", json={"question": "q"}).json()["hits"][0]
+    h = client.post("/life/ask", json={"question": "q"}).json()["hits"][0]
     assert h["content"] == HITS[0].content
 
 
 def test_both_model_names_are_reported(client: TestClient) -> None:
     """랩 비교는 **둘 다** 있어야 성립한다 — 답을 만든 모델과 검색에 쓴 모델 (RAG-028 ⑥)."""
-    d = client.post("/ask", json={"question": "q"}).json()
+    d = client.post("/life/ask", json={"question": "q"}).json()
     assert d["model"] == "gemini-fake" and d["embedding_model"] == "bge-m3"
 
 
 def test_empty_question_is_rejected_by_the_contract(client: TestClient) -> None:
     """검증은 DTO 가 한다 — 컨트롤러에 로직을 넣지 않기 위해서다 (RAG-027 강제 규칙)."""
-    assert client.post("/ask", json={"question": ""}).status_code == 422
+    assert client.post("/life/ask", json={"question": ""}).status_code == 422
 
 
 # ---------------------------------------------------------------- 경계 신호 (RAG-055)
@@ -156,7 +156,7 @@ def test_no_evidence_means_no_answer(client: TestClient, monkeypatch: pytest.Mon
     """
     empty = Answer(question="q", text="", hits=[], model="m", embedding_model="bge-m3")
     monkeypatch.setattr(service.generate, "ask", lambda *a, **k: empty)
-    assert client.post("/ask", json={"question": "q"}).status_code == 404
+    assert client.post("/life/ask", json={"question": "q"}).status_code == 404
 
 
 def test_missing_key_is_503_not_500(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,7 +165,7 @@ def test_missing_key_is_503_not_500(client: TestClient, monkeypatch: pytest.Monk
         raise RuntimeError("GEMINI_API_KEY 가 없다")
 
     monkeypatch.setattr(service.generate, "ask", boom)
-    r = client.post("/ask", json={"question": "q"})
+    r = client.post("/life/ask", json={"question": "q"})
     assert r.status_code == 503 and "GEMINI_API_KEY" in r.json()["detail"]
 
 
@@ -176,7 +176,7 @@ def test_upstream_failure_says_which_upstream(client: TestClient,
         raise TimeoutError("연결 시간 초과")
 
     monkeypatch.setattr(service.generate, "ask", boom)
-    r = client.post("/ask", json={"question": "q"})
+    r = client.post("/life/ask", json={"question": "q"})
     assert r.status_code == 502 and "TimeoutError" in r.json()["detail"]
 
 
@@ -196,7 +196,7 @@ def test_gemini_timeout_is_504_not_502(client: TestClient, monkeypatch: pytest.M
         raise httpx.ReadTimeout("timed out")
 
     monkeypatch.setattr(service.generate, "ask", boom)
-    r = client.post("/ask", json={"question": "q"})
+    r = client.post("/life/ask", json={"question": "q"})
     assert r.status_code == 504
     assert "30" in r.json()["detail"], "몇 초 안에 안 왔는지를 말해 준다"
 
@@ -227,9 +227,14 @@ def test_the_timeout_reaches_the_client_in_milliseconds(monkeypatch: pytest.Monk
 
 
 def test_walk_still_registered() -> None:
-    """`/ask` 를 붙이면서 `main.py` 에서 겹치는 것은 **등록 한 줄**이어야 한다 (RAG-027 마지막 절).
-    파트②의 엔드포인트가 사라지면 그 약속이 깨진 것이다."""
+    """`/life/ask` 를 붙이면서 `main.py` 에서 겹치는 것은 **등록 한 줄**이어야 한다 (RAG-027 마지막 절).
+    파트②의 엔드포인트가 사라지면 그 약속이 깨진 것이다.
+
+    **경로 문자열을 그대로 적는 것이 이 가드의 값이다** (A4 · #176). 경로를 바꾸면 여기서
+    걸리므로, 이름만 바꾸고 한쪽을 빠뜨리는 일이 조용히 지나가지 않는다."""
     # `app.routes` 는 이 FastAPI 버전에서 지연 등록(`_IncludedRouter`)이라 경로가 안 보인다.
     # OpenAPI 스키마를 보면 **실제로 공개되는 계약**을 보게 되므로 이쪽이 더 옳은 검사이기도 하다.
     paths = create_app().openapi()["paths"]
-    assert "/walk" in paths and "/ask" in paths
+    assert "/life/walk-conditions" in paths and "/life/ask" in paths
+    # 옛 경로는 리다이렉트 없이 사라졌다 (#176) — 소비자가 콘솔 하나뿐이라 같이 나간다.
+    assert "/walk" not in paths and "/ask" not in paths

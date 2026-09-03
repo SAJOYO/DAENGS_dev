@@ -8,7 +8,7 @@ SQL 이 맞는지는 여기서 알 수 없습니다 — `uv run dev` 로 실제 
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
@@ -120,6 +121,20 @@ class Store:
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
         self.walk_analyses: list[object] = []
 
+        #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
+        self.chat_sessions: list[FakeChatSession] = []
+        self.chat_turns: list[FakeChatTurn] = []
+        self.chat_summaries: list[FakeChatSummary] = []
+
+        #: chat completion이 부를 때마다 1초씩 앞으로 갑니다. 진짜는 DB 의
+        #: `NOW()` 지만, 가짜에서 같은 시각을 주면 "최근 갱신 순"을 볼 수 없습니다.
+        self.clock = datetime(2026, 9, 1, tzinfo=UTC)
+
+    def tick(self) -> datetime:
+        """다음 시각. 순서를 보는 테스트가 이것에 기댑니다."""
+        self.clock += timedelta(seconds=1)
+        return self.clock
+
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
         return user
@@ -182,6 +197,75 @@ class FakeWalk:
     def pet_ids(self) -> list[uuid.UUID]:
         """진짜 모델과 같은 모양. 라우터가 이걸로 응답을 만듭니다."""
         return [link.pet_id for link in self.pets]
+
+
+@dataclass
+class FakeChatSession:
+    """ChatSession 대역."""
+
+    app_user_id: uuid.UUID
+    pet_id: uuid.UUID
+    title: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    agent_categories: list[str] = field(default_factory=list)
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+    last_message_at: datetime | None = None
+
+
+@dataclass
+class FakeChatTurn:
+    """ChatTurn 대역."""
+
+    session_id: uuid.UUID
+    client_message_id: uuid.UUID
+    processing_status: str
+    user_content: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    assistant_content: str | None = None
+    agent_categories: list[str] = field(default_factory=list)
+    assistant_status: str | None = None
+    request_id: str | None = None
+    public_response: dict | None = None
+    error_code: str | None = None
+    processing_started_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+    completed_at: datetime | None = None
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+
+
+@dataclass
+class FakeChatSummary:
+    """ChatSummary reservation 대역."""
+
+    app_user_id: uuid.UUID
+    pet_id: uuid.UUID
+    source_turn_count: int
+    client_request_id: uuid.UUID
+    processing_status: str
+    source_session_id: uuid.UUID | None = None
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    title: str | None = None
+    question_summary: str | None = None
+    answer_summary: str | None = None
+    key_points: list[str] | None = None
+    cautions: list[str] | None = None
+    source_citations: list[dict] | None = None
+    agent_categories: list[str] = field(default_factory=list)
+    model: str | None = None
+    prompt_version: str | None = None
+    error_code: str | None = None
+    processing_started_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+    completed_at: datetime | None = None
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
 
 
 def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
@@ -422,5 +506,271 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     )
     monkeypatch.setattr(walk_repo, "delete_all_for_owner", walk_delete_all_for_owner)
     monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
+
+    # -- chats -------------------------------------------------------------
+    def active_sessions(app_user_id, pet_id):
+        mine = [
+            row
+            for row in store.chat_sessions
+            if row.app_user_id == app_user_id
+            and row.pet_id == pet_id
+            and row.last_message_at is not None
+        ]
+        return sorted(mine, key=lambda row: (row.last_message_at, row.id), reverse=True)
+
+    async def get_owned_pet_id(session, app_user_id, pet_id):
+        return next(
+            (p.id for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
+            None,
+        )
+
+    async def get_owned_session(session, app_user_id, session_id):
+        return next(
+            (s for s in store.chat_sessions if s.id == session_id and s.app_user_id == app_user_id),
+            None,
+        )
+
+    async def get_draft(session, app_user_id, pet_id):
+        return next(
+            (
+                s
+                for s in store.chat_sessions
+                if s.app_user_id == app_user_id
+                and s.pet_id == pet_id
+                and s.last_message_at is None
+            ),
+            None,
+        )
+
+    def add_session(session, row):
+        row.id = row.id or uuid.uuid4()
+        row.created_at = store.tick()
+        store.chat_sessions.append(row)
+        return row
+
+    async def delete_session(session, row):
+        store.chat_sessions.remove(row)
+        store.chat_turns = [turn for turn in store.chat_turns if turn.session_id != row.id]
+        for summary in store.chat_summaries:
+            if summary.source_session_id == row.id:
+                summary.source_session_id = None
+
+    async def list_turns(session, session_id, *, completed_only=False):
+        rows = [turn for turn in store.chat_turns if turn.session_id == session_id]
+        if completed_only:
+            rows = [turn for turn in rows if turn.processing_status == "completed"]
+        return sorted(rows, key=lambda row: (row.created_at, row.id))
+
+    async def list_capacity_turns(session, session_id):
+        rows = [
+            turn
+            for turn in store.chat_turns
+            if turn.session_id == session_id
+            and turn.processing_status in {"processing", "completed"}
+        ]
+        return sorted(rows, key=lambda row: (row.created_at, row.id))
+
+    async def get_turn_by_client_id(session, session_id, client_message_id):
+        return next(
+            (
+                turn
+                for turn in store.chat_turns
+                if turn.session_id == session_id
+                and turn.client_message_id == client_message_id
+            ),
+            None,
+        )
+
+    async def get_owned_turn(session, app_user_id, turn_id):
+        turn = next((turn for turn in store.chat_turns if turn.id == turn_id), None)
+        if turn is None:
+            return None
+        chat_session = await get_owned_session(session, app_user_id, turn.session_id)
+        return (turn, chat_session) if chat_session is not None else None
+
+    def add_turn(session, turn):
+        turn.id = turn.id or uuid.uuid4()
+        turn.created_at = turn.processing_started_at = store.tick()
+        store.chat_turns.append(turn)
+        return turn
+
+    async def complete_turn(session, turn_id, **values):
+        turn = next((row for row in store.chat_turns if row.id == turn_id), None)
+        if turn is None or turn.processing_status != "processing":
+            return None
+        turn.processing_status = "completed"
+        for key, value in values.items():
+            setattr(turn, key, value)
+        turn.completed_at = store.tick()
+        return turn
+
+    async def fail_turn(session, turn_id, *, error_code):
+        turn = next((row for row in store.chat_turns if row.id == turn_id), None)
+        if turn is None or turn.processing_status != "processing":
+            return None
+        turn.processing_status = "failed"
+        turn.error_code = error_code
+        turn.completed_at = store.tick()
+        return turn
+
+    async def fail_stale_turns(session, *, session_id, cutoff):
+        changed = 0
+        for turn in store.chat_turns:
+            if (
+                turn.session_id == session_id
+                and turn.processing_status == "processing"
+                and turn.processing_started_at < cutoff
+            ):
+                turn.processing_status = "failed"
+                turn.error_code = "STALE_PROCESSING"
+                turn.completed_at = store.tick()
+                changed += 1
+        return changed
+
+    async def prune_failed_turns(session, *, session_id, keep):
+        failed = sorted(
+            (
+                turn
+                for turn in store.chat_turns
+                if turn.session_id == session_id and turn.processing_status == "failed"
+            ),
+            key=lambda row: (row.created_at, row.id),
+            reverse=True,
+        )
+        remove_ids = {turn.id for turn in failed[keep:]}
+        store.chat_turns = [turn for turn in store.chat_turns if turn.id not in remove_ids]
+        return len(remove_ids)
+
+    async def list_completed_summaries(session, app_user_id, pet_id):
+        rows = [
+            row
+            for row in store.chat_summaries
+            if row.app_user_id == app_user_id
+            and row.pet_id == pet_id
+            and row.processing_status == "completed"
+        ]
+        return sorted(rows, key=lambda row: (row.created_at, row.id), reverse=True)
+
+    async def get_owned_summary(session, app_user_id, summary_id):
+        return next(
+            (
+                row
+                for row in store.chat_summaries
+                if row.id == summary_id and row.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def delete_summary(session, row):
+        store.chat_summaries.remove(row)
+
+    async def summary_by_request_id(session, app_user_id, request_id):
+        return next(
+            (
+                row
+                for row in store.chat_summaries
+                if row.app_user_id == app_user_id and row.client_request_id == request_id
+            ),
+            None,
+        )
+
+    async def active_summary_for_source(session, source_session_id, source_turn_count):
+        return next(
+            (
+                row
+                for row in store.chat_summaries
+                if row.source_session_id == source_session_id
+                and row.source_turn_count == source_turn_count
+                and row.processing_status in {"processing", "completed"}
+            ),
+            None,
+        )
+
+    async def fail_stale_summaries(session, *, source_session_id, cutoff):
+        changed = 0
+        for row in store.chat_summaries:
+            if (
+                row.source_session_id == source_session_id
+                and row.processing_status == "processing"
+                and row.processing_started_at < cutoff
+            ):
+                row.processing_status = "failed"
+                row.error_code = "STALE_PROCESSING"
+                row.completed_at = store.tick()
+                changed += 1
+        return changed
+
+    def add_summary(session, row):
+        row.id = row.id or uuid.uuid4()
+        row.created_at = store.tick()
+        store.chat_summaries.append(row)
+        return row
+
+    async def complete_summary(session, summary_id, **values):
+        row = next((item for item in store.chat_summaries if item.id == summary_id), None)
+        if row is None or row.processing_status != "processing":
+            return None
+        row.processing_status = "completed"
+        for key, value in values.items():
+            setattr(row, key, value)
+        row.completed_at = store.tick()
+        return row
+
+    async def fail_summary(session, summary_id, *, error_code):
+        row = next((item for item in store.chat_summaries if item.id == summary_id), None)
+        if row is None or row.processing_status != "processing":
+            return None
+        row.processing_status = "failed"
+        row.error_code = error_code
+        row.completed_at = store.tick()
+        return row
+
+    async def delete_all_for_user(session, app_user_id):
+        owned_ids = {s.id for s in store.chat_sessions if s.app_user_id == app_user_id}
+        store.chat_sessions = [s for s in store.chat_sessions if s.app_user_id != app_user_id]
+        store.chat_turns = [turn for turn in store.chat_turns if turn.session_id not in owned_ids]
+        store.chat_summaries = [
+            summary for summary in store.chat_summaries if summary.app_user_id != app_user_id
+        ]
+
+    async def list_active(session, app_user_id, pet_id, limit):
+        return active_sessions(app_user_id, pet_id)[:limit]
+
+    async def oldest_active(session, app_user_id, pet_id, keep):
+        return active_sessions(app_user_id, pet_id)[keep:]
+
+    def touch_active(session, row, categories):
+        row.last_message_at = store.tick()
+        row.agent_categories = categories
+
+    monkeypatch.setattr(chat_repo, "get_owned_pet_id", get_owned_pet_id)
+    monkeypatch.setattr(chat_repo, "lock_owned_pet", get_owned_pet_id)
+    monkeypatch.setattr(chat_repo, "get_owned_session", get_owned_session)
+    monkeypatch.setattr(chat_repo, "get_owned_session_for_update", get_owned_session)
+    monkeypatch.setattr(chat_repo, "get_draft", get_draft)
+    monkeypatch.setattr(chat_repo, "list_active_sessions", list_active)
+    monkeypatch.setattr(chat_repo, "oldest_active_sessions_beyond", oldest_active)
+    monkeypatch.setattr(chat_repo, "add_session", add_session)
+    monkeypatch.setattr(chat_repo, "delete_session", delete_session)
+    monkeypatch.setattr(chat_repo, "touch_active_session", touch_active)
+    monkeypatch.setattr(chat_repo, "get_turn_by_client_id", get_turn_by_client_id)
+    monkeypatch.setattr(chat_repo, "get_owned_turn", get_owned_turn)
+    monkeypatch.setattr(chat_repo, "list_capacity_turns", list_capacity_turns)
+    monkeypatch.setattr(chat_repo, "list_turns", list_turns)
+    monkeypatch.setattr(chat_repo, "add_turn", add_turn)
+    monkeypatch.setattr(chat_repo, "complete_turn_if_processing", complete_turn)
+    monkeypatch.setattr(chat_repo, "fail_turn_if_processing", fail_turn)
+    monkeypatch.setattr(chat_repo, "fail_stale_turns", fail_stale_turns)
+    monkeypatch.setattr(chat_repo, "prune_failed_turns", prune_failed_turns)
+    monkeypatch.setattr(chat_repo, "get_owned_summary", get_owned_summary)
+    monkeypatch.setattr(chat_repo, "delete_summary", delete_summary)
+    monkeypatch.setattr(chat_repo, "list_completed_summaries", list_completed_summaries)
+    monkeypatch.setattr(chat_repo, "summary_by_request_id", summary_by_request_id)
+    monkeypatch.setattr(chat_repo, "active_summary_for_source", active_summary_for_source)
+    monkeypatch.setattr(chat_repo, "fail_stale_summaries", fail_stale_summaries)
+    monkeypatch.setattr(chat_repo, "add_summary", add_summary)
+    monkeypatch.setattr(chat_repo, "complete_summary_if_processing", complete_summary)
+    monkeypatch.setattr(chat_repo, "fail_summary_if_processing", fail_summary)
+    monkeypatch.setattr(chat_repo, "delete_all_for_user", delete_all_for_user)
 
     return store

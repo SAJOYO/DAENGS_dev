@@ -6,19 +6,23 @@
 | [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 + **공개 `POST /assistant/query` 진입 경계**(§8) |
 | [orchestration-routing.md](orchestration-routing.md) | 승인된 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** + **production 구현 상태**(§4) |
 | [orchestration-router-benchmark.md](orchestration-router-benchmark.md) | Card 2A 의미 라우터 수용 벤치마크 (동결) — 80개 골드 RoutePlan · 결정론적 지표 · 1회 스키마 재시도 · 동결 게이트 · HUMAN FREEZE |
+| [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [walk-finalize-operating-db-smoke.md](walk-finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke — 선행 migration 누락 발견, 932점 백업·chunk 이관, 최종 PASS |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
+| [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
+| [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `life/` · `training/` · `gait/` 을 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
+지금은 `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
 **자리만** 만들어 두었습니다. 나머지(오케스트레이션)는 별도 카드입니다(#82).
 
-### `life/` — 생활 파트 (① 제도·문서 RAG `/ask` · ② 실시간 산책 `/walk`)
+### `life/` — 생활 파트 (① 제도·문서 RAG `/life/ask` · ② 실시간 산책 `/life/walk-conditions`)
 
 생활비서 RAG(①)·실시간 산책(②) 문서는 `choiyc05/daengs-life` 에서 이관했습니다 (D-018).
 **ADR 접두사가 `RAG-` · `RT-` 로 갈려 있는 것은 의도입니다** — 위 `decisions.md` 의 `D-` 와
@@ -47,6 +51,38 @@
 발표 대본·폐기된 그래프 설계·실험 과정 리포트는 원본 레포에 남겼습니다 — 무엇을 왜
 안 가져왔는지는 색인의 "가져오지 않은 것" 절에 있습니다.
 
+### `place/` — 장소 검색·중립 점령지 읽기 (`/v2/places/*` · `/territory/sites/*`)
+
+| | |
+| --- | --- |
+| [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
+| [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
+| [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
+
+실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.
+Place는 별도 PostGIS와 Alembic을 소유하며, 그 물리·런타임 경계는
+[CLAUDE.md](../CLAUDE.md)와 `decisions.md`의 D-026 · D-027 · D-039에 있습니다.
+
+### `journey/` — 장소 선택 뒤 단발 경로 스냅샷 (`POST /journey`)
+
+| | |
+| --- | --- |
+| [journey/README.md](journey/README.md) | Journey의 역할·소유 범위와 실행 문서 안내 |
+| [journey/UPSTREAM.md](journey/UPSTREAM.md) | Geo 이주 기준점, 유지한 계약과 가져오지 않은 범위 |
+
+로컬 실행과 TMAP provider 설정은 코드 옆
+[README.md](../backend/src/daengs_journey/README.md)에 둡니다. Journey는 Place 검색,
+Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
+
+### `territory/` — 점령 방문 증거·상태 (`/app/territory/*`)
+
+| | |
+| --- | --- |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
+
+중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
+`VerifiedVisit`은 backend가 소유합니다. 실제 점령·방어·갱신 게임 정책은 아직 정하지 않았습니다.
+
 ### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
 
 | | |
@@ -63,6 +99,16 @@
 ⚠️ 결정은 `decisions.md` 의 **D-029**(독립 서비스) → **D-038**(소스는 backend 로,
 런타임 격리는 유지)에 있습니다. 코드 위치만 보면 `daengs_training`·`daengs_screening`
 과 같아 보이지만 **gait 만 런타임을 안 합쳤습니다** — 영상 추론이 분 단위라서입니다.
+
+### `console/` — 관리자 콘솔 (`frontend/app/console` · `/admin/*` · `/auth/*`)
+
+| | |
+| --- | --- |
+| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · 메뉴 5개 점검(2026-09-03 실측) · **AI 답변 신고 경로**(지금은 앱 → 메일, 목표는 #131 `chat_turns` 를 가리키는 API) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
+
+콘솔은 코드 하나(`frontend/app/console`)를 로컬(`daengs.~`, 개발 DB)과 GCP(`daengapp.~`, 운영 DB) 두 곳에
+배포합니다. 운영 값이 있는 GCP 쪽이 운영 콘솔이고, "GCP 용 콘솔" 을 따로 만들지 않습니다.
+인증·권한의 "왜" 는 `decisions.md` 의 **D-014 · D-015 · D-016** 에 있습니다.
 
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.

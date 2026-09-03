@@ -4,7 +4,6 @@
 resolver로 보내고 공통 `PlaceResult`로 바꾼 뒤, 종류 안에서만 요청한 사실 선호를 적용한다.
 """
 
-from enum import StrEnum
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_place.core.clock import SystemClock
 from daengs_place.geo.ranking import DISTANCE_BAND_M, prefer_boost, rank_key
 from daengs_place.place.adapters import facility_place_result, medical_place_result
-from daengs_place.place.contracts import DogSize, PlaceResult
+from daengs_place.place.contracts import PlaceResult
 from daengs_place.place.evaluations import DogAccessEvaluation, evaluate_dog_access
 from daengs_place.place.facility_resolver import (
     MAX_RESULTS,
@@ -21,35 +20,21 @@ from daengs_place.place.facility_resolver import (
     resolve_facilities,
 )
 from daengs_place.place.medical_resolver import resolve_medical_places
+from daengs_place.place.planning.compiler import build_place_search_plan
+from daengs_place.place.planning.contract import (
+    MAX_KINDS_PER_REQUEST,
+    MAX_TOTAL_RESULTS,
+    PlaceKind,
+    PlaceSearchConditions,
+    PlaceSearchPlan,
+)
+from daengs_place.place.planning.execution import prefers_parking, purpose_kinds
+from daengs_place.place.planning.guard import guard_search_plan
 from daengs_place.place.restriction_projection import DogRestrictionEvaluation, project
 from daengs_place.place.source_catalog import KCISA_KINDS, KTO_KINDS, MOIS_SOURCES
 
-
-class PlaceKind(StrEnum):
-    HOSPITAL = "hospital"
-    PHARMACY = "pharmacy"
-    PET_SHOP = "pet_shop"
-    SHOPPING = "shopping"
-    GROOMING = "grooming"
-    BOARDING = "boarding"
-    TRAVEL = "travel"
-    LEISURE = "leisure"
-    MUSEUM = "museum"
-    GALLERY = "gallery"
-    ARTS_CENTER = "arts_center"
-    CULTURE = "culture"
-    CAFE = "cafe"
-    RESTAURANT = "restaurant"
-    PENSION = "pension"
-    HOTEL = "hotel"
-    STAY = "stay"
-    ETC = "etc"
-
-
 MEDICAL_KINDS = frozenset({PlaceKind.HOSPITAL, PlaceKind.PHARMACY})
 PLACE_KINDS = frozenset(PlaceKind)
-MAX_KINDS_PER_REQUEST = 6
-MAX_TOTAL_RESULTS = 5000
 
 _RESOLVER_KINDS = {
     *KCISA_KINDS.values(),
@@ -65,35 +50,6 @@ if _DECLARED_KINDS != _RESOLVER_KINDS:
         "PlaceKind and resolver mappings differ: "
         f"missing={missing}, without_resolver={retired}"
     )
-
-
-class PlaceSearchConditions(BaseModel):
-    """사용자가 명시한 대조 조건. 장소를 제거하거나 순서를 바꾸지 않는다.
-
-    **identity 가 아니라 값만 받는다.** 호출자가 대조할 값이 있을 때만 선택적으로 보내며,
-    값이 없으면 conditions 없이 검색한다. 준 값은 그대로 평가에 쓰고 응답에 그대로
-    되돌리므로 "무엇을 기준으로 대조했나"가 항상 요청과 일치한다. 이 계약은 프로필
-    저장소나 dog_id 를 요구하지 않는다.
-
-    모르는 키는 422 다 — `preferences` 와 같은 이유(extra="forbid")다. 판정 의미가 있는
-    입력에서 오타(`dog_weigth_kg`)나 옛 계약(`dog_id`)을 조용히 무시하면 덜 개인화된
-    결과가 정상 응답처럼 나간다. 계약이 틀렸다고 즉시 말하는 쪽이 낫다.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    dog_size: DogSize | None = None
-    dog_weight_kg: float | None = Field(None, gt=0, le=200)
-    # `deny:age` 술어를 대조하는 유일한 재료. 호출자가 알고 있을 때만 보낸다.
-    dog_age_years: float | None = Field(None, ge=0, le=40)
-
-    @model_validator(mode="after")
-    def require_a_dog_subject(self) -> Self:
-        if self.dog_size is None and self.dog_weight_kg is None and self.dog_age_years is None:
-            raise ValueError(
-                "conditions require at least one of dog_size, dog_weight_kg, dog_age_years"
-            )
-        return self
 
 
 class PlaceSearchPreferences(BaseModel):
@@ -150,6 +106,20 @@ class PlaceSearchRequest(BaseModel):
         if self.limit_per_kind is not None:
             return self.limit_per_kind
         return min(MAX_RESULTS, MAX_TOTAL_RESULTS // len(self.kinds))
+
+
+def compile_place_search_request(request: PlaceSearchRequest) -> PlaceSearchPlan:
+    """현행 HTTP 계약을 내부 typed plan으로 옮긴다. 응답 계약은 바꾸지 않는다."""
+
+    return build_place_search_plan(
+        lat=request.lat,
+        lng=request.lng,
+        radius_m=request.radius_m,
+        kinds=request.kinds,
+        limit_per_kind=request.effective_limit_per_kind,
+        conditions=request.conditions,
+        prefer_parking=bool(request.preferences and request.preferences.parking),
+    )
 
 
 class BooleanFactCoverage(BaseModel):
@@ -307,39 +277,39 @@ def _hit(
 
 async def _medical_group(
     db: AsyncSession,
-    request: PlaceSearchRequest,
+    plan: PlaceSearchPlan,
     kind: PlaceKind,
-    limit: int,
-    conditions: PlaceSearchConditions | None,
 ) -> PlaceSearchGroup:
+    spatial = plan.spatial
+    limit = plan.limit_per_kind
     rows = await resolve_medical_places(
         db,
-        lat=request.lat,
-        lng=request.lng,
-        radius_m=request.radius_m,
+        lat=spatial.lat,
+        lng=spatial.lng,
+        radius_m=spatial.radius_m,
         judge_at=SystemClock().now(),
         kind=kind.value,
         limit=limit + 1,
     )
     truncated = len(rows) > limit
     places = sorted((medical_place_result(row) for row in rows), key=_distance_key)[:limit]
-    results = [_hit(place, conditions) for place in places]
+    results = [_hit(place, plan.conditions) for place in places]
     return PlaceSearchGroup(kind=kind, limit=limit, truncated=truncated, results=results)
 
 
 async def _facility_group(
     db: AsyncSession,
-    request: PlaceSearchRequest,
+    plan: PlaceSearchPlan,
     kind: PlaceKind,
-    limit: int,
-    conditions: PlaceSearchConditions | None,
 ) -> PlaceSearchGroup:
-    prefer_parking = bool(request.preferences and request.preferences.parking)
+    spatial = plan.spatial
+    limit = plan.limit_per_kind
+    prefer_parking = prefers_parking(plan)
     resolved = await resolve_facilities(
         FacilityParams(
-            lat=request.lat,
-            lng=request.lng,
-            radius_m=request.radius_m,
+            lat=spatial.lat,
+            lng=spatial.lng,
+            radius_m=spatial.radius_m,
             kind=kind.value,
             limit=limit,
             only_dog_ok=False,
@@ -361,7 +331,7 @@ async def _facility_group(
         )
     else:
         places.sort(key=_distance_key)
-    results = [_hit(place, conditions) for place in places]
+    results = [_hit(place, plan.conditions) for place in places]
     return PlaceSearchGroup(
         kind=kind,
         sort=sort,
@@ -372,18 +342,27 @@ async def _facility_group(
     )
 
 
+async def search_place_plan(
+    db: AsyncSession,
+    plan: PlaceSearchPlan,
+) -> PlaceSearchResponse:
+    """검증된 plan의 kind 순서를 보존하고 서로 다른 후보군을 전역 순위로 섞지 않는다."""
+
+    plan = guard_search_plan(plan)
+    groups: list[PlaceSearchGroup] = []
+    for kind in purpose_kinds(plan):
+        if kind in MEDICAL_KINDS:
+            group = await _medical_group(db, plan, kind)
+        else:
+            group = await _facility_group(db, plan, kind)
+        groups.append(group)
+    return PlaceSearchResponse(conditions=plan.conditions, groups=groups)
+
+
 async def search_place_groups(
     db: AsyncSession,
     request: PlaceSearchRequest,
 ) -> PlaceSearchResponse:
-    """요청 kind 순서를 보존하고, 서로 다른 kind 사이에는 순위를 만들지 않는다."""
-    limit = request.effective_limit_per_kind
-    conditions = request.conditions
-    groups: list[PlaceSearchGroup] = []
-    for kind in request.kinds:
-        if kind in MEDICAL_KINDS:
-            group = await _medical_group(db, request, kind, limit, conditions)
-        else:
-            group = await _facility_group(db, request, kind, limit, conditions)
-        groups.append(group)
-    return PlaceSearchResponse(conditions=conditions, groups=groups)
+    """현행 HTTP request를 typed plan으로 컴파일한 뒤 같은 실행기를 호출한다."""
+
+    return await search_place_plan(db, compile_place_search_request(request))

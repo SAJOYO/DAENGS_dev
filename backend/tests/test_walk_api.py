@@ -1,4 +1,4 @@
-"""`GET /walk` — ⑥ 응답 계약과 저하 경로 (RT-001 ⑥ · RAG-027, 구현 계획 9).
+"""`GET /life/walk-conditions` — ⑥ 응답 계약과 저하 경로 (RT-001 ⑥ · RAG-027, 구현 계획 9).
 
 **검문소 D 를 한 층 위에서 다시 본다.** `test_collect.py` 는 실패가 판정까지 흘러가는지를
 봤고, 여기는 그 판정이 **HTTP 계약으로 정직하게 나오는지**를 본다 — 죽은 축이 응답에서
@@ -83,7 +83,7 @@ def out(**_):
 
 def test_the_response_carries_the_five_parts_the_contract_promised(client) -> None:
     """⑥ — 엔드포인트 하나가 `now` + `timeline` + `windows` + `sources` 를 타임라인째로 준다."""
-    r = client.get("/walk", params={"lat": HERE.lat, "lon": HERE.lon})
+    r = client.get("/life/walk-conditions", params={"lat": HERE.lat, "lon": HERE.lon})
     assert r.status_code == 200, r.text
     d = r.json()
     assert set(d) >= {"location", "generated_at", "now", "timeline", "windows", "sources", "notes"}
@@ -158,7 +158,7 @@ def test_a_dead_airkorea_shows_up_as_unknown_and_never_as_good(client, monkeypat
     monkeypatch.setattr(airkorea_realtime, "raw_dnsty", dead)
     monkeypatch.setattr(airkorea_realtime, "raw_frcst", dead)
 
-    d = client.get("/walk", params={"lat": HERE.lat, "lon": HERE.lon}).json()
+    d = client.get("/life/walk-conditions", params={"lat": HERE.lat, "lon": HERE.lon}).json()
     assert "air" in d["now"]["unknown_axes"]
     assert d["now"]["axes"]["air"]["grade"] == "unknown"
     assert d["now"]["grade"] != "GOOD"
@@ -170,7 +170,7 @@ def test_unknown_is_a_string_not_null(client, monkeypatch) -> None:
     """⑥ — `null` 은 "필드 없음"과 헷갈린다."""
     monkeypatch.setattr(airkorea_realtime, "raw_dnsty", dead)
     monkeypatch.setattr(airkorea_realtime, "raw_frcst", dead)
-    d = client.get("/walk", params={"lat": HERE.lat, "lon": HERE.lon}).json()
+    d = client.get("/life/walk-conditions", params={"lat": HERE.lat, "lon": HERE.lon}).json()
     assert d["now"]["axes"]["air"]["grade"] == "unknown"
 
 
@@ -184,7 +184,7 @@ def test_no_verdict_is_a_503_that_still_explains_itself(client, monkeypatch) -> 
         monkeypatch.setattr(kma_vilage_fcst, name, dead)
     monkeypatch.setattr(kma_apihub, "raw_aws", dead)
 
-    r = client.get("/walk", params={"lat": HERE.lat, "lon": HERE.lon})
+    r = client.get("/life/walk-conditions", params={"lat": HERE.lat, "lon": HERE.lon})
     assert r.status_code == 503
     detail = r.json()["detail"]
     assert detail["now"]["grade"] == "unknown"
@@ -205,7 +205,7 @@ def test_a_stale_source_is_visible_and_noted(wired, monkeypatch) -> None:
 def test_a_dead_kakao_still_answers(client, monkeypatch) -> None:
     """①이 카카오를 표기 역할로 좁힌 것 — 표기 때문에 판정을 못 주면 안 된다."""
     monkeypatch.setattr(kakao_local, "raw_region", dead)
-    d = client.get("/walk", params={"lat": HERE.lat, "lon": HERE.lon}).json()
+    d = client.get("/life/walk-conditions", params={"lat": HERE.lat, "lon": HERE.lon}).json()
     assert d["now"]["grade"] != "unknown"
     assert d["location"]["label"].startswith("37.4979")       # 좌표를 그대로 쓴다
 
@@ -219,7 +219,7 @@ def test_a_dead_kakao_still_answers(client, monkeypatch) -> None:
 ])
 def test_a_coordinate_we_cannot_serve_is_rejected_at_the_edge(client, params) -> None:
     """경계에서 끊는다. 안 끊으면 "판정 불가"가 되는데 원인이 좌표라는 걸 알 수 없다."""
-    assert client.get("/walk", params=params).status_code == 422
+    assert client.get("/life/walk-conditions", params=params).status_code == 422
 
 
 def test_the_root_route_still_answers(client) -> None:

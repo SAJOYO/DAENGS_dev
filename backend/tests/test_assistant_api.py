@@ -6,7 +6,7 @@
 갈아끼운다 — `test_ask_auth.py` 가 `service.ask` 를 표식으로 막는 것과 같은 자리다.
 
 `admin_or_app_user(Perm.READ)` 를 실제 토큰으로 통과시킨다(오버라이드하지 않는다) —
-`test_ask_auth.py`·`/walk` 가 검증한 문을 이 카드가 다시 배선하지 않았다는 것 자체가
+`test_ask_auth.py`·`/life/walk-conditions` 가 검증한 문을 이 카드가 다시 배선하지 않았다는 것 자체가
 검증 대상이기 때문이다.
 """
 
@@ -187,6 +187,18 @@ def test_질의_원문은_공백을_포함해_그대로_전달된다(
     assert fake_service.calls[0]["query"] == padded
 
 
+def test_place_내부_계약보다_긴_질의는_HTTP_경계에서_422다(
+    client: TestClient, fake_service: FakeAssistantOrchestrationService
+) -> None:
+    got = _post(
+        client,
+        {"query": "가" * 1_001, "requested_capability": "place"},
+        _app_token(),
+    )
+    assert got.status_code == 422
+    assert fake_service.calls == []
+
+
 # --------------------------------------------------------- 라우팅 메타데이터
 
 
@@ -322,14 +334,21 @@ def test_requested_capability는_그대로_전달되고_인가에_관여하지_�
     assert call["principal"].kind == "APP_USER"
 
 
-def test_지원하지_않는_requested_capability도_422가_아니라_그대로_넘어간다(
+def test_place_requested_capability도_인가와_분리된_신호로_전달된다(
     client: TestClient, fake_service: FakeAssistantOrchestrationService
 ) -> None:
-    """planner.resolve_deterministic_route 가 알려지지 않은 값을 의미 라우팅으로
-    넘기는 것을 그대로 보존한다 — 여기서 enum 을 만들지 않는다."""
+    """HTTP DTO는 enum을 소유하지 않고 planner가 명시 Place 경로를 해석한다."""
     got = _post(client, {"query": QUERY, "requested_capability": "place"}, _app_token())
     assert got.status_code == 200
     assert fake_service.calls[0]["requested_capability"] == "place"
+
+
+def test_지원하지_않는_requested_capability도_422가_아니라_그대로_넘어간다(
+    client: TestClient, fake_service: FakeAssistantOrchestrationService
+) -> None:
+    got = _post(client, {"query": QUERY, "requested_capability": "calendar"}, _app_token())
+    assert got.status_code == 200
+    assert fake_service.calls[0]["requested_capability"] == "calendar"
 
 
 # ------------------------------------------------------------ Principal

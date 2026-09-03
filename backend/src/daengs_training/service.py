@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 import uuid
 from pathlib import Path
 from threading import Lock
@@ -16,10 +17,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from daengs_training import telemetry
 from daengs_training.generation import gemini as generation
 from daengs_training.resources import RUNTIME_ROOT
 from daengs_training.retrieval.pgvector import RuntimeRetriever
-
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DSN = "postgresql://postgres:postgres@localhost:5432/vectordb"
@@ -233,7 +234,17 @@ class RAGService:
         # Keep retrieval + external generation serialized in this small runtime.
         # E5 stays process-local, and bounded concurrency avoids duplicate model
         # loads or an accidental burst of paid Gemini requests.
+        #
+        # The lock is unchanged; only the time spent blocked on it is measured.  The
+        # `with` statement's acquire() is the wait, so the stamp immediately inside
+        # the block is the actual wait, not an inference from the total.
+        trace = telemetry.current_trace()
+        lock_wait_started = time.perf_counter()
         with self._lock:
+            trace.emit(
+                telemetry.EVENT_LOCK_WAIT,
+                wait_ms=int((time.perf_counter() - lock_wait_started) * 1_000),
+            )
             medical = generation.medical_guardrail.classify_input_v2(
                 question, self.medical_terms, self.whitelist_terms
             )
@@ -285,10 +296,31 @@ class RAGService:
                 "answer",
             )
             record: dict[str, Any] = {"question": question, "usage": None}
+            # Generation timing carries the outcome and, on failure, the exception class
+            # only — never the prompt, the answer, or the provider's message.
+            generation_started = time.perf_counter()
             try:
                 raw_answer = self.client.complete(prompt, record)
             except generation.GenerationTimeoutError as exc:
+                trace.emit(
+                    telemetry.EVENT_GENERATION,
+                    duration_ms=int((time.perf_counter() - generation_started) * 1_000),
+                    outcome="timeout",
+                )
                 raise TrainingTimeoutError("Training generation timed out") from exc
+            except Exception as exc:
+                trace.emit(
+                    telemetry.EVENT_GENERATION,
+                    duration_ms=int((time.perf_counter() - generation_started) * 1_000),
+                    outcome="error",
+                    error_type=type(exc).__name__,
+                )
+                raise
+            trace.emit(
+                telemetry.EVENT_GENERATION,
+                duration_ms=int((time.perf_counter() - generation_started) * 1_000),
+                outcome="success",
+            )
             if not raw_answer:
                 raise generation.GenerationError("generation returned an empty answer")
             output = generation.medical_guardrail.apply_output_guardrail(

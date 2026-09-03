@@ -55,8 +55,12 @@ GROUP BY 1 ORDER BY 1;
 배포 workflow를 다시 실행해 data-ready까지 녹색으로 만들어야 합니다.
 
 ```powershell
-Invoke-RestMethod `
-  'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=1000&limit=1'
+$response = Invoke-RestMethod `
+  'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=3000&limit=1'
+if (@($response.sites).Count -lt 1 -or $response.count -lt 1) {
+  throw '현행 140u 점령지 게임판이 비어 있습니다.'
+}
+$response
 ```
 
 응답은 200이어야 하고 `count`, `truncated`, `sites`를 가져야 합니다. 데이터가 아직 적재되지

@@ -82,6 +82,7 @@ backend/src/daengs_place/
 ├─ place/
 │  ├─ planning/                     # 이미 승격됨
 │  ├─ source_facts/                 # 이미 승격됨
+│  ├─ information_needs.py          # intent와 presentation이 공유하는 식별자
 │  ├─ intent/
 │  │  ├─ contract.py
 │  │  ├─ prompt.py
@@ -120,6 +121,7 @@ Geo 이름은 다음처럼 바꿔 옮긴다.
 | --- | --- | --- |
 | `app/discovery/place_intent/*` | `daengs_place/place/intent/*` | 범용 discovery가 아니라 Place 소유 의미 해석이다 |
 | `app/place/presentation/*` | `daengs_place/place/presentation/*` | 기존 planning/source facts와 같은 제품 계약이다 |
+| `presentation.needs.InformationNeedId` | `daengs_place/place/information_needs.py` | intent가 presentation 구현을 선행 참조하지 않게 식별자만 공유한다 |
 | `place_intent/assembly.py` | `daengs_place/place/discovery/service.py` | planning·검색·표시를 묶는 응용 서비스다 |
 | `PlaceCapabilityInput` | `PlaceDiscoveryRequest` | capability는 공통 오케스트레이터가 소유하는 용어다 |
 | `orchestration_bridge.py` | 그대로 승격하지 않음 | Geo 호환성 실험을 운영 계약처럼 복제하지 않는다 |
@@ -246,6 +248,7 @@ Geo의 lab 관측 테이블을 그대로 옮기지 않는다. 저장형 `/assist
 
 - intent contract, evidence grounding, hypothesis, open discovery, suggestion, lens,
   refinement, confirmation, service를 `daengs_place.place.intent`로 승격
+- lens와 presentation이 공유할 `InformationNeedId`만 Place 공용 계약으로 분리
 - namespace 변경 외 의미 변경 금지
 - Gemini/config/API/migration/오케스트레이션 변경 금지
 

@@ -91,3 +91,28 @@ stacked parent:    SAJOYO/DAENGS_dev #183
   origin, unknown policy와 locked gate 불변식을 다시 검사하므로 LLM 출력이 곧 필터가 되지 않는다.
 - 의도적 제외: Gemini/OpenAI proposer, 복수 hypothesis/lens/refinement,
   presentation assembly, 운영 discovery HTTP, main orchestration과 Android 연결.
+
+## Provider-free intent core 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+target PR:         pending
+```
+
+자연어 모델이 제안한 값을 곧바로 검색하지 않도록, provider 호출보다 먼저 Place 소유의
+의미 계약과 결정론적 정규화 계층을 승격한다.
+
+- 포함: authority-free intent 계약과 원문 evidence grounding, 복수 hypothesis,
+  open-discovery 정책, suggestion/lens, refinement/confirmation, provider-neutral prompt/schema,
+  proposer 주입형 service
+- 대상 구조: Geo의 범용 `app.discovery.place_intent`를 복제하지 않고
+  `daengs_place.place.intent` 아래에 둔다. intent와 후속 presentation이 공유하는
+  `InformationNeedId`는 `daengs_place.place.information_needs`로 분리한다.
+- 운영 정합성: Geo 최신 planner와 달리 현재 운영 planner는 blocking semantic target을
+  `UNSUPPORTED`로 분류한다. product fallback 후보는 그대로 제공하되 거절된 원 해석의
+  상태를 다시 쓰거나 운영 planner를 이 PR에서 변경하지 않는다.
+- 경계: intent core는 provider SDK, HTTP, FastAPI, SQLAlchemy, presentation 구현을 import하지
+  않는다. 기존 Place 앱 import closure와 네 공개 경로는 변하지 않는다.
+- 의도적 제외: Gemini/OpenAI adapter, usage/metering, lab/관측 DB, presentation과 discovery
+  assembly, HTTP endpoint, main orchestration, Android 연결.

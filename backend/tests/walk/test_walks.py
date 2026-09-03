@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.orchestration.adapters.life import WalkWeatherObservation
 from daengs_backend.routers import walk as walk_router
 from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.services import walk as walk_service
@@ -40,6 +41,7 @@ def client(store: Store) -> TestClient:
     app.dependency_overrides[
         next(iter(CurrentAppUser.__metadata__)).dependency
     ] = lambda: AppPrincipal(app_user_id=OWNER)
+    app.dependency_overrides[walk_router.get_walk_weather_lookup] = lambda: None
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -323,6 +325,98 @@ def test_finalize는_계산과_봉인을_한번에_저장한다(client: TestClie
     assert capsule.trail_context["status"] == "partial"
     assert capsule.trail_context["weather_code"] == 61
     assert [item["name"] for item in capsule.capabilities] == ["low_motion", "gap"]
+
+
+def test_finalize는_대표_좌표의_KMA_관측으로_context를_한번만_보강한다(
+    client: TestClient,
+    store: Store,
+) -> None:
+    calls: list[tuple[float, float, datetime]] = []
+
+    async def observed(lat: float, lon: float, at: datetime) -> WalkWeatherObservation:
+        calls.append((lat, lon, at))
+        return WalkWeatherObservation(
+            status="captured",
+            provider="kma-vilage-fcst:ncst",
+            observed_at=STARTED.replace(minute=0),
+            temperature_c=17.2,
+            humidity_pct=73,
+            precipitation_kind="rain",
+            precipitation_mm=1.5,
+        )
+
+    client.app.dependency_overrides[walk_router.get_walk_weather_lookup] = lambda: observed
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    url = f"/app/walks/{created['id']}/finalize"
+
+    first = client.post(url, json=finalize_body(2))
+    retried = client.post(url, json=finalize_body(2))
+
+    assert first.status_code == 201
+    assert retried.status_code == 200
+    assert calls == [(37.4979, 127.0276, STARTED + timedelta(seconds=3))]
+    context = store.walk_analyses[0].capsule.trail_context
+    assert context["context_version"] == 2
+    assert context["weather_code"] == 61
+    assert context["is_day"] is True
+    assert context["temperature_c"] == 17.2
+    assert context["humidity_pct"] == 73
+    assert context["precipitation_kind"] == "rain"
+    assert context["precipitation_mm"] == 1.5
+    assert context["provider"] == "kma-vilage-fcst:ncst+android_walk_upload_v1"
+
+
+def test_KMA_실패는_앱_context로_finalize한다(
+    client: TestClient,
+    store: Store,
+) -> None:
+    async def fail(*_args):
+        raise TimeoutError
+
+    client.app.dependency_overrides[walk_router.get_walk_weather_lookup] = lambda: fail
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(2),
+    )
+
+    assert response.status_code == 201
+    context = store.walk_analyses[0].capsule.trail_context
+    assert context["status"] == "partial"
+    assert context["weather_code"] == 61
+    assert context["temperature_c"] == 18.5
+    assert context["provider"] == "android_walk_upload_v1"
+
+
+def test_앱_context도_없으면_KMA_실패_출처를_명시한다(
+    client: TestClient,
+    store: Store,
+) -> None:
+    async def failed(*_args) -> WalkWeatherObservation:
+        return WalkWeatherObservation(
+            status="failed",
+            provider="kma-vilage-fcst:ncst",
+            failure_reason="게이트웨이 장애",
+        )
+
+    client.app.dependency_overrides[walk_router.get_walk_weather_lookup] = lambda: failed
+    payload = body(uuid.uuid4())
+    payload["weather_code"] = None
+    payload["is_day"] = None
+    payload["temperature_c"] = None
+    created = client.post("/app/walks", json=payload).json()
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(2),
+    )
+
+    assert response.status_code == 201
+    context = store.walk_analyses[0].capsule.trail_context
+    assert context["status"] == "failed"
+    assert context["provider"] == "kma-vilage-fcst:ncst"
+    assert context["failure_reason"] == "게이트웨이 장애"
 
 
 def test_같은_finalize_재시도는_기존_분석을_돌려준다(client: TestClient, store: Store) -> None:

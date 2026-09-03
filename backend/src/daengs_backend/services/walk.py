@@ -10,6 +10,10 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
+from daengs_backend.orchestration.adapters.life import (
+    WalkWeatherLookup,
+    WalkWeatherObservation,
+)
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import (
@@ -21,7 +25,12 @@ from daengs_backend.services.walk_analysis import build_analysis_models
 from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
-from daengs_walk import analyze_walk, build_cellophane, build_walk_capsule
+from daengs_walk import (
+    analyze_walk,
+    build_cellophane,
+    build_walk_capsule,
+    select_context_anchor,
+)
 
 
 class WalkNotFoundError(Exception):
@@ -45,9 +54,7 @@ async def list_walks(session: AsyncSession, app_user_id: uuid.UUID) -> list[Walk
     return await walk_repo.list_for_owner(session, app_user_id)
 
 
-async def get_walk(
-    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
-) -> Walk:
+async def get_walk(session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID) -> Walk:
     walk = await walk_repo.get_owned(session, app_user_id, walk_id)
     if walk is None:
         raise WalkNotFoundError
@@ -75,9 +82,7 @@ async def upload_walk(
 
     :returns: (산책, 이번에 새로 만들었는가)
     """
-    existing = await walk_repo.get_by_client_session(
-        session, app_user_id, body.client_session_id
-    )
+    existing = await walk_repo.get_by_client_session(session, app_user_id, body.client_session_id)
     if existing is not None:
         return existing, False
 
@@ -149,6 +154,7 @@ async def finalize_walk(
     app_user_id: uuid.UUID,
     walk_id: uuid.UUID,
     manifest: WalkFinalizeRequest,
+    weather_lookup: WalkWeatherLookup | None = None,
 ) -> tuple[WalkAnalysis, bool]:
     """완전한 좌표열을 계산하고 분석·sheet·봉인 상태를 한 번에 commit한다.
 
@@ -181,6 +187,7 @@ async def finalize_walk(
                     existing,
                     sealed_at=existing.derived_at,
                     provider="legacy_walk_metadata_v1",
+                    context_version=1,
                 )
                 await session.flush()
             await session.commit()  # 필요하면 legacy seal을 복구하고 멱등 응답한다.
@@ -198,6 +205,12 @@ async def finalize_walk(
             walk.ended_at,
             prepared.points,
         )
+        anchor = select_context_anchor(
+            evidence.accepted_points,
+            started_at=walk.started_at,
+            ended_at=walk.ended_at,
+        )
+        weather = await _lookup_context_weather(weather_lookup, anchor)
         analysis = build_analysis_models(
             prepared,
             evidence,
@@ -208,6 +221,7 @@ async def finalize_walk(
             analysis,
             sealed_at=datetime.now(UTC),
             provider="android_walk_upload_v1",
+            weather=weather,
         )
         walk_repo.add_analysis(session, analysis)
         walk.analysis_state = "derived"
@@ -225,8 +239,32 @@ def _attach_capsule(
     *,
     sealed_at: datetime,
     provider: str,
+    weather: WalkWeatherObservation | None = None,
+    context_version: int = 2,
 ) -> None:
-    """이미 저장된 Walk 원자만으로 Analysis에 Capsule seal을 붙인다."""
+    """앱 원본을 보존하고, 있으면 Life 관측으로 환경 Snapshot을 보강한다."""
+
+    app_temperature = float(walk.temperature_c) if walk.temperature_c is not None else None
+    has_app_context = any(
+        value is not None for value in (walk.weather_code, walk.is_day, app_temperature)
+    )
+    has_observed_context = weather is not None and any(
+        value is not None
+        for value in (
+            weather.temperature_c,
+            weather.humidity_pct,
+            weather.precipitation_kind,
+            weather.precipitation_mm,
+        )
+    )
+    context_provider = provider
+    if has_observed_context:
+        observed_provider = weather.provider or "life_weather_at"
+        context_provider = (
+            f"{observed_provider}+{provider}" if has_app_context else observed_provider
+        )
+    elif weather is not None and not has_app_context:
+        context_provider = weather.provider or "life_weather_at"
 
     capsule = build_walk_capsule(
         walk_id=walk.id,
@@ -239,11 +277,43 @@ def _attach_capsule(
         weather_code=walk.weather_code,
         is_day=walk.is_day,
         temperature_c=(
-            float(walk.temperature_c) if walk.temperature_c is not None else None
+            weather.temperature_c
+            if weather is not None and weather.temperature_c is not None
+            else app_temperature
         ),
-        provider=provider,
+        precipitation_kind=(weather.precipitation_kind if has_observed_context else None),
+        precipitation_mm=(weather.precipitation_mm if has_observed_context else None),
+        humidity_pct=(weather.humidity_pct if has_observed_context else None),
+        source_observed_at=(weather.observed_at if has_observed_context else None),
+        failure_reason=(
+            weather.failure_reason[:256]
+            if weather is not None
+            and not has_app_context
+            and not has_observed_context
+            and weather.failure_reason is not None
+            else None
+        ),
+        provider=context_provider,
+        context_version=context_version,
     )
     analysis.capsule = build_capsule_model(analysis, capsule)
+
+
+async def _lookup_context_weather(
+    lookup: WalkWeatherLookup | None,
+    anchor,
+) -> WalkWeatherObservation | None:
+    """외부 관측의 어떤 실패도 산책 분석 트랜잭션 밖으로 새지 않게 한다."""
+
+    if lookup is None or anchor is None:
+        return None
+    try:
+        return await lookup(anchor.lat, anchor.lng, anchor.at)
+    except Exception as exc:  # noqa: BLE001 - 주입된 adapter도 같은 저하 계약을 지킨다
+        return WalkWeatherObservation(
+            status="failed",
+            failure_reason=f"Life 과거 날씨 조회 실패: {type(exc).__name__}",
+        )
 
 
 def _chunk(points: list) -> WalkPointChunk:

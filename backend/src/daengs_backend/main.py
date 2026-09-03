@@ -20,6 +20,7 @@ from daengs_backend.routers import (
     gait,
     health,
     pet,
+    territory,
     training,
     walk_spatial_diary,
 )
@@ -126,6 +127,8 @@ app.include_router(pet.router)
 app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
+# 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
+app.include_router(territory.router)
 # 산책 기록을 조건별 공간 일기로 읽는 앱 전용 표면. 인증은 라우터가 받고,
 # Place·Journey·Pin을 호출하지 않은 채 Walk 원판만 조립합니다 (D-049).
 app.include_router(walk_spatial_diary.router)

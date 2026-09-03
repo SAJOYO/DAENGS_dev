@@ -1,0 +1,1 @@
+"""Place provider adapter tests."""

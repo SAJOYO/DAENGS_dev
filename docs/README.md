@@ -13,12 +13,13 @@
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `life/` · `training/` · `gait/` · `place/` · `journey/` 를 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
+지금은 `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
 **자리만** 만들어 두었습니다. 나머지(오케스트레이션)는 별도 카드입니다(#82).
 
 ### `life/` — 생활 파트 (① 제도·문서 RAG `/life/ask` · ② 실시간 산책 `/life/walk-conditions`)
@@ -72,6 +73,15 @@ Place는 별도 PostGIS와 Alembic을 소유하며, 그 물리·런타임 경계
 로컬 실행과 TMAP provider 설정은 코드 옆
 [README.md](../backend/src/daengs_journey/README.md)에 둡니다. Journey는 Place 검색,
 Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
+
+### `territory/` — 점령 방문 증거·상태 (`/app/territory/*`)
+
+| | |
+| --- | --- |
+| [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
+
+중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
+`VerifiedVisit`은 backend가 소유합니다. 실제 점령·방어·갱신 게임 정책은 아직 정하지 않았습니다.
 
 ### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
 

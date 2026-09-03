@@ -269,18 +269,28 @@ receipt가 표시 계약에서 보존되며, 기존 Place 전체 테스트와 Op
 
 - `PlaceDiscoveryRequest`, 내부 planning/result, assembly service 추가
 - intent → plan → guard → search → source facts → presentation을 순수 서비스로 연결
-- 대화형 lens·후보·byte 예산 추가
+- 기본 3 lens·lens당 5건·전체 15건·128 KiB의 서버 소유 결과 정책 추가
+- 하드 상한은 3 lens·lens당 10건·전체 20건·256 KiB이며 클라이언트가 넘을 수 없음
+- 정책상 뒤쪽 lens·후보를 줄이면 notice를 남기고 source facts는 표시 후보만 읽음
 - HTTP와 provider wiring 금지
+
+완료 기준: 실행량을 검색 전에 제한하고, 검색 hit·source facts·presentation의 순서를 보존하며,
+직렬화 결과가 byte 예산 안에 든다. 기존 Place OpenAPI와 keyless boot는 변하지 않는다.
 
 ### PR5 — Place 내부 endpoint와 Gemini proposer
 
-- container network에서 사용할 내부 discovery endpoint 추가
-- optional Gemini 설정과 lazy client 조립
-- 키 없음·timeout·provider/schema 실패 격리 테스트
-- nginx의 기존 공개 `/v2/places/` 계약 확장 금지
+- container network에서 사용할 `POST /internal/place/discovery` 추가
+- HTTP 입력은 `query`, `spatial`, 선택적 `conditions`만 받고 `result_policy`는 서버에서 주입
+- 기존 `GEMINI_API_KEY`·`GEMINI_MODEL`·`GEMINI_TIMEOUT_MS`를 Place Settings가 독립적으로
+  읽고, service와 HTTP client는 discovery 요청 전에는 만들지 않음
+- 키 없음 503, timeout 504, provider HTTP·interaction envelope 실패 502로 격리하고
+  schema 불일치는 raw 없이 `needs_clarification` domain 결과로 변환
+- place-search host port와 nginx `/internal/` route를 추가하지 않고 기존 공개
+  `/v2/places/` 계약 확장 금지
 - `daengs_place.main`의 PostGIS-only 설명과 경계 테스트를 새 현실에 맞게 갱신하되,
   keyless boot와 기존 네 공개 경로는 계속 기계적으로 보장
-- Geo에서 평가한 provider transport를 바꾸면 holdout 재실행
+- Geo holdout의 Gemini Interactions stateless structured-output transport를 그대로 유지;
+  이후 `generate_content` 등으로 바꾸면 holdout 재실행
 
 ### PR6 — `daengs_backend` Place adapter
 

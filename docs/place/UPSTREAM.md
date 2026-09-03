@@ -31,8 +31,9 @@ Source facts와 typed planning 이후 자연어 발견 기능의 코드·프로�
 
 ## 무엇을 바꿨나 (원본과의 의도된 차이)
 
-- `src/daengs_place/core/config.py` — provider/LLM/deeplink 설정 제거, 검색·적재가 실제로 읽는
-  필드만 (파일 docstring 참고)
+- `src/daengs_place/core/config.py` — 지도/route/deeplink 설정은 제거하고 검색·적재 필드만
+  유지했다. PR #195부터 Place 내부 discovery가 쓰는 optional Gemini 필드만 추가했으며,
+  keyless boot와 기존 공개 검색은 계속 보장한다(파일 docstring 참고).
 - `tests/place/conftest.py` — walk/journey/provider 팩토리를 뺀 발췌
 - `tests/place/test_boundary.py` — geo의 `test_search_closure.py` 번안. geo에서는
   "provider·profile 이 closure 에 없다"를 쟀지만, 여기는 그 코드가 아예 없으므로
@@ -139,3 +140,50 @@ Place 내부 presentation 계층을 승격한다.
   않는다. 기존 `/v2/places/search` 응답과 Place 앱의 공개 경로는 변하지 않는다.
 - 의도적 제외: discovery assembly, Gemini adapter, 내부 endpoint, main orchestration,
   관측 migration과 Android 연결.
+
+## Internal discovery assembly 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+target PR:         SAJOYO/DAENGS_dev #192
+```
+
+분리해 승격한 intent·planning·source facts·presentation을 Place 내부 응용 서비스에서 처음
+연결한다. 외부 transport를 붙이기 전 결정론적 실행 경계와 결과량을 고정하는 단계다.
+
+- 포함: `PlaceDiscoveryRequest`, provider trace를 제거한 planning projection, lens별 검색과
+  source-fact 일괄 읽기, 동일 identity presentation 조립
+- 대상 adaptation: Geo의 `orchestration_bridge.py`와 `PlaceCapabilityInput` 이름을 복제하지
+  않는다. `daengs_place.place.discovery`가 계약과 `PlaceDiscoveryService`를 직접 소유한다.
+- 결과 정책: 기본 3 lens·lens당 5건·전체 15건·128 KiB, 하드 상한 3·10·20·256 KiB.
+  검색 전에 lens와 후보 예산을 배분하고, byte 상한에는 뒤쪽 후보부터 줄이며 notice를 남긴다.
+- 경계: provider SDK, HTTP/FastAPI, `daengs_backend` 오케스트레이션을 import하지 않는다.
+  기존 Place 앱의 네 공개 경로와 `/v2/places/search` 계약은 변하지 않는다.
+- 의도적 제외: Gemini adapter/config, 내부 endpoint, main orchestration, 관측 migration,
+  공개 capability projection과 Android 연결.
+
+## Internal discovery API·Gemini 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+target PR:         SAJOYO/DAENGS_dev #195
+stacked parent:    SAJOYO/DAENGS_dev #192
+```
+
+PR #192의 순수 discovery 조립을 컨테이너 네트워크의 내부 HTTP 경계와 연결한다. Geo holdout이
+평가한 Gemini Interactions의 stateless structured-output transport를 유지하므로 provider
+transport 변경에 따른 holdout 재실행은 필요하지 않다.
+
+- 포함: `POST /internal/place/discovery`, Place 소유 Gemini adapter, optional key/model/timeout
+  설정, request-time service/client 조립, provider 장애의 제한된 HTTP 오류 projection
+- 대상 adaptation: Geo의 lab·usage/metering·관측 DB는 가져오지 않는다. HTTP 입력에서는
+  `result_policy`를 받지 않고 PR #192의 서버 기본 예산만 주입한다.
+- 실패 계약: 키 없음 503, provider timeout 504, HTTP·interaction envelope 실패 502.
+  Geo lab은 모든 `httpx` 실패를 502로 묶지만 대상 레포의 기존 timeout 계약에 맞춰 504를
+  분리했다. structured schema 불일치는 raw 없이 `needs_clarification` 결과로 반환한다.
+- 공개 경계: place-search는 host port가 없고 nginx는 `/internal/`을 라우팅하지 않는다.
+  기존 네 공개 경로와 `/v2/places/search` 계약은 변하지 않는다.
+- 의도적 제외: `daengs_backend` capability adapter/projection, 전역 semantic router,
+  provider 관측 저장소, Android 연결.

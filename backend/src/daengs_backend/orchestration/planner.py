@@ -107,6 +107,10 @@ def assemble_route_plan(
     for capability in decision.execute:
         if capability in {"training", "life"}:
             payload: dict[str, Any] = {"question": query}
+            if capability == "life":
+                dog = _dog_context(context)
+                if dog is not None:
+                    payload["dog"] = dog
         else:
             location = context["location"]
             payload = {"lat": location["lat"], "lon": location["lon"]}
@@ -124,6 +128,27 @@ def assemble_route_plan(
             "model": model,
         }
     )
+
+
+def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the trusted dog facts, dropping anything the caller did not resolve.
+
+    Same rule as ``context.location``: only the caller's structured values reach a payload,
+    never model output. A malformed or empty entry yields None rather than an error, because
+    a missing profile must not turn an answerable question into a failed request — Life
+    answers without it exactly as it did before B4.
+    """
+    dog = context.get("dog")
+    if not isinstance(dog, Mapping):
+        return None
+    resolved: dict[str, Any] = {}
+    breed = dog.get("breed")
+    if isinstance(breed, str) and breed.strip():
+        resolved["breed"] = breed
+    age_months = dog.get("age_months")
+    if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
+        resolved["age_months"] = age_months
+    return resolved or None
 
 
 def _missing_walk_coordinates(context: dict[str, Any]) -> list[str]:

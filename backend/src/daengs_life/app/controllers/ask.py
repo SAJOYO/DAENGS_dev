@@ -30,7 +30,8 @@ def post_ask(
     도구이고, 무엇을 컨텍스트로 줬는지 말하지 않으면 *"인용한 조항이 실재했나"* 를 셀 수 없다
     (RAG-028 ②). 프론트가 붙을 때 줄인다.
     """
-    return service.ask(body.question, k=body.k, encoder=encoder, conn=conn)
+    return service.ask(body.question, k=body.k, encoder=encoder, conn=conn,
+                      breed=body.breed, age_months=body.age_months)
 
 
 __all__ = ["router"]

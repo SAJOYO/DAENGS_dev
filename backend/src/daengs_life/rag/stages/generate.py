@@ -94,6 +94,26 @@ PROMPT = """당신은 한국의 반려동물 관련 제도를 안내하는 도�
 [질문] {question}
 """
 
+# 반려견 프로필 블록 (로드맵 B4). **`PROMPT` 뒤에 붙인다** — 프로필이 없을 때 프롬프트가
+# 지금과 한 글자도 달라지지 않아야 lap18 과 lap19 를 같은 축에서 비교할 수 있다. `{dog}` 슬롯을
+# 본문에 파 두면 빈 문자열이어도 줄바꿈이 남아 그 비교가 깨진다.
+#
+# **맹견 판정을 코드가 하지 않는다.** 시행규칙의 5종 목록은 코퍼스에 있고(law_animal_protection),
+# `breed` 는 앱이 정하는 어휘라 여기서 문자열 집합을 들고 있으면 앱에 견종이 하나 늘 때마다
+# 조용히 어긋난다. 잡종("그 잡종의 개")까지 코드로 가르려 들면 더 그렇다.
+#
+# ⚠️ **프로필로 조항을 만들지 말라는 문단이 이 블록의 전부다.** 견종·나이는 [참고자료]가 이미
+# 견종이나 나이로 답을 가를 때 그 갈래를 고르는 데만 쓴다. 이것이 없으면 A3a 가 세운 경계가
+# 무너지는 방식이 특히 나쁘다 — 근거 없이 지어낸 답이 **이 아이에게 맞춘 답처럼** 보인다.
+DOG_BLOCK = """
+[반려견] {facts}
+
+[참고자료]가 견종이나 나이에 따라 답을 가르는 경우에만 위 정보를 쓰세요. 해당하는 갈래를
+고르고, 왜 그 갈래인지를 한 줄로 밝히세요.
+[참고자료]에 없는 기준을 이 정보로 만들어 내지 마세요 — 견종이나 나이만으로는 알 수 없는
+것을 물었다면 그렇게 답하세요.
+"""
+
 _ITEM = "[{n}] {citation} — {title}{section}\n{content}"
 
 # 답변에서 조항 번호를 뽑는 정규식. `제15조` · `제15조의2` 를 잡는다.
@@ -147,8 +167,40 @@ def build_context(hits: list[Hit]) -> str:
     )
 
 
-def build_prompt(question: str, hits: list[Hit]) -> str:
-    return PROMPT.format(context=build_context(hits), question=question)
+@dataclass(frozen=True)
+class DogProfile:
+    """Life 가 받는 반려견 사실 둘 (로드맵 B4).
+
+    어댑터가 원시값으로 넘기고 여기서 모양을 갖는다 — `daengs_backend` 의 `DogContext` 를
+    import 하면 `rag` 가 `app` 은커녕 오케스트레이션까지 의존하게 된다 (RAG-014).
+    """
+
+    breed: str | None = None
+    age_months: int | None = None
+
+    @property
+    def has_facts(self) -> bool:
+        return bool(self.breed) or self.age_months is not None
+
+    def describe(self) -> str:
+        """`[반려견]` 줄. **개월을 그대로 쓰지 않는다** — "38개월"보다 "3년 2개월"이 조문의
+        연령 조건(만 나이)과 맞대 보기 쉽고, 모델이 단위를 헷갈릴 자리가 준다.
+        """
+        parts = []
+        if self.breed:
+            parts.append(f"견종: {self.breed}")
+        if self.age_months is not None:
+            years, months = divmod(self.age_months, 12)
+            age = f"{years}년 {months}개월" if years else f"{months}개월"
+            parts.append(f"나이: {age} (만 {years}세)")
+        return " · ".join(parts)
+
+
+def build_prompt(question: str, hits: list[Hit], *, dog: DogProfile | None = None) -> str:
+    prompt = PROMPT.format(context=build_context(hits), question=question)
+    if dog is None or not dog.has_facts:
+        return prompt
+    return prompt + DOG_BLOCK.format(facts=dog.describe())
 
 
 class Verdict(BaseModel):
@@ -227,7 +279,7 @@ def _client(api_key: str | None = None):
 
 
 def answer(question: str, hits: list[Hit], *, client=None, model: str | None = None,
-           embedding_model: str | None = None) -> Answer:
+           embedding_model: str | None = None, dog: DogProfile | None = None) -> Answer:
     """**순수하다** — 검색 결과를 받는다. DB 도 임베딩 모델도 안 만진다.
 
     나눠 둔 이유는 `search()` 가 `conn` 을 받게 한 것과 같다: 테스트가 손으로 만든 `Hit` 몇 개로
@@ -239,7 +291,7 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
     name = model or config.settings.gemini_model
     cli = client or _client()
     resp = cli.models.generate_content(
-        model=name, contents=build_prompt(question, hits),
+        model=name, contents=build_prompt(question, hits, dog=dog),
         # **스키마를 붙여서 받는다** (RAG-055). 프롬프트로 JSON 을 부탁하는 것과 다르다 —
         # 부탁은 모델이 산문으로 새면 그만이고, 그 새는 날이 하필 거절해야 할 질문일 수 있다
         config=types.GenerateContentConfig(response_mime_type="application/json",
@@ -267,7 +319,8 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
 
 def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool = True,
         category: str | None = None, model_key: str | None = None,
-        st=None, conn=None, client=None, model: str | None = None) -> Answer:
+        st=None, conn=None, client=None, model: str | None = None,
+        dog: DogProfile | None = None) -> Answer:
     """질문 하나 → 답 하나. **9단계의 순서가 이 세 줄이다.**
 
     `st`(임베딩 모델)·`conn`(DB)·`client`(Gemini) 셋 다 **받으면 만들지도 닫지도 않는다** — ①의
@@ -287,7 +340,10 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
 
     hits = search.search(query, k=k, include_supplementary=include_supplementary,
                          category=category, conn=conn)
-    return answer(question, hits, client=client, model=model, embedding_model=key)
+    # **검색 질의에는 프로필이 안 들어간다** (로드맵 B4 = "프로필 → 프롬프트"). 견종을 질의에
+    # 섞으면 검색이 달라져 lap 비교 축이 흔들리고, 그것은 지역 필터(A2)와 같은 종류의 카드다.
+    # 그래서 top-k 에 맹견 조항이 안 오면 프로필이 있어도 답이 안 갈린다 — `## 남은 것`(#202).
+    return answer(question, hits, client=client, model=model, embedding_model=key, dog=dog)
 
 
 # ---------------------------------------------------------------- 덤프 (RAG-028 ⑥)

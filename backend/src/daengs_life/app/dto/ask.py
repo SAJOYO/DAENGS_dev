@@ -43,6 +43,13 @@ class AskIn(BaseModel):
     # 갖는다 — RAG-026 ①이 *"검사 도구와 서빙이 같은 기본값을 쓸 이유가 없다"* 며 비워 둔 자리다.
     k: int | None = Field(default=None, ge=1, le=20)
 
+    # 반려견 프로필 (로드맵 B4). **여기서는 손으로 넣는 값이다.** 사용자 경로에서는 앱이
+    # `active_dog_id` 만 보내고 `daengs_backend` 가 pets 를 읽어 채운다 — 이 직접 API 는 pets 를
+    # 모르고, 알아야 할 이유도 없다(파트① 은 Dog Profile 과 독립이다). 콘솔 점검 탭이 프로필이
+    # 붙은 답과 안 붙은 답을 나란히 보려면 이 자리가 필요하다.
+    breed: str | None = Field(default=None, max_length=60)
+    age_months: int | None = Field(default=None, ge=0, le=360)
+
 
 class AskOut(BaseModel):
     question: str

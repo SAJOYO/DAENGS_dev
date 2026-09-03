@@ -30,7 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_place.core.config import settings
 from daengs_place.core.db import SessionLocal
-from daengs_place.ingest.facility_store import prune_unseen, update_pet_detail, upsert_rows
+from daengs_place.ingest.facility_store import (
+    invalidate_pet_details_without_source_payload,
+    prune_unseen,
+    update_pet_detail,
+    upsert_rows,
+)
 from daengs_place.ingest.linking import rebuild_links
 from daengs_place.ingest.source_record_store import (
     pending_detail_refs,
@@ -115,9 +120,21 @@ async def fetch_pet_detail(client: httpx.AsyncClient, content_id: str) -> Detail
         break
     else:
         return DetailFetchResult(DetailAcquisitionState.FETCH_FAILED)
-    item = (_body(r.json()).get("items") or {}).get("item") or []
+    try:
+        payload = r.json()
+    except ValueError as exc:
+        raise KtoApiError("invalid KTO detail JSON") from exc
+    body = _body(payload)
+    if not isinstance(body, dict):
+        raise KtoApiError("invalid KTO detail body")
+    items = body.get("items") or {}
+    if not isinstance(items, dict):
+        raise KtoApiError("invalid KTO detail items")
+    item = items.get("item") or []
     if isinstance(item, dict):
         item = [item]
+    if not isinstance(item, list) or (item and not isinstance(item[0], dict)):
+        raise KtoApiError("invalid KTO detail item")
     if not item:
         return DetailFetchResult(DetailAcquisitionState.NO_DATA)
     detail = {k: v for k, v in item[0].items() if v not in ("", None) and k != "contentid"}
@@ -240,6 +257,11 @@ async def _run(mode: str, details: int) -> None:
                 preserve_detail=True,
                 detail_version_field="modifiedtime",
             )
+            # 목록 version 변경·실패·no-data로 source payload를 신뢰할 수 없게 된 순간
+            # legacy facility가 예전 상세와 판정을 계속 서비스하지 않도록 같은 트랜잭션에서 비운다.
+            detail_invalidated = await invalidate_pet_details_without_source_payload(
+                session, "kto"
+            )
 
             rows = all_rows
             if mode == "incremental" and prior:
@@ -323,6 +345,7 @@ async def _run(mode: str, details: int) -> None:
                 "pruned": pruned,
                 "source_stored": source_stored,
                 "source_pruned": source_pruned,
+                "detail_invalidated": detail_invalidated,
                 "pet_details": got_details,
                 "detail_no_data": detail_no_data,
                 "detail_failed": detail_failed,

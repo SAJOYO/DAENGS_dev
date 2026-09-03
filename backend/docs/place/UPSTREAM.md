@@ -97,7 +97,7 @@ stacked parent:    SAJOYO/DAENGS_dev #183
 ```
 promotion source:  rkbuhtig/DAENGS_geo
 source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
-target PR:         pending
+target PR:         SAJOYO/DAENGS_dev #189
 ```
 
 자연어 모델이 제안한 값을 곧바로 검색하지 않도록, provider 호출보다 먼저 Place 소유의

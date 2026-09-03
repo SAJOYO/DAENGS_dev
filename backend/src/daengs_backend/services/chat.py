@@ -154,6 +154,24 @@ class SummaryRequestConflictError(Exception):
     pass
 
 
+class SummaryPersistenceError(Exception):
+    """A generated summary could not be committed as a completed row.
+
+    The reservation was gone or no longer ``processing`` when the completion UPDATE ran —
+    withdrawal deleted it, or stale recovery already failed it. The generated draft is
+    never returned as a success and nothing is re-inserted; the client retries with a fresh
+    ``client_request_id``. The persisted-turn twin is ``TurnPersistenceError``.
+    """
+
+    def __init__(self, summary_id: uuid.UUID, persistence_error_code: str) -> None:
+        super().__init__(
+            f"summary persistence failed ({persistence_error_code}): {summary_id}"
+        )
+        self.summary_id = summary_id
+        self.persistence_error_code = persistence_error_code
+        self.retry_with_fresh_client_request_id = True
+
+
 @dataclass(frozen=True)
 class SummaryReservation:
     summary_id: uuid.UUID
@@ -733,6 +751,24 @@ async def fail_summary(
         await session.rollback()
 
 
+async def _require_active_member(session: AsyncSession, app_user_id: uuid.UUID) -> None:
+    """Recheck membership inside a service-owned TX, holding the withdrawal lock.
+
+    The summary route authenticates with a token-only dependency (no request session), so
+    the member's ``active`` state is verified here, in the same short transaction that
+    writes. The ``FOR UPDATE`` serializes with withdrawal exactly like ``current_app_user``
+    does for request-scoped endpoints: withdrawal holds this row for its whole transaction,
+    so either it finished first and no active row is found, or our write commits first and
+    withdrawal's explicit cleanup deletes it afterwards.
+
+    Holding the lock in *this* transaction is also what removes the self-deadlock: the
+    ``chat_summaries`` INSERT's FK takes ``FOR KEY SHARE`` on the same ``app_users`` row,
+    which a transaction already holding ``FOR UPDATE`` on it does not wait for.
+    """
+    if await app_user_repo.get_active_for_update(session, app_user_id) is None:
+        raise AppUserNotActiveError
+
+
 async def create_summary(
     session_factory: async_sessionmaker[AsyncSession],
     app_user_id: uuid.UUID,
@@ -741,8 +777,21 @@ async def create_summary(
     client_request_id: uuid.UUID,
     summarizer: GeminiChatSummarizer | None = None,
 ) -> ChatSummary:
-    """Full workflow with no AsyncSession alive across the external call."""
+    """``active check + reservation TX -> close AsyncSession -> summarizer -> completion/failure TX``.
+
+    The caller must not hold a request-scoped session or any ``app_users`` lock: the
+    reservation transaction takes that lock itself, reserves the summary under it, and
+    commits and closes before the summarizer runs. No AsyncSession and no row lock is
+    alive during the external call.
+
+    If withdrawal commits between reservation and completion, its cleanup has already
+    deleted the reservation. The completion TX rechecks membership first (401, like every
+    other withdrawn-member write) and otherwise updates only a row that is still
+    ``processing``; a vanished or already-closed row is ``SummaryPersistenceError``. Nothing
+    is ever re-inserted and 201 is returned only after the completed row is committed.
+    """
     async with session_factory() as reserve_session:
+        await _require_active_member(reserve_session, app_user_id)
         reservation = await reserve_summary(
             reserve_session,
             app_user_id,
@@ -756,6 +805,8 @@ async def create_summary(
         )
     except ChatSummaryError:
         async with session_factory() as failure_session:
+            # Conditional UPDATE only. If withdrawal already deleted the reservation this
+            # touches nothing; the provider failure is still reported as such.
             await fail_summary(
                 failure_session,
                 reservation.summary_id,
@@ -764,7 +815,18 @@ async def create_summary(
         raise
 
     async with session_factory() as completion_session:
-        return await complete_summary(completion_session, reservation.summary_id, draft)
+        # Withdrawal serialization again: a member who withdrew while the summarizer ran
+        # gets the withdrawn-member 401, and their (already deleted) reservation is left
+        # alone rather than recreated or completed.
+        await _require_active_member(completion_session, app_user_id)
+        try:
+            return await complete_summary(
+                completion_session, reservation.summary_id, draft
+            )
+        except CompletionConflictError as exc:
+            raise SummaryPersistenceError(
+                reservation.summary_id, "COMPLETION_CONFLICT"
+            ) from exc
 
 
 async def list_summaries(
@@ -812,6 +874,7 @@ __all__ = [
     "ExistingSummaryError",
     "Orchestrate",
     "PetNotOwnedError",
+    "SummaryPersistenceError",
     "SummaryProcessingError",
     "SummaryRequestConflictError",
     "SummaryReservation",

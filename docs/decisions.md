@@ -2448,6 +2448,25 @@ D-037은 오케스트레이션의 일반 운영 로그·트레이스에 질문 �
 v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는 변경이 필요하면 D-037의
 명시적 옵트인·별도 저장·보존 기한 조건을 만족하는 별도 결정을 먼저 만듭니다.
 
+**외부 호출 경계와 인증 (2026-09-03 보강)** — 대화 turn과 AI 요약은
+`활성 확인 + 예약 TX → AsyncSession 닫기 → 외부 호출 → 완료/실패 TX`이며, 외부 호출 동안
+열린 요청 DB 세션과 행 잠금은 **0개**여야 합니다 (`docs/chat-transaction-flow.md`). 그래서 서비스가
+짧은 TX를 따로 소유하는 엔드포인트(`POST /app/chats/{id}/summary`)는 요청 세션에서
+`app_users FOR UPDATE`를 잡는 `CurrentAppUser`가 아니라 **토큰만 보는
+`CurrentAppMemberTokenOnly`**를 쓰고, 회원 active 확인은 서비스의 예약 TX가 같은 잠금으로
+다시 합니다. 서버 Phase 3A(2026-09-03)에서 이전 배선이 PostgreSQL 자기 교착(바깥 요청 TX
+`idle in transaction`으로 `app_users FOR UPDATE` 보유, 안쪽 INSERT `chat_summaries`가 FK
+`FOR KEY SHARE`로 `Lock/transactionid` 대기, 공급자 호출 0회)으로 워커를 영영 멈추게 한
+것이 이유입니다. 전역 `FOR NO KEY UPDATE`로만 고치지 않는 이유는 그 FK 충돌은 피해도 외부
+호출 동안 요청 세션과 회원 잠금이 살아 있는 경계 위반이 그대로이기 때문입니다. 요청 세션을
+같이 받는 보통의 앱 API는 계속 `CurrentAppUser`입니다.
+
+같은 보강으로 요약 완료 실패 계약을 turn과 맞췄습니다: 완료 UPDATE가 0행이면(탈퇴 정리·stale
+회수) 생성된 요약을 201로 돌려주지 않고 503 `SUMMARY_PERSISTENCE_FAILED`(`summary_id` ·
+`persistence_error_code` · `retry_with_fresh_client_request_id: true`)로 끝냅니다.
+탈퇴가 예약 뒤·완료 전에 commit되면 완료 TX의 active 확인이 401로 끝나고, 지워진 대화·요약 행을
+다시 만들지 않습니다.
+
 **번호 재부여 (2026-09-03)** — 이 결정은 원래 D-043 으로 발행됐습니다. 이 브랜치가 `origin/dev` 를 86 커밋 뒤진 채로 있는 사이 dev 에서 D-043·D-044·D-045 가 먼저 머지됐습니다. `docs/collaboration.md` §4 대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-048 으로 옮겼습니다. 바로 위 D-045 도 같은 사고를 한 번 겪었습니다 — 브랜치를 오래 안 맞추면 반복됩니다.
 
 ---

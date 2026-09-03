@@ -7,16 +7,23 @@
 규칙). 그리고 `CurrentAppUser` 를 씁니다 — `admin_or_app_user` 는 **principal 을
 쓰지 않는** 엔드포인트 전용이고(core/deps.py 독스트링), 여기는 신원으로 남의 것을
 걸러야 하는 API 라 관리자 토큰이 들어오면 `app_users` 에 없는 회원이 됩니다.
+
+**예외가 하나 있습니다 — `POST /{session_id}/summary` 는 `CurrentAppMemberTokenOnly`
+입니다.** 그 엔드포인트만 요청 수명 세션이 없고, 서비스가 짧은 TX 를 따로 여닫습니다
+(예약 → 세션 닫기 → Gemini → 완료). `CurrentAppUser` 가 요청 세션에서 잡은
+`app_users FOR UPDATE` 를 서비스의 두 번째 TX 가 INSERT 의 FK 로 다시 기다리면
+자기 교착이 됩니다 — 2026-09-03 서버 Phase 3A 에서 실제로 워커가 영영 멈췄습니다.
+active 확인은 서비스의 예약 TX 가 같은 잠금으로 다시 합니다 (`services/chat.py`).
 """
 
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from daengs_backend.core.database import SessionLocal, get_session
-from daengs_backend.core.deps import CurrentAppUser
+from daengs_backend.core.database import get_chat_session_factory, get_session
+from daengs_backend.core.deps import CurrentAppMemberTokenOnly, CurrentAppUser
 from daengs_backend.models import ChatSession, ChatSummary, ChatTurn
 from daengs_backend.orchestration.contracts import AssistantResponse
 from daengs_backend.schemas.chat import (
@@ -30,9 +37,15 @@ from daengs_backend.schemas.chat import (
     ChatTurnResponse,
 )
 from daengs_backend.services import chat as chat_service
-from daengs_backend.services.chat_summary import ChatSummaryError
+from daengs_backend.services.chat_summary import ChatSummaryError, GeminiChatSummarizer
 
 router = APIRouter(prefix="/app/chats", tags=["chats"])
+
+
+def get_chat_summarizer() -> GeminiChatSummarizer:
+    """요약 공급자. 테스트는 이 의존성을 가짜 `generate` 를 가진 것으로 바꿉니다."""
+    return GeminiChatSummarizer()
+
 
 #: 문서에 같은 문장을 세 번 적지 않도록 모아 둡니다.
 _NOT_MINE = {
@@ -271,12 +284,24 @@ async def delete_session(
             "description": "요약 공급자가 실패했거나 출력이 스키마를 두 번 어겼습니다. "
             "**부분 저장을 하지 않습니다** — 빈 껍데기가 보관함에 남으면 저장에 성공한 것으로 보입니다."
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "요약은 만들어졌지만 completed 행으로 commit하지 못했습니다 — 예약이 "
+            "그 사이 사라졌거나(탈퇴 정리) 이미 닫혔습니다(5분 stale 회수). `detail.code`는 "
+            "`SUMMARY_PERSISTENCE_FAILED`이고 `summary_id`, 내부 `persistence_error_code`, "
+            "`retry_with_fresh_client_request_id: true`를 동봉합니다. **생성된 요약 본문은 "
+            "성공 응답으로 반환하지 않고, 사라진 행을 다시 만들지도 않습니다** — "
+            "`/assistant/query`의 `TURN_PERSISTENCE_FAILED`와 같은 계약입니다."
+        },
     },
 )
 async def create_summary(
     session_id: uuid.UUID,
     body: ChatSummaryCreate,
-    user: CurrentAppUser,
+    user: CurrentAppMemberTokenOnly,
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)
+    ],
+    summarizer: Annotated[GeminiChatSummarizer, Depends(get_chat_summarizer)],
 ) -> ChatSummaryResponse:
     """**사용자가 누를 때만 돕니다.** 답변마다 자동으로 다시 만들지 않습니다.
 
@@ -285,14 +310,23 @@ async def create_summary(
 
     요약은 **이 대화만** 봅니다. 새 RAG 검색도, 새 상담도 하지 않고, 원문의
     주의·한계·출처를 그대로 보존합니다.
+
+    인증은 **토큰만** 봅니다 (`CurrentAppMemberTokenOnly`) — 요청 수명 DB 세션이 없습니다.
+    회원이 아직 active 인지는 서비스가 예약 TX 안에서 같은 잠금으로 다시 확인하고,
+    아니면 `current_app_user` 와 같은 401 입니다. 모델이 도는 동안 열린 DB 세션도 행
+    잠금도 없습니다 (`docs/chat-transaction-flow.md`).
     """
     try:
         summary = await chat_service.create_summary(
-            SessionLocal,
+            session_factory,
             user.app_user_id,
             session_id,
             client_request_id=body.client_request_id,
+            summarizer=summarizer,
         )
+    except chat_service.AppUserNotActiveError:
+        # `current_app_user` 와 같은 문장 — 앱이 재로그인으로 알아듣는 자리입니다.
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.") from None
     except chat_service.ChatSessionNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "대화를 찾을 수 없습니다.") from None
     except chat_service.EmptyConversationError:
@@ -319,6 +353,18 @@ async def create_summary(
             status.HTTP_409_CONFLICT,
             {"code": "SUMMARY_SOURCE_LIMIT_EXCEEDED"},
         ) from None
+    except chat_service.SummaryPersistenceError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            {
+                "code": "SUMMARY_PERSISTENCE_FAILED",
+                "summary_id": str(exc.summary_id),
+                "persistence_error_code": exc.persistence_error_code,
+                "retry_with_fresh_client_request_id": (
+                    exc.retry_with_fresh_client_request_id
+                ),
+            },
+        ) from None
     except ChatSummaryError:
         # 원출력은 노출하지 않습니다 (O-14 와 같은 규칙).
         raise HTTPException(
@@ -327,4 +373,4 @@ async def create_summary(
     return _summary_response(summary)
 
 
-__all__ = ["router"]
+__all__ = ["get_chat_summarizer", "router"]

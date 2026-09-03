@@ -20,7 +20,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from daengs_backend.core.database import SessionLocal
+from daengs_backend.core.database import get_chat_session_factory
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
 from daengs_backend.orchestration.service import AssistantOrchestrationService
@@ -32,15 +32,6 @@ router = APIRouter(tags=["assistant"])
 
 def get_assistant_orchestration_service() -> AssistantOrchestrationService:
     return AssistantOrchestrationService()
-
-
-def get_chat_session_factory() -> async_sessionmaker[AsyncSession]:
-    """대화 저장용 세션 **공장**. 요청 수명의 `get_session` 이 아니다.
-
-    외부 호출 동안 살아 있는 AsyncSession 이 없어야 해서(`docs/chat-transaction-flow.md`),
-    서비스가 짧은 TX 마다 하나씩 열고 닫는다. 무상태 요청은 이것을 한 번도 부르지 않는다.
-    """
-    return SessionLocal
 
 
 def _principal_context(principal: Principal | AppPrincipal) -> PrincipalContext:
@@ -205,4 +196,7 @@ async def query(
         ) from None
 
 
+# `get_chat_session_factory` 는 core/database.py 의 것을 그대로 내보낸다 — 요약 라우터와
+# 같은 의존성이라 테스트가 한 번 바꾸면 두 라우터가 같이 계측된다. 무상태 요청은 이것을
+# 한 번도 부르지 않는다.
 __all__ = ["get_chat_session_factory", "router"]

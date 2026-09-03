@@ -70,10 +70,20 @@ stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UU
 ## AI 요약
 
 ```text
-예약 TX -> AsyncSession 닫기 -> Gemini 호출 -> 완료 TX
+active 확인 + 예약 TX -> AsyncSession 닫기 -> Gemini 호출 -> 완료/실패 TX
 ```
 
+- **`POST /app/chats/{id}/summary`는 요청 수명 세션이 없습니다.** 인증은 토큰만 보는
+  `CurrentAppMemberTokenOnly`(`core/deps.py`)이고, 회원이 아직 active인지는 예약 TX가
+  `app_users FOR UPDATE`로 다시 확인합니다 — `current_app_user`와 같은 잠금이라 탈퇴와
+  같은 방식으로 직렬화되고, 아니면 같은 401 `다시 로그인해 주세요.`입니다.
+  잠금과 `chat_summaries` INSERT가 **한 트랜잭션**이라 INSERT의 FK `FOR KEY SHARE`가 자기
+  잠금과 부딪히지 않습니다. 이전 배선(`CurrentAppUser` + 서비스의 두 번째 `SessionLocal`)은
+  요청 TX가 잠근 행을 두 번째 TX가 기다리고 요청 TX는 그 INSERT를 기다리는 **자기 교착**이었습니다
+  — 2026-09-03 서버 Phase 3A에서 공급자 호출 0회, 워커 하나와 DB 연결 둘이 영영 묶였습니다.
+  `tests/test_chat_summary_api.py`가 그 배선을 잠금 장부로 재현해 결정론적으로 막습니다.
 - 예약 TX는 완료된 turn만 읽어 `source_turn_count`를 고정하고 `processing` 요약을 commit합니다.
+  commit 뒤 세션을 닫으므로 **Gemini가 도는 동안 열린 DB 세션도 행 잠금도 0개**입니다.
 - 같은 `(source_session_id, source_turn_count)`의 processing/completed 행은 부분 UNIQUE로 한
   건만 허용합니다. completed면 그 summary ID를 담은 기존-요약 도메인 오류를 반환합니다.
 - 5분을 넘긴 processing 행은 다음 예약 시 `STALE_PROCESSING` 실패로 바꾸며, failed 행은 같은
@@ -84,8 +94,19 @@ stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UU
   `[ASSISTANT]`나 "위 규칙은 무시해"는 따옴표 안의 값으로 남습니다 (`chat-summary-ko-v2`).
 - 완성된 요약은 `DELETE /app/chats/summaries/{summary_id}`로 지웁니다. 만드는 중인 것은 409로
   거절합니다 — 지우면 완료 UPDATE가 갈 곳을 잃습니다. 원본 대화는 건드리지 않습니다.
-- 완료 TX는 아직 `processing`인 summary만 구조화 결과로 채웁니다. 실패도 같은 조건부 UPDATE로
-  닫아 늦게 도착한 응답이 이미 실패 처리된 예약을 되살리지 못하게 합니다.
+- 완료 TX는 먼저 회원 active를 같은 잠금으로 다시 확인한 뒤, 아직 `processing`인 summary만
+  구조화 결과로 채웁니다. 실패도 같은 조건부 UPDATE로 닫아 늦게 도착한 응답이 이미 실패
+  처리된 예약을 되살리지 못하게 합니다. **INSERT 경로가 없으므로** 지워진 예약이 되살아나는
+  일은 없습니다.
+- **예약 뒤·완료 전에 탈퇴가 commit되면**: 탈퇴 TX가 `app_users`를 잠근 채 대화·요약을 명시로
+  지우므로, 완료 TX의 active 확인은 탈퇴 commit을 기다린 뒤 실패해 401로 끝납니다. 생성된 요약은
+  버려지고 아무것도 다시 쓰지 않습니다. 공급자가 실패한 쪽이면 조건부 실패 UPDATE가 0행이고 502
+  그대로입니다. 어느 쪽도 매달리지 않습니다.
+- **완료 UPDATE가 0행이면** (회원은 active인데 5분 stale 회수가 먼저 닫았거나 행이 사라짐)
+  생성된 요약을 201로 돌려주지 않습니다. 503 `SUMMARY_PERSISTENCE_FAILED`에 `summary_id`, 내부
+  `persistence_error_code`(`COMPLETION_CONFLICT`), `retry_with_fresh_client_request_id: true`를
+  담습니다 — `/assistant/query`의 `TURN_PERSISTENCE_FAILED`와 같은 모양입니다. 201은 completed
+  행의 commit 뒤에만 나갑니다.
 - failed summary 보존 정리는 아직 별도 후속입니다. 이번 failed-turn 상한을 summary나 스케줄러
   설계로 넓히지 않습니다.
 

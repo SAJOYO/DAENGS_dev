@@ -11,16 +11,22 @@ from __future__ import annotations
 import re
 import threading
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pytest
 
 from daengs_life.realtime.cache import (
-    CACHE_FILE, POLICY, Cache, Cached, Entry, MemoryStore, load_policy, split_key,
+    CACHE_FILE,
+    POLICY,
+    Cache,
+    Cached,
+    Entry,
+    MemoryStore,
+    load_policy,
+    split_key,
 )
 from daengs_life.realtime.config import KST
 from daengs_life.realtime.observation import Source
-from daengs_life.realtime.transport.base import Unavailable
+from daengs_life.realtime.transport.base import NoData, Unavailable
 
 # 모듈이 쥔 경로를 그대로 쓴다. 손으로 다시 조립하면 패키지가 움직일 때마다 어긋난다
 # — 이관(D-018) 때 실제로 어긋났다.
@@ -100,6 +106,12 @@ def test_the_key_survives_a_colon_inside_the_lookup() -> None:
     """조회 키에 `:` 가 들어온다 — 미세먼지 예보통보는 `'서울:2026-08-25'` 로 부른다."""
     key = Cache.key(Source.AIRKOREA_FORECAST.value, "서울:2026-08-25")
     assert split_key(key) == (Source.AIRKOREA_FORECAST.value, "서울:2026-08-25")
+
+
+def test_a_historical_snapshot_key_includes_the_observation_cycle() -> None:
+    assert Cache.snapshot_key(NCST, "61,125:202608250900") == (
+        "rt-snapshot:kma-vilage-fcst:ncst:61,125:202608250900"
+    )
 
 
 def test_an_unknown_feed_fails_loudly() -> None:
@@ -232,6 +244,81 @@ def test_concurrent_misses_call_the_api_once() -> None:
     assert len(calls) == 1, f"동시 8건이 {len(calls)}번 불렀다"
 
 
+def test_a_historical_snapshot_is_reused_without_current_cycle_staleness() -> None:
+    """과거 09시 관측은 12시에 다시 읽어도 현재 발표를 놓친 값이 아니다."""
+    cache = Cache(MemoryStore())
+    fetch, calls = counting({"observed": "09:00"})
+
+    first = cache.get_snapshot(NCST, "61,125:202608250900", fetch, t(25, 10, 10))
+    second = cache.get_snapshot(NCST, "61,125:202608250900", fetch, t(25, 12, 10))
+
+    assert first.payload == second.payload == {"observed": "09:00"}
+    assert first.calls == 1 and second.calls == 0
+    assert len(calls) == 1
+
+
+def test_different_historical_cycles_do_not_share_a_snapshot() -> None:
+    cache = Cache(MemoryStore())
+    fetch, calls = counting()
+
+    cache.get_snapshot(NCST, "61,125:202608250900", fetch, t(25, 10, 10))
+    cache.get_snapshot(NCST, "61,125:202608251000", fetch, t(25, 11, 10))
+
+    assert len(calls) == 2
+
+
+def test_historical_no_data_is_not_replaced_with_a_current_or_stale_value() -> None:
+    """없는 과거값에 일반 ``rt:`` 캐시를 끼워 넣으면 일기가 현재 날씨로 오염된다."""
+    cache = Cache(MemoryStore())
+    current, _ = counting({"current": True})
+    cache.get(NCST, "61,125", current, t(25, 10, 41))
+
+    calls: list[int] = []
+
+    def no_data():
+        calls.append(1)
+        raise NoData("그 시각 자료 없음")
+
+    got = cache.get_snapshot(NCST, "61,125:202608250900", no_data, t(25, 10, 41))
+    repeated = cache.get_snapshot(NCST, "61,125:202608250900", no_data, t(25, 10, 42))
+
+    assert got.payload is None
+    assert got.stale is False
+    assert got.failure_kind == "nodata"
+    assert got.calls == 1
+    assert repeated.payload is None and repeated.failure_kind == "nodata"
+    assert repeated.calls == 0
+    assert calls == [1], "비재시도성 NoData를 같은 회차에 다시 호출했다"
+
+
+def test_a_snapshot_does_not_unlock_another_process_flight() -> None:
+    class BusyStore(MemoryStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.unlocks = 0
+
+        def lock(self, key: str, ttl_sec: int) -> bool:
+            return False
+
+        def unlock(self, key: str) -> None:
+            self.unlocks += 1
+
+    store = BusyStore()
+    fetch, calls = counting()
+
+    got = Cache(store).get_snapshot(
+        NCST,
+        "61,125:202608250900",
+        fetch,
+        t(25, 10, 41),
+        wait_sec=0,
+    )
+
+    assert got.payload is None and got.failure_kind == "in_flight"
+    assert calls == [], "다른 프로세스가 부르는 동안 중복 호출했다"
+    assert store.unlocks == 0, "획득하지 않은 분산 락을 해제했다"
+
+
 # ------------------------------------------------------------ 활성 키 (④-d · ④-f)
 
 def test_a_request_marks_its_lookup_active() -> None:
@@ -265,6 +352,11 @@ def test_an_entry_survives_a_round_trip_as_text() -> None:
     entry = Entry({"items": [{"category": "T1H", "obsrValue": "33.1"}]}, t(25, 14, 40))
     assert Entry.loads(entry.dumps()) == entry
     assert Entry.loads(Entry("텍스트/CSV 한 줄", t(25, 14)).dumps()).payload == "텍스트/CSV 한 줄"
+
+
+def test_a_negative_snapshot_entry_preserves_its_outcome() -> None:
+    entry = Entry(None, t(25, 14), failure_kind="nodata", reason="그 시각 자료 없음")
+    assert Entry.loads(entry.dumps()) == entry
 
 
 def test_a_corrupt_entry_is_dropped_not_raised() -> None:

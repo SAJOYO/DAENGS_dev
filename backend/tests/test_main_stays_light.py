@@ -97,6 +97,9 @@ def test_walk_ask_and_spatial_diary_are_registered() -> None:
     assert "/walk" in paths
     assert "/ask" in paths
     assert "/app/walks/spatial-diary/views/query" in paths
+    assert "/weather/at" not in paths, (
+        "소유 Walk 없이 임의 격자·회차를 부를 수 있는 API는 공용 KMA 쿼터를 소진한다"
+    )
 
 
 def test_lifespan_opens_the_cache_up_front() -> None:

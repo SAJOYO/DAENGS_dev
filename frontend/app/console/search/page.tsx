@@ -3,7 +3,8 @@ import InspectTabs from "../../components/inspect-tabs";
 /**
  * `기능 / 검색 점검` — 콘솔 메뉴의 두 번째 카드가 여는 화면.
  *
- * **갈래가 둘입니다.** 훈련 RAG(`/training/chat`, `#25`)와 생활 RAG(`/ask`·`/walk`).
+ * **갈래가 셋입니다.** 훈련 RAG(`/training/chat`, `#25`) · 생활 RAG(`/ask`·`/walk`) ·
+ * 피부 스크리닝(`/screen/v1/screen`).
  * 원래는 훈련 RAG 하나뿐이었고, 그 챗봇도 처음에는 `/` 랜딩에 붙어 있었습니다 — 그때는
  * 콘솔이 없어서 임시로 거기 둔 것이었습니다.
  *

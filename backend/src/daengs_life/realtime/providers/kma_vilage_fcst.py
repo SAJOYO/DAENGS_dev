@@ -16,9 +16,7 @@ from typing import Any
 
 from ..config import KST
 from ..geo import Grid
-from ..observation import (
-    Interval, Measurement, Q, Source, parse_interval, parse_precip_kind, parse_sky,
-)
+from ..observation import Measurement, Q, Source, parse_interval, parse_precip_kind, parse_sky
 from ..transport import datagokr
 from ..transport.base import Budget
 
@@ -131,6 +129,33 @@ def _fetch(operation: str, grid: Grid, base: tuple[str, str], rows: int,
 
 def raw_ncst(grid: Grid, now: datetime, *, budget: Budget | None = None) -> dict:
     return _fetch("getUltraSrtNcst", grid, ncst_base(now), 10, budget)
+
+
+def raw_ncst_at(
+    grid: Grid,
+    observed_at: datetime,
+    *,
+    budget: Budget | None = None,
+) -> dict:
+    """이미 발표된 특정 정시의 초단기실황을 조회한다.
+
+    ``raw_ncst``는 요청 시각에서 40분을 빼 "그때 받을 수 있는 최신 발표"를 고른다. 산책
+    종료 뒤 과거 환경을 복원할 때는 어느 발표를 읽을지 호출자가 이미 결정하므로, 여기서
+    다시 40분을 빼면 한 시간 전 관측으로 밀린다.
+    """
+
+    if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+        raise ValueError("과거 실황 시각은 시간대를 가져야 한다")
+    local = observed_at.astimezone(KST)
+    if local.minute or local.second or local.microsecond:
+        raise ValueError("초단기실황 과거 조회 시각은 정시여야 한다")
+    return _fetch(
+        "getUltraSrtNcst",
+        grid,
+        (local.strftime("%Y%m%d"), local.strftime("%H00")),
+        10,
+        budget,
+    )
 
 
 def raw_ultra(grid: Grid, now: datetime, *, budget: Budget | None = None) -> dict:

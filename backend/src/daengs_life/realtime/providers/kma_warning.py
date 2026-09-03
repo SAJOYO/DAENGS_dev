@@ -7,9 +7,10 @@
 보낸 이유가 여기 있다 — 값으로 넣으면 `value=None, grade='경보'` 라는 기형이 생기고 그 `None` 을
 모든 룰이 특수 처리한다.
 
-⚠️ **특보구역명 ↔ 내 행정구역 매핑이 필요하다.** 강남구를 "서울동남권"으로 옮겨야 `t6` 에서
-나를 찾는다. `data/reference/` 캐시가 하나 더 생기는 자리이고, 그 표가 없으면 이 provider 는
-아무것도 못 낸다 — 그래서 매핑을 **인자로 받는다**. 없으면 빈 목록이고 ⑤가 저하시킨다.
+**특보구역명 ↔ 내 행정구역 매핑은 RT-003 이 채웠다.** 강남구를 "서울동남권"으로 옮겨야 `t6`
+에서 나를 찾는다. 표는 `realtime/warning_areas.py` 가 소유하고 이 provider 는 결과를
+**인자로 받는다** — 조회를 여기서 하면 provider 가 provider 를 알게 된다. 표가 답을 못 주면
+빈 목록이고, 그때는 광역명으로 넓게 잡는다 (`_mentions` 의 `precise`).
 """
 from __future__ import annotations
 
@@ -48,22 +49,84 @@ def _split_kind(label: str) -> tuple[StateKind, str] | None:
     return None
 
 
-def _mentions(areas_text: str, mine: Iterable[str]) -> bool:
-    """내 특보구역이 그 줄에 있는가.
+def _mentions(areas_text: str, mine: Iterable[str], precise: bool) -> bool:
+    """내 특보구역이 그 줄에 있는가. **괄호를 판다** (RT-003 정정).
 
-    괄호 안팎을 따로 파싱하지 않는다 — `'서울(서울동남권, 서울동북권)'` 에서 우리가 알고 싶은
-    것은 "내 구역 이름이 들어 있나" 하나이고, 구조를 복원해도 쓸 데가 없다. 다만 **부분일치를
-    피하려고 경계를 본다** — `'서울동남권'` 을 찾는데 `'서울동남권해상'` 에 걸리면 안 된다.
+    원안은 괄호 안팎을 안 갈랐다 — "내 이름이 줄 어딘가에 있나"만 보면 되고 구조를 복원해도
+    쓸 데가 없다고 봤다. 특보구역 매핑표가 생기면서 쓸 데가 생겼고, 안 가르면 **틀린다**:
+
+        폭염경보   … 서울(서울동남권, 서울동북권), 광주, 대구 …
+        폭염주의보 … 서울(서울서남권, 서울서북권), 인천, 대전 …
+        열대야주의보 … 서울, 인천(옹진, 인천영종, 인천남부) …
+
+    앞의 둘에서 `'서울'` 은 **묶음 머리**다 — "서울 안에서 이 구역들"이라는 뜻이지 서울
+    전체가 아니다. 셋째의 `'서울'` 은 서울 전체다. 광역명을 후보로 넘기면 서초구(동남권)가
+    **서남권 주의보까지 자기 것으로 읽는다.** 경보와 주의보가 같은 축이라 티가 안 나다가,
+    내 권역엔 아무것도 없고 옆 권역에만 주의보가 있는 날 근거 없는 CAUTION 이 된다.
+
+    괄호가 늘 하위 목록인 것은 아니다 — `'보령(도서제외)'`·`'영광(영광군 낙월면 제외)'` 은
+    **제외 규칙**이고 그때 머리는 나를 포함한다. `제외` 라는 말이 그 둘을 가른다.
+
+    **머리를 버리는 것은 내 구역을 알 때뿐이다** (`precise`). 매핑표가 답을 못 주면(표에 없는
+    곳, 카카오 실패) 광역명이 가진 유일한 단서라, 그때까지 버리면 RT-003 이 커버리지를 되레
+    깎는다. 모르면 넓게 잡고, 알면 정확히 잡는다.
+
+    부분일치 방어는 그대로다 — `'서울동남권'` 을 찾는데 `'서울동남권해상'` 에 걸리면 안 된다.
     """
-    return any(re.search(rf"(?<![가-힣]){re.escape(name)}(?![가-힣])", areas_text)
-               for name in mine if name)
+    wanted = [name for name in mine if name]
+    if not wanted:
+        return False
+    for header, inner in _segments(areas_text):
+        if inner is None or "제외" in inner:
+            haystacks = [header]                  # 하위 목록이 아니다 — 머리가 나를 포함한다
+        elif precise:
+            haystacks = [inner]                   # 내 구역을 아니 목록 안에서만 찾는다
+        else:
+            haystacks = [inner, header]           # 모르니 "서울 어딘가"까지 인정한다
+        if any(re.search(rf"(?<![가-힣]){re.escape(name)}(?![가-힣])", haystack)
+               for haystack in haystacks for name in wanted):
+            return True
+    return False
 
 
-def parse_pwn(body: dict, areas: Iterable[str]) -> list[State]:
+def _segments(areas_text: str) -> list[tuple[str, str | None]]:
+    """`'서울(서울동남권, 서울동북권), 광주'` → `[('서울', '서울동남권, 서울동북권'), ('광주', None)]`.
+
+    괄호 깊이만 세면 되고 중첩은 실측에 없다. 괄호를 못 닫은 줄(잘림)은 거기까지를 내용으로 본다.
+    """
+    out: list[tuple[str, str | None]] = []
+    head: list[str] = []
+    inner: list[str] | None = None
+    for char in areas_text:
+        if char == "(" and inner is None:
+            inner = []
+        elif char == ")" and inner is not None:
+            out.append(("".join(head).strip(), "".join(inner)))
+            head, inner = [], None
+        elif inner is not None:
+            inner.append(char)
+        elif char == ",":
+            if "".join(head).strip():
+                out.append(("".join(head).strip(), None))
+            head = []
+        else:
+            head.append(char)
+    if inner is not None:                       # 괄호가 안 닫힌 채 줄이 끝났다
+        out.append(("".join(head).strip(), "".join(inner)))
+    elif "".join(head).strip():
+        out.append(("".join(head).strip(), None))
+    return out
+
+
+def parse_pwn(body: dict, areas: Iterable[str], *, precise: Iterable[str] = ()) -> list[State]:
     """`t6`(발효 중인 특보)에서 내 구역에 걸린 것만.
 
     `areas` 는 내 위치를 가리키는 이름들이다 — 특보구역명(`'서울동남권'`)과 광역명(`'서울'`)을
     함께 넘기면 둘 중 어느 표기로 실려도 잡힌다.
+
+    `precise` 는 그중 **매핑표가 확정해 준 특보구역명**이다 (RT-003). 비어 있으면 광역명이
+    유일한 단서라 넓게 잡고, 있으면 `'서울(서울서남권, …)'` 의 묶음 머리를 버린다 —
+    `_mentions` 참조.
     """
     item = _first(body)
     if item is None:
@@ -74,13 +137,14 @@ def parse_pwn(body: dict, areas: Iterable[str]) -> list[State]:
         return []
 
     mine = list(areas)
+    narrow = bool(list(precise))
     out: list[State] = []
     for raw_line in str(item.get("t6") or "").splitlines():
         matched = _LINE.match(raw_line.strip())
         if not matched:
             continue
         split = _split_kind(matched["label"])
-        if split is None or not _mentions(matched["areas"], mine):
+        if split is None or not _mentions(matched["areas"], mine, narrow):
             continue
         kind, category = split
         out.append(State(

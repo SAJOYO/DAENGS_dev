@@ -40,7 +40,7 @@
 | 검색 | 하이브리드(dense + Kiwi FTS, RRF 0.3) + 인용 확장(홉) + 교통 배제. **지역 필터 없음** | RAG-035 · 040 · 052 · 003 |
 | 골든셋·평가 | 22문항(법령 Q · 교통 T · 보험 I) · `score-laps` 두 지표. **judge·회귀 게이트 없음** | RAG-022 · 029 · 049 · 007 |
 | `/ask` 서빙 | `POST /ask` — 근거 0건이면 404. **그 외 기권·거절 신호 없음.** 응답에 `content` 전문 | RAG-028 · D-021 |
-| `/walk` | 결정적 · T+24h 타임라인 · `sources` 노출 · 판정 불가는 `unknown`(503) | RT-001 ⑥ |
+| `/walk` | 결정적 · T+24h 타임라인 · `sources` 노출 · 판정 불가는 `unknown`(503). **특보는 구 단위까지 잡는다** (#175) | RT-001 ⑥ · RT-003 |
 | 화면 | **앱 ChatScreen → `POST /assistant/query`** (DAENGS_APP `ui/chat/ChatScreen.kt`). 웹 콘솔은 검색 점검 탭이 직접 `/ask` 를 부른다. 앱이 `/ask`·`/walk` 를 직접 부르는 코드는 없다 | #115 · #36 · 2026-09-03 실측 |
 | 코퍼스 분포 | `policy` 8,735 (그중 insurance 4,673) · `travel` 255 · `food` 0 | 서버 DB 실측 |
 
@@ -123,7 +123,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | A3a | **Life 경계 신호 — REFUSED** — `services/ask.py` 가 `medical`·`emergency` 를 감지해 REFUSED 로 내고(`refusal.code` 보존), 골든셋에 `must` OR 목록 · `expect: abstain` · `expect: refuse` 문항 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · D-035 "Life 안전/거절 분류 신설은 별도 카드" · §2 의 경계를 테스트로. **A0 실측**(`assistant-life-gcp-smoke.md` §3): 목줄 과태료 질문이 "자료에 없다" 산문 + OK 로 나가고(`cited == []`), 근거 0건 문장도 검색이 항상 k 건을 돌려줘 `no_evidence` 가 안 난다 — **약한 근거 기권도 이 카드 범위** | A0 ✅ | M | ⬜ 2026-09-03 사람 확정 — 옛 A3 를 분할 |
 | A3b | **라우터 HANDOFF 대상 `place` 추가** — `semantic.py` HandoffName · planner 고정 reason · aggregate 사용자 문구 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 (prompt/gold 는 제자리 수정 없이 버전을 올려 전체 재실행) | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. 이 파트는 필요와 문항을 낸다 |
 | A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/walk` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 12곳 동반 | S | ⬜ (옛 "응답 축소"는 🚫 — §5) |
-| A5 | **특보구역명 ↔ 행정구역 매핑표** (`data/reference/`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/walk` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ⬜ |
+| A5 | **특보구역명 ↔ 행정구역 매핑표** (`realtime/warning_areas.csv`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/walk` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ✅ #175 (2026-09-03) — RT-003. 출처는 날씨누리(공공데이터포털 파일데이터는 관할 시군구가 없다). **딸려 나온 정정 하나**: 묶음 머리(`서울(서울서남권, …)`)를 매칭해 서초구가 옆 권역 주의보를 자기 것으로 읽던 것 |
 | A6 | Walk `unknown` → ABSTAINED 매핑 | #80 계약 표 · RT-001 ⑥ | 없음 | XS | ✅ #102 (`orchestration/adapters/walk.py:52`) |
 | A7 | **`insurance` 를 `policy` 에서 독립 category 로** | 4,673/8,990 이 한 칸에 몰려 category 필터의 격리 효과가 없음. RAG-028 이 "값이 없다"고 지목한 자리 | A1 (재적재는 메타만이지만 스냅샷·라벨이 움직임) | S | ⬜ 사람 결정 2026-08-30 "나중에 뺀다" |
 | A8 | ~~**`/walk?verbose=1`** — 판정 근거(축 · 관측값 · stale) 노출~~ | A6 에서 갈라져 나온 잔여 · RT-001 ⑥ | — | XS | 🚫 2026-09-03 사람 확정 — 근거는 `results[].data.now.axes` 와 aggregate 문장(859a691)으로 이미 나간다. §5 |
@@ -188,7 +188,8 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 ```
 ── 09-21 전 (DB 무변경 · 배포 = git pull · main 프리즈 09-18) ──────────────────────────
-A0 GCP Life 스모크 → A3a REFUSED → A5 특보 매핑 → B4 견종·나이 → A4 이름 정리
+A0 GCP Life 스모크 ✅ #169 → A5 특보 매핑 ✅ #175 → A4 이름 정리 → A3a REFUSED → B4 견종·나이
+   └ 2026-09-03 A5·A4·A3a 를 병렬로 열었다 (#175 · #176 · #177). 파일이 안 겹치고 머지 순서만 A5 → A4 → A3a 다
 A3b place 핸드오프 = 라우터 카드 (담당 조율, 병렬)          E1 · E2 = 비 오는 날 (틈에)
 
 ── 09-21 뒤 (재적재 = 55분 + GCP 덤프·복원, migrations 두 DB 손 적용) ─────────────────
@@ -202,7 +203,7 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 ```
 
 - **A0 이 맨 앞인 이유** — 30분짜리인데, 실패하면 A3a · B4 가 사용자에게 안 보인다. Walk 는 GCP 경로가 앱 버그로 검증됐고 Life 는 아직이다.
-- **A3a 가 A5 앞인 이유** — 데모에서 "증상 물어봤더니 조문으로 답한다"가 "구 단위 특보를 놓친다"보다 먼저 눈에 띈다. 둘 다 M/S 라 순서만의 문제다.
+- **A5 를 A3a 앞에 실제로 넣은 이유** — 셋을 병렬로 열자 순서는 머지 순서만 남았고, S 인 A5·A4 를 먼저 넣어야 M 인 A3a 가 리베이스에서 흡수한다.
 - **A4 가 09-21 전 묶음의 끝인 이유** — 앱이 직접 안 부르니 리스크는 낮지만 급하지도 않다. 문서 12곳·콘솔 호출 경로가 같이 움직여 리뷰가 넓다.
 - **A1 을 소스 카드(A7 · F1 · D3) 앞에 두는 이유** — 그 셋이 각각 55분을 다시 내기 때문.
   **2026-09-02 부터는 여기에 GCP 몫이 붙는다** — 재적재는 집 서버 DB 만 바꾸고 GCP 는 09-02 스냅샷

@@ -123,11 +123,19 @@ class TrainingRagService:
         with telemetry.training_trace():
             try:
                 response = await asyncio.to_thread(_answer_locally, question)
-            except TrainingRagTimeoutError:
-                logger.exception("training_rag timeout trace_id=%s", trace_id)
+            except TrainingRagTimeoutError as exc:
+                logger.error(
+                    "training_rag timeout trace_id=%s error_type=%s",
+                    trace_id,
+                    type(exc).__name__,
+                )
                 raise
             except Exception as exc:  # dependencies fail heterogeneously
-                logger.exception("training_rag unavailable trace_id=%s", trace_id)
+                logger.error(
+                    "training_rag unavailable trace_id=%s error_type=%s",
+                    trace_id,
+                    type(exc).__name__,
+                )
                 raise TrainingRagUnavailableError from exc
         logger.info(
             "training_rag completed trace_id=%s decision=%s citations=%s",

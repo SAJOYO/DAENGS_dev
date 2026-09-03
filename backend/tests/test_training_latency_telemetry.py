@@ -20,7 +20,11 @@ from daengs_backend.orchestration.contracts import (
     CapabilityStatus,
 )
 from daengs_backend.services import training_rag
-from daengs_backend.services.training_rag import TrainingRagService, TrainingRagTimeoutError
+from daengs_backend.services.training_rag import (
+    TrainingRagService,
+    TrainingRagTimeoutError,
+    TrainingRagUnavailableError,
+)
 from daengs_training import telemetry
 from daengs_training.generation import gemini as generation
 from daengs_training.retrieval.pgvector import RuntimeRetriever
@@ -32,6 +36,7 @@ ANSWER_MARKER = "ANSWERTOKEN55"
 CHUNK_TEXT = "CHUNKTOKEN33 손을 물면 놀이를 바로 멈춥니다."
 USER_ID = "app-user-7f3a"
 PET_ID = "pet-91c2"
+PROVIDER_PAYLOAD_MARKER = "PROVIDER_PAYLOAD_MARKER_SHOULD_NOT_LEAK"
 
 
 # --------------------------------------------------------------------------- fixtures / fakes
@@ -438,6 +443,35 @@ async def test_service_timeout_type_is_preserved_with_tracing(monkeypatch) -> No
     )
     with pytest.raises(TrainingRagTimeoutError):
         await TrainingRagService().ask(question=QUESTION, trace_id="public")
+
+
+async def test_timeout_log_excludes_chained_provider_message(caplog, monkeypatch) -> None:
+    client = FakeClient(generation.GenerationTimeoutError(PROVIDER_PAYLOAD_MARKER))
+    monkeypatch.setattr(training_rag, "get_training_runtime", lambda: rag_service(client))
+    caplog.set_level(logging.ERROR, logger=training_rag.logger.name)
+
+    with pytest.raises(TrainingRagTimeoutError):
+        await TrainingRagService().ask(question=QUESTION, trace_id="public")
+
+    assert PROVIDER_PAYLOAD_MARKER not in caplog.text
+    assert "Traceback" not in caplog.text
+    assert "error_type=TrainingRagTimeoutError" in caplog.text
+
+
+async def test_unavailable_log_excludes_provider_message(caplog, monkeypatch) -> None:
+    monkeypatch.setattr(
+        training_rag,
+        "get_training_runtime",
+        lambda: FakeRuntime(generation.GenerationError(PROVIDER_PAYLOAD_MARKER)),
+    )
+    caplog.set_level(logging.ERROR, logger=training_rag.logger.name)
+
+    with pytest.raises(TrainingRagUnavailableError):
+        await TrainingRagService().ask(question=QUESTION, trace_id="public")
+
+    assert PROVIDER_PAYLOAD_MARKER not in caplog.text
+    assert "Traceback" not in caplog.text
+    assert "error_type=GenerationError" in caplog.text
 
 
 # --------------------------------------------------------------------------- visibility

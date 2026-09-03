@@ -18,9 +18,12 @@ provider 는 **GCS 로 확정**(2026-09-02). 다만 bucket·location·만료·�
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
+
+log = logging.getLogger(__name__)
 
 
 class StorageNotConfiguredError(RuntimeError):
@@ -249,7 +252,57 @@ def get_storage() -> StoragePort:
             raise StorageNotConfiguredError(
                 "GAIT_LOCAL_STORAGE_DIR 이 비어 있습니다 (gait_storage=local)."
             )
+        _check_bridge_base_url(settings.gait_bridge_base_url)
         return LocalBridgeStorage(
             settings.gait_local_storage_dir, base_url=settings.gait_bridge_base_url
         )
     return NotConfiguredStorage()
+
+
+def _check_bridge_base_url(base_url: str) -> None:
+    """bridge 의 공개 주소를 발급 **전에** 검사합니다 (local 모드 전용).
+
+    ⚠️ **앱은 티켓의 `upload_url` 을 그대로 씁니다 — 보정할 수 없습니다.** 그래서 잘못된
+       값은 앱에서야 드러나고, 그때는 원인이 서버 설정이라는 것이 안 보입니다. 여기서
+       막아야 `/app/gait/analyze` 가 503 과 함께 이유를 말해 줍니다.
+
+    막는 것은 **조용히 깨지는 모양**입니다:
+
+    - 빈 값 → `"/app/gait/_bridge/..."` 라는 **호스트 없는 상대경로**가 나갑니다.
+      앱의 `URL(ticket.uploadUrl)` 이 거기서 예외를 냅니다.
+    - 스킴 없음(`daengback.weareithero.cloud`) → 같은 이유로 앱이 절대 URL 로 못 씁니다.
+    - 경로가 붙음(`http://host/gait`) → `"/gait/app/gait/_bridge/..."` 가 되어 **404**.
+      옛 주소를 그대로 옮겨 적을 때 나오는 실수입니다.
+
+    ⚠️ **`http` 를 막지는 않습니다.** 지금 운영 중인 `daengback` 이 평문 http 라서,
+       막으면 돌아가는 서버가 죽습니다. 대신 경고를 남깁니다.
+
+    ⚠️ **"맞는 호스트인지"는 여기서 못 봅니다.** GCP 에 집 서버 주소를 넣어도 형식은
+       정상입니다 — 그러면 **앱이 영상을 엉뚱한 서버로 올립니다.** 그건 배포 절차가
+       지킬 몫이고(`docs/deploy/runbook.md`), 그래서 아래 경고에 호스트를 찍습니다.
+    """
+    from urllib.parse import urlparse
+
+    if not base_url:
+        raise StorageNotConfiguredError(
+            "GAIT_BRIDGE_BASE_URL 이 비어 있습니다 (gait_storage=local). "
+            "앱이 영상을 올릴 공개 주소라, 비면 상대경로가 나가 앱에서 실패합니다."
+        )
+
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise StorageNotConfiguredError(
+            f"GAIT_BRIDGE_BASE_URL 이 절대 주소가 아닙니다: {base_url!r} — "
+            "http(s)://호스트 형태여야 합니다."
+        )
+    if parsed.path.strip("/"):
+        raise StorageNotConfiguredError(
+            f"GAIT_BRIDGE_BASE_URL 에 경로가 붙어 있습니다: {base_url!r} — "
+            "오리진만 넣으세요. 경로를 붙이면 업로드 주소가 어긋납니다."
+        )
+    if parsed.scheme == "http":
+        log.warning(
+            "GAIT_BRIDGE_BASE_URL 이 평문 http 입니다 (%s). 앱이 이 주소로 영상을 "
+            "올립니다 — 배포 환경의 공개 주소가 맞는지 확인하세요.",
+            parsed.netloc,
+        )

@@ -268,7 +268,7 @@ docker compose exec redis redis-cli -a <REDIS_PASSWORD> LLEN celery     # 소비
    docker compose exec crawler-worker uv run --no-sync python -m daengs_life.crawler due
    # → "due N / 후보 12 / 시드 30" 에서 N 이 12 보다 작으면 로그가 같이 온 것입니다.
    #   N == 후보 전체면 로그가 안 온 것 — 04:00 전에 3 을 다시 하세요.
-   docker compose logs backend | Select-String "임베딩 모델"     # /ask 가 여전히 200 인지 — venv 를 안 섞었다는 증거
+   docker compose logs backend | Select-String "임베딩 모델"     # /life/ask 가 여전히 200 인지 — venv 를 안 섞었다는 증거
    ```
 6. 다음 날 04:00 을 넘긴 뒤 `docker compose logs --since 24h crawler-worker` 에서 발사와 결과를 봅니다.
 

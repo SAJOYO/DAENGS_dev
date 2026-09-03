@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     #
     # ⚠ `daengs_life.tasks` 를 import 하지 않습니다. CLAUDE.md 가 "`daengs_backend` 가
     # `daengs_life` 를 부르는 접점은 main.py 의 세 줄뿐" 이라고 못박아 두었고, 그 선을
-    # 태스크 하나 부르자고 넘으면 D-021 2단계(`/ask` 를 별도 프로세스로)가 그만큼 비싸집니다.
+    # 태스크 하나 부르자고 넘으면 D-021 2단계(`/life/ask` 를 별도 프로세스로)가 그만큼 비싸집니다.
     # 대신 브로커에 태스크 **이름 문자열**을 던집니다 — 태스크가 `@app.task(name=...)` 로
     # 그 이름을 명시하고 있어서 그것이 계약입니다.
     #
@@ -57,14 +57,14 @@ class Settings(BaseSettings):
     # 반대로 https 로 옮긴 뒤에도 false 로 두면 토큰이 평문으로 오갑니다.
     cookie_secure: bool = False
 
-    # 기동할 때 `/ask` 의 임베딩 모델을 미리 올릴지 (D-021).
+    # 기동할 때 `/life/ask` 의 임베딩 모델을 미리 올릴지 (D-021).
     #
     # **끄는 자리가 필요한 이유는 둘입니다.** 테스트가 `TestClient(app)` 를 `with` 로 열면
     # lifespan 이 그대로 도는데, `ml` 그룹을 깐 개발 PC(#34 의 `rag embed` 가 요구합니다)에서는
     # 그때마다 1.2GB 가 올라오고 대조 때문에 **실서버 DB 에도 붙습니다.** `tests/conftest.py` 가
-    # 이 값을 false 로 둡니다. 개발 PC 에서 `/ask` 말고 다른 걸 보는 동안에도 끌 수 있습니다.
+    # 이 값을 false 로 둡니다. 개발 PC 에서 `/life/ask` 말고 다른 걸 보는 동안에도 끌 수 있습니다.
     #
-    # 끄면 모델이 안 사라지는 게 아니라 **첫 `/ask` 요청이 로드를 뭅니다** (5~7초).
+    # 끄면 모델이 안 사라지는 게 아니라 **첫 `/life/ask` 요청이 로드를 뭅니다** (5~7초).
     # 서버에서는 켜 두세요 — 그게 예열을 두는 이유입니다.
     warm_up_encoder: bool = True
 

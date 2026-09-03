@@ -1,8 +1,8 @@
-"""`GET /walk` 은 로그인한 앱 회원과 관리자만 부를 수 있다 (#23 · #30).
+"""`GET /life/walk-conditions` 은 로그인한 앱 회원과 관리자만 부를 수 있다 (#23 · #30).
 
 **여기서 보는 것은 문(門)뿐이다.** 응답 계약과 저하 경로는 `test_walk_api.py` 가
 `daengs_life` 쪽 앱을 세워서 이미 본다 — 그 파일은 인증을 모르고, 알 필요도 없다.
-`daengs_life.app.main` 은 단독으로 도는 앱이고 거기 `/walk` 은 열려 있다.
+`daengs_life.app.main` 은 단독으로 도는 앱이고 거기 `/life/walk-conditions` 은 열려 있다.
 
 문을 **라우터가 아니라 등록 시점에** 거는 것이 이 카드의 설계다 (`main.py` 주석).
 그래서 그 배선이 실제로 걸렸는지는 `daengs_backend` 쪽 앱으로만 확인할 수 있고,
@@ -61,13 +61,13 @@ def _admin_token() -> str:
 
 
 def test_토큰_없이_부르면_401(client: TestClient) -> None:
-    assert client.get("/walk", params=SEOUL).status_code == 401
+    assert client.get("/life/walk-conditions", params=SEOUL).status_code == 401
 
 
 def test_망가진_토큰이면_401(client: TestClient) -> None:
     # 헤더 값은 ascii 여야 한다 (httpx 가 한글을 못 싣는다). 어차피 여기서 보는 것은
     # "우리 토큰이 아니다" 이고, 그건 아무 ascii 문자열이나 똑같이 만족한다.
-    got = client.get("/walk", params=SEOUL,
+    got = client.get("/life/walk-conditions", params=SEOUL,
                      headers={"Authorization": "Bearer not-a-real-token"})
     assert got.status_code == 401
 
@@ -83,7 +83,7 @@ def test_관리자_토큰이면_핸들러까지_간다(client: TestClient, servi
     답하므로 관리자 `sub` 가 `app_users` 에 없어서 깨지는 자리가 없다.
     """
     with pytest.raises(Reached):
-        client.get("/walk", params=SEOUL,
+        client.get("/life/walk-conditions", params=SEOUL,
                    headers={"Authorization": f"Bearer {_admin_token()}"})
 
 
@@ -94,14 +94,14 @@ def test_권한_없는_role_이면_403(client: TestClient) -> None:
     401 을 주면 프론트(`lib/api.ts`)가 재발급하며 돈다.
     """
     token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "NOT_A_ROLE")
-    got = client.get("/walk", params=SEOUL,
+    got = client.get("/life/walk-conditions", params=SEOUL,
                      headers={"Authorization": f"Bearer {token}"})
     assert got.status_code == 403
 
 
 def test_앱_회원_토큰이면_핸들러까지_간다(client: TestClient, service_reached: None) -> None:
     with pytest.raises(Reached):
-        client.get("/walk", params=SEOUL,
+        client.get("/life/walk-conditions", params=SEOUL,
                    headers={"Authorization": f"Bearer {_app_token()}"})
 
 
@@ -112,7 +112,7 @@ def test_인증이_좌표_검증보다_먼저다(client: TestClient) -> None:
     응답으로 떠볼 수 있다.** 사소해 보이지만, 인증 전에 도는 검증이 하나라도 있으면
     거기부터 정보가 샌다.
     """
-    got = client.get("/walk", params={"lat": 0.0, "lon": 0.0})
+    got = client.get("/life/walk-conditions", params={"lat": 0.0, "lon": 0.0})
     assert got.status_code == 401
 
 
@@ -124,5 +124,5 @@ def test_daengs_life_단독_앱은_그대로_열려_있다() -> None:
     """
     from daengs_life.app.main import create_app
 
-    got = TestClient(create_app()).get("/walk", params={"lat": 0.0, "lon": 0.0})
+    got = TestClient(create_app()).get("/life/walk-conditions", params={"lat": 0.0, "lon": 0.0})
     assert got.status_code == 422, "좌표 검증에 막혀야 한다 — 인증에 막히면 안 된다"

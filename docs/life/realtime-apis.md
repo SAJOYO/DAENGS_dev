@@ -390,7 +390,7 @@ tm            stn  WD1    WS1  WDS    WSS  WD10   WS10 TA    RE     RN-15m/60m/1
 반대로 `getUVIdxV3` 는 `requestCode` 값을 **무시한다**(A01·A07 어느 쪽이든 같은 응답) —
 둘이 같은 봉투를 쓰므로 한 곳에서 붙이되 무시되는 쪽에 해가 없다는 것을 확인했다.
 
-### 6.10 연동 확인 (2026-08-25) — 실서버 `GET /walk` 3지역
+### 6.10 연동 확인 (2026-08-25) — 실서버 `GET /walk` 3지역 (경로는 #176 으로 `/life/walk-conditions`)
 
 `uvicorn main:app` 에 역삼·해운대·제주를 날린 결과다. **`docs/life/data-sources.md` §8 의 근거가 이것이다.**
 

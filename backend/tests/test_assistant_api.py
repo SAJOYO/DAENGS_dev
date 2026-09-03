@@ -6,7 +6,7 @@
 갈아끼운다 — `test_ask_auth.py` 가 `service.ask` 를 표식으로 막는 것과 같은 자리다.
 
 `admin_or_app_user(Perm.READ)` 를 실제 토큰으로 통과시킨다(오버라이드하지 않는다) —
-`test_ask_auth.py`·`/walk` 가 검증한 문을 이 카드가 다시 배선하지 않았다는 것 자체가
+`test_ask_auth.py`·`/life/walk-conditions` 가 검증한 문을 이 카드가 다시 배선하지 않았다는 것 자체가
 검증 대상이기 때문이다.
 """
 

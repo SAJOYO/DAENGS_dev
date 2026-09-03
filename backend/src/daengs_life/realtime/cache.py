@@ -33,7 +33,7 @@ from typing import Any, Protocol
 import yaml
 
 from .config import KST, REDIS_URL
-from .transport.base import TransportError
+from .transport.base import NoData, TransportError
 
 CACHE_FILE = Path(__file__).with_name("cache.yaml")
 
@@ -42,6 +42,7 @@ CACHE_FILE = Path(__file__).with_name("cache.yaml")
 _EPOCH = datetime(2020, 1, 1, tzinfo=KST)
 
 PREFIX = "rt"
+SNAPSHOT_PREFIX = "rt-snapshot"
 
 
 # ------------------------------------------------------------------ 발표 주기 (④-b)
@@ -111,20 +112,34 @@ POLICY = load_policy()
 
 @dataclass(frozen=True)
 class Entry:
-    """API 응답 원본 + 받은 시각. 판정에 쓸 수 있는지는 `Feed.missed` 가 정한다."""
+    """API 응답 원본 + 받은 시각. snapshot은 비재시도성 실패도 잠시 담을 수 있다."""
 
     payload: Any
     fetched_at: datetime
+    failure_kind: str | None = None
+    reason: str | None = None
 
     def dumps(self) -> str:
-        return json.dumps({"payload": self.payload, "fetched_at": self.fetched_at.isoformat()},
-                          ensure_ascii=False)
+        return json.dumps(
+            {
+                "payload": self.payload,
+                "fetched_at": self.fetched_at.isoformat(),
+                "failure_kind": self.failure_kind,
+                "reason": self.reason,
+            },
+            ensure_ascii=False,
+        )
 
     @staticmethod
     def loads(raw: str | bytes) -> Entry | None:
         try:
             data = json.loads(raw)
-            return Entry(data["payload"], datetime.fromisoformat(data["fetched_at"]))
+            return Entry(
+                data["payload"],
+                datetime.fromisoformat(data["fetched_at"]),
+                failure_kind=data.get("failure_kind"),
+                reason=data.get("reason"),
+            )
         except (ValueError, TypeError, KeyError):
             return None          # 저장 포맷이 바뀐 옛 값. 버리고 다시 받는다
 
@@ -137,6 +152,7 @@ class Cached:
     stale: bool = False
     reason: str | None = None
     calls: int = 0               # 이번에 실제로 API 를 부른 횟수
+    failure_kind: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -286,7 +302,7 @@ def open_store(url: str | None = None) -> Store:
     if not url:
         return MemoryStore()
     try:
-        import redis                                     # 선택 의존이 아니라 지연 import 다 —
+        import redis  # 선택 의존이 아니라 지연 import 다 —
         client = redis.Redis.from_url(                   # Redis 없이도 이 모듈이 import 돼야 한다
             url,
             socket_connect_timeout=CONNECT_TIMEOUT_SEC,
@@ -325,6 +341,17 @@ class Cache:
         호출로 덮이고, 역삼동으로 두면 같은 격자를 사람 수만큼 다시 받는다.
         """
         return f"{PREFIX}:{feed_id}:{lookup}"
+
+    @staticmethod
+    def snapshot_key(feed_id: str, lookup: str) -> str:
+        """시각 버킷까지 포함한 불변 관측 키.
+
+        일반 ``rt:`` 키는 새 발표가 나올 때 교체되고 활성 격자 프리페치 대상이 된다. 과거
+        관측은 이미 확정된 한 발표를 다시 읽는 것이므로 별도 namespace에 두고, 호출자가
+        ``lookup``에 격자와 관측 주기를 모두 넣게 한다.
+        """
+
+        return f"{SNAPSHOT_PREFIX}:{feed_id}:{lookup}"
 
     def feed(self, feed_id: str) -> Feed:
         try:
@@ -371,6 +398,127 @@ class Cache:
 
         return self._flight(feed, key, fetch, now, entry, wait_sec)
 
+    def get_snapshot(
+        self,
+        feed_id: str,
+        lookup: str,
+        fetch: Callable[[], Any],
+        fetched_at: datetime,
+        *,
+        allow_call: bool = True,
+        wait_sec: float = 3.0,
+    ) -> Cached:
+        """관측 주기가 키에 박힌 과거 응답을 한 번만 가져온다.
+
+        일반 :meth:`get`의 신선도 비교를 쓰면 10시 관측을 12시에 조회한 직후에도 "발표를
+        놓친 stale"로 보게 된다. 과거 관측은 현재 발표 주기와 비교하지 않고, 성공 응답을
+        해당 feed의 기존 TTL 동안 그대로 재사용한다. 이 캐시는 archive가 아니라 같은 산책
+        finalize와 동시 요청의 중복 호출을 막는 전송 캐시다.
+        """
+
+        feed = self.feed(feed_id)
+        key = self.snapshot_key(feed_id, lookup)
+        entry = self.store.get(key)
+        if entry is not None:
+            return Cached(
+                entry.payload,
+                reason=entry.reason,
+                failure_kind=entry.failure_kind,
+            )
+
+        if not allow_call:
+            return Cached(
+                None,
+                reason="과거 관측 호출하지 않음",
+                failure_kind="call_disabled",
+            )
+
+        left = self.budget_left(feed_id, fetched_at)
+        if left is not None and left <= 0:
+            return Cached(
+                None,
+                reason=f"일 예산 소진 ({feed.budget})",
+                failure_kind="budget_exhausted",
+            )
+
+        return self._snapshot_flight(feed, key, fetch, fetched_at, wait_sec)
+
+    def _snapshot_flight(
+        self,
+        feed: Feed,
+        key: str,
+        fetch: Callable[[], Any],
+        fetched_at: datetime,
+        wait_sec: float,
+    ) -> Cached:
+        lock = self._thread_lock(key)
+        with lock:
+            existing = self.store.get(key)
+            if existing is not None:
+                return Cached(
+                    existing.payload,
+                    reason=existing.reason,
+                    failure_kind=existing.failure_kind,
+                )
+
+            if not self.store.lock(key, self.policy.lock_sec):
+                waited = self._await_snapshot(key, wait_sec)
+                if waited is not None:
+                    return Cached(
+                        waited.payload,
+                        reason=waited.reason,
+                        failure_kind=waited.failure_kind,
+                    )
+                # 과거 사실 조회는 즉시성보다 쿼터 보존이 우선이다. 다른 프로세스가 여전히
+                # provider를 부르는 동안 중복 호출하지 않고, 호출자가 명시적인 실패를 보고
+                # 재시도하게 한다. 락을 얻지 않았으므로 아래 finally에도 들어가지 않는다.
+                return Cached(
+                    None,
+                    reason="동일한 과거 관측 조회가 아직 진행 중입니다.",
+                    failure_kind="in_flight",
+                )
+            try:
+                payload = fetch()
+                self.store.spend(feed.budget, _day(fetched_at))
+                self.store.set(
+                    key,
+                    Entry(payload, fetched_at),
+                    feed.ttl_sec(self.policy.ttl_periods),
+                )
+                return Cached(payload, calls=1)
+            except TransportError as exc:
+                self.store.spend(feed.budget, _day(fetched_at))
+                failure_kind = type(exc).__name__.lower()
+                if isinstance(exc, NoData):
+                    # NoData는 전송층이 비재시도성으로 분류한 결과다. 한 발표 주기만 기억해
+                    # 동일 finalize·동시 요청이 같은 빈 회차에 쿼터를 반복 소모하지 않게 한다.
+                    self.store.set(
+                        key,
+                        Entry(
+                            None,
+                            fetched_at,
+                            failure_kind=failure_kind,
+                            reason=str(exc),
+                        ),
+                        feed.ttl_sec(1),
+                    )
+                return Cached(
+                    None,
+                    reason=str(exc),
+                    calls=1,
+                    failure_kind=failure_kind,
+                )
+            finally:
+                self.store.unlock(key)
+
+    def _await_snapshot(self, key: str, wait_sec: float) -> Entry | None:
+        deadline = time.monotonic() + max(0.0, wait_sec)
+        while time.monotonic() < deadline:
+            time.sleep(0.05)
+            if found := self.store.get(key):
+                return found
+        return None
+
     def _flight(self, feed: Feed, key: str, fetch: Callable[[], Any], now: datetime,
                 entry: Entry | None, wait_sec: float) -> Cached:
         lock = self._thread_lock(key)
@@ -392,7 +540,14 @@ class Cache:
                 return Cached(payload, calls=1)
             except TransportError as exc:
                 self.store.spend(feed.budget, _day(now))   # 실패도 한도를 먹는다
-                return self._fallback(feed, entry, now, str(exc), calls=1)
+                return self._fallback(
+                    feed,
+                    entry,
+                    now,
+                    str(exc),
+                    calls=1,
+                    failure_kind=type(exc).__name__.lower(),
+                )
             finally:
                 self.store.unlock(key)
 
@@ -407,17 +562,23 @@ class Cache:
         return None
 
     def _fallback(self, feed: Feed, entry: Entry | None, now: datetime, reason: str,
-                  *, calls: int = 0) -> Cached:
+                  *, calls: int = 0, failure_kind: str | None = None) -> Cached:
         """새 값을 못 얻었다. **셋을 구분하지 않는다** (⑤-c) — 재시도 소진·예산 초과·대기
         타임아웃은 전부 "옛 값을 쓰거나 모른다"로 같다.
         """
         if entry is None:
-            return Cached(None, reason=reason, calls=calls)
+            return Cached(None, reason=reason, calls=calls, failure_kind=failure_kind)
         missed = feed.missed(entry.fetched_at, now)
         if missed >= self.policy.discard_periods:
-            return Cached(None, reason=f"{reason} · 옛 값도 폐기(발표 {missed}회 놓침)", calls=calls)
+            return Cached(
+                None,
+                reason=f"{reason} · 옛 값도 폐기(발표 {missed}회 놓침)",
+                calls=calls,
+                failure_kind=failure_kind,
+            )
         return Cached(entry.payload, stale=True,
-                      reason=f"{reason} · 옛 값 사용(발표 {missed}회 놓침)", calls=calls)
+                      reason=f"{reason} · 옛 값 사용(발표 {missed}회 놓침)", calls=calls,
+                      failure_kind=failure_kind)
 
     def _thread_lock(self, key: str) -> threading.Lock:
         with self._guard:
@@ -466,6 +627,20 @@ def _day(now: datetime) -> str:
     return now.astimezone(KST).strftime("%Y%m%d")
 
 
-__all__ = ["Cache", "Cached", "CONNECT_TIMEOUT_SEC", "Entry", "Feed", "MemoryStore",
-           "OP_TIMEOUT_SEC", "POLICY", "Policy", "RedisStore", "Store", "load_policy",
-           "open_store", "split_key"]
+__all__ = [
+    "CONNECT_TIMEOUT_SEC",
+    "OP_TIMEOUT_SEC",
+    "POLICY",
+    "SNAPSHOT_PREFIX",
+    "Cache",
+    "Cached",
+    "Entry",
+    "Feed",
+    "MemoryStore",
+    "Policy",
+    "RedisStore",
+    "Store",
+    "load_policy",
+    "open_store",
+    "split_key",
+]

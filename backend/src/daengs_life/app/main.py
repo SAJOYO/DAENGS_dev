@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from daengs_life.app.controllers import ask, walk
+from daengs_life.app.controllers import ask, walk, weather
 from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
 
 
@@ -68,6 +68,7 @@ def create_app() -> FastAPI:
 
     # --- 컨트롤러 등록. 새 엔드포인트는 여기 한 줄만 는다 ---
     app.include_router(walk.router)
+    app.include_router(weather.router)
     app.include_router(ask.router)
 
     @app.get("/", tags=["test"])

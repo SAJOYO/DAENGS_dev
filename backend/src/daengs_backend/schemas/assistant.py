@@ -15,7 +15,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Walk 적합도(`GET /walk`)와 WalkPayload(orchestration/contracts.py)가 이미 쓰는
+# Walk 적합도(`GET /life/walk-conditions`)와 WalkPayload(orchestration/contracts.py)가 이미 쓰는
 # 남한 좌표 범위. 새 지리 정책을 만들지 않는다 — 세 곳이 같은 값이어야 한다.
 _LAT_BOUNDS = (33.0, 39.0)
 _LON_BOUNDS = (124.0, 132.0)

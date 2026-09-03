@@ -1,4 +1,4 @@
-"""`GET /walk` (RT-001 ⑥ · RAG-027 의 C 층).
+"""`GET /life/walk-conditions` (RT-001 ⑥ · RAG-027 의 C 층).
 
 **로직이 없다.** 좌표를 받고, 서비스를 부르고, 그대로 돌려준다. 판정도 조립도 여기 없다 —
 그것이 RAG-027 의 유일한 강제 규칙이고, 이 파일이 그 규칙의 본보기다.
@@ -15,10 +15,10 @@ from daengs_life.app.services import walk as service
 from daengs_life.realtime.cache import Cache
 from daengs_life.realtime.geo import LatLon
 
-router = APIRouter(tags=["walk"])
+router = APIRouter(tags=["Life · 산책 적합도"])
 
 
-@router.get("/walk", response_model=WalkOut, response_model_by_alias=True,
+@router.get("/life/walk-conditions", response_model=WalkOut, response_model_by_alias=True,
             summary="산책 적합도 — 지금 + T+24h 타임라인 + 권장 구간")
 def get_walk(
     lat: float = Query(..., ge=33.0, le=39.0, description="위도 (WGS84)"),

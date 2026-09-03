@@ -12,7 +12,7 @@
 /** 판정 불가를 `null` 이 아니라 문자열로 냅니다 (RT-001 ⑥). */
 export type Grade = "UNSAFE" | "CAUTION" | "GOOD" | "unknown";
 
-// ---------------------------------------------------------------- GET /walk
+// ------------------------------------------------- GET /life/walk-conditions
 
 /** 근거가 된 측정값 하나. */
 export type BasisValue = {
@@ -125,7 +125,7 @@ export function walkFromErrorBody(body: unknown): WalkResponse | null {
   return "sources" in detail && "location" in detail ? (detail as WalkResponse) : null;
 }
 
-// ---------------------------------------------------------------- POST /ask
+// ------------------------------------------------------------ POST /life/ask
 
 /**
  * 근거 청크 하나.

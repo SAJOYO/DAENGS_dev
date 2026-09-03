@@ -62,7 +62,7 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 `getUltraSrtNcst`·`getUltraSrtFcst`·`getVilageFcst` 는 같은 봉투·같은 격자 입력이라 한 모듈 안의
 함수 셋이다. 그래서 7개가 `docs/life/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다.
 
-Life 단독 앱의 `POST /weather/at`은 `GET /walk`의 과거 버전이 아니다(D-050). 현재·미래
+Life 단독 앱의 `POST /weather/at`은 `GET /life/walk-conditions`의 과거 버전이 아니다(D-050). 현재·미래
 적합도를 조립하지 않고, 이미 공개된 한 NCST 회차에서 기온·습도·강수 형태·강수량 원자만
 반환합니다. 성공 원본은 `rt-snapshot:` namespace에 격자와 관측 회차를 함께 넣어 잠시
 재사용하고, `NoData`만 한 발표 주기 동안 negative-cache하지만 영구 저장하지 않습니다. 없는
@@ -77,7 +77,7 @@ Life 단독 앱의 `POST /weather/at`은 `GET /walk`의 과거 버전이 아니�
 
 `rag` 는 허용이 둘(`config` + `textutil`)이라 목록이 패키지별로 갈려 있다. `tasks`·`app` 도 같은 폭으로 등재돼 있다.
 
-서빙 층(`app/`)의 안쪽 배치는 **RAG-027** 이다 — 파트①의 `/ask` 와 공유하는 결정이라 `RT-` 가 아니라 `RAG-` 다.
+서빙 층(`app/`)의 안쪽 배치는 **RAG-027** 이다 — 파트①의 `/life/ask` 와 공유하는 결정이라 `RT-` 가 아니라 `RAG-` 다.
 `app/controllers/` 가 `realtime.rules`·`realtime.collect` 를 import 하는 것을 가드가 막는다: **로직은 `app/services/` 에.**
 
 ## 실행

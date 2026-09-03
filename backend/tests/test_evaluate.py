@@ -201,12 +201,72 @@ def test_summary_carries_the_four_required_things() -> None:
     assert "승자" in md
 
 
+# ---------------------------------------------------------------- 요구와 대안 (RAG-055)
+def _item(must) -> object:
+    from daengs_life.rag.stages import goldenset
+
+    return goldenset.Item(id="X1", added_on="2026-09-03", origin="hand",
+                          question="질문", must=must)
+
+
+def test_a_requirement_takes_the_rank_of_its_best_alternative() -> None:
+    """**OR 의 정의다** — 어느 대안으로도 답이 성립하므로, 제일 높이 올라온 것이 그 요구가
+    실제로 닿은 거리다. 최악이나 평균을 쓰면 대안을 적어 둘수록 문항이 나빠진다.
+    """
+    index = {"a": "a__1", "b": "b__1"}
+    id_to_row = {"a__1": 0, "b__1": 1}
+    ranks = [7, 2]
+
+    rows = evaluate.requirement_rows(_item([["a", "b"]]), index, id_to_row, ranks)
+    assert len(rows) == 1
+    assert rows[0]["rank"] == 2
+    assert [a["rank"] for a in rows[0]["alternatives"]] == [7, 2]
+
+
+def test_alternatives_do_not_change_the_recall_denominator() -> None:
+    """**대안을 늘려도 `item_metrics` 가 받는 목록의 길이가 같아야 한다** (RAG-055).
+
+    이것이 무너지면 라벨에 해설을 하나 더 적는 것만으로 그 문항의 Recall 이 떨어지고,
+    `lap1`~`lap14` 와의 비교가 조용히 끊긴다 — RAG-049 ④ 가 스키마를 안 고친 이유가 그것이다.
+    """
+    index = {"a": "a__1", "b": "b__1", "c": "c__1"}
+    id_to_row = {"a__1": 0, "b__1": 1, "c__1": 2}
+    ranks = [3, 1, 9]
+
+    one = evaluate.requirement_rows(_item(["a"]), index, id_to_row, ranks)
+    many = evaluate.requirement_rows(_item([["a", "b", "c"]]), index, id_to_row, ranks)
+    assert len(one) == len(many) == 1
+
+    two_requirements = evaluate.requirement_rows(_item(["a", "b"]), index, id_to_row, ranks)
+    assert len(two_requirements) == 2
+    assert evaluate.item_metrics([r["rank"] for r in many])["recall"][5] == 1.0
+    assert evaluate.item_metrics([r["rank"] for r in two_requirements])["recall"][5] == 1.0
+
+
+def test_a_requirement_whose_alternatives_are_all_missing_drops_out() -> None:
+    """코퍼스 밖이거나 벡터가 아직 없는 요구는 `None` 이고 분모에서 빠진다.
+
+    **0위로 세지 않는다** — 없는 것을 "못 찾았다"로 세면 코퍼스를 안 늘린 것이 검색 성능
+    저하로 보인다. `unavailable` 을 분모에서 뺀 RAG-022 ③ 과 같은 자리다.
+    """
+    rows = evaluate.requirement_rows(_item([["없는주소"], ["a"]]), {"a": "a__1"}, {"a__1": 0}, [4])
+    assert [r["rank"] for r in rows] == [None, 4]
+    assert evaluate.item_metrics([r["rank"] for r in rows if r["rank"] is not None])["rr"] == 0.25
+
+
 # ---------------------------------------------------------------- 실물 (있으면)
 def test_labels_resolve_to_rows() -> None:
-    """골든셋 라벨 43개가 전부 parquet 의 행으로 풀리는가.
+    """골든셋 라벨이 전부 parquet 의 행으로 풀리는가.
 
     `goldenset` 서브커맨드는 라벨이 **청크로** 실재하는지만 본다. 채점은 거기서 한 단계 더 가서
     **벡터 행**을 찾아야 하고, 그 사이에서 어긋나면 그 문항만 조용히 0 점이 된다.
+
+    ⚠ **벡터가 청크보다 낡으면 이 테스트는 아무것도 못 가른다.** parquet 은 `rag embed` 를
+    돌린 시점의 청크를 담고 있어서, 그 뒤에 소스가 붙거나 재청킹이 되면(주소가 바뀐다)
+    멀쩡한 라벨도 "행이 없다"로 나온다 — 실제로 2026-09-03 에 parquet 6,368행 / 청크 9,451개
+    상태에서 항공 라벨과 삼성 약관 라벨이 그렇게 걸렸다. 그건 라벨 문제가 아니라 **재임베딩이
+    안 된 것**이라, 두 수가 다르면 여기서 멈춘다. 라벨 실재 여부는 `test_every_label_exists`
+    가 청크를 보고 계속 지킨다.
     """
     from daengs_life.rag.stages import goldenset
 
@@ -215,7 +275,12 @@ def test_labels_resolve_to_rows() -> None:
         pytest.skip("bge-m3.parquet 이 없다 — `python -m rag embed` 먼저")
     gs = goldenset.load()
     index = goldenset.corpus_index()
+    if len(ids) != len(index):
+        pytest.skip(f"벡터가 청크보다 낡았다 — parquet {len(ids)}행 / 청크 {len(index)}개. "
+                    "`python -m rag embed` 로 다시 만든 뒤에야 라벨을 잴 수 있다")
     rows = {cid: i for i, cid in enumerate(ids)}
-    missing = [a for item in gs.items for a in item.must
+    # `must_flat` 이다 (RAG-055) — 요구의 경계는 여기서 상관없고, 대안이든 필수든
+    # 벡터 행이 없으면 똑같이 그 문항을 조용히 0 점으로 만든다
+    missing = [a for item in gs.items for a in item.must_flat
                if a not in index or index[a] not in rows]
     assert missing == [], f"벡터 행을 못 찾는 필수 라벨: {missing}"

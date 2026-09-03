@@ -162,6 +162,50 @@ async def test_life_machine_readable_errors_are_mapped(
         assert result.abstention and result.abstention.code == "no_evidence"
 
 
+async def test_life_boundary_becomes_refused_with_its_code_and_wording() -> None:
+    """422 -> REFUSED. `refusal.code` 는 보존되고 `message` 는 Life 가 준 문장 그대로다.
+
+    Invariant 3 is the whole point: the adapter translates the status, never the sentence.
+    """
+    said = "지체 없이 가까운 동물병원에 방문해 수의사의 진료를 받으세요."
+
+    def refuse(_: str):
+        raise HTTPException(status_code=422,
+                            detail={"code": "emergency_boundary", "message": said})
+
+    result = await LifeCapabilityAdapter(refuse).run(life_request(), request_id="trace")
+    assert result.status == CapabilityStatus.REFUSED
+    assert result.refusal and result.refusal.code == "emergency_boundary"
+    assert result.refusal.message == said
+
+
+async def test_a_mapping_detail_never_reaches_the_user_as_a_repr() -> None:
+    """**`str()` over a mapping would hand the user a Python repr.** That is the lossy step
+    invariant 3 forbids, and it is silent — the request still returns 200 at the top.
+    """
+    def abstain(_: str):
+        raise HTTPException(status_code=404,
+                            detail={"code": "no_evidence", "message": "자료에 없습니다."})
+
+    result = await LifeCapabilityAdapter(abstain).run(life_request(), request_id="trace")
+    assert result.status == CapabilityStatus.ABSTAINED
+    assert result.abstention and result.abstention.message == "자료에 없습니다."
+    assert "{" not in result.abstention.message
+
+
+async def test_the_older_string_detail_still_maps() -> None:
+    """404 with a bare string is the pre-RAG-055 shape and still has to work — `services/ask`
+    keeps it for the genuinely-zero-hit case.
+    """
+    def abstain(_: str):
+        raise HTTPException(status_code=404, detail="근거를 찾지 못했다")
+
+    result = await LifeCapabilityAdapter(abstain).run(life_request(), request_id="trace")
+    assert result.status == CapabilityStatus.ABSTAINED
+    assert result.abstention.code == "no_evidence"
+    assert result.abstention.message == "근거를 찾지 못했다"
+
+
 async def test_life_runtime_failure_is_error() -> None:
     def fail(_: str):
         raise RuntimeError("database unavailable")

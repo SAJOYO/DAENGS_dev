@@ -1,13 +1,17 @@
-"""v5 prompt-regression runner: production `semantic-router-ko-v4` vs. the frozen v3 contract.
+"""v5 prompt-regression runner: the recorded run certified `semantic-router-ko-v4`.
 
-No Gemini calls here (FakeClient only). The ONE changed variable is the production
-prompt/schema (v4 adds an exclusive `social_intent`); model id, gold set, gates, and
-the single-schema-retry policy must match the accepted v4 run byte-for-byte.
+No Gemini calls here (FakeClient only). The runner drives whatever the PRODUCTION prompt
+is at import time (v4 when the v5 artifacts were recorded, v5 since PR #172 — its
+regression is runner_v6), so these tests pin the production `PROMPT_VERSION` symbol and
+check the recorded v5 artifacts separately. Model id, gold set, gates, and the
+single-schema-retry policy must match the accepted v4 run byte-for-byte.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 from daengs_backend.orchestration.semantic import PROMPT_VERSION, SemanticRoutingDecision
@@ -23,6 +27,8 @@ from tools.router_benchmark.runner_v5 import (
     social_intent_section,
 )
 from tools.router_benchmark.schemas import GoldCase, load_benchmark_config, load_gold_v3_cases
+
+EVALS_DIR = Path(__file__).parents[1] / "evals" / "orchestration_router"
 
 
 @dataclass
@@ -62,7 +68,10 @@ def _response(payload: object) -> FakeResponse:
 
 def test_v5_keeps_the_v4_model_and_the_v3_gold_and_gates() -> None:
     assert MODEL_ID == V4_MODEL_ID == "gemini-3.1-flash-lite"
-    assert PROMPT_VERSION == "semantic-router-ko-v4"
+    # The recorded v5 run certified prompt v4; production has since moved to v5 (runner_v6).
+    recorded = json.loads((EVALS_DIR / "summary_v5.json").read_text(encoding="utf-8"))
+    assert recorded["prompt_version"] == "semantic-router-ko-v4"
+    assert PROMPT_VERSION.startswith("semantic-router-ko-v")
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert BENCHMARK_ID == "orchestration-router-v5"
     assert len(load_gold_v3_cases()) == 80
@@ -74,7 +83,7 @@ def test_v5_provider_call_uses_the_production_prompt_and_schema() -> None:
     attempts, _, social = run_cases([case], client=client)
     call = client.models.calls[0]
     assert call["model"] == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v4" in call["contents"]
+    assert f"PROMPT_VERSION: {PROMPT_VERSION}" in call["contents"]
     assert "social_intent" in call["contents"]
     assert call["config"].response_json_schema == SemanticRoutingDecision.model_json_schema()
     assert attempts[case.case_id][0].schema_valid is True
@@ -123,7 +132,7 @@ def test_v5_retry_policy_is_unchanged_exactly_one_schema_retry() -> None:
     assert [attempt.schema_valid for attempt in attempts[case.case_id]] == [False, True]
 
 
-def test_v5_artifacts_carry_the_v4_prompt_version_and_frozen_gates() -> None:
+def test_v5_artifacts_carry_the_production_prompt_version_and_frozen_gates() -> None:
     case = _case("training_01")
     client = FakeClient([_response({"execute": ["training"], "handoffs": []})])
     attempts, performance, _ = run_cases([case], client=client)
@@ -137,11 +146,11 @@ def test_v5_artifacts_carry_the_v4_prompt_version_and_frozen_gates() -> None:
         gold_version=GOLD_VERSION,
         model_id=MODEL_ID,
     )
-    assert summary["prompt_version"] == "semantic-router-ko-v4"
+    assert summary["prompt_version"] == PROMPT_VERSION
     assert summary["model"] == "gemini-3.1-flash-lite"
     assert summary["benchmark_id"] == "orchestration-router-v5"
     assert records[0]["model"] == "gemini-3.1-flash-lite"
-    assert "semantic-router-ko-v4" in report
+    assert PROMPT_VERSION in report
 
     cases = load_gold_v3_cases()
     perfect = evaluate_benchmark(

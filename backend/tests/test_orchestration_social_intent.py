@@ -293,13 +293,15 @@ async def test_requested_capability_still_bypasses_gemini_even_for_social_text()
     assert adapters[CapabilityName.TRAINING].calls[0].payload.question == "고마워"
 
 
-# ----------------------------------------------------------------- prompt v4 policy
+# ------------------------------------------------ prompt v4 social policy (kept in v5)
 
 
-def test_prompt_is_v4_and_states_the_social_rules_without_keyword_lists() -> None:
-    assert PROMPT_VERSION == "semantic-router-ko-v4"
+def test_prompt_keeps_the_v4_social_rules_without_keyword_lists() -> None:
+    # v5/v6 (PR #172) only refined the Life / unsupported-care / Walk-window boundary; the
+    # social rules are intact.
+    assert PROMPT_VERSION == "semantic-router-ko-v6"
     prompt = build_semantic_router_prompt(query="고마워", context={})
-    assert "PROMPT_VERSION: semantic-router-ko-v4" in prompt
+    assert "PROMPT_VERSION: semantic-router-ko-v6" in prompt
     assert "social_intent" in prompt
     assert "purely social" in prompt
     assert "leave social_intent null" in prompt

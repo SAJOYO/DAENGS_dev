@@ -7,13 +7,13 @@ import json
 from pathlib import Path
 
 import httpx
-
 from daengs_backend.orchestration.adapters.place import PlaceCapabilityAdapter
 from daengs_backend.orchestration.contracts import (
     CapabilityRequest,
     CapabilityStatus,
     PlacePayload,
 )
+
 from place_capability_cases import discovery_payload
 
 
@@ -186,4 +186,5 @@ def test_backend_place_adapter_never_imports_place_implementation() -> None:
             if isinstance(node, ast.ImportFrom) and node.module is not None
         )
     assert not {name for name in imports if name.startswith("daengs_place")}
+
 

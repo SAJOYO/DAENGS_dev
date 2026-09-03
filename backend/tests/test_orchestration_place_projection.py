@@ -9,6 +9,7 @@ from daengs_backend.orchestration.adapters.place import (
     MAX_PLACE_CAPABILITY_BYTES,
     project_place_capability_data,
 )
+
 from place_capability_cases import discovery_payload
 
 
@@ -76,3 +77,4 @@ def test_projection_has_an_independent_byte_budget() -> None:
     assert "place.capability_projection_applied" in {
         notice["code"] for notice in data["notices"]
     }
+

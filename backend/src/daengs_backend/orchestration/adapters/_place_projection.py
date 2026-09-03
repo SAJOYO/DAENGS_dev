@@ -9,9 +9,9 @@ from typing import Any
 from daengs_backend.orchestration.adapters._place_contract import (
     _DiscoveryResponse,
     _Presentation,
+    _PresentationFact,
     _SearchPlace,
 )
-
 
 _MAX_GROUPS = 3
 _MAX_CANDIDATES_PER_GROUP = 3

@@ -1,5 +1,8 @@
 # GCP `/assistant/query` 경유 Life 스모크 (A0)
 
+> ⚠️ **아래 경로 표기는 실행 시점의 것이다.** Life 직접 API 는 #176(A4)으로 `/life/ask` · `/life/walk-conditions` 가 됐다.
+> 실측 기록이라 본문은 찍힌 대로 둔다.
+
 - 실행일: 2026-09-03 14:33 (KST)
 - 대상: `https://daengapi.weareithero.cloud` — GCP VM 이 서빙하는 `main` `ba4136f` (#153 스냅샷). DB 는 09-02 덤프(코퍼스 8,990문서)
 - 실행 쪽 코드: `dev` `c45bfdd` (#169 브랜치) — 요청은 curl, 판독은 응답 JSON 만

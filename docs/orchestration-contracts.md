@@ -271,7 +271,7 @@ AssistantResponse:
 `backend/src/daengs_backend/routers/assistant.py`(엔드포인트) — 아래는 그 계약의
 의사 스키마이지 Pydantic 소스를 그대로 옮긴 것이 아닙니다.
 
-**인증** — `admin_or_app_user(Perm.READ)`, `/walk`·`/ask` 와 같은 문입니다. 인증되지
+**인증** — `admin_or_app_user(Perm.READ)`, `/life/walk-conditions`·`/life/ask` 와 같은 문입니다. 인증되지
 않은 요청은 오케스트레이션에 닿기 전에 401 입니다.
 
 ```
@@ -296,7 +296,7 @@ LocationIn:                       # extra="forbid"
 - `source`·`action`·`active_dog_id` 는 있으면 trim 후 비어있지 않은 문자열이어야
   합니다. dict·list·숫자·bool 같은 다른 모양은 Pydantic 타입 검증에서 이미 422 입니다
   — `semantic.py` 의 내부 fail-fast(`ValueError`)에 닿기 전에 이 경계가 막습니다.
-- `location` 이 있으면 `lat`/`lon` 범위는 `/walk` 과 `WalkPayload`(§3)가 이미 쓰는
+- `location` 이 있으면 `lat`/`lon` 범위는 `/life/walk-conditions` 과 `WalkPayload`(§3)가 이미 쓰는
   범위와 같습니다. 새 지리 정책이 아닙니다.
 - **`location` 이 없어도 유효한 요청입니다.** Walk 가 나중에 선택되면 CLARIFY 는
   기존 결정론적 planner 가 냅니다(§2) — HTTP 검증이 미리 막지 않습니다.

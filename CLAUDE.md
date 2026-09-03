@@ -90,22 +90,22 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `backend/src` 파일 하나를 고치면 컨테이너가 리로드합니다. 다만 배포 checkout이 Windows bind mount 아래 파일을
   한꺼번에 교체할 때는 polling이 변경을 놓칠 수 있어, 자동 배포가 `backend`를 명시적으로 재시작합니다.
   의존성을 바꿨을 때는 영향받는 `backend`·`place-search`·`journey-service`를 재생성하세요.
-- **`/ask` 의 임베딩 모델은 backend 프로세스에 상주합니다** (D-021). 그래서 컨테이너의
+- **`/life/ask` 의 임베딩 모델은 backend 프로세스에 상주합니다** (D-021). 그래서 컨테이너의
   `command` 가 `uv sync --frozen --group ml && uv run --no-sync dev` 입니다.
   ⚠ **컨테이너 안에서 `uv sync` 를 인자 없이 돌리지 마세요** — 그건 exact 동기화라 `ml` 을
   지웁니다(`uv run` 은 inexact 라 안 지웁니다. uv 0.12.5 실측). 그러면 torch 가 빠져
-  `/ask` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에 아무 문제도 안 보입니다.
+  `/life/ask` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에 아무 문제도 안 보입니다.
   고칠 때는 `uv sync --group ml` 로 부르세요.
   상시 비용은 **RAM 약 2.4GB** 이고, 그것이 서버 여유를 위협하면 그때 별도 프로세스로 뗍니다
   (D-021 의 재개 조건 ⓐ~ⓓ). **개발 PC 는 `uv sync` 만 해도 backend 가 뜹니다** — `ml` 이
-  없으면 `/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
+  없으면 `/life/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
 - **서빙 임베딩 모델과 코퍼스가 어긋나면 조용히 틀립니다.** 문서 벡터와 질의 벡터가 다른
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
   `임베딩 모델 불일치` 경고가 그것을 알려 줍니다.
 - **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 `main.py` 의 세 줄뿐입니다** —
-  등록 두 줄(`/walk` · `/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
-  (`/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
+  등록 두 줄(`/life/walk-conditions` · `/life/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
+  (`/life/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
   `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
   `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라

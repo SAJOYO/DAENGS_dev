@@ -40,7 +40,7 @@ os.environ["DAENGS_AES_KEY"] = _key(1)
 os.environ["DAENGS_BLIND_INDEX_KEY"] = _key(2)
 os.environ["DAENGS_JWE_KEY"] = _key(3)
 
-# `/ask` 의 임베딩 모델을 기동 때 올리지 않습니다.
+# `/life/ask` 의 임베딩 모델을 기동 때 올리지 않습니다.
 #
 # `with TestClient(app)` 로 lifespan 을 여는 테스트가 여럿인데(test_walk_auth · test_ask_auth ·
 # test_main_stays_light), 켜 두면 `ml` 그룹이 깔린 PC 에서 그때마다 1.2GB 를 올리고

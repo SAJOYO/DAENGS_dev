@@ -47,7 +47,7 @@ const consoleSections: Array<{
     description: "훈련 RAG와 생활 RAG(질의응답·산책 적합도), 피부 스크리닝을 직접 두들겨 보고, 어떤 근거를 집어 왔는지 확인합니다.",
     // **`search:inspect` 가 아니라 `read` 입니다.** 이 화면에는 권한이 다른 두 갈래가
     // 들어 있습니다 — 훈련 RAG(`/training/chat`)는 `search:inspect` 관리자 전용이고,
-    // 생활 RAG(`/ask`·`/walk`)는 `admin_or_app_user(Perm.READ)` 라 로그인한 사람 전부입니다.
+    // 생활 RAG(`/life/ask`·`/life/walk-conditions`)는 `admin_or_app_user(Perm.READ)` 라 로그인한 사람 전부입니다.
     // 카드를 `search:inspect` 로 잠그면 API 는 열어 주는데 화면만 안 보이는 계정이 생깁니다.
     // 훈련 갈래는 화면 안에서 가립니다 (`inspect-tabs.tsx`).
     // 피부 스크리닝(`/screen/*`)은 아예 인증이 없어서 같은 이유가 더 강하게 적용됩니다.

@@ -204,6 +204,26 @@ async def fail_turn_if_processing(
     return (await session.scalars(stmt)).one_or_none()
 
 
+async def fail_stale_turns(
+    session: AsyncSession, *, session_id: uuid.UUID, cutoff: datetime
+) -> int:
+    """Same lazy recovery as ``fail_stale_summaries``, scoped to one session."""
+    result = await session.execute(
+        update(ChatTurn)
+        .where(
+            ChatTurn.session_id == session_id,
+            ChatTurn.processing_status == "processing",
+            ChatTurn.processing_started_at < cutoff,
+        )
+        .values(
+            processing_status="failed",
+            error_code="STALE_PROCESSING",
+            completed_at=func.now(),
+        )
+    )
+    return int(result.rowcount or 0)
+
+
 async def list_completed_summaries(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSummary]:
@@ -217,6 +237,20 @@ async def list_completed_summaries(
         .order_by(ChatSummary.created_at.desc(), ChatSummary.id.desc())
     )
     return list(rows)
+
+
+async def get_owned_summary(
+    session: AsyncSession, app_user_id: uuid.UUID, summary_id: uuid.UUID
+) -> ChatSummary | None:
+    return await session.scalar(
+        select(ChatSummary).where(
+            ChatSummary.id == summary_id, ChatSummary.app_user_id == app_user_id
+        )
+    )
+
+
+async def delete_summary(session: AsyncSession, summary: ChatSummary) -> None:
+    await session.delete(summary)
 
 
 async def summary_by_request_id(

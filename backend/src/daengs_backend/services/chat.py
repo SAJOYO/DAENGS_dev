@@ -69,6 +69,39 @@ class CompletionConflictError(Exception):
     pass
 
 
+class TurnIdempotencyConflictError(Exception):
+    """The client reused a ``client_message_id`` for a *different* question.
+
+    Never merged silently: answering the stored question would look like a correct reply to
+    the new one, and overwriting the stored one would rewrite history the user already saw.
+    """
+
+    def __init__(self, turn_id: uuid.UUID) -> None:
+        super().__init__(f"client_message_id reused with different content: {turn_id}")
+        self.turn_id = turn_id
+
+
+class TurnProcessingError(Exception):
+    """The same reservation is still being answered; the client must wait, not retry."""
+
+    def __init__(self, turn_id: uuid.UUID) -> None:
+        super().__init__(f"turn is already processing: {turn_id}")
+        self.turn_id = turn_id
+
+
+class TurnFailedError(Exception):
+    """The UUID belongs to a failed (or stale) turn and stays burned. Retry with a fresh one."""
+
+    def __init__(self, turn_id: uuid.UUID, error_code: str) -> None:
+        super().__init__(f"turn already failed ({error_code}): {turn_id}")
+        self.turn_id = turn_id
+        self.error_code = error_code
+
+
+class ChatSummaryNotFoundError(Exception):
+    pass
+
+
 class ExistingSummaryError(Exception):
     """The same successfully summarized source state already exists."""
 
@@ -195,6 +228,23 @@ def _validate_question(question: str) -> None:
         raise ContentLimitError("question", MAX_QUESTION_CHARS)
 
 
+def _resolve_existing_turn(existing: ChatTurn, question: str) -> ChatTurn:
+    """Decide what a reused ``client_message_id`` means.
+
+    Only an exact replay of a completed turn is returned, so the caller can answer from the
+    stored ``public_response`` without calling the orchestrator. Everything else raises: a
+    different question is a client bug, a live reservation is still being answered, and a
+    failed or stale one stays burned so a retry cannot resurrect a dead request.
+    """
+    if existing.user_content != question:
+        raise TurnIdempotencyConflictError(existing.id)
+    if existing.processing_status == "completed":
+        return existing
+    if existing.processing_status == "processing":
+        raise TurnProcessingError(existing.id)
+    raise TurnFailedError(existing.id, existing.error_code or "FAILED")
+
+
 async def reserve_turn(
     session: AsyncSession,
     app_user_id: uuid.UUID,
@@ -202,8 +252,13 @@ async def reserve_turn(
     *,
     client_message_id: uuid.UUID,
     question: str,
+    now: datetime | None = None,
 ) -> ChatTurn:
-    """Reserve a turn and commit before any orchestrator call."""
+    """Reserve a turn and commit before any orchestrator call.
+
+    Returns the new ``processing`` row, or the existing ``completed`` row for an exact replay
+    (same UUID, same question). See ``_resolve_existing_turn`` for every other reuse.
+    """
     _validate_question(question)
     chat_session = await chat_repo.get_owned_session_for_update(
         session, app_user_id, session_id
@@ -211,11 +266,24 @@ async def reserve_turn(
     if chat_session is None:
         raise ChatSessionNotFoundError
 
+    # Stale recovery comes first. A ``processing`` row older than five minutes is a crashed or
+    # timed-out request, not a live one: it must neither hold its idempotency key as "still
+    # answering" nor count toward the turn cap. The recovery is committed on its own so it
+    # survives whatever the checks below raise, then the session lock is taken again.
+    cutoff = (now or datetime.now(UTC)) - STALE_PROCESSING_AFTER
+    if await chat_repo.fail_stale_turns(session, session_id=session_id, cutoff=cutoff):
+        await session.commit()
+        chat_session = await chat_repo.get_owned_session_for_update(
+            session, app_user_id, session_id
+        )
+        if chat_session is None:
+            raise ChatSessionNotFoundError
+
     existing = await chat_repo.get_turn_by_client_id(
         session, session_id, client_message_id
     )
     if existing is not None:
-        return existing
+        return _resolve_existing_turn(existing, question)
     if await chat_repo.count_reserved_turns(session, session_id) >= MAX_COMPLETED_TURNS:
         raise TurnLimitError
 
@@ -243,7 +311,7 @@ async def reserve_turn(
         )
         if winner is None:
             raise
-        return winner
+        return _resolve_existing_turn(winner, question)
     return turn
 
 
@@ -360,11 +428,9 @@ def _transcript_char_count(turns: list[ChatTurn]) -> int:
 
 
 def _render_completed_turns(turns: list[ChatTurn]) -> str:
-    messages: list[tuple[str, str]] = []
-    for turn in turns:
-        messages.append(("user", turn.user_content))
-        messages.append(("assistant", turn.assistant_content or ""))
-    return render_transcript(messages)
+    return render_transcript(
+        [(turn.user_content, turn.assistant_content or "") for turn in turns]
+    )
 
 
 def _raise_for_existing_summary(summary: ChatSummary) -> None:
@@ -390,9 +456,12 @@ async def reserve_summary(
         raise EmptyConversationError
     if len(turns) > MAX_COMPLETED_TURNS:
         raise TurnLimitError
-    transcript = _render_completed_turns(turns)
-    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+    # The limit counts stored characters, the same way turn reservation and completion count
+    # them, so a conversation that was allowed to grow can always be summarized. The JSON
+    # envelope's overhead is covered by the byte-based Gemini input cap instead.
+    if _transcript_char_count(turns) > MAX_TRANSCRIPT_CHARS:
         raise TranscriptLimitError
+    transcript = _render_completed_turns(turns)
 
     timestamp = now or datetime.now(UTC)
     stale_count = await chat_repo.fail_stale_summaries(
@@ -524,6 +593,25 @@ async def list_summaries(
     return await chat_repo.list_completed_summaries(session, app_user_id, pet_id)
 
 
+async def delete_summary(
+    session: AsyncSession, app_user_id: uuid.UUID, summary_id: uuid.UUID
+) -> None:
+    """Delete one completed summary. The source conversation is untouched.
+
+    A failed reservation is invisible to the user (only completed rows are listed), so it is
+    reported as not found rather than deleted. A ``processing`` one is refused: deleting it
+    would leave the in-flight completion UPDATE with no row, and the caller would then see a
+    502 for a summary the user "already removed".
+    """
+    summary = await chat_repo.get_owned_summary(session, app_user_id, summary_id)
+    if summary is None or summary.processing_status == "failed":
+        raise ChatSummaryNotFoundError
+    if summary.processing_status == "processing":
+        raise SummaryProcessingError(summary.id)
+    await chat_repo.delete_summary(session, summary)
+    await session.commit()
+
+
 __all__ = [
     "MAX_ASSISTANT_CHARS",
     "MAX_COMPLETED_TURNS",
@@ -532,6 +620,7 @@ __all__ = [
     "MAX_TRANSCRIPT_CHARS",
     "STALE_PROCESSING_AFTER",
     "ChatSessionNotFoundError",
+    "ChatSummaryNotFoundError",
     "ChatTurnNotFoundError",
     "CompletionConflictError",
     "ContentLimitError",
@@ -542,7 +631,10 @@ __all__ = [
     "SummaryRequestConflictError",
     "SummaryReservation",
     "TranscriptLimitError",
+    "TurnFailedError",
+    "TurnIdempotencyConflictError",
     "TurnLimitError",
+    "TurnProcessingError",
     "build_title",
     "categories_of",
     "complete_summary",
@@ -550,6 +642,7 @@ __all__ = [
     "create_session",
     "create_summary",
     "delete_session",
+    "delete_summary",
     "fail_summary",
     "fail_turn",
     "get_session_with_turns",

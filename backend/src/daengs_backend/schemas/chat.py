@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from daengs_backend.orchestration.contracts import AssistantResponse
+
 AgentCategory = Literal["training", "life", "walk"]
 
 
@@ -24,6 +26,11 @@ class ChatTurnResponse(BaseModel):
     assistant_content: str | None
     agent_categories: list[AgentCategory]
     assistant_status: str | None
+    #: 그때 사용자에게 갔던 `AssistantResponse` 그대로 — 완료된 turn 에만 있습니다. 앱이
+    #: 인용·handoff·clarify 를 다시 그릴 수 있게 `assistant_content` 와 별도로 둡니다.
+    #: 저장 자체가 공개 계약만 담으므로(07_chats.sql) 프롬프트·예외·공급자 payload 는
+    #: 여기로 나올 길이 없습니다.
+    public_response: AssistantResponse | None
     error_code: str | None
     completed_at: datetime | None
     created_at: datetime

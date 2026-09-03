@@ -602,6 +602,20 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         turn.completed_at = store.tick()
         return turn
 
+    async def fail_stale_turns(session, *, session_id, cutoff):
+        changed = 0
+        for turn in store.chat_turns:
+            if (
+                turn.session_id == session_id
+                and turn.processing_status == "processing"
+                and turn.processing_started_at < cutoff
+            ):
+                turn.processing_status = "failed"
+                turn.error_code = "STALE_PROCESSING"
+                turn.completed_at = store.tick()
+                changed += 1
+        return changed
+
     async def list_completed_summaries(session, app_user_id, pet_id):
         rows = [
             row
@@ -611,6 +625,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             and row.processing_status == "completed"
         ]
         return sorted(rows, key=lambda row: (row.created_at, row.id), reverse=True)
+
+    async def get_owned_summary(session, app_user_id, summary_id):
+        return next(
+            (
+                row
+                for row in store.chat_summaries
+                if row.id == summary_id and row.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def delete_summary(session, row):
+        store.chat_summaries.remove(row)
 
     async def summary_by_request_id(session, app_user_id, request_id):
         return next(
@@ -718,6 +745,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "add_turn", add_turn)
     monkeypatch.setattr(chat_repo, "complete_turn_if_processing", complete_turn)
     monkeypatch.setattr(chat_repo, "fail_turn_if_processing", fail_turn)
+    monkeypatch.setattr(chat_repo, "fail_stale_turns", fail_stale_turns)
+    monkeypatch.setattr(chat_repo, "get_owned_summary", get_owned_summary)
+    monkeypatch.setattr(chat_repo, "delete_summary", delete_summary)
     monkeypatch.setattr(chat_repo, "list_completed_summaries", list_completed_summaries)
     monkeypatch.setattr(chat_repo, "summary_by_request_id", summary_by_request_id)
     monkeypatch.setattr(chat_repo, "active_summary_for_source", active_summary_for_source)

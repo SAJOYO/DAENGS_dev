@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import SessionLocal, get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import ChatSession, ChatSummary, ChatTurn
+from daengs_backend.orchestration.contracts import AssistantResponse
 from daengs_backend.schemas.chat import (
     ChatSessionCreate,
     ChatSessionDetailResponse,
@@ -65,6 +66,13 @@ def _turn_response(turn: ChatTurn) -> ChatTurnResponse:
         assistant_content=turn.assistant_content,
         agent_categories=list(turn.agent_categories),
         assistant_status=turn.assistant_status,
+        # 저장된 JSON 을 공개 계약으로 다시 검증해서 내보냅니다 — 모양이 어긋난 행이 있으면
+        # 여기서 드러나야지, 앱이 알 수 없는 키를 받아서는 안 됩니다.
+        public_response=(
+            AssistantResponse.model_validate(turn.public_response)
+            if turn.public_response is not None
+            else None
+        ),
         error_code=turn.error_code,
         completed_at=turn.completed_at,
         created_at=turn.created_at,
@@ -166,10 +174,40 @@ async def list_summaries(
     return ChatSummaryListResponse(summaries=[_summary_response(s) for s in summaries])
 
 
-# ⚠️ `/{session_id}` 보다 **먼저** 선언해야 합니다. FastAPI 는 등록 순서대로
-# 매칭하므로 뒤에 두면 `/app/chats/summaries` 가 `get_session` 으로 가서
+@router.delete(
+    "/summaries/{summary_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="보관함에서 요약 하나를 지운다 (원본 대화는 그대로)",
+    responses={
+        **_NEEDS_AUTH,
+        **_NOT_MINE,
+        status.HTTP_409_CONFLICT: {
+            "description": "아직 만드는 중인 요약입니다 (`SUMMARY_PROCESSING`). 끝나기 전에는 "
+            "지울 수 없습니다 — 지우면 완료 쓰기가 갈 곳을 잃고 사용자는 502 를 봅니다."
+        },
+    },
+)
+async def delete_summary(
+    summary_id: uuid.UUID,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """**완성된 요약만** 지웁니다. 만드는 데 실패한 예약은 보관함에 없으므로 404 입니다."""
+    try:
+        await chat_service.delete_summary(session, user.app_user_id, summary_id)
+    except chat_service.ChatSummaryNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "요약을 찾을 수 없습니다.") from None
+    except chat_service.SummaryProcessingError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "SUMMARY_PROCESSING", "summary_id": str(exc.summary_id)},
+        ) from None
+
+
+# ⚠️ `/summaries...` 는 `/{session_id}` 보다 **먼저** 선언해야 합니다. FastAPI 는 등록
+# 순서대로 매칭하므로 뒤에 두면 `/app/chats/summaries` 가 `get_session` 으로 가서
 # "summaries" 를 UUID 로 파싱하려다 422 가 납니다 (`routers/pet.py` 의 `/primary`
-# 와 같은 함정).
+# 와 같은 함정). `tests/test_chat_api.py` 가 이 순서를 지킵니다.
 @router.get(
     "/{session_id}",
     response_model=ChatSessionDetailResponse,
@@ -221,8 +259,13 @@ async def delete_session(
         **_NEEDS_AUTH,
         **_NOT_MINE,
         status.HTTP_409_CONFLICT: {
-            "description": "메시지가 없는 대화입니다. 빈 대화를 모델에 보내면 "
-            "**없는 대화를 지어내므로** 부르기 전에 막습니다."
+            "description": "모델을 부르기 전에 막는 경우들. `detail.code` 로 구분합니다 — "
+            "`SUMMARY_ALREADY_EXISTS` (같은 원본 상태를 이미 요약함, `summary_id` 동봉) · "
+            "`SUMMARY_PROCESSING` (같은 요약을 만드는 중, `summary_id` 동봉) · "
+            "`SUMMARY_REQUEST_ALREADY_FAILED` (같은 `client_request_id` 가 실패로 끝남, 새 id 로) · "
+            "`SUMMARY_SOURCE_LIMIT_EXCEEDED` (turn 30개·transcript 320,000자 초과). "
+            "메시지가 없는 대화도 409 입니다 — 빈 대화를 모델에 보내면 **없는 대화를 지어내므로** "
+            "부르기 전에 막습니다."
         },
         status.HTTP_502_BAD_GATEWAY: {
             "description": "요약 공급자가 실패했거나 출력이 스키마를 두 번 어겼습니다. "

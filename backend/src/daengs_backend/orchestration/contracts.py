@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ContractModel(BaseModel):
@@ -16,6 +16,7 @@ class CapabilityName(StrEnum):
     TRAINING = "training"
     LIFE = "life"
     WALK = "walk"
+    PLACE = "place"
 
 
 class CapabilityStatus(StrEnum):
@@ -64,11 +65,29 @@ class WalkPayload(ContractModel):
     lon: float = Field(ge=124.0, le=132.0)
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload
+class PlacePayload(ContractModel):
+    """Non-personalized Place input assembled from the original query and trusted location."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    query: str = Field(min_length=1, max_length=1_000)
+    lat: float = Field(ge=33.0, le=39.0)
+    lon: float = Field(ge=124.0, le=132.0)
+
+    @field_validator("query")
+    @classmethod
+    def query_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("query must not be blank")
+        return value
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
+    CapabilityName.PLACE: PlacePayload,
 }
 
 
@@ -195,6 +214,7 @@ __all__ = [
     "OrchestratorState",
     "OutcomeDetail",
     "PendingJob",
+    "PlacePayload",
     "PrincipalContext",
     "RoutePlan",
     "RouterKind",

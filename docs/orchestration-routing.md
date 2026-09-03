@@ -14,6 +14,8 @@
 
 - `requested_capability` — 클라이언트가 능력을 명시한 경우.
   **라우팅 신호일 뿐, 절대 인가가 아닙니다** (D-036) — 인가는 §5 의 매트릭스가 따로 봅니다.
+  PR #196부터 `place`도 이 경로에서만 실행합니다. 위치가 없으면 Place 전용 좌표 CLARIFY를
+  만들며, 이 추가는 아래 의미 라우터 schema/prompt를 넓히지 않습니다.
 - 구조화된 UI/액션 메타데이터 — 어느 화면·버튼에서 온 요청인지
 - 명시적 source/action 식별자
 - 의미가 모호하지 않은, 이미 구조화된 컨텍스트
@@ -303,8 +305,10 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 
 ## 5. 능력 가용성 · v1 범위 · 인가 매트릭스
 
-라우터가 EXECUTE 로 보낼 수 있는 대상은 v1 에서 **Training · Life · Walk** 뿐입니다
-(architecture §v1 범위 — 능력별 현실은 그 문서 §능력 현실 표).
+의미 라우터가 EXECUTE 로 고를 수 있는 대상은 현재 **Training · Life · Walk**뿐입니다.
+실행 registry에는 Place가 추가됐지만 PR #196에서는 `requested_capability=place`라는 명시적
+신호로만 들어갑니다. Place 자연어 목적지 선택은 별도 gold set과 기존 80건 회귀를 통과할
+후속 PR의 범위입니다.
 
 ### v1 인가 매트릭스 (CONFIRMED — D-036)
 
@@ -317,6 +321,7 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 | Training | **YES** | YES |
 | Life | YES | YES |
 | Walk | YES | YES |
+| Place (명시 신호만) | YES | YES |
 | Skin EXECUTE | NO | NO |
 | Gait EXECUTE | NO | NO |
 
@@ -335,8 +340,9 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
   Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
   HANDOFF 입니다. Gait 는 여전히 `gait` profile 뒤의 별도 프로세스이고 #98도 미머지입니다.
-  Place·Journey 역시 #99로 소스가 backend 프로젝트에 합쳐졌을 뿐 Card 1 EXECUTE 대상이
-  아닙니다. **기술 가용성은 오케스트레이션 범위 승인이 아닙니다.**
+  Journey는 #99로 소스가 backend 프로젝트에 합쳐졌을 뿐 Card 1 EXECUTE 대상이 아닙니다.
+  Place는 PR #196의 명시 신호 표적 경로만 예외이며 전역 의미 라우터 대상은 아닙니다.
+  **기술 가용성은 오케스트레이션 범위 승인이 아닙니다.**
 - Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의 PENDING + job
   메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다.
 - 능력의 의존성이 일시적으로 죽어 있을 때(예: Training 의 전용 PGVector 컨테이너나

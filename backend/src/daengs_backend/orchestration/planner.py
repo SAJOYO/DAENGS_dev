@@ -16,7 +16,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from daengs_backend.orchestration.contracts import RoutePlan, RouterKind
+from daengs_backend.orchestration.contracts import (
+    CapabilityName,
+    CapabilityRequest,
+    PlacePayload,
+    RoutePlan,
+    RouterKind,
+)
 from daengs_backend.orchestration.semantic import ROUTER_MODEL_ID, SemanticRoutingDecision
 
 _EXECUTE_NAMES = frozenset({"training", "life", "walk"})
@@ -33,6 +39,36 @@ def resolve_deterministic_route(
     """Return a deterministic RoutePlan when the approved signal resolves it, else None."""
     if requested_capability is None:
         return None
+    if requested_capability == CapabilityName.PLACE:
+        missing = _missing_walk_coordinates(context)
+        if missing:
+            return RoutePlan.model_validate(
+                {
+                    "requests": [],
+                    "handoffs": [],
+                    "clarify": {
+                        "question": _place_clarify_question(missing),
+                        "missing": missing,
+                    },
+                    "router": RouterKind.DETERMINISTIC,
+                    "model": None,
+                }
+            )
+        location = context["location"]
+        return RoutePlan(
+            requests=[
+                CapabilityRequest(
+                    capability=CapabilityName.PLACE,
+                    payload=PlacePayload(
+                        query=query,
+                        lat=location["lat"],
+                        lon=location["lon"],
+                    ),
+                )
+            ],
+            router=RouterKind.DETERMINISTIC,
+            model=None,
+        )
     if requested_capability in _EXECUTE_NAMES:
         decision = SemanticRoutingDecision(execute=[requested_capability], handoffs=[])
     elif requested_capability in _HANDOFF_REASONS:
@@ -112,6 +148,14 @@ def _clarify_question(missing: list[str]) -> str:
     if missing == ["location.lat"]:
         return "현재 위치의 위도를 알려주세요."
     return "현재 위치의 경도를 알려주세요."
+
+
+def _place_clarify_question(missing: list[str]) -> str:
+    if len(missing) == 2:
+        return "장소를 찾을 위치의 위도와 경도를 알려주세요."
+    if missing == ["location.lat"]:
+        return "장소를 찾을 위치의 위도를 알려주세요."
+    return "장소를 찾을 위치의 경도를 알려주세요."
 
 
 __all__ = ["assemble_route_plan", "resolve_deterministic_route"]

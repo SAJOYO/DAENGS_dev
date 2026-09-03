@@ -20,10 +20,12 @@ import json
 import uuid
 from typing import Any
 
+import httpx
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
+from daengs_backend.orchestration.adapters.place import PlaceCapabilityAdapter
 from daengs_backend.orchestration.contracts import (
     CapabilityName,
     CapabilityRequest,
@@ -304,4 +306,120 @@ def test_인증_없이는_오케스트레이션에_닿지_못한다() -> None:
     got = _post(service, {"query": QUERY, "requested_capability": "training"}, token=None)
     assert got.status_code == 401
     assert training.calls == []
+    assert transport.prompts == []
+
+
+# ------------------------------------------ Place targeted vertical HTTP slice
+
+
+async def test_place_명시_신호가_실제_HTTP_adapter와_축약_projection까지_도달한다() -> None:
+    """Everything except the place-search transport is production code.
+
+    In particular, this crosses the public FastAPI DTO/auth boundary, deterministic planner,
+    LangGraph, the real Place HTTP adapter, compact projection, and aggregate message.
+    """
+
+    internal = {
+        "contract_version": "place-discovery-v1",
+        "planning": {
+            "contract_version": "place-discovery-planning-v1",
+            "status": "ready",
+            "source_disposition": "proposed",
+            "resolution": "inferred",
+            "lenses": {
+                "target_lenses": [
+                    {
+                        "lens_id": "target:pet-shop",
+                        "display_label": "#펫샵",
+                        "mapping_scope": "direct",
+                        "availability": "executable",
+                        "support_note": "강아지 용품 구매 장소로 해석했어요.",
+                    }
+                ],
+                "signal_lenses": [],
+            },
+            "issues": [],
+        },
+        "lens_results": [
+            {
+                "lens_id": "target:pet-shop",
+                "display_label": "#펫샵",
+                "support_note": "강아지 용품 구매 장소로 해석했어요.",
+                "search": {
+                    "groups": [
+                        {
+                            "results": [
+                                {
+                                    "place": {
+                                        "key": {"source": "kcisa", "ref": "P-1"},
+                                        "lat": 37.557,
+                                        "lng": 126.924,
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "presentations": [
+                    {
+                        "place_key": {"source": "kcisa", "ref": "P-1"},
+                        "title": "홍대 반려동물 용품점",
+                        "summary": "강아지 용품 정보를 확인할 수 있어요.",
+                        "kind_id": "pet_shop",
+                        "kind_label": "펫샵",
+                        "distance_m": 180,
+                        "address": "서울 마포구",
+                        "core_items": [],
+                        "promoted_items": [],
+                        "detail_items": [],
+                        "notices": [],
+                        "why_matched": [],
+                    }
+                ],
+            }
+        ],
+        "notices": [],
+    }
+    seen: list[httpx.Request] = []
+
+    async def place_search(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=internal)
+
+    place_http = httpx.AsyncClient(transport=httpx.MockTransport(place_search))
+    transport = ScriptedTransport()
+    adapter = PlaceCapabilityAdapter(client=place_http, base_url="http://place-search:8000")
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.PLACE: adapter}),
+        semantic_router=GeminiSemanticRouter(generate=transport),
+    )
+    from daengs_backend.main import app
+
+    app.dependency_overrides[assistant_router.get_assistant_orchestration_service] = lambda: service
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            got = await client.post(
+                "/assistant/query",
+                json={
+                    "query": "강아지 장난감 사고 싶어",
+                    "requested_capability": "place",
+                    "location": {"lat": 37.5563, "lon": 126.9236},
+                },
+                headers={"Authorization": f"Bearer {_app_token()}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        await place_http.aclose()
+
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "ANSWERED"
+    assert body["results"][0]["capability"] == "place"
+    assert body["results"][0]["data"]["contract_version"] == "place-capability-v1"
+    candidate = body["results"][0]["data"]["groups"][0]["candidates"][0]
+    assert candidate["place_id"] == {"source": "kcisa", "ref": "P-1"}
+    assert candidate["location"] == {"lat": 37.557, "lon": 126.924, "distance_m": 180}
+    assert len(seen) == 1
     assert transport.prompts == []

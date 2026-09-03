@@ -66,6 +66,8 @@ class AssistantQueryRequest(BaseModel):
     def _persistence_fields_come_together(self) -> AssistantQueryRequest:
         if (self.chat_session_id is None) != (self.client_message_id is None):
             raise ValueError("chat_session_id and client_message_id must be sent together")
+        if self.requested_capability == "place" and len(self.query) > 1_000:
+            raise ValueError("Place query must not exceed 1000 characters")
         return self
 
     @field_validator("query")

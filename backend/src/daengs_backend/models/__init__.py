@@ -10,6 +10,15 @@ SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 관계 문자열 참조와 `Base.metadata` 가 온전해집니다.
 """
 
+from daengs_backend.models.admin_audit_log import (
+    AUDIT_ACTIONS,
+    AUDIT_LOGIN_DENIED_SUSPENDED,
+    AUDIT_LOGIN_FAILED_PASSWORD,
+    AUDIT_LOGIN_FAILED_UNKNOWN_ID,
+    AUDIT_LOGIN_SUCCESS,
+    AUDIT_TARGET_TYPES,
+    AdminAuditLog,
+)
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
@@ -48,6 +57,12 @@ __all__ = [
     "ADMIN_ROLES",
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
+    "AUDIT_ACTIONS",
+    "AUDIT_LOGIN_DENIED_SUSPENDED",
+    "AUDIT_LOGIN_FAILED_PASSWORD",
+    "AUDIT_LOGIN_FAILED_UNKNOWN_ID",
+    "AUDIT_LOGIN_SUCCESS",
+    "AUDIT_TARGET_TYPES",
     "CHAT_PROCESSING_STATUSES",
     "CHAT_SUMMARY_STATUSES",
     "CRAWL_STATUSES",
@@ -58,6 +73,7 @@ __all__ = [
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
     "WALK_ANALYSIS_STATES",
+    "AdminAuditLog",
     "AdminUser",
     "AppUser",
     "Base",

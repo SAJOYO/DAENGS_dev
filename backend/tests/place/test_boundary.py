@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 from daengs_place.core.db import get_session
 
-ALLOWED_PLACE_SUBPACKAGES = {"api", "core", "geo", "main", "place"}
+ALLOWED_PLACE_SUBPACKAGES = {"api", "core", "geo", "main", "place", "territory"}
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "src" / "daengs_place"
 FORBIDDEN_PACKAGES = {
     "daengs_backend",
@@ -102,6 +102,11 @@ def test_search_app_serves_health_and_validation_without_db_or_any_key():
         search_app.dependency_overrides.pop(get_session, None)
 
     exposed = set(search_app.openapi()["paths"])
-    assert exposed == {"/health", "/health/ready", "/v2/places/search"}, (
+    assert exposed == {
+        "/health",
+        "/health/ready",
+        "/territory/sites/nearby",
+        "/v2/places/search",
+    }, (
         f"검색 서버의 표면이 계약과 다르다: {sorted(exposed)}"
     )

@@ -17,6 +17,27 @@ async def _no_db():
 
 
 @pytest.mark.parametrize(
+    "params",
+    [
+        {"lat": 31.9, "lng": 127.0},
+        {"lat": 37.5, "lng": 133.1},
+        {"lat": 37.5, "lng": 127.0, "radius_m": 49},
+        {"lat": 37.5, "lng": 127.0, "radius_m": 3001},
+        {"lat": 37.5, "lng": 127.0, "limit": 501},
+    ],
+)
+def test_territory_site_nearby_rejects_invalid_bounds_before_reading_db(params):
+    app.dependency_overrides[get_session] = _no_db
+    try:
+        with TestClient(app) as client:
+            response = client.get("/territory/sites/nearby", params=params)
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
     ("kinds", "message"),
     [
         ([], "at least 1 item"),

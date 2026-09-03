@@ -48,7 +48,8 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
                      │   /            ─▶ host.docker.internal:3000 ───┼─▶ PM2: daengs-web (Next standalone ×2)
                      │   /api/*       ─▶ backend:8000  (접두사 제거)   │
                      │                                                │
- daengback.~ :8000 ─▶│   /v2/places/* ─▶ place-search:8000  (rate limit)
+ daengback.~ :8000 ─▶│   /v2/places/* · /territory/sites/*
+                     │                 ─▶ place-search:8000  (rate limit)
                      │   /journey     ─▶ journey-service:8000         │
                      │   /screen/*    ─▶ backend:8000  (daengs_screening)
                      │   /gait/*      ─▶ gait-analysis:8000   (profile)
@@ -67,6 +68,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
 | :80 | `/` | PM2 의 Next | upstream 블록 사용 — 게이트웨이 IP 라 재해석 불필요 |
 | :80 | `/api/*` | backend | 접두사를 rewrite 로 뗍니다. 로그인(httpOnly 쿠키)의 전제인 같은-오리진 경로 (D-015) |
 | :8000 | `/v2/places/*` | place-search | 공개 검색이라 IP 당 5r/s 제한 (D-028). 접두사 제거 없음 |
+| :8000 | `/territory/sites/*` | place-search | 중립 점령지 좌표만 제공. 같은 rate limit, 접두사 제거 없음 |
 | :8000 | `/journey` | journey-service | URI·본문 무변환. Place 의 rate limit 을 여기로 넓히지 않습니다 |
 | :8000 | `/screen/*` | backend (`daengs_screening`) | 접두사 제거 없음. main backend 의 무인증 multipart 라우터이며 가중치는 첫 요청에 지연 로딩 (D-040) |
 | :8000 | `/gait/*` | gait-analysis | profile 뒤. 여기만 body 200m · timeout 600s (영상) |
@@ -270,7 +272,7 @@ Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입�
 | **Walk** | backend `/life/walk-conditions` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
 | **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (orchestration-contracts.md) |
-| **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. `/v2/places/*` 공개 API는 rate limit 적용 | v1 실행 대상 아님 — `handoffs[].target` 후보 (`place`, docs/life/roadmap.md §2 제안) | 별도 프로세스 직접 API | **예** | 소스/project 통합은 런타임 또는 Card 1 편입이 아닙니다. 장소 데이터는 Place 소유(D-026·D-039); 핸드오프 식별자 확정은 통합 카드의 사람 결정 |
+| **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. `/v2/places/*`와 중립 게임판 `/territory/sites/*` 공개 API는 rate limit 적용 | v1 실행 대상 아님 — `handoffs[].target` 후보 (`place`, docs/life/roadmap.md §2 제안) | 별도 프로세스 직접 API | **예** | 소스/project 통합은 런타임 또는 Card 1 편입이 아닙니다. 장소 검색과 점령지 앱 계약은 분리돼 있고, 핸드오프 식별자 확정은 통합 카드의 사람 결정 |
 | **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
 
 Skin 이 main backend 에서 기술적으로 호출 가능해진 것은 **런타임 사실의 변화**이지

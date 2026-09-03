@@ -20,7 +20,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# autogenerate 를 **끈다**. ORM 에는 Place 하나뿐이고 facility·walk·anchor 를 비롯한
+# autogenerate 를 **끈다**. ORM 에는 Place 하나뿐이고 facility·walk·territory_site 를 비롯한
 # 대부분의 테이블이 없어서, metadata 를 넘기면 `revision --autogenerate` 가 그것들을 전부
 # "삭제 대상"으로 판단한다. 모든 스키마를 ORM 으로 표현할 계획이 서기 전까지는 리비전을
 # 손으로 쓴다. 되살리려면 전체 테이블 metadata + PostGIS 시스템 객체 제외 필터가 함께 필요하다.

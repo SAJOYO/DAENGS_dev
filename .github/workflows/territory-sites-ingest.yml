@@ -1,0 +1,113 @@
+name: Territory Site gameboard sync
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # 시설 검색 적재와 같은 place-db를 쓰므로 두 배치를 함께 직렬화합니다.
+  group: place-data-sync
+  cancel-in-progress: false
+
+# 스냅샷 변경은 코드 리뷰 대상입니다. URL 입력을 받아 self-hosted 서버에서 임의 파일을
+# 내려받지 않고, 공개 Geo 릴리스의 태그·파일명·해시·건수를 함께 고정합니다.
+env:
+  SNAPSHOT_TAG: territory-sites-140u-20260903
+  SNAPSHOT_ASSET: territory-lamps-140u-20260903.ndjson.gz
+  SNAPSHOT_SHA256: DACB49E4C4F9969FF1EFDD1CED58527B5B4C2768C785F902538AEED1F2224E1F
+  EXPECTED_SITES: '362309'
+
+jobs:
+  sync:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@v5
+        with:
+          # 서버 전용 .env는 저장소 밖으로 지우거나 덮지 않습니다.
+          clean: false
+
+      - name: Compose 설정 및 Place 기동
+        run: |
+          docker compose config --quiet
+          docker compose up -d place-db place-search nginx
+
+      - name: 점령지 스냅샷 검증·적재
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP $env:SNAPSHOT_ASSET
+          $ndjson = Join-Path $env:RUNNER_TEMP 'territory-lamps.ndjson'
+          $containerPath = '/tmp/territory-lamps.ndjson'
+          $url = "https://github.com/rkbuhtig/DAENGS_geo/releases/download/$($env:SNAPSHOT_TAG)/$($env:SNAPSHOT_ASSET)"
+
+          try {
+            Invoke-WebRequest -UseBasicParsing $url -OutFile $archive
+            $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash
+            if ($actualHash -ne $env:SNAPSHOT_SHA256) {
+              throw "Territory snapshot SHA-256 mismatch: $actualHash"
+            }
+
+            $inputStream = [System.IO.File]::OpenRead($archive)
+            $gzipStream = [System.IO.Compression.GZipStream]::new(
+              $inputStream,
+              [System.IO.Compression.CompressionMode]::Decompress
+            )
+            $outputStream = [System.IO.File]::Create($ndjson)
+            try {
+              $gzipStream.CopyTo($outputStream)
+            } finally {
+              $outputStream.Dispose()
+              $gzipStream.Dispose()
+              $inputStream.Dispose()
+            }
+
+            docker cp $ndjson "daengs-place-search:$containerPath"
+            if ($LASTEXITCODE -ne 0) { throw 'failed to copy territory snapshot' }
+
+            docker compose exec -T place-search uv run --no-sync `
+              python -m daengs_place.ingest.territory_sites $containerPath `
+              --expected-sites $env:EXPECTED_SITES --dry-run
+            if ($LASTEXITCODE -ne 0) { throw 'territory snapshot dry-run failed' }
+
+            docker compose exec -T place-search uv run --no-sync `
+              python -m daengs_place.ingest.territory_sites $containerPath `
+              --expected-sites $env:EXPECTED_SITES
+            if ($LASTEXITCODE -ne 0) { throw 'territory snapshot ingest failed' }
+          } finally {
+            docker compose exec -T place-search rm -f $containerPath
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $ndjson -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: DB 세대와 공개 API 확인
+        run: |
+          $query = "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id LIKE 'territory-site:hex-v1:140:%';"
+          $actual = docker compose exec -T place-db sh -c `
+            "psql -U `$POSTGRES_USER -d `$POSTGRES_DB -Atc `"$query`""
+          if ($LASTEXITCODE -ne 0) { throw 'failed to count active territory sites' }
+          if ([int]$actual.Trim() -ne [int]$env:EXPECTED_SITES) {
+            throw "Active territory count mismatch: $actual"
+          }
+
+          $otherGenerationQuery = "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id NOT LIKE 'territory-site:hex-v1:140:%';"
+          $otherGeneration = docker compose exec -T place-db sh -c `
+            "psql -U `$POSTGRES_USER -d `$POSTGRES_DB -Atc `"$otherGenerationQuery`""
+          if ($LASTEXITCODE -ne 0) { throw 'failed to count inactive territory generations' }
+          if ([int]$otherGeneration.Trim() -ne 0) {
+            throw "Unexpected lamp territory generation remains: $otherGeneration"
+          }
+
+          $response = Invoke-RestMethod `
+            -Method Get `
+            -Uri 'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=3000&limit=1' `
+            -TimeoutSec 20
+          if (@($response.sites).Count -lt 1 -or $response.count -lt 1) {
+            throw 'Active 140u territory gameboard is not visible through the public API'
+          }
+          Write-Host "Territory Site data-ready: $actual sites, sample=$($response.sites[0].site_id)"

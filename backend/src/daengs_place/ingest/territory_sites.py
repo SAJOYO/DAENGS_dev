@@ -104,6 +104,21 @@ def select(points: Iterable[dict], radius_u: float = TERRITORY_SITE_RADIUS_U) ->
     return _select(points, radius_u)[0]
 
 
+def validate_site_count(
+    actual: int,
+    *,
+    minimum: int = MIN_PRODUCTION_SITES,
+    expected: int | None = None,
+) -> None:
+    """잘리거나 다른 세대인 스냅샷이 운영 게임판을 교체하지 못하게 한다."""
+    if actual < minimum:
+        raise ValueError(f"점령지 {actual:,}개는 교체 하한 {minimum:,}개보다 작습니다")
+    if expected is not None and actual != expected:
+        raise ValueError(
+            f"점령지 {actual:,}개가 고정 스냅샷의 예상 건수 {expected:,}개와 다릅니다"
+        )
+
+
 async def replace(rows: list[dict]) -> None:
     """lamp 세대를 한 트랜잭션에서 교체한다. 실패하면 기존 게임판이 그대로 남는다."""
     if not rows:
@@ -128,6 +143,11 @@ def main() -> None:
         default=MIN_PRODUCTION_SITES,
         help="이 수보다 작은 스냅샷은 교체 거부 (기본: 300000)",
     )
+    parser.add_argument(
+        "--expected-sites",
+        type=int,
+        help="고정 스냅샷의 정확한 점령지 수. 다르면 교체와 dry-run을 모두 거부",
+    )
     args = parser.parse_args()
 
     sites, input_count = _select(read_lamps(args.path))
@@ -141,12 +161,14 @@ def main() -> None:
     for kind, count in kinds.most_common():
         print(f"  {kind:8} {count:8,}  {100 * count / len(sites):5.1f}%")
 
+    try:
+        validate_site_count(
+            len(sites), minimum=args.minimum_sites, expected=args.expected_sites
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     if args.dry_run:
         return
-    if len(sites) < args.minimum_sites:
-        raise SystemExit(
-            f"점령지 {len(sites):,}개는 교체 하한 {args.minimum_sites:,}개보다 작습니다"
-        )
     asyncio.run(replace(sites))
     print("완료")
 

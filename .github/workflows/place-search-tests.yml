@@ -20,6 +20,7 @@ on:
       - "nginx/api-locations.test.conf"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/place-search-ingest.yml"
+      - ".github/workflows/territory-sites-ingest.yml"
       - ".github/workflows/place-search-tests.yml"
   push:
     branches: [dev]
@@ -35,6 +36,7 @@ on:
       - "nginx/api-locations.test.conf"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/place-search-ingest.yml"
+      - ".github/workflows/territory-sites-ingest.yml"
       - ".github/workflows/place-search-tests.yml"
 
 jobs:

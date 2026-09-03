@@ -5,7 +5,11 @@
 데이터 저장소를 복제하거나 우회하지 않는다 (D-045).
 """
 
-from daengs_walk.capsule import WalkCapsuleArtifacts, build_walk_capsule
+from daengs_walk.capsule import (
+    WalkCapsuleArtifacts,
+    build_walk_capsule,
+    select_context_anchor,
+)
 from daengs_walk.cellophane import Cellophane, build_cellophane
 from daengs_walk.contracts import WalkEvidencePoint
 from daengs_walk.evidence import WalkEvidenceBundle, analyze_walk
@@ -26,4 +30,5 @@ __all__ = [
     "build_cellophane",
     "build_walk_capsule",
     "context_facets",
+    "select_context_anchor",
 ]

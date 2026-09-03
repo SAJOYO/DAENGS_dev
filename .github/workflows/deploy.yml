@@ -121,7 +121,11 @@ jobs:
       - name: nginx 기동 / 설정 반영
         run: |
           # compose 서비스와 마운트된 nginx 설정을 함께 반영합니다.
+          # checkout이 bind mount 아래 파일을 한꺼번에 바꿀 때 Windows Docker의
+          # watchfiles polling이 변경을 놓칠 수 있으므로 backend 프로세스는 명시적으로
+          # 다시 띄웁니다. 그러지 않으면 Actions는 성공해도 옛 OpenAPI가 계속 서빙됩니다.
           docker compose up -d
+          docker compose restart backend
           docker compose ps
           docker compose exec -T nginx nginx -t
           docker compose exec -T nginx nginx -s reload
@@ -136,6 +140,28 @@ jobs:
         shell: powershell
 
     steps:
+      - name: Backend Walk 공개 경로 확인
+        run: |
+          # 인증이 필요한 API를 가짜 계정으로 호출하지 않고, 실행 중인 FastAPI가
+          # 새 Walk 라우터를 실제로 등록했는지를 공개 OpenAPI에서 확인합니다.
+          $requiredPath = '/app/walks/spatial-diary/views/query'
+          foreach ($attempt in 1..18) {
+            try {
+              $openapi = Invoke-RestMethod `
+                -Method Get `
+                -Uri 'http://127.0.0.1:8000/openapi.json' `
+                -TimeoutSec 10
+              if ($requiredPath -notin $openapi.paths.PSObject.Properties.Name) {
+                throw "Backend OpenAPI is missing $requiredPath"
+              }
+              Write-Host 'Backend Walk spatial diary route verified'
+              break
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
       - name: Place 공개 경로 확인
         run: |
           # 배포에서는 공개 경로와 APP 응답 계약만 확인합니다.

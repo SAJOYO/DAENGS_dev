@@ -13,6 +13,13 @@ SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
+from daengs_backend.models.chat import (
+    CHAT_PROCESSING_STATUSES,
+    CHAT_SUMMARY_STATUSES,
+    ChatSession,
+    ChatSummary,
+    ChatTurn,
+)
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
 from daengs_backend.models.gait_record import GAIT_STATUSES, GaitRecord
 from daengs_backend.models.pet import (
@@ -35,6 +42,8 @@ __all__ = [
     "ADMIN_ROLES",
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
+    "CHAT_PROCESSING_STATUSES",
+    "CHAT_SUMMARY_STATUSES",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",
     "GAIT_STATUSES",
@@ -44,6 +53,9 @@ __all__ = [
     "AdminUser",
     "AppUser",
     "Base",
+    "ChatSession",
+    "ChatSummary",
+    "ChatTurn",
     "CrawlRun",
     "GaitRecord",
     "Pet",

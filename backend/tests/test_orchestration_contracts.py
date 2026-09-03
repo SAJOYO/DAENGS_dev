@@ -9,6 +9,7 @@ from daengs_backend.orchestration.contracts import (
     ClarifyRequest,
     Handoff,
     LifePayload,
+    PlacePayload,
     RoutePlan,
     RouterKind,
     TrainingPayload,
@@ -68,4 +69,19 @@ def test_capability_payload_must_match_its_identity() -> None:
         CapabilityRequest(
             capability="training",
             payload=LifePayload(question="훈련 질문"),
+        )
+
+
+def test_place_payload_contains_original_query_and_location_but_no_identity() -> None:
+    payload = PlacePayload(query="  조용한 곳  ", lat=37.5563, lon=126.9236)
+    assert payload.query == "  조용한 곳  "
+    assert set(payload.model_dump()) == {"query", "lat", "lon"}
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PlacePayload.model_validate(
+            {
+                "query": "조용한 곳",
+                "lat": 37.5563,
+                "lon": 126.9236,
+                "active_dog_id": "dog-1",
+            }
         )

@@ -263,7 +263,7 @@ def test_care_question_is_not_hard_routed_by_the_prompt_builder() -> None:
 
 
 def test_no_care_capability_exists_in_the_contracts() -> None:
-    assert {name.value for name in CapabilityName} == {"training", "life", "walk"}
+    assert {name.value for name in CapabilityName} == {"training", "life", "walk", "place"}
     for invented in ("care", "husbandry", "general", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}
 

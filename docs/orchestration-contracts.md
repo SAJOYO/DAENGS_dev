@@ -89,7 +89,7 @@ RoutePlan:
 
 ```
 CapabilityRequest:
-  capability: training | life | walk           # v1 실행 범위 (architecture §v1)
+  capability: training | life | walk | place   # 실행 registry; place는 명시 신호만(PR #196)
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -103,6 +103,12 @@ CapabilityRequest:
 **만능 공용 페이로드를 만들지 않습니다 (CONFIRMED).** `question + dog_profile` 하나로 모든
 능력을 덮으려던 v1 계약이 Walk(좌표·시각) 앞에서 이미 안 맞았습니다. 페이로드 타입은
 능력이 소유하고, 오케스트레이터는 그 내용을 해석하지 않고 전달만 합니다.
+
+Place의 첫 계약은 `PlacePayload {query, lat, lon}`뿐입니다. `query`는 공백 여부만 검증하고
+원문을 보존하며, 좌표는 검증된 `context.location`에서 복사합니다. 반경은 adapter의 서버
+정책(3km)이고 `active_dog_id`나 profile 값은 payload에 없습니다. Place를 enum에 추가한
+것과 전역 의미 라우터가 Place를 고르는 것은 별개입니다. PR #196에서는
+`requested_capability=place`만 결정적으로 열고 semantic schema는 여전히 세 능력입니다.
 
 ## 4. CapabilityResult
 
@@ -153,6 +159,9 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Life 타임아웃 (504) | TIMEOUT |
 | Walk 정상 판정 — **GOOD·CAUTION·UNSAFE 전부** | OK — **UNSAFE 는 성공한 도메인 판정**이지 REFUSED 가 아닙니다 |
 | Walk 판정 불가 (`unknown` — 관측 공급자 부재/실패, 503 + 전체 본문) | ABSTAINED |
+| Place 후보 1건 이상(직접 해석 또는 공개된 대안 lens) | OK — 대안·미해결 신호를 notice로 보존 |
+| Place 정상 응답이지만 후보 없음·추가 선택 필요·미지원 의미 | ABSTAINED — 공개 projection과 refinement는 `data`에 함께 보존 |
+| Place 내부 HTTP/provider 실패 | ERROR 또는 TIMEOUT — provider 본문·원출력은 노출하지 않음 |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL
   구분(공개 decision — `schemas/training.py` · docs/training/rag-demo.md)이 `refusal.code`
@@ -174,6 +183,10 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
   `ungrounded` 는 품질 신호입니다. **수용된 v1 한계**: Life 가 산문으로만 물러서는
   경우(기계 신호 없음)는 OK 로 통과합니다. Training 급 안전 분류를 Life 에 지어내지
   않으며, Life 안전/거절 분류 신설은 별도 행동 변경 카드입니다 (FOLLOW-UP).
+- **Place는 내부 응답 전체를 통과시키지 않습니다.** 대화 turn이 `AssistantResponse` 전체를
+  저장하므로 adapter가 최대 3 lens·lens당 3건·전체 9건·48KiB로 다시 제한합니다.
+  지도 좌표·표시 사실·KTO/KCISA provenance·refinement는 남기고 search plan, provider 자료,
+  원천 raw, 전체 policy receipt는 제거합니다.
 - `elapsed_ms` 는 항상 기록합니다. 라우터 벤치마크(routing 문서 §4)와 운영 타임아웃
   정합(architecture §서버 재구축)이 이 값을 씁니다.
 

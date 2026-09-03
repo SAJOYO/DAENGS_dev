@@ -1,6 +1,6 @@
 # Place 자연어 발견 기능 운영 이주 계획
 
-> 상태: **승격 계획 — 구현은 단계별 PR에서 진행**
+> 상태: **PR2~PR6 구현 — 전역 라우터·앱 연결은 후속**
 >
 > 작성일: 2026-09-03
 >
@@ -66,8 +66,8 @@ flowchart LR
 
 Place는 우선 `EXECUTE` 후보로 본다. 검색이 동기적으로 끝나고 후보·복수 가설·refinement를
 한 응답에 보존해야 하기 때문이다. 지도 화면 이동은 결과를 받은 뒤 CTA로 붙일 수 있다.
-다만 `CapabilityResult` 응답 크기와 앱 소비 계약을 검증하기 전에는
-`CapabilityName.PLACE`와 전역 router schema를 변경하지 않는다.
+`CapabilityResult` 응답 크기와 앱 소비 계약을 먼저 검증하기 위해 PR #196에서
+`CapabilityName.PLACE`는 추가하되 전역 router schema는 변경하지 않고 명시 신호만 연다.
 
 ## 3. 대상 저장소에 맞춘 코드 배치
 
@@ -185,12 +185,14 @@ provider 원출력, 원문 grounding 내부 trace, 원천 raw, 전체 디버그 
 `limit_per_kind <= 3000`, 전체 5,000건 계약은 내부 검색에는 유효하지만 Assistant 응답에
 직접 적용하지 않는다.
 
-초기 운영 기본값은 다음 범위 안에서 고정하고, 실측 뒤 별도 PR로 조정한다.
+Place 내부 discovery와 assistant 공개 projection은 서로 다른 예산을 쓴다. 내부 기본값은
+3 lens·lens당 5건·전체 15건·128KiB이고, PR #196의 공개 projection은 다음으로 더 줄였다.
 
 - executable lens 최대 3개
-- lens당 표시 후보 5~10개
-- 전체 표시 후보 15~20개
-- 직렬화된 capability data에 별도 byte 상한 적용
+- lens당 표시 후보 최대 3개
+- 전체 표시 후보 최대 9개
+- 직렬화된 capability data 최대 48KiB
+- 후보별 표시 사실 최대 5개, notice/why-matched 각 최대 2개
 
 클라이언트가 이 값을 늘릴 수 없어야 한다. 예산 초과 시 임의 순서로 자르지 않고 정책상
 정해진 lens·후보 순서대로 축소한 사실을 notice에 남긴다.
@@ -294,10 +296,18 @@ receipt가 표시 계약에서 보존되며, 기존 Place 전체 테스트와 Op
 
 ### PR6 — `daengs_backend` Place adapter
 
-- `CapabilityName.PLACE`, `PlacePayload`, 내부 HTTP adapter, aggregate projection 추가
-- 우선 `requested_capability=place`로 표적 종단 테스트
-- profile identity 전달 금지
-- 전역 semantic router prompt/schema 변경 금지
+- **구현: PR #196**
+- `CapabilityName.PLACE`, 원문+검증 좌표만 담는 `PlacePayload`, 내부 HTTP adapter 추가
+- `requested_capability=place` 표적 종단 경로와 위치 누락 CLARIFY 추가
+- KTO/KCISA provenance·지도 좌표·refinement·deferred signal을 남기는 48KiB projection 추가
+- profile identity 전달 금지와 전역 semantic router prompt/schema 불변을 회귀 테스트로 고정
+- adapter timeout 15초, compose 기본 주소 `http://place-search:8000`; provider 실패 본문 비노출
+
+2026-09-03 홍대 기준 실제 Gemini 3.1 Flash-Lite + PostGIS 표적 스모크에서 세 요청이 모두
+`AssistantStatus.ANSWERED` / `CapabilityStatus.OK`로 끝났다. 첫 open discovery는 cold
+11.2초·7후보·16.5KB, 장난감 구매는 2.7초·3후보·7.3KB, 조용한 곳은 2.1초·7후보·18.2KB였다.
+세 응답 모두 48KiB 아래였고 KTO/KCISA identity가 함께 남았다. 조용함은 일반 후보와 별개인
+`place.signal_deferred` notice로 보존되어 조용한 장소라고 보장하지 않았다.
 
 ### PR7 — 전역 의미 라우터 편입
 

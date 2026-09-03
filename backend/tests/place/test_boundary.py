@@ -4,11 +4,12 @@ geo 에서는 provider/profile 이 같은 트리에 살아서 "closure 에 그�
 여기는 그 코드가 아예 없으므로 같은 검사는 공허하게 통과한다. 이 저장소에서 실제로
 막아야 하는 침범은 둘이다:
 
-  1. daengs_place 트리가 다시 자라는 것 — provider·profile·usage 류가 돌아오는 것
+  1. daengs_place 최상위가 다시 자라는 것 — profile·usage·전역 provider 류가 돌아오는 것
   2. place-search 가 daengs_backend 를 아는 것 — 두 서비스의 경계는 HTTP 뿐이다 (D-026)
 
 그래서 금지 목록이 아니라 **화이트리스트**로 잰다: 진입점 closure 의 하위 패키지는
-api / core / geo / place 넷뿐이어야 한다 (ingest 는 배치 전용이라 서버 closure 밖).
+api / core / geo / place / territory뿐이어야 한다 (ingest는 배치 전용이라 서버 closure 밖).
+PR5의 Gemini adapter는 범용 provider 계층이 아니라 `place/providers` 아래 Place 소유다.
 """
 
 import ast
@@ -69,7 +70,7 @@ def test_entrypoint_closure_is_whitelisted_and_blind_to_the_backend():
     assert subpackages <= ALLOWED_PLACE_SUBPACKAGES, (
         f"검색 진입점 closure 에 새 하위 패키지가 생겼다: "
         f"{sorted(subpackages - ALLOWED_PLACE_SUBPACKAGES)}. provider/profile/usage 류를 "
-        "다시 들여왔는지, ingest 를 서버 경로에 물렸는지 보라 (D-026)."
+        "다시 들여왔는지, ingest를 서버 경로에 물렸는지 보라 (D-026)."
     )
 
 
@@ -176,8 +177,8 @@ async def _no_db():
     yield None
 
 
-def test_search_app_serves_health_and_validation_without_db_or_any_key():
-    """DB 없이도 뜨고, 검증 경로가 동작하고, place 밖의 표면은 노출하지 않는다."""
+def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
+    """DB·키 없이도 뜨고, 기존 공개 검증 경로가 동작한다."""
     from daengs_place.main import app as search_app
 
     search_app.dependency_overrides[get_session] = _no_db
@@ -192,11 +193,21 @@ def test_search_app_serves_health_and_validation_without_db_or_any_key():
         search_app.dependency_overrides.pop(get_session, None)
 
     exposed = set(search_app.openapi()["paths"])
-    assert exposed == {
+    public = {path for path in exposed if not path.startswith("/internal/")}
+    assert public == {
         "/health",
         "/health/ready",
         "/territory/sites/nearby",
         "/v2/places/search",
     }, (
-        f"검색 서버의 표면이 계약과 다르다: {sorted(exposed)}"
+        f"검색 서버의 공개 표면이 계약과 다르다: {sorted(public)}"
     )
+    assert exposed - public == {"/internal/place/discovery"}
+
+
+def test_nginx_does_not_publish_the_internal_discovery_prefix():
+    nginx = (PACKAGE_DIR.parents[2] / "nginx" / "default.conf").read_text(encoding="utf-8")
+
+    assert "location /internal" not in nginx
+    assert "location /v2/places/" in nginx
+    assert "location /territory/sites/" in nginx

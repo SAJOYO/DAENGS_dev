@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
+from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
     app_auth,
     assistant,
@@ -19,6 +20,7 @@ from daengs_backend.routers import (
     gait,
     health,
     pet,
+    status,
     training,
     walk_spatial_diary,
 )
@@ -41,8 +43,17 @@ from daengs_backend.services.training_rag import release_training_runtime
 # 함수 안에서 부르므로 모듈을 읽는 것만으로는 아무것도 안 올라옵니다 — 그 사실을
 # `tests/test_main_stays_light.py` 가 기계로 지킵니다. 무거워지는 것은 import 가 아니라
 # 아래 lifespan 의 예열이고, 그래서 그것만 백그라운드로 돌립니다.
+#
+# `encoder_loaded` 는 **묻기만 합니다** — 예열이 끝난 뒤 성패를 가르려고 부릅니다 (#180).
+# `get_encoder()` 로 물으면 안 올라와 있을 때 **올려 버립니다.** 새 파일이 아니라 이미
+# 승인된 이 자리의 이름 하나라, D-035 의 경계 테스트는 그대로 통과합니다.
 from daengs_life.app.controllers import ask, walk
-from daengs_life.app.deps import get_cache, release_encoder, warm_up_encoder
+from daengs_life.app.deps import (
+    encoder_loaded,
+    get_cache,
+    release_encoder,
+    warm_up_encoder,
+)
 
 # ⚠️ 스크리닝도 같은 규칙입니다 — 이 import 로 torch 가 딸려 오면 안 됩니다.
 #    `service.py` 최상단은 fastapi 와 `agent`(config 만 씀)뿐이고, 가중치는
@@ -80,7 +91,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # `settings.warm_up_encoder` 로 끌 수 있습니다 — 테스트와 개발 PC 용입니다. 끄면 모델이
     # 안 뜨는 게 아니라 **첫 `/ask` 가 로드를 뭅니다.** 그때는 아무도 예열하고 있지 않으므로
     # 위의 503 이 아니라 기다리는 쪽이 맞습니다 (`deps._WARM_UP_IN_PROGRESS`).
-    warm_up = (asyncio.create_task(asyncio.to_thread(warm_up_encoder))
+    #
+    # **결과를 `app.state` 에 적습니다** (#180). 상태 화면이 "모델이 올라왔나"를 물을 자리가
+    # 여기밖에 없습니다 — `daengs_life.app.deps` 를 상태 라우터가 직접 읽으면 접점이
+    # 셋에서 넷이 되고, `tests/test_main_stays_light.py` 가 거기서 깨집니다 (D-035).
+    # **이미 예열을 부르고 있는 이 자리**가 그 결과를 남기면 접점은 안 늘어납니다.
+    #
+    # `warm_up_encoder()` 는 성공해도 실패해도 `None` 을 돌려주므로(lifespan 이 부르는
+    # 함수라 예외를 안 던집니다), 끝난 뒤 `encoder_loaded()` 로 물어서 가릅니다 —
+    # 그쪽은 **올리지 않고 물어보기만** 합니다.
+    setattr(app.state, STATE_ATTR, WarmUp(phase=WarmUpPhase.DISABLED))
+
+    async def _warm_up_and_record() -> None:
+        setattr(app.state, STATE_ATTR, WarmUp(phase=WarmUpPhase.LOADING, started_at=now()))
+        await asyncio.to_thread(warm_up_encoder)
+        before = getattr(app.state, STATE_ATTR)
+        phase = WarmUpPhase.READY if encoder_loaded() else WarmUpPhase.FAILED
+        setattr(app.state, STATE_ATTR,
+                WarmUp(phase=phase, started_at=before.started_at, finished_at=now()))
+
+    warm_up = (asyncio.create_task(_warm_up_and_record())
                if settings.warm_up_encoder else None)
 
     yield
@@ -133,6 +163,10 @@ app.include_router(training.router)
 app.include_router(assistant.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
+# 상태 페이지 (#180 · 콘솔 로드맵 B1). 읽기 전용이고 DB 를 바꾸지 않습니다.
+# `/health` 와 다른 자리입니다 — 저기는 모니터링이 읽고 DB 가 죽으면 503 이며,
+# 여기는 사람이 읽고 항목 하나가 죽어도 200 으로 나머지를 보여 줍니다.
+app.include_router(status.router)
 app.include_router(screening_router)
 # 실시간 산책 적합도. nginx 는 `:8000` 을 통째로 이 앱에 보내므로
 # `daengback.~:8000/walk` 로 바로 나갑니다 (설정 변경 없음).

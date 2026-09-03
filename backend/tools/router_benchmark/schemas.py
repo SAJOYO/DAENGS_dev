@@ -30,6 +30,7 @@ PromptVersion = Literal[
     "semantic-router-ko-v1",
     "semantic-router-ko-v2",
     "semantic-router-ko-v3",
+    "semantic-router-ko-v4",
 ]
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -147,7 +148,7 @@ def _exact_interval(atom: Any | None) -> float | None:
     ):
         return None
     value = float(atom.lower_bound)
-    return value if value >= 0 else None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _precipitation_kind(value: str | None) -> WalkPrecipitationKind | None:

@@ -650,13 +650,56 @@ def cmd_score_laps(_: argparse.Namespace) -> int:
 
     print(f"{'랩':6} {'문항':>4}   {'현행(cited)':>12}   {'근거인용(grounded, RAG-029)':>28}")
     print("-" * 60)
+    laps = []
     for path in paths:
         header, rows = io.read_answers(path)
         s = scorer.score_rows(rows)
         n = s["n"]
         if not n:
             continue
+        laps.append((path.stem, rows))
         print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
+
+    _print_expect_table(laps)
+    return 0
+
+
+def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
+    """`expect` 채점 — "답했나 말았나" (RAG-055).
+
+    **정책을 하나 고르지 않고 나란히 찍는다.** 카드 #177 이 *"골든셋으로 잰 뒤 고른다 — 착수 전
+    결정 금지"* 라고 못 박은 자리라, 이 표가 그 결정의 근거다. `none` 이 지금 서빙이 하는 것이고
+    나머지가 후보다.
+
+    두 방향을 갈라 찍는 이유는 한 수로 합치면 정반대의 정책이 같은 점수를 받기 때문이다 —
+    아무것도 기권 안 하는 정책과 전부 기권하는 정책이 그렇다.
+    """
+    gs = goldenset.load()
+    expects = {i.id: i.expect for i in gs.items}
+    boundary = {i.id for i in gs.items if i.expect != "answer"}
+    scored = [(stem, rows) for stem, rows in laps
+              if boundary & {r.get("id") for r in rows}]
+    if not scored:
+        print("\n기대 채점(RAG-055): 경계 문항을 가진 랩이 없다 —"
+              " `rag generate --questions --lap lapN` 으로 새 랩을 떠야 잰다")
+        return 0
+
+    for stem, rows in scored:
+        base = scorer.grade_expect(rows, expects, "none")
+        print(f"\n기대 채점 — {stem}  (채점 가능 {base['gradable']}문항 ·"
+              f" refuse {base['unmeasurable']}문항은 덤프로 못 잰다)")
+        print(f"  {'정책':24} {'통과':>7}   {'오기권':>18}   {'놓친 기권':>16}")
+        print("  " + "-" * 72)
+        for name in scorer.ABSTAIN_POLICIES:
+            g = scorer.grade_expect(rows, expects, name)
+            mark = " ←현행" if name == "none" else ""
+            print(f"  {name:24} {g['passed']:>3}/{g['gradable']:<3}"
+                  f"   {g['false_abstain']:>8}/{g['answer_n']:<8}"
+                  f"   {g['missed_abstain']:>7}/{g['abstain_n']:<7}{mark}")
+        print("  오기권 = 답해야 하는데 기권(신호가 과하게 켜졌다) ·"
+              " 놓친 기권 = 기권해야 하는데 답함(신호가 안 켜졌다)")
+        print("  refuse 문항은 질문을 보고 갈라야 하고 그 분류는 생성 앞단에 있다 —"
+              " 랩 덤프에는 흔적이 없다 (RAG-055)")
     return 0
 
 

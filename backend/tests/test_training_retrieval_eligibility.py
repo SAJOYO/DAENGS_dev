@@ -41,12 +41,22 @@ def test_pagination_strip_is_not_evidence(current: int) -> None:
     assert not eligible(pagination_strip(current))
 
 
-def test_bare_numbers_or_markup_are_not_evidence() -> None:
-    assert not eligible("**2**")
-    assert not eligible("1 2 3 4 5")
-    assert not eligible("| --- | --- |\n| 12 | 34 |")
-    assert not eligible("")
-    assert not eligible("[다음](/x) [이전](/y)")
+@pytest.mark.parametrize(
+    "residue",
+    [
+        "**2**",  # bold current page number
+        "1 2 3 4 5",  # bare page numbers
+        "| --- | --- |\n| 12 | 34 |",  # numeric-only table rows
+        "",
+        "   \n\t",
+        "[다음](/x) [이전](/y)",  # link-only
+        "![](/img/a.png) ![](/img/b.png)",  # image-only
+        "**  **\n---\n* * *",  # markup only
+        "2024-01-01 12:00 / 3,544",  # numbers and punctuation only
+    ],
+)
+def test_numeric_markup_or_navigation_residue_is_not_evidence(residue: str) -> None:
+    assert not eligible(residue)
 
 
 @pytest.mark.parametrize(
@@ -65,9 +75,14 @@ def test_bare_numbers_or_markup_are_not_evidence() -> None:
         "3주 정도 반복하면 크레이트 교육이 자리 잡습니다.",
         # A table row with real content.
         "| 제목 | 짖는 원인 | 조회 | 2623 |\n■ 개요 짖는 행동은 반려견의 의사 표현입니다.",
+        # English prose is evidence too — the rule is "has letters", not "has Hangul".
+        "Puppies mouth hands during play; stop the game the moment teeth touch skin.",
+        "Bite inhibition is usually learned by 4 to 5 months of age.",
+        # Mixed Korean/English prose.
+        "입질(mouthing)은 놀이 중 손을 무는 행동을 말합니다.",
     ],
 )
-def test_korean_prose_stays_eligible(prose: str) -> None:
+def test_prose_with_letters_stays_eligible(prose: str) -> None:
     assert eligible(prose)
 
 

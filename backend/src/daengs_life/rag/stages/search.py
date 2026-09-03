@@ -344,7 +344,7 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     """
     filters, lex_filters = [], []
     # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-040). 한 번의 쿼리로 끝낸다 —
-    # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/ask` 마다 붙는다
+    # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/life/ask` 마다 붙는다
     params: dict[str, Any] = {"q": query.vector, "k": max(k, EXPAND_SCAN_N), "n": CANDIDATE_N,
                               "rrf": RRF_K, "wlex": LEXICAL_WEIGHT, "tsq": query.tsquery}
     if not include_supplementary:

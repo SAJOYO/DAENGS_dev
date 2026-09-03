@@ -1,5 +1,8 @@
 # Walk finalize 운영 DB smoke
 
+> ⚠️ **아래 경로 표기는 실행 시점의 것이다.** Life 직접 API 는 #176(A4)으로 `/life/ask` · `/life/walk-conditions` 가 됐다.
+> 실측 기록이라 본문은 찍힌 대로 둔다.
+
 - 실행일: 2026-09-02 (KST)
 - 대상 코드: `dev` `5b40f22` (#140 finalize API 포함)
 - 대상 DB: 공유 운영 `vectordb`

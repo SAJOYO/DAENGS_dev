@@ -1,6 +1,6 @@
 """기동 때의 예열과 **모델 불일치 경고** (D-021).
 
-`/ask` 가 조용히 틀릴 수 있는 자리는 하나뿐이다 — **서빙 키와 코퍼스의 임베딩 모델이 다를 때.**
+`/life/ask` 가 조용히 틀릴 수 있는 자리는 하나뿐이다 — **서빙 키와 코퍼스의 임베딩 모델이 다를 때.**
 문서 벡터와 질의 벡터가 다른 모델이면 두 벡터가 다른 공간에 있어 코사인이 무의미해지는데,
 세 모델의 차원이 전부 1024 라 예외가 **하나도** 안 난다. 그럴듯한 순위가 그냥 나온다.
 
@@ -103,7 +103,7 @@ def test_키가_아니라_정식_식별자로_비교한다(corpus, caplog: pytes
 
 
 def test_코퍼스가_비면_그걸_말한다(corpus, caplog: pytest.LogCaptureFixture) -> None:
-    """이 카드를 `#34` 보다 먼저 머지하면 여기로 온다. `/ask` 는 404 만 내는데, 그 이유가
+    """이 카드를 `#34` 보다 먼저 머지하면 여기로 온다. `/life/ask` 는 404 만 내는데, 그 이유가
     "질문이 나빠서"가 아니라 "적재가 아직"이라는 것을 로그가 말해 줘야 한다."""
     corpus([])
     with caplog.at_level(logging.WARNING):
@@ -134,7 +134,7 @@ def test_커넥션을_반드시_닫는다(corpus) -> None:
 def test_예열이_실패해도_던지지_않는다(monkeypatch: pytest.MonkeyPatch,
                                       caplog: pytest.LogCaptureFixture) -> None:
     """부르는 쪽이 lifespan 이다. 여기서 예외가 나가면 **앱이 아예 안 뜬다** — `ml` 없는
-    개발 PC 에서 로그인도 `/walk` 도 못 보게 된다는 뜻이고, 그게 D-021 이 막은 것이다."""
+    개발 PC 에서 로그인도 `/life/walk-conditions` 도 못 보게 된다는 뜻이고, 그게 D-021 이 막은 것이다."""
     def no_torch(*_a, **_k):
         raise ImportError("No module named 'torch'")
 
@@ -147,7 +147,7 @@ def test_예열이_실패해도_던지지_않는다(monkeypatch: pytest.MonkeyPa
         deps.release_encoder()
 
     assert "torch" in caplog.text
-    assert "503" in caplog.text, "왜 /ask 만 죽는지를 로그가 말해 줘야 한다"
+    assert "503" in caplog.text, "왜 /life/ask 만 죽는지를 로그가 말해 줘야 한다"
 
 
 def test_예열에_성공하면_대조까지_간다(monkeypatch: pytest.MonkeyPatch, corpus,
@@ -223,7 +223,7 @@ def test_예열이_꺼져_있으면_요청이_기다린다(monkeypatch: pytest.M
     같은 처지의 다른 요청이라 기다리는 편이 맞다.
 
     "락이 잡혀 있다"만 보고 503 을 내면 여기서 두 번째 요청이 엉뚱하게 503 을 받고, 예열이
-    꺼져 있는 한 그게 계속된다 — `/ask` 가 그 PC 에서 영영 안 되는 것으로 보인다. 그래서
+    꺼져 있는 한 그게 계속된다 — `/life/ask` 가 그 PC 에서 영영 안 되는 것으로 보인다. 그래서
     `deps._WARM_UP_IN_PROGRESS` 가 **누가 잡고 있는지**를 가른다.
     """
     corpus([(QWEN_REPO, 1)])
@@ -286,7 +286,7 @@ def test_설정이_꺼져_있으면_예열하지_않는다(monkeypatch: pytest.M
 
 
 def test_설정이_켜져_있으면_백그라운드로_예열한다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**동기로 부르면 안 된다** — 이 프로세스에는 로그인·`/walk`·`/training` 이 같이 살고,
+    """**동기로 부르면 안 된다** — 이 프로세스에는 로그인·`/life/walk-conditions`·`/training` 이 같이 살고,
     가중치를 올리는 5~7초 동안 API 전체가 502 다.
 
     여기서 "백그라운드"를 증명하는 방법: 예열을 붙잡아 둔 채로 앱이 다른 요청에 답하는지

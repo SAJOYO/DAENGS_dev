@@ -2,8 +2,14 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 
-from daengs_place.ingest.kto import _prune_after_listing, fetch_pet_detail, source_records
+from daengs_place.ingest.kto import (
+    KtoApiError,
+    _prune_after_listing,
+    fetch_pet_detail,
+    source_records,
+)
 from daengs_place.place.source_facts.states import DetailAcquisitionState
 
 
@@ -55,6 +61,16 @@ async def test_exhausted_rate_limit_is_fetch_failed(monkeypatch) -> None:
 
     assert result.state is DetailAcquisitionState.FETCH_FAILED
     assert sleeps.await_count == 4
+
+
+async def test_malformed_success_response_is_a_detail_failure() -> None:
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(200, text="<html>upstream error</html>")
+    )
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(KtoApiError, match="invalid KTO detail JSON"):
+            await fetch_pet_detail(client, "1")
 
 
 def test_shadow_list_keeps_hidden_items_filtered_from_product() -> None:

@@ -1,10 +1,15 @@
 """원천 shadow는 제품 facility와 독립되고 detail 획득 상태를 잃지 않는다."""
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
 
+from daengs_place.ingest.facility_store import (
+    invalidate_pet_details_without_source_payload,
+    upsert_rows,
+)
 from daengs_place.ingest.source_record_store import (
     pending_detail_refs,
     prune_source_records,
@@ -21,6 +26,10 @@ SOURCE = "test:source_record"
 async def _clean(session) -> None:
     await session.rollback()
     await session.execute(
+        text("DELETE FROM facility WHERE source = :source"),
+        {"source": SOURCE},
+    )
+    await session.execute(
         text("DELETE FROM facility_source_record WHERE source = :source"),
         {"source": SOURCE},
     )
@@ -35,6 +44,30 @@ def _records(*refs: str) -> list[dict]:
         }
         for ref in refs
     ]
+
+
+def _facility_row(ref: str, pet: dict) -> dict:
+    return {
+        "source_ref": ref,
+        "name": f"장소-{ref}",
+        "kind": "cafe",
+        "category3": "카페",
+        "sido": None,
+        "sigungu": None,
+        "address": None,
+        "phone": None,
+        "homepage": None,
+        "hours_text": None,
+        "closed_days": None,
+        "parking": None,
+        "indoor": None,
+        "outdoor": None,
+        "lat": 37.5,
+        "lng": 127.0,
+        "last_written": None,
+        "pet": json.dumps(pet, ensure_ascii=False),
+        "raw": None,
+    }
 
 
 async def test_shadow_record_does_not_require_product_facility() -> None:
@@ -214,6 +247,78 @@ async def test_kto_new_listing_version_marks_preserved_detail_stale() -> None:
             assert row.detail_attempted_at is None
             assert row.detail_fetched_at is None
             assert await pending_detail_refs(session, SOURCE, 10) == ["1"]
+        finally:
+            await _clean(session)
+
+
+async def test_stale_shadow_detail_invalidates_product_projection() -> None:
+    async with db_session() as session:
+        await _clean(session)
+        try:
+            first = datetime.now(UTC)
+            original = _records("product")
+            original[0]["listing_raw"]["modifiedtime"] = "20260831010000"
+            await upsert_source_records(
+                session,
+                SOURCE,
+                original,
+                "2026-08-31",
+                first,
+                detail_state=DetailAcquisitionState.NOT_FETCHED,
+                preserve_detail=True,
+                detail_version_field="modifiedtime",
+            )
+            await record_detail_result(
+                session,
+                SOURCE,
+                "product",
+                DetailAcquisitionState.FETCHED,
+                first,
+                {"acmpyTypeCd": "전구역 동반가능"},
+            )
+            await upsert_rows(
+                session,
+                SOURCE,
+                [_facility_row("product", {"acmpyTypeCd": "전구역 동반가능"})],
+                "2026-08-31",
+                first,
+            )
+            await session.execute(
+                text("""
+                    UPDATE facility
+                    SET pet_allowed = true, restriction_state = 'none_confirmed'
+                    WHERE source = :source AND source_ref = 'product'
+                """),
+                {"source": SOURCE},
+            )
+
+            changed = _records("product")
+            changed[0]["listing_raw"]["modifiedtime"] = "20260901010000"
+            await upsert_source_records(
+                session,
+                SOURCE,
+                changed,
+                "2026-09-01",
+                first + timedelta(days=1),
+                detail_state=DetailAcquisitionState.NOT_FETCHED,
+                preserve_detail=True,
+                detail_version_field="modifiedtime",
+            )
+
+            assert await invalidate_pet_details_without_source_payload(session, SOURCE) == 1
+            row = (
+                await session.execute(
+                    text("""
+                        SELECT pet, pet_allowed, restriction_state
+                        FROM facility
+                        WHERE source = :source AND source_ref = 'product'
+                    """),
+                    {"source": SOURCE},
+                )
+            ).one()
+            assert row.pet == {}
+            assert row.pet_allowed is None
+            assert row.restriction_state is None
         finally:
             await _clean(session)
 

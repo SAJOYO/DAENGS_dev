@@ -323,8 +323,8 @@ def admin_or_app_user(*perms: Perm):
 
     `current_admin` 과 `current_app_user` 가 서로를 막는 것과 반대로 보이지만, 규칙이
     느슨해진 것이 아니라 **엔드포인트의 성격이 다릅니다.** 여기를 쓸 수 있는 것은
-    principal 을 받기만 하고 **쓰지 않는** 엔드포인트뿐입니다 — 지금은 `/walk` 하나이고,
-    저기는 좌표만 보고 답합니다.
+    principal 을 받기만 하고 **쓰지 않는** 엔드포인트뿐입니다 — 지금은 Life 의 직접 API 둘
+    (`/life/walk-conditions` · `/life/ask`)이고, 저기는 좌표와 질문만 보고 답합니다.
 
     **신원으로 남의 것을 걸러야 하는 API 에는 쓰지 마세요.** 관리자 `sub` 는
     `admin_users` 의 UUID 라 `app_users` 에서 조회하면 없는 회원이 되고, 그때

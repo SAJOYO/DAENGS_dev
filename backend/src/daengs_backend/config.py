@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     # Place 내부 provider timeout과 별개의 assistant 응답 경계입니다 (밀리초).
     place_discovery_timeout_ms: int = Field(default=15_000, gt=0)
 
+    # 점령지 게임판은 별도 place-search 프로세스가 소유합니다. backend는 좌표를
+    # 복제하지 않고 촬영 시점에 이 내부 HTTP 경계로 현행 140u 대표점을 확인합니다.
+    territory_site_base_url: str = "http://place-search:8000"
+    territory_site_timeout_seconds: float = 2.0
+
     # ── 보행 영상 저장소 (D-043) ──────────────────────────────────────
     # provider 는 GCS 로 확정 (2026-09-02). 하지만 **세부값은 하드코딩하지 않습니다** —
     # bucket·location·만료·보관 정책은 #78 이 정할 자리라 환경으로 뺍니다.

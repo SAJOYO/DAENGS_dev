@@ -7,7 +7,9 @@
 > **갱신 규칙 한 줄** — 카드를 머지하면 해당 행의 상태를 바꾸고, 그 카드가 새로 미룬 것은 트랙에 한 줄 더한다.
 > 상태 표기: ✅ 끝 · 🔵 진행 · ⬜ 열림 · ⏸ 보류(이유 필수) · 🚫 하지 않음.
 >
-> 작성 2026-08-30 (#81) · 현행화 2026-09-02 (#151) · **재점검 2026-09-03 (#164)** — 앱 채팅 화면이
+> 작성 2026-08-30 (#81) · 현행화 2026-09-02 (#151) · 재점검 2026-09-03 (#164) · **대조 2026-09-04 (#202)**
+> — §3 트랙 표는 맞았고 §0 · §1 · §2 · §4 가 하루 뒤처져 있었다 (#177 이 자기 행만 고치고 갔다).
+> 2026-09-03 재점검은 앱 채팅 화면이
 > `/assistant/query` 를 쓰고, `daengs_walk`(D-045~047)가 생기고, 발표 09-21 이 확정된 뒤의 순서 재조정.
 > 사람 결정 다섯(페이로드 위치 · A4 · A8 · A3 분할 · B4 범위)이 이날 닫혔다 (§6).
 > 전제: 오케스트레이션 문서 세트 #80 (사람 승인 O-1~O-14).
@@ -16,7 +18,8 @@
 
 ## 0. 한 장 요약
 
-- **답변 API 는 끝났다.** `/life/ask` 9단계 전부 · `/life/walk-conditions` 전부 구현·배포. 코퍼스 8,990문서 / 22문항 lap14 = cited 17 · grounded 13.
+- **답변 API 는 끝났다.** `/life/ask` 9단계 전부 · `/life/walk-conditions` 전부 구현·배포. 코퍼스 8,990문서.
+  **기권·거절 신호도 섰다** (A3a ✅ #177) — 골든셋 38문항, lap14 와 같은 22문항에서 grounded 13 → 15.
 - **수집은 닫혔다.** 문서형 시드 23 중 16 수집, 남은 7 은 robots·WAF·SPA·문서 부재로 우리 손 밖 (`data-sources.md` §0).
 - **운영 뼈대는 섰다** — #65(코퍼스 서버 이관) · #66(개정 감지) · #67(고시공고) 전부 2026-08-31 머지. 운영에 남은 것은 C5(워커 예열 · `crawl_runs` 잔존 행 · 알림 · HNSW) 뿐이다.
 - **다음은 "툴로서의 완성"이다.** #80 에서 이 파트는 에이전트가 아니라 **능력(capability)** 이고, Life·Walk 둘 다 v1 실행 대상.
@@ -38,22 +41,24 @@
 | 임베딩 | `qwen3-embedding-0.6b` 승자. **소스 하나 늘면 전량 재인코딩 55분** | RAG-024 · 043 ④ · 045 ⑧ |
 | 적재 | `load --prune` — 행 단위 upsert + 옛 행 청소. HNSW 인덱스 미생성(전수 스캔) | RAG-025 · 045 |
 | 검색 | 하이브리드(dense + Kiwi FTS, RRF 0.3) + 인용 확장(홉) + 교통 배제. **지역 필터 없음** | RAG-035 · 040 · 052 · 003 |
-| 골든셋·평가 | 22문항(법령 Q · 교통 T · 보험 I) · `score-laps` 두 지표. **judge·회귀 게이트 없음** | RAG-022 · 029 · 049 · 007 |
-| `/life/ask` 서빙 | `POST /life/ask` — 근거 0건이면 404. **그 외 기권·거절 신호 없음.** 응답에 `content` 전문 | RAG-028 · D-021 |
+| 골든셋·평가 | **38문항** — 법령 Q7 · 조례 S5 · 교통 T5 · 보험 I5 · easylaw QA8 · 경계 B6 · 프로필 DP2. `score-laps` 가 `expect` 까지 채점. **judge·회귀 게이트 없음** | RAG-022 · 029 · 049 · 055 · 056 · 007 |
+| `/life/ask` 서빙 | `POST /life/ask` — 근거 0건 404 · **약한 근거 기권 404**(`covered+selfreport`) · **경계 거절 422**(`medical`·`emergency`). 응답에 `content` 전문 | RAG-028 · 055 · D-021 |
 | `/life/walk-conditions` | 결정적 · T+24h 타임라인 · `sources` 노출 · 판정 불가는 `unknown`(503). **특보는 구 단위까지 잡는다** (#175) | RT-001 ⑥ · RT-003 |
-| 화면 | **앱 ChatScreen → `POST /assistant/query`** (DAENGS_APP `ui/chat/ChatScreen.kt`). 웹 콘솔은 검색 점검 탭이 직접 `/life/ask` 를 부른다. 앱이 `/life/ask`·`/life/walk-conditions` 를 직접 부르는 코드는 없다 | #115 · #36 · 2026-09-03 실측 |
+| 화면 | **앱 ChatScreen → `POST /assistant/query`** (DAENGS_APP `ui/chat/ChatScreen.kt`). 웹 콘솔은 생활 RAG 탭이 직접 `/life/ask`·`/life/walk-conditions` 를, **어시스턴트 탭**(`assistant-inspect.tsx`)이 `/assistant/query` 를 부른다. `/console/status` 도 생겼다. 앱이 Life 를 직접 부르는 코드는 없다 | #115 · #36 · #180 · 2026-09-04 실측 |
 | 코퍼스 분포 | `policy` 8,735 (그중 insurance 4,673) · `travel` 255 · `food` 0 | 서버 DB 실측 |
 
-랩 추이 (같은 22문항은 lap12 부터): lap12 16·13 → lap13 16·12 → lap14 **17·13**. 보합권 — 수집으로 올릴 여지는 소진(RAG-040 이 실증).
+랩 추이 (같은 22문항은 lap12 부터, `cited`·`grounded`): lap12 16·13 → lap13 16·12 → lap14 17·13 →
+**lap18 15·15** (A3a). `cited` 가 준 둘(S5·T2)은 답이 맞고 소스에 조 번호가 없는 것이라 RAG-029 의 알려진
+누수다. 수집으로 올릴 여지는 소진(RAG-040 이 실증)이고, 남은 여지는 순위(D5)다.
 
 ### 다른 파트와의 관계 — 통합 시점 (2026-08-30 dev 기준)
 
 | 파트 | dev 상태 | 이 로드맵에 미치는 것 |
 | --- | --- | --- |
-| Place 검색 (병원·약국·동반시설) | 착륙했으나 `profiles: ["place"]` 로 꺼짐, DB 비어 있음 (D-026) | 장소 데이터는 **저쪽 소유** — 이쪽은 넣지 않는다. 핸드오프 대상이 아직 없어도 식별자는 낸다 |
+| Place 검색 (병원·약국·동반시설) | **2026-09-04 갱신** — profile 이 떨어져 기본 `up -d` 로 뜨고, `place` 가 **실행 능력**이 됐다 (#196 · #198). 다만 `ExecuteName` 은 아직 세 능력이라 명시 신호로만 들어간다 | 장소 데이터는 **저쪽 소유** — 이쪽은 넣지 않는다. 핸드오프가 아니라 능력이 됐으므로 A3b 를 다시 써야 한다 |
 | 훈련 RAG | `daengs_training` 모듈로 backend 프로세스에 통합 | 별도 PGVector 유지, 향후 측정 결과에 따라 추출 가능 |
 | 피부 스크리닝 · 보행 분석 | profile 뒤, 배포에 안 붙음 (D-022 · D-029) | v1 은 HANDOFF 만 (#80) |
-| 오케스트레이션 | **2026-09-02 갱신** — v1 실행 코어 착륙(#102) · 시맨틱 라우터(#113) · `/assistant/query`(#115) · closeout(#118) | Life·Walk 어댑터는 **이미 그 안에서 돈다**(B2 · B3). 이 파트에 남은 것은 능력 쪽 신호(A0 · A3a · A5 — §3). HANDOFF 대상 추가(A3b)는 라우터 소유 |
+| 오케스트레이션 | **2026-09-04 갱신** — v1 실행 코어(#102) · 시맨틱 라우터(#113) · `/assistant/query`(#115) · closeout(#118) · Place 능력(#196 · #198) | Life·Walk 어댑터는 **이미 그 안에서 돈다**(B2 · B3). 능력 쪽 신호 셋(A0 · A3a · A5)은 **다 섰다**. 이 파트에 남은 것은 B4 뿐이고, place 목적지 선택(A3b)은 라우터 소유 |
 
 ---
 
@@ -90,7 +95,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | --- | --- | --- |
 | **이 개의 몸**에 대한 판단 — 증상 · 진단 · 용량 · 응급 | 문서가 아니라 판단 (RAG-008 ③) | **Life 가 REFUSED** — `refusal.code` = `medical_boundary` / `emergency_boundary` (A3a). 능력은 handoff 를 낼 수 없다 — `CapabilityResult` 에 그 필드가 없다 (contracts §4) |
 | **이 개의 행동**을 바꾸는 계획 — 짖음 · 배변 · 입질 교정 | 〃 | 라우터가 `training` 을 EXECUTE 로 같이 고른다(다중 선택). Life 는 근거 없으면 `no_evidence` 기권 — **별도 핸드오프 불필요** |
-| **어디** — 병원 · 카페 · 숙소 위치 | 장소 데이터는 place 소유 (D-026) | **라우터의 HANDOFF 대상 `place`** (A3b). 지금은 대상이 `skin`·`gait` 뿐이라 place 질문은 빈 선택 → 최상위 FAILED 로 간다 |
+| **어디** — 병원 · 카페 · 숙소 위치 | 장소 데이터는 place 소유 (D-026) | **라우터가 `place` 를 EXECUTE 로 고른다** (A3b). #196 이 능력·어댑터·planner 를 넣었지만 `ExecuteName` 은 아직 `training`·`life`·`walk` 라, 자연어 place 질문은 여전히 빈 선택 → 최상위 FAILED 다 |
 | 근거 문서가 코퍼스에 없는 것 | — | 기권 `no_evidence` (넘길 곳 없음) |
 
 이렇게 잡으면 ① 경계가 코드로 강제되고(코퍼스에 있는 것 = 경계) ② 골든셋 `expect: abstain` · `expect: refuse` 로 **테스트가 되며**
@@ -105,7 +110,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | ABSTAINED | ✅ 근거 0건 404 **+ 약한 근거 기권** — 생성이 낸 `covered` + 답변의 자기보고 (`covered+selfreport`, RAG-055) | 그대로. 오기권 셋은 검색 순위 구멍이라 D5 | HTTP 는 `unknown` → 503, **어댑터가 ABSTAINED 로 옮긴다** (#102) | ✅ 확정됨 — A6 |
 | REFUSED | ✅ **생성이 `boundary` 를 낸다** — `medical` · `emergency` → 422 + `code`, 어댑터가 REFUSED 로 (RAG-055). 문장도 Life 가 만든다 (불변식 3) | `place` 는 라우터 몫(A3b), `training` 은 다중 EXECUTE 라 불필요 | — | — |
 | ERROR / TIMEOUT | 502 / 504 | 그대로 | 503(예산 초과) | 그대로 |
-| 컨텍스트 입력 | `question` 하나 | + 반려견 견종·나이 (B4) · 지역 (A2). 등록 여부는 pets 에 없다 → F5 전제 | `lat` `lon` | 그대로 — 앱이 `location` 을 매 요청 보낸다 (contracts §8). 프로필 기본 위치는 🚫 (§5) |
+| 컨텍스트 입력 | ✅ `question` + **반려견 견종·나이** (`LifePayload.dog`, B4 · RAG-056) | + 지역 (A2). 등록 여부는 pets 에 없다 → F5 전제. **앱이 `active_dog_id` 를 보내야 실제로 켜진다** — `DAENGS_APP#112` | `lat` `lon` | 그대로 — 앱이 `location` 을 매 요청 보낸다 (contracts §8). 프로필 기본 위치는 🚫 (§5) |
 
 ---
 
@@ -121,7 +126,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | A2 | **지역 필터** — `documents` 에 지역 메타 + `search(region=…)` + 질의에서 지역 읽기 | 코퍼스 절반이 지자체별(조례 208 · 보조금24 37)인데 "우리 동네"를 못 가름. RAG-003 · **RAG-033 ⑥**(org 사전필터/BM25/되묻기 택1 미결) · 034 | `db/migrations/` 1장. 재임베딩 불필요(메타만) | M | ⬜ |
 | A0 | **GCP 에서 `/assistant/query` 경유 Life 스모크** — 앱 계정으로 제도 질문 하나, 기대 OK + citations | `orchestration-architecture.md` 가 "배포 인프라에서 실제 Life 능력 스모크"를 미완 후속으로 남겼다. Walk 는 앱의 CAUTION 문구 버그(859a691)로 GCP 경로가 검증됐지만 Life 는 아니다. `ml` 그룹이 빠지면 503→ERROR 인데 앱에는 "실패" 한 줄뿐이라 뒤 카드가 전부 헛돈다 | GCP 접근 | XS | ✅ #169 (2026-09-03) **인프라 PASS** — 4/4 200, 예열 503 없음, O-9 축소 확인, 의미 라우팅이 `life` 선택. 답변 품질에서 A3a 근거 둘: 산문 물러섬이 OK 로 통과(`cited == []`), `no_evidence` 기권이 사실상 안 남. 기록은 `assistant-life-gcp-smoke.md` §3 |
 | A3a ✅ | **Life 경계 신호 — REFUSED** — `services/ask.py` 가 `medical`·`emergency` 를 감지해 REFUSED 로 내고(`refusal.code` 보존), 골든셋에 `must` OR 목록 · `expect: abstain` · `expect: refuse` 문항 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · D-035 "Life 안전/거절 분류 신설은 별도 카드" · §2 의 경계를 테스트로. **A0 실측**(`assistant-life-gcp-smoke.md` §3): 목줄 과태료 질문이 "자료에 없다" 산문 + OK 로 나가고(`cited == []`), 근거 0건 문장도 검색이 항상 k 건을 돌려줘 `no_evidence` 가 안 난다 — **약한 근거 기권도 이 카드 범위** | A0 ✅ | M | ✅ **#177 (2026-09-03)** — 신호는 **생성이 낸다**(방식 a, RAG-055 ②): `boundary` 3/3 정확 · 오거절 0 (lap16·17·18 모두), 기권은 `covered+selfreport` 로 놓친 기권 0/2. 골든셋은 `must` OR · `expect` 로 늘렸고(36문항) `score-laps` 가 그것을 채점한다. 지표는 lap14 와 같은 22문항에서 grounded 13 → 15, cited 17 → 15(S5·T2 — 답은 맞고 소스에 조 번호가 없다, RAG-029 의 알려진 누수). 오기권 셋(Q3·S3·B1)은 **검색 순위 구멍**이라 D5 로 넘긴다 |
-| A3b | **라우터 HANDOFF 대상 `place` 추가** — `semantic.py` HandoffName · planner 고정 reason · aggregate 사용자 문구 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 (prompt/gold 는 제자리 수정 없이 버전을 올려 전체 재실행) | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. 이 파트는 필요와 문항을 낸다 |
+| A3b | **라우터가 `place` 를 자연어로 고르게 한다** — `semantic.py` `ExecuteName` · 프롬프트 목적지 서술 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. **2026-09-04 정정**: #196 · #198 로 place 가 handoff 후보가 아니라 **실행 능력**이 됐다(`CapabilityName.PLACE` · `adapters/place.py` · `planner.py` 좌표 CLARIFY). 남은 것은 라우터의 목적지 선택뿐이고, 이 행은 **라우터 담당이 다시 쓴다** |
 | A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/life/walk-conditions` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 동반 | S | ✅ #176 (옛 "응답 축소"는 🚫 — §5) |
 | A5 | **특보구역명 ↔ 행정구역 매핑표** (`realtime/warning_areas.csv`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/life/walk-conditions` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ✅ #175 (2026-09-03) — RT-003. 출처는 날씨누리(공공데이터포털 파일데이터는 관할 시군구가 없다). **딸려 나온 정정 하나**: 묶음 머리(`서울(서울서남권, …)`)를 매칭해 서초구가 옆 권역 주의보를 자기 것으로 읽던 것 |
 | A6 | Walk `unknown` → ABSTAINED 매핑 | #80 계약 표 · RT-001 ⑥ | 없음 | XS | ✅ #102 (`orchestration/adapters/walk.py:52`) |
@@ -132,10 +137,10 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| B1 | 페이로드 — 실물은 `LifePayload(question)` · `WalkPayload(lat, lon)` 이 `daengs_backend/orchestration/contracts.py:58` 에 있다. `region`·`dog` 필드는 아직 없다 | **2026-09-03 위치 결정 닫힘 — 계약 계층 잔류 수용** (§6). 필드 확장은 B4 · A2 가 요구할 때 `contracts.py` 를 고친다 — 오케스트레이션 소유 파일이라 그쪽 리뷰를 받는다 | 필드는 B4 · A2 의 입력이 정해진 뒤 | S | ✅ 위치 결정 · ⬜ 필드 확장 |
+| B1 | 페이로드 — 실물은 `LifePayload(question, dog)` · `WalkPayload(lat, lon)` 이 `daengs_backend/orchestration/contracts.py` 에 있다. `region` 은 아직 없다 | **2026-09-03 위치 결정 닫힘 — 계약 계층 잔류 수용** (§6). 필드 확장은 `contracts.py` 를 고치는 일이라 오케스트레이션 리뷰를 받는다 | — | S | ✅ 위치 결정 · ✅ **`dog` 확장 #202** (B4 가 가져갔다) · ⬜ `region` 은 A2 |
 | B2 | 어댑터 — `services.ask.ask()` / `services.walk.walk()` in-process 호출, `HTTPException` → status 번역(404→ABSTAINED · 502/503→ERROR · 504→TIMEOUT · `unknown`→ABSTAINED), `elapsed_ms`, 질문 원문 비로깅 | D-035 · #80 불변식 7 · 11 | 없음 — 두 서비스는 이미 HTTP 무관(encoder·conn·client 주입) | S | ✅ #102 |
 | B3 | 접점 테스트 갱신 — `daengs_backend → daengs_life` import 를 **어댑터 한 곳만** 허용 | D-018 "세 줄" · D-035 O-11 | B2 | XS | ✅ #102 |
-| B4 | 반려견 컨텍스트 소비 — **견종(맹견 5종) · 나이(보험 가입)만.** `active_dog_id` → pets 조회 → `LifePayload` 필드 → 프롬프트 | #88 pets · #80 O-4(`active_dog_id` 는 context 예약 키까지). pets 에는 견종·성별·중성화·체중·생년월일뿐 — **등록 여부·기본 위치 컬럼은 없다**(2026-09-03 실측). 위치는 앱이 `location` 으로 보낸다 | #64 ✅ (fbc1540) · B1 위치 결정 ✅. 소유권 검증(`pets.app_user_id`)은 이 파트 밖 | S~M | ⬜ 2026-09-03 사람 확정 — 축소. 등록 여부는 F5 전제로 |
+| B4 | 반려견 컨텍스트 소비 — **견종 · 나이만.** `active_dog_id` → pets 조회 → `context["dog"]` → `LifePayload.dog` → 프롬프트 | #88 pets · #80 O-4. pets 에는 견종·성별·중성화·체중·생년월일뿐 — **등록 여부·기본 위치 컬럼은 없다**. 위치는 앱이 `location` 으로 보낸다 | #64 ✅ (fbc1540) · B1 위치 결정 ✅. 소유권 검증은 `services/chat.py` 가 이미 한다 | S~M | ✅ **#202 (2026-09-04)** — RAG-056. **근거 하나를 고쳐 적었다**: 앱 아바타 27종에 맹견 5종이 없어 그쪽은 사용자 경로에서 안 걸리고, 견종이 실제로 답을 가르는 자리는 **단두종(항공 운송)** 이다(퍼그·프렌치불독이 아바타에 있다). 나이는 `birth_date_kind='birthday'` 일 때만 센다 — `family_day` 는 나이가 아니다. **앱이 `active_dog_id` 를 보내야 켜진다** (`DAENGS_APP#112`). lap19 30문항 cited 17 · grounded 15 · 지어낸 조항 0. 프로필 문항 둘 중 **DP2(나이)는 갈렸고 DP1(단두종)은 안 갈렸다** — 검색이 단두종 청크를 top-5 에 안 올려서다. 프로필은 프롬프트만 바꾸므로 그건 D5 다 |
 
 ### C. 운영 — 다른 날 · 다른 자리
 
@@ -188,7 +193,8 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 
 ```
 ── 09-21 전 (DB 무변경 · 배포 = git pull · main 프리즈 09-18) ──────────────────────────
-A0 GCP Life 스모크 ✅ #169 → A5 특보 매핑 ✅ #175 → A4 이름 정리 → A3a REFUSED → B4 견종·나이
+A0 GCP Life 스모크 ✅ #169 → A5 특보 매핑 ✅ #175 → A4 이름 정리 ✅ #176 → A3a REFUSED ✅ #177
+   → B4 견종·나이 ✅ #202 → **앱이 active_dog_id 를 보낸다 (DAENGS_APP#112)** ← 09-21 전 묶음의 진짜 끝
    └ 2026-09-03 A5·A4·A3a 를 병렬로 열었다 (#175 · #176 · #177). 파일이 안 겹치고 머지 순서만 A5 → A4 → A3a 다
 A3b place 핸드오프 = 라우터 카드 (담당 조율, 병렬)          E1 · E2 = 비 오는 날 (틈에)
 

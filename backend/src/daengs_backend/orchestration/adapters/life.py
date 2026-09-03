@@ -7,6 +7,7 @@ import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
@@ -50,8 +51,13 @@ class WalkWeatherLookup(Protocol):
     ) -> WalkWeatherObservation: ...
 
 
-def _ask_life(question: str) -> Any:
-    """Open the existing request-scoped dependencies around the Life service shim."""
+def _ask_life(question: str, *, breed: str | None = None, age_months: int | None = None) -> Any:
+    """Open the existing request-scoped dependencies around the Life service shim.
+
+    The dog facts cross as primitives, not as ``DogContext``: importing the contract type
+    into ``daengs_life`` would make the domain depend on the orchestration layer, which is
+    the direction D-035 forbids. Life decides what they mean.
+    """
     from daengs_life.app import deps
     from daengs_life.app.services import ask as life_service
 
@@ -59,7 +65,9 @@ def _ask_life(question: str) -> Any:
     connection_dependency = deps.get_conn()
     conn = next(connection_dependency)
     try:
-        return life_service.ask(question, encoder=encoder, conn=conn)
+        return life_service.ask(
+            question, encoder=encoder, conn=conn, breed=breed, age_months=age_months
+        )
     finally:
         connection_dependency.close()
 
@@ -168,7 +176,7 @@ def _bounded_reason(value: str | None) -> str | None:
 class LifeCapabilityAdapter:
     capability = CapabilityName.LIFE
 
-    def __init__(self, ask: Callable[[str], Any] | None = None) -> None:
+    def __init__(self, ask: Callable[..., Any] | None = None) -> None:
         self._ask = ask or _ask_life
 
     async def run(self, request: CapabilityRequest, *, request_id: str) -> CapabilityResult:
@@ -177,8 +185,17 @@ class LifeCapabilityAdapter:
         payload = request.payload
         if not isinstance(payload, LifePayload):
             return self._error(started, "invalid_payload", "Life payload is invalid")
+        dog = payload.dog
         try:
-            upstream = await asyncio.to_thread(self._ask, payload.question)
+            # 프로필이 없으면 두 값이 None 이고, 그때 Life 는 B4 이전과 똑같이 답한다.
+            upstream = await asyncio.to_thread(
+                partial(
+                    self._ask,
+                    payload.question,
+                    breed=dog.breed if dog else None,
+                    age_months=dog.age_months if dog else None,
+                )
+            )
         except HTTPException as exc:
             code, detail = _outcome(exc.detail)
             if exc.status_code == 422:

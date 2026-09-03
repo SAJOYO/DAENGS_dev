@@ -31,11 +31,11 @@ from daengs_life.rag.stages import goldenset
 # 2026-09-03 갱신 — 경계 6문항(B1~B6) 추가 + `must` OR (RAG-055). hand 22 -> 28, 문항 30 -> 36.
 # **필수는 62 -> 64 만 늘었다** — B1 이 요구 둘을 갖고, 나머지 다섯은 정답 근거가 없는 문항이다.
 # Q2·T1·I1·I5 에 더한 대안 넷은 **요구를 안 늘린다**. 그것이 OR 을 넣은 이유이고 아래에서 따로 붙잡는다.
-ITEMS = 36
-MUST_TOTAL = 64          # 요구의 수
-MUST_ADDRESSES = 68      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
-BY_ORIGIN = {"hand": 28, "easylaw": 8}
-BY_EXPECT = {"answer": 31, "abstain": 2, "refuse": 3}
+ITEMS = 38
+MUST_TOTAL = 67          # 요구의 수
+MUST_ADDRESSES = 75      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+BY_ORIGIN = {"hand": 30, "easylaw": 8}
+BY_EXPECT = {"answer": 33, "abstain": 2, "refuse": 3}
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_unavailable_is_recorded_not_dropped(gs: goldenset.GoldenSet) -> None:
     물러서는 것이 정답이고, 그 사실을 적어 두는 자리가 `unavailable` 이다 (RAG-055).
     """
     have = {i.id for i in gs.items if i.unavailable}
-    assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5", "B3"}, \
+    assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5", "B3", "DP1"}, \
         f"분모 제외를 가진 문항이 달라졌다: {sorted(have)}"
 
 

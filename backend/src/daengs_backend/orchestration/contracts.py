@@ -56,8 +56,28 @@ class TrainingPayload(ContractModel):
     question: str = Field(min_length=1, max_length=1_000)
 
 
+class DogContext(ContractModel):
+    """The dog facts Life may reason with, assembled from trusted profile data only.
+
+    Deliberately narrow (roadmap B4). ``breed`` is a Korean breed name, already translated
+    from the app's avatar id by ``services.dog_context``: the stored value is an asset id
+    (``dog_pug``) that matches nothing in a Korean statute or airline tariff. What that breed
+    then implies — brachycephalic, restricted — needs the corpus, so that judgement stays
+    with the capability rather than this layer or its adapter.
+
+    Age arrives already reduced to whole months. The birth date itself never crosses this
+    boundary — it is personal data with no routing or answering use, and ``pets`` stores a
+    date that may be the day the dog joined the family rather than its birthday, which is
+    not an age at all. The caller resolves that ambiguity and sends nothing when it cannot.
+    """
+
+    breed: str | None = Field(default=None, max_length=60)
+    age_months: int | None = Field(default=None, ge=0, le=360)
+
+
 class LifePayload(ContractModel):
     question: str = Field(min_length=1, max_length=500)
+    dog: DogContext | None = None
 
 
 class WalkPayload(ContractModel):

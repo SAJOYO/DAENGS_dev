@@ -560,6 +560,18 @@ def cmd_generate(args: argparse.Namespace) -> int:
         return 1
 
     items = searcher.hand_questions() if args.questions else [("", " ".join(args.query), set(), set())]
+
+    # 문항별 반려견 프로필 (RAG-056). **`hand_questions()` 의 튜플을 안 늘린다** — 그 모양을
+    # 네 곳이 풀어 쓰고 있어서, 칸 하나 때문에 전부 고치면 이 카드가 건드릴 이유가 없는
+    # 자리까지 diff 에 들어온다. 여기서 id 로 한 번 더 읽는 편이 싸다.
+    profiles: dict[str, generator.DogProfile] = {}
+    if args.questions:
+        from .stages import goldenset as _gs
+        profiles = {i.id: generator.DogProfile(breed=i.dog.breed, age_months=i.dog.age_months)
+                    for i in _gs.load().items if i.dog is not None}
+        if profiles:
+            print(f"반려견 프로필이 붙은 문항 {len(profiles)}개: {', '.join(sorted(profiles))}")
+
     print(f"임베딩 {key}  ·  Gemini {config.settings.gemini_model}  ·  top-{args.k}")
 
     # 모델·커넥션·클라이언트를 **여기서 만들어 넘긴다** — RAG-028 ①의 수명 규약이다. 질의 7개마다
@@ -578,7 +590,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
             for qid, q, must, nice in items:
                 a = generator.ask(q, k=args.k, include_supplementary=args.supplementary,
                                   category=args.category, model_key=key,
-                                  st=st, conn=conn, client=client)
+                                  st=st, conn=conn, client=client, dog=profiles.get(qid))
                 answers.append((qid or "-", a, must, nice))
 
                 print()

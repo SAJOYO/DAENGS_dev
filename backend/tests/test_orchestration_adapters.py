@@ -130,7 +130,7 @@ def life_request() -> CapabilityRequest:
 
 
 async def test_life_normal_result_is_ok_without_raw_chunks() -> None:
-    result = await LifeCapabilityAdapter(lambda _: life_output()).run(
+    result = await LifeCapabilityAdapter(lambda _q, **_: life_output()).run(
         life_request(), request_id="trace"
     )
     assert result.status == CapabilityStatus.OK
@@ -153,7 +153,7 @@ async def test_life_normal_result_is_ok_without_raw_chunks() -> None:
 async def test_life_machine_readable_errors_are_mapped(
     status_code: int, status: CapabilityStatus
 ) -> None:
-    def fail(_: str):
+    def fail(_: str, **_kw):
         raise HTTPException(status_code=status_code, detail="upstream")
 
     result = await LifeCapabilityAdapter(fail).run(life_request(), request_id="trace")
@@ -169,7 +169,7 @@ async def test_life_boundary_becomes_refused_with_its_code_and_wording() -> None
     """
     said = "지체 없이 가까운 동물병원에 방문해 수의사의 진료를 받으세요."
 
-    def refuse(_: str):
+    def refuse(_: str, **_kw):
         raise HTTPException(status_code=422,
                             detail={"code": "emergency_boundary", "message": said})
 
@@ -183,7 +183,7 @@ async def test_a_mapping_detail_never_reaches_the_user_as_a_repr() -> None:
     """**`str()` over a mapping would hand the user a Python repr.** That is the lossy step
     invariant 3 forbids, and it is silent — the request still returns 200 at the top.
     """
-    def abstain(_: str):
+    def abstain(_: str, **_kw):
         raise HTTPException(status_code=404,
                             detail={"code": "no_evidence", "message": "자료에 없습니다."})
 
@@ -197,7 +197,7 @@ async def test_the_older_string_detail_still_maps() -> None:
     """404 with a bare string is the pre-RAG-055 shape and still has to work — `services/ask`
     keeps it for the genuinely-zero-hit case.
     """
-    def abstain(_: str):
+    def abstain(_: str, **_kw):
         raise HTTPException(status_code=404, detail="근거를 찾지 못했다")
 
     result = await LifeCapabilityAdapter(abstain).run(life_request(), request_id="trace")
@@ -207,7 +207,7 @@ async def test_the_older_string_detail_still_maps() -> None:
 
 
 async def test_life_runtime_failure_is_error() -> None:
-    def fail(_: str):
+    def fail(_: str, **_kw):
         raise RuntimeError("database unavailable")
 
     result = await LifeCapabilityAdapter(fail).run(life_request(), request_id="trace")

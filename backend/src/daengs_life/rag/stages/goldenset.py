@@ -86,6 +86,22 @@ Expectation = Literal["answer", "abstain", "refuse"]
 RefusalCode = Literal["medical_boundary", "emergency_boundary"]
 
 
+class Dog(_Base):
+    """이 문항을 물을 때의 반려견 프로필 (RAG-056 · 로드맵 B4).
+
+    **문항에 붙는 이유**는 프로필이 답을 가르기 때문이다. "비행기 태울 수 있나요"는 퍼그일
+    때와 비글일 때 답이 다르고, 그 차이를 재려면 랩이 같은 프로필로 물어야 한다. 질문 문장에
+    "퍼그인데"를 섞으면 안 되는 것이 이 카드의 요점이다 — 그건 검색까지 바꿔서 B4 가 프롬프트로
+    한 일인지 검색이 한 일인지 못 가른다.
+
+    `breed` 는 **한국어 견종명**이다. 앱 아바타 id(`dog_pug`)를 옮기는 일은 `daengs_backend`
+    의 `services/dog_context.py` 가 하고, 골든셋은 그 결과를 적는다.
+    """
+
+    breed: str | None = None
+    age_months: int | None = None
+
+
 class Item(_Base):
     """문항 하나.
 
@@ -109,6 +125,7 @@ class Item(_Base):
     question: str
     expect: Expectation = "answer"             # 이 문항에 기대하는 것 (RAG-055)
     refusal_code: RefusalCode | None = None    # `expect: refuse` 일 때만. 어댑터가 내보낼 코드
+    dog: Dog | None = None                     # 프로필을 얹고 묻는 문항 (RAG-056). 없으면 안 얹는다
     must: list[list[str]] = []                 # 요구 목록. 항목 하나 = 요구 하나, 그 안은 OR
     nice: list[str] = []                       # 있으면 인용이 단단해지지만 점수에는 안 들어간다
     unavailable: list[Unavailable] = []

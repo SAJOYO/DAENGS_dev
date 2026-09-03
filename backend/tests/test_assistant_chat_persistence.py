@@ -220,7 +220,7 @@ def test_persisted_request_reserves_orchestrates_completes_and_replays_on_read(
     assert turn.assistant_content == "답변입니다"
     assert turn.public_response == got.json()
     assert draft.last_message_at is not None  # first delivered answer activates the draft
-    assert factory.opened == 2 and factory.active == 0  # reserve TX, completion TX
+    assert factory.opened == 3 and factory.active == 0  # reserve TX, 프로필 조회, completion TX
 
     detail = client.get(f"/app/chats/{draft.id}", headers=_app()).json()
     persisted = next(
@@ -338,7 +338,8 @@ def test_same_uuid_same_question_replays_the_stored_response_without_orchestrati
     assert second.json() == first.json()
     assert len(service.calls) == 1
     assert len(store.chat_turns) == 1
-    assert factory.opened == 3  # reserve + completion, then the replay's single reserve TX
+    # 재생은 예약 TX 하나로 끝난다 — orchestrate 를 안 부르므로 프로필도 안 읽는다.
+    assert factory.opened == 4  # reserve + 프로필 + completion, then the replay's single reserve TX
 
 
 def test_same_uuid_different_question_is_409_and_keeps_the_original(
@@ -404,7 +405,7 @@ def test_orchestration_exception_closes_the_turn_failed_and_propagates_unchanged
     assert turn.processing_status == "failed"
     assert turn.error_code == "ORCHESTRATION_FAILED"
     assert draft.last_message_at is None
-    assert factory.opened == 2 and factory.active == 0  # reserve TX, failure TX
+    assert factory.opened == 3 and factory.active == 0  # reserve TX, 프로필 조회, failure TX
 
     # 무상태일 때와 같은 오류다 — 저장이 오류 모양을 바꾸지 않는다.
     with pytest.raises(RuntimeError, match="provider down"):
@@ -488,13 +489,35 @@ def test_openapi_documents_post_orchestration_persistence_failure(client: TestCl
 # -------------------------------------------------------------- 역호환
 
 
-def test_requests_without_chat_fields_never_open_a_db_session(
+def test_requests_without_chat_fields_never_touch_the_chat_tables(
     client: TestClient, store: Store, service: FakeService, factory: TrackingFactory
 ) -> None:
-    got = _post(client, {"query": QUERY, "active_dog_id": "dog-1"}, _app())
+    """무상태 요청은 **대화를 안 만든다.** 이것이 v0.0.0 과의 역호환이다.
+
+    ⚠️ **2026-09-04(B4) 에 "세션을 하나도 안 연다"에서 좁혔다.** 그때까지는 `active_dog_id` 를
+    쓰는 기능이 없어 둘이 같은 말이었는데, B4 가 그 값을 쓰는 첫 기능이라 프로필을 읽으려면
+    `pets` 를 봐야 한다. 지킬 것은 세션 수가 아니라 **대화 테이블을 안 건드린다**는 쪽이다 —
+    무상태 요청이 turn 이나 session 을 남기면 그것이 역호환을 깨는 일이다.
+    """
+    pet = FakePet(app_user_id=OWNER, name="두부", breed="dog_pug")
+    store.pets.append(pet)
+
+    got = _post(client, {"query": QUERY, "active_dog_id": str(pet.id)}, _app())
     assert got.status_code == 200
-    assert service.calls[0]["context"] == {"active_dog_id": "dog-1"}  # hint passes through
     assert store.chat_turns == [] and store.chat_sessions == []
+
+    context = service.calls[0]["context"]
+    assert context["active_dog_id"] == str(pet.id)  # hint passes through
+    assert context["dog"] == {"breed": "퍼그"}  # 생일을 모르면 나이는 안 간다
+    assert factory.opened == 1  # 프로필 조회 하나뿐 — 대화 TX 는 없다
+
+
+def test_a_stateless_request_without_a_dog_opens_no_session(
+    client: TestClient, store: Store, service: FakeService, factory: TrackingFactory
+) -> None:
+    """프로필을 물어보지 않았으면 DB 도 안 본다. B4 가 늘린 것은 **필요할 때 한 번**이다."""
+    assert _post(client, {"query": QUERY}, _app()).status_code == 200
+    assert service.calls[0]["context"] == {}
     assert factory.opened == 0
 
 
@@ -540,7 +563,7 @@ def test_no_db_session_is_open_while_the_orchestrator_runs(
     draft = _draft(store)
     assert _post(client, _persisted(draft), _app()).status_code == 200
     assert service.calls[0]["sessions_open"] == 0
-    assert factory.opened == 2  # one short TX before the call, one after — never around it
+    assert factory.opened == 3  # 예약·프로필·완료 — 셋 다 짧고, 어느 것도 호출을 감싸지 않는다
 
 
 def test_no_db_session_is_open_while_the_orchestrator_fails(

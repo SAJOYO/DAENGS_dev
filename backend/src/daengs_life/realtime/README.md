@@ -35,6 +35,7 @@ realtime/
 ├── collect.py        ✅ ★ 조립 — provider 들을 `Observations` 하나로 (RT-002 ②-a).
 │                        **이 층이 아는 유일한 것은 호출 순서다** — providers 는 서로를 모르고
 │                        rules 는 조회를 모른다. 9단계 `app/` 는 여기 위의 껍데기다
+├── weather_at.py     ✅ 과거 사실 — 좌표·시각의 NCST 원자를 판단 없이 복원 (D-050)
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·
 │                        ProviderResult · Observations + 조회 헬퍼(⑤-d → ②-c)
@@ -60,6 +61,11 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 **provider 는 API *서비스* 하나 = 모듈 하나다. 오퍼레이션 단위가 아니다.** 단기예보의
 `getUltraSrtNcst`·`getUltraSrtFcst`·`getVilageFcst` 는 같은 봉투·같은 격자 입력이라 한 모듈 안의
 함수 셋이다. 그래서 7개가 `docs/life/data-sources.md` §8 의 연동 체크 7개와 1:1 로 맞는다.
+
+`POST /weather/at`은 `GET /walk`의 과거 버전이 아니다(D-050). 현재·미래 적합도를 조립하지
+않고, 이미 공개된 한 NCST 회차에서 기온·습도·강수 형태·강수량 원자만 반환합니다. 성공 원본은
+`rt-snapshot:` namespace에 격자와 관측 회차를 함께 넣어 잠시 재사용하지만 영구 저장하지 않으며,
+없는 과거값을 현재 `rt:` 캐시로 대체하지 않습니다.
 
 ## 의존 방향
 

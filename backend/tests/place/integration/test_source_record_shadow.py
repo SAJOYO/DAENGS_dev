@@ -16,6 +16,7 @@ from daengs_place.ingest.source_record_store import (
     record_detail_result,
     upsert_source_records,
 )
+from daengs_place.place.restriction_map import RESTRICTION_SEMANTICS_VERSION
 from daengs_place.place.source_facts.states import DetailAcquisitionState
 
 from ..conftest import db_session
@@ -286,10 +287,16 @@ async def test_stale_shadow_detail_invalidates_product_projection() -> None:
             await session.execute(
                 text("""
                     UPDATE facility
-                    SET pet_allowed = true, restriction_state = 'none_confirmed'
+                    SET pet_allowed = true,
+                        restriction_state = 'none_confirmed',
+                        restriction_parse_state = 'mapped',
+                        restriction_semantics_version = :semantics_version
                     WHERE source = :source AND source_ref = 'product'
                 """),
-                {"source": SOURCE},
+                {
+                    "source": SOURCE,
+                    "semantics_version": RESTRICTION_SEMANTICS_VERSION,
+                },
             )
 
             changed = _records("product")

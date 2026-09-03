@@ -18,6 +18,7 @@ from daengs_backend.core.storage import (
     StorageNotConfiguredError,
     build_object_key,
     build_overlay_object_key,
+    build_territory_photo_key,
 )
 
 PET = uuid.uuid4()
@@ -51,6 +52,18 @@ def test_overlay_key_is_deterministic_from_record_identity():
     assert build_overlay_object_key(PET, record_id) == expected
 
 
+def test_territory_photo_key_is_deterministic_and_mime_scoped():
+    attempt_id = uuid.uuid4()
+    assert build_territory_photo_key(PET, attempt_id, content_type="image/jpeg") == (
+        f"territory/{PET}/{attempt_id}/capture.jpg"
+    )
+    assert build_territory_photo_key(PET, attempt_id, content_type="image/webp").endswith(
+        "/capture.webp"
+    )
+    with pytest.raises(ValueError):
+        build_territory_photo_key(PET, attempt_id, content_type="image/png")
+
+
 # ── none ────────────────────────────────────────────────────────────────
 def test_not_configured_fails_loudly():
     s = NotConfiguredStorage()
@@ -82,10 +95,23 @@ def test_local_bridge_write_read_delete(tmp_path):
     assert s.exists(key) is False
 
 
+def test_local_bridge_supports_a_separate_territory_upload_path(tmp_path):
+    s = LocalBridgeStorage(str(tmp_path), base_url="http://x")
+    key = "territory/user/attempt/capture.jpg"
+    ticket = s.create_upload_ticket(
+        object_key=key,
+        content_type="image/jpeg",
+        bridge_upload_path="/app/territory/attempts/_bridge/upload",
+    )
+    assert ticket.upload_url == f"http://x/app/territory/attempts/_bridge/upload/{key}"
+
+
 def test_local_bridge_rejects_escape(tmp_path):
     s = LocalBridgeStorage(str(tmp_path))
     with pytest.raises(StorageNotConfiguredError):
         s.local_path("../../secret")
+    with pytest.raises(StorageNotConfiguredError):
+        s.local_path(f"../{tmp_path.name}-sibling/secret")
 
 
 # ── GcsStorage — google 클라이언트 mock ─────────────────────────────────

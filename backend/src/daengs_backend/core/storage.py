@@ -1,19 +1,19 @@
 """파일 저장소 경계 — GCS 확정, provider-neutral 계약 (D-043, #78).
 
-앱이 영상을 **backend 를 거치지 않고** 저장소에 직접 올리는 구조입니다
+앱이 보행 영상과 점령지 사진을 **backend 를 거치지 않고** 저장소에 직접 올리는 구조입니다
 (Signed URL). backend 가 저장소에 요구하는 것만 Protocol 로 좁혀 둡니다.
 
 provider 는 **GCS 로 확정**(2026-09-02). 다만 bucket·location·만료·보관 정책은
 #78 이 정할 값이라 전부 `settings` 로 뺐습니다 — 여기 하드코딩하지 않습니다.
 
-구현체 셋 (`settings.gait_storage` 로 고름):
+구현체 셋 (`settings.gait_storage` 로 고름 — 이름은 보행 저장소에서 시작한 역사적 이름):
   none  — 미설정. 모든 호출이 503. (`NotConfiguredStorage`)
   local — **임시 bridge.** GCS 자격증명 없이 왕복을 검증하려고 로컬 디렉터리에
           둡니다. 프로덕션이 아닙니다. (`LocalBridgeStorage`)
   gcs   — 진짜. Signed URL. (`GcsStorage`)
 
 ⚠️ **object key 는 backend 가 만듭니다** (원칙 6). 앱이 임의 키를 지정하면 남의
-   경로를 덮어쓰거나 훔쳐볼 수 있습니다. `build_object_key()` 한 곳에서만 만듭니다.
+   경로를 덮어쓰거나 훔쳐볼 수 있습니다. 도메인별 key builder에서만 만듭니다.
 """
 
 from __future__ import annotations
@@ -41,7 +41,13 @@ class UploadTicket:
 
 
 class StoragePort(Protocol):
-    def create_upload_ticket(self, *, object_key: str, content_type: str) -> UploadTicket:
+    def create_upload_ticket(
+        self,
+        *,
+        object_key: str,
+        content_type: str,
+        bridge_upload_path: str = "/app/gait/_bridge/upload",
+    ) -> UploadTicket:
         ...
 
     def exists(self, storage_key: str) -> bool:
@@ -76,13 +82,34 @@ def build_overlay_object_key(pet_id: uuid.UUID, record_id: uuid.UUID) -> str:
     return f"gait/{pet_id}/overlay/{record_id.hex}.mp4"
 
 
+def build_territory_photo_key(
+    app_user_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    *,
+    content_type: str,
+) -> str:
+    """점령지 촬영 원본의 결정적 키. 파일명 대신 검증된 MIME으로 확장자를 정합니다."""
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 점령지 사진 형식: {content_type}") from exc
+    return f"territory/{app_user_id}/{attempt_id}/capture{suffix}"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""
 
     _MSG = "파일 저장소가 아직 설정되지 않았습니다 — provider·정책이 정해지면(#78) 열립니다."
 
-    def create_upload_ticket(self, *, object_key, content_type):
+    def create_upload_ticket(
+        self,
+        *,
+        object_key,
+        content_type,
+        bridge_upload_path="/app/gait/_bridge/upload",
+    ):
         raise StorageNotConfiguredError(self._MSG)
 
     def exists(self, storage_key):
@@ -120,15 +147,24 @@ class LocalBridgeStorage:
 
         # key 는 backend 가 만든 `gait/<uuid>/...` 라 조작 위험이 없지만, 방어적으로
         # 루트 밖으로 못 나가게 확인합니다.
-        p = (self._root / storage_key).resolve()
-        if not str(p).startswith(str(self._root.resolve())):
+        root = self._root.resolve()
+        p = (root / storage_key).resolve()
+        if not p.is_relative_to(root):
             raise StorageNotConfiguredError("잘못된 storage_key")
         return p
 
-    def create_upload_ticket(self, *, object_key, content_type):
+    def create_upload_ticket(
+        self,
+        *,
+        object_key,
+        content_type,
+        bridge_upload_path="/app/gait/_bridge/upload",
+    ):
+        if not bridge_upload_path.startswith("/") or bridge_upload_path.endswith("/"):
+            raise StorageNotConfiguredError("잘못된 bridge upload path")
         return UploadTicket(
             storage_key=object_key,
-            upload_url=f"{self._base_url}/app/gait/_bridge/upload/{object_key}",
+            upload_url=f"{self._base_url}{bridge_upload_path}/{object_key}",
             headers={"Content-Type": content_type},
             expires_in_seconds=15 * 60,
         )
@@ -182,7 +218,13 @@ class GcsStorage:
             self._client = storage.Client()
         return self._client.bucket(self._bucket_name)
 
-    def create_upload_ticket(self, *, object_key, content_type):
+    def create_upload_ticket(
+        self,
+        *,
+        object_key,
+        content_type,
+        bridge_upload_path="/app/gait/_bridge/upload",
+    ):
         from datetime import timedelta
 
         blob = self._bucket().blob(object_key)

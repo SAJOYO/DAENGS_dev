@@ -1,0 +1,388 @@
+"""점령지 방문 인증의 앱 API·상태 전이 계약."""
+
+from __future__ import annotations
+
+import datetime
+import uuid
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from daengs_backend.core.database import get_session
+from daengs_backend.core.deps import AppPrincipal, current_app_user
+from daengs_backend.core.storage import LocalBridgeStorage, UploadTicket
+from daengs_backend.main import app
+from daengs_backend.models.territory import TerritoryAttempt
+from daengs_backend.repositories import territory as territory_repo
+from daengs_backend.services import territory as territory_service
+from daengs_backend.services.territory_site_lookup import (
+    HttpTerritorySiteLookup,
+    TerritorySiteSnapshot,
+    TerritorySiteUnavailableError,
+    get_territory_site_lookup,
+)
+
+OWNER = uuid.uuid4()
+CAPTURE = uuid.uuid4()
+SESSION = uuid.uuid4()
+SITE_ID = "territory-site:hex-v1:140:324:777"
+NOW = datetime.datetime(2026, 9, 3, 3, 0, tzinfo=datetime.UTC)
+REPO = Path(__file__).resolve().parents[2]
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.added: list[object] = []
+        self.commits = 0
+        self.rollbacks = 0
+
+    def add(self, obj: object) -> None:
+        self.added.append(obj)
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+    async def refresh(self, obj: TerritoryAttempt) -> None:
+        if obj.created_at is None:
+            obj.created_at = NOW
+        if obj.updated_at is None:
+            obj.updated_at = NOW
+
+
+class FakeLookup:
+    def __init__(self, *, lat: str = "37.5000000", lng: str = "127.0000000") -> None:
+        self.site = TerritorySiteSnapshot(SITE_ID, Decimal(lat), Decimal(lng))
+        self.calls = 0
+
+    async def find_near_capture(self, **kwargs):
+        self.calls += 1
+        return self.site if kwargs["site_id"] == SITE_ID else None
+
+
+class FakeStorage:
+    def __init__(self, *, exists: bool = True) -> None:
+        self._exists = exists
+        self.deleted: list[str] = []
+
+    def create_upload_ticket(self, *, object_key, content_type, bridge_upload_path=None):
+        assert bridge_upload_path == "/app/territory/attempts/_bridge/upload"
+        return UploadTicket(
+            storage_key=object_key,
+            upload_url=f"https://storage.example/{object_key}",
+            headers={"Content-Type": content_type},
+            expires_in_seconds=900,
+        )
+
+    def exists(self, storage_key):
+        return self._exists
+
+    def delete(self, storage_key):
+        self.deleted.append(storage_key)
+
+
+def _body(**overrides):
+    body = {
+        "client_capture_id": str(CAPTURE),
+        "client_session_id": str(SESSION),
+        "site_id": SITE_ID,
+        "captured_at": NOW.isoformat(),
+        "lat": "37.5000000",
+        "lng": "127.0000000",
+        "accuracy_m": 4.2,
+        "is_mock": False,
+        "content_type": "image/jpeg",
+    }
+    body.update(overrides)
+    return body
+
+
+def _attempt(**overrides) -> TerritoryAttempt:
+    values = {
+        "id": uuid.uuid4(),
+        "app_user_id": OWNER,
+        "client_capture_id": CAPTURE,
+        "client_session_id": SESSION,
+        "site_id": SITE_ID,
+        "captured_at": NOW,
+        "capture_lat": Decimal("37.5000000"),
+        "capture_lng": Decimal("127.0000000"),
+        "accuracy_m": 4.2,
+        "is_mock": False,
+        "site_lat": Decimal("37.5000000"),
+        "site_lng": Decimal("127.0000000"),
+        "distance_m": 0.0,
+        "status": "PENDING_UPLOAD",
+        "photo_storage_key": f"territory/{OWNER}/{uuid.uuid4()}/capture.jpg",
+        "photo_content_type": "image/jpeg",
+        "photo_deleted_at": None,
+        "vision_model": None,
+        "vision_model_version": None,
+        "decision_reason": None,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+    values.update(overrides)
+    return TerritoryAttempt(**values)
+
+
+@pytest.fixture()
+def client(monkeypatch):
+    session = FakeSession()
+    lookup = FakeLookup()
+    storage = FakeStorage()
+    app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=OWNER)
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_territory_site_lookup] = lambda: lookup
+    monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+
+    async def no_existing(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(territory_repo, "get_by_client_capture", no_existing)
+    c = TestClient(app)
+    c.fake_session = session
+    c.fake_lookup = lookup
+    c.fake_storage = storage
+    yield c
+    app.dependency_overrides.clear()
+
+
+def test_endpoints_require_app_authentication():
+    app.dependency_overrides.clear()
+    client = TestClient(app)
+    attempt_id = uuid.uuid4()
+    assert client.post("/app/territory/attempts", json=_body()).status_code in (401, 403)
+    assert client.get(f"/app/territory/attempts/{attempt_id}").status_code in (401, 403)
+    assert client.post(f"/app/territory/attempts/{attempt_id}/confirm").status_code in (401, 403)
+
+
+def test_start_checks_current_site_and_returns_direct_upload_ticket(client):
+    response = client.post("/app/territory/attempts", json=_body())
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "PENDING_UPLOAD"
+    assert payload["distance_m"] == pytest.approx(0)
+    assert payload["upload_url"].startswith("https://storage.example/territory/")
+    assert payload["upload_headers"] == {"Content-Type": "image/jpeg"}
+    assert client.fake_lookup.calls == 1
+    assert client.fake_session.commits == 1
+
+
+def test_start_rejects_outside_ten_metres(client):
+    response = client.post(
+        "/app/territory/attempts",
+        json=_body(lat="37.5002000"),
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "outside_capture_radius"
+    assert client.fake_session.added == []
+
+
+def test_mock_location_is_rejected_without_gameboard_lookup(client):
+    response = client.post("/app/territory/attempts", json=_body(is_mock=True))
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "mock_location"
+    assert client.fake_lookup.calls == 0
+
+
+def test_capture_coordinates_must_fit_the_persisted_precision(client):
+    response = client.post(
+        "/app/territory/attempts",
+        json=_body(lat="37.50000001"),
+    )
+    assert response.status_code == 422
+
+
+def test_same_capture_retry_returns_existing_attempt_and_200(client, monkeypatch):
+    existing = _attempt()
+
+    async def found(*args, **kwargs):
+        return existing
+
+    monkeypatch.setattr(territory_repo, "get_by_client_capture", found)
+    response = client.post("/app/territory/attempts", json=_body())
+    assert response.status_code == 200
+    assert response.json()["attempt_id"] == str(existing.id)
+    assert client.fake_lookup.calls == 0
+    assert client.fake_session.commits == 0
+
+
+def test_same_capture_id_with_changed_evidence_is_conflict(client, monkeypatch):
+    existing = _attempt(capture_lat=Decimal("37.4990000"))
+
+    async def found(*args, **kwargs):
+        return existing
+
+    monkeypatch.setattr(territory_repo, "get_by_client_capture", found)
+    response = client.post("/app/territory/attempts", json=_body())
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "capture_id_conflict"
+
+
+def test_confirm_checks_photo_then_becomes_vision_pending(client, monkeypatch):
+    attempt = _attempt()
+
+    async def owned(*args, **kwargs):
+        assert kwargs["for_update"] is True
+        return attempt
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
+    assert response.status_code == 200
+    assert response.json()["status"] == "VISION_PENDING"
+    assert client.fake_session.commits == 1
+
+
+def test_confirm_missing_photo_is_conflict(client, monkeypatch):
+    attempt = _attempt()
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    client.fake_storage._exists = False
+    response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "photo_not_uploaded"
+    assert attempt.status == "PENDING_UPLOAD"
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected_status", "visit_count"),
+    [("verified", "VERIFIED", 1), ("rejected", "REJECTED", 0), ("failed", "FAILED", 0)],
+)
+async def test_vision_decision_is_terminal_and_deletes_photo(
+    monkeypatch, decision, expected_status, visit_count
+):
+    session = FakeSession()
+    storage = FakeStorage()
+    attempt = _attempt(status="VISION_PENDING")
+
+    async def for_decision(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_repo, "get_for_decision", for_decision)
+    monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+    result = await territory_service.record_vision_decision(
+        session,
+        attempt.id,
+        decision=decision,
+        model="dog-detector",
+        model_version="2026-09-03",
+        reason="dog" if decision == "verified" else "not_dog",
+    )
+    assert result.status == expected_status
+    assert result.photo_deleted_at is not None
+    assert storage.deleted == [attempt.photo_storage_key]
+    assert (
+        len([item for item in session.added if item.__class__.__name__ == "VerifiedVisit"])
+        == visit_count
+    )
+
+
+def test_local_bridge_accepts_only_issued_matching_small_photo(client, monkeypatch, tmp_path):
+    from daengs_backend.routers import territory as territory_router
+
+    storage = LocalBridgeStorage(str(tmp_path), base_url="http://testserver")
+    key = f"territory/{OWNER}/{uuid.uuid4()}/capture.jpg"
+    attempt = _attempt(photo_storage_key=key)
+
+    async def found(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_router, "_local_bridge", lambda: storage)
+    monkeypatch.setattr(territory_repo, "find_pending_by_storage_key", found)
+    response = client.put(
+        f"/app/territory/attempts/_bridge/upload/{key}",
+        content=b"jpeg",
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert response.status_code == 200
+    assert storage.local_path(key).read_bytes() == b"jpeg"
+
+    wrong_type = client.put(
+        f"/app/territory/attempts/_bridge/upload/{key}",
+        content=b"webp",
+        headers={"Content-Type": "image/webp"},
+    )
+    assert wrong_type.status_code == 415
+
+
+async def test_http_site_lookup_uses_server_coordinates(monkeypatch):
+    import httpx
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(
+            200,
+            json={
+                "sites": [
+                    {"site_id": SITE_ID, "lat": 37.5, "lng": 127.0, "distance_m": 3.0}
+                ]
+            },
+        )
+
+    original = httpx.AsyncClient
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(transport=transport, **kwargs),
+    )
+    lookup = HttpTerritorySiteLookup("http://place-search:8000", timeout_seconds=2)
+    site = await lookup.find_near_capture(
+        site_id=SITE_ID,
+        lat=Decimal("37.50001"),
+        lng=Decimal("127.00001"),
+    )
+    assert site == TerritorySiteSnapshot(SITE_ID, Decimal("37.5"), Decimal("127.0"))
+    assert seen["radius_m"] == "50"
+    assert seen["limit"] == "100"
+
+
+async def test_http_site_lookup_fails_closed_on_broken_contract(monkeypatch):
+    import httpx
+
+    original = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=[]))
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(transport=transport, **kwargs),
+    )
+    lookup = HttpTerritorySiteLookup("http://place-search:8000", timeout_seconds=2)
+    with pytest.raises(TerritorySiteUnavailableError):
+        await lookup.find_near_capture(
+            site_id=SITE_ID,
+            lat=Decimal("37.5"),
+            lng=Decimal("127.0"),
+        )
+
+
+def test_init_and_migration_share_the_visit_invariants():
+    init_sql = (REPO / "db/init/08_territory_visits.sql").read_text(encoding="utf-8")
+    migration_sql = (REPO / "db/migrations/2026-09-03_territory_visits.sql").read_text(
+        encoding="utf-8"
+    )
+    verify_sql = (
+        REPO / "db/migrations/verify_2026-09-03_territory_visits.sql"
+    ).read_text(encoding="utf-8")
+    required = (
+        "CREATE TABLE IF NOT EXISTS territory_attempts",
+        "CREATE TABLE IF NOT EXISTS territory_verified_visits",
+        "territory_attempts_owner_capture_unique",
+        "territory_attempts_distance_range",
+        "territory_attempts_final_photo_deleted",
+        "territory_attempts_final_vision_metadata",
+    )
+    assert all(token in init_sql for token in required)
+    assert all(token in migration_sql for token in required)
+    assert "fact_for_nonverified_attempt" in verify_sql
+    assert "final_without_photo_cleanup" in verify_sql

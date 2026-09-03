@@ -250,6 +250,11 @@ class WalkAnalysis(Base):
         cascade="all, delete-orphan",
         order_by="WalkCellophaneSheet.paint_fp",
     )
+    capsule: Mapped["WalkCapsule | None"] = relationship(
+        back_populates="analysis",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class WalkCellophaneSheet(Base):
@@ -303,6 +308,40 @@ class WalkCellophaneSheet(Base):
     )
 
     analysis: Mapped[WalkAnalysis] = relationship(back_populates="cellophane_sheets")
+
+
+class WalkCapsule(Base):
+    """한 WalkAnalysis의 필수 원판이 모두 준비됐음을 선언하는 마지막 seal."""
+
+    __tablename__ = "walk_capsules"
+
+    __table_args__ = (
+        CheckConstraint(
+            "capsule_version > 0 AND context_version > 0",
+            name="walk_capsules_versions_positive",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(capabilities) = 'array' AND jsonb_array_length(capabilities) > 0",
+            name="walk_capsules_capabilities_array",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(trail_context) = 'object'",
+            name="walk_capsules_context_object",
+        ),
+    )
+
+    analysis_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("walk_analyses.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    capsule_version: Mapped[int] = mapped_column(Integer)
+    context_version: Mapped[int] = mapped_column(Integer)
+    capabilities: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    trail_context: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    sealed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    analysis: Mapped[WalkAnalysis] = relationship(back_populates="capsule")
 
 
 class WalkPet(Base):

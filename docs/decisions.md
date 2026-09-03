@@ -51,6 +51,7 @@
 | [D-044](#d-044) | 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다 | 2026-09-02 |
 | [D-045](#d-045) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
 | [D-046](#d-046) | Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다 | 2026-09-03 |
+| [D-047](#d-047) | Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다 | 2026-09-03 |
 
 ---
 
@@ -2385,4 +2386,32 @@ Place·Journey 네트워크 호출을 Walk 행 잠금 안에서 실행하지 않
 따라서 첫 Dev형 Capsule은 Facts·Receipt·Observation·Cellophane과 앱이 산책 시작 때 남긴
 날씨만 봉인합니다. Place 주변 사실, Journey 계획 경로, 행동 의미와 일기 문장은 필수 자식이
 아닙니다. 각 데이터의 실제 소비자가 생기는 후속 결정에서만 경계를 넓힙니다.
+
+---
+
+## D-047
+### Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다
+
+Geo의 Capsule을 Dev에 채택하되 저장 구조를 그대로 복사하지 않습니다. Dev에는 이미
+`walk_analyses`가 Facts·Receipt·Event·Observation을, `walk_cellophane_sheets`가 Paint 세대를
+보존합니다. 새 `walk_capsules`는 `analysis_id`를 PK이자 FK로 갖는 1:1 자식이며, 이 원판들이
+공간 기억 소비에 준비됐다는 선언만 맡습니다. Capsule 자체에는 계산 결과를 다시 넣지 않고
+계약 세대, 관측 capability, 당시 환경 원자와 seal 시각만 둡니다.
+
+강아지 ID도 Capsule에 중복 저장하지 않습니다. 한 산책에는 여러 마리가 참여할 수 있고 그
+연결의 정본은 `walk_pets`입니다. 이후 행동 증언과 개체별 일기는 해당 산책과 강아지를 함께
+가리키는 별도 기록으로 만들며, Capsule 하나를 강아지마다 복제하지 않습니다.
+
+첫 context snapshot은 앱이 산책 시작 때 이미 업로드한 WMO 날씨 코드·주야·기온만 옮깁니다.
+하나라도 있으면 `partial`, 전부 없으면 `unknown`이며 현재 날씨로 과거를 보충하지 않습니다.
+Place나 Journey를 finalize 행 잠금 안에서 호출하지도 않습니다. 기존 분석 backfill 역시 당시
+Walk 메타데이터만 사용하고 `legacy_walk_metadata_v1` 출처를 명시합니다.
+
+finalize는 Analysis·Cellophane·Capsule을 한 SQLAlchemy aggregate로 조립하고 `derived` 전환과
+같은 DB 트랜잭션에서 commit합니다. 원본 좌표는 D-044대로 계정 삭제 때까지 보존하므로 Geo의
+purge 전제나 물리적 "마지막 INSERT" 순서를 들여오지 않습니다. 재시도에서 `derived`인데
+Capsule이 없으면 성공으로 위장하지 않고 저장 불일치로 거절합니다.
+
+Capsule은 이번 단계에서 내부 저장 계약입니다. 별도 HTTP API, App UI, Place 주변 사실,
+Journey 계획 snapshot, 행동 의미와 일기 문장은 실제 소비자가 생기는 후속 PR에서 추가합니다.
 

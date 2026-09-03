@@ -5,6 +5,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +18,10 @@ from daengs_backend.schemas.walk import (
     WalkUpload,
 )
 from daengs_backend.services.walk_analysis import build_analysis_models
+from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
-from daengs_walk import analyze_walk, build_cellophane
+from daengs_walk import analyze_walk, build_cellophane, build_walk_capsule
 
 
 class WalkNotFoundError(Exception):
@@ -170,6 +172,11 @@ async def finalize_walk(
                     "finalized_analysis_not_found",
                     "봉인 상태와 저장된 분석 결과가 맞지 않습니다.",
                 )
+            if existing.capsule is None:
+                raise WalkStateConflictError(
+                    "finalized_capsule_not_found",
+                    "봉인 상태와 저장된 Capsule이 맞지 않습니다.",
+                )
             await session.commit()  # 변경 없이 행 잠금만 풀고 멱등 응답한다.
             return existing, False
 
@@ -190,6 +197,22 @@ async def finalize_walk(
             evidence,
             build_cellophane(evidence),
         )
+        sealed_at = datetime.now(UTC)
+        capsule = build_walk_capsule(
+            walk_id=walk.id,
+            facts_record_version=analysis.facts_record_version,
+            calculation_version=analysis.calculation_version,
+            receipt_version=analysis.receipt_version,
+            observation_version=analysis.observation_version,
+            walked_at=walk.started_at,
+            sealed_at=sealed_at,
+            weather_code=walk.weather_code,
+            is_day=walk.is_day,
+            temperature_c=(
+                float(walk.temperature_c) if walk.temperature_c is not None else None
+            ),
+        )
+        analysis.capsule = build_capsule_model(analysis, capsule)
         walk_repo.add_analysis(session, analysis)
         walk.analysis_state = "derived"
         await session.flush()

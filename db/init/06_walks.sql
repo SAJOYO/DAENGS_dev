@@ -221,6 +221,32 @@ CREATE INDEX IF NOT EXISTS walk_cellophane_paint_fp_idx
     ON walk_cellophane_sheets (paint_fp);
 
 -- ---------------------------------------------------------------------
+-- walk_capsules : 한 분석 원판이 공간 기억 소비에 준비됐다는 1:1 seal
+-- ---------------------------------------------------------------------
+-- Facts·Receipt·Observation·Cellophane을 다시 복제하지 않는다. analysis_id 하나로
+-- 그 불변 결과를 가리키고, 당시 환경 원자와 읽을 수 있는 관측 세대만 덧붙인다.
+-- 강아지는 capsule 컬럼이 아니라 walk_pets로 연결한다. 한 산책에 여러 마리가
+-- 나갈 수 있고, 이후 개체별 일기는 그 연결 위에서 별도 기록해야 하기 때문이다.
+CREATE TABLE IF NOT EXISTS walk_capsules (
+    analysis_id UUID PRIMARY KEY REFERENCES walk_analyses(id) ON DELETE CASCADE,
+    capsule_version INTEGER NOT NULL,
+    context_version INTEGER NOT NULL,
+    capabilities JSONB NOT NULL,
+    trail_context JSONB NOT NULL,
+    sealed_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT walk_capsules_versions_positive CHECK (
+        capsule_version > 0 AND context_version > 0
+    ),
+    CONSTRAINT walk_capsules_capabilities_array CHECK (
+        jsonb_typeof(capabilities) = 'array'
+        AND jsonb_array_length(capabilities) > 0
+    ),
+    CONSTRAINT walk_capsules_context_object
+        CHECK (jsonb_typeof(trail_context) = 'object')
+);
+
+-- ---------------------------------------------------------------------
 -- walk_pets : 그 산책에 누가 나갔나
 -- ---------------------------------------------------------------------
 -- **한 번에 여러 마리를 데리고 나간다.** walks.pet_id 한 칸이던 것을 조인으로

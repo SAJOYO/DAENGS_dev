@@ -298,6 +298,11 @@ def test_finalize는_계산과_봉인을_한번에_저장한다(client: TestClie
     assert len(store.walk_analyses) == 1
     assert store.walks[0].analysis_state == "derived"
     assert len(store.walk_analyses[0].cellophane_sheets) == 1
+    capsule = store.walk_analyses[0].capsule
+    assert capsule is not None
+    assert capsule.trail_context["status"] == "partial"
+    assert capsule.trail_context["weather_code"] == 61
+    assert [item["name"] for item in capsule.capabilities] == ["low_motion", "gap"]
 
 
 def test_같은_finalize_재시도는_기존_분석을_돌려준다(client: TestClient, store: Store) -> None:
@@ -378,6 +383,21 @@ def test_봉인_상태에_분석이_없으면_충돌을_알린다(
     assert response.json()["detail"]["code"] == "finalized_analysis_not_found"
 
 
+def test_봉인_상태에_capsule이_없으면_충돌을_알린다(
+    client: TestClient, store: Store
+) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    url = f"/app/walks/{created['id']}/finalize"
+    first = client.post(url, json=finalize_body(2))
+    assert first.status_code == 201
+    store.walk_analyses[0].capsule = None
+
+    response = client.post(url, json=finalize_body(2))
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "finalized_capsule_not_found"
+
+
 def test_남의_산책은_finalize할_수_없다(client: TestClient, store: Store) -> None:
     other = FakeWalk(
         app_user_id=STRANGER,
@@ -411,4 +431,29 @@ async def test_finalize_commit_실패는_rollback한다(client: TestClient, stor
             WalkFinalizeRequest(**finalize_body(2)),
         )
 
+    assert session.rollbacks == 1
+
+
+async def test_capsule_조립_실패는_분석과_derived를_남기지_않는다(
+    client: TestClient,
+    store: Store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    session = FakeSession()
+
+    def fail_capsule(*args, **kwargs):
+        raise RuntimeError("capsule build failed")
+
+    monkeypatch.setattr(walk_service, "build_capsule_model", fail_capsule)
+    with pytest.raises(RuntimeError, match="capsule build failed"):
+        await walk_service.finalize_walk(
+            session,
+            OWNER,
+            uuid.UUID(created["id"]),
+            WalkFinalizeRequest(**finalize_body(2)),
+        )
+
+    assert store.walks[0].analysis_state == "collecting"
+    assert store.walk_analyses == []
     assert session.rollbacks == 1

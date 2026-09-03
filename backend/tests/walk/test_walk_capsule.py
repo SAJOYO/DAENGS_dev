@@ -1,0 +1,107 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+
+from daengs_backend.models.walk import WalkAnalysis
+from daengs_backend.services.walk_capsule import (
+    build_capsule_model,
+    decode_capsule_model,
+)
+from daengs_walk.capsule import ContextStatus, build_walk_capsule
+
+REPO = Path(__file__).parents[3]
+WALK_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
+STARTED_AT = datetime(2026, 9, 3, 9, tzinfo=UTC)
+SEALED_AT = STARTED_AT + timedelta(minutes=30)
+
+
+def analysis(*, walk_id: uuid.UUID = WALK_ID) -> WalkAnalysis:
+    return WalkAnalysis(
+        walk_id=walk_id,
+        input_fingerprint="sha256:" + "1" * 64,
+        point_count=0,
+        terminal_client_seq=None,
+        facts_record_version=1,
+        calculation_version=4,
+        receipt_version=1,
+        observation_version=1,
+        moving_distance_m=0,
+        moving_s=0,
+        stop_count=0,
+        facts={},
+        measurement_receipt={},
+        motion_events=[],
+        micro_observations=[],
+    )
+
+
+def capsule(*, walk_id: uuid.UUID = WALK_ID, with_weather: bool = True):
+    return build_walk_capsule(
+        walk_id=walk_id,
+        facts_record_version=1,
+        calculation_version=4,
+        receipt_version=1,
+        observation_version=1,
+        walked_at=STARTED_AT,
+        sealed_at=SEALED_AT,
+        weather_code=61 if with_weather else None,
+        is_day=True if with_weather else None,
+        temperature_c=18.5 if with_weather else None,
+    )
+
+
+def test_capsule은_기존_날씨_원자와_관측_능력만_봉인한다() -> None:
+    artifacts = capsule()
+
+    assert artifacts.trail_context.status is ContextStatus.PARTIAL
+    assert artifacts.trail_context.provider == "android_walk_upload_v1"
+    assert artifacts.trail_context.weather_code == 61
+    assert artifacts.trail_context.temperature_c == 18.5
+    assert [(item.name, item.generation) for item in artifacts.manifest.capabilities] == [
+        ("low_motion", 1),
+        ("gap", 1),
+    ]
+
+
+def test_날씨가_없으면_현재값을_보충하지_않고_unknown으로_남긴다() -> None:
+    artifacts = capsule(with_weather=False)
+
+    assert artifacts.trail_context.status is ContextStatus.UNKNOWN
+    assert artifacts.trail_context.provider is None
+    assert artifacts.trail_context.weather_code is None
+    assert artifacts.trail_context.temperature_c is None
+
+
+def test_capsule_storage_roundtrip은_analysis를_복제하지_않는다() -> None:
+    stored_analysis = analysis()
+    artifacts = capsule()
+
+    stored_analysis.capsule = build_capsule_model(stored_analysis, artifacts)
+
+    assert stored_analysis.capsule.analysis is stored_analysis
+    assert stored_analysis.capsule.trail_context["walk_id"] == str(WALK_ID)
+    assert "facts" not in stored_analysis.capsule.trail_context
+    assert decode_capsule_model(stored_analysis) == artifacts
+
+
+def test_다른_analysis의_capsule은_저장하지_않는다() -> None:
+    with pytest.raises(ValueError, match="identity"):
+        build_capsule_model(analysis(), capsule(walk_id=uuid.uuid4()))
+
+
+def test_capsule_migration은_기존_분석을_출처와_함께_backfill한다() -> None:
+    migration = (
+        REPO / "db/migrations/2026-09-03_walk_capsules.sql"
+    ).read_text(encoding="utf-8")
+    verify = (
+        REPO / "db/migrations/verify_2026-09-03_walk_capsules.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS walk_capsules" in migration
+    assert "ON CONFLICT (analysis_id) DO NOTHING" in migration
+    assert "legacy_walk_metadata_v1" in migration
+    assert "JOIN walks AS walk ON walk.id = analysis.walk_id" in migration
+    assert "derived_without_capsule" in verify
+    assert "mismatched_context_identity" in verify

@@ -6,13 +6,16 @@
 """
 
 from daengs_walk.cellophane import Cellophane, build_cellophane
+from daengs_walk.capsule import WalkCapsuleArtifacts, build_walk_capsule
 from daengs_walk.contracts import WalkEvidencePoint
 from daengs_walk.evidence import WalkEvidenceBundle, analyze_walk
 
 __all__ = [
     "Cellophane",
+    "WalkCapsuleArtifacts",
     "WalkEvidenceBundle",
     "WalkEvidencePoint",
     "analyze_walk",
     "build_cellophane",
+    "build_walk_capsule",
 ]

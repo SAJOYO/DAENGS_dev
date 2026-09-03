@@ -39,7 +39,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 회원이 탈퇴 · 정지를 요청했다 | SSH 터널(15432) → HeidiSQL/psql. `app_users` 는 암호문이라 이메일로 찾으려면 blind index 를 손으로 계산한다 | 이메일로 검색(HMAC) · 상태 변경 · 반려견 목록. 개인정보는 마스킹, 복호화는 `pii:read` 만 | A2 |
 | 팀원에게 콘솔 계정을 주고 싶다 | `uv run seed-admin` 이 뽑은 SQL 을 psql 에 붙여 넣는다. role 은 5단계인데 발급은 ADMIN 뿐 | 계정 발급 · 정지 · role 변경. 복호화 같은 위험한 조회는 OPERATOR 이상만 | A3 |
 | 누가 복호화를 봤나 | 알 수 없다. `logger.info` 는 어디에도 안 남는다 (Hold 카드, §4 E) | 감사 로그 테이블 — 복호화 · 정지 · 신고 처리 | A4 |
-| 서비스가 살아 있나 | `curl /health` · `docker compose ps` · 앱을 켜 본다. 모델(피부 350MB · 임베딩 1.2GB)이 올라왔는지는 첫 요청이 알려 준다 | 상태 페이지 — 컨테이너 · 모델 로딩(`/screen/healthz`) · data.go.kr 일 예산(Redis) · 최근 크롤 | B1 |
+| 서비스가 살아 있나 | ✅ 이미 콘솔 (#180) | — | — |
 | 사람들이 무엇을 묻나 | 모른다. D-037 이 원문 로깅을 금지했고, 허용된 메타데이터의 저장처도 없다 | 능력별 분포 · FAILED 비율 · 지연 (원문 없이) | B2 · B3 |
 | 크롤이 실패했다 | ✅ 이미 콘솔 (#76) | — | — |
 | 답변 품질을 점검한다 | ✅ 이미 콘솔 (#30 · #36 · #170) — 단 앱이 쓰는 `/assistant/query` 가 아니라 직접 API | 앱과 같은 경로로 점검 | C1 |
@@ -50,10 +50,11 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 
 ## 2. 지금 상태 (2026-09-03, `origin/dev` `42be33d` 실측)
 
-### 메뉴 5개
+### 메뉴 6개
 
 | 메뉴 (`console/page.tsx`) | 카드 권한 | 화면 | 뒤의 API | 상태 | 어긋난 것 |
 | --- | --- | --- | --- | --- | --- |
+| 상태 | `read` | `/console/status` — 항목 여덟, 30초 폴링. `absent`(이 환경엔 없음)와 `down`(죽음)의 색·문구가 다르다 | `/admin/status`(READ) | ✅ #180 | 사람이 손댈 자리는 없다 — 읽기 전용이다 |
 | 기능 / 검색 점검 | `read` | `/console/search` — 탭 3: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 | 앱은 `/assistant/query` 만 부르는데 콘솔은 직접 API 만 두들긴다. 산책 기록 · gait · place · journey 탭 없음 |
 | 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
 | 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
@@ -131,7 +132,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| B1 | **상태 페이지** `/console/status` — `/health` · `/screen/healthz`(가중치) · 임베딩 예열 · Redis(일 예산 카운터) · place/journey 컨테이너 · 마지막 크롤. 읽기 전용, DB 무변경 | §1 "살아 있나". 지금은 첫 요청이 알려 준다 | `GET /admin/status` 하나 (BE) | S | ⬜ **DB 없이 되는 첫 카드** |
+| B1 | **상태 페이지** `/console/status` — 항목 여덟(`db` · 임베딩 예열 · `screening` 가중치 · Redis 일 예산 · place · journey · 크롤 · gait). 항목별 짧은 timeout 이고 하나가 죽어도 200. 읽기 전용, DB 무변경 | §1 "살아 있나". 지금은 첫 요청이 알려 준다 | `GET /admin/status` 하나 (BE) | S | ✅ #180 |
 | B2 | **요청 메타데이터 저장** — D-037 허용 열만(request_id · principal 종류 · 능력 · status · reason code · elapsed_ms) → 테이블 or 파일 집계. **저장처는 사람 결정** | `운영 지표` 카드가 보여 줄 것이 없다. Hold 로그 카드가 전제 | 로그 카드 해제 · §7 | M | ⬜ 저장처 결정 뒤 |
 | B3 | **대화 집계** — 세션 수 · `agent_categories` 분포 · `assistant_status` FAILED 비율 · 요약 생성 수. 제품 테이블 집계, 원문 노출 없음 | #131 뒤 가장 싸게 "사람들이 무엇을 묻나" 를 보는 길 | #131 | S | ⬜ |
 | B4 | `운영 지표` 화면 `/console/metrics` — B2 · B3 를 한 화면에 | 준비 중 카드 | B2 or B3 | S | ⬜ |
@@ -167,7 +168,7 @@ draft 카드 `fix: 앱 로그가 어디에도 남지 않는 문제`(Hold P3) 가
 
 ```
 ── 지금 (DB 변경 허용 — 2026-09-03 사람 결정. 카드마다 두 DB 손 적용) ────────────────────
-C2 문구 → B1 상태 페이지 → C1 assistant 탭        (셋 다 DB 없음 · FE/읽기 전용 — 먼저)
+C2 문구 ✅ → B1 상태 페이지 ✅ → C1 assistant 탭 ✅   (셋 다 DB 없음 · FE/읽기 전용 — 먼저 갔다)
 A4 감사 로그 → A3 계정 관리 → A2 회원 조회         (A 트랙. A4 가 앞인 이유는 아래)
 
 ── #131 머지 + 운영 DB 적용 뒤 ────────────────────────────────────────────────────────
@@ -216,3 +217,6 @@ B2 요청 메타데이터 = 로그 카드(Hold) 해제 + 저장처 결정 뒤.  
 - **역할 발급** — 팀원 계정을 ADMIN 공유에서 역할별(OPERATOR · CURATOR …)로 나눌지. A3 의 첫 사용자가 누구인지가 답이다.
 - **C4 테스트 회원** — 관리자 토큰으로 본인 소유 API 를 못 부르는 구조에서 산책 기록 등을 점검하려면 무엇으로 부를지.
 - **GCP 콘솔의 크롤 메뉴** — 숨길지, "트리거 없음" 안내만 할지 (C2 는 안내로 제안).
+  #180 뒤로는 **감출 수 있게 됐다** — `GET /admin/status` 의 `crawl` 항목이 워커가 없는 환경을
+  `absent` 로 알려 준다(브로커에 `active_queues` 로 묻는다). 고르는 것은 여전히 사람 몫이고,
+  감추기로 하면 새 카드가 그 값을 읽어 카드/버튼을 가린다.

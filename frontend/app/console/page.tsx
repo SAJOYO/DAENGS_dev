@@ -9,6 +9,11 @@ import type { Permission } from "@/lib/auth";
  * 콘솔 메뉴. `permission` 은 **메뉴를 보여 줄지 정하는 값일 뿐**이고,
  * 실제 차단은 각 API 가 `core/deps.py` 의 같은 권한으로 합니다.
  * 이름 문자열이 백엔드의 `Perm` 과 어긋나면 조용히 메뉴가 사라집니다.
+ *
+ * **"준비 중" 카드의 설명은 약속이 아니라 계획입니다.** 무엇을 담을지는
+ * `docs/console/roadmap.md` 의 트랙이 정본이고, 여기 문구는 그것을 한 줄로 줄인
+ * 것입니다 — 로드맵이 움직이면 같이 고칩니다. 화면이 실제로 생기면 `href` 가
+ * 붙으면서 "준비 중" 배지가 사라집니다.
  */
 const consoleSections: Array<{
   title: string;
@@ -25,7 +30,16 @@ const consoleSections: Array<{
 }> = [
   {
     title: "지식 베이스",
-    description: "훈련 문서를 올리고, 청크와 그래프 추출 결과를 확인합니다.",
+    description:
+      "적재된 문서와 청크를 확인합니다. 올리는 것은 여기가 아닙니다 — 훈련 RAG는 승인된 14문서로 고정이고, 생활 RAG 적재는 개발 PC에서 CLI로 합니다.",
+    // **"그래프 추출" 을 뺐습니다.** GraphRAG 는 2026-08-24 에 폐기됐습니다
+    // (`docs/training/decision_graphrag_abandoned_0824.md`). 지금 뽑는 것은 청크뿐입니다.
+    //
+    // **업로드 UI 를 약속하지 않는 이유**는 지금 성립하지 않아서입니다 —
+    // 훈련 RAG 는 승인 매니페스트 14문서 재적재 금지(`docs/training/rag-demo.md`)이고,
+    // 생활 RAG 적재는 GPU 가 필요해 개발 PC 의 `rag load` 로만 합니다 (RAG-043 ④).
+    // 재개 조건은 `docs/deploy/roadmap.md` §7-1 (크롤러·적재 VM 이전) 이고,
+    // 그 판단은 `docs/console/roadmap.md` §6 에 있습니다.
     permission: "kb:write",
   },
   {
@@ -42,7 +56,14 @@ const consoleSections: Array<{
   },
   {
     title: "수집 / 크롤",
-    description: "소스별 마지막 수집 결과를 보고, 필요하면 직접 부릅니다. 수집까지만 하고 적재는 사람이 판단합니다.",
+    description:
+      "소스별 마지막 수집 결과를 보고, 필요하면 직접 부릅니다. 수집까지만 하고 적재는 사람이 판단합니다. 크롤러는 로컬 서버에만 있습니다.",
+    // **마지막 문장이 운영(GCP) 서버를 위한 것입니다.** 코퍼스 정본은 로컬 서버에
+    // 남기기로 했고(`docs/deploy/roadmap.md` §2-4) GCP 에는 crawler-worker·beat 가
+    // 아예 안 뜹니다. 그래서 저기서는 이 화면이 09-02 덤프 시점의 이력만 보여 주고
+    // 트리거는 눌러도 아무 일이 없습니다. 어느 배포인지 **감지**해서 버튼을 감추는
+    // 것은 상태 API 가 생긴 뒤입니다 (`docs/console/roadmap.md` B1 · §7).
+    //
     // **`ops:write` 가 아니라 `read` 입니다.** 위 `기능 / 검색 점검` 과 같은 이유 —
     // 이력 조회는 `read` 로 열려 있고 트리거만 `ops:write` 입니다. 카드를 `ops:write` 로
     // 잠그면 API 는 이력을 보여 주는데 화면만 안 보이는 계정이 생깁니다.
@@ -52,12 +73,20 @@ const consoleSections: Array<{
   },
   {
     title: "회원 · 반려견",
-    description: "앱에서 들어온 계정과 반려견 프로필을 조회하고 정리합니다.",
+    description:
+      "앱 회원을 이메일로 찾아 상태와 반려견을 봅니다. 개인정보는 가려서 보여 주고, 원문은 권한이 있는 계정만 봅니다.",
+    // 이메일 검색이 blind index 로만 되는 것과(D-012) 복호화가 `pii:read` 인 것은
+    // 이미 정해져 있습니다. 그 조회를 기록에 남기는 감사 로그가 이 화면의 전제라,
+    // 로드맵에서는 A4 가 A2 보다 앞입니다 (`docs/console/roadmap.md` §5).
     permission: "read",
   },
   {
     title: "운영 지표",
-    description: "질문량, 거절 비율, 응답 지연을 한 화면에서 봅니다.",
+    description:
+      "어떤 능력이 얼마나 불렸는지, 실패 비율과 응답 지연을 봅니다. 질문 원문은 남기지 않습니다.",
+    // **마지막 문장이 이 화면이 아직 없는 이유입니다.** D-037 이 관측에 질문 원문을
+    // 금지했고, 허용된 메타데이터(request_id · 능력 · status · elapsed_ms)를 어디에
+    // 쌓을지가 아직 안 정해졌습니다 (`docs/console/roadmap.md` B2 · §7).
     permission: "metrics:read",
   },
 ];

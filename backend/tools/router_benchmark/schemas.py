@@ -32,6 +32,7 @@ PromptVersion = Literal[
     "semantic-router-ko-v3",
     "semantic-router-ko-v4",
     "semantic-router-ko-v5",  # PR #172 — production Life/unsupported-care boundary (runner_v6)
+    "semantic-router-ko-v6",  # PR #172 — routine-care vs today's walking window (runner_v7)
 ]
 
 

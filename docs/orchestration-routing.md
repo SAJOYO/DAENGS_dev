@@ -66,7 +66,7 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
 라우터는 **분류기이지 답변자가 아닙니다.** 라우터가 도메인 답을 직접 생성하는 순간
 "도메인 안전·거절은 능력이 소유한다"(architecture §논리 오케스트레이션)가 깨집니다.
 
-### 순수 인사말 — `social_intent` (CONFIRMED — `semantic-router-ko-v4`, PR #163; v5 에서도 그대로)
+### 순수 인사말 — `social_intent` (CONFIRMED — `semantic-router-ko-v4`, PR #163; v5·v6 에서도 그대로)
 
 "고마워"·"안녕하세요"·"잘가"처럼 **요청이 통째로 인사말뿐**이면 예전에는 빈 결정 →
 빈 RoutePlan → `실행하거나 안내할 수 있는 기능이 없습니다.`(FAILED)가 났습니다. AI 비서가
@@ -162,10 +162,29 @@ weight_kg · birth_date 를 저장할 뿐 권고 로직이 없고, Training 의 
   because it concerns walking" 문장이 그 "시간" 을 돌봄 상식으로 읽게 만든 것입니다.
   상세: `docs/orchestration-router-benchmark.md` §v6.
 
-**현재 상태 (PENDING — 사람 결정).** v5 프롬프트는 이 브랜치에 있지만 **동결 gate 를 통과하지 못해
-수용되지 않았습니다.** 규칙대로 재조정 루프를 돌지 않았고 재실행도 하지 않았습니다. 다음 조치
-후보는 v5 의 미지원 문장에서 "오늘/지금의 산책 시간 창은 Walk" 를 명시해 Walk 경계를 원래대로
-되돌리는 한 문장 수정(v6 프롬프트 + 80건 회귀 1회)이며, 그 결정은 사람 몫입니다.
+**`semantic-router-ko-v6` — v5 의 한 문장 보정 (사람 결정, 같은 카드).** v5 는 일상 돌봄을 Life 에서
+올바르게 막았지만, "walk or exercise frequency or duration … not Walk merely because it concerns walking"
+문구가 **오늘/저녁 산책 시간 창** 질문의 Walk 까지 눌렀습니다. v6 는 v5 의 Life 제한을 그대로 두고 그
+문장만 바꿉니다: **일상적·규범적 운동 권고**(하루 몇 번·몇 분, 견종·연령·체격별 산책량 — 현재 조건과
+무관)는 미지원(빈 결정), **지금·오늘·이번 저녁에 걸을지/언제 걸을지**(오늘의 산책 시간 창 고르기 포함)는
+날씨·대기질을 명시하지 않아도 Walk. Walk 를 반복 운동 일정으로 넓히지는 않습니다. 모델·스키마·planner·
+graph·aggregate·다른 경계 문구는 그대로이고 한국어 키워드 규칙은 없습니다.
+
+**v6 검증 (2026-09-03):**
+
+- 7건 타깃 프로브(production 모듈, 질문당 1회, 유료 7건): "푸들 산책은 몇 회가 좋아?" · "성견은 하루에
+  몇 분 정도 산책해야 해?" → 빈 결정, 동결 원문 그대로의 `mixed_10` → Life+Walk+Gait, `clarify_08` →
+  Life+Walk(좌표 없음은 planner 의 CLARIFY), `walk_03` → Walk, `clarify_03` → Walk, "반려견 등록은 어디서
+  해?" → Life. **7/7.**
+- 동결 80건 회귀 1회(`runner_v7.py`, run **v7**, 유료 80건, gate 그대로): **PASS — 15/15 gate.** exact
+  97.5%, 실행 precision/recall 97.4%/100%, 다중 재현율 100%, mixed execute+handoff 0.90(경계값, gate ≥0.90),
+  CLARIFY 100%/100%, Skin/Gait 100%, social_intent non-null 0/80. non-exact 2건은 모두 기존 흔들림
+  사례 — `boundary_05`(Walk 추가, v5·v6 run 과 동일) · `mixed_09`(Training 추가, v4 run 과 동일). v6 가 잃었던
+  `mixed_10`·`clarify_08` 은 회복. 상세: `docs/orchestration-router-benchmark.md` §v7.
+
+**현재 상태 (CONFIRMED — v6 수용).** production 프롬프트는 `semantic-router-ko-v6` 입니다. 일반 돌봄
+질문은 어느 능력으로도 가지 않고 기존 미지원 문구(FAILED)로 떨어지며, **그 질문에 답하는 능력은 여전히
+없습니다**(옵션 C). 미지원 사용자 문구 개선은 별도 UX 카드입니다.
 
 **미래 계약 경계 (PENDING — 사람 결정, 이 카드가 구현하지 않음).** 실행 능력이 생기려면
 순서가 고정입니다: ① 인용 가능한 근거 소스 ② 그 소스를 소유하는 도메인 서비스 ③ 그 뒤에야

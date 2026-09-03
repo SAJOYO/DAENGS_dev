@@ -12,15 +12,21 @@ Measured defect (2026-09-03, two paid calls, production `semantic-router-ko-v4`,
 "강아지는 하루에 몇 번 산책해야 해?" came back `{"execute": ["life"]}` — Life's
 "official guidance" wording absorbed ordinary care advice, and Life's `/ask` only
 abstains on zero hits, so the user would get an OK answer over unrelated ordinance
-chunks. `semantic-router-ko-v5` narrows Life to formal institutional / legal /
-administrative / policy / contractual evidence and declares general husbandry
-unsupported (empty decision). v5 does NOT answer care questions.
+chunks. `semantic-router-ko-v5` narrowed Life to formal institutional / legal /
+administrative / policy / contractual evidence and declared general husbandry
+unsupported (empty decision). Its "walk frequency or duration" wording, however,
+also suppressed Walk for today's / this evening's walking time-window questions
+(frozen mixed_10 · clarify_08 lost Walk; run v6 failed one gate).
+`semantic-router-ko-v6` keeps the v5 Life restriction and distinguishes ROUTINE
+or normative exercise advice (unsupported) from CURRENT-day timing/suitability
+(Walk). Neither version answers care questions.
 
 Every test uses a fake Gemini transport — no provider spend. They pin (a) what the
 DETERMINISTIC layer does given the semantically correct decision and (b) the v5
-prompt contract text. The live classifier is certified separately: a five-case
-production probe and one frozen 80-case regression (`runner_v6.py`), recorded in
-PR #172 and docs/orchestration-router-benchmark.md.
+prompt contract text. The live classifier is certified separately: targeted
+production probes and one frozen 80-case regression per prompt version
+(`runner_v6.py` for v5, `runner_v7.py` for v6), recorded in PR #172 and
+docs/orchestration-router-benchmark.md.
 """
 
 from __future__ import annotations
@@ -76,6 +82,12 @@ CARE_BOUNDARY_CASES: list[dict] = [
         "expect": "unsupported",
     },
     {
+        "id": "care_walk_duration_routine",
+        "query": "성견은 하루에 몇 분 정도 산책해야 해?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
+    },
+    {
         "id": "care_puppy_sleep",
         "query": "3개월 강아지는 얼마나 자야 해?",
         "decision": {"execute": [], "handoffs": []},
@@ -104,6 +116,14 @@ CARE_BOUNDARY_CASES: list[dict] = [
     {
         "id": "walk_air_quality_now",
         "query": "오늘 미세먼지 심한데 산책 나가도 돼?",
+        "decision": {"execute": ["walk"], "handoffs": []},
+        "expect": "walk",
+    },
+    # Today's / this evening's walking time window is Walk (frozen clarify_03 shape),
+    # even without naming weather or air quality.
+    {
+        "id": "walk_evening_time_window",
+        "query": "저녁 산책하기 제일 나은 시간 추천해줘",
         "decision": {"execute": ["walk"], "handoffs": []},
         "expect": "walk",
     },
@@ -367,10 +387,10 @@ def _policy() -> str:
     return prompt.split("USER_QUERY:")[0]
 
 
-def test_prompt_is_v5_with_the_same_model_and_schema() -> None:
-    assert PROMPT_VERSION == "semantic-router-ko-v5"
+def test_prompt_is_v6_with_the_same_model_and_schema() -> None:
+    assert PROMPT_VERSION == "semantic-router-ko-v6"
     assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v5" in _policy()
+    assert "PROMPT_VERSION: semantic-router-ko-v6" in _policy()
     # Schema unchanged: three EXECUTE names, two HANDOFF targets, social_intent enum.
     schema = SemanticRoutingDecision.model_json_schema()
     assert set(schema["properties"]) == {"execute", "handoffs", "social_intent"}
@@ -399,11 +419,12 @@ def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:
     assert "Official guidance belongs to Life ONLY when it concerns such formal" in life_line
 
 
-def test_v5_declares_general_husbandry_unsupported_without_keyword_lists() -> None:
+def test_v6_declares_routine_husbandry_unsupported_without_keyword_lists() -> None:
     policy = " ".join(_policy().split())
     assert "General pet husbandry or care recommendations are NOT supported" in policy
     for example in (
-        "walk or exercise frequency or duration",
+        "routine or normative advice on how often or how long a dog should walk or exercise",
+        "independent of current conditions",
         "feeding frequency or amount",
         "sleep duration",
         "water intake",
@@ -413,10 +434,22 @@ def test_v5_declares_general_husbandry_unsupported_without_keyword_lists() -> No
         assert example in policy, example
     assert "even when it mentions an institution, an official source, or a recommendation" in policy
     assert "return both lists empty and leave social_intent null" in policy
+    # v5's blanket "not Walk merely because it concerns walking" is gone (it suppressed Walk
+    # for today's walking window); v6 draws the line at routine vs. current-day instead.
+    assert "not Walk merely because it concerns walking" not in policy
     # Semantic rule only: no Korean keyword list and no answer instruction.
-    for keyword in ("산책", "급여", "수면", "정부", "권장", "푸들"):
+    for keyword in ("산책", "급여", "수면", "정부", "권장", "푸들", "저녁", "오늘"):
         assert keyword not in policy
     assert "not an answer generator" in policy
+
+
+def test_v6_keeps_todays_walking_time_window_in_walk_without_broadening_to_routines() -> None:
+    policy = " ".join(_policy().split())
+    assert "deciding whether or when to walk now, today, or this evening" in policy
+    assert "choosing a suitable walking time window for today" in policy
+    assert "IS Walk (current environmental suitability)" in policy
+    assert "even when weather or air quality is not named explicitly" in policy
+    assert "do not extend Walk to recurring exercise routines" in policy
 
 
 def test_v5_keeps_the_other_boundaries_verbatim() -> None:

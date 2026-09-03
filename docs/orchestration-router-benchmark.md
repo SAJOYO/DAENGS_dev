@@ -274,3 +274,40 @@ v5 프롬프트는 브랜치에 있으나 **수용되지 않았습니다.** 다�
 합니다. v1~v5 결과 파일은 제자리 수정하지 않았고 v6 결과 파일(`results_v6.jsonl` · `summary_v6.json` ·
 `phase2_v6_report.md`)은 FAIL 기록 그대로 보존합니다. 이 카드의 유료 호출 합계: 2(v4 진단) + 5(v5
 프로브) + 80(v6 회귀) = **87건.**
+
+## v7 프롬프트 회귀 — `semantic-router-ko-v6` 일상 운동 권고 vs 오늘의 산책 시간 창 (2026-09-03, PR #172) — **PASS**
+
+v6 run 의 실패 원인은 v5 의 한 문장이었습니다: "walk or exercise frequency or duration … not Walk merely
+because it concerns walking" 이 일상 돌봄뿐 아니라 **오늘/저녁의 산책 시간 창**(gold 가 Walk 로 보는 것)까지
+눌렀습니다. 사람 결정으로 프롬프트를 v5 → **v6** 으로 올려 그 문장만 보정했습니다 — **일상적·규범적 운동
+권고**(하루 몇 번·몇 분, 견종·연령·체격별, 현재 조건과 무관)는 미지원, **지금·오늘·이번 저녁에 걸을지/언제
+걸을지**(오늘의 시간 창 고르기 포함)는 날씨·대기질을 명시하지 않아도 Walk, Walk 를 반복 일정으로 넓히지 않음.
+Life 제한(v5)·모델·스키마·gold·gate·1회 재시도 정책은 그대로. 순서는 규칙대로: 7건 타깃 프로브(동결 원문
+`mixed_10`·`clarify_08`·`walk_03`·`clarify_03` 포함, 7/7 PASS, 유료 7건) → 80건 회귀 정확히 1회(run **v7**).
+
+| 항목 | v5 (`ko-v4`) | v6 (`ko-v5`) | v7 (`ko-v6`) |
+| --- | ---: | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity (first-pass / final) | 100% / 100% | 100% / 100% | 100% / 100% |
+| exact RoutePlan match (≥0.90) | 98.75% | 95.00% | 97.50% |
+| executable precision / recall (≥0.95) | 98.68% / 100% | 96.10% / 98.67% | 97.40% / 100% |
+| multi-execute recall (≥0.90) | 100% | 97.06% | 100% |
+| exact executable set (multi, ≥0.90) | 100% | 93.75% | 100% |
+| exact mixed execute+handoff match (≥0.90) | 100% | **80.00% FAIL** | 90.00% (경계값) |
+| Skin / Gait HANDOFF recall (=1.0) | 100% / 100% | 100% / 100% | 100% / 100% |
+| handoff precision (≥0.95) | 100% | 100% | 100% |
+| CLARIFY precision / recall (≥0.90) | 100% / 100% | 100% / 91.67% | 100% / 100% |
+| forbidden / invented capability (=0) | 0 / 0 | 0 / 0 | 0 / 0 |
+| `social_intent` non-null | 0 / 80 | 0 / 80 | 0 / 80 |
+| warm p50 / p95 | 950 / 1117 ms | — | 1032 / 1207 ms |
+| non-exact | `boundary_05` | `boundary_05` · `mixed_09` · `mixed_10` · `clarify_08` | `boundary_05` · `mixed_09` |
+| verdict | PASS | FAIL (14/15) | **PASS (15/15)** |
+
+non-exact 2건은 둘 다 이전 run 에서 이미 나타난 온도 0 경계 흔들림입니다: `boundary_05`("오늘 산책 날씨는
+말고 목줄 당김 교육만") 은 v5·v6 run 과 같은 Walk 추가, `mixed_09`("리드줄 연습 가능한 날씨인지 보고, 걷는
+영상도") 는 v4 run 과 같은 Training 추가(정정 gold 는 Walk+Gait). v6 run 이 새로 잃었던 `mixed_10`·`clarify_08`
+은 회복됐습니다. `exact_mixed_execute_handoff_match` 가 정확히 gate 값 0.90 에 걸린 것은 이 10건 범주에
+`mixed_09` 하나가 non-exact 이기 때문이며, 규칙대로 80/80 을 쫓지 않고 수용합니다. v1~v6 결과 파일은 제자리
+수정하지 않았고(v6 FAIL 산출물은 근거로 보존), v7 산출물은 `results_v7.jsonl` · `summary_v7.json` ·
+`phase2_v7_report.md`. 이 카드의 유료 호출 합계: 2(v4 진단) + 5(v5 프로브) + 80(v6 회귀) + 7(v6 프로브)
++ 80(v7 회귀) = **174건.**

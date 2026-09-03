@@ -13,7 +13,7 @@
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
 지금은 `life/` · `training/` · `gait/` 을 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
@@ -64,6 +64,16 @@
 ⚠️ 결정은 `decisions.md` 의 **D-029**(독립 서비스) → **D-038**(소스는 backend 로,
 런타임 격리는 유지)에 있습니다. 코드 위치만 보면 `daengs_training`·`daengs_screening`
 과 같아 보이지만 **gait 만 런타임을 안 합쳤습니다** — 영상 추론이 분 단위라서입니다.
+
+### `console/` — 관리자 콘솔 (`frontend/app/console` · `/admin/*` · `/auth/*`)
+
+| | |
+| --- | --- |
+| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · 메뉴 5개 점검(2026-09-03 실측) · **AI 답변 신고 경로**(지금은 앱 → 메일, 목표는 #131 `chat_turns` 를 가리키는 API) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
+
+콘솔은 코드 하나(`frontend/app/console`)를 로컬(`daengs.~`, 개발 DB)과 GCP(`daengapp.~`, 운영 DB) 두 곳에
+배포합니다. 운영 값이 있는 GCP 쪽이 운영 콘솔이고, "GCP 용 콘솔" 을 따로 만들지 않습니다.
+인증·권한의 "왜" 는 `decisions.md` 의 **D-014 · D-015 · D-016** 에 있습니다.
 
 운영 / 배포 절차는 루트 [README.md](../README.md), 코드 규칙은
 [CLAUDE.md](../CLAUDE.md) 에 있습니다.

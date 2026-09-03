@@ -138,6 +138,75 @@ def test_life_execute_실제_그래프를_거쳐_실행된다() -> None:
     assert transport.prompts == []
 
 
+# ---------------------------------------------------- 2-b. Life 경계 신호 (RAG-055 · #177)
+# 여기서는 **진짜 `LifeCapabilityAdapter`** 를 쓴다 — 위 둘이 쓰는 `RecordingAdapter` 는 결과를
+# 그대로 돌려주므로 어댑터의 번역을 건너뛴다. 이 카드가 지켜야 할 것이 바로 그 번역이라,
+# 가짜로 두는 경계를 한 칸 안쪽(`services.ask` 가 던지는 HTTPException)으로 옮긴다.
+
+
+def _life_adapter_raising(exc: Exception):
+    from daengs_backend.orchestration.adapters.life import LifeCapabilityAdapter
+
+    def ask(_: str):
+        raise exc
+
+    return LifeCapabilityAdapter(ask)
+
+
+def test_life_medical_boundary_reaches_the_user_as_refused() -> None:
+    """증상 질문 → 최상위 `REFUSED` + `refusal.code` + Life 가 쓴 문장 그대로 (RAG-055 ⑤).
+
+    이 사슬 전체가 진짜다 — HTTP · 인증 · 라우팅 · 그래프 · `aggregate_results`. 가짜는
+    `services/ask.py` 가 던지는 예외 하나뿐이고, 그것이 이 카드가 새로 만든 계약이다.
+    """
+    from fastapi import HTTPException
+
+    said = "반려동물의 증상에 대한 판단은 수의사의 진료를 통해 확인해야 합니다."
+    life = _life_adapter_raising(
+        HTTPException(status_code=422,
+                      detail={"code": "medical_boundary", "message": said}))
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.LIFE: life}),
+        semantic_router=GeminiSemanticRouter(generate=ScriptedTransport()),
+    )
+    got = _post(service, {"query": "뒷다리를 절뚝거리는데 무슨 병인가요?",
+                          "requested_capability": "life"}, _app_token())
+
+    assert got.status_code == 200          # 거절은 실패가 아니다 — 능력이 낸 결과다
+    body = got.json()
+    assert body["status"] == "REFUSED"
+    result = body["results"][0]
+    assert result["status"] == "REFUSED"
+    assert result["refusal"]["code"] == "medical_boundary"
+    assert result["refusal"]["message"] == said     # 불변식 3 — 어댑터는 상태만 옮긴다
+
+
+def test_life_weak_evidence_reaches_the_user_as_uncertain() -> None:
+    """A0 의 목줄 질문이 가야 할 곳 — 최상위 `UNCERTAIN` (ABSTAINED, RAG-055 ⑤).
+
+    옛 서빙은 이것을 `OK`/`ANSWERED` 로 내보냈고(A0 §3-1), 앱은 무관한 과태료를 나열한 답을
+    정상 답변으로 보여 줬다. 코드가 `no_evidence` 그대로인 것은 기권의 **종류가 는 것**이지
+    뜻이 바뀐 게 아니어서다.
+    """
+    from fastapi import HTTPException
+
+    said = "제공해주신 자료에는 목줄 미착용에 대한 과태료 규정이 포함되어 있지 않습니다."
+    life = _life_adapter_raising(
+        HTTPException(status_code=404, detail={"code": "no_evidence", "message": said}))
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.LIFE: life}),
+        semantic_router=GeminiSemanticRouter(generate=ScriptedTransport()),
+    )
+    got = _post(service, {"query": "목줄 안 하면 과태료 얼마야",
+                          "requested_capability": "life"}, _app_token())
+
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "UNCERTAIN"
+    assert body["results"][0]["abstention"]["code"] == "no_evidence"
+    assert body["results"][0]["abstention"]["message"] == said
+
+
 # ------------------------------------------------------------------- 3. Walk EXECUTE + 좌표
 
 

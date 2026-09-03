@@ -396,7 +396,10 @@ def hand_questions() -> list[tuple[str, str, set[str], set[str]]]:
     from . import goldenset
 
     gs = goldenset.load()
-    return [(i.id, i.question, set(i.must), set(i.nice))
+    # **`must_flat` 이다** — 여기가 쓰는 것은 "이 주소가 정답 층인가"뿐이라 요구의 경계가
+    # 필요 없다 (RAG-055). 요구째로 봐야 하는 것은 채점이고, 그건 `evaluate` 와 `score` 다.
+    # 기권·거절 문항(`expect != answer`)도 그대로 나간다 — 랩이 그 질문을 돌려야 잴 수 있다
+    return [(i.id, i.question, set(i.must_flat), set(i.nice))
             for i in gs.items if i.origin == "hand"]
 
 

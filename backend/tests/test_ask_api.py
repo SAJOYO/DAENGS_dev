@@ -78,6 +78,76 @@ def test_empty_question_is_rejected_by_the_contract(client: TestClient) -> None:
     assert client.post("/life/ask", json={"question": ""}).status_code == 422
 
 
+# ---------------------------------------------------------------- 경계 신호 (RAG-055)
+def test_a_body_question_is_refused_with_its_own_wording(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**이 개의 몸에 대한 판단은 422 로 거절한다** (RAG-055 · 로드맵 §2).
+
+    422 인 것은 요청이 잘못돼서가 아니라 **답할 수 없는 요청**이어서다. 4xx 중 이 뜻에 가장
+    가깝고, 상류가 죽은 5xx 와 갈라야 어댑터가 REFUSED 와 ERROR 를 안 뭉갠다.
+
+    `message` 가 생성이 만든 문장 그대로인 것이 핵심이다 — 여기서 고정 문구를 끼우면 어댑터가
+    지킬 무손실(불변식 3)이 이미 여기서 깨진다.
+    """
+    said = "지체 없이 가까운 동물병원에 방문해 수의사의 진료를 받으세요."
+    refused = Answer(question="q", text=said, hits=HITS, model="m", embedding_model="bge-m3",
+                     boundary="emergency", covered=False)
+    monkeypatch.setattr(service.generate, "ask", lambda *a, **k: refused)
+
+    r = client.post("/life/ask", json={"question": "초콜릿을 먹었어요"})
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["code"] == "emergency_boundary"
+    assert detail["message"] == said
+
+
+def test_refusal_comes_before_abstention(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**응급 질문에 근거가 0건이면 둘 다 성립한다.** 그때 사용자에게 필요한 것은 "자료에 없다"가
+    아니라 "지금 병원에"다 — 그래서 거절이 앞이다 (RAG-055).
+    """
+    both = Answer(question="q", text="지금 병원으로 가세요.", hits=[], model="m",
+                  embedding_model="bge-m3", boundary="emergency", covered=False)
+    monkeypatch.setattr(service.generate, "ask", lambda *a, **k: both)
+    assert client.post("/life/ask", json={"question": "q"}).status_code == 422
+
+
+def test_weak_evidence_abstains_even_with_hits(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**근거는 있는데 물은 것에 못 닿는 경우** (RAG-055). A0 이 실물로 둘 남겨 이 카드가 열렸다.
+
+    하이브리드 검색이 늘 상위 k 를 돌려주므로 근거 0건은 빈 코퍼스에서나 난다 — 그 위에
+    더하는 기권이다. 코드가 `no_evidence` 그대로인 것은 기권의 **종류가 는 것**이지 뜻이 바뀐
+    것이 아니어서다: 어댑터가 이미 ABSTAINED 로 옮기고 있다.
+    """
+    weak = Answer(question="q", text="자료에는 그 값이 없습니다.", hits=HITS, model="m",
+                  embedding_model="bge-m3", boundary="none", covered=False)
+    monkeypatch.setattr(service.generate, "ask", lambda *a, **k: weak)
+
+    r = client.post("/life/ask", json={"question": "q"})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "no_evidence"
+
+
+def test_serving_reads_the_same_policy_the_lap_scorer_does() -> None:
+    """**서빙이 자기 판정을 따로 적지 않는다** (RAG-055).
+
+    검문소가 재는 것과 서빙이 하는 것이 갈리면 랩 표가 거짓말이 된다 — RAG-026 ②가 8단계에서,
+    RAG-028 ③이 9단계에서 막은 것과 같은 병리다. `_as_row` 의 칸 이름이 저장된 랩의 행과
+    어긋나면 정책이 조용히 기본값(`covered=True`)을 읽어 **기권이 영영 안 난다.**
+    """
+    from daengs_life.rag.stages import score
+
+    assert service.SERVING_ABSTAIN_POLICY in score.ABSTAIN_POLICIES
+    covered = Answer(question="q", text="답", hits=HITS, model="m", embedding_model="b",
+                     cited=["제1조"], covered=True)
+    uncovered = Answer(question="q", text="답", hits=HITS, model="m", embedding_model="b",
+                       cited=["제1조"], covered=False)
+    policy = score.ABSTAIN_POLICIES[service.SERVING_ABSTAIN_POLICY]
+    assert not policy(service._as_row(covered))
+    assert policy(service._as_row(uncovered))
+
+
 def test_no_evidence_means_no_answer(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """**근거 0건이면 생성하지 않는다.** 빈 컨텍스트로 Gemini 에 넘기면 그것은 검색 결과 위의
     답이 아니라 모델의 기억이고, KPI(출처 링크 + 조항 번호)가 성립할 수 없다.

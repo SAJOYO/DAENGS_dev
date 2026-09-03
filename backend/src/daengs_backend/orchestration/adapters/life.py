@@ -180,12 +180,20 @@ class LifeCapabilityAdapter:
         try:
             upstream = await asyncio.to_thread(self._ask, payload.question)
         except HTTPException as exc:
-            detail = str(exc.detail)
+            code, detail = _outcome(exc.detail)
+            if exc.status_code == 422:
+                # Life refuses a question about this animal's body; keep its own wording intact.
+                return CapabilityResult(
+                    capability=self.capability,
+                    status=CapabilityStatus.REFUSED,
+                    refusal=OutcomeDetail(code=code or "life_boundary", message=detail),
+                    elapsed_ms=_elapsed_ms(started),
+                )
             if exc.status_code == 404:
                 return CapabilityResult(
                     capability=self.capability,
                     status=CapabilityStatus.ABSTAINED,
-                    abstention=OutcomeDetail(code="no_evidence", message=detail),
+                    abstention=OutcomeDetail(code=code or "no_evidence", message=detail),
                     elapsed_ms=_elapsed_ms(started),
                 )
             if exc.status_code == 504:
@@ -234,6 +242,20 @@ class LifeCapabilityAdapter:
             error=ErrorDetail(kind=kind, detail=detail),
             elapsed_ms=_elapsed_ms(started),
         )
+
+
+def _outcome(detail: Any) -> tuple[str | None, str]:
+    """Split Life's HTTPException detail into (code, message) without rewriting the message.
+
+    Life sends a mapping for the outcomes it names itself and a bare string for the older
+    ones. Reading both matters: ``str()`` over a mapping would hand the user a Python repr,
+    which is exactly the lossy step invariant 3 forbids.
+    """
+    if isinstance(detail, dict):
+        code = detail.get("code")
+        message = detail.get("message")
+        return (str(code) if code else None), (str(message) if message else str(detail))
+    return None, str(detail)
 
 
 def _elapsed_ms(started: float) -> int:

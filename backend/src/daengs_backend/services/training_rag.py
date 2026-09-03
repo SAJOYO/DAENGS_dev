@@ -45,9 +45,18 @@ class TrainingRuntime(Protocol):
 
 @lru_cache(maxsize=1)
 def get_training_runtime() -> TrainingRuntime:
-    """Initialize the heavy runtime lazily, on the first worker-thread request."""
+    """Initialize the heavy runtime lazily, on the first worker-thread request.
+
+    The body runs only when the cache misses, so it is the one place that knows this
+    invocation *constructed* the runtime.  It marks the active telemetry trace instead of
+    inspecting ``cache_info()``: concurrent first calls each run the body (lru_cache does not
+    coalesce in-flight misses) and each will report ``created`` — that is the behavior that
+    exists, and this card only observes it.
+    """
+    from daengs_training import telemetry
     from daengs_training.service import RAGService
 
+    telemetry.current_trace().runtime_created = True
     return RAGService()
 
 
@@ -63,10 +72,15 @@ def _citation_label(heading_path: list[str], rank: int) -> str:
 
 def _answer_locally(question: str) -> TrainingRagResult:
     # Import the domain timeout lazily with the heavy Training runtime boundary.
+    from daengs_training import telemetry
     from daengs_training.service import TrainingTimeoutError
 
+    trace = telemetry.current_trace()
+    with trace.stage(telemetry.EVENT_RUNTIME) as stage:
+        runtime = get_training_runtime()
+        stage["runtime_state"] = "created" if trace.runtime_created else "reused"
     try:
-        upstream = get_training_runtime().answer(question, top_k=4)
+        upstream = runtime.answer(question, top_k=4)
     except TrainingTimeoutError as exc:
         raise TrainingRagTimeoutError from exc
     decision = upstream.decision
@@ -97,15 +111,24 @@ def _answer_locally(question: str) -> TrainingRagResult:
 
 class TrainingRagService:
     async def ask(self, *, question: str, trace_id: str) -> TrainingRagResult:
-        """Run all blocking ML, PGVector, and Gemini work outside the event loop."""
-        try:
-            response = await asyncio.to_thread(_answer_locally, question)
-        except TrainingRagTimeoutError:
-            logger.exception("training_rag timeout trace_id=%s", trace_id)
-            raise
-        except Exception as exc:  # dependencies fail heterogeneously
-            logger.exception("training_rag unavailable trace_id=%s", trace_id)
-            raise TrainingRagUnavailableError from exc
+        """Run all blocking ML, PGVector, and Gemini work outside the event loop.
+
+        ``training_trace()`` joins the adapter's trace when one is active and starts one
+        for the public ``/training/chat`` path otherwise; ``to_thread`` copies the context,
+        so the worker thread sees the same trace.  Function-local import: this module must
+        not pull ``daengs_training`` when the backend is merely imported.
+        """
+        from daengs_training import telemetry
+
+        with telemetry.training_trace():
+            try:
+                response = await asyncio.to_thread(_answer_locally, question)
+            except TrainingRagTimeoutError:
+                logger.exception("training_rag timeout trace_id=%s", trace_id)
+                raise
+            except Exception as exc:  # dependencies fail heterogeneously
+                logger.exception("training_rag unavailable trace_id=%s", trace_id)
+                raise TrainingRagUnavailableError from exc
         logger.info(
             "training_rag completed trace_id=%s decision=%s citations=%s",
             trace_id,

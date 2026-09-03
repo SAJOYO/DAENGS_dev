@@ -1,8 +1,14 @@
 """Runtime PGVector retriever with a conservative answer gate."""
 from __future__ import annotations
-import argparse,json,re,sys
+
+import argparse
+import json
+import re
+import sys
+import time
 from dataclasses import dataclass
 
+from daengs_training import telemetry
 from daengs_training.resources import RUNTIME_ROOT
 
 #: Minimum characters for any term in SAFETY_BOUNDARY_TERMS.
@@ -142,35 +148,45 @@ class RuntimeRetriever:
         return bool(re.search(r"[가-힣A-Za-z]", clean))
 
     def search(self, question: str, top_k: int=5):
-        vec=self.model.encode("query: "+question,normalize_embeddings=True)
+        # Timing only (daengs_training.telemetry).  The encode call, the connection and
+        # the query are exactly as before; connect_ms/query_ms fall out of the existing
+        # `with connect()` boundary without restructuring retrieval.
+        trace=telemetry.current_trace()
+        with trace.stage(telemetry.EVENT_EMBEDDING):
+            vec=self.model.encode("query: "+question,normalize_embeddings=True)
         vector="["+",".join(str(float(x)) for x in vec)+"]"
-        with self.psycopg.connect(self.dsn) as conn, conn.cursor() as cur:
-            # A large candidate pool is intentional: noisy raw collection rows
-            # can otherwise occupy all of a top-5 before the quality filter sees
-            # any real prose.  This is local PGVector; generation dominates the
-            # request latency by orders of magnitude.
-            candidate_limit=max(500, top_k * 100)
-            where="embedding_model=%s"
-            params=[vector,self.label]
-            if self.document_ids is not None:
-                # The serving allow-list is small enough that an exact scan is
-                # faster and more reliable than an HNSW filtered scan.  HNSW's
-                # finite candidate set can otherwise return no filtered rows.
-                cur.execute("set local enable_indexscan = off")
-                where += " and document_id = any(%s)"
-                params.append(list(self.document_ids))
-            params.extend([vector,candidate_limit])
-            cur.execute(f"select chunk_id,document_id,chunk_index,text,metadata,1-(embedding <=> %s::vector) from training_rag_chunks where {where} order by embedding <=> %s::vector limit %s",params)
-            rows=[]
-            seen=set()
-            for r in cur.fetchall():
-                if r[0] in seen or not self.is_retrieval_eligible(r[3]):
-                    continue
-                seen.add(r[0])
-                rows.append({"chunk_id":r[0],"document_id":r[1],"chunk_index":r[2],"text":r[3],"metadata":r[4],"score":float(r[5])})
-                if len(rows)>=top_k:
-                    break
-            return rows
+        with trace.stage(telemetry.EVENT_PGVECTOR) as pgvector_stage:
+            connect_started=time.perf_counter()
+            with self.psycopg.connect(self.dsn) as conn, conn.cursor() as cur:
+                pgvector_stage["connect_ms"]=int((time.perf_counter()-connect_started)*1_000)
+                query_started=time.perf_counter()
+                # A large candidate pool is intentional: noisy raw collection rows
+                # can otherwise occupy all of a top-5 before the quality filter sees
+                # any real prose.  This is local PGVector; generation dominates the
+                # request latency by orders of magnitude.
+                candidate_limit=max(500, top_k * 100)
+                where="embedding_model=%s"
+                params=[vector,self.label]
+                if self.document_ids is not None:
+                    # The serving allow-list is small enough that an exact scan is
+                    # faster and more reliable than an HNSW filtered scan.  HNSW's
+                    # finite candidate set can otherwise return no filtered rows.
+                    cur.execute("set local enable_indexscan = off")
+                    where += " and document_id = any(%s)"
+                    params.append(list(self.document_ids))
+                params.extend([vector,candidate_limit])
+                cur.execute(f"select chunk_id,document_id,chunk_index,text,metadata,1-(embedding <=> %s::vector) from training_rag_chunks where {where} order by embedding <=> %s::vector limit %s",params)
+                rows=[]
+                seen=set()
+                for r in cur.fetchall():
+                    if r[0] in seen or not self.is_retrieval_eligible(r[3]):
+                        continue
+                    seen.add(r[0])
+                    rows.append({"chunk_id":r[0],"document_id":r[1],"chunk_index":r[2],"text":r[3],"metadata":r[4],"score":float(r[5])})
+                    if len(rows)>=top_k:
+                        break
+                pgvector_stage["query_ms"]=int((time.perf_counter()-query_started)*1_000)
+                return rows
     def gate(self, question: str, results: list[dict]):
         """Harm boundary, then the medical verdict, then retrieval quality.
 

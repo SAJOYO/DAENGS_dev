@@ -19,7 +19,7 @@ uv run pytest  # 테스트
 | `daengs_backend` | 인증·회원·공통 API | `backend` |
 | `daengs_life` | 생활비서·실시간 산책 | `backend`/crawler |
 | `daengs_training` | 훈련 RAG | `backend` |
-| `daengs_place` | Place 검색·적재 | `place-search` |
+| `daengs_place` | Place 검색·적재, 중립 점령지 읽기 | `place-search` |
 | `daengs_journey` | 장소 선택 뒤 이동 스냅샷 | `journey-service` |
 
 Place 개발에는 전용 의존성을 함께 동기화합니다.

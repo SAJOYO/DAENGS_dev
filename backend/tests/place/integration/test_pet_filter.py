@@ -251,7 +251,7 @@ async def test_dog_size_value_drives_the_size_filter():
 
 
 async def test_truncation_is_reported_not_silent():
-    """상한에 걸리면 말한다. 조용히 자르면 "이 반경엔 이만큼뿐"으로 읽힌다 (`/anchor/search` 와 같은 이유)."""
+    """상한에 걸리면 말한다. 조용히 자르면 "이 반경엔 이만큼뿐"으로 읽힌다."""
     async with db_session() as session:
         await _clean(session)
         try:
@@ -278,7 +278,7 @@ async def test_truncation_is_reported_not_silent():
 
 async def test_unspecified_limit_is_still_bounded_by_the_server():
     """`limit` 미지정이 '무한'은 아니다. 경계는 서버가 세운다 — 호출자가 카테고리로
-    나눠 부를 것이라는 기대는 경계가 아니다 (`/anchor/search` 의 `MAX_LIMIT` 과 같은 이유)."""
+    나눠 부를 것이라는 기대는 서버의 자원 경계가 아니다."""
     async with db_session() as session:
         await _clean(session)
         try:

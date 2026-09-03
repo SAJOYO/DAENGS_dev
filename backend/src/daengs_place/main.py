@@ -1,7 +1,7 @@
 """Place 검색 전용 진입점 — `uvicorn daengs_place.main:app`.
 
-`main.py` 는 walk/journey/static-map/anchor 까지 전부 mount 하고 route provider 설정을
-기동 게이트로 검증한다. 그 문을 같이 쓰면 Place 검색만 필요한 배포에서도 TMAP 키 하나
+DAENGS_geo의 통합 `app.main`은 walk/journey/static-map까지 전부 mount 하고 route provider
+설정을 기동 게이트로 검증한다. 그 문을 같이 쓰면 Place 검색만 필요한 배포에서도 TMAP 키 하나
 때문에 서버가 안 뜬다 — 코드 경계(결정 #73)를 끊어도 프로세스 경계가 남아 있던 자리다.
 
 이 진입점의 약속: **PostGIS 만 있으면 뜬다.** 지도/route provider 키도, LLM 키도,
@@ -17,11 +17,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_place.api import places_v2
+from daengs_place.api import places_v2, territory_sites
 from daengs_place.core.db import get_session
 
 app = FastAPI(title="DAENGS Place Search", version="0.1.0")
 app.include_router(places_v2.router)
+app.include_router(territory_sites.router)
 
 
 @app.get("/health")

@@ -31,6 +31,7 @@ from daengs_backend.schemas.territory import TerritoryAttemptStart
 from daengs_backend.services.territory_site_lookup import TerritorySiteLookup
 
 CAPTURE_RADIUS_M = 10.0
+MAX_TERRITORY_PHOTO_BYTES = 12 * 1024 * 1024
 TERRITORY_BRIDGE_UPLOAD_PATH = "/app/territory/attempts/_bridge/upload"
 
 
@@ -81,6 +82,7 @@ def _ticket_for(attempt: TerritoryAttempt) -> UploadTicket | None:
         object_key=attempt.photo_storage_key,
         content_type=attempt.photo_content_type,
         bridge_upload_path=TERRITORY_BRIDGE_UPLOAD_PATH,
+        create_only=True,
     )
 
 
@@ -125,6 +127,12 @@ async def start_attempt(
             "outside_capture_radius",
             f"점령지 인증 반경 10m 밖입니다 (현재 {distance_m:.1f}m).",
         )
+    if distance_m + body.accuracy_m > CAPTURE_RADIUS_M:
+        raise TerritoryAttemptConflictError(
+            "insufficient_location_accuracy",
+            "GPS 오차를 포함하면 점령지 인증 반경 10m를 벗어납니다 "
+            f"(거리 {distance_m:.1f}m + 오차 {body.accuracy_m:.1f}m).",
+        )
 
     attempt_id = uuid.uuid4()
     storage_key = build_territory_photo_key(
@@ -136,6 +144,7 @@ async def start_attempt(
         object_key=storage_key,
         content_type=body.content_type,
         bridge_upload_path=TERRITORY_BRIDGE_UPLOAD_PATH,
+        create_only=True,
     )
     attempt = TerritoryAttempt(
         id=attempt_id,
@@ -154,6 +163,8 @@ async def start_attempt(
         status="PENDING_UPLOAD",
         photo_storage_key=storage_key,
         photo_content_type=body.content_type,
+        photo_object_generation=None,
+        photo_size_bytes=None,
         # 새 ORM 행에서 응답 조립이 lazy load를 시도하지 않도록 명시적으로 고정합니다.
         verified_visit=None,
     )
@@ -204,12 +215,25 @@ async def confirm_upload(
         raise TerritoryAttemptNotFoundError
     if attempt.status != "PENDING_UPLOAD":
         return attempt, False
-    if not get_storage().exists(attempt.photo_storage_key):
+    stored = get_storage().stat(attempt.photo_storage_key)
+    if stored is None:
         raise TerritoryAttemptConflictError(
             "photo_not_uploaded",
             "업로드된 사진을 찾을 수 없습니다.",
         )
+    if stored.size_bytes <= 0 or stored.size_bytes > MAX_TERRITORY_PHOTO_BYTES:
+        raise TerritoryAttemptConflictError(
+            "invalid_photo_size",
+            "사진은 비어 있지 않은 12 MiB 이하 파일이어야 합니다.",
+        )
+    if stored.content_type is not None and stored.content_type != attempt.photo_content_type:
+        raise TerritoryAttemptConflictError(
+            "photo_content_type_mismatch",
+            "업로드된 객체의 Content-Type이 발급된 사진 형식과 다릅니다.",
+        )
 
+    attempt.photo_object_generation = stored.generation
+    attempt.photo_size_bytes = stored.size_bytes
     attempt.status = "VISION_PENDING"
     attempt.updated_at = datetime.now(UTC)
     await session.commit()
@@ -227,8 +251,9 @@ async def record_vision_decision(
 ) -> TerritoryAttempt:
     """비동기 VLM 결과를 반영하는 유일한 경계.
 
-    어느 결과든 확정되면 사진을 먼저 지우고 같은 DB 트랜잭션에서 상태와
-    ``VerifiedVisit``을 기록합니다. failed도 새 촬영으로 재시도하게 해 원본을 남기지 않습니다.
+    판정과 ``VerifiedVisit``을 먼저 commit한 뒤, confirm에서 고정한 generation만
+    0바이트 tombstone으로 치환합니다. 저장소 작업이 실패해도 판정은 유실되지 않고 같은
+    호출을 재시도하면 정리만 이어집니다.
     """
     if not model.strip() or not model_version.strip():
         raise ValueError("VLM 모델과 버전은 비어 있을 수 없습니다.")
@@ -248,6 +273,8 @@ async def record_vision_decision(
                 "vision_decision_conflict",
                 "이미 확정된 사진 판정을 다른 결과로 바꿀 수 없습니다.",
             )
+        if attempt.photo_redacted_at is None:
+            await _redact_decided_photo(session, attempt)
         return attempt
     if attempt.status != "VISION_PENDING":
         raise TerritoryAttemptConflictError(
@@ -256,9 +283,6 @@ async def record_vision_decision(
         )
 
     now = datetime.now(UTC)
-    get_storage().delete(attempt.photo_storage_key)
-    attempt.photo_deleted_at = now
-
     attempt.status = target_status
     attempt.vision_model = model
     attempt.vision_model_version = model_version
@@ -274,5 +298,21 @@ async def record_vision_decision(
         attempt.verified_visit = visit
         session.add(visit)
 
+    # 외부 저장소 작업보다 판정 사실을 먼저 내구성 있게 확정합니다.
     await session.commit()
+    await _redact_decided_photo(session, attempt)
     return attempt
+
+
+async def _redact_decided_photo(
+    session: AsyncSession,
+    attempt: TerritoryAttempt,
+) -> None:
+    generation = attempt.photo_object_generation
+    if not generation:
+        raise RuntimeError("confirm된 사진 generation이 없습니다.")
+    get_storage().redact(attempt.photo_storage_key, generation=generation)
+    now = datetime.now(UTC)
+    attempt.photo_redacted_at = now
+    attempt.updated_at = now
+    await session.commit()

@@ -32,7 +32,7 @@ class TerritoryAttemptStart(BaseModel):
     captured_at: datetime
     lat: Decimal = Field(ge=-90, le=90, max_digits=9, decimal_places=7)
     lng: Decimal = Field(ge=-180, le=180, max_digits=10, decimal_places=7)
-    accuracy_m: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    accuracy_m: float = Field(ge=0, allow_inf_nan=False)
     is_mock: bool = False
     content_type: Literal["image/jpeg", "image/webp"] = "image/jpeg"
 
@@ -52,7 +52,7 @@ class TerritoryAttemptResponse(BaseModel):
     captured_at: datetime
     status: TerritoryAttemptStatus
     distance_m: float
-    accuracy_m: float | None
+    accuracy_m: float
     verified_visit_id: uuid.UUID | None
     vision_model: str | None
     vision_model_version: str | None

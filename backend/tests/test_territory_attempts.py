@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, current_app_user
-from daengs_backend.core.storage import LocalBridgeStorage, UploadTicket
+from daengs_backend.core.storage import LocalBridgeStorage, StoredObject, UploadTicket
 from daengs_backend.main import app
 from daengs_backend.models.territory import TerritoryAttempt
 from daengs_backend.repositories import territory as territory_repo
@@ -65,24 +65,38 @@ class FakeLookup:
 
 
 class FakeStorage:
-    def __init__(self, *, exists: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        exists: bool = True,
+        size_bytes: int = 4,
+        content_type: str | None = "image/jpeg",
+    ) -> None:
         self._exists = exists
-        self.deleted: list[str] = []
+        self.object = StoredObject("generation-1", size_bytes, content_type)
+        self.redacted: list[tuple[str, str]] = []
 
-    def create_upload_ticket(self, *, object_key, content_type, bridge_upload_path=None):
+    def create_upload_ticket(
+        self, *, object_key, content_type, bridge_upload_path=None, create_only=False
+    ):
         assert bridge_upload_path == "/app/territory/attempts/_bridge/upload"
+        assert create_only is True
         return UploadTicket(
             storage_key=object_key,
             upload_url=f"https://storage.example/{object_key}",
-            headers={"Content-Type": content_type},
+            headers={
+                "Content-Type": content_type,
+                "x-goog-if-generation-match": "0",
+            },
             expires_in_seconds=900,
         )
 
-    def exists(self, storage_key):
-        return self._exists
+    def stat(self, storage_key):
+        return self.object if self._exists else None
 
-    def delete(self, storage_key):
-        self.deleted.append(storage_key)
+    def redact(self, storage_key, *, generation):
+        self.redacted.append((storage_key, generation))
+        return "redacted-generation"
 
 
 def _body(**overrides):
@@ -119,7 +133,9 @@ def _attempt(**overrides) -> TerritoryAttempt:
         "status": "PENDING_UPLOAD",
         "photo_storage_key": f"territory/{OWNER}/{uuid.uuid4()}/capture.jpg",
         "photo_content_type": "image/jpeg",
-        "photo_deleted_at": None,
+        "photo_object_generation": None,
+        "photo_size_bytes": None,
+        "photo_redacted_at": None,
         "vision_model": None,
         "vision_model_version": None,
         "decision_reason": None,
@@ -168,7 +184,10 @@ def test_start_checks_current_site_and_returns_direct_upload_ticket(client):
     assert payload["status"] == "PENDING_UPLOAD"
     assert payload["distance_m"] == pytest.approx(0)
     assert payload["upload_url"].startswith("https://storage.example/territory/")
-    assert payload["upload_headers"] == {"Content-Type": "image/jpeg"}
+    assert payload["upload_headers"] == {
+        "Content-Type": "image/jpeg",
+        "x-goog-if-generation-match": "0",
+    }
     assert client.fake_lookup.calls == 1
     assert client.fake_session.commits == 1
 
@@ -181,6 +200,21 @@ def test_start_rejects_outside_ten_metres(client):
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "outside_capture_radius"
     assert client.fake_session.added == []
+
+
+def test_start_requires_uncertainty_to_fit_inside_ten_metres(client):
+    response = client.post(
+        "/app/territory/attempts",
+        json=_body(lat="37.5000450", accuracy_m=6.0),
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "insufficient_location_accuracy"
+
+
+def test_start_requires_location_accuracy(client):
+    body = _body()
+    del body["accuracy_m"]
+    assert client.post("/app/territory/attempts", json=body).status_code == 422
 
 
 def test_mock_location_is_rejected_without_gameboard_lookup(client):
@@ -235,6 +269,8 @@ def test_confirm_checks_photo_then_becomes_vision_pending(client, monkeypatch):
     response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
     assert response.status_code == 200
     assert response.json()["status"] == "VISION_PENDING"
+    assert attempt.photo_object_generation == "generation-1"
+    assert attempt.photo_size_bytes == 4
     assert client.fake_session.commits == 1
 
 
@@ -252,6 +288,24 @@ def test_confirm_missing_photo_is_conflict(client, monkeypatch):
     assert attempt.status == "PENDING_UPLOAD"
 
 
+def test_confirm_rejects_oversized_photo(client, monkeypatch):
+    attempt = _attempt()
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    client.fake_storage.object = StoredObject(
+        "generation-1",
+        territory_service.MAX_TERRITORY_PHOTO_BYTES + 1,
+        "image/jpeg",
+    )
+    response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "invalid_photo_size"
+    assert attempt.status == "PENDING_UPLOAD"
+
+
 @pytest.mark.parametrize(
     ("decision", "expected_status", "visit_count"),
     [("verified", "VERIFIED", 1), ("rejected", "REJECTED", 0), ("failed", "FAILED", 0)],
@@ -261,7 +315,11 @@ async def test_vision_decision_is_terminal_and_deletes_photo(
 ):
     session = FakeSession()
     storage = FakeStorage()
-    attempt = _attempt(status="VISION_PENDING")
+    attempt = _attempt(
+        status="VISION_PENDING",
+        photo_object_generation="generation-1",
+        photo_size_bytes=4,
+    )
 
     async def for_decision(*args, **kwargs):
         return attempt
@@ -277,12 +335,62 @@ async def test_vision_decision_is_terminal_and_deletes_photo(
         reason="dog" if decision == "verified" else "not_dog",
     )
     assert result.status == expected_status
-    assert result.photo_deleted_at is not None
-    assert storage.deleted == [attempt.photo_storage_key]
+    assert result.photo_redacted_at is not None
+    assert storage.redacted == [(attempt.photo_storage_key, "generation-1")]
+    assert session.commits == 2
     assert (
         len([item for item in session.added if item.__class__.__name__ == "VerifiedVisit"])
         == visit_count
     )
+
+
+async def test_vision_decision_survives_photo_cleanup_failure(monkeypatch):
+    session = FakeSession()
+    attempt = _attempt(
+        status="VISION_PENDING",
+        photo_object_generation="generation-1",
+        photo_size_bytes=4,
+    )
+
+    class FailingOnceStorage(FakeStorage):
+        failed = False
+
+        def redact(self, storage_key, *, generation):
+            if not self.failed:
+                self.failed = True
+                raise OSError("storage unavailable")
+            return super().redact(storage_key, generation=generation)
+
+    async def for_decision(*args, **kwargs):
+        return attempt
+
+    storage = FailingOnceStorage()
+    monkeypatch.setattr(territory_repo, "get_for_decision", for_decision)
+    monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+    with pytest.raises(OSError, match="storage unavailable"):
+        await territory_service.record_vision_decision(
+            session,
+            attempt.id,
+            decision="verified",
+            model="dog-detector",
+            model_version="2026-09-03",
+        )
+
+    assert attempt.status == "VERIFIED"
+    assert attempt.photo_redacted_at is None
+    assert session.commits == 1
+
+    result = await territory_service.record_vision_decision(
+        session,
+        attempt.id,
+        decision="verified",
+        model="dog-detector",
+        model_version="2026-09-03",
+    )
+    assert result.photo_redacted_at is not None
+    assert storage.redacted == [(attempt.photo_storage_key, "generation-1")]
+    assert session.commits == 2
+    assert len([item for item in session.added if item.__class__.__name__ == "VerifiedVisit"]) == 1
 
 
 def test_local_bridge_accepts_only_issued_matching_small_photo(client, monkeypatch, tmp_path):
@@ -305,6 +413,14 @@ def test_local_bridge_accepts_only_issued_matching_small_photo(client, monkeypat
     assert response.status_code == 200
     assert storage.local_path(key).read_bytes() == b"jpeg"
 
+    overwrite = client.put(
+        f"/app/territory/attempts/_bridge/upload/{key}",
+        content=b"other jpeg",
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert overwrite.status_code == 409
+    assert storage.local_path(key).read_bytes() == b"jpeg"
+
     wrong_type = client.put(
         f"/app/territory/attempts/_bridge/upload/{key}",
         content=b"webp",
@@ -322,11 +438,7 @@ async def test_http_site_lookup_uses_server_coordinates(monkeypatch):
         seen.update(dict(request.url.params))
         return httpx.Response(
             200,
-            json={
-                "sites": [
-                    {"site_id": SITE_ID, "lat": 37.5, "lng": 127.0, "distance_m": 3.0}
-                ]
-            },
+            json={"sites": [{"site_id": SITE_ID, "lat": 37.5, "lng": 127.0, "distance_m": 3.0}]},
         )
 
     original = httpx.AsyncClient
@@ -371,18 +483,20 @@ def test_init_and_migration_share_the_visit_invariants():
     migration_sql = (REPO / "db/migrations/2026-09-03_territory_visits.sql").read_text(
         encoding="utf-8"
     )
-    verify_sql = (
-        REPO / "db/migrations/verify_2026-09-03_territory_visits.sql"
-    ).read_text(encoding="utf-8")
+    verify_sql = (REPO / "db/migrations/verify_2026-09-03_territory_visits.sql").read_text(
+        encoding="utf-8"
+    )
     required = (
         "CREATE TABLE IF NOT EXISTS territory_attempts",
         "CREATE TABLE IF NOT EXISTS territory_verified_visits",
         "territory_attempts_owner_capture_unique",
         "territory_attempts_distance_range",
-        "territory_attempts_final_photo_deleted",
+        "territory_attempts_location_evidence",
+        "territory_attempts_confirmed_photo_identity",
         "territory_attempts_final_vision_metadata",
     )
     assert all(token in init_sql for token in required)
     assert all(token in migration_sql for token in required)
     assert "fact_for_nonverified_attempt" in verify_sql
-    assert "final_without_photo_cleanup" in verify_sql
+    assert "terminal_photo_cleanup_pending" in verify_sql
+    assert "confirmed_without_photo_identity" in verify_sql

@@ -8,10 +8,25 @@ WHERE status NOT IN ('PENDING_UPLOAD','VISION_PENDING','VERIFIED','REJECTED','FA
    OR is_mock
    OR photo_content_type NOT IN ('image/jpeg','image/webp');
 
-SELECT count(*) AS final_without_photo_cleanup
+SELECT count(*) AS terminal_photo_cleanup_pending
 FROM territory_attempts
 WHERE status IN ('VERIFIED', 'REJECTED', 'FAILED')
-  AND photo_deleted_at IS NULL;
+  AND photo_redacted_at IS NULL;
+
+SELECT count(*) AS confirmed_without_photo_identity
+FROM territory_attempts
+WHERE status <> 'PENDING_UPLOAD'
+  AND (
+      photo_object_generation IS NULL
+      OR btrim(photo_object_generation) = ''
+      OR photo_size_bytes NOT BETWEEN 1 AND 12582912
+  );
+
+SELECT count(*) AS location_uncertainty_outside_radius
+FROM territory_attempts
+WHERE accuracy_m IS NULL
+   OR accuracy_m < 0
+   OR distance_m + accuracy_m > 10;
 
 SELECT count(*) AS final_without_vision_metadata
 FROM territory_attempts

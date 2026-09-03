@@ -28,7 +28,7 @@ PET = uuid.uuid4()
 def test_object_key_is_scoped_to_pet_and_kind():
     k = build_object_key(PET, kind="original", source_file="IMG.MOV")
     assert k.startswith(f"gait/{PET}/original/")
-    assert k.endswith(".mov")               # 확장자만 따온다
+    assert k.endswith(".mov")  # 확장자만 따온다
     assert str(PET) in k
 
 
@@ -36,7 +36,7 @@ def test_object_key_ignores_path_in_source_file():
     """앱이 준 이름에 경로가 있어도 키에 새지 않습니다 — basename 의 suffix 만."""
     k = build_object_key(PET, kind="overlay", source_file="../../etc/passwd.mp4")
     assert ".." not in k
-    assert k.count("/") == 3                # gait / pet / kind / name
+    assert k.count("/") == 3  # gait / pet / kind / name
 
 
 def test_object_keys_are_unique():
@@ -120,15 +120,53 @@ class _FakeBlob:
         self.store, self.key = store, key
 
     def generate_signed_url(self, **kw):
-        return f"https://signed.example/{self.key}?m={kw.get('method')}"
+        signed_create_only = kw.get("headers") == {"x-goog-if-generation-match": "0"}
+        return (
+            f"https://signed.example/{self.key}?m={kw.get('method')}"
+            f"&createOnly={int(signed_create_only)}"
+        )
 
     def exists(self):
         return self.key in self.store
 
-    def upload_from_string(self, data, content_type=None):
-        self.store[self.key] = data
+    def reload(self):
+        if self.key not in self.store:
+
+            class NotFound(Exception):
+                code = 404
+
+            raise NotFound
+
+    @property
+    def generation(self):
+        return self.store[self.key][2]
+
+    @property
+    def size(self):
+        return len(self.store[self.key][0])
+
+    @property
+    def content_type(self):
+        return self.store[self.key][1]
+
+    def upload_from_string(self, data, content_type=None, if_generation_match=None):
+        current_generation = self.store[self.key][2] if self.key in self.store else 0
+        if if_generation_match is not None and current_generation != if_generation_match:
+
+            class PreconditionFailed(Exception):
+                code = 412
+
+            raise PreconditionFailed
+        self.store[self.key] = (data, content_type, current_generation + 1)
 
     def delete(self, **kw):
+        expected = kw.get("if_generation_match")
+        if expected is not None and self.key in self.store and self.store[self.key][2] != expected:
+
+            class PreconditionFailed(Exception):
+                code = 412
+
+            raise PreconditionFailed
         self.store.pop(self.key, None)
 
 
@@ -143,7 +181,7 @@ class _FakeBucket:
 @pytest.fixture()
 def gcs(monkeypatch):
     """google.cloud.storage 를 mock 으로 꽂습니다 — 지연 import 라 가능합니다."""
-    store: dict[str, bytes] = {}
+    store: dict[str, tuple[bytes, str | None, int]] = {}
 
     fake_mod = types.ModuleType("google.cloud.storage")
 
@@ -169,6 +207,17 @@ def test_gcs_signed_upload_url(gcs):
     assert t.headers["Content-Type"] == "video/mp4"
 
 
+def test_gcs_create_only_ticket_signs_zero_generation_precondition(gcs):
+    storage, _ = gcs
+    ticket = storage.create_upload_ticket(
+        object_key="territory/user/attempt/capture.jpg",
+        content_type="image/jpeg",
+        create_only=True,
+    )
+    assert ticket.headers["x-goog-if-generation-match"] == "0"
+    assert "createOnly=1" in ticket.upload_url
+
+
 def test_gcs_exists_and_delete(gcs):
     storage, _ = gcs
     key = "gait/k/original/x.mp4"
@@ -177,6 +226,27 @@ def test_gcs_exists_and_delete(gcs):
     assert storage.exists(key) is True
     storage.delete(key)
     assert storage.exists(key) is False
+
+
+def test_gcs_stat_and_redact_preserve_object_identity(gcs):
+    storage, _ = gcs
+    key = "territory/user/attempt/capture.jpg"
+    storage.upload_bytes(key, b"jpeg", content_type="image/jpeg")
+
+    stored = storage.stat(key)
+    assert stored is not None
+    assert stored.generation == "1"
+    assert stored.size_bytes == 4
+    assert stored.content_type == "image/jpeg"
+
+    redacted_generation = storage.redact(key, generation=stored.generation)
+    assert redacted_generation == "2"
+    redacted = storage.stat(key)
+    assert redacted is not None
+    assert redacted.size_bytes == 0
+    assert redacted.content_type == "application/x-daengs-redacted"
+    # DB의 photo_redacted_at commit만 실패한 경우에도 재시도 가능합니다.
+    assert storage.redact(key, generation=stored.generation) == "2"
 
 
 def test_gcs_delete_accepts_already_missing_object(gcs, monkeypatch):

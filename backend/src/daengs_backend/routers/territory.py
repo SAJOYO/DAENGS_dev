@@ -35,7 +35,6 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 SiteLookup = Annotated[TerritorySiteLookup, Depends(get_territory_site_lookup)]
 
 _NOT_FOUND = HTTPException(status.HTTP_404_NOT_FOUND, "방문 인증 시도를 찾을 수 없습니다.")
-_MAX_LOCAL_PHOTO_BYTES = 12 * 1024 * 1024
 
 
 def _response_fields(attempt: TerritoryAttempt) -> dict:
@@ -162,7 +161,7 @@ async def _bridge_upload(session: Session, storage_key: str, request: Request) -
     declared_size = request.headers.get("content-length")
     if declared_size is not None:
         try:
-            if int(declared_size) > _MAX_LOCAL_PHOTO_BYTES:
+            if int(declared_size) > territory_service.MAX_TERRITORY_PHOTO_BYTES:
                 raise HTTPException(
                     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "사진은 12 MiB 이하입니다."
                 )
@@ -174,11 +173,17 @@ async def _bridge_upload(session: Session, storage_key: str, request: Request) -
     data = bytearray()
     async for chunk in request.stream():
         data.extend(chunk)
-        if len(data) > _MAX_LOCAL_PHOTO_BYTES:
+        if len(data) > territory_service.MAX_TERRITORY_PHOTO_BYTES:
             raise HTTPException(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "사진은 12 MiB 이하입니다."
             )
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "빈 사진은 업로드할 수 없습니다.")
-    storage.write(storage_key, bytes(data))
+    try:
+        storage.write_if_absent(storage_key, bytes(data))
+    except FileExistsError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "이미 업로드된 사진은 같은 티켓으로 덮어쓸 수 없습니다.",
+        ) from None
     return Response(status_code=status.HTTP_200_OK)

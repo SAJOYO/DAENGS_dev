@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
     captured_at TIMESTAMPTZ NOT NULL,
     capture_lat NUMERIC(9, 7) NOT NULL,
     capture_lng NUMERIC(10, 7) NOT NULL,
-    accuracy_m DOUBLE PRECISION,
+    accuracy_m DOUBLE PRECISION NOT NULL,
     is_mock BOOLEAN NOT NULL DEFAULT FALSE,
     site_lat NUMERIC(9, 7) NOT NULL,
     site_lng NUMERIC(10, 7) NOT NULL,
@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
     status VARCHAR(24) NOT NULL DEFAULT 'PENDING_UPLOAD',
     photo_storage_key TEXT NOT NULL UNIQUE,
     photo_content_type VARCHAR(50) NOT NULL,
-    photo_deleted_at TIMESTAMPTZ,
+    photo_object_generation TEXT,
+    photo_size_bytes BIGINT,
+    photo_redacted_at TIMESTAMPTZ,
     vision_model TEXT,
     vision_model_version TEXT,
     decision_reason TEXT,
@@ -35,8 +37,8 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
     CONSTRAINT territory_attempts_site_coordinate_range CHECK (
         site_lat BETWEEN -90 AND 90 AND site_lng BETWEEN -180 AND 180
     ),
-    CONSTRAINT territory_attempts_accuracy_nonnegative CHECK (
-        accuracy_m IS NULL OR accuracy_m >= 0
+    CONSTRAINT territory_attempts_location_evidence CHECK (
+        accuracy_m >= 0 AND distance_m + accuracy_m <= 10
     ),
     CONSTRAINT territory_attempts_distance_range CHECK (
         distance_m >= 0 AND distance_m <= 10
@@ -45,8 +47,14 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
     CONSTRAINT territory_attempts_photo_type_check CHECK (
         photo_content_type IN ('image/jpeg','image/webp')
     ),
-    CONSTRAINT territory_attempts_final_photo_deleted CHECK (
-        status NOT IN ('VERIFIED','REJECTED','FAILED') OR photo_deleted_at IS NOT NULL
+    CONSTRAINT territory_attempts_confirmed_photo_identity CHECK (
+        status = 'PENDING_UPLOAD'
+        OR (
+            photo_object_generation IS NOT NULL
+            AND btrim(photo_object_generation) <> ''
+            AND photo_size_bytes > 0
+            AND photo_size_bytes <= 12582912
+        )
     ),
     CONSTRAINT territory_attempts_final_vision_metadata CHECK (
         status NOT IN ('VERIFIED','REJECTED','FAILED')
@@ -60,6 +68,31 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
         client_capture_id
     )
 );
+
+-- 이 PR의 초안 마이그레이션을 이미 시험 적용한 DB도 같은 최종 스키마로 수렴시킨다.
+ALTER TABLE territory_attempts
+    ADD COLUMN IF NOT EXISTS photo_object_generation TEXT,
+    ADD COLUMN IF NOT EXISTS photo_size_bytes BIGINT,
+    ADD COLUMN IF NOT EXISTS photo_redacted_at TIMESTAMPTZ;
+ALTER TABLE territory_attempts ALTER COLUMN accuracy_m SET NOT NULL;
+ALTER TABLE territory_attempts
+    DROP CONSTRAINT IF EXISTS territory_attempts_accuracy_nonnegative,
+    DROP CONSTRAINT IF EXISTS territory_attempts_location_evidence,
+    DROP CONSTRAINT IF EXISTS territory_attempts_final_photo_deleted,
+    DROP CONSTRAINT IF EXISTS territory_attempts_confirmed_photo_identity;
+ALTER TABLE territory_attempts
+    ADD CONSTRAINT territory_attempts_location_evidence CHECK (
+        accuracy_m >= 0 AND distance_m + accuracy_m <= 10
+    ),
+    ADD CONSTRAINT territory_attempts_confirmed_photo_identity CHECK (
+        status = 'PENDING_UPLOAD'
+        OR (
+            photo_object_generation IS NOT NULL
+            AND btrim(photo_object_generation) <> ''
+            AND photo_size_bytes > 0
+            AND photo_size_bytes <= 12582912
+        )
+    );
 
 CREATE INDEX IF NOT EXISTS territory_attempts_owner_created_idx
     ON territory_attempts (app_user_id, created_at);
@@ -79,6 +112,6 @@ CREATE TABLE IF NOT EXISTS territory_verified_visits (
 COMMENT ON TABLE territory_attempts IS
     '산책 중 점령지 촬영의 위치·업로드·VLM 상태. 실제 점령 상태가 아님';
 COMMENT ON TABLE territory_verified_visits IS
-    '10m 위치와 강아지 사진 판정을 모두 통과한 불변 방문 사실';
+    '앱 위치 attestation의 보수적 10m 조건과 강아지 사진 판정을 통과한 방문 사실';
 
 COMMIT;

@@ -14,6 +14,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -59,8 +60,8 @@ class TerritoryAttempt(Base):
             name="territory_attempts_site_coordinate_range",
         ),
         CheckConstraint(
-            "accuracy_m IS NULL OR accuracy_m >= 0",
-            name="territory_attempts_accuracy_nonnegative",
+            "accuracy_m >= 0 AND distance_m + accuracy_m <= 10",
+            name="territory_attempts_location_evidence",
         ),
         CheckConstraint(
             "distance_m >= 0 AND distance_m <= 10",
@@ -72,8 +73,11 @@ class TerritoryAttempt(Base):
             name="territory_attempts_photo_type_check",
         ),
         CheckConstraint(
-            "status NOT IN ('VERIFIED','REJECTED','FAILED') OR photo_deleted_at IS NOT NULL",
-            name="territory_attempts_final_photo_deleted",
+            "status = 'PENDING_UPLOAD' OR "
+            "(photo_object_generation IS NOT NULL "
+            "AND btrim(photo_object_generation) <> '' "
+            "AND photo_size_bytes > 0 AND photo_size_bytes <= 12582912)",
+            name="territory_attempts_confirmed_photo_identity",
         ),
         CheckConstraint(
             "status NOT IN ('VERIFIED','REJECTED','FAILED') "
@@ -114,7 +118,7 @@ class TerritoryAttempt(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     capture_lat: Mapped[Decimal] = mapped_column(Numeric(9, 7))
     capture_lng: Mapped[Decimal] = mapped_column(Numeric(10, 7))
-    accuracy_m: Mapped[float | None] = mapped_column(Float)
+    accuracy_m: Mapped[float] = mapped_column(Float)
     is_mock: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
 
     # 판정 당시 게임판 좌표를 보존합니다. 나중에 게임판 세대가 바뀌어도 과거 10m 판정은
@@ -126,7 +130,10 @@ class TerritoryAttempt(Base):
     status: Mapped[str] = mapped_column(String(24), server_default=text("'PENDING_UPLOAD'"))
     photo_storage_key: Mapped[str] = mapped_column(Text, unique=True)
     photo_content_type: Mapped[str] = mapped_column(String(50))
-    photo_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # confirm에서 고정한 원본 generation과 크기. VLM은 이 generation만 읽어야 합니다.
+    photo_object_generation: Mapped[str | None] = mapped_column(Text)
+    photo_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    photo_redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     vision_model: Mapped[str | None] = mapped_column(Text)
     vision_model_version: Mapped[str | None] = mapped_column(Text)
@@ -147,7 +154,7 @@ class TerritoryAttempt(Base):
 
 
 class VerifiedVisit(Base):
-    """위치 10m와 강아지 사진 판정을 모두 통과한 불변 방문 사실."""
+    """앱 위치 attestation의 보수적 10m 조건과 강아지 사진 판정을 통과한 사실."""
 
     __tablename__ = "territory_verified_visits"
     __table_args__ = (

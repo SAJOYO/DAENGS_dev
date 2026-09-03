@@ -42,20 +42,20 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 서비스가 살아 있나 | ✅ 이미 콘솔 (#180) | — | — |
 | 사람들이 무엇을 묻나 | 모른다. D-037 이 원문 로깅을 금지했고, 허용된 메타데이터의 저장처도 없다 | 능력별 분포 · FAILED 비율 · 지연 (원문 없이) | B2 · B3 |
 | 크롤이 실패했다 | ✅ 이미 콘솔 (#76) | — | — |
-| 답변 품질을 점검한다 | ✅ 이미 콘솔 (#30 · #36 · #170) — 단 앱이 쓰는 `/assistant/query` 가 아니라 직접 API | 앱과 같은 경로로 점검 | C1 |
+| 답변 품질을 점검한다 | ✅ 이미 콘솔 (#30 · #36 · #170 · #181) | — | — |
 
 **발표(09-21)에서의 값**은 부차적이지만 있다 — 앱 데모 옆에 운영 화면이 있으면 "기능" 이 아니라 "서비스" 로 읽힌다.
 
 ---
 
-## 2. 지금 상태 (2026-09-03, `origin/dev` `42be33d` 실측)
+## 2. 지금 상태 (2026-09-04, `origin/dev` `d31826f` 실측)
 
 ### 메뉴 6개
 
 | 메뉴 (`console/page.tsx`) | 카드 권한 | 화면 | 뒤의 API | 상태 | 어긋난 것 |
 | --- | --- | --- | --- | --- | --- |
 | 상태 | `read` | `/console/status` — 항목 여덟, 30초 폴링. `absent`(이 환경엔 없음)와 `down`(죽음)의 색·문구가 다르다 | `/admin/status`(READ) | ✅ #180 | 사람이 손댈 자리는 없다 — 읽기 전용이다 |
-| 기능 / 검색 점검 | `read` | `/console/search` — 탭 3: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 | 앱은 `/assistant/query` 만 부르는데 콘솔은 직접 API 만 두들긴다. 산책 기록 · gait · place · journey 탭 없음 |
+| 기능 / 검색 점검 | `read` | `/console/search` — 탭 4: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 · 어시스턴트(`/assistant/query`) | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 · #181 | 산책 기록 · gait · place · journey 탭 없음 (C4). 어시스턴트 탭은 `RoutePlan` 이 공개 응답에 없어 라우터 종류 · 모델 이름을 못 보여 준다 |
 | 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
 | 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
 | 회원 · 반려견 | `read` | 없음 | 없음 — `app_users` 는 AES 암호문 + blind index(D-012), `Perm.PII_READ` 는 정의만 | ⬜ 준비 중 | — |
@@ -123,10 +123,10 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | A0 | **관리자가 회원 대화를 보는 범위 결정** (`D-`) — 신고된 turn 만 / 세션 / Perm(`pii:read` 로 묶을지 새 `report:read`) / 고지 문구 | §3. 코드 없이 결정만. A1 이 이 번호를 인용한다 | #131 의 D-048 | XS | ⬜ 사람 몫 (§7) |
-| A4 | **감사 로그 테이블** `admin_audit_log`(누가 · 언제 · 무엇을 · 대상 id) + 기록 헬퍼. 첫 소비자는 A2 의 복호화 조회 | Hold 로그 카드 메모 "감사 로그는 DB" · D-012(복호화는 `core/crypto.py` 한 곳) | 없음 — 두 DB 손 적용 | S | ⬜ **A 트랙의 첫 카드** |
+| A4 | **감사 로그 테이블** `admin_audit_log`(누가 · 언제 · 무엇을 · 대상 id) + 기록 헬퍼. 첫 소비자는 **로그인 시도**(성공 · 실패 · 정지 거부, 2026-09-04 사람 결정)이고 A2 의 복호화 조회가 뒤따른다 | Hold 로그 카드 메모 "감사 로그는 DB" · D-012(복호화는 `core/crypto.py` 한 곳) | 없음 — 두 DB 손 적용 | S | 🔵 #203 |
 | A3 | **관리자 계정 관리** — `GET/POST /admin/admins` · 정지 · role 변경 (`ADMIN_MANAGE`) + `/console/admins`. `seed-admin` 은 최초 1회로 남긴다 | D-014 5단계가 정의만. 팀원이 ADMIN 하나를 공유하는 것이 로그인 잠금 설계의 전제까지 정한다(`login_attempts.py` 첫 문단) | A4 (발급 · 정지도 감사 대상) | S~M | ⬜ |
 | A2 | **회원 · 반려견 조회** — `GET /admin/app-users?email=`(blind index) · 상세(마스킹, `pii:read` 면 복호화 + 감사) · `PATCH status`(suspended) · 반려견 목록. `/console/users` | §1 둘째 줄. `console/page.tsx` 의 준비 중 카드 | A4. 복호화는 `core/crypto.py` 만 (D-012) | M | ⬜ |
-| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | **#131 머지 + 운영 DB 적용** · A0 · A4 · 앱 카드(DAENGS_APP) | M | ⬜ |
+| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ 머지됨 · **운영 DB 적용**(`main` 에 아직 없다) · A0 · A4 · 앱 카드(DAENGS_APP) | M | ⬜ |
 
 ### B. 관측 — 시스템이 남긴 것을 본다
 
@@ -134,7 +134,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | --- | --- | --- | --- | --- | --- |
 | B1 | **상태 페이지** `/console/status` — 항목 여덟(`db` · 임베딩 예열 · `screening` 가중치 · Redis 일 예산 · place · journey · 크롤 · gait). 항목별 짧은 timeout 이고 하나가 죽어도 200. 읽기 전용, DB 무변경 | §1 "살아 있나". 지금은 첫 요청이 알려 준다 | `GET /admin/status` 하나 (BE) | S | ✅ #180 |
 | B2 | **요청 메타데이터 저장** — D-037 허용 열만(request_id · principal 종류 · 능력 · status · reason code · elapsed_ms) → 테이블 or 파일 집계. **저장처는 사람 결정** | `운영 지표` 카드가 보여 줄 것이 없다. Hold 로그 카드가 전제 | 로그 카드 해제 · §7 | M | ⬜ 저장처 결정 뒤 |
-| B3 | **대화 집계** — 세션 수 · `agent_categories` 분포 · `assistant_status` FAILED 비율 · 요약 생성 수. 제품 테이블 집계, 원문 노출 없음 | #131 뒤 가장 싸게 "사람들이 무엇을 묻나" 를 보는 길 | #131 | S | ⬜ |
+| B3 | **대화 집계** — 세션 수 · `agent_categories` 분포 · `assistant_status` FAILED 비율 · 요약 생성 수. 제품 테이블 집계, 원문 노출 없음 | #131 뒤 가장 싸게 "사람들이 무엇을 묻나" 를 보는 길 | #131 ✅ 머지됨 — 운영 DB 적용만 남음 | S | ⬜ |
 | B4 | `운영 지표` 화면 `/console/metrics` — B2 · B3 를 한 화면에 | 준비 중 카드 | B2 or B3 | S | ⬜ |
 
 ### C. 점검 도구 — 지금 메뉴 손질
@@ -142,7 +142,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | C1 | **`/assistant/query` 점검 탭** — 앱과 같은 경로 · 같은 축소 응답, `context`(location · active_dog_id) 입력, `results[]` status 와 라우팅 결과 표시 | 앱 ChatScreen 의 실제 경로인데 콘솔이 안 두들긴다. A0 스모크(#169)를 사람이 curl 로 했다 | 없음 (FE 만) | S | ✅ #181. `RoutePlan` 이 공개 응답에 없어 **라우터 종류(deterministic/llm)·모델 이름은 화면에 안 뜬다** — 응답 계약을 늘려야 하는 별도 카드감 |
-| C2 | **준비 중 카드 문구 현실화** — 지식 베이스 설명에서 "그래프" 제거 · 크롤 카드에 "GCP 에서는 트리거 없음" 안내 · `href` 리터럴 유니온에 새 라우트 | §2 표 "어긋난 것" | 없음 | XS | ⬜ |
+| C2 | **준비 중 카드 문구 현실화** — 지식 베이스 설명에서 "그래프" 제거 · 크롤 카드에 "GCP 에서는 트리거 없음" 안내 · `href` 리터럴 유니온에 새 라우트 | §2 표 "어긋난 것" | 없음 | XS | ✅ #179 |
 | C3 | 생활 파트 A4(이름 정리 `/life/ask` · `/life/walk-conditions`)의 **콘솔 호출 경로 동반** | `docs/life/roadmap.md` A4 가 "콘솔 점검 탭 호출 경로 동반" 을 명시 | life A4 카드 안 | — | ✅ #176 |
 | C4 | 산책 기록(`/app/walks`) · gait · place · journey 점검 탭 | life A8 🚫 의 재개 조건 "콘솔에 산책 점검 탭이 생기면". 관리자 토큰으로는 본인 소유 API 를 못 부른다(`current_app_user`) → **테스트 회원 토큰**이 필요 | §7 | M | ⏸ 앱 API 가 본인 것만 주는 구조라 형태부터 정해야 |
 
@@ -169,9 +169,9 @@ draft 카드 `fix: 앱 로그가 어디에도 남지 않는 문제`(Hold P3) 가
 ```
 ── 지금 (DB 변경 허용 — 2026-09-03 사람 결정. 카드마다 두 DB 손 적용) ────────────────────
 C2 문구 ✅ → B1 상태 페이지 ✅ → C1 assistant 탭 ✅   (셋 다 DB 없음 · FE/읽기 전용 — 먼저 갔다)
-A4 감사 로그 → A3 계정 관리 → A2 회원 조회         (A 트랙. A4 가 앞인 이유는 아래)
+A4 감사 로그 🔵 → A3 계정 관리 → A2 회원 조회      (A 트랙. A4 가 앞인 이유는 아래)
 
-── #131 머지 + 운영 DB 적용 뒤 ────────────────────────────────────────────────────────
+── 운영 DB 적용 뒤 (#131 은 dev 에 머지됨. `main` 에 `07_chats.sql` 이 아직 없다) ──────────
 A0 결정(D-) → A1 신고  ─┐
 B3 대화 집계           ─┴→ B4 운영 지표 화면
 D1 screen 인증 은 스크리닝 파트 일정에 (병렬)

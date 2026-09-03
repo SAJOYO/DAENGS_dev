@@ -46,7 +46,11 @@
 | [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
 | [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
 | [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
-| [D-042](#d-042) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-042](#d-042) | 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬 잔류 | 2026-09-01 |
+| [D-043](#d-043) | 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다 | 2026-09-02 |
+| [D-044](#d-044) | 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다 | 2026-09-02 |
+| [D-045](#d-045) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-046](#d-046) | 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지 | 2026-09-03 |
 
 ---
 
@@ -2133,6 +2137,164 @@ Skin/Gait handoff recall 100%로 정확도는 사실상 동등합니다. 지연�
 ---
 
 ## D-042
+### 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬에 남긴다
+
+앱 출시(HTTPS 필수)와 클라우드 배포 경험을 위해 서빙을 **GCP VM 1대**(e2-standard-4,
+asia-northeast3)로 옮깁니다. Cloud Run 이 아닌 이유(임베딩 상주·celery 상주·바인드
+마운트·비용 3배)와 비용 계산은 노션 "클라우드 이전 검토" 문서에 있습니다. 일정·단계는
+`docs/deploy/roadmap.md`, 명령 절차는 `docs/deploy/runbook.md`, GCP 전용 구성은
+`docker-compose.gcp.yml` + `nginx/gcp.conf` 입니다.
+
+- **배포 소스는 `main` 브랜치**입니다 (PR #114 가 첫 스냅샷). 별도 배포 레포를 만들지
+  않습니다 — 정본이 둘이 되면 핫픽스가 갈라지고(D-032 가 피한 그 상황), 같은 목적을
+  기존 규칙(완성 단위마다 dev → main PR)이 이미 제공합니다. **이관 관련 파일만 예외로
+  main 기준 브랜치 → main 머지**로 작업합니다 — 소비자가 GCP VM(main clone)뿐이라
+  dev 를 거칠 이유가 없습니다 (roadmap §3).
+- **서빙만 옮깁니다.** 크롤러·코퍼스 정본은 로컬 서버에 남습니다 — 코퍼스 raw 는
+  서빙 경로에서 읽히지 않고(앱이 읽는 것은 적재가 끝난 pgvector 뿐), 적재는 GPU 때문에
+  어차피 개발 PC 라 옮겨도 일하는 곳이 안 바뀝니다. 대신 컷오버 리스크와 왕복 비용이
+  생깁니다. GCP 유지가 확정되면 그때 2차로 이전합니다 (roadmap §7).
+- **DB 는 dev/prod 로 갈라집니다.** GCP 2대(pgvector·place-db, 덤프 복원)가 운영 정본,
+  로컬 서버 DB 는 개발용으로 남습니다. Training RAG 는 별도 DB 가 아니라 vectordb 안
+  테이블입니다(#112). GCP 는 5432/6379 를 인터넷에 열지 않습니다 — 지금 compose 의
+  LAN 개방을 인터넷에 재현하지 않습니다.
+- **TLS 는 certbot(Let's Encrypt)** — 가비아 DNS 유지, A 레코드만 GCP 고정 IP 로.
+  앱에 박는 주소는 IP 가 아니라 **도메인**입니다. 그래야 9/21 이후 VM 을 지워도
+  DNS 회귀로 배포된 앱이 계속 삽니다.
+- **기한 제약** — 발표 9/21 까지 유지가 1차 목표. 크레딧(약 ₩435k)이 **2026-11-17
+  만료**되고 계정이 일반 계정이라 만료 후 자동 실비 청구입니다. 종료 시 정지가 아니라
+  **삭제**까지 해야 합니다(디스크·미연결 고정 IP 는 정지 중에도 과금).
+
+**도메인 결정으로 개정 (2026-09-01 팀 회의)** — 클라우드는 기존 이름을 넘겨받지 않고
+**새 서브도메인**을 씁니다: 프런트 `daengapp.weareithero.cloud` · 백엔드
+`daengapi.weareithero.cloud`. 기존 `daengs`·`daengback` 은 로컬(개발) 서버가 그대로
+유지합니다 — 메인 프런트가 앱이라 웹 주소의 가치가 낮고, 이렇게 하면 **DNS 컷오버가
+아예 없습니다**(새 레코드 추가만 하고 기존 레코드는 안 건드림). 앱에 박는 주소는
+`https://daengapi.weareithero.cloud` 입니다. 와일드카드 DNS/인증서는 쓰지 않습니다 —
+가비아는 DNS-01 자동 갱신 수단이 마땅치 않아 와일드카드 인증서가 수동 갱신이 됩니다.
+
+---
+
+## D-043
+### 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다
+
+앱이 gait 서비스를 직접 부르는 구조를 끝냅니다. 새 계약은 backend 의
+`/app/gait/*` 이고, 흐름은 이렇습니다:
+
+```
+앱 → /app/gait/*        backend (인증 · pet 소유권 · record/job · presigned 발급)
+앱 → cloud storage       직접 업로드 — 영상이 backend 를 지나가지 않는다
+backend → Redis 큐(gait) 작업 발행
+gait 워커(별도 프로세스) → storage 에서 읽어 분석 → backend DB 에 결과 반영
+```
+
+#### 무엇을 뒤집고 무엇을 유지하나
+
+| 기존 결정 | 뒤집는 부분 | 유지하는 부분 |
+| --- | --- | --- |
+| D-038 "접점 0개" | `daengs_backend → daengs_gait` **지연 import 한쪽**이 생긴다 (태스크가 분석 함수를 부른다) | **별도 프로세스 · 별도 venv(gait 그룹) · 런타임 격리** |
+| D-029 격리 근거 | — | 전부. 분 단위 추론은 여전히 워커에서만 돈다 |
+| gait `API.md` v1 (앱→gait 직접) | 앱은 `/app/gait/*` 만 본다. 기존 `/gait/*` 는 앱 전환(#64) 뒤 단계 제거 | 응답 필드 모양 대부분 (`comparable`·`has_overlay` 등 파생 필드 유지) |
+| 설계문서 §3 "gait 가 파일 물리 소유" | 파일이 cloud storage(#78) 로 | **DB 에 영상 바이트를 절대 넣지 않는다** |
+
+#### 왜 인증을 gait 에 붙이지 않았나
+
+`/gait/*` 의 모든 경로가 `dog_id` 하나로 동작하고 그 값을 검증하지 않았다 —
+남의 기록을 받아오고 지울 수 있었다 (앱 카드 DAENGS_APP#64 가 출시 서류를 쓰다 발견).
+검증에 필요한 것(계정·세션·`pets.app_user_id`)은 전부 backend 에 있고, gait 에
+인증을 넣으면 그 지식이 두 곳으로 갈라진다. **소유권은 `pet_id → pets.app_user_id`
+JOIN 으로 유도**하고 owner 를 중복 저장하지 않는다 — 반려견 양도에서 어긋난다.
+
+#### 상태는 두 축이다 — 섞으면 안내가 갈리지 않는다
+
+```
+status         : PENDING → UPLOADED → PROCESSING → DONE / FAILED   (파이프라인)
+quality_status : ok / unavailable                                   (DONE 안에서)
+```
+
+FAILED(워커가 죽음)는 **재시도**, unavailable(영상이 분석 부적합)은 **재촬영**이다.
+D-033 이 ABSTAINED≠REFUSED 를 가른 것과 같은 이유다.
+
+#### Celery 는 backend 자체 앱이다
+
+`daengs_life.tasks.celery_app` 에 태스크를 넣으면 D-021 이 세 줄로 못박은
+backend→life 접점이 넓어진다. 같은 Redis 브로커에 **앱 인스턴스만 따로** 두고
+큐 이름(`gait` vs `crawl`)이 가른다. 태스크 정의·DB 반영은 backend 소유,
+무거운 분석 함수만 `daengs_gait` 에서 **지연 import** 한다(방식 ⓒ) —
+`services/training_rag.py` 가 `daengs_training` 을 부르는 규율과 같고,
+`daengs_gait` 는 여전히 backend 를 모른다.
+
+⚠️ 그 지연 import 를 최상단으로 올리면 **기본 설치(backend, gait 그룹 없음)가
+   ImportError 로 죽는다.** 테스트가 지키고 있다 (`test_gait_app_api.py`).
+
+#### 저장소는 GCS — Signed URL, backend 가 키를 만든다 (2026-09-02 확정)
+
+```
+앱 → /app/gait/analyze → backend 가 object key 생성 + GCS Signed URL(PUT) 발급
+앱 → GCS 에 직접 PUT (영상이 backend 를 통과하지 않는다 — 원칙 1)
+앱 → confirm → backend 가 exists() 로 실존 확인 후 큐 발행
+워커 → GCS 에서 Signed URL(GET)로 받아 분석, overlay 는 GCS 에 upload
+```
+
+- **object key 는 backend 가 만든다** (`build_object_key`, 원칙 6). 앱은 표시용 이름만
+  주고 그 확장자만 키에 반영된다 — 앱이 키를 정하면 남의 경로를 덮거나 훔쳐본다.
+- **버킷은 public 으로 열지 않는다** (원칙 7). 접근은 전부 Signed URL. 자격증명은
+  코드에 두지 않고 ADC(GOOGLE_APPLICATION_CREDENTIALS / 워크로드 아이덴티티).
+- **bucket·location·만료·정책은 하드코딩하지 않는다** (원칙 8) — 전부 `settings`.
+  리전은 서울(asia-northeast3) — 해외면 국외이전 동의가 따로 필요하다.
+- **삭제·파기는 한 통로로 모은다** — 사용자 직접 삭제 · 탈퇴 · 보관기간 만료 · confirm
+  안 온 고아가 전부 `gait.cleanup` 태스크로 간다. soft delete 로 표시하고 워커가
+  object 를 지운 뒤 행을 물리 삭제한다 (키를 먼저 잃으면 파일이 고아가 된다).
+
+#### 임시 bridge — GCS 자격증명 전에 왕복을 검증하려고 (settings.gait_storage="local")
+
+`LocalBridgeStorage` 는 로컬 디렉터리에 두고 backend 의 `_bridge` 엔드포인트로
+업로드를 받는다. **프로덕션이 아니다** — 여기서는 영상이 bridge(backend)를 지나가므로
+원칙 1 과 다르고, `gait_storage="local"` 일 때만 켜진다. 실측으로 IMG_8631.mov 왕복
+(upload→confirm→분석)이 sampled 298·detected 99·usable 3 으로 walk_demo 와 일치했다.
+
+#### 하지 않은 것 · 기다리는 것
+
+- **provider 는 GCS 확정, 세부값은 #78 대기** — 버킷·리전 세부, Signed URL 만료의
+  최종값, 보관 기간, 탈퇴 시 파기 시점, 기록 삭제 시 원본/overlay 삭제 정책.
+  코드는 그 값들을 `settings`·태스크 통로로 **열어 두었을 뿐** 정책을 정하지 않았다.
+- **기존 JSON 기록은 이관하지 않는다** — 전부 테스트 데이터이고 `dog_id="1"` 같은
+  값은 `pets.id` UUID FK 를 만족하지 못한다.
+- ⚠️ **앱 전환(#64) 전까지 무인증 `/gait/*` 가 열려 있다.** 완화는 앱 쪽
+  "비공개 테스트 빌드에서 끄기"이고, nginx location 제거는 전환 검증 뒤다.
+
+
+---
+
+## D-044
+### 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다
+
+`walks.analysis_state`는 원본 입력의 변경 가능성만 표현합니다. `collecting`에서는 좌표와
+계산 입력을 받을 수 있고, `derived`는 현재 입력이 봉인됐다는 뜻입니다. 계산 정책이 바뀌어
+재분석하더라도 원본을 다시 여는 것이 아니므로 상태를 `collecting`으로 되돌리지 않습니다.
+동기 계산을 한 트랜잭션에서 수행하는 동안에는 별도 `finalizing`·`failed` 상태를 만들지 않습니다.
+
+계산 결과의 identity는 `walk_analyses`가 소유합니다. 같은 `walk_id`라도 입력 fingerprint나
+Facts·Receipt·Observation 버전이 다르면 새 행으로 쌓고 이전 결과를 덮어쓰지 않습니다.
+자주 목록·집계할 `moving_distance_m`, `moving_s`, `stop_count`만 컬럼으로 꺼내며 전체
+canonical 계약은 JSONB로 함께 보존합니다. Event와 Observation도 실제 개별 행 질의가 생기기
+전까지는 정렬된 JSON 배열로 둡니다.
+
+Paint는 Facts 계산과 독립된 세대입니다. 한 `walk_analysis` 아래
+`walk_cellophane_sheets (analysis_id, paint_fp)`를 여러 장 둘 수 있게 해, Paint만 바뀌었을 때
+Facts·Receipt를 복제하지 않습니다. sheet payload는 storage schema v1의 정렬된
+`[q, r, occupancy_s, peak]` 배열과 전체 SHA-256 fingerprint를 가집니다. 현재 제품에는 한
+산책의 장 전체를 쓰고 읽는 경로만 있으므로 셀당 한 행은 만들지 않습니다. 특정 셀 검색이나
+셀별 누적 집계가 실제 소비자로 생기면 canonical JSONB를 유지한 채 검색용 index를 별도로
+물질화합니다.
+
+원본 좌표 보관은 기존 결정대로 계정 삭제 시까지 유지합니다. Geo의 purge 전제나 셀 행 저장
+형태를 운영 저장소에 그대로 복제하지 않습니다. finalize API는 다음 PR에서 Walk 행 잠금 아래
+분석·sheet 저장과 `derived` 전환을 한 트랜잭션으로 묶습니다.
+
+---
+
+## D-045
 ### Walk는 in-process 제품 패키지로 두고 Place·Journey는 능력 경계로 소비한다
 
 산책 측정과 공간 일기의 정본은 `backend/src/daengs_walk/`에 둡니다. 이것은 별도
@@ -2168,10 +2330,11 @@ Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합�
 최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
 producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
 
+**번호 재부여 (2026-09-02)** — 이 결정은 원래 D-042 로 발행됐습니다. 같은 날 `main` 에서 GCP 이관 결정이 같은 번호로 나갔고(PR #119, 09-01 14:02), 이 결정은 `dev` 에서 나왔습니다(PR #125, 09-01 17:30). 두 브랜치가 서로를 못 봐서 생긴 충돌이라 `docs/collaboration.md` §4 의 규칙대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-045 로 옮겼습니다. 같은 사고를 다시 내지 않으려고 이관 산출물의 main 직행 예외를 없앴습니다 — `docs/deploy/roadmap.md` §3.
 
 ---
 
-## D-043
+## D-046
 ### 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지한다
 
 D-037은 오케스트레이션의 일반 운영 로그·트레이스에 질문 원문을 남기지 않는 결정입니다.
@@ -2192,3 +2355,4 @@ D-037은 오케스트레이션의 일반 운영 로그·트레이스에 질문 �
 v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는 변경이 필요하면 D-037의
 명시적 옵트인·별도 저장·보존 기한 조건을 만족하는 별도 결정을 먼저 만듭니다.
 
+**번호 재부여 (2026-09-03)** — 이 결정은 원래 D-043 으로 발행됐습니다. 이 브랜치가 `origin/dev` 를 86 커밋 뒤진 채로 있는 사이 dev 에서 D-043·D-044·D-045 가 먼저 머지됐습니다. `docs/collaboration.md` §4 대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-046 으로 옮겼습니다. 바로 위 D-045 도 같은 사고를 한 번 겪었습니다 — 브랜치를 오래 안 맞추면 반복됩니다.

@@ -1,6 +1,6 @@
 """Product chat persistence. The SQL source of truth is ``db/init/07_chats.sql``.
 
-Chat persistence is product data, not observability logging (D-043).  Never copy
+Chat persistence is product data, not observability logging (D-046).  Never copy
 raw questions from these rows into logs or traces (D-037).
 """
 

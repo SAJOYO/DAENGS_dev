@@ -76,6 +76,12 @@ class Pet(Base):
     birth_date: Mapped[date | None] = mapped_column(Date)
     birth_date_kind: Mapped[str | None] = mapped_column(String(20))
 
+    #: 배웅한 날. **NULL 이면 아직 함께 있는 아이입니다.**
+    #:
+    #: 삭제와 다른 일이라 칸을 따로 둡니다 — 목록에서 지우는 것은 없던 일로 만드는
+    #: 것이고, 배웅은 있었던 일을 적어 두는 것입니다. 행을 안 지우고 이 날짜만 채웁니다.
+    farewell_on: Mapped[date | None] = mapped_column(Date)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )

@@ -9,12 +9,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fakes import FakeAdmin, FakeAppUser, FakePet, FakeWalk, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, FakeWalk, Store, install
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk as walk_router
+from daengs_backend.schemas.walk import WalkFinalizeRequest
+from daengs_backend.services import walk as walk_service
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
@@ -95,8 +97,13 @@ def test_같은_산책을_두_번_올려도_한_건이다(client: TestClient, st
     # 두 번째는 새로 만든 게 아니라 있던 것입니다.
     assert second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
+    # 재시도 응답도 첫 응답과 같은 상세 계약입니다. 기존 Walk를 찾기만 하고
+    # points를 미리 읽지 않으면 실제 async DB에서 응답 직렬화가 500으로 터집니다.
+    assert second.json()["points"] == first.json()["points"]
     assert len(store.walks) == 1
-    assert len(store.walks[0].points) == 2
+    # 좌표는 **묶음**으로 담긴다. 세는 것은 묶음이 아니라 그 안의 점이다 —
+    # 이 테스트가 보는 것은 "다시 올려도 좌표가 안 늘어난다" 이기 때문이다.
+    assert sum(chunk.point_count for chunk in store.walks[0].points) == 2
 
 
 def test_남의_산책은_404(client: TestClient, store: Store) -> None:
@@ -224,6 +231,13 @@ def point(seq: int) -> dict:
     }
 
 
+def finalize_body(count: int) -> dict:
+    return {
+        "expected_point_count": count,
+        "terminal_client_seq": count - 1 if count else None,
+    }
+
+
 def test_좌표를_나눠_올릴_수_있다(client: TestClient) -> None:
     """두 시간 산책이면 좌표가 5천 점이라 한 번에 보내면 바디 한도에 걸립니다."""
     created = client.post("/app/walks", json=body(uuid.uuid4())).json()
@@ -264,3 +278,137 @@ def test_남의_산책에는_좌표를_못_붙인다(client: TestClient, store: 
 
     assert response.status_code == 404
     assert other.points == []
+
+
+def test_finalize는_계산과_봉인을_한번에_저장한다(client: TestClient, store: Store) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(2),
+    )
+
+    assert response.status_code == 201
+    result = response.json()
+    assert result["walk_id"] == created["id"]
+    assert result["analysis_state"] == "derived"
+    assert result["point_count"] == 2
+    assert result["terminal_client_seq"] == 1
+    assert result["input_fingerprint"].startswith("sha256:")
+    assert len(store.walk_analyses) == 1
+    assert store.walks[0].analysis_state == "derived"
+    assert len(store.walk_analyses[0].cellophane_sheets) == 1
+
+
+def test_같은_finalize_재시도는_기존_분석을_돌려준다(client: TestClient, store: Store) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    url = f"/app/walks/{created['id']}/finalize"
+
+    first = client.post(url, json=finalize_body(2))
+    retried = client.post(url, json=finalize_body(2))
+
+    assert first.status_code == 201
+    assert retried.status_code == 200
+    assert retried.json()["analysis_id"] == first.json()["analysis_id"]
+    assert len(store.walk_analyses) == 1
+
+
+def test_finalize_후에는_좌표를_더할_수_없다(client: TestClient) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(2),
+    )
+
+    response = client.post(
+        f"/app/walks/{created['id']}/points",
+        json={"points": [point(2), point(3)]},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "walk_already_finalized"
+
+
+def test_불완전한_좌표열은_finalize하지_않고_상태를_보존한다(
+    client: TestClient, store: Store
+) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(3),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "point_count_mismatch"
+    assert store.walks[0].analysis_state == "collecting"
+    assert store.walk_analyses == []
+
+
+def test_다른_fingerprint는_봉인하지_않는다(
+    client: TestClient, store: Store
+) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    manifest = finalize_body(2)
+    manifest["input_fingerprint"] = "sha256:" + "0" * 64
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=manifest,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "input_fingerprint_mismatch"
+    assert store.walks[0].analysis_state == "collecting"
+    assert store.walk_analyses == []
+
+
+def test_봉인_상태에_분석이_없으면_충돌을_알린다(
+    client: TestClient, store: Store
+) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    store.walks[0].analysis_state = "derived"
+
+    response = client.post(
+        f"/app/walks/{created['id']}/finalize",
+        json=finalize_body(2),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "finalized_analysis_not_found"
+
+
+def test_남의_산책은_finalize할_수_없다(client: TestClient, store: Store) -> None:
+    other = FakeWalk(
+        app_user_id=STRANGER,
+        client_session_id=uuid.uuid4(),
+        started_at=STARTED,
+        ended_at=ENDED,
+    )
+    store.walks.append(other)
+
+    response = client.post(
+        f"/app/walks/{other.id}/finalize",
+        json=finalize_body(0),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_finalize_commit_실패는_rollback한다(client: TestClient, store: Store) -> None:
+    created = client.post("/app/walks", json=body(uuid.uuid4())).json()
+    session = FakeSession()
+
+    async def fail_commit() -> None:
+        raise RuntimeError("commit failed")
+
+    session.commit = fail_commit
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await walk_service.finalize_walk(
+            session,
+            OWNER,
+            uuid.UUID(created["id"]),
+            WalkFinalizeRequest(**finalize_body(2)),
+        )
+
+    assert session.rollbacks == 1

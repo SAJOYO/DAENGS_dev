@@ -1,4 +1,4 @@
-"""Short-transaction rules for product chat persistence (D-043).
+"""Short-transaction rules for product chat persistence (D-046).
 
 External orchestration/Gemini calls are intentionally absent from turn transactions. Summary
 generation uses reserve TX -> close session -> external call -> completion TX.

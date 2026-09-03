@@ -11,9 +11,9 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class WalkPointUpload(BaseModel):
@@ -28,8 +28,15 @@ class WalkPointUpload(BaseModel):
     at: datetime
     lat: Decimal = Field(ge=-90, le=90)
     lng: Decimal = Field(ge=-180, le=180)
-    accuracy_m: float | None = None
+    accuracy_m: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     is_mock: bool = False
+
+    @field_validator("at")
+    @classmethod
+    def _timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("산책 좌표 시각에는 timezone이 필요합니다.")
+        return value
 
 
 class WalkUpload(BaseModel):
@@ -100,6 +107,60 @@ class WalkPointsAppend(BaseModel):
         if len(seqs) != len(set(seqs)):
             raise ValueError("client_seq 가 겹칩니다.")
         return self
+
+
+class WalkFinalizeRequest(BaseModel):
+    """클라이언트가 끝까지 보냈다고 주장하는 좌표열의 manifest.
+
+    ``client_seq`` 는 산책 안에서 0부터 빠짐없이 증가한다. 서버는 이 선언을 저장된
+    chunk의 metadata와 디코딩 결과에 모두 대조한 뒤에만 계산 입력을 봉인한다.
+
+    ``input_fingerprint`` 는 선택 사항이다. 앱이 보내면 서버가 decoded point stream에서
+    계산한 같은 v1 지문과 대조한다. 앱이 아직 지문을 만들지 않는 첫 배포에서도 count와
+    terminal sequence로 누락·중복·겹침을 막을 수 있다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_point_count: int = Field(ge=0)
+    terminal_client_seq: int | None = Field(default=None, ge=0)
+    input_fingerprint: str | None = Field(
+        default=None,
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    )
+
+    @model_validator(mode="after")
+    def _terminal_matches_count(self) -> Self:
+        if self.expected_point_count == 0:
+            if self.terminal_client_seq is not None:
+                raise ValueError("빈 좌표열에는 terminal_client_seq가 없어야 합니다.")
+            return self
+        if self.terminal_client_seq is None:
+            raise ValueError("좌표가 있으면 terminal_client_seq가 필요합니다.")
+        if self.terminal_client_seq != self.expected_point_count - 1:
+            raise ValueError(
+                "client_seq는 0부터 연속이어야 하므로 terminal_client_seq는 "
+                "expected_point_count - 1이어야 합니다."
+            )
+        return self
+
+
+class WalkFinalizeResponse(BaseModel):
+    """입력 봉인과 계산 행을 앱이 안정적으로 재시도할 수 있는 요약."""
+
+    walk_id: uuid.UUID
+    analysis_id: uuid.UUID
+    analysis_state: Literal["derived"] = "derived"
+    input_fingerprint: str
+    point_count: int
+    terminal_client_seq: int | None
+    facts_record_version: int
+    calculation_version: int
+    receipt_version: int
+    observation_version: int
+    moving_distance_m: int
+    moving_s: int
+    stop_count: int
 
 
 class WalkPointResponse(BaseModel):

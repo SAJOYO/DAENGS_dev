@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -24,8 +24,15 @@ from daengs_gait.record_store import load_record, save_record
 from daengs_gait.trajectory import build_trajectories
 
 
-def process_video(video_path, date: str | None = None, note: str | None = None,
-                  dog_id: str | None = None, original_filename: str | None = None) -> dict:
+def process_video(
+    video_path,
+    date: str | None = None,
+    note: str | None = None,
+    dog_id: str | None = None,
+    original_filename: str | None = None,
+    *,
+    persist: bool = True,
+) -> dict:
     """영상 하나 → 보행 기록 (이미 저장된 상태로 반환).
 
     `dog_id` 는 같은 개체의 기록을 묶기 위한 선택 필드입니다. 없어도 동작합니다.
@@ -50,7 +57,7 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
         "date": date,
         "note": note,
         "dog_id": dog_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "video_meta": {
             "resolution": f"{meta['width']}x{meta['height']}",
             "native_fps": round(meta["native_fps"], 2),
@@ -62,14 +69,20 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
     }
 
     if quality["status"] != "ok":
-        record_id = save_record(record)
-        record["record_id"] = record_id
+        if persist:
+            record_id = save_record(record)
+            record["record_id"] = record_id
         return record
 
     # overlay 는 **곁딸린 산출물**입니다. 인코딩이 실패했다고 분 단위가 걸린 추론 결과를
     # 통째로 버리지는 않습니다. 다만 실패했으면 `overlay_video` 를 **넣지 않습니다** —
     # 넣으면 기록이 없는 영상을 있다고 광고하고, 사용자는 404 만 받습니다.
-    overlay_path = OVERLAYS_DIR / f"{video_path.stem}_overlay.mp4"
+    # D-043 Celery 워커는 PostgreSQL/storage 가 원장이라 worker volume 사본을 남기지
+    # 않습니다. persist=False 면 task 임시 입력 옆에 만들고 호출자가 bytes 를 읽은 뒤
+    # TemporaryDirectory 가 원본·overlay 를 함께 없앱니다. legacy HTTP 서비스는 기존대로
+    # GAIT_DATA_DIR 에 JSON과 overlay 를 보존합니다.
+    overlay_dir = OVERLAYS_DIR if persist else video_path.parent
+    overlay_path = overlay_dir / f"{video_path.stem}_overlay.mp4"
     overlay_video = None
     overlay_error = None
     try:
@@ -88,8 +101,9 @@ def process_video(video_path, date: str | None = None, note: str | None = None,
         "features": features,
     })
 
-    record_id = save_record(record)
-    record["record_id"] = record_id
+    if persist:
+        record_id = save_record(record)
+        record["record_id"] = record_id
     return record
 
 

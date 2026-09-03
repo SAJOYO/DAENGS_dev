@@ -17,6 +17,7 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
+from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
@@ -117,6 +118,8 @@ class Store:
 
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
+        #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
+        self.walk_analyses: list[object] = []
 
         #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
         self.chat_sessions: list[FakeChatSession] = []
@@ -150,19 +153,21 @@ class FakePet:
     weight_kg: object | None = None
     birth_date: object | None = None
     birth_date_kind: str | None = None
+    farewell_on: object | None = None
 
 
 @dataclass
-class FakeWalkPoint:
-    """WalkPoint 대역."""
+class FakeWalkPointChunk:
+    """WalkPointChunk 대역. **좌표 묶음 한 줄**입니다.
 
-    client_seq: int
-    chain_index: int
-    at: object
-    lat: object
-    lng: object
-    accuracy_m: float | None = None
-    is_mock: bool = False
+    진짜와 같게 `payload` 는 `services/walk_chunk.py` 가 만든 모양이고, 순번과
+    개수는 밖에 꺼내 둡니다 — payload 를 풀지 않고 재시도를 판정하기 위해서입니다.
+    """
+
+    seq_from: int
+    seq_to: int
+    point_count: int
+    payload: dict
 
 
 @dataclass
@@ -184,7 +189,8 @@ class FakeWalk:
     weather_code: int | None = None
     is_day: bool | None = None
     temperature_c: object | None = None
-    points: list[FakeWalkPoint] = field(default_factory=list)
+    analysis_state: str = "collecting"
+    points: list[FakeWalkPointChunk] = field(default_factory=list)
     pets: list[FakeWalkPet] = field(default_factory=list)
 
     @property
@@ -311,6 +317,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
                 return user
         return None
 
+    async def app_get_active_for_update(session, app_user_id):
+        user = await app_get_by_id(session, app_user_id)
+        return user if user is not None and user.status == "active" else None
+
     async def app_create(session, **kw):
         # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
         # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
@@ -329,6 +339,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
     monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
+    monkeypatch.setattr(
+        app_user_repo, "get_active_for_update", app_get_active_for_update
+    )
     monkeypatch.setattr(app_user_repo, "create", app_create)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
@@ -345,7 +358,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def pet_list_for_owner(session, app_user_id):
         return [p for p in store.pets if p.app_user_id == app_user_id]
 
-    async def pet_get_owned(session, app_user_id, pet_id):
+    async def pet_get_owned(session, app_user_id, pet_id, *, for_update=False):
         return next(
             (p for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
             None,
@@ -373,12 +386,35 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         for walk in store.walks:
             walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
 
+    async def pet_delete_all_for_owner(session, app_user_id):
+        owned_ids = {pet.id for pet in store.pets if pet.app_user_id == app_user_id}
+        store.pets = [pet for pet in store.pets if pet.app_user_id != app_user_id]
+        for walk in store.walks:
+            walk.pets = [link for link in walk.pets if link.pet_id not in owned_ids]
+        for user in store.app_users.values():
+            if user.primary_pet_id in owned_ids:
+                user.primary_pet_id = None
+        return len(owned_ids)
+
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
+    monkeypatch.setattr(
+        pet_repo, "list_for_owner_for_update", pet_list_for_owner
+    )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
+    monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
+
+    # D-043 gait 행은 별도 focused tests 가 대역을 넣습니다. 일반 pet/auth 테스트에는
+    # 보행 기록이 없으므로 빈 잠금 결과를 돌려 storage 설정과 무관하게 둡니다.
+    async def gait_list_for_pets_for_update(session, pet_ids):
+        return []
+
+    monkeypatch.setattr(
+        gait_repo, "list_for_pets_for_update", gait_list_for_pets_for_update
+    )
 
     # -- walks -------------------------------------------------------------
     async def walk_list_for_owner(session, app_user_id):
@@ -395,6 +431,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             ),
             None,
         )
+
+    async def walk_get_owned_for_update(session, app_user_id, walk_id):
+        return await walk_get_owned(session, app_user_id, walk_id)
 
     async def walk_get_by_client_session(
         session, app_user_id, client_session_id
@@ -419,24 +458,52 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             store.walks.remove(walk)
         return len(solo)
 
+    async def walk_delete_all_for_owner(session, app_user_id):
+        owned = [walk for walk in store.walks if walk.app_user_id == app_user_id]
+        store.walks = [walk for walk in store.walks if walk.app_user_id != app_user_id]
+        return len(owned)
+
     def walk_add(session, walk):
         if walk.id is None:
             walk.id = uuid.uuid4()
+        if walk.analysis_state is None:
+            walk.analysis_state = "collecting"
         store.walks.append(walk)
         return walk
 
+    def walk_add_analysis(session, analysis):
+        if analysis.id is None:
+            analysis.id = uuid.uuid4()
+        store.walk_analyses.append(analysis)
+        return analysis
+
+    async def walk_get_analysis_for_input(session, **identity):
+        return next(
+            (
+                analysis
+                for analysis in store.walk_analyses
+                if all(getattr(analysis, key) == value for key, value in identity.items())
+            ),
+            None,
+        )
+
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
+    monkeypatch.setattr(walk_repo, "get_owned_for_update", walk_get_owned_for_update)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
-    async def walk_existing_seqs(session, walk_id):
+
+    async def walk_existing_chunk_starts(session, walk_id):
         walk = next((w for w in store.walks if w.id == walk_id), None)
-        return {p.client_seq for p in walk.points} if walk else set()
+        return {c.seq_from for c in walk.points} if walk else set()
 
     monkeypatch.setattr(walk_repo, "add", walk_add)
+    monkeypatch.setattr(walk_repo, "add_analysis", walk_add_analysis)
+    monkeypatch.setattr(walk_repo, "get_analysis_for_input", walk_get_analysis_for_input)
     monkeypatch.setattr(
         walk_repo, "delete_walks_only_with", walk_delete_walks_only_with
     )
-    monkeypatch.setattr(walk_repo, "existing_seqs", walk_existing_seqs)
+    monkeypatch.setattr(walk_repo, "delete_all_for_owner", walk_delete_all_for_owner)
+    monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
 
     # -- chats -------------------------------------------------------------
     def active_sessions(app_user_id, pet_id):

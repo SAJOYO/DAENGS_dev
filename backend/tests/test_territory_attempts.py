@@ -94,6 +94,10 @@ class FakeStorage:
     def stat(self, storage_key):
         return self.object if self._exists else None
 
+    def read_bytes(self, storage_key, *, generation, max_bytes):
+        assert generation == self.object.generation
+        return b"jpeg"[:max_bytes]
+
     def redact(self, storage_key, *, generation):
         self.redacted.append((storage_key, generation))
         return "redacted-generation"
@@ -155,6 +159,8 @@ def client(monkeypatch):
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_territory_site_lookup] = lambda: lookup
     monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+    published: list[uuid.UUID] = []
+    monkeypatch.setattr(territory_service, "_publish_vision_attempt", published.append)
 
     async def no_existing(*args, **kwargs):
         return None
@@ -164,6 +170,7 @@ def client(monkeypatch):
     c.fake_session = session
     c.fake_lookup = lookup
     c.fake_storage = storage
+    c.published_vision_attempts = published
     yield c
     app.dependency_overrides.clear()
 
@@ -271,6 +278,42 @@ def test_confirm_checks_photo_then_becomes_vision_pending(client, monkeypatch):
     assert response.json()["status"] == "VISION_PENDING"
     assert attempt.photo_object_generation == "generation-1"
     assert attempt.photo_size_bytes == 4
+    assert client.fake_session.commits == 1
+    assert client.published_vision_attempts == [attempt.id]
+
+
+def test_confirm_retry_republishes_pending_attempt(client, monkeypatch):
+    attempt = _attempt(
+        status="VISION_PENDING",
+        photo_object_generation="generation-1",
+        photo_size_bytes=4,
+    )
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
+    assert response.status_code == 200
+    assert response.json()["status"] == "VISION_PENDING"
+    assert client.published_vision_attempts == [attempt.id]
+    assert client.fake_session.commits == 1
+
+
+def test_confirm_keeps_pending_state_when_queue_is_unavailable(client, monkeypatch):
+    attempt = _attempt()
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    def unavailable(*args, **kwargs):
+        raise territory_service.TerritoryVisionQueueUnavailable("queue unavailable")
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    monkeypatch.setattr(territory_service, "_publish_vision_attempt", unavailable)
+    response = client.post(f"/app/territory/attempts/{attempt.id}/confirm")
+    assert response.status_code == 503
+    assert attempt.status == "VISION_PENDING"
     assert client.fake_session.commits == 1
 
 

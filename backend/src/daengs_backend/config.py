@@ -112,6 +112,18 @@ class Settings(BaseSettings):
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
 
+    # 점령지 사진 판정은 대화/라우팅과 호출 예산이 다릅니다. 모델 이름과 12초 제한을
+    # 따로 두어, 사진 판정 워커만 독립적으로 교체·튜닝할 수 있게 합니다. 키는 같은
+    # Gemini 프로젝트를 쓰되 웹 요청에서는 이 설정을 소비하지 않습니다.
+    territory_vision_model: str = Field(
+        default="gemini-3.1-flash-lite",
+        validation_alias=AliasChoices("TERRITORY_VISION_MODEL"),
+    )
+    territory_vision_timeout_ms: int = Field(
+        default=12_000,
+        validation_alias=AliasChoices("TERRITORY_VISION_TIMEOUT_MS"),
+    )
+
     # 점령지 게임판은 별도 place-search 프로세스가 소유합니다. backend는 좌표를
     # 복제하지 않고 촬영 시점에 이 내부 HTTP 경계로 현행 140u 대표점을 확인합니다.
     territory_site_base_url: str = "http://place-search:8000"

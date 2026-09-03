@@ -128,7 +128,7 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker
+  gait-analysis gait-worker territory-vision-worker
 
 # ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
 #   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
@@ -241,7 +241,8 @@ done
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker
+      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      territory-vision-worker
     ```
 
     ⚠ **서비스 이름을 반드시 적습니다.** 인자 없이 `up -d` 하면 `crawler-worker`·
@@ -251,6 +252,8 @@ done
     스케줄을 발사하게 됩니다.
     ⚠ **`gait-worker`** 는 D-043 으로 생긴 서비스입니다. 빠뜨리면 웹만 새 코드가 되고
     워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
+    **`territory-vision-worker`** 도 같은 배포 단위입니다. 빠뜨리면 confirm은 성공하지만
+    앱의 점령지 인증이 `VISION_PENDING`에서 끝나지 않습니다.
   - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → **컨테이너를
     재생성합니다. `reload` 로는 반영되지 않습니다.**
 

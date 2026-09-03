@@ -16,6 +16,7 @@ from daengs_backend.core.storage import (
     LocalBridgeStorage,
     NotConfiguredStorage,
     StorageNotConfiguredError,
+    StorageObjectChangedError,
     build_object_key,
     build_overlay_object_key,
     build_territory_photo_key,
@@ -106,6 +107,18 @@ def test_local_bridge_supports_a_separate_territory_upload_path(tmp_path):
     assert ticket.upload_url == f"http://x/app/territory/attempts/_bridge/upload/{key}"
 
 
+def test_local_bridge_reads_only_the_confirmed_generation(tmp_path):
+    storage = LocalBridgeStorage(str(tmp_path), base_url="http://x")
+    key = "territory/user/attempt/capture.jpg"
+    storage.write_if_absent(key, b"jpeg")
+    generation = storage.stat(key).generation
+    assert storage.read_bytes(key, generation=generation, max_bytes=4) == b"jpeg"
+
+    storage.local_path(key).write_bytes(b"webp")
+    with pytest.raises(StorageObjectChangedError):
+        storage.read_bytes(key, generation=generation, max_bytes=4)
+
+
 def test_local_bridge_rejects_escape(tmp_path):
     s = LocalBridgeStorage(str(tmp_path))
     with pytest.raises(StorageNotConfiguredError):
@@ -116,8 +129,9 @@ def test_local_bridge_rejects_escape(tmp_path):
 
 # ── GcsStorage — google 클라이언트 mock ─────────────────────────────────
 class _FakeBlob:
-    def __init__(self, store, key):
+    def __init__(self, store, key, pinned_generation=None):
         self.store, self.key = store, key
+        self.pinned_generation = pinned_generation
 
     def generate_signed_url(self, **kw):
         signed_create_only = kw.get("headers") == {"x-goog-if-generation-match": "0"}
@@ -169,13 +183,24 @@ class _FakeBlob:
             raise PreconditionFailed
         self.store.pop(self.key, None)
 
+    def download_as_bytes(self, **kw):
+        expected = kw.get("if_generation_match")
+        if self.key not in self.store or self.store[self.key][2] != expected:
+
+            class PreconditionFailed(Exception):
+                code = 412
+
+            raise PreconditionFailed
+        assert self.pinned_generation == expected
+        return self.store[self.key][0]
+
 
 class _FakeBucket:
     def __init__(self, store):
         self.store = store
 
-    def blob(self, key):
-        return _FakeBlob(self.store, key)
+    def blob(self, key, generation=None):
+        return _FakeBlob(self.store, key, generation)
 
 
 @pytest.fixture()
@@ -238,6 +263,7 @@ def test_gcs_stat_and_redact_preserve_object_identity(gcs):
     assert stored.generation == "1"
     assert stored.size_bytes == 4
     assert stored.content_type == "image/jpeg"
+    assert storage.read_bytes(key, generation="1", max_bytes=4) == b"jpeg"
 
     redacted_generation = storage.redact(key, generation=stored.generation)
     assert redacted_generation == "2"

@@ -139,3 +139,25 @@ Place 내부 presentation 계층을 승격한다.
   않는다. 기존 `/v2/places/search` 응답과 Place 앱의 공개 경로는 변하지 않는다.
 - 의도적 제외: discovery assembly, Gemini adapter, 내부 endpoint, main orchestration,
   관측 migration과 Android 연결.
+
+## Internal discovery assembly 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+target PR:         SAJOYO/DAENGS_dev #192
+```
+
+분리해 승격한 intent·planning·source facts·presentation을 Place 내부 응용 서비스에서 처음
+연결한다. 외부 transport를 붙이기 전 결정론적 실행 경계와 결과량을 고정하는 단계다.
+
+- 포함: `PlaceDiscoveryRequest`, provider trace를 제거한 planning projection, lens별 검색과
+  source-fact 일괄 읽기, 동일 identity presentation 조립
+- 대상 adaptation: Geo의 `orchestration_bridge.py`와 `PlaceCapabilityInput` 이름을 복제하지
+  않는다. `daengs_place.place.discovery`가 계약과 `PlaceDiscoveryService`를 직접 소유한다.
+- 결과 정책: 기본 3 lens·lens당 5건·전체 15건·128 KiB, 하드 상한 3·10·20·256 KiB.
+  검색 전에 lens와 후보 예산을 배분하고, byte 상한에는 뒤쪽 후보부터 줄이며 notice를 남긴다.
+- 경계: provider SDK, HTTP/FastAPI, `daengs_backend` 오케스트레이션을 import하지 않는다.
+  기존 Place 앱의 네 공개 경로와 `/v2/places/search` 계약은 변하지 않는다.
+- 의도적 제외: Gemini adapter/config, 내부 endpoint, main orchestration, 관측 migration,
+  공개 capability projection과 Android 연결.

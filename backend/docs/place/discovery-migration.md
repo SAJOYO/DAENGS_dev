@@ -269,8 +269,13 @@ receipt가 표시 계약에서 보존되며, 기존 Place 전체 테스트와 Op
 
 - `PlaceDiscoveryRequest`, 내부 planning/result, assembly service 추가
 - intent → plan → guard → search → source facts → presentation을 순수 서비스로 연결
-- 대화형 lens·후보·byte 예산 추가
+- 기본 3 lens·lens당 5건·전체 15건·128 KiB의 서버 소유 결과 정책 추가
+- 하드 상한은 3 lens·lens당 10건·전체 20건·256 KiB이며 클라이언트가 넘을 수 없음
+- 정책상 뒤쪽 lens·후보를 줄이면 notice를 남기고 source facts는 표시 후보만 읽음
 - HTTP와 provider wiring 금지
+
+완료 기준: 실행량을 검색 전에 제한하고, 검색 hit·source facts·presentation의 순서를 보존하며,
+직렬화 결과가 byte 예산 안에 든다. 기존 Place OpenAPI와 keyless boot는 변하지 않는다.
 
 ### PR5 — Place 내부 endpoint와 Gemini proposer
 

@@ -85,6 +85,8 @@ def _select(
             math.dist(mercator(point["lat"], point["lng"]), (cx, cy)),
             point["lat"],
             point["lng"],
+            -(point["as_of"].toordinal() if point["as_of"] else 0),
+            point["instt"] or "",
         )
         current = cells.get(cell)
         if current is None or rank < current[0]:
@@ -98,7 +100,7 @@ def _select(
 
 
 def select(points: Iterable[dict], radius_u: float = TERRITORY_SITE_RADIUS_U) -> list[dict]:
-    """셀당 하나를 설치형태, 중심 거리, 좌표 순으로 결정론적으로 고른다."""
+    """셀당 하나를 설치형태, 중심 거리, 좌표, 메타데이터 순으로 고른다."""
     return _select(points, radius_u)[0]
 
 

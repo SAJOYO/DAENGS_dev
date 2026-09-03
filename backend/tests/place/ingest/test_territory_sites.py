@@ -1,5 +1,7 @@
 """140u 점령지 선별의 결정론과 식별자 계약."""
 
+from datetime import date
+
 import pytest
 
 from daengs_place.ingest.territory_sites import replace, select
@@ -33,6 +35,22 @@ def test_selection_is_independent_of_input_order() -> None:
     second = {(row["site_id"], row["lat"], row["lng"]) for row in select(reversed(lamps))}
 
     assert first == second
+
+
+def test_exact_coordinate_tie_uses_metadata_instead_of_input_order() -> None:
+    older = {
+        **_lamp(37.5, 127.0),
+        "instt": "가 기관",
+        "as_of": date(2024, 1, 1),
+    }
+    newer = {
+        **_lamp(37.5, 127.0),
+        "instt": "나 기관",
+        "as_of": date(2025, 1, 1),
+    }
+
+    assert select([older, newer]) == select([newer, older])
+    assert select([older, newer])[0]["as_of"] == date(2025, 1, 1)
 
 
 async def test_empty_snapshot_cannot_delete_the_current_gameboard() -> None:

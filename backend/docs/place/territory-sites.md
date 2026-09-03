@@ -24,11 +24,16 @@ Alembic `0021`은 과거 `anchor` 테이블을 `territory_site`로, `cell`을 `s
 보안등 NDJSON에서 다시 선별해 아래 명령으로 원자적으로 교체합니다.
 
 ```powershell
-docker cp <원본.ndjson> daengs-place-search:/tmp/territory-lamps.ndjson
-docker compose exec -T place-search uv run --no-sync `
-  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson --dry-run
-docker compose exec -T place-search uv run --no-sync `
-  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson
+$containerPath = '/tmp/territory-lamps.ndjson'
+docker cp <원본.ndjson> "daengs-place-search:${containerPath}"
+try {
+  docker compose exec -T place-search uv run --no-sync `
+    python -m daengs_place.ingest.territory_sites $containerPath --dry-run
+  docker compose exec -T place-search uv run --no-sync `
+    python -m daengs_place.ingest.territory_sites $containerPath
+} finally {
+  docker compose exec -T place-search rm -f $containerPath
+}
 ```
 
 교체는 한 DB 트랜잭션입니다. 선별이나 INSERT가 실패하면 기존 `lamp` 게임판을 유지합니다.
@@ -44,7 +49,10 @@ FROM territory_site
 GROUP BY 1 ORDER BY 1;
 ```
 
-현행 140u 행이 존재하는지 확인한 뒤 공개 경로를 확인합니다.
+현행 140u 행이 존재하는지 확인한 뒤 공개 경로를 확인합니다. `dev` 배포의 Territory Site
+스모크도 서울시청 반경 3km에서 한 건 이상을 요구합니다. 따라서 최초 승격에서 140u 데이터가
+없으면 서비스와 마이그레이션은 반영되더라도 workflow는 실패로 남습니다. 위 적재를 마친 뒤
+배포 workflow를 다시 실행해 data-ready까지 녹색으로 만들어야 합니다.
 
 ```powershell
 Invoke-RestMethod `
@@ -52,4 +60,5 @@ Invoke-RestMethod `
 ```
 
 응답은 200이어야 하고 `count`, `truncated`, `sites`를 가져야 합니다. 데이터가 아직 적재되지
-않았다면 200과 빈 `sites`가 정상이며, 115u 행을 대신 내보내지는 않습니다.
+않았다면 API 자체는 200과 빈 `sites`를 반환하며 115u 행을 대신 내보내지 않습니다. 다만 빈
+현행 게임판은 앱 출시 가능 상태가 아니므로 배포 workflow는 성공으로 판정하지 않습니다.

@@ -136,18 +136,17 @@ async def get_owned_turn(
     return (row[0], row[1]) if row is not None else None
 
 
-async def count_reserved_turns(session: AsyncSession, session_id: uuid.UUID) -> int:
-    return int(
-        await session.scalar(
-            select(func.count())
-            .select_from(ChatTurn)
-            .where(
-                ChatTurn.session_id == session_id,
-                ChatTurn.processing_status.in_(("processing", "completed")),
-            )
+async def list_capacity_turns(session: AsyncSession, session_id: uuid.UUID) -> list[ChatTurn]:
+    """Rows that consume the completed-turn and reserved transcript budgets."""
+    rows = await session.scalars(
+        select(ChatTurn)
+        .where(
+            ChatTurn.session_id == session_id,
+            ChatTurn.processing_status.in_(("processing", "completed")),
         )
-        or 0
+        .order_by(ChatTurn.created_at, ChatTurn.id)
     )
+    return list(rows)
 
 
 async def list_turns(
@@ -221,6 +220,21 @@ async def fail_stale_turns(
             completed_at=func.now(),
         )
     )
+    return int(result.rowcount or 0)
+
+
+async def prune_failed_turns(session: AsyncSession, *, session_id: uuid.UUID, keep: int) -> int:
+    """Delete failed rows older than the newest ``keep`` by ``created_at, id``."""
+    oldest_ids = (
+        select(ChatTurn.id)
+        .where(
+            ChatTurn.session_id == session_id,
+            ChatTurn.processing_status == "failed",
+        )
+        .order_by(ChatTurn.created_at.desc(), ChatTurn.id.desc())
+        .offset(keep)
+    )
+    result = await session.execute(delete(ChatTurn).where(ChatTurn.id.in_(oldest_ids)))
     return int(result.rowcount or 0)
 
 

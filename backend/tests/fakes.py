@@ -559,6 +559,15 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             rows = [turn for turn in rows if turn.processing_status == "completed"]
         return sorted(rows, key=lambda row: (row.created_at, row.id))
 
+    async def list_capacity_turns(session, session_id):
+        rows = [
+            turn
+            for turn in store.chat_turns
+            if turn.session_id == session_id
+            and turn.processing_status in {"processing", "completed"}
+        ]
+        return sorted(rows, key=lambda row: (row.created_at, row.id))
+
     async def get_turn_by_client_id(session, session_id, client_message_id):
         return next(
             (
@@ -615,6 +624,20 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
                 turn.completed_at = store.tick()
                 changed += 1
         return changed
+
+    async def prune_failed_turns(session, *, session_id, keep):
+        failed = sorted(
+            (
+                turn
+                for turn in store.chat_turns
+                if turn.session_id == session_id and turn.processing_status == "failed"
+            ),
+            key=lambda row: (row.created_at, row.id),
+            reverse=True,
+        )
+        remove_ids = {turn.id for turn in failed[keep:]}
+        store.chat_turns = [turn for turn in store.chat_turns if turn.id not in remove_ids]
+        return len(remove_ids)
 
     async def list_completed_summaries(session, app_user_id, pet_id):
         rows = [
@@ -714,16 +737,6 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def oldest_active(session, app_user_id, pet_id, keep):
         return active_sessions(app_user_id, pet_id)[keep:]
 
-    async def count_reserved(session, session_id):
-        return len(
-            [
-                turn
-                for turn in store.chat_turns
-                if turn.session_id == session_id
-                and turn.processing_status in {"processing", "completed"}
-            ]
-        )
-
     def touch_active(session, row, categories):
         row.last_message_at = store.tick()
         row.agent_categories = categories
@@ -740,12 +753,13 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "touch_active_session", touch_active)
     monkeypatch.setattr(chat_repo, "get_turn_by_client_id", get_turn_by_client_id)
     monkeypatch.setattr(chat_repo, "get_owned_turn", get_owned_turn)
-    monkeypatch.setattr(chat_repo, "count_reserved_turns", count_reserved)
+    monkeypatch.setattr(chat_repo, "list_capacity_turns", list_capacity_turns)
     monkeypatch.setattr(chat_repo, "list_turns", list_turns)
     monkeypatch.setattr(chat_repo, "add_turn", add_turn)
     monkeypatch.setattr(chat_repo, "complete_turn_if_processing", complete_turn)
     monkeypatch.setattr(chat_repo, "fail_turn_if_processing", fail_turn)
     monkeypatch.setattr(chat_repo, "fail_stale_turns", fail_stale_turns)
+    monkeypatch.setattr(chat_repo, "prune_failed_turns", prune_failed_turns)
     monkeypatch.setattr(chat_repo, "get_owned_summary", get_owned_summary)
     monkeypatch.setattr(chat_repo, "delete_summary", delete_summary)
     monkeypatch.setattr(chat_repo, "list_completed_summaries", list_completed_summaries)

@@ -7,7 +7,9 @@
 ## 턴 저장
 
 1. **예약 TX** — 소유한 세션을 잠그고, 그 세션에서 5분을 넘긴 `processing` turn을
-   `STALE_PROCESSING` 실패로 먼저 정리합니다(정리는 그 자리에서 commit). 그 다음
+   `STALE_PROCESSING` 실패로 먼저 정리한 뒤 오래된 failed turn을 보존 상한까지 정리합니다
+   (정리는 그 자리에서 commit). 완료된 원문과 모든 `processing` 질문에 답변 최대 8,000자를
+   더한 예약량을 검사하므로 동시에 들어온 요청도 transcript 용량을 초과 예약할 수 없습니다. 그 다음
    `(session_id, client_message_id)`를 멱등 키로 `chat_turns.processing` 한 행을 만든 뒤
    commit합니다. 같은 키가 이미 있으면 상태로 답이 갈립니다 — 아래 표.
 2. **DB 세션 종료** — 예약에 쓴 `AsyncSession`을 닫습니다.
@@ -29,10 +31,12 @@ turn의 늦은 완료도 여기서 막힙니다.
 | 무엇이든 | **다르다** | `TurnIdempotencyConflictError` — 클라이언트 버그. 조용히 합치지 않습니다 | 409 `CLIENT_MESSAGE_ID_REUSED` |
 | `completed` | 같다 | 그 행을 돌려줍니다. 호출자는 저장된 `public_response`로 답하고 오케스트레이터를 부르지 않습니다 | 200, 저장된 응답 그대로 |
 | `processing` | 같다 | `TurnProcessingError` — 아직 답하는 중이니 기다립니다 | 409 `TURN_PROCESSING` |
-| `failed` (stale 포함) | 같다 | `TurnFailedError` — 그 UUID는 탄 것입니다. **새 UUID로** 다시 보냅니다 | 409 `TURN_FAILED` (+ `error_code`) |
+| 보존 중인 `failed` (stale 포함) | 같다 | `TurnFailedError` — 그 UUID는 탄 것입니다. **새 UUID로** 다시 보냅니다 | 409 `TURN_FAILED` (+ `error_code`) |
 
 stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UUID는 "처리 중"으로 보이지도,
-30개 상한을 차지하지도 않습니다.
+완료/처리 중 30개 상한을 차지하지도 않습니다. failed turn은 세션마다 최신 30개만
+`created_at, id` 순서로 보존합니다. 따라서 실패 UUID는 그 예약 행이 보존 창 안에 있는 동안만
+탄 것이며, 창 밖으로 정리된 뒤에도 클라이언트는 오류 계약대로 새 UUID를 사용해야 합니다.
 
 ### `POST /assistant/query`가 이 흐름을 탑니다
 
@@ -51,9 +55,10 @@ stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UU
 - 오케스트레이션이 예외를 내면 새 TX에서 `ORCHESTRATION_FAILED`로 닫고 예외는 무상태일 때와
   똑같이 나갑니다. 응답 자체가 `FAILED`면 `ASSISTANT_FAILED`로 닫고 응답은 그대로 돌려줍니다 —
   공급자 실패는 draft를 활성화하지 않습니다.
-- 완료 TX가 답을 저장하지 못해도(답 8,000자 초과·transcript 초과·이미 닫힌 행) **답은
-  돌려줍니다.** 행이 `error_code`로 이유를 남기고 세션은 활성화되지 않습니다. 전달된 답을
-  사후에 오류로 바꾸지 않습니다.
+- 완료 TX가 답을 저장하지 못하면(답 8,000자 초과·방어적 transcript 검사·이미 닫힌 행)
+  생성된 답변을 정상 200으로 돌려주지 않습니다. 503 `TURN_PERSISTENCE_FAILED`에 `turn_id`,
+  내부 `persistence_error_code`, `retry_with_fresh_client_message_id: true`를 담습니다. 정상 200인
+  non-FAILED 응답은 동일한 `public_response`를 가진 completed turn의 commit 이후에만 나갑니다.
 
 ### 되살릴 때
 
@@ -81,10 +86,12 @@ stale 정리가 멱등·개수 검사보다 먼저이므로, 죽은 요청의 UU
   거절합니다 — 지우면 완료 UPDATE가 갈 곳을 잃습니다. 원본 대화는 건드리지 않습니다.
 - 완료 TX는 아직 `processing`인 summary만 구조화 결과로 채웁니다. 실패도 같은 조건부 UPDATE로
   닫아 늦게 도착한 응답이 이미 실패 처리된 예약을 되살리지 못하게 합니다.
+- failed summary 보존 정리는 아직 별도 후속입니다. 이번 failed-turn 상한을 summary나 스케줄러
+  설계로 넓히지 않습니다.
 
 ## 무손실 제한
 
-질문 2,000자, 답변 8,000자, 완료 turn 30개, transcript 320,000자, Gemini 입력 안전 상한
+질문 2,000자, 답변 8,000자, 완료/처리 중 turn 30개, failed turn 보존 30개, transcript 320,000자, Gemini 입력 안전 상한
 900,000 token입니다. 어느 경계에서도 조용히 자르지 않고 도메인 오류 또는 안전한 실패 코드로
 끝냅니다. transcript 상한은 예약·완료·요약 세 곳 모두 **저장된 글자 수**로 셉니다 — JSON
 봉투의 덧붙는 글자는 세지 않아, turn 상한이 허락한 대화는 언제나 요약할 수 있습니다. Gemini

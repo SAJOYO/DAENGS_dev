@@ -224,6 +224,31 @@ def test_stale_turns_do_not_count_toward_the_thirty_turn_cap(
     assert sum(1 for turn in store.chat_turns if turn.error_code == "STALE_PROCESSING") == 30
 
 
+def test_stale_recovery_prunes_failed_rows_and_retains_the_recovered_uuid(
+    store: Store, draft: ChatSession
+) -> None:
+    failed: list[ChatTurn] = []
+    for _ in range(chat_service.MAX_FAILED_TURNS):
+        turn = reserve(draft)
+        failed.append(
+            asyncio.run(
+                chat_service.fail_turn(FakeSession(), OWNER, turn.id, error_code="FAILED")
+            )
+        )
+
+    key = uuid.uuid4()
+    stale = processing_since(draft, NOW - timedelta(minutes=6))
+    stale.client_message_id = key
+    with pytest.raises(chat_service.TurnFailedError) as caught:
+        reserve(draft, client_message_id=key)
+
+    retained = [turn for turn in store.chat_turns if turn.processing_status == "failed"]
+    assert len(retained) == chat_service.MAX_FAILED_TURNS
+    assert failed[0] not in retained
+    assert stale in retained
+    assert caught.value.error_code == "STALE_PROCESSING"
+
+
 def test_late_completion_of_a_stale_turn_does_not_resurrect_it(draft: ChatSession) -> None:
     stale = processing_since(draft, NOW - timedelta(minutes=6))
     reserve(draft)  # recovery
@@ -307,6 +332,116 @@ def test_provider_failure_does_not_activate(store: Store, draft: ChatSession) ->
     assert draft.last_message_at is None
 
 
+def test_failed_turn_retention_is_bounded_and_oldest_uuid_becomes_reusable(
+    store: Store, draft: ChatSession
+) -> None:
+    failed: list[ChatTurn] = []
+    for _ in range(chat_service.MAX_FAILED_TURNS + 1):
+        turn = reserve(draft, "질문")
+        failed.append(
+            asyncio.run(
+                chat_service.fail_turn(FakeSession(), OWNER, turn.id, error_code="FAILED")
+            )
+        )
+
+    retained = [turn for turn in store.chat_turns if turn.processing_status == "failed"]
+    assert len(retained) == chat_service.MAX_FAILED_TURNS
+    assert failed[0] not in retained
+    with pytest.raises(chat_service.TurnFailedError):
+        reserve(draft, "질문", client_message_id=failed[-1].client_message_id)
+
+    reused = reserve(draft, "질문", client_message_id=failed[0].client_message_id)
+    assert reused.processing_status == "processing"
+
+
+def test_failed_turn_pruning_breaks_created_at_ties_by_id(
+    store: Store, draft: ChatSession
+) -> None:
+    same_time = store.tick()
+    failed: list[ChatTurn] = []
+    for number in range(1, chat_service.MAX_FAILED_TURNS + 2):
+        turn = ChatTurn(
+            session_id=draft.id,
+            client_message_id=uuid.uuid4(),
+            processing_status="failed",
+            user_content="질문",
+            agent_categories=[],
+            error_code="FAILED",
+            completed_at=same_time,
+        )
+        turn.id = uuid.UUID(int=number)
+        turn.created_at = same_time
+        failed.append(turn)
+        store.chat_turns.append(turn)
+
+    reserve(draft)
+    retained_ids = {
+        turn.id for turn in store.chat_turns if turn.processing_status == "failed"
+    }
+    assert len(retained_ids) == chat_service.MAX_FAILED_TURNS
+    assert failed[0].id not in retained_ids
+    assert failed[1].id in retained_ids
+
+
+def test_concurrent_reservations_cannot_overbook_transcript_capacity(
+    store: Store,
+    draft: ChatSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lock = asyncio.Lock()
+    original_lock = chat_repo.get_owned_session_for_update
+
+    class LockingSession(FakeSession):
+        owns_lock = False
+
+        async def commit(self) -> None:
+            await super().commit()
+            self.release()
+
+        async def rollback(self) -> None:
+            await super().rollback()
+            self.release()
+
+        def release(self) -> None:
+            if self.owns_lock:
+                self.owns_lock = False
+                lock.release()
+
+    async def locked_session(session, app_user_id, session_id):
+        await lock.acquire()
+        session.owns_lock = True
+        return await original_lock(session, app_user_id, session_id)
+
+    monkeypatch.setattr(chat_repo, "get_owned_session_for_update", locked_session)
+    monkeypatch.setattr(chat_service, "MAX_COMPLETED_TURNS", 100)
+    monkeypatch.setattr(chat_service, "MAX_TRANSCRIPT_CHARS", 15_000)
+
+    async def attempt() -> ChatTurn | Exception:
+        session = LockingSession()
+        try:
+            return await chat_service.reserve_turn(
+                session,
+                OWNER,
+                draft.id,
+                client_message_id=uuid.uuid4(),
+                question="가" * 1_000,
+                now=NOW,
+            )
+        except chat_service.TranscriptLimitError as exc:
+            await session.rollback()
+            return exc
+
+    async def run_both() -> tuple[ChatTurn | Exception, ChatTurn | Exception]:
+        first, second = await asyncio.gather(attempt(), attempt())
+        return first, second
+
+    first, second = asyncio.run(run_both())
+    outcomes = (first, second)
+    assert sum(isinstance(value, ChatTurn) for value in outcomes) == 1
+    assert sum(isinstance(value, chat_service.TranscriptLimitError) for value in outcomes) == 1
+    assert len([turn for turn in store.chat_turns if turn.processing_status == "processing"]) == 1
+
+
 def test_conditional_completion_rejects_second_writer(draft: ChatSession) -> None:
     turn = reserve(draft)
     asyncio.run(chat_service.complete_turn(FakeSession(), OWNER, turn.id, response=response()))
@@ -337,6 +472,36 @@ def test_assistant_limit_fails_reservation_without_activation(
         asyncio.run(chat_service.complete_turn(FakeSession(), OWNER, turn.id, response=too_long))
     assert turn.processing_status == "failed"
     assert draft.last_message_at is None
+
+
+def test_completion_failure_prunes_failed_retention_under_the_session_lock(
+    store: Store, draft: ChatSession
+) -> None:
+    oldest: ChatTurn | None = None
+    for _ in range(chat_service.MAX_FAILED_TURNS):
+        failed = ChatTurn(
+            session_id=draft.id,
+            client_message_id=uuid.uuid4(),
+            processing_status="failed",
+            user_content="질문",
+            agent_categories=[],
+            error_code="FAILED",
+            completed_at=store.tick(),
+        )
+        failed.id = uuid.uuid4()
+        failed.created_at = store.tick()
+        store.chat_turns.append(failed)
+        oldest = oldest or failed
+
+    turn = reserve(draft)
+    too_long = response().model_copy(update={"message": "가" * 8_001})
+    with pytest.raises(chat_service.ContentLimitError):
+        asyncio.run(chat_service.complete_turn(FakeSession(), OWNER, turn.id, response=too_long))
+
+    retained = [row for row in store.chat_turns if row.processing_status == "failed"]
+    assert len(retained) == chat_service.MAX_FAILED_TURNS
+    assert oldest not in retained
+    assert turn in retained
 
 
 def test_thirty_reserved_or_completed_turns_is_the_hard_cap(

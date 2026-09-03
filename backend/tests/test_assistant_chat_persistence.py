@@ -31,6 +31,7 @@ from daengs_backend.orchestration.contracts import (
     PrincipalContext,
 )
 from daengs_backend.routers import assistant as assistant_router
+from daengs_backend.services import chat as chat_service
 
 OWNER = uuid.uuid4()
 OTHER = uuid.uuid4()
@@ -204,10 +205,13 @@ def test_persisted_request_reserves_orchestrates_completes_and_replays_on_read(
     client: TestClient, store: Store, service: FakeService, factory: TrackingFactory
 ) -> None:
     draft = _draft(store)
-    got = _post(client, _persisted(draft), _app())
+    key = uuid.uuid4()
+    original_response = service.response.model_dump(mode="json")
+    got = _post(client, _persisted(draft, key), _app())
 
     assert got.status_code == 200
-    assert got.json() == service.response.model_dump(mode="json")
+    assert got.json()["status"] != "FAILED"
+    assert got.json() == original_response
     assert len(service.calls) == 1
 
     (turn,) = store.chat_turns
@@ -219,7 +223,11 @@ def test_persisted_request_reserves_orchestrates_completes_and_replays_on_read(
     assert factory.opened == 2 and factory.active == 0  # reserve TX, completion TX
 
     detail = client.get(f"/app/chats/{draft.id}", headers=_app()).json()
-    assert detail["turns"][0]["public_response"] == got.json()
+    persisted = next(
+        turn for turn in detail["turns"] if turn["client_message_id"] == str(key)
+    )
+    assert persisted["processing_status"] == "completed"
+    assert persisted["public_response"] == original_response
     assert detail["session"]["last_message_at"] is not None
 
 
@@ -420,15 +428,21 @@ def test_failed_status_response_is_returned_but_does_not_activate(
     assert draft.last_message_at is None
 
 
-def test_delivered_answer_that_cannot_be_stored_is_still_returned(
+def test_non_storable_answer_is_an_explicit_api_error_without_the_answer_body(
     client: TestClient, store: Store, service: FakeService
 ) -> None:
     draft = _draft(store)
     service.response = _answered("가" * 8_001)
     got = _post(client, _persisted(draft), _app())
-    assert got.status_code == 200
-    assert len(got.json()["message"]) == 8_001  # not truncated
+    assert got.status_code == 503
     (turn,) = store.chat_turns
+    assert got.json()["detail"] == {
+        "code": "TURN_PERSISTENCE_FAILED",
+        "turn_id": str(turn.id),
+        "persistence_error_code": "ASSISTANT_CONTENT_TOO_LONG",
+        "retry_with_fresh_client_message_id": True,
+    }
+    assert "message" not in got.json()
     assert turn.processing_status == "failed"
     assert turn.error_code == "ASSISTANT_CONTENT_TOO_LONG"
     assert draft.last_message_at is None
@@ -444,6 +458,31 @@ def test_thirty_turns_is_409_before_orchestration(
     assert got.status_code == 409
     assert got.json()["detail"] == {"code": "TURN_LIMIT_EXCEEDED", "limit": 30}
     assert service.calls == []
+
+
+def test_reserved_transcript_capacity_is_rejected_before_orchestration(
+    client: TestClient,
+    store: Store,
+    service: FakeService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    draft = _draft(store)
+    monkeypatch.setattr(chat_service, "MAX_TRANSCRIPT_CHARS", len(QUERY) + 7_999)
+    got = _post(client, _persisted(draft), _app())
+    assert got.status_code == 409
+    assert got.json()["detail"] == {
+        "code": "TRANSCRIPT_LIMIT_EXCEEDED",
+        "limit": len(QUERY) + 7_999,
+    }
+    assert service.calls == [] and store.chat_turns == []
+
+
+def test_openapi_documents_post_orchestration_persistence_failure(client: TestClient) -> None:
+    operation = app.openapi()["paths"]["/assistant/query"]["post"]
+    description = operation["responses"]["503"]["description"]
+    assert "TURN_PERSISTENCE_FAILED" in description
+    assert "persistence_error_code" in description
+    assert "retry_with_fresh_client_message_id: true" in description
 
 
 # -------------------------------------------------------------- 역호환

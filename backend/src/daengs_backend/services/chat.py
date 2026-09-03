@@ -37,6 +37,7 @@ MAX_SESSIONS_PER_PET = 5
 MAX_QUESTION_CHARS = 2_000
 MAX_ASSISTANT_CHARS = 8_000
 MAX_COMPLETED_TURNS = 30
+MAX_FAILED_TURNS = 30
 MAX_TRANSCRIPT_CHARS = 320_000
 STALE_PROCESSING_AFTER = timedelta(minutes=5)
 _TITLE_MAX = 120
@@ -113,12 +114,22 @@ class TurnProcessingError(Exception):
 
 
 class TurnFailedError(Exception):
-    """The UUID belongs to a failed (or stale) turn and stays burned. Retry with a fresh one."""
+    """The retained UUID belongs to a failed turn. Retry with a fresh one."""
 
     def __init__(self, turn_id: uuid.UUID, error_code: str) -> None:
         super().__init__(f"turn already failed ({error_code}): {turn_id}")
         self.turn_id = turn_id
         self.error_code = error_code
+
+
+class TurnPersistenceError(Exception):
+    """A generated non-failure response could not be committed as a completed turn."""
+
+    def __init__(self, turn_id: uuid.UUID, persistence_error_code: str) -> None:
+        super().__init__(f"turn persistence failed ({persistence_error_code}): {turn_id}")
+        self.turn_id = turn_id
+        self.persistence_error_code = persistence_error_code
+        self.retry_with_fresh_client_message_id = True
 
 
 class ChatSummaryNotFoundError(Exception):
@@ -257,7 +268,8 @@ def _resolve_existing_turn(existing: ChatTurn, question: str) -> ChatTurn:
     Only an exact replay of a completed turn is returned, so the caller can answer from the
     stored ``public_response`` without calling the orchestrator. Everything else raises: a
     different question is a client bug, a live reservation is still being answered, and a
-    failed or stale one stays burned so a retry cannot resurrect a dead request.
+    retained failed or stale rows stay burned. Once bounded retention prunes a failed row,
+    that UUID no longer has a reservation to conflict with.
     """
     if existing.user_content != question:
         raise TurnIdempotencyConflictError(existing.id)
@@ -289,12 +301,16 @@ async def reserve_turn(
     if chat_session is None:
         raise ChatSessionNotFoundError
 
-    # Stale recovery comes first. A ``processing`` row older than five minutes is a crashed or
-    # timed-out request, not a live one: it must neither hold its idempotency key as "still
-    # answering" nor count toward the turn cap. The recovery is committed on its own so it
-    # survives whatever the checks below raise, then the session lock is taken again.
+    # Stale recovery and failed-row retention happen under the session lock. Commit them on
+    # their own so cleanup survives whatever reservation check below raises, then relock.
     cutoff = (now or datetime.now(UTC)) - STALE_PROCESSING_AFTER
-    if await chat_repo.fail_stale_turns(session, session_id=session_id, cutoff=cutoff):
+    stale_count = await chat_repo.fail_stale_turns(
+        session, session_id=session_id, cutoff=cutoff
+    )
+    pruned_count = await chat_repo.prune_failed_turns(
+        session, session_id=session_id, keep=MAX_FAILED_TURNS
+    )
+    if stale_count or pruned_count:
         await session.commit()
         chat_session = await chat_repo.get_owned_session_for_update(
             session, app_user_id, session_id
@@ -307,11 +323,12 @@ async def reserve_turn(
     )
     if existing is not None:
         return _resolve_existing_turn(existing, question)
-    if await chat_repo.count_reserved_turns(session, session_id) >= MAX_COMPLETED_TURNS:
+    capacity_turns = await chat_repo.list_capacity_turns(session, session_id)
+    if len(capacity_turns) >= MAX_COMPLETED_TURNS:
         raise TurnLimitError
 
-    completed = await chat_repo.list_turns(session, session_id, completed_only=True)
-    projected = _transcript_char_count(completed) + len(question)
+    projected = _reserved_transcript_char_count(capacity_turns)
+    projected += len(question) + MAX_ASSISTANT_CHARS
     if projected > MAX_TRANSCRIPT_CHARS:
         raise TranscriptLimitError
 
@@ -366,8 +383,14 @@ async def complete_turn(
     if turn.processing_status != "processing":
         raise CompletionConflictError
     if not response.message or len(response.message) > MAX_ASSISTANT_CHARS:
-        await chat_repo.fail_turn_if_processing(
+        failed = await chat_repo.fail_turn_if_processing(
             session, turn_id, error_code="ASSISTANT_CONTENT_TOO_LONG"
+        )
+        if failed is None:
+            await session.rollback()
+            raise CompletionConflictError
+        await chat_repo.prune_failed_turns(
+            session, session_id=chat_session.id, keep=MAX_FAILED_TURNS
         )
         await session.commit()
         raise ContentLimitError("assistant", MAX_ASSISTANT_CHARS)
@@ -378,8 +401,14 @@ async def complete_turn(
     if _transcript_char_count(completed) + len(turn.user_content) + len(
         response.message
     ) > MAX_TRANSCRIPT_CHARS:
-        await chat_repo.fail_turn_if_processing(
+        failed = await chat_repo.fail_turn_if_processing(
             session, turn_id, error_code="TRANSCRIPT_TOO_LONG"
+        )
+        if failed is None:
+            await session.rollback()
+            raise CompletionConflictError
+        await chat_repo.prune_failed_turns(
+            session, session_id=chat_session.id, keep=MAX_FAILED_TURNS
         )
         await session.commit()
         raise TranscriptLimitError
@@ -435,13 +464,24 @@ async def fail_turn(
     *,
     error_code: str,
 ) -> ChatTurn:
-    if await chat_repo.get_owned_turn(session, app_user_id, turn_id) is None:
+    owned = await chat_repo.get_owned_turn(session, app_user_id, turn_id)
+    if owned is None:
         raise ChatTurnNotFoundError
+    turn, chat_session = owned
+    if await chat_repo.get_owned_session_for_update(
+        session, app_user_id, chat_session.id
+    ) is None:
+        raise ChatSessionNotFoundError
+    if turn.processing_status != "processing":
+        raise CompletionConflictError
     failed = await chat_repo.fail_turn_if_processing(
         session, turn_id, error_code=error_code
     )
     if failed is None:
         raise CompletionConflictError
+    await chat_repo.prune_failed_turns(
+        session, session_id=chat_session.id, keep=MAX_FAILED_TURNS
+    )
     await session.commit()
     return failed
 
@@ -450,20 +490,50 @@ def _transcript_char_count(turns: list[ChatTurn]) -> int:
     return sum(len(turn.user_content) + len(turn.assistant_content or "") for turn in turns)
 
 
+def _reserved_transcript_char_count(turns: list[ChatTurn]) -> int:
+    """Committed content plus worst-case answers for every live reservation."""
+    return sum(
+        len(turn.user_content)
+        + (
+            len(turn.assistant_content or "")
+            if turn.processing_status == "completed"
+            else MAX_ASSISTANT_CHARS
+        )
+        for turn in turns
+    )
+
+
 #: The external call. Receives the session's pet id (as the ``active_dog_id`` the
 #: orchestrator should see) and returns what the user will be shown.
 Orchestrate = Callable[[str], Awaitable[AssistantResponse]]
 
-#: Reasons a delivered answer can no longer be stored. Each one is already recorded on the
-#: turn row (or the row is gone), so the caller still returns the answer instead of turning
-#: a served response into an error after the fact.
-_NOT_STORABLE = (
+#: Expected completion-stage failures that must become an explicit API error. A generated
+#: non-FAILED response is never returned as HTTP 200 unless its identical public response
+#: has been committed in a completed turn.
+_PERSISTENCE_FAILURES = (
     ContentLimitError,
     TranscriptLimitError,
     CompletionConflictError,
     ChatTurnNotFoundError,
+    ChatSessionNotFoundError,
     PetNotOwnedError,
 )
+
+
+def _persistence_error_code(error: Exception) -> str:
+    if isinstance(error, ContentLimitError):
+        return "ASSISTANT_CONTENT_TOO_LONG"
+    if isinstance(error, TranscriptLimitError):
+        return "TRANSCRIPT_TOO_LONG"
+    if isinstance(error, CompletionConflictError):
+        return "COMPLETION_CONFLICT"
+    if isinstance(error, ChatTurnNotFoundError):
+        return "TURN_NOT_FOUND"
+    if isinstance(error, ChatSessionNotFoundError):
+        return "SESSION_NOT_FOUND"
+    if isinstance(error, PetNotOwnedError):
+        return "PET_NOT_OWNED"
+    raise TypeError(f"unexpected persistence error type: {type(error).__name__}")
 
 
 async def _close_failed(
@@ -533,8 +603,8 @@ async def run_persisted_turn(
     async with session_factory() as completion_session:
         try:
             await complete_turn(completion_session, app_user_id, turn_id, response=response)
-        except _NOT_STORABLE:
-            pass
+        except _PERSISTENCE_FAILURES as exc:
+            raise TurnPersistenceError(turn_id, _persistence_error_code(exc)) from exc
     return response
 
 
@@ -726,6 +796,7 @@ async def delete_summary(
 __all__ = [
     "MAX_ASSISTANT_CHARS",
     "MAX_COMPLETED_TURNS",
+    "MAX_FAILED_TURNS",
     "MAX_QUESTION_CHARS",
     "MAX_SESSIONS_PER_PET",
     "MAX_TRANSCRIPT_CHARS",
@@ -748,6 +819,7 @@ __all__ = [
     "TurnFailedError",
     "TurnIdempotencyConflictError",
     "TurnLimitError",
+    "TurnPersistenceError",
     "TurnProcessingError",
     "build_title",
     "categories_of",

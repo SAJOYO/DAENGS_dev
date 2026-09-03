@@ -92,6 +92,12 @@ def _structured_context(body: AssistantQueryRequest) -> dict[str, Any]:
             "description": "본문 모양이 틀렸거나, 저장하는 요청의 질문이 2,000자를 넘습니다 "
             "(`QUESTION_TOO_LONG`). 무상태 요청에는 이 길이 제한이 없습니다."
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "오케스트레이션 뒤 응답을 turn 으로 commit하지 못했습니다. "
+            "`detail.code`는 `TURN_PERSISTENCE_FAILED`이고 `turn_id`, 내부 "
+            "`persistence_error_code`, `retry_with_fresh_client_message_id: true`를 동봉합니다. "
+            "생성된 답변 본문은 성공 응답으로 반환하지 않습니다."
+        },
     },
 )
 async def query(
@@ -184,6 +190,18 @@ async def query(
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {"code": "TRANSCRIPT_LIMIT_EXCEEDED", "limit": chat_service.MAX_TRANSCRIPT_CHARS},
+        ) from None
+    except chat_service.TurnPersistenceError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            {
+                "code": "TURN_PERSISTENCE_FAILED",
+                "turn_id": str(exc.turn_id),
+                "persistence_error_code": exc.persistence_error_code,
+                "retry_with_fresh_client_message_id": (
+                    exc.retry_with_fresh_client_message_id
+                ),
+            },
         ) from None
 
 

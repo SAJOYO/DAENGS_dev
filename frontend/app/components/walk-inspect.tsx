@@ -26,7 +26,7 @@ import {
  */
 
 /** 눈으로 좌표를 외우지 않아도 되게. 강남은 `#23` 실기 확인에 쓴 좌표 그대로입니다. */
-const PRESETS: Array<{ label: string; lat: number; lon: number }> = [
+export const PRESETS: Array<{ label: string; lat: number; lon: number }> = [
   { label: "강남", lat: 37.4979, lon: 127.0276 },
   { label: "서울시청", lat: 37.5663, lon: 126.9779 },
   { label: "부산 해운대", lat: 35.1587, lon: 129.1604 },

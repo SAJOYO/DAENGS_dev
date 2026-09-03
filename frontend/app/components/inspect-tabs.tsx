@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import AskInspect from "./ask-inspect";
+import AssistantInspect from "./assistant-inspect";
 import SkinInspect from "./skin-inspect";
 import TrainingChat from "./training-chat";
 import WalkInspect from "./walk-inspect";
@@ -12,8 +13,8 @@ import { useAuth } from "./auth-provider";
  * `기능 / 검색 점검` 안의 갈래 전환.
  *
  * **훈련 갈래만 권한으로 가립니다.** `/training/chat` 은 `Perm.SEARCH_INSPECT`(관리자
- * 전용)이고 `/life/ask`·`/life/walk-conditions` 는 `Perm.READ` 라, 두 갈래의 문턱이 다릅니다. 화면에서 가리는
- * 것은 UX 일 뿐이고 실제 차단은 백엔드가 같은 권한으로 합니다 (`lib/auth.ts`).
+ * 전용)이고 `/life/ask`·`/life/walk-conditions`·`/assistant/query` 는 `Perm.READ` 라, 두 갈래의
+ * 문턱이 다릅니다. 화면에서 가리는 것은 UX 일 뿐이고 실제 차단은 백엔드가 같은 권한으로 합니다 (`lib/auth.ts`).
  *
  * **피부 갈래는 권한으로 안 가립니다.** `/screen/*` 라우터에는 dependency 가 없어서
  * `core/deps.py` 를 아예 안 거칩니다 — 로그인조차 필요 없습니다. 화면만 잠그면 "API 는
@@ -26,7 +27,7 @@ import { useAuth } from "./auth-provider";
  * 갈래를 URL 에 안 싣습니다(`?tab=`). 새로고침하면 첫 갈래로 돌아옵니다 — 공유할 일이
  * 생기면 그때 넣습니다.
  */
-type TabId = "training" | "life" | "skin";
+type TabId = "training" | "life" | "skin" | "assistant";
 
 export default function InspectTabs() {
   const { can } = useAuth();
@@ -39,6 +40,7 @@ export default function InspectTabs() {
       : []),
     { id: "life", label: "생활 RAG", hint: "제도·문서 + 실시간 산책" },
     { id: "skin", label: "피부 스크리닝", hint: "사진 한 장 · 2단계 모델" },
+    { id: "assistant", label: "어시스턴트", hint: "앱과 같은 경로 · 라우팅 결과" },
   ];
 
   // 권한이 사라진 상태로 훈련 갈래가 선택돼 있을 수 없게 합니다(로그아웃 후 재로그인 등).
@@ -81,6 +83,8 @@ export default function InspectTabs() {
           <TrainingChat />
         ) : current === "skin" ? (
           <SkinInspect />
+        ) : current === "assistant" ? (
+          <AssistantInspect />
         ) : (
           <div className="flex flex-col gap-6">
             <AskInspect />

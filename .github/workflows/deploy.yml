@@ -138,7 +138,7 @@ jobs:
               $forceAll = $true
             } else {
               $changed = @(git diff --name-only $before '${{ github.sha }}')
-              if ($LASTEXITCODE -ne 0) { throw '배포 변경 파일을 계산하지 못했습니다' }
+              if ($LASTEXITCODE -ne 0) { throw 'failed to compute deployment changed files' }
             }
           }
 

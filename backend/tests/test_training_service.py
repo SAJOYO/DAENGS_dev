@@ -11,7 +11,6 @@ from daengs_training.generation import gemini as generation
 from daengs_training.retrieval.pgvector import RuntimeRetriever
 from daengs_training.service import RAGService, TrainingTimeoutError, load_serving_document_ids
 
-
 #: Synthetic evidence.  Not corpus text — written for these tests only.
 WALK_HITS = [
     {

@@ -1,7 +1,7 @@
 """``/app/territory/attempts`` — 산책 중 점령지 방문 인증 API.
 
-촬영 순간의 위치만 동기로 10m 판정하고, 사진은 저장소에 직접 올린 뒤
-``VISION_PENDING``까지만 넘깁니다. VLM과 실제 점령 정책은 이 라우터 밖의 후속 단계입니다.
+촬영 순간의 위치만 동기로 10m 판정하고, 사진은 저장소에 직접 올린 뒤 전용 VLM 큐에
+넘깁니다. 사진 판정과 실제 점령 정책은 이 라우터 밖의 후속 단계입니다.
 """
 
 from __future__ import annotations
@@ -116,6 +116,8 @@ async def confirm_upload(
         raise _NOT_FOUND from None
     except territory_service.TerritoryAttemptConflictError as exc:
         raise _conflict(exc) from None
+    except territory_service.TerritoryVisionQueueUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
     except StorageNotConfiguredError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
     return TerritoryAttemptResponse(**_response_fields(attempt))

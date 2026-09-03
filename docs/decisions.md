@@ -1487,7 +1487,7 @@ place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(
 **"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
 place-db 의 스키마 원본은 `backend/infra/place/alembic` 이고, 리비전 히스토리를 개조하지
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
-쌉니다 — `backend/docs/place/UPSTREAM.md`).
+쌉니다 — `docs/place/UPSTREAM.md`).
 
 #### API 는 아직 nginx 에 노출하지 않았다
 

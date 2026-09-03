@@ -46,6 +46,23 @@ class TerritoryAttemptConflictError(RuntimeError):
         self.detail = detail
 
 
+class TerritoryVisionQueueUnavailable(RuntimeError):
+    """DB는 대기 상태로 확정됐지만 워커 큐 발행에 실패했습니다."""
+
+
+def _publish_vision_attempt(attempt_id: uuid.UUID) -> None:
+    from daengs_backend.tasks.territory import verify_photo
+
+    try:
+        verify_photo.delay(str(attempt_id))
+    except Exception as exc:
+        # confirm 재호출은 VISION_PENDING도 다시 발행하므로 앱이 같은 요청을 안전하게
+        # 재시도할 수 있습니다. 공급자/Redis 원문은 HTTP 응답으로 내보내지 않습니다.
+        raise TerritoryVisionQueueUnavailable(
+            "사진 판정 큐를 사용할 수 없습니다. 같은 confirm 요청을 다시 시도해 주세요."
+        ) from exc
+
+
 def _haversine_m(
     lat_a: Decimal,
     lng_a: Decimal,
@@ -207,12 +224,17 @@ async def confirm_upload(
 ) -> tuple[TerritoryAttempt, bool]:
     """사진 실존을 확인하고 즉시 VISION_PENDING으로 넘깁니다.
 
-    여기서는 사진을 열거나 VLM을 기다리지 않습니다. 두 번째 반환값은 이번 호출이
-    새로 상태를 넘겼는지이며, 실제 워커 발행은 VLM PR이 이 경계 뒤에 붙입니다.
+    여기서는 사진을 열거나 VLM을 기다리지 않습니다. DB commit 뒤 전용 큐에 발행하며,
+    이미 VISION_PENDING인 confirm 재호출도 다시 발행해 broker 실패를 복구합니다.
     """
     attempt = await territory_repo.get_owned(session, app_user_id, attempt_id, for_update=True)
     if attempt is None:
         raise TerritoryAttemptNotFoundError
+    if attempt.status == "VISION_PENDING":
+        # SELECT FOR UPDATE 잠금을 broker I/O 전에 풉니다. 중복 태스크는 워커가 멱등 처리합니다.
+        await session.commit()
+        _publish_vision_attempt(attempt.id)
+        return attempt, False
     if attempt.status != "PENDING_UPLOAD":
         return attempt, False
     stored = get_storage().stat(attempt.photo_storage_key)
@@ -237,6 +259,7 @@ async def confirm_upload(
     attempt.status = "VISION_PENDING"
     attempt.updated_at = datetime.now(UTC)
     await session.commit()
+    _publish_vision_attempt(attempt.id)
     return attempt, True
 
 

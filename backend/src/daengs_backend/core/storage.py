@@ -76,6 +76,16 @@ class StoragePort(Protocol):
         generation: str | None = None,
     ) -> str: ...
 
+    def read_bytes(
+        self,
+        storage_key: str,
+        *,
+        generation: str,
+        max_bytes: int,
+    ) -> bytes:
+        """confirm에서 고정한 generation의 바이트만 읽습니다."""
+        ...
+
     def delete(self, storage_key: str, *, generation: str | None = None) -> None: ...
 
     def redact(self, storage_key: str, *, generation: str) -> str:
@@ -143,6 +153,9 @@ class NotConfiguredStorage:
         raise StorageNotConfiguredError(self._MSG)
 
     def download_url(self, storage_key, *, expires_in_seconds, generation=None):
+        raise StorageNotConfiguredError(self._MSG)
+
+    def read_bytes(self, storage_key, *, generation, max_bytes):
         raise StorageNotConfiguredError(self._MSG)
 
     def delete(self, storage_key, *, generation=None):
@@ -217,6 +230,14 @@ class LocalBridgeStorage:
 
     def download_url(self, storage_key, *, expires_in_seconds, generation=None):
         return f"{self._base_url}/app/gait/_bridge/download/{storage_key}"
+
+    def read_bytes(self, storage_key, *, generation, max_bytes):
+        data = self._path(storage_key).read_bytes()
+        if len(data) > max_bytes:
+            raise ValueError("저장소 객체가 허용 크기를 초과합니다.")
+        if sha256(data).hexdigest() != generation:
+            raise StorageObjectChangedError("저장소 객체가 confirm 뒤 변경되었습니다.")
+        return data
 
     def delete(self, storage_key, *, generation=None):
         p = self._path(storage_key)
@@ -342,6 +363,25 @@ class GcsStorage:
                 generation=generation,
             )
         )
+
+    def read_bytes(self, storage_key, *, generation, max_bytes):
+        match = int(generation)
+        blob = self._bucket().blob(storage_key, generation=match)
+        try:
+            data = blob.download_as_bytes(
+                if_generation_match=match,
+                timeout=30,
+                single_shot_download=True,
+            )
+        except Exception as exc:
+            if _is_not_found(exc) or _is_precondition_failed(exc):
+                raise StorageObjectChangedError(
+                    "confirm에서 고정한 저장소 객체를 읽을 수 없습니다."
+                ) from exc
+            raise
+        if len(data) > max_bytes:
+            raise ValueError("저장소 객체가 허용 크기를 초과합니다.")
+        return data
 
     def delete(self, storage_key, *, generation=None):
         # 없는 것을 지워도 실패로 보지 않습니다 (idempotent — 재시도·중복 정리 대비).

@@ -55,6 +55,15 @@ async def get_for_decision(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_for_worker(
+    session: AsyncSession,
+    attempt_id: uuid.UUID,
+) -> TerritoryAttempt | None:
+    """워커가 외부 호출 전에 고정 증거만 복사하는 잠금 없는 조회."""
+    stmt = select(TerritoryAttempt).where(TerritoryAttempt.id == attempt_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def find_pending_by_storage_key(
     session: AsyncSession,
     storage_key: str,

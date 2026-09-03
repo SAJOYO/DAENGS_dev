@@ -3,8 +3,11 @@
 Deterministic signal first, semantic Gemini selection only as the fallback, then
 the plan goes to the untouched OrchestrationEngine. A router/system failure
 (O-14) executes nothing and returns top-level FAILED — it is never CLARIFY, and
-the invalid model output is never surfaced. `/assistant/query` itself is Card 3;
-this module deliberately registers no endpoint.
+the invalid model output is never surfaced. A purely social utterance
+(greeting/thanks/goodbye, classified by the router with no capability intent) is
+answered by a fixed template before any RoutePlan exists, so it never reaches
+the engine. `/assistant/query` itself is Card 3; this module deliberately
+registers no endpoint.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from daengs_backend.orchestration.semantic import (
     GeminiSemanticRouter,
     SemanticRoutingError,
 )
+from daengs_backend.orchestration.social import build_social_response
 
 _ROUTER_FAILURE_MESSAGE = "요청을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요."
 
@@ -70,6 +74,9 @@ class AssistantOrchestrationService:
                     handoffs=[],
                     clarify=None,
                 )
+            if decision.social_intent is not None:
+                # Schema guarantees execute/handoffs are empty here: nothing to plan or run.
+                return build_social_response(request_id=rid, intent=decision.social_intent)
             route_plan = assemble_route_plan(
                 decision,
                 query=query,

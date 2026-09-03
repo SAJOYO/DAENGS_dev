@@ -1,11 +1,11 @@
-"""Place 검색이 실제로 소비하는 설정만. **provider·LLM·deeplink 설정은 여기 없다.**
+"""Place 런타임이 실제로 소비하는 설정만.
 
 원본(DAENGS_geo `app/core/config.py`)은 지도/route/LLM provider 키까지 한 덩어리였다.
-이 서비스의 약속은 "PostGIS 만 있으면 뜬다"(D-026)라서, 설정 표면도 그 약속만큼만 둔다 —
-여기 없는 필드를 다시 들여오는 변경은 경계 침범이다 (tests/test_boundary.py).
+이 서비스는 PostGIS만으로 기존 검색을 계속 제공하고, optional Gemini 설정은 내부 discovery
+요청에서만 읽는다. 지도/route/deeplink 설정을 다시 들여오는 변경은 경계 침범이다.
 """
 
-from pydantic import Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL, make_url
 
@@ -43,6 +43,24 @@ class Settings(BaseSettings):
     # 한국관광공사 반려동물 동반여행 (KorPetTourService2) — 기반층 두 번째 원천, 배치 전용
     kto_service_key: str = ""              # 일반(Decoding) 인증키
     kto_page_size: int = Field(100, ge=1, le=1000)
+
+    # Place 내부 discovery 전용. 키가 비어도 앱 import·health·기존 검색은 정상이어야 한다.
+    # 배포 중인 공용 이름을 각 프로세스 Settings가 독립적으로 읽으며, timeout 단위는 ms다.
+    gemini_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("GEMINI_API_KEY"),
+    )
+    gemini_model: str = Field(
+        default="gemini-3.1-flash-lite",
+        min_length=1,
+        validation_alias=AliasChoices("GEMINI_MODEL"),
+    )
+    gemini_timeout_ms: int = Field(
+        default=30_000,
+        gt=0,
+        le=120_000,
+        validation_alias=AliasChoices("GEMINI_TIMEOUT_MS"),
+    )
 
 
 settings = Settings()

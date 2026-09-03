@@ -28,3 +28,27 @@ def test_database_url_override_remains_available_for_local_and_ci_runs():
     assert settings.sqlalchemy_url.host == "localhost"
     assert settings.sqlalchemy_url.port == 5544
     assert settings.sqlalchemy_url.database == "test_place"
+
+
+def test_place_gemini_settings_reuse_existing_unprefixed_environment(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "place-test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-test-model")
+    monkeypatch.setenv("GEMINI_TIMEOUT_MS", "12500")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_api_key.get_secret_value() == "place-test-key"
+    assert settings.gemini_model == "gemini-test-model"
+    assert settings.gemini_timeout_ms == 12_500
+
+
+def test_place_gemini_settings_are_optional(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_TIMEOUT_MS", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_api_key.get_secret_value() == ""
+    assert settings.gemini_model == "gemini-3.1-flash-lite"
+    assert settings.gemini_timeout_ms == 30_000

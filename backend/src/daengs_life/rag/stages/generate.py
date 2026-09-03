@@ -29,7 +29,8 @@ from ..core import config
 from . import embed, goldenset, load, search
 from .search import Hit
 
-VERSION = 2      # 2 = 생성이 낸 boundary·covered 가 행에 있다 (RAG-055)
+VERSION = 3      # 2 = 생성이 낸 boundary·covered 가 행에 있다 (RAG-055)
+                 # 3 = 반려견 프로필(`dog`)이 행에 있다 (RAG-056 · 로드맵 B4)
 
 # 질문이 걸린 경계 (RAG-055). `medical`·`emergency` 는 로드맵 §2 가 "이 개의 몸에 대한 판단"
 # 으로 묶은 것이고 RAG-008 ③ 이 "문서가 아니라 판단"이라고 가른 자리다.
@@ -144,6 +145,9 @@ class Answer:
     # 실패하거나 옛 덤프를 읽을 때 조용히 거절·기권으로 바뀌면 그것이 더 나쁘다
     boundary: Boundary = "none"
     covered: bool = True
+    # 이 답을 만들 때 쓴 반려견 프로필 (RAG-056). **덤프에 남아야 한다** — 안 남기면 같은
+    # 문항의 두 랩이 왜 다른 답을 냈는지 아무도 못 가른다. 없으면 프로필 없이 물은 것이다
+    dog: "DogProfile | None" = None
 
     @property
     def grounded(self) -> list[str]:
@@ -306,6 +310,7 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
             question=question, text=text, hits=hits, model=name,
             embedding_model=embedding_model or config.settings.embedding_model_key,
             cited=cited_articles(text), ungrounded=ungrounded_articles(text, hits),
+            dog=dog if dog and dog.has_facts else None,
         )
 
     text = verdict.answer.strip()
@@ -314,6 +319,7 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
         embedding_model=embedding_model or config.settings.embedding_model_key,
         cited=cited_articles(text), ungrounded=ungrounded_articles(text, hits),
         boundary=verdict.boundary, covered=verdict.covered,
+        dog=dog if dog and dog.has_facts else None,
     )
 
 
@@ -369,6 +375,16 @@ class DumpHit(_Base):
     tier: str                         # must / nice / -
 
 
+class DumpDog(_Base):
+    """랩 행에 남는 프로필. `DogProfile` 과 같은 칸이지만 **읽는 쪽 타입이 따로 있다** —
+    `DogProfile` 은 서빙이 받는 입력이고 이쪽은 저장 포맷이라, 한쪽이 늘 때 다른 쪽이
+    덩달아 늘지 않게 갈라 둔다 (`DumpHit` 과 `Hit` 을 가른 것과 같다).
+    """
+
+    breed: str | None = None
+    age_months: int | None = None
+
+
 class DumpRow(_Base):
     """문항 하나. **비교 축 셋이 전부 여기 있다** (RAG-028 ⑥ⓐ) — `hit_ids`·`cited`·`ungrounded`.
 
@@ -387,6 +403,9 @@ class DumpRow(_Base):
     # 옛 랩(`lap1`~`lap15`)에는 이 칸이 없다. 읽는 쪽이 `.get()` 으로 넘어간다
     boundary: Boundary = "none"
     covered: bool = True
+    # 이 문항을 어떤 프로필로 물었나 (RAG-056). 옛 랩(`lap1`~`lap18`)에는 이 칸이 없고,
+    # 없는 것과 프로필 없이 물은 것은 같은 뜻이라 기본값이 `None` 인 것이 맞다
+    dog: DumpDog | None = None
 
 
 def dump_rows(items: list[tuple[str, Answer, set[str], set[str]]]) -> list[DumpRow]:
@@ -399,6 +418,7 @@ def dump_rows(items: list[tuple[str, Answer, set[str], set[str]]]) -> list[DumpR
                   for h in a.hits],
             cited=a.cited, ungrounded=a.ungrounded,
             boundary=a.boundary, covered=a.covered,
+            dog=DumpDog(breed=a.dog.breed, age_months=a.dog.age_months) if a.dog else None,
         )
         for qid, a, must, nice in items
     ]

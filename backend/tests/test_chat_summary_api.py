@@ -689,7 +689,7 @@ def test_persisted_assistant_query_keeps_its_boundary_and_401(
     }
 
     assert client.post("/assistant/query", json=body, headers=_app()).status_code == 200
-    assert seen == [0] and factory.opened == 2 and gate.calls == 0
+    assert seen == [0] and factory.opened == 3 and gate.calls == 0  # +프로필 조회 (B4)
 
     store.app_users[1].status = "withdrawn"
     body["client_message_id"] = str(uuid.uuid4())

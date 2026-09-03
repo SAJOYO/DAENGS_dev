@@ -91,9 +91,11 @@ def test_questions_come_from_the_goldenset() -> None:
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 28
+    assert len(items) == 30
     assert all(q for _, q, _, _ in items)
     assert {"B2", "B4", "B6"} <= {i[0] for i in items}
+    # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)
+    assert {"DP1", "DP2"} <= {i[0] for i in items}
 
 
 # ---------------------------------------------------------------- 교통수단 배제 (RAG-052)

@@ -16,6 +16,7 @@ on:
       - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
+      - "nginx/api-locations.inc"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/place-search-ingest.yml"
       - ".github/workflows/place-search-tests.yml"
@@ -29,6 +30,7 @@ on:
       - "backend/uv.lock"
       - "docker-compose.yml"
       - "nginx/default.conf"
+      - "nginx/api-locations.inc"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/place-search-ingest.yml"
       - ".github/workflows/place-search-tests.yml"
@@ -93,13 +95,25 @@ jobs:
           grep -Fq 'limit_req zone=place_search_per_ip burst=10 nodelay;' \
             <<< "$place_location"
           grep -Fq 'limit_req_status 429;' <<< "$place_location"
+
+          territory_location="$(
+            awk '
+              $1 == "location" && $2 == "/territory/sites/" && $3 == "{" { inside = 1 }
+              inside { print }
+              inside && $1 == "}" { exit }
+            ' <<< "$nginx_config"
+          )"
+          grep -Fq 'limit_req zone=place_search_per_ip burst=10 nodelay;' \
+            <<< "$territory_location"
+          grep -Fq 'set $place_search_upstream place-search:8000;' \
+            <<< "$territory_location"
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
       - name: 의존성
         run: uv sync --frozen --extra place
-      - name: 스키마 (Alembic 0001~0020 전체가 실제로 적용되는지도 여기서 검증됩니다)
+      - name: 스키마 (Alembic 전체 이력이 실제로 적용되는지도 여기서 검증됩니다)
         run: uv run alembic -c infra/place/alembic.ini upgrade head
       - name: 테스트
         run: uv run pytest -q tests/place

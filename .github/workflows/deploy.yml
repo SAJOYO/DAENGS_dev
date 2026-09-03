@@ -169,6 +169,31 @@ jobs:
             }
           }
 
+      - name: Territory Site 공개 경로 확인
+        run: |
+          # 데이터 적재 전에도 API 계약과 nginx 라우팅은 200 + 빈 목록으로 검증할 수 있습니다.
+          foreach ($attempt in 1..18) {
+            try {
+              $response = Invoke-RestMethod `
+                -Method Get `
+                -Uri 'http://127.0.0.1:8000/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=1000&limit=1' `
+                -TimeoutSec 10
+              $requiredFields = @('count', 'truncated', 'sites')
+              $missingFields = @($requiredFields | Where-Object {
+                $_ -notin $response.PSObject.Properties.Name
+              })
+              if ($missingFields.Count -ne 0 -or
+                  $response.sites -isnot [System.Array]) {
+                throw 'Territory Site response does not match APP contract'
+              }
+              Write-Host 'Territory Site APP contract verified'
+              break
+            } catch {
+              if ($attempt -eq 18) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
       - name: Journey 공개 경로 확인
         run: |
           # 현재 APP이 보내는 dog_id 없는 좌표 요청입니다. 외부 키가 없어도 원본 계약대로

@@ -106,8 +106,6 @@ def compile_intent_plan(request: PlannerRequest) -> PlannerResult:
     not_applied: list[PlannerIssue] = []
     unsupported: list[PlannerIssue] = []
     clarifications: list[PlannerIssue] = []
-    deferred_target = False
-
     for observation in request.observations:
         intent = observation.intent
         if isinstance(intent, (ActivityIntent, ObjectIntent)):
@@ -209,7 +207,6 @@ def compile_intent_plan(request: PlannerRequest) -> PlannerResult:
                 )
             )
         else:
-            deferred_target = True
             unsupported.append(
                 _issue(
                     observation,
@@ -230,7 +227,7 @@ def compile_intent_plan(request: PlannerRequest) -> PlannerResult:
         )
 
     if not targets:
-        if deferred_target or not unsupported:
+        if not any(issue.blocking for issue in unsupported):
             clarifications.append(
                 PlannerIssue(
                     code="place_target_required",

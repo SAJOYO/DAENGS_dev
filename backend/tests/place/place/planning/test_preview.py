@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from daengs_place.place.contracts import (
+    FieldProvenance,
     PlaceClassification,
     PlaceFacts,
     PlaceMatch,
@@ -11,6 +12,7 @@ from daengs_place.place.contracts import (
 from daengs_place.place.planning.compiler import build_place_search_plan
 from daengs_place.place.planning.contract import PlaceKind
 from daengs_place.place.planning.preview import PreviewCandidate, build_plan_preview
+from daengs_place.place.search_preview import _source_fact_keys
 from daengs_place.place.source_facts.bundle import (
     SourceFactKey,
     SourceFactVariant,
@@ -21,7 +23,14 @@ from daengs_place.place.source_facts.kto import project_kto
 from daengs_place.place.source_facts.states import DetailAcquisitionState
 
 
-def _place(source: str, ref: str, kind: PlaceKind, parking: bool | None) -> PlaceResult:
+def _place(
+    source: str,
+    ref: str,
+    kind: PlaceKind,
+    parking: bool | None,
+    *,
+    parking_source: PlaceRef | None = None,
+) -> PlaceResult:
     key = PlaceRef(source=source, ref=ref)
     return PlaceResult(
         key=key,
@@ -39,6 +48,11 @@ def _place(source: str, ref: str, kind: PlaceKind, parking: bool | None) -> Plac
             )
         ],
         facts=PlaceFacts(parking=parking),
+        field_sources=(
+            {"facts.parking": FieldProvenance(source=parking_source)}
+            if parking_source is not None
+            else {}
+        ),
     )
 
 
@@ -99,14 +113,14 @@ def test_preview_separates_executor_outcomes_from_source_evidence() -> None:
     candidates = [
         PreviewCandidate(
             place=_place("kcisa", "known", PlaceKind.CAFE, True),
-            bundle=_kcisa_bundle("known"),
+            bundles=(_kcisa_bundle("known"),),
         ),
         PreviewCandidate(
             place=_place("kcisa", "missing", PlaceKind.CAFE, False),
         ),
         PreviewCandidate(
             place=_place("kto", "effective", PlaceKind.SHOPPING, None),
-            bundle=_kto_bundle("effective"),
+            bundles=(_kto_bundle("effective"),),
         ),
     ]
 
@@ -153,10 +167,10 @@ def test_preview_separates_executor_outcomes_from_source_evidence() -> None:
 
 
 def test_preview_rejects_a_bundle_from_another_candidate() -> None:
-    with pytest.raises(ValidationError, match="bundle must match"):
+    with pytest.raises(ValidationError, match="bundles must match"):
         PreviewCandidate(
             place=_place("kcisa", "candidate-a", PlaceKind.CAFE, True),
-            bundle=_kcisa_bundle("candidate-b"),
+            bundles=(_kcisa_bundle("candidate-b"),),
         )
 
 
@@ -199,7 +213,7 @@ def test_preview_surfaces_conflict_without_overwriting_the_execution_value() -> 
         [
             PreviewCandidate(
                 place=_place("kcisa", ref, PlaceKind.CAFE, True),
-                bundle=bundle,
+                bundles=(bundle,),
             )
         ],
         candidate_limit_per_kind=1000,
@@ -250,7 +264,7 @@ def test_unrelated_partial_projection_does_not_hide_known_capability_evidence() 
         [
             PreviewCandidate(
                 place=_place("kcisa", ref, PlaceKind.CAFE, True),
-                bundle=bundle,
+                bundles=(bundle,),
             )
         ],
         candidate_limit_per_kind=1000,
@@ -258,3 +272,38 @@ def test_unrelated_partial_projection_does_not_hide_known_capability_evidence() 
 
     assert preview.gates[1].source_evidence.known == 1
     assert preview.gates[1].source_evidence.unknown == 0
+
+
+def test_preview_follows_borrowed_field_provenance_for_source_evidence() -> None:
+    plan = build_place_search_plan(
+        lat=37.5,
+        lng=127.0,
+        radius_m=3000,
+        kinds=[PlaceKind.CAFE],
+        limit_per_kind=20,
+        prefer_parking=True,
+    )
+    candidate = PreviewCandidate(
+        place=_place(
+            "kto",
+            "primary",
+            PlaceKind.CAFE,
+            True,
+            parking_source=PlaceRef(source="kcisa", ref="parking-evidence"),
+        ),
+        bundles=(
+            _kto_bundle("primary"),
+            _kcisa_bundle("parking-evidence"),
+        ),
+    )
+
+    assert {
+        (key.source, key.source_ref) for key in _source_fact_keys(candidate.place, plan)
+    } == {("kto", "primary"), ("kcisa", "parking-evidence")}
+
+    preview = build_plan_preview(plan, [candidate], candidate_limit_per_kind=1000)
+
+    parking = preview.gates[1]
+    assert parking.known_match == 1
+    assert parking.source_evidence.known == 1
+    assert parking.source_evidence.unsupported == 0

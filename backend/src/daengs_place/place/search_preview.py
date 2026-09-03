@@ -2,6 +2,8 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from daengs_place.place.contracts import PlaceResult
+from daengs_place.place.planning.capabilities import capability_spec
 from daengs_place.place.planning.contract import (
     MAX_RESULTS_PER_KIND,
     CapabilityId,
@@ -15,11 +17,37 @@ from daengs_place.place.planning.preview import (
     build_plan_preview,
 )
 from daengs_place.place.search import search_place_plan
+from daengs_place.place.source_facts.bundle import SourceFactKey
 from daengs_place.place.source_facts.reader import (
     MAX_BUNDLE_CANDIDATES,
     load_candidate_fact_bundles,
     source_fact_key,
 )
+
+
+def _source_fact_keys(
+    place: PlaceResult,
+    plan: PlaceSearchPlan,
+) -> tuple[SourceFactKey, ...]:
+    refs = [place.match.source]
+    for gate in plan.gates:
+        if gate.mode is GateMode.OFF:
+            continue
+        spec = capability_spec(gate.capability_id)
+        refs.extend(
+            provenance.source
+            for path in spec.execution_paths
+            if (provenance := place.field_sources.get(path)) is not None
+        )
+    keys: list[SourceFactKey] = []
+    seen: set[tuple[str, str]] = set()
+    for ref in refs:
+        key = source_fact_key(ref)
+        identity = (ref.source, ref.ref)
+        if key is not None and identity not in seen:
+            seen.add(identity)
+            keys.append(key)
+    return tuple(keys)
 
 
 def _candidate_plan(plan: PlaceSearchPlan, limit_per_kind: int) -> PlaceSearchPlan:
@@ -53,18 +81,30 @@ async def preview_search_plan(
     response = await search_place_plan(db, _candidate_plan(plan, limit_per_kind))
     places = [hit.place for group in response.groups for hit in group.results]
 
-    bundle_indexes = []
-    keys = []
-    for index, place in enumerate(places):
-        key = source_fact_key(place.match.source)
-        if key is not None:
-            bundle_indexes.append(index)
-            keys.append(key)
-    loaded = await load_candidate_fact_bundles(db, keys)
-    bundles_by_index = dict(zip(bundle_indexes, loaded, strict=True))
+    candidate_keys = [_source_fact_keys(place, plan) for place in places]
+    unique_keys: dict[tuple[str, str], SourceFactKey] = {}
+    for keys in candidate_keys:
+        for key in keys:
+            unique_keys[(key.source, key.source_ref)] = key
+    requested = list(unique_keys.values())
+    loaded = []
+    for start in range(0, len(requested), MAX_BUNDLE_CANDIDATES):
+        loaded.extend(
+            await load_candidate_fact_bundles(
+                db, requested[start : start + MAX_BUNDLE_CANDIDATES]
+            )
+        )
+    bundles_by_key = {
+        (bundle.key.source, bundle.key.source_ref): bundle for bundle in loaded
+    }
     candidates = [
-        PreviewCandidate(place=place, bundle=bundles_by_index.get(index))
-        for index, place in enumerate(places)
+        PreviewCandidate(
+            place=place,
+            bundles=tuple(
+                bundles_by_key[(key.source, key.source_ref)] for key in keys
+            ),
+        )
+        for place, keys in zip(places, candidate_keys, strict=True)
     ]
     return build_plan_preview(
         plan,

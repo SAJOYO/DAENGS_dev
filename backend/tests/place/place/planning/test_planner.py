@@ -256,6 +256,25 @@ def test_supported_target_can_run_while_unknown_semantics_remain_visible() -> No
     }
 
 
+def test_non_blocking_semantic_without_target_requests_clarification() -> None:
+    result = compile_intent_plan(
+        _request(
+            _semantic(
+                "quiet",
+                source=IntentSource.LLM_PROPOSAL,
+                concept_id="semantic.quiet",
+                evidence="조용한 곳",
+            )
+        )
+    )
+
+    assert result.status is PlannerStatus.NEEDS_CLARIFICATION
+    assert result.plan is None
+    assert result.unsupported[0].code == "unsupported_semantic_intent"
+    assert result.unsupported[0].blocking is False
+    assert result.clarifications[0].code == "place_target_required"
+
+
 def test_parking_preference_uses_source_authority_but_hard_filter_is_rejected() -> None:
     preferred = compile_intent_plan(
         _request(

@@ -44,15 +44,22 @@ SOURCE_EVIDENCE_STATUSES: tuple[SourceEvidenceStatus, ...] = (
 
 class PreviewCandidate(PlanningModel):
     place: PlaceResult
-    bundle: CandidateFactBundle | None = None
+    bundles: tuple[CandidateFactBundle, ...] = ()
 
     @model_validator(mode="after")
-    def bundle_matches_candidate_source(self) -> Self:
-        if self.bundle is None:
-            return self
-        source = self.place.match.source
-        if (self.bundle.key.source, self.bundle.key.source_ref) != (source.source, source.ref):
-            raise ValueError("preview bundle must match the candidate source record")
+    def bundles_match_candidate_sources(self) -> Self:
+        allowed = {
+            (self.place.match.source.source, self.place.match.source.ref),
+            *(
+                (provenance.source.source, provenance.source.ref)
+                for provenance in self.place.field_sources.values()
+            ),
+        }
+        keys = [(bundle.key.source, bundle.key.source_ref) for bundle in self.bundles]
+        if len(set(keys)) != len(keys):
+            raise ValueError("preview candidate bundle keys must be unique")
+        if any(key not in allowed for key in keys):
+            raise ValueError("preview bundles must match candidate or field source records")
         return self
 
 
@@ -125,23 +132,47 @@ def _execution_outcome(gate: SearchGate, place: PlaceResult) -> ExecutionOutcome
     return "unknown"
 
 
-def _source_evidence_status(
+def _evidence_source_and_bundle(
     gate: SearchGate,
     candidate: PreviewCandidate,
-) -> SourceEvidenceStatus:
+) -> tuple[str, CandidateFactBundle | None]:
     spec = capability_spec(gate.capability_id)
-    source = candidate.place.match.source.source
+    provenance_sources = {
+        provenance.source
+        for path in spec.execution_paths
+        if (provenance := candidate.place.field_sources.get(path)) is not None
+    }
+    if len(provenance_sources) > 1:
+        raise ValueError("one capability cannot use multiple field evidence sources")
+    source_ref = next(iter(provenance_sources), candidate.place.match.source)
+    bundle = next(
+        (
+            value
+            for value in candidate.bundles
+            if (value.key.source, value.key.source_ref)
+            == (source_ref.source, source_ref.ref)
+        ),
+        None,
+    )
+    return source_ref.source, bundle
+
+
+def _source_evidence(
+    gate: SearchGate,
+    candidate: PreviewCandidate,
+) -> tuple[SourceEvidenceStatus, CandidateFactBundle | None]:
+    spec = capability_spec(gate.capability_id)
+    source, bundle = _evidence_source_and_bundle(gate, candidate)
     if source not in spec.projection_sources:
-        return "unsupported"
-    bundle = candidate.bundle
+        return "unsupported", bundle
     if bundle is None or bundle.availability == "missing":
-        return "missing"
+        return "missing", bundle
     if bundle.projection_state is ProjectionState.FAILED:
-        return "failed"
+        return "failed", bundle
 
     sections = {path.split(".", maxsplit=1)[0] for path in spec.projection_paths}
     if sections & {conflict.section for conflict in bundle.conflicts}:
-        return "conflicted"
+        return "conflicted", bundle
 
     evidence = [
         variant.projection.evidence.get(path)
@@ -149,8 +180,8 @@ def _source_evidence_status(
         for path in spec.projection_paths
     ]
     if evidence and all(item is not None and item.state is FactState.KNOWN for item in evidence):
-        return "known"
-    return "unknown"
+        return "known", bundle
+    return "unknown", bundle
 
 
 def _source_coverage(
@@ -160,10 +191,10 @@ def _source_coverage(
     counts = {status: 0 for status in SOURCE_EVIDENCE_STATUSES}
     acquisition: dict[DetailAcquisitionState, int] = {}
     for candidate in candidates:
-        status = _source_evidence_status(gate, candidate)
+        status, bundle = _source_evidence(gate, candidate)
         counts[status] += 1
-        if candidate.bundle is not None:
-            for state in candidate.bundle.acquisition_states:
+        if bundle is not None:
+            for state in bundle.acquisition_states:
                 acquisition[state] = acquisition.get(state, 0) + 1
     return SourceEvidenceCoverage(
         **counts,

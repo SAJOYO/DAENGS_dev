@@ -64,3 +64,27 @@ target PR:         SAJOYO/DAENGS_dev #183
   이들은 source facts를 소비하는 후속 promotion PR에서 각각 경계를 검증한다.
 - 동기화 방식: Geo 코드를 runtime import하거나 subtree로 연결하지 않는다. fixture와
   parser 기대값을 함께 복사한 뒤 이 저장소의 고정 테스트가 운영 동작을 소유한다.
+
+## Typed search planning 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source merge:      e3aea61aa7f0c12f041a9b0fb7c1874eb4df44f3
+target PR:         SAJOYO/DAENGS_dev #184
+stacked parent:    SAJOYO/DAENGS_dev #183
+```
+
+외부 검색 요청과 미래의 자연어 intent가 같은 실행기를 사용하도록, 검색 조건을 먼저
+검증 가능한 `PlaceSearchPlan`으로 컴파일하는 내부 경계를 승격했다.
+
+- 포함: 정적 capability catalog, gate/compiler/guard, 목적 catalog, typed intent planner,
+  plan 실행 adapter, 후보 손실과 source evidence 상태를 계산하는 preview
+- 실제 연결: 현행 `PlaceSearchRequest`도 내부 plan으로 컴파일한 뒤 기존 resolver를 호출한다.
+  preview는 선호 적용 전 spatial 후보를 최대 1,000개 읽고 #183의 source-fact bundle을
+  후보 identity와 정확히 대조한다.
+- 호환성: `/v2/places/search`의 요청·응답과 정렬 의미는 바꾸지 않는다. planning과 preview는
+  아직 내부 계약이며 새 HTTP endpoint를 만들지 않는다.
+- 권한 경계: plan은 구조화된 값만 실행한다. 실행 직전 guard가 capability별 허용 mode,
+  origin, unknown policy와 locked gate 불변식을 다시 검사하므로 LLM 출력이 곧 필터가 되지 않는다.
+- 의도적 제외: Gemini/OpenAI proposer, 복수 hypothesis/lens/refinement,
+  presentation assembly, 운영 discovery HTTP, main orchestration과 Android 연결.

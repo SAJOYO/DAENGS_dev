@@ -1,0 +1,47 @@
+{
+  "fixture_version": 1,
+  "provenance": {
+    "source_repo": "rkbuhtig/DAENGS_geo",
+    "source_commit": "c25119d069b4daefe295d66bd5796c2c8c55123f",
+    "source_contract": "docs/decisions/2026-09-01-spatial-diary-view-v0.md",
+    "target_repo": "SAJOYO/DAENGS_dev",
+    "target_pr": 162,
+    "covers": "sealed cellophanes -> visit_rate / walk_utilization with explicit denominators"
+  },
+  "pet_id": "11111111-1111-1111-1111-111111111111",
+  "walks": [
+    {
+      "id": "21111111-1111-1111-1111-111111111111",
+      "started_at": "2026-09-01T09:00:00Z",
+      "weather_code": 61,
+      "is_day": false,
+      "cells": [[0, 0, 6.0, 1.0], [1, 0, 4.0, 0.5]]
+    },
+    {
+      "id": "31111111-1111-1111-1111-111111111111",
+      "started_at": "2026-09-02T09:00:00Z",
+      "weather_code": 0,
+      "is_day": true,
+      "cells": [[0, 0, 2.0, 0.7], [0, 1, 8.0, 1.0]]
+    },
+    {
+      "id": "41111111-1111-1111-1111-111111111111",
+      "started_at": "2026-09-03T09:00:00Z",
+      "weather_code": null,
+      "is_day": null,
+      "cells": []
+    }
+  ],
+  "expected": {
+    "visit_rate": {
+      "denominator": 3.0,
+      "contributing": 3,
+      "cells": [[0, 0, 0.6666666666666666, 2.0], [0, 1, 0.3333333333333333, 1.0], [1, 0, 0.3333333333333333, 1.0]]
+    },
+    "walk_utilization": {
+      "denominator": 2.0,
+      "contributing": 2,
+      "cells": [[0, 0, 0.4, 0.8], [0, 1, 0.4, 0.8], [1, 0, 0.2, 0.4]]
+    }
+  }
+}

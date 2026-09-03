@@ -116,3 +116,26 @@ target PR:         SAJOYO/DAENGS_dev #189
   않는다. 기존 Place 앱 import closure와 네 공개 경로는 변하지 않는다.
 - 의도적 제외: Gemini/OpenAI adapter, usage/metering, lab/관측 DB, presentation과 discovery
   assembly, HTTP endpoint, main orchestration, Android 연결.
+
+## Presentation 승격 기준점 (2026-09-03)
+
+```
+promotion source:  rkbuhtig/DAENGS_geo
+source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
+target PR:         SAJOYO/DAENGS_dev #190
+```
+
+검색 후보를 단순 필드 묶음이 아니라 사용자 판단에 필요한 사실·한계·출처로 표시하기 위해
+Place 내부 presentation 계층을 승격한다.
+
+- 포함: source-neutral 표시 계약, information-need catalog, core/promoted/detail 배치 정책,
+  KTO/KCISA source-fact bundle과 검색 hit를 결합하는 assembler
+- 단일 타입 소유권: Geo의 `presentation.needs.InformationNeedId` 정의는 복제하지 않는다.
+  PR2에서 분리한 `daengs_place.place.information_needs.InformationNeedId`를 catalog와 intent가
+  함께 사용한다.
+- 정합성: assembler는 검색 hit와 source-fact bundle의 `PlaceRef`가 같을 때만 조립하고,
+  사실의 known/unknown/conflicting 상태와 primary/supporting provenance를 그대로 보존한다.
+- 경계: presentation은 provider SDK, HTTP, FastAPI, SQLAlchemy, intent 구현을 import하지
+  않는다. 기존 `/v2/places/search` 응답과 Place 앱의 공개 경로는 변하지 않는다.
+- 의도적 제외: discovery assembly, Gemini adapter, 내부 endpoint, main orchestration,
+  관측 migration과 Android 연결.

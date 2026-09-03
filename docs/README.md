@@ -6,6 +6,7 @@
 | [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 + **공개 `POST /assistant/query` 진입 경계**(§8) |
 | [orchestration-routing.md](orchestration-routing.md) | 승인된 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** + **production 구현 상태**(§4) |
 | [orchestration-router-benchmark.md](orchestration-router-benchmark.md) | Card 2A 의미 라우터 수용 벤치마크 (동결) — 80개 골드 RoutePlan · 결정론적 지표 · 1회 스키마 재시도 · 동결 게이트 · HUMAN FREEZE |
+| [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [walk-finalize-operating-db-smoke.md](walk-finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke — 선행 migration 누락 발견, 932점 백업·chunk 이관, 최종 PASS |

@@ -15,6 +15,7 @@ from daengs_backend.routers import (
     app_auth,
     assistant,
     auth,
+    chat,
     crawl,
     gait,
     health,
@@ -132,6 +133,9 @@ app.include_router(training.router)
 # 오케스트레이션 진입점 (Card 3). 인증은 `/training/chat` 과 같은 자리 —
 # 엔드포인트 자체의 파라미터 의존성(`admin_or_app_user(Perm.READ)`)이 겁니다.
 app.include_router(assistant.router)
+# 대화 기록(`/app/chats`)과 저장된 AI 요약. 라우터가 CurrentAppUser 로 잠겨 있습니다 —
+# 신원으로 남의 것을 걸러야 해서 `admin_or_app_user` 를 쓰지 않습니다 (core/deps.py).
+app.include_router(chat.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
 app.include_router(screening_router)

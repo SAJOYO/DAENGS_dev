@@ -105,20 +105,29 @@ jobs:
 
       - name: DB 세대와 공개 API 확인
         run: |
+          $dbUser = @(docker compose exec -T place-db printenv POSTGRES_USER)
+          if ($LASTEXITCODE -ne 0) { throw 'failed to read place-db user' }
+          $dbUser = ($dbUser -join '').Trim()
+          $dbName = @(docker compose exec -T place-db printenv POSTGRES_DB)
+          if ($LASTEXITCODE -ne 0) { throw 'failed to read place-db name' }
+          $dbName = ($dbName -join '').Trim()
+
           $query = "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id LIKE 'territory-site:hex-v1:140:%';"
-          $actual = docker compose exec -T place-db sh -c `
-            "psql -U `$POSTGRES_USER -d `$POSTGRES_DB -Atc `"$query`""
+          $actual = @(docker compose exec -T place-db `
+            psql -v ON_ERROR_STOP=1 -U $dbUser -d $dbName -Atc $query)
           if ($LASTEXITCODE -ne 0) { throw 'failed to count active territory sites' }
-          if ([int]$actual.Trim() -ne [int]$env:EXPECTED_SITES) {
-            throw "Active territory count mismatch: $actual"
+          $actual = ($actual -join '').Trim()
+          if ([int]$actual -ne [int]$env:EXPECTED_SITES) {
+            throw "Active territory count mismatch: [$actual]"
           }
 
           $otherGenerationQuery = "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id NOT LIKE 'territory-site:hex-v1:140:%';"
-          $otherGeneration = docker compose exec -T place-db sh -c `
-            "psql -U `$POSTGRES_USER -d `$POSTGRES_DB -Atc `"$otherGenerationQuery`""
+          $otherGeneration = @(docker compose exec -T place-db `
+            psql -v ON_ERROR_STOP=1 -U $dbUser -d $dbName -Atc $otherGenerationQuery)
           if ($LASTEXITCODE -ne 0) { throw 'failed to count inactive territory generations' }
-          if ([int]$otherGeneration.Trim() -ne 0) {
-            throw "Unexpected lamp territory generation remains: $otherGeneration"
+          $otherGeneration = ($otherGeneration -join '').Trim()
+          if ([int]$otherGeneration -ne 0) {
+            throw "Unexpected lamp territory generation remains: [$otherGeneration]"
           }
 
           $response = Invoke-RestMethod `

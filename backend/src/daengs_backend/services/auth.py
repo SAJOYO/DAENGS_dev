@@ -25,9 +25,15 @@ from daengs_backend.core.password import (
 )
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import REFRESH_TTL
+from daengs_backend.models import (
+    AUDIT_LOGIN_DENIED_SUSPENDED,
+    AUDIT_LOGIN_FAILED_PASSWORD,
+    AUDIT_LOGIN_FAILED_UNKNOWN_ID,
+    AUDIT_LOGIN_SUCCESS,
+)
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
-from daengs_backend.services import login_attempts
+from daengs_backend.services import audit, login_attempts
 from daengs_backend.services import session as session_service
 from daengs_backend.services.session import (
     InvalidRefreshTokenError,
@@ -65,6 +71,19 @@ class InvalidCredentialsError(AuthError):
     """
 
 
+def _attempt_detail(login_id: str) -> dict[str, str]:
+    """감사 행에 남길 "무엇으로 시도했나".
+
+    없는 아이디로 두드린 실패는 `admin_user_id` 가 NULL 이라, 이 값이 없으면 그 행에
+    아무 단서도 남지 않습니다.
+
+    **50자로 자르는 이유**는 로그인 칸에 아무 문자열이나 들어올 수 있어서입니다 —
+    아이디 칸에 이메일을 잘못 치는 것 같은 경우요. `admin_users.login_id` 와 같은
+    길이로 묶어, 감사 테이블이 남의 긴 입력을 그대로 보관하지 않게 합니다.
+    """
+    return {"login_id": login_id[:50]}
+
+
 async def login(
     session: AsyncSession,
     *,
@@ -85,6 +104,14 @@ async def login(
         # 비밀번호가 틀렸을 때와 똑같이 셉니다. 한쪽만 세면 차이가 드러납니다.
         login_attempts.record_failure(login_id, ip)
         logger.info("로그인 실패: 없는 아이디 (ip=%s)", ip)
+        # **주체가 없는 감사 행입니다** — 가리킬 admin_users 행이 없어서
+        # admin_user_id 가 NULL 로 남고, 무엇을 시도했는지는 detail 에만 있습니다.
+        await audit.record_and_commit(
+            session,
+            action=AUDIT_LOGIN_FAILED_UNKNOWN_ID,
+            detail=_attempt_detail(login_id),
+            ip=ip,
+        )
         raise InvalidCredentialsError
 
     try:
@@ -92,6 +119,13 @@ async def login(
     except VerifyMismatchError:
         login_attempts.record_failure(login_id, ip)
         logger.info("로그인 실패: 비밀번호 불일치 (admin=%s, ip=%s)", admin.id, ip)
+        await audit.record_and_commit(
+            session,
+            action=AUDIT_LOGIN_FAILED_PASSWORD,
+            admin_user_id=admin.id,
+            detail=_attempt_detail(login_id),
+            ip=ip,
+        )
         raise InvalidCredentialsError from None
     # InvalidHashError 는 잡지 않습니다. 저장된 해시가 깨졌다는 뜻이고,
     # 그건 401 이 아니라 데이터 사고라 500 으로 올라가야 합니다 (core/password.py).
@@ -102,6 +136,15 @@ async def login(
         # 응답은 아이디·비밀번호가 틀렸을 때와 똑같습니다 — 여기서 "정지됨"을 알려 주면
         # 비밀번호를 맞혔다는 사실까지 알려 주게 됩니다.
         logger.warning("로그인 거부: 정지된 계정 (admin=%s, ip=%s)", admin.id, ip)
+        # 실패로 세지는 않지만 **기록은 남깁니다.** 정지된 계정에 맞는 비밀번호가
+        # 들어왔다는 것은 잠금 카운터보다 감사 쪽에서 값이 큰 사건입니다.
+        await audit.record_and_commit(
+            session,
+            action=AUDIT_LOGIN_DENIED_SUSPENDED,
+            admin_user_id=admin.id,
+            detail=_attempt_detail(login_id),
+            ip=ip,
+        )
         raise InvalidCredentialsError
 
     now = datetime.now(UTC)
@@ -121,6 +164,16 @@ async def login(
         role=admin.role,
         refresh_expires_at=now + REFRESH_TTL,
         user_agent=user_agent,
+        ip=ip,
+    )
+    # 성공 경로는 `record_and_commit` 이 아닙니다 — 아래 commit 하나가 토큰 발급 ·
+    # last_login_at · 이 기록을 함께 확정합니다. 토큰은 나갔는데 기록만 없는 상태를
+    # 만들지 않으려는 것입니다.
+    await audit.record(
+        session,
+        action=AUDIT_LOGIN_SUCCESS,
+        admin_user_id=admin.id,
+        detail=_attempt_detail(login_id),
         ip=ip,
     )
     await session.commit()

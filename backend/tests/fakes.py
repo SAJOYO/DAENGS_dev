@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
+from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
@@ -64,6 +65,21 @@ class FakeAppUser:
 
 
 @dataclass
+class FakeAuditEntry:
+    """AdminAuditLog 대역. `admin_user_id` 가 None 인 것은 빠뜨린 게 아니라
+    **주체를 특정할 수 없는 행위**입니다 (없는 아이디로 두드린 로그인 실패).
+    """
+
+    action: str
+    admin_user_id: uuid.UUID | None = None
+    target_type: str | None = None
+    target_id: uuid.UUID | None = None
+    detail: dict | None = None
+    request_id: str | None = None
+    ip: str | None = None
+
+
+@dataclass
 class FakeToken:
     """RefreshToken 대역.
 
@@ -82,9 +98,16 @@ class FakeToken:
 
 
 class FakeSession:
-    """commit 횟수만 셉니다. 진짜 쿼리는 아래 가짜 저장소가 가로챕니다."""
+    """commit 횟수만 셉니다. 진짜 쿼리는 아래 가짜 저장소가 가로챕니다.
 
-    def __init__(self) -> None:
+    `store` 를 넘기면 **감사 행의 커밋 경계까지 흉내 냅니다** — 얹기만 한 행은
+    `store.audit_pending` 에 있고 `commit()` 이라야 `store.audit_log` 로 넘어갑니다.
+    이것이 없으면 "예외로 롤백돼 기록이 사라지는" 사고를 테스트가 볼 수 없습니다
+    (services/audit.py 의 커밋 경계 설명). 안 넘기면 세던 대로만 셉니다.
+    """
+
+    def __init__(self, store: "Store | None" = None) -> None:
+        self.store = store
         self.commits = 0
         self.rollbacks = 0
         self.flushes = 0
@@ -99,9 +122,16 @@ class FakeSession:
 
     async def commit(self) -> None:
         self.commits += 1
+        if self.store is not None:
+            self.store.audit_log.extend(self.store.audit_pending)
+            self.store.audit_pending.clear()
 
     async def rollback(self) -> None:
         self.rollbacks += 1
+        if self.store is not None:
+            # 커밋 안 된 감사 행은 여기서 사라집니다. 진짜 `get_session` 도
+            # 커밋하지 않은 변경을 버리고 닫습니다 (core/database.py).
+            self.store.audit_pending.clear()
 
 
 class Store:
@@ -125,6 +155,12 @@ class Store:
         self.chat_sessions: list[FakeChatSession] = []
         self.chat_turns: list[FakeChatTurn] = []
         self.chat_summaries: list[FakeChatSummary] = []
+
+        #: 감사 기록. **둘로 나눈 것이 핵심**입니다 — `audit_pending` 은 세션에
+        #: 얹기만 한 것이고, 커밋해야 `audit_log` 로 넘어갑니다 (FakeSession).
+        #: 확정을 보고 싶은 테스트는 `audit_log` 만 봐야 합니다.
+        self.audit_pending: list[FakeAuditEntry] = []
+        self.audit_log: list[FakeAuditEntry] = []
 
         #: chat completion이 부를 때마다 1초씩 앞으로 갑니다. 진짜는 DB 의
         #: `NOW()` 지만, 가짜에서 같은 시각을 주면 "최근 갱신 순"을 볼 수 없습니다.
@@ -772,5 +808,22 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "complete_summary_if_processing", complete_summary)
     monkeypatch.setattr(chat_repo, "fail_summary_if_processing", fail_summary)
     monkeypatch.setattr(chat_repo, "delete_all_for_user", delete_all_for_user)
+
+    async def audit_add(session, **kw):
+        entry = FakeAuditEntry(
+            action=kw["action"],
+            admin_user_id=kw.get("admin_user_id"),
+            target_type=kw.get("target_type"),
+            target_id=kw.get("target_id"),
+            detail=kw.get("detail"),
+            request_id=kw.get("request_id"),
+            ip=kw.get("ip"),
+        )
+        # 얹기만 합니다. 확정은 FakeSession.commit() 이 합니다 — 진짜와 같은 순서라야
+        # "커밋 전에 예외가 나면 사라진다"를 테스트가 볼 수 있습니다.
+        store.audit_pending.append(entry)
+        return entry
+
+    monkeypatch.setattr(admin_audit_log_repo, "add", audit_add)
 
     return store

@@ -182,6 +182,8 @@ Copy-Item .env.example .env
 
 점령지 140u 게임판 적재와 배포 확인은
 [`backend/docs/place/territory-sites.md`](backend/docs/place/territory-sites.md)를 따릅니다.
+자연어 Place 발견 기능의 운영 이주 경계와 단계별 PR 순서는
+[`backend/docs/place/discovery-migration.md`](backend/docs/place/discovery-migration.md)에 있습니다.
 
 ```powershell
 docker compose logs -f place-search

@@ -14,6 +14,9 @@ DAENGS_geo는 검색 실험을 계속할 수 있지만 그 변경이 자동으�
 검증된 실험은 아래처럼 source commit과 포함·제외 범위를 고정한 promotion PR로만 가져오며,
 승격 뒤의 운영 수정은 이 저장소에서 한다.
 
+Source facts와 typed planning 이후 자연어 발견 기능의 코드·프로세스·공개 계약 경계와
+단계별 승격 순서는 [discovery-migration.md](discovery-migration.md)에 고정한다.
+
 ## 무엇을 가져왔나
 
 - `src/daengs_place/` — `main` 진입점의 import closure 전체(api/core/geo/place) + 장소

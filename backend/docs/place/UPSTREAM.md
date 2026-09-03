@@ -122,7 +122,7 @@ target PR:         SAJOYO/DAENGS_dev #189
 ```
 promotion source:  rkbuhtig/DAENGS_geo
 source head:       3ff268a17d85fd0b641396c213ad8706a2f5bf40
-target PR:         pending
+target PR:         SAJOYO/DAENGS_dev #190
 ```
 
 검색 후보를 단순 필드 묶음이 아니라 사용자 판단에 필요한 사실·한계·출처로 표시하기 위해

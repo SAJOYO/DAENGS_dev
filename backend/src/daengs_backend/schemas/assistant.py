@@ -51,7 +51,7 @@ class AssistantQueryRequest(BaseModel):
     # 소유권 증명이 아니라 라우팅/개인화 힌트일 뿐이다 (O-4, contracts §1).
     active_dog_id: str | None = None
     location: LocationIn | None = None
-    # 대화 저장 (D-046). **둘 다 있으면** 이 질문과 답이 그 대화의 turn 으로 남고, **둘 다
+    # 대화 저장 (D-047). **둘 다 있으면** 이 질문과 답이 그 대화의 turn 으로 남고, **둘 다
     # 없으면** v0.0.0 그대로 무상태다 — 그 요청은 DB 를 한 번도 열지 않는다. 한쪽만 있는
     # 것은 모양이 틀린 것이라 422. 앱 회원 전용이고, 대화의 `pet_id` 가 `active_dog_id` 보다
     # 우선한다 (routers/assistant.py).

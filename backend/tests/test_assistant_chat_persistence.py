@@ -1,4 +1,4 @@
-"""`POST /assistant/query` 의 대화 저장 배선 (D-046).
+"""`POST /assistant/query` 의 대화 저장 배선 (D-047).
 
 무상태 계약(`test_assistant_api.py`)은 그대로 두고, `chat_session_id` + `client_message_id`
 가 함께 왔을 때만 달라지는 것을 본다 — 문·소유권·강아지 일치·멱등·실패·역호환·트랜잭션

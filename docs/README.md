@@ -31,6 +31,7 @@
 | [life/decisions-realtime.md](life/decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
 | [life/data-sources.md](life/data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-30 기준 문서형 23 중 16 수집, 남은 7은 막힘** |
 | [life/realtime-apis.md](life/realtime-apis.md) | ② 날씨·대기질 API 정리 + 실측 로그. §1~§5 와 어긋나면 **§6 이 맞습니다** |
+| [life/assistant-life-gcp-smoke.md](life/assistant-life-gcp-smoke.md) | ① GCP `/assistant/query` 경유 Life 스모크 (#169, 로드맵 A0) — 인프라 PASS · O-9 축소 확인. **산문 물러섬이 OK 로 통과 · `no_evidence` 기권이 안 남** → A3a 근거 |
 
 저쪽 `docs/workflow.md`(작업 방식)는 **가져오지 않았습니다** — 위 `collaboration.md` 가
 같은 규칙을 더 자세히 담고 있어, 두면 같은 규칙의 두 번째 주장이 생깁니다.

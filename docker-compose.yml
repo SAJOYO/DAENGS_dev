@@ -145,8 +145,9 @@ services:
       # 영영 메모리 폴백이고, 그러면 일 예산 카운터가 안 쌓입니다 (D-019).
       redis:
         condition: service_healthy
-    # uv sync 는 컨테이너가 뜰 때만 돕니다.
-    # 의존성을 바꿨다면 docker compose restart backend 를 직접 실행하세요.
+    # uv sync 는 컨테이너가 뜰 때만 돕니다. 자동 배포는 checkout의 bind-mount 변경을
+    # 확실히 읽도록 매번 backend를 재시작합니다. 서버에서 수동으로 의존성을 바꿨다면
+    # docker compose restart backend 를 직접 실행하세요.
     #
     # **`--group ml` 이 붙었습니다** (D-021). `/ask` 의 임베딩 모델이 이 프로세스에 상주하므로
     # torch 가 필요합니다. 리눅스에서는 CPU 판을 받습니다 — `pyproject.toml` 의 `pytorch-cpu`

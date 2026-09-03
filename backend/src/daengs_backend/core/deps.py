@@ -16,6 +16,12 @@
 관리자 의존성은 DB 를 보지 않습니다. 앱 회원 의존성은 예외입니다 — 탈퇴 뒤에도
 access token 서명은 최대 ACCESS_TTL(5분) 유효하므로, user-owned API 공통 경계에서
 active 상태와 탈퇴 동시 쓰기를 DB 잠금으로 확인합니다.
+
+그 예외의 예외가 `current_app_member_token_only` 입니다. 서비스가 **자기 짧은 TX 를
+따로 여는** 엔드포인트(AI 요약처럼 외부 호출을 사이에 둔 것)는 요청 수명 세션과
+그 안의 `app_users FOR UPDATE` 를 가지면 안 됩니다 — 요청 TX 가 잠근 행을 서비스의
+두 번째 TX 가 FK 로 다시 기다리면 서로를 기다리는 자기 교착이 됩니다 (2026-09-03
+서버 Phase 3A 에서 `POST /app/chats/{id}/summary` 가 그렇게 영영 멈췄습니다).
 """
 
 import logging
@@ -189,13 +195,36 @@ CurrentAdmin = Annotated[Principal, Depends(current_admin)]
 class AppPrincipal:
     """지금 요청을 보낸 앱 회원. **role 이 없습니다.**
 
-    앱 회원은 자기 것만 봅니다. 이 객체가 만들어졌다면 DB 에서 active 상태도 확인한
-    것입니다 — 권한 등급이 필요한 화면이 없어서 `Perm` 도,
-    `require(...)` 도 쓰지 않습니다. "남의 것을 보려 하는가"는 각 엔드포인트가
+    앱 회원은 자기 것만 봅니다. `current_app_user` 가 만든 것이면 DB 에서 active
+    상태도 확인한 것이고, `current_app_member_token_only` 나 `admin_or_app_user` 가 만든
+    것이면 **토큰만 본 것**입니다 — 그 경우 서비스가 자기 TX 에서 다시 확인합니다.
+    권한 등급이 필요한 화면이 없어서 `Perm` 도, `require(...)` 도 쓰지 않습니다. "남의 것을 보려 하는가"는 각 엔드포인트가
     `app_user_id` 로 직접 확인합니다.
     """
 
     app_user_id: uuid.UUID
+
+
+def _app_claims_of(request: Request) -> AccessClaims:
+    """앱 회원 토큰만 받습니다. 관리자 토큰은 만료·위조와 같은 401 입니다.
+
+    `current_app_user` 와 `current_app_member_token_only` 가 공유하는 문입니다 —
+    "앱 회원 토큰인가" 까지만 하고, active 상태를 DB 에서 볼지는 부르는 쪽이 정합니다.
+    """
+    claims = _claims_of(request)
+
+    if claims.subject_type is not SubjectType.APP:
+        # `current_admin` 의 거울상입니다. 관리자 토큰의 `sub` 는 `admin_users` 의 UUID 라
+        # `app_users` 에서 조회하면 없는 회원이 됩니다. 그 자리를 404 나 500 으로 만나지
+        # 말고 여기서 끊습니다. 응답 메시지는 인증 실패와 똑같이 둡니다.
+        logger.warning(
+            "앱 API 에 %s 토큰 (subject=%s, ip=%s)",
+            claims.subject_type.value,
+            claims.subject_id,
+            _client_host(request),
+        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
+    return claims
 
 
 async def current_app_user(
@@ -205,23 +234,16 @@ async def current_app_user(
     """access token 을 풀어 AppPrincipal 로. 못 믿을 토큰이면 401 입니다.
 
     `current_admin` 의 거울상입니다 — 저쪽이 앱 회원 토큰을 막듯이, 여기서는
-    **관리자 토큰을 막습니다.** 관리자가 앱 API 로 들어오는 것이 당장 위험하지는
-    않지만, 그 토큰의 `sub` 는 `admin_users` 의 UUID 라 `app_users` 에서 조회하면
-    없는 회원이 됩니다. 그 자리를 404 나 500 으로 만나지 말고 여기서 끊습니다.
+    **관리자 토큰을 막습니다** (`_app_claims_of`). 그리고 요청 세션에서 회원이 아직
+    active 인지 잠그며 확인합니다.
 
     **둘을 함께 받아야 하는 엔드포인트는 `admin_or_app_user` 를 쓰세요.** 이 함수를
     고쳐서 관리자를 통과시키면 그것을 쓰는 앱 API 가 전부 같이 열립니다.
-    """
-    claims = _claims_of(request)
 
-    if claims.subject_type is not SubjectType.APP:
-        logger.warning(
-            "앱 API 에 %s 토큰 (subject=%s, ip=%s)",
-            claims.subject_type.value,
-            claims.subject_id,
-            _client_host(request),
-        )
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "인증이 필요합니다.")
+    **서비스가 자기 TX 를 따로 여는 엔드포인트에는 쓰지 마세요** —
+    `current_app_member_token_only` 를 보세요.
+    """
+    claims = _app_claims_of(request)
 
     # access token 은 무상태라 탈퇴 뒤에도 최대 ACCESS_TTL 동안 서명 자체는 유효합니다.
     # 모든 앱 소유 데이터 API 가 지나는 이 한 곳에서 현재 상태를 확인합니다. FOR UPDATE
@@ -240,6 +262,41 @@ async def current_app_user(
 
 
 CurrentAppUser = Annotated[AppPrincipal, Depends(current_app_user)]
+
+
+async def current_app_member_token_only(request: Request) -> AppPrincipal:
+    """앱 회원 access token 을 **토큰만으로** AppPrincipal 로. DB 세션을 열지 않습니다.
+
+    받는 토큰의 범위는 `current_app_user` 와 같습니다 — 없거나·위조·만료·관리자 토큰은
+    전부 401 입니다. 다른 것은 하나뿐입니다: **회원이 아직 active 인지 여기서 보지
+    않습니다.** 탈퇴 뒤에도 access token 서명은 최대 ACCESS_TTL 동안 유효하므로, 이
+    principal 은 "이 토큰의 주인이 누구인가" 까지만 말합니다.
+
+    그래서 **신원만으로는 user-owned 쓰기를 해서는 안 됩니다.** 이 의존성을 쓰는
+    엔드포인트의 서비스는 자기 짧은 TX 안에서
+    `app_user_repo.get_active_for_update` 로 active 상태를 다시 확인하고(그 잠금이
+    탈퇴와 직렬화됩니다) 같은 TX 에서 쓰기를 예약한 뒤 commit·close 해야 합니다.
+    아니면 `AppUserNotActiveError` 같은 것을 올려 라우터가 `current_app_user` 와 같은
+    401 로 바꿉니다.
+
+    **어디에 쓰나**: 서비스가 트랜잭션 경계를 따로 소유하는 엔드포인트 —
+    `POST /app/chats/{id}/summary` 처럼 외부 호출 전후로 짧은 TX 를 여닫는 자리.
+    요청 수명 `get_session` 을 같이 받는 보통의 앱 API 는 계속 `CurrentAppUser` 입니다.
+    거기서는 이것을 쓰면 active 확인이 빠집니다.
+
+    **왜 따로 있나**: `current_app_user` 는 요청 세션에서 `app_users FOR UPDATE` 를 잡고
+    요청이 끝날 때까지 들고 있습니다. 서비스가 그 사이에 두 번째 세션으로
+    `chat_summaries` 를 INSERT 하면 FK 가 같은 행의 `FOR KEY SHARE` 를 기다리고, 요청
+    TX 는 그 INSERT 를 기다립니다 — 외부 공급자는 불리지도 않은 채 워커 하나와 DB 연결
+    둘이 영영 묶입니다 (서버 Phase 3A). 게다가 외부 호출 동안 행 잠금이 살아 있는 것
+    자체가 D-048 의 경계 위반입니다.
+    """
+    claims = _app_claims_of(request)
+    return AppPrincipal(app_user_id=claims.subject_id)
+
+
+#: 토큰만 확인한 앱 회원. **active 여부는 서비스의 짧은 TX 가 다시 봅니다.**
+CurrentAppMemberTokenOnly = Annotated[AppPrincipal, Depends(current_app_member_token_only)]
 
 
 def require(*perms: Perm):

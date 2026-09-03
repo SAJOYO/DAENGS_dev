@@ -122,7 +122,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | A0 | **GCP 에서 `/assistant/query` 경유 Life 스모크** — 앱 계정으로 제도 질문 하나, 기대 OK + citations | `orchestration-architecture.md` 가 "배포 인프라에서 실제 Life 능력 스모크"를 미완 후속으로 남겼다. Walk 는 앱의 CAUTION 문구 버그(859a691)로 GCP 경로가 검증됐지만 Life 는 아니다. `ml` 그룹이 빠지면 503→ERROR 인데 앱에는 "실패" 한 줄뿐이라 뒤 카드가 전부 헛돈다 | GCP 접근 | XS | ⬜ **첫 카드** (2026-09-03 신설) |
 | A3a | **Life 경계 신호 — REFUSED** — `services/ask.py` 가 `medical`·`emergency` 를 감지해 REFUSED 로 내고(`refusal.code` 보존), 골든셋에 `must` OR 목록 · `expect: abstain` · `expect: refuse` 문항 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · D-035 "Life 안전/거절 분류 신설은 별도 카드" · §2 의 경계를 테스트로 | 없음 | M | ⬜ 2026-09-03 사람 확정 — 옛 A3 를 분할 |
 | A3b | **라우터 HANDOFF 대상 `place` 추가** — `semantic.py` HandoffName · planner 고정 reason · aggregate 사용자 문구 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 (prompt/gold 는 제자리 수정 없이 버전을 올려 전체 재실행) | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. 이 파트는 필요와 문항을 낸다 |
-| A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/walk` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름(§1) — 착수 때 앱 담당 재확인. 콘솔 점검 탭 호출 경로 · 문서 12곳 동반 | S | ⬜ (옛 "응답 축소"는 🚫 — §5) |
+| A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/walk` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 12곳 동반 | S | ⬜ (옛 "응답 축소"는 🚫 — §5) |
 | A5 | **특보구역명 ↔ 행정구역 매핑표** (`data/reference/`) | `collect.py` 가 `warning_area=None` — **구 단위 특보를 놓친다.** `/walk` 의 유일한 기능 구멍 (RT-001 ②-a · RT-002 ②-c) | 없음 | S | ⬜ |
 | A6 | Walk `unknown` → ABSTAINED 매핑 | #80 계약 표 · RT-001 ⑥ | 없음 | XS | ✅ #102 (`orchestration/adapters/walk.py:52`) |
 | A7 | **`insurance` 를 `policy` 에서 독립 category 로** | 4,673/8,990 이 한 칸에 몰려 category 필터의 격리 효과가 없음. RAG-028 이 "값이 없다"고 지목한 자리 | A1 (재적재는 메타만이지만 스냅샷·라벨이 움직임) | S | ⬜ 사람 결정 2026-08-30 "나중에 뺀다" |
@@ -244,7 +244,9 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 - **핸드오프 식별자** — 2026-09-03 정리: `place` 만 라우터 HANDOFF 대상 후보(A3b — 확정은 라우터 담당).
   `medical` · `emergency` 는 핸드오프가 아니라 Life 의 `refusal.code` (A3a). `training` 은 제거 (§5).
   남은 사람 몫은 **A3b 의 시점** — 09-21 전에 라우터 벤치마크를 다시 돌릴 여유가 있는지는 라우터 담당이 본다.
-- **A4 착수 시점** — 앱 담당이 "앱은 `/ask`·`/walk` 를 직접 안 부른다"를 확인한 뒤 (2026-09-03 코드 grep 으로는 없었다).
+- ~~**A4 착수 시점**~~ — 2026-09-03 닫힘. DAENGS_APP dev(`0290d23`, origin 과 동일)의 API 경로 전부를 훑어 `/ask`·`/walk` 직접 호출이
+  없음을 확인했다. 앱이 읽는 것은 `/assistant/query` 응답의 `results[].capability == "walk"`(`assistant/WalkVerdict.kt`)뿐이라,
+  **HTTP 경로는 바꿔도 능력 이름은 못 바꾼다**는 §5 의 판단이 코드로도 확인됐다.
 - ~~**페이로드를 누가 소유하는가**~~ — **2026-09-03 닫힘: 계약 계층 잔류 수용.** 이유: `LifePayload` 를
   `daengs_life.app.dto` 로 옮기면 `contracts.py` 가 `daengs_life` 를 import 하게 되어 D-035 "어댑터 한 곳만" 규칙을 깬다.
   #80 불변식 6 은 "페이로드의 *의미*는 능력이, *타입*은 계약 계층이 소유한다"로 문구 개정을 제안한다 —

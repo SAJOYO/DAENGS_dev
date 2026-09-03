@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS walks (
     CONSTRAINT walks_time_order CHECK (ended_at >= started_at),
     CONSTRAINT walks_analysis_state_check
         CHECK (analysis_state IN ('collecting', 'derived')),
+    CONSTRAINT walks_weather_code_range CHECK (weather_code BETWEEN 0 AND 99),
+    CONSTRAINT walks_temperature_c_range CHECK (temperature_c BETWEEN -100 AND 100),
 
     -- **재시도가 안전해야 한다.** 앱은 네트워크가 끊기면 다음에 다시 올리는데,
     -- 그때 같은 산책이 두 건이 되면 안 된다. 이 제약이 그걸 DB 에서 막는다.

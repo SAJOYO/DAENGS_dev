@@ -12,14 +12,58 @@ WHERE capsule_version <= 0
    OR context_version <= 0
    OR jsonb_typeof(capabilities) <> 'array'
    OR jsonb_array_length(capabilities) = 0
-   OR jsonb_typeof(trail_context) <> 'object';
+   OR jsonb_typeof(trail_context) <> 'object'
+   OR NOT trail_context ?& ARRAY[
+       'context_version',
+       'walk_id',
+       'status',
+       'walked_at',
+       'source_observed_at',
+       'captured_at',
+       'provider',
+       'weather_code',
+       'is_day',
+       'temperature_c',
+       'precipitation_mm',
+       'humidity_pct',
+       'sun_elevation_deg',
+       'failure_reason'
+   ]
+   OR jsonb_typeof(trail_context -> 'context_version') IS DISTINCT FROM 'number'
+   OR jsonb_typeof(trail_context -> 'walk_id') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'status') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'walked_at') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'captured_at') IS DISTINCT FROM 'string';
 
 SELECT count(*) AS mismatched_context_identity
 FROM walk_capsules AS capsule
 JOIN walk_analyses AS analysis ON analysis.id = capsule.analysis_id
-WHERE capsule.context_version <> (capsule.trail_context ->> 'context_version')::integer
-   OR analysis.walk_id::text <> capsule.trail_context ->> 'walk_id'
-   OR capsule.sealed_at < (capsule.trail_context ->> 'captured_at')::timestamptz;
+WHERE capsule.context_version IS DISTINCT FROM CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'context_version',
+            'integer'
+        )
+        THEN (capsule.trail_context ->> 'context_version')::integer
+        ELSE NULL
+    END
+   OR analysis.walk_id::text IS DISTINCT FROM capsule.trail_context ->> 'walk_id'
+   OR CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'walked_at',
+            'timestamp with time zone'
+        )
+        THEN FALSE
+        ELSE TRUE
+    END
+   OR CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'captured_at',
+            'timestamp with time zone'
+        )
+        THEN capsule.sealed_at <
+            (capsule.trail_context ->> 'captured_at')::timestamptz
+        ELSE TRUE
+    END;
 
 SELECT
     analysis.walk_id,

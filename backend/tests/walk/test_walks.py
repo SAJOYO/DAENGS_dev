@@ -219,6 +219,26 @@ def test_날씨를_못_받은_산책도_올라간다(client: TestClient) -> None
     assert data["temperature_c"] is None
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("weather_code", -1),
+        ("weather_code", 100),
+        ("temperature_c", "-100.1"),
+        ("temperature_c", "100.1"),
+    ],
+)
+def test_capsule이_읽을_수_없는_날씨는_업로드에서_거절한다(
+    client: TestClient,
+    field: str,
+    value: object,
+) -> None:
+    payload = body(uuid.uuid4())
+    payload[field] = value
+
+    assert client.post("/app/walks", json=payload).status_code == 422
+
+
 def point(seq: int) -> dict:
     return {
         "client_seq": seq,
@@ -383,7 +403,7 @@ def test_봉인_상태에_분석이_없으면_충돌을_알린다(
     assert response.json()["detail"]["code"] == "finalized_analysis_not_found"
 
 
-def test_봉인_상태에_capsule이_없으면_충돌을_알린다(
+def test_배포_사이에_누락된_capsule은_재시도에서_복구한다(
     client: TestClient, store: Store
 ) -> None:
     created = client.post("/app/walks", json=body(uuid.uuid4())).json()
@@ -394,8 +414,12 @@ def test_봉인_상태에_capsule이_없으면_충돌을_알린다(
 
     response = client.post(url, json=finalize_body(2))
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "finalized_capsule_not_found"
+    assert response.status_code == 200
+    assert response.json()["analysis_id"] == first.json()["analysis_id"]
+    capsule = store.walk_analyses[0].capsule
+    assert capsule is not None
+    assert capsule.trail_context["provider"] == "legacy_walk_metadata_v1"
+    assert capsule.sealed_at == store.walk_analyses[0].derived_at
 
 
 def test_남의_산책은_finalize할_수_없다(client: TestClient, store: Store) -> None:

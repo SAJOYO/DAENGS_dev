@@ -21,6 +21,42 @@ CREATE TABLE IF NOT EXISTS walk_capsules (
         CHECK (jsonb_typeof(trail_context) = 'object')
 );
 
+-- API와 Capsule이 같은 환경 원자 범위를 쓰게 한다. 기존 범위 밖 값은 WMO·기온
+-- 원자로 해석할 수 없으므로 거짓 값 대신 unknown(NULL)으로 바로잡은 뒤 제약을 건다.
+UPDATE walks
+SET weather_code = NULL
+WHERE weather_code IS NOT NULL
+  AND weather_code NOT BETWEEN 0 AND 99;
+
+UPDATE walks
+SET temperature_c = NULL
+WHERE temperature_c IS NOT NULL
+  AND temperature_c NOT BETWEEN -100 AND 100;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'walks_weather_code_range'
+          AND conrelid = 'walks'::regclass
+    ) THEN
+        ALTER TABLE walks
+            ADD CONSTRAINT walks_weather_code_range
+            CHECK (weather_code BETWEEN 0 AND 99);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'walks_temperature_c_range'
+          AND conrelid = 'walks'::regclass
+    ) THEN
+        ALTER TABLE walks
+            ADD CONSTRAINT walks_temperature_c_range
+            CHECK (temperature_c BETWEEN -100 AND 100);
+    END IF;
+END
+$$;
+
 -- 이미 finalize된 분석도 새 불변식을 만족하게 한다. 당시 Walk에 업로드된 원자만
 -- 사용하며 현재 날씨나 Place/Journey를 조회해 과거를 거짓 보충하지 않는다.
 INSERT INTO walk_capsules (
@@ -49,9 +85,9 @@ SELECT
         'context_version', 1,
         'walk_id', walk.id::text,
         'status', CASE
-            WHEN walk.weather_code IS NOT NULL
+            WHEN walk.weather_code BETWEEN 0 AND 99
                 OR walk.is_day IS NOT NULL
-                OR walk.temperature_c IS NOT NULL
+                OR walk.temperature_c BETWEEN -100 AND 100
             THEN 'partial'
             ELSE 'unknown'
         END,
@@ -59,15 +95,21 @@ SELECT
         'source_observed_at', NULL,
         'captured_at', analysis.derived_at,
         'provider', CASE
-            WHEN walk.weather_code IS NOT NULL
+            WHEN walk.weather_code BETWEEN 0 AND 99
                 OR walk.is_day IS NOT NULL
-                OR walk.temperature_c IS NOT NULL
+                OR walk.temperature_c BETWEEN -100 AND 100
             THEN 'legacy_walk_metadata_v1'
             ELSE NULL
         END,
-        'weather_code', walk.weather_code,
+        'weather_code', CASE
+            WHEN walk.weather_code BETWEEN 0 AND 99 THEN walk.weather_code
+            ELSE NULL
+        END,
         'is_day', walk.is_day,
-        'temperature_c', walk.temperature_c,
+        'temperature_c', CASE
+            WHEN walk.temperature_c BETWEEN -100 AND 100 THEN walk.temperature_c
+            ELSE NULL
+        END,
         'precipitation_mm', NULL,
         'humidity_pct', NULL,
         'sun_elevation_deg', NULL,

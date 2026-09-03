@@ -43,6 +43,14 @@ class Walk(Base):
             "analysis_state IN ('collecting','derived')",
             name="walks_analysis_state_check",
         ),
+        CheckConstraint(
+            "weather_code BETWEEN 0 AND 99",
+            name="walks_weather_code_range",
+        ),
+        CheckConstraint(
+            "temperature_c BETWEEN -100 AND 100",
+            name="walks_temperature_c_range",
+        ),
         # **재시도가 안전해야 합니다.** 앱은 네트워크가 끊기면 다음에 다시 올리는데,
         # 그때 같은 산책이 두 건이 되면 안 됩니다.
         UniqueConstraint(

@@ -2405,12 +2405,20 @@ Geo의 Capsule을 Dev에 채택하되 저장 구조를 그대로 복사하지 �
 첫 context snapshot은 앱이 산책 시작 때 이미 업로드한 WMO 날씨 코드·주야·기온만 옮깁니다.
 하나라도 있으면 `partial`, 전부 없으면 `unknown`이며 현재 날씨로 과거를 보충하지 않습니다.
 Place나 Journey를 finalize 행 잠금 안에서 호출하지도 않습니다. 기존 분석 backfill 역시 당시
-Walk 메타데이터만 사용하고 `legacy_walk_metadata_v1` 출처를 명시합니다.
+Walk 메타데이터만 사용하고 `legacy_walk_metadata_v1` 출처를 명시합니다. WMO 코드 0~99와
+기온 -100~100℃ 밖의 기존 값은 환경 원자로 해석하지 않고 migration에서 `NULL`로 바로잡으며,
+이후 업로드와 DB 제약이 같은 범위를 강제합니다.
 
 finalize는 Analysis·Cellophane·Capsule을 한 SQLAlchemy aggregate로 조립하고 `derived` 전환과
 같은 DB 트랜잭션에서 commit합니다. 원본 좌표는 D-044대로 계정 삭제 때까지 보존하므로 Geo의
 purge 전제나 물리적 "마지막 INSERT" 순서를 들여오지 않습니다. 재시도에서 `derived`인데
-Capsule이 없으면 성공으로 위장하지 않고 저장 불일치로 거절합니다.
+Capsule이 없으면 성공으로 위장하거나 영구 충돌로 남기지 않고 기존 Analysis와 Walk
+메타데이터에서 같은 seal을 복구합니다.
+
+배포는 Capsule 테이블 migration을 코드보다 먼저 적용합니다. 그 뒤 새 코드가 뜨기 전까지
+이전 프로세스가 만든 Analysis에는 Capsule이 없을 수 있으므로, 새 finalize는 같은 Walk 행
+잠금 안에서 그 누락 seal을 기존 메타데이터로 복구합니다. 배포 뒤 migration을 한 번 더
+실행하고 verify하여 재시도하지 않은 산책까지 backfill합니다.
 
 Capsule은 이번 단계에서 내부 저장 계약입니다. 별도 HTTP API, App UI, Place 주변 사실,
 Journey 계획 snapshot, 행동 의미와 일기 문장은 실제 소비자가 생기는 후속 PR에서 추가합니다.

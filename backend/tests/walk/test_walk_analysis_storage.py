@@ -191,6 +191,8 @@ def test_sqlalchemy_metadata_keeps_state_identity_and_cascade_contracts() -> Non
     assert str(Walk.__table__.c.analysis_state.server_default.arg) == "'collecting'"
     assert Walk.analysis_state.property.deferred is True
     assert "walks_analysis_state_check" in constraint_names(Walk.__table__)
+    assert "walks_weather_code_range" in constraint_names(Walk.__table__)
+    assert "walks_temperature_c_range" in constraint_names(Walk.__table__)
 
     analysis_constraints = constraint_names(WalkAnalysis.__table__)
     assert "walk_analyses_identity_unique" in analysis_constraints

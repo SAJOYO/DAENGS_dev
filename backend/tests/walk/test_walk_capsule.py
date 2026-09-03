@@ -103,5 +103,13 @@ def test_capsule_migration은_기존_분석을_출처와_함께_backfill한다()
     assert "ON CONFLICT (analysis_id) DO NOTHING" in migration
     assert "legacy_walk_metadata_v1" in migration
     assert "JOIN walks AS walk ON walk.id = analysis.walk_id" in migration
+    assert "walk.weather_code BETWEEN 0 AND 99" in migration
+    assert "walk.temperature_c BETWEEN -100 AND 100" in migration
+    assert "walks_weather_code_range" in migration
+    assert "walks_temperature_c_range" in migration
+    assert "SET weather_code = NULL" in migration
+    assert "SET temperature_c = NULL" in migration
     assert "derived_without_capsule" in verify
     assert "mismatched_context_identity" in verify
+    assert "IS DISTINCT FROM" in verify
+    assert "pg_input_is_valid" in verify

@@ -29,6 +29,7 @@ import csv
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -38,10 +39,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_place.core.db import SessionLocal
 from daengs_place.ingest.facility_store import prune_unseen, upsert_rows
 from daengs_place.ingest.linking import rebuild_links
+from daengs_place.ingest.source_record_store import prune_source_records, upsert_source_records
 from daengs_place.place.restriction_map import Subject, read
 from daengs_place.place.source_catalog import (
     KCISA_KINDS as KINDS,
 )
+from daengs_place.place.source_facts.states import DetailAcquisitionState
 
 SOURCE = "public:kcisa:pet_facility"
 _MISSING = {"", "정보없음", "-", "없음", "NULL"}
@@ -59,6 +62,13 @@ def source_ref(name: str, lat: float, lng: float) -> str:
     """
     norm = re.sub(r"[\s()\[\]·.,-]", "", name.lower())
     return hashlib.md5(f"{norm}|{lat:.5f},{lng:.5f}".encode()).hexdigest()[:20]
+
+
+def source_record_ref(row: dict) -> str:
+    """KCISA에 없는 행 ID를 원문 전체의 결정적 hash로 만든다."""
+
+    payload = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()[:24]
 
 
 def _flag(value: str | None) -> bool | None:
@@ -121,6 +131,8 @@ def parse_row(row: dict) -> dict | None:
         "lat": lat,
         "lng": lng,
         "last_written": written,
+        # 제품 행에도 원문을 남기되 shadow record가 원천 권위다.
+        "raw": json.dumps(row, ensure_ascii=False),
     }
 
 
@@ -139,16 +151,38 @@ def concept_excluded(pet: dict) -> bool:
     )
 
 
-def load_rows(path: Path) -> tuple[list[dict], int, int, int]:
-    """(적재 행, 거부 수, 중복 수, 컨셉 제외 수). 중복 키 = (시설명, 위도, 경도) 원문."""
+@dataclass(frozen=True)
+class LoadedSnapshot:
+    facility_rows: list[dict]
+    source_records: list[dict]
+    rejected: int
+    duplicates: int
+    excluded: int
+
+
+def load_snapshot(path: Path) -> LoadedSnapshot:
+    """제품 후보와 필터 전 source record를 한 번의 CSV 순회로 만든다."""
+
     parsed: list[dict] = []
+    source_records: dict[str, dict] = {}
     rejected = 0
     duplicates = 0
     excluded = 0
     seen: set[str] = set()
     with path.open(encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f):
+            record_ref = source_record_ref(row)
             item = parse_row(row)
+            record_source_ref = item["source_ref"] if item is not None else f"unlinked:{record_ref}"
+            if record_ref in source_records:
+                source_records[record_ref]["occurrence_count"] += 1
+            else:
+                source_records[record_ref] = {
+                    "record_ref": record_ref,
+                    "source_ref": record_source_ref,
+                    "listing_raw": dict(row),
+                    "occurrence_count": 1,
+                }
             if item is None:
                 rejected += 1
                 continue
@@ -163,13 +197,40 @@ def load_rows(path: Path) -> tuple[list[dict], int, int, int]:
             seen.add(item["source_ref"])
             item["pet"] = json.dumps(item["pet"], ensure_ascii=False)
             parsed.append(item)
-    return parsed, rejected, duplicates, excluded
+    return LoadedSnapshot(parsed, list(source_records.values()), rejected, duplicates, excluded)
 
 
-async def replace_snapshot(session: AsyncSession, rows: list[dict], snapshot: str) -> dict:
+def load_rows(path: Path) -> tuple[list[dict], int, int, int]:
+    """기존 호출 계약. 새 ingest 경로는 `load_snapshot`으로 원천 레코드도 받는다."""
+
+    loaded = load_snapshot(path)
+    return (
+        loaded.facility_rows,
+        loaded.rejected,
+        loaded.duplicates,
+        loaded.excluded,
+    )
+
+
+async def replace_snapshot(
+    session: AsyncSession,
+    rows: list[dict],
+    source_records: list[dict],
+    snapshot: str,
+) -> dict:
     synced_at = datetime.now(UTC)
+    source_stored = await upsert_source_records(
+        session,
+        "kcisa",
+        source_records,
+        snapshot,
+        synced_at,
+        detail_state=DetailAcquisitionState.NOT_APPLICABLE,
+        preserve_detail=False,
+    )
     stored = await upsert_rows(session, "kcisa", rows, snapshot, synced_at)
     pruned = await prune_unseen(session, "kcisa", synced_at)
+    source_pruned = await prune_source_records(session, "kcisa", synced_at)
     linked = await rebuild_links(session)
     await session.execute(
         text("""
@@ -179,21 +240,37 @@ async def replace_snapshot(session: AsyncSession, rows: list[dict], snapshot: st
         """),
         {"source": SOURCE, "watermark": snapshot},
     )
-    return {"stored": stored, "pruned": pruned, **linked}
+    return {
+        "stored": stored,
+        "pruned": pruned,
+        "source_stored": source_stored,
+        "source_pruned": source_pruned,
+        **linked,
+    }
 
 
 async def _run(csv_path: Path, snapshot: str) -> None:
-    rows, rejected, duplicates, excluded = load_rows(csv_path)
-    if not rows:
+    loaded = load_snapshot(csv_path)
+    if not loaded.facility_rows:
         raise SystemExit(f"refusing empty snapshot from {csv_path}")
     async with SessionLocal() as session:
-        stats = await replace_snapshot(session, rows, snapshot)
+        stats = await replace_snapshot(
+            session, loaded.facility_rows, loaded.source_records, snapshot
+        )
         await session.commit()
-    print(json.dumps(
-        {"source": SOURCE, "snapshot": snapshot, "rejected": rejected,
-         "duplicates": duplicates, "concept_excluded": excluded, **stats},
-        ensure_ascii=False,
-    ))
+    print(
+        json.dumps(
+            {
+                "source": SOURCE,
+                "snapshot": snapshot,
+                "rejected": loaded.rejected,
+                "duplicates": loaded.duplicates,
+                "concept_excluded": loaded.excluded,
+                **stats,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def main() -> None:

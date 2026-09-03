@@ -161,6 +161,54 @@ async def update_pet_detail(
     return result.rowcount
 
 
+_INVALIDATE_UNTRUSTED_PET_DETAILS = text("""
+UPDATE facility AS product SET
+    pet = '{}'::jsonb,
+    pet_allowed = NULL,
+    pet_exclusive = NULL,
+    pet_dog_ok = NULL,
+    pet_size_class = NULL,
+    pet_max_kg = NULL,
+    restriction_state = NULL,
+    restriction_parse_state = NULL,
+    restriction_predicates = NULL,
+    restriction_semantics_version = NULL
+WHERE product.source = :source
+  AND EXISTS (
+      SELECT 1
+      FROM facility_source_record AS record
+      WHERE record.source = product.source
+        AND record.source_ref = product.source_ref
+        AND record.detail_state IN ('not_fetched', 'no_data', 'fetch_failed', 'unknown')
+  )
+  AND (
+      product.pet IS DISTINCT FROM '{}'::jsonb
+      OR product.pet_allowed IS NOT NULL
+      OR product.pet_exclusive IS NOT NULL
+      OR product.pet_dog_ok IS NOT NULL
+      OR product.pet_size_class IS NOT NULL
+      OR product.pet_max_kg IS NOT NULL
+      OR product.restriction_state IS NOT NULL
+      OR product.restriction_parse_state IS NOT NULL
+      OR product.restriction_predicates IS NOT NULL
+      OR product.restriction_semantics_version IS NOT NULL
+  )
+""")
+
+
+async def invalidate_pet_details_without_source_payload(
+    session: AsyncSession,
+    source: str,
+) -> int:
+    """현재 source lifecycle이 신뢰하지 않는 제품 상세와 그 파생값을 함께 비운다."""
+
+    result = await session.execute(
+        _INVALIDATE_UNTRUSTED_PET_DETAILS,
+        {"source": source},
+    )
+    return result.rowcount
+
+
 async def prune_unseen(session: AsyncSession, source: str, synced_at: datetime) -> int:
     """이번 실행에서 안 건드려진 같은 원천 행 삭제 = 스냅샷 의미.
 

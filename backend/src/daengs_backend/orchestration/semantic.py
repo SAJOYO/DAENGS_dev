@@ -3,9 +3,12 @@
 The LLM owns exactly one thing: which EXECUTE capabilities (training/life/walk)
 and HANDOFF targets (skin/gait) the query semantically requests. Payload text,
 coordinates, CLARIFY, handoff reasons, and the final RoutePlan are assembled
-deterministically in planner.py. The prompt below is the accepted
-`semantic-router-ko-v3` boundary; the frozen benchmark copy under
-tools/router_benchmark/ is the acceptance record and stays untouched.
+deterministically in planner.py. The prompt below is `semantic-router-ko-v4`:
+the accepted v3 routing boundary plus one narrow classification — a PURELY
+social utterance (greeting/thanks/goodbye) — which never enters RoutePlan or
+LangGraph and is answered by fixed templates in social.py. The frozen v3
+benchmark copy under tools/router_benchmark/ is the acceptance record and stays
+untouched; the v4 regression against the same 80 gold cases is runner_v5.py.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v3"
+PROMPT_VERSION = "semantic-router-ko-v4"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # The only routing metadata the model may see. Coordinates deliberately stay out:
@@ -29,6 +32,7 @@ _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
 ExecuteName = Literal["training", "life", "walk"]
 HandoffName = Literal["skin", "gait"]
+SocialIntent = Literal["greeting", "thanks", "goodbye"]
 _UniqueExecuteList = Annotated[list[ExecuteName], Field(json_schema_extra={"uniqueItems": True})]
 _UniqueHandoffList = Annotated[list[HandoffName], Field(json_schema_extra={"uniqueItems": True})]
 
@@ -40,6 +44,9 @@ class SemanticRoutingDecision(BaseModel):
 
     execute: _UniqueExecuteList = Field(default_factory=list)
     handoffs: _UniqueHandoffList = Field(default_factory=list)
+    # Set only when the entire utterance is social small talk with no actionable
+    # request. Capability intent always wins: the two are mutually exclusive.
+    social_intent: SocialIntent | None = None
 
     @model_validator(mode="after")
     def destinations_are_unique(self) -> SemanticRoutingDecision:
@@ -47,6 +54,12 @@ class SemanticRoutingDecision(BaseModel):
             raise ValueError("execute capabilities must be unique")
         if len(self.handoffs) != len(set(self.handoffs)):
             raise ValueError("handoff targets must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def social_intent_is_exclusive(self) -> SemanticRoutingDecision:
+        if self.social_intent is not None and (self.execute or self.handoffs):
+            raise ValueError("social_intent is exclusive with execute and handoffs")
         return self
 
 
@@ -75,7 +88,14 @@ handoffs only. Select Walk only for current environmental walking suitability, s
 heat, cold, rain, air quality, or similar environmental conditions; do not select Walk merely
 because walking is the setting of a Training or Gait request. Route by meaning, not keyword
 occurrence. Do not invent names. If no supported destination is semantically requested, return both
-lists empty."""
+lists empty.
+
+social_intent is a classification only, never an answer. Set it to greeting, thanks, or goodbye
+ONLY when the entire request is purely social small talk toward the assistant with no actionable
+request at all; then execute and handoffs must both be empty. If any Training, Life, Walk, Skin, or
+Gait request is present, route that request normally and leave social_intent null, even when the
+message also opens or closes with a greeting or thanks. Any other unsupported request also leaves
+social_intent null. Do not reply to the user and do not generate conversational prose."""
 
 
 def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
@@ -184,6 +204,7 @@ __all__ = [
     "GeminiSemanticRouter",
     "SemanticRoutingDecision",
     "SemanticRoutingError",
+    "SocialIntent",
     "build_semantic_router_prompt",
     "validate_semantic_decision",
 ]

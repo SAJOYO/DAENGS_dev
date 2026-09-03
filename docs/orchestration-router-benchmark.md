@@ -197,3 +197,35 @@ PASS는 100% 의미 정확도를 뜻하지 않습니다. 최종 실행에서 `mi
 `ROUTER_MODEL_ID`를 `gemini-3.1-flash-lite`로 교정했습니다(D-041). v3 결과 파일
 (`summary_v3.json`, `results_v3.jsonl`, `phase2_v3_report.md`)은 감사 근거로 보존하며
 제자리 수정하지 않았습니다.
+
+## v5 프롬프트 회귀 — `semantic-router-ko-v4` 순수 인사말 분류 (2026-09-03, PR #163)
+
+production 라우터가 순수 인사말(greeting / thanks / goodbye)만 분류하는 `social_intent` 를
+얻으면서 프롬프트가 `semantic-router-ko-v3` → **v4** 로 올라갔습니다 (routing 문서 §2).
+프롬프트·스키마가 바뀌었으므로 수용된 v1 라우팅 동작을 다시 확인해야 했습니다. 같은 80개
+v3 gold·같은 동결 gate·같은 `gemini-3.1-flash-lite` 로 **production 모듈의 프롬프트와
+스키마를 그대로** 정확히 한 번 실행했습니다 (`runner_v5.py` — v2~v4 와 달리 벤치마크
+사본이 아니라 `daengs_backend.orchestration.semantic` / `planner` 를 씁니다. 인증할 대상이
+production 이 실제로 보내는 것이기 때문입니다).
+
+| 항목 | v4 (`ko-v3`, `3.1-flash-lite`) | v5 (`ko-v4`, `3.1-flash-lite`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity | 100% | 100% |
+| exact RoutePlan match | 98.75% | 98.75% |
+| executable precision / recall | 98.68% / 100% | 98.68% / 100% |
+| Skin / Gait HANDOFF recall | 100% / 100% | 100% / 100% |
+| CLARIFY precision / recall | 100% / 100% | 100% / 100% |
+| non-exact case | `mixed_09` (Training 추가) | `boundary_05` (Walk 추가) |
+| `social_intent` non-null | — | **0 / 80** |
+| warm p50 / p95 | 859 ms / 1144 ms | 950 ms / 1117 ms |
+| verdict | PASS | **PASS** |
+
+모든 gate 는 v4 와 같은 값으로 통과했고, 80건 어디에서도 social_intent 가 켜지지 않았습니다
+(능력 의도 우선 규칙이 gold 전체에서 지켜졌다는 뜻입니다). non-exact 1건이 `mixed_09` 에서
+`boundary_05`("오늘 산책 날씨는 말고 목줄 당김 교육만 알려줘" — 자연어 부정, gold 는 Training
+만)로 옮겨간 것은 temperature 0 에서도 남는 경계 사례의 흔들림이며, 두 run 모두 1/80
+non-exact 로 gate 안입니다. 이 카드는 이 사례를 tuning 하지 않았고 추가 실행도 하지
+않았습니다. 별도로 production `GeminiSemanticRouter` 로 순수/혼합 인사말 8건을 1회
+프로브해 8/8 기대 분류를 확인했습니다 (PR #163 본문). v1~v4 결과 파일은 제자리 수정하지
+않았습니다.

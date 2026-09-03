@@ -6,7 +6,7 @@ source commit:     c5f0d5f738410e90cac294fd5f407cd88f5330ac  (Place, 2026-08-29)
 territory source:  4d384106a52c814faf006e4b033354f7d4e686fd               (main, 2026-09-03)
 핵심 선행 PR:      #148  검색은 identity가 아니라 값을 받는다 (dog_id 제거, extra="forbid")
                    #149  검색 전용 진입점 — provider/LLM 키 없이 PostGIS만으로 부팅
-경계 결정:         이 저장소 docs/decisions.md D-026
+경계 결정:         이 저장소 [docs/decisions.md](../decisions.md) D-026
 ```
 
 **운영 Place 검색의 canonical 구현은 이 저장소(SAJOYO/DAENGS_dev)다.**

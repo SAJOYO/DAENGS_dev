@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import Walk, WalkAnalysis
+from daengs_backend.orchestration.adapters.life import (
+    WalkWeatherLookup,
+    lookup_walk_weather,
+)
 from daengs_backend.schemas.walk import (
     WalkDetailResponse,
     WalkFinalizeRequest,
@@ -32,6 +36,12 @@ from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.services.walk_finalize import FinalizeInputError
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
+
+
+def get_walk_weather_lookup() -> WalkWeatherLookup:
+    """테스트가 외부 날씨를 대체할 수 있는 얇은 조립 경계."""
+
+    return lookup_walk_weather
 
 
 def _to_response(walk: Walk) -> WalkResponse:
@@ -173,6 +183,7 @@ async def finalize_walk(
     response: Response,
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
+    weather_lookup: Annotated[WalkWeatherLookup, Depends(get_walk_weather_lookup)],
 ) -> WalkFinalizeResponse:
     """전체 좌표열을 봉인하고 버전된 계산 결과를 저장합니다.
 
@@ -185,6 +196,7 @@ async def finalize_walk(
             user.app_user_id,
             walk_id,
             body,
+            weather_lookup,
         )
     except walk_service.WalkNotFoundError:
         raise HTTPException(

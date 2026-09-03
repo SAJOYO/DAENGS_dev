@@ -26,7 +26,7 @@ const consoleSections: Array<{
    * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
    * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
    */
-  href?: "/console/search" | "/console/crawl";
+  href?: "/console/search" | "/console/crawl" | "/console/status";
 }> = [
   {
     title: "지식 베이스",
@@ -41,6 +41,21 @@ const consoleSections: Array<{
     // 재개 조건은 `docs/deploy/roadmap.md` §7-1 (크롤러·적재 VM 이전) 이고,
     // 그 판단은 `docs/console/roadmap.md` §6 에 있습니다.
     permission: "kb:write",
+  },
+  {
+    title: "상태",
+    description:
+      "DB·모델·Redis 일 예산·다른 컨테이너·마지막 크롤이 지금 어떤지 봅니다. 이 배포에 없는 서비스는 고장과 다르게 보여 줍니다.",
+    // **마지막 문장이 이 카드가 생긴 이유입니다.** 로컬 서버와 GCP 는 같은 코드가 뜨는데
+    // 있는 것이 다릅니다 — GCP 에는 크롤러가 없고(`docs/deploy/roadmap.md` §2-4) gait 는
+    // 어디서도 profile 로 꺼져 있습니다(D-038). 환경 차이를 고장으로 칠하면 화면이 늘
+    // 빨갛고, 그러면 아무도 안 봅니다 (`docs/console/roadmap.md` §6).
+    //
+    // **`ops:write` 가 아니라 `read` 입니다.** API(`/admin/status`)가 `Perm.READ` 로
+    // 열려 있어서입니다 — 읽기 전용이고 개인정보가 없습니다. 여기를 좁히면 API 는
+    // 열어 주는데 화면만 안 보이는 계정이 생깁니다 (위 두 카드와 같은 규칙).
+    permission: "read",
+    href: "/console/status",
   },
   {
     title: "기능 / 검색 점검",

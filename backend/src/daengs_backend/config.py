@@ -175,6 +175,30 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("GAIT_BRIDGE_BASE_URL")
     )
 
+    # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
+    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와
+    # **다른 컨테이너**라 프로세스 안에서는 알 수 없고, nginx 를 거치지도 않습니다
+    # (compose 네트워크 안에서 서비스 이름으로 직접 닿습니다).
+    #
+    # **기본값이 compose 서비스 이름인 이유**는 서버의 `.env` 를 안 건드리려는 것입니다.
+    # 개발 PC 에서 `uv run dev` 로 띄우면 이 이름들이 **애초에 안 풀리는데**, 그것이
+    # 곧 "이 환경엔 없다" 이므로 상태 페이지가 `absent` 로 그립니다 — 이름 해석
+    # 실패(DNS)와 연결 거부를 가르는 판정이 `services/status.py` 에 있습니다.
+    #
+    # ⚠ 한계: compose 안에서 컨테이너가 아예 안 떠 있어도 도커 DNS 가 이름을 못 풀어
+    #   `absent` 로 보입니다. "이 환경에 있어야 하는가" 를 backend 가 따로 알지 못하는
+    #   한 그 둘은 안 갈립니다. 갈라야 할 일이 생기면 그때 `expected` 를 더합니다.
+    #
+    # 빈 값으로 두면 그 항목을 아예 `absent` 로 둡니다 (물어보지도 않습니다).
+    #
+    # **place 는 여기 없습니다** — 위 `place_search_base_url` 을 그대로 씁니다. 같은
+    #   컨테이너의 주소를 두 이름으로 두면 한쪽만 고치는 날 상태 화면과 실제 호출이
+    #   서로 다른 곳을 봅니다.
+    journey_service_url: str = "http://journey-service:8000"
+    # gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
+    # 그래서 여기 이름이 있어도 평소에는 `absent` 로 보이는 것이 정상입니다.
+    gait_service_url: str = "http://gait-analysis:8000"
+
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #
     # extra="ignore" 라서 .env 에 남아 있어도 조용히 무시되는데, 그러면 개발 PC 가

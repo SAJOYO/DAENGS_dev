@@ -138,6 +138,23 @@ def release_encoder() -> None:
     _encoder.cache_clear()
 
 
+def encoder_loaded() -> bool:
+    """지금 모델이 올라와 있나. **올리지 않는다** — 물어보기만 한다 (#180).
+
+    `get_encoder()` 로는 이걸 물을 수 없다. 안 올라와 있으면 **올려 버리기** 때문이다.
+    상태 화면이 "모델이 올라왔나"를 묻자고 1.2GB 를 끌어오면 안 된다 —
+    `daengs_screening.service.healthz()` 가 `_agent.cache_info()` 로 같은 답을 내는 것과
+    같은 이유이고, 그쪽 주석("헬스체크가 350MB 를 끌어오면 안 된다")이 여기에도 그대로다.
+
+    `_encoder` 를 밖에서 부르게 하지 않으려고 이름을 하나 둔다 — `release_encoder` 와 같다.
+
+    **예열의 성패를 부르는 쪽이 알 방법이 이것뿐이다.** `warm_up_encoder()` 는 성공해도
+    실패해도 `None` 을 돌려준다(lifespan 이 부르므로 예외를 안 던진다). `daengs_backend`
+    쪽에서는 `main.py` 가 예열 뒤 이것을 물어 `app.state` 에 적는다 (#180 · D-035 접점).
+    """
+    return _encoder.cache_info().currsize > 0
+
+
 def warm_up_encoder() -> None:
     """모델을 미리 올린다. **예외를 던지지 않는다** — 부르는 쪽이 lifespan 이라서다.
 

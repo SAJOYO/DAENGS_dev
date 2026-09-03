@@ -40,8 +40,9 @@ def _context(
     walked_at: datetime = STARTED_AT,
     weather_code: int | None,
     is_day: bool | None,
+    precipitation_kind: str | None = None,
 ) -> TrailContextSnapshot:
-    observed = weather_code is not None or is_day is not None
+    observed = weather_code is not None or is_day is not None or precipitation_kind is not None
     return TrailContextSnapshot(
         walk_id=walk_id,
         status=ContextStatus.PARTIAL if observed else ContextStatus.UNKNOWN,
@@ -50,6 +51,7 @@ def _context(
         provider="fixture" if observed else None,
         weather_code=weather_code,
         is_day=is_day,
+        precipitation_kind=precipitation_kind,
     )
 
 
@@ -58,6 +60,7 @@ def _index(
     at: datetime = STARTED_AT,
     weather_code: int | None = 61,
     is_day: bool | None = False,
+    precipitation_kind: str | None = None,
     paint_spec: PaintSpec = CANONICAL_PAINT_SPEC,
     cell_count: int = 1,
 ) -> diary_repo.SpatialDiaryIndexRow:
@@ -67,6 +70,7 @@ def _index(
         walked_at=at,
         weather_code=weather_code,
         is_day=is_day,
+        precipitation_kind=precipitation_kind,
     )
     return diary_repo.SpatialDiaryIndexRow(
         analysis_id=uuid.uuid4(),
@@ -193,6 +197,27 @@ async def test_query_selects_pet_date_and_context_then_builds_one_receipt(monkey
     assert result.receipt.contributing_capsules == 1
     assert result.receipt.context_known_count == 1
     assert result.receipt.context_unknown_count == 0
+
+
+@pytest.mark.asyncio
+async def test_query_uses_kma_precipitation_before_conflicting_wmo(monkeypatch):
+    observed_dry = _index(weather_code=61, precipitation_kind="none")
+    _install_repository(
+        monkeypatch,
+        [observed_dry],
+        [_stored_sheet(observed_dry, {(0, 0): 1.0})],
+    )
+    spec = _spec(ContextFacetFilter(axis="precipitation", values=("dry",)))
+
+    result = await diary_service.query_view(
+        object(),
+        OWNER_ID,
+        spec,
+        view_as_of=STARTED_AT,
+    )
+
+    assert result.receipt.selected_capsules == 1
+    assert result.receipt.context_known_count == 1
 
 
 @pytest.mark.asyncio
@@ -430,7 +455,7 @@ def test_api_returns_projection_cells_and_named_denominators(api_client, monkeyp
     assert body["spec"]["view_version"] == 1
     assert body["spec"]["walk_selector"]["pet_id"] == str(PET_ID)
     assert body["spec"]["walk_selector"]["context_facets"] == [
-        {"axis": "precipitation", "values": ["rain"], "policy_version": 1}
+        {"axis": "precipitation", "values": ["rain"], "policy_version": 2}
     ]
     assert body["projection"]["paint_fp"] == CANONICAL_PAINT_SPEC.fingerprint
     assert body["field"] == {

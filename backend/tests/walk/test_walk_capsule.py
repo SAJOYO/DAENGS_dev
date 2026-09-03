@@ -9,7 +9,13 @@ from daengs_backend.services.walk_capsule import (
     build_capsule_model,
     decode_capsule_model,
 )
-from daengs_walk.capsule import ContextStatus, build_walk_capsule
+from daengs_walk.capsule import (
+    ContextStatus,
+    TrailContextSnapshot,
+    build_walk_capsule,
+    select_context_anchor,
+)
+from daengs_walk.contracts import WalkEvidencePoint
 
 REPO = Path(__file__).parents[3]
 WALK_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -56,6 +62,7 @@ def test_capsule은_기존_날씨_원자와_관측_능력만_봉인한다() -> N
     artifacts = capsule()
 
     assert artifacts.trail_context.status is ContextStatus.PARTIAL
+    assert artifacts.trail_context.context_version == 2
     assert artifacts.trail_context.provider == "android_walk_upload_v1"
     assert artifacts.trail_context.weather_code == 61
     assert artifacts.trail_context.temperature_c == 18.5
@@ -63,6 +70,85 @@ def test_capsule은_기존_날씨_원자와_관측_능력만_봉인한다() -> N
         ("low_motion", 1),
         ("gap", 1),
     ]
+
+
+def test_context_v1은_새_필드가_없는_기존_payload도_계속_읽는다() -> None:
+    payload = capsule().trail_context.model_dump(mode="json")
+    payload["context_version"] = 1
+    payload.pop("precipitation_kind")
+
+    restored = TrailContextSnapshot.model_validate(payload)
+
+    assert restored.context_version == 1
+    assert restored.precipitation_kind is None
+
+
+def test_context_v1은_새_강수_종류를_거짓으로_싣지_않는다() -> None:
+    payload = capsule().trail_context.model_dump(mode="json") | {
+        "context_version": 1,
+        "precipitation_kind": "rain",
+    }
+
+    with pytest.raises(ValueError, match="v1"):
+        TrailContextSnapshot.model_validate(payload)
+
+
+def test_context_anchor는_시간상_중앙에_가깝고_순번이_앞선_실제_좌표다() -> None:
+    points = (
+        WalkEvidencePoint(
+            client_seq=0,
+            at=STARTED_AT + timedelta(minutes=10),
+            lat=37.1,
+            lng=127.1,
+        ),
+        WalkEvidencePoint(
+            client_seq=2,
+            at=STARTED_AT + timedelta(minutes=20),
+            lat=37.3,
+            lng=127.3,
+        ),
+        WalkEvidencePoint(
+            client_seq=1,
+            at=STARTED_AT + timedelta(minutes=20),
+            lat=37.2,
+            lng=127.2,
+        ),
+        WalkEvidencePoint(
+            client_seq=3,
+            at=STARTED_AT + timedelta(minutes=15),
+            lat=38.0,
+            lng=128.0,
+            is_mock=True,
+        ),
+    )
+
+    anchor = select_context_anchor(
+        points,
+        started_at=STARTED_AT,
+        ended_at=STARTED_AT + timedelta(minutes=30),
+    )
+
+    assert anchor is not None
+    assert anchor.client_seq == 0
+
+
+def test_context_anchor는_실제_좌표가_없으면_조회하지_않는다() -> None:
+    point = WalkEvidencePoint(
+        client_seq=0,
+        at=STARTED_AT,
+        lat=37.1,
+        lng=127.1,
+        is_mock=True,
+    )
+
+    assert (
+        select_context_anchor(
+            (point,),
+            started_at=STARTED_AT,
+            ended_at=SEALED_AT,
+        )
+        is None
+    )
 
 
 def test_날씨가_없으면_현재값을_보충하지_않고_unknown으로_남긴다() -> None:

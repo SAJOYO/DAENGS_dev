@@ -86,9 +86,10 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   로컬에 3.11 / 3.14 도 깔려 있으니 `uv run` 을 거쳐 실행하세요.
 - **`frontend/AGENTS.md` 는 `next dev` 가 자동 생성/갱신합니다.** 지워도 다시 생기므로
   변경분이 보이면 그냥 같이 커밋하면 됩니다. `frontend/CLAUDE.md` 는 그 파일을 참조만 합니다.
-- **Python 서비스는 compose에서 `backend/src`와 단일 lock을 공유합니다.** backend는 개발 모드로 돕니다. `backend/src` 를 마운트해
-  파일을 고치면 컨테이너가 리로드합니다. 재시작이 필요한 건 의존성을 바꿨을 때뿐이고,
-  그때는 영향받는 `backend`·`place-search`·`journey-service`를 재생성하세요.
+- **Python 서비스는 compose에서 `backend/src`와 단일 lock을 공유합니다.** backend는 개발 모드로 돕니다. 로컬에서
+  `backend/src` 파일 하나를 고치면 컨테이너가 리로드합니다. 다만 배포 checkout이 Windows bind mount 아래 파일을
+  한꺼번에 교체할 때는 polling이 변경을 놓칠 수 있어, 자동 배포가 `backend`를 명시적으로 재시작합니다.
+  의존성을 바꿨을 때는 영향받는 `backend`·`place-search`·`journey-service`를 재생성하세요.
 - **`/life/ask` 의 임베딩 모델은 backend 프로세스에 상주합니다** (D-021). 그래서 컨테이너의
   `command` 가 `uv sync --frozen --group ml && uv run --no-sync dev` 입니다.
   ⚠ **컨테이너 안에서 `uv sync` 를 인자 없이 돌리지 마세요** — 그건 exact 동기화라 `ml` 을

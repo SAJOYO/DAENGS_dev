@@ -2498,17 +2498,20 @@ walk_utilization
 없으므로 한 field에 섞지 않습니다. 결과는 값뿐 아니라 분자, 이름 붙은 분모, Paint 지문,
 selector 지문, context known/unknown 수와 정책 버전을 함께 반환합니다.
 
-### Dev context facet policy v1
+### Dev context facet policy v1 → v2
 
 Geo의 첫 View는 `precipitation_mm`과 `sun_elevation_deg`를 사용했지만, Dev가 현재 산책 당시
-동결하는 원자는 앱이 보낸 WMO `weather_code`, `is_day`, 기온입니다. 없는 원자를 현재 날씨나
-시각으로 추정하지 않고 `unknown`으로 둡니다. v1 분류는 다음과 같습니다.
+동결하는 첫 원자는 앱이 보낸 WMO `weather_code`, `is_day`, 기온이었습니다. v2부터 Walk
+finalize가 Life의 과거 KMA 관측을 값으로 동결하며, 강수 facet은 KMA의
+`precipitation_kind`를 우선하고 없을 때만 WMO로 되돌아갑니다. 없는 원자를 현재 날씨나
+시각으로 추정하지 않고 `unknown`으로 둡니다. 분류는 다음과 같습니다.
 
 ```text
 precipitation
   dry      0, 1, 2, 3, 45, 48
   rain     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99
   snow     71, 73, 75, 77, 85, 86
+  mixed    KMA rain_snow 관측
   unknown  값 없음 또는 WMO 표에서 정의하지 않은 0..99 값
 
 daylight
@@ -2568,4 +2571,10 @@ Walk와 무관한 임의 좌표·회차 조회가 공용 KMA 일일 쿼터를 �
 `daengs_backend` 제품 앱에 `/weather/at`을 등록하지 않습니다. Walk DB 저장, finalize 연결, 앱
 호출, Place 주변 사실, Journey 계획 경로도 포함하지 않습니다. 이 경계는 D-046의 소유권을
 그대로 유지합니다.
+
+후속 Walk finalize 연결에서도 소유 Walk만으로 호출 자격을 닫는 것만으로는 충분하지 않습니다.
+인증 사용자가 서로 다른 회차·격자의 산책을 반복 생성할 수 있기 때문입니다. 과거 snapshot은
+provider 호출 전에 공용 일 예산을 원자적으로 선점하되, 기존 실시간 10개 활성 격자에 필요한
+560회(격자당 56회/일)는 침범하지 않습니다. 예약분에 닿으면 Capsule은 앱 원본 또는
+unknown/failed로 저하되고, 캐시 hit는 호출 슬롯을 쓰지 않습니다.
 

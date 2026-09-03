@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import threading
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
@@ -267,6 +268,53 @@ def test_different_historical_cycles_do_not_share_a_snapshot() -> None:
     assert len(calls) == 2
 
 
+def test_historical_snapshots_preserve_the_live_weather_budget() -> None:
+    store = MemoryStore()
+    cache = Cache(store)
+    group = POLICY.feeds[NCST].budget
+    limit = POLICY.budgets[group]
+    assert limit is not None
+    snapshot_ceiling = limit - POLICY.snapshot_live_reserve_calls
+    for _ in range(snapshot_ceiling):
+        store.spend(group, "20260825")
+    fetch, calls = counting()
+
+    got = cache.get_snapshot(NCST, "61,125:202608250900", fetch, t(25, 10, 41))
+
+    assert got.payload is None and got.failure_kind == "budget_reserved"
+    assert calls == []
+    assert store.used(group, "20260825") == snapshot_ceiling
+
+
+def test_concurrent_historical_misses_cannot_cross_the_snapshot_ceiling() -> None:
+    store = MemoryStore()
+    group = POLICY.feeds[NCST].budget
+    limit = POLICY.budgets[group]
+    assert limit is not None
+    policy = replace(POLICY, snapshot_live_reserve_calls=limit - 1)
+    cache = Cache(store, policy=policy)
+    started = threading.Barrier(8)
+    calls: list[int] = []
+
+    def worker(index: int) -> None:
+        started.wait()
+        cache.get_snapshot(
+            NCST,
+            f"61,{index}:202608250900",
+            lambda: calls.append(index) or {"ok": index},
+            t(25, 10, 41),
+        )
+
+    threads = [threading.Thread(target=worker, args=(index,)) for index in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(calls) == 1
+    assert store.used(group, "20260825") == 1
+
+
 def test_historical_no_data_is_not_replaced_with_a_current_or_stale_value() -> None:
     """없는 과거값에 일반 ``rt:`` 캐시를 끼워 넣으면 일기가 현재 날씨로 오염된다."""
     cache = Cache(MemoryStore())
@@ -398,6 +446,7 @@ def test_every_uncited_number_is_marked_as_ours() -> None:
 def test_the_policy_file_actually_loads() -> None:
     policy = load_policy(CACHE_YAML)
     assert policy.active_keys == 10                     # ④-f 운영 상수
+    assert policy.snapshot_live_reserve_calls == 560    # 10개 격자 × 56회/일
     assert policy.budgets["datagokr-vilage-fcst"] == 1000
     assert policy.budgets["apihub"] is None             # "모른다" 이지 무제한이 아니다
 

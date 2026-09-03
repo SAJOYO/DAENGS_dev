@@ -37,8 +37,9 @@ def _context(
     *,
     weather_code: int | None,
     is_day: bool | None,
+    precipitation_kind: str | None = None,
 ) -> TrailContextSnapshot:
-    observed = weather_code is not None or is_day is not None
+    observed = weather_code is not None or is_day is not None or precipitation_kind is not None
     return TrailContextSnapshot(
         walk_id=walk_id,
         status=ContextStatus.PARTIAL if observed else ContextStatus.UNKNOWN,
@@ -47,6 +48,7 @@ def _context(
         provider="fixture" if observed else None,
         weather_code=weather_code,
         is_day=is_day,
+        precipitation_kind=precipitation_kind,
     )
 
 
@@ -114,6 +116,26 @@ def test_context_policy_preserves_wmo_weather_meaning(code, expected):
     assert facets.daylight == "day"
 
 
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        ("none", "dry"),
+        ("rain", "rain"),
+        ("snow", "snow"),
+        ("mixed", "mixed"),
+    ],
+)
+def test_kma_precipitation_kind_takes_priority_over_wmo(kind, expected):
+    context = _context(
+        uuid.uuid4(),
+        weather_code=61 if kind == "none" else 0,
+        is_day=True,
+        precipitation_kind=kind,
+    )
+
+    assert context_facets(context).precipitation == expected
+
+
 def test_unknown_context_does_not_invert_missing_atoms():
     context = _context(uuid.uuid4(), weather_code=None, is_day=None)
 
@@ -178,7 +200,7 @@ def test_selector_fingerprint_is_stable_and_includes_hidden_policy():
 
     assert selector_fingerprint(first) == selector_fingerprint(first)
     assert selector_fingerprint(first) != selector_fingerprint(second)
-    assert CONTEXT_FACET_POLICY_VERSION == 1
+    assert CONTEXT_FACET_POLICY_VERSION == 2
 
 
 def test_selector_fingerprint_canonicalizes_semantic_set_order():

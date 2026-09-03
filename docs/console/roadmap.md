@@ -123,7 +123,8 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | # | 무엇 | 왜 | 전제 | 크기 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | A0 | **관리자가 회원 대화를 보는 범위 결정** (`D-`) — 신고된 turn 만 / 세션 / Perm(`pii:read` 로 묶을지 새 `report:read`) / 고지 문구 | §3. 코드 없이 결정만. A1 이 이 번호를 인용한다 | #131 의 D-048 | XS | ⬜ 사람 몫 (§7) |
-| A4 | **감사 로그 테이블** `admin_audit_log`(누가 · 언제 · 무엇을 · 대상 id) + 기록 헬퍼. 첫 소비자는 **로그인 시도**(성공 · 실패 · 정지 거부, 2026-09-04 사람 결정)이고 A2 의 복호화 조회가 뒤따른다 | Hold 로그 카드 메모 "감사 로그는 DB" · D-012(복호화는 `core/crypto.py` 한 곳) | 없음 — 두 DB 손 적용 | S | 🔵 #203 |
+| A4 | **감사 로그 테이블** `admin_audit_log`(누가 · 언제 · 무엇을 · 대상 id) + 기록 헬퍼. 첫 소비자는 **로그인 시도**(성공 · 실패 · 정지 거부, 2026-09-04 사람 결정)이고 A2 의 복호화 조회가 뒤따른다 | Hold 로그 카드 메모 "감사 로그는 DB" · D-012(복호화는 `core/crypto.py` 한 곳) | 없음 — 두 DB 손 적용 | S | ✅ #203 (개발 DB 적용됨 · **운영 DB 는 2026-09-05**) |
+| A5 | **감사 로그 보존 · 정리** — 로그인 시도까지 들어와 행이 빨리 는다. 지우는 주기와 방법(월별 파티션 / 오래된 행 삭제 / 그대로 두기) | #203 이 일부러 안 정했다 — 얼마나 빨리 느는지 보고 정하는 것이 맞아서 | #203 뒤 실제 증가량 | XS | ⏸ 증가량을 본 뒤 |
 | A3 | **관리자 계정 관리** — `GET/POST /admin/admins` · 정지 · role 변경 (`ADMIN_MANAGE`) + `/console/admins`. `seed-admin` 은 최초 1회로 남긴다 | D-014 5단계가 정의만. 팀원이 ADMIN 하나를 공유하는 것이 로그인 잠금 설계의 전제까지 정한다(`login_attempts.py` 첫 문단) | A4 (발급 · 정지도 감사 대상) | S~M | ⬜ |
 | A2 | **회원 · 반려견 조회** — `GET /admin/app-users?email=`(blind index) · 상세(마스킹, `pii:read` 면 복호화 + 감사) · `PATCH status`(suspended) · 반려견 목록. `/console/users` | §1 둘째 줄. `console/page.tsx` 의 준비 중 카드 | A4. 복호화는 `core/crypto.py` 만 (D-012) | M | ⬜ |
 | A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ 머지됨 · **운영 DB 적용**(`main` 에 아직 없다) · A0 · A4 · 앱 카드(DAENGS_APP) | M | ⬜ |
@@ -169,7 +170,7 @@ draft 카드 `fix: 앱 로그가 어디에도 남지 않는 문제`(Hold P3) 가
 ```
 ── 지금 (DB 변경 허용 — 2026-09-03 사람 결정. 카드마다 두 DB 손 적용) ────────────────────
 C2 문구 ✅ → B1 상태 페이지 ✅ → C1 assistant 탭 ✅   (셋 다 DB 없음 · FE/읽기 전용 — 먼저 갔다)
-A4 감사 로그 🔵 → A3 계정 관리 → A2 회원 조회      (A 트랙. A4 가 앞인 이유는 아래)
+A4 감사 로그 ✅ → A3 계정 관리 → A2 회원 조회      (A 트랙. A4 가 앞인 이유는 아래)
 
 ── 운영 DB 적용 뒤 (#131 은 dev 에 머지됨. `main` 에 `07_chats.sql` 이 아직 없다) ──────────
 A0 결정(D-) → A1 신고  ─┐

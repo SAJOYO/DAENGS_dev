@@ -199,7 +199,7 @@ def test_storage_error_detail_never_reaches_the_user(client, monkeypatch):
     assert r.status_code == 503
     detail = r.json()["detail"]
     # 사용자에게는 안내 문장만.
-    assert detail == "보행 분석을 준비 중이에요. 잠시 뒤에 다시 시도해 주세요."
+    assert detail == "보행 분석은 아직 준비 중이에요."
     # 내부 흔적이 하나도 없어야 합니다.
     for leak in ("#78", "GAIT_BRIDGE_BASE_URL", "http://host/gait", "GAIT_"):
         assert leak not in detail

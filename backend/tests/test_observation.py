@@ -70,8 +70,13 @@ def test_derived_quantities_are_not_in_the_vocabulary() -> None:
 
 
 def test_unverified_quantities_are_marked() -> None:
-    """`LGT` 는 `'0'` 만 봤고 `UV` 는 403 이었다. 표에 있되 확인 전이라는 사실이 코드에 남아야 한다."""
-    assert UNVERIFIED == {Q.LIGHTNING, Q.UV}
+    """표에 있되 확인 전이라는 사실이 코드에 남아야 한다.
+
+    **`LGT` 는 RT-004 에서 빠졌다** — 실측은 여전히 `'0'` 뿐이지만 활용가이드 260623 이
+    도메인을 숫자로 못박았다(에너지밀도 0.2~100kA/㎢). `UV` 는 apihub 403 이라 응답 자체를
+    못 봐서 남는다 — **둘의 성격이 다르다는 것이 이 테스트가 지키는 것이다.**
+    """
+    assert UNVERIFIED == {Q.UV}
 
 
 # --------------------------------------------------- 경계에서의 검사 (②-d-1 · ②-d-2)
@@ -259,23 +264,65 @@ def test_an_unknown_interval_string_fails_loudly() -> None:
         parse_interval("조금 옴")
 
 
+@pytest.mark.parametrize("raw", ["-", "", "None", None])
+def test_the_documented_empty_markers_mean_no_precipitation(raw) -> None:
+    """RT-004 — 활용가이드 260623 이 강수량·신적설 표 밑에 똑같이 달아 둔 각주:
+
+        ※ -, null, 0값은 '강수없음'   /   ※ -, null, 0값은 '적설없음'
+
+    **PTY 5·6·7 과 같은 유형의 사고였다** — 문서에 있는 값인데 `ValueError` 로 터져서 그 응답의
+    measurement 가 통째로 빠진다. `0` 은 폭 0 구간으로 이미 받고 있었고, `-` 와 빈 값만 구멍이었다.
+    """
+    got = parse_interval(raw)
+    assert (got.lo, got.hi) == (0.0, 0.0)
+
+
+@pytest.mark.parametrize("raw", ["강수없음", "1mm 미만", "6.2", "30.0~50.0mm", "50.0mm 이상",
+                                 "적설없음", "0.5cm 미만", "5.0cm 이상"])
+def test_every_documented_interval_string_parses(raw: str) -> None:
+    """활용가이드 260623 의 강수량(RN1·PCP)·신적설(SNO) 범주 표에 적힌 표기 전부.
+
+    **E1 을 닫지는 않는다** — 문서가 정한 표기를 다 받는지까지가 여기고, `1.0~29.9mm` 구간의
+    실수값이 실제로 어떤 문자열로 오는지는 비 오는 날 확인할 일로 남는다.
+    """
+    assert parse_interval(raw).hi >= 0.0
+
+
 # --------------------------------------------------------------- 코드 파서
 
 @pytest.mark.parametrize(("raw", "name"), [
     ("0", "none"), ("1", "rain"), ("2", "rain_snow"), ("3", "snow"), ("4", "shower"),
+    # RT-004 — **문서 근거**로 넣은 셋 (활용가이드 260623 의 `(초단기)` 줄). 실측이 아니다
+    ("5", "drizzle"), ("6", "drizzle_snow"), ("7", "snow_flurry"),
 ])
 def test_precip_codes(raw: str, name: str) -> None:
     got = parse_precip_kind(raw)
     assert got == Code(name, raw)
 
 
-def test_an_unknown_precip_code_fails_rather_than_becoming_none() -> None:
-    """⚠️ 초단기 계열이 5·6·7 을 쓴다고 알려져 있으나 실측에서 확인하지 못했다 (②-d-3 미실측 공백).
+def test_an_unknown_precip_code_still_fails_rather_than_becoming_none() -> None:
+    """**RT-004 는 ②-d-3 을 없앤 것이 아니라 아는 값을 늘린 것이다.**
 
-    조용히 `NONE` 으로 떨어뜨리면 눈 날리는 날 "강수 없음"이 된다. 실물이 잡히면 여기가 먼저 깨진다.
+    5·6·7 을 넣었다고 "모르면 `NONE`" 으로 돌아서면, 문서에 없는 코드가 생기는 날 눈 날리는데
+    "강수 없음"이 된다. 8 은 문서 기준으로도 없는 코드라 여전히 터져야 한다 — 이 테스트가
+    그 원칙의 회귀다.
     """
     with pytest.raises(ValueError, match="모르는 PTY 코드"):
-        parse_precip_kind("7")
+        parse_precip_kind("8")
+
+
+def test_the_precip_domain_matches_the_documented_ultra_short_range() -> None:
+    """문서가 정한 것은 **오퍼레이션별 도메인**이다 (활용가이드 260623):
+
+        (초단기) 없음(0) 비(1) 비/눈(2) 눈(3) 소나기(4) 빗방울(5) 빗방울눈날림(6) 눈날림(7)
+        (단기)   없음(0) 비(1) 비/눈(2) 눈(3) 소나기(4)
+
+    단기가 초단기의 **부분집합**이라 표를 하나로 뒀다. 그 사실이 깨지면(예: 단기에만 있는 코드가
+    생기면) 표를 갈라야 하므로 여기서 먼저 걸리게 한다.
+    """
+    assert all(parse_precip_kind(str(c)) for c in range(8))
+    with pytest.raises(ValueError):
+        parse_precip_kind("8")
 
 
 def test_sky_codes() -> None:

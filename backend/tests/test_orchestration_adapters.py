@@ -286,3 +286,37 @@ async def test_walk_basis_source_time_and_location_are_preserved() -> None:
     assert result.data["generated_at"]
     assert result.data["sources"][0]["provider"] == "kma"
     assert result.data["now"]["axes"]["heat"]["basis"][0]["source"] == "kma"
+
+
+# ── Life → Walk 강수 어휘 경계 (RT-004) ──────────────────────────────────
+
+def test_every_life_precipitation_kind_is_folded_at_the_walk_boundary() -> None:
+    """**Life 에 값이 늘면 이 경계도 늘어야 한다.**
+
+    `_precipitation_kind` 는 `.get()` 이라 빠뜨린 값이 조용히 `None` 이 되고, Walk 는 그것을
+    "관측이 없다"로 읽는다 — KMA 가 값을 냈는데도 그렇다. 예외가 안 나서 안 보인다.
+    실제로 RT-004 가 `PrecipKind` 에 셋(빗방울·빗방울눈날림·눈날림)을 늘렸을 때 여기가
+    비어 있었고, 이 테스트는 **다음번에 같은 일이 나면 먼저 깨지라고** 있는 것이다.
+
+    `PrecipKind` 를 직접 훑으므로 어휘가 늘면 자동으로 검사 범위가 는다.
+    """
+    from daengs_life.realtime.observation import PrecipKind
+
+    from daengs_backend.orchestration.adapters.life import _precipitation_kind
+
+    missing = [k.value for k in PrecipKind if _precipitation_kind(k.value) is None]
+    assert not missing, f"Walk 경계에서 접히지 않는 Life 강수 어휘: {missing}"
+
+
+def test_the_fold_keeps_the_form_and_drops_only_the_intensity() -> None:
+    """접는 축은 **세기**이지 형태가 아니다 — 눈이 비가 되면 안 된다.
+
+    `shower`(소나기)를 `rain` 으로 접어 온 규칙을 5·6·7 에 그대로 적용한 것이고,
+    그 규칙이 지켜지는지를 형태별로 확인한다.
+    """
+    from daengs_backend.orchestration.adapters.life import _precipitation_kind
+
+    assert _precipitation_kind("drizzle") == "rain"          # 5 빗방울 — 비 계열
+    assert _precipitation_kind("drizzle_snow") == "mixed"    # 6 빗방울눈날림 — 혼합 계열
+    assert _precipitation_kind("snow_flurry") == "snow"      # 7 눈날림 — 눈 계열
+    assert _precipitation_kind("멋대로") is None              # 모르는 값은 그대로 없음

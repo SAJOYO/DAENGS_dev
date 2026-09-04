@@ -2514,8 +2514,14 @@ precipitation
   dry      0, 1, 2, 3, 45, 48
   rain     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99
   snow     71, 73, 75, 77, 85, 86
-  mixed    KMA rain_snow 관측
+  mixed    KMA rain_snow · drizzle_snow 관측
   unknown  값 없음 또는 WMO 표에서 정의하지 않은 0..99 값
+
+KMA의 강수형태 여덟 값(PTY 0~7, RT-004)은 이 네 값으로 접힙니다. 접는 축은 **세기**이지
+형태가 아닙니다 — drizzle·shower는 rain으로, snow_flurry는 snow로, drizzle_snow는
+rain_snow와 함께 mixed로 갑니다. Life에 값이 늘면 이 경계도 같이 늘려야 하며, 빠뜨리면
+KMA가 값을 냈는데도 조용히 unknown이 됩니다(예외가 나지 않습니다). 그 누락 자체는
+`test_orchestration_adapters.py`가 PrecipKind를 훑어 잡습니다.
 
 daylight
   day      is_day=true

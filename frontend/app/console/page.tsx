@@ -26,7 +26,7 @@ const consoleSections: Array<{
    * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
    * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
    */
-  href?: "/console/search" | "/console/crawl" | "/console/status";
+  href?: "/console/search" | "/console/crawl" | "/console/status" | "/console/users";
 }> = [
   {
     title: "지식 베이스",
@@ -90,10 +90,15 @@ const consoleSections: Array<{
     title: "회원 · 반려견",
     description:
       "앱 회원을 이메일로 찾아 상태와 반려견을 봅니다. 개인정보는 가려서 보여 주고, 원문은 권한이 있는 계정만 봅니다.",
-    // 이메일 검색이 blind index 로만 되는 것과(D-012) 복호화가 `pii:read` 인 것은
-    // 이미 정해져 있습니다. 그 조회를 기록에 남기는 감사 로그가 이 화면의 전제라,
-    // 로드맵에서는 A4 가 A2 보다 앞입니다 (`docs/console/roadmap.md` §5).
+    // **이 카드는 읽기까지입니다** (#211). 이메일 검색이 blind index 로만 되는 것은
+    // D-012 가 정해 둔 것이고, 화면이 그 제약을 안내합니다.
+    //
+    // **`pii:read` 가 아니라 `read` 입니다.** 나가는 값이 전부 마스킹된 것이라
+    // API(`/admin/app-users`)도 `Perm.READ` 로 열려 있습니다. 여기를 좁히면 API 는
+    // 열어 주는데 화면만 안 보이는 계정이 생깁니다 (위 카드들과 같은 규칙).
+    // 원문 보기와 정지는 짝 카드가 `pii:read`·`ops:write` 로 화면 안에서 가립니다.
     permission: "read",
+    href: "/console/users",
   },
   {
     title: "운영 지표",

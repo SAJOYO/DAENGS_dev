@@ -353,6 +353,13 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
                 return user
         return None
 
+    async def app_get_by_email_hash(session, email_hash):
+        # 진짜와 같이 **`status` 로 거르지 않습니다.** 다만 탈퇴한 회원은 해시 자체가
+        # 지워져 있어(services/app_auth.py) 애초에 안 걸립니다.
+        return next(
+            (u for u in store.app_users.values() if u.email_hash == email_hash), None
+        )
+
     async def app_get_active_for_update(session, app_user_id):
         user = await app_get_by_id(session, app_user_id)
         return user if user is not None and user.status == "active" else None
@@ -375,6 +382,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
     monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
+    monkeypatch.setattr(app_user_repo, "get_by_email_hash", app_get_by_email_hash)
     monkeypatch.setattr(
         app_user_repo, "get_active_for_update", app_get_active_for_update
     )

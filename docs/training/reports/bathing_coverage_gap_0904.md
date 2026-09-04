@@ -3,7 +3,7 @@
 **Query**: `목욕을 싫어해요` ("My dog hates bathing")  
 **Status**: UNCERTAIN (model_reported_insufficient_evidence)  
 **Investigation Date**: 2026-09-04  
-**Scope**: Phases 1-4 Diagnostic Analysis
+**Scope**: Phases 1-4 complete (diagnostic analysis); Phase 5 not applicable; Phase 6 complete for this investigation (documentation only); Phase 7 proposal only; Phase 8 deferred
 
 ---
 
@@ -160,10 +160,7 @@ The 14-document serving corpus covers:
 - Sets user expectations correctly
 - No code changes required
 
-**Implementation**:
-- Add to serving corpus manifest metadata
-- Update training evaluation set expectations
-- Document in README
+**This investigation's action**: This report documents the coverage gap. It does not modify the serving corpus manifest, the evaluation dataset, or any other runtime artifact — those remain a separate future decision (see `bathing_coverage_gap_proposal_0904.md`).
 
 ### Option B: Source & Review Bathing Content (Requires Business Decision)
 
@@ -199,27 +196,25 @@ The 14-document serving corpus covers:
 
 ## Recommendations
 
-### For Phase 5 (Parsing & Chunking): N/A
-No source content exists to inspect.
+### Phase 5 (Parsing & Chunking): Not applicable
+No relevant ingested source was found, so there is no parsing or chunking behavior to inspect.
 
-### For Phase 6 (Minimum Fix):
-**Choose Option A** (document as out-of-scope) OR initiate Option B source selection through business process.
+### Phase 6 (Minimum Fix): Complete for this investigation
+The minimum justified action is to document the coverage gap and stop pending source review (Option A). This report is that action. Option B (sourcing new bathing content) is a separate future decision requiring human source approval — see "Remaining Human Decision" below.
 
-### For Phase 7 (Evaluation):
-Add bathing-related queries to **expected insufficient-evidence** cases in frozen evaluation set:
-- `목욕을 싫어해요`
-- `강아지가 목욕을 무서워하고 도망가요`
-- `물을 묻히면 강아지가 도망가요`
+### Phase 7 (Evaluation): Proposal only, not implemented
+Candidate bathing-related queries are recorded as future evaluation cases in `bathing_coverage_gap_proposal_0904.md`. They are not integrated into any permanent or frozen evaluation dataset in this PR, because doing so would freeze a temporary coverage gap as if it were expected long-term behavior.
 
-These should continue to return `UNCERTAIN` with reason `model_reported_insufficient_evidence` until bathing content is added to corpus.
+### Phase 8 (Verification): Deferred
+Deferred until an approved bathing-aversion source and its ingestion are implemented. There is nothing to verify yet, since no retrieval, generation, or corpus change was made.
 
 ---
 
 ## Data Artifacts
 
-- `reports/diagnostics/bathing_search_results.json` — Phase 4 ranking comparison across all 6 diagnostic queries (20 results each)
-  - All six queries present with complete top-20 ranked results
-  - Proves: ZERO direct bathing-aversion evidence in entire corpus
+- `docs/training/reports/generated/bathing_search_results_0904.json` — Phase 4 ranking comparison
+  - Six diagnostic queries, top 20 results per query, 120 ranked results total
+  - Zero directly relevant bathing-aversion chunks found across all 120 ranked results
   - Format: JSON with chunk IDs, document IDs, scores, heading paths, serving eligibility
 - Database queries executed on 2026-09-04 against production vectordb (read-only, no mutations)
 
@@ -227,10 +222,8 @@ These should continue to return `UNCERTAIN` with reason `model_reported_insuffic
 
 ## Timeline
 
-- **Phase 1-2**: Baseline reproduction and chunk analysis ✓
-- **Phase 3**: Full-corpus search ✓  
-- **Phase 4**: Ranking comparison ✓
-- **Phase 5**: Parsing/chunking inspection (N/A — no source)
-- **Phase 6**: Minimum fix selection (pending)
-- **Phase 7**: Evaluation cases (pending)
-- **Phase 8**: Verification (pending fix implementation)
+- **Phase 1-4**: Complete — baseline reproduction, chunk analysis, full-corpus search, ranking comparison
+- **Phase 5**: Not applicable — no relevant ingested source was found
+- **Phase 6**: Complete for this investigation — coverage gap documented, work stopped pending source review
+- **Phase 7**: Proposal only — not implemented, not integrated into any permanent evaluation dataset
+- **Phase 8**: Deferred — until an approved source and implementation exist

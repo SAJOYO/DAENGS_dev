@@ -14,6 +14,7 @@ from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
     admin_account,
+    admin_audit,
     app_auth,
     app_user_admin,
     assistant,
@@ -173,6 +174,10 @@ app.include_router(assistant.router)
 app.include_router(chat.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
+# 감사 로그 조회 (#221 · 콘솔 로드맵 A4-1). **읽기 전용이고 이 조회 자체는 감사에 남기지
+# 않습니다** — 남기면 화면이 자기 기록으로 채워지고 그 행을 본 것도 남겨야 하는 재귀가
+# 됩니다. 권한은 `ADMIN_MANAGE` 라 OPERATOR 는 복호화는 해도 누가 했는지는 못 봅니다.
+app.include_router(admin_audit.router)
 # 관리자 계정 관리 (#207 · 콘솔 로드맵 A3). 권한은 라우터 안에서 `ADMIN_MANAGE` 로 겁니다 —
 # D-014 의 role 5단계가 실제로 갈리는 첫 자리입니다 (그 전까지는 정의만 있었습니다).
 app.include_router(admin_account.router)

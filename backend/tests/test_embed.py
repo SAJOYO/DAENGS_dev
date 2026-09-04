@@ -12,6 +12,18 @@ from __future__ import annotations
 
 import pytest
 
+# `ml` 그룹이 없으면 이 파일 전체를 건너뜁니다 (#230).
+#
+# **CI 는 torch 를 안 깝니다** — `ml` 은 임베딩 가중치까지 딸려 오는 무거운 그룹이라
+# (D-021), 기본 설치로 도는 CI 에 넣을 것이 아닙니다. 그렇다고 그냥 두면 아래 테스트가
+# `ModuleNotFoundError` 로 **깨져서** 전체 스위트가 빨간불이 됩니다 — 없는 그룹은
+# 실패가 아니라 skip 이 맞고, `test_gait_inference.py` 가 `--group gait` 에 대해
+# 같은 방식을 쓰고 있습니다.
+#
+# 로컬에서 이 파일을 돌리려면: `uv sync --group ml`
+pytest.importorskip("pyarrow", reason="parquet 계약 검증에는 --group ml 이 필요합니다")
+pytest.importorskip("transformers", reason="토크나이저 가드 검증에는 --group ml 이 필요합니다")
+
 from daengs_life.rag.core import config
 from daengs_life.rag.stages import embed
 

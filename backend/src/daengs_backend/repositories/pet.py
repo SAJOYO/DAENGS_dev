@@ -97,6 +97,27 @@ def add(session: AsyncSession, pet: Pet) -> Pet:
     return pet
 
 
+async def find_by_photo_key(
+    session: AsyncSession, storage_key: str, *, pending: bool
+) -> Pet | None:
+    """저장소 키 하나로 행을 찾습니다. **bridge 전용입니다.**
+
+    ⚠️ **소유자 조건이 없는 유일한 조회입니다.** bridge 는 인증 헤더를 안 받습니다 —
+       Signed URL 을 흉내 내는 자리라 헤더를 요구하면 저장소를 GCS 로 바꿀 때 앱
+       코드가 또 바뀝니다. 대신 **backend 가 실제로 발급한 키인지**를 여기서 봅니다.
+       이 검사가 없으면 아무나 임의 경로로 서버 디스크를 채울 수 있습니다
+       (보행 bridge 가 2026-09-02 에 그 상태로 한 번 배포됐습니다).
+
+    키에 uuid 가 들어 있어 추측이 안 되는 것이 나머지 절반입니다
+    (`build_pet_photo_key`).
+
+    :param pending: 올릴 때는 **대기 키**로(확정된 사진을 덮어쓰지 못하게),
+        내려받을 때는 **확정 키**로 찾습니다.
+    """
+    column = Pet.photo_pending_key if pending else Pet.photo_storage_key
+    return await session.scalar(select(Pet).where(column == storage_key))
+
+
 async def delete(session: AsyncSession, pet: Pet) -> None:
     await session.delete(pet)
 

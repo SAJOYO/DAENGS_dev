@@ -3,11 +3,23 @@
 Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + nginx 로 배포합니다.
 
 ```
-daengs.~     :80   → nginx(도커) → host.docker.internal:3000 → PM2 (Next, 호스트)
-daengback.~  :8000 → nginx(도커) → backend:8000 (기본 API 경로)
-                                  → place-search:8000 (`/v2/places/`, `/territory/sites/`)
-                                  → journey-service:8000 (`/journey`만)
+daengs.~     :80 ─┐                ┌─ nginx:80   → host.docker.internal:3000 → PM2 (Next, 호스트)
+                  ├─ 호스트명으로 갈림 ─┤
+daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기본 API 경로)
+                                                 → place-search:8000 (`/v2/places/`, `/territory/sites/`)
+                                                 → journey-service:8000 (`/journey`만)
 ```
+
+**바깥에서는 둘 다 `:80` 입니다.** 8000 은 **LAN 안에서만** 열립니다
+(`192.168.0.22:8000` 은 되고 공인 IP 의 8000 은 timeout — 2026-09-04 실측).
+`docker-compose.yml` 이 `8000:8000` 을 매핑하는 것은 그래서 LAN 용입니다.
+
+**호스트명을 갈라 주는 것은 이 저장소에 없습니다.** `nginx/default.conf` 의 두
+`server` 블록은 **둘 다 `server_name _`(catch-all)** 이라 nginx 혼자서는 호스트명으로
+못 가릅니다 — 실제로 LAN nginx 의 80 은 Host 를 `daengback.~` 로 바꿔 넣어도 Next 가
+답합니다. 그런데 공개로는 `daengback.~:80` 이 API 를 줍니다. **공인 IP 와 이 nginx
+사이에 호스트명으로 갈라 주는 무언가가 하나 더 있고, 그 설정은 저장소 밖에 있습니다.**
+무엇인지는 아직 안 적혀 있으니, 이 경로를 만질 일이 생기면 **서버를 직접 보고 확인하세요.**
 
 ## 폴더
 
@@ -52,7 +64,7 @@ npm run lint
 uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
-uv run pytest              # 테스트 (backend/tests/)
+uv run pytest              # 테스트 전체 (backend/tests/, 약 6분)
 uv run pytest tests/place  # Place 테스트만
 uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)
@@ -107,9 +119,11 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   등록 두 줄(`/life/walk-conditions` · `/life/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
   (`/life/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
   `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
-- **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
-  `daengs.~`(80) 는 프론트, `daengback.~`(8000) 는 API 입니다. 둘은 오리진이 달라
-  CORS 가 필요합니다 — `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
+- **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 를 통해서만 닿습니다.
+  `daengs.~` 는 프론트, `daengback.~` 는 API 이고 **둘 다 공개 포트는 80 입니다**
+  (nginx 안에서 80 / 8000 두 블록으로 갈리지만, 그건 서버 안쪽 이야기입니다 — 위 그림).
+  둘은 오리진이 달라 CORS 가 필요합니다. **포트가 아니라 호스트명이 달라서**입니다 —
+  `DAENGS_CORS_ORIGINS` 에 넣는 값은 '부르는 쪽'인 프론트 도메인입니다.
 - **DB 는 compose 로 띄웁니다.** `docker compose up -d` 는 nginx · backend · pgvector · redis와
   Place 검색(place-search · place-db), 크롤러 워커·Beat(crawler-worker · crawler-beat)를 함께 올립니다.
   접속 정보는 최상단 `.env`. `db/init/` 은 최초 1회만 실행되므로,
@@ -182,10 +196,14 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   다르면 한쪽이 암호화·조회한 데이터를 다른 쪽이 못 읽습니다. git 에는 올리지 않고
   팀 채널로 공유하세요. **AES 키를 잃으면 암호문을 영영 못 엽니다** — 어딘가 백업해
   두세요.
-- **CORS 는 지금 배포 환경에도 필요합니다.** `daengs.~`(80) 와 `daengback.~`(8000) 는
-  오리진이 달라서입니다. 로그인 API 카드에서 `nginx/default.conf` 의 `/api/` 블록
-  주석을 열어 같은 오리진으로 묶을 예정이고(httpOnly 쿠키가 가려면 필요합니다),
-  그 전까지는 오리진 추가를 `DAENGS_CORS_ORIGINS` 환경 변수로 하세요.
+- **CORS 는 지금 배포 환경에도 필요합니다.** `daengs.~` 와 `daengback.~` 는 오리진이
+  달라서인데, **포트는 둘 다 80 이라 같습니다 — 다른 것은 호스트명뿐입니다.**
+  브라우저에게는 그것으로 충분히 다른 오리진이라, "포트를 맞추면 CORS 가 필요 없다"는
+  성립하지 않습니다 (2026-09-04 에 문서가 `:8000` 이라 그렇게 읽혔습니다).
+  같은 오리진으로 묶는 답은 포트가 아니라 **경로**입니다 — `nginx/default.conf` 의
+  `/api/` 블록이 이미 그것을 하고 있고(`daengs.~/api/...` → backend), 프론트는
+  `lib/api.ts` 에서 `/api/...` 만 부릅니다. httpOnly 쿠키가 가려면 그 길이라야 합니다.
+  그 밖의 클라이언트(앱 등)가 쓰는 오리진 추가는 `DAENGS_CORS_ORIGINS` 환경 변수로 하세요.
 - 서버 PC 재부팅 후에는 PM2 와 러너를 **수동으로** 띄워야 합니다. 순서와 이유는
   루트 `README.md` 참고 (러너를 먼저 띄우면 배포 후 서비스가 내려갑니다).
 - **협업 규칙은 `docs/collaboration.md` 에 있습니다.** 우선순위(P0~P3) · Iteration 기간 · Hold 판단은

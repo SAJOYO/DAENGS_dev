@@ -58,13 +58,28 @@ Value = float | Code | Interval
 
 
 class PrecipKind(StrEnum):
-    """`PTY` — 강수 형태. 단기예보 기준 0~4 (§6.3 실측은 `'0'` 뿐이었다)."""
+    """`PTY` — 강수 형태.
+
+    **도메인이 오퍼레이션마다 다르다** (활용가이드 260623, RT-004):
+
+        (초단기) 없음(0) 비(1) 비/눈(2) 눈(3) 소나기(4) 빗방울(5) 빗방울눈날림(6) 눈날림(7)
+        (단기)   없음(0) 비(1) 비/눈(2) 눈(3) 소나기(4)
+
+    단기가 초단기의 부분집합이라 표는 하나로 둔다. **아래 셋(5·6·7)은 실측이 아니라 문서
+    근거다** — §6.3 실측에서는 `'0'` 밖에 못 봤다 (RT-004 가 그 사실을 남긴다).
+    """
 
     NONE = "none"
     RAIN = "rain"
     RAIN_SNOW = "rain_snow"
     SNOW = "snow"
     SHOWER = "shower"
+    # 접지 않고 새 값으로 둔다 — `judge_rain` 은 raw 로 판정하므로 등급은 어느 쪽이든 같지만,
+    # 접으면 근거 문구가 빗방울을 "비"라고 말한다. 프론트는 이 문자열을 매핑하지 않고
+    # 그대로 표시하므로(`services/walk.py::_value`) 값을 늘려도 화면이 안 깨진다.
+    DRIZZLE = "drizzle"                 # 5 빗방울
+    DRIZZLE_SNOW = "drizzle_snow"       # 6 빗방울눈날림
+    SNOW_FLURRY = "snow_flurry"         # 7 눈날림
 
 
 class SkyState(StrEnum):
@@ -127,9 +142,13 @@ REPRESENTATION: dict[Q, type] = {
 # 실측 PM10 37 은 `Grade`=1(24h 평균), `Grade1h`=2(현재)로 갈렸다.
 GRADED = {Q.PM10, Q.PM25, Q.SO2, Q.NO2, Q.CO, Q.O3, Q.KHAI, Q.UV}
 
-# 확인 전 (②-d-3). `LGT` 는 실측값이 `'0'` 뿐이라 숫자인지 코드인지 모르고,
-# `UV` 는 apihub 403 이라 응답 자체를 못 봤다.
-UNVERIFIED = {Q.LIGHTNING, Q.UV}
+# 확인 전 (②-d-3). `UV` 는 apihub 403 이라 응답 자체를 못 봤다.
+#
+# **`LGT` 는 RT-004 에서 빠졌다** — 실측값이 `'0'` 뿐이라 "숫자인지 코드인지" 몰랐는데,
+# 활용가이드 260623 이 숫자라고 못박았다: *"낙뢰(초단기예보) : 에너지밀도(0.2~100kA
+# (킬로암페어)/㎢)"*. 그래서 `float(raw)` 로 읽는 것도, `judge_rain` 의 `> 0` 도 맞다 —
+# 0 이 "없음"이고 실제 낙뢰는 0.2 부터다. **초단기예보에만 있다**(실황엔 없다).
+UNVERIFIED = {Q.UV}
 
 
 # ------------------------------------------------------------------ 출처 (⑤-d)
@@ -419,7 +438,11 @@ class Observations:
 # --------------------------------------------------------- 구간 문자열 파서 (②-d-1)
 
 # `'강수없음'` `'적설없음'` `'1.0mm 미만'` `'30.0~50.0mm'` `'5.0cm 이상'`
-_NONE = re.compile(r"^(강수|적설)?없음$")
+# **`-` 와 빈 값도 "없음"이다** (RT-004 — 활용가이드 260623 이 강수량·신적설 표 밑에 똑같이
+# 달아 둔 각주: *"※ -, null, 0값은 '강수없음'"* · *"…'적설없음'"*). 여기 없으면 PTY 5·6·7 과
+# **같은 사고**가 난다 — 문서에 있는 값인데 `ValueError` 로 터져 그 응답의 measurement 가
+# 통째로 빠진다. `0` 은 아래 `_POINT` 가 폭 0 구간으로 이미 받는다.
+_NONE = re.compile(r"^(강수|적설)?없음$|^-$|^$|^None$")
 _UNDER = re.compile(r"^([\d.]+)\s*(mm|cm)?\s*미만$")
 _OVER = re.compile(r"^([\d.]+)\s*(mm|cm)?\s*이상$")
 _RANGE = re.compile(r"^([\d.]+)\s*~\s*([\d.]+)\s*(mm|cm)?$")
@@ -432,6 +455,10 @@ def parse_interval(raw: str) -> Interval:
     **모르는 문자열은 조용히 0 으로 떨어지지 않고 실패한다** (②-d-1). 실측 당일은 비가 오지
     않아 `'강수없음'` 하나만 나왔고 구간 문자열의 실제 형태는 문서 기준이다. 조용히 0 이 되면
     비 오는 날 "강수 없음"이라고 답하고도 아무 신호가 없다 — 그게 이 판정에서 가장 위험한 실패다.
+
+    RT-004 에서 `-`·빈 값을 "없음"으로 받게 했다 (`_NONE` 의 주석). **E1 을 닫은 것은 아니다** —
+    문서가 정한 표기를 다 받는지까지가 여기고, `1.0~29.9mm` 구간의 실수값이 실제로 어떤 문자열로
+    오는지는 여전히 비 오는 날 확인할 일이다.
     """
     text = (raw or "").strip()
     if _NONE.match(text):
@@ -454,20 +481,26 @@ def parse_interval(raw: str) -> Interval:
 
 
 _PRECIP_CODES = {"0": PrecipKind.NONE, "1": PrecipKind.RAIN, "2": PrecipKind.RAIN_SNOW,
-                 "3": PrecipKind.SNOW, "4": PrecipKind.SHOWER}
+                 "3": PrecipKind.SNOW, "4": PrecipKind.SHOWER,
+                 "5": PrecipKind.DRIZZLE, "6": PrecipKind.DRIZZLE_SNOW,
+                 "7": PrecipKind.SNOW_FLURRY}
 _SKY_CODES = {"1": SkyState.CLEAR, "3": SkyState.PARTLY_CLOUDY, "4": SkyState.CLOUDY}
 
 
 def parse_precip_kind(raw: str) -> Code:
-    """`PTY` → `Code`. 모르는 코드는 실패한다.
+    """`PTY` → `Code`. **모르는 코드는 여전히 실패한다** (②-d-3).
 
-    ⚠️ 표는 단기예보 기준 0~4 다 (②-d-3). **초단기 계열이 5·6·7(빗방울·빗방울눈날림·눈날림)을
-    쓴다고 알려져 있으나 실측에서 확인하지 못했다.** 조용히 `NONE` 으로 떨어뜨리면 눈 날리는 날
-    "강수 없음"이 되므로, 실패하게 두고 실물이 잡히면 여기에 추가한다.
+    5·6·7 은 RT-004 에서 **문서 근거로** 넣었다 (활용가이드 260623). ②-d-3 의 "조용히 `NONE`
+    으로 떨어뜨리지 않는다"를 **없앤 것이 아니라 아는 값을 늘린 것**이고, 8 이상은 그대로
+    실패한다 — 그것을 `test_observation.py` 가 회귀로 잡는다.
+
+    넣기 전에는 이슬비(`PTY=5`) 한 번에 **그 응답의 measurement 가 통째로** 사라졌다.
+    `_parse` 가 루프 중간에 터져서 PTY 만이 아니라 같은 응답의 `T1H`·`REH`·`WSD`·`RN1` 까지
+    날아가고, 초단기예보가 T+1~6h 타임라인의 주 출처라 앞 6시간이 성겼다.
     """
     kind = _PRECIP_CODES.get((raw or "").strip())
     if kind is None:
-        raise ValueError(f"모르는 PTY 코드: {raw!r} (확인된 것은 0~4). ②-d-3 의 미실측 공백")
+        raise ValueError(f"모르는 PTY 코드: {raw!r} (문서 기준은 0~7). ②-d-3 · RT-004")
     return Code(kind.value, raw)
 
 

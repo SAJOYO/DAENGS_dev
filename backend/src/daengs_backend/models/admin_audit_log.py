@@ -29,9 +29,8 @@ AUDIT_LOGIN_FAILED_UNKNOWN_ID = "admin.login.failed_unknown_id"
 AUDIT_LOGIN_FAILED_PASSWORD = "admin.login.failed_password"
 AUDIT_LOGIN_DENIED_SUSPENDED = "admin.login.denied_suspended"
 
-# 관리자 계정 관리 (`services/admin_account.py`). 대상은 언제나 다른 `admin_users`
-# 행이라 `target_type='admin_user'` · `target_id` 가 채워집니다 — 대상이 없는
-# 로그인 기록과 다른 점입니다.
+# 관리자 계정 관리 (`services/admin_account.py`). `target_type='admin_user'` ·
+# `target_id` 가 채워집니다 — 대상이 없는 로그인 기록과 다른 점입니다.
 #
 # **정지와 해제를 한 action 으로 합치지 않습니다.** `detail` 을 펼쳐 봐야 어느
 # 쪽인지 알게 되면, "누가 정지시켰나"를 세는 것이 집계가 아니라 파싱이 됩니다.
@@ -39,6 +38,17 @@ AUDIT_ACCOUNT_CREATED = "admin.account.created"
 AUDIT_ACCOUNT_ROLE_CHANGED = "admin.account.role_changed"
 AUDIT_ACCOUNT_SUSPENDED = "admin.account.suspended"
 AUDIT_ACCOUNT_REACTIVATED = "admin.account.reactivated"
+
+# 본인 비밀번호 변경 (#222). **이 목록에서 유일하게 주체와 대상이 같은 행위입니다** —
+# `admin_user_id` 와 `target_id` 에 같은 값이 들어갑니다. 위 넷은 전부 남에게 한 일이라
+# 둘이 다르고, 그 차이를 모르고 "누가 누구에게" 를 세면 이 행이 자기 자신에게 한 일로
+# 잡힙니다 (맞는 말이지만, 계정 관리 행위로 세면 안 됩니다).
+#
+# `detail` 은 `{"sessions_dropped": n}` 입니다. **정지(`suspended`)와 키 이름이 같지만
+# 읽는 법이 다릅니다** — 저기서는 n 이 전부 남의 세션이고, 여기서는 **지금 이 요청을 보낸
+# 본인 브라우저가 그 안에 포함**됩니다. 화면이 n 을 "다른 데서 로그인돼 있던 수" 로 그리면
+# 항상 하나씩 많습니다 (2026-09-04 사람 결정: 남기되 화면이 "본인 것 포함"을 밝힌다).
+AUDIT_ACCOUNT_PASSWORD_CHANGED = "admin.account.password_changed"
 
 # 앱 회원을 상대로 한 관리 행위 (`services/app_user_admin.py` · #212). 대상은 `app_users`
 # 행이라 `target_type='app_user'` 입니다 — 위 계정 관리(`admin_user`)와 접두어로 갈립니다.
@@ -60,6 +70,7 @@ AUDIT_ACTIONS = (
     AUDIT_ACCOUNT_ROLE_CHANGED,
     AUDIT_ACCOUNT_SUSPENDED,
     AUDIT_ACCOUNT_REACTIVATED,
+    AUDIT_ACCOUNT_PASSWORD_CHANGED,
     AUDIT_APP_USER_PII_REVEALED,
     AUDIT_APP_USER_SUSPENDED,
     AUDIT_APP_USER_REACTIVATED,

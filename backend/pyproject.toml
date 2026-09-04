@@ -189,6 +189,13 @@ target-version = "py312"
 # (패키지 안이 아니라 밖입니다 — 배포 아티팩트에 테스트가 들어가지 않게).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# **rootdir(=backend/)을 sys.path 에 넣습니다** (#224). `tools/` 는 `__init__.py` 가 있는
+# 진짜 패키지지만 아래 [tool.uv.build-backend] 의 module-name 에 없어 venv 에 설치되지
+# 않습니다 — 일회성 스크립트·벤치마크라 런타임 이미지에 들어갈 것이 아니고, 루트 CLAUDE.md 도
+# tools/ 를 그렇게 규정합니다. 손으로 돌릴 때(`uv run python -m tools.x`)는 CWD 가 sys.path 에
+# 들어가 되지만 pytest 는 rootdir 을 넣지 않아 `from tools... import` 가 13개 파일에서
+# ModuleNotFoundError 였습니다. 설치 대상을 늘리는 대신 테스트에서만 경로를 엽니다.
+pythonpath = ["."]
 # async 테스트에 @pytest.mark.asyncio 를 매번 붙이지 않아도 되게 합니다.
 asyncio_mode = "auto"
 # 가중치를 로드하는 테스트는 기본 실행에서 뺍니다 — bge-m3 하나가 6.5GB 라

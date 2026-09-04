@@ -42,7 +42,9 @@ AND, 같은 축의 값은 OR이다. 현재 metric은 `visit_rate`와 `walk_utili
 
 강수 facet policy v2는 KMA 관측의 `precipitation_kind`를 우선하고, 그 값이 없을 때만 앱이
 보낸 WMO `weather_code`를 사용한다. 값은 `rain`, `snow`, `mixed`, `dry`, `unknown`이며
-KMA의 비·눈 혼합 관측을 다른 형태로 접지 않고 `mixed`로 보존한다.
+KMA의 비·눈 혼합 관측(`rain_snow` · `drizzle_snow`)을 다른 형태로 접지 않고 `mixed`로
+보존한다. 접히는 것은 **세기**뿐이다 — 빗방울(`drizzle`)과 소나기(`shower`)는 `rain`,
+눈날림(`snow_flurry`)은 `snow` 가 된다 (RT-004).
 
 ## 응답
 

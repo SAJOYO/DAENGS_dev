@@ -12,11 +12,23 @@ const REFRESH_PATH = "/api/auth/refresh";
 /**
  * 401 을 받아도 재발급하지 않는 경로.
  *
- * 이 둘의 401 은 "세션이 만료됐다"가 아니라 **자격 증명이 틀렸다**는 뜻이라,
+ * 이 셋의 401 은 "세션이 만료됐다"가 아니라 **자격 증명이 틀렸다**는 뜻이라,
  * 재발급해 봐야 결과가 같습니다. 로그인 실패마다 refresh 를 부르면 다른 탭에서
  * 멀쩡히 쓰고 있던 세션의 토큰을 괜히 회전시키게 됩니다.
+ *
+ * **비밀번호 변경(#222)이 여기 있어야 하는 이유는 눈에 잘 안 띕니다.** 그 API 는
+ * "지금 쓰는 비밀번호가 틀렸다"를 401 로 줍니다. 빼 두면 아래 흐름이 그대로 돕니다 —
+ *
+ *     오타 → 401 → refresh → 재시도 → 또 401 → onSessionExpired() → /login
+ *
+ * 즉 **현재 비밀번호를 한 번 잘못 치면 로그인 화면으로 튕깁니다.** 게다가 그 사이
+ * refresh 토큰이 한 번 회전해서, 다른 탭에서 쓰던 세션까지 건드립니다.
  */
-const NO_RETRY_PATHS = new Set([REFRESH_PATH, "/api/auth/login"]);
+const NO_RETRY_PATHS = new Set([
+  REFRESH_PATH,
+  "/api/auth/login",
+  "/api/admin/admins/me/password",
+]);
 
 export class ApiError extends Error {
   readonly status: number;

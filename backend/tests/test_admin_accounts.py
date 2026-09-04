@@ -14,19 +14,23 @@ conftest.py 대로 DB 에는 붙지 않습니다. `FakeSession` 이 커밋 경�
 """
 
 import uuid
-from typing import Annotated
 
 import pytest
 from fakes import IP, FakeAdmin, FakeSession, Store, install
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import CurrentAdmin, Principal, current_admin
-from daengs_backend.core.password import hash_password, verify_password
+from daengs_backend.core.deps import Principal, current_admin
+from daengs_backend.core.password import (
+    VerifyMismatchError,
+    hash_password,
+    verify_password,
+)
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.models import (
     AUDIT_ACCOUNT_CREATED,
+    AUDIT_ACCOUNT_PASSWORD_CHANGED,
     AUDIT_ACCOUNT_REACTIVATED,
     AUDIT_ACCOUNT_ROLE_CHANGED,
     AUDIT_ACCOUNT_SUSPENDED,
@@ -35,6 +39,9 @@ from daengs_backend.routers import admin_account as admin_account_router
 from daengs_backend.services import admin_account as service
 
 NEW_PASSWORD = "correct-horse-battery-staple"
+#: 비밀번호 변경 테스트에서 **바꿔 넣는** 값. `NEW_PASSWORD` 는 이미 "지금 쓰는 것"
+#: 자리를 차지하고 있어서, 같은 이름으로 둘을 쓰면 어느 쪽을 보는 단언인지 흐려집니다.
+CHANGED_PASSWORD = "another-correct-horse-staple"
 
 
 @pytest.fixture
@@ -233,9 +240,9 @@ class TestSuspend:
 
     async def test_열려_있던_세션이_끊긴다(self, session, store, target) -> None:
         """`status` 는 새 로그인만 막습니다. 이미 나간 세션은 따로 끊어야 합니다."""
-        from daengs_backend.repositories import refresh_token as refresh_token_repo
-
         from datetime import UTC, datetime, timedelta
+
+        from daengs_backend.repositories import refresh_token as refresh_token_repo
 
         await refresh_token_repo.create(
             session,
@@ -308,6 +315,173 @@ class TestSuspend:
                 actor_id=store.admin.id,
                 target_id=uuid.uuid4(),
                 status="suspended",
+            )
+
+
+class TestChangeOwnPassword:
+    """services.change_own_password — #222.
+
+    **이 파일에서 유일하게 주체와 대상이 같은 행위입니다.** 위의 가드들이 전부 "남에게
+    한 일" 을 다루는 것과 갈리는 자리라, 여기서 보려는 것도 다릅니다 — 잠그는 것이
+    아니라 **바꾼 뒤에 옛 비밀번호와 옛 세션이 정말 죽었는가** 입니다.
+    """
+
+    @staticmethod
+    async def _login_somewhere(session, admin_id: uuid.UUID, tag: str) -> None:
+        """그 계정으로 로그인된 세션을 하나 만듭니다 (`refresh_tokens` 한 줄)."""
+        from datetime import UTC, datetime, timedelta
+
+        from daengs_backend.repositories import refresh_token as refresh_token_repo
+
+        await refresh_token_repo.create(
+            session,
+            subject_type=SubjectType.ADMIN,
+            subject_id=admin_id,
+            token_hash=f"hash-of-{tag}",
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+
+    async def test_새_비밀번호로_바뀌고_옛것은_죽는다(self, session, store) -> None:
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+
+        assert verify_password(store.admin.password_hash, CHANGED_PASSWORD)
+        # 해시가 바뀌었는지만 보면, 엉뚱한 값을 해시해 넣어도 통과합니다.
+        # **옛 비밀번호가 죽었는지**까지 봐야 이 카드가 한 일이 확인됩니다.
+        with pytest.raises(VerifyMismatchError):
+            verify_password(store.admin.password_hash, NEW_PASSWORD)
+
+    async def test_원문이_저장되지_않는다(self, session, store) -> None:
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+        assert store.admin.password_hash.startswith("$argon2id$")
+        assert CHANGED_PASSWORD not in store.admin.password_hash
+
+    async def test_본인_것까지_세션이_전부_끊긴다(self, session, store) -> None:
+        """골라 남길 수 없습니다 — 어느 행이 지금 이 브라우저 것인지 서버가 모릅니다."""
+        await self._login_somewhere(session, store.admin.id, "this-browser")
+        await self._login_somewhere(session, store.admin.id, "phone")
+        assert len(store.tokens) == 2
+
+        dropped = await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+
+        assert dropped == 2
+        assert store.tokens == {}
+
+    async def test_남의_세션은_안_끊긴다(self, session, store) -> None:
+        """`drop_all` 의 주체를 잘못 넘기면 조용히 남까지 로그아웃시킵니다."""
+        other = store.add_admin(FakeAdmin(login_id="yuna", role="OPERATOR"))
+        await self._login_somewhere(session, store.admin.id, "mine")
+        await self._login_somewhere(session, other.id, "hers")
+
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+
+        assert list(store.tokens) == ["hash-of-hers"]
+
+    async def test_현재_비밀번호가_틀리면_아무것도_안_바뀐다(
+        self, session, store
+    ) -> None:
+        """**예외를 던지는 것만으로는 부족합니다.** 던지기 전에 해시를 갈아 끼웠거나
+        세션을 끊었으면, 남의 브라우저를 잡은 사람이 비밀번호를 모른 채 로그아웃만
+        시킬 수 있습니다.
+        """
+        await self._login_somewhere(session, store.admin.id, "this-browser")
+        before = store.admin.password_hash
+
+        with pytest.raises(service.InvalidCurrentPasswordError):
+            await service.change_own_password(
+                session,  # type: ignore[arg-type]
+                admin_id=store.admin.id,
+                current_password="not-my-password",
+                new_password=CHANGED_PASSWORD,
+            )
+
+        assert store.admin.password_hash == before
+        assert list(store.tokens) == ["hash-of-this-browser"]
+        assert store.audit_log == []
+
+    async def test_감사에_주체와_대상이_같게_남는다(self, session, store) -> None:
+        await self._login_somewhere(session, store.admin.id, "this-browser")
+
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+            ip=IP,
+        )
+
+        (entry,) = store.audit_log
+        assert entry.action == AUDIT_ACCOUNT_PASSWORD_CHANGED
+        # 이 목록에서 유일하게 둘이 같습니다 (`models/admin_audit_log.py`).
+        assert entry.admin_user_id == store.admin.id
+        assert entry.target_id == store.admin.id
+        assert entry.target_type == "admin_user"
+        assert entry.ip == IP
+
+    async def test_감사_detail_은_끊은_세션_수뿐이다(self, session, store) -> None:
+        """**본인 브라우저가 그 수에 포함됩니다** — 정지(#207)와 키 이름은 같지만
+        읽는 법이 다릅니다 (2026-09-04 사람 결정). 여기 2 는 "남이 둘" 이 아니라
+        "본인 것 하나 + 다른 곳 하나" 입니다.
+        """
+        await self._login_somewhere(session, store.admin.id, "this-browser")
+        await self._login_somewhere(session, store.admin.id, "phone")
+
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+
+        (entry,) = store.audit_log
+        assert entry.detail == {"sessions_dropped": 2}
+
+    async def test_감사에_비밀번호가_안_남는다(self, session, store) -> None:
+        """`detail` 은 #221 의 화면이 **그대로 그리는** 값입니다. 여기 새면 감사 로그를
+        보는 화면이 비밀번호를 뿌립니다.
+        """
+        await service.change_own_password(
+            session,  # type: ignore[arg-type]
+            admin_id=store.admin.id,
+            current_password=NEW_PASSWORD,
+            new_password=CHANGED_PASSWORD,
+        )
+
+        (entry,) = store.audit_log
+        # 필드를 하나씩 보지 않고 통째로 봅니다 — 나중에 detail 에 칸이 늘어도
+        # 이 단언이 같이 따라갑니다.
+        dumped = repr(entry)
+        assert CHANGED_PASSWORD not in dumped
+        assert NEW_PASSWORD not in dumped
+        assert "argon2" not in dumped
+
+    async def test_없는_계정은_AdminNotFoundError(self, session, store) -> None:
+        """토큰은 멀쩡한데 그 계정이 DB 에 없는 상태입니다."""
+        with pytest.raises(service.AdminNotFoundError):
+            await service.change_own_password(
+                session,  # type: ignore[arg-type]
+                admin_id=uuid.uuid4(),
+                current_password=NEW_PASSWORD,
+                new_password=CHANGED_PASSWORD,
             )
 
 
@@ -430,3 +604,106 @@ class TestHttpBoundary:
             f"/admin/admins/{uuid.uuid4()}", json={"status": "suspended"}
         )
         assert res.status_code == 404
+
+    # --- 본인 비밀번호 변경 (#222) -------------------------------------------
+    #
+    # 위의 셋과 **권한 등급이 다른** 엔드포인트입니다. 같은 라우터 파일에 있다고 같은
+    # 게이트가 아니라는 것을 여기서 지킵니다.
+
+    def test_VIEWER_도_자기_비밀번호는_바꾼다(self, as_role, store) -> None:
+        """**이 카드의 진짜 산출물입니다.** `ADMIN_MANAGE` 로 잠갔으면 발급받은 사람이
+        정확히 못 바꾸게 되어, 초기 비밀번호가 팀 채널에 계속 남습니다.
+        """
+        for role in ("ADMIN", "OPERATOR", "CURATOR", "ANALYST", "VIEWER"):
+            store.admin.role = role
+            store.admin.password_hash = hash_password(NEW_PASSWORD)
+
+            res = as_role(role).patch(
+                "/admin/admins/me/password",
+                json={
+                    "current_password": NEW_PASSWORD,
+                    "new_password": CHANGED_PASSWORD,
+                },
+            )
+
+            assert res.status_code == 204, role
+            assert verify_password(store.admin.password_hash, CHANGED_PASSWORD)
+
+    def test_me_password_가_id_경로로_안_샌다(self, as_role) -> None:
+        """`/{admin_id}` 가 먼저 등록돼 있습니다. 세그먼트 수가 달라 안 겹치지만,
+        나중에 `/{admin_id}/password` 같은 경로가 생기면 그때 갈립니다 — 그 순간을
+        이 테스트가 잡습니다 (지금은 `me` 가 UUID 로 파싱되면 422 가 납니다).
+        """
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={"current_password": NEW_PASSWORD, "new_password": CHANGED_PASSWORD},
+        )
+        assert res.status_code == 204
+
+    def test_현재_비밀번호가_틀리면_401(self, as_role) -> None:
+        """403 이 아닙니다 — 권한은 맞고 **자격 증명**이 틀린 것입니다.
+
+        프론트는 이 401 을 `NO_RETRY_PATHS` 로 걸러야 합니다. 안 그러면 오타 한 번에
+        재발급을 타고 로그인 화면으로 튕깁니다 (`lib/api.ts`).
+        """
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={
+                "current_password": "not-my-password",
+                "new_password": CHANGED_PASSWORD,
+            },
+        )
+        assert res.status_code == 401
+
+    def test_짧은_새_비밀번호는_422(self, as_role) -> None:
+        """발급(`AdminAccountCreate`)과 같은 12자입니다. 바꿀 때만 짧아지면 제한이
+        없는 것과 같습니다.
+        """
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={"current_password": NEW_PASSWORD, "new_password": "short"},
+        )
+        assert res.status_code == 422
+
+    def test_짧은_현재_비밀번호는_422가_아니다(self, as_role, store) -> None:
+        """옛 비밀번호가 12자 미만인 계정(seed-admin 으로 만든 최초 계정)이 **바로 그
+        이유로 못 바꾸는** 일이 없어야 합니다. 틀린 값이라 401 이지 422 가 아닙니다.
+        """
+        store.admin.password_hash = hash_password("short-old")
+
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={"current_password": "short-old", "new_password": CHANGED_PASSWORD},
+        )
+        assert res.status_code == 204
+
+    def test_같은_비밀번호로_바꾸면_422(self, as_role) -> None:
+        """받아들이면 아무것도 안 바뀐 채 모든 기기에서 로그아웃만 됩니다."""
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={"current_password": NEW_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+        assert res.status_code == 422
+
+    def test_응답에_비밀번호가_없다(self, as_role) -> None:
+        """204 라 본문이 없습니다. 계정 정보를 실어 봐야 곧 로그아웃될 화면이 안 씁니다."""
+        res = as_role("VIEWER").patch(
+            "/admin/admins/me/password",
+            json={"current_password": NEW_PASSWORD, "new_password": CHANGED_PASSWORD},
+        )
+        assert res.status_code == 204
+        assert res.content == b""
+
+    def test_경로에_남의_id_를_넣을_수_없다(self, as_role, store) -> None:
+        """`READ` 로 열린 문이라, id 를 받는 순간 남의 비밀번호를 바꾸는 길이 됩니다.
+
+        `PATCH /admin/admins/{id}/password` 는 **존재하지 않아야** 합니다. 405 든
+        404 든 "안 열려 있다" 면 됩니다.
+        """
+        other = store.add_admin(FakeAdmin(login_id="yuna", role="OPERATOR"))
+
+        res = as_role("VIEWER").patch(
+            f"/admin/admins/{other.id}/password",
+            json={"current_password": NEW_PASSWORD, "new_password": CHANGED_PASSWORD},
+        )
+        assert res.status_code in (404, 405)

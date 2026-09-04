@@ -33,8 +33,11 @@ realtime/
 │   ├── airkorea_stations.py 조회 키를 만드는 provider
 │   └── kakao_local.py       표기 전용 — 실패해도 관통된다
 ├── collect.py        ✅ ★ 조립 — provider 들을 `Observations` 하나로 (RT-002 ②-a).
-│                        **이 층이 아는 유일한 것은 호출 순서다** — providers 는 서로를 모르고
-│                        rules 는 조회를 모른다. 9단계 `app/` 는 여기 위의 껍데기다
+│                        **이 층이 아는 유일한 것은 무엇을 부르는가다** — providers 는 서로를
+│                        모르고 rules 는 조회를 모른다. 9단계 `app/` 는 여기 위의 껍데기다.
+│                        요청 예산 안의 조회는 `_Fetch` 목록을 세워 `gather` 로 **병렬**이다
+│                        (⑤-b). 순서가 남는 곳은 웨이브 둘 사이 하나뿐 — 초단기실황을 부를지가
+│                        AWS 결과에 달려 있다 (④-e 1번)
 ├── weather_at.py     ✅ 과거 사실 — 좌표·시각의 NCST 원자를 판단 없이 복원 (D-050)
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·

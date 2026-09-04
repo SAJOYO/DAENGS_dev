@@ -34,10 +34,15 @@ from collections.abc import Sequence
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.core.password import hash_password
+from daengs_backend.core.password import (
+    VerifyMismatchError,
+    hash_password,
+    verify_password,
+)
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.models import (
     AUDIT_ACCOUNT_CREATED,
+    AUDIT_ACCOUNT_PASSWORD_CHANGED,
     AUDIT_ACCOUNT_REACTIVATED,
     AUDIT_ACCOUNT_ROLE_CHANGED,
     AUDIT_ACCOUNT_SUSPENDED,
@@ -52,9 +57,11 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "AdminAccountError",
     "AdminNotFoundError",
+    "InvalidCurrentPasswordError",
     "LastAdminError",
     "LoginIdTakenError",
     "SelfChangeError",
+    "change_own_password",
     "create_account",
     "list_accounts",
     "update_account",
@@ -87,6 +94,16 @@ class SelfChangeError(AdminAccountError):
 
 class LastAdminError(AdminAccountError):
     """마지막 active ADMIN 입니다 (가드 ②). 정지도 강등도 막습니다."""
+
+
+class InvalidCurrentPasswordError(AdminAccountError):
+    """비밀번호 변경에서 **지금 쓰는 비밀번호**가 틀렸습니다 (#222).
+
+    `services/auth.py` 의 `InvalidCredentialsError` 와 다른 예외인 이유는 뜻이
+    다르기 때문입니다. 저기는 "이 사람이 누군지 모르겠다" 이고, 여기는 **이미 토큰으로
+    신원이 확인된 사람**이 자기 비밀번호를 못 맞힌 것입니다 — 계정 존재를 숨길 상대가
+    없으니 문구도 숨기지 않습니다.
+    """
 
 
 async def list_accounts(session: AsyncSession) -> Sequence[AdminUser]:
@@ -245,3 +262,87 @@ async def update_account(
     # 바뀐 것이 없어도 커밋합니다 — 아무것도 안 걸려 있으면 빈 커밋이라 값이 같습니다.
     await session.commit()
     return target
+
+
+async def change_own_password(
+    session: AsyncSession,
+    *,
+    admin_id: uuid.UUID,
+    current_password: str,
+    new_password: str,
+    ip: str | None = None,
+) -> int:
+    """**자기** 비밀번호를 바꾸고, 그 계정의 세션을 전부 끊습니다. 끊은 수를 돌려줍니다.
+
+    #207 이 계정 발급을 콘솔로 옮기면서 초기 비밀번호를 발급자가 정해 전달하는 것으로
+    뒀고, 받은 사람이 바꿀 길이 없어 **그 값이 팀 채널에 계속 남아 있었습니다.** 이
+    함수가 그 길입니다.
+
+    `update_account` 의 가드 ①("자기 것은 못 바꾼다")과 정반대로 보이지만 반대가
+    아닙니다. 저 가드가 막는 것은 **role·status** 이고, 그건 자기에게 권한을 주거나
+    마지막 ADMIN 을 없애는 길이라 막습니다. 비밀번호는 남에게 힘이 되지 않는 값이라
+    자기 것만 바꿀 수 있어야 맞습니다 — 그래서 이 함수는 `target_id` 를 아예 안 받습니다.
+
+    --------------------------------------------------------------------------
+    **지금 비밀번호를 반드시 확인합니다.** access token 이 5분 유효하므로(D-015), 자리를
+    비운 사이 남이 브라우저를 잡으면 확인이 없을 때 계정을 통째로 가져갑니다. 토큰이
+    말해 주는 것은 "이 세션이 그 계정이다"까지고, "이 사람이 그 계정 주인이다"는 아닙니다.
+
+    **바꾸면 세션을 전부 끊습니다 — 본인 것도 포함이라 다시 로그인해야 합니다.**
+    비밀번호를 바꾸는 이유의 절반은 "샜을지도 모른다"이고, 그때 남아 있는 세션은 믿을 수
+    없습니다. 어느 `refresh_tokens` 행이 지금 이 브라우저 것인지 서버가 모르므로 골라
+    남길 수도 없습니다 (`services/session.py` 의 `drop_all` — 정지와 같은 함수).
+    다만 **이미 발급된 access token 5분은 그대로 삽니다.** 요청마다 DB 를 보지 않기로 한
+    것이 D-015 이고, 그 대가를 여기서도 똑같이 치릅니다.
+    --------------------------------------------------------------------------
+
+    `needs_rehash` 와 헷갈리지 마세요. `services/auth.py` 의 로그인은 Argon2id 파라미터가
+    올라갔을 때 **같은 비밀번호**를 조용히 다시 해시합니다. 여기는 **다른 비밀번호**로
+    바꾸는 것이라, 새 해시가 어차피 지금 파라미터로 만들어집니다.
+    """
+    admin = await admin_user_repo.get_by_id(session, admin_id)
+    if admin is None:
+        # 토큰은 멀쩡한데 그 계정이 없는 상태입니다. 계정을 지우지 않는 정책이라
+        # (`routers/admin_account.py` 의 "DELETE 가 없습니다") 정상 경로에서는 안 옵니다.
+        logger.error("비밀번호 변경: 토큰의 계정이 DB 에 없음 (admin=%s)", admin_id)
+        raise AdminNotFoundError
+
+    try:
+        verify_password(admin.password_hash, current_password)
+    except VerifyMismatchError:
+        # **`login_attempts` 로 세지 않습니다.** 저 카운터의 열쇠는 `login_id` 이고
+        # 목적은 "바깥에서 아이디를 두드리는 것"을 막는 것입니다. 여기는 이미 로그인한
+        # 세션이라, 여기서 세면 자기 비밀번호를 헷갈린 사람이 로그인까지 잠깁니다.
+        logger.info("비밀번호 변경 거부: 현재 비밀번호 불일치 (admin=%s)", admin_id)
+        raise InvalidCurrentPasswordError from None
+    # InvalidHashError 는 잡지 않습니다 — 저장된 해시가 깨졌다는 뜻이라 401 이 아니라
+    # 500 으로 올라가야 합니다 (`core/password.py` 와 `services/auth.py` 가 같은 선).
+
+    admin.password_hash = hash_password(new_password)
+    dropped = await session_service.drop_all(session, SubjectType.ADMIN, admin_id)
+
+    await audit.record(
+        session,
+        action=AUDIT_ACCOUNT_PASSWORD_CHANGED,
+        # **주체와 대상이 같습니다.** 이 목록에서 유일합니다
+        # (`models/admin_audit_log.py` 의 주석).
+        admin_user_id=admin_id,
+        target_type="admin_user",
+        target_id=admin_id,
+        # 남기는 것은 **끊은 세션 수뿐**입니다. 비밀번호도, 그 길이도, 해시도 넣지
+        # 마세요 — `detail` 은 #221 의 화면이 그대로 그리는 값입니다.
+        #
+        # 정지(`AUDIT_ACCOUNT_SUSPENDED`)와 키 이름이 같지만 **읽는 법이 다릅니다.**
+        # 저기서는 n 이 전부 남의 세션이고, 여기서는 지금 이 요청을 보낸 본인
+        # 브라우저가 포함되어 사실상 1 이상입니다 (2026-09-04 사람 결정).
+        detail={"sessions_dropped": dropped},
+        ip=ip,
+    )
+    # 새 해시 · 끊긴 세션 · 그 기록을 한 번에 확정합니다. 비밀번호만 바뀌고 세션이
+    # 남거나, 세션만 끊기고 비밀번호가 그대로인 상태를 만들지 않으려는 것입니다.
+    await session.commit()
+
+    logger.warning(
+        "비밀번호 변경 (admin=%s, 세션 %d개 끊음, 본인 것 포함)", admin_id, dropped
+    )
+    return dropped

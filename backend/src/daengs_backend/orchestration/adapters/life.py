@@ -160,12 +160,26 @@ def _exact_interval(atom: Any | None) -> float | None:
 
 
 def _precipitation_kind(value: str | None) -> WalkPrecipitationKind | None:
+    """Life 의 `PrecipKind` → Walk 의 네 값. **여기는 일부러 거칠다.**
+
+    Life 는 기상청 `PTY` 를 그대로 들고 있고(0~7, RT-004), Walk 는 비/눈/혼합이면 충분하다.
+    그래서 세기(빗방울 vs 비)는 이 경계에서 접는다 — `shower`(소나기)를 `rain` 으로 접어 온
+    것과 같은 규칙이다.
+
+    ⚠️ **`Life` 에 값이 늘면 여기도 늘려야 한다.** 빠뜨리면 `.get()` 이 `None` 을 주고,
+    Walk 는 그것을 "관측이 없다"로 읽는다 — KMA 가 값을 냈는데도 그렇다. 예외가 안 나서
+    안 보이므로 `test_orchestration_walk_weather.py` 가 **누락 자체**를 잡는다.
+    """
     return {
         "none": "none",
         "rain": "rain",
         "snow": "snow",
         "rain_snow": "mixed",
         "shower": "rain",
+        # RT-004 — 초단기 계열의 셋. 세기만 다르고 형태는 위와 같아서 같은 자리로 접는다
+        "drizzle": "rain",              # 5 빗방울
+        "drizzle_snow": "mixed",        # 6 빗방울눈날림
+        "snow_flurry": "snow",          # 7 눈날림
     }.get(value)
 
 

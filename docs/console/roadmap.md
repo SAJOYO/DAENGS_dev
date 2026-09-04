@@ -58,7 +58,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 기능 / 검색 점검 | `read` | `/console/search` — 탭 4: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 · 어시스턴트(`/assistant/query`) | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 · #181 · #213 | 산책 기록 · gait · place · journey 탭 없음 (C4). 어시스턴트 탭은 `RoutePlan` 이 공개 응답에 없어 라우터 종류 · 모델 이름을 못 보여 준다 |
 | 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
 | 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
-| 관리자 계정 | `admin:manage` | `/console/admins` — 목록 · 발급 · role 변경 · 정지/해제 | `/admin/admins`(ADMIN_MANAGE) | ✅ #207 | 본인 비밀번호 변경 화면이 없다 — 초기 비밀번호는 발급자가 전달한다 |
+| 관리자 계정 | `admin:manage` | `/console/admins` — 목록 · 발급 · role 변경 · 정지/해제 | `/admin/admins`(ADMIN_MANAGE) | ✅ #207 · #222 | 초기 비밀번호는 발급자가 전달하고, 받은 사람이 헤더의 이름 → `/console/password` 에서 바꾼다 (#222). **그 화면만 `read` 라 이 메뉴와 등급이 다르다** |
 | 감사 로그 | `admin:manage` | `/console/audit` — 최근 순, 갈래 필터 넷, 더 보기(키셋) | `/admin/audit`(ADMIN_MANAGE) | ✅ #221 | 지우는 주기가 없다 (A5). `action` 인덱스가 없어 갈래 필터는 created_at 으로 좁힌 뒤 걸린다 |
 | 회원 · 반려견 | `read` | `/console/users` — 검색 · 마스킹 상세 · 반려견 · 원문 보기(`pii:read`) · 정지/해제(`ops:write`) | `/admin/app-users`(READ · PII_READ · OPS_WRITE) | ✅ #211 · #212 | **목록이 없다** — 검색만 된다 (A2c) |
 | 운영 지표 | `metrics:read` | `/console/metrics` — 기간 전환(7·30·90일), 분포 넷 | `/admin/metrics/chats`(METRICS_READ) | ✅ #223 | 제품 테이블(`chat_*`) 집계뿐이다. 요청 메타데이터(지연 등)는 B2 대기 |
@@ -77,9 +77,10 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 로그인 · refresh · `/auth/me` · 라우트 가드 | ✅ httpOnly 쿠키 JWE, 5분 access, 401 → 조용한 재발급 | #11 · #29 · D-015 |
 | role 5단계 (ADMIN · OPERATOR · CURATOR · ANALYST · VIEWER) | ✅ 콘솔에서 발급·변경한다 (#207). `Perm.ADMIN_MANAGE` 가 처음으로 실제로 갈리는 자리 — ADMIN 만 이 메뉴가 보인다 | D-014 |
 | 최초 계정 | `uv run seed-admin` 이 SQL 출력 → psql 손 적용. **두 번째부터는 콘솔**이다 (#207). GCP 는 09-02 덤프의 `admin_users` 그대로 | D-015 |
+| 비밀번호 변경 | ✅ `PATCH /admin/admins/me/password`(**`read`**) + `/console/password` (#222). 바꾸면 그 계정의 세션이 전부 끊긴다 — 본인 것 포함. **최초 로그인 강제 변경은 하지 않는다** (`must_change_password` 컬럼과 두 DB 손 적용이 붙는다 — 2026-09-04 사람 결정). 대가는 **안 바꾸는 사람이 생길 수 있다**는 것 | #222 |
 | 로그인 잠금 | `(login_id, IP)` 5회/10분, **프로세스 메모리** — 재시작에 풀린다. #207 로 계정이 여럿이 될 수 있게 됐지만 잠금 자체는 그대로다 (Redis 이관은 D3) | `services/login_attempts.py` |
 | 로그 | `logger.info` 가 어디에도 안 남는다 | draft 카드 `fix: 앱 로그가 어디에도 남지 않는 문제` (Hold P3) |
-| 감사 로그 | ✅ `admin_audit_log` (#203) · 기록 열한 종류 (#207 · #212) · **조회 화면 `/console/audit`** (#221). 그 선(감사 로그 = DB 테이블 / 운영 로그 = 파일)은 §6 | #203 · #207 · #212 · #221 |
+| 감사 로그 | ✅ `admin_audit_log` (#203) · 기록 열두 종류 (#207 · #212 · #222) · **조회 화면 `/console/audit`** (#221). 그 선(감사 로그 = DB 테이블 / 운영 로그 = 파일)은 §6. **`models/admin_audit_log.py` 의 `AUDIT_ACTIONS` 가 유일한 목록이다** — SQL 에 CHECK 가 없으니 새 action 은 거기 먼저 더하고, 화면은 여기 적힌 수가 아니라 그 상수에서 센다 | #203 · #207 · #212 · #221 · #222 |
 | 앱 회원 API | `/auth/app/*`(카카오) · `/app/pets` · `/app/walks` · `/app/gait` — 전부 **본인 것만**. 관리자용 목록 조회 없음. `current_app_user` 는 관리자 토큰을 401 로 막는다 | #19 · #88 · D-043 · `core/deps.py` |
 
 ### 배포
@@ -135,7 +136,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | A4 | **감사 로그 테이블** `admin_audit_log`(누가 · 언제 · 무엇을 · 대상 id) + 기록 헬퍼. 첫 소비자는 **로그인 시도**(성공 · 실패 · 정지 거부, 2026-09-04 사람 결정)이고 A2 의 복호화 조회가 뒤따른다 | Hold 로그 카드 메모 "감사 로그는 DB" · D-012(복호화는 `core/crypto.py` 한 곳) | 없음 — 두 DB 손 적용 | S | ✅ #203 (개발 DB 적용됨 · **운영 DB 는 2026-09-05**) |
 | A5 | **감사 로그 보존 · 정리** — 로그인 시도까지 들어와 행이 빨리 는다. 지우는 주기와 방법(월별 파티션 / 오래된 행 삭제 / 그대로 두기) | #203 이 일부러 안 정했다 — 얼마나 빨리 느는지 보고 정하는 것이 맞아서. **#221 로 이제 증가량을 화면에서 볼 수 있다** | #221 뒤 실제 증가량 | XS | ⏸ 증가량을 본 뒤 |
 | A3 | **관리자 계정 관리** — `GET/POST /admin/admins` · `PATCH`(role · status) + `/console/admins`. `seed-admin` 은 최초 1회로 남겼다 | D-014 5단계가 정의만이었다. 이제 `pii:read` 를 못 가진 계정을 실제로 만들 수 있어 A2b 의 가리기가 검증된다 | A4 ✅ | S | ✅ #207 (DB 변경 없음 — `admin_users` 는 두 DB 에 이미 있다) |
-| A3-1 | **본인 비밀번호 변경** — 발급받은 사람이 초기 비밀번호를 바꾸는 길 (`PATCH /admin/admins/me/password`) | #207 이 초기 비밀번호를 발급자가 전달하는 것으로 두고 미뤘다. 받은 사람이 못 바꾸면 그 값이 계속 팀 채널에 남는다 | #207 | XS | ⬜ |
+| A3-1 | **본인 비밀번호 변경** — 발급받은 사람이 초기 비밀번호를 바꾸는 길 (`PATCH /admin/admins/me/password`) + `/console/password` | #207 이 초기 비밀번호를 발급자가 전달하는 것으로 두고 미뤘다. 받은 사람이 못 바꾸면 그 값이 계속 팀 채널에 남는다 | #207 | XS | ✅ #222 (DB 변경 없음 — `admin_audit_log.action` 에 CHECK 가 없다. **이 라우터에서 유일하게 `read` 인 엔드포인트**이고, `ADMIN_MANAGE` 로 잠그면 받은 사람이 정확히 못 바꾼다) |
 | A4-1 | **감사 로그 조회 화면** `/console/audit` — 로그인 시도 · 계정 변경 · **개인정보 원문 조회**. 갈래 필터와 키셋 페이지네이션 | #203 이 테이블만 만들었고 보는 길이 psql 뿐이었다. 그중 `pii_revealed` 는 **이 테이블이 생긴 첫째 이유**다 (§1) | #203 · #207 · #212 | S | ✅ #221 (DB 변경 없음 — 인덱스 셋을 #203 이 미리 달아 뒀다). **이 조회는 감사에 안 남긴다** |
 | A2a | **회원 조회** — `GET /admin/app-users?email=`·`?kakao_id=` · 상세(마스킹 · 반려견) · `/console/users`. 전부 `READ`, 쓰기 없음 | §1 둘째 줄. `console/page.tsx` 의 준비 중 카드 | 없음 — DB 변경도 없다 | S | ✅ #211 |
 | A2b | **원문 복호화와 상태 변경** — `GET /admin/app-users/{id}/pii`(`pii:read`, 부를 때마다 `admin.app_user.pii_revealed`) · `PATCH status`(`ops:write`) + 세션 끊기 | 감사에 남길 가치가 있는 것은 "가려서 봤다"가 아니라 "원문을 열어 봤다" — 그 선에서 A2 를 갈랐다 | A4 ✅ · A3 ✅ · #211 ✅ | S | ✅ #212 (`Perm.PII_READ` 의 첫 사용처. 탈퇴 회원의 상태는 관리자가 못 되돌린다) |
@@ -185,7 +186,7 @@ draft 카드 `fix: 앱 로그가 어디에도 남지 않는 문제`(Hold P3) 가
 C2 문구 ✅ → B1 상태 페이지 ✅ → C1 assistant 탭 ✅   (셋 다 DB 없음 · FE/읽기 전용 — 먼저 갔다)
 A4 감사 로그 ✅ → A3 계정 관리 ✅ → A2a 회원 조회 ✅ → A2b 복호화·상태 변경 ✅
                                                         (A 트랙. A4 가 앞인 이유는 아래)
-남은 A 트랙: A0 결정(사람) → A1 신고 · A3-1 비밀번호 변경(#222) · A5 보존
+남은 A 트랙: A0 결정(사람) → A1 신고 · A5 보존
 ※ A2a 는 A3 을 기다릴 필요가 없었다 — 나가는 값이 전부 마스킹이라 `READ` 로 열리고,
    `pii:read` 가 실제로 갈려야 하는 것은 A2b 다.
 

@@ -1667,7 +1667,7 @@ URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았�
 
 대화형 진입점 `POST /assistant/query` 하나를 두고, 그 뒤의 흐름 제어(라우팅 · 실행 순서 ·
 결과 수집)를 **LangGraph** 가 맡습니다. 전체 구조와 능력별 현실은
-`docs/orchestration-architecture.md`, 계약은 `docs/orchestration-contracts.md` 가 원본입니다.
+`docs/orchestration/architecture.md`, 계약은 `docs/orchestration/contracts.md` 가 원본입니다.
 이 항목은 되돌리기 번거로운 **경계** 결정만 기록합니다.
 
 - **LangGraph 는 오케스트레이터이지, 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.**
@@ -1701,11 +1701,11 @@ GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출�
 > 능력의 도메인 선택이 우연히 일치한 것입니다. 또한 O-4 의 근거였던 "DB 에 프로필
 > 테이블 없음"(D-029 인용)은 #88(`pets` 테이블·`/app/pets`)로 낡았지만, **소비하는
 > 능력이 아직 없다**는 사실은 그대로라 O-4 결정 자체는 유지됩니다
-> (`docs/orchestration-contracts.md` §1).
+> (`docs/orchestration/contracts.md` §1).
 
 **미결이었던 것들은 2026-08-30 에 전부 해결됐습니다.** 어드버서리얼 아키텍처 리뷰
 (읽기 전용, `origin/dev` 코드 대조) 후 사람이 일괄 승인 — 결정 이력 표는
-`docs/orchestration-routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
+`docs/orchestration/routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
 귀속되는 추가 승인 둘:
 
 - **반려견 컨텍스트 (O-4)** — `active_dog_id` 는 v1 상태의 타입 필드가 아니라 `context`
@@ -1723,7 +1723,7 @@ GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출�
 ### 결정적 라우팅은 기계 신호에만, 자연어는 LLM 라우터 — 모델은 벤치마크로
 
 오케스트레이터의 라우팅 경로를 둘로 나누고, 경계를 고정합니다
-(상세는 `docs/orchestration-routing.md`).
+(상세는 `docs/orchestration/routing.md`).
 
 **결정적 라우팅은 기계가 읽는 명시적 신호에만 허용합니다** — `requested_capability`,
 구조화된 UI/액션 메타데이터, 명시적 source/action 식별자, 의미가 모호하지 않은 구조화
@@ -1782,7 +1782,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 동결 평가 재실행.
 
 **서버 재구축(신규 PGVector · 지연 검증 · 포트 · GPU · 리소스 제한)은 미완**이며 월요일
-서버 리허설 후 `docs/orchestration-architecture.md` §서버 재구축 상태를 갱신합니다.
+서버 리허설 후 `docs/orchestration/architecture.md` §서버 재구축 상태를 갱신합니다.
 
 > **사실 갱신 (2026-08-31)** — 이관은 **완료됐습니다** (#83 런타임 이행 → #92 PGVector
 > pg18 → #93 생성 Gemini 전환 → #94 modular monolith). 위 허용/금지 경계는 지켜졌고
@@ -1792,7 +1792,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 > 부담이 확인될 때만 서비스 분리를 재검토합니다. `:8010`·`DAENGS_TRAINING_RAG_BASE_URL`
 > 은 코드에서 사라졌고, Training PGVector 는 전용 컨테이너(`training-rag-pgvector`)로
 > 분리 유지됩니다. 프롬프트(`grounded-answer-ko-v2`) 이행은 여전히 별도 카드입니다.
-> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration-architecture.md`
+> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration/architecture.md`
 > §Training 토폴로지.
 
 ---
@@ -1802,7 +1802,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 
 오케스트레이션의 CapabilityResult status 를 여섯으로 확정합니다:
 **OK · ABSTAINED · REFUSED · PENDING · ERROR · TIMEOUT** (계약 상세는
-`docs/orchestration-contracts.md` §4). 2026-08-30 어드버서리얼 리뷰 후 사람 승인.
+`docs/orchestration/contracts.md` §4). 2026-08-30 어드버서리얼 리뷰 후 사람 승인.
 
 **핵심은 기권과 거절의 분리입니다.**
 
@@ -1836,7 +1836,7 @@ AssistantResponse 상태는 여덟입니다: ANSWERED · PARTIAL · CLARIFY · H
 ### RoutePlan 은 요청·핸드오프·클래리파이의 목록 구조, CLARIFY 는 배타적
 
 라우터 산출물을 스칼라 `mode` 하나가 아니라 **`requests[] + handoffs[] + clarify`**
-구조로 확정합니다 (`docs/orchestration-contracts.md` §2). 2026-08-30 리뷰가 스칼라
+구조로 확정합니다 (`docs/orchestration/contracts.md` §2). 2026-08-30 리뷰가 스칼라
 mode 로는 "Walk 실행 + Skin 핸드오프" 같은 **실존하는 혼합 흐름을 표현할 수 없음**을
 계약 결함으로 확정했고, 사람이 이 구조를 승인했습니다.
 
@@ -1900,7 +1900,7 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 전용 의존성을 구현에서 새로 둘 수 있습니다.
 
 능력별 인가는 백엔드/오케스트레이션 경계 안의 **중앙 매트릭스 한 곳**이 정합니다
-(`docs/orchestration-routing.md` §5): v1 은 Training·Life·Walk 를 앱 회원·관리자
+(`docs/orchestration/routing.md` §5): v1 은 Training·Life·Walk 를 앱 회원·관리자
 모두에게, Skin·Gait EXECUTE 는 아무에게도 허용하지 않습니다.
 
 **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
@@ -1924,7 +1924,7 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 오케스트레이션의 일반 운영 로그·트레이스에 **사용자 질문 원문을 기본으로 넣지
 않습니다.** Training 게이트웨이가 이미 지키는 선례(`services/training_rag.py` —
 질문 원문 비로깅, 식별자·상태·인용 수만 기록)를 오케스트레이션 전체의 불변식으로
-확장한 것입니다 (`docs/orchestration-contracts.md` §6-11).
+확장한 것입니다 (`docs/orchestration/contracts.md` §6-11).
 
 | 기본 관측에 허용 | 금지 |
 | --- | --- |

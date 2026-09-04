@@ -1,6 +1,6 @@
 # 오케스트레이터 공통 계약
 
-`/assistant/query` 뒤 LangGraph 오케스트레이션([orchestration-architecture.md](orchestration-architecture.md) §논리
+`/assistant/query` 뒤 LangGraph 오케스트레이션([architecture.md](architecture.md) §논리
 오케스트레이션)이 쓸 공통 계약입니다. **2026-08-30 어드버서리얼 아키텍처 리뷰를 거쳐
 사람이 승인한 확정 계약**입니다 (D-033 · D-034). 실제 Pydantic/TypedDict 정의는
 `backend/src/daengs_backend/orchestration/contracts.py` 에 있으며, 필드의 Python 표현은

@@ -7,8 +7,8 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 
 문서는 셋으로 나뉩니다. **이 파일** = 물리 토폴로지(§1~§5, 전부 CURRENT 사실) +
 논리 오케스트레이션 구조(§6~, CURRENT 와 TARGET 을 구분해 표기).
-**[orchestration-contracts.md](orchestration-contracts.md)** = 오케스트레이터 공통 계약 (확정).
-**[orchestration-routing.md](orchestration-routing.md)** = 라우팅 정책 · 인가 매트릭스 · 사람 결정 이력.
+**[contracts.md](contracts.md)** = 오케스트레이터 공통 계약 (확정).
+**[routing.md](routing.md)** = 라우팅 정책 · 인가 매트릭스 · 사람 결정 이력.
 
 > 표기: **CURRENT** = 지금 사실 · **TARGET** = 승인된 목표 상태(아직 구현 안 됨) ·
 > **CONFIRMED** = 확정된 설계 제약 · **OPEN** = 사람 결정 대기 · **PENDING** = 검증 대기 ·
@@ -221,7 +221,7 @@ Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레�
 **CURRENT / CONFIRMED — v1 로 구현 완료** — 대화형 진입점 `/assistant/query` 하나를
 두고, 그 뒤의 흐름 제어는 **LangGraph** 가 맡습니다. 아래 경계는 2026-08-30
 어드버서리얼 아키텍처 리뷰(읽기 전용, `origin/dev` 코드 대조)를 거쳐 **사람이 최종
-승인**했고(D-030~D-037 · orchestration-routing.md §6 의 결정 이력), Card 1~3 구현이
+승인**했고(D-030~D-037 · routing.md §6 의 결정 이력), Card 1~3 구현이
 그대로 지킵니다.
 
 - **LangGraph 는 오케스트레이터입니다** — 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.
@@ -230,8 +230,8 @@ Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레�
   부르는 것은 바뀌지 않습니다. `/assistant/query` 는 자연어·모호·다중 능력 요청 전용입니다.
 - **인증은 그래프 밖입니다.** 기존 FastAPI 의존성 계층(D-015 · D-016)이 토큰을 검증하고,
   그래프는 **인증이 끝난 principal** 을 받아 능력별 **인가**만 판단합니다. 인가는 중앙
-  매트릭스 한 곳이 정하며(D-036 · orchestration-routing.md §5), 토큰이 그래프 상태에
-  들어가지 않습니다 (계약 불변식 — orchestration-contracts.md).
+  매트릭스 한 곳이 정하며(D-036 · routing.md §5), 토큰이 그래프 상태에
+  들어가지 않습니다 (계약 불변식 — contracts.md).
 - **도메인 안전·거절 결정은 각 능력이 소유합니다.** 오케스트레이터는 상류의 REFUSED 를
   ERROR 로 재해석하지 않고, **자료 부족 기권(ABSTAINED)을 거절(REFUSED)로 접지도
   않습니다** (D-033). Training 의 SAFETY_REFUSAL/MEDICAL_REFUSAL 구분
@@ -242,7 +242,7 @@ Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레�
   갱신해 **다시 기계로 강제**합니다. 그 밖의 daengs_backend → daengs_life import 는
   여전히 금지입니다.
 - **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화로 "피부 사진 봐줘"가
-  들어오면 실행이 아니라 해당 업로드/UI 플로우로 **HANDOFF** 합니다 (orchestration-routing.md).
+  들어오면 실행이 아니라 해당 업로드/UI 플로우로 **HANDOFF** 합니다 (routing.md).
 - **능력별 생성 모델을 계약으로 통일하지 않습니다.** 지금은 Training(#93 이후
   `gemini-3.1-flash-lite`)과 Life 가 둘 다 Gemini 지만, 그것은 각 능력의 도메인 선택이
   우연히 겹친 것이지 공유 계약이 아닙니다 — 어느 쪽이 모델을 바꿔도 오케스트레이션은
@@ -278,7 +278,7 @@ Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입�
 | **Life** | backend `POST /life/ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/life/walk-conditions` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
-| **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (orchestration-contracts.md) |
+| **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (contracts.md) |
 | **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. 내부 `POST /internal/place/discovery`는 Place 전용 Gemini proposer와 검색/presentation을 조립 | **실행 ✅** — 명시 신호(`requested_capability=place`, #196)와 **전역 의미 선택(#204, D-051, `semantic-router-ko-v7`)** 둘 다 | backend adapter → compose 내부 HTTP | **예** | payload는 원문+검증 좌표뿐이고 profile identity를 보내지 않습니다. 내부 43~89KB 응답은 최대 3 lens·9후보·48KiB의 공개 projection으로 줄이며 KTO/KCISA provenance와 unresolved signal은 보존합니다 (#195·#196) |
 | **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
 
@@ -400,7 +400,7 @@ DB 통합까지 팀 승인으로 수행했고, 운영 실측에서 부담이 확
 > 라이브 프로브 3건으로 대신했습니다 (#161 컨텍스트 메모).
 
 로케일은 계약에 자리만 잡습니다: 지금은 `locale = "ko-KR"` 하나, 미래에 `"en-US"`
-(orchestration-contracts.md). 영어 UI · 영어 코퍼스 · 영어 가드레일 행동은 이 문서
+(contracts.md). 영어 UI · 영어 코퍼스 · 영어 가드레일 행동은 이 문서
 세트의 범위가 아니고 **지금 구현하지 않습니다.**
 
 ## 더 읽을 곳
@@ -415,5 +415,5 @@ DB 통합까지 팀 승인으로 수행했고, 운영 실측에서 부담이 확
 | 결정 배경 (D- / RAG- / RT-) | `docs/decisions.md` · `docs/life/decisions-rag.md` · `docs/life/decisions-realtime.md` |
 | Training RAG 서빙 계약 | `docs/training/rag-demo.md` (색인: `docs/training/README.md`) |
 | 생활 파트(Life·Walk) 로드맵 — 어댑터 준비 트랙 포함 | `docs/life/roadmap.md` |
-| 오케스트레이터 공통 계약 (확정) | `docs/orchestration-contracts.md` |
-| 라우팅 정책 · 인가 매트릭스 · 결정 이력 | `docs/orchestration-routing.md` |
+| 오케스트레이터 공통 계약 (확정) | `contracts.md` |
+| 라우팅 정책 · 인가 매트릭스 · 결정 이력 | `routing.md` |

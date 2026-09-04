@@ -34,6 +34,11 @@ on:
         required: false
         default: true
         type: boolean
+      backup:
+        description: "적용 전에 pg_dump 를 뜹니다 (이 DB 는 자동 백업이 없습니다)"
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   # 마이그레이션이 겹치면 안 됩니다. 배포와 달리 **취소하지 않습니다** —
@@ -104,6 +109,55 @@ jobs:
             if ($attempt -eq 20) { throw "pgvector 가 안 뜹니다" }
             Start-Sleep -Seconds 3
           }
+
+      # ⚠️ **이 DB 는 자동 백업이 없습니다.** pg_dump 는 GCP 이관 때 손으로 한 번 뜬 것이
+      #    전부입니다(roadmap §2). 마이그레이션은 덧붙이기만 하도록 쓰지만, 그 규칙을
+      #    어긴 파일이 하나 섞이면 되돌릴 방법이 없습니다.
+      - name: 백업 (pg_dump)
+        if: ${{ inputs.backup }}
+        run: |
+          # ⚠️ **체크아웃 폴더 밖에 둡니다.** 안에 두면 언젠가 `git clean -ffdx` 가
+          #    지웁니다 — 크롤러 코퍼스가 실제로 그렇게 한 번 날아갔습니다
+          #    (deploy.yml 이 clean:false 를 쓰는 이유).
+          $dir = 'C:\deploy\daengs\db-backups'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+
+          # 뜨기 전에 크기를 봅니다. 이 디스크에는 이제 영상·사진도 같이 쌓입니다(D-052).
+          Write-Host "--- DB 크기 ---"
+          docker compose exec -T pgvector sh -c 'psql -tA -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_size_pretty(pg_database_size(current_database()))"'
+          Write-Host "--- 남은 디스크 ---"
+          Get-PSDrive C | Select-Object Used, Free | Format-List
+
+          $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+          $out = Join-Path $dir "vectordb-$stamp.dump"
+
+          # ⚠️ **PowerShell 의 `>` 는 바이너리를 깨뜨립니다.** `-Fc` 는 바이너리 포맷이라
+          #    파이프로 받으면 못 쓰는 덤프가 나옵니다 — 그리고 **복원할 때까지 모릅니다.**
+          #    그래서 컨테이너 안에 만들고 `docker cp` 로 꺼냅니다 (runbook §2 와 같은 방식).
+          docker compose exec -T pgvector sh -c 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /tmp/migrate-backup.dump'
+          if ($LASTEXITCODE -ne 0) { throw "pg_dump 실패 — 적용을 중단합니다" }
+
+          docker cp pgvector:/tmp/migrate-backup.dump $out
+          if ($LASTEXITCODE -ne 0) { throw "덤프를 꺼내지 못했습니다 — 적용을 중단합니다" }
+          docker compose exec -T pgvector rm -f /tmp/migrate-backup.dump
+
+          $size = (Get-Item $out).Length
+          if ($size -lt 1024) { throw "덤프가 너무 작습니다 ($size 바이트). 적용을 중단합니다" }
+
+          # 진짜 pg_dump custom 포맷인지 봅니다 — 매직 바이트가 "PGDMP" 입니다.
+          # 위 바이너리 함정을 다시 밟으면 여기서 걸립니다.
+          $head = [System.Text.Encoding]::ASCII.GetString([byte[]](Get-Content $out -Encoding Byte -TotalCount 5))
+          if ($head -ne 'PGDMP') { throw "덤프가 pg_dump 포맷이 아닙니다 (머리: '$head'). 적용을 중단합니다" }
+
+          Write-Host "✅ 백업: $out ($([math]::Round($size/1MB,1)) MB)"
+          Write-Host "   되돌릴 때: docker cp <이 파일> pgvector:/tmp/r.dump 후 pg_restore"
+          Write-Host "   ⚠️ 롤(daengs)은 pg_dump 에 안 담깁니다 — runbook §2 의 globals.sql 참고"
+
+          # 쌓이면 디스크를 먹습니다. **최근 3개만** 남깁니다.
+          Get-ChildItem $dir -Filter 'vectordb-*.dump' |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip 3 |
+            ForEach-Object { Write-Host "옛 백업 삭제: $($_.Name)"; Remove-Item $_.FullName -Force }
 
       - name: 적용
         run: |

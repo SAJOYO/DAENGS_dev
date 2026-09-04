@@ -59,6 +59,23 @@ try {
 스냅샷을 채택할 때만 측정 후 `--minimum-sites`와 고정 건수를 함께 바꿉니다. 원본 파일 자체는
 저장소와 컨테이너에 정본으로 남기지 않습니다.
 
+## 적재 대상은 DB마다다 — 로컬 서버와 GCP는 각각입니다
+
+**Territory Site gameboard sync는 로컬 서버 place-db만 채웁니다.** `runs-on: [self-hosted]`라
+서버 PC의 러너가 자기 `docker compose`를 잡기 때문입니다. GCP의 place-db는 별개 인스턴스이고
+두 DB 사이에 복제가 없으므로(`docs/deploy/roadmap.md` §2-5), **workflow를 몇 번 돌려도 GCP는
+바뀌지 않습니다.**
+
+GCP는 `docs/deploy/runbook.md` §6 "점령 게임판 적재 (GCP)"의 같은 명령을 손으로 밟습니다.
+네 상수(태그·자산명·SHA-256·건수)가 workflow와 그 절 두 군데에 있으므로 세대를 바꿀 때 같이
+고칩니다.
+
+이것을 빠뜨렸을 때의 증상이 특히 조용합니다. GCP는 09-02 덤프에서 왔고 그 안에는 옛
+`anchor-hex:115:q:r` 행이 있는데, Alembic `0021`이 그것을 `territory-site:hex-v1:115:q:r`로만
+바꿉니다(세대를 올리지 않는 것이 의도입니다). 읽기 질의는 현행 세대만 거르므로 결과는
+**어느 좌표에서도 200 + 빈 `sites`**입니다. 마이그레이션도 서비스도 정상이고 로그에도 아무
+문제가 없는데 앱 지도에만 점령지가 하나도 없습니다.
+
 ## 배포 확인
 
 ```sql

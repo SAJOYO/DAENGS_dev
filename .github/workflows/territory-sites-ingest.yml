@@ -1,3 +1,7 @@
+# ⚠️ 이 워크플로우는 **집 서버 place-db 만** 적재합니다 (`runs-on: [self-hosted]`).
+#    GCP 는 이 러너가 아니므로 여기서 돌려도 안 바뀝니다 — 증상은 "GCP 지도에 점령지가
+#    하나도 없다" 입니다. GCP 는 `docs/deploy/runbook.md` §6 "점령 게임판 적재 (GCP)" 의
+#    같은 명령을 손으로 밟습니다. 아래 env 네 값은 그 절과 **같아야 합니다.**
 name: Territory Site gameboard sync
 
 on:

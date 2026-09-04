@@ -409,6 +409,81 @@ def test_bridge_download_allows_overlay_but_upload_does_not(bridge, client, monk
     assert seen == [True, False]
 
 
+# ── 크기 상한 (D-052: 모든 바이트가 backend 를 지나게 된 뒤로 필수) ──────────
+#
+# GCS 시절 이 경로는 검증용이라 `await request.body()` 로 통째로 읽어도 넘어갔습니다.
+# 이제는 영상 전량이 항상 여기를 지나므로, 상한이 없으면 한 요청이 컨테이너 메모리를
+# 다 먹습니다.
+
+
+@pytest.fixture()
+def small_limit(monkeypatch):
+    """상한을 32바이트로 낮춥니다 — 150MB 를 실제로 만들지 않으려는 것뿐입니다."""
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "gait_max_upload_bytes", 32)
+    return 32
+
+
+@pytest.fixture()
+def pending_key(monkeypatch):
+    """발급된 PENDING 키 하나를 흉내 냅니다."""
+    key = "gait/pet/original/big.mp4"
+
+    async def found(session, storage_key, *, status=None):
+        return _record(status="PENDING", original_storage_key=key)
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", found)
+    return key
+
+
+def test_bridge_upload_rejects_oversize_by_content_length(
+    bridge, client, small_limit, pending_key
+):
+    """**다 받기 전에** 거절해야 합니다 — 받고 나서 거절하면 대역폭과 디스크를 이미 썼습니다."""
+    r = client.put(
+        f"/app/gait/_bridge/upload/{pending_key}",
+        content=b"x" * (small_limit + 1),
+        headers={"Content-Length": str(small_limit + 1)},
+    )
+    assert r.status_code == 413
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_rejects_oversize_when_length_lies(
+    bridge, client, small_limit, pending_key
+):
+    """Content-Length 는 앱이 주는 값이라 믿지 않습니다.
+
+    헤더로만 막으면 거짓 길이를 적어 상한을 그대로 통과할 수 있습니다. 스트리밍 중에
+    누적으로 다시 봐야 하고, **끊긴 자리에 반쯤 쓴 파일이 남으면 안 됩니다** —
+    다음 PUT 이 막히거나 confirm 이 모자란 파일을 성공으로 받습니다.
+    """
+    r = client.put(
+        f"/app/gait/_bridge/upload/{pending_key}",
+        content=b"x" * (small_limit * 4),
+        headers={"Content-Length": "1"},
+    )
+    assert r.status_code == 413
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_rejects_empty_body(bridge, client, small_limit, pending_key):
+    """빈 파일을 받아 두면 안 됩니다 — 0바이트는 redact() 의 tombstone 과 같은 모양이라,
+    남겨 두면 "이미 파기된 원본" 처럼 보입니다."""
+    r = client.put(f"/app/gait/_bridge/upload/{pending_key}", content=b"")
+    assert r.status_code == 400
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_accepts_up_to_the_limit(bridge, client, small_limit, pending_key):
+    """경계값은 통과합니다 (상한 초과만 막습니다)."""
+    payload = b"x" * small_limit
+    r = client.put(f"/app/gait/_bridge/upload/{pending_key}", content=payload)
+    assert r.status_code == 200
+    assert bridge.local_path(pending_key).read_bytes() == payload
+
+
 def test_storage_not_configured_fails_loudly():
     """미설정 저장소는 no-op 이 아니라 명확한 실패입니다 — 조용히 성공하면
     confirm 이 거짓말을 하고 워커가 없는 파일을 받으러 갑니다."""

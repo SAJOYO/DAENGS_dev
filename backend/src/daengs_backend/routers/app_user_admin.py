@@ -26,9 +26,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import Perm, Principal, require
-from daengs_backend.schemas.app_user_admin import AppUserDetailOut, AppUserOut
-from daengs_backend.schemas.pet import PetResponse
+from daengs_backend.schemas.app_user_admin import (
+    AdminPetOut,
+    AppUserDetailOut,
+    AppUserOut,
+)
 from daengs_backend.services import app_user_admin as service
+from daengs_backend.services import dog_context
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +106,7 @@ async def detail(
     return AppUserDetailOut(
         **base.model_dump(),
         pets=[
-            PetResponse(
+            AdminPetOut(
                 id=p.id,
                 name=p.name,
                 breed=p.breed,
@@ -113,6 +117,9 @@ async def detail(
                 birth_date_kind=p.birth_date_kind,
                 farewell_on=p.farewell_on,
                 is_primary=p.id == view.user.primary_pet_id,
+                # 모르는 아바타 id 면 원래 값을 그대로 보여 줍니다 — 관리 화면은
+                # "저장된 것이 무엇인가"를 알아야 합니다 (`AdminPetOut` 주석).
+                breed_label=dog_context.breed_label(p.breed) or p.breed,
             )
             for p in view.pets
         ],

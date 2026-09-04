@@ -51,13 +51,32 @@ class AppUserOut(BaseModel):
     created_at: datetime
 
 
+class AdminPetOut(PetResponse):
+    """앱이 쓰는 `PetResponse` + 사람이 읽을 견종 이름 한 칸.
+
+    **상속입니다. 베껴 쓰지 않았습니다** — `PetResponse` 에 칸이 늘면 여기도 같이
+    늘어야 하고, 따로 정의하면 한쪽만 고치는 날이 옵니다.
+
+    `breed` 는 앱의 아바타 id(`dog_toy_poodle_light_brown`)라 화면에 그대로 두면 사람이
+    못 읽습니다. 번역표는 `services/dog_context.py` 의 `BREED_LABELS` 하나뿐이라
+    프론트에 사본을 두지 않고 서버가 붙여 보냅니다 (그 표부터가 DAENGS_APP
+    `DogShapes.kt` 의 사본이라, 셋으로 늘리면 어긋납니다).
+
+    **Life 와 규칙이 다릅니다.** `dog_context.breed_label` 은 모르는 id 와 `mix` 에
+    `None` 을 주는데, 그건 모델에게 지어낼 거리를 주지 않으려는 것입니다. 관리 화면은
+    반대로 **저장된 값을 알아야** 하므로 모르면 원래 id 를 그대로 보여 줍니다.
+    """
+
+    #: 한국어 견종명. 모르는 아바타 id 면 `breed` 와 같은 값입니다.
+    breed_label: str
+
+
 class AppUserDetailOut(AppUserOut):
     """상세. 반려견을 같이 실어 보냅니다.
 
     `pets` 를 별도 엔드포인트로 빼지 않은 것은 **화면이 언제나 같이 그리기** 때문입니다.
     강아지 정보에는 암호화 컬럼이 없어(`models/pet.py`) 여기 실어도 가려야 할 것이
-    늘지 않습니다. 앱이 쓰는 `PetResponse` 를 그대로 씁니다 — 같은 값을 두 모양으로
-    두면 한쪽만 고치는 날이 옵니다.
+    늘지 않습니다.
     """
 
-    pets: list[PetResponse]
+    pets: list[AdminPetOut]

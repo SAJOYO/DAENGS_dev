@@ -21,11 +21,21 @@ type AppUser = {
   created_at: string;
 };
 
-/** `schemas/pet.py` 의 `PetResponse`. 강아지에는 암호화 컬럼이 없습니다 (05_pets.sql). */
+/**
+ * `schemas/app_user_admin.py` 의 `AdminPetOut` (= 앱의 `PetResponse` + `breed_label`).
+ * 강아지에는 암호화 컬럼이 없어 그대로 옵니다 (05_pets.sql).
+ */
 type Pet = {
   id: string;
-  name: string;
+  /** 앱의 아바타 id (`dog_toy_poodle_light_brown`). 화면에는 `breed_label` 을 씁니다. */
   breed: string;
+  /**
+   * 사람이 읽을 견종명. **서버가 붙여 보냅니다** — 번역표(`services/dog_context.py` 의
+   * `BREED_LABELS`)는 이미 DAENGS_APP `DogShapes.kt` 의 사본이라, 프론트에 또 두면
+   * 사본이 셋이 되어 반드시 어긋납니다.
+   */
+  breed_label: string;
+  name: string;
   sex: "male" | "female" | null;
   neutered: boolean | null;
   weight_kg: string | number | null;
@@ -261,7 +271,7 @@ export default function AppUsersConsole() {
                     </div>
                     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                       {[
-                        pet.breed,
+                        pet.breed_label,
                         pet.sex ? SEX[pet.sex] : null,
                         pet.neutered === null ? null : pet.neutered ? "중성화함" : "중성화 안 함",
                         pet.weight_kg ? `${pet.weight_kg}kg` : null,

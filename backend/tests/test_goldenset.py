@@ -31,11 +31,13 @@ from daengs_life.rag.stages import goldenset
 # 2026-09-03 갱신 — 경계 6문항(B1~B6) 추가 + `must` OR (RAG-055). hand 22 -> 28, 문항 30 -> 36.
 # **필수는 62 -> 64 만 늘었다** — B1 이 요구 둘을 갖고, 나머지 다섯은 정답 근거가 없는 문항이다.
 # Q2·T1·I1·I5 에 더한 대안 넷은 **요구를 안 늘린다**. 그것이 OR 을 넣은 이유이고 아래에서 따로 붙잡는다.
-ITEMS = 38
-MUST_TOTAL = 67          # 요구의 수
-MUST_ADDRESSES = 75      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
-BY_ORIGIN = {"hand": 30, "easylaw": 8}
-BY_EXPECT = {"answer": 33, "abstain": 2, "refuse": 3}
+# 2026-09-04 갱신 — 사망·장례 3문항(FW1~FW3) 추가 (RAG-059). hand 30 -> 33, 문항 38 -> 41.
+# 셋 다 요구 하나짜리라 필수가 67 -> 70, 주소가 75 -> 78 로 나란히 는다 (대안이 없다).
+ITEMS = 41
+MUST_TOTAL = 70          # 요구의 수
+MUST_ADDRESSES = 78      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+BY_ORIGIN = {"hand": 33, "easylaw": 8}
+BY_EXPECT = {"answer": 36, "abstain": 2, "refuse": 3}
 
 
 @pytest.fixture(scope="module")

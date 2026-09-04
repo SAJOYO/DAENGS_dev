@@ -130,6 +130,9 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 docker compose --profile gait up -d nginx backend place-search journey-service \
   gait-analysis gait-worker territory-vision-worker
 
+# ③-1 점령 게임판 — 덤프에는 안 따라옵니다(옛 115u 세대). §6 "점령 게임판 적재 (GCP)"
+#     를 여기서 한 번 밟으세요. 안 하면 지도에 점령지가 하나도 안 뜹니다
+
 # ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
 #   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
 cd frontend && npm ci && npm run build
@@ -297,3 +300,80 @@ done
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
+
+### 점령 게임판 적재 (GCP)
+
+**언제** — ⓐ GCP 를 처음 세울 때(§3 ③ 뒤) ⓑ 게임판 세대가 바뀔 때.
+`.github/workflows/territory-sites-ingest.yml` 은 `runs-on: [self-hosted]` 라 **집 서버 place-db
+에만** 적재합니다. GCP 는 그 러너가 아니므로 같은 일을 여기서 손으로 합니다.
+
+**안 하면** — `GET /territory/sites/nearby` 가 **어디서 불러도 `{"sites": []}`** 입니다.
+읽기 질의가 현행 세대만 거르는데(`daengs_place/territory/sites.py` 의
+`site_id LIKE 'territory-site:hex-v1:140:%'`), 09-02 덤프에 있는 건 옛 `anchor-hex:115:q:r`
+행이고 Alembic `0021` 이 그것을 `territory-site:hex-v1:115:q:r` 로만 바꾸기 때문입니다.
+**옛 행이 몇 개든 결과는 같습니다** — 격자가 다르면 같은 id 가 다른 자리를 뜻하므로
+`0021` 이 일부러 세대를 안 올립니다. 앱은 이 API 를 부르므로 증상은 "지도에 점령지가
+하나도 없다" 입니다.
+
+⚠️ **아래 네 값은 워크플로우의 `env:` 와 같아야 합니다.** 세대를 바꾸면 두 군데를 같이
+고치세요 — 워크플로우가 `env:` 로만 읽을 수 있어 한 곳으로 못 모았습니다.
+
+```bash
+cd ~/daengs
+TAG=territory-sites-140u-20260903
+ASSET=territory-lamps-140u-20260903.ndjson.gz
+SHA256=dacb49e4c4f9969ff1efdd1ced58527b5b4c2768c785f902538aeed1f2224e1f
+EXPECTED=362309
+
+# ① 공개 릴리스에서 받고 해시를 대조합니다. 여기서 멈추면 그 뒤로 가지 마세요
+#    ⚠ `cd /tmp` 하지 마세요 — 아래 `docker compose exec` 는 compose 파일이 있는
+#      ~/daengs 에서 불러야 합니다. 받는 것만 /tmp 로 보냅니다
+curl -fL -o "/tmp/$ASSET" \
+  "https://github.com/rkbuhtig/DAENGS_geo/releases/download/$TAG/$ASSET"
+( cd /tmp && echo "$SHA256  $ASSET" | sha256sum -c - )
+
+# ② 풀어서 place-search 컨테이너로. 적재는 DB 접속을 가진 그 컨테이너 안에서 돕니다
+gunzip -kf "/tmp/$ASSET"
+docker cp "/tmp/${ASSET%.gz}" daengs-place-search:/tmp/territory-lamps.ndjson
+
+# ③ dry-run 먼저 — 받다 만 파일을 실적재 전에 잡습니다
+#    (모듈에 MIN_PRODUCTION_SITES=300000 가드가 있고 --expected-sites 와 함께 봅니다)
+docker compose exec -T place-search uv run --no-sync \
+  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson \
+  --expected-sites "$EXPECTED" --dry-run
+
+# ④ 실적재. source='lamp' 를 통째로 DELETE 하고 다시 넣는 원자적 교체라
+#    여러 번 돌려도 안전하고, 옛 115u 행도 이때 같이 사라집니다
+#    (옛 anchor 행의 source 도 'lamp' 입니다 — Alembic 0012 의 원본 SQL)
+docker compose exec -T place-search uv run --no-sync \
+  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson \
+  --expected-sites "$EXPECTED"
+
+# ⑤ 뒷정리
+docker compose exec -T place-search rm -f /tmp/territory-lamps.ndjson
+rm -f "/tmp/$ASSET" "/tmp/${ASSET%.gz}"
+```
+
+**검증 — 셋 다 봅니다.** 워크플로우가 자기 자리에서 하는 것과 같습니다. 한쪽만 헐거우면
+GCP 에서만 조용히 틀립니다:
+
+```bash
+# 현행 세대 건수 = EXPECTED
+docker compose exec -T place-db psql -v ON_ERROR_STOP=1 -U place -d place -Atc \
+  "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id LIKE 'territory-site:hex-v1:140:%';"
+
+# 옛 세대 잔존 = 0
+docker compose exec -T place-db psql -v ON_ERROR_STOP=1 -U place -d place -Atc \
+  "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id NOT LIKE 'territory-site:hex-v1:140:%';"
+
+# 공개 API 로도 보이는지 (서울시청 반경 3km)
+curl -s 'https://daengapi.weareithero.cloud/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=3000&limit=1'
+```
+
+- **`/v2/places/search` 와 같은 DB 입니다.** 적재가 place-db 를 무겁게 쓰는 동안 시설 검색이
+  느려질 수 있어 트래픽이 없는 시간에 돌립니다 (워크플로우가 시설 적재와 `concurrency:
+  place-data-sync` 로 직렬화하는 것과 같은 이유입니다).
+- **집 서버는 이 절차를 쓰지 않습니다** — 거기는 워크플로우를 수동 실행(`workflow_dispatch`)
+  하면 됩니다. 로컬 서버와 GCP 는 **각각** 적재입니다 (roadmap §2-5 와 같은 규칙).
+- 워크플로우로 자동화하려면 GCP 를 러너로 등록하거나 SSH 배포 액션이 필요합니다 —
+  roadmap §7 의 CI/CD 항목과 같은 자리라 그때 같이 봅니다.

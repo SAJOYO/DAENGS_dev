@@ -15,6 +15,10 @@ BENCHMARK_DIR = Path(__file__).resolve().parents[2] / "evals" / "orchestration_r
 GOLD_V1_PATH = BENCHMARK_DIR / "gold_v1.jsonl"
 GOLD_V3_CORRECTIONS_PATH = BENCHMARK_DIR / "gold_v3_corrections.json"
 CONFIG_V1_PATH = BENCHMARK_DIR / "benchmark_v1.yaml"
+# PR #204 — the Place acceptance set. Deliberately a SEPARATE file: the 80-case v1 gold
+# is the frozen regression baseline and gains no cases, so a Place miss and a v6
+# regression can never be confused for one another.
+GOLD_PLACE_V1_PATH = BENCHMARK_DIR / "gold_place_v1.jsonl"
 
 Category = Literal[
     "training_only",
@@ -25,6 +29,9 @@ Category = Literal[
     "execute_handoff",
     "clarify",
     "boundary_adversarial",
+    # PR #204 — used only by the Place acceptance set (gold_place_v1.jsonl). The frozen
+    # 80-case v1 gold has no case in this category and is not re-annotated.
+    "place_only",
 ]
 PromptVersion = Literal[
     "semantic-router-ko-v1",
@@ -33,6 +40,7 @@ PromptVersion = Literal[
     "semantic-router-ko-v4",
     "semantic-router-ko-v5",  # PR #172 — production Life/unsupported-care boundary (runner_v6)
     "semantic-router-ko-v6",  # PR #172 — routine-care vs today's walking window (runner_v7)
+    "semantic-router-ko-v7",  # PR #204 — the `place` destination (runner_v8)
 ]
 
 
@@ -197,6 +205,11 @@ def load_gold_cases(path: Path = GOLD_V1_PATH) -> list[GoldCase]:
             raise ValueError(f"invalid JSONL at {path}:{line_number}") from exc
         cases.append(GoldCase.model_validate(raw))
     return cases
+
+
+def load_gold_place_cases() -> list[GoldCase]:
+    """The frozen Place acceptance set (PR #204), loaded by the same GoldCase schema."""
+    return load_gold_cases(GOLD_PLACE_V1_PATH)
 
 
 def load_gold_v3_cases() -> list[GoldCase]:

@@ -123,6 +123,10 @@ def project_place_capability_data(discovery: _DiscoveryResponse) -> dict[str, An
             notices[-1] = projection_notice
         else:
             notices.append(projection_notice)
+    # Inserted AFTER the budget slice, deliberately: this is the one notice that may
+    # never be dropped, and counting it against `_MAX_GLOBAL_NOTICES` would let a
+    # noisy result silently delete the sentence that says where we actually searched.
+    notices.insert(0, dict(_SEARCH_FRAME_NOTICE))
 
     data: dict[str, Any] = {
         "contract_version": "place-capability-v1",
@@ -237,23 +241,48 @@ def _fit_byte_budget(data: dict[str, Any]) -> None:
                 break
 
 
+# Every Place search is anchored to the caller's trusted device coordinates — there is
+# no geocoder anywhere in Place, and `PlaceSpatialConstraint` takes lat/lng/radius only.
+# So when the user names an area ("성수동에서…", "부산 해운대 근처…") the search still
+# happens around the device, and the result has to say so (D-051, Option B).
+#
+# Both facts are stated UNCONDITIONALLY, and that is the design, not laziness:
+# deciding "was a region named?" would need a new router classification the card
+# deliberately deferred, and a disclosure that appears only sometimes is one the
+# reader cannot rely on. The wording is true either way — it says what the search
+# actually did and what it cannot yet do, and never that a named area was resolved.
+_CURRENT_LOCATION_FRAME = "현재 기기 위치를 기준으로"
+_SEARCH_FRAME_NOTICE = {
+    "code": "place.searched_around_current_location",
+    "message": (
+        "현재 기기 위치를 기준으로 찾았어요. "
+        "질문에 지역 이름이 있어도 아직 그 지역으로는 찾지 못하고, 반영하지 않았습니다."
+    ),
+    "lens_id": None,
+}
+
+
 def _answer(data: dict[str, Any], *, status: str, uses_fallback: bool) -> str:
     count = _candidate_count(data)
     group_count = sum(bool(group["candidates"]) for group in data["groups"])
     if count:
+        found = (
+            f"{_CURRENT_LOCATION_FRAME} {group_count}가지 방향에서 "
+            f"가까운 장소 {count}곳을 찾았습니다."
+        )
         if uses_fallback:
-            return (
-                "요청을 직접 확인할 근거가 부족한 부분은 대안으로 남겼어요. "
-                f"{group_count}가지 방향에서 가까운 장소 {count}곳을 찾았습니다."
-            )
-        return f"{group_count}가지 방향에서 가까운 장소 {count}곳을 찾았습니다."
+            return "요청을 직접 확인할 근거가 부족한 부분은 대안으로 남겼어요. " + found
+        return found
     if data["refinements"]:
         return "바로 검색하기 어려운 기준이 있어요. 아래 선택지로 뜻을 좁혀주세요."
     if status == "unsupported":
         return "이 요청은 현재 장소 데이터로 직접 확인하기 어려워요. 장소 종류나 하고 싶은 일을 더 구체적으로 알려주세요."
     if status == "needs_clarification":
         return "장소를 찾으려면 뜻을 조금 더 구체적으로 알려주세요."
-    return "해석한 방향에서는 주변 장소를 찾지 못했어요. 다른 기준이나 위치로 다시 찾아보세요."
+    return (
+        f"{_CURRENT_LOCATION_FRAME} 찾아봤지만 해석한 방향에서는 주변 장소를 찾지 못했어요. "
+        "다른 기준이나 위치로 다시 찾아보세요."
+    )
 
 
 def _interpretation_message(groups: list[dict[str, Any]], refinements: list[dict[str, Any]]) -> str:

@@ -311,3 +311,61 @@ non-exact 2건은 둘 다 이전 run 에서 이미 나타난 온도 0 경계 흔
 수정하지 않았고(v6 FAIL 산출물은 근거로 보존), v7 산출물은 `results_v7.jsonl` · `summary_v7.json` ·
 `phase2_v7_report.md`. 이 카드의 유료 호출 합계: 2(v4 진단) + 5(v5 프로브) + 80(v6 회귀) + 7(v6 프로브)
 + 80(v7 회귀) = **174건.**
+
+## v8 프롬프트 회귀 — `semantic-router-ko-v7` Place 목적지 추가 (2026-09-04, PR #204 · D-051) — **PASS**
+
+바뀐 변수는 **프롬프트 하나**입니다. v7 은 `ExecuteName` 에 `place` 를 더하고 경계 문장 셋을
+넣었습니다(Place="어디로 갈까" vs Walk="지금 나가도 될까" · 장소 명사가 배경이면 Place 아님 ·
+한 발화가 둘 다 물으면 둘 다). 모델 · gold · gate · 스키마 모양 · 1회 재시도 정책은 그대로입니다.
+
+**이 run 이 재는 것은 "나머지 80건이 안 움직였는가" 입니다.** 동결 gold 에는 Place 케이스가
+하나도 없으므로, 이 80건에서 나오는 모든 Place 선택은 정의상 오탐입니다. 그래서 여유가
+얼마인지 먼저 적어 두고 시작했습니다 — gold 실행 76건에 `executable_precision` gate 0.95 면
+오탐 4건까지가 한계이고, 수용된 v7 run 이 이미 2건(`boundary_05` Walk 추가 · `mixed_09`
+Training 추가)을 쓰고 있으므로 **새 Place 오탐은 2건까지 흡수 가능**했습니다.
+
+순서는 규칙대로: 동결 Place gold set 15건 라이브 프로브(15/15 PASS, 유료 15건) → 80건 회귀
+정확히 1회(run **v8**, 유료 80건).
+
+| 항목 | v7 (`ko-v6`) | v8 (`ko-v7`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity (first-pass / final) | 100% / 100% | 100% / 100% |
+| exact RoutePlan match (≥0.90) | 97.50% | 96.25% |
+| executable precision / recall (≥0.95) | 97.40% / 100% | 96.15% / 100% |
+| multi-execute recall (≥0.90) | 100% | 100% |
+| exact executable set (multi, ≥0.90) | 100% | 100% |
+| exact mixed execute+handoff match (≥0.90) | 90.00% (경계값) | 90.00% (경계값) |
+| Skin / Gait HANDOFF recall (=1.0) | 100% / 100% | 100% / 100% |
+| handoff precision (≥0.95) | 100% | 100% |
+| CLARIFY precision / recall (≥0.90) | 100% / 100% | 100% / 100% |
+| walk / training / life precision | 95.83% / 96.30% / 100% | 95.83% / 96.30% / 100% |
+| forbidden / invented capability (=0) | 0 / 0 | 0 / 0 |
+| `social_intent` non-null | 0 / 80 | 0 / 80 |
+| warm p50 / p95 | 1032 / 1207 ms | 930 / 1135 ms |
+| non-exact | `boundary_05` · `mixed_09` | `boundary_05` · `mixed_09` · **`walk_03`** |
+| verdict | PASS (15/15) | **PASS (15/15)** |
+
+**새로 잃은 것은 `walk_03` 하나이고, 그것이 유일한 Place 오탐입니다.**
+"비 그치는 시간 봐서 오늘 걷기 좋은 구간 골라줘" 에 `place` 가 하나 더 붙었습니다(gold 는 Walk
+단독). 나머지 두 건은 v7 과 **같은** 기존 흔들림이며, 그 사실은 숫자로 확인됩니다 —
+`walk_precision`(95.83%)과 `training_precision`(96.30%)이 v7 과 소수점까지 동일하므로 이번에
+추가된 오탐은 Walk 도 Training 도 아닙니다.
+
+`walk_03` 은 쫓지 않고 **경계 사례로 수용합니다.** "좋은 구간 골라줘" 는 실제로 장소 요청과
+가까운 문장이고("걷기 좋은 곳 골라줘" 와 형태가 거의 같습니다), gold 가 Walk 단독으로 본 근거는
+앞머리의 "비 그치는 시간 봐서" 라는 시간 창 표현입니다. 두 읽기 모두 방어 가능하며, 프롬프트를
+더 조여 이 한 건을 잡으려다 v6 이 겪은 것처럼 반대쪽(오늘의 산책 시간 창)을 눌러 버리는 쪽이
+더 비쌉니다. 규칙대로 80/80 을 쫓지 않습니다.
+
+`invented_unsupported_capability_count` 가 0 인 것은 `evaluate.ALLOWED_EXECUTE` 에 `place` 를
+**회귀를 돌리기 전에** 더했기 때문입니다. 그러지 않았으면 정당한 Place 선택이 "계약에 없는 이름"
+으로 집계돼 무관용 gate 에서 거짓 FAIL 이 났을 것입니다. 잘못된 Place 선택은 지금처럼
+executable precision 의 감점으로 잡히는 것이 맞습니다.
+
+v1~v7 결과 파일은 제자리 수정하지 않았고, v8 산출물은 `results_v8.jsonl` · `summary_v8.json` ·
+`phase2_v8_report.md` 입니다. Place 수용 세트는 `gold_place_v1.jsonl` 로 **별도 파일**이며 동결
+80건에 합치지 않았습니다 — 합치면 Place 오탐과 v6 회귀가 같은 숫자로 읽힙니다.
+이 카드의 유료 호출 합계: 15(Place 프로브, 정렬 수정 전) + 15(Place 프로브, 재실행)
++ 80(v8 회귀) = **110건.** (첫 프로브는 결정적 실행 순서를 넣기 전이라 gold 와 순서만 달랐고,
+그 자체가 순서 결정화가 필요하다는 근거였습니다 — §라우팅 D-051 ④.)

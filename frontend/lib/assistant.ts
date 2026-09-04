@@ -45,14 +45,27 @@ export type AssistantQueryRequest = {
 
 /**
  * `requested_capability` 가 결정론적으로 풀리는 값 전부 (`planner.py`).
- * 앞의 셋은 실행(`execute`), 뒤의 둘은 순수 핸드오프입니다.
+ * 앞의 넷은 실행(`execute`), 뒤의 둘은 순수 핸드오프입니다.
  */
-export const RESOLVED_CAPABILITIES = ["training", "life", "walk", "skin", "gait"] as const;
+export const RESOLVED_CAPABILITIES = [
+  "training",
+  "life",
+  "walk",
+  "place",
+  "skin",
+  "gait",
+] as const;
 
 // ------------------------------------------------------------------- 응답
 
-/** 실행되는 능력. 핸드오프 대상(`skin`·`gait`)은 여기 없습니다 — 실행되지 않으니까요. */
-export type CapabilityName = "training" | "life" | "walk";
+/**
+ * 실행되는 능력. 핸드오프 대상(`skin`·`gait`)은 여기 없습니다 — 실행되지 않으니까요.
+ *
+ * `place` 는 PR #196 에서 실행 registry 에 들어왔고 PR #204(D-051)부터 의미 라우터도
+ * 고를 수 있습니다. 이 파일은 백엔드와 **손으로** 맞추는 것이라(머리 주석) 저쪽
+ * `CapabilityName` 이 넷인 동안 여기가 셋이면 조용히 어긋납니다.
+ */
+export type CapabilityName = "training" | "life" | "walk" | "place";
 
 /** 능력 하나의 결과 상태. 최상위 status 와 **다른 축**입니다. */
 export type CapabilityStatus = "OK" | "ABSTAINED" | "REFUSED" | "PENDING" | "ERROR" | "TIMEOUT";

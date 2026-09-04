@@ -25,14 +25,26 @@
 --------------------------------------------------------------------------------
 """
 
+import base64
+import binascii
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from daengs_backend.models import AdminAuditLog
 from daengs_backend.repositories import admin_audit_log as audit_repo
 
-__all__ = ["record", "record_and_commit"]
+__all__ = [
+    "AuditEntry",
+    "AuditPage",
+    "InvalidCursorError",
+    "list_entries",
+    "record",
+    "record_and_commit",
+]
 
 
 async def record(
@@ -97,3 +109,102 @@ async def record_and_commit(
         ip=ip,
     )
     await session.commit()
+
+
+# --------------------------------------------------------------------------
+# 읽는 쪽 (#221). 위쪽 쓰기와 달리 트랜잭션 경계가 없습니다 — 조회뿐입니다.
+#
+# **감사 로그를 본 것은 감사에 남기지 않습니다.** 남기면 이 화면을 열 때마다 행이
+# 쌓여 같은 화면이 자기 기록으로 채워지고, 그 행을 본 것도 남겨야 하는 재귀가 됩니다.
+# 로드맵 §6 의 "감사 로그는 로그가 아니라 데이터" 와 같은 선입니다.
+# --------------------------------------------------------------------------
+
+#: 한 번에 주는 최대 행 수. 화면의 "더 보기" 가 이 단위로 부릅니다.
+MAX_LIMIT = 200
+DEFAULT_LIMIT = 50
+
+
+class InvalidCursorError(Exception):
+    """커서가 우리가 만든 값이 아닙니다. 라우터가 422 로 바꿉니다."""
+
+
+@dataclass(frozen=True)
+class AuditEntry:
+    """감사 행 + 주체 이름. 라우터가 스키마로 옮깁니다."""
+
+    entry: AdminAuditLog
+    actor_login_id: str | None
+    actor_name: str | None
+
+
+@dataclass(frozen=True)
+class AuditPage:
+    entries: list[AuditEntry]
+    next_cursor: str | None
+
+
+def _encode_cursor(at: datetime, entry_id: uuid.UUID) -> str:
+    """`(created_at, id)` 를 불투명한 문자열로.
+
+    **불투명하게 두는 이유**는 다음 쪽을 부르는 방법이 우리 계약이지 클라이언트가
+    조립할 것이 아니기 때문입니다. 화면은 받은 값을 그대로 돌려주기만 하면 되고,
+    나중에 정렬 기준을 바꿔도 화면을 안 고칩니다.
+    """
+    raw = f"{at.isoformat()}|{entry_id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    """커서를 되돌립니다. 우리가 만든 값이 아니면 `InvalidCursorError`.
+
+    **500 으로 새지 않게 여기서 잡습니다.** 커서는 URL 에 그대로 실려 오므로 사람이
+    손으로 고친 값이 들어올 수 있고, 그건 서버 잘못이 아니라 잘못된 요청입니다.
+    """
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        at_text, _, id_text = raw.partition("|")
+        return datetime.fromisoformat(at_text), uuid.UUID(id_text)
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        raise InvalidCursorError from None
+
+
+async def list_entries(
+    session: AsyncSession,
+    *,
+    limit: int = DEFAULT_LIMIT,
+    cursor: str | None = None,
+    action_prefix: str | None = None,
+    admin_user_id: uuid.UUID | None = None,
+    target_id: uuid.UUID | None = None,
+    since: datetime | None = None,
+) -> AuditPage:
+    """최근 순 한 쪽 + 다음 커서.
+
+    **`limit + 1` 개를 읽어 다음 쪽이 있는지 봅니다.** 정확히 `limit` 개를 읽으면
+    "이게 마지막인가"를 알 수 없어 화면이 빈 쪽을 한 번 더 부르게 됩니다.
+    """
+    capped = max(1, min(limit, MAX_LIMIT))
+    before = _decode_cursor(cursor) if cursor else None
+
+    rows = await audit_repo.list_entries(
+        session,
+        limit=capped + 1,
+        before=before,
+        action_prefix=action_prefix,
+        admin_user_id=admin_user_id,
+        target_id=target_id,
+        since=since,
+    )
+
+    has_more = len(rows) > capped
+    kept = rows[:capped]
+    entries = [
+        AuditEntry(entry=row[0], actor_login_id=row[1], actor_name=row[2])
+        for row in kept
+    ]
+    next_cursor = (
+        _encode_cursor(entries[-1].entry.created_at, entries[-1].entry.id)
+        if has_more and entries
+        else None
+    )
+    return AuditPage(entries=entries, next_cursor=next_cursor)

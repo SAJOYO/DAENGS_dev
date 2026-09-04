@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { useAuth } from "./auth-provider";
 import { apiJson, ApiError } from "@/lib/api";
 
 /**
@@ -46,6 +47,14 @@ type Pet = {
 };
 
 type AppUserDetail = AppUser & { pets: Pet[] };
+
+/**
+ * `GET /api/admin/app-users/{id}/pii` 의 응답 (`schemas` 의 `AppUserPiiOut`).
+ *
+ * **이 값을 받는 순간 서버에 감사 행이 하나 남았습니다** — 그래서 화면이 누르기 전에
+ * 그 사실을 알려 줍니다. 모르고 누르는 기록은 감사가 아니라 함정입니다.
+ */
+type RevealedPii = { email: string | null; phone: string | null; name: string | null };
 
 /**
  * 회원 상태. **`withdrawn` 을 `suspended` 와 다르게 씁니다** — 정지는 관리자가 막은
@@ -95,12 +104,21 @@ function emptyReason(status: AppUser["status"]): string {
  * 감사 기록을 함께 붙입니다. 이 화면은 읽고 가려서 보여 주기만 합니다.
  */
 export default function AppUsersConsole() {
+  // **버튼 둘의 권한이 다릅니다** — 원문은 `pii:read`, 정지는 `ops:write`.
+  // 지금 `ROLE_PERMISSIONS` 로는 둘 다 ADMIN·OPERATOR 만 가지지만, 화면에서 합쳐 두면
+  // role 구성을 바꿀 때 여기가 조용히 틀립니다 (`core/deps.py` 첫 문단).
+  const { can } = useAuth();
+  const canReveal = can("pii:read");
+  const canWrite = can("ops:write");
+
   const [mode, setMode] = useState<"email" | "kakao_id">("email");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AppUser[] | null>(null);
   const [detail, setDetail] = useState<AppUserDetail | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 원문. `null` 이면 아직 안 열어 본 것입니다 — 열었는데 비어 있는 것과 다릅니다. */
+  const [pii, setPii] = useState<RevealedPii | null>(null);
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
@@ -130,10 +148,46 @@ export default function AppUsersConsole() {
   }
 
   async function open(id: string) {
+    // **원문을 반드시 접습니다.** 안 접으면 A 회원의 원문이 B 회원 화면에 남습니다.
+    setPii(null);
     try {
       setDetail(await apiJson<AppUserDetail>(`/api/admin/app-users/${id}`));
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : "회원을 불러오지 못했습니다.");
+    }
+  }
+
+  async function reveal(id: string) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      setPii(await apiJson<RevealedPii>(`/api/admin/app-users/${id}/pii`));
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "원문을 불러오지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setStatus(id: string, status: "active" | "suspended") {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await apiJson<AppUser>(`/api/admin/app-users/${id}`, {
+        method: "PATCH",
+        // `apiJson` 은 헤더를 안 붙여 줍니다 — 빼면 FastAPI 가 본문을 파싱하지 않아
+        // 422 가 나고, 그 detail 은 목록이라 화면에 기본 문구만 남습니다.
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      setNotice(status === "suspended" ? "회원을 정지했습니다." : "정지를 풀었습니다.");
+      // 상태가 바뀐 행을 다시 읽습니다. `open` 이 원문도 같이 접습니다.
+      await open(id);
+    } catch (e) {
+      // 409 는 **탈퇴한 회원**입니다. 서버가 무엇을 해야 하는지까지 문구에 담아 줍니다.
+      setNotice(e instanceof ApiError ? e.message : "상태를 바꾸지 못했습니다.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -219,8 +273,29 @@ export default function AppUsersConsole() {
           </div>
 
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <Field label="이메일" value={detail.email_masked} status={detail.status} />
-            <Field label="전화번호" value={detail.phone_masked} status={detail.status} />
+            {/*
+              원문을 열었으면 그것을, 아니면 가려진 값을 보여 줍니다. **원문이 `null` 인
+              것은 실패가 아닙니다** — 열 것이 없었던 것이고, 그때는 가려진 값 자리와
+              같은 문구(`파기됨` / `동의 안 받음`)로 떨어집니다.
+            */}
+            <Field
+              label="이메일"
+              value={pii ? pii.email : detail.email_masked}
+              status={detail.status}
+              revealed={pii !== null}
+            />
+            <Field
+              label="전화번호"
+              value={pii ? pii.phone : detail.phone_masked}
+              status={detail.status}
+              revealed={pii !== null}
+            />
+            <Field
+              label="이름"
+              value={pii ? pii.name : detail.name_masked}
+              status={detail.status}
+              revealed={pii !== null}
+            />
             <div>
               <dt className="text-xs text-zinc-500 dark:text-zinc-400">카카오 회원번호</dt>
               <dd className="mt-0.5 font-mono text-xs">{detail.kakao_id}</dd>
@@ -232,12 +307,82 @@ export default function AppUsersConsole() {
           </dl>
 
           {/*
-            **가린 값이지 지운 값이 아닙니다.** 원문을 여는 문은 짝 카드(#212)가
-            `pii:read` 로 따로 내고, 그 조회는 감사 기록에 남습니다.
+            **누르기 전에 기록된다는 것을 알려 줍니다.** 모르고 누르는 기록은 감사가
+            아니라 함정입니다. 권한이 없는 사람에게는 버튼 대신 왜 없는지를 적습니다 —
+            버튼만 사라지면 "고장났나" 로 읽힙니다.
           */}
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            개인정보는 가려서 보여 줍니다. 원문 보기는 아직 없습니다.
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {canReveal ? (
+              pii ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPii(null)}
+                    className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                  >
+                    다시 가리기
+                  </button>
+                  <span className="text-xs text-amber-700 dark:text-amber-400">
+                    원문을 열었습니다. 이 조회는 기록에 남았습니다.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void reveal(detail.id)}
+                    className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    원문 보기
+                  </button>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    누르면 <strong className="font-medium">누가 · 언제 · 어느 칸을 열었는지</strong>가
+                    기록에 남습니다. 값은 기록하지 않습니다.
+                  </span>
+                </>
+              )
+            ) : (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                개인정보는 가려서 보여 줍니다. 원문을 보려면 <code>pii:read</code> 권한이 필요합니다.
+              </span>
+            )}
+          </div>
+
+          {canWrite && detail.status !== "withdrawn" && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void setStatus(detail.id, detail.status === "active" ? "suspended" : "active")
+                }
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+              >
+                {detail.status === "active" ? "이용 정지" : "정지 해제"}
+              </button>
+              {/*
+                **정지가 즉시가 아닙니다.** access token 은 무상태라 최대 5분(ACCESS_TTL)
+                동안 살아 있습니다 — 요청마다 DB 를 보지 않기로 한 것이 D-015 입니다.
+                열려 있던 세션(refresh)은 정지하는 순간 끊깁니다.
+              */}
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                정지하면 열려 있던 세션이 끊기지만, 이미 발급된 접근 토큰은 최대 5분 더 살아 있습니다.
+              </span>
+            </div>
+          )}
+
+          {detail.status === "withdrawn" && (
+            /*
+              **탈퇴는 관리자가 되돌리지 않습니다.** 본인 요청이고 개인정보 파기가
+              따라온 일이라, 되돌리면 삭제 요청을 관리자가 무르는 것이 됩니다.
+              되살아나는 길은 본인이 카카오로 다시 로그인하는 것 하나입니다.
+            */
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              탈퇴한 회원입니다. 개인정보가 이미 파기되었고, 관리자가 상태를 되돌릴 수 없습니다 —
+              본인이 카카오로 다시 로그인하면 되살아납니다.
+            </p>
+          )}
 
           <div>
             <h3 className="text-sm font-medium">반려견 {detail.pets.length}마리</h3>
@@ -299,14 +444,22 @@ function Field({
   label,
   value,
   status,
+  revealed,
 }: {
   label: string;
   value: string | null;
   status: AppUser["status"];
+  /** 원문을 연 상태인가. 값이 같아도 **가려진 값인지 원문인지** 화면이 말해야 합니다. */
+  revealed: boolean;
 }) {
   return (
     <div>
-      <dt className="text-xs text-zinc-500 dark:text-zinc-400">{label}</dt>
+      <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+        {label}
+        {revealed && value && (
+          <span className="ml-1.5 text-amber-700 dark:text-amber-400">원문</span>
+        )}
+      </dt>
       <dd className={value ? "mt-0.5" : "mt-0.5 text-zinc-400 dark:text-zinc-500"}>
         {value ?? emptyReason(status)}
       </dd>

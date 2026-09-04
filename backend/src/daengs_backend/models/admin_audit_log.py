@@ -40,6 +40,17 @@ AUDIT_ACCOUNT_ROLE_CHANGED = "admin.account.role_changed"
 AUDIT_ACCOUNT_SUSPENDED = "admin.account.suspended"
 AUDIT_ACCOUNT_REACTIVATED = "admin.account.reactivated"
 
+# 앱 회원을 상대로 한 관리 행위 (`services/app_user_admin.py` · #212). 대상은 `app_users`
+# 행이라 `target_type='app_user'` 입니다 — 위 계정 관리(`admin_user`)와 접두어로 갈립니다.
+#
+# **`pii_revealed` 가 이 테이블이 생긴 첫째 이유입니다** (로드맵 §1 "누가 복호화를 봤나").
+# 가려서 보는 것(`services/app_user_admin.py` 의 마스킹)은 남기지 않습니다 — 남길 가치가
+# 있는 것은 "가려서 봤다"가 아니라 "원문을 열어 봤다" 이고, 화면을 열 때마다 행이 쌓이면
+# 진짜 따져야 하는 행위가 그 안에 묻힙니다.
+AUDIT_APP_USER_PII_REVEALED = "admin.app_user.pii_revealed"
+AUDIT_APP_USER_SUSPENDED = "admin.app_user.suspended"
+AUDIT_APP_USER_REACTIVATED = "admin.app_user.reactivated"
+
 AUDIT_ACTIONS = (
     AUDIT_LOGIN_SUCCESS,
     AUDIT_LOGIN_FAILED_UNKNOWN_ID,
@@ -49,6 +60,9 @@ AUDIT_ACTIONS = (
     AUDIT_ACCOUNT_ROLE_CHANGED,
     AUDIT_ACCOUNT_SUSPENDED,
     AUDIT_ACCOUNT_REACTIVATED,
+    AUDIT_APP_USER_PII_REVEALED,
+    AUDIT_APP_USER_SUSPENDED,
+    AUDIT_APP_USER_REACTIVATED,
 )
 
 # `target_type` 에 들어가는 값. 대상이 없는 행위(로그인)는 NULL 입니다.

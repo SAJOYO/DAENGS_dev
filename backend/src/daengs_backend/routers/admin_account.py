@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import Perm, Principal, require
+from daengs_backend.core.deps import Perm, Principal, client_ip, require
 from daengs_backend.schemas.admin_account import (
     AdminAccountCreate,
     AdminAccountOut,
@@ -33,18 +33,6 @@ from daengs_backend.services import admin_account as admin_account_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/admins", tags=["admin-accounts"])
-
-
-def _client_ip(request: Request) -> str:
-    """감사 행에 남길 IP. `routers/auth.py` 의 같은 함수와 판단이 같습니다.
-
-    nginx 가 `X-Real-IP` 를 덮어쓰므로 배포 환경에서는 위조할 수 없고, `uv run dev` 로
-    직접 띄우면 앞에 nginx 가 없어 믿을 수 없습니다 (개발 PC 한정).
-    """
-    forwarded = request.headers.get("x-real-ip")
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else "unknown"
 
 
 @router.get("", response_model=list[AdminAccountOut])
@@ -77,7 +65,7 @@ async def create_account(
             password=body.password,
             name=body.name,
             role=body.role,
-            ip=_client_ip(request),
+            ip=client_ip(request),
         )
     except admin_account_service.LoginIdTakenError:
         # 409 입니다 — 요청 자체는 올바르고 지금 상태와 충돌하는 것입니다.
@@ -110,7 +98,7 @@ async def update_account(
             target_id=admin_id,
             role=body.role,
             status=body.status,
-            ip=_client_ip(request),
+            ip=client_ip(request),
         )
     except admin_account_service.AdminNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "없는 계정입니다.") from None

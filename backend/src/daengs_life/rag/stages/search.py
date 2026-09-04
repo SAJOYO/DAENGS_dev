@@ -390,9 +390,16 @@ def expand_citations(hits: list[Hit], query: Query, *, scan: list[Hit] | None = 
 
         top-k 밖일 수 있다 — Q6 의 다리가 7위였다. 그래서 근거에 안 실린 청크의 `chunk_id` 가
         나올 수 있는데, 그것이 사실이고 검문소③이 알아야 할 것이다.
+
+        **조 폴백으로 온 청크도 찾아 준다** (RAG-058 ②). 참조는 `제16조제2항` 인데 돌아온
+        청크의 `section` 은 `제16조` 라, 있는 그대로 맞추면 못 찾고 `cited_by` 가 빈 채로
+        나간다 — 그러면 두 축이 모두 `None` 인 히트가 **왜 거기 있는지 설명할 칸이 사라진다.**
         """
         for h in scan:
-            if (title, section) in _refs_in(h):
+            refs = _refs_in(h)
+            if (title, section) in refs:
+                return h.chunk_id
+            if any(t == title and article_only(s) == section for t, s in refs):
                 return h.chunk_id
         return None
 

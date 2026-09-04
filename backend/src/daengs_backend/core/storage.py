@@ -152,6 +152,27 @@ def build_territory_photo_key(
     return f"territory/{app_user_id}/{attempt_id}/capture{suffix}"
 
 
+def build_screening_photo_key(
+    app_user_id: uuid.UUID, record_id: uuid.UUID, *, content_type: str
+) -> str:
+    """피부 변화 기록 사진의 키.
+
+    **record_id 가 uuid 라 추측이 안 됩니다** — bridge 는 인증 헤더 없이 "키를 아는
+    것이 자격" 이라, 여기에 순번 같은 것을 쓰면 남의 사진을 받을 수 있습니다.
+    (점령지가 attempt_id 로, 프로필이 따로 만든 uuid 로 같은 역할을 합니다.)
+
+    ⚠️ **한 기록에 사진 한 장이고 바뀌지 않습니다.** 프로필 사진과 달리 교체가
+       없습니다 — 다시 찍으면 그건 새 기록입니다. 그래서 키에 uuid 를 더 붙이지
+       않고 record_id 로 결정합니다.
+    """
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 피부 사진 형식: {content_type}") from exc
+    return f"screening/{app_user_id}/{record_id}/photo{suffix}"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""

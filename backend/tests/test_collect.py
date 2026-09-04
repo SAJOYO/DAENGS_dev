@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -48,6 +49,14 @@ def text(name: str) -> str:
 
 def dead(*_a, **_k):
     raise Unavailable("죽었다", hint="검문소 D")
+
+
+def _delayed(inner, seconds: float):
+    """느린 provider. **`wired` 가 세는 것을 그대로 세도록 원래 스텁을 감싼다.**"""
+    def slow(*a, **k):
+        time.sleep(seconds)
+        return inner(*a, **k)
+    return slow
 
 
 @pytest.fixture
@@ -283,6 +292,95 @@ def test_prefetch_counts_grids_not_keys(wired) -> None:
     keys = [k for k in cache.active_keys(NOW, limit=100)
             if k.split(":", 3)[1] + ":" + k.split(":", 3)[2] in GRID_FEEDS]
     assert len(keys) >= 2 and active_grids(cache, NOW) == [GRID]
+
+
+# ------------------------------------------------------------ 병렬 (⑤-b)
+#
+# 콜드 캐시에서 `sources` 9개 중 **마지막 3개**(`dnsty`·`frcst`·`pwn`)가 늘 `예산 초과` 로
+# 죽었다. 그 셋이 느려서가 아니라 호출 순서의 마지막이라서였다 — 직렬이면 8초가 **총합**이라
+# 앞의 셋이 다 먹으면 뒤는 호출조차 안 나간다. 예산을 늘리는 것으로는 안 고쳐진다:
+# `transport/base.py` 의 재시도 때문에 provider 하나가 남은 예산을 혼자 다 먹을 수 있다.
+
+def test_the_request_wave_goes_out_in_parallel(wired, monkeypatch) -> None:
+    """**벽시계로 잰다.** 예산은 스텁이 `transport` 를 건너뛰어서 여기까지 안 내려온다 —
+    직렬/병렬을 가르는 것은 "예산 초과가 났는가"가 아니라 조회 다섯이 겹쳐 나갔는가다.
+
+    직렬이면 5 × 0.3 = 1.5초 이상, 병렬이면 0.3초 언저리다. 0.9초는 그 사이 어디를 잡아도
+    안 흔들리는 자리라 고른 값이다 — 느린 PC 에서도 병렬은 0.9초를 안 넘고, 빠른 PC 에서도
+    직렬은 1.5초 밑으로 못 내려온다.
+    """
+    slow = ("kma_apihub.raw_aws", "kma_vilage_fcst.raw_ultra", "kma_vilage_fcst.raw_village",
+            "airkorea_realtime.raw_dnsty", "airkorea_realtime.raw_frcst", "kma_warning.raw_pwn")
+    for name in slow:
+        module_name, attr = name.split(".")
+        module = {"kma_apihub": kma_apihub, "kma_vilage_fcst": kma_vilage_fcst,
+                  "airkorea_realtime": airkorea_realtime, "kma_warning": kma_warning}[module_name]
+        original = getattr(module, attr)
+        monkeypatch.setattr(module, attr, _delayed(original, 0.3))
+
+    started = time.monotonic()
+    obs = collect(HERE, NOW, cache=fresh())
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.9, f"조회가 겹쳐 나가지 않았다 — {elapsed:.2f}초 걸렸다 (직렬이면 1.5초+)"
+    assert all(r.ok for r in obs.providers), [reasons(obs, r.provider) for r in obs.providers]
+
+
+def test_a_parse_failure_only_marks_its_own_provider(wired, monkeypatch) -> None:
+    """**병렬화에서 실제로 고쳐야 했던 자리.**
+
+    예전 `parsed()` 는 파싱 실패를 `self.results[-1]` 에 썼다. 직렬일 때는 그 `[-1]` 이 방금
+    내가 넣은 항목이었지만, 병렬에서는 "마지막에 append 한 남의 항목"이라 **엉뚱한 provider 를
+    실패로 만들고 진짜 실패는 사라진다.** 완료 순서를 일부러 어긋나게 만들어 그것을 잡는다 —
+    깨진 응답은 즉시 오고, 다른 조회들은 늦게 온다.
+    """
+    monkeypatch.setattr(airkorea_realtime, "raw_dnsty", lambda *a, **k: {"items": "리스트가 아니다"})
+    for module, attr in ((kma_vilage_fcst, "raw_ultra"), (kma_vilage_fcst, "raw_village"),
+                         (kma_warning, "raw_pwn")):
+        monkeypatch.setattr(module, attr, _delayed(getattr(module, attr), 0.2))
+
+    obs = collect(HERE, NOW, cache=fresh())
+
+    failed = [r.provider for r in obs.providers if not r.ok]
+    assert failed == [Source.AIRKOREA], f"파싱 실패가 남의 자리를 덮었다 — {failed}"
+    assert "파싱 실패" in (next(r for r in obs.providers if r.provider is Source.AIRKOREA).reason or "")
+
+
+def test_the_source_list_keeps_a_fixed_order(wired) -> None:
+    """⑥ `sources` 는 완료 순서가 아니라 **선언 순서**다.
+
+    병렬이면 그날의 응답 속도가 곧 목록 순서가 되어, 콘솔에서 어제와 오늘을 눈으로 못 맞춘다.
+    순서는 병렬화 이전의 호출 순서와 같게 두었다 — 화면에 보이는 것은 안 바뀐다.
+    """
+    obs = collect(HERE, NOW, cache=fresh())
+    assert [r.provider for r in obs.providers] == [
+        Source.AWS_STATIONS, Source.AIRKOREA_STATIONS, Source.KAKAO,
+        Source.AWS_MIN, Source.FCST_ULTRA, Source.FCST_VILLAGE,
+        Source.AIRKOREA, Source.AIRKOREA_FORECAST, Source.WARNING,
+    ]   # AWS 가 값을 냈으므로 `ncst` 는 안 불렀다 (④-e 1번)
+
+
+def test_the_daily_budget_counts_every_concurrent_call_exactly_once(wired) -> None:
+    """④-e — 동시에 나가도 일 예산은 호출 수와 정확히 같아야 한다.
+
+    카운터가 병렬에서 유실되면 **한도를 넘겨 쓰고도 안 넘긴 줄 안다.** data.go.kr 1,000회/일이
+    이 카운터 하나로 지켜지므로(개발계정, 2026-08-25 결정) 여기가 틀리면 조용히 차단된다.
+    `MemoryStore` 는 `_guard` 락, `RedisStore` 는 `INCR` 로 원자적이라는 것의 확인이다.
+    """
+    calls = wired
+    cache = fresh()
+    collect(HERE, NOW, cache=cache)
+
+    made = {name: len(hits) for name, hits in calls.items()}
+    day = NOW.strftime("%Y%m%d")        # `cache._day` 와 같은 축이어야 한다 (KST 날짜)
+    assert cache.store.used("datagokr-vilage-fcst", day) == (
+        made["kma_vilage_fcst.raw_ultra"] + made["kma_vilage_fcst.raw_village"]
+        + made["kma_vilage_fcst.raw_ncst"])
+    assert cache.store.used("datagokr-airkorea", day) == (
+        made["airkorea_realtime.raw_dnsty"] + made["airkorea_realtime.raw_frcst"])
+    assert cache.store.used("datagokr-warning", day) == made["kma_warning.raw_pwn"]
+    assert cache.store.used("apihub", day) == (
+        made["kma_apihub.raw_aws"] + made["kma_apihub.raw_stations"])
 
 
 def test_warming_uses_the_same_path_as_a_request(wired) -> None:

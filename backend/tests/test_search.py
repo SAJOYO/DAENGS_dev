@@ -331,3 +331,98 @@ def test_checkpoint3_finds_the_maengyeon_article(vector) -> None:
     tiers = [search.tier_of(h.chunk_id, {"law-drf-api-animal-protection-act#제18조"}, set())
              for h in hits]
     assert "must" in tiers
+
+
+# ------------------------------------------- 시행령의 맨몸 `법` 과 항 단위 조회 (RAG-058)
+def test_parent_law_only_for_subordinate_titles() -> None:
+    """모법은 **시행령·시행규칙에서만** 나온다 (RAG-058 ①).
+
+    조례도 본문에서 `법` 을 쓰지만 **어느 법인지 제목이 말해 주지 않는다** — 조례 하나가
+    여러 법을 인용한다. 여기서 넓히면 엉뚱한 법의 같은 번호를 근거로 싣게 된다.
+    """
+    assert search.parent_law("동물보호법 시행령") == "동물보호법"
+    assert search.parent_law("가축전염병 예방법 시행규칙") == "가축전염병 예방법"
+    assert search.parent_law("동물보호법") is None
+    assert search.parent_law("서울특별시 동물보호 조례") is None
+    assert search.parent_law(None) is None
+
+
+def test_refs_read_the_hang_not_just_the_article() -> None:
+    """조문을 **항까지** 읽는다 (RAG-058).
+
+    DB 의 `section` 이 `제101조제4항` 이라 글자 그대로 맞아야 한다. 조까지만 읽으면
+    `제101조` 로 조회해 다섯 항 어느 것도 못 찾는다.
+    """
+    got = search.refs_in_text("근거 법조문: 법 제101조제4항제4호", "동물보호법 시행령")
+    assert got == [("동물보호법", "제101조제4항")]
+
+
+def test_bare_law_resolves_even_behind_a_subject() -> None:
+    """별표는 두 모양으로 쓴다 — `법 제101조…` 와 `소유자등이 법 제16조…`.
+
+    **마지막 낱말이 `법`** 인지를 보므로 둘 다 잡힌다. 앞에 붙은 것은 문장의 주어이지
+    법령명의 일부가 아니다.
+    """
+    text = "위반행위: 소유자등이 법 제16조제2항제1호에 따른 안전조치를 하지 않은 경우"
+    assert search.refs_in_text(text, "동물보호법 시행령") == [("동물보호법", "제16조제2항")]
+
+
+def test_bare_law_is_dropped_when_the_owner_is_not_subordinate() -> None:
+    """소유 문서를 모르거나 시행령이 아니면 **맨몸 `법` 을 풀지 않는다.**
+
+    지어내는 것보다 못 찾는 편이 낫다 (RAG-058 ①). 이 규칙이 `…이 법` 같은 산문도 같이
+    걸러 준다 — 조례 본문에서 나오던 `란 법` · `소유자가 법` 이 그것이다.
+    """
+    text = "근거 법조문: 법 제101조제4항제4호"
+    assert search.refs_in_text(text) == []
+    assert search.refs_in_text(text, "서울특별시 동물보호 조례") == []
+    assert search.refs_in_text("이 법 제5조에 따라", "동물보호법") == []
+
+
+def test_full_law_names_are_untouched_by_the_bare_law_rule() -> None:
+    """`가축전염병 예방법` 은 마지막 낱말이 `예방법` 이라 모법 치환에 안 걸린다.
+
+    시행령 안에서도 다른 법을 이름으로 인용하는 자리가 있어서, 그것까지 모법으로 바꾸면
+    엉뚱한 조문이 온다.
+    """
+    got = search.refs_in_text("「가축전염병 예방법」 제15조에 따라", "동물보호법 시행령")
+    assert got == [("가축전염병 예방법", "제15조")]
+
+
+def test_article_only_strips_the_hang() -> None:
+    """조 폴백 키 (RAG-058 ②). 항이 없으면 그대로다."""
+    assert search.article_only("제101조제4항") == "제101조"
+    assert search.article_only("제52조의4제2항") == "제52조의4"
+    assert search.article_only("제16조") == "제16조"
+
+
+def test_cited_refs_skips_what_the_hits_already_have_by_article() -> None:
+    """`제16조` 가 이미 히트에 있으면 `제16조제2항` 참조도 뺀다 (RAG-058 ②).
+
+    안 빼면 항 조회가 빗나가고 **폴백이 같은 청크를 도로 데려와** `MAX_EXPANDED` 를 한 자리
+    쓴다. `expand_citations` 가 마지막에 거르기는 하지만 그때는 이미 늦다.
+    """
+    have = search.Hit(rank=1, score=0.5, chunk_id="x#제16조", citation="", citation_url=None,
+                      section="제16조", document_title="동물보호법", content="", part=None)
+    citing = search.Hit(
+        rank=2, score=0.4, chunk_id="y#별표", citation="", citation_url=None,
+        section="별표 4", document_title="동물보호법 시행령", part=None,
+        content="위반행위: 소유자등이 법 제16조제2항제1호에 따른 안전조치를 하지 않은 경우")
+    assert search.cited_refs([have, citing]) == []
+
+
+def test_expansion_falls_back_from_hang_to_article(vector) -> None:
+    """항으로 못 찾으면 조로 찾는다 (RAG-058 ②).
+
+    `동물보호법 제16조` 는 2,000자 미만이라 조 하나로 저장돼 있는데, 시행령 별표는 그것을
+    `법 제16조제2항제1호` 로 가리킨다. 폴백이 없으면 이 참조는 영영 빗나간다.
+    """
+    citing = search.Hit(
+        rank=1, score=0.4, chunk_id="probe#별표", citation="", citation_url=None,
+        section="별표 4", document_title="동물보호법 시행령", part=None,
+        content="위반행위: 소유자등이 법 제16조제2항제1호에 따른 안전조치를 하지 않은 경우")
+    with _ready_or_skip() as conn:
+        out = search.expand_citations([citing], vector, conn=conn)
+    pulled = [h for h in out if h.cited_by == "probe#별표"]
+    assert any(h.document_title == "동물보호법" and h.section == "제16조" for h in pulled), \
+        "조 폴백이 `제16조` 를 데려오지 못했다"

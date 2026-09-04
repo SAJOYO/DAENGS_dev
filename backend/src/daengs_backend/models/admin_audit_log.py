@@ -61,6 +61,16 @@ AUDIT_APP_USER_PII_REVEALED = "admin.app_user.pii_revealed"
 AUDIT_APP_USER_SUSPENDED = "admin.app_user.suspended"
 AUDIT_APP_USER_REACTIVATED = "admin.app_user.reactivated"
 
+# AI 답변 신고 처리 (`services/answer_report.py` · A1). **`turn_revealed` 는 신고 상세를
+# 열어 대화 원문을 본 순간에만 남깁니다 — 목록을 훑는 것은 남기지 않습니다** (D-053 ③).
+# `pii_revealed` 가 그은 선과 같습니다: 남길 가치가 있는 것은 "가려서 봤다" 가 아니라
+# "원문을 열어 봤다" 이고, 화면을 열 때마다 행이 쌓이면 진짜 따져야 하는 행위가 묻힙니다.
+#
+# `target_type` 은 `app_user` 입니다 — 신고 id 가 아니라 **누구의 대화를 봤나**가
+# 나중에 따질 대상이기 때문입니다. 어느 신고였는지는 `detail.report_id` 에 남습니다.
+AUDIT_REPORT_TURN_REVEALED = "admin.report.turn_revealed"
+AUDIT_REPORT_RESOLVED = "admin.report.resolved"
+
 AUDIT_ACTIONS = (
     AUDIT_LOGIN_SUCCESS,
     AUDIT_LOGIN_FAILED_UNKNOWN_ID,
@@ -74,6 +84,8 @@ AUDIT_ACTIONS = (
     AUDIT_APP_USER_PII_REVEALED,
     AUDIT_APP_USER_SUSPENDED,
     AUDIT_APP_USER_REACTIVATED,
+    AUDIT_REPORT_TURN_REVEALED,
+    AUDIT_REPORT_RESOLVED,
 )
 
 # `target_type` 에 들어가는 값. 대상이 없는 행위(로그인)는 NULL 입니다.

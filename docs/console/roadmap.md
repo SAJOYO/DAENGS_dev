@@ -65,6 +65,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 감사 로그 | `admin:manage` | `/console/audit` — 최근 순, 갈래 필터 넷, 더 보기(키셋) | `/admin/audit`(ADMIN_MANAGE) | ✅ #221 | 지우는 주기가 없다 (A5). `action` 인덱스가 없어 갈래 필터는 created_at 으로 좁힌 뒤 걸린다 |
 | 회원 · 반려견 | `read` | `/console/users` — 검색 · 마스킹 상세 · 반려견 · 원문 보기(`pii:read`) · 정지/해제(`ops:write`) | `/admin/app-users`(READ · PII_READ · OPS_WRITE) | ✅ #211 · #212 | **목록이 없다** — 검색만 된다 (A2c) |
 | 운영 지표 | `metrics:read` | `/console/metrics` — 기간 전환(7·30·90일), 분포 넷 | `/admin/metrics/chats`(METRICS_READ) | ✅ #223 | 제품 테이블(`chat_*`) 집계뿐이다. 요청 메타데이터(지연 등)는 B2 대기 |
+| 신고 | `admin:manage` | 없음 — **#237 이 만든다** | `/admin/reports`(ADMIN_MANAGE) | 🔵 #235 (BE 만) | 화면이 없어 지금은 psql · curl 로만 본다. 상세를 여는 것은 **감사에 남는다**(`admin.report.turn_revealed`) |
 
 > **생활 RAG 탭이 읽어야 하는 계약 — `detail` 이 두 모양이다** (#213). `/life/ask` 는 스스로 이름
 > 붙인 결과를 `{code, message}` **객체**로 주고(#177 의 기권 `no_evidence` · 경계 거절
@@ -185,7 +186,7 @@ cd ~/daengs && git show origin/main:db/migrations/verify_2026-09-01_chats.sql \
 | A2a | **회원 조회** — `GET /admin/app-users?email=`·`?kakao_id=` · 상세(마스킹 · 반려견) · `/console/users`. 전부 `READ`, 쓰기 없음 | §1 둘째 줄. `console/page.tsx` 의 준비 중 카드 | 없음 — DB 변경도 없다 | S | ✅ #211 |
 | A2b | **원문 복호화와 상태 변경** — `GET /admin/app-users/{id}/pii`(`pii:read`, 부를 때마다 `admin.app_user.pii_revealed`) · `PATCH status`(`ops:write`) + 세션 끊기 | 감사에 남길 가치가 있는 것은 "가려서 봤다"가 아니라 "원문을 열어 봤다" — 그 선에서 A2 를 갈랐다 | A4 ✅ · A3 ✅ · #211 ✅ | S | ✅ #212 (`Perm.PII_READ` 의 첫 사용처. 탈퇴 회원의 상태는 관리자가 못 되돌린다) |
 | A2c | **회원 목록** — 검색 말고 훑어보는 길. **권한을 같이 정해야 한다** | #211 이 일부러 안 만들었다 — `/admin/app-users` 가 `Perm.READ` 라 목록을 열면 VIEWER 까지 전 회원을 넘겨보게 된다. "메일 보낸 사람 찾기"와 "회원 훑기"는 다른 일이다 | 사람 결정(권한) — §7 | XS | ⏸ 필요해지면 |
-| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ (두 DB 적용 완료) · A0 ✅ D-053 · A4 ✅ · 앱 카드(DAENGS_APP)는 **전제가 아니다**(D-053 ④) | M | ⬜ **전제가 없다 — 지금 착수 가능** |
+| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ (두 DB 적용 완료) · A0 ✅ D-053 · A4 ✅ · 앱 카드(DAENGS_APP)는 **전제가 아니다**(D-053 ④) | M | 🔵 **BE 완료**(#235 — `answer_reports` · `POST /app/reports` · `GET/PATCH /admin/reports` · 감사 action 둘). 남은 것은 화면(#237)과 앱 카드 |
 
 ### B. 관측 — 시스템이 남긴 것을 본다
 

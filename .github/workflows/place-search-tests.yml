@@ -68,8 +68,6 @@ jobs:
         env:
           DAENGS_TRAINING_RAG_BASE_URL: http://host.docker.internal:8010
           REDIS_PASSWORD: ci-only-password
-          # Training DSN 의 `:?` 가드(#105). CI 는 DB 에 붙지 않고 렌더만 통과하면 된다.
-          TRAINING_RAG_DB_PASSWORD: ci-only-training-rag-password
           # 서버 폴더 가드(`:?`, RAG-050). CI 는 크롤러를 띄우지 않으니 렌더만 통과하면 된다.
           DAENGS_CORPUS_DIR: ./data
         run: docker compose config --quiet

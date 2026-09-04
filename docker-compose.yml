@@ -603,7 +603,6 @@ services:
       sh -c "uv sync --frozen &&
       exec uv run --no-sync uvicorn daengs_journey.main:app --host 0.0.0.0 --port 8000"
 
-  # GUI가 필요할 때만: docker compose --profile tools up -d
   # ------------------------------------------------------------------ 크롤러 (RAG-044 · RAG-050)
   #
   # `docker compose up -d` 에 **같이 뜹니다** (RAG-050 에서 profile 을 뗐습니다). 매일 KST 04:00 에
@@ -747,6 +746,13 @@ services:
       exec uv run --no-sync celery -A daengs_life.tasks.celery_app beat
       --loglevel info --schedule /var/lib/celery/beat-schedule"
 
+  # ── pgAdmin (GUI 가 필요할 때만) ─────────────────────────────────────
+  #
+  # **기본 기동에는 안 뜹니다** — `profiles: ["tools"]` 라 명시해야 올라옵니다:
+  #   docker compose --profile tools up -d
+  #
+  # ⚠ **로그인 없는 모드입니다** (`PGADMIN_CONFIG_SERVER_MODE: "False"`). 띄워 둔 동안에는
+  #   같은 네트워크의 누구나 들어와 DB 를 만집니다. 쓸 때만 올리고 내리세요 (CLAUDE.md).
   pgadmin:
     image: dpage/pgadmin4:9.17
     container_name: pgadmin

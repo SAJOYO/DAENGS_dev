@@ -177,7 +177,11 @@ async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
 async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pet = type("Pet", (), {"id": uuid.uuid4()})()
+    # 사진 칸도 들고 있어야 합니다 — 삭제 경로가 보행 객체와 **프로필 사진**을
+    # 둘 다 훑기 때문입니다 (D-052). 여기서는 사진이 없는 아이라 전부 None 입니다.
+    pet = type(
+        "Pet", (), {"id": uuid.uuid4(), "photo_storage_key": None, "photo_pending_key": None}
+    )()
     session = TxSession()
     events: list[str] = []
 

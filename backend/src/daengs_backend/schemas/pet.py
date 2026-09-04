@@ -6,7 +6,7 @@
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
@@ -92,6 +92,61 @@ class PetResponse(BaseModel):
     #: 이 아이가 대표인가. `app_users.primary_pet_id` 에서 옵니다 —
     #: pets 테이블에는 그런 칸이 없습니다 (05_pets.sql 주석 참고).
     is_primary: bool
+
+    #: 프로필 사진이 있는가. **URL 을 여기 담지 않습니다** — 목록 한 번에 N 개의
+    #: 주소를 만들면 저장소를 N 번 두드리게 되고, 앱이 안 그리는 아이 것까지
+    #: 만들게 됩니다. 앱은 이 값이 true 인 아이에 대해서만 사진 주소를 따로 받습니다.
+    has_photo: bool = False
+
+    #: 사진이 마지막으로 바뀐 시각. **앱의 캐시 열쇠입니다** — 이 값이 그대로면
+    #: 다시 안 받아도 됩니다. 사진이 없으면 None 입니다.
+    photo_updated_at: datetime | None = None
+
+
+#: 프로필 사진으로 받는 형식. 모델·DB CHECK 와 같은 목록입니다.
+PetPhotoContentType = Literal["image/jpeg", "image/webp"]
+
+
+class PetPhotoTicketRequest(BaseModel):
+    """어떤 형식으로 올릴지. **키의 확장자를 이 값이 정합니다.**
+
+    파일 이름을 안 받는 이유는 앱이 준 이름을 경로로 쓰면 안 되기 때문입니다
+    (`build_object_key` 가 basename 의 suffix 만 쓰는 것과 같은 자리).
+    """
+
+    content_type: PetPhotoContentType = "image/jpeg"
+
+
+class PetPhotoTicketResponse(BaseModel):
+    """사진을 올릴 자리. 앱은 여기 적힌 곳으로 **직접 PUT** 합니다.
+
+    보행·점령지의 티켓과 같은 모양입니다 — 저장소가 GCS 로 되돌아가도 앱 코드가
+    안 바뀌게 하려는 것입니다 (그때는 이 주소가 Signed URL 이 됩니다).
+    """
+
+    #: backend 가 만든 키. **앱이 정하지 않습니다**(원칙 6).
+    storage_key: str
+
+    #: 여기로 PUT 합니다.
+    upload_url: str
+
+    #: 그대로 붙여야 하는 헤더. Content-Type 이 안 맞으면 confirm 에서 거절됩니다.
+    upload_headers: dict[str, str]
+
+    expires_in_seconds: int
+
+
+class PetPhotoResponse(BaseModel):
+    """사진을 내려받을 자리."""
+
+    #: 이 주소로 GET 합니다. 저장소가 GCS 면 만료가 있는 Signed URL 입니다.
+    #:
+    #: ⚠️ 로컬 볼륨에서는 **만료가 없습니다.** 대신 bridge 라우터가 "backend 가
+    #:    발급한 키인지"를 DB 로 확인합니다 (D-052).
+    download_url: str
+    content_type: str
+    size_bytes: int
+    updated_at: datetime
 
 
 class PetListResponse(BaseModel):

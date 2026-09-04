@@ -3,7 +3,7 @@
 **Query**: `목욕을 싫어해요` ("My dog hates bathing")  
 **Status**: UNCERTAIN (model_reported_insufficient_evidence)  
 **Investigation Date**: 2026-09-04  
-**Scope**: Phases 1-4 complete (diagnostic analysis); Phase 5 not applicable; Phase 6 complete for this investigation (documentation only); Phase 7 proposal only; Phase 8 deferred
+**Scope**: Phases 1-4 complete (diagnostic analysis); Phase 5 not applicable; Phase 6 complete for this investigation (documentation only); Phase 7 proposal only; Phase 8 not applicable to this documentation-only PR, deferred until an approved source and implementation exist
 
 ---
 
@@ -205,8 +205,7 @@ The minimum justified action is to document the coverage gap and stop pending so
 ### Phase 7 (Evaluation): Proposal only, not implemented
 Candidate bathing-related queries are recorded as future evaluation cases in `bathing_coverage_gap_proposal_0904.md`. They are not integrated into any permanent or frozen evaluation dataset in this PR, because doing so would freeze a temporary coverage gap as if it were expected long-term behavior.
 
-### Phase 8 (Verification): Deferred
-Deferred until an approved bathing-aversion source and its ingestion are implemented. There is nothing to verify yet, since no retrieval, generation, or corpus change was made.
+### Phase 8 (Verification): Not applicable to this documentation-only PR; deferred until an approved source and implementation exist.
 
 ---
 
@@ -226,4 +225,4 @@ Deferred until an approved bathing-aversion source and its ingestion are impleme
 - **Phase 5**: Not applicable — no relevant ingested source was found
 - **Phase 6**: Complete for this investigation — coverage gap documented, work stopped pending source review
 - **Phase 7**: Proposal only — not implemented, not integrated into any permanent evaluation dataset
-- **Phase 8**: Deferred — until an approved source and implementation exist
+- **Phase 8**: Not applicable to this documentation-only PR; deferred until an approved source and implementation exist.

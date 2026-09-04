@@ -87,11 +87,13 @@ def test_questions_come_from_the_goldenset() -> None:
 
     **기권·거절 문항도 여기 들어온다.** 랩이 그 질문을 실제로 돌려야 "답했나 말았나"를 잴 수
     있어서다 — 골든셋에만 적어 두고 랩이 안 물으면 아무것도 안 재진다 (RAG-055).
+
+    09-04 에 사망·장례 3문항(FW1~FW3)이 붙어 33 이 됐다 (RAG-059).
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 30
+    assert len(items) == 33
     assert all(q for _, q, _, _ in items)
     assert {"B2", "B4", "B6"} <= {i[0] for i in items}
     # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)

@@ -15,21 +15,34 @@
 
 **조건 없는 목록이 없습니다.** `?email=` 이나 `?kakao_id=` 중 하나가 반드시 있어야
 합니다 — 이유는 아래 `search` docstring.
+
+**권한이 셋으로 갈립니다** (#212 가 뒤의 둘을 더했습니다).
+
+    GET  /admin/app-users            READ       가려진 값만
+    GET  /admin/app-users/{id}       READ       가려진 값만 + 반려견
+    GET  /admin/app-users/{id}/pii   PII_READ   **원문. 부를 때마다 감사 행이 남는다**
+    PATCH /admin/app-users/{id}      OPS_WRITE  정지 / 정지 해제
+
+원문 조회를 `?reveal=true` 같은 질의 인자로 두지 않은 이유는 **같은 경로가 어떤 때는
+기록을 남기고 어떤 때는 안 남게 되기 때문**입니다. 권한도 다르고(FastAPI 의존성은
+경로 단위입니다), "감사에 남는 호출"이 경로 이름으로 드러나는 편이 낫습니다.
 """
 
 import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import Perm, Principal, require
+from daengs_backend.core.deps import Perm, Principal, client_ip, require
 from daengs_backend.schemas.app_user_admin import (
     AdminPetOut,
     AppUserDetailOut,
     AppUserOut,
+    AppUserPiiOut,
+    AppUserStatusPatch,
 )
 from daengs_backend.services import app_user_admin as service
 from daengs_backend.services import dog_context
@@ -124,3 +137,78 @@ async def detail(
             for p in view.pets
         ],
     )
+
+
+@router.get("/{app_user_id}/pii", response_model=AppUserPiiOut)
+async def reveal(
+    app_user_id: uuid.UUID,
+    request: Request,
+    admin: Annotated[Principal, Depends(require(Perm.PII_READ))],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AppUserPiiOut:
+    """개인정보 원문. **`pii:read` 만 통과하고, 부를 때마다 감사 행이 남습니다.**
+
+    `Perm.PII_READ` 를 가진 role 은 ADMIN 과 OPERATOR 뿐입니다 (`core/deps.py`).
+    CURATOR · ANALYST · VIEWER 는 여기서 403 이고, 그 셋도 위의 마스킹된 조회는
+    그대로 씁니다 — 그것이 이 카드가 A3(#207) 뒤에 온 이유입니다.
+
+    **GET 인데 쓰기가 일어납니다.** 감사 기록이 그 쓰기이고, 그래서 이 호출은
+    멱등하지 않습니다. 그래도 GET 인 것은 클라이언트 입장에서 **자원을 바꾸지 않기**
+    때문입니다 — 브라우저가 미리 불러 두는 자리에 이 경로를 두지만 마세요.
+
+    값이 전부 `None` 이어도 200 입니다. 없는 것과 못 여는 것은 다릅니다
+    (`services/app_user_admin.py` 의 `_decrypt_or_none`).
+    """
+    pii = await service.reveal(
+        session,
+        app_user_id=app_user_id,
+        actor_id=admin.admin_id,
+        ip=client_ip(request),
+    )
+    if pii is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "없는 회원입니다.")
+
+    return AppUserPiiOut(email=pii.email, phone=pii.phone, name=pii.name)
+
+
+@router.patch("/{app_user_id}", response_model=AppUserOut)
+async def update_status(
+    app_user_id: uuid.UUID,
+    body: AppUserStatusPatch,
+    request: Request,
+    admin: Annotated[Principal, Depends(require(Perm.OPS_WRITE))],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AppUserOut:
+    """정지 / 정지 해제. **`ops:write` 입니다** — 원문 조회(`pii:read`)와 다른 권한입니다.
+
+    ⚠ **지금 `ROLE_PERMISSIONS` 로는 둘이 같은 두 role 을 가립니다** — ADMIN 과
+    OPERATOR 만 둘 다 가집니다 (CURATOR 의 쓰기는 `KB_WRITE` 하나뿐입니다). 그래도
+    나눠 두는 것은 두 일이 실제로 다르고, role 구성을 바꿀 때 고칠 자리가
+    `ROLE_PERMISSIONS` 한 곳이어야 하기 때문입니다 (`core/deps.py` 첫 문단 —
+    "엔드포인트는 role 이 아니라 권한을 선언합니다"). 화면도 두 버튼을 따로 가립니다.
+
+    **탈퇴한 회원은 409 입니다.** 권한 문제가 아니라 요청이 지금 상태와 충돌하는
+    것입니다 — 되살리는 길은 본인이 카카오로 다시 로그인하는 것 하나뿐입니다
+    (`services/app_user_admin.py` 의 `update_status`).
+    """
+    try:
+        user = await service.update_status(
+            session,
+            app_user_id=app_user_id,
+            actor_id=admin.admin_id,
+            status=body.status,
+            ip=client_ip(request),
+        )
+    except service.AppUserNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "없는 회원입니다.") from None
+    except service.WithdrawnMemberError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "탈퇴한 회원입니다. 상태를 되돌릴 수 없습니다 — "
+            "본인이 카카오로 다시 로그인하면 되살아납니다.",
+        ) from None
+
+    # 응답은 가려진 값입니다. 상태를 바꿨다고 원문을 딸려 보내지 않습니다.
+    view = await service.get_detail(session, user.id)
+    assert view is not None
+    return _to_out(view)

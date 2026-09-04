@@ -26,7 +26,12 @@ const consoleSections: Array<{
    * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
    * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
    */
-  href?: "/console/search" | "/console/crawl" | "/console/status" | "/console/users";
+  href?:
+    | "/console/search"
+    | "/console/crawl"
+    | "/console/status"
+    | "/console/admins"
+    | "/console/users";
 }> = [
   {
     title: "지식 베이스",
@@ -91,14 +96,30 @@ const consoleSections: Array<{
     description:
       "앱 회원을 이메일이나 카카오 회원번호로 찾아 상태와 반려견을 봅니다. 개인정보는 가려서 보여 줍니다.",
     // **이 카드는 읽기까지입니다** (#211). 이메일 검색이 blind index 로만 되는 것은
-    // D-012 가 정해 둔 것이고, 화면이 그 제약을 안내합니다.
+    // D-012 가 정해 둔 것이고, 화면이 그 제약을 안내합니다. 원문 보기와 정지는 아직
+    // 없어서 문구에서도 뺐습니다 — 카드 문구가 없는 기능을 약속하면 안 됩니다.
     //
     // **`pii:read` 가 아니라 `read` 입니다.** 나가는 값이 전부 마스킹된 것이라
     // API(`/admin/app-users`)도 `Perm.READ` 로 열려 있습니다. 여기를 좁히면 API 는
     // 열어 주는데 화면만 안 보이는 계정이 생깁니다 (위 카드들과 같은 규칙).
-    // 원문 보기와 정지는 짝 카드가 `pii:read`·`ops:write` 로 화면 안에서 가립니다.
+    // 원문 보기와 정지는 짝 카드(#212)가 `pii:read`·`ops:write` 로 화면 안에서 가립니다.
+    // 그 카드의 전제가 감사 로그(A4 · #203)와, `pii:read` 를 **못 가진 계정이 실제로
+    // 존재하게** 하는 계정 관리(A3 · #207)입니다 — 로드맵 §5 가 둘을 앞에 둔 이유입니다.
     permission: "read",
     href: "/console/users",
+  },
+  {
+    title: "관리자 계정",
+    description:
+      "콘솔에 로그인하는 사내 계정을 발급하고, 권한을 바꾸거나 정지합니다. 회원(앱)이 아니라 관리자입니다.",
+    // **`admin:manage` 는 ADMIN 만 가집니다** (`core/deps.py` 의 ROLE_PERMISSIONS).
+    // 다른 카드들과 달리 여기서는 카드 권한과 API 권한이 **같아야** 합니다 —
+    // 화면 안에 권한이 갈리는 갈래가 없어서, 넓히면 들어가자마자 403 을 보게 됩니다.
+    //
+    // 이 카드가 D-014 의 role 5단계가 실제로 갈리는 첫 자리입니다. 그전까지는
+    // 전원이 ADMIN 이라 어느 카드도 사라지지 않았습니다.
+    permission: "admin:manage",
+    href: "/console/admins",
   },
   {
     title: "운영 지표",

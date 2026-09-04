@@ -4,15 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { useAuth } from "./auth-provider";
-
-/** `03_auth.sql` 의 role 5단계. 화면에는 한국어로 보여 줍니다. */
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "관리자",
-  OPERATOR: "운영",
-  CURATOR: "지식 관리",
-  ANALYST: "분석",
-  VIEWER: "조회",
-};
+import { ROLE_LABEL } from "@/lib/auth";
 
 /**
  * 콘솔의 껍데기. 헤더와 로그아웃, 그리고 `/auth/me` 를 기다리는 동안의 빈 화면.

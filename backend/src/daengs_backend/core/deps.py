@@ -369,5 +369,25 @@ def _deny_unless_permitted(admin: Principal, perms: tuple[Perm, ...]) -> None:
     raise HTTPException(status.HTTP_403_FORBIDDEN, "권한이 없습니다.")
 
 
+def client_ip(request: Request) -> str:
+    """감사 행과 잠금 카운터에 남길 IP.
+
+    nginx 의 `proxy_set_header X-Real-IP $remote_addr` 는 클라이언트가 보낸 같은 이름의
+    헤더를 **덮어씁니다.** 그래서 배포 환경에서는 위조할 수 없고, backend 가 포트를
+    열지 않아 nginx 말고는 들어올 길이 없는 것도 전제입니다 (D-005).
+
+    `uv run dev` 로 직접 띄우면 앞에 nginx 가 없어서 이 헤더를 믿을 수 없습니다.
+    개발 PC 한정이라 그대로 둡니다.
+
+    **`routers/auth.py` 에 같은 함수가 하나 더 있습니다.** 저기는 로그인 잠금 카운터의
+    기준이라 인증 경로를 건드리지 않으려고 남겨 두었습니다 — 합칠 때는 그 카드에서
+    같이 합치세요 (#212 `## 남은 것`).
+    """
+    forwarded = request.headers.get("x-real-ip")
+    if forwarded:
+        return forwarded
+    return _client_host(request)
+
+
 def _client_host(request: Request) -> str:
     return request.client.host if request.client else "unknown"

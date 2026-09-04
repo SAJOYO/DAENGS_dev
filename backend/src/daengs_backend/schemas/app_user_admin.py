@@ -20,6 +20,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -80,3 +81,33 @@ class AppUserDetailOut(AppUserOut):
     """
 
     pets: list[AdminPetOut]
+
+
+class AppUserPiiOut(BaseModel):
+    """복호화된 원문 (`pii:read` · #212). **이 응답은 감사 기록과 짝입니다.**
+
+    서버가 이것을 만들 때 `admin_audit_log` 에 행이 하나 남습니다
+    (`services/app_user_admin.py` 의 `reveal`). 그래서 화면도 누르기 전에 그 사실을
+    알려 줘야 합니다 — 모르고 누르는 기록은 감사가 아니라 함정입니다.
+
+    `None` 은 오류가 아닙니다. 처음부터 암호문이 없던 칸이고, 이유는 `AppUserOut.status`
+    가 가릅니다 — `withdrawn` 이면 파기된 것, 아니면 카카오 동의를 못 받은 것.
+    """
+
+    email: str | None
+    phone: str | None
+    name: str | None
+
+
+class AppUserStatusPatch(BaseModel):
+    """정지 / 정지 해제. **`withdrawn` 은 받지 않습니다.**
+
+    탈퇴는 본인 요청이고 개인정보 파기가 따라오는 일이라, 관리자가 status 만 바꿔서
+    만들면 **파기가 안 된 채로 '탈퇴함'이 되는 행**이 생깁니다. 그 경로는
+    `services/app_auth.py` 의 `withdraw` 하나뿐입니다.
+
+    `Literal` 로 쓰는 이유: `models` 의 `APP_USER_STATUSES` 는 셋(`withdrawn` 포함)이라
+    그대로 검증하면 관리자가 탈퇴를 만들 수 있게 됩니다. 여기서 좁히는 것이 맞습니다.
+    """
+
+    status: Literal["active", "suspended"]

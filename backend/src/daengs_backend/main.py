@@ -21,6 +21,7 @@ from daengs_backend.routers import (
     auth,
     chat,
     crawl,
+    dogcard,
     gait,
     health,
     metrics,
@@ -29,6 +30,11 @@ from daengs_backend.routers import (
     territory,
     training,
     walk_spatial_diary,
+)
+from daengs_backend.routers import (
+    # ⚠️ 별칭입니다. 아래 `daengs_screening.service` 의 `screening_router` 와 이름이
+    #    겹칩니다 — 그쪽은 옛 무인증 `/screen/*`, 이쪽은 새 계약 `/app/screening/*`.
+    screening as app_screening,
 )
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
@@ -155,6 +161,10 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+
+# 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
+# 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
+app.include_router(dogcard.router)
 # 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
 # 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**
@@ -163,6 +173,12 @@ app.include_router(gait.router)
 app.include_router(app_walks.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
+
+# 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —
+# 그쪽은 인증 없이 판정만 하고 아무것도 안 남기며, 앱이 아직 그것을 씁니다.
+# 여기는 인증·소유권·사진 저장이 붙은 새 계약이고, 옛 경로를 410 으로 닫는 것은
+# 앱이 옮겨간 뒤 별도 카드입니다 (보행 `/gait/*` → `/app/gait/*` 와 같은 방식).
+app.include_router(app_screening.router)
 # 산책 기록을 조건별 공간 일기로 읽는 앱 전용 표면. 인증은 라우터가 받고,
 # Place·Journey·Pin을 호출하지 않은 채 Walk 원판만 조립합니다 (D-049).
 app.include_router(walk_spatial_diary.router)

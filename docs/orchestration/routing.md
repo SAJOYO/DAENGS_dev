@@ -14,8 +14,10 @@
 
 - `requested_capability` — 클라이언트가 능력을 명시한 경우.
   **라우팅 신호일 뿐, 절대 인가가 아닙니다** (D-036) — 인가는 §5 의 매트릭스가 따로 봅니다.
-  PR #196부터 `place`도 이 경로에서만 실행합니다. 위치가 없으면 Place 전용 좌표 CLARIFY를
-  만들며, 이 추가는 아래 의미 라우터 schema/prompt를 넓히지 않습니다.
+  PR #196은 `place`를 이 경로에서만 열었고, **PR #204(D-051)부터는 의미 라우터도 고릅니다.**
+  그때 이 경로의 Place 특수 분기는 지웠습니다 — 명시 신호와 의미 경로가 같은
+  `assemble_route_plan` 으로 같은 plan 을 만듭니다(동치성은 테스트로 고정). 위치가 없으면
+  예전처럼 Place 좌표 CLARIFY 이고, 그 계약은 바뀌지 않았습니다.
 - 구조화된 UI/액션 메타데이터 — 어느 화면·버튼에서 온 요청인지
 - 명시적 source/action 식별자
 - 의미가 모호하지 않은, 이미 구조화된 컨텍스트
@@ -207,6 +209,56 @@ graph·aggregate·다른 경계 문구는 그대로이고 한국어 키워드 �
    `active_dog_id` 로 프로필을 서버가 조회하는 모양이 되어야 하고, 라우터가 견종·나이를
    생성해 넣는 일은 없습니다.
 
+### Place 목적지 — `semantic-router-ko-v7` (CONFIRMED — PR #204, D-051, 2026-09-04)
+
+실제 사용자 질문 **"오늘 산책하기 좋은 곳이 어디야?"** 가 Walk 만 실행하고 **장소 대신 현재
+산책 조건**을 답했습니다. 오라우팅이 아니라 **표현 불가**였습니다 — Place 는 PR #196 부터
+실행 가능한 능력이었지만(`CapabilityName.PLACE` · `PlacePayload` · adapter · 48KiB projection)
+`ExecuteName` 이 세 값짜리 `Literal` 이라 자유 자연어에서 고를 길이 없었고, 라우터는 스키마가
+표현할 수 있는 절반만 골랐습니다.
+
+v7 은 목적지 하나와 경계 문장 셋을 더합니다. 모델(`gemini-3.1-flash-lite`) · 스키마 모양 ·
+handoff 쌍 · `social_intent` · O-14 1회 재시도 · v5 의 Life 제한 · v6 의 산책 시간 창 문장은
+**그대로**입니다.
+
+| 질의 | v6 (이전) | v7 (현재) |
+| --- | --- | --- |
+| `지금 산책하기 좋아?` | Walk | Walk |
+| `산책하기 좋은 곳 추천해줘` | Walk 또는 빈 결정 | **Place** |
+| `오늘 산책하기 좋은 곳 추천해줘` | Walk | **Place + Walk** |
+| `근처 동물병원 찾아줘` | 빈 결정 | **Place** |
+| `오늘 공원 산책 괜찮아?` | Walk | Walk (공원은 배경) |
+| `산책할 때 줄을 너무 당겨` | Training | Training |
+| `목욕은 몇 주마다 해야 해?` | 빈 결정 | 빈 결정 (미지원) |
+
+세 문장은 이렇습니다.
+
+1. **Place 는 "어디로 갈까", Walk 는 "지금 나가도 될까"** — 둘은 독립적으로 선택합니다.
+2. **장소 명사가 배경이면 Place 가 아닙니다.** Walk 가 이미 갖고 있던 "산책이 배경이라고 Walk
+   가 아니다" 규칙의 거울입니다. 이 문장이 지키는 것은 동결 gold 의 `multi_07`·`multi_11`
+   ("공원" 이 배경으로 등장하는 두 건)입니다.
+3. 한 발화가 둘 다 물으면 **둘 다** 고릅니다.
+
+일반 돌봄 경계(§2 옵션 C)는 그대로이고, 새 목적지가 그 공백을 삼키지 않도록 한 문장을
+더했습니다 — **"목욕은 몇 주마다"는 미지원, "미용실 찾아줘"는 Place.** Place 가 생겼다고
+사육 상식에 답이 생기지는 않습니다.
+
+**지역명 — Option B (사람 결정, 2026-09-04).** "성수동에서…", "부산 해운대 근처…" 의 지역명은
+**좌표가 아닙니다.** Place 에 geocoder 가 없고 `PlaceSpatialConstraint` 는 `lat`/`lng`/`radius_m`
+뿐이며, Place 전용 proposer 는 공간 표현으로 semantic 을 만드는 것을 명시적으로 금지합니다.
+그래서 목적지 선택은 지역명이 있어도 달라지지 않고(Place 는 그대로 선택), 검색은 신뢰된 기기
+좌표로만 하며, 응답이 **그 사실과 지역명을 반영하지 못했다는 사실**을 함께 밝힙니다. 두 고지
+모두 조건 없이 나갑니다 — "지역명이 있었나" 를 판정하려면 라우터 분류가 하나 더 필요한데
+그것이 이 카드가 미룬 것이고, 가끔만 나오는 고지는 기댈 수 없는 고지입니다. 지오코딩과 명시적
+지역 CLARIFY(Option A)는 **별도 카드**입니다.
+
+**v7 검증 (2026-09-04):**
+
+- 동결 Place gold set 15건 라이브 프로브(production 모듈, 질문당 1회, 유료 15건):
+  단일 4 · 복합 2 · 부정/경계 5 · CLARIFY 2 · 지역명 2 → **15/15**, 스키마 재시도 0.
+- 동결 80건 회귀 1회(`runner_v8.py`, run **v8**, 유료 80건, gate 그대로): **PASS — 15/15 gate.**
+  상세는 `router-benchmark.md` §v8.
+
 ## 3. CLARIFY 와 HANDOFF 의 뜻
 
 세 행위는 RoutePlan 의 스칼라 mode 가 아니라 **목록 구조**로 표현됩니다
@@ -223,7 +275,10 @@ graph·aggregate·다른 경계 문구는 그대로이고 한국어 키워드 �
   계산하고 핸드오프는 항상 별도 표면화합니다 (contracts §5).
 - **CLARIFY 는 배타적입니다** (O-8). `clarify != None` 이면 능력도 핸드오프도 실행하지
   않습니다 — stateless 재요청(아래)이 이미 실행된 능력을 재실행해 비용을 이중으로 무는
-  것을 막습니다.
+  것을 막습니다. **좌표 게이트는 선택 집합 전체에 하나입니다** (D-051): Walk 와 Place 가
+  둘 다 좌표를 쓰므로, Place+Walk 인데 좌표가 없으면 어느 쪽도 실행하지 않습니다. 절반만
+  답하고 나머지를 되묻는 응답은 사용자가 이미 답을 받았다고 읽습니다. 되묻는 문장만
+  무엇이 필요했는지에 따라 갈리고 `clarify.missing` 키는 세 경우 모두 같습니다.
 - CLARIFY 는 2026-08-22 멘토링에서 합의된 원칙의 계승입니다 — **도구가 직접 되묻지 않고
   오케스트레이터가 후속 질문을 담당한다.**
 - HANDOFF 는 실패가 아닙니다. multipart 이미지·영상 워크플로(Skin·Gait)는 전용 API 에
@@ -305,10 +360,11 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 
 ## 5. 능력 가용성 · v1 범위 · 인가 매트릭스
 
-의미 라우터가 EXECUTE 로 고를 수 있는 대상은 현재 **Training · Life · Walk**뿐입니다.
-실행 registry에는 Place가 추가됐지만 PR #196에서는 `requested_capability=place`라는 명시적
-신호로만 들어갑니다. Place 자연어 목적지 선택은 별도 gold set과 기존 80건 회귀를 통과할
-후속 PR의 범위입니다.
+의미 라우터가 EXECUTE 로 고를 수 있는 대상은 **Training · Life · Walk · Place** 넷입니다.
+Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=place` 명시 신호로만
+열려 있다가, **PR #204(D-051, 프롬프트 `semantic-router-ko-v7`)에서 자연어 목적지 선택이
+열렸습니다** — 예고된 순서대로 동결 Place gold set(`gold_place_v1.jsonl`, 15건 라이브 15/15)과
+기존 80건 회귀(run v8, 15/15 gate PASS)를 함께 통과한 뒤입니다.
 
 ### v1 인가 매트릭스 (CONFIRMED — D-036)
 
@@ -321,7 +377,7 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 | Training | **YES** | YES |
 | Life | YES | YES |
 | Walk | YES | YES |
-| Place (명시 신호만) | YES | YES |
+| Place | YES | YES |
 | Skin EXECUTE | NO | NO |
 | Gait EXECUTE | NO | NO |
 
@@ -341,7 +397,8 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
   HANDOFF 입니다. Gait 는 여전히 `gait` profile 뒤의 별도 프로세스이고 #98도 미머지입니다.
   Journey는 #99로 소스가 backend 프로젝트에 합쳐졌을 뿐 Card 1 EXECUTE 대상이 아닙니다.
-  Place는 PR #196의 명시 신호 표적 경로만 예외이며 전역 의미 라우터 대상은 아닙니다.
+  Place는 PR #204(D-051)로 전역 의미 라우터 대상이 됐습니다 — 근거·서비스·목적지 순서를
+  지킨 결과이지 기술 가용성 때문이 아닙니다.
   **기술 가용성은 오케스트레이션 범위 승인이 아닙니다.**
 - Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의 PENDING + job
   메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다.

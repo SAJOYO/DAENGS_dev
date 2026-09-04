@@ -31,7 +31,9 @@ const consoleSections: Array<{
     | "/console/crawl"
     | "/console/status"
     | "/console/admins"
-    | "/console/users";
+    | "/console/users"
+    | "/console/audit"
+    | "/console/metrics";
 }> = [
   {
     title: "지식 베이스",
@@ -122,13 +124,35 @@ const consoleSections: Array<{
     href: "/console/admins",
   },
   {
+    title: "감사 로그",
+    description:
+      "관리자가 한 일이 남습니다 — 로그인 시도, 계정 발급과 권한 변경, 회원 개인정보 원문 조회. 값은 남기지 않습니다.",
+    // **`admin:manage` 입니다** — 계정 관리와 같은 등급 (2026-09-04 사람 결정).
+    // 이 화면에는 "누가 어느 회원의 개인정보를 열었나"와 "어떤 아이디로 로그인이
+    // 시도됐나"가 그대로 보입니다. 감사 로그를 보는 것 자체가 동료를 감시할 수 있다는
+    // 뜻이라, OPERATOR 는 복호화는 하지만 누가 복호화했는지는 못 봅니다 — 의도한
+    // 비대칭입니다 (`routers/admin_audit.py`).
+    //
+    // **운영 로그가 아닙니다.** 에러·스택트레이스는 파일로 가고 콘솔에 안 띄웁니다
+    // (`docs/console/roadmap.md` §6). 여기 있는 것은 로그가 아니라 데이터입니다.
+    permission: "admin:manage",
+    href: "/console/audit",
+  },
+  {
     title: "운영 지표",
     description:
-      "어떤 능력이 얼마나 불렸는지, 실패 비율과 응답 지연을 봅니다. 질문 원문은 남기지 않습니다.",
-    // **마지막 문장이 이 화면이 아직 없는 이유입니다.** D-037 이 관측에 질문 원문을
-    // 금지했고, 허용된 메타데이터(request_id · 능력 · status · elapsed_ms)를 어디에
-    // 쌓을지가 아직 안 정해졌습니다 (`docs/console/roadmap.md` B2 · §7).
+      "대화가 얼마나 오갔고 어떤 갈래로 답했는지 봅니다. 질문 원문은 남기지 않습니다.",
+    // **제품 테이블(`chat_*`)을 집계합니다** (#223). 원문 없이 세는 것만 하는 이유는
+    // D-037 이고, 스키마에 담을 칸조차 없습니다 (`schemas/metrics.py`).
+    //
+    // **요청 메타데이터(B2)는 아직 없습니다** — request_id · 능력 · status · elapsed_ms
+    // 를 어디에 쌓을지가 사람 결정 대기라(`docs/console/roadmap.md` §7), 정해지면 같은
+    // 화면에 칸을 더합니다.
+    //
+    // `metrics:read` 는 VIEWER 만 없습니다 — `ANALYST` 라는 role 이 존재하는 이유가
+    // 이 화면입니다 (`core/deps.py` 의 ROLE_PERMISSIONS).
     permission: "metrics:read",
+    href: "/console/metrics",
   },
 ];
 

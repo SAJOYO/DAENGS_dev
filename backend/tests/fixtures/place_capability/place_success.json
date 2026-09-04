@@ -1,0 +1,169 @@
+{
+  "request_id": "fx-place-success-0001",
+  "status": "ANSWERED",
+  "message": "현재 기기 위치를 기준으로 1가지 방향에서 가까운 장소 2곳을 찾았습니다.",
+  "results": [
+    {
+      "capability": "place",
+      "status": "OK",
+      "data": {
+        "contract_version": "place-capability-v1",
+        "answer": "현재 기기 위치를 기준으로 1가지 방향에서 가까운 장소 2곳을 찾았습니다.",
+        "interpretation_summary": {
+          "status": "ready",
+          "disposition": "literal_target",
+          "resolution": "single_interpretation",
+          "message": "미용/위탁 방향으로 나눠 찾았어요."
+        },
+        "groups": [
+          {
+            "lens_id": "purpose.pet_care",
+            "label": "미용/위탁",
+            "support_note": "미용·위탁 목적으로 좁혔어요.",
+            "candidates": [
+              {
+                "place_id": {
+                  "source": "kto",
+                  "ref": "P-1001"
+                },
+                "title": "멍멍이 미용실 홍대점",
+                "summary": "반려견 전용 미용실이에요.",
+                "kind": {
+                  "id": "grooming",
+                  "label": "미용"
+                },
+                "location": {
+                  "lat": 37.5563,
+                  "lon": 126.9236,
+                  "distance_m": 420
+                },
+                "address": "서울 마포구 양화로 1",
+                "facts": [
+                  {
+                    "id": "pet_access.allowed",
+                    "label": "반려동물 출입",
+                    "text": "반려동물 동반이 가능해요.",
+                    "placement": "promoted",
+                    "source_state": "known",
+                    "evaluation_state": "compatible",
+                    "severity": "info",
+                    "provenance": {
+                      "source": "kto",
+                      "ref": "src-1",
+                      "role": "primary",
+                      "value_origin": "own",
+                      "link_state": null
+                    }
+                  },
+                  {
+                    "id": "operations.parking",
+                    "label": "주차",
+                    "text": "건물 내 주차장을 이용할 수 있어요.",
+                    "placement": "promoted",
+                    "source_state": "known",
+                    "evaluation_state": "not_evaluated",
+                    "severity": "info",
+                    "provenance": {
+                      "source": "kcisa",
+                      "ref": "src-9",
+                      "role": "supporting",
+                      "value_origin": "borrowed",
+                      "link_state": "verified"
+                    }
+                  }
+                ],
+                "notices": [],
+                "why_matched": [
+                  {
+                    "code": "kind_match",
+                    "message": "요청하신 미용 목적과 일치해요."
+                  }
+                ]
+              },
+              {
+                "place_id": {
+                  "source": "kto",
+                  "ref": "P-1002"
+                },
+                "title": "댕댕 펫살롱",
+                "summary": "예약제로 운영되는 소형견 전문 미용실이에요.",
+                "kind": {
+                  "id": "grooming",
+                  "label": "미용"
+                },
+                "location": {
+                  "lat": 37.5563,
+                  "lon": 126.9236,
+                  "distance_m": 610
+                },
+                "address": "서울 마포구 동교로 15",
+                "facts": [
+                  {
+                    "id": "pet_access.allowed",
+                    "label": "반려동물 출입",
+                    "text": "확인되지 않았어요.",
+                    "placement": "promoted",
+                    "source_state": "not_fetched",
+                    "evaluation_state": "unknown",
+                    "severity": "warning",
+                    "provenance": {
+                      "source": "kto",
+                      "ref": "src-1",
+                      "role": "primary",
+                      "value_origin": "own",
+                      "link_state": null
+                    }
+                  },
+                  {
+                    "id": "operations.hours",
+                    "label": "영업시간",
+                    "text": "10:00~20:00 (다른 기록에서 가져온 정보예요.)",
+                    "placement": "promoted",
+                    "source_state": "known",
+                    "evaluation_state": "not_evaluated",
+                    "severity": "info",
+                    "provenance": {
+                      "source": "kcisa",
+                      "ref": "src-12",
+                      "role": "supporting",
+                      "value_origin": "borrowed",
+                      "link_state": "candidate"
+                    }
+                  }
+                ],
+                "notices": [
+                  {
+                    "code": "candidate.verify_before_visit",
+                    "message": "방문 전에 전화로 확인해 주세요.",
+                    "severity": "warning"
+                  }
+                ],
+                "why_matched": [
+                  {
+                    "code": "kind_match",
+                    "message": "요청하신 미용 목적과 일치해요."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "refinements": [],
+        "notices": [
+          {
+            "code": "place.searched_around_current_location",
+            "message": "현재 기기 위치를 기준으로 찾았어요. 질문에 지역 이름이 있어도 아직 그 지역으로는 찾지 못하고, 반영하지 않았습니다.",
+            "lens_id": null
+          }
+        ]
+      },
+      "abstention": null,
+      "refusal": null,
+      "job": null,
+      "error": null,
+      "elapsed_ms": 2140
+    }
+  ],
+  "handoffs": [],
+  "clarify": null
+}

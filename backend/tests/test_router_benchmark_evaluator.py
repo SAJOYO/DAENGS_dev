@@ -141,9 +141,13 @@ def test_forbidden_and_invented_execute_names_are_detected_from_invalid_attempts
         **_empty_plan(),
         "requests": [{"capability": "skin", "payload": {"question": "x"}}],
     }
-    invalid_place = {
+    # `place` used to be the example of a name outside the contract. It became a real
+    # EXECUTE destination in v7 (PR #204), so this needs a name that is still genuinely
+    # unsupported — otherwise the test would quietly stop exercising the
+    # invented-capability path at all while still passing.
+    invalid_invented = {
         **_empty_plan(),
-        "requests": [{"capability": "place", "payload": {"question": "x"}}],
+        "requests": [{"capability": "journey", "payload": {"question": "x"}}],
     }
     unsupported_handoff = {
         **_empty_plan(),
@@ -153,7 +157,7 @@ def test_forbidden_and_invented_execute_names_are_detected_from_invalid_attempts
         [skin_case, gait_case, medical_case],
         {
             skin_case.case_id: [invalid_skin, skin_case.gold_route_plan],
-            gait_case.case_id: [invalid_place, gait_case.gold_route_plan],
+            gait_case.case_id: [invalid_invented, gait_case.gold_route_plan],
             medical_case.case_id: [unsupported_handoff],
         },
     ).summary

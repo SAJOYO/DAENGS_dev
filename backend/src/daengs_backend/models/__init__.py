@@ -24,10 +24,17 @@ from daengs_backend.models.admin_audit_log import (
     AUDIT_LOGIN_FAILED_PASSWORD,
     AUDIT_LOGIN_FAILED_UNKNOWN_ID,
     AUDIT_LOGIN_SUCCESS,
+    AUDIT_REPORT_RESOLVED,
+    AUDIT_REPORT_TURN_REVEALED,
     AUDIT_TARGET_TYPES,
     AdminAuditLog,
 )
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
+from daengs_backend.models.answer_report import (
+    ANSWER_REPORT_STATUSES,
+    REASON_MAX_CHARS,
+    AnswerReport,
+)
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
 from daengs_backend.models.chat import (
@@ -38,6 +45,7 @@ from daengs_backend.models.chat import (
     ChatTurn,
 )
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
+from daengs_backend.models.dog_card import DogCard
 from daengs_backend.models.gait_record import GAIT_STATUSES, GaitRecord
 from daengs_backend.models.pet import (
     PET_BIRTH_DATE_KINDS,
@@ -45,6 +53,10 @@ from daengs_backend.models.pet import (
     Pet,
 )
 from daengs_backend.models.refresh_token import RefreshToken
+from daengs_backend.models.screening_record import (
+    SCREENING_STATUSES,
+    ScreeningRecord,
+)
 from daengs_backend.models.territory import (
     TERRITORY_ATTEMPT_STATUSES,
     TERRITORY_EVIDENCE_VERSION,
@@ -66,6 +78,7 @@ __all__ = [
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
     "AUDIT_ACCOUNT_CREATED",
+    "ANSWER_REPORT_STATUSES",
     "AUDIT_ACCOUNT_PASSWORD_CHANGED",
     "AUDIT_ACCOUNT_REACTIVATED",
     "AUDIT_ACCOUNT_ROLE_CHANGED",
@@ -78,17 +91,22 @@ __all__ = [
     "AUDIT_LOGIN_FAILED_PASSWORD",
     "AUDIT_LOGIN_FAILED_UNKNOWN_ID",
     "AUDIT_LOGIN_SUCCESS",
+    "AUDIT_REPORT_RESOLVED",
+    "AUDIT_REPORT_TURN_REVEALED",
     "AUDIT_TARGET_TYPES",
     "CHAT_PROCESSING_STATUSES",
     "CHAT_SUMMARY_STATUSES",
+    "REASON_MAX_CHARS",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",
     "GAIT_STATUSES",
     "PET_BIRTH_DATE_KINDS",
     "PET_SEXES",
+    "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
     "WALK_ANALYSIS_STATES",
+    "AnswerReport",
     "AdminAuditLog",
     "AdminUser",
     "AppUser",
@@ -97,9 +115,11 @@ __all__ = [
     "ChatSummary",
     "ChatTurn",
     "CrawlRun",
+    "DogCard",
     "GaitRecord",
     "Pet",
     "RefreshToken",
+    "ScreeningRecord",
     "TerritoryAttempt",
     "VerifiedVisit",
     "Walk",

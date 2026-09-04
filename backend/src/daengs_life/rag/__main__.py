@@ -22,6 +22,8 @@
   python -m rag generate --questions                  # 검증질문 1~7 전부 = **검문소④** + 1랩 덤프
   python -m rag generate --questions --dry-run        # 덤프를 쓰지 않는다
   python -m rag score-laps                            # 저장된 랩을 전부 새 지표로 소급 채점 (RAG-029)
+  python -m rag score-laps --by source_id             # 종류별 슬라이스 — 총계가 감추는 것 (RAG-060)
+  python -m rag score-laps --by source_id --laps 0    # 최근 6개가 아니라 전부
 """
 from __future__ import annotations
 
@@ -645,15 +647,19 @@ def cmd_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_score_laps(_: argparse.Namespace) -> int:
+def cmd_score_laps(args: argparse.Namespace) -> int:
     """저장된 모든 랩(`lap1`~)을 새 지표(`grounded`, RAG-029)로 소급 채점한다.
 
-    **DB 도 임베딩도 코퍼스도 필요 없다** — `data/processed/answers/*.jsonl` 만 읽는다.
+    **DB 도 임베딩도 필요 없다** — 총계 표는 `data/processed/answers/*.jsonl` 만 읽는다.
     `hits[].tier` 가 적재 시점에 이미 골든셋과 대조돼 저장돼 있어서다. 그래서 이 도구는
     2026-08-28 이전에 만들어진 `lap1`~`lap3`(7문항) · `lap4`~`lap6`(12문항)도 그대로 재본다.
 
     새 소스 카드(`#50` 펫보험 · `#51` 운송약관)가 새 랩을 뜨면 이 표에 한 줄이 늘어난다 —
     문항 수·`must` 라벨이 달라도 상관없다. 표가 랩마다 자기 문항 수로 나눈 비율이라서다.
+
+    ⚠ **종류별 슬라이스(RAG-060)만은 `chunks/` 와 골든셋을 읽는다.** 그래서 없으면 그 표만
+    건너뛰고 한 줄로 알린다 — 총계 표는 그대로 나온다. 위의 "코퍼스 없이 돈다"는 약속을 슬라이스
+    하나 때문에 깨지 않기 위해서다.
     """
     paths = io.answer_files()
     if not paths:
@@ -672,8 +678,80 @@ def cmd_score_laps(_: argparse.Namespace) -> int:
         laps.append((path.stem, rows))
         print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
 
+    _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
     _print_expect_table(laps)
     return 0
+
+
+def _print_kind_table(laps: list[tuple[str, list[dict]]], field: str = "trust_level",
+                      shown: int = 6) -> int:
+    """종류별 슬라이스 — 총계 하나로는 노이즈와 퇴보가 안 갈린다 (RAG-060).
+
+    문항을 **골든셋 `must` 라벨이 어느 종류 문서에 있는가**로 귀속한다. 랩이 실제로 잡은 히트로
+    귀속하지 않는 이유는 `scorer` 모듈 머리말에 있다 — 그러면 분모가 랩마다 흔들린다.
+
+    **축은 고를 수 있다** (`--by`). 축을 코드에 박지 않는 이유는 이 카드가 실제로 겪은 것이다 —
+    `trust_level` 로는 RAG-046 ⑦ 의 주장이 안 보이는데 `source_id` 로는 보인다. 어느 축이
+    맞는지는 미리 알 수 없고, 알아보는 것이 이 표의 일이다.
+
+    `chunks/` 가 없으면 종류를 알 길이 없다. 그때는 **총계 표를 막지 않고 이 표만 건너뛴다** —
+    `score-laps` 는 랩 파일만 있으면 도는 도구이고, 그 약속이 옛 랩을 재보는 근거다.
+    """
+    chunk_paths = io.chunk_files()
+    if not chunk_paths:
+        print(f"\n종류별 슬라이스(RAG-060): `data/processed/chunks/` 가 비어 있어 건너뛴다 —"
+              f" 종류는 청크 행의 `{field}` 에서 파생된다")
+        return 0
+
+    kinds = scorer.corpus_kinds(
+        (row for path in chunk_paths for row in io.read_chunks(path)), field)
+    gs = goldenset.load()
+    qkinds = scorer.question_kinds({i.id: i.must for i in gs.items}, kinds)
+
+    spread = collections.Counter(qkinds.values())
+    print(f"\n종류별 슬라이스 (RAG-060) — 청크 {len(kinds):,}개의 `{field}` 에서 파생."
+          f" 골든셋 {len(qkinds)}문항: "
+          + " · ".join(f"{k} {n}" for k, n in sorted(spread.items(), key=lambda kv: scorer.kind_order(kv[0]))))
+    print("  문항은 **정답이 있는 문서의 종류**로 앉는다 — 랩이 무엇을 찾았는지와 무관하게 고정이다")
+
+    # **종류가 줄, 랩이 칸이다.** `--by source_id` 는 종류가 15개까지 가고, 그것을 가로로 늘어놓으면
+    # 한 줄이 화면을 넘어가 아무도 안 읽는다. 종류 수는 축마다 다르지만 **읽는 방향은 늘 같다** —
+    # "이 종류가 랩을 지나며 움직였나" 라서, 종류를 세로로 두는 쪽이 그 물음과 모양이 같다.
+    recent = sorted(laps, key=lambda lap: _lap_key(lap[0]))[-shown:] if shown else \
+        sorted(laps, key=lambda lap: _lap_key(lap[0]))
+    sliced = {stem: scorer.slice_rows(rows, qkinds) for stem, rows in recent}
+    rows_order = sorted({k for cells in sliced.values() for k in cells}, key=scorer.kind_order)
+
+    # 칸 하나가 `cited/grounded·문항수` 다. 비율을 미리 나누지 않는 이유는 분모가 종류마다 다르고
+    # (한 자리 수인 칸이 흔하다) 퍼센트로 적으면 1문항이 움직인 것이 크게 보이기 때문이다.
+    width = max((len(k) for k in rows_order), default=8)
+    print(f"\n  {'종류':{width}}" + "".join(f"   {stem:>16}" for stem, _ in recent))
+    print(f"  {'':{width}}" + "".join(f"   {'cited/grounded·n':>16}" for _ in recent))
+    print("  " + "-" * (width + 19 * len(recent)))
+    for kind in rows_order:
+        cells = []
+        for stem, _ in recent:
+            cell = sliced[stem].get(kind)
+            text = "-" if cell is None else f"{cell['cited']}/{cell['grounded']}·{cell['n']}"
+            cells.append(f"   {text:>16}")
+        print(f"  {kind:{width}}" + "".join(cells))
+
+    if field == "trust_level":
+        # 기본 축은 짧아서 "뭔가 움직였나"를 훑기에 좋지만, **왜 움직였나는 여기서 안 보인다** —
+        # `official` 이 조례(조 번호 있음)와 보조금24(없음)를 한 칸에 넣기 때문이다 (RAG-060 ②).
+        print("  ↪ `--by source_id` 로 다시 보면 눌림(grounded > cited)과 부풀림(cited > grounded)이"
+              " 갈린다 — 이 축은 그 둘을 한 칸에 넣는다 (RAG-060 ②·③)")
+    return 0
+
+
+def _lap_key(stem: str) -> tuple[int, str]:
+    """`lap10` 이 `lap2` 뒤에 오게. 파일명 정렬로는 `lap10` < `lap2` 라 "최근 N개"가 엉킨다.
+
+    ⚠ **위의 총계 표는 여전히 파일명 순이다** — `io.answer_files()` 가 그 순서를 돌려주고,
+    RAG-029 이후의 기록들이 그 표를 그 순서로 인용한다. 여기서만 다시 세우고 저쪽은 안 건드린다.
+    """
+    head = stem.split("-", 1)[0]
+    return (int(head[3:]), stem) if head[3:].isdigit() else (0, stem)
 
 
 def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
@@ -818,6 +896,11 @@ def main(argv: list[str] | None = None) -> int:
     sr.set_defaults(fn=cmd_search, supplementary=True)
 
     scl = sub.add_parser("score-laps", help="저장된 모든 랩을 새 지표로 소급 채점 (RAG-029)")
+    scl.add_argument("--by", default="trust_level",
+                     choices=["trust_level", "source_id", "subcategory", "category"],
+                     help="종류별 슬라이스의 축 (RAG-060). 청크 행의 그 칸에서 파생한다")
+    scl.add_argument("--laps", type=int, default=6, metavar="N",
+                     help="슬라이스 표에 보일 최근 랩 수 (0=전부). 기본 6")
     scl.set_defaults(fn=cmd_score_laps)
 
     args = p.parse_args(argv)

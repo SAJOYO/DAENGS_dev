@@ -16,11 +16,14 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
+from daengs_backend.repositories import answer_report as answer_report_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
+from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
+from daengs_backend.repositories import screening as screening_repo
 from daengs_backend.repositories import walk as walk_repo
 
 PASSWORD = "correct-horse-battery-staple"
@@ -116,6 +119,7 @@ class FakeSession:
         self.commits = 0
         self.rollbacks = 0
         self.flushes = 0
+        self.refreshes = 0
 
     async def flush(self) -> None:
         """진짜 세션은 여기서 DB 기본값(id)을 받아 옵니다.
@@ -125,9 +129,29 @@ class FakeSession:
         """
         self.flushes += 1
 
+    async def refresh(self, obj: object) -> None:
+        """진짜 세션은 여기서 서버 기본값(`created_at` 등)을 읽어 옵니다.
+
+        가짜는 아무것도 안 합니다 — `Fake*` 는 만들어질 때 그 값을 이미 갖고 있어서,
+        서비스가 refresh 뒤에 그 칸을 읽는 흐름이 그대로 돕니다 (`flush` 와 같은 이유).
+        """
+        self.refreshes += 1
+
     async def commit(self) -> None:
         self.commits += 1
         if self.store is not None:
+            # 신고의 UNIQUE (turn_id, app_user_id) 는 **여기서** 터집니다. 진짜 DB 와
+            # 같은 자리라야 서비스의 `except IntegrityError → rollback` 이 실제로 돕니다.
+            for pending in self.store.answer_reports_pending:
+                if any(
+                    r.turn_id == pending.turn_id
+                    and r.app_user_id == pending.app_user_id
+                    for r in self.store.answer_reports
+                ):
+                    raise IntegrityError("duplicate", None, Exception("duplicate"))
+            self.store.answer_reports.extend(self.store.answer_reports_pending)
+            self.store.answer_reports_pending.clear()
+
             self.store.audit_log.extend(self.store.audit_pending)
             self.store.audit_pending.clear()
 
@@ -137,6 +161,7 @@ class FakeSession:
             # 커밋 안 된 감사 행은 여기서 사라집니다. 진짜 `get_session` 도
             # 커밋하지 않은 변경을 버리고 닫습니다 (core/database.py).
             self.store.audit_pending.clear()
+            self.store.answer_reports_pending.clear()
 
 
 class Store:
@@ -160,10 +185,25 @@ class Store:
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
         self.walk_analyses: list[object] = []
 
+        #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
+        self.screenings: list = []
+
+        #: 뽑아 둔 도감 카드. id 는 **앱이 만든 것**이라 가짜가 안 채웁니다.
+        self.dog_cards: list = []
+
         #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
         self.chat_sessions: list[FakeChatSession] = []
         self.chat_turns: list[FakeChatTurn] = []
         self.chat_summaries: list[FakeChatSummary] = []
+
+        #: AI 답변 신고 (A1 · D-053). 진짜는 turn_id FK 가 CASCADE 라 대화가 지워지면
+        #: 같이 사라지는데, 가짜는 그 배선을 흉내 내지 않습니다 — 그 동작은 SQL 의
+        #: 몫이라 verify 스크립트로 지킵니다.
+        self.answer_reports: list[FakeAnswerReport] = []
+        #: 아직 커밋 안 된 신고. 감사 행과 같은 이유로 나눠 둡니다 — **중복은
+        #: commit 에서 터져야** 서비스의 `except IntegrityError` 경로를 테스트가
+        #: 실제로 지나갑니다 (진짜 `session.add()` 는 예외를 내지 않습니다).
+        self.answer_reports_pending: list[FakeAnswerReport] = []
 
         #: 감사 기록. **둘로 나눈 것이 핵심**입니다 — `audit_pending` 은 세션에
         #: 얹기만 한 것이고, 커밋해야 `audit_log` 로 넘어갑니다 (FakeSession).
@@ -204,6 +244,16 @@ class FakePet:
     birth_date: object | None = None
     birth_date_kind: str | None = None
     farewell_on: object | None = None
+
+    # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
+    photo_storage_key: str | None = None
+    photo_content_type: str | None = None
+    photo_generation: str | None = None
+    photo_size_bytes: int | None = None
+    photo_updated_at: object | None = None
+    photo_pending_key: str | None = None
+    photo_pending_content_type: str | None = None
+    photo_pending_at: object | None = None
 
 
 @dataclass
@@ -313,6 +363,22 @@ class FakeChatSummary:
         default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
     )
     completed_at: datetime | None = None
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+
+
+@dataclass
+class FakeAnswerReport:
+    """AnswerReport 대역. **답변 원문이 없습니다** — turn_id 가 그것을 가리킵니다."""
+
+    turn_id: uuid.UUID
+    app_user_id: uuid.UUID
+    reason: str
+    status: str = "open"
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
     )
@@ -447,6 +513,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def pet_find_by_photo_key(session, storage_key, *, pending):
+        # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
+        # "backend 가 발급한 키인가" 만 봅니다.
+        attr = "photo_pending_key" if pending else "photo_storage_key"
+        return next((p for p in store.pets if getattr(p, attr) == storage_key), None)
+
     async def pet_owned_ids(session, app_user_id, pet_ids):
         mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
         return mine & set(pet_ids)
@@ -484,6 +556,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_repo, "list_for_owner_for_update", pet_list_for_owner
     )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
@@ -856,6 +929,136 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "fail_summary_if_processing", fail_summary)
     monkeypatch.setattr(chat_repo, "delete_all_for_user", delete_all_for_user)
 
+    # ── 피부 변화 기록 (D-052) ───────────────────────────────────────────
+    #
+    # 탈퇴가 이것을 명시로 지웁니다 — app_users 행을 남기므로 FK CASCADE 가 영영
+    # 안 돕니다. 그래서 이 대역이 없으면 **탈퇴 테스트가 전부 깨집니다.**
+
+    def screening_add(session, record):
+        # 진짜 DB 는 `gen_random_uuid()` 와 `NOW()` 로 채웁니다. 가짜가 그 역할을
+        # 합니다 — 안 채우면 응답 스키마가 created_at=None 에서 터집니다
+        # (pet_add 가 id 를 채우는 것과 같은 자리).
+        if getattr(record, "id", None) is None:
+            record.id = uuid.uuid4()
+        now = datetime.now(UTC)
+        if record.created_at is None:
+            record.created_at = now
+        if record.updated_at is None:
+            record.updated_at = now
+        store.screenings.append(record)
+        return record
+
+    async def screening_get_owned(session, app_user_id, record_id, *, for_update=False):
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id and r.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def screening_list_for_owner(session, app_user_id, *, pet_id=None, limit=50):
+        rows = [r for r in store.screenings if r.app_user_id == app_user_id]
+        if pet_id is not None:
+            rows = [r for r in rows if r.pet_id == pet_id]
+        # 진짜는 created_at DESC 입니다. 담은 순서를 뒤집어 그 순서를 흉내 냅니다.
+        return list(reversed(rows))[:limit]
+
+    async def screening_find_by_storage_key(session, storage_key, *, status=None):
+        # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
+        # "backend 가 발급한 키인가" 만 봅니다.
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.photo_storage_key == storage_key
+                and (status is None or r.status == status)
+            ),
+            None,
+        )
+
+    async def screening_list_for_owner_for_update(session, app_user_id):
+        return [r for r in store.screenings if r.app_user_id == app_user_id]
+
+    async def screening_delete(session, record):
+        store.screenings.remove(record)
+
+    async def screening_delete_all_for_owner(session, app_user_id):
+        mine = [r for r in store.screenings if r.app_user_id == app_user_id]
+        store.screenings = [r for r in store.screenings if r.app_user_id != app_user_id]
+        return len(mine)
+
+    monkeypatch.setattr(screening_repo, "add", screening_add)
+    monkeypatch.setattr(screening_repo, "get_owned", screening_get_owned)
+    monkeypatch.setattr(screening_repo, "list_for_owner", screening_list_for_owner)
+    monkeypatch.setattr(screening_repo, "find_by_storage_key", screening_find_by_storage_key)
+    monkeypatch.setattr(
+        screening_repo, "list_for_owner_for_update", screening_list_for_owner_for_update
+    )
+    monkeypatch.setattr(screening_repo, "delete", screening_delete)
+    monkeypatch.setattr(screening_repo, "delete_all_for_owner", screening_delete_all_for_owner)
+
+    # ── 도감 카드 (D-052) ────────────────────────────────────────────────
+    #
+    # 탈퇴가 이것도 명시로 지웁니다 — app_users 행을 남기므로 FK CASCADE 가 영영
+    # 안 돕니다. 그래서 이 대역이 없으면 **탈퇴 테스트가 깨집니다.**
+
+    def card_add(session, card):
+        # ⚠️ id 는 **앱이 만듭니다.** 다른 표와 달리 가짜가 채우지 않습니다 —
+        #    채우면 "앱이 안 보냈을 때 서버가 새 id 를 만든다" 는, 진짜에는 없는
+        #    동작을 테스트가 못 잡습니다.
+        now = datetime.now(UTC)
+        if card.created_at is None:
+            card.created_at = now
+        if card.updated_at is None:
+            card.updated_at = now
+        store.dog_cards.append(card)
+        return card
+
+    async def card_get_any(session, card_id, *, for_update=False):
+        return next((c for c in store.dog_cards if c.id == card_id), None)
+
+    async def card_get_owned(session, app_user_id, card_id, *, for_update=False):
+        return next(
+            (
+                c
+                for c in store.dog_cards
+                if c.id == card_id and c.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def card_list_for_owner(session, app_user_id, *, limit=500):
+        rows = [c for c in store.dog_cards if c.app_user_id == app_user_id]
+        # 진짜는 drawn_at DESC 입니다.
+        return sorted(rows, key=lambda c: c.drawn_at, reverse=True)[:limit]
+
+    async def card_find_by_face_key(session, storage_key):
+        return next(
+            (c for c in store.dog_cards if c.face_storage_key == storage_key), None
+        )
+
+    async def card_list_for_owner_for_update(session, app_user_id):
+        return [c for c in store.dog_cards if c.app_user_id == app_user_id]
+
+    async def card_delete(session, card):
+        store.dog_cards.remove(card)
+
+    async def card_delete_all_for_owner(session, app_user_id):
+        mine = [c for c in store.dog_cards if c.app_user_id == app_user_id]
+        store.dog_cards = [c for c in store.dog_cards if c.app_user_id != app_user_id]
+        return len(mine)
+
+    monkeypatch.setattr(card_repo, "add", card_add)
+    monkeypatch.setattr(card_repo, "get_any", card_get_any)
+    monkeypatch.setattr(card_repo, "get_owned", card_get_owned)
+    monkeypatch.setattr(card_repo, "list_for_owner", card_list_for_owner)
+    monkeypatch.setattr(card_repo, "find_by_face_key", card_find_by_face_key)
+    monkeypatch.setattr(card_repo, "list_for_owner_for_update", card_list_for_owner_for_update)
+    monkeypatch.setattr(card_repo, "delete", card_delete)
+    monkeypatch.setattr(card_repo, "delete_all_for_owner", card_delete_all_for_owner)
+
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(
             action=kw["action"],
@@ -872,5 +1075,114 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return entry
 
     monkeypatch.setattr(admin_audit_log_repo, "add", audit_add)
+
+    # -----------------------------------------------------------------------
+    # AI 답변 신고 (A1 · D-053)
+    # -----------------------------------------------------------------------
+
+    def _turn(turn_id):
+        return next((t for t in store.chat_turns if t.id == turn_id), None)
+
+    async def report_get_owned_turn(session, *, turn_id, app_user_id):
+        """**소유 확인이 이 대역의 핵심입니다.** 진짜는 chat_sessions 조인으로 거르고,
+        여기서도 같은 경로로 걸러야 "남의 turn 은 404" 를 테스트가 볼 수 있습니다."""
+        turn = _turn(turn_id)
+        if turn is None:
+            return None
+        owner = next(
+            (c for c in store.chat_sessions if c.id == turn.session_id), None
+        )
+        if owner is None or owner.app_user_id != app_user_id:
+            return None
+        return turn
+
+    async def report_add(session, *, turn_id, app_user_id, reason):
+        """얹기만 합니다 — 진짜 `session.add()` 도 그렇습니다.
+
+        중복은 `FakeSession.commit()` 이 터뜨립니다. 여기서 터뜨리면 서비스의
+        `try: commit / except IntegrityError` 를 건너뛰어, **정작 지키려던 경로를
+        테스트가 안 지나갑니다.**
+        """
+        report = FakeAnswerReport(
+            turn_id=turn_id,
+            app_user_id=app_user_id,
+            reason=reason,
+            created_at=store.tick(),
+        )
+        store.answer_reports_pending.append(report)
+        return report
+
+    async def report_get_by_id(session, report_id):
+        return next((r for r in store.answer_reports if r.id == report_id), None)
+
+    async def report_get_turn(session, turn_id):
+        return _turn(turn_id)
+
+    async def report_count_for_turn(session, turn_id):
+        return sum(1 for r in store.answer_reports if r.turn_id == turn_id)
+
+    async def report_count_for_turns(session, turn_ids):
+        wanted = set(turn_ids)
+        counts: dict = {}
+        for r in store.answer_reports:
+            if r.turn_id in wanted:
+                counts[r.turn_id] = counts.get(r.turn_id, 0) + 1
+        return counts
+
+    async def report_turn_position(session, turn):
+        done = sorted(
+            (
+                t
+                for t in store.chat_turns
+                if t.session_id == turn.session_id
+                and t.processing_status == "completed"
+            ),
+            key=lambda t: (t.created_at, t.id),
+        )
+        if turn.processing_status != "completed":
+            return len(done), 0
+        return len(done), done.index(turn) + 1
+
+    async def report_list_reports(session, *, limit, before=None, status=None):
+        rows = sorted(
+            store.answer_reports, key=lambda r: (r.created_at, r.id), reverse=True
+        )
+        if status is not None:
+            rows = [r for r in rows if r.status == status]
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < before]
+        out = []
+        for r in rows[:limit]:
+            reviewer = next(
+                (a for a in store.admins if a.id == r.reviewed_by), None
+            )
+            out.append(
+                (r, getattr(reviewer, "login_id", None), getattr(reviewer, "name", None))
+            )
+        return out
+
+    async def report_get_with_reviewer(session, report_id):
+        report = next((r for r in store.answer_reports if r.id == report_id), None)
+        if report is None:
+            return None
+        reviewer = next((a for a in store.admins if a.id == report.reviewed_by), None)
+        return (
+            report,
+            getattr(reviewer, "login_id", None),
+            getattr(reviewer, "name", None),
+        )
+
+    monkeypatch.setattr(answer_report_repo, "get_owned_turn", report_get_owned_turn)
+    monkeypatch.setattr(answer_report_repo, "add", report_add)
+    monkeypatch.setattr(answer_report_repo, "get_by_id", report_get_by_id)
+    monkeypatch.setattr(answer_report_repo, "get_turn", report_get_turn)
+    monkeypatch.setattr(answer_report_repo, "count_for_turn", report_count_for_turn)
+    monkeypatch.setattr(answer_report_repo, "count_for_turns", report_count_for_turns)
+    monkeypatch.setattr(answer_report_repo, "turn_position", report_turn_position)
+    monkeypatch.setattr(answer_report_repo, "list_reports", report_list_reports)
+    monkeypatch.setattr(
+        answer_report_repo, "get_with_reviewer", report_get_with_reviewer
+    )
+
 
     return store

@@ -42,6 +42,8 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
+| `.github/workflows/backend-tests.yml` | **모든 PR 에서 `uv run pytest` 전체.** `paths` 필터가 없는 것이 의도입니다 — 필터에 안 걸려 검사가 안 돌던 것이 이 파일이 생긴 이유입니다 (#230). `ml`·`gait`·`screening` 그룹은 안 깔고, 그 테스트는 skip 됩니다 |
+| `.github/workflows/{journey,place-search}-tests.yml` | 그 두 서비스 전용. pytest 는 위와 겹치지만 **compose 렌더·nginx 문법 검사·패키지별 ruff** 를 들고 있어 남겨 둡니다 |
 
 도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
 나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).

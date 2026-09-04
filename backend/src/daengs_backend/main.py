@@ -16,19 +16,27 @@ from daengs_backend.routers import (
     admin_account,
     admin_audit,
     app_auth,
+    app_report,
     app_user_admin,
     assistant,
     auth,
     chat,
     crawl,
+    dogcard,
     gait,
     health,
     metrics,
     pet,
+    report_admin,
     status,
     territory,
     training,
     walk_spatial_diary,
+)
+from daengs_backend.routers import (
+    # ⚠️ 별칭입니다. 아래 `daengs_screening.service` 의 `screening_router` 와 이름이
+    #    겹칩니다 — 그쪽은 옛 무인증 `/screen/*`, 이쪽은 새 계약 `/app/screening/*`.
+    screening as app_screening,
 )
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
@@ -155,6 +163,10 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+
+# 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
+# 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
+app.include_router(dogcard.router)
 # 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
 # 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**
@@ -163,6 +175,12 @@ app.include_router(gait.router)
 app.include_router(app_walks.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
+
+# 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —
+# 그쪽은 인증 없이 판정만 하고 아무것도 안 남기며, 앱이 아직 그것을 씁니다.
+# 여기는 인증·소유권·사진 저장이 붙은 새 계약이고, 옛 경로를 410 으로 닫는 것은
+# 앱이 옮겨간 뒤 별도 카드입니다 (보행 `/gait/*` → `/app/gait/*` 와 같은 방식).
+app.include_router(app_screening.router)
 # 산책 기록을 조건별 공간 일기로 읽는 앱 전용 표면. 인증은 라우터가 받고,
 # Place·Journey·Pin을 호출하지 않은 채 Walk 원판만 조립합니다 (D-049).
 app.include_router(walk_spatial_diary.router)
@@ -173,6 +191,10 @@ app.include_router(assistant.router)
 # 대화 기록(`/app/chats`)과 저장된 AI 요약. 라우터가 CurrentAppUser 로 잠겨 있습니다 —
 # 신원으로 남의 것을 걸러야 해서 `admin_or_app_user` 를 쓰지 않습니다 (core/deps.py).
 app.include_router(chat.router)
+# AI 답변 신고 접수 (`/app/reports` · A1 · D-053). `CurrentAppUser` 라 **본인 대화의
+# turn 만** 신고할 수 있습니다 — 남의 turn_id 는 404 입니다. 답변 원문은 받지 않습니다
+# (turn_id 가 chat_turns 를 가리킵니다 — D-048).
+app.include_router(app_report.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
 # 운영 지표 (#223 · 콘솔 로드맵 B3). 제품 테이블(chat_*)을 세기만 하고 **원문은 스키마에
@@ -192,6 +214,10 @@ app.include_router(admin_account.router)
 # 봅니다. 나가는 개인정보는 전부 마스킹이라 권한이 `READ` 이고, 원문을 여는 문은 짝
 # 카드(#212)가 `pii:read` 로 따로 냅니다.
 app.include_router(app_user_admin.router)
+# 신고 조회·처리 (`/admin/reports` · A1 · D-053). 권한은 `ADMIN_MANAGE` 입니다 — 신고된
+# 답변을 여는 것은 **회원의 대화 원문을 보는 일**이라, 계정 관리와 같은 등급으로 묶었습니다.
+# **목록은 감사에 안 남기고 상세만 남깁니다** — `pii_revealed` 가 그은 선과 같습니다.
+app.include_router(report_admin.router)
 # 상태 페이지 (#180 · 콘솔 로드맵 B1). 읽기 전용이고 DB 를 바꾸지 않습니다.
 # `/health` 와 다른 자리입니다 — 저기는 모니터링이 읽고 DB 가 죽으면 503 이며,
 # 여기는 사람이 읽고 항목 하나가 죽어도 200 으로 나머지를 보여 줍니다.

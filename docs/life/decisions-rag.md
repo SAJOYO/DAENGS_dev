@@ -6589,10 +6589,14 @@ RAG-029 가 예고한 *"라벨 자체의 문제를 그대로 물려받는다"* �
 - **인용 확장의 `법` 해소 + 항 단위 조회** (⑥). DB 무변경이지만 랩이 따라온다 — 별도 카드
 - **골든셋 라벨 보강** — Q3 · B1 에 `별표 4-2-아` 를 OR 대안으로 (⑦). 사람 확인 뒤
 - **질의별 가중치** — S3 와 DP1 이 정반대를 요구한다 (④). A2 와 같은 층
-- 테스트 위생 둘 (이 카드 밖) — `test_gait_app_api.py::test_task_module_imports_without_gait_deps`
-  가 `ml` 그룹이 깔린 환경에서 `test_embed.py` 뒤에 돌면 `sys.modules` 오염으로 깨진다.
-  `test_screening_agent.py`·`test_screening_message.py` 는 모듈 최상단에서 `sys.exit()` 을 불러
-  **전체 pytest 를 INTERNALERROR 로 끊는다**
+- ~~테스트 위생 둘 (이 카드 밖)~~ — **✅ #224 에서 닫혔다 (2026-09-04).**
+  `test_gait_app_api.py::test_task_module_imports_without_gait_deps` 가 `ml` 그룹이 깔린 환경에서
+  `test_embed.py` 뒤에 돌면 `sys.modules` 오염으로 깨졌고, `test_screening_agent.py`·
+  `test_screening_message.py` 는 모듈 최상단의 `sys.exit()` 으로 **전체 pytest 를 INTERNALERROR 로
+  끊었다.** 앞은 별도 인터프리터에서 묻게 고쳤고(질문 자체가 "깨끗한 프로세스에서 무엇이 딸려
+  오는가"였다), 뒤는 상류 동기화 사본이라 파일을 안 건드리고 `conftest.py` 의 `collect_ignore` 로
+  뺐다. **셋째가 하나 더 있었다** — `tools/` 가 venv 에 없어 13개 파일이 `ModuleNotFoundError` 였고
+  그건 `pythonpath = ["."]` 로 열었다. 이제 `uv run pytest` 가 인자 없이 2605개를 다 돈다
 
 ---
 

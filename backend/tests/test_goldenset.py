@@ -37,7 +37,9 @@ from daengs_life.rag.stages import goldenset
 # 여기 두 수로 보이는 것이 OR 스키마를 넣은 이유다 (RAG-055).
 ITEMS = 41
 MUST_TOTAL = 70          # 요구의 수
-MUST_ADDRESSES = 80      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+MUST_ADDRESSES = 82      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+#                          80 → 82: Q3·B1 의 두 번째 요구에 `별표 4-2-아` 를 대안으로 (RAG-061 ①).
+#                          `MUST_TOTAL`(요구 수)이 안 움직인 것이 그 변경이 옳다는 표시다
 BY_ORIGIN = {"hand": 33, "easylaw": 8}
 BY_EXPECT = {"answer": 36, "abstain": 2, "refuse": 3}
 

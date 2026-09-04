@@ -136,9 +136,12 @@ class Settings(BaseSettings):
     territory_site_base_url: str = "http://place-search:8000"
     territory_site_timeout_seconds: float = 2.0
 
-    # ── 보행 영상 저장소 (D-043) ──────────────────────────────────────
-    # provider 는 GCS 로 확정 (2026-09-02). 하지만 **세부값은 하드코딩하지 않습니다** —
-    # bucket·location·만료·보관 정책은 #78 이 정할 자리라 환경으로 뺍니다.
+    # ── 공용 파일 저장소 (D-043, D-052) ───────────────────────────────
+    # provider 는 GCS 로 확정 (2026-09-02), 버킷·리전·보관 정책은 D-052 (2026-09-04).
+    # 그래도 **세부값은 하드코딩하지 않습니다** — 환경으로 뺍니다.
+    #
+    # ⚠️ 이름이 gait_* 인 것은 보행에서 시작한 역사적 이름입니다. 지금은 점령지 사진도
+    #    같은 값을 읽는 **공용 설정**입니다.
     #
     # `gait_storage` 가 저장소 구현을 고릅니다:
     #   "none"  (기본) — 미설정. 모든 호출이 503. 서버에 아무 설정도 없을 때.
@@ -148,15 +151,17 @@ class Settings(BaseSettings):
     gait_storage: str = Field(
         default="none", validation_alias=AliasChoices("GAIT_STORAGE")
     )
-    # GCS. bucket·location 은 #78 이 버킷을 파야 값이 생깁니다. 그 전엔 비어 있고,
-    # gait_storage="gcs" 인데 비어 있으면 기동이 아니라 첫 발급에서 명확히 실패합니다.
+    # GCS. D-052 가 정한 값은 `daengs-media-prod` · asia-northeast3 이고, 여기 기본값으로
+    # 박지 않습니다 — 개발 PC 가 실수로 운영 버킷에 쓰는 것을 막습니다. 비어 있는 채
+    # gait_storage="gcs" 이면 기동이 아니라 첫 발급에서 명확히 실패합니다.
     gait_gcs_bucket: str = Field(
         default="", validation_alias=AliasChoices("GAIT_GCS_BUCKET")
     )
     gait_gcs_location: str = Field(
         default="", validation_alias=AliasChoices("GAIT_GCS_LOCATION")
     )
-    # Signed URL 만료(초). **잠정 기본값**입니다 — #78 이 정하면 그 값으로.
+    # Signed URL 만료(초). **아직 잠정 기본값**입니다 — D-052 가 실기기 왕복을 보고
+    # 정하기로 남겨 둔 유일한 값입니다.
     # 업로드는 큰 파일이라 넉넉히, 다운로드(재생)는 짧게.
     gait_upload_url_ttl_seconds: int = Field(
         default=15 * 60, validation_alias=AliasChoices("GAIT_UPLOAD_URL_TTL_SECONDS")

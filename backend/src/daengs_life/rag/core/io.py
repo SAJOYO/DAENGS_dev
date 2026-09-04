@@ -176,8 +176,11 @@ def write_answers(header: BaseModel, items: list[BaseModel], stem: str = "lap1")
     """`write_eval` 과 같은 파일 모양(1행 헤더 + 문항). 다른 함수인 것은 경로와 헤더 타입뿐이다.
 
     **여기 쓰는 것도 판단이 아니라 물증이다** (RAG-024 ④ 와 같은 규약). 1랩 요약 — 코퍼스 스냅샷 ·
-    검문소④ 수치 · 문항별 한 줄 — 은 이 파일이 아니라 RAG-028 ⑥ 으로 간다. 이 덤프는 미추적이라
-    **PC 를 갈아타면 사라지고**, 그러면 2랩에서 비교할 근거가 ADR 에만 남기 때문이다.
+    검문소④ 수치 · 문항별 한 줄 — 은 이 파일이 아니라 RAG-028 ⑥ 으로 간다.
+
+    **이 덤프는 커밋한다** — 옆의 `write_eval` 과 갈리는 자리다 (`config.ANSWER_DIR` 주석).
+    LLM 출력이라 같은 코퍼스로 다시 돌려도 같은 글이 안 나와서, 안 담으면 다음 랩에서 비교할
+    근거가 ADR 의 요약에만 남는다.
     """
     path = answer_path(stem)
     path.parent.mkdir(parents=True, exist_ok=True)

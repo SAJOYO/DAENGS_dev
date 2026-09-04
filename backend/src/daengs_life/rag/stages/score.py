@@ -59,6 +59,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from .goldenset import logical
@@ -295,3 +296,107 @@ def grade_expect(rows: list[dict[str, Any]], expects: dict[str, str], policy: st
               + counts["missed_refuse"] + counts["wrong_code"])
     return {"policy": policy, **counts,
             "passed": gradable - failed, "gradable": gradable, "failures": failures}
+
+
+# ---------------------------------------------------------------- 종류별 슬라이스 (RAG-060)
+# **총계 하나로는 노이즈와 퇴보가 안 갈린다.** 랩 간 잡음이 ±2~3 인데(RAG-059 ③) 지표는 랩당
+# `cited` 하나 · `grounded` 하나뿐이라, 수가 움직여도 그것이 검색이 좋아진 것인지 Gemini 가
+# 다르게 답한 것인지 표에서 안 보인다.
+#
+# 그리고 RAG-046 ⑦ 이 지목한 구조적 눌림이 있다 — **조 번호가 없는 문서(보조금24 · 항공 ·
+# 철도 약관)를 근거로 답하면 `cited` 가 0이 된다.** 답이 맞아도 그렇다 (RAG-029 의 알려진 누수).
+#
+# ⚠ **쪼개 보니 편향이 하나가 아니라 둘이었고, 총계에서 서로 상쇄되고 있었다** (RAG-060):
+#
+#   눌림  grounded > cited   보조금24 · 항공 · SRT — 조 번호가 없어 답이 맞아도 `cited` 가 0
+#   부풀림 cited > grounded  knia-disclosure · 법령 — 조 번호는 인용하는데 그것이 정답 근거가 아니다
+#
+# 그래서 총계만 보면 **둘 다 안 보인다.** 축을 잘못 고르면 이것도 안 보인다 — `trust_level` 로는
+# 조례(조 번호 있음)와 보조금24(없음)가 `official` 한 칸에 앉아 눌림이 지워진다. 그것이
+# `--by` 를 둔 이유다.
+#
+# ────────────────────────────────────────────────────────────────────────
+# 문항을 무엇으로 귀속하는가 — **골든셋 `must` 라벨의 종류**다
+# ────────────────────────────────────────────────────────────────────────
+# 후보가 둘이었다:
+#
+#   ⓐ 랩이 실제로 잡은 `must` 히트의 종류   ⓑ 골든셋 `must` 라벨의 종류
+#
+# **ⓑ 를 골랐다.** ⓐ 는 검색이 성공한 문항에서만 종류를 알 수 있어서 **분모가 랩마다 흔들린다** —
+# 정답을 못 찾은 문항이 조용히 빠지고, 그러면 어느 칸이든 성공률이 높게 나온다. 이 모듈이 하려던
+# 일(잡음과 퇴보를 가르는 것)과 정반대다. ⓑ 는 *"이 문항의 정답이 어느 종류 문서에 있나"* 라서
+# **랩과 무관하게 고정**이고, 같은 문항이 랩마다 같은 칸에 앉는다.
+#
+# 대가는 골든셋을 읽어야 한다는 것이다. `score_rows` 는 안 읽지만(그래서 옛 랩도 재본다) 이
+# 슬라이스는 읽는다 — `grade_expect` 가 `expects` 를 받는 것과 같은 층이다.
+#
+# ⚠ **`must` 는 요구 목록이고 그 안이 OR 이다** (`goldenset.Item`). #217 이 FW1 을 *"시행령 조문
+# OR 법제처 해설"* 로 넓히면서 **한 문항이 두 종류에 걸치는 자리**가 실제로 생겼다. 그래서 종류를
+# 하나로 고르지 않고 `law+official` 처럼 이어 붙인 칸을 만든다 — 어느 한쪽으로 몰아 세면 그 문항이
+# 어느 칸에서도 정직하지 않다.
+
+NO_MUST = "(must 없음)"          # `expect: abstain`·`refuse` 문항 — 잴 정답이 애초에 없다
+OFF_CORPUS = "(코퍼스 밖)"        # 라벨이 가리키는 청크가 지금 코퍼스에 없다
+OFF_GOLDENSET = "(골든셋 밖)"     # 랩에는 있는데 지금 골든셋에서 지워진 옛 문항
+
+
+def corpus_kinds(chunk_rows: Iterable[dict[str, Any]], field: str = "trust_level") -> dict[str, str]:
+    """청크 행들 → `logical chunk_id` → 문서 종류.
+
+    **표를 새로 손으로 적지 않는다.** `trust_level`·`subcategory`·`source_id` 는 청크 행마다 이미
+    박혀 있고(`chunk.py` 가 소스 메타에서 옮긴다), 여기서 하는 일은 그것을 골든셋 라벨이 쓰는
+    주소 체계(`logical`, 날짜 뗀 것)로 다시 세는 것뿐이다 — RAG-042 ③ 이 `BY_SOURCE` 에서
+    지적한 자리다. 두 번째 진실을 만들면 코퍼스가 움직일 때 조용히 어긋난다.
+
+    IO 는 여기 없다 — 호출부가 `io.chunk_files()` · `io.read_chunks()` 로 흘려 넣는다. 이 모듈은
+    디스크를 모르는 채로 남는다 (`score_rows` 가 그런 것처럼).
+    """
+    kinds: dict[str, str] = {}
+    for row in chunk_rows:
+        value = row.get(field)
+        if value:
+            kinds[logical(row.get("chunk_id", ""))] = value
+    return kinds
+
+
+def question_kind(musts: list[list[str]], kinds: dict[str, str]) -> str:
+    """문항 하나의 정답이 어느 종류 문서에 있나.
+
+    `musts` 는 골든셋의 요구 목록이고 그 안이 OR 이다. 걸친 종류를 **전부** 모아 정렬해 이어
+    붙인다 — `law` · `official` · `law+official`. 라벨이 하나도 코퍼스에 없으면 `OFF_CORPUS`,
+    라벨 자체가 없으면 `NO_MUST` 다. 이 셋을 한 칸으로 뭉치면 *"잴 것이 없다"* 와 *"잴 것이
+    있는데 못 찾겠다"* 가 같은 자리에 앉는다.
+    """
+    if not musts:
+        return NO_MUST
+    found = {kinds[ref] for group in musts for ref in group if ref in kinds}
+    return "+".join(sorted(found)) if found else OFF_CORPUS
+
+
+def question_kinds(musts_by_id: dict[str, list[list[str]]], kinds: dict[str, str]) -> dict[str, str]:
+    """골든셋 문항 전부에 대해 `question_kind`."""
+    return {qid: question_kind(musts, kinds) for qid, musts in musts_by_id.items()}
+
+
+def slice_rows(rows: list[dict[str, Any]], qkinds: dict[str, str]) -> dict[str, dict[str, int]]:
+    """`score_rows` 를 문항 종류별로 쪼갠다. 총계는 건드리지 않는다.
+
+    **분모를 조용히 줄이지 않는다** — 골든셋에서 지워진 옛 문항은 빼지 않고 `OFF_GOLDENSET`
+    칸에 넣는다. 빼면 랩마다 다른 만큼 분모가 줄어드는데 표에는 그 사실이 안 나온다.
+
+    각 칸의 수는 `score_rows` 와 같은 자다(`cited` 는 저장된 칸, `grounded` 는 `tier` 소급).
+    그래서 **모든 칸을 더하면 총계와 정확히 같다** — 테스트가 그것을 고정한다.
+    """
+    out: dict[str, dict[str, int]] = {}
+    for row in rows:
+        kind = qkinds.get(row.get("id", ""), OFF_GOLDENSET)
+        cell = out.setdefault(kind, {"n": 0, "cited": 0, "grounded": 0})
+        cell["n"] += 1
+        cell["cited"] += bool(row.get("cited"))
+        cell["grounded"] += grounded_from_dump(row)
+    return out
+
+
+def kind_order(kind: str) -> tuple[int, str]:
+    """표의 줄 순서. 실제 종류를 먼저, 괄호 친 칸(`(must 없음)` 등)을 뒤로."""
+    return (1, kind) if kind.startswith("(") else (0, kind)

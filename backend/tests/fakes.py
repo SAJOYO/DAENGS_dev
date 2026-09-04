@@ -18,9 +18,11 @@ from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
+from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
+from daengs_backend.repositories import screening as screening_repo
 from daengs_backend.repositories import walk as walk_repo
 
 PASSWORD = "correct-horse-battery-staple"
@@ -160,6 +162,12 @@ class Store:
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
         self.walk_analyses: list[object] = []
 
+        #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
+        self.screenings: list = []
+
+        #: 뽑아 둔 도감 카드. id 는 **앱이 만든 것**이라 가짜가 안 채웁니다.
+        self.dog_cards: list = []
+
         #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
         self.chat_sessions: list[FakeChatSession] = []
         self.chat_turns: list[FakeChatTurn] = []
@@ -204,6 +212,16 @@ class FakePet:
     birth_date: object | None = None
     birth_date_kind: str | None = None
     farewell_on: object | None = None
+
+    # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
+    photo_storage_key: str | None = None
+    photo_content_type: str | None = None
+    photo_generation: str | None = None
+    photo_size_bytes: int | None = None
+    photo_updated_at: object | None = None
+    photo_pending_key: str | None = None
+    photo_pending_content_type: str | None = None
+    photo_pending_at: object | None = None
 
 
 @dataclass
@@ -447,6 +465,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def pet_find_by_photo_key(session, storage_key, *, pending):
+        # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
+        # "backend 가 발급한 키인가" 만 봅니다.
+        attr = "photo_pending_key" if pending else "photo_storage_key"
+        return next((p for p in store.pets if getattr(p, attr) == storage_key), None)
+
     async def pet_owned_ids(session, app_user_id, pet_ids):
         mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
         return mine & set(pet_ids)
@@ -484,6 +508,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_repo, "list_for_owner_for_update", pet_list_for_owner
     )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)
@@ -855,6 +880,136 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "complete_summary_if_processing", complete_summary)
     monkeypatch.setattr(chat_repo, "fail_summary_if_processing", fail_summary)
     monkeypatch.setattr(chat_repo, "delete_all_for_user", delete_all_for_user)
+
+    # ── 피부 변화 기록 (D-052) ───────────────────────────────────────────
+    #
+    # 탈퇴가 이것을 명시로 지웁니다 — app_users 행을 남기므로 FK CASCADE 가 영영
+    # 안 돕니다. 그래서 이 대역이 없으면 **탈퇴 테스트가 전부 깨집니다.**
+
+    def screening_add(session, record):
+        # 진짜 DB 는 `gen_random_uuid()` 와 `NOW()` 로 채웁니다. 가짜가 그 역할을
+        # 합니다 — 안 채우면 응답 스키마가 created_at=None 에서 터집니다
+        # (pet_add 가 id 를 채우는 것과 같은 자리).
+        if getattr(record, "id", None) is None:
+            record.id = uuid.uuid4()
+        now = datetime.now(UTC)
+        if record.created_at is None:
+            record.created_at = now
+        if record.updated_at is None:
+            record.updated_at = now
+        store.screenings.append(record)
+        return record
+
+    async def screening_get_owned(session, app_user_id, record_id, *, for_update=False):
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id and r.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def screening_list_for_owner(session, app_user_id, *, pet_id=None, limit=50):
+        rows = [r for r in store.screenings if r.app_user_id == app_user_id]
+        if pet_id is not None:
+            rows = [r for r in rows if r.pet_id == pet_id]
+        # 진짜는 created_at DESC 입니다. 담은 순서를 뒤집어 그 순서를 흉내 냅니다.
+        return list(reversed(rows))[:limit]
+
+    async def screening_find_by_storage_key(session, storage_key, *, status=None):
+        # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
+        # "backend 가 발급한 키인가" 만 봅니다.
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.photo_storage_key == storage_key
+                and (status is None or r.status == status)
+            ),
+            None,
+        )
+
+    async def screening_list_for_owner_for_update(session, app_user_id):
+        return [r for r in store.screenings if r.app_user_id == app_user_id]
+
+    async def screening_delete(session, record):
+        store.screenings.remove(record)
+
+    async def screening_delete_all_for_owner(session, app_user_id):
+        mine = [r for r in store.screenings if r.app_user_id == app_user_id]
+        store.screenings = [r for r in store.screenings if r.app_user_id != app_user_id]
+        return len(mine)
+
+    monkeypatch.setattr(screening_repo, "add", screening_add)
+    monkeypatch.setattr(screening_repo, "get_owned", screening_get_owned)
+    monkeypatch.setattr(screening_repo, "list_for_owner", screening_list_for_owner)
+    monkeypatch.setattr(screening_repo, "find_by_storage_key", screening_find_by_storage_key)
+    monkeypatch.setattr(
+        screening_repo, "list_for_owner_for_update", screening_list_for_owner_for_update
+    )
+    monkeypatch.setattr(screening_repo, "delete", screening_delete)
+    monkeypatch.setattr(screening_repo, "delete_all_for_owner", screening_delete_all_for_owner)
+
+    # ── 도감 카드 (D-052) ────────────────────────────────────────────────
+    #
+    # 탈퇴가 이것도 명시로 지웁니다 — app_users 행을 남기므로 FK CASCADE 가 영영
+    # 안 돕니다. 그래서 이 대역이 없으면 **탈퇴 테스트가 깨집니다.**
+
+    def card_add(session, card):
+        # ⚠️ id 는 **앱이 만듭니다.** 다른 표와 달리 가짜가 채우지 않습니다 —
+        #    채우면 "앱이 안 보냈을 때 서버가 새 id 를 만든다" 는, 진짜에는 없는
+        #    동작을 테스트가 못 잡습니다.
+        now = datetime.now(UTC)
+        if card.created_at is None:
+            card.created_at = now
+        if card.updated_at is None:
+            card.updated_at = now
+        store.dog_cards.append(card)
+        return card
+
+    async def card_get_any(session, card_id, *, for_update=False):
+        return next((c for c in store.dog_cards if c.id == card_id), None)
+
+    async def card_get_owned(session, app_user_id, card_id, *, for_update=False):
+        return next(
+            (
+                c
+                for c in store.dog_cards
+                if c.id == card_id and c.app_user_id == app_user_id
+            ),
+            None,
+        )
+
+    async def card_list_for_owner(session, app_user_id, *, limit=500):
+        rows = [c for c in store.dog_cards if c.app_user_id == app_user_id]
+        # 진짜는 drawn_at DESC 입니다.
+        return sorted(rows, key=lambda c: c.drawn_at, reverse=True)[:limit]
+
+    async def card_find_by_face_key(session, storage_key):
+        return next(
+            (c for c in store.dog_cards if c.face_storage_key == storage_key), None
+        )
+
+    async def card_list_for_owner_for_update(session, app_user_id):
+        return [c for c in store.dog_cards if c.app_user_id == app_user_id]
+
+    async def card_delete(session, card):
+        store.dog_cards.remove(card)
+
+    async def card_delete_all_for_owner(session, app_user_id):
+        mine = [c for c in store.dog_cards if c.app_user_id == app_user_id]
+        store.dog_cards = [c for c in store.dog_cards if c.app_user_id != app_user_id]
+        return len(mine)
+
+    monkeypatch.setattr(card_repo, "add", card_add)
+    monkeypatch.setattr(card_repo, "get_any", card_get_any)
+    monkeypatch.setattr(card_repo, "get_owned", card_get_owned)
+    monkeypatch.setattr(card_repo, "list_for_owner", card_list_for_owner)
+    monkeypatch.setattr(card_repo, "find_by_face_key", card_find_by_face_key)
+    monkeypatch.setattr(card_repo, "list_for_owner_for_update", card_list_for_owner_for_update)
+    monkeypatch.setattr(card_repo, "delete", card_delete)
+    monkeypatch.setattr(card_repo, "delete_all_for_owner", card_delete_all_for_owner)
 
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(

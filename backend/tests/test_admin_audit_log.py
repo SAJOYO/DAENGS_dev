@@ -212,3 +212,20 @@ class TestHelperShape:
         assert entry.target_id == target
         assert entry.detail == {"fields": ["email"]}
         assert entry.request_id == "req-1"
+
+
+def test_detail_없는_행은_SQL_NULL_로_나간다() -> None:
+    """**빠지면 detail 없는 감사 행이 전부 500 입니다** (2026-09-04 실제 사고).
+
+    SQLAlchemy 의 JSON/JSONB 기본값은 파이썬 `None` 을 SQL NULL 이 아니라 **JSON `null`**
+    로 넣습니다. `admin_audit_log` 의 CHECK 은 `detail IS NULL OR jsonb_typeof(detail) =
+    'object'` 라, JSON `null` 은 `jsonb_typeof` 이 `'null'` 이 되어 걸립니다.
+
+    `admin.account.reactivated`(정지 해제)가 남길 값이 없어 `detail` 을 안 주는데, 그래서
+    콘솔의 `정지 해제` 버튼이 500 이었습니다. **가짜 세션은 DB CHECK 을 모르므로** 위의
+    다른 테스트들이 전부 통과하면서도 실서버에서만 죽었습니다 — 이 테스트는 그 한 줄이
+    지워지지 않게 붙잡아 두는 것이 전부입니다.
+    """
+    from daengs_backend.models import AdminAuditLog
+
+    assert AdminAuditLog.__table__.c.detail.type.none_as_null is True

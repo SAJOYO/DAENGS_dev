@@ -1,8 +1,8 @@
 # 오케스트레이터 라우팅 정책
 
 `/assistant/query` 로 들어온 요청이 어느 능력으로 가는지를 정하는 정책 문서입니다.
-구조는 [orchestration-architecture.md](orchestration-architecture.md), 계약 모양은
-[orchestration-contracts.md](orchestration-contracts.md) 가 원본입니다. 표기는 같습니다
+구조는 [architecture.md](architecture.md), 계약 모양은
+[contracts.md](contracts.md) 가 원본입니다. 표기는 같습니다
 (CONFIRMED / OPEN / PENDING).
 
 ## 1. 결정적 라우팅의 경계 (CONFIRMED)
@@ -92,7 +92,7 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
   그대로 남습니다. 일반 미지원 UX 는 이 카드가 풀지 않았습니다.
 - 회귀 근거: 같은 80건 v3 gold·동결 gate·`gemini-3.1-flash-lite` 로 v4 프롬프트를 1회
   재실행해 PASS (`backend/evals/orchestration_router/summary_v5.json`, 80건 모두
-  social_intent null) — `docs/orchestration-router-benchmark.md` §v5.
+  social_intent null) — `router-benchmark.md` §v5.
 
 ### 일반 돌봄(사육) 정보 질문 — 분류 공백, 실행 대상 없음 (CONFIRMED — PR #172, 2026-09-03)
 
@@ -162,7 +162,7 @@ weight_kg · birth_date 를 저장할 뿐 권고 로직이 없고, Training 의 
   산책 시간하고 …") 둘** — 둘 다 Walk 를 놓쳤습니다. gold 는 "오늘/저녁 산책 시간" 을 **오늘의 환경
   창(window) = Walk** 로 보는데, v5 의 "walk or exercise frequency or duration … is not Walk merely
   because it concerns walking" 문장이 그 "시간" 을 돌봄 상식으로 읽게 만든 것입니다.
-  상세: `docs/orchestration-router-benchmark.md` §v6.
+  상세: `router-benchmark.md` §v6.
 
 **`semantic-router-ko-v6` — v5 의 한 문장 보정 (사람 결정, 같은 카드).** v5 는 일상 돌봄을 Life 에서
 올바르게 막았지만, "walk or exercise frequency or duration … not Walk merely because it concerns walking"
@@ -182,7 +182,7 @@ graph·aggregate·다른 경계 문구는 그대로이고 한국어 키워드 �
   97.5%, 실행 precision/recall 97.4%/100%, 다중 재현율 100%, mixed execute+handoff 0.90(경계값, gate ≥0.90),
   CLARIFY 100%/100%, Skin/Gait 100%, social_intent non-null 0/80. non-exact 2건은 모두 기존 흔들림
   사례 — `boundary_05`(Walk 추가, v5·v6 run 과 동일) · `mixed_09`(Training 추가, v4 run 과 동일). v6 가 잃었던
-  `mixed_10`·`clarify_08` 은 회복. 상세: `docs/orchestration-router-benchmark.md` §v7.
+  `mixed_10`·`clarify_08` 은 회복. 상세: `router-benchmark.md` §v7.
 
 **현재 상태 (CONFIRMED — v6 수용).** production 프롬프트는 `semantic-router-ko-v6` 입니다. 일반 돌봄
 질문은 어느 능력으로도 가지 않고 기존 미지원 문구(FAILED)로 떨어지며, **그 질문에 답하는 능력은 여전히
@@ -265,7 +265,7 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 | warm p50/p95 지연 | 라우터는 모든 대화 요청의 앞단에 선다 |
 | 자원/비용 특성 | 서버 상주 RAM · API 비용 |
 
-게이트는 `docs/orchestration-router-benchmark.md`와
+게이트는 `router-benchmark.md`와
 `backend/evals/orchestration_router/benchmark_v1.yaml`이 원본입니다. 지연은 관측하지만
 더 빠른 다른 모델을 고르는 규칙은 없습니다. 실패하면 모델을 조용히 바꾸지 않고 실패
 유형을 분석한 뒤 사람이 프롬프트·스키마/컨텍스트·아키텍처 중 다음 조치를 정합니다.
@@ -278,13 +278,13 @@ LLM 의미 선택 + 결정론적 RoutePlan 조립입니다.
 - **production 의미 라우터가 merge 됐습니다** (PR #113) — `semantic.py`(Gemini 의미
   선택 + O-14 1회 재시도) · `planner.py`(결정론적 RoutePlan 조립) · `service.py`.
 - **인증된 `POST /assistant/query` 진입점이 merge 됐습니다** (PR #115,
-  orchestration-contracts.md §8) — 이 정책 §1~§5 가 설명하는 경로 전체(결정적 신호 →
+  contracts.md §8) — 이 정책 §1~§5 가 설명하는 경로 전체(결정적 신호 →
   의미 라우팅 → 결정론적 조립 → Card 1 실행 → 집계)가 이제 실제 HTTP 요청으로
   도달 가능합니다.
 - **최종 경로에 포커스 E2E 검증이 있습니다** — 실제 `AssistantOrchestrationService` ·
   planner · Card 1 그래프 · 집계를 그대로 쓰고 Gemini 전송과 능력 어댑터만 대체한
   통합 테스트입니다(`backend/tests/test_assistant_orchestration_e2e.py`). Card 2A 의
-  80건 골드 벤치마크(`docs/orchestration-router-benchmark.md`)와는 다른 것이고, **이
+  80건 골드 벤치마크(`router-benchmark.md`)와는 다른 것이고, **이
   closeout 이 그 벤치마크를 다시 돌리거나 동결을 해제하지 않습니다.**
 - **라이브 Gemini 스모크 3건** — 실제 `gemini-3.5-flash-lite` 로 production 경로가
   실제로 붙어 있는지 확인한 소규모 스모크이지, 새 벤치마크가 아닙니다. Provider 원문

@@ -1,27 +1,43 @@
 """조립 — provider 들을 불러 `Observations` 하나로 (RT-002 ②-a).
 
-**이 층이 아는 유일한 것은 호출 순서다.** providers 는 서로를 모르고(모듈 하나 = 서비스 하나),
-rules 는 조회를 모른다(`judge(obs, t)` 는 시각의 함수다). 그 사이가 비어 있었고, 검문소 D 가
+**이 층이 아는 유일한 것은 무엇을 부르는가다.** providers 는 서로를 모르고(모듈 하나 = 서비스
+하나), rules 는 조회를 모른다(`judge(obs, t)` 는 시각의 함수다). 그 사이가 비어 있었고, 검문소 D 가
 확인해야 하는 것 — **전송 실패가 캐시를 거쳐 판정까지 전달되는가** — 가 정확히 이 층이다.
 
-순서에 결정 셋이 박혀 있다:
+여기에 결정 넷이 박혀 있다:
 
   1. **조회 키를 먼저 만든다** (②-a) — 격자는 계산으로 나오지만 측정소·AWS 지점은 목록을
      받아야 나온다. 그 둘은 월 1회짜리라 캐시 수명이 완전히 다르고, 없으면 그 축이 `UNKNOWN`
-     이 된다.
-  2. **같은 격자 안에 AWS 지점이 있으면 초단기실황을 생략한다** (④-e 1번) — ⑤-d 가 이미
+     이 된다. 이 단계만 순차다.
+  2. **요청 예산 안의 조회는 병렬이다** (⑤-b) — provider 는 서로 독립이므로 동시에 낸다.
+     직렬로 걸면 8초가 **총합**이 되어 순서상 뒤쪽이 호출조차 못 나간다. 실제로 콜드 캐시에서
+     `dnsty`·`frcst`·`pwn` 셋이 늘 `예산 초과` 로 죽었고, 그 셋이 느려서가 아니라 마지막이라서
+     죽는 것이었다. 예산을 늘리는 것으로는 안 고쳐진다 — `transport/base.py` 의 재시도 때문에
+     provider 하나가 남은 예산을 혼자 다 먹을 수 있어서(최악 5+0.5+5+1.5+5=17초) 숫자를 올려도
+     "뒤쪽이 진다"는 구조가 그대로다. 병렬이면 8초가 **가장 느린 하나**가 되어 예산을 손댈
+     이유가 없어진다.
+  3. **같은 격자 안에 AWS 지점이 있으면 초단기실황을 생략한다** (④-e 1번) — ⑤-d 가 이미
      "같은 격자면 AWS 가 1순위"라고 정했으므로 실황을 불러도 지기만 한다. 격자당 56→32회/일.
      단, **AWS 가 실제로 값을 냈을 때만** 생략한다. 부르지도 않고 실패하면 둘 다 없어진다.
-  3. **생활기상지수는 부르지 않는다** — ③-c 가 체감온도를 자체 계산으로 확정했고 UV 는
+     **이 하나 때문에 웨이브가 둘로 갈린다** — 실황을 부를지가 AWS 의 결과에 달려 있어서,
+     이것만 병렬 밖에 남는다.
+  4. **생활기상지수는 부르지 않는다** — ③-c 가 체감온도를 자체 계산으로 확정했고 UV 는
      ③-b 가 축에서 뺐다. 판정에 안 쓰이는 값에 일 예산을 쓰지 않는다. provider 는 산식을
      공식값과 **대조**할 때 쓰는 도구로 남는다 (§6.8 정정).
 
 ⑤-a 대로 **기상청 격자만 필수**다. 나머지는 없으면 `UNKNOWN` 이 되고, 그 상태로도 판정은
 나가되 `GOOD` 으로 올라가지 않는다 — 그 상한은 여기가 아니라 `rules.judge` 가 건다.
+
+**병렬이 안전한 근거는 이 파일 밖에 있다.** 둘 다 실제로 확인했고, 의심이 들면 여기부터 보라:
+`observation.py` 의 `Observations.__init__` 이 받은 measurement 를 `(valid_at, _RANK[source])` 로
+전부 다시 정렬하므로 **완료 순서는 판정에 영향이 없고**, `cache.py` 의 저장소는 둘 다 스레드
+안전하다(`MemoryStore` 는 `_guard` 락, `RedisStore` 는 `INCR`·Lua). `Budget` 은 monotonic
+deadline 을 읽기만 해서 공유해도 된다.
 """
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -46,6 +62,21 @@ SIDO: tuple[str, ...] = (
     "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
     "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 )
+
+
+@dataclass(frozen=True)
+class _Fetch:
+    """요청 예산 안에서 나가는 조회 하나. **스레드에 넘길 수 있게 값으로 만든다.**
+
+    `collect` 가 곧바로 부르지 않고 이 목록을 먼저 세우는 이유가 병렬이다 — 무엇을 부를지가
+    다 정해진 뒤에야 한꺼번에 던질 수 있다. `parse` 를 여기 같이 담는 이유는 파싱까지
+    워커 스레드에서 끝내야 조립 스레드가 순서를 기다리지 않기 때문이다.
+    """
+
+    source: Source
+    lookup: str
+    fetch: Callable[[], Any]
+    parse: Callable[[Any], list]
 
 
 @dataclass
@@ -74,6 +105,9 @@ class _Run:
 
         기록이 조건부이면 조용히 사라진 provider 가 생기고, ⑥의 `sources`(저하 이유)가
         "왜 모르는지"를 못 말한다.
+
+        **조회 키를 만드는 순차 구간 전용이다** (`_aws_table` · `_label_and_areas`). 요청 예산
+        안의 조회는 `gather` 를 쓴다 — 거기서는 `self.results` 를 직접 건드리면 안 된다.
         """
         got = self.cache.get(source.value, lookup, fetch, self.now,
                              allow_call=self.allow_call)
@@ -81,20 +115,49 @@ class _Run:
                                            reason=got.reason, stale=got.stale))
         return got.payload
 
-    def parsed(self, source: Source, lookup: str, fetch: Callable[[], Any],
-               parse: Callable[[Any], list]) -> list:
-        """받기 → 파싱. **파싱 실패는 전송 실패와 다르게 다룬다** — 응답은 왔는데 우리가 못
-        읽은 것이므로 캐시는 그대로 두고 이번 판정에서만 뺀다.
+    def one(self, spec: _Fetch) -> tuple[ProviderResult, list]:
+        """조회 하나 → (기록, 값). **`self.results` 를 건드리지 않고 반환한다.**
+
+        예전에는 `payload()` 가 append 하고 파싱 실패 때 `self.results[-1]` 을 덮어썼다. 직렬일
+        때는 그 `[-1]` 이 방금 내가 넣은 항목이라 맞았지만, **병렬에서는 "마지막에 append 한
+        남의 항목"이라 엉뚱한 provider 의 결과를 지운다.** 기록을 반환값으로 돌리면 그 자리가
+        아예 없어진다 — 병렬화에서 실제로 고쳐야 했던 곳은 여기 하나뿐이었다.
+
+        **파싱 실패는 전송 실패와 다르게 다룬다** — 응답은 왔는데 우리가 못 읽은 것이므로
+        캐시는 그대로 두고 이번 판정에서만 뺀다.
         """
-        body = self.payload(source, lookup, fetch)
-        if body is None:
-            return []
+        got = self.cache.get(spec.source.value, spec.lookup, spec.fetch, self.now,
+                             allow_call=self.allow_call)
+        result = ProviderResult(provider=spec.source, ok=got.ok,
+                                reason=got.reason, stale=got.stale)
+        if got.payload is None:
+            return result, []
         try:
-            return parse(body)
+            return result, spec.parse(got.payload)
         except Exception as exc:                       # noqa: BLE001 — provider 가 낼 수 있는 것 전부
-            self.results[-1] = ProviderResult(provider=source, ok=False,
-                                              reason=f"파싱 실패: {exc}")
-            return []
+            return ProviderResult(provider=spec.source, ok=False,
+                                  reason=f"파싱 실패: {exc}"), []
+
+    def gather(self, specs: list[_Fetch]) -> dict[Source, list]:
+        """여러 조회를 **동시에** 낸다 (⑤-b). 값은 `Source` 로 찾을 수 있게 돌려준다.
+
+        `pool.map` 은 결과를 **인자 순서대로** 주므로 완료 순서가 뒤섞여도 여기서 나가는
+        순서는 매번 같다. 예외도 그대로 다시 낸다 — 전송 실패는 `cache.get` 이 이미 삼켰고,
+        여기까지 올라온 것은 우리 버그이므로 직렬일 때와 똑같이 터지는 편이 맞다.
+
+        하나뿐이면 스레드를 안 만든다. 프리페치(`warm`)와 테스트가 대부분 그 경로라, 풀을
+        띄우는 비용과 스택 트레이스가 깊어지는 것을 그냥 피한다.
+        """
+        if not specs:
+            return {}
+        if len(specs) == 1:
+            done = [self.one(specs[0])]
+        else:
+            with ThreadPoolExecutor(max_workers=len(specs),
+                                    thread_name_prefix="rt-collect") as pool:
+                done = list(pool.map(self.one, specs))
+        self.results += [result for result, _ in done]
+        return {spec.source: values for spec, (_, values) in zip(specs, done, strict=True)}
 
 
 # ------------------------------------------------------------------ 조회 키 (②-a)
@@ -216,6 +279,20 @@ def _warning_areas(location: ResolvedLocation, station: str | None) -> list[str]
 
 # ------------------------------------------------------------------ 본체
 
+# 값이 아니라 **상태**를 내는 출처. 나머지는 전부 `Measurement` 다.
+_STATE_SOURCES = frozenset({Source.AIRKOREA_FORECAST, Source.WARNING})
+
+# ⑥ `sources` 의 고정 순서. **완료 순서로 두면 매 요청 순서가 달라진다** — 병렬이라 그날의
+# 응답 속도가 곧 목록 순서가 되어, 콘솔에서 어제와 오늘을 눈으로 못 맞춘다. 조회 키를 만드는
+# 셋이 앞이고 그 뒤는 `Source` 선언 순서(⑤-d 우선순위와 같은 축)다 — 병렬화 이전의 호출
+# 순서와 같아서 화면에 보이는 것은 안 바뀐다. 여기 없는 출처는 뒤에 원래 순서로 남는다.
+_REPORT_RANK: dict[Source, int] = {source: i for i, source in enumerate((
+    Source.AWS_STATIONS, Source.AIRKOREA_STATIONS, Source.KAKAO,
+    Source.AWS_MIN, Source.NCST, Source.FCST_ULTRA, Source.FCST_VILLAGE,
+    Source.AIRKOREA, Source.AIRKOREA_FORECAST, Source.WARNING,
+))}
+
+
 def collect(point: LatLon, now: datetime, *, cache: Cache | None = None,
             budget: Budget | None = None, allow_call: bool = True) -> Observations:
     """좌표 하나에 대한 관측 한 묶음. `judge(collect(...), t)` 가 9단계 `app/` 의 전부다."""
@@ -226,54 +303,62 @@ def collect(point: LatLon, now: datetime, *, cache: Cache | None = None,
     run.start_request(budget)               # 조회 키가 다 나온 뒤에 ⑤-b 의 8초를 건다
     grid = location.grid
     gridkey = f"{grid.nx},{grid.ny}"
+    areas = _warning_areas(location, location.station)   # 계산뿐이라 조회 전에 끝난다
 
-    measurements: list[Measurement] = []
-    states: list[State] = []
-
-    # --- ⑤-d 1순위 · ④-e 1번 -------------------------------------------------
-    aws: list[Measurement] = []
+    # --- 웨이브 1 — 서로 독립인 조회 전부, 동시에 (⑤-b) ----------------------
+    # **`if` 로 거르는 것은 예산을 아끼는 게 아니라 확실히 실패할 호출을 안 하는 것이다** —
+    # 측정소를 못 골랐으면 대기질 조회는 인자가 없어 반드시 실패한다.
+    wave: list[_Fetch] = []
     if coords:
-        aws = run.parsed(Source.AWS_MIN, "all",
-                         lambda: kma_apihub.raw_aws(now, budget=run.budget),
-                         lambda text: kma_apihub.parse_aws(text, coords, grid))
-        measurements += aws
-
-    # --- 기상청 격자 (⑤-a 의 유일한 필수 출처) --------------------------------
-    if not aws:
-        # AWS 가 값을 냈을 때만 생략한다. 지점이 없거나 그 호출이 실패한 격자에서는
-        # 실황이 유일한 현재 관측이라, 아껴 봐야 판정을 못 하게 된다
-        measurements += run.parsed(Source.NCST, gridkey,
-                                   lambda: kma_vilage_fcst.raw_ncst(grid, now, budget=run.budget),
-                                   kma_vilage_fcst.parse_ncst)
-    measurements += run.parsed(Source.FCST_ULTRA, gridkey,
-                               lambda: kma_vilage_fcst.raw_ultra(grid, now, budget=run.budget),
-                               kma_vilage_fcst.parse_ultra)
-    measurements += run.parsed(Source.FCST_VILLAGE, gridkey,
-                               lambda: kma_vilage_fcst.raw_village(grid, now, budget=run.budget),
-                               kma_vilage_fcst.parse_village)
-
-    # --- 대기질 ---------------------------------------------------------------
+        wave.append(_Fetch(Source.AWS_MIN, "all",
+                           lambda: kma_apihub.raw_aws(now, budget=run.budget),
+                           lambda text: kma_apihub.parse_aws(text, coords, grid)))
+    wave.append(_Fetch(Source.FCST_ULTRA, gridkey,
+                       lambda: kma_vilage_fcst.raw_ultra(grid, now, budget=run.budget),
+                       kma_vilage_fcst.parse_ultra))
+    wave.append(_Fetch(Source.FCST_VILLAGE, gridkey,
+                       lambda: kma_vilage_fcst.raw_village(grid, now, budget=run.budget),
+                       kma_vilage_fcst.parse_village))
     if location.station:
         station = location.station
-        measurements += run.parsed(Source.AIRKOREA, station,
-                                   lambda: airkorea_realtime.raw_dnsty(station, budget=run.budget),
-                                   lambda body: airkorea_realtime.parse_dnsty(body, station))
+        wave.append(_Fetch(Source.AIRKOREA, station,
+                           lambda: airkorea_realtime.raw_dnsty(station, budget=run.budget),
+                           lambda body: airkorea_realtime.parse_dnsty(body, station)))
     if location.region:
         region = location.region
-        states += run.parsed(Source.AIRKOREA_FORECAST, f"{region}:{now:%Y-%m-%d}",
-                             lambda: airkorea_realtime.raw_frcst(now, budget=run.budget),
-                             lambda body: airkorea_realtime.parse_frcst(body, region))
-
-    # --- 특보 (전국 1세트라 조회 키가 하나다) ---------------------------------
-    areas = _warning_areas(location, location.station)
+        wave.append(_Fetch(Source.AIRKOREA_FORECAST, f"{region}:{now:%Y-%m-%d}",
+                           lambda: airkorea_realtime.raw_frcst(now, budget=run.budget),
+                           lambda body: airkorea_realtime.parse_frcst(body, region)))
     if areas:
-        states += run.parsed(Source.WARNING, "all",
-                             lambda: kma_warning.raw_pwn(budget=run.budget),
-                             lambda body: kma_warning.parse_pwn(
-                                 body, areas, precise=location.warning_areas))
+        # 특보는 전국 1세트라 조회 키가 하나다
+        wave.append(_Fetch(Source.WARNING, "all",
+                           lambda: kma_warning.raw_pwn(budget=run.budget),
+                           lambda body: kma_warning.parse_pwn(
+                               body, areas, precise=location.warning_areas)))
 
-    return Observations(location=location, fetched_at=now, measurements=measurements,
-                        states=states, providers=run.results)
+    got = run.gather(wave)
+
+    # --- 웨이브 2 — ④-e 1번 --------------------------------------------------
+    # **이것만 웨이브 1 의 결과에 달려 있다.** AWS 가 값을 냈을 때만 생략한다 — 지점이 없거나
+    # 그 호출이 실패한 격자에서는 실황이 유일한 현재 관측이라, 아껴 봐야 판정을 못 하게 된다.
+    # 예산은 웨이브 1 과 **같은 시계를 공유하므로**, 앞에서 시간을 다 썼으면 여기서 예산 초과가
+    # 된다. 그것이 맞다 — 8초는 한 판정에 쓰는 시간이지 웨이브당 시간이 아니다 (⑤-b).
+    if not got.get(Source.AWS_MIN):
+        got |= run.gather([_Fetch(Source.NCST, gridkey,
+                                  lambda: kma_vilage_fcst.raw_ncst(grid, now, budget=run.budget),
+                                  kma_vilage_fcst.parse_ncst)])
+
+    # `got` 은 삽입 순서(=`wave` 순서)를 지키므로 어느 축에 담기든 결과가 결정적이다.
+    # measurement 는 `Observations` 가 어차피 다시 정렬한다 — 그래서 병렬이 판정을 안 바꾼다.
+    measurements: list[Measurement] = []
+    states: list[State] = []
+    for source, values in got.items():
+        (states if source in _STATE_SOURCES else measurements).extend(values)
+
+    return Observations(
+        location=location, fetched_at=now, measurements=measurements, states=states,
+        providers=sorted(run.results,
+                         key=lambda r: _REPORT_RANK.get(r.provider, len(_REPORT_RANK))))
 
 
 # 격자를 조회 키로 쓰는 feed 들. 프리페치가 "무엇을 데울지" 고를 때의 축이다.

@@ -13,17 +13,20 @@ import {
 } from "@/lib/life-rag";
 
 /**
- * `GET /walk` 점검 패널.
+ * `GET /life/walk-conditions` 점검 패널.
  *
- * **`/walk` 을 부르는 첫 화면입니다.** 지금까지는 API 만 열려 있고 부르는 곳이 없어서,
- * 살아 있는지 보려면 사람이 좌표를 넣어 `curl` 을 쳐야 했습니다.
+ * **이 API 를 부르는 유일한 화면입니다.** 앱은 `/assistant/query` 만 쓰므로, 이 패널이 없으면
+ * 살아 있는지 보려고 사람이 좌표를 넣어 `curl` 을 쳐야 합니다.
  *
  * 이 화면의 본론은 등급이 아니라 **`sources`** 입니다 — 9개 출처 중 어느 것이 죽었고
  * 왜 죽었는지가 보여야 점검입니다.
+ *
+ * ⚠️ 경로가 A4(#176)로 `/walk` → `/life/walk-conditions` 가 됐고 리다이렉트가 없습니다.
+ * 산책 **기록**(`/app/walks`)과 한 글자 차이였던 것을 갈라 놓은 것이 그 카드입니다.
  */
 
 /** 눈으로 좌표를 외우지 않아도 되게. 강남은 `#23` 실기 확인에 쓴 좌표 그대로입니다. */
-const PRESETS: Array<{ label: string; lat: number; lon: number }> = [
+export const PRESETS: Array<{ label: string; lat: number; lon: number }> = [
   { label: "강남", lat: 37.4979, lon: 127.0276 },
   { label: "서울시청", lat: 37.5663, lon: 126.9779 },
   { label: "부산 해운대", lat: 35.1587, lon: 129.1604 },
@@ -110,7 +113,7 @@ export default function WalkInspect() {
 
     try {
       const query = new URLSearchParams({ lat: lat.trim(), lon: lon.trim() });
-      setResult(await apiJson<WalkResponse>(`/api/walk?${query}`, { signal: controller.signal }));
+      setResult(await apiJson<WalkResponse>(`/api/life/walk-conditions?${query}`, { signal: controller.signal }));
     } catch (caught) {
       // ⚠️ 503 은 실패가 아니라 **"판정 불가"라는 답**입니다. 본문에 어느 출처가 죽었는지
       // 들어 있고, 그것을 버리면 이 화면을 만든 이유가 사라집니다 (RT-001 ⑥).
@@ -137,7 +140,7 @@ export default function WalkInspect() {
         <div>
           <p className="text-sm font-medium text-sky-700 dark:text-sky-400">생활 RAG · 실시간</p>
           <h2 id="walk-inspect-title" className="mt-1 text-2xl font-semibold tracking-tight">
-            산책 적합도 <code className="text-base font-normal text-zinc-500">GET /walk</code>
+            산책 적합도 <code className="text-base font-normal text-zinc-500">GET /life/walk-conditions</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             좌표 하나로 지금 등급과 24시간 타임라인, 권장 구간을 냅니다. 저장하지 않고 매번 받아 옵니다.

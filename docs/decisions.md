@@ -1,5 +1,8 @@
 # 의사결정 기록
 
+> ⚠️ **Life 직접 API 경로는 #176(A4)으로 바뀌었다** — `/ask` → `/life/ask`, `/walk` → `/life/walk-conditions`.
+> 이 파일은 **결정이 내려진 시점의 기록**이라 본문의 옆 경로 표기를 고치지 않는다. 현행 경로는 위 줄이 정본이다.
+
 되돌리기 번거롭거나, 나중에 "왜 이렇게 했지"가 나올 결정만 적습니다.
 코드나 커밋을 보면 알 수 있는 것은 여기 적지 않습니다.
 
@@ -50,6 +53,11 @@
 | [D-043](#d-043) | 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다 | 2026-09-02 |
 | [D-044](#d-044) | 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다 | 2026-09-02 |
 | [D-045](#d-045) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-046](#d-046) | Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다 | 2026-09-03 |
+| [D-047](#d-047) | Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다 | 2026-09-03 |
+| [D-048](#d-048) | 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지 | 2026-09-03 |
+| [D-049](#d-049) | 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다 | 2026-09-03 |
+| [D-050](#d-050) | Life는 좌표·과거 시각의 환경 관측을 반환하고 Walk는 후속 단계에서 값으로 동결한다 | 2026-09-03 |
 
 ---
 
@@ -1479,7 +1487,7 @@ place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(
 **"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
 place-db 의 스키마 원본은 `backend/infra/place/alembic` 이고, 리비전 히스토리를 개조하지
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
-쌉니다 — `backend/docs/place/UPSTREAM.md`).
+쌉니다 — `docs/place/UPSTREAM.md`).
 
 #### API 는 아직 nginx 에 노출하지 않았다
 
@@ -2330,4 +2338,246 @@ Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합�
 producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
 
 **번호 재부여 (2026-09-02)** — 이 결정은 원래 D-042 로 발행됐습니다. 같은 날 `main` 에서 GCP 이관 결정이 같은 번호로 나갔고(PR #119, 09-01 14:02), 이 결정은 `dev` 에서 나왔습니다(PR #125, 09-01 17:30). 두 브랜치가 서로를 못 봐서 생긴 충돌이라 `docs/collaboration.md` §4 의 규칙대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-045 로 옮겼습니다. 같은 사고를 다시 내지 않으려고 이관 산출물의 main 직행 예외를 없앴습니다 — `docs/deploy/roadmap.md` §3.
+
+---
+
+## D-046
+### Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다
+
+D-045는 Walk가 Place·Journey 능력을 어댑터 뒤에서 소비할 수 있다고 정했지만, 어떤 질문과
+데이터를 누가 소유하는지는 남겨 두었습니다. Geo의 Capsule·Spatial Diary를 제품에 채택하기
+전에 다음 경계를 고정합니다.
+
+| 패키지 | 답하는 질문 | 소유하는 정본 |
+| --- | --- | --- |
+| `daengs_walk` | 실제 산책에서 무엇이 측정되고 기억됐는가 | 좌표 입력, Facts, Receipt, Observation, Cellophane, Capsule과 이후 Pin·공간 일기 |
+| `daengs_place` | 이 좌표 주변에 무엇이 존재하는가 | Place identity, 원천 사실, 태그, 검색·주변 장소 결과 |
+| `daengs_journey` | 사용자가 어디로 가려고 계획했는가 | 선택 장소까지의 단발 계획 경로 snapshot |
+
+**Journey는 Journal이 아닙니다.** 실제로 걸은 경로와 사용자가 남긴 기억·일기는 Walk가
+소유합니다. Journey는 계획 경로를 만들 뿐 실제 GPS, 행동 관측, 일기 문장이나 Pin을 쓰지
+않습니다. Walk가 나중에 계획과 실제를 비교할 때도 Journey의 snapshot을 입력으로 받을 뿐,
+Journey 저장소를 실제 산책의 정본으로 삼지 않습니다.
+
+### 호출과 저장 경계
+
+세 제품 패키지는 서로의 Python 구현을 직접 import하거나 DB를 조회·수정하지 않습니다.
+별도 DB 사이에 FK도 만들지 않습니다. HTTP·인증·재시도·트랜잭션을 소유한
+`daengs_backend`가 조립점이며, 구체 소비자가 생겼을 때 소비자가 요구하는 최소 typed
+capability와 adapter를 함께 만듭니다. 미리 범용 Place/Journey adapter를 만들지 않습니다.
+
+Walk가 특정 장면의 주변 장소 사실을 필요로 하면 Place의 공개 capability가 반환한 최소 사실을
+출처·계약 버전·확보 시각과 함께 Walk의 별도 context snapshot으로 동결합니다. Place 행 전체를
+복제하거나 현재 Place를 매번 다시 읽어 과거 일기의 뜻을 바꾸지 않습니다. Journey 결과도 실제
+비교 기능이 생겼을 때 같은 방식으로 참조 ID와 필요한 계획 snapshot만 받습니다.
+
+호출 방향은 다음과 같습니다.
+
+```text
+Phone GPS ───────────────────────────────▶ Walk
+Place ── 주변 사실 snapshot ─────────────▶ Walk의 후속 Event Context
+Journey ── 선택적 계획 경로 snapshot ────▶ Walk의 계획/실제 비교
+```
+
+Place와 Journey는 Walk 테이블을 쓰지 않으며, Walk의 계산 결과를 자기 정본으로 복제하지
+않습니다. 공유가 필요하면 각 소유자의 공개 계약을 통해 값으로 전달합니다.
+
+### finalize는 외부 능력과 분리한다
+
+Walk finalize와 첫 Capsule 봉인은 업로드돼 있거나 Walk가 이미 소유한 자료만으로 끝나야 합니다.
+Place·Journey 네트워크 호출을 Walk 행 잠금 안에서 실행하지 않고, 두 능력의 장애 때문에 산책
+봉인이나 앱 재시도가 실패해서도 안 됩니다. 주변 세계 보강은 봉인 뒤 별도 단계에서 수행하며
+값을 확보하지 못했으면 `unknown`, 호출을 시도해 실패했으면 `failed`로 남깁니다.
+
+따라서 첫 Dev형 Capsule은 Facts·Receipt·Observation·Cellophane과 앱이 산책 시작 때 남긴
+날씨만 봉인합니다. Place 주변 사실, Journey 계획 경로, 행동 의미와 일기 문장은 필수 자식이
+아닙니다. 각 데이터의 실제 소비자가 생기는 후속 결정에서만 경계를 넓힙니다.
+
+---
+
+## D-047
+### Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다
+
+Geo의 Capsule을 Dev에 채택하되 저장 구조를 그대로 복사하지 않습니다. Dev에는 이미
+`walk_analyses`가 Facts·Receipt·Event·Observation을, `walk_cellophane_sheets`가 Paint 세대를
+보존합니다. 새 `walk_capsules`는 `analysis_id`를 PK이자 FK로 갖는 1:1 자식이며, 이 원판들이
+공간 기억 소비에 준비됐다는 선언만 맡습니다. Capsule 자체에는 계산 결과를 다시 넣지 않고
+계약 세대, 관측 capability, 당시 환경 원자와 seal 시각만 둡니다.
+
+강아지 ID도 Capsule에 중복 저장하지 않습니다. 한 산책에는 여러 마리가 참여할 수 있고 그
+연결의 정본은 `walk_pets`입니다. 이후 행동 증언과 개체별 일기는 해당 산책과 강아지를 함께
+가리키는 별도 기록으로 만들며, Capsule 하나를 강아지마다 복제하지 않습니다.
+
+첫 context snapshot은 앱이 산책 시작 때 이미 업로드한 WMO 날씨 코드·주야·기온만 옮깁니다.
+하나라도 있으면 `partial`, 전부 없으면 `unknown`이며 현재 날씨로 과거를 보충하지 않습니다.
+Place나 Journey를 finalize 행 잠금 안에서 호출하지도 않습니다. 기존 분석 backfill 역시 당시
+Walk 메타데이터만 사용하고 `legacy_walk_metadata_v1` 출처를 명시합니다. WMO 코드 0~99와
+기온 -100~100℃ 밖의 기존 값은 환경 원자로 해석하지 않고 migration에서 `NULL`로 바로잡으며,
+이후 업로드와 DB 제약이 같은 범위를 강제합니다.
+
+finalize는 Analysis·Cellophane·Capsule을 한 SQLAlchemy aggregate로 조립하고 `derived` 전환과
+같은 DB 트랜잭션에서 commit합니다. 원본 좌표는 D-044대로 계정 삭제 때까지 보존하므로 Geo의
+purge 전제나 물리적 "마지막 INSERT" 순서를 들여오지 않습니다. 재시도에서 `derived`인데
+Capsule이 없으면 성공으로 위장하거나 영구 충돌로 남기지 않고 기존 Analysis와 Walk
+메타데이터에서 같은 seal을 복구합니다.
+
+배포는 Capsule 테이블 migration을 코드보다 먼저 적용합니다. 그 뒤 새 코드가 뜨기 전까지
+이전 프로세스가 만든 Analysis에는 Capsule이 없을 수 있으므로, 새 finalize는 같은 Walk 행
+잠금 안에서 그 누락 seal을 기존 메타데이터로 복구합니다. 배포 뒤 migration을 한 번 더
+실행하고 verify하여 재시도하지 않은 산책까지 backfill합니다.
+
+Capsule은 이번 단계에서 내부 저장 계약입니다. 별도 HTTP API, App UI, Place 주변 사실,
+Journey 계획 snapshot, 행동 의미와 일기 문장은 실제 소비자가 생기는 후속 PR에서 추가합니다.
+
+---
+
+## D-048
+### 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지한다
+
+D-037은 오케스트레이션의 일반 운영 로그·트레이스에 질문 원문을 남기지 않는 결정입니다.
+사용자가 다시 열어 보는 **제품 기능의 정본 데이터**까지 금지한 결정은 아닙니다. 두 저장은
+목적·접근 경로·보존 수명이 다르므로 다음과 같이 구분합니다.
+
+| 구분 | 질문·답변 원문 | 목적 |
+| --- | --- | --- |
+| 제품 대화 테이블 (`chat_sessions` · `chat_turns`) | 사용자 동의 기능 범위에서 저장 | 최근 대화 복원·사용자 요청 요약 |
+| 운영 로그·트레이스·메트릭 | 계속 금지 | 장애 진단·성능·상태 관측 |
+
+제품 저장 행을 로그에 덤프하거나, 예외 메시지·SQL 바인드·공급자 payload를 통해 원문을 관측
+계층으로 복제하지 않습니다. 관측에는 D-037의 `request_id`·상태·오류 코드 같은 안전한
+메타데이터만 남깁니다. 탈퇴 트랜잭션은 `app_users` 행을 유지하므로 FK cascade에 기대지 않고
+대화와 저장된 요약을 명시적으로 삭제합니다.
+
+릴리즈 범위는 **v0.0.0 제외, v0.0.1 활성화**입니다. v0.0.0은 무상태 대화 계약을 유지하고,
+v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는 변경이 필요하면 D-037의
+명시적 옵트인·별도 저장·보존 기한 조건을 만족하는 별도 결정을 먼저 만듭니다.
+
+**외부 호출 경계와 인증 (2026-09-03 보강)** — 대화 turn과 AI 요약은
+`활성 확인 + 예약 TX → AsyncSession 닫기 → 외부 호출 → 완료/실패 TX`이며, 외부 호출 동안
+열린 요청 DB 세션과 행 잠금은 **0개**여야 합니다 (`docs/chat-transaction-flow.md`). 그래서 서비스가
+짧은 TX를 따로 소유하는 엔드포인트(`POST /app/chats/{id}/summary`)는 요청 세션에서
+`app_users FOR UPDATE`를 잡는 `CurrentAppUser`가 아니라 **토큰만 보는
+`CurrentAppMemberTokenOnly`**를 쓰고, 회원 active 확인은 서비스의 예약 TX가 같은 잠금으로
+다시 합니다. 서버 Phase 3A(2026-09-03)에서 이전 배선이 PostgreSQL 자기 교착(바깥 요청 TX
+`idle in transaction`으로 `app_users FOR UPDATE` 보유, 안쪽 INSERT `chat_summaries`가 FK
+`FOR KEY SHARE`로 `Lock/transactionid` 대기, 공급자 호출 0회)으로 워커를 영영 멈추게 한
+것이 이유입니다. 전역 `FOR NO KEY UPDATE`로만 고치지 않는 이유는 그 FK 충돌은 피해도 외부
+호출 동안 요청 세션과 회원 잠금이 살아 있는 경계 위반이 그대로이기 때문입니다. 요청 세션을
+같이 받는 보통의 앱 API는 계속 `CurrentAppUser`입니다.
+
+같은 보강으로 요약 완료 실패 계약을 turn과 맞췄습니다: 회원은 active인데 완료 UPDATE가 0행이면
+(5분 stale 회수 등) 생성된 요약을 201로 돌려주지 않고 503 `SUMMARY_PERSISTENCE_FAILED`(`summary_id` ·
+`persistence_error_code` · `retry_with_fresh_client_request_id: true`)로 끝냅니다.
+탈퇴가 예약 뒤·완료 전에 commit되면 완료 TX의 active 확인이 401로 끝나고, 지워진 대화·요약 행을
+다시 만들지 않습니다.
+
+**번호 재부여 (2026-09-03)** — 이 결정은 원래 D-043 으로 발행됐습니다. 이 브랜치가 `origin/dev` 를 86 커밋 뒤진 채로 있는 사이 dev 에서 D-043·D-044·D-045 가 먼저 머지됐습니다. `docs/collaboration.md` §4 대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-048 으로 옮겼습니다. 바로 위 D-045 도 같은 사고를 한 번 겪었습니다 — 브랜치를 오래 안 맞추면 반복됩니다.
+
+---
+
+## D-049
+### 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다
+
+공간 일기는 완성된 지도 snapshot을 저장하는 기능이 아니라, 봉인된 산책별 Capsule과
+Cellophane을 현재 조건으로 다시 고르고 겹치는 읽기 모델입니다. 첫 View selector는
+`pet_id`, KST 양끝 포함 기간, 당시 강수 형태와 낮·밤만 받습니다. 한 산책에 여러 강아지가
+참여하더라도 Capsule을 복제하지 않고, 실제 DB 조회 단계에서 `walk_pets`를 통해 각 강아지의
+cohort로 읽습니다.
+
+첫 field metric은 다음 두 개뿐입니다.
+
+```text
+visit_rate
+  해당 셀을 칠한 선택 산책 수 / 선택된 전체 Capsule 수
+  빈 Cellophane도 "방문하지 않은 산책"으로 분모에 남는다.
+
+walk_utilization
+  각 산책의 셀 시간 질량을 먼저 합 1로 만든 뒤 기여 산책을 동등 가중
+  빈 Cellophane은 정규화할 수 없어 이 metric의 기여 분모에서만 빠진다.
+```
+
+한 산책이 여러 Analysis나 pet join으로 두 번 들어오면 비율 분모가 부풀기 때문에 계산 코어가
+중복 `walk_id`를 거부합니다. 서로 다른 `paint_fp`도 같은 `(q, r)`가 같은 위치라는 보장이
+없으므로 한 field에 섞지 않습니다. 결과는 값뿐 아니라 분자, 이름 붙은 분모, Paint 지문,
+selector 지문, context known/unknown 수와 정책 버전을 함께 반환합니다.
+
+### Dev context facet policy v1 → v2
+
+Geo의 첫 View는 `precipitation_mm`과 `sun_elevation_deg`를 사용했지만, Dev가 현재 산책 당시
+동결하는 첫 원자는 앱이 보낸 WMO `weather_code`, `is_day`, 기온이었습니다. v2부터 Walk
+finalize가 Life의 과거 KMA 관측을 값으로 동결하며, 강수 facet은 KMA의
+`precipitation_kind`를 우선하고 없을 때만 WMO로 되돌아갑니다. 없는 원자를 현재 날씨나
+시각으로 추정하지 않고 `unknown`으로 둡니다. 분류는 다음과 같습니다.
+
+```text
+precipitation
+  dry      0, 1, 2, 3, 45, 48
+  rain     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99
+  snow     71, 73, 75, 77, 85, 86
+  mixed    KMA rain_snow 관측
+  unknown  값 없음 또는 WMO 표에서 정의하지 않은 0..99 값
+
+daylight
+  day      is_day=true
+  night    is_day=false
+  unknown  값 없음
+```
+
+어는 이슬비(56·57)와 어는 비(66·67)는 기상 현상 그대로 `rain`입니다. 앱의
+`OutsideApi.weatherOf()`가 이들을 눈으로 접는 것은 창문 그림의 시각 표현 정책이라, 과거 산책
+필터의 의미 정책으로 재사용하지 않습니다. facet 정책이 달라지면 원본 WMO 값을 고치지 않고
+정책 버전과 selector 지문을 올립니다.
+
+날짜는 `Asia/Seoul` 달력으로 해석하고 양끝이 모두 있는 동기 View 기간은 최대 366일입니다.
+여러 facet 축은 AND이고 한 축 안의 여러 값은 OR입니다. 필터에 사용한 축이 모두 알려졌을 때만
+그 Capsule의 context를 known으로 세며, context 필터가 없다면 현재 지원하는 두 축이 모두
+알려져야 known입니다.
+
+이번 결정은 순수 `daengs_walk` 계약과 계산까지만 채택합니다. SQLAlchemy 조회, 인증,
+repeatable-read snapshot, HTTP API와 앱 지도는 다음 조립 단계입니다. EntrySelector,
+EpisodeCandidate·Offer·Attestation·Pin, Memory Place, 일기 문장도 포함하지 않습니다.
+Place 주변 사실과 Journey 계획 경로는 이 계산에 필요하지 않으며 D-046의 capability 경계를
+그대로 유지합니다. 계절 facet은 한국 달력 정책과 실제 UI 소비가 생길 때 별도 버전으로
+추가합니다.
+
+---
+
+## D-050
+### Life는 좌표·과거 시각의 환경 관측을 반환하고 Walk는 후속 단계에서 값으로 동결한다
+
+산책 전의 운영 `GET /walk`와 Life 단독 앱의 계약 검증용 `POST /weather/at`을 분리합니다.
+전자는 현재와 미래를 조립해 산책 적합도를 판단하는 제품 읽기이고, 후자는 좌표와 과거 시각에
+대응하는 환경 사실을 판단어 없이 반환하는 내부 capability입니다. 과거 조회가 현재 산책 적합도
+전체를 재실행하면 예보·대기질·특보까지 불필요하게 호출하고, 현재값을 과거 사실로 오인할 여지가
+생깁니다.
+
+첫 버전은 기상청 초단기실황(`NCST`) 한 원천에서 기온, 습도, 강수 형태, 1시간 강수량만
+반환합니다. 요청 시각(`requested_at`), 값의 시각(`valid_at`), 발표 시각(`issued_at`), 실제 조회
+시각(`fetched_at`)을 분리합니다. 실황은 정시 관측이 40분 뒤 공개되므로, 조회 시점에 아직
+공개되지 않은 회차라면 직전 관측 회차를 선택합니다. 미래 시각은 거부하고, 없는 과거 자료를
+현재 날씨나 stale 현재 캐시로 채우지 않습니다.
+
+강수 형태의 숫자는 기상청 PTY 코드이며 앱이 보내는 WMO `weather_code`와 다른 어휘입니다.
+따라서 PTY를 WMO 숫자로 강제 변환하지 않고 의미 이름과 원본 코드를 함께 반환합니다. 강수량의
+구간 표현도 임의의 점값으로 누르지 않습니다. 각 원자는 출처와 공간 기준을 싣고, 전체 결과는
+`captured`, `partial`, `unknown`, `failed`로 관측 완전성을 드러냅니다.
+
+과거 응답 캐시는 `source + grid + observation cycle`을 키로 쓰는 별도 namespace입니다. 현재
+발표 주기의 stale 판정이나 활성 격자 프리페치에 넣지 않으며, 같은 산책 finalize와 동시 요청의
+중복 전송만 줄이는 캐시이지 영구 기록은 아닙니다. 성공 응답은 일반 TTL을 쓰고, 전송층이
+비재시도성으로 분류한 `NoData`만 한 발표 주기 동안 negative-cache합니다. 일시 장애는 저장하지
+않습니다.
+
+Life는 환경 사실을 조회할 뿐 Walk, Capsule, 일기, pet을 소유하지 않습니다. 후속 Walk 조립은
+산책의 대표 시각과 좌표를 선택해 이 capability를 호출하고 응답값을 Capsule에 동결합니다. 소유
+Walk와 무관한 임의 좌표·회차 조회가 공용 KMA 일일 쿼터를 소진하지 않도록 이번 단계에서는
+`daengs_backend` 제품 앱에 `/weather/at`을 등록하지 않습니다. Walk DB 저장, finalize 연결, 앱
+호출, Place 주변 사실, Journey 계획 경로도 포함하지 않습니다. 이 경계는 D-046의 소유권을
+그대로 유지합니다.
+
+후속 Walk finalize 연결에서도 소유 Walk만으로 호출 자격을 닫는 것만으로는 충분하지 않습니다.
+인증 사용자가 서로 다른 회차·격자의 산책을 반복 생성할 수 있기 때문입니다. 과거 snapshot은
+provider 호출 전에 공용 일 예산을 원자적으로 선점하되, 기존 실시간 10개 활성 격자에 필요한
+560회(격자당 56회/일)는 침범하지 않습니다. 예약분에 닿으면 Capsule은 앱 원본 또는
+unknown/failed로 저하되고, 캐시 hit는 호출 슬롯을 쓰지 않습니다.
 

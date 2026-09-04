@@ -1,0 +1,86 @@
+{
+  "source": "kto",
+  "note": "detailPetTour2의 scope/대상견/준비물/예외/amenity/결측 형태별 표본",
+  "cases": [
+    {
+      "id": "full-mountain",
+      "listing": {
+        "contentid": "1",
+        "title": "간월산",
+        "contenttypeid": "12",
+        "lclsSystm1": "NA",
+        "lclsSystm2": "NA01",
+        "lclsSystm3": "NA010100"
+      },
+      "detail": {
+        "acmpyTypeCd": "전구역 동반가능",
+        "acmpyNeedMtr": "목줄 착용",
+        "acmpyPsblCpam": "전 견종 동반 가능",
+        "etcAcmpyInfo": "맹견의 경우, 입마개 착용 필수\n배변봉투 지참 및 배변처리 필수"
+      },
+      "detail_state": "known"
+    },
+    {
+      "id": "partial-weight-amenity",
+      "listing": {
+        "contentid": "2",
+        "title": "남이섬",
+        "contenttypeid": "12",
+        "lclsSystm1": "VE",
+        "lclsSystm2": "VE05",
+        "lclsSystm3": "VE050100"
+      },
+      "detail": {
+        "acmpyTypeCd": "일부구역 동반가능",
+        "acmpyNeedMtr": "목줄 착용,반려동물 유모차 탑승,이동장(켄넬)사용",
+        "acmpyPsblCpam": "20㎏ 미만 동반 가능",
+        "etcAcmpyInfo": "투개더파크는 15㎏ 미만 등록 반려견만 입장 가능",
+        "relaPosesFclty": "반려견놀이터 / 반려견 동반 가능 객실 / 펫 프렌들리 카페"
+      },
+      "detail_state": "known"
+    },
+    {
+      "id": "not-fetched",
+      "listing": {
+        "contentid": "3",
+        "title": "해변",
+        "contenttypeid": "12",
+        "lclsSystm1": "NA",
+        "lclsSystm2": "NA02",
+        "lclsSystm3": "NA020900"
+      },
+      "detail": null,
+      "detail_state": "not_fetched"
+    },
+    {
+      "id": "unparseable-detail",
+      "listing": {
+        "contentid": "4",
+        "title": "어떤 장소",
+        "contenttypeid": "12",
+        "lclsSystm1": "VE",
+        "lclsSystm2": "VE03",
+        "lclsSystm3": "VE030500"
+      },
+      "detail": {
+        "acmpyTypeCd": "일부구역 동반가능",
+        "acmpyNeedMtr": "기타",
+        "etcAcmpyInfo": "현장 상황에 따라 운영자가 판단"
+      },
+      "detail_state": "known"
+    },
+    {
+      "id": "invalid-taxonomy",
+      "listing": {
+        "contentid": "5",
+        "title": "잘못된 계층",
+        "contenttypeid": "12",
+        "lclsSystm1": "NA",
+        "lclsSystm2": "VE03",
+        "lclsSystm3": "VE030100"
+      },
+      "detail": null,
+      "detail_state": "unknown"
+    }
+  ]
+}

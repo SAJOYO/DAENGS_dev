@@ -18,7 +18,7 @@ from fastapi import HTTPException
 
 from daengs_life.app.dto.ask import AskOut, HitOut
 from daengs_life.rag.core import config
-from daengs_life.rag.stages import generate
+from daengs_life.rag.stages import generate, score
 from daengs_life.rag.stages.search import Hit
 
 # ---------------------------------------------------------------- 서빙 정책 (RAG-026 ①이 비워 둔 자리)
@@ -26,6 +26,20 @@ from daengs_life.rag.stages.search import Hit
 # 정하면서 *"9단계 서빙의 기본값은 그때 따로 정한다"* 고 미뤄 뒀다.
 SERVING_K = 5                       # 검문소③·RAG-024 ②의 판정 k 와 같은 수. 다르면 인상이 어긋난다
 SERVING_SUPPLEMENTARY = True        # 부칙 포함. 1랩 실측에서 부칙을 빼도 결과가 안 바뀌었다(RAG-026 ①)
+
+# 약한 근거에서 기권할지 정하는 정책 (RAG-055). **이름으로 고른다** — 실물은
+# `rag.stages.score.ABSTAIN_POLICIES` 에 있고 `score-laps` 가 랩을 그 함수들로 채점한다.
+# 서빙이 자기 판정을 따로 적으면 **검문소가 재는 것과 서빙이 하는 것이 갈린다** — RAG-026 ②가
+# 8단계에서, RAG-028 ③이 9단계에서 막은 것과 같은 병리다. 여기 있는 것은 이름 하나뿐이다.
+#
+# `covered+selfreport` 를 고른 근거는 lap16·lap17 이다. 모델이 스스로 낸 `covered` 가 주력이고
+# — 문장을 읽는 후보가 전부 놓치던 B2(조용한 재해석)를 잡는 유일한 신호다 — 자기보고는
+# `covered` 가 한 랩에서 놓친 자리를 메우는 보조다. 두 랩 모두 이 조합만 놓친 기권 0 이었다.
+#
+# ⚠️ **오기권 셋(Q3 · S3 · B1)은 이 정책의 과잉이 아니다.** 셋 다 정답 청크가 DB 에 있는데
+# top-5 에 안 오는 자리라, 지금 서빙은 그 질문에 **무관한 조항을 나열한 틀린 답**을 낸다.
+# 기권이 그보다 낫다. 순위를 고치는 것은 검색 쪽 일이다 (A0 §3-1 이 남긴 D5).
+SERVING_ABSTAIN_POLICY = "covered+selfreport"
 
 
 # ---------------------------------------------------------------- 에러 매핑에 쓰는 타임아웃 타입
@@ -42,11 +56,16 @@ else:
     _TIMEOUTS += (httpx2.TimeoutException,)
 
 
-def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None) -> AskOut:
+def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None,
+        breed: str | None = None, age_months: int | None = None) -> AskOut:
     """질문 하나 → 응답 하나.
 
     `encoder`·`conn`·`client` 는 **받아서 그대로 넘긴다** — 만들지도 닫지도 않는다(RAG-028 ①).
     수명을 아는 것은 이 층이 아니라 `deps.py` 와 lifespan 이다.
+
+    `breed`·`age_months` 는 로드맵 B4 다. **원시값으로 받는다** — 부르는 쪽(어댑터)의 타입을
+    여기서 알면 `daengs_life` 가 오케스트레이션을 의존하게 된다. 둘 다 `None` 이면 프롬프트가
+    B4 이전과 한 글자도 다르지 않고, 그래서 프로필 없는 요청의 답은 그대로다.
     """
     try:
         answer = generate.ask(
@@ -57,6 +76,7 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
             st=encoder.st if encoder else None,
             conn=conn,
             client=client,
+            dog=generate.DogProfile(breed=breed, age_months=age_months),
         )
     except RuntimeError as e:
         # `_client()` 가 키 없음으로 죽는 경우 — 설정 문제지 요청 문제가 아니다
@@ -74,13 +94,41 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
         # 502 로 뭉뚱그리면 "DB 가 죽었나 Gemini 가 죽었나"를 로그 없이는 못 가른다
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
 
+    # **거절이 기권보다 앞이다** (RAG-055). 응급 질문에 근거가 0건이면 둘 다 성립하는데,
+    # 그때 사용자에게 필요한 것은 "자료에 없다"가 아니라 "지금 병원에"다
+    if answer.boundary != "none":
+        # 422 인 것은 **요청이 잘못돼서가 아니라 답할 수 없는 요청이어서**다. 4xx 중 이 뜻에
+        # 가장 가깝고, 상류가 죽은 5xx 와 갈라야 어댑터가 REFUSED 와 ERROR 를 안 뭉갠다.
+        # `message` 는 생성이 만든 문장 그대로다 — 여기서 고정 문구를 끼우면 어댑터가 지킬
+        # 무손실(불변식 3)이 이미 여기서 깨진다
+        raise HTTPException(status_code=422, detail={
+            "code": f"{answer.boundary}_boundary", "message": answer.text})
+
     if not answer.hits:
         # **근거가 0건이면 답을 만들지 않는다.** 컨텍스트가 빈 채로 Gemini 에 넘기면 그건 검색
         # 결과 위의 답이 아니라 모델의 기억이고, KPI(출처 링크 + 조항 번호)가 성립할 수 없다.
-        # ⚠️ 이것은 RAG-029(근거가 *약할* 때의 거부 전략)가 아니다 — 근거가 **아예 없는** 경우다
+        # 하이브리드 검색이 늘 상위 k 를 돌려주므로 **이 자리는 빈 코퍼스에서나 난다** (A0 §3-2)
         raise HTTPException(status_code=404, detail="근거를 찾지 못했다")
 
+    if score.ABSTAIN_POLICIES[SERVING_ABSTAIN_POLICY](_as_row(answer)):
+        # **근거는 있는데 물은 것에 못 닿는 경우.** RAG-029 가 미뤄 두고 D-035 가 v1 한계로
+        # 수용한 자리이고, A0 이 실물로 둘 남겨 이 카드가 열렸다. 코드는 404 그대로다 —
+        # 어댑터가 이미 ABSTAINED 로 옮기고 있고, 기권의 종류가 늘어난 것이지 뜻이 바뀐 게 아니다
+        raise HTTPException(status_code=404, detail={
+            "code": "no_evidence", "message": answer.text})
+
     return to_dto(answer)
+
+
+def _as_row(answer: generate.Answer) -> dict:
+    """`Answer` → 정책이 보는 모양. **저장된 랩의 행과 같은 칸 이름**이라야 한다 (RAG-055).
+
+    `score.ABSTAIN_POLICIES` 는 소급 채점용으로 dict 를 받게 돼 있고, 서빙이 그 함수를 그대로
+    쓰는 것이 이 파일이 자기 판정을 따로 적지 않는 방법이다. 칸 이름이 어긋나면 정책이 조용히
+    기본값(`covered=True`)을 읽어 **기권이 영영 안 난다** — 그래서 테스트가 이 함수를 붙잡는다.
+    """
+    return {"covered": answer.covered, "cited": answer.cited, "text": answer.text,
+            "hits": [{"score": h.score} for h in answer.hits]}
 
 
 def to_dto(answer: generate.Answer) -> AskOut:

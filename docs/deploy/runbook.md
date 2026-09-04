@@ -93,7 +93,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
 | `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | 기본은 셋 다 **비웁니다** (= `none`, `/app/gait/*` 가 503 — 안전합니다). 임시 LocalBridge 로 새 흐름을 검증할 때만 `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** 진짜 저장소는 GCS 이고 버킷은 #78 대기입니다 |
-| `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
+| `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/life/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:
 
@@ -128,7 +128,10 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker
+  gait-analysis gait-worker territory-vision-worker
+
+# ③-1 점령 게임판 — 덤프에는 안 따라옵니다(옛 115u 세대). §6 "점령 게임판 적재 (GCP)"
+#     를 여기서 한 번 밟으세요. 안 하면 지도에 점령지가 하나도 안 뜹니다
 
 # ④ 프론트 — deploy.yml 의 standalone 배치(releases/<해시>/ + current 링크)를
 #   /srv/daengs/web 에 재현하고 PM2 를 systemd 에 등록합니다
@@ -176,8 +179,27 @@ curl -sI http://daengapp.weareithero.cloud/            # 301 → https
 curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 ```
 
-`/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
-`/gait/analyze` 는 영상으로 분 단위 — 504 가 나면 `nginx/gcp.conf` 의 gait 타임아웃 확인.
+**경로별 기대 응답** — 배포 뒤 이 표대로 나오는지 봅니다. 인증이 필요한 경로는 **401 이
+정답**이고, 404 가 나오면 그 엔드포인트가 아직 이 서버에 없다는 뜻입니다:
+
+```bash
+for p in /health /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
+  printf "%-24s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
+done
+```
+
+| 경로 | 기대 | 아니면 |
+| --- | --- | --- |
+| `/health` | 200 (`{"status":"ok","db":"ok"}`) | backend 기동 실패 |
+| `/gait/records` | **410** — 옛 무인증 경로는 닫혀 있어야 합니다 (#145) | **400·200 이면 설정이 반영 안 된 것.** §6 의 inode 함정 |
+| `/app/gait/analyze` (POST) | 401 | 404 면 새 계약이 안 올라온 것 |
+| `/app/walks` (POST) | 401 | 〃 |
+| `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
+
+`/life/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
+
+`/app/gait/*` 의 영상 분석은 분 단위입니다 — 504 가 나면 `api-locations.inc` 의
+`/app/gait/` 타임아웃(600s)이 실제로 반영됐는지부터 보세요 (§6 의 inode 함정).
 
 ## 6. 운영
 
@@ -199,8 +221,12 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
   ```bash
   # ③ db/migrations/ 에 새 파일이 있으면 **pull 보다 먼저** 적용한다
   git show origin/main:db/migrations/<파일>.sql \
-    | docker compose exec -T pgvector psql -U daengs -d vectordb
+    | docker compose exec -T pgvector psql -U daengs -d vectordb -v ON_ERROR_STOP=1
   ```
+
+  ⚠ **`-v ON_ERROR_STOP=1` 을 빼지 마세요.** psql 기본값은 오류가 나도 다음 문장을 계속
+  실행하고 **종료 코드 0** 을 냅니다. 여러 장을 반복문으로 돌리면 실패한 것을 못 알아채고
+  ④ 로 넘어갑니다. 적용 뒤에는 같은 이름의 `verify_*.sql` 이 있으면 그것도 돌립니다.
   ```bash
   # ④ 워크트리 갱신 = 배포
   git merge --ff-only origin/main
@@ -218,7 +244,8 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker
+      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      territory-vision-worker
     ```
 
     ⚠ **서비스 이름을 반드시 적습니다.** 인자 없이 `up -d` 하면 `crawler-worker`·
@@ -228,16 +255,36 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
     스케줄을 발사하게 됩니다.
     ⚠ **`gait-worker`** 는 D-043 으로 생긴 서비스입니다. 빠뜨리면 웹만 새 코드가 되고
     워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
-  - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → 설정은 마운트라
-    compose 가 변경을 못 봅니다. `up -d` 로는 아무것도 재생성되지 않으니 직접 reload:
+    **`territory-vision-worker`** 도 같은 배포 단위입니다. 빠뜨리면 confirm은 성공하지만
+    앱의 점령지 인증이 `VISION_PENDING`에서 끝나지 않습니다.
+  - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → **컨테이너를
+    재생성합니다. `reload` 로는 반영되지 않습니다.**
 
     ```bash
-    docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      up -d --force-recreate nginx
     ```
 
-    ⚠ GCP 가 읽는 것은 `default.conf` 가 **아닙니다** — 오버레이가 `gcp.conf` 를 그 자리에
+    ⚠️ **`nginx -s reload` 를 쓰지 마세요. 오류 없이 아무 일도 안 일어납니다.**
+    compose 가 설정을 **파일 하나씩** 마운트하는데, 파일 마운트는 경로가 아니라
+    **inode 를 뭅니다.** `git merge`(또는 편집기 저장)는 새 파일을 만들어 이름을
+    갈아끼우므로 새 inode 가 되고, 컨테이너의 마운트는 **옛 inode 를 계속 가리킵니다.**
+    그래서 `nginx -t` 는 옛 파일을 검사해 **통과**하고 `reload` 는 옛 파일을 **다시
+    읽습니다** — 로그에도 아무 문제가 안 보입니다.
+    2026-09-02 배포에서 실제로 밟았습니다: `/gait/records` 가 410 이어야 하는데 400 이었고,
+    호스트 파일에는 `return 410` 이 있는데 `docker compose exec nginx grep` 으로는 없었습니다.
+    `--force-recreate nginx` 로 즉시 해결.
+
+    ⚠️ `up -d` 를 **이름 없이** 부르면 nginx 는 compose 정의가 안 바뀌었으므로 그냥
+    넘어갑니다. 서비스 이름을 찍고 `--force-recreate` 를 붙여야 합니다.
+
+    ⚠️ 같은 함정이 **파일로 마운트하는 것 전부**에 있습니다 — `backend/pyproject.toml` ·
+    `backend/uv.lock` · `backend/README.md`. 반대로 `backend/src` 는 **디렉터리** 마운트라
+    해당 없습니다(그래서 코드 수정은 reload 로 반영됩니다).
+
+    ⚠️ GCP 가 읽는 것은 `default.conf` 가 **아닙니다** — 오버레이가 `gcp.conf` 를 그 자리에
     끼웁니다. API 경로 블록은 `api-locations.inc` 한 곳에 있고 두 server 블록이 include
-    합니다. dev 에서 `default.conf` 만 고친 변경은 GCP 에 **없는 것과 같습니다** (#150).
+    합니다. dev 에서 `default.conf` 만 고친 변경은 GCP 에 **없는 것과 같습니다** (#150 · #145).
   - **프론트** → §3 ④ 의 빌드·배치를 반복하되 릴리스 폴더 이름을 새로(`-manual2`,
     `-manual3`…) 하고, 마지막을 `pm2 reload daengs-web` 로 (start 아님 — reload 가
     클러스터 무중단 교체입니다)
@@ -253,3 +300,80 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
+
+### 점령 게임판 적재 (GCP)
+
+**언제** — ⓐ GCP 를 처음 세울 때(§3 ③ 뒤) ⓑ 게임판 세대가 바뀔 때.
+`.github/workflows/territory-sites-ingest.yml` 은 `runs-on: [self-hosted]` 라 **집 서버 place-db
+에만** 적재합니다. GCP 는 그 러너가 아니므로 같은 일을 여기서 손으로 합니다.
+
+**안 하면** — `GET /territory/sites/nearby` 가 **어디서 불러도 `{"sites": []}`** 입니다.
+읽기 질의가 현행 세대만 거르는데(`daengs_place/territory/sites.py` 의
+`site_id LIKE 'territory-site:hex-v1:140:%'`), 09-02 덤프에 있는 건 옛 `anchor-hex:115:q:r`
+행이고 Alembic `0021` 이 그것을 `territory-site:hex-v1:115:q:r` 로만 바꾸기 때문입니다.
+**옛 행이 몇 개든 결과는 같습니다** — 격자가 다르면 같은 id 가 다른 자리를 뜻하므로
+`0021` 이 일부러 세대를 안 올립니다. 앱은 이 API 를 부르므로 증상은 "지도에 점령지가
+하나도 없다" 입니다.
+
+⚠️ **아래 네 값은 워크플로우의 `env:` 와 같아야 합니다.** 세대를 바꾸면 두 군데를 같이
+고치세요 — 워크플로우가 `env:` 로만 읽을 수 있어 한 곳으로 못 모았습니다.
+
+```bash
+cd ~/daengs
+TAG=territory-sites-140u-20260903
+ASSET=territory-lamps-140u-20260903.ndjson.gz
+SHA256=dacb49e4c4f9969ff1efdd1ced58527b5b4c2768c785f902538aeed1f2224e1f
+EXPECTED=362309
+
+# ① 공개 릴리스에서 받고 해시를 대조합니다. 여기서 멈추면 그 뒤로 가지 마세요
+#    ⚠ `cd /tmp` 하지 마세요 — 아래 `docker compose exec` 는 compose 파일이 있는
+#      ~/daengs 에서 불러야 합니다. 받는 것만 /tmp 로 보냅니다
+curl -fL -o "/tmp/$ASSET" \
+  "https://github.com/rkbuhtig/DAENGS_geo/releases/download/$TAG/$ASSET"
+( cd /tmp && echo "$SHA256  $ASSET" | sha256sum -c - )
+
+# ② 풀어서 place-search 컨테이너로. 적재는 DB 접속을 가진 그 컨테이너 안에서 돕니다
+gunzip -kf "/tmp/$ASSET"
+docker cp "/tmp/${ASSET%.gz}" daengs-place-search:/tmp/territory-lamps.ndjson
+
+# ③ dry-run 먼저 — 받다 만 파일을 실적재 전에 잡습니다
+#    (모듈에 MIN_PRODUCTION_SITES=300000 가드가 있고 --expected-sites 와 함께 봅니다)
+docker compose exec -T place-search uv run --no-sync \
+  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson \
+  --expected-sites "$EXPECTED" --dry-run
+
+# ④ 실적재. source='lamp' 를 통째로 DELETE 하고 다시 넣는 원자적 교체라
+#    여러 번 돌려도 안전하고, 옛 115u 행도 이때 같이 사라집니다
+#    (옛 anchor 행의 source 도 'lamp' 입니다 — Alembic 0012 의 원본 SQL)
+docker compose exec -T place-search uv run --no-sync \
+  python -m daengs_place.ingest.territory_sites /tmp/territory-lamps.ndjson \
+  --expected-sites "$EXPECTED"
+
+# ⑤ 뒷정리
+docker compose exec -T place-search rm -f /tmp/territory-lamps.ndjson
+rm -f "/tmp/$ASSET" "/tmp/${ASSET%.gz}"
+```
+
+**검증 — 셋 다 봅니다.** 워크플로우가 자기 자리에서 하는 것과 같습니다. 한쪽만 헐거우면
+GCP 에서만 조용히 틀립니다:
+
+```bash
+# 현행 세대 건수 = EXPECTED
+docker compose exec -T place-db psql -v ON_ERROR_STOP=1 -U place -d place -Atc \
+  "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id LIKE 'territory-site:hex-v1:140:%';"
+
+# 옛 세대 잔존 = 0
+docker compose exec -T place-db psql -v ON_ERROR_STOP=1 -U place -d place -Atc \
+  "SELECT count(*) FROM territory_site WHERE source = 'lamp' AND site_id NOT LIKE 'territory-site:hex-v1:140:%';"
+
+# 공개 API 로도 보이는지 (서울시청 반경 3km)
+curl -s 'https://daengapi.weareithero.cloud/territory/sites/nearby?lat=37.5665&lng=126.9780&radius_m=3000&limit=1'
+```
+
+- **`/v2/places/search` 와 같은 DB 입니다.** 적재가 place-db 를 무겁게 쓰는 동안 시설 검색이
+  느려질 수 있어 트래픽이 없는 시간에 돌립니다 (워크플로우가 시설 적재와 `concurrency:
+  place-data-sync` 로 직렬화하는 것과 같은 이유입니다).
+- **집 서버는 이 절차를 쓰지 않습니다** — 거기는 워크플로우를 수동 실행(`workflow_dispatch`)
+  하면 됩니다. 로컬 서버와 GCP 는 **각각** 적재입니다 (roadmap §2-5 와 같은 규칙).
+- 워크플로우로 자동화하려면 GCP 를 러너로 등록하거나 SSH 배포 액션이 필요합니다 —
+  roadmap §7 의 CI/CD 항목과 같은 자리라 그때 같이 봅니다.

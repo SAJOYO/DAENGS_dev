@@ -20,10 +20,12 @@ import json
 import uuid
 from typing import Any
 
+import httpx
 from fastapi.testclient import TestClient
 
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
+from daengs_backend.orchestration.adapters.place import PlaceCapabilityAdapter
 from daengs_backend.orchestration.contracts import (
     CapabilityName,
     CapabilityRequest,
@@ -134,6 +136,75 @@ def test_life_execute_실제_그래프를_거쳐_실행된다() -> None:
     assert got.json()["status"] == "ANSWERED"
     assert life.calls[0].payload.question == QUERY
     assert transport.prompts == []
+
+
+# ---------------------------------------------------- 2-b. Life 경계 신호 (RAG-055 · #177)
+# 여기서는 **진짜 `LifeCapabilityAdapter`** 를 쓴다 — 위 둘이 쓰는 `RecordingAdapter` 는 결과를
+# 그대로 돌려주므로 어댑터의 번역을 건너뛴다. 이 카드가 지켜야 할 것이 바로 그 번역이라,
+# 가짜로 두는 경계를 한 칸 안쪽(`services.ask` 가 던지는 HTTPException)으로 옮긴다.
+
+
+def _life_adapter_raising(exc: Exception):
+    from daengs_backend.orchestration.adapters.life import LifeCapabilityAdapter
+
+    def ask(_: str, **_kw):
+        raise exc
+
+    return LifeCapabilityAdapter(ask)
+
+
+def test_life_medical_boundary_reaches_the_user_as_refused() -> None:
+    """증상 질문 → 최상위 `REFUSED` + `refusal.code` + Life 가 쓴 문장 그대로 (RAG-055 ⑤).
+
+    이 사슬 전체가 진짜다 — HTTP · 인증 · 라우팅 · 그래프 · `aggregate_results`. 가짜는
+    `services/ask.py` 가 던지는 예외 하나뿐이고, 그것이 이 카드가 새로 만든 계약이다.
+    """
+    from fastapi import HTTPException
+
+    said = "반려동물의 증상에 대한 판단은 수의사의 진료를 통해 확인해야 합니다."
+    life = _life_adapter_raising(
+        HTTPException(status_code=422,
+                      detail={"code": "medical_boundary", "message": said}))
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.LIFE: life}),
+        semantic_router=GeminiSemanticRouter(generate=ScriptedTransport()),
+    )
+    got = _post(service, {"query": "뒷다리를 절뚝거리는데 무슨 병인가요?",
+                          "requested_capability": "life"}, _app_token())
+
+    assert got.status_code == 200          # 거절은 실패가 아니다 — 능력이 낸 결과다
+    body = got.json()
+    assert body["status"] == "REFUSED"
+    result = body["results"][0]
+    assert result["status"] == "REFUSED"
+    assert result["refusal"]["code"] == "medical_boundary"
+    assert result["refusal"]["message"] == said     # 불변식 3 — 어댑터는 상태만 옮긴다
+
+
+def test_life_weak_evidence_reaches_the_user_as_uncertain() -> None:
+    """A0 의 목줄 질문이 가야 할 곳 — 최상위 `UNCERTAIN` (ABSTAINED, RAG-055 ⑤).
+
+    옛 서빙은 이것을 `OK`/`ANSWERED` 로 내보냈고(A0 §3-1), 앱은 무관한 과태료를 나열한 답을
+    정상 답변으로 보여 줬다. 코드가 `no_evidence` 그대로인 것은 기권의 **종류가 는 것**이지
+    뜻이 바뀐 게 아니어서다.
+    """
+    from fastapi import HTTPException
+
+    said = "제공해주신 자료에는 목줄 미착용에 대한 과태료 규정이 포함되어 있지 않습니다."
+    life = _life_adapter_raising(
+        HTTPException(status_code=404, detail={"code": "no_evidence", "message": said}))
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.LIFE: life}),
+        semantic_router=GeminiSemanticRouter(generate=ScriptedTransport()),
+    )
+    got = _post(service, {"query": "목줄 안 하면 과태료 얼마야",
+                          "requested_capability": "life"}, _app_token())
+
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "UNCERTAIN"
+    assert body["results"][0]["abstention"]["code"] == "no_evidence"
+    assert body["results"][0]["abstention"]["message"] == said
 
 
 # ------------------------------------------------------------------- 3. Walk EXECUTE + 좌표
@@ -304,4 +375,120 @@ def test_인증_없이는_오케스트레이션에_닿지_못한다() -> None:
     got = _post(service, {"query": QUERY, "requested_capability": "training"}, token=None)
     assert got.status_code == 401
     assert training.calls == []
+    assert transport.prompts == []
+
+
+# ------------------------------------------ Place targeted vertical HTTP slice
+
+
+async def test_place_명시_신호가_실제_HTTP_adapter와_축약_projection까지_도달한다() -> None:
+    """Everything except the place-search transport is production code.
+
+    In particular, this crosses the public FastAPI DTO/auth boundary, deterministic planner,
+    LangGraph, the real Place HTTP adapter, compact projection, and aggregate message.
+    """
+
+    internal = {
+        "contract_version": "place-discovery-v1",
+        "planning": {
+            "contract_version": "place-discovery-planning-v1",
+            "status": "ready",
+            "source_disposition": "proposed",
+            "resolution": "inferred",
+            "lenses": {
+                "target_lenses": [
+                    {
+                        "lens_id": "target:pet-shop",
+                        "display_label": "#펫샵",
+                        "mapping_scope": "direct",
+                        "availability": "executable",
+                        "support_note": "강아지 용품 구매 장소로 해석했어요.",
+                    }
+                ],
+                "signal_lenses": [],
+            },
+            "issues": [],
+        },
+        "lens_results": [
+            {
+                "lens_id": "target:pet-shop",
+                "display_label": "#펫샵",
+                "support_note": "강아지 용품 구매 장소로 해석했어요.",
+                "search": {
+                    "groups": [
+                        {
+                            "results": [
+                                {
+                                    "place": {
+                                        "key": {"source": "kcisa", "ref": "P-1"},
+                                        "lat": 37.557,
+                                        "lng": 126.924,
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "presentations": [
+                    {
+                        "place_key": {"source": "kcisa", "ref": "P-1"},
+                        "title": "홍대 반려동물 용품점",
+                        "summary": "강아지 용품 정보를 확인할 수 있어요.",
+                        "kind_id": "pet_shop",
+                        "kind_label": "펫샵",
+                        "distance_m": 180,
+                        "address": "서울 마포구",
+                        "core_items": [],
+                        "promoted_items": [],
+                        "detail_items": [],
+                        "notices": [],
+                        "why_matched": [],
+                    }
+                ],
+            }
+        ],
+        "notices": [],
+    }
+    seen: list[httpx.Request] = []
+
+    async def place_search(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=internal)
+
+    place_http = httpx.AsyncClient(transport=httpx.MockTransport(place_search))
+    transport = ScriptedTransport()
+    adapter = PlaceCapabilityAdapter(client=place_http, base_url="http://place-search:8000")
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.PLACE: adapter}),
+        semantic_router=GeminiSemanticRouter(generate=transport),
+    )
+    from daengs_backend.main import app
+
+    app.dependency_overrides[assistant_router.get_assistant_orchestration_service] = lambda: service
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            got = await client.post(
+                "/assistant/query",
+                json={
+                    "query": "강아지 장난감 사고 싶어",
+                    "requested_capability": "place",
+                    "location": {"lat": 37.5563, "lon": 126.9236},
+                },
+                headers={"Authorization": f"Bearer {_app_token()}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        await place_http.aclose()
+
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "ANSWERED"
+    assert body["results"][0]["capability"] == "place"
+    assert body["results"][0]["data"]["contract_version"] == "place-capability-v1"
+    candidate = body["results"][0]["data"]["groups"][0]["candidates"][0]
+    assert candidate["place_id"] == {"source": "kcisa", "ref": "P-1"}
+    assert candidate["location"] == {"lat": 37.557, "lon": 126.924, "distance_m": 180}
+    assert len(seen) == 1
     assert transport.prompts == []

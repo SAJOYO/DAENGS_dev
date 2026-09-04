@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     #
     # ⚠ `daengs_life.tasks` 를 import 하지 않습니다. CLAUDE.md 가 "`daengs_backend` 가
     # `daengs_life` 를 부르는 접점은 main.py 의 세 줄뿐" 이라고 못박아 두었고, 그 선을
-    # 태스크 하나 부르자고 넘으면 D-021 2단계(`/ask` 를 별도 프로세스로)가 그만큼 비싸집니다.
+    # 태스크 하나 부르자고 넘으면 D-021 2단계(`/life/ask` 를 별도 프로세스로)가 그만큼 비싸집니다.
     # 대신 브로커에 태스크 **이름 문자열**을 던집니다 — 태스크가 `@app.task(name=...)` 로
     # 그 이름을 명시하고 있어서 그것이 계약입니다.
     #
@@ -57,14 +57,14 @@ class Settings(BaseSettings):
     # 반대로 https 로 옮긴 뒤에도 false 로 두면 토큰이 평문으로 오갑니다.
     cookie_secure: bool = False
 
-    # 기동할 때 `/ask` 의 임베딩 모델을 미리 올릴지 (D-021).
+    # 기동할 때 `/life/ask` 의 임베딩 모델을 미리 올릴지 (D-021).
     #
     # **끄는 자리가 필요한 이유는 둘입니다.** 테스트가 `TestClient(app)` 를 `with` 로 열면
     # lifespan 이 그대로 도는데, `ml` 그룹을 깐 개발 PC(#34 의 `rag embed` 가 요구합니다)에서는
     # 그때마다 1.2GB 가 올라오고 대조 때문에 **실서버 DB 에도 붙습니다.** `tests/conftest.py` 가
-    # 이 값을 false 로 둡니다. 개발 PC 에서 `/ask` 말고 다른 걸 보는 동안에도 끌 수 있습니다.
+    # 이 값을 false 로 둡니다. 개발 PC 에서 `/life/ask` 말고 다른 걸 보는 동안에도 끌 수 있습니다.
     #
-    # 끄면 모델이 안 사라지는 게 아니라 **첫 `/ask` 요청이 로드를 뭅니다** (5~7초).
+    # 끄면 모델이 안 사라지는 게 아니라 **첫 `/life/ask` 요청이 로드를 뭅니다** (5~7초).
     # 서버에서는 켜 두세요 — 그게 예열을 두는 이유입니다.
     warm_up_encoder: bool = True
 
@@ -112,6 +112,30 @@ class Settings(BaseSettings):
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
 
+    # ── Place discovery internal HTTP boundary ───────────────────────
+    # backend와 place-search는 소스를 공유해도 런타임은 분리돼 있습니다. 기본값은 compose
+    # service DNS이고, 호스트에서 backend만 실행할 때는 backend/.env에서 바꿉니다.
+    place_search_base_url: str = "http://place-search:8000"
+    # Place 내부 provider timeout과 별개의 assistant 응답 경계입니다 (밀리초).
+    place_discovery_timeout_ms: int = Field(default=15_000, gt=0)
+
+    # 점령지 사진 판정은 대화/라우팅과 호출 예산이 다릅니다. 모델 이름과 12초 제한을
+    # 따로 두어, 사진 판정 워커만 독립적으로 교체·튜닝할 수 있게 합니다. 키는 같은
+    # Gemini 프로젝트를 쓰되 웹 요청에서는 이 설정을 소비하지 않습니다.
+    territory_vision_model: str = Field(
+        default="gemini-3.1-flash-lite",
+        validation_alias=AliasChoices("TERRITORY_VISION_MODEL"),
+    )
+    territory_vision_timeout_ms: int = Field(
+        default=12_000,
+        validation_alias=AliasChoices("TERRITORY_VISION_TIMEOUT_MS"),
+    )
+
+    # 점령지 게임판은 별도 place-search 프로세스가 소유합니다. backend는 좌표를
+    # 복제하지 않고 촬영 시점에 이 내부 HTTP 경계로 현행 140u 대표점을 확인합니다.
+    territory_site_base_url: str = "http://place-search:8000"
+    territory_site_timeout_seconds: float = 2.0
+
     # ── 보행 영상 저장소 (D-043) ──────────────────────────────────────
     # provider 는 GCS 로 확정 (2026-09-02). 하지만 **세부값은 하드코딩하지 않습니다** —
     # bucket·location·만료·보관 정책은 #78 이 정할 자리라 환경으로 뺍니다.
@@ -150,6 +174,30 @@ class Settings(BaseSettings):
     gait_bridge_base_url: str = Field(
         default="", validation_alias=AliasChoices("GAIT_BRIDGE_BASE_URL")
     )
+
+    # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
+    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와
+    # **다른 컨테이너**라 프로세스 안에서는 알 수 없고, nginx 를 거치지도 않습니다
+    # (compose 네트워크 안에서 서비스 이름으로 직접 닿습니다).
+    #
+    # **기본값이 compose 서비스 이름인 이유**는 서버의 `.env` 를 안 건드리려는 것입니다.
+    # 개발 PC 에서 `uv run dev` 로 띄우면 이 이름들이 **애초에 안 풀리는데**, 그것이
+    # 곧 "이 환경엔 없다" 이므로 상태 페이지가 `absent` 로 그립니다 — 이름 해석
+    # 실패(DNS)와 연결 거부를 가르는 판정이 `services/status.py` 에 있습니다.
+    #
+    # ⚠ 한계: compose 안에서 컨테이너가 아예 안 떠 있어도 도커 DNS 가 이름을 못 풀어
+    #   `absent` 로 보입니다. "이 환경에 있어야 하는가" 를 backend 가 따로 알지 못하는
+    #   한 그 둘은 안 갈립니다. 갈라야 할 일이 생기면 그때 `expected` 를 더합니다.
+    #
+    # 빈 값으로 두면 그 항목을 아예 `absent` 로 둡니다 (물어보지도 않습니다).
+    #
+    # **place 는 여기 없습니다** — 위 `place_search_base_url` 을 그대로 씁니다. 같은
+    #   컨테이너의 주소를 두 이름으로 두면 한쪽만 고치는 날 상태 화면과 실제 호출이
+    #   서로 다른 곳을 봅니다.
+    journey_service_url: str = "http://journey-service:8000"
+    # gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
+    # 그래서 여기 이름이 있어도 평소에는 `absent` 로 보이는 것이 정상입니다.
+    gait_service_url: str = "http://gait-analysis:8000"
 
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #

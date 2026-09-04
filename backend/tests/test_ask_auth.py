@@ -1,15 +1,15 @@
-"""`POST /ask` 는 로그인한 앱 회원과 관리자만 부를 수 있다 (D-021).
+"""`POST /life/ask` 는 로그인한 앱 회원과 관리자만 부를 수 있다 (D-021).
 
 **여기서 보는 것은 문(門)뿐이다.** 응답 계약은 `test_ask_api.py` 가 `daengs_life` 쪽 앱을
 세워서 이미 본다 — 그 파일은 인증을 모르고, 알 필요도 없다. `daengs_life.app.main` 은 단독으로
-도는 앱이고 거기 `/ask` 는 열려 있다.
+도는 앱이고 거기 `/life/ask` 는 열려 있다.
 
 문을 **라우터가 아니라 등록 시점에** 거는 것이 이 카드의 설계다 (`main.py` 주석). `ask.router` 가
 `daengs_backend.core.deps` 를 import 하면 의존 방향이 뒤집혀, `daengs_life` 가 이 레포의 인증
 없이는 못 도는 물건이 된다 (RAG-001 원칙 1 · D-018). 그 배선은 `daengs_backend` 쪽 앱으로만
 확인할 수 있고, 이 파일이 그 자리다.
 
-`test_walk_auth.py` 와 같은 모양이지만 **한 가지가 더 있다** — `/ask` 는 의존성이 무겁다.
+`test_walk_auth.py` 와 같은 모양이지만 **한 가지가 더 있다** — `/life/ask` 는 의존성이 무겁다.
 인증을 통과한 뒤 `Depends(get_encoder)` 가 도는데, `ml` 그룹이 없으면 거기서 503 이 되어야 한다
 (500 이 아니라). 그게 D-021 이 개발 PC 에 약속한 것이다.
 """
@@ -81,26 +81,26 @@ def _admin_token() -> str:
 
 
 def test_토큰_없이_부르면_401(client: TestClient) -> None:
-    assert client.post("/ask", json=QUESTION).status_code == 401
+    assert client.post("/life/ask", json=QUESTION).status_code == 401
 
 
 def test_망가진_토큰이면_401(client: TestClient) -> None:
-    got = client.post("/ask", json=QUESTION,
+    got = client.post("/life/ask", json=QUESTION,
                       headers={"Authorization": "Bearer not-a-real-token"})
     assert got.status_code == 401
 
 
 def test_관리자_토큰이면_핸들러까지_간다(client: TestClient, service_reached: None) -> None:
-    """`/walk` 과 같은 판단이다 (메모 ⑦). `post_ask` 도 principal 을 **받지 않으므로**
+    """`/life/walk-conditions` 과 같은 판단이다 (메모 ⑦). `post_ask` 도 principal 을 **받지 않으므로**
     관리자 `sub` 가 `app_users` 에 없어서 깨지는 자리가 없다."""
     with pytest.raises(Reached):
-        client.post("/ask", json=QUESTION,
+        client.post("/life/ask", json=QUESTION,
                     headers={"Authorization": f"Bearer {_admin_token()}"})
 
 
 def test_앱_회원_토큰이면_핸들러까지_간다(client: TestClient, service_reached: None) -> None:
     with pytest.raises(Reached):
-        client.post("/ask", json=QUESTION,
+        client.post("/life/ask", json=QUESTION,
                     headers={"Authorization": f"Bearer {_app_token()}"})
 
 
@@ -108,7 +108,7 @@ def test_권한_없는_role_이면_403(client: TestClient) -> None:
     """401 이 아니라 403 인 것까지 고정한다 — 종류는 맞고 권한이 모자란 것이라,
     401 을 주면 프론트(`lib/api.ts`)가 재발급하며 돈다."""
     token = create_access_token(uuid.uuid4(), SubjectType.ADMIN, "NOT_A_ROLE")
-    got = client.post("/ask", json=QUESTION, headers={"Authorization": f"Bearer {token}"})
+    got = client.post("/life/ask", json=QUESTION, headers={"Authorization": f"Bearer {token}"})
     assert got.status_code == 403
 
 
@@ -116,13 +116,13 @@ def test_인증이_본문_검증보다_먼저다(client: TestClient) -> None:
     """빈 질문 + 토큰 없음 → 401 이지 422 가 아니다.
 
     순서가 뒤집히면 로그인하지 않은 사람이 **DTO 의 검증 규칙을 응답으로 떠볼 수 있다.**
-    `/walk` 이 좌표 범위에 대해 고정해 둔 것과 같은 자리다.
+    `/life/walk-conditions` 이 좌표 범위에 대해 고정해 둔 것과 같은 자리다.
     """
-    assert client.post("/ask", json={"question": ""}).status_code == 401
+    assert client.post("/life/ask", json={"question": ""}).status_code == 401
 
 
 def test_ml_이_없으면_인증_뒤에_503(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**`ml` 그룹이 없는 개발 PC 의 약속** (D-021) — backend 는 뜨고 `/ask` 만 503 이다.
+    """**`ml` 그룹이 없는 개발 PC 의 약속** (D-021) — backend 는 뜨고 `/life/ask` 만 503 이다.
 
     500 이 아닌 이유는 요청이 틀린 게 아니라 환경이 덜 갖춰진 것이라서다.
     `services/ask.py` 가 `GEMINI_API_KEY` 없음을 503 으로 보내는 것과 같은 규칙이다.
@@ -145,7 +145,7 @@ def test_ml_이_없으면_인증_뒤에_503(monkeypatch: pytest.MonkeyPatch) -> 
     app.dependency_overrides[deps.get_conn] = lambda: object()
     try:
         with TestClient(app) as c:
-            got = c.post("/ask", json=QUESTION,
+            got = c.post("/life/ask", json=QUESTION,
                          headers={"Authorization": f"Bearer {_app_token()}"})
     finally:
         app.dependency_overrides.clear()
@@ -172,5 +172,5 @@ def test_daengs_life_단독_앱은_그대로_열려_있다() -> None:
     app = create_app()
     app.dependency_overrides[deps.get_encoder] = lambda: deps.Encoder(key="fake", st=object())
     app.dependency_overrides[deps.get_conn] = lambda: object()
-    got = TestClient(app).post("/ask", json={"question": ""})
+    got = TestClient(app).post("/life/ask", json={"question": ""})
     assert got.status_code == 422, "본문 검증에 막혀야 한다 — 인증에 막히면 안 된다"

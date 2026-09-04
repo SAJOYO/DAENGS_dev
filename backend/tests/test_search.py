@@ -80,15 +80,22 @@ def test_questions_come_from_the_goldenset() -> None:
     """검증질문을 코드에 박지 않는다 — 박으면 질문 목록의 단일 소스가 둘이 된다.
 
     2026-08-27 에 조례 3문항(S1~S3)이, 08-28 에 보조금24 2문항(S4·S5)이 붙어 7 → 12 가 됐고,
-    08-30 에 펫보험 5문항(I1~I5)·항공 2문항(T4·T5)이 붙어 22 가 됐다 (RAG-049).
+    08-30 에 펫보험 5문항(I1~I5)·항공 2문항(T4·T5)이 붙어 22 가 됐고, 09-03 에 경계 6문항
+    (B1~B6)이 붙어 28 이 됐다 (RAG-055).
     **이 수를 갱신하는 것 자체가 이 테스트의 일이다** — `--questions` 가 도는 범위라
     문항이 늘거나 줄면 검문소③④의 분모가 말없이 바뀐다.
+
+    **기권·거절 문항도 여기 들어온다.** 랩이 그 질문을 실제로 돌려야 "답했나 말았나"를 잴 수
+    있어서다 — 골든셋에만 적어 두고 랩이 안 물으면 아무것도 안 재진다 (RAG-055).
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 22
+    assert len(items) == 30
     assert all(q for _, q, _, _ in items)
+    assert {"B2", "B4", "B6"} <= {i[0] for i in items}
+    # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)
+    assert {"DP1", "DP2"} <= {i[0] for i in items}
 
 
 # ---------------------------------------------------------------- 교통수단 배제 (RAG-052)
@@ -129,9 +136,19 @@ def test_no_transport_signal_means_no_exclusion_clause() -> None:
     assert "subcategory <> ALL" not in sql
 
 
-def test_every_hand_question_has_a_must_label() -> None:
-    """정답 없는 문항이 섞이면 검문소③의 ★ 표시가 의미를 잃는다."""
-    assert all(must for _, _, must, _ in search.hand_questions())
+def test_every_answer_question_has_a_must_label() -> None:
+    """정답 있는 문항에 라벨이 없으면 검문소③의 ★ 표시가 의미를 잃는다.
+
+    **기권·거절 문항은 반대로 비어 있어야 한다** (RAG-055) — 물러서는 것이 정답인 질문에
+    ★ 가 찍히면 그 표시가 거짓말을 한다. 그래서 `must` 없음을 금지하는 대신 `expect` 로 가른다.
+    """
+    gs = goldenset.load()
+    expect = {i.id: i.expect for i in gs.items}
+    for qid, _, must, _ in search.hand_questions():
+        if expect[qid] == "answer":
+            assert must, f"{qid}: 답변 문항인데 must 라벨이 없다"
+        else:
+            assert not must, f"{qid}: {expect[qid]} 문항인데 must 라벨이 있다"
 
 
 def test_tier_strips_the_collection_date() -> None:

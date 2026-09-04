@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 
 import pytest
@@ -39,6 +40,7 @@ class _Rollback(Exception):
 MODEL_KEY = config.settings.embedding_model_key
 
 
+@functools.lru_cache(maxsize=None)
 def _prepared_or_skip(key: str = MODEL_KEY):
     """`prepare()` 한 벌. **낡은 parquet 은 서빙 모델만 실패시킨다** (RAG-047 ⑧).
 
@@ -50,6 +52,16 @@ def _prepared_or_skip(key: str = MODEL_KEY):
     낡은 채로 `load.prepare()` 를 부르면 `ValueError: chunk_id 순서가 chunks/ 와 다르다`
     로 죽는다 — 맞는 동작이지만 여기서는 "적재 계약이 깨졌다"가 아니라 "저 모델을 아직 안
     다시 만들었다"는 뜻이라, 실패로 두면 신호가 뒤바뀐다.
+
+    **`lru_cache` 로 감싼다.** 이 파일의 13개 테스트가 전부 이 함수를 부르고, `prepare()`
+    는 순수 함수다(디스크의 청크·parquet 만 읽고 DB 도 전역 상태도 안 건드린다). 캐싱 전에는
+    9,451청크 코퍼스를 13번 다시 읽고 다시 해시했다. `key` 별로 캐시되므로
+    `test_embedding_model_is_what_was_actually_used` 가 쓰는 `"bge-m3"` 도 그대로 맞물린다.
+
+    ⚠️ **캐시는 이 프로세스 수명이다** — `pytest` 한 번 실행 안에서만 유효하고, 코퍼스가
+    실제로 바뀌면(재청킹·재임베딩) 다음 실행에서 다시 계산한다. `pytest.skip`/`pytest.fail`
+    은 예외라 캐시되지 않는다 — parquet 이 없거나 낡았을 때는 매번 다시 판단하는데, 그 판단
+    자체는 가볍다.
     """
     if not embed.parquet_path(key).is_file():
         pytest.skip(f"{key}.parquet 이 없다 — `python -m rag embed` 먼저")

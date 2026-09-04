@@ -3,9 +3,23 @@
 The LLM owns exactly one thing: which EXECUTE capabilities (training/life/walk)
 and HANDOFF targets (skin/gait) the query semantically requests. Payload text,
 coordinates, CLARIFY, handoff reasons, and the final RoutePlan are assembled
-deterministically in planner.py. The prompt below is the accepted
-`semantic-router-ko-v3` boundary; the frozen benchmark copy under
-tools/router_benchmark/ is the acceptance record and stays untouched.
+deterministically in planner.py. The prompt below is `semantic-router-ko-v6`:
+the accepted v3 routing boundary, the v4 PURELY social utterance classification
+(greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
+templates in social.py), plus one v5 boundary refinement (PR #172): Life is
+formal institutional/legal/administrative/policy/contractual evidence only, and
+general pet husbandry/care recommendations (walk frequency, feeding, sleep,
+water intake, breed/age/size-specific care) have NO destination in v1 — they
+must yield an empty decision instead of being absorbed by Life. v6 keeps that
+and narrows one sentence: v5's "walk frequency or duration" wording had also
+suppressed Walk for today's / this evening's walking time-window questions
+(frozen mixed_10 · clarify_08 lost Walk), so v6 distinguishes ROUTINE or
+normative exercise advice (unsupported) from CURRENT-day timing/suitability
+(Walk). Neither v5 nor v6 answers care questions; they only stop routing them
+to a domain whose evidence cannot support them. The frozen v3 benchmark copy
+under tools/router_benchmark/ is the acceptance record and stays untouched;
+the v4 regression against the same 80 gold cases is runner_v5.py, v5 is
+runner_v6.py (FAIL, one gate), and v6 is runner_v7.py.
 """
 
 from __future__ import annotations
@@ -20,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v3"
+PROMPT_VERSION = "semantic-router-ko-v6"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # The only routing metadata the model may see. Coordinates deliberately stay out:
@@ -29,6 +43,7 @@ _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
 ExecuteName = Literal["training", "life", "walk"]
 HandoffName = Literal["skin", "gait"]
+SocialIntent = Literal["greeting", "thanks", "goodbye"]
 _UniqueExecuteList = Annotated[list[ExecuteName], Field(json_schema_extra={"uniqueItems": True})]
 _UniqueHandoffList = Annotated[list[HandoffName], Field(json_schema_extra={"uniqueItems": True})]
 
@@ -40,6 +55,9 @@ class SemanticRoutingDecision(BaseModel):
 
     execute: _UniqueExecuteList = Field(default_factory=list)
     handoffs: _UniqueHandoffList = Field(default_factory=list)
+    # Set only when the entire utterance is social small talk with no actionable
+    # request. Capability intent always wins: the two are mutually exclusive.
+    social_intent: SocialIntent | None = None
 
     @model_validator(mode="after")
     def destinations_are_unique(self) -> SemanticRoutingDecision:
@@ -47,6 +65,12 @@ class SemanticRoutingDecision(BaseModel):
             raise ValueError("execute capabilities must be unique")
         if len(self.handoffs) != len(set(self.handoffs)):
             raise ValueError("handoff targets must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def social_intent_is_exclusive(self) -> SemanticRoutingDecision:
+        if self.social_intent is not None and (self.execute or self.handoffs):
+            raise ValueError("social_intent is exclusive with execute and handoffs")
         return self
 
 
@@ -62,8 +86,12 @@ object, or capability execution result.
 
 Select every semantically requested destination:
 - execute.training: changing dog behavior or teaching skills.
-- execute.life: evidence-backed information about rules, institutions, procedures, conditions,
-  fees, deadlines, official guidance, insurance terms, or pet travel rules.
+- execute.life: evidence-backed FORMAL institutional, legal, administrative, policy, or
+  contractual information — registrations, institutions, official procedures, eligibility,
+  government or support programs, fees, deadlines, statutory or regulatory requirements,
+  insurance terms, transport or travel terms, and other formal policy or contractual
+  requirements. Official guidance belongs to Life ONLY when it concerns such formal
+  institutional or policy topics.
 - execute.walk: current environmental walking suitability.
 - handoffs.skin: inspecting a visible skin condition through the dedicated image flow.
 - handoffs.gait: analyzing walking, limping, asymmetry, stride, posture, joint angles, or gait from
@@ -74,8 +102,26 @@ Preserve multi-intent. Natural-language negation overrides incidental vocabulary
 handoffs only. Select Walk only for current environmental walking suitability, such as weather,
 heat, cold, rain, air quality, or similar environmental conditions; do not select Walk merely
 because walking is the setting of a Training or Gait request. Route by meaning, not keyword
-occurrence. Do not invent names. If no supported destination is semantically requested, return both
-lists empty."""
+occurrence. Do not invent names.
+
+General pet husbandry or care recommendations are NOT supported by any destination in v1: routine
+or normative advice on how often or how long a dog should walk or exercise in general (per day, for
+a breed, for an age or body size) independent of current conditions, feeding frequency or amount,
+sleep duration, water intake, general grooming or care norms, and breed-, age-, or body-size-specific
+care. Such a request is not Life even when it mentions an institution, an official source, or a
+recommendation, and is not Training unless it asks to change behavior or teach a skill. By contrast,
+deciding whether or when to walk now, today, or this evening — including choosing a suitable walking
+time window for today — IS Walk (current environmental suitability), even when weather or air
+quality is not named explicitly; do not extend Walk to recurring exercise routines. If no Training,
+Life, Walk, Skin, or Gait destination is semantically requested, return both lists empty and leave
+social_intent null.
+
+social_intent is a classification only, never an answer. Set it to greeting, thanks, or goodbye
+ONLY when the entire request is purely social small talk toward the assistant with no actionable
+request at all; then execute and handoffs must both be empty. If any Training, Life, Walk, Skin, or
+Gait request is present, route that request normally and leave social_intent null, even when the
+message also opens or closes with a greeting or thanks. Any other unsupported request also leaves
+social_intent null. Do not reply to the user and do not generate conversational prose."""
 
 
 def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
@@ -184,6 +230,7 @@ __all__ = [
     "GeminiSemanticRouter",
     "SemanticRoutingDecision",
     "SemanticRoutingError",
+    "SocialIntent",
     "build_semantic_router_prompt",
     "validate_semantic_decision",
 ]

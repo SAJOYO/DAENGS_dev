@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ContractModel(BaseModel):
@@ -16,6 +16,7 @@ class CapabilityName(StrEnum):
     TRAINING = "training"
     LIFE = "life"
     WALK = "walk"
+    PLACE = "place"
 
 
 class CapabilityStatus(StrEnum):
@@ -55,8 +56,28 @@ class TrainingPayload(ContractModel):
     question: str = Field(min_length=1, max_length=1_000)
 
 
+class DogContext(ContractModel):
+    """The dog facts Life may reason with, assembled from trusted profile data only.
+
+    Deliberately narrow (roadmap B4). ``breed`` is a Korean breed name, already translated
+    from the app's avatar id by ``services.dog_context``: the stored value is an asset id
+    (``dog_pug``) that matches nothing in a Korean statute or airline tariff. What that breed
+    then implies — brachycephalic, restricted — needs the corpus, so that judgement stays
+    with the capability rather than this layer or its adapter.
+
+    Age arrives already reduced to whole months. The birth date itself never crosses this
+    boundary — it is personal data with no routing or answering use, and ``pets`` stores a
+    date that may be the day the dog joined the family rather than its birthday, which is
+    not an age at all. The caller resolves that ambiguity and sends nothing when it cannot.
+    """
+
+    breed: str | None = Field(default=None, max_length=60)
+    age_months: int | None = Field(default=None, ge=0, le=360)
+
+
 class LifePayload(ContractModel):
     question: str = Field(min_length=1, max_length=500)
+    dog: DogContext | None = None
 
 
 class WalkPayload(ContractModel):
@@ -64,11 +85,29 @@ class WalkPayload(ContractModel):
     lon: float = Field(ge=124.0, le=132.0)
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload
+class PlacePayload(ContractModel):
+    """Non-personalized Place input assembled from the original query and trusted location."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    query: str = Field(min_length=1, max_length=1_000)
+    lat: float = Field(ge=33.0, le=39.0)
+    lon: float = Field(ge=124.0, le=132.0)
+
+    @field_validator("query")
+    @classmethod
+    def query_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("query must not be blank")
+        return value
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
+    CapabilityName.PLACE: PlacePayload,
 }
 
 
@@ -195,6 +234,7 @@ __all__ = [
     "OrchestratorState",
     "OutcomeDetail",
     "PendingJob",
+    "PlacePayload",
     "PrincipalContext",
     "RoutePlan",
     "RouterKind",

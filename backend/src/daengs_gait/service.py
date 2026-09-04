@@ -11,7 +11,7 @@ nginx 뒤에 붙는 방식과 운영 절차가 같습니다.
    backend 로 통합했고 런타임은 그대로 갈라 둡니다 — compose 의 `gait-analysis` 서비스가
    이 모듈을 자기 프로세스로 띄웁니다. 그래서 `daengs_backend` 쪽에 라우터도 서비스
    접점도 두지 않습니다. 여기에 `daengs_backend` 를 import 하지 마세요. 그 순간
-   격리가 깨지고 D-029 가 지키려던 것(추론이 넘어질 때 로그인·`/ask` 까지 넘어지지
+   격리가 깨지고 D-029 가 지키려던 것(추론이 넘어질 때 로그인·`/life/ask` 까지 넘어지지
    않는 것)이 사라집니다.
 
 ⚠️ **인증이 없습니다.** 스크리닝과 같은 상태이고, 그래서 compose profile 뒤에 꺼둔 채로
@@ -195,7 +195,7 @@ def build_app() -> FastAPI:
             )
         except FileNotFoundError as exc:
             # 가중치가 없는 경우입니다. 요청이 틀린 게 아니라 환경이 덜 갖춰진 것이라 503 입니다
-            # (backend 의 `/ask` 가 ml 그룹 없을 때 503 을 내는 것과 같은 규칙).
+            # (backend 의 `/life/ask` 가 ml 그룹 없을 때 503 을 내는 것과 같은 규칙).
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
         return _public(record)

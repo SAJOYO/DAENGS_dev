@@ -171,6 +171,7 @@ async def get_analysis_for_input(
             WalkAnalysis.walk_id == walk_id,
             WalkAnalysis.input_fingerprint == input_fingerprint,
         )
+        .options(selectinload(WalkAnalysis.capsule))
         .order_by(WalkAnalysis.derived_at, WalkAnalysis.id)
         .limit(1)
     )

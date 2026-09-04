@@ -178,6 +178,64 @@ CREATE TABLE refresh_tokens (
 
 
 -- ---------------------------------------------------------------------
+-- admin_audit_log : 관리자가 무엇을 했는지 남기는 기록. **로그가 아니라 데이터다.**
+--
+-- 운영 로그(에러 · 스택트레이스)는 파일로 가고 이 테이블에 넣지 않는다. 그 선은
+-- 2026-08-26 에 그었다 (docs/console/roadmap.md §6). 여기 들어오는 것은
+-- "누가 · 언제 · 무엇을 · 누구 것에" 뿐이고, 개인정보 복호화 조회처럼 **사후에
+-- 따져야 하는 행위**다.
+--
+-- **append-only 다.** UPDATE 도 DELETE 도 하지 않으므로 updated_at 도 트리거도 없다 --
+-- 다른 테이블에 다 있는 것이 여기만 없는 것은 빠뜨린 게 아니다.
+-- ---------------------------------------------------------------------
+CREATE TABLE admin_audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- 한 일의 주체. **NULL 이 허용되는 이유는 로그인 실패 때문이다** --
+    -- 없는 아이디로 두드린 시도는 가리킬 admin_users 행이 아예 없다.
+    -- 그때 무엇을 시도했는지는 detail 의 login_id 에 남는다.
+    --
+    -- ON DELETE RESTRICT 는 위 admin_users.status 주석("행을 지우면 감사 로그의
+    -- 참조가 끊긴다")을 DB 가 지키게 하는 것이다. 계정은 지우지 않고 suspended 로
+    -- 막는다. refresh_tokens 의 CASCADE 와 반대인 것은 의도한 차이다 --
+    -- 세션은 없어져야 하고 기록은 남아야 한다.
+    admin_user_id UUID REFERENCES admin_users(id) ON DELETE RESTRICT,
+
+    -- 무엇을 했나. 점으로 구분한 소문자다 ('admin.login.success').
+    --
+    -- role · status 와 달리 **CHECK 로 묶지 않는다.** 이 목록은 화면이 하나 생길
+    -- 때마다 늘어나서, 묶어 두면 카드마다 두 DB 에 ALTER 를 돌려야 한다.
+    -- 실제로 쓰는 값은 models/admin_audit_log.py 의 AUDIT_ACTIONS 에 모여 있다.
+    action VARCHAR(60) NOT NULL,
+
+    -- 무엇에 한 일인가. 대상이 없는 행위(로그인)는 둘 다 NULL 이다.
+    -- FK 를 걸지 않는 이유는 가리키는 테이블이 target_type 에 따라 달라져서다.
+    target_type VARCHAR(30),
+    target_id UUID,
+
+    -- 행위마다 다른 부속 정보. **복호화된 개인정보를 넣지 않는다** --
+    -- "무엇을 열었나"(대상 id · 컬럼 이름)까지다. 넣기 시작하면 이 테이블이
+    -- 두 번째 개인정보 저장소가 되고, 탈퇴 시 파기 대상이 하나 늘어난다
+    -- (관측에 질문 원문을 금지한 D-037 과 같은 선이다).
+    detail JSONB,
+
+    -- 요청 하나를 나중에 로그 · 지표와 이어 붙이는 값.
+    request_id VARCHAR(64),
+
+    -- 어디서 했나. refresh_tokens.ip 와 같이 nginx 가 넘긴 X-Real-IP 다 (D-005).
+    ip INET,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- detail 은 객체이거나 없거나다. 배열 · 스칼라가 섞여 들어오면 나중에 이것을
+    -- 읽는 화면과 집계가 행마다 다른 모양을 만난다
+    -- (chat_turns.public_response 에 같은 제약이 있다).
+    CONSTRAINT admin_audit_log_detail_object_check
+        CHECK (detail IS NULL OR jsonb_typeof(detail) = 'object')
+);
+
+
+-- ---------------------------------------------------------------------
 -- 인덱스
 --
 -- documents 와 달리 여기 인덱스는 indexes.sql 이 아니라 이 파일에 둔다.
@@ -201,6 +259,18 @@ CREATE INDEX idx_refresh_tokens_app ON refresh_tokens (app_user_id)
 
 -- 만료 토큰 정리 배치용.
 CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens (expires_at);
+
+
+-- 감사 로그는 늘 최근순으로 본다. 로그인 시도까지 들어와서 행이 빨리 는다.
+CREATE INDEX idx_admin_audit_log_created ON admin_audit_log (created_at DESC);
+
+-- "이 관리자가 무엇을 했나". 주체가 없는 실패 행은 뺀다.
+CREATE INDEX idx_admin_audit_log_admin ON admin_audit_log (admin_user_id, created_at DESC)
+    WHERE admin_user_id IS NOT NULL;
+
+-- "이 회원에게 무슨 일이 있었나". 대상이 없는 행(로그인)은 뺀다.
+CREATE INDEX idx_admin_audit_log_target ON admin_audit_log (target_type, target_id)
+    WHERE target_id IS NOT NULL;
 
 
 -- ---------------------------------------------------------------------
@@ -268,3 +338,14 @@ COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspende
 COMMENT ON COLUMN app_users.room_name          IS '미니룸 이름표 / NULL 이면 앱이 대표 강아지 이름으로 짓는다';
 COMMENT ON COLUMN app_users.created_at         IS '가입 시각';
 COMMENT ON COLUMN app_users.updated_at         IS '수정 시각';
+COMMENT ON TABLE  admin_audit_log               IS '관리자 행위 감사 기록 (append-only) / 운영 로그는 파일에 따로';
+
+COMMENT ON COLUMN admin_audit_log.id            IS '감사 행 고유 ID';
+COMMENT ON COLUMN admin_audit_log.admin_user_id IS '행위 주체 / 로그인 실패는 NULL (가리킬 계정이 없음). 삭제는 RESTRICT';
+COMMENT ON COLUMN admin_audit_log.action        IS '무엇을 했나 (admin.login.success 등) / 목록은 models/admin_audit_log.py';
+COMMENT ON COLUMN admin_audit_log.target_type   IS '대상 종류 (app_user / admin_user 등) / 대상 없는 행위는 NULL';
+COMMENT ON COLUMN admin_audit_log.target_id     IS '대상 id / FK 없음 (테이블이 target_type 에 따라 다름)';
+COMMENT ON COLUMN admin_audit_log.detail        IS '부속 정보 JSONB (객체만) / 복호화된 개인정보 금지';
+COMMENT ON COLUMN admin_audit_log.request_id    IS '요청 식별자 (로그 · 지표와 이어 붙이는 값)';
+COMMENT ON COLUMN admin_audit_log.ip            IS '행위 당시 IP (nginx X-Real-IP)';
+COMMENT ON COLUMN admin_audit_log.created_at    IS '기록 시각 / 갱신하지 않으므로 updated_at 없음';

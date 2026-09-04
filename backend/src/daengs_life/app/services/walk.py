@@ -1,4 +1,4 @@
-"""`/walk` 유스케이스 — 도메인 호출 + ⑥ 계약으로 옮기기 (RAG-027 의 service 층).
+"""`GET /life/walk-conditions` 유스케이스 — 도메인 호출 + ⑥ 계약으로 옮기기 (RAG-027 의 service 층).
 
 **컨트롤러에 로직을 안 넣는다는 규칙이 이 파일을 만든다.** 여기서 하는 일은 셋뿐이고
 그중 어느 것도 판정이 아니다:
@@ -135,7 +135,7 @@ def _notes(obs: Observations) -> list[str]:
     if obs.location.aws_station is None:
         out.append("같은 격자 안에 AWS 지점이 없어 기상청 격자 실황을 썼다 (⑤-d 2순위)")
     if obs.location.warning_area is None:
-        out.append("특보구역 매핑표가 아직 없어 시도 단위로만 특보를 찾는다 — 구 단위 특보는 놓칠 수 있다")
+        out.append("이 위치의 특보구역을 찾지 못해 시도 단위로만 특보를 찾는다 — 구 단위 특보는 놓칠 수 있다")
     stale = [r.provider.value for r in obs.providers if r.stale]
     if stale:
         out.append(f"옛 값으로 채운 출처가 있다: {', '.join(stale)} (⑤-c — 그래서 GOOD 으로 올리지 않는다)")

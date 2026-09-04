@@ -344,7 +344,7 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     """
     filters, lex_filters = [], []
     # **인용을 훑을 만큼 뽑고, 근거로 싣는 것은 k 까지다** (RAG-040). 한 번의 쿼리로 끝낸다 —
-    # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/ask` 마다 붙는다
+    # 확장 때문에 DB 를 두 번 왕복하면 그 비용이 `/life/ask` 마다 붙는다
     params: dict[str, Any] = {"q": query.vector, "k": max(k, EXPAND_SCAN_N), "n": CANDIDATE_N,
                               "rrf": RRF_K, "wlex": LEXICAL_WEIGHT, "tsq": query.tsquery}
     if not include_supplementary:
@@ -396,7 +396,10 @@ def hand_questions() -> list[tuple[str, str, set[str], set[str]]]:
     from . import goldenset
 
     gs = goldenset.load()
-    return [(i.id, i.question, set(i.must), set(i.nice))
+    # **`must_flat` 이다** — 여기가 쓰는 것은 "이 주소가 정답 층인가"뿐이라 요구의 경계가
+    # 필요 없다 (RAG-055). 요구째로 봐야 하는 것은 채점이고, 그건 `evaluate` 와 `score` 다.
+    # 기권·거절 문항(`expect != answer`)도 그대로 나간다 — 랩이 그 질문을 돌려야 잴 수 있다
+    return [(i.id, i.question, set(i.must_flat), set(i.nice))
             for i in gs.items if i.origin == "hand"]
 
 

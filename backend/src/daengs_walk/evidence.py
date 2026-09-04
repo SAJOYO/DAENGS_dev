@@ -36,6 +36,7 @@ class WalkEvidenceBundle:
     observations: tuple[MicroObservation, ...]
     speed_profile: MovingSpeedProfile | None
     receipt: MeasurementReceipt
+    accepted_points: tuple[WalkEvidencePoint, ...]
 
 
 def analyze_walk(
@@ -61,4 +62,5 @@ def analyze_walk(
         observations=observations,
         speed_profile=moving_speed_profile(computed.segments),
         receipt=build_measurement_receipt(computed, points),
+        accepted_points=computed.accepted_points,
     )

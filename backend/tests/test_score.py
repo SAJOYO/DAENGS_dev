@@ -164,6 +164,131 @@ def test_six_laps_retroactive_summary_matches_measured_values() -> None:
         assert (s["n"], s["cited"], s["grounded"]) == (n, cited, grounded), name
 
 
+# ------------------------------------------------------------------ 기대 채점 (RAG-055)
+# A0 스모크가 남긴 두 문장을 그대로 픽스처로 쓴다 (`assistant-life-gcp-smoke.md` §3).
+# **후보 신호를 재는 것이 목적이므로, 픽스처가 실물 말투를 흉내 내는 것이 곧 테스트다.**
+
+A0_PROSE = ("제시해주신 [참고자료]에는 목줄 미착용에 대한 과태료 규정이 포함되어 있지 않습니다. "
+            "다만 관련된 과태료로는 [1] 보험 미가입 등이 있습니다.")
+A0_REINTERPRET = ("질문하신 '우주선'은 반려동물 운송 용기를 의미하는 것으로 이해하여 답변드립니다. "
+                  "[1] 동물보호법 제16조에 따라 …")
+PLAIN = "[1] 「동물보호법」 제101조제4항에 따라 50만원 이하의 과태료가 부과됩니다."
+
+
+def _scored_row(qid: str, text: str, top: float, cited: list[str] | None = None) -> dict:
+    hit = _dump_hit("c1", "-") | {"score": top}
+    return {"id": qid, "question": "q", "text": text, "hits": [hit], "cited": cited or []}
+
+
+def test_self_report_needs_both_no_citation_and_the_prose() -> None:
+    """`cited == []` 단독으로 걸면 **비법령 소스가 전부 기권된다** — 약관·항공 문서는 조항
+    번호가 없어 비어 있는 것이 정상이다 (카드 #177 컨텍스트 메모). 자기보고와 묶어서 본다.
+    """
+    assert score.ABSTAIN_POLICIES["selfreport"](_scored_row("Q", A0_PROSE, 0.7))
+    # 조항을 들었으면 물러선 것이 아니다
+    assert not score.ABSTAIN_POLICIES["selfreport"](
+        _scored_row("Q", A0_PROSE, 0.7, cited=["제16조"]))
+    # 인용이 없어도 물러섰다고 말하지 않으면 아니다 — 약관 답변이 여기 걸린다
+    assert not score.ABSTAIN_POLICIES["selfreport"](
+        _scored_row("Q", "이동장에 넣어 탑승하면 됩니다.", 0.7))
+
+
+def test_a_negation_topic_answer_is_not_a_retreat() -> None:
+    """**lap15 가 실물로 남긴 오작동이다** (RAG-055). I4 는 *"보험금을 지급하지 않는 경우"* 를
+    묻는 문항이라 **좋은 답변이 통째로 부정문**이다 — *"약관에 따라 다음과 같은 경우 보험금이
+    지급되지 않습니다"*. 물러선 것이 아니라 그것이 답이다.
+
+    문장으로 물러섬을 읽는 신호가 **주제가 부정문인 문항에서 새는** 자리이고, 지금 코퍼스에는
+    면책·금지·제한을 묻는 문항이 여럿이라(I4 · Q7 · QA7) 좁은 자리가 아니다. 그래서 부정이
+    **자료를 주어로** 걸릴 때만 본다 — 이 테스트가 그 좁힘을 붙잡는다.
+    """
+    i4 = ("제시된 참고자료를 바탕으로 펫보험에서 보험금을 지급하지 않는 사유를 안내해 드립니다. "
+          "각 보험 상품의 약관에 따라 다음과 같은 경우 보험금이 지급되지 않습니다. "
+          "위생관리 및 미모를 위한 성형수술, 선천적 기형 등이 이에 해당합니다.")
+    assert not score.says_no_evidence(i4)
+    assert not score.ABSTAIN_POLICIES["selfreport"](_scored_row("I4", i4, 0.68))
+
+
+def test_the_no_evidence_wordings_lap15_actually_produced() -> None:
+    """랩이 실제로 낸 네 가지 말투. **픽스처가 실물이라는 것이 이 테스트의 값이다** —
+    검출기를 좁힐 때 어느 것도 잃지 않았음을 여기서 붙잡는다 (RAG-055).
+    """
+    for text in [
+        "제공해주신 [참고자료]에는 목줄 미착용에 관한 과태료 규정이 포함되어 있지 않아 답변을 드릴 수 없습니다.",   # B1
+        "제공해주신 [참고자료]에는 목줄 미착용에 대한 과태료 규정이 포함되어 있지 않습니다.",                       # Q3
+        "보험별로 가입 가능한 최대 연령에 관한 구체적인 수치는 기재되어 있지 않습니다.",                            # B3
+        "제공된 자료만으로는 원인이나 질병에 대해 확인하거나 안내해 드릴 수 없습니다.",                             # B4
+    ]:
+        assert score.says_no_evidence(text), text
+
+
+def test_reinterpretation_catches_what_the_citation_signal_misses() -> None:
+    """A0 ③ 이 이 자리다 — `cited == ["제16조"]` 라 자기보고 신호로는 안 걸린다 (§3-2).
+    후보가 하나로는 부족하다는 것이 이 테스트가 남기는 사실이다.
+    """
+    row = _scored_row("B2", A0_REINTERPRET, 0.62, cited=["제16조"])
+    assert not score.ABSTAIN_POLICIES["selfreport"](row)
+    assert score.ABSTAIN_POLICIES["reinterpret"](row)
+    assert score.ABSTAIN_POLICIES["selfreport+reinterpret"](row)
+
+
+def test_top_score_reads_the_cosine_not_the_rank() -> None:
+    """`hits[].score` 는 코사인이다 — RRF 가 순서를 정하지만 점수 칸의 뜻은 안 바뀌었다
+    (`search.py`). 그래서 랩끼리 같은 자로 비교되고 문턱을 숫자로 적을 수 있다.
+    """
+    row = {"hits": [_dump_hit("a", "-") | {"score": 0.41},
+                    _dump_hit("b", "-") | {"score": 0.58}]}
+    assert score.top_score(row) == 0.58
+    assert score.top_score({"hits": []}) == 0.0
+    assert score.ABSTAIN_POLICIES["score<0.60"](row)
+    assert not score.ABSTAIN_POLICIES["score<0.55"](row)
+
+
+def test_grade_expect_counts_the_two_directions_separately() -> None:
+    """**한 수로 합치면 정반대의 정책이 같은 점수를 받는다** (RAG-055).
+
+    아무것도 기권 안 하는 정책과 전부 기권하는 정책이 그렇다. 그래서 오기권과 놓친 기권을
+    갈라 센다 — 신호가 과하게 켜졌는지 안 켜졌는지는 다른 고침을 부른다.
+    """
+    rows = [_scored_row("Q3", PLAIN, 0.71, cited=["제101조"]),   # 답해야 하고, 답했다
+            _scored_row("B1", A0_PROSE, 0.70),                   # 답해야 하는데 물러섰다
+            _scored_row("B2", A0_PROSE, 0.62)]                   # 기권해야 하고, 물러섰다
+    expects = {"Q3": "answer", "B1": "answer", "B2": "abstain"}
+
+    g = score.grade_expect(rows, expects, "selfreport")
+    assert (g["answer_n"], g["abstain_n"]) == (2, 1)
+    assert g["false_abstain"] == 1 and g["missed_abstain"] == 0
+    assert g["passed"] == 2 and g["gradable"] == 3
+    assert ("B1", "답해야 하는데 기권") in g["failures"]
+
+    # 기준선은 정반대로 틀린다 — 하나도 기권하지 않으므로 오기권 0, 놓친 기권 1
+    base = score.grade_expect(rows, expects, "none")
+    assert (base["false_abstain"], base["missed_abstain"]) == (0, 1)
+    assert base["passed"] == 2
+
+
+def test_refuse_items_are_counted_as_unmeasurable_not_failed() -> None:
+    """**못 재는 것을 0으로 세지 않는다** (RAG-055).
+
+    증상·응급 거절은 검색 결과가 아니라 질문을 보고 갈라야 하고, 그 분류는 생성 앞단에서
+    일어난다 — 랩 덤프에는 흔적이 없다. 실패로 세면 어떤 정책을 골라도 점수가 같이 깎여
+    정책 비교가 흐려진다.
+    """
+    rows = [_scored_row("B4", "슬개골 탈구가 의심됩니다.", 0.66, cited=["제3조"])]
+    g = score.grade_expect(rows, {"B4": "refuse"}, "selfreport")
+    assert g["unmeasurable"] == 1
+    assert g["gradable"] == 0 and g["passed"] == 0
+    assert g["failures"] == []
+
+
+def test_rows_the_goldenset_no_longer_has_are_skipped() -> None:
+    """골든셋에서 지워진 옛 문항은 채점하지 않는다 — `lap1`~`lap14` 를 이 표로 읽을 때
+    없는 문항이 실패로 세어지면 소급 비교가 통째로 어긋난다.
+    """
+    g = score.grade_expect([_scored_row("사라진문항", PLAIN, 0.7)], {"Q3": "answer"}, "none")
+    assert g["gradable"] == 0 and g["unmeasurable"] == 0
+
+
 def io_has_data() -> bool:
     from daengs_life.rag.core import config
     return config.ANSWER_DIR is not None and config.ANSWER_DIR.exists()

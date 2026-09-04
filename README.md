@@ -5,7 +5,7 @@ Next.js 프론트엔드와 FastAPI 백엔드를 PM2 + nginx 로 자체 서버에
 ```
 daengs.~     :80   → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next, 호스트)
 daengback.~  :8000 → nginx 컨테이너 → backend:8000              (기본 API 경로)
-                                      → place-search:8000         (`/v2/places/`만)
+                                      → place-search:8000         (`/v2/places/`, `/territory/sites/`)
                                       → journey-service:8000      (`/journey`만)
 ```
 
@@ -177,7 +177,13 @@ Copy-Item .env.example .env
 `backend/src/daengs_place`를 실행하는 `place-search`와 별도 PostGIS인 `place-db`는
 기본 `docker compose up -d`에 포함됩니다.
 기동 전에 기존 Alembic 이력이 자동 적용되며, 외부 요청은 nginx의
-`POST /v2/places/search`로만 받습니다. place-db 자체 포트는 호스트에 열지 않습니다.
+`POST /v2/places/search`와 `GET /territory/sites/nearby`로 받습니다. 시설 검색과 중립
+점령지 게임판은 HTTP 계약을 섞지 않습니다. place-db 자체 포트는 호스트에 열지 않습니다.
+
+점령지 140u 게임판 적재와 배포 확인은
+[`docs/place/territory-sites.md`](docs/place/territory-sites.md)를 따릅니다.
+자연어 Place 발견 기능의 운영 이주 경계와 단계별 PR 순서는
+[`docs/place/discovery-migration.md`](docs/place/discovery-migration.md)에 있습니다.
 
 ```powershell
 docker compose logs -f place-search
@@ -268,7 +274,7 @@ docker compose exec redis redis-cli -a <REDIS_PASSWORD> LLEN celery     # 소비
    docker compose exec crawler-worker uv run --no-sync python -m daengs_life.crawler due
    # → "due N / 후보 12 / 시드 30" 에서 N 이 12 보다 작으면 로그가 같이 온 것입니다.
    #   N == 후보 전체면 로그가 안 온 것 — 04:00 전에 3 을 다시 하세요.
-   docker compose logs backend | Select-String "임베딩 모델"     # /ask 가 여전히 200 인지 — venv 를 안 섞었다는 증거
+   docker compose logs backend | Select-String "임베딩 모델"     # /life/ask 가 여전히 200 인지 — venv 를 안 섞었다는 증거
    ```
 6. 다음 날 04:00 을 넘긴 뒤 `docker compose logs --since 24h crawler-worker` 에서 발사와 결과를 봅니다.
 

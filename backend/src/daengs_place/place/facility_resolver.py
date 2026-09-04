@@ -30,7 +30,7 @@ from daengs_place.place.restriction_map import RESTRICTION_SEMANTICS_VERSION
 MEDICAL = ("hospital", "pharmacy")
 CANONICAL_SOURCES = ("kcisa", "kto")
 
-# 서버가 세우는 자원 경계. `/anchor/search` 의 `MAX_LIMIT` 과 같은 값·같은 이유다 —
+# 서버가 세우는 자원 경계. 다른 지도 조회의 결과 상한과 같은 이유다 —
 # 호출자가 카테고리로 나눠 부를 것이라는 기대는 경계가 아니다. 반경 상한(20km)만으로는
 # 부족하다: 강남역 20km 는 kind 를 지정해도 4,966 곳(3MB)이라 `kind` 를 요구해봐야
 # 최악이 거의 안 준다. 실제 지도 사용(반경 3km, kind 별)은 수백 곳이라 이 상한에 안 닿는다.
@@ -139,7 +139,7 @@ class FacilityOut(BaseModel):
 
 class FacilitySearchOut(BaseModel):
     params: FacilityParams
-    # 상한에 걸렸나. `/anchor/search` 와 같은 이유로 있다 — 조용히 자르면 "이 반경엔
+    # 상한에 걸렸나. 다른 지도 조회와 같은 이유로 있다 — 조용히 자르면 "이 반경엔
     # 이만큼뿐"으로 읽힌다. 지도 표면에서는 그 오독이 "우리 개가 갈 곳이 없다"가 된다.
     truncated: bool = False
     results: list[FacilityOut]

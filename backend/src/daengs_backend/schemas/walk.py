@@ -59,9 +59,14 @@ class WalkUpload(BaseModel):
     started_at: datetime
     ended_at: datetime
 
-    weather_code: int | None = None
+    weather_code: int | None = Field(default=None, ge=0, le=99)
     is_day: bool | None = None
-    temperature_c: Decimal | None = Field(default=None, decimal_places=1)
+    temperature_c: Decimal | None = Field(
+        default=None,
+        ge=-100,
+        le=100,
+        decimal_places=1,
+    )
 
     points: list[WalkPointUpload] = Field(default_factory=list)
 

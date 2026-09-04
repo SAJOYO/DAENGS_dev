@@ -156,6 +156,46 @@ def test_a_dead_kakao_never_blocks_the_verdict(wired, monkeypatch) -> None:
     assert judge(obs, NOW).grade is not None
 
 
+# ------------------------------------------------------------ 특보구역 (RT-003)
+#
+# `test_providers.py` 는 `["서울동남권", "서울"]` 을 **손으로 넘겨** 파서를 검증한다. 그래서
+# 그 이름을 만들어 낼 방법이 없다는 사실을 가리고 있었다 — 이 절이 그 구멍을 막는다.
+# 픽스처는 서초구(서초2동)이고 `t6` 는 이렇게 생겼다:
+#
+#     폭염경보   … 서울(서울동남권, 서울동북권) …      ← 서초구는 동남권이라 여기 걸린다
+#     폭염주의보 … 서울(서울서남권, 서울서북권) …      ← 걸리면 안 된다
+
+def test_the_district_is_mapped_to_its_warning_zone(wired) -> None:
+    """카카오가 준 시군구가 특보구역명이 된다. 이것이 RT-003 의 전부다."""
+    obs = collect(HERE, NOW, cache=fresh())
+    assert obs.location.warning_areas == ("서울동남권",)
+    assert obs.location.warning_area == "서울동남권"       # 표기용 대표 하나
+
+
+def test_a_neighbouring_quadrant_warning_is_not_mine(wired) -> None:
+    """묶음 머리(`서울(…)`)를 매칭하면 서초구가 서남권 주의보까지 자기 것으로 읽는다.
+
+    경보와 주의보가 같은 축이라 이 픽스처에서는 등급이 안 변한다. 그래서 등급이 아니라
+    **어느 특보가 잡혔는지**를 본다 — 옆 권역에만 주의보가 있는 날 근거 없는 CAUTION 이
+    되는 것이 실제 피해다.
+    """
+    obs = collect(HERE, NOW, cache=fresh())
+    warnings = [(s.kind.value, s.category) for s in obs.states if s.source is Source.WARNING]
+    assert warnings == [("heat", "경보")]
+
+
+def test_without_the_district_the_broad_name_still_catches(wired, monkeypatch) -> None:
+    """카카오가 죽으면 시군구를 모른다. 그때까지 좁히면 RT-003 이 커버리지를 깎는다 —
+    광역명으로 넓게 잡아 RT-003 이전과 같은 상태로 떨어진다.
+    """
+    monkeypatch.setattr(kakao_local, "raw_region", dead)
+
+    obs = collect(HERE, NOW, cache=fresh())
+    assert obs.location.warning_areas == ()
+    kinds = {(s.kind.value, s.category) for s in obs.states if s.source is Source.WARNING}
+    assert ("heat", "경보") in kinds and ("heat", "주의보") in kinds
+
+
 def test_a_broken_response_is_reported_as_a_parse_failure(wired, monkeypatch) -> None:
     """응답은 왔는데 우리가 못 읽은 경우. 전송 실패와 섞으면 원인을 못 찾는다."""
     monkeypatch.setattr(airkorea_realtime, "raw_dnsty", lambda *a, **k: {"items": "리스트가 아니다"})

@@ -153,11 +153,23 @@ jobs:
           Write-Host "   되돌릴 때: docker cp <이 파일> pgvector:/tmp/r.dump 후 pg_restore"
           Write-Host "   ⚠️ 롤(daengs)은 pg_dump 에 안 담깁니다 — runbook §2 의 globals.sql 참고"
 
-          # 쌓이면 디스크를 먹습니다. **최근 3개만** 남깁니다.
-          Get-ChildItem $dir -Filter 'vectordb-*.dump' |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -Skip 3 |
-            ForEach-Object { Write-Host "옛 백업 삭제: $($_.Name)"; Remove-Item $_.FullName -Force }
+          # ⚠️ **옛 백업을 자동으로 지우지 않습니다.**
+          #
+          #    처음에는 "최근 3개만 남기고 지우기" 로 썼는데 그게 틀렸습니다 —
+          #    마이그레이션을 연달아 돌리면 **제일 오래된 것부터** 밀려 나가는데,
+          #    크게 되돌려야 할 때 필요한 게 바로 그 "아무것도 안 바뀐 상태" 의
+          #    백업입니다. 백업을 지우는 판단은 사람이 합니다.
+          #
+          #    대신 쌓인 것을 보여 주고, 지우는 명령을 로그에 적어 둡니다.
+          $dumps = @(Get-ChildItem $dir -Filter 'vectordb-*.dump' | Sort-Object LastWriteTime -Descending)
+          $total = ($dumps | Measure-Object -Property Length -Sum).Sum
+          Write-Host "--- 쌓인 백업 $($dumps.Count) 개 (합계 $([math]::Round($total/1GB,2)) GB) ---"
+          $dumps | ForEach-Object {
+            Write-Host ("  {0}  {1} MB  {2}" -f $_.Name, [math]::Round($_.Length/1MB,1), $_.LastWriteTime)
+          }
+          if ($dumps.Count -gt 5) {
+            Write-Host "::warning::백업이 $($dumps.Count) 개 쌓였습니다. 필요 없는 것은 손으로 지우세요: $dir"
+          }
 
       - name: 적용
         run: |

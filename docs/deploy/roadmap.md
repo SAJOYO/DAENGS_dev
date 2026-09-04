@@ -44,6 +44,12 @@
    > 적용됐는지 DB 가 기억하지 않으므로(CLAUDE.md), 어디까지 적용했는지는 사람이 안다.
    > GCP 에 미적용인 것은 09-02 덤프 이후에 추가된 분, 즉 **`main` 에 아직 없는
    > `db/migrations/` 전부**이고 다음 dev→main 배포 때 적용한다 (runbook §6).
+   >
+   > **점령 게임판 적재도 각각이다.** `territory-sites-ingest.yml` 은
+   > `runs-on: [self-hosted]` 라 로컬 서버 place-db 만 채운다. GCP 는 runbook §6 의
+   > "점령 게임판 적재 (GCP)" 절을 손으로 밟는다. 안 밟으면 `/territory/sites/nearby` 가
+   > **어디서 불러도 빈 배열**이다 — 읽기 질의가 현행 세대(`...:hex-v1:140:`)만 거르는데
+   > 덤프에 있는 건 옛 115u 행이기 때문이고, 그건 Alembic `0021` 의 의도다.
 6. **TLS 는 certbot(Let's Encrypt, 무료).** DNS 는 가비아 유지. 인증서 구매 불필요.
 7. **클라우드는 새 서브도메인을 쓴다** (2026-09-01 팀 회의) — 프런트
    `daengapp.weareithero.cloud` · 백엔드 `daengapi.weareithero.cloud`. 기존

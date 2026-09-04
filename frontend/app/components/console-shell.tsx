@@ -35,12 +35,29 @@ export default function ConsoleShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-zinc-600 sm:inline dark:text-zinc-400">
-              {admin.name}
-            </span>
-            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
-              {ROLE_LABEL[admin.role] ?? admin.role}
-            </span>
+            {/*
+              이름과 등급이 통째로 `/console/password` 로 가는 링크입니다 (#222).
+
+              **이름만 링크로 만들면 안 됩니다.** 이름 쪽은 `sm:inline` 이라 좁은 화면에서
+              사라지고, 그러면 폰에서 비밀번호를 바꿀 입구가 아예 없어집니다. 항상 보이는
+              등급 배지까지 묶어야 어느 폭에서도 누를 것이 남습니다.
+
+              대시보드(`console/page.tsx`)의 카드로 두지 않은 이유: 저 카드들은 권한으로
+              갈리는 메뉴인데, 이 화면은 `read` 라 누구나 들어옵니다. 카드로 두면 "권한이
+              있어서 보이는 것"과 "누구나 되는 것"이 같은 자리에 섞입니다.
+            */}
+            <Link
+              href="/console/password"
+              title="비밀번호 변경"
+              className="flex items-center gap-3 rounded-full transition-opacity hover:opacity-70"
+            >
+              <span className="hidden text-zinc-600 sm:inline dark:text-zinc-400">
+                {admin.name}
+              </span>
+              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+                {ROLE_LABEL[admin.role] ?? admin.role}
+              </span>
+            </Link>
             <button
               type="button"
               onClick={() => {

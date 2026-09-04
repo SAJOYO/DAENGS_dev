@@ -15,7 +15,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from daengs_backend.models import ADMIN_ROLES, ADMIN_STATUSES
 
@@ -88,3 +88,39 @@ class AdminAccountPatch(BaseModel):
                 f"status 는 {', '.join(ADMIN_STATUSES)} 중 하나여야 합니다."
             )
         return value
+
+
+class PasswordChangeRequest(BaseModel):
+    """**자기** 비밀번호 변경 (#222). 대상은 경로가 아니라 토큰이 정합니다.
+
+    id 를 받는 필드가 없는 것이 이 스키마의 첫째 일입니다 — 받는 순간
+    `PATCH /admin/admins/{id}` 와 같은 문이 되고, 그건 `ADMIN_MANAGE` 로 잠가야 하는
+    문입니다. 이 카드는 `Perm.READ` 로 열려 있으므로 **누구를 바꾸는지는 토큰만이
+    말합니다** (`routers/admin_account.py`).
+
+    **`current_password` 에는 최소 길이를 걸지 않습니다.** `new_password` 와 같은 12자를
+    걸고 싶어지는 자리지만, 그러면 12자 미만인 옛 비밀번호를 쓰는 사람이 **바로 그 이유로
+    422 에 막혀 못 바꿉니다** — 이 카드가 없애려던 상태 그대로입니다 (`uv run seed-admin`
+    으로 만든 최초 계정이 그럴 수 있습니다). 여기 값은 대조만 하고 저장하지 않으므로
+    길이를 볼 이유도 없습니다.
+
+    `new_password` 쪽 12자는 `AdminAccountCreate` 와 같은 값입니다. 발급 때만 길고 바꿀 때
+    짧아지면 제한이 없는 것과 같습니다. 위쪽 1024 도 같은 이유입니다 — 1KB 짜리가 들어오면
+    Argon2id 해싱에만 시간을 씁니다.
+    """
+
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=12, max_length=1024)
+
+    @model_validator(mode="after")
+    def _actually_different(self) -> "PasswordChangeRequest":
+        """같은 값으로 바꾸는 요청을 422 로 막습니다.
+
+        서버가 받아들여도 되는 요청처럼 보이지만 아닙니다 — 성공 경로가 **그 계정의
+        세션을 전부 끊으므로**(`services/admin_account.py`), 아무것도 바뀌지 않은 채
+        모든 기기에서 로그아웃만 되는 요청이 됩니다. 비밀번호를 확인하려다 오타로
+        같은 값을 두 번 넣는 것이 실제로 일어나는 자리입니다.
+        """
+        if self.current_password == self.new_password:
+            raise ValueError("새 비밀번호가 지금 쓰는 것과 같습니다.")
+        return self

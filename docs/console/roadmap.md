@@ -56,6 +56,11 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | --- | --- | --- | --- | --- | --- |
 | 상태 | `read` | `/console/status` — 항목 여덟, 30초 폴링. `absent`(이 환경엔 없음)와 `down`(죽음)의 색·문구가 다르다 | `/admin/status`(READ) | ✅ #180 | 사람이 손댈 자리는 없다 — 읽기 전용이다 |
 | 기능 / 검색 점검 | `read` | `/console/search` — 탭 4: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 · 어시스턴트(`/assistant/query`) | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 · #181 · #213 | 산책 기록 · gait · place · journey 탭 없음 (C4). 어시스턴트 탭은 `RoutePlan` 이 공개 응답에 없어 라우터 종류 · 모델 이름을 못 보여 준다 |
+| 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
+| 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
+| 관리자 계정 | `admin:manage` | `/console/admins` — 목록 · 발급 · role 변경 · 정지/해제 | `/admin/admins`(ADMIN_MANAGE) | ✅ #207 | 본인 비밀번호 변경 화면이 없다 — 초기 비밀번호는 발급자가 전달한다 |
+| 회원 · 반려견 | `read` | `/console/users` — 이메일·카카오번호 검색, 마스킹 상세, 반려견 | `/admin/app-users`(READ) | ✅ #211 | 원문 보기·상태 변경이 없다 (A2b). **목록이 없다** — 검색만 된다 (A2c) |
+| 운영 지표 | `metrics:read` | 없음 | 없음 — 저장되는 지표 자체가 없다 | ⬜ 준비 중 | D-037 이 원문을 금지했고, 허용된 메타데이터의 저장처는 미정 |
 
 > **생활 RAG 탭이 읽어야 하는 계약 — `detail` 이 두 모양이다** (#213). `/life/ask` 는 스스로 이름
 > 붙인 결과를 `{code, message}` **객체**로 주고(#177 의 기권 `no_evidence` · 경계 거절
@@ -63,11 +68,6 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 > 담으므로(`lib/api.ts` 의 `detailOf`) 객체형은 `ApiError.body` 에서 읽는다. 안 읽으면 **기권이
 > "라우트 없음"으로, 응급 거절이 "요청을 처리하지 못했습니다"로** 표시된다 — 둘 다 실제로 그랬다.
 > 백엔드 쪽 같은 판단은 `orchestration/adapters/life.py` 의 `_outcome()` 이고 **둘은 같이 움직인다.**
-| 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
-| 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
-| 관리자 계정 | `admin:manage` | `/console/admins` — 목록 · 발급 · role 변경 · 정지/해제 | `/admin/admins`(ADMIN_MANAGE) | ✅ #207 | 본인 비밀번호 변경 화면이 없다 — 초기 비밀번호는 발급자가 전달한다 |
-| 회원 · 반려견 | `read` | `/console/users` — 이메일·카카오번호 검색, 마스킹 상세, 반려견 | `/admin/app-users`(READ) | ✅ #211 | 원문 보기·상태 변경이 없다 (A2b). **목록이 없다** — 검색만 된다 (A2c) |
-| 운영 지표 | `metrics:read` | 없음 | 없음 — 저장되는 지표 자체가 없다 | ⬜ 준비 중 | D-037 이 원문을 금지했고, 허용된 메타데이터의 저장처는 미정 |
 
 ### 인증 · 권한 · 운영 뼈대
 

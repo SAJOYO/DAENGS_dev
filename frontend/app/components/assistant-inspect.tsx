@@ -71,6 +71,7 @@ const CAPABILITY_LABEL: Record<string, string> = {
   training: "훈련",
   life: "생활 · 제도",
   walk: "산책 적합도",
+  place: "장소 추천",
   skin: "피부 스크리닝",
   gait: "보행 분석",
 };

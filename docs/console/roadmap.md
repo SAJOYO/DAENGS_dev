@@ -59,7 +59,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 | 메뉴 (`console/page.tsx`) | 카드 권한 | 화면 | 뒤의 API | 상태 | 어긋난 것 |
 | --- | --- | --- | --- | --- | --- |
 | 상태 | `read` | `/console/status` — 항목 여덟, 30초 폴링. `absent`(이 환경엔 없음)와 `down`(죽음)의 색·문구가 다르다 | `/admin/status`(READ) | ✅ #180 | 사람이 손댈 자리는 없다 — 읽기 전용이다 |
-| 기능 / 검색 점검 | `read` | `/console/search` — 탭 4: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 · 어시스턴트(`/assistant/query`) | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증**) | ✅ #30 · #36 · #170 · #181 · #213 | 산책 기록 · gait · place · journey 탭 없음 (C4). 어시스턴트 탭은 `RoutePlan` 이 공개 응답에 없어 라우터 종류 · 모델 이름을 못 보여 준다 |
+| 기능 / 검색 점검 | `read` | `/console/search` — 탭 4: 훈련 RAG · 생활 RAG(`/life/ask` + `/life/walk-conditions`) · 피부 스크리닝 · 어시스턴트(`/assistant/query`) | `/training/chat`(SEARCH_INSPECT) · `/life/ask` `/life/walk-conditions`(READ, 앱 회원도) · `/screen/v1/screen`(**무인증 — 그대로 둔다**, D1 ⏸) | ✅ #30 · #36 · #170 · #181 · #213 | 산책 기록 · gait · place · journey 탭 없음 (C4). 피부 탭이 무인증 경로를 그대로 부른다 — **가리지 않기로 했다**(D1 ⏸, #239) |
 | 수집 / 크롤 | `read` (트리거 `ops:write`) | `/console/crawl` — 소스별 마지막 실행, 5초 폴링, 수동 트리거 | `/admin/crawl` | ✅ #76 · #95 | **GCP 에서는 반쪽이다** — 크롤러가 안 떠서(`deploy/roadmap.md` §2-4) 트리거는 202 만 주고 아무 일도 없다. 표는 09-02 덤프 시점 행 |
 | 지식 베이스 | `kb:write` | 없음 | 없음 | ⬜ 준비 중 | 설명문 "청크와 그래프 추출" — 그래프는 폐기된 GraphRAG (`training/decision_graphrag_abandoned_0824.md`). 훈련 RAG 는 승인 매니페스트 14문서 **재적재 금지**(`training/rag-demo.md`), 생활 RAG 적재는 개발 PC CLI(GPU, 55분). **업로드 UI 는 지금 성립하지 않는다** (§6) |
 | 관리자 계정 | `admin:manage` | `/console/admins` — 목록 · 발급 · role 변경 · 정지/해제 | `/admin/admins`(ADMIN_MANAGE) | ✅ #207 · #222 | 초기 비밀번호는 발급자가 전달하고, 받은 사람이 헤더의 이름 → `/console/password` 에서 바꾼다 (#222). **그 화면만 `read` 라 이 메뉴와 등급이 다르다** |
@@ -213,9 +213,13 @@ cd ~/daengs && git show origin/main:db/migrations/verify_2026-09-01_chats.sql \
 콘솔 탭만 가리면 "API 는 열려 있는데 화면만 안 보이는 계정" 이 생긴다 (`inspect-tabs.tsx` · `console/page.tsx` 주석).
 그래서 **가리는 PR 과 인증을 거는 PR 이 같은 PR** 이어야 한다.
 
+> **그 규칙은 "둘 다 안 하는 것" 을 막지 않는다.** D1 이 지금 그 상태다 — 인증도 안 걸고 탭도 안
+> 가린다. 규칙이 막으려던 것은 **가린 쪽만 있는 상태**이고, 가린 것이 없으면 "API 는 열려 있는데
+> 화면만 안 보이는 계정" 도 없다. 무인증인 것이 화면에 그대로 보이는 편이 오히려 정직하다.
+
 | # | 무엇 | 왜 | 소유 | 상태 |
 | --- | --- | --- | --- | --- |
-| D1 | `/screen/*` 인증 + rate limit — 백엔드에 걸고 같은 PR 에서 `inspect-tabs.tsx` 피부 탭을 권한으로 가림 | `docs/orchestration/architecture.md` 준비도 표 "보안 후속은 별도" | 스크리닝 파트 + 콘솔 | ⬜ |
+| D1 | `/screen/*` 인증 + rate limit — 백엔드에 걸고 같은 PR 에서 `inspect-tabs.tsx` 피부 탭을 권한으로 가림 | `docs/orchestration/architecture.md` 준비도 표 "보안 후속은 별도" | 스크리닝 파트 + 콘솔 | ⏸ **#239 (2026-09-05)**. 이유가 둘인데 **둘째가 진짜다** — ⓐ 발표일까지 문제가 생기지 않는다(사람 판단) · ⓑ **무인증이 빠뜨린 게 아니라 의도일 수 있다** (스크리닝을 GCP Cloud Run 같은 별도 런타임으로 뺄 계획). **의도를 모르는 채 남의 파트의 경계를 바꾸면 고치는 게 아니라 깨는 것**이다. 재개 조건: 앱이 `/app/screening/*` 로 완전히 옮기고(`DAENGS_APP#131` 머지 + 배포) fallback 을 뗀 뒤 **+ 스크리닝 파트에 의도 확인**(§7). 착수 전 확인한 사실 셋은 #239 본문에 있다 |
 | D2 | `/gait/*` 무인증 → `/app/gait/*` 전환 뒤 닫기 | `docs/gait/worklog.md` 미해결 5 | gait 파트 | ⬜ 링크만 |
 | D3 | 로그인 잠금을 Redis 로 — 워커를 늘리거나 재시작을 견뎌야 할 때 | `login_attempts.py` 마지막 문단 | 콘솔 | ⬜ 조건부 |
 
@@ -290,6 +294,11 @@ B2 요청 메타데이터 = 로그 카드(Hold) 해제 + 저장처 결정 뒤.  
 - **B2 저장처** — 요청 메타데이터를 테이블에 쌓을지, 파일 로그를 집계할지. 로그 카드(Hold)와 같이 본다.
 - **역할 발급** — 팀원 계정을 ADMIN 공유에서 역할별(OPERATOR · CURATOR …)로 나눌지. **화면은 생겼다**(#207) —
   이제 고르기만 하면 된다. 나누면 A2(복호화 가리기)가 실제로 검증되고, 안 나누면 A2 는 지금처럼 전원 통과다.
+- **스크리닝 `/screen/*` 의 무인증이 의도였나** (D1 ⏸) — 그 경로를 GCP Cloud Run 같은 별도 런타임으로
+  뺄 계획이 있었는지, 아니면 그냥 안 건 것인지. **이 저장소가 답할 수 없고 스크리닝 파트가 답한다.**
+  ⓐ "별도 런타임 계획" 이면 D1 의 전제 자체가 달라지고(인증을 여기 걸 일이 아니다),
+  ⓑ "그냥 안 걸었다" 면 D1 은 앱 이관 뒤 그대로 진행한다. **답이 오기 전에는 만지지 않는다** — 
+  배포된 앱이 그 경로를 무인증으로 부르고 있어서(#239) 잘못 건드리면 되던 기능이 죽는다.
 - **C4 테스트 회원** — 관리자 토큰으로 본인 소유 API 를 못 부르는 구조에서 산책 기록 등을 점검하려면 무엇으로 부를지.
 - **GCP 콘솔의 크롤 메뉴** — 숨길지, "트리거 없음" 안내만 할지 (C2 는 안내로 제안).
   #180 뒤로는 **감출 수 있게 됐다** — `GET /admin/status` 의 `crawl` 항목이 워커가 없는 환경을

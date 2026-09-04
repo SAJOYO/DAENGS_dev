@@ -29,11 +29,26 @@ AUDIT_LOGIN_FAILED_UNKNOWN_ID = "admin.login.failed_unknown_id"
 AUDIT_LOGIN_FAILED_PASSWORD = "admin.login.failed_password"
 AUDIT_LOGIN_DENIED_SUSPENDED = "admin.login.denied_suspended"
 
+# 관리자 계정 관리 (`services/admin_account.py`). 대상은 언제나 다른 `admin_users`
+# 행이라 `target_type='admin_user'` · `target_id` 가 채워집니다 — 대상이 없는
+# 로그인 기록과 다른 점입니다.
+#
+# **정지와 해제를 한 action 으로 합치지 않습니다.** `detail` 을 펼쳐 봐야 어느
+# 쪽인지 알게 되면, "누가 정지시켰나"를 세는 것이 집계가 아니라 파싱이 됩니다.
+AUDIT_ACCOUNT_CREATED = "admin.account.created"
+AUDIT_ACCOUNT_ROLE_CHANGED = "admin.account.role_changed"
+AUDIT_ACCOUNT_SUSPENDED = "admin.account.suspended"
+AUDIT_ACCOUNT_REACTIVATED = "admin.account.reactivated"
+
 AUDIT_ACTIONS = (
     AUDIT_LOGIN_SUCCESS,
     AUDIT_LOGIN_FAILED_UNKNOWN_ID,
     AUDIT_LOGIN_FAILED_PASSWORD,
     AUDIT_LOGIN_DENIED_SUSPENDED,
+    AUDIT_ACCOUNT_CREATED,
+    AUDIT_ACCOUNT_ROLE_CHANGED,
+    AUDIT_ACCOUNT_SUSPENDED,
+    AUDIT_ACCOUNT_REACTIVATED,
 )
 
 # `target_type` 에 들어가는 값. 대상이 없는 행위(로그인)는 NULL 입니다.

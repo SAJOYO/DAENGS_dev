@@ -39,6 +39,11 @@ class FakeAdmin:
     role: str = "ADMIN"
     status: str = "active"
     last_login_at: datetime | None = None
+    #: 진짜는 DB DEFAULT NOW() 입니다. 계정 목록 응답(`AdminAccountOut`)이 이 값을
+    #: 요구해서 대역에도 둡니다 — 고정값이라 정렬을 보는 데는 못 씁니다.
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
 
 
 @dataclass
@@ -139,6 +144,10 @@ class Store:
 
     def __init__(self, admin: FakeAdmin) -> None:
         self.admin = admin
+        #: 관리자 **여러 명**. `admin` 은 그중 첫 번째를 가리키는 이름일 뿐입니다 —
+        #: 계정 관리(A3) 이전에는 한 명뿐이라 그 이름만 있었고, 기존 테스트가
+        #: 전부 그것을 쓰고 있어 그대로 둡니다. 두 번째부터는 `add_admin`.
+        self.admins: list[FakeAdmin] = [admin]
         self.tokens: dict[str, FakeToken] = {}
         #: kakao_id → 회원. 앱 회원은 여러 명일 수 있습니다.
         self.app_users: dict[int, FakeAppUser] = {}
@@ -174,6 +183,11 @@ class Store:
     def add_app_user(self, user: FakeAppUser) -> FakeAppUser:
         self.app_users[user.kakao_id] = user
         return user
+
+    def add_admin(self, admin: FakeAdmin) -> FakeAdmin:
+        """관리자를 한 명 더. 계정 관리 테스트가 씁니다."""
+        self.admins.append(admin)
+        return admin
 
 
 @dataclass
@@ -308,10 +322,30 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     """repositories 의 함수들을 store 를 쓰는 것으로 바꿉니다."""
 
     async def get_by_login_id(session, login_id):
-        return store.admin if login_id == store.admin.login_id else None
+        return next((a for a in store.admins if a.login_id == login_id), None)
 
     async def get_by_id(session, admin_id):
-        return store.admin if admin_id == store.admin.id else None
+        return next((a for a in store.admins if a.id == admin_id), None)
+
+    async def admin_list_all(session):
+        return sorted(store.admins, key=lambda a: a.login_id)
+
+    async def admin_create(session, **kw):
+        # `admin_users_login_id_key` UNIQUE 를 흉내 냅니다. 진짜 DB 는 flush 에서
+        # IntegrityError 를 내고, 서비스가 그것을 LoginIdTakenError 로 바꿉니다.
+        if any(a.login_id == kw["login_id"] for a in store.admins):
+            raise IntegrityError("admin_users_login_id_key", None, Exception())
+        return store.add_admin(
+            FakeAdmin(
+                login_id=kw["login_id"],
+                password_hash=kw["password_hash"],
+                name=kw["name"],
+                role=kw["role"],
+            )
+        )
+
+    async def admin_count_active_with_role(session, role):
+        return sum(1 for a in store.admins if a.role == role and a.status == "active")
 
     async def create(session, **kw):
         token = FakeToken(
@@ -353,6 +387,13 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
                 return user
         return None
 
+    async def app_get_by_email_hash(session, email_hash):
+        # 진짜와 같이 **`status` 로 거르지 않습니다.** 다만 탈퇴한 회원은 해시 자체가
+        # 지워져 있어(services/app_auth.py) 애초에 안 걸립니다.
+        return next(
+            (u for u in store.app_users.values() if u.email_hash == email_hash), None
+        )
+
     async def app_get_active_for_update(session, app_user_id):
         user = await app_get_by_id(session, app_user_id)
         return user if user is not None and user.status == "active" else None
@@ -375,6 +416,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(app_user_repo, "get_by_kakao_id", app_get_by_kakao_id)
     monkeypatch.setattr(app_user_repo, "get_by_id", app_get_by_id)
+    monkeypatch.setattr(app_user_repo, "get_by_email_hash", app_get_by_email_hash)
     monkeypatch.setattr(
         app_user_repo, "get_active_for_update", app_get_active_for_update
     )
@@ -382,6 +424,11 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)
+    monkeypatch.setattr(admin_user_repo, "list_all", admin_list_all)
+    monkeypatch.setattr(admin_user_repo, "create", admin_create)
+    monkeypatch.setattr(
+        admin_user_repo, "count_active_with_role", admin_count_active_with_role
+    )
     monkeypatch.setattr(refresh_token_repo, "create", create)
     monkeypatch.setattr(refresh_token_repo, "get_by_hash", get_by_hash)
     monkeypatch.setattr(refresh_token_repo, "revoke", revoke)

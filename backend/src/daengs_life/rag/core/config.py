@@ -22,8 +22,10 @@ EMBED_DIR: Path | None = PROCESSED_DIR / "embeddings" if PROCESSED_DIR else None
 # 6단계 3파전 덤프. **미추적이다** — 기계 산출물이고 chunk_id 의 수집 날짜에 묶여 재수집하면
 # 통째로 낡는다. 판단이 남는 자리는 `docs/life/decisions-rag.md` 의 RAG-024 다 (RAG-024 ④).
 EVAL_DIR: Path | None = PROCESSED_DIR / "eval" if PROCESSED_DIR else None
-# 9단계 1랩 답변 덤프 (RAG-028 ⑥). **미추적**이고 2랩(소스 확장 후 재관통) 비교의 재료다.
-# eval/ 과 같은 이유로 여기 둔다 — 기계 산출물이고 재수집하면 chunk_id 가 바뀌어 통째로 낡는다.
+# 9단계 랩 답변 덤프 (RAG-028 ⑥). 랩간 비교의 재료다.
+# ⚠ **이 폴더만 추적한다** — 여기 나란한 eval/ · embeddings/ 와 반대다
+# (`.gitignore` 의 `!data/processed/answers/*.jsonl`, RAG-017 '예외' 절). LLM 출력이라
+# 다시 돌려도 같은 글이 안 나오고, RAG-028 ⑥ 이 그것을 랩끼리 비교 축으로 지정했다.
 ANSWER_DIR: Path | None = PROCESSED_DIR / "answers" if PROCESSED_DIR else None
 
 # ---------------------------------------------------------------- 7단계 이후: DB (RAG-025 ②)

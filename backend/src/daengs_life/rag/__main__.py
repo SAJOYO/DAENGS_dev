@@ -31,6 +31,7 @@ import argparse
 import collections
 import sys
 import traceback
+from pathlib import Path
 
 from .core import config, io
 from .stages import chunk as chunker
@@ -541,6 +542,34 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 
+def _warn_if_dump_lands_outside_checkout(path: Path) -> None:
+    """랩 덤프가 **지금 돌고 있는 코드의 체크아웃 밖**에 떨어졌으면 알린다.
+
+    랩 덤프는 커밋해야 하는 파일이다 (`core.config.ANSWER_DIR` 주석). 그런데 워크트리에서
+    작업하면 `backend/.env` 의 `DAENGS_DATA_DIR` 이 **메인 체크아웃을 가리키도록 고정**돼 있어
+    (CLAUDE.md "워크트리에서 작업해도 `data/` 는 한 곳에 쌓으세요" — 코퍼스가 갈라지지 않게 한
+    설정이다) 덤프는 작업 중인 워크트리가 아닌 곳에 떨어진다. 그러면 그 워크트리의 `git status`
+    는 깨끗하고, **파일이 있는 줄도 모른 채** 카드가 머지된다.
+
+    실제로 세 번 났다 — `4db761e`(lap15~18, #177 뒤처리) · `d454da5`(lap20) · lap22(#240).
+    셋 다 나중에 다른 사람이 발견해 뒤처리 커밋을 따로 만들었다. 규칙을 하나 더 쓰는 대신
+    **파일을 쓴 그 자리에서** 알리는 이유는, 이것이 규칙을 몰라서가 아니라 파일이 안 보여서
+    생긴 사고이기 때문이다.
+
+    체크아웃 루트는 이 파일 위치에서 잡는다 (`backend/src/daengs_life/rag/__main__.py` → 5단계 위).
+    **이 파일을 옮기면 `parents[4]` 도 같이 고쳐야 한다.**
+    """
+    checkout = Path(__file__).resolve().parents[4]
+    try:
+        path.resolve().relative_to(checkout)
+    except ValueError:
+        print(f"⚠️ 이 덤프는 커밋 대상인데 지금 체크아웃({checkout}) 밖에 떨어졌다 —")
+        print("   `DAENGS_DATA_DIR` 이 다른 곳을 가리킨다. 여기서 `git add` 해도 안 잡힌다.")
+        print(f"   파일이 있는 체크아웃에서 담을 것:  git -C {path.resolve().parent} add {path.name}")
+    else:
+        print("   커밋 대상이다 — 이 카드에 같이 담을 것 (`.gitignore` 예외, RAG-017)")
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """9단계 — 검색 위에 Gemini 로 답을 만든다 (RAG-028). **조립은 `stages.generate` 가 하고
     여기는 출력과 덤프만 한다** (RAG-023 이 parse 에서 정리한 모양 그대로).
@@ -622,7 +651,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 header = generator.dump_header(args.lap, answers, args.k, conn=conn)
                 path = io.write_answers(header, generator.dump_rows(answers), stem=args.lap)
                 print()
-                print(f"덤프 → {path}")
+                print(f"덤프 → {path.resolve()}")
+                _warn_if_dump_lands_outside_checkout(path)
     finally:
         del st
         embed.release()

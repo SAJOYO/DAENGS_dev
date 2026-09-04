@@ -152,6 +152,25 @@ def build_territory_photo_key(
     return f"territory/{app_user_id}/{attempt_id}/capture{suffix}"
 
 
+def build_pet_photo_key(pet_id: uuid.UUID, *, content_type: str) -> str:
+    """프로필 사진 키. 파일명 대신 검증된 MIME 으로 확장자를 정합니다.
+
+    ⚠️ **uuid 를 넣는 것이 보안 장치입니다.** bridge 는 인증 헤더 없이 "키를 아는 것이
+       자격" 이라, `pets/<pet_id>/profile.jpg` 처럼 추측 가능한 키를 쓰면 pet_id 만
+       알면 남의 사진을 받을 수 있습니다. 점령지 키가 attempt_id 로 그 역할을 하는
+       것과 같은 자리입니다.
+
+    ⚠️ **매번 새 키입니다.** 같은 키에 덮어쓰면 앱·CDN 이 옛 사진을 계속 보여 줍니다.
+       사진을 바꾸면 새 키로 올리고 옛 객체를 지웁니다.
+    """
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 프로필 사진 형식: {content_type}") from exc
+    return f"pets/{pet_id}/profile/{uuid.uuid4().hex}{suffix}"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""

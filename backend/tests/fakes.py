@@ -205,6 +205,16 @@ class FakePet:
     birth_date_kind: str | None = None
     farewell_on: object | None = None
 
+    # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
+    photo_storage_key: str | None = None
+    photo_content_type: str | None = None
+    photo_generation: str | None = None
+    photo_size_bytes: int | None = None
+    photo_updated_at: object | None = None
+    photo_pending_key: str | None = None
+    photo_pending_content_type: str | None = None
+    photo_pending_at: object | None = None
+
 
 @dataclass
 class FakeWalkPointChunk:
@@ -447,6 +457,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    async def pet_find_by_photo_key(session, storage_key, *, pending):
+        # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
+        # "backend 가 발급한 키인가" 만 봅니다.
+        attr = "photo_pending_key" if pending else "photo_storage_key"
+        return next((p for p in store.pets if getattr(p, attr) == storage_key), None)
+
     async def pet_owned_ids(session, app_user_id, pet_ids):
         mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
         return mine & set(pet_ids)
@@ -484,6 +500,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_repo, "list_for_owner_for_update", pet_list_for_owner
     )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "add", pet_add)

@@ -292,3 +292,84 @@ def test_rows_the_goldenset_no_longer_has_are_skipped() -> None:
 def io_has_data() -> bool:
     from daengs_life.rag.core import config
     return config.ANSWER_DIR is not None and config.ANSWER_DIR.exists()
+
+
+# ------------------------------------------------------------------ ⑧ 종류별 슬라이스 (RAG-060)
+def _chunk(chunk_id: str, **fields: str) -> dict:
+    """청크 jsonl 의 콘텐츠 행 모양. 슬라이스가 보는 것은 `chunk_id` 와 축 하나뿐이다."""
+    return {"type": "chunk", "chunk_id": chunk_id, "content": "…", **fields}
+
+
+def test_corpus_kinds_strips_the_collection_date() -> None:
+    """골든셋 라벨은 날짜를 뗀 주소(`logical`)를 쓰고 청크는 날짜를 달고 있다.
+
+    이 한 줄이 없으면 **모든 문항이 `(코퍼스 밖)`** 이 된다 — 조인이 통째로 어긋나는데
+    표에는 칸 하나로만 보여서 알아채기 어렵다.
+    """
+    kinds = score.corpus_kinds([_chunk("law-a__20260827#제1조", trust_level="law")])
+    assert kinds == {"law-a#제1조": "law"}
+
+
+def test_corpus_kinds_reads_whichever_axis_it_is_given() -> None:
+    """축은 고르는 것이다 — `trust_level` 로는 안 보이는 것이 `source_id` 로는 보인다 (RAG-060)."""
+    rows = [_chunk("x__20260827#c", trust_level="official", source_id="benefit24-services")]
+    assert score.corpus_kinds(rows, "source_id") == {"x#c": "benefit24-services"}
+
+
+def test_question_kind_joins_every_kind_an_or_group_touches() -> None:
+    """`must` 는 요구 목록이고 그 안이 OR 이다. #217 이 FW1 을 *"시행령 조문 OR 해설"* 로
+    넓히면서 **한 문항이 두 종류에 걸치는 자리**가 실제로 생겼다 — 어느 한쪽으로 몰아 세면
+    그 문항이 어느 칸에서도 정직하지 않다.
+    """
+    kinds = {"decree#제11조": "law", "easylaw#h2-5": "official"}
+    assert score.question_kind([["decree#제11조", "easylaw#h2-5"]], kinds) == "law+official"
+
+
+def test_question_kind_separates_no_label_from_label_off_corpus() -> None:
+    """*"잴 것이 없다"* 와 *"잴 것이 있는데 코퍼스에 없다"* 는 다른 자리다.
+
+    한 칸으로 뭉치면 `expect: abstain`·`refuse` 문항(라벨이 없는 것이 정상)과 라벨이 낡아
+    조인이 깨진 문항이 같이 앉는다 — 뒤쪽은 고쳐야 할 것인데 앞쪽에 섞여 안 보인다.
+    """
+    assert score.question_kind([], {"a": "law"}) == score.NO_MUST
+    assert score.question_kind([["없는라벨"]], {"a": "law"}) == score.OFF_CORPUS
+
+
+def test_slice_rows_sums_back_to_the_totals() -> None:
+    """**모든 칸을 더하면 `score_rows` 와 정확히 같다.** 이 카드는 지표를 *분해*하는 것이지
+    새로 *계산*하는 것이 아니라서, 총계가 한 칸이라도 움직이면 그것은 버그다.
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("[1] 근거입니다", [_dump_hit("guide-b#h1", "must")], cited=[]),
+        _row("모르겠습니다", [_dump_hit("law-a#제1조", "-")], cited=["제9조"]),
+    ]
+    for row, qid in zip(rows, ["A", "B", "C"]):
+        row["id"] = qid
+    qkinds = {"A": "law", "B": "official", "C": "law"}
+
+    sliced = score.slice_rows(rows, qkinds)
+    total = score.score_rows(rows)
+    for key in ("n", "cited", "grounded"):
+        assert sum(cell[key] for cell in sliced.values()) == total[key]
+    assert sliced["law"] == {"n": 2, "cited": 2, "grounded": 1}
+    assert sliced["official"] == {"n": 1, "cited": 0, "grounded": 1}
+
+
+def test_slice_rows_keeps_questions_the_goldenset_dropped() -> None:
+    """골든셋에서 지워진 옛 문항을 **조용히 빼지 않는다.**
+
+    `grade_expect` 는 그것을 건너뛰지만(채점할 기대가 없어서다) 여기서 건너뛰면 랩마다 다른
+    만큼 분모가 줄어드는데 표에는 그 사실이 안 나온다 — 그러면 이 표는 자기가 고치려던 병
+    (총계가 무엇을 감추는가)을 그대로 반복한다.
+    """
+    row = _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"])
+    row["id"] = "사라진문항"
+    sliced = score.slice_rows([row], {"Q3": "law"})
+    assert sliced == {score.OFF_GOLDENSET: {"n": 1, "cited": 1, "grounded": 1}}
+
+
+def test_kind_order_puts_real_kinds_before_the_bracketed_ones() -> None:
+    kinds = [score.NO_MUST, "official", score.OFF_CORPUS, "law"]
+    assert sorted(kinds, key=score.kind_order) == [
+        "law", "official", score.NO_MUST, score.OFF_CORPUS]

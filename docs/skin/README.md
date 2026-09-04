@@ -17,7 +17,7 @@
 
 - **"어떻게 돌리나"** 는 코드 옆 README 에 둡니다. 여기는 **"왜"와 "지금 어디까지"** 입니다
 - 오케스트레이션이 스킨을 **HANDOFF** 하는 규칙은 스킨이 아니라 오케스트레이션의
-  결정입니다 (`orchestration-routing.md` 의 인가 매트릭스, D-036)
+  결정입니다 (`docs/orchestration/routing.md` 의 인가 매트릭스, D-036)
 - 앱이 사진을 찍고 네모를 맞추는 흐름은 앱 저장소(`SAJOYO/DAENGS_APP`)의
   `HISTORY.md` 에 있습니다
 

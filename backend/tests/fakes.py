@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
+from daengs_backend.repositories import answer_report as answer_report_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import gait_record as gait_repo
@@ -117,6 +118,7 @@ class FakeSession:
         self.commits = 0
         self.rollbacks = 0
         self.flushes = 0
+        self.refreshes = 0
 
     async def flush(self) -> None:
         """진짜 세션은 여기서 DB 기본값(id)을 받아 옵니다.
@@ -126,9 +128,29 @@ class FakeSession:
         """
         self.flushes += 1
 
+    async def refresh(self, obj: object) -> None:
+        """진짜 세션은 여기서 서버 기본값(`created_at` 등)을 읽어 옵니다.
+
+        가짜는 아무것도 안 합니다 — `Fake*` 는 만들어질 때 그 값을 이미 갖고 있어서,
+        서비스가 refresh 뒤에 그 칸을 읽는 흐름이 그대로 돕니다 (`flush` 와 같은 이유).
+        """
+        self.refreshes += 1
+
     async def commit(self) -> None:
         self.commits += 1
         if self.store is not None:
+            # 신고의 UNIQUE (turn_id, app_user_id) 는 **여기서** 터집니다. 진짜 DB 와
+            # 같은 자리라야 서비스의 `except IntegrityError → rollback` 이 실제로 돕니다.
+            for pending in self.store.answer_reports_pending:
+                if any(
+                    r.turn_id == pending.turn_id
+                    and r.app_user_id == pending.app_user_id
+                    for r in self.store.answer_reports
+                ):
+                    raise IntegrityError("duplicate", None, Exception("duplicate"))
+            self.store.answer_reports.extend(self.store.answer_reports_pending)
+            self.store.answer_reports_pending.clear()
+
             self.store.audit_log.extend(self.store.audit_pending)
             self.store.audit_pending.clear()
 
@@ -138,6 +160,7 @@ class FakeSession:
             # 커밋 안 된 감사 행은 여기서 사라집니다. 진짜 `get_session` 도
             # 커밋하지 않은 변경을 버리고 닫습니다 (core/database.py).
             self.store.audit_pending.clear()
+            self.store.answer_reports_pending.clear()
 
 
 class Store:
@@ -168,6 +191,15 @@ class Store:
         self.chat_sessions: list[FakeChatSession] = []
         self.chat_turns: list[FakeChatTurn] = []
         self.chat_summaries: list[FakeChatSummary] = []
+
+        #: AI 답변 신고 (A1 · D-053). 진짜는 turn_id FK 가 CASCADE 라 대화가 지워지면
+        #: 같이 사라지는데, 가짜는 그 배선을 흉내 내지 않습니다 — 그 동작은 SQL 의
+        #: 몫이라 verify 스크립트로 지킵니다.
+        self.answer_reports: list[FakeAnswerReport] = []
+        #: 아직 커밋 안 된 신고. 감사 행과 같은 이유로 나눠 둡니다 — **중복은
+        #: commit 에서 터져야** 서비스의 `except IntegrityError` 경로를 테스트가
+        #: 실제로 지나갑니다 (진짜 `session.add()` 는 예외를 내지 않습니다).
+        self.answer_reports_pending: list[FakeAnswerReport] = []
 
         #: 감사 기록. **둘로 나눈 것이 핵심**입니다 — `audit_pending` 은 세션에
         #: 얹기만 한 것이고, 커밋해야 `audit_log` 로 넘어갑니다 (FakeSession).
@@ -327,6 +359,22 @@ class FakeChatSummary:
         default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
     )
     completed_at: datetime | None = None
+    created_at: datetime = field(
+        default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
+
+
+@dataclass
+class FakeAnswerReport:
+    """AnswerReport 대역. **답변 원문이 없습니다** — turn_id 가 그것을 가리킵니다."""
+
+    turn_id: uuid.UUID
+    app_user_id: uuid.UUID
+    reason: str
+    status: str = "open"
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 9, 1, tzinfo=UTC)
     )
@@ -963,5 +1011,114 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return entry
 
     monkeypatch.setattr(admin_audit_log_repo, "add", audit_add)
+
+    # -----------------------------------------------------------------------
+    # AI 답변 신고 (A1 · D-053)
+    # -----------------------------------------------------------------------
+
+    def _turn(turn_id):
+        return next((t for t in store.chat_turns if t.id == turn_id), None)
+
+    async def report_get_owned_turn(session, *, turn_id, app_user_id):
+        """**소유 확인이 이 대역의 핵심입니다.** 진짜는 chat_sessions 조인으로 거르고,
+        여기서도 같은 경로로 걸러야 "남의 turn 은 404" 를 테스트가 볼 수 있습니다."""
+        turn = _turn(turn_id)
+        if turn is None:
+            return None
+        owner = next(
+            (c for c in store.chat_sessions if c.id == turn.session_id), None
+        )
+        if owner is None or owner.app_user_id != app_user_id:
+            return None
+        return turn
+
+    async def report_add(session, *, turn_id, app_user_id, reason):
+        """얹기만 합니다 — 진짜 `session.add()` 도 그렇습니다.
+
+        중복은 `FakeSession.commit()` 이 터뜨립니다. 여기서 터뜨리면 서비스의
+        `try: commit / except IntegrityError` 를 건너뛰어, **정작 지키려던 경로를
+        테스트가 안 지나갑니다.**
+        """
+        report = FakeAnswerReport(
+            turn_id=turn_id,
+            app_user_id=app_user_id,
+            reason=reason,
+            created_at=store.tick(),
+        )
+        store.answer_reports_pending.append(report)
+        return report
+
+    async def report_get_by_id(session, report_id):
+        return next((r for r in store.answer_reports if r.id == report_id), None)
+
+    async def report_get_turn(session, turn_id):
+        return _turn(turn_id)
+
+    async def report_count_for_turn(session, turn_id):
+        return sum(1 for r in store.answer_reports if r.turn_id == turn_id)
+
+    async def report_count_for_turns(session, turn_ids):
+        wanted = set(turn_ids)
+        counts: dict = {}
+        for r in store.answer_reports:
+            if r.turn_id in wanted:
+                counts[r.turn_id] = counts.get(r.turn_id, 0) + 1
+        return counts
+
+    async def report_turn_position(session, turn):
+        done = sorted(
+            (
+                t
+                for t in store.chat_turns
+                if t.session_id == turn.session_id
+                and t.processing_status == "completed"
+            ),
+            key=lambda t: (t.created_at, t.id),
+        )
+        if turn.processing_status != "completed":
+            return len(done), 0
+        return len(done), done.index(turn) + 1
+
+    async def report_list_reports(session, *, limit, before=None, status=None):
+        rows = sorted(
+            store.answer_reports, key=lambda r: (r.created_at, r.id), reverse=True
+        )
+        if status is not None:
+            rows = [r for r in rows if r.status == status]
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < before]
+        out = []
+        for r in rows[:limit]:
+            reviewer = next(
+                (a for a in store.admins if a.id == r.reviewed_by), None
+            )
+            out.append(
+                (r, getattr(reviewer, "login_id", None), getattr(reviewer, "name", None))
+            )
+        return out
+
+    async def report_get_with_reviewer(session, report_id):
+        report = next((r for r in store.answer_reports if r.id == report_id), None)
+        if report is None:
+            return None
+        reviewer = next((a for a in store.admins if a.id == report.reviewed_by), None)
+        return (
+            report,
+            getattr(reviewer, "login_id", None),
+            getattr(reviewer, "name", None),
+        )
+
+    monkeypatch.setattr(answer_report_repo, "get_owned_turn", report_get_owned_turn)
+    monkeypatch.setattr(answer_report_repo, "add", report_add)
+    monkeypatch.setattr(answer_report_repo, "get_by_id", report_get_by_id)
+    monkeypatch.setattr(answer_report_repo, "get_turn", report_get_turn)
+    monkeypatch.setattr(answer_report_repo, "count_for_turn", report_count_for_turn)
+    monkeypatch.setattr(answer_report_repo, "count_for_turns", report_count_for_turns)
+    monkeypatch.setattr(answer_report_repo, "turn_position", report_turn_position)
+    monkeypatch.setattr(answer_report_repo, "list_reports", report_list_reports)
+    monkeypatch.setattr(
+        answer_report_repo, "get_with_reviewer", report_get_with_reviewer
+    )
+
 
     return store

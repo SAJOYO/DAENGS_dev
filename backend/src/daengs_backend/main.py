@@ -16,6 +16,7 @@ from daengs_backend.routers import (
     admin_account,
     admin_audit,
     app_auth,
+    app_report,
     app_user_admin,
     assistant,
     auth,
@@ -25,6 +26,7 @@ from daengs_backend.routers import (
     health,
     metrics,
     pet,
+    report_admin,
     status,
     territory,
     training,
@@ -184,6 +186,10 @@ app.include_router(assistant.router)
 # 대화 기록(`/app/chats`)과 저장된 AI 요약. 라우터가 CurrentAppUser 로 잠겨 있습니다 —
 # 신원으로 남의 것을 걸러야 해서 `admin_or_app_user` 를 쓰지 않습니다 (core/deps.py).
 app.include_router(chat.router)
+# AI 답변 신고 접수 (`/app/reports` · A1 · D-053). `CurrentAppUser` 라 **본인 대화의
+# turn 만** 신고할 수 있습니다 — 남의 turn_id 는 404 입니다. 답변 원문은 받지 않습니다
+# (turn_id 가 chat_turns 를 가리킵니다 — D-048).
+app.include_router(app_report.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
 # 운영 지표 (#223 · 콘솔 로드맵 B3). 제품 테이블(chat_*)을 세기만 하고 **원문은 스키마에
@@ -203,6 +209,10 @@ app.include_router(admin_account.router)
 # 봅니다. 나가는 개인정보는 전부 마스킹이라 권한이 `READ` 이고, 원문을 여는 문은 짝
 # 카드(#212)가 `pii:read` 로 따로 냅니다.
 app.include_router(app_user_admin.router)
+# 신고 조회·처리 (`/admin/reports` · A1 · D-053). 권한은 `ADMIN_MANAGE` 입니다 — 신고된
+# 답변을 여는 것은 **회원의 대화 원문을 보는 일**이라, 계정 관리와 같은 등급으로 묶었습니다.
+# **목록은 감사에 안 남기고 상세만 남깁니다** — `pii_revealed` 가 그은 선과 같습니다.
+app.include_router(report_admin.router)
 # 상태 페이지 (#180 · 콘솔 로드맵 B1). 읽기 전용이고 DB 를 바꾸지 않습니다.
 # `/health` 와 다른 자리입니다 — 저기는 모니터링이 읽고 DB 가 죽으면 503 이며,
 # 여기는 사람이 읽고 항목 하나가 죽어도 200 으로 나머지를 보여 줍니다.

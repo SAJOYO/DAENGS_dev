@@ -24,10 +24,17 @@ from daengs_backend.models.admin_audit_log import (
     AUDIT_LOGIN_FAILED_PASSWORD,
     AUDIT_LOGIN_FAILED_UNKNOWN_ID,
     AUDIT_LOGIN_SUCCESS,
+    AUDIT_REPORT_RESOLVED,
+    AUDIT_REPORT_TURN_REVEALED,
     AUDIT_TARGET_TYPES,
     AdminAuditLog,
 )
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
+from daengs_backend.models.answer_report import (
+    ANSWER_REPORT_STATUSES,
+    REASON_MAX_CHARS,
+    AnswerReport,
+)
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
 from daengs_backend.models.chat import (
@@ -70,6 +77,7 @@ __all__ = [
     "ADMIN_STATUSES",
     "APP_USER_STATUSES",
     "AUDIT_ACCOUNT_CREATED",
+    "ANSWER_REPORT_STATUSES",
     "AUDIT_ACCOUNT_PASSWORD_CHANGED",
     "AUDIT_ACCOUNT_REACTIVATED",
     "AUDIT_ACCOUNT_ROLE_CHANGED",
@@ -82,9 +90,12 @@ __all__ = [
     "AUDIT_LOGIN_FAILED_PASSWORD",
     "AUDIT_LOGIN_FAILED_UNKNOWN_ID",
     "AUDIT_LOGIN_SUCCESS",
+    "AUDIT_REPORT_RESOLVED",
+    "AUDIT_REPORT_TURN_REVEALED",
     "AUDIT_TARGET_TYPES",
     "CHAT_PROCESSING_STATUSES",
     "CHAT_SUMMARY_STATUSES",
+    "REASON_MAX_CHARS",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",
     "GAIT_STATUSES",
@@ -94,6 +105,7 @@ __all__ = [
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
     "WALK_ANALYSIS_STATES",
+    "AnswerReport",
     "AdminAuditLog",
     "AdminUser",
     "AppUser",

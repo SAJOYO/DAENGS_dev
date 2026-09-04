@@ -35,6 +35,7 @@ from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
 from .stages import load as loader
 from .stages import score as scorer
+from .core import transport
 from .stages import search as searcher
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -260,6 +261,17 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _expect(item) -> str:
+    """`expect` 가 기본(`answer`)이 아닌 문항만 화면에 표시한다 (RAG-055).
+
+    기본값을 안 찍는 것은 30문항 중 27개가 `answer` 라서다 — 전부 찍으면 **다른 셋이 묻힌다.**
+    """
+    if item.expect == "answer":
+        return ""
+    code = f" ({item.refusal_code})" if item.refusal_code else ""
+    return f"   → 기대: {item.expect}{code}"
+
+
 def cmd_goldenset(args: argparse.Namespace) -> int:
     """골든셋 라벨이 실제 청크를 가리키는지 검사한다 (RAG-022 ⑥).
 
@@ -271,17 +283,27 @@ def cmd_goldenset(args: argparse.Namespace) -> int:
     problems, warnings = goldenset.verify(gs, index)
 
     origin = collections.Counter(i.origin for i in gs.items)
+    expect = collections.Counter(i.expect for i in gs.items)
+    addresses = sum(len(i.must_flat) for i in gs.items)
     print(f"골든셋 {len(gs.items)}문항 (hand {origin['hand']} · easylaw {origin['easylaw']})  "
-          f"필수 {gs.must_total}  보강 {sum(len(i.nice) for i in gs.items)}  "
+          f"필수 {gs.must_total}요구/{addresses}주소  보강 {sum(len(i.nice) for i in gs.items)}  "
           f"분모 제외 {sum(len(i.unavailable) for i in gs.items)}")
+    # **요구와 주소를 갈라 찍는다** (RAG-055). 한 요구 안의 대안을 늘리면 주소만 늘고 요구는
+    # 그대로여야 하는데, 한 수만 찍으면 그 불변식이 화면에서 안 보인다
+    print(f"기대  답변 {expect['answer']}  ·  기권 {expect['abstain']}  ·  거절 {expect['refuse']}")
     print(f"코퍼스 {len(index)}청크  ·  라벨 기준 {gs.corpus.collected_on}")
 
     if args.verbose:
         for item in gs.items:
-            print(f"\n  [{item.id}] ({item.origin}) {item.question}")
-            for tier, addrs in (("must", item.must), ("nice", item.nice)):
-                for a in addrs:
-                    print(f"    {tier:4s} {'OK  ' if a in index else '없음 '}{a}")
+            print(f"\n  [{item.id}] ({item.origin}) {item.question}{_expect(item)}")
+            for n, group in enumerate(item.must, 1):
+                # **요구 번호를 찍는다** (RAG-055) — 안 찍으면 "대안이 둘"과 "요구가 둘"이
+                # 화면에서 똑같아 보이고, 그 둘은 Recall 분모가 다르다
+                for j, a in enumerate(group):
+                    tier = f"must{n}" if j == 0 else "또는"
+                    print(f"    {tier:>6s} {'OK  ' if a in index else '없음 '}{a}")
+            for a in item.nice:
+                print(f"    {'nice':>6s} {'OK  ' if a in index else '없음 '}{a}")
             for u in item.unavailable:
                 print(f"    ----      {u.ref}  ({u.reason})")
 
@@ -344,7 +366,9 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
         if args.verbose:
             k = evaluate.JUDGE_K
             for it in items:
-                ranks = ", ".join(str(m["rank"]) for m in it.must)
+                # 요구마다 **가장 좋은 대안**의 순위다 (RAG-055). `-` 는 top 밖이거나 코퍼스 밖
+                ranks = ", ".join(str(g["rank"]) if g["rank"] is not None else "-"
+                                  for g in it.must)
                 print(f"      [{it.item_id:4s}] hit@{k}={int(it.hit[k])} "
                       f"recall@{k}={it.recall[k]:.2f}  필수 순위 [{ranks}]  {it.question}")
 
@@ -356,7 +380,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     print()
     print(evaluate.markdown(summaries, verdict, gs, fingerprint, len(index)))
     print()
-    print("  ^ 위 markdown 을 docs/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
+    print("  ^ 위 markdown 을 docs/life/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
     print("    덤프는 미추적이라 이것이 뒤에 남는 전부다.")
     return 0
 
@@ -497,6 +521,9 @@ def cmd_search(args: argparse.Namespace) -> int:
             print(f"\n{head}{q}")
             if must:
                 print(f"      필수 {len(must)}개: {', '.join(sorted(must))}")
+            if excluded := transport.exclusions(q):
+                # 검문소③이 "왜 항공이 안 보이나"를 눈으로 알 수 있게 (RAG-052)
+                print(f"      교통수단 {'/'.join(sorted(transport.modes(q)))} → {', '.join(excluded)} 배제")
             hits = searcher.search(vec, k=args.k, conn=conn,
                                    include_supplementary=args.supplementary,
                                    category=args.category)
@@ -533,6 +560,18 @@ def cmd_generate(args: argparse.Namespace) -> int:
         return 1
 
     items = searcher.hand_questions() if args.questions else [("", " ".join(args.query), set(), set())]
+
+    # 문항별 반려견 프로필 (RAG-056). **`hand_questions()` 의 튜플을 안 늘린다** — 그 모양을
+    # 네 곳이 풀어 쓰고 있어서, 칸 하나 때문에 전부 고치면 이 카드가 건드릴 이유가 없는
+    # 자리까지 diff 에 들어온다. 여기서 id 로 한 번 더 읽는 편이 싸다.
+    profiles: dict[str, generator.DogProfile] = {}
+    if args.questions:
+        from .stages import goldenset as _gs
+        profiles = {i.id: generator.DogProfile(breed=i.dog.breed, age_months=i.dog.age_months)
+                    for i in _gs.load().items if i.dog is not None}
+        if profiles:
+            print(f"반려견 프로필이 붙은 문항 {len(profiles)}개: {', '.join(sorted(profiles))}")
+
     print(f"임베딩 {key}  ·  Gemini {config.settings.gemini_model}  ·  top-{args.k}")
 
     # 모델·커넥션·클라이언트를 **여기서 만들어 넘긴다** — RAG-028 ①의 수명 규약이다. 질의 7개마다
@@ -551,7 +590,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
             for qid, q, must, nice in items:
                 a = generator.ask(q, k=args.k, include_supplementary=args.supplementary,
                                   category=args.category, model_key=key,
-                                  st=st, conn=conn, client=client)
+                                  st=st, conn=conn, client=client, dog=profiles.get(qid))
                 answers.append((qid or "-", a, must, nice))
 
                 print()
@@ -623,13 +662,69 @@ def cmd_score_laps(_: argparse.Namespace) -> int:
 
     print(f"{'랩':6} {'문항':>4}   {'현행(cited)':>12}   {'근거인용(grounded, RAG-029)':>28}")
     print("-" * 60)
+    laps = []
     for path in paths:
         header, rows = io.read_answers(path)
         s = scorer.score_rows(rows)
         n = s["n"]
         if not n:
             continue
+        laps.append((path.stem, rows))
         print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
+
+    _print_expect_table(laps)
+    return 0
+
+
+def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
+    """`expect` 채점 — "답했나 말았나" (RAG-055).
+
+    **정책을 하나 고르지 않고 나란히 찍는다.** 카드 #177 이 *"골든셋으로 잰 뒤 고른다 — 착수 전
+    결정 금지"* 라고 못 박은 자리라, 이 표가 그 결정의 근거다. `none` 이 지금 서빙이 하는 것이고
+    나머지가 후보다.
+
+    두 방향을 갈라 찍는 이유는 한 수로 합치면 정반대의 정책이 같은 점수를 받기 때문이다 —
+    아무것도 기권 안 하는 정책과 전부 기권하는 정책이 그렇다.
+    """
+    gs = goldenset.load()
+    expects = {i.id: i.expect for i in gs.items}
+    codes = {i.id: i.refusal_code for i in gs.items if i.refusal_code}
+    boundary = {i.id for i in gs.items if i.expect != "answer"}
+    scored = [(stem, rows) for stem, rows in laps
+              if boundary & {r.get("id") for r in rows}]
+    if not scored:
+        print("\n기대 채점(RAG-055): 경계 문항을 가진 랩이 없다 —"
+              " `rag generate --questions --lap lapN` 으로 새 랩을 떠야 잰다")
+        return 0
+
+    for stem, rows in scored:
+        base = scorer.grade_expect(rows, expects, "none", codes)
+        head = f"\n기대 채점 — {stem}  (채점 가능 {base['gradable']}문항"
+        if base["unmeasurable"]:
+            head += (f" · refuse {base['unmeasurable']}문항은 이 랩에 `boundary` 칸이 없어 못 잰다"
+                     " — 덤프 VERSION 2 부터 있다")
+        print(head + ")")
+
+        if base["refuse_n"]:
+            # **거절은 정책과 무관하다** — 생성이 질문을 보고 낸 값이라 기권 문턱을 바꿔도
+            # 안 변한다. 정책 표에 섞으면 같은 수가 줄마다 되풀이돼 읽는 사람을 헷갈리게 한다
+            print(f"  거절(생성이 낸 boundary) — 맞음 "
+                  f"{base['refuse_n'] - base['missed_refuse'] - base['wrong_code']}"
+                  f"/{base['refuse_n']}  ·  놓침 {base['missed_refuse']}"
+                  f"  ·  코드 다름 {base['wrong_code']}"
+                  f"  ·  경계 아닌데 거절 {base['false_refuse']}")
+
+        print(f"  {'정책':24} {'통과':>7}   {'오기권':>18}   {'놓친 기권':>16}")
+        print("  " + "-" * 72)
+        for name in scorer.ABSTAIN_POLICIES:
+            g = scorer.grade_expect(rows, expects, name, codes)
+            mark = " ←현행" if name == "none" else ""
+            print(f"  {name:24} {g['passed']:>3}/{g['gradable']:<3}"
+                  f"   {g['false_abstain']:>8}/{g['answer_n']:<8}"
+                  f"   {g['missed_abstain']:>7}/{g['abstain_n']:<7}{mark}")
+        print("  오기권 = 답해야 하는데 기권(신호가 과하게 켜졌다) ·"
+              " 놓친 기권 = 기권해야 하는데 답함(신호가 안 켜졐다)".replace("켜졐", "켜졌"))
+        print("  통과 수에는 거절 채점도 들어간다 — 정책이 같아도 랩이 다르면 이 칸이 움직인다")
     return 0
 
 

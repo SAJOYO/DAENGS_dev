@@ -18,8 +18,13 @@ from daengs_life.realtime.config import KST
 from daengs_life.realtime.geo import Grid, LatLon, to_grid
 from daengs_life.realtime.observation import Code, Interval, Measurement, Q, Source, StateKind
 from daengs_life.realtime.providers import (
-    airkorea_realtime, airkorea_stations, kakao_local, kma_apihub, kma_life_index,
-    kma_vilage_fcst, kma_warning,
+    airkorea_realtime,
+    airkorea_stations,
+    kakao_local,
+    kma_apihub,
+    kma_life_index,
+    kma_vilage_fcst,
+    kma_warning,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "realtime"
@@ -133,6 +138,42 @@ def test_nowcast_base_time_waits_the_forty_minutes() -> None:
     assert kma_vilage_fcst.ncst_base(datetime(2026, 8, 25, 10, 45, tzinfo=KST)) == ("20260825", "1000")
 
 
+def test_historical_nowcast_uses_the_exact_requested_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_get(path, params, *, budget=None):
+        seen.update(path=path, params=params, budget=budget)
+        return {"items": {"item": []}}
+
+    monkeypatch.setattr(kma_vilage_fcst.datagokr, "get", fake_get)
+    at = datetime(2026, 8, 25, 9, tzinfo=KST)
+    got = kma_vilage_fcst.raw_ncst_at(GRID, at)
+
+    assert got == {"items": {"item": []}}
+    assert str(seen["path"]).endswith("/getUltraSrtNcst")
+    assert seen["params"] == {
+        "base_date": "20260825",
+        "base_time": "0900",
+        "nx": 61,
+        "ny": 125,
+        "numOfRows": 10,
+    }
+
+
+@pytest.mark.parametrize(
+    "at",
+    [
+        datetime(2026, 8, 25, 9, tzinfo=KST).replace(tzinfo=None),
+        datetime(2026, 8, 25, 9, 1, tzinfo=KST),
+    ],
+)
+def test_historical_nowcast_requires_an_aware_exact_hour(at: datetime) -> None:
+    with pytest.raises(ValueError):
+        kma_vilage_fcst.raw_ncst_at(GRID, at)
+
+
 # ---------------------------------------------------- airkorea-realtime (D · E)
 
 def test_station_readings_carry_the_hourly_grade_not_the_daily_one() -> None:
@@ -175,7 +216,7 @@ def test_the_regional_forecast_is_a_state_not_a_value() -> None:
     """모양 E — `informGrade` 가 `"서울 : 좋음,제주 : 좋음,…"` 한 문자열이다 (②-a)."""
     states = airkorea_realtime.parse_frcst(load("airkorea-realtime.frcst.json"), "서울")
     assert states
-    today = [s for s in states if s.valid_from.date() == datetime(2026, 8, 25).date()]
+    today = [s for s in states if s.valid_from.date() == datetime(2026, 8, 25, tzinfo=KST).date()]
     assert today and today[0].kind is StateKind.AIR_FORECAST
     assert today[0].category == "좋음"            # 기관 라벨 그대로 (②-d-2)
     assert today[0].area == "서울"

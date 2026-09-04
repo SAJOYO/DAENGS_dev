@@ -24,7 +24,10 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import REFRESH_TTL
 from daengs_backend.models import AppUser
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
+from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.services import pet as pet_service
 from daengs_backend.services import session as session_service
 from daengs_backend.services.session import (
     InvalidRefreshTokenError,
@@ -243,13 +246,38 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         # 이미 없습니다. 탈퇴는 여러 번 불러도 같은 결과여야 합니다.
         return
 
-    user.status = "withdrawn"
-    # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
-    user.email_enc = None
-    user.email_hash = None
-    user.phone_enc = None
-    user.name_enc = None
+    try:
+        # **산책이 먼저입니다.** 강아지를 먼저 지우면 walk_pets 연결만 사라지고,
+        # 사람 소유인 walks와 집·생활권을 드러내는 좌표는 그대로 남습니다.
+        deleted_walks = await walk_repo.delete_all_for_owner(session, user.id)
+        deleted_pets = await pet_service.delete_all_for_owner(session, user.id)
 
-    count = await session_service.drop_all(session, SubjectType.APP, user.id)
-    await session.commit()
-    logger.info("앱 회원 탈퇴 (app_user=%s, 끊은 세션 %d개)", user.id, count)
+        # 대화는 pets 를 지울 때 pet_id 로 함께 CASCADE 되지만, **그것에 기대지
+        # 않습니다.** app_users 행은 탈퇴해도 남기므로 app_user_id 쪽 CASCADE 는
+        # 영영 돌지 않고, 대화가 강아지와의 연결을 잃는 날이 오면 사람의 질문 원문만
+        # 조용히 남습니다. 같은 트랜잭션에서 명시로 지웁니다 (turn 은 CASCADE).
+        await chat_repo.delete_all_for_user(session, user.id)
+
+        user.status = "withdrawn"
+        # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
+        user.email_enc = None
+        user.email_hash = None
+        user.phone_enc = None
+        user.name_enc = None
+        user.room_name = None
+        user.primary_pet_id = None
+
+        token_count = await session_service.drop_all(session, SubjectType.APP, user.id)
+        await session.commit()
+    except Exception:
+        # 요청 의존성도 닫힐 때 rollback하지만, 여기서 명시해야 이 함수를 다른
+        # 진입점에서 불러도 반쪽 탈퇴가 남지 않습니다.
+        await session.rollback()
+        raise
+    logger.info(
+        "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 끊은 세션 %d개)",
+        user.id,
+        deleted_pets,
+        deleted_walks,
+        token_count,
+    )

@@ -1,0 +1,61 @@
+{
+  "request_id": "fx-refinement-0007",
+  "status": "UNCERTAIN",
+  "message": "바로 검색하기 어려운 기준이 있어요. 아래 선택지로 뜻을 좁혀주세요.",
+  "results": [
+    {
+      "capability": "place",
+      "status": "ABSTAINED",
+      "data": {
+        "contract_version": "place-capability-v1",
+        "answer": "바로 검색하기 어려운 기준이 있어요. 아래 선택지로 뜻을 좁혀주세요.",
+        "interpretation_summary": {
+          "status": "needs_clarification",
+          "disposition": "literal_target",
+          "resolution": "single_interpretation",
+          "message": "선택이 필요한 검색 기준을 찾았어요."
+        },
+        "groups": [],
+        "refinements": [
+          {
+            "lens_id": "signal.dog_size",
+            "label": "반려견 크기",
+            "required": true,
+            "support_note": "크기에 따라 입장 가능 여부가 달라져요.",
+            "options": [
+              {
+                "id": "small",
+                "label": "소형견",
+                "availability": "available",
+                "support_note": "10kg 이하"
+              },
+              {
+                "id": "large",
+                "label": "대형견",
+                "availability": "available",
+                "support_note": "10kg 초과"
+              }
+            ]
+          }
+        ],
+        "notices": [
+          {
+            "code": "place.searched_around_current_location",
+            "message": "현재 기기 위치를 기준으로 찾았어요. 질문에 지역 이름이 있어도 아직 그 지역으로는 찾지 못하고, 반영하지 않았습니다.",
+            "lens_id": null
+          }
+        ]
+      },
+      "abstention": {
+        "code": "place_needs_clarification",
+        "message": "바로 검색하기 어려운 기준이 있어요. 아래 선택지로 뜻을 좁혀주세요."
+      },
+      "refusal": null,
+      "job": null,
+      "error": null,
+      "elapsed_ms": 1980
+    }
+  ],
+  "handoffs": [],
+  "clarify": null
+}

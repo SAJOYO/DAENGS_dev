@@ -26,11 +26,12 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
 
     source_id TEXT NOT NULL,
 
-    -- 'due'    = Beat 가 주기 판정으로 고른 것
-    -- 'manual' = 관리자가 이름을 대고 부른 것 (RAG-001 요구사항 ②③)
+    -- 'due'      = Beat 가 주기 판정으로 고른 것
+    -- 'manual'   = 관리자가 이름을 대고 부른 것 (RAG-001 요구사항 ②③)
+    -- 'revision' = Beat 가 개정 판정으로 깨운 것 — cadence 가 manual 인 법령은 이 길로만 받는다 (RAG-054)
     -- 같은 함수를 지나가지만 화면에서 갈라 보여야 한다.
     trigger TEXT NOT NULL
-        CHECK (trigger IN ('due','manual')),
+        CHECK (trigger IN ('due','manual','revision')),
 
     -- 'unavailable' 을 'failed' 와 가른다. 키 미설정·시드 URL 사망은 **실패가 아니라
     -- "아직 못 하는 것"** 이라 사람이 고쳐야 하고, 화면에서 다르게 보여야 한다.

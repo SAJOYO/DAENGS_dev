@@ -17,7 +17,7 @@
   대한항공·아시아나 ❌ ReadTimeout / 제주항공·티웨이 ❌ robots.txt 403
 
 **`robots.txt` 는 정적 파일이라 CDN 이 챌린지 없이 내주고, 챌린지는 본문 페이지에서만 걸린다.**
-그래서 robots 만 보면 "열려 있다"가 나온다 (`docs/data-sources.md` §12). 에어서울은 첫 요청이
+그래서 robots 만 보면 "열려 있다"가 나온다 (`docs/life/data-sources.md` §12). 에어서울은 첫 요청이
 200 이었다가 몇 요청 뒤 403 이 됐다 — **빈도로 켜진다.** 셋 다 우회하지 않는다.
 
 **회사를 늘리는 자리는 `_ADAPTERS` 다.** 막힌 곳이 열리면 어댑터를 하나 더한다.
@@ -181,7 +181,7 @@ class AirlinesPetPages(Source):
     format = "html"
     trust_level = "official"
     # 공공저작물이 아니라 항공사 저작물이다. 원본은 `data/` 에만 두고(RAG-017),
-    # 서비스 표출 시 출처 표기가 필수다 (docs/data-sources.md §12)
+    # 서비스 표출 시 출처 표기가 필수다 (docs/life/data-sources.md §12)
     license = "항공사 저작물 — 인용 시 출처 표기"
 
     # ------------------------------------------------------------ discover

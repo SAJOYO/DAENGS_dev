@@ -1,0 +1,227 @@
+"""Deterministic route planning around the semantic decision (D-041, Card 2B).
+
+Two responsibilities, both deterministic:
+
+1. Resolve the approved machine-readable routing signal (`requested_capability`,
+   routing doc §1) before any LLM call. It is a routing signal, never
+   authorization (D-036), and no new deterministic signals are invented here.
+2. Assemble the real Card 1 RoutePlan from a SemanticRoutingDecision using only
+   the trusted query/context: Training/Life carry the exact original query, Walk
+   and Place coordinates come only from context.location, handoff reasons are
+   fixed, and missing coordinates produce an exclusive CLARIFY.
+
+**Payloads are built by an exhaustive per-capability branch, never by a fallback**
+(D-051). Until v7 the loop read `if capability in {"training","life"}: … else:
+{lat, lon}`, so every capability that was not Training or Life silently received a
+WalkPayload shape. That was correct only while Walk was the sole coordinate
+capability; the moment `place` became selectable it would have handed Place a
+payload with no `query`, failing PlacePayload validation and surfacing as a
+top-level FAILED on exactly the queries Place was added to answer. The `else`
+below therefore raises: a new ExecuteName must state its payload here or stop the
+request loudly, never inherit another capability's shape.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+from daengs_backend.orchestration.contracts import RoutePlan, RouterKind
+from daengs_backend.orchestration.semantic import ROUTER_MODEL_ID, SemanticRoutingDecision
+
+# Requests are emitted in this order regardless of the order the router listed them.
+# The model's list order is not stable — a live v7 probe returned both ["place","walk"]
+# and ["walk","place"] for the same shape of query — and that order is user-visible,
+# because `aggregate_results` builds the "[산책] … [장소] …" sections from it. Two
+# identical questions should not produce two differently-ordered answers. The frozen
+# router benchmark is unaffected either way: `_semantic_plan_key` compares requests as
+# a multiset. Order follows the `CapabilityName` declaration order.
+_EXECUTION_ORDER = ("training", "life", "walk", "place")
+_EXECUTE_NAMES = frozenset(_EXECUTION_ORDER)
+_EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
+# Capabilities whose payload carries trusted coordinates. Missing coordinates make
+# the whole plan a CLARIFY, so this set is what the coordinate gate reads.
+_NEEDS_COORDINATES = frozenset({"walk", "place"})
+_QUESTION_CAPABILITIES = frozenset({"training", "life"})
+_HANDOFF_REASONS = {
+    "skin": "image_upload_required",
+    "gait": "video_upload_required",
+}
+# The assistant contract's South Korea box. Place's own service accepts a wider box
+# (lat 32~40 · lng 123~133); the public boundary deliberately stays the stricter one
+# so Place cannot loosen validation for everyone else (discovery-migration.md §5).
+_COORDINATE_BOUNDS = (("lat", 33.0, 39.0), ("lon", 124.0, 132.0))
+
+
+def resolve_deterministic_route(
+    *, requested_capability: str | None, query: str, context: dict[str, Any]
+) -> RoutePlan | None:
+    """Return a deterministic RoutePlan when the approved signal resolves it, else None.
+
+    Since v7, `place` is an ordinary member of `_EXECUTE_NAMES`, so the explicit signal
+    and the semantic path build the identical plan through `assemble_route_plan` —
+    PR #196 needed a separate Place branch here only because the shared assembler had
+    no Place payload rule yet. One code path is the point: a Place request assembled
+    two different ways is a Place request that can drift.
+    """
+    if requested_capability is None:
+        return None
+    if requested_capability in _EXECUTE_NAMES:
+        decision = SemanticRoutingDecision(execute=[requested_capability], handoffs=[])
+    elif requested_capability in _HANDOFF_REASONS:
+        decision = SemanticRoutingDecision(execute=[], handoffs=[requested_capability])
+    else:
+        # An unresolved signal does not fail the request; semantic routing decides.
+        return None
+    return assemble_route_plan(
+        decision, query=query, context=context, router=RouterKind.DETERMINISTIC, model=None
+    )
+
+
+def assemble_route_plan(
+    decision: SemanticRoutingDecision,
+    *,
+    query: str,
+    context: dict[str, Any],
+    router: RouterKind,
+    model: str | None = ROUTER_MODEL_ID,
+) -> RoutePlan:
+    """Build the real Card 1 RoutePlan using only trusted query/context values."""
+    needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
+    missing = _missing_coordinates(context) if needs_coordinates else []
+    if missing:
+        # CLARIFY is exclusive (O-8): nothing executes and nothing hands off first.
+        # One gate for the whole selection — a mixed Place+Walk turn with no
+        # coordinates must not run half of itself.
+        return RoutePlan.model_validate(
+            {
+                "requests": [],
+                "handoffs": [],
+                "clarify": {
+                    "question": _clarify_question(missing, needs=needs_coordinates),
+                    "missing": missing,
+                },
+                "router": router,
+                "model": model,
+            }
+        )
+
+    requests: list[dict[str, Any]] = []
+    # An unrecognized name sorts last rather than raising here, so the precise
+    # "no payload rule" error below is what surfaces instead of an index error.
+    for capability in sorted(
+        decision.execute, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
+    ):
+        payload = _payload_for(capability, query=query, context=context)
+        requests.append({"capability": capability, "payload": payload, "timeout_ms": None})
+
+    return RoutePlan.model_validate(
+        {
+            "requests": requests,
+            "handoffs": [
+                {"target": target, "reason": _HANDOFF_REASONS[target]}
+                for target in decision.handoffs
+            ],
+            "clarify": None,
+            "router": router,
+            "model": model,
+        }
+    )
+
+
+def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dict[str, Any]:
+    """The payload for one capability. Exhaustive by design — see the module docstring.
+
+    Every branch reads only the original query text and the already-validated
+    `context.location`. Nothing here is derived from model output, and Place gets the
+    user's exact words: `PlacePayload` does not strip whitespace because the Place
+    service grounds its own interpretation in literal spans of the original query.
+    """
+    if capability in _QUESTION_CAPABILITIES:
+        payload: dict[str, Any] = {"question": query}
+        if capability == "life":
+            dog = _dog_context(context)
+            if dog is not None:
+                payload["dog"] = dog
+        return payload
+    if capability == "walk":
+        location = context["location"]
+        return {"lat": location["lat"], "lon": location["lon"]}
+    if capability == "place":
+        location = context["location"]
+        return {"query": query, "lat": location["lat"], "lon": location["lon"]}
+    # A destination the router can now emit but the planner has no payload rule for.
+    # Failing here is the point: the alternative is silently sending some other
+    # capability's payload shape (D-051).
+    raise ValueError(f"no payload rule for capability {capability!r}")
+
+
+def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the trusted dog facts, dropping anything the caller did not resolve.
+
+    Same rule as ``context.location``: only the caller's structured values reach a payload,
+    never model output. A malformed or empty entry yields None rather than an error, because
+    a missing profile must not turn an answerable question into a failed request — Life
+    answers without it exactly as it did before B4.
+    """
+    dog = context.get("dog")
+    if not isinstance(dog, Mapping):
+        return None
+    resolved: dict[str, Any] = {}
+    breed = dog.get("breed")
+    if isinstance(breed, str) and breed.strip():
+        resolved["breed"] = breed
+    age_months = dog.get("age_months")
+    if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
+        resolved["age_months"] = age_months
+    return resolved or None
+
+
+def _missing_coordinates(context: dict[str, Any]) -> list[str]:
+    """Which trusted coordinate keys are absent or outside the assistant's box.
+
+    Out-of-range is treated as missing rather than clamped: a coordinate we do not
+    trust is not a coordinate, and silently moving the user somewhere inside the box
+    would answer confidently about the wrong place.
+    """
+    location = context.get("location")
+    if not isinstance(location, Mapping):
+        return ["location.lat", "location.lon"]
+    missing = []
+    for key, low, high in _COORDINATE_BOUNDS:
+        value = location.get(key)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not low <= value <= high
+        ):
+            missing.append(f"location.{key}")
+    return missing
+
+
+def _clarify_question(missing: list[str], *, needs: frozenset[str] | set[str]) -> str:
+    """The CLARIFY sentence, chosen by what the missing coordinates were for.
+
+    Only the wording varies — `clarify.missing` carries the same keys either way, and
+    the frozen router benchmark compares that list, never this text.
+    """
+    if "walk" in needs and "place" in needs:
+        if len(missing) == 2:
+            return "지금 위치의 위도와 경도를 알려주시면 산책 조건과 주변 장소를 함께 찾아볼게요."
+        if missing == ["location.lat"]:
+            return "지금 위치의 위도를 알려주세요."
+        return "지금 위치의 경도를 알려주세요."
+    if "place" in needs:
+        if len(missing) == 2:
+            return "장소를 찾을 위치의 위도와 경도를 알려주세요."
+        if missing == ["location.lat"]:
+            return "장소를 찾을 위치의 위도를 알려주세요."
+        return "장소를 찾을 위치의 경도를 알려주세요."
+    if len(missing) == 2:
+        return "산책할 위치의 위도와 경도를 알려주세요."
+    if missing == ["location.lat"]:
+        return "현재 위치의 위도를 알려주세요."
+    return "현재 위치의 경도를 알려주세요."
+
+
+__all__ = ["assemble_route_plan", "resolve_deterministic_route"]

@@ -114,7 +114,9 @@ class EvalItem(_Base):
     item_id: str
     origin: str
     question: str
-    must: list[dict[str, Any]]        # {address, chunk_id, rank} — 필수가 몇 위였나
+    # 요구 하나 = 항목 하나 (RAG-055). {alternatives: [{address, chunk_id, rank}], rank}
+    # `rank` 는 그 요구의 **가장 좋은 대안**의 순위다 — 없으면 None
+    must: list[dict[str, Any]]
     top: list[dict[str, Any]]         # {rank, chunk_id, score, tier} — 검문소②가 눈으로 보는 것
     hit: dict[int, float]
     recall: dict[int, float]
@@ -171,6 +173,34 @@ def rank_question(model: embed.Model, question: str, matrix, st=None):
     return order, sims, ranks
 
 
+def requirement_rows(item: goldenset.Item, index: dict[str, str],
+                     id_to_row: dict[str, int], ranks) -> list[dict[str, Any]]:
+    """요구 하나 → `{alternatives, rank}` 하나 (RAG-055).
+
+    **요구의 순위는 가장 좋은 대안의 순위다.** 대안은 OR — 어느 하나로 답이 성립하므로, 그중
+    제일 높이 올라온 것이 그 요구가 실제로 닿은 거리다. 그래서 대안을 늘려도 `item_metrics` 가
+    받는 목록의 **길이가 안 변하고**, Recall 분모(= 요구 수)가 그대로 유지된다.
+
+    이 규칙이 검색과 분리돼 있는 이유는 `item_metrics` 와 같다 — 벡터도 GPU 도 없이 손계산으로
+    검증할 수 있어야 하고, `tests/test_evaluate.py` 가 여기만 붙잡는다.
+
+    코퍼스 밖이거나(주소가 `index` 에 없다) 벡터가 아직 없는(행이 `id_to_row` 에 없다) 대안은
+    `rank=None` 이다. **한 요구의 대안이 전부 그러면 그 요구도 `None`** 이고, 그때는
+    `item_metrics` 의 분모에서 빠진다 — 없는 것을 0위로 세지 않는다.
+    """
+    rows = []
+    for group in item.must:
+        alternatives = []
+        for address in group:
+            chunk_id = index.get(address)
+            row = id_to_row.get(chunk_id) if chunk_id else None
+            alternatives.append({"address": address, "chunk_id": chunk_id,
+                                 "rank": int(ranks[row]) if row is not None else None})
+        found = [a["rank"] for a in alternatives if a["rank"] is not None]
+        rows.append({"alternatives": alternatives, "rank": min(found) if found else None})
+    return rows
+
+
 def score_model(key: str, gs: goldenset.GoldenSet, index: dict[str, str], *,
                 top: int = DUMP_TOP, progress=None) -> tuple[list[EvalItem], dict[str, Any]] | None:
     """모델 하나를 15문항으로 채점한다. **모델은 이 함수 안에서 올라갔다 내려간다.**
@@ -188,26 +218,25 @@ def score_model(key: str, gs: goldenset.GoldenSet, index: dict[str, str], *,
     st = embed.load_model(model)
     try:
         items: list[EvalItem] = []
-        for item in gs.items:
+        # **`scored_items` 다** — 기권·거절 문항은 정답 청크가 없어 지표가 전부 0 이고,
+        # 문항 균등 평균(RAG-024 ③)에 넣으면 세 모델의 차이를 희석만 한다 (RAG-055)
+        for item in gs.scored_items:
             if progress:
                 progress(item.id)
             order, sims, ranks = rank_question(model, item.question, matrix, st=st)
 
-            must_rows = {}
-            for address in item.must:
-                row = id_to_row.get(index[address])
-                must_rows[address] = row
-            must_ranks = [int(ranks[r]) for r in must_rows.values() if r is not None]
+            must_groups = requirement_rows(item, index, id_to_row, ranks)
+            must_ranks = [g["rank"] for g in must_groups if g["rank"] is not None]
+
+            must_chunks = {index[a] for a in item.must_flat if a in index}
             nice_rows = {index[a] for a in item.nice if a in index}
 
             m = item_metrics(must_ranks)
             items.append(EvalItem(
                 item_id=item.id, origin=item.origin, question=item.question,
-                must=[{"address": a, "chunk_id": index[a],
-                       "rank": int(ranks[r]) if r is not None else None}
-                      for a, r in must_rows.items()],
+                must=must_groups,
                 top=[{"rank": i + 1, "chunk_id": ids[int(row)], "score": round(float(sims[row]), 5),
-                      "tier": ("must" if ids[int(row)] in {index[a] for a in item.must}
+                      "tier": ("must" if ids[int(row)] in must_chunks
                                else "nice" if ids[int(row)] in nice_rows else "-")}
                      for i, row in enumerate(order[:top])],
                 hit=m["hit"], recall=m["recall"], rr=m["rr"],
@@ -236,8 +265,8 @@ def write_dump(key: str, items: list[EvalItem], gs: goldenset.GoldenSet,
         chunks_sha256=fingerprint,
         corpus_collected_on=str(gs.corpus.collected_on),
         corpus_chunk_count=gs.corpus.chunk_count,
-        goldenset_items=len(gs.items),
-        goldenset_must=gs.must_total,
+        goldenset_items=len(gs.scored_items),   # 재는 문항만 — 기권·거절은 빠진다 (RAG-055)
+        goldenset_must=gs.must_total,           # 요구의 수. 대안을 늘려도 안 변한다
         ks=list(KS), judge_k=JUDGE_K,
         evaluator_version=VERSION, evaluated_at=io.now_kst(),
     )
@@ -252,7 +281,7 @@ def markdown(summaries: dict[str, dict[str, Any]], verdict: Verdict,
     네 가지가 반드시 들어간다 (RAG-024 ④): 점수표 · `Hit@5=0` 문항 id · ① 의 어느 줄이
     적용됐나 · 코퍼스 스냅샷.
     """
-    n = len(gs.items)
+    n = len(gs.scored_items)          # 재는 문항만 (RAG-055) — 기권·거절은 이 표에 없다
     out = [f"### 판정 결과 ({io.now_kst()[:10]})", ""]
     out.append(f"코퍼스 {chunk_count}청크 · 라벨 기준 {gs.corpus.collected_on} · "
                f"`chunks_sha256` `{fingerprint[:16]}` · 골든셋 {n}문항 / 필수 {gs.must_total}")

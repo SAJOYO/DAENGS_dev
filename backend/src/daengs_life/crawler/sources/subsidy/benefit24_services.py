@@ -63,6 +63,7 @@ from urllib.parse import quote
 from ...core import config
 from ...core.fetch import FetchResult, Fetcher
 from ..base import Extracted, Source, Target
+from ._pet_keywords import KEYWORDS
 
 BASE = "https://api.odcloud.kr/api/gov24/v3"
 LIST = f"{BASE}/serviceList"
@@ -78,12 +79,12 @@ MAX_PAGES = 20                       # 폭주 방지. 한 키워드가 100건을
 FIELDS = ("서비스명", "지원내용")
 
 # **전부 복합어다.** 단독 `반려` 는 返戾(신청 반려)와 겹쳐 무관한 사업을 끌고 온다 (위 정찰).
-KEYWORDS = ("반려동물", "반려견", "반려묘", "동물등록", "중성화", "내장형", "유기동물", "광견병")
+# 목록은 `_pet_keywords` 에 있다 — `seoul-notice-api` 와 같은 것을 쓴다 (RAG-053 ④).
 
 KEY_MISSING = (
     "DATA_GO_KR_KEY 미설정. data.go.kr 회원가입 후 이 API 의 '활용신청' 을 누르면\n"
     "  자동승인으로 즉시 열린다: https://www.data.go.kr/data/15113968/openapi.do\n"
-    "  발급 후 .env 에 `DATA_GO_KR_KEY=발급받은키` 한 줄. (docs/data-sources.md §9)"
+    "  발급 후 .env 에 `DATA_GO_KR_KEY=발급받은키` 한 줄. (docs/life/data-sources.md §9)"
 )
 
 

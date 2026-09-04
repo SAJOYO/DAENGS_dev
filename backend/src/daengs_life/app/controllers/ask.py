@@ -1,4 +1,4 @@
-"""`POST /ask` (RAG-028 · RAG-027 의 C 층).
+"""`POST /life/ask` (RAG-028 · RAG-027 의 C 층).
 
 **로직이 없다.** 질문을 받고, 서비스를 부르고, 그대로 돌려준다. 검색도 프롬프트도 판정도 여기
 없다 — 그것이 RAG-027 의 유일한 강제 규칙이고, `controllers/walk.py` 가 세워 둔 본보기 그대로다.
@@ -14,10 +14,10 @@ from daengs_life.app.deps import Encoder, get_conn, get_encoder
 from daengs_life.app.dto.ask import AskIn, AskOut
 from daengs_life.app.services import ask as service
 
-router = APIRouter(tags=["ask"])
+router = APIRouter(tags=["Life · 제도 Q&A"])
 
 
-@router.post("/ask", response_model=AskOut,
+@router.post("/life/ask", response_model=AskOut,
              summary="제도·문서형 질의응답 — 답변 + 근거 (출처 링크·조항 번호)")
 def post_ask(
     body: AskIn,
@@ -30,7 +30,8 @@ def post_ask(
     도구이고, 무엇을 컨텍스트로 줬는지 말하지 않으면 *"인용한 조항이 실재했나"* 를 셀 수 없다
     (RAG-028 ②). 프론트가 붙을 때 줄인다.
     """
-    return service.ask(body.question, k=body.k, encoder=encoder, conn=conn)
+    return service.ask(body.question, k=body.k, encoder=encoder, conn=conn,
+                      breed=body.breed, age_months=body.age_months)
 
 
 __all__ = ["router"]

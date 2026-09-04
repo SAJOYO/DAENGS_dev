@@ -1,0 +1,14 @@
+{
+  "request_id": "fx-clarify-location-0005",
+  "status": "CLARIFY",
+  "message": "장소를 찾을 위치의 위도와 경도를 알려주세요.",
+  "results": [],
+  "handoffs": [],
+  "clarify": {
+    "question": "장소를 찾을 위치의 위도와 경도를 알려주세요.",
+    "missing": [
+      "location.lat",
+      "location.lon"
+    ]
+  }
+}

@@ -1,5 +1,8 @@
 # 의사결정 기록
 
+> ⚠️ **Life 직접 API 경로는 #176(A4)으로 바뀌었다** — `/ask` → `/life/ask`, `/walk` → `/life/walk-conditions`.
+> 이 파일은 **결정이 내려진 시점의 기록**이라 본문의 옆 경로 표기를 고치지 않는다. 현행 경로는 위 줄이 정본이다.
+
 되돌리기 번거롭거나, 나중에 "왜 이렇게 했지"가 나올 결정만 적습니다.
 코드나 커밋을 보면 알 수 있는 것은 여기 적지 않습니다.
 
@@ -33,7 +36,28 @@
 | [D-026](#d-026) | Place 검색은 별도 컨테이너 + 별도 PostGIS 로, profile 로 꺼둔 채 들여온다 | 2026-08-29 |
 | [D-027](#d-027) | APP의 기존 Place 요청은 nginx가 place-search로 그대로 전달 | 2026-08-29 |
 | [D-028](#d-028) | Place 공개 경로는 호출량을 제한하고 기존 세 원천만 배치 적재 | 2026-08-29 |
-| [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 | 2026-08-29 |
+| [D-029](#d-029) | 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다 (소스 배치는 D-038 이 대체) | 2026-08-29 |
+| [D-030](#d-030) | 대화형 요청은 LangGraph 오케스트레이터로, 기능 UI 는 직접 API 유지 | 2026-08-30 |
+| [D-031](#d-031) | 결정적 라우팅은 기계 신호에만, 자연어는 LLM 라우터 — 모델은 벤치마크로 | 2026-08-30 |
+| [D-032](#d-032) | Training RAG 이관은 검증된 freeze 태그의 파일 복사로만 — 히스토리·코퍼스 반입 금지 | 2026-08-30 |
+| [D-033](#d-033) | ABSTAINED 는 REFUSED 가 아니다 — 능력 결과 6상태와 결정적 집계 | 2026-08-30 |
+| [D-034](#d-034) | RoutePlan 은 요청·핸드오프·클래리파이의 목록 구조, CLARIFY 는 배타적 | 2026-08-30 |
+| [D-035](#d-035) | Life 는 어댑터 뒤 in-process — 접점 규칙은 한 곳만 넓혀 다시 기계 강제 | 2026-08-30 |
+| [D-036](#d-036) | assistant 능력 인가 매트릭스 — 앱 회원 Training 은 의도된 확대 | 2026-08-30 |
+| [D-037](#d-037) | 오케스트레이션 관측에 질문 원문을 남기지 않는다 | 2026-08-30 |
+| [D-038](#d-038) | 보행 분석 소스는 backend 로, 런타임 격리는 유지 | 2026-08-31 |
+| [D-039](#d-039) | Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리 | 2026-08-31 |
+| [D-040](#d-040) | 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음) | 2026-08-31 |
+| [D-041](#d-041) | v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립, Card 2A PASS | 2026-09-01 |
+| [D-042](#d-042) | 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬 잔류 | 2026-09-01 |
+| [D-043](#d-043) | 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다 | 2026-09-02 |
+| [D-044](#d-044) | 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다 | 2026-09-02 |
+| [D-045](#d-045) | Walk는 in-process 제품 패키지, Place·Journey는 능력 경계로 소비 | 2026-09-01 |
+| [D-046](#d-046) | Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다 | 2026-09-03 |
+| [D-047](#d-047) | Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다 | 2026-09-03 |
+| [D-048](#d-048) | 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지 | 2026-09-03 |
+| [D-049](#d-049) | 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다 | 2026-09-03 |
+| [D-050](#d-050) | Life는 좌표·과거 시각의 환경 관측을 반환하고 Walk는 후속 단계에서 값으로 동결한다 | 2026-09-03 |
 
 ---
 
@@ -866,7 +890,7 @@ SQLAlchemy 로 옮길지 — 은 **이 카드에서 하지 않았습니다.** �
 - **env 이름에 `DAENGS_` 접두사를 붙이지 않았습니다.** `rag` 는 최상단 `.env` 의
   `POSTGRES_*` 를 **compose 값 그대로** 읽는데, 그 이름은 pgvector 컨테이너와 공유하는
   것이라 접두사를 붙이면 DB 를 못 찾습니다. API 키도 발급 기관이 부르는 이름 그대로가
-  `docs/data-sources.md` §9 와 1:1 입니다. 두 Settings 는 `extra="ignore"` 라 한 `.env`
+  `docs/life/data-sources.md` §9 와 1:1 입니다. 두 Settings 는 `extra="ignore"` 라 한 `.env`
   안에 섞여 있어도 서로를 무시하고, 실제로 겹치는 이름은 **하나도 없습니다**(확인함).
   통일이 필요해지면 `AliasChoices` 로 두 이름을 다 받는 쪽이 맞습니다 — 지금 바꾸면
   서버 `.env` 를 손으로 고쳐야 하는데 얻는 것이 이름 모양뿐입니다.
@@ -923,8 +947,8 @@ DB 기동 35초 / 미기동 사실상 정지였고, **이 레포는 DB 가 원�
 열어 두고 비밀번호가 없으면 같은 네트워크의 누구나 `FLUSHALL` 할 수 있습니다.
 `REDIS_PASSWORD` 가 비면 `--requirepass ""` 가 되어 인증이 꺼집니다. 그래서 compose 에
 `${REDIS_PASSWORD:?...}` 가드를 걸어 **값이 없으면 아예 안 뜨게** 했습니다 — #26 이
-`DAENGS_TRAINING_RAG_BASE_URL` 에 쓴 것과 같은 장치이고, 저기가 "빈 값이면 restart loop"
-를 막듯이 여기는 "인증 없는 Redis 가 LAN 에 열리는 것"을 막습니다. 컨테이너가 안 뜨는 편이
+필수 환경 변수가 비어 있으면 compose 단계에서 중단하는 장치이며, 여기서는
+"인증 없는 Redis 가 LAN 에 열리는 것"을 막습니다. 컨테이너가 안 뜨는 편이
 열린 채로 뜨는 것보다 낫습니다. compose 는 파일 전체를 해석하고 나서 컨테이너를 만들므로
 가드 한 곳이면 `REDISCLI_AUTH` 와 backend 의 `REDIS_URL` 까지 같이 지켜집니다.
 
@@ -1205,6 +1229,11 @@ DB 접속을 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하�
 ## D-022
 ### 스크리닝 모델을 `backend/` 가 아닌 최상위 폴더로
 
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
+
 피부 병변 스크리닝을 `skin-screening/` 최상위 폴더에 독립 서비스로 두었습니다.
 `backend/` 안에 넣지 않았습니다.
 
@@ -1262,12 +1291,48 @@ reload 를 돌리는 컨테이너(D-006)가 그만큼 무거워집니다. 스크
 5. 병변별 긴급도 문구를 앱이 자체적으로 붙이지 않습니다 — 이름을 단정하는 셈입니다
 
 `skin-screening/tests/test_agent.py` 가 저 키들이 생기는지 감시합니다.
+
+#### 기권(abstention)은 판정을 뒤집지 않는다 (2026-08-31 보강)
+
+배포에서 사고가 났습니다. 2단계가 종류를 못 고르겠다고 기권하면 **판정 전체가
+`retake` 로 덮여** "다시 찍어주세요" 가 나갔습니다. 1단계가 **95.6%** 로 이상이라고
+본 사진이 그렇게 나갔고, 분포까지 같이 사라졌습니다. 크롭 8장 중 임계값을 넘은
+4장이 **전부** 그랬습니다 (`abnormal` 0건).
+
+기권은 병변 **종류**를 말할지의 판단이지 1단계 판정을 뒤집는 장치가 아닙니다.
+노트북 `06` §5 에 원래 그렇게 적혀 있었는데 코드만 어기고 있었습니다. 그리고
+이 결정(D-023) 이후로는 **이름을 아예 안 말하므로** 기권이 감출 것도 없습니다.
+
+바로잡은 규칙:
+
+* **1단계가 임계값을 넘으면 언제나 `abnormal`** 입니다. 분포도 항상 실립니다
+* `retake` 는 **모델을 돌리기 전** 판단만 남습니다 — 이미지를 못 열었을 때,
+  가이드 프레임이 밴드 밖일 때
+* 기권 사실은 **`meta.stage2_low_confidence`** 로 나갑니다. 앱은 그걸로 표시를
+  더 약하게 할 수 있습니다. ⚠️ 이름 필드는 여전히 만들지 않습니다
+* 기권일 때 **"다시 찍으라" 고 하지 않습니다.** 2단계의 불확실은 사진 탓이 아니라
+  모델 한계라(다른 구조끼리 0.0026 차이) 다시 찍어도 안 좋아집니다
+
+같이 고친 것 — `abstain_threshold`(0.45)는 "2단계가 이만큼 확신하는가" 인데
+비교 대상이 **1단계 확률을 곱한 값**이었습니다. 이중 감점이라 1단계가 95%
+확신해도 2단계가 47% 넘게 확신해야 통과했고, 6종 분류에서는 거의 없는
+일이었습니다. 이제 **깎기 전 확률**로 비교합니다 — 노트북이 문턱을 뽑는 척도와
+같아졌습니다.
+
+⚠️ **왜 하필 지금 터졌나**: 재학습으로 1단계 임계값이 `0.1823 → 0.1466` 으로
+내려가면서 더 많은 사진이 2단계로 들어갔습니다. 예전에 `normal` 로 빠지던 것이
+`retake` 가 됐습니다. 임계값을 내리는 변경은 이 경로를 같이 봐야 합니다.
 필드를 되살리려면 이 결정을 먼저 뒤집어야 합니다.
 
 ---
 
 ## D-024
 ### 스크리닝은 별도 컨테이너로, profile 로 꺼둔 채 들여온다
+
+> ⚠️ **뒤집혔습니다 (2026-08-31, D-040).** 팀이 최상위 독립 서비스를
+> backend 패키지로 모으는 방향을 택했습니다 (#94 · #99 선례).
+> 아래는 그때의 판단이며, 무엇이 바뀌고 무엇이 그대로 유효한지는
+> [D-040](#d-040) 에 있습니다. **기록으로 남겨 둡니다.**
 
 `skin-screening` 을 compose 서비스로 정의하되 `profiles: ["screening"]` 을 걸어
 **기본 `docker compose up -d` 에서는 안 뜨게** 했습니다. nginx 에는 `daengback`
@@ -1420,9 +1485,9 @@ place 스키마는 `CREATE EXTENSION postgis` 부터 시작하는 자기 역사(
 메모리가 실측으로 부족해질 때 다시 봅니다.
 
 **"스키마 원본은 `db/init/`, Alembic 안 씀" 규칙은 dev DB(pgvector) 한정입니다.**
-place-db 의 스키마 원본은 `place-search/alembic` 이고, 리비전 히스토리를 개조하지
+place-db 의 스키마 원본은 `backend/infra/place/alembic` 이고, 리비전 히스토리를 개조하지
 않고 통째로 가져왔습니다 (walk 용 빈 테이블 몇 개가 생기는 것이 히스토리 분기보다
-쌉니다 — `place-search/UPSTREAM.md`).
+쌉니다 — `docs/place/UPSTREAM.md`).
 
 #### API 는 아직 nginx 에 노출하지 않았다
 
@@ -1437,7 +1502,7 @@ identity 가 아니라 선택적인 값(size/weight/age)을 받으며, 값이 �
 
 Place 검색의 canonical 구현은 **이 저장소**입니다. geo 쪽 사본은 동결이며(그쪽 산책
 연구가 facility corpus 를 참조해 삭제하지 못함), 검색 수정은 여기서만 합니다.
-경계를 지키는 것은 문서가 아니라 `place-search/tests/test_boundary.py` 입니다 —
+경계를 지키는 것은 문서가 아니라 `backend/tests/place/test_boundary.py` 입니다 —
 진입점 closure 화이트리스트와 "backend 를 import 하지 않는다"를 CI 가 잽니다.
 
 ---
@@ -1478,8 +1543,8 @@ PostGIS를 반복 호출해 같은 8000번 포트의 기존 API까지 굶기지 
 
 - KCISA: 공공데이터포털 파일 `15111389`, 2025-03-24 스냅샷. 원문 SHA-256은
   `2F88BEDFF41A8B9F032ABD16CE2FB0BC31D91EC28EE559E6E79C2559A2F45928`입니다.
-- KTO: 기존 `app.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
-- MOIS: 기존 `app.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
+- KTO: `daengs_place.ingest.kto`가 KorPetTourService2를 full/incremental로 동기화합니다.
+- MOIS: `daengs_place.ingest`가 동물병원·동물약국 인허가 데이터를 동기화합니다.
 
 배치는 `.github/workflows/place-search-ingest.yml`의 수동 실행점 하나로 모읍니다. 호출
 주기를 새로 정하지 않았으므로 schedule은 두지 않습니다. KCISA는 공개 파일이라 단독
@@ -1495,6 +1560,13 @@ place-db는 계속 compose 네트워크 안에만 둡니다. 호스트·팀원�
 
 ## D-029
 ### 보행 분석을 독립 서비스로, 실험 코드는 정리해서 들여온다
+
+> ⚠️ **부분적으로 대체됨 — 소스 배치만 [D-038](#d-038) 이 뒤집었습니다** (2026-08-31).
+> 아래의 "최상위 독립 폴더 + 자체 `pyproject.toml`·`uv.lock`" 은 더 이상 사실이 아닙니다
+> (`backend/src/daengs_gait/` 로 옮겼습니다). **런타임 격리는 그대로입니다** — 별도
+> 컨테이너 · 별도 FastAPI 프로세스 · 별도 venv · 별도 데이터 볼륨. 아래 "왜 `backend/`
+> 가 아닌가" 의 근거 셋 중 **프로세스가 죽는 범위**와 **영상은 분 단위**는 D-038 이
+> 그대로 받아들였고, **torch·ultralytics 무게**만 다시 판단했습니다.
 
 `YH-KIKI/walk_demo` 의 강아지 보행 영상 분석을 `gait-analysis/` 최상위 폴더로 들여왔습니다.
 `skin-screening` 과 같은 모양입니다 — 자체 `pyproject.toml`·`uv.lock`, compose
@@ -1590,3 +1662,1033 @@ Git LFS 는 쓰지 않습니다 — 저장소가 안 쓰고 있고, 팀원 전�
 URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았습니다 — 빼면 `--extra url`
 을 통째로 제거할 수 있습니다.
 
+## D-030
+### 대화형 요청은 LangGraph 오케스트레이터로, 기능 UI 는 직접 API 유지
+
+대화형 진입점 `POST /assistant/query` 하나를 두고, 그 뒤의 흐름 제어(라우팅 · 실행 순서 ·
+결과 수집)를 **LangGraph** 가 맡습니다. 전체 구조와 능력별 현실은
+`docs/orchestration/architecture.md`, 계약은 `docs/orchestration/contracts.md` 가 원본입니다.
+이 항목은 되돌리기 번거로운 **경계** 결정만 기록합니다.
+
+- **LangGraph 는 오케스트레이터이지, 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.**
+  도메인 안전·거절 결정은 각 능력이 소유하고, 오케스트레이터는 상류의 REFUSED 를
+  ERROR 로 재해석하지 않으며 자료 부족 기권과도 섞지 않습니다 (D-033).
+- **명시적 기능 UI 플로우는 기존 직접 API 를 그대로 씁니다.** `/assistant/query` 는
+  자연어 · 모호 · 다중 능력 요청 전용입니다. 화면이 능력을 이미 아는 요청까지 그래프를
+  통과시키면 지연과 오라우팅 위험만 삽니다.
+- **인증은 그래프 밖입니다.** 기존 FastAPI 의존성 계층(D-015 · D-016)이 검증을 끝내고,
+  그래프는 인증된 principal 을 받아 능력별 인가만 합니다. 토큰은 그래프 상태에
+  들어가지 않습니다.
+- **multipart 이미지·영상 워크플로는 전용 API 에 남습니다.** 대화형 요청은 해당
+  업로드/UI 플로우로 HANDOFF 합니다.
+- **v1 실행 범위는 Training + Life + Walk.** Skin·Gait 는 인터페이스/어댑터 문서까지만 —
+  Skin 은 #100/D-040 이후 main backend 에서 기술적으로 호출 가능해졌지만 multipart
+  업로드·통제 문구와 인증 경계 때문에 HANDOFF 역할을 유지하고, Gait 는 profile 뒤의
+  분 단위 추론이라 동기 대화에 안 맞습니다. Place·Journey 의 #99 소스 통합도 이 범위를
+  넓히지 않습니다.
+- **v1 프리미티브는 StateGraph · 일반 edge · 조건부 edge, `Send` 는 동적 fan-out 이
+  실제로 필요할 때만.** `Command` 는 나중 선택지, 서브그래프 · checkpointer ·
+  interrupt 는 v1 요구가 아닙니다.
+- **능력별 생성 모델을 통일하지 않습니다** (Training=gemma3:4b, Life=Gemini 유지).
+  공유하는 것은 계약 · 안전 시맨틱 · 인가 · 라우팅 · 관측입니다.
+
+**GraphRAG / Neo4j 와 무관합니다.** 그쪽은 폐기됐고, LangGraph(흐름 제어)와
+GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출물은 이관하지 않습니다.
+
+> **사실 갱신 (2026-08-31)** — "Training=gemma3:4b" 는 #93 으로 낡았습니다. Training
+> 생성은 Gemini(`gemini-3.1-flash-lite`)로 전환됐고, 이제 Life 와 같은 공급자입니다.
+> 결정의 본질(모델 공급자를 계약으로 공유하지 않는다)은 그대로입니다 — 겹침은 각
+> 능력의 도메인 선택이 우연히 일치한 것입니다. 또한 O-4 의 근거였던 "DB 에 프로필
+> 테이블 없음"(D-029 인용)은 #88(`pets` 테이블·`/app/pets`)로 낡았지만, **소비하는
+> 능력이 아직 없다**는 사실은 그대로라 O-4 결정 자체는 유지됩니다
+> (`docs/orchestration/contracts.md` §1).
+
+**미결이었던 것들은 2026-08-30 에 전부 해결됐습니다.** 어드버서리얼 아키텍처 리뷰
+(읽기 전용, `origin/dev` 코드 대조) 후 사람이 일괄 승인 — 결정 이력 표는
+`docs/orchestration/routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
+귀속되는 추가 승인 둘:
+
+- **반려견 컨텍스트 (O-4)** — `active_dog_id` 는 v1 상태의 타입 필드가 아니라 `context`
+  의 **예약 키 이름**으로만 둡니다. 권위 있는 프로필/소유권 원천이 없고(D-029 — DB 에
+  프로필 테이블 없음) 소비하는 능력도 없어서입니다. dog 식별자는 소유권 증명이 아니고,
+  대상이 모호하면 CLARIFY, 다견 식별자 모델은 지금 설계하지 않습니다.
+- **병렬 실행 정책 (O-10)** — 독립 능력의 동시 실행은 허용하되, 능력 선언형 정책 DSL 은
+  만들지 않고 오케스트레이터 안의 **단순 정적 상수**로 갑니다. 성공한 독립 결과는 다른
+  능력이 실패해도 보존하고, 실패 시 무관한 능력으로 조용히 폴백하지 않습니다.
+  타임아웃·동시성 **수치**는 서버 실측까지 PENDING.
+
+---
+
+## D-031
+### 결정적 라우팅은 기계 신호에만, 자연어는 LLM 라우터 — 모델은 벤치마크로
+
+오케스트레이터의 라우팅 경로를 둘로 나누고, 경계를 고정합니다
+(상세는 `docs/orchestration/routing.md`).
+
+**결정적 라우팅은 기계가 읽는 명시적 신호에만 허용합니다** — `requested_capability`,
+구조화된 UI/액션 메타데이터, 명시적 source/action 식별자, 의미가 모호하지 않은 구조화
+컨텍스트. **자연어 키워드 하드 라우팅("훈련"·"짖음"·"배변" → Training 류)은 결정적
+경로가 아닙니다.** 키워드 규칙은 처음엔 맞다가 오답을 조용히 쌓고, 규칙끼리 부딪혀도
+심판할 기준이 없습니다. 자유 자연어의 의미 판단은 전부 LLM 라우터 경로로 갑니다.
+
+**LLM 라우터의 모델은 의도적으로 미정입니다.** "지금 Gemini 를 쓰니까 Gemini" 도,
+"무관한 생성 실험에서 Qwen 이 빨랐으니까 Qwen" 도 선정 이유가 아닙니다. 나중의 공정
+벤치마크로 정하되 — 측정 항목은 라우팅 정확도 · 다중 능력 재현율 · 스키마 유효성 ·
+안전 결정적 오라우팅 · CLARIFY 정밀도 · warm p50/p95 지연 · 자원/비용 — 선정 규칙은
+**품질·안전 게이트를 통과한 모델 중에서만 가장 빠른 것**입니다.
+
+**대가**: 결정적 경로가 좁아 대부분의 대화 요청이 LLM 라우터를 타므로, 라우터 지연이
+모든 대화 응답의 바닥이 됩니다. 그래서 벤치마크 항목에 지연이 들어 있고, 게이트 통과
+후 속도로 고릅니다.
+
+**라우터 구조화 출력 실패 (O-14, 2026-08-30 승인 추가)** — 실패를 CLARIFY 로 위장하지
+않습니다. CLARIFY 는 "사용자가 정보를 덜 준 것"이고 스키마 실패는 "시스템이 유효한
+RoutePlan 을 못 만든 것"입니다. 정책: 스키마 검증 → 실패 시 **1회 한정** 재시도(재시도
+프레임워크는 만들지 않음) → 그래도 실패면 아무 능력도 실행하지 않고 최상위 **FAILED**.
+잘못된 모델 원출력은 사용자에게 노출하지 않습니다.
+
+---
+
+## D-032
+### Training RAG 이관은 검증된 freeze 태그의 파일 복사로만 — 히스토리·코퍼스 반입 금지
+
+Training RAG 소스를 DAENGS_dev 안의 전용 유닛으로 들여오는 이관의 출처와 경계입니다.
+**저장소 통합 ≠ 프로세스 통합** — 코드가 들어와도 런타임은 daengs_backend 와 계속
+분리되고, 기존 HTTP 능력 경계(`DAENGS_TRAINING_RAG_BASE_URL`)를 초기에는 유지합니다.
+이관은 이 결정을 적는 시점(2026-08-30)에 **아직 수행되지 않았습니다.**
+
+**검증된 출처는 한 지점입니다**: commit `22495d28bc9a8869ba132d0b98206b10a9e8fbc3`,
+tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICTION**.
+
+| 허용 | 금지 |
+| --- | --- |
+| freeze 태그의 clean checkout | dog-training-rag **Git 히스토리 반입** — subtree · 히스토리 기반 이관 · 브랜치 이관 · fork 이식 전부 |
+| 승인된 운영 서브셋의 파일 단위 복사 | raw/원문 코퍼스 커밋 |
+| DAENGS_dev 안에서 새로 만든 커밋 | 원문 텍스트가 든 과거 평가 스냅샷 이관 |
+| | GraphRAG · Neo4j 산출물 (폐기됨) |
+
+히스토리를 막는 이유는 개인 저장소 히스토리에 코퍼스 원문·미검증 산출물이 섞여 있어,
+한 번 들어오면 D-029 가 적어 둔 대로 **git 히스토리는 영구적**이기 때문입니다.
+커밋 산출물에 원문/청크 전문이 들어가지 않는다는 불변식은 이관 후에도 유지/재도입합니다.
+
+**백업 패키지 ≠ 배포 패키지.** 외부 전체 ZIP 은 개인 재해 복구 백업이고, 자동으로 운영
+서버 코퍼스가 되지 않습니다. 공유/서버 인프라로의 코퍼스 배포는 미해결 소스들의
+권리·출처 검증을 따로 통과해야 합니다.
+
+**프롬프트도 freeze 대상입니다.** 현재 런타임 프롬프트 `grounded-answer-ko-v2` 는 멘토
+컨벤션(영어 + Markdown)을 만족하지 않지만, 이관 중 재작성하면 gemma3:4b 출력 · 인용 ·
+`model_reported_no_evidence` 탐지 · 동결 평가 동등성이 흔들려 "이관이 잘 됐는지"를 잴
+기준이 사라집니다. 순서 고정: 이관 동등성 → 별도 프롬프트 변경 카드 → 회귀 테스트 →
+동결 평가 재실행.
+
+**서버 재구축(신규 PGVector · 지연 검증 · 포트 · GPU · 리소스 제한)은 미완**이며 월요일
+서버 리허설 후 `docs/orchestration/architecture.md` §서버 재구축 상태를 갱신합니다.
+
+> **사실 갱신 (2026-08-31)** — 이관은 **완료됐습니다** (#83 런타임 이행 → #92 PGVector
+> pg18 → #93 생성 Gemini 전환 → #94 modular monolith). 위 허용/금지 경계는 지켜졌고
+> (freeze 태그 출처의 새 커밋, 히스토리·raw 코퍼스 반입 없음 — #94 체크리스트),
+> 결과는 이 결정의 초기 TARGET("프로세스 분리 + HTTP 경계 유지")보다 한 걸음 더 간
+> **in-process modular monolith** 입니다 — #94 가 팀 승인으로 수행했고, 운영 실측에서
+> 부담이 확인될 때만 서비스 분리를 재검토합니다. `:8010`·`DAENGS_TRAINING_RAG_BASE_URL`
+> 은 코드에서 사라졌고, Training PGVector 는 전용 컨테이너(`training-rag-pgvector`)로
+> 분리 유지됩니다. 프롬프트(`grounded-answer-ko-v2`) 이행은 여전히 별도 카드입니다.
+> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration/architecture.md`
+> §Training 토폴로지.
+
+---
+
+## D-033
+### ABSTAINED 는 REFUSED 가 아니다 — 능력 결과 6상태와 결정적 집계
+
+오케스트레이션의 CapabilityResult status 를 여섯으로 확정합니다:
+**OK · ABSTAINED · REFUSED · PENDING · ERROR · TIMEOUT** (계약 상세는
+`docs/orchestration/contracts.md` §4). 2026-08-30 어드버서리얼 리뷰 후 사람 승인.
+
+**핵심은 기권과 거절의 분리입니다.**
+
+| | ABSTAINED | REFUSED |
+| --- | --- | --- |
+| 뜻 | 근거 부족·자료 없음·품질 문턱 미달 | 정책·안전·의료 경계의 의도적 거절 |
+| 자료가 늘면 | **답할 수 있게 됩니다** | **자동으로 바뀌지 않습니다** |
+
+접으면 "자료가 늘면 답할 수 있는 것"에 "답하지 않기로 했다"는 라벨이 붙습니다 —
+2026-08-22 멘토링이 v1 도구 계약에서 지적한 바로 그 병이고, Training 게이트웨이
+(`services/training_rag.py`)가 상류 reason 으로 이미 갈라 둔 구분입니다.
+
+**v1 매핑 (확정)** — Training ANSWER→OK · UNCERTAIN→**ABSTAINED** ·
+SAFETY_REFUSAL/MEDICAL_REFUSAL→REFUSED(code 보존), Life 근거 있는 200→OK ·
+무근거 404→**ABSTAINED**(no_evidence) · 상류 실패→ERROR · 타임아웃→TIMEOUT.
+
+**최상위 집계는 결정적입니다** (O-5) — 성공/기권/거절/실패 판정에 LLM 을 쓰지 않고,
+개별 CapabilityResult 를 전부 보존하며, 기계 status 와 사용자 공지를 분리합니다.
+전부 기권이면 최상위는 **UNCERTAIN** 이지 REFUSED/FAILED 가 아니고, 그래서
+AssistantResponse 상태는 여덟입니다: ANSWERED · PARTIAL · CLARIFY · HANDOFF ·
+**UNCERTAIN** · REFUSED · PENDING · FAILED. 진리표는 contracts §5 — 안전·의료 거절
+공지는 다른 능력이 성공했다고 숨기지 않습니다.
+
+**바꾸려면**: 상태 하나를 없애는 것은 그 상태로 이미 기록·표시된 결과의 재해석이라
+비쌉니다. Gait 의 PENDING 이 얽히는 조합은 일부러 미확정으로 남겼습니다 — 그 카드에서
+정합니다.
+
+---
+
+## D-034
+### RoutePlan 은 요청·핸드오프·클래리파이의 목록 구조, CLARIFY 는 배타적
+
+라우터 산출물을 스칼라 `mode` 하나가 아니라 **`requests[] + handoffs[] + clarify`**
+구조로 확정합니다 (`docs/orchestration/contracts.md` §2). 2026-08-30 리뷰가 스칼라
+mode 로는 "Walk 실행 + Skin 핸드오프" 같은 **실존하는 혼합 흐름을 표현할 수 없음**을
+계약 결함으로 확정했고, 사람이 이 구조를 승인했습니다.
+
+- `requests[]` 와 `handoffs[]` 는 **공존합니다.** 혼합 시 최상위 status 는 실행 결과에서만
+  계산하고 핸드오프는 `AssistantResponse.handoffs[]` 로 항상 별도 표면화합니다. 순수
+  핸드오프는 최상위 **HANDOFF** 입니다.
+- **CLARIFY 는 배타적입니다** (O-8). clarify 를 낼 요청에서는 능력도 핸드오프도 실행하지
+  않습니다. 이유는 stateless CLARIFY 와의 결합입니다 — v1 은 checkpointer 가 없고
+  CLARIFY 가 실행을 종료하며, 클라이언트가 원 질의 + 채운 컨텍스트로 **새 요청**을
+  보냅니다(continuation token 불요). 부분 실행을 허용하면 그 재요청이 이미 실행된
+  능력을 다시 실행해 **비용을 이중으로** 뭅니다.
+- 요약 mode 가 필요하면 세 목록에서 파생합니다 — 진실 원천이 아닙니다. 범용 워크플로
+  액션 DSL 로 일반화하지 않습니다.
+- 라우터 구조화 출력 실패는 CLARIFY 가 아니라 FAILED 입니다 — 정책은 D-031 의 O-14 절.
+
+**바꾸려면**: 이 구조는 공개 응답(`handoffs[]` · HANDOFF status)까지 이어지므로
+프론트 계약과 함께 움직입니다. checkpointer 도입(멀티턴)은 v1 근거가 없어 미룬
+것이지 금지가 아닙니다 — 제품 증거가 생기면 별도 카드로.
+
+---
+
+## D-035
+### Life 는 어댑터 뒤 in-process — 접점 규칙은 한 곳만 넓혀 다시 기계 강제
+
+오케스트레이터는 **전송 무관 `LifeCapabilityAdapter`** 를 통해 Life 를 부릅니다.
+v1 구현은 기존 Life 서비스 심(`daengs_life.app.services.ask`)을 **in-process** 로
+호출합니다 — 자기 자신에게 `/ask` HTTP 를 다시 쏘지 않고, Life 내부에 깊이 결합하지도
+않습니다. 미래에 HTTP 구현이 같은 어댑터 경계 뒤에서 in-process 구현을 대체할 수
+있습니다 (D-021 2단계가 그 자리입니다).
+
+**접점 규칙과의 관계 (O-11)** — daengs_backend↔daengs_life 접점을 "등록 두 줄 + 예열
+한 줄"로 묶고 `tests/test_main_stays_light.py` 로 기계 강제하는 D-018 의 규칙은
+**약화하거나 지우지 않습니다.** 이 어댑터가 **유일하게 새로 승인된 접점**이고, 구현
+시작 시 경계 테스트를 그 한 곳만 허용하도록 갱신해 다시 기계로 강제합니다. 그 밖의
+daengs_backend → daengs_life import 는 여전히 금지입니다. (2026-08-30 리뷰가 이 충돌을
+BLOCKER 로 지목했고, 사람이 이 해소안을 승인했습니다.)
+
+**Life 는 재설계하지 않습니다 (O-3, 범위 축소 승인)** — 어댑터는 **이미 있는** 기계
+신호만 오케스트레이션 계약으로 번역합니다: 무근거 404→ABSTAINED, 상류 실패→ERROR,
+타임아웃→TIMEOUT, `ungrounded` 지표→품질 메타데이터. 공개 `/ask` 동작은 이 결정으로
+바뀌지 않습니다. Training 식 안전 분류를 Life 에 지어내지 않으며, **산문으로만
+물러서는 경우(기계 신호 없음)가 OK 로 통과하는 것은 수용된 v1 한계**입니다 — Life
+안전/거절 분류 신설은 별도 행동 변경 카드입니다.
+
+**출력 축소 (O-9)** — 어댑터는 검색 청크 전문·내부 유사도 점수·불필요한 내부 청크
+식별자를 그래프 상태와 공개 결과에 올리지 않습니다. answer · 안전한 인용/출처 식별자 ·
+인용 URL · 품질 플래그까지만 (RAG-028 ②가 유보해 둔 "응답 축소"의 첫 소비자입니다).
+v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는 프론트가 맡을 수 있습니다.
+
+**바꾸려면**: in-process → HTTP 전환은 어댑터 구현 교체로 끝나야 합니다. 그 성질을
+잃게 만드는 결합(어댑터 밖에서 Life 타입 사용 등)이 이 결정이 금지하는 것입니다.
+
+---
+
+## D-036
+### assistant 능력 인가 매트릭스 — 앱 회원 Training 은 의도된 확대
+
+`/assistant/query` 는 **인증 필수**입니다 — 익명 운영 접근 없음, 인증된 앱 회원과
+관리자를 받습니다. 기존 `admin_or_app_user` 의존성이 principal 을 사용하는 인가에
+부적합하면(자체 독스트링이 "principal 을 쓰지 않는 엔드포인트 전용"으로 제한)
+전용 의존성을 구현에서 새로 둘 수 있습니다.
+
+능력별 인가는 백엔드/오케스트레이션 경계 안의 **중앙 매트릭스 한 곳**이 정합니다
+(`docs/orchestration/routing.md` §5): v1 은 Training·Life·Walk 를 앱 회원·관리자
+모두에게, Skin·Gait EXECUTE 는 아무에게도 허용하지 않습니다.
+
+**앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
+우회가 아닙니다 (2026-08-30 사람 승인). 현행 `/training/chat` 이 관리자 전용인 근거는
+"#25 임시 게이트웨이, 앱 클라이언트 부재"라는 실용적 이유였고, assistant 가 바로 그
+앱 클라이언트가 됩니다. **기존 직접 엔드포인트의 인가는 바뀌지 않습니다** —
+`/training/chat` 은 현행 관리자 지향 정책을 유지할 수 있고, 다른 직접 엔드포인트를
+조용히 넓히지 않습니다.
+
+`requested_capability` 는 라우팅 신호일 뿐 **절대 인가가 아닙니다.** rate limit 과
+구체 한도는 구현/운영 후속입니다.
+
+**바꾸려면**: 매트릭스 표 한 곳 + 그것을 고정하는 테스트만 고치면 되도록 구현하는
+것이 이 결정의 요구입니다. 정책이 어댑터마다 흩어지면 드리프트가 이 결정을 무효화합니다.
+
+---
+
+## D-037
+### 오케스트레이션 관측에 질문 원문을 남기지 않는다
+
+오케스트레이션의 일반 운영 로그·트레이스에 **사용자 질문 원문을 기본으로 넣지
+않습니다.** Training 게이트웨이가 이미 지키는 선례(`services/training_rag.py` —
+질문 원문 비로깅, 식별자·상태·인용 수만 기록)를 오케스트레이션 전체의 불변식으로
+확장한 것입니다 (`docs/orchestration/contracts.md` §6-11).
+
+| 기본 관측에 허용 | 금지 |
+| --- | --- |
+| request_id | 질문 원문 |
+| 안전한 범위의 principal 종류 | 인증 토큰 |
+| 라우터 종류 (deterministic/llm) | 업로드 바이너리 |
+| 선택된 능력 · 결과 status | 검색 청크 전문 |
+| 거절/기권 reason code | 사적 컨텍스트 원본 |
+| elapsed_ms · 오류 범주 | |
+
+새 관측 플랫폼 도입은 이 결정의 범위가 아닙니다.
+
+**바꾸려면**: 디버깅에 원문이 꼭 필요한 자리가 생기면 "기본 금지"를 유지한 채 명시적
+옵트인(별도 플래그·별도 저장·보존 기한)을 설계하는 카드로 — 기본값을 뒤집는 것이
+아니라 예외를 설계하는 방향이어야 합니다.
+
+## D-038
+### 보행 분석 소스는 backend 로, 런타임 격리는 유지
+
+`gait-analysis/` 최상위 폴더를 없애고 `backend/src/daengs_gait/` 로 옮깁니다.
+의존성은 `backend/pyproject.toml` 의 **`gait` 그룹** 하나로 관리합니다.
+
+**뒤집는 것은 [D-029](#d-029) 의 "소스 배치"뿐입니다.** 런타임은 그대로 갈라 둡니다 —
+별도 컨테이너 · 별도 FastAPI 프로세스 · 별도 venv(`gait-venv`) · 별도 데이터
+볼륨(`gait-data`) · nginx `/gait/` · `profiles: ["gait"]`. 앱이 부르는 주소도 그대로입니다.
+
+#### 왜 소스만 합치나
+
+D-029 가 최상위 폴더를 고른 이유는 셋이었는데, 그중 하나만 사정이 바뀌었습니다.
+
+- **torch·ultralytics 무게** — D-021 로 backend 가 이미 `ml` 그룹에 torch 를 갖고 있고,
+  이 레포에서 **의존성은 이미지가 아니라 venv 볼륨에 삽니다.** `docker/uv/Dockerfile` 은
+  20줄이고 애플리케이션 코드도 의존성도 없습니다 — 7개 서비스가 전부 `image: uv:1`
+  하나를 쓰고, `command` 의 `uv sync` 가 각자의 named volume 에 설치합니다. 그래서
+  **`pyproject.toml` 을 공유해도 backend 컨테이너에는 ultralytics 가 안 들어갑니다.**
+  `crawler-worker` 가 이미 반대 방향으로 같은 일을 하고 있습니다 — backend 와 같은
+  `pyproject.toml`·`uv.lock` 을 마운트하면서 `--group ml` 을 빼서 torch 를 안 받습니다.
+- **프로세스가 죽는 범위** — **그대로 유효합니다.** 보행 분석이 넘어질 때 로그인과
+  `/ask` 까지 같이 넘어지면 안 됩니다.
+- **영상은 사진과 다르다** — **그대로 유효합니다.** 실측으로 2.6MB 클립에 CPU 152초입니다.
+  `069cf0d` 가 `run_in_threadpool` 로 이벤트 루프를 풀어 줬지만, 같은 프로세스에 두면
+  그 스레드와 CPU 를 로그인·`/ask` 와 다투게 됩니다.
+
+뒤의 둘이 남아 있으므로 **`daengs_training`(#94)처럼 프로세스를 합치지는 않습니다.**
+저쪽은 요청이 짧아 합치는 값이 있었고, 여기는 없습니다.
+
+#### 접점을 0 개로 둡니다
+
+`daengs_training` 은 프로세스를 합쳤기 때문에 `routers/training.py` +
+`services/training_rag.py` 접점이 필요했습니다. **여기는 만들지 않습니다** —
+`daengs_gait` 가 자기 FastAPI 앱을 직접 띄우므로 `daengs_backend` 가 그것을 알 이유가
+없습니다. 양방향 모두 import 하지 않습니다. D-021 이 `daengs_life` 접점을 세 줄로 좁혀
+둔 것과 같은 규율이고, 여기서는 아예 0 입니다.
+
+⚠️ 반대 방향도 막아야 합니다. `daengs_backend` 가 `daengs_gait` 를 최상단 import 하면
+   **기본 설치(`uv sync`, gait 그룹 없음)의 backend 가 ImportError 로 죽습니다.**
+
+#### 의존성은 `gait` 그룹 하나 — `ml` 을 붙이지 않습니다
+
+gait 소스의 서드파티 import 를 전수 조사한 결과 `cv2` · `fastapi` · `imageio_ffmpeg` ·
+`numpy` · `pydantic` · `ultralytics` · `uvicorn` 뿐입니다. **`torch` 는 직접 import 하지
+않습니다** — ultralytics 가 끌고 옵니다. `ml` 의 `sentence-transformers` ·
+`transformers` · `pyarrow` 는 하나도 쓰지 않으므로 `--group ml --group gait` 가 아니라
+**`--group gait`** 하나로 갑니다. `fastapi`·`uvicorn`·`python-multipart` 는 backend 기본
+`dependencies` 의 `fastapi[standard]` 가 이미 줍니다.
+
+`[tool.uv.sources]` 의 torch 인덱스 바인딩(리눅스=CPU 판)은 **패키지 단위**라 어느 그룹이
+요구하든 적용됩니다 — 컨테이너가 CUDA 판을 받을 위험은 없습니다.
+
+#### 조용히 틀릴 수 있는 자리
+
+- **`gait-venv` 를 `backend-venv` 와 공유하면 안 됩니다.** `uv sync` 는 exact 동기화라
+  같은 볼륨에 다른 그룹으로 돌리면 서로를 지웁니다. `crawler-worker` 가 `crawler-venv` 를
+  따로 쓰는 것과 같은 이유입니다.
+- **compose 의 `--group gait` 와 `pyproject.toml` 의 그룹 이름이 어긋나면 `/gait/` 만
+  503 이 되는데 다른 API 는 멀쩡해서 로그에 아무 문제도 안 보입니다.**
+- **`*.pt` 방어를 전역으로 올렸습니다.** 규칙이 `gait-analysis/.gitignore` 에만 있었고
+  `backend/.gitignore` 도 최상단에도 없었습니다 — 폴더를 지우면 가중치 57MB 를 커밋할 수
+  있는 상태가 됩니다. D-029 의 "가중치는 git 에 안 넣는다"는 그대로 유지합니다.
+- **`config.py` 의 `ROOT` 가 `parents[2]`(= `backend/`) 로 바뀌었습니다.** 로컬 기본값의
+  기준점이고, 컨테이너에서는 `GAIT_RELEASE_DIR`·`GAIT_DATA_DIR` 이 덮어써서 안 드러납니다.
+
+#### 하지 않은 것
+
+알고리즘 · 임계값 · `GAIT_FILTER_VERSION` · 가중치 선택 · API 경로와 의미는 **한 줄도
+바꾸지 않았습니다.** 이번 작업의 목적은 구조 이관입니다.
+
+---
+
+## D-039
+### Place·Journey 코드는 backend/src와 단일 lock으로, 런타임은 분리한다
+
+최상위 `place-search/`와 `journey-service/`에 각각 있던 Python 프로젝트를
+`backend/src/daengs_place/`, `backend/src/daengs_journey/`로 옮깁니다. 생활·훈련 코드가
+이미 `daengs_life`·`daengs_training` 패키지로 같은 `src/`에 있으므로, 팀이 소유하는 일반
+Python 서비스는 같은 패키지 레이아웃과 `backend/pyproject.toml`·`backend/uv.lock` 한 벌을
+사용합니다. 원본의 일반명 `app`도 두 서비스를 한 환경에 설치할 수 있도록 고유 패키지명으로
+바꿉니다.
+
+이 결정은 **코드와 의존성의 정본을 합치는 것**이지 프로세스를 합치는 것이 아닙니다.
+Place는 PostGIS·Alembic과 함께 `place-search`, Journey는 외부 경로 Usage Gate와 함께
+`journey-service` 컨테이너에서 계속 따로 실행합니다. 따라서 D-026의 별도 장애 도메인·별도
+PostGIS 결정과 D-027의 nginx 공개 경로는 유지합니다. 외부 API(`/v2/places/search`,
+`/journey`)와 compose 서비스 이름도 바꾸지 않습니다.
+
+`venv`는 프로젝트 정의가 아니라 실행 결과입니다. 두 컨테이너가 같은 lock을 읽더라도
+`place-search-venv`와 `journey-service-venv` named volume은 분리합니다. uv의 exact sync가
+한 서비스의 extra를 다른 서비스 환경에서 지우는 일을 막고, 나중에 런타임을 합치거나 다시
+나눌 때 소스 위치를 또 옮기지 않게 합니다. Place만 필요한 GeoAlchemy2·Alembic은 `place`
+extra로 두고 `place-search`가 `uv sync --extra place`로 선택합니다.
+
+스크리닝처럼 외부 저장소 사본을 그대로 동기화해야 하거나, 보행처럼 대형 모델 의존성과
+분 단위 CPU 작업을 가진 유닛은 이 결정만으로 자동 이관하지 않습니다. 그 예외는 D-022·D-029의
+운영 제약을 별도로 판단합니다.
+
+
+---
+
+## D-040
+### 스크리닝을 `backend/src/daengs_screening/` 로 이관 (D-022·D-024 뒤집음)
+
+최상위 `skin-screening/` 컨테이너를 없애고 backend 안의 패키지로 옮겼습니다.
+`#94`(Training RAG → `daengs_training`) 와 같은 모양이고, `#98`(보행)·`#99`(Place)가
+같은 방향을 예고하고 있어 스크리닝만 남으면 혼자 다른 모양이 됩니다.
+
+#### 무엇이 D-022 를 바꿨나
+
+| D-022 의 근거 | 지금 |
+| --- | --- |
+| torch 가 backend 에 들어오면 무겁다 | **약해졌습니다.** D-021 로 backend 는 이미 `ml` 그룹에 torch 를 갖고 있습니다. 새로 붙는 건 `timm`(모델 정의 모음) · `torchvision` 뿐입니다 |
+| **죽는 범위** | **그대로 유효합니다.** 스크리닝이 넘어지면 로그인과 `/ask` 도 같이 넘어집니다 |
+| 사본 구조가 깨진다 | **맞습니다.** 패키지 이름이 `src` → `daengs_screening` 으로 바뀌어 "그냥 복사" 가 안 됩니다 → `backend/tools/sync_screening.py` 로 대신합니다 |
+
+**GCP 로 옮길 예정**이라는 것이 결정적이었습니다. 클라우드에서는 상시 떠 있는
+컨테이너 수가 곧 비용이고, `screening-venv` 볼륨이 **backend 와 별개로 torch 를
+한 벌 더** 갖고 있었습니다. 합치면서 그 사본이 사라집니다.
+
+#### 대가로 안고 가는 것
+
+* **죽는 범위** — 위 표 ②. 팀이 알고 택한 방향이라 여기 적어 둡니다
+* **메모리** — 임베딩 모델(D-021) 옆에 가중치 350MB 가 더 올라갑니다.
+  그래서 **첫 요청 때 올립니다** (`service.py` 의 `_agent()`). 기동 때 올리면
+  로그인·`/ask` 까지 같이 늦어지고, 아무도 안 쓰는 동안 메모리를 잡습니다
+* **CPU 경합** — 사진 한 장에 0.6~3초. `run_in_threadpool` 로 이벤트 루프는
+  지키지만 워커 스레드는 `/ask`·로그인과 나눠 씁니다
+
+#### 앱은 손댈 것이 없습니다
+
+부르는 주소가 그대로입니다 — `http://daengback.~/screen/v1/screen`.
+바뀐 것은 nginx 의 upstream 뿐입니다 (`skin-screening:8000` → `backend:8000`).
+
+⚠️ **nginx 의 `rewrite` 를 뺐습니다.** 라우터가 `prefix="/screen"` 을 갖게 돼서,
+접두사를 떼면 backend 에 그 경로가 없어 404 입니다.
+
+#### ⚠️ 의존성 그룹을 빠뜨리면 조용히 죽습니다
+
+`backend/pyproject.toml` 에 `screening` 그룹을 새로 만들었고, compose 의 backend
+`command` 가 `uv sync --frozen --group ml --group screening` 입니다.
+**둘 중 하나만 고치면 `/screen/` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에
+아무 문제도 안 보입니다** (`pdf` 그룹이 경고하는 그 함정).
+확인: `docker compose exec backend uv pip list | grep -i timm` 가 비면 안 됩니다.
+
+`torchvision` 도 `[tool.uv.sources]` 에 같이 지목했습니다 — `torch` 만 CPU 로
+잡아 두면 torchvision 이 PyPI 기본에서 와서 NVIDIA 런타임을 다시 끌고 옵니다.
+
+#### 사본은 스크립트로 유지합니다
+
+`backend/tools/sync_screening.py <원본경로>` 가 원본에서 15개 파일을 가져오고
+import 를 기계적으로 치환합니다. 돌린 뒤 `git diff` 가 비면 원본과 같다는 뜻입니다.
+**`serve.py` 는 안 가져옵니다** — 원본은 단독 서버, 여기는 라우터라 모양이 다릅니다.
+
+
+---
+
+## D-041
+### v1 의미 라우터는 Gemini 의미 선택 + 결정론적 RoutePlan 조립으로 수용한다
+
+DAENGS v1 의미 라우터 모델은 팀 결정으로 **`gemini-3.5-flash-lite`** 를 사용합니다.
+Card 2A는 공급자나 모델을 비교해 승자를 고르는 실험이 아닙니다. 모델 출력 전에
+80개 한국어 골드 RoutePlan, `semantic-router-ko-v1` 프롬프트, 결정론적 지표와 수용
+게이트를 함께 동결하고, 선택된 모델을 그 기준에 대해 **PASS/FAIL**로만 판정합니다.
+
+Phase 1은 이 기준을 만드는 오프라인 작업이며 Gemini를 호출하지 않습니다. Phase 2에서
+FAIL이 나와도 모델을 자동 교체하지 않습니다. 실패 유형을 기록한 뒤 프롬프트 개선,
+스키마·컨텍스트 개선, 아키텍처 명확화 중 다음 조치를 사람이 결정합니다. Phase 2 결과를
+보고 v1 프롬프트나 게이트를 제자리 수정하지 않으며, 변경이 필요하면 버전을 올리고 전체
+벤치마크를 다시 실행합니다.
+
+**Card 2A 결과로 개정 (2026-09-01)** — v1 의미 라우터는 `gemini-3.5-flash-lite`를
+**capability/handoff 의도 선택에만** 사용합니다. 모델이 선택할 EXECUTE는 Training·Life·Walk,
+HANDOFF는 Skin·Gait입니다. Training/Life 원문 payload, trusted Walk 좌표, 좌표 누락 CLARIFY와
+그 배타성, 고정 Skin/Gait reason, 최종 Card 1 `RoutePlan` 구성은 결정론적 오케스트레이션
+책임입니다. 모델은 payload 문구·좌표·CLARIFY·reason 또는 도메인 답변을 생성하지 않습니다.
+
+이 경계에서 `semantic-router-ko-v3`를 같은 80문항과 동결 gate로 한 번 실행해 최종
+**PASS**했습니다. 이는 공급자/모델 비교의 증거가 아니며, `mixed_09` 한 건의 사람 확인
+annotation 정정은 버전 overlay로 남겨 과거 결과를 보존했습니다. PASS 뒤 prompt/gold/gate를
+더 조정하거나 Gemini를 다시 실행하지 않습니다.
+
+**모델 선정 정정 (2026-09-01, PR #130)** — 위 "팀 결정"은 실제로는 사람의 모델 선정
+기억 착오에서 비롯됐습니다. 원래 의도된 팀 라우터 모델은 `gemini-3.1-flash-lite`였습니다.
+착오를 프로덕션에 반영하기 전에, 동일한 80개 v3 gold·`semantic-router-ko-v3` 프롬프트·
+동결 gate로 `gemini-3.1-flash-lite`를 재실행했습니다(`runner_v4.py`,
+`backend/evals/orchestration_router/summary_v4.json`): 80건 시도, 재시도 0회, 15개
+게이트 전부 **PASS**, `exact_route_plan_match` 98.75%(`gemini-3.5-flash-lite`와 동일하게
+`mixed_09` 1건만 불일치), schema validity 100%, executable precision 98.68%/recall 100%,
+Skin/Gait handoff recall 100%로 정확도는 사실상 동등합니다. 지연은 `gemini-3.1-flash-lite`가
+더 느립니다 — warm p50 859.28ms vs 784.71ms(+9.5%), warm p95 1143.53ms vs 947.53ms(+20.7%).
+이 지연 증가는 의사결정권자가 명시적으로 수용했습니다. 이 근거로 production
+`ROUTER_MODEL_ID`를 `gemini-3.1-flash-lite`로 교정했습니다. `gemini-3.5-flash-lite`
+벤치마크 기록(`summary_v3.json` 등)은 지우지 않고 감사 근거로 보존합니다.
+`gemini-3.1-flash-lite`는 Training/Life 생성에도 쓰이지만(`docs/life/roadmap.md`,
+별도 프롬프트·런타임 경로) 그것과 라우터로서의 이번 채택은 서로 다른 책임이며,
+채택 근거는 이 절의 v4 수용 벤치마크입니다.
+
+
+---
+
+## D-042
+### 서빙은 GCP VM 1대로 이관 — 배포 소스는 main, 크롤러·코퍼스·개발 DB 는 로컬에 남긴다
+
+앱 출시(HTTPS 필수)와 클라우드 배포 경험을 위해 서빙을 **GCP VM 1대**(e2-standard-4,
+asia-northeast3)로 옮깁니다. Cloud Run 이 아닌 이유(임베딩 상주·celery 상주·바인드
+마운트·비용 3배)와 비용 계산은 노션 "클라우드 이전 검토" 문서에 있습니다. 일정·단계는
+`docs/deploy/roadmap.md`, 명령 절차는 `docs/deploy/runbook.md`, GCP 전용 구성은
+`docker-compose.gcp.yml` + `nginx/gcp.conf` 입니다.
+
+- **배포 소스는 `main` 브랜치**입니다 (PR #114 가 첫 스냅샷). 별도 배포 레포를 만들지
+  않습니다 — 정본이 둘이 되면 핫픽스가 갈라지고(D-032 가 피한 그 상황), 같은 목적을
+  기존 규칙(완성 단위마다 dev → main PR)이 이미 제공합니다. **이관 관련 파일만 예외로
+  main 기준 브랜치 → main 머지**로 작업합니다 — 소비자가 GCP VM(main clone)뿐이라
+  dev 를 거칠 이유가 없습니다 (roadmap §3).
+- **서빙만 옮깁니다.** 크롤러·코퍼스 정본은 로컬 서버에 남습니다 — 코퍼스 raw 는
+  서빙 경로에서 읽히지 않고(앱이 읽는 것은 적재가 끝난 pgvector 뿐), 적재는 GPU 때문에
+  어차피 개발 PC 라 옮겨도 일하는 곳이 안 바뀝니다. 대신 컷오버 리스크와 왕복 비용이
+  생깁니다. GCP 유지가 확정되면 그때 2차로 이전합니다 (roadmap §7).
+- **DB 는 dev/prod 로 갈라집니다.** GCP 2대(pgvector·place-db, 덤프 복원)가 운영 정본,
+  로컬 서버 DB 는 개발용으로 남습니다. Training RAG 는 별도 DB 가 아니라 vectordb 안
+  테이블입니다(#112). GCP 는 5432/6379 를 인터넷에 열지 않습니다 — 지금 compose 의
+  LAN 개방을 인터넷에 재현하지 않습니다.
+- **TLS 는 certbot(Let's Encrypt)** — 가비아 DNS 유지, A 레코드만 GCP 고정 IP 로.
+  앱에 박는 주소는 IP 가 아니라 **도메인**입니다. 그래야 9/21 이후 VM 을 지워도
+  DNS 회귀로 배포된 앱이 계속 삽니다.
+- **기한 제약** — 발표 9/21 까지 유지가 1차 목표. 크레딧(약 ₩435k)이 **2026-11-17
+  만료**되고 계정이 일반 계정이라 만료 후 자동 실비 청구입니다. 종료 시 정지가 아니라
+  **삭제**까지 해야 합니다(디스크·미연결 고정 IP 는 정지 중에도 과금).
+
+**도메인 결정으로 개정 (2026-09-01 팀 회의)** — 클라우드는 기존 이름을 넘겨받지 않고
+**새 서브도메인**을 씁니다: 프런트 `daengapp.weareithero.cloud` · 백엔드
+`daengapi.weareithero.cloud`. 기존 `daengs`·`daengback` 은 로컬(개발) 서버가 그대로
+유지합니다 — 메인 프런트가 앱이라 웹 주소의 가치가 낮고, 이렇게 하면 **DNS 컷오버가
+아예 없습니다**(새 레코드 추가만 하고 기존 레코드는 안 건드림). 앱에 박는 주소는
+`https://daengapi.weareithero.cloud` 입니다. 와일드카드 DNS/인증서는 쓰지 않습니다 —
+가비아는 DNS-01 자동 갱신 수단이 마땅치 않아 와일드카드 인증서가 수동 갱신이 됩니다.
+
+---
+
+## D-043
+### 보행 분석은 backend 가 record·job 을 소유하고, gait 는 내부 워커로 남는다
+
+앱이 gait 서비스를 직접 부르는 구조를 끝냅니다. 새 계약은 backend 의
+`/app/gait/*` 이고, 흐름은 이렇습니다:
+
+```
+앱 → /app/gait/*        backend (인증 · pet 소유권 · record/job · presigned 발급)
+앱 → cloud storage       직접 업로드 — 영상이 backend 를 지나가지 않는다
+backend → Redis 큐(gait) 작업 발행
+gait 워커(별도 프로세스) → storage 에서 읽어 분석 → backend DB 에 결과 반영
+```
+
+#### 무엇을 뒤집고 무엇을 유지하나
+
+| 기존 결정 | 뒤집는 부분 | 유지하는 부분 |
+| --- | --- | --- |
+| D-038 "접점 0개" | `daengs_backend → daengs_gait` **지연 import 한쪽**이 생긴다 (태스크가 분석 함수를 부른다) | **별도 프로세스 · 별도 venv(gait 그룹) · 런타임 격리** |
+| D-029 격리 근거 | — | 전부. 분 단위 추론은 여전히 워커에서만 돈다 |
+| gait `API.md` v1 (앱→gait 직접) | 앱은 `/app/gait/*` 만 본다. 기존 `/gait/*` 는 앱 전환(#64) 뒤 단계 제거 | 응답 필드 모양 대부분 (`comparable`·`has_overlay` 등 파생 필드 유지) |
+| 설계문서 §3 "gait 가 파일 물리 소유" | 파일이 cloud storage(#78) 로 | **DB 에 영상 바이트를 절대 넣지 않는다** |
+
+#### 왜 인증을 gait 에 붙이지 않았나
+
+`/gait/*` 의 모든 경로가 `dog_id` 하나로 동작하고 그 값을 검증하지 않았다 —
+남의 기록을 받아오고 지울 수 있었다 (앱 카드 DAENGS_APP#64 가 출시 서류를 쓰다 발견).
+검증에 필요한 것(계정·세션·`pets.app_user_id`)은 전부 backend 에 있고, gait 에
+인증을 넣으면 그 지식이 두 곳으로 갈라진다. **소유권은 `pet_id → pets.app_user_id`
+JOIN 으로 유도**하고 owner 를 중복 저장하지 않는다 — 반려견 양도에서 어긋난다.
+
+#### 상태는 두 축이다 — 섞으면 안내가 갈리지 않는다
+
+```
+status         : PENDING → UPLOADED → PROCESSING → DONE / FAILED   (파이프라인)
+quality_status : ok / unavailable                                   (DONE 안에서)
+```
+
+FAILED(워커가 죽음)는 **재시도**, unavailable(영상이 분석 부적합)은 **재촬영**이다.
+D-033 이 ABSTAINED≠REFUSED 를 가른 것과 같은 이유다.
+
+#### Celery 는 backend 자체 앱이다
+
+`daengs_life.tasks.celery_app` 에 태스크를 넣으면 D-021 이 세 줄로 못박은
+backend→life 접점이 넓어진다. 같은 Redis 브로커에 **앱 인스턴스만 따로** 두고
+큐 이름(`gait` vs `crawl`)이 가른다. 태스크 정의·DB 반영은 backend 소유,
+무거운 분석 함수만 `daengs_gait` 에서 **지연 import** 한다(방식 ⓒ) —
+`services/training_rag.py` 가 `daengs_training` 을 부르는 규율과 같고,
+`daengs_gait` 는 여전히 backend 를 모른다.
+
+⚠️ 그 지연 import 를 최상단으로 올리면 **기본 설치(backend, gait 그룹 없음)가
+   ImportError 로 죽는다.** 테스트가 지키고 있다 (`test_gait_app_api.py`).
+
+#### 저장소는 GCS — Signed URL, backend 가 키를 만든다 (2026-09-02 확정)
+
+```
+앱 → /app/gait/analyze → backend 가 object key 생성 + GCS Signed URL(PUT) 발급
+앱 → GCS 에 직접 PUT (영상이 backend 를 통과하지 않는다 — 원칙 1)
+앱 → confirm → backend 가 exists() 로 실존 확인 후 큐 발행
+워커 → GCS 에서 Signed URL(GET)로 받아 분석, overlay 는 GCS 에 upload
+```
+
+- **object key 는 backend 가 만든다** (`build_object_key`, 원칙 6). 앱은 표시용 이름만
+  주고 그 확장자만 키에 반영된다 — 앱이 키를 정하면 남의 경로를 덮거나 훔쳐본다.
+- **버킷은 public 으로 열지 않는다** (원칙 7). 접근은 전부 Signed URL. 자격증명은
+  코드에 두지 않고 ADC(GOOGLE_APPLICATION_CREDENTIALS / 워크로드 아이덴티티).
+- **bucket·location·만료·정책은 하드코딩하지 않는다** (원칙 8) — 전부 `settings`.
+  리전은 서울(asia-northeast3) — 해외면 국외이전 동의가 따로 필요하다.
+- **삭제·파기는 한 통로로 모은다** — 사용자 직접 삭제 · 탈퇴 · 보관기간 만료 · confirm
+  안 온 고아가 전부 `gait.cleanup` 태스크로 간다. soft delete 로 표시하고 워커가
+  object 를 지운 뒤 행을 물리 삭제한다 (키를 먼저 잃으면 파일이 고아가 된다).
+
+#### 임시 bridge — GCS 자격증명 전에 왕복을 검증하려고 (settings.gait_storage="local")
+
+`LocalBridgeStorage` 는 로컬 디렉터리에 두고 backend 의 `_bridge` 엔드포인트로
+업로드를 받는다. **프로덕션이 아니다** — 여기서는 영상이 bridge(backend)를 지나가므로
+원칙 1 과 다르고, `gait_storage="local"` 일 때만 켜진다. 실측으로 IMG_8631.mov 왕복
+(upload→confirm→분석)이 sampled 298·detected 99·usable 3 으로 walk_demo 와 일치했다.
+
+#### 하지 않은 것 · 기다리는 것
+
+- **provider 는 GCS 확정, 세부값은 #78 대기** — 버킷·리전 세부, Signed URL 만료의
+  최종값, 보관 기간, 탈퇴 시 파기 시점, 기록 삭제 시 원본/overlay 삭제 정책.
+  코드는 그 값들을 `settings`·태스크 통로로 **열어 두었을 뿐** 정책을 정하지 않았다.
+- **기존 JSON 기록은 이관하지 않는다** — 전부 테스트 데이터이고 `dog_id="1"` 같은
+  값은 `pets.id` UUID FK 를 만족하지 못한다.
+- ⚠️ **앱 전환(#64) 전까지 무인증 `/gait/*` 가 열려 있다.** 완화는 앱 쪽
+  "비공개 테스트 빌드에서 끄기"이고, nginx location 제거는 전환 검증 뒤다.
+
+
+---
+
+## D-044
+### 산책 입력 봉인과 계산·Paint 세대를 분리해 보존한다
+
+`walks.analysis_state`는 원본 입력의 변경 가능성만 표현합니다. `collecting`에서는 좌표와
+계산 입력을 받을 수 있고, `derived`는 현재 입력이 봉인됐다는 뜻입니다. 계산 정책이 바뀌어
+재분석하더라도 원본을 다시 여는 것이 아니므로 상태를 `collecting`으로 되돌리지 않습니다.
+동기 계산을 한 트랜잭션에서 수행하는 동안에는 별도 `finalizing`·`failed` 상태를 만들지 않습니다.
+
+계산 결과의 identity는 `walk_analyses`가 소유합니다. 같은 `walk_id`라도 입력 fingerprint나
+Facts·Receipt·Observation 버전이 다르면 새 행으로 쌓고 이전 결과를 덮어쓰지 않습니다.
+자주 목록·집계할 `moving_distance_m`, `moving_s`, `stop_count`만 컬럼으로 꺼내며 전체
+canonical 계약은 JSONB로 함께 보존합니다. Event와 Observation도 실제 개별 행 질의가 생기기
+전까지는 정렬된 JSON 배열로 둡니다.
+
+Paint는 Facts 계산과 독립된 세대입니다. 한 `walk_analysis` 아래
+`walk_cellophane_sheets (analysis_id, paint_fp)`를 여러 장 둘 수 있게 해, Paint만 바뀌었을 때
+Facts·Receipt를 복제하지 않습니다. sheet payload는 storage schema v1의 정렬된
+`[q, r, occupancy_s, peak]` 배열과 전체 SHA-256 fingerprint를 가집니다. 현재 제품에는 한
+산책의 장 전체를 쓰고 읽는 경로만 있으므로 셀당 한 행은 만들지 않습니다. 특정 셀 검색이나
+셀별 누적 집계가 실제 소비자로 생기면 canonical JSONB를 유지한 채 검색용 index를 별도로
+물질화합니다.
+
+원본 좌표 보관은 기존 결정대로 계정 삭제 시까지 유지합니다. Geo의 purge 전제나 셀 행 저장
+형태를 운영 저장소에 그대로 복제하지 않습니다. finalize API는 다음 PR에서 Walk 행 잠금 아래
+분석·sheet 저장과 `derived` 전환을 한 트랜잭션으로 묶습니다.
+
+---
+
+## D-045
+### Walk는 in-process 제품 패키지로 두고 Place·Journey는 능력 경계로 소비한다
+
+산책 측정과 공간 일기의 정본은 `backend/src/daengs_walk/`에 둡니다. 이것은 별도
+컨테이너나 독립 서비스가 아니라 backend 프로세스 안에서 호출되는 **제품 기능 패키지**입니다.
+HTTP 인증·요청 수명·DB 트랜잭션은 계속 `daengs_backend`가 소유하고, 산책 lifecycle
+서비스가 `daengs_walk`의 공개 진입점을 호출합니다.
+
+패키지의 계산 코어는 한층 더 좁습니다. 좌표 정규화, 측정 사실, 관측 후보, 계측 영수증,
+hex-v1, Cellophane 생산은 FastAPI·SQLAlchemy·DB·시계·난수와 Place·Journey를 모르는
+결정론적 모듈로 유지합니다. Cellophane은 **산책에서 직접 측정한 macro 공간 자료**라서
+장소 검색 결과나 일기 문맥을 그 안에 굽지 않습니다. 그래야 같은 산책을 같은 계산 세대로
+재현하고, 계절·날씨·반려견 같은 조건으로 장을 나중에 골라 겹칠 수 있습니다.
+
+반면 `daengs_walk` 패키지 전체가 영원히 순수하거나 별개인 것은 아닙니다. 이후 공간 일기의
+Capsule·Context 응용부는 Place의 주변 특성이나 Journey의 일기 능력을 사용할 수 있습니다.
+그때는 좁은 capability/adapter 계약을 두고 다음 방향으로만 연결합니다.
+
+```text
+daengs_backend (HTTP · auth · DB transaction)
+    └── daengs_walk application
+          ├── deterministic walk calculation core
+          ├── Place capability adapter  ──> daengs_place runtime/API
+          └── Journey capability adapter ─> daengs_journey runtime/API
+```
+
+Place는 D-026·D-039의 별도 PostGIS와 런타임 경계를 계속 소유합니다. Journey는 D-039의
+별도 런타임과 외부 경로 Usage Gate를 계속 소유합니다. Walk가 두 패키지의 구현 코드나
+테이블을 복사하거나, 내부 함수를 직접 불러 그 경계를 우회하지 않습니다. 같은 프로세스로
+합치는 선택을 나중에 하더라도 호출부는 어댑터 뒤에 두어 소유권과 정책을 유지합니다.
+
+이번 결정에서 adapter 인터페이스를 미리 만들지는 않습니다. 아직 어떤 Capsule/Context가
+어떤 Place·Journey 결과를 요구하는지 정해지지 않았기 때문입니다. 구체 소비자가 생길 때
+최소 계약을 함께 추가합니다. 현재 이관 범위는 측정 evidence와 canonical Cellophane
+producer까지이며 DB 저장, API, 필터 질의, 장 겹치기, 핀·일기 UI는 포함하지 않습니다.
+
+**번호 재부여 (2026-09-02)** — 이 결정은 원래 D-042 로 발행됐습니다. 같은 날 `main` 에서 GCP 이관 결정이 같은 번호로 나갔고(PR #119, 09-01 14:02), 이 결정은 `dev` 에서 나왔습니다(PR #125, 09-01 17:30). 두 브랜치가 서로를 못 봐서 생긴 충돌이라 `docs/collaboration.md` §4 의 규칙대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-045 로 옮겼습니다. 같은 사고를 다시 내지 않으려고 이관 산출물의 main 직행 예외를 없앴습니다 — `docs/deploy/roadmap.md` §3.
+
+---
+
+## D-046
+### Walk는 실제 산책과 공간 기억, Place는 주변 세계 사실, Journey는 계획 경로를 소유한다
+
+D-045는 Walk가 Place·Journey 능력을 어댑터 뒤에서 소비할 수 있다고 정했지만, 어떤 질문과
+데이터를 누가 소유하는지는 남겨 두었습니다. Geo의 Capsule·Spatial Diary를 제품에 채택하기
+전에 다음 경계를 고정합니다.
+
+| 패키지 | 답하는 질문 | 소유하는 정본 |
+| --- | --- | --- |
+| `daengs_walk` | 실제 산책에서 무엇이 측정되고 기억됐는가 | 좌표 입력, Facts, Receipt, Observation, Cellophane, Capsule과 이후 Pin·공간 일기 |
+| `daengs_place` | 이 좌표 주변에 무엇이 존재하는가 | Place identity, 원천 사실, 태그, 검색·주변 장소 결과 |
+| `daengs_journey` | 사용자가 어디로 가려고 계획했는가 | 선택 장소까지의 단발 계획 경로 snapshot |
+
+**Journey는 Journal이 아닙니다.** 실제로 걸은 경로와 사용자가 남긴 기억·일기는 Walk가
+소유합니다. Journey는 계획 경로를 만들 뿐 실제 GPS, 행동 관측, 일기 문장이나 Pin을 쓰지
+않습니다. Walk가 나중에 계획과 실제를 비교할 때도 Journey의 snapshot을 입력으로 받을 뿐,
+Journey 저장소를 실제 산책의 정본으로 삼지 않습니다.
+
+### 호출과 저장 경계
+
+세 제품 패키지는 서로의 Python 구현을 직접 import하거나 DB를 조회·수정하지 않습니다.
+별도 DB 사이에 FK도 만들지 않습니다. HTTP·인증·재시도·트랜잭션을 소유한
+`daengs_backend`가 조립점이며, 구체 소비자가 생겼을 때 소비자가 요구하는 최소 typed
+capability와 adapter를 함께 만듭니다. 미리 범용 Place/Journey adapter를 만들지 않습니다.
+
+Walk가 특정 장면의 주변 장소 사실을 필요로 하면 Place의 공개 capability가 반환한 최소 사실을
+출처·계약 버전·확보 시각과 함께 Walk의 별도 context snapshot으로 동결합니다. Place 행 전체를
+복제하거나 현재 Place를 매번 다시 읽어 과거 일기의 뜻을 바꾸지 않습니다. Journey 결과도 실제
+비교 기능이 생겼을 때 같은 방식으로 참조 ID와 필요한 계획 snapshot만 받습니다.
+
+호출 방향은 다음과 같습니다.
+
+```text
+Phone GPS ───────────────────────────────▶ Walk
+Place ── 주변 사실 snapshot ─────────────▶ Walk의 후속 Event Context
+Journey ── 선택적 계획 경로 snapshot ────▶ Walk의 계획/실제 비교
+```
+
+Place와 Journey는 Walk 테이블을 쓰지 않으며, Walk의 계산 결과를 자기 정본으로 복제하지
+않습니다. 공유가 필요하면 각 소유자의 공개 계약을 통해 값으로 전달합니다.
+
+### finalize는 외부 능력과 분리한다
+
+Walk finalize와 첫 Capsule 봉인은 업로드돼 있거나 Walk가 이미 소유한 자료만으로 끝나야 합니다.
+Place·Journey 네트워크 호출을 Walk 행 잠금 안에서 실행하지 않고, 두 능력의 장애 때문에 산책
+봉인이나 앱 재시도가 실패해서도 안 됩니다. 주변 세계 보강은 봉인 뒤 별도 단계에서 수행하며
+값을 확보하지 못했으면 `unknown`, 호출을 시도해 실패했으면 `failed`로 남깁니다.
+
+따라서 첫 Dev형 Capsule은 Facts·Receipt·Observation·Cellophane과 앱이 산책 시작 때 남긴
+날씨만 봉인합니다. Place 주변 사실, Journey 계획 경로, 행동 의미와 일기 문장은 필수 자식이
+아닙니다. 각 데이터의 실제 소비자가 생기는 후속 결정에서만 경계를 넓힙니다.
+
+---
+
+## D-047
+### Capsule은 WalkAnalysis와 1:1 seal이며 기존 원판을 복제하지 않는다
+
+Geo의 Capsule을 Dev에 채택하되 저장 구조를 그대로 복사하지 않습니다. Dev에는 이미
+`walk_analyses`가 Facts·Receipt·Event·Observation을, `walk_cellophane_sheets`가 Paint 세대를
+보존합니다. 새 `walk_capsules`는 `analysis_id`를 PK이자 FK로 갖는 1:1 자식이며, 이 원판들이
+공간 기억 소비에 준비됐다는 선언만 맡습니다. Capsule 자체에는 계산 결과를 다시 넣지 않고
+계약 세대, 관측 capability, 당시 환경 원자와 seal 시각만 둡니다.
+
+강아지 ID도 Capsule에 중복 저장하지 않습니다. 한 산책에는 여러 마리가 참여할 수 있고 그
+연결의 정본은 `walk_pets`입니다. 이후 행동 증언과 개체별 일기는 해당 산책과 강아지를 함께
+가리키는 별도 기록으로 만들며, Capsule 하나를 강아지마다 복제하지 않습니다.
+
+첫 context snapshot은 앱이 산책 시작 때 이미 업로드한 WMO 날씨 코드·주야·기온만 옮깁니다.
+하나라도 있으면 `partial`, 전부 없으면 `unknown`이며 현재 날씨로 과거를 보충하지 않습니다.
+Place나 Journey를 finalize 행 잠금 안에서 호출하지도 않습니다. 기존 분석 backfill 역시 당시
+Walk 메타데이터만 사용하고 `legacy_walk_metadata_v1` 출처를 명시합니다. WMO 코드 0~99와
+기온 -100~100℃ 밖의 기존 값은 환경 원자로 해석하지 않고 migration에서 `NULL`로 바로잡으며,
+이후 업로드와 DB 제약이 같은 범위를 강제합니다.
+
+finalize는 Analysis·Cellophane·Capsule을 한 SQLAlchemy aggregate로 조립하고 `derived` 전환과
+같은 DB 트랜잭션에서 commit합니다. 원본 좌표는 D-044대로 계정 삭제 때까지 보존하므로 Geo의
+purge 전제나 물리적 "마지막 INSERT" 순서를 들여오지 않습니다. 재시도에서 `derived`인데
+Capsule이 없으면 성공으로 위장하거나 영구 충돌로 남기지 않고 기존 Analysis와 Walk
+메타데이터에서 같은 seal을 복구합니다.
+
+배포는 Capsule 테이블 migration을 코드보다 먼저 적용합니다. 그 뒤 새 코드가 뜨기 전까지
+이전 프로세스가 만든 Analysis에는 Capsule이 없을 수 있으므로, 새 finalize는 같은 Walk 행
+잠금 안에서 그 누락 seal을 기존 메타데이터로 복구합니다. 배포 뒤 migration을 한 번 더
+실행하고 verify하여 재시도하지 않은 산책까지 backfill합니다.
+
+Capsule은 이번 단계에서 내부 저장 계약입니다. 별도 HTTP API, App UI, Place 주변 사실,
+Journey 계획 snapshot, 행동 의미와 일기 문장은 실제 소비자가 생기는 후속 PR에서 추가합니다.
+
+---
+
+## D-048
+### 제품 대화 저장은 허용하되 관측 로그의 질문 원문 금지는 유지한다
+
+D-037은 오케스트레이션의 일반 운영 로그·트레이스에 질문 원문을 남기지 않는 결정입니다.
+사용자가 다시 열어 보는 **제품 기능의 정본 데이터**까지 금지한 결정은 아닙니다. 두 저장은
+목적·접근 경로·보존 수명이 다르므로 다음과 같이 구분합니다.
+
+| 구분 | 질문·답변 원문 | 목적 |
+| --- | --- | --- |
+| 제품 대화 테이블 (`chat_sessions` · `chat_turns`) | 사용자 동의 기능 범위에서 저장 | 최근 대화 복원·사용자 요청 요약 |
+| 운영 로그·트레이스·메트릭 | 계속 금지 | 장애 진단·성능·상태 관측 |
+
+제품 저장 행을 로그에 덤프하거나, 예외 메시지·SQL 바인드·공급자 payload를 통해 원문을 관측
+계층으로 복제하지 않습니다. 관측에는 D-037의 `request_id`·상태·오류 코드 같은 안전한
+메타데이터만 남깁니다. 탈퇴 트랜잭션은 `app_users` 행을 유지하므로 FK cascade에 기대지 않고
+대화와 저장된 요약을 명시적으로 삭제합니다.
+
+릴리즈 범위는 **v0.0.0 제외, v0.0.1 활성화**입니다. v0.0.0은 무상태 대화 계약을 유지하고,
+v0.0.1부터 제품 대화 영속화를 켭니다. 원문 관측을 허용하는 변경이 필요하면 D-037의
+명시적 옵트인·별도 저장·보존 기한 조건을 만족하는 별도 결정을 먼저 만듭니다.
+
+**외부 호출 경계와 인증 (2026-09-03 보강)** — 대화 turn과 AI 요약은
+`활성 확인 + 예약 TX → AsyncSession 닫기 → 외부 호출 → 완료/실패 TX`이며, 외부 호출 동안
+열린 요청 DB 세션과 행 잠금은 **0개**여야 합니다 (`docs/chat-transaction-flow.md`). 그래서 서비스가
+짧은 TX를 따로 소유하는 엔드포인트(`POST /app/chats/{id}/summary`)는 요청 세션에서
+`app_users FOR UPDATE`를 잡는 `CurrentAppUser`가 아니라 **토큰만 보는
+`CurrentAppMemberTokenOnly`**를 쓰고, 회원 active 확인은 서비스의 예약 TX가 같은 잠금으로
+다시 합니다. 서버 Phase 3A(2026-09-03)에서 이전 배선이 PostgreSQL 자기 교착(바깥 요청 TX
+`idle in transaction`으로 `app_users FOR UPDATE` 보유, 안쪽 INSERT `chat_summaries`가 FK
+`FOR KEY SHARE`로 `Lock/transactionid` 대기, 공급자 호출 0회)으로 워커를 영영 멈추게 한
+것이 이유입니다. 전역 `FOR NO KEY UPDATE`로만 고치지 않는 이유는 그 FK 충돌은 피해도 외부
+호출 동안 요청 세션과 회원 잠금이 살아 있는 경계 위반이 그대로이기 때문입니다. 요청 세션을
+같이 받는 보통의 앱 API는 계속 `CurrentAppUser`입니다.
+
+같은 보강으로 요약 완료 실패 계약을 turn과 맞췄습니다: 회원은 active인데 완료 UPDATE가 0행이면
+(5분 stale 회수 등) 생성된 요약을 201로 돌려주지 않고 503 `SUMMARY_PERSISTENCE_FAILED`(`summary_id` ·
+`persistence_error_code` · `retry_with_fresh_client_request_id: true`)로 끝냅니다.
+탈퇴가 예약 뒤·완료 전에 commit되면 완료 TX의 active 확인이 401로 끝나고, 지워진 대화·요약 행을
+다시 만들지 않습니다.
+
+**번호 재부여 (2026-09-03)** — 이 결정은 원래 D-043 으로 발행됐습니다. 이 브랜치가 `origin/dev` 를 86 커밋 뒤진 채로 있는 사이 dev 에서 D-043·D-044·D-045 가 먼저 머지됐습니다. `docs/collaboration.md` §4 대로 **먼저 머지된 쪽이 번호를 지키고** 이쪽이 D-048 으로 옮겼습니다. 바로 위 D-045 도 같은 사고를 한 번 겪었습니다 — 브랜치를 오래 안 맞추면 반복됩니다.
+
+---
+
+## D-049
+### 공간 일기 v1은 pet·기간·당시 환경으로 Capsule을 고르고 두 가지 분모로 Cellophane을 읽는다
+
+공간 일기는 완성된 지도 snapshot을 저장하는 기능이 아니라, 봉인된 산책별 Capsule과
+Cellophane을 현재 조건으로 다시 고르고 겹치는 읽기 모델입니다. 첫 View selector는
+`pet_id`, KST 양끝 포함 기간, 당시 강수 형태와 낮·밤만 받습니다. 한 산책에 여러 강아지가
+참여하더라도 Capsule을 복제하지 않고, 실제 DB 조회 단계에서 `walk_pets`를 통해 각 강아지의
+cohort로 읽습니다.
+
+첫 field metric은 다음 두 개뿐입니다.
+
+```text
+visit_rate
+  해당 셀을 칠한 선택 산책 수 / 선택된 전체 Capsule 수
+  빈 Cellophane도 "방문하지 않은 산책"으로 분모에 남는다.
+
+walk_utilization
+  각 산책의 셀 시간 질량을 먼저 합 1로 만든 뒤 기여 산책을 동등 가중
+  빈 Cellophane은 정규화할 수 없어 이 metric의 기여 분모에서만 빠진다.
+```
+
+한 산책이 여러 Analysis나 pet join으로 두 번 들어오면 비율 분모가 부풀기 때문에 계산 코어가
+중복 `walk_id`를 거부합니다. 서로 다른 `paint_fp`도 같은 `(q, r)`가 같은 위치라는 보장이
+없으므로 한 field에 섞지 않습니다. 결과는 값뿐 아니라 분자, 이름 붙은 분모, Paint 지문,
+selector 지문, context known/unknown 수와 정책 버전을 함께 반환합니다.
+
+### Dev context facet policy v1 → v2
+
+Geo의 첫 View는 `precipitation_mm`과 `sun_elevation_deg`를 사용했지만, Dev가 현재 산책 당시
+동결하는 첫 원자는 앱이 보낸 WMO `weather_code`, `is_day`, 기온이었습니다. v2부터 Walk
+finalize가 Life의 과거 KMA 관측을 값으로 동결하며, 강수 facet은 KMA의
+`precipitation_kind`를 우선하고 없을 때만 WMO로 되돌아갑니다. 없는 원자를 현재 날씨나
+시각으로 추정하지 않고 `unknown`으로 둡니다. 분류는 다음과 같습니다.
+
+```text
+precipitation
+  dry      0, 1, 2, 3, 45, 48
+  rain     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99
+  snow     71, 73, 75, 77, 85, 86
+  mixed    KMA rain_snow 관측
+  unknown  값 없음 또는 WMO 표에서 정의하지 않은 0..99 값
+
+daylight
+  day      is_day=true
+  night    is_day=false
+  unknown  값 없음
+```
+
+어는 이슬비(56·57)와 어는 비(66·67)는 기상 현상 그대로 `rain`입니다. 앱의
+`OutsideApi.weatherOf()`가 이들을 눈으로 접는 것은 창문 그림의 시각 표현 정책이라, 과거 산책
+필터의 의미 정책으로 재사용하지 않습니다. facet 정책이 달라지면 원본 WMO 값을 고치지 않고
+정책 버전과 selector 지문을 올립니다.
+
+날짜는 `Asia/Seoul` 달력으로 해석하고 양끝이 모두 있는 동기 View 기간은 최대 366일입니다.
+여러 facet 축은 AND이고 한 축 안의 여러 값은 OR입니다. 필터에 사용한 축이 모두 알려졌을 때만
+그 Capsule의 context를 known으로 세며, context 필터가 없다면 현재 지원하는 두 축이 모두
+알려져야 known입니다.
+
+이번 결정은 순수 `daengs_walk` 계약과 계산까지만 채택합니다. SQLAlchemy 조회, 인증,
+repeatable-read snapshot, HTTP API와 앱 지도는 다음 조립 단계입니다. EntrySelector,
+EpisodeCandidate·Offer·Attestation·Pin, Memory Place, 일기 문장도 포함하지 않습니다.
+Place 주변 사실과 Journey 계획 경로는 이 계산에 필요하지 않으며 D-046의 capability 경계를
+그대로 유지합니다. 계절 facet은 한국 달력 정책과 실제 UI 소비가 생길 때 별도 버전으로
+추가합니다.
+
+---
+
+## D-050
+### Life는 좌표·과거 시각의 환경 관측을 반환하고 Walk는 후속 단계에서 값으로 동결한다
+
+산책 전의 운영 `GET /walk`와 Life 단독 앱의 계약 검증용 `POST /weather/at`을 분리합니다.
+전자는 현재와 미래를 조립해 산책 적합도를 판단하는 제품 읽기이고, 후자는 좌표와 과거 시각에
+대응하는 환경 사실을 판단어 없이 반환하는 내부 capability입니다. 과거 조회가 현재 산책 적합도
+전체를 재실행하면 예보·대기질·특보까지 불필요하게 호출하고, 현재값을 과거 사실로 오인할 여지가
+생깁니다.
+
+첫 버전은 기상청 초단기실황(`NCST`) 한 원천에서 기온, 습도, 강수 형태, 1시간 강수량만
+반환합니다. 요청 시각(`requested_at`), 값의 시각(`valid_at`), 발표 시각(`issued_at`), 실제 조회
+시각(`fetched_at`)을 분리합니다. 실황은 정시 관측이 40분 뒤 공개되므로, 조회 시점에 아직
+공개되지 않은 회차라면 직전 관측 회차를 선택합니다. 미래 시각은 거부하고, 없는 과거 자료를
+현재 날씨나 stale 현재 캐시로 채우지 않습니다.
+
+강수 형태의 숫자는 기상청 PTY 코드이며 앱이 보내는 WMO `weather_code`와 다른 어휘입니다.
+따라서 PTY를 WMO 숫자로 강제 변환하지 않고 의미 이름과 원본 코드를 함께 반환합니다. 강수량의
+구간 표현도 임의의 점값으로 누르지 않습니다. 각 원자는 출처와 공간 기준을 싣고, 전체 결과는
+`captured`, `partial`, `unknown`, `failed`로 관측 완전성을 드러냅니다.
+
+과거 응답 캐시는 `source + grid + observation cycle`을 키로 쓰는 별도 namespace입니다. 현재
+발표 주기의 stale 판정이나 활성 격자 프리페치에 넣지 않으며, 같은 산책 finalize와 동시 요청의
+중복 전송만 줄이는 캐시이지 영구 기록은 아닙니다. 성공 응답은 일반 TTL을 쓰고, 전송층이
+비재시도성으로 분류한 `NoData`만 한 발표 주기 동안 negative-cache합니다. 일시 장애는 저장하지
+않습니다.
+
+Life는 환경 사실을 조회할 뿐 Walk, Capsule, 일기, pet을 소유하지 않습니다. 후속 Walk 조립은
+산책의 대표 시각과 좌표를 선택해 이 capability를 호출하고 응답값을 Capsule에 동결합니다. 소유
+Walk와 무관한 임의 좌표·회차 조회가 공용 KMA 일일 쿼터를 소진하지 않도록 이번 단계에서는
+`daengs_backend` 제품 앱에 `/weather/at`을 등록하지 않습니다. Walk DB 저장, finalize 연결, 앱
+호출, Place 주변 사실, Journey 계획 경로도 포함하지 않습니다. 이 경계는 D-046의 소유권을
+그대로 유지합니다.
+
+후속 Walk finalize 연결에서도 소유 Walk만으로 호출 자격을 닫는 것만으로는 충분하지 않습니다.
+인증 사용자가 서로 다른 회차·격자의 산책을 반복 생성할 수 있기 때문입니다. 과거 snapshot은
+provider 호출 전에 공용 일 예산을 원자적으로 선점하되, 기존 실시간 10개 활성 격자에 필요한
+560회(격자당 56회/일)는 침범하지 않습니다. 예약분에 닿으면 Capsule은 앱 원본 또는
+unknown/failed로 저하되고, 캐시 hit는 호출 슬롯을 쓰지 않습니다.
+
+
+---
+
+## D-051
+### 의미 라우터가 Place를 고른다 — payload는 능력별로 만들고, 지역명은 좌표가 아니다
+
+Place는 PR #196에서 이미 실행 가능한 능력이었습니다. `CapabilityName.PLACE`·`PlacePayload`·
+내부 HTTP adapter·48KiB `place-capability-v1` projection이 모두 있었고, 결정적 신호
+`requested_capability="place"`로 종단까지 돌았습니다. 없던 것은 **자유 자연어에서 Place를
+고르는 길** 하나뿐이었습니다 — `SemanticRoutingDecision.execute`가 `training`·`life`·`walk`
+세 값짜리 `Literal`이라, "오늘 산책하기 좋은 곳이 어디야?"가 Walk만 실행하고 **장소 대신
+산책 조건**을 답했습니다. 표현할 수 있는 절반만 선택된 것이지 오라우팅이 아니었습니다.
+
+이 결정은 그 목적지 하나를 열고, 그 과정에서 드러난 두 가지를 함께 고정합니다.
+
+### ① 의미 목적지 `place` (프롬프트 `semantic-router-ko-v7`)
+
+`ExecuteName`에 `place`를 더하고 프롬프트에 경계 문장 셋을 넣었습니다. 모델·스키마 모양·
+handoff 쌍·`social_intent`·O-14 1회 재시도는 그대로입니다.
+
+- **Place는 "어디로 갈까", Walk는 "지금 나가도 될까"** 입니다. 둘은 독립적으로 선택합니다.
+- **장소 명사가 배경일 뿐이면 Place가 아닙니다** — "오늘 공원 산책 괜찮아?"는 Walk 단독,
+  "공원에서 리콜 연습"은 Training 단독입니다. Walk가 이미 갖고 있던 "산책이 배경이라고
+  Walk가 아니다" 규칙의 거울입니다.
+- 한 발화가 둘 다 물으면 **둘 다** 고릅니다.
+
+일반 돌봄 경계(D-041 · 라우팅 §2 옵션 C)는 그대로입니다. 새 목적지가 그 공백을 삼키지
+않도록 한 문장을 더했습니다: **"목욕은 몇 주마다"는 미지원, "미용실 찾아줘"는 Place.**
+Place가 생겼다고 사육 상식에 답이 생기지 않습니다.
+
+### ② payload는 능력별 분기로 만든다 — fallback 금지
+
+`assemble_route_plan`의 조립 루프는 `if capability in {"training","life"}: … else: {lat, lon}`
+이었습니다. Walk가 유일한 좌표 능력인 동안에만 맞는 코드였고, `place`가 선택 가능해지는
+순간 **Place에 `query` 없는 WalkPayload를 주어** `PlacePayload` 검증 실패 → 최상위 `FAILED`가
+됩니다. 하필 Place를 추가한 이유인 바로 그 질문들에서만 터집니다.
+
+그래서 능력별 명시 분기로 바꾸고 `else`는 **예외를 던집니다.** 새 `ExecuteName`은 여기에
+자기 payload를 적거나 요청을 소리 나게 세우거나 둘 중 하나이지, 남의 모양을 물려받지
+않습니다. 좌표는 예전처럼 검증된 `context.location`에서만 오고 모델 출력에서는 절대 오지
+않습니다. Place의 `query`는 **원문 그대로**입니다 — Place 서비스가 원문의 문자 구간에
+해석을 grounding하므로 공백을 다듬으면 그 offset이 밀립니다.
+
+같은 이유로 `resolve_deterministic_route`의 Place 특수 분기를 지웠습니다. 그 분기는 공용
+조립기에 Place 규칙이 없어서 있던 것이고, 이제 명시 신호와 의미 경로가 **같은 코드 경로**로
+같은 plan을 만듭니다. 동치성은 테스트로 고정했습니다.
+
+### ③ 좌표 게이트는 선택 전체에 하나
+
+Walk와 Place 둘 다 신뢰된 좌표가 필요합니다. 게이트는 **선택 집합 전체에 하나**이고 CLARIFY는
+여전히 배타적입니다(O-8) — Place+Walk인데 좌표가 없으면 **어느 쪽도 실행하지 않습니다.**
+절반만 돌려주고 나머지를 되묻는 응답은 사용자가 이미 답을 받았다고 읽습니다. 되묻는 문장만
+무엇이 필요했는지에 따라 갈리고, `clarify.missing` 키는 셋 다 같습니다(동결 벤치마크가
+비교하는 것이 그 키 목록입니다). 범위를 벗어난 좌표는 **없는 것으로 칩니다** — 신뢰하지 않는
+좌표는 좌표가 아니고, 상자 안으로 끌어다 붙이면 엉뚱한 동네를 자신 있게 답합니다.
+
+### ④ 실행 순서는 결정적이다
+
+요청은 모델이 나열한 순서가 아니라 `CapabilityName` 선언 순서(`training · life · walk · place`)로
+냅니다. v7 실측 프로브에서 모델이 같은 모양의 질문에 `["place","walk"]`와 `["walk","place"]`를
+둘 다 냈고, 그 순서는 `aggregate_results`가 만드는 `[산책] … [장소] …` 절 순서로 **사용자에게
+그대로 보입니다.** 같은 질문이 두 가지로 배열돼 돌아오면 안 됩니다. 동결 라우터 벤치마크는
+영향이 없습니다 — `_semantic_plan_key`가 requests를 multiset으로 비교합니다.
+
+### ⑤ 지역명 — Option B (디스클로저), 지오코딩은 미룬다
+
+"성수동에서 산책하기 좋은 곳", "부산 해운대 근처 동물병원"의 지역명은 **좌표가 아닙니다.**
+Place에는 geocoder가 없고(`PlaceSpatialConstraint`는 `lat`/`lng`/`radius_m`뿐), Place 전용
+proposer는 공간 표현으로 semantic을 만들지 말라고 명시적으로 금지돼 있습니다. 모델이 좌표를
+지어내는 것은 이 계약이 처음부터 막는 것입니다.
+
+**사람 결정(2026-09-04): Option B.** 검색은 신뢰된 현재 기기 좌표로만 하고, 결과가 그 사실과
+**지역명을 반영하지 못했다는 사실**을 함께 밝힙니다. 두 문장 모두 **조건 없이** 나갑니다 —
+"지역명이 있었나"를 판정하려면 라우터 분류를 하나 더 만들어야 하는데 그것이 바로 이 카드가
+미룬 것이고, 가끔만 나오는 고지는 사용자가 기댈 수 없는 고지입니다. 문구는 어느 쪽이든 참이고
+지역이 해석됐다고 주장하지 않습니다. 고지 notice(`place.searched_around_current_location`)는
+notice 예산 절단 **뒤에** 넣습니다 — 결과가 시끄러울 때 하필 사라지면 안 되는 한 줄입니다.
+
+지역명 지오코딩과 명시적 지역 CLARIFY(Option A: `explicit_named_region` 분류 필드 + Place 전용
+배타 CLARIFY)는 **별도 카드**입니다. 여는 순서는 D-041의 그것과 같습니다 — 근거(geocoder와
+그 권리·정확도) → 소유 서비스 → 그 뒤에야 라우터 신호.
+
+### 공개 계약과 클라이언트 (백엔드 쪽 기록)
+
+`AssistantResponse`·`CapabilityResult`·`PlacePayload`·`place-capability-v1`의 **모양은 바뀌지
+않았습니다.** `aggregate.py`·`graph.py`·contracts·adapters·DB 스키마도 그대로입니다
+(`agent_categories`는 제약 없는 `TEXT[]`라 마이그레이션이 없습니다). 바뀐 것은 Place `answer`
+문구와 notice 하나뿐입니다.
+
+Android가 실제로 받는 JSON 7종을 **`backend/tests/fixtures/place_capability/`에 커밋**했습니다.
+production projection·aggregation·Walk DTO를 그대로 거쳐 생성하고
+(`uv run python -m tools.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
+재생성해 바이트 단위로 대조합니다 — 계약이 움직이면 다른 저장소가 아니라 여기서 깨집니다.
+표시 규칙(대화에서 후보 3개 상한, 알 수 없음을 긍정으로 바꾸지 않기, borrowed 사실의
+`link_state` 보존)은 **클라이언트의 몫**이고 이 결정은 그 근거 데이터를 보존할 뿐입니다.
+출처(`provenance.source`/`value_origin`/`link_state`)와 unknown 상태(`source_state`·
+`evaluation_state`)는 projection이 예전처럼 그대로 실어 보냅니다.
+
+### 근거
+
+- 결정적 계층: `backend/tests/test_orchestration_place_routing.py`(42) ·
+  `test_router_benchmark_place_gold.py`(22) · `test_place_capability_fixtures.py`(30),
+  전부 fake transport — 유료 호출 0.
+- Place 수용: 동결 `gold_place_v1.jsonl` 15건 라이브 프로브 **15/15 PASS**, 스키마 재시도 0.
+- 회귀: 동결 80건 1회(run **v8**, `runner_v8.py`) **PASS — 15/15 gate.** exact 96.25%,
+  실행 precision/recall 96.15%/100%, CLARIFY 100%/100%, forbidden·invented 0.
+  non-exact 3건 중 둘(`mixed_09`·`boundary_05`)은 v7과 **같은** 기존 흔들림이고
+  (walk/training precision이 v7과 소수점까지 동일), 새로 잃은 것은 `walk_03`
+  ("비 그치는 시간 봐서 오늘 걷기 좋은 구간 골라줘")에 Place가 하나 더 붙은 것 **하나뿐**입니다.
+  "구간 골라줘"는 장소 요청과 실제로 가까운 문장이라 이것은 수용하고 경계 사례로 기록합니다.
+  v1~v7 산출물은 제자리 수정하지 않았습니다.

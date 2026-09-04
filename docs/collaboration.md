@@ -99,7 +99,7 @@ Project 3 (`orgs/SAJOYO/projects/3`) 은 `Open Pull Requests` 기준으로 관�
    git fetch origin; git switch <그 이름>; git merge origin/dev
    ```
 
-   `RAG-` 결정 번호나 랩(`lapN`)을 쓸 카드면 **`docs/decisions-rag.md` 머리의 "예약 중" 표에
+   `RAG-` 결정 번호나 랩(`lapN`)을 쓸 카드면 **`docs/life/decisions-rag.md` 머리의 "예약 중" 표에
    한 줄 넣습니다.** 카드를 미리 열어 두는 경우엔 여는 시점이 아니라 **착수할 때** 넣으세요 —
    열어 둔 사이에 다른 카드가 그 번호를 가져갑니다. PR 본문에만 적으면 먼저 머지하는 쪽이 이기고
    나중이 renumber 합니다 (#53 이 번호와 랩을 두 번 옮겼습니다. RAG-042).

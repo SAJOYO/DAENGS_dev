@@ -6,36 +6,85 @@ import { ApiError, apiJson } from "@/lib/api";
 import type { AskHit, AskResponse } from "@/lib/life-rag";
 
 /**
- * `POST /ask` 점검 패널.
+ * `POST /life/ask` 점검 패널.
  *
- * **응답을 줄이지 않고 그대로 그립니다.** `/ask` 가 근거를 통째로 싣는 이유가
+ * **응답을 줄이지 않고 그대로 그립니다.** `/life/ask` 가 근거를 통째로 싣는 이유가
  * *"인용한 조항이 실제로 컨텍스트에 있었나"* 를 보기 위해서인데(RAG-028 ②), 지금은 그것을
  * JSON 으로만 볼 수 있습니다. **`ungrounded` 배지가 검문소④ 그 자체입니다** — 0 이 아니면
  * 모델이 컨텍스트에 없는 조항을 지어낸 것입니다.
  *
- * ⚠️ **아직 배포된 API 에 `/ask` 가 없습니다** (#35). 그전까지 이 패널은 "라우트 없음"
- * 404 를 받습니다 — 서버가 주는 "근거 0건" 404 와 본문이 달라서 화면에서 구분합니다.
+ * **이 패널이 전문을 받는 유일한 소비자입니다.** 사용자에게 닿는 길은 `/assistant/query` 하나이고
+ * 거기서 어댑터가 응답을 줄이므로, 여기가 없으면 근거 전문을 볼 곳이 사라집니다. A4(#176)가
+ * 경로만 바꾸고 응답은 그대로 둔 이유입니다.
+ *
+ * ⚠️ **경로가 A4(#176)로 `/ask` → `/life/ask` 가 됐고 리다이렉트를 두지 않았습니다.** 프론트와
+ * 백엔드가 같은 배포에 같이 나가야 하고, 한쪽만 먼저 나가면 아래 "라우트 없음" 404 를 받습니다 —
+ * 서버가 주는 "근거 0건" 404 와 본문이 달라서 화면에서 구분합니다.
+ *
+ * ⚠️ **서버는 `detail` 을 두 모양으로 줍니다** (`services/ask.py`) — 스스로 이름 붙인 결과는
+ * `{code, message}` 객체이고, 그 전부터 있던 것만 문자열입니다. `ApiError.message` 는
+ * `detail` 이 **문자열일 때만** 서버 문구를 담으므로(`lib/api.ts` 의 `detailOf`),
+ * 객체형은 `ApiError.body` 에서 직접 읽습니다. 백엔드 쪽 같은 판단은
+ * `orchestration/adapters/life.py` 의 `_outcome()` 이고 **둘은 같이 움직여야 합니다.**
  */
 
 /** 서버가 근거 0건일 때 주는 문구 (`services/ask.py`). 라우트 없음 404 와 가르는 표시입니다. */
 const NO_EVIDENCE = "근거를 찾지 못했다";
 
+/** 서버가 스스로 이름 붙인 결과의 `detail` 모양 (`services/ask.py`). */
+type ServerOutcome = { code?: string; message?: string };
+
+/**
+ * `ApiError.body` 에서 **객체형 `detail`** 만 꺼냅니다. 문자열이면 `null` — 그건
+ * `ApiError.message` 가 이미 들고 있습니다.
+ *
+ * 통째로 문자열화하지 않는 이유는 `detailOf` 의 주석과 같습니다 —
+ * `/life/walk-conditions` 는 503 에서 `detail` 에 응답 본문 전체를 싣습니다.
+ */
+function serverOutcomeOf(body: unknown): ServerOutcome | null {
+  if (!body || typeof body !== "object" || !("detail" in body)) return null;
+  const detail = (body as { detail: unknown }).detail;
+  if (!detail || typeof detail !== "object") return null;
+  const { code, message } = detail as ServerOutcome;
+  if (typeof code !== "string" && typeof message !== "string") return null;
+  return {
+    code: typeof code === "string" ? code : undefined,
+    message: typeof message === "string" ? message : undefined,
+  };
+}
+
 type Outcome =
   | { kind: "answer"; data: AskResponse }
   /** 404 인데 서버가 준 것 — 실패가 아니라 **관찰 결과**입니다. */
-  | { kind: "no-evidence" }
+  | { kind: "no-evidence"; message?: string }
+  /** 422 — 물은 것이 이 API 의 경계 밖입니다 (`medical`·`emergency`, #177). */
+  | { kind: "refused"; message: string; code?: string }
   | { kind: "error"; message: string; hint?: string };
 
 function outcomeOf(caught: unknown): Outcome {
   if (caught instanceof ApiError) {
+    if (caught.status === 422) {
+      // 경계 거절. **서버 문구를 그대로 보여 줍니다** — 응급 질문에 "요청을 처리하지
+      // 못했습니다" 를 띄우면 사용자가 받아야 할 안내가 사라집니다.
+      const outcome = serverOutcomeOf(caught.body);
+      if (outcome?.message) {
+        return { kind: "refused", message: outcome.message, code: outcome.code };
+      }
+    }
     if (caught.status === 404) {
-      // 서버의 "근거 0건" 404 는 detail 문구로 알아봅니다. 라우트가 아예 없으면
-      // FastAPI 가 "Not Found" 를 주므로 여기 안 걸립니다.
+      // 기권 두 가지를 먼저 봅니다.
+      //   · 근거는 있는데 물은 것에 못 닿음 → `{code: "no_evidence", message: …}` (#177)
+      //   · 코퍼스가 빔 → 문자열 "근거를 찾지 못했다" (그 전부터 있던 것)
+      // 라우트가 아예 없으면 FastAPI 가 `{"detail": "Not Found"}` 를 주므로 둘 다 안 걸립니다.
+      const outcome = serverOutcomeOf(caught.body);
+      if (outcome?.code === "no_evidence") {
+        return { kind: "no-evidence", message: outcome.message };
+      }
       if (caught.message.includes(NO_EVIDENCE)) return { kind: "no-evidence" };
       return {
         kind: "error",
-        message: "이 서버에 /ask 라우트가 없습니다.",
-        hint: "백엔드에 아직 안 붙은 상태입니다 (#35). 붙고 나면 같은 404 라도 본문이 달라집니다.",
+        message: "이 서버에 /life/ask 라우트가 없습니다.",
+        hint: "프론트만 먼저 배포됐을 수 있습니다 — 경로가 #176 으로 /ask → /life/ask 로 바뀌었고 리다이렉트가 없습니다. 붙고 나면 같은 404 라도 본문이 달라집니다.",
       };
     }
     if (caught.status === 401) return { kind: "error", message: "세션이 만료되었습니다. 다시 로그인해 주세요." };
@@ -83,7 +132,7 @@ export default function AskInspect() {
 
     try {
       const parsedK = Number.parseInt(k, 10);
-      const data = await apiJson<AskResponse>("/api/ask", {
+      const data = await apiJson<AskResponse>("/api/life/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // `k` 를 비우면 **보내지 않습니다.** null 은 "서버 기본값을 쓴다"는 뜻이고,
@@ -114,7 +163,7 @@ export default function AskInspect() {
         <div>
           <p className="text-sm font-medium text-indigo-700 dark:text-indigo-400">생활 RAG · 제도·문서</p>
           <h2 id="ask-inspect-title" className="mt-1 text-2xl font-semibold tracking-tight">
-            질의응답 <code className="text-base font-normal text-zinc-500">POST /ask</code>
+            질의응답 <code className="text-base font-normal text-zinc-500">POST /life/ask</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             동물보호법·가축전염병예방법 등에서 근거를 찾아 답합니다. 무엇을 근거로 줬는지 전문까지 함께 봅니다.
@@ -174,10 +223,32 @@ export default function AskInspect() {
 
         {outcome?.kind === "no-evidence" && (
           <div className="rounded-lg border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-800">
-            <p className="font-medium">근거 0건 — 답을 만들지 않았습니다</p>
+            <p className="font-medium">
+              {outcome.message ? "기권 — 근거가 물은 것에 못 닿았습니다" : "근거 0건 — 답을 만들지 않았습니다"}
+            </p>
+            {/* 서버가 준 사유. **이 화면의 값이 여기 있습니다** — 무엇이 검색됐고 왜 그것으로는
+                답할 수 없었는지를 모델이 직접 적어 줍니다. */}
+            {outcome.message && (
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-zinc-800 dark:text-zinc-100">
+                {outcome.message}
+              </p>
+            )}
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               실패가 아니라 설계입니다. 컨텍스트가 빈 채로 생성하면 그건 검색 결과 위의 답이 아니라 모델의 기억이고,
               &ldquo;출처 링크 + 조항 번호&rdquo; 가 성립할 수 없습니다. 코퍼스에 없는 주제이거나, 아직 적재가 안 된 상태입니다.
+            </p>
+          </div>
+        )}
+
+        {outcome?.kind === "refused" && (
+          <div className="rounded-lg border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-800">
+            <p className="font-medium">경계 밖 — 이 API 가 답하지 않는 질문입니다</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-zinc-800 dark:text-zinc-100">
+              {outcome.message}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              제도·문서 질의응답이라 이 아이의 몸 상태는 다루지 않습니다(#177).
+              {outcome.code ? ` 판정: ${outcome.code}` : ""}
             </p>
           </div>
         )}

@@ -68,6 +68,7 @@ class LawDrfApi(Source):
     format = "xml"
     trust_level = "law"
     license = "공공누리 제1유형"
+    revision_key = "published_at"            # 목록검색의 현행 시행일자가 곧 판이다 (RAG-054)
 
     # (법령명, slug 접미사, subcategory)
     LAWS = [

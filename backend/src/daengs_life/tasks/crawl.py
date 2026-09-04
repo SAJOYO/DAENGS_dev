@@ -11,7 +11,7 @@
 
 ⚠ **쪼갠 이유는 병렬성이 아니다.** 워커는 `--concurrency 1 --queues crawl` 그대로이고 태스크들은
 순서대로 돈다. 동시성을 올리면 같은 호스트로 요청이 겹쳐 나가 `request_delay_sec` 1.5초가
-무의미해진다 (`docs/data-sources.md` §12).
+무의미해진다 (`docs/life/data-sources.md` §12).
 
 ⚠ **적재로 이어 붙이지 않는다** (카드 메모 ③ · RAG-002 · RAG-025). 바뀐 것이 있으면 경고 한 줄을
 남기고 멈춘다. `parse → chunk → embed → load` 는 GPU 와 검문소가 걸려 있어 사람이 랩을 뜨고
@@ -28,7 +28,7 @@ import logging
 from datetime import datetime
 
 from daengs_life.crawler import run as crawler_run
-from daengs_life.crawler.core import cadence, registry
+from daengs_life.crawler.core import cadence, registry, revision
 from daengs_life.crawler.core.config import KST
 
 from . import crawl_runs
@@ -55,7 +55,7 @@ def crawl_source(self, source_id: str, trigger: str = "due") -> dict[str, object
     `crawl_due` 에서 떼어낸 이유는 재시도와 이력이지 **병렬성이 아니다.** 워커는 여전히
     `--concurrency 1 --queues crawl` 로 뜨고, 그래서 이 태스크들은 순서대로 돈다.
     동시성을 올리면 같은 호스트로 요청이 겹쳐 나가 `request_delay_sec` 1.5초가 무의미해지고,
-    그건 크롤 예절 위반이다 (`docs/data-sources.md` §12). **쪼갠 이유가 코드에 안 보이므로
+    그건 크롤 예절 위반이다 (`docs/life/data-sources.md` §12). **쪼갠 이유가 코드에 안 보이므로
     여기 적어 둔다** (RAG-047).
 
     **재시도는 시도마다 `crawl_runs` 에 한 행을 남긴다.** 합치지 않는 것이 의도다 — 세 번
@@ -84,13 +84,33 @@ def crawl_source(self, source_id: str, trigger: str = "due") -> dict[str, object
                       changed_slugs=result.changed_slugs)
 
     if result.changed_slugs:
-        # **여기서 멈춘다.** 이 줄이 C3 의 입력이다 (메모 ③). 적재로 이어 붙이지 않는다 —
-        # `parse → chunk → embed → load` 는 GPU 와 검문소가 걸려 사람이 판단하는 자리다.
+        # **여기서 멈춘다.** 적재로 이어 붙이지 않는다 (메모 ③) — `parse → chunk → embed → load`
+        # 는 GPU 와 검문소가 걸려 사람이 판단하는 자리다. "바뀜"까지가 여기고, "개정"은 아래다.
         log.warning("소스 %s 에서 바뀐 문서 %d건 — 적재는 사람이 판단한다 (RAG-002 · RAG-025)",
                     source_id, len(result.changed_slugs))
 
+    # 판이 slug 에 박힌 소스(약관)는 **새 slug 가 같은 상품의 옛 slug 를 대체한 것**이 개정이다.
+    # 같은 slug 의 바이트가 바뀐 것은 개정이 아니라 재생성이다 (RAG-054 ②). 요청을 더 내지 않는다 —
+    # 이 수집이 이미 목록을 다시 읽었다.
+    superseded = _superseded(source_id, result)
+    for v in superseded:
+        log.warning("개정: %s — %s 가 %s 를 대체했다. 옛 판을 코퍼스에서 지울지는 사람이 정한다 (RAG-054)",
+                    v.title, v.current, v.previous)
+
     return {"source_id": source_id, **counts, "run_id": result.run_id,
-            "changed_slugs": result.changed_slugs}
+            "changed_slugs": result.changed_slugs,
+            "superseded": [(v.previous, v.current) for v in superseded]}
+
+
+def _superseded(source_id: str, result) -> list[revision.Verdict]:
+    new_slugs = list(getattr(result, "new_slugs", []) or [])
+    if not new_slugs:
+        return []
+    try:
+        return revision.superseded(registry.build(source_id), new_slugs)
+    except Exception as e:                      # noqa: BLE001 — 판정 실패가 수집 결과를 지우면 안 된다
+        log.warning("개정 판정 실패 (%s): %s", source_id, e)
+        return []
 
 
 @app.task(name="daengs_life.tasks.crawl.crawl_due")
@@ -108,6 +128,7 @@ def crawl_due(source_ids: list[str] | None = None) -> dict[str, object]:
     seeds = registry.load_seeds()
     now = datetime.now(KST)
 
+    revised: list[str] = []
     if source_ids:
         selected, mode = list(source_ids), "manual"
     else:
@@ -115,13 +136,17 @@ def crawl_due(source_ids: list[str] | None = None) -> dict[str, object]:
         selected = cadence.due_sources(seeds, implemented=implemented, now=now)
         mode = "due"
         log.info("due 소스 %d개 / 시드 %d개 — %s", len(selected), len(seeds), ", ".join(selected) or "없음")
+        # **법령은 주기가 아니라 사건으로 깨운다** (RAG-044 ① · RAG-054 ①). cadence 가 manual 인
+        # 소스는 위 판정이 영영 안 고르므로, 시행일자만 가볍게 조회해(원본은 안 받는다) 바뀐 것만
+        # 받는다. Beat 등록은 여전히 이 태스크 하나다 (원칙 4) — 조회는 "고르기"의 일부다.
+        revised = _revised_sources(seeds)
 
     dispatched: list[str] = []
-    for source_id in selected:
+    for source_id, trigger in [(s, mode) for s in selected] + [(s, "revision") for s in revised]:
         # 한 소스를 못 보내도 나머지는 보낸다 (원칙 5 의 절반. 이제는 발사 단계에서 지킨다).
         try:
             dispatched.append(crawl_source.apply_async(
-                args=(source_id, mode), queue=QUEUE).id)
+                args=(source_id, trigger), queue=QUEUE).id)
         except Exception as e:                  # noqa: BLE001
             log.exception("소스 %s 발사 실패", source_id)
             dispatched.append(f"(발사 실패: {type(e).__name__}: {e})")
@@ -129,9 +154,29 @@ def crawl_due(source_ids: list[str] | None = None) -> dict[str, object]:
     return {
         "mode": mode,
         "selected": selected,
+        "revised": revised,
         "dispatched": dispatched,
         "ran_at": now.isoformat(timespec="seconds"),
     }
+
+
+def _revised_sources(seeds) -> list[str]:
+    """개정 판정에서 받아야 할 것이 나온 소스. 조회 자체가 죽어도 due 발사는 막지 않는다."""
+    try:
+        verdicts = revision.probe_sources(seeds)
+    except Exception as e:                      # noqa: BLE001
+        log.warning("개정 조회 전체 실패 — 오늘은 due 만 받는다: %s", e)
+        return []
+    out: list[str] = []
+    for sid, vs in verdicts.items():
+        hits = [v for v in vs if v.kind in ("new", "revised")]
+        if hits:
+            out.append(sid)
+            for v in hits:
+                log.warning("개정 판정: %s / %s — %s (%s → %s)", sid, v.slug, v.kind, v.previous, v.current)
+        else:
+            log.info("개정 조회: %s — 변화 없음 (%d건)", sid, len(vs))
+    return out
 
 
 __all__ = ["crawl_due", "crawl_source"]

@@ -86,7 +86,9 @@ class Store:
     # ------------------------------------------------------------ save
     def save(self, src: Source, target: Target, res: FetchResult, ext: Extracted | None) -> StoreResult:
         domain_dir = config.RAW_DIR / src.domain
-        fingerprint = sha256_text(ext.text) if (ext and src.format == "html") else sha256_bytes(res.content)
+        # html 은 늘 텍스트, 그 외는 소스가 `fingerprint = "text"` 로 고른 경우만 (sources/base.py)
+        text_fp = ext is not None and (src.format == "html" or src.fingerprint == "text")
+        fingerprint = sha256_text(ext.text) if text_fp else sha256_bytes(res.content)
 
         prev = self._latest_meta(domain_dir, target.slug)
         prev_sha = prev.get("sha256") if prev else None

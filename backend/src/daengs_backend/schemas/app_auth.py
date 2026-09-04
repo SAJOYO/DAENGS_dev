@@ -12,7 +12,7 @@ EncryptedSharedPreferences). 평문 파일이나 로그에 남기면 쿠키를 �
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class KakaoLoginRequest(BaseModel):
@@ -78,3 +78,26 @@ class AppMeResponse(BaseModel):
     email: str | None
     status: str
     created_at: datetime
+    #: 미니룸 이름표. **None 이면 아직 안 정한 것**이고, 그때 앱이 대표 강아지
+    #: 이름으로 짓습니다 — 서버가 대신 지어 주지 않습니다. 그 규칙(받침에 따라
+    #: "이네"/"네")은 한국어라 앱의 것이고, 서버가 지으면 규칙이 두 벌이 됩니다.
+    room_name: str | None = None
+
+
+class AppProfileUpdate(BaseModel):
+    """`PATCH /auth/app/me` — 회원이 스스로 고치는 것.
+
+    지금은 이름표 하나뿐입니다. 늘어나면 여기에 필드를 더합니다.
+    """
+
+    #: 미니룸 이름표. **None 을 보내면 되돌립니다** — 다시 대표 강아지를 따라갑니다.
+    #: 공백만 보낸 것도 같게 봅니다 (빈 이름표를 걸 수는 없습니다).
+    room_name: str | None = Field(default=None, max_length=20)
+
+    @field_validator("room_name")
+    @classmethod
+    def _blank_is_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None

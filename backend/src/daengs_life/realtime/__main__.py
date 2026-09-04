@@ -39,7 +39,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     for name, value in config.KEYS.items():
         raw = getattr(config.settings, name.lower()).strip()
         if not value:
-            print(f"  [ ] {name:16s} 없음 — 발급처는 docs/data-sources.md §9")
+            print(f"  [ ] {name:16s} 없음 — 발급처는 docs/life/data-sources.md §9")
             continue
         # 정규화가 실제로 걸렸는지가 이 명령의 존재 이유다. Encoding 키를 넣어 두고
         # "왜 403 이지"로 한나절을 쓰는 것이 §6.1 함정 1 이 실제로 일으킨 일이다.
@@ -52,7 +52,10 @@ def cmd_config(args: argparse.Namespace) -> int:
           f"{'' if config.REFERENCE_DIR is None or config.REFERENCE_DIR.exists() else '  (아직 없음)'}")
 
     print("\n예산")
-    print(f"  요청 하나 {config.REQUEST_BUDGET_SEC}s · 개별 호출 {config.REQUEST_TIMEOUT_SEC}s  (RT-001 ⑤-b)")
+    # 조회가 병렬이라 요청 예산은 **총합이 아니라 가장 느린 하나**다. 여기 표기가 "합"으로
+    # 읽히면 "8초에 7개를 어떻게 넣나" 하고 예산부터 올리게 된다 — 실제로 그 오해가 있었다.
+    print(f"  요청 하나 {config.REQUEST_BUDGET_SEC}s (병렬이라 가장 느린 하나 기준)"
+          f" · 개별 호출 {config.REQUEST_TIMEOUT_SEC}s  (RT-001 ⑤-b)")
 
     # **실제로 붙여 본다.** 연결 실패를 예외가 아니라 저하로 다루기 때문에(④-c),
     # REDIS_URL 이 틀려도 앱은 아무 말 없이 뜨고 조용히 메모리로 떨어진다.

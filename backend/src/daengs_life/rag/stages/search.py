@@ -202,17 +202,52 @@ LIMIT %(k)s
 # **한 방에 잡지 않고 두 걸음으로 간다.** 처음에는 `[가-힣]+(?:\s*[가-힣]+)*?…법` 한 줄로 썼는데,
 # 법령명이 **안 나오는** 긴 한글 문장에서 중첩 수량자가 폭주했다 (`제15조` 없는 청크 하나에서
 # 사실상 정지). 조문 번호를 먼저 찾고 **그 앞 40자만** 되짚으면 후보 구간이 상수라 폭주할 수 없다.
-_ARTICLE_RE = re.compile(r"제\d+조(?:의\d+)?")
+# **항까지 읽는다** (RAG-058). 청크가 항 단위로 저장돼 있기 때문이다 — `동물보호법` 의
+# `제101조` 는 `section` 이 `제101조제1항` … `제101조제5항` 인 다섯 행이고, 조 단위로만 읽으면
+# `제101조` 로 조회해 **하나도 못 찾는다.** 뽑는 문자열과 DB 의 `section` 이 글자 그대로 같다.
+# 조 단위로 저장된 법(`제16조`)도 있어서 조회 쪽에 폴백이 있다 (`_EXPAND_SQL`).
+_ARTICLE_RE = re.compile(r"제\d+조(?:의\d+)?(?:제\d+항)?")
+# 조문 하나에서 조 부분만. 항 조회가 빗나갔을 때의 폴백 키다.
+_ARTICLE_ONLY_RE = re.compile(r"^(제\d+조(?:의\d+)?)")
 # 조문 바로 앞에서 법령명을 떼어 낸다. 낱말 4개까지만 본다 — "가축전염병 예방법 시행령" 이 셋이다.
 _LAW_TAIL_RE = re.compile(r"([가-힣]+(?:\s[가-힣]+){0,3})\s*[」』]?\s*\(?\s*$")
 # 떼어 낸 것이 정말 법령명인가. `…법`·`…법률` 로 끝나고 `시행령`·`시행규칙` 이 붙을 수 있다.
 _LAW_OK_RE = re.compile(r"(?:법|법률)(?:\s*시행령|\s*시행규칙)?$")
 # 조문 앞을 얼마나 되짚을지. "가축전염병 예방법 시행령(" 이 넉넉히 들어가는 길이다.
 _LOOKBACK = 40
+# 시행령·시행규칙의 제목에서 모법을 떼어 낸다. `동물보호법 시행령` → `동물보호법`.
+_SUBORDINATE_RE = re.compile(r"^(.+법)\s*시행(?:령|규칙)$")
 
 
-def refs_in_text(text: str) -> list[tuple[str, str]]:
-    """텍스트가 가리키는 `(법령명, 조문)` — 등장 순, 중복 포함."""
+def parent_law(owner_title: str | None) -> str | None:
+    """이 문서가 시행령·시행규칙이면 그 모법의 이름. 아니면 `None`.
+
+    **여기서만 모법을 만든다** — 조례·해설·약관은 대상이 아니다 (RAG-058 ①). 조례도 본문에서
+    `법` 을 쓰지만 **어느 법인지 문서 제목이 말해 주지 않는다** — 조례 하나가 여러 법을 인용한다.
+    """
+    m = _SUBORDINATE_RE.match((owner_title or "").strip())
+    return m.group(1) if m else None
+
+
+def refs_in_text(text: str, owner_title: str | None = None) -> list[tuple[str, str]]:
+    """텍스트가 가리키는 `(법령명, 조문)` — 등장 순, 중복 포함.
+
+    `owner_title` 은 **이 텍스트가 들어 있는 문서**의 제목이다. 시행령·시행규칙 안에서 맨몸
+    `법` 은 그 모법을 뜻하는데(`동물보호법 시행령` 의 `법 제101조제4항` = `동물보호법 제101조제4항`),
+    텍스트만 봐서는 그것을 알 수 없어 소유 문서를 받는다 (RAG-058).
+
+    **기본값이 `None` 인 것은 호환이 아니라 뜻이다** — 소유 문서를 모르면 맨몸 `법` 을 풀지
+    않는다. 지어내는 것보다 못 찾는 편이 낫다.
+
+    마지막 낱말이 `법` 인 것을 본다. 별표가 두 모양으로 쓰기 때문이다:
+
+        근거 법조문: 법 제101조제4항제4호            → `법`
+        위반행위: 소유자등이 법 제16조제2항제1호      → `소유자등이 법`
+
+    앞에 붙은 것은 문장의 주어이지 법령명의 일부가 아니다. `가축전염병 예방법` 은 마지막
+    낱말이 `예방법` 이라 걸리지 않는다.
+    """
+    parent = parent_law(owner_title)
     out: list[tuple[str, str]] = []
     for m in _ARTICLE_RE.finditer(text):
         window = text[max(0, m.start() - _LOOKBACK):m.start()]
@@ -220,8 +255,15 @@ def refs_in_text(text: str) -> list[tuple[str, str]]:
         if not tail:
             continue
         law = " ".join(tail.group(1).split())
-        if _LAW_OK_RE.search(law):
-            out.append((law, m.group()))
+        if not _LAW_OK_RE.search(law):
+            continue
+        if law.split()[-1] == "법":
+            if parent is None:
+                # 소유 문서가 시행령·시행규칙이 아니다. `…이 법` 같은 산문도 여기서 걸러진다 —
+                # 어떤 `document_title` 과도 안 맞아 조회에서 자연히 떨어진다.
+                continue
+            law = parent
+        out.append((law, m.group()))
     return out
 
 
@@ -242,24 +284,51 @@ EXPAND_SCAN_N = 20
 #
 # `score` 는 여기서도 코사인이다. 순위 밖에서 들어온 청크라 RRF 점수가 없지만, 점수 칸의 뜻이
 # 히트마다 달라지면 검문소③을 눈으로 읽을 수 없다.
+# **항으로 먼저, 없으면 조로** (RAG-058 ②). 참조는 `제101조제4항` 처럼 항까지 말하는데 청크는
+# 법마다 다르다 — `동물보호법 제101조` 는 항 단위 다섯 행이고 `제16조` 는 조 하나다. 항으로만
+# 찾으면 후자를 전부 놓치고, 조로만 찾으면 전자를 전부 놓친다.
+#
+# `DISTINCT ON` 이 **참조 하나당 한 줄**을 보장한다. 없으면 한 참조가 항·조 두 줄을 물어
+# `MAX_EXPANDED` 를 혼자 써 버린다. 정확 일치(`d.section = want.section`)를 앞에 세워
+# 항이 있으면 항이 이긴다.
 _EXPAND_SQL = """
-SELECT 1 - (d.embedding <=> %(q)s) AS score,
-       d.metadata->>'chunk_id', d.metadata->>'citation', d.metadata->>'citation_url',
-       d.section, d.document_title, d.content, d.metadata->>'part'
-FROM documents d
-JOIN unnest(%(titles)s::text[], %(sections)s::text[]) AS want(title, section)
-  ON d.document_title = want.title AND d.section = want.section
-WHERE d.embedding IS NOT NULL
-  {filters}
-ORDER BY d.embedding <=> %(q)s
+SELECT score, chunk_id, citation, citation_url, section, document_title, content, part
+FROM (
+    SELECT DISTINCT ON (want.title, want.section)
+           1 - (d.embedding <=> %(q)s) AS score,
+           d.metadata->>'chunk_id' AS chunk_id,
+           d.metadata->>'citation' AS citation,
+           d.metadata->>'citation_url' AS citation_url,
+           d.section AS section, d.document_title AS document_title,
+           d.content AS content, d.metadata->>'part' AS part,
+           d.embedding <=> %(q)s AS dist
+    FROM documents d
+    JOIN unnest(%(titles)s::text[], %(sections)s::text[], %(articles)s::text[])
+         AS want(title, section, article)
+      ON d.document_title = want.title
+     AND d.section IN (want.section, want.article)
+    WHERE d.embedding IS NOT NULL
+      {filters}
+    ORDER BY want.title, want.section, (d.section = want.section) DESC, d.embedding <=> %(q)s
+) picked
+ORDER BY dist
 LIMIT %(limit)s
 """
 
 
+def article_only(section: str) -> str:
+    """`제101조제4항` → `제101조`. 항이 없으면 그대로."""
+    m = _ARTICLE_ONLY_RE.match(section)
+    return m.group(1) if m else section
+
+
 def _refs_in(hit: Hit) -> list[tuple[str, str]]:
     """히트 하나가 가리키는 `(법령명, 조문)`. `citation` 도 같이 본다 — 보조금24 는 서비스명이
-    `citation` 에 있고 조문은 `content` 에 있어서, 둘을 이어 붙여야 한 문장으로 읽힌다."""
-    return refs_in_text(f"{hit.citation}\n{hit.content}")
+    `citation` 에 있고 조문은 `content` 에 있어서, 둘을 이어 붙여야 한 문장으로 읽힌다.
+
+    **`document_title` 을 같이 넘긴다** — 시행령 안의 맨몸 `법` 을 풀려면 필요하다 (RAG-058).
+    """
+    return refs_in_text(f"{hit.citation}\n{hit.content}", hit.document_title)
 
 
 def cited_refs(hits: list[Hit]) -> list[tuple[str, str]]:
@@ -267,13 +336,18 @@ def cited_refs(hits: list[Hit]) -> list[tuple[str, str]]:
 
     **이미 들어와 있는 조문은 뺀다.** 안 빼면 같은 청크를 두 번 싣고 `MAX_EXPANDED` 를
     그것으로 다 써 버린다.
+
+    **조 폴백까지 보고 뺀다** (RAG-058 ②). `제16조` 가 이미 히트에 있는데 참조가
+    `제16조제2항` 으로 오면, 항 조회는 빗나가고 폴백이 같은 `제16조` 를 도로 데려온다 —
+    `expand_citations` 가 마지막에 거르기는 하지만 그 전에 이미 한 자리를 쓴 뒤다.
     """
     have = {(h.document_title, h.section) for h in hits}
     seen: dict[tuple[str, str], None] = {}
     for h in hits:
         for ref in _refs_in(h):
-            if ref not in have:
-                seen.setdefault(ref, None)
+            if ref in have or (ref[0], article_only(ref[1])) in have:
+                continue
+            seen.setdefault(ref, None)
     return list(seen)
 
 
@@ -295,7 +369,9 @@ def expand_citations(hits: list[Hit], query: Query, *, scan: list[Hit] | None = 
 
     filters = []
     params: dict[str, Any] = {"q": query.vector, "limit": limit,
-                              "titles": [r[0] for r in refs], "sections": [r[1] for r in refs]}
+                              "titles": [r[0] for r in refs], "sections": [r[1] for r in refs],
+                              # 항 조회가 빗나갔을 때의 폴백 키 (RAG-058 ②)
+                              "articles": [article_only(r[1]) for r in refs]}
     if not include_supplementary:
         filters.append("AND d.metadata->>'part' IS DISTINCT FROM 'supplementary'")
 

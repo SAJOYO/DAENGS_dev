@@ -152,6 +152,19 @@ def build_territory_photo_key(
     return f"territory/{app_user_id}/{attempt_id}/capture{suffix}"
 
 
+def build_card_face_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
+    """도감 카드 얼굴 그림의 키.
+
+    **PNG 뿐입니다** — 구멍에 끼우려면 알파가 필요해서 JPEG 은 못 씁니다. 그래서
+    다른 도메인처럼 content_type 을 인자로 받지 않습니다.
+
+    **card_id 가 uuid 라 추측이 안 됩니다.** bridge 는 인증 헤더 없이 "키를 아는 것이
+    자격" 이라, 여기에 순번 같은 것을 쓰면 남의 카드를 받을 수 있습니다.
+    다만 이 uuid 는 **앱이 만든 것**입니다 — 카드는 오프라인에서 먼저 만들어집니다.
+    """
+    return f"cards/{app_user_id}/{card_id}/face.png"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""

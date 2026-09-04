@@ -42,6 +42,9 @@ const ACTION: Record<string, { label: string; className: string }> = {
   "admin.account.role_changed": { label: "권한 변경", className: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
   "admin.account.suspended": { label: "계정 정지", className: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
   "admin.account.reactivated": { label: "계정 정지 해제", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  // **이 목록에서 유일하게 주체와 대상이 같습니다** (#222) — 남에게 한 일이 아니라
+  // 자기 것을 바꾼 행위라, 위 계정 관리 넷과 색을 달리 둡니다.
+  "admin.account.password_changed": { label: "비밀번호 변경", className: "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400" },
   // **이 줄이 이 테이블이 생긴 첫째 이유입니다** (로드맵 §1 "누가 복호화를 봤나").
   // 색을 제일 세게 씁니다 — 훑을 때 눈에 걸려야 하는 것이 이것입니다.
   "admin.app_user.pii_revealed": { label: "개인정보 원문 조회", className: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
@@ -67,6 +70,9 @@ function when(iso: string): string {
  * `{login_id}` · `{from,to}` · `{sessions_dropped}` · `{opened}` · `null` 이 지금 전부인데,
  * 한 모양으로 가정하면 절반이 안 읽힙니다. 모르는 모양은 JSON 그대로 떨어뜨려서
  * **새 action 이 생겨도 정보가 사라지지 않게** 합니다.
+ *
+ * **모양이 같아도 뜻이 같지는 않습니다** — `sessions_dropped` 가 그렇습니다. 그래서
+ * 여기서 `entry.detail` 만 보지 않고 `entry.action` 까지 봅니다 (아래 주석).
  */
 function describe(entry: AuditEntry): string | null {
   const d = entry.detail;
@@ -74,7 +80,14 @@ function describe(entry: AuditEntry): string | null {
 
   if (typeof d.login_id === "string") return `아이디 ${d.login_id}`;
   if (typeof d.from === "string" && typeof d.to === "string") return `${d.from} → ${d.to}`;
-  if (typeof d.sessions_dropped === "number") return `세션 ${d.sessions_dropped}개 끊음`;
+  if (typeof d.sessions_dropped === "number") {
+    // **같은 키인데 읽는 법이 다릅니다** (#222). 정지(`suspended`)는 주체와 대상이 달라
+    // n 이 전부 남의 세션이지만, 비밀번호 변경은 자기 것이라 **지금 그 요청을 보낸
+    // 본인 브라우저가 n 에 포함**됩니다. 밝히지 않으면 늘 하나씩 많게 읽힙니다 —
+    // 다른 데 로그인이 없어도 1 이 남습니다 (09-04 개발 DB 실측이 정확히 그 1 이었습니다).
+    const own = entry.action === "admin.account.password_changed" ? " (본인 것 포함)" : "";
+    return `세션 ${d.sessions_dropped}개 끊음${own}`;
+  }
   if (Array.isArray(d.opened)) {
     // 칸 **이름**만 옵니다. 값은 서버가 절대 안 넣습니다.
     return d.opened.length > 0 ? `열어 본 칸: ${d.opened.join(" · ")}` : "열 것이 없었음";

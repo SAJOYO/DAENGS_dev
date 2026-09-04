@@ -176,6 +176,35 @@ def test_analyze_returns_503_when_storage_not_configured(client, monkeypatch):
     assert client.fake_session.added == []
 
 
+def test_storage_error_detail_never_reaches_the_user(client, monkeypatch):
+    """**내부 사유가 사용자 화면에 그대로 뜨면 안 됩니다.**
+
+    `StorageNotConfiguredError` 메시지는 운영자용이라 이슈 번호·환경 변수 이름·설정값이
+    들어 있습니다. 실제로 앱에 "…정책이 정해지면(#78) 열립니다" 가 그대로 떴습니다
+    (2026-09-03, GCP 배포 직후). 503 은 그대로 두되 문장만 사용자용으로 바꿉니다.
+    """
+    async def owned(session, app_user_id, pet_id):
+        return object()
+
+    class Leaky:
+        def create_upload_ticket(self, *, object_key, content_type):
+            raise StorageNotConfiguredError(
+                "GAIT_BRIDGE_BASE_URL 에 경로가 붙어 있습니다: 'http://host/gait' — #78"
+            )
+
+    monkeypatch.setattr(pet_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_service, "get_storage", lambda: Leaky())
+    r = client.post("/app/gait/analyze", json=_analyze_body())
+
+    assert r.status_code == 503
+    detail = r.json()["detail"]
+    # 사용자에게는 안내 문장만.
+    assert detail == "보행 분석을 준비 중이에요. 잠시 뒤에 다시 시도해 주세요."
+    # 내부 흔적이 하나도 없어야 합니다.
+    for leak in ("#78", "GAIT_BRIDGE_BASE_URL", "http://host/gait", "GAIT_"):
+        assert leak not in detail
+
+
 def test_analyze_rejects_non_uuid_pet_id(client):
     """dog_id="1" 같은 값이 들어오던 자리 — pydantic 이 422 로 거릅니다."""
     r = client.post("/app/gait/analyze", json={"pet_id": "1", "source_file": "a.mp4"})

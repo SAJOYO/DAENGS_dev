@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -33,11 +34,29 @@ from daengs_backend.schemas.gait import (
 )
 from daengs_backend.services import gait as gait_service
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/app/gait", tags=["gait"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 _NOT_FOUND = HTTPException(status.HTTP_404_NOT_FOUND, "기록을 찾을 수 없습니다.")
+
+#: 저장소가 준비되지 않았을 때 **사용자에게** 보여 줄 문장.
+#:
+#: ⚠️ **예외 메시지를 그대로 내보내면 안 됩니다.** `StorageNotConfiguredError` 는 운영자가
+#:    보라고 쓴 것이라 이슈 번호·환경 변수 이름·설정값이 들어 있습니다
+#:    (예: "GAIT_BRIDGE_BASE_URL 에 경로가 붙어 있습니다: 'http://…'").
+#:    실제로 앱 화면에 "…정책이 정해지면(#78) 열립니다" 가 그대로 뜬 적이 있습니다
+#:    (2026-09-03, GCP 배포 직후 저장소 미설정 상태).
+#:    진짜 사유는 로그로 남기고, 사용자에게는 이 한 줄만 보냅니다.
+_STORAGE_NOT_READY = "보행 분석을 준비 중이에요. 잠시 뒤에 다시 시도해 주세요."
+
+
+def _storage_unavailable(exc: StorageNotConfiguredError) -> HTTPException:
+    """503 으로 바꾸면서 **사유는 로그에만** 남깁니다."""
+    log.warning("보행 저장소가 준비되지 않았습니다: %s", exc)
+    return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _STORAGE_NOT_READY)
 
 
 def _summary(r: GaitRecord) -> dict:
@@ -75,7 +94,7 @@ async def start_analysis(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
     except StorageNotConfiguredError as exc:
         # 요청이 틀린 게 아니라 환경이 덜 갖춰진 것 — /ask 의 503 규칙과 같습니다.
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+        raise _storage_unavailable(exc) from None
     return GaitUploadTicketResponse(
         record_id=record.id,
         status=record.status,
@@ -97,7 +116,7 @@ async def confirm_upload(
     except gait_service.WrongStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
     except StorageNotConfiguredError as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+        raise _storage_unavailable(exc) from None
     return GaitRecordSummary(**_summary(record))
 
 

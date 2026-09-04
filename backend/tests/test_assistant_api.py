@@ -380,7 +380,7 @@ def test_관리자_PrincipalContext는_인증된_신원과_권한만_담는다(
 
 
 def test_응답은_AssistantResponse_그대로다(client: TestClient) -> None:
-    """FAILED 를 포함해 상태를 재해석하지 않는다 (orchestration-contracts.md §5)."""
+    """FAILED 를 포함해 상태를 재해석하지 않는다 (docs/orchestration/contracts.md §5)."""
     failed = AssistantResponse(
         request_id="req-failed",
         status=AssistantStatus.FAILED,

@@ -2,10 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| [orchestration-architecture.md](orchestration-architecture.md) | CURRENT 물리 토폴로지(실행 주체 3개 · 라우팅 · 배포 · 기동 순서) + **구현 완료된 오케스트레이션 v1 지도**(`/assistant/query` · v1 범위 · **능력 준비도 표(단일 원본)** · Training 토폴로지 — `vectordb.training_rag_*`) |
-| [orchestration-contracts.md](orchestration-contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 + **공개 `POST /assistant/query` 진입 경계**(§8) |
-| [orchestration-routing.md](orchestration-routing.md) | 승인된 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** + **production 구현 상태**(§4) |
-| [orchestration-router-benchmark.md](orchestration-router-benchmark.md) | Card 2A 의미 라우터 수용 벤치마크 (동결) — 80개 골드 RoutePlan · 결정론적 지표 · 1회 스키마 재시도 · 동결 게이트 · HUMAN FREEZE |
+| [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
@@ -19,8 +16,24 @@
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고, `skin/` 은 옮겨 올 문서가 아직 없어
-**자리만** 만들어 두었습니다. 나머지(오케스트레이션)는 별도 카드입니다(#82).
+지금은 `orchestration/` · `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고,
+`skin/` 은 옮겨 올 문서가 아직 없어 **자리만** 만들어 두었습니다. 마지막까지 루트에 남아 있던
+오케스트레이션 4건도 `orchestration/` 으로 옮겼습니다(#82) — 폴더가 유닛을 말하므로 파일 이름의
+`orchestration-` 접두사는 뗐습니다 (`orchestration-contracts.md` → `orchestration/contracts.md`).
+
+### `orchestration/` — `/assistant/query` 뒤 LangGraph 오케스트레이션 (`backend/src/daengs_backend/orchestration/`)
+
+| | |
+| --- | --- |
+| [orchestration/README.md](orchestration/README.md) | 유닛 색인 — 네 문서의 경계와 읽는 순서 |
+| [orchestration/architecture.md](orchestration/architecture.md) | CURRENT 물리 토폴로지(실행 주체 3개 · 라우팅 · 배포 · 기동 순서) + **구현 완료된 오케스트레이션 v1 지도**(`/assistant/query` · v1 범위 · **능력 준비도 표(단일 원본)** · Training 토폴로지 — `vectordb.training_rag_*`) |
+| [orchestration/contracts.md](orchestration/contracts.md) | 오케스트레이터 공통 계약 (확정) — OrchestratorState · RoutePlan(requests+handoffs+clarify) · CapabilityResult 6상태(**ABSTAINED ≠ REFUSED**) · AssistantResponse 8상태 · 집계 진리표 · 불변식 + **공개 `POST /assistant/query` 진입 경계**(§8) |
+| [orchestration/routing.md](orchestration/routing.md) | 승인된 라우팅 정책 — 결정적/의미 경로 경계 · CLARIFY 배타 · 라우터 실패=FAILED · 인가 매트릭스 · 벤치마크 정책 · **사람 결정 이력(O-1~O-14, 전부 해결)** + **production 구현 상태**(§4) |
+| [orchestration/router-benchmark.md](orchestration/router-benchmark.md) | Card 2A 의미 라우터 수용 벤치마크 (동결) — 80개 골드 RoutePlan · 결정론적 지표 · 1회 스키마 재시도 · 동결 게이트 · HUMAN FREEZE |
+
+오케스트레이션은 유닛들의 **앞단**입니다 — 각 능력(Life · Training · Walk · Place · Gait)의 "왜"는
+그 유닛 폴더에, 능력을 고르고 합치는 규칙은 여기에 둡니다. 결정 이력은 두 갈래입니다:
+공통/인프라 `D-` 는 `decisions.md`, 라우팅 결정 `O-` 는 `orchestration/routing.md` §6.
 
 ### `life/` — 생활 파트 (① 제도·문서 RAG `/life/ask` · ② 실시간 산책 `/life/walk-conditions`)
 

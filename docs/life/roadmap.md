@@ -64,7 +64,7 @@
 
 ## 2. 오케스트레이션 안에서 이 파트의 자리
 
-계약·상태·라우팅은 `orchestration-contracts.md` · `orchestration-routing.md`(#80) 가 원본이다. 여기서는 **이 파트가 그 틀에
+계약·상태·라우팅은 `docs/orchestration/contracts.md` · `docs/orchestration/routing.md`(#80) 가 원본이다. 여기서는 **이 파트가 그 틀에
 꽂히려면 무엇을 내야 하는가**만 적는다.
 
 ```
@@ -124,7 +124,7 @@ RAG-008 ③ 이 `care`·`emergency` 를 뺀 이유).
 | --- | --- | --- | --- | --- | --- |
 | A1 | **문서 단위 증분 임베딩** — parquet 을 `(chunk_id, content)` 로 대조해 바뀐 것만 인코딩 | 지금은 소스 하나에 55분 전량 (RAG-043 ④ · 045 ⑧ · 047). 뒤의 모든 소스 카드가 이 비용을 낸다 | 없음 — `embed.py` 안에서 끝남 | S~M | ⬜ |
 | A2 | **지역 필터** — `documents` 에 지역 메타 + `search(region=…)` + 질의에서 지역 읽기 | 코퍼스 절반이 지자체별(조례 208 · 보조금24 37)인데 "우리 동네"를 못 가름. RAG-003 · **RAG-033 ⑥**(org 사전필터/BM25/되묻기 택1 미결) · 034 | `db/migrations/` 1장. 재임베딩 불필요(메타만) | M | ⬜ |
-| A0 | **GCP 에서 `/assistant/query` 경유 Life 스모크** — 앱 계정으로 제도 질문 하나, 기대 OK + citations | `orchestration-architecture.md` 가 "배포 인프라에서 실제 Life 능력 스모크"를 미완 후속으로 남겼다. Walk 는 앱의 CAUTION 문구 버그(859a691)로 GCP 경로가 검증됐지만 Life 는 아니다. `ml` 그룹이 빠지면 503→ERROR 인데 앱에는 "실패" 한 줄뿐이라 뒤 카드가 전부 헛돈다 | GCP 접근 | XS | ✅ #169 (2026-09-03) **인프라 PASS** — 4/4 200, 예열 503 없음, O-9 축소 확인, 의미 라우팅이 `life` 선택. 답변 품질에서 A3a 근거 둘: 산문 물러섬이 OK 로 통과(`cited == []`), `no_evidence` 기권이 사실상 안 남. 기록은 `assistant-life-gcp-smoke.md` §3 |
+| A0 | **GCP 에서 `/assistant/query` 경유 Life 스모크** — 앱 계정으로 제도 질문 하나, 기대 OK + citations | `docs/orchestration/architecture.md` 가 "배포 인프라에서 실제 Life 능력 스모크"를 미완 후속으로 남겼다. Walk 는 앱의 CAUTION 문구 버그(859a691)로 GCP 경로가 검증됐지만 Life 는 아니다. `ml` 그룹이 빠지면 503→ERROR 인데 앱에는 "실패" 한 줄뿐이라 뒤 카드가 전부 헛돈다 | GCP 접근 | XS | ✅ #169 (2026-09-03) **인프라 PASS** — 4/4 200, 예열 503 없음, O-9 축소 확인, 의미 라우팅이 `life` 선택. 답변 품질에서 A3a 근거 둘: 산문 물러섬이 OK 로 통과(`cited == []`), `no_evidence` 기권이 사실상 안 남. 기록은 `assistant-life-gcp-smoke.md` §3 |
 | A3a ✅ | **Life 경계 신호 — REFUSED** — `services/ask.py` 가 `medical`·`emergency` 를 감지해 REFUSED 로 내고(`refusal.code` 보존), 골든셋에 `must` OR 목록 · `expect: abstain` · `expect: refuse` 문항 | RAG-049 ④ (Q2·T1·I1·I5 가 검증 문항) · D-035 "Life 안전/거절 분류 신설은 별도 카드" · §2 의 경계를 테스트로. **A0 실측**(`assistant-life-gcp-smoke.md` §3): 목줄 과태료 질문이 "자료에 없다" 산문 + OK 로 나가고(`cited == []`), 근거 0건 문장도 검색이 항상 k 건을 돌려줘 `no_evidence` 가 안 난다 — **약한 근거 기권도 이 카드 범위** | A0 ✅ | M | ✅ **#177 (2026-09-03)** — 신호는 **생성이 낸다**(방식 a, RAG-055 ②): `boundary` 3/3 정확 · 오거절 0 (lap16·17·18 모두), 기권은 `covered+selfreport` 로 놓친 기권 0/2. 골든셋은 `must` OR · `expect` 로 늘렸고(36문항) `score-laps` 가 그것을 채점한다. 지표는 lap14 와 같은 22문항에서 grounded 13 → 15, cited 17 → 15(S5·T2 — 답은 맞고 소스에 조 번호가 없다, RAG-029 의 알려진 누수). 오기권 셋(Q3·S3·B1)은 **검색 순위 구멍**이라 D5 로 넘긴다 |
 | A3b | **라우터가 `place` 를 자연어로 고르게 한다** — `semantic.py` `ExecuteName` · 프롬프트 목적지 서술 · 골드 문항 · 벤치마크 버전 상승 재실행 | §2 — place 질문이 빈 선택 → FAILED. D-041 | **라우터 담당 조율** | M | ⬜ 라우터 카드 — 이 파트 밖. **2026-09-04 정정**: #196 · #198 로 place 가 handoff 후보가 아니라 **실행 능력**이 됐다(`CapabilityName.PLACE` · `adapters/place.py` · `planner.py` 좌표 CLARIFY). 남은 것은 라우터의 목적지 선택뿐이고, 이 행은 **라우터 담당이 다시 쓴다** |
 | A4 | **직접 API 이름 정리** — `POST /ask`→`POST /life/ask`, `GET /walk`→`GET /life/walk-conditions`, Swagger 태그 `Life · 제도 Q&A` / `Life · 산책 적합도`. 응답 전문은 **유지**하고 콘솔 관측용임을 DTO docstring 에 명시 | 파트 접두사 통일(`/training/chat` · `/assistant/query` 꼴) · `/life/walk-conditions` 와 `/app/walks` 혼동(`main.py` 의 별칭 경고) · 2026-09-03 사람 확정 | 앱이 직접 안 부름 — DAENGS_APP dev `0290d23` 에서 확인 (§6). 콘솔 점검 탭 호출 경로 · 문서 동반 | S | ✅ #176 (옛 "응답 축소"는 🚫 — §5) |
@@ -257,5 +257,5 @@ C5 만 남았다 (서버가 있는 날).  D 는 틈에.  F0 정찰은 A3a 와 �
 - ~~**페이로드를 누가 소유하는가**~~ — **2026-09-03 닫힘: 계약 계층 잔류 수용.** 이유: `LifePayload` 를
   `daengs_life.app.dto` 로 옮기면 `contracts.py` 가 `daengs_life` 를 import 하게 되어 D-035 "어댑터 한 곳만" 규칙을 깬다.
   #80 불변식 6 은 "페이로드의 *의미*는 능력이, *타입*은 계약 계층이 소유한다"로 문구 개정을 제안한다 —
-  `orchestration-contracts.md` 는 오케스트레이션 소유라 그쪽 카드에서. 앞으로 필드 확장(B4 · A2)은 `contracts.py`
+  `docs/orchestration/contracts.md` 는 오케스트레이션 소유라 그쪽 카드에서. 앞으로 필드 확장(B4 · A2)은 `contracts.py`
   수정이라 오케스트레이션 리뷰를 받는다. (#151 이 올리고 #164 가 닫음)

@@ -154,7 +154,7 @@ psql · Gmail · SSH 로 된다. 콘솔이 바꾸는 것은 **그 일을 할 수
 
 | # | 무엇 | 왜 | 소유 | 상태 |
 | --- | --- | --- | --- | --- |
-| D1 | `/screen/*` 인증 + rate limit — 백엔드에 걸고 같은 PR 에서 `inspect-tabs.tsx` 피부 탭을 권한으로 가림 | `orchestration-architecture.md` 준비도 표 "보안 후속은 별도" | 스크리닝 파트 + 콘솔 | ⬜ |
+| D1 | `/screen/*` 인증 + rate limit — 백엔드에 걸고 같은 PR 에서 `inspect-tabs.tsx` 피부 탭을 권한으로 가림 | `docs/orchestration/architecture.md` 준비도 표 "보안 후속은 별도" | 스크리닝 파트 + 콘솔 | ⬜ |
 | D2 | `/gait/*` 무인증 → `/app/gait/*` 전환 뒤 닫기 | `docs/gait/worklog.md` 미해결 5 | gait 파트 | ⬜ 링크만 |
 | D3 | 로그인 잠금을 Redis 로 — 워커를 늘리거나 재시작을 견뎌야 할 때 | `login_attempts.py` 마지막 문단 | 콘솔 | ⬜ 조건부 |
 

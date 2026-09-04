@@ -2,8 +2,8 @@
 
 Card 2A는 이미 선정된 `gemini-3.5-flash-lite`가 DAENGS v1 라우팅 계약을 생산 환경에서
 받아들일 수준으로 만족하는지 검증합니다. 모델 비교나 승자 선정이 아닙니다(D-041).
-권위 있는 계약은 [라우팅 정책](orchestration-routing.md),
-[공통 계약](orchestration-contracts.md), [아키텍처](orchestration-architecture.md),
+권위 있는 계약은 [라우팅 정책](routing.md),
+[공통 계약](contracts.md), [아키텍처](architecture.md),
 그리고 실제 `backend/src/daengs_backend/orchestration/contracts.py`입니다.
 
 ## 동결 단위와 분류 체계

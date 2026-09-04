@@ -26,7 +26,7 @@ DETERMINISTIC layer does given the semantically correct decision and (b) the v5
 prompt contract text. The live classifier is certified separately: targeted
 production probes and one frozen 80-case regression per prompt version
 (`runner_v6.py` for v5, `runner_v7.py` for v6), recorded in PR #172 and
-docs/orchestration-router-benchmark.md.
+docs/orchestration/router-benchmark.md.
 """
 
 from __future__ import annotations

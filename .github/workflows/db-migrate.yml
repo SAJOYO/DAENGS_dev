@@ -1,0 +1,131 @@
+name: DB 마이그레이션 적용
+
+# `db/migrations/*.sql` 한 장을 **서버 DB 에 적용**합니다. Actions 탭에서 손으로 돌립니다.
+#
+# 왜 필요한가 — 서버 PC 에는 SSH 도 SMB 도 없습니다(README). 그래서 마이그레이션을
+# 적용하려면 그 앞에 가서 psql 을 쳐야 했는데, `place-search-ingest` 처럼 self-hosted
+# 러너로 `docker compose exec` 를 돌릴 수 있으므로 **Actions 탭이 원격 손**이 됩니다.
+#
+# ⚠️ **작업 트리를 안 건드립니다.** 여기가 이 워크플로의 핵심입니다 —
+#    `backend/src` 가 컨테이너에 bind mount 돼 있어서, 기능 브랜치를 checkout 하면
+#    **그 순간 backend 가 그 코드를 로드합니다.** 마이그레이션을 적용하기 전에 새
+#    모델이 올라오면 없는 컬럼을 SELECT 해서 `/app/pets` 같은 멀쩡한 경로가 500 이
+#    됩니다. 그래서 checkout 은 기본 브랜치 그대로 두고, SQL 파일만
+#    `git show <ref>:<path>` 로 꺼내 psql 에 흘려보냅니다.
+#
+# ⚠️ **여러 번 돌려도 안전해야 합니다.** 이 저장소는 버전 테이블이 없어서 DB 가 적용
+#    여부를 기억하지 않습니다 — 모든 마이그레이션이 `IF NOT EXISTS` · `DO` 블록으로
+#    멱등하게 쓰여 있습니다 (db/migrations/README.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "db/migrations/ 안의 파일 이름 (예: 2026-09-04_pet_photo.sql)"
+        required: true
+        type: string
+      ref:
+        description: "그 파일을 꺼내 올 브랜치·커밋. 아직 안 머지된 PR 브랜치도 됩니다"
+        required: true
+        default: dev
+        type: string
+      verify:
+        description: "적용 뒤 verify_<파일> 도 돌려서 결과를 로그에 남깁니다"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  # 마이그레이션이 겹치면 안 됩니다. 배포와 달리 **취소하지 않습니다** —
+  # 반쯤 적용된 채로 끊기는 것이 제일 나쁩니다.
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: ${{ inputs.file }} 적용
+    runs-on: [self-hosted, Windows, X64]
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@v5
+        with:
+          # 서버 전용 .env 와 빌드 산출물을 지우지 않습니다 (deploy.yml 과 같은 이유).
+          clean: false
+
+      - name: 입력 검사
+        run: |
+          $file = '${{ inputs.file }}'
+          # 경로를 못 벗어나게 합니다. 파일 **이름만** 받습니다.
+          if ($file -notmatch '^[A-Za-z0-9._-]+\.sql$') {
+            throw "파일 이름이 이상합니다: $file (db/migrations 안의 이름만 적으세요)"
+          }
+          if ($file -like 'verify_*') {
+            throw "verify_ 파일은 여기서 직접 돌리지 않습니다. 원본 파일 이름을 적고 verify 를 켜세요."
+          }
+          Write-Host "적용할 파일: db/migrations/$file  (ref: ${{ inputs.ref }})"
+
+      - name: SQL 꺼내 오기 (작업 트리는 안 건드림)
+        run: |
+          $ref = '${{ inputs.ref }}'
+          $file = '${{ inputs.file }}'
+
+          # ⚠️ checkout 하지 않습니다. bind mount 때문에 작업 트리를 바꾸면 backend 가
+          #    그 코드를 즉시 로드합니다 (이 워크플로 맨 위 주석 참고).
+          git fetch origin $ref --depth=1
+          if ($LASTEXITCODE -ne 0) { throw "ref 를 못 찾았습니다: $ref" }
+
+          New-Item -ItemType Directory -Force _migrate | Out-Null
+
+          git show "FETCH_HEAD:db/migrations/$file" | Out-File -Encoding utf8 "_migrate/$file"
+          if ($LASTEXITCODE -ne 0) { throw "그 ref 에 db/migrations/$file 이 없습니다" }
+
+          if ('${{ inputs.verify }}' -eq 'true') {
+            git show "FETCH_HEAD:db/migrations/verify_$file" | Out-File -Encoding utf8 "_migrate/verify_$file"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::verify_$file 이 없습니다. 적용만 하고 확인은 건너뜁니다."
+              Remove-Item "_migrate/verify_$file" -ErrorAction SilentlyContinue
+            }
+          }
+
+          Write-Host "--- 적용할 SQL ---"
+          Get-Content "_migrate/$file" -TotalCount 40
+
+      - name: DB 가 떠 있는지 확인
+        run: |
+          docker compose up -d pgvector
+          foreach ($attempt in 1..20) {
+            docker compose exec -T pgvector sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | Out-Null
+            if ($?) { Write-Host "pgvector 준비됨"; break }
+            if ($attempt -eq 20) { throw "pgvector 가 안 뜹니다" }
+            Start-Sleep -Seconds 3
+          }
+
+      - name: 적용
+        run: |
+          # ON_ERROR_STOP=1 이라 한 줄이라도 실패하면 여기서 멈춥니다.
+          # 계정·DB 이름은 컨테이너 안 환경 변수를 씁니다 — 워크플로에 안 적습니다.
+          Get-Content "_migrate/${{ inputs.file }}" | `
+            docker compose exec -T pgvector sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+          if ($LASTEXITCODE -ne 0) { throw "마이그레이션 적용 실패" }
+          Write-Host "✅ ${{ inputs.file }} 적용됨"
+
+      - name: 확인 (verify)
+        if: ${{ inputs.verify }}
+        run: |
+          $v = "_migrate/verify_${{ inputs.file }}"
+          if (-not (Test-Path $v)) {
+            Write-Host "verify 파일이 없어 건너뜁니다."
+            exit 0
+          }
+          # verify 는 **읽기만** 합니다. 결과를 로그에서 눈으로 봅니다.
+          Get-Content $v | `
+            docker compose exec -T pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+      - name: 임시 파일 치우기
+        if: always()
+        run: Remove-Item -Recurse -Force _migrate -ErrorAction SilentlyContinue

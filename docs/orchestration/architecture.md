@@ -252,8 +252,9 @@ Training/Life/Walk 능력 스모크는 이 문서가 다루는 오케스트레�
   GraphRAG(그래프 지식베이스)는 이름만 비슷한 남남입니다. 폐기된 산출물은 이관하지 않습니다.
 
 **전역 의미 라우팅 범위 (CONFIRMED)** — Gemini가 EXECUTE로 선택할 수 있는 능력은
-**Training + Life + Walk** 셋입니다. PR #196은 실행 registry에 Place를 추가하되
-`requested_capability=place` 명시 신호로만 표적 연결했습니다. Place를 전역 의미 라우팅에
+**Training + Life + Walk + Place** 넷입니다. PR #196은 실행 registry에 Place를 추가하되
+`requested_capability=place` 명시 신호로만 표적 연결했고, PR #204(D-051)에서 의미 라우터가
+Place를 고를 수 있게 됐습니다. (아래 문단은 PR #196 시점의 기록입니다.) Place를 전역 의미 라우팅에
 넣는 것은 새 gold set과 기존 80건 회귀를 함께 통과한 뒤의 별도 변경입니다.
 Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입니다(`semantic.py` 의
 `handoffs.skin`/`handoffs.gait`, planner 의 고정 reason) — "아직 문서만 있고 라우터가
@@ -278,7 +279,7 @@ Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입�
 | **Walk** | backend `/life/walk-conditions` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023), 이력은 저장소/이력 결정 뒤. 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도 |
 | **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (contracts.md) |
-| **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. 내부 `POST /internal/place/discovery`는 Place 전용 Gemini proposer와 검색/presentation을 조립 | **명시 신호 실행 ✅** (`requested_capability=place`), 전역 의미 선택은 아직 없음 | backend adapter → compose 내부 HTTP | **예** | payload는 원문+검증 좌표뿐이고 profile identity를 보내지 않습니다. 내부 43~89KB 응답은 최대 3 lens·9후보·48KiB의 공개 projection으로 줄이며 KTO/KCISA provenance와 unresolved signal은 보존합니다 (#195·#196) |
+| **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. 내부 `POST /internal/place/discovery`는 Place 전용 Gemini proposer와 검색/presentation을 조립 | **실행 ✅** — 명시 신호(`requested_capability=place`, #196)와 **전역 의미 선택(#204, D-051, `semantic-router-ko-v7`)** 둘 다 | backend adapter → compose 내부 HTTP | **예** | payload는 원문+검증 좌표뿐이고 profile identity를 보내지 않습니다. 내부 43~89KB 응답은 최대 3 lens·9후보·48KiB의 공개 projection으로 줄이며 KTO/KCISA provenance와 unresolved signal은 보존합니다 (#195·#196) |
 | **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
 
 Skin 이 main backend 에서 기술적으로 호출 가능해진 것은 **런타임 사실의 변화**이지

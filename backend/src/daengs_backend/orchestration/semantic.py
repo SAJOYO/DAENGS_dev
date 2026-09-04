@@ -1,9 +1,22 @@
 """Production Gemini semantic destination selection (D-041, Card 2A PASS).
 
-The LLM owns exactly one thing: which EXECUTE capabilities (training/life/walk)
+The LLM owns exactly one thing: which EXECUTE capabilities (training/life/walk/place)
 and HANDOFF targets (skin/gait) the query semantically requests. Payload text,
 coordinates, CLARIFY, handoff reasons, and the final RoutePlan are assembled
-deterministically in planner.py. The prompt below is `semantic-router-ko-v6`:
+deterministically in planner.py.
+
+v7 (D-051) adds the `place` destination. Place was already an executable capability
+with a payload type, adapter, and bounded projection (PR #196), but it could only be
+reached by the explicit `requested_capability=place` signal — so "오늘 산책하기 좋은
+곳이 어디야?" ran Walk alone and answered with walking conditions instead of places.
+v7 adds one destination and three boundary sentences: Place answers "where should I
+go" (Walk answers "is now a good time"), a place noun that is only the *setting* of a
+Training/Walk/Gait request is not a Place target, and both are selected when one
+utterance asks both. A named area in the query never becomes a coordinate — Place
+always searches around the trusted device location and says so (D-051 Option B;
+named-region geocoding and a named-region CLARIFY are deferred to a separate card).
+
+The prompt below is `semantic-router-ko-v7`, which keeps intact:
 the accepted v3 routing boundary, the v4 PURELY social utterance classification
 (greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
 templates in social.py), plus one v5 boundary refinement (PR #172): Life is
@@ -19,7 +32,8 @@ normative exercise advice (unsupported) from CURRENT-day timing/suitability
 to a domain whose evidence cannot support them. The frozen v3 benchmark copy
 under tools/router_benchmark/ is the acceptance record and stays untouched;
 the v4 regression against the same 80 gold cases is runner_v5.py, v5 is
-runner_v6.py (FAIL, one gate), and v6 is runner_v7.py.
+runner_v6.py (FAIL, one gate), v6 is runner_v7.py, and v7 is runner_v8.py.
+The v7 Place acceptance set is evals/orchestration_router/gold_place_v1.jsonl.
 """
 
 from __future__ import annotations
@@ -34,14 +48,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v6"
+PROMPT_VERSION = "semantic-router-ko-v7"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # The only routing metadata the model may see. Coordinates deliberately stay out:
-# WalkPayload is built from trusted structured context, never from model output.
+# Walk and Place payloads are built from trusted structured context, never from
+# model output — including when the query names an area (D-051, Option B).
 _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
-ExecuteName = Literal["training", "life", "walk"]
+ExecuteName = Literal["training", "life", "walk", "place"]
 HandoffName = Literal["skin", "gait"]
 SocialIntent = Literal["greeting", "thanks", "goodbye"]
 _UniqueExecuteList = Annotated[list[ExecuteName], Field(json_schema_extra={"uniqueItems": True})]
@@ -93,6 +108,8 @@ Select every semantically requested destination:
   requirements. Official guidance belongs to Life ONLY when it concerns such formal
   institutional or policy topics.
 - execute.walk: current environmental walking suitability.
+- execute.place: finding somewhere to go near the user — a kind of venue, a purpose, or a
+  described place. Place answers "where should I go", not "is now a good time".
 - handoffs.skin: inspecting a visible skin condition through the dedicated image flow.
 - handoffs.gait: analyzing walking, limping, asymmetry, stride, posture, joint angles, or gait from
   an image/video through the dedicated gait flow. These descriptions do not make it an unsupported
@@ -104,12 +121,23 @@ heat, cold, rain, air quality, or similar environmental conditions; do not selec
 because walking is the setting of a Training or Gait request. Route by meaning, not keyword
 occurrence. Do not invent names.
 
+Walk and Place answer different questions and are selected independently. Select Place when the
+user asks where to go, which venue to visit, or to find or recommend a place. Do not select Place
+merely because a place noun is the setting or backdrop of a Training, Walk, or Gait request —
+asking whether today suits walking in a park is Walk alone, and asking how to train in a park is
+Training alone. Select BOTH Place and Walk when one utterance asks both where to go and whether
+current conditions suit walking. A named area, neighborhood, city, or landmark in the query does
+not change which destinations are selected and is never a location value; select destinations as
+usual and never emit, resolve, or imply coordinates for it.
+
 General pet husbandry or care recommendations are NOT supported by any destination in v1: routine
 or normative advice on how often or how long a dog should walk or exercise in general (per day, for
 a breed, for an age or body size) independent of current conditions, feeding frequency or amount,
 sleep duration, water intake, general grooming or care norms, and breed-, age-, or body-size-specific
 care. Such a request is not Life even when it mentions an institution, an official source, or a
-recommendation, and is not Training unless it asks to change behavior or teach a skill. By contrast,
+recommendation, is not Training unless it asks to change behavior or teach a skill, and is not
+Place unless the user asks where to go — how often to bathe a dog is unsupported, while finding a
+grooming shop is Place. By contrast,
 deciding whether or when to walk now, today, or this evening — including choosing a suitable walking
 time window for today — IS Walk (current environmental suitability), even when weather or air
 quality is not named explicitly; do not extend Walk to recurring exercise routines. If no Training,

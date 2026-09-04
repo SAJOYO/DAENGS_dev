@@ -19,7 +19,8 @@ export default function ConsoleAdminsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">관리자 계정</h1>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
         콘솔에 로그인하는 계정입니다. 권한 등급에 따라 볼 수 있는 메뉴가 달라지고,
-        <strong className="font-medium"> 개인정보 복호화 같은 위험한 조회는 등급으로 갈립니다.</strong>
+        <strong className="font-medium"> 개인정보 복호화 같은 위험한 조회는 등급으로 갈립니다.</strong>{" "}
+        {/* `{" "}` 가 없으면 문장이 붙습니다 — JSX 는 태그에 붙은 줄바꿈을 지웁니다. */}
         계정 발급과 권한 변경은 감사 기록에 남습니다.
       </p>
 

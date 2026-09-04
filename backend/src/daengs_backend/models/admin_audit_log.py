@@ -89,7 +89,16 @@ class AdminAuditLog(Base):
     # **복호화된 개인정보를 넣지 마세요** — "무엇을 열었나"(대상 id · 컬럼 이름)
     # 까지입니다. 넣기 시작하면 이 테이블이 두 번째 개인정보 저장소가 되고,
     # 탈퇴 시 파기 대상이 하나 늘어납니다 (관측에 질문 원문을 금지한 D-037 과 같은 선).
-    detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    #
+    # ⚠ **`none_as_null=True` 를 빼면 detail 없는 행이 전부 500 이 됩니다.**
+    # SQLAlchemy 의 JSON/JSONB 기본값은 파이썬 `None` 을 **SQL NULL 이 아니라 JSON `null`**
+    # 로 넣습니다. 그러면 `jsonb_typeof(detail)` 이 `'null'` 이라 위 CHECK
+    # (`detail IS NULL OR jsonb_typeof(detail) = 'object'`)에 걸립니다.
+    #
+    # 대상이 없는 행위(정지 **해제** 처럼 남길 값이 없는 것)가 그 경우이고, 2026-09-04 에
+    # `admin.account.reactivated` 가 실제로 그렇게 죽었습니다. 가짜 세션을 쓰는 테스트는
+    # DB CHECK 을 모르므로 **이 자리는 테스트가 아니라 이 한 줄이 지킵니다.**
+    detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
     request_id: Mapped[str | None] = mapped_column(String(64))
 

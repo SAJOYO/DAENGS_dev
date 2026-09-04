@@ -1,6 +1,6 @@
 # 오케스트레이터 공통 계약
 
-`/assistant/query` 뒤 LangGraph 오케스트레이션([orchestration-architecture.md](orchestration-architecture.md) §논리
+`/assistant/query` 뒤 LangGraph 오케스트레이션([architecture.md](architecture.md) §논리
 오케스트레이션)이 쓸 공통 계약입니다. **2026-08-30 어드버서리얼 아키텍처 리뷰를 거쳐
 사람이 승인한 확정 계약**입니다 (D-033 · D-034). 실제 Pydantic/TypedDict 정의는
 `backend/src/daengs_backend/orchestration/contracts.py` 에 있으며, 필드의 Python 표현은
@@ -89,7 +89,7 @@ RoutePlan:
 
 ```
 CapabilityRequest:
-  capability: training | life | walk | place   # 실행 registry; place는 명시 신호만(PR #196)
+  capability: training | life | walk | place   # 실행 registry (place: PR #196, 의미 선택은 PR #204)
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -105,10 +105,19 @@ CapabilityRequest:
 능력이 소유하고, 오케스트레이터는 그 내용을 해석하지 않고 전달만 합니다.
 
 Place의 첫 계약은 `PlacePayload {query, lat, lon}`뿐입니다. `query`는 공백 여부만 검증하고
-원문을 보존하며, 좌표는 검증된 `context.location`에서 복사합니다. 반경은 adapter의 서버
-정책(3km)이고 `active_dog_id`나 profile 값은 payload에 없습니다. Place를 enum에 추가한
-것과 전역 의미 라우터가 Place를 고르는 것은 별개입니다. PR #196에서는
-`requested_capability=place`만 결정적으로 열고 semantic schema는 여전히 세 능력입니다.
+원문을 보존하며(공백도 다듬지 않습니다 — Place 서비스가 원문의 문자 구간에 해석을
+grounding합니다), 좌표는 검증된 `context.location`에서 복사합니다. 반경은 adapter의 서버
+정책(3km)이고 `active_dog_id`나 profile 값은 payload에 없습니다. PR #196은
+`requested_capability=place`만 결정적으로 열었고, **PR #204(D-051)에서 의미 라우터도 Place를
+고릅니다** — `PlacePayload` 자체는 그대로입니다.
+
+**payload는 능력별 명시 분기로 만듭니다** (D-051). 예전 조립 루프는 Training/Life가 아니면
+좌표 payload를 주는 `else` 폴백이었고, 그것은 Walk가 유일한 좌표 능력인 동안에만 맞았습니다 —
+`place`가 선택 가능해지는 순간 Place에 `query` 없는 WalkPayload를 주어 검증 실패 → 최상위
+FAILED가 됩니다. 이제 새 `ExecuteName`은 자기 payload를 적거나 요청을 소리 나게 세우거나
+둘 중 하나이고, 남의 모양을 물려받지 않습니다. 요청 순서도 모델의 나열 순서가 아니라
+`CapabilityName` 선언 순서로 고정합니다 — 그 순서가 집계 message의 절 순서로 사용자에게
+그대로 보이기 때문입니다.
 
 ## 4. CapabilityResult
 

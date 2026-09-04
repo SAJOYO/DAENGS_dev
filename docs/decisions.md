@@ -1667,7 +1667,7 @@ URL 업로드(`yt-dlp`)는 코드만 옮기고 엔드포인트를 두지 않았�
 
 대화형 진입점 `POST /assistant/query` 하나를 두고, 그 뒤의 흐름 제어(라우팅 · 실행 순서 ·
 결과 수집)를 **LangGraph** 가 맡습니다. 전체 구조와 능력별 현실은
-`docs/orchestration-architecture.md`, 계약은 `docs/orchestration-contracts.md` 가 원본입니다.
+`docs/orchestration/architecture.md`, 계약은 `docs/orchestration/contracts.md` 가 원본입니다.
 이 항목은 되돌리기 번거로운 **경계** 결정만 기록합니다.
 
 - **LangGraph 는 오케스트레이터이지, 모든 결정을 쥐는 LLM 슈퍼바이저가 아닙니다.**
@@ -1701,11 +1701,11 @@ GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출�
 > 능력의 도메인 선택이 우연히 일치한 것입니다. 또한 O-4 의 근거였던 "DB 에 프로필
 > 테이블 없음"(D-029 인용)은 #88(`pets` 테이블·`/app/pets`)로 낡았지만, **소비하는
 > 능력이 아직 없다**는 사실은 그대로라 O-4 결정 자체는 유지됩니다
-> (`docs/orchestration-contracts.md` §1).
+> (`docs/orchestration/contracts.md` §1).
 
 **미결이었던 것들은 2026-08-30 에 전부 해결됐습니다.** 어드버서리얼 아키텍처 리뷰
 (읽기 전용, `origin/dev` 코드 대조) 후 사람이 일괄 승인 — 결정 이력 표는
-`docs/orchestration-routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
+`docs/orchestration/routing.md` §6, 개별 결정은 D-033~D-037. 이 항목(D-030)에 직접
 귀속되는 추가 승인 둘:
 
 - **반려견 컨텍스트 (O-4)** — `active_dog_id` 는 v1 상태의 타입 필드가 아니라 `context`
@@ -1723,7 +1723,7 @@ GraphRAG(그래프 지식베이스)는 이름만 비슷합니다. 폐기 산출�
 ### 결정적 라우팅은 기계 신호에만, 자연어는 LLM 라우터 — 모델은 벤치마크로
 
 오케스트레이터의 라우팅 경로를 둘로 나누고, 경계를 고정합니다
-(상세는 `docs/orchestration-routing.md`).
+(상세는 `docs/orchestration/routing.md`).
 
 **결정적 라우팅은 기계가 읽는 명시적 신호에만 허용합니다** — `requested_capability`,
 구조화된 UI/액션 메타데이터, 명시적 source/action 식별자, 의미가 모호하지 않은 구조화
@@ -1782,7 +1782,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 동결 평가 재실행.
 
 **서버 재구축(신규 PGVector · 지연 검증 · 포트 · GPU · 리소스 제한)은 미완**이며 월요일
-서버 리허설 후 `docs/orchestration-architecture.md` §서버 재구축 상태를 갱신합니다.
+서버 리허설 후 `docs/orchestration/architecture.md` §서버 재구축 상태를 갱신합니다.
 
 > **사실 갱신 (2026-08-31)** — 이관은 **완료됐습니다** (#83 런타임 이행 → #92 PGVector
 > pg18 → #93 생성 Gemini 전환 → #94 modular monolith). 위 허용/금지 경계는 지켜졌고
@@ -1792,7 +1792,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 > 부담이 확인될 때만 서비스 분리를 재검토합니다. `:8010`·`DAENGS_TRAINING_RAG_BASE_URL`
 > 은 코드에서 사라졌고, Training PGVector 는 전용 컨테이너(`training-rag-pgvector`)로
 > 분리 유지됩니다. 프롬프트(`grounded-answer-ko-v2`) 이행은 여전히 별도 카드입니다.
-> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration-architecture.md`
+> 현재 상태의 원본은 `docs/training/rag-demo.md` · `docs/orchestration/architecture.md`
 > §Training 토폴로지.
 
 ---
@@ -1802,7 +1802,7 @@ tag `training-runtime-freeze-2026-08-30`. R2 이관 판정 **CLEAR WITH RESTRICT
 
 오케스트레이션의 CapabilityResult status 를 여섯으로 확정합니다:
 **OK · ABSTAINED · REFUSED · PENDING · ERROR · TIMEOUT** (계약 상세는
-`docs/orchestration-contracts.md` §4). 2026-08-30 어드버서리얼 리뷰 후 사람 승인.
+`docs/orchestration/contracts.md` §4). 2026-08-30 어드버서리얼 리뷰 후 사람 승인.
 
 **핵심은 기권과 거절의 분리입니다.**
 
@@ -1836,7 +1836,7 @@ AssistantResponse 상태는 여덟입니다: ANSWERED · PARTIAL · CLARIFY · H
 ### RoutePlan 은 요청·핸드오프·클래리파이의 목록 구조, CLARIFY 는 배타적
 
 라우터 산출물을 스칼라 `mode` 하나가 아니라 **`requests[] + handoffs[] + clarify`**
-구조로 확정합니다 (`docs/orchestration-contracts.md` §2). 2026-08-30 리뷰가 스칼라
+구조로 확정합니다 (`docs/orchestration/contracts.md` §2). 2026-08-30 리뷰가 스칼라
 mode 로는 "Walk 실행 + Skin 핸드오프" 같은 **실존하는 혼합 흐름을 표현할 수 없음**을
 계약 결함으로 확정했고, 사람이 이 구조를 승인했습니다.
 
@@ -1900,7 +1900,7 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 전용 의존성을 구현에서 새로 둘 수 있습니다.
 
 능력별 인가는 백엔드/오케스트레이션 경계 안의 **중앙 매트릭스 한 곳**이 정합니다
-(`docs/orchestration-routing.md` §5): v1 은 Training·Life·Walk 를 앱 회원·관리자
+(`docs/orchestration/routing.md` §5): v1 은 Training·Life·Walk 를 앱 회원·관리자
 모두에게, Skin·Gait EXECUTE 는 아무에게도 허용하지 않습니다.
 
 **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
@@ -1924,7 +1924,7 @@ v1 은 2차 합성 LLM 없이 결정적 조립이고, 능력별 섹션 렌더는
 오케스트레이션의 일반 운영 로그·트레이스에 **사용자 질문 원문을 기본으로 넣지
 않습니다.** Training 게이트웨이가 이미 지키는 선례(`services/training_rag.py` —
 질문 원문 비로깅, 식별자·상태·인용 수만 기록)를 오케스트레이션 전체의 불변식으로
-확장한 것입니다 (`docs/orchestration-contracts.md` §6-11).
+확장한 것입니다 (`docs/orchestration/contracts.md` §6-11).
 
 | 기본 관측에 허용 | 금지 |
 | --- | --- |
@@ -2581,3 +2581,114 @@ provider 호출 전에 공용 일 예산을 원자적으로 선점하되, 기존
 560회(격자당 56회/일)는 침범하지 않습니다. 예약분에 닿으면 Capsule은 앱 원본 또는
 unknown/failed로 저하되고, 캐시 hit는 호출 슬롯을 쓰지 않습니다.
 
+
+---
+
+## D-051
+### 의미 라우터가 Place를 고른다 — payload는 능력별로 만들고, 지역명은 좌표가 아니다
+
+Place는 PR #196에서 이미 실행 가능한 능력이었습니다. `CapabilityName.PLACE`·`PlacePayload`·
+내부 HTTP adapter·48KiB `place-capability-v1` projection이 모두 있었고, 결정적 신호
+`requested_capability="place"`로 종단까지 돌았습니다. 없던 것은 **자유 자연어에서 Place를
+고르는 길** 하나뿐이었습니다 — `SemanticRoutingDecision.execute`가 `training`·`life`·`walk`
+세 값짜리 `Literal`이라, "오늘 산책하기 좋은 곳이 어디야?"가 Walk만 실행하고 **장소 대신
+산책 조건**을 답했습니다. 표현할 수 있는 절반만 선택된 것이지 오라우팅이 아니었습니다.
+
+이 결정은 그 목적지 하나를 열고, 그 과정에서 드러난 두 가지를 함께 고정합니다.
+
+### ① 의미 목적지 `place` (프롬프트 `semantic-router-ko-v7`)
+
+`ExecuteName`에 `place`를 더하고 프롬프트에 경계 문장 셋을 넣었습니다. 모델·스키마 모양·
+handoff 쌍·`social_intent`·O-14 1회 재시도는 그대로입니다.
+
+- **Place는 "어디로 갈까", Walk는 "지금 나가도 될까"** 입니다. 둘은 독립적으로 선택합니다.
+- **장소 명사가 배경일 뿐이면 Place가 아닙니다** — "오늘 공원 산책 괜찮아?"는 Walk 단독,
+  "공원에서 리콜 연습"은 Training 단독입니다. Walk가 이미 갖고 있던 "산책이 배경이라고
+  Walk가 아니다" 규칙의 거울입니다.
+- 한 발화가 둘 다 물으면 **둘 다** 고릅니다.
+
+일반 돌봄 경계(D-041 · 라우팅 §2 옵션 C)는 그대로입니다. 새 목적지가 그 공백을 삼키지
+않도록 한 문장을 더했습니다: **"목욕은 몇 주마다"는 미지원, "미용실 찾아줘"는 Place.**
+Place가 생겼다고 사육 상식에 답이 생기지 않습니다.
+
+### ② payload는 능력별 분기로 만든다 — fallback 금지
+
+`assemble_route_plan`의 조립 루프는 `if capability in {"training","life"}: … else: {lat, lon}`
+이었습니다. Walk가 유일한 좌표 능력인 동안에만 맞는 코드였고, `place`가 선택 가능해지는
+순간 **Place에 `query` 없는 WalkPayload를 주어** `PlacePayload` 검증 실패 → 최상위 `FAILED`가
+됩니다. 하필 Place를 추가한 이유인 바로 그 질문들에서만 터집니다.
+
+그래서 능력별 명시 분기로 바꾸고 `else`는 **예외를 던집니다.** 새 `ExecuteName`은 여기에
+자기 payload를 적거나 요청을 소리 나게 세우거나 둘 중 하나이지, 남의 모양을 물려받지
+않습니다. 좌표는 예전처럼 검증된 `context.location`에서만 오고 모델 출력에서는 절대 오지
+않습니다. Place의 `query`는 **원문 그대로**입니다 — Place 서비스가 원문의 문자 구간에
+해석을 grounding하므로 공백을 다듬으면 그 offset이 밀립니다.
+
+같은 이유로 `resolve_deterministic_route`의 Place 특수 분기를 지웠습니다. 그 분기는 공용
+조립기에 Place 규칙이 없어서 있던 것이고, 이제 명시 신호와 의미 경로가 **같은 코드 경로**로
+같은 plan을 만듭니다. 동치성은 테스트로 고정했습니다.
+
+### ③ 좌표 게이트는 선택 전체에 하나
+
+Walk와 Place 둘 다 신뢰된 좌표가 필요합니다. 게이트는 **선택 집합 전체에 하나**이고 CLARIFY는
+여전히 배타적입니다(O-8) — Place+Walk인데 좌표가 없으면 **어느 쪽도 실행하지 않습니다.**
+절반만 돌려주고 나머지를 되묻는 응답은 사용자가 이미 답을 받았다고 읽습니다. 되묻는 문장만
+무엇이 필요했는지에 따라 갈리고, `clarify.missing` 키는 셋 다 같습니다(동결 벤치마크가
+비교하는 것이 그 키 목록입니다). 범위를 벗어난 좌표는 **없는 것으로 칩니다** — 신뢰하지 않는
+좌표는 좌표가 아니고, 상자 안으로 끌어다 붙이면 엉뚱한 동네를 자신 있게 답합니다.
+
+### ④ 실행 순서는 결정적이다
+
+요청은 모델이 나열한 순서가 아니라 `CapabilityName` 선언 순서(`training · life · walk · place`)로
+냅니다. v7 실측 프로브에서 모델이 같은 모양의 질문에 `["place","walk"]`와 `["walk","place"]`를
+둘 다 냈고, 그 순서는 `aggregate_results`가 만드는 `[산책] … [장소] …` 절 순서로 **사용자에게
+그대로 보입니다.** 같은 질문이 두 가지로 배열돼 돌아오면 안 됩니다. 동결 라우터 벤치마크는
+영향이 없습니다 — `_semantic_plan_key`가 requests를 multiset으로 비교합니다.
+
+### ⑤ 지역명 — Option B (디스클로저), 지오코딩은 미룬다
+
+"성수동에서 산책하기 좋은 곳", "부산 해운대 근처 동물병원"의 지역명은 **좌표가 아닙니다.**
+Place에는 geocoder가 없고(`PlaceSpatialConstraint`는 `lat`/`lng`/`radius_m`뿐), Place 전용
+proposer는 공간 표현으로 semantic을 만들지 말라고 명시적으로 금지돼 있습니다. 모델이 좌표를
+지어내는 것은 이 계약이 처음부터 막는 것입니다.
+
+**사람 결정(2026-09-04): Option B.** 검색은 신뢰된 현재 기기 좌표로만 하고, 결과가 그 사실과
+**지역명을 반영하지 못했다는 사실**을 함께 밝힙니다. 두 문장 모두 **조건 없이** 나갑니다 —
+"지역명이 있었나"를 판정하려면 라우터 분류를 하나 더 만들어야 하는데 그것이 바로 이 카드가
+미룬 것이고, 가끔만 나오는 고지는 사용자가 기댈 수 없는 고지입니다. 문구는 어느 쪽이든 참이고
+지역이 해석됐다고 주장하지 않습니다. 고지 notice(`place.searched_around_current_location`)는
+notice 예산 절단 **뒤에** 넣습니다 — 결과가 시끄러울 때 하필 사라지면 안 되는 한 줄입니다.
+
+지역명 지오코딩과 명시적 지역 CLARIFY(Option A: `explicit_named_region` 분류 필드 + Place 전용
+배타 CLARIFY)는 **별도 카드**입니다. 여는 순서는 D-041의 그것과 같습니다 — 근거(geocoder와
+그 권리·정확도) → 소유 서비스 → 그 뒤에야 라우터 신호.
+
+### 공개 계약과 클라이언트 (백엔드 쪽 기록)
+
+`AssistantResponse`·`CapabilityResult`·`PlacePayload`·`place-capability-v1`의 **모양은 바뀌지
+않았습니다.** `aggregate.py`·`graph.py`·contracts·adapters·DB 스키마도 그대로입니다
+(`agent_categories`는 제약 없는 `TEXT[]`라 마이그레이션이 없습니다). 바뀐 것은 Place `answer`
+문구와 notice 하나뿐입니다.
+
+Android가 실제로 받는 JSON 7종을 **`backend/tests/fixtures/place_capability/`에 커밋**했습니다.
+production projection·aggregation·Walk DTO를 그대로 거쳐 생성하고
+(`uv run python -m tools.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
+재생성해 바이트 단위로 대조합니다 — 계약이 움직이면 다른 저장소가 아니라 여기서 깨집니다.
+표시 규칙(대화에서 후보 3개 상한, 알 수 없음을 긍정으로 바꾸지 않기, borrowed 사실의
+`link_state` 보존)은 **클라이언트의 몫**이고 이 결정은 그 근거 데이터를 보존할 뿐입니다.
+출처(`provenance.source`/`value_origin`/`link_state`)와 unknown 상태(`source_state`·
+`evaluation_state`)는 projection이 예전처럼 그대로 실어 보냅니다.
+
+### 근거
+
+- 결정적 계층: `backend/tests/test_orchestration_place_routing.py`(42) ·
+  `test_router_benchmark_place_gold.py`(22) · `test_place_capability_fixtures.py`(30),
+  전부 fake transport — 유료 호출 0.
+- Place 수용: 동결 `gold_place_v1.jsonl` 15건 라이브 프로브 **15/15 PASS**, 스키마 재시도 0.
+- 회귀: 동결 80건 1회(run **v8**, `runner_v8.py`) **PASS — 15/15 gate.** exact 96.25%,
+  실행 precision/recall 96.15%/100%, CLARIFY 100%/100%, forbidden·invented 0.
+  non-exact 3건 중 둘(`mixed_09`·`boundary_05`)은 v7과 **같은** 기존 흔들림이고
+  (walk/training precision이 v7과 소수점까지 동일), 새로 잃은 것은 `walk_03`
+  ("비 그치는 시간 봐서 오늘 걷기 좋은 구간 골라줘")에 Place가 하나 더 붙은 것 **하나뿐**입니다.
+  "구간 골라줘"는 장소 요청과 실제로 가까운 문장이라 이것은 수용하고 경계 사례로 기록합니다.
+  v1~v7 산출물은 제자리 수정하지 않았습니다.

@@ -31,7 +31,8 @@ const consoleSections: Array<{
     | "/console/crawl"
     | "/console/status"
     | "/console/admins"
-    | "/console/users";
+    | "/console/users"
+    | "/console/audit";
 }> = [
   {
     title: "지식 베이스",
@@ -120,6 +121,21 @@ const consoleSections: Array<{
     // 전원이 ADMIN 이라 어느 카드도 사라지지 않았습니다.
     permission: "admin:manage",
     href: "/console/admins",
+  },
+  {
+    title: "감사 로그",
+    description:
+      "관리자가 한 일이 남습니다 — 로그인 시도, 계정 발급과 권한 변경, 회원 개인정보 원문 조회. 값은 남기지 않습니다.",
+    // **`admin:manage` 입니다** — 계정 관리와 같은 등급 (2026-09-04 사람 결정).
+    // 이 화면에는 "누가 어느 회원의 개인정보를 열었나"와 "어떤 아이디로 로그인이
+    // 시도됐나"가 그대로 보입니다. 감사 로그를 보는 것 자체가 동료를 감시할 수 있다는
+    // 뜻이라, OPERATOR 는 복호화는 하지만 누가 복호화했는지는 못 봅니다 — 의도한
+    // 비대칭입니다 (`routers/admin_audit.py`).
+    //
+    // **운영 로그가 아닙니다.** 에러·스택트레이스는 파일로 가고 콘솔에 안 띄웁니다
+    // (`docs/console/roadmap.md` §6). 여기 있는 것은 로그가 아니라 데이터입니다.
+    permission: "admin:manage",
+    href: "/console/audit",
   },
   {
     title: "운영 지표",

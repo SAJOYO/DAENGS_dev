@@ -27,7 +27,7 @@ import { PRESETS } from "./walk-inspect";
  *
  * ⚠️ **관리자로 부른 결과입니다.** `routers/assistant.py` 가 principal 을
  * `kind=ADMIN` + permissions 로 넘기는데 라우팅 인가 매트릭스가 종류별로 다릅니다
- * (`docs/orchestration-routing.md` §5). 앱 회원과 같은 결과를 보려면 테스트 회원 토큰이
+ * (`docs/orchestration/routing.md` §5). 앱 회원과 같은 결과를 보려면 테스트 회원 토큰이
  * 필요하고, 그건 콘솔 로드맵 C4 입니다.
  *
  * ⚠️ **라우터 종류는 여기서 볼 수 없습니다.** `RoutePlan` 이 공개 응답에 안 실립니다
@@ -46,7 +46,7 @@ const STATUS_STYLE: Record<AssistantStatus, string> = {
   FAILED: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100",
 };
 
-/** 한 줄 설명. 집계 진리표(`orchestration-contracts.md` §5)를 화면에 옮긴 것입니다. */
+/** 한 줄 설명. 집계 진리표(`docs/orchestration/contracts.md` §5)를 화면에 옮긴 것입니다. */
 const STATUS_NOTE: Record<AssistantStatus, string> = {
   ANSWERED: "실행된 능력이 전부 성공",
   PARTIAL: "일부만 성공 — 나머지는 기권·거절·실패",
@@ -71,6 +71,7 @@ const CAPABILITY_LABEL: Record<string, string> = {
   training: "훈련",
   life: "생활 · 제도",
   walk: "산책 적합도",
+  place: "장소 추천",
   skin: "피부 스크리닝",
   gait: "보행 분석",
 };

@@ -311,9 +311,18 @@ receipt가 표시 계약에서 보존되며, 기존 Place 전체 테스트와 Op
 
 ### PR7 — 전역 의미 라우터 편입
 
-- `place` 목적지 선택만 schema와 prompt에 추가
-- Place 단일·복합·부정·무관 발화 gold set을 먼저 동결
-- 기존 80개 라우팅 회귀와 새 Place 수용 기준을 함께 통과한 뒤 활성화
+- **구현: PR #204 (D-051)**
+- `place` 목적지 선택만 schema와 prompt에 추가 — `ExecuteName` 에 한 값, 경계 문장 셋
+  (Place="어디로 갈까" vs Walk="지금 나가도 될까" · 장소 명사가 배경이면 Place 아님 ·
+  한 발화가 둘 다 물으면 둘 다). 모델·스키마 모양·handoff·`social_intent`·O-14는 불변
+- Place 단일·복합·부정·무관 발화 gold set을 먼저 동결 →
+  `backend/evals/orchestration_router/gold_place_v1.jsonl` (15건, 동결 80건과 **별도 파일**)
+- 기존 80개 라우팅 회귀와 새 Place 수용 기준을 함께 통과한 뒤 활성화 →
+  Place 15/15, 80건 run **v8** 15/15 gate PASS
+- 함께 고친 것: 조립기의 payload `else` 폴백 제거(능력별 명시 분기 + unknown은 raise),
+  좌표 게이트를 선택 집합 전체로 확대(배타 CLARIFY 유지), 실행 순서 결정화,
+  `router_benchmark/evaluate.py` 의 `ALLOWED_EXECUTE` 에 `place` 추가
+- **지역명은 Option B(디스클로저)** — 지오코딩·명시적 지역 CLARIFY 는 여전히 미착수(아래 §9)
 
 ### PR8 — DAENGS_APP 연결
 

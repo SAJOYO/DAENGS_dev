@@ -11,10 +11,15 @@ HTTP 를 모릅니다 — 나가는 것은 예외와 dataclass 뿐이고, 404 �
 쌓이면 감사 테이블이 조회 로그가 되고, 그러면 진짜 따져야 하는 행위가 그 안에 묻힙니다
 (`docs/console/roadmap.md` §6 — 감사 로그는 로그가 아니라 데이터).
 
-그 선이 이 카드와 짝 카드(#212)를 가르는 자리입니다. 저쪽이 `pii:read` 로 원문을
-돌려주면서 `admin.app_user.pii_revealed` 를 남깁니다. **여기에 감사를 붙이고 싶어지면
+그 선이 같은 파일 안의 `find`·`get_detail`(마스킹, 기록 없음)과 `reveal`(원문, 기록
+남김)을 가릅니다 — #212 가 아래쪽을 더했습니다. **마스킹 경로에 감사를 붙이고 싶어지면
 그건 마스킹이 원문을 너무 많이 흘리고 있다는 신호**이지, 기록을 늘릴 이유가 아닙니다.
 --------------------------------------------------------------------------------
+
+**상태 변경은 `withdrawn` 을 건드리지 않습니다** (`update_status`). 탈퇴는 본인 요청이고
+개인정보 파기가 따라온 일이라, 관리자가 되돌리면 삭제 요청을 관리자가 무르는 것이 됩니다.
+되살아나는 길은 하나뿐입니다 — **본인이 카카오로 다시 로그인**하면
+`services/app_auth.py` 의 `login_with_kakao` 가 `active` 로 돌리고 프로필을 다시 채웁니다.
 
 **검색은 값 하나가 통째로 맞아야 합니다.** `email_hash` 가 HMAC-SHA256 이라 부분
 문자열로는 원천적으로 못 찾습니다 (D-012 · 03_auth.sql). 대소문자와 앞뒤 공백은
@@ -29,13 +34,46 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.crypto import blind_index, decrypt
-from daengs_backend.models import AppUser, Pet
+from daengs_backend.core.subject import SubjectType
+from daengs_backend.models import (
+    AUDIT_APP_USER_PII_REVEALED,
+    AUDIT_APP_USER_REACTIVATED,
+    AUDIT_APP_USER_SUSPENDED,
+    AppUser,
+    Pet,
+)
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.services import audit
+from daengs_backend.services import session as session_service
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AppUserView", "find", "get_detail", "mask_email", "mask_name", "mask_phone"]
+__all__ = [
+    "AppUserNotFoundError",
+    "AppUserView",
+    "RevealedPii",
+    "WithdrawnMemberError",
+    "find",
+    "get_detail",
+    "mask_email",
+    "mask_name",
+    "mask_phone",
+    "reveal",
+    "update_status",
+]
+
+
+class AppUserAdminError(Exception):
+    """회원 관리 요청을 받아들일 수 없습니다. 아래 것들의 부모입니다."""
+
+
+class AppUserNotFoundError(AppUserAdminError):
+    """그 id 의 회원이 없습니다."""
+
+
+class WithdrawnMemberError(AppUserAdminError):
+    """탈퇴한 회원입니다. 관리자가 상태를 되돌리지 않습니다 (파일 docstring)."""
 
 
 @dataclass(frozen=True)
@@ -191,3 +229,155 @@ async def get_detail(
         return None
     pets = await pet_repo.list_for_owner(session, user.id)
     return _to_view(user, list(pets))
+
+
+@dataclass(frozen=True)
+class RevealedPii:
+    """복호화된 원문. **이 객체는 로그에도 감사 `detail` 에도 들어가면 안 됩니다.**
+
+    `None` 인 칸은 처음부터 암호문이 없던 것입니다 — 탈퇴로 파기됐거나, 카카오에서 그
+    항목 동의를 못 받았거나. 어느 쪽인지는 `AppUser.status` 가 가릅니다.
+    """
+
+    email: str | None
+    phone: str | None
+    name: str | None
+
+    def opened(self) -> list[str]:
+        """실제로 값이 나온 칸 이름. **감사에 남기는 것은 이것뿐입니다.**"""
+        return [
+            field
+            for field, value in (
+                ("email", self.email),
+                ("phone", self.phone),
+                ("name", self.name),
+            )
+            if value is not None
+        ]
+
+
+async def reveal(
+    session: AsyncSession,
+    *,
+    app_user_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    ip: str | None = None,
+) -> RevealedPii | None:
+    """개인정보 원문. **부를 때마다 감사 행이 남습니다.** 없는 회원이면 `None` 입니다.
+
+    로드맵 §1 의 "누가 복호화를 봤나 — 알 수 없다" 를 닫는 자리입니다.
+
+    --------------------------------------------------------------------------
+    **기록을 먼저 확정하고 원문을 돌려줍니다.** 순서가 이 함수의 전부입니다.
+
+    `record_and_commit` 이 실패하면 예외가 그대로 올라가고 호출자는 원문을 받지
+    못합니다. 반대로 했다면 "본 사람은 있는데 기록은 없는" 조회가 생기고, 그건
+    감사 로그가 있는 것이 없는 것보다 나쁜 상태입니다 (`services/audit.py`).
+
+    이 경로는 읽기만 하므로 `record_and_commit` 이 함께 확정할 다른 변경이 없습니다 —
+    그 함수가 경고하는 조건을 만족합니다.
+    --------------------------------------------------------------------------
+
+    **`detail` 에 값을 넣지 않습니다.** 남기는 것은 "어느 회원의 어느 칸을 열었나"
+    까지입니다. 값을 넣으면 `admin_audit_log` 가 두 번째 개인정보 저장소가 되고,
+    탈퇴 시 파기 대상이 하나 늘어납니다 (`models/admin_audit_log.py` 의 `detail` 주석).
+    """
+    user = await app_user_repo.get_by_id(session, app_user_id)
+    if user is None:
+        return None
+
+    pii = RevealedPii(
+        email=_decrypt_or_none(user.email_enc, field="email", user_id=user.id),
+        phone=_decrypt_or_none(user.phone_enc, field="phone", user_id=user.id),
+        name=_decrypt_or_none(user.name_enc, field="name", user_id=user.id),
+    )
+
+    await audit.record_and_commit(
+        session,
+        action=AUDIT_APP_USER_PII_REVEALED,
+        admin_user_id=actor_id,
+        target_type="app_user",
+        target_id=user.id,
+        # 칸 **이름**만입니다. 값은 절대 넣지 마세요.
+        detail={"opened": pii.opened()},
+        ip=ip,
+    )
+    logger.warning(
+        "개인정보 원문 조회 (admin=%s, app_user=%s, 칸=%s)",
+        actor_id,
+        user.id,
+        pii.opened(),
+    )
+    return pii
+
+
+async def update_status(
+    session: AsyncSession,
+    *,
+    app_user_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    status: str,
+    ip: str | None = None,
+) -> AppUser:
+    """회원을 정지하거나 정지를 풉니다. `active` 와 `suspended` 둘뿐입니다.
+
+    **`withdrawn` 은 받지 않습니다** — 스키마가 먼저 막고, 여기서는 *대상이* 탈퇴한
+    회원일 때 막습니다. 탈퇴는 본인 요청이고 개인정보 파기가 따라온 일이라, 관리자가
+    `active` 로 돌리면 삭제 요청을 관리자가 무르는 것이 됩니다. 되살아나는 길은
+    본인이 카카오로 다시 로그인하는 것 하나입니다 (파일 docstring).
+
+    **정지는 `status` 와 세션을 둘 다 건드립니다.** `status` 는 새 로그인을 막고
+    (`app_auth.login_with_kakao` 의 `SuspendedError`), 이미 나간 세션은 `drop_all` 이
+    끊습니다. 앱 회원의 `refresh` 도 status 를 보지만(`app_auth.refresh`), 그건 그쪽이
+    다음에 재발급을 시도할 때이고 여기서 끊으면 지금입니다.
+
+    ⚠ **access token 5분은 못 줄입니다.** 무상태라 요청마다 DB 를 보지 않기로 한 것이
+    D-015 입니다. 정지가 완전히 반영되는 데 최대 그만큼 걸립니다 — 관리자 계정 정지
+    (`services/admin_account.py`)와 같습니다.
+    """
+    user = await app_user_repo.get_by_id(session, app_user_id)
+    if user is None:
+        raise AppUserNotFoundError
+
+    if user.status == "withdrawn":
+        logger.warning(
+            "회원 상태 변경 거부: 탈퇴한 회원 (admin=%s, app_user=%s)", actor_id, user.id
+        )
+        raise WithdrawnMemberError
+
+    if user.status == status:
+        # 이미 그 값입니다. 사건이 아니므로 기록하지 않습니다
+        # (`services/admin_account.py` 의 같은 판단).
+        return user
+
+    user.status = status
+    if status == "suspended":
+        dropped = await session_service.drop_all(session, SubjectType.APP, user.id)
+        await audit.record(
+            session,
+            action=AUDIT_APP_USER_SUSPENDED,
+            admin_user_id=actor_id,
+            target_type="app_user",
+            target_id=user.id,
+            # 끊은 세션 수. 0이면 "이미 안 쓰던 계정", 여럿이면 "쓰던 사람을 끊었다".
+            detail={"sessions_dropped": dropped},
+            ip=ip,
+        )
+        logger.warning(
+            "회원 정지 (admin=%s, app_user=%s, 세션 %d개 끊음)", actor_id, user.id, dropped
+        )
+    else:
+        await audit.record(
+            session,
+            action=AUDIT_APP_USER_REACTIVATED,
+            admin_user_id=actor_id,
+            target_type="app_user",
+            target_id=user.id,
+            ip=ip,
+        )
+        logger.info("회원 정지 해제 (admin=%s, app_user=%s)", actor_id, user.id)
+
+    # 상태 변경과 그 기록을 한 번에 확정합니다 — 정지는 됐는데 기록만 없는 상태를
+    # 만들지 않으려는 것입니다 (`services/audit.py` 의 성공 경로).
+    await session.commit()
+    return user

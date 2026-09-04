@@ -3,6 +3,14 @@
 No Gemini calls here (FakeClient only). The ONE changed variable versus the recorded v6
 run is the production prompt (v6 separates routine exercise advice from today's walking
 window); model id, gold set, gates, schema, and the single-schema-retry policy are unchanged.
+
+**What pins v6 here is the recorded artifact, not the live constant** (PR #204). Every
+runner drives whatever `PROMPT_VERSION` production currently exports, so once production
+moved to v7 these tests could no longer assert the live constant equals v6 without
+breaking on every future prompt bump. `evals/orchestration_router/summary_v7.json` is the
+frozen record of what this run actually sent, and that is what the version assertions read
+now; the call-shape assertions follow the live constant on purpose, because that is the
+real property being tested (the runner sends production's prompt, whatever it is).
 """
 
 from __future__ import annotations
@@ -51,22 +59,26 @@ def _response(payload: object) -> SimpleNamespace:
 def test_v7_is_the_next_run_identifier_with_v6_prompt_and_unchanged_model_gold() -> None:
     assert V6_BENCHMARK_ID == "orchestration-router-v6"
     assert BENCHMARK_ID == "orchestration-router-v7"
-    assert PROMPT_VERSION == "semantic-router-ko-v6"
     assert MODEL_ID == "gemini-3.1-flash-lite"
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert len(load_gold_v3_cases()) == 80
     recorded_v6 = json.loads((EVALS_DIR / "summary_v6.json").read_text(encoding="utf-8"))
     assert recorded_v6["prompt_version"] == "semantic-router-ko-v5"
     assert recorded_v6["verdict"] == "FAIL"
+    # The v7 run itself is frozen as having sent v6 — that record is immutable even
+    # though production has since advanced (PR #204 → v7).
+    recorded_v7 = json.loads((EVALS_DIR / "summary_v7.json").read_text(encoding="utf-8"))
+    assert recorded_v7["prompt_version"] == "semantic-router-ko-v6"
+    assert recorded_v7["verdict"] == "PASS"
 
 
-def test_v7_provider_call_uses_the_production_v6_prompt_and_schema() -> None:
+def test_v7_provider_call_uses_the_production_prompt_and_schema() -> None:
     case = next(c for c in load_gold_v3_cases() if c.case_id == "mixed_10")
     client = FakeClient([_response({"execute": ["life", "walk"], "handoffs": ["gait"]})])
     attempts, _, social = run_cases([case], client=client, model_id=MODEL_ID)
     call = client.models.calls[0]
     assert call["model"] == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v6" in call["contents"]
+    assert f"PROMPT_VERSION: {PROMPT_VERSION}" in call["contents"]
     assert "choosing a suitable walking" in call["contents"]
     assert call["config"].response_json_schema == SemanticRoutingDecision.model_json_schema()
     [attempt] = attempts[case.case_id]
@@ -91,9 +103,9 @@ def test_v7_artifacts_and_frozen_gates() -> None:
         gold_version=GOLD_VERSION,
         model_id=MODEL_ID,
     )
-    assert summary["prompt_version"] == "semantic-router-ko-v6"
+    assert summary["prompt_version"] == PROMPT_VERSION
     assert summary["benchmark_id"] == "orchestration-router-v7"
-    assert "semantic-router-ko-v6" in report
+    assert PROMPT_VERSION in report
 
     cases = load_gold_v3_cases()
     perfect = evaluate_benchmark(

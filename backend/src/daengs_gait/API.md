@@ -294,6 +294,6 @@ POST /gait/compare
 | | 왜 |
 | --- | --- |
 | `GET /gait/records/{id}/original` (원본 재생) | 앱 요구사항이 확정되지 않았습니다. 필요해질 때 추가합니다 |
-| 비동기 job/poll | 지금은 동기입니다. 미래 모양은 `docs/orchestration-contracts.md` 의 `job: {job_id, poll}` |
+| 비동기 job/poll | 지금은 동기입니다. 미래 모양은 `docs/orchestration/contracts.md` 의 `job: {job_id, poll}` |
 | 인증·소유권 | 위 참고 |
 | URL 업로드 (`yt-dlp`) | 코드는 있으나 엔드포인트를 두지 않았습니다 |

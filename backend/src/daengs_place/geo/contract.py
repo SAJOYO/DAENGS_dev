@@ -24,6 +24,7 @@ class SearchMust:
     require_tags: tuple[str, ...] = field(default_factory=tuple)
     exclude_ids: tuple[int, ...] = field(default_factory=tuple)
     limit: int = 20
+    name_query: str = ""
 
 
 @dataclass(frozen=True)

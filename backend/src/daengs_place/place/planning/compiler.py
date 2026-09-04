@@ -28,6 +28,7 @@ def build_place_search_plan(
     limit_per_kind: int,
     conditions: PlaceSearchConditions | None = None,
     prefer_parking: bool = False,
+    name_query: str = "",
     purpose_origin: GateOrigin = GateOrigin.USER_EXPLICIT,
     purpose_locked: bool = True,
     purpose_relaxable: bool = False,
@@ -84,6 +85,7 @@ def build_place_search_plan(
             gates=tuple(gates),
             limit_per_kind=limit_per_kind,
             conditions=conditions,
+            name_query=name_query,
             trace=PlanTrace(entries=tuple(trace)),
         )
     )

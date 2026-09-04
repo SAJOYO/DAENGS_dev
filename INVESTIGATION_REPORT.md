@@ -96,10 +96,10 @@ No documents in the collected corpus contain any bathing-related vocabulary.
 |-------|------------------|----------|-------|------------|
 | `목욕을 싫어해요` | 0.8210 | nias-64753 | Biting behavior | YES |
 | `강아지가 목욕을 무서워하고 도망가요` | 0.8260 | nias-a6aeb | Toilet training | YES |
-| `강아지를 목욕에 천천히 적응시키는 방법을 알려줘` | 0.8237 | nias-64753 | Pagination | YES |
-| `물을 묻히면 강아지가 도망가요` | [TBD] | [TBD] | [TBD] | [TBD] |
-| `드라이기 소리를 무서워해요` | [TBD] | [TBD] | [TBD] | [TBD] |
-| `목욕할 때 물려고 해요` | [TBD] | [TBD] | [TBD] | [TBD] |
+| `강아지를 목욕에 천천히 적응시키는 방법을 알려줘` | 0.8564 | nias-64753 | FAQ | YES |
+| `물을 묻히면 강아지가 도망가요` | 0.8312 | nias-64753 | FAQ | YES |
+| `드라이기 소리를 무서워해요` | 0.8223 | nias-64753 | FAQ | YES |
+| `목욕할 때 물려고 해요` | 0.8271 | nias-a6aeb | FAQ | YES |
 
 **Pattern Observed**: All bathing-related queries return non-bathing content.  Semantic embeddings find no direct matches, so similar behavioral topics rank highest (toilet training, handling sensitivity).
 
@@ -217,9 +217,11 @@ These should continue to return `UNCERTAIN` with reason `model_reported_insuffic
 
 ## Data Artifacts
 
-- `bathing_search_results.json` — Phase 1-4 ranking comparison across 6 diagnostic queries
-- `bathing_full_search.json` — Phase 3 full-corpus search results (all zeros)
-- Database queries executed on 2026-09-04 against production vectordb
+- `reports/diagnostics/bathing_search_results.json` — Phase 4 ranking comparison across all 6 diagnostic queries (20 results each)
+  - All six queries present with complete top-20 ranked results
+  - Proves: ZERO direct bathing-aversion evidence in entire corpus
+  - Format: JSON with chunk IDs, document IDs, scores, heading paths, serving eligibility
+- Database queries executed on 2026-09-04 against production vectordb (read-only, no mutations)
 
 ---
 

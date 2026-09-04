@@ -10,8 +10,24 @@ name: DB 마이그레이션 적용
 #    `backend/src` 가 컨테이너에 bind mount 돼 있어서, 기능 브랜치를 checkout 하면
 #    **그 순간 backend 가 그 코드를 로드합니다.** 마이그레이션을 적용하기 전에 새
 #    모델이 올라오면 없는 컬럼을 SELECT 해서 `/app/pets` 같은 멀쩡한 경로가 500 이
-#    됩니다. 그래서 checkout 은 기본 브랜치 그대로 두고, SQL 파일만
-#    `git show <ref>:<path>` 로 꺼내 psql 에 흘려보냅니다.
+#    됩니다. 그래서 checkout 은 기본 브랜치 그대로 두고, SQL 파일만 `git show` 로 꺼냅니다.
+#
+# ⚠️ **`run:` 블록은 전부 ASCII 입니다. 한글을 넣지 마세요.**
+#    러너는 스텝 스크립트를 BOM 없는 UTF-8 로 쓰는데 Windows PowerShell 5.1 이 그것을
+#    cp949 로 읽습니다. 한글이 깨지면서 따옴표가 안 닫히면 **파싱 단계에서 죽습니다** —
+#    2026-09-04 에 실제로 그렇게 실패했습니다 (`"pgvector 가 안 뜹니다"` 가
+#    `"pgvector 媛<NUL> ???밸땲??"` 로 깨져 문자열이 안 닫혔습니다).
+#    `deploy.yml` 은 run 블록에 한글이 있는데도 도는데, 그건 그 글자들이 우연히 안
+#    깨진 것뿐이라 기대면 안 됩니다. 같은 `workflow_dispatch` 인 인제스트 워크플로
+#    둘(`place-search-ingest` · `territory-sites-ingest`)은 run 블록이 **전부 ASCII**
+#    입니다 — 그쪽을 따릅니다. 설명은 이렇게 YAML 주석으로 답니다(스크립트에 안 들어감).
+#
+# ⚠️ **바이트를 PowerShell 파이프에 태우지 마세요.** SQL 에는 한글 주석과
+#    `COMMENT ON ... IS '한글'` 이 들어 있고 pg_dump 는 아예 바이너리입니다.
+#    PowerShell 은 파이프를 지날 때 다시 인코딩합니다 — SQL 은 주석이 깨지고, 덤프는
+#    통째로 못 쓰게 되며 **복원할 때까지 그걸 모릅니다.** 그래서 파일을 옮기는 자리는
+#    `shell: cmd`(리다이렉션이 바이트 그대로)와 `docker cp` 를 씁니다.
+#    같은 함정이 `docs/deploy/runbook.md` §2 에도 적혀 있습니다.
 #
 # ⚠️ **여러 번 돌려도 안전해야 합니다.** 이 저장소는 버전 테이블이 없어서 DB 가 적용
 #    여부를 기억하지 않습니다 — 모든 마이그레이션이 `IF NOT EXISTS` · `DO` 블록으로
@@ -52,8 +68,13 @@ jobs:
     runs-on: [self-hosted, Windows, X64]
     defaults:
       run:
-        shell: powershell
         working-directory: ${{ github.workspace }}
+
+    # 입력을 스크립트에 문자열로 끼워 넣지 않고 **환경 변수**로 넘깁니다 (스크립트 주입 방지).
+    env:
+      MIG_FILE: ${{ inputs.file }}
+      MIG_REF: ${{ inputs.ref }}
+      BACKUP_DIR: C:\deploy\daengs\db-backups
 
     steps:
       - name: 소스 받기
@@ -62,136 +83,117 @@ jobs:
           # 서버 전용 .env 와 빌드 산출물을 지우지 않습니다 (deploy.yml 과 같은 이유).
           clean: false
 
-      - name: 입력 검사
+      # 파일 **이름만** 받습니다. 경로 구분자를 막아 db/migrations 밖으로 못 나갑니다.
+      - name: Validate input
+        shell: powershell
         run: |
-          $file = '${{ inputs.file }}'
-          # 경로를 못 벗어나게 합니다. 파일 **이름만** 받습니다.
-          if ($file -notmatch '^[A-Za-z0-9._-]+\.sql$') {
-            throw "파일 이름이 이상합니다: $file (db/migrations 안의 이름만 적으세요)"
+          if ($env:MIG_FILE -notmatch '^[A-Za-z0-9._-]+\.sql$') {
+            throw "bad file name: $env:MIG_FILE (name only, no path separators)"
           }
-          if ($file -like 'verify_*') {
-            throw "verify_ 파일은 여기서 직접 돌리지 않습니다. 원본 파일 이름을 적고 verify 를 켜세요."
+          if ($env:MIG_FILE -like 'verify_*') {
+            throw "do not run verify_ files directly; pass the base name and enable verify"
           }
-          Write-Host "적용할 파일: db/migrations/$file  (ref: ${{ inputs.ref }})"
+          Write-Host "file=$env:MIG_FILE ref=$env:MIG_REF"
 
-      - name: SQL 꺼내 오기 (작업 트리는 안 건드림)
+      # ⚠️ checkout 하지 않습니다 (맨 위 bind mount 주석). `git show` 로 파일만 꺼냅니다.
+      #    cmd 를 쓰는 이유는 리다이렉션이 **바이트 그대로**이기 때문입니다 —
+      #    PowerShell 로 받으면 SQL 안의 한글 주석이 다시 인코딩됩니다.
+      - name: Fetch migration SQL
+        shell: cmd
         run: |
-          $ref = '${{ inputs.ref }}'
-          $file = '${{ inputs.file }}'
+          if not exist _migrate mkdir _migrate
+          git fetch origin %MIG_REF% --depth=1 || exit /b 1
+          git show FETCH_HEAD:db/migrations/%MIG_FILE% > _migrate\%MIG_FILE% || exit /b 1
+          git show FETCH_HEAD:db/migrations/verify_%MIG_FILE% > _migrate\verify_%MIG_FILE% 2>nul
+          if not exist _migrate\verify_%MIG_FILE% echo note: no verify file in this ref
+          dir _migrate
 
-          # ⚠️ checkout 하지 않습니다. bind mount 때문에 작업 트리를 바꾸면 backend 가
-          #    그 코드를 즉시 로드합니다 (이 워크플로 맨 위 주석 참고).
-          git fetch origin $ref --depth=1
-          if ($LASTEXITCODE -ne 0) { throw "ref 를 못 찾았습니다: $ref" }
-
-          New-Item -ItemType Directory -Force _migrate | Out-Null
-
-          git show "FETCH_HEAD:db/migrations/$file" | Out-File -Encoding utf8 "_migrate/$file"
-          if ($LASTEXITCODE -ne 0) { throw "그 ref 에 db/migrations/$file 이 없습니다" }
-
-          if ('${{ inputs.verify }}' -eq 'true') {
-            git show "FETCH_HEAD:db/migrations/verify_$file" | Out-File -Encoding utf8 "_migrate/verify_$file"
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "::warning::verify_$file 이 없습니다. 적용만 하고 확인은 건너뜁니다."
-              Remove-Item "_migrate/verify_$file" -ErrorAction SilentlyContinue
-            }
-          }
-
-          Write-Host "--- 적용할 SQL ---"
-          Get-Content "_migrate/$file" -TotalCount 40
-
-      - name: DB 가 떠 있는지 확인
+      - name: Wait for database
+        shell: powershell
         run: |
           docker compose up -d pgvector
-          foreach ($attempt in 1..20) {
+          $ok = $false
+          foreach ($i in 1..20) {
             docker compose exec -T pgvector sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | Out-Null
-            if ($?) { Write-Host "pgvector 준비됨"; break }
-            if ($attempt -eq 20) { throw "pgvector 가 안 뜹니다" }
+            if ($?) { $ok = $true; break }
             Start-Sleep -Seconds 3
           }
+          if (-not $ok) { throw "pgvector did not become ready" }
+          Write-Host "pgvector ready"
 
       # ⚠️ **이 DB 는 자동 백업이 없습니다.** pg_dump 는 GCP 이관 때 손으로 한 번 뜬 것이
       #    전부입니다(roadmap §2). 마이그레이션은 덧붙이기만 하도록 쓰지만, 그 규칙을
       #    어긴 파일이 하나 섞이면 되돌릴 방법이 없습니다.
-      - name: 백업 (pg_dump)
+      #
+      # ⚠️ 덤프는 **체크아웃 폴더 밖**에 둡니다. 안에 두면 언젠가 `git clean -ffdx` 가
+      #    지웁니다 — 크롤러 코퍼스가 실제로 그렇게 날아갔고, deploy.yml 이
+      #    `clean: false` 를 쓰는 이유가 그것입니다.
+      #
+      # ⚠️ **옛 백업을 자동으로 지우지 않습니다.** 연달아 돌리면 제일 오래된 것부터
+      #    밀려 나가는데, 크게 되돌려야 할 때 필요한 것이 바로 그 "아무것도 안 바뀐
+      #    상태" 의 백업입니다. 목록만 보여 주고, 지우는 판단은 사람이 합니다.
+      - name: Backup (pg_dump)
         if: ${{ inputs.backup }}
+        shell: powershell
         run: |
-          # ⚠️ **체크아웃 폴더 밖에 둡니다.** 안에 두면 언젠가 `git clean -ffdx` 가
-          #    지웁니다 — 크롤러 코퍼스가 실제로 그렇게 한 번 날아갔습니다
-          #    (deploy.yml 이 clean:false 를 쓰는 이유).
-          $dir = 'C:\deploy\daengs\db-backups'
-          New-Item -ItemType Directory -Force $dir | Out-Null
+          New-Item -ItemType Directory -Force $env:BACKUP_DIR | Out-Null
 
-          # 뜨기 전에 크기를 봅니다. 이 디스크에는 이제 영상·사진도 같이 쌓입니다(D-052).
-          Write-Host "--- DB 크기 ---"
+          Write-Host "--- database size ---"
           docker compose exec -T pgvector sh -c 'psql -tA -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_size_pretty(pg_database_size(current_database()))"'
-          Write-Host "--- 남은 디스크 ---"
+          Write-Host "--- disk free ---"
           Get-PSDrive C | Select-Object Used, Free | Format-List
 
           $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-          $out = Join-Path $dir "vectordb-$stamp.dump"
+          $out = Join-Path $env:BACKUP_DIR "vectordb-$stamp.dump"
 
-          # ⚠️ **PowerShell 의 `>` 는 바이너리를 깨뜨립니다.** `-Fc` 는 바이너리 포맷이라
-          #    파이프로 받으면 못 쓰는 덤프가 나옵니다 — 그리고 **복원할 때까지 모릅니다.**
-          #    그래서 컨테이너 안에 만들고 `docker cp` 로 꺼냅니다 (runbook §2 와 같은 방식).
+          # -Fc is binary: build it inside the container, then docker cp it out.
           docker compose exec -T pgvector sh -c 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /tmp/migrate-backup.dump'
-          if ($LASTEXITCODE -ne 0) { throw "pg_dump 실패 — 적용을 중단합니다" }
-
+          if ($LASTEXITCODE -ne 0) { throw "pg_dump failed - aborting before any change" }
           docker cp pgvector:/tmp/migrate-backup.dump $out
-          if ($LASTEXITCODE -ne 0) { throw "덤프를 꺼내지 못했습니다 — 적용을 중단합니다" }
+          if ($LASTEXITCODE -ne 0) { throw "docker cp failed - aborting before any change" }
           docker compose exec -T pgvector rm -f /tmp/migrate-backup.dump
 
           $size = (Get-Item $out).Length
-          if ($size -lt 1024) { throw "덤프가 너무 작습니다 ($size 바이트). 적용을 중단합니다" }
+          if ($size -lt 1024) { throw "dump too small ($size bytes) - aborting" }
 
-          # 진짜 pg_dump custom 포맷인지 봅니다 — 매직 바이트가 "PGDMP" 입니다.
-          # 위 바이너리 함정을 다시 밟으면 여기서 걸립니다.
-          $head = [System.Text.Encoding]::ASCII.GetString([byte[]](Get-Content $out -Encoding Byte -TotalCount 5))
-          if ($head -ne 'PGDMP') { throw "덤프가 pg_dump 포맷이 아닙니다 (머리: '$head'). 적용을 중단합니다" }
+          # pg_dump custom format starts with the magic bytes "PGDMP".
+          # If the binary ever goes through a text pipe again, this catches it.
+          $magic = [System.Text.Encoding]::ASCII.GetString([byte[]](Get-Content $out -Encoding Byte -TotalCount 5))
+          if ($magic -ne 'PGDMP') { throw "not a pg_dump archive (magic='$magic') - aborting" }
 
-          Write-Host "✅ 백업: $out ($([math]::Round($size/1MB,1)) MB)"
-          Write-Host "   되돌릴 때: docker cp <이 파일> pgvector:/tmp/r.dump 후 pg_restore"
-          Write-Host "   ⚠️ 롤(daengs)은 pg_dump 에 안 담깁니다 — runbook §2 의 globals.sql 참고"
+          Write-Host "backup ok: $out ($([math]::Round($size/1MB,1)) MB)"
+          Write-Host "restore: docker cp <file> pgvector:/tmp/r.dump then pg_restore"
+          Write-Host "note: roles are NOT in this dump - see runbook globals.sql"
 
-          # ⚠️ **옛 백업을 자동으로 지우지 않습니다.**
-          #
-          #    처음에는 "최근 3개만 남기고 지우기" 로 썼는데 그게 틀렸습니다 —
-          #    마이그레이션을 연달아 돌리면 **제일 오래된 것부터** 밀려 나가는데,
-          #    크게 되돌려야 할 때 필요한 게 바로 그 "아무것도 안 바뀐 상태" 의
-          #    백업입니다. 백업을 지우는 판단은 사람이 합니다.
-          #
-          #    대신 쌓인 것을 보여 주고, 지우는 명령을 로그에 적어 둡니다.
-          $dumps = @(Get-ChildItem $dir -Filter 'vectordb-*.dump' | Sort-Object LastWriteTime -Descending)
+          $dumps = @(Get-ChildItem $env:BACKUP_DIR -Filter 'vectordb-*.dump' | Sort-Object LastWriteTime -Descending)
           $total = ($dumps | Measure-Object -Property Length -Sum).Sum
-          Write-Host "--- 쌓인 백업 $($dumps.Count) 개 (합계 $([math]::Round($total/1GB,2)) GB) ---"
-          $dumps | ForEach-Object {
-            Write-Host ("  {0}  {1} MB  {2}" -f $_.Name, [math]::Round($_.Length/1MB,1), $_.LastWriteTime)
-          }
+          Write-Host "--- kept backups: $($dumps.Count) (total $([math]::Round($total/1GB,2)) GB) ---"
+          $dumps | ForEach-Object { Write-Host ("  {0}  {1} MB" -f $_.Name, [math]::Round($_.Length/1MB,1)) }
           if ($dumps.Count -gt 5) {
-            Write-Host "::warning::백업이 $($dumps.Count) 개 쌓였습니다. 필요 없는 것은 손으로 지우세요: $dir"
+            Write-Host "::warning::$($dumps.Count) backups kept. Delete old ones by hand: $env:BACKUP_DIR"
           }
 
-      - name: 적용
+      # `<` 리다이렉션이 **바이트 그대로**라 SQL 안의 한글이 안 깨집니다.
+      # ON_ERROR_STOP=1 이라 한 줄이라도 실패하면 여기서 멈춥니다.
+      # 계정·DB 이름은 컨테이너 안 환경 변수를 씁니다 — 워크플로에 안 적습니다.
+      - name: Apply
+        shell: cmd
         run: |
-          # ON_ERROR_STOP=1 이라 한 줄이라도 실패하면 여기서 멈춥니다.
-          # 계정·DB 이름은 컨테이너 안 환경 변수를 씁니다 — 워크플로에 안 적습니다.
-          Get-Content "_migrate/${{ inputs.file }}" | `
-            docker compose exec -T pgvector sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-          if ($LASTEXITCODE -ne 0) { throw "마이그레이션 적용 실패" }
-          Write-Host "✅ ${{ inputs.file }} 적용됨"
+          docker compose exec -T pgvector sh -c "psql -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\%MIG_FILE% || exit /b 1
+          echo applied: %MIG_FILE%
 
-      - name: 확인 (verify)
+      # verify 는 **읽기만** 합니다. 결과를 로그에서 눈으로 봅니다.
+      - name: Verify
         if: ${{ inputs.verify }}
+        shell: cmd
         run: |
-          $v = "_migrate/verify_${{ inputs.file }}"
-          if (-not (Test-Path $v)) {
-            Write-Host "verify 파일이 없어 건너뜁니다."
-            exit 0
-          }
-          # verify 는 **읽기만** 합니다. 결과를 로그에서 눈으로 봅니다.
-          Get-Content $v | `
-            docker compose exec -T pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+          if not exist _migrate\verify_%MIG_FILE% (
+            echo no verify file for %MIG_FILE% - skipping
+            exit /b 0
+          )
+          docker compose exec -T pgvector sh -c "psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\verify_%MIG_FILE%
 
-      - name: 임시 파일 치우기
+      - name: Clean up
         if: always()
+        shell: powershell
         run: Remove-Item -Recurse -Force _migrate -ErrorAction SilentlyContinue

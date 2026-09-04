@@ -107,6 +107,69 @@ def test_local_bridge_supports_a_separate_territory_upload_path(tmp_path):
     assert ticket.upload_url == f"http://x/app/territory/attempts/_bridge/upload/{key}"
 
 
+def test_local_bridge_supports_a_separate_download_path(tmp_path):
+    """**다운로드 경로도 도메인마다 다릅니다.**
+
+    업로드 경로만 인자였고 다운로드는 `/app/gait/_bridge/download` 가 박혀 있었습니다.
+    저장소가 공용이 된 뒤(D-052)로는 프로필 사진·도감 카드가 그 주소로 나가서 보행
+    라우터에 걸려 404 가 납니다 — 저장소는 멀쩡한데 읽기만 안 되는 모양이라 원인이
+    안 보입니다.
+    """
+    s = LocalBridgeStorage(str(tmp_path), base_url="http://x")
+    key = "territory/user/attempt/capture.jpg"
+
+    # 기본값은 그대로 보행입니다 (기존 호출부가 안 바뀝니다).
+    assert s.download_url(key, expires_in_seconds=60) == (
+        f"http://x/app/gait/_bridge/download/{key}"
+    )
+    assert s.download_url(
+        key,
+        expires_in_seconds=60,
+        bridge_download_path="/app/territory/attempts/_bridge/download",
+    ) == f"http://x/app/territory/attempts/_bridge/download/{key}"
+
+
+@pytest.mark.parametrize("bad", ["app/x", "/app/x/", ""])
+def test_local_bridge_rejects_malformed_download_path(tmp_path, bad):
+    """업로드 경로와 같은 검사를 겁니다 — 슬래시가 어긋나면 조용히 이상한 주소가 나갑니다."""
+    s = LocalBridgeStorage(str(tmp_path), base_url="http://x")
+    with pytest.raises(StorageNotConfiguredError):
+        s.download_url("k", expires_in_seconds=60, bridge_download_path=bad)
+
+
+def test_local_bridge_open_write_streams_and_cleans_up_partials(tmp_path):
+    """**중간에 끊기면 반쯤 쓴 파일을 지웁니다.**
+
+    남겨 두면 두 가지가 깨집니다 — create-only PUT 이 409 에 막히고, confirm 이 모자란
+    파일을 성공으로 받습니다. 특히 0바이트로 남으면 `redact()` 의 tombstone 과
+    구별되지 않아 "이미 파기된 원본" 처럼 보입니다.
+    """
+    s = LocalBridgeStorage(str(tmp_path))
+    key = "gait/pet/original/a.mp4"
+
+    with s.open_write(key) as stream:
+        stream.write(b"aaa")
+        stream.write(b"bbb")
+    assert s.local_path(key).read_bytes() == b"aaabbb"
+
+    s.delete(key)
+    with pytest.raises(RuntimeError), s.open_write(key) as stream:
+        stream.write(b"half")
+        raise RuntimeError("업로드 도중 끊김")
+    assert not s.local_path(key).exists()
+
+
+def test_local_bridge_open_write_exclusive_refuses_overwrite(tmp_path):
+    """create-only 의 스트리밍 판. 기존 파일은 그대로 남아야 합니다."""
+    s = LocalBridgeStorage(str(tmp_path))
+    key = "territory/user/attempt/capture.jpg"
+    s.write(key, b"first")
+
+    with pytest.raises(FileExistsError), s.open_write(key, exclusive=True):
+        pass
+    assert s.local_path(key).read_bytes() == b"first"
+
+
 def test_local_bridge_reads_only_the_confirmed_generation(tmp_path):
     storage = LocalBridgeStorage(str(tmp_path), base_url="http://x")
     key = "territory/user/attempt/capture.jpg"

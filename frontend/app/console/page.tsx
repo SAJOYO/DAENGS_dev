@@ -26,7 +26,12 @@ const consoleSections: Array<{
    * `<Link href>` 를 그렇게 검사해서, 오타나 지워진 라우트를 빌드에서 잡습니다.
    * 화면이 늘어나면 여기에 경로를 `|` 로 더하세요.
    */
-  href?: "/console/search" | "/console/crawl" | "/console/status" | "/console/admins";
+  href?:
+    | "/console/search"
+    | "/console/crawl"
+    | "/console/status"
+    | "/console/admins"
+    | "/console/users";
 }> = [
   {
     title: "지식 베이스",
@@ -89,12 +94,19 @@ const consoleSections: Array<{
   {
     title: "회원 · 반려견",
     description:
-      "앱 회원을 이메일로 찾아 상태와 반려견을 봅니다. 개인정보는 가려서 보여 주고, 원문은 권한이 있는 계정만 봅니다.",
-    // 이메일 검색이 blind index 로만 되는 것과(D-012) 복호화가 `pii:read` 인 것은
-    // 이미 정해져 있습니다. 그 조회를 기록에 남기는 감사 로그(A4 · #203)와, `pii:read`
-    // 를 **못 가진 계정이 실제로 존재하게** 하는 계정 관리(A3 · #207)가 이 화면의
-    // 전제입니다 — 그래서 로드맵 §5 에서 둘 다 A2 보다 앞입니다.
+      "앱 회원을 이메일이나 카카오 회원번호로 찾아 상태와 반려견을 봅니다. 개인정보는 가려서 보여 줍니다.",
+    // **이 카드는 읽기까지입니다** (#211). 이메일 검색이 blind index 로만 되는 것은
+    // D-012 가 정해 둔 것이고, 화면이 그 제약을 안내합니다. 원문 보기와 정지는 아직
+    // 없어서 문구에서도 뺐습니다 — 카드 문구가 없는 기능을 약속하면 안 됩니다.
+    //
+    // **`pii:read` 가 아니라 `read` 입니다.** 나가는 값이 전부 마스킹된 것이라
+    // API(`/admin/app-users`)도 `Perm.READ` 로 열려 있습니다. 여기를 좁히면 API 는
+    // 열어 주는데 화면만 안 보이는 계정이 생깁니다 (위 카드들과 같은 규칙).
+    // 원문 보기와 정지는 짝 카드(#212)가 `pii:read`·`ops:write` 로 화면 안에서 가립니다.
+    // 그 카드의 전제가 감사 로그(A4 · #203)와, `pii:read` 를 **못 가진 계정이 실제로
+    // 존재하게** 하는 계정 관리(A3 · #207)입니다 — 로드맵 §5 가 둘을 앞에 둔 이유입니다.
     permission: "read",
+    href: "/console/users",
   },
   {
     title: "관리자 계정",

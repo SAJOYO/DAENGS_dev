@@ -10,5 +10,6 @@
       "location.lat",
       "location.lon"
     ]
-  }
+  },
+  "route": null
 }

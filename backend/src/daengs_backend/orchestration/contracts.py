@@ -146,11 +146,21 @@ class ClarifyRequest(ContractModel):
 
 
 class RoutePlan(ContractModel):
+    """The plan itself plus how it was reached.
+
+    `router`/`model`/`prompt_version` are observation metadata, not routing semantics:
+    the deterministic path calls no model, so its `model` and `prompt_version` are both
+    None by construction. They live here rather than beside the router because both paths
+    assemble their plan in `assemble_route_plan` (D-051 ②) — one assembly point means the
+    two paths cannot disagree about what produced them.
+    """
+
     requests: list[CapabilityRequest] = Field(default_factory=list)
     handoffs: list[Handoff] = Field(default_factory=list)
     clarify: ClarifyRequest | None = None
     router: RouterKind
     model: str | None = None
+    prompt_version: str | None = None
 
     @model_validator(mode="after")
     def clarify_is_exclusive(self) -> RoutePlan:
@@ -200,13 +210,39 @@ class CapabilityResult(ContractModel):
         return self
 
 
+class RouteTrace(ContractModel):
+    """Which way the request went, for console inspection only (#238).
+
+    **Metadata, never content.** Router kind, model id and prompt version are exactly the
+    fields D-037 already allows in observation; the question text, the prompt body and any
+    provider payload stay out — putting those here would cross that line through the
+    response instead of the log.
+
+    `model` and `prompt_version` are None on the deterministic path: no model was called,
+    so there is nothing to name. A reader must not render that as an empty model field.
+    """
+
+    router: RouterKind
+    model: str | None = None
+    prompt_version: str | None = None
+
+
 class AssistantResponse(ContractModel):
+    """The public `/assistant/query` contract.
+
+    `route` is the one field that is not for everyone: it is attached only when the caller
+    holds the console inspection permission (`routers/assistant.py`), so app members never
+    receive it and it never reaches a stored chat turn. Everything above it is the reduced
+    response the app consumes and must not change shape.
+    """
+
     request_id: str = Field(min_length=1)
     status: AssistantStatus
     message: str
     results: list[CapabilityResult] = Field(default_factory=list)
     handoffs: list[Handoff] = Field(default_factory=list)
     clarify: ClarifyRequest | None = None
+    route: RouteTrace | None = None
 
 
 class OrchestratorState(TypedDict):
@@ -218,6 +254,9 @@ class OrchestratorState(TypedDict):
     route_plan: RoutePlan
     results: list[CapabilityResult]
     response: AssistantResponse | None
+    #: May this caller see `AssistantResponse.route`? Decided at the HTTP boundary, which
+    #: is the layer that knows permissions — this graph never reads a permission itself.
+    include_route_trace: bool
 
 
 __all__ = [
@@ -237,6 +276,7 @@ __all__ = [
     "PlacePayload",
     "PrincipalContext",
     "RoutePlan",
+    "RouteTrace",
     "RouterKind",
     "TrainingPayload",
     "WalkPayload",

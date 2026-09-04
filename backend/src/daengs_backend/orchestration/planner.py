@@ -27,7 +27,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from daengs_backend.orchestration.contracts import RoutePlan, RouterKind
-from daengs_backend.orchestration.semantic import ROUTER_MODEL_ID, SemanticRoutingDecision
+from daengs_backend.orchestration.semantic import (
+    PROMPT_VERSION,
+    ROUTER_MODEL_ID,
+    SemanticRoutingDecision,
+)
 
 # Requests are emitted in this order regardless of the order the router listed them.
 # The model's list order is not stable — a live v7 probe returned both ["place","walk"]
@@ -74,7 +78,12 @@ def resolve_deterministic_route(
         # An unresolved signal does not fail the request; semantic routing decides.
         return None
     return assemble_route_plan(
-        decision, query=query, context=context, router=RouterKind.DETERMINISTIC, model=None
+        decision,
+        query=query,
+        context=context,
+        router=RouterKind.DETERMINISTIC,
+        model=None,
+        prompt_version=None,
     )
 
 
@@ -85,8 +94,15 @@ def assemble_route_plan(
     context: dict[str, Any],
     router: RouterKind,
     model: str | None = ROUTER_MODEL_ID,
+    prompt_version: str | None = PROMPT_VERSION,
 ) -> RoutePlan:
-    """Build the real Card 1 RoutePlan using only trusted query/context values."""
+    """Build the real Card 1 RoutePlan using only trusted query/context values.
+
+    `model`/`prompt_version` describe how the selection was reached, not what was selected.
+    The deterministic caller above passes None for both because it calls no model at all —
+    they are not "unknown", they are "there was none", and the console renders that
+    difference (#238).
+    """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     missing = _missing_coordinates(context) if needs_coordinates else []
     if missing:
@@ -103,6 +119,7 @@ def assemble_route_plan(
                 },
                 "router": router,
                 "model": model,
+                "prompt_version": prompt_version,
             }
         )
 
@@ -125,6 +142,7 @@ def assemble_route_plan(
             "clarify": None,
             "router": router,
             "model": model,
+            "prompt_version": prompt_version,
         }
     )
 

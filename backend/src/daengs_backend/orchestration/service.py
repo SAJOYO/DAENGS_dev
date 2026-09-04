@@ -20,10 +20,12 @@ from daengs_backend.orchestration.contracts import (
     AssistantStatus,
     PrincipalContext,
     RouterKind,
+    RouteTrace,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
 from daengs_backend.orchestration.semantic import (
+    PROMPT_VERSION,
     ROUTER_MODEL_ID,
     GeminiSemanticRouter,
     SemanticRoutingError,
@@ -52,8 +54,24 @@ class AssistantOrchestrationService:
         requested_capability: str | None = None,
         request_id: str | None = None,
         locale: str = "ko-KR",
+        include_route_trace: bool = False,
     ) -> AssistantResponse:
+        """Plan, then execute. `include_route_trace` is the caller's answer to "may this
+        principal see how the request was routed?" (#238) — the HTTP boundary decides it,
+        because permissions are its business, and it defaults to no.
+
+        The two responses that never reach the engine get the same trace attached here:
+        a social reply and a router failure are exactly the answers whose "no capability
+        ran" is otherwise unexplained in the console.
+        """
         rid = request_id or str(uuid.uuid4())
+        semantic_trace = (
+            RouteTrace(
+                router=RouterKind.LLM, model=ROUTER_MODEL_ID, prompt_version=PROMPT_VERSION
+            )
+            if include_route_trace
+            else None
+        )
         structured_context = dict(context or {})
         route_plan = resolve_deterministic_route(
             requested_capability=requested_capability,
@@ -73,10 +91,13 @@ class AssistantOrchestrationService:
                     results=[],
                     handoffs=[],
                     clarify=None,
+                    route=semantic_trace,
                 )
             if decision.social_intent is not None:
                 # Schema guarantees execute/handoffs are empty here: nothing to plan or run.
-                return build_social_response(request_id=rid, intent=decision.social_intent)
+                return build_social_response(
+                    request_id=rid, intent=decision.social_intent, route=semantic_trace
+                )
             route_plan = assemble_route_plan(
                 decision,
                 query=query,
@@ -91,6 +112,7 @@ class AssistantOrchestrationService:
             request_id=rid,
             locale=locale,
             context=structured_context,
+            include_route_trace=include_route_trace,
         )
 
 

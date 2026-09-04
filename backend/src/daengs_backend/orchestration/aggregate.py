@@ -11,6 +11,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityResult,
     CapabilityStatus,
     RoutePlan,
+    RouteTrace,
 )
 
 _LABELS = {
@@ -44,9 +45,18 @@ _UNKNOWN_WALK_VERDICT = "지금 산책 조건을 확인했어요."
 
 
 def aggregate_results(
-    *, request_id: str, route_plan: RoutePlan, results: list[CapabilityResult]
+    *,
+    request_id: str,
+    route_plan: RoutePlan,
+    results: list[CapabilityResult],
+    include_route_trace: bool = False,
 ) -> AssistantResponse:
-    """Apply D-033/D-034 without using a model or rewriting domain messages."""
+    """Apply D-033/D-034 without using a model or rewriting domain messages.
+
+    `include_route_trace` defaults off: the caller that knows the principal's permissions
+    has to say yes (#238). A caller that forgets therefore leaks nothing.
+    """
+    route = _route_trace(route_plan) if include_route_trace else None
     if route_plan.clarify is not None:
         return AssistantResponse(
             request_id=request_id,
@@ -55,6 +65,7 @@ def aggregate_results(
             results=[],
             handoffs=[],
             clarify=route_plan.clarify,
+            route=route,
         )
 
     if not results:
@@ -70,6 +81,7 @@ def aggregate_results(
             message=message,
             results=[],
             handoffs=route_plan.handoffs,
+            route=route,
         )
 
     statuses = [result.status for result in results]
@@ -99,6 +111,16 @@ def aggregate_results(
         message="\n\n".join(section for section in sections if section),
         results=results,
         handoffs=route_plan.handoffs,
+        route=route,
+    )
+
+
+def _route_trace(route_plan: RoutePlan) -> RouteTrace:
+    """Copy the plan's observation metadata across — nothing is derived or looked up here."""
+    return RouteTrace(
+        router=route_plan.router,
+        model=route_plan.model,
+        prompt_version=route_plan.prompt_version,
     )
 
 

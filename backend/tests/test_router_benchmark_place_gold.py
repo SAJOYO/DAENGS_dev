@@ -18,7 +18,11 @@ import pytest
 
 from daengs_backend.orchestration.contracts import RouterKind
 from daengs_backend.orchestration.planner import assemble_route_plan
-from daengs_backend.orchestration.semantic import ROUTER_MODEL_ID, SemanticRoutingDecision
+from daengs_backend.orchestration.semantic import (
+    PROMPT_VERSION,
+    ROUTER_MODEL_ID,
+    SemanticRoutingDecision,
+)
 from tools.router_benchmark.schemas import load_gold_cases, load_gold_place_cases
 
 # The decision each case asserts the classifier should return. Deliberately restated
@@ -79,7 +83,11 @@ def test_gold_plan_is_exactly_what_the_production_planner_builds(case_id: str) -
         router=RouterKind.LLM,
         model=ROUTER_MODEL_ID,
     )
-    assert rebuilt == case.gold_route_plan
+    # gold 파일은 `prompt_version` 을 안 들고 있다 — #238 이 그 필드를 더하기 전에 얼었다.
+    # 관측 메타데이터라 라우팅 결정은 하나도 안 달라지므로, 파일을 고치는 대신 여기서 맞춘다.
+    assert rebuilt == case.gold_route_plan.model_copy(
+        update={"prompt_version": PROMPT_VERSION}
+    )
 
 
 # --------------------------------------------------------- the approved contract rows

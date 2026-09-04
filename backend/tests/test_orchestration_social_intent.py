@@ -316,6 +316,7 @@ def test_prompt_keeps_the_v4_social_rules_without_keyword_lists() -> None:
 
 
 def test_social_response_carries_no_principal_or_context() -> None:
+    """`route` 는 부르는 쪽이 달라고 해야 붙는다 — 기본값은 None 이다 (#238)."""
     response = build_social_response(request_id="rid", intent="greeting")
     assert response.model_dump() == {
         "request_id": "rid",
@@ -324,6 +325,7 @@ def test_social_response_carries_no_principal_or_context() -> None:
         "results": [],
         "handoffs": [],
         "clarify": None,
+        "route": None,
     }
 
 

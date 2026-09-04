@@ -7,10 +7,10 @@
  * 계약 문서는 `docs/orchestration/contracts.md` §5(응답) · §8(요청)입니다.
  * **한쪽만 고치면 조용히 어긋납니다** — 필드를 더하거나 이름을 바꿀 때는 셋을 같이 보세요.
  *
- * ⚠️ **여기 있는 것이 응답의 전부입니다.** `RoutePlan` 은 공개 응답에 실리지 않아
- * 라우터 종류(`deterministic`/`llm`)와 모델 이름은 밖에서 볼 수 없습니다. 화면이 그릴 수
- * 있는 것은 `results[].capability` 로 **무엇이 실행됐나** 이고, "라우터가 무엇을 골랐나" 는
- * 그 역산입니다 (`assistant-inspect.tsx` 가 그렇게 적어 둡니다).
+ * ⚠️ **`route` 는 아무에게나 오지 않습니다.** 라우터 종류·모델 이름·프롬프트 버전은
+ * `search:inspect` 권한을 가진 관리자에게만 실립니다 (#238). 앱 회원과 권한 없는 관리자에게는
+ * **키는 있고 값이 `null`** 입니다 — 없는 것이 정상이라 화면이 그것을 오류로 그리면 안 됩니다.
+ * 나머지 필드는 예나 지금이나 모두에게 같습니다.
  *
  * 이 파일은 `life-rag.ts` 와 층이 다릅니다 — 저쪽은 Life 의 **직접** API 두 개고,
  * 여기는 그 위에서 능력을 고르는 오케스트레이션의 경계입니다.
@@ -120,6 +120,21 @@ export type Handoff = { target: string; reason: string };
 /** **CLARIFY 는 배타적입니다** (O-8) — 이것이 있으면 능력도 핸드오프도 실행되지 않았습니다. */
 export type ClarifyRequest = { question: string; missing: string[] };
 
+/**
+ * `RouteTrace` — **어느 길로 갔나**. 점검 권한이 있을 때만 옵니다 (#238).
+ *
+ * `model` 과 `prompt_version` 이 `null` 인 것은 **모르는 것이 아니라 없는 것**입니다 —
+ * 결정론적 경로는 모델을 아예 부르지 않습니다. 빈칸으로 그리면 그 둘이 헷갈립니다.
+ *
+ * 여기 실리는 것은 **메타데이터뿐**입니다. 질문 원문·프롬프트 본문·공급자 payload 는
+ * 응답에도 로그에도 싣지 않습니다 (D-037).
+ */
+export type RouteTrace = {
+  router: "deterministic" | "llm";
+  model?: string | null;
+  prompt_version?: string | null;
+};
+
 export type AssistantResponse = {
   request_id: string;
   status: AssistantStatus;
@@ -127,4 +142,6 @@ export type AssistantResponse = {
   results: CapabilityResult[];
   handoffs: Handoff[];
   clarify?: ClarifyRequest | null;
+  /** 점검 권한이 없으면 `null` 입니다. 옛 백엔드에서는 키 자체가 없습니다. */
+  route?: RouteTrace | null;
 };

@@ -78,6 +78,7 @@ class OrchestrationEngine:
         request_id: str | None = None,
         locale: str = "ko-KR",
         context: dict | None = None,
+        include_route_trace: bool = False,
     ) -> AssistantResponse:
         if locale != "ko-KR":
             raise ValueError("v1 supports locale ko-KR only")
@@ -92,6 +93,7 @@ class OrchestrationEngine:
             "route_plan": route_plan,
             "results": [],
             "response": None,
+            "include_route_trace": include_route_trace,
         }
         final = await self.graph.ainvoke(initial)
         response = final.get("response")
@@ -168,6 +170,7 @@ class OrchestrationEngine:
             request_id=state["request_id"],
             route_plan=state["route_plan"],
             results=state["results"],
+            include_route_trace=state["include_route_trace"],
         )
         return {"response": response}
 

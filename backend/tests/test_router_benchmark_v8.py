@@ -100,7 +100,13 @@ def test_v8_provider_call_uses_the_production_prompt_and_schema() -> None:
     [attempt] = attempts[case.case_id]
     assert attempt.schema_valid is True
     assert attempt.plan == case.gold_route_plan.model_copy(
-        update={"router": "llm", "model": "gemini-3.1-flash-lite"}
+        # 얼어붙은 gold 는 관측 메타데이터를 안 들고 있거나 그때 값으로 들고 있다 — 라우팅
+        # 의미가 아니라 경위라서, 지금 값으로 맞춘 뒤 비교한다 (`prompt_version` 은 #238).
+        update={
+            "router": "llm",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": PROMPT_VERSION,
+        }
     )
     assert social == {case.case_id: None}
 

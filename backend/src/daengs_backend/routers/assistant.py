@@ -35,6 +35,20 @@ def get_assistant_orchestration_service() -> AssistantOrchestrationService:
     return AssistantOrchestrationService()
 
 
+def _may_inspect_route(principal: Principal | AppPrincipal) -> bool:
+    """`AssistantResponse.route` 를 이 사람에게 실을까 (#238).
+
+    **인가 판단이라 여기서 합니다.** orchestration 은 `core.deps` 를 import 하지 않고,
+    권한을 아는 층은 HTTP 경계뿐입니다. 앱 회원은 애초에 권한 목록이 비어 있어
+    (`_principal_context`) 구조적으로 False 입니다 — 콘솔 점검 화면의 것이지 앱 기능이
+    아니고, 저장되는 대화 turn 은 앱 회원 것뿐이라 `public_response_of` 로도 안 샙니다.
+
+    **"항상 만들고 나중에 벗긴다" 를 하지 않는 이유**: `run_persisted_turn` 은 벗기기
+    전에 응답을 적재합니다. 한 번 잊으면 DB 로 갑니다.
+    """
+    return isinstance(principal, Principal) and Perm.SEARCH_INSPECT in principal.permissions
+
+
 def _principal_context(principal: Principal | AppPrincipal) -> PrincipalContext:
     """인증된 principal 에서만 만든다 — 요청 본문의 신원 필드는 절대 쓰지 않는다."""
     if isinstance(principal, Principal):
@@ -133,6 +147,7 @@ async def query(
     똑같이 나간다.
     """
     principal_context = _principal_context(principal)
+    include_route_trace = _may_inspect_route(principal)
     context = _structured_context(body)
     if not body.persists:
         return await service.run(
@@ -140,6 +155,7 @@ async def query(
             principal=principal_context,
             context=await _with_dog_context(context, principal, session_factory),
             requested_capability=body.requested_capability,
+            include_route_trace=include_route_trace,
         )
 
     if not isinstance(principal, AppPrincipal):
@@ -159,6 +175,9 @@ async def query(
                 {**context, "active_dog_id": active_dog_id}, principal, session_factory
             ),
             requested_capability=body.requested_capability,
+            # `include_route_trace` 를 여기서는 **안 넘깁니다.** 저장하는 요청은 바로 위에서
+            # 앱 회원으로 좁혀져 있어 어차피 False 이고, 안 넘기는 쪽이 "저장되는 turn 에는
+            # 라우팅 메타데이터가 실릴 수 없다"를 코드 모양으로 못박습니다 (#238).
         )
 
     try:

@@ -13,7 +13,9 @@ from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
+    admin_account,
     app_auth,
+    app_user_admin,
     assistant,
     auth,
     chat,
@@ -171,6 +173,15 @@ app.include_router(assistant.router)
 app.include_router(chat.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
+# 관리자 계정 관리 (#207 · 콘솔 로드맵 A3). 권한은 라우터 안에서 `ADMIN_MANAGE` 로 겁니다 —
+# D-014 의 role 5단계가 실제로 갈리는 첫 자리입니다 (그 전까지는 정의만 있었습니다).
+app.include_router(admin_account.router)
+# 회원 조회 (#211 · 콘솔 로드맵 A2). **위 줄과 다른 사람들입니다** — `admin_users` 는 이
+# 콘솔에 로그인하는 사내 계정이고, `app_users` 는 앱을 쓰는 회원입니다 (03_auth.sql).
+# `/app/*` 와도 다른 문입니다: 저기는 앱 회원이 자기 것을 보고 여기는 관리자가 남의 것을
+# 봅니다. 나가는 개인정보는 전부 마스킹이라 권한이 `READ` 이고, 원문을 여는 문은 짝
+# 카드(#212)가 `pii:read` 로 따로 냅니다.
+app.include_router(app_user_admin.router)
 # 상태 페이지 (#180 · 콘솔 로드맵 B1). 읽기 전용이고 DB 를 바꾸지 않습니다.
 # `/health` 와 다른 자리입니다 — 저기는 모니터링이 읽고 DB 가 죽으면 503 이며,
 # 여기는 사람이 읽고 항목 하나가 죽어도 200 으로 나머지를 보여 줍니다.

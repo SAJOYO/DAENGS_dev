@@ -6321,7 +6321,7 @@ pytest           210 통과 · 1 skip (벡터 parquet 이 청크보다 낡음 �
   면책·금지·제한 문항이 여럿이라 좁은 자리가 아니다. `covered` 만으로 충분해지면 뗀다
 - **`expect: refuse` 의 소급 채점** — `boundary` 는 덤프 VERSION 2 부터라 `lap1`~`lap15` 는
   `unmeasurable` 이다. 못 재는 것을 0으로 세지 않는다
-- **`docs/orchestration-contracts.md` §4 v1 매핑 표의 Life REFUSED 행** — 오케스트레이션 소유
+- **`docs/orchestration/contracts.md` §4 v1 매핑 표의 Life REFUSED 행** — 오케스트레이션 소유
   문서라 그쪽 리뷰 (#177 의 DOCS 항목)
 ## RAG-056. 반려견 컨텍스트 — 견종은 맹견이 아니라 단두종에서 갈리고, 가족이 된 날은 나이가 아니다 — ✅ 확정 (2026-09-04)
 

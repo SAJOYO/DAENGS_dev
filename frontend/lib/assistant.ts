@@ -4,7 +4,7 @@
  * **백엔드와 손으로 맞춘 것입니다.** 원본이 두 곳입니다 —
  * 요청은 `backend/src/daengs_backend/schemas/assistant.py`,
  * 응답은 `backend/src/daengs_backend/orchestration/contracts.py` 이고
- * 계약 문서는 `docs/orchestration-contracts.md` §5(응답) · §8(요청)입니다.
+ * 계약 문서는 `docs/orchestration/contracts.md` §5(응답) · §8(요청)입니다.
  * **한쪽만 고치면 조용히 어긋납니다** — 필드를 더하거나 이름을 바꿀 때는 셋을 같이 보세요.
  *
  * ⚠️ **여기 있는 것이 응답의 전부입니다.** `RoutePlan` 은 공개 응답에 실리지 않아
@@ -59,7 +59,7 @@ export type CapabilityStatus = "OK" | "ABSTAINED" | "REFUSED" | "PENDING" | "ERR
 
 /**
  * 최상위 status 8개. 능력별 6개와 헷갈리지 마세요 — 집계 진리표는
- * `docs/orchestration-contracts.md` §5 가 소유합니다.
+ * `docs/orchestration/contracts.md` §5 가 소유합니다.
  *
  * `UNCERTAIN` 은 **전부 기권**이고 `REFUSED`/`FAILED` 가 아닙니다 (D-033).
  * `HANDOFF` 는 **순수 핸드오프**(실행된 능력 없음)입니다 — 실행과 섞이면 최상위는

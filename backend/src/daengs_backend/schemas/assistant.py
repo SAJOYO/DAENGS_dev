@@ -6,7 +6,7 @@
 바로잡는 것은 이 경계의 일이지 orchestration 의 일이 아니다.
 
 `AssistantResponse` (orchestration/contracts.py) 는 이미 승인된 공개 응답 계약이라
-(orchestration-contracts.md §5) 여기서는 요청만 다룬다.
+(docs/orchestration/contracts.md §5) 여기서는 요청만 다룬다.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class AssistantQueryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str
-    # 라우팅 신호일 뿐 인가가 아니다 (D-036, orchestration-routing.md §1). 새 능력을
+    # 라우팅 신호일 뿐 인가가 아니다 (D-036, docs/orchestration/routing.md §1). 새 능력을
     # 만들지 않는다 — 알 수 없는 값은 planner.resolve_deterministic_route 가 그대로
     # 의미 라우팅으로 넘긴다.
     requested_capability: str | None = None

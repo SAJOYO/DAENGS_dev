@@ -125,7 +125,7 @@ async def query(
     ],
 ) -> AssistantResponse:
     """`AssistantResponse` 를 그대로 돌려준다. FAILED 를 포함해 상태를 재해석하지
-    않는다 — 그것은 orchestration 계약이 소유한다 (orchestration-contracts.md §5).
+    않는다 — 그것은 orchestration 계약이 소유한다 (docs/orchestration/contracts.md §5).
 
     `chat_session_id` + `client_message_id` 가 있으면 **같은 응답을 그 대화의 turn 으로
     남긴다.** 같은 두 값과 같은 질문을 다시 보내면 저장된 응답을 그대로 돌려주고 모델을

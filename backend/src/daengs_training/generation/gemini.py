@@ -16,7 +16,7 @@ from daengs_training.guardrails import medical as medical_guardrail
 PROMPT_VERSION = 'grounded-answer-ko-v3'
 
 # v3 (2026-09-03): model-facing instructions moved to English (mentor convention,
-# docs/orchestration-architecture.md §프롬프트·로케일 정책) and one semantic rule added —
+# docs/orchestration/architecture.md §프롬프트·로케일 정책) and one semantic rule added —
 # evidence must *directly* address the behavior/problem the user stated; adjacent
 # evidence is not an answer.  Everything the user can see stays Korean: the question,
 # the retrieved evidence, the canonical no-evidence sentence, the hedge prefix.

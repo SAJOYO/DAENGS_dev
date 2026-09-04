@@ -91,3 +91,26 @@ def _no_crawl_runs_writes(request, monkeypatch):
         raise RuntimeError("테스트는 실서버 브로커로 발사하지 않는다 — apply_async 를 직접 대체할 것")
 
     monkeypatch.setattr(crawl.crawl_source, "apply_async", _no_dispatch)
+
+
+# ---------------------------------------------------------------- 수집에서 뺄 파일
+#
+# **`uv run pytest` 를 인자 없이 돌릴 수 있게 하는 자리입니다** (#224).
+#
+# 아래 둘은 pytest 테스트가 아니라 **직접 돌리는 검사 스크립트**입니다. 모듈 최상단에서
+# `sys.exit()` 을 부르는데, 이름이 `test_` 라 pytest 가 import 하고 그 `SystemExit` 이
+# **INTERNALERROR 로 수집 전체를 끊습니다.** 한 파일 때문에 스위트가 통째로 안 도는 것이라
+# 다른 실패와 성격이 다릅니다 (decisions-rag.md RAG-057 ⑨ "테스트 위생 둘").
+#
+# ⚠️ **파일을 고치거나 이름을 바꾸지 않습니다.** 둘 다 상류 저장소
+# (gayeoniee/deeplearning_test)에서 `tools/sync_screening.py` 가 가져오는 사본이라,
+# 여기서 고치면 다음 동기화가 되돌리거나 조용히 갈라집니다. 그래서 **우리 쪽에서 수집만**
+# 막습니다. 원본 파일명이 바뀌면 `sync_screening.py` 의 `FILES` 와 이 목록을 같이 고치세요.
+#
+# 스크립트로서의 용도는 그대로입니다:
+#     uv run python tests/test_screening_message.py
+#     uv run python tests/test_screening_agent.py     # `--group screening` 필요 (PIL)
+collect_ignore = [
+    "test_screening_message.py",
+    "test_screening_agent.py",
+]

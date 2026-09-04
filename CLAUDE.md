@@ -52,7 +52,7 @@ npm run lint
 uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
-uv run pytest              # 테스트 (backend/tests/)
+uv run pytest              # 테스트 전체 (backend/tests/, 약 6분)
 uv run pytest tests/place  # Place 테스트만
 uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)

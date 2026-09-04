@@ -311,13 +311,26 @@ def test_detail_never_exposes_internal_feature_vector(client, monkeypatch):
 # ── 워커 경계 (ⓒ) ──────────────────────────────────────────────────────
 def test_task_module_imports_without_gait_deps():
     """태스크 모듈 import 가 torch·daengs_gait 를 끌고 오면 안 됩니다 — backend 웹
-    프로세스(기본 설치)가 이 모듈로 `.delay()` 를 부르기 때문입니다."""
+    프로세스(기본 설치)가 이 모듈로 `.delay()` 를 부르기 때문입니다.
+
+    **별도 인터프리터에서 봅니다** (#224). 같은 프로세스에서 `sys.modules` 를 보면 *이 테스트가
+    돌기 전에 누가 torch 를 올렸는가*를 재게 됩니다 — `ml` 그룹이 깔린 환경에서 `test_embed.py`
+    뒤에 돌면 그 이유로 깨졌고, 파일 하나만 찍어 돌리면 통과해서 원인이 안 보였습니다
+    (decisions-rag.md RAG-057 ⑨ "테스트 위생 둘"). 확인하려는 것은 **깨끗한 프로세스에서
+    이 모듈을 import 했을 때 무엇이 딸려 오는가**이므로, 그 질문을 그대로 묻습니다.
+    """
+    import subprocess
     import sys
 
-    import daengs_backend.tasks.gait  # noqa: F401
-
-    assert "daengs_gait.pipeline" not in sys.modules
-    assert "torch" not in sys.modules
+    probe = (
+        "import sys; import daengs_backend.tasks.gait; "
+        "leaked = [m for m in ('daengs_gait.pipeline', 'torch') if m in sys.modules]; "
+        "print(','.join(leaked)); "
+        "sys.exit(1 if leaked else 0)"
+    )
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert done.returncode == 0, (
+        f"태스크 모듈이 끌고 온 것: {done.stdout.strip() or done.stderr.strip()}")
 
 
 # ── 임시 bridge 의 자격 검사 (2026-09-02 서버에서 무인증으로 열려 있었습니다) ──

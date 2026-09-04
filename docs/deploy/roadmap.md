@@ -109,6 +109,7 @@ clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였�
 | 상태 | 원본 위치 | 비고 |
 | --- | --- | --- |
 | Postgres 2대 덤프 | 로컬 서버 (pgvector 의 vectordb · place-db) | `pg_dump` + **`pg_dumpall --globals-only`** — 손으로 만든 `daengs` 롤은 덤프에 안 담긴다. vectordb 에는 Training RAG 테이블(`training_rag_*`)도 들어 있다(#112). **덤프 전에 `db/migrations/` 최근분(특히 2026-09-01 training_rag 통합) 적용 여부 확인** |
+| **업로드 원본(`gait-bridge` 볼륨)** | 로컬 서버의 도커 named volume | **D-052 로 사진·영상 원본이 여기 삽니다.** 안 옮기면 미디어만 집에 남고 GCP 는 빈 볼륨으로 뜹니다 — 조회가 404 나는데 DB 행은 멀쩡해서 원인이 안 보입니다. 뜨기: `docker run --rm -v gait-bridge:/d -v %CD%:/b alpine tar czf /b/bridge.tgz -C /d .` · 풀기: 같은 명령에 `tar xzf /b/bridge.tgz -C /d`. **백업이 이것뿐입니다**(D-052 가 감수) |
 | 모델 가중치 4개 | 서버 디스크 (git 에 없음) | 스크리닝 2 + gait 2(best.pt·yolov8n.pt). 배포 폴더 밖에 두고 마운트 |
 | `.env` 2개 | 최상단 + backend/ | CORS 를 https 도메인으로, RELEASE_DIR 경로들, **`DAENGS_CORPUS_DIR` 는 더미 경로 필요**(크롤러를 안 띄워도 compose 가 해석 시점에 `:?` 가드를 평가) |
 | 암호화 키 3개 | 팀 채널 | **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 연다 |

@@ -58,6 +58,7 @@ class FakeAssistantOrchestrationService:
         requested_capability: str | None = None,
         request_id: str | None = None,
         locale: str = "ko-KR",
+        include_route_trace: bool = False,
     ) -> AssistantResponse:
         self.calls.append(
             {
@@ -65,6 +66,7 @@ class FakeAssistantOrchestrationService:
                 "principal": principal,
                 "context": context,
                 "requested_capability": requested_capability,
+                "include_route_trace": include_route_trace,
             }
         )
         return self._response

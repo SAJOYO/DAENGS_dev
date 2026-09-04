@@ -67,6 +67,7 @@ RoutePlan:
   clarify:   {question: str, missing: list[str]} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
   model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.1-flash-lite` (routing 문서 §4)
+  prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v7`
 ```
 
 규칙 (CONFIRMED):
@@ -79,7 +80,10 @@ RoutePlan:
 - 요약이 필요하면 mode 는 세 목록에서 **파생**합니다 — 진실 원천이 아닙니다.
 - 이 구조를 범용 워크플로 액션 DSL 로 일반화하지 않습니다.
 - `router` 출처 필드는 관측용이자 회귀 판별용입니다. 결정적 경로가 낸 오답과 LLM 이 낸
-  오답은 고치는 방법이 다릅니다.
+  오답은 고치는 방법이 다릅니다. `model`·`prompt_version` 도 같은 성격이라 세 값은
+  **라우팅 의미가 아닙니다** — 벤치마크의 `_semantic_plan_key` 가 셋 다 비교에서 뺍니다.
+  결정적 경로에서 뒤의 둘이 `None` 인 것은 "모름"이 아니라 **부른 모델이 없다**는 뜻입니다.
+  공개 응답으로 나가는 것은 이 셋뿐이고, 그것도 점검 권한이 있을 때만입니다 (§5 `route`).
 - **라우터의 구조화 출력이 스키마 검증에 실패하면 CLARIFY 로 위장하지 않습니다** (O-14,
   routing 문서 §2) — CLARIFY 는 사용자의 정보 부족이고, 스키마 실패는 시스템 실패입니다.
   1회 한정 재시도 후에도 실패면 아무 능력도 실행하지 않고 최상위 FAILED 를 냅니다.
@@ -211,7 +215,25 @@ AssistantResponse:
   results:    list[CapabilityResult]   # 능력별 결과 전부 보존 (내부 필드는 노출 전 필터)
   handoffs:   list[{target, reason}]   # RoutePlan.handoffs 를 그대로 — 항상 표면화
   clarify:    RoutePlan.clarify 와 같은 모양 | None
+  route:      {router, model, prompt_version} | None   # 점검 권한이 있을 때만 (CURRENT — #238)
 ```
+
+**`route` 만 받는 사람이 다릅니다 (CURRENT — #238).** 나머지 필드는 부르는 사람이 누구든 같고,
+`route` 는 `search:inspect` 권한을 가진 관리자에게만 실립니다. **앱 회원에게는 항상 `null`
+입니다** — 권한 목록 자체가 비어 있어(`routers/assistant.py _principal_context`) 구조적으로
+그렇습니다. 키는 늘 있고 값만 없습니다.
+
+- 담기는 것은 **라우터 종류 · 모델 이름 · 프롬프트 버전**뿐입니다. 이 셋은 D-037 이 기본 관측에
+  **허용한** 항목 그대로이고, 질문 원문 · 프롬프트 본문 · 공급자 payload 는 응답에도 로그에도
+  싣지 않습니다. 선택된 능력은 여기 없습니다 — `results[].capability` 와 `handoffs[]` 로 이미
+  공개돼 있습니다.
+- **결정론적 경로는 `model`·`prompt_version` 이 `null` 입니다.** 모르는 것이 아니라 부른 모델이
+  없다는 뜻이라, 화면은 그 둘을 구분해 그려야 합니다.
+- **`RoutePlan` 을 거치지 않는 두 응답에도 붙습니다** — 순수 사교 발화(고정 문구)와 라우터 실패
+  FAILED. 실행된 능력이 하나도 없는 것이 정상인 자리라, 경위가 없으면 고장과 구별되지 않습니다.
+- **저장되는 대화 turn 에는 실리지 않습니다.** 저장은 앱 회원만 하고(D-048) 라우터는 그 경로에
+  플래그를 넘기지 않습니다. `services/chat.py public_response_of` 가 응답 전체를 적재하는
+  자리라, 한 번 실리면 지난 turn 에서 되돌릴 수 없습니다.
 
 - `UNCERTAIN` 은 **전부 기권(all-ABSTAINED)** 인 결과의 최상위 표현입니다 — REFUSED 나
   FAILED 로 거짓 라벨링하지 않습니다 (D-033).

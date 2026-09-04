@@ -130,6 +130,16 @@ def test_every_place_result_carries_the_contract_version_and_the_search_frame(
     assert "반영하지 않았습니다" in frame["message"]
 
 
+def test_the_client_never_sees_routing_metadata() -> None:
+    """`route` 는 콘솔 점검 권한(`search:inspect`)이 있을 때만 채워진다 (#238).
+
+    이 파일은 안드로이드가 파서를 맞추는 wire 계약이라 키는 있고 값은 **항상 null** 이다.
+    여기에 값이 찍히는 날이 오면 그건 라우터 종류·모델 이름이 앱으로 새고 있다는 뜻이다.
+    """
+    for name in sorted(EXPECTED):
+        assert _committed(name)["route"] is None, name
+
+
 def test_abstaining_place_still_carries_its_data() -> None:
     """ABSTAINED is not empty: the interpretation and any refinements still ship, which
     is what lets the client show why nothing came back."""

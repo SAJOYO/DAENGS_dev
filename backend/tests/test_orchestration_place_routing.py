@@ -444,8 +444,11 @@ def test_deterministic_and_semantic_paths_build_the_identical_place_plan() -> No
         SemanticRoutingDecision(execute=["place"], handoffs=[]),
         query=query,
         context=dict(LOCATION),
+        # 관측 메타데이터는 결정적 경로의 값으로 맞춰 둔다 — 여기서 보는 것은 "누가 골랐나" 가
+        # 아니라 조립된 plan 이 같은가다.
         router=RouterKind.DETERMINISTIC,
         model=None,
+        prompt_version=None,
     )
     assert deterministic == semantic
 

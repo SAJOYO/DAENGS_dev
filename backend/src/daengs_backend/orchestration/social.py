@@ -8,7 +8,11 @@ small-talk copy only — it does not define a persona for Training/Life/Walk.
 
 from __future__ import annotations
 
-from daengs_backend.orchestration.contracts import AssistantResponse, AssistantStatus
+from daengs_backend.orchestration.contracts import (
+    AssistantResponse,
+    AssistantStatus,
+    RouteTrace,
+)
 from daengs_backend.orchestration.semantic import SocialIntent
 
 _SOCIAL_MESSAGES: dict[SocialIntent, str] = {
@@ -22,8 +26,15 @@ def social_message(intent: SocialIntent) -> str:
     return _SOCIAL_MESSAGES[intent]
 
 
-def build_social_response(*, request_id: str, intent: SocialIntent) -> AssistantResponse:
-    """ANSWERED with the fixed template and nothing else: no results, handoffs, or clarify."""
+def build_social_response(
+    *, request_id: str, intent: SocialIntent, route: RouteTrace | None = None
+) -> AssistantResponse:
+    """ANSWERED with the fixed template and nothing else: no results, handoffs, or clarify.
+
+    `route` is the console's inspection metadata and is None for everyone else (#238). It is
+    the only thing that tells a reader this answer came from the router's social
+    classification rather than from a capability that quietly did nothing.
+    """
     return AssistantResponse(
         request_id=request_id,
         status=AssistantStatus.ANSWERED,
@@ -31,6 +42,7 @@ def build_social_response(*, request_id: str, intent: SocialIntent) -> Assistant
         results=[],
         handoffs=[],
         clarify=None,
+        route=route,
     )
 
 

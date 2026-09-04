@@ -33,7 +33,8 @@ const consoleSections: Array<{
     | "/console/admins"
     | "/console/users"
     | "/console/audit"
-    | "/console/metrics";
+    | "/console/metrics"
+    | "/console/reports";
 }> = [
   {
     title: "지식 베이스",
@@ -153,6 +154,23 @@ const consoleSections: Array<{
     // 이 화면입니다 (`core/deps.py` 의 ROLE_PERMISSIONS).
     permission: "metrics:read",
     href: "/console/metrics",
+  },
+  {
+    title: "신고",
+    description:
+      "회원이 신고한 AI 답변을 봅니다. 신고된 답변 한 건만 열리고, 여는 것은 기록에 남습니다.",
+    // **`admin:manage` 입니다** — D-053 ② (2026-09-04 사람 결정). 신고를 여는 것은
+    // **회원의 대화 원문을 보는 일**이라 계정 관리와 같은 등급으로 묶었습니다.
+    // `pii:read` 에 얹지 않은 것은 그 권한이 "암호문을 원문으로 여는 일" 이라 뜻이
+    // 다르기 때문이고, 새 `Perm` 을 세우지 않은 것은 지금 그것으로 갈릴 계정이 없어서입니다.
+    //
+    // **지금은 이 잠금이 아무도 안 가립니다** — 발급된 계정이 전부 ADMIN 입니다
+    // (`core/deps.py`). 실제로 갈리는 것은 로드맵 §7 "역할 발급" 이 닫힌 뒤입니다.
+    //
+    // 메일로 오는 신고는 여기 안 보입니다 (2026-09-03 사람 결정) — 콘솔은 API 로 온
+    // 것만 봅니다.
+    permission: "admin:manage",
+    href: "/console/reports",
   },
 ];
 

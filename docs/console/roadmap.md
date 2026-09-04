@@ -3,8 +3,9 @@
 > **living doc.** "왜 필요한가 · 지금 무엇이 있고 · 무엇이 열려 있나" 만 말한다. 결정의 *왜* 는 `D-` 번호가
 > 가리키는 곳에 있고 여기서 다시 쓰지 않는다 (`docs/life/roadmap.md` 와 같은 규칙).
 >
-> **갱신 규칙 한 줄** — 카드를 머지하면 해당 행의 상태를 바꾸고, 그 카드가 새로 미룬 것은 트랙에 한 줄 더한다.
-> 상태 표기: ✅ 끝 · 🔵 진행 · ⬜ 열림 · ⏸ 보류(이유 필수) · 🚫 하지 않음.
+> **갱신 규칙은 `docs/collaboration.md` §4 "living doc 갱신" 에 있다** — 여기 복사하지 않는다.
+> 요약하면: 카드를 머지하면 해당 행을 고치고, **그 행을 인용하는 자리(요약 · 표 · 순서도)를 grep 으로
+> 같이 본다.** 다른 저장소 작업은 카드 번호까지 적되 상태는 옮겨 적지 않는다.
 >
 > 작성 2026-09-03 (#174). 사람 결정 셋(Priority · 신고 경로 · 09-21 전 DB 변경)이 이날 닫혔다 (§7).
 
@@ -149,7 +150,7 @@ cd ~/daengs && git show origin/main:db/migrations/verify_2026-09-01_chats.sql \
 
 서버 쪽 (2026-09-05 완성 — #235 · #237)
   POST /app/reports {turn_id, reason} → answer_reports → GET /admin/reports → /console/reports
-  **앱이 아직 이 길을 안 부른다.** 앱 카드(DAENGS_APP)와 그 앞의 고지 한 줄이 남았다 (D-053 ④).
+  **앱이 아직 이 길을 안 부른다.** 앱 카드 `DAENGS_APP#133` 과 그 앞의 고지 한 줄이 남았다 (D-053 ④).
   메일 경로는 남긴다 — 구버전 앱 · 저장 안 된 대화용.
   콘솔은 API 로 온 것만 본다. 메일 건은 콘솔에 옮겨 적지 않는다 (§6).
 ```
@@ -162,11 +163,13 @@ cd ~/daengs && git show origin/main:db/migrations/verify_2026-09-01_chats.sql \
 품질 점검으로 같은 행을 보는 것은 새 용도였다. 정해진 것 넷: **원문은 신고된 turn 하나만** 열고 "n턴 중 m번째"
 는 숫자로만 보여 준다(넓히는 것은 카드 하나, 좁히는 것은 못 되돌린다) · **`Perm.ADMIN_MANAGE`** — 새 권한을
 만들지 않는다 · **상세를 열 때 감사 한 행**, 목록 조회는 안 남긴다 · **고지는 관문이 둘**로, 앱 화면 한 줄은
-앱이 이 API 를 부르기 시작하는 전제이고 처리방침 개정(`SAJOYO/daengs-legal`)은 앱 v0.0.1 배포의 전제다 —
+앱이 이 API 를 부르기 시작하는 전제이고 처리방침 개정은 앱 v0.0.1 배포의 전제다 (`daengs-legal#1` 은 대화 저장분으로 2026-09-05 시행 · 신고분은 `daengs-legal#2`) —
 **서버 카드 A1 은 둘 다 안 기다린다.**
 
-**앱 쪽 동반** — `ReportAnswer.kt` 가 turn id 를 알아야 한다. 앱 카드는 DAENGS_APP 이 연다. 이 문서는 API 계약
-(요청 필드 · 응답)만 A1 에 적는다.
+**앱 쪽 동반 — `DAENGS_APP#133`** (2026-09-05 열림). `ReportAnswer.kt` 가 turn id 를 알아야 하는데,
+`ChatModels.kt` 의 `ChatTurn.id` 로 **이미 앱에 있다** — 서버 계약을 바꿀 것이 없다. 이 문서는 API 계약
+(요청 필드 · 응답)만 A1 에 적는다. **그 카드의 진행 상태는 여기 옮겨 적지 않는다** — 번호를 누르면 나온다
+(`collaboration.md` §4 "living doc 갱신").
 
 ---
 
@@ -188,7 +191,7 @@ cd ~/daengs && git show origin/main:db/migrations/verify_2026-09-01_chats.sql \
 | A2a | **회원 조회** — `GET /admin/app-users?email=`·`?kakao_id=` · 상세(마스킹 · 반려견) · `/console/users`. 전부 `READ`, 쓰기 없음 | §1 둘째 줄. `console/page.tsx` 의 준비 중 카드 | 없음 — DB 변경도 없다 | S | ✅ #211 |
 | A2b | **원문 복호화와 상태 변경** — `GET /admin/app-users/{id}/pii`(`pii:read`, 부를 때마다 `admin.app_user.pii_revealed`) · `PATCH status`(`ops:write`) + 세션 끊기 | 감사에 남길 가치가 있는 것은 "가려서 봤다"가 아니라 "원문을 열어 봤다" — 그 선에서 A2 를 갈랐다 | A4 ✅ · A3 ✅ · #211 ✅ | S | ✅ #212 (`Perm.PII_READ` 의 첫 사용처. 탈퇴 회원의 상태는 관리자가 못 되돌린다) |
 | A2c | **회원 목록** — 검색 말고 훑어보는 길. **권한을 같이 정해야 한다** | #211 이 일부러 안 만들었다 — `/admin/app-users` 가 `Perm.READ` 라 목록을 열면 VIEWER 까지 전 회원을 넘겨보게 된다. "메일 보낸 사람 찾기"와 "회원 훑기"는 다른 일이다 | 사람 결정(권한) — §7 | XS | ⏸ 필요해지면 |
-| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ (두 DB 적용 완료) · A0 ✅ D-053 · A4 ✅ · 앱 카드(DAENGS_APP)는 **전제가 아니다**(D-053 ④) | M | ✅ #235(BE) · #237(FE). **남은 것은 앱 카드뿐**(DAENGS_APP) — 그건 전제가 아니라 동반이다(D-053 ④). 운영 DB 적용은 다음 스냅샷 때 |
+| A1 | **AI 답변 신고** — `answer_reports`(turn_id FK · app_user_id · reason · status open/reviewed/dismissed · reviewed_by) · `POST /app/reports` · `GET /admin/reports` · `/console/reports` 목록 + 상세(turn 원문 · `public_response`) + 처리 | §3 · §1 첫 줄 | #131 ✅ (두 DB 적용 완료) · A0 ✅ D-053 · A4 ✅ · 앱 카드 `DAENGS_APP#133` 은 **전제가 아니다**(D-053 ④) | M | ✅ #235(BE) · #237(FE). **남은 것은 앱 카드뿐 — `DAENGS_APP#133`** (열림). 그건 전제가 아니라 동반이다(D-053 ④). 운영 DB 적용은 다음 스냅샷 때 |
 
 ### B. 관측 — 시스템이 남긴 것을 본다
 
@@ -243,7 +246,7 @@ A4 감사 로그 ✅ → A3 계정 관리 ✅ → A2a 회원 조회 ✅ → A2b 
 
 ── 지금 착수 가능 (전제 없음 — 운영 DB 게이트는 2026-09-05 실측으로 이미 열려 있었다) ────────
 B3 대화 집계 ✅ → B4 운영 지표 화면 ✅   (둘 다 #223. 화면은 `dev` 에만 있고 GCP 에는 없다)
-A1 신고 ✅ #235(BE) · #237(FE)      ← 앱 카드만 남았다 (전제가 아니라 동반 — D-053 ④)
+A1 신고 ✅ #235(BE) · #237(FE)      ← 앱 카드 DAENGS_APP#133 만 남았다 (전제가 아니라 동반 — D-053 ④)
 D1 screen 인증 은 스크리닝 파트 일정에 (병렬)
 
 ── 조건부 ─────────────────────────────────────────────────────────────────────────────
@@ -257,7 +260,7 @@ B2 요청 메타데이터 = 로그 카드(Hold) 해제 + 저장처 결정 뒤.  
   **정확히는 A2b 앞이다** — A2a(#211)는 마스킹만 하므로 그 계정이 없어도 성립한다.
 - **A1 이 맨 뒤였던 이유** — 전제가 셋(#131 · A0 · A4)이었다. 셋 다 닫혔고, 마지막까지 남은 줄 알았던
   운영 DB 적용도 **이미 끝나 있었다**(2026-09-05 실측). 그래서 그날 바로 갔다 — #235(BE) · #237(FE).
-  **앱 카드는 동반하되 전제가 아니다** — 서버에 엔드포인트가 있어도 앱이 부르지 않으면 아무 일도
+  **앱 카드(`DAENGS_APP#133`)는 동반하되 전제가 아니다** — 서버에 엔드포인트가 있어도 앱이 부르지 않으면 아무 일도
   일어나지 않으므로 A1 을 DAENGS_APP 일정에 묶지 않았다 (D-053 ④). 앱이 옮겨 올 때까지 신고는
   계속 메일로 온다 (§3).
 - **B1 · C1 · C2 를 먼저 하는 이유** — DB 도 결정도 필요 없고, 09-21 발표 화면에 바로 보인다.

@@ -38,6 +38,7 @@ from daengs_backend.models.chat import (
     ChatTurn,
 )
 from daengs_backend.models.crawl_run import CRAWL_STATUSES, CRAWL_TRIGGERS, CrawlRun
+from daengs_backend.models.dog_card import DogCard
 from daengs_backend.models.gait_record import GAIT_STATUSES, GaitRecord
 from daengs_backend.models.pet import (
     PET_BIRTH_DATE_KINDS,
@@ -102,6 +103,7 @@ __all__ = [
     "ChatSummary",
     "ChatTurn",
     "CrawlRun",
+    "DogCard",
     "GaitRecord",
     "Pet",
     "RefreshToken",

@@ -27,6 +27,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.services import dogcard as card_service
 from daengs_backend.services import pet as pet_service
 from daengs_backend.services import screening as screening_service
 from daengs_backend.services import session as session_service
@@ -265,6 +266,11 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         # (점령지 사진이 지금 그 상태입니다 — D-052 의 남은 숙제).
         deleted_screenings = await screening_service.cleanup_for_owner(session, user.id)
 
+        # 도감 카드도 **같은 이유로 명시 삭제**입니다 — app_users 행을 남기므로 FK
+        # CASCADE 가 영영 안 돕니다. 그리고 행만 지워서는 부족합니다: 얼굴 그림이
+        # 저장소에 있고 **저장소에는 FK 가 없어서** 아무도 안 치웁니다.
+        deleted_cards = await card_service.cleanup_for_owner(session, user.id)
+
         user.status = "withdrawn"
         # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
         user.email_enc = None
@@ -282,10 +288,12 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         await session.rollback()
         raise
     logger.info(
-        "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 피부 기록 %d건, 끊은 세션 %d개)",
+        "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 피부 기록 %d건, "
+        "도감 카드 %d장, 끊은 세션 %d개)",
         user.id,
         deleted_pets,
         deleted_walks,
         deleted_screenings,
+        deleted_cards,
         token_count,
     )

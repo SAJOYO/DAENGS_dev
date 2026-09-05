@@ -80,6 +80,21 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+      # LangSmith 트레이싱. **기본은 꺼져 있습니다** — 최상단 .env 에서 켭니다.
+      #
+      # **여기 있어야 합니다. `backend/.env` 에 적으면 안 켜집니다.** 그 파일은
+      # pydantic-settings 가 자기 Settings 로만 읽고 `os.environ` 에 넣지 않는데,
+      # langsmith SDK 는 `os.environ` 만 봅니다. 접두사 DAENGS_ 가 없는 것은
+      # GEMINI_*·REDIS_URL 과 같은 이유입니다 — 도구가 부르는 이름을 그대로 씁니다.
+      #
+      # 켜면 **질문 원문·검색 청크·프롬프트·답변이 LangSmith 로 나갑니다.** 그것이
+      # 목적이고(민원 진단), 신원과 정밀 좌표는 `core/tracing.py` 가 지웁니다.
+      # 켜기 전에 개인정보처리방침의 제3자 제공 목록을 먼저 채우세요.
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-daengs}
+      # 리전. 비워 두면 미국입니다. 한국이면 APAC 을 고르세요 — 전 요금제에서 열려 있습니다.
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
       # **공용 파일 저장소** (D-043, D-052). 보행 영상·점령지 사진, 앞으로 프로필 사진·
       # 도감 카드까지 같은 볼륨에 접두사로 들어옵니다.
       #

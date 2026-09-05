@@ -8,6 +8,8 @@ import sys
 import time
 from dataclasses import dataclass
 
+from langsmith import traceable
+
 from daengs_training import telemetry
 from daengs_training.resources import RUNTIME_ROOT
 
@@ -79,6 +81,33 @@ RETRIEVAL_FLOOR_SCORE = 0.70
 _MEDICAL_LEXICONS: tuple | None = None
 
 
+def _trace_documents(hits: list[dict]) -> dict:
+    """검색 결과를 LangSmith 의 retriever 런 모양으로.
+
+    **본문 전문을 그대로 싣습니다.** "왜 이 답이 나왔나" 는 결국 "무엇을 읽고 답했나"
+    이고, 청크를 식별자로만 남기면 트레이스를 열 때마다 DB 를 다시 봐야 합니다.
+    그 비용이 민원 하나당 한 번씩 붙으면 아무도 트레이스를 안 봅니다.
+
+    `page_content` · `metadata` 이름을 쓰는 것은 LangSmith UI 가 그 모양을 문서
+    카드로 렌더하기 때문입니다. 다른 이름이면 그냥 JSON 덩어리로 보입니다.
+    """
+    return {
+        "documents": [
+            {
+                "page_content": hit.get("text", ""),
+                "metadata": {
+                    "chunk_id": hit.get("chunk_id"),
+                    "document_id": hit.get("document_id"),
+                    "chunk_index": hit.get("chunk_index"),
+                    "score": hit.get("score"),
+                    **(hit.get("metadata") or {} if isinstance(hit.get("metadata"), dict) else {}),
+                },
+            }
+            for hit in hits
+        ]
+    }
+
+
 def _medical_verdict(question: str):
     """Ask medical_guardrail.classify_input_v2 — the one owner of that judgement.
 
@@ -147,6 +176,7 @@ class RuntimeRetriever:
         # navigation residue alone are not evidence.
         return bool(re.search(r"[가-힣A-Za-z]", clean))
 
+    @traceable(run_type="retriever", name="pgvector_search", process_outputs=_trace_documents)
     def search(self, question: str, top_k: int=5):
         # Timing only (daengs_training.telemetry).  The encode call, the connection and
         # the query are exactly as before; connect_ms/query_ms fall out of the existing

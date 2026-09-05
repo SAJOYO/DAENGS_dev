@@ -12,6 +12,12 @@ def test_missing_restriction_is_unknown(pet_access):
     assert (evaluation.state, evaluation.reason) == ("unknown", "missing_restriction")
 
 
+def test_unrestricted_size_needs_no_dog_size_but_still_checks_numeric_limit():
+    assert evaluate_dog_access(PetAccessFacts(size_class="any"), None).state == "compatible"
+    assert evaluate_dog_access(PetAccessFacts(size_class="any", max_kg=10), None).state == "unknown"
+    assert evaluate_dog_access(PetAccessFacts(size_class="any", allowed=False), None).state == "incompatible"
+
+
 @pytest.mark.parametrize(
     "pet_access",
     [PetAccessFacts(allowed=False, size_class="any"), PetAccessFacts(dog_ok=False)],

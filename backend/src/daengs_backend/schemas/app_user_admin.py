@@ -49,6 +49,15 @@ class AppUserOut(BaseModel):
     status: str
     #: 미니룸 이름표. 사용자가 직접 지은 별명이라 개인정보로 보지 않습니다.
     room_name: str | None
+    #: 사람 이름. 가입할 때 서버가 발급하고 회원이 고칠 수 있습니다.
+    #:
+    #: **이 화면에서 회원을 알아보는 거의 유일한 값입니다.** 지금 카카오 앱키로는
+    #: 이메일·전화번호·이름 동의를 못 받아 위 `*_masked` 가 전부 None 이라서,
+    #: 이 칸이 없으면 한 줄이 "UUID · 숫자 · None · None · None" 입니다.
+    #:
+    #: None 은 **아직 발급 전**입니다 — 이 칸보다 먼저 가입한 회원이고 다음 로그인에
+    #: 채워집니다. `*_masked` 의 None 과 뜻이 다릅니다 (저건 동의를 못 받았거나 파기).
+    nickname: str | None
     created_at: datetime
 
 

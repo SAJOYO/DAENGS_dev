@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 from daengs_backend.core.crypto import blind_index, encrypt
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import Principal, current_admin
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.routers import app_user_admin as router_module
 from daengs_backend.services import app_user_admin as service
 
@@ -55,6 +56,7 @@ def member(store: Store) -> FakeAppUser:
             phone_enc=encrypt(PHONE),
             name_enc=encrypt(NAME),
             room_name="네옹이네",
+            nickname="네옹집사",
         )
     )
     store.pets.append(
@@ -288,3 +290,79 @@ class TestHttpBoundary:
     def test_없는_회원_상세는_404(self, as_role) -> None:
         res = as_role("ADMIN").get(f"/admin/app-users/{uuid.uuid4()}")
         assert res.status_code == 404
+
+    def test_응답에_닉네임이_실린다(self, as_role, member) -> None:
+        """**이 화면에서 회원을 알아보는 거의 유일한 값입니다.**
+
+        `*_masked` 가 전부 None 인 계정에서는 이 칸이 없으면 한 줄이
+        "UUID · 숫자 · None · None · None" 입니다.
+        """
+        row = (
+            as_role("ADMIN")
+            .get("/admin/app-users", params={"nickname": "집사"})
+            .json()[0]
+        )
+
+        assert row["nickname"] == member.nickname
+
+    def test_닉네임과_이메일을_같이_주면_422(self, as_role, member) -> None:
+        res = as_role("ADMIN").get(
+            "/admin/app-users", params={"nickname": "집사", "email": EMAIL}
+        )
+        assert res.status_code == 422
+
+    def test_빈_닉네임은_422(self, as_role, member) -> None:
+        """조건 없는 호출이 전체 목록이 되는 뒷문이 되면 안 됩니다."""
+        res = as_role("ADMIN").get("/admin/app-users", params={"nickname": ""})
+        assert res.status_code == 422
+
+
+class TestNicknameSearch:
+    """`?nickname=` — **이 앱키에서 실제로 도는 유일한 검색.**
+
+    우리 카카오 앱키가 사업자 등록이 아니라 프로젝트 팀 것이라 이메일 동의를 못 받고,
+    그래서 `email_hash` 가 전 회원 NULL 입니다. `?email=` 은 영영 아무것도 못 찾습니다.
+    """
+
+    async def test_부분_일치로_찾는다(self, session, member) -> None:
+        """닉네임은 평문이라 조각 검색이 됩니다 (`email_hash` 는 HMAC 이라 안 됩니다)."""
+        (view,) = await service.find(session, nickname="집사")  # type: ignore[arg-type]
+        assert view.user.id == member.id
+
+    async def test_대소문자를_안_가린다(self, session, store) -> None:
+        store.add_app_user(FakeAppUser(kakao_id=100002, nickname="NeoDog"))
+
+        (view,) = await service.find(session, nickname="neodog")  # type: ignore[arg-type]
+
+        assert view.user.nickname == "NeoDog"
+
+    async def test_여러_명이_나올_수_있다(self, session, store, member) -> None:
+        """앞의 둘과 다릅니다 — UNIQUE 조회가 아니라 부분 일치입니다."""
+        store.add_app_user(FakeAppUser(kakao_id=100003, nickname="네옹집사2"))
+
+        found = await service.find(session, nickname="집사")  # type: ignore[arg-type]
+
+        assert len(found) == 2
+
+    async def test_닉네임이_없는_회원은_안_걸린다(self, session, store) -> None:
+        """이 칸보다 먼저 가입한 회원입니다. 다음 로그인에 발급됩니다."""
+        store.add_app_user(FakeAppUser(kakao_id=100004, nickname=None))
+
+        assert await service.find(session, nickname="집사") == []  # type: ignore[arg-type]
+
+    async def test_없으면_빈_목록(self, session, member) -> None:
+        assert await service.find(session, nickname="아무도아님") == []  # type: ignore[arg-type]
+
+    def test_와일드카드를_이스케이프한다(self) -> None:
+        """`%` 하나로 전 회원이 나오면 조건 없는 목록을 막아 둔 것이 무의미해집니다.
+
+        **저장소 함수를 직접 봅니다.** 가짜 저장소는 부분 일치로 흉내 내서 어떤 코드를
+        넣어도 통과하므로, 이스케이프가 실제로 도는지는 여기서만 확인됩니다.
+        """
+        assert app_user_repo.escape_like("%") == r"\%"
+        assert app_user_repo.escape_like("_") == r"\_"
+        assert app_user_repo.escape_like("네옹") == "네옹"
+
+    def test_백슬래시를_먼저_바꾼다(self) -> None:
+        """나중에 하면 앞에서 넣은 탈출 문자까지 다시 탈출해 `%` 가 도로 살아납니다."""
+        assert app_user_repo.escape_like(r"\%") == r"\\\%"

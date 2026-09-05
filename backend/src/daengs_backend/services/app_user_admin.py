@@ -183,11 +183,17 @@ async def find(
     *,
     email: str | None = None,
     kakao_id: int | None = None,
+    nickname: str | None = None,
 ) -> list[AppUserView]:
-    """이메일 또는 카카오 회원번호로 찾습니다. 목록은 0개나 1개입니다.
+    """이메일 · 카카오 회원번호 · 닉네임 중 하나로 찾습니다.
 
-    둘 다 UNIQUE 라 언제나 한 명 이하인데도 **목록으로 돌려주는** 이유는, "못 찾음"을
-    404 가 아니라 빈 결과로 다루기 위해서입니다. 검색이 0건인 것은 오류가 아닙니다.
+    앞의 둘은 UNIQUE 라 0개나 1개이고, **닉네임만 여러 명이 나옵니다** — 부분 일치라서
+    입니다. "못 찾음"을 404 가 아니라 빈 결과로 다루려고 셋 다 목록으로 돌려줍니다.
+    검색이 0건인 것은 오류가 아닙니다.
+
+    **실제로 쓰이는 것은 닉네임입니다.** 지금 카카오 앱키로는 이메일 동의를 못 받아
+    `email_hash` 가 전부 NULL 이고, 그래서 `email` 검색은 영영 아무것도 못 찾습니다
+    (`routers/app_user_admin.py` 의 `search` docstring).
 
     **`email` 을 여기서 정규화하지 마세요.** `core.crypto.blind_index` 가 안에서
     `strip().lower()` 를 합니다 — 가입(`services/app_auth.py`)도 검색도 같은 함수를
@@ -201,6 +207,12 @@ async def find(
     이 검색으로는 **탈퇴한 회원을 이메일로 찾을 수 없습니다** — 탈퇴가 `email_hash` 를
     지웁니다. 그 경우 `kakao_id` 로 찾습니다.
     """
+    if nickname is not None:
+        # **여기만 여러 명이 나옵니다.** 닉네임은 평문이라 조각 검색이 됩니다
+        # (`email_hash` 는 HMAC 이라 안 됩니다 — D-012).
+        users = await app_user_repo.search_by_nickname(session, nickname)
+        return [_to_view(user, []) for user in users]
+
     if email is not None:
         user = await app_user_repo.get_by_email_hash(session, blind_index(email))
     elif kakao_id is not None:
@@ -208,7 +220,7 @@ async def find(
     else:
         # 라우터가 먼저 막습니다. 여기까지 왔다면 부르는 쪽의 실수입니다 —
         # 조건 없는 조회를 조용히 "전체 목록"으로 해석하지 않습니다.
-        raise ValueError("email 이나 kakao_id 중 하나는 있어야 합니다.")
+        raise ValueError("email · kakao_id · nickname 중 하나는 있어야 합니다.")
 
     if user is None:
         return []

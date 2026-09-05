@@ -67,6 +67,8 @@ class FakeAppUser:
 
     #: 미니룸 이름표. None 이면 아직 안 정한 것입니다.
     room_name: str | None = None
+    #: 사람 이름. None 이면 아직 발급 전입니다 (서버가 로그인할 때 채웁니다).
+    nickname: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -105,6 +107,19 @@ class FakeToken:
     ip: str | None = None
 
 
+class _FakeSavepoint:
+    """`async with session.begin_nested()` 가 성립하게만 합니다."""
+
+    async def __aenter__(self) -> None:
+        # 부르는 쪽이 `as` 를 안 씁니다 (`services/app_auth.py`). 진짜 세션은 트랜잭션
+        # 객체를 주지만, 안 쓰는 것을 흉내 내면 그것대로 오해를 만듭니다.
+        return None
+
+    async def __aexit__(self, *exc: object) -> bool:
+        # False 라야 안에서 난 예외가 그대로 바깥으로 나갑니다.
+        return False
+
+
 class FakeSession:
     """commit 횟수만 셉니다. 진짜 쿼리는 아래 가짜 저장소가 가로챕니다.
 
@@ -120,6 +135,7 @@ class FakeSession:
         self.rollbacks = 0
         self.flushes = 0
         self.refreshes = 0
+        self.savepoints = 0
 
     async def flush(self) -> None:
         """진짜 세션은 여기서 DB 기본값(id)을 받아 옵니다.
@@ -128,6 +144,18 @@ class FakeSession:
         서비스가 flush 뒤에 id 를 쓰는 흐름이 그대로 돕니다.
         """
         self.flushes += 1
+
+    def begin_nested(self) -> "_FakeSavepoint":
+        """SAVEPOINT 흉내. **아무것도 안 되돌립니다.**
+
+        진짜 세션에서 이것을 쓰는 자리는 닉네임 발급 하나뿐인데
+        (`services/app_auth.py` 의 `_ensure_nickname`), 거기서 savepoint 가 막는 것은
+        **물어본 뒤 커밋 전에 남이 채가는 경합**입니다. 가짜 저장소에는 동시성이 없어서
+        그 경합 자체가 일어나지 않습니다 — 후보를 고르는 판단은 `is_nickname_taken`
+        쪽에서 보므로, 여기서는 `async with` 가 성립하기만 하면 됩니다.
+        """
+        self.savepoints += 1
+        return _FakeSavepoint()
 
     async def refresh(self, obj: object) -> None:
         """진짜 세션은 여기서 서버 기본값(`created_at` 등)을 읽어 옵니다.
@@ -464,6 +492,23 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         user = await app_get_by_id(session, app_user_id)
         return user if user is not None and user.status == "active" else None
 
+    async def app_is_nickname_taken(session, nickname):
+        # 진짜와 같이 **소문자로 접어서** 봅니다 (lower(nickname) UNIQUE 인덱스).
+        folded = nickname.lower()
+        return any(
+            u.nickname is not None and u.nickname.lower() == folded
+            for u in store.app_users.values()
+        )
+
+    async def app_search_by_nickname(session, term, *, limit=20):
+        needle = term.lower()
+        found = [
+            u
+            for u in store.app_users.values()
+            if u.nickname is not None and needle in u.nickname.lower()
+        ]
+        return found[:limit]
+
     async def app_create(session, **kw):
         # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
         # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
@@ -487,6 +532,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         app_user_repo, "get_active_for_update", app_get_active_for_update
     )
     monkeypatch.setattr(app_user_repo, "create", app_create)
+    monkeypatch.setattr(app_user_repo, "is_nickname_taken", app_is_nickname_taken)
+    monkeypatch.setattr(app_user_repo, "search_by_nickname", app_search_by_nickname)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)

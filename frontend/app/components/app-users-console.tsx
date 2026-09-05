@@ -44,6 +44,13 @@ type RosterUser = {
   status: AppUser["status"];
   created_at: string;
   pet_count: number;
+  /**
+   * 대표 강아지 이름. 대표가 없으면 `null` 입니다.
+   *
+   * **닉네임이 비었을 때 사람을 가리는 값입니다** — 이 칸이 생기기 전에 가입한
+   * 회원은 닉네임이 `null` 이라, 없으면 목록이 "이름 없음" 만 줄줄이 뜹니다.
+   */
+  primary_pet_name: string | null;
 };
 
 type RosterPage = { users: RosterUser[]; next_cursor: string | null };
@@ -139,6 +146,21 @@ function when(iso: string): string {
  * 항목 동의를 못 받은 것입니다. 둘 다 "없음"으로 쓰면 "우리가 지웠다"와 "처음부터
  * 못 받았다"가 화면에서 같아 보입니다.
  */
+/**
+ * 반려견 칸의 글자. **대표 이름을 앞에 둡니다** — 닉네임이 비어 있을 때 사람을
+ * 가리는 것이 이 이름이라, "반려견 3" 보다 "네옹 외 2마리" 가 훨씬 잘 읽힙니다.
+ *
+ * 대표가 없는데 마릿수가 있는 경우도 있습니다 (지웠다가 아직 승계 전). 그때는
+ * 마릿수만 말합니다 — 없는 이름을 지어내지 않습니다.
+ */
+function petLabel(u: RosterUser): string {
+  if (u.pet_count === 0) return "반려견 없음";
+  if (!u.primary_pet_name) return `반려견 ${u.pet_count}`;
+  return u.pet_count === 1
+    ? u.primary_pet_name
+    : `${u.primary_pet_name} 외 ${u.pet_count - 1}`;
+}
+
 function emptyReason(status: AppUser["status"]): string {
   return status === "withdrawn" ? "파기됨" : "동의 안 받음";
 }
@@ -425,7 +447,7 @@ export default function AppUsersConsole() {
                       {STATUS[u.status].label}
                     </span>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      반려견 {u.pet_count}
+                      {petLabel(u)}
                     </span>
                     <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">
                       {when(u.created_at)} 가입

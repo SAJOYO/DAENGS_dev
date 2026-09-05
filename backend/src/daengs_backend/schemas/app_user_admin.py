@@ -84,8 +84,17 @@ class AppUserRosterItem(BaseModel):
     #: 목록에 없다" 가 생깁니다.
     status: str
     created_at: datetime
-    #: 마릿수만입니다. 이름·견종은 상세에서 봅니다.
+    #: 마릿수. 이름은 대표 한 마리만 오고, 나머지와 견종은 상세에서 봅니다.
     pet_count: int
+    #: 대표 강아지 이름. 대표가 없으면 `None` 입니다.
+    #:
+    #: **개인정보가 아닙니다** — `models/pet.py` 에 암호화 컬럼이 없고, 마스킹 상세가
+    #: 이미 `Perm.READ` 로 전 반려견의 이름을 내보냅니다. `ADMIN_MANAGE` 인 이 목록에
+    #: 한 마리 이름을 싣는 것으로 새로 열리는 것은 없습니다.
+    #:
+    #: 실을 이유는 닉네임이 아직 안 채워진 회원이 많아서입니다 (다음 로그인에 발급).
+    #: 그때 목록은 "이름 없음" 만 줄줄이 뜨고 사람을 가릴 값이 가입일뿐입니다.
+    primary_pet_name: str | None
 
 
 class AppUserRosterPage(BaseModel):

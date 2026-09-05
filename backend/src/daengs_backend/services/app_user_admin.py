@@ -259,6 +259,8 @@ class RosterEntry:
 
     user: AppUser
     pet_count: int
+    #: 대표 강아지 이름. 대표가 없으면(반려견이 없거나 아직 안 정함) `None` 입니다.
+    primary_pet_name: str | None
 
 
 @dataclass(frozen=True)
@@ -295,7 +297,13 @@ async def list_roster(
     이 목록을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정): 훑는 화면이 개인정보를
     아예 안 들고 있으면 "누가 전 회원의 개인정보를 넘겨본다" 가 성립을 안 합니다.
     지금은 그 값들이 어차피 전부 `None` 이라(카카오 이메일 동의 미수령) 빼서 잃는 것도
-    없습니다. 비즈 앱 심사를 통과해 실제 값이 들어오면 **그때 다시 정할 일**이지,
+    없습니다.
+
+    **대표 강아지 이름은 예외로 싣습니다.** 개인정보가 아니고(`models/pet.py` 에 암호화
+    컬럼이 없습니다) 마스킹 상세가 이미 `Perm.READ` 로 전 반려견의 이름을 내보내므로,
+    `ADMIN_MANAGE` 인 이 목록에 한 마리 이름을 싣는 것은 **새로 열리는 것이 없습니다.**
+    실을 이유는 2026-09-05 실측입니다 — 개발 DB 회원 다섯이 전원 닉네임 NULL 이라
+    목록이 "이름 없음" 다섯 줄이었고, 사람을 가리키는 값이 가입일뿐이었습니다. 비즈 앱 심사를 통과해 실제 값이 들어오면 **그때 다시 정할 일**이지,
     지금 자리를 미리 만들어 두지 않습니다.
 
     회원을 찾는 길은 [find] 입니다. 저쪽은 `Perm.READ` 이고 이쪽은 `ADMIN_MANAGE`
@@ -314,9 +322,22 @@ async def list_roster(
     has_more = len(users) > capped
     kept = users[:capped]
 
-    # 마릿수는 한 번에 셉니다. 한 명씩 부르면 한 쪽에 쿼리가 50번 나갑니다.
+    # 마릿수와 대표 이름은 **각각 한 번에** 가져옵니다. 회원마다 부르면 한 쪽에
+    # 쿼리가 50번씩 나갑니다.
     counts = await pet_repo.count_by_owners(session, [u.id for u in kept])
-    entries = [RosterEntry(user=u, pet_count=counts.get(u.id, 0)) for u in kept]
+    names = await pet_repo.names_by_ids(
+        session, [u.primary_pet_id for u in kept if u.primary_pet_id is not None]
+    )
+    entries = [
+        RosterEntry(
+            user=u,
+            pet_count=counts.get(u.id, 0),
+            primary_pet_name=(
+                names.get(u.primary_pet_id) if u.primary_pet_id is not None else None
+            ),
+        )
+        for u in kept
+    ]
 
     next_cursor = (
         _encode_cursor(kept[-1].created_at, kept[-1].id) if has_more and kept else None

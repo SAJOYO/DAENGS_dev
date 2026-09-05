@@ -59,9 +59,11 @@ def member(store: Store) -> FakeAppUser:
             nickname="네옹집사",
         )
     )
-    store.pets.append(
-        FakePet(app_user_id=user.id, name="네옹", breed="포메라니안")
-    )
+    pet = FakePet(app_user_id=user.id, name="네옹", breed="포메라니안")
+    store.pets.append(pet)
+    # 대표는 `app_users.primary_pet_id` 에 있습니다 (pets 쪽에 is_primary 가 없는
+    # 이유는 models/app_user.py). 목록이 이 값으로 이름을 붙입니다.
+    user.primary_pet_id = pet.id
     return user
 
 
@@ -438,6 +440,22 @@ class TestRoster:
 
         assert counts[member.id] == 1
 
+    async def test_대표_강아지_이름을_붙인다(self, session, store, member) -> None:
+        """닉네임이 아직 없는 회원이 많아서(다음 로그인에 발급) 이 값이 없으면 목록이
+        "이름 없음" 만 줄줄이 뜹니다 — 2026-09-05 개발 DB 실측이 그랬습니다."""
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+        names = {e.user.id: e.primary_pet_name for e in page.entries}
+
+        assert names[member.id] == "네옹"
+
+    async def test_대표가_없으면_None(self, session, store) -> None:
+        """반려견이 없거나 아직 대표를 안 정한 회원입니다. 마릿수 0 과 짝입니다."""
+        alone = store.add_app_user(FakeAppUser(kakao_id=400002, nickname="대표없음"))
+
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        assert {e.user.id: e.primary_pet_name for e in page.entries}[alone.id] is None
+
     async def test_강아지가_없으면_0이다(self, session, store) -> None:
         """`GROUP BY` 는 한 마리도 없는 주인의 행을 안 만듭니다 — 서비스가 0 을 채웁니다.
         `.get(id, 0)` 을 `[id]` 로 바꾸면 여기서 KeyError 로 걸립니다."""
@@ -509,6 +527,8 @@ class TestRosterHttp:
         assert row["nickname"] == "네옹집사"
         assert row["status"] == "active"
         assert row["pet_count"] == 1
+        # 강아지 이름은 개인정보가 아니고, 상세가 이미 `READ` 로 내보내는 값입니다.
+        assert row["primary_pet_name"] == "네옹"
 
     def test_list_가_상세_경로에_안_먹힌다(self, as_role, member) -> None:
         """`/list` 가 `/{app_user_id}` 보다 **먼저** 등록돼야 합니다.

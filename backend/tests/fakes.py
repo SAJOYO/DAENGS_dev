@@ -588,6 +588,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
+    async def pet_names_by_ids(session, pet_ids):
+        wanted = set(pet_ids)
+        return {p.id: p.name for p in store.pets if p.id in wanted}
+
     async def pet_count_by_owners(session, app_user_ids):
         # 진짜와 같이 **한 마리도 없는 주인은 키가 아예 없습니다** (GROUP BY 가 행을
         # 안 만듭니다). 부르는 쪽이 .get(id, 0) 을 안 쓰면 여기서 걸립니다.
@@ -632,6 +636,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
+    monkeypatch.setattr(pet_repo, "names_by_ids", pet_names_by_ids)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)

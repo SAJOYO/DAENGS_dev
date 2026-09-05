@@ -22,6 +22,7 @@ __all__ = [
     "get_owned",
     "list_for_owner",
     "list_for_owner_for_update",
+    "names_by_ids",
     "owned_ids",
 ]
 
@@ -115,6 +116,26 @@ async def count_by_owners(
         .group_by(Pet.app_user_id)
     )
     return {owner: count for owner, count in (await session.execute(stmt)).all()}
+
+
+async def names_by_ids(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """id → 이름. 회원 목록이 **대표 강아지 이름**을 붙이는 데 씁니다.
+
+    대표는 `app_users.primary_pet_id` 에 있으므로(pets 쪽에 `is_primary` 가 없는
+    이유는 `models/app_user.py`), 목록은 그 id 들을 모아 여기서 한 번에 이름으로
+    바꿉니다 — 회원마다 상세를 부르면 한 쪽에 쿼리가 50번 나갑니다.
+
+    **없는 id 는 키가 없습니다.** 실제로는 FK 가 `ON DELETE SET NULL` 이라 없는
+    강아지를 가리키는 `primary_pet_id` 자체가 없지만, 부르는 쪽은 `.get()` 으로
+    읽어 그 가정에 기대지 않습니다.
+    """
+    if not pet_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 대표가 아무도 없는 쪽에서 실제로 옵니다.
+        return {}
+    stmt = select(Pet.id, Pet.name).where(Pet.id.in_(pet_ids))
+    return {pet_id: name for pet_id, name in (await session.execute(stmt)).all()}
 
 
 def add(session: AsyncSession, pet: Pet) -> Pet:

@@ -140,6 +140,10 @@ async def roster(
     목록을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정 · 로드맵 A2c). 여기에
     `email_masked` 를 더하고 싶어지면 그 결정을 먼저 다시 여세요.
 
+    **대표 강아지 이름은 예외입니다.** 개인정보가 아니고(암호화 컬럼이 없습니다), 아래
+    `detail` 이 이미 `READ` 로 전 반려견의 이름을 내보냅니다 — `ADMIN_MANAGE` 인 여기에
+    한 마리를 싣는 것으로 새로 열리는 것은 없습니다 (스키마 주석).
+
     ⚠️ **이 라우트는 아래 `/{app_user_id}` 보다 먼저 등록돼 있어야 합니다.** 세그먼트가
     하나뿐이라 순서가 뒤집히면 `list` 가 UUID 로 파싱되며 422 가 됩니다. `admin_account.py`
     의 `/me/password` 는 세그먼트가 둘이라 순서를 안 타는데, 이쪽은 다릅니다.
@@ -162,6 +166,7 @@ async def roster(
                 status=e.user.status,
                 created_at=e.user.created_at,
                 pet_count=e.pet_count,
+                primary_pet_name=e.primary_pet_name,
             )
             for e in page.entries
         ],

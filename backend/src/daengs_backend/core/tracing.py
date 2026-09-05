@@ -83,12 +83,18 @@ REDACTED = "[redacted]"
 #: 좌표가 아닙니다. 재현이 필요하면 반올림 전 값을 가진 곳은 우리 DB 뿐입니다.
 COORDINATE_PRECISION = 2
 
-#: 통째로 지우는 키. 지금은 `PrincipalContext.subject` 하나입니다.
+#: 통째로 지우는 키.
 #:
 #: **해시로 남기지 않는 이유**: 남길 이유가 없습니다. "이 사람이 또 신고했나" 를 묻는 길은
 #: `request_id` → `chat_turns` → `chat_sessions` 로 **우리 DB 안에** 이미 있습니다.
-#: 제3자에게 회원 식별자를 보내서 얻는 것이 0 인데 보내면, 그건 그냥 유출 표면입니다.
-_IDENTITY_KEYS = frozenset({"subject"})
+#: 관측 저장소로 식별자를 복제해서 얻는 것이 0 인데 복제하면, 그건 그냥 유출 표면입니다.
+#:
+#: `active_dog_id` 가 여기 있는 이유: **그것도 사람을 가리킵니다.** 반려견 UUID 는
+#: 회원당 안정적이라, 트레이스를 사람 단위로 묶는 데 `subject` 와 똑같이 쓸 수 있습니다.
+#: `subject` 만 지우고 이것을 두면 지운 의미가 없습니다. 답에 필요한 반려견 사실
+#: (견종·월령)은 `context.dog` 에 따로 있고 그쪽은 그대로 남습니다 — 그건 답의
+#: 입력이지 신원이 아닙니다.
+_IDENTITY_KEYS = frozenset({"subject", "active_dog_id"})
 
 #: 반올림하는 키. `WalkPayload` · `PlacePayload` · `context.location` 이 같은 이름을 씁니다.
 _COORDINATE_KEYS = frozenset({"lat", "lon"})
@@ -143,6 +149,26 @@ def tracing_mode() -> str:
     return (ls_utils.get_env_var("TRACING_MODE") or "langsmith").lower()
 
 
+def _force_tracing_off() -> None:
+    """트레이싱을 프로세스 전체에서 끕니다 — 설정이 안전하지 않다고 판명됐을 때.
+
+    환경 변수를 직접 끄는 이유: 계측은 `LANGSMITH_TRACING` 을 **각자** 봅니다
+    (`@traceable` · LangGraph 콜백). 우리가 `False` 를 돌려주는 것만으로는 그들이
+    안 멈춥니다. 끄려면 그들이 읽는 값을 꺼야 합니다.
+
+    `get_env_var` 가 lru_cache 라 캐시도 같이 비웁니다. 안 비우면 이미 읽어 둔
+    "true" 가 그대로 남습니다.
+    """
+    import os
+
+    from langsmith import utils as ls_utils
+
+    for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):
+        os.environ.pop(name, None)
+    os.environ["LANGSMITH_TRACING"] = "false"
+    ls_utils.get_env_var.cache_clear()
+
+
 def configure_tracing() -> bool:
     """마스킹이 걸린 클라이언트를 전역 캐시에 심습니다. 켜졌으면 True.
 
@@ -155,22 +181,35 @@ def configure_tracing() -> bool:
 
     from langsmith import run_trees
 
-    client = run_trees.get_cached_client(
-        anonymizer=scrub_payload,
-        # anonymizer 는 inputs/outputs 에만 걸립니다 (`client.py` `_hide_run_inputs`
-        # `_hide_run_outputs`). metadata 는 별도 훅이라, 같은 함수를 여기도 겁니다 —
-        # 우리가 metadata 에 원문을 안 넣는다는 규칙에만 기대면 언젠가 넣습니다.
-        hide_metadata=scrub_payload,
-    )
+    try:
+        client = run_trees.get_cached_client(
+            anonymizer=scrub_payload,
+            # anonymizer 는 inputs/outputs 에만 걸립니다 (`client.py` `_hide_run_inputs`
+            # `_hide_run_outputs`). metadata 는 별도 훅이라, 같은 함수를 여기도 겁니다 —
+            # 우리가 metadata 에 원문을 안 넣는다는 규칙에만 기대면 언젠가 넣습니다.
+            hide_metadata=scrub_payload,
+        )
+    except Exception:
+        # `Client.__init__` 은 던집니다 — 예를 들어 `LANGSMITH_TRACING_MODE` 에 오타가
+        # 있으면 `LangSmithUserError` 입니다. 여기가 lifespan 의 첫 줄이라, 그대로
+        # 올리면 **backend 가 아예 안 뜨고 API 전체가 내려갑니다.** 오타 하나로
+        # 로그인까지 죽는 것은 트레이싱이 가질 권한이 아닙니다.
+        LOGGER.exception("트레이싱 설정에 실패해 트레이싱 없이 계속합니다.")
+        _force_tracing_off()
+        return False
+
     # `get_cached_client` 는 전역이 비었을 때만 kwargs 를 씁니다. 우리 것이 안 걸렸다면
-    # 누군가 먼저 만든 것이고, 그 클라이언트에는 마스킹이 없습니다. 조용히 넘어가면
-    # 신원·좌표가 그대로 나가므로 **크게 알립니다.**
+    # 누군가 먼저 만든 것이고, 그 클라이언트에는 마스킹이 없습니다.
     if getattr(client, "_anonymizer", None) is not scrub_payload:
+        # **감지만 하고 두면 안 됩니다.** 이 상태로 계속 돌면 신원·정밀 좌표가 그대로
+        # 나가는데, 그건 로그 한 줄로 막을 수 있는 종류가 아닙니다. 트레이싱을 끕니다 —
+        # 트레이스를 잃는 것과 개인정보를 흘리는 것 중 전자가 낫습니다.
         LOGGER.error(
             "LangSmith 클라이언트가 이미 만들어져 있어 마스킹이 걸리지 않았습니다. "
-            "configure_tracing() 이 lifespan 맨 앞에서 불렸는지 확인하세요. "
-            "이 상태로는 신원·정밀 좌표가 트레이스로 나갑니다."
+            "마스킹 없이 내보내지 않도록 트레이싱을 끕니다. "
+            "configure_tracing() 이 lifespan 맨 앞에서 불렸는지 확인하세요."
         )
+        _force_tracing_off()
         return False
 
     mode = tracing_mode()

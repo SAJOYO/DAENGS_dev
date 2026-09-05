@@ -98,7 +98,14 @@ services:
       LANGSMITH_TRACING_MODE: ${LANGSMITH_TRACING_MODE:-otel}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-daengs}
       # collector 는 compose 네트워크 안에서만 닿습니다. 호스트 포트가 없습니다.
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      #
+      # ⚠ **`/v1/traces` 까지 적어야 합니다.** langsmith 가 이 값을 직접 읽어
+      # `OTLPSpanExporter(endpoint=...)` 로 **명시 전달**하는데, exporter 는
+      # 명시 전달된 주소에는 경로를 안 붙입니다(env 폴백 경로에서만 붙입니다).
+      # 베이스 URL 만 주면 모든 export 가 `/` 로 POST 돼 404 가 나고, backend 는
+      # "트레이싱을 켰습니다" 를 찍고 collector 로그도 멀쩡한데 Cloud Trace 만
+      # 영원히 비어 있습니다.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-daengs-backend}
       # MODE=langsmith 로 되돌릴 때만 씁니다 (그때는 제3자 제공입니다 — 처리방침 확인).
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}

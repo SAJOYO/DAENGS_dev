@@ -82,15 +82,24 @@ _MEDICAL_LEXICONS: tuple | None = None
 
 
 def _trace_documents(hits: list[dict]) -> dict:
-    """검색 결과를 LangSmith 의 retriever 런 모양으로.
+    """검색 결과를 retriever 런의 모양으로.
 
     **본문 전문을 그대로 싣습니다.** "왜 이 답이 나왔나" 는 결국 "무엇을 읽고 답했나"
     이고, 청크를 식별자로만 남기면 트레이스를 열 때마다 DB 를 다시 봐야 합니다.
     그 비용이 민원 하나당 한 번씩 붙으면 아무도 트레이스를 안 봅니다.
 
-    `page_content` · `metadata` 이름을 쓰는 것은 LangSmith UI 가 그 모양을 문서
+    `page_content` · `metadata` 이름을 쓰는 것은 트레이스 뷰어가 그 모양을 문서
     카드로 렌더하기 때문입니다. 다른 이름이면 그냥 JSON 덩어리로 보입니다.
+
+    **맨 앞의 가드가 핵심입니다.** langsmith 는 트레이싱이 꺼져 있어도 이 함수를
+    부릅니다 — `_handle_container_end` 가 `outputs_processor` 를 먼저 돌리고 그 다음에
+    `_container_end` 가 빠져나갑니다 (0.11.2 실측: 꺼진 상태에서 3회 호출 중 3회 실행).
+    가드가 없으면 **트레이싱을 안 켠 서버가 매 요청마다 청크 4개 전문을 복사합니다.**
     """
+    from langsmith import utils as ls_utils
+
+    if not ls_utils.tracing_is_enabled():
+        return {}
     return {
         "documents": [
             {

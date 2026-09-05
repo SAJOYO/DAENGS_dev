@@ -222,6 +222,110 @@ class TestGraphWiring:
         assert subject not in flattened
 
 
+class TestReviewFindings:
+    """코드 리뷰가 잡은 다섯 건. 전부 조용히 되돌아올 수 있는 종류다."""
+
+    def test_반려견_식별자도_지운다(self) -> None:
+        """`active_dog_id` 는 회원당 안정적이라 `subject` 와 똑같이 사람을 가리킨다.
+
+        `subject` 만 지우고 이것을 두면 지운 의미가 없다 — 트레이스를 사람 단위로
+        묶는 데 그대로 쓸 수 있다.
+        """
+        dog_id = "9f2b7c1e-0000-4a2b-8c3d-5e6f70819a2b"
+        scrubbed = scrub_payload({"context": {"active_dog_id": dog_id, "source": "chat"}})
+        assert scrubbed["context"]["active_dog_id"] == REDACTED
+        # 답의 입력인 것은 남는다 — 견종·월령은 신원이 아니다.
+        assert scrubbed["context"]["source"] == "chat"
+
+    def test_OTLP_주소에_경로가_있다(self) -> None:
+        """`/v1/traces` 가 없으면 **트레이스가 한 건도 도착하지 않는다.**
+
+        langsmith 가 이 값을 읽어 `OTLPSpanExporter(endpoint=...)` 로 명시 전달하는데,
+        exporter 는 명시 전달된 주소에 경로를 안 붙인다(env 폴백에서만 붙인다).
+        베이스 URL 만 주면 전부 `/` 로 POST 돼 404 인데, backend 로그도 collector
+        로그도 멀쩡해서 아무도 모른다.
+        """
+        from pathlib import Path
+
+        compose = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+        line = next(
+            ln for ln in compose.read_text(encoding="utf-8").splitlines()
+            if "OTEL_EXPORTER_OTLP_ENDPOINT:" in ln
+        )
+        assert line.rstrip().endswith("/v1/traces}"), line.strip()
+
+    def test_설정이_틀려도_기동을_막지_않는다(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`LANGSMITH_TRACING_MODE` 오타 하나로 API 전체가 안 뜨면 안 된다.
+
+        `configure_tracing()` 은 lifespan 의 첫 줄이라, 여기서 예외가 올라가면
+        로그인까지 죽는다. 트레이싱이 가질 권한이 아니다.
+        """
+        from langsmith import run_trees
+        from langsmith import utils as ls_utils
+
+        from daengs_backend.core import tracing
+
+        monkeypatch.setenv("LANGSMITH_TRACING", "true")
+        monkeypatch.setenv("LANGSMITH_TRACING_MODE", "오타난값")
+        ls_utils.get_env_var.cache_clear()
+
+        def _explode(**kwargs):
+            raise ls_utils.LangSmithUserError("Invalid tracing_mode")
+
+        monkeypatch.setattr(run_trees, "get_cached_client", _explode)
+        try:
+            assert tracing.configure_tracing() is False
+            # 끄고 나가야 한다 — 반쯤 켜진 채로 계측이 돌면 마스킹 없이 나간다.
+            assert tracing.tracing_enabled() is False
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+    def test_마스킹이_안_걸리면_트레이싱을_끈다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """감지만 하고 계속 돌면 신원·좌표가 그대로 나간다. 로그로 막을 일이 아니다."""
+        from langsmith import run_trees
+        from langsmith import utils as ls_utils
+
+        from daengs_backend.core import tracing
+
+        monkeypatch.setenv("LANGSMITH_TRACING", "true")
+        monkeypatch.delenv("LANGSMITH_TRACING_MODE", raising=False)
+        ls_utils.get_env_var.cache_clear()
+
+        class ClientWithoutOurMasking:
+            _anonymizer = None
+
+        monkeypatch.setattr(
+            run_trees, "get_cached_client", lambda **kw: ClientWithoutOurMasking()
+        )
+        try:
+            assert tracing.configure_tracing() is False
+            assert tracing.tracing_enabled() is False
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+    def test_꺼져_있으면_출력_프로세서가_사본을_안_만든다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """langsmith 는 꺼져 있어도 `process_outputs` 를 부른다 (0.11.2 실측).
+
+        가드가 없으면 트레이싱을 안 켠 서버가 **매 요청마다** 청크 전문을 복사한다.
+        """
+        from langsmith import utils as ls_utils
+
+        from daengs_training.retrieval.pgvector import _trace_documents
+
+        for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):
+            monkeypatch.delenv(name, raising=False)
+        ls_utils.get_env_var.cache_clear()
+        try:
+            hits = [{"text": "가" * 5_000, "chunk_id": "c1", "score": 0.9}]
+            assert _trace_documents(hits) == {}
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+
 class TestTracingMode:
     """트레이스가 **어디로** 가나. 기본 목적지가 제3자가 아닌 것이 D-054 의 핵심이다."""
 

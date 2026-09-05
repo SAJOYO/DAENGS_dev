@@ -9,8 +9,14 @@ keeps the medical and output guardrails outside the model's control.
 기본으로 꺼져 있고, `LANGSMITH_TRACING` 이 있을 때만 켜집니다
 (`daengs_backend.core.tracing` 이 그 배선과 마스킹 규칙을 가집니다).
 계측이 여기 손으로 붙는 이유는 이 패키지가 LangChain 밖이라 자동으로 안 잡히기
-때문입니다 — `@traceable` 은 트레이싱이 꺼져 있으면 원래 함수를 그대로 돌려주므로
-(langsmith `run_helpers`) 꺼진 상태의 비용은 없습니다.
+때문입니다.
+
+⚠ **`@traceable` 은 꺼져 있어도 공짜가 아닙니다.** 원래 함수를 돌려주지 않고 항상
+래퍼를 답니다. 특히 `process_outputs` 는 트레이싱이 꺼진 상태에서도 매번 실행됩니다
+(`_handle_container_end` 가 `_container_end` 보다 먼저 부릅니다 — 0.11.2 실측).
+그래서 이 파일의 `_trace_outputs` 와 `retrieval.pgvector._trace_documents` 는 **맨 앞에서
+직접 확인하고 빠져나갑니다.** 그 가드를 지우면 트레이싱을 안 켠 서버가 매 요청마다
+응답과 청크 전문을 통째로 복사합니다.
 """
 from __future__ import annotations
 
@@ -160,7 +166,14 @@ def _trace_outputs(response: ChatResponse) -> dict[str, Any]:
 
     **근거 청크의 본문은 여기 넣지 않습니다.** 그건 바로 아래 retriever 런에 이미
     전문으로 있고, 여기 또 실으면 같은 텍스트가 한 요청에 두 번 나갑니다.
+
+    맨 앞의 가드 이유는 `retrieval.pgvector._trace_documents` 와 같습니다 — langsmith 는
+    트레이싱이 꺼져 있어도 `outputs_processor` 를 부릅니다.
     """
+    from langsmith import utils as ls_utils
+
+    if not ls_utils.tracing_is_enabled():
+        return {}
     return {
         "decision": response.decision,
         "reason": response.reason,

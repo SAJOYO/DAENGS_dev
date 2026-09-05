@@ -169,10 +169,66 @@ def trace_config(
     return config
 
 
+#: 신고가 트레이스에 붙는 이름. LangSmith 에서 이 키로 거르면 신고된 요청만 남습니다.
+REPORT_FEEDBACK_KEY = "user_report"
+
+
+async def record_report_feedback(*, request_id: str | None) -> None:
+    """신고 한 건을 그 요청의 트레이스에 붙입니다. **실패해도 신고는 성공입니다.**
+
+    이것이 "민원을 하나하나 못 본다" 에 대한 답의 절반입니다 — LangSmith 에서
+    `user_report` 로 거르면 신고된 트레이스만 모이고, 그대로 데이터셋으로 올라갑니다.
+    골드셋을 새로 만드는 대신 **민원이 곧 평가셋**이 되는 자리입니다.
+
+    **신고 사유 원문은 안 보냅니다.** 사용자가 자유롭게 쓰는 칸이라 무엇이든 들어올 수
+    있고, LangSmith 가 알아야 하는 것은 "이 트레이스가 신고됐다" 뿐입니다. 왜 신고했는지는
+    관리자 콘솔에 있고 그쪽이 D-053 의 열람 범위 안입니다.
+
+    **호출 규칙 두 가지.**
+
+    1. **열린 트랜잭션 없이 부르세요.** 외부 호출 동안 요청 DB 세션과 행 잠금이 살아
+       있으면 안 됩니다 (D-048 의 외부 호출 경계). 신고 저장을 커밋한 **뒤**가 그 자리입니다.
+    2. **예외를 밖으로 내보내지 않습니다.** 신고는 이미 우리 DB 에 들어갔습니다.
+       LangSmith 가 죽었다고 사용자에게 실패를 돌려주면 같은 신고를 다시 누르게 되고,
+       그건 유니크 제약에 걸려 409 가 됩니다.
+    """
+    if not request_id or not tracing_enabled():
+        return
+    try:
+        run_id = uuid.UUID(request_id)
+    except (ValueError, AttributeError, TypeError):
+        # `run_id` 를 못 박지 못한 요청입니다 (`trace_config` 의 같은 갈래).
+        return
+
+    import asyncio
+
+    from langsmith import run_trees
+
+    client = run_trees.get_cached_client()
+
+    def _send() -> None:
+        # `stop_after_attempt` 기본값이 10 입니다. 그대로 두면 LangSmith 가 죽었을 때
+        # 신고 POST 하나가 재시도 열 번을 기다립니다 — 여기서 재시도는 가치가 없습니다.
+        client.create_feedback(
+            run_id, key=REPORT_FEEDBACK_KEY, score=0, stop_after_attempt=1
+        )
+
+    try:
+        # requests 기반 동기 호출이라 이벤트 루프를 막습니다. 스레드로 뺍니다.
+        await asyncio.to_thread(_send)
+    except Exception:
+        LOGGER.warning(
+            "신고를 LangSmith 피드백으로 보내지 못했습니다 (신고 자체는 저장됨).",
+            exc_info=True,
+        )
+
+
 __all__ = [
     "COORDINATE_PRECISION",
     "REDACTED",
+    "REPORT_FEEDBACK_KEY",
     "configure_tracing",
+    "record_report_feedback",
     "scrub_payload",
     "trace_config",
     "tracing_enabled",

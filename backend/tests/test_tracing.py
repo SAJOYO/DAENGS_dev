@@ -222,6 +222,82 @@ class TestGraphWiring:
         assert subject not in flattened
 
 
+class TestReportFeedback:
+    """신고 → 트레이스 피드백. **신고가 실패하면 안 된다**는 것이 여기의 요점이다."""
+
+    @pytest.mark.asyncio
+    async def test_꺼져_있으면_아무것도_안_한다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from daengs_backend.core import tracing
+
+        monkeypatch.setattr(tracing, "tracing_enabled", lambda: False)
+        called: list[object] = []
+        from langsmith import run_trees
+
+        monkeypatch.setattr(
+            run_trees, "get_cached_client", lambda **kw: called.append(kw) or object()
+        )
+        await tracing.record_report_feedback(request_id=str(uuid.uuid4()))
+        assert called == []
+
+    @pytest.mark.asyncio
+    async def test_request_id_가_없으면_넘어간다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """v0.0.0 무상태 대화의 turn 처럼 `request_id` 가 비어 있을 수 있다."""
+        from daengs_backend.core import tracing
+
+        monkeypatch.setattr(tracing, "tracing_enabled", lambda: True)
+        await tracing.record_report_feedback(request_id=None)
+        await tracing.record_report_feedback(request_id="uuid-가-아님")
+
+    @pytest.mark.asyncio
+    async def test_보낼_때_사유_원문은_안_실린다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """LangSmith 가 알아야 하는 것은 "신고됐다" 뿐이다. 사유는 콘솔의 것이다."""
+        from daengs_backend.core import tracing
+
+        sent: dict = {}
+
+        class FakeClient:
+            def create_feedback(self, run_id, key="unnamed", **kwargs):
+                sent.update({"run_id": run_id, "key": key, **kwargs})
+
+        monkeypatch.setattr(tracing, "tracing_enabled", lambda: True)
+        from langsmith import run_trees
+
+        monkeypatch.setattr(run_trees, "get_cached_client", lambda **kw: FakeClient())
+
+        request_id = str(uuid.uuid4())
+        await tracing.record_report_feedback(request_id=request_id)
+
+        assert sent["run_id"] == uuid.UUID(request_id)
+        assert sent["key"] == tracing.REPORT_FEEDBACK_KEY
+        assert sent.get("comment") is None
+        # 기본값 10 이면 LangSmith 가 죽었을 때 신고 POST 가 재시도 열 번을 기다린다.
+        assert sent["stop_after_attempt"] == 1
+
+    @pytest.mark.asyncio
+    async def test_LangSmith_가_죽어도_예외를_안_올린다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """신고는 이미 우리 DB 에 들어갔다. 여기서 실패를 올리면 사용자가 다시 누른다."""
+        from daengs_backend.core import tracing
+
+        class ExplodingClient:
+            def create_feedback(self, *a, **kw):
+                raise RuntimeError("LangSmith unreachable")
+
+        monkeypatch.setattr(tracing, "tracing_enabled", lambda: True)
+        from langsmith import run_trees
+
+        monkeypatch.setattr(run_trees, "get_cached_client", lambda **kw: ExplodingClient())
+
+        await tracing.record_report_feedback(request_id=str(uuid.uuid4()))
+
+
 class TestDefaultOff:
     def test_환경변수가_없으면_꺼져_있다(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):

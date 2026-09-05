@@ -79,6 +79,7 @@ class PetUpsert(BaseModel):
 
 
 class PetResponse(BaseModel):
+    updated_at: datetime | None = None
     id: uuid.UUID
     name: str
     breed: str

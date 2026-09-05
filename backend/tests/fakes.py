@@ -272,6 +272,7 @@ class FakePet:
     birth_date: object | None = None
     birth_date_kind: str | None = None
     farewell_on: object | None = None
+    updated_at: object | None = None
 
     # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
     photo_storage_key: str | None = None

@@ -58,6 +58,8 @@ def evaluate_dog_access(
 
     if facility_limit is None:
         return DogAccessEvaluation(state="unknown", reason="missing_restriction")
+    if facility_limit == "any":
+        return DogAccessEvaluation(state="compatible", reason="size_allowed")
     if dog_size is None:
         return DogAccessEvaluation(state="unknown", reason="missing_dog_size")
 

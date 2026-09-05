@@ -4,6 +4,7 @@
 resolver로 보내고 공통 `PlaceResult`로 바꾼 뒤, 종류 안에서만 요청한 사실 선호를 적용한다.
 """
 
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_place.core.clock import SystemClock
 from daengs_place.geo.ranking import DISTANCE_BAND_M, prefer_boost, rank_key
 from daengs_place.place.adapters import facility_place_result, medical_place_result
-from daengs_place.place.contracts import PlaceResult
+from daengs_place.place.contracts import DogSize, PlaceResult
 from daengs_place.place.evaluations import DogAccessEvaluation, evaluate_dog_access
 from daengs_place.place.facility_resolver import (
     MAX_RESULTS,
@@ -48,8 +49,7 @@ if _DECLARED_KINDS != _RESOLVER_KINDS:
     missing = sorted(_RESOLVER_KINDS - _DECLARED_KINDS)
     retired = sorted(_DECLARED_KINDS - _RESOLVER_KINDS)
     raise RuntimeError(
-        "PlaceKind and resolver mappings differ: "
-        f"missing={missing}, without_resolver={retired}"
+        f"PlaceKind and resolver mappings differ: missing={missing}, without_resolver={retired}"
     )
 
 
@@ -59,6 +59,20 @@ class PlaceSearchPreferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     parking: bool = False
+
+
+class PlaceDogSnapshot(BaseModel):
+    """Caller-resolved values, not an authenticated profile identity.
+
+    ref only correlates this request and response. All unknown is a valid selected dog.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    ref: str = Field(min_length=1, max_length=100)
+    revision: str | None = Field(None, max_length=100)
+    dog_size: DogSize | None = None
+    dog_weight_kg: float | None = Field(None, gt=0, le=200)
+    dog_age_years: float | None = Field(None, ge=0, le=40)
 
 
 class PlaceSearchRequest(BaseModel):
@@ -71,6 +85,7 @@ class PlaceSearchRequest(BaseModel):
     conditions: PlaceSearchConditions | None = None
     preferences: PlaceSearchPreferences | None = None
     name_query: PlaceNameQuery = ""
+    dogs: list[PlaceDogSnapshot] = Field(default_factory=list, max_length=20)
 
     @field_validator("kinds", mode="before")
     @classmethod
@@ -94,6 +109,10 @@ class PlaceSearchRequest(BaseModel):
 
     @model_validator(mode="after")
     def stay_inside_request_budget(self) -> Self:
+        if self.dogs and self.conditions is not None:
+            raise ValueError("dogs and conditions cannot be combined")
+        if len({dog.ref for dog in self.dogs}) != len(self.dogs):
+            raise ValueError("dog refs must be unique")
         if (
             self.limit_per_kind is not None
             and self.limit_per_kind * len(self.kinds) > MAX_TOTAL_RESULTS
@@ -151,27 +170,36 @@ class RestrictionCoverage(BaseModel):
 
 class PlaceSort(BaseModel):
     type: Literal["distance", "distance_preferred"] = "distance"
-    basis: tuple[Literal["distance_band", "parking", "distance_m"], ...] = (
-        "distance_m",
-    )
+    basis: tuple[Literal["distance_band", "parking", "distance_m"], ...] = ("distance_m",)
     applied: tuple[Literal["parking"], ...] = Field(
-        default=(), exclude_if=lambda value: not value,
+        default=(),
+        exclude_if=lambda value: not value,
     )
     band_m: int | None = Field(None, ge=1, exclude_if=lambda value: value is None)
     coverage: dict[Literal["parking"], BooleanFactCoverage] = Field(
-        default_factory=dict, exclude_if=lambda value: not value,
+        default_factory=dict,
+        exclude_if=lambda value: not value,
     )
+
+
+class PerDogEvaluation(BaseModel):
+    ref: str
+    dog_access: DogAccessEvaluation | None = None
+    restrictions: DogRestrictionEvaluation | None = None
 
 
 class PlaceEvaluations(BaseModel):
     dog_access: DogAccessEvaluation | None = Field(
-        None, exclude_if=lambda value: value is None,
+        None,
+        exclude_if=lambda value: value is None,
     )
     # 조건 술어를 이 개에 대고 본 결과. `dog_access`(원천 크기 축)와 **다른 축**이라
     # 합치지 않는다 — 원천이 두 곳에 다르게 적었다는 사실 자체가 정보다.
     restrictions: DogRestrictionEvaluation | None = Field(
-        None, exclude_if=lambda value: value is None,
+        None,
+        exclude_if=lambda value: value is None,
     )
+    dogs: list[PerDogEvaluation] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class PlaceSearchHit(BaseModel):
@@ -184,7 +212,8 @@ class PlaceSearchGroup(BaseModel):
     sort: PlaceSort = Field(default_factory=PlaceSort)
     # 의료 그룹에는 없다 — `restrictions` 는 시설 원천(KCISA)만 가진 사실이다.
     restrictions: RestrictionCoverage | None = Field(
-        None, exclude_if=lambda value: value is None,
+        None,
+        exclude_if=lambda value: value is None,
     )
     limit: int = Field(ge=1)
     truncated: bool = False
@@ -192,12 +221,15 @@ class PlaceSearchGroup(BaseModel):
 
 
 class PlaceSearchResponse(BaseModel):
+    dogs: list[PlaceDogSnapshot] = Field(default_factory=list, exclude_if=lambda value: not value)
+    evaluated_at: datetime | None = Field(None, exclude_if=lambda value: value is None)
     # 구버전 서버가 알 수 없는 요청 필드를 무시해도 앱이 이름 검색 성공으로 오인하지 않게.
     name_query: str = Field(default="", exclude_if=lambda value: not value)
     # 평가에 쓴 조건의 에코. 서버가 값을 보정하지 않으므로 요청의 conditions 와 같다 —
     # 그래도 되돌리는 이유는 "무엇을 기준으로 대조했나"를 응답만 보고 알 수 있어야 해서다.
     conditions: PlaceSearchConditions | None = Field(
-        None, exclude_if=lambda value: value is None,
+        None,
+        exclude_if=lambda value: value is None,
     )
     groups: list[PlaceSearchGroup]
 
@@ -248,7 +280,7 @@ def _restriction_coverage(results: list[PlaceResult]) -> RestrictionCoverage:
 
 def _hit(
     result: PlaceResult,
-    conditions: PlaceSearchConditions | None,
+    conditions: PlaceSearchConditions | PlaceDogSnapshot | None,
 ) -> PlaceSearchHit:
     dog_access = None
     restrictions = None
@@ -275,7 +307,8 @@ def _hit(
     return PlaceSearchHit(
         place=result,
         evaluations=PlaceEvaluations(
-            dog_access=dog_access, restrictions=restrictions,
+            dog_access=dog_access,
+            restrictions=restrictions,
         ),
     )
 
@@ -363,7 +396,9 @@ async def search_place_plan(
         else:
             group = await _facility_group(db, plan, kind)
         groups.append(group)
-    return PlaceSearchResponse(conditions=plan.conditions, groups=groups, name_query=plan.name_query)
+    return PlaceSearchResponse(
+        conditions=plan.conditions, groups=groups, name_query=plan.name_query
+    )
 
 
 async def search_place_groups(
@@ -372,4 +407,19 @@ async def search_place_groups(
 ) -> PlaceSearchResponse:
     """현행 HTTP request를 typed plan으로 컴파일한 뒤 같은 실행기를 호출한다."""
 
-    return await search_place_plan(db, compile_place_search_request(request))
+    response = await search_place_plan(db, compile_place_search_request(request))
+    if request.dogs:
+        # Resolve candidates once per kind; dog count does not multiply DB searches.
+        response.dogs = request.dogs
+        response.evaluated_at = SystemClock().now()
+        for group in response.groups:
+            for hit in group.results:
+                hit.evaluations.dogs = [
+                    PerDogEvaluation(
+                        ref=dog.ref,
+                        dog_access=(evaluation := _hit(hit.place, dog).evaluations).dog_access,
+                        restrictions=evaluation.restrictions,
+                    )
+                    for dog in request.dogs
+                ]
+    return response

@@ -197,33 +197,61 @@ def cmd_embed(args: argparse.Namespace) -> int:
             bad += not ok
         return 1 if bad else 0
 
-    todo: list[tuple[str, dict[str, int]]] = []
+    if args.backfill_hashes:
+        # RAG-064 ② — 옛 parquet(v1)에 행별 해시를 재인코딩 없이 채운다. 전역 지문이 증명서다
+        bad = 0
+        for key in keys:
+            ok, why = embed.backfill_hashes(key, fingerprint, rows)
+            print(f"  {'filled' if ok else 'REFUSED':11s} {key:22s} {why}")
+            bad += not ok
+        return 1 if bad else 0
+
+    todo: list[tuple[str, dict[str, int], embed.Plan | None]] = []
     for key in keys:
         model = embed.MODELS[key]
-        if embed.is_current(key, fingerprint) and not args.force:
+        # `--full` 은 **다시 만들라는 뜻**이므로 지문 스킵도 같이 넘긴다 (RAG-064).
+        # 안 그러면 코퍼스가 그대로일 때 `--full` 이 조용히 아무것도 안 하는데,
+        # 그것을 쓰는 자리가 하필 ④ 대조라 "전량을 만들었다"고 믿고 비교하게 된다.
+        if embed.is_current(key, fingerprint) and not (args.force or args.full):
             print(f"  {'same':11s} {key}")
             continue
+
+        # **증분 계획을 가드보다 먼저 세운다** (RAG-064). 가드는 전량 텍스트를 토큰화하는데,
+        # 실제로 인코딩할 것이 37건이면 9,451건을 재는 것은 낭비다.
+        plan = None if args.full else embed.plan_incremental(key, model, rows)
+        if plan is not None and not plan.ok:
+            print(f"  {'full':11s} {key:22s} 증분 거부 — {plan.refused}")
+            plan = None
+        elif plan is not None:
+            print(f"  {'incremental':11s} {key:22s} 재사용 {len(plan.reuse):,} · "
+                  f"인코딩 {len(plan.encode):,} · 사라짐 {plan.dropped:,}")
+
+        # 가드는 **실제로 인코딩할 텍스트**에만 건다
+        target = texts if plan is None else [rows[i]["content"] for i in plan.encode]
         try:
-            stats = embed.guard(model, texts)
+            stats = embed.guard(model, target) if target else {"max": 0, "median": 0, "p95": 0}
         except Exception as exc:
             print(f"  {'GUARD FAIL':11s} {key}\n      {exc}")
             return 1
-        pct = stats["max"] / model.max_tokens * 100
-        print(f"  {'guard ok':11s} {key:22s} 최대 {stats['max']:5d} / 한계 {model.max_tokens} "
-              f"({pct:.0f}%)  중앙 {stats['median']}  p95 {stats['p95']}")
-        todo.append((key, stats))
+        if target:
+            pct = stats["max"] / model.max_tokens * 100
+            print(f"  {'guard ok':11s} {key:22s} 최대 {stats['max']:5d} / 한계 {model.max_tokens} "
+                  f"({pct:.0f}%)  중앙 {stats['median']}  p95 {stats['p95']}"
+                  f"  ({len(target):,}건 대상)")
+        todo.append((key, stats, plan))
 
     if args.guard_only:
         print("\n(guard-only: 인코딩하지 않음)")
         return 0
 
-    for key, stats in todo:
+    for key, stats, plan in todo:
         model = embed.MODELS[key]
-        print(f"  {'encoding':11s} {key} ({model.repo}) …", flush=True)
-        st = embed.load_model(model)
+        target = texts if plan is None else [rows[i]["content"] for i in plan.encode]
+        print(f"  {'encoding':11s} {key} ({model.repo}) {len(target):,}건 …", flush=True)
+        st = embed.load_model(model) if target else None
         try:
-            vectors = embed.encode_docs(model, texts, batch_size=args.batch,
-                                        st=st, progress=not args.quiet)
+            vectors = embed.encode_docs(model, target, batch_size=args.batch,
+                                        st=st, progress=not args.quiet) if target else []
         finally:
             # **모델마다 GPU 에서 내린다.** PyTorch 는 파이썬 객체가 사라져도 empty_cache 전까지
             # VRAM 을 붙들고 있어, 3종을 한 프로세스에서 돌리면 누적된다. 6GB GPU 에서 마지막
@@ -231,12 +259,17 @@ def cmd_embed(args: argparse.Namespace) -> int:
             del st
             embed.release()
         if args.dry_run:
-            print(f"  {'(dry-run)':11s} {key:22s} {vectors.shape}")
+            print(f"  {'(dry-run)':11s} {key:22s} 인코딩 {len(target):,}건")
             continue
-        path = embed.write_parquet(model, rows, vectors,
-                                   fingerprint=fingerprint, token_stats=stats)
+        if plan is None:
+            path = embed.write_parquet(model, rows, vectors,
+                                       fingerprint=fingerprint, token_stats=stats)
+        else:
+            path = embed.write_parquet_incremental(model, rows, plan, vectors,
+                                                   fingerprint=fingerprint, token_stats=stats)
         size = path.stat().st_size / 1e6
-        print(f"  {'written':11s} {key:22s} {vectors.shape}  {size:.1f} MB  "
+        how = "전량" if plan is None else f"증분({len(plan.encode):,}/{len(rows):,})"
+        print(f"  {'written':11s} {key:22s} {how}  {len(rows):,}행  {size:.1f} MB  "
               f"VRAM {embed.vram_used_mb():.0f} MB  -> {path.name}", flush=True)
     return 0
 
@@ -904,6 +937,10 @@ def main(argv: list[str] | None = None) -> int:
                      help="토큰 가드만 돌리고 인코딩은 하지 않는다 (가중치 로드 없음)")
     emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
+    emb.add_argument("--full", action="store_true",
+                     help="증분을 쓰지 않고 전량 인코딩 (RAG-064 — 증분과 대조할 때)")
+    emb.add_argument("--backfill-hashes", action="store_true",
+                     help="옛 parquet(v1)에 content_sha256 을 채운다. 벡터는 안 건드린다 (RAG-064)")
     emb.add_argument("--restamp", action="store_true",
                      help="벡터는 두고 지문만 다시 찍는다 (RAG-025 ⑤ 일회성. 행이 일치할 때만)")
     emb.set_defaults(fn=cmd_embed)

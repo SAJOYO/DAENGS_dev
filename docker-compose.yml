@@ -254,9 +254,19 @@ services:
       # GCP VM 위에서 돌면 메타데이터 서버가 대신하므로 둘 다 필요 없습니다.
       # - ${GAIT_GCP_CREDENTIALS_FILE:-./_secrets/gcp-sa.json}:/secrets/gcp-sa.json:ro
     environment:
-      # 어느 프로젝트로 보낼지. **비어 있으면 collector 가 기동에 실패합니다** — 그게
-      # 맞습니다. 조용히 뜨면 트레이스가 어디로도 안 가는데 아무도 모릅니다.
-      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?트레이싱을 켜려면 최상단 .env 에 GCP 프로젝트 ID 를 넣으세요}
+      # 어느 프로젝트로 보낼지.
+      #
+      # ⚠ **여기에 `:?` 를 쓰면 안 됩니다.** compose 는 프로파일로 거르기 **전에**
+      #   보간하므로, 이 서비스가 안 뜨는 사람의 `docker compose config` 까지 실패합니다.
+      #   배포 워크플로우가 `docker compose config --quiet` 로 검증하기 때문에
+      #   (`.github/workflows/deploy.yml` "Compose 설정 검증"), 그러면 트레이싱을
+      #   안 켜는 사람의 **배포가 통째로 깨집니다.**
+      #
+      # 비면 googlecloud exporter 가 자격증명에서 프로젝트를 유추합니다. 그것도 없으면
+      # collector 가 기동에 실패하는데, 그건 이 프로파일을 켠 사람에게만 일어나고
+      # `docker compose logs otel-collector` 에 그대로 보입니다 — 실패를 알아야 할
+      # 사람에게만 알리는 자리가 거기입니다.
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
 
   redis:

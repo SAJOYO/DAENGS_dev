@@ -240,6 +240,29 @@ class TestTracingMode:
         finally:
             ls_utils.get_env_var.cache_clear()
 
+    def test_트레이싱_변수가_배포_검증을_깨지_않는다(self) -> None:
+        """profiled 서비스의 환경 변수에 `${VAR:?}` 를 쓰면 **모두의 배포가 깨진다.**
+
+        compose 는 프로파일로 거르기 **전에** 보간한다. 배포 워크플로우가
+        `docker compose config --quiet` 로 검증하므로(`deploy.yml` "Compose 설정 검증"),
+        트레이싱을 안 켜는 서버에서도 그 변수가 없으면 배포가 통째로 실패한다.
+        실제로 그렇게 썼다가 잡았다 — 서버에 넣기 전에 잡아서 다행이었을 뿐이다.
+
+        docker 없이 확인할 수 있는 형태로 못박는다.
+        """
+        import re
+        from pathlib import Path
+
+        compose = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+        text = compose.read_text(encoding="utf-8")
+        block = text[text.index("  otel-collector:"):text.index("\n  redis:")]
+        required = re.findall(r"\$\{([A-Z_]+):\?", block)
+        assert not required, (
+            f"otel-collector 가 필수 변수를 요구한다: {required}. "
+            "이 서비스는 profiles 뒤에 있어서, 여기서 :? 를 쓰면 트레이싱을 안 켜는 "
+            "서버의 `docker compose config` 까지 실패한다 (= 배포 실패)."
+        )
+
     def test_compose_가_otel_로_덮는다(self) -> None:
         """`docker-compose.yml` 의 backend 가 실제로 otel 을 기본으로 주는가.
 

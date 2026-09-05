@@ -1,5 +1,6 @@
 """Real chunk decode + measurement + geo scenes across the authenticated HTTP boundary."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -129,6 +130,82 @@ def test_pinless_real_observations_generate_and_cache(live):
     assert client.post(PATH, json={"expected_entries": {}}).json() == result
     assert client.get(PATH).json() == result
     assert lookup.await_count == 1
+
+
+def test_environment_deadline_keeps_scenes_and_can_refresh(live, monkeypatch):
+    client, _, lookup = live
+    monkeypatch.setattr(service, "CONTEXT_TIMEOUT_SECONDS", 0.01)
+    cancelled = []
+
+    async def slow(_):
+        try:
+            await asyncio.sleep(60)
+        finally:
+            cancelled.append(True)
+
+    successful_lookup = lookup.side_effect
+    lookup.side_effect = slow
+    response = client.post(PATH, json={"expected_entries": {}})
+    assert response.status_code == 200
+    fallback = response.json()
+    assert fallback["status"] == "ready" and fallback["error_code"] is None
+    scenes = fallback["bundle"]["scenes"]
+    assert {"start", "end"} <= {s["id"] for s in scenes}
+    anchors = [s for s in scenes if "distance_fill" in s["reasons"]]
+    assert anchors and all(any(f["kind"] == "coverage" for f in s["facts"]) for s in anchors)
+    assert all(
+        any(
+            s["provider"] == "place-search" and s["status"] == "unavailable" and s["captured_at"]
+            for s in a["sources"]
+        )
+        for a in anchors
+    )
+    assert cancelled == [True]
+    # Normal retry reuses the successful observation bundle; explicit refresh retries environment.
+    assert client.post(PATH, json={"expected_entries": {}}).json() == fallback
+    assert lookup.await_count == 1
+    lookup.side_effect = successful_lookup
+    refreshed = client.post(PATH, json={"expected_entries": {}, "refresh": True}).json()
+    assert refreshed["generation"] > fallback["generation"]
+    assert any(
+        f["kind"] == "environment" for s in refreshed["bundle"]["scenes"] for f in s["facts"]
+    )
+
+
+def test_environment_deadline_does_not_publish_obsolete_input(live, monkeypatch):
+    client, state, lookup = live
+    monkeypatch.setattr(service, "CONTEXT_TIMEOUT_SECONDS", 0.01)
+
+    async def mutate_then_wait(_):
+        state.entries = [note()]
+        await asyncio.sleep(60)
+
+    lookup.side_effect = mutate_then_wait
+    response = client.post(PATH, json={"expected_entries": {}}).json()
+    assert response["status"] == "stale" and response["bundle"] is None
+
+
+async def test_request_cancellation_is_not_an_environment_fallback(live):
+    client, state, lookup = live
+    from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+
+    lookup.side_effect = asyncio.CancelledError
+    db = client.app.dependency_overrides[get_session]()
+    with pytest.raises(asyncio.CancelledError):
+        await service.generate(db, OWNER, WALK, StoryboardRequest(expected_entries={}), lookup)
+    assert state.row.status == "running" and state.row.bundle is None
+
+
+def test_measurement_timeout_is_still_an_analysis_failure(live, monkeypatch):
+    client, _, lookup = live
+
+    def broken(*args):
+        raise TimeoutError("measurement failure")
+
+    monkeypatch.setattr(service, "analyze_walk", broken)
+    response = client.post(PATH, json={"expected_entries": {}}).json()
+    assert response["status"] == "failed" and response["bundle"] is None
+    lookup.assert_not_awaited()
 
 
 def test_correction_deletion_and_source_ids(live):

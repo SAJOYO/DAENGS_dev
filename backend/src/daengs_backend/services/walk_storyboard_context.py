@@ -11,6 +11,25 @@ KINDS = ["leisure", "cafe", "restaurant"]
 LABELS = {"leisure": "여가 시설", "cafe": "카페", "restaurant": "음식점"}
 
 
+def unavailable_contexts(selection):
+    """The lookup deadline limits external I/O, not the observed walk's availability."""
+    captured = datetime.now(UTC).isoformat()
+    return {
+        anchor["id"]: {
+            "facts": [],
+            "sources": [
+                {
+                    "source": "place-search",
+                    "status": "unavailable",
+                    "captured_at": captured,
+                    "source_url": None,
+                }
+            ],
+        }
+        for anchor in selection["anchors"]
+    }
+
+
 async def lookup_contexts(selection, *, client=None):
     if client is None:
         async with httpx.AsyncClient(timeout=3.0) as opened:

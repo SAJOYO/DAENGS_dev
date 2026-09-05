@@ -11,6 +11,7 @@ from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardResponse
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_backend.services.walk_storyboard_context import unavailable_contexts
 from daengs_walk import analyze_walk
 from daengs_walk.storyboard import build_storyboard, fingerprint
 from daengs_walk.storyboard_input import scene_inputs
@@ -18,6 +19,7 @@ from daengs_walk.storyboard_selection import ReferenceWalk
 
 POLICY_VERSION = "live-storyboard-v1"
 LEASE_SECONDS = 60
+CONTEXT_TIMEOUT_SECONDS = 10
 
 
 class StoryboardNotFound(LookupError):
@@ -114,7 +116,10 @@ async def generate(session, owner, walk_id, request, lookup):
         projected, selection = scene_inputs(
             evidence, entries, session_id=session_id, pet_id=pet_id, references=references
         )
-        contexts = await asyncio.wait_for(lookup(selection), timeout=10)
+        try:
+            contexts = await asyncio.wait_for(lookup(selection), timeout=CONTEXT_TIMEOUT_SECONDS)
+        except TimeoutError:
+            contexts = unavailable_contexts(selection)
         bundle = build_storyboard(
             session_id,
             started_at,

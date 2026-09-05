@@ -1,4 +1,4 @@
--- 20260905_documents_org_backfill.sql — 지역 필터의 원본 메타를 채운다 (RAG-063 / #262)
+-- 2026-09-05_documents_org_backfill.sql — 지역 필터의 원본 메타를 채운다 (RAG-063 / #262)
 --
 -- **왜 SQL 에 매핑을 박았는가.** `org` 의 원본은 `data/processed/parsed/` 의 document 헤더인데
 -- **GCP VM 에는 그 코퍼스가 없다** (크롤러·코퍼스 정본은 집 서버, `docs/deploy/roadmap.md` §2-4).
@@ -10,7 +10,7 @@
 --
 -- **여러 번 돌려도 안전하다** (CLAUDE.md — 버전 테이블이 없다). `||` 는 같은 키를 덮어쓴다.
 --
--- 적용 뒤: `db/migrations/verify_2026-09-05_documents_org.sql`
+-- 적용 뒤: `db/migrations/verify_2026-09-05_documents_org_backfill.sql`
 -- 앞으로 새로 적재되는 문서는 이 파일이 필요 없다 — `chunk._doc_fields` 와
 -- `load.META_FIELDS` 가 `org` 을 들고 오도록 같은 카드에서 고쳤다.
 

@@ -106,13 +106,13 @@ jobs:
         shell: cmd
         run: |
           if exist _migrate rmdir /s /q _migrate
-          mkdir _migrate || exit /b 1
-          git fetch origin %MIG_REF% --depth=1 || exit /b 1
-          git show FETCH_HEAD:db/migrations/%MIG_FILE% > _migrate\%MIG_FILE% || exit /b 1
-          for %%F in (_migrate\%MIG_FILE%) do if %%~zF EQU 0 exit /b 1
+          mkdir _migrate || exit 1
+          git fetch origin %MIG_REF% --depth=1 || exit 1
+          git show FETCH_HEAD:db/migrations/%MIG_FILE% > _migrate\%MIG_FILE% || exit 1
+          for %%F in (_migrate\%MIG_FILE%) do if %%~zF EQU 0 exit 1
           if /I "%MIG_VERIFY%"=="true" (
-            git show FETCH_HEAD:db/migrations/verify_%MIG_FILE% > _migrate\verify_%MIG_FILE% || exit /b 1
-            for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit /b 1
+            git show FETCH_HEAD:db/migrations/verify_%MIG_FILE% > _migrate\verify_%MIG_FILE% || exit 1
+            for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit 1
           )
           dir _migrate
 
@@ -187,7 +187,7 @@ jobs:
       - name: Apply
         shell: cmd
         run: |
-          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\%MIG_FILE% || exit /b 1
+          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\%MIG_FILE% || exit 1
           echo applied: %MIG_FILE%
 
       # 새 verify는 불일치 시 예외를 내고 psql 실패를 전파합니다.
@@ -196,9 +196,9 @@ jobs:
         if: ${{ inputs.verify }}
         shell: cmd
         run: |
-          if not exist _migrate\verify_%MIG_FILE% exit /b 1
-          for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit /b 1
-          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\verify_%MIG_FILE% || exit /b 1
+          if not exist _migrate\verify_%MIG_FILE% exit 1
+          for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit 1
+          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\verify_%MIG_FILE% || exit 1
 
       - name: Clean up
         if: always()

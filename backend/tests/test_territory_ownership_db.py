@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, text
@@ -74,6 +75,11 @@ async def database():
             await raw.execute(migration)  # Existing-volume replay.
             await raw.execute(
                 (ROOT / "db/init/20_territory_claims.sql").read_text(encoding="utf-8")
+            )
+            await raw.execute(
+                (ROOT / "db/migrations/verify_2026-09-05_territory_claims.sql").read_text(
+                    encoding="utf-8"
+                )
             )
         factory = async_sessionmaker(engine, expire_on_commit=False)
         yield factory
@@ -495,3 +501,34 @@ async def test_session_retry_cannot_change_participants_or_restart_ended_session
             await svc.start_session(
                 db, a, sa, SessionStart(started_at=initial.started_at, pet_ids=[a2])
             )
+
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "DROP TABLE territory_claim_photos",
+        "ALTER TABLE territory_claims DROP COLUMN resolution_code",
+        "ALTER TABLE territory_claims ALTER COLUMN contact TYPE varchar(2048)",
+        "ALTER TABLE territory_claims ALTER COLUMN created_at DROP NOT NULL",
+        "ALTER TABLE territory_claim_photos DROP CONSTRAINT territory_claim_photos_pkey",
+        "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_pet_id_fkey",
+        "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_disposition_check",
+        "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_session_id_site_id_key",
+        "DROP INDEX territory_claims_pet_idx",
+        "DROP INDEX ix_territory_claim_photos_claim_id",
+        "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_pet_id_fkey; "
+        "ALTER TABLE territory_claims ADD FOREIGN KEY(pet_id) REFERENCES pets(id)",
+    ],
+)
+async def test_verification_rejects_schema_damage(database, damage):
+    verifier = (ROOT / "db/migrations/verify_2026-09-05_territory_claims.sql").read_text(
+        encoding="utf-8"
+    )
+    async with database() as db:
+        connection = await db.connection()
+        raw = (await connection.get_raw_connection()).driver_connection
+        await raw.execute(damage)
+        with pytest.raises(asyncpg.PostgresError, match="mismatch|missing table"):
+            await raw.execute(verifier)
+        await db.rollback()

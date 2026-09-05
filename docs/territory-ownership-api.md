@@ -105,6 +105,13 @@ site_id와 버전만 남는다. 시즌 점수/장기 이력은 아직 이 저장
 [`20_territory_claims.sql`](../db/init/20_territory_claims.sql)이 같은 테이블을 만든다.
 두 파일은 동일하고 재실행 가능하다. 운영 DB 변경은 PR 구현/로컬 검증에 포함하지 않는다.
 
+적용 뒤 [`verify_2026-09-05_territory_claims.sql`](../db/migrations/verify_2026-09-05_territory_claims.sql)을
+`psql -X -v ON_ERROR_STOP=1`로 실행한다. 다섯 테이블의 컬럼 형식/NULL 허용,
+PK·UNIQUE·CHECK·FK(삭제 동작 포함), 유효한 인덱스를 검사하고 불일치하면 예외를 낸다.
+스키마 검증 성공을 확인한 뒤 웹/워커 코드를 배포한다. 데이터·VLM·앱 종단 검증은 별도다.
+공통 워크플로의 누락/빈 파일 차단과 실패 전파는 [#264](https://github.com/SAJOYO/DAENGS_dev/pull/264)에서
+수정한다. 해당 PR을 먼저 반영한 뒤 최신 dev를 통합해 `verify=true`로 실행한다.
+
 ```powershell
 cd backend
 uv run pytest -q tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py
@@ -117,3 +124,4 @@ DB 테스트는 실제 init SQL 및 마이그레이션을 실행하고 매 테�
 두 계정 탈취·중복 요청·동시 점유/인증·지연 결과·트랜잭션 롤백·다견 선택·사진 재사용·종료 후 판정·
 삭제·기존 데이터 보존을 확인한다. 환경 변수 없이는 DB 테스트가 명시적으로 skip된다.
 전용 GitHub-hosted PostgreSQL CI는 이를 실제 실행하고 기존 모든 PR 대상 전체 테스트는 유지한다.
+

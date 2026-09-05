@@ -167,9 +167,21 @@ uv run pytest                                    # 83개 (가중치 로드분은
 
 ```bash
 uv run python -m rag embed --guard-only      # 토큰 가드만 (가중치 로드 없음, 빠르다)
-uv run python -m rag embed                   # 청크가 바뀐 것만
-uv run python -m rag embed --model bge-m3 --force
+uv run python -m rag embed                   # **서빙 모델 하나**, 바뀐 청크만 (RAG-064)
+uv run python -m rag embed --all             # 3종 전부 — 6단계 3파전용. 55분 x 3 이다
+uv run python -m rag embed --backfill-hashes # 옛 parquet(v1)에 행별 해시만 (벡터 무변경, 몇 초)
+uv run python -m rag embed --full --force    # 증분을 안 쓰고 전량으로 다시
 ```
+
+⚠ **기본이 3종이 아니라 서빙 모델 하나다** (2026-09-06, RAG-064 ⑦). 서빙은
+`DAENGS_EMBEDDING_MODEL_KEY` 하나만 읽으므로 나머지 둘을 만드는 시간에는 소비자가 없다.
+3파전을 다시 잴 때만 `--all` 을 쓴다.
+
+⚠ **`--dry-run` 은 인코딩을 한다** (쓰지만 않는다). 가드까지만 보려면 `--guard-only` 다.
+
+⚠ **다른 PC 의 parquet 은 v1 이다.** `embeddings/` 는 git 미추적이라(RAG-017) 이 코드를 처음
+받은 PC 에서는 증분이 거부되고 전량 인코딩으로 떨어진다. **코퍼스가 그 parquet 과 같다면**
+`--backfill-hashes` 를 한 번 돌리면 몇 초에 v2 가 된다 — 거부 메시지가 그 명령을 알려 준다.
 
 | key | repo | 입력 한계 | 프롬프트 | 디스크 |
 |---|---|---:|---|---:|

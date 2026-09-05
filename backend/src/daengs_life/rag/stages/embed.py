@@ -319,9 +319,13 @@ def plan_incremental(key: str, model: Model, rows: list[dict[str, Any]]) -> Plan
 
     meta = read_meta(key) or {}
     if meta.get("schema_version") != str(SCHEMA_VERSION):
+        # **해법까지 말한다.** parquet 은 git 미추적이라(RAG-017) 다른 PC 는 여전히 v1 이고,
+        # 원인만 말하면 그 사람은 이유를 모른 채 55분 전량 인코딩을 낸다 — A1 이 없애려던 값이다.
         return Plan([], list(range(len(rows))), 0,
                     refused=f"parquet 스키마가 v{meta.get('schema_version', '1')} 다"
-                            f" — `content_sha256` 이 없어 증분을 못 판단한다")
+                            f" — `content_sha256` 이 없어 증분을 못 판단한다."
+                            f" 코퍼스가 이 parquet 과 같다면 `rag embed --backfill-hashes"
+                            f" --model {key}` 로 몇 초에 채울 수 있다 (벡터 무변경)")
     if meta.get("embedding_model") != model.repo:
         return Plan([], list(range(len(rows))), 0,
                     refused=f"모델이 다르다: parquet={meta.get('embedding_model')} != {model.repo}")

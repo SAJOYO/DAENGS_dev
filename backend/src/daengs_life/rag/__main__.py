@@ -9,8 +9,11 @@
   python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
   python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (RAG-022)
   python -m rag goldenset -v                          # 문항별 라벨까지 전부
-  python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)
-  python -m rag evaluate --model bge-m3 -v            # 하나만 (판정은 셋이 다 있어야 한다)
+  python -m rag embed                                 # 4단계 임베딩 — **기본은 서빙 모델 하나** (RAG-064)
+  python -m rag embed --all                           # 3종 전부 (6단계 3파전용, 55분 x 3)
+  python -m rag embed --backfill-hashes               # 옛 parquet 에 행별 해시만 채운다 (벡터 무변경)
+  python -m rag evaluate                              # 6단계 채점 — 기본은 서빙 모델 하나
+  python -m rag evaluate --all -v                     # 3파전 판정 (승자 고르기는 셋이 다 있어야 한다)
   python -m rag load                                  # 7단계 documents 적재 (RAG-025)
   python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
   python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
@@ -167,6 +170,29 @@ def cmd_chunk(args: argparse.Namespace) -> int:
     return 1 if n_failed else 0
 
 
+def _target_models(args: argparse.Namespace) -> list[str]:
+    """이 실행이 다룰 모델. **기본은 서빙 모델 하나다** (RAG-064 ⑦).
+
+    예전 기본은 `MODELS` 전부(3종)였다. 그것은 6단계 3파전(RAG-002 · 024)의 기본값이고,
+    RAG-024 가 *"7~9단계 첫 관통은 기준선 `bge-m3` 로 간다"* 고 한 동안은 둘이 다 필요했다.
+    **그 기간이 끝났는데 기본값이 안 따라왔다:**
+
+      - 서빙은 `config.settings.embedding_model_key` **하나**만 읽는다 (`app/deps.py`)
+      - 그래서 코퍼스가 바뀔 때마다 **55분 × 3 ≈ 165분**을 쓰고 그중 110분은 소비자가 없다
+      - `bge-m3`·`kure-v1` 은 2026-08-29 코퍼스(6,368행)에서 멈춰 있다
+
+    실제 피해도 이미 났다 — RAG-045 가 *"방아쇠는 사소했다. `rag embed` 를 `--model` 없이
+    돌려 `bge-m3.parquet` 이 생겼다"* 로 시작한다.
+
+    3파전을 다시 돌릴 일이 생기면 `--all` 이 그 자리다.
+    """
+    if args.model:
+        return [args.model]
+    if getattr(args, "all_models", False):
+        return list(embed.MODELS)
+    return [config.settings.embedding_model_key]
+
+
 def cmd_embed(args: argparse.Namespace) -> int:
     """chunks → embeddings/{key}.parquet. 모델 3종을 나란히 만든다 (RAG-002).
 
@@ -177,7 +203,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
     if not rows:
         print("chunks 가 비었다 — `python -m rag chunk` 먼저")
         return 1
-    keys = [args.model] if args.model else list(embed.MODELS)
+    keys = _target_models(args)
     unknown = [k for k in keys if k not in embed.MODELS]
     if unknown:
         print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
@@ -371,7 +397,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     for w in warnings:
         print(f"  경고: {w}")
 
-    keys = [args.model] if args.model else list(embed.MODELS)
+    keys = _target_models(args)
     unknown = [k for k in keys if k not in embed.MODELS]
     if unknown:
         print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
@@ -931,11 +957,14 @@ def main(argv: list[str] | None = None) -> int:
 
     emb = sub.add_parser("embed", help="processed/chunks → processed/embeddings (모델 3종)")
     emb.add_argument("--model", help=f"하나만: {list(embed.MODELS)}")
+    emb.add_argument("--all", dest="all_models", action="store_true",
+                     help="3종 전부 (6단계 3파전용). **기본은 서빙 모델 하나다** — RAG-064 ⑦")
     emb.add_argument("--batch", type=int, default=8)
     emb.add_argument("--force", action="store_true", help="청크가 그대로여도 다시")
     emb.add_argument("--guard-only", action="store_true",
                      help="토큰 가드만 돌리고 인코딩은 하지 않는다 (가중치 로드 없음)")
-    emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
+    emb.add_argument("--dry-run", action="store_true",
+                     help="인코딩은 **하고** 쓰지는 않는다. 가드까지만 보려면 --guard-only")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
     emb.add_argument("--full", action="store_true",
                      help="증분을 쓰지 않고 전량 인코딩 (RAG-064 — 증분과 대조할 때)")
@@ -950,7 +979,9 @@ def main(argv: list[str] | None = None) -> int:
     gld.set_defaults(fn=cmd_goldenset)
 
     ev = sub.add_parser("evaluate", help="6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)")
-    ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)} (판정은 셋이 다 있어야 한다)")
+    ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)}")
+    ev.add_argument("--all", dest="all_models", action="store_true",
+                    help="3종 전부. **판정(승자 고르기)은 셋이 다 있어야 하므로 이것이 필요하다**")
     ev.add_argument("--force", action="store_true",
                     help="parquet 이 지금 청크와 어긋나도 채점한다")
     ev.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")

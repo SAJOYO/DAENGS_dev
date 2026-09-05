@@ -61,6 +61,53 @@ class AppUserOut(BaseModel):
     created_at: datetime
 
 
+class AppUserRosterItem(BaseModel):
+    """훑는 목록의 한 줄 (A2c · #257). **[AppUserOut] 과 일부러 다릅니다.**
+
+    가려진 개인정보(`*_masked`)도 `kakao_id` 도 없습니다 — 이 목록은 조건 없이 전
+    회원을 주는 자리라, 개인정보를 아예 안 들고 있는 것이 이 화면을 열 수 있게 된
+    이유입니다 (`services/app_user_admin.py` 의 `list_roster`).
+
+    **`AppUserOut` 을 상속하지 않은 것이 의도입니다.** 상속하면 저쪽에 칸이 느는 날
+    이 목록에도 조용히 따라 들어옵니다. `AdminPetOut` 이 상속인 것과 반대 방향의
+    판단인데, 저기는 "같이 늘어야 하는 것"이고 여기는 "같이 늘면 안 되는 것"입니다.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    #: 사람이 회원을 알아보는 값. `None` 이면 아직 발급 전(다음 로그인에 채워집니다).
+    nickname: str | None
+    #: 미니룸 이름표. 사용자가 지은 별명이라 개인정보로 보지 않습니다.
+    room_name: str | None
+    #: active · suspended · withdrawn. 셋 다 목록에 나옵니다 — 거르면 "찾는 사람이
+    #: 목록에 없다" 가 생깁니다.
+    status: str
+    created_at: datetime
+    #: 마릿수. 이름은 대표 한 마리만 오고, 나머지와 견종은 상세에서 봅니다.
+    pet_count: int
+    #: 대표 강아지 이름. 대표가 없으면 `None` 입니다.
+    #:
+    #: **개인정보가 아닙니다** — `models/pet.py` 에 암호화 컬럼이 없고, 마스킹 상세가
+    #: 이미 `Perm.READ` 로 전 반려견의 이름을 내보냅니다. `ADMIN_MANAGE` 인 이 목록에
+    #: 한 마리 이름을 싣는 것으로 새로 열리는 것은 없습니다.
+    #:
+    #: 실을 이유는 닉네임이 아직 안 채워진 회원이 많아서입니다 (다음 로그인에 발급).
+    #: 그때 목록은 "이름 없음" 만 줄줄이 뜨고 사람을 가릴 값이 가입일뿐입니다.
+    primary_pet_name: str | None
+
+
+class AppUserRosterPage(BaseModel):
+    """훑는 목록 한 쪽. **총 개수를 주지 않습니다.**
+
+    신고·감사 목록과 같은 이유입니다 — 읽는 사이에도 늘어서 곧 틀린 숫자가 됩니다.
+    `next_cursor` 를 그대로 돌려주면 다음 쪽이고, `None` 이면 마지막입니다.
+    """
+
+    users: list[AppUserRosterItem]
+    next_cursor: str | None = None
+
+
 class AdminPetOut(PetResponse):
     """앱이 쓰는 `PetResponse` + 사람이 읽을 견종 이름 한 칸.
 

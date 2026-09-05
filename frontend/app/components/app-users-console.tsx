@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "./auth-provider";
 import { apiJson, ApiError } from "@/lib/api";
@@ -19,7 +19,57 @@ type AppUser = {
   name_masked: string | null;
   status: "active" | "suspended" | "withdrawn";
   room_name: string | null;
+  /**
+   * 사람 이름. **이 화면에서 회원을 알아보는 거의 유일한 값입니다** — 이 앱키로는
+   * 이메일·전화·이름 동의를 못 받아 위 `*_masked` 가 전부 `null` 입니다.
+   *
+   * `null` 은 **아직 발급 전**입니다 (이 칸보다 먼저 가입한 회원. 다음 로그인에
+   * 채워집니다). `*_masked` 의 `null` 과 뜻이 다릅니다 — 저건 동의를 못 받았거나 파기.
+   */
+  nickname: string | null;
   created_at: string;
+};
+
+/**
+ * `GET /api/admin/app-users/list` 의 한 줄 (`AppUserRosterItem`).
+ *
+ * **`AppUser` 와 겹치지 않습니다.** 개인정보가 한 칸도 없고 `kakao_id` 도 없습니다 —
+ * 조건 없이 전 회원을 주는 목록이라, 아무것도 안 들고 있는 것이 이 화면이 열릴 수
+ * 있게 된 이유입니다 (2026-09-05 사람 결정 · 로드맵 A2c).
+ */
+type RosterUser = {
+  id: string;
+  nickname: string | null;
+  room_name: string | null;
+  status: AppUser["status"];
+  created_at: string;
+  pet_count: number;
+};
+
+type RosterPage = { users: RosterUser[]; next_cursor: string | null };
+
+/** 검색 갈래. `email` 은 이 앱키로는 영영 0건이지만 일부러 남겨 둡니다 (아래 안내). */
+type SearchMode = "nickname" | "email" | "kakao_id";
+
+/** 목록 한 쪽에 몇 명. 서버 기본값과 같습니다 (`services/app_user_admin.py`). */
+const PAGE = 50;
+
+/**
+ * 0건일 때의 문구. **갈래마다 다른 이유로 0건이라** 한 문장으로 못 씁니다 —
+ * 닉네임은 아직 발급 전일 수 있고, 이메일은 이 앱키로는 언제나 0건입니다.
+ */
+const PLACEHOLDER: Record<SearchMode, string> = {
+  nickname: "네옹집사",
+  email: "daengs@example.com",
+  kakao_id: "123456789",
+};
+
+const EMPTY_NOTICE: Record<SearchMode, string> = {
+  nickname:
+    "그 닉네임을 가진 회원이 없습니다. 이 칸보다 먼저 가입한 회원은 아직 닉네임이 없어 다음 로그인에 생깁니다.",
+  email:
+    "그 이메일로 가입한 회원이 없습니다 — 지금은 이메일로는 아무도 못 찾습니다 (아래 안내).",
+  kakao_id: "그 카카오 회원번호를 가진 회원이 없습니다.",
 };
 
 /**
@@ -94,14 +144,20 @@ function emptyReason(status: AppUser["status"]): string {
 }
 
 /**
- * 회원 조회 (콘솔 로드맵 A2 · #211).
+ * 회원 조회 (콘솔 로드맵 A2 · #211 · #212 · #257).
  *
- * **검색만 있고 목록이 없습니다.** 서버가 조건 없는 조회를 422 로 막습니다 — 이 API 는
- * `Perm.READ` 라 VIEWER 까지 통과하는데, 목록을 열면 로그인한 사람 누구나 전 회원을
- * 넘겨보게 됩니다 (`routers/app_user_admin.py` 의 `search`).
+ * **찾기와 훑기가 다른 문입니다.** 검색은 `GET /admin/app-users`(`Perm.READ`)이고,
+ * 조건 없는 목록은 `GET /admin/app-users/list`(`admin:manage`)입니다. 서버에서 경로가
+ * 갈린 것은 **FastAPI 의존성이 경로 단위**라 질의 인자로는 권한을 못 가르기 때문입니다.
  *
- * **원문 보기와 정지 버튼이 없습니다.** 짝 카드(#212)가 `pii:read` · `ops:write` 와
- * 감사 기록을 함께 붙입니다. 이 화면은 읽고 가려서 보여 주기만 합니다.
+ * **목록에는 개인정보가 한 칸도 없습니다** — 마스킹한 것조차 없습니다. 그것이 조건
+ * 없는 목록을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정 · 로드맵 A2c). 여기에
+ * `email_masked` 한 칸을 더하고 싶어지면 그 결정을 먼저 다시 여세요 — 화면은 멀쩡해
+ * 보이는데 "누가 전 회원의 개인정보를 넘겨본다" 가 그 순간 다시 성립합니다.
+ *
+ * **이 화면 안에서 권한이 셋으로 갈립니다.** 목록 `admin:manage` · 원문 `pii:read` ·
+ * 정지 `ops:write`. 화면에서 가리는 것은 UX 일 뿐이고 실제 차단은 백엔드가 같은
+ * 권한으로 합니다 (`lib/auth.ts`).
  */
 export default function AppUsersConsole() {
   // **버튼 둘의 권한이 다릅니다** — 원문은 `pii:read`, 정지는 `ops:write`.
@@ -110,8 +166,11 @@ export default function AppUsersConsole() {
   const { can } = useAuth();
   const canReveal = can("pii:read");
   const canWrite = can("ops:write");
+  const canBrowse = can("admin:manage");
 
-  const [mode, setMode] = useState<"email" | "kakao_id">("email");
+  // **기본은 닉네임입니다.** 이메일은 이 앱키로 영영 0건이라(아래 안내) 기본으로 두면
+  // 처음 쓰는 사람이 "검색이 고장났다" 를 먼저 만납니다.
+  const [mode, setMode] = useState<SearchMode>("nickname");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AppUser[] | null>(null);
   const [detail, setDetail] = useState<AppUserDetail | null>(null);
@@ -119,6 +178,59 @@ export default function AppUsersConsole() {
   const [busy, setBusy] = useState(false);
   /** 원문. `null` 이면 아직 안 열어 본 것입니다 — 열었는데 비어 있는 것과 다릅니다. */
   const [pii, setPii] = useState<RevealedPii | null>(null);
+
+  /** 훑는 목록. `null` 이면 아직 안 불러온 것이고, `[]` 는 회원이 없는 것입니다. */
+  const [roster, setRoster] = useState<RosterUser[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  // StrictMode 가 개발에서 effect 를 두 번 돌립니다 (`reports-console.tsx` 와 같은 장치).
+  const alive = useRef(true);
+
+  const loadRoster = useCallback((signal?: AbortSignal) => {
+    const params = new URLSearchParams({ limit: String(PAGE) });
+    return apiJson<RosterPage>(`/api/admin/app-users/list?${params}`, { signal })
+      .then((page) => {
+        if (!alive.current) return;
+        setRoster(page.users);
+        setCursor(page.next_cursor);
+        setRosterError(null);
+      })
+      .catch((e: unknown) => {
+        if (!alive.current || (e as Error)?.name === "AbortError") return;
+        setRosterError(e instanceof ApiError ? e.message : "회원 목록을 불러오지 못했습니다.");
+      });
+  }, []);
+
+  useEffect(() => {
+    // 목록을 못 보는 계정에서는 아예 부르지 않습니다 — 부르면 403 한 번이 콘솔에
+    // 남고, 화면에는 어차피 안 그립니다.
+    if (!canBrowse) return;
+    alive.current = true;
+    const controller = new AbortController();
+    void loadRoster(controller.signal);
+    return () => {
+      alive.current = false;
+      controller.abort();
+    };
+  }, [canBrowse, loadRoster]);
+
+  async function more() {
+    if (!cursor) return;
+    setBusy(true);
+    try {
+      const params = new URLSearchParams({ limit: String(PAGE), cursor });
+      const page = await apiJson<RosterPage>(`/api/admin/app-users/list?${params}`);
+      // **이어 붙입니다.** 키셋 커서라 읽는 동안 가입이 들어와도 겹치거나 빠지지
+      // 않습니다 (OFFSET 이면 어긋납니다).
+      setRoster((prev) => [...(prev ?? []), ...page.users]);
+      setCursor(page.next_cursor);
+    } catch (e) {
+      setRosterError(e instanceof ApiError ? e.message : "더 불러오지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
@@ -130,13 +242,10 @@ export default function AppUsersConsole() {
       const found = await apiJson<AppUser[]>(`/api/admin/app-users?${params}`);
       setResults(found);
       if (found.length === 0) {
-        setNotice(
-          mode === "email"
-            ? "그 이메일로 가입한 회원이 없습니다. 주소가 정확한지, 탈퇴한 회원은 아닌지 보세요."
-            : "그 카카오 회원번호를 가진 회원이 없습니다.",
-        );
-      } else {
-        // 결과가 하나뿐이라 바로 펼칩니다 — 한 번 더 누르게 할 이유가 없습니다.
+        setNotice(EMPTY_NOTICE[mode]);
+      } else if (found.length === 1) {
+        // 하나뿐이면 바로 펼칩니다 — 한 번 더 누르게 할 이유가 없습니다.
+        // **닉네임은 여럿이 나올 수 있어** 조건이 `=== 1` 입니다 (부분 일치라서).
         await open(found[0].id);
       }
     } catch (e) {
@@ -196,9 +305,10 @@ export default function AppUsersConsole() {
       <form onSubmit={(e) => void search(e)} className="flex flex-wrap gap-3">
         <select
           value={mode}
-          onChange={(e) => setMode(e.target.value as "email" | "kakao_id")}
+          onChange={(e) => setMode(e.target.value as SearchMode)}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-black"
         >
+          <option value="nickname">닉네임</option>
           <option value="email">이메일</option>
           <option value="kakao_id">카카오 회원번호</option>
         </select>
@@ -208,8 +318,8 @@ export default function AppUsersConsole() {
           required
           // 카카오 회원번호는 64비트 정수라 `number` 로 두면 큰 값에서 정밀도가 깨집니다.
           // 문자열로 받아 서버가 검증하게 둡니다.
-          inputMode={mode === "kakao_id" ? "numeric" : "email"}
-          placeholder={mode === "email" ? "daengs@example.com" : "123456789"}
+          inputMode={mode === "kakao_id" ? "numeric" : "text"}
+          placeholder={PLACEHOLDER[mode]}
           className="min-w-[18rem] flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-black"
         />
         <button
@@ -227,11 +337,18 @@ export default function AppUsersConsole() {
         부분 검색을 안 넣은 것이 아니라, 넣을 방법이 없습니다.
       */}
       <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-        이메일은 <strong className="font-medium">주소 전체가 정확히 맞아야</strong> 찾습니다.
-        개인정보라 암호화되어 있어 일부만으로는 찾을 수 없습니다 (대소문자와 앞뒤 공백은 괜찮습니다).
+        <strong className="font-medium">닉네임</strong>은 일부만 넣어도 찾습니다. 다만 이 칸이
+        생기기 전에 가입한 회원은 아직 닉네임이 없어{" "}
+        <strong className="font-medium">다음 로그인에 생깁니다</strong> — 그때까지는 목록에서
+        찾으세요.
         <br />
-        <strong className="font-medium">탈퇴한 회원은 이메일로 찾을 수 없습니다</strong> — 탈퇴할 때
-        개인정보가 파기되기 때문입니다. 카카오 회원번호로 찾으세요.
+        <strong className="font-medium">이메일로는 지금 아무도 못 찾습니다.</strong> 우리 카카오
+        앱키로는 이메일 동의를 받을 수 없어 저장된 값이 없습니다. 칸을 남겨 둔 것은 비즈 앱
+        심사를 통과하면 그날부터 도는 길이기 때문입니다 (그때도 주소 전체가 정확히 맞아야
+        합니다 — 암호화돼 있어 일부로는 못 찾습니다).
+        <br />
+        <strong className="font-medium">탈퇴한 회원은 카카오 회원번호로만</strong> 찾습니다 —
+        탈퇴할 때 개인정보가 파기되기 때문입니다.
       </p>
 
       {notice && (
@@ -249,11 +366,87 @@ export default function AppUsersConsole() {
                 onClick={() => void open(u.id)}
                 className="w-full py-3 text-left text-sm hover:underline"
               >
-                {u.email_masked ?? emptyReason(u.status)} · {u.name_masked ?? "-"}
+                {/* **닉네임이 앞입니다.** 뒤의 둘은 이 앱키로는 전부 비어 있어서,
+                    닉네임이 없으면 줄 전체가 "동의 안 받음 · -" 가 됩니다. */}
+                <span className="font-medium">{u.nickname ?? "이름 없음"}</span>
+                <span className="ml-2 text-zinc-500 dark:text-zinc-400">
+                  {u.email_masked ?? emptyReason(u.status)} · {u.name_masked ?? "-"}
+                </span>
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {/*
+        훑는 목록. **`admin:manage` 가 있을 때만 그립니다** — 없는 계정에게는 검색만
+        보입니다. 화면에서 가리는 것은 UX 일 뿐이고 실제 차단은 백엔드가 같은 권한으로
+        합니다 (`routers/app_user_admin.py` 의 `roster`).
+      */}
+      {canBrowse && (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-medium">회원 목록</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              가입 최근 순 · 개인정보는 상세에서 봅니다
+            </p>
+          </div>
+
+          {rosterError && (
+            <p className="rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              {rosterError}
+            </p>
+          )}
+
+          {roster && roster.length === 0 && (
+            <p className="py-6 text-sm text-zinc-500 dark:text-zinc-400">
+              가입한 회원이 아직 없습니다.
+            </p>
+          )}
+
+          {roster && roster.length > 0 && (
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              {roster.map((u) => (
+                <li key={u.id}>
+                  <button
+                    type="button"
+                    onClick={() => void open(u.id)}
+                    className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 py-3 text-left text-sm hover:underline"
+                  >
+                    <span className="font-medium">{u.nickname ?? "이름 없음"}</span>
+                    {u.room_name && (
+                      <span className="text-zinc-500 dark:text-zinc-400">
+                        {u.room_name}
+                      </span>
+                    )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${STATUS[u.status].className}`}
+                    >
+                      {STATUS[u.status].label}
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      반려견 {u.pet_count}
+                    </span>
+                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">
+                      {when(u.created_at)} 가입
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {cursor && (
+            <button
+              type="button"
+              onClick={() => void more()}
+              disabled={busy}
+              className="rounded-full border border-zinc-300 px-4 py-2 text-sm transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              더 보기
+            </button>
+          )}
+        </section>
       )}
 
       {detail && (

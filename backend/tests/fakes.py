@@ -510,6 +510,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
         return found[:limit]
 
+    async def app_list_page(session, *, limit, before=None):
+        # 진짜와 같이 **status 로 거르지 않습니다** — 정지·탈퇴도 목록에 나옵니다.
+        # 정렬도 같습니다: 가입 최근 순이고, 같은 시각이면 id 로 한 번 더 가릅니다.
+        rows = sorted(
+            store.app_users.values(),
+            key=lambda u: (u.created_at, u.id),
+            reverse=True,
+        )
+        if before is not None:
+            # 진짜 쿼리의 튜플 비교 `(created_at, id) < (at, id)` 자리입니다.
+            rows = [u for u in rows if (u.created_at, u.id) < before]
+        return rows[:limit]
+
     async def app_create(session, **kw):
         # email_hash 의 UNIQUE 를 흉내 냅니다. 진짜 DB 는 IntegrityError 를 내고,
         # 서비스는 그것을 EmailAlreadyRegisteredError 로 바꿉니다.
@@ -535,6 +548,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(app_user_repo, "create", app_create)
     monkeypatch.setattr(app_user_repo, "is_nickname_taken", app_is_nickname_taken)
     monkeypatch.setattr(app_user_repo, "search_by_nickname", app_search_by_nickname)
+    monkeypatch.setattr(app_user_repo, "list_page", app_list_page)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)
@@ -574,6 +588,16 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
+    async def pet_count_by_owners(session, app_user_ids):
+        # 진짜와 같이 **한 마리도 없는 주인은 키가 아예 없습니다** (GROUP BY 가 행을
+        # 안 만듭니다). 부르는 쪽이 .get(id, 0) 을 안 쓰면 여기서 걸립니다.
+        wanted = set(app_user_ids)
+        counts: dict = {}
+        for pet in store.pets:
+            if pet.app_user_id in wanted:
+                counts[pet.app_user_id] = counts.get(pet.app_user_id, 0) + 1
+        return counts
+
     def pet_add(session, pet):
         # 진짜 DB 는 `gen_random_uuid()` 로 id 를 채웁니다. 가짜가 그 역할을 합니다 —
         # 안 채우면 서비스가 flush 뒤에 쓰는 `pet.id` 가 None 입니다.
@@ -607,6 +631,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
+    monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)

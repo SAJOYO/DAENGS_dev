@@ -5,15 +5,17 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet
 
 __all__ = [
     "add",
+    "count_by_owners",
     "count_for_owner",
     "delete",
     "delete_all_for_owner",
@@ -90,6 +92,29 @@ async def count_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
     """마릿수. 상한 검사에 씁니다."""
     stmt = select(Pet.id).where(Pet.app_user_id == app_user_id)
     return len(list(await session.scalars(stmt)))
+
+
+async def count_by_owners(
+    session: AsyncSession, app_user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """여러 주인의 마릿수를 **한 번에.** 회원 목록 화면이 씁니다.
+
+    [count_for_owner] 를 한 명씩 부르면 한 쪽(50명)에 쿼리가 50번 나갑니다.
+
+    **한 마리도 없는 주인은 키가 아예 없습니다** — `GROUP BY` 가 행을 안 만듭니다.
+    부르는 쪽에서 `.get(id, 0)` 으로 읽으세요. 여기서 0 을 채워 돌려주지 않는 것은,
+    그러려면 이 함수가 "물어본 id 전부"를 알아야 해서 빈 목록과 없는 회원이 섞이기
+    때문입니다.
+    """
+    if not app_user_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 빈 쪽(회원이 0명)에서 실제로 옵니다.
+        return {}
+    stmt = (
+        select(Pet.app_user_id, func.count())
+        .where(Pet.app_user_id.in_(app_user_ids))
+        .group_by(Pet.app_user_id)
+    )
+    return {owner: count for owner, count in (await session.execute(stmt)).all()}
 
 
 def add(session: AsyncSession, pet: Pet) -> Pet:

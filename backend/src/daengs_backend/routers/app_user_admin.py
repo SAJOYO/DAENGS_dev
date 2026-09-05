@@ -13,16 +13,24 @@
 생깁니다 (`console/page.tsx` 의 카드 권한 주석). 원문을 여는 문은 짝 카드(#212)가
 `pii:read` 로 따로 냅니다.
 
-**조건 없는 목록이 없습니다.** `?nickname=` · `?email=` · `?kakao_id=` 중 하나가 반드시
-있어야 합니다 — 이유는 아래 `search` docstring. 그중 **오늘 실제로 도는 것은
-`?nickname=`** 입니다 (이 앱키로는 이메일 동의를 못 받아 `email_hash` 가 전부 NULL).
+**검색(`GET ""`)에는 조건이 반드시 있어야 합니다.** `?nickname=` · `?email=` ·
+`?kakao_id=` 중 하나입니다 — 이유는 아래 `search` docstring. 그중 **오늘 실제로 도는
+것은 `?nickname=`** 입니다 (이 앱키로는 이메일 동의를 못 받아 `email_hash` 가 전부 NULL).
 
-**권한이 셋으로 갈립니다** (#212 가 뒤의 둘을 더했습니다).
+조건 없이 훑는 길은 **`GET /list` 하나뿐이고 권한이 다릅니다** (#257 · A2c). 찾기와
+훑기를 같은 경로에 얹지 않은 것은 **FastAPI 의존성이 경로 단위**라 질의 인자로는
+권한을 못 가르기 때문입니다 — `reveal` 을 `?reveal=true` 로 안 둔 것과 같은 이유입니다.
 
-    GET  /admin/app-users            READ       가려진 값만
-    GET  /admin/app-users/{id}       READ       가려진 값만 + 반려견
-    GET  /admin/app-users/{id}/pii   PII_READ   **원문. 부를 때마다 감사 행이 남는다**
-    PATCH /admin/app-users/{id}      OPS_WRITE  정지 / 정지 해제
+**권한이 넷으로 갈립니다** (#212 가 셋째·넷째를, #257 이 `/list` 를 더했습니다).
+
+    GET  /admin/app-users            READ          가려진 값만 (조건 필수)
+    GET  /admin/app-users/list       ADMIN_MANAGE  **개인정보 없이** 전 회원 훑기
+    GET  /admin/app-users/{id}       READ          가려진 값만 + 반려견
+    GET  /admin/app-users/{id}/pii   PII_READ      **원문. 부를 때마다 감사 행이 남는다**
+    PATCH /admin/app-users/{id}      OPS_WRITE     정지 / 정지 해제
+
+⚠️ **`/list` 는 `/{app_user_id}` 보다 먼저 등록돼 있어야 합니다** — 세그먼트가 하나라
+순서를 탑니다. 자세한 이유는 그 함수의 docstring.
 
 원문 조회를 `?reveal=true` 같은 질의 인자로 두지 않은 이유는 **같은 경로가 어떤 때는
 기록을 남기고 어떤 때는 안 남게 되기 때문**입니다. 권한도 다르고(FastAPI 의존성은
@@ -43,6 +51,8 @@ from daengs_backend.schemas.app_user_admin import (
     AppUserDetailOut,
     AppUserOut,
     AppUserPiiOut,
+    AppUserRosterItem,
+    AppUserRosterPage,
     AppUserStatusPatch,
 )
 from daengs_backend.services import app_user_admin as service
@@ -111,6 +121,52 @@ async def search(
         session, email=email, kakao_id=kakao_id, nickname=nickname
     )
     return [_to_out(v) for v in views]
+
+
+@router.get("/list", response_model=AppUserRosterPage)
+async def roster(
+    _admin: Annotated[Principal, Depends(require(Perm.ADMIN_MANAGE))],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    cursor: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=service.MAX_LIMIT)] = service.DEFAULT_LIMIT,
+) -> AppUserRosterPage:
+    """가입 최근 순으로 **전 회원을 훑습니다.** 위 `search` 와 권한이 다릅니다.
+
+    `search` 는 `Perm.READ` 이고 여기는 `ADMIN_MANAGE` 입니다. 같은 경로에 질의
+    인자를 얹어 가르지 않은 이유는 `reveal` 과 같습니다 — **FastAPI 의존성은 경로
+    단위**라 인자로는 권한을 못 가릅니다 (파일 첫 docstring).
+
+    나가는 값에 **개인정보가 없습니다 — 마스킹한 것도 없습니다.** 그것이 조건 없는
+    목록을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정 · 로드맵 A2c). 여기에
+    `email_masked` 를 더하고 싶어지면 그 결정을 먼저 다시 여세요.
+
+    ⚠️ **이 라우트는 아래 `/{app_user_id}` 보다 먼저 등록돼 있어야 합니다.** 세그먼트가
+    하나뿐이라 순서가 뒤집히면 `list` 가 UUID 로 파싱되며 422 가 됩니다. `admin_account.py`
+    의 `/me/password` 는 세그먼트가 둘이라 순서를 안 타는데, 이쪽은 다릅니다.
+    """
+    try:
+        page = await service.list_roster(session, limit=limit, cursor=cursor)
+    except service.InvalidCursorError:
+        # 커서는 URL 에 실려 오므로 손으로 고친 값이 들어올 수 있습니다.
+        # 서버 잘못이 아니라 잘못된 요청이라 422 입니다 (500 이 아닙니다).
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "커서가 올바르지 않습니다."
+        ) from None
+
+    return AppUserRosterPage(
+        users=[
+            AppUserRosterItem(
+                id=e.user.id,
+                nickname=e.user.nickname,
+                room_name=e.user.room_name,
+                status=e.user.status,
+                created_at=e.user.created_at,
+                pet_count=e.pet_count,
+            )
+            for e in page.entries
+        ],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get("/{app_user_id}", response_model=AppUserDetailOut)

@@ -52,6 +52,8 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         projected.append(
             {
                 "id": entry["id"],
+                "revision": entry["revision"],
+                "pet_id": content.get("pet_id"),
                 "accepted": True,
                 "kind": content["kind"],
                 "behavior_code": content.get("behavior_code"),

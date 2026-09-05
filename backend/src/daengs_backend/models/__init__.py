@@ -129,3 +129,5 @@ __all__ = [
     "WalkPet",
     "WalkPointChunk",
 ]
+
+from daengs_backend.models.walk_storyboard import WalkStoryboard  # noqa: F401

@@ -59,9 +59,11 @@ def member(store: Store) -> FakeAppUser:
             nickname="네옹집사",
         )
     )
-    store.pets.append(
-        FakePet(app_user_id=user.id, name="네옹", breed="포메라니안")
-    )
+    pet = FakePet(app_user_id=user.id, name="네옹", breed="포메라니안")
+    store.pets.append(pet)
+    # 대표는 `app_users.primary_pet_id` 에 있습니다 (pets 쪽에 is_primary 가 없는
+    # 이유는 models/app_user.py). 목록이 이 값으로 이름을 붙입니다.
+    user.primary_pet_id = pet.id
     return user
 
 
@@ -206,31 +208,39 @@ class TestDetail:
             await service.get_detail(session, broken.id)  # type: ignore[arg-type]
 
 
+@pytest.fixture
+def app(store: Store) -> FastAPI:
+    """라우터만 얹은 최소 앱. **모듈 수준입니다** — HTTP 경계를 보는 클래스가 둘이라
+    (`TestHttpBoundary` · `TestRosterHttp`), 클래스 안에 두면 한쪽이 다른 쪽을 상속해야
+    하고 그러면 부모의 테스트가 통째로 다시 돕니다."""
+    test_app = FastAPI()
+    test_app.include_router(router_module.router)
+
+    async def _fake_session() -> FakeSession:
+        return FakeSession(store)
+
+    test_app.dependency_overrides[get_session] = _fake_session
+    return test_app
+
+
+@pytest.fixture
+def as_role(app: FastAPI, store: Store):
+    """role 하나를 가진 관리자로 부르는 클라이언트. 권한은 `core/deps.py` 의 진짜
+    `ROLE_PERMISSIONS` 를 지납니다 — 대역이 아닙니다."""
+
+    def _make(role: str) -> TestClient:
+        principal = Principal(admin_id=store.admin.id, role=role)
+
+        async def _fake_admin() -> Principal:
+            return principal
+
+        app.dependency_overrides[current_admin] = _fake_admin
+        return TestClient(app)
+
+    return _make
+
+
 class TestHttpBoundary:
-    @pytest.fixture
-    def app(self, store: Store) -> FastAPI:
-        test_app = FastAPI()
-        test_app.include_router(router_module.router)
-
-        async def _fake_session() -> FakeSession:
-            return FakeSession(store)
-
-        test_app.dependency_overrides[get_session] = _fake_session
-        return test_app
-
-    @pytest.fixture
-    def as_role(self, app: FastAPI, store: Store):
-        def _make(role: str) -> TestClient:
-            principal = Principal(admin_id=store.admin.id, role=role)
-
-            async def _fake_admin() -> Principal:
-                return principal
-
-            app.dependency_overrides[current_admin] = _fake_admin
-            return TestClient(app)
-
-        return _make
-
     def test_로그인한_관리자면_누구나_본다(self, as_role, member) -> None:
         """`Perm.READ` 라 VIEWER 까지 통과합니다. 나가는 값이 전부 가려져서입니다 —
         여기를 `pii:read` 로 잠그면 API 는 열려 있는데 화면만 안 보이는 계정이 생깁니다."""
@@ -366,3 +376,172 @@ class TestNicknameSearch:
     def test_백슬래시를_먼저_바꾼다(self) -> None:
         """나중에 하면 앞에서 넣은 탈출 문자까지 다시 탈출해 `%` 가 도로 살아납니다."""
         assert app_user_repo.escape_like(r"\%") == r"\\\%"
+
+
+class TestRoster:
+    """조건 없이 훑는 목록 (A2c · #257).
+
+    **여기서 지키려는 것 둘:**
+
+      ① 목록 줄에 개인정보가 **한 글자도** 없다 — 마스킹한 것조차 없다
+      ② 권한이 `ADMIN_MANAGE` 다 — 검색(`READ`)과 다르다
+
+    ①이 이 화면을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정). 마스킹 값을 한 칸
+    넣는 순간 "누가 전 회원의 개인정보를 넘겨본다" 가 다시 성립하는데, 화면은 멀쩡해
+    보이므로 눈으로는 안 걸립니다.
+    """
+
+    @pytest.fixture
+    def crowd(self, store: Store, member: FakeAppUser) -> list[FakeAppUser]:
+        """가입 시각이 다른 회원 셋 + `member`. 정렬과 페이지를 보려면 여럿이 필요합니다."""
+        from datetime import UTC, datetime
+
+        return [
+            store.add_app_user(
+                FakeAppUser(
+                    kakao_id=200000 + i,
+                    nickname=f"회원{i}",
+                    created_at=datetime(2026, 2, i + 1, tzinfo=UTC),
+                )
+            )
+            for i in range(3)
+        ]
+
+    async def test_조건_없이_전부_준다(self, session, store, crowd, member) -> None:
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        assert {e.user.id for e in page.entries} == {
+            member.id,
+            *(u.id for u in crowd),
+        }
+
+    async def test_가입_최근_순(self, session, store, crowd, member) -> None:
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        ats = [e.user.created_at for e in page.entries]
+        assert ats == sorted(ats, reverse=True)
+
+    async def test_정지도_탈퇴도_나온다(self, session, store, member) -> None:
+        """거르면 "찾는 사람이 목록에 없다" 가 생깁니다. 상세와 같은 규칙입니다."""
+        store.add_app_user(FakeAppUser(kakao_id=300001, status="suspended"))
+        store.add_app_user(FakeAppUser(kakao_id=300002, status="withdrawn"))
+
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        assert {e.user.status for e in page.entries} >= {
+            "active",
+            "suspended",
+            "withdrawn",
+        }
+
+    async def test_마릿수를_센다(self, session, store, member) -> None:
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+        counts = {e.user.id: e.pet_count for e in page.entries}
+
+        assert counts[member.id] == 1
+
+    async def test_대표_강아지_이름을_붙인다(self, session, store, member) -> None:
+        """닉네임이 아직 없는 회원이 많아서(다음 로그인에 발급) 이 값이 없으면 목록이
+        "이름 없음" 만 줄줄이 뜹니다 — 2026-09-05 개발 DB 실측이 그랬습니다."""
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+        names = {e.user.id: e.primary_pet_name for e in page.entries}
+
+        assert names[member.id] == "네옹"
+
+    async def test_대표가_없으면_None(self, session, store) -> None:
+        """반려견이 없거나 아직 대표를 안 정한 회원입니다. 마릿수 0 과 짝입니다."""
+        alone = store.add_app_user(FakeAppUser(kakao_id=400002, nickname="대표없음"))
+
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        assert {e.user.id: e.primary_pet_name for e in page.entries}[alone.id] is None
+
+    async def test_강아지가_없으면_0이다(self, session, store) -> None:
+        """`GROUP BY` 는 한 마리도 없는 주인의 행을 안 만듭니다 — 서비스가 0 을 채웁니다.
+        `.get(id, 0)` 을 `[id]` 로 바꾸면 여기서 KeyError 로 걸립니다."""
+        alone = store.add_app_user(FakeAppUser(kakao_id=400001, nickname="혼자"))
+
+        page = await service.list_roster(session)  # type: ignore[arg-type]
+
+        assert {e.user.id: e.pet_count for e in page.entries}[alone.id] == 0
+
+    async def test_커서로_이어서_읽으면_겹치지도_빠지지도_않는다(
+        self, session, store, crowd, member
+    ) -> None:
+        first = await service.list_roster(session, limit=2)  # type: ignore[arg-type]
+        assert first.next_cursor is not None
+
+        second = await service.list_roster(  # type: ignore[arg-type]
+            session, limit=2, cursor=first.next_cursor
+        )
+
+        seen = [e.user.id for e in first.entries] + [e.user.id for e in second.entries]
+        assert len(seen) == len(set(seen)) == 4
+
+    async def test_마지막_쪽은_커서가_없다(self, session, store, crowd, member) -> None:
+        """정확히 `limit` 개일 때 커서를 주면 화면이 빈 쪽을 한 번 더 부릅니다."""
+        page = await service.list_roster(session, limit=4)  # type: ignore[arg-type]
+
+        assert len(page.entries) == 4
+        assert page.next_cursor is None
+
+    async def test_망가진_커서는_InvalidCursorError(self, session, member) -> None:
+        with pytest.raises(service.InvalidCursorError):
+            await service.list_roster(session, cursor="not-base64!!")  # type: ignore[arg-type]
+
+
+class TestRosterHttp:
+    """목록의 HTTP 경계. 모듈 수준 `app`·`as_role` 픽스처를 씁니다."""
+
+    def test_ADMIN_만_본다(self, as_role, member) -> None:
+        """검색(`READ`)과 **다른 권한**입니다 — 훑기는 찾기와 다른 일이라서입니다.
+
+        지금은 발급된 계정이 전부 ADMIN 이라 이 잠금이 아무도 안 가립니다.
+        실제로 갈리는 것은 로드맵 §7 "역할 발급" 이 닫힌 뒤입니다.
+        """
+        assert as_role("ADMIN").get("/admin/app-users/list").status_code == 200
+        for role in ("OPERATOR", "CURATOR", "ANALYST", "VIEWER"):
+            res = as_role(role).get("/admin/app-users/list")
+            assert res.status_code == 403, role
+
+    def test_개인정보가_한_글자도_없다(self, as_role, member) -> None:
+        """마스킹한 값조차 없습니다. **이 목록이 열릴 수 있는 이유가 그것입니다.**"""
+        body = as_role("ADMIN").get("/admin/app-users/list").text
+
+        assert EMAIL not in body
+        assert PHONE not in body
+        assert NAME not in body
+        assert member.email_hash not in body
+        for leaked in (
+            "email_masked",
+            "phone_masked",
+            "name_masked",
+            "email_hash",
+            "kakao_id",
+        ):
+            assert leaked not in body
+
+    def test_사람이_알아볼_값은_나간다(self, as_role, member) -> None:
+        row = as_role("ADMIN").get("/admin/app-users/list").json()["users"][0]
+
+        assert row["nickname"] == "네옹집사"
+        assert row["status"] == "active"
+        assert row["pet_count"] == 1
+        # 강아지 이름은 개인정보가 아니고, 상세가 이미 `READ` 로 내보내는 값입니다.
+        assert row["primary_pet_name"] == "네옹"
+
+    def test_list_가_상세_경로에_안_먹힌다(self, as_role, member) -> None:
+        """`/list` 가 `/{app_user_id}` 보다 **먼저** 등록돼야 합니다.
+
+        순서가 뒤집히면 `list` 가 UUID 로 파싱되며 422 가 됩니다. 라우터 파일을
+        정리하다 순서가 바뀌는 것이 실제로 있을 법한 사고라 여기서 못 박습니다.
+        """
+        assert as_role("ADMIN").get("/admin/app-users/list").status_code == 200
+
+    def test_망가진_커서는_422(self, as_role, member) -> None:
+        """서버 잘못이 아니라 잘못된 요청입니다 — 500 이 아닙니다."""
+        res = as_role("ADMIN").get(
+            "/admin/app-users/list", params={"cursor": "not-base64!!"}
+        )
+
+        assert res.status_code == 422

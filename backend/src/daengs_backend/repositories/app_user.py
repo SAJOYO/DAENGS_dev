@@ -8,8 +8,9 @@ commit 은 하지 않습니다. 트랜잭션 경계는 services 가 잡습니다
 """
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import AppUser
@@ -22,6 +23,7 @@ __all__ = [
     "get_by_id",
     "get_by_kakao_id",
     "is_nickname_taken",
+    "list_page",
     "search_by_nickname",
 ]
 
@@ -118,6 +120,37 @@ async def search_by_nickname(
         .limit(limit)
     )
     return list(await session.scalars(stmt))
+
+
+async def list_page(
+    session: AsyncSession,
+    *,
+    limit: int,
+    before: tuple[datetime, uuid.UUID] | None = None,
+) -> list[AppUser]:
+    """가입 최근 순 한 쪽. **조건이 없습니다 — 전 회원이 대상입니다.**
+
+    위의 검색들과 쓰임이 다릅니다. 저기는 "메일 보낸 그 사람을 찾는 것"이고 여기는
+    "회원을 훑는 것"이라, 부르는 자리의 권한이 다릅니다 (`ADMIN_MANAGE` —
+    `routers/app_user_admin.py`). 그래서 [search_by_nickname] 에 조건을 비울 수 있는
+    인자를 더하지 않고 함수를 따로 뒀습니다.
+
+    **`status` 로 거르지 않습니다.** 정지·탈퇴한 회원도 관리 화면에서는 보여야 합니다
+    ([get_by_id] · `services/app_user_admin.py` 의 `get_detail` 과 같은 규칙).
+    거르면 "찾는 사람이 목록에 없다" 가 생깁니다.
+
+    **키셋입니다 — OFFSET 이 아닙니다.** 읽는 사이에 가입이 하나 들어오면 OFFSET 은
+    한 명을 건너뛰거나 두 번 보여 줍니다. `created_at` 은 같은 초에 둘이 가입하면
+    겹치므로 `id` 로 한 번 더 갈라, 두 값을 묶어 비교합니다 (튜플 비교라 인덱스가
+    그대로 듣습니다).
+    """
+    stmt = select(AppUser).order_by(AppUser.created_at.desc(), AppUser.id.desc())
+    if before is not None:
+        at, last_id = before
+        stmt = stmt.where(
+            tuple_(AppUser.created_at, AppUser.id) < tuple_(at, last_id)
+        )
+    return list(await session.scalars(stmt.limit(limit)))
 
 
 async def create(

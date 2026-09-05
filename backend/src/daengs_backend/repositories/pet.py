@@ -5,21 +5,24 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet
 
 __all__ = [
     "add",
+    "count_by_owners",
     "count_for_owner",
     "delete",
     "delete_all_for_owner",
     "get_owned",
     "list_for_owner",
     "list_for_owner_for_update",
+    "names_by_ids",
     "owned_ids",
 ]
 
@@ -90,6 +93,49 @@ async def count_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
     """마릿수. 상한 검사에 씁니다."""
     stmt = select(Pet.id).where(Pet.app_user_id == app_user_id)
     return len(list(await session.scalars(stmt)))
+
+
+async def count_by_owners(
+    session: AsyncSession, app_user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """여러 주인의 마릿수를 **한 번에.** 회원 목록 화면이 씁니다.
+
+    [count_for_owner] 를 한 명씩 부르면 한 쪽(50명)에 쿼리가 50번 나갑니다.
+
+    **한 마리도 없는 주인은 키가 아예 없습니다** — `GROUP BY` 가 행을 안 만듭니다.
+    부르는 쪽에서 `.get(id, 0)` 으로 읽으세요. 여기서 0 을 채워 돌려주지 않는 것은,
+    그러려면 이 함수가 "물어본 id 전부"를 알아야 해서 빈 목록과 없는 회원이 섞이기
+    때문입니다.
+    """
+    if not app_user_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 빈 쪽(회원이 0명)에서 실제로 옵니다.
+        return {}
+    stmt = (
+        select(Pet.app_user_id, func.count())
+        .where(Pet.app_user_id.in_(app_user_ids))
+        .group_by(Pet.app_user_id)
+    )
+    return {owner: count for owner, count in (await session.execute(stmt)).all()}
+
+
+async def names_by_ids(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """id → 이름. 회원 목록이 **대표 강아지 이름**을 붙이는 데 씁니다.
+
+    대표는 `app_users.primary_pet_id` 에 있으므로(pets 쪽에 `is_primary` 가 없는
+    이유는 `models/app_user.py`), 목록은 그 id 들을 모아 여기서 한 번에 이름으로
+    바꿉니다 — 회원마다 상세를 부르면 한 쪽에 쿼리가 50번 나갑니다.
+
+    **없는 id 는 키가 없습니다.** 실제로는 FK 가 `ON DELETE SET NULL` 이라 없는
+    강아지를 가리키는 `primary_pet_id` 자체가 없지만, 부르는 쪽은 `.get()` 으로
+    읽어 그 가정에 기대지 않습니다.
+    """
+    if not pet_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 대표가 아무도 없는 쪽에서 실제로 옵니다.
+        return {}
+    stmt = select(Pet.id, Pet.name).where(Pet.id.in_(pet_ids))
+    return {pet_id: name for pet_id, name in (await session.execute(stmt)).all()}
 
 
 def add(session: AsyncSession, pet: Pet) -> Pet:

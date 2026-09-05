@@ -104,7 +104,7 @@ def windows_checks():
             env = dict(os.environ, MIG_REF='fixture', MIG_FILE=f'{name}.sql', MIG_VERIFY=verify)
             result = subprocess.run(['cmd', '/d', '/c', str(script)], cwd=work, env=env,
                                     capture_output=True)
-            assert (result.returncode == 0) == success, (name, result.stdout, result.stderr)
+            assert (result.returncode == 0) == success, (name, verify, result.returncode, success, result.stdout, result.stderr, fetch)
             if success:
                 assert (stale / f'{name}.sql').read_bytes() == payload
                 if verify == 'true':

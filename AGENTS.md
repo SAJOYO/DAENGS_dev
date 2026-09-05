@@ -1,8 +1,10 @@
 # DAENGS
 
-이 파일은 Codex·Claude 등 에이전트가 함께 사용하는 **저장소 작업 규칙의 원본**입니다.
-루트 `CLAUDE.md`는 이 파일을 불러오는 진입점입니다. 공통 규칙을 두 파일에 복사하지 말고
-여기서 수정하세요. 사용자가 이번 작업에서 명시한 범위와 지시는 이 문서보다 우선합니다.
+이 파일은 **Codex가 읽을 저장소 작업 지침**입니다. 팀원들이 Claude에서 사용하는
+`CLAUDE.md`의 저장소 규칙을 바탕으로 작성하고, Codex의 타겟 테스트 기준을 추가했습니다.
+`CLAUDE.md`는 팀원용 지침으로 그대로 유지합니다. 이 파일을 만들거나 갱신하기 위해
+`CLAUDE.md`를 축약하거나 참조 파일로 바꾸지 마세요. 저장소 규칙을 갱신할 때는 관련
+`CLAUDE.md` 내용도 확인해 차이를 검토합니다. 사용자의 명시적 지시는 이 문서보다 우선합니다.
 
 하위 경로를 수정할 때는 해당 경로의 지침도 읽습니다. `frontend/AGENTS.md`는 Next.js가
 관리하며, `backend/src/daengs_gait/CLAUDE.md`와 `backend/src/daengs_screening/CLAUDE.md`에는

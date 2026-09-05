@@ -43,3 +43,21 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 ⚠️ 이 워크플로는 **작업 트리를 안 건드립니다.** `backend/src` 가 컨테이너에 bind mount
 돼 있어서 브랜치를 checkout 하면 그 순간 backend 가 그 코드를 로드합니다. 그래서
 `git show <ref>:<파일>` 로 SQL 만 꺼내 psql 에 흘려보냅니다.
+
+
+## 검증 성공의 의미
+
+`verify=true`(기본값)이면 같은 ref의 `verify_<파일>`이 없거나 비어 있을 때
+**DB 기동·백업·적용 전에 실패**한다. `verify=false`는 검증 SQL이 없는 기존 파일을
+명시적으로 적용할 때만 사용한다. SQL은 cmd 리다이렉션으로 바이트를 보존하며,
+Apply/Verify 모두 `psql -X -v ON_ERROR_STOP=1`의 오류를 작업 실패로 전달한다.
+
+새 산책 검증 SQL은 테이블·컬럼 형식/NULL 허용·PK/FK/UNIQUE/CHECK와 관련 인덱스를
+카탈로그에서 검사하고 불일치 시 예외를 낸다. 이는 스키마 검증이며 데이터나 실제
+앱 연동을 검증한 것은 아니다. 기존 출력 전용 verify는 녹색이어도 출력 내용을
+사람이 확인해야 한다. 파일 존재만으로 자동 스키마 판정을 보장하지 않는다.
+
+산책 두 파일은 `2026-09-05_walk_entries.sql`, `2026-09-05_walk_storyboards.sql`로
+이름을 통일했다. SQL 내용은 그대로이며 DB 적용 이력 테이블을 도입하지 않는다.
+이미 적용된 DB를 파일명 변경 때문에 되돌릴 필요는 없고, 적용 여부는 검증 SQL로 확인한다.
+같은 날짜 안에서도 FK 등 실제 의존성을 확인하고, 스키마 적용·검증 후 코드를 배포한다.

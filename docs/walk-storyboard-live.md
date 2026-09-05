@@ -51,7 +51,7 @@ app은 별도 Room `walk_scene_analysis`에 결과를 저장한다. 사용자 �
 
 ## 적용 및 검증
 
-기존 DB에는 **`db/migrations/20260905_walk_storyboards.sql`을 먼저 적용**해야 한다.
+기존 DB에는 **`db/migrations/2026-09-05_walk_storyboards.sql`을 먼저 적용**해야 한다.
 새 볼륨은 `db/init/20_walk_storyboards.sql`을 사용한다. 별도 geo 프로세스나 새 비밀키는
 필요 없고 기존 `DAENGS_PLACE_SEARCH_BASE_URL` 설정을 사용한다. app은 Room 9→10이다.
 이번 작업에서 운영 DB migration이나 배포는 실행하지 않았다.
@@ -67,3 +67,4 @@ DB 검증은 Docker 없이 별도 로컬 PostgreSQL에서 수행했다. 테스�
 분석 중 정정·더 최신 계산 게시·늦은 응답, 삭제 후 재분석, 회원 삭제 CASCADE를 확인한다.
 Place 응답은 이 테스트에서 통제한 응답을 사용한다. 운영 인덱스 내용과 실기기 동작은
 배포 후 확인이 필요하다. AI 일기 생성은 이 단계에 포함하지 않는다.
+

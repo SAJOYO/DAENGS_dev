@@ -51,6 +51,7 @@ DELETE는 query에 `expected_revision`과 `mutation_id`를 넣는다. payload를
 
 ## DB 반영과 검증
 
-빈 DB: `db/init/19_walk_entries.sql`. 기존 DB: `db/migrations/20260905_walk_entries.sql`을 운영자가 해당 DB에 적용해야 한다. 새 테이블을 만든 뒤 서버 코드를 배포한다. 이 PR은 운영 DB 적용이나 배포를 수행하지 않았다.
+빈 DB: `db/init/19_walk_entries.sql`. 기존 DB: `db/migrations/2026-09-05_walk_entries.sql`을 운영자가 해당 DB에 적용해야 한다. 새 테이블을 만든 뒤 서버 코드를 배포한다. 이 PR은 운영 DB 적용이나 배포를 수행하지 않았다.
 
 `test_walk_entries.py`는 재전송·삭제·귀속·프로필 집계를, `test_walk_entry_http.py`는 실제 라우터/서비스/응답 직렬화를 fake 저장소로 검증한다. 실제 PostgreSQL migration/동시 요청 검증을 대신하지 않는다.
+

@@ -38,8 +38,8 @@ async def database():
     for file in (
         "db/init/06_walks.sql",
         "db/init/19_walk_entries.sql",
-        "db/migrations/20260905_walk_storyboards.sql",
-        "db/migrations/20260905_walk_storyboards.sql",
+        "db/migrations/2026-09-05_walk_storyboards.sql",
+        "db/migrations/2026-09-05_walk_storyboards.sql",
     ):
         await conn.execute((REPO / file).read_text(encoding="utf-8"))
     engine = create_async_engine(
@@ -204,3 +204,4 @@ async def test_history_query_only_uses_three_prior_single_pet_owned_walks(databa
     async with factory() as db:
         walk = await get_owned_for_update(db, owner, current)
         assert [w.id for w in await reference_walks(db, walk)] == wanted
+

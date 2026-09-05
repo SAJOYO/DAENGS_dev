@@ -35,8 +35,12 @@ exporters:
     project: ${env:GOOGLE_CLOUD_PROJECT}
     # ADC 를 씁니다 — 서비스 계정 키 파일을 물렸으면 GOOGLE_APPLICATION_CREDENTIALS,
     # GCP VM 위면 메타데이터 서버. 둘 다 이 컨테이너의 환경에서 옵니다.
-    log:
-      default_log_name: daengs-otel
+    #
+    # `trace: {}` 는 기본값을 그대로 쓴다는 뜻입니다(엔드포인트 cloudtrace.googleapis.com).
+    # 비워 두는 것과 같지만, **이 exporter 가 트레이스만 다룬다는 것을 파일에 남깁니다** —
+    # 여기에 `log:`/`metric:` 을 적어도 파이프라인에 없으면 그냥 죽은 설정이고,
+    # 죽은 설정은 나중에 "로그도 가는 줄" 알게 만듭니다.
+    trace: {}
 
 service:
   # collector 자신의 로그. 기본 info 면 스팬마다 안 찍고 시작·오류만 찍습니다.

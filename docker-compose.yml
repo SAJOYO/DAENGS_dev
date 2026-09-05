@@ -238,7 +238,7 @@ services:
   # 앱이 Cloud Trace 로 직접 안 쏘는 이유는 `otel/collector.yaml` 머리말에 있습니다
   # (OAuth 토큰이 만료되는데 OTLP 헤더는 고정이라 조용히 멈춥니다).
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.140.0
+    image: otel/opentelemetry-collector-contrib:0.160.0
     container_name: daengs-otel-collector
     restart: unless-stopped
     profiles: ["tracing"]

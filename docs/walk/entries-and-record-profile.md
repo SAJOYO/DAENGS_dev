@@ -1,6 +1,6 @@
 # 산책 기록과 산책 기록 프로필 v0
 
-2026-09-05 구현. 앱 연결 PR: [DAENGS_APP#141](https://github.com/SAJOYO/DAENGS_APP/pull/141). 서버 PR: [#251](https://github.com/SAJOYO/DAENGS_dev/pull/251).
+2026-09-05 구현. 앱 연결 PR: [DAENGS_APP#144](https://github.com/SAJOYO/DAENGS_APP/pull/144). 서버 PR: [#251](https://github.com/SAJOYO/DAENGS_dev/pull/251).
 
 ## 기록 계약
 

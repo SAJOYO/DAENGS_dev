@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..core import config, tokenize, transport
+from ..core import config, region, tokenize, transport
 from . import embed, load
 
 VERSION = 2          # 1 = dense 단독 / 2 = 하이브리드 (RAG-035)
@@ -479,6 +479,21 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
 
     own = conn is None
     conn = conn or load.connect()
+
+    # **지역도 인자가 아니라 질의에서 읽는다** (RAG-063) — `transport` 와 같은 이유다.
+    # 인자로 빼면 CLI·9단계·FastAPI 가 각자 켜고 끄게 되고 검문소③이 본 것과 서빙이 갈린다.
+    #
+    # ⚠ **`org` 이 없는 문서는 남긴다.** "부산 동래구에서 목줄 안 하면 과태료?" 의 답은 조례가
+    # 아니라 동물보호법에 있고 법령에는 `org` 이 없다. 빼면 고치려던 것보다 큰 것이 사라진다.
+    # 실제로 걸러지는 것은 **다른 지자체의 조례·보조금**뿐이고, 그것이 S3 의 top-8 을 채우고
+    # 있던 바로 그 문서들이다 (RAG-033 ⑥).
+    if kept := region.orgs(query.text, known_orgs(conn)):
+        filters.append(
+            "AND (metadata->>'org' IS NULL OR metadata->>'org' = ANY(%(orgs)s))")
+        lex_filters.append(
+            "AND (d.metadata->>'org' IS NULL OR d.metadata->>'org' = ANY(%(orgs)s))")
+        params["orgs"] = list(kept)
+
     try:
         with conn.cursor() as cur:
             cur.execute(_SQL.format(filters="\n      ".join(filters),
@@ -499,6 +514,44 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     finally:
         if own:
             conn.close()
+
+
+# 코퍼스에 실재하는 `org` 값. **표를 손으로 적지 않는다** (RAG-042 ③) — 지자체가 늘면
+# 적재만으로 따라온다. 프로세스 수명 동안 캐시한다: 한 랩이 질의 33개를 도는데 같은
+# `SELECT DISTINCT` 를 33번 할 이유가 없고, 코퍼스는 프로세스가 도는 중에 안 바뀐다.
+_ORGS_CACHE: tuple[str, ...] | None = None
+
+
+def known_orgs(conn=None) -> tuple[str, ...]:
+    """`documents.metadata->>'org'` 의 고유값 전부. 적재 전이면 빈 튜플이다.
+
+    ⚠ **빈 결과는 캐시하지 않는다.** 캐시하면 적재 전에 한 번 부른 프로세스가 그 뒤로 영영
+    지역 필터를 안 켠다 — 그런데 **검색은 계속 되므로 아무 예외도 안 난다.** 이 파일이
+    처음부터 경계하는 "조용히 틀리는" 모양이라, 빈 값일 때만 매번 다시 묻는다(그 비용은
+    코퍼스가 없을 때만 든다).
+    """
+    global _ORGS_CACHE
+    if _ORGS_CACHE:
+        return _ORGS_CACHE
+    own = conn is None
+    conn = conn or load.connect()
+    try:
+        with conn.cursor() as cur:
+            # 파라미터를 빈 dict 로 넘긴다 — psycopg 도 받고, SQL 을 받아 적는 테스트 가짜
+            # 커서도 `execute(sql, params)` 두 인자를 기대한다.
+            cur.execute("SELECT DISTINCT metadata->>'org' FROM documents"
+                        " WHERE metadata->>'org' IS NOT NULL", {})
+            _ORGS_CACHE = tuple(sorted(r[0] for r in cur.fetchall() if r[0]))
+    finally:
+        if own:
+            conn.close()
+    return _ORGS_CACHE
+
+
+def forget_orgs() -> None:
+    """캐시를 버린다. 적재 직후·테스트에서 쓴다."""
+    global _ORGS_CACHE
+    _ORGS_CACHE = None
 
 
 def hand_questions() -> list[tuple[str, str, set[str], set[str]]]:

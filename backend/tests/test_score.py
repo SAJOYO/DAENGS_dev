@@ -139,7 +139,9 @@ def test_score_rows_matches_dump_read() -> None:
         _row("틀린 문서의 같은 조 번호 [1]", [_dump_hit("z-wrong#제6조", "-")], cited=["제6조"]),
     ]
     s = score.score_rows(rows)
-    assert s == {"n": 3, "cited": 2, "grounded": 1}
+    # `scored`·`boundary` 는 RAG-062 가 더한 칸이다. `ckinds` 없이 부르면 경계를 가릴 길이
+    # 없으므로 **아무것도 빼지 않는다** — 그래서 `scored == n` 이고 `boundary == 0` 이다.
+    assert s == {"n": 3, "scored": 3, "boundary": 0, "cited": 2, "grounded": 1}
 
 
 def test_six_laps_retroactive_summary_matches_measured_values() -> None:
@@ -336,8 +338,11 @@ def test_question_kind_separates_no_label_from_label_off_corpus() -> None:
 
 
 def test_slice_rows_sums_back_to_the_totals() -> None:
-    """**모든 칸을 더하면 `score_rows` 와 정확히 같다.** 이 카드는 지표를 *분해*하는 것이지
+    """**모든 칸을 더하면 `score_rows` 와 정확히 같다.** 이 표는 지표를 *분해*하는 것이지
     새로 *계산*하는 것이 아니라서, 총계가 한 칸이라도 움직이면 그것은 버그다.
+
+    ⚠ 이것은 **`ckinds` 없이 부른 총계**와의 약속이다. 경계 문항을 빼는 총계와의 약속은
+    아래 `test_slice_rows_sums_back_to_the_scored_total` 이 따로 고정한다 (RAG-062).
     """
     rows = [
         _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
@@ -354,6 +359,71 @@ def test_slice_rows_sums_back_to_the_totals() -> None:
         assert sum(cell[key] for cell in sliced.values()) == total[key]
     assert sliced["law"] == {"n": 2, "cited": 2, "grounded": 1}
     assert sliced["official"] == {"n": 1, "cited": 0, "grounded": 1}
+
+
+def test_slice_rows_sums_back_to_the_scored_total() -> None:
+    """**RAG-062 로 바뀐 불변식** — `(must 없음)` 칸을 뺀 나머지의 합이 총계와 같다.
+
+    예전 불변식(*"모든 칸의 합 == 총계"*)은 `score_rows` 가 경계 문항을 빼면서 더는 참이
+    아니다. **경계 칸을 표에서 지워서 옛 불변식을 지키는 길도 있었지만 고르지 않았다** —
+    지우면 이 표를 더해도 총계가 안 나오는 이유가 사라져, 분모가 왜 줄었는지를 다음 사람이
+    못 읽는다. 그래서 **칸은 남기고 불변식을 다시 썼다.**
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("수의사에게 가세요", [_dump_hit("law-a#제1조", "-")], cited=["제10조"]),
+    ]
+    for row, qid in zip(rows, ["A", "경계"]):
+        row["id"] = qid
+    ckinds = {"A": score.CITABLE, "경계": score.NO_MUST}
+
+    sliced = score.slice_rows(rows, {"A": "law", "경계": score.NO_MUST})
+    total = score.score_rows(rows, ckinds)
+
+    # 경계 문항은 총계에서 빠지고, 뺀 수는 버려지지 않는다.
+    assert total["n"] == 2 and total["scored"] == 1 and total["boundary"] == 1
+    # 거절문이 "제10조" 를 물고 있어도 `cited` 로 세지 않는다 — lap22 `B6` 이 그 모양이었다.
+    assert total["cited"] == 1
+    for key in ("cited", "grounded"):
+        assert sum(cell[key] for kind, cell in sliced.items()
+                   if kind != score.NO_MUST) == total[key]
+    assert sum(cell["n"] for kind, cell in sliced.items()
+               if kind != score.NO_MUST) == total["scored"]
+
+
+def test_score_rows_without_ckinds_reproduces_the_old_numbers() -> None:
+    """`ckinds` 없이 부르면 **예전 그대로**다.
+
+    소급 대조표가 "옛 표기 19/33 = 새 표기 17/28" 을 말하려면, 옛 수를 그 자리에서 다시
+    낼 수 있어야 한다. 그것이 이 인자가 선택인 이유다.
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("수의사에게 가세요", [_dump_hit("law-a#제1조", "-")], cited=["제10조"]),
+    ]
+    for row, qid in zip(rows, ["A", "경계"]):
+        row["id"] = qid
+
+    old = score.score_rows(rows)
+    assert old["n"] == 2 and old["cited"] == 2 and old["boundary"] == 0
+    assert old["scored"] == old["n"]
+
+
+def test_citable_kind_reads_the_article_from_the_must_anchor() -> None:
+    """축은 **골든셋만으로** 정해진다 — 코퍼스도 DB 도 안 본다 (RAG-062).
+
+    `question_kind` 는 청크 행의 `trust_level` 이 있어야 하지만 이쪽은 `must` 라벨의 앵커만
+    읽는다. 그래서 `score_rows` 의 "랩 파일만 있으면 돈다"는 약속이 안 깨진다.
+    """
+    assert score.citable_kind([["law-drf-api-animal-protection-act#제101조③"]]) == score.CITABLE
+    assert score.citable_kind([["srt-terms-pet#h2-0"]]) == score.UNCITABLE
+    assert score.citable_kind([]) == score.NO_MUST
+    # 별표는 조 번호와 같은 자리에서 같은 일을 한다.
+    assert score.citable_kind([["law-drf-api-animal-protection-decree#별표 4-2-라"]]) == score.CITABLE
+    # OR 그룹 중 하나만 조 번호를 가져도 인용이 성립할 길이 있다 — 골든셋 S5 가 그 모양이다.
+    assert score.citable_kind(
+        [["ordinance-search-2253349#제4조", "benefit24-services-374000000596#지원내용"]]
+    ) == score.CITABLE
 
 
 def test_slice_rows_keeps_questions_the_goldenset_dropped() -> None:

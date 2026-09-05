@@ -696,17 +696,48 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         print("data/processed/answers 에 랩이 없다 — `rag generate --questions --lap <이름>` 로 먼저 만들 것")
         return 1
 
-    print(f"{'랩':6} {'문항':>4}   {'현행(cited)':>12}   {'근거인용(grounded, RAG-029)':>28}")
-    print("-" * 60)
+    # 경계 문항을 총계에서 빼려면 **골든셋만** 있으면 된다 (RAG-062) — `must` 가 있나 없나가
+    # 판정의 전부라서다. 청크(`chunks/`)를 요구하는 종류별 슬라이스와 달리, 골든셋은 패키지에
+    # 같이 실려 있으므로 "랩 파일만 있으면 돈다"는 이 표의 약속이 안 깨진다. 그래도 못 읽는
+    # 경우가 있으면(옛 체크아웃 등) **표를 막지 않고 옛 셈으로 떨어진다.**
+    try:
+        gs = goldenset.load()
+        ckinds = scorer.citable_kinds({i.id: i.must for i in gs.items})
+    except Exception as exc:  # noqa: BLE001 - 표를 막는 것보다 옛 셈으로라도 내는 쪽이 낫다
+        ckinds = None
+        print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 옛 셈(경계 포함)으로 낸다\n")
+
+    print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
+          f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
+    print("-" * 108)
     laps = []
     for path in paths:
         header, rows = io.read_answers(path)
-        s = scorer.score_rows(rows)
-        n = s["n"]
+        s = scorer.score_rows(rows, ckinds)
+        n, k = s["n"], s["scored"]
         if not n:
             continue
         laps.append((path.stem, rows))
-        print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
+        old = scorer.score_rows(rows)  # 소급 대조 — 옛 기록이 인용하는 수를 그대로 다시 낸다
+        cells = []
+        for kind in (scorer.CITABLE, scorer.UNCITABLE):
+            if f"{kind}_n" not in s:
+                cells.append(f"{'—':>14}")
+                continue
+            cells.append(f"{s[f'{kind}_cited']}/{s[f'{kind}_grounded']}·{s[f'{kind}_n']:<2}".rjust(14))
+        print(f"{path.stem:6} {n:>4} {s['boundary']:>4} {k:>4}   {s['cited']:>5}/{k:<3}"
+              f"   {s['grounded']:>5}/{k:<3}   {cells[0]}   {cells[1]}"
+              f"   {old['cited']:>4}·{old['grounded']}/{n:<4}")
+
+    if ckinds is not None:
+        print("\n  **경계 문항(`expect: abstain`·`refuse`)은 `cited`/`grounded` 에서 뺐다** (RAG-062) —"
+              " `must` 가 없어 잴 근거가 없다.")
+        print("  거절을 옳게 한 답이 거절문에 문 조 번호로 `cited` 에 잡히고, 놓친 기권이 성공으로 세지던 자리다.")
+        print("  `옛 표기` 는 그 둘을 포함한 예전 수다 — RAG-029 이후 기록들이 인용하는 값이 이 열에 있다.")
+        print("  칸 하나가 `cited/grounded·문항수` 다. **조 번호 축은 골든셋 `must` 앵커로 정한다** —"
+              " 코퍼스를 안 보므로 랩마다 흔들리지 않는다.")
+        print("  두 축의 문항수를 더한 것이 `채점` 보다 작으면, 그 차이는 **골든셋에서 빠진 옛 문항**이다"
+              " (`lap7-age` 처럼). 총계에서는 빼지 않는다 — 뺄지 모르는 것과 빼야 하는 것은 다르다.")
 
     _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
     _print_expect_table(laps)

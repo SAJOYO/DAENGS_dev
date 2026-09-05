@@ -1,6 +1,6 @@
--- verify_2026-09-05_documents_org.sql
+-- verify_2026-09-05_documents_org_backfill.sql
 -- 적용 후 눈으로 보는 질의 모음. **고치는 것은 없다.**
--- 짝: 20260905_documents_org_backfill.sql (RAG-063 / #262)
+-- 짝: 2026-09-05_documents_org_backfill.sql (RAG-063 / #262)
 
 -- 1) 몇 청크가 채워졌나. 2026-09-05 집 서버 기준 **2,592** 다
 --    (문서 245개 = 조례 208 + 보조금24 37 이 청크로 펼쳐진 수).

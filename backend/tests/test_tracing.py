@@ -298,6 +298,175 @@ class TestReportFeedback:
         await tracing.record_report_feedback(request_id=str(uuid.uuid4()))
 
 
+class TestEndToEndMasking:
+    """**실제로 나가는 바이트**에 마스킹이 걸리는가.
+
+    `TestScrub` 는 함수가 맞게 지운다는 것만 본다. 그 함수가 진짜 전송 경로에
+    걸려 있는지는 별개의 사실이고, 안 걸려 있으면 그게 곧 유출이다. 여기서는
+    실제 `Client` 를 `configure_tracing()` 이 만드는 그대로 세우고, 진짜 그래프를
+    돌리고, `_create_run`(네트워크 직전 · `_run_transform` 마스킹 직후)에서
+    payload 를 가로채 확인한다.
+
+    `create_run` → `_run_transform`(마스킹) → `_create_run` 이 langsmith 의 순서라,
+    이 지점이 "이 프로세스를 떠나는 것" 의 정확한 경계다.
+    """
+
+    @staticmethod
+    def _enable(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> list[dict]:
+        """트레이싱을 실제로 켜고, 마스킹을 통과한 run payload 를 모으는 리스트를 준다.
+
+        **가로채는 자리가 마스킹 함수의 반환값인 것이 중요하다.** 전송 경로는 하나가
+        아니다 — run 생성은 `_run_transform` 을 지나지만 종료(outputs)는 `update_run` 이
+        자기 자리에서 따로 마스킹한다. 게다가 기본 설정(`auto_batch_tracing=True`)의
+        실제 전송은 백그라운드 스레드의 multipart 배치라, 전송 지점을 잡으면 경로가
+        바뀔 때마다 테스트가 헛돈다. `_hide_run_*` 셋은 **마스킹 그 자체**라 무엇이
+        나가든 반드시 하나를 지나간다.
+
+        `Client` 가 `__slots__` 이라 인스턴스에 patch 가 안 걸린다. 클래스에 건다.
+        """
+        from langsmith import run_trees
+        from langsmith import utils as ls_utils
+        from langsmith.client import Client
+
+        monkeypatch.setenv("LANGSMITH_TRACING", "true")
+        monkeypatch.setenv("LANGSMITH_API_KEY", "lsv2_fake_for_tests")
+        monkeypatch.setenv("LANGSMITH_ENDPOINT", "https://example.invalid")
+        ls_utils.get_env_var.cache_clear()
+
+        sent: list[dict] = []
+
+        def _wrap(method_name: str) -> None:
+            real = getattr(Client, method_name)
+
+            def capturing(self, *args, **kwargs):
+                masked = real(self, *args, **kwargs)
+                sent.append(masked)
+                return masked
+
+            monkeypatch.setattr(Client, method_name, capturing)
+
+        for name in ("_run_transform", "_hide_run_inputs", "_hide_run_outputs",
+                     "_hide_run_metadata"):
+            _wrap(name)
+
+        # **네트워크를 통째로 막는다.** `request_with_retries` 가 이 클라이언트의 유일한
+        # HTTP 통로다. 전송 메서드를 하나씩 막으면 배치·압축 경로가 갈려서 새는데,
+        # 실제로 백그라운드 스레드가 그리로 빠져나가는 것을 확인했다. 단위 테스트가
+        # 밖으로 나가면 CI 에서 DNS 타임아웃만큼 느려지고 로그도 덮인다.
+        #
+        # 이 테스트가 보는 것은 "무엇이 나갈 뻔했나" 이지 전송이 아니다.
+        def _no_network(self, *args, **kwargs):
+            raise AssertionError("이 테스트는 네트워크로 나가지 않는다")
+
+        monkeypatch.setattr(Client, "request_with_retries", _no_network)
+        monkeypatch.setattr(Client, "_multipart_ingest_ops", lambda self, *a, **kw: None)
+        monkeypatch.setattr(Client, "_send_multipart_req", lambda self, *a, **kw: None)
+        monkeypatch.setattr(Client, "_send_compressed_multipart_req",
+                            lambda self, *a, **kw: None)
+        monkeypatch.setattr(Client, "_create_run", lambda self, *a, **kw: None)
+
+        # 전역 캐시를 비워야 `configure_tracing()` 이 자기 kwargs 로 클라이언트를 만든다.
+        monkeypatch.setattr(run_trees, "_CLIENT", None, raising=False)
+        assert configure_tracing() is True
+
+        # **테스트가 끝나기 전에 큐를 닫는다.** 이 클라이언트는 백그라운드 스레드로
+        # 배치를 보내는데, 그 플러시는 monkeypatch 가 **풀린 뒤**(세션 종료) 돈다 —
+        # 그때는 위의 네트워크 차단이 이미 사라져 진짜로 밖으로 나간다. 차단이 살아
+        # 있는 동안 여기서 닫아 두면 나중에 보낼 것이 남지 않는다.
+        #
+        # `addfinalizer` 는 LIFO 라 monkeypatch 의 되돌리기보다 **먼저** 돈다.
+        client = run_trees.get_cached_client()
+        request.addfinalizer(lambda: client.cleanup(timeout=5))
+        return sent
+
+    @pytest.mark.asyncio
+    async def test_실제_그래프를_돌리면_신원과_좌표만_지워져_나간다(
+        self, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    ) -> None:
+        from langsmith import utils as ls_utils
+
+        from daengs_backend.orchestration.contracts import (
+            CapabilityName,
+            CapabilityResult,
+            CapabilityStatus,
+            PrincipalContext,
+            RoutePlan,
+        )
+        from daengs_backend.orchestration.graph import OrchestrationEngine
+
+        sent = self._enable(monkeypatch, request)
+        try:
+            class FakeTrainingAdapter:
+                capability = CapabilityName.TRAINING
+
+                async def run(self, request, *, request_id: str) -> CapabilityResult:
+                    return CapabilityResult(
+                        capability=self.capability,
+                        status=CapabilityStatus.OK,
+                        data={"answer": "짖음 교육 방법입니다"},
+                        elapsed_ms=1,
+                    )
+
+            query = "우리 개가 산책 중에 짖어요"
+            subject = "8f14e45f-ceea-467a-9f0e-2b8e1a0d3c44"
+            engine = OrchestrationEngine({CapabilityName.TRAINING: FakeTrainingAdapter()})
+            await engine.run(
+                route_plan=RoutePlan.model_validate(
+                    {
+                        "requests": [{"capability": "training",
+                                      "payload": {"question": query}, "timeout_ms": None}],
+                        "handoffs": [], "clarify": None, "router": "llm",
+                    }
+                ),
+                query=query,
+                principal=PrincipalContext(subject=subject, kind="APP_USER"),
+                request_id=str(uuid.uuid4()),
+                context={"location": {"lat": 37.566826, "lon": 126.978656}},
+            )
+
+            assert sent, "트레이싱을 켰는데 나간 run 이 하나도 없다"
+            blob = repr(sent)
+
+            # 1) 지워져야 하는 것 — **문자열 전체에서** 찾는다. 어느 한 필드만 보면
+            #    다른 노드의 입력으로 같은 값이 새는 것을 놓친다.
+            assert subject not in blob, "회원 식별자가 그대로 나갔다"
+            assert "37.566826" not in blob, "정밀 좌표가 그대로 나갔다"
+            assert "126.978656" not in blob
+
+            # 2) 남아야 하는 것 — 이게 없으면 트레이싱을 켤 이유가 없다.
+            assert query in blob, "질문 원문이 안 나갔다 (그럼 진단이 불가능하다)"
+            assert REDACTED in blob
+            assert "37.57" in blob, "좌표가 반올림되어 남아야 한다 (통째로 지우지 않는다)"
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_훈련_RAG_계측이_같은_클라이언트를_탄다(
+        self, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    ) -> None:
+        """`@traceable` 은 LangGraph 와 다른 경로인데, 폴백이 같은 전역이라 함께 덮인다.
+
+        그 사실이 `core/tracing.py` 의 "주입점이 하나" 주장을 떠받치므로 여기서 못박는다.
+        """
+        from langsmith import traceable
+        from langsmith import utils as ls_utils
+
+        sent = self._enable(monkeypatch, request)
+        try:
+            @traceable(run_type="retriever", name="pgvector_search")
+            def search(question: str) -> list[dict]:
+                return [{"text": "짖음은 요구성 짖음일 수 있습니다", "score": 0.88}]
+
+            search("우리 개가 짖어요")
+
+            assert sent, "@traceable 이 트레이싱을 켰는데도 아무것도 안 보냈다"
+            names = [r.get("name") for r in sent if isinstance(r, dict)]
+            assert "pgvector_search" in names
+            assert "짖음은 요구성 짖음일 수 있습니다" in repr(sent), "청크 전문이 나가야 한다"
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+
 class TestDefaultOff:
     def test_환경변수가_없으면_꺼져_있다(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):

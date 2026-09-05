@@ -1,9 +1,13 @@
 """`POST /assistant/query` HTTP 경계.
 
 판단은 여기 없다. 검증하고, 인증된 principal 로 `PrincipalContext` 를 만들고,
-승인된 필드만으로 구조화 컨텍스트를 조립해 `AssistantOrchestrationService` 를
-부른다. 의미 라우팅·결정론적 RoutePlan 조립·능력 실행·집계는 전부 Card 2B/Card 1
-의 것이다 (`orchestration/service.py` · `planner.py` · `semantic.py` · `graph.py`).
+승인된 필드만으로 구조화 컨텍스트를 조립해 `Orchestrator` 를 부른다. 의미
+라우팅·결정론적 RoutePlan 조립·능력 실행·집계는 전부 Card 2B/Card 1 의 것이다
+(`orchestration/service.py` · `planner.py` · `semantic.py` · `graph.py`).
+
+**어느 구현이 답하는지는 여기서 모른다.** `orchestration/runtime.py` 의
+`build_orchestrator()` 가 고르고, 이 파일은 `run(...) -> AssistantResponse` 만
+본다 — LangGraph 와 LangChain 에이전트를 갈아끼우는 자리가 그 한 곳인 이유다.
 
 **대화 저장은 이 엔드포인트 하나로 들어온다** (D-048). 본문에 `chat_session_id` 와
 `client_message_id` 가 함께 오면 같은 호출이 그 대화의 turn 으로 남고, 없으면 v0.0.0
@@ -23,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from daengs_backend.core.database import get_chat_session_factory
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
-from daengs_backend.orchestration.service import AssistantOrchestrationService
+from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
@@ -31,8 +35,14 @@ from daengs_backend.services import dog_context as dog_context_service
 router = APIRouter(tags=["assistant"])
 
 
-def get_assistant_orchestration_service() -> AssistantOrchestrationService:
-    return AssistantOrchestrationService()
+def get_assistant_orchestration_service() -> Orchestrator:
+    """어느 구현이 답할지는 `orchestration/runtime.py` 가 정합니다.
+
+    여기서 `settings.orchestrator` 를 읽지 않는 이유: 이 함수는 **의존성 오버라이드
+    지점**이라 테스트가 이미 갈아끼우고 있습니다. 선택 규칙까지 여기 두면 규칙이
+    두 군데가 됩니다.
+    """
+    return build_orchestrator()
 
 
 def _may_inspect_route(principal: Principal | AppPrincipal) -> bool:
@@ -133,7 +143,7 @@ async def _with_dog_context(
 async def query(
     body: AssistantQueryRequest,
     principal: Annotated[Principal | AppPrincipal, Depends(admin_or_app_user(Perm.READ))],
-    service: Annotated[AssistantOrchestrationService, Depends(get_assistant_orchestration_service)],
+    service: Annotated[Orchestrator, Depends(get_assistant_orchestration_service)],
     session_factory: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)
     ],

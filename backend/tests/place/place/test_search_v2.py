@@ -517,7 +517,8 @@ async def test_v2_groups_kinds_and_sorts_only_inside_each_candidate_set():
             """), {"ref": _FACILITY_REFS[2]})
             await session.commit()
             # 크기·무게 미상인 개(나이만 안다). 미상을 불가로 판정하거나 값을 지어내지
-            # 않는다 — 개 자체 불가(dog_disallowed)만 크기 없이도 확정된다.
+            # 않는다. 개 자체 불가는 크기 없이 확정되고, 크기 제한 없음(any)은
+            # 크기를 몰라도 그 축을 충족한다. 명시 kg 제한은 여전히 무게가 필요하다.
             values_unknown = await search_place_groups(session, PlaceSearchRequest(
                 lat=TEST_ORIGIN[0],
                 lng=TEST_ORIGIN[1],
@@ -534,9 +535,9 @@ async def test_v2_groups_kinds_and_sorts_only_inside_each_candidate_set():
                 "state": "incompatible", "reason": "dog_disallowed",
             }
             assert [
-                hit.evaluations.dog_access.reason
+                (hit.evaluations.dog_access.state, hit.evaluations.dog_access.reason)
                 for hit in values_unknown.groups[1].results
-            ] == ["missing_dog_weight", "missing_dog_size"]
+            ] == [("unknown", "missing_dog_weight"), ("compatible", "size_allowed")]
         finally:
             await session.rollback()
             await _delete_owned_rows(session)

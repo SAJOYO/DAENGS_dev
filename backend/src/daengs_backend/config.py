@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +8,18 @@ from sqlalchemy import URL
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+# `/assistant/query` 를 어느 오케스트레이터가 답하는가.
+#
+# **이 별칭이 config 에 있는 것은 자리를 잘못 잡아서가 아니라 순환 때문입니다.**
+# 임자는 `orchestration/runtime.py` 인데, 거기 두고 config 가 import 하면
+# config → runtime → service → semantic → config 로 한 바퀴 돕니다
+# (`semantic.py` 가 `settings` 를 모듈 최상단에서 읽습니다). 값의 권위가 환경
+# 변수(`DAENGS_ORCHESTRATOR`)에 있으니 정의를 이쪽에 두고, `runtime.py` 가
+# 다시 export 합니다 — 쓰는 쪽은 `orchestration.runtime` 에서 가져오면 됩니다.
+#
+# Literal 인 이유: 오타가 **기동 때** 걸립니다. `str` 이면 첫 요청에서야 터집니다.
+OrchestratorKind = Literal["langgraph", "agent"]
 
 
 class Settings(BaseSettings):
@@ -95,6 +108,18 @@ class Settings(BaseSettings):
     # 인증 화면이 아직 연결되지 않은 로컬 데모에서만 명시적으로 true로 둔다.
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
+
+    # ── 오케스트레이터 구현 선택 ──────────────────────────────────────
+    # LangGraph 는 정해진 워크플로우에 최적화돼 있어, 자유도가 필요한 질의에
+    # LangChain 에이전트가 더 나은지 재 보려고 두 구현을 병존시킵니다.
+    # `orchestration/runtime.py` 의 `build_orchestrator()` 가 이 값을 읽습니다.
+    #
+    # **이건 배포 스위치입니다 — 비교 스위치가 아닙니다.** 두 구현을 나란히 재는
+    # 벤치마크는 이 값을 건드리지 않고 `build_orchestrator(kind)` 로 객체를 둘
+    # 만듭니다. 환경 변수를 토글해 가며 재면 한 프로세스에서 비교가 안 됩니다.
+    #
+    # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
+    orchestrator: OrchestratorKind = "langgraph"
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이

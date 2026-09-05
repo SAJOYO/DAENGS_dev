@@ -20,6 +20,7 @@ from daengs_place.place.facility_resolver import (
     resolve_facilities,
 )
 from daengs_place.place.medical_resolver import resolve_medical_places
+from daengs_place.place.name_query import PlaceNameQuery
 from daengs_place.place.planning.compiler import build_place_search_plan
 from daengs_place.place.planning.contract import (
     MAX_KINDS_PER_REQUEST,
@@ -69,6 +70,7 @@ class PlaceSearchRequest(BaseModel):
     limit_per_kind: int | None = Field(None, ge=1, le=MAX_RESULTS)
     conditions: PlaceSearchConditions | None = None
     preferences: PlaceSearchPreferences | None = None
+    name_query: PlaceNameQuery = ""
 
     @field_validator("kinds", mode="before")
     @classmethod
@@ -119,6 +121,7 @@ def compile_place_search_request(request: PlaceSearchRequest) -> PlaceSearchPlan
         limit_per_kind=request.effective_limit_per_kind,
         conditions=request.conditions,
         prefer_parking=bool(request.preferences and request.preferences.parking),
+        name_query=request.name_query,
     )
 
 
@@ -189,6 +192,8 @@ class PlaceSearchGroup(BaseModel):
 
 
 class PlaceSearchResponse(BaseModel):
+    # 구버전 서버가 알 수 없는 요청 필드를 무시해도 앱이 이름 검색 성공으로 오인하지 않게.
+    name_query: str = Field(default="", exclude_if=lambda value: not value)
     # 평가에 쓴 조건의 에코. 서버가 값을 보정하지 않으므로 요청의 conditions 와 같다 —
     # 그래도 되돌리는 이유는 "무엇을 기준으로 대조했나"를 응답만 보고 알 수 있어야 해서다.
     conditions: PlaceSearchConditions | None = Field(
@@ -290,6 +295,7 @@ async def _medical_group(
         judge_at=SystemClock().now(),
         kind=kind.value,
         limit=limit + 1,
+        name_query=plan.name_query,
     )
     truncated = len(rows) > limit
     places = sorted((medical_place_result(row) for row in rows), key=_distance_key)[:limit]
@@ -314,6 +320,7 @@ async def _facility_group(
             limit=limit,
             only_dog_ok=False,
             parking=prefer_parking,
+            name_query=plan.name_query,
         ),
         db,
         require_canonical_identity=True,
@@ -356,7 +363,7 @@ async def search_place_plan(
         else:
             group = await _facility_group(db, plan, kind)
         groups.append(group)
-    return PlaceSearchResponse(conditions=plan.conditions, groups=groups)
+    return PlaceSearchResponse(conditions=plan.conditions, groups=groups, name_query=plan.name_query)
 
 
 async def search_place_groups(

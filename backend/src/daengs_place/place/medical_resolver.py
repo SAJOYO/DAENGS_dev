@@ -19,6 +19,7 @@ async def resolve_medical_places(
     kind: str,
     limit: int,
     judge_at: datetime,
+    name_query: str = "",
 ) -> list[PlaceOut]:
     """같은 kind의 dev/임의 source를 섞지 않고 해당 MOIS endpoint만 읽는다."""
     try:
@@ -34,6 +35,7 @@ async def resolve_medical_places(
             judge_at=judge_at,
             kind=kind,
             limit=limit,
+            name_query=name_query,
         )),
         source=source.source,
     )

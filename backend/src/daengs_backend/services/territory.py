@@ -2,7 +2,8 @@
 
 촬영 요청에서는 위치 10m만 동기적으로 판정하고, 사진 내용은 confirm 뒤
 ``VISION_PENDING``에 둡니다. VLM 워커는 나중에 ``record_vision_decision``만 호출하면
-되며, 실제 점령/소유권은 이 모듈의 책임이 아닙니다.
+됩니다. 연결된 게임 시도가 있으면 territory_ownership 어댑터가 같은 트랜잭션에서
+점유 규칙을 적용합니다. 이 모듈은 방문 인증 사실을 담당합니다.
 """
 
 from __future__ import annotations
@@ -321,6 +322,10 @@ async def record_vision_decision(
         attempt.verified_visit = visit
         session.add(visit)
 
+    # A bound game's ownership and this verdict commit together. Unbound visits stay visits.
+    from daengs_backend.services.territory_ownership import apply_photo_decision
+
+    await apply_photo_decision(session, attempt)
     # 외부 저장소 작업보다 판정 사실을 먼저 내구성 있게 확정합니다.
     await session.commit()
     await _redact_decided_photo(session, attempt)

@@ -71,6 +71,10 @@ def _doc_fields(head: dict) -> dict:
         "trust_level": head.get("trust_level", ""),
         "published_at": head.get("published_at"),
         "license": head.get("license", ""),
+        # 지자체·소관기관명 (RAG-063). 파서가 `extra` 에 넣어 두는데 여기서 안 꺼내면
+        # 청크 행에서 사라진다 — RAG-033 ⑥ 은 `load.META_FIELDS` 만 지목했지만
+        # **끊긴 자리가 하나 더 앞에 있었다.** `org` 이 없는 소스에서는 None 이다.
+        "org": (head.get("extra") or {}).get("org") or None,
     }
 
 

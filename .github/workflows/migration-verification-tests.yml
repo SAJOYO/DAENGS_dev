@@ -1,0 +1,51 @@
+name: migration verification
+on:
+  pull_request:
+    paths:
+      - 'db/**'
+      - '.github/workflows/db-migrate.yml'
+      - '.github/workflows/migration-verification-tests.yml'
+      - 'tools/check_migration_verification.py'
+  push:
+    branches: [dev]
+    paths:
+      - 'db/**'
+      - '.github/workflows/db-migrate.yml'
+      - '.github/workflows/migration-verification-tests.yml'
+      - 'tools/check_migration_verification.py'
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: migration_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d migration_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: test-password
+      PGDATABASE: migration_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/check_migration_verification.py sql
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/check_migration_verification.py windows

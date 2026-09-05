@@ -8,3 +8,4 @@ CREATE TABLE IF NOT EXISTS walk_storyboards (
     bundle JSONB,
     error_code VARCHAR(80)
 );
+

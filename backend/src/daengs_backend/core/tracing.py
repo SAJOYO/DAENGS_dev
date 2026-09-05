@@ -10,9 +10,28 @@ D-037 은 일반 관측에 질문 원문을 남기지 않습니다. 이 모듈�
 (langsmith `client.py` `_hide_run_inputs`) 트레이스의 진단 가치를 0 으로 만듭니다.
 지우는 것은 **진단에 안 쓰이는 신원·위치**뿐입니다 (`scrub_payload`).
 
+## 어디로 보내나 — 기본은 **우리 GCP** 입니다
+
+`langsmith` 는 **계측 SDK 로만** 씁니다. 목적지는 `LANGSMITH_TRACING_MODE` 가 정하고,
+운영값은 `otel` 입니다 (D-054):
+
+    backend ──OTLP──▶ otel-collector (compose) ──▶ Cloud Trace (우리 GCP 프로젝트)
+
+그래서 **LangSmith 라는 회사에는 아무것도 안 갑니다.** 새 벤더도, 새 계정도, API 키도
+없습니다 — `_validate_api_key_if_hosted` 가 `tracing_mode == "otel"` 이면 키 요구를
+건너뜁니다("no LangSmith REST calls are made"). 이미 쓰는 GCP 프로젝트라 처리방침의
+제3자 목록도 그대로입니다.
+
+마스킹은 두 모드에 똑같이 걸립니다. OTel exporter 가 받는 것이
+`serialize_run_dict("post", run_create)` 인데 그 `run_create` 는 이미 `_run_transform`
+(=`_hide_run_*`)을 지난 것이기 때문입니다.
+
+`mode=langsmith` 로 두면 그때는 진짜로 제3자에게 나갑니다. 기동 로그가 그것을 경고합니다.
+
 ## 켜는 법
 
-`LANGSMITH_TRACING=true` 와 `LANGSMITH_API_KEY` 를 **프로세스 환경 변수**로 줍니다.
+`LANGSMITH_TRACING=true` + `LANGSMITH_TRACING_MODE=otel` +
+`OTEL_EXPORTER_OTLP_ENDPOINT` 를 **프로세스 환경 변수**로 줍니다.
 
 ⚠ **`backend/.env` 에 적으면 안 켜집니다.** 그 파일은 pydantic-settings 가 자기
 `Settings` 로만 읽고 `os.environ` 에 넣지 않는데, langsmith 는 `os.environ` 만
@@ -21,6 +40,13 @@ D-037 은 일반 관측에 질문 원문을 남기지 않습니다. 이 모듈�
 그래서 이 모듈은 `DAENGS_` 설정을 새로 만들지 않습니다. 만들면 "우리 설정은 켜졌는데
 SDK 는 꺼져 있는" 상태가 생기고, 그건 아무 데도 안 찍히면서 켜진 줄 알게 되는 상태입니다.
 권위는 `LANGSMITH_*` 한 곳입니다.
+
+## 신고 → 트레이스
+
+`trace_config` 가 `run_id` 를 `request_id` 로 못박고, langsmith 의
+`get_otel_trace_id_from_uuid` 가 `int(uuid.hex, 16)` 이라 **Cloud Trace 의 trace id 가
+`request_id` 의 hex 와 글자 그대로 같습니다.** 신고 한 건에서 그 요청의 라우팅·검색
+청크·프롬프트로 바로 갑니다.
 
 ## 왜 주입점이 하나인가
 
@@ -102,6 +128,21 @@ def tracing_enabled() -> bool:
     return bool(ls_utils.tracing_is_enabled())
 
 
+def tracing_mode() -> str:
+    """트레이스가 **어디로** 가나 — `langsmith` · `otel` · `hybrid`.
+
+    `LANGSMITH_TRACING_MODE` 를 SDK 와 같은 방식으로 읽습니다 (`LANGSMITH_`/`LANGCHAIN_`
+    두 접두사). 우리 설정을 따로 만들지 않는 이유는 `tracing_enabled()` 와 같습니다 —
+    권위가 둘이면 어긋납니다.
+
+    운영 기본값은 `otel` 입니다 (D-054). 트레이스는 우리 GCP 프로젝트의 Cloud Trace 로
+    가고, LangSmith 라는 회사에는 아무것도 안 갑니다. `langsmith` 는 계측 SDK 로만 씁니다.
+    """
+    from langsmith import utils as ls_utils
+
+    return (ls_utils.get_env_var("TRACING_MODE") or "langsmith").lower()
+
+
 def configure_tracing() -> bool:
     """마스킹이 걸린 클라이언트를 전역 캐시에 심습니다. 켜졌으면 True.
 
@@ -132,8 +173,24 @@ def configure_tracing() -> bool:
         )
         return False
 
-    LOGGER.info("LangSmith 트레이싱을 켰습니다 (신원 마스킹 · 좌표 %d자리 반올림).",
-                COORDINATE_PRECISION)
+    mode = tracing_mode()
+    LOGGER.info(
+        "트레이싱을 켰습니다 — 모드=%s (신원 마스킹 · 좌표 %d자리 반올림). "
+        "%s",
+        mode,
+        COORDINATE_PRECISION,
+        "트레이스는 우리 GCP 프로젝트의 Cloud Trace 로 갑니다."
+        if mode == "otel"
+        else "⚠ 트레이스가 LangSmith(제3자)로 나갑니다. 처리방침의 제3자 제공 목록을 확인하세요.",
+    )
+    if mode != "otel":
+        # 기본값이 `langsmith` 라 **환경 변수를 안 넣으면 제3자로 나갑니다.** 운영에서
+        # 그 상태를 조용히 지나가면 안 됩니다 (D-054 는 otel 을 운영 기본으로 정했습니다).
+        LOGGER.warning(
+            "LANGSMITH_TRACING_MODE 가 %r 입니다. 자체 수집(Cloud Trace)을 쓰려면 "
+            "'otel' 로 두세요.",
+            mode,
+        )
     return True
 
 
@@ -194,6 +251,14 @@ async def record_report_feedback(*, request_id: str | None) -> None:
     """
     if not request_id or not tracing_enabled():
         return
+    if tracing_mode() == "otel":
+        # 피드백은 LangSmith **REST API** 의 기능이라 Cloud Trace 에는 붙일 자리가 없습니다
+        # (스팬은 한 번 쓰이면 못 고칩니다). 여기서 막지 않으면 API 키도 없이 LangSmith 로
+        # 요청이 나가서, 실패를 삼키느라 아무도 모르는 채 매 신고마다 헛돕니다.
+        #
+        # 대신 신고된 요청을 찾는 길은 그대로 있습니다 — 콘솔의 신고 목록이
+        # `request_id` 를 주고, 그것이 곧 Cloud Trace 의 trace id 입니다 (D-054).
+        return
     try:
         run_id = uuid.UUID(request_id)
     except (ValueError, AttributeError, TypeError):
@@ -232,4 +297,5 @@ __all__ = [
     "scrub_payload",
     "trace_config",
     "tracing_enabled",
+    "tracing_mode",
 ]

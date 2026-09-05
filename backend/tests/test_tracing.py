@@ -222,8 +222,65 @@ class TestGraphWiring:
         assert subject not in flattened
 
 
+class TestTracingMode:
+    """트레이스가 **어디로** 가나. 기본 목적지가 제3자가 아닌 것이 D-054 의 핵심이다."""
+
+    def test_기본값은_langsmith_다(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SDK 의 기본값이다. **우리 compose 는 otel 로 덮는다** — 그 사실이 중요해서
+        여기서 기본값을 못박는다. 누가 compose 의 그 줄을 지우면 조용히 제3자로 나간다."""
+        from langsmith import utils as ls_utils
+
+        from daengs_backend.core import tracing
+
+        monkeypatch.delenv("LANGSMITH_TRACING_MODE", raising=False)
+        monkeypatch.delenv("LANGCHAIN_TRACING_MODE", raising=False)
+        ls_utils.get_env_var.cache_clear()
+        try:
+            assert tracing.tracing_mode() == "langsmith"
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+    def test_compose_가_otel_로_덮는다(self) -> None:
+        """`docker-compose.yml` 의 backend 가 실제로 otel 을 기본으로 주는가.
+
+        문서와 코드가 갈리는 것을 막는다 — `.env` 를 안 고친 서버가 무엇을 쓰는지가
+        이 한 줄에 달려 있다.
+        """
+        from pathlib import Path
+
+        compose = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+        text = compose.read_text(encoding="utf-8")
+        assert "LANGSMITH_TRACING_MODE: ${LANGSMITH_TRACING_MODE:-otel}" in text
+
+
 class TestReportFeedback:
     """신고 → 트레이스 피드백. **신고가 실패하면 안 된다**는 것이 여기의 요점이다."""
+
+    @pytest.mark.asyncio
+    async def test_otel_모드에서는_LangSmith_로_안_부른다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """피드백은 LangSmith REST 기능이라 Cloud Trace 에는 붙을 자리가 없다.
+
+        안 막으면 API 키도 없이 매 신고마다 밖으로 요청이 나가고, 실패를 삼키느라
+        아무도 모르는 채 헛돈다.
+        """
+        from daengs_backend.core import tracing
+
+        called: list[object] = []
+
+        class FakeClient:
+            def create_feedback(self, *a, **kw):
+                called.append(kw)
+
+        monkeypatch.setattr(tracing, "tracing_enabled", lambda: True)
+        monkeypatch.setattr(tracing, "tracing_mode", lambda: "otel")
+        from langsmith import run_trees
+
+        monkeypatch.setattr(run_trees, "get_cached_client", lambda **kw: FakeClient())
+
+        await tracing.record_report_feedback(request_id=str(uuid.uuid4()))
+        assert called == []
 
     @pytest.mark.asyncio
     async def test_꺼져_있으면_아무것도_안_한다(

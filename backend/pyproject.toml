@@ -48,6 +48,19 @@ place = [
     "alembic>=1.19",
     "geoalchemy2>=0.15",
 ]
+# LangChain 에이전트 오케스트레이터 (D-055). `orchestration/agent/` 만 씁니다.
+#
+# **extra 인 것이 요점입니다.** CI(`backend-tests.yml` 은 `--extra place` 하나만 붙입니다)
+# 와 서버 backend 컨테이너에는 안 깔립니다 — 두 구현을 병존시키는 동안에도 운영 경로의
+# 의존성이 늘지 않게 하려는 것입니다. 그래서 `tests/test_orchestration_agent.py` 는
+# `pytest.importorskip` 으로 감쌉니다 (`ml`·`gait`·`screening` 과 같은 자리).
+#
+# ⚠ 로컬 전체 테스트는 **`uv sync --extra place --extra agent`** 입니다. `--extra agent`
+#   하나만 주면 place 가 빠져 `tests/place` 13개가 수집 단계에서 죽습니다.
+agent = [
+    "langchain>=1.0",
+    "langchain-google-genai>=3.0",
+]
 
 # torch 를 플랫폼별로 다른 인덱스에서 받는다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
 # `explicit = true` 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스에서 받는다.

@@ -121,6 +121,12 @@ class Settings(BaseSettings):
     # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
     orchestrator: OrchestratorKind = "langgraph"
 
+    # 에이전트 한 턴의 예산. **답이 아니라 안전장치입니다** — 에이전트가 루프를 돌아
+    # 비싼 것 자체는 카드 ③이 재야 할 발견이라, 여기서 깎아 결과를 미리 만들지
+    # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
+    agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
+    agent_recursion_limit: int = Field(default=25, gt=0)
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는

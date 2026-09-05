@@ -13,8 +13,9 @@
 생깁니다 (`console/page.tsx` 의 카드 권한 주석). 원문을 여는 문은 짝 카드(#212)가
 `pii:read` 로 따로 냅니다.
 
-**조건 없는 목록이 없습니다.** `?email=` 이나 `?kakao_id=` 중 하나가 반드시 있어야
-합니다 — 이유는 아래 `search` docstring.
+**조건 없는 목록이 없습니다.** `?nickname=` · `?email=` · `?kakao_id=` 중 하나가 반드시
+있어야 합니다 — 이유는 아래 `search` docstring. 그중 **오늘 실제로 도는 것은
+`?nickname=`** 입니다 (이 앱키로는 이메일 동의를 못 받아 `email_hash` 가 전부 NULL).
 
 **권한이 셋으로 갈립니다** (#212 가 뒤의 둘을 더했습니다).
 
@@ -61,6 +62,7 @@ def _to_out(view: service.AppUserView) -> AppUserOut:
         name_masked=view.name_masked,
         status=view.user.status,
         room_name=view.user.room_name,
+        nickname=view.user.nickname,
         created_at=view.user.created_at,
     )
 
@@ -71,13 +73,22 @@ async def search(
     session: Annotated[AsyncSession, Depends(get_session)],
     email: Annotated[str | None, Query(max_length=320)] = None,
     kakao_id: Annotated[int | None, Query(ge=1)] = None,
+    nickname: Annotated[str | None, Query(min_length=1, max_length=30)] = None,
 ) -> list[AppUserOut]:
-    """이메일 **정확 일치** 또는 카카오 회원번호로 찾습니다. 0개나 1개입니다.
+    """닉네임(부분 일치) · 이메일(정확 일치) · 카카오 회원번호 중 하나로 찾습니다.
 
-    **부분 검색이 원천적으로 안 됩니다.** `email_hash` 가 HMAC-SHA256 이라
+    ⚠️ **`?email=` 은 지금 앱키로는 아무것도 못 찾습니다.** 우리 카카오 앱키가 사업자
+    등록이 아니라 프로젝트 팀 것이라 **이메일 동의를 받을 수 없고**, 그래서 `email_hash`
+    가 전 회원 NULL 입니다. 인자를 남겨 둔 것은 비즈 앱 심사를 통과하면 그날부터 도는
+    길이기 때문이고, **오늘 쓸 검색은 `?nickname=` 입니다.**
+
+    **닉네임만 부분 검색이 됩니다.** 평문이라서입니다. `email_hash` 는 HMAC-SHA256 이라
     `LIKE '%@gmail.com'` 같은 조각 검색이 성립하지 않습니다 (D-012) — 주소를 통째로
-    알아야 찾습니다. 화면이 그것을 안내해야 합니다. 안 그러면 "검색이 고장났다"로
+    알아야 찾습니다. 화면이 그 차이를 안내해야 합니다. 안 그러면 "검색이 고장났다"로
     읽힙니다. (대소문자·앞뒤 공백은 `blind_index` 가 맞춰 주므로 예외입니다.)
+
+    닉네임 검색은 **여러 명이 나올 수 있습니다.** 앞의 둘과 달리 UNIQUE 조회가 아닙니다.
+    아직 닉네임이 없는 회원(이 칸보다 먼저 가입)은 안 걸립니다 — 다음 로그인에 발급됩니다.
 
     **조건 없이 전체를 주지 않습니다.** 이 API 는 `Perm.READ` 라 VIEWER 까지 전부
     통과하는데, 목록을 열면 로그인한 사람 누구나 전 회원의 (가려졌더라도) 개인정보를
@@ -89,14 +100,16 @@ async def search(
     상태 코드로 알려 주게 되는데, 이 문은 로그인 뒤라 그 자체가 사고는 아니어도
     빈 목록으로 충분합니다.
     """
-    given = [v for v in (email, kakao_id) if v is not None]
+    given = [v for v in (email, kakao_id, nickname) if v is not None]
     if len(given) != 1:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "email 이나 kakao_id 중 하나만 주세요.",
+            "nickname · email · kakao_id 중 하나만 주세요.",
         )
 
-    views = await service.find(session, email=email, kakao_id=kakao_id)
+    views = await service.find(
+        session, email=email, kakao_id=kakao_id, nickname=nickname
+    )
     return [_to_out(v) for v in views]
 
 

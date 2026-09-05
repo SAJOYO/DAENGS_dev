@@ -14,7 +14,8 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.crypto import decrypt
@@ -28,6 +29,7 @@ from daengs_backend.schemas.app_auth import (
     AppProfileUpdate,
     AppSessionResponse,
     KakaoLoginRequest,
+    NicknameAvailability,
     RefreshRequest,
 )
 from daengs_backend.services import app_auth as app_auth_service
@@ -184,7 +186,9 @@ async def update_me(
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AppMeResponse:
-    """회원이 스스로 고치는 것. 지금은 미니룸 이름표뿐입니다.
+    """회원이 스스로 고치는 것 — 미니룸 이름표와 닉네임.
+
+    ⚠️ **보낸 칸만 바뀝니다.** `{"nickname": "..."}` 만 보내면 이름표는 그대로입니다.
 
     **`room_name` 을 null(또는 공백)로 보내면 되돌립니다** — 다시 대표 강아지를
     따라갑니다. 빈 문자열로 저장하지 않는 이유는, 그러면 "아직 안 정했다" 와
@@ -198,9 +202,83 @@ async def update_me(
         logger.warning("app patch me: 쓸 수 없는 회원 (app_user=%s)", user.app_user_id)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.")
 
-    row.room_name = body.room_name
-    await session.commit()
+    sent = body.model_fields_set
+
+    # **보낸 칸만 바꿉니다.** 예전에는 `row.room_name = body.room_name` 한 줄이었는데,
+    # 칸이 둘이 되는 순간 그것이 **닉네임만 고치려는 요청에 이름표를 같이 지웁니다** —
+    # 안 보낸 칸도 모델에서는 None 이라 "되돌려 달라"와 구분이 안 됩니다.
+    if "room_name" in sent:
+        row.room_name = body.room_name
+
+    if "nickname" in sent:
+        if body.nickname is None:
+            # 이름표와 달리 **비울 수 없습니다.** 조용히 무시하면 앱은 바뀐 줄 알고
+            # 화면에서 옛 이름을 지웁니다 (schemas/app_auth.py 의 그 칸 주석).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "닉네임은 비울 수 없습니다."
+            )
+        if body.nickname.lower() == (row.nickname or "").lower():
+            # **자기 이름입니다.** 중복 검사를 하면 자기 자신에 걸립니다. 그대로 넣는
+            # 이유는 `neo` → `Neo` 처럼 **대소문자만 바꾸는 것도 진짜 편집**이라서입니다 —
+            # 건너뛰면 사용자가 고쳤는데 화면이 안 바뀝니다.
+            row.nickname = body.nickname
+        elif await app_user_repo.is_nickname_taken(session, body.nickname):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "다른 분이 쓰고 있는 이름이에요."
+            )
+        else:
+            row.nickname = body.nickname
+
+    try:
+        await session.commit()
+    except IntegrityError:
+        # 위에서 물어본 뒤 커밋 전에 남이 채갔습니다. **여기가 진짜 방어입니다** —
+        # `lower(nickname)` UNIQUE 인덱스가 막아 준 것이고, 앞의 조회는 참고였습니다.
+        await session.rollback()
+        logger.info("닉네임 경합 (app_user=%s)", user.app_user_id)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "다른 분이 쓰고 있는 이름이에요."
+        ) from None
     return _to_me(row)
+
+
+@router.get("/nickname/available")
+async def nickname_available(
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    value: Annotated[str, Query(min_length=1, max_length=30)],
+) -> NicknameAvailability:
+    """앱이 **입력하는 동안** 부릅니다. 쓸 수 있는 이름인지 미리 알려 줍니다.
+
+    ⚠️ **판정은 참고용입니다.** 여기서 `true` 를 받아도 저장할 때 409 가 날 수 있습니다 —
+    물어본 뒤 저장하기 전에 남이 채갈 수 있어서입니다. 진짜 방어는
+    `lower(nickname)` UNIQUE 인덱스이고, 이 API 는 **사용자가 다 치고 나서 거절당하는
+    일을 줄이는 것**이 목적입니다.
+
+    **로그인해야 부를 수 있습니다.** 로그인 뒤에만 쓰는 화면이기도 하고, 열어 두면
+    후보 이름을 넣어 보며 누가 있는지 훑는 창구가 됩니다.
+
+    **자기가 지금 쓰는 이름은 `true`** 입니다. 고치다가 원래 이름으로 되돌렸을 때
+    "다른 분이 쓰고 있어요" 가 뜨면 사용자는 그것을 오류로 읽습니다.
+
+    빈 이름은 여기까지 오지 않습니다 (`min_length=1` → 422). 앱이 모양 검사를 먼저 하고
+    통과한 것만 물어보게 되어 있어서, 여기 오는 값은 이미 한 번 걸러진 것입니다.
+    """
+    trimmed = value.strip()
+    if not trimmed:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "닉네임은 비울 수 없습니다."
+        )
+
+    row = await app_user_repo.get_by_id(session, user.app_user_id)
+    if row is None or row.status != "active":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "다시 로그인해 주세요.")
+
+    if trimmed.lower() == (row.nickname or "").lower():
+        return NicknameAvailability(available=True)
+
+    taken = await app_user_repo.is_nickname_taken(session, trimmed)
+    return NicknameAvailability(available=not taken)
 
 
 def _to_me(row: AppUser) -> AppMeResponse:
@@ -212,6 +290,7 @@ def _to_me(row: AppUser) -> AppMeResponse:
         status=row.status,
         created_at=row.created_at,
         room_name=row.room_name,
+        nickname=row.nickname,
     )
 
 

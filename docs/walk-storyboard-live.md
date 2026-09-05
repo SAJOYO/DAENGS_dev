@@ -4,7 +4,7 @@ GPS 업로드·finalize와 행동/메모 동기화가 끝나면 app의 기존 Wo
 `POST /app/walks/{walk_id}/storyboard`를 호출한다. 서버는 저장된 GPS chunk를 검증하고
 `daengs_walk.analyze_walk`의 관측 구간으로 장면을 만든다. 합성 경로·시뮬레이터 정답·LLM은
 실행 경로에 들어가지 않는다. scene builder/selector는 DAENGS_geo의
-`app/features/walk/storyboard.py`, `storyboard_selection.py`와 같은 코드다.
+`app/features/storyboard/scenes.py`, `selection.py`와 같은 코드다.
 
 ## 교환 계약
 

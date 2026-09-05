@@ -158,6 +158,18 @@ async def test_real_upload_finalize_entries_revision_race_and_cascade(database):
         latest = (await client.get(path + "/storyboard")).json()
         assert latest == newer.json()
         assert any(s["id"] == f"entry:{entry}" for s in latest["bundle"]["scenes"])
+        detailed = (
+            await client.get(path + "/storyboard?bundle_format=walk-storyboard-candidates-v2")
+        ).json()
+        assert detailed["generation"] == latest["generation"]
+        assert detailed["bundle"]["format"] == "walk-storyboard-candidates-v2"
+        assert detailed["bundle"]["selection"]["minimum_met"]
+        recorded = next(s for s in detailed["bundle"]["scenes"] if s["entry"])
+        assert recorded["entry"] == {"entry_id": str(entry), "revision": 1, "pet_id": None}
+        assert (
+            await conn.fetchval("SELECT bundle->>'format' FROM walk_storyboards LIMIT 1")
+            == "walk-storyboard-candidates-v2"
+        )
         removed = await client.delete(
             path + f"/entries/{entry}",
             params={"expected_revision": 1, "mutation_id": str(uuid.uuid4())},
@@ -204,4 +216,3 @@ async def test_history_query_only_uses_three_prior_single_pet_owned_walks(databa
     async with factory() as db:
         walk = await get_owned_for_update(db, owner, current)
         assert [w.id for w in await reference_walks(db, walk)] == wanted
-

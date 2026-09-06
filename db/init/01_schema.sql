@@ -27,8 +27,13 @@ CREATE TABLE documents (
 
     -- care/emergency는 진단 성격이 강해 별도 에이전트로 분리한다. 필요해지면 제약만 교체하면 된다.
     -- 접종 스케줄처럼 '법정 의무가 아닌' 문서는 category가 아니라 metadata.trust_level로 구분한다.
+    --
+    -- 2026-09-06 (RAG-067 / #271) — 'insurance' 를 더했다. 위 주석의 "제약만 교체하면 된다"를
+    -- 실제로 밟은 첫 자리다. 보험 약관·공시 4,673행이 policy 에 들어 있어 코퍼스의 47.5%가
+    -- 한 값을 갖고 있었다. **이 파일은 볼륨이 빌 때만 실행되므로** 이미 도는 DB 는
+    -- db/migrations/2026-09-06_documents_category_insurance.sql 로 따로 맞춘다.
     category VARCHAR(50) NOT NULL
-        CHECK (category IN ('policy','travel','food')),
+        CHECK (category IN ('policy','travel','food','insurance')),
 
     -- CHECK 없음. 값 사전을 문서로 관리하며 수집하면서 늘려간다 (kebab-case).
     -- 재분류는 UPDATE 한 줄이고 content가 안 바뀌므로 임베딩 재계산이 필요 없다.

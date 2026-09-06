@@ -9,12 +9,49 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# Minimal stand-ins for what each migration expects to already exist.
+# `db/init/01_schema.sql` cannot be used here: it needs the `vector` extension.
+WALKS = 'CREATE TABLE walks(id uuid PRIMARY KEY);'
+# Only the columns the migration and its verifier touch. The three-value CHECK is
+# deliberate: the migration must be the thing that widens it. Rows make the UPDATE real.
+DOCUMENTS = (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " category varchar(50) NOT NULL CHECK (category IN ('policy','travel','food')),"
+    " subcategory varchar(50) NOT NULL,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb);"
+    "INSERT INTO documents(category, subcategory)"
+    " VALUES ('policy','insurance'), ('policy','insurance'), ('policy','ordinance');"
+)
+
+
+def transactionless(sql):
+    """Strip the migration's own BEGIN;/COMMIT; so the harness can supply the transaction.
+
+    적용 경로(`db-migrate.yml`, `runbook.md`)는 `psql -X -v ON_ERROR_STOP=1` 이고
+    **`--single-transaction` 이 없다.** 그래서 원자성이 필요한 마이그레이션은 자기 `BEGIN;`/
+    `COMMIT;` 을 들고 있어야 한다 — `documents_org_backfill` 과 `documents_category_insurance`
+    가 그렇다.
+
+    그런데 이 하네스는 **일회용 스키마 + ROLLBACK** 으로 격리한다. 안쪽 `COMMIT;` 이 그
+    바깥 트랜잭션을 커밋해 버리면 `SET LOCAL search_path` 가 날아가고, 그 뒤 문장들이
+    `public` 을 보게 되어 **아무 문제가 없어도 verifier 가 'missing table' 을 낸다.**
+    격리도 깨져 `verify_test_*` 스키마가 남는다.
+
+    그래서 여기서만 벗긴다. 벗기는 것은 **단독 줄로 선 BEGIN;/COMMIT;** 뿐이라, 문장 안에
+    그 낱말이 들어 있는 경우는 안 건드린다.
+    """
+    keep = [line for line in sql.splitlines()
+            if line.strip().upper() not in ('BEGIN;', 'COMMIT;')]
+    return '\n'.join(keep) + '\n'
+
+
 def sql_checks():
     # libpq settings are supplied only by the dedicated disposable CI service.
     assert os.environ.get('PGHOST') in ('127.0.0.1', 'localhost', '::1')
     total = 0
-    for name, table, mutations in (
-        ('walk_entries', 'walk_entries', [
+    for date, name, fixture, table, mutations in (
+        ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
             'ALTER TABLE walk_entries ALTER COLUMN mutation_id DROP NOT NULL',
@@ -24,7 +61,7 @@ def sql_checks():
             'ALTER TABLE walk_entries DROP CONSTRAINT walk_entries_walk_id_fkey; '
             'ALTER TABLE walk_entries ADD FOREIGN KEY(walk_id) REFERENCES walks(id)',
         ]),
-        ('walk_storyboards', 'walk_storyboards', [
+        ('2026-09-05', 'walk_storyboards', WALKS, 'walk_storyboards', [
             'ALTER TABLE walk_storyboards DROP COLUMN bundle',
             'ALTER TABLE walk_storyboards ALTER COLUMN input_revision TYPE varchar(80)',
             'ALTER TABLE walk_storyboards ALTER COLUMN updated_at DROP NOT NULL',
@@ -33,13 +70,31 @@ def sql_checks():
             'ALTER TABLE walk_storyboards DROP CONSTRAINT walk_storyboards_status_check',
             'ALTER TABLE walk_storyboards DROP CONSTRAINT walk_storyboards_generation_check',
         ]),
+        # 2026-09-06 (RAG-067 / #271) — insurance 를 policy 에서 가른다.
+        # **망가뜨리는 방식이 walk_* 와 다르다.** 저쪽은 모양(컬럼·제약)만 깨는데, 이 마이그레이션은
+        # 하는 일의 절반이 UPDATE 라 **값**도 깨야 한다. 아래 넷 중 뒤의 둘이 그것이다.
+        ('2026-09-06', 'documents_category_insurance', DOCUMENTS, 'documents', [
+            'ALTER TABLE documents DROP CONSTRAINT documents_category_check',
+            # 옛 세 값으로 되돌린다. **NOT VALID 여야 한다** — 이미 insurance 행이 있어서
+            # 검증하려 들면 CHECK 위반으로 ALTER 자체가 죽고, 그러면 verifier 가 잡은 것이
+            # 아니라 ALTER 가 실패한 것이 된다 (하네스는 그 둘을 stderr 낱말로 가른다).
+            'ALTER TABLE documents DROP CONSTRAINT documents_category_check;'
+            " ALTER TABLE documents ADD CONSTRAINT documents_category_check"
+            " CHECK (category IN ('policy','travel','food')) NOT VALID",
+            # 값을 옛것으로 되돌린다 — `rag load` 가 옛 청크로 덮어쓴 상태와 같은 모양이다.
+            # RAG-066 ① 에서 `org` 이 실제로 이렇게 지워졌고 **아무 에러도 안 났다.**
+            "UPDATE documents SET category = 'policy' WHERE subcategory = 'insurance'",
+            # 엉뚱한 행을 옮긴다 — 조건을 잘못 쓰면 이쪽으로 샌다
+            "UPDATE documents SET category = 'insurance' WHERE subcategory = 'ordinance'",
+        ]),
     ):
-        migration = (ROOT / f'db/migrations/2026-09-05_{name}.sql').read_text(encoding='utf-8')
-        verifier = (ROOT / f'db/migrations/verify_2026-09-05_{name}.sql').read_text(encoding='utf-8')
+        migration = transactionless(
+            (ROOT / f'db/migrations/{date}_{name}.sql').read_text(encoding='utf-8'))
+        verifier = (ROOT / f'db/migrations/verify_{date}_{name}.sql').read_text(encoding='utf-8')
         for mutation in ['', f'DROP TABLE {table}', *mutations]:
             schema = 'verify_test_' + uuid.uuid4().hex
             sql = (f'BEGIN; CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}; '
-                   'CREATE TABLE walks(id uuid PRIMARY KEY);\n' + migration + migration
+                   + fixture + '\n' + migration + migration
                    + mutation + ';\n' + verifier + '\nROLLBACK;')
             result = subprocess.run(['psql', '-X', '-v', 'ON_ERROR_STOP=1'],
                                     input=sql, text=True, capture_output=True)

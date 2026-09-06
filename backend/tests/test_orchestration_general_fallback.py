@@ -479,3 +479,21 @@ def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback(
 def test_life_payload_and_general_payload_share_the_dog_type() -> None:
     dog = DogContext(breed="푸들", age_months=30)
     assert LifePayload(question="q", dog=dog).dog == GeneralPayload(question="q", dog=dog).dog
+
+
+def test_answer_schema_requires_text_so_the_model_cannot_omit_it() -> None:
+    """라이브 확인에서 모델이 `{"kind": "answer", "reason": null}` 로 text 를 통째로 빼고 답했다.
+
+    스키마에서 text 가 선택 필드면 제약 디코딩이 그것을 허용한다. 필수로 두어야 답 경로가
+    `general_invalid_output` 으로 새지 않는다. 거절은 text 를 "" 으로 낸다.
+    """
+    from daengs_backend.orchestration.adapters.general import GeneralAnswer, validate_general_answer
+
+    assert "text" in GeneralAnswer.model_json_schema()["required"]
+    assert validate_general_answer({"kind": "answer", "reason": None}) is None
+    assert (
+        validate_general_answer({"kind": "answer", "text": "짧은 답", "reason": None}) is not None
+    )
+    assert (
+        validate_general_answer({"kind": "refuse", "text": "", "reason": "emergency"}) is not None
+    )

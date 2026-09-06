@@ -77,7 +77,10 @@ class GeneralAnswer(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["answer", "refuse"]
-    text: str = Field(default="", max_length=1_000)
+    # **필수 필드다.** 기본값 "" 을 두면 JSON 스키마에서 선택 필드가 되고, 제약 디코딩은 그것을
+    # 그대로 허용한다 — 실측에서 모델이 `{"kind": "answer", "reason": null}` 로 text 를 통째로
+    # 빼고 답해 `general_invalid_output` 이 됐다 (#279 라이브 확인). 거절일 때는 "" 을 낸다.
+    text: str = Field(max_length=1_000)
     reason: RefusalReason | None = None
 
     @model_validator(mode="after")

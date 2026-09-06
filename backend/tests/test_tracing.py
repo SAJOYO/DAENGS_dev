@@ -413,6 +413,98 @@ class TestRootRun:
         assert seen["engine_run"] is None
 
 
+class TestRealGraphNesting:
+    """**진짜 LangGraph** 가 루트 아래에 붙는가 — `TestRootRun` 이 가짜 엔진으로 비워 둔 칸.
+
+    LangGraph 의 런은 langsmith 의 `@traceable` 이 아니라 **langchain 의 트레이서**가
+    만든다. 그것이 부모를 langsmith 의 현재 런 컨텍스트에서 읽는다는 것
+    (`langchain_core/callbacks/manager.py` `_configure`)이 이 배선 전체의 전제인데,
+    그건 코드를 읽고 믿은 것이지 잰 것이 아니었다. 여기서 잰다.
+
+    local 모드로는 못 한다 — langchain 트레이서는 local 모드에서도 전송을 시도한다
+    (0.11.2 실측, 가짜 키라 403). 그래서 **전송 메서드만 무력화한 진짜 Client** 를
+    양쪽(langsmith `get_cached_client` · langchain `get_client`)에 심는다. `Client` 는
+    속성이 읽기 전용이라 서브클래스라야 한다.
+    """
+
+    @pytest.mark.asyncio
+    async def test_그래프_노드_런이_전부_루트의_trace_id_를_가진다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import langchain_core.tracers.langchain as langchain_tracer
+        from langsmith import Client, run_trees
+        from langsmith.run_helpers import get_current_run_tree, tracing_context
+
+        from daengs_backend.orchestration.contracts import (
+            CapabilityName,
+            CapabilityResult,
+            CapabilityStatus,
+            PrincipalContext,
+        )
+        from daengs_backend.orchestration.graph import OrchestrationEngine
+        from daengs_backend.orchestration.semantic import GeminiSemanticRouter
+        from daengs_backend.orchestration.service import AssistantOrchestrationService
+
+        created: list[dict] = []
+
+        class NoNetworkClient(Client):
+            def create_run(self, *args, **kwargs) -> None:  # type: ignore[override]
+                created.append(kwargs)
+
+            def update_run(self, *args, **kwargs) -> None:  # type: ignore[override]
+                return None
+
+        client = NoNetworkClient(api_key="lsv2_pt_test_not_used", auto_batch_tracing=False)
+        monkeypatch.setattr(run_trees, "get_cached_client", lambda **kw: client)
+        monkeypatch.setattr(langchain_tracer, "get_client", lambda: client)
+
+        seen: dict = {}
+
+        class FakeTrainingAdapter:
+            capability = CapabilityName.TRAINING
+
+            async def run(self, request, *, request_id: str) -> CapabilityResult:
+                seen["node_run"] = get_current_run_tree()
+                return CapabilityResult(
+                    capability=self.capability,
+                    status=CapabilityStatus.OK,
+                    data={"answer": "짖음 교육 방법입니다"},
+                    elapsed_ms=1,
+                )
+
+        async def generate(prompt: str) -> object:
+            return '{"execute": ["training"], "handoffs": []}'
+
+        service = AssistantOrchestrationService(
+            engine=OrchestrationEngine({CapabilityName.TRAINING: FakeTrainingAdapter()}),
+            semantic_router=GeminiSemanticRouter(generate=generate),
+        )
+        request_id = str(uuid.uuid4())
+
+        with tracing_context(enabled=True, client=client):
+            await service.run(
+                query="우리 개가 짖어요",
+                principal=PrincipalContext(subject=str(uuid.uuid4()), kind="APP_USER"),
+                request_id=request_id,
+            )
+
+        # 어댑터는 그래프 노드(`execute_requests`) 안에서 돌고, 그 노드의 trace 가 루트다.
+        node_run = seen["node_run"]
+        assert node_run is not None and node_run.name == "execute_requests"
+        assert node_run.trace_id == uuid.UUID(request_id)
+
+        # 만들어진 런 전부가 한 트레이스다 — 루트 · 라우터 · 그래프 · 노드.
+        names = [run["name"] for run in created]
+        assert names[0] == "assistant_query"
+        assert {"semantic_router", "orchestration_engine", "execute_requests"} <= set(names)
+        assert names.count("assistant_query") == 1, "루트가 둘이면 같은 id 충돌의 재발이다"
+        trace_ids = {str(run.get("trace_id")) for run in created}
+        assert trace_ids == {request_id}
+        # 루트만 `request_id` 를 id 로 갖는다. 자식이 같은 id 를 쓰면 안 된다.
+        with_request_id = [run["name"] for run in created if str(run.get("id")) == request_id]
+        assert with_request_id == ["assistant_query"]
+
+
 class TestReviewFindings:
     """코드 리뷰가 잡은 다섯 건. 전부 조용히 되돌아올 수 있는 종류다."""
 

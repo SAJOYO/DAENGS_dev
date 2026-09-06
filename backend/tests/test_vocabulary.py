@@ -85,6 +85,41 @@ def test_pet_becomes_livestock_only_in_a_housing_question() -> None:
         assert "가축" not in vocabulary.aliases(q), q
 
 
+def test_the_leash_question_gets_the_statute_word() -> None:
+    """`Q3`·`B1` — **시연 첫 질문인데 `lap19`~`lap29` 동안 한 번도 답한 적이 없다** (RAG-070 ②).
+
+    답은 코퍼스에 있다 — 동물보호법 시행령 별표 4-아가 1차 20 · 2차 30 · 3차 이상 50만원이라
+    적는다. 그런데 그 행은 위반행위를 `법 제16조제2항제1호에 따른 **안전조치**를 하지 않은
+    경우` 라고만 쓴다. `목줄` 은 두 다리 건너 시행규칙 제11조에 있고 그건 다른 문서다.
+    낱말 하나를 붙이면 **dense 106위 → 1위**다.
+    """
+    for question in ("목줄 안 하면 과태료 얼마인가요?", "목줄 안 하면 과태료 얼마야"):
+        assert "안전조치" in vocabulary.aliases(question), question
+
+
+def test_the_leash_alias_reaches_exactly_two_golden_items() -> None:
+    """**사정거리를 여기서 붙잡는다.** `가축` 이 46문항 중 18개에 붙던 사고(위 테스트)가
+    이 모듈의 위험이고, 새 트리거를 넣을 때마다 같은 것을 재야 한다.
+
+    `안전조치` 를 받는 문항은 `Q3`·`B1` 둘뿐이다 — `QA5`(*"목줄 착용 외에 다른 안전조치
+    방법은 없나요?"*)는 질문에 **이미 그 낱말이 있어** `aliases()` 가 안 더한다. 그 규칙이
+    죽으면 여기서 셋이 되어 깨진다.
+    """
+    from daengs_life.rag.stages import goldenset
+
+    reached = {i.id for i in goldenset.load().items
+               if "안전조치" in vocabulary.aliases(i.question)}
+    assert reached == {"Q3", "B1"}, reached
+
+
+def test_the_leash_trigger_needs_no_context() -> None:
+    """`목줄` 은 한 토큰이고 다른 맥락에서 쓰일 자리가 없다 — `화장장` 과 같다.
+
+    조건을 걸면 *"목줄 없이 산책해도 되나요"* 같은 문장이 조용히 빠진다.
+    """
+    assert not vocabulary.ALIASES["목줄"].requires
+
+
 def test_a_context_gated_trigger_needs_its_context() -> None:
     """조건 목록이 비어 있으면 무조건 걸리고, 있으면 그중 하나가 같이 있어야 한다."""
     gated = [t for t, a in vocabulary.ALIASES.items() if a.requires]

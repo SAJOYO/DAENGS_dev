@@ -37,8 +37,12 @@ jobs:
       # **`ml`·`gait`·`screening` 그룹은 일부러 안 깝니다.** torch 만 2.4GB 라 CI 마다 받는 것이
       # 얻는 것에 비해 비쌉니다 (D-021 이 상주 비용을 다룬 것과 같은 판단). 그 그룹이 필요한
       # 테스트는 `pytest.importorskip` 으로 **skip 됩니다** — 없는 그룹은 실패가 아닙니다.
+      #
+      # `--extra agent` 는 D-055 ⑦ 입니다. 에이전트 구현을 조건부로 보존하기로 하면서, 보존하는
+      # 코드를 아무도 검사하지 않는 상태를 막으려고 CI 에서만 깝니다 (LangChain 둘, 수십 MB).
+      # 서버 backend 컨테이너는 여전히 안 깝니다.
       - name: 의존성
-        run: uv sync --frozen --extra place
+        run: uv sync --frozen --extra place --extra agent
 
       # 인자 없이 돌립니다. #224 이전에는 수집 단계에서 죽어 이것이 불가능했습니다.
       - name: 테스트

@@ -50,6 +50,10 @@ PromptVersion = Literal[
     # ⚠ Adding a value is safe for the frozen runners; changing or removing one is not
     # (card note ④) — `runner_v5`~`v8` import this module to reproduce their reports.
     "agent-ko-v1",
+    # PR #272 — the agent aligned with the frozen CLARIFY contract (tools record a
+    # selection; the shared planner gates and the shared engine executes). Added, never
+    # substituted: `agent-ko-v1` stays so `comparison_v1_*` remains reproducible.
+    "agent-ko-v2",
 ]
 
 

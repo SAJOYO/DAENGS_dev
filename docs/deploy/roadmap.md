@@ -45,6 +45,12 @@
    > GCP 에 미적용인 것은 09-02 덤프 이후에 추가된 분, 즉 **`main` 에 아직 없는
    > `db/migrations/` 전부**이고 다음 dev→main 배포 때 적용한다 (runbook §6).
    >
+   > **`verify_*.sql` 을 믿어도 된다 — 2026-09-06(#273)부터다.** 그전에는 아홉 장 중 여섯이
+   > 출력 전용(SELECT 나열)이라 **스키마가 틀려도 종료 코드 0** 이었다(`psql … || exit 1` 이
+   > 종료 코드를 본다). 지금은 전부 단언형이고 `tools/check_migration_verification.py` 가
+   > 일회용 Postgres 에 적용한 뒤 **일부러 망가뜨려 verify 가 잡는지** 확인한다
+   > (`PostgreSQL: 78 checks passed`). 규약은 `db/migrations/README.md` 에 있다.
+   >
    > **점령 게임판 적재도 각각이다.** `territory-sites-ingest.yml` 은
    > `runs-on: [self-hosted]` 라 로컬 서버 place-db 만 채운다. GCP 는 runbook §6 의
    > "점령 게임판 적재 (GCP)" 절을 손으로 밟는다. 안 밟으면 `/territory/sites/nearby` 가

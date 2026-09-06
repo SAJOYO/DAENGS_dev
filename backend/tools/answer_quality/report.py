@@ -29,7 +29,7 @@ from typing import Any
 from tools.answer_quality.collect import NOT_ANSWERED_STATUSES, load_answers
 from tools.answer_quality.judge import RUBRIC_ITEMS, RUBRIC_MAX, agreement_rates, pairwise_summary
 from tools.answer_quality.provenance import source_provenance, utc_now
-from tools.answer_quality.questions import ASSETS_DIR, load_questions
+from tools.answer_quality.questions import ASSETS_DIR, file_sha256, load_questions
 from tools.answer_quality.strata import STRATA, STRATA_BY_ID
 
 REPORT_NAME = "report_v1.md"
@@ -71,14 +71,18 @@ def discover(directory: Path = ASSETS_DIR) -> dict[str, Any]:
     questions = load_questions(directory / "questions_v1.jsonl")
     generation_path = directory / "questions_v1_generation.json"
     generation = (
-        json.loads(generation_path.read_text(encoding="utf-8")) if generation_path.exists() else None
+        json.loads(generation_path.read_text(encoding="utf-8"))
+        if generation_path.exists()
+        else None
     )
     anchor_checks = [
         json.loads(path.read_text(encoding="utf-8"))
         for path in sorted(directory.glob("anchor_check_*.json"))
     ]
     answers = {label: _read_jsonl(path) for label, path in _labels(directory, "answers").items()}
-    judgments = {label: _read_jsonl(path) for label, path in _labels(directory, "judgments").items()}
+    judgments = {
+        label: _read_jsonl(path) for label, path in _labels(directory, "judgments").items()
+    }
     agreements = {
         label: _read_jsonl(path)
         for label, path in _labels(directory, "judgments", "_agreement").items()
@@ -89,6 +93,7 @@ def discover(directory: Path = ASSETS_DIR) -> dict[str, Any]:
         if not path.stem[len("pairwise_") :].startswith(_SMOKE_PREFIX)
     }
     return {
+        "directory": directory,
         "questions": questions,
         "generation": generation,
         "anchor_checks": anchor_checks,
@@ -134,7 +139,10 @@ def answer_rate(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "by_status": dict(sorted(Counter(str(row["status"]) for row in rows).items())),
         "by_stratum": by_stratum,
         "by_route_kind": {
-            kind: {"count": by_kind_total[kind], "rate": _rate(by_kind_hit[kind], by_kind_total[kind])}
+            kind: {
+                "count": by_kind_total[kind],
+                "rate": _rate(by_kind_hit[kind], by_kind_total[kind]),
+            }
             for kind in ("specialized", "fallback", "clarify")
             if by_kind_total[kind]
         },
@@ -225,7 +233,9 @@ def grounding_priority(rubric: Mapping[str, Any]) -> list[dict[str, Any]]:
         for sid, entry in rubric["by_stratum"].items()
         if STRATA_BY_ID[sid].expected_route_kind == "fallback"
     ]
-    return sorted(rows, key=lambda r: (r["grounded"] if r["grounded"] is not None else 9, r["stratum"]))
+    return sorted(
+        rows, key=lambda r: (r["grounded"] if r["grounded"] is not None else 9, r["stratum"])
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +245,7 @@ def grounding_priority(rubric: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def build_summary(inputs: Mapping[str, Any], *, notes: Sequence[str] = ()) -> dict[str, Any]:
     questions = inputs["questions"]
+    directory = Path(inputs.get("directory") or ASSETS_DIR)
     per_stratum = Counter(case.stratum for case in questions)
     anchor_checks = [
         {
@@ -287,11 +298,9 @@ def build_summary(inputs: Mapping[str, Any], *, notes: Sequence[str] = ()) -> di
                 **rubric,
                 "prompt_version": jmeta.get("prompt_versions", {}).get("A"),
                 "answers_sha256": jmeta.get("answers_sha256"),
-                "answers_match": jmeta.get("answers_sha256") == None
-                or True,  # placeholder replaced below
+                "answers_match": _answers_match(directory, label, jmeta),
                 "tokens": jmeta.get("tokens"),
             }
-            entry["rubric"]["answers_match"] = _answers_match(inputs, label, jmeta)
             entry["rubric_reportable"] = bool(models) and models <= passed_models
             entry["low_strata"] = low_strata(rubric, rows)
             entry["grounding_priority"] = grounding_priority(rubric)
@@ -356,16 +365,12 @@ def build_summary(inputs: Mapping[str, Any], *, notes: Sequence[str] = ()) -> di
     }
 
 
-def _answers_match(inputs: Mapping[str, Any], label: str, jmeta: Mapping[str, Any]) -> bool | None:
+def _answers_match(directory: Path, label: str, jmeta: Mapping[str, Any]) -> bool | None:
     """판정 파일이 지금 있는 답변 파일을 채점한 것인가 (sha256). 모르면 None."""
     expected = jmeta.get("answers_sha256")
-    if not expected:
+    path = directory / f"answers_{label}.jsonl"
+    if not expected or not path.exists():
         return None
-    path = ASSETS_DIR / f"answers_{label}.jsonl"
-    if not path.exists():
-        return None
-    from tools.answer_quality.questions import file_sha256
-
     return file_sha256(path) == expected
 
 
@@ -377,7 +382,9 @@ def _automatic_notes(
 ) -> list[str]:
     notes: list[str] = []
     if not labels:
-        notes.append("수집된 답변 파일(`answers_<label>.jsonl`)이 없다 — 답변률 · 루브릭 전부 미측정.")
+        notes.append(
+            "수집된 답변 파일(`answers_<label>.jsonl`)이 없다 — 답변률 · 루브릭 전부 미측정."
+        )
     for label, entry in labels.items():
         adapters = entry["meta"]["adapters"]
         if adapters == "fake":
@@ -389,9 +396,13 @@ def _automatic_notes(
                 f"`{label}`: `general` 만 진짜 어댑터 — 전문 능력(훈련 · 제도 · 산책 · 장소)의 답 품질은 재지 않았다."
             )
         if entry["rubric"] is not None and entry["rubric_reportable"] is False:
-            notes.append(f"`{label}`: 판정 모델의 앵커 검사가 없거나 실패해 루브릭 점수를 싣지 않는다.")
+            notes.append(
+                f"`{label}`: 판정 모델의 앵커 검사가 없거나 실패해 루브릭 점수를 싣지 않는다."
+            )
         if entry["rubric"] is not None and entry["rubric"].get("answers_match") is False:
-            notes.append(f"`{label}`: 판정 파일이 지금의 답변 파일과 다른 판본을 채점한 것이다 — 다시 채점할 것.")
+            notes.append(
+                f"`{label}`: 판정 파일이 지금의 답변 파일과 다른 판본을 채점한 것이다 — 다시 채점할 것."
+            )
     if not pairwise:
         notes.append("쌍대 비교 파일(`pairwise_*`)이 없다 — 전/후 승률 미측정.")
     if router_model and judge_models and judge_models <= {router_model}:
@@ -438,14 +449,22 @@ def render_report(summary: Mapping[str, Any]) -> str:
     dirty = prov.get("source_dirty_files") or []
     packages = ", ".join(f"{k} {v}" for k, v in (prov.get("packages") or {}).items())
 
-    anchor_table = _table(
-        ["판정 모델", "프롬프트", "통과", "실패 앵커"],
-        [
-            (c["judge_model"], c["prompt_version"], f"{c['passed_count']}/{c['anchor_count']}",
-             ", ".join(f"`{a}`" for a in c["failed_anchors"]) or "없음")
-            for c in summary["anchor_checks"]
-        ],
-    ) if summary["anchor_checks"] else "_앵커 검사 기록이 없다 — 어떤 점수도 실을 수 없다._"
+    anchor_table = (
+        _table(
+            ["판정 모델", "프롬프트", "통과", "실패 앵커"],
+            [
+                (
+                    c["judge_model"],
+                    c["prompt_version"],
+                    f"{c['passed_count']}/{c['anchor_count']}",
+                    ", ".join(f"`{a}`" for a in c["failed_anchors"]) or "없음",
+                )
+                for c in summary["anchor_checks"]
+            ],
+        )
+        if summary["anchor_checks"]
+        else "_앵커 검사 기록이 없다 — 어떤 점수도 실을 수 없다._"
+    )
 
     question_table = _table(
         ["계층", "건수", "묶음"],
@@ -463,21 +482,29 @@ def render_report(summary: Mapping[str, Any]) -> str:
             "",
             f"- 질문 {ar['count']}건 · 답변률 **{_fmt(ar['rate'])}** ({ar['answered']}/{ar['count']})"
             + (f" · 중단: {meta['stopped']}" if meta.get("stopped") else ""),
-            f"- 상태별: " + ", ".join(f"{k} {v}" for k, v in ar["by_status"].items()),
+            "- 상태별: " + ", ".join(f"{k} {v}" for k, v in ar["by_status"].items()),
             "- 묶음별 답변률: "
-            + ", ".join(f"{k} {_fmt(v['rate'])} (n={v['count']})" for k, v in ar["by_route_kind"].items()),
+            + ", ".join(
+                f"{k} {_fmt(v['rate'])} (n={v['count']})" for k, v in ar["by_route_kind"].items()
+            ),
             f"- 라우터 토큰: {(meta.get('tokens') or {}).get('total_tokens', '–')}",
             "",
             _table(
                 ["계층", "묶음", "n", "답변률"],
-                [(sid, v["route_kind"], v["count"], v["rate"]) for sid, v in ar["by_stratum"].items()],
+                [
+                    (sid, v["route_kind"], v["count"], v["rate"])
+                    for sid, v in ar["by_stratum"].items()
+                ],
             ),
         ]
         rubric = entry["rubric"]
         if rubric is None:
             lines += ["", "루브릭: **미측정** (판정 파일 없음)."]
         elif not entry["rubric_reportable"]:
-            lines += ["", f"루브릭: 판정 파일은 있으나 판정 모델 {rubric['judge_models']} 의 앵커 검사가 통과하지 않아 **싣지 않는다**."]
+            lines += [
+                "",
+                f"루브릭: 판정 파일은 있으나 판정 모델 {rubric['judge_models']} 의 앵커 검사가 통과하지 않아 **싣지 않는다**.",
+            ]
         else:
             excluded = entry["excluded_items"]
             lines += [
@@ -504,9 +531,15 @@ def render_report(summary: Mapping[str, Any]) -> str:
                     _table(
                         ["계층", "묶음", "ⓐ", "ⓒ", "예시", "상태", "문구(앞 120자)"],
                         [
-                            (r["stratum"], r["route_kind"], r["mean_answered"], r["mean_grounded"],
-                             r["example_question_id"], r["example_status"],
-                             (r["example_message"] or "").replace("\n", " ").replace("|", "¦"))
+                            (
+                                r["stratum"],
+                                r["route_kind"],
+                                r["mean_answered"],
+                                r["mean_grounded"],
+                                r["example_question_id"],
+                                r["example_status"],
+                                (r["example_message"] or "").replace("\n", " ").replace("|", "¦"),
+                            )
                             for r in entry["low_strata"]
                         ],
                     ),
@@ -518,8 +551,10 @@ def render_report(summary: Mapping[str, Any]) -> str:
                     "",
                     _table(
                         ["계층", "ⓒ grounded", "ⓐ answered", "ⓑ safe", "ⓓ deferred"],
-                        [(r["stratum"], r["grounded"], r["answered"], r["safe"], r["deferred"])
-                         for r in entry["grounding_priority"]],
+                        [
+                            (r["stratum"], r["grounded"], r["answered"], r["safe"], r["deferred"])
+                            for r in entry["grounding_priority"]
+                        ],
                     ),
                 ]
         agreement = entry["agreement"]
@@ -532,8 +567,14 @@ def render_report(summary: Mapping[str, Any]) -> str:
                 "",
                 _table(
                     ["항목", "일치율", "판정"],
-                    [(item, agreement["rates"][item], "제외" if item in agreement["excluded_items"] else "사용")
-                     for item in RUBRIC_ITEMS],
+                    [
+                        (
+                            item,
+                            agreement["rates"][item],
+                            "제외" if item in agreement["excluded_items"] else "사용",
+                        )
+                        for item in RUBRIC_ITEMS
+                    ],
                 ),
             ]
         sections.append("\n".join(lines))
@@ -551,8 +592,18 @@ def render_report(summary: Mapping[str, Any]) -> str:
                 "",
                 _table(
                     ["계층", "n", "후 승", "전 승", "무", "위치 의존", "후 승률"],
-                    [(sid, v["count"], v["B"], v["A"], v["tie"], v["position_dependent"], v["b_win_rate"])
-                     for sid, v in p["by_stratum"].items()],
+                    [
+                        (
+                            sid,
+                            v["count"],
+                            v["B"],
+                            v["A"],
+                            v["tie"],
+                            v["position_dependent"],
+                            v["b_win_rate"],
+                        )
+                        for sid, v in p["by_stratum"].items()
+                    ],
                 ),
                 "",
             ]
@@ -561,10 +612,14 @@ def render_report(summary: Mapping[str, Any]) -> str:
         pairwise_section = "**미측정.** 쌍대 비교 파일이 없다."
 
     unmeasured = summary["unmeasured"]
-    not_collected = "\n".join(
-        f"- `{label}`: " + (", ".join(f"`{s}`" for s in strata) if strata else "없음 — 전 계층 수집")
-        for label, strata in unmeasured["strata_not_collected"].items()
-    ) or "- 수집된 라벨이 없다 — 전 계층 미측정"
+    not_collected = (
+        "\n".join(
+            f"- `{label}`: "
+            + (", ".join(f"`{s}`" for s in strata) if strata else "없음 — 전 계층 수집")
+            for label, strata in unmeasured["strata_not_collected"].items()
+        )
+        or "- 수집된 라벨이 없다 — 전 계층 미측정"
+    )
     notes = "\n".join(f"- {n}" for n in unmeasured["notes"]) or "- 없음"
 
     return f"""# 답변 품질 리포트 v1 ({CARD})
@@ -616,7 +671,7 @@ def render_report(summary: Mapping[str, Any]) -> str:
 
 {not_collected}
 
-라벨 없이 남은 것: 판정 없음 {", ".join(f"`{x}`" for x in unmeasured["labels_without_judgments"]) or "없음"} · 일치율 없음 {", ".join(f"`{x}`" for x in unmeasured["labels_without_agreement"]) or "없음"}
+판정 파일이 없는 라벨: {", ".join(f"`{x}`" for x in unmeasured["labels_without_judgments"]) or "없음"} · 일치율 파일이 없는 라벨: {", ".join(f"`{x}`" for x in unmeasured["labels_without_agreement"]) or "없음"}
 
 {notes}
 
@@ -636,7 +691,9 @@ def write_report(summary: Mapping[str, Any], *, directory: Path = ASSETS_DIR) ->
     directory.mkdir(parents=True, exist_ok=True)
     summary_path = directory / SUMMARY_NAME
     report_path = directory / REPORT_NAME
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     report_path.write_text(render_report(summary), encoding="utf-8")
     return report_path, summary_path
 
@@ -644,14 +701,18 @@ def write_report(summary: Mapping[str, Any], *, directory: Path = ASSETS_DIR) ->
 def main() -> None:
     parser = argparse.ArgumentParser(description="답변 품질 리포트 (#277)")
     parser.add_argument("--dir", type=Path, default=ASSETS_DIR)
-    parser.add_argument("--note", action="append", default=[], help="미측정 절에 남길 메모 (반복 가능)")
+    parser.add_argument(
+        "--note", action="append", default=[], help="미측정 절에 남길 메모 (반복 가능)"
+    )
     args = parser.parse_args()
     summary = build_summary(discover(args.dir), notes=args.note)
     report_path, summary_path = write_report(summary, directory=args.dir)
     print(f"리포트 {report_path}")
     print(f"요약   {summary_path}")
     for label, entry in summary["labels"].items():
-        print(f"  {label:<12} 답변률 {entry['answer_rate']['rate']} · 루브릭 {'있음' if entry['rubric'] else '없음'}")
+        print(
+            f"  {label:<12} 답변률 {entry['answer_rate']['rate']} · 루브릭 {'있음' if entry['rubric'] else '없음'}"
+        )
 
 
 if __name__ == "__main__":

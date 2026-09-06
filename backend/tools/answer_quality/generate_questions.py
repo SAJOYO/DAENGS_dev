@@ -166,7 +166,9 @@ def main() -> None:
 
     strata = resolve_strata(args.strata)
     target_total = sum(s.questions_target for s in strata)
-    print(f"계층 {len(strata)}개 · 목표 {target_total}건 · 모델 {args.model} · 호출 {len(strata)}회")
+    print(
+        f"계층 {len(strata)}개 · 목표 {target_total}건 · 모델 {args.model} · 호출 {len(strata)}회"
+    )
     if args.dry_run:
         print(build_generation_prompt(strata[0], count=strata[0].questions_target + _OVERSAMPLE))
         return
@@ -183,7 +185,9 @@ def main() -> None:
         print(f"중단: {exc}")
         return
     finally:
-        print(f"토큰 합계 {ledger.total:,} (입력 {ledger.input_tokens:,} · 출력 {ledger.output_tokens:,})")
+        print(
+            f"토큰 합계 {ledger.total:,} (입력 {ledger.input_tokens:,} · 출력 {ledger.output_tokens:,})"
+        )
 
     write_questions(args.out, cases)
     meta = {

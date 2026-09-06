@@ -12,14 +12,12 @@ import asyncio
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 #: 한 단계(명령 하나)의 기본 토큰 예산. 넘으면 `TokenBudgetExceeded` 로 멈추고 결과를 보고한다.
 DEFAULT_TOKEN_BUDGET = 400_000
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class TokenBudgetExceeded(RuntimeError):
@@ -96,7 +94,7 @@ def generation_config(
     )
 
 
-def parse_structured(raw: object, schema: type[ModelT]) -> ModelT | None:
+def parse_structured[ModelT: BaseModel](raw: object, schema: type[ModelT]) -> ModelT | None:
     """프로바이더 출력을 스키마로. 무효면 None — 원문은 올리지 않는다."""
     parsed: object = raw
     if isinstance(raw, str):
@@ -112,7 +110,7 @@ def parse_structured(raw: object, schema: type[ModelT]) -> ModelT | None:
         return None
 
 
-def generate_structured(
+def generate_structured[ModelT: BaseModel](
     *,
     model: str,
     prompt: str,
@@ -132,9 +130,13 @@ def generate_structured(
     for _attempt in range(2):
         response = active.models.generate_content(model=model, contents=prompt, config=config)
         usage = getattr(response, "usage_metadata", None)
+        # 생각하는 모델의 사고 토큰은 출력으로 과금되므로 출력에 합쳐 센다 — 예산이 실제 비용을 보게.
+        output = int(getattr(usage, "candidates_token_count", None) or 0) + int(
+            getattr(usage, "thoughts_token_count", None) or 0
+        )
         ledger.add(
             input_tokens=getattr(usage, "prompt_token_count", None),
-            output_tokens=getattr(usage, "candidates_token_count", None),
+            output_tokens=output,
             label=label,
         )
         raw = getattr(response, "parsed", None)
@@ -143,7 +145,9 @@ def generate_structured(
         result = parse_structured(raw, schema)
         if result is not None:
             return result
-    raise SchemaOutputError(f"{model}: 출력이 두 번 다 {schema.__name__} 스키마를 지키지 않았습니다")
+    raise SchemaOutputError(
+        f"{model}: 출력이 두 번 다 {schema.__name__} 스키마를 지키지 않았습니다"
+    )
 
 
 async def generate_structured_async(**kwargs: Any) -> Any:

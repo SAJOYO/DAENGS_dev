@@ -247,7 +247,9 @@ def controlled_settings(adapter_mode: str, flag: Mapping[str, Any]) -> dict[str,
     }
 
 
-def write_answers(path: Path, rows: Sequence[Mapping[str, Any]], *, meta: Mapping[str, Any]) -> None:
+def write_answers(
+    path: Path, rows: Sequence[Mapping[str, Any]], *, meta: Mapping[str, Any]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         handle.write(json.dumps({"kind": "meta", **meta}, ensure_ascii=False) + "\n")
@@ -323,7 +325,9 @@ def main() -> None:
     }
     path = answers_path(args.label)
     write_answers(path, rows, meta=meta)
-    print(f"토큰 합계 {ledger.total:,} (입력 {ledger.input_tokens:,} · 출력 {ledger.output_tokens:,})")
+    print(
+        f"토큰 합계 {ledger.total:,} (입력 {ledger.input_tokens:,} · 출력 {ledger.output_tokens:,})"
+    )
     print(f"상태  {meta['status_counts']}")
     print(f"결과  {path}")
 

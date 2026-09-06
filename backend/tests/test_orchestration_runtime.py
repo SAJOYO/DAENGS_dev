@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from daengs_backend.config import settings
@@ -31,25 +33,51 @@ def test_explicit_langgraph_kind() -> None:
 def test_kind_argument_beats_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     """설정이 agent 여도 `kind="langgraph"` 면 LangGraph 가 나온다.
 
-    벤치마크가 의존하는 성질입니다. 반대 방향(설정 langgraph + kind agent)은 카드 ②가
-    들어오기 전까지 NotImplementedError 로만 확인할 수 있어 아래 테스트가 겸합니다.
+    벤치마크가 의존하는 성질입니다. 반대 방향(설정 langgraph + kind agent)은 아래
+    `test_agent_kind_builds_the_agent` 가 겸합니다.
     """
     monkeypatch.setattr(settings, "orchestrator", "agent")
     assert isinstance(build_orchestrator("langgraph"), AssistantOrchestrationService)
 
 
-def test_agent_is_not_built_yet(monkeypatch: pytest.MonkeyPatch) -> None:
-    """아직 없는 구현을 조용히 LangGraph 로 바꿔치기하지 않는다.
+def test_agent_kind_builds_the_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """설정으로 골랐든 인자로 골랐든 같은 구현이 나온다.
 
-    설정으로 골랐든 인자로 골랐든 같은 자리에서 걸려야 합니다 — 설정 경로만 열려
-    있으면 `.env` 에 agent 를 적어 둔 서버가 LangGraph 로 돌면서 결과만 남깁니다.
+    한쪽 경로만 열려 있으면 `.env` 에 agent 를 적어 둔 서버가 LangGraph 로 돌면서
+    결과만 남깁니다 — 그 결과를 나중에 에이전트 것이라고 믿게 됩니다.
     """
-    with pytest.raises(NotImplementedError):
-        build_orchestrator("agent")
+    pytest.importorskip("langchain")
+    from daengs_backend.orchestration.agent import AgentOrchestrationService
+
+    assert isinstance(build_orchestrator("agent"), AgentOrchestrationService)
 
     monkeypatch.setattr(settings, "orchestrator", "agent")
-    with pytest.raises(NotImplementedError):
-        build_orchestrator()
+    assert isinstance(build_orchestrator(), AgentOrchestrationService)
+
+
+def test_agent_extra_missing_is_not_silently_langgraph() -> None:
+    """`agent` extra 가 없는 환경에서도 LangGraph 로 되돌아가지 않는다.
+
+    설치가 안 됐으면 ImportError 로 시끄럽게 실패해야 합니다. 조용히 LangGraph 를
+    주면 CI 나 서버에서 "에이전트로 돌렸다"는 기록만 남고 실제로는 안 돈 것이 됩니다.
+    """
+    pytest.importorskip("langchain")
+    assert not isinstance(build_orchestrator("agent"), AssistantOrchestrationService)
+
+
+def test_missing_agent_extra_fails_loudly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """extra 가 없으면 **구현을 고르는 순간** 실패한다 — 요청 때가 아니라.
+
+    `agent/service.py` 가 LangChain 을 모듈 최상단에서 import 하는 이유입니다. 거기서도
+    미루면, extra 없이 `DAENGS_ORCHESTRATOR=agent` 로 뜬 서버가 멀쩡히 기동한 뒤 모든
+    요청을 "잠시 후 다시 시도해 주세요"로 돌려보냅니다 — 설치가 빠진 것이 프로바이더
+    장애처럼 보이는, `/life/ask` 만 503 이던 그 모양입니다.
+
+    `sys.modules` 에 None 을 꽂아 import 실패를 흉내냅니다.
+    """
+    monkeypatch.setitem(sys.modules, "daengs_backend.orchestration.agent", None)
+    with pytest.raises(ImportError):
+        build_orchestrator("agent")
 
 
 def test_unknown_kind_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -69,6 +69,9 @@ class ReportedTurn(BaseModel):
     assistant_status: str | None
     #: 이미 공개 계약인 `AssistantResponse` 그대로입니다 — 근거·상태가 여기 있습니다.
     public_response: dict[str, Any] | None
+    #: **LangSmith 트레이스의 run id 와 같은 값입니다** (D-054). 트레이싱을 켜 둔
+    #: 기간의 신고라면 이 값으로 그 요청의 라우팅·검색 청크·프롬프트까지 열 수 있습니다.
+    #: 콘솔이 링크를 걸 자리이고, 그래서 이 필드는 새로 넣을 것이 없습니다.
     request_id: str | None
     agent_categories: list[str]
 

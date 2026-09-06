@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
+from daengs_backend.core.tracing import configure_tracing
 from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
     admin_account,
@@ -31,6 +32,8 @@ from daengs_backend.routers import (
     status,
     territory,
     training,
+    walk_entry,
+    walk_storyboard,
     walk_spatial_diary,
 )
 from daengs_backend.routers import (
@@ -82,6 +85,13 @@ SRC_DIR = Path(__file__).resolve().parents[1]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # **맨 앞이어야 합니다.** LangSmith 클라이언트는 모듈 전역 캐시라 먼저 만든 쪽이
+    # 이깁니다 — 다른 코드가 트레이스를 하나라도 만든 뒤에 부르면 마스킹 없는
+    # 클라이언트가 굳고, 신원·정밀 좌표가 그대로 나갑니다 (`core.tracing`).
+    #
+    # `LANGSMITH_TRACING` 이 없으면 아무것도 안 합니다. 기본은 꺼져 있습니다.
+    configure_tracing()
+
     # 실시간 캐시를 미리 엽니다 (RT-001 ④-c). `get_cache` 는 lru_cache 라 여기서
     # `Cache()` 가 만들어지고 그때 Redis 연결을 시도합니다. 첫 요청에 미루면 그 비용이
     # 요청 하나에 통째로 붙습니다.
@@ -173,6 +183,8 @@ app.include_router(dogcard.router)
 app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
+app.include_router(walk_entry.router)
+app.include_router(walk_storyboard.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 

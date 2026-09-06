@@ -80,6 +80,36 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+      # 트레이싱 (D-054). **기본은 꺼져 있습니다** — 최상단 .env 에서 켭니다.
+      #
+      # **여기 있어야 합니다. `backend/.env` 에 적으면 안 켜집니다.** 그 파일은
+      # pydantic-settings 가 자기 Settings 로만 읽고 `os.environ` 에 넣지 않는데,
+      # langsmith SDK 는 `os.environ` 만 봅니다. 접두사 DAENGS_ 가 없는 것은
+      # GEMINI_*·REDIS_URL 과 같은 이유입니다 — 도구가 부르는 이름을 그대로 씁니다.
+      #
+      # `langsmith` 는 **계측 SDK 로만** 씁니다. MODE=otel 이면 트레이스는 위
+      # otel-collector 를 거쳐 **우리 GCP 프로젝트의 Cloud Trace** 로 가고,
+      # LangSmith 라는 회사에는 아무것도 안 갑니다 (API 키가 필요 없는 이유).
+      #
+      # 켜면 질문 원문·검색 청크·프롬프트·답변이 트레이스에 담깁니다. 그것이
+      # 목적이고(민원 진단), 신원과 정밀 좌표는 `core/tracing.py` 가 지웁니다.
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      # ⚠ **기본값 langsmith 는 제3자로 나갑니다.** 우리 운영값은 otel 입니다.
+      LANGSMITH_TRACING_MODE: ${LANGSMITH_TRACING_MODE:-otel}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-daengs}
+      # collector 는 compose 네트워크 안에서만 닿습니다. 호스트 포트가 없습니다.
+      #
+      # ⚠ **`/v1/traces` 까지 적어야 합니다.** langsmith 가 이 값을 직접 읽어
+      # `OTLPSpanExporter(endpoint=...)` 로 **명시 전달**하는데, exporter 는
+      # 명시 전달된 주소에는 경로를 안 붙입니다(env 폴백 경로에서만 붙입니다).
+      # 베이스 URL 만 주면 모든 export 가 `/` 로 POST 돼 404 가 나고, backend 는
+      # "트레이싱을 켰습니다" 를 찍고 collector 로그도 멀쩡한데 Cloud Trace 만
+      # 영원히 비어 있습니다.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-daengs-backend}
+      # MODE=langsmith 로 되돌릴 때만 씁니다 (그때는 제3자 제공입니다 — 처리방침 확인).
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
       # **공용 파일 저장소** (D-043, D-052). 보행 영상·점령지 사진, 앞으로 프로필 사진·
       # 도감 카드까지 같은 볼륨에 접두사로 들어옵니다.
       #
@@ -204,6 +234,47 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # 트레이스를 우리 GCP 프로젝트의 Cloud Trace 로 넘깁니다 (D-054).
+  #
+  # **기본 기동에는 안 뜹니다** — `profiles: ["tracing"]` 이라 명시해야 올라옵니다.
+  # 트레이싱은 옵트인이고, 안 켤 사람의 서버에 컨테이너를 하나 더 얹지 않습니다:
+  #
+  #   docker compose --profile tracing up -d
+  #
+  # 앱이 Cloud Trace 로 직접 안 쏘는 이유는 `otel/collector.yaml` 머리말에 있습니다
+  # (OAuth 토큰이 만료되는데 OTLP 헤더는 고정이라 조용히 멈춥니다).
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.160.0
+    container_name: daengs-otel-collector
+    restart: unless-stopped
+    profiles: ["tracing"]
+    networks:
+      - daengs-network
+    # ports 가 없습니다. 트레이스에는 질문 원문이 들어 있어서 LAN 에도 안 엽니다 —
+    # backend 만 compose 네트워크 안에서 4318 로 붙습니다.
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol/collector.yaml:ro
+      # 서비스 계정 키 파일을 쓰면 이 줄과 아래 GOOGLE_APPLICATION_CREDENTIALS 를 켭니다.
+      # gait 세 서비스가 쓰는 것과 **같은 키 파일**입니다 (.env 의 GAIT_GCP_CREDENTIALS_FILE).
+      # GCP VM 위에서 돌면 메타데이터 서버가 대신하므로 둘 다 필요 없습니다.
+      # - ${GAIT_GCP_CREDENTIALS_FILE:-./_secrets/gcp-sa.json}:/secrets/gcp-sa.json:ro
+    environment:
+      # 어느 프로젝트로 보낼지.
+      #
+      # ⚠ **여기에 `:?` 를 쓰면 안 됩니다.** compose 는 프로파일로 거르기 **전에**
+      #   보간하므로, 이 서비스가 안 뜨는 사람의 `docker compose config` 까지 실패합니다.
+      #   배포 워크플로우가 `docker compose config --quiet` 로 검증하기 때문에
+      #   (`.github/workflows/deploy.yml` "Compose 설정 검증"), 그러면 트레이싱을
+      #   안 켜는 사람의 **배포가 통째로 깨집니다.**
+      #
+      # 비면 googlecloud exporter 가 자격증명에서 프로젝트를 유추합니다. 그것도 없으면
+      # collector 가 기동에 실패하는데, 그건 이 프로파일을 켠 사람에게만 일어나고
+      # `docker compose logs otel-collector` 에 그대로 보입니다 — 실패를 알아야 할
+      # 사람에게만 알리는 자리가 거기입니다.
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
 
   redis:
     image: redis:8.2-alpine

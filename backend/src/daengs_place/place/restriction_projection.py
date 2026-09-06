@@ -174,16 +174,18 @@ def project(
         if applies_to_dog(chip, dog_size=dog_size, dog_age_years=dog_age_years)
     ]
 
+    missing = None
     for chip in visible:
         # **약한 술어는 어느 코드든 판정하지 않는다.** 원문이 단정하지 않았다.
         if chip.certainty == "soft":
             continue
         if chip.code == "deny:size":
             if dog_size is None:
-                return DogRestrictionEvaluation(
+                missing = DogRestrictionEvaluation(
                     state="unknown", reason="missing_dog_size",
                     chips=visible, blocking=[chip.code],
                 )
+                continue
             return DogRestrictionEvaluation(
                 state="incompatible", reason="size_denied",
                 chips=visible, blocking=[chip.code],
@@ -197,14 +199,18 @@ def project(
             # 여기 온 칩은 `applies_to_dog` 를 통과했다 — 나이를 모르면 통과했을
             # 뿐이므로 판정은 못 한다.
             if dog_age_years is None:
-                return DogRestrictionEvaluation(
+                missing = DogRestrictionEvaluation(
                     state="unknown", reason="missing_dog_age",
                     chips=visible, blocking=[chip.code],
                 )
+                continue
             return DogRestrictionEvaluation(
                 state="incompatible", reason="age_denied",
                 chips=visible, blocking=[chip.code],
             )
+
+    if missing is not None:
+        return missing
 
     # 판독이 불완전하면 현재 칩에 blocker가 없다는 사실로 원문 전체가 안전하다고
     # 결론내릴 수 없다. 위의 확정 blocker만 먼저 판정하고 나머지는 fail closed 한다.

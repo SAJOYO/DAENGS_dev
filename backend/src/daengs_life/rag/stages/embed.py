@@ -91,6 +91,23 @@ def chunks_fingerprint() -> str:
     return h.hexdigest()
 
 
+# ---------------------------------------------------------------- 증분 (RAG-064)
+# **전역 지문은 "다시 만들어야 하나"만 답한다. 증분은 "무엇을"까지 답해야 한다.**
+# 그래서 행마다 `content` 해시를 parquet 에 싣는다.
+#
+# ⚠ **`chars` 로 대신하지 않는다.** `restamp` 는 `chars` 를 쓰면서 스스로 "내용 동일성의
+#   대리 검사" 라고 부른다 — 일회성 검사에서는 감당할 만한 대리였지만, **매 적재마다 수천
+#   행을 그것으로 판정하면** 글자 수가 같은 수정(오타 한 글자 교체)에서 낡은 벡터를 그대로
+#   유지하고 **예외가 하나도 안 난다.** CLAUDE.md 가 경고하는 "차원이 같아서 조용히 틀린다"
+#   와 같은 종류다.
+SCHEMA_VERSION = 2        # 1 = chunk_id·embedding·chars·element_type / 2 = + content_sha256
+
+
+def content_sha256(content: str) -> str:
+    """행 하나의 내용 해시. 주소(`chunk_id`)는 별도 컬럼이라 여기 안 섞는다."""
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
 # ---------------------------------------------------------------- 토큰 가드 (RAG-021 ②)
 def token_stats(model: Model, texts: list[str]) -> dict[str, int]:
     """모델의 토크나이저로 재기만 한다. 가중치를 로드하지 않으므로 인코딩 전에 싸게 실패할 수 있다."""
@@ -218,6 +235,9 @@ def write_parquet(model: Model, rows: list[dict[str, Any]], vectors, *,
                 pa.array(vectors.reshape(-1), pa.float32()), DIM),
             "chars": pa.array([r["chars"] for r in rows], pa.int32()),
             "element_type": pa.array([r["element_type"] for r in rows], pa.string()),
+            # 증분이 "무엇이 바뀌었나"를 묻는 칸 (RAG-064). `chars` 는 대리 검사라 못 쓴다
+            "content_sha256": pa.array(
+                [content_sha256(r["content"]) for r in rows], pa.string()),
         },
         metadata={
             b"embedding_model": model.repo.encode(),
@@ -232,6 +252,7 @@ def write_parquet(model: Model, rows: list[dict[str, Any]], vectors, *,
             b"query_prompt": model.query_prompt.encode(),
             b"token_stats": json.dumps(token_stats, ensure_ascii=False).encode(),
             b"embedder_version": str(VERSION).encode(),
+            b"schema_version": str(SCHEMA_VERSION).encode(),
             b"embedded_at": io.now_kst().encode(),
         },
     )
@@ -256,6 +277,103 @@ def is_current(key: str, fingerprint: str) -> bool:
     meta = read_meta(key)
     return bool(meta) and meta.get("chunks_sha256") == fingerprint \
         and meta.get("embedder_version") == str(VERSION)
+
+
+@dataclass(frozen=True)
+class Plan:
+    """증분 인코딩 계획 (RAG-064).
+
+    `refused` 가 차 있으면 **전량으로 떨어져야 한다** — 그 이유를 사람이 로그에서 본다.
+    `reuse` 는 `(현재 행 index, parquet 행 index)` 쌍이고, `encode` 는 현재 행 index 다.
+    둘을 합치면 현재 청크 전체가 정확히 한 번씩 덮인다.
+    """
+    reuse: list[tuple[int, int]]
+    encode: list[int]
+    dropped: int
+    refused: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.refused is None
+
+
+def plan_incremental(key: str, model: Model, rows: list[dict[str, Any]]) -> Plan:
+    """무엇을 다시 인코딩해야 하나. **거부할 이유가 있으면 먼저 거부한다.**
+
+    거부 조건은 전부 *"섞으면 조용히 틀리는"* 자리다:
+
+      parquet 없음         첫 인코딩이다
+      스키마가 옛것         `content_sha256` 칸이 없어 무엇이 바뀌었는지 물을 수 없다
+      모델·차원이 다름      다른 모델의 벡터를 한 파일에 섞으면 코사인이 무의미해진다.
+                          **차원이 같아서(1024) 예외가 안 난다** — CLAUDE.md 가 경고하는 자리
+      embedder_version     인코딩 방식 자체가 바뀌었다는 뜻이다
+
+    ⚠ **낡은 parquet 을 조용히 이어 쓰지 않는다.** `bge-m3`·`kure-v1` 은 2026-08-29 코퍼스
+    (6,368행)에서 멈춰 있는데, 거기에 증분을 얹으면 **9,451행짜리 최신인 척하는 파일**이 된다.
+    """
+    import pyarrow.parquet as pq
+
+    path = parquet_path(key)
+    if not path.is_file():
+        return Plan([], list(range(len(rows))), 0, refused="parquet 이 없다 (첫 인코딩)")
+
+    meta = read_meta(key) or {}
+    if meta.get("schema_version") != str(SCHEMA_VERSION):
+        # **해법까지 말한다.** parquet 은 git 미추적이라(RAG-017) 다른 PC 는 여전히 v1 이고,
+        # 원인만 말하면 그 사람은 이유를 모른 채 55분 전량 인코딩을 낸다 — A1 이 없애려던 값이다.
+        return Plan([], list(range(len(rows))), 0,
+                    refused=f"parquet 스키마가 v{meta.get('schema_version', '1')} 다"
+                            f" — `content_sha256` 이 없어 증분을 못 판단한다."
+                            f" 코퍼스가 이 parquet 과 같다면 `rag embed --backfill-hashes"
+                            f" --model {key}` 로 몇 초에 채울 수 있다 (벡터 무변경)")
+    if meta.get("embedding_model") != model.repo:
+        return Plan([], list(range(len(rows))), 0,
+                    refused=f"모델이 다르다: parquet={meta.get('embedding_model')} != {model.repo}")
+    if meta.get("dim") != str(DIM) or meta.get("embedder_version") != str(VERSION):
+        return Plan([], list(range(len(rows))), 0,
+                    refused=f"dim/embedder_version 이 다르다:"
+                            f" {meta.get('dim')}/{meta.get('embedder_version')}"
+                            f" != {DIM}/{VERSION}")
+
+    table = pq.read_table(path, columns=["chunk_id", "content_sha256"])
+    have: dict[str, int] = {}
+    for i, (cid, sha) in enumerate(zip(table["chunk_id"].to_pylist(),
+                                       table["content_sha256"].to_pylist())):
+        have[f"{cid}\0{sha}"] = i
+
+    reuse, encode = [], []
+    for i, row in enumerate(rows):
+        j = have.get(f"{row['chunk_id']}\0{content_sha256(row['content'])}")
+        if j is None:
+            encode.append(i)
+        else:
+            reuse.append((i, j))
+    return Plan(reuse, encode, dropped=table.num_rows - len(reuse))
+
+
+def write_parquet_incremental(model: Model, rows: list[dict[str, Any]], plan: Plan,
+                              new_vectors, *, fingerprint: str,
+                              token_stats: dict[str, int]) -> Path:
+    """재사용 벡터 + 새로 만든 벡터를 **현재 청크 순서로** 합쳐 쓴다.
+
+    순서를 청크에 맞추는 것이 계약이다 — `restamp` 가 `chunk_id` 목록을 **순서까지** 대조하고,
+    적재기도 parquet 행과 청크를 같은 순서로 본다. 증분이 순서를 흔들면 그 대조가 죽는다.
+    """
+    import numpy as np
+    import pyarrow.parquet as pq
+
+    old = pq.read_table(parquet_path(model.key), columns=["embedding"])
+    old_vecs = np.asarray(old["embedding"].to_pylist(), dtype=np.float32)
+    new_vecs = np.asarray(new_vectors, dtype=np.float32).reshape(len(plan.encode), DIM) \
+        if len(plan.encode) else np.zeros((0, DIM), dtype=np.float32)
+
+    merged = np.empty((len(rows), DIM), dtype=np.float32)
+    for i, j in plan.reuse:
+        merged[i] = old_vecs[j]
+    for n, i in enumerate(plan.encode):
+        merged[i] = new_vecs[n]
+    return write_parquet(model, rows, merged,
+                         fingerprint=fingerprint, token_stats=token_stats)
 
 
 def restamp(key: str, fingerprint: str, rows: list[dict[str, Any]]) -> tuple[bool, str]:
@@ -288,3 +406,41 @@ def restamp(key: str, fingerprint: str, rows: list[dict[str, Any]]) -> tuple[boo
     meta[b"restamped_at"] = io.now_kst().encode()
     pq.write_table(table.replace_schema_metadata(meta), path)
     return True, f"{before[:16]} -> {fingerprint[:16]}"
+
+
+def backfill_hashes(key: str, fingerprint: str, rows: list[dict[str, Any]]) -> tuple[bool, str]:
+    """옛 parquet(스키마 v1)에 `content_sha256` 칸을 **재인코딩 없이** 채운다 (RAG-064).
+
+    **전역 지문이 증명서다.** `chunks_sha256` 이 현재 청크의 지문과 같으면, 그것은 정의상
+    *모든* `(chunk_id, content)` 쌍이 동일하다는 뜻이다(`chunks_fingerprint` 참고). 그러니
+    현재 청크로 행별 해시를 계산해 써넣어도 된다 — **`chars` 대리 검사를 안 거쳐도 된다.**
+    전역 지문이 이미 그 일을 해 줬다.
+
+    지문이 안 맞으면 **채우지 않는다.** 그때 채우면 "낡은 벡터에 최신 해시" 가 붙어 증분이
+    그 행들을 영원히 건너뛴다 — 고치려던 병보다 나쁘다.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    path = parquet_path(key)
+    if not path.is_file():
+        return False, "parquet 이 없다"
+    meta_now = read_meta(key) or {}
+    if meta_now.get("schema_version") == str(SCHEMA_VERSION):
+        return False, "이미 v2 다 — 채울 것이 없다"
+    if meta_now.get("chunks_sha256") != fingerprint:
+        return False, ("지문이 다르다 — 이 parquet 은 지금 청크로 만든 것이 아니다."
+                       " 채우면 낡은 벡터에 최신 해시가 붙는다. 전량 인코딩할 것")
+
+    table = pq.read_table(path)
+    if table["chunk_id"].to_pylist() != [r["chunk_id"] for r in rows]:
+        return False, "chunk_id 목록이 다르다 — 지문은 같은데 순서가 다르다. 전량 인코딩할 것"
+
+    table = table.append_column(
+        "content_sha256",
+        pa.array([content_sha256(r["content"]) for r in rows], pa.string()))
+    meta = {k: v for k, v in (table.schema.metadata or {}).items()}
+    meta[b"schema_version"] = str(SCHEMA_VERSION).encode()
+    meta[b"hashes_backfilled_at"] = io.now_kst().encode()
+    pq.write_table(table.replace_schema_metadata(meta), path)
+    return True, f"{table.num_rows:,}행에 content_sha256 을 채웠다 (벡터 무변경)"

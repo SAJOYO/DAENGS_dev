@@ -114,9 +114,9 @@ deleted mistake.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
 
 from daengs_training.resources import RUNTIME_ROOT
 
@@ -313,7 +313,7 @@ def classify_output(
 
 
 def apply_output_guardrail(
-    answer: "str | SystemAuthoredText",
+    answer: str | SystemAuthoredText,
     medical_terms: Sequence[str],
     whitelist_terms: Sequence[str],
     markers: Sequence[str] = PRESCRIPTIVE_MARKERS,

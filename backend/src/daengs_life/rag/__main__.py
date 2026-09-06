@@ -9,8 +9,11 @@
   python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
   python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (RAG-022)
   python -m rag goldenset -v                          # 문항별 라벨까지 전부
-  python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)
-  python -m rag evaluate --model bge-m3 -v            # 하나만 (판정은 셋이 다 있어야 한다)
+  python -m rag embed                                 # 4단계 임베딩 — **기본은 서빙 모델 하나** (RAG-064)
+  python -m rag embed --all                           # 3종 전부 (6단계 3파전용, 55분 x 3)
+  python -m rag embed --backfill-hashes               # 옛 parquet 에 행별 해시만 채운다 (벡터 무변경)
+  python -m rag evaluate                              # 6단계 채점 — 기본은 서빙 모델 하나
+  python -m rag evaluate --all -v                     # 3파전 판정 (승자 고르기는 셋이 다 있어야 한다)
   python -m rag load                                  # 7단계 documents 적재 (RAG-025)
   python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
   python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
@@ -167,6 +170,29 @@ def cmd_chunk(args: argparse.Namespace) -> int:
     return 1 if n_failed else 0
 
 
+def _target_models(args: argparse.Namespace) -> list[str]:
+    """이 실행이 다룰 모델. **기본은 서빙 모델 하나다** (RAG-064 ⑦).
+
+    예전 기본은 `MODELS` 전부(3종)였다. 그것은 6단계 3파전(RAG-002 · 024)의 기본값이고,
+    RAG-024 가 *"7~9단계 첫 관통은 기준선 `bge-m3` 로 간다"* 고 한 동안은 둘이 다 필요했다.
+    **그 기간이 끝났는데 기본값이 안 따라왔다:**
+
+      - 서빙은 `config.settings.embedding_model_key` **하나**만 읽는다 (`app/deps.py`)
+      - 그래서 코퍼스가 바뀔 때마다 **55분 × 3 ≈ 165분**을 쓰고 그중 110분은 소비자가 없다
+      - `bge-m3`·`kure-v1` 은 2026-08-29 코퍼스(6,368행)에서 멈춰 있다
+
+    실제 피해도 이미 났다 — RAG-045 가 *"방아쇠는 사소했다. `rag embed` 를 `--model` 없이
+    돌려 `bge-m3.parquet` 이 생겼다"* 로 시작한다.
+
+    3파전을 다시 돌릴 일이 생기면 `--all` 이 그 자리다.
+    """
+    if args.model:
+        return [args.model]
+    if getattr(args, "all_models", False):
+        return list(embed.MODELS)
+    return [config.settings.embedding_model_key]
+
+
 def cmd_embed(args: argparse.Namespace) -> int:
     """chunks → embeddings/{key}.parquet. 모델 3종을 나란히 만든다 (RAG-002).
 
@@ -177,7 +203,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
     if not rows:
         print("chunks 가 비었다 — `python -m rag chunk` 먼저")
         return 1
-    keys = [args.model] if args.model else list(embed.MODELS)
+    keys = _target_models(args)
     unknown = [k for k in keys if k not in embed.MODELS]
     if unknown:
         print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
@@ -197,33 +223,61 @@ def cmd_embed(args: argparse.Namespace) -> int:
             bad += not ok
         return 1 if bad else 0
 
-    todo: list[tuple[str, dict[str, int]]] = []
+    if args.backfill_hashes:
+        # RAG-064 ② — 옛 parquet(v1)에 행별 해시를 재인코딩 없이 채운다. 전역 지문이 증명서다
+        bad = 0
+        for key in keys:
+            ok, why = embed.backfill_hashes(key, fingerprint, rows)
+            print(f"  {'filled' if ok else 'REFUSED':11s} {key:22s} {why}")
+            bad += not ok
+        return 1 if bad else 0
+
+    todo: list[tuple[str, dict[str, int], embed.Plan | None]] = []
     for key in keys:
         model = embed.MODELS[key]
-        if embed.is_current(key, fingerprint) and not args.force:
+        # `--full` 은 **다시 만들라는 뜻**이므로 지문 스킵도 같이 넘긴다 (RAG-064).
+        # 안 그러면 코퍼스가 그대로일 때 `--full` 이 조용히 아무것도 안 하는데,
+        # 그것을 쓰는 자리가 하필 ④ 대조라 "전량을 만들었다"고 믿고 비교하게 된다.
+        if embed.is_current(key, fingerprint) and not (args.force or args.full):
             print(f"  {'same':11s} {key}")
             continue
+
+        # **증분 계획을 가드보다 먼저 세운다** (RAG-064). 가드는 전량 텍스트를 토큰화하는데,
+        # 실제로 인코딩할 것이 37건이면 9,451건을 재는 것은 낭비다.
+        plan = None if args.full else embed.plan_incremental(key, model, rows)
+        if plan is not None and not plan.ok:
+            print(f"  {'full':11s} {key:22s} 증분 거부 — {plan.refused}")
+            plan = None
+        elif plan is not None:
+            print(f"  {'incremental':11s} {key:22s} 재사용 {len(plan.reuse):,} · "
+                  f"인코딩 {len(plan.encode):,} · 사라짐 {plan.dropped:,}")
+
+        # 가드는 **실제로 인코딩할 텍스트**에만 건다
+        target = texts if plan is None else [rows[i]["content"] for i in plan.encode]
         try:
-            stats = embed.guard(model, texts)
+            stats = embed.guard(model, target) if target else {"max": 0, "median": 0, "p95": 0}
         except Exception as exc:
             print(f"  {'GUARD FAIL':11s} {key}\n      {exc}")
             return 1
-        pct = stats["max"] / model.max_tokens * 100
-        print(f"  {'guard ok':11s} {key:22s} 최대 {stats['max']:5d} / 한계 {model.max_tokens} "
-              f"({pct:.0f}%)  중앙 {stats['median']}  p95 {stats['p95']}")
-        todo.append((key, stats))
+        if target:
+            pct = stats["max"] / model.max_tokens * 100
+            print(f"  {'guard ok':11s} {key:22s} 최대 {stats['max']:5d} / 한계 {model.max_tokens} "
+                  f"({pct:.0f}%)  중앙 {stats['median']}  p95 {stats['p95']}"
+                  f"  ({len(target):,}건 대상)")
+        todo.append((key, stats, plan))
 
     if args.guard_only:
         print("\n(guard-only: 인코딩하지 않음)")
         return 0
 
-    for key, stats in todo:
+    for key, stats, plan in todo:
         model = embed.MODELS[key]
-        print(f"  {'encoding':11s} {key} ({model.repo}) …", flush=True)
-        st = embed.load_model(model)
+        target = texts if plan is None else [rows[i]["content"] for i in plan.encode]
+        print(f"  {'encoding':11s} {key} ({model.repo}) {len(target):,}건 …", flush=True)
+        st = embed.load_model(model) if target else None
         try:
-            vectors = embed.encode_docs(model, texts, batch_size=args.batch,
-                                        st=st, progress=not args.quiet)
+            vectors = embed.encode_docs(model, target, batch_size=args.batch,
+                                        st=st, progress=not args.quiet) if target else []
         finally:
             # **모델마다 GPU 에서 내린다.** PyTorch 는 파이썬 객체가 사라져도 empty_cache 전까지
             # VRAM 을 붙들고 있어, 3종을 한 프로세스에서 돌리면 누적된다. 6GB GPU 에서 마지막
@@ -231,12 +285,17 @@ def cmd_embed(args: argparse.Namespace) -> int:
             del st
             embed.release()
         if args.dry_run:
-            print(f"  {'(dry-run)':11s} {key:22s} {vectors.shape}")
+            print(f"  {'(dry-run)':11s} {key:22s} 인코딩 {len(target):,}건")
             continue
-        path = embed.write_parquet(model, rows, vectors,
-                                   fingerprint=fingerprint, token_stats=stats)
+        if plan is None:
+            path = embed.write_parquet(model, rows, vectors,
+                                       fingerprint=fingerprint, token_stats=stats)
+        else:
+            path = embed.write_parquet_incremental(model, rows, plan, vectors,
+                                                   fingerprint=fingerprint, token_stats=stats)
         size = path.stat().st_size / 1e6
-        print(f"  {'written':11s} {key:22s} {vectors.shape}  {size:.1f} MB  "
+        how = "전량" if plan is None else f"증분({len(plan.encode):,}/{len(rows):,})"
+        print(f"  {'written':11s} {key:22s} {how}  {len(rows):,}행  {size:.1f} MB  "
               f"VRAM {embed.vram_used_mb():.0f} MB  -> {path.name}", flush=True)
     return 0
 
@@ -338,7 +397,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     for w in warnings:
         print(f"  경고: {w}")
 
-    keys = [args.model] if args.model else list(embed.MODELS)
+    keys = _target_models(args)
     unknown = [k for k in keys if k not in embed.MODELS]
     if unknown:
         print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
@@ -696,17 +755,48 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         print("data/processed/answers 에 랩이 없다 — `rag generate --questions --lap <이름>` 로 먼저 만들 것")
         return 1
 
-    print(f"{'랩':6} {'문항':>4}   {'현행(cited)':>12}   {'근거인용(grounded, RAG-029)':>28}")
-    print("-" * 60)
+    # 경계 문항을 총계에서 빼려면 **골든셋만** 있으면 된다 (RAG-062) — `must` 가 있나 없나가
+    # 판정의 전부라서다. 청크(`chunks/`)를 요구하는 종류별 슬라이스와 달리, 골든셋은 패키지에
+    # 같이 실려 있으므로 "랩 파일만 있으면 돈다"는 이 표의 약속이 안 깨진다. 그래도 못 읽는
+    # 경우가 있으면(옛 체크아웃 등) **표를 막지 않고 옛 셈으로 떨어진다.**
+    try:
+        gs = goldenset.load()
+        ckinds = scorer.citable_kinds({i.id: i.must for i in gs.items})
+    except Exception as exc:  # noqa: BLE001 - 표를 막는 것보다 옛 셈으로라도 내는 쪽이 낫다
+        ckinds = None
+        print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 옛 셈(경계 포함)으로 낸다\n")
+
+    print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
+          f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
+    print("-" * 108)
     laps = []
     for path in paths:
         header, rows = io.read_answers(path)
-        s = scorer.score_rows(rows)
-        n = s["n"]
+        s = scorer.score_rows(rows, ckinds)
+        n, k = s["n"], s["scored"]
         if not n:
             continue
         laps.append((path.stem, rows))
-        print(f"{path.stem:6} {n:>4}   {s['cited']:>6}/{n:<4}   {s['grounded']:>10}/{n}")
+        old = scorer.score_rows(rows)  # 소급 대조 — 옛 기록이 인용하는 수를 그대로 다시 낸다
+        cells = []
+        for kind in (scorer.CITABLE, scorer.UNCITABLE):
+            if f"{kind}_n" not in s:
+                cells.append(f"{'—':>14}")
+                continue
+            cells.append(f"{s[f'{kind}_cited']}/{s[f'{kind}_grounded']}·{s[f'{kind}_n']:<2}".rjust(14))
+        print(f"{path.stem:6} {n:>4} {s['boundary']:>4} {k:>4}   {s['cited']:>5}/{k:<3}"
+              f"   {s['grounded']:>5}/{k:<3}   {cells[0]}   {cells[1]}"
+              f"   {old['cited']:>4}·{old['grounded']}/{n:<4}")
+
+    if ckinds is not None:
+        print("\n  **경계 문항(`expect: abstain`·`refuse`)은 `cited`/`grounded` 에서 뺐다** (RAG-062) —"
+              " `must` 가 없어 잴 근거가 없다.")
+        print("  거절을 옳게 한 답이 거절문에 문 조 번호로 `cited` 에 잡히고, 놓친 기권이 성공으로 세지던 자리다.")
+        print("  `옛 표기` 는 그 둘을 포함한 예전 수다 — RAG-029 이후 기록들이 인용하는 값이 이 열에 있다.")
+        print("  칸 하나가 `cited/grounded·문항수` 다. **조 번호 축은 골든셋 `must` 앵커로 정한다** —"
+              " 코퍼스를 안 보므로 랩마다 흔들리지 않는다.")
+        print("  두 축의 문항수를 더한 것이 `채점` 보다 작으면, 그 차이는 **골든셋에서 빠진 옛 문항**이다"
+              " (`lap7-age` 처럼). 총계에서는 빼지 않는다 — 뺄지 모르는 것과 빼야 하는 것은 다르다.")
 
     _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
     _print_expect_table(laps)
@@ -867,12 +957,19 @@ def main(argv: list[str] | None = None) -> int:
 
     emb = sub.add_parser("embed", help="processed/chunks → processed/embeddings (모델 3종)")
     emb.add_argument("--model", help=f"하나만: {list(embed.MODELS)}")
+    emb.add_argument("--all", dest="all_models", action="store_true",
+                     help="3종 전부 (6단계 3파전용). **기본은 서빙 모델 하나다** — RAG-064 ⑦")
     emb.add_argument("--batch", type=int, default=8)
     emb.add_argument("--force", action="store_true", help="청크가 그대로여도 다시")
     emb.add_argument("--guard-only", action="store_true",
                      help="토큰 가드만 돌리고 인코딩은 하지 않는다 (가중치 로드 없음)")
-    emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
+    emb.add_argument("--dry-run", action="store_true",
+                     help="인코딩은 **하고** 쓰지는 않는다. 가드까지만 보려면 --guard-only")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
+    emb.add_argument("--full", action="store_true",
+                     help="증분을 쓰지 않고 전량 인코딩 (RAG-064 — 증분과 대조할 때)")
+    emb.add_argument("--backfill-hashes", action="store_true",
+                     help="옛 parquet(v1)에 content_sha256 을 채운다. 벡터는 안 건드린다 (RAG-064)")
     emb.add_argument("--restamp", action="store_true",
                      help="벡터는 두고 지문만 다시 찍는다 (RAG-025 ⑤ 일회성. 행이 일치할 때만)")
     emb.set_defaults(fn=cmd_embed)
@@ -882,7 +979,9 @@ def main(argv: list[str] | None = None) -> int:
     gld.set_defaults(fn=cmd_goldenset)
 
     ev = sub.add_parser("evaluate", help="6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)")
-    ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)} (판정은 셋이 다 있어야 한다)")
+    ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)}")
+    ev.add_argument("--all", dest="all_models", action="store_true",
+                    help="3종 전부. **판정(승자 고르기)은 셋이 다 있어야 하므로 이것이 필요하다**")
     ev.add_argument("--force", action="store_true",
                     help="parquet 이 지금 청크와 어긋나도 채점한다")
     ev.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")

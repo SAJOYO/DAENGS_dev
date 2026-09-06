@@ -44,6 +44,14 @@ def _body(name: str = "네옹", **kw: object) -> dict:
     return {"name": name, "breed": "toy_poodle_light_brown", **kw}
 
 
+def test_profile_revision_is_exposed_without_replacing_profile_fields(client, store):
+    client.post("/app/pets", json=_body("revision-test"))
+    store.pets[0].updated_at = datetime(2026, 9, 5, tzinfo=UTC)
+    pet = client.get("/app/pets").json()["pets"][0]
+    assert pet["updated_at"] == "2026-09-05T00:00:00Z"
+    assert pet["name"] == "revision-test"
+
+
 def test_첫_아이는_자동으로_대표가_된다(client: TestClient, store: Store) -> None:
     """고르라고 묻지 않습니다 — 고를 것이 없습니다."""
     r = client.post("/app/pets", json=_body())

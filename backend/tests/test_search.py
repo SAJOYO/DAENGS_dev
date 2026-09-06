@@ -113,23 +113,37 @@ def test_questions_come_from_the_goldenset() -> None:
 
 # ---------------------------------------------------------------- 교통수단 배제 (RAG-052)
 class _Cursor:
-    def __init__(self, log): self._log = log
+    def __init__(self, conn): self._conn = conn; self._rows = []
     def __enter__(self): return self
     def __exit__(self, *a): return False
-    def execute(self, sql, params): self._log.append((sql, params))
-    def fetchall(self): return []
+
+    def execute(self, sql, params):
+        self._conn.log.append((sql, params))
+        # 지역 사전 질의(RAG-063)에만 답한다 — 본 검색은 그대로 0행이다
+        self._rows = self._conn.orgs if "DISTINCT metadata->>'org'" in sql else []
+
+    def fetchall(self): return self._rows
 
 
 class _Conn:
-    """`search()` 가 DB 에 보내는 SQL 을 받아 적는 가짜 연결. 결과는 늘 0행이다."""
-    def __init__(self): self.log = []
-    def cursor(self): return _Cursor(self.log)
+    """`search()` 가 DB 에 보내는 SQL 을 받아 적는 가짜 연결. 본 검색 결과는 늘 0행이다.
+
+    `orgs` 에 값을 넣으면 지역 사전 질의(RAG-063)만 그것을 돌려준다.
+    """
+    def __init__(self): self.log = []; self.orgs: list[tuple[str]] = []
+    def cursor(self): return _Cursor(self)
 
 
 def _sql_for(text: str):
+    """`search()` 가 보낸 **본 검색** SQL. 지역 사전(RAG-063)을 묻는 질의는 건너뛴다.
+
+    `search()` 는 `known_orgs()` 로 `org` 목록을 먼저 묻는다. 그것도 이 가짜 연결에 기록되므로
+    `log[0]` 을 집으면 본 검색이 아니라 그 질의를 집는다 — 파라미터에 벡터가 있는 쪽이 본 검색이다.
+    """
+    search.forget_orgs()          # 앞선 테스트가 캐시에 남긴 것을 물려받지 않는다
     conn = _Conn()
     search.search(search.Query(vector=[0.0] * 4, tsquery="", text=text), k=5, conn=conn)
-    sql, params = conn.log[0]
+    sql, params = next((s, p) for s, p in conn.log if isinstance(p, dict) and "q" in p)
     return sql, params
 
 
@@ -140,6 +154,38 @@ def test_transport_signal_excludes_the_other_mode_on_both_axes() -> None:
     sql, params = _sql_for("기차에 반려동물은 몇 kg까지 태울 수 있나요?")
     assert params["excluded"] == ["transport-air"]
     assert sql.count("subcategory <> ALL(%(excluded)s)") == 2
+
+
+def test_region_signal_keeps_documents_without_an_org() -> None:
+    """지역 신호가 있어도 **`org` 이 없는 문서는 남긴다** (RAG-063).
+
+    "부산 동래구에서 목줄 안 하면 과태료?" 의 답은 조례가 아니라 동물보호법에 있고 법령에는
+    `org` 이 없다. 절에 `IS NULL` 이 없으면 고치려던 것보다 큰 것이 사라진다.
+    """
+    search.forget_orgs()
+    conn = _Conn()
+    conn.orgs = [("부산광역시 동래구",)]
+    search.search(search.Query(vector=[0.0] * 4, tsquery="", text="부산 동래구 지원"),
+                  k=5, conn=conn)
+    sql, params = next((s, p) for s, p in conn.log if isinstance(p, dict) and "q" in p)
+    assert params["orgs"] == ["부산광역시 동래구"]
+    # 두 축 모두에 걸린다 — 한 축에만 걸면 RRF 가 다른 축에서 도로 끌어온다
+    assert sql.count("metadata->>'org' IS NULL OR") == 2
+
+
+def test_empty_org_list_is_not_cached() -> None:
+    """**빈 결과를 캐시하면 조용히 틀린다.**
+
+    적재 전에 `search()` 를 한 번 부른 프로세스가 그 뒤로 영영 지역 필터를 안 켜는데,
+    검색 자체는 계속 되므로 **아무 예외도 안 난다.** 그래서 빈 값일 때만 매번 다시 묻는다.
+    """
+    search.forget_orgs()
+    empty = _Conn()
+    assert search.known_orgs(empty) == ()
+    filled = _Conn()
+    filled.orgs = [("부산광역시",)]
+    assert search.known_orgs(filled) == ("부산광역시",)   # 앞의 () 를 물려받지 않았다
+    search.forget_orgs()
 
 
 def test_no_transport_signal_means_no_exclusion_clause() -> None:

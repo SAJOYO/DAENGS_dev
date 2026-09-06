@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 pytest.importorskip("langchain")
@@ -451,3 +453,34 @@ async def test_results_survive_a_mid_loop_model_failure() -> None:
     assert response.status == AssistantStatus.ANSWERED
     assert response.message == "훈련 답"
     assert "provider down" not in response.message
+
+
+@pytest.mark.asyncio
+async def test_trace_metadata_keys_match_langgraph() -> None:
+    """두 구현의 트레이스를 **같은 쿼리로 걸러야** 비교가 된다 (D-054).
+
+    키가 갈리면 카드 ③이 재려는 지연·토큰 비용이 한쪽에서만 나옵니다 — 에이전트가
+    루프를 돌아 비싼지가 이 실험의 주된 발견이 될 수 있는데 그걸 못 재게 됩니다.
+    `graph.py` 가 키를 늘리면 여기가 먼저 깨져서 알려 줍니다.
+    """
+    import re
+
+    config = AgentOrchestrationService._trace_config(
+        request_id="11111111-1111-1111-1111-111111111111", principal=PRINCIPAL
+    )
+    graph_source = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "src/daengs_backend/orchestration/graph.py"
+    ).read_text(encoding="utf-8")
+    graph_block = graph_source.split("metadata={", 1)[1].split("},", 1)[0]
+    graph_keys = set(re.findall(r'"(\w+)":', graph_block))
+
+    assert graph_keys, "graph.py 의 trace metadata 를 못 읽었습니다 — 이 테스트를 고치세요"
+    assert graph_keys <= set(config["metadata"])
+    assert config["metadata"]["router_model"] == AGENT_MODEL_ID
+    assert config["metadata"]["prompt_version"] == AGENT_PROMPT_VERSION
+    # run_id 가 request_id 여야 신고 → 트레이스 링크가 산다 (D-054).
+    assert str(config["run_id"]) == "11111111-1111-1111-1111-111111111111"
+    # run_name 만 다르다 — 트레이스에서 두 구현을 가르는 자리.
+    assert config["run_name"] == "assistant_query_agent"
+    assert '"assistant_query"' in graph_source

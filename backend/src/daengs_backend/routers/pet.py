@@ -71,6 +71,7 @@ def _to_response(pet: Pet, primary_pet_id: uuid.UUID | None) -> PetResponse:
         birth_date_kind=pet.birth_date_kind,
         farewell_on=pet.farewell_on,
         is_primary=pet.id == primary_pet_id,
+        updated_at=pet.updated_at,
         has_photo=pet.photo_storage_key is not None,
         photo_updated_at=pet.photo_updated_at,
     )

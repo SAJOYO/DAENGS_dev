@@ -104,14 +104,78 @@ def grounded_from_dump(row: dict[str, Any]) -> bool:
     return any(h.get("tier") == "must" for h in referenced_hits(row.get("text", ""), hits))
 
 
-def score_rows(rows: list[dict[str, Any]]) -> dict[str, int]:
-    """저장된 랩 하나(문항 목록) → 지표 요약. `python -m rag score-laps` 가 랩마다 이걸 부른다."""
-    n = len(rows)
-    return {
-        "n": n,
-        "cited": sum(1 for r in rows if r.get("cited")),          # 현행 지표 (참고용으로 남긴다)
-        "grounded": sum(1 for r in rows if grounded_from_dump(r)),  # 새 지표
+# 문항의 요구 근거에 **조 번호가 있는가** (RAG-062). `must` 라벨의 앵커에서 읽는다 —
+# `law-drf-api-animal-protection-act#제101조③` 은 있고 `srt-terms-pet#h2-0` 은 없다.
+# 별표를 같이 세는 것은 `별표 4-2-라` 가 조 번호와 같은 자리에서 같은 일을 하기 때문이다.
+ARTICLE_ANCHOR_RE = re.compile(r"제\d+조|별표")
+
+CITABLE = "조 번호 있음"
+UNCITABLE = "조 번호 없음"
+
+
+def citable_kind(musts: list[list[str]]) -> str:
+    """문항 하나 → `CITABLE` / `UNCITABLE` / `NO_MUST`.
+
+    **왜 이것이 필요한가** — `cited` 는 *"답변에 `제N조` 가 등장했나"* 를 셀 뿐 `must` 와
+    대조하지 않는다(`generate.cited_articles`). 그래서 **요구 근거에 조 번호가 없는 문항은
+    답이 완벽해도 `cited` 가 영영 0** 이다 (모듈 머리말의 "분자가 빠진다" — lap6 S4·S5).
+    그 눌림과, 조 번호가 있는 문항의 진짜 실패가 **총계 한 줄에서 상쇄된다** (RAG-060 ③).
+
+    **골든셋만으로 판정한다 — 코퍼스도 DB 도 안 본다.** `must` 라벨의 앵커가 이미 답을
+    들고 있어서다. 그래서 `score_rows` 의 "랩 파일만 있으면 돈다"는 약속이 안 깨진다
+    (`corpus_kinds` 쪽 `question_kind` 는 청크 행이 있어야 하는 것과 다르다).
+
+    OR 그룹 중 **하나라도** 조 번호를 가지면 `CITABLE` 이다 — 그 대안으로 답하면 인용이
+    성립하므로, 답변이 조 번호를 낼 길이 실제로 있다.
+    """
+    if not musts:
+        return NO_MUST
+    refs = (ref for group in musts for ref in group)
+    return CITABLE if any(ARTICLE_ANCHOR_RE.search(ref) for ref in refs) else UNCITABLE
+
+
+def citable_kinds(musts_by_id: dict[str, list[list[str]]]) -> dict[str, str]:
+    """골든셋 문항 전부에 대해 `citable_kind`."""
+    return {qid: citable_kind(musts) for qid, musts in musts_by_id.items()}
+
+
+def score_rows(rows: list[dict[str, Any]],
+               ckinds: dict[str, str] | None = None) -> dict[str, int]:
+    """저장된 랩 하나(문항 목록) → 지표 요약. `python -m rag score-laps` 가 랩마다 이걸 부른다.
+
+    **`ckinds` 를 주면 경계 문항을 `cited`/`grounded` 에서 뺀다** (RAG-062). 경계 문항은
+    `must` 가 없는 것(`expect: abstain` · `refuse`)이고, **잴 근거가 없으므로 분모에도 분자에도
+    들어갈 이유가 없다.** 실제로 두 방향으로 다 틀리고 있었다 (lap22 실측):
+
+      분자가 부풀었다   `B6`(초콜릿)은 거절을 옳게 했는데 거절문에 "제10조" 가 들어가 `cited` 로 잡힌다
+      실패를 성공으로   `B3` 은 기권해야 하는데 답해 버린 실패인데 `cited` 로 잡힌다.
+                      같은 랩의 기대 채점표에는 `놓친 기권 2/2` 로 찍혀 있어 **두 표가 반대를 말한다**
+
+    **뺀 수를 버리지 않는다** — `boundary` 로 같이 돌려준다. 분모가 왜 33에서 28로 줄었는지가
+    표에서 안 보이면 다음 사람이 못 읽는다 (RAG-060 의 *"분모를 조용히 줄이지 않는다"*).
+
+    `ckinds` 없이 부르면 **예전 그대로**다 — 옛 기록의 수를 그 자리에서 재현할 수 있어야
+    소급 대조표가 성립한다.
+
+    골든셋에서 **지워진 문항**(`ckinds` 에 없는 id)은 뺀 것이 아니라 **남긴다.** 뺄지 말지를
+    모르는 것과 빼야 하는 것은 다르고, 모를 때 빼면 분모가 랩마다 조용히 흔들린다.
+    """
+    scored = [r for r in rows
+              if ckinds is None or ckinds.get(str(r.get("id", ""))) != NO_MUST]
+    out = {
+        "n": len(rows),
+        "scored": len(scored),
+        "boundary": len(rows) - len(scored),
+        "cited": sum(1 for r in scored if r.get("cited")),          # 현행 지표 (참고용으로 남긴다)
+        "grounded": sum(1 for r in scored if grounded_from_dump(r)),  # 새 지표
     }
+    if ckinds is not None:
+        for kind in (CITABLE, UNCITABLE):
+            part = [r for r in scored if ckinds.get(str(r.get("id", ""))) == kind]
+            out[f"{kind}_n"] = len(part)
+            out[f"{kind}_cited"] = sum(1 for r in part if r.get("cited"))
+            out[f"{kind}_grounded"] = sum(1 for r in part if grounded_from_dump(r))
+    return out
 
 
 # ---------------------------------------------------------------- 기대 채점 (RAG-055)
@@ -385,7 +449,14 @@ def slice_rows(rows: list[dict[str, Any]], qkinds: dict[str, str]) -> dict[str, 
     칸에 넣는다. 빼면 랩마다 다른 만큼 분모가 줄어드는데 표에는 그 사실이 안 나온다.
 
     각 칸의 수는 `score_rows` 와 같은 자다(`cited` 는 저장된 칸, `grounded` 는 `tier` 소급).
-    그래서 **모든 칸을 더하면 총계와 정확히 같다** — 테스트가 그것을 고정한다.
+
+    ⚠ **불변식이 RAG-062 에서 한 번 바뀌었다.** 예전에는 *"모든 칸을 더하면 총계와 정확히 같다"*
+    였는데, `score_rows` 가 경계 문항을 총계에서 빼면서 그 문장이 더는 참이 아니다. 지금은
+    **`(must 없음)` 칸을 뺀 나머지의 합이 총계와 같다** — 테스트가 그것을 고정한다.
+
+    **경계 칸은 표에서 지우지 않는다.** 지우면 이 표를 더해도 총계가 안 나오는 이유가
+    사라지고, 분모가 왜 33에서 28로 줄었는지를 다음 사람이 못 읽는다. 이 모듈이
+    `OFF_GOLDENSET` 을 남겨 두는 것과 같은 이유다 — *분모를 조용히 줄이지 않는다.*
     """
     out: dict[str, dict[str, int]] = {}
     for row in rows:

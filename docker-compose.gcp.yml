@@ -8,6 +8,16 @@
 # 로컬 서버입니다. 단 compose 는 파일 해석 시점에 `:?` 가드를 평가하므로, 안 띄워도
 # 최상단 .env 의 DAENGS_CORPUS_DIR 에는 더미 경로가 있어야 합니다 (runbook §2).
 # ⚠ **서비스 이름을 빼고 `up -d` 하지 마세요** — profile 이 없는 크롤러까지 뜹니다 (#150).
+#
+# 트레이싱(D-054)을 켤 때는 **프로파일과 서비스 이름을 둘 다** 더합니다. 이 파일의
+# 기동이 서비스를 명시 나열하는 방식이라, `--profile tracing` 만 붙이면 collector 가
+# 목록에 없어서 안 뜨고 backend 는 아무 데도 못 보냅니다:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gcp.yml
+#     --profile gait --profile tracing
+#     up -d nginx backend place-search journey-service gait-analysis gait-worker otel-collector
+#
+# (한 줄로 이어 쓰세요 — 위는 읽기 좋게 끊어 둔 것입니다.)
 services:
   nginx:
     ports:

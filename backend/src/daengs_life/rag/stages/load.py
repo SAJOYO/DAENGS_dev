@@ -43,7 +43,8 @@ COLUMNS = ("content", "content_hash", "embedding", "content_tokens", "category",
 # 어차피 같은 JSONB 한 덩어리이고, 표준/비표준의 구분은 스키마 주석이 이미 갖고 있다.
 META_FIELDS = ("raw_file", "format", "trust_level", "published_at", "license",
                "chunk_id", "citation", "citation_url", "element_type", "chars",
-               "doc_id", "source_id", "part")
+               "doc_id", "source_id", "part",
+               "org")   # 지자체·소관기관명 — 지역 필터가 이것으로 거른다 (RAG-063)
 
 
 @dataclass

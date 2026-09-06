@@ -95,7 +95,7 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
         None
         if old is None
         else policy.Ownership(
-            old.pet_id,
+            old.owner_pet_id,
             old.source_session_id,
             old.source_attempt_id,
             old.certification.value,
@@ -116,7 +116,7 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
     )
     receipt = await db.get(ActivityGameReceipt, (season.id, event_id))
     policy.require(receipt is None, "unexpected_reapplied_transition")
-    pets = {claim.pet_id} | ({uuid.UUID(old.pet_id)} if old else set())
+    pets = {claim.pet_id} | ({uuid.UUID(old.owner_pet_id)} if old else set())
     accounts = {row.pet_id: row for row in await repo.accounts(db, season.id)}
     scores = {
         str(pet): policy.Score(**accounts[pet].score)

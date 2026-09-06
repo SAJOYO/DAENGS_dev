@@ -416,7 +416,7 @@ async def test_verdict_and_occupancy_rollback_together(database, actors, monkeyp
     pa = await photo(database, a, sa, ca)
     original = svc._save_site
 
-    async def fail_save(*args):
+    async def fail_save(*args, **kwargs):
         raise RuntimeError("injected transaction failure")
 
     monkeypatch.setattr(svc, "_save_site", fail_save)
@@ -501,7 +501,6 @@ async def test_session_retry_cannot_change_participants_or_restart_ended_session
             await svc.start_session(
                 db, a, sa, SessionStart(started_at=initial.started_at, pet_ids=[a2])
             )
-
 
 
 @pytest.mark.parametrize(

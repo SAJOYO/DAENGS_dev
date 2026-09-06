@@ -13,6 +13,10 @@ BEGIN
         AND tgname='activity_pet_cleanup' AND tgenabled='O') OR NOT EXISTS (
         SELECT 1 FROM pg_trigger WHERE tgrelid='territory_occupancies'::regclass
         AND tgname='activity_ownership_guard' AND tgdeferrable AND tginitdeferred AND tgenabled='O')
+        OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='app_users'::regclass
+            AND tgname='activity_owner_cleanup' AND tgenabled='O')
+        OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='activity_holding_periods'::regclass
+            AND tgname='activity_period_guard' AND tgdeferrable AND tginitdeferred AND tgenabled='O')
     THEN RAISE EXCEPTION 'activity integrity triggers missing or disabled'; END IF;
     IF to_regclass('activity_one_active_season') IS NULL
         OR to_regclass('activity_one_open_holding') IS NULL

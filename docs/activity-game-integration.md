@@ -8,7 +8,7 @@ Geo는 가짜 보호자·강아지와 독립 PostgreSQL로 계약을 검증하�
 따라서 Geo 서버를 운영 데이터 중계 서버로 두지 않고 필요한 코어를 DEV 서비스에 이식한다.
 
 - 선행 PR: [DEV #260](https://github.com/SAJOYO/DAENGS_dev/pull/260), 실제 점령 시도·현재 소유권.
-- 코어/저장 참조: [Geo #249](https://github.com/SAJOYO/DAENGS_geo/pull/249).
+- 코어/저장 참조: [Geo #249](https://github.com/rkbuhtig/DAENGS_geo/pull/249).
 - DEV 연결: [#281](https://github.com/SAJOYO/DAENGS_dev/pull/281).
 - 선행 배포 절차: [territory-ownership-api.md](territory-ownership-api.md).
 
@@ -40,8 +40,9 @@ Analysis/Receipt/Capsule을 같은 트랜잭션의 통계 head로 연결한다. 
 
 현 DEV 버전 조합은 Facts 1 / calculation 4 / receipt 1 / capsule 1이다.
 Receipt의 `canonical_segment_time_s > 0`을 관측 가능한 구간의 조건으로 사용한다.
-관측 불가면 거리·시간은 `null`이고 `no_observed_intervals`로 분리한다.
-`mock/mixed/unknown` 원본은 코어의 origin 제외 규칙을 따른다. 행동·성격 판단을 추가하지 않는다.
+관측 불가면 거리·시간은 `null`이고 device 원본은 `no_observed_intervals`로 분리한다.
+`mock/mixed/unknown` 원본(빈 좌표열 포함)은 코어의 `non_device_evidence` 제외 규칙을
+먼저 적용한다. 행동·성격 판단을 추가하지 않는다.
 조회 기간은 산책 종료 시각 `[from_ms,to_ms)` 기준이며 한 요청에 최대 366일이다.
 
 ## 트랜잭션과 처리기
@@ -102,6 +103,7 @@ site version도 증가시켜 늦은 사진 판정이 지난 시즌 소유권을 
 - 산책 삭제: 분석 및 head는 CASCADE, 세션 연결의 walk_id는 SET NULL.
   공동 산책은 기존 정책에 따라 남으며 현재 참가견 관계로 집계한다.
 - 회원 탈퇴: app_users 행이 남는 기존 구조를 고려하여 세션 연결과 게임 세션도 명시 삭제한다.
+  SQL status 트리거로 flag가 꺼진 상태에서도 새 연결 기록을 정리한다.
   기존 사진 저장소의 삭제 정책을 이 PR이 대체하지 않는다.
 - 활성 시즌에서는 지연 제약 트리거가 실제 소유권과 열린 보유 구간의 소유자·claim·인증을
   commit 시점에 비교한다. 정책을 모르는 구버전 프로세스의 변경이 조용히 통과하는 것을 막는다.

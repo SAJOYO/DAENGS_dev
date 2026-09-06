@@ -7,22 +7,24 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import test_territory_ownership_db as base
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, current_app_user
 from daengs_backend.main import app
-from daengs_backend.models import Pet, TerritoryAttempt
+from daengs_backend.models import AppUser, Pet, TerritoryAttempt
 from daengs_backend.models.activity import (
     ActivityAccount,
     ActivityGameReceipt,
     ActivitySeason,
+    ActivitySessionLink,
     ActivityWalkHead,
 )
 from daengs_backend.models.territory_claim import TerritoryClaimSession, TerritoryOccupancy
 from daengs_backend.repositories import activity as repo
+from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload, WalkUpload
 from daengs_backend.services import activity, activity_game
 from daengs_backend.services import walk as walks
@@ -179,7 +181,8 @@ async def test_empty_observation_and_failure_rollback_are_not_zero_measurements(
         value = await activity.walk_summary(db, owner, 0, clock[0])
         assert value["recorded_walk_count"] == 1 and value["observed_walk_count"] == 0
         assert value["moving_s"] is None
-        assert value["exclusions"] == (("no_observed_intervals", 1),)
+        # An empty stream has unknown origin; origin exclusion precedes observability.
+        assert value["exclusions"] == (("non_device_evidence", 1),)
 
 
 async def test_protected_visit_survives_then_takeover_has_one_bonus(
@@ -340,3 +343,125 @@ async def test_api_owner_scope_validation_pending_and_ready(database, actors, cl
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(current_app_user, None)
+
+
+async def test_daily_bonus_is_not_reawarded_after_real_reacquisition(
+    database, actors, clock, monkeypatch
+):
+    (a, b), (pa, _, pb) = actors
+    # Keep the three changes within one UTC date even if the test runs near midnight.
+    clock[0] -= clock[0] % 86_400_000
+    clock[0] += 86_400_000 + 43_200_000
+    await season(database, clock, repeat_bonus="daily_pet_site")
+    sa = await base.begin(database, a, [pa])
+    await mark(database, clock, a, sa, pa)
+    for owner, pet in [(b, pb), (a, pa)]:
+        clock[0] += 600000
+        client = await base.begin(database, owner, [pet])
+        claim = await mark(database, clock, owner, client, pet)
+        await certify(database, clock, owner, client, claim, monkeypatch)
+    async with database() as db:
+        account = await db.get(ActivityAccount, ("test", pa))
+        assert account.score["claims"] == 2 and account.score["bonus"] == 100
+        assert len(await repo.periods(db, "test", pa)) == 2
+
+
+async def test_simultaneous_photos_only_one_owner_and_small_batches_do_not_starve(
+    database, actors, clock, monkeypatch
+):
+    (a, b), (pa, pa2, pb) = actors
+    await season(database, clock)
+    sa = await base.begin(database, a, [pa])
+    await mark(database, clock, a, sa, pa)
+    clock[0] += 600000
+    attempts = []
+    for owner, pet in [(a, pa2), (b, pb)]:
+        client = await base.begin(database, owner, [pet])
+        claim = await mark(database, clock, owner, client, pet)
+        photo = await base.photo(
+            database, owner, client, claim, captured_at=datetime.fromtimestamp(clock[0] / 1000, UTC)
+        )
+        attempts.append((owner, pet, claim, photo))
+    await asyncio.gather(
+        *(base.decide(database, photo, monkeypatch) for _, _, _, photo in attempts)
+    )
+    async with database() as db:
+        results = [
+            await base.svc.get_claim(db, owner, claim.claim_id) for owner, _, claim, _ in attempts
+        ]
+        assert sum(result.resolution_code == "site_changed" for result in results) == 1
+        assert len(await repo.accounts(db, "test")) == 2
+        assert await db.scalar(select(func.count()).select_from(ActivityGameReceipt)) == 2
+    for _ in range(2):
+        clock[0] += 1000
+        async with database() as db:
+            await activity.process_pending(db, limit=1)
+    async with database() as db:
+        assert all(row.processed_revision > 0 for row in await repo.accounts(db, "test"))
+
+
+async def test_verdict_policy_sources_and_score_roll_back_together(
+    database, actors, clock, monkeypatch
+):
+    (owner, _), (pet, _, _) = actors
+    await season(database, clock)
+    client = await base.begin(database, owner, [pet])
+    claim = await mark(database, clock, owner, client, pet)
+    photo = await base.photo(
+        database, owner, client, claim, captured_at=datetime.fromtimestamp(clock[0] / 1000, UTC)
+    )
+    original = base.svc._save_site
+
+    async def fail(*args, **kwargs):
+        await original(*args, **kwargs)
+        raise RuntimeError("after policy write")
+
+    monkeypatch.setattr(base.svc, "_save_site", fail)
+    with pytest.raises(RuntimeError, match="after policy write"):
+        await base.decide(database, photo, monkeypatch)
+    async with database() as db:
+        attempt = await db.get(TerritoryAttempt, photo)
+        assert attempt.status == "VISION_PENDING"
+        assert (await db.get(TerritoryOccupancy, base.SITE)).certification == "UNVERIFIED"
+        assert (await repo.periods(db, "test"))[0].verified_from_ms is None
+        assert await db.scalar(select(func.count()).select_from(ActivityGameReceipt)) == 1
+    monkeypatch.setattr(base.svc, "_save_site", original)
+    await base.decide(database, photo, monkeypatch)
+    async with database() as db:
+        assert (await db.get(TerritoryOccupancy, base.SITE)).certification == "VERIFIED"
+        assert (await db.get(ActivityAccount, ("test", pet))).score["bonus"] == 100
+
+
+async def test_shared_walk_survives_pet_delete_and_withdrawal_erases_links_when_disabled(
+    database, actors, clock, monkeypatch
+):
+    (owner, _), (pet, pet2, _) = actors
+    client = await base.begin(database, owner, [pet, pet2])
+    await upload(database, owner, [pet, pet2], client, datetime.now(UTC) - timedelta(minutes=2))
+    async with database() as db:
+        await activity.process_pending(db)
+        before = await activity.walk_summary(db, owner, 0, clock[0], pet2)
+    async with database() as db:
+        await repo.barrier(db)
+        await walk_repo.delete_walks_only_with(db, pet)
+        await db.execute(delete(Pet).where(Pet.id == pet))
+        await db.commit()
+    async with database() as db:
+        after = await activity.walk_summary(db, owner, 0, clock[0], pet2)
+        assert after == before
+        with pytest.raises(activity.ActivityNotFound):
+            await activity.walk_summary(db, owner, 0, clock[0], pet)
+    monkeypatch.setattr(settings, "activity_game_enabled", False)
+    async with database() as db:
+        await walk_repo.delete_all_for_owner(db, owner)
+        await db.execute(delete(Pet).where(Pet.app_user_id == owner))
+        await db.execute(update(AppUser).where(AppUser.id == owner).values(status="withdrawn"))
+        await db.commit()
+    async with database() as db:
+        assert await db.get(ActivitySessionLink, (owner, client)) is None
+        assert not list(
+            await db.scalars(
+                select(TerritoryClaimSession).where(TerritoryClaimSession.app_user_id == owner)
+            )
+        )
+        assert await db.scalar(select(func.count()).select_from(ActivityWalkHead)) == 0

@@ -96,6 +96,21 @@ DROP TRIGGER IF EXISTS activity_pet_cleanup ON pets;
 CREATE TRIGGER activity_pet_cleanup BEFORE DELETE ON pets
 FOR EACH ROW EXECUTE FUNCTION activity_pet_cleanup();
 
+-- app_users survives withdrawal. Privacy cleanup must still run with the feature
+-- disabled after its migration has been installed.
+CREATE OR REPLACE FUNCTION activity_owner_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.status='withdrawn' THEN
+        PERFORM pg_advisory_xact_lock(260,36);
+        DELETE FROM activity_session_links WHERE app_user_id=NEW.id;
+        DELETE FROM territory_claim_sessions WHERE app_user_id=NEW.id;
+    END IF;
+    RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS activity_owner_cleanup ON app_users;
+CREATE TRIGGER activity_owner_cleanup AFTER UPDATE OF status ON app_users
+FOR EACH ROW EXECUTE FUNCTION activity_owner_cleanup();
+
 -- Once a season is explicitly activated, an old/disabled writer must not silently
 -- change ownership without the matching policy source. Deferred to inspect the
 -- final state of the complete verdict/ownership/score transaction, including CASCADE.

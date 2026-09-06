@@ -33,8 +33,9 @@ APP_USERS = (
     " VALUES ('11111111-1111-1111-1111-111111111111', 1),"
     "        ('22222222-2222-2222-2222-222222222222', 2);"
 )
-# `db/init/05_pets.sql` 의 pets 중 닿는 부분만. app_users 를 앞세워야 FK 가 선다.
-PETS = APP_USERS + (
+# `db/init/05_pets.sql` 의 pets 중 닿는 부분만. **app_users 를 앞세워야 FK 가 선다** —
+# 그래서 둘로 나눠 두고, 필요한 조합을 항목에서 더한다.
+PETS_ONLY = (
     "CREATE TABLE pets("
     " id uuid PRIMARY KEY,"
     " app_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,"
@@ -42,6 +43,32 @@ PETS = APP_USERS + (
     "INSERT INTO pets(id, app_user_id, name)"
     " VALUES ('33333333-3333-3333-3333-333333333333',"
     "         '11111111-1111-1111-1111-111111111111', 'x');"
+)
+PETS = APP_USERS + PETS_ONLY
+# `db/init/02_trigger.sql` 의 함수. dog_cards·screening_records 가 트리거로 건다.
+SET_UPDATED_AT = (
+    'CREATE FUNCTION set_updated_at() RETURNS TRIGGER AS $t$'
+    ' BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $t$ LANGUAGE plpgsql;'
+)
+# answer_reports 의 FK 셋. chat_turns 는 chat_sessions 를 참조하지만 그 사슬까지는 안 세운다 —
+# 이 마이그레이션이 보는 것은 chat_turns(id) 하나다.
+CHAT_AND_ADMINS = APP_USERS + (
+    "CREATE TABLE admin_users(id uuid PRIMARY KEY);"
+    "CREATE TABLE chat_turns(id uuid PRIMARY KEY);"
+    "INSERT INTO admin_users(id) VALUES ('44444444-4444-4444-4444-444444444444');"
+    "INSERT INTO chat_turns(id) VALUES ('55555555-5555-5555-5555-555555555555');"
+)
+# org 백필은 **값**을 검사하므로 픽스처에도 값이 있어야 한다. 실제 doc_id 두 개를
+# 골라 넣는다 — 마이그레이션의 VALUES 목록에 있는 것이라야 UPDATE 가 실제로 돈다.
+DOCUMENTS_WITH_ORG = (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb);"
+    "INSERT INTO documents(metadata) VALUES"
+    " ('{\"source_id\":\"ordinance-search\",\"doc_id\":\"ordinance-search-2182010__20260829\"}'),"
+    " ('{\"source_id\":\"benefit24-services\","
+    "\"doc_id\":\"benefit24-services-305000000130__20260829\"}'),"
+    " ('{\"source_id\":\"law-drf-api\",\"doc_id\":\"law-drf-api-veterinarian-act__20260827\"}');"
 )
 
 
@@ -70,7 +97,11 @@ def sql_checks():
     # libpq settings are supplied only by the dedicated disposable CI service.
     assert os.environ.get('PGHOST') in ('127.0.0.1', 'localhost', '::1')
     total = 0
-    for date, name, fixture, table, mutations in (
+    # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
+    # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
+    # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
+    # False 로 두는 자리는 `documents_org_backfill` 하나뿐이고 이유는 그 항목에 적었다.
+    for date, name, fixture, table, mutations, *rest in (
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
@@ -141,14 +172,77 @@ def sql_checks():
             'DROP INDEX idx_pets_photo_pending_key;'
             ' CREATE UNIQUE INDEX idx_pets_photo_pending_key ON pets (photo_pending_key)',
         ]),
+        ('2026-09-04', 'dog_cards', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'dog_cards', [
+            'ALTER TABLE dog_cards DROP COLUMN user_framed',
+            'ALTER TABLE dog_cards ALTER COLUMN dog_name TYPE varchar(80)',
+            'ALTER TABLE dog_cards ALTER COLUMN dog_id SET NOT NULL',
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_core_rect',
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_face_set',
+            # **FK 의 삭제 동작을 뒤바꾸는 변조.** SET NULL → CASCADE 면 강아지가 무지개다리를
+            # 건널 때 뽑아 둔 카드가 같이 사라진다. 모양은 멀쩡해 보인다.
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_dog_id_fkey;'
+            ' ALTER TABLE dog_cards ADD FOREIGN KEY(dog_id) REFERENCES pets(id) ON DELETE CASCADE',
+            # 부분 조건을 잃는 변조 — 얼굴 없는 카드가 둘 이상일 수 없게 된다
+            'DROP INDEX idx_dog_cards_face_key;'
+            ' CREATE UNIQUE INDEX idx_dog_cards_face_key ON dog_cards (face_storage_key)',
+            'DROP TRIGGER trg_dog_cards_updated_at ON dog_cards',
+        ]),
+        ('2026-09-04', 'screening_records',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'screening_records', [
+            'ALTER TABLE screening_records DROP COLUMN result',
+            'ALTER TABLE screening_records ALTER COLUMN result TYPE text',
+            # **사진 칸의 NOT NULL 을 푸는 변조.** 사진 자체가 기록이라(D-052) 사진 없는
+            # 기록은 성립하지 않는다.
+            'ALTER TABLE screening_records ALTER COLUMN photo_storage_key DROP NOT NULL',
+            'ALTER TABLE screening_records DROP CONSTRAINT screening_records_status_check',
+            'ALTER TABLE screening_records DROP CONSTRAINT'
+            ' screening_records_photo_content_type_check',
+            'ALTER TABLE screening_records DROP CONSTRAINT screening_records_pet_id_fkey;'
+            ' ALTER TABLE screening_records ADD FOREIGN KEY(pet_id)'
+            ' REFERENCES pets(id) ON DELETE CASCADE',
+            'DROP INDEX idx_screening_records_photo_key',
+            'DROP TRIGGER trg_screening_records_updated_at ON screening_records',
+        ]),
+        ('2026-09-05', 'answer_reports', CHAT_AND_ADMINS, 'answer_reports', [
+            'ALTER TABLE answer_reports DROP COLUMN reviewed_at',
+            'ALTER TABLE answer_reports ALTER COLUMN reason TYPE varchar(200)',
+            # **한 사람이 같은 답변을 두 번 신고할 수 있게 되는 변조.** 신고 수가 사람 수가
+            # 아니라 클릭 수가 된다 — 화면은 멀쩡히 돈다.
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_turn_user_key',
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_status_check',
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_review_state_check',
+            # **RESTRICT → CASCADE 변조.** 관리자를 지우면 그 사람이 검토한 신고가 사라진다.
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_reviewed_by_fkey;'
+            ' ALTER TABLE answer_reports ADD FOREIGN KEY(reviewed_by)'
+            ' REFERENCES admin_users(id) ON DELETE CASCADE',
+            'DROP INDEX answer_reports_status_created_idx',
+        ]),
+        # ⚠ **이 한 줄만 2회 적용을 안 한다** (`repeat=False`).
+        #    `CREATE TEMP TABLE _org_backfill … ON COMMIT DROP` 인데, 하네스는 `transactionless()`
+        #    로 COMMIT 을 벗기므로 temp 가 안 사라지고 두 번째 CREATE 가 "already exists" 로 죽는다.
+        #    **마이그레이션이 틀린 것이 아니다** — 실제 적용 경로에서는 자기 트랜잭션이 COMMIT 될 때
+        #    temp 가 사라져 여러 번 돌려도 안전하다 (CLAUDE.md 의 요구를 만족한다).
+        #    깨지는 것은 하네스의 격리 모델과 `ON COMMIT DROP` 이 겹치는 자리뿐이라,
+        #    **마이그레이션 SQL 을 고치는 대신 여기서 예외로 둔다** (#273 은 SQL 을 안 고친다).
+        ('2026-09-05', 'documents_org_backfill', DOCUMENTS_WITH_ORG, 'documents', [
+            'DROP INDEX idx_documents_org',
+            # **값을 지우는 변조 — RAG-066 ① 의 실제 사고와 같은 모양이다.**
+            # #268 의 `rag load` 가 `org` 없는 청크로 덮어써 2,592행이 통째로 사라졌고
+            # 적재는 성공하고 예외도 안 났다. 이제 verify 가 잡는다.
+            "UPDATE documents SET metadata = metadata - 'org'",
+            # 빈 문자열로 채우는 변조. 있는 것처럼 보이면서 지역 필터를 통과시킨다.
+            "UPDATE documents SET metadata = metadata || '{\"org\":\"\"}'::jsonb"
+            " WHERE metadata ? 'org'",
+        ], False),
     ):
         migration = transactionless(
             (ROOT / f'db/migrations/{date}_{name}.sql').read_text(encoding='utf-8'))
         verifier = (ROOT / f'db/migrations/verify_{date}_{name}.sql').read_text(encoding='utf-8')
-        for mutation in ['', f'DROP TABLE {table}', *mutations]:
+        applied = migration * (2 if (rest[0] if rest else True) else 1)
+        for mutation in ['', f'DROP TABLE {table} CASCADE', *mutations]:
             schema = 'verify_test_' + uuid.uuid4().hex
             sql = (f'BEGIN; CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}; '
-                   + fixture + '\n' + migration + migration
+                   + fixture + '\n' + applied
                    + mutation + ';\n' + verifier + '\nROLLBACK;')
             result = subprocess.run(['psql', '-X', '-v', 'ON_ERROR_STOP=1'],
                                     input=sql, text=True, capture_output=True)

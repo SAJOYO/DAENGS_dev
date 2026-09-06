@@ -34,15 +34,21 @@ BEGIN
 
     -- ② 인덱스가 **표현식(lower)** 인가. 그냥 컬럼 UNIQUE 면 'Neo' 와 'neo' 가 둘 다 생긴다.
     --    이름만 보면 안 된다 — 같은 이름으로 다른 인덱스를 만들 수 있다.
+    --
+    -- ⚠ **정의 문자열을 그대로 비교하지 않는다.** Postgres 가 `lower((nickname)::text)` 로
+    --    다시 써서 내놓기 때문에 `lower(nickname` 같은 조각은 안 맞는다 (2026-09-06 CI 실측).
+    --    그래서 **표현식 인덱스인가**(`indexprs`)를 카탈로그로 보고, 함수 이름만 문자열로 본다.
     SELECT pg_get_indexdef(i.indexrelid) INTO definition
     FROM pg_index i
     JOIN pg_class c ON c.oid = i.indexrelid
     WHERE i.indrelid = relation AND c.relname = 'idx_app_users_nickname'
-      AND i.indisvalid AND i.indisready AND i.indisunique;
+      AND i.indisvalid AND i.indisready AND i.indisunique
+      AND i.indexprs IS NOT NULL;
     IF definition IS NULL THEN
-        RAISE EXCEPTION 'index mismatch: idx_app_users_nickname missing, invalid, or not unique';
+        RAISE EXCEPTION 'index mismatch: idx_app_users_nickname missing, invalid, '
+                        'not unique, or not an expression index';
     END IF;
-    IF position('lower(nickname' IN definition) = 0 THEN
+    IF position('lower(' IN definition) = 0 OR position('nickname' IN definition) = 0 THEN
         RAISE EXCEPTION 'index mismatch: idx_app_users_nickname is not on lower(nickname), got %',
             definition;
     END IF;

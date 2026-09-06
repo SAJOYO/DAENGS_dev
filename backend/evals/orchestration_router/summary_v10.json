@@ -1,0 +1,378 @@
+{
+  "benchmark_id": "orchestration-router-v10",
+  "freeze_commit": "204b12fa774ebcc324eb55863d0f39dbcefa892b",
+  "model": "gemini-3.1-flash-lite",
+  "prompt_version": "semantic-router-ko-v9",
+  "generation_config": {
+    "temperature": 0.0,
+    "candidate_count": 1,
+    "max_output_tokens": 256,
+    "response_mime_type": "application/json",
+    "response_json_schema": "SemanticRoutingDecision.model_json_schema()"
+  },
+  "scored_cases": 80,
+  "total_provider_attempts": 80,
+  "retry_count": 0,
+  "metrics": {
+    "case_count": 80,
+    "first_pass_schema_valid_rate": 1.0,
+    "retry_recovery_count": 0,
+    "final_schema_valid_rate": 1.0,
+    "unrecovered_schema_failure_count": 0,
+    "exact_route_plan_match": 0.6125,
+    "executable_precision": 0.7009345794392523,
+    "executable_recall": 1.0,
+    "training_precision": 0.9629629629629629,
+    "training_recall": 1.0,
+    "life_precision": 1.0,
+    "life_recall": 1.0,
+    "walk_precision": 1.0,
+    "walk_recall": 1.0,
+    "multi_execute_recall": 1.0,
+    "exact_executable_set_accuracy_multi": 0.25,
+    "handoff_precision": 1.0,
+    "handoff_recall": 1.0,
+    "skin_handoff_recall": 1.0,
+    "gait_handoff_recall": 1.0,
+    "exact_mixed_execute_handoff_match": 0.4,
+    "clarify_precision": 1.0,
+    "clarify_recall": 1.0,
+    "false_positive_clarify_rate": 0.0,
+    "forbidden_execute_count": 0,
+    "invented_unsupported_capability_count": 0
+  },
+  "performance": {
+    "warm_sample_count": 80,
+    "warm_p50_ms": 842.7356999600306,
+    "warm_p95_ms": 1058.6861099814996,
+    "input_tokens": 104748,
+    "output_tokens": 2795,
+    "total_tokens": 107543
+  },
+  "gate_checks": [
+    {
+      "metric": "final_schema_valid_rate",
+      "operator": ">=",
+      "threshold": 1.0,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "first_pass_schema_valid_rate",
+      "operator": ">=",
+      "threshold": 0.975,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "forbidden_execute_count",
+      "operator": "<=",
+      "threshold": 0.0,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "metric": "invented_unsupported_capability_count",
+      "operator": "<=",
+      "threshold": 0.0,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "metric": "exact_route_plan_match",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 0.6125,
+      "passed": false
+    },
+    {
+      "metric": "executable_precision",
+      "operator": ">=",
+      "threshold": 0.95,
+      "actual": 0.7009345794392523,
+      "passed": false
+    },
+    {
+      "metric": "executable_recall",
+      "operator": ">=",
+      "threshold": 0.95,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "multi_execute_recall",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "exact_executable_set_accuracy_multi",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 0.25,
+      "passed": false
+    },
+    {
+      "metric": "skin_handoff_recall",
+      "operator": ">=",
+      "threshold": 1.0,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "gait_handoff_recall",
+      "operator": ">=",
+      "threshold": 1.0,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "handoff_precision",
+      "operator": ">=",
+      "threshold": 0.95,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "exact_mixed_execute_handoff_match",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 0.4,
+      "passed": false
+    },
+    {
+      "metric": "clarify_precision",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "clarify_recall",
+      "operator": ">=",
+      "threshold": 0.9,
+      "actual": 1.0,
+      "passed": true
+    }
+  ],
+  "verdict": "FAIL",
+  "failing_case_ids": [
+    "training_01",
+    "training_02",
+    "training_03",
+    "training_04",
+    "training_05",
+    "training_06",
+    "training_07",
+    "training_08",
+    "training_09",
+    "training_10",
+    "life_09",
+    "walk_03",
+    "walk_08",
+    "multi_01",
+    "multi_02",
+    "multi_04",
+    "multi_05",
+    "multi_06",
+    "multi_07",
+    "multi_08",
+    "multi_11",
+    "multi_12",
+    "handoff_06",
+    "mixed_01",
+    "mixed_02",
+    "mixed_04",
+    "mixed_05",
+    "mixed_07",
+    "mixed_09",
+    "boundary_01",
+    "boundary_04"
+  ],
+  "failure_categories": {
+    "EXTRA_EXECUTE": 31
+  },
+  "gold_version": "gold-v3-overlay-mixed-09",
+  "social_intent_non_null_case_ids": [],
+  "general_selected_case_ids": [
+    "boundary_01",
+    "boundary_04",
+    "clarify_07",
+    "clarify_12",
+    "handoff_06",
+    "life_09",
+    "mixed_01",
+    "mixed_02",
+    "mixed_04",
+    "mixed_05",
+    "mixed_07",
+    "mixed_09",
+    "multi_01",
+    "multi_02",
+    "multi_04",
+    "multi_05",
+    "multi_06",
+    "multi_07",
+    "multi_08",
+    "multi_11",
+    "multi_12",
+    "training_01",
+    "training_02",
+    "training_03",
+    "training_04",
+    "training_05",
+    "training_06",
+    "training_07",
+    "training_08",
+    "training_09",
+    "training_10",
+    "walk_08"
+  ],
+  "general_stripped": {
+    "benchmark_id": "orchestration-router-v10-general-stripped",
+    "metrics": {
+      "case_count": 80,
+      "first_pass_schema_valid_rate": 1.0,
+      "retry_recovery_count": 0,
+      "final_schema_valid_rate": 1.0,
+      "unrecovered_schema_failure_count": 0,
+      "exact_route_plan_match": 0.975,
+      "executable_precision": 0.974025974025974,
+      "executable_recall": 1.0,
+      "training_precision": 0.9629629629629629,
+      "training_recall": 1.0,
+      "life_precision": 1.0,
+      "life_recall": 1.0,
+      "walk_precision": 1.0,
+      "walk_recall": 1.0,
+      "multi_execute_recall": 1.0,
+      "exact_executable_set_accuracy_multi": 1.0,
+      "handoff_precision": 1.0,
+      "handoff_recall": 1.0,
+      "skin_handoff_recall": 1.0,
+      "gait_handoff_recall": 1.0,
+      "exact_mixed_execute_handoff_match": 0.9,
+      "clarify_precision": 1.0,
+      "clarify_recall": 1.0,
+      "false_positive_clarify_rate": 0.0,
+      "forbidden_execute_count": 0,
+      "invented_unsupported_capability_count": 0
+    },
+    "gate_checks": [
+      {
+        "metric": "final_schema_valid_rate",
+        "operator": ">=",
+        "threshold": 1.0,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "first_pass_schema_valid_rate",
+        "operator": ">=",
+        "threshold": 0.975,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "forbidden_execute_count",
+        "operator": "<=",
+        "threshold": 0.0,
+        "actual": 0.0,
+        "passed": true
+      },
+      {
+        "metric": "invented_unsupported_capability_count",
+        "operator": "<=",
+        "threshold": 0.0,
+        "actual": 0.0,
+        "passed": true
+      },
+      {
+        "metric": "exact_route_plan_match",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 0.975,
+        "passed": true
+      },
+      {
+        "metric": "executable_precision",
+        "operator": ">=",
+        "threshold": 0.95,
+        "actual": 0.974025974025974,
+        "passed": true
+      },
+      {
+        "metric": "executable_recall",
+        "operator": ">=",
+        "threshold": 0.95,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "multi_execute_recall",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "exact_executable_set_accuracy_multi",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "skin_handoff_recall",
+        "operator": ">=",
+        "threshold": 1.0,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "gait_handoff_recall",
+        "operator": ">=",
+        "threshold": 1.0,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "handoff_precision",
+        "operator": ">=",
+        "threshold": 0.95,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "exact_mixed_execute_handoff_match",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 0.9,
+        "passed": true
+      },
+      {
+        "metric": "clarify_precision",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 1.0,
+        "passed": true
+      },
+      {
+        "metric": "clarify_recall",
+        "operator": ">=",
+        "threshold": 0.9,
+        "actual": 1.0,
+        "passed": true
+      }
+    ],
+    "verdict": "PASS",
+    "failing_case_ids": [
+      "walk_03",
+      "mixed_09"
+    ],
+    "failure_categories": {
+      "EXTRA_EXECUTE": 2
+    }
+  }
+}

@@ -39,6 +39,16 @@ def status(doc: io.RawDoc) -> tuple[str, str]:
     return "OK", ""
 
 
+def parser_version(doc: io.RawDoc) -> int | None:
+    """이 원본을 맡은 파서 모듈의 `VERSION`. 파서가 없으면 `None`.
+
+    `io.is_current()` 에 넘겨 **파서를 고쳤는데 옛 결과가 남는 것**을 막는다 (RAG-066 ②).
+    여기 두는 이유는 registry 를 아는 층이 여기라서다 — `io` 가 파서를 import 하면 순환이다.
+    """
+    mod = registry.resolve(doc.domain, doc.source_id)
+    return getattr(mod, "VERSION", None) if mod else None
+
+
 def parse_doc(doc: io.RawDoc) -> tuple[Document, list[AnyElement], dict[str, int]]:
     """원본 1건 → (문서 헤더, 요소들, 타입별 개수). 쓰지는 않는다 — 그건 호출자 몫이다.
 

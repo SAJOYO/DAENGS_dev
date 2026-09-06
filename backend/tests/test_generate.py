@@ -174,15 +174,37 @@ def test_ask_does_not_close_what_it_was_handed(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_ask_passes_the_borrowed_model_instead_of_loading(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`st` 를 주면 **모델을 올리지 않는다.** 안 그러면 요청마다 5~7초가 붙는다."""
+    """`st` 를 주면 **모델을 올리지 않는다.** 안 그러면 요청마다 5~7초가 붙는다.
+
+    ⚠ **2026-09-06 (RAG-066 ③) 에 재는 방법을 바꿨다.** 예전에는 *"`search.encode` 가 안 불린다"*
+    로 쟀는데, 그때는 `st` 가 있으면 `make_query(q, encode_query(...))` 를 직접 불러 `encode` 를
+    **건너뛰는 것**이 곧 이 성질이었기 때문이다. 그런데 그 건너뛰는 길이 어휘 확장을 함께
+    건너뛰어서(입구가 둘이 됐다), `encode(st=…)` 하나로 모았다. 이제 `encode` 는 **불려야 하고**
+    재야 할 것은 그 안에서 모델을 올렸는가다. 수단이 아니라 **성질**을 직접 잰다.
+    """
     loaded: list[str] = []
-    monkeypatch.setattr(generate.search, "encode",
-                        lambda *a, **k: loaded.append("loaded") or [0.0])
-    monkeypatch.setattr(generate.embed, "encode_query", lambda *a, **k: [0.0])
+    monkeypatch.setattr(search.embed, "load_model",
+                        lambda *a, **k: loaded.append("loaded") or object())
+    monkeypatch.setattr(search.embed, "encode_query", lambda *a, **k: [0.0])
+    monkeypatch.setattr(search.embed, "release", lambda: loaded.append("released"))
     monkeypatch.setattr(generate.search, "search", lambda *a, **k: HITS)
 
     generate.ask("q", st=object(), conn=object(), client=FakeClient("x"), model="fake")
     assert loaded == []
+
+
+def test_ask_loads_the_model_when_none_is_lent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """반대쪽 — `st` 가 없으면 올렸다 내린다. 위 테스트가 `encode` 를 통째로 막아 통과하는
+    가짜가 되지 않도록 짝으로 둔다."""
+    events: list[str] = []
+    monkeypatch.setattr(search.embed, "load_model",
+                        lambda *a, **k: events.append("loaded") or object())
+    monkeypatch.setattr(search.embed, "encode_query", lambda *a, **k: [0.0])
+    monkeypatch.setattr(search.embed, "release", lambda: events.append("released"))
+    monkeypatch.setattr(generate.search, "search", lambda *a, **k: HITS)
+
+    generate.ask("q", conn=object(), client=FakeClient("x"), model="fake")
+    assert events == ["loaded", "released"]
 
 
 def test_ask_is_the_only_place_the_order_is_written(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -74,10 +74,21 @@ def read_header(path: Path) -> dict[str, Any] | None:
         return None
 
 
-def is_current(doc: RawDoc) -> bool:
-    """이미 같은 원본으로 파싱된 결과가 있는가."""
+def is_current(doc: RawDoc, parser_version: int | None = None) -> bool:
+    """이미 같은 원본을 **같은 파서 판으로** 파싱한 결과가 있는가.
+
+    ⚠ **원본 해시만 보면 코드 변경이 반영되지 않는다** (RAG-066 ②). 파서를 고쳐도 원본은
+    그대로라 전부 `same` 으로 건너뛰고, 고친 사람은 `--force` 를 기억해야만 한다.
+    기억은 실제로 새어 나갔다 — `nias_pet` 파서를 v2 로 올린 #268 이 손으로 `--force` 를
+    붙여야 했다. 붙이는 것을 잊으면 조용히 옛 결과가 남는다.
+
+    `parser_version` 을 주면 헤더에 적힌 판과 비교한다. 안 주면 옛 동작(해시만)이다 —
+    호출부가 파서 모듈을 이미 손에 들고 있을 때만 줄 수 있어 선택 인자로 둔다.
+    """
     head = read_header(parsed_path(doc.doc_id))
-    return bool(head) and head.get("raw_sha256") == doc.meta.get("sha256")
+    if not head or head.get("raw_sha256") != doc.meta.get("sha256"):
+        return False
+    return parser_version is None or head.get("parser_version") == parser_version
 
 
 def now_kst() -> str:
@@ -121,14 +132,21 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def is_chunk_current(parsed: Path) -> bool:
-    """이미 같은 parsed 로 청킹된 결과가 있는가.
+def is_chunk_current(parsed: Path, chunker_version: int | None = None) -> bool:
+    """이미 같은 parsed 를 **같은 청커 판으로** 청킹한 결과가 있는가.
 
     parsed 쪽 `is_current()` 와 같은 모양이다 — 상태 파일을 따로 두지 않고 상류 산출물의 해시를
     하류 헤더에 적어 비교한다 (RAG-001 원칙 2 를 한 단계 더 연장).
+
+    ⚠ **해시만 보던 것이 실제 사고를 냈다** (RAG-066 ①). `org` 을 싣도록 청커를 고친
+    RAG-063 이 `chunker_version` 을 안 올려, 08-29 자 청크 245건이 `org` 없이 남았다.
+    그 뒤 `rag load` 가 그 파일들로 DB 를 덮어써 지역 필터가 통째로 죽었고, **적재도
+    성공하고 예외도 안 나서** 랩을 두 번 돌 때까지 아무도 몰랐다.
     """
     head = read_header(chunk_path(parsed.stem))
-    return bool(head) and head.get("parsed_sha256") == sha256_file(parsed)
+    if not head or head.get("parsed_sha256") != sha256_file(parsed):
+        return False
+    return chunker_version is None or head.get("chunker_version") == chunker_version
 
 
 def write_chunks(header: BaseModel, chunks: list[BaseModel]) -> Path:

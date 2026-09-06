@@ -39,6 +39,7 @@ from langchain.agents import create_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from daengs_backend.config import settings
+from daengs_backend.core.tracing import trace_config
 from daengs_backend.orchestration.agent.tools import CapabilityToolbox
 from daengs_backend.orchestration.aggregate import aggregate_results
 from daengs_backend.orchestration.contracts import (
@@ -143,7 +144,9 @@ class AgentOrchestrationService:
             )
 
         try:
-            await self._invoke_agent(query, toolbox)
+            await self._invoke_agent(
+                query, toolbox, request_id=rid, principal=principal
+            )
         except Exception:  # noqa: BLE001 - 모델/시스템 실패는 O-14 로 FAILED 다
             # CLARIFY 가 아니다. 그리고 모델의 잘못된 출력은 사용자에게 안 보인다.
             #
@@ -179,7 +182,14 @@ class AgentOrchestrationService:
             include_route_trace=include_route_trace,
         )
 
-    async def _invoke_agent(self, query: str, toolbox: CapabilityToolbox) -> None:
+    async def _invoke_agent(
+        self,
+        query: str,
+        toolbox: CapabilityToolbox,
+        *,
+        request_id: str,
+        principal: PrincipalContext,
+    ) -> None:
         """에이전트를 한 턴 돌린다. 최종 텍스트는 **버린다.**
 
         답 문장은 `aggregate_results` 가 도구 결과로 만든다. 모델의 마지막 말을 쓰면
@@ -194,11 +204,41 @@ class AgentOrchestrationService:
         await asyncio.wait_for(
             agent.ainvoke(
                 {"messages": [{"role": "user", "content": query}]},
-                # 루프 상한. 답이 아니라 **안전장치**다 — 에이전트가 루프를 돌아 비싼
-                # 것 자체는 카드 ③이 재야 할 발견이므로 여기서 깎지 않는다.
-                config={"recursion_limit": settings.agent_recursion_limit},
+                config={
+                    **self._trace_config(request_id=request_id, principal=principal),
+                    # 루프 상한. 답이 아니라 **안전장치**다 — 에이전트가 루프를 돌아
+                    # 비싼 것 자체는 카드 ③이 재야 할 발견이므로 여기서 깎지 않는다.
+                    "recursion_limit": settings.agent_recursion_limit,
+                },
             ),
             timeout=settings.agent_turn_timeout_ms / 1_000,
+        )
+
+    @staticmethod
+    def _trace_config(*, request_id: str, principal: PrincipalContext) -> dict[str, Any]:
+        """`graph.py` 와 **같은 metadata 키**로 트레이스를 남긴다 (D-054).
+
+        키가 갈리면 두 구현의 트레이스를 같은 쿼리로 못 거르고, 그러면 카드 ③이 재려는
+        지연·토큰 비용이 한쪽에서만 나온다 — 에이전트가 루프를 돌아 비싼지가 이 실험의
+        주된 발견이 될 수 있는데, 그것을 못 재게 된다.
+
+        **`run_name` 만 다르다.** 두 구현을 트레이스에서 갈라 보는 자리가 필요하고,
+        `graph.py` 를 건드리지 않고 그것을 얻는 가장 싼 방법이다.
+
+        **`tags` 는 비운다.** `graph.py` 는 RoutePlan 이 이미 있어 `cap:training` 을 미리
+        달 수 있지만, 에이전트는 무엇을 부를지 돌기 전에 모른다. 없는 것을 지어내느니
+        비워 둔다 — 실제로 무엇이 불렸는지는 응답의 `results` 에 그대로 있다.
+        """
+        return trace_config(
+            request_id=request_id,
+            run_name="assistant_query_agent",
+            metadata={
+                "principal_kind": principal.kind,
+                "router": RouterKind.LLM.value,
+                "router_model": AGENT_MODEL_ID,
+                "prompt_version": AGENT_PROMPT_VERSION,
+                "locale": "ko-KR",
+            },
         )
 
     def _default_model(self) -> Any:

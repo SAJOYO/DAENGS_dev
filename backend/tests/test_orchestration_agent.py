@@ -1,8 +1,8 @@
 """LangChain 에이전트 오케스트레이터 — 동결 계약에 맞춘 v2 (#272).
 
-**`importorskip` 이 맨 위에 있는 이유**: CI 는 `uv sync --frozen --extra place` 하나만
-돌려서 `agent` extra 를 안 깝니다 (`.github/workflows/backend-tests.yml`). 감싸지 않으면
-수집 단계에서 죽어 **스위트가 통째로 안 돕니다** — `tests/place` 가 겪은 그것입니다.
+**`importorskip` 이 맨 위에 있는 이유**: `agent` extra 는 기본 설치에 없습니다. CI 는 D-055 ⑦
+부터 그것을 깔아 이 파일이 실제로 돌지만, extra 없는 개발 PC 에서는 감싸지 않으면 수집
+단계에서 죽어 **스위트가 통째로 안 돕니다** — `tests/place` 가 겪은 그것입니다.
 `ml`·`gait`·`screening` 과 같은 자리입니다.
 
 여기서 재는 것은 **결정론적인 부분**입니다. 모델이 무엇을 고르느냐는 비교 벤치마크가

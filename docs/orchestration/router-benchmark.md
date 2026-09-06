@@ -369,3 +369,54 @@ v1~v7 결과 파일은 제자리 수정하지 않았고, v8 산출물은 `result
 이 카드의 유료 호출 합계: 15(Place 프로브, 정렬 수정 전) + 15(Place 프로브, 재실행)
 + 80(v8 회귀) = **110건.** (첫 프로브는 결정적 실행 순서를 넣기 전이라 gold 와 순서만 달랐고,
 그 자체가 순서 결정화가 필요하다는 근거였습니다 — §라우팅 D-051 ④.)
+
+## v9 프롬프트 회귀 — `semantic-router-ko-v8` 배제 문장 (2026-09-07, PR #279) — **PASS**
+
+바뀐 변수는 **프롬프트 한 문장**입니다. v8 은 "사용자가 한 주제를 분명히 뺐으면(하나는 말고 / 하나만)
+그 어휘가 보여도 빠진 목적지를 고르지 말라" 를 더했습니다. v7 의 "negation overrides incidental
+vocabulary" 가 이미 있었는데도 `boundary_05`("… 날씨는 말고 … 교육만") 는 v5 · v6 · v7 · v8 회귀와
+#272 비교(3/3)에서 매번 Walk 를 더 골랐고, 이 문장은 그 패턴을 이름으로 부릅니다. 모델 · gold ·
+gate · 스키마 모양 · 1회 재시도 정책은 그대로입니다.
+
+**이 run 이 재지 않는 것도 적어 둡니다.** #279 는 일반 답변 폴백(`CapabilityName.GENERAL`)도 넣었지만
+그것은 **플래그 뒤의 planner 규칙**이지 라우터 목적지가 아닙니다. 러너(`runner_v5.run_cases`)는
+`assemble_route_plan` 을 기본값(`general_fallback=False`)으로 부르므로 여기서 채점되는 계획은 v1~v8
+과 똑같이 **라우터의 결정**이고, 80건 계획에 `general` 은 0건입니다. `evaluate.ALLOWED_EXECUTE` 에
+`general` 을 더한 것은 v7 의 `place` 와 같은 이유 — 언젠가 플래그를 켠 계획이 이 채점기에 오면
+"지어낸 능력" 이 아니라 precision 감점으로 읽히게 하려는 것입니다. gold 는 손대지 않았습니다.
+
+걱정한 위험은 배제 문장이 평범한 대조를 배제로 과독해 다중 의도의 한쪽을 떨어뜨리는 것이었고,
+그래서 볼 숫자는 `executable_recall` 과 `multi_execute_recall` 이었습니다.
+
+| 항목 | v8 (`ko-v7`) | v9 (`ko-v8`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity (first-pass / final) | 100% / 100% | 100% / 100% |
+| exact RoutePlan match (≥0.90) | 96.25% | **97.50%** |
+| executable precision / recall (≥0.95) | 96.15% / 100% | **97.40%** / 100% |
+| multi-execute recall (≥0.90) | 100% | 100% |
+| exact executable set (multi, ≥0.90) | 100% | 100% |
+| exact mixed execute+handoff match (≥0.90) | 90.00% (경계값) | 90.00% (경계값) |
+| Skin / Gait HANDOFF recall (=1.0) | 100% / 100% | 100% / 100% |
+| handoff precision (≥0.95) | 100% | 100% |
+| CLARIFY precision / recall (≥0.90) | 100% / 100% | 100% / 100% |
+| walk / training / life precision | 95.83% / 96.30% / 100% | **100%** / 96.30% / 100% |
+| forbidden / invented capability (=0) | 0 / 0 | 0 / 0 |
+| `social_intent` non-null | 0 / 80 | 0 / 80 |
+| warm p50 / p95 | 930 / 1135 ms | 897 / 1031 ms |
+| 토큰 합계 (`usage_metadata`) | 94,777 | 97,917 (입력 95,468 · 출력 2,449) |
+| non-exact | `boundary_05` · `mixed_09` · `walk_03` | `mixed_09` · `walk_03` |
+| verdict | PASS (15/15) | **PASS (15/15)** |
+
+**`boundary_05` 가 처음으로 맞았고 잃은 것은 없습니다.** `walk_precision` 이 100% 가 된 것이 그 한 건이고,
+`executable_recall` · `multi_execute_recall` 은 100% 그대로라 배제 문장이 다중 의도를 떨어뜨리지 않았습니다.
+남은 두 건은 v7 · v8 과 같은 알려진 흔들림입니다 — `walk_03` 의 Place 추가(v8 절에서 경계 사례로 수용)
+와 `mixed_09` 의 Training 추가(v4 부터). 규칙대로 80/80 을 쫓지 않습니다.
+
+같은 문장을 에이전트 프롬프트(`agent-ko-v3`)에도 넣었습니다 (D-055 ⑦ 규칙 1). 에이전트 쪽은 이 카드에서
+라이브로 재지 않았습니다 — 비교 러너 3회분(240×2 호출)은 이 카드의 예산 밖이고, 두 구현의 결정론 동치는
+`tests/test_orchestrator_failure_contract.py` ⓓ 가 잽니다.
+
+v1~v8 결과 파일은 제자리 수정하지 않았고, v9 산출물은 `results_v9.jsonl` · `summary_v9.json` ·
+`phase2_v9_report.md` 입니다. 이 카드의 유료 호출 합계: 80(v9 회귀) + 5(일반 어댑터 스모크, 3,335 토큰)
+= **85건.**

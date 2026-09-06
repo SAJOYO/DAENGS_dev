@@ -77,7 +77,7 @@ def cmd_parse(args: argparse.Namespace) -> int:
             print(f"  {label:11s} {doc.doc_id:44s} {reason}")
             n_skipped += 1
             continue
-        if io.is_current(doc) and not args.force:
+        if io.is_current(doc, parse.parser_version(doc)) and not args.force:
             n_same += 1
             if args.verbose:
                 print(f"  {'same':11s} {doc.doc_id}")
@@ -122,7 +122,7 @@ def cmd_chunk(args: argparse.Namespace) -> int:
         head = io.read_header(path)
         if args.source and (head or {}).get("source_id") != args.source:
             continue
-        if io.is_chunk_current(path) and not args.force:
+        if io.is_chunk_current(path, chunker.VERSION) and not args.force:
             n_same += 1
             if args.verbose:
                 print(f"  {'same':11s} {path.stem}")
@@ -490,6 +490,22 @@ def cmd_load(args: argparse.Namespace) -> int:
             print(f"  {mark}기존 {n:5d}행  {name}")
         if any(name not in (prepared.model_repo, "(없음)") for name, _ in before):
             print("  ! 다른 모델의 행이 있다 — upsert 가 같은 content_hash 를 덮어쓴다 (RAG-025 ①)")
+
+        # **DB 에 있는 메타 키가 이번 적재로 통째로 사라지는가** (RAG-066 ①).
+        # upsert 는 metadata 를 병합이 아니라 갈아끼우므로, 청크에 없는 키는 그냥 없어진다.
+        # 실제로 `org` 2,592행이 그렇게 지워졌고 **아무 에러도 안 났다.**
+        if losing := loader.metadata_loss(conn, prepared.rows):
+            print("  ! 이번 적재가 DB 의 메타 키를 통째로 지운다:")
+            for key, in_db, incoming in losing:
+                print(f"      {key:24s} DB {in_db:6,d}행  →  이번 {incoming}행")
+            print("    청크 파일이 낡았을 수 있다 — `rag chunk` 를 먼저 돌려 보세요"
+                  " (청커 판이 올라갔으면 다시 만든다).")
+            print("    마이그레이션으로만 넣은 값이면 **코퍼스가 원천이 되도록** 파서·청커에"
+                  " 실어야 합니다.")
+            if not args.allow_metadata_loss:
+                print("    정말 지우려면 --allow-metadata-loss 를 붙이세요. 적재를 멈춥니다.")
+                return 1
+            print("    --allow-metadata-loss 가 있어 그대로 진행합니다.")
 
         loader.upsert(conn, prepared.rows)
         total = loader.count(conn)
@@ -995,6 +1011,9 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--show", type=int, default=5, help="dry-run·stale 에서 보여 줄 행 수")
     ld.add_argument("--prune", action="store_true",
                     help="이번 적재에 없는 행(사라진 청크)을 지운다. 기본은 세어서 경고만 (RAG-045)")
+    ld.add_argument("--allow-metadata-loss", action="store_true",
+                    help="DB 에 있는 메타 키가 이번 적재로 통째로 사라져도 진행한다."
+                         " 기본은 멈춘다 — `org` 이 그렇게 지워진 적이 있다 (RAG-066)")
     ld.set_defaults(fn=cmd_load)
 
     sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, RAG-026)")

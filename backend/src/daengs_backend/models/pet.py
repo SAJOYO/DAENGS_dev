@@ -100,6 +100,13 @@ class Pet(Base):
     sex: Mapped[str | None] = mapped_column(String(10))
     neutered: Mapped[bool | None] = mapped_column(Boolean)
 
+    #: 동물등록(동물보호법 제15조) 여부. None 은 '모름'이고 위와 같은 규칙입니다.
+    #:
+    #: **기본값을 두지 않습니다** — `DEFAULT false` 면 안 물어본 강아지가 전부
+    #: "등록 안 했다"가 되고, 알림이 이미 등록한 사람에게 등록하라고 보냅니다.
+    #: 읽는 코드는 아직 없습니다 (컬럼만 먼저 나갔습니다).
+    registered: Mapped[bool | None] = mapped_column(Boolean)
+
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
 
     birth_date: Mapped[date | None] = mapped_column(Date)

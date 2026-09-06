@@ -36,6 +36,7 @@ OC 발급 — open.law.go.kr 에서 신청하면 즉시 나온다. IP/도메인 
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
@@ -54,6 +55,19 @@ SERVICE = _drf.SERVICE
 _RE_SPACE = re.compile(r"\s+")
 
 
+class Law(NamedTuple):
+    """받을 법령 하나.
+
+    `category` 가 여기 있는 이유 — 이 소스 하나가 `policy`(동물보호법 계열)와 `food`(사료관리법)를
+    같이 받기 때문이다. 소스 클래스의 `category` 는 기본값으로 남고 여기 적힌 값이 이긴다
+    (`crawler/core/store.py`). 2026-09-06 RAG-065 에서 갈렸다.
+    """
+    name: str                                # 법령명 (검색어이자 제목)
+    slug: str                                # raw/ 파일명 접미사
+    subcategory: str
+    category: str = "policy"
+
+
 def _norm(name: str) -> str:
     """법령명 비교용. '가축전염병예방법' 과 '가축전염병 예방법' 은 같은 법이다."""
     return _RE_SPACE.sub("", name)
@@ -70,16 +84,31 @@ class LawDrfApi(Source):
     license = "공공누리 제1유형"
     revision_key = "published_at"            # 목록검색의 현행 시행일자가 곧 판이다 (RAG-054)
 
-    # (법령명, slug 접미사, subcategory)
     LAWS = [
-        ("동물보호법",            "animal-protection-act",    "animal-protection-act"),
-        ("동물보호법 시행령",      "animal-protection-decree", "animal-protection-act"),
-        ("동물보호법 시행규칙",    "animal-protection-rule",   "animal-protection-act"),
-        ("가축전염병예방법",       "livestock-epidemic-act",    "livestock-epidemic-act"),
-        ("가축전염병예방법 시행령", "livestock-epidemic-decree", "livestock-epidemic-act"),
-        ("가축전염병예방법 시행규칙", "livestock-epidemic-rule", "livestock-epidemic-act"),
-        ("수의사법",              "veterinarian-act",          "veterinarian-act"),
-        ("자연공원법",            "natural-park-act",          "natural-park-act"),
+        Law("동물보호법",            "animal-protection-act",    "animal-protection-act"),
+        Law("동물보호법 시행령",      "animal-protection-decree", "animal-protection-act"),
+        Law("동물보호법 시행규칙",    "animal-protection-rule",   "animal-protection-act"),
+        Law("가축전염병예방법",       "livestock-epidemic-act",    "livestock-epidemic-act"),
+        Law("가축전염병예방법 시행령", "livestock-epidemic-decree", "livestock-epidemic-act"),
+        Law("가축전염병예방법 시행규칙", "livestock-epidemic-rule", "livestock-epidemic-act"),
+        Law("수의사법",              "veterinarian-act",          "veterinarian-act"),
+        Law("자연공원법",            "natural-park-act",          "natural-park-act"),
+        # --- 음식 · 사료 (2026-09-06, RAG-065 / F1) ---
+        # 표시사항이 목적이다 — 본법 제14조와 시행규칙 **별표 4「용기 및 포장에의 표시사항
+        # 및 표시방법」**(제14조 관련). 나머지 조문(제조업 등록·검사기관·과징금)은 사업자
+        # 규제라 답할 질문이 없지만, 서식 별표를 뺀 3법 합이 **165KB** 라 통째로 둔다 —
+        # 선별 적재라는 새 패턴을 만드는 값이 그 절약보다 비싸다.
+        Law("사료관리법",            "feed-control-act",     "feed-control-act",   "food"),
+        Law("사료관리법 시행령",      "feed-control-decree",  "feed-control-act",   "food"),
+        Law("사료관리법 시행규칙",    "feed-control-rule",    "feed-control-act",   "food"),
+        # --- 주거 · 이웃 (2026-09-06, RAG-065 / F4-ⓐ) ---
+        # **시행령 제19조제2항제4호**가 이 셋을 들이는 이유 전부다 —
+        # *"가축(장애인 보조견은 제외한다)을 사육하거나 … 공동주거생활에 피해를 미치는 행위"*
+        # 는 관리주체의 동의 대상이다. 조 번호가 있어 KPI 가 성립한다 (#256).
+        # `가축` 은 3법을 통틀어 저 한 번뿐이지만, `소음` 이 84회라 짖음 민원에도 닿는다.
+        Law("공동주택관리법",         "apartment-mgmt-act",    "apartment-mgmt-act"),
+        Law("공동주택관리법 시행령",   "apartment-mgmt-decree", "apartment-mgmt-act"),
+        Law("공동주택관리법 시행규칙", "apartment-mgmt-rule",   "apartment-mgmt-act"),
     ]
 
     # ------------------------------------------------------------ discover
@@ -88,13 +117,14 @@ class LawDrfApi(Source):
             raise RuntimeError(_drf.OC_MISSING)
 
         targets: list[Target] = []
-        for name, suffix, subcategory in self.LAWS:
-            found = self._find_law(fetcher, name)
+        for law in self.LAWS:
+            found = self._find_law(fetcher, law.name)
             targets.append(Target(
                 url=f"{SERVICE}?OC={config.LAW_OC}&target=law&type=XML&ID={found['law_id']}",
-                slug=f"{self.id}-{suffix}",
+                slug=f"{self.id}-{law.slug}",
                 ext="xml",
-                meta={"title": name, "subcategory": subcategory, **found},
+                meta={"title": law.name, "subcategory": law.subcategory,
+                      "category": law.category, **found},
             ))
         return targets
 
@@ -176,25 +206,25 @@ class LawDrfApi(Source):
         # 태그별로 따로 돌면 조 안에서 항→호→목 이 각각 뭉쳐 나와 읽는 순서가 깨진다
         # (제2조의 '가. 포유류 / 나. 조류' 가 호 나열 뒤로 밀렸다).
         lines = [t for el in soup.find_all(["조문내용", "항내용", "호내용", "목내용"])
-                 if (t := el.get_drf.text(strip=True))]
+                 if (t := el.get_text(strip=True))]
 
         # 조문여부: '조문' = 실제 조, '전문' = 장·절 제목("제1장 총칙"). 조 수는 전자만 센다
         # (동물보호법 = 조 103 + 장절 12 = 단위 115. 웹 원문의 div.lawcon 103개와 일치).
         extra["articles"] = sum(1 for u in units
-                                if (f := u.find("조문여부")) is not None and f.get_drf.text(strip=True) == "조문")
+                                if (f := u.find("조문여부")) is not None and f.get_text(strip=True) == "조문")
         extra["units"] = len(units)
 
         # 부칙 — 시행일과 경과규정이 들어 있다. 웹 원문(RAG-011)도 본문에 포함하므로 맞춘다.
         addenda = soup.find_all("부칙단위")
         extra["addenda"] = len(addenda)
-        lines += [t for el in addenda if (t := el.get_drf.text("\n", strip=True))]
+        lines += [t for el in addenda if (t := el.get_text("\n", strip=True))]
 
         # 별표·서식 — **내용이 통째로 들어 있다** (`별표내용`). RAG-011 에서 웹 원문의 미해결로
         # 남겨 둔 "과태료 부과기준 별표" 문제의 답이 여기다. 웹 HTML 에는 제목과 파일 링크뿐이었다.
         # 시행규칙은 별표가 80개고 서식 양식이 대부분이라 본문 대비 비중이 크다.
         tables = soup.find_all("별표단위")
         extra["attachments"] = len(tables)
-        lines += [t for el in tables if (t := el.get_drf.text("\n", strip=True))]
+        lines += [t for el in tables if (t := el.get_text("\n", strip=True))]
 
         # 조문키/조문번호는 RAG-004 의 section 후보다. 원본 XML 을 그대로 저장하므로
         # 여기서는 개수만 남기고 실제 section 부여는 파싱 단계에서 한다.

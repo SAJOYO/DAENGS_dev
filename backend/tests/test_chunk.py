@@ -56,8 +56,15 @@ BY_SOURCE: dict[str, dict] = {
     "insurer-terms-pdfs":      {"docs": 23, "chunks": {"article": 4404, "table": 615}},
     "knia-disclosure":         {"docs": 7,  "chunks": {"article": 48, "table": 62}},
     "korea-kr-policy":         {"docs": 3,  "chunks": {"heading": 3}},
-    "law-drf-api":             {"docs": 8,  "chunks": {"article": 720, "para": 192, "table": 423}},
-    "nias-pet":                {"docs": 7,  "chunks": {"heading": 42}},
+    # 2026-09-06 (RAG-065, #268) — 사료관리법 3법 + 공동주택관리법 3법을 더해 8 → 14.
+    # 조문·별표가 대략 갑절이 되는데 **`반려동물` 이 한 번도 안 나오는 조문이 대부분이다** —
+    # 사료 3법은 사업자 규제고, 공동주택 3법은 `가축` 이 시행령 제19조제2항제4호 한 번뿐이다.
+    # 그 한 호와 사료 표시사항(법 제13조·시행규칙 제14조)이 이 여섯을 들인 값 전부다.
+    "law-drf-api":             {"docs": 14, "chunks": {"article": 1140, "para": 362, "table": 676}},
+    # 2026-09-06 (RAG-065) — 음식 3장(일반사료 구입 요령 · 반려견/반려묘 건강상식)을 더해 7 → 10.
+    # 건강상식 두 장은 탭 6개 중 **먹이 둘만** 살아 문서당 청크가 3개다 (예방접종·계절별
+    # 돌보기·수명표는 roadmap §5 의 🚫 건강 상식이라 파서가 버린다).
+    "nias-pet":                {"docs": 10, "chunks": {"heading": 52}},
     "seoul-microchip-support": {"docs": 2,  "chunks": {"heading": 6}},
     # 항공 2곳 (RAG-046, #57). `table` 이 많은 것은 **문서가 곧 표**여서다 — 이스타는 표 하나가
     # 문서 전체이고(행마다 청크), 에어프레미아는 요금표를 페이로드에서 다시 세운 것이다.
@@ -86,7 +93,7 @@ NO_CHUNK_DOCS = {"easylaw-pet-2-1-1-qna", "easylaw-pet-2-2-2-qna"}
 SOFT_CAP_OVER = {
     "insurer-terms-pdfs": 177,  # 특별약관의 정의·보상 조. RAG-041 ⑦ 이 "경고만" 으로 둔 그것 (KB·농협 12건을 더해 91 → 177)
     "korail-terms": 2,          # 광역철도약관 제3조·제6조 — PDF 라 항으로 더 쪼갤 태그가 없다
-    "law-drf-api": 3,           # 별표 1의10-4 · 1의10-6 · 제18조②
+    "law-drf-api": 4,           # 별표 1의10-4 · 1의10-6 · 제18조② + 공동주택관리법 시행령 제19조① (관리규약준칙 2,363자)
     "nias-pet": 1,              # 분실·유기 절 — 소제목 하나에 분실신고·습득신고·유기 셋
     "ordinance-search": 1,      # 부칙-1제2조 4,902자 — 개정별로 쪼갠 뒤에도 남은 긴 부칙
     "seoulmetro-terms": 2,      # 정의 조 — 항이 하나인데 그 안에 호가 26개다 (RAG-041 ④)

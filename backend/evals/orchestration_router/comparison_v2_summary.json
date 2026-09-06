@@ -1,0 +1,1103 @@
+{
+  "benchmark_id": "orchestrator-comparison-v2",
+  "card": "#272",
+  "decision": "D-055",
+  "gold_file": "gold_v1.jsonl",
+  "scored_case_count": 80,
+  "run_count": 3,
+  "explicit_signal_case_ids": [],
+  "benchmark_source_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+  "source_dirty_files": [],
+  "provenance": {
+    "benchmark_source_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+    "source_dirty_files": [],
+    "dev_source_sha": "9ffbdbcb603866dafdde49df6b8973f2509bccd2",
+    "agent_implementation_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+    "langgraph_implementation_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+    "packages": {
+      "langchain": "1.4.0",
+      "langchain-core": "1.6.1",
+      "langchain-google-genai": "4.4.0",
+      "langgraph": "1.2.11",
+      "google-genai": "2.20.0",
+      "pydantic": "2.13.4"
+    }
+  },
+  "settings": {
+    "model_id": {
+      "langgraph": "gemini-3.1-flash-lite",
+      "agent": "gemini-3.1-flash-lite"
+    },
+    "temperature": {
+      "langgraph": 0.0,
+      "agent": 0.0
+    },
+    "candidate_count": {
+      "langgraph": 1,
+      "agent": 1
+    },
+    "max_output_tokens_per_call": {
+      "langgraph": 256,
+      "agent": 256
+    },
+    "provider_timeout_ms": {
+      "langgraph": 30000,
+      "agent": 30000
+    },
+    "provider_retries": {
+      "langgraph": "none (google-genai retry_options unset → stop_after_attempt(1))",
+      "agent": "none (max_retries=0 → stop_after_attempt(1))"
+    },
+    "schema_retry": {
+      "langgraph": "once on schema failure (O-14)",
+      "agent": "none — tool-call validity is enforced by the API"
+    },
+    "loop_bounds": {
+      "langgraph": "single call",
+      "agent": "recursion_limit=25, turn_timeout_ms=60000"
+    },
+    "selection_surface": {
+      "langgraph": "structured output (response_json_schema=SemanticRoutingDecision)",
+      "agent": "function calling over 7 argument-less tools (reply_socially: intent)"
+    },
+    "model_visible_input": {
+      "langgraph": "policy prompt + ROUTING_METADATA + USER_QUERY",
+      "agent": "system prompt + ROUTING_METADATA + USER_QUERY (same keys, same validation)"
+    },
+    "prompt_version": {
+      "langgraph": "semantic-router-ko-v7",
+      "agent": "agent-ko-v2"
+    },
+    "principal": "ADMIN comparison-runner",
+    "locale": "ko-KR",
+    "requested_capability": null,
+    "adapters": "FakeAdapter — immediate OK for every capability (same as v1)",
+    "credential": "settings.gemini_api_key — never printed",
+    "execution": "sequential; first runner alternates by case index and inverts per run",
+    "warmup": "one non-scored invocation per implementation per run, excluded from metrics"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "source_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+      "started_at": "2026-09-06T09:40:09+00:00",
+      "warmup": {
+        "case_id": "training_01",
+        "order": [
+          "langgraph",
+          "agent"
+        ],
+        "results": {
+          "langgraph": {
+            "status": "ANSWERED",
+            "turns": 1,
+            "latency_ms": 1218.0,
+            "error": null
+          },
+          "agent": {
+            "status": "ANSWERED",
+            "turns": 2,
+            "latency_ms": 1985.1,
+            "error": null
+          }
+        }
+      },
+      "first_runner_balance": {
+        "langgraph": 40,
+        "agent": 40
+      },
+      "implementations": {
+        "langgraph": {
+          "prompt_version": "semantic-router-ko-v7",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 1.0,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 1.0,
+            "unrecovered_schema_failure_count": 0,
+            "exact_route_plan_match": 0.975,
+            "executable_precision": 0.9743589743589743,
+            "executable_recall": 1.0,
+            "training_precision": 1.0,
+            "training_recall": 1.0,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 0.9583333333333334,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 1.0,
+            "exact_executable_set_accuracy_multi": 1.0,
+            "handoff_precision": 1.0,
+            "handoff_recall": 1.0,
+            "skin_handoff_recall": 1.0,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 1.0,
+            "clarify_precision": 1.0,
+            "clarify_recall": 1.0,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 0.9583333333333334,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 80,
+            "mean": 1.0,
+            "max": 1
+          },
+          "tokens": {
+            "input_total": 92268,
+            "output_total": 2509,
+            "total": 94777,
+            "mean_per_case": 1184.7,
+            "missing_usage_case_count": 0
+          },
+          "latency_ms": {
+            "mean": 951.5,
+            "p50": 946.9,
+            "p95": 1074.8,
+            "max": 1213.3,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 11,
+            "CLARIFY": 12
+          }
+        },
+        "agent": {
+          "prompt_version": "agent-ko-v2",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 1.0,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 1.0,
+            "unrecovered_schema_failure_count": 0,
+            "exact_route_plan_match": 0.975,
+            "executable_precision": 0.9868421052631579,
+            "executable_recall": 0.9868421052631579,
+            "training_precision": 1.0,
+            "training_recall": 0.9629629629629629,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 1.0,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 0.9722222222222222,
+            "exact_executable_set_accuracy_multi": 0.9411764705882353,
+            "handoff_precision": 1.0,
+            "handoff_recall": 1.0,
+            "skin_handoff_recall": 1.0,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 0.9,
+            "clarify_precision": 1.0,
+            "clarify_recall": 1.0,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 0.9629629629629629
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 160,
+            "mean": 2.0,
+            "max": 2
+          },
+          "tokens": {
+            "input_total": 175036,
+            "output_total": 3289,
+            "total": 178325,
+            "mean_per_case": 2229.1,
+            "missing_usage_case_count": 0
+          },
+          "latency_ms": {
+            "mean": 1847.8,
+            "p50": 1819.7,
+            "p95": 2172.7,
+            "max": 2681.8,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [
+            "mixed_09"
+          ],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 11,
+            "CLARIFY": 12
+          }
+        }
+      },
+      "divergence": {
+        "divergent_case_count": 2,
+        "divergent_case_ids": [
+          "mixed_09",
+          "boundary_05"
+        ],
+        "favored": {
+          "langgraph": 1,
+          "agent": 1,
+          "neither": 0
+        },
+        "cases": [
+          {
+            "case_id": "mixed_09",
+            "category": "execute_handoff",
+            "matches_gold": {
+              "langgraph": true,
+              "agent": false
+            },
+            "favors": "langgraph"
+          },
+          {
+            "case_id": "boundary_05",
+            "category": "boundary_adversarial",
+            "matches_gold": {
+              "langgraph": false,
+              "agent": true
+            },
+            "favors": "agent"
+          }
+        ]
+      }
+    },
+    {
+      "run": 2,
+      "source_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+      "started_at": "2026-09-06T09:44:11+00:00",
+      "warmup": {
+        "case_id": "training_01",
+        "order": [
+          "agent",
+          "langgraph"
+        ],
+        "results": {
+          "agent": {
+            "status": "ANSWERED",
+            "turns": 2,
+            "latency_ms": 2239.0,
+            "error": null
+          },
+          "langgraph": {
+            "status": "ANSWERED",
+            "turns": 1,
+            "latency_ms": 1132.2,
+            "error": null
+          }
+        }
+      },
+      "first_runner_balance": {
+        "langgraph": 40,
+        "agent": 40
+      },
+      "implementations": {
+        "langgraph": {
+          "prompt_version": "semantic-router-ko-v7",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 1.0,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 1.0,
+            "unrecovered_schema_failure_count": 0,
+            "exact_route_plan_match": 0.975,
+            "executable_precision": 0.9743589743589743,
+            "executable_recall": 1.0,
+            "training_precision": 1.0,
+            "training_recall": 1.0,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 0.9583333333333334,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 1.0,
+            "exact_executable_set_accuracy_multi": 1.0,
+            "handoff_precision": 1.0,
+            "handoff_recall": 1.0,
+            "skin_handoff_recall": 1.0,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 1.0,
+            "clarify_precision": 1.0,
+            "clarify_recall": 1.0,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 0.9583333333333334,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 80,
+            "mean": 1.0,
+            "max": 1
+          },
+          "tokens": {
+            "input_total": 92268,
+            "output_total": 2509,
+            "total": 94777,
+            "mean_per_case": 1184.7,
+            "missing_usage_case_count": 0
+          },
+          "latency_ms": {
+            "mean": 967.6,
+            "p50": 951.0,
+            "p95": 1128.6,
+            "max": 1398.3,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 11,
+            "CLARIFY": 12
+          }
+        },
+        "agent": {
+          "prompt_version": "agent-ko-v2",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 0.975,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 0.975,
+            "unrecovered_schema_failure_count": 2,
+            "exact_route_plan_match": 0.95,
+            "executable_precision": 0.9868421052631579,
+            "executable_recall": 0.9868421052631579,
+            "training_precision": 1.0,
+            "training_recall": 0.9629629629629629,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 1.0,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 0.9722222222222222,
+            "exact_executable_set_accuracy_multi": 0.9411764705882353,
+            "handoff_precision": 1.0,
+            "handoff_recall": 0.9523809523809523,
+            "skin_handoff_recall": 0.9090909090909091,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 0.9,
+            "clarify_precision": 1.0,
+            "clarify_recall": 0.9166666666666666,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 0.9629629629629629
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 157,
+            "mean": 1.96,
+            "max": 2
+          },
+          "tokens": {
+            "input_total": 171707,
+            "output_total": 3222,
+            "total": 174929,
+            "mean_per_case": 2186.6,
+            "missing_usage_case_count": 1
+          },
+          "latency_ms": {
+            "mean": 1855.6,
+            "p50": 1865.7,
+            "p95": 2248.5,
+            "max": 2383.0,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [
+            "mixed_09"
+          ],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 10,
+            "FAILED": 2,
+            "CLARIFY": 11
+          }
+        }
+      },
+      "divergence": {
+        "divergent_case_count": 4,
+        "divergent_case_ids": [
+          "handoff_02",
+          "mixed_09",
+          "clarify_07",
+          "boundary_05"
+        ],
+        "favored": {
+          "langgraph": 3,
+          "agent": 1,
+          "neither": 0
+        },
+        "cases": [
+          {
+            "case_id": "handoff_02",
+            "category": "pure_handoff",
+            "matches_gold": {
+              "langgraph": true,
+              "agent": false
+            },
+            "favors": "langgraph"
+          },
+          {
+            "case_id": "mixed_09",
+            "category": "execute_handoff",
+            "matches_gold": {
+              "langgraph": true,
+              "agent": false
+            },
+            "favors": "langgraph"
+          },
+          {
+            "case_id": "clarify_07",
+            "category": "clarify",
+            "matches_gold": {
+              "langgraph": true,
+              "agent": false
+            },
+            "favors": "langgraph"
+          },
+          {
+            "case_id": "boundary_05",
+            "category": "boundary_adversarial",
+            "matches_gold": {
+              "langgraph": false,
+              "agent": true
+            },
+            "favors": "agent"
+          }
+        ]
+      }
+    },
+    {
+      "run": 3,
+      "source_sha": "4260ff62e3167687434f195eec6a9efb690aa008",
+      "started_at": "2026-09-06T09:48:09+00:00",
+      "warmup": {
+        "case_id": "training_01",
+        "order": [
+          "langgraph",
+          "agent"
+        ],
+        "results": {
+          "langgraph": {
+            "status": "ANSWERED",
+            "turns": 1,
+            "latency_ms": 1364.5,
+            "error": null
+          },
+          "agent": {
+            "status": "ANSWERED",
+            "turns": 2,
+            "latency_ms": 1928.3,
+            "error": null
+          }
+        }
+      },
+      "first_runner_balance": {
+        "langgraph": 40,
+        "agent": 40
+      },
+      "implementations": {
+        "langgraph": {
+          "prompt_version": "semantic-router-ko-v7",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 1.0,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 1.0,
+            "unrecovered_schema_failure_count": 0,
+            "exact_route_plan_match": 0.975,
+            "executable_precision": 0.9743589743589743,
+            "executable_recall": 1.0,
+            "training_precision": 1.0,
+            "training_recall": 1.0,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 0.9583333333333334,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 1.0,
+            "exact_executable_set_accuracy_multi": 1.0,
+            "handoff_precision": 1.0,
+            "handoff_recall": 1.0,
+            "skin_handoff_recall": 1.0,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 1.0,
+            "clarify_precision": 1.0,
+            "clarify_recall": 1.0,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 0.9583333333333334,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 80,
+            "mean": 1.0,
+            "max": 1
+          },
+          "tokens": {
+            "input_total": 92268,
+            "output_total": 2509,
+            "total": 94777,
+            "mean_per_case": 1184.7,
+            "missing_usage_case_count": 0
+          },
+          "latency_ms": {
+            "mean": 947.7,
+            "p50": 944.6,
+            "p95": 1122.9,
+            "max": 1351.4,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 11,
+            "CLARIFY": 12
+          }
+        },
+        "agent": {
+          "prompt_version": "agent-ko-v2",
+          "summary": {
+            "case_count": 80,
+            "first_pass_schema_valid_rate": 1.0,
+            "retry_recovery_count": 0,
+            "final_schema_valid_rate": 1.0,
+            "unrecovered_schema_failure_count": 0,
+            "exact_route_plan_match": 0.975,
+            "executable_precision": 0.9868421052631579,
+            "executable_recall": 0.9868421052631579,
+            "training_precision": 1.0,
+            "training_recall": 0.9629629629629629,
+            "life_precision": 1.0,
+            "life_recall": 1.0,
+            "walk_precision": 1.0,
+            "walk_recall": 1.0,
+            "multi_execute_recall": 0.9722222222222222,
+            "exact_executable_set_accuracy_multi": 0.9411764705882353,
+            "handoff_precision": 1.0,
+            "handoff_recall": 1.0,
+            "skin_handoff_recall": 1.0,
+            "gait_handoff_recall": 1.0,
+            "exact_mixed_execute_handoff_match": 0.9,
+            "clarify_precision": 1.0,
+            "clarify_recall": 1.0,
+            "false_positive_clarify_rate": 0.0,
+            "forbidden_execute_count": 0,
+            "invented_unsupported_capability_count": 0
+          },
+          "capabilities": {
+            "training": {
+              "precision": 1.0,
+              "recall": 0.9629629629629629
+            },
+            "life": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "walk": {
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "place": {
+              "precision": 0.0,
+              "recall": 1.0
+            }
+          },
+          "llm_turns": {
+            "total": 160,
+            "mean": 2.0,
+            "max": 2
+          },
+          "tokens": {
+            "input_total": 175036,
+            "output_total": 3289,
+            "total": 178325,
+            "mean_per_case": 2229.1,
+            "missing_usage_case_count": 0
+          },
+          "latency_ms": {
+            "mean": 1807.2,
+            "p50": 1765.3,
+            "p95": 2009.9,
+            "max": 2440.6,
+            "count": 80
+          },
+          "runner_errors": [],
+          "silent_intent_loss_case_ids": [
+            "mixed_09"
+          ],
+          "first_runner_case_count": 40,
+          "status_counts": {
+            "ANSWERED": 57,
+            "HANDOFF": 11,
+            "CLARIFY": 12
+          }
+        }
+      },
+      "divergence": {
+        "divergent_case_count": 2,
+        "divergent_case_ids": [
+          "mixed_09",
+          "boundary_05"
+        ],
+        "favored": {
+          "langgraph": 1,
+          "agent": 1,
+          "neither": 0
+        },
+        "cases": [
+          {
+            "case_id": "mixed_09",
+            "category": "execute_handoff",
+            "matches_gold": {
+              "langgraph": true,
+              "agent": false
+            },
+            "favors": "langgraph"
+          },
+          {
+            "case_id": "boundary_05",
+            "category": "boundary_adversarial",
+            "matches_gold": {
+              "langgraph": false,
+              "agent": true
+            },
+            "favors": "agent"
+          }
+        ]
+      }
+    }
+  ],
+  "aggregate": {
+    "implementations": {
+      "langgraph": {
+        "rates_mean_over_runs": {
+          "exact_route_plan_match": 0.975,
+          "executable_precision": 0.9744,
+          "executable_recall": 1.0,
+          "exact_executable_set_accuracy_multi": 1.0,
+          "multi_execute_recall": 1.0,
+          "handoff_precision": 1.0,
+          "handoff_recall": 1.0,
+          "clarify_precision": 1.0,
+          "clarify_recall": 1.0,
+          "false_positive_clarify_rate": 0.0,
+          "final_schema_valid_rate": 1.0
+        },
+        "rates_per_run": {
+          "exact_route_plan_match": [
+            0.975,
+            0.975,
+            0.975
+          ],
+          "executable_precision": [
+            0.9743589743589743,
+            0.9743589743589743,
+            0.9743589743589743
+          ],
+          "executable_recall": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "exact_executable_set_accuracy_multi": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "multi_execute_recall": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "handoff_precision": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "handoff_recall": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "clarify_precision": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "clarify_recall": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "false_positive_clarify_rate": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "final_schema_valid_rate": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "counts_sum_over_runs": {
+          "forbidden_execute_count": 0,
+          "invented_unsupported_capability_count": 0
+        },
+        "capabilities_mean_over_runs": {
+          "training": {
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "life": {
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "walk": {
+            "precision": 0.9583,
+            "recall": 1.0
+          },
+          "place": {
+            "precision": 0.0,
+            "recall": 1.0
+          }
+        },
+        "llm_turns": {
+          "total": 240,
+          "mean_per_case": 1.0,
+          "max": 1
+        },
+        "tokens": {
+          "input_total": 276804,
+          "output_total": 7527,
+          "total": 284331,
+          "mean_per_case": 1184.7,
+          "per_run_total": [
+            94777,
+            94777,
+            94777
+          ]
+        },
+        "latency_ms_pooled": {
+          "mean": 955.6,
+          "p50": 947.3,
+          "p95": 1123.6,
+          "max": 1398.3,
+          "count": 240
+        },
+        "latency_ms_per_run": [
+          {
+            "mean": 951.5,
+            "p50": 946.9,
+            "p95": 1074.8,
+            "max": 1213.3,
+            "count": 80
+          },
+          {
+            "mean": 967.6,
+            "p50": 951.0,
+            "p95": 1128.6,
+            "max": 1398.3,
+            "count": 80
+          },
+          {
+            "mean": 947.7,
+            "p50": 944.6,
+            "p95": 1122.9,
+            "max": 1351.4,
+            "count": 80
+          }
+        ],
+        "runner_error_count": 0,
+        "silent_intent_loss": {},
+        "first_runner_case_count_per_run": [
+          40,
+          40,
+          40
+        ]
+      },
+      "agent": {
+        "rates_mean_over_runs": {
+          "exact_route_plan_match": 0.9667,
+          "executable_precision": 0.9868,
+          "executable_recall": 0.9868,
+          "exact_executable_set_accuracy_multi": 0.9412,
+          "multi_execute_recall": 0.9722,
+          "handoff_precision": 1.0,
+          "handoff_recall": 0.9841,
+          "clarify_precision": 1.0,
+          "clarify_recall": 0.9722,
+          "false_positive_clarify_rate": 0.0,
+          "final_schema_valid_rate": 0.9917
+        },
+        "rates_per_run": {
+          "exact_route_plan_match": [
+            0.975,
+            0.95,
+            0.975
+          ],
+          "executable_precision": [
+            0.9868421052631579,
+            0.9868421052631579,
+            0.9868421052631579
+          ],
+          "executable_recall": [
+            0.9868421052631579,
+            0.9868421052631579,
+            0.9868421052631579
+          ],
+          "exact_executable_set_accuracy_multi": [
+            0.9411764705882353,
+            0.9411764705882353,
+            0.9411764705882353
+          ],
+          "multi_execute_recall": [
+            0.9722222222222222,
+            0.9722222222222222,
+            0.9722222222222222
+          ],
+          "handoff_precision": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "handoff_recall": [
+            1.0,
+            0.9523809523809523,
+            1.0
+          ],
+          "clarify_precision": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "clarify_recall": [
+            1.0,
+            0.9166666666666666,
+            1.0
+          ],
+          "false_positive_clarify_rate": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "final_schema_valid_rate": [
+            1.0,
+            0.975,
+            1.0
+          ]
+        },
+        "counts_sum_over_runs": {
+          "forbidden_execute_count": 0,
+          "invented_unsupported_capability_count": 0
+        },
+        "capabilities_mean_over_runs": {
+          "training": {
+            "precision": 1.0,
+            "recall": 0.963
+          },
+          "life": {
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "walk": {
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "place": {
+            "precision": 0.0,
+            "recall": 1.0
+          }
+        },
+        "llm_turns": {
+          "total": 477,
+          "mean_per_case": 1.9867,
+          "max": 2
+        },
+        "tokens": {
+          "input_total": 521779,
+          "output_total": 9800,
+          "total": 531579,
+          "mean_per_case": 2214.9333,
+          "per_run_total": [
+            178325,
+            174929,
+            178325
+          ]
+        },
+        "latency_ms_pooled": {
+          "mean": 1836.9,
+          "p50": 1818.7,
+          "p95": 2189.6,
+          "max": 2681.8,
+          "count": 240
+        },
+        "latency_ms_per_run": [
+          {
+            "mean": 1847.8,
+            "p50": 1819.7,
+            "p95": 2172.7,
+            "max": 2681.8,
+            "count": 80
+          },
+          {
+            "mean": 1855.6,
+            "p50": 1865.7,
+            "p95": 2248.5,
+            "max": 2383.0,
+            "count": 80
+          },
+          {
+            "mean": 1807.2,
+            "p50": 1765.3,
+            "p95": 2009.9,
+            "max": 2440.6,
+            "count": 80
+          }
+        ],
+        "runner_error_count": 0,
+        "silent_intent_loss": {
+          "mixed_09": 3
+        },
+        "first_runner_case_count_per_run": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    "cost_difference_agent_vs_langgraph_pct": {
+      "total_tokens": 87.0,
+      "input_tokens": 88.5,
+      "output_tokens": 30.2,
+      "llm_turns": 98.8,
+      "mean_latency_ms": 92.2
+    },
+    "stability": {
+      "langgraph": {
+        "stable_case_count": 80,
+        "agreement_rate": 1.0,
+        "unstable_case_ids": []
+      },
+      "agent": {
+        "stable_case_count": 78,
+        "agreement_rate": 0.975,
+        "unstable_case_ids": [
+          "handoff_02",
+          "clarify_07"
+        ]
+      }
+    },
+    "divergence": {
+      "in_any_run": [
+        "boundary_05",
+        "clarify_07",
+        "handoff_02",
+        "mixed_09"
+      ],
+      "in_every_run": [
+        "boundary_05",
+        "mixed_09"
+      ],
+      "favored_sum_over_runs": {
+        "langgraph": 5,
+        "agent": 3,
+        "neither": 0
+      }
+    }
+  },
+  "recommendation": {
+    "verdict": "retain_langgraph",
+    "reason": "exact match ≥ agent and total tokens ≤ agent in every run"
+  },
+  "real_tester_holdout": {
+    "status": "pending",
+    "reason": "no de-identified real tester-query dataset exists in the repository"
+  }
+}

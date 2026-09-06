@@ -68,7 +68,9 @@ class PetNotFoundError(Exception):
     """
 
 
-async def list_pets(session: AsyncSession, app_user_id: uuid.UUID) -> tuple[list[Pet], uuid.UUID | None]:
+async def list_pets(
+    session: AsyncSession, app_user_id: uuid.UUID
+) -> tuple[list[Pet], uuid.UUID | None]:
     """내 강아지와 대표 id. 대표는 계정 쪽에 있어서 같이 읽어 옵니다."""
     pets = await pet_repo.list_for_owner(session, app_user_id)
     user = await app_user_repo.get_by_id(session, app_user_id)
@@ -205,9 +207,7 @@ async def issue_photo_ticket(
     return ticket
 
 
-async def confirm_photo(
-    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
-) -> Pet:
+async def confirm_photo(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> Pet:
     """올라온 사진을 확정합니다. **여기서 처음으로 화면에 보입니다.**
 
     저장소를 직접 보고 크기·형식을 확인합니다 — 앱이 "올렸어요" 라고 말하는 것만
@@ -280,9 +280,7 @@ async def photo_download_url(
     return pet, url
 
 
-async def delete_photo(
-    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
-) -> None:
+async def delete_photo(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> None:
     """사진을 지웁니다. **앱은 다시 견종 그림으로 돌아갑니다.**
 
     올리다 만 티켓도 같이 걷어냅니다 — "지웠는데 잠시 뒤에 다시 나타나는" 것을
@@ -320,6 +318,9 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
     FK 가 `ON DELETE SET NULL` 이라 지우면 `primary_pet_id` 는 저절로 비지만,
     **누구를 대신 세울지는 정책이라 DB 가 못 정합니다.**
     """
+    from daengs_backend.services.activity_game import acquire
+
+    await acquire(session)
     pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
     if pet is None:
         raise PetNotFoundError
@@ -362,6 +363,9 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
     보행 영상과 **프로필 사진 둘 다** 지우고 나서 행을 지웁니다 — 공개한 처리방침
     4항("탈퇴 시 지체 없이 파기")을 지키려면 DB 행만으로는 모자랍니다.
     """
+    from daengs_backend.services.activity_game import acquire
+
+    await acquire(session)
     pets = await pet_repo.list_for_owner_for_update(session, app_user_id)
     await gait_service.cleanup_for_pets(session, [pet.id for pet in pets])
     await cleanup_photos_for_pets(session, pets)

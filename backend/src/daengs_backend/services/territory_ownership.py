@@ -16,7 +16,9 @@ from daengs_backend.schemas.territory_claim import (
     SessionResponse,
     SiteResponse,
 )
+from daengs_backend.services import activity, activity_game
 from daengs_backend.services import territory_claim as rules
+from daengs_backend.services.activity_core.game_policy import GameError
 
 MARK_RADIUS_M = 20.0
 CONTACT_MAX_AGE_S = 30
@@ -47,6 +49,7 @@ def _session_response(row):
 
 
 async def start_session(db, owner, client_id, body):
+    await activity_game.acquire(db)
     row = await repo.session_by_client(db, owner, client_id)
     if row is None:
         if body.started_at > _now() + timedelta(seconds=5):
@@ -66,6 +69,7 @@ async def start_session(db, owner, client_id, body):
         row = await repo.session_by_client(db, owner, client_id, lock=True)
     if row.started_at != body.started_at or row.pet_ids != body.pet_ids:
         raise ClaimConflict("session_identity_conflict")
+    await activity.record_game(db, row)
     await db.commit()
     return _session_response(row)
 
@@ -161,7 +165,11 @@ async def _rule_site(db, site):
     return rules.ClaimSite(site.site_id, owner, site.version)
 
 
-async def _save_site(db, row, state):
+async def _save_site(db, row, state, *, game=None, claim=None, event_id=None, at_ms=None):
+    if activity.settings.activity_game_enabled:
+        state = await activity_game.transition(
+            db, await _rule_site(db, row), state, game, claim, event_id, at_ms
+        )
     row.version = state.version
     if state.occupancy:
         occupied = await repo.occupancy(db, row.site_id)
@@ -189,6 +197,7 @@ async def mark(db, owner, body, lookup):
     target = await lookup.find_near_capture(site_id=body.site_id, lat=body.lat, lng=body.lng)
     if target is None:
         raise ClaimConflict("site_not_nearby")
+    await activity_game.acquire(db)
     game_session = await repo.session_by_client(db, owner, body.client_session_id, lock=True)
     site = await repo.lock_site(db, body.site_id)
     existing = await repo.claim_at(db, game_session.id, body.site_id)
@@ -241,7 +250,15 @@ async def mark(db, owner, body, lookup):
     )
     db.add(claim)
     await db.flush()
-    await _save_site(db, site, state)
+    await _save_site(
+        db,
+        site,
+        state,
+        game=game_session,
+        claim=claim,
+        event_id="mark:" + str(claim.id),
+        at_ms=int(now.timestamp() * 1000),
+    )
     await db.flush()
     result = await _response(db, owner, claim, game_session)
     await db.commit()
@@ -249,7 +266,8 @@ async def mark(db, owner, body, lookup):
 
 
 async def bind_photo(db, owner, claim_id, photo_id):
-    # Lock order: photo -> session -> site. Worker: photo -> site. Never reverse it.
+    # Enabled writers: activity barrier -> photo -> session -> site.
+    await activity_game.acquire(db)
     photo = await photos.get_owned(db, owner, photo_id, for_update=True)
     pair = await repo.owned_claim(db, owner, claim_id)
     if photo is None or pair is None:
@@ -296,6 +314,7 @@ async def bind_photo(db, owner, claim_id, photo_id):
 
 async def apply_photo_decision(db, photo):
     """Called inside the photo verdict transaction; no commit and no external I/O here."""
+    await activity_game.acquire(db)
     binding = await repo.photo_binding(db, photo.id)
     if binding is None:
         return
@@ -331,13 +350,14 @@ async def _apply_photo(db, photo, site, claim, game_session):
         rules.PhotoStatus.PENDING,
     )
     state = await _rule_site(db, site)
+    at_ms = int(_now().timestamp() * 1000)
     try:
         updated, resolved = rules.resolve_photo(
             state,
             attempt,
             str(photo.id),
             outcome,
-            at_millis=int(_now().timestamp() * 1000),
+            at_millis=at_ms,
         )
     except ValueError as exc:
         if str(exc) not in {"site_changed", "new_session_required"}:
@@ -346,7 +366,22 @@ async def _apply_photo(db, photo, site, claim, game_session):
         claim.photo_status = "VERIFIED"
         claim.resolution_code = str(exc)
         return
+    try:
+        await _save_site(
+            db,
+            site,
+            updated,
+            game=game_session,
+            claim=claim,
+            event_id="photo:" + str(photo.id),
+            at_ms=at_ms,
+        )
+    except GameError as exc:
+        if str(exc) not in {"protected", "season_ended", "new_session_required"}:
+            raise
+        claim.photo_status = "VERIFIED"
+        claim.resolution_code = str(exc)
+        return
     claim.photo_status = resolved.photo_status.value
     claim.disposition = resolved.disposition.value
-    claim.expected_site_version = resolved.expected_site_version
-    await _save_site(db, site, updated)
+    claim.expected_site_version = site.version

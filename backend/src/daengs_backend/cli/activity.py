@@ -1,0 +1,53 @@
+"""Explicit administration: python -m daengs_backend.cli.activity --help."""
+
+import argparse
+import asyncio
+import json
+from dataclasses import fields
+from pathlib import Path
+
+from daengs_backend.core.database import worker_session
+from daengs_backend.services import activity, activity_game
+from daengs_backend.services.activity_core.game_policy import Rules
+
+
+def parse_rules(path):
+    values = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(values, dict) or set(values) != {f.name for f in fields(Rules)}:
+        raise ValueError("rules JSON must explicitly specify every Rules field")
+    return Rules(**values)
+
+
+async def run(args):
+    async with worker_session() as db:
+        if args.command == "start-season":
+            activity.enabled()
+            season = await activity_game.create_season(
+                db, args.season_id, args.starts_ms, args.ends_ms, parse_rules(args.rules)
+            )
+            print(
+                json.dumps({"season_id": season.id, "coverage_start_ms": season.coverage_start_ms})
+            )
+        elif args.command == "process":
+            print(json.dumps({"processed": await activity.process_pending(db, limit=args.limit)}))
+        elif args.command == "rebuild":
+            await activity.rebuild(db)
+            print(json.dumps({"status": "queued"}))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    start = commands.add_parser("start-season")
+    start.add_argument("season_id")
+    start.add_argument("--starts-ms", type=int, required=True)
+    start.add_argument("--ends-ms", type=int, required=True)
+    start.add_argument("--rules", required=True, help="JSON path; no implicit product balance")
+    process = commands.add_parser("process")
+    process.add_argument("--limit", type=int, default=100)
+    commands.add_parser("rebuild")
+    asyncio.run(run(parser.parse_args()))
+
+
+if __name__ == "__main__":
+    main()

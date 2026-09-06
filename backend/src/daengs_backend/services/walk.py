@@ -21,6 +21,7 @@ from daengs_backend.schemas.walk import (
     WalkPointsAppend,
     WalkUpload,
 )
+from daengs_backend.services import activity, activity_game
 from daengs_backend.services.walk_analysis import build_analysis_models
 from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
@@ -83,8 +84,12 @@ async def upload_walk(
 
     :returns: (산책, 이번에 새로 만들었는가)
     """
+    await activity_game.acquire(session)
     existing = await walk_repo.get_by_client_session(session, app_user_id, body.client_session_id)
     if existing is not None:
+        await activity.record_walk(session, existing)
+        if activity.settings.activity_game_enabled:
+            await session.commit()
         return existing, False
 
     mine = await pet_repo.owned_ids(session, app_user_id, body.pet_ids)
@@ -105,6 +110,9 @@ async def upload_walk(
     # 곧 묶음 하나다 (`WalkSync.POINTS_PER_REQUEST`).
     walk.points = [_chunk(body.points)] if body.points else []
     walk_repo.add(session, walk)
+    if activity.settings.activity_game_enabled:
+        await session.flush()
+        await activity.record_walk(session, walk)
     await session.commit()
     return walk, True
 
@@ -163,6 +171,7 @@ async def finalize_walk(
     append와 같은 Walk 행을 잠그므로 두 요청이 동시에 입력을 바꾸지 못한다.
     """
     try:
+        await activity_game.acquire(session)
         walk = await walk_repo.get_owned_for_update(session, app_user_id, walk_id)
         if walk is None:
             raise WalkNotFoundError
@@ -191,6 +200,7 @@ async def finalize_walk(
                     context_version=1,
                 )
                 await session.flush()
+            await activity.record_walk(session, walk, existing)
             await session.commit()  # 필요하면 legacy seal을 복구하고 멱등 응답한다.
             return existing, False
 
@@ -227,6 +237,7 @@ async def finalize_walk(
         walk_repo.add_analysis(session, analysis)
         walk.analysis_state = "derived"
         await session.flush()
+        await activity.record_walk(session, walk, analysis)
         await session.commit()
         return analysis, True
     except Exception:
@@ -287,9 +298,7 @@ def _attach_capsule(
         is_day=walk.is_day,
         temperature_c=(
             weather.temperature_c
-            if has_observed_context
-            and weather is not None
-            and weather.temperature_c is not None
+            if has_observed_context and weather is not None and weather.temperature_c is not None
             else app_temperature
         ),
         precipitation_kind=(weather.precipitation_kind if has_observed_context else None),

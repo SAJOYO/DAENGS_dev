@@ -1,0 +1,28 @@
+-- Read-only shape checks. Execute with ON_ERROR_STOP after #260 and activity migration.
+DO $$
+DECLARE relation_name TEXT;
+BEGIN
+    FOREACH relation_name IN ARRAY ARRAY['activity_session_links','activity_walk_heads',
+        'activity_seasons','activity_accounts','activity_holding_periods',
+        'activity_game_receipts','activity_bonus_keys'] LOOP
+        IF to_regclass(relation_name) IS NULL THEN
+            RAISE EXCEPTION 'missing activity table: %', relation_name;
+        END IF;
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='pets'::regclass
+        AND tgname='activity_pet_cleanup' AND tgenabled='O') OR NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgrelid='territory_occupancies'::regclass
+        AND tgname='activity_ownership_guard' AND tgdeferrable AND tginitdeferred AND tgenabled='O')
+    THEN RAISE EXCEPTION 'activity integrity triggers missing or disabled'; END IF;
+    IF to_regclass('activity_one_active_season') IS NULL
+        OR to_regclass('activity_one_open_holding') IS NULL
+    THEN RAISE EXCEPTION 'activity unique indexes missing'; END IF;
+END $$;
+SELECT walk_id, analysis_id, revision, processed_revision, processed_analysis_id, contribution
+FROM activity_walk_heads LIMIT 0;
+SELECT id, starts_ms, ends_ms, coverage_start_ms, confirmed_ms, revision, status, rules
+FROM activity_seasons LIMIT 0;
+SELECT season_id, pet_id, score, final_score, revision, processed_revision, statistics
+FROM activity_accounts LIMIT 0;
+SELECT id, season_id, pet_id, site_id, claim_id, game_session_id, started_ms, ended_ms,
+       verified_from_ms, start_order, end_order, origin, takeover FROM activity_holding_periods LIMIT 0;

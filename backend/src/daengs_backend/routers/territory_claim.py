@@ -18,6 +18,7 @@ from daengs_backend.schemas.territory_claim import (
     SiteResponse,
 )
 from daengs_backend.services import territory_ownership as service
+from daengs_backend.services.activity_core.game_policy import GameError
 from daengs_backend.services.territory_site_lookup import (
     TerritorySiteLookup,
     TerritorySiteUnavailableError,
@@ -36,6 +37,8 @@ async def _call(operation):
         raise HTTPException(404, "산책 게임 세션 또는 시도를 찾을 수 없습니다.") from None
     except service.ClaimConflict as exc:
         raise HTTPException(409, {"code": exc.code}) from None
+    except GameError as exc:
+        raise HTTPException(409, {"code": str(exc)}) from None
     except TerritorySiteUnavailableError:
         raise HTTPException(503, "점령지 게임판을 확인할 수 없습니다.") from None
 

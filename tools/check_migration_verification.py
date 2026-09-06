@@ -144,7 +144,12 @@ def sql_checks():
         ('2026-09-05', 'app_user_nickname', APP_USERS, 'app_users', [
             'ALTER TABLE app_users DROP COLUMN nickname',
             'ALTER TABLE app_users ALTER COLUMN nickname TYPE varchar(80)',
-            'ALTER TABLE app_users ALTER COLUMN nickname SET NOT NULL',
+            # ⚠ **값을 먼저 채워야 한다.** 그냥 SET NOT NULL 하면 기존 NULL 행 때문에
+            #   ALTER 자체가 죽고, 그러면 **verifier 가 잡은 것이 아니라 ALTER 가 실패한 것**이
+            #   된다 (하네스는 그 둘을 stderr 의 mismatch/missing table 낱말로 가른다).
+            #   #271 의 `NOT VALID` 와 같은 함정이다. lower(nickname) 이 UNIQUE 라 값도 달라야 한다.
+            "UPDATE app_users SET nickname = 'n' || kakao_id;"
+            ' ALTER TABLE app_users ALTER COLUMN nickname SET NOT NULL',
             'DROP INDEX idx_app_users_nickname',
             # **표현식을 잃는 변조.** 이름은 같은데 lower() 가 없다 — 이러면
             # 'Neo' 와 'neo' 가 둘 다 생긴다. 이름만 보는 verify 는 이걸 못 잡는다.

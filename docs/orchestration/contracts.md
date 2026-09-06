@@ -298,6 +298,21 @@ AssistantResponse:
 12. **`requested_capability` 는 라우팅 신호일 뿐, 절대 인가가 아닙니다** (D-036).
 13. **능력 실패 시 무관한 능력으로 조용히 폴백하지 않습니다** (O-10). 성공한 독립 결과는
     다른 능력이 실패·타임아웃해도 보존합니다.
+14. **능력 이름의 사본 세 벌은 항상 같은 값을 가집니다** (#269). 능력을 추가할 때 다음
+    셋을 **함께** 넓히세요 — 서로를 참조하지 않고 손으로 적힌 목록이라, 하나만 빠져도
+    타입 검사에는 안 걸립니다.
+
+    | 자리 | 이름 | 역할 |
+    | --- | --- | --- |
+    | `orchestration/contracts.py` | `CapabilityName` | 능력의 원본 정의 |
+    | `orchestration/semantic.py` | `ExecuteName` | 라우터가 고를 수 있는 목적지 |
+    | `schemas/chat.py` | `AgentCategory` | 저장된 대화를 읽어 줄 때의 꼬리표 |
+
+    `place` 를 넣을 때 앞의 둘만 넓히고 셋째를 놓쳐서, Place 가 답한 대화가 **저장은 되고
+    읽을 때만** 응답 검증에 걸려 `/app/chats` 가 500 을 냈습니다. 쓰는 쪽이 읽는 쪽보다
+    넓으면 사고가 데이터에 박히고, 코드를 고칠 때까지 그 강아지의 기록이 통째로 죽습니다.
+    `tests/test_orchestration_contracts.py::test_capability_names_have_exactly_three_copies_and_they_agree`
+    가 셋을 대조합니다.
 
 ## 7. locale 준비
 

@@ -610,9 +610,26 @@ def _markdown_report(summary: dict[str, Any]) -> str:
 **명시 신호 케이스**({len(summary["explicit_signal_case_ids"])}개)는 두 구현이 같은 코드로
 끝난다 (D-036). 비교에 정보가 없다: {", ".join(summary["explicit_signal_case_ids"]) or "없음"}
 
-## 결론
+## 이 리포트가 말하는 것
 
-<!-- 사람이 채운다. D-055 ⑥ 에 반영하고, 진 쪽을 지우는 카드를 연다. -->
+**v1 은 계약이 갈린 상태의 측정이다.** 골드는 LangGraph 의 계약으로 동결돼 있고,
+에이전트는 다른 계약으로 돈다. 그래서 총점을 그대로 "품질 차이"로 읽으면 안 된다.
+
+- 의미상 갈린 케이스 **{div["divergent_case_count"]}건** / {summary["scored_case_count"]}건 —
+  나머지는 두 구현이 똑같이 골랐다
+- 그중 **{len(div["contract_difference_case_ids"])}건이 계약 차이**다 (카드 ⑤⑴)
+- 계약 차이를 빼면 완전 일치는 **{adjusted["langgraph"]:.3f} 대 {adjusted["agent"]:.3f}** 로 좁혀진다
+- **남는 차이는 비용이다** — 턴 {impls["langgraph"]["llm_turns"]["total"]} 대 {impls["agent"]["llm_turns"]["total"]},
+  평균 지연 {impls["langgraph"]["latency_ms"]["mean"]}ms 대 {impls["agent"]["latency_ms"]["mean"]}ms.
+  이건 계약 차이로 설명되지 않고 구조에서 온다
+
+**전제를 맞춘 재측정이 후속 카드다** (메모 ⑥). 골드를 고치는 것이 아니라 에이전트가
+같은 계약으로 돌게 한 뒤 같은 러너로 다시 재고, 그것이 `comparison_v2` 가 된다.
+이 리포트는 그때도 그대로 남아 **왜 프롬프트를 바꿨는지**의 근거가 된다.
+
+## 사람의 결정
+
+<!-- 어느 구현을 남길지. v2 결과까지 보고 D-055 ⑥ 에 반영한 뒤, 진 쪽을 지우는 카드를 연다. -->
 """
 
 

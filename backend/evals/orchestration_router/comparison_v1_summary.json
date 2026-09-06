@@ -2,7 +2,7 @@
   "benchmark_id": "orchestrator-comparison-v1",
   "card": "#252",
   "decision": "D-055",
-  "head_commit": "44c7336f09c2d791bd007bf2e48b1759e9f5721c",
+  "head_commit": "07ce4c51ba56be70c939050e3594f802631af1a7",
   "gold_file": "gold_v1.jsonl",
   "scored_case_count": 80,
   "explicit_signal_case_ids": [],

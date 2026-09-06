@@ -17,6 +17,9 @@
   코드를 지나므로 같다 — 그것만 확인한다.
 - ⓒ 계획 동결 전 모델 실패에서 에이전트는 이미 고른 선택을 버린다 (v1 은 실행된 결과를
   살렸다). 실행이 선택 뒤이므로 살릴 결과가 없고, 공유 라우터 실패 계약(O-14)을 따른다.
+- ⓓ 일반 답변 폴백(#279)은 두 구현이 **같은 planner 규칙을 같은 플래그로** 지난다. 라우터의
+  빈 결정과 에이전트의 "툴 없이 마침"은 플래그가 꺼져 있으면 둘 다 FAILED, 켜져 있으면 둘 다
+  `general` 하나를 같은 payload 로 돌린다. 전문 선택에는 어느 쪽도 `general` 을 안 붙인다.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
+from daengs_backend.config import settings
 from daengs_backend.orchestration.agent.service import AgentOrchestrationService
 from daengs_backend.orchestration.contracts import (
     AssistantResponse,
@@ -41,6 +45,8 @@ from daengs_backend.orchestration.contracts import (
     CapabilityResult,
     CapabilityStatus,
     ErrorDetail,
+    GeneralPayload,
+    OutcomeDetail,
     PrincipalContext,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
@@ -90,9 +96,11 @@ class ScriptedAdapter:
         self.capability = capability
         self._outcome = outcome
         self._log = log
+        self.payloads: list[object] = []
 
     async def run(self, request, *, request_id: str) -> CapabilityResult:
         self._log.append(self.capability.value)
+        self.payloads.append(request.payload)
         if isinstance(self._outcome, Exception):
             raise self._outcome
         return self._outcome
@@ -313,7 +321,11 @@ async def test_selector_failure_before_plan_freeze_runs_nothing() -> None:
 
 
 async def test_empty_selection_is_the_same_failed_answer_in_both() -> None:
-    """라우터의 빈 결정과 에이전트의 '툴 없이 마침'은 같은 길로 FAILED 다 — 어댑터 0회."""
+    """라우터의 빈 결정과 에이전트의 '툴 없이 마침'은 같은 길로 FAILED 다 — 어댑터 0회.
+
+    플래그가 **꺼진** 기본값에서의 계약이다 (ⓓ). 켜졌을 때는 아래 `run_both_empty` 계열이 잰다.
+    """
+    assert settings.general_fallback is False
     fakes_lg, log_lg = adapters({"training": ok(CapabilityName.TRAINING)})
     lg = await langgraph_service(
         ScriptedTransport(json.dumps({"execute": [], "handoffs": []})), fakes_lg
@@ -325,6 +337,104 @@ async def test_empty_selection_is_the_same_failed_answer_in_both() -> None:
     assert lg.status == ag.status == AssistantStatus.FAILED
     assert "답할 수 없어요" not in ag.message
     assert log_lg == log_ag == []
+    assert_equivalent(lg, ag)
+
+
+# ── ⓓ 일반 답변 폴백 (#279) — 켜졌을 때 두 구현이 같은 길을 지난다 ──────
+
+
+def refused_general() -> CapabilityResult:
+    return CapabilityResult(
+        capability=CapabilityName.GENERAL,
+        status=CapabilityStatus.REFUSED,
+        refusal=OutcomeDetail(code="medication", message="수의사에게 확인해 주세요."),
+        elapsed_ms=1,
+    )
+
+
+async def run_both_empty(
+    outcomes: dict[str, object], *, context=None
+) -> tuple[AssistantResponse, dict, AssistantResponse, dict]:
+    """빈 라우터 결정 / 툴 없이 마친 에이전트 — 같은 어댑터 대본을 두 구현에 먹인다."""
+    lg_fakes, _ = adapters(outcomes)
+    ag_fakes, _ = adapters(outcomes)
+    ctx = dict(SEOUL if context is None else context)
+    lg = await langgraph_service(
+        ScriptedTransport(json.dumps({"execute": [], "handoffs": []})), lg_fakes
+    ).run(query=QUERY, principal=PRINCIPAL, context=dict(ctx))
+    ag = await agent_service(
+        ScriptedChatModel(script=[AIMessage(content="맞는 도구가 없어 마칩니다.")]), ag_fakes
+    ).run(query=QUERY, principal=PRINCIPAL, context=dict(ctx))
+    return lg, lg_fakes, ag, ag_fakes
+
+
+@pytest.fixture
+def fallback_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "general_fallback", True)
+
+
+async def test_empty_selection_with_fallback_on_is_the_same_general_answer_in_both(
+    fallback_on: None,
+) -> None:
+    lg, lg_fakes, ag, ag_fakes = await run_both_empty(
+        {"training": ok(CapabilityName.TRAINING), "general": ok(CapabilityName.GENERAL)},
+        context={**SEOUL, "dog": {"breed": "푸들", "age_months": 30}},
+    )
+    for response, fakes in ((lg, lg_fakes), (ag, ag_fakes)):
+        assert response.status == AssistantStatus.ANSWERED
+        assert response.message == "general 답"
+        assert fakes[CapabilityName.TRAINING].payloads == []
+        assert fakes[CapabilityName.GENERAL].payloads == [
+            GeneralPayload(question=QUERY, dog={"breed": "푸들", "age_months": 30})
+        ]
+    assert "마칩니다" not in ag.message  # 에이전트의 마무리 문장은 여전히 버린다
+    assert_no_silent_intent_loss(lg, ["general"], [])
+    assert_equivalent(lg, ag)
+
+
+async def test_general_refusal_with_fallback_on_is_refused_in_both(fallback_on: None) -> None:
+    lg, _, ag, _ = await run_both_empty({"general": refused_general()})
+    assert lg.status == ag.status == AssistantStatus.REFUSED
+    assert lg.message == "수의사에게 확인해 주세요."
+    assert lg.results[0].refusal is not None and lg.results[0].refusal.code == "medication"
+    assert_equivalent(lg, ag)
+
+
+async def test_general_provider_failure_with_fallback_on_is_contained_in_both(
+    fallback_on: None,
+) -> None:
+    """폴백이 죽어도 사용자에게는 능력 하나의 실패로 보인다 — 라우터 실패 문구가 아니다."""
+    lg, _, ag, _ = await run_both_empty({"general": RuntimeError("boom")})
+    assert lg.status == ag.status == AssistantStatus.FAILED
+    assert lg.message != _ROUTER_FAILURE_MESSAGE
+    assert [r.status for r in lg.results] == [CapabilityStatus.ERROR]
+    assert "boom" not in lg.message
+    assert_no_silent_intent_loss(lg, ["general"], [])
+    assert_equivalent(lg, ag)
+
+
+async def test_specialized_selection_with_fallback_on_never_runs_general_in_both(
+    fallback_on: None,
+) -> None:
+    lg, lg_log, ag, ag_log = await run_both(
+        ["training"],
+        ["gait"],
+        {"training": ok(CapabilityName.TRAINING), "general": ok(CapabilityName.GENERAL)},
+    )
+    assert lg_log == ag_log == ["training"]
+    assert_no_silent_intent_loss(lg, ["training"], ["gait"])
+    assert_equivalent(lg, ag)
+
+
+async def test_clarify_gate_with_fallback_on_still_runs_nothing_in_both(fallback_on: None) -> None:
+    lg, lg_log, ag, ag_log = await run_both(
+        ["walk"],
+        [],
+        {"walk": ok(CapabilityName.WALK), "general": ok(CapabilityName.GENERAL)},
+        context={},
+    )
+    assert lg_log == ag_log == []
+    assert lg.status == ag.status == AssistantStatus.CLARIFY
     assert_equivalent(lg, ag)
 
 

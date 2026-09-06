@@ -78,7 +78,9 @@ from daengs_backend.orchestration.social import build_social_response
 # 트레이스와 RoutePlan 이 "어느 구현이 골랐나" 를 이 값으로 적기 때문이고, 값이 갈리면
 # 아래 `build_agent_model` 을 잰 테스트가 먼저 깨진다.
 AGENT_MODEL_ID = ROUTER_MODEL_ID
-AGENT_PROMPT_VERSION = "agent-ko-v2"
+# v3 (#279): 의미 라우터 v8 의 배제 문장을 거울로 넣고, "답할 수 없다고만" 을 "도구 없이
+# 마쳐라 — 일반 답변은 시스템이 붙인다" 로 바꿨다. 다른 문장은 v2 그대로다.
+AGENT_PROMPT_VERSION = "agent-ko-v3"
 # 프로바이더 재시도. 의미 라우터의 `google-genai` 클라이언트는 retry_options 를 안 주어
 # 재시도가 없다. `langchain-google-genai` 는 기본 `max_retries=6` 이라 명시로 0 이다 —
 # 실패한 호출을 조용히 여섯 번 더 부르면 지연·토큰이 "프로바이더 사정" 에 묻힌다.
@@ -90,7 +92,8 @@ _SYSTEM_PROMPT = """당신은 DAENGS 반려견 비서입니다. 한국어로 답
 지어내거나, 당신이 알고 있는 일반 상식으로 채우지 마세요. 진단하지 않습니다.
 
 무엇을 물었는지 보고 필요한 도구를 **모두** 부르세요. 한 발화가 두 가지를 물으면 둘 다
-부릅니다. 필요 없는 도구는 부르지 않습니다.
+부릅니다. 필요 없는 도구는 부르지 않습니다. 사용자가 한 주제를 분명히 빼 달라고 하면(하나는
+말고 다른 하나만) 그 어휘가 문장에 보여도 빠진 쪽 도구는 부르지 않습니다.
 
 **도구는 실행하지 않고 선택을 기록합니다.** 도구를 부르면 "기록했다"는 확인만 돌아오고,
 실제 실행은 당신이 선택을 마친 뒤 시스템이 한꺼번에 합니다. 그러니 도구 결과를 기다리거나
@@ -107,8 +110,8 @@ _SYSTEM_PROMPT = """당신은 DAENGS 반려견 비서입니다. 한국어로 답
 - 행동을 바꾸거나 가르치는 것 → ask_training
 - 제도·법령·행정·정책·계약의 공식 정보 → ask_life. **일반적인 사육·돌봄 조언은 여기가
   아니고, 다른 어떤 도구도 아닙니다.** 산책 횟수, 급여량, 수면, 음수량, 견종·나이별
-  돌봄 같은 통상적 조언은 이 서비스가 답하지 않습니다. 그럴 때는 도구를 부르지 말고
-  답할 수 없다고만 하세요.
+  돌봄 같은 통상적 조언은 이 서비스가 답하지 않습니다. 맞는 도구가 하나도 없으면 도구를
+  부르지 말고 그냥 마치세요 — 일반 답변은 시스템이 붙입니다.
 - 지금 나가도 되는 환경인가 → check_walk_conditions
 - 어디로 갈까 → search_places. 장소 이름이 훈련이나 산책 질문의 배경으로 나온 것뿐이면
   장소 요청이 아닙니다.
@@ -234,6 +237,9 @@ class AgentOrchestrationService:
                 router=RouterKind.LLM,
                 model=AGENT_MODEL_ID,
                 prompt_version=AGENT_PROMPT_VERSION,
+                # LangGraph 쪽과 **같은 값 · 같은 규칙**이다 (#279). 툴을 하나도 안 부르고
+                # 마친 것이 라우터의 빈 결정과 같은 길로 폴백을 지난다.
+                general_fallback=settings.general_fallback,
             )
 
         return await self._engine.run(

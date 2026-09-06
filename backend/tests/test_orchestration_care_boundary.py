@@ -272,9 +272,18 @@ def test_care_question_is_not_hard_routed_by_the_prompt_builder() -> None:
 
 
 def test_no_care_capability_exists_in_the_contracts() -> None:
-    assert {name.value for name in CapabilityName} == {"training", "life", "walk", "place"}
-    for invented in ("care", "husbandry", "general", "nutrition"):
+    """`general` (#279) is an executable capability now, but still not a router destination:
+    the router cannot route a care question anywhere — the planner's fallback rule takes it."""
+    assert {name.value for name in CapabilityName} == {
+        "training",
+        "life",
+        "walk",
+        "place",
+        "general",
+    }
+    for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}
+    assert "general" not in get_args(ExecuteName)
 
 
 @pytest.mark.parametrize("invented", ["care", "husbandry", "general"])
@@ -396,17 +405,17 @@ def _policy() -> str:
     return prompt.split("USER_QUERY:")[0]
 
 
-def test_prompt_is_v7_with_the_same_model_and_schema_shape() -> None:
-    """v7 (D-051) added `place` and nothing else.
+def test_prompt_is_v8_with_the_same_model_and_schema_shape() -> None:
+    """v7 (D-051) added `place`; v8 (#279) added one exclusion sentence and nothing else.
 
     The care boundary this file defends is a *prompt* boundary, so it pins the prompt
-    version. v7 adds one EXECUTE name; the schema's shape, the handoff pair, the
-    social_intent field and the model are all unchanged, and the husbandry rules below
-    are re-asserted verbatim against the new prompt.
+    version. Neither bump touched the schema's shape, the handoff pair, the social_intent
+    field or the model — and v8 deliberately did NOT add the general fallback as a
+    destination — so the husbandry rules below are re-asserted verbatim against v8.
     """
-    assert PROMPT_VERSION == "semantic-router-ko-v7"
+    assert PROMPT_VERSION == "semantic-router-ko-v8"
     assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v7" in _policy()
+    assert "PROMPT_VERSION: semantic-router-ko-v8" in _policy()
     # Schema shape unchanged: same three properties, two HANDOFF targets, and exactly
     # one new EXECUTE name appended after the original three.
     schema = SemanticRoutingDecision.model_json_schema()

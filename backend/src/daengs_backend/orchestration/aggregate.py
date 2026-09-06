@@ -19,6 +19,9 @@ _LABELS = {
     CapabilityName.LIFE: "생활 정보",
     CapabilityName.WALK: "산책",
     CapabilityName.PLACE: "장소",
+    # 폴백은 전문 능력이 하나도 안 골렸을 때만 붙으므로(#279) 실제로는 단독 결과라
+    # 이 라벨이 화면에 찍힐 일이 없다. 그래도 빠뜨리면 KeyError 다.
+    CapabilityName.GENERAL: "일반",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라

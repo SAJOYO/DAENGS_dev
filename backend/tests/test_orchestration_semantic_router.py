@@ -372,7 +372,7 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
             "note": "unapproved",
         },
     )
-    assert QUERY in prompt and "semantic-router-ko-v7" in prompt
+    assert QUERY in prompt and "semantic-router-ko-v8" in prompt
     metadata_line = next(
         line for line in prompt.splitlines() if line.startswith("ROUTING_METADATA:")
     )

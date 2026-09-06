@@ -127,6 +127,18 @@ class Settings(BaseSettings):
     agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
     agent_recursion_limit: int = Field(default=25, gt=0)
 
+    # ── 일반 답변 폴백 (#279) ─────────────────────────────────────────
+    # 라우터가 전문 능력을 하나도 못 골랐을 때 거절(FAILED) 대신 Gemini 생성 답변
+    # (`adapters/general.py`)을 붙일지. **기본값 false 라 켜기 전까지 운영은 지금과
+    # 같습니다** — #277 의 판정 결과를 보고 서버 `backend/.env` 한 줄로 켭니다.
+    #
+    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙이고,
+    # 두 오케스트레이터 구현(langgraph · agent)이 같은 규칙을 같은 값으로 지납니다.
+    # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
+    general_fallback: bool = Field(
+        default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
+    )
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는

@@ -105,5 +105,8 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     사고의 본질이라, 셋을 한자리에서 묶는다.
     """
     names = {capability.value for capability in CapabilityName}
-    assert names == set(get_args(ExecuteName)), "라우터가 고를 수 있는 목적지가 어긋났다"
+    # `general`(#279) 은 실행되고 저장되지만 **라우터가 고르지는 못한다** — planner 의 폴백
+    # 규칙만이 넣는다. 그래서 세 사본 중 라우터 목적지만 하나 좁고, 그 차이는 정확히 이 한 값이다.
+    assert names - {"general"} == set(get_args(ExecuteName)), "라우터가 고를 수 있는 목적지가 어긋났다"
+    assert "general" not in get_args(ExecuteName), "폴백은 라우터 목적지가 아니다 (#279)"
     assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

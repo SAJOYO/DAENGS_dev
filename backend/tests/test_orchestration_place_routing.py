@@ -308,7 +308,14 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "walk",
         "place",
     ]
-    assert [name.value for name in CapabilityName] == ["training", "life", "walk", "place"]
+    # `general` (#279) sits last: it is never selected alongside the four, only by itself.
+    assert [name.value for name in CapabilityName] == [
+        "training",
+        "life",
+        "walk",
+        "place",
+        "general",
+    ]
 
 
 def test_unknown_execute_name_refuses_to_inherit_another_payload() -> None:

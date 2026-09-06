@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import (
     AssistantResponse,
     AssistantStatus,
@@ -104,6 +105,9 @@ class AssistantOrchestrationService:
                 context=structured_context,
                 router=RouterKind.LLM,
                 model=ROUTER_MODEL_ID,
+                # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
+                # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
+                general_fallback=settings.general_fallback,
             )
         return await self._engine.run(
             route_plan=route_plan,

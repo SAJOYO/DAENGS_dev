@@ -17,6 +17,11 @@ class CapabilityName(StrEnum):
     LIFE = "life"
     WALK = "walk"
     PLACE = "place"
+    #: The general-answer fallback (#279). An executable capability with an adapter, but
+    #: NOT a router destination: `semantic.ExecuteName` deliberately omits it. The planner
+    #: assembles it by a deterministic rule when the router selected nothing, so the model
+    #: can never trade an evidence-backed capability for an ungrounded answer.
+    GENERAL = "general"
 
 
 class CapabilityStatus(StrEnum):
@@ -102,12 +107,25 @@ class PlacePayload(ContractModel):
         return value
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload
+class GeneralPayload(ContractModel):
+    """The fallback's input: the same trusted facts Life gets, nothing more (#279).
+
+    The question is the user's exact words and ``dog`` comes only from the resolved
+    profile (``planner._dog_context``). No coordinates — the fallback must not answer
+    "where" or "is now a good time"; those are Place and Walk, and they were not selected.
+    """
+
+    question: str = Field(min_length=1, max_length=1_000)
+    dog: DogContext | None = None
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
     CapabilityName.PLACE: PlacePayload,
+    CapabilityName.GENERAL: GeneralPayload,
 }
 
 
@@ -268,6 +286,7 @@ __all__ = [
     "CapabilityStatus",
     "ClarifyRequest",
     "ErrorDetail",
+    "GeneralPayload",
     "Handoff",
     "LifePayload",
     "OrchestratorState",

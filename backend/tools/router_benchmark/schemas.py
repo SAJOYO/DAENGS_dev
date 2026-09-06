@@ -41,6 +41,7 @@ PromptVersion = Literal[
     "semantic-router-ko-v5",  # PR #172 — production Life/unsupported-care boundary (runner_v6)
     "semantic-router-ko-v6",  # PR #172 — routine-care vs today's walking window (runner_v7)
     "semantic-router-ko-v7",  # PR #204 — the `place` destination (runner_v8)
+    "semantic-router-ko-v8",  # PR #279 — explicit-exclusion (negation) sentence (runner_v9)
     # PR #252 — the LangChain agent orchestrator (D-055). Not a semantic-router prompt
     # version at all: the agent has no routing prompt, it picks tools in a loop. It lives
     # in the same Literal because `CaseResult.prompt_version` is what tells two rows of
@@ -54,6 +55,10 @@ PromptVersion = Literal[
     # selection; the shared planner gates and the shared engine executes). Added, never
     # substituted: `agent-ko-v1` stays so `comparison_v1_*` remains reproducible.
     "agent-ko-v2",
+    # PR #279 — the agent prompt mirrors v8's exclusion sentence and hands "no tool
+    # applies" to the planner's general fallback (D-055 ⑦ rule 1). `agent-ko-v2` stays
+    # so `comparison_v2_*` remains reproducible.
+    "agent-ko-v3",
 ]
 
 

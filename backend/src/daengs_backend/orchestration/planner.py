@@ -19,6 +19,16 @@ payload with no `query`, failing PlacePayload validation and surfacing as a
 top-level FAILED on exactly the queries Place was added to answer. The `else`
 below therefore raises: a new ExecuteName must state its payload here or stop the
 request loudly, never inherit another capability's shape.
+
+**The general-answer fallback is a planner rule, not a router destination** (#279).
+When the semantic decision selects nothing at all — no capability, no handoff — and
+`general_fallback` is on, the plan becomes exactly one `general` request carrying the
+same trusted payload Life gets (question + resolved dog facts). It is deliberately not
+an `ExecuteName`: letting the model *choose* `general` would let it trade an
+evidence-backed capability for an ungrounded answer, and that direction of mistake is
+the worst one. As a rule it also holds when the model's output is empty. A decision
+with any specialized selection never gains `general`, and the explicit
+`requested_capability` signal is untouched — `general` is not a resolvable signal.
 """
 
 from __future__ import annotations
@@ -40,8 +50,12 @@ from daengs_backend.orchestration.semantic import (
 # identical questions should not produce two differently-ordered answers. The frozen
 # router benchmark is unaffected either way: `_semantic_plan_key` compares requests as
 # a multiset. Order follows the `CapabilityName` declaration order.
-_EXECUTION_ORDER = ("training", "life", "walk", "place")
-_EXECUTE_NAMES = frozenset(_EXECUTION_ORDER)
+_GENERAL = "general"
+_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL)
+# The names the router (and the explicit signal) may select. `general` is executable but
+# never selectable — it only ever enters a plan through the fallback rule below, so it is
+# excluded here on purpose: `requested_capability="general"` is an unresolved signal.
+_EXECUTE_NAMES = frozenset(name for name in _EXECUTION_ORDER if name != _GENERAL)
 _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # Capabilities whose payload carries trusted coordinates. Missing coordinates make
 # the whole plan a CLARIFY, so this set is what the coordinate gate reads.
@@ -95,6 +109,7 @@ def assemble_route_plan(
     router: RouterKind,
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
+    general_fallback: bool = False,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
 
@@ -102,6 +117,11 @@ def assemble_route_plan(
     The deterministic caller above passes None for both because it calls no model at all —
     they are not "unknown", they are "there was none", and the console renders that
     difference (#238).
+
+    `general_fallback` defaults to off so that every existing caller — including the
+    frozen router-benchmark runners, which score the *router's* decision — keeps
+    building exactly the plan it built before (#279). Production passes
+    `settings.general_fallback`.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     missing = _missing_coordinates(context) if needs_coordinates else []
@@ -123,11 +143,22 @@ def assemble_route_plan(
             }
         )
 
+    selected: list[str] = list(decision.execute)
+    if (
+        general_fallback
+        and not selected
+        and not decision.handoffs
+        and decision.social_intent is None  # never reaches here in practice; belt and braces
+    ):
+        # The fallback rule (module docstring). One request, and only when the router
+        # chose nothing: a specialized selection is never padded with `general`.
+        selected = [_GENERAL]
+
     requests: list[dict[str, Any]] = []
     # An unrecognized name sorts last rather than raising here, so the precise
     # "no payload rule" error below is what surfaces instead of an index error.
     for capability in sorted(
-        decision.execute, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
+        selected, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
     ):
         payload = _payload_for(capability, query=query, context=context)
         requests.append({"capability": capability, "payload": payload, "timeout_ms": None})
@@ -161,6 +192,14 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
             dog = _dog_context(context)
             if dog is not None:
                 payload["dog"] = dog
+        return payload
+    if capability == _GENERAL:
+        # Same rule as Life: the exact question plus the trusted dog facts, never a
+        # coordinate — the fallback is not allowed to answer Walk's or Place's question.
+        payload = {"question": query}
+        dog = _dog_context(context)
+        if dog is not None:
+            payload["dog"] = dog
         return payload
     if capability == "walk":
         location = context["location"]

@@ -16,7 +16,17 @@ utterance asks both. A named area in the query never becomes a coordinate — Pl
 always searches around the trusted device location and says so (D-051 Option B;
 named-region geocoding and a named-region CLARIFY are deferred to a separate card).
 
-The prompt below is `semantic-router-ko-v7`, which keeps intact:
+v8 (#279) adds ONE sentence and changes nothing else: an explicit natural-language
+exclusion ("this, not that" / "only this") removes the excluded destination even when
+its vocabulary is present. v7 already said negation overrides incidental vocabulary,
+but the frozen `boundary_05`-shaped exclusion was still gaining Walk in every run
+(#272: 3/3) — the sentence names the pattern. The same rule is mirrored in the agent
+system prompt in the same PR (D-055 ⑦ rule 1). The general-answer fallback of #279 is
+deliberately NOT a destination here: the router keeps selecting specialized
+capabilities only, and the planner adds `general` by rule when nothing was selected.
+The v8 regression against the same 80 gold cases is runner_v9.py.
+
+The prompt below is `semantic-router-ko-v8`, which keeps intact everything of v7:
 the accepted v3 routing boundary, the v4 PURELY social utterance classification
 (greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
 templates in social.py), plus one v5 boundary refinement (PR #172): Life is
@@ -48,7 +58,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v7"
+PROMPT_VERSION = "semantic-router-ko-v8"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이
@@ -123,7 +133,9 @@ Select every semantically requested destination:
   an image/video through the dedicated gait flow. These descriptions do not make it an unsupported
   medical request.
 
-Preserve multi-intent. Natural-language negation overrides incidental vocabulary. Skin and gait are
+Preserve multi-intent. Natural-language negation overrides incidental vocabulary. When the user
+explicitly excludes a topic — asking for one thing and not another, or for one thing only — do not
+select the excluded destination even though its vocabulary appears in the utterance. Skin and gait are
 handoffs only. Select Walk only for current environmental walking suitability, such as weather,
 heat, cold, rain, air quality, or similar environmental conditions; do not select Walk merely
 because walking is the setting of a Training or Gait request. Route by meaning, not keyword

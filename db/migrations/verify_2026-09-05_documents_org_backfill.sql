@@ -1,41 +1,69 @@
--- verify_2026-09-05_documents_org_backfill.sql
--- 적용 후 눈으로 보는 질의 모음. **고치는 것은 없다.**
--- 짝: 2026-09-05_documents_org_backfill.sql (RAG-063 / #262)
+-- Read-only catalog assertions. Run with psql -X -v ON_ERROR_STOP=1.
+-- Uses the connection's search_path, including disposable schemas in tests.
+--
+-- **단언형이다** — 이유는 verify_2026-09-05_app_user_nickname.sql 머리말과 같다.
+--
+-- ⚠ **이 파일은 모양이 아니라 값을 잰다.** 다른 verify 들은 컬럼·제약이 섰는지 보는데,
+--    이 마이그레이션이 한 일은 `documents.metadata` 에 `org` 을 채운 것이다. 그리고
+--    **그 값이 실제로 지워진 적이 있다** — #268 의 `rag load` 가 `org` 없는 청크로 덮어써
+--    2,592행이 통째로 사라졌고, 적재는 성공하고 예외도 안 났다 (RAG-066 ①).
+--    그 사고를 잡는 자리가 여기다.
+DO $verify$
+DECLARE
+    filled bigint;
+    definition text;
+BEGIN
+    IF to_regclass('documents') IS NULL THEN
+        RAISE EXCEPTION 'missing table: documents';
+    END IF;
 
--- 1) 몇 청크가 채워졌나. 2026-09-05 집 서버 기준 **2,592** 다
---    (문서 245개 = 조례 208 + 보조금24 37 이 청크로 펼쳐진 수).
-SELECT count(*) AS org_chunks
-FROM documents
-WHERE metadata->>'org' IS NOT NULL;
+    -- ① 인덱스. 지역 필터가 `metadata->>'org'` 로 거르므로(RAG-063) 표현식 인덱스여야 한다.
+    --    ⚠ 정의 문자열을 그대로 비교하지 않는다 — Postgres 가 다시 써서 내놓는다.
+    SELECT pg_get_indexdef(i.indexrelid) INTO definition
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indrelid = to_regclass('documents') AND c.relname = 'idx_documents_org'
+      AND i.indisvalid AND i.indisready
+      AND i.indexprs IS NOT NULL;
+    IF definition IS NULL THEN
+        RAISE EXCEPTION 'index mismatch: idx_documents_org missing, invalid, '
+                        'or not an expression index';
+    END IF;
+    IF position('org' IN definition) = 0 THEN
+        RAISE EXCEPTION 'index mismatch: idx_documents_org is not on metadata->>org, got %',
+            definition;
+    END IF;
 
--- 2) 고유 지자체 수. **146** 이어야 한다. 이 값이 곧 `search.known_orgs()` 의 사전이고,
---    비면 지역 필터가 조용히 안 켜진다 — 검색은 계속 되므로 예외가 안 난다.
-SELECT count(DISTINCT metadata->>'org') AS orgs
-FROM documents
-WHERE metadata->>'org' IS NOT NULL;
+    -- ② **값이 실제로 채워졌는가.** 이것이 이 파일의 이유다 (머리말 ⚠).
+    --    조례·보조금 문서에는 `org` 이 있어야 한다 — 그 두 소스가 지자체 문서다.
+    SELECT count(*) INTO filled
+    FROM documents
+    WHERE metadata->>'source_id' IN ('ordinance-search', 'benefit24-services')
+      AND metadata->>'org' IS NULL;
+    IF filled > 0 THEN
+        RAISE EXCEPTION 'row mismatch: % local-government documents have no org', filled;
+    END IF;
 
--- 3) 소스별 분포. `ordinance-search` 와 `benefit24-services` 두 곳에만 있어야 한다 —
---    다른 소스에 `org` 이 붙었다면 doc_id 매칭이 헐거운 것이다.
-SELECT metadata->>'source_id' AS source_id, count(*) AS chunks,
-       count(DISTINCT metadata->>'org') AS orgs
-FROM documents
-WHERE metadata->>'org' IS NOT NULL
+    -- ③ 빈 문자열로 채워지지 않았는가. `''` 는 있는 것처럼 보이면서 필터를 통과시킨다.
+    SELECT count(*) INTO filled
+    FROM documents WHERE metadata ? 'org' AND btrim(metadata->>'org') = '';
+    IF filled > 0 THEN
+        RAISE EXCEPTION 'row mismatch: % documents have a blank org', filled;
+    END IF;
+END
+$verify$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 사람이 눈으로 보는 자리. 위 단언이 통과한 뒤에만 여기까지 온다.
+-- ─────────────────────────────────────────────────────────────────────────
+
+-- `org` 을 가진 행 수와 고유 지자체 수. 2026-09-06 실측: 2,592행 · 146곳.
+SELECT count(*) FILTER (WHERE metadata ? 'org') AS with_org,
+       count(DISTINCT metadata->>'org') AS distinct_orgs,
+       count(*) AS documents_total
+FROM documents;
+
+-- 소스별로 몇 건이 채워졌나. ordinance-search 와 benefit24-services 만 나와야 한다.
+SELECT metadata->>'source_id' AS source_id, count(*) AS rows
+FROM documents WHERE metadata ? 'org'
 GROUP BY 1 ORDER BY 2 DESC;
-
--- 4) **값에 공백이 정상인가.** `org` 은 법제처가 정규화해서 주는 값이라 `부산광역시 동래구`
---    처럼 띄어져 있어야 한다. 조례명(`document_title`)은 `부산광역시동래구` 로 붙어 있는데,
---    그 둘을 헷갈리면 지역 필터가 `document_title` 을 파싱하는 쪽으로 잘못 간다 (RAG-063).
-SELECT DISTINCT metadata->>'org' AS org, document_title
-FROM documents
-WHERE metadata->>'org' LIKE '부산%'
-ORDER BY 1
-LIMIT 10;
-
--- 5) 인덱스가 **표현식**으로 섰나. `metadata->>'org'` 가 indexdef 에 보여야 한다 —
---    없으면 지역 질의마다 전수 스캔이다.
-SELECT indexname, indexdef
-FROM pg_indexes
-WHERE tablename = 'documents' AND indexname = 'idx_documents_org';
-
--- 6) 여러 번 돌려도 안전한가. 이 파일을 다시 적용한 뒤 1)·2) 의 수가 그대로면 통과다.
---    (`||` 는 같은 키를 덮어쓰고, UPDATE 는 `IS DISTINCT FROM` 으로 바뀔 행만 고른다.)

@@ -422,8 +422,27 @@ def suggest_workers() -> int:
           150~200 img/s 입니다. 절반 이상을 데이터 로딩에서 흘리고 있었습니다.
     """
     import os
+    import sys
+
+    # 환경변수로 강제 (튜닝·디버깅용). 0 이면 메인 프로세스에서 로딩합니다.
+    forced = os.environ.get("DOG_SKIN_WORKERS")
+    if forced is not None and forced.strip().lstrip("-").isdigit():
+        return max(0, int(forced))
 
     n = os.cpu_count() or 2
+
+    # ⚠️ **윈도우는 다릅니다.** 리눅스(Colab/Kaggle)는 `fork` 라 워커가 부모
+    #    메모리를 그대로 물려받지만, 윈도우는 `spawn` 이라 **워커마다 torch·
+    #    timm·src 를 통째로 다시 import** 합니다. 게다가 이 리포는 train 로더와
+    #    val 로더를 **매 에폭 새로** 만들어서(persistent_workers 안 씀) 에폭마다
+    #    16번을 다시 띄웁니다.
+    #    2026-09-05 실측: RTX 3050 + 워커 8 로 1단계를 돌리다 **교착**했습니다.
+    #    GPU 사용률 97% → 1%, 메모리는 3.6GB 를 잡은 채 CPU 시간이 584.2초에서
+    #    멈췄고(8초 뒤에도 같은 값), 워커 13개가 뜬 상태였습니다.
+    #    → 윈도우에서는 적게 씁니다. 데이터 로딩이 조금 느려도 도는 게 낫습니다.
+    if sys.platform == "win32":
+        return min(2, max(n - 1, 0))
+
     # 메인 프로세스 몫을 남기고, 너무 많으면 오히려 컨텍스트 스위칭 비용이 큽니다
     return max(2, min(n - 1, 8))
 
@@ -517,16 +536,201 @@ def _search_roots() -> list[Path]:
     return out
 
 
+#: 우리가 쓰는 크롭 태그. `crops/` 층 없이 올라온 폴더를 알아볼 때만 씁니다
+CROP_TAGS = ("m2.5", "m1.5", "f320", "full")
+
+
+def _tag_has_jpg(t: Path) -> bool:
+    try:
+        return t.is_dir() and next(t.rglob("*.jpg"), None) is not None
+    except OSError:
+        return False
+
+
+def _crops_dir(d: Path) -> Path | None:
+    """`d` 안에서 **태그 폴더들을 담고 있는 폴더**를 찾습니다. 없으면 None.
+
+    ⚠️ 캐글 데이터셋을 만들 때 `crops/` 층이 사라지는 일이 있습니다.
+       `data/work/crops/m2.5` 를 그대로 올리면 데이터셋 안이
+       `<데이터셋>/m2.5/00/....jpg` 가 됩니다 — `crops/` 가 없습니다.
+       `d/crops` 만 보면 **붙여놓고도** "전처리 결과를 찾지 못했습니다" 로
+       죽습니다 (실제로 당했습니다). 그래서 `d` 자신도 봅니다.
+
+       단 `d` 자신을 볼 때는 **이름이 아는 태그인 것만** 인정합니다. 아무
+       폴더나 태그로 받으면 남의 데이터셋이 크롭으로 잡힙니다.
+    """
+    c = d / "crops"
+    try:
+        if c.is_dir() and any(_tag_has_jpg(t) for t in c.iterdir()):
+            return c
+    except OSError:
+        pass
+    try:
+        if d.is_dir() and any(t.name in CROP_TAGS and _tag_has_jpg(t) for t in d.iterdir()):
+            return d
+    except OSError:
+        pass
+    return None
+
+
 def _has_crops(d: Path) -> bool:
     """크롭이 **한 장이라도** 들어 있는 태그 폴더가 있는가."""
-    c = d / "crops"
-    return c.is_dir() and any(t.is_dir() and next(t.rglob("*.jpg"), None) is not None
-                              for t in c.iterdir())
+    return _crops_dir(d) is not None
+
+
+def _manifest_files(d: Path) -> list[Path]:
+    """`d` **바로 아래**의 매니페스트 파일들 (parquet · csv)."""
+    try:
+        return sorted(p for p in d.iterdir()
+                      if p.is_file() and not p.name.startswith(".")
+                      and p.suffix in (".parquet", ".csv")
+                      and "manifest" in p.name.lower())
+    except OSError:
+        return []
+
+
+def _manifests_dir(d: Path, depth: int = 5) -> Path | None:
+    """`d` 안에서 **매니페스트 파일이 실제로 들어 있는 폴더**를 찾습니다.
+
+    ⚠️ `d / "manifests"` 로 못 박지 마세요. 캐글 데이터셋을 만들면 층이
+       하나 늘거나(`manifests/manifests/*.parquet`,
+       `manifests/data/work/manifests/*.parquet`) 아예 없어져
+       (`<데이터셋>/manifest_final.parquet`) 있는 일이 실제로 있습니다.
+       예전 코드는 `manifests/` **폴더만** 보고 "매니페스트 복사" 를 찍은 뒤
+       0개를 복사했습니다 — 8분 뒤 다음 셀에서
+       `FileNotFoundError: manifest_final.parquet` 로 죽었습니다.
+
+    크롭 태그 폴더로는 안 내려갑니다 (36만 장짜리라 훑으면 몇 분 걸립니다).
+    """
+    skip = set(CROP_TAGS) | {"crops", "reports", "checkpoints",
+                             "__pycache__", "lost+found"}
+    frontier = [d / "manifests", d]
+    seen: set[Path] = set()
+    for _ in range(depth):
+        nxt: list[Path] = []
+        for p in frontier:
+            if not p.is_dir():
+                continue
+            try:
+                r = p.resolve()
+            except OSError:
+                continue
+            if r in seen:
+                continue
+            seen.add(r)
+            if _manifest_files(p):
+                return p
+            try:
+                nxt += [c for c in sorted(p.iterdir())
+                        if c.is_dir() and c.name not in skip
+                        and not c.name.startswith(".")]
+            except OSError:
+                continue
+        if not nxt:
+            break
+        frontier = nxt
+    return None
+
+
+def _manifest_zip(d: Path, depth: int = 5, max_gb: float = 3.0) -> tuple[Path | None, list[str]]:
+    """매니페스트가 들어 있는 **zip** 과 그 안의 항목들. 없으면 `(None, [])`.
+
+    ⚠️ **캐글이 업로드한 zip 을 늘 풀어주는 건 아닙니다.** 실제로 크롭 zip 은
+       풀려서 `m2.5/00/*.jpg` 가 됐는데 `manifests.zip` 은 그대로 남아
+       있었습니다. 폴더만 보면 "매니페스트 없음" 으로 죽습니다.
+
+    크롭 zip(12GB 대)은 크기로 걸러냅니다 — 거기엔 매니페스트가 없고,
+    네트워크 마운트에서 목차를 읽으면 느립니다.
+    """
+    import zipfile
+
+    skip = set(CROP_TAGS) | {"crops", "reports", "checkpoints",
+                             "__pycache__", "lost+found"}
+    frontier, seen = [d], set()
+    for _ in range(depth):
+        nxt: list[Path] = []
+        for p in frontier:
+            if not p.is_dir():
+                continue
+            try:
+                r = p.resolve()
+            except OSError:
+                continue
+            if r in seen:
+                continue
+            seen.add(r)
+            try:
+                items = sorted(p.iterdir())
+            except OSError:
+                continue
+            for q in items:
+                if q.is_dir():
+                    if q.name not in skip and not q.name.startswith("."):
+                        nxt.append(q)
+                    continue
+                if q.suffix.lower() != ".zip":
+                    continue
+                # ⚠️ 통짜 `dogskin*.zip` 은 건드리지 않습니다 — 그건 아래
+                #    "압축 해제" 경로가 통째로 풉니다. 여기서 가로채면
+                #    크롭이 안 풀린 채 매니페스트만 옵니다.
+                if q.name.lower().startswith("dogskin"):
+                    continue
+                try:
+                    if q.stat().st_size > max_gb * 1024**3:
+                        continue                    # 크롭 zip — 여기엔 없습니다
+                    with zipfile.ZipFile(q) as f:
+                        names = [n for n in f.namelist()
+                                 if not n.endswith("/")
+                                 and "manifest" in n.rsplit("/", 1)[-1].lower()
+                                 and n.lower().endswith((".parquet", ".csv"))]
+                except (OSError, zipfile.BadZipFile):
+                    continue
+                if names:
+                    return q, names
+        frontier = nxt
+        if not frontier:
+            break
+    return None, []
+
+
+def _bring_manifests(src: Path, man: Path) -> int:
+    """`src` 안의 매니페스트를 작업 폴더로 가져옵니다. 가져온 **개수**를 돌려줍니다.
+
+    폴더로 올렸든 zip 으로 올렸든 둘 다 받습니다.
+    """
+    import zipfile
+
+    d = _manifests_dir(src)
+    if d is not None:
+        man.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for f in sorted(d.iterdir()):
+            if f.is_file():
+                shutil.copy2(f, man / f.name)
+                n += 1
+        tail = d.name if d != src else "(최상위)"
+        print(f"[env] 매니페스트 {n}개 복사: {src.name}/{tail} → {man}")
+        return n
+
+    z, members = _manifest_zip(src)
+    if z is not None:
+        man.mkdir(parents=True, exist_ok=True)
+        # ⚠️ 폴더 구조는 버리고 **파일만** 꺼냅니다. zip 안이
+        #    `data/work/manifests/manifest_final.parquet` 이어도
+        #    작업 폴더에는 `manifests/manifest_final.parquet` 이어야 합니다.
+        with zipfile.ZipFile(z) as f:
+            for m in members:
+                with f.open(m) as r, open(man / m.rsplit("/", 1)[-1], "wb") as w:
+                    shutil.copyfileobj(r, w)
+        print(f"[env] 매니페스트 {len(members)}개 풀기: {z.name} → {man}")
+        return len(members)
+
+    print(f"[env] {src.name} 안에 매니페스트가 없습니다 (크롭만 있는 입력)")
+    return 0
 
 
 def _has_manifest(d: Path) -> bool:
-    m = d / "manifests"
-    return m.is_dir() and next(m.glob("*.parquet"), None) is not None
+    return _manifests_dir(d) is not None
 
 
 def _looks_prepared(d: Path) -> bool:
@@ -543,6 +747,17 @@ def _looks_prepared(d: Path) -> bool:
 def _looks_partial(d: Path) -> bool:
     """크롭만 있고 매니페스트는 없는 폴더 — 태그를 나눠 올린 경우."""
     return _has_crops(d) and not _has_manifest(d)
+
+
+def _looks_manifest_only(d: Path) -> bool:
+    """크롭 없이 **매니페스트만** 올린 폴더.
+
+    크롭 데이터셋은 그대로 두고 매니페스트만 따로 올려 붙이는 길을 열어둡니다
+    (크롭은 12GB 라 다시 올리는 데 몇 시간 걸립니다). 폴더든 zip 이든 받습니다.
+    """
+    if _has_crops(d):
+        return False
+    return _manifests_dir(d, depth=2) is not None or _manifest_zip(d, depth=2)[0] is not None
 
 
 def find_prepared(dest: Path | None = None) -> tuple[Path, str]:
@@ -568,7 +783,7 @@ def find_prepared_all(dest: Path | None = None) -> list[tuple[Path, str]]:
     seen: set[Path] = set()
 
     for base in _search_roots():
-        for d in _walk(base, depth=3):
+        for d in _walk(base, depth=5):
             r = d.resolve()
             # zip 은 이 폴더 바로 아래만 봅니다 (rglob 은 심볼릭 링크로 안 들어갑니다)
             for z in sorted(d.glob("dogskin*.zip")):
@@ -577,7 +792,7 @@ def find_prepared_all(dest: Path | None = None) -> list[tuple[Path, str]]:
                     zips.append((z, "zip"))
             if r in seen or r == dest.resolve():
                 continue
-            if _looks_prepared(d) or _looks_partial(d):
+            if _looks_prepared(d) or _looks_partial(d) or _looks_manifest_only(d):
                 seen.add(r)
                 dirs.append((d, "dir"))
 
@@ -588,7 +803,8 @@ def find_prepared_all(dest: Path | None = None) -> list[tuple[Path, str]]:
             + _what_is_there()
             + "\n찾는 것 (둘 중 하나):\n"
             "  · dogskin*.zip 파일\n"
-            "  · crops/ 폴더를 가진 폴더 (Kaggle 은 zip 을 자동으로 풀어둡니다)\n\n"
+            "  · crops/ 폴더를 가진 폴더 (Kaggle 은 zip 을 자동으로 풀어둡니다)\n"
+            "  · 또는 m2.5/f320/full/m1.5 를 바로 담은 폴더 (crops/ 층 없이 올린 데이터셋)\n\n"
             "확인할 것:\n"
             "  · Kaggle : 우측 패널 [Add Input] 으로 데이터셋을 붙였는지\n"
             "             (붙였으면 위 목록의 /kaggle/input 아래에 보여야 합니다)\n"
@@ -628,7 +844,17 @@ def _walk(base: Path, depth: int = 5, max_dirs: int = 3000) -> list[Path]:
                     if not p.is_dir() or p.name in _SKIP_DIRS or p.name.startswith("."):
                         continue
                     out.append(p)
-                    # 여기가 이미 전처리 폴더면 더 내려갈 이유가 없습니다
+                    # 크롭이 실제로 들어 있으면 더 내려갈 이유가 없습니다.
+                    #
+                    # ⚠️ **`_looks_manifest_only` 로는 멈추면 안 됩니다.** 그 판정은
+                    #    자식 폴더 안까지(depth=2) 훑어서 parquet 을 찾습니다. 그래서
+                    #    데이터셋 **여러 개를 담고 있는 부모 폴더**가 걸립니다 —
+                    #    캐글은 `/kaggle/input/datasets/<계정>/<데이터셋>` 이라
+                    #    `<계정>` 폴더가 매니페스트 데이터셋 때문에 매치됩니다.
+                    #    거기서 멈추면 **형제인 크롭 데이터셋을 아예 안 봅니다.**
+                    #    실제로 당했습니다 (2026-09-04): 크롭을 붙여놨는데
+                    #    `찾은 입력: [('/kaggle/input/datasets/gayoniee', 'dir')]`
+                    #    하나만 나오고 "사용 가능한 태그: []" 로 죽었습니다.
                     if not (_looks_prepared(p) or _looks_partial(p)):
                         nxt.append(p)
             except OSError:
@@ -670,6 +896,87 @@ def _what_is_there(max_items: int = 12) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _peek(d: Path, depth: int = 3, max_items: int = 10) -> list[str]:
+    """`d` 안을 몇 층까지 훑어 사람이 읽을 줄로 만듭니다 (진단용).
+
+    크롭 태그 폴더로는 안 들어갑니다 — 36만 장을 세면 몇 분 걸립니다.
+    """
+    skip = set(CROP_TAGS) | {"crops"}
+    out: list[str] = []
+
+    def walk(p: Path, level: int, pad: str) -> None:
+        if level > depth:
+            return
+        try:
+            items = sorted(p.iterdir())
+        except OSError as exc:
+            out.append(f"{pad}(읽을 수 없음: {type(exc).__name__})")
+            return
+        if not items:
+            out.append(f"{pad}(비어 있음)")
+            return
+        for q in items[:max_items]:
+            if q.is_dir():
+                mark = " …" if q.name in skip else "/"
+                out.append(f"{pad}📁 {q.name}{mark}")
+                if q.name not in skip:
+                    walk(q, level + 1, pad + "   ")
+            else:
+                mb = q.stat().st_size / 1024**2
+                out.append(f"{pad}📄 {q.name}  ({mb:,.1f} MB)")
+        if len(items) > max_items:
+            out.append(f"{pad}… 외 {len(items) - max_items}개")
+
+    walk(d, 1, "")
+    return out
+
+
+def _unwrap_tag_dir(t: Path, max_depth: int = 3) -> Path:
+    """태그 폴더 안이 한 겹 더 싸여 있으면 **진짜 층까지 내려갑니다.**
+
+    크롭의 실제 모양은 `<태그>/<hh>/<이름>.jpg` 입니다 (hh = 해시 앞 두 자리,
+    256개). 그런데 캐글에 올릴 때 폴더를 한 겹 더 감싸면
+    `<태그>/<태그>/<hh>/*.jpg` 가 됩니다 — 실제로 이렇게 올라갔습니다.
+
+    ⚠️ 이걸 안 풀면 **링크는 걸리는데 경로가 한 칸씩 어긋납니다.**
+       `crops/m2.5/ab/x.jpg` 를 찾는데 실제로는 `m2.5/m2.5/ab/x.jpg` 라
+       `switch_tag` 가 "0/365,428장 존재 (0.0%)" 로 죽습니다. 링크가 걸렸으니
+       "붙었다" 고 보이는데 한 장도 안 읽힙니다 — 제일 나쁜 종류의 실패입니다.
+    """
+    cur = t
+    for _ in range(max_depth):
+        if _has_shard_jpg(cur):
+            return cur
+        try:
+            subs = [q for q in cur.iterdir() if q.is_dir()]
+        except OSError:
+            break
+        if len(subs) != 1:            # 갈래가 여럿이면 여기가 맞는 층입니다
+            break
+        cur = subs[0]
+    return cur if _has_shard_jpg(cur) else t
+
+
+def _has_shard_jpg(d: Path, probe: int = 8) -> bool:
+    """`d` 바로 아래 폴더들(`<hh>`) 안에 jpg 가 있는가.
+
+    256개를 다 뒤지지 않습니다 — 네트워크 마운트에서는 왕복이 비쌉니다.
+    """
+    try:
+        n = 0
+        for sub in d.iterdir():
+            if not sub.is_dir():
+                continue
+            if next(sub.glob("*.jpg"), None) is not None:
+                return True
+            n += 1
+            if n >= probe:
+                break
+    except OSError:
+        pass
+    return False
+
+
 def _link_tags(src_crops: Path, dst_crops: Path) -> dict[str, str]:
     """크롭을 **태그 단위로** 연결합니다. 여러 입력을 합칠 수 있습니다.
 
@@ -680,7 +987,11 @@ def _link_tags(src_crops: Path, dst_crops: Path) -> dict[str, str]:
     """
     dst_crops.mkdir(parents=True, exist_ok=True)
     out: dict[str, str] = {}
-    for tag_dir in sorted(p for p in src_crops.iterdir() if p.is_dir()):
+    # ⚠️ `crops/` 층 없이 올라온 폴더(`_crops_dir` 이 폴더 자신을 돌려준 경우)에는
+    #    `manifests/` 같은 형제 폴더가 같이 있습니다. 이름으로 걸러내지 않으면
+    #    매니페스트가 **크롭 태그로 링크**됩니다.
+    for tag_dir in sorted(p for p in src_crops.iterdir()
+                          if p.is_dir() and p.name not in _SKIP_DIRS):
         # ⚠️ **빈 태그 폴더는 건너뜁니다.** 노트북 출력을 데이터셋으로 만들면
         #    work/crops/ 의 심볼릭 링크가 빈 폴더로 남는 일이 있습니다.
         #    먼저 연결된 쪽이 이기므로, 그 빈 폴더가 진짜 크롭 데이터셋을 가로막고
@@ -688,20 +999,24 @@ def _link_tags(src_crops: Path, dst_crops: Path) -> dict[str, str]:
         if next(tag_dir.iterdir(), None) is None:
             out[tag_dir.name] = "비어 있어 건너뜀"
             continue
-        dst = dst_crops / tag_dir.name
+        # ★ `<태그>/<태그>/<hh>/*.jpg` 처럼 한 겹 더 싸여 있으면 풀어서 연결합니다
+        inner = _unwrap_tag_dir(tag_dir)
+        name = tag_dir.name
+        dst = dst_crops / name
+        tag_dir = inner
         if dst.is_symlink():
-            out[tag_dir.name] = ("이미 연결됨" if dst.resolve() == tag_dir.resolve()
-                                 else "다른 곳에 연결됨(유지)")
+            out[name] = ("이미 연결됨" if dst.resolve() == tag_dir.resolve()
+                         else "다른 곳에 연결됨(유지)")
             continue
         if dst.exists():
-            out[tag_dir.name] = "이미 있음"
+            out[name] = "이미 있음"
             continue
         try:
             dst.symlink_to(tag_dir.resolve(), target_is_directory=True)
-            out[tag_dir.name] = "링크"
+            out[name] = "링크"
         except OSError:
             shutil.copytree(tag_dir, dst)
-            out[tag_dir.name] = "복사"
+            out[name] = "복사"
     return out
 
 
@@ -758,23 +1073,26 @@ def load_prepared(
 
         if kind == "dir":
             # 읽기 전용일 수 있으므로 크롭은 태그별 링크, 매니페스트는 복사
-            how = _link_tags(src / "crops", dest / "crops")
-            for tag, act in how.items():
-                print(f"[env] 크롭 {act}: {src.name}/crops/{tag}")
+            # ⚠️ `src / "crops"` 로 못 박지 마세요 — 캐글 데이터셋은 `crops/` 층이
+            #    빠진 채 올라올 수 있습니다 (`_crops_dir` 주석 참고).
+            src_crops = _crops_dir(src)
+            if src_crops is not None:
+                where = src.name if src_crops == src else f"{src.name}/crops"
+                how = _link_tags(src_crops, dest / "crops")
+                for tag, act in how.items():
+                    print(f"[env] 크롭 {act}: {where}/{tag}")
             # ⚠️ `ensure_dirs()` 가 work_root()/manifests 를 **빈 폴더로 미리 만듭니다.**
             #    "없으면 복사" 로 조건을 걸면 그 빈 폴더 때문에 영원히 복사가 안 되고,
             #    나중에 manifest_final.parquet 을 못 찾아 죽습니다. 비어 있으면 채웁니다.
             man = dest / "manifests"
-            if (src / "manifests").is_dir():
-                if force and man.exists() and not man.is_symlink():
-                    shutil.rmtree(man)
-                have = sorted(man.glob("*")) if man.exists() else []
-                if not have:
-                    man.mkdir(parents=True, exist_ok=True)
-                    for f in sorted((src / "manifests").iterdir()):
-                        if f.is_file():
-                            shutil.copy2(f, man / f.name)
-                    print(f"[env] 매니페스트 복사: {src.name}/manifests → {man}")
+            if force and man.exists() and not man.is_symlink():
+                shutil.rmtree(man)
+            # ⚠️ `ensure_dirs()` 가 work_root()/manifests 를 **빈 폴더로 미리
+            #    만듭니다.** "폴더가 없으면" 으로 조건을 걸면 영영 안 가져옵니다.
+            #    `manifest_final` 이 이미 있을 때만 건너뜁니다.
+            have = sorted(man.glob("*.parquet")) if man.exists() else []
+            if not any("final" in p.name for p in have):
+                _bring_manifests(src, man)
         elif already:
             print(f"[env] 이미 풀려 있습니다: {dest}  (다시 풀려면 force=True)")
         else:
@@ -789,6 +1107,40 @@ def load_prepared(
 
     crops = dest / "crops"
     mans = sorted((dest / "manifests").glob("*.parquet")) if (dest / "manifests").exists() else []
+
+    # ★ 매니페스트가 없으면 **여기서 멈춥니다.** 크롭 세기 전에요.
+    #
+    # ⚠️ 예전에는 경고만 찍고 진행했습니다. 크롭 36만 장을 세는 데 13분이
+    #    걸리고, 그 뒤 다음 셀이 `FileNotFoundError: manifest_final.parquet` 로
+    #    죽었습니다 — 20분을 버리고, 정작 원인을 알려주는 줄은 스크롤 위로
+    #    밀려 올라가 보이지도 않았습니다. 실제로 두 번 당했습니다.
+    #    **예외 메시지에 데이터셋 안을 같이 넣습니다** — 사람들이 복사해 오는
+    #    건 로그 꼬리(=트레이스백)뿐이라, 거기 없으면 전달되지 않습니다.
+    if not any("final" in m.name for m in mans):
+        found = [m.name for m in mans] or ["(하나도 없음)"]
+        lines = [
+            "manifest_final.parquet 이 없습니다. (크롭은 붙었는데 라벨이 없습니다)",
+            "",
+            f"작업 폴더 {dest / 'manifests'} 에 있는 것: {found}",
+            "",
+            "붙인 입력 안을 열어봤습니다 ↓ — 여기에 parquet 이 안 보이면",
+            "데이터셋에 매니페스트가 **안 들어간 것**입니다:",
+        ]
+        for s, kind in sources:
+            lines.append(f"  ── {s}  ({kind}) ──")
+            if kind == "dir":
+                lines += [f"     {t}" for t in _peek(s)]
+            else:
+                lines.append("     (zip)")
+        lines += [
+            "",
+            "할 일 — 둘 중 하나:",
+            "  · manifest_final.parquet 을 Private 데이터셋으로 따로 올려",
+            "    [Add Input] 으로 붙이세요. 크롭 데이터셋은 그대로 두면 됩니다",
+            "    (매니페스트는 100MB 안팎이라 몇 분이면 올라갑니다)",
+            "  · 이미 붙였는데 위 목록에 안 보이면 업로드가 덜 끝난 것입니다",
+        ]
+        raise FileNotFoundError("\n".join(lines))
     # ⚠️ `crops.rglob()` 은 **심볼릭 링크 하위 폴더로 들어가지 않습니다.**
     #    Kaggle 에서는 태그마다 링크를 걸므로 여기서 0장이 나옵니다.
     #    태그 폴더를 하나씩(= 링크 자체를 시작점으로) 훑어야 합니다.
@@ -817,10 +1169,6 @@ def load_prepared(
     print(f"[env] 매니페스트 {[m.name for m in mans]}")
     if n_crop == 0:
         print("⚠️ 크롭이 하나도 없습니다. 데이터셋 내용을 확인하세요.")
-    if not any("final" in m.name for m in mans):
-        print("⚠️ manifest_final.parquet 이 없습니다.")
-        print("   로컬에서 `python prepare_local.py --finalize` 를 돌렸는지 확인하세요.")
-        print("   이게 없으면 개체 단위 분할(fold/holdout)이 안 되어 있습니다.")
     return dest
 
 

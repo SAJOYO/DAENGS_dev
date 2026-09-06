@@ -7,8 +7,8 @@
 시설 검색은 산책과 독립이다. 기존 Place intent/planning/discovery/presentation을 재사용해
 시설 화면에 AI 결과를 반환하고 검색 방향 확정·조건 보완을 이어서 처리한다.
 채팅의 저장/응답 계약과 일반 `/v2/places/search`는 유지한다.
-웹은 App `ConnectedPlaceSearchScreen`·`PlaceSearchLabScreen`·`PlaceDogEvaluationPresentation`을
-대응시킨 검토 화면이다. Compose를 브라우저에서 실행하지 않으며 Android 소스는 이번 범위에서 바꾸지 않는다.
+운영 API와 서비스 테스트는 dev가 소유한다. App 화면을 대응시킨 웹 검토 도구와 표본·브라우저
+테스트는 geo가 소유하며 이 저장소에 포함하지 않는다. Android 소스는 이 범위에서 바꾸지 않는다.
 
 ```text
 시설 웹 → POST /app/places/discovery (앱 회원 인증)
@@ -147,8 +147,19 @@ backend는 Place 런타임을 import하지 않으며 공개 봉투와 에코를 
 - 새 내부 경로를 nginx에 공개하지 않는다. `/app/places/discovery`는 기존 backend 경로로 간다.
 - DB 스키마 변경 없음. 실제 검증에는 설정된 개발 계정·Gemini·시설 DB가 필요하다.
 
-## 검증 화면
+## 검증 도구의 소유 경계
 
-[실행 안내](../../tools/facility-review/README.md). `http://127.0.0.1:8766/`.
-실제 개발 서버 모드와 명시적인 저장 표본 모드를 분리했다. 서버 모드에 설정이 없거나 요청이
-실패하면 오류를 표시한다. 표본 결과로 바꿔 보여주지 않는다.
+웹 검토 화면·표본 데이터·브라우저 테스트는 `rkbuhtig/DAENGS_geo`의
+`tools/facility-review/`에서 관리한다. dev는 검토 도구를 import하거나 배포하지 않는다.
+검토 도구는 실제 모드에서 이 문서의 공개 HTTP API를 호출한다. 선택적인 표본 통합 검증은
+geo가 dev 실행 환경을 사용해 운영 코드를 확인하는 방향이며, dev가 geo에 의존하지 않는다.
+
+dev에서 실행할 서비스 검증:
+
+```powershell
+# backend/
+uv run pytest -q tests/place/place/discovery tests/place/place/intent/test_confirmation.py tests/place/place/intent/test_lenses.py tests/place/api tests/place/test_boundary.py tests/test_facility_discovery_api.py tests/test_main_stays_light.py
+```
+
+검토 도구의 이동과 실행 안내는
+[DAENGS_geo#244](https://github.com/rkbuhtig/DAENGS_geo/pull/244)를 참조한다.

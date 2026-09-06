@@ -6,8 +6,6 @@ import json
 from dataclasses import fields
 from pathlib import Path
 
-from daengs_backend.core.database import worker_session
-from daengs_backend.services import activity, activity_game
 from daengs_backend.services.activity_core.game_policy import Rules
 
 
@@ -19,6 +17,9 @@ def parse_rules(path):
 
 
 async def run(args):
+    from daengs_backend.core.database import worker_session
+    from daengs_backend.services import activity, activity_game
+
     async with worker_session() as db:
         if args.command == "start-season":
             activity.enabled()

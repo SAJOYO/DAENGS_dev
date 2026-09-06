@@ -516,8 +516,10 @@ async def test_session_retry_cannot_change_participants_or_restart_ended_session
         "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_session_id_site_id_key",
         "DROP INDEX territory_claims_pet_idx",
         "DROP INDEX ix_territory_claim_photos_claim_id",
-        "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_pet_id_fkey; "
-        "ALTER TABLE territory_claims ADD FOREIGN KEY(pet_id) REFERENCES pets(id)",
+        (
+            "ALTER TABLE territory_claims DROP CONSTRAINT territory_claims_pet_id_fkey; "
+            "ALTER TABLE territory_claims ADD FOREIGN KEY(pet_id) REFERENCES pets(id)"
+        ),
     ],
 )
 async def test_verification_rejects_schema_damage(database, damage):

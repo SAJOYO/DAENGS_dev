@@ -1,0 +1,8 @@
+{
+  "name": "daengs-facility-review",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test state.test.mjs", "test:browser": "node browser-test.cjs"},
+  "dependencies": {"leaflet": "1.9.4"},
+  "devDependencies": {"playwright": "1.58.2"}
+}

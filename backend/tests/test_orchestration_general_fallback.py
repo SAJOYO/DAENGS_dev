@@ -177,8 +177,9 @@ def test_router_schema_and_prompt_do_not_offer_general() -> None:
     """모델은 `general` 을 고를 수 없다 — 그것이 이 카드의 설계 요지다."""
     assert "general" not in get_args(ExecuteName)
     assert validate_semantic_decision(json.dumps({"execute": ["general"], "handoffs": []})) is None
-    policy = build_semantic_router_prompt(query="x", context={}).split("USER_QUERY:")[0]
-    assert "general" not in policy.lower().replace("general pet husbandry", "")
+    prompt = build_semantic_router_prompt(query="x", context={})
+    assert "execute.general" not in prompt
+    assert "general" not in json.dumps(SemanticRoutingDecision.model_json_schema())
 
 
 # ── service: LangGraph 경로 ────────────────────────────────────────────

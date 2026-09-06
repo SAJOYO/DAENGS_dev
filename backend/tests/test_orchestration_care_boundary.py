@@ -32,6 +32,7 @@ docs/orchestration/router-benchmark.md.
 from __future__ import annotations
 
 import json
+from typing import get_args
 
 import pytest
 
@@ -51,6 +52,7 @@ from daengs_backend.orchestration.planner import assemble_route_plan, resolve_de
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
+    ExecuteName,
     GeminiSemanticRouter,
     SemanticRoutingDecision,
     build_semantic_router_prompt,

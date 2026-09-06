@@ -35,13 +35,16 @@ from daengs_life.rag.stages import goldenset
 # 필수는 67 -> 70 (셋 다 요구 하나짜리다). 주소는 75 -> **80** 인데, 셋이 더한 것은 셋뿐이고
 # 나머지 둘은 **lap21 을 보고 더한 대안**이다 (FW1·FW2). 대안은 요구를 안 늘린다 — 그 구분이
 # 여기 두 수로 보이는 것이 OR 스키마를 넣은 이유다 (RAG-055).
-ITEMS = 41
-MUST_TOTAL = 70          # 요구의 수
-MUST_ADDRESSES = 82      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+# 2026-09-06 갱신 — 음식 4문항(FD1~FD4) + 주거 1문항(HS1) 추가 (RAG-065). hand 33 -> 38, 문항 41 -> 46.
+# 필수 70 -> 76 · 주소 82 -> 90 이라 **주소가 요구보다 2 더 늘었다** — FD3(법 제13조 | 시행규칙 제14조)과
+# FD4(먹이 가이드 | 사료 구입 요령)가 각각 대안 하나씩을 갖기 때문이다. 나머지 셋은 요구 하나짜리다.
+ITEMS = 46
+MUST_TOTAL = 76          # 요구의 수
+MUST_ADDRESSES = 90      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
 #                          80 → 82: Q3·B1 의 두 번째 요구에 `별표 4-2-아` 를 대안으로 (RAG-061 ①).
 #                          `MUST_TOTAL`(요구 수)이 안 움직인 것이 그 변경이 옳다는 표시다
-BY_ORIGIN = {"hand": 33, "easylaw": 8}
-BY_EXPECT = {"answer": 36, "abstain": 2, "refuse": 3}
+BY_ORIGIN = {"hand": 38, "easylaw": 8}
+BY_EXPECT = {"answer": 41, "abstain": 2, "refuse": 3}
 
 
 @pytest.fixture(scope="module")
@@ -120,9 +123,13 @@ def test_unavailable_is_recorded_not_dropped(gs: goldenset.GoldenSet) -> None:
 
     B3 은 **분모 제외만 있고 must 가 없는 첫 문항**이다 — 가입 나이 상한이 코퍼스 밖이라
     물러서는 것이 정답이고, 그 사실을 적어 두는 자리가 `unavailable` 이다 (RAG-055).
+
+    FD3 이 더해졌다 (RAG-065 ⑪). 여기 걸린 것 중 **유일하게 "코퍼스 밖"이 아닌 항목**이다 —
+    사료관리법 시행규칙 별표 4「용기 및 포장에의 표시사항」은 받았고 파싱도 되는데, 청킹이
+    `para: 소제목 밖` 으로 버려서 청크가 없다. 고칠 자리가 수집이 아니라 `D5b` 라는 뜻이다.
     """
     have = {i.id for i in gs.items if i.unavailable}
-    assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5", "B3", "DP1"}, \
+    assert have == {"Q7", "QA6", "QA8", "T1", "T3", "I1", "T4", "T5", "B3", "DP1", "FD3"}, \
         f"분모 제외를 가진 문항이 달라졌다: {sorted(have)}"
 
 

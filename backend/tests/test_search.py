@@ -100,11 +100,12 @@ def test_questions_come_from_the_goldenset() -> None:
     있어서다 — 골든셋에만 적어 두고 랩이 안 물으면 아무것도 안 재진다 (RAG-055).
 
     09-04 에 사망·장례 3문항(FW1~FW3)이 붙어 33 이 됐다 (RAG-059).
+    09-06 에 음식 4문항(FD1~FD4)과 주거 1문항(HS1)이 붙어 38 이 됐다 (RAG-065).
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 33
+    assert len(items) == 38
     assert all(q for _, q, _, _ in items)
     assert {"B2", "B4", "B6"} <= {i[0] for i in items}
     # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)
@@ -303,15 +304,28 @@ def test_no_supplementary_actually_filters(vector) -> None:
 
 
 def test_category_filter(vector) -> None:
-    """지금 코퍼스는 전부 policy 라 결과가 줄지 않아야 한다 — 필터가 오작동하면 여기서 걸린다.
+    """필터가 실제로 가르는가.
 
     길이가 아니라 **검색분(`cited_by is None`)의 수**를 센다 — 확장분은 인용을 따라 들어온 것이라
     카테고리 필터의 관심사가 아니다 (RAG-040).
+
+    ⚠ **2026-09-06(RAG-065)에 이 테스트의 전제가 바뀌었다.** 그전까지는 코퍼스가 전부 `policy` 라
+    `food` 가 **빈 결과**인 것을 고정하고 있었다. `F1` 이 그 칸을 채웠으므로(사료관리법 3법 +
+    `nias-pet` 해설 3장) 이제 둘 다 결과가 있어야 하고, **서로 겹치지 않아야** 한다.
+    빈 결과를 고정하던 자리가 이제 "두 칸이 실제로 갈리는가"를 고정한다.
     """
     with _ready_or_skip() as conn:
-        hits = search.search(vector, k=5, category="policy", conn=conn)
-        assert len([h for h in hits if h.cited_by is None]) == 5
-        assert search.search(vector, k=5, category="food", conn=conn) == []
+        policy = search.search(vector, k=5, category="policy", conn=conn)
+        food = search.search(vector, k=5, category="food", conn=conn)
+
+    kept = [h for h in policy if h.cited_by is None]
+    assert len(kept) == 5
+    assert food, "food 칸이 비었다 — F1(RAG-065)이 적재한 문서가 안 보인다"
+
+    # 같은 질의인데 두 칸의 검색분이 겹치면 필터가 안 걸린 것이다.
+    a = {h.chunk_id for h in policy if h.cited_by is None}
+    b = {h.chunk_id for h in food if h.cited_by is None}
+    assert not (a & b), f"두 카테고리가 같은 청크를 준다: {sorted(a & b)}"
 
 
 # ---------------------------------------------------------------- 인용 확장 (RAG-040)

@@ -51,6 +51,14 @@ from daengs_backend.config import settings
 PROMPT_VERSION = "semantic-router-ko-v7"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
+# 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이
+# 같은 값을 여기서 import 해 가기 위해서**다 (#272). 두 구현이 숫자를 따로 적으면 "같은
+# 설정으로 쟀다" 를 코드가 증명하지 못한다 — v1 비교에서 에이전트는 temperature 를 명시하지
+# 않아 프로바이더 기본값으로 돌았다.
+ROUTER_TEMPERATURE = 0.0
+ROUTER_CANDIDATE_COUNT = 1
+ROUTER_MAX_OUTPUT_TOKENS = 256
+
 # The only routing metadata the model may see. Coordinates deliberately stay out:
 # Walk and Place payloads are built from trusted structured context, never from
 # model output — including when the query names an area (D-051, Option B).
@@ -152,11 +160,14 @@ message also opens or closes with a greeting or thanks. Any other unsupported re
 social_intent null. Do not reply to the user and do not generate conversational prose."""
 
 
-def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
-    if not query.strip():
-        raise ValueError("query must not be blank")
-    # Card 2A validated routing metadata as non-empty strings; malformed internal
-    # context (a dict/list/blank under an approved key) must never reach the prompt.
+def routing_metadata(context: dict[str, Any]) -> dict[str, str]:
+    """The only context values any selector may show the model (Card 2A).
+
+    Approved keys only, each a non-empty string; malformed internal context (a dict/list/
+    blank under an approved key) must never reach a prompt. Shared by the semantic router
+    and the agent selector (#272) so the two implementations see the same input surface —
+    and, deliberately, so neither sees coordinates (D-051).
+    """
     metadata: dict[str, str] = {}
     for key in _ROUTING_METADATA_KEYS:
         if key not in context:
@@ -165,6 +176,13 @@ def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"routing metadata {key} must be a non-empty string")
         metadata[key] = value
+    return metadata
+
+
+def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
+    if not query.strip():
+        raise ValueError("query must not be blank")
+    metadata = routing_metadata(context)
     schema = json.dumps(
         SemanticRoutingDecision.model_json_schema(), ensure_ascii=False, sort_keys=True
     )
@@ -210,20 +228,30 @@ def _gemini_client() -> Any:
     )
 
 
+def router_generation_config() -> Any:
+    """The one generation config of the semantic router.
+
+    A function rather than a constant only because `google.genai.types` stays a lazy
+    import. The comparison runner's metered transport uses this same object, so the
+    benchmark cannot drift from production by re-typing the numbers (#272).
+    """
+    from google.genai import types
+
+    return types.GenerateContentConfig(
+        temperature=ROUTER_TEMPERATURE,
+        candidate_count=ROUTER_CANDIDATE_COUNT,
+        max_output_tokens=ROUTER_MAX_OUTPUT_TOKENS,
+        response_mime_type="application/json",
+        response_json_schema=SemanticRoutingDecision.model_json_schema(),
+    )
+
+
 async def _generate_with_gemini(prompt: str) -> object:
     def _call() -> object:
-        from google.genai import types
-
         response = _gemini_client().models.generate_content(
             model=ROUTER_MODEL_ID,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                candidate_count=1,
-                max_output_tokens=256,
-                response_mime_type="application/json",
-                response_json_schema=SemanticRoutingDecision.model_json_schema(),
-            ),
+            config=router_generation_config(),
         )
         parsed = getattr(response, "parsed", None)
         return parsed if parsed is not None else getattr(response, "text", None)
@@ -254,11 +282,16 @@ class GeminiSemanticRouter:
 
 __all__ = [
     "PROMPT_VERSION",
+    "ROUTER_CANDIDATE_COUNT",
+    "ROUTER_MAX_OUTPUT_TOKENS",
     "ROUTER_MODEL_ID",
+    "ROUTER_TEMPERATURE",
     "GeminiSemanticRouter",
     "SemanticRoutingDecision",
     "SemanticRoutingError",
     "SocialIntent",
     "build_semantic_router_prompt",
+    "router_generation_config",
+    "routing_metadata",
     "validate_semantic_decision",
 ]

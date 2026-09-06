@@ -33,6 +33,67 @@ def test_referenced_indices_empty_when_no_refs() -> None:
     assert score.referenced_indices("근거를 안 든 답변") == []
 
 
+# ------------------------------------------------------------------ ①-2 한 괄호 안의 여럿 (RAG-069)
+# 프롬프트는 `[1]` 을 요구하지만 모델은 `[1, 2]` 로도 쓴다. 저장된 랩 전체에서 **90건 · 24종**이
+# 그 모양이었고 옛 정규식(`\[(\d+)\]`)은 그것을 통째로 놓쳤다 — `grounded` 가 조용히 낮게
+# 나왔다. 아래 표가 그 모양들을 고정한다. **실물 랩에서 뽑았다 — 지어내지 않았다.**
+BRACKETS = [
+    ("근거는 [1]입니다", [1]),                                  # 프롬프트가 요구한 모양
+    ("…보장합니다[1, 2]. 또한 …[4].", [1, 2, 4]),               # 쉼표+공백 — 가장 흔했다
+    ("…[1,2,3]…", [1, 2, 3]),                                   # 공백 없음
+    ("…[2, 3, 4, 5]…", [2, 3, 4, 5]),                           # 넷 이상
+    ("…[1], [3], [4]…", [1, 3, 4]),                             # 옛 정규식도 읽던 모양 — 안 변해야 한다
+]
+
+
+@pytest.mark.parametrize("text,expected", BRACKETS)
+def test_referenced_indices_reads_grouped_refs(text: str, expected: list[int]) -> None:
+    assert score.referenced_indices(text) == expected
+
+
+def test_the_old_regex_missed_the_grouped_ones() -> None:
+    """**옛 규칙으로는 못 읽는다는 것이 이 카드의 전제다.**
+
+    이 단언이 깨지면 정규식이 이미 넓혀진 것이고, 그때는 위 표의 값이 달라진다.
+    """
+    import re
+    old = re.compile(r"\[(\d+)\]")
+    assert old.findall("…보장합니다[1, 2]. 또한 …[4].") == ["4"]
+
+
+@pytest.mark.parametrize("text", [
+    "동물보호법 [별표 4] 참고",       # 한글이 섞이면 안 잡힌다
+    "가입 기간 [1-2]년",              # 붙임표는 문자 클래스 밖이다
+    "빈 괄호 [] 와 공백 괄호 [ ]",    # 숫자가 없으면 아무것도 안 나온다
+])
+def test_referenced_indices_ignores_non_reference_brackets(text: str) -> None:
+    assert score.referenced_indices(text) == []
+
+
+def test_a_year_in_brackets_is_read_but_harmless() -> None:
+    """⚠ `[2026]` 은 번호로 읽힌다 — 넓힌 규칙의 알려진 대가다.
+
+    막지 않는 이유는 `referenced_hits` 가 범위 밖을 버려서 채점에 닿지 않기 때문이다.
+    실측으로도 새로 읽히는 90건이 전부 1~7 이라 실제로 나온 적이 없다. 그래도 **번호로
+    읽힌다는 사실 자체**를 여기 남긴다 — 나중에 top-k 가 커지면 이 가정이 바뀐다.
+    """
+    assert score.referenced_indices("2026[2026]") == [2026]
+    assert score.referenced_hits("[2026]", [_dump_hit("a", "must")]) == []
+
+
+def test_referenced_hits_dedups_across_groups() -> None:
+    """한 괄호 안과 밖에서 같은 번호를 써도 근거는 하나다."""
+    hits = [_dump_hit("a", "must"), _dump_hit("b", "-")]
+    assert [h["chunk_id"] for h in score.referenced_hits("[1, 2] 그리고 [1]", hits)] == ["a", "b"]
+
+
+def test_grouped_refs_reach_grounded_from_dump() -> None:
+    """**파싱만 고치고 채점에 안 닿으면 의미가 없다** — 두 층을 한 번에 묶어 둔다."""
+    hits = [_dump_hit("a", "-"), _dump_hit("b", "must")]
+    assert not score.grounded_from_dump(_row("[1]", hits))
+    assert score.grounded_from_dump(_row("[1, 2]", hits))
+
+
 def test_referenced_hits_drops_out_of_range() -> None:
     """모델이 `[9]` 를 지어내도(hits 가 3개뿐이면) 죽지 않고 조용히 버린다."""
     hits = [_dump_hit("a", "-"), _dump_hit("b", "must"), _dump_hit("c", "-")]
@@ -154,8 +215,11 @@ def test_six_laps_retroactive_summary_matches_measured_values() -> None:
     from daengs_life.rag.core import io
 
     paths = {p.stem: p for p in (io.answer_files() if io_has_data() else [])}
-    expected = {"lap1": (7, 6, 2), "lap2": (7, 7, 3), "lap3": (7, 6, 2),
-                "lap4": (12, 8, 6), "lap5": (12, 8, 8), "lap6": (12, 8, 7)}
+    # 2026-09-07 갱신 — `lap3` 2->3, `lap6` 7->8 (RAG-069 ①). **랩 파일은 안 건드렸다.**
+    # 답변 안의 `[1, 2]` 를 이제 읽으므로 소급 점수가 올라간 것이다 — 이 테스트가
+    # "판정 로직이 바뀌면 여기서 깨진다"고 한 약속이 실제로 그렇게 동작했다.
+    expected = {"lap1": (7, 6, 2), "lap2": (7, 7, 3), "lap3": (7, 6, 3),
+                "lap4": (12, 8, 6), "lap5": (12, 8, 8), "lap6": (12, 8, 8)}
     missing = [name for name in expected if name not in paths]
     if missing:
         pytest.skip(f"data/processed/answers 에 없음: {missing} — 2026-08-28 세션에서 측정한 값")

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>댕스 · 시설 검색 연결 검증</title>
+<link rel="stylesheet" href="/vendor/leaflet.css"><link rel="stylesheet" href="/style.css">
+<script defer src="/vendor/leaflet.js"></script><script type="module" src="/app.js"></script></head>
+<body>
+<header class="page-head"><b>댕스 <span>시설 찾기</span></b><span>앱 화면 기준 · 웹 연결 검증</span></header>
+<main class="workspace">
+<aside class="review">
+  <p class="eyebrow">FACILITY SEARCH</p><h1>원하는 곳을<br>함께 찾아요.</h1>
+  <p>현재 앱의 시설 검색 화면을 웹으로 옮기고 AI 검색을 연결한 검토판이에요.</p>
+  <label for="source">데이터 연결</label><select id="source"><option value="live">실제 개발 서버</option><option value="fixture">저장 표본으로 계약 검증</option></select>
+  <p id="connection" role="status"></p>
+  <label for="where">지도 시작 위치</label><select id="where"><option value="37.4979,127.0276">강남역</option><option value="37.5445,127.0557">성수</option><option value="37.5563,126.9236">홍대</option><option value="33.4996,126.5312">제주시</option></select>
+  <p class="small">지도를 움직인 뒤 ‘이 위치에서 검색’을 누르면 지도 중심을 기준으로 찾아요.</p>
+  <div id="examples"><label>고정 해석 검증 예시</label><button data-example="주차되면 좋은 카페">주차되면 좋은 카페 ↗</button><button data-example="조용하면 좋은 카페">조용하면 좋은 카페 ↗</button><button data-example="주차 필수 카페">주차 필수 카페 ↗</button><button data-example="싼 카페">싼 카페 ↗</button><p class="small">저장 표본은 geo의 강남 카페·식당 응답이에요. 전체 시설이나 최신 영업 상태를 나타내지 않아요.</p></div>
+  <details><summary>요청·응답 확인</summary><pre id="trace">아직 검색하지 않았어요.</pre></details>
+</aside>
+<section class="phone" aria-label="시설 검색 앱 화면">
+  <div class="phone-top"><span>댕스</span><span id="data-badge">실제 서버</span></div>
+  <div class="search-head">
+    <form id="search-form"><input id="query" aria-label="검색어" placeholder="장소명 검색" maxlength="1000"><button id="ai" type="button" aria-label="AI 조건 검색 전환" aria-pressed="false">🤖</button><button type="submit" aria-label="검색 실행">↑</button></form>
+    <div id="mode-note">장소명으로 검색해요.</div>
+    <div id="categories" aria-label="시설 카테고리"></div>
+    <div class="filters"><button id="dogs-button">🐾 반려견 ▾</button><button id="radius" aria-label="검색 반경">3km ▾</button><button id="parking" aria-pressed="false">주차 우선</button><button id="filters-button" aria-label="검색 조건">⚙</button></div>
+  </div>
+  <div class="map-wrap"><div id="map" aria-label="시설 지도"></div><div class="map-controls"><button id="here">이 위치에서 검색</button><button id="locate" aria-label="현재 위치로 이동">◎</button></div><p id="map-warning" hidden>지도 배경을 불러오지 못했어요. 결과 목록은 사용할 수 있어요.</p></div>
+  <section class="sheet"><div class="handle"></div><div class="sheet-title"><h2>시설 찾기</h2><span id="count">검색 전</span></div>
+    <p id="status" role="status" aria-live="polite">검색어 또는 카테고리를 선택해 주세요.</p>
+    <div id="notices"></div><div id="directions"></div><div id="continuation-actions"></div><div id="signals"></div><div id="cards"></div>
+    <button id="retry" hidden>다시 시도</button>
+  </section>
+</section>
+<aside class="guide"><p class="eyebrow">이번 연결 범위</p><h2>검색 조건이<br>결과까지 이어지도록.</h2><ol><li>로봇 버튼으로 AI 모드 전환</li><li>반경·카테고리·주차 선호 유지</li><li>선택한 반려견별 조건 평가</li><li>검색 결과를 지도와 카드에 표시</li><li>검색 방향·보완 조건을 선택해 이어서 검색</li></ol><p>반려견 선택은 시설을 제외하거나 순위를 바꾸지 않아요. 각 아이의 조건을 따로 확인해요.</p><p>추가 확인이 필요한 조건은 선택지를 눌러 보완해요. 지원하지 않는 선택지는 이유를 함께 표시해요.</p></aside>
+</main>
+<dialog id="dogs-dialog"><form method="dialog"><h2>함께 갈 반려견</h2><p>선택하지 않으면 반려견 조건을 적용하지 않아요.</p><p id="profile-message" role="status"></p><div id="dog-inputs"></div><button id="refresh-profiles" type="button">목록 새로고침</button><button class="primary">완료</button></form></dialog>
+<dialog id="filters-dialog"><form method="dialog"><h2>검색 조건</h2><div id="radius-options"></div><p>주차는 필수 조건이 아닌 우선 정렬입니다. 실내 동반 조건은 카드에서 확인하세요.</p><button class="primary">완료</button></form></dialog>
+</body></html>

@@ -1,0 +1,1694 @@
+{
+  "groups": [
+    {
+      "kind": "cafe",
+      "sort": {
+        "type": "distance",
+        "basis": [
+          "distance_m"
+        ]
+      },
+      "restrictions": {
+        "none_confirmed": 21,
+        "not_applicable": 0,
+        "restricted": 3,
+        "unknown": 0,
+        "needs_raw": 0
+      },
+      "limit": 500,
+      "truncated": false,
+      "results": [
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "abc5ceef7788b1d87416"
+            },
+            "aliases": [],
+            "name": "알베르",
+            "lat": 37.50305653,
+            "lng": 127.028103,
+            "distance_m": 574,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "abc5ceef7788b1d87416"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "abc5ceef7788b1d87416"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 강남대로102길 34",
+              "phone": "02-566-6181",
+              "homepage": "http://instagram.com/alver_coffee",
+              "hours_text": "매일 10:00~23:00",
+              "closed_days": "연중무휴",
+              "parking": false,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "cef832662f9facbb91e1"
+            },
+            "aliases": [],
+            "name": "에이아이",
+            "lat": 37.50367855,
+            "lng": 127.027484,
+            "distance_m": 641,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "cef832662f9facbb91e1"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "cef832662f9facbb91e1"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 강남대로110길 32",
+              "phone": "070-8158-2588",
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "소형",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "small",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "fe4b714dd3e578716f51"
+            },
+            "aliases": [],
+            "name": "더왈츠",
+            "lat": 37.49411114,
+            "lng": 127.034316,
+            "distance_m": 727,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "fe4b714dd3e578716f51"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "fe4b714dd3e578716f51"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 역삼로 134",
+              "phone": "02-564-0927",
+              "homepage": "https://www.instagram.com/cafe.the.walz/",
+              "hours_text": "매일 12:00~21:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "소형/중형",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "medium",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "7ab0bd14299bbcf571b5"
+            },
+            "aliases": [],
+            "name": "다독인더시티",
+            "lat": 37.50461632,
+            "lng": 127.034044,
+            "distance_m": 938,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "7ab0bd14299bbcf571b5"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "7ab0bd14299bbcf571b5"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로101길 10",
+              "phone": "02-516-9650",
+              "homepage": "http://www.dadogg.com/",
+              "hours_text": "매일 10:00~22:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "365123141c355b9410af"
+            },
+            "aliases": [],
+            "name": "엔트런스",
+            "lat": 37.49244178,
+            "lng": 127.019046,
+            "distance_m": 969,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "365123141c355b9410af"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "365123141c355b9410af"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 서초구 사임당로19길 72-3",
+              "phone": "0507-1325-0727",
+              "homepage": "https://www.instagram.com/entrance_cafe/",
+              "hours_text": "화~일 10:00~20:00",
+              "closed_days": "매주 월요일",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "65ff3e3e2095d69e41ad"
+            },
+            "aliases": [],
+            "name": "두젠틀",
+            "lat": 37.50411917,
+            "lng": 127.035807,
+            "distance_m": 1001,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "65ff3e3e2095d69e41ad"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "65ff3e3e2095d69e41ad"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로 534",
+              "phone": "02-6259-1436",
+              "homepage": "https://www.dogentle.com/",
+              "hours_text": "매일 11:00~21:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "8e8ad2c1cefb6220cdb6"
+            },
+            "aliases": [],
+            "name": "정다방 카페",
+            "lat": 37.49925201,
+            "lng": 127.040044,
+            "distance_m": 1110,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "8e8ad2c1cefb6220cdb6"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "8e8ad2c1cefb6220cdb6"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2025-03-24"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 테헤란로30길 31",
+              "phone": "02-6243-6008",
+              "homepage": null,
+              "hours_text": "매일 08:00~20:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "extra_fee": "4,000원",
+                  "restrictions": "야외만 반려동물 동반 가능"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "restricted",
+                "parse_state": "mapped",
+                "chips": [
+                  {
+                    "code": "zone:outdoor_only",
+                    "label": "야외만",
+                    "applies_to": "all",
+                    "params": {},
+                    "certainty": "firm"
+                  }
+                ],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "f9852aefedbc884faff8"
+            },
+            "aliases": [],
+            "name": "댕그라미 애견카페",
+            "lat": 37.50832105,
+            "lng": 127.027203,
+            "distance_m": 1157,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "f9852aefedbc884faff8"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "f9852aefedbc884faff8"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로115길 71",
+              "phone": "0507-1301-3595",
+              "homepage": "https://blog.naver.com/mungmung8844",
+              "hours_text": "매일 10:30~22:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "a8e09ac1aa47d188da30"
+            },
+            "aliases": [],
+            "name": "마이티그루밍",
+            "lat": 37.50851375,
+            "lng": 127.032936,
+            "distance_m": 1268,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "a8e09ac1aa47d188da30"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "a8e09ac1aa47d188da30"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로 613",
+              "phone": "0507-1323-9718",
+              "homepage": "https://www.instagram.com/mightygrooming",
+              "hours_text": "월~토 10:00~20:00",
+              "closed_days": "매주 일요일",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "65126cb32191ef50a4f9"
+            },
+            "aliases": [],
+            "name": "전설의강아지",
+            "lat": 37.51201752,
+            "lng": 127.041166,
+            "distance_m": 1973,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "65126cb32191ef50a4f9"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "65126cb32191ef50a4f9"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 선릉로115길 22",
+              "phone": null,
+              "homepage": "https://www.instagram.com/junsuldog_official",
+              "hours_text": "토~일 08:30~21:30",
+              "closed_days": "매주 월~금",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "반려동물 전용",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": true,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "bcca1eb100715a98bccc"
+            },
+            "aliases": [],
+            "name": "진쇼니샵",
+            "lat": 37.51446227,
+            "lng": 127.018471,
+            "distance_m": 2007,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "bcca1eb100715a98bccc"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "bcca1eb100715a98bccc"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 서초구 강남대로97길 23",
+              "phone": "0507-1351-0626",
+              "homepage": "http://blog.naver.com/jinsyoni3",
+              "hours_text": "매일 12:00~22:00",
+              "closed_days": "연중무휴",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "반려동물 전용",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": true,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "58335d8817b95f4f9ea3"
+            },
+            "aliases": [],
+            "name": "애니멀고파크 논현점",
+            "lat": 37.51356096,
+            "lng": 127.039785,
+            "distance_m": 2044,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "58335d8817b95f4f9ea3"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "58335d8817b95f4f9ea3"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 봉은사로47길 59",
+              "phone": "0507-1378-4939",
+              "homepage": "https://animalgopark.co.kr/",
+              "hours_text": "매일 10:00~21:00",
+              "closed_days": "연중무휴",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "반려동물 전용",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": true,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "23a283685a54fd3cfaaf"
+            },
+            "aliases": [],
+            "name": "반려문화",
+            "lat": 37.51596415,
+            "lng": 127.03329,
+            "distance_m": 2067,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "23a283685a54fd3cfaaf"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "23a283685a54fd3cfaaf"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 언주로133길 23",
+              "phone": "0507-1389-6100",
+              "homepage": "https://banstory.modoo.at/",
+              "hours_text": "매일 10:00~21:30",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "5073f864abf34624785f"
+            },
+            "aliases": [],
+            "name": "모스가든",
+            "lat": 37.51668679,
+            "lng": 127.028327,
+            "distance_m": 2086,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "5073f864abf34624785f"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "5073f864abf34624785f"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로139길 12",
+              "phone": "02-546-8532",
+              "homepage": null,
+              "hours_text": "매일 08:30~22:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "b8fbe8415078a3e796d0"
+            },
+            "aliases": [],
+            "name": "블랙노우즈 카페",
+            "lat": 37.50079968,
+            "lng": 127.051008,
+            "distance_m": 2094,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "b8fbe8415078a3e796d0"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "b8fbe8415078a3e796d0"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 선릉로 402",
+              "phone": "0507-1382-6503",
+              "homepage": null,
+              "hours_text": "매일 09:00~22:00",
+              "closed_days": "연중무휴",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "ed37f72a6effb97261fd"
+            },
+            "aliases": [],
+            "name": "카페엔바이콘 카페",
+            "lat": 37.51718945,
+            "lng": 127.022974,
+            "distance_m": 2179,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "ed37f72a6effb97261fd"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "ed37f72a6effb97261fd"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 도산대로 130",
+              "phone": "0507-1434-8522",
+              "homepage": "http://nbicorn.com/",
+              "hours_text": "매일 07:00~21:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "1층만 이용 가능"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "restricted",
+                "parse_state": "mapped",
+                "chips": [
+                  {
+                    "code": "zone:floor1_only",
+                    "label": "1층만",
+                    "applies_to": "all",
+                    "params": {},
+                    "certainty": "firm"
+                  }
+                ],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "7e30dfc5508f546271b1"
+            },
+            "aliases": [],
+            "name": "Im",
+            "lat": 37.49380373,
+            "lng": 127.001714,
+            "distance_m": 2333,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "7e30dfc5508f546271b1"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "7e30dfc5508f546271b1"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 서초구 동광로 183",
+              "phone": "02-593-6700",
+              "homepage": "http://cafe.naver.com/loveandpet",
+              "hours_text": "매일 08:00~19:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "a1190a643a2f33ee5068"
+            },
+            "aliases": [],
+            "name": "에스피온",
+            "lat": 37.50116337,
+            "lng": 127.055313,
+            "distance_m": 2477,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "a1190a643a2f33ee5068"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "a1190a643a2f33ee5068"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 삼성로71길 45",
+              "phone": "0507-1467-9311",
+              "homepage": "http://instagram.com/esp.on__",
+              "hours_text": "월~금 07:00~17:00, 토~일 08:00~18:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "172e04427a52f159d213"
+            },
+            "aliases": [],
+            "name": "한스펌킨 쇼룸 카페",
+            "lat": 37.47623988,
+            "lng": 127.03988,
+            "distance_m": 2637,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "172e04427a52f159d213"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "172e04427a52f159d213"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 서초구 양재천로 97",
+              "phone": "02-502-1502",
+              "homepage": "https://www.instagram.com/hanspumpkin_cafe/",
+              "hours_text": "월~금 11:00~18:00",
+              "closed_days": "매주 토, 일",
+              "parking": false,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "실외만 동반 가능"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "restricted",
+                "parse_state": "mapped",
+                "chips": [
+                  {
+                    "code": "zone:outdoor_only",
+                    "label": "야외만",
+                    "applies_to": "all",
+                    "params": {},
+                    "certainty": "firm"
+                  }
+                ],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "516fc3183b46f6ab39bc"
+            },
+            "aliases": [],
+            "name": "메이킷",
+            "lat": 37.50961727,
+            "lng": 127.054664,
+            "distance_m": 2723,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "516fc3183b46f6ab39bc"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "516fc3183b46f6ab39bc"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 삼성로 535",
+              "phone": "070-8623-9333",
+              "homepage": "http://www.instagram.com/makit_cafe",
+              "hours_text": "월~토 08:00~18:00",
+              "closed_days": "매주 일요일",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "c376a2bd035a48e21951"
+            },
+            "aliases": [],
+            "name": "겟썸커피",
+            "lat": 37.5224347,
+            "lng": 127.024464,
+            "distance_m": 2737,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "c376a2bd035a48e21951"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "c376a2bd035a48e21951"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로159길 46-6",
+              "phone": "070-4223-3619",
+              "homepage": "http://instagram.com/get.some.coffee",
+              "hours_text": "화~일 10:00~21:00",
+              "closed_days": "매주 월요일",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "101ee76534539f6833b3"
+            },
+            "aliases": [],
+            "name": "빈터커피바",
+            "lat": 37.52207063,
+            "lng": 127.021067,
+            "distance_m": 2744,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "101ee76534539f6833b3"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "101ee76534539f6833b3"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 강남대로162길 41-22",
+              "phone": "0507-1399-6006",
+              "homepage": "https://www.instagram.com/vinter_coffee_bar/",
+              "hours_text": "월~토 09:00~21:00",
+              "closed_days": "매주 일요일",
+              "parking": false,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "4ef0353514a0354958fe"
+            },
+            "aliases": [],
+            "name": "오늘 카페",
+            "lat": 37.47984643,
+            "lng": 127.006088,
+            "distance_m": 2763,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "4ef0353514a0354958fe"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "4ef0353514a0354958fe"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 서초구 명달로4길 4",
+              "phone": "02-6439-5428",
+              "homepage": "https://www.instagram.com/cafe._.oneul",
+              "hours_text": "매일 10:00~22:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": false,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        },
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "54981775c321a4e93efd"
+            },
+            "aliases": [],
+            "name": "바잇미",
+            "lat": 37.52256677,
+            "lng": 127.021258,
+            "distance_m": 2794,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "54981775c321a4e93efd"
+              },
+              "kind": "cafe"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "54981775c321a4e93efd"
+                },
+                "source_category": "카페",
+                "kind": "cafe",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 논현로175길 101-3",
+              "phone": "070-7766-1824",
+              "homepage": "https://www.instagram.com/cafe_biteme/",
+              "hours_text": "매일 12:00~21:00",
+              "closed_days": "연중무휴",
+              "parking": true,
+              "indoor": true,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        }
+      ]
+    },
+    {
+      "kind": "restaurant",
+      "sort": {
+        "type": "distance",
+        "basis": [
+          "distance_m"
+        ]
+      },
+      "restrictions": {
+        "none_confirmed": 1,
+        "not_applicable": 0,
+        "restricted": 0,
+        "unknown": 0,
+        "needs_raw": 0
+      },
+      "limit": 500,
+      "truncated": false,
+      "results": [
+        {
+          "place": {
+            "key": {
+              "source": "kcisa",
+              "ref": "6cb533370cc9a6afaac2"
+            },
+            "aliases": [],
+            "name": "필리필리",
+            "lat": 37.51845805,
+            "lng": 127.038023,
+            "distance_m": 2460,
+            "match": {
+              "source": {
+                "source": "kcisa",
+                "ref": "6cb533370cc9a6afaac2"
+              },
+              "kind": "restaurant"
+            },
+            "classifications": [
+              {
+                "source": {
+                  "source": "kcisa",
+                  "ref": "6cb533370cc9a6afaac2"
+                },
+                "source_category": "식당",
+                "kind": "restaurant",
+                "mapping_version": "kcisa-category3/2",
+                "as_of": "2022-11-30"
+              }
+            ],
+            "facts": {
+              "address": "서울특별시 강남구 학동로43길 38",
+              "phone": "02-518-8188",
+              "homepage": "https://www.instagram.com/phillyphilly_seoul",
+              "hours_text": "월~토 11:00~21:00",
+              "closed_days": "매주 일요일",
+              "parking": true,
+              "indoor": false,
+              "outdoor": true,
+              "pet_access": {
+                "raw": {
+                  "size": "모두 가능",
+                  "allowed": "Y",
+                  "exclusive": "해당없음",
+                  "restrictions": "제한사항 없음"
+                },
+                "allowed": true,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": "any",
+                "max_kg": null
+              },
+              "restrictions": {
+                "state": "none_confirmed",
+                "parse_state": "mapped",
+                "chips": [],
+                "raw": null
+              },
+              "medical": null
+            },
+            "field_sources": {},
+            "icon_group": "food"
+          },
+          "evaluations": {}
+        }
+      ]
+    }
+  ]
+}

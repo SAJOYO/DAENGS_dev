@@ -1,0 +1,4 @@
+connection.local.json
+node_modules/
+screenshots/
+__pycache__/

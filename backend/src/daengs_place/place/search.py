@@ -408,9 +408,16 @@ async def search_place_groups(
     """현행 HTTP request를 typed plan으로 컴파일한 뒤 같은 실행기를 호출한다."""
 
     response = await search_place_plan(db, compile_place_search_request(request))
-    if request.dogs:
+    return evaluate_search_dogs(response, request.dogs)
+
+
+def evaluate_search_dogs(
+    response: PlaceSearchResponse, dogs: list[PlaceDogSnapshot]
+) -> PlaceSearchResponse:
+    """Attach per-dog evaluations without querying, filtering or reordering candidates."""
+    if dogs:
         # Resolve candidates once per kind; dog count does not multiply DB searches.
-        response.dogs = request.dogs
+        response.dogs = dogs
         response.evaluated_at = SystemClock().now()
         for group in response.groups:
             for hit in group.results:
@@ -420,6 +427,6 @@ async def search_place_groups(
                         dog_access=(evaluation := _hit(hit.place, dog).evaluations).dog_access,
                         restrictions=evaluation.restrictions,
                     )
-                    for dog in request.dogs
+                    for dog in dogs
                 ]
     return response

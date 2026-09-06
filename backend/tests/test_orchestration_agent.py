@@ -143,6 +143,7 @@ def test_tools_take_no_arguments_except_the_social_intent() -> None:
         "ask_life",
         "check_walk_conditions",
         "search_places",
+        "answer_generally",  # D-056 ① — mirrors the router's v9 `general` destination
         "hand_off_to_skin",
         "hand_off_to_gait",
         "reply_socially",

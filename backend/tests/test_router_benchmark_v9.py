@@ -63,7 +63,6 @@ def _response(payload: object) -> SimpleNamespace:
 def test_v9_is_the_next_run_identifier_with_the_v8_prompt_and_unchanged_model_gold() -> None:
     assert V8_BENCHMARK_ID == "orchestration-router-v8"
     assert BENCHMARK_ID == "orchestration-router-v9"
-    assert PROMPT_VERSION == "semantic-router-ko-v8"
     assert MODEL_ID == "gemini-3.1-flash-lite"
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert len(load_gold_v3_cases()) == 80
@@ -71,6 +70,12 @@ def test_v9_is_the_next_run_identifier_with_the_v8_prompt_and_unchanged_model_go
     recorded_v8 = json.loads((EVALS_DIR / "summary_v8.json").read_text(encoding="utf-8"))
     assert recorded_v8["prompt_version"] == "semantic-router-ko-v7"
     assert recorded_v8["verdict"] == "PASS"
+    # The v9 run itself is frozen as having sent v8 — that record is immutable even
+    # though production has since advanced (D-056 → v9, run by runner_v10).
+    recorded_v9 = json.loads((EVALS_DIR / "summary_v9.json").read_text(encoding="utf-8"))
+    assert recorded_v9["prompt_version"] == "semantic-router-ko-v8"
+    assert recorded_v9["verdict"] == "PASS"
+    assert recorded_v9["metrics"]["exact_route_plan_match"] == 0.975
 
 
 def test_v9_writes_only_new_artifact_paths() -> None:
@@ -95,11 +100,10 @@ def test_v9_provider_call_uses_the_production_prompt_and_schema() -> None:
     # v6's walking-window sentence and v7's Place destination survive v8 untouched.
     assert "choosing a suitable walking" in call["contents"]
     assert "execute.place:" in call["contents"]
-    # and the one v8 addition is actually sent — without offering `general` as a destination.
+    # and the one v8 addition is actually sent. (Whether `general` is offered is a v9 /
+    # runner_v10 matter — this runner drives whatever the production prompt is.)
     assert "explicitly excludes a topic" in call["contents"]
-    assert "execute.general" not in call["contents"]
     assert call["config"].response_json_schema == SemanticRoutingDecision.model_json_schema()
-    assert "general" not in json.dumps(call["config"].response_json_schema)
     [attempt] = attempts[case.case_id]
     assert attempt.schema_valid is True
     assert attempt.plan == case.gold_route_plan.model_copy(

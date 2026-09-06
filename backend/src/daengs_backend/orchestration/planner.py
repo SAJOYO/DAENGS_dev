@@ -20,14 +20,16 @@ top-level FAILED on exactly the queries Place was added to answer. The `else`
 below therefore raises: a new ExecuteName must state its payload here or stop the
 request loudly, never inherit another capability's shape.
 
-**The general-answer fallback is a planner rule, not a router destination** (#279).
-When the semantic decision selects nothing at all — no capability, no handoff — and
-`general_fallback` is on, the plan becomes exactly one `general` request carrying the
-same trusted payload Life gets (question + resolved dog facts). It is deliberately not
-an `ExecuteName`: letting the model *choose* `general` would let it trade an
-evidence-backed capability for an ungrounded answer, and that direction of mistake is
-the worst one. As a rule it also holds when the model's output is empty. A decision
-with any specialized selection never gains `general`, and the explicit
+**The general-answer fallback reaches a plan two ways, both behind one flag** (D-056).
+(1) A planner rule: when the semantic decision selects nothing at all — no capability,
+no handoff — and `general_fallback` is on, the plan becomes exactly one `general`
+request carrying the same trusted payload Life gets (question + resolved dog facts).
+(2) Since `semantic-router-ko-v9` the router may also select `general` *in addition to*
+a specialized destination, so a care or health worry mixed into a weather/venue/
+institution utterance is not silently dropped (#277 measured exactly that loss). The
+router never uses it to replace Training/Life/Walk/Place. With the flag off the planner
+strips `general` from the decision, so production builds the plans it built before.
+`general` orders last, never needs coordinates, and the explicit
 `requested_capability` signal is untouched — `general` is not a resolvable signal.
 """
 
@@ -144,14 +146,19 @@ def assemble_route_plan(
         )
 
     selected: list[str] = list(decision.execute)
-    if (
-        general_fallback
-        and not selected
+    if not general_fallback:
+        # Flag off: the router may name `general` (v9 destination, D-056), but production
+        # builds exactly the plan it built before the fallback existed — strip it. A
+        # `general`-only decision therefore becomes the old empty plan (FAILED), not an answer.
+        selected = [name for name in selected if name != _GENERAL]
+    elif (
+        not selected
         and not decision.handoffs
         and decision.social_intent is None  # never reaches here in practice; belt and braces
     ):
         # The fallback rule (module docstring). One request, and only when the router
-        # chose nothing: a specialized selection is never padded with `general`.
+        # chose nothing: a specialized selection is never padded with `general` by rule —
+        # the router adds it explicitly when a care intent is mixed in (D-056 ①).
         selected = [_GENERAL]
 
     requests: list[dict[str, Any]] = []

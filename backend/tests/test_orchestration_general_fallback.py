@@ -148,13 +148,46 @@ def test_coordinate_gate_still_wins_over_the_fallback() -> None:
         assert built.clarify is not None and built.requests == []
 
 
-def test_general_sorts_last_in_the_execution_order() -> None:
-    """규칙상 단독으로만 조립되지만, 순서표에서의 자리는 맨 뒤로 고정한다."""
-    decision = SemanticRoutingDecision.model_construct(
-        execute=["general", "training"], handoffs=[], social_intent=None
+@pytest.mark.parametrize(
+    ("execute", "expected"),
+    [
+        (["general", "walk"], ["walk", "general"]),
+        (["general", "training"], ["training", "general"]),
+        (["general", "place", "life"], ["life", "place", "general"]),
+    ],
+)
+def test_mixed_decision_keeps_general_and_orders_it_last_when_flag_is_on(
+    execute: list[str], expected: list[str]
+) -> None:
+    """D-056 ①: 라우터가 전문 능력에 **더해** 고른 `general` 은 살아남고 맨 뒤에 선다."""
+    built = plan(
+        SemanticRoutingDecision(execute=execute), context=dict(SEOUL), general_fallback=True
     )
-    built = plan(decision, context=dict(SEOUL), general_fallback=False)
-    assert [request.capability.value for request in built.requests] == ["training", "general"]
+    assert [request.capability.value for request in built.requests] == expected
+    general = built.requests[-1]
+    assert general.payload == GeneralPayload(question=QUERY)
+
+
+@pytest.mark.parametrize("execute", [["general", "walk"], ["general"], ["training", "general"]])
+def test_flag_off_strips_general_from_the_decision(execute: list[str]) -> None:
+    """플래그가 꺼져 있으면 라우터가 `general` 을 골라도 예전 계획 그대로다 — `general` 단독은 빈 계획."""
+    built = plan(
+        SemanticRoutingDecision(execute=execute), context=dict(SEOUL), general_fallback=False
+    )
+    assert [request.capability.value for request in built.requests] == [
+        name for name in execute if name != "general"
+    ]
+
+
+def test_general_never_needs_coordinates() -> None:
+    built = plan(SemanticRoutingDecision(execute=["general"]), context={}, general_fallback=True)
+    assert built.clarify is None
+    assert [request.capability.value for request in built.requests] == ["general"]
+    # ...but a coordinate capability beside it still gates the whole selection (O-8).
+    gated = plan(
+        SemanticRoutingDecision(execute=["general", "walk"]), context={}, general_fallback=True
+    )
+    assert gated.clarify is not None and gated.requests == []
 
 
 def test_general_is_not_a_resolvable_explicit_signal(fallback_on: None) -> None:
@@ -173,13 +206,18 @@ def test_general_is_not_a_resolvable_explicit_signal(fallback_on: None) -> None:
     assert [request.capability for request in training.requests] == [CapabilityName.TRAINING]
 
 
-def test_router_schema_and_prompt_do_not_offer_general() -> None:
-    """모델은 `general` 을 고를 수 없다 — 그것이 이 카드의 설계 요지다."""
-    assert "general" not in get_args(ExecuteName)
-    assert validate_semantic_decision(json.dumps({"execute": ["general"], "handoffs": []})) is None
+def test_router_schema_and_prompt_offer_general_as_an_additive_destination() -> None:
+    """D-056 ①: v9 부터 모델이 `general` 을 고를 수 있다 — 전문 능력에 더해서, 대신해서는 아니다."""
+    assert get_args(ExecuteName)[-1] == "general"
+    assert (
+        validate_semantic_decision(json.dumps({"execute": ["general"], "handoffs": []})) is not None
+    )
+    assert validate_semantic_decision(json.dumps({"execute": ["walk", "general"], "handoffs": []}))
     prompt = build_semantic_router_prompt(query="x", context={})
-    assert "execute.general" not in prompt
-    assert "general" not in json.dumps(SemanticRoutingDecision.model_json_schema())
+    assert "execute.general:" in prompt
+    assert "IN ADDITION to any specialized destination" in prompt
+    assert "never replaces Training, Life, Walk, or Place" in prompt
+    assert "not about dogs at all" in prompt and "selects NOTHING" in prompt
 
 
 # ── service: LangGraph 경로 ────────────────────────────────────────────
@@ -423,6 +461,32 @@ def test_general_prompt_carries_the_question_and_dog_but_never_coordinates() -> 
     assert build_general_prompt(GeneralPayload(question=QUERY)).count("DOG_CONTEXT: {}") == 1
 
 
+def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> None:
+    """D-056 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
+    diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
+    makes institutional document-backed facts only, and diagnosis explicit requests only."""
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v2"
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    # husbandry norms are answerable, with the individual-variation hedge and the authority
+    assert "통상 돌봄 기준은 답합니다" in prompt
+    for topic in ("급여 횟수", "음수량", "목욕", "빗질", "발톱", "준비물", "사회화 시기", "수면"):
+        assert topic in prompt, topic
+    assert "개체차가 크다는 단서" in prompt
+    assert "사료 포장의 급여표나 수의사가 기준" in prompt
+    assert "통상 기준은 institutional 이 아닙니다" in prompt
+    # "is this normal" answers with the range and a vet hedge — it is not a diagnosis
+    assert "정상인가" in prompt and "거절하지 않습니다" in prompt
+    assert '"괜찮은가 / 정상인가" 는 여기가 아닙니다' in prompt
+    # institutional = document-backed facts only; diagnosis = explicit requests only
+    assert "출처 문서가 있어야 답이 되는 사실" in prompt
+    assert "통상 돌봄 기준의 수치는 여기에 넣지 않습니다" in prompt
+    assert "병명을 대 달라거나" in prompt and "검사 결과를 해석해 달라고 명시적으로" in prompt
+    # medication · emergency · off_topic unchanged
+    assert "약 · 영양제 · 용량 · 투여 방법" in prompt
+    assert '"지금 바로 동물병원으로" 이상의 처치는 말하지 않습니다' in prompt
+    assert "off_topic: 반려견과 무관한 질문." in prompt
+
+
 def test_general_adapter_uses_the_router_model() -> None:
     assert GENERAL_MODEL_ID == ROUTER_MODEL_ID
 
@@ -470,10 +534,29 @@ def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback(
     assert "빠진 쪽 도구는 부르지 않습니다" in _SYSTEM_PROMPT
     assert "일반 답변은 시스템이 붙입니다" in _SYSTEM_PROMPT
     assert "답할 수 없다고만" not in _SYSTEM_PROMPT
-    # 에이전트에 `general` 툴은 없다 — 폴백은 planner 가 붙인다.
+    # D-056 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
+    assert "answer_generally" in _SYSTEM_PROMPT
+    assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
+    assert (
+        "반려견과 무관한 요청" in _SYSTEM_PROMPT
+        and "어느\n  도구도 부르지 않습니다" in _SYSTEM_PROMPT
+    )
     from daengs_backend.orchestration.agent.tools import CapabilityToolbox
 
-    assert not any("general" in tool.name for tool in CapabilityToolbox().as_tools())
+    box = CapabilityToolbox()
+    general_tool = next(tool for tool in box.as_tools() if tool.name == "answer_generally")
+    assert general_tool.args == {}  # 인자 없음 — payload 는 planner 가 만든다 (D-051)
+
+
+async def test_agent_toolbox_passes_general_through_like_any_execute_name() -> None:
+    pytest.importorskip("langchain")
+    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
+
+    box = CapabilityToolbox()
+    tools = {tool.name: tool for tool in box.as_tools()}
+    await tools["check_walk_conditions"].ainvoke({})
+    await tools["answer_generally"].ainvoke({})
+    assert box.decision() == SemanticRoutingDecision(execute=["walk", "general"])
 
 
 def test_life_payload_and_general_payload_share_the_dog_type() -> None:

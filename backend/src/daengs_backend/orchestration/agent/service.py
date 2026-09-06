@@ -80,7 +80,9 @@ from daengs_backend.orchestration.social import build_social_response
 AGENT_MODEL_ID = ROUTER_MODEL_ID
 # v3 (#279): 의미 라우터 v8 의 배제 문장을 거울로 넣고, "답할 수 없다고만" 을 "도구 없이
 # 마쳐라 — 일반 답변은 시스템이 붙인다" 로 바꿨다. 다른 문장은 v2 그대로다.
-AGENT_PROMPT_VERSION = "agent-ko-v3"
+# v4 (D-056 ①): 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 일반 돌봄은
+# 전문 도구에 **더해** 부르고, 반려견과 무관하면 아무 도구도 안 부른다.
+AGENT_PROMPT_VERSION = "agent-ko-v4"
 # 프로바이더 재시도. 의미 라우터의 `google-genai` 클라이언트는 retry_options 를 안 주어
 # 재시도가 없다. `langchain-google-genai` 는 기본 `max_retries=6` 이라 명시로 0 이다 —
 # 실패한 호출을 조용히 여섯 번 더 부르면 지연·토큰이 "프로바이더 사정" 에 묻힌다.
@@ -109,12 +111,15 @@ _SYSTEM_PROMPT = """당신은 DAENGS 반려견 비서입니다. 한국어로 답
 경계:
 - 행동을 바꾸거나 가르치는 것 → ask_training
 - 제도·법령·행정·정책·계약의 공식 정보 → ask_life. **일반적인 사육·돌봄 조언은 여기가
-  아니고, 다른 어떤 도구도 아닙니다.** 산책 횟수, 급여량, 수면, 음수량, 견종·나이별
-  돌봄 같은 통상적 조언은 이 서비스가 답하지 않습니다. 맞는 도구가 하나도 없으면 도구를
+  아니라 answer_generally 입니다.** 맞는 도구가 하나도 없으면 도구를
   부르지 말고 그냥 마치세요 — 일반 답변은 시스템이 붙입니다.
 - 지금 나가도 되는 환경인가 → check_walk_conditions
 - 어디로 갈까 → search_places. 장소 이름이 훈련이나 산책 질문의 배경으로 나온 것뿐이면
   장소 요청이 아닙니다.
+- 위 어느 것도 답하지 않는 일반 돌봄·사육·습성·건강 걱정(급여, 음수, 목욕, 수면, 준비물,
+  "이 정도면 괜찮은가") → answer_generally. 같은 발화에 전문 도구가 맞는 부분이 있으면 그 도구에
+  **더해** 부르고 대신하지 않으며, 반려견과 무관한 요청(사람 음식·금융·사람용 날씨 등)은 어느
+  도구도 부르지 않습니다.
 - 눈에 보이는 피부 상태 → hand_off_to_skin
 - 걸음걸이·절뚝임·자세 → hand_off_to_gait
 - 발화 전체가 인사·감사·작별뿐 → reply_socially

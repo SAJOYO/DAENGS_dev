@@ -38,6 +38,7 @@ _LABELS = {
     CapabilityName.LIFE: "생활 정보",
     CapabilityName.WALK: "산책 조건",
     CapabilityName.PLACE: "장소 검색",
+    CapabilityName.GENERAL: "일반 답변",
 }
 
 
@@ -92,6 +93,16 @@ class CapabilityToolbox:
                 "search_places",
                 "사용자 근처에서 갈 만한 곳을 찾는다. 장소 종류·목적·묘사로 찾는다. "
                 "'지금 나가도 되나'가 아니라 '어디로 갈까'에 답한다. 위치가 필요하다.",
+            ),
+            # D-056 ①: 의미 라우터 v9 의 `general` 목적지와 같은 출구 (D-055 ⑦ 거울). 툴 자체는
+            # 다른 능력과 똑같이 선택만 기록하고, 플래그가 꺼져 있으면 planner 가 떼어 낸다.
+            self._capability_tool(
+                CapabilityName.GENERAL,
+                "answer_generally",
+                "훈련·제도·산책·장소 어느 것도 아닌 일반 돌봄·사육·습성·건강 걱정 질문에 답한다. "
+                "급여, 음수, 목욕, 빗질, 수면, 준비물, '이 정도면 괜찮은가' 같은 것이 여기다. "
+                "다른 도구가 맞는 부분이 있으면 그 도구와 같이 부르고, 그 도구를 대신하지 않는다. "
+                "반려견과 무관한 질문은 여기도 아니다.",
             ),
         ]
         tools.extend(

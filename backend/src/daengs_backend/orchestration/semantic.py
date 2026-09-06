@@ -26,7 +26,20 @@ deliberately NOT a destination here: the router keeps selecting specialized
 capabilities only, and the planner adds `general` by rule when nothing was selected.
 The v8 regression against the same 80 gold cases is runner_v9.py.
 
-The prompt below is `semantic-router-ko-v8`, which keeps intact everything of v7:
+v9 (D-056 ①) reverses one part of v8's stance: `general` IS a destination now, but an
+additive one. #277 measured that with the fallback as a planner rule only, 49 of 84
+fallback-stratum questions never reached `general` — a care or health worry mixed into a
+weather/venue/institution utterance was routed to the specialized capability alone and the
+care part silently disappeared, and dog-unrelated requests were stretched onto Place/Life/
+Walk. v9 adds `execute.general` (general care, husbandry, "is this normal", health worries
+that no specialized destination answers), says it is selected IN ADDITION to any
+specialized destination and never replaces one, and says a request that is not about dogs
+at all selects nothing. The v5/v6 husbandry sentences stay, retargeted from "no
+destination" to General. With `DAENGS_GENERAL_FALLBACK` off the planner strips `general`
+from the decision, so production plans are unchanged until the switch is thrown. The v9
+regression (two views, general counted and general-stripped) is runner_v10.py.
+
+The prompt below is `semantic-router-ko-v9`, which keeps intact everything of v8:
 the accepted v3 routing boundary, the v4 PURELY social utterance classification
 (greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
 templates in social.py), plus one v5 boundary refinement (PR #172): Life is
@@ -58,7 +71,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v8"
+PROMPT_VERSION = "semantic-router-ko-v9"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이
@@ -74,7 +87,9 @@ ROUTER_MAX_OUTPUT_TOKENS = 256
 # model output — including when the query names an area (D-051, Option B).
 _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
-ExecuteName = Literal["training", "life", "walk", "place"]
+# `general` (D-056 ①): additive destination since v9. The planner strips it when the
+# fallback flag is off, so naming it here changes nothing in production until then.
+ExecuteName = Literal["training", "life", "walk", "place", "general"]
 HandoffName = Literal["skin", "gait"]
 SocialIntent = Literal["greeting", "thanks", "goodbye"]
 _UniqueExecuteList = Annotated[list[ExecuteName], Field(json_schema_extra={"uniqueItems": True})]
@@ -128,6 +143,9 @@ Select every semantically requested destination:
 - execute.walk: current environmental walking suitability.
 - execute.place: finding somewhere to go near the user — a kind of venue, a purpose, or a
   described place. Place answers "where should I go", not "is now a good time".
+- execute.general: general dog care, husbandry, behavior-as-wellbeing, or health-concern questions
+  that no specialized destination answers. Select it IN ADDITION to any specialized destination the
+  same utterance also asks for; it never replaces Training, Life, Walk, or Place when those apply.
 - handoffs.skin: inspecting a visible skin condition through the dedicated image flow.
 - handoffs.gait: analyzing walking, limping, asymmetry, stride, posture, joint angles, or gait from
   an image/video through the dedicated gait flow. These descriptions do not make it an unsupported
@@ -150,24 +168,26 @@ current conditions suit walking. A named area, neighborhood, city, or landmark i
 not change which destinations are selected and is never a location value; select destinations as
 usual and never emit, resolve, or imply coordinates for it.
 
-General pet husbandry or care recommendations are NOT supported by any destination in v1: routine
-or normative advice on how often or how long a dog should walk or exercise in general (per day, for
-a breed, for an age or body size) independent of current conditions, feeding frequency or amount,
-sleep duration, water intake, general grooming or care norms, and breed-, age-, or body-size-specific
-care. Such a request is not Life even when it mentions an institution, an official source, or a
-recommendation, is not Training unless it asks to change behavior or teach a skill, and is not
-Place unless the user asks where to go — how often to bathe a dog is unsupported, while finding a
-grooming shop is Place. By contrast,
+General pet husbandry or care recommendations belong to execute.general, never to a specialized
+destination: routine or normative advice on how often or how long a dog should walk or exercise in
+general (per day, for a breed, for an age or body size) independent of current conditions, feeding
+frequency or amount, sleep duration, water intake, general grooming or care norms, breed-, age-, or
+body-size-specific care, and worries about whether a dog's behavior or intake is normal. Such a
+request is not Life even when it mentions an institution, an official source, or a recommendation,
+is not Training unless it asks to change behavior or teach a skill, and is not Place unless the user
+asks where to go — how often to bathe a dog is General, while finding a grooming shop is Place.
+By contrast,
 deciding whether or when to walk now, today, or this evening — including choosing a suitable walking
 time window for today — IS Walk (current environmental suitability), even when weather or air
-quality is not named explicitly; do not extend Walk to recurring exercise routines. If no Training,
-Life, Walk, Skin, or Gait destination is semantically requested, return both lists empty and leave
-social_intent null.
+quality is not named explicitly; do not extend Walk to recurring exercise routines.
+A request that is not about dogs at all — food or restaurants for people, finance, weather for
+people, or anything else unrelated to a dog — selects NOTHING: do not stretch Place, Life, Walk, or
+General to cover it; return both lists empty and leave social_intent null.
 
 social_intent is a classification only, never an answer. Set it to greeting, thanks, or goodbye
 ONLY when the entire request is purely social small talk toward the assistant with no actionable
-request at all; then execute and handoffs must both be empty. If any Training, Life, Walk, Skin, or
-Gait request is present, route that request normally and leave social_intent null, even when the
+request at all; then execute and handoffs must both be empty. If any Training, Life, Walk, Place,
+General, Skin, or Gait request is present, route that request normally and leave social_intent null, even when the
 message also opens or closes with a greeting or thanks. Any other unsupported request also leaves
 social_intent null. Do not reply to the user and do not generate conversational prose."""
 

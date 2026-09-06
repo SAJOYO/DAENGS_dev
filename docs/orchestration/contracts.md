@@ -125,13 +125,14 @@ FAILED가 됩니다. 이제 새 `ExecuteName`은 자기 payload를 적거나 요
 `CapabilityName` 선언 순서로 고정합니다 — 그 순서가 집계 message의 절 순서로 사용자에게
 그대로 보이기 때문입니다.
 
-**`general` 은 라우터의 목적지가 아니라 planner 의 결정론 규칙입니다** (PR #279, 결정 기록은
-사람 승인 뒤 번호를 받습니다). 의미 결정이 비어 있고(능력 0 · 핸드오프 0 · 스몰토크 아님)
-`DAENGS_GENERAL_FALLBACK` 이 켜져 있으면 `GeneralPayload {question, dog}` 하나 — Life 와 같은
-규칙, 좌표 없음 — 를 조립합니다. 전문 선택이 하나라도 있으면 절대 안 붙고, 좌표 게이트(CLARIFY)가
-먼저이며, `requested_capability="general"` 은 풀리지 않는 신호입니다. 모델이 `general` 을 고르게
-하지 않는 이유는 근거 있는 답을 근거 없는 답으로 바꾸는 오선택이 가장 나쁜 방향의 실수이기
-때문입니다. 플래그 기본값은 `false` 라 켜기 전까지 빈 결정은 예전처럼 FAILED 입니다.
+**`general` 은 두 길로 계획에 들어옵니다** (D-056 ①). ⓐ planner 규칙: 의미 결정이 비어 있고(능력 0 ·
+핸드오프 0 · 스몰토크 아님) `DAENGS_GENERAL_FALLBACK` 이 켜져 있으면 `GeneralPayload {question, dog}`
+하나 — Life 와 같은 규칙, 좌표 없음 — 를 조립합니다. ⓑ 라우터 목적지(`semantic-router-ko-v9`): 돌봄·
+건강 의도가 전문 능력과 섞인 발화에서 라우터가 `general` 을 **추가로** 고릅니다 — 전문 능력을 대신하지
+않고, 반려견과 무관한 요청에는 아무것도 고르지 않습니다. `general` 은 실행 순서 맨 뒤, 좌표 불필요,
+좌표 게이트(CLARIFY)는 그대로 선택 전체에 하나이며, `requested_capability="general"` 은 풀리지 않는
+신호입니다. **플래그가 꺼져 있으면 planner 가 결정에서 `general` 을 떼어 냅니다** — 기본값이 `false` 라
+켜기 전까지 계획은 예전과 글자까지 같고, 빈 결정은 FAILED 입니다.
 
 ## 4. CapabilityResult
 
@@ -327,9 +328,7 @@ AssistantResponse:
     `tests/test_orchestration_contracts.py::test_capability_names_have_exactly_three_copies_and_they_agree`
     가 셋을 대조합니다.
 
-    **예외 하나 (PR #279):** `general` 은 `CapabilityName` 과 `AgentCategory` 에는 있고
-    `ExecuteName` 에는 **일부러 없습니다** — 실행되고 저장되지만 라우터가 고르지는 못하는
-    능력이라서입니다 (§3 끝). 위 테스트가 그 차이가 정확히 이 한 값뿐임을 같이 대조합니다.
+    `general` (D-056) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
     프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
 ## 7. locale 준비

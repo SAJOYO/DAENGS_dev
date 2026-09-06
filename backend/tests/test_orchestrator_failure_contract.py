@@ -65,6 +65,7 @@ TOOL_BY_CAPABILITY = {
     "life": "ask_life",
     "walk": "check_walk_conditions",
     "place": "search_places",
+    "general": "answer_generally",
 }
 TOOL_BY_HANDOFF = {"skin": "hand_off_to_skin", "gait": "hand_off_to_gait"}
 
@@ -423,6 +424,35 @@ async def test_specialized_selection_with_fallback_on_never_runs_general_in_both
     )
     assert lg_log == ag_log == ["training"]
     assert_no_silent_intent_loss(lg, ["training"], ["gait"])
+    assert_equivalent(lg, ag)
+
+
+async def test_mixed_general_and_walk_selection_runs_both_in_planner_order_in_both(
+    fallback_on: None,
+) -> None:
+    """D-056 ①: 라우터가 `general` 을 산책에 **더해** 골랐다 / 에이전트가 두 툴을 불렀다 — 둘 다
+    산책 → 일반 순으로 돌고 돌봄 의도가 사라지지 않는다."""
+    lg, lg_log, ag, ag_log = await run_both(
+        ["general", "walk"],
+        [],
+        {"walk": ok(CapabilityName.WALK), "general": ok(CapabilityName.GENERAL)},
+    )
+    assert lg_log == ag_log == ["walk", "general"]
+    assert lg.status == ag.status == AssistantStatus.ANSWERED
+    assert "[산책]" in lg.message and "[일반]" in lg.message
+    assert_no_silent_intent_loss(lg, ["walk", "general"], [])
+    assert_equivalent(lg, ag)
+
+
+async def test_mixed_general_and_walk_selection_drops_general_in_both_when_flag_is_off() -> None:
+    """플래그가 꺼져 있으면 두 구현 다 예전 계획이다 — `general` 은 planner 가 떼어 낸다."""
+    assert settings.general_fallback is False
+    lg, lg_log, ag, ag_log = await run_both(
+        ["general", "walk"],
+        [],
+        {"walk": ok(CapabilityName.WALK), "general": ok(CapabilityName.GENERAL)},
+    )
+    assert lg_log == ag_log == ["walk"]
     assert_equivalent(lg, ag)
 
 

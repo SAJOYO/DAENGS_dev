@@ -341,7 +341,8 @@ def test_place_is_a_semantic_router_destination() -> None:
     """
     schema = SemanticRoutingDecision.model_json_schema()
     execute_items = schema["properties"]["execute"]["items"]
-    assert execute_items["enum"] == ["training", "life", "walk", "place"]
+    # v9 (D-056) appended `general` after the four; the order of the four is unchanged.
+    assert execute_items["enum"] == ["training", "life", "walk", "place", "general"]
     assert validate_semantic_decision(decision(["place"])) is not None
     # The router still cannot invent a destination outside the contract.
     assert validate_semantic_decision(decision(["journey"])) is None
@@ -372,7 +373,7 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
             "note": "unapproved",
         },
     )
-    assert QUERY in prompt and "semantic-router-ko-v8" in prompt
+    assert QUERY in prompt and "semantic-router-ko-v9" in prompt
     metadata_line = next(
         line for line in prompt.splitlines() if line.startswith("ROUTING_METADATA:")
     )

@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..core import config, region, tokenize, transport
+from ..core import config, region, tokenize, transport, vocabulary
 from . import embed, load
 
 VERSION = 2          # 1 = dense 단독 / 2 = 하이브리드 (RAG-035)
@@ -414,31 +414,47 @@ def expand_citations(hits: list[Hit], query: Query, *, scan: list[Hit] | None = 
     return hits + extra
 
 
-def encode(query: str, model_key: str | None = None):
-    """질의 → 벡터. **모델을 올렸다 내린다.**
+def encode(query: str, model_key: str | None = None, st=None):
+    """질의 → `Query`. **어휘 확장이 여기 한 곳에서만 일어난다** (RAG-066 ③).
 
     `encode_query` 를 쓰는 것이 계약이다 — Qwen3 만 질의에 공식 지시문을 붙이는 비대칭 모델이라
     (4단계 실측) 문서 경로로 넣으면 그 모델을 자기 설계와 다르게 쓰게 된다. 지금 기본값은
     승자가 아니라 기준선 `bge-m3` 이고, 그것이 RAG-024 `판정 이후` 의 결정이다.
+
+    **`st` 를 받는다.** 예전에는 모델을 여기서 올렸다 내리기만 해서, 모델을 재사용하는 경로
+    (`--questions`, 서빙)는 이 함수를 **건너뛰고** `make_query(q, embed.encode_query(...))` 를
+    직접 불렀다. 그 순간 입구가 셋이 되는데, `transport`·`region` 이 *"인자로 빼면 CLI·9단계·
+    FastAPI 가 각자 켜고 끄게 된다"* 며 막아 온 바로 그 모양이다 (RAG-052 · RAG-063).
+    어휘 확장은 **벡터를 만들기 전에** 걸어야 해서 `search()` 안에 못 살고, 그래서 입구를
+    여기 하나로 모았다. `st` 를 주면 올리지도 내리지도 않는다 (`search(conn=)` 의 `own` 패턴).
     """
     key = model_key or config.settings.embedding_model_key
     model = embed.MODELS[key]
-    st = embed.load_model(model)
+    own = st is None
+    st = st if st is not None else embed.load_model(model)
     try:
-        vector = embed.encode_query(model, query, st=st)
+        # ⚠ **인코딩에는 넓힌 문장, `Query.text` 에는 원문**이다 — `vocabulary.expand` 의 경고 참고.
+        vector = embed.encode_query(model, vocabulary.expand(query), st=st)
     finally:
-        del st
-        embed.release()
+        if own:
+            del st
+            embed.release()
     return make_query(query, vector)
 
 
 def make_query(text: str, vector) -> Query:
-    """벡터를 이미 만들어 둔 caller 용 (CLI 가 질의 여러 개를 한 번에 인코딩한다).
+    """벡터를 이미 만들어 둔 caller 용.
 
     **토큰화는 여기 한 곳에서만 한다** — 문서 쪽(`stages/load.py`)과 같은 `core.tokenize` 를
     부른다. 둘이 갈라지면 매칭이 그냥 안 되는데 dense 가 결과를 채워 줘서 안 보인다.
+
+    렉시컬 축도 넓힌 문장으로 만든다 — dense 만 넓히고 여기를 원문으로 두면 두 축이 다른
+    질의를 보게 된다. 다만 `text` 필드는 **원문**이다 (`transport`·`region` 이 그것을 읽는다).
+
+    ⚠ **벡터를 직접 만들어 여기로 오지 말 것.** 그러면 어휘 확장을 건너뛴다 — `encode(st=…)` 를
+    쓰면 모델을 재사용하면서도 같은 경로를 탄다. `test_vocabulary.py` 가 호출부를 세고 있다.
     """
-    return Query(vector=vector, tsquery=tokenize.tsquery(text), text=text)
+    return Query(vector=vector, tsquery=tokenize.tsquery(vocabulary.expand(text)), text=text)
 
 
 def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = True,

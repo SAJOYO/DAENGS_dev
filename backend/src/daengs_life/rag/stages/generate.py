@@ -340,11 +340,10 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     쓸 이유가 없다"* 며 비워 둔 자리이고, 값은 1랩을 돌고 정한다.
     """
     key = model_key or config.settings.embedding_model_key
-    if st is None:
-        query = search.encode(question, model_key=key)
-    else:
-        # 모델이 이미 올라와 있는 경로(--questions). 토큰화는 `make_query` 가 맡는다 (RAG-035)
-        query = search.make_query(question, embed.encode_query(embed.MODELS[key], question, st=st))
+    # `st` 가 있으면 올라와 있는 모델을 그대로 쓰고, 없으면 `encode` 가 올렸다 내린다.
+    # **분기가 사라졌다** (RAG-066 ③) — 예전에는 `st` 가 있을 때 `make_query(q, encode_query(…))`
+    # 를 직접 불러 입구가 둘이었고, 그 자리에 어휘 확장을 걸면 한쪽만 걸린다.
+    query = search.encode(question, model_key=key, st=st)
 
     hits = search.search(query, k=k, include_supplementary=include_supplementary,
                          category=category, conn=conn)

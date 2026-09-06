@@ -41,7 +41,7 @@ from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
 from .stages import load as loader
 from .stages import score as scorer
-from .core import transport
+from .core import transport, vocabulary
 from .stages import search as searcher
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -586,7 +586,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         # 벡터를 여기서 만들지만 **토큰화는 searcher 가 한다** — 문서 쪽과 같은 함수를
         # 쓰게 하려는 것이고, 그래서 `make_query` 를 거친다 (RAG-035)
         vectors = [(qid, q, must, nice,
-                    searcher.make_query(q, embed.encode_query(model, q, st=st)))
+                    searcher.encode(q, model_key=key, st=st))
                    for qid, q, must, nice in items]
     finally:
         del st
@@ -602,6 +602,10 @@ def cmd_search(args: argparse.Namespace) -> int:
             if excluded := transport.exclusions(q):
                 # 검문소③이 "왜 항공이 안 보이나"를 눈으로 알 수 있게 (RAG-052)
                 print(f"      교통수단 {'/'.join(sorted(transport.modes(q)))} → {', '.join(excluded)} 배제")
+            if added := vocabulary.aliases(q):
+                # 검문소③이 "왜 이게 올라왔나"를 눈으로 알 수 있게 (RAG-066). 위 두 줄과 같은 자리다 —
+                # **신호가 켜졌는지 안 켜졌는지가 화면에 안 보이면 오탐을 영영 못 찾는다.**
+                print(f"      어휘 확장 → {', '.join(added)}")
             hits = searcher.search(vec, k=args.k, conn=conn,
                                    include_supplementary=args.supplementary,
                                    category=args.category)

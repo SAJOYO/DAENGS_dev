@@ -1,0 +1,56 @@
+# OpenTelemetry Collector — backend 의 트레이스를 우리 GCP 프로젝트의 Cloud Trace 로.
+#
+# **왜 앱이 Cloud Trace 로 직접 안 쏘나.** Telemetry(OTLP) API 는 OAuth 액세스 토큰을
+# 요구하는데 그건 만료됩니다. OTLP exporter 의 헤더는 고정 문자열이라 토큰이 죽는 순간
+# 트레이스가 조용히 멈춥니다. collector 의 `googlecloud` exporter 는 ADC 로 토큰을
+# 알아서 갱신합니다 — 그래서 한 단계를 둡니다.
+#
+# 이 파일은 컨테이너 안에서만 통신합니다 (compose 네트워크). 포트를 호스트에 열지
+# 않습니다 — 트레이스에는 질문 원문이 들어 있고, LAN 에 열 이유가 없습니다.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        # 0.0.0.0 은 컨테이너 안 이야기입니다. compose 가 포트를 밖으로 안 냅니다.
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # 배치로 묶어 보냅니다. Cloud Trace 는 스팬 단위 과금이라 묶어도 비용은 같고,
+  # 요청 수만 줍니다.
+  batch:
+    timeout: 5s
+    send_batch_size: 200
+
+  # **메모리 상한을 겁니다.** collector 가 죽으면 backend 의 OTLP 전송이 실패하는데,
+  # 그건 트레이스만 잃고 요청은 사는 쪽이라 괜찮습니다. 반대로 상한이 없으면
+  # collector 가 서버 RAM 을 먹고 그건 backend·임베딩 모델(D-021, 약 2.4GB)과 다툽니다.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+exporters:
+  googlecloud:
+    project: ${env:GOOGLE_CLOUD_PROJECT}
+    # ADC 를 씁니다 — 서비스 계정 키 파일을 물렸으면 GOOGLE_APPLICATION_CREDENTIALS,
+    # GCP VM 위면 메타데이터 서버. 둘 다 이 컨테이너의 환경에서 옵니다.
+    #
+    # `trace: {}` 는 기본값을 그대로 쓴다는 뜻입니다(엔드포인트 cloudtrace.googleapis.com).
+    # 비워 두는 것과 같지만, **이 exporter 가 트레이스만 다룬다는 것을 파일에 남깁니다** —
+    # 여기에 `log:`/`metric:` 을 적어도 파이프라인에 없으면 그냥 죽은 설정이고,
+    # 죽은 설정은 나중에 "로그도 가는 줄" 알게 만듭니다.
+    trace: {}
+
+service:
+  # collector 자신의 로그. 기본 info 면 스팬마다 안 찍고 시작·오류만 찍습니다.
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # memory_limiter 가 batch 보다 **앞**이어야 합니다. 뒤에 두면 이미 쌓인 뒤에
+      # 제한이 걸려서 상한이 뜻대로 안 듭니다.
+      processors: [memory_limiter, batch]
+      exporters: [googlecloud]

@@ -23,6 +23,26 @@ DOCUMENTS = (
     "INSERT INTO documents(category, subcategory)"
     " VALUES ('policy','insurance'), ('policy','insurance'), ('policy','ordinance');"
 )
+# `db/init/03_auth.sql` 의 app_users 중 이 마이그레이션들이 닿는 부분만.
+# gen_random_uuid() 는 pgcrypto/ pg13+ 내장이라 쓰지 않고 값을 직접 넣는다 — 확장에 안 기댄다.
+APP_USERS = (
+    "CREATE TABLE app_users("
+    " id uuid PRIMARY KEY,"
+    " kakao_id bigint NOT NULL UNIQUE);"
+    "INSERT INTO app_users(id, kakao_id)"
+    " VALUES ('11111111-1111-1111-1111-111111111111', 1),"
+    "        ('22222222-2222-2222-2222-222222222222', 2);"
+)
+# `db/init/05_pets.sql` 의 pets 중 닿는 부분만. app_users 를 앞세워야 FK 가 선다.
+PETS = APP_USERS + (
+    "CREATE TABLE pets("
+    " id uuid PRIMARY KEY,"
+    " app_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,"
+    " name varchar(40) NOT NULL);"
+    "INSERT INTO pets(id, app_user_id, name)"
+    " VALUES ('33333333-3333-3333-3333-333333333333',"
+    "         '11111111-1111-1111-1111-111111111111', 'x');"
+)
 
 
 def transactionless(sql):
@@ -86,6 +106,40 @@ def sql_checks():
             "UPDATE documents SET category = 'policy' WHERE subcategory = 'insurance'",
             # 엉뚱한 행을 옮긴다 — 조건을 잘못 쓰면 이쪽으로 샌다
             "UPDATE documents SET category = 'insurance' WHERE subcategory = 'ordinance'",
+        ]),
+        # 2026-09-06 (#273) — 밀린 verify 를 단언형으로 바꾸며 목록에 넣는다.
+        # 이 여섯은 SELECT 나열이라 **틀려도 종료 코드 0 이었다**: db-migrate.yml 이
+        # `psql … < verify_%MIG_FILE% || exit 1` 로 판정하는데 SELECT 는 실패하지 않는다.
+        ('2026-09-05', 'app_user_nickname', APP_USERS, 'app_users', [
+            'ALTER TABLE app_users DROP COLUMN nickname',
+            'ALTER TABLE app_users ALTER COLUMN nickname TYPE varchar(80)',
+            'ALTER TABLE app_users ALTER COLUMN nickname SET NOT NULL',
+            'DROP INDEX idx_app_users_nickname',
+            # **표현식을 잃는 변조.** 이름은 같은데 lower() 가 없다 — 이러면
+            # 'Neo' 와 'neo' 가 둘 다 생긴다. 이름만 보는 verify 는 이걸 못 잡는다.
+            'DROP INDEX idx_app_users_nickname;'
+            ' CREATE UNIQUE INDEX idx_app_users_nickname ON app_users (nickname)',
+            # 유일성을 잃는 변조. 표현식은 맞는데 UNIQUE 가 아니다.
+            'DROP INDEX idx_app_users_nickname;'
+            ' CREATE INDEX idx_app_users_nickname ON app_users (lower(nickname))',
+        ]),
+        ('2026-09-04', 'pet_photo', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN photo_storage_key CASCADE',
+            'ALTER TABLE pets DROP COLUMN photo_generation CASCADE',
+            'ALTER TABLE pets ALTER COLUMN photo_size_bytes TYPE bigint',
+            # NOT NULL 을 거는 변조. 사진 없는 강아지가 정상인데 그것을 막는다.
+            "UPDATE pets SET photo_storage_key = 'k', photo_content_type = 'image/jpeg',"
+            " photo_generation = 'g', photo_size_bytes = 1, photo_updated_at = now();"
+            ' ALTER TABLE pets ALTER COLUMN photo_storage_key SET NOT NULL',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_set',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_pending_set',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_content_type',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_size',
+            'DROP INDEX idx_pets_photo_storage_key',
+            # **부분 조건을 잃는 변조.** WHERE 가 빠지면 NULL 이 유일해야 하는 값이 되어
+            # 사진 없는 강아지가 둘 이상일 수 없게 된다.
+            'DROP INDEX idx_pets_photo_pending_key;'
+            ' CREATE UNIQUE INDEX idx_pets_photo_pending_key ON pets (photo_pending_key)',
         ]),
     ):
         migration = transactionless(

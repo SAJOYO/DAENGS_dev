@@ -48,7 +48,7 @@ from langchain.agents import create_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from daengs_backend.config import settings
-from daengs_backend.core.tracing import trace_config
+from daengs_backend.core.tracing import request_trace, trace_config
 from daengs_backend.orchestration.agent.tools import CapabilityToolbox
 from daengs_backend.orchestration.contracts import (
     AssistantResponse,
@@ -195,6 +195,43 @@ class AgentOrchestrationService:
         # 엔진도 거르지만, 모델이 엔진보다 먼저 돈다 — 날 자격증명이 프롬프트에 닿기 전에.
         _reject_raw_credentials(structured_context)
 
+        # 요청의 루트 런 (`orchestration/service.py` 와 같은 자리 · 같은 이유). 선택
+        # 루프와 엔진이 전부 이 아래 자식이다. 전에는 선택 루프와 엔진이 **둘 다**
+        # `run_id=request_id` 인 루트를 만들어 같은 id 의 런이 둘이었다.
+        root = self._trace_config(request_id=rid, principal=principal)
+        async with request_trace(
+            request_id=rid,
+            run_name=root["run_name"],
+            inputs={
+                "query": query,
+                "requested_capability": requested_capability,
+                "context": structured_context,
+                "locale": locale,
+            },
+            metadata=root["metadata"],
+            tags=root["tags"],
+        ):
+            return await self._plan_and_execute(
+                query=query,
+                principal=principal,
+                structured_context=structured_context,
+                requested_capability=requested_capability,
+                rid=rid,
+                locale=locale,
+                include_route_trace=include_route_trace,
+            )
+
+    async def _plan_and_execute(
+        self,
+        *,
+        query: str,
+        principal: PrincipalContext,
+        structured_context: dict[str, Any],
+        requested_capability: str | None,
+        rid: str,
+        locale: str,
+        include_route_trace: bool,
+    ) -> AssistantResponse:
         route_plan = resolve_deterministic_route(
             requested_capability=requested_capability,
             query=query,
@@ -265,7 +302,9 @@ class AgentOrchestrationService:
             agent.ainvoke(
                 {"messages": [{"role": "user", "content": content}]},
                 config={
-                    **self._trace_config(request_id=request_id, principal=principal),
+                    # 루트(`assistant_query_agent`, `run()`)의 자식이다. `run_id` 를
+                    # 여기서도 `request_id` 로 주면 루트와 같은 id 가 둘이 된다.
+                    **trace_config(request_id=request_id, run_name="agent_select", root=False),
                     # 루프 상한. 답이 아니라 **안전장치**다 — 에이전트가 루프를 돌아
                     # 비싼 것 자체는 비교가 재야 할 발견이므로 여기서 깎지 않는다.
                     "recursion_limit": settings.agent_recursion_limit,
@@ -283,8 +322,9 @@ class AgentOrchestrationService:
         지연·토큰 비용이 한쪽에서만 나온다.
 
         **`run_name` 만 다르다.** 두 구현을 트레이스에서 갈라 보는 자리가 필요하고,
-        `graph.py` 를 건드리지 않고 그것을 얻는 가장 싼 방법이다. 이 config 는 선택
-        루프에 붙는다 — 실행은 엔진이 자기 config(RoutePlan 의 메타데이터)로 남긴다.
+        `graph.py` 를 건드리지 않고 그것을 얻는 가장 싼 방법이다. 이 config 는 `run()` 의
+        **루트 런**(`request_trace`)에 붙는다 — 선택 루프(`agent_select`)와 엔진
+        (`orchestration_engine`)은 그 아래 자식으로, 각자 `run_id` 없이 남긴다.
 
         **`tags` 는 비운다.** `graph.py` 는 RoutePlan 이 이미 있어 `cap:training` 을 미리
         달 수 있지만, 에이전트는 무엇을 부를지 돌기 전에 모른다.

@@ -47,6 +47,58 @@ DB 는 팀에 하나뿐이라(서버에만 있음) `backend/.env` 의 `DAENGS_DB
 암호화 키 3개(`DAENGS_JWE_KEY` 등)도 서버와 같은 값이어야 합니다 — 전부 팀 채널로
 공유받으세요. 자세한 이유는 `backend/.env.example` 의 주석에 있습니다.
 
+### 트레이스를 LangSmith 로 보기 (개발 PC 전용)
+
+`/assistant/query` 한 요청의 라우팅 결정 → 검색 청크 → 프롬프트 → Gemini 답변을 한
+트리로 봅니다 (`assistant_query` → `semantic_router` · `orchestration_engine` →
+`training_rag` → `pgvector_search` · `gemini_generate`). 훈련 RAG 와 에이전트를 고치고
+디버깅하는 자리입니다.
+
+**운영 서버는 이 절과 무관합니다.** 서버의 트레이스는 우리 GCP Cloud Trace 로 가고
+LangSmith 회사에는 아무것도 안 갑니다 (D-054). 이 절은 **개발자가 직접 치는 질문**을
+**본인 계정**의 LangSmith 클라우드(무료 플랜, 월 5,000 트레이스)로 보내는 이야기입니다.
+코드 변경은 없고 환경 변수뿐입니다. 실제 회원 계정으로는 테스트하지 마세요 —
+회원 식별자·정밀 좌표는 마스킹되지만, 실사용 대화를 개인 계정으로 보낼 이유가 없습니다.
+
+1. <https://smith.langchain.com> 가입 → Settings → API Keys → Personal Access Token.
+2. `backend/.env` 에 `GEMINI_API_KEY` 와 `DAENGS_DB_*` 가 있어야 합니다 (위 문단).
+3. **`uv sync --group ml`.** 훈련 RAG 의 검색기가 `sentence-transformers` 를 씁니다 —
+   `ml` 없이 띄우면 `/life/ask` 만이 아니라 훈련 능력도 검색 단계에서 실패합니다.
+4. 서버를 띄우는 **바로 그 PowerShell 창**에서 (`backend/` 에서):
+
+   ```powershell
+   $env:GEMINI_API_KEY = ((Get-Content .env | Select-String '^GEMINI_API_KEY=') -replace '^GEMINI_API_KEY=','')
+   $env:LANGSMITH_TRACING="true"
+   $env:LANGSMITH_TRACING_MODE="langsmith"
+   $env:LANGSMITH_PROJECT="daengs-dev"
+   $env:LANGSMITH_API_KEY="<본인 키>"
+   uv run dev
+   ```
+
+   기동 로그에 `트레이싱을 켰습니다 — 모드=langsmith` 와 `⚠ 트레이스가 LangSmith(제3자)로
+   나갑니다` 경고가 같이 뜹니다. 개발 PC 에서는 그 경고가 정상입니다.
+5. 로그인해서 질문 하나를 보내면 LangSmith → Tracing → `daengs-dev` 프로젝트가
+   자동으로 생기고 요청 하나가 한 줄입니다. 프로젝트는 손으로 만들 필요가 없습니다 —
+   목록에 없다면 트레이스가 하나도 도착하지 않은 것입니다.
+
+**함정 — 전부 2026-09-06 에 실제로 밟은 것입니다.**
+
+- **`LANGSMITH_*` 를 `backend/.env` 에 적으면 조용히 안 켜집니다.** langsmith SDK 는
+  `os.environ` 만 보고, `backend/.env` 는 pydantic-settings 가 자기 `Settings` 로만
+  읽습니다. 셸 환경 변수로만 주세요. `DAENGS_` 접두사의 우리 설정을 새로 만들지 않는
+  이유는 D-054 에 있습니다.
+- **`GEMINI_API_KEY` 도 셸에 따로 올려야 합니다.** 시맨틱 라우터는 `backend/.env` 를
+  읽지만, 훈련 RAG 의 생성부(`daengs_training/generation/gemini.py`)는 `os.environ` 만
+  읽습니다. 서버에서는 compose 의 `env_file` 이 그 일을 하는데 개발 PC 에는 그 단계가
+  없습니다. 빠뜨리면 라우팅·검색까지는 트레이스에 남고 생성만
+  `GEMINI_API_KEY is required` 로 실패합니다.
+- **`uv run --env-file .env dev` 는 쓰지 마세요.** 얼핏 위 두 문제를 한 번에 푸는 것
+  같지만, uv 의 dotenv 파서가 `DAENGS_KAKAO_APP_KEYS=["a","b"]` 안의 큰따옴표를 벗겨
+  `[a,b]` 로 올리고, pydantic 이 목록 필드를 JSON 으로 읽다 `kakao_app_keys` 에서
+  기동이 죽습니다.
+- **팀 LAN 밖에서는 안 됩니다.** DB 와 Redis 는 `192.168.0.x` 에만 열려 있어서
+  (CLAUDE.md), 다른 네트워크에서는 로그인부터 500 입니다. 트레이싱 설정 문제가 아닙니다.
+
 ## 배포
 
 - `dev` 브랜치에 push/merge 하면 자동으로 배포됩니다.

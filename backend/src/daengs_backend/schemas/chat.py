@@ -12,7 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from daengs_backend.orchestration.contracts import AssistantResponse
 
-AgentCategory = Literal["training", "life", "walk"]
+#: `CapabilityName` 의 값들과 **글자 그대로 같아야 합니다** — 여기 담기는 값이 곧
+#: `services/chat.py` 의 `categories_of()` 가 넣어 준 capability 이름이고, 좁으면 이미
+#: 저장된 행을 읽을 때 응답 검증에 걸려 500 이 됩니다. 능력이 늘 때 같이 넓히는 세 자리와
+#: 그것을 지키는 테스트는 `docs/orchestration/contracts.md` 를 보세요.
+AgentCategory = Literal["training", "life", "walk", "place"]
 
 
 class ChatSessionCreate(BaseModel):

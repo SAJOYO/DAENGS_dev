@@ -355,6 +355,49 @@ def test_rows_the_goldenset_no_longer_has_are_skipped() -> None:
     assert g["gradable"] == 0 and g["unmeasurable"] == 0
 
 
+# ------------------------------------------------------------------ ⑦-2 KPI 두 축 (RAG-070 ③)
+# KPI 문장은 「답변에 출처 링크 + **조항 번호** 인용」인데 총계 `cited` 는 두 축을 한 수에 섞는다.
+# 조 번호가 **문서에 아예 없는** 소스(보조금24 · knia 공시 · 항공사 안내 · SRT 약관 · 해설)는
+# `cited` 가 영영 0이고 그것은 실패가 아니다 — 그 문항들도 근거는 옳게 잡는다.
+
+def test_kpi_cells_splits_the_two_axes() -> None:
+    """`data/` 없이 돈다 — 손으로 만든 두 문항이 각 축에 하나씩 앉는다."""
+    from daengs_life.rag.__main__ import kpi_cells
+
+    must = {"L": [["law-a#제1조"]],                 # 조 번호가 있는 소스
+            "B": [["benefit24-services-1#지원내용"]]}  # 없는 소스
+    ckinds = score.citable_kinds(must)
+    rows = [_row("근거 [1] 제1조입니다", [_dump_hit("law-a__20260101#제1조", "must")], cited=["제1조"]),
+            _row("근거 [1] 입니다", [_dump_hit("benefit24-services-1__20260101#지원내용", "must")])]
+    rows[0]["id"], rows[1]["id"] = "L", "B"
+
+    cells = kpi_cells(rows, ckinds)
+    assert cells[score.CITABLE] == (1, 1, 1)
+    # **인용 0인데 근거는 1이다.** 이 한 줄이 이 카드가 보이려는 것 전부다.
+    assert cells[score.UNCITABLE] == (0, 1, 1)
+
+
+def test_kpi_cells_does_not_touch_the_totals() -> None:
+    """⚠ **총계를 다시 쓰지 않는다.** `D10`(RAG-062)·`D12`(RAG-069)가 이미 두 번 소급으로
+    바꿨고, 세 번째면 옛 기록이 인용하는 대조선이 또 끊긴다. KPI 는 **읽는 법을 더할 뿐**이다.
+    """
+    from daengs_life.rag.__main__ import kpi_cells
+
+    must = {"L": [["law-a#제1조"]], "B": [["benefit24-services-1#지원내용"]]}
+    ckinds = score.citable_kinds(must)
+    rows = [_row("[1] 제1조", [_dump_hit("law-a__20260101#제1조", "must")], cited=["제1조"]),
+            _row("[1]", [_dump_hit("benefit24-services-1__20260101#지원내용", "must")])]
+    rows[0]["id"], rows[1]["id"] = "L", "B"
+
+    before = score.score_rows(rows, ckinds)
+    kpi_cells(rows, ckinds)
+    assert score.score_rows(rows, ckinds) == before
+    # 두 축의 합이 총계와 맞는다 — KPI 가 다른 모집단을 세는 것이 아니라는 확인이다.
+    cells = kpi_cells(rows, ckinds)
+    assert sum(c[0] for c in cells.values()) == before["cited"]
+    assert sum(c[1] for c in cells.values()) == before["grounded"]
+
+
 def io_has_data() -> bool:
     from daengs_life.rag.core import config
     return config.ANSWER_DIR is not None and config.ANSWER_DIR.exists()

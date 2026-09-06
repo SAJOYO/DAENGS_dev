@@ -5,8 +5,8 @@
 > 사람이 모으지도 채점하지도 않았다 — 질문은 모델이 계층별로 생성해 동결했고, 판정기의 신뢰도는
 > 앵커(코드) · 일치율(프롬프트 변형 둘) · 쌍대 위치 교환으로 잰다.
 
-- 생성 시각: 2026-09-06T21:57:57+00:00
-- 소스 SHA: `4e746b6a5b498e2e98e2e4a40ed80b9fa5c49175` · `dev` 머지 베이스 `aec7ce50bfbb9d128a785f02e7d973d86a5a6403`
+- 생성 시각: 2026-09-06T21:59:46+00:00
+- 소스 SHA: `051d78baf91b3407d7a03756344e6af74872f3a5` · `dev` 머지 베이스 `aec7ce50bfbb9d128a785f02e7d973d86a5a6403`
 - 패키지: google-genai 2.20.0, langgraph 1.2.11, pydantic 2.13.4
 - 답변 라우터 모델: `gemini-3.1-flash-lite` · 판정 모델: 없음
 - 앵커를 통과한 판정 모델: `gemini-3.1-flash-lite`, `gemini-3.1-pro-preview`
@@ -19,6 +19,7 @@
 | --- | --- | --- | --- |
 | gemini-3.1-flash-lite | answer-quality-judge-ko-v2a | 7/7 | 없음 |
 | gemini-3.1-pro-preview | answer-quality-judge-ko-v2a | 7/7 | 없음 |
+| gemini-3.1-pro-preview | answer-quality-judge-ko-v2b | 7/7 | 없음 |
 
 ## 질문 세트
 

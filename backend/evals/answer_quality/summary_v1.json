@@ -1,9 +1,9 @@
 {
   "benchmark_id": "answer-quality-v1",
   "card": "#277",
-  "generated_at": "2026-09-06T21:57:57+00:00",
+  "generated_at": "2026-09-06T21:59:46+00:00",
   "provenance": {
-    "source_sha": "4e746b6a5b498e2e98e2e4a40ed80b9fa5c49175",
+    "source_sha": "051d78baf91b3407d7a03756344e6af74872f3a5",
     "source_dirty_files": [],
     "dev_source_sha": "aec7ce50bfbb9d128a785f02e7d973d86a5a6403",
     "packages": {
@@ -113,6 +113,14 @@
     {
       "judge_model": "gemini-3.1-pro-preview",
       "prompt_version": "answer-quality-judge-ko-v2a",
+      "passed": true,
+      "passed_count": 7,
+      "anchor_count": 7,
+      "failed_anchors": []
+    },
+    {
+      "judge_model": "gemini-3.1-pro-preview",
+      "prompt_version": "answer-quality-judge-ko-v2b",
       "passed": true,
       "passed_count": 7,
       "anchor_count": 7,

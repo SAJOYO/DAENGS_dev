@@ -1,4 +1,4 @@
-"""두 보행 기록 비교 — **판정만** 있는 모듈 (D-056).
+"""두 보행 기록 비교 — **판정만** 있는 모듈 (D-057).
 
 ⚠️ **여기에 무거운 import 를 넣지 마세요.** `numpy` 와 임계값 상수뿐입니다.
    `pipeline.py` 는 최상단에서 `keypoint_infer`(cv2)·`overlay` 를 끌고 오는데,
@@ -19,7 +19,7 @@ from daengs_gait.config import COMPARE_DIFF_THRESHOLD
 def compare_loaded_records(a: dict, b: dict) -> dict:
     """두 기록 비교 — **이미 불러온 기록**을 받습니다.
 
-    파일에서 왔든 DB 에서 왔든 상관하지 않습니다 (D-056). backend 의 `/app/gait/compare`
+    파일에서 왔든 DB 에서 왔든 상관하지 않습니다 (D-057). backend 의 `/app/gait/compare`
     는 DB 행을 이 모양으로 맞춰 넘기고, 그래서 **비교가 저장소 구현과 무관**해집니다 —
     원본 영상도 overlay 도 읽지 않습니다.
 

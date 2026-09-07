@@ -139,7 +139,7 @@ class CompareError(RuntimeError):
 
 
 def _as_compare_record(record: GaitRecord) -> dict:
-    """DB 행을 `compare_records` 가 읽는 모양으로 맞춥니다 (D-056).
+    """DB 행을 `compare_records` 가 읽는 모양으로 맞춥니다 (D-057).
 
     ⚠️ **파일을 하나도 안 만집니다.** 옛 구현은 `load_record()` 로 JSON 파일을 읽었지만,
        비교에 필요한 값은 전부 DB 컬럼에 있습니다 — 원본·overlay 는 보관/재생용이고
@@ -188,7 +188,7 @@ async def compare(
     record_id_a: uuid.UUID,
     record_id_b: uuid.UUID,
 ) -> dict:
-    """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-056).
+    """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-057).
 
     판정·임계값·문구는 `daengs_gait.compare.compare_loaded_records` 그대로입니다 — 여기서는
     입력을 모아 주고 `_dev_only_*` 만 걷어냅니다.

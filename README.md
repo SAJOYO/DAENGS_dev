@@ -68,6 +68,8 @@ LangSmith 회사에는 아무것도 안 갑니다 (D-054). 이 절은 **개발�
 
    ```powershell
    $env:GEMINI_API_KEY = ((Get-Content .env | Select-String '^GEMINI_API_KEY=') -replace '^GEMINI_API_KEY=','')
+   # 훈련 RAG 검색기의 DB 접속. backend/.env 의 DAENGS_DB_* 와 같은 값을 URL 한 줄로.
+   $env:RAG_PGVECTOR_DSN = "postgresql://daengs:<비밀번호>@192.168.0.22:5432/vectordb"
    $env:LANGSMITH_TRACING="true"
    $env:LANGSMITH_TRACING_MODE="langsmith"
    $env:LANGSMITH_PROJECT="daengs-dev"
@@ -92,6 +94,11 @@ LangSmith 회사에는 아무것도 안 갑니다 (D-054). 이 절은 **개발�
   읽습니다. 서버에서는 compose 의 `env_file` 이 그 일을 하는데 개발 PC 에는 그 단계가
   없습니다. 빠뜨리면 라우팅·검색까지는 트레이스에 남고 생성만
   `GEMINI_API_KEY is required` 로 실패합니다.
+- **`RAG_PGVECTOR_DSN` 도 셸에 줘야 합니다.** 훈련 RAG 의 검색기는 `DAENGS_DB_*` 를 안 보고
+  이 변수 하나(`daengs_training/service.py`)를 읽으며, 없으면 `localhost:5432` 로 가서
+  **260초를 기다린 뒤** `training_pgvector … ConnectionTimeout` 으로 실패합니다. 라우팅·
+  임베딩까지는 되고 응답은 `FAILED` 라 트레이싱 문제처럼 보입니다 (2026-09-07 실측).
+  서버에서는 compose 가 넣어 줍니다 (`docker-compose.yml` 의 `RAG_PGVECTOR_DSN`).
 - **`uv run --env-file .env dev` 는 쓰지 마세요.** 얼핏 위 두 문제를 한 번에 푸는 것
   같지만, uv 의 dotenv 파서가 `DAENGS_KAKAO_APP_KEYS=["a","b"]` 안의 큰따옴표를 벗겨
   `[a,b]` 로 올리고, pydantic 이 목록 필드를 JSON 으로 읽다 `kakao_app_keys` 에서

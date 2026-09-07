@@ -608,6 +608,26 @@ class TestReviewFindings:
         finally:
             ls_utils.get_env_var.cache_clear()
 
+    def test_실패한_런의_출력_프로세서는_None_을_받아도_산다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """추적 대상 함수가 예외로 끝나면 langsmith 는 `process_outputs` 를 `None` 으로
+        부른다 (0.11.2 실측 — 2026-09-07 개발 PC 에서 DB 접속이 안 될 때
+        "NoneType is not iterable" · "has no attribute 'decision'" 두 줄이 그것).
+        가공기가 거기서 또 죽으면 실패 원인이 로그에서 한 줄 더 멀어진다."""
+        from langsmith import utils as ls_utils
+
+        from daengs_training.retrieval.pgvector import _trace_documents
+        from daengs_training.service import _trace_outputs
+
+        monkeypatch.setenv("LANGSMITH_TRACING", "true")
+        ls_utils.get_env_var.cache_clear()
+        try:
+            assert _trace_documents(None) == {}  # type: ignore[arg-type]
+            assert _trace_outputs(None) == {}  # type: ignore[arg-type]
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
 
 class TestTracingMode:
     """트레이스가 **어디로** 가나. 기본 목적지가 제3자가 아닌 것이 D-054 의 핵심이다."""

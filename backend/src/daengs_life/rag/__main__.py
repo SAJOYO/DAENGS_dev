@@ -1119,6 +1119,39 @@ def _judge_table(rows: list[dict], judgments: list[judger.Judgment],
         print(f"      이유   : {d['rationale']}")
 
 
+def _print_agreement(reference_stem: str, candidate: list[judger.Judgment]) -> int:
+    """캘리브레이션 표 — `RAG-007` 이 요구한 **사람 라벨과의 일치율** (RAG-075).
+
+    ⚠ **분모는 양쪽에 다 있는 문항**이다. 사람 라벨은 보통 일부만 있고, 없는 문항을 일치로
+    세면 라벨을 안 단 만큼 점수가 올라간다.
+    """
+    rpath = io.judgment_path(reference_stem)
+    if not rpath.exists():
+        print(f"{rpath} 가 없다 — 기준 판정(사람 라벨 등)을 `judgments/` 에 먼저 둘 것")
+        return 1
+    rhead, rrows = io.read_judgments(rpath)
+    reference = [judger.Judgment.model_validate(j) for j in rrows]
+    a = judger.agreement(reference, candidate)
+    if not a["n"]:
+        print(f"겹치는 문항이 없다 — `{reference_stem}` 과 이 판정이 다른 문항을 보고 있다")
+        return 1
+
+    print(f"\n기준 `{reference_stem}` (judge `{rhead.get('judge_model')}`"
+          f" · 프롬프트 v{rhead.get('prompt_version')}) 과 겹치는 문항 {a['n']}")
+    print(f"**일치 {a['agreed']}/{a['n']}**")
+    if not a["mismatch"]:
+        print("\n  어긋난 문항이 없다.")
+        return 0
+    print("\n  어긋난 문항 — 프롬프트를 고칠 근거는 여기서만 나온다"
+          " (한둘에 맞춰 고치면 그 문항에서만 맞는 채점자가 된다)\n")
+    for m in a["mismatch"]:
+        print(f"  [{m['id']}] 기준 {'답함' if m['reference'] else '못함'}"
+              f" · 이 판정 {'답함' if m['candidate'] else '못함'}")
+        print(f"      기준 : {m['reference_why']}")
+        print(f"      판정 : {m['candidate_why']}")
+    return 0
+
+
 def cmd_judge(args: argparse.Namespace) -> int:
     """랩 하나를 LLM judge 로 채점한다 (RAG-074 · `D15`).
 
@@ -1151,7 +1184,10 @@ def cmd_judge(args: argparse.Namespace) -> int:
         head, saved = io.read_judgments(jpath)
         print(f"{args.lap} — judge `{head.get('judge_model')}`"
               f" · 프롬프트 v{head.get('prompt_version')} · {head.get('judged_at')}")
-        _judge_table(rows, [judger.Judgment.model_validate(j) for j in saved], ckinds)
+        judgments = [judger.Judgment.model_validate(j) for j in saved]
+        if args.against:
+            return _print_agreement(args.against, judgments)
+        _judge_table(rows, judgments, ckinds)
         return 0
 
     if args.limit:
@@ -1309,6 +1345,10 @@ def main(argv: list[str] | None = None) -> int:
     jd.add_argument("--show", action="store_true",
                     help="**부르지 않는다** — 저장된 판정을 다시 읽어 표만 낸다."
                          " 판정이 돈이라 기본이 아니라 플래그인 쪽이 맞다")
+    jd.add_argument("--against", metavar="판정",
+                    help="`--show` 와 같이 쓴다 — 기준 판정과의 **일치율**을 낸다 (RAG-007 의"
+                         " 캘리브레이션). 사람 라벨도 판정 파일로 적으므로 `lap30__human` 처럼"
+                         " stem 을 준다. ⚠ 분모는 **양쪽에 다 있는 문항**이다")
     jd.set_defaults(fn=cmd_judge)
 
     args = p.parse_args(argv)

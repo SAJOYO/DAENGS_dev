@@ -169,6 +169,34 @@ def test_disagreements_ignores_items_missing_from_either_side() -> None:
     assert judge.disagreements(marks, js) == []
 
 
+# ------------------------------------------------------------------ 캘리브레이션 (RAG-075)
+def test_agreement_counts_only_shared_items() -> None:
+    """**분모는 양쪽에 다 있는 문항**이다. 사람 라벨은 보통 일부만 있으므로, 없는 문항을
+    일치로 세면 **라벨을 안 단 만큼 점수가 올라간다** — 가장 나쁜 종류의 부풀림이다."""
+    human = _judgments(I4=True, T3=True)
+    llm = _judgments(I4=True, T3=False, Q1=True, S1=True)
+
+    a = judge.agreement(human, llm)
+
+    assert a["n"] == 2          # 4가 아니다
+    assert a["agreed"] == 1
+    assert [m["id"] for m in a["mismatch"]] == ["T3"]
+
+
+def test_agreement_keeps_both_rationales() -> None:
+    """어긋난 자리에서 **양쪽 이유를 다 들고 나온다** — 프롬프트를 고칠 근거가 그 둘의
+    차이에만 있고, 한쪽만 보면 어느 쪽이 옳은지 못 읽는다."""
+    a = judge.agreement(_judgments(T3=True), _judgments(T3=False))
+    m = a["mismatch"][0]
+    assert m["reference"] is True and m["candidate"] is False
+    assert m["reference_why"] and m["candidate_why"]
+
+
+def test_agreement_is_empty_when_nothing_overlaps() -> None:
+    a = judge.agreement(_judgments(A=True), _judgments(B=True))
+    assert a == {"n": 0, "agreed": 0, "mismatch": []}
+
+
 # ------------------------------------------------------------------ 요약 네 칸
 def test_summarise_returns_all_four_cells() -> None:
     """**합계 하나로 줄이지 않는다** — `D6`(RAG-071)이 *"총계 한 줄로 성패를 말하면 안 된다"*

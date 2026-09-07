@@ -232,6 +232,32 @@ def disagreements(marks: dict[str, tuple[bool, bool]],
     return out
 
 
+def agreement(reference: list[Judgment], candidate: list[Judgment]) -> dict[str, Any]:
+    """두 판정 목록의 **일치율**. `RAG-007` 이 요구한 캘리브레이션이 이 수다.
+
+    **사람 라벨도 판정 파일로 적는다** (`judge_model: human`). 파일 모양을 같게 둔 이유가
+    이것이다 — 사람과 judge 를 견주는 코드와 judge 둘을 견주는 코드가 갈리면, 프롬프트를
+    고칠 때마다 둘 중 하나가 낡는다.
+
+    ⚠ **양쪽에 다 있는 문항만 본다** (`disagreements` · `score.flips` 와 같은 규약).
+    사람 라벨은 보통 일부만 있으므로 **분모는 그 일부**다 — 그것이 정직한 분모다.
+
+    `RAG-007` 은 *"변경 시 재캘리브레이션"* 이라 못 박았다. 프롬프트나 모델을 바꾸면
+    이 함수를 다시 부르는 것이 그 요구의 전부다.
+    """
+    ref = {j.id: j for j in reference}
+    cand = {j.id: j for j in candidate}
+    shared = sorted(ref.keys() & cand.keys())
+    mismatch = [{"id": qid,
+                 "reference": ref[qid].answers_question,
+                 "candidate": cand[qid].answers_question,
+                 "reference_why": ref[qid].rationale,
+                 "candidate_why": cand[qid].rationale}
+                for qid in shared
+                if ref[qid].answers_question != cand[qid].answers_question]
+    return {"n": len(shared), "agreed": len(shared) - len(mismatch), "mismatch": mismatch}
+
+
 def summarise(judgments: list[Judgment], marks: dict[str, tuple[bool, bool]]) -> dict[str, int]:
     """판정 요약 — 네 칸(`grounded` × `answers_question`)과 합계.
 

@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     주는 형태이고, 그때 조각을 다시 조립하게 하면 두 표현이 어긋날 수 있다.
     """
 
+    #: 생성 온도. **기본이 `None` 이고, 그때는 `GenerateContentConfig` 에 아무것도 안 넣는다** —
+    #: 즉 지금까지의 동작과 한 글자도 다르지 않고 랩 비교 축이 그대로다 (RAG-028 ⑥).
+    #:
+    #: 값을 넣는 것은 **측정할 때뿐이다** (#314). 2026-09-07 실측: 같은 프롬프트로 두 번 돌렸더니
+    #: 답이 14/14 전부 달랐다. 그 상태에서는 "판정을 넣으니 답이 바뀌었다" 를 판정 효과로 읽을 수
+    #: 없다 — 아무것도 안 바꿔도 바뀌기 때문이다. 서빙 기본값을 0 으로 내리는 것은 이 설정이 아니라
+    #: 별도 결정이다(다양성과 랩 축을 같이 건드린다).
+    generation_temperature: float | None = None
+
     database_url: str = ""
     postgres_ip: str = "localhost"
     postgres_port: int = 5432

@@ -108,6 +108,41 @@ def parse_screening(raw: str | None) -> dict[str, Any] | None:
     return {"verdict": verdict, "days_ago": int(days)}
 
 
+def apply_life_temperature(value: float | None) -> dict[str, Any]:
+    """Life 생성 온도를 이 프로세스에서 고정한다. `apply_flag` 와 같은 자리·같은 모양.
+
+    `None` 이면 아무것도 안 건드린다 — 서빙 기본값 그대로이고 호출도 지금까지와 같다.
+    """
+    from daengs_life.rag.core import config as rag_config
+
+    if value is None:
+        return {"requested": None, "effective": "serving default"}
+    if not 0.0 <= value <= 2.0:
+        raise ValueError(f"--life-temperature 는 0.0~2.0 입니다: {value!r}")
+    rag_config.settings.generation_temperature = value
+    return {"requested": value, "effective": value}
+
+
+def require_screening_wiring() -> None:
+    """판정을 읽는 배선이 이 브랜치에 있는지 확인한다. 없으면 **여기서 멈춘다.**
+
+    `apply_flag` 와 같은 판단이고 같은 사고를 막는다 — 조용히 무시하면 "판정 있음" 이라고 적힌
+    파일이 "없음" 을 담는다. 2026-09-07 에 실제로 그렇게 한 사이클(14문항 × 2, 약 3분)을 버렸다:
+    `context["screening"]` 은 채워졌는데 `LifePayload` 에 칸이 없어 아무도 안 읽었고, 두 실행의
+    프롬프트가 같았다. 파일만 보고는 알 수 없었다.
+
+    `LifePayload` 를 보는 이유는 그것이 배선의 **마지막** 자리이기 때문이다 — planner 가 옮겨도
+    payload 에 칸이 없으면 거기서 사라진다.
+    """
+    from daengs_backend.orchestration.contracts import LifePayload
+
+    if "screening" not in LifePayload.model_fields:
+        raise RuntimeError(
+            "LifePayload 에 screening 칸이 없습니다 — 이 브랜치에는 #283 배선이 없어 "
+            "--screening 이 아무 일도 하지 않습니다. #283 을 머지하거나 그 위에서 돌리세요."
+        )
+
+
 def with_screening(
     cases: Sequence[QuestionCase], screening: Mapping[str, Any] | None
 ) -> list[dict[str, Any]]:
@@ -342,6 +377,15 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="앞에서 N개만 (연기 시험)")
     parser.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
     parser.add_argument(
+        "--life-temperature",
+        type=float,
+        default=None,
+        metavar="T",
+        help="Life 생성 온도를 이 프로세스에서 고정한다 (측정용). 생략하면 서빙 기본값 그대로. "
+        "짝을 비교할 때는 0 을 권한다 — 안 그러면 같은 프롬프트로도 답이 달라져 판정 효과와 "
+        "생성 잡음을 못 가른다 (#314 실측: 같은 입력 14/14 전부 다름)",
+    )
+    parser.add_argument(
         "--screening",
         default=None,
         metavar="VERDICT:DAYS",
@@ -352,6 +396,9 @@ def main() -> None:
 
     flag = apply_flag(settings, args.flag)
     screening = parse_screening(args.screening)
+    if screening is not None:
+        require_screening_wiring()
+    life_temperature = apply_life_temperature(args.life_temperature)
     cases = select_questions(load_questions(args.questions), strata=args.strata, limit=args.limit)
     contexts = with_screening(cases, screening)
     meter = Meter()
@@ -360,7 +407,8 @@ def main() -> None:
     ledger = TokenLedger(budget=args.token_budget, log=print)
     print(
         f"질문 {len(cases)}건 · 어댑터 {args.adapters} · 플래그 {flag['effective']} · "
-        f"판정 {args.screening or '없음'} · 라벨 {args.label}"
+        f"판정 {args.screening or '없음'} · Life 온도 {life_temperature['effective']} · "
+        f"라벨 {args.label}"
     )
     started = utc_now()
     rows, stopped = asyncio.run(
@@ -379,6 +427,8 @@ def main() -> None:
         # **판정은 메타에 남아야 한다** — 두 파일이 질문도 플래그도 같고 이 값만 다르므로,
         # 안 적으면 나중에 어느 쪽이 "판정 있음" 인지 파일 이름으로만 알게 된다 (#314).
         "screening": screening,
+        # 온도도 남긴다 — 짝의 두 파일이 다른 온도로 모였으면 비교가 성립하지 않는다 (#314).
+        "life_temperature": life_temperature,
         "started_at": started,
         "finished_at": utc_now(),
         "stopped": stopped,

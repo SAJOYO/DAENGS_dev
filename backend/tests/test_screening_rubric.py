@@ -157,3 +157,59 @@ def test_기존_계층은_그대로다() -> None:
     assert "life_institutional__polite" in STRATA_BY_ID
     assert STRATA_BY_ID["life_institutional__no_location"].context() == {}
     assert "location" in STRATA_BY_ID["life_institutional__polite"].context()
+
+
+# ---------------------------------------------------------------- 배선 가드 · 온도
+
+
+def test_배선이_없으면_판정_수집이_멈춘다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`apply_flag` 와 같은 판단입니다. 조용히 무시하면 "판정 있음" 이라고 적힌 파일이
+    "없음" 을 담습니다 — 2026-09-07 에 실제로 한 사이클을 그렇게 버렸습니다.
+    """
+    from daengs_backend.orchestration.contracts import LifePayload
+
+    monkeypatch.setattr(
+        LifePayload,
+        "model_fields",
+        {k: v for k, v in LifePayload.model_fields.items() if k != "screening"},
+    )
+    with pytest.raises(RuntimeError, match="#283"):
+        collect.require_screening_wiring()
+
+
+def test_배선이_있으면_통과한다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**칸을 넣어서** 봅니다. 실제 브랜치에 배선이 있는지로 재면 이 테스트가 #283 머지
+    전후로 결과가 달라져, 가드가 아니라 브랜치를 재게 됩니다.
+    """
+    from daengs_backend.orchestration.contracts import LifePayload
+
+    fields = dict(LifePayload.model_fields)
+    fields.setdefault("screening", fields["dog"])
+    monkeypatch.setattr(LifePayload, "model_fields", fields)
+    collect.require_screening_wiring()
+
+
+def test_온도를_안_주면_서빙_기본값_그대로다() -> None:
+    """`None` 이면 `GenerateContentConfig` 에 인자 자체가 안 붙습니다 — 랩 축이 그대로입니다."""
+    from daengs_life.rag.core import config as rag_config
+
+    before = rag_config.settings.generation_temperature
+    assert collect.apply_life_temperature(None) == {
+        "requested": None,
+        "effective": "serving default",
+    }
+    assert rag_config.settings.generation_temperature == before
+
+
+def test_온도를_주면_이_프로세스에서만_고정된다(monkeypatch: pytest.MonkeyPatch) -> None:
+    from daengs_life.rag.core import config as rag_config
+
+    monkeypatch.setattr(rag_config.settings, "generation_temperature", None)
+    assert collect.apply_life_temperature(0.0)["effective"] == 0.0
+    assert rag_config.settings.generation_temperature == 0.0
+
+
+@pytest.mark.parametrize("bad", [-0.1, 2.1])
+def test_범위_밖_온도는_거부한다(bad: float) -> None:
+    with pytest.raises(ValueError):
+        collect.apply_life_temperature(bad)

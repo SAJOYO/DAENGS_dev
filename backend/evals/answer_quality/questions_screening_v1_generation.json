@@ -1,0 +1,85 @@
+{
+  "generator_version": "answer-quality-questions-ko-v1",
+  "model": "gemini-3.1-flash-lite",
+  "temperature": 0.9,
+  "seed": 277,
+  "max_output_tokens": 1024,
+  "calls_per_stratum": 1,
+  "schema_retry": "once on schema failure",
+  "started_at": "2026-09-07T09:21:17+00:00",
+  "finished_at": "2026-09-07T09:21:31+00:00",
+  "stopped": null,
+  "strata_count": 7,
+  "target_total": 14,
+  "written_total": 14,
+  "per_stratum": [
+    {
+      "stratum": "pet_insurance_skin__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "pet_insurance_skin__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    }
+  ],
+  "tokens": {
+    "calls": 7,
+    "input_tokens": 3470,
+    "output_tokens": 1178,
+    "total_tokens": 4648,
+    "budget": 400000
+  },
+  "provenance": {
+    "source_sha": "614c92ec541ce0fa6ffaadf6333e98d4784c93d2",
+    "source_dirty_files": [
+      "backend/tools/answer_quality/judge.py"
+    ],
+    "dev_source_sha": "42f67765c34683a4cd1a8d8dbbd374b2fa8022c9",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

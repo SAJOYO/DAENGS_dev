@@ -232,6 +232,32 @@ def read_answers(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return rows[0], rows[1:]
 
 
+# ---------------------------------------------------------------- judge: judgments/ (RAG-074)
+def judgment_path(stem: str) -> Path:
+    """판정 파일 하나. **랩 이름이 곧 파일명**이라 `answers/lap30.jsonl` 과 짝이 눈에 보인다.
+
+    judge 모델을 파일명에 안 넣는다 — 넣으면 `lap30__gpt….jsonl` 처럼 길어지고, 무엇보다
+    **한 랩에 판정이 여럿 쌓이면 어느 것이 지금 것인지 사람이 고르게 된다.** 모델·프롬프트
+    버전은 헤더에 있으므로, 다시 매기면 **덮어쓰고 헤더가 그 사실을 말한다.**
+    """
+    return config.JUDGMENT_DIR / f"{stem}.jsonl"
+
+
+def write_judgments(header: BaseModel, items: list[BaseModel], stem: str) -> Path:
+    """`write_answers` 와 같은 파일 모양(1행 헤더 + 판정). 다른 것은 경로와 헤더 타입뿐이다."""
+    path = judgment_path(stem)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        for model in [header, *items]:
+            f.write(json.dumps(model.model_dump(exclude_none=True), ensure_ascii=False) + "\n")
+    return path
+
+
+def read_judgments(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """판정 파일 하나 → (헤더, 판정 목록). `read_answers` 와 같은 이유로 **dict** 로 돌려준다."""
+    return read_answers(path)
+
+
 def read_chunks(path: Path) -> Iterator[dict[str, Any]]:
     """헤더를 건너뛰고 청크 행만. 4단계 임베더는 파일 경계를 무시하고 이것만 이어 붙인다."""
     for row in read(path):

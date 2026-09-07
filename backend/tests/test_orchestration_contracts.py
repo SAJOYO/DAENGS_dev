@@ -105,5 +105,6 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     사고의 본질이라, 셋을 한자리에서 묶는다.
     """
     names = {capability.value for capability in CapabilityName}
+    # `general` (D-057) 은 v9 부터 라우터 목적지이기도 하다 — 세 사본이 다시 완전히 같다.
     assert names == set(get_args(ExecuteName)), "라우터가 고를 수 있는 목적지가 어긋났다"
     assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

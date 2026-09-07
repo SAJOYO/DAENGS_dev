@@ -264,9 +264,16 @@ check("네모 허용 밴드는 줌 밴드의 역수",
       and abs(be.BOX_ALLOW[1] - 1 / be.ZOOM_ALLOW[0]) < 1e-9)
 check("밴드 값이 agent 와 같은 실측에서 옴",
       be.SHIFT_MAX == agent.GUIDE_CENTER_MAX)
-check("1.5배로 그리면 허용 밖 (0.59~1.43배)",
-      not (be.BOX_ALLOW[0] <= 1.5 <= be.BOX_ALLOW[1]))
-check("1.3배는 허용 안", be.BOX_ALLOW[0] <= 1.3 <= be.BOX_ALLOW[1])
+# ⚠️ 이 두 줄은 STEP 10 밴드(0.59~1.43배)를 단언하고 있었고, `box_error.py` 가
+#    같은 옛 값을 **베껴 두고 있어서 통과했습니다.** 밴드 출처를 `src/robust.py`
+#    하나로 모으자(2026-09-06) 비로소 드러났습니다 — 두 곳이 같이 옛것이면
+#    "일치한다" 는 검사는 아무것도 못 잡습니다.
+check("1.5배로 그리면 **허용 안, 권장 밖** (STEP 16: 허용 0.71~1.67 / 권장 0.83~1.43)",
+      be.BOX_ALLOW[0] <= 1.5 <= be.BOX_ALLOW[1]
+      and not (be.BOX_RECOMMEND[0] <= 1.5 <= be.BOX_RECOMMEND[1]))
+check("1.3배는 권장 안", be.BOX_RECOMMEND[0] <= 1.3 <= be.BOX_RECOMMEND[1])
+check("1.8배는 허용 밖 (크게 그리는 쪽이 STEP 10 보다 빡빡)",
+      not (be.BOX_ALLOW[0] <= 1.8 <= be.BOX_ALLOW[1]))
 
 sm = be.summarize([be.to_perturbation([.45, .45, .10, .10], T), {"user": None}])
 check("요약이 건너뛴 장수를 셈", "건너뜀 1" in sm, sm.split("\n")[0])
@@ -275,7 +282,8 @@ check("표본이 없으면 그렇게 말함", "쓸 수 있는 표본이 없습�
 
 # ── 9. release 폴더 자동 탐색 + 1단계만 구성 ────────────────
 print("\n[9] 가중치 붙이기")
-import json as _json                                             # noqa: E402
+import json as _json
+import shutil as _sh                                             # noqa: E402
 import tempfile                                                  # noqa: E402
 
 with tempfile.TemporaryDirectory() as td:
@@ -289,14 +297,34 @@ with tempfile.TemporaryDirectory() as td:
     seen: dict = {}
     real = agent.ScreeningAgent.load
     agent.ScreeningAgent.load = classmethod(
-        lambda cls, c1, c2=None, thr=None, dev=None, stage1_only=False:
+        lambda cls, c1, c2=None, thr=None, dev=None, stage1_only=False,
+        ckpt2_extra=None:
         seen.update(c1=Path(c1).parent.name, c2=(Path(c2).parent.name if c2 else None),
-                    thr=thr, only=stage1_only))
+                    thr=thr, only=stage1_only,
+                    extra=[Path(x).parent.name for x in (ckpt2_extra or [])]))
     try:
         agent.ScreeningAgent.from_release(rel)
         check("release 에서 1단계를 이름으로 찾음", seen["c1"].startswith("stage1_"), str(seen))
         check("release 에서 2단계를 이름으로 찾음", seen["c2"].startswith("stage2_"), str(seen))
         check("stage1_threshold.json 을 같이 읽음", seen["thr"] == 0.1823, str(seen["thr"]))
+        check("2단계가 하나뿐이면 앙상블 팔이 없다", seen["extra"] == [], str(seen["extra"]))
+
+        # ★ 2단계 폴더가 여럿이면 **자동으로 앙상블** (STEP 25~33).
+        #   켜고 끄는 스위치가 따로 없는 게 의도입니다 — 릴리스에 넣은 것이 곧 구성.
+        for extra_name in ("stage2_effnetv2_s_m2.5_384_moderate",
+                           "stage2_effnetv2_s_f320_384_moderate"):
+            d = rel / "checkpoints" / extra_name
+            d.mkdir(parents=True); (d / "best.pt").touch()
+        seen.clear()
+        agent.ScreeningAgent.from_release(rel)
+        check("2단계가 여럿이면 앙상블 팔로 넘긴다", len(seen["extra"]) == 2, str(seen))
+        check("첫 팔(기준)은 이름 순 첫 번째", seen["c2"].startswith("stage2_convnextv2"),
+              str(seen["c2"]))
+        check("추가 팔이 첫 팔과 겹치지 않는다", seen["c2"] not in seen["extra"],
+              str(seen))
+        for _d in ("stage2_effnetv2_s_m2.5_384_moderate",
+                   "stage2_effnetv2_s_f320_384_moderate"):
+            _sh.rmtree(rel / "checkpoints" / _d)
 
         seen.clear()
         agent.ScreeningAgent.from_release(rel, stage1_only=True)
@@ -350,7 +378,34 @@ check("기권해도 retake 로 안 보냄", 'contract("retake"' not in _after)
 check("1단계가 이상이면 결론은 abnormal 하나뿐",
       _after.count('contract("abnormal"') == 1)
 check("기권이어도 분포를 실어 보냄", "stage2=raw" in _after)
-check("기권 사실을 meta 로 알림", "stage2_low_confidence" in src_screen)
+# ⚠️ 예전엔 `src_screen` 안에 문자열이 있는지 봤습니다. 그런데 그 meta 를
+#    `agent.stage2_meta()` 로 빼내자 **동작은 그대로인데 검사만 깨졌습니다.**
+#    소스 문자열을 뒤지는 검사는 리팩터링을 막을 뿐 계약을 못 지킵니다.
+#    → **응답을 봅니다.** MockAgent 는 가중치가 없어도 도는데, 이제 진짜와
+#      **같은 함수**로 meta 를 만들므로 이 검사가 양쪽을 다 지킵니다.
+import numpy as _np                                              # noqa: E402
+
+
+def _photo(seed: int):
+    """MockAgent 는 사진 **바이트의 해시**로 값을 만듭니다 — 씨앗을 바꾸면
+    정상/이상이 갈립니다. `PIL.Image` 를 그대로 넘기면 `tobytes()` 를 씁니다."""
+    return Image.fromarray(
+        _np.random.default_rng(seed).integers(0, 255, (64, 64, 3), dtype=_np.uint8))
+
+
+_ab = None
+for _s in range(20):
+    _r = agent.MockAgent().screen(_photo(_s))
+    if _r["verdict"] == "abnormal":
+        _ab = _r
+        break
+check("2단계까지 간 응답을 만들 수 있다", _ab is not None)
+if _ab:
+    check("기권 사실을 meta 로 알림", "stage2_low_confidence" in _ab["meta"])
+    check("기권 문턱도 같이 실음", "stage2_abstain_threshold" in _ab["meta"])
+    check("1등 확률은 숫자로만 (이름 아님)",
+          isinstance(_ab["meta"].get("stage2_top_prob"), float))
+    check("분포가 같이 온다", len(_ab["stage2"]["distribution"]) == 6)
 
 # 기권 판정은 **깎기 전** 확률로 — 1단계 확률을 곱한 값과 비교하면 이중 감점입니다
 check("기권을 깎기 전 확률로 판정", "raw[0][1] < self.s2.cfg.abstain_threshold" in src_screen)

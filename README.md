@@ -202,6 +202,27 @@ docker compose restart backend      # 의존성(uv.lock)을 바꿨을 때
 리로드되므로 재시작이 필요 없습니다. **의존성을 바꿨을 때만** 위 restart 를 실행하세요.
 (`uv sync` 는 컨테이너가 뜰 때만 돕니다)
 
+**`backend/.env` 를 고쳤을 때는 restart 로는 반영되지 않습니다.** `env_file` 값은 컨테이너를
+만들 때 굳어지고, `restart` 는 그 컨테이너의 프로세스만 다시 띄웁니다. 컨테이너를 다시 만들어야
+합니다 — 그런데 **`up -d` 를 손으로 돌리기 전에 셸에 `GEMINI_API_KEY` 를 올려야 합니다.**
+compose 의 `environment: GEMINI_API_KEY: ${GEMINI_API_KEY:-}` 가 `env_file` 보다 우선하는데,
+그 값은 최상단 `.env` 나 셸에서만 오기 때문입니다. 자동 배포는 `deploy.yml` 이 `backend/.env`
+에서 읽어 셸에 올린 뒤 compose 를 돌려서 문제가 없지만, 사람이 그냥 `docker compose up -d backend`
+를 치면 **빈 키가 박혀 의미 라우터가 죽습니다** (2026-09-07 실제로 그랬습니다 — `/assistant/query`
+전부 FAILED). 러너 체크아웃에서:
+
+```powershell
+$line = Get-Content backend\.env | Where-Object { $_ -match '^\s*GEMINI_API_KEY\s*=' } | Select-Object -First 1
+$env:GEMINI_API_KEY = ($line -replace '^\s*GEMINI_API_KEY\s*=\s*','').Trim().Trim('"').Trim("'")
+docker compose up -d backend        # backend 만. --force-recreate 없이
+docker compose exec backend python -c "import os; print(len(os.environ.get('GEMINI_API_KEY','')))"   # 0 이면 잘못된 것
+```
+
+**어느 폴더에서 돌리느냐도 중요합니다.** 컨테이너 이름이 고정돼 있어 서버의 다른 클론에서
+`up -d` 를 돌려도 같은 운영 컨테이너를 잡고, **그 클론의 `backend/src` 가 마운트**됩니다. 반드시
+러너 체크아웃(`C:\IDE\actions-runner\_work\DAENGS_dev\DAENGS_dev`, `dev`)에서 돌리세요.
+`docker compose ls` 의 ConfigFiles 가 그 경로인지 먼저 보면 됩니다.
+
 backend 컨테이너는 포트를 열지 않습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
 
 ### pgvector (PostgreSQL 18)

@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.core.tracing import trace_config
 from daengs_backend.orchestration.adapters import (
+    GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
     TrainingCapabilityAdapter,
@@ -51,6 +52,9 @@ class OrchestrationEngine:
                 CapabilityName.LIFE: LifeCapabilityAdapter(),
                 CapabilityName.WALK: WalkCapabilityAdapter(),
                 CapabilityName.PLACE: PlaceCapabilityAdapter(),
+                # 플래그(`DAENGS_GENERAL_FALLBACK`)가 꺼져 있으면 planner 가 이 능력을
+                # 계획에 넣지 않으므로 등록만 되고 돌지 않는다 (#279).
+                CapabilityName.GENERAL: GeneralCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         self.graph = self._build_graph()

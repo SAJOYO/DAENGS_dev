@@ -260,6 +260,9 @@ class Settings(BaseSettings):
     # gait_v4 프로젝트 폴더. 그 안의 `.venv` 와 `weights/` 를 씁니다. 비우면 저장소의
     # `backend/gait_v4` (config.py 기준 상대 경로) 입니다.
     gait_v4_dir: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_DIR"))
+    # v4 venv 의 python. 비우면 `<gait_v4_dir>/.venv/…/python`. 컨테이너에서는 코드 폴더가 :ro 라
+    # venv 를 /opt 에 두고 이 값으로 알려 줍니다 (compose 의 gait-worker 참고).
+    gait_v4_python: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_PYTHON"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
     # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와

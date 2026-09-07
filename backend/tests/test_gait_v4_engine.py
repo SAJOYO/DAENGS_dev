@@ -122,12 +122,36 @@ def test_v4_engine_failure_surfaces_stderr(monkeypatch: pytest.MonkeyPatch, tmp_
         gait_service._analyze_with_v4(tmp_path / "input.bin")
 
 
+def test_v4_python_override_wins_over_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """컨테이너는 venv 를 코드 밖에 둡니다 — GAIT_V4_PYTHON 이 있으면 그것을 씁니다."""
+    from daengs_backend.config import settings
+
+    exe = tmp_path / "opt" / "bin" / "python"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    monkeypatch.setattr(settings, "gait_v4_dir", str(tmp_path / "nowhere"))
+    monkeypatch.setattr(settings, "gait_v4_python", str(exe))
+
+    assert gait_service._v4_python() == exe
+
+
+def test_v4_python_override_missing_says_where_to_look(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "gait_v4_python", str(tmp_path / "gone" / "python"))
+    with pytest.raises(RuntimeError, match="GAIT_V4_PYTHON"):
+        gait_service._v4_python()
+
+
 def test_v4_engine_without_venv_says_how_to_fix(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from daengs_backend.config import settings
 
     monkeypatch.setattr(settings, "gait_v4_dir", str(tmp_path))
+    monkeypatch.setattr(settings, "gait_v4_python", "")
     with pytest.raises(RuntimeError, match="uv sync"):
         gait_service._analyze_with_v4(tmp_path / "input.bin")
 

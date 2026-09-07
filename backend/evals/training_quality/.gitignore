@@ -1,0 +1,3 @@
+# 연기 시험(smoke) 산출물은 품질 데이터가 아니다 — git 에도 안 올린다
+# (`evals/answer_quality/.gitignore` 와 같은 관례).
+*smoke*

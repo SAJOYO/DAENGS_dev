@@ -35,6 +35,7 @@ from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
 from daengs_backend.services import request_metrics as metrics_service
+from daengs_backend.services import screening_context as screening_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -110,6 +111,49 @@ async def _with_dog_context(
     if dog is None:
         return context
     return {**context, "dog": dog}
+
+
+async def _with_screening_context(
+    context: dict[str, Any],
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """`context["screening"]` 을 채워 돌려준다 — `_with_dog_context` 와 같은 자리다 (#307).
+
+    **판정 내용은 본문에서 안 받는다.** 앱이 보내는 것은 기록 id 뿐이고, 무엇이었는지는
+    서버가 DB 에서 읽어 `verdict` + `days_ago` 로 좁힌다. 응답이 대화 turn 으로 저장되는
+    경로라(D-048), 검증하지 않은 판정을 그대로 실었다면 지난 turn 에서 되돌릴 수 없다.
+
+    **못 채워도 그냥 지나간다.** 관리자 토큰(기록이 없다) · 남의 기록 · 아직 판정 전 ·
+    앱이 옛 `/screen/v1/screen` fallback 으로 찍어 행이 없는 건이 전부 여기로 온다
+    (#239 컨텍스트). 기록이 없으면 어시스턴트는 이 기능이 생기기 전과 똑같이 답한다.
+    """
+    if not isinstance(principal, AppPrincipal) or body.screening_record_id is None:
+        return context
+    async with session_factory() as session:
+        screening = await screening_context_service.resolve(
+            session, principal.app_user_id, body.screening_record_id
+        )
+    if screening is None:
+        return context
+    return {**context, "screening": screening}
+
+
+async def _resolved_context(
+    base: dict[str, Any],
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """신뢰된 구조화 컨텍스트를 다 채운 모양. 부르는 자리가 둘(무상태 · 저장)이라 묶어 둔다.
+
+    **세션을 각자 연다.** 해당 필드를 안 보낸 요청은 DB 를 아예 안 열고, 보낸 요청만
+    그만큼 연다 — 무상태 요청이 DB 를 한 번도 안 여는 성질(D-048)을 이 두 필드가
+    필요할 때만 깬다.
+    """
+    context = await _with_dog_context(base, principal, session_factory)
+    return await _with_screening_context(context, body, principal, session_factory)
 
 
 @router.post(
@@ -196,7 +240,7 @@ async def _dispatch(
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context=await _with_dog_context(context, principal, session_factory),
+            context=await _resolved_context(context, body, principal, session_factory),
             requested_capability=body.requested_capability,
             include_route_trace=include_route_trace,
         )
@@ -214,8 +258,8 @@ async def _dispatch(
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context=await _with_dog_context(
-                {**context, "active_dog_id": active_dog_id}, principal, session_factory
+            context=await _resolved_context(
+                {**context, "active_dog_id": active_dog_id}, body, principal, session_factory
             ),
             requested_capability=body.requested_capability,
             # `include_route_trace` 를 여기서는 **안 넘깁니다.** 저장하는 요청은 바로 위에서

@@ -54,6 +54,24 @@ OrchestratorState:
 - 민감한 반려견별 데이터 접근 전에 권위 있는 소유권/프로필 해석이 선행 조건입니다 (FOLLOW-UP).
 - 다견 식별자 모델은 지금 설계하지 않습니다.
 
+**스크리닝 컨텍스트 (CURRENT — #307)** — `context` 의 두 번째 예약 키가 `screening` 입니다.
+사용자가 피부 판정 결과에서 이어 물을 때, 앱이 보내는 것은 **기록 id 하나**(`screening_record_id`,
+§8)이고 판정 내용은 서버가 DB 에서 읽습니다 — `screening_records` 소유권을 확인하고
+`ScreeningContext {verdict, days_ago}` 로 좁혀 `context["screening"]` 에 넣습니다
+(`services/screening_context.py`, `orchestration/contracts.py`). 규칙:
+
+- **판정 본문은 요청으로 받지 않습니다.** `/assistant/query` 응답은 대화 turn 으로 저장되므로
+  (D-048), 검증하지 않은 판정이 한 번 들어가면 지난 turn 에서 되돌릴 수 없습니다. `location`·
+  `dog` 과 같은 규칙입니다 — 구조화 컨텍스트는 **서버가 명시적으로 조립**합니다.
+- **병변 분포 · 계열 · 통제 문구 · `stage1` 확률 · 사진 주소는 안 들어갑니다** (§6 불변식 15).
+- **못 채워도 실패가 아닙니다.** 남의 기록 · 없는 기록 · 판정 전 · 앱이 옛 `/screen/v1/screen`
+  fallback 으로 찍어 행이 없는 건이 전부 조용히 무시되고, 어시스턴트는 이 기능이 생기기 전과
+  똑같이 답합니다.
+- **이것은 능력 확장이 아닙니다.** Skin 은 계속 HANDOFF 전용이고(routing 문서 §5) `CapabilityName`
+  에 `skin` 이 없습니다 — 여기서 읽는 것은 **이미 끝난 판정의 기록**입니다.
+- 라우팅 신호가 아닙니다 — 라우터 프롬프트가 보는 것은 `source`·`action`·`active_dog_id`
+  뿐입니다 (`semantic._ROUTING_METADATA_KEYS`).
+
 ## 2. RoutePlan
 
 라우터의 산출물. **스칼라 mode 하나로 접지 않습니다** (D-034) — "산책은 실행하고 피부는
@@ -331,6 +349,16 @@ AssistantResponse:
     `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
     프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
+15. **스크리닝의 통제 문구와 병변 분포는 어떤 payload · 프롬프트 · 그래프 상태에도 들어가지
+    않습니다** (#307). 오케스트레이션이 스크리닝에서 받는 것은 **판정 종류와 경과일**뿐입니다
+    (`ScreeningContext`). 불변식 5 의 형제이고, 근거는 D-023 입니다 — 2단계 병변명이 holdout
+    에서 56.6% 틀려서 계약에 `top1` 을 아예 두지 않았고, 지금 그 방어가 서 있는 이유는
+    **이름을 말하는 코드 경로가 없다**는 사실 자체입니다. 필드가 하나 늘면 그 사실이 사라지는데
+    예외도 실패도 안 나므로, 계약이 직접 거절합니다
+    (`tests/test_orchestration_contracts.py` · `tests/test_screening_context.py`).
+    `headline`·`body`·`action`·`disclaimer` 는 사용자에게 무수정으로 갈 것이지 모델이 읽을
+    것이 아닙니다 (PR #79). **합성은 2차 LLM 이 아니라 결정적 절 조립입니다** (O-9 · §5).
+
 ## 7. locale 준비
 
 지금은 `locale = "ko-KR"` 하나입니다. 미래에 `"en-US"` 가 들어올 자리를 계약에만
@@ -357,6 +385,7 @@ AssistantQueryRequest:            # extra="forbid" — 목록에 없는 필드�
   source:                 str | None = None
   action:                 str | None = None
   active_dog_id:          str | None = None
+  screening_record_id:    UUID | None = None
   location:               LocationIn | None = None
 
 LocationIn:                       # extra="forbid"
@@ -378,6 +407,10 @@ LocationIn:                       # extra="forbid"
   기존 결정론적 planner 가 냅니다(§2) — HTTP 검증이 미리 막지 않습니다.
 - **클라이언트가 보낼 수 있는 임의의 `context` 딕셔너리는 없습니다.** 구조화
   컨텍스트는 위 필드에서만, 서버가 명시적으로 조립합니다.
+- **`screening_record_id` 는 참조이지 판정이 아닙니다** (#307). UUID 가 아니면 422 이고,
+  내 기록이 아니거나 아직 판정 전이면 **조용히 무시**합니다 — 404 를 주면 "그 기록이
+  존재한다" 가 새고, 기록을 못 찾았다는 이유로 답할 수 있는 질문까지 죽습니다. 판정 본문을
+  담은 필드는 없고, 보내면 `extra="forbid"` 가 422 로 거부합니다 (§1 스크리닝 컨텍스트).
 - **`token`·`authorization`·`credentials`·`user`·`principal`·`permissions` 같은 신원
   필드는 요청 본문에서 받지 않습니다.** `extra="forbid"` 가 422 로 거부하고, 애초에
   `PrincipalContext` 는 본문이 아니라 인증된 의존성에서만 서버가 만듭니다.

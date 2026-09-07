@@ -3033,10 +3033,26 @@ langsmith SDK 는 `os.environ` 의 `LANGSMITH_*` 만 봅니다. 우리 설정을
 
 #### 켰을 때 무엇이 이어지는가
 
-`run_id` 를 `request_id` 로 못박습니다 (`core/tracing.py` `trace_config`). 그래서
-`answer_reports.turn_id` → `chat_turns.request_id` → LangSmith 트레이스가 조회 없이
-바로 이어집니다 — 신고 한 건에서 그 요청의 라우팅·검색·프롬프트로 가는 길입니다.
+루트 런의 `run_id` 를 `request_id` 로 못박습니다 (`core/tracing.py` `request_trace`).
+그래서 `answer_reports.turn_id` → `chat_turns.request_id` → LangSmith 트레이스가 조회
+없이 바로 이어집니다 — 신고 한 건에서 그 요청의 라우팅·검색·프롬프트로 가는 길입니다.
 D-053 이 정한 "신고된 turn 하나만 연다" 는 열람 범위가 트레이스에도 그대로 적용됩니다.
+
+#### 보강 (2026-09-06, #282) — 루트 런은 서비스가 만들고, 그래프는 자식이다
+
+처음 배선은 LangGraph 의 `ainvoke` config 에 `run_id=request_id` 를 줘서 **그래프를
+루트**로 삼았습니다. 그런데 시맨틱 라우터의 Gemini 호출은 그래프 **앞**에서 돕니다
+(`orchestration/service.py`). 루트가 라우터보다 늦게 생기니 라우터 런은 어느 트레이스에도
+못 붙었고, 위의 세 질문 중 "라우터가 능력을 잘못 골랐나"가 트레이스에서 빠져 있었습니다.
+
+그래서 루트를 **서비스**로 올렸습니다 — `assistant_query`(LangGraph 구현) ·
+`assistant_query_agent`(에이전트 구현)가 `request_trace` 로 루트를 만들고, 라우터의
+`semantic_router`(llm) 런과 그래프 `orchestration_engine`(자식, `run_id` 없음)이 그 아래
+붙습니다. 링크의 등식(루트 id = trace id = `request_id`)은 그대로입니다.
+
+부수 효과로 에이전트 경로의 숨은 충돌도 사라졌습니다 — 선택 루프와 엔진이 **둘 다**
+`run_id=request_id` 인 루트를 만들어 같은 id 의 런이 둘이던 상태였습니다. 트레이싱을
+켠 적이 없어 아무도 못 봤습니다.
 
 #### 바꾸려면
 

@@ -112,7 +112,10 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   고칠 때는 `uv sync --group ml` 로 부르세요.
   상시 비용은 **RAM 약 2.4GB** 이고, 그것이 서버 여유를 위협하면 그때 별도 프로세스로 뗍니다
   (D-021 의 재개 조건 ⓐ~ⓓ). **개발 PC 는 `uv sync` 만 해도 backend 가 뜹니다** — `ml` 이
-  없으면 `/life/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
+  없으면 `/life/ask` 가 503 이고, **훈련 능력도 검색 단계에서 실패합니다**
+  (`daengs_training/retrieval/pgvector.py` 가 sentence-transformers 를 씁니다). 라우팅·
+  트레이스까지 보려면 `uv sync --group ml`. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수
+  있습니다.
 - **서빙 임베딩 모델과 코퍼스가 어긋나면 조용히 틀립니다.** 문서 벡터와 질의 벡터가 다른
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의

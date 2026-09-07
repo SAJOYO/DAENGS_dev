@@ -255,6 +255,36 @@ CHECKS = (
             ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
             'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
         ]),
+        # 2026-09-07 (#297) — 요청 메타데이터. **변조 목록의 마지막 둘이 이 항목의 이유다.**
+        # 이 표에서 지켜야 하는 것은 "있어야 할 열이 있나" 만이 아니라 **"없어야 할 열이
+        # 없나" 이다** (D-037 은 질문 원문을, D-054 는 회원 식별자를 금지했다). 열을 하나
+        # 더하는 변조는 스키마를 안 깨고 테스트도 안 터뜨린다 — verify 가 이름으로 막는
+        # 것이 유일한 그물이라, 그 그물이 실제로 걸리는지 여기서 잰다.
+        #
+        # 픽스처가 없다(''). 이 표는 아무것도 참조하지 않으므로 선행 테이블이 필요 없고,
+        # 그 성질 자체를 verify ④ 가 단언한다.
+        ('2026-09-07', 'request_metrics', '', 'request_metrics', [
+            'ALTER TABLE request_metrics DROP COLUMN elapsed_ms',
+            'ALTER TABLE request_metrics ALTER COLUMN elapsed_ms TYPE bigint',
+            # NOT NULL 을 잃는 변조. "지연을 못 쟀다" 와 "0ms" 가 안 갈리게 된다.
+            'ALTER TABLE request_metrics ALTER COLUMN elapsed_ms DROP NOT NULL',
+            'ALTER TABLE request_metrics DROP CONSTRAINT request_metrics_elapsed_check',
+            'ALTER TABLE request_metrics DROP CONSTRAINT'
+            ' request_metrics_principal_kind_check',
+            'ALTER TABLE request_metrics DROP CONSTRAINT request_metrics_router_kind_check',
+            'DROP INDEX idx_request_metrics_created',
+            'DROP INDEX idx_request_metrics_request_id',
+            # **외래 키가 생기는 변조.** 편해 보여서 누군가 걸 수 있는데, 걸면 탈퇴 한 번에
+            # 지난달 지연 통계가 바뀐다. 참조 대상을 같이 만들어야 ALTER 가 안 죽는다.
+            'CREATE TABLE chat_turns(id uuid PRIMARY KEY);'
+            ' ALTER TABLE request_metrics ADD COLUMN turn_id uuid'
+            ' REFERENCES chat_turns(id) ON DELETE CASCADE',
+            # **금지된 열이 생기는 변조 둘 — 이 항목의 핵심이다.**
+            # 둘 다 "디버깅에 편하니까" 로 실제로 들어올 법한 모양이고, 스키마상으로는
+            # 아무 문제가 없다. verify ⑤ 만이 이것을 잡는다.
+            'ALTER TABLE request_metrics ADD COLUMN query text',
+            'ALTER TABLE request_metrics ADD COLUMN app_user_id uuid',
+        ]),
         ('2026-09-04', 'pet_photo', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN photo_storage_key CASCADE',
             'ALTER TABLE pets DROP COLUMN photo_generation CASCADE',

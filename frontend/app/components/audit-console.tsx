@@ -27,6 +27,24 @@ type AuditEntry = {
 type AuditPage = { entries: AuditEntry[]; next_cursor: string | null };
 
 /**
+ * `GET /api/admin/audit/retention` (`schemas/admin_audit.py` 의 `AuditRetentionOut`).
+ *
+ * **A5 는 "지우지 않는다" 로 닫혔습니다** (2026-09-07). 대신 다시 열 기준을 숫자로 박았고,
+ * 이 화면이 그것을 보여 주는 것이 그 결정의 나머지 반입니다 — 안 지우기로 했으면 최소한
+ * **얼마나 쌓였는지는 보이고 있어야** 합니다.
+ *
+ * `over_threshold` 는 서버가 판단합니다. 여기서 `total >= 100000` 을 직접 쓰면 기준이
+ * 두 곳에 살게 됩니다 (`services/audit.py` 의 `RETENTION_ROW_THRESHOLD`).
+ */
+type AuditRetention = {
+  total: number;
+  oldest_at: string | null;
+  newest_at: string | null;
+  threshold: number;
+  over_threshold: boolean;
+};
+
+/**
  * action → 한국어 문구와 색.
  *
  * **모르는 action 도 그려야 합니다.** `action` 에는 DB CHECK 이 없고 카드마다 늘어납니다
@@ -114,6 +132,9 @@ export default function AuditConsole() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // **없어도 화면은 돕니다.** 보존 요약이 실패해도 목록을 막지 않습니다 — 곁다리 값이
+  // 본 화면을 죽이면 안 됩니다. 그래서 에러를 `setError` 로 올리지 않고 `null` 로 둡니다.
+  const [retention, setRetention] = useState<AuditRetention | null>(null);
 
   // StrictMode 가 개발에서 effect 를 두 번 돌립니다 (`crawl-console.tsx` 와 같은 장치).
   const alive = useRef(true);
@@ -146,6 +167,20 @@ export default function AuditConsole() {
       controller.abort();
     };
   }, [load, scope]);
+
+  // 갈래를 바꿔도 다시 안 부릅니다 — 필터와 무관한 전체 값이고, 쪽을 넘길 때마다 세지
+  // 않는 것이 이 엔드포인트를 목록과 떼어 놓은 이유입니다 (`routers/admin_audit.py`).
+  useEffect(() => {
+    const controller = new AbortController();
+    apiJson<AuditRetention>("/api/admin/audit/retention", { signal: controller.signal })
+      .then((r) => {
+        if (alive.current) setRetention(r);
+      })
+      .catch(() => {
+        /* 곁다리 값입니다. 실패하면 그 줄만 안 그립니다. */
+      });
+    return () => controller.abort();
+  }, []);
 
   async function more() {
     if (!cursor) return;
@@ -190,11 +225,41 @@ export default function AuditConsole() {
           ))}
         </select>
         {/*
-          **총 개수를 안 보여 줍니다.** 세는 값이 비싸고 읽는 사이에도 늘어서
-          (로그인마다 행이 생깁니다) 곧 틀린 숫자가 됩니다.
+          **목록에는 총 개수를 안 싣습니다.** 쪽마다 세는 값이 비싸고 읽는 사이에도 늘어서
+          (로그인마다 행이 생깁니다) 곧 틀린 숫자가 됩니다. 아래 보존 줄은 다른 질문입니다 —
+          "지울 때가 됐나" 이고, 그건 가끔 한 번 세면 됩니다.
         */}
         <p className="text-sm text-zinc-600 dark:text-zinc-400">{entries.length}줄 불러옴</p>
       </div>
+
+      {/*
+        **A5 — 지우는 주기를 두지 않기로 했습니다** (2026-09-07). 하루 14행이라 지울 이유가
+        없고 감사 로그는 지우면 못 되돌립니다. 대신 다시 열 기준을 박았고, 이 줄이 그것을
+        눈에 보이게 합니다. 이 줄이 없으면 "안 지운다" 가 그냥 "안 본다" 가 됩니다.
+      */}
+      {retention && (
+        <p
+          className={
+            retention.over_threshold
+              ? "rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              : "text-xs text-zinc-500 dark:text-zinc-400"
+          }
+        >
+          {retention.over_threshold ? (
+            <>
+              <strong className="font-medium">보존 기준을 넘었습니다</strong> — 전체{" "}
+              {retention.total.toLocaleString()}행 (기준 {retention.threshold.toLocaleString()}행).
+              지우는 주기를 다시 정할 때입니다 (로드맵 A5).
+            </>
+          ) : (
+            <>
+              전체 {retention.total.toLocaleString()}행
+              {retention.oldest_at && ` · ${retention.oldest_at.slice(0, 10)}부터`} · 지우는 주기
+              없음 (기준 {retention.threshold.toLocaleString()}행)
+            </>
+          )}
+        </p>
+      )}
 
       {entries.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">기록이 없습니다.</p>

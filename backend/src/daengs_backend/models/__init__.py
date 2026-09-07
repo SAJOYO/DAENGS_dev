@@ -62,6 +62,11 @@ from daengs_backend.models.pet import (
     Pet,
 )
 from daengs_backend.models.refresh_token import RefreshToken
+from daengs_backend.models.request_metrics import (
+    PRINCIPAL_KINDS,
+    ROUTER_KINDS,
+    RequestMetric,
+)
 from daengs_backend.models.screening_record import (
     SCREENING_STATUSES,
     ScreeningRecord,
@@ -117,7 +122,9 @@ __all__ = [
     "GAIT_STATUSES",
     "PET_BIRTH_DATE_KINDS",
     "PET_SEXES",
+    "PRINCIPAL_KINDS",
     "REASON_MAX_CHARS",
+    "ROUTER_KINDS",
     "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
@@ -142,6 +149,7 @@ __all__ = [
     "GaitRecord",
     "Pet",
     "RefreshToken",
+    "RequestMetric",
     "ScreeningRecord",
     "TerritoryAttempt",
     "TerritoryClaim",

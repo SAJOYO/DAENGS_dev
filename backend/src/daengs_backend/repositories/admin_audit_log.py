@@ -111,3 +111,24 @@ async def list_entries(
 
     result = await session.execute(stmt)
     return result.all()
+
+
+async def retention_summary(session: AsyncSession) -> Row[Any]:
+    """보존 점검용 한 줄 — 총 행 수 · 가장 오래된 행 · 가장 최근 행.
+
+    **목록 조회와 일부러 떼어 놨습니다.** `list_entries` 가 `total` 을 안 주는 이유는
+    #221 이 적어 뒀고(세는 값이 비싸고 읽는 사이에 늘어 곧 틀립니다) 그 판단은 그대로
+    유효합니다 — 쪽을 넘길 때마다 전체를 세는 것은 낭비입니다. 이건 다른 질문입니다:
+    **"지울 때가 됐나"** 이고, A5 가 박아 둔 기준(총 10만 행)에 닿았는지 가끔 보는 값이라
+    한 번 더 세는 값이 아깝지 않습니다.
+
+    `count(*)` 는 전체 스캔입니다. 지금은 수십~수천 행이라 무시할 수 있고, 이 값이 비싸질
+    무렵이면 그것 자체가 A5 를 다시 열 신호입니다 (`docs/console/roadmap.md` §4 A5).
+    """
+    stmt = select(
+        func.count(AdminAuditLog.id),
+        func.min(AdminAuditLog.created_at),
+        func.max(AdminAuditLog.created_at),
+    )
+    result = await session.execute(stmt)
+    return result.one()

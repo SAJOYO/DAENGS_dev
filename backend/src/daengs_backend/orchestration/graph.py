@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.core.tracing import trace_config
 from daengs_backend.orchestration.adapters import (
+    GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
     TrainingCapabilityAdapter,
@@ -51,6 +52,9 @@ class OrchestrationEngine:
                 CapabilityName.LIFE: LifeCapabilityAdapter(),
                 CapabilityName.WALK: WalkCapabilityAdapter(),
                 CapabilityName.PLACE: PlaceCapabilityAdapter(),
+                # 플래그(`DAENGS_GENERAL_FALLBACK`)가 꺼져 있으면 planner 가 이 능력을
+                # 계획에 넣지 않으므로 등록만 되고 돌지 않는다 (#279).
+                CapabilityName.GENERAL: GeneralCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         self.graph = self._build_graph()
@@ -102,11 +106,18 @@ class OrchestrationEngine:
         # 여기가 아니라 노드 input 으로 갑니다. 그쪽은 anonymizer 를 거치지만
         # metadata 는 우리가 무엇을 넣었는지가 곧 계약이라, 이 목록을 늘릴 때는
         # 그 값이 "라우팅 종류·상태·코드" 급인지 먼저 물어야 합니다.
+        #
+        # **루트가 아니라 자식입니다** (`root=False`). 요청의 루트 런은 서비스가
+        # 만들고(`assistant_query` · `assistant_query_agent`), 이 그래프는 그 아래
+        # 붙습니다 — 시맨틱 라우터의 LLM 런이 그래프보다 먼저 돌아서, 루트를 여기 두면
+        # 그 런이 트레이스 밖에 남습니다. `run_id` 를 여기서도 `request_id` 로 주면 루트와
+        # 같은 id 의 런이 둘이 됩니다 (`core.tracing` 모듈 docstring).
         final = await self.graph.ainvoke(
             initial,
             config=trace_config(
                 request_id=rid,
-                run_name="assistant_query",
+                run_name="orchestration_engine",
+                root=False,
                 metadata={
                     "principal_kind": principal.kind,
                     "router": route_plan.router.value,

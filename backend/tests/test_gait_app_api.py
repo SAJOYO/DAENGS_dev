@@ -308,6 +308,52 @@ def test_detail_never_exposes_internal_feature_vector(client, monkeypatch):
     assert body["summary_for_ui"] == {"hip": {"x_range": 1.0}}
 
 
+def test_detail_gives_overlay_url_when_overlay_exists(client, monkeypatch):
+    """overlay 가 있으면 재생 주소를 내려줍니다 — 앱이 원본 대신 이걸 재생합니다."""
+    import daengs_backend.routers.gait as gait_router
+
+    rec = _record(status="DONE", quality_status="ok", overlay_storage_key="gait/p/overlay/o.mp4")
+
+    async def owned(session, app_user_id, record_id):
+        return rec
+
+    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_router, "get_storage", lambda: FakeStorage())
+    body = client.get(f"/app/gait/records/{rec.id}").json()
+    assert body["has_overlay"] is True
+    assert body["overlay_url"] == "https://storage.example/get"
+
+
+def test_detail_overlay_url_is_null_without_overlay(client, monkeypatch):
+    """overlay 가 없으면 null — 앱은 그때 기기의 원본을 재생합니다."""
+    rec = _record(status="DONE", quality_status="ok", overlay_storage_key=None)
+
+    async def owned(session, app_user_id, record_id):
+        return rec
+
+    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    body = client.get(f"/app/gait/records/{rec.id}").json()
+    assert body["has_overlay"] is False
+    assert body["overlay_url"] is None
+
+
+def test_detail_overlay_url_null_when_storage_not_configured(client, monkeypatch):
+    """overlay 는 있는데 저장소가 안 켜졌으면 null — 내부 에러가 앱에 새지 않습니다."""
+    import daengs_backend.routers.gait as gait_router
+    from daengs_backend.core.storage import NotConfiguredStorage
+
+    rec = _record(status="DONE", quality_status="ok", overlay_storage_key="gait/p/overlay/o.mp4")
+
+    async def owned(session, app_user_id, record_id):
+        return rec
+
+    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_router, "get_storage", lambda: NotConfiguredStorage())
+    body = client.get(f"/app/gait/records/{rec.id}").json()
+    assert body["has_overlay"] is True
+    assert body["overlay_url"] is None
+
+
 # ── 워커 경계 (ⓒ) ──────────────────────────────────────────────────────
 def test_task_module_imports_without_gait_deps():
     """태스크 모듈 import 가 torch·daengs_gait 를 끌고 오면 안 됩니다 — backend 웹

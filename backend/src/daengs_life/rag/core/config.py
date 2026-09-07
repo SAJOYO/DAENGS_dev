@@ -27,6 +27,11 @@ EVAL_DIR: Path | None = PROCESSED_DIR / "eval" if PROCESSED_DIR else None
 # (`.gitignore` 의 `!data/processed/answers/*.jsonl`, RAG-017 '예외' 절). LLM 출력이라
 # 다시 돌려도 같은 글이 안 나오고, RAG-028 ⑥ 이 그것을 랩끼리 비교 축으로 지정했다.
 ANSWER_DIR: Path | None = PROCESSED_DIR / "answers" if PROCESSED_DIR else None
+# LLM judge 판정 (RAG-074 · `D15`). **랩 파일 옆이 아니라 따로 둔다** — 랩은 그때 뜬 기록이고
+# 판정은 나중에 다른 모델·다른 프롬프트로 **여러 번** 다시 매길 수 있다. 랩 안에 섞으면
+# 판정을 고칠 때마다 랩 파일이 바뀌어 `score-laps` 의 대조선이 흔들린다.
+# ⚠ 여기도 추적한다 (`.gitignore` 의 두 번째 예외).
+JUDGMENT_DIR: Path | None = PROCESSED_DIR / "judgments" if PROCESSED_DIR else None
 
 # ---------------------------------------------------------------- 7단계 이후: DB (RAG-025 ②)
 class Settings(BaseSettings):
@@ -77,6 +82,29 @@ class Settings(BaseSettings):
     # `proxy_read_timeout`(60초) 안쪽이라 **우리가 먼저 504 를 낸다** — 상류 판정이 우리 손에 남는다.
     # 걸어 두지 않으면 무제한이라, 상류가 물리면 스레드풀 워커를 그대로 잡고 있는다.
     gemini_timeout_ms: int = 30_000
+
+    # LLM-as-a-judge (RAG-007 · `D15`). **일부러 다른 계열이다** — 생성이 Gemini 인데 judge 도
+    # Gemini 면 같은 훈련 계보가 자기 계열의 문장을 후하게 보는 self-preference 가 남는다.
+    # RAG-007 이 요구한 것은 *"급 분리"*(flash → pro)까지였는데, 2026-09-07 에 사람이
+    # **계열까지 가르기로** 정했다 (§6).
+    #
+    # ⚠ **키가 없으면 judge 만 안 돈다.** 생성(`gemini_api_key`)과 갈라 둔 이유가 그것이다 —
+    # 채점 도구 하나 때문에 `/life/ask` 가 뜨지 않으면 안 된다.
+    openai_api_key: str = ""
+    # ⚠ **`-latest` 류를 안 쓴다** — 움직이는 이름이면 두 판정 파일의 차이가 답변 때문인지
+    # judge 때문인지 안 갈린다. `judge.PROMPT_VERSION` 과 같은 이유로 **못 박는 값**이다.
+    # `gemini_model` 을 상수로 안 박은 것과 방향이 반대인데, 그쪽은 생성이라 되돌리기가 싸고
+    # 이쪽은 **채점자**라 흔들리면 옛 판정과 비교가 통째로 끊긴다.
+    # 2026-09-07 실측 — `models.list()` 로 확인한 이름이다 (`gemini-2.5-flash` 가 404 를 냈던
+    # 자리가 만든 습관이다). **pro 급을 안 골랐다**: 이 축이 하는 일은 질문 한 줄과 답변 한
+    # 문단을 읽고 판정 하나를 내는 것이라 긴 다단계 추론이 필요한 자리가 아니고, 추론급일수록
+    # `temperature=0` 을 거절할 확률이 높아 **채점자에게는 손해**다. `mini`·`nano` 도 안 골랐다 —
+    # 너무 작은 채점자는 다 통과시키는 쪽으로 쏠리는데, 그것을 발견하는 비용이 **사람 라벨 한 판**이라
+    # 아낀 것보다 비싸다. ⚠ `gpt-5.3` 계열은 **날짜 핀이 없어** 후보에서 빠졌다.
+    openai_judge_model: str = "gpt-5.4-2026-03-05"
+    # OpenAI 호출 타임아웃. **여기는 초다** — `gemini_timeout_ms` 와 단위가 다르므로 이름에
+    # 박아 둔다. judge 는 서빙 경로가 아니라 배치라 넉넉하게 준다.
+    openai_timeout_s: float = 120.0
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,

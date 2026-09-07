@@ -174,6 +174,10 @@ def _trace_outputs(response: ChatResponse) -> dict[str, Any]:
 
     if not ls_utils.tracing_is_enabled():
         return {}
+    # `answer` 가 예외로 끝나면 `None` 으로 불린다 (`retrieval.pgvector._trace_documents`
+    # 와 같은 이유). 그 요청의 실패 사유는 런의 error 에 있다.
+    if response is None:
+        return {}
     return {
         "decision": response.decision,
         "reason": response.reason,

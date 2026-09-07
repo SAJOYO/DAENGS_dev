@@ -13,12 +13,16 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     RouteTrace,
 )
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 
 _LABELS = {
     CapabilityName.TRAINING: "훈련",
     CapabilityName.LIFE: "생활 정보",
     CapabilityName.WALK: "산책",
     CapabilityName.PLACE: "장소",
+    # 폴백은 전문 능력이 하나도 안 골렸을 때만 붙으므로(#279) 실제로는 단독 결과라
+    # 이 라벨이 화면에 찍힐 일이 없다. 그래도 빠뜨리면 KeyError 다.
+    CapabilityName.GENERAL: "일반",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라
@@ -73,8 +77,11 @@ def aggregate_results(
             status = AssistantStatus.HANDOFF
             message = _handoff_message(route_plan)
         else:
+            # 라우터가 아무것도 못 고른 요청은 실무상 대부분 반려견과 무관한 요청이었다 —
+            # 일반 답변 폴백 플래그가 꺼져 있을 때도(D-057) "무엇은 도울 수 있다" 를 말하는
+            # 스코프드 리다이렉트를 쓴다 (#278). REFUSED 의 off_topic 과 같은 문장이다.
             status = AssistantStatus.FAILED
-            message = "실행하거나 안내할 수 있는 기능이 없습니다."
+            message = NO_CAPABILITY_MESSAGE
         return AssistantResponse(
             request_id=request_id,
             status=status,

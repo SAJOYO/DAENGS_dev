@@ -67,6 +67,21 @@ def get_chat_session_factory() -> async_sessionmaker[AsyncSession]:
     return SessionLocal
 
 
+def get_metrics_session_factory() -> async_sessionmaker[AsyncSession]:
+    """요청 지표용 세션 **공장**. 위 대화 저장용과 같은 `SessionLocal` 을 돌려줍니다.
+
+    **같은 것을 돌려주는데 왜 이름을 따로 두나** — 둘은 같은 것이 아니기 때문입니다.
+    대화 저장은 사용자 데이터라 실패하면 503 이 나가야 하고, 지표는 곁다리라 실패해도
+    조용히 넘어가야 합니다 (`services/request_metrics.py` 머리말). 한 의존성을 나눠 쓰면
+    **테스트가 그 둘을 못 가릅니다** — 대화 TX 를 세는 테스트에 지표 TX 가 섞여 들어와
+    "이 요청이 대화를 몇 번 열었나" 라는 질문의 답이 바뀝니다. 실제로 그렇게 됐습니다
+    (#297 이 이 함수를 만든 이유).
+
+    나중에 지표를 다른 커넥션 풀이나 다른 DB 로 뗄 일이 생기면 **이 한 줄만 바뀝니다.**
+    """
+    return SessionLocal
+
+
 @contextlib.asynccontextmanager
 async def worker_session() -> AsyncGenerator[AsyncSession, None]:
     """**Celery 태스크 전용** 세션 — 태스크마다 엔진을 새로 만들고 끝나면 버립니다.

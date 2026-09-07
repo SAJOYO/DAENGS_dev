@@ -125,3 +125,7 @@ DB 테스트는 실제 init SQL 및 마이그레이션을 실행하고 매 테�
 삭제·기존 데이터 보존을 확인한다. 환경 변수 없이는 DB 테스트가 명시적으로 skip된다.
 전용 GitHub-hosted PostgreSQL CI는 이를 실제 실행하고 기존 모든 PR 대상 전체 테스트는 유지한다.
 
+후속 [DEV #281](https://github.com/SAJOYO/DAENGS_dev/pull/281)은 이 확정 경계에
+보호 시간·점수·시즌과 산책/점령 통계 원본을 연결한다. 별도 migration과 기본 비활성 flag를
+사용하며, 계약·조회 API·활성화 순서는 [activity-game-integration.md](activity-game-integration.md)에 있다.
+

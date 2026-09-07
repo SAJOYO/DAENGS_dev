@@ -39,6 +39,7 @@ from pathlib import Path
 from .core import config, io
 from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
+from .stages import judge as judger
 from .stages import load as loader
 from .stages import score as scorer
 from .core import transport, vocabulary
@@ -1091,6 +1092,98 @@ def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
     return 0
 
 
+def _judge_table(rows: list[dict], judgments: list[judger.Judgment],
+                 ckinds: dict[str, str] | None) -> None:
+    """판정 표 하나 + 엇갈린 문항. **`score-laps` 에 열을 안 더하고 여기서만 낸다** — 캘리브레이션
+    전이라 지표가 아니기 때문이다 (`judge.py` 머리말)."""
+    marks = scorer.marks(rows, ckinds)
+    s = judger.summarise(judgments, marks)
+
+    print(f"\n문항 {s['n']}  ·  **물은 것에 답함 {s['answers']}/{s['n']}**")
+    print("\n  두 자를 겹쳐 본다 — 세로가 `grounded`(근거를 지목했나), 가로가 judge(물은 것에 답했나)\n")
+    print(f"    {'':14} {'답함':>6} {'못함':>6}")
+    print(f"    {'grounded ✓':14} {s['both']:>6} {s['grounded_only']:>6}")
+    print(f"    {'grounded ✗':14} {s['answers_only']:>6} {s['neither']:>6}")
+
+    dis = judger.disagreements(marks, judgments)
+    if not dis:
+        print("\n  엇갈린 문항이 없다 — 그러면 **캘리브레이션할 자리도 없다.**"
+              " 두 자가 같은 것을 재고 있다는 뜻이거나, 문항이 너무 쉽다는 뜻이다.")
+        return
+    print(f"\n  **엇갈린 문항 {len(dis)}** — `RAG-007` 이 요구한 사람 라벨은 여기서 고른다."
+          " 일치하는 문항만 라벨링하면 judge 를 못 검증한다.\n")
+    for d in dis:
+        arrow = "grounded ✓ · judge ✗" if d["grounded"] else "grounded ✗ · judge ✓"
+        print(f"  [{d['id']}] {arrow}")
+        print(f"      물은 것: {d['asked']}")
+        print(f"      이유   : {d['rationale']}")
+
+
+def cmd_judge(args: argparse.Namespace) -> int:
+    """랩 하나를 LLM judge 로 채점한다 (RAG-074 · `D15`).
+
+    **랩 파일만 있으면 돈다** — `score-laps` 와 같은 약속이다. 이 축이 `question`·`text` 만
+    보기 때문이고, 그것이 루브릭 넷 중 이것부터 세운 이유의 하나다 (`judge.py` 머리말).
+
+    ⚠ **랩 파일은 안 건드린다.** 판정은 `judgments/` 로 따로 간다 — 랩은 그때 뜬 기록이고
+    판정은 나중에 다른 모델로 다시 매길 수 있다 (`config.JUDGMENT_DIR`).
+    """
+    path = io.answer_path(args.lap)
+    if not path.exists():
+        print(f"{path} 가 없다 — `rag generate --questions --lap {args.lap}` 로 먼저 뜰 것")
+        return 1
+    _, rows = io.read_answers(path)
+
+    # `score-laps` 와 같은 자로 경계 문항을 가른다. 못 읽으면 **막지 않고** 알린다 — 여기서는
+    # 경계 문항이 판정에 들어와 `expect: abstain` 이 거짓으로 찍힐 뿐이라, 표를 못 내는 것보다 낫다.
+    try:
+        gs = goldenset.load()
+        ckinds = scorer.citable_kinds({i.id: i.must for i in gs.items})
+    except Exception as exc:  # noqa: BLE001
+        ckinds = None
+        print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 전부 채점한다\n")
+
+    if args.show:
+        jpath = io.judgment_path(args.lap)
+        if not jpath.exists():
+            print(f"{jpath} 가 없다 — `--show` 없이 한 번 돌릴 것")
+            return 1
+        head, saved = io.read_judgments(jpath)
+        print(f"{args.lap} — judge `{head.get('judge_model')}`"
+              f" · 프롬프트 v{head.get('prompt_version')} · {head.get('judged_at')}")
+        _judge_table(rows, [judger.Judgment.model_validate(j) for j in saved], ckinds)
+        return 0
+
+    if args.limit:
+        rows = rows[:args.limit]
+    model = args.model or config.settings.openai_judge_model
+    print(f"{args.lap} — judge `{model}` · 프롬프트 v{judger.PROMPT_VERSION} · {len(rows)}문항")
+
+    try:
+        cli = judger.client()
+    except RuntimeError as exc:
+        print(exc)
+        return 1
+
+    def tick(j: judger.Judgment) -> None:
+        print(f"  {j.id:6} {'답함' if j.answers_question else '못함'}  {j.asked[:60]}")
+
+    judgments = judger.judge_rows(rows, cli=cli, model=model, ckinds=ckinds, on_item=tick)
+    if not judgments:
+        print("채점할 문항이 없다")
+        return 1
+
+    # `--limit` 은 눈으로 보는 길이라 **저장하지 않는다** — 반쪽 판정 파일이 남으면 다음에
+    # `--show` 가 그것을 전체인 양 읽는다.
+    if args.limit:
+        print(f"\n`--limit {args.limit}` 이라 저장하지 않았다 — 전체를 돌려야 판정 파일이 남는다")
+    else:
+        out = io.write_judgments(judger.header(args.lap, judgments, model), judgments, args.lap)
+        print(f"\n{out}")
+    _judge_table(rows, judgments, ckinds)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1206,6 +1299,17 @@ def main(argv: list[str] | None = None) -> int:
     scl.add_argument("--quiet", action="store_true",
                      help="`--against` 와 같이 쓴다 — 표를 접고 대조와 종료 코드만 낸다")
     scl.set_defaults(fn=cmd_score_laps)
+
+    jd = sub.add_parser("judge", help="랩 하나를 LLM judge 로 채점 — '답이 물은 것에 답했나' (RAG-074)")
+    jd.add_argument("lap", help="랩 이름 (`answers/<이름>.jsonl`)")
+    jd.add_argument("--model", help=f"judge 모델. 기본 `{config.settings.openai_judge_model}`"
+                                    " (**생성과 다른 계열**이다 — RAG-007 · D15)")
+    jd.add_argument("--limit", type=int, default=0, metavar="N",
+                    help="앞에서 N문항만. 프롬프트를 손본 뒤 몇 개로 눈으로 보는 길이다")
+    jd.add_argument("--show", action="store_true",
+                    help="**부르지 않는다** — 저장된 판정을 다시 읽어 표만 낸다."
+                         " 판정이 돈이라 기본이 아니라 플래그인 쪽이 맞다")
+    jd.set_defaults(fn=cmd_judge)
 
     args = p.parse_args(argv)
     return args.fn(args)

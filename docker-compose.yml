@@ -455,8 +455,11 @@ services:
       # (services/gait._analyze_from_storage). backend 만 채우고 여기를 빠뜨리면
       # 업로드는 되는데 분석이 FAILED 로 떨어집니다.
       #
-      # ⚠️ 워커에는 `GAIT_BRIDGE_BASE_URL` 이 없습니다 — 필요 없어서입니다. 워커는
-      #    LocalBridge 를 HTTP 가 아니라 **같은 볼륨의 파일로** 직접 읽습니다.
+      # ⚠️ 워커는 LocalBridge 를 HTTP 가 아니라 **같은 볼륨의 파일로** 직접 읽습니다.
+      #    그래서 `GAIT_BRIDGE_BASE_URL` 을 *쓰지는* 않는데, **넣기는 넣어야 합니다** —
+      #    이유는 위 블록에 있습니다(`get_storage()` 가 만들 때 검사합니다).
+      #    2026-09-07(#290)까지 이 주석이 "워커에는 없습니다" 라고 적혀 있었는데,
+      #    바로 위 `GAIT_BRIDGE_BASE_URL:` 줄과 반대라 #289 배포에서 헷갈렸습니다.
       GAIT_GCS_BUCKET: ${GAIT_GCS_BUCKET:-}
       GAIT_GCS_LOCATION: ${GAIT_GCS_LOCATION:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}

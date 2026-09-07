@@ -245,6 +245,22 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
 
+    # ── 보행 분석 엔진 (#304) ─────────────────────────────────────────
+    # "legacy" = `daengs_gait`(ultralytics best.pt, 워커 venv 에 설치됨).
+    # "v4"     = `backend/gait_v4/`(walk_demo v4: ssdlite + RTMPose AP-10K). **별도 uv
+    #            프로젝트**라 워커가 그 venv 의 python 을 서브프로세스로 부릅니다 —
+    #            버전이 `==` 로 못 박혀 있고 골든이 그 조합에서 나와서 backend lock 에
+    #            합치지 않습니다. 라이선스(ssdlite.pt academic/non-commercial) 결정 전이라
+    #            **기본은 legacy** 입니다. 운영에서 바꾸지 마세요.
+    #
+    # ⚠️ 두 엔진의 기록은 DB 에서 구분되지 않습니다 (`pose_model` 컬럼 없음,
+    #    `gait_filter_version` 문자열도 같음). 섞이면 관절 정의가 다른 기록끼리 비교됩니다.
+    #    엔진을 바꾸려면 그 결정이 먼저입니다 (#304 컨텍스트 메모).
+    gait_engine: str = Field(default="legacy", validation_alias=AliasChoices("GAIT_ENGINE"))
+    # gait_v4 프로젝트 폴더. 그 안의 `.venv` 와 `weights/` 를 씁니다. 비우면 저장소의
+    # `backend/gait_v4` (config.py 기준 상대 경로) 입니다.
+    gait_v4_dir: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_DIR"))
+
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
     # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와
     # **다른 컨테이너**라 프로세스 안에서는 알 수 없고, nginx 를 거치지도 않습니다

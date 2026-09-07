@@ -97,6 +97,28 @@ def live(monkeypatch):
 PATH = f"/app/walks/{WALK}/storyboard"
 
 
+def test_v4_anchors_survive_http_storage_and_old_cache_requires_explicit_refresh(live):
+    client, state, lookup = live
+    titles = AsyncMock(side_effect=lambda bundle: bundle)
+    client.app.dependency_overrides[router.get_title_generator] = lambda: titles
+    client.post(PATH, json={"expected_entries": {}})
+    request = {"expected_entries": {}, "bundle_format": "walk-storyboard-candidates-v4"}
+    assert client.post(PATH, json=request).json()["bundle"]["format"].endswith("v2")
+    titles.assert_not_awaited()
+    fresh = client.post(PATH, json={**request, "refresh": True}).json()
+    assert fresh["status"] == "ready" and fresh["bundle"]["format"].endswith("v4")
+    assert fresh["bundle"]["scenes"][0]["observation"]["client_seq"] == 0
+    assert fresh["bundle"]["scenes"][-1]["observation"]["client_seq"] == 120
+    assert state.row.bundle == fresh["bundle"]
+    assert client.get(PATH + "?bundle_format=" + request["bundle_format"]).json() == fresh
+    assert client.post(PATH, json=request).json() == fresh
+    titles.assert_awaited_once()
+    for version in ("v1", "v2", "v3"):
+        old = client.get(PATH + "?bundle_format=walk-storyboard-candidates-" + version).json()
+        assert all("observation" not in s for s in old["bundle"]["scenes"])
+    assert lookup.await_count == 2
+
+
 def note(revision=1, content="메모"):
     return WalkEntry(
         walk_id=WALK,

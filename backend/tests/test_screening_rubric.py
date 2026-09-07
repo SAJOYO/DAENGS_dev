@@ -81,8 +81,11 @@ def test_판정을_판정기에게_한국어로_보여_준다() -> None:
 def test_판정이_없는_쪽도_같은_프롬프트로_잰다() -> None:
     """짝의 두 답을 다른 프롬프트로 재면 비교가 성립하지 않습니다."""
     prompt = screening_rubric.build_screening_prompt(question="질문", answer="답", screening=None)
-    assert "판정 기록 없음" in prompt
+    assert "피부 판정 기록이 없다" in prompt
     assert screening_rubric.SCREENING_PROMPT_VERSION in prompt
+    # **유도하지 않는다.** v1 은 "ⓑ 는 0 이 정상" 이라고 적었고, 그러면 off/on 의 갈래 점수
+    # 차이가 배선 효과가 아니라 프롬프트 효과가 된다 (#314 실측 뒤 v2 에서 지움).
+    assert "0 이 정상" not in prompt
 
 
 def test_빈_답변도_채점_대상이다() -> None:

@@ -39,7 +39,7 @@ from tools.answer_quality.gemini import TokenLedger, generate_structured
 
 #: 공유 루브릭과 **다른 이름 공간**입니다. `answer-quality-judge-ko-*` 를 재사용하면 앵커 기록이
 #: 서로를 통과시킨 것으로 보입니다.
-SCREENING_PROMPT_VERSION = "answer-quality-screening-ko-v1"
+SCREENING_PROMPT_VERSION = "answer-quality-screening-ko-v2"
 SCREENING_TEMPERATURE = 0.0
 #: `judge.JUDGE_MAX_OUTPUT_TOKENS` 와 같은 이유로 넉넉히 — 생각하는 모델은 사고 토큰이 이 한도를
 #: 같이 씁니다 (2026-09-07 실측, #277).
@@ -100,7 +100,10 @@ def build_screening_prompt(*, question: str, answer: str, screening: Mapping[str
     그쪽에서 그대로 유지되고, 여기서만 다르다.
     """
     if screening is None:
-        shown = "(판정 기록 없음 — 이 답은 판정을 못 받은 쪽이다. ⓑ 는 0 이 정상이다.)"
+        # **"0 이 정상" 이라고 말하지 않는다.** v1 이 그렇게 적었는데 그것은 유도였다 —
+        # 판정 없는 쪽의 ⓑ 를 낮추라고 판정기에게 미리 일러 주면, off/on 의 갈래 점수 차이가
+        # 배선 효과가 아니라 프롬프트 효과가 된다 (2026-09-07, #314).
+        shown = "(이 사용자는 피부 판정 기록이 없다.)"
     else:
         verdict = {
             "normal": "특이 소견 없음",

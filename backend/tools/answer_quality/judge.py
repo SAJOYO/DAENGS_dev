@@ -48,6 +48,15 @@ from tools.answer_quality.questions import (
     file_sha256,
     load_questions,
 )
+from tools.answer_quality.screening_rubric import (
+    SCREENING_PROMPT_VERSION,
+    SCREENING_TEMPERATURE,
+    ScreeningScore,
+    judge_screening,
+)
+from tools.answer_quality.screening_rubric import (
+    summarize as screening_summary,
+)
 
 #: v1 은 앵커 `specific_law_fee` 를 놓쳤다 — flash-lite 와 pro 둘 다 "동물보호법 제47조" 라는 법령명을
 #: 출처로 봤다. v2 는 근거 표시(자료 번호 · 출처 라벨 · 기관/문서명)와 주장(법령명 · 조항 번호)을
@@ -435,6 +444,50 @@ def write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]], *, meta: Mapping[
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def screen_answers(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    queries: Mapping[str, str],
+    screening: Mapping[str, Any] | None,
+    model: str,
+    ledger: TokenLedger,
+    generate: Callable[..., Any] | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """판정 계층 전용 채점 (#314). 예산을 넘으면 거기까지의 행과 멈춘 이유를 돌려준다.
+
+    `screening` 은 **답변 파일의 meta 에서 온다** — 인자로 다시 받으면 두 표현이 어긋나
+    "판정 없음" 파일을 "판정 있음" 이라고 채점할 수 있다.
+    """
+    judged: list[dict[str, Any]] = []
+    stopped: str | None = None
+    for row in rows:
+        question_id = str(row.get("question_id", ""))
+        try:
+            score = judge_screening(
+                question=queries.get(question_id, ""),
+                answer=str(row.get("message", "")),
+                screening=screening,
+                model=model,
+                ledger=ledger,
+                generate=generate,
+                label=question_id,
+            )
+        except TokenBudgetExceeded as exc:
+            stopped = str(exc)
+            break
+        judged.append(
+            {
+                "kind": "screening_judgment",
+                "question_id": question_id,
+                "stratum": row.get("stratum"),
+                "scores": score.scores(),
+                "usable": score.usable,
+                "note": score.note,
+            }
+        )
+    return judged, stopped
+
+
 def _question_text(questions_path: Path) -> dict[str, str]:
     return {case.question_id: case.query for case in load_questions(questions_path)}
 
@@ -555,6 +608,15 @@ def main() -> None:
     pair.add_argument("--out", type=Path, default=None)
     pair.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
 
+    screen = sub.add_parser(
+        "screening", help="판정 계층 전용 채점 — 자격 단정과 갈래 선택을 따로 잰다 (#314)"
+    )
+    screen.add_argument("--answers", type=Path, required=True)
+    screen.add_argument("--questions", type=Path, required=True)
+    screen.add_argument("--judge-model", default=ROUTER_MODEL_ID, help="모델 id 또는 auto")
+    screen.add_argument("--out", type=Path, default=None)
+    screen.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
+
     args = parser.parse_args()
     ledger = TokenLedger(budget=getattr(args, "token_budget", DEFAULT_TOKEN_BUDGET), log=print)
 
@@ -623,6 +685,43 @@ def main() -> None:
                 **source_provenance(),
             },
         )
+        print(f"토큰 합계 {ledger.total:,}")
+        print(f"판정  {out} ({len(judged)}행)")
+        return
+
+    if args.command == "screening":
+        # **앵커 게이트가 없다.** 이 루브릭에는 앵커가 아직 없어서이고, 그래서 이 점수는
+        # #277 의 게이트를 통과한 점수와 같은 신뢰도가 아니다 — 리포트가 그렇게 적어야 한다.
+        meta_in, rows = load_answers(args.answers)
+        screening = meta_in.get("settings", {}).get("screening") or meta_in.get("screening")
+        judged, stopped = screen_answers(
+            rows, queries=queries, screening=screening, model=model, ledger=ledger
+        )
+        label = str(meta_in.get("label", args.answers.stem))
+        out = args.out or (ASSETS_DIR / f"screening_judgments_{label}.jsonl")
+        summary = screening_summary([ScreeningScore(**j["scores"]) for j in judged])
+        write_jsonl(
+            out,
+            judged,
+            meta={
+                "label": label,
+                "answers_file": args.answers.name,
+                "answers_sha256": file_sha256(args.answers),
+                "questions_sha256": file_sha256(args.questions),
+                "screening": screening,
+                "judge_model": model,
+                "prompt_version": SCREENING_PROMPT_VERSION,
+                "temperature": SCREENING_TEMPERATURE,
+                "anchor_gate": "none — 이 루브릭에는 앵커가 없다 (#314)",
+                "judged_count": len(judged),
+                "stopped": stopped,
+                "summary": summary,
+                "finished_at": utc_now(),
+                "tokens": ledger.summary(),
+                **source_provenance(),
+            },
+        )
+        print(f"요약  {summary}")
         print(f"토큰 합계 {ledger.total:,}")
         print(f"판정  {out} ({len(judged)}행)")
         return

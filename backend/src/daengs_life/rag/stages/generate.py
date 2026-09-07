@@ -370,8 +370,14 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
         model=name, contents=build_prompt(question, hits, dog=dog, screening=screening),
         # **스키마를 붙여서 받는다** (RAG-055). 프롬프트로 JSON 을 부탁하는 것과 다르다 —
         # 부탁은 모델이 산문으로 새면 그만이고, 그 새는 날이 하필 거절해야 할 질문일 수 있다
-        config=types.GenerateContentConfig(response_mime_type="application/json",
-                                           response_schema=Verdict),
+        # **온도는 설정이 있을 때만 넣는다.** `None` 이면 이 인자 자체가 안 붙어 지금까지와
+        # 같은 호출이 된다 — 랩 비교 축을 건드리지 않는 조건이다 (#314).
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=Verdict,
+            **({} if config.settings.generation_temperature is None
+               else {"temperature": config.settings.generation_temperature}),
+        ),
     )
     verdict = parse_verdict((resp.text or "").strip())
     if verdict is None:

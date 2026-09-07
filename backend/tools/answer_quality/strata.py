@@ -23,12 +23,19 @@ _QUESTIONS_PER_STYLE_SPECIALIZED = 2
 _QUESTIONS_PER_STYLE_FALLBACK = 3
 
 
+#: 질문 세트. **`questions_v1.jsonl` 은 동결돼 있고 그 sha256 이 #277 의 답변 메타에 박혀 있습니다** —
+#: 주제를 더해서 그 파일의 "모든 계층을 덮는다" 를 깨면 #277 의 출처 추적이 끊깁니다. 그래서 새 주제는
+#: 자기 세트에 들어가고, 세트마다 질문 파일이 따로입니다 (#314).
+QuestionSet = Literal["v1", "screening"]
+
+
 @dataclass(frozen=True)
 class Topic:
     name: str
     description: str
     expected_route_kind: RouteKind
     needs_location: bool = False
+    question_set: QuestionSet = "v1"
 
     @property
     def questions_per_style(self) -> int:
@@ -45,6 +52,11 @@ class Style:
     without_location: bool = False
 
 
+#: `pet_insurance_skin` 은 #314 가 더한 주제다. 다른 주제와 달리 **판정 컨텍스트가 답을 가를 수
+#: 있는 유일한 자리**라서 있다 — 코퍼스에서 피부병을 명시한 보장 조항(KB반려행복펫보험 반려견
+#: 피부병 확장보장 추가특별약관 제1조 ②)과 그 면책 짝(치료비 특별약관 제3조 6·7호)이 **경과일**로
+#: 갈리기 때문이다. 조례·보조금 쪽에는 그런 갈래가 없어 판정을 넣어도 같은 답이 나온다
+#: (`evals/answer_quality/screening_corpus_survey.md`).
 TOPICS: tuple[Topic, ...] = (
     Topic(
         "training",
@@ -77,6 +89,14 @@ TOPICS: tuple[Topic, ...] = (
         "눈에 보이는 피부 상태(발진, 탈모, 딱지, 붉은 반점)를 사진으로 봐 달라거나, 걷는 모습"
         "(절뚝임, 다리 절기, 비대칭, 자세)을 영상으로 분석해 달라는 요청",
         "specialized",
+    ),
+    Topic(
+        "pet_insurance_skin",
+        "펫보험이 피부병(피부염, 발진, 탈모, 외이염, 알러지)을 보장하는지 — 가입 전부터 있던 "
+        "증상은 어떻게 되는지, 가입하고 며칠 뒤부터 보장되는지, 면책 기간이 있는지 같은 "
+        "**보장 여부와 시점**을 묻는 질문",
+        "specialized",
+        question_set="screening",
     ),
     Topic(
         "general_care",
@@ -177,6 +197,16 @@ class Stratum:
 
 STRATA: tuple[Stratum, ...] = tuple(Stratum(topic, style) for topic in TOPICS for style in STYLES)
 STRATA_BY_ID: dict[str, Stratum] = {stratum.id: stratum for stratum in STRATA}
+
+
+def strata_for_set(question_set: QuestionSet) -> tuple[Stratum, ...]:
+    """한 질문 파일이 덮어야 하는 계층. **파일과 세트는 1:1 입니다.**
+
+    `resolve_strata` 가 여전히 `STRATA` 전체를 보는 것은 의도입니다 — `--strata` 로 세트를
+    가로질러 고르는 것은 막을 이유가 없고, 막으면 연기 시험이 불편해집니다. 덮는 범위를
+    따지는 자리(질문 생성 · 동결 파일 검사)만 이 함수를 씁니다.
+    """
+    return tuple(s for s in STRATA if s.topic.question_set == question_set)
 TOPICS_BY_NAME: dict[str, Topic] = {topic.name: topic for topic in TOPICS}
 STYLES_BY_NAME: dict[str, Style] = {style.name: style for style in STYLES}
 
@@ -209,9 +239,11 @@ __all__ = [
     "STYLES_BY_NAME",
     "TOPICS",
     "TOPICS_BY_NAME",
+    "QuestionSet",
     "RouteKind",
     "Stratum",
     "Style",
     "Topic",
     "resolve_strata",
+    "strata_for_set",
 ]

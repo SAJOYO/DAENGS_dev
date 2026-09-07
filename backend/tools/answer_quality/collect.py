@@ -85,6 +85,77 @@ def apply_flag(settings_obj: Any, flag: str) -> dict[str, Any]:
     return {"requested": flag, "setting_present": True, "effective": flag}
 
 
+#: `--screening` 이 받는 판정. `ScreeningContext` 와 같은 값이라야 planner 가 payload 로 옮긴다
+#: (`orchestration/planner.py` `_SCREENING_VERDICTS`). 여기서 좁혀 두면 오타가 조용히 무시되는 대신
+#: 즉시 멈춘다 — 무시되면 "판정 있음" 이라고 적힌 파일이 "없음" 을 담는다.
+SCREENING_VERDICTS = ("normal", "abnormal", "retake")
+
+
+def parse_screening(raw: str | None) -> dict[str, Any] | None:
+    """`--screening abnormal:3` → `{"verdict": "abnormal", "days_ago": 3}`. 없으면 None.
+
+    **계층이 아니라 수집 옵션인 것이 설계다** (#314). 짝이 성립하려면 두 실행의 **질문 문장이
+    같아야** 하는데, 계층으로 나누면 생성기가 서로 다른 질문을 만든다. 같은 `questions_v1.jsonl`
+    을 판정 있이/없이 두 번 돌리는 것이 `--flag on/off` 와 같은 모양이다.
+    """
+    if raw is None:
+        return None
+    verdict, _, days = raw.partition(":")
+    if verdict not in SCREENING_VERDICTS:
+        raise ValueError(f"--screening 의 판정은 {'|'.join(SCREENING_VERDICTS)} 입니다: {verdict!r}")
+    if not days.isdigit():
+        raise ValueError(f"--screening 의 경과일은 0 이상 정수입니다: {days!r}")
+    return {"verdict": verdict, "days_ago": int(days)}
+
+
+def apply_life_temperature(value: float | None) -> dict[str, Any]:
+    """Life 생성 온도를 이 프로세스에서 고정한다. `apply_flag` 와 같은 자리·같은 모양.
+
+    `None` 이면 아무것도 안 건드린다 — 서빙 기본값 그대로이고 호출도 지금까지와 같다.
+    """
+    from daengs_life.rag.core import config as rag_config
+
+    if value is None:
+        return {"requested": None, "effective": "serving default"}
+    if not 0.0 <= value <= 2.0:
+        raise ValueError(f"--life-temperature 는 0.0~2.0 입니다: {value!r}")
+    rag_config.settings.generation_temperature = value
+    return {"requested": value, "effective": value}
+
+
+def require_screening_wiring() -> None:
+    """판정을 읽는 배선이 이 브랜치에 있는지 확인한다. 없으면 **여기서 멈춘다.**
+
+    `apply_flag` 와 같은 판단이고 같은 사고를 막는다 — 조용히 무시하면 "판정 있음" 이라고 적힌
+    파일이 "없음" 을 담는다. 2026-09-07 에 실제로 그렇게 한 사이클(14문항 × 2, 약 3분)을 버렸다:
+    `context["screening"]` 은 채워졌는데 `LifePayload` 에 칸이 없어 아무도 안 읽었고, 두 실행의
+    프롬프트가 같았다. 파일만 보고는 알 수 없었다.
+
+    `LifePayload` 를 보는 이유는 그것이 배선의 **마지막** 자리이기 때문이다 — planner 가 옮겨도
+    payload 에 칸이 없으면 거기서 사라진다.
+    """
+    from daengs_backend.orchestration.contracts import LifePayload
+
+    if "screening" not in LifePayload.model_fields:
+        raise RuntimeError(
+            "LifePayload 에 screening 칸이 없습니다 — 이 브랜치에는 #283 배선이 없어 "
+            "--screening 이 아무 일도 하지 않습니다. #283 을 머지하거나 그 위에서 돌리세요."
+        )
+
+
+def with_screening(
+    cases: Sequence[QuestionCase], screening: Mapping[str, Any] | None
+) -> list[dict[str, Any]]:
+    """질문마다 오케스트레이터에 넘길 context 를 만든다. 판정이 없으면 계층 것 그대로.
+
+    `QuestionCase.context` 를 고치지 않는 이유: 그쪽은 `context == stratum.context()` 를 검증하고
+    있어서 판정을 넣으면 질문 파일이 통째로 무효가 된다. 주입은 **읽은 뒤** 한다.
+    """
+    if screening is None:
+        return [dict(case.context) for case in cases]
+    return [{**case.context, "screening": dict(screening)} for case in cases]
+
+
 def _general_adapter() -> Any:
     """#279 의 일반 폴백 어댑터. 이 브랜치에 없으면 무엇이 없는지 말하고 멈춘다."""
     capability = getattr(CapabilityName, "GENERAL", None)
@@ -143,7 +214,11 @@ def select_questions(
 
 
 async def run_question(
-    orchestrator: Any, case: QuestionCase, meter: Meter, sink: dict[str, Any]
+    orchestrator: Any,
+    case: QuestionCase,
+    meter: Meter,
+    sink: dict[str, Any],
+    context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """질문 하나. 실패해도 다음으로 넘어가되 RUNNER_ERROR 로 남긴다."""
     meter.reset()
@@ -163,7 +238,9 @@ async def run_question(
     }
     try:
         response = await orchestrator.run(
-            query=case.query, principal=_PRINCIPAL, context=dict(case.context)
+            query=case.query,
+            principal=_PRINCIPAL,
+            context=dict(case.context if context is None else context),
         )
         row.update(
             status=response.status.value,
@@ -190,13 +267,21 @@ async def collect(
     sink: dict[str, Any],
     *,
     ledger: TokenLedger,
+    contexts: Sequence[Mapping[str, Any]] | None = None,
     log: Callable[[str], None] = print,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    """순차 실행. 예산을 넘으면 거기까지의 행과 멈춘 이유를 돌려준다."""
+    """순차 실행. 예산을 넘으면 거기까지의 행과 멈춘 이유를 돌려준다.
+
+    `contexts` 는 `cases` 와 같은 길이여야 한다 — 짝이 어긋나면 판정이 다른 질문에 붙는다.
+    """
+    if contexts is not None and len(contexts) != len(cases):
+        raise ValueError("contexts 는 cases 와 같은 길이여야 합니다")
     rows: list[dict[str, Any]] = []
     stopped: str | None = None
     for index, case in enumerate(cases, start=1):
-        row = await run_question(orchestrator, case, meter, sink)
+        row = await run_question(
+            orchestrator, case, meter, sink, None if contexts is None else contexts[index - 1]
+        )
         rows.append(row)
         marker = "ok" if row["error"] is None else "ERR"
         log(
@@ -291,20 +376,44 @@ def main() -> None:
     parser.add_argument("--strata", nargs="*", help="계층 id · 주제 · 문체 이름으로 거른다")
     parser.add_argument("--limit", type=int, default=None, help="앞에서 N개만 (연기 시험)")
     parser.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
+    parser.add_argument(
+        "--life-temperature",
+        type=float,
+        default=None,
+        metavar="T",
+        help="Life 생성 온도를 이 프로세스에서 고정한다 (측정용). 생략하면 서빙 기본값 그대로. "
+        "짝을 비교할 때는 0 을 권한다 — 안 그러면 같은 프롬프트로도 답이 달라져 판정 효과와 "
+        "생성 잡음을 못 가른다 (#314 실측: 같은 입력 14/14 전부 다름)",
+    )
+    parser.add_argument(
+        "--screening",
+        default=None,
+        metavar="VERDICT:DAYS",
+        help="판정 컨텍스트를 모든 질문에 주입한다 (예: abnormal:3). 생략하면 판정 없음 — "
+        "같은 질문 파일로 두 번 돌린 짝이 #314 의 측정 대상이다",
+    )
     args = parser.parse_args()
 
     flag = apply_flag(settings, args.flag)
+    screening = parse_screening(args.screening)
+    if screening is not None:
+        require_screening_wiring()
+    life_temperature = apply_life_temperature(args.life_temperature)
     cases = select_questions(load_questions(args.questions), strata=args.strata, limit=args.limit)
+    contexts = with_screening(cases, screening)
     meter = Meter()
     sink: dict[str, Any] = {"plan": None}
     orchestrator = build_orchestrator(args.adapters, meter, sink)
     ledger = TokenLedger(budget=args.token_budget, log=print)
     print(
         f"질문 {len(cases)}건 · 어댑터 {args.adapters} · 플래그 {flag['effective']} · "
+        f"판정 {args.screening or '없음'} · Life 온도 {life_temperature['effective']} · "
         f"라벨 {args.label}"
     )
     started = utc_now()
-    rows, stopped = asyncio.run(collect(cases, orchestrator, meter, sink, ledger=ledger))
+    rows, stopped = asyncio.run(
+        collect(cases, orchestrator, meter, sink, ledger=ledger, contexts=contexts)
+    )
     meta = {
         "benchmark_id": BENCHMARK_ID,
         "card": CARD,
@@ -315,6 +424,11 @@ def main() -> None:
         "requested_count": len(cases),
         "limited": bool(args.limit),
         "strata_filter": args.strata or None,
+        # **판정은 메타에 남아야 한다** — 두 파일이 질문도 플래그도 같고 이 값만 다르므로,
+        # 안 적으면 나중에 어느 쪽이 "판정 있음" 인지 파일 이름으로만 알게 된다 (#314).
+        "screening": screening,
+        # 온도도 남긴다 — 짝의 두 파일이 다른 온도로 모였으면 비교가 성립하지 않는다 (#314).
+        "life_temperature": life_temperature,
         "started_at": started,
         "finished_at": utc_now(),
         "stopped": stopped,

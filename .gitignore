@@ -290,3 +290,7 @@ _data/
 *.webm
 *.mov
 *.avi
+
+# curl 로 손 시험할 때 생기는 것들 — 세션 쿠키가 들어갑니다 (#314 에서 실수로 커밋될 뻔했음)
+cookies.txt
+query_body.json

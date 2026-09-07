@@ -1,0 +1,1041 @@
+{
+  "description": "Synthetic out-and-back GPS with an explicit pause; production v4 contract fixture, not a user walk.",
+  "started_at": "2026-09-07T00:00:00+00:00",
+  "ended_at": "2026-09-07T00:21:20+00:00",
+  "observations": [
+    {
+      "client_seq": 0,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:00Z",
+      "lat": 37.5,
+      "lng": 127.0,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 1,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:10Z",
+      "lat": 37.5,
+      "lng": 127.000113,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 2,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:20Z",
+      "lat": 37.5,
+      "lng": 127.000226,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 3,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:30Z",
+      "lat": 37.5,
+      "lng": 127.000339,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 4,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:40Z",
+      "lat": 37.5,
+      "lng": 127.000452,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 5,
+      "chain_index": 0,
+      "at": "2026-09-07T00:00:50Z",
+      "lat": 37.5,
+      "lng": 127.000565,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 6,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:00Z",
+      "lat": 37.5,
+      "lng": 127.000678,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 7,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:10Z",
+      "lat": 37.5,
+      "lng": 127.000791,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 8,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:20Z",
+      "lat": 37.5,
+      "lng": 127.000904,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 9,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:30Z",
+      "lat": 37.5,
+      "lng": 127.001017,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 10,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:40Z",
+      "lat": 37.5,
+      "lng": 127.00113,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 11,
+      "chain_index": 0,
+      "at": "2026-09-07T00:01:50Z",
+      "lat": 37.5,
+      "lng": 127.001243,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 12,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:00Z",
+      "lat": 37.5,
+      "lng": 127.001356,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 13,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:10Z",
+      "lat": 37.5,
+      "lng": 127.001469,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 14,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:20Z",
+      "lat": 37.5,
+      "lng": 127.001582,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 15,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:30Z",
+      "lat": 37.5,
+      "lng": 127.001695,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 16,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:40Z",
+      "lat": 37.5,
+      "lng": 127.001808,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 17,
+      "chain_index": 0,
+      "at": "2026-09-07T00:02:50Z",
+      "lat": 37.5,
+      "lng": 127.001921,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 18,
+      "chain_index": 0,
+      "at": "2026-09-07T00:03:00Z",
+      "lat": 37.5,
+      "lng": 127.002034,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 19,
+      "chain_index": 0,
+      "at": "2026-09-07T00:03:10Z",
+      "lat": 37.5,
+      "lng": 127.002147,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 20,
+      "chain_index": 0,
+      "at": "2026-09-07T00:07:20Z",
+      "lat": 37.5,
+      "lng": 127.00226,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 21,
+      "chain_index": 0,
+      "at": "2026-09-07T00:07:30Z",
+      "lat": 37.5,
+      "lng": 127.002373,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 22,
+      "chain_index": 0,
+      "at": "2026-09-07T00:07:40Z",
+      "lat": 37.5,
+      "lng": 127.002486,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 23,
+      "chain_index": 0,
+      "at": "2026-09-07T00:07:50Z",
+      "lat": 37.5,
+      "lng": 127.002599,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 24,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:00Z",
+      "lat": 37.5,
+      "lng": 127.002712,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 25,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:10Z",
+      "lat": 37.5,
+      "lng": 127.002825,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 26,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:20Z",
+      "lat": 37.5,
+      "lng": 127.002938,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 27,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:30Z",
+      "lat": 37.5,
+      "lng": 127.003051,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 28,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:40Z",
+      "lat": 37.5,
+      "lng": 127.003164,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 29,
+      "chain_index": 0,
+      "at": "2026-09-07T00:08:50Z",
+      "lat": 37.5,
+      "lng": 127.003277,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 30,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:00Z",
+      "lat": 37.5,
+      "lng": 127.00339,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 31,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:10Z",
+      "lat": 37.5,
+      "lng": 127.003503,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 32,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:20Z",
+      "lat": 37.5,
+      "lng": 127.003616,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 33,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:30Z",
+      "lat": 37.5,
+      "lng": 127.003729,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 34,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:40Z",
+      "lat": 37.5,
+      "lng": 127.003842,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 35,
+      "chain_index": 0,
+      "at": "2026-09-07T00:09:50Z",
+      "lat": 37.5,
+      "lng": 127.003955,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 36,
+      "chain_index": 0,
+      "at": "2026-09-07T00:10:00Z",
+      "lat": 37.5,
+      "lng": 127.004068,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 37,
+      "chain_index": 0,
+      "at": "2026-09-07T00:10:10Z",
+      "lat": 37.5,
+      "lng": 127.004181,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 38,
+      "chain_index": 0,
+      "at": "2026-09-07T00:10:20Z",
+      "lat": 37.5,
+      "lng": 127.004294,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 39,
+      "chain_index": 0,
+      "at": "2026-09-07T00:10:30Z",
+      "lat": 37.5,
+      "lng": 127.004407,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 40,
+      "chain_index": 0,
+      "at": "2026-09-07T00:10:40Z",
+      "lat": 37.5,
+      "lng": 127.00452,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 41,
+      "chain_index": 1,
+      "at": "2026-09-07T00:14:50Z",
+      "lat": 37.5,
+      "lng": 127.004407,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 42,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:00Z",
+      "lat": 37.5,
+      "lng": 127.004294,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 43,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:10Z",
+      "lat": 37.5,
+      "lng": 127.004181,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 44,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:20Z",
+      "lat": 37.5,
+      "lng": 127.004068,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 45,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:30Z",
+      "lat": 37.5,
+      "lng": 127.003955,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 46,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:40Z",
+      "lat": 37.5,
+      "lng": 127.003842,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 47,
+      "chain_index": 1,
+      "at": "2026-09-07T00:15:50Z",
+      "lat": 37.5,
+      "lng": 127.003729,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 48,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:00Z",
+      "lat": 37.5,
+      "lng": 127.003616,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 49,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:10Z",
+      "lat": 37.5,
+      "lng": 127.003503,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 50,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:20Z",
+      "lat": 37.5,
+      "lng": 127.00339,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 51,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:30Z",
+      "lat": 37.5,
+      "lng": 127.003277,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 52,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:40Z",
+      "lat": 37.5,
+      "lng": 127.003164,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 53,
+      "chain_index": 1,
+      "at": "2026-09-07T00:16:50Z",
+      "lat": 37.5,
+      "lng": 127.003051,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 54,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:00Z",
+      "lat": 37.5,
+      "lng": 127.002938,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 55,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:10Z",
+      "lat": 37.5,
+      "lng": 127.002825,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 56,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:20Z",
+      "lat": 37.5,
+      "lng": 127.002712,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 57,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:30Z",
+      "lat": 37.5,
+      "lng": 127.002599,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 58,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:40Z",
+      "lat": 37.5,
+      "lng": 127.002486,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 59,
+      "chain_index": 1,
+      "at": "2026-09-07T00:17:50Z",
+      "lat": 37.5,
+      "lng": 127.002373,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 60,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:00Z",
+      "lat": 37.5,
+      "lng": 127.00226,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 61,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:10Z",
+      "lat": 37.5,
+      "lng": 127.002147,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 62,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:20Z",
+      "lat": 37.5,
+      "lng": 127.002034,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 63,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:30Z",
+      "lat": 37.5,
+      "lng": 127.001921,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 64,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:40Z",
+      "lat": 37.5,
+      "lng": 127.001808,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 65,
+      "chain_index": 1,
+      "at": "2026-09-07T00:18:50Z",
+      "lat": 37.5,
+      "lng": 127.001695,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 66,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:00Z",
+      "lat": 37.5,
+      "lng": 127.001582,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 67,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:10Z",
+      "lat": 37.5,
+      "lng": 127.001469,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 68,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:20Z",
+      "lat": 37.5,
+      "lng": 127.001356,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 69,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:30Z",
+      "lat": 37.5,
+      "lng": 127.001243,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 70,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:40Z",
+      "lat": 37.5,
+      "lng": 127.00113,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 71,
+      "chain_index": 1,
+      "at": "2026-09-07T00:19:50Z",
+      "lat": 37.5,
+      "lng": 127.001017,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 72,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:00Z",
+      "lat": 37.5,
+      "lng": 127.000904,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 73,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:10Z",
+      "lat": 37.5,
+      "lng": 127.000791,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 74,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:20Z",
+      "lat": 37.5,
+      "lng": 127.000678,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 75,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:30Z",
+      "lat": 37.5,
+      "lng": 127.000565,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 76,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:40Z",
+      "lat": 37.5,
+      "lng": 127.000452,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 77,
+      "chain_index": 1,
+      "at": "2026-09-07T00:20:50Z",
+      "lat": 37.5,
+      "lng": 127.000339,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 78,
+      "chain_index": 1,
+      "at": "2026-09-07T00:21:00Z",
+      "lat": 37.5,
+      "lng": 127.000226,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 79,
+      "chain_index": 1,
+      "at": "2026-09-07T00:21:10Z",
+      "lat": 37.5,
+      "lng": 127.000113,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    },
+    {
+      "client_seq": 80,
+      "chain_index": 1,
+      "at": "2026-09-07T00:21:20Z",
+      "lat": 37.5,
+      "lng": 127.0,
+      "accuracy_m": 5.0,
+      "is_mock": false
+    }
+  ],
+  "bundle": {
+    "format": "walk-storyboard-candidates-v4",
+    "session_id": "anchor-fixture",
+    "source_revision": "23c03b7471770cfa6d3d2ce540857c06f83a0d6ab5e9638f02cba5f7269147ae",
+    "synthetic": false,
+    "scenes": [
+      {
+        "id": "start",
+        "revision": "407935be1e61859ca4fe365e263f9ddf13bf80fcd727fa2e92a7e2ce41394b98",
+        "started_at": "2026-09-07T00:00:00Z",
+        "ended_at": "2026-09-07T00:00:00Z",
+        "route": null,
+        "reasons": [
+          "session_boundary"
+        ],
+        "title": "산책 시작",
+        "facts": [
+          {
+            "id": "start:fact",
+            "kind": "walk",
+            "text": "산책 시작 기록",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 0,
+          "chain_index": 0,
+          "at": "2026-09-07T00:00:00Z",
+          "lat": 37.5,
+          "lng": 127.0
+        }
+      },
+      {
+        "id": "scene-e5afb9f7178b1e76c57acf6c",
+        "revision": "71ad2a13daced93caba16e12e383490eafe2cee5644bf6793720d619596ca7fa",
+        "started_at": "2026-09-07T00:01:30Z",
+        "ended_at": "2026-09-07T00:01:30Z",
+        "route": {
+          "start_m": 89.7165532073972,
+          "end_m": 89.7165532073972,
+          "block_id": 0
+        },
+        "reasons": [
+          "distance_fill"
+        ],
+        "title": "경로 90m 주변",
+        "facts": [
+          {
+            "id": "scene-e5afb9f7178b1e76c57acf6c:fact",
+            "kind": "walk",
+            "text": "산책 경로 90m 부근의 관측 지점이에요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 9,
+          "chain_index": 0,
+          "at": "2026-09-07T00:01:30Z",
+          "lat": 37.5,
+          "lng": 127.001017
+        }
+      },
+      {
+        "id": "scene-eeea3d4f9026f066339fd34b",
+        "revision": "707ba02b35aca9975f64a036d1fc0d0cb885653240b441d8aa9a9a048d56984a",
+        "started_at": "2026-09-07T00:03:10Z",
+        "ended_at": "2026-09-07T00:07:20Z",
+        "route": null,
+        "reasons": [
+          "observation_gap"
+        ],
+        "title": "위치 기록이 비어 있는 구간",
+        "facts": [
+          {
+            "id": "scene-eeea3d4f9026f066339fd34b:fact",
+            "kind": "coverage",
+            "text": "이 사이의 이동 경로는 확인할 수 없어요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": null
+      },
+      {
+        "id": "scene-9794f4531b8058c5bf1275d5",
+        "revision": "9588c9133316faee538c2d62e5ae48b3707a3daaf4290a2db024df3a9d9c739a",
+        "started_at": "2026-09-07T00:09:00Z",
+        "ended_at": "2026-09-07T00:09:00Z",
+        "route": {
+          "start_m": 289.08667144327177,
+          "end_m": 289.08667144327177,
+          "block_id": 1
+        },
+        "reasons": [
+          "distance_fill"
+        ],
+        "title": "경로 289m 주변",
+        "facts": [
+          {
+            "id": "scene-9794f4531b8058c5bf1275d5:fact",
+            "kind": "walk",
+            "text": "산책 경로 289m 부근의 관측 지점이에요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 30,
+          "chain_index": 0,
+          "at": "2026-09-07T00:09:00Z",
+          "lat": 37.5,
+          "lng": 127.00339
+        }
+      },
+      {
+        "id": "scene-400802428de756bb7f150fad",
+        "revision": "c36c57b712646a20304add8a5e4bb7bbf197d01c79e5b56430dea9ba6675e660",
+        "started_at": "2026-09-07T00:18:00Z",
+        "ended_at": "2026-09-07T00:18:00Z",
+        "route": {
+          "start_m": 578.1733428877972,
+          "end_m": 578.1733428877972,
+          "block_id": 2
+        },
+        "reasons": [
+          "distance_fill"
+        ],
+        "title": "경로 578m 주변",
+        "facts": [
+          {
+            "id": "scene-400802428de756bb7f150fad:fact",
+            "kind": "walk",
+            "text": "산책 경로 578m 부근의 관측 지점이에요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 60,
+          "chain_index": 1,
+          "at": "2026-09-07T00:18:00Z",
+          "lat": 37.5,
+          "lng": 127.00226
+        }
+      },
+      {
+        "id": "scene-f39c10f9620d022c0c51151e",
+        "revision": "528954f61f80c26fc6d32bb921d5c37512f34170514c20891ca15031999b2c38",
+        "started_at": "2026-09-07T00:20:10Z",
+        "ended_at": "2026-09-07T00:20:10Z",
+        "route": {
+          "start_m": 707.7639197423692,
+          "end_m": 707.7639197423692,
+          "block_id": 2
+        },
+        "reasons": [
+          "distance_fill"
+        ],
+        "title": "경로 708m 주변",
+        "facts": [
+          {
+            "id": "scene-f39c10f9620d022c0c51151e:fact",
+            "kind": "walk",
+            "text": "산책 경로 708m 부근의 관측 지점이에요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 73,
+          "chain_index": 1,
+          "at": "2026-09-07T00:20:10Z",
+          "lat": 37.5,
+          "lng": 127.000791
+        }
+      },
+      {
+        "id": "end",
+        "revision": "99bb93b5e800bc1e2e6f37845c6e96fc472bde5db0dc54d3117cc77b3a4d4466",
+        "started_at": "2026-09-07T00:21:20Z",
+        "ended_at": "2026-09-07T00:21:20Z",
+        "route": null,
+        "reasons": [
+          "session_boundary"
+        ],
+        "title": "산책 마무리",
+        "facts": [
+          {
+            "id": "end:fact",
+            "kind": "walk",
+            "text": "수용 이동거리 778m",
+            "source_ids": [
+              "local-walk"
+            ]
+          },
+          {
+            "id": "end:selection:0",
+            "kind": "coverage",
+            "text": "환경 조회 지점 4곳을 선택했어요. 최소 목표는 4곳이에요. 장면 수나 발견한 시설 수를 뜻하지 않아요.",
+            "source_ids": [
+              "local-walk"
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "id": "local-walk",
+            "provider": "walk-observation",
+            "status": "known",
+            "captured_at": null,
+            "url": null
+          }
+        ],
+        "entry": null,
+        "observation": {
+          "client_seq": 80,
+          "chain_index": 1,
+          "at": "2026-09-07T00:21:20Z",
+          "lat": 37.5,
+          "lng": 127.0
+        }
+      }
+    ],
+    "selection": {
+      "minimum_target": 4,
+      "selected_count": 4,
+      "minimum_met": true,
+      "shortfall_reason": null,
+      "coverage_met": true,
+      "longest_unread_m": 139.4,
+      "max_unread_m": 300.0,
+      "max_anchors": 8,
+      "deferred_action_count": 0
+    },
+    "title": null,
+    "title_fact_ids": []
+  }
+}

@@ -6,7 +6,7 @@ import json
 from pydantic import Field, field_validator
 
 from daengs_backend.config import settings
-from daengs_walk.storyboard import StoryboardBundleV3, StrictModel, fingerprint
+from daengs_walk.storyboard import StoryboardBundleV3, StoryboardBundleV4, StrictModel, fingerprint
 
 MODEL = "gemini-3.1-flash-lite"
 TIMEOUT_SECONDS = 12
@@ -91,8 +91,11 @@ async def generate_headings(payload):
 
 async def title_storyboard(bundle, generate=generate_headings):
     payload = bundle.model_dump(mode="json")
-    payload["format"] = "walk-storyboard-candidates-v3"
-    fallback = StoryboardBundleV3.model_validate(payload)
+    bundle_type = (
+        StoryboardBundleV4 if isinstance(bundle, StoryboardBundleV4) else StoryboardBundleV3
+    )
+    payload["format"] = bundle_type.model_fields["format"].default
+    fallback = bundle_type.model_validate(payload)
     facts = title_input(bundle)
     if len(json.dumps(facts, ensure_ascii=False).encode()) > MAX_INPUT_BYTES:
         return fallback  # Never truncate a walk silently and title only a partial story.
@@ -120,7 +123,7 @@ async def title_storyboard(bundle, generate=generate_headings):
         payload["title"] = result.title.text
         payload["title_fact_ids"] = result.title.fact_ids
         payload["source_revision"] = fingerprint(payload)
-        return StoryboardBundleV3.model_validate(payload)
+        return bundle_type.model_validate(payload)
     except asyncio.CancelledError:
         raise
     except Exception:  # noqa: BLE001 - optional provider failure cannot discard factual scenes

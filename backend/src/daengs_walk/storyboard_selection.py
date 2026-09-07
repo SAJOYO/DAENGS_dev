@@ -142,6 +142,7 @@ def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, star
             )
             return False
         chosen = {k: candidate[k] for k in ("route_m", "block", "elapsed_s", "location")}
+        chosen["observation"] = candidate.get("observation")
         chosen.update(
             id=f"anchor-{len(selected) + 1}",
             reasons=[candidate["reason"]],
@@ -173,6 +174,7 @@ def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, star
         add(
             dict(
                 closest,
+                observation=None,  # An entry location/time is not the nearest GPS sample's identity.
                 location=entry["location"],
                 reason="action",
                 elapsed_s=entry["elapsed_s"],

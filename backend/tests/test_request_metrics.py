@@ -176,7 +176,14 @@ class TestFailures:
             raise HTTPException(404, "대화를 찾을 수 없습니다.")
 
         with pytest.raises(HTTPException):
-            await service.measured(None, principal_kind="APP_USER", run=_raise)
+            await service.measured(
+                None,
+                principal_kind="APP_USER",
+                run=_raise,
+                # **부르는 쪽이 정합니다.** 서비스는 `HTTPException` 이 무엇인지 모릅니다 —
+                # 라우터가 넘기는 것과 같은 값을 여기서도 넘깁니다.
+                ignore=(HTTPException,),
+            )
 
         assert recorded_metrics == []
 

@@ -103,24 +103,28 @@ async def measured(
     *,
     principal_kind: str,
     run: Callable[[], Awaitable[AssistantResponse]],
+    ignore: tuple[type[BaseException], ...] = (),
 ) -> AssistantResponse:
     """`run()` 을 재고, 결과를 한 행으로 남기고, 결과를 그대로 돌려줍니다.
 
-    **`run()` 의 예외를 바꾸지 않습니다.** 라우터의 `HTTPException` 들은 계약된 클라이언트
-    오류(없는 대화 · 중복 message id)이고 오케스트레이션 지표가 아니므로 **안 남깁니다.**
+    **`run()` 의 예외를 바꾸지 않습니다.** `ignore` 에 든 것은 그냥 다시 던지고,
     그 밖의 예외는 `error_category` 로 한 행 남기고 **그대로 다시 던집니다** — 여기서
     삼키면 500 이 200 이 됩니다.
+
+    **`ignore` 를 부르는 쪽이 정합니다.** 이 모듈이 `HTTPException` 을 알면 services 가
+    프레임워크를 물게 되는데, 이 저장소의 `services/` 38개 중 fastapi 를 import 하는 것은
+    하나도 없습니다. 그리고 **"무엇이 계약된 클라이언트 오류인가" 는 HTTP 경계의 일**입니다
+    — `routers/assistant.py` 가 `include_route_trace` 를 자기가 정하는 것과 같은 이유입니다
+    (권한이 그쪽 소유이듯 상태 코드도 그쪽 소유입니다).
 
     지연은 `perf_counter` 로 잽니다. 벽시계(`datetime.now`)로 재면 NTP 보정이 들어올 때
     음수가 나오고, 그런 행이 섞이면 평균이 조용히 틀립니다.
     """
-    from fastapi import HTTPException  # 순환 import 를 피해 여기서 부릅니다.
-
     started = time.perf_counter()
     try:
         response = await run()
-    except HTTPException:
-        # 계약된 클라이언트 오류입니다. 이 표는 "오케스트레이션이 어땠나" 를 셉니다.
+    except ignore:
+        # 부르는 쪽이 "이건 오케스트레이션 지표가 아니다" 라고 알려 준 것들입니다.
         raise
     except Exception as exc:
         await _write(

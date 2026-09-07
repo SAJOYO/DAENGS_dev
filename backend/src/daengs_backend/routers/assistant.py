@@ -165,10 +165,16 @@ async def query(
     """
     # **지표는 곁다리다.** 못 남겨도 답변은 나간다 — 그 규칙은
     # `services/request_metrics.py` 머리말에 있고 여기서는 감싸기만 한다.
+    #
+    # `ignore=(HTTPException,)` 를 **여기서** 넘기는 것은, "무엇이 계약된 클라이언트
+    # 오류인가"가 HTTP 경계의 일이기 때문이다 — 아래 `_dispatch` 의 `except` 열둘이
+    # 전부 그것이고(없는 대화 · 중복 message id · 한도 초과), 그건 "오케스트레이션이
+    # 어땠나" 가 아니라 "요청이 잘못 왔다" 이다. services 가 fastapi 를 알 이유도 없다.
     return await metrics_service.measured(
         metrics_factory,
         principal_kind=_principal_context(principal).kind,
         run=lambda: _dispatch(body, principal, service, session_factory),
+        ignore=(HTTPException,),
     )
 
 

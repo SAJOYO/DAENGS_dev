@@ -142,16 +142,54 @@ $verify$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 사람이 눈으로 보는 자리. 위 단언이 통과한 뒤에만 여기까지 온다.
+-- **이 아래는 이 파일이 원래 갖고 있던 질의 그대로다** — 단언을 더하면서
+-- 갈아치우지 않는다. 카탈로그로는 못 보는 것을 보기 때문이다
+-- (jsonb 키 집합 · 표 사이의 신원 일치 · 사진 삭제 대기 …).
 -- ─────────────────────────────────────────────────────────────────────────
 
--- 시도의 상태 분포와 인정된 방문 수.
-SELECT (SELECT count(*) FROM territory_attempts) AS attempts,
-       (SELECT count(*) FROM territory_attempts WHERE status = 'VERIFIED') AS verified_attempts,
-       (SELECT count(*) FROM territory_verified_visits) AS verified_visits;
+SELECT count(*) AS invalid_attempt_state
+FROM territory_attempts
+WHERE status NOT IN ('PENDING_UPLOAD','VISION_PENDING','VERIFIED','REJECTED','FAILED')
+   OR distance_m < 0
+   OR distance_m > 10
+   OR is_mock
+   OR photo_content_type NOT IN ('image/jpeg','image/webp');
 
--- **인정됐는데 방문 행이 없는 시도.** 0이 아니면 워커가 중간에 죽은 것이다
--- (제약이 막는 자리가 아니라 눈으로 본다).
-SELECT count(*) AS verified_without_visit
-FROM territory_attempts a
-WHERE a.status = 'VERIFIED'
-  AND NOT EXISTS (SELECT 1 FROM territory_verified_visits v WHERE v.attempt_id = a.id);
+SELECT count(*) AS terminal_photo_cleanup_pending
+FROM territory_attempts
+WHERE status IN ('VERIFIED', 'REJECTED', 'FAILED')
+  AND photo_redacted_at IS NULL;
+
+SELECT count(*) AS confirmed_without_photo_identity
+FROM territory_attempts
+WHERE status <> 'PENDING_UPLOAD'
+  AND (
+      photo_object_generation IS NULL
+      OR btrim(photo_object_generation) = ''
+      OR photo_size_bytes NOT BETWEEN 1 AND 12582912
+  );
+
+SELECT count(*) AS location_uncertainty_outside_radius
+FROM territory_attempts
+WHERE accuracy_m IS NULL
+   OR accuracy_m < 0
+   OR distance_m + accuracy_m > 10;
+
+SELECT count(*) AS final_without_vision_metadata
+FROM territory_attempts
+WHERE status IN ('VERIFIED', 'REJECTED', 'FAILED')
+  AND (
+      vision_model IS NULL OR btrim(vision_model) = ''
+      OR vision_model_version IS NULL OR btrim(vision_model_version) = ''
+  );
+
+SELECT count(*) AS verified_without_fact
+FROM territory_attempts AS attempt
+LEFT JOIN territory_verified_visits AS visit ON visit.attempt_id = attempt.id
+WHERE attempt.status = 'VERIFIED'
+  AND visit.id IS NULL;
+
+SELECT count(*) AS fact_for_nonverified_attempt
+FROM territory_verified_visits AS visit
+JOIN territory_attempts AS attempt ON attempt.id = visit.attempt_id
+WHERE attempt.status <> 'VERIFIED';

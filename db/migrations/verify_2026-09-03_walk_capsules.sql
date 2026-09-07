@@ -138,15 +138,83 @@ $verify$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 사람이 눈으로 보는 자리. 위 단언이 통과한 뒤에만 여기까지 온다.
+-- **이 아래는 이 파일이 원래 갖고 있던 질의 그대로다** — 단언을 더하면서
+-- 갈아치우지 않는다. 카탈로그로는 못 보는 것을 보기 때문이다
+-- (jsonb 키 집합 · 표 사이의 신원 일치 · 사진 삭제 대기 …).
 -- ─────────────────────────────────────────────────────────────────────────
 
--- 계산 · 캡슐 · 시트 수. 캡슐은 계산당 하나이므로 `analyses` 를 못 넘는다.
-SELECT (SELECT count(*) FROM walk_analyses) AS analyses,
-       (SELECT count(*) FROM walk_capsules) AS capsules,
-       (SELECT count(*) FROM walk_cellophane_sheets) AS sheets,
-       (SELECT count(DISTINCT paint_fp) FROM walk_cellophane_sheets) AS distinct_paints;
+SELECT count(*) AS derived_without_capsule
+FROM walk_analyses AS analysis
+LEFT JOIN walk_capsules AS capsule ON capsule.analysis_id = analysis.id
+WHERE capsule.analysis_id IS NULL;
 
--- 캡슐이 없는 계산. 0이 아닌 것이 정상이다 — 봉인은 계산과 별개 단계다.
-SELECT count(*) AS analyses_without_capsule
-FROM walk_analyses a
-WHERE NOT EXISTS (SELECT 1 FROM walk_capsules c WHERE c.analysis_id = a.id);
+SELECT count(*) AS invalid_capsule_shape
+FROM walk_capsules
+WHERE capsule_version <= 0
+   OR context_version <= 0
+   OR jsonb_typeof(capabilities) <> 'array'
+   OR jsonb_array_length(capabilities) = 0
+   OR jsonb_typeof(trail_context) <> 'object'
+   OR NOT trail_context ?& ARRAY[
+       'context_version',
+       'walk_id',
+       'status',
+       'walked_at',
+       'source_observed_at',
+       'captured_at',
+       'provider',
+       'weather_code',
+       'is_day',
+       'temperature_c',
+       'precipitation_mm',
+       'humidity_pct',
+       'sun_elevation_deg',
+       'failure_reason'
+   ]
+   OR jsonb_typeof(trail_context -> 'context_version') IS DISTINCT FROM 'number'
+   OR jsonb_typeof(trail_context -> 'walk_id') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'status') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'walked_at') IS DISTINCT FROM 'string'
+   OR jsonb_typeof(trail_context -> 'captured_at') IS DISTINCT FROM 'string';
+
+SELECT count(*) AS mismatched_context_identity
+FROM walk_capsules AS capsule
+JOIN walk_analyses AS analysis ON analysis.id = capsule.analysis_id
+WHERE capsule.context_version IS DISTINCT FROM CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'context_version',
+            'integer'
+        )
+        THEN (capsule.trail_context ->> 'context_version')::integer
+        ELSE NULL
+    END
+   OR analysis.walk_id::text IS DISTINCT FROM capsule.trail_context ->> 'walk_id'
+   OR CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'walked_at',
+            'timestamp with time zone'
+        )
+        THEN FALSE
+        ELSE TRUE
+    END
+   OR CASE
+        WHEN pg_input_is_valid(
+            capsule.trail_context ->> 'captured_at',
+            'timestamp with time zone'
+        )
+        THEN capsule.sealed_at <
+            (capsule.trail_context ->> 'captured_at')::timestamptz
+        ELSE TRUE
+    END;
+
+SELECT
+    analysis.walk_id,
+    capsule.analysis_id,
+    capsule.capsule_version,
+    capsule.trail_context ->> 'status' AS context_status,
+    capsule.trail_context ->> 'provider' AS context_provider,
+    capsule.sealed_at
+FROM walk_capsules AS capsule
+JOIN walk_analyses AS analysis ON analysis.id = capsule.analysis_id
+ORDER BY capsule.sealed_at DESC
+LIMIT 10;

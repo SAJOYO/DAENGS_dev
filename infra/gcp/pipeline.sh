@@ -53,11 +53,18 @@ gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1 || \
 for i in 1 2 3 4 5 6; do gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1 && break; sleep 5; done
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
   --member="serviceAccount:${SA_EMAIL}" --role=roles/storage.objectAdmin >/dev/null
-for i in 1 2 3; do                                                              # 동시 실행 확인
-  gcloud projects add-iam-policy-binding "${PROJECT}" \
-    --member="serviceAccount:${SA_EMAIL}" --role=roles/run.viewer >/dev/null && break
+ok=""                                                                            # 동시 실행 확인
+for i in 1 2 3; do
+  if gcloud projects add-iam-policy-binding "${PROJECT}" \
+    --member="serviceAccount:${SA_EMAIL}" --role=roles/run.viewer >/dev/null; then
+    ok=1
+    break
+  fi
   sleep 10
 done
+# 루프의 마지막 명령이 항상 `sleep 10`(성공)이면 3번 다 실패해도 set -e 가 못 잡는다 —
+# 성공 플래그로 직접 확인해서 크게 실패한다.
+[ -n "$ok" ] || { echo "run.viewer 바인딩 실패 — SA 가 아직 안 보이거나 권한 문제" >&2; exit 1; }
 for s in corpus-db-password corpus-law-oc corpus-data-go-kr-key; do
   gcloud secrets describe "$s" >/dev/null 2>&1 || gcloud secrets create "$s" --replication-policy=automatic
   gcloud secrets add-iam-policy-binding "$s" --member="serviceAccount:${SA_EMAIL}" \

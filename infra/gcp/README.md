@@ -27,6 +27,8 @@
    gcloud storage cp C:\deploy\daengs\corpus\manifests\crawl_log.jsonl gs://daengs-corpus/manifests/crawl_log.jsonl
    ```
    `processed/` 는 올리지 않는다 — 잡이 만든다. `seed_sources.yaml` 도 올리지 않는다 — 이미지가 넣는다.
+   `pipeline.sh` 의 `BUCKET=` 을 다른 이름으로 바꿨다면(버킷 이름 충돌 시) 위 두 줄의
+   `gs://daengs-corpus` 도 그 이름으로 바꿔야 한다.
 6. **검증** — `docs/deploy/corpus-pipeline.md` §6 의 2~6. 잡 수동 실행:
    ```bash
    gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages,parse,chunk" --wait

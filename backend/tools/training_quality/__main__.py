@@ -229,20 +229,39 @@ def _load_judgments(path: Path) -> list[judge_mod.Judgment]:
     return [judge_mod.Judgment.model_validate_json(ln) for ln in lines[1:]]
 
 
+def _judge_model(label: str) -> str:
+    """판정 파일의 헤더가 적은 판정자. **사람인지 LLM 인지로 이 수의 뜻이 갈린다.**"""
+    lines = _judgments_path(label).read_text(encoding="utf-8").splitlines()
+    return str(json.loads(lines[0]).get("judge_model", "?")) if lines else "?"
+
+
 def cmd_agreement(args: argparse.Namespace) -> int:
     reference = _load_judgments(_judgments_path(args.against))
     candidate = _load_judgments(_judgments_path(args.label))
+    ref_model, cand_model = _judge_model(args.against), _judge_model(args.label)
     result = judge_mod.agreement(reference, candidate)
+
+    print(f"기준 {args.against} ({ref_model})  ↔  후보 {args.label} ({cand_model})")
     print(f"일치 {result['agreed']}/{result['n']}   "
           f"(분모는 **양쪽에 다 있는 문항**입니다 — RAG-075 ①)")
     for row in result["mismatch"]:
         print(f"\n── {row['id']}  기준={row['reference']} 후보={row['candidate']}")
         print(f"   기준 근거: {row['reference_why']}")
         print(f"   후보가 짚은 것: {row['candidate_unsupported']}")
-    print("\n⚠ 이것은 **판정자 간 일치율**이지 캘리브레이션이 아닙니다 (D-060 ⑦).")
-    print("   LLM 둘이 일치하는 것은 둘이 같은 맹점을 공유하는 것일 수도 있습니다.")
-    print("   특히 검증자가 GPT 계열이면 judge 와 같은 계열이라, D-060 ① 이 일부러 갈라 둔")
-    print("   self-preference 분리가 무너져 이 수가 부풀려집니다. 지표로 승격하지 마세요.")
+
+    # **사람이 한쪽에 있으면 뜻이 다르다.** LLM 둘의 일치는 같은 맹점을 공유해도 높게 나오지만,
+    # 사람과의 일치는 `RAG-007` 이 요구한 바로 그 수다 — 다만 30개라는 분모까지 채워야 한다.
+    if "human" in (ref_model, cand_model):
+        print(f"\n사람과의 일치입니다 — `RAG-007` 이 요구한 종류의 수입니다. 다만 분모가"
+              f" {result['n']}개이고 그 카드는 **30개**를 요구합니다.")
+        if result["n"] < 30:
+            print("   그래서 아직 지표로 승격하지 않습니다. 분모가 정직한 것이 요점입니다 —")
+            print("   사람이 안 본 문항을 일치로 세면 라벨을 안 단 만큼 점수가 올라갑니다.")
+    else:
+        print("\n⚠ 이것은 **판정자 간 일치율**이지 캘리브레이션이 아닙니다 (D-060 ⑦).")
+        print("   LLM 둘이 일치하는 것은 둘이 같은 맹점을 공유하는 것일 수도 있습니다.")
+        print("   특히 검증자가 GPT 계열이면 judge 와 같은 계열이라, D-060 ① 이 일부러 갈라 둔")
+        print("   self-preference 분리가 무너져 이 수가 부풀려집니다. 지표로 승격하지 마세요.")
     return 0
 
 

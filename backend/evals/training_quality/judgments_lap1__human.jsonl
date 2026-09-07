@@ -1,0 +1,7 @@
+{"type": "header", "version": 1, "lap": "lap1__human", "judged_at": "2026-09-07T10:27:49+00:00", "judge_model": "human", "prompt_version": 0, "rubric": "grounded", "items": 6}
+{"type": "judgment", "id": "t01", "grounded": false, "supported": [], "unsupported": ["반려견 집은 본능적으로 사람과 가까운 곳을 좋아하므로 거실과 가까운 곳에 설치한다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}
+{"type": "judgment", "id": "t07", "grounded": false, "supported": [], "unsupported": ["반려인이 불안해하면 '반려견을 무시하고' 소리보다 반려인이 더 강하다는 것을 인식시켜야 한다는 서술에서, 무시와 인식시키기를 하나의 직접적 대응 문장으로 묶은 표현 자체는 자료에 각각 있으나 이 문장 구성 그대로의 단일 지침으로 제시된 부분은 분리되어 있다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}
+{"type": "judgment", "id": "t09", "grounded": false, "supported": [], "unsupported": ["한 울타리 공간에서 함께 잠을 자게 하면 서로 의지하게 됩니다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}
+{"type": "judgment", "id": "t10", "grounded": false, "supported": [], "unsupported": ["반려견의 흥분이 가라앉으면 다른 가족이 반려견을 불러 칭찬과 보상을 한다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}
+{"type": "judgment", "id": "t15", "grounded": false, "supported": [], "unsupported": ["반려견이 목줄을 보면 흥분하여 짖는 이유는 산책을 나가는 것에 대한 기대감 때문이다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}
+{"type": "judgment", "id": "t19", "grounded": false, "supported": [], "unsupported": ["놀이는 정해진 시간에 반려인과 함께한다는 인식을 심어주어야 합니다."], "rationale": "사람 검토 (2026-09-07, review_lap1): judge 의 판정이 맞다 — 짚은 문장이 자료에 없다."}

@@ -23,6 +23,89 @@ DOCUMENTS = (
     "INSERT INTO documents(category, subcategory)"
     " VALUES ('policy','insurance'), ('policy','insurance'), ('policy','ordinance');"
 )
+# `db/init/03_auth.sql` 의 app_users 중 이 마이그레이션들이 닿는 부분만.
+# gen_random_uuid() 는 pgcrypto/ pg13+ 내장이라 쓰지 않고 값을 직접 넣는다 — 확장에 안 기댄다.
+APP_USERS = (
+    "CREATE TABLE app_users("
+    " id uuid PRIMARY KEY,"
+    " kakao_id bigint NOT NULL UNIQUE);"
+    "INSERT INTO app_users(id, kakao_id)"
+    " VALUES ('11111111-1111-1111-1111-111111111111', 1),"
+    "        ('22222222-2222-2222-2222-222222222222', 2);"
+)
+# `db/init/05_pets.sql` 의 pets 중 닿는 부분만. **app_users 를 앞세워야 FK 가 선다** —
+# 그래서 둘로 나눠 두고, 필요한 조합을 항목에서 더한다.
+PETS_ONLY = (
+    "CREATE TABLE pets("
+    " id uuid PRIMARY KEY,"
+    " app_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,"
+    " name varchar(40) NOT NULL);"
+    "INSERT INTO pets(id, app_user_id, name)"
+    " VALUES ('33333333-3333-3333-3333-333333333333',"
+    "         '11111111-1111-1111-1111-111111111111', 'x');"
+)
+PETS = APP_USERS + PETS_ONLY
+# `db/init/02_trigger.sql` 의 함수. dog_cards·screening_records 가 트리거로 건다.
+SET_UPDATED_AT = (
+    'CREATE FUNCTION set_updated_at() RETURNS TRIGGER AS $t$'
+    ' BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $t$ LANGUAGE plpgsql;'
+)
+# answer_reports 의 FK 셋. chat_turns 는 chat_sessions 를 참조하지만 그 사슬까지는 안 세운다 —
+# 이 마이그레이션이 보는 것은 chat_turns(id) 하나다.
+CHAT_AND_ADMINS = APP_USERS + (
+    "CREATE TABLE admin_users(id uuid PRIMARY KEY);"
+    "CREATE TABLE chat_turns(id uuid PRIMARY KEY);"
+    "INSERT INTO admin_users(id) VALUES ('44444444-4444-4444-4444-444444444444');"
+    "INSERT INTO chat_turns(id) VALUES ('55555555-5555-5555-5555-555555555555');"
+)
+# org 백필은 **값**을 검사하므로 픽스처에도 값이 있어야 한다. 실제 doc_id 두 개를
+# 골라 넣는다 — 마이그레이션의 VALUES 목록에 있는 것이라야 UPDATE 가 실제로 돈다.
+DOCUMENTS_WITH_ORG = (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb);"
+    "INSERT INTO documents(metadata) VALUES"
+    " ('{\"source_id\":\"ordinance-search\",\"doc_id\":\"ordinance-search-2182010__20260829\"}'),"
+    " ('{\"source_id\":\"benefit24-services\","
+    "\"doc_id\":\"benefit24-services-305000000130__20260829\"}'),"
+    " ('{\"source_id\":\"law-drf-api\",\"doc_id\":\"law-drf-api-veterinarian-act__20260827\"}');"
+)
+
+
+# `db/init/03_auth.sql` 의 refresh_tokens 중 2026-08-26 이 닿는 부분만.
+# **`admin_user_id` 가 NOT NULL 이고 인덱스가 전체(부분 아님)인 것이 옛 모양이고**, 그
+# 마이그레이션이 고치러 오는 대상이다. 행 하나를 넣어 NOT NULL 변조가 실제로 돌게 한다.
+REFRESH_TOKENS_OLD = APP_USERS + (
+    "CREATE TABLE admin_users(id uuid PRIMARY KEY);"
+    "INSERT INTO admin_users(id) VALUES ('44444444-4444-4444-4444-444444444444');"
+    "CREATE TABLE refresh_tokens("
+    " id uuid PRIMARY KEY,"
+    " admin_user_id uuid NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,"
+    " token_hash char(64) NOT NULL UNIQUE);"
+    "CREATE INDEX idx_refresh_tokens_admin ON refresh_tokens (admin_user_id);"
+    "INSERT INTO refresh_tokens(id, admin_user_id, token_hash)"
+    " VALUES ('66666666-6666-6666-6666-666666666666',"
+    "         '44444444-4444-4444-4444-444444444444', repeat('a', 64));"
+)
+# 2026-08-30 은 ALTER 만 하므로 **옛 두 값짜리 CHECK 를 가진 표**가 있어야 넓히는 일이 실제로
+# 일어난다. 행은 'due' 라 옛 제약을 만족한다 — 그래야 변조에서 되돌릴 때 ALTER 가 안 죽는다.
+CRAWL_RUNS_OLD = (
+    "CREATE TABLE crawl_runs("
+    " id bigserial PRIMARY KEY,"
+    " run_id text,"
+    " source_id text NOT NULL,"
+    " trigger text NOT NULL"
+    "   CONSTRAINT crawl_runs_trigger_check CHECK (trigger IN ('due','manual')),"
+    " status text NOT NULL,"
+    " started_at timestamptz NOT NULL DEFAULT now());"
+    "INSERT INTO crawl_runs(source_id, trigger, status)"
+    " VALUES ('ordinance-search','due','ok');"
+)
+# `training_rag_*` 는 pgvector 를 요구한다. CI 서비스가 `pgvector/pgvector:pg17` 인 이유다
+# (`.github/workflows/migration-verification-tests.yml`). 일회용 스키마 안에 만들고 ROLLBACK
+# 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
+# search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
+VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
 
 
 def transactionless(sql):
@@ -50,7 +133,11 @@ def sql_checks():
     # libpq settings are supplied only by the dedicated disposable CI service.
     assert os.environ.get('PGHOST') in ('127.0.0.1', 'localhost', '::1')
     total = 0
-    for date, name, fixture, table, mutations in (
+    # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
+    # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
+    # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
+    # False 로 두는 자리는 `documents_org_backfill` 하나뿐이고 이유는 그 항목에 적었다.
+    for date, name, fixture, table, mutations, *rest in (
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
@@ -87,14 +174,275 @@ def sql_checks():
             # 엉뚱한 행을 옮긴다 — 조건을 잘못 쓰면 이쪽으로 샌다
             "UPDATE documents SET category = 'insurance' WHERE subcategory = 'ordinance'",
         ]),
+        # 2026-09-06 (#273) — 밀린 verify 를 단언형으로 바꾸며 목록에 넣는다.
+        # 이 여섯은 SELECT 나열이라 **틀려도 종료 코드 0 이었다**: db-migrate.yml 이
+        # `psql … < verify_%MIG_FILE% || exit 1` 로 판정하는데 SELECT 는 실패하지 않는다.
+        ('2026-09-05', 'app_user_nickname', APP_USERS, 'app_users', [
+            'ALTER TABLE app_users DROP COLUMN nickname',
+            'ALTER TABLE app_users ALTER COLUMN nickname TYPE varchar(80)',
+            # ⚠ **값을 먼저 채워야 한다.** 그냥 SET NOT NULL 하면 기존 NULL 행 때문에
+            #   ALTER 자체가 죽고, 그러면 **verifier 가 잡은 것이 아니라 ALTER 가 실패한 것**이
+            #   된다 (하네스는 그 둘을 stderr 의 mismatch/missing table 낱말로 가른다).
+            #   #271 의 `NOT VALID` 와 같은 함정이다. lower(nickname) 이 UNIQUE 라 값도 달라야 한다.
+            "UPDATE app_users SET nickname = 'n' || kakao_id;"
+            ' ALTER TABLE app_users ALTER COLUMN nickname SET NOT NULL',
+            'DROP INDEX idx_app_users_nickname',
+            # **표현식을 잃는 변조.** 이름은 같은데 lower() 가 없다 — 이러면
+            # 'Neo' 와 'neo' 가 둘 다 생긴다. 이름만 보는 verify 는 이걸 못 잡는다.
+            'DROP INDEX idx_app_users_nickname;'
+            ' CREATE UNIQUE INDEX idx_app_users_nickname ON app_users (nickname)',
+            # 유일성을 잃는 변조. 표현식은 맞는데 UNIQUE 가 아니다.
+            'DROP INDEX idx_app_users_nickname;'
+            ' CREATE INDEX idx_app_users_nickname ON app_users (lower(nickname))',
+        ]),
+        # 2026-09-07 (#288) — 동물등록 여부 한 칸. **변조 넷 중 마지막이 이 항목의 이유다.**
+        # DEFAULT 를 거는 것은 타입도 널 허용도 안 건드리므로 컬럼 모양만 보는 verify 는
+        # 통과시킨다. 그런데 그 순간 "안 물어봤다"가 전부 "안 했다"가 된다.
+        ('2026-09-07', 'pets_registered', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN registered',
+            'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',
+            # ⚠ 값을 먼저 채워야 ALTER 가 안 죽는다 — #271 의 NOT VALID · #273 의 nickname 과
+            #   같은 함정이다. 하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr
+            #   낱말로 가르므로, ALTER 가 죽으면 이 항목은 무엇도 증명하지 않는다.
+            'UPDATE pets SET registered = true;'
+            ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
+            'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
+        ]),
+        ('2026-09-04', 'pet_photo', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN photo_storage_key CASCADE',
+            'ALTER TABLE pets DROP COLUMN photo_generation CASCADE',
+            'ALTER TABLE pets ALTER COLUMN photo_size_bytes TYPE bigint',
+            # NOT NULL 을 거는 변조. 사진 없는 강아지가 정상인데 그것을 막는다.
+            "UPDATE pets SET photo_storage_key = 'k', photo_content_type = 'image/jpeg',"
+            " photo_generation = 'g', photo_size_bytes = 1, photo_updated_at = now();"
+            ' ALTER TABLE pets ALTER COLUMN photo_storage_key SET NOT NULL',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_set',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_pending_set',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_content_type',
+            'ALTER TABLE pets DROP CONSTRAINT pets_photo_size',
+            'DROP INDEX idx_pets_photo_storage_key',
+            # **부분 조건을 잃는 변조.** WHERE 가 빠지면 NULL 이 유일해야 하는 값이 되어
+            # 사진 없는 강아지가 둘 이상일 수 없게 된다.
+            'DROP INDEX idx_pets_photo_pending_key;'
+            ' CREATE UNIQUE INDEX idx_pets_photo_pending_key ON pets (photo_pending_key)',
+        ]),
+        ('2026-09-04', 'dog_cards', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'dog_cards', [
+            'ALTER TABLE dog_cards DROP COLUMN user_framed',
+            'ALTER TABLE dog_cards ALTER COLUMN dog_name TYPE varchar(80)',
+            'ALTER TABLE dog_cards ALTER COLUMN dog_id SET NOT NULL',
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_core_rect',
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_face_set',
+            # **FK 의 삭제 동작을 뒤바꾸는 변조.** SET NULL → CASCADE 면 강아지가 무지개다리를
+            # 건널 때 뽑아 둔 카드가 같이 사라진다. 모양은 멀쩡해 보인다.
+            'ALTER TABLE dog_cards DROP CONSTRAINT dog_cards_dog_id_fkey;'
+            ' ALTER TABLE dog_cards ADD FOREIGN KEY(dog_id) REFERENCES pets(id) ON DELETE CASCADE',
+            # 부분 조건을 잃는 변조 — 얼굴 없는 카드가 둘 이상일 수 없게 된다
+            'DROP INDEX idx_dog_cards_face_key;'
+            ' CREATE UNIQUE INDEX idx_dog_cards_face_key ON dog_cards (face_storage_key)',
+            'DROP TRIGGER trg_dog_cards_updated_at ON dog_cards',
+        ]),
+        ('2026-09-04', 'screening_records',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'screening_records', [
+            'ALTER TABLE screening_records DROP COLUMN result',
+            'ALTER TABLE screening_records ALTER COLUMN result TYPE text',
+            # **사진 칸의 NOT NULL 을 푸는 변조.** 사진 자체가 기록이라(D-052) 사진 없는
+            # 기록은 성립하지 않는다.
+            'ALTER TABLE screening_records ALTER COLUMN photo_storage_key DROP NOT NULL',
+            'ALTER TABLE screening_records DROP CONSTRAINT screening_records_status_check',
+            'ALTER TABLE screening_records DROP CONSTRAINT'
+            ' screening_records_photo_content_type_check',
+            'ALTER TABLE screening_records DROP CONSTRAINT screening_records_pet_id_fkey;'
+            ' ALTER TABLE screening_records ADD FOREIGN KEY(pet_id)'
+            ' REFERENCES pets(id) ON DELETE CASCADE',
+            'DROP INDEX idx_screening_records_photo_key',
+            'DROP TRIGGER trg_screening_records_updated_at ON screening_records',
+        ]),
+        ('2026-09-05', 'answer_reports', CHAT_AND_ADMINS, 'answer_reports', [
+            'ALTER TABLE answer_reports DROP COLUMN reviewed_at',
+            'ALTER TABLE answer_reports ALTER COLUMN reason TYPE varchar(200)',
+            # **한 사람이 같은 답변을 두 번 신고할 수 있게 되는 변조.** 신고 수가 사람 수가
+            # 아니라 클릭 수가 된다 — 화면은 멀쩡히 돈다.
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_turn_user_key',
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_status_check',
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_review_state_check',
+            # **RESTRICT → CASCADE 변조.** 관리자를 지우면 그 사람이 검토한 신고가 사라진다.
+            'ALTER TABLE answer_reports DROP CONSTRAINT answer_reports_reviewed_by_fkey;'
+            ' ALTER TABLE answer_reports ADD FOREIGN KEY(reviewed_by)'
+            ' REFERENCES admin_users(id) ON DELETE CASCADE',
+            'DROP INDEX answer_reports_status_created_idx',
+        ]),
+        # ⚠ **이 한 줄만 2회 적용을 안 한다** (`repeat=False`).
+        #    `CREATE TEMP TABLE _org_backfill … ON COMMIT DROP` 인데, 하네스는 `transactionless()`
+        #    로 COMMIT 을 벗기므로 temp 가 안 사라지고 두 번째 CREATE 가 "already exists" 로 죽는다.
+        #    **마이그레이션이 틀린 것이 아니다** — 실제 적용 경로에서는 자기 트랜잭션이 COMMIT 될 때
+        #    temp 가 사라져 여러 번 돌려도 안전하다 (CLAUDE.md 의 요구를 만족한다).
+        #    깨지는 것은 하네스의 격리 모델과 `ON COMMIT DROP` 이 겹치는 자리뿐이라,
+        #    **마이그레이션 SQL 을 고치는 대신 여기서 예외로 둔다** (#273 은 SQL 을 안 고친다).
+        ('2026-09-05', 'documents_org_backfill', DOCUMENTS_WITH_ORG, 'documents', [
+            'DROP INDEX idx_documents_org',
+            # **값을 지우는 변조 — RAG-066 ① 의 실제 사고와 같은 모양이다.**
+            # #268 의 `rag load` 가 `org` 없는 청크로 덮어써 2,592행이 통째로 사라졌고
+            # 적재는 성공하고 예외도 안 났다. 이제 verify 가 잡는다.
+            "UPDATE documents SET metadata = metadata - 'org'",
+            # 빈 문자열로 채우는 변조. 있는 것처럼 보이면서 지역 필터를 통과시킨다.
+            "UPDATE documents SET metadata = metadata || '{\"org\":\"\"}'::jsonb"
+            " WHERE metadata ? 'org'",
+        ], False),
+        # ── 2026-09-07 (#292) — verify 가 아예 없던 여덟 장. ────────────────────────
+        # #273 이 "SELECT 나열이라 틀려도 녹색"인 여섯 장을 고쳤는데, **파일 자체가 없는
+        # 것들은 그때 목록에 안 들어왔다.** `db-migrate.yml` 은 `verify=true` 가 기본이라
+        # 이 여덟 장은 Actions 탭으로 **다시 돌릴 수도 없었다**(손으로 verify=false 를
+        # 골라야 했다). 전부 2026-09-03(#273) 이전에 쓰인 것들이다.
+        #
+        # ⚠ 여기 넷(walks · crawl_runs · documents_lexical · refresh_tokens)은 **뒤 장이
+        #   자기가 만든 것을 걷어 가거나 넓힌다.** verify 는 그 뒤 상태의 DB 에서도 돌아야
+        #   하므로 걷힌 것은 조건부로, 넓혀진 것은 "들어 있는지만" 본다. 각 verify 머리말 참고.
+        ('2026-08-26', 'refresh_token_subject', REFRESH_TOKENS_OLD, 'refresh_tokens', [
+            'ALTER TABLE refresh_tokens DROP COLUMN app_user_id',
+            # **NOT NULL 만 풀고 CHECK 를 안 거는 변조.** 마이그레이션 본문이 *"2번만 하고
+            # 이걸 빠뜨리면 주인 없는 세션 행이 만들어질 수 있다"* 라고 경고한 바로 그 자리다.
+            'ALTER TABLE refresh_tokens DROP CONSTRAINT refresh_tokens_one_subject_check',
+            # 반대 방향 — NOT NULL 을 도로 걸면 앱 회원 세션을 넣을 수 없다.
+            # 픽스처 행이 admin 쪽이라 ALTER 자체는 성공한다(#271 의 NOT VALID 함정 회피).
+            'ALTER TABLE refresh_tokens ALTER COLUMN admin_user_id SET NOT NULL',
+            # **부분 조건을 잃는 변조.** 이름이 같아서 "인덱스가 있다"는 확인은 통과하는데,
+            # 마이그레이션이 옛 전체 인덱스를 DROP 하고 부분으로 다시 만드는 것이 그 이유다.
+            'DROP INDEX idx_refresh_tokens_admin;'
+            ' CREATE INDEX idx_refresh_tokens_admin ON refresh_tokens (admin_user_id)',
+            'DROP INDEX idx_refresh_tokens_app',
+            # FK 의 삭제 동작을 잃는 변조 — 회원이 탈퇴해도 세션이 남는다.
+            'ALTER TABLE refresh_tokens DROP CONSTRAINT refresh_tokens_app_user_id_fkey;'
+            ' ALTER TABLE refresh_tokens ADD FOREIGN KEY(app_user_id) REFERENCES app_users(id)',
+        ]),
+        ('2026-08-28', 'documents_lexical', DOCUMENTS, 'documents', [
+            'ALTER TABLE documents DROP COLUMN content_tokens CASCADE',
+            'ALTER TABLE documents ALTER COLUMN content_tokens DROP NOT NULL',
+            # **2단계(DROP DEFAULT)를 빠뜨린 상태.** 토큰이 다 찬 뒤에도 기본값이 남아 있으면
+            # 안 채운 INSERT 가 조용히 성공한다 — 그 행은 dense 로만 찾히는 반쪽 문서다.
+            # verify 가 "토큰이 찼는가"로 판정하므로 **여기서 먼저 채워야** 그 가지에 닿는다.
+            "UPDATE documents SET content_tokens = 'x'",
+            # **생성식의 config 만 바꾸는 변조 — 이 항목의 이유다.** 타입도 생성 여부도
+            # 그대로라 모양만 보는 검사는 통과하는데, 한국어에 영어 스테머가 걸려 토큰이
+            # 망가진다. dense 가 계속 답을 주므로 예외도 로그도 안 난다.
+            "UPDATE documents SET content_tokens = 'x';"
+            ' ALTER TABLE documents DROP COLUMN content_tsv;'
+            ' ALTER TABLE documents ADD COLUMN content_tsv tsvector'
+            " GENERATED ALWAYS AS (to_tsvector('english', content_tokens)) STORED",
+            # 생성 컬럼을 보통 컬럼으로 바꾸는 변조 — 토큰과 어긋날 수 있게 된다.
+            "UPDATE documents SET content_tokens = 'x';"
+            ' ALTER TABLE documents DROP COLUMN content_tsv;'
+            ' ALTER TABLE documents ADD COLUMN content_tsv tsvector',
+        ]),
+        ('2026-08-29', 'crawl_runs', '', 'crawl_runs', [
+            'ALTER TABLE crawl_runs DROP COLUMN changed_slugs',
+            # **`run_id` 에 NOT NULL 을 도로 거는 변조.** 행은 수집이 시작될 때 먼저 들어가고
+            # 이 값은 끝나야 나온다 — 막으면 죽은 실행을 아예 기록할 수 없다.
+            'ALTER TABLE crawl_runs ALTER COLUMN run_id SET NOT NULL',
+            # 기본값을 잃는 변조 — 개정 감지가 "바뀐 것 없음"과 "안 적음"을 못 가른다.
+            'ALTER TABLE crawl_runs ALTER COLUMN changed_slugs DROP DEFAULT',
+            'ALTER TABLE crawl_runs DROP CONSTRAINT crawl_runs_status_check',
+            # **`unavailable` 을 잃는 변조.** 키 미설정·시드 사망이 `failed` 와 한 칸이 되면
+            # 사람이 고쳐야 할 것과 재시도할 것이 화면에서 안 갈린다.
+            'ALTER TABLE crawl_runs DROP CONSTRAINT crawl_runs_status_check;'
+            " ALTER TABLE crawl_runs ADD CONSTRAINT crawl_runs_status_check"
+            " CHECK (status IN ('running','ok','failed'))",
+            'ALTER TABLE crawl_runs DROP CONSTRAINT crawl_runs_trigger_check',
+            'DROP INDEX idx_crawl_runs_run_id',
+            # **정렬 방향을 뒤집는 변조.** 이름이 같아 "인덱스가 있다"는 통과하는데
+            # 관리자 화면의 "소스별 최신 실행"이 거꾸로 읽힌다.
+            'DROP INDEX idx_crawl_runs_source_started;'
+            ' CREATE INDEX idx_crawl_runs_source_started ON crawl_runs (source_id, started_at)',
+        ]),
+        ('2026-08-30', 'crawl_runs_trigger_revision', CRAWL_RUNS_OLD, 'crawl_runs', [
+            'ALTER TABLE crawl_runs DROP CONSTRAINT crawl_runs_trigger_check',
+            # **되돌리는 변조 — 이 한 줄짜리 마이그레이션의 전부다.** 안 걸면 Beat 가 개정
+            # 판정으로 깨운 수집의 기록이 CHECK 에 막히는데, 기록 실패는 크롤을 안 죽이므로
+            # (RAG-047 ②) 수집은 정상으로 끝나고 화면에만 그 실행이 안 보인다.
+            'ALTER TABLE crawl_runs DROP CONSTRAINT crawl_runs_trigger_check;'
+            " ALTER TABLE crawl_runs ADD CONSTRAINT crawl_runs_trigger_check"
+            " CHECK (trigger IN ('due','manual'))",
+        ]),
+        ('2026-08-31', 'walks', APP_USERS + PETS_ONLY, 'walks', [
+            'ALTER TABLE walks DROP COLUMN ended_at',
+            # 열린 채 남은 세션이 올라올 수 있게 되는 변조.
+            'ALTER TABLE walks ALTER COLUMN ended_at DROP NOT NULL',
+            'ALTER TABLE walks DROP CONSTRAINT walks_time_order',
+            # **재업로드 중복 방지를 잃는 변조.** 네트워크가 끊겨 다시 올리면 같은 산책이
+            # 두 건이 된다 — 화면은 멀쩡히 돈다.
+            'ALTER TABLE walks DROP CONSTRAINT walks_client_session_unique',
+            'ALTER TABLE walks DROP CONSTRAINT walks_app_user_id_fkey;'
+            ' ALTER TABLE walks ADD FOREIGN KEY(app_user_id) REFERENCES app_users(id)',
+            # **SET NULL → CASCADE 로 뒤바꾸는 변조.** 무지개다리를 건넌 아이와의 산책이
+            # 그 아이를 지웠다고 없던 일이 된다. 모양은 멀쩡해 보인다 (dog_cards 의 전례).
+            'ALTER TABLE walks DROP CONSTRAINT walks_pet_id_fkey;'
+            ' ALTER TABLE walks ADD FOREIGN KEY(pet_id) REFERENCES pets(id) ON DELETE CASCADE',
+            'DROP INDEX walks_owner_started_idx;'
+            ' CREATE INDEX walks_owner_started_idx ON walks (app_user_id, started_at)',
+            # 옛 좌표 표 쪽. 아직 안 걷힌 DB 에서만 도는 가지를 여기서 잰다.
+            'ALTER TABLE walk_points DROP COLUMN chain_index',
+            'ALTER TABLE walk_points DROP CONSTRAINT walk_points_pkey',
+            'ALTER TABLE walk_points DROP CONSTRAINT walk_points_walk_id_fkey;'
+            ' ALTER TABLE walk_points ADD FOREIGN KEY(walk_id) REFERENCES walks(id)',
+        ]),
+        ('2026-09-01', 'room_name', APP_USERS, 'app_users', [
+            'ALTER TABLE app_users DROP COLUMN room_name',
+            'ALTER TABLE app_users ALTER COLUMN room_name TYPE varchar(40)',
+            # 값을 먼저 채워야 ALTER 가 안 죽는다 (#271 NOT VALID · #273 nickname 과 같은 함정).
+            "UPDATE app_users SET room_name = 'r';"
+            ' ALTER TABLE app_users ALTER COLUMN room_name SET NOT NULL',
+            # **기본값을 거는 변조 — 이 항목의 이유다.** 타입도 널 허용도 그대로라 컬럼 모양만
+            # 보는 검사는 통과하는데, 그 순간 "아직 안 정했다"가 사라진다. 방 앞 이름표가
+            # 앱에 박혀 있어 남의 강아지 이름이 걸려 있던 것이 이 마이그레이션의 계기였다.
+            "ALTER TABLE app_users ALTER COLUMN room_name SET DEFAULT '네옹이네'",
+        ]),
+        ('2026-09-01', 'training_rag_into_vectordb', VECTOR_EXTENSION, 'training_rag_chunks', [
+            'ALTER TABLE training_rag_chunks DROP COLUMN text',
+            # **차원을 바꾸는 변조.** `vector` 로만 두거나 차원이 달라지면 검색이 런타임에
+            # 죽는다 — 훈련 RAG 는 768 이고 Life 의 1024 와 다르다.
+            'ALTER TABLE training_rag_chunks DROP COLUMN embedding;'
+            ' ALTER TABLE training_rag_chunks ADD COLUMN embedding vector(1024) NOT NULL',
+            'ALTER TABLE training_rag_chunks ALTER COLUMN embedding_model DROP NOT NULL',
+            # 모델별 공존을 잃는 변조 — 모델을 바꿔 다시 적재할 수 없게 된다.
+            'ALTER TABLE training_rag_chunks'
+            ' DROP CONSTRAINT training_rag_chunks_document_id_chunk_index_embedding_model_key',
+            # 문서를 지웠는데 청크가 남는 변조 — 출처를 못 대는 벡터가 검색에 계속 잡힌다.
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey;'
+            ' ALTER TABLE training_rag_chunks ADD FOREIGN KEY(document_id)'
+            ' REFERENCES training_rag_documents(document_id)',
+            'DROP INDEX training_rag_chunks_embedding_hnsw',
+            # **연산자 클래스를 바꾸는 변조.** 이름은 같고 인덱스도 있는데 `<=>` 질의가
+            # 그것을 안 탄다 — 결과는 맞고 느려지기만 해서 아무도 안 알려준다.
+            'DROP INDEX training_rag_chunks_embedding_hnsw;'
+            ' CREATE INDEX training_rag_chunks_embedding_hnsw ON training_rag_chunks'
+            ' USING hnsw (embedding vector_l2_ops)',
+        ]),
+        ('2026-09-02', 'gait_records', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'gait_records', [
+            # **비교 전용 칸을 없애는 변조 — 이 항목의 이유다.** 셋을 한 컬럼에 합치면
+            # `internal_feature_vector` 가 API 응답으로 새어 나간다. 남은 칸의 타입은
+            # 그대로(jsonb)라 타입만 보는 검사로는 안 잡힌다.
+            'ALTER TABLE gait_records DROP COLUMN internal_feature_vector',
+            'ALTER TABLE gait_records DROP COLUMN summary_for_ui',
+            'ALTER TABLE gait_records ALTER COLUMN status TYPE text',
+            # **`FAILED` 를 잃는 변조.** 워커가 죽었을 때 그 상태를 못 적는데, 두 축이 달라서
+            # (status vs quality_status) 사용자 안내가 "재시도"인지 "재촬영"인지 갈린다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_status_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_status_check"
+            " CHECK (status IN ('PENDING','UPLOADED','PROCESSING','DONE'))",
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_status_check',
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_pet_id_fkey;'
+            ' ALTER TABLE gait_records ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX idx_gait_records_pet_created',
+            'DROP TRIGGER trg_gait_records_updated_at ON gait_records',
+        ]),
     ):
         migration = transactionless(
             (ROOT / f'db/migrations/{date}_{name}.sql').read_text(encoding='utf-8'))
         verifier = (ROOT / f'db/migrations/verify_{date}_{name}.sql').read_text(encoding='utf-8')
-        for mutation in ['', f'DROP TABLE {table}', *mutations]:
+        applied = migration * (2 if (rest[0] if rest else True) else 1)
+        for mutation in ['', f'DROP TABLE {table} CASCADE', *mutations]:
             schema = 'verify_test_' + uuid.uuid4().hex
             sql = (f'BEGIN; CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}; '
-                   + fixture + '\n' + migration + migration
+                   + fixture + '\n' + applied
                    + mutation + ';\n' + verifier + '\nROLLBACK;')
             result = subprocess.run(['psql', '-X', '-v', 'ON_ERROR_STOP=1'],
                                     input=sql, text=True, capture_output=True)

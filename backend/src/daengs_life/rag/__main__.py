@@ -786,9 +786,22 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         ckinds = None
         print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 옛 셈(경계 포함)으로 낸다\n")
 
-    print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
-          f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
-    print("-" * 108)
+    # `--quiet` 는 표를 전부 접고 **종료 코드만** 받는 길이다 (`--against` 와 같이 쓴다).
+    # 뒤에 CI 를 붙일 자리인데, 그때 필요한 것은 사람이 읽는 표가 아니라 판정 하나다.
+    quiet = getattr(args, "quiet", False) and getattr(args, "against", None)
+
+    # ⚠ **랩 번호순이다 — 2026-09-07(#292)에 파일명 순에서 바꿨다** (`D9` · RAG-060 ⑦).
+    # `io.answer_files()` 는 파일명 순을 돌려주는데, 그러면 `lap10` 이 `lap2` **앞**에 오고
+    # 표의 마지막 줄이 `lap30` 이 아니라 **`lap9-age`** 가 된다 (저장된 33개 실측).
+    # 랩이 두 자리로 넘어가면 바꿀 일이라고 `io.answer_files()` 의 주석이 예고해 둔 자리다.
+    # RAG-029 이후의 기록들은 이 표를 **파일명 순으로** 인용하므로, 그 기록들과 줄 순서를
+    # 맞춰 볼 때는 이 정렬이 바뀐 것을 감안해야 한다 — 수는 하나도 안 바뀐다.
+    paths = sorted(paths, key=lambda p: _lap_key(p.stem))
+
+    if not quiet:
+        print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
+              f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
+        print("-" * 108)
     laps = []
     for path in paths:
         header, rows = io.read_answers(path)
@@ -797,6 +810,8 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         if not n:
             continue
         laps.append((path.stem, rows))
+        if quiet:
+            continue
         old = scorer.score_rows(rows)  # 소급 대조 — 옛 기록이 인용하는 수를 그대로 다시 낸다
         cells = []
         for kind in (scorer.CITABLE, scorer.UNCITABLE):
@@ -808,7 +823,7 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
               f"   {s['grounded']:>5}/{k:<3}   {cells[0]}   {cells[1]}"
               f"   {old['cited']:>4}·{old['grounded']}/{n:<4}")
 
-    if ckinds is not None:
+    if ckinds is not None and not quiet:
         print("\n  **경계 문항(`expect: abstain`·`refuse`)은 `cited`/`grounded` 에서 뺐다** (RAG-062) —"
               " `must` 가 없어 잴 근거가 없다.")
         print("  거절을 옳게 한 답이 거절문에 문 조 번호로 `cited` 에 잡히고, 놓친 기권이 성공으로 세지던 자리다.")
@@ -818,9 +833,139 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         print("  두 축의 문항수를 더한 것이 `채점` 보다 작으면, 그 차이는 **골든셋에서 빠진 옛 문항**이다"
               " (`lap7-age` 처럼). 총계에서는 빼지 않는다 — 뺄지 모르는 것과 빼야 하는 것은 다르다.")
 
-    _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
-    _print_expect_table(laps)
+    if not quiet:
+        _print_kpi(laps, ckinds)
+        _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
+        _print_expect_table(laps)
+    if getattr(args, "against", None):
+        return _print_flip_table(laps, args.against, ckinds, getattr(args, "laps", 6))
     return 0
+
+
+def _print_flip_table(laps: list[tuple[str, list[dict]]], baseline: str,
+                      ckinds: dict[str, str] | None, window: int) -> int:
+    """`--against` — 두 랩을 **문항 단위로** 대조한다 (RAG-071 · `D6`).
+
+    로드맵 §4 의 9번이 *"여기부터 순위 카드를 잰다"* 고 적은 자리다. 아래 🔵 카드
+    (`D14` · `D2` · `D4`)의 성패를 총계 한 줄로 말하면 안 된다는 것이 세 번 실증됐고
+    (`score.py` 의 랩 대조 머리말), 그 셋의 공통점은 **문항 단위로 귀속하면 바로 보였다**는 것이다.
+
+    **종료 코드로 판정한다** — 뒤집힌 문항이 하나라도 있으면 1이다. 총계로는 판정하지 않는다.
+    """
+    if ckinds is None:
+        print("\n골든셋을 못 읽어 문항 단위 대조를 건너뛴다 — 경계 문항을 가릴 수 없다")
+        return 1
+    by_stem = dict(laps)
+    if baseline not in by_stem:
+        print(f"\n기준선 랩 `{baseline}` 이 없다. 있는 랩: "
+              + " ".join(stem for stem, _ in sorted(laps, key=lambda lap: _lap_key(lap[0]))))
+        return 1
+    head_stem, head_rows = max(laps, key=lambda lap: _lap_key(lap[0]))
+    if head_stem == baseline:
+        print(f"\n기준선 `{baseline}` 이 최신 랩과 같다 — 대조할 것이 없다")
+        return 0
+    base_rows = by_stem[baseline]
+
+    changed = scorer.flips(base_rows, head_rows, ckinds)
+    recent = sorted(laps, key=lambda lap: _lap_key(lap[0]))[-window:] if window else laps
+    noise = scorer.flip_frequency(recent, ckinds)
+    before, after = scorer.marks(base_rows, ckinds), scorer.marks(head_rows, ckinds)
+    added = sorted(after.keys() - before.keys())
+    removed = sorted(before.keys() - after.keys())
+
+    print(f"\n문항 단위 대조 — `{baseline}` → `{head_stem}`"
+          f"  (잡음 띠는 최근 {len(recent)}랩)")
+    print("  **총계로 카드의 성패를 말하지 않는다.** 랩 잡음이 ±2~3(lap30 은 ±4)인데 순위 카드의"
+          " 기대 효과가 1~2문항이라, 총계는 노이즈를 성과로 읽게 한다 (RAG-070 ④ · RAG-059 ③).")
+    if not changed:
+        print("\n  뒤집힌 문항이 없다.")
+    else:
+        print(f"\n  {'문항':<6} {'축':<12} {'cited':<11} {'grounded':<11} {'최근 뒤집힘':<10}")
+        print("  " + "-" * 60)
+        for flip in sorted(changed, key=lambda f: (-noise.get(f["id"], 0), f["id"])):
+            shakes = noise.get(flip["id"], 0)
+            # **뒤집힘 횟수가 이 표를 읽는 법이다.** 1회면 그 랩에서 처음 움직인 것이고
+            # (`S3` 가 13랩 연속 실패하다 열린 모양), 여러 번이면 매 랩 흔들리는 문항이다
+            # (`T2`·`T3`·`I1`·`I2` — 지역 신호가 없어 SQL 이 동일한데도 답이 달라진다).
+            tag = "" if shakes <= 1 else ("  ⚠ 잡음일 수 있다" if shakes >= 3 else "  ~")
+            print(f"  {flip['id']:<6} {flip['kind']:<12}"
+                  f" {_arrow(flip['cited']):<11} {_arrow(flip['grounded']):<11}"
+                  f" {shakes:>3}회{tag}")
+
+    base_totals = scorer.score_rows(base_rows, ckinds)
+    head_totals = scorer.score_rows(head_rows, ckinds)
+    print(f"\n  총계(참고): cited {base_totals['cited']} → {head_totals['cited']}"
+          f" · grounded {base_totals['grounded']} → {head_totals['grounded']}"
+          f" · 채점 {base_totals['scored']} → {head_totals['scored']}")
+    steady = [f for f in changed if noise.get(f["id"], 0) <= 1]
+    # **두 축이 같이 움직인 문항이 가장 센 신호다.** `cited` 만 뒤집히는 것은 생성이 조 번호를
+    # 쓸까 말까 한 자리라 랩마다 흔들리고, `grounded` 만 뒤집히는 것도 마찬가지다. 둘이 같은
+    # 방향으로 함께 가면 **검색이 실제로 다른 것을 물어 왔다**는 뜻이다 — `lap29 → lap30` 에서
+    # 그 조건을 만족하는 것이 `Q3`·`B1` 둘이고, RAG-070 ④ 가 손으로 귀속한 답과 같다.
+    both = [f for f in changed
+            if f["cited"][0] != f["cited"][1] and f["grounded"][0] != f["grounded"][1]
+            and f["cited"][1] == f["grounded"][1]]
+    print(f"  뒤집힌 문항 {len(changed)}개 — 그중 **최근 랩에서 안 흔들리던 것이 {len(steady)}개**"
+          f"{' (' + ' · '.join(f['id'] for f in steady) + ')' if steady else ''}.")
+    if both:
+        direction = "좋아진" if both[0]["cited"][1] else "나빠진"
+        print(f"  **두 축이 같이 {direction} 문항은 {len(both)}개** "
+              f"({' · '.join(f['id'] for f in both)}) — 한 축만 움직인 것은 생성이 조 번호를"
+              " 쓸까 말까 한 자리라 랩마다 흔들리지만, 둘이 함께 가면 검색이 실제로 다른 것을"
+              " 물어 온 것이다. **카드의 몫은 여기서부터 센다.**")
+    print("  나머지는 이름을 대기 전에는 잡음이다 — 총계에서 빼지도 더하지도 말 것.")
+    if added or removed:
+        # 골든셋이 늘어난 랩(28 → 33)에서 새 문항을 "좋아졌다"로 세면 카드의 몫이 부푼다.
+        print(f"  ⚠ 문항 집합이 달라졌다 — 들어온 것 {len(added)}"
+              f"{' (' + ' '.join(added) + ')' if added else ''}"
+              f" · 빠진 것 {len(removed)}{' (' + ' '.join(removed) + ')' if removed else ''}."
+              " 위 표는 **양쪽에 다 있는 문항만** 센다.")
+    return 1 if changed else 0
+
+
+def _arrow(pair: tuple[bool, bool]) -> str:
+    """`(before, after)` → 눈으로 읽는 화살표. 안 바뀐 축은 비워 둔다."""
+    if pair[0] == pair[1]:
+        return "-"
+    return f"{'O' if pair[0] else 'X'} → {'O' if pair[1] else 'X'}"
+
+
+def kpi_cells(rows: list[dict], ckinds: dict[str, str]) -> dict[str, tuple[int, int, int]]:
+    """KPI 를 **두 축으로 갈라** 낸다 — `{축: (cited, grounded, 문항수)}` (RAG-070 ③).
+
+    KPI 문장은 「답변에 출처 링크 + **조항 번호** 인용」인데 총계 `cited` 는 두 축을 한 수에
+    섞는다. 조 번호가 **문서에 아예 없는** 소스(보조금24 · knia 공시 · 항공사 안내 · SRT 약관 ·
+    easylaw/nias 해설)는 `cited` 가 영영 0이고, 그것은 실패가 아니라 **그 소스의 성질**이다 —
+    그 문항들도 근거는 옳게 잡는다. `lap29` 실측으로 그 칸이 **13문항 중 grounded 13** 이다.
+
+    ⚠ **총계 칸은 안 건드린다.** `D10`(RAG-062)이 경계 문항을, `D12`(RAG-069)가 근거 표기를
+    소급으로 두 번 바꿨다. 세 번째면 옛 기록이 인용하는 대조선이 또 끊긴다 — 여기서는
+    **읽는 법을 더할 뿐** 수를 다시 쓰지 않는다. 축을 가르는 데 쓰는 값은 `D10` 이 이미
+    표에 넣어 둔 `조 번호 있음`·`조 번호 없음` 그대로다.
+    """
+    s = scorer.score_rows(rows, ckinds)
+    cells = {}
+    for kind in (scorer.CITABLE, scorer.UNCITABLE):
+        if f"{kind}_n" in s:
+            cells[kind] = (s[f"{kind}_cited"], s[f"{kind}_grounded"], s[f"{kind}_n"])
+    return cells
+
+
+def _print_kpi(laps: list[tuple[str, list[dict]]], ckinds: dict[str, str] | None) -> None:
+    """최신 랩 하나를 KPI 문장 그대로 읽어 준다. 발표 자료가 쓰는 수가 이것이다."""
+    if ckinds is None or not laps:
+        return
+    stem, rows = max(laps, key=lambda lap: _lap_key(lap[0]))
+    cells = kpi_cells(rows, ckinds)
+    if not cells:
+        return
+    print(f"\n  KPI 「답변에 출처 링크 + 조항 번호 인용」 — 최신 랩 `{stem}`")
+    labels = {scorer.CITABLE: "조 번호가 있는 소스", scorer.UNCITABLE: "조 번호가 없는 소스"}
+    for kind, (cited, grounded, n) in cells.items():
+        print(f"    {labels[kind]:22} 조 번호 인용 {cited:>3}/{n:<3}({cited * 100 // n:>3}%)"
+              f"   출처 근거 {grounded:>3}/{n:<3}({grounded * 100 // n:>3}%)")
+    print("    조 번호가 없는 소스는 **문서에 조 번호가 없어서** 인용 칸이 0이다 —"
+          " 실패가 아니라 그 소스의 성질이고, 근거 칸으로 읽는다 (RAG-070 ③).")
 
 
 def _print_kind_table(laps: list[tuple[str, list[dict]]], field: str = "trust_level",
@@ -1025,8 +1170,8 @@ def main(argv: list[str] | None = None) -> int:
     sr.add_argument("--questions", action="store_true",
                     help="검증질문 1~7 전부 (goldenset.yaml 의 origin=hand)")
     sr.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="top-k (기본 5)")
-    sr.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
-    sr.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    sr.add_argument("--model", help=f"기본 {config.settings.embedding_model_key} (RAG-024 판정 승자)")
+    sr.add_argument("--category", help="policy/insurance/travel/food 로 사전 필터")
     sr.add_argument("--width", type=int, default=150, help="본문 발췌 길이")
     sr.add_argument("--no-supplementary", dest="supplementary", action="store_false",
                     help="부칙(시행일·경과조치)을 뺀다. **기본은 포함**이다 — 검문소③은"
@@ -1037,8 +1182,8 @@ def main(argv: list[str] | None = None) -> int:
     gen.add_argument("--questions", action="store_true",
                      help="검증질문 1~7 전부 = 검문소④ (goldenset.yaml 의 origin=hand)")
     gen.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="컨텍스트에 넣을 top-k (기본 5)")
-    gen.add_argument("--model", help=f"임베딩 모델. 기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
-    gen.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    gen.add_argument("--model", help=f"임베딩 모델. 기본 {config.settings.embedding_model_key} (RAG-024 판정 승자)")
+    gen.add_argument("--category", help="policy/insurance/travel/food 로 사전 필터")
     gen.add_argument("--width", type=int, default=150, help="근거 발췌 길이 (답변 본문은 안 자른다)")
     gen.add_argument("--lap", default="lap1", help="덤프 파일명. 2랩은 lap2 (RAG-028 ⑥)")
     gen.add_argument("--no-supplementary", dest="supplementary", action="store_false",
@@ -1052,7 +1197,14 @@ def main(argv: list[str] | None = None) -> int:
                      choices=["trust_level", "source_id", "subcategory", "category"],
                      help="종류별 슬라이스의 축 (RAG-060). 청크 행의 그 칸에서 파생한다")
     scl.add_argument("--laps", type=int, default=6, metavar="N",
-                     help="슬라이스 표에 보일 최근 랩 수 (0=전부). 기본 6")
+                     help="슬라이스 표에 보일 최근 랩 수 (0=전부). 기본 6."
+                          " `--against` 의 잡음 띠를 세는 창이기도 하다")
+    scl.add_argument("--against", metavar="랩",
+                     help="기준선 랩과 최신 랩을 **문항 단위로** 대조한다 (RAG-071)."
+                          " 뒤집힌 문항이 있으면 종료 코드 1."
+                          " ⚠ `lap29` 앞뒤로 채점기가 바뀌었으니(RAG-069) 그 경계를 넘겨 잡지 말 것")
+    scl.add_argument("--quiet", action="store_true",
+                     help="`--against` 와 같이 쓴다 — 표를 접고 대조와 종료 코드만 낸다")
     scl.set_defaults(fn=cmd_score_laps)
 
     args = p.parse_args(argv)

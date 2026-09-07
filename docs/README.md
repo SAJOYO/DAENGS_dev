@@ -117,7 +117,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 
 | | |
 | --- | --- |
-| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · 메뉴 5개 점검(2026-09-03 실측) · **AI 답변 신고 경로**(지금은 앱 → 메일, 목표는 #131 `chat_turns` 를 가리키는 API) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
+| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · **메뉴 9개**와 그 뒤의 API (2026-09-07 실측 · 준비 중은 지식 베이스 하나) · **운영 DB 에 무엇이 적용됐나** · **AI 답변 신고 경로**(서버는 섰고 앱이 남았다) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
 
 콘솔은 코드 하나(`frontend/app/console`)를 로컬(`daengs.~`, 개발 DB)과 GCP(`daengapp.~`, 운영 DB) 두 곳에
 배포합니다. 운영 값이 있는 GCP 쪽이 운영 콘솔이고, "GCP 용 콘솔" 을 따로 만들지 않습니다.

@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     # 서버에서는 켜 두세요 — 그게 예열을 두는 이유입니다.
     warm_up_encoder: bool = True
 
+    # Requires #260 + 21_activity_game.sql on web and worker DBs. Explicit activation only.
+    activity_game_enabled: bool = False
+
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
     # 사실상 호스트 하나뿐인데, URL 로 받으면 그 한 글자 때문에 접속 정보 전체를
@@ -126,6 +129,18 @@ class Settings(BaseSettings):
     # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
     agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
     agent_recursion_limit: int = Field(default=25, gt=0)
+
+    # ── 일반 답변 폴백 (#279) ─────────────────────────────────────────
+    # 라우터가 전문 능력을 하나도 못 골랐을 때 거절(FAILED) 대신 Gemini 생성 답변
+    # (`adapters/general.py`)을 붙일지. **기본값 false 라 켜기 전까지 운영은 지금과
+    # 같습니다** — #277 의 판정 결과를 보고 서버 `backend/.env` 한 줄로 켭니다.
+    #
+    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙이고,
+    # 두 오케스트레이터 구현(langgraph · agent)이 같은 규칙을 같은 값으로 지납니다.
+    # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
+    general_fallback: bool = Field(
+        default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
+    )
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
@@ -184,17 +199,11 @@ class Settings(BaseSettings):
     #   "local" — **이게 운영값입니다** (D-052). 서버의 gait-bridge 볼륨에 두고
     #             업로드·다운로드가 backend 의 bridge 를 지납니다.
     #   "gcs"   — 지금은 안 씁니다. 서버가 부하를 못 받을 때 되돌아갈 길.
-    gait_storage: str = Field(
-        default="none", validation_alias=AliasChoices("GAIT_STORAGE")
-    )
+    gait_storage: str = Field(default="none", validation_alias=AliasChoices("GAIT_STORAGE"))
     # GCS 로 되돌아갈 때만 씁니다. 비워 두는 것이 정상입니다 — 비어 있는 채
     # gait_storage="gcs" 이면 기동이 아니라 첫 발급에서 명확히 실패합니다.
-    gait_gcs_bucket: str = Field(
-        default="", validation_alias=AliasChoices("GAIT_GCS_BUCKET")
-    )
-    gait_gcs_location: str = Field(
-        default="", validation_alias=AliasChoices("GAIT_GCS_LOCATION")
-    )
+    gait_gcs_bucket: str = Field(default="", validation_alias=AliasChoices("GAIT_GCS_BUCKET"))
+    gait_gcs_location: str = Field(default="", validation_alias=AliasChoices("GAIT_GCS_LOCATION"))
     # 만료(초). **아직 잠정 기본값**입니다 — 실기기 왕복을 보고 정합니다.
     # 업로드는 큰 파일이라 넉넉히, 다운로드(재생)는 짧게.
     #
@@ -265,9 +274,7 @@ class Settings(BaseSettings):
     # extra="ignore" 라서 .env 에 남아 있어도 조용히 무시되는데, 그러면 개발 PC 가
     # 엉뚱한 호스트로 붙어서 원인을 찾기 어려운 인증 실패를 봅니다. 옛 줄이 보이면
     # 무시하지 말고 뜨지 않는 편이 낫습니다. 언젠가 지워도 되는 필드입니다.
-    legacy_database_url: str | None = Field(
-        default=None, validation_alias="DAENGS_DATABASE_URL"
-    )
+    legacy_database_url: str | None = Field(default=None, validation_alias="DAENGS_DATABASE_URL")
 
     # ── 암호화 키 ─────────────────────────────────────────────────────
     # 셋 다 32바이트 난수를 urlsafe base64 로 인코딩한 문자열입니다.

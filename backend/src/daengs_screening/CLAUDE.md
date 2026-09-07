@@ -19,7 +19,7 @@ uv run python tools/sync_screening.py <원본경로>          # 원본에서 가
 
 - **이 폴더는 사본입니다.** 원본은
   [gayeoniee/deeplearning_test](https://github.com/gayeoniee/deeplearning_test)(공개)
-  이고 복사 시점 커밋은 `3f5ee88` (main) 입니다.
+  이고 복사 시점 커밋은 `adcea28` (main, 2026-09-07) 입니다.
   **고칠 일이 생기면 원본을 고치고 다시 복사하세요** — 여기서 고치면
   갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.

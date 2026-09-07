@@ -62,10 +62,12 @@ export const RESOLVED_CAPABILITIES = [
  * 실행되는 능력. 핸드오프 대상(`skin`·`gait`)은 여기 없습니다 — 실행되지 않으니까요.
  *
  * `place` 는 PR #196 에서 실행 registry 에 들어왔고 PR #204(D-051)부터 의미 라우터도
- * 고를 수 있습니다. 이 파일은 백엔드와 **손으로** 맞추는 것이라(머리 주석) 저쪽
- * `CapabilityName` 이 넷인 동안 여기가 셋이면 조용히 어긋납니다.
+ * 고를 수 있습니다. `general` 은 PR #279 의 일반 답변 폴백 — 라우터가 고르는 것이 아니라
+ * 전문 능력이 하나도 안 골렸을 때 planner 가 붙이는 것이라 `RESOLVED_CAPABILITIES` 에는
+ * 없습니다(`requested_capability` 로 못 부릅니다). 이 파일은 백엔드와 **손으로** 맞추는
+ * 것이라(머리 주석) 저쪽 `CapabilityName` 이 다섯인 동안 여기가 넷이면 조용히 어긋납니다.
  */
-export type CapabilityName = "training" | "life" | "walk" | "place";
+export type CapabilityName = "training" | "life" | "walk" | "place" | "general";
 
 /** 능력 하나의 결과 상태. 최상위 status 와 **다른 축**입니다. */
 export type CapabilityStatus = "OK" | "ABSTAINED" | "REFUSED" | "PENDING" | "ERROR" | "TIMEOUT";

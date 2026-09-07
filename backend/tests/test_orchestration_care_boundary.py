@@ -418,9 +418,9 @@ def test_prompt_is_v9_with_the_same_model_and_schema_shape() -> None:
     the enum — and the husbandry sentences below are re-asserted against it, retargeted
     from "no destination" to General.
     """
-    assert PROMPT_VERSION == "semantic-router-ko-v9"
+    assert PROMPT_VERSION == "semantic-router-ko-v10"
     assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v9" in _policy()
+    assert "PROMPT_VERSION: semantic-router-ko-v10" in _policy()
     schema = SemanticRoutingDecision.model_json_schema()
     assert set(schema["properties"]) == {"execute", "handoffs", "social_intent"}
     execute_enum = schema["properties"]["execute"]["items"]["enum"]
@@ -489,6 +489,25 @@ def test_v6_declares_routine_husbandry_a_general_matter_without_keyword_lists() 
     for keyword in ("산책", "급여", "수면", "정부", "권장", "푸들", "저녁", "오늘"):
         assert keyword not in policy
     assert "not an answer generator" in policy
+
+
+def test_v10_place_is_for_the_dog_and_another_animal_is_not_a_destination() -> None:
+    """v10 (D-057 ④ 후속): 새는 곳은 `place` 하나였다.
+
+    #277 의 off_domain 21건 중 6건이 답으로 나갔고, 대조군을 낀 12건 프로브(2026-09-07)에서
+    모양이 전부 같았다 — 고양이 카페 · 고양이 사료 가게 · 사람 내과 · 이탈리안 레스토랑이
+    모두 `place` 였다. v9 의 Place 정의가 "장소를 찾아 달라는 말" 을 읽고 "그 장소가 무엇을
+    위한 것인가" 를 안 읽었기 때문이다. 안전 프롬프트(`general.py`)는 그대로다 — 거기 닿은
+    것은 이미 제대로 거절하고 있었다.
+    """
+    policy = " ".join(_policy().split())
+    assert "The venue must be for the dog or for the user together with the dog" in policy
+    assert "Finding somewhere for a person's own errand, or for another animal, is NOT Place." in policy
+    assert "a venue or care question whose subject is another animal such as a cat" in policy
+    assert "Wanting somewhere nearby found does not by itself make a request Place" in policy
+    # 과교정 방어선. 같은 발화에 강아지 부분이 있으면 그 부분은 평소대로 간다 —
+    # "주식 얘기 + 강아지 동반 카페" 가 place 를 잃으면 이 변경은 손해다.
+    assert "route that part as usual and leave the unrelated part unanswered" in policy
 
 
 def test_v6_keeps_todays_walking_time_window_in_walk_without_broadening_to_routines() -> None:

@@ -12,8 +12,9 @@ from daengs_backend.schemas.walk_storyboard import StoryboardResponse
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
+from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk import analyze_walk
-from daengs_walk.storyboard import StoryboardBundleV2, build_storyboard, fingerprint, legacy_bundle
+from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
 from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk
 
@@ -58,8 +59,8 @@ async def source(session, owner, walk_id):
 def result(walk, row, revisions, revision, bundle_format="walk-storyboard-candidates-v1"):
     state = "pending" if row is None else "stale" if row.input_revision != revision else row.status
     bundle = row.bundle if row is not None and state == "ready" else None
-    if bundle is not None and bundle_format == "walk-storyboard-candidates-v1":
-        bundle = legacy_bundle(StoryboardBundleV2.model_validate(bundle))
+    if bundle is not None:
+        bundle = compatible_bundle(bundle, bundle_format)
     return StoryboardResponse(
         session_id=walk.client_session_id,
         generation=row.generation if row else 0,
@@ -78,7 +79,7 @@ async def get(session, owner, walk_id, bundle_format="walk-storyboard-candidates
     return value
 
 
-async def generate(session, owner, walk_id, request, lookup):
+async def generate(session, owner, walk_id, request, lookup, titles=title_storyboard):
     walk, analysis, entries, revisions, revision, history = await source(session, owner, walk_id)
     if {str(k): v for k, v in request.expected_entries.items()} != revisions:
         raise StoryboardConflict("행동 기록이 변경됐어요. 기록을 다시 동기화해 주세요.")
@@ -132,7 +133,10 @@ async def generate(session, owner, walk_id, request, lookup):
             selection,
             contexts,
             evidence.gaps,
-        ).model_dump(mode="json")
+        )
+        if request.bundle_format == "walk-storyboard-candidates-v3":
+            bundle = await titles(bundle)
+        bundle = bundle.model_dump(mode="json")
     except asyncio.CancelledError:
         raise  # Persisted lease makes a killed request recoverable after 60s.
     except Exception:  # noqa: BLE001 - persist a bounded failed state; never expose provider/DB secrets

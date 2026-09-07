@@ -67,6 +67,10 @@ class GaitRecordDetail(GaitRecordSummary):
     summary_for_ui: dict | None
     video_meta: dict | None
     failure_reason: str | None
+    # 분석 결과(스켈레톤) 영상을 받을 주소. overlay 가 있고 저장소가 설정됐을 때만 채워집니다.
+    # 앱은 이게 있으면 이걸 재생하고, 없으면 기기의 원본을 재생합니다. `has_overlay` 는
+    # "존재하나"이고 이 값은 "어디서 받나"입니다 — overlay 가 있어도 저장소 미설정이면 null.
+    overlay_url: str | None = None
 
 
 class GaitDeleteResponse(BaseModel):

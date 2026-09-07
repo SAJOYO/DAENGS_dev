@@ -144,10 +144,42 @@ class StoryboardBundleV2(StoryboardBundle):
         return self
 
 
+class StoryboardBundleV3(StoryboardBundleV2):
+    format: Literal["walk-storyboard-candidates-v3"] = "walk-storyboard-candidates-v3"
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    title_fact_ids: list[str] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def title_provenance(self):
+        ids = {f.id for s in self.scenes for f in s.facts if f.kind != "coverage"}
+        if bool(self.title) != bool(self.title_fact_ids) or not set(self.title_fact_ids) <= ids:
+            raise ValueError("Diary title requires recorded evidence")
+        if self.title is not None and (
+            self.title != self.title.strip() or any(c in self.title for c in "\n\r\t")
+        ):
+            raise ValueError("Diary title must be a single trimmed line")
+        return self
+
+
+def compatible_bundle(payload, target):
+    """Stored v3 can be read by strict older clients without extra keys."""
+    bundle = (
+        StoryboardBundleV3 if payload["format"].endswith("v3") else StoryboardBundleV2
+    ).model_validate(payload)
+    if target == "walk-storyboard-candidates-v1":
+        return legacy_bundle(bundle)
+    if target == "walk-storyboard-candidates-v2" and isinstance(bundle, StoryboardBundleV3):
+        value = bundle.model_dump(mode="json", exclude={"title", "title_fact_ids"})
+        return StoryboardBundleV2.model_validate({**value, "format": target})
+    return bundle  # Old cached v2 has no title; reading never triggers an LLM call.
+
+
 def legacy_bundle(bundle):
     """Keep old clients working; preserve v2 evidence revisions and diagnostic facts."""
     payload = bundle.model_dump(mode="json")
     payload.pop("selection", None)
+    payload.pop("title", None)
+    payload.pop("title_fact_ids", None)
     payload["format"] = "walk-storyboard-candidates-v1"
     for scene in payload["scenes"]:
         scene.pop("entry", None)

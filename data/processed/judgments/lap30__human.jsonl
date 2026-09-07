@@ -1,0 +1,5 @@
+{"type": "header", "version": 1, "lap": "lap30", "judged_at": "2026-09-07T17:29:26+09:00", "judge_model": "human", "prompt_version": 0, "rubric": "answers_question", "items": 4}
+{"type": "judgment", "id": "I4", "answers_question": true, "asked": "보험금을 지급하지 않는 경우", "rationale": "지급하지 않는 경우를 하나라도 직접 제시했으므로 물음에 답한 것으로 본다. ⚠ RAG-072 가 이 답을 '물은 것의 답이 아니다' 로 읽은 것을 사람이 뒤집었다."}
+{"type": "judgment", "id": "Q1", "answers_question": true, "asked": "등록하지 않았을 때 받는 처분", "rationale": "'어떻게 되나요' 는 열린 물음이고 처분(100만원 이하 과태료)을 곧장 답했다. grounded 가 X 인 것은 지목한 [2,3,4] 가 easylaw 해설이라서이고, 그것은 인용 축(D4)이다."}
+{"type": "judgment", "id": "S1", "answers_question": true, "asked": "당진시 진료비 지원 한도", "rationale": "'연간 20만원 이내' 로 금액을 곧장 답했다. grounded 가 X 인 것은 답변이 must 를 [N] 이 아니라 [당진시 … 조례 제26조] 로 지목해 채점기가 못 읽어서다."}
+{"type": "judgment", "id": "T3", "answers_question": true, "asked": "기차의 반려동물 무게 제한", "rationale": "코레일 일반열차는 실제로 무게가 아니라 크기 기준이고, 골든셋 must 도 srt-terms-pet 하나뿐이라 라벨 자체가 'kg 제한은 SRT 에만 있다' 로 보고 있다. judge 가 엄했다."}

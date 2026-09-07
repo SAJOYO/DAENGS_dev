@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.core.storage import StorageNotConfiguredError
+from daengs_backend.core.storage import StorageNotConfiguredError, get_storage
 from daengs_backend.models.gait_record import GaitRecord
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.schemas.gait import (
@@ -169,7 +169,27 @@ async def get_record(
         summary_for_ui=record.summary_for_ui,
         video_meta=record.video_meta,
         failure_reason=record.failure_reason,
+        overlay_url=_overlay_url(record),
     )
+
+
+def _overlay_url(record: GaitRecord) -> str | None:
+    """overlay 재생 주소. 없거나 저장소 미설정이면 None — 앱은 그때 원본을 재생합니다.
+
+    다운로드는 인증 헤더 없는 bridge 를 지납니다(overlay 키는 backend 만 발급하는 uuid4 라
+    추측 불가). 그래서 이 응답 자체가 소유권 게이트입니다 — 남의 record_id 는 위에서
+    이미 404 이고, 여기까지 온 것은 내 기록의 overlay 뿐입니다.
+    """
+    if record.overlay_storage_key is None:
+        return None
+    try:
+        return get_storage().download_url(
+            record.overlay_storage_key,
+            expires_in_seconds=settings.gait_download_url_ttl_seconds,
+        )
+    except StorageNotConfiguredError:
+        # overlay 는 있는데 저장소가 안 켜진 상태 — 앱에는 원본 재생으로 조용히 물러납니다.
+        return None
 
 
 @router.delete("/records/{record_id}", response_model=GaitDeleteResponse)
@@ -227,7 +247,7 @@ async def compare_records_endpoint(
 
 
 def _local_bridge():
-    from daengs_backend.core.storage import LocalBridgeStorage, get_storage
+    from daengs_backend.core.storage import LocalBridgeStorage
 
     storage = get_storage()
     if not isinstance(storage, LocalBridgeStorage):

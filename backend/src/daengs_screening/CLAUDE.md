@@ -8,18 +8,35 @@
 
 ```powershell
 cd backend
-uv sync --group ml --group screening                     # torch·timm
-uv run dev                                               # /screen/healthz
-uv run python tests/test_screening_agent.py              # 계약 감시 (99개)
-uv run python tests/test_screening_message.py            # 문구 감시 (34개)
-uv run python tools/sync_screening.py <원본경로>          # 원본에서 가져오기
+# ⚠️ --extra place 를 **빼지 마세요.** uv 는 exact 동기화라 안 적은 것을 지웁니다
+uv sync --extra place --group ml --group screening       # torch·timm + 기존 backend
+
+uv run --no-sync dev                                     # /screen/healthz
+uv run --no-sync python tests/test_screening_agent.py    # 계약 감시
+uv run --no-sync python tests/test_screening_message.py  # 문구 감시
+uv run --no-sync python tools/sync_screening.py <원본경로>  # 원본에서 가져오기
 ```
+
+> ### ⚠️ `uv run` 을 맨몸으로 쓰지 마세요 — 공용 환경이 깨집니다
+>
+> `uv run` 은 실행 **전에** 환경을 동기화합니다. extras·groups 를 안 적으면
+> **적혀 있지 않은 것을 지웁니다.** `uv run python x.py` 한 번에
+> `place`(geoalchemy2·alembic·mako)와 `ml`(torch·timm)이 통째로 날아갑니다.
+> 에러는 안 나고, 다음 사람이 테스트를 돌릴 때 `ModuleNotFoundError` 로 만납니다.
+>
+> **2026-09-07 에 하루 두 번 이 사고가 났습니다.** 두 번 다 위 명령 블록을
+> 그대로 따라 하다가요 — 사람 문제가 아니라 **문서가 함정이었습니다.**
+>
+> - 평소: **`uv run --no-sync ...`** (환경을 안 건드림)
+> - 의존성을 정말 바꿀 때만: 위 `uv sync` 를 **extras·groups 전부 적어서**
+>
+> 깼으면 위 `uv sync` 한 줄로 복구됩니다 (torch 를 다시 받아 몇 분 걸립니다).
 
 ## 규칙
 
 - **이 폴더는 사본입니다.** 원본은
   [gayeoniee/deeplearning_test](https://github.com/gayeoniee/deeplearning_test)(공개)
-  이고 복사 시점 커밋은 `adcea28` (main, 2026-09-07) 입니다.
+  이고 복사 시점 커밋은 `909d9e9` (main, 2026-09-07) 입니다.
   **고칠 일이 생기면 원본을 고치고 다시 복사하세요** — 여기서 고치면
   갈라지고, 갈라져도 아무도 모릅니다.
   재동기화 절차는 README 맨 아래에 있습니다.

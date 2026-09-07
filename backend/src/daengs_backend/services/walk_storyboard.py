@@ -133,8 +133,12 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
             selection,
             contexts,
             evidence.gaps,
+            include_observations=request.bundle_format == "walk-storyboard-candidates-v4",
         )
-        if request.bundle_format == "walk-storyboard-candidates-v3":
+        if request.bundle_format in {
+            "walk-storyboard-candidates-v3",
+            "walk-storyboard-candidates-v4",
+        }:
             bundle = await titles(bundle)
         bundle = bundle.model_dump(mode="json")
     except asyncio.CancelledError:

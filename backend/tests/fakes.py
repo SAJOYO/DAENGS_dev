@@ -1036,12 +1036,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
-    async def screening_list_for_owner(session, app_user_id, *, pet_id=None, limit=50):
+    async def screening_list_for_owner(
+        session, app_user_id, *, pet_id=None, before=None, limit=50
+    ):
         rows = [r for r in store.screenings if r.app_user_id == app_user_id]
         if pet_id is not None:
             rows = [r for r in rows if r.pet_id == pet_id]
-        # 진짜는 created_at DESC 입니다. 담은 순서를 뒤집어 그 순서를 흉내 냅니다.
-        return list(reversed(rows))[:limit]
+        # **담은 순서를 뒤집지 않고 `created_at` 으로 실제로 정렬합니다.** 뒤집기로 흉내 내면
+        # "담은 순서 = 시간 순서" 인 테스트만 통과하고, 옛 기록을 기준으로 묻는 갈래가 통째로
+        # 안 돌아 #79 3번의 순서 버그를 못 잡았습니다 (동시각은 진짜와 같게 `id` 로 가릅니다).
+        rows.sort(key=lambda r: (r.created_at, r.id), reverse=True)
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
+        return rows[:limit]
 
     async def screening_find_by_storage_key(session, storage_key, *, status=None):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고

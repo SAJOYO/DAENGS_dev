@@ -59,7 +59,8 @@ else:
 def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None,
         breed: str | None = None, age_months: int | None = None,
         screening_verdict: str | None = None,
-        screening_days_ago: int | None = None) -> AskOut:
+        screening_days_ago: int | None = None,
+        screening_history: tuple[tuple[str, int], ...] = ()) -> AskOut:
     """질문 하나 → 응답 하나.
 
     `encoder`·`conn`·`client` 는 **받아서 그대로 넘긴다** — 만들지도 닫지도 않는다(RAG-028 ①).
@@ -73,6 +74,10 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
     이면 프롬프트가 한 글자도 안 바뀐다. **판정 기록에서 이어 온 질문에만 채워진다.**
     병명·확률·통제 문구가 여기 없는 것은 빠뜨린 것이 아니라 상류 계약이 안 싣기 때문이다
     (D-023, `orchestration/contracts.py` 의 `ScreeningContext`).
+
+    `screening_history` 는 #79 3번이고 같은 아이의 **이전** 판정들이다 — `(판정, 경과일)`
+    쌍의 튜플이라 여기도 원시값이고, 비어 있으면 이력 블록이 아예 안 붙는다. 위 두 값과
+    **따로 온다**: 첫 기록은 이력이 없고, 이번 판정이 실패한 자리에는 이력만 있다.
     """
     try:
         answer = generate.ask(
@@ -85,7 +90,9 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
             client=client,
             dog=generate.DogProfile(breed=breed, age_months=age_months),
             screening=generate.ScreeningNote(
-                verdict=screening_verdict, days_ago=screening_days_ago
+                verdict=screening_verdict,
+                days_ago=screening_days_ago,
+                history=tuple(screening_history),
             ),
         )
     except RuntimeError as e:

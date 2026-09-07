@@ -93,6 +93,40 @@ def _no_crawl_runs_writes(request, monkeypatch):
     monkeypatch.setattr(crawl.crawl_source, "apply_async", _no_dispatch)
 
 
+@pytest.fixture(autouse=True)
+def recorded_metrics(request, monkeypatch):
+    """요청 지표를 **DB 대신 리스트에 모은다** (#297). 위 fixture 와 같은 규칙이다.
+
+    `/assistant/query` 가 이제 요청마다 `request_metrics` 에 한 행을 남긴다. 그 공장은
+    `SessionLocal` 이라 **테스트에서도 팀에 하나뿐인 DB 를 문다** — 막지 않으면
+    `crawl_runs`(RAG-047)와 `documents`(RAG-045 ③)에서 두 번 겪은 일이 세 번째로 난다.
+    이번에는 표가 아직 없어서 쓰기가 실패하고 조용히 넘어가지만, 마이그레이션을 개발 DB 에
+    적용하는 순간 **테스트를 돌릴 때마다 가짜 지표가 쌓인다.**
+
+    막는 방법이 다른 것은 의도다. 저쪽은 예외를 던져 "쓰려 하면 터지게" 하는데, 여기서는
+    **모으기만** 한다 — 지표 쓰기는 실패를 삼키는 것이 계약이라(services/request_metrics.py)
+    예외를 던져도 테스트가 아무것도 못 본다. 대신 모아 두면 **무엇을 남기려 했는지**를
+    테스트가 그대로 볼 수 있다:
+
+        def test_무엇을_남기나(client, recorded_metrics):
+            client.post("/assistant/query", json=...)
+            (row,) = recorded_metrics
+            assert row["status"] == "ANSWERED"
+
+    진짜 쓰기 경로(`_write` 안쪽)를 보는 테스트는 이 fixture 를 안 받고 리포지토리를
+    직접 부른다 (`test_request_metrics.py`).
+    """
+    from daengs_backend.services import request_metrics
+
+    rows: list[dict] = []
+
+    async def _collect(_factory, **fields):
+        rows.append(fields)
+
+    monkeypatch.setattr(request_metrics, "_write", _collect)
+    return rows
+
+
 # ---------------------------------------------------------------- 수집에서 뺄 파일
 #
 # **`uv run pytest` 를 인자 없이 돌릴 수 있게 하는 자리입니다** (#224).

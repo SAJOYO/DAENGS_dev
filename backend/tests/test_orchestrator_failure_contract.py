@@ -50,6 +50,7 @@ from daengs_backend.orchestration.contracts import (
     PrincipalContext,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import GeminiSemanticRouter
 from daengs_backend.orchestration.service import (
     _ROUTER_FAILURE_MESSAGE,
@@ -325,6 +326,7 @@ async def test_empty_selection_is_the_same_failed_answer_in_both() -> None:
     """라우터의 빈 결정과 에이전트의 '툴 없이 마침'은 같은 길로 FAILED 다 — 어댑터 0회.
 
     플래그가 **꺼진** 기본값에서의 계약이다 (ⓓ). 켜졌을 때는 아래 `run_both_empty` 계열이 잰다.
+    문구는 스코프드 리다이렉트다 (#278) — 라우터 실패 문구(`_ROUTER_FAILURE_MESSAGE`)와 다르다.
     """
     assert settings.general_fallback is False
     fakes_lg, log_lg = adapters({"training": ok(CapabilityName.TRAINING)})
@@ -336,6 +338,7 @@ async def test_empty_selection_is_the_same_failed_answer_in_both() -> None:
         ScriptedChatModel(script=[AIMessage(content="답할 수 없어요.")]), fakes_ag
     ).run(query=QUERY, principal=PRINCIPAL, context=dict(SEOUL))
     assert lg.status == ag.status == AssistantStatus.FAILED
+    assert lg.message == ag.message == NO_CAPABILITY_MESSAGE
     assert "답할 수 없어요" not in ag.message
     assert log_lg == log_ag == []
     assert_equivalent(lg, ag)

@@ -13,6 +13,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     RouteTrace,
 )
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 
 _LABELS = {
     CapabilityName.TRAINING: "훈련",
@@ -76,8 +77,11 @@ def aggregate_results(
             status = AssistantStatus.HANDOFF
             message = _handoff_message(route_plan)
         else:
+            # 라우터가 아무것도 못 고른 요청은 실무상 대부분 반려견과 무관한 요청이었다 —
+            # 일반 답변 폴백 플래그가 꺼져 있을 때도(D-057) "무엇은 도울 수 있다" 를 말하는
+            # 스코프드 리다이렉트를 쓴다 (#278). REFUSED 의 off_topic 과 같은 문장이다.
             status = AssistantStatus.FAILED
-            message = "실행하거나 안내할 수 있는 기능이 없습니다."
+            message = NO_CAPABILITY_MESSAGE
         return AssistantResponse(
             request_id=request_id,
             status=status,

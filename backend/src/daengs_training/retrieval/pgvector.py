@@ -100,6 +100,11 @@ def _trace_documents(hits: list[dict]) -> dict:
 
     if not ls_utils.tracing_is_enabled():
         return {}
+    # 검색이 예외로 끝나면 langsmith 는 여기를 `None` 으로 부른다 (0.11.2 실측 —
+    # DB 접속 실패 때 "NoneType is not iterable" 로그가 그것). 실패한 런의 출력은 빈 것이
+    # 맞고, 예외 자체는 langsmith 가 런의 error 로 따로 남긴다.
+    if hits is None:
+        return {}
     return {
         "documents": [
             {

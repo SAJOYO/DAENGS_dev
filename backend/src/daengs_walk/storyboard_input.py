@@ -16,6 +16,13 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
             "route_m": offset,
             "block": block,
             "elapsed_s": (fix.at - start).total_seconds(),
+            "observation": {
+                "client_seq": fix.client_seq,
+                "chain_index": fix.chain_index,
+                "at": fix.at.isoformat(),
+                "lat": fix.lat,
+                "lng": fix.lng,
+            },
             "location": {
                 "lat": fix.lat,
                 "lng": fix.lng,
@@ -75,4 +82,8 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         pet_id=pet_id,
         started_at=start,
     )
+    selection["boundary_observations"] = {
+        "start": nodes[0]["observation"] if nodes else None,
+        "end": nodes[-1]["observation"] if nodes else None,
+    }
     return projected, selection

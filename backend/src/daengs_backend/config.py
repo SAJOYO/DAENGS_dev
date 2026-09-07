@@ -158,6 +158,43 @@ class Settings(BaseSettings):
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
 
+    # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
+    # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은
+    # 그 값을 `daengs_backend` 쪽 도구(`tools/answer_quality/`)도 읽어야 해서이고,
+    # 위 `redis_url`·`gemini_api_key` 와 **같은 판단**입니다 — 두 패키지가 같은 env 를
+    # 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
+    #
+    # ⚠ **이름·단위·기본값을 #305 와 어긋나게 두지 마세요.** 같은 `backend/.env` 한 줄을
+    #   둘이 읽으므로, 여기서만 바꾸면 judge 둘이 다른 모델로 채점하면서 그 사실이
+    #   아무 데도 안 드러납니다.
+    #
+    # 판정자가 Gemini 가 아닌 이유는 #305 가 이미 정했습니다 — 생성이 Gemini 인데 judge 도
+    # Gemini 면 같은 훈련 계보가 자기 계열 문장을 후하게 보는 self-preference 가 남습니다.
+    # RAG-007 은 "급 분리"(flash 생성 → pro judge)까지 요구했고, 2026-09-07 에 계열까지
+    # 가르기로 정했습니다. D-060 은 그 결정을 훈련 RAG 로 **이어받을 뿐 다시 정하지 않습니다.**
+    #
+    # ⚠ `os.getenv` 로 읽는 자리를 새로 만들지 마세요. `daengs_training/generation/gemini.py`
+    #   가 그렇게 돼 있어서 개발 PC 에서는 셸에 키를 또 줘야 합니다 (`backend/.env` 는
+    #   pydantic-settings 가 Settings 로 읽을 뿐 `os.environ` 에 올리지 않습니다).
+    #   openai SDK 의 기본 생성자가 그 `os.environ` 을 보므로, 여기서 받아 클라이언트에
+    #   **명시적으로** 넘깁니다.
+    #
+    # 키가 비면 judge 만 안 돕니다 — 앱은 정상으로 뜹니다.
+    openai_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("OPENAI_API_KEY")
+    )
+    # ⚠ **`-latest` 류를 쓰지 않습니다** (#305). 움직이는 이름이면 두 판정 파일의 차이가
+    # 답변 때문인지 judge 때문인지 안 갈립니다. `gemini_model` 과 방향이 반대인데, 그쪽은
+    # 생성이라 되돌리기가 싸고 이쪽은 **채점자**라 흔들리면 옛 판정과의 비교가 통째로 끊깁니다.
+    openai_judge_model: str = Field(
+        default="gpt-5.4-2026-03-05", validation_alias=AliasChoices("OPENAI_JUDGE_MODEL")
+    )
+    # ⚠ **여기는 초입니다** — `gemini_timeout_ms` 와 단위가 다르므로 이름에 박아 둡니다.
+    # judge 는 서빙 경로가 아니라 배치라 넉넉하게 줍니다.
+    openai_timeout_s: float = Field(
+        default=120.0, validation_alias=AliasChoices("OPENAI_TIMEOUT_S"), gt=0
+    )
+
     # ── Place discovery internal HTTP boundary ───────────────────────
     # backend와 place-search는 소스를 공유해도 런타임은 분리돼 있습니다. 기본값은 compose
     # service DNS이고, 호스트에서 backend만 실행할 때는 backend/.env에서 바꿉니다.
@@ -244,6 +281,25 @@ class Settings(BaseSettings):
         default=150 * 1024 * 1024,
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
+
+    # ── 보행 분석 엔진 (#304) ─────────────────────────────────────────
+    # "legacy" = `daengs_gait`(ultralytics best.pt, 워커 venv 에 설치됨).
+    # "v4"     = `backend/gait_v4/`(walk_demo v4: ssdlite + RTMPose AP-10K). **별도 uv
+    #            프로젝트**라 워커가 그 venv 의 python 을 서브프로세스로 부릅니다 —
+    #            버전이 `==` 로 못 박혀 있고 골든이 그 조합에서 나와서 backend lock 에
+    #            합치지 않습니다. 라이선스(ssdlite.pt academic/non-commercial) 결정 전이라
+    #            **기본은 legacy** 입니다. 운영에서 바꾸지 마세요.
+    #
+    # ⚠️ 두 엔진의 기록은 DB 에서 구분되지 않습니다 (`pose_model` 컬럼 없음,
+    #    `gait_filter_version` 문자열도 같음). 섞이면 관절 정의가 다른 기록끼리 비교됩니다.
+    #    엔진을 바꾸려면 그 결정이 먼저입니다 (#304 컨텍스트 메모).
+    gait_engine: str = Field(default="legacy", validation_alias=AliasChoices("GAIT_ENGINE"))
+    # gait_v4 프로젝트 폴더. 그 안의 `.venv` 와 `weights/` 를 씁니다. 비우면 저장소의
+    # `backend/gait_v4` (config.py 기준 상대 경로) 입니다.
+    gait_v4_dir: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_DIR"))
+    # v4 venv 의 python. 비우면 `<gait_v4_dir>/.venv/…/python`. 컨테이너에서는 코드 폴더가 :ro 라
+    # venv 를 /opt 에 두고 이 값으로 알려 줍니다 (compose 의 gait-worker 참고).
+    gait_v4_python: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_PYTHON"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
     # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와

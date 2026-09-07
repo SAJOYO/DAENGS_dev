@@ -1,0 +1,481 @@
+{
+  "generator_version": "answer-quality-questions-ko-v1",
+  "model": "gemini-3.1-flash-lite",
+  "temperature": 0.9,
+  "seed": 277,
+  "max_output_tokens": 1024,
+  "calls_per_stratum": 1,
+  "schema_retry": "once on schema failure",
+  "started_at": "2026-09-06T21:49:43+00:00",
+  "finished_at": "2026-09-06T21:51:24+00:00",
+  "stopped": null,
+  "strata_count": 63,
+  "target_total": 154,
+  "written_total": 154,
+  "per_stratum": [
+    {
+      "stratum": "training__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "training__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_institutional__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "walk_now__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "place__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__polite",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__casual",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__abbrev_typo",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__noisy",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__smalltalk_mixed",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__multi_intent",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "skin_gait__no_location",
+      "requested": 3,
+      "returned": 3,
+      "kept": 2,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__polite",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__casual",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__abbrev_typo",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__noisy",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__smalltalk_mixed",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__multi_intent",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "general_care__no_location",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__polite",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__casual",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__abbrev_typo",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__noisy",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__smalltalk_mixed",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__multi_intent",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "medical_boundary__no_location",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__polite",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__casual",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__abbrev_typo",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__noisy",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__smalltalk_mixed",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__multi_intent",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "emergency__no_location",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__polite",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__casual",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__abbrev_typo",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__noisy",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__smalltalk_mixed",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__multi_intent",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    },
+    {
+      "stratum": "off_domain__no_location",
+      "requested": 4,
+      "returned": 4,
+      "kept": 3,
+      "short_by": 0
+    }
+  ],
+  "tokens": {
+    "calls": 63,
+    "input_tokens": 29732,
+    "output_tokens": 9885,
+    "total_tokens": 39617,
+    "budget": 400000
+  },
+  "provenance": {
+    "source_sha": "cbfb2ca9e7579936ce2b0cfe4f0f4a8d3418f8bd",
+    "source_dirty_files": [
+      "backend/tools/answer_quality/collect.py",
+      "backend/tools/answer_quality/gemini.py",
+      "backend/tools/answer_quality/generate_questions.py",
+      "backend/tools/answer_quality/judge.py",
+      "backend/tools/answer_quality/report.py"
+    ],
+    "dev_source_sha": "aec7ce50bfbb9d128a785f02e7d973d86a5a6403",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

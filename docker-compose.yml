@@ -124,6 +124,10 @@ services:
       GAIT_STORAGE: ${GAIT_STORAGE:-none}
       GAIT_LOCAL_STORAGE_DIR: ${GAIT_LOCAL_STORAGE_DIR:-}
       GAIT_BRIDGE_BASE_URL: ${GAIT_BRIDGE_BASE_URL:-}
+      # 보행 분석 엔진 (#304). legacy = daengs_gait(best.pt), v4 = backend/gait_v4(walk_demo).
+      # backend 는 v4 의 **비교 함수만** 씁니다 — 아래 volumes 의 compare.py 마운트와 한 쌍.
+      # 기본 legacy. ssdlite.pt 라이선스(academic/non-commercial) 결정 전 운영에서 바꾸지 마세요.
+      GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
       # bridge 업로드 상한(바이트). D-052 로 모든 바이트가 backend 를 지나므로
       # 이게 메모리 방어선입니다. nginx 의 200m 보다 낮게 유지하세요.
       #
@@ -180,6 +184,9 @@ services:
       #   경로에서 읽습니다 — 그래서 한 볼륨입니다.
       #   ⚠️ 임시가 아닙니다. 영상·사진 **원본이 여기 남습니다.** 지우지 마세요.
       - gait-bridge:/data/gait-bridge
+      # v4 비교 모듈 (#304). `services/gait._load_v4_compare` 가 이 안의 compare.py 를 **파일로**
+      # 불러옵니다 (numpy 만 씀, torch 없음). 패키지 전체·venv 는 워커에만 있습니다.
+      - ./backend/gait_v4/gait_v4:/app/gait_v4/gait_v4:ro
       # ⬇ GCS 로 **되돌아갈** 때만 엽니다 (서비스 계정 키를 쓸 때).
       #   호스트의 키 파일을 읽기 전용으로 물리고, 위 GOOGLE_APPLICATION_CREDENTIALS 를
       #   `/secrets/gcp-sa.json` 으로 맞춥니다. 배포 폴더 **바깥**에 두세요 — 재배포에
@@ -475,6 +482,16 @@ services:
       GAIT_GCS_LOCATION: ${GAIT_GCS_LOCATION:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       TZ: Asia/Seoul
+      # ── 보행 분석 엔진 (#304) ──────────────────────────────────────
+      # v4 면 아래 command 가 /app/gait_v4 의 **별도 venv** 를 동기화하고, 워커는 그 python 을
+      # 서브프로세스로 부릅니다 (services/gait._analyze_with_v4). torch 는 이 프로세스에 안 올라옵니다.
+      GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
+      # v4 가중치 위치. legacy 와 **같은 폴더**(GAIT_RELEASE_DIR)를 씁니다 — ssdlite.pt 와
+      # rtmpose-m_ap10k/end2end.onnx 를 거기 두세요. 파일 이름이 달라 legacy 와 안 겹칩니다.
+      GAIT_V4_WEIGHTS: /models/release
+      # 워커가 서브프로세스로 부를 v4 python. 비우면 코드 폴더의 .venv 를 찾는데, 컨테이너에서는
+      # 그 자리가 :ro 라 venv 를 밖에 두고 여기로 알려 줍니다 (아래 volumes 와 command 가 한 쌍).
+      GAIT_V4_PYTHON: /opt/gait-v4-venv/bin/python
     volumes:
       # backend 와 같은 프로젝트 정의를 공유하되 venv 는 gait-analysis 와 함께 gait-venv 를 씁니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -490,6 +507,13 @@ services:
       # gait-analysis 와 **같은 venv** (위 ⚠ 참고 — 인자가 같아 안전합니다).
       - gait-venv:/opt/venv
       - uv-cache:/root/.cache/uv
+      # ★ walk_demo v4 (#304). 코드는 읽기 전용, venv 는 **코드 밖** /opt/gait-v4-venv 에 named volume.
+      #   ⚠ 코드 폴더 **안**(/app/gait_v4/.venv)에 물리면 안 됩니다 — :ro 바인드 안에 마운트 지점을
+      #     못 만들어 컨테이너가 아예 안 뜹니다 (`mkdirat …/.venv: read-only file system`, 2026-09-07
+      #     서버 실측). 개발 PC 는 .venv 폴더가 이미 있어 렌더 검사로는 안 잡혔습니다.
+      #   ⚠ `gait-venv` 와 절대 공유하지 마세요 — 두 lock 이 다릅니다 (torch 2.13.0 vs ultralytics 의 것).
+      - ./backend/gait_v4:/app/gait_v4:ro
+      - gait-v4-venv:/opt/gait-v4-venv
     depends_on:
       pgvector:
         condition: service_healthy
@@ -500,8 +524,23 @@ services:
     # `--concurrency 1`: 분석이 무겁고 GPU 없는 CPU 추론이라 한 번에 하나만 돕니다.
     # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다 — `>` 가 더 깊이 들여쓴 줄바꿈을 살려 두면
     #    sh 가 여러 줄 스크립트를 받아 exec 뒤 인자가 실행되지 않습니다 (#55 의 함정).
+    #
+    # v4 (#304): GAIT_ENGINE=v4 일 때만 /app/gait_v4 의 venv 를 lock 그대로 동기화합니다.
+    #   · `UV_PROJECT_ENVIRONMENT` 를 **반드시 덮어씁니다** — 위 environment 의 /opt/venv 가 그대로면
+    #     exact 동기화가 gait-venv 의 ultralytics 를 지웁니다. 값은 위 GAIT_V4_PYTHON 의 venv 입니다.
+    #   · `--no-install-project`: 프로젝트 자체는 안 깝니다(setuptools 가 :ro 폴더에 egg-info 를 쓰려다
+    #     실패). `python -m gait_v4` 는 cwd 가 /app/gait_v4 라 패키지를 그냥 찾습니다.
+    #   · opencv 를 **headless 로 바꿉니다** — lock 은 GUI 판(opencv-python)인데 slim 컨테이너에는
+    #     libxcb 가 없어 첫 분석에서 죽습니다 (legacy 가 8/31 에 겪은 것과 같음). 같은 버전·같은 API 라
+    #     골든에 영향 없습니다. pyproject 의 버전은 안 건드립니다.
     command: >
       sh -c "uv sync --frozen --group gait &&
+      if [ \"$$GAIT_ENGINE\" = v4 ]; then
+      cd /app/gait_v4 &&
+      UV_PROJECT_ENVIRONMENT=/opt/gait-v4-venv uv sync --frozen --no-install-project &&
+      VIRTUAL_ENV=/opt/gait-v4-venv uv pip uninstall opencv-python opencv-contrib-python &&
+      VIRTUAL_ENV=/opt/gait-v4-venv uv pip install --no-deps opencv-python-headless==5.0.0.93 opencv-contrib-python-headless==5.0.0.93 &&
+      cd /app; fi &&
       exec uv run --no-sync celery -A daengs_backend.tasks.gait worker
       --loglevel info --concurrency 1 --queues gait"
 
@@ -873,6 +912,8 @@ volumes:
   # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
   crawler-beat-state:
   gait-venv:
+  # walk_demo v4 의 venv (#304). gait-venv 와 lock 이 달라 따로 둡니다.
+  gait-v4-venv:
   territory-vision-venv:
   # 보행 분석 기록(JSON) · overlay 영상 · 업로드 원본.
   # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.

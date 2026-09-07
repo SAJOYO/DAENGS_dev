@@ -253,3 +253,123 @@ class TestHttpBoundary:
         assert as_role("ADMIN").get(
             "/admin/audit", params={"limit": service.MAX_LIMIT + 1}
         ).status_code == 422
+
+
+@pytest.fixture
+def counts(monkeypatch: pytest.MonkeyPatch):
+    """`retention_summary` 리포지토리를 갈아 끼웁니다 — 실제 SQL 은 안 탑니다.
+
+    `rows` 와 같은 이유로 리포지토리 자리에서 끊습니다. `Store` 는 커밋 경계만 흉내 내므로
+    `count(*)` 가 진짜로 맞는지는 여기서 못 봅니다. 여기서 보는 것은 **판단**입니다.
+    """
+    from daengs_backend.repositories import admin_audit_log as audit_repo
+
+    def _install(total: int, *, empty: bool = False) -> None:
+        async def fake_summary(_session):  # type: ignore[no-untyped-def]
+            if empty:
+                return (0, None, None)
+            return (
+                total,
+                datetime(2026, 9, 4, tzinfo=UTC),
+                datetime(2026, 9, 7, tzinfo=UTC),
+            )
+
+        monkeypatch.setattr(audit_repo, "retention_summary", fake_summary)
+
+    return _install
+
+
+class TestRetention:
+    """보존 요약 — A5 가 "지우지 않는다" 로 닫히면서 생긴 자리 (#297).
+
+    **A5 의 결정은 "지우는 주기를 두지 않는다" 입니다** (2026-09-07). 그 결정이 "안 본다"로
+    무너지지 않게 기준을 숫자로 박았고, 이 코드가 그 기준을 들고 있습니다. 그래서 여기서
+    지키는 것은 **기준이 한 곳에만 사는가**입니다.
+    """
+
+    async def test_기준_아래면_over_가_아니다(self, session, counts) -> None:
+        counts(56)
+        summary = await service.retention_summary(session)  # type: ignore[arg-type]
+
+        assert summary.total == 56
+        assert summary.threshold == service.RETENTION_ROW_THRESHOLD
+        assert summary.over_threshold is False
+
+    async def test_기준에_닿으면_over_다(self, session, counts) -> None:
+        """**경계는 `>=` 입니다.** 딱 기준일 때 안 걸리면 아무도 못 알아챕니다."""
+        counts(service.RETENTION_ROW_THRESHOLD)
+        summary = await service.retention_summary(session)  # type: ignore[arg-type]
+
+        assert summary.over_threshold is True
+
+    async def test_비어_있어도_안_죽는다(self, session, counts) -> None:
+        """행이 하나도 없으면 min/max 가 NULL 입니다 — 새 환경의 정상 상태입니다."""
+        counts(0, empty=True)
+        summary = await service.retention_summary(session)  # type: ignore[arg-type]
+
+        assert summary.total == 0
+        assert summary.oldest_at is None
+        assert summary.over_threshold is False
+
+    async def test_조회는_감사에_안_남는다(self, session, store, counts) -> None:
+        """목록과 같은 이유입니다 — 남기면 화면이 자기 기록으로 채워집니다."""
+        counts(56)
+        await service.retention_summary(session)  # type: ignore[arg-type]
+
+        assert store.audit_log == []
+        assert store.audit_pending == []
+
+
+class TestRetentionHttpBoundary:
+    """권한은 목록과 같은 `admin:manage` 입니다 — 새 `Perm` 을 만들지 않았습니다."""
+
+    @pytest.fixture
+    def app(self, store: Store) -> FastAPI:
+        test_app = FastAPI()
+        test_app.include_router(router_module.router)
+
+        async def _fake_session() -> FakeSession:
+            return FakeSession(store)
+
+        test_app.dependency_overrides[get_session] = _fake_session
+        return test_app
+
+    @pytest.fixture
+    def as_role(self, app: FastAPI, store: Store):
+        def _make(role: str) -> TestClient:
+            principal = Principal(admin_id=store.admin.id, role=role)
+
+            async def _fake_admin() -> Principal:
+                return principal
+
+            app.dependency_overrides[current_admin] = _fake_admin
+            return TestClient(app)
+
+        return _make
+
+    def test_ADMIN_만_본다(self, as_role, counts) -> None:
+        counts(56)
+        assert as_role("ADMIN").get("/admin/audit/retention").status_code == 200
+        for role in ("OPERATOR", "CURATOR", "ANALYST", "VIEWER"):
+            assert as_role(role).get("/admin/audit/retention").status_code == 403, role
+
+    def test_기준을_같이_내려_준다(self, as_role, counts) -> None:
+        """**화면이 기준을 직접 들고 있지 않게** 응답에 같이 실어 보냅니다.
+
+        `total >= 100000` 을 화면이 쓰면 기준이 두 곳에 살고, 나중에 바꿀 때 한쪽만 바뀝니다.
+        """
+        counts(56)
+        body = as_role("ADMIN").get("/admin/audit/retention").json()
+
+        assert body["total"] == 56
+        assert body["threshold"] == service.RETENTION_ROW_THRESHOLD
+        assert body["over_threshold"] is False
+        assert body["oldest_at"].startswith("2026-09-04")
+
+    def test_목록_경로와_안_겹친다(self, as_role, counts, rows) -> None:
+        """`/admin/audit` 와 `/admin/audit/retention` 이 서로를 잡아먹지 않습니다."""
+        counts(56)
+        client = as_role("ADMIN")
+
+        assert set(client.get("/admin/audit").json()) == {"entries", "next_cursor"}
+        assert "total" in client.get("/admin/audit/retention").json()

@@ -63,6 +63,9 @@ _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # the whole plan a CLARIFY, so this set is what the coordinate gate reads.
 _NEEDS_COORDINATES = frozenset({"walk", "place"})
 _QUESTION_CAPABILITIES = frozenset({"training", "life"})
+# The verdicts `ScreeningContext` allows. Kept as a literal set rather than read off the
+# contract so a widened contract cannot silently widen what the planner copies (#283).
+_SCREENING_VERDICTS = frozenset({"normal", "abnormal", "retake"})
 _HANDOFF_REASONS = {
     "skin": "image_upload_required",
     "gait": "video_upload_required",
@@ -199,10 +202,20 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
             dog = _dog_context(context)
             if dog is not None:
                 payload["dog"] = dog
+            screening = _screening_context(context)
+            if screening is not None:
+                payload["screening"] = screening
         return payload
     if capability == _GENERAL:
         # Same rule as Life: the exact question plus the trusted dog facts, never a
         # coordinate — the fallback is not allowed to answer Walk's or Place's question.
+        #
+        # **The screening verdict deliberately stops here.** `general` answers without
+        # retrieved evidence (D-057), and its own refusal codes already send symptoms and
+        # diagnosis away (`adapters/general.py` `diagnosis`). Handing an ungrounded answerer
+        # the fact that a skin check came back `abnormal` invites exactly the sentence that
+        # refusal exists to prevent. Life gets it because Life answers from ordinances and
+        # subsidy documents, and those are what "이런 경우 지원이 있어요" is made of.
         payload = {"question": query}
         dog = _dog_context(context)
         if dog is not None:
@@ -239,6 +252,32 @@ def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
         resolved["age_months"] = age_months
     return resolved or None
+
+
+def _screening_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the recorded screening verdict, dropping anything the caller did not resolve.
+
+    Same rule as ``_dog_context``: only the caller's structured values reach a payload,
+    never model output, and a malformed entry yields None rather than an error. The caller
+    is ``routers/assistant.py`` `_with_screening_context`, which already proved ownership
+    and narrowed the record to two fields (#307).
+
+    **This function must never learn a third field.** The lesion name is wrong 56.6% of the
+    time on holdout (D-023) and `stage1` is uncalibrated, so what keeps that defence standing
+    is that no code path speaks either — invariant 15 in `docs/orchestration/contracts.md`.
+    Widening the whitelist here would not raise; it would just quietly put a wrong lesion
+    name in a prompt.
+    """
+    screening = context.get("screening")
+    if not isinstance(screening, Mapping):
+        return None
+    verdict = screening.get("verdict")
+    if verdict not in _SCREENING_VERDICTS:
+        return None
+    days_ago = screening.get("days_ago")
+    if not isinstance(days_ago, int) or isinstance(days_ago, bool) or days_ago < 0:
+        return None
+    return {"verdict": verdict, "days_ago": days_ago}
 
 
 def _missing_coordinates(context: dict[str, Any]) -> list[str]:

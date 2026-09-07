@@ -4,7 +4,8 @@
 골랐고 핸드오프도 없으면, 플래그(`DAENGS_GENERAL_FALLBACK`)가 켜져 있을 때만 `general`
 요청 하나를 조립한다. 이 파일이 고정하는 것:
 
-- 플래그가 꺼져 있으면(기본) 지금과 글자까지 같다 — 빈 결정은 FAILED.
+- 플래그가 꺼져 있으면(기본) 빈 결정은 그대로 FAILED 다 — 문구만 스코프드 리다이렉트로
+  바뀌었다 (#278).
 - 켜져 있으면 빈 결정 → `general` 하나, payload 는 Life 와 같은 규칙(원문 + 신뢰된 dog).
 - 전문 능력이나 핸드오프가 하나라도 있으면 `general` 이 **절대** 안 붙는다.
 - 좌표 게이트(CLARIFY)가 폴백보다 먼저다. 명시 신호는 영향이 없고 `general` 은 신호가 아니다.
@@ -53,6 +54,7 @@ from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
 )
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ExecuteName,
@@ -280,11 +282,11 @@ def service(decision: dict, general: CapabilityResult | Exception):
     return orchestrator, fakes
 
 
-async def test_flag_off_empty_decision_is_failed_as_before() -> None:
+async def test_flag_off_empty_decision_is_failed_with_the_scoped_redirect() -> None:
     orchestrator, fakes = service({"execute": [], "handoffs": []}, ok(CapabilityName.GENERAL, "x"))
     response = await orchestrator.run(query=QUERY, principal=PRINCIPAL, context=dict(SEOUL))
     assert response.status == AssistantStatus.FAILED
-    assert response.message == "실행하거나 안내할 수 있는 기능이 없습니다."
+    assert response.message == NO_CAPABILITY_MESSAGE
     assert all(fake.calls == [] for fake in fakes.values())
 
 

@@ -51,12 +51,23 @@ class WalkWeatherLookup(Protocol):
     ) -> WalkWeatherObservation: ...
 
 
-def _ask_life(question: str, *, breed: str | None = None, age_months: int | None = None) -> Any:
+def _ask_life(
+    question: str,
+    *,
+    breed: str | None = None,
+    age_months: int | None = None,
+    screening_verdict: str | None = None,
+    screening_days_ago: int | None = None,
+) -> Any:
     """Open the existing request-scoped dependencies around the Life service shim.
 
     The dog facts cross as primitives, not as ``DogContext``: importing the contract type
     into ``daengs_life`` would make the domain depend on the orchestration layer, which is
     the direction D-035 forbids. Life decides what they mean.
+
+    The screening verdict crosses the same way and for the same reason (#283) — two
+    primitives, never ``ScreeningContext``. Both are ``None`` on every request that did not
+    come from a screening result, and Life's prompt is then byte-identical to before.
     """
     from daengs_life.app import deps
     from daengs_life.app.services import ask as life_service
@@ -66,7 +77,13 @@ def _ask_life(question: str, *, breed: str | None = None, age_months: int | None
     conn = next(connection_dependency)
     try:
         return life_service.ask(
-            question, encoder=encoder, conn=conn, breed=breed, age_months=age_months
+            question,
+            encoder=encoder,
+            conn=conn,
+            breed=breed,
+            age_months=age_months,
+            screening_verdict=screening_verdict,
+            screening_days_ago=screening_days_ago,
         )
     finally:
         connection_dependency.close()
@@ -200,14 +217,18 @@ class LifeCapabilityAdapter:
         if not isinstance(payload, LifePayload):
             return self._error(started, "invalid_payload", "Life payload is invalid")
         dog = payload.dog
+        screening = payload.screening
         try:
             # 프로필이 없으면 두 값이 None 이고, 그때 Life 는 B4 이전과 똑같이 답한다.
+            # 스크리닝도 같다 — 판정에서 이어 온 질문이 아니면 두 값이 None 이다 (#283).
             upstream = await asyncio.to_thread(
                 partial(
                     self._ask,
                     payload.question,
                     breed=dog.breed if dog else None,
                     age_months=dog.age_months if dog else None,
+                    screening_verdict=screening.verdict if screening else None,
+                    screening_days_ago=screening.days_ago if screening else None,
                 )
             )
         except HTTPException as exc:

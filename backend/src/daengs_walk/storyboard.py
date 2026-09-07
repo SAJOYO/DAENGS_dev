@@ -144,18 +144,105 @@ class StoryboardBundleV2(StoryboardBundle):
         return self
 
 
+class StoryboardBundleV3(StoryboardBundleV2):
+    format: Literal["walk-storyboard-candidates-v3"] = "walk-storyboard-candidates-v3"
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    title_fact_ids: list[str] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def title_provenance(self):
+        ids = {f.id for s in self.scenes for f in s.facts if f.kind != "coverage"}
+        if bool(self.title) != bool(self.title_fact_ids) or not set(self.title_fact_ids) <= ids:
+            raise ValueError("Diary title requires recorded evidence")
+        if self.title is not None and (
+            self.title != self.title.strip() or any(c in self.title for c in "\n\r\t")
+        ):
+            raise ValueError("Diary title must be a single trimmed line")
+        return self
+
+
+class ObservationAnchor(StrictModel):
+    client_seq: int = Field(ge=0, le=2_147_483_647)
+    chain_index: int = Field(ge=0, le=2_147_483_647)
+    at: AwareDatetime
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class SceneV4(SceneV2):
+    observation: ObservationAnchor | None
+
+    @model_validator(mode="after")
+    def observation_provenance(self):
+        if self.observation:
+            if self.entry or "observation_gap" in self.reasons:
+                raise ValueError("Entries and gaps cannot borrow a GPS anchor")
+            if "session_boundary" not in self.reasons and not (
+                self.started_at <= self.observation.at <= self.ended_at
+            ):
+                raise ValueError("Observation must belong to the selected scene time")
+        return self
+
+
+class StoryboardBundleV4(StoryboardBundleV3):
+    format: Literal["walk-storyboard-candidates-v4"] = "walk-storyboard-candidates-v4"
+    scenes: list[SceneV4] = Field(min_length=1, max_length=250)
+
+    @model_validator(mode="after")
+    def observation_time_bounds(self):
+        start = min(s.started_at for s in self.scenes)
+        end = max(s.ended_at for s in self.scenes)
+        if any(s.observation and not start <= s.observation.at <= end for s in self.scenes):
+            raise ValueError("Observation is outside the walk")
+        return self
+
+
+def compatible_bundle(payload, target):
+    """Stored v3 can be read by strict older clients without extra keys."""
+    if payload["format"] == "walk-storyboard-candidates-v4":
+        bundle = StoryboardBundleV4.model_validate(payload)
+        if target == bundle.format:
+            return bundle
+        payload = bundle.model_dump(mode="json")
+        payload["format"] = "walk-storyboard-candidates-v3"
+        for scene in payload["scenes"]:
+            scene.pop("observation")
+    bundle = (
+        StoryboardBundleV3 if payload["format"].endswith("v3") else StoryboardBundleV2
+    ).model_validate(payload)
+    if target == "walk-storyboard-candidates-v1":
+        return legacy_bundle(bundle)
+    if target == "walk-storyboard-candidates-v2" and isinstance(bundle, StoryboardBundleV3):
+        value = bundle.model_dump(mode="json", exclude={"title", "title_fact_ids"})
+        return StoryboardBundleV2.model_validate({**value, "format": target})
+    return bundle  # Old cached v2 has no title; reading never triggers an LLM call.
+
+
 def legacy_bundle(bundle):
     """Keep old clients working; preserve v2 evidence revisions and diagnostic facts."""
     payload = bundle.model_dump(mode="json")
     payload.pop("selection", None)
+    payload.pop("title", None)
+    payload.pop("title_fact_ids", None)
     payload["format"] = "walk-storyboard-candidates-v1"
     for scene in payload["scenes"]:
         scene.pop("entry", None)
+        scene.pop("observation", None)
     return StoryboardBundle.model_validate(payload)
 
 
 def build_storyboard(
-    session_id, start, end, distance_m, entries, selection, contexts, gaps=(), *, synthetic=False
+    session_id,
+    start,
+    end,
+    distance_m,
+    entries,
+    selection,
+    contexts,
+    gaps=(),
+    *,
+    synthetic=False,
+    include_observations=False,
 ):
     local_source = {
         "id": "local-walk",
@@ -198,6 +285,7 @@ def build_storyboard(
         movement=(),
         entry=None,
         coverage=(),
+        observation=None,
     ):
         scene_id = "scene-" + fingerprint({"session": session_id, "identity": identity})[:24]
         if not synthetic and (identity in {"start", "end"} or identity.startswith("entry:")):
@@ -292,6 +380,8 @@ def build_storyboard(
             "sources": sources,
             "entry": entry,
         }
+        if include_observations:
+            content["observation"] = observation
         revision = fingerprint(
             {
                 **content,
@@ -299,9 +389,19 @@ def build_storyboard(
                 "ended_at": content["ended_at"].isoformat(),
             }
         )
-        scenes.append(SceneV2(**content, revision=revision))
+        scene_type = SceneV4 if include_observations else SceneV2
+        scenes.append(scene_type(**content, revision=revision))
 
-    append("start", 0, "산책 시작", "walk", "산책 시작 기록", ["session_boundary"])
+    boundaries = selection.get("boundary_observations", {})
+    append(
+        "start",
+        0,
+        "산책 시작",
+        "walk",
+        "산책 시작 기록",
+        ["session_boundary"],
+        observation=boundaries.get("start"),
+    )
     for entry in entries:
         if not entry["accepted"]:
             continue
@@ -345,6 +445,7 @@ def build_storyboard(
             {"start_m": anchor["route_m"], "end_m": anchor["route_m"], "block_id": anchor["block"]},
             contexts.get(anchor["id"]),
             movement=anchor["movement_evidence"],
+            observation=anchor.get("observation"),
         )
     for gap in gaps:
         # Gap fields are checked through the canonical model, not inferred from a straight line.
@@ -388,10 +489,12 @@ def build_storyboard(
         f"수용 이동거리 {round(distance_m)}m",
         ["session_boundary"],
         coverage=coverage,
+        observation=boundaries.get("end"),
     )
     scenes.sort(key=lambda s: (s.started_at, s.id))
     payload = [s.model_dump(mode="json") for s in scenes]
-    return StoryboardBundleV2(
+    bundle_type = StoryboardBundleV4 if include_observations else StoryboardBundleV2
+    return bundle_type(
         session_id=session_id,
         synthetic=synthetic,
         source_revision=fingerprint({"scenes": payload, "selection": summary.model_dump()}),

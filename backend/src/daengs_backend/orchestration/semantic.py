@@ -76,6 +76,7 @@ from collections.abc import Awaitable, Callable
 from functools import lru_cache
 from typing import Annotated, Any, Literal
 
+from langsmith import traceable
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from daengs_backend.config import settings
@@ -305,6 +306,45 @@ async def _generate_with_gemini(prompt: str) -> object:
     return await asyncio.to_thread(_call)
 
 
+def _trace_router_output(raw: object) -> dict[str, Any]:
+    """트레이스에 실을 라우터 원답. 스키마 검증 **전**의 값이라 그대로 싣는다.
+
+    검증에 떨어진 답을 보려고 있는 자리다 — 통과한 결정은 그래프 자식의 metadata
+    (`router` · `router_model`)와 RoutePlan 에 이미 있다.
+
+    맨 앞의 가드 이유는 `daengs_training/service.py` 의 `_trace_outputs` 와 같다 —
+    langsmith 는 트레이싱이 꺼져 있어도 `process_outputs` 를 부른다.
+    """
+    from langsmith import utils as ls_utils
+
+    if not ls_utils.tracing_is_enabled():
+        return {}
+    return {"raw": raw}
+
+
+@traceable(
+    run_type="llm",
+    name="semantic_router",
+    # `generate` 는 호출 가능 객체라 트레이스 입력에서 뺀다. 남는 것은 프롬프트뿐이고,
+    # 그것이 이 런을 두는 이유다 — "라우터가 능력을 잘못 골랐나" 는 프롬프트와 원답을
+    # 같이 봐야 답이 나온다 (D-054 의 세 질문 중 첫째).
+    process_inputs=lambda inputs: {"prompt": inputs.get("prompt")},
+    process_outputs=_trace_router_output,
+    metadata={"model": ROUTER_MODEL_ID, "prompt_version": PROMPT_VERSION},
+)
+async def _traced_generate(generate: Callable[[str], Awaitable[object]], prompt: str) -> object:
+    """라우터의 모델 호출 한 번 = LLM 런 하나.
+
+    `_generate_with_gemini` 가 아니라 **주입된 `generate` 를 감싸는** 이유: 테스트와
+    비교 러너가 가짜를 주입하는데, 그때도 런이 같은 자리에 같은 이름으로 생겨야
+    "라우터 런이 부모 아래에 있다" 를 실제 Gemini 없이 검증할 수 있다.
+
+    O-14 의 스키마 재시도는 이 함수를 두 번 부르므로 트레이스에 LLM 런이 둘 남는다.
+    그것이 의도다 — 재시도가 있었다는 사실 자체가 진단 정보다.
+    """
+    return await generate(prompt)
+
+
 class GeminiSemanticRouter:
     """Strict structured-output selection with the O-14 single schema retry."""
 
@@ -315,7 +355,7 @@ class GeminiSemanticRouter:
         prompt = build_semantic_router_prompt(query=query, context=context)
         for _attempt in range(2):  # O-14: retry exactly once, only on schema failure
             try:
-                raw = await self._generate(prompt)
+                raw = await _traced_generate(self._generate, prompt)
             except SemanticRoutingError:
                 raise
             except Exception as exc:  # a provider failure is a router failure, never CLARIFY

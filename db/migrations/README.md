@@ -52,11 +52,11 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 명시적으로 적용할 때만 사용한다.
 
 ⚠️ **그래서 verify 가 없는 마이그레이션은 Actions 탭으로 다시 못 돌린다** — 손으로
-`verify=false` 를 골라야 한다. 2026-09-07(#292)까지 여덟 장이 그 상태였고
-(`refresh_token_subject` · `documents_lexical` · `crawl_runs` ·
-`crawl_runs_trigger_revision` · `walks` · `room_name` · `training_rag_into_vectordb` ·
-`gait_records`) 전부 아래 "단언형" 규칙이 생기기 전에 쓰인 것들이다. **지금은
-`db/migrations/*.sql` 전부가 짝을 가진다.** SQL은 cmd 리다이렉션으로 바이트를 보존하며,
+`verify=false` 를 골라야 한다. 2026-09-07(#292)까지 여덟 장이 그 상태였고 전부 아래
+"단언형" 규칙이 생기기 전에 쓰인 것들이다.
+
+**지금은 `db/migrations/*.sql` 전부가 짝을 가지고, 그 짝이 전부 단언형이며, 전부 하네스에
+등록돼 있다** (#292 · #295). 그리고 그 셋을 CI 가 검사한다 — 아래 "단언형으로 쓴다" 참고. SQL은 cmd 리다이렉션으로 바이트를 보존하며,
 Apply/Verify 모두 `psql -X -v ON_ERROR_STOP=1`의 오류를 작업 실패로 전달한다.
 
 ## `verify_*.sql` 은 **단언형으로 쓴다** (2026-09-06, #273)
@@ -73,9 +73,24 @@ Apply/Verify 모두 `psql -X -v ON_ERROR_STOP=1`의 오류를 작업 실패로 �
 
 사람이 눈으로 볼 분포·샘플 질의는 **단언 뒤에** 둔다. 단언이 먼저 실패하면 거기서 멈춘다.
 
-**그리고 `tools/check_migration_verification.py` 의 목록에 등록한다.** 그 하네스가 일회용
-Postgres 에 마이그레이션을 적용한 뒤 스키마를 **일부러 망가뜨려 verify 가 잡는지** 본다 —
+**그리고 `tools/check_migration_verification.py` 의 `CHECKS` 목록에 등록한다.** 그 하네스가
+일회용 Postgres 에 마이그레이션을 적용한 뒤 스키마를 **일부러 망가뜨려 verify 가 잡는지** 본다 —
 등록하지 않으면 단언형으로 써 놓고도 그 단언이 실제로 작동하는지는 아무도 안 잰다.
+
+✅ **2026-09-07(#295)부터 이 두 가지를 기계가 본다** — `check_migration_verification.py coverage`
+가 `db/migrations/*.sql` 전부에 대해 ⓐ 짝이 있고 ⓑ `RAISE EXCEPTION` 을 갖고 ⓒ `CHECKS` 에
+등록됐는지 검사하고, CI 의 `names` job 이 그것을 돌린다. **같은 부채가 두 번 났기 때문이다** —
+#273 이 여섯 장을 고쳤는데 여덟 장이 그때 목록에 안 들어갔고 #292 가 그것을 다시 발견했다.
+목록을 사람이 관리하는 한 세 번째가 온다.
+
+예외는 코드 안의 `BEHAVIOURAL` 하나뿐이고 지금 한 줄이다 — `2026-08-31_pets` 는 카탈로그
+단언이 아니라 **행동 테스트**라(자기 스키마를 만들고 `\i db/init/*.sql` 을 부르고 INSERT 로
+FK 동작을 본다) 하네스의 격리 모델과 안 맞는다. **못 넣는 것이지 부실한 것이 아니다.**
+여기 이름을 더할 때는 *왜 하네스 모델과 안 맞는지*를 적는다 — "나중에 하자"는 이유가 아니다.
+
+⚠️ **예외 문구는 공용 어휘를 쓴다** — `missing table:` · `... mismatch:`. 하네스가
+"verifier 가 잡았다"와 "적용이 실패했다"를 그 낱말로 가르기 때문에, 다른 말로 쓰면
+**변조를 잡았는데도 하네스가 실패로 읽는다.**
 등록에 필요한 것은 (날짜, 이름, 픽스처, 테이블, 변조 목록) 다섯이고, 변조는
 **그 마이그레이션이 세운 것을 하나씩 무너뜨리는** 방식으로 고른다.
 

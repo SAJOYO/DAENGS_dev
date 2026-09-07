@@ -57,7 +57,44 @@ const SUMMARY: Record<string, string> = {
   failed: "실패",
 };
 
+/**
+ * `GET /api/admin/metrics/requests` (`schemas/metrics.py` 의 `RequestMetricsOut`, B2 · #297).
+ *
+ * **위 `ChatMetrics` 와 다른 표를 셉니다.** 저쪽은 제품 테이블(`chat_*`)이라 "무엇을
+ * 물었나" 를 알고, 이쪽은 `request_metrics` 라 **"어떻게 처리됐나"** 를 압니다. 저장 안
+ * 되는 요청(무상태 · 관리자 점검)은 저쪽에 없고 여기에 있어서, **두 숫자는 안 맞는 것이
+ * 정상입니다.**
+ */
+type RequestMetrics = {
+  since: string;
+  days: number;
+  latency: {
+    total: number;
+    /** 행이 없으면 `null` 입니다 — 0ms 가 아닙니다. "빠르다" 와 "잰 적 없다" 는 다릅니다. */
+    avg_ms: number | null;
+    p50_ms: number | null;
+    p95_ms: number | null;
+    max_ms: number | null;
+  };
+  by_status: NamedCount[];
+  /** 합이 요청 수가 아닙니다 — 한 요청이 능력 둘을 부르면 둘 다 셉니다. */
+  by_capability: NamedCount[];
+  by_reason_code: NamedCount[];
+  by_router_kind: NamedCount[];
+};
+
+const ROUTER: Record<string, string> = {
+  deterministic: "규칙",
+  llm: "모델",
+};
+
 const RANGES = [7, 30, 90];
+
+/** 밀리초를 읽히게. 1초가 넘으면 초로 — 3200ms 보다 3.2초가 빨리 읽힙니다. */
+function ms(value: number | null): string {
+  if (value === null) return "—";
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}초` : `${value}ms`;
+}
 
 function when(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR", { dateStyle: "medium" });
@@ -77,6 +114,10 @@ export default function MetricsConsole() {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<ChatMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // **없어도 화면은 돕니다.** B2 표가 아직 없는 환경(마이그레이션 전)에서는 이 조회가
+  // 실패하는데, 그때 대화 집계까지 같이 안 보이면 안 됩니다. 그래서 `setError` 로
+  // 올리지 않고 `null` 로 둡니다 — 그 칸만 안 그립니다.
+  const [requests, setRequests] = useState<RequestMetrics | null>(null);
 
   // StrictMode 가 개발에서 effect 를 두 번 돌립니다 (`crawl-console.tsx` 와 같은 장치).
   const alive = useRef(true);
@@ -104,6 +145,21 @@ export default function MetricsConsole() {
     };
   }, [load, days]);
 
+  // 기간을 같이 따라갑니다 — 위아래 숫자가 다른 기간이면 나란히 둔 뜻이 없습니다.
+  useEffect(() => {
+    const controller = new AbortController();
+    apiJson<RequestMetrics>(`/api/admin/metrics/requests?days=${days}`, {
+      signal: controller.signal,
+    })
+      .then((next) => {
+        if (alive.current) setRequests(next);
+      })
+      .catch(() => {
+        /* 곁다리 칸입니다. 실패하면 그 칸만 안 그립니다 (위 주석). */
+      });
+    return () => controller.abort();
+  }, [days]);
+
   if (error) {
     return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
   }
@@ -123,7 +179,10 @@ export default function MetricsConsole() {
         <select
           value={days}
           onChange={(e) => {
+            // 기간을 바꾸면 **둘 다** 비웁니다. effect 안에서 비우면 lint 가 막고
+            // (`react-hooks/set-state-in-effect`), 옛 기간 숫자가 잠깐 남습니다.
             setData(null);
+            setRequests(null);
             setDays(Number(e.target.value));
           }}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-black"
@@ -191,6 +250,80 @@ export default function MetricsConsole() {
         labels={SUMMARY}
         total={data.summaries.reduce((n, c) => n + c.count, 0)}
       />
+
+      {/*
+        **요청 쪽 (B2 · #297).** 위가 "무엇을 물었나" 라면 여기는 "어떻게 처리됐나" 입니다.
+        저장 안 되는 요청도 세므로 **위 숫자와 안 맞는 것이 정상**이고, 화면이 그것을
+        말해 주지 않으면 "둘 중 하나가 틀렸다" 로 읽힙니다.
+      */}
+      {requests && (
+        <section className="space-y-6 border-t border-zinc-200 pt-8 dark:border-zinc-800">
+          <div>
+            <h2 className="text-lg font-medium">요청이 어떻게 처리됐나</h2>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              위 대화 숫자와 다른 표입니다 — 저장되지 않는 요청(콘솔 점검 등)도 여기 들어옵니다.
+            </p>
+          </div>
+
+          {requests.latency.total === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              이 기간에 잰 요청이 없습니다.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-4">
+                <Stat label="요청" value={requests.latency.total} />
+                <Stat label="중앙값" value={ms(requests.latency.p50_ms)} />
+                {/*
+                  **p95 가 이 화면에서 제일 중요한 숫자입니다.** 느린 꼬리는 평균에 거의
+                  안 잡혀서, 평균만 보면 "괜찮다" 가 나오는 동안 스무 건 중 한 건이
+                  몇 초씩 걸릴 수 있습니다.
+                */}
+                <Stat
+                  label="p95"
+                  value={ms(requests.latency.p95_ms)}
+                  note="스무 건 중 한 건은 이보다 느립니다"
+                />
+                <Stat label="최대" value={ms(requests.latency.max_ms)} />
+              </div>
+
+              <Distribution
+                title="응답 결과"
+                counts={requests.by_status}
+                labels={ASSISTANT}
+                total={requests.latency.total}
+              />
+
+              <Distribution
+                title="어떤 능력이 돌았나"
+                note="한 요청이 여러 능력을 부를 수 있어 합이 요청 수와 다릅니다. 아무 능력도 안 돈 요청(사교적 응답·라우팅 실패)은 여기 없습니다."
+                counts={requests.by_capability}
+                labels={{}}
+                total={requests.by_capability.reduce((n, c) => n + c.count, 0)}
+              />
+
+              {requests.by_reason_code.length > 0 && (
+                <Distribution
+                  title="거절·기권한 사유"
+                  note="거절이 아니었던 요청은 여기 안 들어옵니다."
+                  counts={requests.by_reason_code}
+                  labels={{}}
+                  total={requests.by_reason_code.reduce((n, c) => n + c.count, 0)}
+                />
+              )}
+
+              {requests.by_router_kind.length > 0 && (
+                <Distribution
+                  title="목적지를 무엇이 골랐나"
+                  counts={requests.by_router_kind}
+                  labels={ROUTER}
+                  total={requests.by_router_kind.reduce((n, c) => n + c.count, 0)}
+                />
+              )}
+            </>
+          )}
+        </section>
+      )}
 
       {/*
         **질문 원문은 없습니다** — D-037 이 관측에 원문을 금지했고, 서버 스키마에 담을

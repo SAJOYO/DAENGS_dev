@@ -132,6 +132,68 @@ def test_pinless_real_observations_generate_and_cache(live):
     assert lookup.await_count == 1
 
 
+def test_v3_title_is_saved_once_and_legacy_reads_do_not_regenerate(live):
+    from daengs_backend.services.walk_storyboard_titles import title_storyboard
+    from tests.walk.test_walk_storyboard_titles import headings
+
+    client, state, _ = live
+    generated = AsyncMock(side_effect=headings)
+
+    async def titles(bundle):
+        return await title_storyboard(bundle, generated)
+
+    client.app.dependency_overrides[router.get_title_generator] = lambda: titles
+    body = {"expected_entries": {}, "bundle_format": "walk-storyboard-candidates-v3"}
+    first = client.post(PATH, json=body).json()
+    assert first["status"] == "ready" and first["bundle"]["title"] == "함께 남긴 산책 기록"
+    assert state.row.bundle == first["bundle"]
+    assert client.post(PATH, json=body).json() == first
+    assert client.get(PATH + "?bundle_format=" + body["bundle_format"]).json() == first
+    for version in ("v1", "v2"):
+        legacy = client.get(PATH + "?bundle_format=walk-storyboard-candidates-" + version).json()
+        assert "title" not in legacy["bundle"]
+    generated.assert_awaited_once()
+    state.entries = [note()]
+    assert client.get(PATH + "?bundle_format=" + body["bundle_format"]).json()["bundle"] is None
+
+
+def test_v3_title_failure_cached_until_refresh_and_late_title_cannot_publish(live):
+    from daengs_backend.services.walk_storyboard_titles import title_storyboard
+
+    client, state, _ = live
+    generated = AsyncMock(side_effect=ValueError("unavailable"))
+
+    async def titles(bundle):
+        return await title_storyboard(bundle, generated)
+
+    client.app.dependency_overrides[router.get_title_generator] = lambda: titles
+    body = {"expected_entries": {}, "bundle_format": "walk-storyboard-candidates-v3"}
+    result = client.post(PATH, json=body).json()
+    assert result["status"] == "ready" and result["bundle"]["title"] is None
+    assert client.post(PATH, json=body).json() == result
+    generated.assert_awaited_once()
+
+    async def late(_):
+        state.entries = [note()]
+        raise ValueError("late provider response")
+
+    generated.side_effect = late
+    result = client.post(PATH, json={**body, "refresh": True}).json()
+    assert result["status"] == "stale" and result["bundle"] is None
+
+
+def test_v3_read_of_cached_v2_does_not_spend_a_title_call(live):
+    client, _, _ = live
+    client.post(PATH, json={"expected_entries": {}})
+    unused = AsyncMock()
+    client.app.dependency_overrides[router.get_title_generator] = lambda: unused
+    response = client.post(
+        PATH, json={"expected_entries": {}, "bundle_format": "walk-storyboard-candidates-v3"}
+    )
+    assert response.json()["bundle"]["format"] == "walk-storyboard-candidates-v2"
+    unused.assert_not_awaited()
+
+
 def test_environment_deadline_keeps_scenes_and_can_refresh(live, monkeypatch):
     client, _, lookup = live
     monkeypatch.setattr(service, "CONTEXT_TIMEOUT_SECONDS", 0.01)

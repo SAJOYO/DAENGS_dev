@@ -274,7 +274,7 @@ def test_care_question_is_not_hard_routed_by_the_prompt_builder() -> None:
 
 
 def test_no_care_capability_exists_in_the_contracts() -> None:
-    """No `care` capability was invented. `general` (D-056) is the one destination that
+    """No `care` capability was invented. `general` (D-057) is the one destination that
     receives husbandry questions now — additive, and stripped by the planner while the
     fallback flag is off, so this file's deterministic cases still route as before."""
     assert {name.value for name in CapabilityName} == {
@@ -409,7 +409,7 @@ def _policy() -> str:
 
 
 def test_prompt_is_v9_with_the_same_model_and_schema_shape() -> None:
-    """v7 (D-051) added `place`; v8 added one exclusion sentence; v9 (D-056) added `general`.
+    """v7 (D-051) added `place`; v8 added one exclusion sentence; v9 (D-057) added `general`.
 
     The care boundary this file defends is a *prompt* boundary, so it pins the prompt
     version. None of the bumps touched the handoff pair, the social_intent field or the
@@ -461,7 +461,7 @@ def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:
 
 def test_v6_declares_routine_husbandry_a_general_matter_without_keyword_lists() -> None:
     policy = " ".join(_policy().split())
-    # v5/v6 said "NOT supported by any destination"; v9 (D-056) retargets the same
+    # v5/v6 said "NOT supported by any destination"; v9 (D-057) retargets the same
     # sentence to General. The examples and the "not Life / not Training" fences stay.
     assert "belong to execute.general, never to a specialized destination" in policy
     assert "NOT supported by any destination" not in policy

@@ -125,7 +125,7 @@ FAILED가 됩니다. 이제 새 `ExecuteName`은 자기 payload를 적거나 요
 `CapabilityName` 선언 순서로 고정합니다 — 그 순서가 집계 message의 절 순서로 사용자에게
 그대로 보이기 때문입니다.
 
-**`general` 은 두 길로 계획에 들어옵니다** (D-056 ①). ⓐ planner 규칙: 의미 결정이 비어 있고(능력 0 ·
+**`general` 은 두 길로 계획에 들어옵니다** (D-057 ①). ⓐ planner 규칙: 의미 결정이 비어 있고(능력 0 ·
 핸드오프 0 · 스몰토크 아님) `DAENGS_GENERAL_FALLBACK` 이 켜져 있으면 `GeneralPayload {question, dog}`
 하나 — Life 와 같은 규칙, 좌표 없음 — 를 조립합니다. ⓑ 라우터 목적지(`semantic-router-ko-v9`): 돌봄·
 건강 의도가 전문 능력과 섞인 발화에서 라우터가 `general` 을 **추가로** 고릅니다 — 전문 능력을 대신하지
@@ -328,7 +328,7 @@ AssistantResponse:
     `tests/test_orchestration_contracts.py::test_capability_names_have_exactly_three_copies_and_they_agree`
     가 셋을 대조합니다.
 
-    `general` (D-056) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
+    `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
     프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
 ## 7. locale 준비

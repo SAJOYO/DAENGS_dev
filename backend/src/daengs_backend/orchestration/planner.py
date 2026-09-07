@@ -20,7 +20,7 @@ top-level FAILED on exactly the queries Place was added to answer. The `else`
 below therefore raises: a new ExecuteName must state its payload here or stop the
 request loudly, never inherit another capability's shape.
 
-**The general-answer fallback reaches a plan two ways, both behind one flag** (D-056).
+**The general-answer fallback reaches a plan two ways, both behind one flag** (D-057).
 (1) A planner rule: when the semantic decision selects nothing at all — no capability,
 no handoff — and `general_fallback` is on, the plan becomes exactly one `general`
 request carrying the same trusted payload Life gets (question + resolved dog facts).
@@ -147,7 +147,7 @@ def assemble_route_plan(
 
     selected: list[str] = list(decision.execute)
     if not general_fallback:
-        # Flag off: the router may name `general` (v9 destination, D-056), but production
+        # Flag off: the router may name `general` (v9 destination, D-057), but production
         # builds exactly the plan it built before the fallback existed — strip it. A
         # `general`-only decision therefore becomes the old empty plan (FAILED), not an answer.
         selected = [name for name in selected if name != _GENERAL]
@@ -158,7 +158,7 @@ def assemble_route_plan(
     ):
         # The fallback rule (module docstring). One request, and only when the router
         # chose nothing: a specialized selection is never padded with `general` by rule —
-        # the router adds it explicitly when a care intent is mixed in (D-056 ①).
+        # the router adds it explicitly when a care intent is mixed in (D-057 ①).
         selected = [_GENERAL]
 
     requests: list[dict[str, Any]] = []

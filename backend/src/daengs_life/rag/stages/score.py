@@ -65,12 +65,28 @@ from typing import Any
 from .goldenset import logical
 
 # 답변이 지목한 근거. 프롬프트가 `[1]` 처럼 쓰라고 요구한다 (`generate.PROMPT`).
-REF_RE = re.compile(r"\[(\d+)\]")
+#
+# ⚠️ **한 괄호 안에 여럿을 쓰는 모양도 받는다** (RAG-069). 프롬프트는 `[1]` 을 요구하지만
+# 모델은 `[1, 2]` 로도 쓴다 — 저장된 랩 전체에서 **90건 · 24종**이 그 모양이었고
+# (`[1, 2]` · `[1,2,3]` · `[2, 3, 4, 5]` …), 옛 정규식은 그것을 **통째로 놓쳤다.**
+#
+#     "…보장합니다[1, 2]. 또한 …[4]."   옛: [4]        새: [1, 2, 4]
+#     "…[1,2,3]…"                       옛: []         새: [1, 2, 3]
+#     "…[1], [3], [4]…"                 옛: [1, 3, 4]  새: 같다
+#
+# 그래서 `grounded` 가 **조용히 낮게** 나왔다 — 답변이 정답 청크를 실제로 인용했는데도
+# 지목이 안 읽혀 False 였다. 랩 넷에서 각각 1~2문항이 뒤집힌다. `D10`(RAG-062)이 지표의
+# **부풀림**을 걷은 것과 방향만 반대고 같은 종류다.
+#
+# 오탐은 확인했다 — 새로 읽히는 90건이 전부 1~7 의 작은 수다. 연도·금액이 이 모양으로 오면
+# 범위 밖이라 `referenced_hits` 가 이미 버린다.
+REF_RE = re.compile(r"\[([\d,\s]+)\]")
+_DIGITS = re.compile(r"\d+")
 
 
 def referenced_indices(text: str) -> list[int]:
-    """답변이 `[N]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
-    return sorted({int(n) for n in REF_RE.findall(text)})
+    """답변이 `[N]`·`[N, M]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
+    return sorted({int(n) for group in REF_RE.findall(text) for n in _DIGITS.findall(group)})
 
 
 def referenced_hits(text: str, hits: list[Any]) -> list[Any]:

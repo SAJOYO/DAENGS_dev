@@ -40,10 +40,10 @@ None of the 80 gold cases is pure small talk, so every case is expected to leave
 
 - Non-null `social_intent` cases: 0 / 80
 
-## `general` — two views (D-056 ⑤)
+## `general` — two views (D-057 ⑤)
 
 The frozen gold has no `general`, so every `general` the v9 router adds is a precision
-miss by that gold and the intended policy by D-056. Both views are scored from the ONE
+miss by that gold and the intended policy by D-057. Both views are scored from the ONE
 paid run above; the stripped view is what production builds with the flag off.
 
 - Cases where the router selected `general`: 0 / 80

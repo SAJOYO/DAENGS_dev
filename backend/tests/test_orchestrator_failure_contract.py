@@ -430,7 +430,7 @@ async def test_specialized_selection_with_fallback_on_never_runs_general_in_both
 async def test_mixed_general_and_walk_selection_runs_both_in_planner_order_in_both(
     fallback_on: None,
 ) -> None:
-    """D-056 ①: 라우터가 `general` 을 산책에 **더해** 골랐다 / 에이전트가 두 툴을 불렀다 — 둘 다
+    """D-057 ①: 라우터가 `general` 을 산책에 **더해** 골랐다 / 에이전트가 두 툴을 불렀다 — 둘 다
     산책 → 일반 순으로 돌고 돌봄 의도가 사라지지 않는다."""
     lg, lg_log, ag, ag_log = await run_both(
         ["general", "walk"],

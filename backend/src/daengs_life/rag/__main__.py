@@ -818,9 +818,48 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         print("  두 축의 문항수를 더한 것이 `채점` 보다 작으면, 그 차이는 **골든셋에서 빠진 옛 문항**이다"
               " (`lap7-age` 처럼). 총계에서는 빼지 않는다 — 뺄지 모르는 것과 빼야 하는 것은 다르다.")
 
+    _print_kpi(laps, ckinds)
     _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
     _print_expect_table(laps)
     return 0
+
+
+def kpi_cells(rows: list[dict], ckinds: dict[str, str]) -> dict[str, tuple[int, int, int]]:
+    """KPI 를 **두 축으로 갈라** 낸다 — `{축: (cited, grounded, 문항수)}` (RAG-070 ③).
+
+    KPI 문장은 「답변에 출처 링크 + **조항 번호** 인용」인데 총계 `cited` 는 두 축을 한 수에
+    섞는다. 조 번호가 **문서에 아예 없는** 소스(보조금24 · knia 공시 · 항공사 안내 · SRT 약관 ·
+    easylaw/nias 해설)는 `cited` 가 영영 0이고, 그것은 실패가 아니라 **그 소스의 성질**이다 —
+    그 문항들도 근거는 옳게 잡는다. `lap29` 실측으로 그 칸이 **13문항 중 grounded 13** 이다.
+
+    ⚠ **총계 칸은 안 건드린다.** `D10`(RAG-062)이 경계 문항을, `D12`(RAG-069)가 근거 표기를
+    소급으로 두 번 바꿨다. 세 번째면 옛 기록이 인용하는 대조선이 또 끊긴다 — 여기서는
+    **읽는 법을 더할 뿐** 수를 다시 쓰지 않는다. 축을 가르는 데 쓰는 값은 `D10` 이 이미
+    표에 넣어 둔 `조 번호 있음`·`조 번호 없음` 그대로다.
+    """
+    s = scorer.score_rows(rows, ckinds)
+    cells = {}
+    for kind in (scorer.CITABLE, scorer.UNCITABLE):
+        if f"{kind}_n" in s:
+            cells[kind] = (s[f"{kind}_cited"], s[f"{kind}_grounded"], s[f"{kind}_n"])
+    return cells
+
+
+def _print_kpi(laps: list[tuple[str, list[dict]]], ckinds: dict[str, str] | None) -> None:
+    """최신 랩 하나를 KPI 문장 그대로 읽어 준다. 발표 자료가 쓰는 수가 이것이다."""
+    if ckinds is None or not laps:
+        return
+    stem, rows = max(laps, key=lambda lap: _lap_key(lap[0]))
+    cells = kpi_cells(rows, ckinds)
+    if not cells:
+        return
+    print(f"\n  KPI 「답변에 출처 링크 + 조항 번호 인용」 — 최신 랩 `{stem}`")
+    labels = {scorer.CITABLE: "조 번호가 있는 소스", scorer.UNCITABLE: "조 번호가 없는 소스"}
+    for kind, (cited, grounded, n) in cells.items():
+        print(f"    {labels[kind]:22} 조 번호 인용 {cited:>3}/{n:<3}({cited * 100 // n:>3}%)"
+              f"   출처 근거 {grounded:>3}/{n:<3}({grounded * 100 // n:>3}%)")
+    print("    조 번호가 없는 소스는 **문서에 조 번호가 없어서** 인용 칸이 0이다 —"
+          " 실패가 아니라 그 소스의 성질이고, 근거 칸으로 읽는다 (RAG-070 ③).")
 
 
 def _print_kind_table(laps: list[tuple[str, list[dict]]], field: str = "trust_level",

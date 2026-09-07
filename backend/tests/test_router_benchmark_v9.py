@@ -71,7 +71,7 @@ def test_v9_is_the_next_run_identifier_with_the_v8_prompt_and_unchanged_model_go
     assert recorded_v8["prompt_version"] == "semantic-router-ko-v7"
     assert recorded_v8["verdict"] == "PASS"
     # The v9 run itself is frozen as having sent v8 — that record is immutable even
-    # though production has since advanced (D-056 → v9, run by runner_v10).
+    # though production has since advanced (D-057 → v9, run by runner_v10).
     recorded_v9 = json.loads((EVALS_DIR / "summary_v9.json").read_text(encoding="utf-8"))
     assert recorded_v9["prompt_version"] == "semantic-router-ko-v8"
     assert recorded_v9["verdict"] == "PASS"

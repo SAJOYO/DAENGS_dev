@@ -160,7 +160,7 @@ def test_coordinate_gate_still_wins_over_the_fallback() -> None:
 def test_mixed_decision_keeps_general_and_orders_it_last_when_flag_is_on(
     execute: list[str], expected: list[str]
 ) -> None:
-    """D-056 ①: 라우터가 전문 능력에 **더해** 고른 `general` 은 살아남고 맨 뒤에 선다."""
+    """D-057 ①: 라우터가 전문 능력에 **더해** 고른 `general` 은 살아남고 맨 뒤에 선다."""
     built = plan(
         SemanticRoutingDecision(execute=execute), context=dict(SEOUL), general_fallback=True
     )
@@ -208,7 +208,7 @@ def test_general_is_not_a_resolvable_explicit_signal(fallback_on: None) -> None:
 
 
 def test_router_schema_and_prompt_offer_general_as_an_additive_destination() -> None:
-    """D-056 ①: v9 부터 모델이 `general` 을 고를 수 있다 — 전문 능력에 더해서, 대신해서는 아니다."""
+    """D-057 ①: v9 부터 모델이 `general` 을 고를 수 있다 — 전문 능력에 더해서, 대신해서는 아니다."""
     assert get_args(ExecuteName)[-1] == "general"
     assert (
         validate_semantic_decision(json.dumps({"execute": ["general"], "handoffs": []})) is not None
@@ -480,7 +480,7 @@ def test_general_prompt_carries_the_question_and_dog_but_never_coordinates() -> 
 
 
 def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> None:
-    """D-056 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
+    """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
     assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
@@ -564,7 +564,7 @@ def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback(
     assert "빠진 쪽 도구는 부르지 않습니다" in _SYSTEM_PROMPT
     assert "일반 답변은 시스템이 붙입니다" in _SYSTEM_PROMPT
     assert "답할 수 없다고만" not in _SYSTEM_PROMPT
-    # D-056 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
+    # D-057 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
     assert "answer_generally" in _SYSTEM_PROMPT
     assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
     # the same narrowing as the router (D-055 ⑦): separate care question only, doubt → Training

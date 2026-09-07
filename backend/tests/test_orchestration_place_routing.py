@@ -308,7 +308,7 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "walk",
         "place",
     ]
-    # `general` (D-056) sits last: additive to the four, so its section always renders last.
+    # `general` (D-057) sits last: additive to the four, so its section always renders last.
     assert [name.value for name in CapabilityName] == [
         "training",
         "life",

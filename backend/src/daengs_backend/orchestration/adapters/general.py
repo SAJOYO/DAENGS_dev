@@ -51,7 +51,7 @@ from daengs_backend.orchestration.semantic import (
     _gemini_client,
 )
 
-# v2 (D-056 ③ⓐ): v1 은 통상 돌봄 기준(급여량 · 음수량)을 institutional · diagnosis 로 사양했다 —
+# v2 (D-057 ③ⓐ): v1 은 통상 돌봄 기준(급여량 · 음수량)을 institutional · diagnosis 로 사양했다 —
 # #277 실측에서 general_care 15건 중 7건이 과잉 거절이었다. v2 는 통상 기준을 "개체차를 단서로
 # 범위를 답한다" 로 명시하고, institutional 은 출처 문서가 있어야 하는 사실로, diagnosis 는
 # 병명 · 원인 판정 · 검사 해석을 명시적으로 묻는 것으로 좁혔다.

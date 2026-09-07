@@ -1,13 +1,13 @@
 """Prompt-regression run: production `semantic-router-ko-v9` against the unchanged v3 gold/gates.
 
-v9 (D-056 ①) makes `general` a router destination — additive, never a replacement: a care
+v9 (D-057 ①) makes `general` a router destination — additive, never a replacement: a care
 or health worry mixed into a weather/venue/institution utterance keeps its care part, and
 a request that is not about dogs at all selects nothing. No model change; the schema gains
 one enum value; the gates, gold and single-schema-retry policy are unchanged.
 
 **Two views, one paid run.** The frozen gold predates the fallback and has no `general`
 anywhere, so every `general` the router now adds is, by that gold, a precision miss —
-while by D-056 it is the intended policy. Reporting one number would hide one of those two
+while by D-057 it is the intended policy. Reporting one number would hide one of those two
 facts. So:
 
 - **raw** — the plan the planner builds with the fallback ON (`general_fallback=True`),
@@ -16,7 +16,7 @@ facts. So:
   scoring. Because the planner with the flag OFF strips `general` from the decision, this
   is byte-for-byte the plan production builds today, and it is the view that must not
   regress: it has to match or beat v9 (exact ≥ 0.975, all 15 gates PASS). If it does not,
-  D-056 ③ says report it — do not tune.
+  D-057 ③ says report it — do not tune.
 
 The raw view's own gates are informational (the recorded `verdict` is the stripped one's
 twin, kept separately under `general_stripped`). v1–v9 artifacts are not modified.
@@ -173,10 +173,10 @@ def general_case_ids(attempts_by_case: dict[str, list[AttemptValidation]]) -> li
 def general_section(summary: dict[str, Any], stripped: dict[str, Any], selected: list[str]) -> str:
     lines = [
         "",
-        "## `general` — two views (D-056 ⑤)",
+        "## `general` — two views (D-057 ⑤)",
         "",
         "The frozen gold has no `general`, so every `general` the v9 router adds is a precision",
-        "miss by that gold and the intended policy by D-056. Both views are scored from the ONE",
+        "miss by that gold and the intended policy by D-057. Both views are scored from the ONE",
         "paid run above; the stripped view is what production builds with the flag off.",
         "",
         f"- Cases where the router selected `general`: {len(selected)} / {summary['scored_cases']}",

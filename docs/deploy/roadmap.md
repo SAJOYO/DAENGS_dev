@@ -35,8 +35,11 @@
    > **그 대가 — GCP 의 DB 는 2026-09-02 덤프의 스냅샷이다.** 두 DB 사이에 복제는
    > 없다. 개발 PC 의 `rag load` 는 `POSTGRES_IP`(로컬 서버)를 보므로 **코퍼스를 다시
    > 적재해도 GCP 에는 아무 일도 일어나지 않는다.** 적재는 성공하고 스모크도 통과하는데
-   > 앱에만 새 문서가 안 보이는 모양으로 만난다. 반영하려면 로컬 서버에서 `pg_dump` 한
-   > 것을 VM 에서 다시 복원하는 수밖에 없다 — runbook §2(덤프)·§3(복원)의 명령 그대로다.
+   > 앱에만 새 문서가 안 보이는 모양으로 만난다. 반영하려면 로컬 서버에서 `documents`
+   > 테이블만 떠서 VM 에서 그 테이블만 갈아 끼운다 — runbook §6 **"Life 코퍼스만 동기화
+   > (GCP)"** 다. 🔴 **§2·§3 의 통째 덤프·복원이 아니다** — 이 문단이 2026-09-07(#289)까지
+   > 그렇게 적고 있었는데, `vectordb` 한 DB 에 운영 테이블이 같이 있어 **그 길은 GCP 의
+   > 사용자 데이터를 개발 데이터로 덮어쓴다.** 처음 돌린 것은 #289 (8,990 → 9,838).
    > 재적재를 동반하는 생활 파트 카드(`docs/life/roadmap.md` 의 A1·A2·A7·F1·D3)에는
    > 이 손작업이 실제 비용으로 붙는다. 구조적 해소는 §7-1(9/21 이후).
    >
@@ -47,9 +50,15 @@
    >
    > **`verify_*.sql` 을 믿어도 된다 — 2026-09-06(#273)부터다.** 그전에는 아홉 장 중 여섯이
    > 출력 전용(SELECT 나열)이라 **스키마가 틀려도 종료 코드 0** 이었다(`psql … || exit 1` 이
-   > 종료 코드를 본다). 지금은 전부 단언형이고 `tools/check_migration_verification.py` 가
-   > 일회용 Postgres 에 적용한 뒤 **일부러 망가뜨려 verify 가 잡는지** 확인한다
-   > (`PostgreSQL: 78 checks passed`). 규약은 `db/migrations/README.md` 에 있다.
+   > 종료 코드를 본다). `tools/check_migration_verification.py` 가 일회용 Postgres 에 적용한 뒤
+   > **일부러 망가뜨려 verify 가 잡는지** 확인한다. 규약은 `db/migrations/README.md` 에 있다.
+   >
+   > ⚠️ **"전부 단언형"은 아니다** — 2026-09-07(#288) 실측 정정. 19장 중 **8장이 아직 출력
+   > 전용**이다(`chats`·`walk_pets`·`pet_farewell`·`walk_analyses`·`walk_point_chunks`·
+   > `territory_visits`·`walk_capsules`·`admin_audit_log`). **그 여덟은 전부 이미 `main` 에
+   > 있는 옛 장**이라 GCP 에 올릴 것과는 안 겹친다 — **다음 dev→main 에 올릴 열 장은 전부
+   > 단언형이다.** 그래서 오늘의 위험은 0이고, 남은 여덟은 **별도 카드**다. #273 이
+   > "아홉 장 중 여섯"을 고쳤을 때 세지 않은 장들이다.
    >
    > **점령 게임판 적재도 각각이다.** `territory-sites-ingest.yml` 은
    > `runs-on: [self-hosted]` 라 로컬 서버 place-db 만 채운다. GCP 는 runbook §6 의

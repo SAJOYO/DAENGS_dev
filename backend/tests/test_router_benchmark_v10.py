@@ -1,7 +1,7 @@
 """v10 prompt-regression runner: production `semantic-router-ko-v9` vs. the frozen v3 contract.
 
 No Gemini calls here (FakeClient only). The ONE changed variable versus the recorded v9
-run is the production prompt (v9 adds `general` as an additive destination, D-056 ①);
+run is the production prompt (v9 adds `general` as an additive destination, D-057 ①);
 model id, gold set, gates and the single-schema-retry policy are unchanged.
 
 What is new and worth pinning: the runner reports TWO views from one paid run — raw
@@ -179,7 +179,7 @@ def test_v10_raw_view_keeps_general_and_stripped_view_is_the_flag_off_plan() -> 
 
 
 def test_v10_empty_decision_becomes_general_in_the_raw_view_only() -> None:
-    """The planner's empty→general rule fires in the raw view (flag on) — the D-056 policy —
+    """The planner's empty→general rule fires in the raw view (flag on) — the D-057 policy —
     and the stripped view returns to the empty plan v1–v9 scored."""
     case = next(c for c in load_gold_v3_cases() if c.case_id == "training_01")
     client = FakeClient([_response({"execute": [], "handoffs": []})])

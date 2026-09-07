@@ -420,16 +420,16 @@ gate · 스키마 모양 · 1회 재시도 정책은 그대로입니다.
 v1~v8 결과 파일은 제자리 수정하지 않았고, v9 산출물은 `results_v9.jsonl` · `summary_v9.json` ·
 `phase2_v9_report.md` 입니다.
 
-## v10 프롬프트 회귀 — `semantic-router-ko-v9` `general` 추가 목적지, 두 시각 (2026-09-07, PR #279 · D-056) — **PASS (두 시각 다 15/15)**
+## v10 프롬프트 회귀 — `semantic-router-ko-v9` `general` 추가 목적지, 두 시각 (2026-09-07, PR #279 · D-057) — **PASS (두 시각 다 15/15)**
 
-바뀐 변수는 **프롬프트 하나**입니다. v9(D-056 ①)는 `ExecuteName` 에 `general` 을 더하고, 돌봄·건강
+바뀐 변수는 **프롬프트 하나**입니다. v9(D-057 ①)는 `ExecuteName` 에 `general` 을 더하고, 돌봄·건강
 의도가 전문 능력과 섞인 발화에서 그것을 **추가로** 고르되 전문 능력을 대신하지 않으며, 반려견과 무관한
 요청에는 아무것도 고르지 않는다고 적었습니다. #277 실측이 이유입니다 — 폴백을 planner 규칙으로만
 두었더니 폴백 계층 84건 중 49건이 전문 능력에 가려 폴백에 못 닿았고, 도메인 밖 질문은 place/life/walk
 가 집었습니다. 모델 · gold · gate · 1회 재시도 정책은 그대로입니다.
 
-**이 run 부터 시각이 둘입니다** (D-056 ⑤). 동결 gold 에는 `general` 이 없어 라우터가 더 고르는
-`general` 은 정의상 전부 오탐이고, D-056 으로는 의도된 정책입니다. 한 숫자로 적으면 둘 중 하나가
+**이 run 부터 시각이 둘입니다** (D-057 ⑤). 동결 gold 에는 `general` 이 없어 라우터가 더 고르는
+`general` 은 정의상 전부 오탐이고, D-057 으로는 의도된 정책입니다. 한 숫자로 적으면 둘 중 하나가
 숨습니다. 그래서 `runner_v10` 은 한 번의 유료 실행에서 **raw**(planner 를 플래그 on 으로 조립,
 `general` 포함 = 켰을 때의 운영 계획)와 **general-stripped**(`general` 요청을 뺀 것 = 플래그 off 의
 운영 계획, planner 가 결정에서 `general` 을 떼어 내므로 글자까지 같음)를 같이 냅니다. 회귀를 막는
@@ -440,7 +440,7 @@ behavior-as-wellbeing, or health-concern questions" 로 적었고, 그 run(raw)�
 **32/80** 에 더 골랐습니다 — `training_01~10` **전부**, `multi_*` 9건, `mixed_*` 6건, `boundary_01/04`,
 `clarify_07/12`, `handoff_06`, `life_09`, `walk_08`. "섞인 발화에 더하라" 였는데 행동 교정 질문 전부에
 붙은 것이라 의도된 추가 선택이 아니라 과잉 선택이었습니다(raw exact 61.25% · precision 70.09% ·
-11/15 FAIL, stripped 는 v9 와 동일 97.50%). 사람이 **한 번만** 좁히라고 했고(D-056 ③ 의 "더 돌리지
+11/15 FAIL, stripped 는 v9 와 동일 97.50%). 사람이 **한 번만** 좁히라고 했고(D-057 ③ 의 "더 돌리지
 않는다" 는 stripped 회귀에 대한 규칙), 좁힌 것은 넷 — `general` 은 발화에 **별도의** 돌봄 질문이 있을
 때만 · 훈련/제도/산책/장소로 온전히 답해지는 질문에는 없음 · 개·견종·나이·증상이 배경으로 언급된 것은
 계기가 아님 · 행동 질문에서 훈련과 애매하면 훈련만. "behavior-as-wellbeing" 은 지웠습니다. 초안은
@@ -466,7 +466,7 @@ behavior-as-wellbeing, or health-concern questions" 로 적었고, 그 run(raw)�
 않았으므로 뺄 것이 없습니다. 조건("stripped ≥ v9, 15/15") 충족이고, 목표("training/life/walk/handoff 에
 general 없음") 는 0건으로 충족입니다. 동결 골드에는 별도의 돌봄 질문이 있는 발화가 없어(전부 전문
 능력 골드) 이 0 은 **"과잉 선택이 사라졌다"** 를 말하지, "섞인 발화에서 추가로 고른다" 가 실제로 되는지는
-말하지 않습니다 — 그것은 D-056 ③ 의 재측정(#277 폴백 계층 84건, `general_care__multi_intent` 등)이
+말하지 않습니다 — 그것은 D-057 ③ 의 재측정(#277 폴백 계층 84건, `general_care__multi_intent` 등)이
 잽니다. 덤으로 `mixed_09`(v4 부터 흔들리던 Training 추가)가 좁힌 판본에서 처음 골드와 맞아
 `exact_mixed_execute_handoff_match` 가 경계값 90% 에서 100% 가 됐습니다 — 프롬프트를 좁힌 부수 효과이고
 온도 0 경계 흔들림일 수 있어 근거로 세지는 않습니다.

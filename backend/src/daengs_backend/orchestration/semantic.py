@@ -26,7 +26,7 @@ deliberately NOT a destination here: the router keeps selecting specialized
 capabilities only, and the planner adds `general` by rule when nothing was selected.
 The v8 regression against the same 80 gold cases is runner_v9.py.
 
-v9 (D-056 ①) reverses one part of v8's stance: `general` IS a destination now, but an
+v9 (D-057 ①) reverses one part of v8's stance: `general` IS a destination now, but an
 additive one. #277 measured that with the fallback as a planner rule only, 49 of 84
 fallback-stratum questions never reached `general` — a care or health worry mixed into a
 weather/venue/institution utterance was routed to the specialized capability alone and the
@@ -96,7 +96,7 @@ ROUTER_MAX_OUTPUT_TOKENS = 256
 # model output — including when the query names an area (D-051, Option B).
 _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
-# `general` (D-056 ①): additive destination since v9. The planner strips it when the
+# `general` (D-057 ①): additive destination since v9. The planner strips it when the
 # fallback flag is off, so naming it here changes nothing in production until then.
 ExecuteName = Literal["training", "life", "walk", "place", "general"]
 HandoffName = Literal["skin", "gait"]

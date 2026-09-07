@@ -296,14 +296,102 @@ done
     보고 손으로 넣으세요. 기본값이 없는 설정이면 backend 가 ④ 직후 안 뜹니다
 - **코퍼스를 재적재했다면(`rag load`) — GCP 는 바뀌지 않습니다.** 개발 PC 는 로컬
   서버 DB 를 보고 두 DB 사이에 복제가 없습니다 (roadmap §2-5). 적재는 성공하고
-  스모크도 통과하는데 앱에만 새 문서가 안 보입니다. 반영하려면 §2 의 덤프를 다시 뜨고
-  §3 ② 의 복원을 다시 돌립니다 — **아직 한 번도 해 본 적이 없어 전용 절차는 쓰지
-  않았습니다.** 처음 돌릴 때 걸린 것을 여기에 적으세요. 구조적 해소는 roadmap §7-1
+  스모크도 통과하는데 앱에만 새 문서가 안 보입니다.
+  🔴 **§2 의 덤프 → §3 ② 의 복원으로 하지 마세요.** 2026-09-07(#289)까지 이 문단이 그렇게
+  적고 있었는데, **그 길은 운영 데이터를 지웁니다** — 아래 "Life 코퍼스만 동기화 (GCP)"
+  를 따르세요. 구조적 해소는 roadmap §7-1
 - **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
+
+### Life 코퍼스만 동기화 (GCP)
+
+**언제** — 개발 PC 에서 `rag load` 로 집 서버 코퍼스를 늘린 뒤, 그것을 GCP 에 반영할 때.
+처음 돈 것은 2026-09-07 (#289, `documents` 8,990 → 9,838).
+
+🔴 **`vectordb` 를 통째로 덤프·복원하면 안 됩니다.** `db/init/` 이 만드는 테이블 31개가
+전부 이 한 DB 안이라, `documents` 옆에 `app_users` · `pets` · `walks` · `chat_*` ·
+`territory_*` · `screening_records` 가 **같이 있습니다.** `pg_restore --clean` 은 GCP 의
+**운영 사용자 데이터를 집 서버의 개발 데이터로 덮어씁니다.** §3 ② 의 복원은 **빈 볼륨을
+세울 때의 절차**지 갱신 절차가 아닙니다.
+
+**`documents` 한 테이블만 갈아 끼웁니다.** 그래도 되는 근거 셋:
+
+- **`documents` 를 참조하는 FK 가 없습니다** — `TRUNCATE` 가 다른 테이블을 안 건드립니다.
+- **서빙은 `documents` 에 쓰지 않습니다.** 쓰는 곳은 `rag load`(`stages/load.py`) 하나뿐이고
+  개발 PC → 집 서버로만 돕니다. GCP 쪽은 **읽기 전용 사본**이라 갈아 끼워도 잃을 것이 없습니다.
+- **`training_rag_*` 는 다른 코퍼스입니다** — 건드리지 마세요.
+
+```powershell
+# ① 집 서버에서 documents 만 뜬다 (사무실 PC 에서)
+docker compose exec -T pgvector sh -c "pg_dump -U postgres -d vectordb -t public.documents --data-only --no-owner -f /tmp/documents.sql"
+docker compose exec -T pgvector sh -c "psql -U postgres -d vectordb -tAc 'SELECT count(*) FROM documents'"
+docker compose exec -T pgvector sh -c "gzip -f /tmp/documents.sql"
+docker cp pgvector:/tmp/documents.sql.gz .\documents.sql.gz
+```
+
+컨테이너 안에 만들고 `docker cp` 로 꺼냅니다 — **PowerShell 의 `>` 로 직접 받지 마세요**(§2).
+`-Fc`(커스텀)가 아니라 **평문**인 이유는 ③ 에서 `TRUNCATE` 와 한 트랜잭션으로 묶으려면
+`psql -f` 여야 하기 때문입니다. 여기서 나온 **행 수를 적어 두세요.**
+
+```bash
+# ② VM — 되돌릴 것을 먼저 만든다
+cd ~/daengs
+docker compose exec -T pgvector psql -U daengs -d vectordb -tAc 'SELECT count(*) FROM documents'
+docker compose exec -T pgvector sh -c "pg_dump -U daengs -d vectordb -t public.documents --data-only --no-owner -f /tmp/documents-before.sql && gzip -f /tmp/documents-before.sql"
+docker cp pgvector:/tmp/documents-before.sql.gz ~/
+```
+
+§6 의 전체 백업과 **별개로 한 장 더** 뜹니다. ③ 이 실패했을 때 되돌릴 것이 전체 덤프뿐이면
+운영 테이블까지 같이 되돌리게 되기 때문입니다.
+
+```bash
+# ③ VM — 한 트랜잭션으로 갈아 끼운다
+gunzip -c ~/documents.sql.gz > /tmp/documents.sql
+docker cp /tmp/documents.sql pgvector:/tmp/documents.sql
+docker compose exec -T pgvector psql -U daengs -d vectordb \
+  -v ON_ERROR_STOP=1 --single-transaction \
+  -c 'TRUNCATE public.documents' -f /tmp/documents.sql
+```
+
+⚠️ **`--single-transaction` 을 빼지 마세요.** 이것이 있어야 `TRUNCATE` 와 적재가 한
+트랜잭션이 되어, 적재가 깨지면 `TRUNCATE` 까지 되돌아갑니다. 빼면 **코퍼스가 빈 채로 남는
+구간**이 생기고 그동안 `/life/ask` 가 전부 404(근거 0건)입니다.
+
+`TRUNCATE` 권한은 **GCP 에서만** 됩니다 — 그쪽은 볼륨을 `POSTGRES_USER=daengs` 로 초기화해서
+`daengs` 가 소유자입니다. 집 서버는 `documents` 소유자가 `postgres` 라 같은 명령이 안
+먹습니다(거기선 뜨기만 하므로 상관없습니다).
+
+```bash
+# ④ 확인
+docker compose exec -T pgvector psql -U daengs -d vectordb -c "
+  SELECT count(*) FROM documents;
+  SELECT category, count(*) FROM documents GROUP BY 1 ORDER BY 2 DESC;
+  SELECT count(*) FROM documents WHERE metadata ? 'org';
+  SELECT count(*) FROM documents WHERE content_tsv IS NOT NULL;
+  SELECT vector_dims(embedding), count(*) FROM documents WHERE embedding IS NOT NULL GROUP BY 1;"
+```
+
+`content_tsv` 가 전체 행 수와 같고 벡터가 전부 1,024차원이면 된 것입니다.
+
+#### 걸린 것 (2026-09-07, 처음 돌리며)
+
+1. 🔴 **`content_tsv` 는 생성 컬럼이라 `COPY` 가 거부합니다.**
+   `column "content_tsv" is a generated column / Generated columns cannot be used in COPY`.
+   위 ① 처럼 **`pg_dump` 를 쓰면 자동으로 처리**되므로 안 만납니다. 컬럼 목록을 손으로
+   짤 때만 나는데, 그때는 `information_schema.columns` 를 **`is_generated = 'NEVER'`** 로
+   거르세요. 빼도 GCP 에서 같은 정의로 다시 계산됩니다(전체 행이 채워지는 것으로 확인).
+2. ⚠️ **기대 행 수를 `docs/life/roadmap.md` 에서 가져올 때 무엇을 보는지 확인하세요.**
+   그 문서는 **청크 수**(§1, 예: 10,304)와 **DB 문서 수**(§0, 예: 9,836)를 **다른 자리에
+   다른 수로** 적습니다. 여기서 맞춰야 하는 것은 **`documents` 행 수**입니다.
+   #289 는 이 둘을 섞어 "10,304 가 나와야 한다"고 적었다가 실제 9,838 에서 갸웃했습니다.
+3. ⚠️ **개발 PC 에는 `pg_dump` 가 없을 수 있습니다.** 그때 Docker Desktop 이 꺼져 있으면
+   컨테이너로 우회하는 길도 막힙니다. 집 서버 DB 는 LAN 에 열려 있으므로
+   (`POSTGRES_IP`, CLAUDE.md) **개발 PC 에서 psycopg 로 붙어 `COPY … TO STDOUT`** 으로
+   같은 일을 할 수 있습니다 — `backend` 의 `.venv` 에 psycopg 가 이미 있습니다.
+   그 길로 갈 때만 1번의 생성 컬럼 문제를 만납니다.
 
 ### 점령 게임판 적재 (GCP)
 

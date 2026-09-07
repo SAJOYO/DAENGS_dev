@@ -341,7 +341,7 @@ def test_place_is_a_semantic_router_destination() -> None:
     """
     schema = SemanticRoutingDecision.model_json_schema()
     execute_items = schema["properties"]["execute"]["items"]
-    # v9 (D-056) appended `general` after the four; the order of the four is unchanged.
+    # v9 (D-057) appended `general` after the four; the order of the four is unchanged.
     assert execute_items["enum"] == ["training", "life", "walk", "place", "general"]
     assert validate_semantic_decision(decision(["place"])) is not None
     # The router still cannot invent a destination outside the contract.

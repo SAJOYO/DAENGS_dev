@@ -94,7 +94,7 @@ class CapabilityToolbox:
                 "사용자 근처에서 갈 만한 곳을 찾는다. 장소 종류·목적·묘사로 찾는다. "
                 "'지금 나가도 되나'가 아니라 '어디로 갈까'에 답한다. 위치가 필요하다.",
             ),
-            # D-056 ①: 의미 라우터 v9 의 `general` 목적지와 같은 출구 (D-055 ⑦ 거울). 툴 자체는
+            # D-057 ①: 의미 라우터 v9 의 `general` 목적지와 같은 출구 (D-055 ⑦ 거울). 툴 자체는
             # 다른 능력과 똑같이 선택만 기록하고, 플래그가 꺼져 있으면 planner 가 떼어 낸다.
             self._capability_tool(
                 CapabilityName.GENERAL,

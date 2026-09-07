@@ -159,6 +159,19 @@ def sql_checks():
             'DROP INDEX idx_app_users_nickname;'
             ' CREATE INDEX idx_app_users_nickname ON app_users (lower(nickname))',
         ]),
+        # 2026-09-07 (#288) — 동물등록 여부 한 칸. **변조 넷 중 마지막이 이 항목의 이유다.**
+        # DEFAULT 를 거는 것은 타입도 널 허용도 안 건드리므로 컬럼 모양만 보는 verify 는
+        # 통과시킨다. 그런데 그 순간 "안 물어봤다"가 전부 "안 했다"가 된다.
+        ('2026-09-07', 'pets_registered', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN registered',
+            'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',
+            # ⚠ 값을 먼저 채워야 ALTER 가 안 죽는다 — #271 의 NOT VALID · #273 의 nickname 과
+            #   같은 함정이다. 하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr
+            #   낱말로 가르므로, ALTER 가 죽으면 이 항목은 무엇도 증명하지 않는다.
+            'UPDATE pets SET registered = true;'
+            ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
+            'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
+        ]),
         ('2026-09-04', 'pet_photo', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN photo_storage_key CASCADE',
             'ALTER TABLE pets DROP COLUMN photo_generation CASCADE',

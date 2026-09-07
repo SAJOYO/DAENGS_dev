@@ -80,7 +80,7 @@ from daengs_backend.orchestration.social import build_social_response
 AGENT_MODEL_ID = ROUTER_MODEL_ID
 # v3 (#279): 의미 라우터 v8 의 배제 문장을 거울로 넣고, "답할 수 없다고만" 을 "도구 없이
 # 마쳐라 — 일반 답변은 시스템이 붙인다" 로 바꿨다. 다른 문장은 v2 그대로다.
-# v4 (D-056 ①): 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 일반 돌봄은
+# v4 (D-057 ①): 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 일반 돌봄은
 # 전문 도구에 **더해** 부르고, 반려견과 무관하면 아무 도구도 안 부른다.
 AGENT_PROMPT_VERSION = "agent-ko-v4"
 # 프로바이더 재시도. 의미 라우터의 `google-genai` 클라이언트는 retry_options 를 안 주어

@@ -12,6 +12,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityStatus,
     RoutePlan,
     RouteTrace,
+    ScreeningHistory,
 )
 from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 
@@ -35,6 +36,19 @@ _HANDOFF_MESSAGES = {
 # 아직 모르는 target 이 와도(v1 밖 확장) 내부 값을 노출하지 않는 안전한 문장.
 _UNKNOWN_HANDOFF_MESSAGE = "추가 입력이 필요한 전용 기능으로 안내할게요."
 
+#: 판정을 사용자 문장으로. HANDOFF·산책과 같은 이유로 내부 값을 그대로 안 쓴다 — `retake` 는
+#: "판정 못 함"이지 "이상 없음"이 아니다.
+#:
+#: ⚠️ **`daengs_life.rag.stages.generate._VERDICT_KO` 의 사본이다.** 같은 판정이 프롬프트와
+#: 답변에서 다른 말로 나오면 사용자가 그것을 다른 판정으로 읽는다. 두 벌인 것은 방향 때문이다 —
+#: 여기서 `daengs_life` 를 import 하면 오케스트레이션이 도메인 어휘에 묶인다(D-035 의 반대 방향).
+#: 사본끼리는 `tests/test_orchestration_aggregate.py` 가 대조한다 (#269 와 같은 장치).
+_SCREENING_VERDICTS = {
+    "normal": "특이 소견 없음",
+    "abnormal": "이상 소견 있음",
+    "retake": "사진으로 판정하지 못함",
+}
+
 # 산책 판단 사용자 문구. HANDOFF 와 같은 이유다 — `now.grade` 는 GOOD/CAUTION/UNSAFE
 # 라는 내부 값이고, 구조화된 값은 results[].data.now 로 이미 나가고 있다. 예전에는
 # f"현재 산책 판단: {grade}" 였어서 앱에 "현재 산책 판단: CAUTION" 이 그대로 떴다.
@@ -54,11 +68,16 @@ def aggregate_results(
     route_plan: RoutePlan,
     results: list[CapabilityResult],
     include_route_trace: bool = False,
+    screening_history: ScreeningHistory | None = None,
 ) -> AssistantResponse:
     """Apply D-033/D-034 without using a model or rewriting domain messages.
 
     `include_route_trace` defaults off: the caller that knows the principal's permissions
     has to say yes (#238). A caller that forgets therefore leaks nothing.
+
+    `screening_history` 는 같은 아이의 이전 판정들이다 (#79 3번). **능력이 답을 못 냈을 때만**
+    절로 붙는다 — 아래 `_should_tell_history`. 기본값이 `None` 이라 안 넘긴 부르는 쪽은
+    이 카드 이전과 같은 응답을 받는다.
     """
     route = _route_trace(route_plan) if include_route_trace else None
     if route_plan.clarify is not None:
@@ -82,6 +101,9 @@ def aggregate_results(
             # 스코프드 리다이렉트를 쓴다 (#278). REFUSED 의 off_topic 과 같은 문장이다.
             status = AssistantStatus.FAILED
             message = NO_CAPABILITY_MESSAGE
+        # 능력이 하나도 안 돈 자리다 — 이력이 사용자에게 닿는 **주된** 길이 여기다.
+        # "지난번보다 어때요" 는 라우터가 skin 핸드오프만 내고 능력을 안 고르는 요청이다.
+        message = _with_history(message, screening_history)
         return AssistantResponse(
             request_id=request_id,
             status=status,
@@ -112,6 +134,8 @@ def aggregate_results(
     sections = [_result_message(result, multiple=len(results) > 1) for result in results]
     if route_plan.handoffs:
         sections.append(_handoff_message(route_plan))
+    if _should_tell_history(results):
+        sections.insert(0, _history_message(screening_history))
     return AssistantResponse(
         request_id=request_id,
         status=top_status,
@@ -183,6 +207,51 @@ def _walk_message(now: Any) -> str:
     if not reasons:
         return verdict
     return verdict + " " + " ".join(reasons)
+
+
+def _should_tell_history(results: list[CapabilityResult]) -> bool:
+    """이력 절을 붙일까. **능력이 답을 냈으면 안 붙인다.**
+
+    물어본 것에 답이 있으면 이력은 안 물어본 이야기다 — "피부 치료비 지원 있어?" 에 약관을
+    답해 놓고 지난 판정 셋을 덧붙이면 잡음이다. 답이 없을 때만(핸드오프뿐 · 전부 기권 ·
+    전부 실패) "대신 아는 것" 으로 말한다.
+
+    **라우터에게 묻지 않는다.** 여기서 모델이 판단하면 결정적 절 조립이 아니게 되고, O-9 가
+    막은 2차 LLM 이 된다 (architecture.md 합성 단락).
+    """
+    return not any(result.status == CapabilityStatus.OK for result in results)
+
+
+def _history_message(history: ScreeningHistory | None) -> str:
+    """`[이전 기록]` 절. **판정과 경과일 말고는 담을 것이 없다** (불변식 15).
+
+    ⚠️ **두 번째 문장이 이 절의 본체다.** 판정 셋을 나란히 놓으면 사람이 스스로 추세를
+    읽는데, 그 차이는 매번 다른 사진에서 나온 것이라 몸이 달라졌다는 근거가 아니다
+    (D-023 — 2단계 병변명 holdout 오답 56.6%, `stage1` 은 보정 전). 프롬프트에서 모델에게
+    금지한 것을 화면에서 사용자에게도 말해 두지 않으면, 코드가 지킨 방어를 화면이 푼다.
+    """
+    if history is None or not history.entries:
+        return ""
+    items = " · ".join(
+        f"{_when(entry.days_ago)} {_SCREENING_VERDICTS[entry.verdict]}"
+        for entry in history.entries
+    )
+    return (
+        f"[이전 기록] {items}\n"
+        "사진이 매번 달라 기록만으로 좋아졌다·나빠졌다를 말할 수는 없어요. "
+        "변화가 궁금하시면 진료를 받아보세요."
+    )
+
+
+def _with_history(message: str, history: ScreeningHistory | None) -> str:
+    """이력 절을 **앞에** 붙인다 — 아는 것을 먼저 말하고 안내가 뒤에 온다."""
+    clause = _history_message(history)
+    return f"{clause}\n\n{message}" if clause else message
+
+
+def _when(days_ago: int) -> str:
+    """경과일을 말로. 날짜가 아닌 이유는 상류가 시계를 이미 풀었기 때문이다."""
+    return "오늘" if days_ago == 0 else f"{days_ago}일 전"
 
 
 def _handoff_message(route_plan: RoutePlan) -> str:

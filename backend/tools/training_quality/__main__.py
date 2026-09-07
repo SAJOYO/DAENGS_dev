@@ -71,8 +71,8 @@ def _require_anchor_gate(model: str) -> None:
     if not path.exists():
         raise SystemExit(
             f"앵커 기록이 없습니다: {path}\n"
-            f"  먼저 `check-anchors --judge-model {model}` 을 도세요 — 사람 라벨이 모이기 전까지"
-            " judge 를 믿을 근거는 앵커뿐입니다 (D-060 ⑥)."
+            f"  먼저 `check-anchors --judge-model {model}` 을 도세요 — judge 를 믿을 근거는"
+            " 앵커뿐입니다 (D-060 ⑥). 사람 라벨은 진행하지 않습니다 (⑦)."
         )
     record = json.loads(path.read_text(encoding="utf-8"))
     if not record.get("passed"):
@@ -113,23 +113,112 @@ def cmd_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def _review_sheet(label: str, picks: list[dict[str, Any]],
+                  rows: list[dict[str, Any]]) -> str:
+    """사람이 실제로 검산할 수 있는 한 장. **청크 본문을 같이 싣는 것이 요점이다.**
+
+    판정만 보여주면 사람이 할 수 있는 것은 "그럴듯한가" 뿐이고, 그건 `RAG-075` ② 가 실패한
+    바로 그 판단이다. 답변과 자료를 나란히 놓아야 *"이 문장이 자료에 있나"* 라는 **확인 가능한
+    질문**으로 바뀐다.
+    """
+    by_id = {row.get("id"): row for row in rows}
+    out = [
+        f"# 사람이 볼 자리 — `{label}`",
+        "",
+        (f"judge 가 판정 {len(rows)}건 중 **{len(picks)}건**에서 흔들렸습니다. 전부 읽지 "
+         "마시고 여기부터 보세요."),
+        "",
+        "## 각 문항에서 물을 것 하나",
+        "",
+        "> **judge 가 «자료에 없다»고 한 그 문장이, 아래 [자료]에 정말 없습니까?**",
+        "",
+        ("그것만 보시면 됩니다. 답변이 좋은지 나쁜지는 이 축이 묻는 것이 아닙니다. "
+         "`Ctrl+F` 로 낱말을 찾아보는 것이 가장 빠릅니다."),
+        "",
+        "판정이 셋 중 하나로 갈립니다:",
+        "",
+        "| | 뜻 |",
+        "| --- | --- |",
+        "| **judge 가 맞다** | 그 문장이 자료에 없다 — 생성부가 자료 밖으로 나갔다 |",
+        "| **judge 가 틀렸다** | 자료에 있는데 못 찾았다, 또는 표현만 다른 것을 없다고 했다 |",
+        "| **자료가 문제다** | 답은 맞는데 검색된 네 청크에 근거가 안 잡혔다 (검색 문제) |",
+        "",
+        ("⚠ 셋째가 있다는 것이 중요합니다. judge 가 틀린 것도 생성이 틀린 것도 아니라 "
+         "**검색이 엉뚱한 청크를 물어온** 경우이고, 그건 고칠 곳이 다릅니다."),
+        "",
+        "---",
+        "",
+    ]
+    for i, pick in enumerate(picks, start=1):
+        row = by_id.get(pick["id"]) or {}
+        out += [
+            f"## {i}. `{pick['id']}` — {pick['why_review']}",
+            "",
+            f"**질문** {pick['question']}",
+            "",
+            "### judge 가 «자료에 없다»고 한 것",
+            "",
+        ]
+        out += [f"- {claim}" for claim in pick["unsupported"]] or ["- (없음)"]
+        out += ["", f"> {pick['rationale']}", "", "### 답변 전문", "",
+                "```", str(row.get("answer", "")).strip(), "```", "",
+                "### 검색된 자료 — 여기에 있습니까?", ""]
+        for n, chunk in enumerate(row.get("chunks") or [], start=1):
+            head = " › ".join(str(p) for p in (chunk.get("heading_path") or []))
+            out += [
+                f"<details><summary><b>[자료 {n}]</b> {chunk.get('document_id', '?')}"
+                + (f" — {head}" if head else "")
+                + f" (score {chunk.get('score', 0):.3f})</summary>",
+                "",
+                "```",
+                str(chunk.get("text", "")).strip(),
+                "```",
+                "",
+                "</details>",
+                "",
+            ]
+        out += ["---", ""]
+    out += [
+        "## 다 보신 뒤에",
+        "",
+        "판정을 판정 파일과 **같은 모양**으로 적어 두시면 `agreement` 가 견줍니다.",
+        "",
+        "```",
+        f"backend/evals/training_quality/judgments_{label}__<이름>.jsonl",
+        "```",
+        "",
+        ("⚠ `judge_model` 에는 **누가 판정했는지**를 적으세요 — 사람이면 `human`, LLM 이면 "
+         "실제 모델명입니다. 섞이면 나중에 구분되지 않습니다 (D-060 ⑦)."),
+        "",
+        ("⚠ 이 대조로 나오는 수는 **지표가 아닙니다.** 사람 라벨 30개(RAG-007) 조건이 "
+         "충족되지 않기 때문입니다. 쓸모는 *judge 가 어느 쪽으로 기우는지* 까지입니다."),
+    ]
+    return "\n".join(out) + "\n"
+
+
 def cmd_review(args: argparse.Namespace) -> int:
-    """사람이 라벨링할 문항을 고른다. **judge 가 자신 없어 하는 자리**를 고른다."""
+    """사람이 볼 문항을 고른다. **judge 가 자신 없어 하는 자리**를 고른다."""
     _, rows = collect_mod.load_dump(args.dump or collect_mod.dump_path(args.label))
     judgments = _load_judgments(_judgments_path(args.label))
     picks = judge_mod.disagreements(judgments, rows)
     if not picks:
-        print("판정 내부에 모순이나 경계선이 없습니다 — 무작위 표본으로 라벨링하세요.")
+        print("판정 내부에 모순이나 경계선이 없습니다 — 무작위 표본으로 보세요.")
         return 0
     for pick in picks:
         print(f"\n── {pick['id']}  ({pick['why_review']})")
         print(f"   질문: {pick['question']}")
         print(f"   judge: grounded={pick['grounded']}  unsupported={pick['unsupported']}")
         print(f"   근거: {pick['rationale']}")
-    print(f"\n{len(picks)}건 — **이것이 이 도구의 산출물입니다.** 사람이 여기부터 보면 됩니다.")
+
+    out = args.out or (collect_mod.ASSETS_DIR / f"review_{args.label}.md")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(_review_sheet(args.label, picks, rows), encoding="utf-8")
+
+    print(f"\n{len(picks)}건 — **이것이 이 도구의 산출물입니다.**")
+    print(f"   사람이 읽을 한 장: {out}")
+    print("   답변과 검색된 자료를 나란히 실어 뒀습니다 — 판정만 보면 «그럴듯한가»밖에 못 묻고,")
+    print("   그것이 RAG-075 ② 가 실패한 바로 그 판단입니다.")
     print("   교차검증을 붙이려면 docs/training/judge_codex_handoff.md 의 프롬프트 ① 을 쓰세요.")
-    print("   ⚠ 판정 파일의 judge_model 에는 **실제 모델명**을 적으세요. 'human' 으로 쓰면")
-    print("      나중에 사람 라벨과 구분되지 않습니다 (D-060 ⑦).")
     return 0
 
 
@@ -169,9 +258,11 @@ def main(argv: list[str] | None = None) -> int:
     p_score.add_argument("--dump", type=Path, default=None)
     p_score.add_argument("--limit", type=int, default=0)
 
-    p_review = sub.add_parser("review", help="사람이 라벨링할 문항을 고른다")
+    p_review = sub.add_parser("review", help="사람이 볼 문항을 고르고 읽을 한 장을 낸다")
     p_review.add_argument("--label", required=True)
     p_review.add_argument("--dump", type=Path, default=None)
+    p_review.add_argument("--out", type=Path, default=None,
+                          help="기본은 evals/training_quality/review_<label>.md")
 
     p_agree = sub.add_parser("agreement", help="두 판정 파일의 일치율")
     p_agree.add_argument("--label", required=True)

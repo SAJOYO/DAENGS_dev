@@ -158,6 +158,43 @@ class Settings(BaseSettings):
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
 
+    # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
+    # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은
+    # 그 값을 `daengs_backend` 쪽 도구(`tools/answer_quality/`)도 읽어야 해서이고,
+    # 위 `redis_url`·`gemini_api_key` 와 **같은 판단**입니다 — 두 패키지가 같은 env 를
+    # 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
+    #
+    # ⚠ **이름·단위·기본값을 #305 와 어긋나게 두지 마세요.** 같은 `backend/.env` 한 줄을
+    #   둘이 읽으므로, 여기서만 바꾸면 judge 둘이 다른 모델로 채점하면서 그 사실이
+    #   아무 데도 안 드러납니다.
+    #
+    # 판정자가 Gemini 가 아닌 이유는 #305 가 이미 정했습니다 — 생성이 Gemini 인데 judge 도
+    # Gemini 면 같은 훈련 계보가 자기 계열 문장을 후하게 보는 self-preference 가 남습니다.
+    # RAG-007 은 "급 분리"(flash 생성 → pro judge)까지 요구했고, 2026-09-07 에 계열까지
+    # 가르기로 정했습니다. D-060 은 그 결정을 훈련 RAG 로 **이어받을 뿐 다시 정하지 않습니다.**
+    #
+    # ⚠ `os.getenv` 로 읽는 자리를 새로 만들지 마세요. `daengs_training/generation/gemini.py`
+    #   가 그렇게 돼 있어서 개발 PC 에서는 셸에 키를 또 줘야 합니다 (`backend/.env` 는
+    #   pydantic-settings 가 Settings 로 읽을 뿐 `os.environ` 에 올리지 않습니다).
+    #   openai SDK 의 기본 생성자가 그 `os.environ` 을 보므로, 여기서 받아 클라이언트에
+    #   **명시적으로** 넘깁니다.
+    #
+    # 키가 비면 judge 만 안 돕니다 — 앱은 정상으로 뜹니다.
+    openai_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("OPENAI_API_KEY")
+    )
+    # ⚠ **`-latest` 류를 쓰지 않습니다** (#305). 움직이는 이름이면 두 판정 파일의 차이가
+    # 답변 때문인지 judge 때문인지 안 갈립니다. `gemini_model` 과 방향이 반대인데, 그쪽은
+    # 생성이라 되돌리기가 싸고 이쪽은 **채점자**라 흔들리면 옛 판정과의 비교가 통째로 끊깁니다.
+    openai_judge_model: str = Field(
+        default="gpt-5.4-2026-03-05", validation_alias=AliasChoices("OPENAI_JUDGE_MODEL")
+    )
+    # ⚠ **여기는 초입니다** — `gemini_timeout_ms` 와 단위가 다르므로 이름에 박아 둡니다.
+    # judge 는 서빙 경로가 아니라 배치라 넉넉하게 줍니다.
+    openai_timeout_s: float = Field(
+        default=120.0, validation_alias=AliasChoices("OPENAI_TIMEOUT_S"), gt=0
+    )
+
     # ── Place discovery internal HTTP boundary ───────────────────────
     # backend와 place-search는 소스를 공유해도 런타임은 분리돼 있습니다. 기본값은 compose
     # service DNS이고, 호스트에서 backend만 실행할 때는 backend/.env에서 바꿉니다.

@@ -278,3 +278,97 @@ def test_constructing_default_engine_does_not_load_training_ml() -> None:
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
     assert json.loads(completed.stdout.strip().splitlines()[-1]) == []
+
+
+# ---------------------------------------------------------------- 이력 절 배선 (#79 3번)
+#
+# 절 자체는 `test_orchestration_aggregate.py` 가 봅니다. 여기서 보는 것은 **그래프가
+# `context["screening_history"]` 를 거기까지 가져다 주는가**, 그리고 그 길이 payload 와
+# **같은 화이트리스트**를 지나는가입니다 — 두 경로가 갈라지면 한쪽만 넓어져도 안 깨집니다.
+
+
+_HISTORY_CONTEXT = {
+    "screening_history": [
+        {"verdict": "abnormal", "days_ago": 30},
+        {"verdict": "normal", "days_ago": 60},
+    ]
+}
+
+
+async def _run_with_context(engine: OrchestrationEngine, route_plan: RoutePlan, context: dict):
+    return await engine.run(
+        route_plan=route_plan,
+        query="지난번보다 어때?",
+        principal=PRINCIPAL,
+        request_id="request-1",
+        context=context,
+    )
+
+
+async def test_이력이_핸드오프_응답까지_간다() -> None:
+    """"지난번보다 어때요" 의 실제 모양 — 능력은 하나도 안 돌고 skin 핸드오프만 난다."""
+    response = await _run_with_context(
+        OrchestrationEngine({}),
+        plan(handoffs=[Handoff(target="skin", reason="image_upload_required")]),
+        _HISTORY_CONTEXT,
+    )
+    assert response.status == AssistantStatus.HANDOFF
+    assert response.message.startswith("[이전 기록] 30일 전 이상 소견 있음 · 60일 전 특이 소견 없음")
+    assert "피부 사진을 등록해" in response.message
+
+
+async def test_능력이_답하면_그래프도_이력을_안_싣는다() -> None:
+    life = FakeAdapter(CapabilityName.LIFE, result(CapabilityName.LIFE, CapabilityStatus.OK))
+    response = await _run_with_context(
+        OrchestrationEngine({CapabilityName.LIFE: life}),
+        plan(request(CapabilityName.LIFE)),
+        _HISTORY_CONTEXT,
+    )
+    assert response.status == AssistantStatus.ANSWERED
+    assert "[이전 기록]" not in response.message
+
+
+async def test_이력_없는_요청은_이_카드_이전과_같다() -> None:
+    """컨텍스트에 이력이 없으면 응답이 한 글자도 안 달라집니다."""
+    args = (
+        OrchestrationEngine({}),
+        plan(handoffs=[Handoff(target="skin", reason="image_upload_required")]),
+    )
+    base = await run(*args)
+    for context in ({}, {"screening_history": []}, {"active_dog_id": "dog-1"}):
+        got = await _run_with_context(*args, context)
+        assert got.message == base.message, context
+
+
+async def test_모양이_틀린_이력은_응답을_안_깬다() -> None:
+    """payload 쪽과 같은 판단입니다 — 여기서 터지면 답할 수 있는 요청이 통째로 실패합니다."""
+    for bad in ("abnormal", {"verdict": "normal"}, [{"verdict": "확실치_않음", "days_ago": 3}]):
+        got = await _run_with_context(
+            OrchestrationEngine({}),
+            plan(handoffs=[Handoff(target="skin", reason="image_upload_required")]),
+            {"screening_history": bad},
+        )
+        assert got.status == AssistantStatus.HANDOFF
+        assert "[이전 기록]" not in got.message, bad
+
+
+async def test_병변_이름은_이력_절로도_못_간다() -> None:
+    """답변 경로도 payload 와 같은 화이트리스트를 지납니다 (불변식 15, D-023)."""
+    got = await _run_with_context(
+        OrchestrationEngine({}),
+        plan(handoffs=[Handoff(target="skin", reason="image_upload_required")]),
+        {
+            "screening_history": [
+                {
+                    "verdict": "abnormal",
+                    "days_ago": 30,
+                    "top1": "구진",
+                    "headline": "이상 소견이 있어요",
+                    "photo_storage_key": "s3://bucket/key.jpg",
+                }
+            ]
+        },
+    )
+    assert "[이전 기록] 30일 전 이상 소견 있음" in got.message
+    for 금지 in ("구진", "이상 소견이 있어요", "s3://", "photo"):
+        assert 금지 not in got.message

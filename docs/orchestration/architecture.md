@@ -277,7 +277,7 @@ Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입�
 | **Training** | backend 프로세스 안 `daengs_training` 모듈 (#92·#93·#94·#112). `POST /training/chat`(관리자+SEARCH_INSPECT, #25·#30) → in-process `services/training_rag.py` → `RAGService.answer(top_k=4)`. 생성 Gemini `gemini-3.1-flash-lite`, 검색 E5 + 공용 pgvector 클러스터의 **`vectordb` DB**, `public.training_rag_documents`/`training_rag_chunks` 테이블 (#112, 아래 Training 토폴로지 절) | 실행 ✅ (assistant 경유는 앱 회원도 — D-036) | in-process — 어댑터는 `services/training_rag.py` 경계를 쓰고 `RAGService`·PGVector 내부로 직행하지 않습니다 | **예** | 안전 시맨틱은 상류 소유 — 공개 decision ANSWER·UNCERTAIN·SAFETY_REFUSAL·MEDICAL_REFUSAL (`schemas/training.py`, docs/training/rag-demo.md). 내부 경계가 실제 생성 타임아웃과 그 밖의 실패를 구분하며 공개 `/training/chat` 의 503 호환성은 유지합니다 (contracts §4) |
 | **Life** | backend `POST /life/ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/life/walk-conditions` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
-| **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023). **기록된 판정은 승인된 컨텍스트 입력입니다** — `screening_record_id` 참조 → `ScreeningContext {verdict, days_ago}` (#307, contracts §1). 실행이 아니라 이미 끝난 판정의 기록이라 EXECUTE 는 여전히 NO 입니다. 옛 `/screen/v1/screen` 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도(#239 Hold) |
+| **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023). **기록된 판정은 승인된 컨텍스트 입력입니다** — `screening_record_id` 참조 → `ScreeningContext {verdict, days_ago}` (#307, contracts §1). **같은 아이의 이전 판정들(`screening_history`, 최근 3건)도 같은 자격의 입력입니다** — 진입 신호는 그 `screening_record_id` 하나이고, 항목이 `ScreeningContext` 자체라 좁힘이 건수와 무관하게 걸립니다. 다만 **"나아졌다/진행됐다" 는 계약에 없습니다**: 두 시점의 차이는 모델의 잡음일 수 있어(D-023) 이력은 나열·안내까지이고 판단은 진료 권함으로 끝납니다 (#79 3번, contracts §1). 실행이 아니라 이미 끝난 판정의 기록이라 EXECUTE 는 여전히 NO 입니다. 옛 `/screen/v1/screen` 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도(#239 Hold) |
 | **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (contracts.md) |
 | **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. 내부 `POST /internal/place/discovery`는 Place 전용 Gemini proposer와 검색/presentation을 조립 | **실행 ✅** — 명시 신호(`requested_capability=place`, #196)와 **전역 의미 선택(#204, D-051, `semantic-router-ko-v7`)** 둘 다 | backend adapter → compose 내부 HTTP | **예** | payload는 원문+검증 좌표뿐이고 profile identity를 보내지 않습니다. 내부 43~89KB 응답은 최대 3 lens·9후보·48KiB의 공개 projection으로 줄이며 KTO/KCISA provenance와 unresolved signal은 보존합니다 (#195·#196) |
 | **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
@@ -310,6 +310,30 @@ payload 규칙으로 옮기고, `adapters/life.py` 가 원시값 둘로 `daengs_
 골든셋과 랩 비교의 축이 그대로입니다 (B4 가 `DOG_BLOCK` 에 세운 성질과 같습니다).
 블록의 본문이 "무엇이었다" 보다 "무엇을 하지 말라" 가 긴 것도 의도입니다 — 병명을 말하지
 말 것, 나아졌는지 판단하지 말 것. `general` 폴백은 이 값을 받지 않습니다 (contracts §3).
+
+**이력은 그 세 자리에 한 칸씩 더한 것입니다** (#79 3번). `planner._screening_history` 가
+**항목마다** 같은 화이트리스트를 지나게 하고, 어댑터가 `(판정, 경과일)` 쌍의 튜플로 건네고,
+`SCREENING_HISTORY_BLOCK` 이 `SCREENING_BLOCK` **뒤에 따로** 붙습니다. 기존 블록을 고치지 않고
+따로 붙이는 것이 요점입니다 — 이번 판정만 있는 요청의 프롬프트가 #283 과 바이트 단위로 같아야
+그 카드의 지표 비교축이 유지됩니다. 두 블록은 각자 게이트를 가집니다: 첫 기록이면 이번 판정만,
+이번 판정이 실패한 자리면 이력만 붙습니다 — 그래서 이력 블록도 병명 금지 문장을 들고 있습니다.
+그리고 그 블록의 본문은 대부분이 **"견주지 말라"** 입니다. 두 판정의 차이는 매번 다른 사진에서
+나온 것이라 몸이 달라졌다는 근거가 되지 않고(D-023), 계약에 견줄 데이터를 안 둔 것이 방어의
+절반이라면 나머지 절반이 그 문장들입니다. 변화 판단은 진료 권함으로 끝냅니다.
+
+**그런데 Life 프롬프트만으로는 이력이 사용자에게 안 닿습니다** (2026-09-07 실측). Life 는 근거
+기반 RAG 라 [참고자료]에 없는 말을 하지 않고, 판정 블록은 `DOG_BLOCK` 과 같은 **갈래 선택기**로
+붙어 있습니다 — 알려주는 통로가 아닙니다. 실제로 "예전에 피부 찍어둔 기록 있었나?" 를 물으면
+사용자의 기록을 프롬프트에 들고 있으면서도 수의사법 제13조로 답합니다. #283 에서 그것이 문제가
+안 된 이유는 **앱이 결과 카드를 이미 그려서**인데, 이력에는 그 카드가 없습니다.
+
+그래서 이력만은 **답변에 절로 붙습니다** — `aggregate.py` 가 `[이전 기록] …` 을 조립하는 것이고,
+이 문서가 위에서 "합성의 실물" 이라고 부른 바로 그 결정적 절 조립입니다. **능력이 답을 냈으면
+붙지 않습니다**: 물어본 것에 답이 있으면 이력은 안 물어본 이야기라, 핸드오프뿐이거나 전부
+기권·실패일 때만 말합니다. 어느 쪽인지는 `results` 의 상태가 정하지 **라우터가 정하지 않습니다** —
+모델이 판단하면 O-9 가 막은 2차 LLM 이 됩니다. 절의 두 번째 문장이 프롬프트와 같은 말로 비교를
+막고, 판정 어휘는 `generate._VERDICT_KO` 의 사본이라 테스트가 둘을 대조합니다 (#269 와 같은 장치).
+`aggregate` 가 `daengs_life` 를 import 하지 않는 것은 D-035 의 반대 방향이기 때문입니다.
 
 ## Training 토폴로지 — 이관 완료, PGVector 는 본체 DB 로 통합 (CURRENT)
 

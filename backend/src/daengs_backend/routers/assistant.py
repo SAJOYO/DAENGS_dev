@@ -119,25 +119,32 @@ async def _with_screening_context(
     principal: Principal | AppPrincipal,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> dict[str, Any]:
-    """`context["screening"]` 을 채워 돌려준다 — `_with_dog_context` 와 같은 자리다 (#307).
+    """`context["screening"]` 과 `context["screening_history"]` 를 채워 돌려준다 (#307 · #79 3번).
 
-    **판정 내용은 본문에서 안 받는다.** 앱이 보내는 것은 기록 id 뿐이고, 무엇이었는지는
-    서버가 DB 에서 읽어 `verdict` + `days_ago` 로 좁힌다. 응답이 대화 turn 으로 저장되는
-    경로라(D-048), 검증하지 않은 판정을 그대로 실었다면 지난 turn 에서 되돌릴 수 없다.
+    `_with_dog_context` 와 같은 자리다. **판정 내용은 본문에서 안 받는다** — 앱이 보내는
+    것은 기록 id 뿐이고, 무엇이었는지는 서버가 DB 에서 읽어 `verdict` + `days_ago` 로
+    좁힌다. 응답이 대화 turn 으로 저장되는 경로라(D-048), 검증하지 않은 판정을 그대로
+    실었다면 지난 turn 에서 되돌릴 수 없다.
+
+    **이력의 진입 신호도 이 필드다.** "지난번보다 어때요" 에는 앱이 보낼 참조가 따로 없어,
+    결과 화면에서 이어 묻는 이 자리에 얹는다 — 그 요청은 이미 세션을 열고 있으므로 늘어나는
+    것은 같은 세션의 쿼리 하나이고, 이 필드를 안 보낸 요청은 여전히 DB 를 안 연다. 일반
+    대화 전반으로 넓히는 것(`active_dog_id` 만으로 상시)은 수요가 확인된 뒤다.
 
     **못 채워도 그냥 지나간다.** 관리자 토큰(기록이 없다) · 남의 기록 · 아직 판정 전 ·
-    앱이 옛 `/screen/v1/screen` fallback 으로 찍어 행이 없는 건이 전부 여기로 온다
-    (#239 컨텍스트). 기록이 없으면 어시스턴트는 이 기능이 생기기 전과 똑같이 답한다.
+    이력이 비어 있는 첫 기록 · 앱이 옛 `/screen/v1/screen` fallback 으로 찍어 행이 없는
+    건이 전부 여기로 온다 (#239 컨텍스트). 기록이 없으면 어시스턴트는 이 기능이 생기기
+    전과 똑같이 답한다.
     """
     if not isinstance(principal, AppPrincipal) or body.screening_record_id is None:
         return context
     async with session_factory() as session:
-        screening = await screening_context_service.resolve(
+        resolved = await screening_context_service.resolve_context(
             session, principal.app_user_id, body.screening_record_id
         )
-    if screening is None:
+    if not resolved:
         return context
-    return {**context, "screening": screening}
+    return {**context, **resolved}
 
 
 async def _resolved_context(

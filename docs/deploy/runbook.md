@@ -28,7 +28,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-ge
 sudo npm i -g pm2
 
 # 배포 체크아웃 밖 상태 폴더 (로컬 서버의 C:/deploy 와 같은 취급)
-sudo mkdir -p /srv/daengs/{models/release,gait/release,letsencrypt,dumps,corpus-unused}
+sudo mkdir -p /srv/daengs/{models/release/gait-analysis,letsencrypt,dumps,corpus-unused}
 sudo chown -R $USER /srv/daengs
 
 # 저장소는 GitHub 에서 직접 clone 하지 않습니다 — 아래 "git push 배포" 참고
@@ -81,7 +81,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | 무엇 | 어디로 | 비고 |
 | --- | --- | --- |
 | 스크리닝 가중치 2개 | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋) |
-| gait `best.pt` · `yolov8n.pt` | `/srv/daengs/gait/release/` | git 에 없음 |
+| gait `best.pt` · `yolov8n.pt` | `/srv/daengs/models/release/gait-analysis/` | git 에 없음. **`GAIT_RELEASE_DIR` 과 같은 값입니다** — 스크리닝 release 폴더의 하위. 2026-09-07 VM 실측(best.pt 53MB · yolov8n.pt 6.5MB) |
 | 최상단 `.env` | `~/daengs/.env` | 아래 수정표 |
 | `backend/.env` | `~/daengs/backend/.env` | 암호화 키 3개는 **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 엽니다 |
 
@@ -92,7 +92,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | `SCREENING_RELEASE_DIR` | `/srv/daengs/models/release` |
 | `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
-| `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | 기본은 셋 다 **비웁니다** (= `none`, `/app/gait/*` 가 503 — 안전합니다). 임시 LocalBridge 로 새 흐름을 검증할 때만 `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** 진짜 저장소는 GCS 이고 버킷은 #78 대기입니다 |
+| `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. **D-052 로 이 볼륨이 정본입니다** — 임시가 아니고, GCS 로도 안 갑니다(#78 은 닫혔습니다). 가운데 값은 **컨테이너 안 경로**라 호스트에 그런 폴더는 없습니다(named volume `daengs_gait-bridge`). 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** ⚠️ 이 셋은 보행 전용이 아닙니다 — 피부진단·점령지 사진·프로필이 **같은 저장소**를 씁니다. 비우면 그 전부가 503 입니다 |
 | `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/life/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:

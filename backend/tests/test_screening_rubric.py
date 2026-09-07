@@ -26,8 +26,11 @@ def test_공유_루브릭을_안_건드린다() -> None:
 
 def test_판정_프롬프트는_다른_이름_공간이다() -> None:
     """같은 이름을 쓰면 공유 루브릭의 앵커 기록이 이 패스를 통과시킨 것으로 보입니다."""
-    assert screening_rubric.SCREENING_PROMPT_VERSION not in JUDGE_PROMPT_VERSIONS.values()
-    assert screening_rubric.SCREENING_PROMPT_VERSION.startswith("answer-quality-screening-")
+    versions = set(screening_rubric.SCREENING_PROMPT_VERSIONS.values())
+    assert not versions & set(JUDGE_PROMPT_VERSIONS.values())
+    assert all(v.startswith("answer-quality-screening-") for v in versions)
+    # 변형끼리도 달라야 한다 — 같으면 앵커 기록 파일이 서로를 통과시킨다.
+    assert len(versions) == len(screening_rubric.SCREENING_PROMPT_VERSIONS)
 
 
 # ---------------------------------------------------------------- 자격 단정이 먹히지 않는다
@@ -82,7 +85,7 @@ def test_판정이_없는_쪽도_같은_프롬프트로_잰다() -> None:
     """짝의 두 답을 다른 프롬프트로 재면 비교가 성립하지 않습니다."""
     prompt = screening_rubric.build_screening_prompt(question="질문", answer="답", screening=None)
     assert "피부 판정 기록이 없다" in prompt
-    assert screening_rubric.SCREENING_PROMPT_VERSION in prompt
+    assert screening_rubric.SCREENING_PROMPT_VERSIONS["A"] in prompt
     # **유도하지 않는다.** v1 은 "ⓑ 는 0 이 정상" 이라고 적었고, 그러면 off/on 의 갈래 점수
     # 차이가 배선 효과가 아니라 프롬프트 효과가 된다 (#314 실측 뒤 v2 에서 지움).
     assert "0 이 정상" not in prompt
@@ -91,6 +94,43 @@ def test_판정이_없는_쪽도_같은_프롬프트로_잰다() -> None:
 def test_빈_답변도_채점_대상이다() -> None:
     prompt = screening_rubric.build_screening_prompt(question="질문", answer="   ", screening=None)
     assert "(빈 답변)" in prompt
+
+
+def test_변형_둘이_같은_기준을_다른_말로_적는다() -> None:
+    """같은 문장을 조금 바꾼 것이면 두 판정이 닮는 것이 당연해져, 일치율이 아무것도 안 잽니다."""
+    a = screening_rubric.build_screening_prompt(
+        question="질문", answer="답", screening={"verdict": "abnormal", "days_ago": 3}, variant="A"
+    )
+    b = screening_rubric.build_screening_prompt(
+        question="질문", answer="답", screening={"verdict": "abnormal", "days_ago": 3}, variant="B"
+    )
+    assert a != b
+    # 항목 이름은 둘 다 들고 있어야 한다 — 스키마가 같으니 채점 대상도 같다.
+    for item in screening_rubric.SCREENING_ITEMS:
+        assert item in a and item in b
+    # 헤더(무엇을 채점하는가)는 공유한다. 그것까지 다르면 두 판정기가 다른 일을 한다.
+    assert "수의사 진단이 아니며" in a and "수의사 진단이 아니며" in b
+
+
+def test_앵커가_두_항목에_동시에_기대를_걸지_않는다() -> None:
+    """해석이 갈리는 칸에 기대를 두면 앵커가 판정기 대신 판정기의 취향을 잽니다
+    (`anchors.py` 머리말). `usable` 의 뜻을 흐리지 않으려는 것이기도 합니다.
+    """
+    for anchor in screening_rubric.SCREENING_ANCHORS:
+        assert len({e.item for e in anchor.expectations}) == 1
+
+
+def test_앵커가_두_항목을_모두_덮는다() -> None:
+    """한 항목만 덮으면 다른 항목은 게이트 없이 나갑니다."""
+    covered = {e.item for a in screening_rubric.SCREENING_ANCHORS for e in a.expectations}
+    assert covered == set(screening_rubric.SCREENING_ITEMS)
+
+
+def test_일치율_문턱이_공유_루브릭과_같다() -> None:
+    """이 루브릭에만 문턱을 낮추면 '일치율' 이라는 낱말이 두 뜻이 됩니다."""
+    from tools.answer_quality.judge import AGREEMENT_THRESHOLD
+
+    assert screening_rubric.SCREENING_AGREEMENT_THRESHOLD == AGREEMENT_THRESHOLD
 
 
 # ---------------------------------------------------------------- 판정 주입 (collect)

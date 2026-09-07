@@ -108,6 +108,33 @@ class ScreeningContext(ContractModel):
     days_ago: int = Field(ge=0, le=3_650)
 
 
+#: How many earlier screenings ``ScreeningHistory`` may carry. Three is a cap, not a target:
+#: the entries answer "there are earlier records, and this is what they concluded", and a
+#: fourth verdict does not make that sentence truer. An unbounded list would also grow with
+#: the dog rather than with the question, and the whole of it would sit in a saved chat turn.
+SCREENING_HISTORY_LIMIT = 3
+
+
+class ScreeningHistory(ContractModel):
+    """Earlier screenings of the same dog: the same two facts, one entry each, newest first.
+
+    Every exclusion on ``ScreeningContext`` holds here unchanged — a list of the narrow thing
+    is still narrow, and history is not a reason to widen it (#79 3번). The entries are
+    ``ScreeningContext`` itself rather than a looser sibling precisely so that no second,
+    laxer definition of "a screening we may talk about" can appear.
+
+    **Nothing here says a dog got better or worse.** Two verdicts and their ages are not a
+    trend: the two-stage lesion name is wrong 56.6% of the time on holdout and ``stage1`` is
+    uncalibrated (D-023), so the difference between two screenings may be the model's noise
+    rather than the dog's skin. What downstream may do with this is state that earlier records
+    exist and what each concluded; the judgement ends at recommending a vet. The contract
+    enforces the half of that it can — there is no probability, no lesion name and no
+    comparison field to compute a trend from.
+    """
+
+    entries: list[ScreeningContext] = Field(max_length=SCREENING_HISTORY_LIMIT)
+
+
 class LifePayload(ContractModel):
     question: str = Field(min_length=1, max_length=500)
     dog: DogContext | None = None
@@ -116,6 +143,11 @@ class LifePayload(ContractModel):
     #: exactly as it did before this field existed. The narrowing that makes it safe to put
     #: in a prompt lives on ``ScreeningContext`` itself, not here.
     screening: ScreeningContext | None = None
+    #: Earlier screenings of the same dog (#79 3번). Same rule again — the caller resolved it
+    #: and the planner only copies it. It arrives separately from ``screening`` rather than
+    #: nested inside it because the two are independently absent: a first-ever record has no
+    #: history, and a record whose own verdict failed still has one.
+    screening_history: ScreeningHistory | None = None
 
 
 class WalkPayload(ContractModel):
@@ -311,6 +343,7 @@ class OrchestratorState(TypedDict):
 
 
 __all__ = [
+    "SCREENING_HISTORY_LIMIT",
     "AssistantResponse",
     "AssistantStatus",
     "CapabilityName",
@@ -331,6 +364,7 @@ __all__ = [
     "RouteTrace",
     "RouterKind",
     "ScreeningContext",
+    "ScreeningHistory",
     "TrainingPayload",
     "WalkPayload",
 ]

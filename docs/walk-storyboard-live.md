@@ -1,13 +1,15 @@
 # 실제 산책 → 장면 분석 → app 검토
 
-아래는 현재 서버의 규칙 기반 분석 구현을 설명한다.
+아래는 현재 서버의 규칙 기반 관측 분석 구현을 설명한다. v3의 대표/장면 제목 생성은
+[walk-diary-titles.md](walk-diary-titles.md)를 함께 본다.
 전체 이해 → 장면별 갱신 → 재검토 → 검토본 → 선택적 일기는 geo에서 실험 중이며,
 설계와 구현 범위의 기준은 DAENGS_geo `docs/explorations/walk/diary-storyboard-plan.md`다.
 
 GPS 업로드·finalize와 행동/메모 동기화가 끝나면 app의 기존 WorkManager 작업이
 `POST /app/walks/{walk_id}/storyboard`를 호출한다. 서버는 저장된 GPS chunk를 검증하고
-`daengs_walk.analyze_walk`의 관측 구간으로 장면을 만든다. 합성 경로·시뮬레이터 정답·LLM은
-실행 경로에 들어가지 않는다. scene builder/selector는 DAENGS_geo의
+`daengs_walk.analyze_walk`의 관측 구간으로 장면을 만든다. 합성 경로·시뮬레이터 정답은
+실행 경로에 들어가지 않는다. v3는 사실 장면 구성 뒤 LLM으로 제목을 함께 생성한다.
+scene builder/selector는 DAENGS_geo의
 `app/features/storyboard/scenes.py`, `selection.py`와 같은 코드다.
 
 ## 교환 계약
@@ -18,7 +20,8 @@ GPS 업로드·finalize와 행동/메모 동기화가 끝나면 app의 기존 Wo
 
 응답은 `session_id`(app의 client_session_id), `generation`, `input_revision`,
 `status`, `entry_revisions`, `bundle`, `error_code`다. GET은 같은 경로에서 현재 상태를
-읽는다. bundle_format을 생략하면 기존 v1, `walk-storyboard-candidates-v2`이면 v2이며
+읽는다. bundle_format을 생략하면 기존 v1, `walk-storyboard-candidates-v2`이면 v2,
+`walk-storyboard-candidates-v3`이면 대표 제목을 포함할 수 있는 v3이며
 실데이터 경로는 synthetic=false다. GET도 같은 이름의 query로 형식을 선택한다.
 준비된 최신 결과에만 bundle을 돌려준다. status는 pending/running/ready/failed/stale이다.
 

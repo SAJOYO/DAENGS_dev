@@ -16,12 +16,17 @@ from daengs_backend.schemas.walk_storyboard import (
 )
 from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
+from daengs_backend.services.walk_storyboard_titles import title_storyboard
 
 router = APIRouter(prefix="/app/walks", tags=["walk-storyboard"])
 
 
 def get_context_lookup():
     return lookup_contexts
+
+
+def get_title_generator():
+    return title_storyboard
 
 
 @router.get("/{walk_id}/storyboard", response_model=StoryboardResponse)
@@ -46,9 +51,10 @@ async def generate_storyboard(
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
     lookup: Annotated[Callable, Depends(get_context_lookup)],
+    titles: Annotated[Callable, Depends(get_title_generator)],
 ):
     try:
-        return await service.generate(session, user.app_user_id, walk_id, body, lookup)
+        return await service.generate(session, user.app_user_id, walk_id, body, lookup, titles)
     except service.StoryboardNotFound:
         raise HTTPException(404, "산책 기록을 찾을 수 없습니다.") from None
     except service.StoryboardConflict as exc:

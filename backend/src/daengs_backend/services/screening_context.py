@@ -167,18 +167,23 @@ async def _history(
     FK 가 SET NULL 이고, 기록은 남습니다 (`models/screening_record.py`). 그때 소유자
     전체로 넓히면 **다른 아이의 판정이 "지난번" 으로 섞여** 들어갑니다. 넓히지 않습니다.
 
-    기준 기록 자신은 뺍니다 — 이미 `screening` 으로 가 있고, 같은 판정이 두 번 실리면
-    "기록이 두 건" 으로 읽힙니다. `DONE` 이 아닌 행도 여기서 빠집니다 (`_narrowed`).
+    **`before` 로 자릅니다 — 부르는 쪽에서 거를 수 없습니다.** 기준 기록보다 나중 것을 여기서
+    걸러 내면 `limit` 이 이미 그 앞에 걸린 뒤라, 기준 기록이 최신 12건 밖일 때 창 안에 나중
+    기록만 들어와 이력이 통째로 빕니다. 그리고 걸러 내기 전에는 나중 기록이 "지난번" 으로
+    실립니다 — 앱의 기록 화면에서 **옛 기록을 열고 묻는 흐름**이 그 경로입니다 (#79 3번 리뷰).
+    기준 기록 자신도 `before` 가 같이 뺍니다. `DONE` 이 아닌 행은 `_narrowed` 가 뺍니다.
     """
     if record.pet_id is None:
         return []
     rows = await screening_repo.list_for_owner(
-        session, app_user_id, pet_id=record.pet_id, limit=_HISTORY_SCAN_LIMIT
+        session,
+        app_user_id,
+        pet_id=record.pet_id,
+        before=record,
+        limit=_HISTORY_SCAN_LIMIT,
     )
     entries: list[ScreeningContext] = []
     for row in rows:
-        if row.id == record.id:
-            continue
         narrowed = _narrowed(row, now=now)
         if narrowed is None:
             continue

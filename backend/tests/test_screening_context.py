@@ -361,7 +361,12 @@ def _pet_record(days_ago: int, *, verdict: str = "normal", **kwargs) -> Screenin
 
 
 def _fill(store: Store, *records: ScreeningRecord) -> None:
-    """**옛것부터** 넣습니다 — fakes 가 담은 순서를 뒤집어 `created_at DESC` 를 흉내 냅니다."""
+    """순서는 상관없습니다 — fakes 가 `created_at` 으로 실제로 정렬합니다.
+
+    예전에는 "옛것부터 넣어야" 했습니다(fakes 가 담은 순서를 뒤집어 흉내 냈습니다). 그 흉내가
+    **담은 순서 = 시간 순서인 테스트만** 통과시켰고, 옛 기록을 기준으로 묻는 갈래가 통째로 안
+    돌아 순서 버그를 못 잡았습니다 (#79 3번 리뷰).
+    """
     store.screenings.extend(records)
 
 
@@ -377,6 +382,51 @@ async def test_이전_기록은_최근순으로_넘어간다(store: Store) -> No
             {"verdict": "normal", "days_ago": 40},
         ],
     }
+
+
+async def test_기준보다_나중_기록은_이력이_아니다(store: Store) -> None:
+    """**앱의 기록 화면에서 옛 기록을 열고 묻는 흐름입니다.** `screening_record_id` 는 소유자
+    것이면 아무거나 받으므로(#307) 기준이 최신이라는 보장이 없습니다. 나중 기록을 "지난번"
+    으로 실으면 사용자가 읽는 시간 순서가 거꾸로입니다.
+    """
+    old_reference = _pet_record(40, verdict="normal")
+    _fill(
+        store,
+        old_reference,
+        _pet_record(10, verdict="retake"),
+        _pet_record(0, verdict="abnormal"),
+    )
+    resolved = await _resolve_context(old_reference)
+    assert resolved["screening"] == {"verdict": "normal", "days_ago": 40}
+    assert "screening_history" not in resolved
+
+
+async def test_기준이_스캔_창_밖이어도_이전_기록을_찾는다(store: Store) -> None:
+    """`limit` 은 **거르기 전에** 걸립니다. 기준보다 나중 기록이 스캔 창을 다 채우면, 부르는
+    쪽에서 아무리 걸러도 이력이 빈 채로 나옵니다 — 그래서 조건이 쿼리에 있어야 합니다.
+    """
+    reference = _pet_record(100, verdict="abnormal")
+    earlier = _pet_record(200, verdict="normal")
+    # 기준보다 나중 기록으로 `_HISTORY_SCAN_LIMIT`(12) 을 넘긴다.
+    _fill(store, earlier, reference, *(_pet_record(day) for day in range(1, 15)))
+    resolved = await _resolve_context(reference)
+    assert resolved["screening_history"] == [{"verdict": "normal", "days_ago": 200}]
+
+
+async def test_같은_시각이면_id_로_가른다(store: Store) -> None:
+    """시각이 같은 두 행의 순서가 실행마다 달라지면 같은 질문이 다른 이력을 받습니다."""
+    same = NOW - datetime.timedelta(days=5)
+    first, second = sorted(
+        (_pet_record(5, verdict="normal"), _pet_record(5, verdict="retake")),
+        key=lambda r: r.id,
+    )
+    first.created_at = second.created_at = same
+    _fill(store, first, second)
+    # 뒤엣것(id 가 큰 쪽)을 기준으로 하면 앞엣것만 이력이다. 그 반대는 이력이 없다.
+    assert (await _resolve_context(second))["screening_history"] == [
+        {"verdict": first.result["verdict"], "days_ago": 5}
+    ]
+    assert "screening_history" not in await _resolve_context(first)
 
 
 async def test_기준_기록_자신은_이력에_없다(store: Store) -> None:

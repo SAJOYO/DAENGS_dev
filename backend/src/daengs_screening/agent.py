@@ -211,7 +211,8 @@ def lesion_group(probs: list[tuple[str, float]] | None,
     계열 4군은 **67.9%** 이고, 긴급도 하향 3.7% · A6 오명명 12.5% 로
     두 안전 관문 안입니다.
     """
-    from daengs_screening.config import MORPH_GROUP_KEEP_A6
+    from daengs_screening.config import (DOWNGRADE_BLOCK_MIN, MORPH_GROUP_KEEP_A6,
+                            URGENT_GROUPS)
     from daengs_screening.message import GROUP_CONF_MIN, SHOW_GROUP
 
     if not SHOW_GROUP or not probs:
@@ -222,7 +223,17 @@ def lesion_group(probs: list[tuple[str, float]] | None,
         if g is None:
             return None                     # 모르는 코드가 섞이면 말하지 않습니다
         tot[g] = tot.get(g, 0.0) + float(p)
-    name, p = max(tot.items(), key=lambda kv: kv[1])
+
+    # ★ 하향 방지 (STEP 35) — 급한 쪽 합이 문턱을 넘으면 **덜 급한 묶음을
+    #   후보에서 뺍니다.** 그러면 급한 쪽을 말하거나, 확신이 모자라 아무 말도
+    #   안 합니다. 전체 하향(3.7%)이 관문을 통과하는 동안 말한 A5 의 43.8% 가
+    #   하향이던 구멍을 막습니다 → 36.8%, 커버리지는 1.3%p 만 내줍니다.
+    #   ⚠️ `distribution`(6종 분포)은 **안 건드립니다** — 여기서 고르는 것은
+    #      "네 묶음 중 무엇을 말할까" 뿐입니다.
+    urgent = sum(v for k, v in tot.items() if k in URGENT_GROUPS)
+    pool = ({k: v for k, v in tot.items() if k in URGENT_GROUPS}
+            if urgent >= DOWNGRADE_BLOCK_MIN else tot)
+    name, p = max(pool.items(), key=lambda kv: kv[1])
     conf = p * (abnormal_p if abnormal_p is not None else 1.0)
     if conf < GROUP_CONF_MIN:
         return None
@@ -390,9 +401,37 @@ class ScreeningAgent:
         if len(stage2_all) > 1:
             print(f"[agent] 2단계 앙상블 {len(stage2_all)}팔: "
                   + ", ".join(p.parent.name for p in stage2_all))
-        return cls.load(found["stage1"], found.get("stage2"), thr, device,
-                        stage1_only=stage1_only,
-                        ckpt2_extra=stage2_all[1:])
+        ag = cls.load(found["stage1"], found.get("stage2"), thr, device,
+                      stage1_only=stage1_only,
+                      ckpt2_extra=stage2_all[1:])
+        # ★ `describe()`(=/healthz) 가 **어느 폴더의 무엇**인지 말할 수 있게.
+        #   로그가 아니라 값으로 남겨야 배포 뒤에도 확인됩니다.
+        ag.release_dir = str(root)
+        ag.arm_names = [p.parent.name for p in stage2_all]
+        return ag
+
+    def describe(self) -> dict:
+        """★ **지금 무엇을 물고 있나** — 헬스체크가 쓰는, 추론 없는 요약.
+
+        왜 있나 — 배포에서 앙상블이 **조용히 1팔로 줄어든 적**이 있습니다
+        (2026-09-07). 응답은 200 이었고 에러도 경고도 없었습니다. 알아챌 단서가
+        로그에 `[agent] … 3팔:` 이 **안 찍힌 것**, 즉 *성공 로그의 부재*뿐이라
+        아무도 못 봤습니다.
+
+        → **없는 줄을 찾게 하지 말고, 있는 값을 보게 합니다.** 이 dict 를
+        `/healthz` 가 그대로 실어 보내면 배포 확인이 `curl` 한 번입니다.
+
+        ⚠️ 무거운 일을 하지 마세요 — 헬스체크는 자주 불립니다.
+        """
+        return {
+            "stage1_crop": self.tag1,
+            "stage2_crop": self.tag2,
+            "stage2_arms": len(self.arms2),
+            "stage2_crops": [t for _, t in self.arms2],
+            "stage2_experiments": list(getattr(self, "arm_names", [])),
+            "threshold": float(self.thr),
+            "release_dir": str(getattr(self, "release_dir", "") or "") or None,
+        }
 
     @classmethod
     def load(cls, ckpt1: str | Path, ckpt2: str | Path | None = None,
@@ -615,6 +654,18 @@ class MockAgent:
                 pass
         self.thr = float(threshold)
         self.tag1, self.tag2 = STAGE1_TAG, STAGE2_TAG
+
+    def describe(self) -> dict:
+        """`ScreeningAgent.describe()` 와 **같은 키**를 냅니다.
+
+        ⚠️ mock 과 real 이 다른 키를 낸 적이 여섯 번 있습니다 — 그래서 계약을
+        두 곳에 적지 않고 `tests/test_serve_contract.py` 가 대조합니다.
+        mock 은 팔이 하나뿐이라 `stage2_arms = 1` 입니다.
+        """
+        return {"stage1_crop": self.tag1, "stage2_crop": self.tag2,
+                "stage2_arms": 1, "stage2_crops": [self.tag2],
+                "stage2_experiments": [], "threshold": float(self.thr),
+                "release_dir": None}
 
     def screen(self, image: "str | Path | Any", box=None) -> dict:
         from daengs_screening.message import Prediction, band, compose_screening_message

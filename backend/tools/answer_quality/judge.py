@@ -49,9 +49,10 @@ from tools.answer_quality.questions import (
     load_questions,
 )
 from tools.answer_quality.screening_rubric import (
-    SCREENING_PROMPT_VERSION,
+    SCREENING_PROMPT_VERSIONS,
     SCREENING_TEMPERATURE,
     ScreeningScore,
+    check_screening_anchors,
     judge_screening,
 )
 from tools.answer_quality.screening_rubric import (
@@ -444,6 +445,62 @@ def write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]], *, meta: Mapping[
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def screening_anchor_check_path(model: str, variant: str = "A") -> Path:
+    """공유 루브릭의 `anchor_check_<model>.json` 과 **이름이 겹치면 안 된다** — 겹치면 두
+    루브릭이 서로의 앵커 기록을 통과시킨 것으로 보인다 (프롬프트 버전을 다른 이름 공간에 둔
+    것과 같은 이유, #319).
+    """
+    suffix = "" if variant == "A" else f"_{variant}"
+    return ASSETS_DIR / f"screening_anchor_check_{model}{suffix}.json"
+
+
+def run_screening_anchor_check(
+    *, model: str, variant: str, ledger: TokenLedger, generate: Callable[..., Any] | None = None
+) -> dict[str, Any]:
+    def judge(question: str, answer: str, screening: Mapping[str, Any] | None) -> dict[str, int]:
+        return judge_screening(
+            question=question,
+            answer=answer,
+            screening=screening,
+            variant=variant,
+            model=model,
+            ledger=ledger,
+            generate=generate,
+            label="screening-anchor",
+        ).scores()
+
+    result = check_screening_anchors(judge)
+    return {
+        "judge_model": model,
+        "prompt_version": SCREENING_PROMPT_VERSIONS[variant],
+        "variant": variant,
+        "checked_at": utc_now(),
+        **result,
+        "tokens": ledger.summary(),
+        "provenance": source_provenance(),
+    }
+
+
+def require_screening_anchor_pass(
+    model: str, variant: str, *, directory: Path = ASSETS_DIR
+) -> dict[str, Any]:
+    path = directory / screening_anchor_check_path(model, variant).name
+    if not path.exists():
+        raise RuntimeError(
+            f"{path.name} 이 없습니다. 먼저 `judge screening-anchors --judge-model {model}"
+            f"{' --variant ' + variant if variant != 'A' else ''}` 를 돌리세요."
+        )
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("prompt_version") != SCREENING_PROMPT_VERSIONS[variant]:
+        raise RuntimeError(
+            f"{path.name} 은 {record.get('prompt_version')} 로 검사한 기록입니다 — 지금 "
+            f"프롬프트는 {SCREENING_PROMPT_VERSIONS[variant]} 입니다. 다시 검사하세요."
+        )
+    if not record.get("passed"):
+        raise RuntimeError(f"{path.name}: 앵커가 통과하지 않았습니다 — 점수를 쓸 수 없습니다.")
+    return record
+
+
 def screen_answers(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -451,6 +508,7 @@ def screen_answers(
     screening: Mapping[str, Any] | None,
     model: str,
     ledger: TokenLedger,
+    variant: str = "A",
     generate: Callable[..., Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """판정 계층 전용 채점 (#314). 예산을 넘으면 거기까지의 행과 멈춘 이유를 돌려준다.
@@ -467,6 +525,7 @@ def screen_answers(
                 question=queries.get(question_id, ""),
                 answer=str(row.get("message", "")),
                 screening=screening,
+                variant=variant,
                 model=model,
                 ledger=ledger,
                 generate=generate,
@@ -608,9 +667,17 @@ def main() -> None:
     pair.add_argument("--out", type=Path, default=None)
     pair.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
 
+    sanchor = sub.add_parser(
+        "screening-anchors", help="판정 루브릭 앵커를 전부 판정해 기록한다 (#319)"
+    )
+    sanchor.add_argument("--judge-model", default=ROUTER_MODEL_ID, help="모델 id 또는 auto")
+    sanchor.add_argument("--variant", choices=("A", "B"), default="A")
+    sanchor.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
+
     screen = sub.add_parser(
         "screening", help="판정 계층 전용 채점 — 자격 단정과 갈래 선택을 따로 잰다 (#314)"
     )
+    screen.add_argument("--variant", choices=("A", "B"), default="A")
     screen.add_argument("--answers", type=Path, required=True)
     screen.add_argument("--questions", type=Path, required=True)
     screen.add_argument("--judge-model", default=ROUTER_MODEL_ID, help="모델 id 또는 auto")
@@ -635,6 +702,23 @@ def main() -> None:
     if args.command == "check-anchors":
         record = run_anchor_check(model=model, variant=args.variant, ledger=ledger)
         path = anchor_check_path(model, args.variant)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        for result in record["results"]:
+            mark = "PASS" if result["passed"] else "FAIL"
+            print(
+                f"  {mark} {result['anchor_id']:<26} {result['scores']}"
+                + (f"  failed: {result['failed']}" if result["failed"] else "")
+            )
+        print(f"앵커 {record['passed_count']}/{record['anchor_count']} 통과 → {path}")
+        print(f"토큰 합계 {ledger.total:,}")
+        if not record["passed"]:
+            raise SystemExit(1)
+        return
+
+    if args.command == "screening-anchors":
+        record = run_screening_anchor_check(model=model, variant=args.variant, ledger=ledger)
+        path = screening_anchor_check_path(model, args.variant)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for result in record["results"]:
@@ -690,15 +774,21 @@ def main() -> None:
         return
 
     if args.command == "screening":
-        # **앵커 게이트가 없다.** 이 루브릭에는 앵커가 아직 없어서이고, 그래서 이 점수는
-        # #277 의 게이트를 통과한 점수와 같은 신뢰도가 아니다 — 리포트가 그렇게 적어야 한다.
+        # #314 는 게이트 없이 돌았다. 이제 공유 루브릭과 같은 조건이다 (#319).
+        require_screening_anchor_pass(model, args.variant)
         meta_in, rows = load_answers(args.answers)
         screening = meta_in.get("settings", {}).get("screening") or meta_in.get("screening")
         judged, stopped = screen_answers(
-            rows, queries=queries, screening=screening, model=model, ledger=ledger
+            rows,
+            queries=queries,
+            screening=screening,
+            variant=args.variant,
+            model=model,
+            ledger=ledger,
         )
         label = str(meta_in.get("label", args.answers.stem))
-        out = args.out or (ASSETS_DIR / f"screening_judgments_{label}.jsonl")
+        suffix = "" if args.variant == "A" else f"_{args.variant}"
+        out = args.out or (ASSETS_DIR / f"screening_judgments_{label}{suffix}.jsonl")
         summary = screening_summary([ScreeningScore(**j["scores"]) for j in judged])
         write_jsonl(
             out,
@@ -710,9 +800,10 @@ def main() -> None:
                 "questions_sha256": file_sha256(args.questions),
                 "screening": screening,
                 "judge_model": model,
-                "prompt_version": SCREENING_PROMPT_VERSION,
+                "prompt_version": SCREENING_PROMPT_VERSIONS[args.variant],
+                "variant": args.variant,
                 "temperature": SCREENING_TEMPERATURE,
-                "anchor_gate": "none — 이 루브릭에는 앵커가 없다 (#314)",
+                "anchor_gate": screening_anchor_check_path(model, args.variant).name,
                 "judged_count": len(judged),
                 "stopped": stopped,
                 "summary": summary,

@@ -45,6 +45,20 @@ def test_flags_reach_the_stages(monkeypatch):
                      ("load", {"dry_run": True, "max_drop": 0.5})]
 
 
+def test_stages_accepts_space_separated_tokens(monkeypatch):
+    calls = []
+    _wire(monkeypatch, calls)
+    assert cr.main(["--stages", "parse", "chunk"]) == 0
+    assert [c[0] for c in calls] == ["parse", "chunk"]
+
+
+def test_sources_accepts_space_separated_tokens(monkeypatch):
+    calls = []
+    _wire(monkeypatch, calls)
+    cr.main(["--stages", "crawl", "--sources", "a", "b"])
+    assert calls == [("crawl", {"sources": ["a", "b"], "dry_run": False})]
+
+
 def test_sources_go_to_crawl_only(monkeypatch):
     calls = []
     _wire(monkeypatch, calls)

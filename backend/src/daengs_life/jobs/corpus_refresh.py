@@ -40,8 +40,11 @@ def _install_seeds(src: Path) -> None:
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="corpus-refresh", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--stages", help=f"쉼표로: {','.join(stages.ORDER)} (기본 전부)")
-    p.add_argument("--sources", help="crawl 단계에서 due 판정 대신 이 소스만 (쉼표)")
+    # nargs="+" — Cloud Run `--args` 는 쉼표로 토큰을 쪼개므로(`--args="--stages,parse,chunk"`
+    # → argv 는 `--stages parse chunk`) 공백으로도 받아야 한다. 쉼표 한 덩어리(`parse,chunk`)도
+    # 여전히 토큰 하나라 그대로 된다.
+    p.add_argument("--stages", nargs="+", help=f"쉼표나 공백으로: {','.join(stages.ORDER)} (기본 전부)")
+    p.add_argument("--sources", nargs="+", help="crawl 단계에서 due 판정 대신 이 소스만 (쉼표나 공백)")
     p.add_argument("--full", action="store_true", help="embed 를 증분 없이 전량")
     p.add_argument("--dry-run", action="store_true", help="아무것도 쓰지 않는다 (DB 도 안 연다)")
     p.add_argument("--max-drop", type=float, default=0.2,
@@ -56,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
                         stream=sys.stdout)
     args = _parser().parse_args(argv)
     try:
-        wanted = stages.parse_stages(args.stages)
+        wanted = stages.parse_stages(",".join(args.stages) if args.stages else None)
     except ValueError as e:
         log.error("%s", e)
         return 2
@@ -73,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.seeds_from:
         _install_seeds(args.seeds_from)
 
-    sources = [s.strip() for s in args.sources.split(",") if s.strip()] if args.sources else None
+    sources = [s.strip() for s in ",".join(args.sources).split(",") if s.strip()] if args.sources else None
     log.info("[refresh] 시작 — 단계 %s%s%s", ",".join(wanted),
              " · dry-run" if args.dry_run else "", " · full" if args.full else "")
 

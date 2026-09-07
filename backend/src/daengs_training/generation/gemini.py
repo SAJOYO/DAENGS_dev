@@ -3,13 +3,15 @@ GraphRAG/evaluation/OpenAI research dependencies are intentionally excluded.
 Grounded generation uses the Gemini API.  Prompt: see PROMPT_VERSION.
 """
 from __future__ import annotations
+
 import os
 import time
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 import httpx
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Protocol, Sequence
+from langsmith import traceable
 
 from daengs_training.guardrails import medical as medical_guardrail
 
@@ -165,6 +167,16 @@ def load_gemini_answer_client(
         def info(self) -> ClientInfo:
             return ClientInfo(name=f'gemini:{selected_model}')
 
+        # `record` 는 usage 를 되돌려받는 out 파라미터라 호출 시점에는 비어 있습니다.
+        # 트레이스 입력에 실으면 늘 `{}` 인 칸이 하나 생기므로 프롬프트만 남깁니다.
+        # usage 는 상위 `training_rag` 런의 출력에 이미 실립니다 — 두 번 안 보냅니다.
+        @traceable(
+            run_type="llm",
+            name="gemini_generate",
+            process_inputs=lambda inputs: {"prompt": inputs.get("prompt")},
+            process_outputs=lambda text: {"answer": text},
+            metadata={"model": selected_model, "prompt_version": PROMPT_VERSION},
+        )
         def complete(self, prompt: str, record: dict[str, Any]) -> str | None:
             payload = {
                 'contents': [
@@ -301,6 +313,6 @@ def build_prompt(question: str, chunks: Sequence[dict[str, Any]], band: str, pro
         lines += [format_profile_block(profile), '']
     lines += ['<evidence>', '', '\n\n'.join(sources), '', '</evidence>']
     if context_only:
-        lines += ['', '<user_cases>', '', '\n\n'.join((f"({_context_label(chunk)})\n{chunk['text']}" for chunk in context_only)), '', '</user_cases>']
+        lines += ['', '<user_cases>', '', '\n\n'.join(f"({_context_label(chunk)})\n{chunk['text']}" for chunk in context_only), '', '</user_cases>']
     lines += ['', f'Question: {question}']
     return '\n'.join(lines)

@@ -183,11 +183,23 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
     warnings: list[str] = []
     skipped_forms = 0
 
+    # 상위 구분(편·장)을 들고 다닌다. **절 번호는 장 안에서만 유일하기 때문**이다 —
+    # 공동주택관리법은 `제3장 제1절` 과 `제4장 제1절` 을 둘 다 갖는데, 라벨만으로 id 를 만들면
+    # `#제1절` 이 겹친다. 2026-09-06(RAG-065, #268)에 이 법 셋을 들이면서 실제로 났고,
+    # **기존 8법에는 절이 하나도 없어서 그때까지 안 보였다.** `test_parse.py` 의 id 중복
+    # 검사가 잡았다 — 청크로는 안 새어 나갔지만(절 제목은 청킹 대상이 아니다), 새면 그때는
+    # parquet 의 행 키가 겹쳐 **증분 임베딩이 엉뚱한 행을 재사용한다** (RAG-064).
+    parent = ""
+
     for unit in soup.find_all("조문단위"):
         head = _text(unit, "조문내용")
         if _text(unit, "조문여부") != "조문":
             # 장·절 제목. 경계 표시용이라 청킹하지 않지만 문서 순서에는 남긴다
             sec = m.group(1).replace(" ", "") if (m := _RE_DIVISION.match(head)) else None
+            if sec and sec[-1] in "편장":
+                parent = sec                # 새 장이 열리면 그 아래 절들이 여기에 매달린다
+            elif sec and parent:
+                sec = f"{parent}{sec}"      # 제3장제1절
             elements.append(Heading(id=f"{doc_id}#{sec or head[:20]}", level=1,
                                     text=head, section=sec))
             continue

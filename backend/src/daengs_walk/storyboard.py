@@ -96,6 +96,64 @@ class StoryboardBundle(StrictModel):
         return self
 
 
+class EntryReference(StrictModel):
+    entry_id: str = Field(min_length=1, max_length=100)
+    revision: int | None = Field(ge=1)  # Synthetic lab records have no server revision.
+    pet_id: str | None = Field(min_length=1, max_length=128)
+
+
+class SceneV2(Scene):
+    entry: EntryReference | None
+
+
+class SelectionSummary(StrictModel):
+    minimum_target: int = Field(ge=1, le=8)
+    selected_count: int = Field(ge=0, le=8)
+    minimum_met: bool
+    shortfall_reason: Literal["insufficient_distinct_valid_route"] | None
+    coverage_met: bool
+    longest_unread_m: float = Field(ge=0)
+    max_unread_m: float = Field(gt=0)
+    max_anchors: Literal[8] = 8
+    deferred_action_count: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def consistent(self):
+        if self.minimum_met != (self.selected_count >= self.minimum_target):
+            raise ValueError("Inconsistent selection minimum")
+        if self.minimum_met != (self.shortfall_reason is None):
+            raise ValueError("Inconsistent shortfall reason")
+        return self
+
+
+class StoryboardBundleV2(StoryboardBundle):
+    format: Literal["walk-storyboard-candidates-v2"] = "walk-storyboard-candidates-v2"
+    scenes: list[SceneV2] = Field(min_length=1, max_length=250)
+    selection: SelectionSummary
+
+    @model_validator(mode="after")
+    def entry_provenance(self):
+        for scene in self.scenes:
+            recorded = "action" in scene.reasons or "note" in scene.reasons
+            # Automatic action anchors have a walk fact, not an observed action fact.
+            recorded = recorded and any(f.kind in {"action", "note"} for f in scene.facts)
+            if recorded != (scene.entry is not None):
+                raise ValueError("Entry provenance must accompany recorded scenes only")
+            if scene.entry and not self.synthetic and scene.entry.revision is None:
+                raise ValueError("Live entries require a server revision")
+        return self
+
+
+def legacy_bundle(bundle):
+    """Keep old clients working; preserve v2 evidence revisions and diagnostic facts."""
+    payload = bundle.model_dump(mode="json")
+    payload.pop("selection", None)
+    payload["format"] = "walk-storyboard-candidates-v1"
+    for scene in payload["scenes"]:
+        scene.pop("entry", None)
+    return StoryboardBundle.model_validate(payload)
+
+
 def build_storyboard(
     session_id, start, end, distance_m, entries, selection, contexts, gaps=(), *, synthetic=False
 ):
@@ -107,6 +165,25 @@ def build_storyboard(
         "url": None,
     }
     scenes = []
+    minimum = selection.get("settings", {}).get("minimum", 4)
+    count = len(selection["anchors"])
+    summary = SelectionSummary(
+        minimum_target=minimum,
+        selected_count=count,
+        minimum_met=count >= minimum,
+        shortfall_reason=None if count >= minimum else "insufficient_distinct_valid_route",
+        coverage_met=selection.get("coverage_met", True),
+        longest_unread_m=selection.get("longest_unread_m", 0),
+        max_unread_m=selection.get("settings", {}).get("max_unread_m", 300),
+        deferred_action_count=len(
+            {
+                entry_id
+                for d in selection.get("deferred", [])
+                if d["reason"] == "action" and d["status"] == "budget"
+                for entry_id in d.get("entry_ids", [])
+            }
+        ),
+    )
 
     def append(
         identity,
@@ -119,6 +196,8 @@ def build_storyboard(
         context=None,
         end_s=None,
         movement=(),
+        entry=None,
+        coverage=(),
     ):
         scene_id = "scene-" + fingerprint({"session": session_id, "identity": identity})[:24]
         if not synthetic and (identity in {"start", "end"} or identity.startswith("entry:")):
@@ -127,6 +206,15 @@ def build_storyboard(
         facts = [
             {"id": scene_id + ":fact", "kind": kind, "text": text, "source_ids": ["local-walk"]}
         ]
+        for i, value in enumerate(coverage):
+            facts.append(
+                {
+                    "id": scene_id + f":selection:{i}",
+                    "kind": "coverage",
+                    "text": value,
+                    "source_ids": ["local-walk"],
+                }
+            )
         if context:
             for source in context.get("sources", []):
                 provider = source.get("source") or "unknown"
@@ -202,6 +290,7 @@ def build_storyboard(
             "title": title,
             "facts": facts,
             "sources": sources,
+            "entry": entry,
         }
         revision = fingerprint(
             {
@@ -210,7 +299,7 @@ def build_storyboard(
                 "ended_at": content["ended_at"].isoformat(),
             }
         )
-        scenes.append(Scene(**content, revision=revision))
+        scenes.append(SceneV2(**content, revision=revision))
 
     append("start", 0, "산책 시작", "walk", "산책 시작 기록", ["session_boundary"])
     for entry in entries:
@@ -230,6 +319,11 @@ def build_storyboard(
             }
             if entry["location"] is not None and entry.get("route_known", True)
             else None,
+            entry={
+                "entry_id": entry["id"],
+                "revision": entry.get("revision"),
+                "pet_id": entry.get("pet_id"),
+            },
         )
     for anchor in selection["anchors"]:
         # Identity comes from the observed anchor, never its ordinal selection position.
@@ -265,6 +359,27 @@ def build_storyboard(
             ["observation_gap"],
             end_s=b,
         )
+    coverage = [
+        (
+            f"환경 조회 지점 {summary.selected_count}곳을 선택했어요. 최소 목표는 {summary.minimum_target}곳이에요. "
+            "장면 수나 발견한 시설 수를 뜻하지 않아요."
+        )
+    ]
+    if not summary.minimum_met:
+        coverage.append(
+            "서로 떨어진 유효 관측 구간이 부족해 최소 조회 목표를 채우지 못했어요. "
+            "짧은 경로·관측 공백·지점 간격 조건의 영향을 받을 수 있어요."
+        )
+    if not summary.coverage_met:
+        coverage.append(
+            f"보충하지 못한 가장 긴 경로 구간은 약 {summary.longest_unread_m:g}m예요. "
+            f"빈 구간 목표 {summary.max_unread_m:g}m를 넘었어요."
+        )
+    if summary.deferred_action_count:
+        coverage.append(
+            f"조회 지점 상한 {summary.max_anchors}곳으로 행동 기록 {summary.deferred_action_count}개의 "
+            "주변 조회를 보류했어요. 행동 기록 자체는 남아 있어요."
+        )
     append(
         "end",
         (end - start).total_seconds(),
@@ -272,12 +387,14 @@ def build_storyboard(
         "walk",
         f"수용 이동거리 {round(distance_m)}m",
         ["session_boundary"],
+        coverage=coverage,
     )
     scenes.sort(key=lambda s: (s.started_at, s.id))
     payload = [s.model_dump(mode="json") for s in scenes]
-    return StoryboardBundle(
+    return StoryboardBundleV2(
         session_id=session_id,
         synthetic=synthetic,
-        source_revision=fingerprint(payload),
+        source_revision=fingerprint({"scenes": payload, "selection": summary.model_dump()}),
         scenes=scenes,
+        selection=summary,
     )

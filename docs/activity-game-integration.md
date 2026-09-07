@@ -12,9 +12,8 @@ Geo는 가짜 보호자·강아지와 독립 PostgreSQL로 계약을 검증하�
 - DEV 연결: [#281](https://github.com/SAJOYO/DAENGS_dev/pull/281).
 - 선행 배포 절차: [territory-ownership-api.md](territory-ownership-api.md).
 
-#260이 병합되지 않아도 그 브랜치 위에서 구현·테스트할 수 있다. 그러나 운영 적용에는
-#260 SQL과 이 문서의 후속 SQL이 모두 필요하다. PR의 base는 `feat/territory-ownership`이다.
-#260 병합 뒤 최신 dev를 반영하고 base를 dev로 바꿔 다시 검증해야 한다.
+#260은 dev에 병합되었으며, 이 PR도 최신 dev를 반영하고 base를 dev로 변경했다.
+운영 적용에는 #260 SQL과 이 문서의 후속 SQL이 모두 필요하다.
 이 PR을 열거나 테스트하는 것 자체로 운영 DB·웹·워커·앱을 활성화하지 않는다.
 
 ## 원본과 파생 데이터

@@ -116,11 +116,14 @@ def test_element_ids_are_unique_within_a_document(law: dict, easylaw: dict) -> N
 
 # ------------------------------------------------------------------ 법령 XML
 def test_law_element_totals(law: dict) -> None:
+    # 2026-09-06 (RAG-065, #268) — 8법 → 14법. 더한 여섯은 사료관리법 3법과 공동주택관리법 3법이다.
+    # **서식 제외가 126 → 218 로 는 것이 이 여섯의 성격을 말한다** — 더해진 92 중 56이 공동주택
+    # 시행규칙, 36이 사료 시행규칙의 신청서·등록증·신고서다. 사업자용 양식이라 안 싣는다.
     c = _counts(law)
-    assert len(law) == 8
-    assert c["article"] == 629          # 조문. 장·절(전문)은 heading 으로 따로 센다
-    assert c["heading"] == 36
-    assert sum(p.counts["skipped_forms"] for p in law.values()) == 126   # 서식 제외 (RAG-004)
+    assert len(law) == 14
+    assert c["article"] == 1007         # 조문. 장·절(전문)은 heading 으로 따로 센다
+    assert c["heading"] == 92
+    assert sum(p.counts["skipped_forms"] for p in law.values()) == 218   # 서식 제외 (RAG-004)
 
 
 def test_article_keeps_paragraph_item_hierarchy(law: dict) -> None:

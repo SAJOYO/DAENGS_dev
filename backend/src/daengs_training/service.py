@@ -3,6 +3,20 @@
 This process-local component deliberately does not persist questions or model answers. It uses
 the evaluated PGVector corpus, calls Gemini for grounded generation, and
 keeps the medical and output guardrails outside the model's control.
+
+**LangSmith 트레이싱을 켜면 질문·답변·프롬프트·검색 청크가 LangSmith 로 나갑니다.**
+위 문장의 "does not persist" 는 **우리 DB 이야기**이고 그건 그대로입니다. 트레이싱은
+기본으로 꺼져 있고, `LANGSMITH_TRACING` 이 있을 때만 켜집니다
+(`daengs_backend.core.tracing` 이 그 배선과 마스킹 규칙을 가집니다).
+계측이 여기 손으로 붙는 이유는 이 패키지가 LangChain 밖이라 자동으로 안 잡히기
+때문입니다.
+
+⚠ **`@traceable` 은 꺼져 있어도 공짜가 아닙니다.** 원래 함수를 돌려주지 않고 항상
+래퍼를 답니다. 특히 `process_outputs` 는 트레이싱이 꺼진 상태에서도 매번 실행됩니다
+(`_handle_container_end` 가 `_container_end` 보다 먼저 부릅니다 — 0.11.2 실측).
+그래서 이 파일의 `_trace_outputs` 와 `retrieval.pgvector._trace_documents` 는 **맨 앞에서
+직접 확인하고 빠져나갑니다.** 그 가드를 지우면 트레이싱을 안 켠 서버가 매 요청마다
+응답과 청크 전문을 통째로 복사합니다.
 """
 from __future__ import annotations
 
@@ -15,6 +29,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 
+from langsmith import traceable
 from pydantic import BaseModel, Field
 
 from daengs_training import telemetry
@@ -141,6 +156,46 @@ class TrainingTimeoutError(RuntimeError):
     """The Training domain exceeded an upstream generation deadline."""
 
 
+def _trace_outputs(response: ChatResponse) -> dict[str, Any]:
+    """트레이스에 실을 결과의 모양.
+
+    **`decision` 과 `reason` 을 맨 위로 올리는 것이 요점입니다.** 민원 하나를 열었을 때
+    첫 질문이 늘 "게이트가 막았나 · 검색이 틀렸나 · 모델이 헛소리했나" 라서,
+    그 셋을 가르는 값이 트레이스 목록에서 바로 보여야 합니다. LangSmith 의 출력
+    필터가 이 두 키를 겁니다.
+
+    **근거 청크의 본문은 여기 넣지 않습니다.** 그건 바로 아래 retriever 런에 이미
+    전문으로 있고, 여기 또 실으면 같은 텍스트가 한 요청에 두 번 나갑니다.
+
+    맨 앞의 가드 이유는 `retrieval.pgvector._trace_documents` 와 같습니다 — langsmith 는
+    트레이싱이 꺼져 있어도 `outputs_processor` 를 부릅니다.
+    """
+    from langsmith import utils as ls_utils
+
+    if not ls_utils.tracing_is_enabled():
+        return {}
+    return {
+        "decision": response.decision,
+        "reason": response.reason,
+        "answer": response.answer,
+        "generated": response.generated,
+        "model": response.model,
+        "prompt_version": response.prompt_version,
+        "output_guardrail_blocked": response.output_guardrail_blocked,
+        "gate": response.gate,
+        "usage": response.usage,
+        "evidence": [
+            {
+                "rank": card.rank,
+                "chunk_id": card.chunk_id,
+                "document_id": card.document_id,
+                "score": card.score,
+            }
+            for card in response.evidence
+        ],
+    }
+
+
 class RAGService:
     """One process-local runtime with bounded retrieval/generation concurrency."""
 
@@ -224,8 +279,14 @@ class RAGService:
             output_guardrail_blocked=verdict.is_blocked,
         )
 
+    @traceable(run_type="chain", name="training_rag", process_outputs=_trace_outputs)
     def answer(self, question: str, top_k: int = 4) -> ChatResponse:
-        """Run the fixed safety → retrieval → generation sequence once."""
+        """Run the fixed safety → retrieval → generation sequence once.
+
+        어댑터가 `asyncio.to_thread` 로 부르지만 트레이스는 이어집니다 —
+        `to_thread` 가 컨텍스트를 복사하고 langsmith 의 부모 런이 ContextVar 라서입니다.
+        `telemetry.current_trace()` 가 이미 같은 이유로 동작하고 있습니다.
+        """
         question = question.strip()
         if not question:
             raise ValueError("question must not be blank")

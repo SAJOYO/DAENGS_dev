@@ -41,6 +41,19 @@ PromptVersion = Literal[
     "semantic-router-ko-v5",  # PR #172 — production Life/unsupported-care boundary (runner_v6)
     "semantic-router-ko-v6",  # PR #172 — routine-care vs today's walking window (runner_v7)
     "semantic-router-ko-v7",  # PR #204 — the `place` destination (runner_v8)
+    # PR #252 — the LangChain agent orchestrator (D-055). Not a semantic-router prompt
+    # version at all: the agent has no routing prompt, it picks tools in a loop. It lives
+    # in the same Literal because `CaseResult.prompt_version` is what tells two rows of
+    # `evaluate_benchmark` output apart, and the comparison feeds both implementations
+    # through that one scorer on purpose (card ①).
+    #
+    # ⚠ Adding a value is safe for the frozen runners; changing or removing one is not
+    # (card note ④) — `runner_v5`~`v8` import this module to reproduce their reports.
+    "agent-ko-v1",
+    # PR #272 — the agent aligned with the frozen CLARIFY contract (tools record a
+    # selection; the shared planner gates and the shared engine executes). Added, never
+    # substituted: `agent-ko-v1` stays so `comparison_v1_*` remains reproducible.
+    "agent-ko-v2",
 ]
 
 

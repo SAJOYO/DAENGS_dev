@@ -24,12 +24,18 @@ HTTP 를 모릅니다 — 나가는 것은 예외와 dataclass 뿐이고, 404 �
 **검색은 값 하나가 통째로 맞아야 합니다.** `email_hash` 가 HMAC-SHA256 이라 부분
 문자열로는 원천적으로 못 찾습니다 (D-012 · 03_auth.sql). 대소문자와 앞뒤 공백은
 `blind_index` 가 안에서 `strip().lower()` 로 맞춰 주니 신경 쓰지 않아도 됩니다.
-목록을 통째로 주는 길은 두지 않았습니다 — `find` 와 라우터의 `search` 를 보세요.
+
+**훑는 목록은 `list_roster` 하나뿐이고 마스킹 값을 안 실어 보냅니다.** 찾기(`find`)와
+훑기가 다른 일이라 함수도 권한도 갈라 뒀습니다 — 2026-09-05 사람 결정, 로드맵 A2c.
+그래서 이 파일에서 **복호화를 지나지 않는 경로는 그것 하나**입니다.
 """
 
+import base64
+import binascii
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,18 +56,28 @@ from daengs_backend.services import session as session_service
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFAULT_LIMIT",
+    "MAX_LIMIT",
     "AppUserNotFoundError",
     "AppUserView",
+    "InvalidCursorError",
     "RevealedPii",
+    "RosterEntry",
+    "RosterPageView",
     "WithdrawnMemberError",
     "find",
     "get_detail",
+    "list_roster",
     "mask_email",
     "mask_name",
     "mask_phone",
     "reveal",
     "update_status",
 ]
+
+#: 한 쪽에 몇 명까지. 신고·감사 목록과 같은 값입니다 (`services/answer_report.py`).
+MAX_LIMIT = 200
+DEFAULT_LIMIT = 50
 
 
 class AppUserAdminError(Exception):
@@ -74,6 +90,10 @@ class AppUserNotFoundError(AppUserAdminError):
 
 class WithdrawnMemberError(AppUserAdminError):
     """탈퇴한 회원입니다. 관리자가 상태를 되돌리지 않습니다 (파일 docstring)."""
+
+
+class InvalidCursorError(AppUserAdminError):
+    """목록 커서가 우리가 만든 것이 아닙니다. 라우터가 422 로 바꿉니다."""
 
 
 @dataclass(frozen=True)
@@ -226,6 +246,103 @@ async def find(
         return []
     # 검색 결과 줄에는 반려견을 싣지 않습니다. 상세에서 한 번 더 부릅니다.
     return [_to_view(user, [])]
+
+
+@dataclass(frozen=True)
+class RosterEntry:
+    """훑는 목록의 한 줄. **개인정보가 없습니다 — 마스킹된 것조차 없습니다.**
+
+    [AppUserView] 와 일부러 다른 모양입니다. 저쪽은 복호화를 지나고 이쪽은 안 지납니다.
+    여기에 `email_masked` 를 더하고 싶어지는 날이 오면 아래 [list_roster] 의 첫 문단을
+    먼저 읽으세요.
+    """
+
+    user: AppUser
+    pet_count: int
+    #: 대표 강아지 이름. 대표가 없으면(반려견이 없거나 아직 안 정함) `None` 입니다.
+    primary_pet_name: str | None
+
+
+@dataclass(frozen=True)
+class RosterPageView:
+    entries: list[RosterEntry]
+    next_cursor: str | None
+
+
+def _encode_cursor(at: datetime, app_user_id: uuid.UUID) -> str:
+    """`(created_at, id)` 를 불투명한 문자열로 (신고·감사 목록과 같은 방식)."""
+    raw = f"{at.isoformat()}|{app_user_id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        at_text, _, id_text = raw.partition("|")
+        return datetime.fromisoformat(at_text), uuid.UUID(id_text)
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        raise InvalidCursorError from None
+
+
+async def list_roster(
+    session: AsyncSession,
+    *,
+    limit: int = DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> RosterPageView:
+    """가입 최근 순으로 **전 회원을 훑습니다.** 나가는 것은 닉네임 · 상태 · 가입일 · 마릿수뿐.
+
+    **개인정보를 한 글자도 싣지 않습니다 — 마스킹한 것도 안 싣습니다.** 이 파일의 다른
+    조회들은 `a***@gmail.com` 을 만드느라 복호화를 지나는데, 여기만 안 지납니다. 그것이
+    이 목록을 열 수 있게 된 이유입니다 (2026-09-05 사람 결정): 훑는 화면이 개인정보를
+    아예 안 들고 있으면 "누가 전 회원의 개인정보를 넘겨본다" 가 성립을 안 합니다.
+    지금은 그 값들이 어차피 전부 `None` 이라(카카오 이메일 동의 미수령) 빼서 잃는 것도
+    없습니다.
+
+    **대표 강아지 이름은 예외로 싣습니다.** 개인정보가 아니고(`models/pet.py` 에 암호화
+    컬럼이 없습니다) 마스킹 상세가 이미 `Perm.READ` 로 전 반려견의 이름을 내보내므로,
+    `ADMIN_MANAGE` 인 이 목록에 한 마리 이름을 싣는 것은 **새로 열리는 것이 없습니다.**
+    실을 이유는 2026-09-05 실측입니다 — 개발 DB 회원 다섯이 전원 닉네임 NULL 이라
+    목록이 "이름 없음" 다섯 줄이었고, 사람을 가리키는 값이 가입일뿐이었습니다. 비즈 앱 심사를 통과해 실제 값이 들어오면 **그때 다시 정할 일**이지,
+    지금 자리를 미리 만들어 두지 않습니다.
+
+    회원을 찾는 길은 [find] 입니다. 저쪽은 `Perm.READ` 이고 이쪽은 `ADMIN_MANAGE`
+    입니다 — 라우터가 그것을 겁니다.
+
+    **감사에 남기지 않습니다.** 목록은 남기지 않고 원문만 남기는 선
+    (`admin.app_user.pii_revealed` · 신고 목록)과 같은 자리입니다.
+
+    `limit + 1` 개를 읽어 다음 쪽이 있는지 봅니다 — 정확히 `limit` 개면 "이게
+    마지막인가"를 알 수 없어 화면이 빈 쪽을 한 번 더 부릅니다.
+    """
+    capped = max(1, min(limit, MAX_LIMIT))
+    before = _decode_cursor(cursor) if cursor else None
+
+    users = await app_user_repo.list_page(session, limit=capped + 1, before=before)
+    has_more = len(users) > capped
+    kept = users[:capped]
+
+    # 마릿수와 대표 이름은 **각각 한 번에** 가져옵니다. 회원마다 부르면 한 쪽에
+    # 쿼리가 50번씩 나갑니다.
+    counts = await pet_repo.count_by_owners(session, [u.id for u in kept])
+    names = await pet_repo.names_by_ids(
+        session, [u.primary_pet_id for u in kept if u.primary_pet_id is not None]
+    )
+    entries = [
+        RosterEntry(
+            user=u,
+            pet_count=counts.get(u.id, 0),
+            primary_pet_name=(
+                names.get(u.primary_pet_id) if u.primary_pet_id is not None else None
+            ),
+        )
+        for u in kept
+    ]
+
+    next_cursor = (
+        _encode_cursor(kept[-1].created_at, kept[-1].id) if has_more and kept else None
+    )
+    return RosterPageView(entries=entries, next_cursor=next_cursor)
 
 
 async def get_detail(

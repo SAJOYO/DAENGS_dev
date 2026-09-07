@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import collections
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,7 +44,8 @@ COLUMNS = ("content", "content_hash", "embedding", "content_tokens", "category",
 # 어차피 같은 JSONB 한 덩어리이고, 표준/비표준의 구분은 스키마 주석이 이미 갖고 있다.
 META_FIELDS = ("raw_file", "format", "trust_level", "published_at", "license",
                "chunk_id", "citation", "citation_url", "element_type", "chars",
-               "doc_id", "source_id", "part")
+               "doc_id", "source_id", "part",
+               "org")   # 지자체·소관기관명 — 지역 필터가 이것으로 거른다 (RAG-063)
 
 
 @dataclass
@@ -180,6 +182,33 @@ def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> None:
         with conn.cursor() as cur:
             for i in range(0, len(payload), batch):
                 cur.executemany(UPSERT, payload[i:i + batch])
+
+
+def metadata_loss(conn, rows: list[dict[str, Any]]) -> list[tuple[str, int, int]]:
+    """**이번 적재가 DB 에서 지워 버릴 메타 키.** `(키, DB 행 수, 이번 행 수)` 로 돌려준다.
+
+    ────────────────────────────────────────────────────────────────────
+    왜 있나 — 2026-09-06 에 지역 필터가 통째로 죽었다 (RAG-066 ①)
+    ────────────────────────────────────────────────────────────────────
+    `UPSERT` 는 `metadata` 를 **통째로 갈아끼운다**(병합이 아니다). 그래서 청크에 없는 키는
+    DB 에서 그냥 사라진다. `org`(RAG-063)이 마이그레이션으로 DB 에만 있고 08-29 자 청크
+    파일에는 없던 상태에서 `rag load` 가 한 번 돌자 2,592행의 `org` 이 전부 지워졌고,
+    **적재는 성공하고 스모크도 통과하고 예외도 안 났다.** 랩을 두 번 돌 때까지 몰랐다.
+
+    판정은 **"있던 것이 통째로 사라지는가"** 하나다. 일부가 줄어드는 것은 정상일 수 있어
+    (소스를 뺐다거나) 막지 않는다 — 조용히 전부 사라지는 것만 잡는다. 그 한 줄이 이 사고를
+    막았을 것이고, 규칙이 좁아야 사람이 `--force` 를 반사적으로 붙이지 않는다.
+
+    ⚠ **`META_FIELDS` 밖의 키도 본다.** 마이그레이션이 넣은 키는 정의상 `META_FIELDS` 에
+    없을 수 있고(그것이 `org` 이 그렇게 살던 이유다), 그런 키야말로 여기서 잡혀야 한다.
+    """
+    have = collections.Counter()
+    for r in rows:
+        have.update(r["metadata"].keys())
+    with conn.cursor() as cur:
+        cur.execute("SELECT key, count(*) FROM documents, jsonb_each(metadata) GROUP BY key")
+        db = dict(cur.fetchall())
+    return sorted((k, n, have.get(k, 0)) for k, n in db.items() if n and not have.get(k))
 
 
 def stale(conn, rows: list[dict[str, Any]]) -> list[tuple[str, str]]:

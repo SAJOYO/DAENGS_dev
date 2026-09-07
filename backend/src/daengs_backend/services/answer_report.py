@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from daengs_backend.core.tracing import record_report_feedback
 from daengs_backend.models import (
     AUDIT_REPORT_RESOLVED,
     AUDIT_REPORT_TURN_REVEALED,
@@ -135,6 +136,10 @@ async def create(
     if turn is None:
         raise TurnNotFoundError
 
+    # 커밋 전에 읽어 둡니다 — 커밋이 속성을 만료시키므로 뒤에서 읽으면 SELECT 가
+    # 한 번 더 나가고, 그건 아래 외부 호출 동안 트랜잭션을 다시 여는 일입니다.
+    traced_request_id = turn.request_id
+
     report = await report_repo.add(
         session, turn_id=turn_id, app_user_id=app_user_id, reason=reason
     )
@@ -143,6 +148,12 @@ async def create(
     except IntegrityError:
         await session.rollback()
         raise AlreadyReportedError from None
+
+    # **커밋 다음, refresh 앞입니다.** 여기가 이 함수에서 열린 트랜잭션도 행 잠금도
+    # 없는 유일한 지점이라, 외부 호출을 둘 자리가 여기뿐입니다 (D-048 의 경계).
+    # 트레이싱이 꺼져 있으면 즉시 돌아오고, 켜져 있어도 실패는 삼킵니다 — 신고는
+    # 이미 저장됐습니다 (D-054).
+    await record_report_feedback(request_id=traced_request_id)
 
     await session.refresh(report)
     return report

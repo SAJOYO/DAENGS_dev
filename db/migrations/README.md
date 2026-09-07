@@ -49,7 +49,14 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 
 `verify=true`(기본값)이면 같은 ref의 `verify_<파일>`이 없거나 비어 있을 때
 **DB 기동·백업·적용 전에 실패**한다. `verify=false`는 검증 SQL이 없는 기존 파일을
-명시적으로 적용할 때만 사용한다. SQL은 cmd 리다이렉션으로 바이트를 보존하며,
+명시적으로 적용할 때만 사용한다.
+
+⚠️ **그래서 verify 가 없는 마이그레이션은 Actions 탭으로 다시 못 돌린다** — 손으로
+`verify=false` 를 골라야 한다. 2026-09-07(#292)까지 여덟 장이 그 상태였고
+(`refresh_token_subject` · `documents_lexical` · `crawl_runs` ·
+`crawl_runs_trigger_revision` · `walks` · `room_name` · `training_rag_into_vectordb` ·
+`gait_records`) 전부 아래 "단언형" 규칙이 생기기 전에 쓰인 것들이다. **지금은
+`db/migrations/*.sql` 전부가 짝을 가진다.** SQL은 cmd 리다이렉션으로 바이트를 보존하며,
 Apply/Verify 모두 `psql -X -v ON_ERROR_STOP=1`의 오류를 작업 실패로 전달한다.
 
 ## `verify_*.sql` 은 **단언형으로 쓴다** (2026-09-06, #273)
@@ -80,6 +87,23 @@ Postgres 에 마이그레이션을 적용한 뒤 스키마를 **일부러 망가
 - **값을 바꾸는 마이그레이션은 값도 망가뜨려야 한다.** 모양만 검사하면
   `documents_org_backfill` 처럼 "컬럼은 멀쩡한데 값이 다 지워진" 상태를 놓친다.
   실제로 그 사고가 났다 (`docs/life/decisions-rag.md` RAG-066 ①).
+
+### `verify_<옛것>` 은 `<새것>` 까지 적용된 DB 위에서도 돈다 (2026-09-07, #292)
+
+버전 테이블이 없어서 **아무 때나 아무 verify 나 다시 돌릴 수 있는 것**이 이 폴더의 성질인데,
+옛 장이 만든 것을 뒤 장이 걷어 가거나 넓히는 경우가 실제로 넷 있다:
+
+| 옛 장 | 뒤 장이 한 것 | verify 가 대응하는 법 |
+| --- | --- | --- |
+| `2026-08-31_walks` 의 `walks.pet_id` | `2026-09-01_walk_pets` 가 다대다로 옮기고 `DROP COLUMN` | **있을 때만** 검사 |
+| `2026-08-31_walks` 의 `walk_points` | `2026-09-02_walk_point_chunks` 가 `DROP TABLE` | **있을 때만** 검사 |
+| `2026-08-29_crawl_runs` 의 `trigger` CHECK | `2026-08-30_..._trigger_revision` 이 값을 하나 더함 | 개수를 세지 않고 **들어 있는지만** |
+| `2026-08-28_documents_lexical` 의 기본값 | 같은 파일의 **2단계**(주석)가 적재 뒤에 뗀다 | **토큰이 찼을 때만** 단언 |
+
+**조건 없이 단언하면 그 verify 가 운영 DB 전부에서 실패한다.** 반대로 조건을 너무 넓게 잡으면
+아무것도 안 잡는다. 판정 기준은 마이그레이션 본문이 스스로 적어 둔 조건을 그대로 쓴다 —
+예를 들어 `documents_lexical` 의 2단계 조건은 `content_tokens = ''` 가 0행인 것이고,
+verify 도 같은 것을 본다.
 
 산책 두 파일은 `2026-09-05_walk_entries.sql`, `2026-09-05_walk_storyboards.sql`로
 이름을 통일했다. SQL 내용은 그대로이며 DB 적용 이력 테이블을 도입하지 않는다.

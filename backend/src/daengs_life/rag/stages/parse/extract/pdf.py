@@ -116,6 +116,7 @@ def _valid_table(rows: list[list[str | None]]) -> bool:
 def elements(doc, doc_id: str, *, title: str = "",
              pages: range | None = None,
              terms_re: re.Pattern[str] | None = None,
+             terms_guard: Callable[[str], bool] | None = None,
              boundary_hint: Callable[[object], Collection[str] | None] | None = None) -> Parsed:
     """PyMuPDF `Document` → 요소 목록. **원문 순서 그대로.**
 
@@ -124,6 +125,9 @@ def elements(doc, doc_id: str, *, title: str = "",
 
     `pages` 는 **읽을 페이지 범위**다 (0-based). `None` 이면 전부.
     `terms_re` 는 **약관 경계 정규식**을 갈아 끼운다. `None` 이면 `_RE_TERMS`.
+    `terms_guard` 는 그 정규식이 통과시킨 줄을 **한 번 더 거르는** 콜백이다 (RAG-068).
+    정규식은 "줄 끝이 약관 이름"이라는 모양만 보는데, 그 모양은 **줄바꿈으로 잘린 문장**도
+    만족한다. `boundary_hint` 가 있는 쪽은 정규식을 안 타므로 이 콜백도 안 탄다.
     `boundary_hint` 는 **쪽마다 약관 경계 줄을 집어 주는 콜백**이다 (⑧). 쪽을 받아 그 쪽의
     경계 줄(`get_text()` 에 그대로 있는 줄)의 모음을 돌려주면 그 쪽에서는 정규식 대신 그것을
     쓰고, `None` 을 돌려주면 그 쪽은 정규식으로 돌아간다. 인자를 안 주면 늘 정규식이다.
@@ -223,7 +227,13 @@ def elements(doc, doc_id: str, *, title: str = "",
     hints: set[str] | None = None            # 지금 쪽의 경계 줄 (⑧). None 이면 정규식
 
     def is_terms(line: str) -> bool:
-        return (line in hints) if hints is not None else bool(terms_rx.match(line))
+        if hints is not None:
+            return line in hints
+        # **정규식이 통과시킨 줄을 한 번 더 거른다** (RAG-068). 정규식은 "줄 끝이 약관 이름"
+        # 이라는 모양만 보는데, PDF 는 줄바꿈으로 문장을 자르므로 **줄 끝이 우연히 그 낱말이
+        # 되는 문장 조각**이 걸린다. 걸러 낼 판단은 파서마다 다르므로 콜백으로 받는다.
+        # `boundary_hint` 가 있는 쪽(삼성)은 애초에 정규식을 안 타므로 영향이 없다.
+        return bool(terms_rx.match(line)) and (terms_guard is None or terms_guard(line))
     # `pages` 가 없으면 **문서를 그대로 순회한다** — `doc.page_count` 를 거치지 않는 이유는
     # 테스트가 페이지 목록만 흉내 낸 가짜 문서를 넘기기 때문이다 (`test_pdf_extract`).
     # 범위를 받았을 때만 인덱스로 집는다.

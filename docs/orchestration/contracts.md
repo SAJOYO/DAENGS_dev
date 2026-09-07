@@ -67,7 +67,7 @@ RoutePlan:
   clarify:   {question: str, missing: list[str]} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
   model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.1-flash-lite` (routing 문서 §4)
-  prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v7`
+  prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v8`
 ```
 
 규칙 (CONFIRMED):
@@ -93,7 +93,9 @@ RoutePlan:
 
 ```
 CapabilityRequest:
-  capability: training | life | walk | place   # 실행 registry (place: PR #196, 의미 선택은 PR #204)
+  capability: training | life | walk | place | general
+      # 실행 registry (place: PR #196, 의미 선택은 PR #204). `general` 은 PR #279 의 일반 답변
+      # 폴백 — 실행되고 저장되지만 **라우터가 고르지 못하고** planner 규칙만이 넣는다 (아래 §3 끝)
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -122,6 +124,15 @@ FAILED가 됩니다. 이제 새 `ExecuteName`은 자기 payload를 적거나 요
 둘 중 하나이고, 남의 모양을 물려받지 않습니다. 요청 순서도 모델의 나열 순서가 아니라
 `CapabilityName` 선언 순서로 고정합니다 — 그 순서가 집계 message의 절 순서로 사용자에게
 그대로 보이기 때문입니다.
+
+**`general` 은 두 길로 계획에 들어옵니다** (D-057 ①). ⓐ planner 규칙: 의미 결정이 비어 있고(능력 0 ·
+핸드오프 0 · 스몰토크 아님) `DAENGS_GENERAL_FALLBACK` 이 켜져 있으면 `GeneralPayload {question, dog}`
+하나 — Life 와 같은 규칙, 좌표 없음 — 를 조립합니다. ⓑ 라우터 목적지(`semantic-router-ko-v9`): 돌봄·
+건강 의도가 전문 능력과 섞인 발화에서 라우터가 `general` 을 **추가로** 고릅니다 — 전문 능력을 대신하지
+않고, 반려견과 무관한 요청에는 아무것도 고르지 않습니다. `general` 은 실행 순서 맨 뒤, 좌표 불필요,
+좌표 게이트(CLARIFY)는 그대로 선택 전체에 하나이며, `requested_capability="general"` 은 풀리지 않는
+신호입니다. **플래그가 꺼져 있으면 planner 가 결정에서 `general` 을 떼어 냅니다** — 기본값이 `false` 라
+켜기 전까지 계획은 예전과 글자까지 같고, 빈 결정은 FAILED 입니다.
 
 ## 4. CapabilityResult
 
@@ -175,6 +186,9 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Place 후보 1건 이상(직접 해석 또는 공개된 대안 lens) | OK — 대안·미해결 신호를 notice로 보존 |
 | Place 정상 응답이지만 후보 없음·추가 선택 필요·미지원 의미 | ABSTAINED — 공개 projection과 refinement는 `data`에 함께 보존 |
 | Place 내부 HTTP/provider 실패 | ERROR 또는 TIMEOUT — provider 본문·원출력은 노출하지 않음 |
+| General `kind=answer` (PR #279) | OK — `data.answer` 뿐. 근거 없는 생성이라 인용이 없다 |
+| General `kind=refuse` — 진단 · 약/용량 · 응급 · 제도/수치 · 도메인 밖 | **REFUSED** — `refusal.code` 는 사유 범주, `refusal.message` 는 코드가 쓴 고정 안내("수의사에게" / "제도 정보 기능에") |
+| General 프로바이더 실패 · 출력 스키마 불일치 | ERROR 또는 TIMEOUT — 라우터 실패 문구가 아니라 능력 하나의 실패로 보인다 |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL
   구분(공개 decision — `schemas/training.py` · docs/training/rag-demo.md)이 `refusal.code`
@@ -313,6 +327,9 @@ AssistantResponse:
     넓으면 사고가 데이터에 박히고, 코드를 고칠 때까지 그 강아지의 기록이 통째로 죽습니다.
     `tests/test_orchestration_contracts.py::test_capability_names_have_exactly_three_copies_and_they_agree`
     가 셋을 대조합니다.
+
+    `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
+    프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
 ## 7. locale 준비
 

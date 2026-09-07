@@ -32,6 +32,17 @@ NOW = datetime.datetime(2026, 9, 3, 3, 0, tzinfo=datetime.UTC)
 REPO = Path(__file__).resolve().parents[2]
 
 
+@pytest.fixture(autouse=True)
+def unbound_photo_visits(monkeypatch):
+    # These tests exercise legacy visits. Shared ownership uses a real PostgreSQL suite.
+    from daengs_backend.repositories import territory_claim
+
+    async def no_binding(*args):
+        return None
+
+    monkeypatch.setattr(territory_claim, "photo_binding", no_binding)
+
+
 class FakeSession:
     def __init__(self) -> None:
         self.added: list[object] = []

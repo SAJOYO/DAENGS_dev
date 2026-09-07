@@ -31,9 +31,11 @@ from daengs_backend.schemas.walk import (
     WalkResponse,
     WalkUpload,
 )
+from daengs_backend.schemas.walk_style import WalkStylePolicy
 from daengs_backend.services import walk as walk_service
 from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.services.walk_finalize import FinalizeInputError
+from daengs_backend.services.walk_style import walk_style_policy
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
 
@@ -102,6 +104,12 @@ def _conflict(
         status.HTTP_409_CONFLICT,
         detail={"code": exc.code, "message": exc.detail},
     )
+
+
+@router.get("/style-policy", response_model=WalkStylePolicy)
+async def get_style_policy(user: CurrentAppUser) -> WalkStylePolicy:
+    """앱의 오프라인 기본값과 같은 5단계 표시 정책. UUID 경로보다 먼저 등록한다."""
+    return walk_style_policy()
 
 
 @router.get("", response_model=WalkListResponse)

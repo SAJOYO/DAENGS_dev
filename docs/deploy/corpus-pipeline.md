@@ -20,7 +20,7 @@
 | 집 서버 크롤러 | 워커·Beat 그대로 | 위와 같다 |
 | GCP DB `documents` | **파이프라인만 쓴다.** runbook §6 "Life 코퍼스만 동기화" 는 실험 기간 사용 금지 | 손으로 갈아끼우면 파이프라인 결과를 덮어쓴다 |
 | 적재 게이트 | 사람 승인 없음. 기계 가드만 | §3 의 가드 세 가지 |
-| 전체 재임베딩 | Cloud Run Jobs + GPU(L4) 1순위. 보조안 순서: CPU 잡 → 개발 PC parquet 업로드 → Spot GPU VM | 쿼터 승인이 안 나올 때만 내려간다. 셋 다 코드 차이 없음 |
+| 전체 재임베딩 | Cloud Run Jobs + GPU(L4) 1순위. 보조안 순서: CPU 잡 → 개발 PC parquet 업로드 → Spot GPU VM | GPU 잡이 어떤 이유로든 안 될 때만 내려간다. 셋 다 코드 차이 없음 |
 | 초기 사본 | `raw/` + `manifests/crawl_log.jsonl` 만. `processed/` 는 GCP 가 만든다 | 버킷 안 모든 산출물이 GCP 산이 되어 "로컬 작업 없음" 이 처음부터 성립 |
 | 관리자 트리거 | 범위에 포함. GCP 에서는 Celery 대신 Cloud Run Jobs API | 버튼 → 몇십 분 뒤 앱에 새 문서, 가 이 카드의 목적 |
 | 접근 | A(잡 하나, Scheduler 직결). Workflows 는 2차 | 두 달 실험에 배관이 파이프라인보다 커지지 않게 |
@@ -34,7 +34,7 @@ Cloud Scheduler  corpus-refresh-daily   (0 4 * * *  Asia/Seoul)
           │  crawl(due) → parse → chunk → embed(CPU 증분) → guard → load
           └─▶ VM 내부 IP :5432 (pgvector, VPC 내부 이그레스만)
 
-사람 실행 ─▶ Cloud Run Job  corpus-embed-full  [GPU 리전, L4 1장]
+사람 실행 ─▶ Cloud Run Job  corpus-embed-full  [asia-southeast1, L4 1장]
           │  /data ← 같은 버킷
           └─  embed --full 만. parquet 을 버킷에 쓰고 끝 (DB 안 봄)
                  └─ 다음 refresh 가 parquet 지문 변화를 보고 전부 upsert
@@ -109,7 +109,7 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 | Cloud Storage | `daengs-corpus` | 서울 단일 리전. **버전 관리 켬** (잘못된 적재를 되돌리는 유일한 길) |
 | Artifact Registry | `daengs` | `pipeline:cpu-<sha>` · `pipeline:cuda-<sha>` |
 | Cloud Run Job | `corpus-refresh` | 서울, 4vCPU/16GB, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다) |
-| Cloud Run Job | `corpus-embed-full` | GPU 리전(콘솔에서 확인, 서울 미제공 가능), L4 1장, 타임아웃 2h |
+| Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장, 타임아웃 2h. 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
 | Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음 |
 | Secret Manager | `corpus-db-password` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |
@@ -122,13 +122,13 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 `infra/gcp/pipeline-teardown.sh` 를 같이 두고 roadmap §8 종료 체크리스트에 건다. Terraform 은
 두 달 실험에 상태 파일 관리까지 얹는 것이라 안 쓴다.
 
-**역할** — 콘솔에서 API 켜기 · GPU 쿼터 신청 · 스크립트 실행 · 초기 사본 업로드 · VM 내부 IP 확인
+**역할** — 콘솔에서 API 켜기 · 계정 유형(무료 체험 아님) 확인 · 스크립트 실행 · 초기 사본 업로드 · VM 내부 IP 확인
 = 사람 / Dockerfile · 진입점 · 가드 · 트리거 갈래 · 스크립트 · 문서 · 검증 절차 = Claude
 (roadmap §4 의 기존 규칙과 같다).
 
 **비용 어림** (전부 크레딧 차감, 월 1만 원 안쪽) — refresh 매일 30분×4vCPU 약 ₩3,000 · 버킷 수백 원 ·
-Registry 10GB 약 ₩1,500 · GPU 1회 20분 약 ₩600. **GPU 는 돈이 아니라 쿼터다** — 일반 계정도
-초기 할당 0 이라 신청이 먼저이고 승인 하루 안팎.
+Registry 10GB 약 ₩1,500 · GPU 1회 20분 약 ₩600. **L4 쿼터는 신청이 필요 없다** — 리전에서 첫 GPU 잡을 만들 때 3장(영역 중복 없음)이 자동 할당된다
+(2026-09-08 문서 확인). 무료 체험 계정만 GPU 가 막힌다.
 
 ## 5. 오류 처리와 되돌리기
 
@@ -168,7 +168,7 @@ Registry 10GB 약 ₩1,500 · GPU 1회 20분 약 ₩600. **GPU 는 돈이 아니
   VM 재배포를 지난다. #325 가 끝나 잡이 있어야 검증되므로 뒤.
 
 **순서** ① 이 문서 커밋 · #325 본문 재작성 · 새 PR 빈 커밋으로 열기 ② 코드(진입점 → 가드 →
-Dockerfile → 스크립트), 로컬 `--dry-run` ③ 사람: **GPU 쿼터 신청을 가장 먼저**, API 켜기, 스크립트,
+Dockerfile → 스크립트), 로컬 `--dry-run` ③ 사람: API 켜기, 스크립트,
 초기 사본 ④ 검증 1~6 ⑤ 문서 마무리, #325 머지 ⑥ 새 PR, 검증 7~8.
 
 **고치는 문서** — `runbook.md` §6 신설 절 + "Life 코퍼스만 동기화" 머리에 사용 금지 표시 ·

@@ -35,11 +35,16 @@ APP_USERS = (
 )
 # `db/init/05_pets.sql` 의 pets 중 닿는 부분만. **app_users 를 앞세워야 FK 가 선다** —
 # 그래서 둘로 나눠 두고, 필요한 조합을 항목에서 더한다.
+#
+# `birth_date` 는 `pet_farewell`(2026-09-02) 때문에 있다 — 그 마이그레이션의
+# `pets_farewell_after_birth` CHECK 이 이 칸을 읽으므로, 없으면 ALTER 가 죽고 **verifier 가
+# 잡은 것이 아니라 적용이 실패한 것**이 된다. 다른 항목에는 nullable 한 칸이 하나 느는 것뿐이다.
 PETS_ONLY = (
     "CREATE TABLE pets("
     " id uuid PRIMARY KEY,"
     " app_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,"
-    " name varchar(40) NOT NULL);"
+    " name varchar(40) NOT NULL,"
+    " birth_date date);"
     "INSERT INTO pets(id, app_user_id, name)"
     " VALUES ('33333333-3333-3333-3333-333333333333',"
     "         '11111111-1111-1111-1111-111111111111', 'x');"
@@ -108,6 +113,35 @@ CRAWL_RUNS_OLD = (
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
 
 
+# 회원의 상태 칸까지 필요한 항목용. `activity_game` 의 트리거가 `AFTER UPDATE OF status
+# ON app_users` 라 그 칸이 없으면 마이그레이션 자체가 안 붙는다.
+APP_USERS_WITH_STATUS = (
+    "CREATE TABLE app_users("
+    " id uuid PRIMARY KEY,"
+    " kakao_id bigint NOT NULL UNIQUE,"
+    " status varchar(20) NOT NULL DEFAULT 'active');"
+    "INSERT INTO app_users(id, kakao_id)"
+    " VALUES ('11111111-1111-1111-1111-111111111111', 1),"
+    "        ('22222222-2222-2222-2222-222222222222', 2);"
+)
+
+
+def prerequisites(*stems):
+    """앞선 마이그레이션들을 **그대로** 픽스처로 쓴다.
+
+    표가 열 개씩 얽힌 항목(`territory_claims` · `activity_game`)에서 스텁을 손으로 쓰면
+    **스텁과 실물이 갈라지는 순간 검사가 거짓말을 한다** — 실물에 걸린 제약이 스텁에는
+    없으니, verify 가 통과해도 그것이 무엇을 뜻하는지 알 수 없다. 앞 장의 SQL 을 그대로
+    부으면 그 어긋남이 원천적으로 안 생긴다.
+
+    스텁을 아예 안 쓰는 것은 아니다 — `app_users`·`pets` 처럼 `db/init/` 이 원본인 표는
+    여전히 위의 상수들이 대신한다. 여기서 부르는 것은 `db/migrations/` 안의 것뿐이다.
+    """
+    return '\n'.join(
+        transactionless((ROOT / f'db/migrations/{stem}.sql').read_text(encoding='utf-8'))
+        for stem in stems)
+
+
 def transactionless(sql):
     """Strip the migration's own BEGIN;/COMMIT; so the harness can supply the transaction.
 
@@ -126,18 +160,31 @@ def transactionless(sql):
     """
     keep = [line for line in sql.splitlines()
             if line.strip().upper() not in ('BEGIN;', 'COMMIT;')]
-    return '\n'.join(keep) + '\n'
+    return unqualified('\n'.join(keep) + '\n')
 
 
-def sql_checks():
-    # libpq settings are supplied only by the dedicated disposable CI service.
-    assert os.environ.get('PGHOST') in ('127.0.0.1', 'localhost', '::1')
-    total = 0
-    # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
-    # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
-    # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
-    # False 로 두는 자리는 `documents_org_backfill` 하나뿐이고 이유는 그 항목에 적었다.
-    for date, name, fixture, table, mutations, *rest in (
+def unqualified(sql):
+    """`public.` 한정을 뗀다. **`transactionless()` 와 같은 종류의 손질**이다.
+
+    두 파일이 표를 `public.walks` · `public.walk_points` 로 **스키마까지 적어** 가리킨다
+    (`2026-09-02_walk_analyses` · `2026-09-02_walk_point_chunks`, 각 1건). 실제 적용 경로에서는
+    그것이 맞는데 — 서버 DB 의 표는 `public` 에 있다 — **이 하네스는 일회용 스키마 안에서**
+    돌므로 그 이름이 진짜 `public` 을 가리켜 "없는 표"가 된다.
+
+    마이그레이션 SQL 을 고치는 대신 여기서 벗긴다 (#273 이 세운 원칙이고 `transactionless()`
+    가 같은 이유로 있다). 두 파일 다 `public.` 이 그 한 자리에만 나온다.
+    """
+    return sql.replace('public.', '')
+
+
+# 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
+# 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
+# (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
+# False 로 두는 자리는 `documents_org_backfill` 하나뿐이고 이유는 그 항목에 적었다.
+#
+# **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
+# 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
+CHECKS = (
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
@@ -434,10 +481,194 @@ def sql_checks():
             'DROP INDEX idx_gait_records_pet_created',
             'DROP TRIGGER trg_gait_records_updated_at ON gait_records',
         ]),
-    ):
+        # -- 2026-09-07 (#295) — "verify 는 있는데 아무것도 안 잡는" 여덟 장. --------------
+        # #273 이 SELECT 나열이던 여섯 장을 단언형으로 바꿨는데 **그때 목록에 안 들어간
+        # 여덟 장**이 남아 있었다. #292 가 그것을 다시 발견했고, 같은 일이 세 번째로 나지
+        # 않도록 `coverage_checks()` 를 같이 세웠다.
+        #
+        # 표가 얽힌 항목은 스텁 대신 **앞 장의 SQL 을 그대로 붓는다** (`prerequisites`).
+        ('2026-09-01', 'walk_pets', APP_USERS + PETS_ONLY
+         + prerequisites('2026-08-31_walks'), 'walk_pets', [
+            'ALTER TABLE walk_pets DROP CONSTRAINT walk_pets_pkey;'
+            ' ALTER TABLE walk_pets ADD PRIMARY KEY (walk_id)',
+            'ALTER TABLE walk_pets DROP CONSTRAINT walk_pets_pet_id_fkey;'
+            ' ALTER TABLE walk_pets ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX walk_pets_pet_idx',
+            # **옛 칸을 되살리는 변조.** 값만 옮기고 DROP 을 빠뜨린 상태와 같은 모양이고,
+            # 그러면 같은 사실이 두 곳에 있어 앱이 읽는 쪽에 따라 답이 달라진다.
+            'ALTER TABLE walks ADD COLUMN pet_id uuid REFERENCES pets(id) ON DELETE SET NULL',
+        ]),
+        ('2026-09-02', 'pet_farewell', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN farewell_on',
+            'ALTER TABLE pets ALTER COLUMN farewell_on TYPE timestamptz',
+            # 값을 먼저 채워야 ALTER 가 안 죽는다 (#271 · #273 · #288 과 같은 함정).
+            'UPDATE pets SET farewell_on = CURRENT_DATE;'
+            ' ALTER TABLE pets ALTER COLUMN farewell_on SET NOT NULL',
+            # **기본값을 거는 변조** — 그 순간 전 강아지가 배웅된 것이 된다.
+            'ALTER TABLE pets ALTER COLUMN farewell_on SET DEFAULT CURRENT_DATE',
+            'ALTER TABLE pets DROP CONSTRAINT pets_farewell_not_future',
+            'ALTER TABLE pets DROP CONSTRAINT pets_farewell_after_birth',
+        ]),
+        ('2026-09-01', 'chats', APP_USERS + PETS_ONLY, 'chat_turns', [
+            'ALTER TABLE chat_turns DROP COLUMN public_response',
+            'ALTER TABLE chat_turns ALTER COLUMN user_content TYPE varchar(100)',
+            # **상태 기계를 푸는 변조.** 타입도 NOT NULL 도 그대로라 컬럼 검사는 다 통과하는데,
+            # 그 순간 반쯤 채워진 행(답은 있는데 processing 인)이 들어온다.
+            'ALTER TABLE chat_turns DROP CONSTRAINT chat_turns_state_check',
+            'ALTER TABLE chat_turns DROP CONSTRAINT chat_turns_assistant_status_check;'
+            " ALTER TABLE chat_turns ADD CONSTRAINT chat_turns_assistant_status_check"
+            " CHECK (assistant_status IS NULL OR assistant_status IN ('ANSWERED','FAILED'))",
+            # 재전송이 대화를 두 배로 만드는 변조.
+            'ALTER TABLE chat_turns DROP CONSTRAINT chat_turns_session_client_key',
+            'ALTER TABLE chat_summaries DROP CONSTRAINT chat_summaries_state_check',
+            # **방을 지우면 요약이 같이 사라지는 변조.** SET NULL -> CASCADE 다.
+            'ALTER TABLE chat_summaries DROP CONSTRAINT chat_summaries_source_session_id_fkey;'
+            ' ALTER TABLE chat_summaries ADD FOREIGN KEY(source_session_id)'
+            ' REFERENCES chat_sessions(id) ON DELETE CASCADE',
+            # 빈 방이 무한히 쌓이는 변조 — UNIQUE 를 잃는다.
+            'DROP INDEX chat_sessions_one_draft_idx;'
+            ' CREATE INDEX chat_sessions_one_draft_idx ON chat_sessions (app_user_id, pet_id)'
+            ' WHERE last_message_at IS NULL',
+            # 부분 조건을 잃는 변조.
+            'DROP INDEX chat_sessions_one_draft_idx;'
+            ' CREATE UNIQUE INDEX chat_sessions_one_draft_idx'
+            ' ON chat_sessions (app_user_id, pet_id, id)',
+        ]),
+        ('2026-09-02', 'walk_analyses', APP_USERS + PETS_ONLY
+         + prerequisites('2026-08-31_walks'), 'walk_analyses', [
+            'ALTER TABLE walk_analyses DROP COLUMN measurement_receipt',
+            # **신원 UNIQUE 를 줄이는 변조.** 규칙을 고친 순간 옛 계산을 덮어쓰게 된다.
+            'ALTER TABLE walk_analyses DROP CONSTRAINT walk_analyses_identity_unique;'
+            ' ALTER TABLE walk_analyses ADD CONSTRAINT walk_analyses_identity_unique'
+            ' UNIQUE (walk_id, input_fingerprint)',
+            # jsonb 의 **모양**을 잃는 변조 — 타입은 그대로라 컬럼 검사는 통과한다.
+            'ALTER TABLE walk_analyses DROP CONSTRAINT walk_analyses_events_array',
+            'ALTER TABLE walk_analyses DROP CONSTRAINT walk_analyses_facts_object',
+            'ALTER TABLE walk_analyses DROP CONSTRAINT walk_analyses_terminal_sequence_check',
+            'ALTER TABLE walk_analyses DROP CONSTRAINT walk_analyses_input_fingerprint_check',
+            'DROP INDEX walk_analyses_walk_derived_idx;'
+            ' CREATE INDEX walk_analyses_walk_derived_idx ON walk_analyses (walk_id, derived_at)',
+            # `walks` 쪽 칸. 기본값을 잃으면 이미 쌓인 산책의 상태가 안 정해진다.
+            'ALTER TABLE walks ALTER COLUMN analysis_state DROP DEFAULT',
+            'ALTER TABLE walks DROP CONSTRAINT walks_analysis_state_check',
+        ]),
+        ('2026-09-02', 'walk_point_chunks', APP_USERS + PETS_ONLY
+         + prerequisites('2026-08-31_walks'), 'walk_point_chunks', [
+            'ALTER TABLE walk_point_chunks DROP COLUMN payload',
+            'ALTER TABLE walk_point_chunks ALTER COLUMN point_count TYPE bigint',
+            'ALTER TABLE walk_point_chunks DROP CONSTRAINT walk_point_chunks_pkey;'
+            ' ALTER TABLE walk_point_chunks ADD PRIMARY KEY (walk_id, seq_to)',
+            'ALTER TABLE walk_point_chunks DROP CONSTRAINT walk_point_chunks_seq_order',
+            'ALTER TABLE walk_point_chunks DROP CONSTRAINT walk_point_chunks_point_count_check',
+            'ALTER TABLE walk_point_chunks DROP CONSTRAINT walk_point_chunks_walk_id_fkey;'
+            ' ALTER TABLE walk_point_chunks ADD FOREIGN KEY(walk_id) REFERENCES walks(id)',
+            # **옛 표를 되살리는 변조 — 이 항목의 이유다.** 옮기기만 하고 DROP 을 빠뜨리면
+            # 같은 좌표가 두 곳에 남는데, 옛 verify 는 그것을 SELECT 로 찍기만 했다.
+            'CREATE TABLE walk_points(walk_id uuid, client_seq integer)',
+        ]),
+        ('2026-09-03', 'territory_visits', APP_USERS + PETS_ONLY,
+         'territory_verified_visits', [
+            'ALTER TABLE territory_verified_visits DROP COLUMN evidence_version',
+            # **사진 한 장으로 여러 번 인정받게 되는 변조.** PK 가 따로 있어 스키마는
+            # 멀쩡해 보인다.
+            'ALTER TABLE territory_verified_visits'
+            ' DROP CONSTRAINT territory_verified_visits_attempt_id_key',
+            'ALTER TABLE territory_verified_visits'
+            ' DROP CONSTRAINT territory_verified_visits_attempt_id_fkey;'
+            ' ALTER TABLE territory_verified_visits ADD FOREIGN KEY(attempt_id)'
+            ' REFERENCES territory_attempts(id)',
+            # 가상 위치가 통과하게 되는 변조.
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_attempts_not_mock',
+            # **오차를 안 보게 되는 변조.** `distance_m` 만 남으면 오차 50m 측정이
+            # "1m 앞"으로 통과한다.
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_attempts_location_evidence',
+            'ALTER TABLE territory_attempts'
+            ' DROP CONSTRAINT territory_attempts_confirmed_photo_identity',
+            'ALTER TABLE territory_attempts'
+            ' DROP CONSTRAINT territory_attempts_final_vision_metadata',
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_attempts_status_check;'
+            " ALTER TABLE territory_attempts ADD CONSTRAINT territory_attempts_status_check"
+            " CHECK (status IN ('PENDING_UPLOAD','VERIFIED'))",
+            'ALTER TABLE territory_attempts'
+            ' DROP CONSTRAINT territory_attempts_photo_storage_key_key',
+        ]),
+        ('2026-09-03', 'walk_capsules', APP_USERS + PETS_ONLY
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses'), 'walk_capsules', [
+            'ALTER TABLE walk_capsules DROP COLUMN trail_context',
+            'ALTER TABLE walk_capsules ALTER COLUMN sealed_at DROP NOT NULL',
+            'ALTER TABLE walk_capsules DROP CONSTRAINT walk_capsules_context_object',
+            # **빈 배열을 허용하는 변조.** `array` 라는 낱말은 남아서 모양만 보면 안 잡힌다.
+            'ALTER TABLE walk_capsules DROP CONSTRAINT walk_capsules_capabilities_array;'
+            " ALTER TABLE walk_capsules ADD CONSTRAINT walk_capsules_capabilities_array"
+            " CHECK (jsonb_typeof(capabilities) = 'array')",
+            'ALTER TABLE walk_capsules DROP CONSTRAINT walk_capsules_analysis_id_fkey;'
+            ' ALTER TABLE walk_capsules ADD FOREIGN KEY(analysis_id)'
+            ' REFERENCES walk_analyses(id)',
+            # **PK 를 줄이는 변조** — 다른 물감으로 칠한 장이 서로를 덮어쓴다.
+            'ALTER TABLE walk_cellophane_sheets DROP CONSTRAINT walk_cellophane_sheets_pkey;'
+            ' ALTER TABLE walk_cellophane_sheets ADD PRIMARY KEY (analysis_id)',
+            'ALTER TABLE walk_cellophane_sheets DROP CONSTRAINT walk_cellophane_identity_nonempty',
+            'ALTER TABLE walk_cellophane_sheets DROP CONSTRAINT walk_cellophane_fingerprint_check',
+            'DROP INDEX walk_cellophane_paint_fp_idx',
+        ]),
+        ('2026-09-04', 'admin_audit_log', CHAT_AND_ADMINS, 'admin_audit_log', [
+            'ALTER TABLE admin_audit_log DROP COLUMN detail',
+            # **로그인 실패를 기록할 수 없게 되는 변조.** 없는 아이디로 두드린 시도는
+            # 가리킬 admin_users 행이 아예 없다.
+            'ALTER TABLE admin_audit_log ALTER COLUMN admin_user_id SET NOT NULL',
+            # **RESTRICT -> CASCADE 변조 — 이 항목의 이유다.** 관리자를 지우는 순간
+            # 그 사람이 한 일이 통째로 사라진다. 모양은 멀쩡해 보인다.
+            'ALTER TABLE admin_audit_log DROP CONSTRAINT admin_audit_log_admin_user_id_fkey;'
+            ' ALTER TABLE admin_audit_log ADD FOREIGN KEY(admin_user_id)'
+            ' REFERENCES admin_users(id) ON DELETE CASCADE',
+            'ALTER TABLE admin_audit_log DROP CONSTRAINT admin_audit_log_detail_object_check',
+            'DROP INDEX idx_admin_audit_log_created',
+            # 부분 조건을 잃는 변조 둘.
+            'DROP INDEX idx_admin_audit_log_admin;'
+            ' CREATE INDEX idx_admin_audit_log_admin'
+            ' ON admin_audit_log (admin_user_id, created_at DESC)',
+            'DROP INDEX idx_admin_audit_log_target;'
+            ' CREATE INDEX idx_admin_audit_log_target ON admin_audit_log (target_type, target_id)',
+            # **append-only 를 깨는 변조.** 다른 표에 다 있는 것이 여기만 없는 것이 의도다.
+            'ALTER TABLE admin_audit_log ADD COLUMN updated_at timestamptz',
+        ]),
+        # -- 단언형인데 등록만 없던 둘 (#295). -------------------------------------------
+        ('2026-09-05', 'territory_claims', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits'), 'territory_claims', [
+            'ALTER TABLE territory_claims DROP COLUMN pet_id',
+            'ALTER TABLE territory_occupancies DROP CONSTRAINT territory_occupancies_pkey',
+            'ALTER TABLE territory_claim_photos'
+            ' DROP CONSTRAINT territory_claim_photos_claim_id_fkey;'
+            ' ALTER TABLE territory_claim_photos ADD FOREIGN KEY(claim_id)'
+            ' REFERENCES territory_claims(id)',
+            'DROP INDEX ix_territory_claim_photos_claim_id',
+            'DROP INDEX territory_claims_pet_idx',
+        ]),
+        ('2026-09-06', 'activity_game', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'activity_holding_periods', [
+            'ALTER TABLE activity_holding_periods DROP COLUMN site_id',
+            # 트리거 셋은 **탈퇴·삭제 때 게임 데이터를 치우는** 자리다. 하나만 빠져도
+            # 지운 강아지가 점령판에 계속 서 있는다.
+            'DROP TRIGGER activity_pet_cleanup ON pets',
+            'DROP TRIGGER activity_owner_cleanup ON app_users',
+            'DROP TRIGGER activity_ownership_guard ON territory_occupancies',
+            'DROP INDEX activity_one_active_season',
+            'DROP INDEX activity_one_open_holding',
+        ]),
+)
+
+
+def sql_checks():
+    # libpq settings are supplied only by the dedicated disposable CI service.
+    assert os.environ.get('PGHOST') in ('127.0.0.1', 'localhost', '::1')
+    total = 0
+    for date, name, fixture, table, mutations, *rest in CHECKS:
         migration = transactionless(
             (ROOT / f'db/migrations/{date}_{name}.sql').read_text(encoding='utf-8'))
-        verifier = (ROOT / f'db/migrations/verify_{date}_{name}.sql').read_text(encoding='utf-8')
+        verifier = unqualified(
+            (ROOT / f'db/migrations/verify_{date}_{name}.sql').read_text(encoding='utf-8'))
         applied = migration * (2 if (rest[0] if rest else True) else 1)
         for mutation in ['', f'DROP TABLE {table} CASCADE', *mutations]:
             schema = 'verify_test_' + uuid.uuid4().hex
@@ -454,6 +685,66 @@ def sql_checks():
                 assert result.returncode == 0, result.stderr
             total += 1
     print(f'PostgreSQL: {total} checks passed (repeat apply, valid schema, schema damage).')
+
+
+# `verify_*.sql` 이 **행동 테스트**라 하네스에 안 넣는 것. 이름 하나에 이유 하나다.
+#
+# 하네스는 "일회용 스키마에 픽스처 + 마이그레이션을 붓고, 일부러 망가뜨린 뒤, verify 가
+# 종료 코드로 잡는가"를 본다. 아래 파일은 그 모양이 아니다 — **자기 스키마를 직접 만들고**
+# (`CREATE SCHEMA daengs_pets_check`) `\i db/init/*.sql` 로 원본 스키마를 부르고 INSERT 로
+# FK 의 실제 동작을 본다. 안쪽의 `DROP SCHEMA` 가 하네스의 격리(바깥 트랜잭션 + ROLLBACK)와
+# 겹치고, `\i` 의 상대 경로는 psql 의 작업 디렉터리를 요구한다.
+#
+# **못 넣는 것이지 부실한 것이 아니다.** 이 파일은 카탈로그가 아니라 동작을 재고, 세 단언이
+# 다 `RAISE EXCEPTION` 이다. 여기 이름을 더할 때는 **왜 하네스 모델과 안 맞는지**를 적는다 —
+# "나중에 하자" 는 이유가 아니다.
+BEHAVIOURAL = {
+    '2026-08-31_pets': r'자기 스키마를 만들고 db/init 을 \i 로 부르는 행동 테스트',
+}
+
+
+def coverage_checks():
+    """**모든 마이그레이션이 ⓐ 짝 ⓑ 단언 ⓒ 등록을 갖는지.** DB 도 psql 도 안 쓴다.
+
+    이 검사가 있는 이유는 같은 부채가 **두 번** 났기 때문이다 — #273 이 "SELECT 나열이라
+    틀려도 녹색"인 여섯 장을 고쳤는데 여덟 장이 그때 목록에 안 들어갔고, #292 가 그것을
+    다시 발견했다. **목록을 사람이 관리하는 한 세 번째가 온다.**
+
+    세 가지를 본다:
+      ⓐ `verify_<파일>` 이 있는가            — 없으면 `db-migrate.yml` 이 적용 자체를 막는다
+      ⓑ `RAISE EXCEPTION` 이 하나라도 있는가 — 없으면 스키마가 어떻든 종료 코드 0 이다
+      ⓒ `CHECKS` 에 등록됐는가              — 안 하면 그 단언이 실제로 무엇을 잡는지 아무도 안 잰다
+
+    ⓒ 의 예외는 `BEHAVIOURAL` 하나뿐이고 이유가 그 옆에 적혀 있다.
+    """
+    migrations = sorted(p.stem for p in (ROOT / 'db/migrations').glob('*.sql')
+                        if not p.stem.startswith('verify_'))
+    registered = {f'{date}_{name}' for date, name, *_ in CHECKS}
+    problems = []
+    for stem in migrations:
+        verifier = ROOT / f'db/migrations/verify_{stem}.sql'
+        if not verifier.exists():
+            problems.append(f'{stem}: verify_{stem}.sql 이 없다.'
+                            ' db-migrate.yml 이 verify=true 로 적용을 막는다')
+            continue
+        text = verifier.read_text(encoding='utf-8')
+        if 'RAISE EXCEPTION' not in text:
+            problems.append(f'{stem}: verify 에 RAISE EXCEPTION 이 없다.'
+                            ' SELECT 만 있으면 스키마가 어떻든 종료 코드 0 이라 틀려도 녹색이다')
+        if stem not in registered and stem not in BEHAVIOURAL:
+            problems.append(f'{stem}: CHECKS 에 등록되지 않았다.'
+                            ' 단언이 실제로 변조를 잡는지 아무도 재지 않는다'
+                            ' (하네스 모델과 안 맞으면 BEHAVIOURAL 에 이유와 함께 적을 것)')
+    for stem in sorted(BEHAVIOURAL):
+        if not (ROOT / f'db/migrations/{stem}.sql').exists():
+            problems.append(f'{stem}: BEHAVIOURAL 에 있는데 마이그레이션이 없다. 목록이 낡았다')
+    if problems:
+        print('마이그레이션 검증 커버리지에 구멍이 있습니다:')
+        for problem in problems:
+            print(f'  - {problem}')
+        raise SystemExit(1)
+    print(f'Coverage: {len(migrations)} migrations, 짝 · 단언 · 등록 모두 확인'
+          f' (행동 테스트 예외 {len(BEHAVIOURAL)}).')
 
 
 def workflow_script(step):
@@ -526,6 +817,7 @@ def windows_checks():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['sql', 'windows'])
+    parser.add_argument('mode', choices=['sql', 'windows', 'coverage'])
     args = parser.parse_args()
-    {'sql': sql_checks, 'windows': windows_checks}[args.mode]()
+    {'sql': sql_checks, 'windows': windows_checks,
+     'coverage': coverage_checks}[args.mode]()

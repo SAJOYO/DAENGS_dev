@@ -40,11 +40,24 @@ from daengs_backend.repositories import admin_audit_log as audit_repo
 __all__ = [
     "AuditEntry",
     "AuditPage",
+    "RETENTION_ROW_THRESHOLD",
+    "RetentionSummary",
     "InvalidCursorError",
     "list_entries",
     "record",
     "record_and_commit",
+    "retention_summary",
 ]
+
+#: A5 를 다시 열 기준 (2026-09-07 사람 결정 · `docs/console/roadmap.md` §4 A5).
+#:
+#: **주기적 삭제를 두지 않기로 했습니다.** 실측이 하루 14행이라 1년에 5천 행이고,
+#: 감사 로그는 지우면 못 되돌립니다. 대신 "안 지운다" 가 "안 본다" 가 되지 않도록
+#: 숫자를 박고 화면이 그것을 보여 줍니다. 여기 닿으면 파티션·삭제 주기를 다시 엽니다.
+#:
+#: 10만은 지금 속도로 약 20년입니다. 그보다 훨씬 일찍 닿는다면 그것 자체가 신호입니다 —
+#: 무엇이 그렇게 많이 남기고 있는지부터 봅니다.
+RETENTION_ROW_THRESHOLD = 100_000
 
 
 async def record(
@@ -168,6 +181,17 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise InvalidCursorError from None
 
 
+@dataclass(frozen=True)
+class RetentionSummary:
+    """감사 로그가 얼마나 쌓였나 — A5 의 "다시 열 기준" 을 화면이 볼 수 있게."""
+
+    total: int
+    oldest_at: datetime | None
+    newest_at: datetime | None
+    threshold: int
+    over_threshold: bool
+
+
 async def list_entries(
     session: AsyncSession,
     *,
@@ -208,3 +232,22 @@ async def list_entries(
         else None
     )
     return AuditPage(entries=entries, next_cursor=next_cursor)
+
+
+async def retention_summary(session: AsyncSession) -> RetentionSummary:
+    """지금 몇 행인가, 언제부터인가, 지울 때가 됐나.
+
+    **이 조회도 감사에 안 남깁니다** — 위 읽기 절과 같은 이유입니다. 그리고 목록과
+    합치지 않은 이유는 repositories 쪽 주석에 있습니다.
+
+    `over_threshold` 를 서버가 판단합니다. 화면이 `total >= 100000` 을 직접 쓰면 기준이
+    두 곳에 살고, 나중에 바꿀 때 한쪽만 바뀝니다.
+    """
+    total, oldest, newest = await audit_repo.retention_summary(session)
+    return RetentionSummary(
+        total=total,
+        oldest_at=oldest,
+        newest_at=newest,
+        threshold=RETENTION_ROW_THRESHOLD,
+        over_threshold=total >= RETENTION_ROW_THRESHOLD,
+    )

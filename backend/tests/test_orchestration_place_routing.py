@@ -50,6 +50,7 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     GeminiSemanticRouter,
     SemanticRoutingDecision,
@@ -59,7 +60,7 @@ from daengs_backend.orchestration.service import AssistantOrchestrationService
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 LOCATION = {"location": {"lat": 37.5665, "lon": 126.978}}
-UNSUPPORTED_MESSAGE = "실행하거나 안내할 수 있는 기능이 없습니다."
+UNSUPPORTED_MESSAGE = NO_CAPABILITY_MESSAGE
 
 # The approved product routing table (PR #204), plus the negatives that keep the new
 # destination from absorbing its neighbours. `decision` is what the classifier SHOULD
@@ -308,7 +309,14 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "walk",
         "place",
     ]
-    assert [name.value for name in CapabilityName] == ["training", "life", "walk", "place"]
+    # `general` (D-057) sits last: additive to the four, so its section always renders last.
+    assert [name.value for name in CapabilityName] == [
+        "training",
+        "life",
+        "walk",
+        "place",
+        "general",
+    ]
 
 
 def test_unknown_execute_name_refuses_to_inherit_another_payload() -> None:

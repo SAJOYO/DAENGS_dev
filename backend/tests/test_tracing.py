@@ -7,8 +7,10 @@
 2. **켰을 때 신원과 정밀 좌표는 지워지고, 질문·답변·청크는 남는다.** 둘 다
    단언한다 — 지우는 쪽만 보면 "전부 지우기" 가 통과해 버리는데, 그건 트레이싱을
    켤 이유 자체를 없애는 회귀다.
-3. **`run_id` 가 `request_id` 다.** 신고 한 건에서 트레이스로 가는 길이 그 등식
-   하나에 걸려 있다 (`answer_reports.turn_id` → `chat_turns.request_id`).
+3. **루트 런의 `run_id` 가 `request_id` 다.** 신고 한 건에서 트레이스로 가는 길이 그
+   등식 하나에 걸려 있다 (`answer_reports.turn_id` → `chat_turns.request_id`).
+   루트는 **서비스**가 만들고 그래프는 자식이다 — 시맨틱 라우터의 LLM 런이 그래프보다
+   먼저 돌아서, 그래프를 루트로 두면 그 런이 트레이스 밖에 남는다 (`TestRootRun`).
 
 마스킹 함수를 `OrchestratorState` 와 **같은 모양**의 payload 로 검사하는 것이
 핵심이다. 필드 이름만 따로 적어 두고 통과시키면, 상태가 한 겹 깊어지는 날
@@ -162,7 +164,10 @@ class TestGraphWiring:
         return engine
 
     @pytest.mark.asyncio
-    async def test_그래프가_request_id_를_run_id_로_받는다(self) -> None:
+    async def test_그래프는_자식이라_run_id_없이_config_를_받는다(self) -> None:
+        """루트 런은 서비스가 `request_id` 로 만든다. 그래프가 같은 id 를 또 쓰면 같은
+        id 의 런이 둘이 되어 하나가 다른 하나를 덮는다 — 그래서 여기엔 `run_id` 가 없고,
+        `request_id` 는 metadata 로만 남는다 (자식 런만 따로 걸러도 요청을 찾게)."""
         from daengs_backend.orchestration.contracts import PrincipalContext, RoutePlan
 
         captured: dict = {}
@@ -189,8 +194,9 @@ class TestGraphWiring:
             request_id=request_id,
         )
 
-        assert captured["run_id"] == uuid.UUID(request_id)
-        assert captured["run_name"] == "assistant_query"
+        assert "run_id" not in captured
+        assert captured["run_name"] == "orchestration_engine"
+        assert captured["metadata"]["request_id"] == request_id
         assert captured["metadata"]["router"] == "llm"
         assert captured["metadata"]["router_model"] == "gemini-x"
         assert captured["metadata"]["prompt_version"] == "semantic-router-ko-v7"
@@ -220,6 +226,283 @@ class TestGraphWiring:
         flattened = repr(captured["metadata"]) + repr(captured["tags"])
         assert query not in flattened
         assert subject not in flattened
+
+
+class TestRootRun:
+    """루트 런은 서비스가 만들고, 라우터의 LLM 런은 그 아래 자식이다.
+
+    langsmith 의 `tracing_context(enabled="local")` 로 검사한다 — 런 트리는 실제로
+    만들어지고 부모·자식이 이어지지만 아무것도 전송되지 않는다 (`run_helpers.trace._setup`
+    의 `enabled is True` 갈래만 post 를 부른다). 클라우드도, 가짜 클라이언트도 필요 없다.
+
+    엔진은 가짜다. LangGraph 를 돌리면 langchain 의 트레이서가 붙는데 그건 그래프 쪽
+    테스트(`TestGraphWiring`)의 몫이고, 여기서 보는 것은 **그래프 앞에서 도는 라우터**가
+    루트에 붙는가다 — 이 PR 이 고치는 바로 그 회귀.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _quiet_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """local 모드에서도 `@traceable` 은 클라이언트 객체를 만든다. 키가 없으면
+        `LangSmithMissingAPIKeyWarning` 이 뜨는데, 전송이 없는 자리라 소음일 뿐이다."""
+        monkeypatch.setenv("LANGSMITH_API_KEY", "lsv2_pt_test_not_used")
+
+    @staticmethod
+    def _service(seen: dict, *, generate_raw: str | None):
+        """`seen` 에 라우터 런과 엔진이 본 현재 런을 남기는 서비스.
+
+        `generate_raw` 가 None 이면 라우터가 불리는 순간 실패로 친다 — 결정론 라우팅
+        테스트에서 "LLM 런이 없어야 한다" 를 단언하는 방법.
+        """
+        from langsmith.run_helpers import get_current_run_tree
+
+        from daengs_backend.orchestration.contracts import (
+            AssistantResponse,
+            AssistantStatus,
+        )
+        from daengs_backend.orchestration.semantic import GeminiSemanticRouter
+        from daengs_backend.orchestration.service import AssistantOrchestrationService
+
+        async def generate(prompt: str) -> object:
+            assert generate_raw is not None, "결정론 라우팅에서 라우터가 불렸다"
+            seen["router_run"] = get_current_run_tree()
+            seen["router_prompt"] = prompt
+            return generate_raw
+
+        class FakeEngine:
+            async def run(self, *, route_plan, query, principal, request_id, **_):
+                seen["engine_run"] = get_current_run_tree()
+                seen["route_plan"] = route_plan
+                return AssistantResponse(
+                    request_id=request_id,
+                    status=AssistantStatus.ANSWERED,
+                    message="짖음 교육 방법입니다",
+                    results=[],
+                    handoffs=[],
+                    clarify=None,
+                    route=None,
+                )
+
+        return AssistantOrchestrationService(
+            engine=FakeEngine(), semantic_router=GeminiSemanticRouter(generate=generate)
+        )
+
+    @pytest.mark.asyncio
+    async def test_라우터_LLM_런이_루트_아래에_있고_루트_id_가_request_id_다(self) -> None:
+        import json
+
+        from langsmith.run_helpers import tracing_context
+
+        from daengs_backend.orchestration.contracts import PrincipalContext
+
+        seen: dict = {}
+        service = self._service(
+            seen, generate_raw=json.dumps({"execute": ["training"], "handoffs": []})
+        )
+        request_id = str(uuid.uuid4())
+
+        with tracing_context(enabled="local"):
+            await service.run(
+                query="우리 개가 짖어요",
+                principal=PrincipalContext(subject=str(uuid.uuid4()), kind="APP_USER"),
+                request_id=request_id,
+            )
+
+        router_run = seen["router_run"]
+        assert router_run is not None, "라우터 호출이 런 컨텍스트 밖에서 돌았다"
+        assert router_run.name == "semantic_router"
+        assert router_run.run_type == "llm"
+        # 부모는 id 로 본다 — 비동기 `@traceable` 은 부모 객체 참조(`parent_run`)를
+        # 안 남기고 `parent_run_id` · `dotted_order` 만 남긴다 (0.11.2 실측).
+        # 신고 → 트레이스 링크의 근거: 루트 id = trace id = request_id.
+        assert router_run.parent_run_id == uuid.UUID(request_id)
+        assert router_run.trace_id == uuid.UUID(request_id)
+        # 엔진은 루트 바로 아래에서 돈다 — 가짜 엔진이 본 현재 런이 곧 루트다.
+        root = seen["engine_run"]
+        assert root is not None and root.name == "assistant_query"
+        assert root.id == uuid.UUID(request_id)
+
+    @pytest.mark.asyncio
+    async def test_루트_metadata_는_그래프와_같은_키이고_출력은_상태뿐이다(self) -> None:
+        import json
+
+        from langsmith.run_helpers import tracing_context
+
+        from daengs_backend.orchestration.contracts import PrincipalContext
+
+        seen: dict = {}
+        service = self._service(
+            seen, generate_raw=json.dumps({"execute": ["training"], "handoffs": []})
+        )
+        query = "우리 개가 짖어요"
+        subject = str(uuid.uuid4())
+
+        with tracing_context(enabled="local"):
+            await service.run(
+                query=query,
+                principal=PrincipalContext(subject=subject, kind="APP_USER"),
+                request_id=str(uuid.uuid4()),
+            )
+
+        root = seen["engine_run"]
+        metadata = root.extra["metadata"]
+        # `graph.py` 의 자식 런과 같은 키 — 두 구현의 루트를 같은 쿼리로 거르는 계약.
+        assert {"router", "router_model", "prompt_version", "principal_kind", "locale"} <= set(
+            metadata
+        )
+        assert metadata["router"] == "llm"
+        # metadata 는 anonymizer 밖이라 애초에 원문·신원을 안 넣는다 (D-037).
+        flattened = repr(metadata)
+        assert query not in flattened and subject not in flattened
+        # 입력에는 질문이 있다 — 그것을 보려고 켜는 것이다. 출력은 상태뿐이다 —
+        # 답 본문은 자식 런에 있어서 두 번 안 싣는다.
+        assert root.inputs["query"] == query
+        assert root.outputs == {
+            "status": "ANSWERED",
+            "results": [],
+            "handoffs": [],
+            "clarify": False,
+        }
+
+    @pytest.mark.asyncio
+    async def test_결정론_라우팅은_LLM_런이_없다(self) -> None:
+        from langsmith.run_helpers import tracing_context
+
+        from daengs_backend.orchestration.contracts import PrincipalContext
+
+        seen: dict = {}
+        service = self._service(seen, generate_raw=None)
+
+        with tracing_context(enabled="local"):
+            await service.run(
+                query="짖어요",
+                requested_capability="training",
+                principal=PrincipalContext(subject=str(uuid.uuid4()), kind="APP_USER"),
+                request_id=str(uuid.uuid4()),
+            )
+
+        assert "router_run" not in seen
+        engine_run = seen["engine_run"]
+        assert engine_run is not None and engine_run.name == "assistant_query"
+        assert engine_run.extra["metadata"]["router"] == "deterministic"
+
+    @pytest.mark.asyncio
+    async def test_꺼져_있으면_런_컨텍스트가_없다(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """켜지 않은 서버에서는 같은 코드가 돌되 런 컨텍스트가 비어 있어야 한다 —
+        루트를 만드는 `request_trace` 가 꺼짐 경로에서 아무것도 심지 않는다는 뜻이다."""
+        import json
+
+        from langsmith import utils as ls_utils
+
+        from daengs_backend.orchestration.contracts import PrincipalContext
+
+        for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING"):
+            monkeypatch.delenv(name, raising=False)
+        ls_utils.get_env_var.cache_clear()
+        assert not tracing_enabled()
+
+        seen: dict = {}
+        service = self._service(
+            seen, generate_raw=json.dumps({"execute": ["training"], "handoffs": []})
+        )
+        await service.run(
+            query="우리 개가 짖어요",
+            principal=PrincipalContext(subject=str(uuid.uuid4()), kind="APP_USER"),
+            request_id=str(uuid.uuid4()),
+        )
+        assert seen["router_run"] is None
+        assert seen["engine_run"] is None
+
+
+class TestRealGraphNesting:
+    """**진짜 LangGraph** 가 루트 아래에 붙는가 — `TestRootRun` 이 가짜 엔진으로 비워 둔 칸.
+
+    LangGraph 의 런은 langsmith 의 `@traceable` 이 아니라 **langchain 의 트레이서**가
+    만든다. 그것이 부모를 langsmith 의 현재 런 컨텍스트에서 읽는다는 것
+    (`langchain_core/callbacks/manager.py` `_configure`)이 이 배선 전체의 전제인데,
+    그건 코드를 읽고 믿은 것이지 잰 것이 아니었다. 여기서 잰다.
+
+    local 모드로는 못 한다 — langchain 트레이서는 local 모드에서도 전송을 시도한다
+    (0.11.2 실측, 가짜 키라 403). 그래서 **전송 메서드만 무력화한 진짜 Client** 를
+    양쪽(langsmith `get_cached_client` · langchain `get_client`)에 심는다. `Client` 는
+    속성이 읽기 전용이라 서브클래스라야 한다.
+    """
+
+    @pytest.mark.asyncio
+    async def test_그래프_노드_런이_전부_루트의_trace_id_를_가진다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import langchain_core.tracers.langchain as langchain_tracer
+        from langsmith import Client, run_trees
+        from langsmith.run_helpers import get_current_run_tree, tracing_context
+
+        from daengs_backend.orchestration.contracts import (
+            CapabilityName,
+            CapabilityResult,
+            CapabilityStatus,
+            PrincipalContext,
+        )
+        from daengs_backend.orchestration.graph import OrchestrationEngine
+        from daengs_backend.orchestration.semantic import GeminiSemanticRouter
+        from daengs_backend.orchestration.service import AssistantOrchestrationService
+
+        created: list[dict] = []
+
+        class NoNetworkClient(Client):
+            def create_run(self, *args, **kwargs) -> None:  # type: ignore[override]
+                created.append(kwargs)
+
+            def update_run(self, *args, **kwargs) -> None:  # type: ignore[override]
+                return None
+
+        client = NoNetworkClient(api_key="lsv2_pt_test_not_used", auto_batch_tracing=False)
+        monkeypatch.setattr(run_trees, "get_cached_client", lambda **kw: client)
+        monkeypatch.setattr(langchain_tracer, "get_client", lambda: client)
+
+        seen: dict = {}
+
+        class FakeTrainingAdapter:
+            capability = CapabilityName.TRAINING
+
+            async def run(self, request, *, request_id: str) -> CapabilityResult:
+                seen["node_run"] = get_current_run_tree()
+                return CapabilityResult(
+                    capability=self.capability,
+                    status=CapabilityStatus.OK,
+                    data={"answer": "짖음 교육 방법입니다"},
+                    elapsed_ms=1,
+                )
+
+        async def generate(prompt: str) -> object:
+            return '{"execute": ["training"], "handoffs": []}'
+
+        service = AssistantOrchestrationService(
+            engine=OrchestrationEngine({CapabilityName.TRAINING: FakeTrainingAdapter()}),
+            semantic_router=GeminiSemanticRouter(generate=generate),
+        )
+        request_id = str(uuid.uuid4())
+
+        with tracing_context(enabled=True, client=client):
+            await service.run(
+                query="우리 개가 짖어요",
+                principal=PrincipalContext(subject=str(uuid.uuid4()), kind="APP_USER"),
+                request_id=request_id,
+            )
+
+        # 어댑터는 그래프 노드(`execute_requests`) 안에서 돌고, 그 노드의 trace 가 루트다.
+        node_run = seen["node_run"]
+        assert node_run is not None and node_run.name == "execute_requests"
+        assert node_run.trace_id == uuid.UUID(request_id)
+
+        # 만들어진 런 전부가 한 트레이스다 — 루트 · 라우터 · 그래프 · 노드.
+        names = [run["name"] for run in created]
+        assert names[0] == "assistant_query"
+        assert {"semantic_router", "orchestration_engine", "execute_requests"} <= set(names)
+        assert names.count("assistant_query") == 1, "루트가 둘이면 같은 id 충돌의 재발이다"
+        trace_ids = {str(run.get("trace_id")) for run in created}
+        assert trace_ids == {request_id}
+        # 루트만 `request_id` 를 id 로 갖는다. 자식이 같은 id 를 쓰면 안 된다.
+        with_request_id = [run["name"] for run in created if str(run.get("id")) == request_id]
+        assert with_request_id == ["assistant_query"]
 
 
 class TestReviewFindings:
@@ -322,6 +605,26 @@ class TestReviewFindings:
         try:
             hits = [{"text": "가" * 5_000, "chunk_id": "c1", "score": 0.9}]
             assert _trace_documents(hits) == {}
+        finally:
+            ls_utils.get_env_var.cache_clear()
+
+    def test_실패한_런의_출력_프로세서는_None_을_받아도_산다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """추적 대상 함수가 예외로 끝나면 langsmith 는 `process_outputs` 를 `None` 으로
+        부른다 (0.11.2 실측 — 2026-09-07 개발 PC 에서 DB 접속이 안 될 때
+        "NoneType is not iterable" · "has no attribute 'decision'" 두 줄이 그것).
+        가공기가 거기서 또 죽으면 실패 원인이 로그에서 한 줄 더 멀어진다."""
+        from langsmith import utils as ls_utils
+
+        from daengs_training.retrieval.pgvector import _trace_documents
+        from daengs_training.service import _trace_outputs
+
+        monkeypatch.setenv("LANGSMITH_TRACING", "true")
+        ls_utils.get_env_var.cache_clear()
+        try:
+            assert _trace_documents(None) == {}  # type: ignore[arg-type]
+            assert _trace_outputs(None) == {}  # type: ignore[arg-type]
         finally:
             ls_utils.get_env_var.cache_clear()
 

@@ -144,13 +144,13 @@ const consoleSections: Array<{
   {
     title: "운영 지표",
     description:
-      "대화가 얼마나 오갔고 어떤 갈래로 답했는지 봅니다. 질문 원문은 남기지 않습니다.",
+      "대화가 얼마나 오갔고 어떤 갈래로 답했는지, 요청이 얼마나 걸렸는지 봅니다. 질문 원문은 남기지 않습니다.",
     // **제품 테이블(`chat_*`)을 집계합니다** (#223). 원문 없이 세는 것만 하는 이유는
     // D-037 이고, 스키마에 담을 칸조차 없습니다 (`schemas/metrics.py`).
     //
-    // **요청 메타데이터(B2)는 아직 없습니다** — request_id · 능력 · status · elapsed_ms
-    // 를 어디에 쌓을지가 사람 결정 대기라(`docs/console/roadmap.md` §7), 정해지면 같은
-    // 화면에 칸을 더합니다.
+    // **요청 메타데이터(B2)도 같은 화면입니다** (#297). 저장처는 2026-09-07 에 테이블로
+    // 정해졌고(`docs/console/roadmap.md` §7), `request_metrics` 가 지연 · 실패 사유 ·
+    // 라우터 종류를 셉니다. 여기도 원문은 없습니다 — 그 표에 담을 칸이 없습니다.
     //
     // `metrics:read` 는 VIEWER 만 없습니다 — `ANALYST` 라는 role 이 존재하는 이유가
     // 이 화면입니다 (`core/deps.py` 의 ROLE_PERMISSIONS).

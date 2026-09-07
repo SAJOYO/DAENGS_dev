@@ -58,6 +58,7 @@
 """
 from __future__ import annotations
 
+import itertools
 import re
 from collections.abc import Iterable
 from typing import Any
@@ -65,12 +66,28 @@ from typing import Any
 from .goldenset import logical
 
 # 답변이 지목한 근거. 프롬프트가 `[1]` 처럼 쓰라고 요구한다 (`generate.PROMPT`).
-REF_RE = re.compile(r"\[(\d+)\]")
+#
+# ⚠️ **한 괄호 안에 여럿을 쓰는 모양도 받는다** (RAG-069). 프롬프트는 `[1]` 을 요구하지만
+# 모델은 `[1, 2]` 로도 쓴다 — 저장된 랩 전체에서 **90건 · 24종**이 그 모양이었고
+# (`[1, 2]` · `[1,2,3]` · `[2, 3, 4, 5]` …), 옛 정규식은 그것을 **통째로 놓쳤다.**
+#
+#     "…보장합니다[1, 2]. 또한 …[4]."   옛: [4]        새: [1, 2, 4]
+#     "…[1,2,3]…"                       옛: []         새: [1, 2, 3]
+#     "…[1], [3], [4]…"                 옛: [1, 3, 4]  새: 같다
+#
+# 그래서 `grounded` 가 **조용히 낮게** 나왔다 — 답변이 정답 청크를 실제로 인용했는데도
+# 지목이 안 읽혀 False 였다. 랩 넷에서 각각 1~2문항이 뒤집힌다. `D10`(RAG-062)이 지표의
+# **부풀림**을 걷은 것과 방향만 반대고 같은 종류다.
+#
+# 오탐은 확인했다 — 새로 읽히는 90건이 전부 1~7 의 작은 수다. 연도·금액이 이 모양으로 오면
+# 범위 밖이라 `referenced_hits` 가 이미 버린다.
+REF_RE = re.compile(r"\[([\d,\s]+)\]")
+_DIGITS = re.compile(r"\d+")
 
 
 def referenced_indices(text: str) -> list[int]:
-    """답변이 `[N]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
-    return sorted({int(n) for n in REF_RE.findall(text)})
+    """답변이 `[N]`·`[N, M]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
+    return sorted({int(n) for group in REF_RE.findall(text) for n in _DIGITS.findall(group)})
 
 
 def referenced_hits(text: str, hits: list[Any]) -> list[Any]:
@@ -176,6 +193,88 @@ def score_rows(rows: list[dict[str, Any]],
             out[f"{kind}_cited"] = sum(1 for r in part if r.get("cited"))
             out[f"{kind}_grounded"] = sum(1 for r in part if grounded_from_dump(r))
     return out
+
+
+# ---------------------------------------------------------------- 랩 대조 (RAG-071 · D6)
+# **총계로는 카드의 성패를 말할 수 없다.** 세 번 실증됐다:
+#
+#   lap30 (#287)  총계가 `cited +6` 인데 어휘가 붙는 문항은 `Q3`·`B1` 둘뿐이었다 —
+#                 카드의 몫은 +2 고 나머지 넷은 잡음이다. **그 랩의 잡음이 ±4** (RAG-070 ④)
+#   lap28 (#285)  `grounded +1` 도 잡음 안. 그 카드가 고친 것은 약관 절 이름인데
+#                 보험 문항의 `must` 는 KB·농협을 안 가리킨다 (RAG-068 ④ · RAG-069 ③)
+#   21랩 내내     채점기가 `[1, 2]` 를 놓쳐 `grounded` 가 눌려 있었다 (RAG-069)
+#
+# 그래서 **임계값으로 경고하지 않는다.** 랩 잡음이 ±2~3 인데 순위 카드의 기대 효과가
+# 1~2문항이라, 임계값을 잡음 위에 두면 아무것도 안 잡히고 아래에 두면 매번 운다.
+# 여기가 내는 것은 **어느 문항이 뒤집혔는가** 하나이고, 총계는 그 옆에 참고로만 둔다.
+#
+# **judge 는 하지 않는다** (roadmap §5 — *"D6 축소판까지만"*). 이 아래는 저장된 랩 파일과
+# 골든셋만 읽는다 — Gemini 도 DB 도 안 부른다.
+
+def marks(rows: list[dict[str, Any]],
+          ckinds: dict[str, str] | None = None) -> dict[str, tuple[bool, bool]]:
+    """랩 하나 → `{문항 id: (cited, grounded)}`. 경계 문항은 뺀다 (`score_rows` 와 같은 자).
+
+    `cited` 는 저장된 칸을 그대로 읽고 `grounded` 는 `grounded_from_dump` 로 **다시 채점한다** —
+    `D12`(RAG-069)가 채점기를 고친 뒤로 옛 랩의 저장값과 현재 채점이 다르기 때문이다.
+    두 랩을 같은 자로 재야 대조가 성립한다.
+    """
+    out = {}
+    for row in rows:
+        qid = str(row.get("id", ""))
+        if not qid or (ckinds is not None and ckinds.get(qid) == NO_MUST):
+            continue
+        out[qid] = (bool(row.get("cited")), grounded_from_dump(row))
+    return out
+
+
+def flips(base_rows: list[dict[str, Any]], head_rows: list[dict[str, Any]],
+          ckinds: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """두 랩 → 뒤집힌 문항만. `{id, kind, cited, grounded}` 이고 값은 `(before, after)` 다.
+
+    **양쪽에 다 있는 문항만 본다.** 골든셋이 늘어난 랩(28 → 33)에서 새 문항을 "좋아졌다"로
+    세면 카드의 몫이 부풀고, 지워진 문항을 "나빠졌다"로 세면 반대로 준다. 새로 들어온
+    문항은 `added` 로 따로 세어 호출하는 쪽이 문장으로 적게 한다.
+    """
+    before, after = marks(base_rows, ckinds), marks(head_rows, ckinds)
+    out = []
+    for qid in sorted(before.keys() & after.keys()):
+        if before[qid] == after[qid]:
+            continue
+        out.append({
+            "id": qid,
+            "kind": (ckinds or {}).get(qid, ""),
+            "cited": (before[qid][0], after[qid][0]),
+            "grounded": (before[qid][1], after[qid][1]),
+        })
+    return out
+
+
+def flip_frequency(laps: list[tuple[str, list[dict[str, Any]]]],
+                   ckinds: dict[str, str] | None = None) -> dict[str, int]:
+    """**잡음 띠.** 문항 id → 주어진 랩들에서 이웃 랩 사이에 몇 번 뒤집혔나.
+
+    이것이 없으면 뒤집힘 목록을 읽을 수 없다. `S3` 는 13랩 연속 실패하다 `A2`(#262)가 열었고
+    (뒤집힘 1회 = 진짜 변화), `T2`·`T3`·`I1`·`I2` 는 **지역 신호가 안 뜨는 문항이라 SQL 이
+    동일한데도** 랩마다 흔들린다 (RAG-059 ③ — Gemini 비결정성). 표에서 그 둘이 같은 모양으로
+    보이면 안 된다.
+
+    **랩 순서는 `lap` 번호순으로 세운다** — 파일명 순으로 세면 `lap9-age` 다음이 `lap10` 이라
+    이웃이 아닌 두 랩을 비교하게 된다 (`D9` 와 같은 뿌리다).
+    """
+    ordered = sorted(laps, key=lambda lap: _lap_number(lap[0]))
+    counts: dict[str, int] = {}
+    for (_, older), (_, newer) in itertools.pairwise(ordered):
+        for flip in flips(older, newer, ckinds):
+            counts[flip["id"]] = counts.get(flip["id"], 0) + 1
+    return counts
+
+
+def _lap_number(stem: str) -> tuple[int, str]:
+    """`lap10` 이 `lap2` 뒤에 오게. `__main__._lap_key` 와 같은 규칙이고, 여기 것은
+    이 모듈이 CLI 없이도 돌아야 해서 따로 둔다 (`score_rows` 의 "랩 파일만 있으면 돈다")."""
+    head = stem.split("-", 1)[0]
+    return (int(head[3:]), stem) if head[3:].isdigit() else (0, stem)
 
 
 # ---------------------------------------------------------------- 기대 채점 (RAG-055)

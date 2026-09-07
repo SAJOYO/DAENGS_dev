@@ -10,6 +10,15 @@ SQL 을 고쳤으면 여기도 손으로 맞춰야 합니다.
 관계 문자열 참조와 `Base.metadata` 가 온전해집니다.
 """
 
+from daengs_backend.models.activity import (
+    ActivityAccount,
+    ActivityBonusKey,
+    ActivityGameReceipt,
+    ActivityHoldingPeriod,
+    ActivitySeason,
+    ActivitySessionLink,
+    ActivityWalkHead,
+)
 from daengs_backend.models.admin_audit_log import (
     AUDIT_ACCOUNT_CREATED,
     AUDIT_ACCOUNT_PASSWORD_CHANGED,
@@ -53,6 +62,11 @@ from daengs_backend.models.pet import (
     Pet,
 )
 from daengs_backend.models.refresh_token import RefreshToken
+from daengs_backend.models.request_metrics import (
+    PRINCIPAL_KINDS,
+    ROUTER_KINDS,
+    RequestMetric,
+)
 from daengs_backend.models.screening_record import (
     SCREENING_STATUSES,
     ScreeningRecord,
@@ -62,6 +76,13 @@ from daengs_backend.models.territory import (
     TERRITORY_EVIDENCE_VERSION,
     TerritoryAttempt,
     VerifiedVisit,
+)
+from daengs_backend.models.territory_claim import (
+    TerritoryClaim,
+    TerritoryClaimPhoto,
+    TerritoryClaimSession,
+    TerritoryClaimSite,
+    TerritoryOccupancy,
 )
 from daengs_backend.models.walk import (
     WALK_ANALYSIS_STATES,
@@ -76,9 +97,9 @@ from daengs_backend.models.walk import (
 __all__ = [
     "ADMIN_ROLES",
     "ADMIN_STATUSES",
+    "ANSWER_REPORT_STATUSES",
     "APP_USER_STATUSES",
     "AUDIT_ACCOUNT_CREATED",
-    "ANSWER_REPORT_STATUSES",
     "AUDIT_ACCOUNT_PASSWORD_CHANGED",
     "AUDIT_ACCOUNT_REACTIVATED",
     "AUDIT_ACCOUNT_ROLE_CHANGED",
@@ -96,19 +117,28 @@ __all__ = [
     "AUDIT_TARGET_TYPES",
     "CHAT_PROCESSING_STATUSES",
     "CHAT_SUMMARY_STATUSES",
-    "REASON_MAX_CHARS",
     "CRAWL_STATUSES",
     "CRAWL_TRIGGERS",
     "GAIT_STATUSES",
     "PET_BIRTH_DATE_KINDS",
     "PET_SEXES",
+    "PRINCIPAL_KINDS",
+    "REASON_MAX_CHARS",
+    "ROUTER_KINDS",
     "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
     "WALK_ANALYSIS_STATES",
-    "AnswerReport",
+    "ActivityAccount",
+    "ActivityBonusKey",
+    "ActivityGameReceipt",
+    "ActivityHoldingPeriod",
+    "ActivitySeason",
+    "ActivitySessionLink",
+    "ActivityWalkHead",
     "AdminAuditLog",
     "AdminUser",
+    "AnswerReport",
     "AppUser",
     "Base",
     "ChatSession",
@@ -119,8 +149,14 @@ __all__ = [
     "GaitRecord",
     "Pet",
     "RefreshToken",
+    "RequestMetric",
     "ScreeningRecord",
     "TerritoryAttempt",
+    "TerritoryClaim",
+    "TerritoryClaimPhoto",
+    "TerritoryClaimSession",
+    "TerritoryClaimSite",
+    "TerritoryOccupancy",
     "VerifiedVisit",
     "Walk",
     "WalkAnalysis",

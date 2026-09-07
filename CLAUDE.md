@@ -112,7 +112,10 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   고칠 때는 `uv sync --group ml` 로 부르세요.
   상시 비용은 **RAM 약 2.4GB** 이고, 그것이 서버 여유를 위협하면 그때 별도 프로세스로 뗍니다
   (D-021 의 재개 조건 ⓐ~ⓓ). **개발 PC 는 `uv sync` 만 해도 backend 가 뜹니다** — `ml` 이
-  없으면 `/life/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
+  없으면 `/life/ask` 가 503 이고, **훈련 능력도 검색 단계에서 실패합니다**
+  (`daengs_training/retrieval/pgvector.py` 가 sentence-transformers 를 씁니다). 라우팅·
+  트레이스까지 보려면 `uv sync --group ml`. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수
+  있습니다.
 - **서빙 임베딩 모델과 코퍼스가 어긋나면 조용히 틀립니다.** 문서 벡터와 질의 벡터가 다른
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
@@ -190,6 +193,12 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `db_user` / `db_password` / `db_name` 을 `config.py` 가 `URL.create` 로 조립합니다.
   이어 붙이지 않는 이유는 비밀번호의 특수문자 때문입니다 (D-013).
   옛 `DAENGS_DATABASE_URL` 이 `.env` 에 남아 있으면 backend 가 뜨지 않고 알려 줍니다.
+  **서버의 `backend/.env` 를 고쳤으면 `docker compose restart` 로는 반영되지 않습니다** —
+  `env_file` 은 컨테이너를 만들 때 굳습니다. `docker compose up -d backend` 로 다시 만들되,
+  그 전에 **셸에 `GEMINI_API_KEY` 를 올려야 합니다**: compose 의 `environment:` 가 `env_file` 보다
+  우선하고 `${GEMINI_API_KEY:-}` 는 셸/최상단 `.env` 에서만 오므로, 빈 셸에서 `up -d` 를 치면 빈 키가
+  박혀 의미 라우터가 죽습니다 (2026-09-07 실측). 자동 배포는 `deploy.yml` 이 그 변수를 올려 줍니다.
+  절차는 루트 `README.md` "backend" 절.
 - **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
   `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
   `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,

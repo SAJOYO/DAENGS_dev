@@ -33,7 +33,13 @@ MODEL_ID = "gemini-3.5-flash-lite"
 # legitimate selection as an invented capability and fail the whole run for the wrong
 # reason. A *wrong* Place selection is still counted — as an executable-precision
 # miss, which is the metric that actually means "routed somewhere it should not".
-ALLOWED_EXECUTE = frozenset({"training", "life", "walk", "place"})
+# `general` is the planner's fallback capability (#279). Not a router destination —
+# `ExecuteName` still has four values — but it IS a real `CapabilityName` that a RoutePlan
+# may legitimately carry, so it belongs in this set for the same reason `place` does:
+# a plan containing it must score as a precision miss against the frozen gold, never as
+# an invented capability that fails the whole run on a zero-tolerance gate. The frozen
+# runners assemble plans with the fallback off, so on those runs it never appears.
+ALLOWED_EXECUTE = frozenset({"training", "life", "walk", "place", "general"})
 FORBIDDEN_EXECUTE = frozenset({"skin", "gait"})
 ALLOWED_HANDOFFS = frozenset({"skin", "gait"})
 _MAXIMUM_GATES = frozenset({"forbidden_execute_count", "invented_unsupported_capability_count"})

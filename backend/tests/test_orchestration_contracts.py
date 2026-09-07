@@ -15,6 +15,7 @@ from daengs_backend.orchestration.contracts import (
     PlacePayload,
     RoutePlan,
     RouterKind,
+    ScreeningContext,
     TrainingPayload,
 )
 from daengs_backend.orchestration.semantic import ExecuteName
@@ -92,6 +93,37 @@ def test_place_payload_contains_original_query_and_location_but_no_identity() ->
         )
 
 
+def test_screening_context_carries_no_lesion_identity_and_no_control_copy() -> None:
+    """#307 — 좁힘이 계약에 박혀 있다.
+
+    D-023 의 방어는 "병변 이름을 말하는 코드 경로가 없다" 이지 "말하지 말자는 합의" 가
+    아니다. 그 성질은 필드가 하나 늘면 조용히 사라지므로(예외도 실패도 안 난다) 계약이
+    직접 거절해야 한다. 통제 문구도 같다 — 사용자에게 무수정으로 갈 것이지 payload 나
+    프롬프트를 지날 것이 아니다 (PR #79).
+    """
+    assert set(ScreeningContext.model_fields) == {"verdict", "days_ago"}
+    for 금지 in ("distribution", "group", "top1", "headline", "body", "action",
+               "disclaimer", "stage1", "stage2", "photo_url"):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            ScreeningContext.model_validate(
+                {"verdict": "abnormal", "days_ago": 1, 금지: "x"}
+            )
+
+
+def test_screening_verdict_stays_the_three_the_capability_owns() -> None:
+    """상류가 내는 세 값뿐이다. 모르는 판정을 아는 척 통과시키지 않는다."""
+    for verdict in ("normal", "abnormal", "retake"):
+        assert ScreeningContext(verdict=verdict, days_ago=0).verdict == verdict
+    with pytest.raises(ValidationError):
+        ScreeningContext(verdict="inconclusive", days_ago=0)
+
+
+def test_skin_is_still_not_an_executable_capability() -> None:
+    """기록을 읽는 것은 실행이 아니다 — 인가 매트릭스의 `Skin EXECUTE = NO` 는 그대로다
+    (docs/orchestration/routing.md §5). #307 이 넓힌 것은 컨텍스트이지 능력이 아니다."""
+    assert "skin" not in {capability.value for capability in CapabilityName}
+
+
 # ---------------------------------------------- 능력 이름의 사본 (#269)
 
 
@@ -105,5 +137,6 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     사고의 본질이라, 셋을 한자리에서 묶는다.
     """
     names = {capability.value for capability in CapabilityName}
+    # `general` (D-057) 은 v9 부터 라우터 목적지이기도 하다 — 세 사본이 다시 완전히 같다.
     assert names == set(get_args(ExecuteName)), "라우터가 고를 수 있는 목적지가 어긋났다"
     assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

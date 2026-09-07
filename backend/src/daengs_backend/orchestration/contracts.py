@@ -17,6 +17,11 @@ class CapabilityName(StrEnum):
     LIFE = "life"
     WALK = "walk"
     PLACE = "place"
+    #: The general-answer fallback (#279). An executable capability with an adapter, but
+    #: NOT a router destination: `semantic.ExecuteName` deliberately omits it. The planner
+    #: assembles it by a deterministic rule when the router selected nothing, so the model
+    #: can never trade an evidence-backed capability for an ungrounded answer.
+    GENERAL = "general"
 
 
 class CapabilityStatus(StrEnum):
@@ -75,6 +80,34 @@ class DogContext(ContractModel):
     age_months: int | None = Field(default=None, ge=0, le=360)
 
 
+class ScreeningContext(ContractModel):
+    """A recorded skin screening this question follows on from: what it concluded, and how long ago.
+
+    Deliberately two fields, and the exclusions are the point (#307).
+
+    **No lesion identity.** ``stage2.distribution`` and ``stage2.group`` name what the model
+    thought it saw, and the two-stage model's lesion name is wrong 56.6% of the time on
+    holdout — which is why the screening contract has no ``top1`` field at all (D-023). What
+    keeps that defence standing today is that no code path speaks the name; a field here
+    would demote it to a prompt instruction. It also buys nothing downstream: the ordinances
+    and subsidy programmes in the Life corpus do not enumerate 구진·플라크.
+
+    **No control copy.** ``headline``/``body``/``action``/``disclaimer`` must reach the user
+    unmodified (D-023, PR #79). They belong on the screen the app already drew, not in a
+    prompt where a model could paraphrase them.
+
+    **No probability.** ``stage1`` is uncalibrated (``calibrated=false``), so "62%" orders
+    correctly but is not a frequency. Rather than instruct a model not to read it as one,
+    the value simply is not here. Revisit when calibration lands.
+
+    ``days_ago`` rather than a timestamp: the caller resolves the clock, and a date is
+    personal detail that no answer needs.
+    """
+
+    verdict: Literal["normal", "abnormal", "retake"]
+    days_ago: int = Field(ge=0, le=3_650)
+
+
 class LifePayload(ContractModel):
     question: str = Field(min_length=1, max_length=500)
     dog: DogContext | None = None
@@ -102,12 +135,25 @@ class PlacePayload(ContractModel):
         return value
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload
+class GeneralPayload(ContractModel):
+    """The fallback's input: the same trusted facts Life gets, nothing more (#279).
+
+    The question is the user's exact words and ``dog`` comes only from the resolved
+    profile (``planner._dog_context``). No coordinates — the fallback must not answer
+    "where" or "is now a good time"; those are Place and Walk, and they were not selected.
+    """
+
+    question: str = Field(min_length=1, max_length=1_000)
+    dog: DogContext | None = None
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
     CapabilityName.PLACE: PlacePayload,
+    CapabilityName.GENERAL: GeneralPayload,
 }
 
 
@@ -268,6 +314,7 @@ __all__ = [
     "CapabilityStatus",
     "ClarifyRequest",
     "ErrorDetail",
+    "GeneralPayload",
     "Handoff",
     "LifePayload",
     "OrchestratorState",
@@ -278,6 +325,7 @@ __all__ = [
     "RoutePlan",
     "RouteTrace",
     "RouterKind",
+    "ScreeningContext",
     "TrainingPayload",
     "WalkPayload",
 ]

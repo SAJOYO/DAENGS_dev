@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "default_theme": "pink",
+  "speed_max_mps": 2.0,
+  "boundaries_mps": [
+    0.4,
+    0.8,
+    1.2,
+    1.6
+  ],
+  "blend_half_width_mps": 0.05,
+  "unknown_color": "#8a8a8a",
+  "themes": [
+    {
+      "id": "pink",
+      "label": "핑크",
+      "colors": [
+        "#181818",
+        "#4f2438",
+        "#863059",
+        "#bd3c79",
+        "#f44899"
+      ]
+    },
+    {
+      "id": "red",
+      "label": "빨강",
+      "colors": [
+        "#181818",
+        "#4a1b1b",
+        "#7c1e1e",
+        "#ae2121",
+        "#e02424"
+      ]
+    },
+    {
+      "id": "blue",
+      "label": "파랑",
+      "colors": [
+        "#181818",
+        "#1e334f",
+        "#244e86",
+        "#2a69bd",
+        "#3084f4"
+      ]
+    },
+    {
+      "id": "purple",
+      "label": "보라",
+      "colors": [
+        "#181818",
+        "#3a294d",
+        "#5d3a82",
+        "#7f4bb6",
+        "#a15ceb"
+      ]
+    }
+  ]
+}

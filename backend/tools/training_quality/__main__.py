@@ -130,10 +130,19 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
         "",
         "## 각 문항에서 물을 것 하나",
         "",
-        "> **judge 가 «자료에 없다»고 한 그 문장이, 아래 [자료]에 정말 없습니까?**",
+        "> **judge 가 뒷받침 안 된다고 한 그 문장이, 아래 [자료]로 정말 뒷받침이 안 됩니까?**",
         "",
         ("그것만 보시면 됩니다. 답변이 좋은지 나쁜지는 이 축이 묻는 것이 아닙니다. "
          "`Ctrl+F` 로 낱말을 찾아보는 것이 가장 빠릅니다."),
+        "",
+        ("⚠ **«없다»와 «뒷받침이 안 된다»는 다릅니다.** judge 가 «자료에는 있지만 다른 맥락의 "
+         "것이라 이 질문에 옮겨 쓸 수 없다»고 하는 경우가 있습니다. 그때는 낱말을 찾으면 "
+         "**나옵니다** — 그래도 판정은 false 입니다. 아래 근거를 꼭 읽으세요."),
+        "",
+        ("⚠ 그리고 그 경우 **judge 가 축을 넘은 것일 수 있습니다.** 이 축은 *"
+         "«자료에 있는가»* 만 묻고, *«이 질문에 맞는 답인가»* 는 다른 자가 잽니다"
+         "(#305 의 `answers_question`). 자료에 있는데 «맥락이 다르다»는 이유로 false 라면 "
+         "그것은 이 축의 판정이 아닙니다 — 그렇게 보이면 적어 주세요."),
         "",
         "판정이 셋 중 하나로 갈립니다:",
         "",
@@ -156,7 +165,7 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
             "",
             f"**질문** {pick['question']}",
             "",
-            "### judge 가 «자료에 없다»고 한 것",
+            "### judge 가 뒷받침 안 된다고 한 것 — 근거를 꼭 같이 읽으세요",
             "",
         ]
         out += [f"- {claim}" for claim in pick["unsupported"]] or ["- (없음)"]
@@ -235,6 +244,58 @@ def _judge_model(label: str) -> str:
     return str(json.loads(lines[0]).get("judge_model", "?")) if lines else "?"
 
 
+def cmd_blindspots(args: argparse.Namespace) -> int:
+    """두 판정자가 **공통으로 확인 목록에 안 올린** 문장을 찾는다.
+
+    `t03`↔`t19` 를 드러낸 것이 이 대조다 (`judge_lap1_0907.md`). 일치율은 판정자 둘이 같은
+    결론을 냈는지만 말하고 **둘 다 안 본 자리**는 말하지 않는다 — 오탐이 숨는다면 거기다.
+    Codex 교차검증에서 일치율(15/15)은 아무것도 못 냈고, 값은 이 대조에서 나왔다.
+
+    ⚠ **글자 겹침으로 짐작한 값이라 단서이지 증거가 아니다.** 겹침이 낮아도 판정자가 같은
+    내용을 다른 말로 적었을 수 있다. 이 표는 *"어디부터 볼까"* 만 정한다.
+    """
+    import re
+
+    def bigrams(text: str) -> set[str]:
+        flat = re.sub(r"[^가-힣0-9a-zA-Z]", "", text)
+        return {flat[i : i + 2] for i in range(len(flat) - 1)}
+
+    def covered(sentence: str, claims: list[str]) -> float:
+        base = bigrams(sentence)
+        if not base:
+            return 1.0
+        return max((len(base & bigrams(c)) / len(base) for c in claims), default=0.0)
+
+    def sentences(text: str) -> list[str]:
+        parts = re.split(r"(?<=[.!?])\s+|\n+", text)
+        return [p.strip() for p in parts if len(re.sub(r"[^가-힣]", "", p)) >= 6]
+
+    _, rows = collect_mod.load_dump(args.dump or collect_mod.dump_path(args.label))
+    answers = {row["id"]: row.get("answer", "") for row in rows}
+    left = {j.id: j for j in _load_judgments(_judgments_path(args.label))}
+    right = {j.id: j for j in _load_judgments(_judgments_path(args.against))}
+
+    total = 0
+    for qid in sorted(left.keys() & right.keys()):
+        shared = [
+            s
+            for s in sentences(answers.get(qid, ""))
+            if covered(s, left[qid].supported) < 0.34
+            and covered(s, right[qid].supported) < 0.34
+        ]
+        if not shared:
+            continue
+        print(f"\n── {qid}")
+        for sentence in shared:
+            print(f"   {sentence}")
+        total += len(shared)
+
+    print(f"\n둘 다 확인 목록에 안 올린 문장 {total}개.")
+    print("   연결어·머리말이 대부분입니다 — 그건 채점 대상이 아니라 정상입니다.")
+    print("   **내용이 있는 문장**이 여기 있으면 그것을 보세요. t03↔t19 가 그렇게 나왔습니다.")
+    return 0
+
+
 def cmd_agreement(args: argparse.Namespace) -> int:
     reference = _load_judgments(_judgments_path(args.against))
     candidate = _load_judgments(_judgments_path(args.label))
@@ -283,12 +344,18 @@ def main(argv: list[str] | None = None) -> int:
     p_review.add_argument("--out", type=Path, default=None,
                           help="기본은 evals/training_quality/review_<label>.md")
 
+    p_blind = sub.add_parser("blindspots", help="두 판정자가 공통으로 안 훑은 문장")
+    p_blind.add_argument("--label", required=True)
+    p_blind.add_argument("--against", required=True)
+    p_blind.add_argument("--dump", type=Path, default=None)
+
     p_agree = sub.add_parser("agreement", help="두 판정 파일의 일치율")
     p_agree.add_argument("--label", required=True)
     p_agree.add_argument("--against", required=True, help="교차검증 상대 (보통 <label>__codex)")
 
     args = parser.parse_args(argv)
     handlers: dict[str, Any] = {
+        "blindspots": cmd_blindspots,
         "check-anchors": cmd_check_anchors,
         "score": cmd_score,
         "review": cmd_review,

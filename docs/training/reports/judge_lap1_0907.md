@@ -89,7 +89,13 @@ v2 에서 남은 6건 중 넷(`t01` `t09` `t10` `t15`)은 자료에 없는 **구
     # 라벨을 judgments_lap1__human.jsonl 에 같은 모양으로 (judge_model: human · prompt_version: 0)
     uv run python -m tools.training_quality agreement --label lap1 --against lap1__human
 
-24문항으로는 라벨 30개가 안 나온다. 질문을 늘리거나(v2 세트) 랩을 더 도는 것이 다음 카드다.
+⚠ **2026-09-07 갱신 — 사람 라벨은 진행하지 않기로 했다.** 위 절차의 두 번째 줄이 사라진다.
+그러면 judge 는 **수를 믿는 도구가 아니라 사람이 볼 자리를 고르는 도구**로만 남는다 (D-060 ⑦).
+`review` 가 이미 그것이므로 추가 작업은 없다.
+
+교차검증과 질문 세트 확장은 `docs/training/judge_codex_handoff.md` 에 프롬프트를 두었다.
+**그것으로 얻는 것은 판정자 간 일치율이지 캘리브레이션이 아니다** — 특히 검증자가 GPT 계열이면
+judge 와 같은 계열이라 일치율이 부풀려진다.
 
 ## 재현
 

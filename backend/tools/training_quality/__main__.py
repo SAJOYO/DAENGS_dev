@@ -3,11 +3,15 @@
     uv run python -m tools.training_quality check-anchors
     uv run python -m tools.training_quality score --label lap1
     uv run python -m tools.training_quality review --label lap1
-    uv run python -m tools.training_quality agreement --label lap1 --against lap1__human
+    uv run python -m tools.training_quality agreement --label lap1__codex --against lap1
 
-**`score` 는 `check-anchors` 가 통과한 기록이 없으면 안 돈다.** 사람 라벨 30개가 모이기 전까지
-judge 를 믿을 근거가 앵커뿐이라, 그 게이트를 코드로 든다 (#277 의 앵커 게이트와 같은 자리).
-앵커 기록은 **judge 모델 · 프롬프트 버전별로** 남는다 — 둘 중 하나가 바뀌면 다시 통과해야 한다.
+**`score` 는 `check-anchors` 가 통과한 기록이 없으면 안 돈다.** judge 를 믿을 근거가 앵커뿐이라
+그 게이트를 코드로 든다 (#277 의 앵커 게이트와 같은 자리). 앵커 기록은 **judge 모델 · 프롬프트
+버전별로** 남는다 — 둘 중 하나가 바뀌면 다시 통과해야 한다.
+
+⚠ **사람 라벨은 진행하지 않는다** (D-060 ⑦, 2026-09-07). `RAG-007` 이 요구한 30개가 생기지
+않으므로 **`score` 의 수는 지표가 아니고 앞으로도 아니다.** 이 도구의 쓰임은 `review` 다 —
+사람이 볼 자리를 고르는 것. 교차검증 프롬프트는 `docs/training/judge_codex_handoff.md` 에 있다.
 """
 from __future__ import annotations
 
@@ -104,7 +108,8 @@ def cmd_score(args: argparse.Namespace) -> int:
           f"(ANSWER 가 아니거나 청크가 없는 행은 뺍니다 — D-060 ⑤)")
     print(f"  grounded {summary['grounded']} · 아님 {summary['not_grounded']}")
     print(f"  사람이 봐야 할 문항 {summary['review_needed']}건  → `review --label {args.label}`")
-    print("\n⚠ 이 수는 아직 지표가 아닙니다 — 사람 라벨 30개와의 일치율이 먼저입니다 (RAG-007).")
+    print("\n⚠ 이 수는 지표가 아닙니다. 사람 라벨을 진행하지 않기로 해(D-060 ⑦) 승격 경로가")
+    print("   닫혔습니다 — 이 비율을 어디에도 올리지 마세요.")
     return 0
 
 
@@ -121,8 +126,10 @@ def cmd_review(args: argparse.Namespace) -> int:
         print(f"   질문: {pick['question']}")
         print(f"   judge: grounded={pick['grounded']}  unsupported={pick['unsupported']}")
         print(f"   근거: {pick['rationale']}")
-    print(f"\n{len(picks)}건. 사람 라벨은 판정 파일과 **같은 모양**으로 적으세요 "
-          f"(judge_model: human · prompt_version: 0) — `judgments_{args.label}__human.jsonl`.")
+    print(f"\n{len(picks)}건 — **이것이 이 도구의 산출물입니다.** 사람이 여기부터 보면 됩니다.")
+    print("   교차검증을 붙이려면 docs/training/judge_codex_handoff.md 의 프롬프트 ① 을 쓰세요.")
+    print("   ⚠ 판정 파일의 judge_model 에는 **실제 모델명**을 적으세요. 'human' 으로 쓰면")
+    print("      나중에 사람 라벨과 구분되지 않습니다 (D-060 ⑦).")
     return 0
 
 
@@ -143,9 +150,10 @@ def cmd_agreement(args: argparse.Namespace) -> int:
         print(f"\n── {row['id']}  기준={row['reference']} 후보={row['candidate']}")
         print(f"   기준 근거: {row['reference_why']}")
         print(f"   후보가 짚은 것: {row['candidate_unsupported']}")
-    if result["n"] < 30:
-        print(f"\n⚠ 라벨이 {result['n']}개입니다. RAG-007 은 30개를 요구합니다 — "
-              "아직 지표로 승격하지 않습니다.")
+    print("\n⚠ 이것은 **판정자 간 일치율**이지 캘리브레이션이 아닙니다 (D-060 ⑦).")
+    print("   LLM 둘이 일치하는 것은 둘이 같은 맹점을 공유하는 것일 수도 있습니다.")
+    print("   특히 검증자가 GPT 계열이면 judge 와 같은 계열이라, D-060 ① 이 일부러 갈라 둔")
+    print("   self-preference 분리가 무너져 이 수가 부풀려집니다. 지표로 승격하지 마세요.")
     return 0
 
 
@@ -167,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_agree = sub.add_parser("agreement", help="두 판정 파일의 일치율")
     p_agree.add_argument("--label", required=True)
-    p_agree.add_argument("--against", required=True, help="보통 <label>__human")
+    p_agree.add_argument("--against", required=True, help="교차검증 상대 (보통 <label>__codex)")
 
     args = parser.parse_args(argv)
     handlers: dict[str, Any] = {

@@ -150,13 +150,13 @@ def _judgment(qid: str, grounded: bool) -> judge_mod.Judgment:
 
 
 def test_일치율의_분모는_양쪽에_다_있는_문항이다() -> None:
-    """안 본 문항을 일치로 세면 라벨을 안 단 만큼 점수가 올라간다 — 정직한 분모."""
-    human = [_judgment("a", True), _judgment("b", False)]
-    robot = [_judgment("a", True), _judgment("b", False), _judgment("c", True)]
+    """한쪽만 본 문항을 일치로 세면 라벨을 안 단 만큼 점수가 올라간다 — 정직한 분모."""
+    reference = [_judgment("a", True), _judgment("b", False)]
+    candidate = [_judgment("a", True), _judgment("b", False), _judgment("c", True)]
 
-    result = judge_mod.agreement(human, robot)
+    result = judge_mod.agreement(reference, candidate)
 
-    assert result["n"] == 2       # c 는 사람이 안 봤으므로 분모에서 빠진다
+    assert result["n"] == 2       # c 는 기준 쪽에 없으므로 분모에서 빠진다
     assert result["agreed"] == 2
 
 

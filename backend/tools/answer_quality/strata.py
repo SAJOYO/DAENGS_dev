@@ -21,6 +21,10 @@ SEOUL_LOCATION: dict[str, float] = {"lat": 37.5665, "lon": 126.9780}
 #: 폴백이 받을 주제는 이 카드의 측정 대상이라 문체당 한 건 더 만든다 (예산: 총 150건 안팎).
 _QUESTIONS_PER_STYLE_SPECIALIZED = 2
 _QUESTIONS_PER_STYLE_FALLBACK = 3
+#: `screening` 세트만 문체당 넷이다 (#318). #314 실측에서 14문항 중 **인용이 나온 것이 9건**
+#: 이었다 — 나머지는 REFUSED · ABSTAINED · FAILED 라 인용 집합을 비교할 대상이 아니다.
+#: 조합을 늘리기 전에 표본을 늘려야 같은 결론을 조합마다 반복하지 않는다.
+_QUESTIONS_PER_STYLE_SCREENING = 4
 
 
 #: 질문 세트. **`questions_v1.jsonl` 은 동결돼 있고 그 sha256 이 #277 의 답변 메타에 박혀 있습니다** —
@@ -39,6 +43,9 @@ class Topic:
 
     @property
     def questions_per_style(self) -> int:
+        # 세트를 먼저 본다 — `screening` 은 전문 능력 주제지만 표본이 따로 필요하다 (#318).
+        if self.question_set == "screening":
+            return _QUESTIONS_PER_STYLE_SCREENING
         if self.expected_route_kind == "fallback":
             return _QUESTIONS_PER_STYLE_FALLBACK
         return _QUESTIONS_PER_STYLE_SPECIALIZED

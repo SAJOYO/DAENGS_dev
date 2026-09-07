@@ -193,6 +193,21 @@ def test_펫보험_피부_주제가_있다() -> None:
     assert not topic.needs_location
 
 
+def test_screening_세트만_문체당_넷이다() -> None:
+    """#314 실측에서 14문항 중 인용이 나온 것이 9건이었습니다 — 나머지는 REFUSED · ABSTAINED ·
+    FAILED 라 인용 집합을 비교할 대상이 아닙니다. 조합을 늘리기 전에 표본을 늘려야 같은
+    결론을 조합마다 반복하지 않습니다 (#318).
+
+    **v1 세트는 안 건드립니다.** 그쪽 목표 합계가 바뀌면 `questions_v1.jsonl` 의 동결이
+    깨진 것처럼 보입니다.
+    """
+    from tools.answer_quality.strata import strata_for_set
+
+    assert all(s.questions_target == 4 for s in strata_for_set("screening"))
+    assert sum(s.questions_target for s in strata_for_set("screening")) == 28
+    assert 140 <= sum(s.questions_target for s in strata_for_set("v1")) <= 160
+
+
 def test_기존_계층은_그대로다() -> None:
     """주제를 더해도 이미 있던 계층의 id 와 컨텍스트가 바뀌면 안 됩니다 — `questions_v1.jsonl`
     이 통째로 무효가 됩니다.

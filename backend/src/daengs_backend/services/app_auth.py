@@ -12,6 +12,7 @@ HTTP 를 모릅니다. 여기서 나가는 것은 예외와 TokenPair 뿐이고,
 """
 
 import logging
+import secrets
 import uuid
 from datetime import UTC, datetime
 
@@ -27,7 +28,9 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.services import dogcard as card_service
 from daengs_backend.services import pet as pet_service
+from daengs_backend.services import screening as screening_service
 from daengs_backend.services import session as session_service
 from daengs_backend.services.session import (
     InvalidRefreshTokenError,
@@ -106,6 +109,91 @@ async def _sync_profile(user: AppUser, identity: KakaoIdentity) -> None:
     logger.info("이메일 갱신 (app_user=%s)", user.id)
 
 
+# -- 닉네임 ------------------------------------------------------------------
+#
+# **회원을 사람 말로 가리키는 유일한 값입니다.** 지금 카카오 앱키가 사업자 등록이 아니라
+# 프로젝트 팀 것이라 이메일·전화번호·이름 동의를 못 받고, 그래서 `app_users` 의 개인정보
+# 칸이 전부 NULL 입니다 — 콘솔에서 회원 한 줄이 "UUID · 숫자 · None · None · None" 입니다.
+
+#: `app_users.nickname` 의 길이 (03_auth.sql). 카카오 닉네임을 그대로 받을 수 있게
+#: `room_name`(20)보다 넉넉합니다.
+_NICKNAME_MAX = 30
+
+#: 카카오에서 닉네임을 못 받았을 때의 씨앗.
+_NICKNAME_FALLBACK = "댕댕이"
+
+#: 뒤에 붙이는 코드의 글자. **`0`·`O` 와 `1`·`I` 를 뺐습니다** — 사용자가 이 이름을 눈으로
+#: 옮겨 적고 소리 내어 알려 주는 자리가 있어서, 서로 안 갈리는 글자를 넣으면 안 됩니다.
+#: 숫자 8 + 대문자 24 = 32글자라 코드 한 자리가 정확히 5비트입니다.
+_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+#: 시도할 코드 길이. 짧은 것부터 넣고 막히면 늘립니다 — 4자리가 백만 가지라 실제로는
+#: 첫 번째에서 끝나고, 뒤쪽은 사람이 많아졌을 때를 위한 여유입니다.
+_CODE_WIDTHS = (4, 4, 5, 5, 6, 7)
+
+
+def _with_code(base: str, width: int) -> str:
+    """`base` 뒤에 코드를 붙입니다. 길이를 넘지 않게 **앞을 자릅니다.**
+
+    코드를 자르면 유일성이 깨지므로 자르는 쪽은 언제나 이름입니다.
+    """
+    code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(width))
+    return f"{base[: _NICKNAME_MAX - width]}{code}"
+
+
+async def _ensure_nickname(
+    session: AsyncSession, user: AppUser, identity: KakaoIdentity
+) -> None:
+    """닉네임이 비어 있으면 하나 지어 넣습니다. **있으면 손대지 않습니다.**
+
+    "비어 있으면"이 조건인 것이 중요합니다. 세 경우를 한 규칙으로 덮습니다 —
+    첫 가입, 탈퇴 뒤 재가입(파기 때 지웁니다), 그리고 **이 컬럼보다 먼저 가입한 회원**
+    입니다. 마지막 것 덕분에 마이그레이션이 기존 행을 채울 필요가 없습니다
+    (`db/migrations/2026-09-05_app_user_nickname.sql`).
+
+    **재로그인이 덮어쓰면 안 됩니다.** 사용자가 「마이」에서 고쳤을 수 있고, 그것을
+    카카오 닉네임으로 되돌리면 남이 그 이름을 못 쓰게 된 것도 모른 채 이름이 바뀝니다.
+
+    씨앗은 카카오 닉네임이고, 못 받았으면 `댕댕이` 입니다. 카카오 닉네임을 받았을 때만
+    **코드 없는 이름을 먼저 시도합니다** — `댕댕이` 는 모두에게 같아서 첫 사람 말고는
+    다 막히고, 그 한 번을 물어보는 것이 낭비입니다.
+
+    ⚠️ **`is_nickname_taken` 만으로는 부족합니다.** 물어보고 넣는 사이에 남이 채갈 수
+    있어서, 넣는 자리를 savepoint 로 감싸고 `IntegrityError` 면 다음 후보로 갑니다.
+    진짜 방어는 `lower(nickname)` UNIQUE 인덱스입니다.
+    """
+    if user.nickname:
+        return
+
+    seed = (identity.nickname or "").strip()[:_NICKNAME_MAX]
+    base = seed or _NICKNAME_FALLBACK
+
+    candidates = [seed] if seed else []
+    candidates += [_with_code(base, width) for width in _CODE_WIDTHS]
+
+    for candidate in candidates:
+        if await app_user_repo.is_nickname_taken(session, candidate):
+            continue
+        try:
+            async with session.begin_nested():
+                user.nickname = candidate
+                await session.flush()
+        except IntegrityError:
+            # 물어본 뒤에 남이 채갔습니다. savepoint 가 되돌렸으므로 바깥 트랜잭션
+            # (방금 만든 회원 행)은 그대로 살아 있습니다.
+            logger.info("닉네임 경합, 다음 후보로 (app_user=%s)", user.id)
+            continue
+        logger.info("닉네임 발급 (app_user=%s)", user.id)
+        return
+
+    # 여기까지 오는 것은 사실상 없습니다(7자리까지 다 막혔다는 뜻). 그래도 **로그인을
+    # 실패시키지는 않습니다** — 12자리면 60비트라 겹칠 일이 없습니다. 물어보지 않고
+    # 넣는 것도 그래서입니다. 16진수를 쓰지 않는 이유는 위 알파벳과 같습니다
+    # (0·1 이 다시 섞이면 사람이 못 옮겨 적습니다).
+    user.nickname = _with_code(_NICKNAME_FALLBACK, 12)
+    logger.warning("닉네임 후보가 다 막혀 무작위로 지었습니다 (app_user=%s)", user.id)
+
+
 async def login_with_kakao(
     session: AsyncSession,
     *,
@@ -155,6 +243,10 @@ async def login_with_kakao(
         await _sync_profile(user, identity)
     else:
         await _sync_profile(user, identity)
+
+    # **세 갈래 뒤에 한 번만 부릅니다.** 첫 가입·재가입·평소 로그인이 모두 지나는
+    # 자리라, 갈래마다 부르면 한 곳을 빠뜨렸을 때 그 사람만 닉네임이 없습니다.
+    await _ensure_nickname(session, user, identity)
 
     pair = await session_service.issue(
         session,
@@ -258,6 +350,17 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         # 조용히 남습니다. 같은 트랜잭션에서 명시로 지웁니다 (turn 은 CASCADE).
         await chat_repo.delete_all_for_user(session, user.id)
 
+        # 피부 변화 기록도 **같은 이유로 명시 삭제**입니다 — app_users 행을 남기므로
+        # FK CASCADE 가 영영 안 돕니다. 그리고 이건 행만 지워서는 부족합니다:
+        # 사진이 저장소에 있고 **저장소에는 FK 가 없어서** 아무도 안 치웁니다
+        # (점령지 사진이 지금 그 상태입니다 — D-052 의 남은 숙제).
+        deleted_screenings = await screening_service.cleanup_for_owner(session, user.id)
+
+        # 도감 카드도 **같은 이유로 명시 삭제**입니다 — app_users 행을 남기므로 FK
+        # CASCADE 가 영영 안 돕니다. 그리고 행만 지워서는 부족합니다: 얼굴 그림이
+        # 저장소에 있고 **저장소에는 FK 가 없어서** 아무도 안 치웁니다.
+        deleted_cards = await card_service.cleanup_for_owner(session, user.id)
+
         user.status = "withdrawn"
         # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
         user.email_enc = None
@@ -265,6 +368,10 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         user.phone_enc = None
         user.name_enc = None
         user.room_name = None
+        # 닉네임도 지웁니다. **개인정보라서가 아니라** room_name 과 같은 이유입니다 —
+        # 사용자가 스스로 지은 이름이고, 남겨 두면 떠난 사람이 그 이름을 영영 붙들고
+        # 있게 됩니다. 다시 로그인하면 위 _ensure_nickname 이 새로 지어 줍니다.
+        user.nickname = None
         user.primary_pet_id = None
 
         token_count = await session_service.drop_all(session, SubjectType.APP, user.id)
@@ -275,9 +382,12 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         await session.rollback()
         raise
     logger.info(
-        "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 끊은 세션 %d개)",
+        "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 피부 기록 %d건, "
+        "도감 카드 %d장, 끊은 세션 %d개)",
         user.id,
         deleted_pets,
         deleted_walks,
+        deleted_screenings,
+        deleted_cards,
         token_count,
     )

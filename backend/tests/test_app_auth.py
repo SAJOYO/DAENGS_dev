@@ -502,3 +502,320 @@ class TestSubjectSeparation:
         res = client.get("/_app_only", headers={"Authorization": f"Bearer {access}"})
 
         assert res.status_code == 200
+
+
+class TestNickname:
+    """`app_users.nickname` — **서버가 발급하고 회원이 고치는 사람 이름.**
+
+    이름표(`room_name`)와 규칙이 여러 군데 다릅니다. 저건 앱이 지어 화면에만 쓰고
+    비울 수 있지만, 이건 **서버가 지어 저장하고 비울 수 없으며 유일**합니다.
+    그 차이가 안 지켜지면 콘솔에서 회원을 못 가리킵니다 (이 칸을 만든 이유).
+    """
+
+    def test_가입하면_닉네임이_생긴다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """**입력을 안 받고 서버가 짓습니다.** 첫 화면이 사용자를 붙들면 안 됩니다."""
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname
+
+    def test_카카오_닉네임을_받으면_그것을_쓴다(
+        self, client: TestClient, store: Store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def verify(token, *, expected_nonce=None):
+            return KakaoIdentity(
+                kakao_id=KAKAO_ID, email=None, nonce=None, nickname="네옹"
+            )
+
+        monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
+
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname == "네옹"
+
+    def test_카카오_닉네임이_겹치면_뒤에_코드를_붙인다(
+        self, client: TestClient, store: Store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """**같은 이름으로 두 명이 생기면 안 됩니다.** 그게 이 칸의 전부입니다."""
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="네옹"))
+
+        async def verify(token, *, expected_nonce=None):
+            return KakaoIdentity(
+                kakao_id=KAKAO_ID, email=None, nonce=None, nickname="네옹"
+            )
+
+        monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
+
+        _login(client)
+
+        made = store.app_users[KAKAO_ID].nickname
+        assert made != "네옹"
+        assert made.startswith("네옹")
+
+    def test_대소문자만_다른_것도_겹친_것으로_본다(
+        self, client: TestClient, store: Store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Neo 와 neo 는 화면에서 같은 이름으로 읽힙니다 (lower() UNIQUE 인덱스)."""
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="Neo"))
+
+        async def verify(token, *, expected_nonce=None):
+            return KakaoIdentity(
+                kakao_id=KAKAO_ID, email=None, nonce=None, nickname="neo"
+            )
+
+        monkeypatch.setattr(app_auth_service, "verify_id_token", verify)
+
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname.lower() != "neo"
+
+    def test_카카오_닉네임이_없으면_댕댕이로_짓는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """기본 fixture 가 닉네임을 안 주는 상태입니다 — 지금 앱키의 실제 모습입니다."""
+        _login(client)
+
+        made = store.app_users[KAKAO_ID].nickname
+        assert made.startswith("댕댕이")
+        # 코드가 붙어야 두 번째 사람이 들어올 수 있습니다.
+        assert made != "댕댕이"
+
+    def test_다시_로그인해도_덮어쓰지_않는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """**사용자가 고쳤을 수 있습니다.** 되돌리면 남이 못 쓰게 된 것도 모르고 바뀝니다."""
+        _login(client)
+        store.app_users[KAKAO_ID].nickname = "내가고친이름"
+
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname == "내가고친이름"
+
+    def test_이_칸보다_먼저_가입한_회원은_다음_로그인에_받는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """마이그레이션이 기존 행을 안 채우는 근거입니다 — 여기서 저절로 채워집니다."""
+        store.add_app_user(FakeAppUser(kakao_id=KAKAO_ID, nickname=None))
+
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname
+
+    def test_me_가_닉네임을_준다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+
+        body = client.get(
+            "/auth/app/me", headers={"Authorization": f"Bearer {access}"}
+        ).json()
+
+        assert body["nickname"]
+
+    # -- 고치기 --------------------------------------------------------------
+
+    def test_닉네임을_고칠_수_있다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        saved = client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        assert saved.status_code == 200
+        assert saved.json()["nickname"] == "네옹"
+        assert client.get("/auth/app/me", headers=headers).json()["nickname"] == "네옹"
+
+    def test_남이_쓰는_이름이면_409(self, client: TestClient, store: Store) -> None:
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="네옹"))
+        access = _login(client).json()["access_token"]
+
+        res = client.patch(
+            "/auth/app/me",
+            json={"nickname": "네옹"},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.status_code == 409
+
+    def test_대소문자만_바꿔도_남의_이름이면_409(
+        self, client: TestClient, store: Store
+    ) -> None:
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="Neo"))
+        access = _login(client).json()["access_token"]
+
+        res = client.patch(
+            "/auth/app/me",
+            json={"nickname": "neo"},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.status_code == 409
+
+    def test_내가_쓰던_이름을_그대로_보내면_통과한다(self, client: TestClient) -> None:
+        """고치다 되돌린 경우입니다. 자기 이름에 남이 쓰고 있다고 하면 안 됩니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        again = client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        assert again.status_code == 200
+        assert again.json()["nickname"] == "네옹"
+
+    def test_대소문자만_바꾸는_것도_저장된다(self, client: TestClient) -> None:
+        """자기 이름이라 중복 검사에 걸리면 안 되고, **그렇다고 건너뛰어도 안 됩니다.**
+
+        건너뛰면 사용자가 고쳤는데 화면이 안 바뀝니다.
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"nickname": "neo"}, headers=headers)
+
+        res = client.patch("/auth/app/me", json={"nickname": "Neo"}, headers=headers)
+
+        assert res.status_code == 200
+        assert res.json()["nickname"] == "Neo"
+
+    def test_비울_수_없다(self, client: TestClient) -> None:
+        """이름표와 다릅니다. 비우면 그 회원을 가리킬 말이 없어집니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        blanked = client.patch(
+            "/auth/app/me", json={"nickname": "   "}, headers=headers
+        )
+        nulled = client.patch("/auth/app/me", json={"nickname": None}, headers=headers)
+
+        assert blanked.status_code == 422
+        assert nulled.status_code == 422
+
+    def test_닉네임은_30자까지다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+
+        res = client.patch(
+            "/auth/app/me",
+            json={"nickname": "가" * 31},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.status_code == 422
+
+    def test_닉네임만_보내면_이름표는_그대로다(self, client: TestClient) -> None:
+        """**칸이 둘이 되면서 생긴 함정입니다.**
+
+        예전에는 `row.room_name = body.room_name` 한 줄이라, 안 보낸 칸도 None 으로
+        덮였습니다. 닉네임만 고치려는 요청이 이름표를 같이 지웁니다.
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"room_name": "네옹이네"}, headers=headers)
+
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        body = client.get("/auth/app/me", headers=headers).json()
+        assert body["room_name"] == "네옹이네"
+        assert body["nickname"] == "네옹"
+
+    def test_이름표만_보내면_닉네임은_그대로다(self, client: TestClient) -> None:
+        """반대 방향도 같습니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        client.patch("/auth/app/me", json={"room_name": "네옹이네"}, headers=headers)
+
+        assert client.get("/auth/app/me", headers=headers).json()["nickname"] == "네옹"
+
+    # -- 미리 물어보기 --------------------------------------------------------
+
+    def test_아무도_안_쓰면_쓸_수_있다고_한다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+
+        res = client.get(
+            "/auth/app/nickname/available",
+            params={"value": "아무도안쓰는이름"},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.status_code == 200
+        assert res.json()["available"] is True
+
+    def test_남이_쓰면_못_쓴다고_한다(self, client: TestClient, store: Store) -> None:
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="네옹"))
+        access = _login(client).json()["access_token"]
+
+        res = client.get(
+            "/auth/app/nickname/available",
+            params={"value": "네옹"},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.json()["available"] is False
+
+    def test_대소문자만_달라도_못_쓴다고_한다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        store.add_app_user(FakeAppUser(kakao_id=111, nickname="Neo"))
+        access = _login(client).json()["access_token"]
+
+        res = client.get(
+            "/auth/app/nickname/available",
+            params={"value": "neo"},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+
+        assert res.json()["available"] is False
+
+    def test_내_이름은_쓸_수_있다고_한다(self, client: TestClient) -> None:
+        """고치다 되돌린 경우입니다. 위 PATCH 규칙과 같은 답이어야 합니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        res = client.get(
+            "/auth/app/nickname/available", params={"value": "네옹"}, headers=headers
+        )
+
+        assert res.json()["available"] is True
+
+    def test_로그인하지_않으면_못_물어본다(self, client: TestClient) -> None:
+        """열어 두면 후보를 넣어 보며 누가 있는지 훑는 창구가 됩니다."""
+        res = client.get(
+            "/auth/app/nickname/available", params={"value": "네옹"}
+        )
+
+        assert res.status_code == 401
+
+    def test_빈_값은_422(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        empty = client.get(
+            "/auth/app/nickname/available", params={"value": ""}, headers=headers
+        )
+        blank = client.get(
+            "/auth/app/nickname/available", params={"value": "   "}, headers=headers
+        )
+
+        assert empty.status_code == 422
+        assert blank.status_code == 422
+
+    # -- 탈퇴 ----------------------------------------------------------------
+
+    def test_탈퇴하면_닉네임이_풀린다(self, client: TestClient, store: Store) -> None:
+        """**떠난 사람이 이름을 영영 붙들고 있으면 안 됩니다** (room_name 과 같은 규칙)."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        client.post("/auth/app/withdraw", headers=headers)
+
+        assert store.app_users[KAKAO_ID].nickname is None
+
+    def test_탈퇴_뒤_재로그인하면_새로_받는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        client.post("/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"})
+
+        _login(client)
+
+        assert store.app_users[KAKAO_ID].nickname

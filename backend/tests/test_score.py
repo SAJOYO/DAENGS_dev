@@ -33,6 +33,67 @@ def test_referenced_indices_empty_when_no_refs() -> None:
     assert score.referenced_indices("근거를 안 든 답변") == []
 
 
+# ------------------------------------------------------------------ ①-2 한 괄호 안의 여럿 (RAG-069)
+# 프롬프트는 `[1]` 을 요구하지만 모델은 `[1, 2]` 로도 쓴다. 저장된 랩 전체에서 **90건 · 24종**이
+# 그 모양이었고 옛 정규식(`\[(\d+)\]`)은 그것을 통째로 놓쳤다 — `grounded` 가 조용히 낮게
+# 나왔다. 아래 표가 그 모양들을 고정한다. **실물 랩에서 뽑았다 — 지어내지 않았다.**
+BRACKETS = [
+    ("근거는 [1]입니다", [1]),                                  # 프롬프트가 요구한 모양
+    ("…보장합니다[1, 2]. 또한 …[4].", [1, 2, 4]),               # 쉼표+공백 — 가장 흔했다
+    ("…[1,2,3]…", [1, 2, 3]),                                   # 공백 없음
+    ("…[2, 3, 4, 5]…", [2, 3, 4, 5]),                           # 넷 이상
+    ("…[1], [3], [4]…", [1, 3, 4]),                             # 옛 정규식도 읽던 모양 — 안 변해야 한다
+]
+
+
+@pytest.mark.parametrize("text,expected", BRACKETS)
+def test_referenced_indices_reads_grouped_refs(text: str, expected: list[int]) -> None:
+    assert score.referenced_indices(text) == expected
+
+
+def test_the_old_regex_missed_the_grouped_ones() -> None:
+    """**옛 규칙으로는 못 읽는다는 것이 이 카드의 전제다.**
+
+    이 단언이 깨지면 정규식이 이미 넓혀진 것이고, 그때는 위 표의 값이 달라진다.
+    """
+    import re
+    old = re.compile(r"\[(\d+)\]")
+    assert old.findall("…보장합니다[1, 2]. 또한 …[4].") == ["4"]
+
+
+@pytest.mark.parametrize("text", [
+    "동물보호법 [별표 4] 참고",       # 한글이 섞이면 안 잡힌다
+    "가입 기간 [1-2]년",              # 붙임표는 문자 클래스 밖이다
+    "빈 괄호 [] 와 공백 괄호 [ ]",    # 숫자가 없으면 아무것도 안 나온다
+])
+def test_referenced_indices_ignores_non_reference_brackets(text: str) -> None:
+    assert score.referenced_indices(text) == []
+
+
+def test_a_year_in_brackets_is_read_but_harmless() -> None:
+    """⚠ `[2026]` 은 번호로 읽힌다 — 넓힌 규칙의 알려진 대가다.
+
+    막지 않는 이유는 `referenced_hits` 가 범위 밖을 버려서 채점에 닿지 않기 때문이다.
+    실측으로도 새로 읽히는 90건이 전부 1~7 이라 실제로 나온 적이 없다. 그래도 **번호로
+    읽힌다는 사실 자체**를 여기 남긴다 — 나중에 top-k 가 커지면 이 가정이 바뀐다.
+    """
+    assert score.referenced_indices("2026[2026]") == [2026]
+    assert score.referenced_hits("[2026]", [_dump_hit("a", "must")]) == []
+
+
+def test_referenced_hits_dedups_across_groups() -> None:
+    """한 괄호 안과 밖에서 같은 번호를 써도 근거는 하나다."""
+    hits = [_dump_hit("a", "must"), _dump_hit("b", "-")]
+    assert [h["chunk_id"] for h in score.referenced_hits("[1, 2] 그리고 [1]", hits)] == ["a", "b"]
+
+
+def test_grouped_refs_reach_grounded_from_dump() -> None:
+    """**파싱만 고치고 채점에 안 닿으면 의미가 없다** — 두 층을 한 번에 묶어 둔다."""
+    hits = [_dump_hit("a", "-"), _dump_hit("b", "must")]
+    assert not score.grounded_from_dump(_row("[1]", hits))
+    assert score.grounded_from_dump(_row("[1, 2]", hits))
+
+
 def test_referenced_hits_drops_out_of_range() -> None:
     """모델이 `[9]` 를 지어내도(hits 가 3개뿐이면) 죽지 않고 조용히 버린다."""
     hits = [_dump_hit("a", "-"), _dump_hit("b", "must"), _dump_hit("c", "-")]
@@ -139,7 +200,9 @@ def test_score_rows_matches_dump_read() -> None:
         _row("틀린 문서의 같은 조 번호 [1]", [_dump_hit("z-wrong#제6조", "-")], cited=["제6조"]),
     ]
     s = score.score_rows(rows)
-    assert s == {"n": 3, "cited": 2, "grounded": 1}
+    # `scored`·`boundary` 는 RAG-062 가 더한 칸이다. `ckinds` 없이 부르면 경계를 가릴 길이
+    # 없으므로 **아무것도 빼지 않는다** — 그래서 `scored == n` 이고 `boundary == 0` 이다.
+    assert s == {"n": 3, "scored": 3, "boundary": 0, "cited": 2, "grounded": 1}
 
 
 def test_six_laps_retroactive_summary_matches_measured_values() -> None:
@@ -152,8 +215,11 @@ def test_six_laps_retroactive_summary_matches_measured_values() -> None:
     from daengs_life.rag.core import io
 
     paths = {p.stem: p for p in (io.answer_files() if io_has_data() else [])}
-    expected = {"lap1": (7, 6, 2), "lap2": (7, 7, 3), "lap3": (7, 6, 2),
-                "lap4": (12, 8, 6), "lap5": (12, 8, 8), "lap6": (12, 8, 7)}
+    # 2026-09-07 갱신 — `lap3` 2->3, `lap6` 7->8 (RAG-069 ①). **랩 파일은 안 건드렸다.**
+    # 답변 안의 `[1, 2]` 를 이제 읽으므로 소급 점수가 올라간 것이다 — 이 테스트가
+    # "판정 로직이 바뀌면 여기서 깨진다"고 한 약속이 실제로 그렇게 동작했다.
+    expected = {"lap1": (7, 6, 2), "lap2": (7, 7, 3), "lap3": (7, 6, 3),
+                "lap4": (12, 8, 6), "lap5": (12, 8, 8), "lap6": (12, 8, 8)}
     missing = [name for name in expected if name not in paths]
     if missing:
         pytest.skip(f"data/processed/answers 에 없음: {missing} — 2026-08-28 세션에서 측정한 값")
@@ -289,6 +355,198 @@ def test_rows_the_goldenset_no_longer_has_are_skipped() -> None:
     assert g["gradable"] == 0 and g["unmeasurable"] == 0
 
 
+# ------------------------------------------------------------------ ⑦-2 KPI 두 축 (RAG-070 ③)
+# KPI 문장은 「답변에 출처 링크 + **조항 번호** 인용」인데 총계 `cited` 는 두 축을 한 수에 섞는다.
+# 조 번호가 **문서에 아예 없는** 소스(보조금24 · knia 공시 · 항공사 안내 · SRT 약관 · 해설)는
+# `cited` 가 영영 0이고 그것은 실패가 아니다 — 그 문항들도 근거는 옳게 잡는다.
+
+def test_kpi_cells_splits_the_two_axes() -> None:
+    """`data/` 없이 돈다 — 손으로 만든 두 문항이 각 축에 하나씩 앉는다."""
+    from daengs_life.rag.__main__ import kpi_cells
+
+    must = {"L": [["law-a#제1조"]],                 # 조 번호가 있는 소스
+            "B": [["benefit24-services-1#지원내용"]]}  # 없는 소스
+    ckinds = score.citable_kinds(must)
+    rows = [_row("근거 [1] 제1조입니다", [_dump_hit("law-a__20260101#제1조", "must")], cited=["제1조"]),
+            _row("근거 [1] 입니다", [_dump_hit("benefit24-services-1__20260101#지원내용", "must")])]
+    rows[0]["id"], rows[1]["id"] = "L", "B"
+
+    cells = kpi_cells(rows, ckinds)
+    assert cells[score.CITABLE] == (1, 1, 1)
+    # **인용 0인데 근거는 1이다.** 이 한 줄이 이 카드가 보이려는 것 전부다.
+    assert cells[score.UNCITABLE] == (0, 1, 1)
+
+
+def test_kpi_cells_does_not_touch_the_totals() -> None:
+    """⚠ **총계를 다시 쓰지 않는다.** `D10`(RAG-062)·`D12`(RAG-069)가 이미 두 번 소급으로
+    바꿨고, 세 번째면 옛 기록이 인용하는 대조선이 또 끊긴다. KPI 는 **읽는 법을 더할 뿐**이다.
+    """
+    from daengs_life.rag.__main__ import kpi_cells
+
+    must = {"L": [["law-a#제1조"]], "B": [["benefit24-services-1#지원내용"]]}
+    ckinds = score.citable_kinds(must)
+    rows = [_row("[1] 제1조", [_dump_hit("law-a__20260101#제1조", "must")], cited=["제1조"]),
+            _row("[1]", [_dump_hit("benefit24-services-1__20260101#지원내용", "must")])]
+    rows[0]["id"], rows[1]["id"] = "L", "B"
+
+    before = score.score_rows(rows, ckinds)
+    kpi_cells(rows, ckinds)
+    assert score.score_rows(rows, ckinds) == before
+    # 두 축의 합이 총계와 맞는다 — KPI 가 다른 모집단을 세는 것이 아니라는 확인이다.
+    cells = kpi_cells(rows, ckinds)
+    assert sum(c[0] for c in cells.values()) == before["cited"]
+    assert sum(c[1] for c in cells.values()) == before["grounded"]
+
+
 def io_has_data() -> bool:
     from daengs_life.rag.core import config
     return config.ANSWER_DIR is not None and config.ANSWER_DIR.exists()
+
+
+# ------------------------------------------------------------------ ⑧ 종류별 슬라이스 (RAG-060)
+def _chunk(chunk_id: str, **fields: str) -> dict:
+    """청크 jsonl 의 콘텐츠 행 모양. 슬라이스가 보는 것은 `chunk_id` 와 축 하나뿐이다."""
+    return {"type": "chunk", "chunk_id": chunk_id, "content": "…", **fields}
+
+
+def test_corpus_kinds_strips_the_collection_date() -> None:
+    """골든셋 라벨은 날짜를 뗀 주소(`logical`)를 쓰고 청크는 날짜를 달고 있다.
+
+    이 한 줄이 없으면 **모든 문항이 `(코퍼스 밖)`** 이 된다 — 조인이 통째로 어긋나는데
+    표에는 칸 하나로만 보여서 알아채기 어렵다.
+    """
+    kinds = score.corpus_kinds([_chunk("law-a__20260827#제1조", trust_level="law")])
+    assert kinds == {"law-a#제1조": "law"}
+
+
+def test_corpus_kinds_reads_whichever_axis_it_is_given() -> None:
+    """축은 고르는 것이다 — `trust_level` 로는 안 보이는 것이 `source_id` 로는 보인다 (RAG-060)."""
+    rows = [_chunk("x__20260827#c", trust_level="official", source_id="benefit24-services")]
+    assert score.corpus_kinds(rows, "source_id") == {"x#c": "benefit24-services"}
+
+
+def test_question_kind_joins_every_kind_an_or_group_touches() -> None:
+    """`must` 는 요구 목록이고 그 안이 OR 이다. #217 이 FW1 을 *"시행령 조문 OR 해설"* 로
+    넓히면서 **한 문항이 두 종류에 걸치는 자리**가 실제로 생겼다 — 어느 한쪽으로 몰아 세면
+    그 문항이 어느 칸에서도 정직하지 않다.
+    """
+    kinds = {"decree#제11조": "law", "easylaw#h2-5": "official"}
+    assert score.question_kind([["decree#제11조", "easylaw#h2-5"]], kinds) == "law+official"
+
+
+def test_question_kind_separates_no_label_from_label_off_corpus() -> None:
+    """*"잴 것이 없다"* 와 *"잴 것이 있는데 코퍼스에 없다"* 는 다른 자리다.
+
+    한 칸으로 뭉치면 `expect: abstain`·`refuse` 문항(라벨이 없는 것이 정상)과 라벨이 낡아
+    조인이 깨진 문항이 같이 앉는다 — 뒤쪽은 고쳐야 할 것인데 앞쪽에 섞여 안 보인다.
+    """
+    assert score.question_kind([], {"a": "law"}) == score.NO_MUST
+    assert score.question_kind([["없는라벨"]], {"a": "law"}) == score.OFF_CORPUS
+
+
+def test_slice_rows_sums_back_to_the_totals() -> None:
+    """**모든 칸을 더하면 `score_rows` 와 정확히 같다.** 이 표는 지표를 *분해*하는 것이지
+    새로 *계산*하는 것이 아니라서, 총계가 한 칸이라도 움직이면 그것은 버그다.
+
+    ⚠ 이것은 **`ckinds` 없이 부른 총계**와의 약속이다. 경계 문항을 빼는 총계와의 약속은
+    아래 `test_slice_rows_sums_back_to_the_scored_total` 이 따로 고정한다 (RAG-062).
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("[1] 근거입니다", [_dump_hit("guide-b#h1", "must")], cited=[]),
+        _row("모르겠습니다", [_dump_hit("law-a#제1조", "-")], cited=["제9조"]),
+    ]
+    for row, qid in zip(rows, ["A", "B", "C"]):
+        row["id"] = qid
+    qkinds = {"A": "law", "B": "official", "C": "law"}
+
+    sliced = score.slice_rows(rows, qkinds)
+    total = score.score_rows(rows)
+    for key in ("n", "cited", "grounded"):
+        assert sum(cell[key] for cell in sliced.values()) == total[key]
+    assert sliced["law"] == {"n": 2, "cited": 2, "grounded": 1}
+    assert sliced["official"] == {"n": 1, "cited": 0, "grounded": 1}
+
+
+def test_slice_rows_sums_back_to_the_scored_total() -> None:
+    """**RAG-062 로 바뀐 불변식** — `(must 없음)` 칸을 뺀 나머지의 합이 총계와 같다.
+
+    예전 불변식(*"모든 칸의 합 == 총계"*)은 `score_rows` 가 경계 문항을 빼면서 더는 참이
+    아니다. **경계 칸을 표에서 지워서 옛 불변식을 지키는 길도 있었지만 고르지 않았다** —
+    지우면 이 표를 더해도 총계가 안 나오는 이유가 사라져, 분모가 왜 줄었는지를 다음 사람이
+    못 읽는다. 그래서 **칸은 남기고 불변식을 다시 썼다.**
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("수의사에게 가세요", [_dump_hit("law-a#제1조", "-")], cited=["제10조"]),
+    ]
+    for row, qid in zip(rows, ["A", "경계"]):
+        row["id"] = qid
+    ckinds = {"A": score.CITABLE, "경계": score.NO_MUST}
+
+    sliced = score.slice_rows(rows, {"A": "law", "경계": score.NO_MUST})
+    total = score.score_rows(rows, ckinds)
+
+    # 경계 문항은 총계에서 빠지고, 뺀 수는 버려지지 않는다.
+    assert total["n"] == 2 and total["scored"] == 1 and total["boundary"] == 1
+    # 거절문이 "제10조" 를 물고 있어도 `cited` 로 세지 않는다 — lap22 `B6` 이 그 모양이었다.
+    assert total["cited"] == 1
+    for key in ("cited", "grounded"):
+        assert sum(cell[key] for kind, cell in sliced.items()
+                   if kind != score.NO_MUST) == total[key]
+    assert sum(cell["n"] for kind, cell in sliced.items()
+               if kind != score.NO_MUST) == total["scored"]
+
+
+def test_score_rows_without_ckinds_reproduces_the_old_numbers() -> None:
+    """`ckinds` 없이 부르면 **예전 그대로**다.
+
+    소급 대조표가 "옛 표기 19/33 = 새 표기 17/28" 을 말하려면, 옛 수를 그 자리에서 다시
+    낼 수 있어야 한다. 그것이 이 인자가 선택인 이유다.
+    """
+    rows = [
+        _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"]),
+        _row("수의사에게 가세요", [_dump_hit("law-a#제1조", "-")], cited=["제10조"]),
+    ]
+    for row, qid in zip(rows, ["A", "경계"]):
+        row["id"] = qid
+
+    old = score.score_rows(rows)
+    assert old["n"] == 2 and old["cited"] == 2 and old["boundary"] == 0
+    assert old["scored"] == old["n"]
+
+
+def test_citable_kind_reads_the_article_from_the_must_anchor() -> None:
+    """축은 **골든셋만으로** 정해진다 — 코퍼스도 DB 도 안 본다 (RAG-062).
+
+    `question_kind` 는 청크 행의 `trust_level` 이 있어야 하지만 이쪽은 `must` 라벨의 앵커만
+    읽는다. 그래서 `score_rows` 의 "랩 파일만 있으면 돈다"는 약속이 안 깨진다.
+    """
+    assert score.citable_kind([["law-drf-api-animal-protection-act#제101조③"]]) == score.CITABLE
+    assert score.citable_kind([["srt-terms-pet#h2-0"]]) == score.UNCITABLE
+    assert score.citable_kind([]) == score.NO_MUST
+    # 별표는 조 번호와 같은 자리에서 같은 일을 한다.
+    assert score.citable_kind([["law-drf-api-animal-protection-decree#별표 4-2-라"]]) == score.CITABLE
+    # OR 그룹 중 하나만 조 번호를 가져도 인용이 성립할 길이 있다 — 골든셋 S5 가 그 모양이다.
+    assert score.citable_kind(
+        [["ordinance-search-2253349#제4조", "benefit24-services-374000000596#지원내용"]]
+    ) == score.CITABLE
+
+
+def test_slice_rows_keeps_questions_the_goldenset_dropped() -> None:
+    """골든셋에서 지워진 옛 문항을 **조용히 빼지 않는다.**
+
+    `grade_expect` 는 그것을 건너뛰지만(채점할 기대가 없어서다) 여기서 건너뛰면 랩마다 다른
+    만큼 분모가 줄어드는데 표에는 그 사실이 안 나온다 — 그러면 이 표는 자기가 고치려던 병
+    (총계가 무엇을 감추는가)을 그대로 반복한다.
+    """
+    row = _row("[1] 근거입니다", [_dump_hit("law-a#제1조", "must")], cited=["제1조"])
+    row["id"] = "사라진문항"
+    sliced = score.slice_rows([row], {"Q3": "law"})
+    assert sliced == {score.OFF_GOLDENSET: {"n": 1, "cited": 1, "grounded": 1}}
+
+
+def test_kind_order_puts_real_kinds_before_the_bracketed_ones() -> None:
+    kinds = [score.NO_MUST, "official", score.OFF_CORPUS, "law"]
+    assert sorted(kinds, key=score.kind_order) == [
+        "law", "official", score.NO_MUST, score.OFF_CORPUS]

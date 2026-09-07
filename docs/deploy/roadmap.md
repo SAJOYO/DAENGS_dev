@@ -45,6 +45,18 @@
    > GCP 에 미적용인 것은 09-02 덤프 이후에 추가된 분, 즉 **`main` 에 아직 없는
    > `db/migrations/` 전부**이고 다음 dev→main 배포 때 적용한다 (runbook §6).
    >
+   > **`verify_*.sql` 을 믿어도 된다 — 2026-09-06(#273)부터다.** 그전에는 아홉 장 중 여섯이
+   > 출력 전용(SELECT 나열)이라 **스키마가 틀려도 종료 코드 0** 이었다(`psql … || exit 1` 이
+   > 종료 코드를 본다). `tools/check_migration_verification.py` 가 일회용 Postgres 에 적용한 뒤
+   > **일부러 망가뜨려 verify 가 잡는지** 확인한다. 규약은 `db/migrations/README.md` 에 있다.
+   >
+   > ⚠️ **"전부 단언형"은 아니다** — 2026-09-07(#288) 실측 정정. 19장 중 **8장이 아직 출력
+   > 전용**이다(`chats`·`walk_pets`·`pet_farewell`·`walk_analyses`·`walk_point_chunks`·
+   > `territory_visits`·`walk_capsules`·`admin_audit_log`). **그 여덟은 전부 이미 `main` 에
+   > 있는 옛 장**이라 GCP 에 올릴 것과는 안 겹친다 — **다음 dev→main 에 올릴 열 장은 전부
+   > 단언형이다.** 그래서 오늘의 위험은 0이고, 남은 여덟은 **별도 카드**다. #273 이
+   > "아홉 장 중 여섯"을 고쳤을 때 세지 않은 장들이다.
+   >
    > **점령 게임판 적재도 각각이다.** `territory-sites-ingest.yml` 은
    > `runs-on: [self-hosted]` 라 로컬 서버 place-db 만 채운다. GCP 는 runbook §6 의
    > "점령 게임판 적재 (GCP)" 절을 손으로 밟는다. 안 밟으면 `/territory/sites/nearby` 가
@@ -109,6 +121,7 @@ clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였�
 | 상태 | 원본 위치 | 비고 |
 | --- | --- | --- |
 | Postgres 2대 덤프 | 로컬 서버 (pgvector 의 vectordb · place-db) | `pg_dump` + **`pg_dumpall --globals-only`** — 손으로 만든 `daengs` 롤은 덤프에 안 담긴다. vectordb 에는 Training RAG 테이블(`training_rag_*`)도 들어 있다(#112). **덤프 전에 `db/migrations/` 최근분(특히 2026-09-01 training_rag 통합) 적용 여부 확인** |
+| **업로드 원본(`gait-bridge` 볼륨)** | 로컬 서버의 도커 named volume | **D-052 로 사진·영상 원본이 여기 삽니다.** 안 옮기면 미디어만 집에 남고 GCP 는 빈 볼륨으로 뜹니다 — 조회가 404 나는데 DB 행은 멀쩡해서 원인이 안 보입니다. 뜨기: `docker run --rm -v gait-bridge:/d -v %CD%:/b alpine tar czf /b/bridge.tgz -C /d .` · 풀기: 같은 명령에 `tar xzf /b/bridge.tgz -C /d`. **백업이 이것뿐입니다**(D-052 가 감수) |
 | 모델 가중치 4개 | 서버 디스크 (git 에 없음) | 스크리닝 2 + gait 2(best.pt·yolov8n.pt). 배포 폴더 밖에 두고 마운트 |
 | `.env` 2개 | 최상단 + backend/ | CORS 를 https 도메인으로, RELEASE_DIR 경로들, **`DAENGS_CORPUS_DIR` 는 더미 경로 필요**(크롤러를 안 띄워도 compose 가 해석 시점에 `:?` 가드를 평가) |
 | 암호화 키 3개 | 팀 채널 | **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 연다 |

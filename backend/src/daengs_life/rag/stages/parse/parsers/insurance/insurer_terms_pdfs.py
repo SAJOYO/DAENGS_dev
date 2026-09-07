@@ -109,12 +109,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+from daengs_life.rag.core import tokenize
 from daengs_life.rag.core.io import RawDoc
 from daengs_life.rag.stages.parse.extract import pdf
 from ..base import Parsed
 
 NAME = "insurer_terms_pdf"
-VERSION = 4                                   # 4: 특별약관 경계를 레이아웃(폰트 크기)으로 (⑧)
+VERSION = 5                                   # 4: 경계를 레이아웃으로 (⑧) / 5: 잘린 문장 거르기 (⑨)
 
 # ── 약관 본문의 앞뒤를 끊는 마커 (11건 전수 검증, 2026-08-28)
 #
@@ -163,6 +164,51 @@ _ROOMS = {
 # 앞의 `(?![①-⑳\d])` 는 항 번호로 시작하는 문장(`① … 이 특별약관`)과 목차 줄(`1-1. …`)을
 # 함께 막는다 — 포맷 층 기본값이 쓰던 그 장치를 그대로 가져왔다.
 _RE_INSURANCE_TERMS = re.compile(r"^(?![①-⑳\d])(?=.{4,60}$).*(?:보통약관|특별약관)$")
+
+# ────────────────────────────────────────────────────────────────────────────
+# ⑨ 정규식만으로는 부족하다 — **줄바꿈으로 잘린 문장도 그 모양을 만족한다** (RAG-068)
+# ────────────────────────────────────────────────────────────────────────────
+# 위 정규식은 "4~60자이고 `보통약관`/`특별약관` 으로 끝나는 줄"을 본다. PDF 는 줄폭에 맞춰
+# 문장을 자르므로 **줄 끝이 우연히 그 낱말이 되는 조각**이 걸린다. 농협이 특히 심했다:
+#
+#     며, 이로써 회사가 지급하여야 할 해약환급금이 있을 때에는 보통약관   ← 51자, 제목으로 잡혔다
+#
+# 2026-09-06 실측 — 조각이 **농협 589 / KB 341 / 삼성 0** 이었다. 삼성이 0인 것은 그 판형만
+# 레이아웃 경계(`_LAYOUT_FIRMS`)를 쓰기 때문이고, 나머지 둘은 정규식으로 떨어진다.
+#
+# **가르는 것은 길이도 낱말 목록도 아니라 품사다.** 진짜 약관 이름은 명사구이고, 조각에는
+# 서술어가 있다. 이 저장소가 이미 쓰는 Kiwi(`core.tokenize`)로 본다 — 낱말 사전을 손으로
+# 적으면 새 보험사가 올 때마다 는다.
+#
+# 규칙 셋 (전부 실측으로 정했다):
+#   ⓐ `이 특별약관` 처럼 **지시관형사로 시작**하면 본문의 지시다.
+#      ⚠ **띄어쓰기를 요구한다** — Kiwi 가 `이륜자동차` 를 `이`(MM)+`륜`으로 쪼개서,
+#        공백을 안 보면 삼성의 진짜 제목 하나가 같이 죽는다.
+#   ⓑ **괄호 안은 본다 치고 뺀다.** `(1일1회한)` · `(깨짐, 부러짐)` 같은 한정어가 제목에
+#      흔한데 형태소로는 서술어처럼 보인다. 빼기 전에는 삼성 52건이 오탐이었다.
+#   ⓒ 나머지에 **용언·연결어미가 있으면 제목이 아니다.** 다만 `…에 관한 특별약관` 처럼
+#      명사구를 잇는 것들은 남긴다.
+_RE_DEICTIC_HEAD = re.compile(r"^(?:이|그|본|동|해당|위)\s")
+_RE_PARENS = re.compile(r"[(（\[][^)）\]]*[)）\]]")
+_VERBISH = frozenset({"VV", "VA", "VX", "VCP", "VCN", "EC", "EF"})
+_NOMINAL_MODIFIERS = frozenset({"관하", "대하", "관련하", "의하"})
+
+
+def _looks_like_title(line: str) -> bool:
+    """이 줄이 **약관 이름**인가, 잘린 문장인가 (⑨)."""
+    if _RE_DEICTIC_HEAD.match(line):
+        return False
+    tokens = tokenize._kiwi().tokenize(_RE_PARENS.sub(" ", line).strip())
+    if not tokens:
+        return False
+    for i, token in enumerate(tokens):
+        if token.tag == "ETM":
+            if i and tokens[i - 1].form in _NOMINAL_MODIFIERS:
+                continue          # `…에 관한 추가특별약관`
+            return False
+        if token.tag in _VERBISH and token.form not in _NOMINAL_MODIFIERS:
+            return False
+    return True
 
 # 레이아웃 경계 (위 ⑧). 표시 줄을 이어 붙인 뒤 목차식 번호를 떼고 꼬리로 판정한다
 _DISPLAY_STEP = 1.0                                        # 본문보다 이만큼 크면 표시 줄
@@ -420,6 +466,7 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
         layout = _firm_key(doc.doc_id) in _LAYOUT_FIRMS          # 위 ⑧ — 실측한 판형만
         out = pdf.elements(_StrippedDoc(pdf_doc, title, body if layout else None), doc.doc_id,
                            title=title, pages=body, terms_re=_RE_INSURANCE_TERMS,
+                           terms_guard=_looks_like_title,
                            boundary_hint=_StrippedPage.boundaries if layout else None)
         total_pages = pdf_doc.page_count
 

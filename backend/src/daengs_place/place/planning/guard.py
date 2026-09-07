@@ -100,6 +100,8 @@ def guard_plan_transition(
 
     previous = guard_search_plan(previous)
     proposed = guard_search_plan(proposed)
+    if proposed.name_query != previous.name_query:
+        raise PlanValidationError("explicit name query cannot be changed by a plan editor")
     proposed_by_id = {gate.capability_id: gate for gate in proposed.gates}
     for locked_gate in (gate for gate in previous.gates if gate.locked):
         replacement = proposed_by_id.get(locked_gate.capability_id)

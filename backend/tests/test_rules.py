@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -57,6 +58,67 @@ def test_the_formula_reproduces_the_recorded_check() -> None:
     """③-c 실측 검산 — 2026-08-24 14:00 강남, 기온 33.1℃ · 습도 57%."""
     assert wet_bulb_stull(33.1, 57) == pytest.approx(26.25, abs=0.005)
     assert summer_feels(33.1, 57) == pytest.approx(33.27, abs=0.005)
+
+
+# --- RT-004 산식 검산 ---------------------------------------------------------
+#
+# **위의 두 테스트는 우리 구현이 우리 구현과 같은지만 본다.** 기록된 33.27 도 우리가 낸 값이라,
+# 옮겨 적을 때 계수 하나를 잘못 쳤어도 셋이 사이좋게 틀린 채로 통과한다. E3 가 "산식 검산"을
+# 남겨 둔 이유가 그것이고, 아래가 그 자리를 메운다 — **공표된 식을 다른 형태로 다시 적어**
+# 우리 것과 대조한다. 계수 오타는 여기서만 잡힌다.
+
+def _published_summer(ta: float, rh: float) -> float:
+    """기상청 여름철 체감온도 (2022-06-02 개정). 공표형 그대로 — 항 묶음이 우리와 다르다.
+
+        체감온도 = 0.45535×Ta + 3.0 - 0.2442 + (0.55399 + 0.00278×Ta)×Tw - 0.0022×Tw²
+    """
+    tw = _published_stull(ta, rh)
+    return 0.45535 * ta + 3.0 - 0.2442 + (0.55399 + 0.00278 * ta) * tw - 0.0022 * tw ** 2
+
+
+def _published_stull(ta: float, rh: float) -> float:
+    """Stull(2011) 습구온도 근사. **API 가 습구온도를 안 줘서 한 겹 낀다** (③-c)."""
+    return (ta * math.atan(0.151977 * math.sqrt(rh + 8.313659))
+            + math.atan(ta + rh) - math.atan(rh - 1.67633)
+            + 0.00391838 * rh ** 1.5 * math.atan(0.023101 * rh) - 4.686035)
+
+
+def _published_winter(ta: float, wind_kmh: float) -> float:
+    """풍속냉각지수 (JAG/TI 2001). **풍속은 km/h** — 우리 쪽은 m/s 를 받아 3.6 을 곱한다.
+
+        체감온도 = 13.12 + 0.6215×T + (0.3965×T - 11.37)×V^0.16
+    """
+    return 13.12 + 0.6215 * ta + (0.3965 * ta - 11.37) * wind_kmh ** 0.16
+
+
+@pytest.mark.parametrize("ta", [25.0, 28.0, 30.0, 33.1, 36.0, 40.0])
+@pytest.mark.parametrize("rh", [10.0, 30.0, 57.0, 70.0, 90.0, 100.0])
+def test_the_summer_formula_matches_the_published_one(ta: float, rh: float) -> None:
+    """여름식과 그 안의 습구온도 근사를 **공표형과 항등**으로 확인한다.
+
+    `abs=1e-9` 는 실수 재배열 오차만 허용하는 값이다 — 계수가 한 자리라도 다르면 이 폭을
+    한참 넘는다. 근사(±0.3℃)의 오차는 **여기서 재는 것이 아니다**: 우리도 공표형도 같은
+    Stull 을 쓰므로 그 오차는 양쪽에 똑같이 들어 있고, 이 테스트는 옮겨 적기만 본다.
+    """
+    assert wet_bulb_stull(ta, rh) == pytest.approx(_published_stull(ta, rh), abs=1e-9)
+    assert summer_feels(ta, rh) == pytest.approx(_published_summer(ta, rh), abs=1e-9)
+
+
+@pytest.mark.parametrize("ta", [10.0, 5.0, 0.0, -5.0, -15.0])
+@pytest.mark.parametrize("wind_ms", [1.4, 3.0, 5.0, 10.0])
+def test_the_winter_formula_matches_the_published_one(ta: float, wind_ms: float) -> None:
+    """겨울식은 습구온도가 안 껴서 **정확히** 맞아야 한다.
+
+    같이 확인하는 것이 단위다 — 공표식의 `V` 는 **km/h** 인데 우리가 받는 `WSD` 는 m/s 다.
+    3.6 을 빠뜨리면 값이 조용히 따뜻해지는데(풍속을 1/3.6 로 읽으므로) 예외가 하나도 안 난다.
+    """
+    assert winter_feels(ta, wind_ms) == pytest.approx(
+        _published_winter(ta, wind_ms * 3.6), abs=1e-9)
+
+
+def test_the_wind_unit_conversion_is_not_silently_droppable() -> None:
+    """위 테스트가 단위를 정말 잡는지 — 3.6 을 빼면 다른 답이 나오는 것을 명시해 둔다."""
+    assert winter_feels(-5.0, 3.0) != pytest.approx(_published_winter(-5.0, 3.0), abs=0.1)
 
 
 @pytest.mark.parametrize(("rh", "expected"), [(40, 31.5), (50, 32.6), (57, 33.3),
@@ -303,6 +365,24 @@ def test_lightning_is_unsafe() -> None:
                    m(Q.PRECIP_KIND, Code("none", "0"), valid=at(14)),
                    m(Q.LIGHTNING, 1.0, valid=at(14))], now=at(14))
     assert judge(obs, at(14)).axes[Axis.RAIN].grade is Grade.UNSAFE
+
+
+@pytest.mark.parametrize(("lgt", "expected"), [
+    (0.0, Grade.GOOD),        # 문서에 "0 = 낙뢰" 라는 말이 없다. 실측도 `'0'` 뿐이었다
+    (0.2, Grade.UNSAFE),      # 문서 범위의 **하한** — 여기가 안 걸리면 약한 낙뢰를 놓친다
+    (100.0, Grade.UNSAFE),    # 상한
+])
+def test_the_lightning_threshold_matches_the_documented_domain(lgt: float, expected: Grade) -> None:
+    """RT-004 — `LGT` 는 코드가 아니라 **에너지밀도 0.2~100kA/㎢** 다 (활용가이드 260623).
+
+    그 도메인이라야 `judge_rain` 의 `> 0` 이 뜻을 갖는다: 실제 낙뢰는 0.2 부터 시작하므로
+    0 은 "없음"이고 0 초과는 전부 낙뢰다. **코드값(0·1·2·3 같은 등급)이었다면 `> 0` 은
+    "낮음"까지 `UNSAFE` 로 만드는 셈이라 뜻이 달라졌다** — 그래서 도메인 확정이 먼저였다.
+    """
+    obs = observe([m(Q.TEMP, 20.0, valid=at(14)), m(Q.HUMIDITY, 50.0, valid=at(14)),
+                   m(Q.PRECIP_KIND, Code("none", "0"), valid=at(14)),
+                   m(Q.LIGHTNING, lgt, valid=at(14))], now=at(14))
+    assert judge(obs, at(14)).axes[Axis.RAIN].grade is expected
 
 
 # ------------------------------------------------- ③-d 임계표의 규율 (메타 테스트)

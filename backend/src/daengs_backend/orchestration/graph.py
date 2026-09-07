@@ -10,6 +10,7 @@ from typing import Protocol, cast
 
 from langgraph.graph import END, START, StateGraph
 
+from daengs_backend.core.tracing import trace_config
 from daengs_backend.orchestration.adapters import (
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
@@ -78,13 +79,15 @@ class OrchestrationEngine:
         request_id: str | None = None,
         locale: str = "ko-KR",
         context: dict | None = None,
+        include_route_trace: bool = False,
     ) -> AssistantResponse:
         if locale != "ko-KR":
             raise ValueError("v1 supports locale ko-KR only")
         structured_context = dict(context or {})
         _reject_raw_credentials(structured_context)
+        rid = request_id or str(uuid.uuid4())
         initial: OrchestratorState = {
-            "request_id": request_id or str(uuid.uuid4()),
+            "request_id": rid,
             "principal": principal,
             "query": query,
             "locale": "ko-KR",
@@ -92,8 +95,30 @@ class OrchestrationEngine:
             "route_plan": route_plan,
             "results": [],
             "response": None,
+            "include_route_trace": include_route_trace,
         }
-        final = await self.graph.ainvoke(initial)
+        # 트레이싱이 꺼져 있으면 이 config 는 그냥 안 읽힙니다 (`core.tracing.trace_config`).
+        # metadata 에는 **D-037 이 기본 관측에 허용한 것만** 담습니다 — 질문 원문은
+        # 여기가 아니라 노드 input 으로 갑니다. 그쪽은 anonymizer 를 거치지만
+        # metadata 는 우리가 무엇을 넣었는지가 곧 계약이라, 이 목록을 늘릴 때는
+        # 그 값이 "라우팅 종류·상태·코드" 급인지 먼저 물어야 합니다.
+        final = await self.graph.ainvoke(
+            initial,
+            config=trace_config(
+                request_id=rid,
+                run_name="assistant_query",
+                metadata={
+                    "principal_kind": principal.kind,
+                    "router": route_plan.router.value,
+                    "router_model": route_plan.model,
+                    "prompt_version": route_plan.prompt_version,
+                    "locale": "ko-KR",
+                },
+                # 능력별로 트레이스를 거를 수 있게 태그로 답니다. "훈련 답변이 이상하다"
+                # 는 민원을 `cap:training` 으로 좁히는 것이 첫 동작이라서입니다.
+                tags=[f"cap:{request.capability.value}" for request in route_plan.requests],
+            ),
+        )
         response = final.get("response")
         if response is None:
             raise RuntimeError("orchestration graph completed without a response")
@@ -168,6 +193,7 @@ class OrchestrationEngine:
             request_id=state["request_id"],
             route_plan=state["route_plan"],
             results=state["results"],
+            include_route_trace=state["include_route_trace"],
         )
         return {"response": response}
 

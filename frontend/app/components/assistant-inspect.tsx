@@ -10,7 +10,9 @@ import {
   type AssistantStatus,
   type CapabilityResult,
   type CapabilityStatus,
+  type RouteTrace,
 } from "@/lib/assistant";
+import { useAuth } from "./auth-provider";
 // 좌표표를 복사하지 않습니다 — 두 벌이 되면 한쪽만 고쳐집니다.
 // `walk-inspect.tsx` 가 소유하고 여기서 빌려 씁니다.
 import { PRESETS } from "./walk-inspect";
@@ -27,11 +29,13 @@ import { PRESETS } from "./walk-inspect";
  *
  * ⚠️ **관리자로 부른 결과입니다.** `routers/assistant.py` 가 principal 을
  * `kind=ADMIN` + permissions 로 넘기는데 라우팅 인가 매트릭스가 종류별로 다릅니다
- * (`docs/orchestration-routing.md` §5). 앱 회원과 같은 결과를 보려면 테스트 회원 토큰이
+ * (`docs/orchestration/routing.md` §5). 앱 회원과 같은 결과를 보려면 테스트 회원 토큰이
  * 필요하고, 그건 콘솔 로드맵 C4 입니다.
  *
- * ⚠️ **라우터 종류는 여기서 볼 수 없습니다.** `RoutePlan` 이 공개 응답에 안 실립니다
- * (`lib/assistant.ts` 머리). `results[].capability` 로 무엇이 실행됐는지만 보입니다.
+ * **라우팅 정보(`route`)는 `search:inspect` 권한이 있을 때만 옵니다** (#238). 앱 회원에게는
+ * 아예 안 갑니다 — 콘솔 점검의 것이지 앱 기능이 아니라서입니다. 그래서 이 패널은 `route` 가
+ * 없을 때 **빈칸이 아니라 이유를 적습니다**: 이 탭 자체는 `read` 만으로 열려서, 권한이 모자란
+ * 관리자(VIEWER)가 "왜 나만 안 보이지" 로 서 있게 되는 자리입니다.
  */
 
 /** 최상위 8상태. 색이 뜻을 나릅니다 — `REFUSED`(정책·안전)와 `FAILED`(고장)를 안 합칩니다. */
@@ -46,7 +50,7 @@ const STATUS_STYLE: Record<AssistantStatus, string> = {
   FAILED: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100",
 };
 
-/** 한 줄 설명. 집계 진리표(`orchestration-contracts.md` §5)를 화면에 옮긴 것입니다. */
+/** 한 줄 설명. 집계 진리표(`docs/orchestration/contracts.md` §5)를 화면에 옮긴 것입니다. */
 const STATUS_NOTE: Record<AssistantStatus, string> = {
   ANSWERED: "실행된 능력이 전부 성공",
   PARTIAL: "일부만 성공 — 나머지는 기권·거절·실패",
@@ -67,10 +71,28 @@ const CAPABILITY_STATUS_STYLE: Record<CapabilityStatus, string> = {
   TIMEOUT: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100",
 };
 
+/**
+ * 라우터 두 갈래. **어느 쪽이든 plan 은 `assemble_route_plan` 한 곳에서 만들어집니다**
+ * (D-051 ②) — 다른 것은 "무엇이 골랐나" 이지 "어떻게 조립됐나" 가 아닙니다.
+ */
+const ROUTER_LABEL: Record<RouteTrace["router"], { label: string; note: string; style: string }> = {
+  deterministic: {
+    label: "결정적",
+    note: "requested_capability 가 그대로 풀렸습니다 — 모델을 부르지 않았습니다",
+    style: "bg-teal-100 text-teal-900 dark:bg-teal-950 dark:text-teal-100",
+  },
+  llm: {
+    label: "의미 라우팅",
+    note: "자연어를 모델이 읽고 능력을 골랐습니다",
+    style: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950 dark:text-fuchsia-100",
+  },
+};
+
 const CAPABILITY_LABEL: Record<string, string> = {
   training: "훈련",
   life: "생활 · 제도",
   walk: "산책 적합도",
+  place: "장소 추천",
   skin: "피부 스크리닝",
   gait: "보행 분석",
 };
@@ -113,6 +135,8 @@ function messageOf(caught: unknown): { message: string; hint?: string } {
 }
 
 export default function AssistantInspect() {
+  const { can } = useAuth();
+  const canInspectRoute = can("search:inspect");
   const [query, setQuery] = useState("");
   const [capability, setCapability] = useState("");
   const [activeDogId, setActiveDogId] = useState("");
@@ -332,6 +356,8 @@ export default function AssistantInspect() {
               </p>
             </article>
 
+            <RouteCard route={result.route} canInspectRoute={canInspectRoute} />
+
             {result.clarify && (
               <article className="rounded-lg border border-sky-300 bg-sky-50 p-4 text-sm dark:border-sky-800 dark:bg-sky-950">
                 <h3 className="font-medium text-sky-900 dark:text-sky-100">되물음 · clarify</h3>
@@ -397,6 +423,72 @@ export default function AssistantInspect() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * 어느 길로 갔나. **답이 아니라 답이 나온 경위**라 최상위 카드 바로 아래입니다.
+ *
+ * 없을 때 빈칸을 두지 않습니다. 없는 이유가 둘이고 (권한 · 옛 백엔드) 할 일이 서로 다릅니다.
+ * `model`/`prompt_version` 이 비는 것도 마찬가지라, 결정적 경로는 "모름" 이 아니라
+ * **"부른 모델이 없음"** 이라고 적습니다.
+ */
+function RouteCard({
+  route,
+  canInspectRoute,
+}: {
+  route?: RouteTrace | null;
+  canInspectRoute: boolean;
+}) {
+  if (!route) {
+    return (
+      <article className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <strong className="font-medium">라우팅 정보가 응답에 없습니다.</strong>{" "}
+        {canInspectRoute
+          ? "권한은 있으니 백엔드가 아직 이 필드를 내지 않는 버전입니다 (#238 이전)."
+          : "이 계정에는 search:inspect 권한이 없습니다 — 라우터 종류와 모델 이름은 그 권한을 가진 관리자에게만 실립니다."}
+      </article>
+    );
+  }
+
+  const kind = ROUTER_LABEL[route.router];
+  return (
+    <article className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium">어느 길로 갔나</h3>
+        <span className={`rounded-full px-3 py-1 text-xs font-medium ${kind?.style ?? ""}`}>
+          {kind?.label ?? route.router}
+        </span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">{kind?.note ?? route.router}</span>
+      </div>
+      <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-xs">
+        <div>
+          <dt className="text-zinc-500 dark:text-zinc-400">모델</dt>
+          <dd className="mt-0.5 text-zinc-800 dark:text-zinc-100">
+            {route.model ? (
+              <code>{route.model}</code>
+            ) : (
+              <span className="text-zinc-500 dark:text-zinc-400">부른 모델 없음</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500 dark:text-zinc-400">프롬프트 버전</dt>
+          <dd className="mt-0.5 text-zinc-800 dark:text-zinc-100">
+            {route.prompt_version ? (
+              <code>{route.prompt_version}</code>
+            ) : (
+              <span className="text-zinc-500 dark:text-zinc-400">해당 없음</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+        메타데이터만 옵니다 — 질문 원문·프롬프트 본문·공급자 payload 는 응답에도 로그에도 남기지
+        않습니다 (D-037). 이 칸은 <code>search:inspect</code> 관리자에게만 보이고 앱 회원에게는 가지
+        않습니다.
+      </p>
+    </article>
   );
 }
 

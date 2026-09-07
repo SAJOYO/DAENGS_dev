@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS pets (
     -- 안 물어본 것과 아니라고 답한 것은 다르다.
     neutered BOOLEAN,
 
+    -- 동물등록(동물보호법 제15조) 여부. **NULL 은 '모름'이고 위와 같은 규칙이다.**
+    --
+    -- **기본값을 걸지 않는 것이 이 칸의 핵심이다.** `DEFAULT false` 를 걸면 안 물어본
+    -- 강아지가 전부 "등록 안 했다"가 되고, 알림(roadmap F5)이 이미 등록한 사람에게
+    -- 등록하라고 보낸다. 그 오류는 화면 어디에도 안 보인다.
+    --
+    -- 등록**번호**는 안 받는다 — 15자리는 개인을 특정하는 데 쓰일 수 있어 app_users 쪽
+    -- 암호화 경로를 태워야 하는 별개 결정이고, 알림에 필요한 것은 여부뿐이다.
+    registered BOOLEAN,
+
     -- 몸무게(kg). 산책 게임·건강 조언이 쓴다.
     -- 상한은 오타를 거르는 선이다 — 세계 최대 견종도 100kg 을 넘지 않는다.
     weight_kg NUMERIC(4,1) CHECK (weight_kg > 0 AND weight_kg <= 200),
@@ -72,6 +82,62 @@ CREATE TABLE IF NOT EXISTS pets (
     CONSTRAINT pets_farewell_after_birth
         CHECK (farewell_on IS NULL OR birth_date IS NULL OR farewell_on >= birth_date),
 
+    -- ── 프로필 사진 (D-052) ────────────────────────────────────────────
+    -- 사진 자체는 DB 에 안 들어간다. 공용 파일 저장소(gait-bridge 볼륨)에 두고
+    -- 여기에는 **어디에 있는지와, 그것이 정말 그 사진인지**만 적는다.
+    --
+    -- 칸이 둘로 갈린다 — `photo_*` 는 **확정된** 사진이고 `photo_pending_*` 는
+    -- **티켓을 끊어 줬지만 아직 안 올라온** 사진이다. 한 칸으로 합치면 업로드가
+    -- 중간에 끊겼을 때 화면이 깨진 사진을 가리킨다.
+    --
+    -- 키를 앱이 아니라 **backend 가 만든다**(D-043 원칙 6). 앱이 키를 정하면 남의
+    -- 경로를 덮어쓰거나 훔쳐볼 수 있다. 키에 uuid 가 들어가는 것도 그래서다 —
+    -- bridge 는 인증 헤더 없이 "키를 아는 것이 자격" 이라 추측 가능하면 안 된다.
+    photo_storage_key VARCHAR(200),
+    photo_content_type VARCHAR(40),
+
+    -- 저장소가 준 세대값. 로컬 볼륨은 sha256 hex, GCS 는 숫자 문자열이라 **문자로 받는다.**
+    -- confirm 이 고정한 바이트와 지금 바이트가 같은지 보는 데 쓴다.
+    photo_generation VARCHAR(64),
+    photo_size_bytes INTEGER,
+    photo_updated_at TIMESTAMPTZ,
+
+    -- 발급했지만 아직 confirm 안 된 티켓. bridge PUT 이 이 값으로 "우리가 끊어 준
+    -- 키인가"를 확인한다. confirm 되면 위 photo_* 로 옮겨지고 여기는 비워진다.
+    photo_pending_key VARCHAR(200),
+    photo_pending_content_type VARCHAR(40),
+
+    -- 티켓을 끊은 시각. 올리다 만 티켓을 나중에 걷어내는 근거다.
+    photo_pending_at TIMESTAMPTZ,
+
+    -- 확정 사진의 칸들은 **같이 있거나 같이 없어야** 한다. 하나만 남으면 "어디 있는지는
+    -- 아는데 그게 무엇인지 모르는" 행이 되고, 그건 안 받은 것만 못하다
+    -- (birth_date 짝 검사와 같은 결).
+    CONSTRAINT pets_photo_set CHECK (
+        (photo_storage_key IS NULL) = (photo_content_type IS NULL)
+        AND (photo_storage_key IS NULL) = (photo_generation IS NULL)
+        AND (photo_storage_key IS NULL) = (photo_size_bytes IS NULL)
+        AND (photo_storage_key IS NULL) = (photo_updated_at IS NULL)
+    ),
+
+    -- 대기 중 티켓의 칸들도 마찬가지다.
+    CONSTRAINT pets_photo_pending_set CHECK (
+        (photo_pending_key IS NULL) = (photo_pending_content_type IS NULL)
+        AND (photo_pending_key IS NULL) = (photo_pending_at IS NULL)
+    ),
+
+    -- 앱이 그릴 수 있는 형식만 받는다. 저장소 키의 확장자도 이 값에서 정해진다.
+    CONSTRAINT pets_photo_content_type CHECK (
+        photo_content_type IS NULL OR photo_content_type IN ('image/jpeg','image/webp')
+    ),
+    CONSTRAINT pets_photo_pending_content_type CHECK (
+        photo_pending_content_type IS NULL
+        OR photo_pending_content_type IN ('image/jpeg','image/webp')
+    ),
+
+    -- 0바이트는 **redact() 가 남기는 tombstone 과 같은 모양**이라 확정 사진일 수 없다.
+    CONSTRAINT pets_photo_size CHECK (photo_size_bytes IS NULL OR photo_size_bytes > 0),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -80,6 +146,13 @@ CREATE TABLE IF NOT EXISTS pets (
 -- 대표를 지웠을 때 승계 대상(가장 먼저 등록한 아이)도 이 순서로 찾는다.
 CREATE INDEX IF NOT EXISTS idx_pets_owner_created
     ON pets (app_user_id, created_at);
+
+-- bridge 가 키 하나로 행을 찾는 두 자리다. 업로드는 대기 키로, 내려받기는 확정 키로
+-- 찾는다. **부분 인덱스**인 이유는 사진이 선택이라 대부분의 행이 NULL 이기 때문이다.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pets_photo_pending_key
+    ON pets (photo_pending_key) WHERE photo_pending_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pets_photo_storage_key
+    ON pets (photo_storage_key) WHERE photo_storage_key IS NOT NULL;
 
 DROP TRIGGER IF EXISTS trg_pets_updated_at ON pets;
 CREATE TRIGGER trg_pets_updated_at

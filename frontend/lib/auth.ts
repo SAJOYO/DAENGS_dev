@@ -51,3 +51,44 @@ export const SESSION_COOKIE = "daengs_refresh";
 
 /** 로그인 후 돌아갈 기본 자리. */
 export const CONSOLE_HOME = "/console";
+
+/**
+ * `03_auth.sql` 의 role 5단계. **순서가 권한이 넓은 쪽부터입니다** — 계정 발급
+ * 화면의 선택지가 이 순서로 그려집니다.
+ *
+ * 값은 백엔드 `models/admin_user.py` 의 `ADMIN_ROLES` 와 같아야 합니다. 어긋나면
+ * 화면에서는 고를 수 있는데 서버가 422 로 막습니다.
+ */
+export const ADMIN_ROLES = [
+  "ADMIN",
+  "OPERATOR",
+  "CURATOR",
+  "ANALYST",
+  "VIEWER",
+] as const;
+
+export type AdminRole = (typeof ADMIN_ROLES)[number];
+
+/**
+ * 화면에 보여 줄 한국어 이름과 한 줄 설명.
+ *
+ * **설명이 붙어 있는 이유는 계정을 발급하는 사람이 고르는 자리이기 때문입니다.**
+ * `CURATOR` 와 `ANALYST` 의 차이는 이름만 봐서는 안 보이고, 잘못 고르면 개인정보를
+ * 볼 수 있는 계정을 무심코 내주게 됩니다. 내용은 `core/deps.py` 의
+ * `ROLE_PERMISSIONS` 와 같이 고쳐야 합니다.
+ */
+export const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "관리자",
+  OPERATOR: "운영",
+  CURATOR: "지식 관리",
+  ANALYST: "분석",
+  VIEWER: "조회",
+};
+
+export const ROLE_HINT: Record<AdminRole, string> = {
+  ADMIN: "전부. 계정 발급과 권한 변경까지 이 등급만 할 수 있습니다.",
+  OPERATOR: "운영 데이터와 개인정보 복호화. 계정 관리만 빠집니다.",
+  CURATOR: "지식베이스와 검색 점검. 개인정보는 볼 수 없습니다.",
+  ANALYST: "지표와 검색 점검 조회. 쓰기가 없습니다.",
+  VIEWER: "조회만. 개인정보는 가려서 보입니다.",
+};

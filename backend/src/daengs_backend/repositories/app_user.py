@@ -8,18 +8,23 @@ commit 은 하지 않습니다. 트랜잭션 경계는 services 가 잡습니다
 """
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import AppUser
 
 __all__ = [
     "create",
+    "escape_like",
     "get_active_for_update",
     "get_by_email_hash",
     "get_by_id",
     "get_by_kakao_id",
+    "is_nickname_taken",
+    "list_page",
+    "search_by_nickname",
 ]
 
 
@@ -64,6 +69,88 @@ async def get_by_email_hash(session: AsyncSession, email_hash: str) -> AppUser |
     """
     stmt = select(AppUser).where(AppUser.email_hash == email_hash)
     return await session.scalar(stmt)
+
+
+async def is_nickname_taken(session: AsyncSession, nickname: str) -> bool:
+    """이 닉네임을 이미 누가 쓰고 있나. **소문자로 접어서** 봅니다.
+
+    `lower(nickname)` UNIQUE 인덱스와 **같은 식으로 물어야** 인덱스를 탑니다
+    (03_auth.sql 의 `idx_app_users_nickname`). 대소문자만 다른 이름을 허용하면
+    화면에서 같은 이름으로 읽혀서 구분이 안 됩니다.
+
+    ⚠️ **이 답은 참고용입니다.** 여기서 비었다고 나와도 저장하기 전에 남이 채갈 수
+    있습니다. 진짜 방어는 UNIQUE 인덱스이고, 부르는 쪽은 IntegrityError 를 받을 준비가
+    되어 있어야 합니다.
+    """
+    stmt = select(AppUser.id).where(func.lower(AppUser.nickname) == nickname.lower())
+    return await session.scalar(stmt) is not None
+
+
+def escape_like(term: str) -> str:
+    """LIKE 의 메타문자를 막습니다. **탈출 문자는 백슬래시입니다.**
+
+    안 하면 `%` 하나로 전 회원이 나옵니다 — 조건 없는 목록을 막아 둔 것
+    (`routers/app_user_admin.py`)이 그 한 글자로 무의미해집니다. `_` 는 "아무 글자
+    하나"라 엉뚱한 사람이 딸려 나옵니다.
+
+    **백슬래시를 먼저 바꿉니다.** 나중에 하면 앞에서 넣은 탈출 문자까지 다시 탈출해서
+    `%` 가 도로 살아납니다.
+
+    쿼리에서 떼어내 둔 것은 **DB 없이 시험할 수 있게** 하려는 것입니다. 가짜 저장소는
+    부분 일치로 흉내 내므로, 이스케이프가 실제로 도는지는 여기서만 볼 수 있습니다.
+    """
+    return term.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
+
+
+async def search_by_nickname(
+    session: AsyncSession, term: str, *, limit: int = 20
+) -> list[AppUser]:
+    """닉네임 **부분 일치**로 여러 명. 관리 화면의 회원 검색용입니다.
+
+    `email_hash` 로는 조각 검색이 안 되지만(HMAC — D-012) 닉네임은 평문이라 됩니다.
+    이 앱키로는 이메일 동의를 못 받아 `?email=` 이 영영 안 맞으므로, 콘솔에서 실제로
+    쓰이는 검색은 이쪽입니다.
+
+    `%` 와 `_` 는 LIKE 의 메타문자라 [escape_like] 로 막습니다 — 그 함수의 주석을 보세요.
+    """
+    stmt = (
+        select(AppUser)
+        .where(AppUser.nickname.ilike(f"%{escape_like(term)}%", escape="\\"))
+        .order_by(AppUser.created_at.desc())
+        .limit(limit)
+    )
+    return list(await session.scalars(stmt))
+
+
+async def list_page(
+    session: AsyncSession,
+    *,
+    limit: int,
+    before: tuple[datetime, uuid.UUID] | None = None,
+) -> list[AppUser]:
+    """가입 최근 순 한 쪽. **조건이 없습니다 — 전 회원이 대상입니다.**
+
+    위의 검색들과 쓰임이 다릅니다. 저기는 "메일 보낸 그 사람을 찾는 것"이고 여기는
+    "회원을 훑는 것"이라, 부르는 자리의 권한이 다릅니다 (`ADMIN_MANAGE` —
+    `routers/app_user_admin.py`). 그래서 [search_by_nickname] 에 조건을 비울 수 있는
+    인자를 더하지 않고 함수를 따로 뒀습니다.
+
+    **`status` 로 거르지 않습니다.** 정지·탈퇴한 회원도 관리 화면에서는 보여야 합니다
+    ([get_by_id] · `services/app_user_admin.py` 의 `get_detail` 과 같은 규칙).
+    거르면 "찾는 사람이 목록에 없다" 가 생깁니다.
+
+    **키셋입니다 — OFFSET 이 아닙니다.** 읽는 사이에 가입이 하나 들어오면 OFFSET 은
+    한 명을 건너뛰거나 두 번 보여 줍니다. `created_at` 은 같은 초에 둘이 가입하면
+    겹치므로 `id` 로 한 번 더 갈라, 두 값을 묶어 비교합니다 (튜플 비교라 인덱스가
+    그대로 듣습니다).
+    """
+    stmt = select(AppUser).order_by(AppUser.created_at.desc(), AppUser.id.desc())
+    if before is not None:
+        at, last_id = before
+        stmt = stmt.where(
+            tuple_(AppUser.created_at, AppUser.id) < tuple_(at, last_id)
+        )
+    return list(await session.scalars(stmt.limit(limit)))
 
 
 async def create(

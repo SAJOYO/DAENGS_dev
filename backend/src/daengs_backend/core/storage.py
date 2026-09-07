@@ -1,16 +1,23 @@
-"""파일 저장소 경계 — GCS 확정, provider-neutral 계약 (D-043, #78).
+"""파일 저장소 경계 — 자체 호스팅 볼륨 확정, provider-neutral 계약 (D-043, D-052).
 
-앱이 보행 영상과 점령지 사진을 **backend 를 거치지 않고** 저장소에 직접 올리는 구조입니다
-(Signed URL). backend 가 저장소에 요구하는 것만 Protocol 로 좁혀 둡니다.
+보행 영상 · 점령지 사진에 더해 프로필 사진 · 피부 사진 · 도감 카드가 모두 이 한 경계를
+지납니다. backend 가 저장소에 요구하는 것만 Protocol 로 좁혀 둡니다.
 
-provider 는 **GCS 로 확정**(2026-09-02). 다만 bucket·location·만료·보관 정책은
-#78 이 정할 값이라 전부 `settings` 로 뺐습니다 — 여기 하드코딩하지 않습니다.
+provider 는 **서버의 도커 볼륨으로 확정**(D-052, 2026-09-04). GCS 버킷은 파지 않습니다.
+경로·주소·만료는 전부 `settings` 로 뺐습니다 — 여기 하드코딩하지 않습니다.
 
 구현체 셋 (`settings.gait_storage` 로 고름 — 이름은 보행 저장소에서 시작한 역사적 이름):
   none  — 미설정. 모든 호출이 503. (`NotConfiguredStorage`)
-  local — **임시 bridge.** GCS 자격증명 없이 왕복을 검증하려고 로컬 디렉터리에
-          둡니다. 프로덕션이 아닙니다. (`LocalBridgeStorage`)
-  gcs   — 진짜. Signed URL. (`GcsStorage`)
+  local — **이게 운영 저장소입니다** (D-052). 서버의 `gait-bridge` 볼륨에 두고,
+          업로드·다운로드가 backend 의 bridge 엔드포인트를 지납니다.
+          (`LocalBridgeStorage`)
+  gcs   — 지금은 안 씁니다. 서버가 부하를 못 받을 때 `.env` 네 줄로 되돌아갈 길로
+          남겨 둔 완성품입니다. (`GcsStorage`)
+
+⚠️ **D-043 원칙 1("영상이 backend 를 안 지난다")은 D-052 가 의도적으로 폐기했습니다.**
+   이제 모든 바이트가 backend 를 지납니다. 그래서 bridge 업로드는 반드시
+   **스트리밍 + 크기 상한**이어야 합니다 — 통째로 메모리에 올리면 영상 몇 개로
+   컨테이너가 죽습니다 (`routers/gait.py` 의 `_bridge_upload`).
 
 ⚠️ **object key 는 backend 가 만듭니다** (원칙 6). 앱이 임의 키를 지정하면 남의
    경로를 덮어쓰거나 훔쳐볼 수 있습니다. 도메인별 key builder에서만 만듭니다.
@@ -20,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Protocol
@@ -28,7 +36,11 @@ log = logging.getLogger(__name__)
 
 
 class StorageNotConfiguredError(RuntimeError):
-    """저장소가 아직 설정되지 않았습니다 (#78 대기). 라우터가 503 으로 옮깁니다."""
+    """저장소가 아직 설정되지 않았습니다. 라우터가 503 으로 옮깁니다.
+
+    D-052 뒤로 이건 "정책 미정" 이 아니라 **서버 `.env` 세 줄이 비어 있다**는 뜻입니다
+    (`GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL`).
+    """
 
 
 class StorageObjectChangedError(RuntimeError):
@@ -74,7 +86,17 @@ class StoragePort(Protocol):
         *,
         expires_in_seconds: int,
         generation: str | None = None,
-    ) -> str: ...
+        bridge_download_path: str = "/app/gait/_bridge/download",
+    ) -> str:
+        """읽기 주소를 만듭니다.
+
+        `bridge_download_path` 는 `create_upload_ticket` 의 `bridge_upload_path` 와
+        같은 뜻입니다 — **도메인마다 bridge 라우터가 다르므로** 호출부가 알려 줘야
+        합니다. 기본값이 보행인 것은 역사적인 것뿐이고, 새 도메인은 반드시 자기
+        경로를 넘겨야 합니다 (안 넘기면 보행 라우터가 받아 404 를 냅니다).
+        `GcsStorage` 는 이 값을 쓰지 않습니다 — 주소가 저장소 쪽에 있습니다.
+        """
+        ...
 
     def read_bytes(
         self,
@@ -130,11 +152,63 @@ def build_territory_photo_key(
     return f"territory/{app_user_id}/{attempt_id}/capture{suffix}"
 
 
+def build_pet_photo_key(pet_id: uuid.UUID, *, content_type: str) -> str:
+    """프로필 사진 키. 파일명 대신 검증된 MIME 으로 확장자를 정합니다.
+
+    ⚠️ **uuid 를 넣는 것이 보안 장치입니다.** bridge 는 인증 헤더 없이 "키를 아는 것이
+       자격" 이라, `pets/<pet_id>/profile.jpg` 처럼 추측 가능한 키를 쓰면 pet_id 만
+       알면 남의 사진을 받을 수 있습니다. 점령지 키가 attempt_id 로 그 역할을 하는
+       것과 같은 자리입니다.
+
+    ⚠️ **매번 새 키입니다.** 같은 키에 덮어쓰면 앱·CDN 이 옛 사진을 계속 보여 줍니다.
+       사진을 바꾸면 새 키로 올리고 옛 객체를 지웁니다.
+    """
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 프로필 사진 형식: {content_type}") from exc
+    return f"pets/{pet_id}/profile/{uuid.uuid4().hex}{suffix}"
+
+
+def build_screening_photo_key(
+    app_user_id: uuid.UUID, record_id: uuid.UUID, *, content_type: str
+) -> str:
+    """피부 변화 기록 사진의 키.
+
+    **record_id 가 uuid 라 추측이 안 됩니다** — bridge 는 인증 헤더 없이 "키를 아는
+    것이 자격" 이라, 여기에 순번 같은 것을 쓰면 남의 사진을 받을 수 있습니다.
+    (점령지가 attempt_id 로, 프로필이 따로 만든 uuid 로 같은 역할을 합니다.)
+
+    ⚠️ **한 기록에 사진 한 장이고 바뀌지 않습니다.** 프로필 사진과 달리 교체가
+       없습니다 — 다시 찍으면 그건 새 기록입니다. 그래서 키에 uuid 를 더 붙이지
+       않고 record_id 로 결정합니다.
+    """
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 피부 사진 형식: {content_type}") from exc
+    return f"screening/{app_user_id}/{record_id}/photo{suffix}"
+
+def build_card_face_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
+    """도감 카드 얼굴 그림의 키.
+
+    **PNG 뿐입니다** — 구멍에 끼우려면 알파가 필요해서 JPEG 은 못 씁니다. 그래서
+    다른 도메인처럼 content_type 을 인자로 받지 않습니다.
+
+    **card_id 가 uuid 라 추측이 안 됩니다.** bridge 는 인증 헤더 없이 "키를 아는 것이
+    자격" 이라, 여기에 순번 같은 것을 쓰면 남의 카드를 받을 수 있습니다.
+    다만 이 uuid 는 **앱이 만든 것**입니다 — 카드는 오프라인에서 먼저 만들어집니다.
+    """
+    return f"cards/{app_user_id}/{card_id}/face.png"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""
 
-    _MSG = "파일 저장소가 아직 설정되지 않았습니다 — provider·정책이 정해지면(#78) 열립니다."
+    _MSG = "파일 저장소가 아직 설정되지 않았습니다 — 서버 .env 의 GAIT_STORAGE 를 켜세요 (D-052)."
 
     def create_upload_ticket(
         self,
@@ -152,7 +226,14 @@ class NotConfiguredStorage:
     def exists(self, storage_key):
         raise StorageNotConfiguredError(self._MSG)
 
-    def download_url(self, storage_key, *, expires_in_seconds, generation=None):
+    def download_url(
+        self,
+        storage_key,
+        *,
+        expires_in_seconds,
+        generation=None,
+        bridge_download_path="/app/gait/_bridge/download",
+    ):
         raise StorageNotConfiguredError(self._MSG)
 
     def read_bytes(self, storage_key, *, generation, max_bytes):
@@ -165,17 +246,21 @@ class NotConfiguredStorage:
         raise StorageNotConfiguredError(self._MSG)
 
 
-# ── local: 임시 bridge ──────────────────────────────────────────────────
+# ── local: 서버 볼륨 (운영, D-052) ──────────────────────────────────────
 class LocalBridgeStorage:
-    """**임시 dev/검증용.** 로컬 디렉터리에 두고, 업로드는 backend 의 bridge 엔드포인트로
-    받습니다. GCS 자격증명 없이 `/app/gait/*` 왕복을 검증하려는 것뿐입니다.
+    """**운영 저장소** (D-052). 서버의 도커 볼륨에 두고, 업로드·다운로드가 backend 의
+    bridge 엔드포인트를 지납니다.
 
-    ⚠️ **프로덕션 경로가 아닙니다.** 여기서는 영상이 bridge 엔드포인트(backend)를 지나
-       갑니다 — GCS 경로(원칙 1: backend 를 통과하지 않음)와 다릅니다. 그래서
-       `settings.gait_storage="local"` 일 때만 켜지고, 배포에서는 절대 안 씁니다.
+    이름의 `local` 은 "임시" 라는 뜻이 아니라 **"우리 서버 안"** 이라는 뜻입니다.
+    집 서버 PC 와 GCP VM 이 같은 compose 를 쓰므로 두 곳에서 똑같이 돕니다 —
+    서버마다 다른 값은 `GAIT_BRIDGE_BASE_URL` 하나뿐입니다.
 
-    backend 와 gait 워커가 **같은 디렉터리를 봐야** 합니다 (compose 에서 한 볼륨을
-    양쪽에 마운트, 또는 단일 머신 검증에서 같은 경로).
+    ⚠️ **모든 바이트가 backend 를 지납니다.** D-043 원칙 1 을 D-052 가 폐기한 대가입니다.
+       그래서 bridge 라우터는 `open_write()` 로 **스트리밍**해야 하고, 크기 상한을
+       걸어야 합니다. 통째로 읽어 넘기면 영상 하나가 그대로 메모리입니다.
+
+    backend 와 두 워커가 **같은 디렉터리를 봐야** 합니다 — compose 가 `gait-bridge`
+    볼륨을 backend · gait-worker · territory-vision-worker 셋에 물립니다.
     """
 
     def __init__(self, root: str, *, base_url: str = "") -> None:
@@ -228,8 +313,17 @@ class LocalBridgeStorage:
         # gait의 큰 영상 존재 확인은 내용을 읽거나 해시하지 않습니다.
         return self._path(storage_key).exists()
 
-    def download_url(self, storage_key, *, expires_in_seconds, generation=None):
-        return f"{self._base_url}/app/gait/_bridge/download/{storage_key}"
+    def download_url(
+        self,
+        storage_key,
+        *,
+        expires_in_seconds,
+        generation=None,
+        bridge_download_path="/app/gait/_bridge/download",
+    ):
+        if not bridge_download_path.startswith("/") or bridge_download_path.endswith("/"):
+            raise StorageNotConfiguredError("잘못된 bridge download path")
+        return f"{self._base_url}{bridge_download_path}/{storage_key}"
 
     def read_bytes(self, storage_key, *, generation, max_bytes):
         data = self._path(storage_key).read_bytes()
@@ -269,6 +363,33 @@ class LocalBridgeStorage:
         p.parent.mkdir(parents=True, exist_ok=True)
         with p.open("xb") as stream:
             stream.write(data)
+
+    @contextmanager
+    def open_write(self, storage_key: str, *, exclusive: bool = False):
+        """청크를 받아 **곧바로 디스크에 씁니다** — 큰 영상을 메모리에 안 올립니다.
+
+        `write()` 는 bytes 를 통째로 받으므로 150MB 영상이면 그대로 150MB 입니다.
+        모든 바이트가 backend 를 지나게 된 뒤(D-052)로는 bridge 라우터가 이쪽을
+        써야 합니다.
+
+        ⚠️ **도중에 예외가 나면 반쯤 쓴 파일을 지웁니다.** 남겨 두면 두 가지가
+           깨집니다 — 다음 PUT 이 create-only(409)에 막히고, `confirm` 이 모자란
+           파일을 성공으로 받습니다. 특히 **0바이트로 남는 것이 위험합니다**:
+           그 모양은 `redact()` 의 tombstone 과 구별되지 않습니다.
+
+        `exclusive=True` 면 이미 있는 키에 `FileExistsError` 입니다
+        (`write_if_absent` 의 스트리밍 판).
+        """
+        p = self._path(storage_key)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        stream = p.open("xb" if exclusive else "wb")
+        try:
+            yield stream
+        except BaseException:
+            stream.close()
+            p.unlink(missing_ok=True)
+            raise
+        stream.close()
 
     def local_path(self, storage_key: str):
         return self._path(storage_key)
@@ -350,7 +471,15 @@ class GcsStorage:
     def exists(self, storage_key):
         return self._bucket().blob(storage_key).exists()
 
-    def download_url(self, storage_key, *, expires_in_seconds, generation=None):
+    def download_url(
+        self,
+        storage_key,
+        *,
+        expires_in_seconds,
+        generation=None,
+        bridge_download_path="/app/gait/_bridge/download",
+    ):
+        # bridge_download_path 는 안 씁니다 — 주소가 저장소 쪽에 있습니다.
         from datetime import timedelta
 
         return (

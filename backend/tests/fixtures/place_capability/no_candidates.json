@@ -1,0 +1,53 @@
+{
+  "request_id": "fx-no-candidates-0006",
+  "status": "UNCERTAIN",
+  "message": "현재 기기 위치를 기준으로 찾아봤지만 해석한 방향에서는 주변 장소를 찾지 못했어요. 다른 기준이나 위치로 다시 찾아보세요.",
+  "results": [
+    {
+      "capability": "place",
+      "status": "ABSTAINED",
+      "data": {
+        "contract_version": "place-capability-v1",
+        "answer": "현재 기기 위치를 기준으로 찾아봤지만 해석한 방향에서는 주변 장소를 찾지 못했어요. 다른 기준이나 위치로 다시 찾아보세요.",
+        "interpretation_summary": {
+          "status": "ready",
+          "disposition": "literal_target",
+          "resolution": "single_interpretation",
+          "message": "병원/약국 방향으로 나눠 찾았어요."
+        },
+        "groups": [
+          {
+            "lens_id": "purpose.healthcare",
+            "label": "병원/약국",
+            "support_note": "주변에서 병원·약국을 찾아봤어요.",
+            "candidates": []
+          }
+        ],
+        "refinements": [],
+        "notices": [
+          {
+            "code": "place.searched_around_current_location",
+            "message": "현재 기기 위치를 기준으로 찾았어요. 질문에 지역 이름이 있어도 아직 그 지역으로는 찾지 못하고, 반영하지 않았습니다.",
+            "lens_id": null
+          },
+          {
+            "code": "place.no_candidates_in_radius",
+            "message": "반경 안에서 조건에 맞는 장소를 찾지 못했어요.",
+            "lens_id": "purpose.healthcare"
+          }
+        ]
+      },
+      "abstention": {
+        "code": "place_no_candidates",
+        "message": "현재 기기 위치를 기준으로 찾아봤지만 해석한 방향에서는 주변 장소를 찾지 못했어요. 다른 기준이나 위치로 다시 찾아보세요."
+      },
+      "refusal": null,
+      "job": null,
+      "error": null,
+      "elapsed_ms": 1980
+    }
+  ],
+  "handoffs": [],
+  "clarify": null,
+  "route": null
+}

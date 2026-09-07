@@ -6,6 +6,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from daengs_place.place.contracts import DogSize
+from daengs_place.place.name_query import PlaceNameQuery
 
 MAX_KINDS_PER_REQUEST = 6
 MAX_RESULTS_PER_KIND = 3000
@@ -140,4 +141,6 @@ class PlaceSearchPlan(PlanningModel):
     gates: tuple[SearchGate, ...] = Field(min_length=1)
     limit_per_kind: int = Field(ge=1, le=MAX_RESULTS_PER_KIND)
     conditions: PlaceSearchConditions | None = None
+    # 명시적 문자 검색은 AI gate/완화 대상이 아니다. 새 사용자 검색으로만 바꾼다.
+    name_query: PlaceNameQuery = ""
     trace: PlanTrace = Field(default_factory=PlanTrace)

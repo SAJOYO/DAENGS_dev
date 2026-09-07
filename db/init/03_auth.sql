@@ -111,6 +111,25 @@ CREATE TABLE app_users (
     -- 20자는 이름표가 방 그림 위에 걸리는 자리라서다. 더 길면 방을 덮는다.
     room_name VARCHAR(20),
 
+    -- 사람을 가리키는 이름. **room_name 과 다르다** - 저건 집 이름이고("네옹이네")
+    -- 이건 그 집 사람 이름이다. 앱의 RoomLabel.kt 가 room_name 을 가구 이름으로
+    -- 만들기 때문에 하나로 겸할 수 없다.
+    --
+    -- **서버가 발급한다. 사용자에게 입력을 강제하지 않는다.** 카카오 로그인 한 번으로
+    -- 시작하게 하는 것이 앱의 목표라, 첫 화면이 "이미 사용 중입니다"로 사용자를
+    -- 거절하면 안 된다. 가입할 때 서버가 하나 지어 주고(services/app_auth.py 의
+    -- _ensure_nickname), 바꾸고 싶은 사람만 PATCH /auth/app/me 로 바꾼다.
+    --
+    -- **NULL 은 "아직 발급 전"이다.** 이 컬럼을 더하기 전에 가입한 회원과, 탈퇴로
+    -- 지워진 회원이 그렇다. 둘 다 다음 로그인에서 채워진다. 빈 문자열로 저장하지
+    -- 않는 것은 room_name 과 같은 이유다.
+    --
+    -- 개인정보로 보지 않아 평문이다 - 사용자가 스스로 지은 이름이다.
+    --
+    -- 30자인 것은 카카오 닉네임을 그대로 받을 수 있어서다. room_name 의 20자는
+    -- 그림 위에 걸리는 자리 때문인데 이건 글자로만 나온다.
+    nickname VARCHAR(30),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -246,6 +265,18 @@ CREATE TABLE admin_audit_log (
 -- 만들므로 여기 다시 적지 않는다.
 -- ---------------------------------------------------------------------
 
+-- 닉네임은 **소문자로 접어서** 유일하다.
+--
+-- 그냥 컬럼 UNIQUE 로 걸면 'Neo' 와 'neo' 가 둘 다 생긴다. 화면에서 그 둘은 같은
+-- 이름으로 읽히므로 "고유하게 구분한다"는 목적이 그 자리에서 깨진다.
+--
+-- NULL 은 여럿 허용된다(UNIQUE 는 NULL 끼리 중복으로 안 본다) - 아직 발급 안 된
+-- 회원이 여럿일 수 있어야 한다. email_hash 와 같은 규칙이다.
+--
+-- 콘솔의 닉네임 검색(routers/app_user_admin.py)도 lower() 로 물어서 이 인덱스를 탄다.
+CREATE UNIQUE INDEX idx_app_users_nickname ON app_users (lower(nickname));
+
+
 -- "이 사람의 세션 전부" - 강제 로그아웃과 세션 목록 화면.
 -- FK 는 인덱스를 자동으로 만들지 않으므로 직접 걸어야 한다.
 --
@@ -336,6 +367,7 @@ COMMENT ON COLUMN app_users.phone_enc          IS '전화번호 AES-256-GCM 암�
 COMMENT ON COLUMN app_users.name_enc           IS '이름 AES-256-GCM 암호문 (검색 불가)';
 COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspended/withdrawn';
 COMMENT ON COLUMN app_users.room_name          IS '미니룸 이름표 / NULL 이면 앱이 대표 강아지 이름으로 짓는다';
+COMMENT ON COLUMN app_users.nickname           IS '사람 이름 / 가입 때 서버가 발급. lower() 로 유일. NULL 이면 아직 발급 전';
 COMMENT ON COLUMN app_users.created_at         IS '가입 시각';
 COMMENT ON COLUMN app_users.updated_at         IS '수정 시각';
 COMMENT ON TABLE  admin_audit_log               IS '관리자 행위 감사 기록 (append-only) / 운영 로그는 파일에 따로';

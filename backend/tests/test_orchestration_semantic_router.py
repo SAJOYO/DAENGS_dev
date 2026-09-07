@@ -331,11 +331,20 @@ async def test_requested_place_without_coordinates_clarifies_without_gemini() ->
     assert all(not adapter.calls for adapter in adapters.values())
 
 
-def test_place_is_not_yet_a_semantic_router_destination() -> None:
+def test_place_is_a_semantic_router_destination() -> None:
+    """v7 (D-051) opened the fourth EXECUTE destination.
+
+    Until v7 this test asserted the opposite — that `place` was reachable only by the
+    explicit `requested_capability` signal and that the router emitting it was schema-
+    invalid. The inversion is the whole card, so it is pinned in both directions: the
+    enum has exactly four names in a fixed order, and a `place` decision now validates.
+    """
     schema = SemanticRoutingDecision.model_json_schema()
     execute_items = schema["properties"]["execute"]["items"]
-    assert execute_items["enum"] == ["training", "life", "walk"]
-    assert validate_semantic_decision(decision(["place"])) is None
+    assert execute_items["enum"] == ["training", "life", "walk", "place"]
+    assert validate_semantic_decision(decision(["place"])) is not None
+    # The router still cannot invent a destination outside the contract.
+    assert validate_semantic_decision(decision(["journey"])) is None
 
 
 # ----------------------------------------------------------- plan/observability
@@ -363,7 +372,7 @@ def test_prompt_carries_only_approved_routing_metadata() -> None:
             "note": "unapproved",
         },
     )
-    assert QUERY in prompt and "semantic-router-ko-v6" in prompt
+    assert QUERY in prompt and "semantic-router-ko-v7" in prompt
     metadata_line = next(
         line for line in prompt.splitlines() if line.startswith("ROUTING_METADATA:")
     )

@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import time
+
 import httpx
 import pytest
 
@@ -239,6 +241,33 @@ def test_an_exhausted_budget_gives_up_without_calling(monkeypatch: pytest.Monkey
     with pytest.raises(Unavailable, match="예산 초과"):
         base.request("https://x/y", classify=datagokr._classify, budget=Budget(seconds=-1))
     assert calls[0] == 0, "예산이 끝났는데도 호출했다"
+
+
+def test_an_exhausted_budget_says_what_actually_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**"예산 초과"만 남으면 원인을 못 짚는다.**
+
+    시간을 쓴 것이 이 API 의 재시도인지(그 API 가 실제로 실패 중) 앞 순서인지(밀린 것)를
+    구분하려면 직전 실패가 문구에 있어야 한다. `raise ... from last` 는 예외 체인에만 남고
+    `ProviderResult` 로는 `str(exc)` 만 올라가서 ⑥ `sources` 에서는 안 보였다 (2026-09-04).
+    """
+    def slow_failure(url, **kwargs):
+        time.sleep(0.2)                       # 예산을 실제로 태운다 — 재시도가 시간을 쓴 상황
+        return _envelope("05", "SERVICETIMEOUT_ERROR")
+
+    monkeypatch.setattr(base.httpx, "get", slow_failure)
+    monkeypatch.setattr(base, "_sleep", lambda _s: None)      # 백오프까지 재면 느려지기만 한다
+
+    with pytest.raises(Unavailable, match="직전 실패") as caught:
+        base.request("https://x/y", classify=datagokr._classify, budget=Budget(seconds=0.3))
+    assert "SERVICETIMEOUT" in str(caught.value)
+
+
+def test_a_budget_that_never_allowed_a_call_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """한 번도 못 나간 것과 나갔다 실패한 것은 다른 사건이다 — 뭉개면 남는 정보가 없다."""
+    calls = _responder(monkeypatch, [_envelope("00")])
+    with pytest.raises(Unavailable, match="한 번도 못 나갔다"):
+        base.request("https://x/y", classify=datagokr._classify, budget=Budget(seconds=-1))
+    assert calls[0] == 0
 
 
 def test_budget_default_comes_from_settings() -> None:

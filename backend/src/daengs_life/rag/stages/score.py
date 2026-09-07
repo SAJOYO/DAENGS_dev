@@ -59,17 +59,34 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from .goldenset import logical
 
 # 답변이 지목한 근거. 프롬프트가 `[1]` 처럼 쓰라고 요구한다 (`generate.PROMPT`).
-REF_RE = re.compile(r"\[(\d+)\]")
+#
+# ⚠️ **한 괄호 안에 여럿을 쓰는 모양도 받는다** (RAG-069). 프롬프트는 `[1]` 을 요구하지만
+# 모델은 `[1, 2]` 로도 쓴다 — 저장된 랩 전체에서 **90건 · 24종**이 그 모양이었고
+# (`[1, 2]` · `[1,2,3]` · `[2, 3, 4, 5]` …), 옛 정규식은 그것을 **통째로 놓쳤다.**
+#
+#     "…보장합니다[1, 2]. 또한 …[4]."   옛: [4]        새: [1, 2, 4]
+#     "…[1,2,3]…"                       옛: []         새: [1, 2, 3]
+#     "…[1], [3], [4]…"                 옛: [1, 3, 4]  새: 같다
+#
+# 그래서 `grounded` 가 **조용히 낮게** 나왔다 — 답변이 정답 청크를 실제로 인용했는데도
+# 지목이 안 읽혀 False 였다. 랩 넷에서 각각 1~2문항이 뒤집힌다. `D10`(RAG-062)이 지표의
+# **부풀림**을 걷은 것과 방향만 반대고 같은 종류다.
+#
+# 오탐은 확인했다 — 새로 읽히는 90건이 전부 1~7 의 작은 수다. 연도·금액이 이 모양으로 오면
+# 범위 밖이라 `referenced_hits` 가 이미 버린다.
+REF_RE = re.compile(r"\[([\d,\s]+)\]")
+_DIGITS = re.compile(r"\d+")
 
 
 def referenced_indices(text: str) -> list[int]:
-    """답변이 `[N]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
-    return sorted({int(n) for n in REF_RE.findall(text)})
+    """답변이 `[N]`·`[N, M]` 으로 지목한 근거 번호. 중복 제거, 오름차순."""
+    return sorted({int(n) for group in REF_RE.findall(text) for n in _DIGITS.findall(group)})
 
 
 def referenced_hits(text: str, hits: list[Any]) -> list[Any]:
@@ -103,14 +120,78 @@ def grounded_from_dump(row: dict[str, Any]) -> bool:
     return any(h.get("tier") == "must" for h in referenced_hits(row.get("text", ""), hits))
 
 
-def score_rows(rows: list[dict[str, Any]]) -> dict[str, int]:
-    """저장된 랩 하나(문항 목록) → 지표 요약. `python -m rag score-laps` 가 랩마다 이걸 부른다."""
-    n = len(rows)
-    return {
-        "n": n,
-        "cited": sum(1 for r in rows if r.get("cited")),          # 현행 지표 (참고용으로 남긴다)
-        "grounded": sum(1 for r in rows if grounded_from_dump(r)),  # 새 지표
+# 문항의 요구 근거에 **조 번호가 있는가** (RAG-062). `must` 라벨의 앵커에서 읽는다 —
+# `law-drf-api-animal-protection-act#제101조③` 은 있고 `srt-terms-pet#h2-0` 은 없다.
+# 별표를 같이 세는 것은 `별표 4-2-라` 가 조 번호와 같은 자리에서 같은 일을 하기 때문이다.
+ARTICLE_ANCHOR_RE = re.compile(r"제\d+조|별표")
+
+CITABLE = "조 번호 있음"
+UNCITABLE = "조 번호 없음"
+
+
+def citable_kind(musts: list[list[str]]) -> str:
+    """문항 하나 → `CITABLE` / `UNCITABLE` / `NO_MUST`.
+
+    **왜 이것이 필요한가** — `cited` 는 *"답변에 `제N조` 가 등장했나"* 를 셀 뿐 `must` 와
+    대조하지 않는다(`generate.cited_articles`). 그래서 **요구 근거에 조 번호가 없는 문항은
+    답이 완벽해도 `cited` 가 영영 0** 이다 (모듈 머리말의 "분자가 빠진다" — lap6 S4·S5).
+    그 눌림과, 조 번호가 있는 문항의 진짜 실패가 **총계 한 줄에서 상쇄된다** (RAG-060 ③).
+
+    **골든셋만으로 판정한다 — 코퍼스도 DB 도 안 본다.** `must` 라벨의 앵커가 이미 답을
+    들고 있어서다. 그래서 `score_rows` 의 "랩 파일만 있으면 돈다"는 약속이 안 깨진다
+    (`corpus_kinds` 쪽 `question_kind` 는 청크 행이 있어야 하는 것과 다르다).
+
+    OR 그룹 중 **하나라도** 조 번호를 가지면 `CITABLE` 이다 — 그 대안으로 답하면 인용이
+    성립하므로, 답변이 조 번호를 낼 길이 실제로 있다.
+    """
+    if not musts:
+        return NO_MUST
+    refs = (ref for group in musts for ref in group)
+    return CITABLE if any(ARTICLE_ANCHOR_RE.search(ref) for ref in refs) else UNCITABLE
+
+
+def citable_kinds(musts_by_id: dict[str, list[list[str]]]) -> dict[str, str]:
+    """골든셋 문항 전부에 대해 `citable_kind`."""
+    return {qid: citable_kind(musts) for qid, musts in musts_by_id.items()}
+
+
+def score_rows(rows: list[dict[str, Any]],
+               ckinds: dict[str, str] | None = None) -> dict[str, int]:
+    """저장된 랩 하나(문항 목록) → 지표 요약. `python -m rag score-laps` 가 랩마다 이걸 부른다.
+
+    **`ckinds` 를 주면 경계 문항을 `cited`/`grounded` 에서 뺀다** (RAG-062). 경계 문항은
+    `must` 가 없는 것(`expect: abstain` · `refuse`)이고, **잴 근거가 없으므로 분모에도 분자에도
+    들어갈 이유가 없다.** 실제로 두 방향으로 다 틀리고 있었다 (lap22 실측):
+
+      분자가 부풀었다   `B6`(초콜릿)은 거절을 옳게 했는데 거절문에 "제10조" 가 들어가 `cited` 로 잡힌다
+      실패를 성공으로   `B3` 은 기권해야 하는데 답해 버린 실패인데 `cited` 로 잡힌다.
+                      같은 랩의 기대 채점표에는 `놓친 기권 2/2` 로 찍혀 있어 **두 표가 반대를 말한다**
+
+    **뺀 수를 버리지 않는다** — `boundary` 로 같이 돌려준다. 분모가 왜 33에서 28로 줄었는지가
+    표에서 안 보이면 다음 사람이 못 읽는다 (RAG-060 의 *"분모를 조용히 줄이지 않는다"*).
+
+    `ckinds` 없이 부르면 **예전 그대로**다 — 옛 기록의 수를 그 자리에서 재현할 수 있어야
+    소급 대조표가 성립한다.
+
+    골든셋에서 **지워진 문항**(`ckinds` 에 없는 id)은 뺀 것이 아니라 **남긴다.** 뺄지 말지를
+    모르는 것과 빼야 하는 것은 다르고, 모를 때 빼면 분모가 랩마다 조용히 흔들린다.
+    """
+    scored = [r for r in rows
+              if ckinds is None or ckinds.get(str(r.get("id", ""))) != NO_MUST]
+    out = {
+        "n": len(rows),
+        "scored": len(scored),
+        "boundary": len(rows) - len(scored),
+        "cited": sum(1 for r in scored if r.get("cited")),          # 현행 지표 (참고용으로 남긴다)
+        "grounded": sum(1 for r in scored if grounded_from_dump(r)),  # 새 지표
     }
+    if ckinds is not None:
+        for kind in (CITABLE, UNCITABLE):
+            part = [r for r in scored if ckinds.get(str(r.get("id", ""))) == kind]
+            out[f"{kind}_n"] = len(part)
+            out[f"{kind}_cited"] = sum(1 for r in part if r.get("cited"))
+            out[f"{kind}_grounded"] = sum(1 for r in part if grounded_from_dump(r))
+    return out
 
 
 # ---------------------------------------------------------------- 기대 채점 (RAG-055)
@@ -295,3 +376,114 @@ def grade_expect(rows: list[dict[str, Any]], expects: dict[str, str], policy: st
               + counts["missed_refuse"] + counts["wrong_code"])
     return {"policy": policy, **counts,
             "passed": gradable - failed, "gradable": gradable, "failures": failures}
+
+
+# ---------------------------------------------------------------- 종류별 슬라이스 (RAG-060)
+# **총계 하나로는 노이즈와 퇴보가 안 갈린다.** 랩 간 잡음이 ±2~3 인데(RAG-059 ③) 지표는 랩당
+# `cited` 하나 · `grounded` 하나뿐이라, 수가 움직여도 그것이 검색이 좋아진 것인지 Gemini 가
+# 다르게 답한 것인지 표에서 안 보인다.
+#
+# 그리고 RAG-046 ⑦ 이 지목한 구조적 눌림이 있다 — **조 번호가 없는 문서(보조금24 · 항공 ·
+# 철도 약관)를 근거로 답하면 `cited` 가 0이 된다.** 답이 맞아도 그렇다 (RAG-029 의 알려진 누수).
+#
+# ⚠ **쪼개 보니 편향이 하나가 아니라 둘이었고, 총계에서 서로 상쇄되고 있었다** (RAG-060):
+#
+#   눌림  grounded > cited   보조금24 · 항공 · SRT — 조 번호가 없어 답이 맞아도 `cited` 가 0
+#   부풀림 cited > grounded  knia-disclosure · 법령 — 조 번호는 인용하는데 그것이 정답 근거가 아니다
+#
+# 그래서 총계만 보면 **둘 다 안 보인다.** 축을 잘못 고르면 이것도 안 보인다 — `trust_level` 로는
+# 조례(조 번호 있음)와 보조금24(없음)가 `official` 한 칸에 앉아 눌림이 지워진다. 그것이
+# `--by` 를 둔 이유다.
+#
+# ────────────────────────────────────────────────────────────────────────
+# 문항을 무엇으로 귀속하는가 — **골든셋 `must` 라벨의 종류**다
+# ────────────────────────────────────────────────────────────────────────
+# 후보가 둘이었다:
+#
+#   ⓐ 랩이 실제로 잡은 `must` 히트의 종류   ⓑ 골든셋 `must` 라벨의 종류
+#
+# **ⓑ 를 골랐다.** ⓐ 는 검색이 성공한 문항에서만 종류를 알 수 있어서 **분모가 랩마다 흔들린다** —
+# 정답을 못 찾은 문항이 조용히 빠지고, 그러면 어느 칸이든 성공률이 높게 나온다. 이 모듈이 하려던
+# 일(잡음과 퇴보를 가르는 것)과 정반대다. ⓑ 는 *"이 문항의 정답이 어느 종류 문서에 있나"* 라서
+# **랩과 무관하게 고정**이고, 같은 문항이 랩마다 같은 칸에 앉는다.
+#
+# 대가는 골든셋을 읽어야 한다는 것이다. `score_rows` 는 안 읽지만(그래서 옛 랩도 재본다) 이
+# 슬라이스는 읽는다 — `grade_expect` 가 `expects` 를 받는 것과 같은 층이다.
+#
+# ⚠ **`must` 는 요구 목록이고 그 안이 OR 이다** (`goldenset.Item`). #217 이 FW1 을 *"시행령 조문
+# OR 법제처 해설"* 로 넓히면서 **한 문항이 두 종류에 걸치는 자리**가 실제로 생겼다. 그래서 종류를
+# 하나로 고르지 않고 `law+official` 처럼 이어 붙인 칸을 만든다 — 어느 한쪽으로 몰아 세면 그 문항이
+# 어느 칸에서도 정직하지 않다.
+
+NO_MUST = "(must 없음)"          # `expect: abstain`·`refuse` 문항 — 잴 정답이 애초에 없다
+OFF_CORPUS = "(코퍼스 밖)"        # 라벨이 가리키는 청크가 지금 코퍼스에 없다
+OFF_GOLDENSET = "(골든셋 밖)"     # 랩에는 있는데 지금 골든셋에서 지워진 옛 문항
+
+
+def corpus_kinds(chunk_rows: Iterable[dict[str, Any]], field: str = "trust_level") -> dict[str, str]:
+    """청크 행들 → `logical chunk_id` → 문서 종류.
+
+    **표를 새로 손으로 적지 않는다.** `trust_level`·`subcategory`·`source_id` 는 청크 행마다 이미
+    박혀 있고(`chunk.py` 가 소스 메타에서 옮긴다), 여기서 하는 일은 그것을 골든셋 라벨이 쓰는
+    주소 체계(`logical`, 날짜 뗀 것)로 다시 세는 것뿐이다 — RAG-042 ③ 이 `BY_SOURCE` 에서
+    지적한 자리다. 두 번째 진실을 만들면 코퍼스가 움직일 때 조용히 어긋난다.
+
+    IO 는 여기 없다 — 호출부가 `io.chunk_files()` · `io.read_chunks()` 로 흘려 넣는다. 이 모듈은
+    디스크를 모르는 채로 남는다 (`score_rows` 가 그런 것처럼).
+    """
+    kinds: dict[str, str] = {}
+    for row in chunk_rows:
+        value = row.get(field)
+        if value:
+            kinds[logical(row.get("chunk_id", ""))] = value
+    return kinds
+
+
+def question_kind(musts: list[list[str]], kinds: dict[str, str]) -> str:
+    """문항 하나의 정답이 어느 종류 문서에 있나.
+
+    `musts` 는 골든셋의 요구 목록이고 그 안이 OR 이다. 걸친 종류를 **전부** 모아 정렬해 이어
+    붙인다 — `law` · `official` · `law+official`. 라벨이 하나도 코퍼스에 없으면 `OFF_CORPUS`,
+    라벨 자체가 없으면 `NO_MUST` 다. 이 셋을 한 칸으로 뭉치면 *"잴 것이 없다"* 와 *"잴 것이
+    있는데 못 찾겠다"* 가 같은 자리에 앉는다.
+    """
+    if not musts:
+        return NO_MUST
+    found = {kinds[ref] for group in musts for ref in group if ref in kinds}
+    return "+".join(sorted(found)) if found else OFF_CORPUS
+
+
+def question_kinds(musts_by_id: dict[str, list[list[str]]], kinds: dict[str, str]) -> dict[str, str]:
+    """골든셋 문항 전부에 대해 `question_kind`."""
+    return {qid: question_kind(musts, kinds) for qid, musts in musts_by_id.items()}
+
+
+def slice_rows(rows: list[dict[str, Any]], qkinds: dict[str, str]) -> dict[str, dict[str, int]]:
+    """`score_rows` 를 문항 종류별로 쪼갠다. 총계는 건드리지 않는다.
+
+    **분모를 조용히 줄이지 않는다** — 골든셋에서 지워진 옛 문항은 빼지 않고 `OFF_GOLDENSET`
+    칸에 넣는다. 빼면 랩마다 다른 만큼 분모가 줄어드는데 표에는 그 사실이 안 나온다.
+
+    각 칸의 수는 `score_rows` 와 같은 자다(`cited` 는 저장된 칸, `grounded` 는 `tier` 소급).
+
+    ⚠ **불변식이 RAG-062 에서 한 번 바뀌었다.** 예전에는 *"모든 칸을 더하면 총계와 정확히 같다"*
+    였는데, `score_rows` 가 경계 문항을 총계에서 빼면서 그 문장이 더는 참이 아니다. 지금은
+    **`(must 없음)` 칸을 뺀 나머지의 합이 총계와 같다** — 테스트가 그것을 고정한다.
+
+    **경계 칸은 표에서 지우지 않는다.** 지우면 이 표를 더해도 총계가 안 나오는 이유가
+    사라지고, 분모가 왜 33에서 28로 줄었는지를 다음 사람이 못 읽는다. 이 모듈이
+    `OFF_GOLDENSET` 을 남겨 두는 것과 같은 이유다 — *분모를 조용히 줄이지 않는다.*
+    """
+    out: dict[str, dict[str, int]] = {}
+    for row in rows:
+        kind = qkinds.get(row.get("id", ""), OFF_GOLDENSET)
+        cell = out.setdefault(kind, {"n": 0, "cited": 0, "grounded": 0})
+        cell["n"] += 1
+        cell["cited"] += bool(row.get("cited"))
+        cell["grounded"] += grounded_from_dump(row)
+    return out
+
+
+def kind_order(kind: str) -> tuple[int, str]:
+    """표의 줄 순서. 실제 종류를 먼저, 괄호 친 칸(`(must 없음)` 등)을 뒤로."""
+    return (1, kind) if kind.startswith("(") else (0, kind)

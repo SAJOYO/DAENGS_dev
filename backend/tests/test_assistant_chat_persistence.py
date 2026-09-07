@@ -90,6 +90,7 @@ class FakeService:
         requested_capability: str | None = None,
         request_id: str | None = None,
         locale: str = "ko-KR",
+        **extra: Any,
     ) -> AssistantResponse:
         self.calls.append(
             {
@@ -98,6 +99,7 @@ class FakeService:
                 "context": context,
                 "requested_capability": requested_capability,
                 "sessions_open": self.factory.active,
+                "extra": extra,
             }
         )
         if self.error is not None:
@@ -229,6 +231,26 @@ def test_persisted_request_reserves_orchestrates_completes_and_replays_on_read(
     assert persisted["processing_status"] == "completed"
     assert persisted["public_response"] == original_response
     assert detail["session"]["last_message_at"] is not None
+
+
+def test_저장하는_요청에는_라우팅_메타데이터를_넘기지_않는다(
+    client: TestClient, store: Store, service: FakeService
+) -> None:
+    """`route` 는 저장되는 turn 에 실릴 수 없다 (#238).
+
+    저장은 앱 회원만 하고 앱 회원은 `search:inspect` 를 가질 수 없으니 값은 어차피 안 붙지만,
+    라우터가 이 경로에는 `include_route_trace` 를 **아예 안 넘기는 것**이 그 성질을 코드 모양
+    으로 붙들어 둔다. `public_response_of` 가 응답 전체를 적재하는 자리라, 여기서 한 번 새면
+    되돌릴 수 없다.
+    """
+    draft = _draft(store)
+    got = _post(client, _persisted(draft, uuid.uuid4()), _app())
+
+    assert got.status_code == 200
+    assert service.calls[0]["extra"] == {}
+    (turn,) = store.chat_turns
+    assert turn.public_response["route"] is None
+    assert got.json()["route"] is None
 
 
 def test_only_assistant_query_writes_turns(client: TestClient) -> None:

@@ -5,21 +5,24 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet
 
 __all__ = [
     "add",
+    "count_by_owners",
     "count_for_owner",
     "delete",
     "delete_all_for_owner",
     "get_owned",
     "list_for_owner",
     "list_for_owner_for_update",
+    "names_by_ids",
     "owned_ids",
 ]
 
@@ -92,9 +95,73 @@ async def count_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
     return len(list(await session.scalars(stmt)))
 
 
+async def count_by_owners(
+    session: AsyncSession, app_user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """여러 주인의 마릿수를 **한 번에.** 회원 목록 화면이 씁니다.
+
+    [count_for_owner] 를 한 명씩 부르면 한 쪽(50명)에 쿼리가 50번 나갑니다.
+
+    **한 마리도 없는 주인은 키가 아예 없습니다** — `GROUP BY` 가 행을 안 만듭니다.
+    부르는 쪽에서 `.get(id, 0)` 으로 읽으세요. 여기서 0 을 채워 돌려주지 않는 것은,
+    그러려면 이 함수가 "물어본 id 전부"를 알아야 해서 빈 목록과 없는 회원이 섞이기
+    때문입니다.
+    """
+    if not app_user_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 빈 쪽(회원이 0명)에서 실제로 옵니다.
+        return {}
+    stmt = (
+        select(Pet.app_user_id, func.count())
+        .where(Pet.app_user_id.in_(app_user_ids))
+        .group_by(Pet.app_user_id)
+    )
+    return {owner: count for owner, count in (await session.execute(stmt)).all()}
+
+
+async def names_by_ids(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """id → 이름. 회원 목록이 **대표 강아지 이름**을 붙이는 데 씁니다.
+
+    대표는 `app_users.primary_pet_id` 에 있으므로(pets 쪽에 `is_primary` 가 없는
+    이유는 `models/app_user.py`), 목록은 그 id 들을 모아 여기서 한 번에 이름으로
+    바꿉니다 — 회원마다 상세를 부르면 한 쪽에 쿼리가 50번 나갑니다.
+
+    **없는 id 는 키가 없습니다.** 실제로는 FK 가 `ON DELETE SET NULL` 이라 없는
+    강아지를 가리키는 `primary_pet_id` 자체가 없지만, 부르는 쪽은 `.get()` 으로
+    읽어 그 가정에 기대지 않습니다.
+    """
+    if not pet_ids:
+        # `IN ()` 은 SQL 문법이 아닙니다. 대표가 아무도 없는 쪽에서 실제로 옵니다.
+        return {}
+    stmt = select(Pet.id, Pet.name).where(Pet.id.in_(pet_ids))
+    return {pet_id: name for pet_id, name in (await session.execute(stmt)).all()}
+
+
 def add(session: AsyncSession, pet: Pet) -> Pet:
     session.add(pet)
     return pet
+
+
+async def find_by_photo_key(
+    session: AsyncSession, storage_key: str, *, pending: bool
+) -> Pet | None:
+    """저장소 키 하나로 행을 찾습니다. **bridge 전용입니다.**
+
+    ⚠️ **소유자 조건이 없는 유일한 조회입니다.** bridge 는 인증 헤더를 안 받습니다 —
+       Signed URL 을 흉내 내는 자리라 헤더를 요구하면 저장소를 GCS 로 바꿀 때 앱
+       코드가 또 바뀝니다. 대신 **backend 가 실제로 발급한 키인지**를 여기서 봅니다.
+       이 검사가 없으면 아무나 임의 경로로 서버 디스크를 채울 수 있습니다
+       (보행 bridge 가 2026-09-02 에 그 상태로 한 번 배포됐습니다).
+
+    키에 uuid 가 들어 있어 추측이 안 되는 것이 나머지 절반입니다
+    (`build_pet_photo_key`).
+
+    :param pending: 올릴 때는 **대기 키**로(확정된 사진을 덮어쓰지 못하게),
+        내려받을 때는 **확정 키**로 찾습니다.
+    """
+    column = Pet.photo_pending_key if pending else Pet.photo_storage_key
+    return await session.scalar(select(Pet).where(column == storage_key))
 
 
 async def delete(session: AsyncSession, pet: Pet) -> None:

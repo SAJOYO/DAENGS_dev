@@ -25,6 +25,7 @@ from daengs_place.geo.ranking import (
     prefer_boost,
 )
 from daengs_place.place.contracts import DogSize
+from daengs_place.place.name_query import PlaceNameQuery
 from daengs_place.place.restriction_map import RESTRICTION_SEMANTICS_VERSION
 
 MEDICAL = ("hospital", "pharmacy")
@@ -56,6 +57,7 @@ class FacilityParams(BaseModel):
     # (결정 #20). 무엇이 이 불을 켜는지는 호출자가 정한다 — geo/ranking.py 의 경계와 같다.
     parking: bool = False
     dog_exclusive: bool = False
+    name_query: PlaceNameQuery = ""
 
     @field_validator("kind")
     @classmethod
@@ -237,6 +239,8 @@ WITH merged AS (
       AND (:require_canonical_identity IS NOT TRUE
            OR (f.source = ANY(:canonical_sources) AND f.source_ref IS NOT NULL))
       AND (CAST(:kind AS text) IS NULL OR f.kind = :kind)
+      AND (CAST(:name_query AS text) = ''
+           OR strpos(lower(f.name), lower(CAST(:name_query AS text))) > 0)
       AND ST_DWithin(f.location, o.geom, :radius_m)
       AND NOT EXISTS (
           SELECT 1
@@ -271,7 +275,7 @@ WHERE
 ORDER BY floor(distance_m / :band_m), prefer_hits DESC, distance_m,
          source, source_ref NULLS LAST, id
 LIMIT :limit
-""")
+""").bindparams(name_query="")
 
 # 파이썬이 빌리는 필드. 값이 비어 있을 때만 뒤 원천에서 가져온다.
 _BORROWABLE = ("homepage", "hours_text", "closed_days")
@@ -368,6 +372,7 @@ async def resolve_facilities(
         "lat": params.lat, "lng": params.lng, "radius_m": params.radius_m,
         # +1 은 절단 감지용 한 칸이다.
         "kind": params.kind, "medical": list(MEDICAL), "limit": effective_limit + 1,
+        "name_query": params.name_query,
         "require_canonical_identity": require_canonical_identity,
         "canonical_sources": list(CANONICAL_SOURCES),
         "only_dog_ok": params.only_dog_ok, "dog_size": params.dog_size,

@@ -42,6 +42,9 @@ async def _find_places(
     )
     if must.kind:
         stmt = stmt.where(Place.kind == must.kind)
+    if must.name_query:
+        # bound literal substring: %, _ and backslash are not wildcard syntax.
+        stmt = stmt.where(func.strpos(func.lower(Place.name), func.lower(must.name_query)) > 0)
     if authoritative_source is not None:
         stmt = stmt.where(Place.source == authoritative_source)
     if require_source_ref:

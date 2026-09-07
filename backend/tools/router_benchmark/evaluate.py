@@ -27,7 +27,13 @@ from .schemas import (
 
 PROMPT_VERSION = "semantic-router-ko-v1"
 MODEL_ID = "gemini-3.5-flash-lite"
-ALLOWED_EXECUTE = frozenset({"training", "life", "walk"})
+# `place` joined the semantic schema in v7 (D-051). It belongs here, not in
+# FORBIDDEN_EXECUTE: `invented_unsupported_capability_count` is a zero-tolerance gate
+# for names the contract does not have at all, so leaving `place` out would score a
+# legitimate selection as an invented capability and fail the whole run for the wrong
+# reason. A *wrong* Place selection is still counted — as an executable-precision
+# miss, which is the metric that actually means "routed somewhere it should not".
+ALLOWED_EXECUTE = frozenset({"training", "life", "walk", "place"})
 FORBIDDEN_EXECUTE = frozenset({"skin", "gait"})
 ALLOWED_HANDOFFS = frozenset({"skin", "gait"})
 _MAXIMUM_GATES = frozenset({"forbidden_execute_count", "invented_unsupported_capability_count"})

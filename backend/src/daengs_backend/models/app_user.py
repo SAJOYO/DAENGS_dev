@@ -60,6 +60,23 @@ class AppUser(Base):
     # 빈 문자열로 두지 않습니다 — "정해서 지웠다" 와 구분이 안 됩니다.
     room_name: Mapped[str | None] = mapped_column(String(20))
 
+    # 사람을 가리키는 이름. **room_name 과 다릅니다** — 저건 집 이름이고("네옹이네")
+    # 이건 그 집 사람 이름입니다. 앱의 `RoomLabel.kt` 가 room_name 을 가구 이름으로
+    # 만들기 때문에 하나로 겸할 수 없습니다.
+    #
+    # **서버가 발급합니다** (`services/app_auth.py` 의 `_ensure_nickname`).
+    # 사용자에게 입력을 강제하지 않습니다 — 카카오 로그인 한 번으로 시작하게 하는 것이
+    # 앱의 목표라, 첫 화면이 "이미 사용 중입니다"로 거절하면 그 약속이 깨집니다.
+    #
+    # **NULL 은 "아직 발급 전"입니다.** 이 컬럼보다 먼저 가입한 회원과 탈퇴로 지워진
+    # 회원이 그렇고, 둘 다 다음 로그인에서 채워집니다.
+    #
+    # **유일성은 `lower(nickname)` 표현식 UNIQUE 인덱스가 잡습니다** — 아래
+    # `__table_args__` 가 아니라 `db/init/03_auth.sql` 이 원본입니다. 컬럼에 `unique=True`
+    # 를 걸지 않은 것은 그것이 대소문자를 가리기 때문입니다: 'Neo' 와 'neo' 가 둘 다
+    # 생기면 화면에서 같은 이름으로 읽혀서 "고유하게 구분한다"가 그 자리에서 깨집니다.
+    nickname: Mapped[str | None] = mapped_column(String(30))
+
     # 대표 강아지. 상단바·챗봇 얼굴이 이 아이를 따릅니다.
     #
     # **pets 쪽에 is_primary 를 두지 않은 이유**는 05_pets.sql 에 적어 두었습니다 —

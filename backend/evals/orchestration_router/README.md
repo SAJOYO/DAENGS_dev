@@ -35,3 +35,45 @@ prompt/gold/gates with the team-approved `gemini-3.1-flash-lite` model. v5 (`res
 greeting/thanks/goodbye utterances; the report records that no gold case produced a non-null
 `social_intent`. Benchmark run numbers (v1..v5) and prompt versions (`semantic-router-ko-v1..v4`)
 are separate axes.
+
+## Orchestrator comparison (D-055)
+
+`comparison_v1_*` (#252) fed the same 80 gold cases to the LangGraph planner-first path and the
+LangChain agent, scored both with the frozen evaluator, and recorded that it had measured **two
+different CLARIFY contracts**: three of its five divergences were contract differences, not
+selection differences. Those files stay frozen as the record of why the agent was changed.
+
+`comparison_v2_*` (#272) is the controlled follow-up. The agent now records a selection through
+argument-less tools and hands the complete selection to the shared `planner.assemble_route_plan`
+and `OrchestrationEngine`, so both implementations obey the same exclusive-CLARIFY gate; both run
+the same model at `temperature=0.0`, one candidate, the same output limit and timeout, no provider
+retries, over the same fake adapters. `tools/orchestrator_comparison/runner_v2.py` runs three full
+repetitions (`comparison_v2_run_01..03_results.jsonl`, each carrying `benchmark_source_sha`),
+alternates which implementation runs first by case index and inverts that per repetition, performs
+one non-scored warm-up per implementation per repetition, and derives `comparison_v2_summary.json`
+and `comparison_v2_report.md` from the three files. The failure contract (adapter errors, timeouts,
+mixed execution/handoff, selector failure before plan freeze) is verified separately and
+deterministically in `tests/test_orchestrator_failure_contract.py`; it does not touch the 80-case
+score.
+
+### Real tester holdout — pending
+
+No de-identified real tester-query dataset exists in this repository (2026-09-06, searched `evals/`,
+`docs/`, `tests/`; real usage at that date was eight chat turns per `docs/life/roadmap.md`). None
+was manufactured. When one is collected it goes in a separate file, is never merged into
+`gold_v1.jsonl`, and is scored with the same runner under the same controlled settings, reported
+apart from the 80-case benchmark. Minimal expected schema, one JSON object per line, the same
+`GoldCase` shape the loader already validates:
+
+```json
+{"case_id": "tester_01", "category": "boundary_adversarial", "query": "<de-identified utterance>",
+ "context": {"location": {"lat": 37.5, "lon": 127.0}},
+ "gold_route_plan": {"requests": [], "handoffs": [], "clarify": null, "router": "llm", "model": "gemini-3.1-flash-lite"},
+ "rationale": "<why this routing, written by the reviewer>"}
+```
+
+Recommended size and coverage: 24–30 cases spanning abbreviations and typos, noisy or fragmentary
+utterances, small talk mixed with a request, medical versus routine-care boundaries, mixed intent
+(two capabilities, capability plus handoff), and missing context (no or partial coordinates). Every
+case must be de-identified before it enters the repository: no names, device identifiers, exact
+addresses, or copied private messages.

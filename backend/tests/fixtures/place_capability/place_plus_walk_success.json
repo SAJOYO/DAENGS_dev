@@ -1,0 +1,180 @@
+{
+  "request_id": "fx-place-walk-0002",
+  "status": "ANSWERED",
+  "message": "[산책]\n지금 산책하기 좋아요. 기온은 산책하기 알맞아요. 미세먼지 농도가 낮아요. 비 소식이 없어요.\n\n[장소]\n현재 기기 위치를 기준으로 1가지 방향에서 가까운 장소 1곳을 찾았습니다.",
+  "results": [
+    {
+      "capability": "walk",
+      "status": "OK",
+      "data": {
+        "location": {
+          "dong": "서교동",
+          "grid": [
+            59,
+            126
+          ],
+          "air_station": "마포",
+          "air_station_km": 1.2,
+          "aws_station": "서울",
+          "warning_zone": "서울특별시",
+          "label": "서교동 (측정소: 마포) 기준"
+        },
+        "generated_at": "2026-09-04T18:00:00Z",
+        "now": {
+          "at": "2026-09-04T18:00:00Z",
+          "grade": "GOOD",
+          "dominant": [],
+          "axes": {
+            "heat": {
+              "grade": "GOOD",
+              "note": "기온은 산책하기 알맞아요.",
+              "basis": [],
+              "derived": {}
+            },
+            "air": {
+              "grade": "GOOD",
+              "note": "미세먼지 농도가 낮아요.",
+              "basis": [],
+              "derived": {}
+            },
+            "rain": {
+              "grade": "GOOD",
+              "note": "비 소식이 없어요.",
+              "basis": [],
+              "derived": {}
+            }
+          },
+          "unknown_axes": [],
+          "capped": false,
+          "uv": null
+        },
+        "timeline": [
+          {
+            "at": "2026-09-04T18:00:00Z",
+            "grade": "GOOD",
+            "dominant": []
+          },
+          {
+            "at": "2026-09-04T19:00:00Z",
+            "grade": "GOOD",
+            "dominant": []
+          },
+          {
+            "at": "2026-09-04T20:00:00Z",
+            "grade": "GOOD",
+            "dominant": []
+          }
+        ],
+        "windows": [
+          {
+            "from": "2026-09-04T18:00:00Z",
+            "to": "2026-09-04T20:00:00Z",
+            "grade": "GOOD"
+          }
+        ],
+        "sources": [
+          {
+            "provider": "kma",
+            "ok": true,
+            "stale": false,
+            "reason": null
+          },
+          {
+            "provider": "airkorea",
+            "ok": true,
+            "stale": false,
+            "reason": null
+          }
+        ],
+        "notes": []
+      },
+      "abstention": null,
+      "refusal": null,
+      "job": null,
+      "error": null,
+      "elapsed_ms": 310
+    },
+    {
+      "capability": "place",
+      "status": "OK",
+      "data": {
+        "contract_version": "place-capability-v1",
+        "answer": "현재 기기 위치를 기준으로 1가지 방향에서 가까운 장소 1곳을 찾았습니다.",
+        "interpretation_summary": {
+          "status": "ready",
+          "disposition": "literal_target",
+          "resolution": "single_interpretation",
+          "message": "여행지/레저 방향으로 나눠 찾았어요."
+        },
+        "groups": [
+          {
+            "lens_id": "purpose.outing",
+            "label": "여행지/레저",
+            "support_note": "산책 삼아 들를 만한 나들이 장소로 찾았어요.",
+            "candidates": [
+              {
+                "place_id": {
+                  "source": "kto",
+                  "ref": "P-2001"
+                },
+                "title": "선유도공원",
+                "summary": "한강변에 자리한 생태공원이에요.",
+                "kind": {
+                  "id": "leisure",
+                  "label": "레저"
+                },
+                "location": {
+                  "lat": 37.5563,
+                  "lon": 126.9236,
+                  "distance_m": 850
+                },
+                "address": "서울 영등포구 선유로 343",
+                "facts": [
+                  {
+                    "id": "pet_access.allowed",
+                    "label": "반려동물 출입",
+                    "text": "목줄 착용 시 동반이 가능해요.",
+                    "placement": "promoted",
+                    "source_state": "known",
+                    "evaluation_state": "conditional",
+                    "severity": "info",
+                    "provenance": {
+                      "source": "kto",
+                      "ref": "src-1",
+                      "role": "primary",
+                      "value_origin": "own",
+                      "link_state": null
+                    }
+                  }
+                ],
+                "notices": [],
+                "why_matched": [
+                  {
+                    "code": "kind_match",
+                    "message": "나들이 목적과 가까운 장소예요."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "refinements": [],
+        "notices": [
+          {
+            "code": "place.searched_around_current_location",
+            "message": "현재 기기 위치를 기준으로 찾았어요. 질문에 지역 이름이 있어도 아직 그 지역으로는 찾지 못하고, 반영하지 않았습니다.",
+            "lens_id": null
+          }
+        ]
+      },
+      "abstention": null,
+      "refusal": null,
+      "job": null,
+      "error": null,
+      "elapsed_ms": 2140
+    }
+  ],
+  "handoffs": [],
+  "clarify": null,
+  "route": null
+}

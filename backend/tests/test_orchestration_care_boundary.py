@@ -26,7 +26,7 @@ DETERMINISTIC layer does given the semantically correct decision and (b) the v5
 prompt contract text. The live classifier is certified separately: targeted
 production probes and one frozen 80-case regression per prompt version
 (`runner_v6.py` for v5, `runner_v7.py` for v6), recorded in PR #172 and
-docs/orchestration-router-benchmark.md.
+docs/orchestration/router-benchmark.md.
 """
 
 from __future__ import annotations
@@ -150,6 +150,15 @@ CARE_BOUNDARY_CASES: list[dict] = [
         "query": "기차에 반려견을 태울 때 규정이 어떻게 돼?",
         "decision": {"execute": ["life"], "handoffs": []},
         "expect": "life",
+    },
+    # Grooming frequency is husbandry, not an errand — added with the Place
+    # destination (D-051) because "목욕" is the first care noun that also names a
+    # thing Place can sell. The norm has no destination; the shop does.
+    {
+        "id": "care_bathing_frequency",
+        "query": "목욕은 몇 주마다 해야 해?",
+        "decision": {"execute": [], "handoffs": []},
+        "expect": "unsupported",
     },
     {
         "id": "social_thanks",
@@ -387,17 +396,38 @@ def _policy() -> str:
     return prompt.split("USER_QUERY:")[0]
 
 
-def test_prompt_is_v6_with_the_same_model_and_schema() -> None:
-    assert PROMPT_VERSION == "semantic-router-ko-v6"
+def test_prompt_is_v7_with_the_same_model_and_schema_shape() -> None:
+    """v7 (D-051) added `place` and nothing else.
+
+    The care boundary this file defends is a *prompt* boundary, so it pins the prompt
+    version. v7 adds one EXECUTE name; the schema's shape, the handoff pair, the
+    social_intent field and the model are all unchanged, and the husbandry rules below
+    are re-asserted verbatim against the new prompt.
+    """
+    assert PROMPT_VERSION == "semantic-router-ko-v7"
     assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v6" in _policy()
-    # Schema unchanged: three EXECUTE names, two HANDOFF targets, social_intent enum.
+    assert "PROMPT_VERSION: semantic-router-ko-v7" in _policy()
+    # Schema shape unchanged: same three properties, two HANDOFF targets, and exactly
+    # one new EXECUTE name appended after the original three.
     schema = SemanticRoutingDecision.model_json_schema()
     assert set(schema["properties"]) == {"execute", "handoffs", "social_intent"}
     execute_enum = schema["properties"]["execute"]["items"]["enum"]
     handoff_enum = schema["properties"]["handoffs"]["items"]["enum"]
-    assert execute_enum == ["training", "life", "walk"]
+    assert execute_enum == ["training", "life", "walk", "place"]
     assert handoff_enum == ["skin", "gait"]
+
+
+def test_general_care_is_not_absorbed_by_the_new_place_destination() -> None:
+    """Adding Place must not give husbandry questions a home (routing §2 option C).
+
+    "목욕은 몇 주마다 해야 해?" is a care-frequency question that happens to name a
+    service a Place could sell. The prompt has to separate the norm from the errand,
+    or the newest destination quietly becomes the dumping ground the card refused to
+    create for `care`.
+    """
+    policy = _policy()
+    assert "is not\nPlace unless the user asks where to go" in policy
+    assert "how often to bathe a dog is unsupported, while finding a\ngrooming shop is Place" in policy
 
 
 def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:

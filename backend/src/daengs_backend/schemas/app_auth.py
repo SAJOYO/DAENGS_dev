@@ -82,17 +82,39 @@ class AppMeResponse(BaseModel):
     #: 이름으로 짓습니다 — 서버가 대신 지어 주지 않습니다. 그 규칙(받침에 따라
     #: "이네"/"네")은 한국어라 앱의 것이고, 서버가 지으면 규칙이 두 벌이 됩니다.
     room_name: str | None = None
+    #: 사람 이름. **집 이름(`room_name`)과 다릅니다** — 저건 "네옹이네" 고 이건 그 집
+    #: 사람입니다.
+    #:
+    #: 이름표와 달리 **서버가 지어 줍니다.** 카카오 로그인 한 번으로 시작하게 하는 것이
+    #: 앱의 목표라, 첫 화면이 "이미 사용 중입니다"로 사용자를 거절하면 안 됩니다.
+    #: 앱은 받은 이름을 보여 주고, 바꾸고 싶은 사람만 PATCH 로 바꿉니다.
+    #:
+    #: **None 은 아직 발급 전**입니다 — 이 칸보다 먼저 가입한 회원이고, 다음 로그인에
+    #: 채워집니다. 앱은 그동안 이 줄을 비워 둡니다.
+    nickname: str | None = None
 
 
 class AppProfileUpdate(BaseModel):
     """`PATCH /auth/app/me` — 회원이 스스로 고치는 것.
 
-    지금은 이름표 하나뿐입니다. 늘어나면 여기에 필드를 더합니다.
+    ⚠️ **보낸 칸만 바뀝니다.** 라우터가 `model_fields_set` 으로 가릅니다. 안 그러면
+    닉네임만 고치려고 부른 요청이 **이름표를 같이 지웁니다** — 둘 다 기본값이 None 이라
+    "안 보냈다"와 "None 으로 바꿔 달라"가 모델에서는 같은 모양이기 때문입니다.
+    칸이 하나뿐일 때는 드러나지 않던 함정입니다.
     """
 
     #: 미니룸 이름표. **None 을 보내면 되돌립니다** — 다시 대표 강아지를 따라갑니다.
     #: 공백만 보낸 것도 같게 봅니다 (빈 이름표를 걸 수는 없습니다).
     room_name: str | None = Field(default=None, max_length=20)
+
+    #: 사람 이름. **이름표와 달리 비울 수 없습니다.**
+    #:
+    #: 이름표는 비우면 앱이 대표 강아지로 지어 주지만, 닉네임은 비우면 그 회원을 가리킬
+    #: 말이 없어집니다 (그게 이 칸을 만든 이유입니다). 그래서 공백만 보내면 되돌리기가
+    #: 아니라 **422** 입니다 — 조용히 무시하면 앱은 바뀐 줄 알고 옛 이름을 지웁니다.
+    #:
+    #: 바꾸지 않으려면 **칸 자체를 안 보내면** 됩니다.
+    nickname: str | None = Field(default=None, max_length=30)
 
     @field_validator("room_name")
     @classmethod
@@ -101,3 +123,29 @@ class AppProfileUpdate(BaseModel):
             return None
         trimmed = value.strip()
         return trimmed or None
+
+    @field_validator("nickname")
+    @classmethod
+    def _nickname_not_blank(cls, value: str | None) -> str | None:
+        # None 은 여기서 통과시킵니다 — "안 보냄"과 "null 을 보냄"을 모델은 구분하지
+        # 못해서, 그 판단은 `model_fields_set` 을 볼 수 있는 라우터가 합니다.
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("닉네임은 비울 수 없습니다.")
+        return trimmed
+
+
+class NicknameAvailability(BaseModel):
+    """`GET /auth/app/nickname/available` — 이 이름을 쓸 수 있나.
+
+    ⚠️ **참고용입니다.** 물어본 뒤 저장하기 전에 남이 채갈 수 있습니다. 진짜 방어는
+    `lower(nickname)` UNIQUE 인덱스와 저장할 때의 409 이고, 앱은 "쓸 수 있어요" 를
+    보여 준 뒤에도 409 를 받을 준비가 되어 있어야 합니다.
+
+    **자기가 지금 쓰는 이름은 `true` 입니다.** 고치다가 원래 이름으로 되돌렸을 때
+    "다른 사람이 쓰고 있어요" 가 뜨면 사용자는 그것을 오류로 읽습니다.
+    """
+
+    available: bool

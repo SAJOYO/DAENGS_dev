@@ -12,6 +12,18 @@ from __future__ import annotations
 
 import pytest
 
+# `ml` 그룹이 없으면 이 파일 전체를 건너뜁니다 (#230).
+#
+# **CI 는 torch 를 안 깝니다** — `ml` 은 임베딩 가중치까지 딸려 오는 무거운 그룹이라
+# (D-021), 기본 설치로 도는 CI 에 넣을 것이 아닙니다. 그렇다고 그냥 두면 아래 테스트가
+# `ModuleNotFoundError` 로 **깨져서** 전체 스위트가 빨간불이 됩니다 — 없는 그룹은
+# 실패가 아니라 skip 이 맞고, `test_gait_inference.py` 가 `--group gait` 에 대해
+# 같은 방식을 쓰고 있습니다.
+#
+# 로컬에서 이 파일을 돌리려면: `uv sync --group ml`
+pytest.importorskip("pyarrow", reason="parquet 계약 검증에는 --group ml 이 필요합니다")
+pytest.importorskip("transformers", reason="토크나이저 가드 검증에는 --group ml 이 필요합니다")
+
 from daengs_life.rag.core import config
 from daengs_life.rag.stages import embed
 
@@ -191,3 +203,128 @@ def test_query_prompt_changes_vector() -> None:
     with_prompt = embed.encode_query(model, q, st=st)
     without = embed.encode_docs(model, [q], st=st)[0]     # doc_prompt 는 빈 문자열
     assert float(np.dot(with_prompt, without)) < 0.999
+
+
+# ---------------------------------------------------------------- 증분 (RAG-064)
+# **모델을 안 올린다.** 벡터를 손으로 만들어 넣고 *병합이 행을 제자리에 놓는가*만 본다 —
+# 수치 오차는 배치 정찰(RAG-064 ①)이 따로 쟀고, 여기서 볼 것은 그것과 다른 실패다.
+def _fake_rows(specs: list[tuple[str, str]]) -> list[dict]:
+    return [{"chunk_id": cid, "content": text, "chars": len(text), "element_type": "article"}
+            for cid, text in specs]
+
+
+def _write(tmp_path, monkeypatch, key: str, specs: list[tuple[str, str]], vectors):
+    import numpy as np
+
+    monkeypatch.setattr(config, "EMBED_DIR", tmp_path)
+    embed.write_parquet(embed.MODELS[key], _fake_rows(specs),
+                        np.asarray(vectors, dtype=np.float32),
+                        fingerprint="지문0", token_stats={"max": 1, "median": 1, "p95": 1})
+
+
+def _unit(seed: int):
+    """길이 1 짜리 가짜 벡터. 값이 행마다 달라야 뒤섞임을 잡을 수 있다."""
+    import numpy as np
+
+    v = np.zeros(embed.DIM, dtype=np.float32)
+    v[seed % embed.DIM] = 1.0
+    return v
+
+
+def test_content_sha256_is_written_per_row(tmp_path, monkeypatch) -> None:
+    """행마다 `content` 해시가 실린다. **`chars` 는 대리 검사라 못 쓴다** (RAG-064).
+
+    글자 수가 같은 수정(오타 한 글자 교체)에서 `chars` 는 안 움직이는데 해시는 움직인다 —
+    이 차이가 없으면 낡은 벡터를 그대로 유지하면서 **예외가 하나도 안 난다.**
+    """
+    import pyarrow.parquet as pq
+
+    _write(tmp_path, monkeypatch, SERVING, [("a#1", "가나다"), ("b#1", "라마바")],
+           [_unit(0), _unit(1)])
+    table = pq.read_table(tmp_path / f"{SERVING}.parquet")
+    assert "content_sha256" in table.column_names
+    assert table["content_sha256"].to_pylist() == [
+        embed.content_sha256("가나다"), embed.content_sha256("라마바")]
+    # 같은 글자 수, 다른 내용 → chars 는 같고 해시는 다르다
+    assert len("가나다") == len("가나닥"[:3])
+    assert embed.content_sha256("가나다") != embed.content_sha256("가나달")
+
+
+def test_plan_reuses_unchanged_and_encodes_only_the_changed(tmp_path, monkeypatch) -> None:
+    """바뀐 행만 인코딩 대상이 된다. 나머지는 parquet 의 벡터를 재사용한다."""
+    _write(tmp_path, monkeypatch, SERVING,
+           [("a#1", "그대로"), ("b#1", "바뀔것"), ("c#1", "사라질것")],
+           [_unit(0), _unit(1), _unit(2)])
+    rows = _fake_rows([("a#1", "그대로"), ("b#1", "바뀌었다"), ("d#1", "새로생김")])
+
+    plan = embed.plan_incremental(SERVING, embed.MODELS[SERVING], rows)
+    assert plan.ok, plan.refused
+    assert plan.reuse == [(0, 0)]              # a#1 만 그대로
+    assert plan.encode == [1, 2]               # b#1(내용 변경) · d#1(신규)
+    assert plan.dropped == 2                   # b#1 의 옛 행 · c#1
+
+
+def test_merge_puts_every_row_in_its_place(tmp_path, monkeypatch) -> None:
+    """**병합이 행을 뒤섞지 않는다.** 순서는 늘 현재 청크 순서다.
+
+    여기가 틀리면 벡터와 `chunk_id` 가 어긋나는데 **차원이 같아 예외가 안 나고**, 검색이
+    엉뚱한 문서를 1위로 올릴 뿐이다 — 이 저장소가 처음부터 경계하는 모양이다.
+    """
+    import numpy as np
+    import pyarrow.parquet as pq
+
+    _write(tmp_path, monkeypatch, SERVING,
+           [("a#1", "그대로"), ("b#1", "바뀔것")], [_unit(0), _unit(1)])
+    # 새 순서: 바뀐 것이 **앞**으로 온다 — 재사용 행이 뒤로 밀리는 배치다
+    rows = _fake_rows([("b#1", "바뀌었다"), ("a#1", "그대로")])
+    plan = embed.plan_incremental(SERVING, embed.MODELS[SERVING], rows)
+    assert plan.reuse == [(1, 0)] and plan.encode == [0]
+
+    embed.write_parquet_incremental(
+        embed.MODELS[SERVING], rows, plan, np.asarray([_unit(7)]),
+        fingerprint="지문1", token_stats={"max": 1, "median": 1, "p95": 1})
+
+    table = pq.read_table(tmp_path / f"{SERVING}.parquet")
+    assert table["chunk_id"].to_pylist() == ["b#1", "a#1"]
+    got = np.asarray(table["embedding"].to_pylist(), dtype=np.float32)
+    assert np.array_equal(got[0], _unit(7))    # 새로 만든 벡터가 b#1 자리에
+    assert np.array_equal(got[1], _unit(0))    # 재사용 벡터가 a#1 자리에 — 옛 index 0 에서 왔다
+
+
+def test_incremental_refuses_when_mixing_would_be_silent(tmp_path, monkeypatch) -> None:
+    """거부 조건은 전부 **섞으면 조용히 틀리는** 자리다 (RAG-064).
+
+    특히 모델이 다른 경우 — 세 모델 모두 1024차원이라 **섞여도 예외가 안 난다.**
+    CLAUDE.md 가 "차원이 같아서 조용히 틀린다"고 경고하는 그 자리다.
+    """
+    monkeypatch.setattr(config, "EMBED_DIR", tmp_path)
+    rows = _fake_rows([("a#1", "그대로")])
+
+    # ① parquet 자체가 없다
+    assert not embed.plan_incremental(SERVING, embed.MODELS[SERVING], rows).ok
+
+    # ② 다른 모델로 만든 파일 — 파일명은 SERVING 인데 메타의 repo 가 다르다
+    other = next(k for k in embed.MODELS if k != SERVING)
+    _write(tmp_path, monkeypatch, SERVING, [("a#1", "그대로")], [_unit(0)])
+    import pyarrow.parquet as pq
+    path = tmp_path / f"{SERVING}.parquet"
+    table = pq.read_table(path)
+    meta = {k: v for k, v in (table.schema.metadata or {}).items()}
+    meta[b"embedding_model"] = embed.MODELS[other].repo.encode()
+    pq.write_table(table.replace_schema_metadata(meta), path)
+
+    plan = embed.plan_incremental(SERVING, embed.MODELS[SERVING], rows)
+    assert not plan.ok and "모델이 다르다" in plan.refused
+
+
+def test_backfill_refuses_when_the_fingerprint_disagrees(tmp_path, monkeypatch) -> None:
+    """지문이 안 맞으면 해시를 **안 채운다.**
+
+    채우면 "낡은 벡터에 최신 해시" 가 붙어 증분이 그 행들을 **영원히 건너뛴다** —
+    고치려던 병보다 나쁘다.
+    """
+    _write(tmp_path, monkeypatch, SERVING, [("a#1", "그대로")], [_unit(0)])
+    rows = _fake_rows([("a#1", "그대로")])
+    # 방금 쓴 파일은 이미 v2 다
+    ok, why = embed.backfill_hashes(SERVING, "지문0", rows)
+    assert not ok and "이미 v2" in why

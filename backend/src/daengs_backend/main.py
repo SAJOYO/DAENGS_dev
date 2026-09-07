@@ -11,20 +11,37 @@ from fastapi.middleware.cors import CORSMiddleware
 from daengs_backend.config import settings
 from daengs_backend.core.database import engine
 from daengs_backend.core.deps import Perm, admin_or_app_user
+from daengs_backend.core.tracing import configure_tracing
 from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
+    admin_account,
+    admin_audit,
     app_auth,
+    app_report,
+    app_user_admin,
     assistant,
     auth,
     chat,
     crawl,
+    dogcard,
+    facility_discovery,
     gait,
     health,
+    metrics,
     pet,
+    report_admin,
     status,
     territory,
+    territory_claim,
     training,
+    walk_entry,
     walk_spatial_diary,
+    walk_storyboard,
+)
+from daengs_backend.routers import (
+    # ⚠️ 별칭입니다. 아래 `daengs_screening.service` 의 `screening_router` 와 이름이
+    #    겹칩니다 — 그쪽은 옛 무인증 `/screen/*`, 이쪽은 새 계약 `/app/screening/*`.
+    screening as app_screening,
 )
 
 # ⚠️ 별칭입니다. 아래에서 `daengs_life` 의 `walk`(산책 **적합도**)를 같은 이름으로
@@ -70,6 +87,13 @@ SRC_DIR = Path(__file__).resolve().parents[1]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # **맨 앞이어야 합니다.** LangSmith 클라이언트는 모듈 전역 캐시라 먼저 만든 쪽이
+    # 이깁니다 — 다른 코드가 트레이스를 하나라도 만든 뒤에 부르면 마스킹 없는
+    # 클라이언트가 굳고, 신원·정밀 좌표가 그대로 나갑니다 (`core.tracing`).
+    #
+    # `LANGSMITH_TRACING` 이 없으면 아무것도 안 합니다. 기본은 꺼져 있습니다.
+    configure_tracing()
+
     # 실시간 캐시를 미리 엽니다 (RT-001 ④-c). `get_cache` 는 lru_cache 라 여기서
     # `Cache()` 가 만들어지고 그때 Redis 연결을 시도합니다. 첫 요청에 미루면 그 비용이
     # 요청 하나에 통째로 붙습니다.
@@ -151,14 +175,27 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+
+# 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
+# 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
+app.include_router(dogcard.router)
 # 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
 # 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**
 app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
+app.include_router(walk_entry.router)
+app.include_router(walk_storyboard.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
+app.include_router(territory_claim.router)
+
+# 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —
+# 그쪽은 인증 없이 판정만 하고 아무것도 안 남기며, 앱이 아직 그것을 씁니다.
+# 여기는 인증·소유권·사진 저장이 붙은 새 계약이고, 옛 경로를 410 으로 닫는 것은
+# 앱이 옮겨간 뒤 별도 카드입니다 (보행 `/gait/*` → `/app/gait/*` 와 같은 방식).
+app.include_router(app_screening.router)
 # 산책 기록을 조건별 공간 일기로 읽는 앱 전용 표면. 인증은 라우터가 받고,
 # Place·Journey·Pin을 호출하지 않은 채 Walk 원판만 조립합니다 (D-049).
 app.include_router(walk_spatial_diary.router)
@@ -166,11 +203,37 @@ app.include_router(training.router)
 # 오케스트레이션 진입점 (Card 3). 인증은 `/training/chat` 과 같은 자리 —
 # 엔드포인트 자체의 파라미터 의존성(`admin_or_app_user(Perm.READ)`)이 겁니다.
 app.include_router(assistant.router)
+app.include_router(facility_discovery.router)
 # 대화 기록(`/app/chats`)과 저장된 AI 요약. 라우터가 CurrentAppUser 로 잠겨 있습니다 —
 # 신원으로 남의 것을 걸러야 해서 `admin_or_app_user` 를 쓰지 않습니다 (core/deps.py).
 app.include_router(chat.router)
+# AI 답변 신고 접수 (`/app/reports` · A1 · D-053). `CurrentAppUser` 라 **본인 대화의
+# turn 만** 신고할 수 있습니다 — 남의 turn_id 는 404 입니다. 답변 원문은 받지 않습니다
+# (turn_id 가 chat_turns 를 가리킵니다 — D-048).
+app.include_router(app_report.router)
 # 크롤 관리 (RAG-047). 권한은 라우터 안에서 Perm 으로 겁니다 — 읽기 READ / 트리거 OPS_WRITE.
 app.include_router(crawl.router)
+# 운영 지표 (#223 · 콘솔 로드맵 B3). 제품 테이블(chat_*)을 세기만 하고 **원문은 스키마에
+# 담을 칸조차 없습니다** (D-037). 권한이 `metrics:read` 라 VIEWER 만 막힙니다 —
+# `ANALYST` 라는 role 이 존재하는 이유가 이 화면입니다.
+app.include_router(metrics.router)
+# 감사 로그 조회 (#221 · 콘솔 로드맵 A4-1). **읽기 전용이고 이 조회 자체는 감사에 남기지
+# 않습니다** — 남기면 화면이 자기 기록으로 채워지고 그 행을 본 것도 남겨야 하는 재귀가
+# 됩니다. 권한은 `ADMIN_MANAGE` 라 OPERATOR 는 복호화는 해도 누가 했는지는 못 봅니다.
+app.include_router(admin_audit.router)
+# 관리자 계정 관리 (#207 · 콘솔 로드맵 A3). 권한은 라우터 안에서 `ADMIN_MANAGE` 로 겁니다 —
+# D-014 의 role 5단계가 실제로 갈리는 첫 자리입니다 (그 전까지는 정의만 있었습니다).
+app.include_router(admin_account.router)
+# 회원 조회 (#211 · 콘솔 로드맵 A2). **위 줄과 다른 사람들입니다** — `admin_users` 는 이
+# 콘솔에 로그인하는 사내 계정이고, `app_users` 는 앱을 쓰는 회원입니다 (03_auth.sql).
+# `/app/*` 와도 다른 문입니다: 저기는 앱 회원이 자기 것을 보고 여기는 관리자가 남의 것을
+# 봅니다. 나가는 개인정보는 전부 마스킹이라 권한이 `READ` 이고, 원문을 여는 문은 짝
+# 카드(#212)가 `pii:read` 로 따로 냅니다.
+app.include_router(app_user_admin.router)
+# 신고 조회·처리 (`/admin/reports` · A1 · D-053). 권한은 `ADMIN_MANAGE` 입니다 — 신고된
+# 답변을 여는 것은 **회원의 대화 원문을 보는 일**이라, 계정 관리와 같은 등급으로 묶었습니다.
+# **목록은 감사에 안 남기고 상세만 남깁니다** — `pii_revealed` 가 그은 선과 같습니다.
+app.include_router(report_admin.router)
 # 상태 페이지 (#180 · 콘솔 로드맵 B1). 읽기 전용이고 DB 를 바꾸지 않습니다.
 # `/health` 와 다른 자리입니다 — 저기는 모니터링이 읽고 DB 가 죽으면 503 이며,
 # 여기는 사람이 읽고 항목 하나가 죽어도 200 으로 나머지를 보여 줍니다.

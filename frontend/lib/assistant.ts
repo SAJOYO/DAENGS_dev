@@ -4,13 +4,13 @@
  * **백엔드와 손으로 맞춘 것입니다.** 원본이 두 곳입니다 —
  * 요청은 `backend/src/daengs_backend/schemas/assistant.py`,
  * 응답은 `backend/src/daengs_backend/orchestration/contracts.py` 이고
- * 계약 문서는 `docs/orchestration-contracts.md` §5(응답) · §8(요청)입니다.
+ * 계약 문서는 `docs/orchestration/contracts.md` §5(응답) · §8(요청)입니다.
  * **한쪽만 고치면 조용히 어긋납니다** — 필드를 더하거나 이름을 바꿀 때는 셋을 같이 보세요.
  *
- * ⚠️ **여기 있는 것이 응답의 전부입니다.** `RoutePlan` 은 공개 응답에 실리지 않아
- * 라우터 종류(`deterministic`/`llm`)와 모델 이름은 밖에서 볼 수 없습니다. 화면이 그릴 수
- * 있는 것은 `results[].capability` 로 **무엇이 실행됐나** 이고, "라우터가 무엇을 골랐나" 는
- * 그 역산입니다 (`assistant-inspect.tsx` 가 그렇게 적어 둡니다).
+ * ⚠️ **`route` 는 아무에게나 오지 않습니다.** 라우터 종류·모델 이름·프롬프트 버전은
+ * `search:inspect` 권한을 가진 관리자에게만 실립니다 (#238). 앱 회원과 권한 없는 관리자에게는
+ * **키는 있고 값이 `null`** 입니다 — 없는 것이 정상이라 화면이 그것을 오류로 그리면 안 됩니다.
+ * 나머지 필드는 예나 지금이나 모두에게 같습니다.
  *
  * 이 파일은 `life-rag.ts` 와 층이 다릅니다 — 저쪽은 Life 의 **직접** API 두 개고,
  * 여기는 그 위에서 능력을 고르는 오케스트레이션의 경계입니다.
@@ -45,21 +45,34 @@ export type AssistantQueryRequest = {
 
 /**
  * `requested_capability` 가 결정론적으로 풀리는 값 전부 (`planner.py`).
- * 앞의 셋은 실행(`execute`), 뒤의 둘은 순수 핸드오프입니다.
+ * 앞의 넷은 실행(`execute`), 뒤의 둘은 순수 핸드오프입니다.
  */
-export const RESOLVED_CAPABILITIES = ["training", "life", "walk", "skin", "gait"] as const;
+export const RESOLVED_CAPABILITIES = [
+  "training",
+  "life",
+  "walk",
+  "place",
+  "skin",
+  "gait",
+] as const;
 
 // ------------------------------------------------------------------- 응답
 
-/** 실행되는 능력. 핸드오프 대상(`skin`·`gait`)은 여기 없습니다 — 실행되지 않으니까요. */
-export type CapabilityName = "training" | "life" | "walk";
+/**
+ * 실행되는 능력. 핸드오프 대상(`skin`·`gait`)은 여기 없습니다 — 실행되지 않으니까요.
+ *
+ * `place` 는 PR #196 에서 실행 registry 에 들어왔고 PR #204(D-051)부터 의미 라우터도
+ * 고를 수 있습니다. 이 파일은 백엔드와 **손으로** 맞추는 것이라(머리 주석) 저쪽
+ * `CapabilityName` 이 넷인 동안 여기가 셋이면 조용히 어긋납니다.
+ */
+export type CapabilityName = "training" | "life" | "walk" | "place";
 
 /** 능력 하나의 결과 상태. 최상위 status 와 **다른 축**입니다. */
 export type CapabilityStatus = "OK" | "ABSTAINED" | "REFUSED" | "PENDING" | "ERROR" | "TIMEOUT";
 
 /**
  * 최상위 status 8개. 능력별 6개와 헷갈리지 마세요 — 집계 진리표는
- * `docs/orchestration-contracts.md` §5 가 소유합니다.
+ * `docs/orchestration/contracts.md` §5 가 소유합니다.
  *
  * `UNCERTAIN` 은 **전부 기권**이고 `REFUSED`/`FAILED` 가 아닙니다 (D-033).
  * `HANDOFF` 는 **순수 핸드오프**(실행된 능력 없음)입니다 — 실행과 섞이면 최상위는
@@ -107,6 +120,21 @@ export type Handoff = { target: string; reason: string };
 /** **CLARIFY 는 배타적입니다** (O-8) — 이것이 있으면 능력도 핸드오프도 실행되지 않았습니다. */
 export type ClarifyRequest = { question: string; missing: string[] };
 
+/**
+ * `RouteTrace` — **어느 길로 갔나**. 점검 권한이 있을 때만 옵니다 (#238).
+ *
+ * `model` 과 `prompt_version` 이 `null` 인 것은 **모르는 것이 아니라 없는 것**입니다 —
+ * 결정론적 경로는 모델을 아예 부르지 않습니다. 빈칸으로 그리면 그 둘이 헷갈립니다.
+ *
+ * 여기 실리는 것은 **메타데이터뿐**입니다. 질문 원문·프롬프트 본문·공급자 payload 는
+ * 응답에도 로그에도 싣지 않습니다 (D-037).
+ */
+export type RouteTrace = {
+  router: "deterministic" | "llm";
+  model?: string | null;
+  prompt_version?: string | null;
+};
+
 export type AssistantResponse = {
   request_id: string;
   status: AssistantStatus;
@@ -114,4 +142,6 @@ export type AssistantResponse = {
   results: CapabilityResult[];
   handoffs: Handoff[];
   clarify?: ClarifyRequest | null;
+  /** 점검 권한이 없으면 `null` 입니다. 옛 백엔드에서는 키 자체가 없습니다. */
+  route?: RouteTrace | null;
 };

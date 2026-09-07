@@ -176,6 +176,35 @@ def test_analyze_returns_503_when_storage_not_configured(client, monkeypatch):
     assert client.fake_session.added == []
 
 
+def test_storage_error_detail_never_reaches_the_user(client, monkeypatch):
+    """**내부 사유가 사용자 화면에 그대로 뜨면 안 됩니다.**
+
+    `StorageNotConfiguredError` 메시지는 운영자용이라 이슈 번호·환경 변수 이름·설정값이
+    들어 있습니다. 실제로 앱에 "…정책이 정해지면(#78) 열립니다" 가 그대로 떴습니다
+    (2026-09-03, GCP 배포 직후). 503 은 그대로 두되 문장만 사용자용으로 바꿉니다.
+    """
+    async def owned(session, app_user_id, pet_id):
+        return object()
+
+    class Leaky:
+        def create_upload_ticket(self, *, object_key, content_type):
+            raise StorageNotConfiguredError(
+                "GAIT_BRIDGE_BASE_URL 에 경로가 붙어 있습니다: 'http://host/gait' — #78"
+            )
+
+    monkeypatch.setattr(pet_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_service, "get_storage", lambda: Leaky())
+    r = client.post("/app/gait/analyze", json=_analyze_body())
+
+    assert r.status_code == 503
+    detail = r.json()["detail"]
+    # 사용자에게는 안내 문장만.
+    assert detail == "보행 분석은 아직 준비 중이에요."
+    # 내부 흔적이 하나도 없어야 합니다.
+    for leak in ("#78", "GAIT_BRIDGE_BASE_URL", "http://host/gait", "GAIT_"):
+        assert leak not in detail
+
+
 def test_analyze_rejects_non_uuid_pet_id(client):
     """dog_id="1" 같은 값이 들어오던 자리 — pydantic 이 422 로 거릅니다."""
     r = client.post("/app/gait/analyze", json={"pet_id": "1", "source_file": "a.mp4"})
@@ -282,13 +311,26 @@ def test_detail_never_exposes_internal_feature_vector(client, monkeypatch):
 # ── 워커 경계 (ⓒ) ──────────────────────────────────────────────────────
 def test_task_module_imports_without_gait_deps():
     """태스크 모듈 import 가 torch·daengs_gait 를 끌고 오면 안 됩니다 — backend 웹
-    프로세스(기본 설치)가 이 모듈로 `.delay()` 를 부르기 때문입니다."""
+    프로세스(기본 설치)가 이 모듈로 `.delay()` 를 부르기 때문입니다.
+
+    **별도 인터프리터에서 봅니다** (#224). 같은 프로세스에서 `sys.modules` 를 보면 *이 테스트가
+    돌기 전에 누가 torch 를 올렸는가*를 재게 됩니다 — `ml` 그룹이 깔린 환경에서 `test_embed.py`
+    뒤에 돌면 그 이유로 깨졌고, 파일 하나만 찍어 돌리면 통과해서 원인이 안 보였습니다
+    (decisions-rag.md RAG-057 ⑨ "테스트 위생 둘"). 확인하려는 것은 **깨끗한 프로세스에서
+    이 모듈을 import 했을 때 무엇이 딸려 오는가**이므로, 그 질문을 그대로 묻습니다.
+    """
+    import subprocess
     import sys
 
-    import daengs_backend.tasks.gait  # noqa: F401
-
-    assert "daengs_gait.pipeline" not in sys.modules
-    assert "torch" not in sys.modules
+    probe = (
+        "import sys; import daengs_backend.tasks.gait; "
+        "leaked = [m for m in ('daengs_gait.pipeline', 'torch') if m in sys.modules]; "
+        "print(','.join(leaked)); "
+        "sys.exit(1 if leaked else 0)"
+    )
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert done.returncode == 0, (
+        f"태스크 모듈이 끌고 온 것: {done.stdout.strip() or done.stderr.strip()}")
 
 
 # ── 임시 bridge 의 자격 검사 (2026-09-02 서버에서 무인증으로 열려 있었습니다) ──
@@ -365,6 +407,81 @@ def test_bridge_download_allows_overlay_but_upload_does_not(bridge, client, monk
     assert client.put(f"/app/gait/_bridge/upload/{key}", content=b"overwrite").status_code == 404
     assert bridge.local_path(key).read_bytes() == b"overlay-bytes"  # 안 바뀌었습니다
     assert seen == [True, False]
+
+
+# ── 크기 상한 (D-052: 모든 바이트가 backend 를 지나게 된 뒤로 필수) ──────────
+#
+# GCS 시절 이 경로는 검증용이라 `await request.body()` 로 통째로 읽어도 넘어갔습니다.
+# 이제는 영상 전량이 항상 여기를 지나므로, 상한이 없으면 한 요청이 컨테이너 메모리를
+# 다 먹습니다.
+
+
+@pytest.fixture()
+def small_limit(monkeypatch):
+    """상한을 32바이트로 낮춥니다 — 150MB 를 실제로 만들지 않으려는 것뿐입니다."""
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "gait_max_upload_bytes", 32)
+    return 32
+
+
+@pytest.fixture()
+def pending_key(monkeypatch):
+    """발급된 PENDING 키 하나를 흉내 냅니다."""
+    key = "gait/pet/original/big.mp4"
+
+    async def found(session, storage_key, *, status=None):
+        return _record(status="PENDING", original_storage_key=key)
+
+    monkeypatch.setattr(gait_repo, "find_by_storage_key", found)
+    return key
+
+
+def test_bridge_upload_rejects_oversize_by_content_length(
+    bridge, client, small_limit, pending_key
+):
+    """**다 받기 전에** 거절해야 합니다 — 받고 나서 거절하면 대역폭과 디스크를 이미 썼습니다."""
+    r = client.put(
+        f"/app/gait/_bridge/upload/{pending_key}",
+        content=b"x" * (small_limit + 1),
+        headers={"Content-Length": str(small_limit + 1)},
+    )
+    assert r.status_code == 413
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_rejects_oversize_when_length_lies(
+    bridge, client, small_limit, pending_key
+):
+    """Content-Length 는 앱이 주는 값이라 믿지 않습니다.
+
+    헤더로만 막으면 거짓 길이를 적어 상한을 그대로 통과할 수 있습니다. 스트리밍 중에
+    누적으로 다시 봐야 하고, **끊긴 자리에 반쯤 쓴 파일이 남으면 안 됩니다** —
+    다음 PUT 이 막히거나 confirm 이 모자란 파일을 성공으로 받습니다.
+    """
+    r = client.put(
+        f"/app/gait/_bridge/upload/{pending_key}",
+        content=b"x" * (small_limit * 4),
+        headers={"Content-Length": "1"},
+    )
+    assert r.status_code == 413
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_rejects_empty_body(bridge, client, small_limit, pending_key):
+    """빈 파일을 받아 두면 안 됩니다 — 0바이트는 redact() 의 tombstone 과 같은 모양이라,
+    남겨 두면 "이미 파기된 원본" 처럼 보입니다."""
+    r = client.put(f"/app/gait/_bridge/upload/{pending_key}", content=b"")
+    assert r.status_code == 400
+    assert not bridge.local_path(pending_key).exists()
+
+
+def test_bridge_upload_accepts_up_to_the_limit(bridge, client, small_limit, pending_key):
+    """경계값은 통과합니다 (상한 초과만 막습니다)."""
+    payload = b"x" * small_limit
+    r = client.put(f"/app/gait/_bridge/upload/{pending_key}", content=payload)
+    assert r.status_code == 200
+    assert bridge.local_path(pending_key).read_bytes() == payload
 
 
 def test_storage_not_configured_fails_loudly():

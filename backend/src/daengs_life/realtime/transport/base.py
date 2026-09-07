@@ -104,7 +104,16 @@ def request(
     for attempt in range(MAX_RETRIES + 1):
         if budget.expired():
             # 남은 provider 를 포기하고 UNKNOWN 으로 응답하는 경로다 (⑤-b).
-            raise Unavailable("예산 초과", hint=f"{budget.total}초 안에 못 끝냈다") from last
+            #
+            # **직전 실패를 문구에 싣는다.** `from last` 는 예외 체인에만 남고 `ProviderResult`
+            # 로는 `str(exc)` 만 올라가서, ⑥ `sources` 에는 "예산 초과"만 보였다. 그러면
+            # 시간을 쓴 것이 재시도인지(그 API 가 실제로 실패 중) 앞 순서인지(직렬이라 밀린 것)
+            # 구분이 안 되고, 실제로 그 구분이 안 돼서 원인을 순서로만 짚었다 (2026-09-04).
+            raise Unavailable(
+                "예산 초과",
+                hint=f"{budget.total}초 안에 못 끝냈다"
+                     + (f" — 직전 실패: {last}" if last is not None else " (한 번도 못 나갔다)"),
+            ) from last
 
         try:
             response = httpx.get(

@@ -43,7 +43,11 @@ class Source(ABC):
     subcategory: str                         # kebab-case
     source_type: str                         # document | web | api | manual (CHECK)
     format: str                              # pdf | hwp | hwpx | html | xml | json
-    trust_level: str                         # law | official | guideline
+    # law | official | guideline. ⚠ **`guideline` 을 쓰는 소스는 아직 하나도 없다** — 코퍼스 9,451
+    # 청크가 official 5,730 · law 3,721 이다 (RAG-060 실측). 쓰기로 했던 `kvma-guideline` 이
+    # 가이드라인 문서를 못 찾아 빠졌기 때문이고(`data-sources.md` §11), 값이 틀린 것이 아니라
+    # 비어 있는 것이라 지우지 않는다. 등급 셋을 전제로 코드를 짜기 전에 이 줄을 볼 것.
+    trust_level: str
     license: str = ""
     # 변경 감지 지문을 무엇으로 낼지. 기본은 원본 바이트고 html 은 늘 텍스트다 (store.py 머리).
     # `"text"` 로 두면 다른 format 도 `extract().text` 로 지문을 낸다 — 응답에 총건수·타임스탬프처럼

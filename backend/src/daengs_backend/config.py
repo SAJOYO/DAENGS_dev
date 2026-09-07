@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +8,18 @@ from sqlalchemy import URL
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+# `/assistant/query` 를 어느 오케스트레이터가 답하는가.
+#
+# **이 별칭이 config 에 있는 것은 자리를 잘못 잡아서가 아니라 순환 때문입니다.**
+# 임자는 `orchestration/runtime.py` 인데, 거기 두고 config 가 import 하면
+# config → runtime → service → semantic → config 로 한 바퀴 돕니다
+# (`semantic.py` 가 `settings` 를 모듈 최상단에서 읽습니다). 값의 권위가 환경
+# 변수(`DAENGS_ORCHESTRATOR`)에 있으니 정의를 이쪽에 두고, `runtime.py` 가
+# 다시 export 합니다 — 쓰는 쪽은 `orchestration.runtime` 에서 가져오면 됩니다.
+#
+# Literal 인 이유: 오타가 **기동 때** 걸립니다. `str` 이면 첫 요청에서야 터집니다.
+OrchestratorKind = Literal["langgraph", "agent"]
 
 
 class Settings(BaseSettings):
@@ -96,6 +109,24 @@ class Settings(BaseSettings):
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
 
+    # ── 오케스트레이터 구현 선택 ──────────────────────────────────────
+    # LangGraph 는 정해진 워크플로우에 최적화돼 있어, 자유도가 필요한 질의에
+    # LangChain 에이전트가 더 나은지 재 보려고 두 구현을 병존시킵니다.
+    # `orchestration/runtime.py` 의 `build_orchestrator()` 가 이 값을 읽습니다.
+    #
+    # **이건 배포 스위치입니다 — 비교 스위치가 아닙니다.** 두 구현을 나란히 재는
+    # 벤치마크는 이 값을 건드리지 않고 `build_orchestrator(kind)` 로 객체를 둘
+    # 만듭니다. 환경 변수를 토글해 가며 재면 한 프로세스에서 비교가 안 됩니다.
+    #
+    # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
+    orchestrator: OrchestratorKind = "langgraph"
+
+    # 에이전트 한 턴의 예산. **답이 아니라 안전장치입니다** — 에이전트가 루프를 돌아
+    # 비싼 것 자체는 카드 ③이 재야 할 발견이라, 여기서 깎아 결과를 미리 만들지
+    # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
+    agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
+    agent_recursion_limit: int = Field(default=25, gt=0)
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는
@@ -118,6 +149,8 @@ class Settings(BaseSettings):
     place_search_base_url: str = "http://place-search:8000"
     # Place 내부 provider timeout과 별개의 assistant 응답 경계입니다 (밀리초).
     place_discovery_timeout_ms: int = Field(default=15_000, gt=0)
+    # Facility search includes the Place provider (30s default) and DB work.
+    facility_discovery_timeout_ms: int = Field(default=45_000, gt=0, le=120_000)
 
     # 점령지 사진 판정은 대화/라우팅과 호출 예산이 다릅니다. 모델 이름과 12초 제한을
     # 따로 두어, 사진 판정 워커만 독립적으로 교체·튜닝할 수 있게 합니다. 키는 같은
@@ -136,43 +169,71 @@ class Settings(BaseSettings):
     territory_site_base_url: str = "http://place-search:8000"
     territory_site_timeout_seconds: float = 2.0
 
-    # ── 보행 영상 저장소 (D-043) ──────────────────────────────────────
-    # provider 는 GCS 로 확정 (2026-09-02). 하지만 **세부값은 하드코딩하지 않습니다** —
-    # bucket·location·만료·보관 정책은 #78 이 정할 자리라 환경으로 뺍니다.
+    # ── 공용 파일 저장소 (D-043, D-052) ───────────────────────────────
+    # provider 는 **서버의 도커 볼륨**으로 확정 (D-052, 2026-09-04). GCS 버킷은 파지
+    # 않습니다. 그래도 **세부값은 하드코딩하지 않습니다** — 환경으로 뺍니다.
+    #
+    # ⚠️ 이름이 gait_* 인 것은 보행에서 시작한 역사적 이름입니다. 지금은 점령지 사진도
+    #    같은 값을 읽는 **공용 설정**이고, 프로필 사진·도감 카드도 여기로 옵니다.
+    #    MEDIA_* 로 바꾸는 것은 볼륨이 실제로 도는 것을 본 뒤 별도 카드입니다.
     #
     # `gait_storage` 가 저장소 구현을 고릅니다:
     #   "none"  (기본) — 미설정. 모든 호출이 503. 서버에 아무 설정도 없을 때.
-    #   "local" — **임시 bridge.** GCS 자격증명이 없어도 `/app/gait/*` 왕복을
-    #             검증할 수 있게 로컬 디렉터리에 둡니다. 프로덕션이 아닙니다.
-    #   "gcs"   — 진짜. Signed URL 로 앱이 GCS 에 직접 올립니다.
+    #             기본값을 none 으로 두는 이유는 개발 PC 가 아무 설정 없이도 뜨게
+    #             하려는 것입니다 — 운영 서버는 .env 에서 local 로 켭니다.
+    #   "local" — **이게 운영값입니다** (D-052). 서버의 gait-bridge 볼륨에 두고
+    #             업로드·다운로드가 backend 의 bridge 를 지납니다.
+    #   "gcs"   — 지금은 안 씁니다. 서버가 부하를 못 받을 때 되돌아갈 길.
     gait_storage: str = Field(
         default="none", validation_alias=AliasChoices("GAIT_STORAGE")
     )
-    # GCS. bucket·location 은 #78 이 버킷을 파야 값이 생깁니다. 그 전엔 비어 있고,
-    # gait_storage="gcs" 인데 비어 있으면 기동이 아니라 첫 발급에서 명확히 실패합니다.
+    # GCS 로 되돌아갈 때만 씁니다. 비워 두는 것이 정상입니다 — 비어 있는 채
+    # gait_storage="gcs" 이면 기동이 아니라 첫 발급에서 명확히 실패합니다.
     gait_gcs_bucket: str = Field(
         default="", validation_alias=AliasChoices("GAIT_GCS_BUCKET")
     )
     gait_gcs_location: str = Field(
         default="", validation_alias=AliasChoices("GAIT_GCS_LOCATION")
     )
-    # Signed URL 만료(초). **잠정 기본값**입니다 — #78 이 정하면 그 값으로.
+    # 만료(초). **아직 잠정 기본값**입니다 — 실기기 왕복을 보고 정합니다.
     # 업로드는 큰 파일이라 넉넉히, 다운로드(재생)는 짧게.
+    #
+    # ⚠️ local 저장소에서는 **다운로드 만료가 실제로 걸리지 않습니다.** bridge 주소에는
+    #    서명도 만료도 없고, 대신 라우터가 DB 로 "backend 가 발급한 키인지"를 봅니다.
+    #    이 값은 GCS 로 되돌아갈 때를 위해 계약에만 남아 있습니다.
     gait_upload_url_ttl_seconds: int = Field(
         default=15 * 60, validation_alias=AliasChoices("GAIT_UPLOAD_URL_TTL_SECONDS")
     )
     gait_download_url_ttl_seconds: int = Field(
         default=10 * 60, validation_alias=AliasChoices("GAIT_DOWNLOAD_URL_TTL_SECONDS")
     )
-    # local bridge 가 파일을 두는 곳. gait 워커와 backend 가 **같이 보는** 경로여야
-    # 합니다 (compose 에서 한 볼륨을 양쪽에 마운트). gait_storage="local" 일 때만 씁니다.
+    # 파일을 두는 곳 — **컨테이너 안 경로**입니다 (윈도우 경로가 아닙니다).
+    # compose 의 gait-bridge 볼륨이 backend · gait-worker · territory-vision-worker
+    # 셋에 이 경로로 물립니다. 셋이 **같은 곳을 봐야** 분석이 됩니다.
     gait_local_storage_dir: str = Field(
         default="", validation_alias=AliasChoices("GAIT_LOCAL_STORAGE_DIR")
     )
-    # local bridge 의 업로드/다운로드 URL 앞부분 (앱 기준, nginx 접두사 포함).
-    # 예: http://daengback.~ — 앱이 여기에 /app/gait/_bridge/... 를 붙여 부릅니다.
+    # 업로드/다운로드 URL 앞부분 (앱 기준, nginx 접두사 포함).
+    # 앱이 여기에 /app/gait/_bridge/... 를 붙여 부릅니다.
+    #
+    # ⚠️ **서버마다 다른 유일한 값입니다.** 집 서버는 http://daengback.~ (평문),
+    #    GCP VM 은 https://daengapi.~ 입니다. 릴리즈 앱이 보는 곳은 **반드시 후자**여야
+    #    합니다 — 공개한 처리방침 6항이 "서버와의 통신은 HTTPS로 암호화합니다" 입니다.
     gait_bridge_base_url: str = Field(
         default="", validation_alias=AliasChoices("GAIT_BRIDGE_BASE_URL")
+    )
+    # bridge 업로드 한 건의 크기 상한(바이트).
+    #
+    # ⚠️ **없으면 안 됩니다.** D-052 로 모든 바이트가 backend 를 지나게 됐는데, 상한이
+    #    없으면 한 요청이 컨테이너 메모리를 다 먹습니다. 라우터가 Content-Length 를
+    #    먼저 보고, 스트리밍 중에도 누적으로 다시 봅니다.
+    #
+    # nginx 의 `location /app/gait/` client_max_body_size(200m) **보다 낮게** 두세요.
+    # 높으면 nginx 가 먼저 끊어서 앱이 우리 413 대신 nginx HTML 을 받습니다.
+    # 이름·기본값은 레거시 gait-analysis 의 GAIT_MAX_UPLOAD_BYTES 와 일부러 같습니다.
+    gait_max_upload_bytes: int = Field(
+        default=150 * 1024 * 1024,
+        validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────

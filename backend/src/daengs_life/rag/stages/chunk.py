@@ -21,7 +21,13 @@ from ..core import io
 from ..core.ir import Chunk, ChunkSet
 
 NAME = "structure"
-VERSION = 1
+# ⚠ **청커의 산출이 달라지면 반드시 올린다.** `io.is_chunk_current()` 가 이 수를 청크 파일
+#   헤더의 `chunker_version` 과 비교해 낡은 파일을 다시 만든다 (RAG-066).
+#   1 → 2 : `org` 을 문서 필드로 싣기 시작했다 (RAG-063 / #262). **그때 이 수를 안 올렸고**,
+#           그래서 08-29 자 조례 208·보조금24 37 청크 파일이 `org` 없이 남았다.
+#           그 245건은 마이그레이션으로 DB 에만 채워져 있었는데, #268 의 `rag load` 가
+#           `org` 없는 청크로 덮어써 **지역 필터가 통째로 죽었다** (RAG-066 ①).
+VERSION = 2
 
 # ---------------------------------------------------------------- 임계값 (전부 ADR 소관)
 MAX_CHARS = 7_500        # ② 하드 상한. 넘으면 조용히 자르지 않고 실패시킨다
@@ -71,6 +77,10 @@ def _doc_fields(head: dict) -> dict:
         "trust_level": head.get("trust_level", ""),
         "published_at": head.get("published_at"),
         "license": head.get("license", ""),
+        # 지자체·소관기관명 (RAG-063). 파서가 `extra` 에 넣어 두는데 여기서 안 꺼내면
+        # 청크 행에서 사라진다 — RAG-033 ⑥ 은 `load.META_FIELDS` 만 지목했지만
+        # **끊긴 자리가 하나 더 앞에 있었다.** `org` 이 없는 소스에서는 None 이다.
+        "org": (head.get("extra") or {}).get("org") or None,
     }
 
 

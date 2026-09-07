@@ -115,9 +115,14 @@ class Store:
             "source": src.org,
             "source_type": src.source_type,
             "format": src.format,
-            "category": src.category,
-            # 한 소스가 여러 법령을 받는 경우(law-drf-api)처럼 문서마다 분류가 다를 수 있다.
-            # 대상이 알려주면 그 값을, 아니면 소스의 기본값을 쓴다.
+            # 한 소스가 여러 법령·페이지를 받는 경우(law-drf-api, nias-pet)처럼 문서마다
+            # 분류가 다를 수 있다. 대상이 알려주면 그 값을, 아니면 소스의 기본값을 쓴다.
+            #
+            # ⚠ `category` 는 2026-09-06(RAG-065)에야 대상별로 갈렸다. 그전까지는 소스 하나가
+            #   한 값만 가졌는데, `nias-pet` 이 등록제 해설(policy)과 사료 해설(food)을 같이
+            #   받게 되면서 깨졌다. `documents.category` 는 CHECK 가 걸린 열이라
+            #   **없는 값을 넣으면 적재가 죽는다** — 새 값을 쓸 때 `db/init/01_schema.sql` 을 볼 것.
+            "category": target.meta.get("category") or src.category,
             "subcategory": target.meta.get("subcategory") or src.subcategory,
             "trust_level": src.trust_level,
             "published_at": (ext.published_at if ext else None) or target.meta.get("published_at"),

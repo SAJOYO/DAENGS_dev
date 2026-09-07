@@ -22,9 +22,11 @@ from daengs_backend.core.token import create_access_token
 from daengs_backend.main import app
 from daengs_backend.models import ScreeningRecord
 from daengs_backend.orchestration.contracts import (
+    SCREENING_HISTORY_LIMIT,
     AssistantResponse,
     AssistantStatus,
     ScreeningContext,
+    ScreeningHistory,
 )
 from daengs_backend.orchestration.semantic import build_semantic_router_prompt
 from daengs_backend.routers import assistant as assistant_router
@@ -67,10 +69,12 @@ def _record(
     status: str = "DONE",
     result: dict | None = None,
     created_at: datetime.datetime | None = NOW,
+    pet_id: uuid.UUID | None = None,
 ) -> ScreeningRecord:
     return ScreeningRecord(
         id=uuid.uuid4(),
         app_user_id=owner,
+        pet_id=pet_id,
         status=status,
         photo_storage_key=f"screening/{owner}/{uuid.uuid4()}/photo.jpg",
         photo_content_type="image/jpeg",
@@ -82,6 +86,10 @@ def _record(
 
 async def _resolve(record: ScreeningRecord, *, now: datetime.datetime = NOW):
     return await screening_context.resolve(object(), OWNER, record.id, now=now)
+
+
+async def _resolve_context(record: ScreeningRecord, *, now: datetime.datetime = NOW):
+    return await screening_context.resolve_context(object(), OWNER, record.id, now=now)
 
 
 # ---------------------------------------------------------------- 좁힘 (D-023)
@@ -332,3 +340,233 @@ def test_라우터_프롬프트는_기록을_안_본다(store) -> None:
     )
     assert "abnormal" not in prompt
     assert "screening" not in prompt
+
+
+# ---------------------------------------------------------------- 이력 (#79 3번)
+#
+# 이력의 진입 신호는 `screening_record_id` 입니다 — "지난번보다 어때요" 에는 앱이 보낼
+# 참조가 따로 없어서, 결과 화면에서 이어 묻는 그 자리에 얹습니다. 그래서 이 절의 테스트는
+# 전부 "기준 기록 하나를 지목했을 때 **그 아이의 이전 기록**이 어디까지 따라오는가" 입니다.
+
+
+PET = uuid.uuid4()
+OTHER_PET = uuid.uuid4()
+
+
+def _pet_record(days_ago: int, *, verdict: str = "normal", **kwargs) -> ScreeningRecord:
+    """`PET` 의 `DONE` 기록 한 건. 날짜만 다르게 여러 건을 만들 때 씁니다."""
+    kwargs.setdefault("pet_id", PET)
+    kwargs.setdefault("result", {**FULL_RESULT, "verdict": verdict})
+    return _record(created_at=NOW - datetime.timedelta(days=days_ago), **kwargs)
+
+
+def _fill(store: Store, *records: ScreeningRecord) -> None:
+    """**옛것부터** 넣습니다 — fakes 가 담은 순서를 뒤집어 `created_at DESC` 를 흉내 냅니다."""
+    store.screenings.extend(records)
+
+
+async def test_이전_기록은_최근순으로_넘어간다(store: Store) -> None:
+    older = _pet_record(40, verdict="normal")
+    newer = _pet_record(10, verdict="retake")
+    current = _pet_record(0, verdict="abnormal")
+    _fill(store, older, newer, current)
+    assert await _resolve_context(current) == {
+        "screening": {"verdict": "abnormal", "days_ago": 0},
+        "screening_history": [
+            {"verdict": "retake", "days_ago": 10},
+            {"verdict": "normal", "days_ago": 40},
+        ],
+    }
+
+
+async def test_기준_기록_자신은_이력에_없다(store: Store) -> None:
+    """이미 `screening` 으로 가 있습니다. 두 번 실리면 '기록이 두 건' 으로 읽힙니다."""
+    current = _pet_record(0)
+    _fill(store, current)
+    assert await _resolve_context(current) == {
+        "screening": {"verdict": "normal", "days_ago": 0}
+    }
+
+
+async def test_첫_기록이면_이력_키가_아예_없다(store: Store) -> None:
+    """빈 목록을 실어 '이력을 봤는데 없더라' 를 말하지 않습니다 — 안 실으면 이 기능
+    이전과 똑같은 컨텍스트입니다."""
+    current = _pet_record(0)
+    _fill(store, current)
+    assert "screening_history" not in await _resolve_context(current)
+
+
+async def test_상한을_넘으면_최근_것부터_자른다(store: Store) -> None:
+    """상한은 계약에 있습니다 (`SCREENING_HISTORY_LIMIT`). 오래 쓴 아이일수록 한 요청이
+    비싸지는 것도, 저장되는 대화 turn 이 길어지는 것도 여기서 멈춥니다."""
+    olds = [_pet_record(days) for days in (90, 60, 30, 20, 10)]  # 옛것부터
+    current = _pet_record(0)
+    _fill(store, *olds, current)
+    history = (await _resolve_context(current))["screening_history"]
+    assert len(history) == SCREENING_HISTORY_LIMIT
+    assert [entry["days_ago"] for entry in history] == [10, 20, 30]
+
+
+@pytest.mark.parametrize("status", ["PENDING_UPLOAD", "FAILED"])
+async def test_판정이_끝나지_않은_기록은_이력에도_없다(store: Store, status: str) -> None:
+    """`FAILED` 의 `failure_reason` 은 운영자용이고, 판정 전은 애초에 말할 것이 없습니다."""
+    dropped = _pet_record(20, status=status, result=None)
+    kept = _pet_record(30)
+    current = _pet_record(0)
+    _fill(store, kept, dropped, current)
+    assert (await _resolve_context(current))["screening_history"] == [
+        {"verdict": "normal", "days_ago": 30}
+    ]
+
+
+async def test_못_쓸_행을_건너뛰고도_상한까지_채운다(store: Store) -> None:
+    """딱 3건만 읽으면 실패가 몇 번 낀 아이의 이력이 통째로 비어 보입니다."""
+    rows: list[ScreeningRecord] = []
+    for days in (70, 60, 50, 40, 30, 20):
+        rows.append(_pet_record(days + 1, status="FAILED", result=None))
+        rows.append(_pet_record(days))
+    current = _pet_record(0)
+    _fill(store, *rows, current)
+    history = (await _resolve_context(current))["screening_history"]
+    assert [entry["days_ago"] for entry in history] == [20, 30, 40]
+
+
+async def test_다른_아이의_기록은_안_섞인다(store: Store) -> None:
+    """'지난번' 이 다른 아이의 판정이면 그건 이력이 아니라 오답입니다."""
+    sibling = _pet_record(10, pet_id=OTHER_PET, verdict="abnormal")
+    mine = _pet_record(20)
+    current = _pet_record(0)
+    _fill(store, mine, sibling, current)
+    assert (await _resolve_context(current))["screening_history"] == [
+        {"verdict": "normal", "days_ago": 20}
+    ]
+
+
+async def test_아이를_모르면_이력이_없다(store: Store) -> None:
+    """`pet_id` 는 NULL 일 수 있습니다 — 아이를 지우면 FK 가 SET NULL 이고 기록은 남습니다.
+    그때 소유자 전체로 넓히면 다른 아이의 판정이 '지난번' 으로 섞입니다."""
+    orphan_current = _record(created_at=NOW)
+    earlier = _pet_record(10)
+    _fill(store, earlier, orphan_current)
+    assert await _resolve_context(orphan_current) == {
+        "screening": {"verdict": "abnormal", "days_ago": 0}
+    }
+
+
+async def test_남의_기록을_지목하면_이력도_없다(store: Store) -> None:
+    """아이를 알 방법이 그 기록뿐이라, 못 읽으면 이력의 진입 자체가 없습니다."""
+    alien = _record(owner=STRANGER, pet_id=PET)
+    mine = _pet_record(10)
+    _fill(store, mine, alien)
+    assert await screening_context.resolve_context(object(), OWNER, alien.id, now=NOW) == {}
+
+
+async def test_기준_기록이_실패해도_이력은_간다(store: Store) -> None:
+    """방금 찍은 판정이 실패한 자리에서 '지난번엔 어땠지' 는 그대로 유효한 질문입니다."""
+    earlier = _pet_record(10, verdict="abnormal")
+    failed_now = _pet_record(0, status="FAILED", result=None)
+    _fill(store, earlier, failed_now)
+    assert await _resolve_context(failed_now) == {
+        "screening_history": [{"verdict": "abnormal", "days_ago": 10}]
+    }
+
+
+async def test_이력에도_분포와_문구와_확률은_안_실린다(store: Store) -> None:
+    """좁힘은 건수와 무관합니다 — 이력이라고 병변명이 필요해지지 않습니다 (D-023).
+    `ScreeningHistory.entries` 가 `ScreeningContext` 자체인 이유가 이것입니다."""
+    earlier = _pet_record(10)
+    current = _pet_record(0)
+    _fill(store, earlier, current)
+    flat = str(await _resolve_context(current))
+    for 금지 in ("distribution", "group", "A1", "구진", "융기", "0.956", "95.6",
+               "headline", "수의사 진료", "진단이 아니"):
+        assert 금지 not in flat
+
+
+# ---------------------------------------------------------------- 이력 계약
+
+
+def test_이력_계약이_상한을_강제한다() -> None:
+    """상한이 코드의 `break` 에만 있으면 그 줄이 사라질 때 아무것도 안 깨집니다."""
+    entries = [
+        {"verdict": "normal", "days_ago": day} for day in range(SCREENING_HISTORY_LIMIT)
+    ]
+    assert len(ScreeningHistory(entries=entries).entries) == SCREENING_HISTORY_LIMIT
+    with pytest.raises(ValidationError):
+        ScreeningHistory(entries=[*entries, {"verdict": "normal", "days_ago": 99}])
+
+
+def test_이력_계약도_넓어지면_소리가_난다() -> None:
+    """항목이 `ScreeningContext` 라 좁힘이 그대로 걸리고, 감싼 쪽도 `extra="forbid"` 입니다."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        ScreeningHistory(entries=[{"verdict": "normal", "days_ago": 0, "stage2": {}}])
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        ScreeningHistory.model_validate({"entries": [], "trend": "improving"})
+
+
+def test_이력에_추세를_담을_칸이_없다() -> None:
+    """두 시점의 차이는 강아지의 변화가 아니라 모델의 잡음일 수 있습니다 (D-023 —
+    2단계 병변명 holdout 오답 56.6%, `stage1` 은 보정 전). 비교를 프롬프트로 금지하는
+    대신 **비교할 데이터를 안 둡니다.**"""
+    assert set(ScreeningHistory.model_fields) == {"entries"}
+    for 금지 in ("trend", "improved", "worsened", "delta", "change", "compared_to"):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            ScreeningHistory.model_validate({"entries": [], 금지: True})
+
+
+# ---------------------------------------------------------------- 이력 HTTP 배선
+
+
+def test_이력도_같은_요청에서_컨텍스트로_넘어간다(client, store, service) -> None:
+    """진입 신호는 `screening_record_id` 하나입니다 — 이력용 필드를 새로 만들지 않습니다.
+
+    라우터는 `now` 를 안 넘기므로 실제 시계로 잽니다. 기록도 진짜 과거로 만듭니다."""
+    real_now = datetime.datetime.now(datetime.UTC)
+    earlier = _record(
+        pet_id=PET,
+        result={**FULL_RESULT, "verdict": "normal"},
+        created_at=real_now - datetime.timedelta(days=30),
+    )
+    current = _record(pet_id=PET, created_at=real_now - datetime.timedelta(days=3))
+    _fill(store, earlier, current)
+    got = _post(client, {"query": "지난번보다 어때?", "screening_record_id": str(current.id)})
+    assert got.status_code == 200
+    context = service.calls[0]["context"]
+    assert context["screening"] == {"verdict": "abnormal", "days_ago": 3}
+    assert context["screening_history"] == [{"verdict": "normal", "days_ago": 30}]
+
+
+def test_이력_때문에_세션이_더_열리지는_않는다(client, store, service, factory) -> None:
+    """이력은 기존 조회에 얹힙니다 — 같은 세션에서 쿼리 하나가 늘 뿐입니다."""
+    now = datetime.datetime.now(datetime.UTC)
+    earlier = _record(pet_id=PET, created_at=now - datetime.timedelta(days=30))
+    current = _record(pet_id=PET, created_at=now)
+    _fill(store, earlier, current)
+    got = _post(client, {"query": "지난번보다 어때?", "screening_record_id": str(current.id)})
+    assert got.status_code == 200
+    assert factory.opened == 1
+
+
+def test_활성_강아지만으로는_이력을_안_읽는다(client, store, factory, service) -> None:
+    """진입 신호는 `screening_record_id` 뿐입니다 — `active_dog_id` 는 아직 이력을 안 켭니다.
+
+    일반 대화 전반의 피부 기억으로 넓히는 것은 실제 수요가 확인된 뒤입니다. 열린 세션
+    하나는 **프로필 조회**(`_with_dog_context`) 의 것이고, 이력은 거기에 아무것도 안
+    더했습니다 — 이 숫자가 2가 되면 넓힌 것입니다."""
+    _fill(store, _pet_record(10), _pet_record(3))
+    got = _post(client, {"query": "산책 가도 돼?", "active_dog_id": str(PET)})
+    assert got.status_code == 200
+    assert factory.opened == 1
+    assert "screening_history" not in service.calls[0]["context"]
+    assert "screening" not in service.calls[0]["context"]
+
+
+def test_라우터_프롬프트는_이력도_안_본다(store) -> None:
+    """승인된 라우팅 메타데이터는 셋뿐입니다 (`semantic._ROUTING_METADATA_KEYS`).
+    이력은 라우팅 신호가 아니라 능력이 쓸 사실입니다."""
+    prompt = build_semantic_router_prompt(
+        query="지난번보다 어때?",
+        context={"screening_history": [{"verdict": "abnormal", "days_ago": 30}]},
+    )
+    assert "abnormal" not in prompt
+    assert "screening_history" not in prompt

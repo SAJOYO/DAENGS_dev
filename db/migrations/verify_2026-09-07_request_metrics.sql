@@ -6,6 +6,10 @@
 -- (`psql … < verify_%MIG_FILE% || exit 1`) SELECT 만 있으면 **틀려도 통과한다.**
 -- 사람이 눈으로 볼 질의는 단언 뒤에 남겼다.
 --
+-- ⚠ **실패 문구에 `mismatch` 나 `missing table` 이 들어가야 한다.** 하네스가 stderr 에서
+-- 그 낱말로 "verifier 가 잡았다" 와 "변조 SQL 이 죽었다" 를 가른다. 다른 낱말로 실패하면
+-- 잡았는데도 안 잡은 것으로 세어져 CI 가 빨개진다.
+--
 -- **이 표에서 제일 중요한 단언은 ⑤ 다** — "없어야 하는 열이 없는지". 다른 표의 verify 는
 -- 있어야 할 것을 확인하는데, 여기서는 **질문 원문이나 회원 식별자가 슬쩍 들어오지
 -- 않았는지**가 그만큼 중요하다 (D-037 · D-054). 열이 하나 늘어도 아무것도 안 깨지므로
@@ -60,7 +64,7 @@ BEGIN
         WHERE c.conrelid = relation AND c.conname = want.name AND c.contype = 'c'
     );
     IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'missing CHECK on request_metrics: %', missing;
+        RAISE EXCEPTION 'constraint mismatch on request_metrics: %', missing;
     END IF;
 
     -- ③ 인덱스 둘. created_at 은 기간 집계가, request_id 는 신고 한 건에서 오는 길이 쓴다.
@@ -75,7 +79,7 @@ BEGIN
         WHERE x.indrelid = relation AND i.relname = want.name
     );
     IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'missing index on request_metrics: %', missing;
+        RAISE EXCEPTION 'index mismatch on request_metrics: %', missing;
     END IF;
 
     -- ④ **외래 키가 없어야 한다.** chat_turns 를 CASCADE 로 걸면 탈퇴 한 번에
@@ -85,7 +89,7 @@ BEGIN
         SELECT 1 FROM pg_constraint c
         WHERE c.conrelid = relation AND c.contype = 'f'
     ) THEN
-        RAISE EXCEPTION 'request_metrics must have no foreign key';
+        RAISE EXCEPTION 'constraint mismatch on request_metrics: 외래 키가 있으면 안 된다';
     END IF;
 
     -- ⑤ **금지된 열이 없어야 한다. 이 단언이 이 파일의 값이다.**
@@ -104,7 +108,8 @@ BEGIN
       );
     IF forbidden IS NOT NULL THEN
         RAISE EXCEPTION
-            'request_metrics has forbidden column(s): % — D-037/D-054 를 보라', forbidden;
+            'column mismatch on request_metrics: 금지된 열 % — D-037/D-054 를 보라',
+            forbidden;
     END IF;
 END
 $verify$;

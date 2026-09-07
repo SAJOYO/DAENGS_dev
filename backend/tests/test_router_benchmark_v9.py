@@ -1,13 +1,13 @@
-"""v8 prompt-regression runner: production `semantic-router-ko-v7` vs. the frozen v3 contract.
+"""v9 prompt-regression runner: production `semantic-router-ko-v8` vs. the frozen v3 contract.
 
-No Gemini calls here (FakeClient only). The ONE changed variable versus the recorded v7
-run is the production prompt (v7 adds the `place` destination); model id, gold set,
-gates, schema shape and the single-schema-retry policy are unchanged.
+No Gemini calls here (FakeClient only). The ONE changed variable versus the recorded v8
+run is the production prompt (v8 adds the explicit-exclusion sentence); model id, gold
+set, gates, schema shape and the single-schema-retry policy are unchanged.
 
-The point of the v8 run is narrow and worth naming: the frozen 80 contain no Place case,
-so on this set every Place selection is a false positive. These tests make sure the run
-is pointed at new artifact paths, drives the real production prompt, and cannot quietly
-overwrite v1–v7 evidence.
+Two things are worth pinning beyond the usual "new paths, real prompt, no overwrite":
+the runner scores the router's decision with the general fallback OFF (an empty decision
+stays an empty plan, exactly as v1–v8 scored it), and the frozen evaluator now admits
+`general` so a flag-on plan would be a precision miss, never an invented capability.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_ben
 from tools.router_benchmark.runner import build_artifacts
 from tools.router_benchmark.runner_v2 import GENERATION_CONFIG
 from tools.router_benchmark.runner_v5 import run_cases
-from tools.router_benchmark.runner_v7 import BENCHMARK_ID as V7_BENCHMARK_ID
-from tools.router_benchmark.runner_v8 import (
+from tools.router_benchmark.runner_v8 import BENCHMARK_ID as V8_BENCHMARK_ID
+from tools.router_benchmark.runner_v9 import (
     BENCHMARK_ID,
     GOLD_VERSION,
     MODEL_ID,
@@ -60,52 +60,53 @@ def _response(payload: object) -> SimpleNamespace:
     )
 
 
-def test_v8_is_the_next_run_identifier_with_the_v7_prompt_and_unchanged_model_gold() -> None:
-    assert V7_BENCHMARK_ID == "orchestration-router-v7"
-    assert BENCHMARK_ID == "orchestration-router-v8"
+def test_v9_is_the_next_run_identifier_with_the_v8_prompt_and_unchanged_model_gold() -> None:
+    assert V8_BENCHMARK_ID == "orchestration-router-v8"
+    assert BENCHMARK_ID == "orchestration-router-v9"
     assert MODEL_ID == "gemini-3.1-flash-lite"
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert len(load_gold_v3_cases()) == 80
-    # The v7 record stays exactly as it was accepted.
-    recorded_v7 = json.loads((EVALS_DIR / "summary_v7.json").read_text(encoding="utf-8"))
-    assert recorded_v7["prompt_version"] == "semantic-router-ko-v6"
-    assert recorded_v7["verdict"] == "PASS"
-    # The v8 run itself is frozen as having sent v7 — that record is immutable even
-    # though production has since advanced (PR #279 → v8, run by runner_v9).
+    # The v8 record stays exactly as it was accepted.
     recorded_v8 = json.loads((EVALS_DIR / "summary_v8.json").read_text(encoding="utf-8"))
     assert recorded_v8["prompt_version"] == "semantic-router-ko-v7"
     assert recorded_v8["verdict"] == "PASS"
+    # The v9 run itself is frozen as having sent v8 — that record is immutable even
+    # though production has since advanced (D-057 → v9, run by runner_v10).
+    recorded_v9 = json.loads((EVALS_DIR / "summary_v9.json").read_text(encoding="utf-8"))
+    assert recorded_v9["prompt_version"] == "semantic-router-ko-v8"
+    assert recorded_v9["verdict"] == "PASS"
+    assert recorded_v9["metrics"]["exact_route_plan_match"] == 0.975
 
 
-def test_v8_writes_only_new_artifact_paths() -> None:
+def test_v9_writes_only_new_artifact_paths() -> None:
     """A paid run must never be able to overwrite historical evidence."""
     for path in (RESULTS_PATH, SUMMARY_PATH, REPORT_PATH):
-        assert path.name.endswith(("_v8.jsonl", "_v8.json", "_v8_report.md")), path.name
+        assert path.name.endswith(("_v9.jsonl", "_v9.json", "_v9_report.md")), path.name
     historical = {
         EVALS_DIR / f"{stem}_v{n}{suffix}"
-        for n in range(1, 8)
+        for n in range(1, 9)
         for stem, suffix in (("results", ".jsonl"), ("summary", ".json"))
     }
     assert not historical & {RESULTS_PATH, SUMMARY_PATH, REPORT_PATH}
 
 
-def test_v8_provider_call_uses_the_production_prompt_and_schema() -> None:
+def test_v9_provider_call_uses_the_production_prompt_and_schema() -> None:
     case = next(c for c in load_gold_v3_cases() if c.case_id == "mixed_10")
     client = FakeClient([_response({"execute": ["life", "walk"], "handoffs": ["gait"]})])
     attempts, _, social = run_cases([case], client=client, model_id=MODEL_ID)
     call = client.models.calls[0]
     assert call["model"] == "gemini-3.1-flash-lite"
     assert f"PROMPT_VERSION: {PROMPT_VERSION}" in call["contents"]
-    # v6's walking-window sentence survives v7 untouched.
+    # v6's walking-window sentence and v7's Place destination survive v8 untouched.
     assert "choosing a suitable walking" in call["contents"]
-    # and the new destination is actually offered to the model.
     assert "execute.place:" in call["contents"]
+    # and the one v8 addition is actually sent. (Whether `general` is offered is a v9 /
+    # runner_v10 matter — this runner drives whatever the production prompt is.)
+    assert "explicitly excludes a topic" in call["contents"]
     assert call["config"].response_json_schema == SemanticRoutingDecision.model_json_schema()
     [attempt] = attempts[case.case_id]
     assert attempt.schema_valid is True
     assert attempt.plan == case.gold_route_plan.model_copy(
-        # 얼어붙은 gold 는 관측 메타데이터를 안 들고 있거나 그때 값으로 들고 있다 — 라우팅
-        # 의미가 아니라 경위라서, 지금 값으로 맞춘 뒤 비교한다 (`prompt_version` 은 #238).
         update={
             "router": "llm",
             "model": "gemini-3.1-flash-lite",
@@ -115,32 +116,38 @@ def test_v8_provider_call_uses_the_production_prompt_and_schema() -> None:
     assert social == {case.case_id: None}
 
 
-def test_v8_scores_a_place_selection_on_the_frozen_eighty_as_a_precision_miss() -> None:
-    """Not as an invented capability — that distinction is the whole point of the
-    `evaluate.ALLOWED_EXECUTE` change, and getting it wrong would fail the run for the
-    wrong reason (a zero-tolerance gate) instead of reporting a routing miss."""
+def test_v9_scores_the_router_decision_with_the_fallback_off() -> None:
+    """An empty decision stays an empty plan in the runner — the flag is a runtime setting
+    the benchmark never reads, so v9 measures exactly what v1–v8 measured."""
     case = next(c for c in load_gold_v3_cases() if c.case_id == "training_01")
-    spurious = {
+    client = FakeClient([_response({"execute": [], "handoffs": []})])
+    attempts, _, _ = run_cases([case], client=client, model_id=MODEL_ID)
+    [attempt] = attempts[case.case_id]
+    assert attempt.schema_valid is True and attempt.plan is not None
+    assert attempt.plan.requests == [] and attempt.plan.handoffs == []
+
+
+def test_v9_scores_a_general_request_on_the_frozen_eighty_as_a_precision_miss() -> None:
+    """Same reasoning as v8's `place` case: a real capability the gold does not know must
+    cost precision, not trip the zero-tolerance invented-capability gate."""
+    case = next(c for c in load_gold_v3_cases() if c.case_id == "training_01")
+    padded = {
         "requests": [
             {"capability": "training", "payload": {"question": case.query}, "timeout_ms": None},
-            {
-                "capability": "place",
-                "payload": {"query": case.query, "lat": 37.5665, "lon": 126.978},
-                "timeout_ms": None,
-            },
+            {"capability": "general", "payload": {"question": case.query}, "timeout_ms": None},
         ],
         "handoffs": [],
         "clarify": None,
         "router": "llm",
         "model": MODEL_ID,
     }
-    result = evaluate_benchmark([case], {case.case_id: [spurious]})
+    result = evaluate_benchmark([case], {case.case_id: [padded]})
     assert result.summary.invented_unsupported_capability_count == 0
     assert result.summary.executable_precision < 1.0
     assert result.summary.executable_recall == 1.0
 
 
-def test_v8_artifacts_and_frozen_gates() -> None:
+def test_v9_artifacts_and_frozen_gates() -> None:
     case = next(c for c in load_gold_v3_cases() if c.case_id == "training_01")
     client = FakeClient([_response({"execute": ["training"], "handoffs": []})])
     attempts, performance, _ = run_cases([case], client=client, model_id=MODEL_ID)
@@ -155,7 +162,8 @@ def test_v8_artifacts_and_frozen_gates() -> None:
         model_id=MODEL_ID,
     )
     assert summary["prompt_version"] == PROMPT_VERSION
-    assert summary["benchmark_id"] == "orchestration-router-v8"
+    assert summary["benchmark_id"] == "orchestration-router-v9"
+    assert summary["performance"]["total_tokens"] == 110  # usage_metadata is what gets recorded
     assert PROMPT_VERSION in report
 
     # The gates themselves are untouched: a perfect run still passes all 15.

@@ -187,7 +187,9 @@ def test_controlled_settings_come_from_code_constants_and_match() -> None:
         assert s[key]["langgraph"] == s[key]["agent"], key
     assert s["model_id"]["langgraph"] == ROUTER_MODEL_ID
     assert s["temperature"]["langgraph"] == 0.0
-    assert s["prompt_version"] == {"langgraph": "semantic-router-ko-v7", "agent": "agent-ko-v2"}
+    # 두 프롬프트는 #279 에서 같은 PR 안에 함께 올라갔다 (D-055 ⑦ 규칙 1). 기록된
+    # `comparison_v2_*` 는 v7/v2 로 남아 있고, 이 값은 **지금** 러너가 보낼 버전이다.
+    assert s["prompt_version"] == {"langgraph": "semantic-router-ko-v9", "agent": "agent-ko-v4"}
     assert "never printed" in s["credential"]
 
 
@@ -295,7 +297,10 @@ def test_summary_reports_runs_separately_and_aggregates() -> None:
         assert ag["tokens"]["total"] == 80 * 220 and lg["tokens"]["total"] == 80 * 110
         assert ag["llm_turns"]["total"] == 160 and lg["llm_turns"]["total"] == 80
         assert ag["latency_ms"]["p95"] == 900.0 and lg["latency_ms"]["max"] == 500.0
-        assert set(ag["capabilities"]) == {"training", "life", "walk", "place"}
+        # `general` (#279) 은 표에 자리만 있다 — 러너는 폴백을 안 켜므로 골드에도 예측에도
+        # 없어 precision/recall 이 빈 비율(1.0)로 찍힌다.
+        assert set(ag["capabilities"]) == {"training", "life", "walk", "place", "general"}
+        assert ag["capabilities"]["general"] == {"precision": 1.0, "recall": 1.0}
         assert r["divergence"]["favored"]["langgraph"] == (3 if r["run"] == 2 else 2)
         assert "clarify_07" in r["divergence"]["divergent_case_ids"]
 

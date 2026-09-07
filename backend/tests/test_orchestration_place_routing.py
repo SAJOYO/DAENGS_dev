@@ -308,7 +308,14 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "walk",
         "place",
     ]
-    assert [name.value for name in CapabilityName] == ["training", "life", "walk", "place"]
+    # `general` (D-057) sits last: additive to the four, so its section always renders last.
+    assert [name.value for name in CapabilityName] == [
+        "training",
+        "life",
+        "walk",
+        "place",
+        "general",
+    ]
 
 
 def test_unknown_execute_name_refuses_to_inherit_another_payload() -> None:

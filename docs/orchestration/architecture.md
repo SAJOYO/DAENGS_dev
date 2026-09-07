@@ -303,6 +303,14 @@ Skin 의 안전 통제 문구(`headline`·`body`·`action`·`disclaimer`)는 LLM
 그 좁힘을 통과하지 못합니다 — 하류에 쓸모도 없습니다(조례·보조금 문서는 병변명을 열거하지
 않습니다).
 
+**배선이 실제로 지나는 자리는 셋입니다** (#283). `planner._screening_context` 가 §능력별
+payload 규칙으로 옮기고, `adapters/life.py` 가 원시값 둘로 `daengs_life` 에 건네고,
+`rag/stages/generate.py` 의 `SCREENING_BLOCK` 이 프롬프트 끝에 붙습니다. 세 자리 모두
+**판정이 없으면 아무 일도 하지 않습니다** — 프롬프트는 #283 이전과 한 글자도 같고, 그래서
+골든셋과 랩 비교의 축이 그대로입니다 (B4 가 `DOG_BLOCK` 에 세운 성질과 같습니다).
+블록의 본문이 "무엇이었다" 보다 "무엇을 하지 말라" 가 긴 것도 의도입니다 — 병명을 말하지
+말 것, 나아졌는지 판단하지 말 것. `general` 폴백은 이 값을 받지 않습니다 (contracts §3).
+
 ## Training 토폴로지 — 이관 완료, PGVector 는 본체 DB 로 통합 (CURRENT)
 
 **CURRENT (2026-09-01, #112 반영)** — Training RAG 이관은 **완료됐습니다.** 소스는

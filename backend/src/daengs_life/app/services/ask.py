@@ -57,7 +57,9 @@ else:
 
 
 def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None,
-        breed: str | None = None, age_months: int | None = None) -> AskOut:
+        breed: str | None = None, age_months: int | None = None,
+        screening_verdict: str | None = None,
+        screening_days_ago: int | None = None) -> AskOut:
     """질문 하나 → 응답 하나.
 
     `encoder`·`conn`·`client` 는 **받아서 그대로 넘긴다** — 만들지도 닫지도 않는다(RAG-028 ①).
@@ -66,6 +68,11 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
     `breed`·`age_months` 는 로드맵 B4 다. **원시값으로 받는다** — 부르는 쪽(어댑터)의 타입을
     여기서 알면 `daengs_life` 가 오케스트레이션을 의존하게 된다. 둘 다 `None` 이면 프롬프트가
     B4 이전과 한 글자도 다르지 않고, 그래서 프로필 없는 요청의 답은 그대로다.
+
+    `screening_verdict`·`screening_days_ago` 는 #283 이고 규칙이 같다 — 원시값, 둘 다 `None`
+    이면 프롬프트가 한 글자도 안 바뀐다. **판정 기록에서 이어 온 질문에만 채워진다.**
+    병명·확률·통제 문구가 여기 없는 것은 빠뜨린 것이 아니라 상류 계약이 안 싣기 때문이다
+    (D-023, `orchestration/contracts.py` 의 `ScreeningContext`).
     """
     try:
         answer = generate.ask(
@@ -77,6 +84,9 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
             conn=conn,
             client=client,
             dog=generate.DogProfile(breed=breed, age_months=age_months),
+            screening=generate.ScreeningNote(
+                verdict=screening_verdict, days_ago=screening_days_ago
+            ),
         )
     except RuntimeError as e:
         # `_client()` 가 키 없음으로 죽는 경우 — 설정 문제지 요청 문제가 아니다

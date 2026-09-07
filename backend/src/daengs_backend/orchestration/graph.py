@@ -11,6 +11,7 @@ from typing import Protocol, cast
 from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.core.tracing import trace_config
+from daengs_backend.orchestration import planner
 from daengs_backend.orchestration.adapters import (
     GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
@@ -29,6 +30,7 @@ from daengs_backend.orchestration.contracts import (
     OrchestratorState,
     PrincipalContext,
     RoutePlan,
+    ScreeningHistory,
 )
 
 _FORBIDDEN_CONTEXT_KEYS = frozenset(
@@ -200,11 +202,15 @@ class OrchestrationEngine:
 
     @staticmethod
     async def _aggregate(state: OrchestratorState) -> dict:
+        # 이력은 **planner 와 같은 화이트리스트**를 지나서 온다 — 답변에 붙는 절이 payload 와
+        # 다른 경로로 컨텍스트를 읽으면 좁힘이 두 벌이 된다 (#79 3번).
+        history = planner.screening_history(state["context"])
         response = aggregate_results(
             request_id=state["request_id"],
             route_plan=state["route_plan"],
             results=state["results"],
             include_route_trace=state["include_route_trace"],
+            screening_history=ScreeningHistory.model_validate(history) if history else None,
         )
         return {"response": response}
 

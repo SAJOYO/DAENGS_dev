@@ -209,7 +209,7 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
             screening = _screening_context(context)
             if screening is not None:
                 payload["screening"] = screening
-            history = _screening_history(context)
+            history = screening_history(context)
             if history is not None:
                 payload["screening_history"] = history
         return payload
@@ -287,7 +287,7 @@ def _screening_context(context: dict[str, Any]) -> dict[str, Any] | None:
     return {"verdict": verdict, "days_ago": days_ago}
 
 
-def _screening_history(context: dict[str, Any]) -> dict[str, Any] | None:
+def screening_history(context: dict[str, Any]) -> dict[str, Any] | None:
     """Read the earlier screenings of the same dog, entry by entry (#79 3번).
 
     The same whitelist as ``_screening_context``, applied per entry, and for the same reason:
@@ -299,6 +299,10 @@ def _screening_history(context: dict[str, Any]) -> dict[str, Any] | None:
     here means a bug upstream — but failing the request would turn an answerable question
     into an error over a defect the user cannot see or fix. Truncating keeps the contract's
     promise (`ScreeningHistory` would reject the long list downstream) without that cost.
+
+    **공개인 것은 `aggregate` 도 같은 좁힘을 지나야 하기 때문입니다.** 답변에 붙는 이력 절이
+    payload 와 다른 경로로 컨텍스트를 읽으면 좁힘이 두 벌이 되고, 한쪽만 넓어져도 아무것도
+    안 깨집니다 — 능력 이름 사본이 셋이던 자리(#269)가 만든 습관입니다.
     """
     history = context.get("screening_history")
     if not isinstance(history, Sequence) or isinstance(history, (str, bytes)):

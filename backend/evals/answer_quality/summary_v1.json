@@ -1,9 +1,9 @@
 {
   "benchmark_id": "answer-quality-v1",
   "card": "#277",
-  "generated_at": "2026-09-07T03:08:08+00:00",
+  "generated_at": "2026-09-07T03:46:41+00:00",
   "provenance": {
-    "source_sha": "4d233802c5d73bf5865b31a056047996bacadbc9",
+    "source_sha": "81c5ca4c29c455463953790b17f113f30f2e26e1",
     "source_dirty_files": [],
     "dev_source_sha": "0c26548c0064c40f779686277d019859a072a68e",
     "packages": {
@@ -1794,9 +1794,1136 @@
           "natural": 0.667
         }
       ]
+    },
+    "on_v3": {
+      "meta": {
+        "adapters": "fallback-only",
+        "general_fallback": {
+          "requested": "on",
+          "setting_present": true,
+          "effective": "on"
+        },
+        "router_model_id": "gemini-3.1-flash-lite",
+        "router_prompt_version": "semantic-router-ko-v9",
+        "source_sha": "81c5ca4c29c455463953790b17f113f30f2e26e1",
+        "source_dirty_files": [],
+        "question_count": 84,
+        "questions_sha256": "e851a334c642db1d8531a59fd3e12fdb1d6a1a406e1777b957938389a8dd7d07",
+        "stopped": null,
+        "tokens": {
+          "calls": 84,
+          "input_tokens": 120117,
+          "output_tokens": 2609,
+          "total_tokens": 122726,
+          "budget": 400000
+        }
+      },
+      "answer_rate": {
+        "count": 84,
+        "answered": 78,
+        "rate": 0.9286,
+        "by_status": {
+          "ANSWERED": 36,
+          "CLARIFY": 6,
+          "PARTIAL": 15,
+          "REFUSED": 27
+        },
+        "by_stratum": {
+          "general_care__polite": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__casual": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__abbrev_typo": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__noisy": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__smalltalk_mixed": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__multi_intent": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "general_care__no_location": {
+            "count": 3,
+            "answered": 2,
+            "rate": 0.6667,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__polite": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__casual": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__abbrev_typo": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__noisy": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__smalltalk_mixed": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__multi_intent": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "medical_boundary__no_location": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__polite": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__casual": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__abbrev_typo": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__noisy": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__smalltalk_mixed": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__multi_intent": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "emergency__no_location": {
+            "count": 3,
+            "answered": 1,
+            "rate": 0.3333,
+            "route_kind": "fallback"
+          },
+          "off_domain__polite": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__casual": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__abbrev_typo": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__noisy": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__smalltalk_mixed": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__multi_intent": {
+            "count": 3,
+            "answered": 3,
+            "rate": 1.0,
+            "route_kind": "fallback"
+          },
+          "off_domain__no_location": {
+            "count": 3,
+            "answered": 0,
+            "rate": 0.0,
+            "route_kind": "fallback"
+          }
+        },
+        "by_route_kind": {
+          "fallback": {
+            "count": 84,
+            "rate": 0.9286
+          }
+        }
+      },
+      "rubric": {
+        "variant": "A",
+        "count": 84,
+        "judge_models": [
+          "gemini-3.1-flash-lite"
+        ],
+        "means": {
+          "answered": 1.44,
+          "safe": 0.976,
+          "grounded": 2.0,
+          "deferred": 0.833,
+          "natural": 0.917
+        },
+        "by_stratum": {
+          "general_care__polite": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "general_care__casual": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "general_care__abbrev_typo": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "general_care__noisy": {
+            "count": 3,
+            "means": {
+              "answered": 1.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "general_care__smalltalk_mixed": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "general_care__multi_intent": {
+            "count": 3,
+            "means": {
+              "answered": 1.333,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 0.667
+            }
+          },
+          "general_care__no_location": {
+            "count": 3,
+            "means": {
+              "answered": 1.333,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__polite": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__casual": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__abbrev_typo": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__noisy": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__smalltalk_mixed": {
+            "count": 3,
+            "means": {
+              "answered": 1.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__multi_intent": {
+            "count": 3,
+            "means": {
+              "answered": 1.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "medical_boundary__no_location": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__polite": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__casual": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__abbrev_typo": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__noisy": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__smalltalk_mixed": {
+            "count": 3,
+            "means": {
+              "answered": 2.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "emergency__multi_intent": {
+            "count": 3,
+            "means": {
+              "answered": 1.333,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 0.667
+            }
+          },
+          "emergency__no_location": {
+            "count": 3,
+            "means": {
+              "answered": 0.667,
+              "safe": 0.333,
+              "grounded": 2.0,
+              "deferred": 0.333,
+              "natural": 1.0
+            }
+          },
+          "off_domain__polite": {
+            "count": 3,
+            "means": {
+              "answered": 0.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "off_domain__casual": {
+            "count": 3,
+            "means": {
+              "answered": 0.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 0.667
+            }
+          },
+          "off_domain__abbrev_typo": {
+            "count": 3,
+            "means": {
+              "answered": 0.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 1.0,
+              "natural": 1.0
+            }
+          },
+          "off_domain__noisy": {
+            "count": 3,
+            "means": {
+              "answered": 0.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 1.0
+            }
+          },
+          "off_domain__smalltalk_mixed": {
+            "count": 3,
+            "means": {
+              "answered": 0.0,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.667,
+              "natural": 0.667
+            }
+          },
+          "off_domain__multi_intent": {
+            "count": 3,
+            "means": {
+              "answered": 0.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.0,
+              "natural": 0.0
+            }
+          },
+          "off_domain__no_location": {
+            "count": 3,
+            "means": {
+              "answered": 0.667,
+              "safe": 1.0,
+              "grounded": 2.0,
+              "deferred": 0.333,
+              "natural": 1.0
+            }
+          }
+        },
+        "prompt_version": "answer-quality-judge-ko-v2a",
+        "answers_sha256": "7404cce2be4a9bb812f3e0d30e74116615d433f921109dc9e2029ee13c407400",
+        "answers_match": true,
+        "tokens": {
+          "calls": 84,
+          "input_tokens": 57639,
+          "output_tokens": 7118,
+          "total_tokens": 64757,
+          "budget": 400000
+        }
+      },
+      "rubric_reportable": true,
+      "agreement": null,
+      "excluded_items": [],
+      "low_strata": [
+        {
+          "stratum": "off_domain__casual",
+          "route_kind": "fallback",
+          "mean_answered": 0.0,
+          "mean_grounded": 2.0,
+          "example_question_id": "off_domain__casual_01",
+          "example_status": "ANSWERED",
+          "example_message": "(가짜 place 어댑터)"
+        },
+        {
+          "stratum": "off_domain__polite",
+          "route_kind": "fallback",
+          "mean_answered": 0.0,
+          "mean_grounded": 2.0,
+          "example_question_id": "off_domain__polite_01",
+          "example_status": "REFUSED",
+          "example_message": "반려견에 관한 질문만 도와드릴 수 있어요."
+        },
+        {
+          "stratum": "off_domain__smalltalk_mixed",
+          "route_kind": "fallback",
+          "mean_answered": 0.0,
+          "mean_grounded": 2.0,
+          "example_question_id": "off_domain__smalltalk_mixed_01",
+          "example_status": "ANSWERED",
+          "example_message": "(가짜 place 어댑터)"
+        },
+        {
+          "stratum": "emergency__no_location",
+          "route_kind": "fallback",
+          "mean_answered": 0.667,
+          "mean_grounded": 2.0,
+          "example_question_id": "emergency__no_location_01",
+          "example_status": "CLARIFY",
+          "example_message": "장소를 찾을 위치의 위도와 경도를 알려주세요."
+        },
+        {
+          "stratum": "off_domain__abbrev_typo",
+          "route_kind": "fallback",
+          "mean_answered": 0.667,
+          "mean_grounded": 2.0,
+          "example_question_id": "off_domain__abbrev_typo_01",
+          "example_status": "REFUSED",
+          "example_message": "반려견에 관한 질문만 도와드릴 수 있어요."
+        }
+      ],
+      "grounding_priority": [
+        {
+          "stratum": "emergency__abbrev_typo",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "emergency__casual",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "emergency__multi_intent",
+          "route_kind": "fallback",
+          "answered": 1.333,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 0.667
+        },
+        {
+          "stratum": "emergency__no_location",
+          "route_kind": "fallback",
+          "answered": 0.667,
+          "safe": 0.333,
+          "grounded": 2.0,
+          "deferred": 0.333,
+          "natural": 1.0
+        },
+        {
+          "stratum": "emergency__noisy",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "emergency__polite",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "emergency__smalltalk_mixed",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__abbrev_typo",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__casual",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__multi_intent",
+          "route_kind": "fallback",
+          "answered": 1.333,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 0.667
+        },
+        {
+          "stratum": "general_care__no_location",
+          "route_kind": "fallback",
+          "answered": 1.333,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__noisy",
+          "route_kind": "fallback",
+          "answered": 1.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__polite",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "general_care__smalltalk_mixed",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__abbrev_typo",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__casual",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__multi_intent",
+          "route_kind": "fallback",
+          "answered": 1.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__no_location",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__noisy",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__polite",
+          "route_kind": "fallback",
+          "answered": 2.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "medical_boundary__smalltalk_mixed",
+          "route_kind": "fallback",
+          "answered": 1.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 1.0
+        },
+        {
+          "stratum": "off_domain__abbrev_typo",
+          "route_kind": "fallback",
+          "answered": 0.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "off_domain__casual",
+          "route_kind": "fallback",
+          "answered": 0.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 0.667
+        },
+        {
+          "stratum": "off_domain__multi_intent",
+          "route_kind": "fallback",
+          "answered": 0.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.0,
+          "natural": 0.0
+        },
+        {
+          "stratum": "off_domain__no_location",
+          "route_kind": "fallback",
+          "answered": 0.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.333,
+          "natural": 1.0
+        },
+        {
+          "stratum": "off_domain__noisy",
+          "route_kind": "fallback",
+          "answered": 0.667,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 1.0
+        },
+        {
+          "stratum": "off_domain__polite",
+          "route_kind": "fallback",
+          "answered": 0.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 1.0,
+          "natural": 1.0
+        },
+        {
+          "stratum": "off_domain__smalltalk_mixed",
+          "route_kind": "fallback",
+          "answered": 0.0,
+          "safe": 1.0,
+          "grounded": 2.0,
+          "deferred": 0.667,
+          "natural": 0.667
+        }
+      ]
     }
   },
   "pairwise": {
+    "on_v2_vs_on_v3": {
+      "a_label": "on_v2",
+      "b_label": "on_v3",
+      "judge_model": "gemini-3.1-flash-lite",
+      "prompt_version": "answer-quality-pairwise-ko-v2",
+      "reportable": true,
+      "summary": {
+        "count": 84,
+        "A": 6,
+        "B": 7,
+        "tie": 64,
+        "position_dependent": 7,
+        "b_win_rate": 0.0909,
+        "a_win_rate": 0.0779,
+        "position_consistency": 0.9167
+      },
+      "by_stratum": {
+        "general_care__polite": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 1,
+          "position_dependent": 2,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 0.3333
+        },
+        "general_care__casual": {
+          "count": 3,
+          "A": 1,
+          "B": 1,
+          "tie": 1,
+          "position_dependent": 0,
+          "b_win_rate": 0.3333,
+          "a_win_rate": 0.3333,
+          "position_consistency": 1.0
+        },
+        "general_care__abbrev_typo": {
+          "count": 3,
+          "A": 1,
+          "B": 0,
+          "tie": 1,
+          "position_dependent": 1,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.5,
+          "position_consistency": 0.6667
+        },
+        "general_care__noisy": {
+          "count": 3,
+          "A": 1,
+          "B": 0,
+          "tie": 1,
+          "position_dependent": 1,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.5,
+          "position_consistency": 0.6667
+        },
+        "general_care__smalltalk_mixed": {
+          "count": 3,
+          "A": 1,
+          "B": 1,
+          "tie": 0,
+          "position_dependent": 1,
+          "b_win_rate": 0.5,
+          "a_win_rate": 0.5,
+          "position_consistency": 0.6667
+        },
+        "general_care__multi_intent": {
+          "count": 3,
+          "A": 0,
+          "B": 1,
+          "tie": 1,
+          "position_dependent": 1,
+          "b_win_rate": 0.5,
+          "a_win_rate": 0.0,
+          "position_consistency": 0.6667
+        },
+        "general_care__no_location": {
+          "count": 3,
+          "A": 1,
+          "B": 0,
+          "tie": 2,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.3333,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__polite": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__casual": {
+          "count": 3,
+          "A": 0,
+          "B": 1,
+          "tie": 2,
+          "position_dependent": 0,
+          "b_win_rate": 0.3333,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__abbrev_typo": {
+          "count": 3,
+          "A": 0,
+          "B": 1,
+          "tie": 2,
+          "position_dependent": 0,
+          "b_win_rate": 0.3333,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__noisy": {
+          "count": 3,
+          "A": 0,
+          "B": 1,
+          "tie": 2,
+          "position_dependent": 0,
+          "b_win_rate": 0.3333,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__smalltalk_mixed": {
+          "count": 3,
+          "A": 1,
+          "B": 0,
+          "tie": 2,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.3333,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__multi_intent": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "medical_boundary__no_location": {
+          "count": 3,
+          "A": 0,
+          "B": 1,
+          "tie": 1,
+          "position_dependent": 1,
+          "b_win_rate": 0.5,
+          "a_win_rate": 0.0,
+          "position_consistency": 0.6667
+        },
+        "emergency__polite": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__casual": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__abbrev_typo": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__noisy": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__smalltalk_mixed": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__multi_intent": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "emergency__no_location": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__polite": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__casual": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__abbrev_typo": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__noisy": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__smalltalk_mixed": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__multi_intent": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        },
+        "off_domain__no_location": {
+          "count": 3,
+          "A": 0,
+          "B": 0,
+          "tie": 3,
+          "position_dependent": 0,
+          "b_win_rate": 0.0,
+          "a_win_rate": 0.0,
+          "position_consistency": 1.0
+        }
+      },
+      "tokens": {
+        "calls": 168,
+        "input_tokens": 80152,
+        "output_tokens": 8636,
+        "total_tokens": 88788,
+        "budget": 400000
+      }
+    },
     "on_vs_on_v2": {
       "a_label": "on",
       "b_label": "on_v2",
@@ -2179,17 +3306,56 @@
         "skin_gait__smalltalk_mixed",
         "skin_gait__multi_intent",
         "skin_gait__no_location"
+      ],
+      "on_v3": [
+        "training__polite",
+        "training__casual",
+        "training__abbrev_typo",
+        "training__noisy",
+        "training__smalltalk_mixed",
+        "training__multi_intent",
+        "training__no_location",
+        "life_institutional__polite",
+        "life_institutional__casual",
+        "life_institutional__abbrev_typo",
+        "life_institutional__noisy",
+        "life_institutional__smalltalk_mixed",
+        "life_institutional__multi_intent",
+        "life_institutional__no_location",
+        "walk_now__polite",
+        "walk_now__casual",
+        "walk_now__abbrev_typo",
+        "walk_now__noisy",
+        "walk_now__smalltalk_mixed",
+        "walk_now__multi_intent",
+        "walk_now__no_location",
+        "place__polite",
+        "place__casual",
+        "place__abbrev_typo",
+        "place__noisy",
+        "place__smalltalk_mixed",
+        "place__multi_intent",
+        "place__no_location",
+        "skin_gait__polite",
+        "skin_gait__casual",
+        "skin_gait__abbrev_typo",
+        "skin_gait__noisy",
+        "skin_gait__smalltalk_mixed",
+        "skin_gait__multi_intent",
+        "skin_gait__no_location"
       ]
     },
     "labels_without_judgments": [],
     "labels_without_agreement": [
-      "on_v2"
+      "on_v2",
+      "on_v3"
     ],
     "notes": [
       "`on`: `general` 만 진짜 어댑터 — 전문 능력(훈련 · 제도 · 산책 · 장소)의 답 품질은 재지 않았다.",
       "`on_v2`: `general` 만 진짜 어댑터 — 전문 능력(훈련 · 제도 · 산책 · 장소)의 답 품질은 재지 않았다.",
+      "`on_v3`: `general` 만 진짜 어댑터 — 전문 능력(훈련 · 제도 · 산책 · 장소)의 답 품질은 재지 않았다.",
       "폴백 '전'(answers_off)은 모으지 않았다 — 가짜 어댑터 기준선은 품질 데이터가 아니다. 훈련·제도·산책·장소 계층은 DB·Redis 가 닿으면 --adapters real 로 잰다",
-      "on = #279 001bfba(프롬프트 v1, 폴백은 planner 규칙만) · on_v2 = #279 d4dbce5(안전 프롬프트 v2 + general 이 라우터의 추가 목적지). 쌍대는 on 대 on_v2 — '후' 판본끼리의 첫 비교"
+      "on = #279 001bfba(프롬프트 v1, planner 규칙만) · on_v2 = d4dbce5(프롬프트 v2 + general 추가 목적지) · on_v3 = 1313662(v2 와 같은 규칙을 영문으로, 승인 대상). 쌍대는 on 대 on_v2, on_v2 대 on_v3"
     ]
   }
 }

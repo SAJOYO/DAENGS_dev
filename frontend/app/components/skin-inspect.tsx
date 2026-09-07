@@ -26,6 +26,16 @@ import {
  *   코드가 index 로 스타일을 가르지 않는 것이 유일한 방어입니다. 굵게·크게·
  *   "가장 유력" 어느 것도 붙이지 마세요.
  *
+ * ★ **`stage2.group`(계열)은 그 규칙의 예외가 아닙니다.** 여섯 개 중 하나를 고른 게
+ *   아니라 **네 묶음** 중 하나이고, 확률은 묶음 안을 **더한 값**입니다. 그래서
+ *   1등을 안 뽑는다는 위 규칙과 어긋나지 않습니다.
+ *   · `null` 이면 **통째로 안 그립니다** (서버에서 꺼졌거나 확신이 낮음)
+ *   · 문장은 서버가 준 `text`·`caveat` 를 **그대로** 씁니다 — 여기서 지어 쓰면
+ *     앱과 표현이 갈리고, 갈리면 한쪽이 단정적으로 읽힙니다
+ *   · **긴급도 문구를 붙이지 마세요.** 계열 묶음은 긴급도를 높은 쪽으로 잡아서
+ *     말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%)
+ *   · **지금은 콘솔에만** 나갑니다. 앱은 이 필드를 안 읽습니다
+ *
  * 부르는 주소가 `/api/screen/*` 인 이유: nginx 의 `/api/` 가 접두사를 떼고 backend 로
  * 넘겨서 앱이 쓰는 `/screen/` 과 같은 곳에 닿습니다. 오리진을 박으면 쿠키가 안 실립니다 (D-015).
  */
@@ -248,8 +258,10 @@ export default function SkinInspect() {
             병변 스크리닝 <code className="text-base font-normal text-zinc-500">POST /screen/v1/screen</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            ① 정상/이상 → ② 이상이면 병변 6종의 확률 분포. <strong className="font-medium">진단이 아닙니다</strong> —
-            어떤 병변인지는 말하지 않고 분포만 보여준 뒤 진료를 권합니다.
+            ① 정상/이상 → ② 이상이면 병변 6종의 확률 분포 + <strong className="font-medium">계열 한 줄</strong>
+            (시험 중, 콘솔에만). <strong className="font-medium">진단이 아닙니다</strong> —
+            <strong className="font-medium">6종 이름은 여전히 말하지 않고</strong>, 확신이 있을 때만 네 묶음 중
+            하나를 말한 뒤 진료를 권합니다.
           </p>
         </div>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">사진은 저장하지 않습니다</span>
@@ -485,6 +497,39 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
             <strong className="font-medium">1등을 뽑지 않습니다.</strong> holdout 에서 2단계가 고른 이름이 56.6%
             틀렸습니다 (D-023). 줄은 전부 같은 무게로 읽으세요 — 병명이 아니라 병변 &ldquo;형태&rdquo; 입니다.
           </p>
+
+          {/*
+            ★ 계열 한 줄. **`group` 이 null 이면 통째로 안 그립니다** — 서버에서
+              꺼져 있거나 확신이 낮으면 null 입니다.
+
+            ⚠️ 이건 `distribution[0]` 이 **아닙니다.** 여섯 개 중 하나를 고른 게
+               아니라 네 묶음 중 하나이고, 확률은 묶음 안을 **더한 값**입니다.
+               그래서 1등을 안 뽑는다는 위 규칙(D-023)과 어긋나지 않습니다.
+            ⚠️ 문장은 서버가 준 것을 **그대로** 씁니다. 여기서 지어 쓰면 앱과
+               표현이 갈리고, 갈리면 한쪽이 단정적으로 읽힙니다.
+            ⚠️ 긴급도 문구를 붙이지 마세요 — 계열 묶음은 긴급도를 높은 쪽으로
+               잡아서 말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%).
+          */}
+          {stage2.group && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                  시험 중
+                </span>
+                <span className="text-sm font-medium">{stage2.group.text}</span>
+                <span className="ml-auto text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
+                  묶음 {stage2.group.percent.toFixed(1)}% · 확신 {stage2.group.confidence.toFixed(3)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{stage2.group.caveat}</p>
+              <p className="mt-1 text-[11px] leading-5 text-zinc-500 dark:text-zinc-500">
+                <strong className="font-medium">여섯 개 중 하나를 고른 게 아닙니다.</strong> 네 묶음
+                (융기·발진 / 표면 변화 / 미란·궤양 / 결절·종괴) 중 하나이고, 확률은 묶음 안을 더한 값입니다.
+                holdout 에서 이 알갱이는 열에 일곱(67.9%)을 오답률 20% 안에서 말할 수 있었고, 6종 이름은
+                41.1% 였습니다. <strong className="font-medium">앱에는 아직 안 나갑니다</strong> — 여기서 먼저 봅니다.
+              </p>
+            </div>
+          )}
           {/* 모든 행이 같은 className 입니다. index 로 스타일을 가르는 코드를 넣지 마세요. */}
           <ul className="mt-3 flex flex-col gap-2">
             {stage2.distribution.map((row) => (

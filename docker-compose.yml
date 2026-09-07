@@ -145,6 +145,17 @@ services:
       # **컨테이너 안 경로**를 가리켜야 하고, 아래 volumes 의 주석 처리된 마운트를
       # 같이 열어야 합니다. GKE·GCE 워크로드 아이덴티티로 가면 둘 다 필요 없습니다.
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      # ★ 피부 스크리닝 — **계열 한 줄**을 응답(`stage2.group`)에 실을지.
+      #   `1` 이면 켜집니다. 기본은 **꺼짐**이라 앱 화면은 안 바뀝니다.
+      #
+      #   무엇인가 — 6종 이름(`농포·여드름`)은 holdout 에서 열에 넷밖에 못
+      #   말합니다(41.1%). 네 묶음으로 굵게 말하면 **열에 일곱**(67.9%)이고
+      #   안전 관문 둘도 통과합니다. 지금은 **콘솔에서 눈으로 보는 단계**입니다.
+      #   ⚠️ 켜도 "1등 병변" 은 안 나갑니다 (D-023). 계열은 이름이 아니라 묶음이고
+      #      확률은 묶음 안을 더한 값입니다.
+      #   ⚠️ 확신이 낮으면 서버가 알아서 `null` 을 보냅니다 — 화면은 안 그립니다.
+      #   근거: 원본 docs/results/STEP28~34.
+      DOG_SKIN_SHOW_GROUP: ${DOG_SKIN_SHOW_GROUP:-1}
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro

@@ -198,6 +198,9 @@ screening = [
     "pandas>=2.1",
     "tqdm>=4.66",
 ]
+pipeline = [
+    "google-cloud-run>=0.16.1",
+]
 
 [tool.ruff]
 line-length = 100

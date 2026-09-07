@@ -515,7 +515,18 @@ def _v4_dir():
 
 def _v4_python():
     import sys
+    from pathlib import Path
 
+    from daengs_backend.config import settings
+
+    if settings.gait_v4_python:
+        exe = Path(settings.gait_v4_python)
+        if not exe.exists():
+            raise RuntimeError(
+                f"GAIT_V4_PYTHON 이 가리키는 python 이 없습니다: {exe} — 컨테이너면 command 의 "
+                "v4 `uv sync` 가 돌았는지 로그를 보세요."
+            )
+        return exe
     root = _v4_dir()
     exe = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     if not exe.exists():

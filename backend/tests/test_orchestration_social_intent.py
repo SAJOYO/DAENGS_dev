@@ -27,6 +27,7 @@ from daengs_backend.orchestration.contracts import (
     PrincipalContext,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     GeminiSemanticRouter,
@@ -40,7 +41,7 @@ from daengs_backend.orchestration.social import build_social_response, social_me
 from daengs_backend.routers import assistant as assistant_router
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
-UNSUPPORTED_MESSAGE = "실행하거나 안내할 수 있는 기능이 없습니다."
+UNSUPPORTED_MESSAGE = NO_CAPABILITY_MESSAGE
 
 
 class ScriptedTransport:

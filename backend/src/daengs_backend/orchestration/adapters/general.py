@@ -44,6 +44,7 @@ from daengs_backend.orchestration.contracts import (
     GeneralPayload,
     OutcomeDetail,
 )
+from daengs_backend.orchestration.redirects import SCOPED_REDIRECT_MESSAGES, RefusalReason
 from daengs_backend.orchestration.semantic import (
     ROUTER_CANDIDATE_COUNT,
     ROUTER_MODEL_ID,
@@ -62,19 +63,9 @@ GENERAL_MODEL_ID = ROUTER_MODEL_ID
 # 답 문장 3~5개 + JSON 봉투. 라우터의 256 은 분류 한 줄을 위한 예산이라 여기엔 좁다.
 GENERAL_MAX_OUTPUT_TOKENS = 512
 
-RefusalReason = Literal["diagnosis", "medication", "emergency", "institutional", "off_topic"]
-
-# 거절 사유별 안내 문구. **모델이 쓰지 않는다** — 모듈 docstring. `refusal.message` 로
-# 그대로 나가고, `refusal.code` 는 사유 범주다.
-_REFUSAL_MESSAGES: dict[str, str] = {
-    "diagnosis": "증상의 원인이나 병명은 여기서 판단하지 않아요. 가까운 동물병원에서 진료를 받아 보세요.",
-    "medication": "약이나 영양제, 용량은 여기서 안내하지 않아요. 수의사에게 확인해 주세요.",
-    "emergency": "응급 상황으로 보여요. 지금 바로 동물병원으로 가세요.",
-    "institutional": (
-        "제도·법령·요금·기한 같은 사실은 근거와 함께 답하는 제도 정보 기능에 물어봐 주세요."
-    ),
-    "off_topic": "반려견에 관한 질문만 도와드릴 수 있어요.",
-}
+# 거절 사유별 안내 문구는 [daengs_backend.orchestration.redirects] 에 있다 — `refusal.message`
+# 로 그대로 나가고, `refusal.code` 는 사유 범주다. `aggregate.py` 의 빈 선택 FAILED 문구와
+# 한 곳에서 관리한다 (#278).
 
 
 class GeneralAnswer(BaseModel):
@@ -218,7 +209,7 @@ class GeneralCapabilityAdapter:
             return CapabilityResult(
                 capability=self.capability,
                 status=CapabilityStatus.REFUSED,
-                refusal=OutcomeDetail(code=reason, message=_REFUSAL_MESSAGES[reason]),
+                refusal=OutcomeDetail(code=reason, message=SCOPED_REDIRECT_MESSAGES[reason]),
                 elapsed_ms=_elapsed_ms(started),
             )
         return CapabilityResult(

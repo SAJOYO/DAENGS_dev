@@ -28,7 +28,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-ge
 sudo npm i -g pm2
 
 # 배포 체크아웃 밖 상태 폴더 (로컬 서버의 C:/deploy 와 같은 취급)
-sudo mkdir -p /srv/daengs/{models/release,gait/release,letsencrypt,dumps,corpus-unused}
+sudo mkdir -p /srv/daengs/{models/release/gait-analysis,letsencrypt,dumps,corpus-unused}
 sudo chown -R $USER /srv/daengs
 
 # 저장소는 GitHub 에서 직접 clone 하지 않습니다 — 아래 "git push 배포" 참고
@@ -81,7 +81,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | 무엇 | 어디로 | 비고 |
 | --- | --- | --- |
 | 스크리닝 가중치 2개 | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋) |
-| gait `best.pt` · `yolov8n.pt` | ⚠️ **미확인** | git 에 없음. 이 문서가 두 곳을 다르게 적습니다 — 위 `mkdir` 은 `/srv/daengs/gait/release`, 아래 `GAIT_RELEASE_DIR` 은 `/srv/daengs/models/release/gait-analysis`. **VM 에서 `ls` 로 실제 위치를 보고 셋을 한 값으로 맞추세요.** 틀리면 가중치 없는 워커가 떠서 업로드는 되는데 분석만 FAILED 입니다 |
+| gait `best.pt` · `yolov8n.pt` | `/srv/daengs/models/release/gait-analysis/` | git 에 없음. **`GAIT_RELEASE_DIR` 과 같은 값입니다** — 스크리닝 release 폴더의 하위. 2026-09-07 VM 실측(best.pt 53MB · yolov8n.pt 6.5MB) |
 | 최상단 `.env` | `~/daengs/.env` | 아래 수정표 |
 | `backend/.env` | `~/daengs/backend/.env` | 암호화 키 3개는 **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 엽니다 |
 

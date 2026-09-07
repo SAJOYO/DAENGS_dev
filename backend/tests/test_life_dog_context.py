@@ -206,7 +206,10 @@ async def test_어댑터가_견종과_나이를_원시값으로_넘긴다() -> N
                             dog=DogContext(breed="퍼그", age_months=24)),
     )
     await LifeCapabilityAdapter(ask).run(request, request_id="trace")
-    assert seen == {"question": "비행기 태울 수 있나요?", "breed": "퍼그", "age_months": 24}
+    # 정확 일치인 것이 의도다 — 칸이 하나 늘면 여기서 걸리고, 그때 그 칸이 무엇인지
+    # 사람이 본다. 스크리닝 둘은 #283 이 늘린 칸이고 이 요청에는 판정이 없다.
+    assert seen == {"question": "비행기 태울 수 있나요?", "breed": "퍼그", "age_months": 24,
+                    "screening_verdict": None, "screening_days_ago": None}
 
 
 async def test_프로필이_없으면_None_으로_넘어간다() -> None:
@@ -220,7 +223,8 @@ async def test_프로필이_없으면_None_으로_넘어간다() -> None:
 
     request = CapabilityRequest(capability="life", payload=LifePayload(question="질문"))
     await LifeCapabilityAdapter(ask).run(request, request_id="trace")
-    assert seen == {"breed": None, "age_months": None}
+    assert seen == {"breed": None, "age_months": None,
+                    "screening_verdict": None, "screening_days_ago": None}
 
 
 # ---------------------------------------------------------------- 프롬프트

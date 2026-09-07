@@ -138,6 +138,11 @@ class ScreeningHistory(ContractModel):
 class LifePayload(ContractModel):
     question: str = Field(min_length=1, max_length=500)
     dog: DogContext | None = None
+    #: The recorded screening this question follows on from (#283). Same rule as ``dog``:
+    #: the caller resolved it, the planner only copies it, and ``None`` means Life answers
+    #: exactly as it did before this field existed. The narrowing that makes it safe to put
+    #: in a prompt lives on ``ScreeningContext`` itself, not here.
+    screening: ScreeningContext | None = None
 
 
 class WalkPayload(ContractModel):

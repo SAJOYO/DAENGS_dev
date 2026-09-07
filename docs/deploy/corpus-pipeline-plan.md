@@ -56,7 +56,7 @@
 **Interfaces:**
 - Produces: `guard.check(before: int, planned: int, losing: list[tuple[str, int, int]], *, max_drop: float = 0.2) -> Verdict` — `Verdict(ok: bool, reasons: list[str])`. `before` 는 지금 `documents` 행 수, `planned` 는 적재 뒤 남을 행 수(= prepare 가 만든 행 수), `losing` 은 `stages.load.metadata_loss` 반환값.
 
-- [ ] **Step 1: 패키지 파일과 실패하는 테스트**
+- [x] **Step 1: 패키지 파일과 실패하는 테스트**
 
 `backend/src/daengs_life/jobs/__init__.py`:
 
@@ -117,12 +117,12 @@ def test_reports_every_reason_not_just_the_first():
     assert len(v.reasons) == 2
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_guard.py -q`
 Expected: `ModuleNotFoundError: No module named 'daengs_life.jobs.guard'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/daengs_life/jobs/guard.py`:
 
@@ -168,12 +168,12 @@ def check(before: int, planned: int, losing: list[tuple[str, int, int]], *,
 __all__ = ["Verdict", "check"]
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_guard.py -q`
 Expected: `7 passed`
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add backend/src/daengs_life/jobs/__init__.py backend/src/daengs_life/jobs/guard.py backend/tests/test_jobs_guard.py
@@ -192,7 +192,7 @@ git commit -m "feat(jobs): 적재 가드 — 행 수 급감·메타 키 손실�
 - Consumes: `daengs_life.crawler.run.run(source_id) -> RunResult`(`.unavailable` `.fetched` `.changed` `.failed` `.skipped` `.run_id` `.changed_slugs`), `crawler.core.cadence.due_sources(seeds, implemented=, now=)`, `crawler.core.registry.load_seeds() / resolve(seed)`, `daengs_life.tasks.crawl_runs.start(source_id, trigger) / finish(row_id, status, run_id=, counts=, changed_slugs=, error=)`, `daengs_life.rag.__main__.cmd_parse / cmd_chunk / cmd_embed(argparse.Namespace) -> int`.
 - Produces: `ORDER = ("crawl", "parse", "chunk", "embed", "load")`, `parse_stages(text: str | None) -> list[str]`, `run_crawl(source_ids, *, dry_run) -> CrawlSummary`, `run_parse(*, dry_run) -> int`, `run_chunk(*, dry_run) -> int`, `run_embed(*, full, dry_run) -> int`. `CrawlSummary(selected: list[str], ok: int, failed: int, unavailable: int)`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `backend/tests/test_jobs_stages.py`:
 
@@ -295,12 +295,12 @@ def test_run_crawl_exception_in_one_source_is_recorded_and_others_continue(monke
     assert finished[0][0] == "failed" and "RuntimeError" in finished[0][1]
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_stages.py -q`
 Expected: `ModuleNotFoundError: No module named 'daengs_life.jobs.stages'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/daengs_life/jobs/stages.py`:
 
@@ -411,12 +411,12 @@ def run_embed(*, full: bool, dry_run: bool) -> int:
 __all__ = ["ORDER", "CrawlSummary", "parse_stages", "run_crawl", "run_parse", "run_chunk", "run_embed"]
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_stages.py -q`
 Expected: `8 passed`. 만약 `from daengs_life.rag import __main__` 에서 argparse 부작용이 있으면(모듈 최상위에서 `main()` 을 부르는 경우) `rag/__main__.py` 끝의 `if __name__ == "__main__":` 가드가 있는지 확인한다. 있어야 한다 — 없으면 그 가드를 추가하는 것이 이 태스크에 포함된다.
 
-- [ ] **Step 5: 의존 방향 테스트에 `jobs` 추가**
+- [x] **Step 5: 의존 방향 테스트에 `jobs` 추가**
 
 `backend/tests/test_import_direction_packages.py` 의 `ALLOWED` 에 `"tasks"` 항목 바로 아래:
 
@@ -431,7 +431,7 @@ Expected: `8 passed`. 만약 `from daengs_life.rag import __main__` 에서 argpa
 Run: `cd backend && uv run pytest tests/test_import_direction_packages.py -q`
 Expected: `3 passed`
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add backend/src/daengs_life/jobs/stages.py backend/tests/test_jobs_stages.py backend/tests/test_import_direction_packages.py
@@ -450,7 +450,7 @@ git commit -m "feat(jobs): 단계 실행 함수 — crawler.run 과 rag cmd_* �
 - Consumes: `daengs_life.rag.stages.load` 의 `prepare(model_key) -> Prepared(rows, merged, model_repo)`, `connect()`, `count(conn)`, `metadata_loss(conn, rows)`, `upsert(conn, rows)`, `stale(conn, rows)`, `prune(conn, targets)`. `jobs.guard.check`.
 - Produces: `run_load(*, dry_run: bool, max_drop: float) -> int` (종료 코드). `LoadReport(before, after, upserted, pruned, verdict)`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `backend/tests/test_jobs_load.py`:
 
@@ -536,12 +536,12 @@ def test_prepare_failure_is_exit_1(monkeypatch):
     assert jobs_load.run_load(dry_run=False, max_drop=0.2) == 1
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_load.py -q`
 Expected: `ModuleNotFoundError: No module named 'daengs_life.jobs.load'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/daengs_life/jobs/load.py`:
 
@@ -616,12 +616,12 @@ def run_load(*, dry_run: bool, max_drop: float) -> int:
 __all__ = ["LoadReport", "run_load"]
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_load.py -q`
 Expected: `5 passed`
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add backend/src/daengs_life/jobs/load.py backend/tests/test_jobs_load.py
@@ -640,7 +640,7 @@ git commit -m "feat(jobs): 가드 뒤 한 트랜잭션 적재 — upsert 와 pru
 **Interfaces:**
 - Produces: `lock.another_execution_running(*, job: str | None, execution: str | None, project: str | None, region: str | None, list_executions=None) -> str | None`. 다른 실행이 있으면 그 이름, 없거나 로컬(잡 env 없음)이면 `None`.
 
-- [ ] **Step 1: 의존성**
+- [x] **Step 1: 의존성**
 
 ```bash
 cd backend && uv add --group pipeline google-cloud-run
@@ -648,7 +648,7 @@ cd backend && uv add --group pipeline google-cloud-run
 
 `[dependency-groups]` 에 `pipeline` 그룹이 생긴다. `ml` 에 넣지 않는 이유: 개발 PC 의 `uv sync --group ml` 이 GCP 클라이언트까지 끌고 오지 않게. 이미지는 `--group ml --group pipeline`.
 
-- [ ] **Step 2: 실패하는 테스트**
+- [x] **Step 2: 실패하는 테스트**
 
 `backend/tests/test_jobs_lock.py`:
 
@@ -700,12 +700,12 @@ def test_parent_path_is_built_from_project_region_job():
     assert seen["parent"] == "projects/p/locations/r/jobs/corpus-refresh"
 ```
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_lock.py -q`
 Expected: `ModuleNotFoundError: No module named 'daengs_life.jobs.lock'`
 
-- [ ] **Step 4: 구현**
+- [x] **Step 4: 구현**
 
 `backend/src/daengs_life/jobs/lock.py`:
 
@@ -766,12 +766,12 @@ def from_env() -> str | None:
 __all__ = ["another_execution_running", "from_env"]
 ```
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_lock.py -q`
 Expected: `5 passed`
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add backend/pyproject.toml backend/uv.lock backend/src/daengs_life/jobs/lock.py backend/tests/test_jobs_lock.py
@@ -791,7 +791,7 @@ git commit -m "feat(jobs): 동시 실행 확인 — Cloud Run API 로 같은 잡
 - Consumes: Task 2 의 `stages.*`, Task 3 의 `load.run_load`, Task 4 의 `lock.from_env`.
 - Produces: `corpus_refresh.main(argv: list[str] | None = None) -> int`. 인자 `--stages` `--sources a,b` `--full` `--dry-run` `--max-drop 0.2` `--seeds-from PATH`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `backend/tests/test_jobs_corpus_refresh.py`:
 
@@ -885,12 +885,12 @@ def test_seeds_are_copied_into_data_dir(monkeypatch, tmp_path):
     assert (data / "manifests" / "seed_sources.yaml").read_text(encoding="utf-8") == "- id: a\n"
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_corpus_refresh.py -q`
 Expected: `ModuleNotFoundError: No module named 'daengs_life.jobs.corpus_refresh'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/daengs_life/jobs/corpus_refresh.py`:
 
@@ -1008,12 +1008,12 @@ corpus-refresh = "daengs_life.jobs.corpus_refresh:main"
 
 스크립트를 등록했으니 `cd backend && uv sync --group ml --group pipeline` 으로 엔트리포인트를 다시 만든다 (`uv run corpus-refresh --help` 가 떠야 한다).
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `cd backend && uv run pytest tests/test_jobs_corpus_refresh.py -q && uv run corpus-refresh --help | head -3`
 Expected: `8 passed`, 그리고 `usage: corpus-refresh [-h] [--stages STAGES] ...`
 
-- [ ] **Step 5: 로컬 dry-run (임시 data 사본)**
+- [x] **Step 5: 로컬 dry-run (임시 data 사본)**
 
 개발 PC 의 코퍼스는 정본이 아니지만 `processed/` 가 있어 dry-run 에 충분하다. **정본 `data/` 에 쓰지 않도록** 임시 복사본을 쓴다:
 
@@ -1031,7 +1031,7 @@ Remove-Item Env:DAENGS_DATA_DIR
 
 Expected: 네 단계가 `[refresh] ▶ …` 로 지나가고 마지막에 `[refresh] 끝`, 종료 코드 0. `crawl` 은 실제 요청을 내므로 여기서는 뺀다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add backend/src/daengs_life/jobs/corpus_refresh.py backend/pyproject.toml backend/uv.lock backend/tests/test_jobs_corpus_refresh.py
@@ -1050,7 +1050,7 @@ git commit -m "feat(jobs): corpus-refresh 진입점 — crawl~load 를 한 프�
 **Interfaces:**
 - Produces: 이미지 `pipeline:cpu` · `pipeline:cuda`. ENTRYPOINT 가 `entrypoint.sh`, CMD 없음. 인자는 그대로 `corpus-refresh` 로 간다. 환경: `DAENGS_DATA_DIR=/data`, `HF_HOME=/models`.
 
-- [ ] **Step 1: Dockerfile**
+- [x] **Step 1: Dockerfile**
 
 `docker/pipeline/Dockerfile`:
 
@@ -1105,7 +1105,7 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 ```
 
-- [ ] **Step 2: entrypoint 와 dockerignore**
+- [x] **Step 2: entrypoint 와 dockerignore**
 
 `docker/pipeline/entrypoint.sh`:
 
@@ -1135,7 +1135,7 @@ exec uv run --no-sync corpus-refresh --seeds-from /app/seed_sources.yaml "$@"
 backend/src/**/__pycache__
 ```
 
-- [ ] **Step 3: CPU 이미지 빌드와 dry-run**
+- [x] **Step 3: CPU 이미지 빌드와 dry-run**
 
 ```powershell
 # 저장소 루트. uv:1 이 없으면 먼저: docker build -t uv:1 docker/uv
@@ -1148,7 +1148,7 @@ docker run --rm -v "${tmp}:/data" pipeline:cpu --stages parse,chunk,embed,load -
 
 Expected: 빌드 성공, 크기 3~4GB, 컨테이너 안에서 네 단계가 dry-run 으로 지나가고 종료 코드 0. `embed` 가 모델을 `/models` 에서 읽어 네트워크 없이 뜨는지 로그로 확인 (`HF_HUB_OFFLINE=1` 을 `-e` 로 주고 한 번 더 돌리면 확실하다).
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add docker/pipeline/
@@ -1170,7 +1170,7 @@ CUDA 빌드는 로컬에서 안 한다(7GB, 개발 PC 에서 검증할 것이 �
 - Consumes: Task 6 이미지. Task 4 의 env 이름 `DAENGS_GCP_PROJECT` `DAENGS_GCP_REGION`. rag 설정 env `POSTGRES_IP` `POSTGRES_PORT` `POSTGRES_USER` `POSTGRES_PASSWORD` `POSTGRES_DB` `EMBEDDING_MODEL_KEY`. 크롤러 키 env `LAW_OC` `DATA_GO_KR_KEY`.
 - Produces: GCP 리소스 이름 — 스펙 §4 표 그대로.
 
-- [ ] **Step 1: 생성 스크립트**
+- [x] **Step 1: 생성 스크립트**
 
 `infra/gcp/pipeline.sh` (VM 이 아니라 **개발 PC 의 gcloud** 로, 또는 Cloud Shell 에서 실행. bash):
 
@@ -1291,7 +1291,7 @@ fi
 echo "끝. 다음: infra/gcp/README.md 의 '초기 사본' 과 '검증'."
 ```
 
-- [ ] **Step 2: 삭제 스크립트**
+- [x] **Step 2: 삭제 스크립트**
 
 `infra/gcp/pipeline-teardown.sh`:
 
@@ -1313,7 +1313,7 @@ echo "버킷 gs://daengs-corpus 는 남겨 두었다. 정말 지우려면:"
 echo "  gcloud storage rm -r gs://daengs-corpus"
 ```
 
-- [ ] **Step 3: README**
+- [x] **Step 3: README**
 
 `infra/gcp/README.md`:
 
@@ -1364,7 +1364,7 @@ echo "  gcloud storage rm -r gs://daengs-corpus"
 - **GPU 잡이 quota 에러** — 첫 실행에 자동 할당(3장)이 안 된 경우. 콘솔 할당량에서 `Cloud Run Admin API` × `NVIDIA L4` 를 1 로 요청.
 ```
 
-- [ ] **Step 4: 문법 검사와 커밋**
+- [x] **Step 4: 문법 검사와 커밋**
 
 ```bash
 bash -n infra/gcp/pipeline.sh && bash -n infra/gcp/pipeline-teardown.sh && echo ok

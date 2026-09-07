@@ -77,6 +77,39 @@ def test_v10_is_the_next_run_identifier_with_the_v9_prompt_and_unchanged_model_g
     assert recorded_v9["verdict"] == "PASS"
 
 
+def test_v10_recorded_run_is_the_narrowed_prompt_with_both_views_passing() -> None:
+    """The frozen v10 record is the NARROWED v9 prompt's run, not the first draft's.
+
+    The first v9 draft attached `general` to 32/80 (every `training_*` case; raw exact
+    0.6125) and was narrowed once before any run was frozen; its artifacts were
+    overwritten. What is recorded: 0/80 cases gained `general`, so raw equals stripped,
+    both PASS, and the stripped view did not regress against v9 (0.975).
+    """
+    recorded = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+    assert recorded["prompt_version"] == "semantic-router-ko-v9"
+    assert recorded["benchmark_id"] == BENCHMARK_ID
+    assert recorded["general_selected_case_ids"] == []
+    assert recorded["verdict"] == "PASS"
+    assert recorded["general_stripped"]["verdict"] == "PASS"
+    assert recorded["general_stripped"]["benchmark_id"] == STRIPPED_BENCHMARK_ID
+    assert recorded["metrics"] == recorded["general_stripped"]["metrics"]
+    assert recorded["metrics"]["exact_route_plan_match"] >= 0.975
+    assert recorded["metrics"]["executable_recall"] == 1.0
+    assert recorded["retry_count"] == 0
+    rows = [
+        json.loads(line)
+        for line in RESULTS_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 80
+    assert not any(
+        request["capability"] == "general"
+        for row in rows
+        if row["prediction"]
+        for request in row["prediction"]["requests"]
+    )
+
+
 def test_v10_writes_only_new_artifact_paths() -> None:
     for path in (RESULTS_PATH, SUMMARY_PATH, REPORT_PATH):
         assert path.name.endswith(("_v10.jsonl", "_v10.json", "_v10_report.md")), path.name

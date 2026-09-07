@@ -215,9 +215,24 @@ def test_router_schema_and_prompt_offer_general_as_an_additive_destination() -> 
     assert validate_semantic_decision(json.dumps({"execute": ["walk", "general"], "handoffs": []}))
     prompt = build_semantic_router_prompt(query="x", context={})
     assert "execute.general:" in prompt
-    assert "IN ADDITION to any specialized destination" in prompt
-    assert "never replaces Training, Life, Walk, or Place" in prompt
-    assert "not about dogs at all" in prompt and "selects NOTHING" in prompt
+    flat = " ".join(prompt.split())
+    assert "IN ADDITION to any specialized destination" in flat
+    assert "never replaces Training, Life, Walk, or Place" in flat
+    assert "not about dogs at all" in flat and "selects NOTHING" in flat
+    # The narrowing after the first v9 draft over-selected (32/80, every training case):
+    # a SEPARATE care question is required, full coverage by a specialized destination
+    # means no General, context mentions are not triggers, doubt → Training alone.
+    assert "ONLY when the utterance contains a SEPARATE general-care" in flat
+    assert (
+        "fully covered by Training (changing behavior or teaching a skill), Life, Walk, or Place "
+        "gets NO General" in flat
+    )
+    assert "a symptom mentioned as context does not make a request General" in flat
+    assert (
+        "When in doubt between Training and General for a behavior question, choose Training alone"
+        in flat
+    )
+    assert "behavior-as-wellbeing" not in prompt
 
 
 # ── service: LangGraph 경로 ────────────────────────────────────────────
@@ -537,6 +552,10 @@ def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback(
     # D-056 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
     assert "answer_generally" in _SYSTEM_PROMPT
     assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
+    # the same narrowing as the router (D-055 ⑦): separate care question only, doubt → Training
+    assert "**별도의** 돌봄 질문이 있을 때만" in _SYSTEM_PROMPT
+    assert "온전히 답해지는 질문에는 부르지 않습니다" in _SYSTEM_PROMPT
+    assert "훈련과 일반 사이가 애매하면 훈련만 부릅니다" in _SYSTEM_PROMPT
     assert (
         "반려견과 무관한 요청" in _SYSTEM_PROMPT
         and "어느\n  도구도 부르지 않습니다" in _SYSTEM_PROMPT

@@ -39,6 +39,15 @@ destination" to General. With `DAENGS_GENERAL_FALLBACK` off the planner strips `
 from the decision, so production plans are unchanged until the switch is thrown. The v9
 regression (two views, general counted and general-stripped) is runner_v10.py.
 
+The first v9 draft described General as "care, husbandry, behavior-as-wellbeing, or
+health-concern questions" and over-selected: in its v10 run the router attached General
+to 32 of the 80 frozen cases, including every `training_*` case (raw exact 61.25%,
+general-stripped unchanged at 97.5%). It was narrowed before any run was frozen under
+this name — General now requires a SEPARATE care question, a question fully covered by a
+specialized destination gets none, a mentioned dog/breed/age/symptom is not a trigger,
+and a doubtful behavior question is Training alone. The version name stays v9 because
+the draft was never released.
+
 The prompt below is `semantic-router-ko-v9`, which keeps intact everything of v8:
 the accepted v3 routing boundary, the v4 PURELY social utterance classification
 (greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
@@ -143,9 +152,14 @@ Select every semantically requested destination:
 - execute.walk: current environmental walking suitability.
 - execute.place: finding somewhere to go near the user — a kind of venue, a purpose, or a
   described place. Place answers "where should I go", not "is now a good time".
-- execute.general: general dog care, husbandry, behavior-as-wellbeing, or health-concern questions
-  that no specialized destination answers. Select it IN ADDITION to any specialized destination the
-  same utterance also asks for; it never replaces Training, Life, Walk, or Place when those apply.
+- execute.general: ONLY when the utterance contains a SEPARATE general-care, husbandry, or
+  health-worry question that no specialized destination covers — feeding, water, grooming, sleep,
+  gear, socialization, or whether something about the dog is normal. Select it IN ADDITION to any
+  specialized destination the same utterance also asks for; it never replaces Training, Life, Walk,
+  or Place when those apply. A question that is fully covered by Training (changing behavior or
+  teaching a skill), Life, Walk, or Place gets NO General. The mere presence of a dog, a breed, an
+  age, or a symptom mentioned as context does not make a request General. When in doubt between
+  Training and General for a behavior question, choose Training alone.
 - handoffs.skin: inspecting a visible skin condition through the dedicated image flow.
 - handoffs.gait: analyzing walking, limping, asymmetry, stride, posture, joint angles, or gait from
   an image/video through the dedicated gait flow. These descriptions do not make it an unsupported

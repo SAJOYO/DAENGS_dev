@@ -101,6 +101,9 @@ OrchestratorState:
   두 건" 으로 읽힙니다. 거꾸로 **기준 기록이 `FAILED` 여도 이력은 갑니다**: 방금 찍은 판정이
   실패한 자리에서 "지난번엔 어땠지" 는 그대로 유효한 질문이라 `screening` 만 빕니다.
 - 라우팅 신호가 아닌 것도 같습니다 (`semantic._ROUTING_METADATA_KEYS`).
+- **Life 까지 갑니다** — `LifePayload.screening_history` → 어댑터의 `(판정, 경과일)` 쌍 →
+  `SCREENING_HISTORY_BLOCK` (§3 · architecture 문서). `screening` 과 **따로** 흐르므로 한쪽만
+  있어도 됩니다.
 
 ## 2. RoutePlan
 
@@ -173,6 +176,14 @@ grounding합니다), 좌표는 검증된 `context.location`에서 복사합니�
 "이런 경우 지원이 있어요" 를 만드는 조례·보조금 문서를 Life 가 검색하기 때문입니다.
 `ScreeningContext` 의 두 칸(§1 · 불변식 15)이 여기서도 그대로이고, `daengs_life` 로는
 원시값 둘로 건너갑니다 — 도메인이 오케스트레이션 타입을 알면 D-035 가 막은 방향이 됩니다.
+
+**이전 판정들도 같은 규칙으로 받습니다** (#79 3번). `LifePayload.screening_history` 는 §1 의
+`context["screening_history"]` 를 planner 가 **항목마다** 같은 화이트리스트로 옮긴 것이라,
+좁힘이 건수와 무관하게 걸립니다. `screening` 과 **별개의 칸**인 것은 둘이 따로 없기 때문입니다 —
+첫 기록은 이력이 없고, 이번 판정이 실패한 자리에는 이력만 있습니다. `daengs_life` 로는
+`(판정, 경과일)` **쌍의 튜플**로 건너갑니다. 상한을 넘는 목록이 오면 잘라서 보냅니다 —
+상류가 이미 잘랐으므로 그런 목록은 상류 결함인데, 여기서 422 를 내면 사용자가 보지도 고치지도
+못하는 결함 때문에 답할 수 있는 질문이 죽습니다. `general` 이 안 받는 것도 같습니다.
 
 **payload는 능력별 명시 분기로 만듭니다** (D-051). 예전 조립 루프는 Training/Life가 아니면
 좌표 payload를 주는 `else` 폴백이었고, 그것은 Walk가 유일한 좌표 능력인 동안에만 맞았습니다 —

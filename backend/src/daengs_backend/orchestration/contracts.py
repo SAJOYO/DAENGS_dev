@@ -143,6 +143,11 @@ class LifePayload(ContractModel):
     #: exactly as it did before this field existed. The narrowing that makes it safe to put
     #: in a prompt lives on ``ScreeningContext`` itself, not here.
     screening: ScreeningContext | None = None
+    #: Earlier screenings of the same dog (#79 3번). Same rule again — the caller resolved it
+    #: and the planner only copies it. It arrives separately from ``screening`` rather than
+    #: nested inside it because the two are independently absent: a first-ever record has no
+    #: history, and a record whose own verdict failed still has one.
+    screening_history: ScreeningHistory | None = None
 
 
 class WalkPayload(ContractModel):

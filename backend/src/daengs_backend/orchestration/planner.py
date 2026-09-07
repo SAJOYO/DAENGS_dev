@@ -35,10 +35,14 @@ strips `general` from the decision, so production builds the plans it built befo
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from daengs_backend.orchestration.contracts import RoutePlan, RouterKind
+from daengs_backend.orchestration.contracts import (
+    SCREENING_HISTORY_LIMIT,
+    RoutePlan,
+    RouterKind,
+)
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -205,6 +209,9 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
             screening = _screening_context(context)
             if screening is not None:
                 payload["screening"] = screening
+            history = _screening_history(context)
+            if history is not None:
+                payload["screening_history"] = history
         return payload
     if capability == _GENERAL:
         # Same rule as Life: the exact question plus the trusted dog facts, never a
@@ -278,6 +285,38 @@ def _screening_context(context: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(days_ago, int) or isinstance(days_ago, bool) or days_ago < 0:
         return None
     return {"verdict": verdict, "days_ago": days_ago}
+
+
+def _screening_history(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the earlier screenings of the same dog, entry by entry (#79 3번).
+
+    The same whitelist as ``_screening_context``, applied per entry, and for the same reason:
+    a list of the narrow thing is only narrow while every element goes through the filter.
+    Invariant 15 does not weaken with count — widening this loop would not raise either.
+
+    **Bad entries are dropped, not raised on, and the list is truncated rather than refused.**
+    The caller already capped it (``services/screening_context.py``), so an over-long list
+    here means a bug upstream — but failing the request would turn an answerable question
+    into an error over a defect the user cannot see or fix. Truncating keeps the contract's
+    promise (`ScreeningHistory` would reject the long list downstream) without that cost.
+    """
+    history = context.get("screening_history")
+    if not isinstance(history, Sequence) or isinstance(history, (str, bytes)):
+        return None
+    entries: list[dict[str, Any]] = []
+    for entry in history:
+        if not isinstance(entry, Mapping):
+            continue
+        verdict = entry.get("verdict")
+        if verdict not in _SCREENING_VERDICTS:
+            continue
+        days_ago = entry.get("days_ago")
+        if not isinstance(days_ago, int) or isinstance(days_ago, bool) or days_ago < 0:
+            continue
+        entries.append({"verdict": verdict, "days_ago": days_ago})
+        if len(entries) == SCREENING_HISTORY_LIMIT:
+            break
+    return {"entries": entries} if entries else None
 
 
 def _missing_coordinates(context: dict[str, Any]) -> list[str]:

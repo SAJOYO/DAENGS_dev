@@ -58,6 +58,7 @@ def _ask_life(
     age_months: int | None = None,
     screening_verdict: str | None = None,
     screening_days_ago: int | None = None,
+    screening_history: tuple[tuple[str, int], ...] = (),
 ) -> Any:
     """Open the existing request-scoped dependencies around the Life service shim.
 
@@ -68,6 +69,10 @@ def _ask_life(
     The screening verdict crosses the same way and for the same reason (#283) — two
     primitives, never ``ScreeningContext``. Both are ``None`` on every request that did not
     come from a screening result, and Life's prompt is then byte-identical to before.
+
+    Earlier screenings cross as a tuple of ``(verdict, days_ago)`` pairs for that same reason
+    (#79 3번): pairs of primitives, never ``ScreeningHistory``. Empty on every request that
+    did not come from a screening result, and empty again for a dog's first record.
     """
     from daengs_life.app import deps
     from daengs_life.app.services import ask as life_service
@@ -84,6 +89,7 @@ def _ask_life(
             age_months=age_months,
             screening_verdict=screening_verdict,
             screening_days_ago=screening_days_ago,
+            screening_history=screening_history,
         )
     finally:
         connection_dependency.close()
@@ -218,6 +224,7 @@ class LifeCapabilityAdapter:
             return self._error(started, "invalid_payload", "Life payload is invalid")
         dog = payload.dog
         screening = payload.screening
+        history = payload.screening_history
         try:
             # 프로필이 없으면 두 값이 None 이고, 그때 Life 는 B4 이전과 똑같이 답한다.
             # 스크리닝도 같다 — 판정에서 이어 온 질문이 아니면 두 값이 None 이다 (#283).
@@ -229,6 +236,11 @@ class LifeCapabilityAdapter:
                     age_months=dog.age_months if dog else None,
                     screening_verdict=screening.verdict if screening else None,
                     screening_days_ago=screening.days_ago if screening else None,
+                    screening_history=(
+                        tuple((e.verdict, e.days_ago) for e in history.entries)
+                        if history
+                        else ()
+                    ),
                 )
             )
         except HTTPException as exc:

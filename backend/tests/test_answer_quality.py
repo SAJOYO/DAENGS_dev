@@ -25,13 +25,22 @@ from tools.answer_quality.questions import (
     normalized_key,
     write_questions,
 )
-from tools.answer_quality.strata import SEOUL_LOCATION, STRATA, STRATA_BY_ID, resolve_strata
+from tools.answer_quality.strata import (
+    SEOUL_LOCATION,
+    STRATA,
+    STRATA_BY_ID,
+    resolve_strata,
+    strata_for_set,
+)
 
 # ── 계층 ─────────────────────────────────────────────────────────────────
 
 
 def test_strata_are_topic_times_style_with_unique_ids_and_briefs() -> None:
-    assert len(STRATA) == 9 * 7
+    # 세트가 둘이다: v1 9주제 + screening 1주제 (#314). 곱은 그대로 주제 × 문체다.
+    assert len(STRATA) == 10 * 7
+    assert len(strata_for_set("v1")) == 9 * 7
+    assert len(strata_for_set("screening")) == 1 * 7
     assert len(STRATA_BY_ID) == len(STRATA)
     for stratum in STRATA:
         assert stratum.id == f"{stratum.topic.name}__{stratum.style.name}"
@@ -53,7 +62,7 @@ def test_no_location_style_turns_coordinate_topics_into_clarify_only() -> None:
 def test_fallback_topics_get_one_more_question_per_style_and_total_is_about_150() -> None:
     assert STRATA_BY_ID["general_care__polite"].questions_target == 3
     assert STRATA_BY_ID["training__polite"].questions_target == 2
-    assert 140 <= sum(s.questions_target for s in STRATA) <= 160
+    assert 140 <= sum(s.questions_target for s in strata_for_set("v1")) <= 160
 
 
 def test_resolve_strata_accepts_ids_topics_and_styles_in_definition_order() -> None:
@@ -131,7 +140,10 @@ def test_frozen_questions_v1_file_validates_and_covers_every_stratum() -> None:
     cases = load_questions(QUESTIONS_V1_PATH)
     assert 120 <= len(cases) <= 200
     covered = {c.stratum for c in cases}
-    assert covered == set(STRATA_BY_ID), sorted(set(STRATA_BY_ID) - covered)
+    # **v1 세트만** 덮으면 된다. 이 파일은 동결이고 sha256 이 #277 의 답변 메타에 박혀 있어,
+    # 나중에 더해진 주제(#314 의 `screening` 세트)까지 덮으라고 하면 파일을 고쳐야 한다.
+    expected = {s.id for s in strata_for_set("v1")}
+    assert covered == expected, sorted(expected - covered)
     assert {c.generator_version for c in cases} == {generate_questions.GENERATOR_VERSION}
     assert all("lat" not in c.query and "lon" not in c.query for c in cases)
 

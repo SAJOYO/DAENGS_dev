@@ -36,7 +36,7 @@ from tools.answer_quality.questions import (
     normalized_key,
     write_questions,
 )
-from tools.answer_quality.strata import Stratum, resolve_strata
+from tools.answer_quality.strata import Stratum, resolve_strata, strata_for_set
 
 GENERATOR_VERSION = "answer-quality-questions-ko-v1"
 GENERATION_TEMPERATURE = 0.9
@@ -158,13 +158,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="계층별 질문 생성 · 동결 (#277)")
     parser.add_argument("--out", type=Path, default=QUESTIONS_V1_PATH)
     parser.add_argument("--strata", nargs="*", help="계층 id · 주제 · 문체 이름으로 거른다")
+    parser.add_argument(
+        "--question-set",
+        choices=("v1", "screening"),
+        default="v1",
+        help="이 세트의 계층만 만든다. **파일과 세트는 1:1 이다** — `questions_v1.jsonl` 은 동결이고 "
+        "그 sha256 이 #277 의 답변 메타에 박혀 있어, 나중에 더한 주제를 섞으면 안 된다 (#314)",
+    )
     parser.add_argument("--model", default=ROUTER_MODEL_ID)
     parser.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
     parser.add_argument("--force", action="store_true", help="이미 동결된 파일을 덮어쓴다")
     parser.add_argument("--dry-run", action="store_true", help="프롬프트만 찍고 부르지 않는다")
     args = parser.parse_args()
 
-    strata = resolve_strata(args.strata)
+    in_set = {s.id for s in strata_for_set(args.question_set)}
+    strata = [s for s in resolve_strata(args.strata) if s.id in in_set]
+    if not strata:
+        parser.error(f"--question-set {args.question_set} 에 해당하는 계층이 없습니다")
     target_total = sum(s.questions_target for s in strata)
     print(
         f"계층 {len(strata)}개 · 목표 {target_total}건 · 모델 {args.model} · 호출 {len(strata)}회"

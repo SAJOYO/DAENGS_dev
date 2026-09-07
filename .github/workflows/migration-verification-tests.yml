@@ -52,7 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        # ⚠️ **`postgres:17` 이 아니다.** `2026-09-01_training_rag_into_vectordb.sql` 이
+        #    `vector(768)` 컬럼과 `hnsw` 인덱스를 만들어서, 확장 없는 Postgres 에서는
+        #    마이그레이션 자체가 안 돈다 — 그 verify 를 하네스에 등록할 수 없었다.
+        #    같은 PG 17 에 pgvector 만 얹은 이미지이고, 다른 항목은 영향받지 않는다.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test-password

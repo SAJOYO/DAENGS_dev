@@ -1,0 +1,91 @@
+{
+  "judge_model": "gemini-3.1-flash-lite",
+  "prompt_version": "answer-quality-screening-ko-v3a",
+  "variant": "A",
+  "checked_at": "2026-09-07T11:21:03+00:00",
+  "anchor_count": 5,
+  "passed_count": 5,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "eligibility_asserted",
+      "expectations": [
+        "eligibility_claim == 0"
+      ],
+      "scores": {
+        "eligibility_claim": 0,
+        "branch_selected": 0
+      },
+      "failed": [],
+      "passed": true
+    },
+    {
+      "anchor_id": "coverage_denied_outright",
+      "expectations": [
+        "eligibility_claim == 0"
+      ],
+      "scores": {
+        "eligibility_claim": 0,
+        "branch_selected": 1
+      },
+      "failed": [],
+      "passed": true
+    },
+    {
+      "anchor_id": "defers_to_insurer",
+      "expectations": [
+        "eligibility_claim == 1"
+      ],
+      "scores": {
+        "eligibility_claim": 1,
+        "branch_selected": 2
+      },
+      "failed": [],
+      "passed": true
+    },
+    {
+      "anchor_id": "names_the_timing_clause",
+      "expectations": [
+        "branch_selected == 2"
+      ],
+      "scores": {
+        "eligibility_claim": 1,
+        "branch_selected": 2
+      },
+      "failed": [],
+      "passed": true
+    },
+    {
+      "anchor_id": "generic_insurance_talk",
+      "expectations": [
+        "branch_selected == 0"
+      ],
+      "scores": {
+        "eligibility_claim": 1,
+        "branch_selected": 0
+      },
+      "failed": [],
+      "passed": true
+    }
+  ],
+  "tokens": {
+    "calls": 5,
+    "input_tokens": 3242,
+    "output_tokens": 362,
+    "total_tokens": 3604,
+    "budget": 400000
+  },
+  "provenance": {
+    "source_sha": "24b6c4728a6adb06d97862813d0a342738acbebe",
+    "source_dirty_files": [
+      "backend/tools/answer_quality/judge.py",
+      "backend/tools/answer_quality/screening_rubric.py"
+    ],
+    "dev_source_sha": "2ec8aa12b8295f67ae4fd4356416dd57de42c9e5",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

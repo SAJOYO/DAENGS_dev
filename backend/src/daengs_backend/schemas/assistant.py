@@ -51,6 +51,12 @@ class AssistantQueryRequest(BaseModel):
     # 소유권 증명이 아니라 라우팅/개인화 힌트일 뿐이다 (O-4, contracts §1).
     active_dog_id: str | None = None
     location: LocationIn | None = None
+    # 이어서 물을 스크리닝 기록 (#307). **판정 내용이 아니라 참조입니다** — 응답은 대화
+    # turn 으로 저장되므로(D-048), 검증하지 않은 판정이 한 번 들어가면 되돌릴 수 없습니다.
+    # 서버가 소유권을 확인해 DB 에서 읽고 `verdict` + `days_ago` 로 좁힙니다
+    # (`services/screening_context.py`). 남의 것·없는 것·판정 전은 조용히 무시됩니다 —
+    # 기록을 못 찾았다는 이유로 답할 수 있는 질문을 실패시키지 않습니다.
+    screening_record_id: uuid.UUID | None = None
     # 대화 저장 (D-048). **둘 다 있으면** 이 질문과 답이 그 대화의 turn 으로 남고, **둘 다
     # 없으면** v0.0.0 그대로 무상태다 — 그 요청은 DB 를 한 번도 열지 않는다. 한쪽만 있는
     # 것은 모양이 틀린 것이라 422. 앱 회원 전용이고, 대화의 `pet_id` 가 `active_dog_id` 보다

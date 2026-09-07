@@ -47,6 +47,7 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     ROUTER_CANDIDATE_COUNT,
     ROUTER_MAX_OUTPUT_TOKENS,
@@ -415,6 +416,7 @@ async def test_no_capability_and_no_answer_is_failed() -> None:
         query="산책 몇 번 시켜야 해?", principal=PRINCIPAL, context=dict(SEOUL)
     )
     assert response.status == AssistantStatus.FAILED
+    assert response.message == NO_CAPABILITY_MESSAGE
     assert "하루 두 번" not in response.message
 
 

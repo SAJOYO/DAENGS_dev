@@ -1,4 +1,4 @@
-"""HANDOFF 사용자 문구가 내부 라우팅 값을 노출하지 않는지 (aggregate.py)."""
+"""HANDOFF 사용자 문구가 내부 라우팅 값을 노출하지 않는지, 빈 선택의 FAILED 문구 (aggregate.py)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     RouterKind,
 )
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 
 _LEAKED_CODES = ("skin", "gait", "image_upload_required", "video_upload_required")
 
@@ -80,6 +81,24 @@ def test_모르는_핸드오프_대상은_일반_안내문으로_떨어진다() 
     assert "future_capability" not in response.message
     assert "something_new_required" not in response.message
     assert response.message  # 빈 문자열이 아니라 안전한 안내문이 있다
+
+
+# ---------------------------------------------------------------------------
+# 빈 선택 — 핸드오프도 결과도 없다 (#278)
+#
+# 라우터가 아무것도 못 고른 요청이다. 일반 답변 폴백 플래그가 꺼져 있어도(D-057) 지금
+# 나가는 응답이라, "무엇은 도울 수 있다" 를 말하는 스코프드 리다이렉트를 쓴다 — REFUSED
+# 의 off_topic 과 같은 문장이다 (daengs_backend.orchestration.redirects).
+# ---------------------------------------------------------------------------
+
+
+def test_빈_선택은_스코프드_리다이렉트_문구로_FAILED다() -> None:
+    response = aggregate_results(request_id="r5", route_plan=_plan(handoffs=[]), results=[])
+
+    assert response.status == AssistantStatus.FAILED
+    assert response.message == NO_CAPABILITY_MESSAGE
+    assert response.handoffs == []
+    assert response.results == []
 
 
 # ---------------------------------------------------------------------------

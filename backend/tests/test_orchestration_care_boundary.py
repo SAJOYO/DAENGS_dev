@@ -49,6 +49,7 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -63,7 +64,7 @@ from daengs_backend.orchestration.social import social_message
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 LOCATION = {"location": {"lat": 37.5665, "lon": 126.978}}
-UNSUPPORTED_MESSAGE = "실행하거나 안내할 수 있는 기능이 없습니다."
+UNSUPPORTED_MESSAGE = NO_CAPABILITY_MESSAGE
 
 # Routing acceptance cases for this card. `decision` is the semantically correct
 # destination selection (what the classifier SHOULD return); the tests below feed

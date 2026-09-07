@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import get_args
 
 import pytest
@@ -468,11 +469,13 @@ def test_general_prompt_carries_the_question_and_dog_but_never_coordinates() -> 
     assert f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}" in prompt
     assert prompt.rstrip().endswith(f"USER_QUERY: {QUERY}")
     assert 'DOG_CONTEXT: {"age_months": 30, "breed": "푸들"}' in prompt
-    assert "37.5" not in prompt and "lat" not in prompt.split("GENERAL_ANSWER_JSON_SCHEMA")[0]
+    # "lat" as a whole word — the English v3 prompt legitimately contains "regulations"
+    assert "37.5" not in prompt
+    assert not re.search(r"\blat\b|\blon\b", prompt.split("GENERAL_ANSWER_JSON_SCHEMA")[0])
     # 안전 경계가 프롬프트에 실제로 있다 — 진단 · 약/용량 · 응급 · 제도/수치 · 도메인 밖.
     for word in ("diagnosis", "medication", "emergency", "institutional", "off_topic"):
         assert word in prompt
-    assert "동물병원" in prompt and "제도 정보 기능" in prompt
+    assert "veterinary hospital" in prompt and "institutional-information capability" in prompt
     assert build_general_prompt(GeneralPayload(question=QUERY)).count("DOG_CONTEXT: {}") == 1
 
 
@@ -480,26 +483,38 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-056 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v2"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    # v3: the instructions are English like the router policy; the OUTPUT stays Korean
+    assert "Write in Korean" in prompt
+    assert "당신은" not in prompt
     # husbandry norms are answerable, with the individual-variation hedge and the authority
-    assert "통상 돌봄 기준은 답합니다" in prompt
-    for topic in ("급여 횟수", "음수량", "목욕", "빗질", "발톱", "준비물", "사회화 시기", "수면"):
+    assert "Ordinary husbandry norms ARE answerable" in prompt
+    for topic in (
+        "feeding frequency",
+        "water intake",
+        "bathing",
+        "brushing",
+        "nail-trimming",
+        "walking gear",
+        "socialization timing",
+        "sleep duration",
+    ):
         assert topic in prompt, topic
-    assert "개체차가 크다는 단서" in prompt
-    assert "사료 포장의 급여표나 수의사가 기준" in prompt
-    assert "통상 기준은 institutional 이 아닙니다" in prompt
+    assert "individual variation is large" in prompt
+    assert "feeding table on the food package or the veterinarian is the authority" in prompt
+    assert "These ordinary norms are NOT institutional" in prompt
     # "is this normal" answers with the range and a vet hedge — it is not a diagnosis
-    assert "정상인가" in prompt and "거절하지 않습니다" in prompt
-    assert '"괜찮은가 / 정상인가" 는 여기가 아닙니다' in prompt
+    assert "is this normal" in prompt and "Do not refuse it" in prompt
+    assert '"Is this okay / is this normal" is NOT diagnosis' in prompt
     # institutional = document-backed facts only; diagnosis = explicit requests only
-    assert "출처 문서가 있어야 답이 되는 사실" in prompt
-    assert "통상 돌봄 기준의 수치는 여기에 넣지 않습니다" in prompt
-    assert "병명을 대 달라거나" in prompt and "검사 결과를 해석해 달라고 명시적으로" in prompt
+    assert "facts that require a source document" in prompt
+    assert "Ordinary husbandry numbers do NOT belong here" in prompt
+    assert "explicitly asks for a disease name" in prompt and "interpret test results" in prompt
     # medication · emergency · off_topic unchanged
-    assert "약 · 영양제 · 용량 · 투여 방법" in prompt
-    assert '"지금 바로 동물병원으로" 이상의 처치는 말하지 않습니다' in prompt
-    assert "off_topic: 반려견과 무관한 질문." in prompt
+    assert "drugs, supplements, dosages, or administration" in prompt
+    assert 'Say nothing beyond "go to a veterinary hospital right now"' in prompt
+    assert "off_topic: the question is not about dogs." in prompt
 
 
 def test_general_adapter_uses_the_router_model() -> None:

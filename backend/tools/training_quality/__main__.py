@@ -9,9 +9,11 @@
 그 게이트를 코드로 든다 (#277 의 앵커 게이트와 같은 자리). 앵커 기록은 **judge 모델 · 프롬프트
 버전별로** 남는다 — 둘 중 하나가 바뀌면 다시 통과해야 한다.
 
-⚠ **사람 라벨은 진행하지 않는다** (D-060 ⑦, 2026-09-07). `RAG-007` 이 요구한 30개가 생기지
-않으므로 **`score` 의 수는 지표가 아니고 앞으로도 아니다.** 이 도구의 쓰임은 `review` 다 —
-사람이 볼 자리를 고르는 것. 교차검증 프롬프트는 `docs/training/judge_codex_handoff.md` 에 있다.
+⚠ **승격은 포기했다** (D-060 ⑨, 2026-09-07). `score` 의 grounded 비율은 지표가 아니고 앞으로도
+아니다. 이 도구의 산출물은 **`review` 와 `blindspots`** 다 — 사람이 볼 자리를 고르는 것.
+
+첫날 결함 둘을 찾았고 **둘 다 비율이 아니라 선별에서** 나왔다: 프롬프트 오탐은 앵커 게이트가,
+judge 의 축 넘기(⑧)는 `blindspots` 가 잡았다. 일치율은 아무것도 못 찾았다.
 """
 from __future__ import annotations
 
@@ -108,8 +110,10 @@ def cmd_score(args: argparse.Namespace) -> int:
           f"(ANSWER 가 아니거나 청크가 없는 행은 뺍니다 — D-060 ⑤)")
     print(f"  grounded {summary['grounded']} · 아님 {summary['not_grounded']}")
     print(f"  사람이 봐야 할 문항 {summary['review_needed']}건  → `review --label {args.label}`")
-    print("\n⚠ 이 수는 지표가 아닙니다. 사람 라벨을 진행하지 않기로 해(D-060 ⑦) 승격 경로가")
-    print("   닫혔습니다 — 이 비율을 어디에도 올리지 마세요.")
+    print("\n⚠ 이 비율은 지표가 아닙니다. **승격은 포기했습니다** (D-060 ⑨) — 어디에도")
+    print("   올리지 마세요. `score` 는 산출물이 아니라 아래 둘을 위한 재료입니다.")
+    print(f"   → `review --label {args.label}`      판정이 흔들린 자리")
+    print(f"   → `blindspots --label {args.label} --against <상대>`  둘 다 안 훑은 자리")
     return 0
 
 
@@ -311,18 +315,24 @@ def cmd_agreement(args: argparse.Namespace) -> int:
         print(f"   후보가 짚은 것: {row['candidate_unsupported']}")
 
     # **사람이 한쪽에 있으면 뜻이 다르다.** LLM 둘의 일치는 같은 맹점을 공유해도 높게 나오지만,
-    # 사람과의 일치는 `RAG-007` 이 요구한 바로 그 수다 — 다만 30개라는 분모까지 채워야 한다.
+    # 사람과의 일치는 `RAG-007` 이 요구한 바로 그 수다. 다만 **승격은 포기했으므로**(D-060 ⑨)
+    # 어느 쪽이든 이 수로 지표를 만들지 않는다 — 분모 30 은 이제 목표가 아니라 되열기 조건이다.
     if "human" in (ref_model, cand_model):
-        print(f"\n사람과의 일치입니다 — `RAG-007` 이 요구한 종류의 수입니다. 다만 분모가"
-              f" {result['n']}개이고 그 카드는 **30개**를 요구합니다.")
-        if result["n"] < 30:
-            print("   그래서 아직 지표로 승격하지 않습니다. 분모가 정직한 것이 요점입니다 —")
-            print("   사람이 안 본 문항을 일치로 세면 라벨을 안 단 만큼 점수가 올라갑니다.")
+        print(f"\n사람과의 일치입니다 — `RAG-007` 이 요구한 종류의 수이고 분모는 {result['n']}개"
+              " 입니다.")
+        print("   ⚠ 그래도 지표로 만들지 않습니다. **승격은 포기했습니다** (D-060 ⑨).")
+        print("   분모 30 은 이제 목표가 아니라 **카드를 다시 여는 조건**입니다 — 사람 라벨을")
+        print("   30개까지 달겠다는 사람이 나오면 그때 이 수가 뜻을 갖습니다.")
     else:
         print("\n⚠ 이것은 **판정자 간 일치율**이지 캘리브레이션이 아닙니다 (D-060 ⑦).")
         print("   LLM 둘이 일치하는 것은 둘이 같은 맹점을 공유하는 것일 수도 있습니다.")
         print("   특히 검증자가 GPT 계열이면 judge 와 같은 계열이라, D-060 ① 이 일부러 갈라 둔")
         print("   self-preference 분리가 무너져 이 수가 부풀려집니다. 지표로 승격하지 마세요.")
+
+    # 실측이 그것을 보였다 — 이 카드에서 결함을 찾은 것은 비율이 아니라 선별이었다.
+    print("\n이 수보다 아래 둘을 보세요 (D-060 ⑨):")
+    print(f"   → `review --label {args.label}`")
+    print(f"   → `blindspots --label {args.label} --against {args.against}`")
     return 0
 
 

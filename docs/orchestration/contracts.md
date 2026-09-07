@@ -135,6 +135,15 @@ grounding합니다), 좌표는 검증된 `context.location`에서 복사합니�
 `requested_capability=place`만 결정적으로 열었고, **PR #204(D-051)에서 의미 라우터도 Place를
 고릅니다** — `PlacePayload` 자체는 그대로입니다.
 
+**Life payload 는 판정 기록도 받습니다** (#283). `LifePayload {question, dog, screening}` 에서
+`screening` 은 §1 의 `context["screening"]` 을 planner 가 화이트리스트로 옮긴 것이고,
+`dog` 과 규칙이 같습니다 — 부르는 쪽이 이미 푼 값만 지나가고, 모양이 틀리면 `None` 이지
+422 가 아닙니다. **`general` 은 받지 않습니다**: 근거 없이 답하는 자리라(D-057) 판정을 쥐여
+주면 자기 `diagnosis` 거절이 막으려던 문장을 부르게 됩니다. Life 가 받는 이유는 그 반대로,
+"이런 경우 지원이 있어요" 를 만드는 조례·보조금 문서를 Life 가 검색하기 때문입니다.
+`ScreeningContext` 의 두 칸(§1 · 불변식 15)이 여기서도 그대로이고, `daengs_life` 로는
+원시값 둘로 건너갑니다 — 도메인이 오케스트레이션 타입을 알면 D-035 가 막은 방향이 됩니다.
+
 **payload는 능력별 명시 분기로 만듭니다** (D-051). 예전 조립 루프는 Training/Life가 아니면
 좌표 payload를 주는 `else` 폴백이었고, 그것은 Walk가 유일한 좌표 능력인 동안에만 맞았습니다 —
 `place`가 선택 가능해지는 순간 Place에 `query` 없는 WalkPayload를 주어 검증 실패 → 최상위

@@ -381,3 +381,20 @@ def test_판정_어휘가_프롬프트와_같은_말이다() -> None:
     from daengs_life.rag.stages.generate import _VERDICT_KO
 
     assert aggregate._SCREENING_VERDICTS == _VERDICT_KO
+
+
+def test_판정_어휘가_계약의_판정을_다_덮는다() -> None:
+    """**대조만으로는 부족합니다.** 두 사본이 서로 같아도 계약에 없는 판정이 늘면 둘 다
+    그 칸이 비고, `_history_message` 의 `_SCREENING_VERDICTS[entry.verdict]` 가 `KeyError` 로
+    죽습니다 — 어시스턴트 응답 경로라 사용자에게 500 입니다.
+
+    `generate` 쪽은 `.get(..., "판정 결과 불명")` 이라 조용히 넘어가는데, 그 비대칭이 더
+    나쁩니다: 프롬프트는 "불명" 으로 돌고 답변만 터집니다. 그래서 여기서 계약과 맞댑니다.
+    """
+    import typing
+
+    from daengs_backend.orchestration import aggregate
+    from daengs_backend.orchestration.contracts import ScreeningContext
+
+    declared = set(typing.get_args(ScreeningContext.model_fields["verdict"].annotation))
+    assert set(aggregate._SCREENING_VERDICTS) == declared

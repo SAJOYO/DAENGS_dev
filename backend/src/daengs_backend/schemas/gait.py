@@ -83,7 +83,7 @@ class GaitCompareRequest(BaseModel):
 
 
 class GaitCompareResponse(BaseModel):
-    """`compare_records` 의 출력에서 `_dev_only_*` 만 뺀 것 (D-057).
+    """`compare_records` 의 출력에서 `_dev_only_*` 만 뺀 것 (D-058).
 
     ⚠️ **`joint_movement_range_comparison` 은 관절마다 dict 입니다** — 안에 x·y 판정이
        따로 들어 있습니다. 그것을 하나로 합치는 규칙은 **일부러 두지 않았습니다**:

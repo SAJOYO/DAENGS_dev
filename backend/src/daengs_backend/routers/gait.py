@@ -188,7 +188,7 @@ async def delete_record(
 async def compare_records_endpoint(
     user: CurrentAppUser, session: Session, req: GaitCompareRequest
 ) -> GaitCompareResponse:
-    """같은 반려견의 두 기록 비교 (D-057).
+    """같은 반려견의 두 기록 비교 (D-058).
 
     **DB 에 저장된 분석 데이터만 씁니다** — 원본 영상도 overlay 도 읽지 않습니다.
     그래서 저장소가 무엇이든(local·gcs·미설정) 이 엔드포인트는 그대로 돕니다.

@@ -550,3 +550,50 @@ def test_kind_order_puts_real_kinds_before_the_bracketed_ones() -> None:
     kinds = [score.NO_MUST, "official", score.OFF_CORPUS, "law"]
     assert sorted(kinds, key=score.kind_order) == [
         "law", "official", score.NO_MUST, score.OFF_CORPUS]
+
+
+# ------------------------------------------------------------------ 랩 대조 (RAG-071 · D6)
+# **총계로 카드의 성패를 말하지 않는다** — 그것이 세 번 틀렸다는 것이 이 기능의 이유다
+# (`score.py` 의 랩 대조 머리말). 아래 셋이 지키는 것:
+#   ① 양쪽에 다 있는 문항만 센다 — 골든셋이 늘어난 랩에서 새 문항을 성과로 세면 몫이 부푼다
+#   ② 경계 문항은 빠진다 — `score_rows` 와 같은 자여야 두 표가 반대를 말하지 않는다
+#   ③ 잡음 띠는 **랩 번호순**으로 이웃을 잡는다 — 파일명 순이면 `lap9-age` 다음이 `lap10` 이다
+def _flip_row(qid: str, cited: bool, grounded: bool) -> dict:
+    """`grounded` 는 본문의 근거 표기로 만든다 — 저장된 칸이 아니라 다시 채점하기 때문이다."""
+    hits = [_dump_hit("c1", "must")]
+    return {"id": qid, "question": "q", "text": "답변 [1]" if grounded else "답변",
+            "hits": hits, "cited": ["제1조"] if cited else []}
+
+
+def test_flips_reports_only_questions_present_in_both_laps() -> None:
+    base = [_flip_row("Q1", False, False), _flip_row("Q2", True, True)]
+    head = [_flip_row("Q1", True, True), _flip_row("Q3", True, True)]
+    changed = score.flips(base, head)
+    assert [f["id"] for f in changed] == ["Q1"]
+    assert changed[0]["cited"] == (False, True)
+    assert changed[0]["grounded"] == (False, True)
+
+
+def test_flips_drops_boundary_questions() -> None:
+    """`must` 가 없는 문항은 잴 근거가 없다 (RAG-062) — 뒤집혀도 세지 않는다."""
+    ckinds = {"Q1": score.CITABLE, "B6": score.NO_MUST}
+    base = [_flip_row("Q1", False, False), _flip_row("B6", False, False)]
+    head = [_flip_row("Q1", False, False), _flip_row("B6", True, True)]
+    assert score.flips(base, head, ckinds) == []
+
+
+def test_flip_frequency_orders_laps_by_number_not_filename() -> None:
+    """`lap2` 와 `lap10` 이 이웃이면 안 된다 — 파일명 순으로 세면 그렇게 된다 (`D9` 와 같은 뿌리).
+
+    번호순은 lap2(뒤집힘) → lap9 → lap10 이라 이웃 쌍 하나에서만 뒤집힌다(**1회**).
+    파일명 순은 lap10 → lap2 → lap9 라 두 쌍 다 뒤집힌 것으로 보인다(2회) —
+    **같은 랩들로 잡음 띄가 두 배가 된다.** 그랬면 진짜 변화를 잡음으로 읽는다.
+    """
+    steady = [_flip_row("Q1", False, False)]
+    flipped = [_flip_row("Q1", True, True)]
+    laps = [("lap10", steady), ("lap2", flipped), ("lap9", steady)]
+    assert score.flip_frequency(laps) == {"Q1": 1}
+
+    # 두 자리 번호가 없는 부분집합에서는 둘이 같다 — 차이가 나는 것은 lap10 부터다.
+    assert score.flip_frequency([("lap2", flipped), ("lap9", steady)]) == {"Q1": 1}
+    assert score.flip_frequency([("lap2", steady), ("lap10", steady)]) == {}

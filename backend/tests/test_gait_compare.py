@@ -1,4 +1,4 @@
-"""보행 비교 `/app/gait/compare` (D-057).
+"""보행 비교 `/app/gait/compare` (D-058).
 
 ⚠️ **DB 데이터만으로 완결되는지**가 이 파일의 주제입니다. 원본·overlay 파일을 한 번도
    만지지 않아야 저장소 구현(local·gcs·미설정)과 무관하게 비교가 돕니다.
@@ -65,7 +65,7 @@ def _post(client, a, b):
 
 # ── A·B 두 진입이 같은 계약을 쓴다 ──────────────────────────────────────
 def test_compares_two_records_and_keeps_x_y_separate(client, monkeypatch):
-    """**x·y 를 합치지 않습니다.** 합치면 어느 축이 움직였는지가 사라집니다 (D-057)."""
+    """**x·y 를 합치지 않습니다.** 합치면 어느 축이 움직였는지가 사라집니다 (D-058)."""
     a, b = _rec(day=1, x=10.0), _rec(day=5, x=20.0)   # x 는 100% 차이, y 는 동일
     _pair(monkeypatch, [a, b])
 

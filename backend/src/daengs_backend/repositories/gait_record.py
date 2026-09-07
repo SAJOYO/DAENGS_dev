@@ -101,7 +101,7 @@ async def find_by_storage_key(
 async def get_owned_pair(
     session: AsyncSession, app_user_id: uuid.UUID, ids: tuple[uuid.UUID, uuid.UUID]
 ) -> list[GaitRecord]:
-    """비교할 두 기록을 **한 번에** 소유권과 함께 가져옵니다 (D-057).
+    """비교할 두 기록을 **한 번에** 소유권과 함께 가져옵니다 (D-058).
 
     ⚠️ **두 건을 따로 조회하지 않습니다.** 하나씩 부르면 "첫 번째는 있고 두 번째는 없다"
        같은 중간 상태가 호출부로 새고, 그것을 어떻게 응답할지 판단이 두 곳으로 갈립니다.

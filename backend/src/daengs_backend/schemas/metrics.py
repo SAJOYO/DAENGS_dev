@@ -75,3 +75,47 @@ class ChatMetricsOut(BaseModel):
     categories: CategoryMetricsOut
     #: `processing` · `completed` · `failed`
     summaries: list[NamedCount]
+
+
+class LatencyOut(BaseModel):
+    """지연 한 줄 (콘솔 로드맵 B2 · #297).
+
+    **평균만 주지 않습니다.** 느린 꼬리는 평균에 거의 안 잡혀서, 평균만 보면 "괜찮다" 가
+    나오는 동안 20건 중 1건이 8초씩 걸릴 수 있습니다. p95 가 그것을 봅니다.
+
+    행이 하나도 없으면 `total` 이 0 이고 나머지가 전부 `None` 입니다 — 0ms 가 아닙니다.
+    "빠르다" 와 "잰 적이 없다" 는 다른 말이고, 화면이 그 둘을 다르게 그려야 합니다.
+    """
+
+    total: int
+    avg_ms: int | None
+    p50_ms: int | None
+    p95_ms: int | None
+    max_ms: int | None
+
+
+class RequestMetricsOut(BaseModel):
+    """`GET /admin/metrics/requests` 응답 (콘솔 로드맵 B2 · #297).
+
+    **여기도 원문이 들어갈 칸이 없습니다** — 위 첫 문단과 같은 이유입니다. 이 응답이
+    읽는 `request_metrics` 표 자체에 원문 열이 없고, 그 표의 verify 가 열 이름으로
+    그것을 지킵니다 (`verify_2026-09-07_request_metrics.sql` ⑤).
+
+    `by_capability` 의 합은 `latency.total` 보다 클 수 있습니다 — 한 요청이 능력 둘을
+    부르면 둘 다 세기 때문입니다. 반대로 작을 수도 있습니다 — 사교적 응답과 라우터
+    실패는 아무 능력도 안 부릅니다. **비율의 분모로 쓰지 마세요.**
+    """
+
+    since: datetime
+    days: int
+
+    latency: LatencyOut
+    #: `AssistantStatus` 분포.
+    by_status: list[NamedCount]
+    #: 능력별 호출 수. 위 주석대로 합이 요청 수가 아닙니다.
+    by_capability: list[NamedCount]
+    #: 거절 · 기권의 사유 **코드** 분포. 거절이 아니었던 요청은 안 들어갑니다.
+    by_reason_code: list[NamedCount]
+    #: `deterministic` · `llm`. 라우터가 못 돈 요청은 안 들어갑니다.
+    by_router_kind: list[NamedCount]
+

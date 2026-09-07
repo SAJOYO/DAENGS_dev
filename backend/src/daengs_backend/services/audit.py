@@ -38,11 +38,11 @@ from daengs_backend.models import AdminAuditLog
 from daengs_backend.repositories import admin_audit_log as audit_repo
 
 __all__ = [
+    "RETENTION_ROW_THRESHOLD",
     "AuditEntry",
     "AuditPage",
-    "RETENTION_ROW_THRESHOLD",
-    "RetentionSummary",
     "InvalidCursorError",
+    "RetentionSummary",
     "list_entries",
     "record",
     "record_and_commit",

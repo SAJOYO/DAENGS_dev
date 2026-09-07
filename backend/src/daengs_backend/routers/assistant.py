@@ -24,13 +24,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from daengs_backend.core.database import get_chat_session_factory
+from daengs_backend.core.database import (
+    get_chat_session_factory,
+    get_metrics_session_factory,
+)
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
+from daengs_backend.services import request_metrics as metrics_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -147,6 +151,9 @@ async def query(
     session_factory: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)
     ],
+    metrics_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_metrics_session_factory)
+    ],
 ) -> AssistantResponse:
     """`AssistantResponse` 를 그대로 돌려준다. FAILED 를 포함해 상태를 재해석하지
     않는다 — 그것은 orchestration 계약이 소유한다 (docs/orchestration/contracts.md §5).
@@ -155,6 +162,26 @@ async def query(
     남긴다.** 같은 두 값과 같은 질문을 다시 보내면 저장된 응답을 그대로 돌려주고 모델을
     부르지 않는다. 오케스트레이션이 실패하면 turn 은 실패로 닫히고 오류는 무상태일 때와
     똑같이 나간다.
+    """
+    # **지표는 곁다리다.** 못 남겨도 답변은 나간다 — 그 규칙은
+    # `services/request_metrics.py` 머리말에 있고 여기서는 감싸기만 한다.
+    return await metrics_service.measured(
+        metrics_factory,
+        principal_kind=_principal_context(principal).kind,
+        run=lambda: _dispatch(body, principal, service, session_factory),
+    )
+
+
+async def _dispatch(
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    service: Orchestrator,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AssistantResponse:
+    """실제 처리. `query` 에서 뽑아낸 것은 **지표를 재는 자리를 하나로 두려고**서다.
+
+    나가는 길이 여럿이다 — 무상태 응답 하나, 저장 경로 하나, 그리고 계약된 오류 열두 갈래.
+    각 자리에 계측을 붙이면 새 `except` 가 생길 때마다 빠뜨린다. 감싸면 한 곳이다.
     """
     principal_context = _principal_context(principal)
     include_route_trace = _may_inspect_route(principal)
@@ -257,4 +284,9 @@ async def query(
 # `get_chat_session_factory` 는 core/database.py 의 것을 그대로 내보낸다 — 요약 라우터와
 # 같은 의존성이라 테스트가 한 번 바꾸면 두 라우터가 같이 계측된다. 무상태 요청은 이것을
 # 한 번도 부르지 않는다.
-__all__ = ["get_chat_session_factory", "router"]
+#
+# **지표는 그것과 다른 공장을 쓴다** (`get_metrics_session_factory`). 같은 `SessionLocal`
+# 을 돌려주지만 의존성이 갈려 있어야 테스트가 "대화를 몇 번 열었나" 와 "지표를 남겼나"
+# 를 따로 볼 수 있다. 그리고 지표는 **무상태 요청도 남긴다** — 위 주석의 "무상태 요청은
+# 한 번도 부르지 않는다" 는 대화 공장 이야기다 (#297).
+__all__ = ["get_chat_session_factory", "get_metrics_session_factory", "router"]

@@ -134,6 +134,93 @@ async def soft_delete(
     return record
 
 
+class CompareError(RuntimeError):
+    """비교할 수 없는 요청. 라우터가 400 으로 옮깁니다 (없는 것과 구분됩니다)."""
+
+
+def _as_compare_record(record: GaitRecord) -> dict:
+    """DB 행을 `compare_records` 가 읽는 모양으로 맞춥니다 (D-056).
+
+    ⚠️ **파일을 하나도 안 만집니다.** 옛 구현은 `load_record()` 로 JSON 파일을 읽었지만,
+       비교에 필요한 값은 전부 DB 컬럼에 있습니다 — 원본·overlay 는 보관/재생용이고
+       비교의 기준 데이터가 아닙니다. 그래서 저장소 구현이 무엇이든(local·gcs) compare 는
+       그대로 돕니다.
+
+    `compare_records` 가 실제로 읽는 것만 채웁니다 — 전수 확인한 목록입니다:
+    `record_id` · `date` · `quality.status` · `quality.quality_tier` ·
+    `quality.recommendation` · `features.summary_for_ui` ·
+    `features.internal_feature_vector` · `gait_filter_version`.
+
+    ⚠️ `quality_tier` 는 `quality` **dict 안**에서 읽습니다 (`quality_gate` 가 거기 넣고
+       서비스가 통째로 저장합니다). 별도 컬럼도 있지만 그쪽을 쓰면 두 값이 갈릴 수 있어
+       저장된 dict 하나만 봅니다.
+    """
+    return {
+        "record_id": str(record.id),
+        "date": record.captured_at.isoformat() if record.captured_at else None,
+        "quality": record.quality or {},
+        "features": {
+            "summary_for_ui": record.summary_for_ui or {},
+            "internal_feature_vector": record.internal_feature_vector or {},
+        },
+        "gait_filter_version": record.gait_filter_version,
+    }
+
+
+def _order_by_age(a: GaitRecord, b: GaitRecord) -> tuple[GaitRecord, GaitRecord]:
+    """(past, recent) — **오래된 쪽이 past** 입니다.
+
+    앱이 어느 순서로 골랐든 결과가 같아야 합니다. 그래서 정렬을 앱이 아니라 여기서
+    합니다 — 앱에 맡기면 A 진입(기준 기록 먼저)과 B 진입(둘 다 고름)이 서로 다른
+    순서를 보내고, 화면의 "이전/최근" 라벨이 뒤집힙니다.
+
+    촬영일(`captured_at`)이 없을 수 있어 그때는 만들어진 시각으로 갈음합니다.
+    """
+    def key(r: GaitRecord):
+        return (r.captured_at or r.created_at.date(), r.created_at)
+
+    return (a, b) if key(a) <= key(b) else (b, a)
+
+
+async def compare(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    record_id_a: uuid.UUID,
+    record_id_b: uuid.UUID,
+) -> dict:
+    """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-056).
+
+    판정·임계값·문구는 `daengs_gait.compare.compare_loaded_records` 그대로입니다 — 여기서는
+    입력을 모아 주고 `_dev_only_*` 만 걷어냅니다.
+    """
+    if record_id_a == record_id_b:
+        raise CompareError("같은 기록끼리는 비교할 수 없습니다.")
+
+    rows = await gait_repo.get_owned_pair(session, app_user_id, (record_id_a, record_id_b))
+    if len(rows) != 2:
+        # 없는 것과 남의 것을 구분하지 않습니다 (이 모듈의 규칙).
+        raise NotFoundError("record")
+
+    first, second = rows
+    if first.pet_id != second.pet_id:
+        # 소유자는 같지만 **다른 반려견**입니다. 개체가 다르면 비교가 의미를 잃습니다 —
+        # 이 서비스는 "같은 아이의 시간 변화"를 보는 것이라서요.
+        raise CompareError("서로 다른 반려견의 기록은 비교할 수 없습니다.")
+
+    past, recent = _order_by_age(first, second)
+
+    # ⚠️ 지연 import — `compare_records` 가 numpy 를 끌고 옵니다. backend 웹 프로세스의
+    #    main import 를 가볍게 유지하는 규율(D-021)이고, 비교를 안 부르면 안 올라옵니다.
+    from daengs_gait.compare import compare_loaded_records
+
+    result = compare_loaded_records(
+        _as_compare_record(past), _as_compare_record(recent)
+    )
+    # `_dev_only_*` 는 **앱에 절대 내보내지 않습니다** — 수백 개의 숫자가 화면에 나오면
+    # 사용자가 그것을 건강 점수로 읽습니다 (API.md 의 노출 금지 규칙).
+    return {k: v for k, v in result.items() if not k.startswith("_dev_only_")}
+
+
 # ── 정리 (워커/스케줄) ──────────────────────────────────────────────────
 
 

@@ -73,3 +73,35 @@ class GaitDeleteResponse(BaseModel):
     record_id: uuid.UUID
     # 지금은 soft delete 만 — 스토리지 파일 정리는 #78 뒤 비동기로 돕니다.
     deleted: bool
+
+
+class GaitCompareRequest(BaseModel):
+    """비교할 두 기록. **순서는 상관없습니다** — 서버가 날짜로 past/recent 를 정합니다."""
+
+    record_id_a: uuid.UUID
+    record_id_b: uuid.UUID
+
+
+class GaitCompareResponse(BaseModel):
+    """`compare_records` 의 출력에서 `_dev_only_*` 만 뺀 것 (D-056).
+
+    ⚠️ **`joint_movement_range_comparison` 은 관절마다 dict 입니다** — 안에 x·y 판정이
+       따로 들어 있습니다. 그것을 하나로 합치는 규칙은 **일부러 두지 않았습니다**:
+       지금 모델은 x·y 의 의미가 다르고(전후 이동 vs 상하 흔들림), 합치는 순간 어느 쪽이
+       움직였는지가 사라집니다. 모델이나 비교 로직을 바꿀 때 관절 단위 집계 규칙을
+       그때 정의합니다.
+
+    ⚠️ **점수·수치를 담지 않습니다.** `_dev_only_raw_feature_cosine` 같은 값이 화면에
+       나오면 사용자가 그것을 건강 점수로 읽습니다.
+    """
+
+    status: str
+    reason: str | None = None
+    recommendation: str | None = None
+    record_a: dict | None = None
+    record_b: dict | None = None
+    message_for_ui: str | None = None
+    reliability_note: str | None = None
+    version_warning: str | None = None
+    diff_threshold_note: str | None = None
+    joint_movement_range_comparison: dict = {}

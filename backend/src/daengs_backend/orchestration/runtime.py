@@ -69,10 +69,9 @@ def build_orchestrator(kind: OrchestratorKind | None = None) -> Orchestrator:
     if selected == "agent":
         # LangChain 은 `agent` extra 라 기본 설치에 없습니다. 그래서 이 갈래만
         # 지연 import 입니다 — 최상단에 두면 extra 없이는 backend 가 아예 안 뜹니다.
-        raise NotImplementedError(
-            "agent 오케스트레이터는 아직 없습니다 (카드 ②에서 `orchestration/agent/` 로 "
-            "들어옵니다). 지금은 DAENGS_ORCHESTRATOR=langgraph 만 동작합니다."
-        )
+        from daengs_backend.orchestration.agent import AgentOrchestrationService
+
+        return AgentOrchestrationService()
     raise ValueError(f"알 수 없는 오케스트레이터입니다: {selected!r}")
 
 

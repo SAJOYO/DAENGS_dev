@@ -5,13 +5,16 @@
 코드는 `backend/src/daengs_backend/orchestration/` (`contracts.py` · `planner.py` ·
 `semantic.py` · `aggregate.py` · `graph.py` · `runtime.py` · `adapters/`) 에 있습니다.
 
-**오케스트레이터 구현은 갈아끼울 수 있습니다.** LangGraph 는 정해진 워크플로우에
-최적화돼 있어, 자유도가 필요한 질의에 LangChain 에이전트가 나은지 재 보려고 두 구현을
-병존시킵니다. 고르는 곳은 `runtime.py` 의 `build_orchestrator()` 하나이고
-(`routers/assistant.py` 는 `run(...) -> AssistantResponse` 만 봅니다), 운영값은
-`DAENGS_ORCHESTRATOR=langgraph` 입니다. `contracts.py` · `adapters/` · `aggregate.py`
-는 **두 구현이 함께 씁니다** — 복사하면 두 결과를 나란히 놓을 좌표계가 사라집니다.
-갈리는 것은 "능력을 어떻게 고르고 언제 멈추는가"뿐입니다.
+**오케스트레이터 구현은 둘입니다** (D-055). LangGraph 는 정해진 워크플로우에 최적화돼
+있어, 자유도가 필요한 질의에 LangChain 에이전트가 나은지 재 보려고 병존시킵니다.
+고르는 곳은 `runtime.py` 의 `build_orchestrator()` 하나이고 (`routers/assistant.py` 는
+`run(...) -> AssistantResponse` 만 봅니다), 운영값은 `DAENGS_ORCHESTRATOR=langgraph`
+입니다. 에이전트 코드는 `agent/`(`service.py` · `tools.py`)이고 `agent` extra 를 씁니다 —
+CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
+
+`contracts.py` · `adapters/` · `aggregate.py` 는 **두 구현이 함께 씁니다** — 복사하면 두
+결과를 나란히 놓을 좌표계가 사라집니다. 갈리는 것은 "능력을 어떻게 고르고 언제
+멈추는가"뿐입니다. 자세한 것은 D-055.
 
 각 능력이 **무엇을 왜 그렇게 답하는가**는 그 유닛 폴더(`life/` · `training/` · `gait/` ·
 `place/`)가 원본이고, 여기에는 **능력을 고르고 합치는 규칙**만 둡니다.

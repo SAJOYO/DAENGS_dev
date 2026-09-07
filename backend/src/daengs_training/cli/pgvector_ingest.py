@@ -1,6 +1,9 @@
 """Embed structure-preserving chunks and upsert them into local pgvector."""
 from __future__ import annotations
-import argparse, hashlib, json
+
+import argparse
+import hashlib
+import json
 from pathlib import Path
 
 MODEL = "intfloat/multilingual-e5-base"

@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.schemas.walk_storyboard import StoryboardRequest, StoryboardResponse
+from daengs_backend.schemas.walk_storyboard import (
+    BundleFormat,
+    StoryboardRequest,
+    StoryboardResponse,
+)
 from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 
@@ -22,10 +26,13 @@ def get_context_lookup():
 
 @router.get("/{walk_id}/storyboard", response_model=StoryboardResponse)
 async def get_storyboard(
-    walk_id: uuid.UUID, user: CurrentAppUser, session: Annotated[AsyncSession, Depends(get_session)]
+    walk_id: uuid.UUID,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    bundle_format: BundleFormat = "walk-storyboard-candidates-v1",
 ):
     try:
-        return await service.get(session, user.app_user_id, walk_id)
+        return await service.get(session, user.app_user_id, walk_id, bundle_format)
     except service.StoryboardNotFound:
         raise HTTPException(404, "산책 기록을 찾을 수 없습니다.") from None
     except service.StoryboardConflict as exc:

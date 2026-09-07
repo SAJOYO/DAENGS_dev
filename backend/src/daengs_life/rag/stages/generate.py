@@ -78,6 +78,8 @@ PROMPT = """당신은 한국의 반려동물 관련 제도를 안내하는 도�
   쓰러졌다처럼 시간이 걸린 상황.
 - `medical`: 이 동물의 몸에 대한 판단을 묻는다. 증상의 원인, 진단, 약의 종류나 용량.
 - `none`: 그 밖의 전부. 제도·비용·절차·이동·보험처럼 문서로 답할 수 있는 것.
+**"먹여도 되나요"는 `none` 입니다** — 급여해도 되는지는 자료에 적힌 사실이지 이 동물의 몸에
+대한 판단이 아닙니다. 같은 음식이라도 **"먹었어요"** 는 벌어진 일이므로 `emergency` 입니다.
 `emergency` 와 `medical` 둘 다에 해당하면 `emergency` 입니다.
 
 `boundary` 가 `medical` 이나 `emergency` 면, 답변은 **자료에 무엇이 있고 없는지를 따지지 말고**
@@ -338,11 +340,10 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     쓸 이유가 없다"* 며 비워 둔 자리이고, 값은 1랩을 돌고 정한다.
     """
     key = model_key or config.settings.embedding_model_key
-    if st is None:
-        query = search.encode(question, model_key=key)
-    else:
-        # 모델이 이미 올라와 있는 경로(--questions). 토큰화는 `make_query` 가 맡는다 (RAG-035)
-        query = search.make_query(question, embed.encode_query(embed.MODELS[key], question, st=st))
+    # `st` 가 있으면 올라와 있는 모델을 그대로 쓰고, 없으면 `encode` 가 올렸다 내린다.
+    # **분기가 사라졌다** (RAG-066 ③) — 예전에는 `st` 가 있을 때 `make_query(q, encode_query(…))`
+    # 를 직접 불러 입구가 둘이었고, 그 자리에 어휘 확장을 걸면 한쪽만 걸린다.
+    query = search.encode(question, model_key=key, st=st)
 
     hits = search.search(query, k=k, include_supplementary=include_supplementary,
                          category=category, conn=conn)

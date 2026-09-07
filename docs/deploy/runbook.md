@@ -257,6 +257,10 @@ done
     워커는 옛 코드로 남아, 증상이 "분석 결과만 옛날 것"으로 나옵니다.
     **`territory-vision-worker`** 도 같은 배포 단위입니다. 빠뜨리면 confirm은 성공하지만
     앱의 점령지 인증이 `VISION_PENDING`에서 끝나지 않습니다.
+    ⚠ **트레이싱(D-054)을 켠 서버라면 `otel-collector` 도 목록에 넣고 `--profile tracing`
+    을 함께 줍니다.** 프로파일만 붙이고 이름을 빼면 collector 가 안 뜨는데, 그때 backend
+    는 아무 오류 없이 계속 돕니다 — 트레이스만 조용히 사라집니다. 반대로 이름만 넣고
+    프로파일을 빼면 compose 가 "no such service" 로 멈추므로 그쪽은 안전합니다.
   - **nginx 설정만 (`nginx/gcp.conf` · `nginx/api-locations.inc`)** → **컨테이너를
     재생성합니다. `reload` 로는 반영되지 않습니다.**
 

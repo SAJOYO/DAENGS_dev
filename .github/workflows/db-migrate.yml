@@ -74,6 +74,7 @@ jobs:
     env:
       MIG_FILE: ${{ inputs.file }}
       MIG_REF: ${{ inputs.ref }}
+      MIG_VERIFY: ${{ inputs.verify }}
       BACKUP_DIR: C:\deploy\daengs\db-backups
 
     steps:
@@ -93,6 +94,9 @@ jobs:
           if ($env:MIG_FILE -like 'verify_*') {
             throw "do not run verify_ files directly; pass the base name and enable verify"
           }
+          if ($env:MIG_REF -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$') {
+            throw "bad ref: use a branch, tag or commit without shell metacharacters"
+          }
           Write-Host "file=$env:MIG_FILE ref=$env:MIG_REF"
 
       # ⚠️ checkout 하지 않습니다 (맨 위 bind mount 주석). `git show` 로 파일만 꺼냅니다.
@@ -101,11 +105,15 @@ jobs:
       - name: Fetch migration SQL
         shell: cmd
         run: |
-          if not exist _migrate mkdir _migrate
-          git fetch origin %MIG_REF% --depth=1 || exit /b 1
-          git show FETCH_HEAD:db/migrations/%MIG_FILE% > _migrate\%MIG_FILE% || exit /b 1
-          git show FETCH_HEAD:db/migrations/verify_%MIG_FILE% > _migrate\verify_%MIG_FILE% 2>nul
-          if not exist _migrate\verify_%MIG_FILE% echo note: no verify file in this ref
+          if exist _migrate rmdir /s /q _migrate
+          mkdir _migrate || exit 1
+          git fetch origin %MIG_REF% --depth=1 || exit 1
+          git show FETCH_HEAD:db/migrations/%MIG_FILE% > _migrate\%MIG_FILE% || exit 1
+          for %%F in (_migrate\%MIG_FILE%) do if %%~zF EQU 0 exit 1
+          if /I "%MIG_VERIFY%"=="true" (
+            git show FETCH_HEAD:db/migrations/verify_%MIG_FILE% > _migrate\verify_%MIG_FILE% || exit 1
+            for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit 1
+          )
           dir _migrate
 
       - name: Wait for database
@@ -179,21 +187,21 @@ jobs:
       - name: Apply
         shell: cmd
         run: |
-          docker compose exec -T pgvector sh -c "psql -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\%MIG_FILE% || exit /b 1
+          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\%MIG_FILE% || exit 1
           echo applied: %MIG_FILE%
 
-      # verify 는 **읽기만** 합니다. 결과를 로그에서 눈으로 봅니다.
+      # 새 verify는 불일치 시 예외를 내고 psql 실패를 전파합니다.
+      # 기존 출력 전용 verify는 여전히 결과를 사람이 확인해야 합니다.
       - name: Verify
         if: ${{ inputs.verify }}
         shell: cmd
         run: |
-          if not exist _migrate\verify_%MIG_FILE% (
-            echo no verify file for %MIG_FILE% - skipping
-            exit /b 0
-          )
-          docker compose exec -T pgvector sh -c "psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\verify_%MIG_FILE%
+          if not exist _migrate\verify_%MIG_FILE% exit 1
+          for %%F in (_migrate\verify_%MIG_FILE%) do if %%~zF EQU 0 exit 1
+          docker compose exec -T pgvector sh -c "psql -X -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" < _migrate\verify_%MIG_FILE% || exit 1
 
       - name: Clean up
         if: always()
         shell: powershell
         run: Remove-Item -Recurse -Force _migrate -ErrorAction SilentlyContinue
+

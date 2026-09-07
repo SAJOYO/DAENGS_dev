@@ -1,9 +1,12 @@
 """Approved orchestration contract invariants."""
 
+from typing import get_args
+
 import pytest
 from pydantic import ValidationError
 
 from daengs_backend.orchestration.contracts import (
+    CapabilityName,
     CapabilityRequest,
     CapabilityStatus,
     ClarifyRequest,
@@ -14,6 +17,8 @@ from daengs_backend.orchestration.contracts import (
     RouterKind,
     TrainingPayload,
 )
+from daengs_backend.orchestration.semantic import ExecuteName
+from daengs_backend.schemas.chat import AgentCategory
 
 
 def test_abstained_and_refused_are_distinct() -> None:
@@ -85,3 +90,20 @@ def test_place_payload_contains_original_query_and_location_but_no_identity() ->
                 "active_dog_id": "dog-1",
             }
         )
+
+
+# ---------------------------------------------- 능력 이름의 사본 (#269)
+
+
+def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
+    """능력 이름 목록이 저장소에 세 벌 있고, 서로를 참조하지 않는다.
+
+    #196 이 `CapabilityName` 에 `place` 를 넣었고, #204 가 `ExecuteName` 을 따라 넓혔고,
+    `AgentCategory` 는 아무도 못 봤다. 사본끼리 대조하는 테스트가 없어서 한쪽만 넓혀도
+    아무것도 깨지지 않았고, 결국 저장된 `place` 행을 읽을 때 응답 검증이 터져 `/app/chats`
+    가 500 을 냈다 (#269). 값 하나가 빠졌다는 것보다 **대조하는 사람이 없었다**는 것이
+    사고의 본질이라, 셋을 한자리에서 묶는다.
+    """
+    names = {capability.value for capability in CapabilityName}
+    assert names == set(get_args(ExecuteName)), "라우터가 고를 수 있는 목적지가 어긋났다"
+    assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

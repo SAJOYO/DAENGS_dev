@@ -284,3 +284,37 @@ def test_a_stored_row_with_foreign_keys_is_refused_not_leaked(
     _turn(store, session, "completed", public_response=poisoned)
     with pytest.raises(Exception, match="prompt"):
         client.get(f"/app/chats/{session.id}", headers=_auth(OWNER))
+
+
+# ------------------------------------------- place 가 섞인 대화를 읽는다 (#269)
+
+# `AgentCategory` 가 `training`·`life`·`walk` 세 값이던 동안, Place 가 답한 대화는 저장은
+# 되고 **읽을 때만** 응답 검증에 걸려 500 이 났다. 앱에는 `detail` 없는 500 이라 "서버 오류"
+# 만 떴고, 그 강아지의 기록이 통째로 안 보였다. 읽는 길 셋을 각각 붙잡아 둔다.
+
+
+def test_session_list_reads_a_place_tagged_conversation(client: TestClient, store: Store) -> None:
+    session = _active_session(store)
+    session.agent_categories = ["walk", "place"]
+    got = client.get("/app/chats", params={"pet_id": str(PET)}, headers=_auth(OWNER))
+    assert got.status_code == 200
+    assert got.json()["sessions"][0]["agent_categories"] == ["walk", "place"]
+
+
+def test_session_detail_reads_a_place_tagged_turn(client: TestClient, store: Store) -> None:
+    session = _active_session(store)
+    session.agent_categories = ["place"]
+    _turn(store, session, "completed", agent_categories=["place"])
+    got = client.get(f"/app/chats/{session.id}", headers=_auth(OWNER))
+    assert got.status_code == 200
+    assert got.json()["session"]["agent_categories"] == ["place"]
+    assert got.json()["turns"][0]["agent_categories"] == ["place"]
+
+
+def test_archive_reads_a_place_tagged_summary(client: TestClient, store: Store) -> None:
+    """요약은 세션 값을 그대로 복사하므로(`services/chat.py`) 같은 `Literal` 에 걸린다."""
+    summary = _summary(store)
+    summary.agent_categories = ["walk", "place"]
+    got = client.get("/app/chats/summaries", params={"pet_id": str(PET)}, headers=_auth(OWNER))
+    assert got.status_code == 200
+    assert got.json()["summaries"][0]["agent_categories"] == ["walk", "place"]

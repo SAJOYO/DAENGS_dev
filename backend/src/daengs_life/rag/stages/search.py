@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..core import config, tokenize, transport
+from ..core import config, region, tokenize, transport, vocabulary
 from . import embed, load
 
 VERSION = 2          # 1 = dense 단독 / 2 = 하이브리드 (RAG-035)
@@ -414,31 +414,47 @@ def expand_citations(hits: list[Hit], query: Query, *, scan: list[Hit] | None = 
     return hits + extra
 
 
-def encode(query: str, model_key: str | None = None):
-    """질의 → 벡터. **모델을 올렸다 내린다.**
+def encode(query: str, model_key: str | None = None, st=None):
+    """질의 → `Query`. **어휘 확장이 여기 한 곳에서만 일어난다** (RAG-066 ③).
 
     `encode_query` 를 쓰는 것이 계약이다 — Qwen3 만 질의에 공식 지시문을 붙이는 비대칭 모델이라
     (4단계 실측) 문서 경로로 넣으면 그 모델을 자기 설계와 다르게 쓰게 된다. 지금 기본값은
     승자가 아니라 기준선 `bge-m3` 이고, 그것이 RAG-024 `판정 이후` 의 결정이다.
+
+    **`st` 를 받는다.** 예전에는 모델을 여기서 올렸다 내리기만 해서, 모델을 재사용하는 경로
+    (`--questions`, 서빙)는 이 함수를 **건너뛰고** `make_query(q, embed.encode_query(...))` 를
+    직접 불렀다. 그 순간 입구가 셋이 되는데, `transport`·`region` 이 *"인자로 빼면 CLI·9단계·
+    FastAPI 가 각자 켜고 끄게 된다"* 며 막아 온 바로 그 모양이다 (RAG-052 · RAG-063).
+    어휘 확장은 **벡터를 만들기 전에** 걸어야 해서 `search()` 안에 못 살고, 그래서 입구를
+    여기 하나로 모았다. `st` 를 주면 올리지도 내리지도 않는다 (`search(conn=)` 의 `own` 패턴).
     """
     key = model_key or config.settings.embedding_model_key
     model = embed.MODELS[key]
-    st = embed.load_model(model)
+    own = st is None
+    st = st if st is not None else embed.load_model(model)
     try:
-        vector = embed.encode_query(model, query, st=st)
+        # ⚠ **인코딩에는 넓힌 문장, `Query.text` 에는 원문**이다 — `vocabulary.expand` 의 경고 참고.
+        vector = embed.encode_query(model, vocabulary.expand(query), st=st)
     finally:
-        del st
-        embed.release()
+        if own:
+            del st
+            embed.release()
     return make_query(query, vector)
 
 
 def make_query(text: str, vector) -> Query:
-    """벡터를 이미 만들어 둔 caller 용 (CLI 가 질의 여러 개를 한 번에 인코딩한다).
+    """벡터를 이미 만들어 둔 caller 용.
 
     **토큰화는 여기 한 곳에서만 한다** — 문서 쪽(`stages/load.py`)과 같은 `core.tokenize` 를
     부른다. 둘이 갈라지면 매칭이 그냥 안 되는데 dense 가 결과를 채워 줘서 안 보인다.
+
+    렉시컬 축도 넓힌 문장으로 만든다 — dense 만 넓히고 여기를 원문으로 두면 두 축이 다른
+    질의를 보게 된다. 다만 `text` 필드는 **원문**이다 (`transport`·`region` 이 그것을 읽는다).
+
+    ⚠ **벡터를 직접 만들어 여기로 오지 말 것.** 그러면 어휘 확장을 건너뛴다 — `encode(st=…)` 를
+    쓰면 모델을 재사용하면서도 같은 경로를 탄다. `test_vocabulary.py` 가 호출부를 세고 있다.
     """
-    return Query(vector=vector, tsquery=tokenize.tsquery(text), text=text)
+    return Query(vector=vector, tsquery=tokenize.tsquery(vocabulary.expand(text)), text=text)
 
 
 def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = True,
@@ -479,6 +495,21 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
 
     own = conn is None
     conn = conn or load.connect()
+
+    # **지역도 인자가 아니라 질의에서 읽는다** (RAG-063) — `transport` 와 같은 이유다.
+    # 인자로 빼면 CLI·9단계·FastAPI 가 각자 켜고 끄게 되고 검문소③이 본 것과 서빙이 갈린다.
+    #
+    # ⚠ **`org` 이 없는 문서는 남긴다.** "부산 동래구에서 목줄 안 하면 과태료?" 의 답은 조례가
+    # 아니라 동물보호법에 있고 법령에는 `org` 이 없다. 빼면 고치려던 것보다 큰 것이 사라진다.
+    # 실제로 걸러지는 것은 **다른 지자체의 조례·보조금**뿐이고, 그것이 S3 의 top-8 을 채우고
+    # 있던 바로 그 문서들이다 (RAG-033 ⑥).
+    if kept := region.orgs(query.text, known_orgs(conn)):
+        filters.append(
+            "AND (metadata->>'org' IS NULL OR metadata->>'org' = ANY(%(orgs)s))")
+        lex_filters.append(
+            "AND (d.metadata->>'org' IS NULL OR d.metadata->>'org' = ANY(%(orgs)s))")
+        params["orgs"] = list(kept)
+
     try:
         with conn.cursor() as cur:
             cur.execute(_SQL.format(filters="\n      ".join(filters),
@@ -499,6 +530,44 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
     finally:
         if own:
             conn.close()
+
+
+# 코퍼스에 실재하는 `org` 값. **표를 손으로 적지 않는다** (RAG-042 ③) — 지자체가 늘면
+# 적재만으로 따라온다. 프로세스 수명 동안 캐시한다: 한 랩이 질의 33개를 도는데 같은
+# `SELECT DISTINCT` 를 33번 할 이유가 없고, 코퍼스는 프로세스가 도는 중에 안 바뀐다.
+_ORGS_CACHE: tuple[str, ...] | None = None
+
+
+def known_orgs(conn=None) -> tuple[str, ...]:
+    """`documents.metadata->>'org'` 의 고유값 전부. 적재 전이면 빈 튜플이다.
+
+    ⚠ **빈 결과는 캐시하지 않는다.** 캐시하면 적재 전에 한 번 부른 프로세스가 그 뒤로 영영
+    지역 필터를 안 켠다 — 그런데 **검색은 계속 되므로 아무 예외도 안 난다.** 이 파일이
+    처음부터 경계하는 "조용히 틀리는" 모양이라, 빈 값일 때만 매번 다시 묻는다(그 비용은
+    코퍼스가 없을 때만 든다).
+    """
+    global _ORGS_CACHE
+    if _ORGS_CACHE:
+        return _ORGS_CACHE
+    own = conn is None
+    conn = conn or load.connect()
+    try:
+        with conn.cursor() as cur:
+            # 파라미터를 빈 dict 로 넘긴다 — psycopg 도 받고, SQL 을 받아 적는 테스트 가짜
+            # 커서도 `execute(sql, params)` 두 인자를 기대한다.
+            cur.execute("SELECT DISTINCT metadata->>'org' FROM documents"
+                        " WHERE metadata->>'org' IS NOT NULL", {})
+            _ORGS_CACHE = tuple(sorted(r[0] for r in cur.fetchall() if r[0]))
+    finally:
+        if own:
+            conn.close()
+    return _ORGS_CACHE
+
+
+def forget_orgs() -> None:
+    """캐시를 버린다. 적재 직후·테스트에서 쓴다."""
+    global _ORGS_CACHE
+    _ORGS_CACHE = None
 
 
 def hand_questions() -> list[tuple[str, str, set[str], set[str]]]:

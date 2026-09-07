@@ -80,7 +80,11 @@ def read_rows(body: bytes) -> list[dict]:
 class KniaDisclosure(Source):
     id = "knia-disclosure"
     domain = "insurance"
-    category = "policy"
+    # 2026-09-06 (RAG-067 / #271) — `policy` 에서 갈라 나왔다. 보험 약관·공시 4,673행이
+    # 코퍼스의 47.5%였고, `db/init/01_schema.sql` 의 CHECK 가 그것을 받도록 바뀌었다.
+    # **이미 받아 둔 `.meta.json` 은 이 줄로 안 바뀐다** — 크롤 시점에 값이 박히므로
+    # `tools/retag_meta_category.py` 가 따로 맞춘다. 앞으로 받는 문서는 여기가 원천이다.
+    category = "insurance"
     subcategory = "insurance"
     source_type = "api"
     format = "json"

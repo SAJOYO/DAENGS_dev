@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+from typing import NamedTuple
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -26,15 +27,36 @@ from ..base import Extracted, Source, Target
 
 BASE = "https://www.nias.go.kr"
 
-# 메뉴 제목 → (slug 꼬리, subcategory). subcategory 는 data/README.md 값 사전을 따른다.
-WANTED: dict[str, tuple[str, str]] = {
-    "반려동물등록제": ("registration", "registration"),
-    "분실 및 유기": ("lost-stray", "registration"),
-    "동물보호법": ("animal-protection-act", "pet-life-guide"),
-    "반려동물의 의미": ("meaning", "pet-life-guide"),
-    "반려동물 관리 책임": ("owner-duty", "pet-life-guide"),
-    "동물학대 금지": ("abuse-ban", "pet-life-guide"),
-    "사육에 관한 기본사항": ("care-basics", "pet-life-guide"),
+class Page(NamedTuple):
+    """받을 페이지 하나. subcategory 는 data/README.md 값 사전을 따른다.
+
+    `category` 가 여기 있는 이유 — 이 소스 하나가 `policy`(등록제·법률 해설)와 `food`(사료)를
+    같이 받기 때문이다. 소스 클래스의 `category` 는 기본값으로 남고 여기 적힌 값이 이긴다
+    (`crawler/core/store.py`). 2026-09-06 RAG-065 에서 갈렸다.
+    """
+    slug: str
+    subcategory: str
+    category: str = "policy"
+
+
+# 메뉴 제목 → 페이지 정의. **cmCode 가 아니라 제목으로 고른다** (모듈 도크스트링 참고).
+WANTED: dict[str, Page] = {
+    "반려동물등록제": Page("registration", "registration"),
+    "분실 및 유기": Page("lost-stray", "registration"),
+    "동물보호법": Page("animal-protection-act", "pet-life-guide"),
+    "반려동물의 의미": Page("meaning", "pet-life-guide"),
+    "반려동물 관리 책임": Page("owner-duty", "pet-life-guide"),
+    "동물학대 금지": Page("abuse-ban", "pet-life-guide"),
+    "사육에 관한 기본사항": Page("care-basics", "pet-life-guide"),
+    # --- 음식 · 사료 (2026-09-06, RAG-065 / F1) ---
+    # 「일반사료 구입 요령」은 **해설이 법령을 이름으로 인용하는 다리 문서**다 —
+    # 「사료관리법」과 「사료 등의 기준 및 규격」 별표 15 를 본문에서 그대로 지목한다.
+    # 인용 확장(RAG-040)이 여기서 조문으로 건너간다.
+    "일반사료 구입 요령": Page("feed-buying", "pet-food", "food"),
+    # 건강상식 두 장은 **탭 6개 중 먹이 관련 둘만** 살린다 — 파서가 자른다.
+    # 나머지(예방접종·계절별 돌보기·수명표)는 roadmap §5 가 🚫 한 건강 상식이다.
+    "반려견 건강상식": Page("dog-food", "pet-food", "food"),
+    "반려묘 건강상식": Page("cat-food", "pet-food", "food"),
 }
 
 
@@ -66,12 +88,12 @@ class NiasPet(Source):
             raise RuntimeError("메뉴에서 본문 링크를 하나도 찾지 못함 — 페이지 구조가 바뀐 듯")
 
         targets = []
-        for label, (tail, subcategory) in WANTED.items():
+        for label, page in WANTED.items():
             if label not in found:
                 continue
             targets.append(Target(
-                url=found[label], slug=f"{self.id}-{tail}", ext="html",
-                meta={"title": label, "subcategory": subcategory,
+                url=found[label], slug=f"{self.id}-{page.slug}", ext="html",
+                meta={"title": label, "subcategory": page.subcategory, "category": page.category,
                       "notes": f"메뉴: {label}" + (f" (못 찾은 메뉴: {', '.join(missing)})" if missing else "")},
             ))
         return targets

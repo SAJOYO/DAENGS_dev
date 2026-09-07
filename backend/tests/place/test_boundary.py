@@ -202,7 +202,11 @@ def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
     }, (
         f"검색 서버의 공개 표면이 계약과 다르다: {sorted(public)}"
     )
-    assert exposed - public == {"/internal/place/discovery"}
+    assert exposed - public == {
+        "/internal/place/discovery",
+        "/internal/place/facility-discovery",
+        "/internal/place/facility-discovery/actions",
+    }
 
 
 def test_nginx_does_not_publish_the_internal_discovery_prefix():

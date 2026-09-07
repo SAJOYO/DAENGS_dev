@@ -191,6 +191,7 @@ class Chunk(_Base):
     published_at: str | None = None
     license: str = ""
     citation_url: str | None = None           # 답변에 실을 링크. source_url 과 다르다 (RAG-019 §4)
+    org: str | None = None                    # 지자체·소관기관명. 지역 필터의 원본 (RAG-063)
 
     # ----- 우리만 쓰는 것
     citation: str = ""                        # 사람이 읽을 인용 문자열. chunk_id 와 겸하지 않는다 (RAG-021 ⑤B)

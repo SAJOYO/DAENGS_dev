@@ -1,0 +1,856 @@
+{
+  "format": "walk-storyboard-candidates-v2",
+  "session_id": "v2-review",
+  "source_revision": "6ea13bae5fd172a2b7e6bf7443f384b752a2a0294337cdb6356c65fea1c513d4",
+  "synthetic": true,
+  "scenes": [
+    {
+      "id": "scene-26beb4679097add99da824b6",
+      "revision": "f758c46287a0f4fdf517efe23c771b694395b32922eb2530cdf98be12f0709ae",
+      "started_at": "2026-09-06T00:00:00Z",
+      "ended_at": "2026-09-06T00:00:00Z",
+      "route": {
+        "start_m": 0.0,
+        "end_m": 0.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-26beb4679097add99da824b6:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-0",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-444899cd2627e39f4b06acfe",
+      "revision": "593da89ca1e77ff4ab0cc2ee842494d2899de304833f24e8a0d5f500b8e14744",
+      "started_at": "2026-09-06T00:00:00Z",
+      "ended_at": "2026-09-06T00:00:00Z",
+      "route": {
+        "start_m": 0.0,
+        "end_m": 0.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 0m 주변",
+      "facts": [
+        {
+          "id": "scene-444899cd2627e39f4b06acfe:fact",
+          "kind": "walk",
+          "text": "산책 경로 0m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-444899cd2627e39f4b06acfe:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-f037c0e73e1ae170ab32dc6c",
+      "revision": "eb944acdb11c7becad1fc59e73da6e92ffb59362c919a5c0bbeae8f4acc67c29",
+      "started_at": "2026-09-06T00:00:00Z",
+      "ended_at": "2026-09-06T00:00:00Z",
+      "route": null,
+      "reasons": [
+        "session_boundary"
+      ],
+      "title": "산책 시작",
+      "facts": [
+        {
+          "id": "scene-f037c0e73e1ae170ab32dc6c:fact",
+          "kind": "walk",
+          "text": "산책 시작 기록",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-7294eb4e7a462b0a7c3abe03",
+      "revision": "ebb8c574e0b773c89e170e56e390d0c2feb8282f45b6bfee3aa9fa25c86c8698",
+      "started_at": "2026-09-06T00:02:30Z",
+      "ended_at": "2026-09-06T00:02:30Z",
+      "route": {
+        "start_m": 150.0,
+        "end_m": 150.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-7294eb4e7a462b0a7c3abe03:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-1",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-f896f93249532a1bd0e8d2c3",
+      "revision": "8a69ab2d3ac033b4e038747e7fba753b29f8ea08f7bd990e0a13c3e3d43d168b",
+      "started_at": "2026-09-06T00:02:30Z",
+      "ended_at": "2026-09-06T00:02:30Z",
+      "route": {
+        "start_m": 150.0,
+        "end_m": 150.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 150m 주변",
+      "facts": [
+        {
+          "id": "scene-f896f93249532a1bd0e8d2c3:fact",
+          "kind": "walk",
+          "text": "산책 경로 150m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-f896f93249532a1bd0e8d2c3:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-3807ed19b23182a906fae0f6",
+      "revision": "11c4bf9c2764598d7d84b7f46e7012e33dc70966aa0b8b7858de505dd1b35ebf",
+      "started_at": "2026-09-06T00:05:00Z",
+      "ended_at": "2026-09-06T00:05:00Z",
+      "route": {
+        "start_m": 300.0,
+        "end_m": 300.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-3807ed19b23182a906fae0f6:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-2",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-fcc3bc648e17022ceb1362b5",
+      "revision": "340f0d21f3fc07556768be2dc2a5296888bc1448e97b001c4d4354a73ac671a1",
+      "started_at": "2026-09-06T00:05:00Z",
+      "ended_at": "2026-09-06T00:05:00Z",
+      "route": {
+        "start_m": 300.0,
+        "end_m": 300.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 300m 주변",
+      "facts": [
+        {
+          "id": "scene-fcc3bc648e17022ceb1362b5:fact",
+          "kind": "walk",
+          "text": "산책 경로 300m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-fcc3bc648e17022ceb1362b5:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-238425f1e35700fd532251de",
+      "revision": "987746cd21d2862e54d242c4e00130bad6eca8965be44bbdf33584a66c31257e",
+      "started_at": "2026-09-06T00:07:30Z",
+      "ended_at": "2026-09-06T00:07:30Z",
+      "route": {
+        "start_m": 450.0,
+        "end_m": 450.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-238425f1e35700fd532251de:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-3",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-f53082051972ae0708ade05d",
+      "revision": "c78c0c93ced3c7ac9e298829d1cce3a11ff18a0c89f2a328827d3d712a04f482",
+      "started_at": "2026-09-06T00:07:30Z",
+      "ended_at": "2026-09-06T00:07:30Z",
+      "route": {
+        "start_m": 450.0,
+        "end_m": 450.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 450m 주변",
+      "facts": [
+        {
+          "id": "scene-f53082051972ae0708ade05d:fact",
+          "kind": "walk",
+          "text": "산책 경로 450m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-f53082051972ae0708ade05d:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-1564693b8f61b272266fbe9f",
+      "revision": "01e53065ed80bb8d9d9345b66e35defe3d812ac33182b4b0c0612cb69d1103f3",
+      "started_at": "2026-09-06T00:10:00Z",
+      "ended_at": "2026-09-06T00:10:00Z",
+      "route": {
+        "start_m": 600.0,
+        "end_m": 600.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-1564693b8f61b272266fbe9f:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-4",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-237400ec9dbefd106187b959",
+      "revision": "cb35e772b72d3fb164fa89550a6c9931e30ca811ce6ac73c749c490d0128b2ad",
+      "started_at": "2026-09-06T00:10:00Z",
+      "ended_at": "2026-09-06T00:10:00Z",
+      "route": {
+        "start_m": 600.0,
+        "end_m": 600.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 600m 주변",
+      "facts": [
+        {
+          "id": "scene-237400ec9dbefd106187b959:fact",
+          "kind": "walk",
+          "text": "산책 경로 600m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-237400ec9dbefd106187b959:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-b7cb99759092e564bd6b16f1",
+      "revision": "d832bb72a67a6b47dd1c637864758df4bac632c9946895b1bd32405754e553e5",
+      "started_at": "2026-09-06T00:12:30Z",
+      "ended_at": "2026-09-06T00:12:30Z",
+      "route": {
+        "start_m": 750.0,
+        "end_m": 750.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-b7cb99759092e564bd6b16f1:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-5",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-f5ec5f74aed81c6ed38bd145",
+      "revision": "8c9f3b5cf762b15154a4b2a19bafbfabd6eeb80e22b6876e44834991055d954b",
+      "started_at": "2026-09-06T00:12:30Z",
+      "ended_at": "2026-09-06T00:12:30Z",
+      "route": {
+        "start_m": 750.0,
+        "end_m": 750.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 750m 주변",
+      "facts": [
+        {
+          "id": "scene-f5ec5f74aed81c6ed38bd145:fact",
+          "kind": "walk",
+          "text": "산책 경로 750m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-f5ec5f74aed81c6ed38bd145:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-ad729426deab8771fe8845b7",
+      "revision": "5e68fd282900472cbe77c857f17b396b00a2b2bf0048f626ea075f7fa958e97e",
+      "started_at": "2026-09-06T00:15:00Z",
+      "ended_at": "2026-09-06T00:15:00Z",
+      "route": {
+        "start_m": 900.0,
+        "end_m": 900.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-ad729426deab8771fe8845b7:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-6",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-dde8449843719acbfe49b437",
+      "revision": "bfa0307816df8e363e3a51c0f4b6596683475afac21162a001fe68e75f38897d",
+      "started_at": "2026-09-06T00:15:00Z",
+      "ended_at": "2026-09-06T00:15:00Z",
+      "route": {
+        "start_m": 900.0,
+        "end_m": 900.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 900m 주변",
+      "facts": [
+        {
+          "id": "scene-dde8449843719acbfe49b437:fact",
+          "kind": "walk",
+          "text": "산책 경로 900m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-dde8449843719acbfe49b437:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-3b996c3a39f590a456f9d340",
+      "revision": "0ff51476a6e0527670a6b2bf03dc77e2517f0681b4af80b1813dc1ee7990030e",
+      "started_at": "2026-09-06T00:17:30Z",
+      "ended_at": "2026-09-06T00:17:30Z",
+      "route": {
+        "start_m": 1050.0,
+        "end_m": 1050.0,
+        "block_id": 0
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "경로 1050m 주변",
+      "facts": [
+        {
+          "id": "scene-3b996c3a39f590a456f9d340:fact",
+          "kind": "walk",
+          "text": "산책 경로 1050m 부근의 관측 지점이에요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-3b996c3a39f590a456f9d340:coverage",
+          "kind": "coverage",
+          "text": "이 구간을 설명할 환경 자료를 확인하지 못했어요. 시설이 없다는 뜻은 아니에요.",
+          "source_ids": [
+            "environment-fixture"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        },
+        {
+          "id": "environment-fixture",
+          "provider": "fixture",
+          "status": "unavailable",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    },
+    {
+      "id": "scene-41e4656fd3c80ba08323ab60",
+      "revision": "38f44815fd9f0b07ff499e7c6be084d033d536191f2803b97bb14c5c303ec255",
+      "started_at": "2026-09-06T00:17:30Z",
+      "ended_at": "2026-09-06T00:17:30Z",
+      "route": {
+        "start_m": 1050.0,
+        "end_m": 1050.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-41e4656fd3c80ba08323ab60:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-7",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-84bffd303afa7ded71954770",
+      "revision": "182490c02dd643727578cfd96bbf2515e9b4b3829add43aebf5584b7c28aef8f",
+      "started_at": "2026-09-06T00:20:00Z",
+      "ended_at": "2026-09-06T00:20:00Z",
+      "route": {
+        "start_m": 1200.0,
+        "end_m": 1200.0,
+        "block_id": null
+      },
+      "reasons": [
+        "action"
+      ],
+      "title": "킁킁",
+      "facts": [
+        {
+          "id": "scene-84bffd303afa7ded71954770:fact",
+          "kind": "action",
+          "text": "킁킁 기록을 남겼어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": {
+        "entry_id": "record-8",
+        "revision": 1,
+        "pet_id": "pet-a"
+      }
+    },
+    {
+      "id": "scene-05752d87843ca10a8d1f5a3f",
+      "revision": "4c1d035503f8bdd2f715bc3980fd8a4d787b6af44502a3a6f669a8fd4d5935bf",
+      "started_at": "2026-09-06T00:50:00Z",
+      "ended_at": "2026-09-06T00:50:00Z",
+      "route": null,
+      "reasons": [
+        "session_boundary"
+      ],
+      "title": "산책 마무리",
+      "facts": [
+        {
+          "id": "scene-05752d87843ca10a8d1f5a3f:fact",
+          "kind": "walk",
+          "text": "수용 이동거리 3000m",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-05752d87843ca10a8d1f5a3f:selection:0",
+          "kind": "coverage",
+          "text": "환경 조회 지점 8곳을 선택했어요. 최소 목표는 4곳이에요. 장면 수나 발견한 시설 수를 뜻하지 않아요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-05752d87843ca10a8d1f5a3f:selection:1",
+          "kind": "coverage",
+          "text": "보충하지 못한 가장 긴 경로 구간은 약 1900m예요. 빈 구간 목표 300m를 넘었어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        },
+        {
+          "id": "scene-05752d87843ca10a8d1f5a3f:selection:2",
+          "kind": "coverage",
+          "text": "조회 지점 상한 8곳으로 행동 기록 1개의 주변 조회를 보류했어요. 행동 기록 자체는 남아 있어요.",
+          "source_ids": [
+            "local-walk"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "local-walk",
+          "provider": "walk-observation",
+          "status": "known",
+          "captured_at": null,
+          "url": null
+        }
+      ],
+      "entry": null
+    }
+  ],
+  "selection": {
+    "minimum_target": 4,
+    "selected_count": 8,
+    "minimum_met": true,
+    "shortfall_reason": null,
+    "coverage_met": false,
+    "longest_unread_m": 1900.0,
+    "max_unread_m": 300.0,
+    "max_anchors": 8,
+    "deferred_action_count": 1
+  }
+}

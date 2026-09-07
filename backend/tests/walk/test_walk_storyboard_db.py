@@ -38,8 +38,8 @@ async def database():
     for file in (
         "db/init/06_walks.sql",
         "db/init/19_walk_entries.sql",
-        "db/migrations/20260905_walk_storyboards.sql",
-        "db/migrations/20260905_walk_storyboards.sql",
+        "db/migrations/2026-09-05_walk_storyboards.sql",
+        "db/migrations/2026-09-05_walk_storyboards.sql",
     ):
         await conn.execute((REPO / file).read_text(encoding="utf-8"))
     engine = create_async_engine(
@@ -158,6 +158,18 @@ async def test_real_upload_finalize_entries_revision_race_and_cascade(database):
         latest = (await client.get(path + "/storyboard")).json()
         assert latest == newer.json()
         assert any(s["id"] == f"entry:{entry}" for s in latest["bundle"]["scenes"])
+        detailed = (
+            await client.get(path + "/storyboard?bundle_format=walk-storyboard-candidates-v2")
+        ).json()
+        assert detailed["generation"] == latest["generation"]
+        assert detailed["bundle"]["format"] == "walk-storyboard-candidates-v2"
+        assert detailed["bundle"]["selection"]["minimum_met"]
+        recorded = next(s for s in detailed["bundle"]["scenes"] if s["entry"])
+        assert recorded["entry"] == {"entry_id": str(entry), "revision": 1, "pet_id": None}
+        assert (
+            await conn.fetchval("SELECT bundle->>'format' FROM walk_storyboards LIMIT 1")
+            == "walk-storyboard-candidates-v2"
+        )
         removed = await client.delete(
             path + f"/entries/{entry}",
             params={"expected_revision": 1, "mutation_id": str(uuid.uuid4())},

@@ -11,13 +11,15 @@ from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardResponse
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_backend.services.walk_storyboard_context import unavailable_contexts
 from daengs_walk import analyze_walk
-from daengs_walk.storyboard import build_storyboard, fingerprint
+from daengs_walk.storyboard import StoryboardBundleV2, build_storyboard, fingerprint, legacy_bundle
 from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk
 
-POLICY_VERSION = "live-storyboard-v1"
+POLICY_VERSION = "live-storyboard-v2"
 LEASE_SECONDS = 60
+CONTEXT_TIMEOUT_SECONDS = 10
 
 
 class StoryboardNotFound(LookupError):
@@ -53,22 +55,25 @@ async def source(session, owner, walk_id):
     return walk, analysis, entries, revisions, revision, history
 
 
-def result(walk, row, revisions, revision):
+def result(walk, row, revisions, revision, bundle_format="walk-storyboard-candidates-v1"):
     state = "pending" if row is None else "stale" if row.input_revision != revision else row.status
+    bundle = row.bundle if row is not None and state == "ready" else None
+    if bundle is not None and bundle_format == "walk-storyboard-candidates-v1":
+        bundle = legacy_bundle(StoryboardBundleV2.model_validate(bundle))
     return StoryboardResponse(
         session_id=walk.client_session_id,
         generation=row.generation if row else 0,
         input_revision=revision,
         status=state,
         entry_revisions=revisions,
-        bundle=row.bundle if row is not None and state == "ready" else None,
+        bundle=bundle,
         error_code=row.error_code if row is not None and state == "failed" else None,
     )
 
 
-async def get(session, owner, walk_id):
+async def get(session, owner, walk_id, bundle_format="walk-storyboard-candidates-v1"):
     walk, _, _, revisions, revision, _ = await source(session, owner, walk_id)
-    value = result(walk, await repo.current(session, walk_id), revisions, revision)
+    value = result(walk, await repo.current(session, walk_id), revisions, revision, bundle_format)
     await session.commit()
     return value
 
@@ -84,7 +89,7 @@ async def generate(session, owner, walk_id, request, lookup):
             seconds=LEASE_SECONDS
         )
         if running or (row.status == "ready" and not request.refresh):
-            value = result(walk, row, revisions, revision)
+            value = result(walk, row, revisions, revision, request.bundle_format)
             await session.commit()
             return value
     prepared = prepare_finalized_walk(
@@ -114,7 +119,10 @@ async def generate(session, owner, walk_id, request, lookup):
         projected, selection = scene_inputs(
             evidence, entries, session_id=session_id, pet_id=pet_id, references=references
         )
-        contexts = await asyncio.wait_for(lookup(selection), timeout=10)
+        try:
+            contexts = await asyncio.wait_for(lookup(selection), timeout=CONTEXT_TIMEOUT_SECONDS)
+        except TimeoutError:
+            contexts = unavailable_contexts(selection)
         bundle = build_storyboard(
             session_id,
             started_at,
@@ -137,7 +145,7 @@ async def generate(session, owner, walk_id, request, lookup):
     if current and current.generation == generation and latest_revision == revision:
         current.status = "failed" if failure else "ready"
         current.bundle, current.error_code, current.updated_at = bundle, failure, datetime.now(UTC)
-    value = result(latest_walk, current, latest_revisions, latest_revision)
+    value = result(latest_walk, current, latest_revisions, latest_revision, request.bundle_format)
     await session.commit()
     return value
 

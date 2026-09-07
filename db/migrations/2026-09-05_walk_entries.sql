@@ -7,3 +7,4 @@ CREATE TABLE IF NOT EXISTS walk_entries (
     payload JSONB,
     PRIMARY KEY (walk_id, id)
 );
+

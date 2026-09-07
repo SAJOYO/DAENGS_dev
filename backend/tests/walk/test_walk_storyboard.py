@@ -1,5 +1,6 @@
 """Real chunk decode + measurement + geo scenes across the authenticated HTTP boundary."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -129,6 +130,82 @@ def test_pinless_real_observations_generate_and_cache(live):
     assert client.post(PATH, json={"expected_entries": {}}).json() == result
     assert client.get(PATH).json() == result
     assert lookup.await_count == 1
+
+
+def test_environment_deadline_keeps_scenes_and_can_refresh(live, monkeypatch):
+    client, _, lookup = live
+    monkeypatch.setattr(service, "CONTEXT_TIMEOUT_SECONDS", 0.01)
+    cancelled = []
+
+    async def slow(_):
+        try:
+            await asyncio.sleep(60)
+        finally:
+            cancelled.append(True)
+
+    successful_lookup = lookup.side_effect
+    lookup.side_effect = slow
+    response = client.post(PATH, json={"expected_entries": {}})
+    assert response.status_code == 200
+    fallback = response.json()
+    assert fallback["status"] == "ready" and fallback["error_code"] is None
+    scenes = fallback["bundle"]["scenes"]
+    assert {"start", "end"} <= {s["id"] for s in scenes}
+    anchors = [s for s in scenes if "distance_fill" in s["reasons"]]
+    assert anchors and all(any(f["kind"] == "coverage" for f in s["facts"]) for s in anchors)
+    assert all(
+        any(
+            s["provider"] == "place-search" and s["status"] == "unavailable" and s["captured_at"]
+            for s in a["sources"]
+        )
+        for a in anchors
+    )
+    assert cancelled == [True]
+    # Normal retry reuses the successful observation bundle; explicit refresh retries environment.
+    assert client.post(PATH, json={"expected_entries": {}}).json() == fallback
+    assert lookup.await_count == 1
+    lookup.side_effect = successful_lookup
+    refreshed = client.post(PATH, json={"expected_entries": {}, "refresh": True}).json()
+    assert refreshed["generation"] > fallback["generation"]
+    assert any(
+        f["kind"] == "environment" for s in refreshed["bundle"]["scenes"] for f in s["facts"]
+    )
+
+
+def test_environment_deadline_does_not_publish_obsolete_input(live, monkeypatch):
+    client, state, lookup = live
+    monkeypatch.setattr(service, "CONTEXT_TIMEOUT_SECONDS", 0.01)
+
+    async def mutate_then_wait(_):
+        state.entries = [note()]
+        await asyncio.sleep(60)
+
+    lookup.side_effect = mutate_then_wait
+    response = client.post(PATH, json={"expected_entries": {}}).json()
+    assert response["status"] == "stale" and response["bundle"] is None
+
+
+async def test_request_cancellation_is_not_an_environment_fallback(live):
+    client, state, lookup = live
+    from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+
+    lookup.side_effect = asyncio.CancelledError
+    db = client.app.dependency_overrides[get_session]()
+    with pytest.raises(asyncio.CancelledError):
+        await service.generate(db, OWNER, WALK, StoryboardRequest(expected_entries={}), lookup)
+    assert state.row.status == "running" and state.row.bundle is None
+
+
+def test_measurement_timeout_is_still_an_analysis_failure(live, monkeypatch):
+    client, _, lookup = live
+
+    def broken(*args):
+        raise TimeoutError("measurement failure")
+
+    monkeypatch.setattr(service, "analyze_walk", broken)
+    response = client.post(PATH, json={"expected_entries": {}}).json()
+    assert response["status"] == "failed" and response["bundle"] is None
+    lookup.assert_not_awaited()
 
 
 def test_correction_deletion_and_source_ids(live):
@@ -275,3 +352,105 @@ def test_history_uses_observed_speed_and_retains_reference_sources(live):
     )
     scene = next(s for s in bundle.scenes if "profile_change" in s.reasons)
     assert len([s for s in scene.sources if s.provider == "walk-history"]) == 3
+
+
+def test_v2_pet_reassignment_and_unassignment_require_new_scene_revision(live):
+    client, state, lookup = live
+    pet_a, pet_b = uuid.uuid4(), uuid.uuid4()
+    state.walk.pet_ids = [pet_a, pet_b]
+    entry = note()
+    entry.payload = {
+        "kind": "behavior",
+        "behavior_code": "sniffing",
+        "note": None,
+        "recorded_at": (START + timedelta(seconds=450)).isoformat(),
+        "location": {
+            "lat": 37.5,
+            "lng": 127.005085,
+            "captured_at": START.isoformat(),
+            "accuracy_m": 5,
+        },
+        "pet_id": str(pet_a),
+    }
+    state.entries = [entry]
+    previous = None
+    for revision, pet in enumerate([str(pet_a), str(pet_b), None], 1):
+        entry.payload = dict(entry.payload, pet_id=pet)
+        entry.revision = revision
+        entry.mutation_id = uuid.uuid4()
+        result = client.post(
+            PATH,
+            json={
+                "expected_entries": {str(ENTRY): revision},
+                "bundle_format": "walk-storyboard-candidates-v2",
+            },
+        ).json()
+        assert result["status"] == "ready"
+        scene = next(s for s in result["bundle"]["scenes"] if s["id"] == f"entry:{ENTRY}")
+        assert scene["entry"] == {"entry_id": str(ENTRY), "revision": revision, "pet_id": pet}
+        if previous:
+            assert scene["revision"] != previous["revision"] and scene["id"] == previous["id"]
+        previous = scene
+        legacy = client.post(PATH, json={"expected_entries": {str(ENTRY): revision}}).json()
+        assert legacy["bundle"]["format"] == "walk-storyboard-candidates-v1"
+        assert all("entry" not in s for s in legacy["bundle"]["scenes"])
+        assert legacy["generation"] == result["generation"]
+        assert client.get(PATH + "?bundle_format=walk-storyboard-candidates-v2").json() == result
+    assert lookup.await_count == 3  # Negotiating a representation does not redo environment I/O.
+    entry.payload = None
+    entry.revision = 4
+    removed = client.post(
+        PATH,
+        json={
+            "expected_entries": {str(ENTRY): 4},
+            "bundle_format": "walk-storyboard-candidates-v2",
+        },
+    ).json()
+    assert not any(s["entry"] for s in removed["bundle"]["scenes"])
+
+
+def test_v2_short_walk_transmits_shortfall_even_with_environment(live):
+    client, state, _ = live
+    points = [
+        WalkPointUpload(
+            client_seq=i,
+            chain_index=0,
+            at=START + timedelta(seconds=10 * i),
+            lat=37.5,
+            lng=127 + i * 0.000113,
+            accuracy_m=5,
+        )
+        for i in range(7)
+    ]
+    state.walk.points = [
+        SimpleNamespace(seq_from=0, seq_to=6, point_count=7, payload=encode_chunk(points))
+    ]
+    state.walk.ended_at = START + timedelta(seconds=60)
+    analysis = service.repo.latest_analysis.return_value
+    analysis.point_count, analysis.terminal_client_seq = 7, 6
+    analysis.input_fingerprint = walk_input_fingerprint(points)
+    result = client.post(
+        PATH, json={"expected_entries": {}, "bundle_format": "walk-storyboard-candidates-v2"}
+    ).json()
+    assert result["status"] == "ready"
+    selection = result["bundle"]["selection"]
+    assert not selection["minimum_met"]
+    assert selection["shortfall_reason"] == "insufficient_distinct_valid_route"
+    assert any(f["kind"] == "environment" for s in result["bundle"]["scenes"] for f in s["facts"])
+    assert any("최소 조회 목표" in f["text"] for f in result["bundle"]["scenes"][-1]["facts"])
+    assert (
+        client.post(PATH, json={"expected_entries": {}, "bundle_format": "unknown"}).status_code
+        == 422
+    )
+
+
+@pytest.mark.parametrize("name", ["v2-before", "v2-after", "v2-short", "v2-budget"])
+def test_geo_v2_fixtures_validate_in_product(name):
+    from pathlib import Path
+
+    from daengs_walk.storyboard import StoryboardBundleV2
+
+    bundle = StoryboardBundleV2.model_validate_json(
+        (Path(__file__).parent / "fixtures" / f"{name}.json").read_text(encoding="utf-8")
+    )
+    assert bundle.format == "walk-storyboard-candidates-v2"

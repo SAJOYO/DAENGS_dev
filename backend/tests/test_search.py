@@ -100,11 +100,12 @@ def test_questions_come_from_the_goldenset() -> None:
     있어서다 — 골든셋에만 적어 두고 랩이 안 물으면 아무것도 안 재진다 (RAG-055).
 
     09-04 에 사망·장례 3문항(FW1~FW3)이 붙어 33 이 됐다 (RAG-059).
+    09-06 에 음식 4문항(FD1~FD4)과 주거 1문항(HS1)이 붙어 38 이 됐다 (RAG-065).
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 33
+    assert len(items) == 38
     assert all(q for _, q, _, _ in items)
     assert {"B2", "B4", "B6"} <= {i[0] for i in items}
     # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)
@@ -113,23 +114,37 @@ def test_questions_come_from_the_goldenset() -> None:
 
 # ---------------------------------------------------------------- 교통수단 배제 (RAG-052)
 class _Cursor:
-    def __init__(self, log): self._log = log
+    def __init__(self, conn): self._conn = conn; self._rows = []
     def __enter__(self): return self
     def __exit__(self, *a): return False
-    def execute(self, sql, params): self._log.append((sql, params))
-    def fetchall(self): return []
+
+    def execute(self, sql, params):
+        self._conn.log.append((sql, params))
+        # 지역 사전 질의(RAG-063)에만 답한다 — 본 검색은 그대로 0행이다
+        self._rows = self._conn.orgs if "DISTINCT metadata->>'org'" in sql else []
+
+    def fetchall(self): return self._rows
 
 
 class _Conn:
-    """`search()` 가 DB 에 보내는 SQL 을 받아 적는 가짜 연결. 결과는 늘 0행이다."""
-    def __init__(self): self.log = []
-    def cursor(self): return _Cursor(self.log)
+    """`search()` 가 DB 에 보내는 SQL 을 받아 적는 가짜 연결. 본 검색 결과는 늘 0행이다.
+
+    `orgs` 에 값을 넣으면 지역 사전 질의(RAG-063)만 그것을 돌려준다.
+    """
+    def __init__(self): self.log = []; self.orgs: list[tuple[str]] = []
+    def cursor(self): return _Cursor(self)
 
 
 def _sql_for(text: str):
+    """`search()` 가 보낸 **본 검색** SQL. 지역 사전(RAG-063)을 묻는 질의는 건너뛴다.
+
+    `search()` 는 `known_orgs()` 로 `org` 목록을 먼저 묻는다. 그것도 이 가짜 연결에 기록되므로
+    `log[0]` 을 집으면 본 검색이 아니라 그 질의를 집는다 — 파라미터에 벡터가 있는 쪽이 본 검색이다.
+    """
+    search.forget_orgs()          # 앞선 테스트가 캐시에 남긴 것을 물려받지 않는다
     conn = _Conn()
     search.search(search.Query(vector=[0.0] * 4, tsquery="", text=text), k=5, conn=conn)
-    sql, params = conn.log[0]
+    sql, params = next((s, p) for s, p in conn.log if isinstance(p, dict) and "q" in p)
     return sql, params
 
 
@@ -140,6 +155,38 @@ def test_transport_signal_excludes_the_other_mode_on_both_axes() -> None:
     sql, params = _sql_for("기차에 반려동물은 몇 kg까지 태울 수 있나요?")
     assert params["excluded"] == ["transport-air"]
     assert sql.count("subcategory <> ALL(%(excluded)s)") == 2
+
+
+def test_region_signal_keeps_documents_without_an_org() -> None:
+    """지역 신호가 있어도 **`org` 이 없는 문서는 남긴다** (RAG-063).
+
+    "부산 동래구에서 목줄 안 하면 과태료?" 의 답은 조례가 아니라 동물보호법에 있고 법령에는
+    `org` 이 없다. 절에 `IS NULL` 이 없으면 고치려던 것보다 큰 것이 사라진다.
+    """
+    search.forget_orgs()
+    conn = _Conn()
+    conn.orgs = [("부산광역시 동래구",)]
+    search.search(search.Query(vector=[0.0] * 4, tsquery="", text="부산 동래구 지원"),
+                  k=5, conn=conn)
+    sql, params = next((s, p) for s, p in conn.log if isinstance(p, dict) and "q" in p)
+    assert params["orgs"] == ["부산광역시 동래구"]
+    # 두 축 모두에 걸린다 — 한 축에만 걸면 RRF 가 다른 축에서 도로 끌어온다
+    assert sql.count("metadata->>'org' IS NULL OR") == 2
+
+
+def test_empty_org_list_is_not_cached() -> None:
+    """**빈 결과를 캐시하면 조용히 틀린다.**
+
+    적재 전에 `search()` 를 한 번 부른 프로세스가 그 뒤로 영영 지역 필터를 안 켜는데,
+    검색 자체는 계속 되므로 **아무 예외도 안 난다.** 그래서 빈 값일 때만 매번 다시 묻는다.
+    """
+    search.forget_orgs()
+    empty = _Conn()
+    assert search.known_orgs(empty) == ()
+    filled = _Conn()
+    filled.orgs = [("부산광역시",)]
+    assert search.known_orgs(filled) == ("부산광역시",)   # 앞의 () 를 물려받지 않았다
+    search.forget_orgs()
 
 
 def test_no_transport_signal_means_no_exclusion_clause() -> None:
@@ -257,15 +304,28 @@ def test_no_supplementary_actually_filters(vector) -> None:
 
 
 def test_category_filter(vector) -> None:
-    """지금 코퍼스는 전부 policy 라 결과가 줄지 않아야 한다 — 필터가 오작동하면 여기서 걸린다.
+    """필터가 실제로 가르는가.
 
     길이가 아니라 **검색분(`cited_by is None`)의 수**를 센다 — 확장분은 인용을 따라 들어온 것이라
     카테고리 필터의 관심사가 아니다 (RAG-040).
+
+    ⚠ **2026-09-06(RAG-065)에 이 테스트의 전제가 바뀌었다.** 그전까지는 코퍼스가 전부 `policy` 라
+    `food` 가 **빈 결과**인 것을 고정하고 있었다. `F1` 이 그 칸을 채웠으므로(사료관리법 3법 +
+    `nias-pet` 해설 3장) 이제 둘 다 결과가 있어야 하고, **서로 겹치지 않아야** 한다.
+    빈 결과를 고정하던 자리가 이제 "두 칸이 실제로 갈리는가"를 고정한다.
     """
     with _ready_or_skip() as conn:
-        hits = search.search(vector, k=5, category="policy", conn=conn)
-        assert len([h for h in hits if h.cited_by is None]) == 5
-        assert search.search(vector, k=5, category="food", conn=conn) == []
+        policy = search.search(vector, k=5, category="policy", conn=conn)
+        food = search.search(vector, k=5, category="food", conn=conn)
+
+    kept = [h for h in policy if h.cited_by is None]
+    assert len(kept) == 5
+    assert food, "food 칸이 비었다 — F1(RAG-065)이 적재한 문서가 안 보인다"
+
+    # 같은 질의인데 두 칸의 검색분이 겹치면 필터가 안 걸린 것이다.
+    a = {h.chunk_id for h in policy if h.cited_by is None}
+    b = {h.chunk_id for h in food if h.cited_by is None}
+    assert not (a & b), f"두 카테고리가 같은 청크를 준다: {sorted(a & b)}"
 
 
 # ---------------------------------------------------------------- 인용 확장 (RAG-040)

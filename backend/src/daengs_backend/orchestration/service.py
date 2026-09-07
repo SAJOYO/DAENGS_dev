@@ -12,6 +12,7 @@ registers no endpoint.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -35,6 +36,7 @@ from daengs_backend.orchestration.semantic import (
 from daengs_backend.orchestration.social import build_social_response
 
 _ROUTER_FAILURE_MESSAGE = "요청을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요."
+LOGGER = logging.getLogger(__name__)
 
 
 class AssistantOrchestrationService:
@@ -128,7 +130,18 @@ class AssistantOrchestrationService:
                 decision = await self._semantic_router.select(
                     query=query, context=structured_context
                 )
-            except SemanticRoutingError:
+            except SemanticRoutingError as exc:
+                # 사용자에게는 고정 문구만 나가고 모델의 잘못된 출력은 안 보인다 (O-14).
+                # 그래서 **여기가 원인이 남는 유일한 자리**다 — 프로바이더 예외(한도 초과 ·
+                # 타임아웃)와 스키마 실패가 같은 FAILED 로 나가는데, 로그가 없으면 둘을
+                # 못 가른다 (2026-09-07 개발 PC 에서 그 상태로 두 번 헛돌았다). 질문 원문은
+                # 안 남긴다 (D-037) — request_id 로 트레이스와 잇는다.
+                LOGGER.warning(
+                    "시맨틱 라우터 실패 request_id=%s: %s (원인: %r)",
+                    rid,
+                    exc,
+                    exc.__cause__,
+                )
                 return (
                     AssistantResponse(
                         request_id=rid,

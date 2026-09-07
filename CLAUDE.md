@@ -190,6 +190,12 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `db_user` / `db_password` / `db_name` 을 `config.py` 가 `URL.create` 로 조립합니다.
   이어 붙이지 않는 이유는 비밀번호의 특수문자 때문입니다 (D-013).
   옛 `DAENGS_DATABASE_URL` 이 `.env` 에 남아 있으면 backend 가 뜨지 않고 알려 줍니다.
+  **서버의 `backend/.env` 를 고쳤으면 `docker compose restart` 로는 반영되지 않습니다** —
+  `env_file` 은 컨테이너를 만들 때 굳습니다. `docker compose up -d backend` 로 다시 만들되,
+  그 전에 **셸에 `GEMINI_API_KEY` 를 올려야 합니다**: compose 의 `environment:` 가 `env_file` 보다
+  우선하고 `${GEMINI_API_KEY:-}` 는 셸/최상단 `.env` 에서만 오므로, 빈 셸에서 `up -d` 를 치면 빈 키가
+  박혀 의미 라우터가 죽습니다 (2026-09-07 실측). 자동 배포는 `deploy.yml` 이 그 변수를 올려 줍니다.
+  절차는 루트 `README.md` "backend" 절.
 - **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
   `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
   `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,

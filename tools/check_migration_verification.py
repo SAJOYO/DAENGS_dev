@@ -258,9 +258,13 @@ CHECKS = (
         # 2026-09-08 (#331) — 돌봄 칸 넷. 기본값 변조는 `pets_registered` 와 같은 이유이고,
         # **제약을 지우는 변조가 이 항목의 추가 이유다** — 제약이 빠져도 칸 모양은 그대로라
         # 칸만 보는 verify 는 통과하는데, 그 뒤로 자율급식에 시각이 붙은 행이 조용히 쌓인다.
+        # ⚠ 타입 변조는 `feeding_style` 에 건다. `feeding_times` 를 text 로 바꾸면 그 위의
+        #   `jsonb_typeof(feeding_times)` CHECK 가 재검증에서 죽어 **변조 자체가 실패**하고,
+        #   하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr 낱말로 가르므로
+        #   그 항목은 아무것도 증명하지 않는다 (2026-09-08 CI 실측).
         ('2026-09-08', 'pets_care', PETS, 'pets', [
-            'ALTER TABLE pets DROP COLUMN feeding_style',
-            'ALTER TABLE pets ALTER COLUMN feeding_times TYPE text USING feeding_times::text',
+            'ALTER TABLE pets DROP COLUMN feeding_times',
+            'ALTER TABLE pets ALTER COLUMN feeding_style TYPE text',
             'ALTER TABLE pets ALTER COLUMN feeding_style SET DEFAULT \'free\'',
             'ALTER TABLE pets DROP CONSTRAINT pets_feeding_times_need_schedule',
         ]),

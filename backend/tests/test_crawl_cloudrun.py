@@ -4,7 +4,14 @@ GCP 를 부르지 않는다 — run_v2 클라이언트를 가짜로 바꿔 갈�
 """
 from types import SimpleNamespace
 
+import pytest
+
 from daengs_backend.config import settings
+from daengs_backend.services import cloudrun_jobs as cr
+from daengs_backend.services import crawl as crawl_service
+from tests.test_crawl_api import _auth, client  # noqa: F401 — client 는 fixture 로만 쓰인다(재사용)
+
+JOB = "projects/p/locations/r/jobs/corpus-refresh"
 
 
 def test_기본_백엔드는_celery_다():
@@ -12,11 +19,6 @@ def test_기본_백엔드는_celery_다():
     assert settings.gcp_region == "asia-northeast3"
     assert settings.corpus_job == "corpus-refresh"
     assert settings.gcp_project == ""
-
-
-from daengs_backend.services import cloudrun_jobs as cr
-
-JOB = "projects/p/locations/r/jobs/corpus-refresh"
 
 
 def _ex(name, done):
@@ -76,3 +78,80 @@ def test_job_exists():
     class Missing:
         def get_job(self, name): raise NotFound("no")
     assert cr.job_exists("p", "r", "corpus-refresh", jobs_client=Missing()) is False
+
+
+# ---------------------------------------------------------------- services/crawl.py 의 cloudrun 갈래
+def _cloudrun(monkeypatch, *, active=None, project="p"):
+    monkeypatch.setattr(settings, "crawl_backend", "cloudrun")
+    monkeypatch.setattr(settings, "gcp_project", project)
+    calls = {}
+    monkeypatch.setattr(cr, "active_execution", lambda *a, **k: active)
+    monkeypatch.setattr(cr, "run", lambda p, r, j, args, **k: calls.setdefault("run", (p, r, j, list(args))) and "corpus-refresh-x1")
+    monkeypatch.setattr(cr, "job_exists", lambda *a, **k: True)
+    return calls
+
+
+def test_cloudrun_트리거는_잡을_실행하고_실행_이름을_돌려준다(monkeypatch):
+    calls = _cloudrun(monkeypatch)
+    assert crawl_service.trigger(["a", "b"]) == "corpus-refresh-x1"
+    assert calls["run"] == ("p", "asia-northeast3", "corpus-refresh", ["--sources", "a", "b"])
+
+
+def test_cloudrun_소스가_없으면_인자_없이(monkeypatch):
+    calls = _cloudrun(monkeypatch)
+    crawl_service.trigger(None)
+    assert calls["run"][3] == []
+
+
+def test_cloudrun_이미_실행_중이면_새로_안_띄운다(monkeypatch):
+    calls = _cloudrun(monkeypatch, active="corpus-refresh-old")
+    with pytest.raises(crawl_service.AlreadyRunning) as e:
+        crawl_service.trigger([])
+    assert e.value.execution == "corpus-refresh-old"
+    assert "run" not in calls
+
+
+def test_cloudrun_프로젝트가_없으면_BrokerUnavailable(monkeypatch):
+    _cloudrun(monkeypatch, project="")
+    with pytest.raises(crawl_service.BrokerUnavailable):
+        crawl_service.trigger([])
+
+
+def test_cloudrun_API_오류는_BrokerUnavailable(monkeypatch):
+    _cloudrun(monkeypatch)
+    def boom(*a, **k): raise RuntimeError("403")
+    monkeypatch.setattr(cr, "active_execution", boom)
+    with pytest.raises(crawl_service.BrokerUnavailable):
+        crawl_service.trigger([])
+
+
+def test_cloudrun_crawl_workers_는_잡_존재로_답한다(monkeypatch):
+    _cloudrun(monkeypatch)
+    assert crawl_service.crawl_workers() == ["corpus-refresh@asia-northeast3"]
+    monkeypatch.setattr(cr, "job_exists", lambda *a, **k: False)
+    assert crawl_service.crawl_workers() == []
+
+
+def test_celery_갈래는_그대로다(monkeypatch):
+    monkeypatch.setattr(settings, "crawl_backend", "celery")
+    monkeypatch.setattr(settings, "redis_url", "")
+    with pytest.raises(crawl_service.BrokerUnavailable):
+        crawl_service.trigger(["a"])
+
+
+# ---------------------------------------------------------------- 라우터: 202 의 note
+def test_이미_실행_중이면_202_와_note(client, monkeypatch):  # noqa: F811 — client 는 fixture 인자다
+    def _busy(source_ids=None):
+        raise crawl_service.AlreadyRunning("corpus-refresh-old")
+    monkeypatch.setattr(crawl_service, "trigger", _busy)
+    got = client.post("/admin/crawl", json={}, headers=_auth())
+    assert got.status_code == 202
+    body = got.json()
+    assert body["task_id"] == "corpus-refresh-old"
+    assert "실행 중" in body["note"]
+
+
+def test_보통_202_에는_note_가_없다(client, monkeypatch):  # noqa: F811 — client 는 fixture 인자다
+    monkeypatch.setattr(crawl_service, "trigger", lambda source_ids=None: "t1")
+    got = client.post("/admin/crawl", json={}, headers=_auth())
+    assert got.status_code == 202 and got.json()["note"] is None

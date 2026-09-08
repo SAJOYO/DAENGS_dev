@@ -9,6 +9,12 @@ D-021 2단계(`/life/ask` 를 별도 프로세스로 떼기)가 그만큼 비싸
 대가는 명확합니다: **이름이 틀려도 여기서는 안 잡힙니다.** 메시지는 정상으로 나가고 아무도 그것을
 가져가지 않아 큐에 쌓입니다. 그래서 이름을 상수로 한 자리에 두고, 테스트가 워커 쪽 태스크 이름과
 같은지 대조합니다.
+
+GCP 에서는 브로커 대신 **Cloud Run Job** 이다 (#326, D-062 §3). `settings.crawl_backend` 가
+`cloudrun` 이면 `services/cloudrun_jobs.py` 로 `corpus-refresh` 를 실행한다 — 집 서버의 Celery 는
+크롤에서 멈추지만 이 잡은 적재까지 간다. 끝나지 않은 실행이 있으면 새로 띄우지 않고
+`AlreadyRunning` 으로 그 이름을 돌려준다(잡 쪽도 같은 확인을 하지만, 버튼을 누른 사람에게는
+여기서 바로 알려 주는 편이 낫다).
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.config import settings
 from daengs_backend.models.crawl_run import CrawlRun
 from daengs_backend.repositories import crawl_run as repo
+from daengs_backend.services import cloudrun_jobs
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +43,14 @@ class BrokerUnavailable(RuntimeError):
     """브로커 주소가 없거나 연결이 안 됨. 라우터가 503 으로 바꿉니다."""
 
 
+class AlreadyRunning(RuntimeError):
+    """GCP 에서 끝나지 않은 실행이 있어 새로 띄우지 않았다. `execution` 이 그 이름이다."""
+
+    def __init__(self, execution: str) -> None:
+        super().__init__(execution)
+        self.execution = execution
+
+
 def _celery():
     """**보내기 전용** Celery 앱. 태스크를 등록하지 않으므로 이 프로세스는 워커가 아닙니다."""
     if not settings.redis_url:
@@ -46,7 +61,7 @@ def _celery():
 
 
 def trigger(source_ids: Sequence[str] | None = None) -> str:
-    """수동 트리거. 태스크 id 를 돌려줍니다.
+    """수동 트리거. 태스크 id(또는 Cloud Run 실행 이름)를 돌려줍니다.
 
     `source_ids` 가 없으면 due 판정을 태스크가 합니다 — **주기 실행과 같은 경로**입니다
     (RAG-001 원칙 4). 여기서 소스를 거르지 않는 것도 그쪽과 같습니다: 사람이 이름을 대고 부른
@@ -55,6 +70,12 @@ def trigger(source_ids: Sequence[str] | None = None) -> str:
     **이 함수는 기다리지 않습니다.** 결과는 `crawl_runs` 에 남고 화면이 그것을 폴링합니다
     (RAG-001 원칙 6). 크롤 하나가 분 단위라 요청을 붙들고 있을 수 없습니다.
     """
+    if settings.crawl_backend == "cloudrun":
+        return _trigger_cloudrun(source_ids)
+    return _trigger_celery(source_ids)
+
+
+def _trigger_celery(source_ids: Sequence[str] | None) -> str:
     app = _celery()
     kwargs = {"source_ids": list(source_ids)} if source_ids else {}
     try:
@@ -64,6 +85,29 @@ def trigger(source_ids: Sequence[str] | None = None) -> str:
 
     log.info("크롤 수동 트리거 — task=%s sources=%s", async_result.id, list(source_ids or []))
     return async_result.id
+
+
+def _trigger_cloudrun(source_ids: Sequence[str] | None) -> str:
+    """Cloud Run Job `corpus-refresh` 를 실행한다. 소스가 있으면 `--sources a b` 를 컨테이너 인자로.
+
+    **크롤만이 아니라 적재까지 간다** — 그 잡의 뜻이 그렇다(D-062). 끝나지 않은 실행이 있으면
+    `AlreadyRunning`. API 오류는 `BrokerUnavailable` — 라우터에겐 "실행기가 없다" 와 같은 503 이다.
+    """
+    if not settings.gcp_project:
+        raise BrokerUnavailable("DAENGS_GCP_PROJECT 가 없다 — backend/.env 를 확인할 것")
+    project, region, job = settings.gcp_project, settings.gcp_region, settings.corpus_job
+    try:
+        active = cloudrun_jobs.active_execution(project, region, job)
+        if active:
+            raise AlreadyRunning(active)
+        args = ["--sources", *source_ids] if source_ids else []
+        execution = cloudrun_jobs.run(project, region, job, args)
+    except AlreadyRunning:
+        raise
+    except Exception as e:                      # API 가 죽은 것은 500 이 아니다
+        raise BrokerUnavailable(f"Cloud Run 에 보내지 못했다: {type(e).__name__}: {e}") from e
+    log.info("크롤 수동 트리거(cloudrun) — execution=%s sources=%s", execution, list(source_ids or []))
+    return execution
 
 
 async def latest(session: AsyncSession) -> Sequence[CrawlRun]:
@@ -96,6 +140,15 @@ def crawl_workers(timeout_sec: float = 1.0) -> list[str]:
 
     브로커 주소가 없으면 `BrokerUnavailable` 입니다 — `trigger` 와 같은 규칙입니다.
     """
+    if settings.crawl_backend == "cloudrun":
+        if not settings.gcp_project:
+            raise BrokerUnavailable("DAENGS_GCP_PROJECT 가 없다")
+        try:
+            exists = cloudrun_jobs.job_exists(settings.gcp_project, settings.gcp_region, settings.corpus_job)
+        except Exception as e:                  # API 가 죽은 것은 500 이 아니다
+            raise BrokerUnavailable(f"Cloud Run 에 묻지 못했다: {type(e).__name__}: {e}") from e
+        return [f"{settings.corpus_job}@{settings.gcp_region}"] if exists else []
+
     app = _celery()
     try:
         replies = app.control.inspect(timeout=timeout_sec).active_queues()

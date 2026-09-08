@@ -73,6 +73,10 @@ async def trigger(
     """
     try:
         task_id = crawl_service.trigger(body.source_ids)
+    except crawl_service.AlreadyRunning as e:
+        # 새로 띄우지 않았지만 실패도 아니다 — 지금 도는 실행을 알려 준다 (#326).
+        return CrawlTriggerAccepted(task_id=e.execution, source_ids=body.source_ids,
+                                    note=f"실행 중인 것이 있어 새로 띄우지 않았습니다: {e.execution}")
     except crawl_service.BrokerUnavailable as e:
         # 500 이 아닙니다 — 앱은 멀쩡하고 워커/브로커가 없는 것이라 사람이 고칠 일입니다.
         logger.warning("크롤 트리거 실패 — %s", e)

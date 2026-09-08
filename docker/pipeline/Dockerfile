@@ -46,15 +46,17 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 # 의존성만 먼저 — 소스가 바뀌어도 이 레이어는 캐시된다.
 # README.md 도 필요하다 — pyproject.toml 의 readme="README.md" 를 uv 가 빌드 메타데이터로 읽는다
 # (COPY 만 하고 실제 --no-install-project 라 내용은 안 쓰지만, 없으면 sync 가 실패한다).
+# pdf 그룹(PyMuPDF, AGPL)은 서빙 backend 이미지에는 안 들어가지만(RAG-032 ②) 이 이미지는 그 결정이 말하는
+# "오프라인 파이프라인" 그 자체라 들어간다. raw/ 의 PDF 소스가 이것 없이는 전부 FAIL 이다 (2026-09-08 실측).
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
-RUN uv sync --frozen --no-install-project --group ml --group pipeline
+RUN uv sync --frozen --no-install-project --group ml --group pipeline --group pdf
 
 # 프로젝트 자체(엔트리포인트 포함)를 여기서 설치한다 — **이게 이 이미지의 마지막 frozen sync 다.**
 # 이 뒤로는 어느 스테이지도 `uv sync --frozen` 을 다시 부르면 안 된다. 그러면 torch-cuda 의
 # cu126 덮어쓰기가 lock 의 CPU torch 로 되돌아간다(위 헤더 코멘트, 1라운드 리뷰 지적).
 COPY backend/src ./src
 COPY data/manifests/seed_sources.yaml /app/seed_sources.yaml
-RUN uv sync --frozen --group ml --group pipeline
+RUN uv sync --frozen --group ml --group pipeline --group pdf
 
 FROM base AS torch-cpu
 # lock 그대로 (CPU torch) — frozen sync 를 다시 부르지 않는다.

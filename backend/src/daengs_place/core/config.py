@@ -11,11 +11,21 @@ from sqlalchemy import URL, make_url
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="DAENGS_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="DAENGS_", extra="ignore", populate_by_name=True,
+    )
 
     # 로컬·CI의 기존 한 줄 설정은 유지하되, compose는 아래 조각을 넘긴다. 비밀번호를
     # URL 문자열에 이어 붙이면 @ / # 같은 예약 문자가 사용자·호스트 경계를 깨뜨린다.
-    database_url: str | None = None
+    #
+    # 이름이 둘인 이유 (#346): `DAENGS_DATABASE_URL` 은 `daengs_backend.config` 가 보면
+    # 기동을 거부하는 이름이다 (D-013). 같은 pytest 프로세스에 두 설정이 함께 뜨는 CI 는
+    # place 전용 이름 `DAENGS_PLACE_DATABASE_URL` 로 준다. 옛 이름은 상류(UPSTREAM.md)와
+    # 로컬 한 줄 설정을 위해 남긴다 — 둘 다 있으면 place 전용 이름이 이긴다.
+    database_url: str | None = Field(
+        None,
+        validation_alias=AliasChoices("DAENGS_PLACE_DATABASE_URL", "DAENGS_DATABASE_URL"),
+    )
     db_host: str = "localhost"
     db_port: int = Field(5432, ge=1, le=65535)
     db_user: str = "daengs"

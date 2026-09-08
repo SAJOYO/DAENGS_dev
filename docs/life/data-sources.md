@@ -206,7 +206,7 @@
       에어부산은 UA 를 빼도 TLS 단계에서 거부라 UA 문제가 아니다.
       ⚠️ 진에어 robots 에 `Content-Signal: search=yes,ai-train=no,use=reference` — §12 참고
 - [x] ✅ **`nias-pet`(이동 두 장)** — 「함께 외출하기」·「함께 여행가기」 · **수집 완료** (2026-09-08, #347 · RAG-081)
-      → 소스 모듈은 §2 `nias-pet`(동물등록 시드)와 같다 — 새 시드를 등록하지 않았다.
+      → 소스 모듈은 §2 `nias-pet`(동물등록 시드)와 같다. 새 시드를 등록하지 않았다.
       `category=travel` · `subcategory=travel-guide`(신설) — 기존 `transport-rail`·`transport-air` 는
       조문 인용 위주 운송약관이고 이 두 장은 "행동 안내" 서술(제N조 매치 0건)이라 같은 subcategory
       아래 섞지 않았다. 청크 6개(전체 코퍼스 10,304→10,310, `nias-pet` 52→58) · `documents` 9,838→9,844 ·

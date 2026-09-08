@@ -10,8 +10,9 @@
 #
 # lock 의 torch 는 리눅스에서 CPU 인덱스로 고정돼 있다 (backend/pyproject.toml [tool.uv.sources]).
 # 서버 backend 컨테이너가 NVIDIA 런타임 10GB 를 받지 않게 한 결정이라 lock 을 안 건드린다.
-# CUDA 판은 **프로젝트 설치(frozen sync)가 끝난 뒤** torch·torchvision 을 cu126 인덱스에서
-# 덮어쓴다 — 순서가 중요하다. `uv sync --frozen` 은 매번 venv 를 lock 상태로 되돌리므로,
+# CUDA 판은 **프로젝트 설치(frozen sync)가 끝난 뒤** torch 만 cu126 인덱스에서 덮어쓴다
+# (torchvision 은 이 이미지의 `ml` 그룹에 없다 — 아래 torch-cuda 스테이지 주석 참고) —
+# 순서가 중요하다. `uv sync --frozen` 은 매번 venv 를 lock 상태로 되돌리므로,
 # 덮어쓰기가 그 앞에 있으면 뒤에 오는 frozen sync 가 CPU torch 로 도로 갈아치워
 # 덮어쓴 게 없던 일이 된다(1라운드 리뷰에서 실측). 그래서 스테이지 순서를
 # base(deps) → final 소스 COPY + frozen sync(프로젝트 설치, `torch-cpu`/`torch-cuda` 이전에 끝)
@@ -66,12 +67,16 @@ FROM base AS torch-cuda
 # 그대로 cu126 인덱스에 물으면 그런 로컬 빌드는 없어서 해석이 안 된다. `+` 앞만 남긴다.
 # cu126 인덱스는 nvidia-* 런타임 휠(cudnn·cublas 등)도 torch 의 의존성으로 같이 준다 —
 # 별도로 지목하지 않아도 이 설치 한 줄이 그것들도 받는다.
+# torchvision 은 핀하지 않는다 — 이 이미지가 까는 `ml` 그룹에는 torchvision 이 없다
+# (`gait` 전용 그룹에만 있다). 없는 패키지를 `uv pip show` 로 찾으면 버전이 빈 문자열이
+# 되고, 그걸 그대로 넣으면 `torchvision==` 로 파싱이 깨진다(3라운드 Cloud Build 실측:
+# `V_TORCH=2.13.0` · `warning: Package(s) not found for: torchvision` · `V_TV=` ·
+# `error: Failed to parse: torchvision==`). cu126 인덱스에 torch 2.13.0 이 있다는 것은
+# lock 이 win32 에서 같은 인덱스로 그 버전을 해석해 둔 것으로 이미 확인됐다.
 RUN set -eux; \
     V_TORCH="$(uv pip show --python /opt/venv/bin/python torch | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
-    V_TV="$(uv pip show --python /opt/venv/bin/python torchvision | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
     uv pip install --python /opt/venv/bin/python \
-        --index-url https://download.pytorch.org/whl/cu126 \
-        "torch==${V_TORCH}" "torchvision==${V_TV}"
+        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}"
 
 FROM torch-${TORCH} AS final
 # 가중치를 굽는다 — 잡이 뜰 때마다 1.2GB 를 받지 않게. 모델 키는 rag/core/config.py 기본값과 같다.

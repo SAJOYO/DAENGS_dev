@@ -167,7 +167,7 @@ dev `8fcf9bc`(#328 머지 커밋) 기준. 같은 질문 파일(`questions_sha256
 
 ### 레코드별 기계 대조 — 라우팅 축은 움직였고 Life 축은 0
 
-`tools/answer_quality/record_diff.py` 로 v2 ↔ v3 를 문항마다 칸별로 맞댔습니다 (`multi_intent` 제외 24문항,
+`src/daengs_evals/answer_quality/record_diff.py` 로 v2 ↔ v3 를 문항마다 칸별로 맞댔습니다 (`multi_intent` 제외 24문항,
 `--assert-life` 다섯 조건 전부 exit 0).
 
 | 칸 | `off` | `off_ctl` | `abn3` | `abn200` | `normal3` |

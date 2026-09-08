@@ -1,6 +1,6 @@
 """훈련 RAG judge (D-060). 네트워크는 안 탄다 — 가짜 클라이언트로 계약만 본다.
 
-판정의 **내용**은 여기서 안 잰다. 그건 앵커(`tools.training_quality.anchors`)가 진짜 모델로
+판정의 **내용**은 여기서 안 잰다. 그건 앵커(`daengs_evals.training_quality.anchors`)가 진짜 모델로
 재는 것이고, 이 파일이 잡는 것은 그 앞의 배선이다 — 무엇을 채점에서 빼는가, 분모를 어떻게
 세는가, 청크를 판정자에게 어떻게 보여주는가.
 """
@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from tools.training_quality import anchors as anchors_mod
-from tools.training_quality import collect as collect_mod
-from tools.training_quality import judge as judge_mod
+from daengs_evals.training_quality import anchors as anchors_mod
+from daengs_evals.training_quality import collect as collect_mod
+from daengs_evals.training_quality import judge as judge_mod
 
 CHUNKS: list[dict[str, Any]] = [
     {"document_id": "d1", "chunk_index": 0, "heading_path": ["가", "나"], "text": "본문 하나"},

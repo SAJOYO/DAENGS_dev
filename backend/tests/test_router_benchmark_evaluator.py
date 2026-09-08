@@ -7,8 +7,8 @@ from copy import deepcopy
 import pytest
 
 from daengs_backend.orchestration.contracts import RoutePlan
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.schemas import (
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.schemas import (
     GoldCase,
     PerformanceObservation,
     load_benchmark_config,

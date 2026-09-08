@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from tools.router_benchmark.runner import build_artifacts, run_cases
-from tools.router_benchmark.schemas import GoldCase, load_gold_cases
+from daengs_evals.router_benchmark.runner import build_artifacts, run_cases
+from daengs_evals.router_benchmark.schemas import GoldCase, load_gold_cases
 
 
 @dataclass
@@ -93,11 +93,11 @@ def test_runner_only_calls_gemini_and_reuses_frozen_evaluator(monkeypatch) -> No
     def fake_evaluate(cases, attempts, performance, **kwargs):
         nonlocal called
         called = True
-        from tools.router_benchmark.evaluate import evaluate_benchmark
+        from daengs_evals.router_benchmark.evaluate import evaluate_benchmark
 
         return evaluate_benchmark(cases, attempts, performance, **kwargs)
 
-    monkeypatch.setattr("tools.router_benchmark.runner.evaluate_benchmark", fake_evaluate)
+    monkeypatch.setattr("daengs_evals.router_benchmark.runner.evaluate_benchmark", fake_evaluate)
     attempts, performance = run_cases([case], client=client)
     build_artifacts([case], attempts, performance)
     assert called is True

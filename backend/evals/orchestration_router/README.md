@@ -47,7 +47,7 @@ selection differences. Those files stay frozen as the record of why the agent wa
 argument-less tools and hands the complete selection to the shared `planner.assemble_route_plan`
 and `OrchestrationEngine`, so both implementations obey the same exclusive-CLARIFY gate; both run
 the same model at `temperature=0.0`, one candidate, the same output limit and timeout, no provider
-retries, over the same fake adapters. `tools/orchestrator_comparison/runner_v2.py` runs three full
+retries, over the same fake adapters. `src/daengs_evals/orchestrator_comparison/runner_v2.py` runs three full
 repetitions (`comparison_v2_run_01..03_results.jsonl`, each carrying `benchmark_source_sha`),
 alternates which implementation runs first by case index and inverts that per repetition, performs
 one non-scored warm-up per implementation per repetition, and derives `comparison_v2_summary.json`

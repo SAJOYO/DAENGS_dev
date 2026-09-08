@@ -43,7 +43,8 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| [life/roadmap.md](life/roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~F · 순서 · 하지 않기로 한 것. 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
+| [life/roadmap.md](life/roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~G · 순서 · 하지 않기로 한 것. **열린 것만** 담고, 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
+| [life/roadmap-archive-2026-09.md](life/roadmap-archive-2026-09.md) | 🗄 위 로드맵의 **2026-09-08 까지의 판** — 닫힌 카드의 결과 · 랩 추이 · 닫힌 결정 · 갱신 이력. 같은 §뼈대라 옛 `roadmap.md §N` 인용은 여기를 본다. 갱신하지 않는다 (#341) |
 | [life/decisions-rag.md](life/decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-052, `037` 결번) — 임베딩·청킹·저장 규약·골든셋·적재·검색·서빙·크롤 운영·PDF 약관 |
 | [life/decisions-realtime.md](life/decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
 | [life/data-sources.md](life/data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-30 기준 문서형 23 중 16 수집, 남은 7은 막힘** |

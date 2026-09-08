@@ -105,14 +105,14 @@ v1 은 판정 없는 쪽에 `"(판정 기록 없음 — 이 답은 판정을 못
 $env:POSTGRES_IP = "<서버>"; $env:POSTGRES_USER = "..."; $env:POSTGRES_PASSWORD = "..."
 $env:POSTGRES_DB = "vectordb"; $env:POSTGRES_PORT = "5432"
 
-uv run python -m tools.answer_quality.generate_questions --question-set screening `
+uv run python -m daengs_evals.answer_quality.generate_questions --question-set screening `
     --out evals/answer_quality/questions_screening_v1.jsonl
 foreach ($run in @(@("off_t0",@()), @("off_t0_ctl",@()), @("on_t0",@("--screening","abnormal:3")))) {
-    uv run python -m tools.answer_quality.collect --flag on --adapters real `
+    uv run python -m daengs_evals.answer_quality.collect --flag on --adapters real `
         --label $run[0] --questions evals/answer_quality/questions_screening_v1.jsonl `
         --strata pet_insurance_skin --life-temperature 0 @($run[1])
 }
-uv run python -m tools.answer_quality.judge screening `
+uv run python -m daengs_evals.answer_quality.judge screening `
     --answers evals/answer_quality/answers_on_t0.jsonl `
     --questions evals/answer_quality/questions_screening_v1.jsonl
 ```

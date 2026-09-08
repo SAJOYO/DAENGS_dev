@@ -102,3 +102,26 @@ def test_label_sheet_has_one_empty_human_column_per_question() -> None:
     sheet = report_life.label_sheet([a], [_row(a, "OK", message="제15조에 따라")])
     assert sheet == [{"question_id": a.question_id, "stratum": a.stratum, "query": "q1",
                       "life_status": "OK", "message": "제15조에 따라", "human_answered": None, "human_note": ""}]
+
+
+def test_human_label_sheet_has_thirty_filled_rows_matching_the_agreement_subsample() -> None:
+    """사람 라벨 30건 (#348). 일치율 부분표본과 같은 문항이라야 A/B 와 대조된다."""
+    import json
+
+    from daengs_evals.answer_quality.questions import ASSETS_DIR
+
+    rows = [json.loads(l) for l in (ASSETS_DIR / "human_labels_life_v1.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(rows) == 140
+    filled = [r for r in rows if r["human_answered"] is not None]
+    assert len(filled) == 30
+    assert all(r["human_answered"] in (0, 1, 2) for r in filled)
+    assert all(isinstance(r.get("human_at"), str) and r["human_at"] for r in filled)
+    # 채운 문항 = 일치율 부분표본의 문항
+    judged = {
+        json.loads(l)["question_id"]
+        for l in (ASSETS_DIR / "judgments_life_v1_direct_agreement.jsonl").read_text(encoding="utf-8").splitlines()
+        if l.strip() and json.loads(l).get("kind") == "judgment"
+    }
+    assert {r["question_id"] for r in filled} == judged
+    # 안 채운 행은 손대지 않았다
+    assert all(r["human_answered"] is None and r["human_note"] == "" for r in rows if r["question_id"] not in judged)

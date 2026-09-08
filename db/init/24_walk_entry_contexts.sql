@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS walk_entry_context_envelopes (
 CREATE OR REPLACE FUNCTION purge_deleted_walk_entry_contexts() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-    IF NEW.payload IS NULL THEN
+    -- SQLAlchemy JSONB defaults to JSON null for Python None; older SQL writers use SQL NULL.
+    IF NEW.payload IS NULL OR NEW.payload = 'null'::jsonb THEN
         DELETE FROM walk_entry_context_jobs WHERE walk_id = NEW.walk_id AND entry_id = NEW.id;
     END IF;
     RETURN NEW;

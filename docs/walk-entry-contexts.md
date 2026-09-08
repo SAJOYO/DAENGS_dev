@@ -14,7 +14,7 @@ Geo의 [기록/봉투 실험 #260](https://github.com/rkbuhtig/DAENGS_geo/pull/2
 작업 키는 `walk_id + entry_id + revision + policy_version + tag`다.
 같은 mutation 재전송으로 중복 작업을 만들지 않으며, 수정되면 이전 버전의 진행 작업을
 취소한다. 기존 성공 봉투는 이전 버전의 자료로 남고 현재 버전에 재사용하지 않는다.
-삭제 표식(payload NULL) 업데이트는 DB 트리거가 모든 버전의 작업과 봉투를 지운다.
+삭제 표식(SQL NULL 또는 JSON null) 업데이트는 DB 트리거가 모든 버전의 작업과 봉투를 지운다.
 기능 flag를 꺼도 이 정리는 동작한다. 산책/회원 삭제도 기존 FK cascade에 연결된다.
 
 워커는 다음의 짧은 트랜잭션 둘을 사용한다.

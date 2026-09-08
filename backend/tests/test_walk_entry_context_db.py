@@ -88,7 +88,8 @@ async def seed(factory):
     return walk, entry
 
 
-async def test_durable_enqueue_idempotency_rollback_and_delete_purge(database):
+@pytest.mark.parametrize("sql_null", [False, True])
+async def test_durable_enqueue_idempotency_rollback_and_delete_purge(database, sql_null):
     walk, entry = await seed(database)
     async with database() as db:
         assert await db.scalar(select(func.count()).select_from(WalkEntryContextJob)) == 4
@@ -102,7 +103,12 @@ async def test_durable_enqueue_idempotency_rollback_and_delete_purge(database):
         row = await db.get(WalkEntry, (walk, entry))
         assert row.revision == 1
         assert await db.scalar(select(func.count()).select_from(WalkEntryContextEnvelope)) == 1
-        row.payload = None
+        if sql_null:
+            await db.execute(
+                text("UPDATE walk_entries SET payload = NULL WHERE walk_id = :walk"), {"walk": walk}
+            )
+        else:
+            row.payload = None
         await db.commit()
     async with database() as db:
         assert await db.scalar(select(func.count()).select_from(WalkEntryContextJob)) == 0

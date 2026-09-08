@@ -18,6 +18,7 @@ from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import answer_report as answer_report_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
@@ -212,6 +213,12 @@ class Store:
         self.walks: list[FakeWalk] = []
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
         self.walk_analyses: list[object] = []
+
+        #: 케어 로그(밥·약·간식) 행 (#332). **기본은 비어 있습니다** — 비서가 `active_dog_id`
+        #: 요청마다 오늘 요약을 읽으므로(#344), 여기 대역이 없으면 관련 없는 테스트가
+        #: 진짜 리포지토리를 타서 `FakeSession` 에서 죽습니다. 모양은 `test_care_events.py`
+        #: 의 `FakeCareEvent` 처럼 `app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
+        self.care_events: list = []
 
         #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
         self.screenings: list = []
@@ -746,6 +753,47 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     )
     monkeypatch.setattr(walk_repo, "delete_all_for_owner", walk_delete_all_for_owner)
     monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
+
+    # -- care events (#332 · #344) ------------------------------------------
+    # 비서의 오늘 요약(`services/care_log_context`)이 `active_dog_id` 요청마다 읽는 셋.
+    # 정렬·필터 규칙은 진짜 리포지토리와 같습니다. 기록·삭제 쪽 대역은 `test_care_events.py`
+    # 가 자기 파일 안에서 더 촘촘히 씁니다.
+    def _in_window(at, start, end) -> bool:
+        try:
+            return start <= at < end
+        except TypeError:
+            # naive 시각을 넣은 옛 산책 대역 — 하루 창과 비교할 수 없으면 안 센다.
+            return False
+
+    def _care_between(app_user_id, pet_id, start, end):
+        return [
+            e for e in store.care_events
+            if e.app_user_id == app_user_id and e.pet_id == pet_id
+            and _in_window(e.occurred_at, start, end)
+        ]
+
+    async def care_list_between(session, app_user_id, pet_id, start, end):
+        return sorted(
+            _care_between(app_user_id, pet_id, start, end),
+            key=lambda e: (e.occurred_at, e.id), reverse=True,
+        )
+
+    async def care_count_by_kind(session, app_user_id, pet_id, start, end):
+        counts: dict[str, int] = {}
+        for e in _care_between(app_user_id, pet_id, start, end):
+            counts[e.kind] = counts.get(e.kind, 0) + 1
+        return counts
+
+    async def walk_count_for_pet_between(session, app_user_id, pet_id, start, end):
+        return sum(
+            1 for w in store.walks
+            if w.app_user_id == app_user_id and pet_id in w.pet_ids
+            and _in_window(w.started_at, start, end)
+        )
+
+    monkeypatch.setattr(care_repo, "list_between", care_list_between)
+    monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
+    monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
 
     # -- chats -------------------------------------------------------------
     def active_sessions(app_user_id, pet_id):

@@ -109,7 +109,8 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
     assert request.timeout_ms is None
     assert built.handoffs == [] and built.clarify is None
     # 좌표가 있어도 payload 로 건너가지 않는다 — 폴백은 Walk·Place 의 질문에 답하지 않는다.
-    assert set(request.payload.model_dump()) == {"question", "dog"}
+    assert set(request.payload.model_dump()) == {"question", "dog", "care_log"}
+    assert request.payload.care_log is None
 
 
 def test_general_payload_follows_the_life_rule_exactly() -> None:

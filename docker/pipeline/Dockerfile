@@ -18,11 +18,24 @@
 # → `torch-cpu`(no-op) / `torch-cuda`(cu126 덮어쓰기, frozen sync 없음) → 모델 굽기·entrypoint
 # 순으로 재배치했다. `uv pip` 은 lock 을 안 보므로 이 덮어쓰기 이후로는 frozen sync 를 다시
 # 부르지 않는 한 그대로 남는다.
+#
+# 베이스는 `uv:1`(docker/uv/Dockerfile) 을 참조하지 않고 그 레시피를 그대로 인라인한다 —
+# Cloud Build 에는 로컬에서만 구운 `uv:1` 이미지가 없어 `FROM uv:1` 이 "pull access
+# denied" 로 실패한다(2라운드 실측). 그래서 이 Dockerfile 은 공개 이미지만으로 자립한다.
 ARG TORCH=cpu
+ARG PYTHON_VERSION=3.12.13
+ARG UV_VERSION=0.12.3
 
-FROM uv:1 AS base
-# uv:1 은 docker/uv/Dockerfile 로 굽는 공용 베이스 (python 3.12 + uv). 로컬에 없으면
-#   docker build -t uv:1 docker/uv
+# uv 바이너리만 꺼내 오는 스테이지 — 공식 이미지는 바이너리 출처로만 쓰고, 실행 환경은
+# 아래 python:${PYTHON_VERSION}-slim 을 그대로 쓴다(docker/uv/Dockerfile 과 같은 이유:
+# 빌드 도구를 새로 설치하지 않아도 된다).
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uvbin
+
+FROM python:${PYTHON_VERSION}-slim AS base
+COPY --from=uvbin /uv /uvx /usr/local/bin/
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    PYTHONUNBUFFERED=1
 WORKDIR /app
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     HF_HOME=/models \

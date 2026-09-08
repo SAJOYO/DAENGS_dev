@@ -269,6 +269,21 @@ CHECKS = (
         # 2026-09-07 (#288) — 동물등록 여부 한 칸. **변조 넷 중 마지막이 이 항목의 이유다.**
         # DEFAULT 를 거는 것은 타입도 널 허용도 안 건드리므로 컬럼 모양만 보는 verify 는
         # 통과시킨다. 그런데 그 순간 "안 물어봤다"가 전부 "안 했다"가 된다.
+        # 2026-09-08 (#332) — 케어 이벤트(밥·약·간식) 새 표. **멱등키 UNIQUE 를 지우는 변조가
+        # 이 항목의 추가 이유다** — 빠져도 아무 에러가 안 나고 앱의 재시도가 두 줄이 된다.
+        # kind CHECK 를 지우는 변조도 같은 결이다 ('walk' 가 들어오면 walks 와 두 곳이 된다).
+        ('2026-09-08', 'care_events', PETS, 'care_events', [
+            'ALTER TABLE care_events DROP COLUMN client_event_id',
+            'ALTER TABLE care_events ALTER COLUMN kind TYPE text',
+            'ALTER TABLE care_events ALTER COLUMN occurred_at DROP NOT NULL',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_client_event_unique',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_kind_check',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_note_not_blank',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_pet_id_fkey',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_pet_id_fkey; '
+            'ALTER TABLE care_events ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX idx_care_events_pet_occurred',
+        ]),
         ('2026-09-07', 'pets_registered', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN registered',
             'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',

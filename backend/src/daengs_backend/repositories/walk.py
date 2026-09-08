@@ -5,8 +5,9 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
@@ -104,6 +105,32 @@ async def get_by_client_session(
         .options(selectinload(Walk.points), selectinload(Walk.pets))
     )
     return await session.scalar(stmt)
+
+
+async def count_for_pet_between(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    start: datetime,
+    end: datetime,
+) -> int:
+    """그 아이가 나간 산책 수 — `started_at` 이 `[start, end)` 인 것. 케어 로그의 하루 요약이 씁니다 (#332).
+
+    산책을 케어 이벤트로 다시 적지 않고 **여기서 센다** — `walks` 가 진실이고, 한 사실이 두 곳에
+    있으면 반드시 어긋납니다. 소유자 조건은 `walks.app_user_id` 로 겁니다: `walk_pets` 는
+    강아지만 알고, 남의 강아지 id 가 와도 그 사람 산책은 안 셉니다.
+    """
+    stmt = (
+        select(func.count(func.distinct(Walk.id)))
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .where(
+            Walk.app_user_id == app_user_id,
+            WalkPet.pet_id == pet_id,
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+    )
+    return int(await session.scalar(stmt) or 0)
 
 
 async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:

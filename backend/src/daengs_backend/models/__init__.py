@@ -46,6 +46,7 @@ from daengs_backend.models.answer_report import (
 )
 from daengs_backend.models.app_user import APP_USER_STATUSES, AppUser
 from daengs_backend.models.base import Base
+from daengs_backend.models.care_event import CARE_EVENT_KINDS, CareEvent
 from daengs_backend.models.chat import (
     CHAT_PROCESSING_STATUSES,
     CHAT_SUMMARY_STATUSES,
@@ -115,6 +116,7 @@ __all__ = [
     "AUDIT_REPORT_RESOLVED",
     "AUDIT_REPORT_TURN_REVEALED",
     "AUDIT_TARGET_TYPES",
+    "CARE_EVENT_KINDS",
     "CHAT_PROCESSING_STATUSES",
     "CHAT_SUMMARY_STATUSES",
     "CRAWL_STATUSES",
@@ -141,6 +143,7 @@ __all__ = [
     "AnswerReport",
     "AppUser",
     "Base",
+    "CareEvent",
     "ChatSession",
     "ChatSummary",
     "ChatTurn",

@@ -22,6 +22,7 @@ from daengs_backend.routers import (
     app_user_admin,
     assistant,
     auth,
+    care_event,
     chat,
     crawl,
     dogcard,
@@ -178,6 +179,9 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
+# 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
+app.include_router(care_event.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.

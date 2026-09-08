@@ -18,6 +18,7 @@ from daengs_backend.orchestration.contracts import (
 from daengs_evals.answer_quality import anchors, collect, generate_questions, judge, report
 from daengs_evals.answer_quality.gemini import TokenBudgetExceeded, TokenLedger, parse_structured
 from daengs_evals.answer_quality.questions import (
+    ASSETS_DIR,
     QUESTIONS_V1_PATH,
     QuestionCase,
     dedupe,
@@ -166,6 +167,19 @@ def test_frozen_questions_v1_file_validates_and_covers_every_stratum() -> None:
     expected = {s.id for s in strata_for_set("v1")}
     assert covered == expected, sorted(expected - covered)
     assert {c.generator_version for c in cases} == {generate_questions.GENERATOR_VERSION}
+    assert all("lat" not in c.query and "lon" not in c.query for c in cases)
+
+
+def test_frozen_questions_life_file_validates_and_covers_the_life_set() -> None:
+    path = ASSETS_DIR / "questions_life_v1.jsonl"
+    assert path.exists(), "questions_life_v1.jsonl 은 동결돼 커밋돼 있어야 한다 (#343)"
+    cases = load_questions(path)
+    # 목표 140. 중복 제거로 조금 모자랄 수 있고, 그것은 예산을 안 늘리는 규칙의 결과라 허용한다.
+    assert 120 <= len(cases) <= 140
+    covered = {c.stratum for c in cases}
+    expected = {s.id for s in strata_for_set("life")}
+    assert covered == expected, sorted(expected - covered)
+    assert all(c.stratum.startswith("life_") for c in cases)
     assert all("lat" not in c.query and "lon" not in c.query for c in cases)
 
 

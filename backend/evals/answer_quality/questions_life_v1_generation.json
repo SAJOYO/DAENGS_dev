@@ -1,0 +1,281 @@
+{
+  "generator_version": "answer-quality-questions-ko-v1",
+  "model": "gemini-3.1-flash-lite",
+  "temperature": 0.9,
+  "seed": 277,
+  "max_output_tokens": 1024,
+  "calls_per_stratum": 1,
+  "schema_retry": "once on schema failure",
+  "started_at": "2026-09-08T08:01:51+00:00",
+  "finished_at": "2026-09-08T08:03:00+00:00",
+  "stopped": null,
+  "strata_count": 35,
+  "target_total": 140,
+  "written_total": 140,
+  "per_stratum": [
+    {
+      "stratum": "life_policy__polite",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__casual",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__abbrev_typo",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__noisy",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__smalltalk_mixed",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__multi_intent",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_policy__no_location",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__polite",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__casual",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__abbrev_typo",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__noisy",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__smalltalk_mixed",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__multi_intent",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_insurance__no_location",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__polite",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__casual",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__abbrev_typo",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__noisy",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__smalltalk_mixed",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__multi_intent",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_food__no_location",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__polite",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__casual",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__abbrev_typo",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__noisy",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__smalltalk_mixed",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__multi_intent",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_travel__no_location",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__polite",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__casual",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__abbrev_typo",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__noisy",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__smalltalk_mixed",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__multi_intent",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    },
+    {
+      "stratum": "life_boundary__no_location",
+      "requested": 5,
+      "returned": 5,
+      "kept": 4,
+      "short_by": 0
+    }
+  ],
+  "tokens": {
+    "calls": 35,
+    "input_tokens": 17399,
+    "output_tokens": 7629,
+    "total_tokens": 25028,
+    "budget": 400000
+  },
+  "provenance": {
+    "source_sha": "13777c8fedbfe7768050a5ccf16941e559b9ace6",
+    "source_dirty_files": [
+      "backend/tests/test_answer_quality.py"
+    ],
+    "dev_source_sha": "cbd10a190ad8e2d1b59b5e052aa544d9e9cdb39d",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

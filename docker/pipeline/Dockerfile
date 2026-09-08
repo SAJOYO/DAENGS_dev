@@ -75,10 +75,22 @@ FROM base AS torch-cuda
 # `V_TORCH=2.13.0` · `warning: Package(s) not found for: torchvision` · `V_TV=` ·
 # `error: Failed to parse: torchvision==`). cu126 인덱스에 torch 2.13.0 이 있다는 것은
 # lock 이 win32 에서 같은 인덱스로 그 버전을 해석해 둔 것으로 이미 확인됐다.
+# `"torch==${V_TORCH}"` (로컬 세그먼트 없이) 는 **조용히 아무것도 안 한다** — PEP 440 은
+# 스펙에 로컬 세그먼트가 없으면 그걸 무시하고 비교하므로, 이미 깔린 `2.13.0+cpu` 가
+# `==2.13.0` 을 만족한 걸로 쳐서 uv 가 재설치를 건너뛴다(4라운드까지 이렇게 지나갔고,
+# Cloud Build 는 성공한 것처럼 보였다 — 2026-09-08 GPU 잡이 실제로는 CPU 로 돎을 진단
+# 실행에서 실측: `cuda_available False` · `torch 2.13.0+cpu cuda None`). cu126 휠은
+# `+cu126` 로컬 태그를 달고 나오므로, 그 태그를 스펙에 그대로 박아야 CPU 판(`+cpu`)이
+# 후보에서 아예 빠진다. `--reinstall-package torch` 는 그래도 uv 가 "이미 만족" 이라고
+# 오판할 경우를 막는 이중 방어다.
 RUN set -eux; \
     V_TORCH="$(uv pip show --python /opt/venv/bin/python torch | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
-    uv pip install --python /opt/venv/bin/python \
-        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}"
+    uv pip install --python /opt/venv/bin/python --reinstall-package torch \
+        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}+cu126"
+# 빌드에서 CUDA 판인지 확인한다. 2026-09-08 실측 — 덮어쓰기가 조용히 건너뛰어져 GPU 잡이
+# CPU 로 돌았다. `torch.cuda.is_available()` 은 빌드 시점(Cloud Build 에 GPU 없음)엔 항상
+# False 라 못 쓴다 — `torch.version.cuda` 로 "CUDA 빌드인지"만 본다(실제 GPU 가용성과는 별개).
+RUN uv run --no-sync python -c "import torch, sys; v=torch.__version__; print('torch', v, 'cuda', torch.version.cuda); sys.exit(0 if torch.version.cuda else 1)"
 
 FROM torch-${TORCH} AS final
 # 가중치를 굽는다 — 잡이 뜰 때마다 1.2GB 를 받지 않게. 모델 키는 rag/core/config.py 기본값과 같다.

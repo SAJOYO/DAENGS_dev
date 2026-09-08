@@ -95,6 +95,15 @@ def run_chunk(*, dry_run: bool) -> int:
 
 def run_embed(*, full: bool, dry_run: bool) -> int:
     """서빙 모델 하나만. `--full` 은 증분을 버리고 전량 (RAG-064)."""
+    try:
+        # 함수 안에서 임포트한다 — torch 는 `ml` 그룹에만 있고 base 의존성이 아니다.
+        # 로그용: 잡이 어느 장치로 돌았는지 로그에 남긴다 (2026-09-08 GPU 잡이 CPU 로 돈 것을
+        # 로그로 못 봤다). PLC0415(함수 내부 import) 는 이 저장소 ruff 설정에 없어 noqa 불필요.
+        import torch
+        log.info("[refresh] embed device — cuda_available=%s torch=%s",
+                  torch.cuda.is_available(), torch.__version__)
+    except ImportError:
+        log.info("[refresh] embed device — torch 없음")
     return rag_cli.cmd_embed(argparse.Namespace(
         model=rag_config.settings.embedding_model_key, all_models=False, batch=8,
         force=False, guard_only=False, dry_run=dry_run, quiet=True, full=full,

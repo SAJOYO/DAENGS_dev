@@ -8,7 +8,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| [rag-demo.md](rag-demo.md) | **서빙 계약(현재 유효)** — 모듈러 모놀리스 구조, 승인 매니페스트 14문서/83청크, 재적재 금지. 원래 `docs/training-rag-demo.md` |
+| [rag-demo.md](rag-demo.md) | **서빙 계약(현재 유효)** — 모듈러 모놀리스 구조, 승인 매니페스트 14문서/83청크, **배포 과정에서의** 재적재·재임베딩 금지(원문: *"as part of deployment"* — 사람이 손으로 돌리는 적재는 여기 해당하지 않습니다). 원래 `docs/training-rag-demo.md` |
 
 ## 소스 · 수집
 

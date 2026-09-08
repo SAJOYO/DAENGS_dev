@@ -9270,9 +9270,15 @@ Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을
   옛 파일은 지우지 않는다.
 - (a) 시드 재현 중 `life_food__abbrev_typo_01`·`_03` 두 행이 '이미 먹은 응급 상황' 질문이라
   `life_boundary__abbrev_typo_05`·`_06` 로 다시 붙였다. 그 결과 `life_food__abbrev_typo` 는 2행,
-  `life_boundary__abbrev_typo` 는 6행이다.
-- (b) `on` 수집 도중 프로세스 두 개가 실수로 겹쳐 돌았다. `collect.py` 는 파일을 원자적으로 마지막에
-  한 번 쓰기 때문에, 140행 · 중복 없음 · `questions_life_v1.jsonl` 과 순서까지 일치함을 확인했다(Task 3).
+  `life_boundary__abbrev_typo` 는 6행이다. `life_food__noisy_02`("사과를 먹었는데 … 사과 먹어도 되나요?")는
+  같은 과거형이지만 **정보 질문이라 그대로 두었다** — 사과는 독성이 없고 묻는 것이 급여 가능 여부다.
+  이 행이 직접 축에서 `emergency_boundary` 로 거절돼 음식 오거절 3 중 1 · 「못함」 11 중 1 을 차지한다.
+  **이것이 `D17` 이 재는 효과이므로 다음 재실행에서 "고치지" 말 것.**
+- (b) `on` 수집 도중 프로세스 두 개가 실수로 겹쳐 돌았다. `collect.py` 의 `write_answers`
+  (`backend/src/daengs_evals/answer_quality/collect.py:342-349`)는 전체 목록을 **마지막에 한 번만** 쓴다
+  — 마지막으로 실행이 끝난 쪽이 파일을 덮어써 이기는 구조이고(last writer wins), 임시 파일 + rename 이
+  아니라 그냥 열어서 truncate 하고 쓰는 것이라 **원자적 쓰기가 아니다**. 그래도 결과 파일은 사후에
+  140행 · 140개 고유 id · `questions_life_v1.jsonl` 과 순서까지 일치함을 확인했다(Task 3).
 - (c) 계층당 4 · 단일 수집 · 사람 라벨 미기입은 사람 결정이 없어 기본값으로 갔다.
 
 ### 산출물

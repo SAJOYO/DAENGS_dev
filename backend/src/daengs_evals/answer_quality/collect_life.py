@@ -9,7 +9,9 @@
 ABSTAINED/REFUSED/TIMEOUT 으로 번역하므로, 사용자에게 보이는 것과 같은 모양의 결과가 나온다 (D-035).
 
 결과 파일의 행 모양은 `collect.py` 와 같다 — `judge score` 와 `report_life` 가 그대로 읽는다. 최상위 `status` 는
-단일 능력 계획일 때 어시스턴트가 낼 값으로 옮긴다(OK→ANSWERED · REFUSED→REFUSED · 그 밖→FAILED).
+**이 파일 전용의 거친 매핑**이다(OK→ANSWERED · REFUSED→REFUSED · 그 밖→FAILED) — `judge`·`report_life` 가
+읽을 수 있게 맞춘 것일 뿐, 기권에서 오케스트레이터가 실제로 내는 UNCERTAIN/FAILED/REFUSED 같은 최상위
+`status` 와는 **비교 대상이 아니다**. `on`/`direct` 축을 견주려면 `status` 가 아니라 `results[]` 로 비교한다.
 """
 
 from __future__ import annotations

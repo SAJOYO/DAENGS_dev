@@ -61,6 +61,9 @@
 **전체가 약 80초**에 끝난다 (2026-09-08 실측). 빌드가 실제로 도는 경우는 CPU 약 5분,
 CUDA 15~23분이다.
 
+`gcloud builds submit .` 이 올리는 파일은 루트 `.gcloudignore` 가 정한다 — 이미지에 안 들어가는
+것을 새로 넣으면 거기도 열어야 한다.
+
 ## 자주 걸리는 것
 
 - **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가

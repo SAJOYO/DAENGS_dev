@@ -20,7 +20,7 @@
 | 집 서버 크롤러 | 워커·Beat 그대로 | 위와 같다 |
 | GCP DB `documents` | **파이프라인만 쓴다.** runbook §6 "Life 코퍼스만 동기화" 는 실험 기간 사용 금지 | 손으로 갈아끼우면 파이프라인 결과를 덮어쓴다 |
 | 적재 게이트 | 사람 승인 없음. 기계 가드만 | §3 의 가드 세 가지 |
-| 전체 재임베딩 | Cloud Run Jobs + GPU(L4) 1순위. 보조안 순서: CPU 잡 → 개발 PC parquet 업로드 → Spot GPU VM | GPU 잡이 어떤 이유로든 안 될 때만 내려간다. 셋 다 코드 차이 없음 |
+| 전체 재임베딩 | Cloud Run Jobs + GPU(L4) 1순위. 보조안 순서: CPU 잡 → 개발 PC parquet 업로드 → Spot GPU VM | GPU 잡이 어떤 이유로든 안 될 때만 내려간다. 셋 다 코드 차이 없음 — **2026-09-08 L4 로 실측 11분, 확정.** 보조안은 기록으로만 남긴다. |
 | 초기 사본 | `raw/` + `manifests/crawl_log.jsonl` 만. `processed/` 는 GCP 가 만든다 | 버킷 안 모든 산출물이 GCP 산이 되어 "로컬 작업 없음" 이 처음부터 성립 |
 | 초기 사본의 **출처** | **개발 PC 의 `data/`** (2026-09-08 실측 — raw 673개 · 로그 373줄, 마지막 수집 09-06). 집 서버가 아니다 | ⓐ 개발 PC 에서 집 서버 폴더에 못 닿는다 — SMB 도 SSH 도 없다(루트 `README.md`). ⓑ 더 중요한 이유: GCP 의 `documents` 는 #289 에서 **개발 PC 의 `processed/`** 를 실은 것이고 그것은 **개발 PC 의 `raw/`** 를 파싱한 것이라, 개발 PC raw ↔ GCP DB 가 이미 한 줄이었다. 집 서버 raw 는 GCP 에 간 적이 없다 |
 | 관리자 트리거 | 범위에 포함. GCP 에서는 Celery 대신 Cloud Run Jobs API | 버튼 → 몇십 분 뒤 앱에 새 문서, 가 이 카드의 목적 |
@@ -61,8 +61,9 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 
 **진입점** `daengs_life/jobs/corpus_refresh.py` → `[project.scripts] corpus-refresh`.
 `crawler`(브로커 없는 순수 CLI)와 `rag`(단계 CLI)를 순서대로 부르는 얇은 조립층.
-`tasks/`(Celery 래퍼)의 형제이고 Celery 를 안 쓴다. `test_import_direction_packages.py` 에
-`jobs → crawler.{run, core.cadence, core.registry}` · `jobs → rag.stages` 를 허용 간선으로 더한다.
+`tasks/`(Celery 래퍼)의 형제이고 Celery 를 안 쓴다. `test_import_direction_packages.py` 의
+`ALLOWED["jobs"]` 에 `crawler.{core.config, core.cadence, core.registry, run}` 을 더한다.
+`jobs → rag` 는 그 검사의 대상이 아니다(검사는 crawler import 만 본다).
 
 | 순서 | 하는 일 | 재사용 | 실패하면 |
 | --- | --- | --- | --- |
@@ -74,7 +75,7 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 | 5 | **가드** — 적재 계획을 만들고 검사 | 새로 | 걸리면 DB 안 건드리고 종료 코드 1 |
 | 6 | `rag load` upsert + stale prune, 한 트랜잭션 | 있음 | 롤백 |
 
-**가드 세 가지** (임계값은 환경 변수, 괄호가 기본):
+**가드 세 가지** (행 수 한계는 `--max-drop` 인자, 기본 0.2 — 환경 변수가 아니다):
 ① 적재 뒤 행 수가 적재 전 대비 비율 이상 줄어드는 계획이면 중단 (20%).
 ② 파서 예외는 **가드까지 못 온다** — `rag parse` 가 예외 1건이면 종료 코드 1 이라 거기서 멈춘다.
    그래서 이 자리에 따로 셀 것이 없다.
@@ -99,7 +100,8 @@ CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. 실측 크기는 두 장 
 roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 간다.
 
 **설정은 환경 변수로만** — `DAENGS_DATA_DIR=/data`, `POSTGRES_IP=<VM 내부 IP>` 와 계정 조각,
-`EMBEDDING_MODEL_KEY`, 가드 임계값. 비밀번호는 Secret Manager. `.env` 는 이미지에 안 들어간다.
+`EMBEDDING_MODEL_KEY`. 비밀번호는 Secret Manager. `.env` 는 이미지에 안 들어간다.
+가드 한계는 잡 인자(`--max-drop`)다 — `runbook.md` §6 참고.
 
 **관리자 트리거** (별도 PR) — `services/crawl.py` 가 `DAENGS_CRAWL_BACKEND=celery|cloudrun` 으로
 갈린다. cloudrun 이면 Jobs API 로 `corpus-refresh` 실행(소스 id 는 잡 인자), 실행 중이면 새로

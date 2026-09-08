@@ -43,6 +43,7 @@ PromptVersion = Literal[
     "semantic-router-ko-v7",  # PR #204 — the `place` destination (runner_v8)
     "semantic-router-ko-v8",  # PR #279 — explicit-exclusion (negation) sentence (runner_v9)
     "semantic-router-ko-v9",  # PR #279 / D-057 — `general` as an additive destination (runner_v10)
+    "semantic-router-ko-v10",  # D-057 ④ 후속 — Place 를 "그 장소가 개를 위한 것인가" 로 좁힘 (runner_v11)
     # PR #252 — the LangChain agent orchestrator (D-055). Not a semantic-router prompt
     # version at all: the agent has no routing prompt, it picks tools in a loop. It lives
     # in the same Literal because `CaseResult.prompt_version` is what tells two rows of

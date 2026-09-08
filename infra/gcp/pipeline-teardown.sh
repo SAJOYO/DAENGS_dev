@@ -4,9 +4,11 @@
 # 환경변수를 이 스크립트 프로세스에만 export 한다. 모든 gcloud 명령이 이 변수를 본다.
 set -euo pipefail
 
-# Windows Git Bash(MSYS)가 네이티브 exe 인자의 `/data` 같은 경로를 `C:/Program Files/Git/data` 로 바꿔 버린다.
-# gcloud 가 그 값을 그대로 받아 mount-path 가 깨진다 (2026-09-08 실측). 리눅스에서는 아무 효과 없다.
-export MSYS_NO_PATHCONV=1
+# Windows Git Bash(MSYS)가 네이티브 exe 인자의 `/data` 같은 경로를 `C:/Program Files/Git/data` 로 바꿔
+# 버려 mount-path 가 깨진다 (2026-09-08 실측). MSYS_NO_PATHCONV=1 로 전부 끄면 gcloud 런처(bash
+# 스크립트)가 python 에 넘기는 경로까지 안 바뀌어 gcloud 자체가 안 뜬다. 그래서 그 인자 하나만 제외한다.
+# 리눅스에서는 아무 효과 없다.
+export MSYS2_ARG_CONV_EXCL="--add-volume-mount"
 
 : "${PROJECT:?}"
 REGION=asia-northeast3; GPU_REGION=asia-southeast1

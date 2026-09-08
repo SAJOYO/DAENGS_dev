@@ -258,6 +258,17 @@ def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
     age_months = dog.get("age_months")
     if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
         resolved["age_months"] = age_months
+    # Care facts (#331): the same whitelist rule, one field at a time — a malformed care
+    # value drops that field, not the breed next to it. ``on_medication`` passes only as
+    # ``True``; ``False`` would claim a fact the profile cannot state (blank = unknown).
+    feeding_style = dog.get("feeding_style")
+    if feeding_style in ("free", "scheduled"):
+        resolved["feeding_style"] = feeding_style
+    health_conditions = dog.get("health_conditions")
+    if isinstance(health_conditions, str) and health_conditions.strip():
+        resolved["health_conditions"] = health_conditions.strip()[:200]
+    if dog.get("on_medication") is True:
+        resolved["on_medication"] = True
     return resolved or None
 
 

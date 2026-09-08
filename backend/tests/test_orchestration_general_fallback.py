@@ -481,6 +481,28 @@ def test_general_prompt_carries_the_question_and_dog_but_never_coordinates() -> 
     assert build_general_prompt(GeneralPayload(question=QUERY)).count("DOG_CONTEXT: {}") == 1
 
 
+def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
+    """#331: the dog block widens to feeding style, conditions and *whether* it is on
+    medication. The safety prompt text itself stays at v3 — that text was approved after a
+    paired comparison (D-057 ③) and this card only changes the JSON that flows into it."""
+    payload = GeneralPayload(
+        question=QUERY,
+        dog=DogContext(
+            breed="푸들", feeding_style="scheduled",
+            health_conditions="신부전 초기", on_medication=True,
+        ),
+    )
+    prompt = build_general_prompt(payload)
+    assert (
+        'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
+        ' "health_conditions": "신부전 초기", "on_medication": true}'
+    ) in prompt
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    # the contract has no field that could carry a drug name into the prompt
+    assert "medications" not in DogContext.model_fields
+    assert "feeding_times" not in DogContext.model_fields
+
+
 def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> None:
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,

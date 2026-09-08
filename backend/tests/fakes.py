@@ -274,6 +274,12 @@ class FakePet:
     farewell_on: object | None = None
     updated_at: object | None = None
 
+    # 돌봄 (#331). None 은 '모름'입니다.
+    feeding_style: str | None = None
+    feeding_times: list[str] | None = None
+    health_conditions: str | None = None
+    medications: str | None = None
+
     # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
     photo_storage_key: str | None = None
     photo_content_type: str | None = None

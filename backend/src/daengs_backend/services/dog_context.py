@@ -122,4 +122,24 @@ async def resolve(
     months = age_months(pet)
     if months is not None:
         resolved["age_months"] = months
+    # 돌봄 (#331). 급식 **시각**은 안 보냅니다 — 소비자가 알림·케어 기록이지 답변이 아닙니다.
+    if pet.feeding_style in ("free", "scheduled"):
+        resolved["feeding_style"] = pet.feeding_style
+    conditions = (pet.health_conditions or "").strip()
+    if conditions:
+        resolved["health_conditions"] = conditions
+    if on_medication(pet):
+        resolved["on_medication"] = True
     return resolved or None
+
+
+def on_medication(pet: Pet) -> bool:
+    """정기 복약 **여부**. 약 이름은 여기서 멈춥니다.
+
+    `pets.medications` 는 자유 텍스트인데 그대로 프롬프트에 가면, 약·용량 질문을 거절하는
+    일반 답변의 방어(`adapters/general.py`)가 지시문 한 줄로 약해집니다. 비서가 알아야 하는
+    것은 "약을 먹는 아이" 라는 사실뿐입니다.
+
+    **빈 칸은 False 가 아니라 모름입니다** — 호출자는 이 값이 True 일 때만 키를 냅니다.
+    """
+    return bool((pet.medications or "").strip())

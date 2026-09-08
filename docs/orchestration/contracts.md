@@ -54,6 +54,17 @@ OrchestratorState:
 - 민감한 반려견별 데이터 접근 전에 권위 있는 소유권/프로필 해석이 선행 조건입니다 (FOLLOW-UP).
 - 다견 식별자 모델은 지금 설계하지 않습니다.
 
+**돌봄 사실 (CURRENT — #331)** — B4(#202)가 놓은 `active_dog_id → services/dog_context →
+context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_style`(free · scheduled) ·
+`health_conditions`(자유 텍스트, 200자) · `on_medication`(**`True` 만**). 규칙은 견종·나이와
+같습니다 — 서버가 프로필에서 조립하고, planner 가 칸마다 화이트리스트로 옮기며, 모양이 틀린
+칸은 그 칸만 떨어지고 요청은 안 깨집니다. 소비자는 `GeneralPayload.dog` 이고 Life 어댑터는
+견종·나이만 계속 읽습니다. **약 이름과 급식 시각은 이 경계를 안 넘습니다** — `pets.medications`
+는 프로필에 머물고 복약 *여부*만 건너가며, 빈 약 칸은 `False` 가 아니라 모름이라 키 자체가
+없습니다. 일반 답변 프롬프트가 약·용량 질문을 거절하는데(D-057), 약 이름이 DOG_CONTEXT 에
+있으면 그 거절이 힌트로 바뀝니다. 안전 프롬프트 본문은 `general-answer-ko-v3` 그대로입니다
+— 바뀐 것은 그 안에 실리는 JSON 뿐입니다.
+
 **스크리닝 컨텍스트 (CURRENT — #307)** — `context` 의 두 번째 예약 키가 `screening` 입니다.
 사용자가 피부 판정 결과에서 이어 물을 때, 앱이 보내는 것은 **기록 id 하나**(`screening_record_id`,
 §8)이고 판정 내용은 서버가 DB 에서 읽습니다 — `screening_records` 소유권을 확인하고

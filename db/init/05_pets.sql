@@ -82,6 +82,31 @@ CREATE TABLE IF NOT EXISTS pets (
     CONSTRAINT pets_farewell_after_birth
         CHECK (farewell_on IS NULL OR birth_date IS NULL OR farewell_on >= birth_date),
 
+    -- ── 돌봄 (#331) ────────────────────────────────────────────────────
+    -- 비서가 "이 아이 기준"으로 답하는 데 쓰는 넷. **전부 NULL 은 '모름'이고 기본값을
+    -- 걸지 않는다** — `neutered`·`registered` 와 같은 규칙이다. 약 칸이 비었다고
+    -- "약 안 먹는 아이"가 아니다.
+    --
+    --   free       자율급식 — 그릇에 늘 두고 알아서 먹는다
+    --   scheduled  시간제 — 정해진 때에 준다. 시각은 feeding_times
+    feeding_style VARCHAR(10) CHECK (feeding_style IN ('free','scheduled')),
+
+    -- 시간제 급식 시각. JSON 배열 `["08:00","19:30"]`. 형식(HH:MM)은 앱과 schemas 가
+    -- 막고 여기서는 **배열인지와 시간제일 때만 있는지**를 본다 — 자율급식에 시각이
+    -- 붙으면 어느 쪽이 맞는지 알 수 없는 행이 된다. 시간제인데 시각을 모르면 NULL.
+    feeding_times JSONB,
+    CONSTRAINT pets_feeding_times_need_schedule
+        CHECK (feeding_times IS NULL OR feeding_style = 'scheduled'),
+    CONSTRAINT pets_feeding_times_array
+        CHECK (feeding_times IS NULL OR jsonb_typeof(feeding_times) = 'array'),
+
+    -- 앓는 병 · 정기 복용 약. 자유 텍스트. 비서 프롬프트에 실리는 값이라 상한을 둔다.
+    -- 프롬프트에는 병은 그대로, **약은 이름이 아니라 복약 여부만** 간다 — 약 이름을
+    -- 주면 약·용량 질문을 거절하는 방어가 지시문 한 줄로 약해진다 (services/dog_context.py).
+    -- 약 이름의 소비자는 케어 기록(#332)과 알림(roadmap F5)이다.
+    health_conditions VARCHAR(200),
+    medications VARCHAR(200),
+
     -- ── 프로필 사진 (D-052) ────────────────────────────────────────────
     -- 사진 자체는 DB 에 안 들어간다. 공용 파일 저장소(gait-bridge 볼륨)에 두고
     -- 여기에는 **어디에 있는지와, 그것이 정말 그 사진인지**만 적는다.

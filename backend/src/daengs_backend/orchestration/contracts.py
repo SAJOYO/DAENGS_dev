@@ -79,6 +79,20 @@ class DogContext(ContractModel):
     breed: str | None = Field(default=None, max_length=60)
     age_months: int | None = Field(default=None, ge=0, le=360)
 
+    # ── care facts (#331) ──────────────────────────────────────────────
+    # Three more facts the general-answer fallback may reason with, still from the
+    # trusted profile only. Life keeps reading breed/age alone (``adapters/life.py``).
+    #
+    # **No drug name crosses here, ever.** ``pets.medications`` is free text and stays in
+    # the profile; only *whether* the dog is on regular medication arrives, and only as
+    # ``True`` — an empty medication field means "unknown", never "not medicated". The
+    # fallback prompt refuses drug/dosage questions; a drug name in DOG_CONTEXT would turn
+    # that refusal into a hint. Feeding *times* stay out too: their consumers are the care
+    # log and reminders, not an answer.
+    feeding_style: Literal["free", "scheduled"] | None = None
+    health_conditions: str | None = Field(default=None, max_length=200)
+    on_medication: Literal[True] | None = None
+
 
 class ScreeningContext(ContractModel):
     """A recorded skin screening this question follows on from: what it concluded, and how long ago.

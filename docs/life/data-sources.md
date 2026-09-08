@@ -209,7 +209,7 @@
       → 소스 모듈은 §2 `nias-pet`(동물등록 시드)와 같다 — 새 시드를 등록하지 않았다.
       `category=travel` · `subcategory=travel-guide`(신설) — 기존 `transport-rail`·`transport-air` 는
       조문 인용 위주 운송약관이고 이 두 장은 "행동 안내" 서술(제N조 매치 0건)이라 같은 subcategory
-      아래 섞지 않았다. 청크 6개(전체 코퍼스 10,631→10,637, `nias-pet` 52→58) · `documents` 9,838→9,844 ·
+      아래 섞지 않았다. 청크 6개(전체 코퍼스 10,304→10,310, `nias-pet` 52→58) · `documents` 9,838→9,844 ·
       `travel-guide` 6행.
       ⚠️ **「함께 여행가기」는 소제목이 heading 이 아니라 `para` 블록 첫 줄에 있어**(형제 페이지 「함께
       외출하기」는 heading 4개, 이쪽은 2개) 12개 소주제가 2,694자 청크 하나로 뭉쳤다 — 파서 구멍이라

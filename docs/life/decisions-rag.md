@@ -9202,7 +9202,7 @@ lap30 ↔ lap31 에서 뒤집힌 기존 문항은 넷(`B1`·`S1`·`S2`·`S3`)인
 - `backend/src/daengs_life/rag/stages/generate.py` — `PROMPT` 의 `boundary` 규칙 · `VERSION = 4`
 - `backend/src/daengs_life/rag/stages/goldenset.yaml` — `B7`~`B9`
 - `backend/evals/answer_quality/answers_v4_*.jsonl` (다섯 조건) · `report_screening_v3.md`
-- `data/processed/answers/lap31.jsonl` (git 미추적 — 메인 체크아웃에도 복사해 뒀다)
+- `data/processed/answers/lap31.jsonl` (git 미추적 — 메인 체크아웃에도 복사해 뒀다 ⚠ RAG-081 ④ 참고)
 - 테스트: `tests/test_generate.py` (`test_boundary_rule_is_about_what_is_asked_not_what_is_described`) ·
   `tests/test_goldenset.py` (문항 46 → 49 · 요구 76 → 79 · 주소 91 → 96)
 
@@ -9437,10 +9437,14 @@ robots 허용·HTTP 200·79쪽까지는 문제없었지만:
 위주 운송약관이고 이 두 장은 "행동 안내" 서술이라(제N조 매치 0건) 같은 subcategory 아래 섞으면 안
 된다고 판단했다.
 
-- 청크: 전체 코퍼스 10,631 → 10,637(+6) · `nias-pet` 52 → 58(all `heading`) · docs 10 → 12
+- 청크: 전체 코퍼스 10,304 → 10,310(+6) · `nias-pet` 52 → 58(all `heading`) · docs 10 → 12
 - 임베딩: 재사용 10,304 · 신규 인코딩 6 · 사라짐 0(전량 재인코딩 아님)
 - 적재: `documents` 9,838 → 9,844(+6, 감소 없음) · `stale` 없음 · `travel` 카테고리 255 → 261
 - `travel-guide` subcategory 신규 6행(`nias-pet` source_id 로 필터하면 travel 카테고리에 정확히 6행)
+
+⚠ `report_life_v2_direct.md` 의 제목이 *"Life 기준선 — `life_v2_direct` (#343 · RAG-080)"* 라고 적는데,
+이는 `report_life.py`(160줄)가 그 문구를 **하드코딩**해서다 — 이 산출물은 이 카드(#347)의 측정이지 기준선이
+아니다. 제목만 보고 #343 산출물로 착각하지 말 것. 생성기 수정은 후속 카드.
 
 ### ③ 전후 대조 — 새 자로 처음 찍은 델타, 그런데 VERSION 이 섞였다
 
@@ -9460,9 +9464,21 @@ robots 허용·HTTP 200·79쪽까지는 문제없었지만:
 | life_boundary | 30 | 0→0 | 0→0 | 2.00→1.93 |
 | life_travel | 28 | 5→3 | 1→0 | 1.93→2.00 |
 
-「못함」총계 35 → 24. **격자(주제 × 문체) 칸 중 14개가 움직였다** — `life_travel` 3칸 + 나머지 11칸.
-`life_travel` 3칸(`casual`·`multi_intent`·`no_location`)은 이 카드가 실제로 먹인 문서와 직결되지만, 아래
-문단의 청킹 갭 때문에 개선이 약하다. 나머지 11칸(`life_food` 3 · `life_insurance` 4 · `life_policy` 1 ·
+「못함」총계 35 → 24. **격자(주제 × 문체) 칸 중 14개가 상태·코드 구성이 달라졌다**
+(`life`·`codes`·`unable`·`false_refuse`·`false_answer` 전체 일치 기준) — 나머지 5칸은 그 값들은 같고
+`answered_mean`/`grounded_mean` 같은 평균만 흔들렸다(둘을 합치면 전체 35칸 중 19칸이 v1과 다르다).
+14칸은 `life_travel` 3칸 + 나머지 11칸.
+
+`life_travel` 3칸은 **한 방향이 아니다** — `summary_life_v1_direct.json`/`summary_life_v2_direct.json`
+대조 실측:
+- `casual` — **오히려 후퇴했다.** v1 OK 4(전원 답함) → v2 OK 3 · ABSTAINED 1(`no_evidence`), `unable` 0→1
+- `multi_intent` — v1 REFUSED 1(`medical_boundary`) · ABSTAINED 3 → v2 OK 2 · ABSTAINED 2, `false_refuse`
+  1→0. **경계 오거절 하나가 사라져서 좋아진 모양이라** #337 의 VERSION 4 경계 수정과 형태가 같다 — 이
+  카드가 먹인 문서 때문이라는 근거가 약하다
+- `no_location` — v1 OK 3 · ABSTAINED 1 → v2 OK 4, `unable` 1→0. **셋 중 이것만 깨끗한 개선**이고, 이
+  카드가 실제로 먹인 문서와 직결됐다고 말할 수 있는 것도 이것뿐이다
+
+나머지 11칸(`life_food` 3 · `life_insurance` 4 · `life_policy` 1 ·
 `life_boundary` 3 — 마지막 3칸은 최상위 카운트는 그대로고 거절 사유 분류 `emergency_boundary`↔
 `medical_boundary` 만 이동)은 #337 의 경계 판정 수정 쪽에 더 가깝게 읽힌다.
 
@@ -9490,10 +9506,12 @@ per-developer·git 미추적이라 이 머신으로 건너오지 않았다. 오�
 문서 두 장을 담고 있어 그 결과는 lap31 재구성이 아니라 또 다른 lap32 일 뿐이다 — 이 코퍼스 변화에는
 **문항 단위 회귀 게이트로 가는 길이 없다.**
 
-대신 RAG-078 ①이 이미 기록해 둔 lap31 총계로 헤드라인만 대조했다(36문항 채점 기준):
-`grounded` 33 → 33(변화 없음) · `cited` 23 → 22(−1, 문서화된 ±2~3 노이즈 폭 안). 이 −1 은 어느 문항이
-움직였는지 말할 수 없고, **관계없는 문항이 하나 얻고 다른 문항이 하나 잃는 상쇄를 가릴 수 있다** — 그래서
-이것은 게이트가 아니라 헤드라인 점검일 뿐이다.
+대신 RAG-078 ①이 이미 기록해 둔 lap31 총계로 헤드라인만 대조했다(둘 다 36문항 채점 기준):
+`grounded` 33 → 33(변화 없음) · `cited` 23 → 21(−2, 문서화된 ±2~3 노이즈 폭 안). ⚠ **분모를 맞춰야
+한다** — `task-5-report.md` 의 `score-laps` 표는 lap32 를 `cited 21/36`(옛 41문항 표기로는 22)로 적었다.
+41문항 표기 22 와 36문항 표기 23 을 섞으면 −1 로 잘못 읽히는데, 같은 분모(36)로 맞추면 **−2** 다. 이 −2 는
+어느 문항이 움직였는지 말할 수 없고, **관계없는 문항이 하나 얻고 다른 문항이 하나 잃는 상쇄를 가릴 수
+있다** — 그래서 이것은 게이트가 아니라 헤드라인 점검일 뿐이다.
 
 **구조적 문제**: lap 산출물은 개발자별·git 미추적으로 설계됐는데(`data/` 미추적, RAG-017), 의사결정
 기록(`decisions-rag.md`)은 특정 lap 파일명을 공유 기준선처럼 인용한다. RAG-078 산출물 절의 "메인
@@ -9510,8 +9528,15 @@ per-developer·git 미추적이라 이 머신으로 건너오지 않았다. 오�
 - **공유 `data/` 수집 규칙**: 임시 `DAENGS_DATA_DIR` 로 먼저 받고, 새 파일만 골라 공유 `raw/`로 복사한다.
   공유 `manifests/crawl_log.jsonl` 은 손대지 않는다 — 크롤은 서버가 정본이고 개발 PC 의 `crawler run`
   으로 공유 `data/`를 채우지 않는다(CLAUDE.md "크롤은 서버가 합니다").
-- **`--prune` 금지**: `load`는 `--prune` 없이 돌린다 — 줬으면 기존 9,838행이 stale 로 잡혀 지워졌을
-  것이다. dry-run 게이트로 삭제 대상 0을 먼저 확인하고 실 적재한다.
+- **`--prune` 규칙을 정확히 알아 둔다 — 위험한 것은 부분 코퍼스일 때뿐이다**: `stale()`(`load.py`)은
+  로컬 `processed/chunks/`(= `prepare()` 가 만드는 코퍼스 전체)에 없는 `content_hash` 를 DB 에서 지운다.
+  이 카드는 **전체 코퍼스**로 돌았고 실제 적재 로그도 `stale 없음 — DB 가 코퍼스와 일치한다` 였다 —
+  `--prune` 을 줬어도 지워질 행은 0이었다(기존 9,838행이 지워졌을 것이라는 것은 사실이 아니다).
+  **`--prune` 이 치명적인 경우는 로컬 코퍼스가 부분적일 때뿐이다** — 소스 하나만 다시 파싱·청킹해
+  `processed/chunks/` 에 그 소스만 있으면 `stale()` 이 나머지 전부를 "사라졌다"고 본다. dry-run 은
+  `prepare()` 까지만 돌고 DB 를 열지 않아 **`stale()` 자체를 안 부른다** — dry-run 이 "삭제 대상 0" 을
+  확인해 준 것이 아니라, DB 를 안 열어서 그 비교 자체가 없었던 것이다. 다음 카드는 dry-run 을 삭제
+  게이트로 착각하지 말 것 — 그것은 upsert 대상 미리보기일 뿐이다.
 - **청킹 파서 갭**은 이 카드가 고치지 않았다 — 「함께 여행가기」의 소제목이 `para` 블록에 묻힌 문제는
   다른 nias 11장(음식 페이지 포함, #268)까지 건드리는 변경이라 후속 카드로 남긴다.
 - **VERSION 3→4 재기준선**은 이 카드가 맡지 않는다 — 프롬프트만 바뀐 상태로 140문항을 다시 찍는 것은

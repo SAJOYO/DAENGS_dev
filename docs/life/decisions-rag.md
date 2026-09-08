@@ -9253,7 +9253,7 @@ Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을
   safe/grounded/natural 1.0. 모두 threshold(0.8) 이상 — `excluded_items: []`. 사람 라벨은 아직 0 — 시트만 냈다.
 
 ### ④ 정찰 2 결론 (`data-sources.md` §10 "2026-09 정찰 2")
-- 20개 후보 URL 정찰(이동 7 · 음식 5 · guideline 5 · 커뮤니티 3) — HTTP 200 15 · robots 🚫 2(`animal.go.kr`) ·
+- 20개 후보 URL 정찰(이동 7 · 음식 5 · guideline 5 · 커뮤니티 3) — HTTP 200 16 · robots 🚫 2(`animal.go.kr`) ·
   fetch 실패 2(`kobus.co.kr` · `swlc.welfare.seoul.kr` — 원인 미확인).
 - 음식: 없음 — nias 안의 「일반사료 구입 요령」(이미 수집)이 유일한 조문 인용 문서다. `admrul` 검색으로는
   「사료 등의 기준 및 규격」(RAG-065 ②로 이미 확보) 밖에 사료 표시를 따로 정한 고시가 없다.

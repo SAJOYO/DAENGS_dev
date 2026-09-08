@@ -485,7 +485,7 @@ PDF/HWP)이 분리된다. 앞쪽만 하면 `roadmap.md` 가 잡아 둔 M 이 아
 `roadmap.md` §3 F 의 `F0-2` 다. 2026-09-06 정정의 교훈대로 **접근 가능성과 유용성을 다른 열로** 센다 —
 `반려동물`·`반려견` 빈도와 `제N조` 유무가 유용성 열이다. 스크립트는 `backend/tools/f0_2_recon.py` (일회성).
 
-총 20개 후보 URL 을 정찰했다(이동 7 · 음식 5 · guideline 5 · 커뮤니티 3) — HTTP 200 15 · robots 🚫 2(`animal.go.kr`) · fetch 실패 2(`kobus.co.kr` · `swlc.welfare.seoul.kr`, 원인 미확인).
+총 20개 후보 URL 을 정찰했다(이동 7 · 음식 5 · guideline 5 · 커뮤니티 3) — HTTP 200 16 · robots 🚫 2(`animal.go.kr`) · fetch 실패 2(`kobus.co.kr` · `swlc.welfare.seoul.kr`, 원인 미확인).
 
 #### nias-pet 메뉴 전수 (2026-09-08)
 

@@ -36,8 +36,9 @@ def another_execution_running(*, job: str | None, execution: str | None,
         short = ex.name.rsplit("/", 1)[-1]
         if short == execution:
             continue
-        # 끝난 실행은 completion_time 이 있다. 도는 것만 센다.
-        if getattr(ex, "completion_time", None) is None and getattr(ex, "running_count", 0) > 0:
+        # 끝난 실행은 completion_time 이 있다. 없으면 pending 이든 running 이든 활성이다 —
+        # running_count 를 보면 태스크가 아직 안 뜬 실행을 놓친다 (#325 최종 리뷰, #326).
+        if getattr(ex, "completion_time", None) is None:
             return short
     return None
 

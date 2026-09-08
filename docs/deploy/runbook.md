@@ -458,6 +458,21 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
     `--stages parse chunk` 가 되므로, 단계·소스 인자는 공백 나열도 받게 되어 있습니다.
     한 인자 안에 쉼표를 넣어 넘길 방법은 없다고 보는 편이 낫습니다.
 
+#### 관리자 콘솔에서
+
+관리자 콘솔의 크롤 버튼은 위 "수동 실행"과 **같은 잡**을 돌립니다 — 소스를 골랐으면
+`--sources a b`, 안 골랐으면 due 판정 그대로(전체, crawl~load). 이미 실행 중인 것이 있으면
+새로 안 띄우고 202 와 함께 `note: "실행 중인 것이 있어 새로 띄우지 않았습니다: <실행 이름>"`
+으로 그 실행을 알려 줍니다 — 실패가 아닙니다.
+
+권한(`run.invoker`·`run.viewer`)과 VM `backend/.env` 네 줄은 `infra/gcp/README.md` "관리자
+트리거 (#326)" 를 보세요.
+
+상태 페이지(`/console/status`)의 "크롤" 항목은 GCP 에서 잡이 있으면 "Cloud Run 잡
+`corpus-refresh@asia-northeast3`" 로 뜹니다. Cloud Run API 가 안 답하면(권한이 잘못됐거나
+프로젝트를 잘못 적은 경우) `absent` 가 아니라 `down` 이고 "Cloud Run 잡에 묻지 못했습니다"
+라고 이유가 붙습니다 — 설정 자체가 비어 있을 때만 여전히 `absent` 입니다.
+
 ### Life 코퍼스만 동기화 (GCP)
 
 > 🔴 **2026-09-08 부터 실험 기간(~11-17) 동안 이 절을 쓰지 마세요** (D-062). GCP 의 `documents` 는

@@ -1,0 +1,645 @@
+{
+  "label": "life_v1_off",
+  "meta": {
+    "collected_at": "2026-09-08T08:39:53+00:00",
+    "questions_sha256": "c931c72eec41d89ee761ae7b304b4ec3cbe043d13660d141b9c598f1b263df80",
+    "adapters": null,
+    "flag": null,
+    "documents": 9838,
+    "db_host": "192.168.0.22",
+    "prompt_version": 3,
+    "judge_model": null
+  },
+  "topics": {
+    "life_policy": {
+      "topic": "life_policy",
+      "n": 28,
+      "life": {
+        "OK": 23,
+        "ABSTAINED": 4,
+        "NONE": 1
+      },
+      "codes": {
+        "no_evidence": 4
+      },
+      "unable": 5,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance": {
+      "topic": "life_insurance",
+      "n": 28,
+      "life": {
+        "OK": 10,
+        "ABSTAINED": 9,
+        "REFUSED": 9
+      },
+      "codes": {
+        "no_evidence": 9,
+        "medical_boundary": 4,
+        "emergency_boundary": 5
+      },
+      "unable": 18,
+      "false_refuse": 9,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food": {
+      "topic": "life_food",
+      "n": 26,
+      "life": {
+        "NONE": 23,
+        "OK": 2,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 24,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary": {
+      "topic": "life_boundary",
+      "n": 30,
+      "life": {
+        "NONE": 28,
+        "REFUSED": 2
+      },
+      "codes": {
+        "emergency_boundary": 2
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel": {
+      "topic": "life_travel",
+      "n": 28,
+      "life": {
+        "ABSTAINED": 6,
+        "OK": 20,
+        "NONE": 2
+      },
+      "codes": {
+        "no_evidence": 6
+      },
+      "unable": 8,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    }
+  },
+  "grid": {
+    "life_policy__polite": {
+      "topic": "life_policy",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__casual": {
+      "topic": "life_policy",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__abbrev_typo": {
+      "topic": "life_policy",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__noisy": {
+      "topic": "life_policy",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__smalltalk_mixed": {
+      "topic": "life_policy",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__multi_intent": {
+      "topic": "life_policy",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "ABSTAINED": 3,
+        "OK": 1
+      },
+      "codes": {
+        "no_evidence": 3
+      },
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_policy__no_location": {
+      "topic": "life_policy",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "NONE": 1
+      },
+      "codes": {},
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__polite": {
+      "topic": "life_insurance",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__casual": {
+      "topic": "life_insurance",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__abbrev_typo": {
+      "topic": "life_insurance",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "REFUSED": 2,
+        "OK": 1,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "medical_boundary": 1,
+        "no_evidence": 1,
+        "emergency_boundary": 1
+      },
+      "unable": 3,
+      "false_refuse": 2,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__noisy": {
+      "topic": "life_insurance",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "medical_boundary": 2,
+        "emergency_boundary": 2
+      },
+      "unable": 4,
+      "false_refuse": 4,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__smalltalk_mixed": {
+      "topic": "life_insurance",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "REFUSED": 2,
+        "OK": 2
+      },
+      "codes": {
+        "emergency_boundary": 2
+      },
+      "unable": 2,
+      "false_refuse": 2,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__multi_intent": {
+      "topic": "life_insurance",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "REFUSED": 1,
+        "ABSTAINED": 3
+      },
+      "codes": {
+        "medical_boundary": 1,
+        "no_evidence": 3
+      },
+      "unable": 4,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_insurance__no_location": {
+      "topic": "life_insurance",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__polite": {
+      "topic": "life_food",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 4,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__casual": {
+      "topic": "life_food",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 4,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__abbrev_typo": {
+      "topic": "life_boundary",
+      "style": "abbrev_typo",
+      "n": 6,
+      "life": {
+        "NONE": 6
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__abbrev_typo": {
+      "topic": "life_food",
+      "style": "abbrev_typo",
+      "n": 2,
+      "life": {
+        "NONE": 2
+      },
+      "codes": {},
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__noisy": {
+      "topic": "life_food",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 4,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__smalltalk_mixed": {
+      "topic": "life_food",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "NONE": 3,
+        "OK": 1
+      },
+      "codes": {},
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__multi_intent": {
+      "topic": "life_food",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "NONE": 2,
+        "OK": 1,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_food__no_location": {
+      "topic": "life_food",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 4,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__polite": {
+      "topic": "life_travel",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "ABSTAINED": 1,
+        "OK": 3
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__casual": {
+      "topic": "life_travel",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__abbrev_typo": {
+      "topic": "life_travel",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__noisy": {
+      "topic": "life_travel",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__smalltalk_mixed": {
+      "topic": "life_travel",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__multi_intent": {
+      "topic": "life_travel",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "ABSTAINED": 4
+      },
+      "codes": {
+        "no_evidence": 4
+      },
+      "unable": 4,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_travel__no_location": {
+      "topic": "life_travel",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "NONE": 2
+      },
+      "codes": {},
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__polite": {
+      "topic": "life_boundary",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__casual": {
+      "topic": "life_boundary",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__noisy": {
+      "topic": "life_boundary",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__smalltalk_mixed": {
+      "topic": "life_boundary",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__multi_intent": {
+      "topic": "life_boundary",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "NONE": 2,
+        "REFUSED": 2
+      },
+      "codes": {
+        "emergency_boundary": 2
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    },
+    "life_boundary__no_location": {
+      "topic": "life_boundary",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "NONE": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": null,
+      "grounded_mean": null
+    }
+  },
+  "notes": [
+    "경유 축, 폴백 off. 판정 없음 — Life 상태만"
+  ]
+}

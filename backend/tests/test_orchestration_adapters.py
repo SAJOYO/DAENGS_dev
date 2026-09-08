@@ -320,3 +320,98 @@ def test_the_fold_keeps_the_form_and_drops_only_the_intensity() -> None:
     assert _precipitation_kind("drizzle_snow") == "mixed"    # 6 빗방울눈날림 — 혼합 계열
     assert _precipitation_kind("snow_flurry") == "snow"      # 7 눈날림 — 눈 계열
     assert _precipitation_kind("멋대로") is None              # 모르는 값은 그대로 없음
+
+
+# ---------------------------------------------------------------- RAG-077 — a refusal keeps its sources
+def _citing_refusal(said: str, hits: list[dict], *, cited: list[str]):
+    def refuse(_: str, **_kw):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "medical_boundary", "message": said, "hits": hits,
+                    "cited": cited, "ungrounded": []},
+        )
+
+    return refuse
+
+
+async def test_a_citing_refusal_keeps_the_list_its_markers_point_to() -> None:
+    """422 with `hits` -> REFUSED **with data**, reduced exactly like an OK answer (O-9).
+
+    #318 found refusals that were full institutional answers wearing `[1][3]` — and the
+    adapter had nothing to hand over, so the numbers pointed at nothing. Life now sends the
+    evidence (RAG-077); this adapter reduces it by the same three names it uses for OK and
+    still keeps the chunk text, the score and the internal id out of the graph state.
+    """
+    said = "보험개시일로부터 30일 이내 질병은 보상하지 않습니다[1]. 진료는 수의사에게."
+    hits = [hit.model_dump() for hit in life_output().hits]
+
+    result = await LifeCapabilityAdapter(_citing_refusal(said, hits, cited=["제3조"])).run(
+        life_request(), request_id="trace"
+    )
+    assert result.status == CapabilityStatus.REFUSED
+    assert result.refusal and result.refusal.message == said
+    assert result.data == {
+        "citations": [
+            {"label": "제3조", "url": "https://example.test/source", "document_title": "공식 문서"}
+        ],
+        "quality": {"cited": ["제3조"], "ungrounded": []},
+    }
+    encoded = json.dumps(result.data, ensure_ascii=False)
+    assert "secret-chunk" not in encoded and "원문 청크" not in encoded and "0.91" not in encoded
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        {"code": "emergency_boundary", "message": "지금 병원으로 가세요."},          # pre-RAG-077
+        {"code": "emergency_boundary", "message": "지금 병원으로 가세요.", "hits": [],
+         "cited": [], "ungrounded": []},                                          # zero-hit
+    ],
+)
+async def test_a_refusal_without_evidence_has_no_data(detail: dict) -> None:
+    """No `hits` and an empty `hits` both mean "this refusal has no sources": `data` is None,
+    not an empty envelope a reader would open looking for a list.
+    """
+    def refuse(_: str, **_kw):
+        raise HTTPException(status_code=422, detail=detail)
+
+    result = await LifeCapabilityAdapter(refuse).run(life_request(), request_id="trace")
+    assert result.status == CapabilityStatus.REFUSED
+    assert result.refusal and result.refusal.message == "지금 병원으로 가세요."
+    assert result.data is None
+
+
+async def test_markers_in_a_refusal_resolve_inside_its_citations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**The property #328 pins: `[N]` in the wording and the citation list go together.**
+
+    This runs the real Life service under the real adapter (only generation is faked) so the
+    422 detail is the one `services/ask.py` actually builds, not a hand-written fixture. Every
+    number the refusal cites must be a valid 1-based position in `data.citations`, and the
+    entry at that position must be the hit the model was looking at.
+    """
+    from daengs_life.app.services import ask as life_service
+    from daengs_life.rag.stages import generate, score
+    from daengs_life.rag.stages.search import Hit
+
+    hits = [
+        Hit(rank=n, score=0.5, chunk_id=f"chunk-{n}", citation=f"제{n}조", citation_url=None,
+            section=None, document_title=f"문서 {n}", content=f"본문 {n}", part=None)
+        for n in (1, 2, 3)
+    ]
+    said = "제1조 제2항에 따르면 30일 이내 질병은 보상하지 않습니다[1][3]. 진료는 수의사에게."
+    answer = generate.Answer(question="q", text=said, hits=hits, model="m", embedding_model="e",
+                             cited=["제1조"], ungrounded=[], boundary="medical", covered=True)
+    monkeypatch.setattr(life_service.generate, "ask", lambda *a, **k: answer)
+
+    result = await LifeCapabilityAdapter(life_service.ask).run(life_request(), request_id="t")
+
+    assert result.status == CapabilityStatus.REFUSED
+    assert result.refusal and result.refusal.message == said
+    assert result.data is not None
+    citations = result.data["citations"]
+    referenced = score.referenced_indices(result.refusal.message)
+    assert referenced == [1, 3]
+    assert all(1 <= n <= len(citations) for n in referenced)
+    assert [citations[n - 1]["label"] for n in referenced] == ["제1조", "제3조"]

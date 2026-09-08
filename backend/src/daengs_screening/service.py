@@ -67,18 +67,54 @@ def _fail(exc: Exception) -> HTTPException:
     )
 
 
+def _arms_on_disk() -> list[str]:
+    """릴리스 폴더에 **준비된** 2단계 팔 이름. 모델은 안 올립니다.
+
+    `ScreeningAgent.from_release()` 가 `stage2_*` 폴더를 전부 훑어 앙상블을
+    구성하므로, 폴더만 세어도 몇 팔로 뜰지 알 수 있습니다.
+    """
+    ck = Path(RELEASE_DIR) / "checkpoints"
+    if not ck.is_dir():
+        return []
+    return sorted(d.name for d in ck.iterdir()
+                  if d.is_dir() and d.name.startswith("stage2_")
+                  and (d / "best.pt").exists())
+
+
 @router.get("/healthz")
 def healthz():
-    """살아있나 + 어떤 가중치를 물고 있나.
+    """살아있나 + **어떤 가중치를 몇 팔로** 물고 있나.
 
     ⚠️ 여기서 모델을 올리지 않습니다. 올라와 있으면 임계값을 같이 알려주고,
        아직이면 `loaded: false` 로 답합니다 — 헬스체크가 350MB 를 끌어오면 안 됩니다.
+
+    ★ **팔 개수를 말하는 이유** — 배포에서 앙상블이 조용히 1팔로 줄어든 적이
+    있습니다 (2026-09-07). `POST /screen/v1/screen` 응답의 `meta.stage2_arms`
+    로도 알 수 있지만 그건 **2단계가 실제로 도는 사진**이 있어야 나옵니다.
+    실제로 확인하는 데 찌르기 6번과 합성 병변 사진 한 장이 들었습니다.
+
+    두 가지를 나눠서 냅니다:
+
+        stage2_arms_available   릴리스 폴더에 **준비된** 팔 (모델 안 올려도 나옴)
+        stage2_arms             지금 **올라와 있는** 팔 (loaded 일 때만)
+
+    둘이 다르면 릴리스는 새것인데 프로세스가 옛것을 물고 있다는 뜻입니다 —
+    재시작하면 맞습니다.
     """
     loaded = _agent.cache_info().currsize > 0
+    avail = _arms_on_disk()
     body = {"ok": True, "mock": False, "contract_version": CONTRACT_VERSION,
-            "loaded": loaded, "release_dir": RELEASE_DIR}
+            "loaded": loaded, "release_dir": RELEASE_DIR,
+            "stage2_arms_available": len(avail),
+            "stage2_experiments_available": avail}
     if loaded:
-        body["threshold"] = getattr(_agent(), "thr", None)
+        ag = _agent()
+        body["threshold"] = getattr(ag, "thr", None)
+        try:
+            body.update(ag.describe())     # 상류(deeplearning_test)와 같은 키
+        except AttributeError:             # 상류가 옛 버전이면 조용히 물러섭니다
+            arms = getattr(ag, "arms2", None)
+            body["stage2_arms"] = len(arms) if arms else 1
     return body
 
 

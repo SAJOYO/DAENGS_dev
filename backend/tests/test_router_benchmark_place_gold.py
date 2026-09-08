@@ -23,7 +23,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     SemanticRoutingDecision,
 )
-from tools.router_benchmark.schemas import load_gold_cases, load_gold_place_cases
+from daengs_evals.router_benchmark.schemas import load_gold_cases, load_gold_place_cases
 
 # The decision each case asserts the classifier should return. Deliberately restated
 # here rather than read out of the gold file: recovering it from the stored plan is

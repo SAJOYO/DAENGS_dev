@@ -47,6 +47,7 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     ROUTER_CANDIDATE_COUNT,
     ROUTER_MAX_OUTPUT_TOKENS,
@@ -57,7 +58,7 @@ from daengs_backend.orchestration.semantic import (
 )
 from daengs_backend.orchestration.service import _ROUTER_FAILURE_MESSAGE
 from daengs_backend.orchestration.social import social_message
-from tools.router_benchmark.evaluate import _semantic_plan_key
+from daengs_evals.router_benchmark.evaluate import _semantic_plan_key
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 SEOUL = {"location": {"lat": 37.5, "lon": 127.0}}
@@ -143,6 +144,7 @@ def test_tools_take_no_arguments_except_the_social_intent() -> None:
         "ask_life",
         "check_walk_conditions",
         "search_places",
+        "answer_generally",  # D-057 ① — mirrors the router's v9 `general` destination
         "hand_off_to_skin",
         "hand_off_to_gait",
         "reply_socially",
@@ -414,6 +416,7 @@ async def test_no_capability_and_no_answer_is_failed() -> None:
         query="산책 몇 번 시켜야 해?", principal=PRINCIPAL, context=dict(SEOUL)
     )
     assert response.status == AssistantStatus.FAILED
+    assert response.message == NO_CAPABILITY_MESSAGE
     assert "하루 두 번" not in response.message
 
 
@@ -527,4 +530,9 @@ def test_trace_metadata_keys_match_langgraph() -> None:
     assert config["metadata"]["prompt_version"] == AGENT_PROMPT_VERSION
     assert str(config["run_id"]) == "11111111-1111-1111-1111-111111111111"
     assert config["run_name"] == "assistant_query_agent"
-    assert '"assistant_query"' in graph_source
+    # 루트 런 이름의 원본은 이제 서비스다 — 그래프는 자식 `orchestration_engine` 이다.
+    service_source = (
+        pathlib.Path(__file__).resolve().parents[1] / "src/daengs_backend/orchestration/service.py"
+    ).read_text(encoding="utf-8")
+    assert 'run_name="assistant_query"' in service_source
+    assert 'run_name="orchestration_engine"' in graph_source

@@ -60,10 +60,37 @@ class AuditPageOut(BaseModel):
     """한 쪽. **키셋 커서라 `total` 이 없습니다.**
 
     총 개수를 안 주는 것은 세는 값이 비싸고(전체 스캔) 읽는 사이에도 늘어서, 화면에
-    적어 봐야 곧 틀린 숫자가 되기 때문입니다. 얼마나 빨리 느는지를 보는 것은 A5 의 일이고,
-    그때는 psql 로 셉니다.
+    적어 봐야 곧 틀린 숫자가 되기 때문입니다.
+
+    **얼마나 쌓였나는 다른 엔드포인트가 답합니다** — `GET /admin/audit/retention`
+    (`AuditRetentionOut`). 쪽마다 세지 않고, 볼 때만 한 번 셉니다. A5 가 "지우지 않는다"로
+    닫히면서 대신 박은 기준(총 10만 행)을 확인하는 자리입니다.
     """
 
     entries: list[AuditEntryOut]
     #: 다음 쪽을 부를 때 그대로 돌려주는 값. `None` 이면 마지막 쪽입니다.
     next_cursor: str | None
+
+
+class AuditRetentionOut(BaseModel):
+    """감사 로그가 얼마나 쌓였나 (A5).
+
+    **A5 는 "지우지 않는다" 로 닫혔습니다** (2026-09-07). 하루 14행이라 지울 이유가 없고,
+    감사 로그는 지우면 못 되돌립니다. 대신 다시 열 기준을 숫자로 박았고, 이 응답이 그
+    기준과 현재 값을 같이 줍니다 — **"안 지운다" 가 "안 본다" 가 되지 않게** 하는 것이
+    이 엔드포인트의 전부입니다.
+
+    `over_threshold` 를 서버가 판단해서 내려 줍니다. 화면이 직접 비교하면 기준이 두 곳에
+    살게 됩니다 (`services/audit.py` 의 `RETENTION_ROW_THRESHOLD`).
+    """
+
+    #: 지금 행 수. 정확한 `count(*)` 입니다 — 이 값이 비싸질 무렵이면 그것 자체가 신호입니다.
+    total: int
+    #: 가장 오래된 행. 표가 비어 있으면 `None`.
+    oldest_at: datetime | None
+    #: 가장 최근 행. 표가 비어 있으면 `None`.
+    newest_at: datetime | None
+    #: 다시 열 기준. 지금 속도로 약 20년치입니다.
+    threshold: int
+    #: `total >= threshold`. 참이면 A5 를 다시 엽니다 (파티션 / 삭제 주기).
+    over_threshold: bool

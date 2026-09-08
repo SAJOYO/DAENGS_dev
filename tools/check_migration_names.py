@@ -10,14 +10,15 @@
 `20260905_documents_org_backfill.sql` 이 그 상태였다(짝이 `verify_2026-09-05_documents_org.sql`).
 검증이 기본값 `true` 가 된 뒤로는 그런 파일이 **적용 전에 실패**하므로, 머지 전에 잡는 편이 싸다.
 
-**PR 이 건드린 파일만 본다.** 폴더 전체에 걸면 verify 짝이 없는 옛 파일 여덟 개가 첫날부터
-빨간불이 된다. 그 부채를 이 검사로 갚게 하지 않는다 — 예외 목록을 두면 사람들이 목록에
-추가하는 습관이 생기고, 목록 자체가 또 낡는다. 새로 들어오거나 고친 것만 보면 규칙이 저절로
-조여지고 관리할 파일이 안 는다.
+**이제 폴더 전체를 본다** (2026-09-07, #295). 처음에는 *"폴더 전체에 걸면 verify 짝이 없는
+옛 파일 여덟 개가 첫날부터 빨간불이 된다"* 는 이유로 **PR 이 건드린 파일만** 봤는데,
+**#292 가 그 여덟을 다 채워 전제가 사라졌다.** 예외 목록을 두지 않겠다는 판단은 그대로다 —
+목록을 두면 사람들이 목록에 추가하는 습관이 생기고 목록 자체가 또 낡는다.
 
-    python tools/check_migration_names.py <바뀐 파일 경로...>
+    python tools/check_migration_names.py            # 폴더 전체
+    python tools/check_migration_names.py <경로...>   # 그 파일들만 (옛 사용법도 그대로 된다)
 
-경로를 안 주면 아무것도 검사하지 않고 통과한다 — `db/migrations/` 를 안 건드린 PR 이다.
+인자를 주면 그것만 본다. 안 주면 `db/migrations/*.sql` 전부를 본다.
 """
 
 import re
@@ -79,8 +80,13 @@ def check(paths: list[str]) -> list[str]:
     return problems
 
 
+def all_migration_files() -> list[str]:
+    """폴더 전체. 인자를 안 줬을 때 이것을 본다 (#295 전에는 아무것도 안 봤다)."""
+    return sorted(f"db/migrations/{path.name}" for path in MIGRATIONS.glob("*.sql"))
+
+
 def main() -> int:
-    problems = check(sys.argv[1:])
+    problems = check(sys.argv[1:] or all_migration_files())
     if not problems:
         print("db/migrations 이름·짝 검사 통과")
         return 0

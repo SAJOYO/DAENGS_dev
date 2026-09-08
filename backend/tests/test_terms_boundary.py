@@ -21,7 +21,7 @@ from daengs_life.rag.stages.parse.parsers.insurance import insurer_terms_pdfs as
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
-# 실물에서 뽑은 것들이다 — 지어내지 않았다 (`tools/d3_terms_boundary_probe.py`).
+# 실물에서 뽑은 것들이다 — 지어내지 않았다 (`tools/d3_terms_boundary_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제)).
 TITLES = [
     "제도성 특별약관",
     "무배당 NH펫앤미든든보험2604 특별약관",

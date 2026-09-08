@@ -9,6 +9,19 @@
 > 건드리지 않습니다.** 덕분에 DNS 컷오버가 없습니다 — 새 레코드는 고정 IP 예약 직후
 > 바로 만들 수 있습니다(아직 아무도 안 쓰는 이름이라 전파를 기다릴 일이 없습니다).
 
+> ⚠ **그래서 앱이 보는 것은 이 VM 이고, 이 VM 이 서빙하는 것은 `main` 입니다** (§1 의
+> `git clone -b main`). **`dev` 에 머지해도 앱은 안 바뀝니다** — dev 에만 있는 기능은
+> 릴리즈(dev → main)와 §6 배포를 지나기 전까지 앱에서 **존재하지 않습니다.** 민원이
+> "고쳤다는데 그대로다" 로 올 때 코드보다 여기를 먼저 보세요.
+>
+> 2026-09-07 실측: 같은 시각 `/openapi.json` 이 로컬 서버 79 경로 · GCP 72 경로였고,
+> dev 에만 있는 `/app/activity/*` 는 GCP 에 없었습니다. 어느 스냅샷이 도는지는 이렇게
+> 봅니다 — 두 서버의 경로 집합을 비교하는 것이 가장 빠릅니다.
+>
+> **환경 변수도 서버마다 따로입니다.** 로컬 서버의 `backend/.env` 를 고쳐도 VM 의
+> `~/daengs/backend/.env` 는 안 바뀝니다 (§2 수정표). 플래그 하나로 켜고 끄는 기능은
+> **두 파일 모두**에 넣어야 두 서버가 같이 켜집니다.
+
 ## 0. 사전 (콘솔 — roadmap Phase 0)
 
 예산 알림 50/80/100% · 고정 IP 예약(asia-northeast3) · VM e2-standard-4 / Ubuntu 24.04 LTS /
@@ -28,7 +41,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-ge
 sudo npm i -g pm2
 
 # 배포 체크아웃 밖 상태 폴더 (로컬 서버의 C:/deploy 와 같은 취급)
-sudo mkdir -p /srv/daengs/{models/release,gait/release,letsencrypt,dumps,corpus-unused}
+sudo mkdir -p /srv/daengs/{models/release/gait-analysis,letsencrypt,dumps,corpus-unused}
 sudo chown -R $USER /srv/daengs
 
 # 저장소는 GitHub 에서 직접 clone 하지 않습니다 — 아래 "git push 배포" 참고
@@ -80,8 +93,8 @@ docker cp daengs-place-db:/tmp/place.dump .
 
 | 무엇 | 어디로 | 비고 |
 | --- | --- | --- |
-| 스크리닝 가중치 2개 | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋) |
-| gait `best.pt` · `yolov8n.pt` | `/srv/daengs/gait/release/` | git 에 없음 |
+| 스크리닝 릴리스 — **폴더를 통째로** (`checkpoints/` + `stage1_threshold.json`) | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋). ⚠️ **개수를 세지 마세요.** 예전에 이 줄은 "가중치 2개" 였는데 그 사이 2단계가 **앙상블 3팔**이 됐습니다 (2026-09-08 `/screen/healthz` 실측: `stage2_convnextv2_base_m2.5_…` · `stage2_effnetv2_s_f320_…` · `stage2_effnetv2_s_m2.5_…`). 덜 옮기면 §5 를 보세요 |
+| gait `best.pt` · `yolov8n.pt` | `/srv/daengs/models/release/gait-analysis/` | git 에 없음. **`GAIT_RELEASE_DIR` 과 같은 값입니다** — 스크리닝 release 폴더의 하위. 2026-09-07 VM 실측(best.pt 53MB · yolov8n.pt 6.5MB) |
 | 최상단 `.env` | `~/daengs/.env` | 아래 수정표 |
 | `backend/.env` | `~/daengs/backend/.env` | 암호화 키 3개는 **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 엽니다 |
 
@@ -92,7 +105,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | `SCREENING_RELEASE_DIR` | `/srv/daengs/models/release` |
 | `GAIT_RELEASE_DIR` | `/srv/daengs/models/release/gait-analysis` — 서버 관행대로 스크리닝 release 폴더의 하위입니다 |
 | `DAENGS_CORPUS_DIR` | `/srv/daengs/corpus-unused` — **더미.** 크롤러를 안 띄워도 compose 가 파일 해석 시점에 `:?` 가드를 평가합니다 |
-| `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | 기본은 셋 다 **비웁니다** (= `none`, `/app/gait/*` 가 503 — 안전합니다). 임시 LocalBridge 로 새 흐름을 검증할 때만 `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** 진짜 저장소는 GCS 이고 버킷은 #78 대기입니다 |
+| `GAIT_STORAGE` · `GAIT_LOCAL_STORAGE_DIR` · `GAIT_BRIDGE_BASE_URL` | `local` · `/data/gait-bridge` · **`https://daengapi.weareithero.cloud`**. **D-052 로 이 볼륨이 정본입니다** — 임시가 아니고, GCS 로도 안 갑니다(#78 은 닫혔습니다). 가운데 값은 **컨테이너 안 경로**라 호스트에 그런 폴더는 없습니다(named volume `daengs_gait-bridge`). 마지막 값이 앱이 받는 `upload_url` 의 앞부분이라, `.env.example` 의 예시(`http://daengback.~`)를 그대로 두면 **앱이 집 서버로 영상을 올립니다.** ⚠️ 이 셋은 보행 전용이 아닙니다 — 피부진단·점령지 사진·프로필이 **같은 저장소**를 씁니다. 비우면 그 전부가 503 입니다 |
 | `GEMINI_API_KEY` | backend/.env 의 값을 **루트에도** 넣습니다 — compose 의 `${GEMINI_API_KEY:-}` 는 루트 `.env` 에서 읽는데, 없으면 **빈 값이 env_file(backend/.env)을 덮어써서** `/life/ask`·라우터·Training RAG 생성이 전부 죽습니다 (2026-09-02 실제 확인) |
 
 `backend/.env` 수정표:
@@ -183,7 +196,7 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 정답**이고, 404 가 나오면 그 엔드포인트가 아직 이 서버에 없다는 뜻입니다:
 
 ```bash
-for p in /health /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
+for p in /health /screen/healthz /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
   printf "%-24s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
 done
 ```
@@ -191,10 +204,34 @@ done
 | 경로 | 기대 | 아니면 |
 | --- | --- | --- |
 | `/health` | 200 (`{"status":"ok","db":"ok"}`) | backend 기동 실패 |
+| `/screen/healthz` | 200. ★ **본문의 `stage2_arms_available` 이 `3`** | 아래 |
 | `/gait/records` | **410** — 옛 무인증 경로는 닫혀 있어야 합니다 (#145) | **400·200 이면 설정이 반영 안 된 것.** §6 의 inode 함정 |
 | `/app/gait/analyze` (POST) | 401 | 404 면 새 계약이 안 올라온 것 |
 | `/app/walks` (POST) | 401 | 〃 |
 | `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
+
+★ **스크리닝 팔 개수는 상태 코드로 안 잡힙니다** — 팔이 하나뿐이어도 `/screen/healthz`
+도 `POST /screen/v1/screen` 도 **200** 입니다. 서버 PC 에서 2026-09-07 에 실제로 3팔이
+1팔로 강등됐고, 알아챈 단서는 로그에 성공 줄이 **안 찍힌 것** 하나였습니다. 그래서
+여기서는 코드가 아니라 **본문**을 봅니다:
+
+```bash
+curl -s https://daengapi.weareithero.cloud/screen/healthz
+```
+
+| 본문 값 | 뜻 |
+| --- | --- |
+| `stage2_arms_available: 3` | 릴리스 폴더에 팔이 **다 있음** (모델을 안 올려도 나옵니다) |
+| `stage2_arms_available: 1` | §2 에서 **덜 옮긴 것.** `checkpoints/stage2_*` 를 마저 복사하세요 |
+| `available` 3 인데 `stage2_arms` 1 | 릴리스는 새것인데 **프로세스가 옛것**을 물고 있음 → backend 재시작 |
+| `loaded: false` | 정상입니다. 첫 요청이 모델을 올리는 설계라 `stage2_arms` 는 그 뒤에 나옵니다 |
+
+⚠️ 잃는 것이 눈에 안 보입니다 — 1팔이어도 화면은 똑같이 뜨고, 줄어드는 건 계열
+커버리지 **67.9% → 58.4%** 입니다 (holdout 실측).
+
+⚠️ **순서는 코드가 먼저, 가중치가 나중**입니다. 가중치를 먼저 넣고 옛 코드가 뜨면
+`from_release` 가 마지막 팔 하나만 물고 **기준 팔(convnextv2)이 더 약한 팔로 대체**됩니다.
+그 사고가 그렇게 났습니다.
 
 `/life/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
 
@@ -296,14 +333,102 @@ done
     보고 손으로 넣으세요. 기본값이 없는 설정이면 backend 가 ④ 직후 안 뜹니다
 - **코퍼스를 재적재했다면(`rag load`) — GCP 는 바뀌지 않습니다.** 개발 PC 는 로컬
   서버 DB 를 보고 두 DB 사이에 복제가 없습니다 (roadmap §2-5). 적재는 성공하고
-  스모크도 통과하는데 앱에만 새 문서가 안 보입니다. 반영하려면 §2 의 덤프를 다시 뜨고
-  §3 ② 의 복원을 다시 돌립니다 — **아직 한 번도 해 본 적이 없어 전용 절차는 쓰지
-  않았습니다.** 처음 돌릴 때 걸린 것을 여기에 적으세요. 구조적 해소는 roadmap §7-1
+  스모크도 통과하는데 앱에만 새 문서가 안 보입니다.
+  🔴 **§2 의 덤프 → §3 ② 의 복원으로 하지 마세요.** 2026-09-07(#289)까지 이 문단이 그렇게
+  적고 있었는데, **그 길은 운영 데이터를 지웁니다** — 아래 "Life 코퍼스만 동기화 (GCP)"
+  를 따르세요. 구조적 해소는 roadmap §7-1
 - **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
+
+### Life 코퍼스만 동기화 (GCP)
+
+**언제** — 개발 PC 에서 `rag load` 로 집 서버 코퍼스를 늘린 뒤, 그것을 GCP 에 반영할 때.
+처음 돈 것은 2026-09-07 (#289, `documents` 8,990 → 9,838).
+
+🔴 **`vectordb` 를 통째로 덤프·복원하면 안 됩니다.** `db/init/` 이 만드는 테이블 31개가
+전부 이 한 DB 안이라, `documents` 옆에 `app_users` · `pets` · `walks` · `chat_*` ·
+`territory_*` · `screening_records` 가 **같이 있습니다.** `pg_restore --clean` 은 GCP 의
+**운영 사용자 데이터를 집 서버의 개발 데이터로 덮어씁니다.** §3 ② 의 복원은 **빈 볼륨을
+세울 때의 절차**지 갱신 절차가 아닙니다.
+
+**`documents` 한 테이블만 갈아 끼웁니다.** 그래도 되는 근거 셋:
+
+- **`documents` 를 참조하는 FK 가 없습니다** — `TRUNCATE` 가 다른 테이블을 안 건드립니다.
+- **서빙은 `documents` 에 쓰지 않습니다.** 쓰는 곳은 `rag load`(`stages/load.py`) 하나뿐이고
+  개발 PC → 집 서버로만 돕니다. GCP 쪽은 **읽기 전용 사본**이라 갈아 끼워도 잃을 것이 없습니다.
+- **`training_rag_*` 는 다른 코퍼스입니다** — 건드리지 마세요.
+
+```powershell
+# ① 집 서버에서 documents 만 뜬다 (사무실 PC 에서)
+docker compose exec -T pgvector sh -c "pg_dump -U postgres -d vectordb -t public.documents --data-only --no-owner -f /tmp/documents.sql"
+docker compose exec -T pgvector sh -c "psql -U postgres -d vectordb -tAc 'SELECT count(*) FROM documents'"
+docker compose exec -T pgvector sh -c "gzip -f /tmp/documents.sql"
+docker cp pgvector:/tmp/documents.sql.gz .\documents.sql.gz
+```
+
+컨테이너 안에 만들고 `docker cp` 로 꺼냅니다 — **PowerShell 의 `>` 로 직접 받지 마세요**(§2).
+`-Fc`(커스텀)가 아니라 **평문**인 이유는 ③ 에서 `TRUNCATE` 와 한 트랜잭션으로 묶으려면
+`psql -f` 여야 하기 때문입니다. 여기서 나온 **행 수를 적어 두세요.**
+
+```bash
+# ② VM — 되돌릴 것을 먼저 만든다
+cd ~/daengs
+docker compose exec -T pgvector psql -U daengs -d vectordb -tAc 'SELECT count(*) FROM documents'
+docker compose exec -T pgvector sh -c "pg_dump -U daengs -d vectordb -t public.documents --data-only --no-owner -f /tmp/documents-before.sql && gzip -f /tmp/documents-before.sql"
+docker cp pgvector:/tmp/documents-before.sql.gz ~/
+```
+
+§6 의 전체 백업과 **별개로 한 장 더** 뜹니다. ③ 이 실패했을 때 되돌릴 것이 전체 덤프뿐이면
+운영 테이블까지 같이 되돌리게 되기 때문입니다.
+
+```bash
+# ③ VM — 한 트랜잭션으로 갈아 끼운다
+gunzip -c ~/documents.sql.gz > /tmp/documents.sql
+docker cp /tmp/documents.sql pgvector:/tmp/documents.sql
+docker compose exec -T pgvector psql -U daengs -d vectordb \
+  -v ON_ERROR_STOP=1 --single-transaction \
+  -c 'TRUNCATE public.documents' -f /tmp/documents.sql
+```
+
+⚠️ **`--single-transaction` 을 빼지 마세요.** 이것이 있어야 `TRUNCATE` 와 적재가 한
+트랜잭션이 되어, 적재가 깨지면 `TRUNCATE` 까지 되돌아갑니다. 빼면 **코퍼스가 빈 채로 남는
+구간**이 생기고 그동안 `/life/ask` 가 전부 404(근거 0건)입니다.
+
+`TRUNCATE` 권한은 **GCP 에서만** 됩니다 — 그쪽은 볼륨을 `POSTGRES_USER=daengs` 로 초기화해서
+`daengs` 가 소유자입니다. 집 서버는 `documents` 소유자가 `postgres` 라 같은 명령이 안
+먹습니다(거기선 뜨기만 하므로 상관없습니다).
+
+```bash
+# ④ 확인
+docker compose exec -T pgvector psql -U daengs -d vectordb -c "
+  SELECT count(*) FROM documents;
+  SELECT category, count(*) FROM documents GROUP BY 1 ORDER BY 2 DESC;
+  SELECT count(*) FROM documents WHERE metadata ? 'org';
+  SELECT count(*) FROM documents WHERE content_tsv IS NOT NULL;
+  SELECT vector_dims(embedding), count(*) FROM documents WHERE embedding IS NOT NULL GROUP BY 1;"
+```
+
+`content_tsv` 가 전체 행 수와 같고 벡터가 전부 1,024차원이면 된 것입니다.
+
+#### 걸린 것 (2026-09-07, 처음 돌리며)
+
+1. 🔴 **`content_tsv` 는 생성 컬럼이라 `COPY` 가 거부합니다.**
+   `column "content_tsv" is a generated column / Generated columns cannot be used in COPY`.
+   위 ① 처럼 **`pg_dump` 를 쓰면 자동으로 처리**되므로 안 만납니다. 컬럼 목록을 손으로
+   짤 때만 나는데, 그때는 `information_schema.columns` 를 **`is_generated = 'NEVER'`** 로
+   거르세요. 빼도 GCP 에서 같은 정의로 다시 계산됩니다(전체 행이 채워지는 것으로 확인).
+2. ⚠️ **기대 행 수를 `docs/life/roadmap.md` 에서 가져올 때 무엇을 보는지 확인하세요.**
+   그 문서는 **청크 수**(§1, 예: 10,304)와 **DB 문서 수**(§0, 예: 9,836)를 **다른 자리에
+   다른 수로** 적습니다. 여기서 맞춰야 하는 것은 **`documents` 행 수**입니다.
+   #289 는 이 둘을 섞어 "10,304 가 나와야 한다"고 적었다가 실제 9,838 에서 갸웃했습니다.
+3. ⚠️ **개발 PC 에는 `pg_dump` 가 없을 수 있습니다.** 그때 Docker Desktop 이 꺼져 있으면
+   컨테이너로 우회하는 길도 막힙니다. 집 서버 DB 는 LAN 에 열려 있으므로
+   (`POSTGRES_IP`, CLAUDE.md) **개발 PC 에서 psycopg 로 붙어 `COPY … TO STDOUT`** 으로
+   같은 일을 할 수 있습니다 — `backend` 의 `.venv` 에 psycopg 가 이미 있습니다.
+   그 길로 갈 때만 1번의 생성 컬럼 문제를 만납니다.
 
 ### 점령 게임판 적재 (GCP)
 

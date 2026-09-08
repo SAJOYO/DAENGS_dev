@@ -18,6 +18,7 @@ from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import answer_report as answer_report_repo
 from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
@@ -213,6 +214,12 @@ class Store:
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
         self.walk_analyses: list[object] = []
 
+        #: 케어 로그(밥·약·간식) 행 (#332). **기본은 비어 있습니다** — 비서가 `active_dog_id`
+        #: 요청마다 오늘 요약을 읽으므로(#344), 여기 대역이 없으면 관련 없는 테스트가
+        #: 진짜 리포지토리를 타서 `FakeSession` 에서 죽습니다. 모양은 `test_care_events.py`
+        #: 의 `FakeCareEvent` 처럼 `app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
+        self.care_events: list = []
+
         #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
         self.screenings: list = []
 
@@ -273,6 +280,12 @@ class FakePet:
     birth_date_kind: str | None = None
     farewell_on: object | None = None
     updated_at: object | None = None
+
+    # 돌봄 (#331). None 은 '모름'입니다.
+    feeding_style: str | None = None
+    feeding_times: list[str] | None = None
+    health_conditions: str | None = None
+    medications: str | None = None
 
     # 프로필 사진 (D-052). 사진 자체는 저장소에 있고 여기는 그 자리만 적습니다.
     photo_storage_key: str | None = None
@@ -741,6 +754,47 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(walk_repo, "delete_all_for_owner", walk_delete_all_for_owner)
     monkeypatch.setattr(walk_repo, "existing_chunk_starts", walk_existing_chunk_starts)
 
+    # -- care events (#332 · #344) ------------------------------------------
+    # 비서의 오늘 요약(`services/care_log_context`)이 `active_dog_id` 요청마다 읽는 셋.
+    # 정렬·필터 규칙은 진짜 리포지토리와 같습니다. 기록·삭제 쪽 대역은 `test_care_events.py`
+    # 가 자기 파일 안에서 더 촘촘히 씁니다.
+    def _in_window(at, start, end) -> bool:
+        try:
+            return start <= at < end
+        except TypeError:
+            # naive 시각을 넣은 옛 산책 대역 — 하루 창과 비교할 수 없으면 안 센다.
+            return False
+
+    def _care_between(app_user_id, pet_id, start, end):
+        return [
+            e for e in store.care_events
+            if e.app_user_id == app_user_id and e.pet_id == pet_id
+            and _in_window(e.occurred_at, start, end)
+        ]
+
+    async def care_list_between(session, app_user_id, pet_id, start, end):
+        return sorted(
+            _care_between(app_user_id, pet_id, start, end),
+            key=lambda e: (e.occurred_at, e.id), reverse=True,
+        )
+
+    async def care_count_by_kind(session, app_user_id, pet_id, start, end):
+        counts: dict[str, int] = {}
+        for e in _care_between(app_user_id, pet_id, start, end):
+            counts[e.kind] = counts.get(e.kind, 0) + 1
+        return counts
+
+    async def walk_count_for_pet_between(session, app_user_id, pet_id, start, end):
+        return sum(
+            1 for w in store.walks
+            if w.app_user_id == app_user_id and pet_id in w.pet_ids
+            and _in_window(w.started_at, start, end)
+        )
+
+    monkeypatch.setattr(care_repo, "list_between", care_list_between)
+    monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
+    monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
+
     # -- chats -------------------------------------------------------------
     def active_sessions(app_user_id, pet_id):
         mine = [
@@ -1036,12 +1090,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
-    async def screening_list_for_owner(session, app_user_id, *, pet_id=None, limit=50):
+    async def screening_list_for_owner(
+        session, app_user_id, *, pet_id=None, before=None, limit=50
+    ):
         rows = [r for r in store.screenings if r.app_user_id == app_user_id]
         if pet_id is not None:
             rows = [r for r in rows if r.pet_id == pet_id]
-        # 진짜는 created_at DESC 입니다. 담은 순서를 뒤집어 그 순서를 흉내 냅니다.
-        return list(reversed(rows))[:limit]
+        # **담은 순서를 뒤집지 않고 `created_at` 으로 실제로 정렬합니다.** 뒤집기로 흉내 내면
+        # "담은 순서 = 시간 순서" 인 테스트만 통과하고, 옛 기록을 기준으로 묻는 갈래가 통째로
+        # 안 돌아 #79 3번의 순서 버그를 못 잡았습니다 (동시각은 진짜와 같게 `id` 로 가릅니다).
+        rows.sort(key=lambda r: (r.created_at, r.id), reverse=True)
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
+        return rows[:limit]
 
     async def screening_find_by_storage_key(session, storage_key, *, status=None):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고

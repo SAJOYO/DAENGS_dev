@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.egg-info/
+weights/rtmpose-m_ap10k/*.onnx
+weights/rtmpose-m_ap10k/*.zip
+tests/_out/

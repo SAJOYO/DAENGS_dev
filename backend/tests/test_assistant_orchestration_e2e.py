@@ -33,6 +33,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityStatus,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import GeminiSemanticRouter
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_backend.routers import assistant as assistant_router
@@ -339,6 +340,33 @@ def test_두_번째_스키마_실패도_아무것도_실행하지_않고_FAILED�
     assert body["clarify"] is None
     assert body["results"] == [] and body["handoffs"] == []
     assert len(transport.prompts) == 2  # exactly one retry, O-14
+    assert training.calls == []
+
+
+# ------------------------------------------------------------ 8-b. Empty selection (#278)
+
+
+def test_빈_선택은_스코프드_리다이렉트_문구로_FAILED다() -> None:
+    """라우터가 아무것도 못 고르면(기본 플래그) 라우터 실패와는 다른 문구가 나간다.
+
+    스키마 실패(위 8번)는 `_ROUTER_FAILURE_MESSAGE` — "요청을 해석하지 못했습니다".
+    빈 선택은 요청은 해석됐지만 도울 능력이 없었던 것이라, "무엇은 도울 수 있다" 를
+    말하는 스코프드 리다이렉트를 쓴다.
+    """
+    training = RecordingAdapter(
+        CapabilityName.TRAINING, _ok(CapabilityName.TRAINING, "실행되면 안 됨")
+    )
+    transport = ScriptedTransport(_decision())
+    service = AssistantOrchestrationService(
+        engine=OrchestrationEngine({CapabilityName.TRAINING: training}),
+        semantic_router=GeminiSemanticRouter(generate=transport),
+    )
+    got = _post(service, {"query": "비트코인 시세가 어떻게 돼?"}, _app_token())
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "FAILED"
+    assert body["message"] == NO_CAPABILITY_MESSAGE
+    assert body["results"] == [] and body["handoffs"] == []
     assert training.calls == []
 
 

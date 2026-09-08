@@ -22,10 +22,13 @@ from daengs_backend.core.deps import Perm, Principal, require
 from daengs_backend.schemas.metrics import (
     CategoryMetricsOut,
     ChatMetricsOut,
+    LatencyOut,
     NamedCount,
+    RequestMetricsOut,
     TurnMetricsOut,
 )
 from daengs_backend.services import metrics as metrics_service
+from daengs_backend.services import request_metrics as request_metrics_service
 
 logger = logging.getLogger(__name__)
 
@@ -77,3 +80,43 @@ async def chat_metrics(
         ),
         summaries=_ranked(m.summaries_by_processing_status),
     )
+
+
+@router.get("/requests", response_model=RequestMetricsOut)
+async def request_metrics(
+    _admin: Annotated[Principal, Depends(require(Perm.METRICS_READ))],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    days: Annotated[int, Query(ge=1, le=metrics_service.MAX_DAYS)] = (
+        metrics_service.DEFAULT_DAYS
+    ),
+) -> RequestMetricsOut:
+    """기간 안의 **요청** 숫자 — 지연과 실패 사유 (콘솔 로드맵 B2 · #297).
+
+    위 `/chats` 와 나란히 있지만 **다른 표를 셉니다.** `/chats` 는 제품 테이블(`chat_*`)
+    이라 "무엇을 물었나" 를 알고, 이쪽은 `request_metrics` 라 "어떻게 처리됐나" 를 압니다.
+    저장 안 되는 요청(무상태 · 관리자 점검)은 저쪽에 없고 여기에 있습니다.
+
+    권한·기간 한도를 `/chats` 와 같은 값으로 둡니다. 다른 값을 쓸 이유가 없고, 두 화면이
+    한 자리에 나란히 그려집니다.
+
+    **정렬은 이미 서비스가 했습니다** (SQL 의 `ORDER BY count DESC`). `/chats` 가
+    `_ranked` 로 여기서 정렬하는 것과 다른데, 저쪽은 파이썬 `dict` 를 받고 이쪽은 SQL
+    집계라 그렇습니다.
+    """
+    report = await request_metrics_service.report(session, days=days)
+    return RequestMetricsOut(
+        since=report.since,
+        days=report.days,
+        latency=LatencyOut(
+            total=report.latency.total,
+            avg_ms=report.latency.avg_ms,
+            p50_ms=report.latency.p50_ms,
+            p95_ms=report.latency.p95_ms,
+            max_ms=report.latency.max_ms,
+        ),
+        by_status=[NamedCount(name=n, count=c) for n, c in report.by_status],
+        by_capability=[NamedCount(name=n, count=c) for n, c in report.by_capability],
+        by_reason_code=[NamedCount(name=n, count=c) for n, c in report.by_reason_code],
+        by_router_kind=[NamedCount(name=n, count=c) for n, c in report.by_router_kind],
+    )
+

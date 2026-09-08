@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import ScreeningRecord
@@ -42,18 +42,30 @@ async def list_for_owner(
     app_user_id: uuid.UUID,
     *,
     pet_id: uuid.UUID | None = None,
+    before: ScreeningRecord | None = None,
     limit: int = 50,
 ) -> list[ScreeningRecord]:
     """**최근 순.** 변화 기록은 늘 최근 것을 위에 놓고 봅니다.
 
     `pet_id` 를 주면 그 아이 것만 봅니다. **`None` 은 "전부"이지 "아이 없는 것"이
     아닙니다** — 아이를 안 고르고 찍은 기록만 보고 싶은 화면은 아직 없습니다.
+
+    `before` 를 주면 **그 기록보다 앞선 것만** 봅니다. 이것을 부르는 쪽에서 걸러 낼 수 없는
+    이유는 `limit` 이 **거르기 전에** 걸리기 때문입니다 — 기준 기록이 최신 N건 밖이면 창 안에
+    나중 기록만 들어와, 부르는 쪽에서 아무리 걸러도 이력이 빈 채로 나옵니다 (#79 3번 리뷰).
+    같은 `created_at` 은 `id` 로 가릅니다. 시각이 같은 두 행의 순서가 실행마다 달라지면 같은
+    질문이 다른 이력을 받습니다.
     """
     stmt = select(ScreeningRecord).where(ScreeningRecord.app_user_id == app_user_id)
     if pet_id is not None:
         stmt = stmt.where(ScreeningRecord.pet_id == pet_id)
-    stmt = stmt.order_by(ScreeningRecord.created_at.desc()).limit(limit)
-    return list(await session.scalars(stmt))
+    if before is not None:
+        stmt = stmt.where(
+            tuple_(ScreeningRecord.created_at, ScreeningRecord.id)
+            < tuple_(before.created_at, before.id)
+        )
+    stmt = stmt.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id.desc())
+    return list(await session.scalars(stmt.limit(limit)))
 
 
 async def find_by_storage_key(

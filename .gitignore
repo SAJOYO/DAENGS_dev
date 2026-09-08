@@ -259,6 +259,10 @@ data/processed/*/*
 # 예외 — 랩 답변 덤프는 추적한다 (RAG-017 '예외' 절). LLM 출력이라 다시 돌려도 같은 글이
 # 안 나오는데 RAG-028 ⑥ 이 1랩↔2랩 비교 축으로 지정했다. 한 랩에 16KB.
 !data/processed/answers/*.jsonl
+# 예외 둘째 — judge 판정도 추적한다 (RAG-074 · `D15`). 답변 덤프와 같은 이유다: LLM 출력이라
+# 다시 돌려도 같은 글이 안 나오고, **judge 모델·프롬프트 버전을 바꾼 뒤 옛 판정과 대조**하는
+# 것이 캘리브레이션 그 자체다. 한 랩에 수 KB.
+!data/processed/judgments/*.jsonl
 data/manifests/crawl_log.jsonl
 
 # ── 보행 분석 (D-038 로 backend/src/daengs_gait 로 이관) ────────────────────
@@ -286,3 +290,7 @@ _data/
 *.webm
 *.mov
 *.avi
+
+# curl 로 손 시험할 때 생기는 것들 — 세션 쿠키가 들어갑니다 (#314 에서 실수로 커밋될 뻔했음)
+cookies.txt
+query_body.json

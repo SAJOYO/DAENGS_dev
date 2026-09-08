@@ -11,7 +11,7 @@ Card 2A는 이미 선정된 `gemini-3.5-flash-lite`가 DAENGS v1 라우팅 계�
 Phase 1에서 다음 세 자산을 하나로 동결합니다.
 
 - 골드: `backend/evals/orchestration_router/gold_v1.jsonl`
-- 프롬프트: `semantic-router-ko-v1` (`backend/tools/router_benchmark/prompt.py`)
+- 프롬프트: `semantic-router-ko-v1` (`backend/src/daengs_evals/router_benchmark/prompt.py`)
 - 구성·게이트: `backend/evals/orchestration_router/benchmark_v1.yaml`
 
 EXECUTE는 `training`, `life`, `walk`만 허용합니다. HANDOFF는 `skin`, `gait`만 허용하고
@@ -369,3 +369,109 @@ v1~v7 결과 파일은 제자리 수정하지 않았고, v8 산출물은 `result
 이 카드의 유료 호출 합계: 15(Place 프로브, 정렬 수정 전) + 15(Place 프로브, 재실행)
 + 80(v8 회귀) = **110건.** (첫 프로브는 결정적 실행 순서를 넣기 전이라 gold 와 순서만 달랐고,
 그 자체가 순서 결정화가 필요하다는 근거였습니다 — §라우팅 D-051 ④.)
+
+## v9 프롬프트 회귀 — `semantic-router-ko-v8` 배제 문장 (2026-09-07, PR #279) — **PASS**
+
+바뀐 변수는 **프롬프트 한 문장**입니다. v8 은 "사용자가 한 주제를 분명히 뺐으면(하나는 말고 / 하나만)
+그 어휘가 보여도 빠진 목적지를 고르지 말라" 를 더했습니다. v7 의 "negation overrides incidental
+vocabulary" 가 이미 있었는데도 `boundary_05`("… 날씨는 말고 … 교육만") 는 v5 · v6 · v7 · v8 회귀와
+#272 비교(3/3)에서 매번 Walk 를 더 골랐고, 이 문장은 그 패턴을 이름으로 부릅니다. 모델 · gold ·
+gate · 스키마 모양 · 1회 재시도 정책은 그대로입니다.
+
+**이 run 이 재지 않는 것도 적어 둡니다.** #279 는 일반 답변 폴백(`CapabilityName.GENERAL`)도 넣었지만
+그것은 **플래그 뒤의 planner 규칙**이지 라우터 목적지가 아닙니다. 러너(`runner_v5.run_cases`)는
+`assemble_route_plan` 을 기본값(`general_fallback=False`)으로 부르므로 여기서 채점되는 계획은 v1~v8
+과 똑같이 **라우터의 결정**이고, 80건 계획에 `general` 은 0건입니다. `evaluate.ALLOWED_EXECUTE` 에
+`general` 을 더한 것은 v7 의 `place` 와 같은 이유 — 언젠가 플래그를 켠 계획이 이 채점기에 오면
+"지어낸 능력" 이 아니라 precision 감점으로 읽히게 하려는 것입니다. gold 는 손대지 않았습니다.
+
+걱정한 위험은 배제 문장이 평범한 대조를 배제로 과독해 다중 의도의 한쪽을 떨어뜨리는 것이었고,
+그래서 볼 숫자는 `executable_recall` 과 `multi_execute_recall` 이었습니다.
+
+| 항목 | v8 (`ko-v7`) | v9 (`ko-v8`) |
+| --- | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 |
+| schema validity (first-pass / final) | 100% / 100% | 100% / 100% |
+| exact RoutePlan match (≥0.90) | 96.25% | **97.50%** |
+| executable precision / recall (≥0.95) | 96.15% / 100% | **97.40%** / 100% |
+| multi-execute recall (≥0.90) | 100% | 100% |
+| exact executable set (multi, ≥0.90) | 100% | 100% |
+| exact mixed execute+handoff match (≥0.90) | 90.00% (경계값) | 90.00% (경계값) |
+| Skin / Gait HANDOFF recall (=1.0) | 100% / 100% | 100% / 100% |
+| handoff precision (≥0.95) | 100% | 100% |
+| CLARIFY precision / recall (≥0.90) | 100% / 100% | 100% / 100% |
+| walk / training / life precision | 95.83% / 96.30% / 100% | **100%** / 96.30% / 100% |
+| forbidden / invented capability (=0) | 0 / 0 | 0 / 0 |
+| `social_intent` non-null | 0 / 80 | 0 / 80 |
+| warm p50 / p95 | 930 / 1135 ms | 897 / 1031 ms |
+| 토큰 합계 (`usage_metadata`) | 94,777 | 97,917 (입력 95,468 · 출력 2,449) |
+| non-exact | `boundary_05` · `mixed_09` · `walk_03` | `mixed_09` · `walk_03` |
+| verdict | PASS (15/15) | **PASS (15/15)** |
+
+**`boundary_05` 가 처음으로 맞았고 잃은 것은 없습니다.** `walk_precision` 이 100% 가 된 것이 그 한 건이고,
+`executable_recall` · `multi_execute_recall` 은 100% 그대로라 배제 문장이 다중 의도를 떨어뜨리지 않았습니다.
+남은 두 건은 v7 · v8 과 같은 알려진 흔들림입니다 — `walk_03` 의 Place 추가(v8 절에서 경계 사례로 수용)
+와 `mixed_09` 의 Training 추가(v4 부터). 규칙대로 80/80 을 쫓지 않습니다.
+
+같은 문장을 에이전트 프롬프트(`agent-ko-v3`)에도 넣었습니다 (D-055 ⑦ 규칙 1). 에이전트 쪽은 이 카드에서
+라이브로 재지 않았습니다 — 비교 러너 3회분(240×2 호출)은 이 카드의 예산 밖이고, 두 구현의 결정론 동치는
+`tests/test_orchestrator_failure_contract.py` ⓓ 가 잽니다.
+
+v1~v8 결과 파일은 제자리 수정하지 않았고, v9 산출물은 `results_v9.jsonl` · `summary_v9.json` ·
+`phase2_v9_report.md` 입니다.
+
+## v10 프롬프트 회귀 — `semantic-router-ko-v9` `general` 추가 목적지, 두 시각 (2026-09-07, PR #279 · D-057) — **PASS (두 시각 다 15/15)**
+
+바뀐 변수는 **프롬프트 하나**입니다. v9(D-057 ①)는 `ExecuteName` 에 `general` 을 더하고, 돌봄·건강
+의도가 전문 능력과 섞인 발화에서 그것을 **추가로** 고르되 전문 능력을 대신하지 않으며, 반려견과 무관한
+요청에는 아무것도 고르지 않는다고 적었습니다. #277 실측이 이유입니다 — 폴백을 planner 규칙으로만
+두었더니 폴백 계층 84건 중 49건이 전문 능력에 가려 폴백에 못 닿았고, 도메인 밖 질문은 place/life/walk
+가 집었습니다. 모델 · gold · gate · 1회 재시도 정책은 그대로입니다.
+
+**이 run 부터 시각이 둘입니다** (D-057 ⑤). 동결 gold 에는 `general` 이 없어 라우터가 더 고르는
+`general` 은 정의상 전부 오탐이고, D-057 으로는 의도된 정책입니다. 한 숫자로 적으면 둘 중 하나가
+숨습니다. 그래서 `runner_v10` 은 한 번의 유료 실행에서 **raw**(planner 를 플래그 on 으로 조립,
+`general` 포함 = 켰을 때의 운영 계획)와 **general-stripped**(`general` 요청을 뺀 것 = 플래그 off 의
+운영 계획, planner 가 결정에서 `general` 을 떼어 내므로 글자까지 같음)를 같이 냅니다. 회귀를 막는
+것은 stripped 시각이고, 그 조건은 "v9 이상(exact ≥ 0.975 · 15/15)" 이었습니다.
+
+**두 번 돌렸습니다 — 초안과 좁힌 판본.** v9 의 첫 초안은 `execute.general` 을 "care, husbandry,
+behavior-as-wellbeing, or health-concern questions" 로 적었고, 그 run(raw)에서 라우터가 `general` 을
+**32/80** 에 더 골랐습니다 — `training_01~10` **전부**, `multi_*` 9건, `mixed_*` 6건, `boundary_01/04`,
+`clarify_07/12`, `handoff_06`, `life_09`, `walk_08`. "섞인 발화에 더하라" 였는데 행동 교정 질문 전부에
+붙은 것이라 의도된 추가 선택이 아니라 과잉 선택이었습니다(raw exact 61.25% · precision 70.09% ·
+11/15 FAIL, stripped 는 v9 와 동일 97.50%). 사람이 **한 번만** 좁히라고 했고(D-057 ③ 의 "더 돌리지
+않는다" 는 stripped 회귀에 대한 규칙), 좁힌 것은 넷 — `general` 은 발화에 **별도의** 돌봄 질문이 있을
+때만 · 훈련/제도/산책/장소로 온전히 답해지는 질문에는 없음 · 개·견종·나이·증상이 배경으로 언급된 것은
+계기가 아님 · 행동 질문에서 훈련과 애매하면 훈련만. "behavior-as-wellbeing" 은 지웠습니다. 초안은
+이 이름으로 동결된 적이 없어 버전명은 `ko-v9` 그대로이고, 초안의 산출물은 좁힌 run 이 **덮어썼습니다**
+(아래 표의 "초안" 열이 그 기록입니다).
+
+| 항목 | v9 (`ko-v8`) | v10 초안 raw | **v10 좁힌 판본** (raw = stripped) |
+| --- | ---: | ---: | ---: |
+| cases / attempts / retries | 80 / 80 / 0 | 80 / 80 / 0 | 80 / 80 / 0 |
+| `general` 을 더 고른 케이스 | — | 32 / 80 | **0 / 80** |
+| exact RoutePlan match (≥0.90) | 97.50% | 61.25% | **98.75%** |
+| executable precision / recall (≥0.95) | 97.40% / 100% | 70.09% / 100% | **98.68% / 100%** |
+| multi-execute recall (≥0.90) | 100% | 100% | 100% |
+| exact executable set (multi, ≥0.90) | 100% | 25.00% | 100% |
+| exact mixed execute+handoff match (≥0.90) | 90.00% | 40.00% | **100%** |
+| walk / training / life precision | 100% / 96.30% / 100% | 100% / 96.30% / 100% | 100% / **100%** / 100% |
+| CLARIFY · handoff · forbidden · invented | 전부 만점 · 0 | 전부 만점 · 0 | 전부 만점 · 0 |
+| warm p50 / p95 · 토큰 (`usage_metadata`) | 897 / 1031 ms · 97,917 | 843 / 1059 ms · 107,543 | 931 / 1275 ms · 115,571 |
+| non-exact | `walk_03` · `mixed_09` | 31건, 전부 EXTRA_EXECUTE | **`walk_03`** 뿐 |
+| verdict | PASS (15/15) | FAIL (11/15) / stripped PASS | **PASS (15/15) — 두 시각 다** |
+
+**좁힌 판본에서 raw 와 stripped 가 같습니다** — 라우터가 80건 중 어디에도 `general` 을 더 고르지
+않았으므로 뺄 것이 없습니다. 조건("stripped ≥ v9, 15/15") 충족이고, 목표("training/life/walk/handoff 에
+general 없음") 는 0건으로 충족입니다. 동결 골드에는 별도의 돌봄 질문이 있는 발화가 없어(전부 전문
+능력 골드) 이 0 은 **"과잉 선택이 사라졌다"** 를 말하지, "섞인 발화에서 추가로 고른다" 가 실제로 되는지는
+말하지 않습니다 — 그것은 D-057 ③ 의 재측정(#277 폴백 계층 84건, `general_care__multi_intent` 등)이
+잽니다. 덤으로 `mixed_09`(v4 부터 흔들리던 Training 추가)가 좁힌 판본에서 처음 골드와 맞아
+`exact_mixed_execute_handoff_match` 가 경계값 90% 에서 100% 가 됐습니다 — 프롬프트를 좁힌 부수 효과이고
+온도 0 경계 흔들림일 수 있어 근거로 세지는 않습니다.
+
+v1~v9 결과 파일은 제자리 수정하지 않았고, v10 산출물은 `results_v10.jsonl` · `summary_v10.json`
+(raw 가 최상위, stripped 는 `general_stripped` 키) · `phase2_v10_report.md` — 좁힌 판본의 것입니다. 이 카드의
+유료 호출 합계: 80(v9) + 5(스모크 v1, 3,335 토큰) + 3(`001bfba` 재확인, 2,174 토큰) + 80(v10 초안,
+107,543 토큰) + 5(스모크 v2, 4,660 토큰) + 80(v10 좁힌 판본, 115,571 토큰) = **253건.**

@@ -24,13 +24,19 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from daengs_backend.core.database import get_chat_session_factory
+from daengs_backend.core.database import (
+    get_chat_session_factory,
+    get_metrics_session_factory,
+)
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
+from daengs_backend.services import care_log_context as care_log_context_service
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
+from daengs_backend.services import request_metrics as metrics_service
+from daengs_backend.services import screening_context as screening_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -97,15 +103,77 @@ async def _with_dog_context(
     **못 채워도 그냥 지나간다.** 관리자 토큰(pets 가 없다) · 활성 강아지 미지정 ·
     지워진 강아지 전부 여기로 온다. 프로필이 없다고 답할 수 있는 질문을 실패시키지 않는다 —
     B4 이전과 똑같은 답이 나갈 뿐이다.
+
+    **오늘의 케어 로그도 같은 세션에서 읽어 `context["care_log"]` 에 얹는다** (#344). 조건이
+    같고(앱 회원 + `active_dog_id`) 열어야 하는 DB 도 같아서, 세션을 하나 더 열면 요청당 연결만
+    는다 — 무상태 요청이 DB 를 안 여는 성질(D-048)은 여전히 이 조건에서만, 세션 하나로만 깨진다.
+    로그 쪽도 못 채우면 그냥 지나간다: 남의 강아지 · 오늘 기록 없음 · **표가 아직 없음**(#332
+    마이그레이션 전) 전부 로그 없이, 이 카드 전과 똑같이 답한다.
     """
     active_dog_id = context.get("active_dog_id")
     if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
         return context
     async with session_factory() as session:
         dog = await dog_context_service.resolve(session, principal.app_user_id, active_dog_id)
-    if dog is None:
+        care_log = await care_log_context_service.resolve(
+            session, principal.app_user_id, active_dog_id
+        )
+    resolved = dict(context)
+    if dog is not None:
+        resolved["dog"] = dog
+    if care_log is not None:
+        resolved["care_log"] = care_log
+    return resolved
+
+
+async def _with_screening_context(
+    context: dict[str, Any],
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """`context["screening"]` 과 `context["screening_history"]` 를 채워 돌려준다 (#307 · #79 3번).
+
+    `_with_dog_context` 와 같은 자리다. **판정 내용은 본문에서 안 받는다** — 앱이 보내는
+    것은 기록 id 뿐이고, 무엇이었는지는 서버가 DB 에서 읽어 `verdict` + `days_ago` 로
+    좁힌다. 응답이 대화 turn 으로 저장되는 경로라(D-048), 검증하지 않은 판정을 그대로
+    실었다면 지난 turn 에서 되돌릴 수 없다.
+
+    **이력의 진입 신호도 이 필드다.** "지난번보다 어때요" 에는 앱이 보낼 참조가 따로 없어,
+    결과 화면에서 이어 묻는 이 자리에 얹는다 — 그 요청은 이미 세션을 열고 있으므로 늘어나는
+    것은 같은 세션의 쿼리 하나이고, 이 필드를 안 보낸 요청은 여전히 DB 를 안 연다. 일반
+    대화 전반으로 넓히는 것(`active_dog_id` 만으로 상시)은 수요가 확인된 뒤다.
+
+    **못 채워도 그냥 지나간다.** 관리자 토큰(기록이 없다) · 남의 기록 · 아직 판정 전 ·
+    이력이 비어 있는 첫 기록 · 앱이 옛 `/screen/v1/screen` fallback 으로 찍어 행이 없는
+    건이 전부 여기로 온다 (#239 컨텍스트). 기록이 없으면 어시스턴트는 이 기능이 생기기
+    전과 똑같이 답한다.
+    """
+    if not isinstance(principal, AppPrincipal) or body.screening_record_id is None:
         return context
-    return {**context, "dog": dog}
+    async with session_factory() as session:
+        resolved = await screening_context_service.resolve_context(
+            session, principal.app_user_id, body.screening_record_id
+        )
+    if not resolved:
+        return context
+    return {**context, **resolved}
+
+
+async def _resolved_context(
+    base: dict[str, Any],
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """신뢰된 구조화 컨텍스트를 다 채운 모양. 부르는 자리가 둘(무상태 · 저장)이라 묶어 둔다.
+
+    **세션을 각자 연다.** 해당 필드를 안 보낸 요청은 DB 를 아예 안 열고, 보낸 요청만
+    그만큼 연다 — 무상태 요청이 DB 를 한 번도 안 여는 성질(D-048)을 이 두 필드가
+    필요할 때만 깬다.
+    """
+    context = await _with_dog_context(base, principal, session_factory)
+    return await _with_screening_context(context, body, principal, session_factory)
 
 
 @router.post(
@@ -147,6 +215,9 @@ async def query(
     session_factory: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)
     ],
+    metrics_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_metrics_session_factory)
+    ],
 ) -> AssistantResponse:
     """`AssistantResponse` 를 그대로 돌려준다. FAILED 를 포함해 상태를 재해석하지
     않는다 — 그것은 orchestration 계약이 소유한다 (docs/orchestration/contracts.md §5).
@@ -156,6 +227,32 @@ async def query(
     부르지 않는다. 오케스트레이션이 실패하면 turn 은 실패로 닫히고 오류는 무상태일 때와
     똑같이 나간다.
     """
+    # **지표는 곁다리다.** 못 남겨도 답변은 나간다 — 그 규칙은
+    # `services/request_metrics.py` 머리말에 있고 여기서는 감싸기만 한다.
+    #
+    # `ignore=(HTTPException,)` 를 **여기서** 넘기는 것은, "무엇이 계약된 클라이언트
+    # 오류인가"가 HTTP 경계의 일이기 때문이다 — 아래 `_dispatch` 의 `except` 열둘이
+    # 전부 그것이고(없는 대화 · 중복 message id · 한도 초과), 그건 "오케스트레이션이
+    # 어땠나" 가 아니라 "요청이 잘못 왔다" 이다. services 가 fastapi 를 알 이유도 없다.
+    return await metrics_service.measured(
+        metrics_factory,
+        principal_kind=_principal_context(principal).kind,
+        run=lambda: _dispatch(body, principal, service, session_factory),
+        ignore=(HTTPException,),
+    )
+
+
+async def _dispatch(
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    service: Orchestrator,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AssistantResponse:
+    """실제 처리. `query` 에서 뽑아낸 것은 **지표를 재는 자리를 하나로 두려고**서다.
+
+    나가는 길이 여럿이다 — 무상태 응답 하나, 저장 경로 하나, 그리고 계약된 오류 열두 갈래.
+    각 자리에 계측을 붙이면 새 `except` 가 생길 때마다 빠뜨린다. 감싸면 한 곳이다.
+    """
     principal_context = _principal_context(principal)
     include_route_trace = _may_inspect_route(principal)
     context = _structured_context(body)
@@ -163,7 +260,7 @@ async def query(
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context=await _with_dog_context(context, principal, session_factory),
+            context=await _resolved_context(context, body, principal, session_factory),
             requested_capability=body.requested_capability,
             include_route_trace=include_route_trace,
         )
@@ -181,8 +278,8 @@ async def query(
         return await service.run(
             query=body.query,
             principal=principal_context,
-            context=await _with_dog_context(
-                {**context, "active_dog_id": active_dog_id}, principal, session_factory
+            context=await _resolved_context(
+                {**context, "active_dog_id": active_dog_id}, body, principal, session_factory
             ),
             requested_capability=body.requested_capability,
             # `include_route_trace` 를 여기서는 **안 넘깁니다.** 저장하는 요청은 바로 위에서
@@ -257,4 +354,9 @@ async def query(
 # `get_chat_session_factory` 는 core/database.py 의 것을 그대로 내보낸다 — 요약 라우터와
 # 같은 의존성이라 테스트가 한 번 바꾸면 두 라우터가 같이 계측된다. 무상태 요청은 이것을
 # 한 번도 부르지 않는다.
-__all__ = ["get_chat_session_factory", "router"]
+#
+# **지표는 그것과 다른 공장을 쓴다** (`get_metrics_session_factory`). 같은 `SessionLocal`
+# 을 돌려주지만 의존성이 갈려 있어야 테스트가 "대화를 몇 번 열었나" 와 "지표를 남겼나"
+# 를 따로 볼 수 있다. 그리고 지표는 **무상태 요청도 남긴다** — 위 주석의 "무상태 요청은
+# 한 번도 부르지 않는다" 는 대화 공장 이야기다 (#297).
+__all__ = ["get_chat_session_factory", "get_metrics_session_factory", "router"]

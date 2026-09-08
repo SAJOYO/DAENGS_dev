@@ -57,7 +57,10 @@ else:
 
 
 def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=None,
-        breed: str | None = None, age_months: int | None = None) -> AskOut:
+        breed: str | None = None, age_months: int | None = None,
+        screening_verdict: str | None = None,
+        screening_days_ago: int | None = None,
+        screening_history: tuple[tuple[str, int], ...] = ()) -> AskOut:
     """질문 하나 → 응답 하나.
 
     `encoder`·`conn`·`client` 는 **받아서 그대로 넘긴다** — 만들지도 닫지도 않는다(RAG-028 ①).
@@ -66,6 +69,15 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
     `breed`·`age_months` 는 로드맵 B4 다. **원시값으로 받는다** — 부르는 쪽(어댑터)의 타입을
     여기서 알면 `daengs_life` 가 오케스트레이션을 의존하게 된다. 둘 다 `None` 이면 프롬프트가
     B4 이전과 한 글자도 다르지 않고, 그래서 프로필 없는 요청의 답은 그대로다.
+
+    `screening_verdict`·`screening_days_ago` 는 #283 이고 규칙이 같다 — 원시값, 둘 다 `None`
+    이면 프롬프트가 한 글자도 안 바뀐다. **판정 기록에서 이어 온 질문에만 채워진다.**
+    병명·확률·통제 문구가 여기 없는 것은 빠뜨린 것이 아니라 상류 계약이 안 싣기 때문이다
+    (D-023, `orchestration/contracts.py` 의 `ScreeningContext`).
+
+    `screening_history` 는 #79 3번이고 같은 아이의 **이전** 판정들이다 — `(판정, 경과일)`
+    쌍의 튜플이라 여기도 원시값이고, 비어 있으면 이력 블록이 아예 안 붙는다. 위 두 값과
+    **따로 온다**: 첫 기록은 이력이 없고, 이번 판정이 실패한 자리에는 이력만 있다.
     """
     try:
         answer = generate.ask(
@@ -77,6 +89,11 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
             conn=conn,
             client=client,
             dog=generate.DogProfile(breed=breed, age_months=age_months),
+            screening=generate.ScreeningNote(
+                verdict=screening_verdict,
+                days_ago=screening_days_ago,
+                history=tuple(screening_history),
+            ),
         )
     except RuntimeError as e:
         # `_client()` 가 키 없음으로 죽는 경우 — 설정 문제지 요청 문제가 아니다
@@ -100,9 +117,10 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
         # 422 인 것은 **요청이 잘못돼서가 아니라 답할 수 없는 요청이어서**다. 4xx 중 이 뜻에
         # 가장 가깝고, 상류가 죽은 5xx 와 갈라야 어댑터가 REFUSED 와 ERROR 를 안 뭉갠다.
         # `message` 는 생성이 만든 문장 그대로다 — 여기서 고정 문구를 끼우면 어댑터가 지킬
-        # 무손실(불변식 3)이 이미 여기서 깨진다
-        raise HTTPException(status_code=422, detail={
-            "code": f"{answer.boundary}_boundary", "message": answer.text})
+        # 무손실(불변식 3)이 이미 여기서 깨진다.
+        # **근거도 같이 간다** (RAG-077). 경계 답변이 `[1][3]` 을 달고 오는데 본문만 보내면
+        # 그 번호가 가리킬 곳이 사라진다 — #318 실측의 거절 15건 중 14건이 그랬다
+        raise HTTPException(status_code=422, detail=refusal_detail(answer))
 
     if not answer.hits:
         # **근거가 0건이면 답을 만들지 않는다.** 컨텍스트가 빈 채로 Gemini 에 넘기면 그건 검색
@@ -131,6 +149,28 @@ def _as_row(answer: generate.Answer) -> dict:
             "hits": [{"score": h.score} for h in answer.hits]}
 
 
+def refusal_detail(answer: generate.Answer) -> dict:
+    """경계 거절의 422 `detail` (RAG-055 · RAG-077).
+
+    `code`·`message` 는 RAG-055 그대로이고, `hits`·`cited`·`ungrounded` 가 RAG-077 이다 — 모양은
+    200 응답(`AskOut`)의 같은 칸과 **같다.** 어댑터가 OK 를 줄이는 코드로 REFUSED 도 줄이라고
+    같은 모양을 쓴다.
+
+    **`hits` 를 답변이 지목한 것만으로 추리지 않는다.** `[3]` 은 컨텍스트의 세 번째 자리라는
+    뜻이라, 목록에서 빠지는 것이 있으면 번호가 어긋나고 그것을 맞추려면 본문을 고쳐 써야
+    한다 — 불변식 3 이 막는 일이다. 200 응답도 지목 여부와 무관하게 컨텍스트 전부를 싣는다.
+    근거가 0건인 거절(빈 코퍼스의 응급 질문)은 `hits` 가 비고, 그때는 본문에도 가리킬 번호가
+    없어야 정상이다 — 어댑터 테스트가 그 성질을 붙잡는다.
+    """
+    return {
+        "code": f"{answer.boundary}_boundary",
+        "message": answer.text,
+        "hits": [_hit(h).model_dump() for h in answer.hits],
+        "cited": list(answer.cited),
+        "ungrounded": list(answer.ungrounded),
+    }
+
+
 def to_dto(answer: generate.Answer) -> AskOut:
     """도메인 → 계약. **이 함수가 `dto/` 가 존재하는 이유 그 자체다** (RAG-027)."""
     return AskOut(
@@ -152,4 +192,4 @@ def _hit(h: Hit) -> HitOut:
     )
 
 
-__all__ = ["ask", "to_dto", "SERVING_K", "SERVING_SUPPLEMENTARY"]
+__all__ = ["ask", "refusal_detail", "to_dto", "SERVING_K", "SERVING_SUPPLEMENTARY"]

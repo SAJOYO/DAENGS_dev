@@ -22,11 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.core.storage import StorageNotConfiguredError
+from daengs_backend.core.storage import StorageNotConfiguredError, get_storage
 from daengs_backend.models.gait_record import GaitRecord
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.schemas.gait import (
     GaitAnalyzeRequest,
+    GaitCompareRequest,
+    GaitCompareResponse,
     GaitDeleteResponse,
     GaitRecordDetail,
     GaitRecordListResponse,
@@ -167,7 +169,27 @@ async def get_record(
         summary_for_ui=record.summary_for_ui,
         video_meta=record.video_meta,
         failure_reason=record.failure_reason,
+        overlay_url=_overlay_url(record),
     )
+
+
+def _overlay_url(record: GaitRecord) -> str | None:
+    """overlay 재생 주소. 없거나 저장소 미설정이면 None — 앱은 그때 원본을 재생합니다.
+
+    다운로드는 인증 헤더 없는 bridge 를 지납니다(overlay 키는 backend 만 발급하는 uuid4 라
+    추측 불가). 그래서 이 응답 자체가 소유권 게이트입니다 — 남의 record_id 는 위에서
+    이미 404 이고, 여기까지 온 것은 내 기록의 overlay 뿐입니다.
+    """
+    if record.overlay_storage_key is None:
+        return None
+    try:
+        return get_storage().download_url(
+            record.overlay_storage_key,
+            expires_in_seconds=settings.gait_download_url_ttl_seconds,
+        )
+    except StorageNotConfiguredError:
+        # overlay 는 있는데 저장소가 안 켜진 상태 — 앱에는 원본 재생으로 조용히 물러납니다.
+        return None
 
 
 @router.delete("/records/{record_id}", response_model=GaitDeleteResponse)
@@ -180,6 +202,32 @@ async def delete_record(
     except gait_service.NotFoundError:
         raise _NOT_FOUND from None
     return GaitDeleteResponse(record_id=record.id, deleted=True)
+
+
+@router.post("/compare", response_model=GaitCompareResponse)
+async def compare_records_endpoint(
+    user: CurrentAppUser, session: Session, req: GaitCompareRequest
+) -> GaitCompareResponse:
+    """같은 반려견의 두 기록 비교 (D-058).
+
+    **DB 에 저장된 분석 데이터만 씁니다** — 원본 영상도 overlay 도 읽지 않습니다.
+    그래서 저장소가 무엇이든(local·gcs·미설정) 이 엔드포인트는 그대로 돕니다.
+
+    두 진입 경로가 같은 계약을 씁니다: 방금 분석한 기록 ↔ 과거 기록(A), 저장된 과거
+    기록끼리(B). **순서는 상관없습니다** — 날짜가 오래된 쪽이 past 가 됩니다.
+
+    ⚠️ **없는 기록과 남의 기록은 같은 404 입니다.** 400 은 "내 기록 둘인데 비교 규칙에
+       안 맞는 경우"(같은 기록·다른 반려견)라, 존재 여부가 새지 않습니다.
+    """
+    try:
+        result = await gait_service.compare(
+            session, user.app_user_id, req.record_id_a, req.record_id_b
+        )
+    except gait_service.NotFoundError:
+        raise _NOT_FOUND from None
+    except gait_service.CompareError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+    return GaitCompareResponse(**result)
 
 
 # ── 임시 bridge (gait_storage="local" 전용) ─────────────────────────────
@@ -199,7 +247,7 @@ async def delete_record(
 
 
 def _local_bridge():
-    from daengs_backend.core.storage import LocalBridgeStorage, get_storage
+    from daengs_backend.core.storage import LocalBridgeStorage
 
     storage = get_storage()
     if not isinstance(storage, LocalBridgeStorage):

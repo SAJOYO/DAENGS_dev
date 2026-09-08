@@ -35,6 +35,7 @@ from daengs_backend.schemas.admin_audit import (
     AuditActorOut,
     AuditEntryOut,
     AuditPageOut,
+    AuditRetentionOut,
 )
 from daengs_backend.services import audit as audit_service
 
@@ -59,7 +60,8 @@ async def list_entries(
     """최근 순 한 쪽. `next_cursor` 를 그대로 돌려주면 다음 쪽입니다.
 
     **총 개수를 주지 않습니다.** 세는 값이 비싸고 읽는 사이에도 늘어서(로그인마다 행이
-    생깁니다) 곧 틀린 숫자가 됩니다 (`schemas/admin_audit.py`).
+    생깁니다) 곧 틀린 숫자가 됩니다 (`schemas/admin_audit.py`). 얼마나 쌓였나는
+    아래 `/retention` 이 답합니다 — 쪽마다가 아니라 볼 때만 셉니다.
 
     `action_prefix` 는 접두어입니다 — `admin.app_user.` 로 갈래 전체를,
     `admin.app_user.pii_revealed` 로 하나만 고릅니다. 세 갈래는
@@ -110,4 +112,29 @@ async def list_entries(
             for e in page.entries
         ],
         next_cursor=page.next_cursor,
+    )
+
+
+@router.get("/retention", response_model=AuditRetentionOut)
+async def read_retention(
+    _admin: Annotated[Principal, Depends(require(Perm.ADMIN_MANAGE))],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AuditRetentionOut:
+    """얼마나 쌓였나 — A5 의 "다시 열 기준" 을 화면이 볼 수 있게 (#297).
+
+    **A5 는 "지우지 않는다" 로 닫혔습니다** (2026-09-07 사람 결정). 실측이 하루 14행이라
+    1년에 5천 행이고, 감사 로그는 지우면 못 되돌립니다. 그래서 삭제 주기를 두는 대신
+    기준을 숫자로 박았는데, **그 기준이 실제로 걸리려면 총 행 수를 누군가 보고 있어야
+    합니다.** 목록은 키셋이라 총 수를 모르고, 그때마다 psql 을 여는 사람은 없습니다.
+
+    권한은 목록과 같은 `admin:manage` 이고 **이 조회도 감사에 안 남깁니다** — 위 목록과
+    같은 이유입니다 (`services/audit.py` 읽기 절).
+    """
+    summary = await audit_service.retention_summary(session)
+    return AuditRetentionOut(
+        total=summary.total,
+        oldest_at=summary.oldest_at,
+        newest_at=summary.newest_at,
+        threshold=summary.threshold,
+        over_threshold=summary.over_threshold,
     )

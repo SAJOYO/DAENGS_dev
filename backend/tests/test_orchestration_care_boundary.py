@@ -32,6 +32,7 @@ docs/orchestration/router-benchmark.md.
 from __future__ import annotations
 
 import json
+from typing import get_args
 
 import pytest
 
@@ -48,9 +49,11 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
+    ExecuteName,
     GeminiSemanticRouter,
     SemanticRoutingDecision,
     build_semantic_router_prompt,
@@ -61,7 +64,7 @@ from daengs_backend.orchestration.social import social_message
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 LOCATION = {"location": {"lat": 37.5665, "lon": 126.978}}
-UNSUPPORTED_MESSAGE = "실행하거나 안내할 수 있는 기능이 없습니다."
+UNSUPPORTED_MESSAGE = NO_CAPABILITY_MESSAGE
 
 # Routing acceptance cases for this card. `decision` is the semantically correct
 # destination selection (what the classifier SHOULD return); the tests below feed
@@ -272,12 +275,22 @@ def test_care_question_is_not_hard_routed_by_the_prompt_builder() -> None:
 
 
 def test_no_care_capability_exists_in_the_contracts() -> None:
-    assert {name.value for name in CapabilityName} == {"training", "life", "walk", "place"}
-    for invented in ("care", "husbandry", "general", "nutrition"):
+    """No `care` capability was invented. `general` (D-057) is the one destination that
+    receives husbandry questions now — additive, and stripped by the planner while the
+    fallback flag is off, so this file's deterministic cases still route as before."""
+    assert {name.value for name in CapabilityName} == {
+        "training",
+        "life",
+        "walk",
+        "place",
+        "general",
+    }
+    for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}
+    assert "general" in get_args(ExecuteName)
 
 
-@pytest.mark.parametrize("invented", ["care", "husbandry", "general"])
+@pytest.mark.parametrize("invented", ["care", "husbandry", "nutrition"])
 def test_router_output_naming_an_invented_capability_is_schema_invalid(invented: str) -> None:
     assert validate_semantic_decision(json.dumps({"execute": [invented], "handoffs": []})) is None
     assert validate_semantic_decision(json.dumps({"execute": [], "handoffs": [invented]})) is None
@@ -396,38 +409,36 @@ def _policy() -> str:
     return prompt.split("USER_QUERY:")[0]
 
 
-def test_prompt_is_v7_with_the_same_model_and_schema_shape() -> None:
-    """v7 (D-051) added `place` and nothing else.
+def test_prompt_is_v9_with_the_same_model_and_schema_shape() -> None:
+    """v7 (D-051) added `place`; v8 added one exclusion sentence; v9 (D-057) added `general`.
 
     The care boundary this file defends is a *prompt* boundary, so it pins the prompt
-    version. v7 adds one EXECUTE name; the schema's shape, the handoff pair, the
-    social_intent field and the model are all unchanged, and the husbandry rules below
-    are re-asserted verbatim against the new prompt.
+    version. None of the bumps touched the handoff pair, the social_intent field or the
+    model. v9 is the one that finally gives husbandry a destination — additive, last in
+    the enum — and the husbandry sentences below are re-asserted against it, retargeted
+    from "no destination" to General.
     """
-    assert PROMPT_VERSION == "semantic-router-ko-v7"
+    assert PROMPT_VERSION == "semantic-router-ko-v10"
     assert ROUTER_MODEL_ID == "gemini-3.1-flash-lite"
-    assert "PROMPT_VERSION: semantic-router-ko-v7" in _policy()
-    # Schema shape unchanged: same three properties, two HANDOFF targets, and exactly
-    # one new EXECUTE name appended after the original three.
+    assert "PROMPT_VERSION: semantic-router-ko-v10" in _policy()
     schema = SemanticRoutingDecision.model_json_schema()
     assert set(schema["properties"]) == {"execute", "handoffs", "social_intent"}
     execute_enum = schema["properties"]["execute"]["items"]["enum"]
     handoff_enum = schema["properties"]["handoffs"]["items"]["enum"]
-    assert execute_enum == ["training", "life", "walk", "place"]
+    assert execute_enum == ["training", "life", "walk", "place", "general"]
     assert handoff_enum == ["skin", "gait"]
 
 
-def test_general_care_is_not_absorbed_by_the_new_place_destination() -> None:
-    """Adding Place must not give husbandry questions a home (routing §2 option C).
+def test_general_care_is_not_absorbed_by_the_place_destination() -> None:
+    """Place must not be the home of husbandry questions (routing §2 option C).
 
     "목욕은 몇 주마다 해야 해?" is a care-frequency question that happens to name a
-    service a Place could sell. The prompt has to separate the norm from the errand,
-    or the newest destination quietly becomes the dumping ground the card refused to
-    create for `care`.
+    service a Place could sell. The prompt has to separate the norm from the errand —
+    since v9 the norm goes to General, the errand to Place.
     """
-    policy = _policy()
-    assert "is not\nPlace unless the user asks where to go" in policy
-    assert "how often to bathe a dog is unsupported, while finding a\ngrooming shop is Place" in policy
+    policy = " ".join(_policy().split())
+    assert "is not Place unless the user asks where to go" in policy
+    assert "how often to bathe a dog is General, while finding a grooming shop is Place" in policy
 
 
 def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:
@@ -449,9 +460,16 @@ def test_v5_life_definition_is_formal_institutional_evidence_only() -> None:
     assert "Official guidance belongs to Life ONLY when it concerns such formal" in life_line
 
 
-def test_v6_declares_routine_husbandry_unsupported_without_keyword_lists() -> None:
+def test_v6_declares_routine_husbandry_a_general_matter_without_keyword_lists() -> None:
     policy = " ".join(_policy().split())
-    assert "General pet husbandry or care recommendations are NOT supported" in policy
+    # v5/v6 said "NOT supported by any destination"; v9 (D-057) retargets the same
+    # sentence to General. The examples and the "not Life / not Training" fences stay.
+    assert "belong to execute.general, never to a specialized destination" in policy
+    assert "NOT supported by any destination" not in policy
+    # v9's two new rules: additive selection and the dog-unrelated "select nothing" fence.
+    assert "Select it IN ADDITION to any specialized destination" in policy
+    assert "it never replaces Training, Life, Walk, or Place" in policy
+    assert "A request that is not about dogs at all" in policy and "selects NOTHING" in policy
     for example in (
         "routine or normative advice on how often or how long a dog should walk or exercise",
         "independent of current conditions",
@@ -471,6 +489,25 @@ def test_v6_declares_routine_husbandry_unsupported_without_keyword_lists() -> No
     for keyword in ("산책", "급여", "수면", "정부", "권장", "푸들", "저녁", "오늘"):
         assert keyword not in policy
     assert "not an answer generator" in policy
+
+
+def test_v10_place_is_for_the_dog_and_another_animal_is_not_a_destination() -> None:
+    """v10 (D-057 ④ 후속): 새는 곳은 `place` 하나였다.
+
+    #277 의 off_domain 21건 중 6건이 답으로 나갔고, 대조군을 낀 12건 프로브(2026-09-07)에서
+    모양이 전부 같았다 — 고양이 카페 · 고양이 사료 가게 · 사람 내과 · 이탈리안 레스토랑이
+    모두 `place` 였다. v9 의 Place 정의가 "장소를 찾아 달라는 말" 을 읽고 "그 장소가 무엇을
+    위한 것인가" 를 안 읽었기 때문이다. 안전 프롬프트(`general.py`)는 그대로다 — 거기 닿은
+    것은 이미 제대로 거절하고 있었다.
+    """
+    policy = " ".join(_policy().split())
+    assert "The venue must be for the dog or for the user together with the dog" in policy
+    assert "Finding somewhere for a person's own errand, or for another animal, is NOT Place." in policy
+    assert "a venue or care question whose subject is another animal such as a cat" in policy
+    assert "Wanting somewhere nearby found does not by itself make a request Place" in policy
+    # 과교정 방어선. 같은 발화에 강아지 부분이 있으면 그 부분은 평소대로 간다 —
+    # "주식 얘기 + 강아지 동반 카페" 가 place 를 잃으면 이 변경은 손해다.
+    assert "route that part as usual and leave the unrelated part unanswered" in policy
 
 
 def test_v6_keeps_todays_walking_time_window_in_walk_without_broadening_to_routines() -> None:

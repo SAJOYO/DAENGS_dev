@@ -43,7 +43,8 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| [life/roadmap.md](life/roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~F · 순서 · 하지 않기로 한 것. 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
+| [life/roadmap.md](life/roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~G · 순서 · 하지 않기로 한 것. **열린 것만** 담고, 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
+| [life/roadmap-archive-2026-09.md](life/roadmap-archive-2026-09.md) | 🗄 위 로드맵의 **2026-09-08 까지의 판** — 닫힌 카드의 결과 · 랩 추이 · 닫힌 결정 · 갱신 이력. 같은 §뼈대라 옛 `roadmap.md §N` 인용은 여기를 본다. 갱신하지 않는다 (#341) |
 | [life/decisions-rag.md](life/decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-052, `037` 결번) — 임베딩·청킹·저장 규약·골든셋·적재·검색·서빙·크롤 운영·PDF 약관 |
 | [life/decisions-realtime.md](life/decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
 | [life/data-sources.md](life/data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-30 기준 문서형 23 중 16 수집, 남은 7은 막힘** |
@@ -117,7 +118,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 
 | | |
 | --- | --- |
-| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · 메뉴 5개 점검(2026-09-03 실측) · **AI 답변 신고 경로**(지금은 앱 → 메일, 목표는 #131 `chat_turns` 를 가리키는 API) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
+| [console/roadmap.md](console/roadmap.md) | **관리자 콘솔 로드맵** — 왜 필요한가(지금 psql · Gmail · SSH 로 하는 일) · **메뉴 9개**와 그 뒤의 API (2026-09-07 실측 · 준비 중은 지식 베이스 하나) · **운영 DB 에 무엇이 적용됐나** · **AI 답변 신고 경로**(서버는 섰고 앱이 남았다) · 트랙 A~E · 순서 · 하지 않기로 한 것 · 열린 결정 (living doc) |
 
 콘솔은 코드 하나(`frontend/app/console`)를 로컬(`daengs.~`, 개발 DB)과 GCP(`daengapp.~`, 운영 DB) 두 곳에
 배포합니다. 운영 값이 있는 GCP 쪽이 운영 콘솔이고, "GCP 용 콘솔" 을 따로 만들지 않습니다.

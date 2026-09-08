@@ -43,10 +43,24 @@ SDK 는 꺼져 있는" 상태가 생기고, 그건 아무 데도 안 찍히면�
 
 ## 신고 → 트레이스
 
-`trace_config` 가 `run_id` 를 `request_id` 로 못박고, langsmith 의
+`request_trace` 가 요청의 **루트 런** `run_id` 를 `request_id` 로 못박고, langsmith 의
 `get_otel_trace_id_from_uuid` 가 `int(uuid.hex, 16)` 이라 **Cloud Trace 의 trace id 가
 `request_id` 의 hex 와 글자 그대로 같습니다.** 신고 한 건에서 그 요청의 라우팅·검색
 청크·프롬프트로 바로 갑니다.
+
+## 루트는 서비스가, 그래프는 자식이
+
+루트 런은 **오케스트레이션 서비스**(`orchestration/service.py` 의 `assistant_query`,
+`orchestration/agent/service.py` 의 `assistant_query_agent`)가 만듭니다. 그래프
+(`OrchestrationEngine.run`)는 그 아래 자식 `orchestration_engine` 입니다.
+
+그래프를 루트로 두면 안 되는 이유: 시맨틱 라우터의 Gemini 호출이 그래프 **앞**에서
+돕니다. 라우터가 루트보다 먼저 끝나면 그 LLM 런은 어느 트레이스에도 못 붙고, D-054 가
+가르려는 세 질문 중 "라우터가 능력을 잘못 골랐나"가 트레이스에서 사라집니다.
+
+자식은 `run_id` 를 **갖지 않습니다** (`trace_config(root=False)`). 루트와 같은
+`request_id` 를 자식에도 주면 같은 id 의 런이 둘이 되어 하나가 다른 하나를 덮습니다 —
+에이전트 경로가 정확히 그 상태였습니다 (선택 루프와 엔진이 둘 다 `run_id=request_id`).
 
 ## 왜 주입점이 하나인가
 
@@ -239,8 +253,14 @@ def trace_config(
     run_name: str,
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
+    root: bool = True,
 ) -> dict[str, Any]:
     """LangGraph `ainvoke` 에 줄 config. **트레이싱이 꺼져 있어도 같은 것을 만듭니다.**
+
+    `root=False` 면 `run_id` 를 **넣지 않습니다.** 그래프가 `request_trace` 루트 아래의
+    자식으로 도는 자리라, 같은 id 를 또 주면 루트와 충돌합니다 (모듈 docstring
+    "루트는 서비스가, 그래프는 자식이"). `request_id` 는 metadata 에는 그대로 남아
+    자식 런만 따로 걸러도 요청을 찾을 수 있습니다.
 
     분기하지 않는 이유: 분기하면 켠 경로와 끈 경로가 다른 코드가 되고, 문제는 늘 켠
     쪽에서만 납니다. 트레이서가 안 붙어 있으면 이 값들은 그냥 안 읽힙니다.
@@ -258,11 +278,57 @@ def trace_config(
         "metadata": {"request_id": request_id, **(metadata or {})},
         "tags": list(tags or []),
     }
+    if root:
+        run_id = _run_id_from_request(request_id)
+        if run_id is not None:
+            config["run_id"] = run_id
+    return config
+
+
+def _run_id_from_request(request_id: str) -> uuid.UUID | None:
+    """`request_id` 가 UUID 면 그것을 `run_id` 로. 아니면 None (링크만 포기)."""
     try:
-        config["run_id"] = uuid.UUID(request_id)
+        return uuid.UUID(request_id)
     except (ValueError, AttributeError, TypeError):
         LOGGER.debug("request_id 가 UUID 가 아니라 run_id 를 붙이지 않습니다.")
-    return config
+        return None
+
+
+def request_trace(
+    *,
+    request_id: str,
+    run_name: str,
+    inputs: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+) -> Any:
+    """요청 하나의 **루트 런**. `async with request_trace(...) as run:` 으로 씁니다.
+
+    돌려주는 것은 langsmith 의 `trace` 컨텍스트입니다. 안에서 도는 `@traceable`
+    (시맨틱 라우터 · `training_rag`)과 LangGraph 자동 계측(그래프 노드)이 전부 이 런의
+    자식이 됩니다 — langchain_core 가 부모를 langsmith 의 현재 런 컨텍스트에서
+    읽습니다 (`callbacks/manager.py` `_configure`).
+
+    **트레이싱이 꺼져 있어도 같은 코드가 돕니다** (`trace_config` 와 같은 이유).
+    그때 langsmith 는 RunTree 객체만 만들고 post 도, 컨텍스트 설정도, 클라이언트
+    생성도 하지 않습니다 (`run_helpers.trace._setup` — `enabled` 가 False 인 갈래).
+    그래서 켠 경로와 끈 경로가 갈리지 않습니다.
+
+    `run_id` 는 `request_id` 입니다 — 신고 → 트레이스 링크의 근거 (모듈 docstring).
+    `inputs` 는 anonymizer(`scrub_payload`)를 거칩니다. 신원 필드는 애초에 넣지 마세요 —
+    지워지긴 하지만, 안 넣는 것이 규칙입니다. 답의 입력(질문 · context)은 넣습니다.
+    그것을 보려고 켜는 것입니다.
+    """
+    from langsmith import trace as ls_trace
+
+    return ls_trace(
+        name=run_name,
+        run_type="chain",
+        run_id=_run_id_from_request(request_id),
+        inputs=inputs,
+        metadata={"request_id": request_id, **(metadata or {})},
+        tags=list(tags or []),
+    )
 
 
 #: 신고가 트레이스에 붙는 이름. LangSmith 에서 이 키로 거르면 신고된 요청만 남습니다.
@@ -333,6 +399,7 @@ __all__ = [
     "REPORT_FEEDBACK_KEY",
     "configure_tracing",
     "record_report_feedback",
+    "request_trace",
     "scrub_payload",
     "trace_config",
     "tracing_enabled",

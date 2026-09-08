@@ -141,9 +141,7 @@ def _with_code(base: str, width: int) -> str:
     return f"{base[: _NICKNAME_MAX - width]}{code}"
 
 
-async def _ensure_nickname(
-    session: AsyncSession, user: AppUser, identity: KakaoIdentity
-) -> None:
+async def _ensure_nickname(session: AsyncSession, user: AppUser, identity: KakaoIdentity) -> None:
     """닉네임이 비어 있으면 하나 지어 넣습니다. **있으면 손대지 않습니다.**
 
     "비어 있으면"이 조건인 것이 중요합니다. 세 경우를 한 규칙으로 덮습니다 —
@@ -341,8 +339,13 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
     try:
         # **산책이 먼저입니다.** 강아지를 먼저 지우면 walk_pets 연결만 사라지고,
         # 사람 소유인 walks와 집·생활권을 드러내는 좌표는 그대로 남습니다.
+        from daengs_backend.services.activity import remove_owner
+        from daengs_backend.services.activity_game import acquire
+
+        await acquire(session)
         deleted_walks = await walk_repo.delete_all_for_owner(session, user.id)
         deleted_pets = await pet_service.delete_all_for_owner(session, user.id)
+        await remove_owner(session, user.id)
 
         # 대화는 pets 를 지울 때 pet_id 로 함께 CASCADE 되지만, **그것에 기대지
         # 않습니다.** app_users 행은 탈퇴해도 남기므로 app_user_id 쪽 CASCADE 는

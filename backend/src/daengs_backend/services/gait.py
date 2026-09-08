@@ -134,6 +134,85 @@ async def soft_delete(
     return record
 
 
+class CompareError(RuntimeError):
+    """비교할 수 없는 요청. 라우터가 400 으로 옮깁니다 (없는 것과 구분됩니다)."""
+
+
+def _as_compare_record(record: GaitRecord) -> dict:
+    """DB 행을 `compare_records` 가 읽는 모양으로 맞춥니다 (D-058).
+
+    ⚠️ **파일을 하나도 안 만집니다.** 옛 구현은 `load_record()` 로 JSON 파일을 읽었지만,
+       비교에 필요한 값은 전부 DB 컬럼에 있습니다 — 원본·overlay 는 보관/재생용이고
+       비교의 기준 데이터가 아닙니다. 그래서 저장소 구현이 무엇이든(local·gcs) compare 는
+       그대로 돕니다.
+
+    `compare_records` 가 실제로 읽는 것만 채웁니다 — 전수 확인한 목록입니다:
+    `record_id` · `date` · `quality.status` · `quality.quality_tier` ·
+    `quality.recommendation` · `features.summary_for_ui` ·
+    `features.internal_feature_vector` · `gait_filter_version`.
+
+    ⚠️ `quality_tier` 는 `quality` **dict 안**에서 읽습니다 (`quality_gate` 가 거기 넣고
+       서비스가 통째로 저장합니다). 별도 컬럼도 있지만 그쪽을 쓰면 두 값이 갈릴 수 있어
+       저장된 dict 하나만 봅니다.
+    """
+    return {
+        "record_id": str(record.id),
+        "date": record.captured_at.isoformat() if record.captured_at else None,
+        "quality": record.quality or {},
+        "features": {
+            "summary_for_ui": record.summary_for_ui or {},
+            "internal_feature_vector": record.internal_feature_vector or {},
+        },
+        "gait_filter_version": record.gait_filter_version,
+    }
+
+
+def _order_by_age(a: GaitRecord, b: GaitRecord) -> tuple[GaitRecord, GaitRecord]:
+    """(past, recent) — **오래된 쪽이 past** 입니다.
+
+    앱이 어느 순서로 골랐든 결과가 같아야 합니다. 그래서 정렬을 앱이 아니라 여기서
+    합니다 — 앱에 맡기면 A 진입(기준 기록 먼저)과 B 진입(둘 다 고름)이 서로 다른
+    순서를 보내고, 화면의 "이전/최근" 라벨이 뒤집힙니다.
+
+    촬영일(`captured_at`)이 없을 수 있어 그때는 만들어진 시각으로 갈음합니다.
+    """
+    def key(r: GaitRecord):
+        return (r.captured_at or r.created_at.date(), r.created_at)
+
+    return (a, b) if key(a) <= key(b) else (b, a)
+
+
+async def compare(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    record_id_a: uuid.UUID,
+    record_id_b: uuid.UUID,
+) -> dict:
+    """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-058).
+
+    판정·임계값·문구는 `daengs_gait.compare.compare_loaded_records` 그대로입니다 — 여기서는
+    입력을 모아 주고 `_dev_only_*` 만 걷어냅니다.
+    """
+    if record_id_a == record_id_b:
+        raise CompareError("같은 기록끼리는 비교할 수 없습니다.")
+
+    rows = await gait_repo.get_owned_pair(session, app_user_id, (record_id_a, record_id_b))
+    if len(rows) != 2:
+        # 없는 것과 남의 것을 구분하지 않습니다 (이 모듈의 규칙).
+        raise NotFoundError("record")
+
+    first, second = rows
+    if first.pet_id != second.pet_id:
+        # 소유자는 같지만 **다른 반려견**입니다. 개체가 다르면 비교가 의미를 잃습니다 —
+        # 이 서비스는 "같은 아이의 시간 변화"를 보는 것이라서요.
+        raise CompareError("서로 다른 반려견의 기록은 비교할 수 없습니다.")
+
+    past, recent = _order_by_age(first, second)
+
+    # 엔진 선택과 `_dev_only_*` 제거는 `_run_compare` 에 있습니다 (#304).
+    return _run_compare(_as_compare_record(past), _as_compare_record(recent))
+
+
 # ── 정리 (워커/스케줄) ──────────────────────────────────────────────────
 
 
@@ -392,12 +471,17 @@ def _analyze_from_storage(storage_key: str) -> dict:
             )
             urlretrieve(url, local)
 
-        from daengs_gait.pipeline import process_video  # 지연 — torch 가 여기서 올라옵니다
+        if settings.gait_engine == "v4":
+            # walk_demo v4 — 별도 venv 의 서브프로세스 (#304). torch 가 이 프로세스에
+            # 올라오지 않습니다.
+            record = _analyze_with_v4(local)
+        else:
+            from daengs_gait.pipeline import process_video  # 지연 — torch 가 여기서 올라옵니다
 
-        # legacy HTTP 서비스는 JSON·overlay 를 GAIT_DATA_DIR 에 보존하지만, D-043 워커의
-        # 원장은 PostgreSQL/storage 입니다. persist=False 로 task 임시 디렉터리 밖에
-        # worker-side 사본을 만들지 않습니다.
-        record = process_video(local, persist=False)
+            # legacy HTTP 서비스는 JSON·overlay 를 GAIT_DATA_DIR 에 보존하지만, D-043 워커의
+            # 원장은 PostgreSQL/storage 입니다. persist=False 로 task 임시 디렉터리 밖에
+            # worker-side 사본을 만들지 않습니다.
+            record = process_video(local, persist=False)
 
         # 업로드는 DB 행 잠금을 잡은 _run_analysis 가 합니다. 여기서 먼저 올리면 탈퇴
         # cleanup 과 경합해 새 고아 object 를 만들 수 있습니다.
@@ -407,3 +491,141 @@ def _analyze_from_storage(storage_key: str) -> dict:
             overlay_data = Path(overlay_path).read_bytes()
         record["_overlay_bytes"] = overlay_data
         return record
+
+
+# ── walk_demo v4 엔진 (#304) ─────────────────────────────────────────────
+#
+# `backend/gait_v4/` 는 **자기 venv 를 가진 별도 uv 프로젝트**입니다. 워커 venv 에는
+# 설치되지 않으므로 import 할 수 없고, 그 venv 의 python 을 서브프로세스로 부릅니다.
+# 그래서 얻는 것 — ① 골든이 나온 버전 조합(torch 2.13.0 · numpy 2.5.2 …)을 그대로 두고
+# ② 라이선스 결정 전 가중치가 운영 이미지에 들어가지 않으며 ③ 이 프로세스에 torch 가
+# 안 올라옵니다. 대가는 호출마다 모델 로드 ≈4s 인데, 분석 자체가 분 단위라 무시할 만합니다.
+
+
+def _v4_dir():
+    from pathlib import Path
+
+    from daengs_backend.config import settings
+
+    if settings.gait_v4_dir:
+        return Path(settings.gait_v4_dir)
+    # config.py → daengs_backend → src → backend. 그 밑의 gait_v4.
+    return Path(__file__).resolve().parents[3] / "gait_v4"
+
+
+def _v4_python():
+    import sys
+    from pathlib import Path
+
+    from daengs_backend.config import settings
+
+    if settings.gait_v4_python:
+        exe = Path(settings.gait_v4_python)
+        if not exe.exists():
+            raise RuntimeError(
+                f"GAIT_V4_PYTHON 이 가리키는 python 이 없습니다: {exe} — 컨테이너면 command 의 "
+                "v4 `uv sync` 가 돌았는지 로그를 보세요."
+            )
+        return exe
+    root = _v4_dir()
+    exe = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    if not exe.exists():
+        raise RuntimeError(
+            f"gait_v4 venv 가 없습니다: {exe} — `cd {root} && uv sync` 를 먼저 하세요."
+        )
+    return exe
+
+
+def _analyze_with_v4(local) -> dict:
+    """`python -m gait_v4 analyze` 를 돌리고 record JSON 을 읽습니다.
+
+    반환 dict 는 legacy `process_video` 와 **같은 키**를 갖습니다 — `quality` ·
+    `features.summary_for_ui` · `features.internal_feature_vector` · `gait_filter_version` ·
+    `video_meta` · `overlay_video`(경로). 그래서 `_run_analysis` 는 엔진을 모릅니다.
+
+    `follow_cam` 은 앱 계약(`GaitAnalyzeRequest`)에 없어 **False 고정**입니다 — legacy 와
+    같이 정지 구간 필터가 켜집니다. 촬영 가이드에서 사용자가 고르게 되면 그때 받습니다.
+    """
+    import json
+    import subprocess
+
+    local = local if hasattr(local, "parent") else __import__("pathlib").Path(local)
+    out = local.parent / "record.json"
+    overlay = local.parent / "overlay.mp4"
+    cmd = [
+        str(_v4_python()),
+        "-m",
+        "gait_v4",
+        "analyze",
+        str(local),
+        "--overlay",
+        str(overlay),
+        "--out",
+        str(out),
+    ]
+    proc = subprocess.run(
+        cmd,
+        cwd=str(_v4_dir()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=V4_TIMEOUT_SECONDS,
+        check=False,  # 실패는 아래에서 stderr 꼬리를 붙여 우리 예외로 바꿉니다
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "")[-2000:]
+        raise RuntimeError(f"gait_v4 분석 실패 (exit {proc.returncode}): {tail}")
+    if not out.exists():
+        raise RuntimeError("gait_v4 가 record.json 을 만들지 않았습니다.")
+    record = json.loads(out.read_text(encoding="utf-8"))
+    # quality 가 ok 가 아니면 analyze_video 가 overlay 를 만들지 않습니다 — 키가 없거나
+    # 파일이 없으면 `_analyze_from_storage` 가 overlay 없음으로 처리합니다.
+    if record.get("overlay_video") and not overlay.exists():
+        record["overlay_video"] = None
+    return record
+
+
+#: 60초 영상 ≈58s(CPU) 에 모델 로드 4s. 여유를 크게 둡니다 — 워커의 다른 상한
+#: (Celery soft time limit) 이 있으면 그쪽이 먼저입니다.
+V4_TIMEOUT_SECONDS = 20 * 60
+
+
+def _load_v4_compare():
+    """`gait_v4/compare.py` 를 **파일로** 불러옵니다.
+
+    `import gait_v4.compare` 는 안 됩니다 — 패키지 `__init__` 이 `analyze` → `pose` →
+    torch·onnxruntime 을 끌고 오는데 backend 웹 venv 에는 없습니다. compare.py 자체는
+    numpy 만 쓰므로 모듈 하나만 파일에서 로드하면 웹 프로세스에서도 돕니다.
+    판정 로직은 `daengs_gait.compare` 와 같고, `message_kind` · `side_summary` ·
+    `condition_flags` 가 더 있습니다 (walk_demo 계약).
+    """
+    import importlib.util
+
+    path = _v4_dir() / "gait_v4" / "compare.py"
+    if not path.exists():
+        raise RuntimeError(f"gait_v4 compare 모듈이 없습니다: {path}")
+    spec = importlib.util.spec_from_file_location("_daengs_gait_v4_compare", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.compare_records
+
+
+def _run_compare(past: dict, recent: dict) -> dict:
+    """엔진에 맞는 비교 함수를 골라 돌리고 `_dev_only_*` 를 걷어냅니다.
+
+    `_dev_only_*` 는 **앱에 절대 내보내지 않습니다** — 수백 개의 숫자가 화면에 나오면
+    사용자가 그것을 건강 점수로 읽습니다 (API.md 의 노출 금지 규칙). 두 엔진 다 같은
+    접두사를 씁니다.
+    """
+    from daengs_backend.config import settings
+
+    if settings.gait_engine == "v4":
+        compare_fn = _load_v4_compare()
+    else:
+        # ⚠️ 지연 import — numpy 를 끌고 옵니다. backend 웹 프로세스의 main import 를
+        #    가볍게 유지하는 규율(D-021)이고, 비교를 안 부르면 안 올라옵니다.
+        from daengs_gait.compare import compare_loaded_records as compare_fn
+
+    result = compare_fn(past, recent)
+    return {k: v for k, v in result.items() if not k.startswith("_dev_only_")}

@@ -2,7 +2,7 @@
 
 - 골드: `gold_v1.jsonl` · 채점 케이스 80개
 - 커밋: `07ce4c51ba56be70c939050e3594f802631af1a7`
-- 채점기: `tools/router_benchmark/evaluate.py` (v1~v8 과 **같은 자**)
+- 채점기: `src/daengs_evals/router_benchmark/evaluate.py` (v1~v8 과 **같은 자**)
 - 어댑터: 가짜 — 재는 것은 능력 선택이지 도메인 답이 아니다
 
 ## 지표

@@ -29,8 +29,9 @@ from ..core import config
 from . import embed, goldenset, load, search
 from .search import Hit
 
-VERSION = 3      # 2 = 생성이 낸 boundary·covered 가 행에 있다 (RAG-055)
+VERSION = 4      # 2 = 생성이 낸 boundary·covered 가 행에 있다 (RAG-055)
                  # 3 = 반려견 프로필(`dog`)이 행에 있다 (RAG-056 · 로드맵 B4)
+                 # 4 = boundary 를 **묻는 것** 기준으로 — 증상을 곁들인 제도 질문은 none (RAG-078 · D17)
 
 # 질문이 걸린 경계 (RAG-055). `medical`·`emergency` 는 로드맵 §2 가 "이 개의 몸에 대한 판단"
 # 으로 묶은 것이고 RAG-008 ③ 이 "문서가 아니라 판단"이라고 가른 자리다.
@@ -73,13 +74,18 @@ PROMPT = """당신은 한국의 반려동물 관련 제도를 안내하는 도�
 
 답변과 함께 판단 둘을 내세요.
 
-**boundary** — 이 질문이 어디에 속하는가.
-- `emergency`: 지금 이 동물에게 벌어진 일에 대한 대처를 묻는다. 이물질을 삼켰다, 다쳤다,
+**boundary** — 이 질문이 **무엇을 묻는가**로 정합니다. 무엇을 서술했는가가 아닙니다.
+- `emergency`: 지금 이 동물에게 벌어진 일에 대한 **대처**를 묻는다. 이물질을 삼켰다, 다쳤다,
   쓰러졌다처럼 시간이 걸린 상황.
-- `medical`: 이 동물의 몸에 대한 판단을 묻는다. 증상의 원인, 진단, 약의 종류나 용량.
+- `medical`: 이 동물의 몸에 대한 **판단**을 묻는다. 증상의 원인, 진단, 약의 종류나 용량.
 - `none`: 그 밖의 전부. 제도·비용·절차·이동·보험처럼 문서로 답할 수 있는 것.
+**증상을 곁들여 제도를 물으면 `none` 입니다** — "귀가 빨개졌는데 지금 가입하면 보장되나요",
+"다리를 절어서 병원 가려는데 자기부담금이 얼마인가요"는 증상이 있어도 묻는 것은 보장·비용·
+절차·자격입니다. 자료로 답하고, 답변 끝에 증상은 수의사의 진료로 볼 일이라는 **진료 권함**
+한 문장을 붙이세요. 그 문장은 답변의 일부이지 거절이 아닙니다.
 **"먹여도 되나요"는 `none` 입니다** — 급여해도 되는지는 자료에 적힌 사실이지 이 동물의 몸에
 대한 판단이 아닙니다. 같은 음식이라도 **"먹었어요"** 는 벌어진 일이므로 `emergency` 입니다.
+피부 판정 기록이 붙어 있어도 이 판단은 [질문]만 봅니다 — 기록이 있다는 것은 벌어진 일이 아닙니다.
 `emergency` 와 `medical` 둘 다에 해당하면 `emergency` 입니다.
 
 `boundary` 가 `medical` 이나 `emergency` 면, 답변은 **자료에 무엇이 있고 없는지를 따지지 말고**
@@ -115,6 +121,46 @@ DOG_BLOCK = """
 고르고, 왜 그 갈래인지를 한 줄로 밝히세요.
 [참고자료]에 없는 기준을 이 정보로 만들어 내지 마세요 — 견종이나 나이만으로는 알 수 없는
 것을 물었다면 그렇게 답하세요.
+"""
+
+# ⚠ **판정 종류와 경과일 말고는 아무것도 안 들어온다.** 병변 이름도 확률도 이 블록에 올 수
+# 없다 — 2단계 병변명이 holdout 에서 56.6% 틀리고 1단계 확률은 보정 전이라, 계약이 그 둘을
+# 아예 안 싣는다 (D-023, `orchestration/contracts.py` 의 `ScreeningContext`).
+# **그래서 이 블록의 본문은 "무엇이었다"가 아니라 "무엇을 하지 말라"가 대부분이다.** 판정은
+# 조문 갈래를 고르는 데만 쓰고, 진단도 경과 판단도 여기서 하지 않는다. `DOG_BLOCK` 이 프로필로
+# 조항을 지어내지 말라고 막는 것과 같은 자리이고, 틀렸을 때 더 나쁜 이유도 같다 —
+# 근거 없이 지어낸 답이 **이 아이의 판정에 맞춘 답처럼** 보인다.
+SCREENING_BLOCK = """
+[피부 판정 기록] {facts}
+
+이 기록은 [참고자료]가 진료·치료·비용 지원처럼 **판정이 있는 경우와 없는 경우를 가르는**
+답을 담고 있을 때, 그 갈래를 고르는 데만 쓰세요.
+병명이나 증상의 원인을 말하지 마세요 — 이 기록에는 병명이 들어 있지 않습니다.
+나아졌는지 나빠졌는지 판단하지 마세요.
+[참고자료]에 없는 기준을 이 기록으로 만들어 내지 마세요.
+"""
+
+# 이전 판정 블록 (#79 3번). **`SCREENING_BLOCK` 을 고치지 않고 따로 붙인다** — 이번 판정만
+# 있는 요청의 프롬프트가 #283 과 바이트 단위로 같아야 그 카드의 지표 비교축이 유지된다.
+#
+# ⚠️ **본문의 대부분이 "견주지 말라"다.** 두 판정의 차이는 강아지의 변화가 아닐 수 있다:
+# 매번 다른 사진이고, 2단계 병변명은 holdout 에서 56.6% 틀리며 1단계 확률은 보정 전이다
+# (D-023). 그래서 계약에 확률도 병변명도 없고 **견줄 데이터 자체가 없는 것이 의도**인데,
+# 판정 두 개를 나란히 놓으면 모델이 그 둘로 추세를 지어낼 자리가 생긴다 — 그 자리를 막는
+# 것이 이 블록이 존재하는 이유다. 이력은 "그때는 이런 판정이었다"까지이고, 변화 판단은
+# 진료 권함으로 끝낸다.
+#
+# **이번 판정 없이 이 블록만 붙는 경우가 있다** — 방금 찍은 판정이 실패한 자리에서
+# "지난번엔 어땠지"를 묻는 흐름이다. 그래서 병명 금지 문장을 여기도 들고 있다:
+# `SCREENING_BLOCK` 이 안 붙는 요청에서도 그 방어가 서 있어야 한다.
+SCREENING_HISTORY_BLOCK = """
+[이전 피부 판정 기록] {facts}
+
+이전 기록은 "그때 이런 판정이었다"까지만 쓰세요.
+두 기록을 견주어 나아졌다·나빠졌다·진행됐다고 말하지 마세요 — 판정은 매번 다른 사진으로
+내린 것이라, 기록이 다르다는 것이 몸이 달라졌다는 근거가 되지 않습니다.
+이 기록에도 병명은 들어 있지 않습니다.
+변화가 궁금한 질문이라면 수의사 진료를 권하세요.
 """
 
 _ITEM = "[{n}] {citation} — {title}{section}\n{content}"
@@ -202,11 +248,98 @@ class DogProfile:
         return " · ".join(parts)
 
 
-def build_prompt(question: str, hits: list[Hit], *, dog: DogProfile | None = None) -> str:
+#: 판정 한 건을 사람 말로. **영단어를 그대로 두지 않는다** — `retake` 는 "판정 못 함"이지
+#: "이상 없음"이 아닌데, 모델이 그렇게 읽을 자리를 만들 이유가 없다.
+_VERDICT_KO = {
+    "normal": "특이 소견 없음",
+    "abnormal": "이상 소견 있음",
+    "retake": "사진으로 판정하지 못함",
+}
+
+
+def _describe_one(verdict: str | None, days_ago: int | None) -> str:
+    """`{언제} · {무엇}`. **날짜가 아니라 경과일을 말로 옮긴다** — 상류가 시계를 이미 풀었고,
+    날짜는 답이 필요로 하지 않는 개인 정보다."""
+    when = "오늘" if days_ago == 0 else f"{days_ago}일 전"
+    return f"{when} · {_VERDICT_KO.get(verdict or '', '판정 결과 불명')}"
+
+
+@dataclass(frozen=True)
+class ScreeningNote:
+    """Life 가 받는 피부 판정 사실 둘 (#283).
+
+    `DogProfile` 과 같은 규칙이다 — 어댑터가 원시값으로 넘기고 여기서 모양을 갖는다.
+    `daengs_backend` 의 `ScreeningContext` 를 import 하면 `rag` 가 오케스트레이션을
+    의존하게 된다 (RAG-014).
+
+    **칸이 둘인 것이 설계다.** 병변 이름·분포·통제 문구·`stage1` 확률은 상류 계약에 아예
+    없어서 여기 올 길이 없다 (D-023, contracts 불변식 15). 늘리는 것은 이 파일의 결정이 아니다.
+    """
+
+    verdict: str | None = None
+    days_ago: int | None = None
+    #: 같은 아이의 **이전** 판정들, `(판정, 경과일)` 쌍으로 최근 순 (#79 3번). 상한은 상류
+    #: 계약(`ScreeningHistory`)이 들고 있고 여기서 다시 세지 않는다 — 두 군데서 세면 어긋난다.
+    #:
+    #: **위 두 칸과 따로 채워진다.** 첫 기록은 이력이 없고, 이번 판정이 실패한 자리에는
+    #: 이력만 있다. 그래서 `has_facts` 와 `has_history` 가 별개다.
+    history: tuple[tuple[str, int], ...] = ()
+
+    @property
+    def has_facts(self) -> bool:
+        return self.verdict is not None and self.days_ago is not None
+
+    @property
+    def has_history(self) -> bool:
+        return bool(self.history)
+
+    def describe(self) -> str:
+        """`[피부 판정 기록]` 줄.
+
+        **날짜가 아니라 경과일을 말로 옮긴다** — 상류가 시계를 이미 풀었고(`days_ago`),
+        날짜는 답이 필요로 하지 않는 개인 정보다. 판정도 영문 그대로 두지 않는다:
+        `retake` 는 "판정 못 함"이지 "이상 없음"이 아닌데, 모델이 영단어를 그렇게 읽을
+        자리를 만들 이유가 없다.
+        """
+        return _describe_one(self.verdict, self.days_ago)
+
+    def describe_history(self) -> str:
+        """`[이전 피부 판정 기록]` 줄. 최근 순으로 쉼표로 잇는다.
+
+        `describe` 와 **같은 어휘표를 쓴다** — 같은 판정이 이번 줄과 이력 줄에서 다른 말로
+        나오면 모델이 그것을 다른 판정으로 읽을 자리가 생긴다.
+        """
+        return ", ".join(_describe_one(verdict, days) for verdict, days in self.history)
+
+
+def build_prompt(
+    question: str,
+    hits: list[Hit],
+    *,
+    dog: DogProfile | None = None,
+    screening: ScreeningNote | None = None,
+) -> str:
+    """**사실이 없으면 프롬프트가 한 글자도 안 바뀐다.**
+
+    B4 가 세운 성질이고(`DOG_BLOCK`), 스크리닝도 같은 게이트 뒤에 둔다 — 골든셋에는 판정
+    기록이 없으므로 랩 비교의 축이 그대로 유지된다. 이 게이트가 없으면 이 카드가 지표를
+    올렸는지 내렸는지 **아무도 말할 수 없게 된다** (RAG-028 ⑥).
+
+    둘 다 있으면 반려견 블록이 먼저다 — 순서를 고정해 두지 않으면 같은 입력이 두 프롬프트가 된다.
+
+    **이번 판정만 있는 요청의 프롬프트는 #283 과 바이트 단위로 같다** (#79 3번). 이력은
+    `SCREENING_BLOCK` 을 고치는 대신 뒤에 블록 하나를 더 붙이는 방식이라, 이력이 없으면
+    붙는 것이 없다. 두 블록은 **각자 게이트를 가진다** — 첫 기록이면 이번 판정만, 이번
+    판정이 실패한 자리면 이력만 붙는다.
+    """
     prompt = PROMPT.format(context=build_context(hits), question=question)
-    if dog is None or not dog.has_facts:
-        return prompt
-    return prompt + DOG_BLOCK.format(facts=dog.describe())
+    if dog is not None and dog.has_facts:
+        prompt += DOG_BLOCK.format(facts=dog.describe())
+    if screening is not None and screening.has_facts:
+        prompt += SCREENING_BLOCK.format(facts=screening.describe())
+    if screening is not None and screening.has_history:
+        prompt += SCREENING_HISTORY_BLOCK.format(facts=screening.describe_history())
+    return prompt
 
 
 class Verdict(BaseModel):
@@ -285,7 +418,8 @@ def _client(api_key: str | None = None):
 
 
 def answer(question: str, hits: list[Hit], *, client=None, model: str | None = None,
-           embedding_model: str | None = None, dog: DogProfile | None = None) -> Answer:
+           embedding_model: str | None = None, dog: DogProfile | None = None,
+           screening: ScreeningNote | None = None) -> Answer:
     """**순수하다** — 검색 결과를 받는다. DB 도 임베딩 모델도 안 만진다.
 
     나눠 둔 이유는 `search()` 가 `conn` 을 받게 한 것과 같다: 테스트가 손으로 만든 `Hit` 몇 개로
@@ -297,11 +431,17 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
     name = model or config.settings.gemini_model
     cli = client or _client()
     resp = cli.models.generate_content(
-        model=name, contents=build_prompt(question, hits, dog=dog),
+        model=name, contents=build_prompt(question, hits, dog=dog, screening=screening),
         # **스키마를 붙여서 받는다** (RAG-055). 프롬프트로 JSON 을 부탁하는 것과 다르다 —
         # 부탁은 모델이 산문으로 새면 그만이고, 그 새는 날이 하필 거절해야 할 질문일 수 있다
-        config=types.GenerateContentConfig(response_mime_type="application/json",
-                                           response_schema=Verdict),
+        # **온도는 설정이 있을 때만 넣는다.** `None` 이면 이 인자 자체가 안 붙어 지금까지와
+        # 같은 호출이 된다 — 랩 비교 축을 건드리지 않는 조건이다 (#314).
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=Verdict,
+            **({} if config.settings.generation_temperature is None
+               else {"temperature": config.settings.generation_temperature}),
+        ),
     )
     verdict = parse_verdict((resp.text or "").strip())
     if verdict is None:
@@ -328,7 +468,7 @@ def answer(question: str, hits: list[Hit], *, client=None, model: str | None = N
 def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool = True,
         category: str | None = None, model_key: str | None = None,
         st=None, conn=None, client=None, model: str | None = None,
-        dog: DogProfile | None = None) -> Answer:
+        dog: DogProfile | None = None, screening: ScreeningNote | None = None) -> Answer:
     """질문 하나 → 답 하나. **9단계의 순서가 이 세 줄이다.**
 
     `st`(임베딩 모델)·`conn`(DB)·`client`(Gemini) 셋 다 **받으면 만들지도 닫지도 않는다** — ①의
@@ -350,7 +490,10 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     # **검색 질의에는 프로필이 안 들어간다** (로드맵 B4 = "프로필 → 프롬프트"). 견종을 질의에
     # 섞으면 검색이 달라져 lap 비교 축이 흔들리고, 그것은 지역 필터(A2)와 같은 종류의 카드다.
     # 그래서 top-k 에 맹견 조항이 안 오면 프로필이 있어도 답이 안 갈린다 — `## 남은 것`(#202).
-    return answer(question, hits, client=client, model=model, embedding_model=key, dog=dog)
+    # **검색 질의에 판정도 안 들어간다.** 프로필과 같은 이유이고(위), 판정으로 검색을
+    # 가르면 lap 비교 축이 흔들린다 — 판정은 프롬프트에서 갈래를 고르는 데만 쓴다 (#283).
+    return answer(question, hits, client=client, model=model, embedding_model=key, dog=dog,
+                  screening=screening)
 
 
 # ---------------------------------------------------------------- 덤프 (RAG-028 ⑥)

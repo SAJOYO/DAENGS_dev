@@ -54,6 +54,91 @@ OrchestratorState:
 - 민감한 반려견별 데이터 접근 전에 권위 있는 소유권/프로필 해석이 선행 조건입니다 (FOLLOW-UP).
 - 다견 식별자 모델은 지금 설계하지 않습니다.
 
+**돌봄 사실 (CURRENT — #331)** — B4(#202)가 놓은 `active_dog_id → services/dog_context →
+context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_style`(free · scheduled) ·
+`health_conditions`(자유 텍스트, 200자) · `on_medication`(**`True` 만**). 규칙은 견종·나이와
+같습니다 — 서버가 프로필에서 조립하고, planner 가 칸마다 화이트리스트로 옮기며, 모양이 틀린
+칸은 그 칸만 떨어지고 요청은 안 깨집니다. 소비자는 `GeneralPayload.dog` 이고 Life 어댑터는
+견종·나이만 계속 읽습니다. **약 이름과 급식 시각은 이 경계를 안 넘습니다** — `pets.medications`
+는 프로필에 머물고 복약 *여부*만 건너가며, 빈 약 칸은 `False` 가 아니라 모름이라 키 자체가
+없습니다. 일반 답변 프롬프트가 약·용량 질문을 거절하는데(D-057), 약 이름이 DOG_CONTEXT 에
+있으면 그 거절이 힌트로 바뀝니다. 안전 프롬프트 본문은 `general-answer-ko-v3` 그대로입니다
+— 바뀐 것은 그 안에 실리는 JSON 뿐입니다.
+
+**케어 로그 (CURRENT — #344)** — 같은 조건(앱 회원 + `active_dog_id`), 같은 세션에서 오늘의
+케어 요약을 읽어 `context["care_log"]` 에 얹습니다 (`services/care_log_context` ←
+`services/care_event.day_summary`, #332). 모양은 `CareLogContext` — `day` · 종류별 건수(`meal` ·
+`medication` · `snack` · `walk`) · 마지막 시각 셋(`HH:MM`, 서울). planner 가 칸마다 화이트리스트로
+옮겨 **`GeneralPayload.care_log` 로만** 보냅니다 — Life 는 조례·보조금 문서로 답하는 자리라 오늘
+밥 횟수가 답을 안 가르고, Training 은 반려견 사실을 애초에 안 받습니다. **`note` 와 이벤트 목록은
+이 경계를 안 넘습니다** — 사용자가 적은 자유 텍스트가 지시문 옆에 놓이는 자리이고, 요약이 답에
+필요한 전부입니다. 오늘 기록이 0건이면 키 자체가 없습니다(빈 로그는 "안 챙겼다" 가 아니라 "안
+쓴다" 일 수 있어 어느 쪽으로도 안 읽히게). 표가 아직 없거나 DB 가 아프면(`SQLAlchemyError`)
+경고만 남기고 로그 없이 답합니다. 프롬프트는 로그가 있을 때만 `CARE_LOG_TODAY` 블록과 규칙
+한 문단이 붙고 버전이 `general-answer-ko-v4-carelog` 로 갈립니다 — 로그가 없는 요청은 여전히
+v3 와 글자까지 같습니다 (`tests/test_assistant_care_log.py` 가 고정).
+
+**스크리닝 컨텍스트 (CURRENT — #307)** — `context` 의 두 번째 예약 키가 `screening` 입니다.
+사용자가 피부 판정 결과에서 이어 물을 때, 앱이 보내는 것은 **기록 id 하나**(`screening_record_id`,
+§8)이고 판정 내용은 서버가 DB 에서 읽습니다 — `screening_records` 소유권을 확인하고
+`ScreeningContext {verdict, days_ago}` 로 좁혀 `context["screening"]` 에 넣습니다
+(`services/screening_context.py`, `orchestration/contracts.py`). 규칙:
+
+- **판정 본문은 요청으로 받지 않습니다.** `/assistant/query` 응답은 대화 turn 으로 저장되므로
+  (D-048), 검증하지 않은 판정이 한 번 들어가면 지난 turn 에서 되돌릴 수 없습니다. `location`·
+  `dog` 과 같은 규칙입니다 — 구조화 컨텍스트는 **서버가 명시적으로 조립**합니다.
+- **병변 분포 · 계열 · 통제 문구 · `stage1` 확률 · 사진 주소는 안 들어갑니다** (§6 불변식 15).
+- **못 채워도 실패가 아닙니다.** 남의 기록 · 없는 기록 · 판정 전 · 앱이 옛 `/screen/v1/screen`
+  fallback 으로 찍어 행이 없는 건이 전부 조용히 무시되고, 어시스턴트는 이 기능이 생기기 전과
+  똑같이 답합니다.
+- **이것은 능력 확장이 아닙니다.** Skin 은 계속 HANDOFF 전용이고(routing 문서 §5) `CapabilityName`
+  에 `skin` 이 없습니다 — 여기서 읽는 것은 **이미 끝난 판정의 기록**입니다.
+- 라우팅 신호가 아닙니다 — 라우터 프롬프트가 보는 것은 `source`·`action`·`active_dog_id`
+  뿐입니다 (`semantic._ROUTING_METADATA_KEYS`).
+
+**스크리닝 이력 (CURRENT — #79 3번)** — 세 번째 예약 키가 `screening_history` 입니다.
+같은 아이의 **이전** 판정들이고 모양은 `ScreeningHistory {entries: [ScreeningContext]}` 의
+`entries` — 즉 위와 **같은 두 칸이 건수만큼**입니다 (`orchestration/contracts.py`,
+`services/screening_context.py::resolve_context`). 최근 순이고 상한은
+`SCREENING_HISTORY_LIMIT = 3` 입니다. 규칙:
+
+- **진입 신호는 `screening_record_id` 하나입니다.** "지난번보다 어때요" 에는 앱이 보낼
+  참조가 따로 없어, 결과 화면에서 이어 묻는 그 자리에 얹습니다 — 이력 전용 요청 필드를
+  만들지 않고, 아이는 지목된 기록의 `pet_id` 에서 옵니다. 그 필드를 안 보낸 요청은
+  **이력을 읽지 않고 DB 도 열지 않습니다.** `active_dog_id` 만으로 상시 읽는 것(일반 대화
+  전반의 피부 기억)은 실제 수요가 확인된 뒤에 넓힙니다.
+- **좁힘은 건수와 무관합니다.** 항목이 `ScreeningContext` 자체라 §6 불변식 15 가 그대로
+  걸립니다 — 이력이라고 병변 분포·계열·통제 문구·확률·사진 주소가 필요해지지 않습니다.
+- **"나아졌다 / 진행됐다" 를 계산하지 않습니다.** 두 시점의 차이는 강아지의 변화가 아니라
+  모델의 잡음일 수 있습니다 (D-023 — 2단계 병변명이 holdout 에서 56.6% 틀리고 `stage1` 은
+  보정 전). 하류가 할 수 있는 것은 **이전 기록이 있고 그때는 이런 판정이었다**를 나열·안내
+  하는 것까지이고, 판단은 진료 권함으로 끝냅니다. 계약에 추세 칸도 확률도 없어서 애초에
+  **비교할 데이터가 없는 것이 의도**입니다.
+- **상한이 계약에 있습니다.** 오래 쓴 아이일수록 한 요청이 비싸지는 것도, 저장되는 대화
+  turn 이 길어지는 것도 `max_length` 가 막습니다 — 세 번째 판정이 문장을 더 참으로 만들지
+  않습니다.
+- **못 채워도 실패가 아닙니다.** 첫 기록(이력 없음) · `pet_id` 가 NULL 인 기록(아이를 지우면
+  FK 가 SET NULL) · `DONE` 이 아닌 이전 행이 전부 조용히 빠집니다. 빈 목록을 실어 "봤는데
+  없더라" 를 말하지도 않습니다 — 키가 아예 없습니다. 기준 기록을 못 읽으면 아이를 알 방법이
+  없으므로 이력도 없습니다.
+- 기준 기록 자신은 이력에 안 들어갑니다 — 이미 `screening` 에 있고, 두 번 실리면 "기록이
+  두 건" 으로 읽힙니다. 거꾸로 **기준 기록이 `FAILED` 여도 이력은 갑니다**: 방금 찍은 판정이
+  실패한 자리에서 "지난번엔 어땠지" 는 그대로 유효한 질문이라 `screening` 만 빕니다.
+- 라우팅 신호가 아닌 것도 같습니다 (`semantic._ROUTING_METADATA_KEYS`).
+- **Life 까지 갑니다** — `LifePayload.screening_history` → 어댑터의 `(판정, 경과일)` 쌍 →
+  `SCREENING_HISTORY_BLOCK` (§3 · architecture 문서). `screening` 과 **따로** 흐르므로 한쪽만
+  있어도 됩니다.
+- **답변에도 절로 붙습니다 — 다만 능력이 답을 못 냈을 때만입니다.** `aggregate_results` 가
+  `[이전 기록] …` 절을 **결정적으로** 조립합니다 (§5 · O-9). 조건이 좁은 것은 Life 프롬프트만으로는
+  이력이 사용자에게 안 닿기 때문입니다 — Life 는 근거 기반 RAG 라 조례·약관만 답합니다
+  (2026-09-07 실측: "예전에 찍어둔 기록 있었나?" 에 수의사법 제13조로 답했습니다). 그런데
+  물어본 것에 답이 있으면 이력은 안 물어본 이야기라, **핸드오프뿐 · 전부 기권 · 전부 실패**일
+  때만 말합니다. "지난번보다 어때요" 가 정확히 그 자리입니다 — 라우터가 skin 핸드오프만 내고
+  능력을 하나도 안 고릅니다. CLARIFY 는 배타적이라(§2) 붙지 않습니다.
+- **그 절은 견주지 말라를 사용자에게도 말합니다.** 판정을 나란히 놓으면 사람이 스스로 추세를
+  읽는데, 그 차이는 매번 다른 사진에서 나온 것이라 몸이 달라졌다는 근거가 아닙니다 (D-023).
+  프롬프트에서 모델에게만 금지하면 코드가 지킨 방어를 화면이 풉니다.
+
 ## 2. RoutePlan
 
 라우터의 산출물. **스칼라 mode 하나로 접지 않습니다** (D-034) — "산책은 실행하고 피부는
@@ -67,7 +152,7 @@ RoutePlan:
   clarify:   {question: str, missing: list[str]} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
   model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.1-flash-lite` (routing 문서 §4)
-  prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v7`
+  prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v8`
 ```
 
 규칙 (CONFIRMED):
@@ -93,7 +178,9 @@ RoutePlan:
 
 ```
 CapabilityRequest:
-  capability: training | life | walk | place   # 실행 registry (place: PR #196, 의미 선택은 PR #204)
+  capability: training | life | walk | place | general
+      # 실행 registry (place: PR #196, 의미 선택은 PR #204). `general` 은 PR #279 의 일반 답변
+      # 폴백 — 실행되고 저장되지만 **라우터가 고르지 못하고** planner 규칙만이 넣는다 (아래 §3 끝)
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -115,6 +202,23 @@ grounding합니다), 좌표는 검증된 `context.location`에서 복사합니�
 `requested_capability=place`만 결정적으로 열었고, **PR #204(D-051)에서 의미 라우터도 Place를
 고릅니다** — `PlacePayload` 자체는 그대로입니다.
 
+**Life payload 는 판정 기록도 받습니다** (#283). `LifePayload {question, dog, screening}` 에서
+`screening` 은 §1 의 `context["screening"]` 을 planner 가 화이트리스트로 옮긴 것이고,
+`dog` 과 규칙이 같습니다 — 부르는 쪽이 이미 푼 값만 지나가고, 모양이 틀리면 `None` 이지
+422 가 아닙니다. **`general` 은 받지 않습니다**: 근거 없이 답하는 자리라(D-057) 판정을 쥐여
+주면 자기 `diagnosis` 거절이 막으려던 문장을 부르게 됩니다. Life 가 받는 이유는 그 반대로,
+"이런 경우 지원이 있어요" 를 만드는 조례·보조금 문서를 Life 가 검색하기 때문입니다.
+`ScreeningContext` 의 두 칸(§1 · 불변식 15)이 여기서도 그대로이고, `daengs_life` 로는
+원시값 둘로 건너갑니다 — 도메인이 오케스트레이션 타입을 알면 D-035 가 막은 방향이 됩니다.
+
+**이전 판정들도 같은 규칙으로 받습니다** (#79 3번). `LifePayload.screening_history` 는 §1 의
+`context["screening_history"]` 를 planner 가 **항목마다** 같은 화이트리스트로 옮긴 것이라,
+좁힘이 건수와 무관하게 걸립니다. `screening` 과 **별개의 칸**인 것은 둘이 따로 없기 때문입니다 —
+첫 기록은 이력이 없고, 이번 판정이 실패한 자리에는 이력만 있습니다. `daengs_life` 로는
+`(판정, 경과일)` **쌍의 튜플**로 건너갑니다. 상한을 넘는 목록이 오면 잘라서 보냅니다 —
+상류가 이미 잘랐으므로 그런 목록은 상류 결함인데, 여기서 422 를 내면 사용자가 보지도 고치지도
+못하는 결함 때문에 답할 수 있는 질문이 죽습니다. `general` 이 안 받는 것도 같습니다.
+
 **payload는 능력별 명시 분기로 만듭니다** (D-051). 예전 조립 루프는 Training/Life가 아니면
 좌표 payload를 주는 `else` 폴백이었고, 그것은 Walk가 유일한 좌표 능력인 동안에만 맞았습니다 —
 `place`가 선택 가능해지는 순간 Place에 `query` 없는 WalkPayload를 주어 검증 실패 → 최상위
@@ -122,6 +226,15 @@ FAILED가 됩니다. 이제 새 `ExecuteName`은 자기 payload를 적거나 요
 둘 중 하나이고, 남의 모양을 물려받지 않습니다. 요청 순서도 모델의 나열 순서가 아니라
 `CapabilityName` 선언 순서로 고정합니다 — 그 순서가 집계 message의 절 순서로 사용자에게
 그대로 보이기 때문입니다.
+
+**`general` 은 두 길로 계획에 들어옵니다** (D-057 ①). ⓐ planner 규칙: 의미 결정이 비어 있고(능력 0 ·
+핸드오프 0 · 스몰토크 아님) `DAENGS_GENERAL_FALLBACK` 이 켜져 있으면 `GeneralPayload {question, dog}`
+하나 — Life 와 같은 규칙, 좌표 없음 — 를 조립합니다. ⓑ 라우터 목적지(`semantic-router-ko-v9`): 돌봄·
+건강 의도가 전문 능력과 섞인 발화에서 라우터가 `general` 을 **추가로** 고릅니다 — 전문 능력을 대신하지
+않고, 반려견과 무관한 요청에는 아무것도 고르지 않습니다. `general` 은 실행 순서 맨 뒤, 좌표 불필요,
+좌표 게이트(CLARIFY)는 그대로 선택 전체에 하나이며, `requested_capability="general"` 은 풀리지 않는
+신호입니다. **플래그가 꺼져 있으면 planner 가 결정에서 `general` 을 떼어 냅니다** — 기본값이 `false` 라
+켜기 전까지 계획은 예전과 글자까지 같고, 빈 결정은 FAILED 입니다.
 
 ## 4. CapabilityResult
 
@@ -175,6 +288,9 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Place 후보 1건 이상(직접 해석 또는 공개된 대안 lens) | OK — 대안·미해결 신호를 notice로 보존 |
 | Place 정상 응답이지만 후보 없음·추가 선택 필요·미지원 의미 | ABSTAINED — 공개 projection과 refinement는 `data`에 함께 보존 |
 | Place 내부 HTTP/provider 실패 | ERROR 또는 TIMEOUT — provider 본문·원출력은 노출하지 않음 |
+| General `kind=answer` (PR #279) | OK — `data.answer` 뿐. 근거 없는 생성이라 인용이 없다 |
+| General `kind=refuse` — 진단 · 약/용량 · 응급 · 제도/수치 · 도메인 밖 | **REFUSED** — `refusal.code` 는 사유 범주, `refusal.message` 는 코드가 쓴 고정 안내("수의사에게" / "제도 정보 기능에") |
+| General 프로바이더 실패 · 출력 스키마 불일치 | ERROR 또는 TIMEOUT — 라우터 실패 문구가 아니라 능력 하나의 실패로 보인다 |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL
   구분(공개 decision — `schemas/training.py` · docs/training/rag-demo.md)이 `refusal.code`
@@ -273,7 +389,8 @@ AssistantResponse:
 2. **ABSTAINED ≠ REFUSED** (D-033). 자료 부족 기권을 정책·안전 거절로 접지 않고,
    그 역도 하지 않습니다. 전부 기권이면 최상위는 UNCERTAIN 이지 REFUSED/FAILED 가 아닙니다.
 3. **refusal·abstention 메타데이터는 무손실 통과.** 상류의 분류 체계를 오케스트레이터가
-   병합·개명하지 않습니다.
+   병합·개명하지 않습니다. 거절 문장이 `[N]` 으로 근거를 지목하면 그 근거도 같이 갑니다 —
+   `REFUSED` 가 `data.citations` 를 가질 수 있고, OK 와 같은 규칙(5)으로 줄입니다 (RAG-077).
 4. **그래프 상태에 인증 토큰 금지.** principal 만 들어옵니다. 인증은 그래프 밖,
    그래프 안은 능력별 인가만.
 5. **그래프 상태·공개 결과에 업로드 바이너리와 검색 청크 전문 금지.** 특히 Life 어댑터의
@@ -314,6 +431,19 @@ AssistantResponse:
     `tests/test_orchestration_contracts.py::test_capability_names_have_exactly_three_copies_and_they_agree`
     가 셋을 대조합니다.
 
+    `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
+    프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
+
+15. **스크리닝의 통제 문구와 병변 분포는 어떤 payload · 프롬프트 · 그래프 상태에도 들어가지
+    않습니다** (#307). 오케스트레이션이 스크리닝에서 받는 것은 **판정 종류와 경과일**뿐입니다
+    (`ScreeningContext`). 불변식 5 의 형제이고, 근거는 D-023 입니다 — 2단계 병변명이 holdout
+    에서 56.6% 틀려서 계약에 `top1` 을 아예 두지 않았고, 지금 그 방어가 서 있는 이유는
+    **이름을 말하는 코드 경로가 없다**는 사실 자체입니다. 필드가 하나 늘면 그 사실이 사라지는데
+    예외도 실패도 안 나므로, 계약이 직접 거절합니다
+    (`tests/test_orchestration_contracts.py` · `tests/test_screening_context.py`).
+    `headline`·`body`·`action`·`disclaimer` 는 사용자에게 무수정으로 갈 것이지 모델이 읽을
+    것이 아닙니다 (PR #79). **합성은 2차 LLM 이 아니라 결정적 절 조립입니다** (O-9 · §5).
+
 ## 7. locale 준비
 
 지금은 `locale = "ko-KR"` 하나입니다. 미래에 `"en-US"` 가 들어올 자리를 계약에만
@@ -340,6 +470,7 @@ AssistantQueryRequest:            # extra="forbid" — 목록에 없는 필드�
   source:                 str | None = None
   action:                 str | None = None
   active_dog_id:          str | None = None
+  screening_record_id:    UUID | None = None
   location:               LocationIn | None = None
 
 LocationIn:                       # extra="forbid"
@@ -361,6 +492,10 @@ LocationIn:                       # extra="forbid"
   기존 결정론적 planner 가 냅니다(§2) — HTTP 검증이 미리 막지 않습니다.
 - **클라이언트가 보낼 수 있는 임의의 `context` 딕셔너리는 없습니다.** 구조화
   컨텍스트는 위 필드에서만, 서버가 명시적으로 조립합니다.
+- **`screening_record_id` 는 참조이지 판정이 아닙니다** (#307). UUID 가 아니면 422 이고,
+  내 기록이 아니거나 아직 판정 전이면 **조용히 무시**합니다 — 404 를 주면 "그 기록이
+  존재한다" 가 새고, 기록을 못 찾았다는 이유로 답할 수 있는 질문까지 죽습니다. 판정 본문을
+  담은 필드는 없고, 보내면 `extra="forbid"` 가 422 로 거부합니다 (§1 스크리닝 컨텍스트).
 - **`token`·`authorization`·`credentials`·`user`·`principal`·`permissions` 같은 신원
   필드는 요청 본문에서 받지 않습니다.** `extra="forbid"` 가 422 로 거부하고, 애초에
   `PrincipalContext` 는 본문이 아니라 인증된 의존성에서만 서버가 만듭니다.

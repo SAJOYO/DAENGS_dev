@@ -42,13 +42,17 @@ from daengs_life.rag.stages import goldenset
 # "보험 문항은 전부 하나다 / 질문이 '펫보험' 일반이라 한 회사의 행으로 답이 성립한다"는 **더는
 # 안 맞는다** — 그 전제가 틀렸다는 것이 D3·D12 로 드러난 자리다(RAG-068 ④ · RAG-069 ②).
 # 요구는 76 그대로, 주소만 90 -> **91** 이다: I4 가 같은 상품의 두 판(2605.1 | 2601.6)을 대안으로 갖는다.
-ITEMS = 46
-MUST_TOTAL = 76          # 요구의 수
-MUST_ADDRESSES = 91      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
+# 2026-09-08 갱신 — 증상 + 제도 3문항(B7~B9) 추가 (RAG-078 · D17). hand 38 -> 41, 문항 46 -> 49.
+# 셋 다 `expect: answer` 라 요구 76 -> 79. 주소는 91 -> **96** — B7(삼성 | KB 피부병 특약 제1조)과
+# B8(KB 치료비 특약 제3조 | 삼성 보통약관 제5조)이 **두 회사의 같은 조항을 대안**으로 갖고, B9 는 I2 의
+# 주소 하나를 그대로 쓴다. B4~B6 의 짝이다 — 같은 증상을 서술하되 **묻는 것이 제도**라 답해야 한다.
+ITEMS = 49
+MUST_TOTAL = 79          # 요구의 수
+MUST_ADDRESSES = 96      # 주소의 수 — 대안을 늘리면 이쪽만 늘어야 한다
 #                          80 → 82: Q3·B1 의 두 번째 요구에 `별표 4-2-아` 를 대안으로 (RAG-061 ①).
 #                          `MUST_TOTAL`(요구 수)이 안 움직인 것이 그 변경이 옳다는 표시다
-BY_ORIGIN = {"hand": 38, "easylaw": 8}
-BY_EXPECT = {"answer": 41, "abstain": 2, "refuse": 3}
+BY_ORIGIN = {"hand": 41, "easylaw": 8}
+BY_EXPECT = {"answer": 44, "abstain": 2, "refuse": 3}
 
 
 @pytest.fixture(scope="module")
@@ -215,6 +219,7 @@ def test_scored_items_exclude_the_boundary_questions(gs: goldenset.GoldenSet) ->
     assert scored == {i.id for i in gs.items if i.expect == "answer"}
     assert not scored & {"B2", "B3", "B4", "B5", "B6"}
     assert "B1" in scored, "B1 은 답해야 하는 문항이다 — 기권 신호가 과하게 켜지는지 재는 자다"
+    assert {"B7", "B8", "B9"} <= scored,         "B7~B9 는 증상을 서술하되 제도를 묻는 문항이다 — 경계가 과하게 켜지는지 재는 자다 (RAG-078)"
 
 
 def test_refusal_codes_are_the_two_the_adapter_emits(gs: goldenset.GoldenSet) -> None:

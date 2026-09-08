@@ -39,6 +39,7 @@ from pathlib import Path
 from .core import config, io
 from .stages import chunk as chunker
 from .stages import embed, evaluate, generate as generator, goldenset, parse
+from .stages import judge as judger
 from .stages import load as loader
 from .stages import score as scorer
 from .core import transport, vocabulary
@@ -786,9 +787,22 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         ckinds = None
         print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 옛 셈(경계 포함)으로 낸다\n")
 
-    print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
-          f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
-    print("-" * 108)
+    # `--quiet` 는 표를 전부 접고 **종료 코드만** 받는 길이다 (`--against` 와 같이 쓴다).
+    # 뒤에 CI 를 붙일 자리인데, 그때 필요한 것은 사람이 읽는 표가 아니라 판정 하나다.
+    quiet = getattr(args, "quiet", False) and getattr(args, "against", None)
+
+    # ⚠ **랩 번호순이다 — 2026-09-07(#292)에 파일명 순에서 바꿨다** (`D9` · RAG-060 ⑦).
+    # `io.answer_files()` 는 파일명 순을 돌려주는데, 그러면 `lap10` 이 `lap2` **앞**에 오고
+    # 표의 마지막 줄이 `lap30` 이 아니라 **`lap9-age`** 가 된다 (저장된 33개 실측).
+    # 랩이 두 자리로 넘어가면 바꿀 일이라고 `io.answer_files()` 의 주석이 예고해 둔 자리다.
+    # RAG-029 이후의 기록들은 이 표를 **파일명 순으로** 인용하므로, 그 기록들과 줄 순서를
+    # 맞춰 볼 때는 이 정렬이 바뀐 것을 감안해야 한다 — 수는 하나도 안 바뀐다.
+    paths = sorted(paths, key=lambda p: _lap_key(p.stem))
+
+    if not quiet:
+        print(f"{'랩':6} {'문항':>4} {'경계':>4} {'채점':>4}   {'cited':>9}   {'grounded':>9}"
+              f"   {'조 번호 있음':>14}   {'조 번호 없음':>14}   {'옛 표기':>13}")
+        print("-" * 108)
     laps = []
     for path in paths:
         header, rows = io.read_answers(path)
@@ -797,6 +811,8 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         if not n:
             continue
         laps.append((path.stem, rows))
+        if quiet:
+            continue
         old = scorer.score_rows(rows)  # 소급 대조 — 옛 기록이 인용하는 수를 그대로 다시 낸다
         cells = []
         for kind in (scorer.CITABLE, scorer.UNCITABLE):
@@ -808,7 +824,7 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
               f"   {s['grounded']:>5}/{k:<3}   {cells[0]}   {cells[1]}"
               f"   {old['cited']:>4}·{old['grounded']}/{n:<4}")
 
-    if ckinds is not None:
+    if ckinds is not None and not quiet:
         print("\n  **경계 문항(`expect: abstain`·`refuse`)은 `cited`/`grounded` 에서 뺐다** (RAG-062) —"
               " `must` 가 없어 잴 근거가 없다.")
         print("  거절을 옳게 한 답이 거절문에 문 조 번호로 `cited` 에 잡히고, 놓친 기권이 성공으로 세지던 자리다.")
@@ -818,10 +834,101 @@ def cmd_score_laps(args: argparse.Namespace) -> int:
         print("  두 축의 문항수를 더한 것이 `채점` 보다 작으면, 그 차이는 **골든셋에서 빠진 옛 문항**이다"
               " (`lap7-age` 처럼). 총계에서는 빼지 않는다 — 뺄지 모르는 것과 빼야 하는 것은 다르다.")
 
-    _print_kpi(laps, ckinds)
-    _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
-    _print_expect_table(laps)
+    if not quiet:
+        _print_kpi(laps, ckinds)
+        _print_kind_table(laps, getattr(args, "by", "trust_level"), getattr(args, "laps", 6))
+        _print_expect_table(laps)
+    if getattr(args, "against", None):
+        return _print_flip_table(laps, args.against, ckinds, getattr(args, "laps", 6))
     return 0
+
+
+def _print_flip_table(laps: list[tuple[str, list[dict]]], baseline: str,
+                      ckinds: dict[str, str] | None, window: int) -> int:
+    """`--against` — 두 랩을 **문항 단위로** 대조한다 (RAG-071 · `D6`).
+
+    로드맵 §4 의 9번이 *"여기부터 순위 카드를 잰다"* 고 적은 자리다. 아래 🔵 카드
+    (`D14` · `D2` · `D4`)의 성패를 총계 한 줄로 말하면 안 된다는 것이 세 번 실증됐고
+    (`score.py` 의 랩 대조 머리말), 그 셋의 공통점은 **문항 단위로 귀속하면 바로 보였다**는 것이다.
+
+    **종료 코드로 판정한다** — 뒤집힌 문항이 하나라도 있으면 1이다. 총계로는 판정하지 않는다.
+    """
+    if ckinds is None:
+        print("\n골든셋을 못 읽어 문항 단위 대조를 건너뛴다 — 경계 문항을 가릴 수 없다")
+        return 1
+    by_stem = dict(laps)
+    if baseline not in by_stem:
+        print(f"\n기준선 랩 `{baseline}` 이 없다. 있는 랩: "
+              + " ".join(stem for stem, _ in sorted(laps, key=lambda lap: _lap_key(lap[0]))))
+        return 1
+    head_stem, head_rows = max(laps, key=lambda lap: _lap_key(lap[0]))
+    if head_stem == baseline:
+        print(f"\n기준선 `{baseline}` 이 최신 랩과 같다 — 대조할 것이 없다")
+        return 0
+    base_rows = by_stem[baseline]
+
+    changed = scorer.flips(base_rows, head_rows, ckinds)
+    recent = sorted(laps, key=lambda lap: _lap_key(lap[0]))[-window:] if window else laps
+    noise = scorer.flip_frequency(recent, ckinds)
+    before, after = scorer.marks(base_rows, ckinds), scorer.marks(head_rows, ckinds)
+    added = sorted(after.keys() - before.keys())
+    removed = sorted(before.keys() - after.keys())
+
+    print(f"\n문항 단위 대조 — `{baseline}` → `{head_stem}`"
+          f"  (잡음 띠는 최근 {len(recent)}랩)")
+    print("  **총계로 카드의 성패를 말하지 않는다.** 랩 잡음이 ±2~3(lap30 은 ±4)인데 순위 카드의"
+          " 기대 효과가 1~2문항이라, 총계는 노이즈를 성과로 읽게 한다 (RAG-070 ④ · RAG-059 ③).")
+    if not changed:
+        print("\n  뒤집힌 문항이 없다.")
+    else:
+        print(f"\n  {'문항':<6} {'축':<12} {'cited':<11} {'grounded':<11} {'최근 뒤집힘':<10}")
+        print("  " + "-" * 60)
+        for flip in sorted(changed, key=lambda f: (-noise.get(f["id"], 0), f["id"])):
+            shakes = noise.get(flip["id"], 0)
+            # **뒤집힘 횟수가 이 표를 읽는 법이다.** 1회면 그 랩에서 처음 움직인 것이고
+            # (`S3` 가 13랩 연속 실패하다 열린 모양), 여러 번이면 매 랩 흔들리는 문항이다
+            # (`T2`·`T3`·`I1`·`I2` — 지역 신호가 없어 SQL 이 동일한데도 답이 달라진다).
+            tag = "" if shakes <= 1 else ("  ⚠ 잡음일 수 있다" if shakes >= 3 else "  ~")
+            print(f"  {flip['id']:<6} {flip['kind']:<12}"
+                  f" {_arrow(flip['cited']):<11} {_arrow(flip['grounded']):<11}"
+                  f" {shakes:>3}회{tag}")
+
+    base_totals = scorer.score_rows(base_rows, ckinds)
+    head_totals = scorer.score_rows(head_rows, ckinds)
+    print(f"\n  총계(참고): cited {base_totals['cited']} → {head_totals['cited']}"
+          f" · grounded {base_totals['grounded']} → {head_totals['grounded']}"
+          f" · 채점 {base_totals['scored']} → {head_totals['scored']}")
+    steady = [f for f in changed if noise.get(f["id"], 0) <= 1]
+    # **두 축이 같이 움직인 문항이 가장 센 신호다.** `cited` 만 뒤집히는 것은 생성이 조 번호를
+    # 쓸까 말까 한 자리라 랩마다 흔들리고, `grounded` 만 뒤집히는 것도 마찬가지다. 둘이 같은
+    # 방향으로 함께 가면 **검색이 실제로 다른 것을 물어 왔다**는 뜻이다 — `lap29 → lap30` 에서
+    # 그 조건을 만족하는 것이 `Q3`·`B1` 둘이고, RAG-070 ④ 가 손으로 귀속한 답과 같다.
+    both = [f for f in changed
+            if f["cited"][0] != f["cited"][1] and f["grounded"][0] != f["grounded"][1]
+            and f["cited"][1] == f["grounded"][1]]
+    print(f"  뒤집힌 문항 {len(changed)}개 — 그중 **최근 랩에서 안 흔들리던 것이 {len(steady)}개**"
+          f"{' (' + ' · '.join(f['id'] for f in steady) + ')' if steady else ''}.")
+    if both:
+        direction = "좋아진" if both[0]["cited"][1] else "나빠진"
+        print(f"  **두 축이 같이 {direction} 문항은 {len(both)}개** "
+              f"({' · '.join(f['id'] for f in both)}) — 한 축만 움직인 것은 생성이 조 번호를"
+              " 쓸까 말까 한 자리라 랩마다 흔들리지만, 둘이 함께 가면 검색이 실제로 다른 것을"
+              " 물어 온 것이다. **카드의 몫은 여기서부터 센다.**")
+    print("  나머지는 이름을 대기 전에는 잡음이다 — 총계에서 빼지도 더하지도 말 것.")
+    if added or removed:
+        # 골든셋이 늘어난 랩(28 → 33)에서 새 문항을 "좋아졌다"로 세면 카드의 몫이 부푼다.
+        print(f"  ⚠ 문항 집합이 달라졌다 — 들어온 것 {len(added)}"
+              f"{' (' + ' '.join(added) + ')' if added else ''}"
+              f" · 빠진 것 {len(removed)}{' (' + ' '.join(removed) + ')' if removed else ''}."
+              " 위 표는 **양쪽에 다 있는 문항만** 센다.")
+    return 1 if changed else 0
+
+
+def _arrow(pair: tuple[bool, bool]) -> str:
+    """`(before, after)` → 눈으로 읽는 화살표. 안 바뀐 축은 비워 둔다."""
+    if pair[0] == pair[1]:
+        return "-"
+    return f"{'O' if pair[0] else 'X'} → {'O' if pair[1] else 'X'}"
 
 
 def kpi_cells(rows: list[dict], ckinds: dict[str, str]) -> dict[str, tuple[int, int, int]]:
@@ -985,6 +1092,134 @@ def _print_expect_table(laps: list[tuple[str, list[dict]]]) -> int:
     return 0
 
 
+def _judge_table(rows: list[dict], judgments: list[judger.Judgment],
+                 ckinds: dict[str, str] | None) -> None:
+    """판정 표 하나 + 엇갈린 문항. **`score-laps` 에 열을 안 더하고 여기서만 낸다** — 캘리브레이션
+    전이라 지표가 아니기 때문이다 (`judge.py` 머리말)."""
+    marks = scorer.marks(rows, ckinds)
+    s = judger.summarise(judgments, marks)
+
+    print(f"\n문항 {s['n']}  ·  **물은 것에 답함 {s['answers']}/{s['n']}**")
+    print("\n  두 자를 겹쳐 본다 — 세로가 `grounded`(근거를 지목했나), 가로가 judge(물은 것에 답했나)\n")
+    print(f"    {'':14} {'답함':>6} {'못함':>6}")
+    print(f"    {'grounded ✓':14} {s['both']:>6} {s['grounded_only']:>6}")
+    print(f"    {'grounded ✗':14} {s['answers_only']:>6} {s['neither']:>6}")
+
+    dis = judger.disagreements(marks, judgments)
+    if not dis:
+        print("\n  엇갈린 문항이 없다 — 그러면 **캘리브레이션할 자리도 없다.**"
+              " 두 자가 같은 것을 재고 있다는 뜻이거나, 문항이 너무 쉽다는 뜻이다.")
+        return
+    print(f"\n  **엇갈린 문항 {len(dis)}** — `RAG-007` 이 요구한 사람 라벨은 여기서 고른다."
+          " 일치하는 문항만 라벨링하면 judge 를 못 검증한다.\n")
+    for d in dis:
+        arrow = "grounded ✓ · judge ✗" if d["grounded"] else "grounded ✗ · judge ✓"
+        print(f"  [{d['id']}] {arrow}")
+        print(f"      물은 것: {d['asked']}")
+        print(f"      이유   : {d['rationale']}")
+
+
+def _print_agreement(reference_stem: str, candidate: list[judger.Judgment]) -> int:
+    """캘리브레이션 표 — `RAG-007` 이 요구한 **사람 라벨과의 일치율** (RAG-075).
+
+    ⚠ **분모는 양쪽에 다 있는 문항**이다. 사람 라벨은 보통 일부만 있고, 없는 문항을 일치로
+    세면 라벨을 안 단 만큼 점수가 올라간다.
+    """
+    rpath = io.judgment_path(reference_stem)
+    if not rpath.exists():
+        print(f"{rpath} 가 없다 — 기준 판정(사람 라벨 등)을 `judgments/` 에 먼저 둘 것")
+        return 1
+    rhead, rrows = io.read_judgments(rpath)
+    reference = [judger.Judgment.model_validate(j) for j in rrows]
+    a = judger.agreement(reference, candidate)
+    if not a["n"]:
+        print(f"겹치는 문항이 없다 — `{reference_stem}` 과 이 판정이 다른 문항을 보고 있다")
+        return 1
+
+    print(f"\n기준 `{reference_stem}` (judge `{rhead.get('judge_model')}`"
+          f" · 프롬프트 v{rhead.get('prompt_version')}) 과 겹치는 문항 {a['n']}")
+    print(f"**일치 {a['agreed']}/{a['n']}**")
+    if not a["mismatch"]:
+        print("\n  어긋난 문항이 없다.")
+        return 0
+    print("\n  어긋난 문항 — 프롬프트를 고칠 근거는 여기서만 나온다"
+          " (한둘에 맞춰 고치면 그 문항에서만 맞는 채점자가 된다)\n")
+    for m in a["mismatch"]:
+        print(f"  [{m['id']}] 기준 {'답함' if m['reference'] else '못함'}"
+              f" · 이 판정 {'답함' if m['candidate'] else '못함'}")
+        print(f"      기준 : {m['reference_why']}")
+        print(f"      판정 : {m['candidate_why']}")
+    return 0
+
+
+def cmd_judge(args: argparse.Namespace) -> int:
+    """랩 하나를 LLM judge 로 채점한다 (RAG-074 · `D15`).
+
+    **랩 파일만 있으면 돈다** — `score-laps` 와 같은 약속이다. 이 축이 `question`·`text` 만
+    보기 때문이고, 그것이 루브릭 넷 중 이것부터 세운 이유의 하나다 (`judge.py` 머리말).
+
+    ⚠ **랩 파일은 안 건드린다.** 판정은 `judgments/` 로 따로 간다 — 랩은 그때 뜬 기록이고
+    판정은 나중에 다른 모델로 다시 매길 수 있다 (`config.JUDGMENT_DIR`).
+    """
+    path = io.answer_path(args.lap)
+    if not path.exists():
+        print(f"{path} 가 없다 — `rag generate --questions --lap {args.lap}` 로 먼저 뜰 것")
+        return 1
+    _, rows = io.read_answers(path)
+
+    # `score-laps` 와 같은 자로 경계 문항을 가른다. 못 읽으면 **막지 않고** 알린다 — 여기서는
+    # 경계 문항이 판정에 들어와 `expect: abstain` 이 거짓으로 찍힐 뿐이라, 표를 못 내는 것보다 낫다.
+    try:
+        gs = goldenset.load()
+        ckinds = scorer.citable_kinds({i.id: i.must for i in gs.items})
+    except Exception as exc:  # noqa: BLE001
+        ckinds = None
+        print(f"골든셋을 못 읽어 경계 문항을 못 가린다({exc}) — 전부 채점한다\n")
+
+    if args.show:
+        jpath = io.judgment_path(args.lap)
+        if not jpath.exists():
+            print(f"{jpath} 가 없다 — `--show` 없이 한 번 돌릴 것")
+            return 1
+        head, saved = io.read_judgments(jpath)
+        print(f"{args.lap} — judge `{head.get('judge_model')}`"
+              f" · 프롬프트 v{head.get('prompt_version')} · {head.get('judged_at')}")
+        judgments = [judger.Judgment.model_validate(j) for j in saved]
+        if args.against:
+            return _print_agreement(args.against, judgments)
+        _judge_table(rows, judgments, ckinds)
+        return 0
+
+    if args.limit:
+        rows = rows[:args.limit]
+    model = args.model or config.settings.openai_judge_model
+    print(f"{args.lap} — judge `{model}` · 프롬프트 v{judger.PROMPT_VERSION} · {len(rows)}문항")
+
+    try:
+        cli = judger.client()
+    except RuntimeError as exc:
+        print(exc)
+        return 1
+
+    def tick(j: judger.Judgment) -> None:
+        print(f"  {j.id:6} {'답함' if j.answers_question else '못함'}  {j.asked[:60]}")
+
+    judgments = judger.judge_rows(rows, cli=cli, model=model, ckinds=ckinds, on_item=tick)
+    if not judgments:
+        print("채점할 문항이 없다")
+        return 1
+
+    # `--limit` 은 눈으로 보는 길이라 **저장하지 않는다** — 반쪽 판정 파일이 남으면 다음에
+    # `--show` 가 그것을 전체인 양 읽는다.
+    if args.limit:
+        print(f"\n`--limit {args.limit}` 이라 저장하지 않았다 — 전체를 돌려야 판정 파일이 남는다")
+    else:
+        out = io.write_judgments(judger.header(args.lap, judgments, model), judgments, args.lap)
+        print(f"\n{out}")
+    _judge_table(rows, judgments, ckinds)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1064,8 +1299,8 @@ def main(argv: list[str] | None = None) -> int:
     sr.add_argument("--questions", action="store_true",
                     help="검증질문 1~7 전부 (goldenset.yaml 의 origin=hand)")
     sr.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="top-k (기본 5)")
-    sr.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
-    sr.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    sr.add_argument("--model", help=f"기본 {config.settings.embedding_model_key} (RAG-024 판정 승자)")
+    sr.add_argument("--category", help="policy/insurance/travel/food 로 사전 필터")
     sr.add_argument("--width", type=int, default=150, help="본문 발췌 길이")
     sr.add_argument("--no-supplementary", dest="supplementary", action="store_false",
                     help="부칙(시행일·경과조치)을 뺀다. **기본은 포함**이다 — 검문소③은"
@@ -1076,8 +1311,8 @@ def main(argv: list[str] | None = None) -> int:
     gen.add_argument("--questions", action="store_true",
                      help="검증질문 1~7 전부 = 검문소④ (goldenset.yaml 의 origin=hand)")
     gen.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="컨텍스트에 넣을 top-k (기본 5)")
-    gen.add_argument("--model", help=f"임베딩 모델. 기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
-    gen.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    gen.add_argument("--model", help=f"임베딩 모델. 기본 {config.settings.embedding_model_key} (RAG-024 판정 승자)")
+    gen.add_argument("--category", help="policy/insurance/travel/food 로 사전 필터")
     gen.add_argument("--width", type=int, default=150, help="근거 발췌 길이 (답변 본문은 안 자른다)")
     gen.add_argument("--lap", default="lap1", help="덤프 파일명. 2랩은 lap2 (RAG-028 ⑥)")
     gen.add_argument("--no-supplementary", dest="supplementary", action="store_false",
@@ -1091,8 +1326,30 @@ def main(argv: list[str] | None = None) -> int:
                      choices=["trust_level", "source_id", "subcategory", "category"],
                      help="종류별 슬라이스의 축 (RAG-060). 청크 행의 그 칸에서 파생한다")
     scl.add_argument("--laps", type=int, default=6, metavar="N",
-                     help="슬라이스 표에 보일 최근 랩 수 (0=전부). 기본 6")
+                     help="슬라이스 표에 보일 최근 랩 수 (0=전부). 기본 6."
+                          " `--against` 의 잡음 띠를 세는 창이기도 하다")
+    scl.add_argument("--against", metavar="랩",
+                     help="기준선 랩과 최신 랩을 **문항 단위로** 대조한다 (RAG-071)."
+                          " 뒤집힌 문항이 있으면 종료 코드 1."
+                          " ⚠ `lap29` 앞뒤로 채점기가 바뀌었으니(RAG-069) 그 경계를 넘겨 잡지 말 것")
+    scl.add_argument("--quiet", action="store_true",
+                     help="`--against` 와 같이 쓴다 — 표를 접고 대조와 종료 코드만 낸다")
     scl.set_defaults(fn=cmd_score_laps)
+
+    jd = sub.add_parser("judge", help="랩 하나를 LLM judge 로 채점 — '답이 물은 것에 답했나' (RAG-074)")
+    jd.add_argument("lap", help="랩 이름 (`answers/<이름>.jsonl`)")
+    jd.add_argument("--model", help=f"judge 모델. 기본 `{config.settings.openai_judge_model}`"
+                                    " (**생성과 다른 계열**이다 — RAG-007 · D15)")
+    jd.add_argument("--limit", type=int, default=0, metavar="N",
+                    help="앞에서 N문항만. 프롬프트를 손본 뒤 몇 개로 눈으로 보는 길이다")
+    jd.add_argument("--show", action="store_true",
+                    help="**부르지 않는다** — 저장된 판정을 다시 읽어 표만 낸다."
+                         " 판정이 돈이라 기본이 아니라 플래그인 쪽이 맞다")
+    jd.add_argument("--against", metavar="판정",
+                    help="`--show` 와 같이 쓴다 — 기준 판정과의 **일치율**을 낸다 (RAG-007 의"
+                         " 캘리브레이션). 사람 라벨도 판정 파일로 적으므로 `lap30__human` 처럼"
+                         " stem 을 준다. ⚠ 분모는 **양쪽에 다 있는 문항**이다")
+    jd.set_defaults(fn=cmd_judge)
 
     args = p.parse_args(argv)
     return args.fn(args)

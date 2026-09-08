@@ -17,12 +17,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from daengs_backend.orchestration.semantic import PROMPT_VERSION, SemanticRoutingDecision
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.runner import build_artifacts
-from tools.router_benchmark.runner_v2 import GENERATION_CONFIG
-from tools.router_benchmark.runner_v5 import run_cases
-from tools.router_benchmark.runner_v7 import BENCHMARK_ID as V7_BENCHMARK_ID
-from tools.router_benchmark.runner_v8 import (
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.runner import build_artifacts
+from daengs_evals.router_benchmark.runner_v2 import GENERATION_CONFIG
+from daengs_evals.router_benchmark.runner_v5 import run_cases
+from daengs_evals.router_benchmark.runner_v7 import BENCHMARK_ID as V7_BENCHMARK_ID
+from daengs_evals.router_benchmark.runner_v8 import (
     BENCHMARK_ID,
     GOLD_VERSION,
     MODEL_ID,
@@ -30,7 +30,7 @@ from tools.router_benchmark.runner_v8 import (
     RESULTS_PATH,
     SUMMARY_PATH,
 )
-from tools.router_benchmark.schemas import load_benchmark_config, load_gold_v3_cases
+from daengs_evals.router_benchmark.schemas import load_benchmark_config, load_gold_v3_cases
 
 EVALS_DIR = Path(__file__).parents[1] / "evals" / "orchestration_router"
 
@@ -63,7 +63,6 @@ def _response(payload: object) -> SimpleNamespace:
 def test_v8_is_the_next_run_identifier_with_the_v7_prompt_and_unchanged_model_gold() -> None:
     assert V7_BENCHMARK_ID == "orchestration-router-v7"
     assert BENCHMARK_ID == "orchestration-router-v8"
-    assert PROMPT_VERSION == "semantic-router-ko-v7"
     assert MODEL_ID == "gemini-3.1-flash-lite"
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert len(load_gold_v3_cases()) == 80
@@ -71,6 +70,11 @@ def test_v8_is_the_next_run_identifier_with_the_v7_prompt_and_unchanged_model_go
     recorded_v7 = json.loads((EVALS_DIR / "summary_v7.json").read_text(encoding="utf-8"))
     assert recorded_v7["prompt_version"] == "semantic-router-ko-v6"
     assert recorded_v7["verdict"] == "PASS"
+    # The v8 run itself is frozen as having sent v7 — that record is immutable even
+    # though production has since advanced (PR #279 → v8, run by runner_v9).
+    recorded_v8 = json.loads((EVALS_DIR / "summary_v8.json").read_text(encoding="utf-8"))
+    assert recorded_v8["prompt_version"] == "semantic-router-ko-v7"
+    assert recorded_v8["verdict"] == "PASS"
 
 
 def test_v8_writes_only_new_artifact_paths() -> None:

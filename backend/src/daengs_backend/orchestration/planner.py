@@ -19,14 +19,31 @@ payload with no `query`, failing PlacePayload validation and surfacing as a
 top-level FAILED on exactly the queries Place was added to answer. The `else`
 below therefore raises: a new ExecuteName must state its payload here or stop the
 request loudly, never inherit another capability's shape.
+
+**The general-answer fallback reaches a plan two ways, both behind one flag** (D-057).
+(1) A planner rule: when the semantic decision selects nothing at all — no capability,
+no handoff — and `general_fallback` is on, the plan becomes exactly one `general`
+request carrying the same trusted payload Life gets (question + resolved dog facts).
+(2) Since `semantic-router-ko-v9` the router may also select `general` *in addition to*
+a specialized destination, so a care or health worry mixed into a weather/venue/
+institution utterance is not silently dropped (#277 measured exactly that loss). The
+router never uses it to replace Training/Life/Walk/Place. With the flag off the planner
+strips `general` from the decision, so production builds the plans it built before.
+`general` orders last, never needs coordinates, and the explicit
+`requested_capability` signal is untouched — `general` is not a resolvable signal.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from daengs_backend.orchestration.contracts import RoutePlan, RouterKind
+from daengs_backend.orchestration.contracts import (
+    SCREENING_HISTORY_LIMIT,
+    RoutePlan,
+    RouterKind,
+)
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -40,13 +57,20 @@ from daengs_backend.orchestration.semantic import (
 # identical questions should not produce two differently-ordered answers. The frozen
 # router benchmark is unaffected either way: `_semantic_plan_key` compares requests as
 # a multiset. Order follows the `CapabilityName` declaration order.
-_EXECUTION_ORDER = ("training", "life", "walk", "place")
-_EXECUTE_NAMES = frozenset(_EXECUTION_ORDER)
+_GENERAL = "general"
+_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL)
+# The names the router (and the explicit signal) may select. `general` is executable but
+# never selectable — it only ever enters a plan through the fallback rule below, so it is
+# excluded here on purpose: `requested_capability="general"` is an unresolved signal.
+_EXECUTE_NAMES = frozenset(name for name in _EXECUTION_ORDER if name != _GENERAL)
 _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # Capabilities whose payload carries trusted coordinates. Missing coordinates make
 # the whole plan a CLARIFY, so this set is what the coordinate gate reads.
 _NEEDS_COORDINATES = frozenset({"walk", "place"})
 _QUESTION_CAPABILITIES = frozenset({"training", "life"})
+# The verdicts `ScreeningContext` allows. Kept as a literal set rather than read off the
+# contract so a widened contract cannot silently widen what the planner copies (#283).
+_SCREENING_VERDICTS = frozenset({"normal", "abnormal", "retake"})
 _HANDOFF_REASONS = {
     "skin": "image_upload_required",
     "gait": "video_upload_required",
@@ -95,6 +119,7 @@ def assemble_route_plan(
     router: RouterKind,
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
+    general_fallback: bool = False,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
 
@@ -102,6 +127,11 @@ def assemble_route_plan(
     The deterministic caller above passes None for both because it calls no model at all —
     they are not "unknown", they are "there was none", and the console renders that
     difference (#238).
+
+    `general_fallback` defaults to off so that every existing caller — including the
+    frozen router-benchmark runners, which score the *router's* decision — keeps
+    building exactly the plan it built before (#279). Production passes
+    `settings.general_fallback`.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     missing = _missing_coordinates(context) if needs_coordinates else []
@@ -123,11 +153,27 @@ def assemble_route_plan(
             }
         )
 
+    selected: list[str] = list(decision.execute)
+    if not general_fallback:
+        # Flag off: the router may name `general` (v9 destination, D-057), but production
+        # builds exactly the plan it built before the fallback existed — strip it. A
+        # `general`-only decision therefore becomes the old empty plan (FAILED), not an answer.
+        selected = [name for name in selected if name != _GENERAL]
+    elif (
+        not selected
+        and not decision.handoffs
+        and decision.social_intent is None  # never reaches here in practice; belt and braces
+    ):
+        # The fallback rule (module docstring). One request, and only when the router
+        # chose nothing: a specialized selection is never padded with `general` by rule —
+        # the router adds it explicitly when a care intent is mixed in (D-057 ①).
+        selected = [_GENERAL]
+
     requests: list[dict[str, Any]] = []
     # An unrecognized name sorts last rather than raising here, so the precise
     # "no payload rule" error below is what surfaces instead of an index error.
     for capability in sorted(
-        decision.execute, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
+        selected, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
     ):
         payload = _payload_for(capability, query=query, context=context)
         requests.append({"capability": capability, "payload": payload, "timeout_ms": None})
@@ -161,6 +207,32 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
             dog = _dog_context(context)
             if dog is not None:
                 payload["dog"] = dog
+            screening = _screening_context(context)
+            if screening is not None:
+                payload["screening"] = screening
+            history = screening_history(context)
+            if history is not None:
+                payload["screening_history"] = history
+        return payload
+    if capability == _GENERAL:
+        # Same rule as Life: the exact question plus the trusted dog facts, never a
+        # coordinate — the fallback is not allowed to answer Walk's or Place's question.
+        #
+        # **The screening verdict deliberately stops here.** `general` answers without
+        # retrieved evidence (D-057), and its own refusal codes already send symptoms and
+        # diagnosis away (`adapters/general.py` `diagnosis`). Handing an ungrounded answerer
+        # the fact that a skin check came back `abnormal` invites exactly the sentence that
+        # refusal exists to prevent. Life gets it because Life answers from ordinances and
+        # subsidy documents, and those are what "이런 경우 지원이 있어요" is made of.
+        payload = {"question": query}
+        dog = _dog_context(context)
+        if dog is not None:
+            payload["dog"] = dog
+        # Today's care log goes to the fallback and nowhere else (#344): "did I give the
+        # medication this morning" is a general question, and Life's documents do not care.
+        care_log = _care_log_context(context)
+        if care_log is not None:
+            payload["care_log"] = care_log
         return payload
     if capability == "walk":
         location = context["location"]
@@ -192,7 +264,119 @@ def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
     age_months = dog.get("age_months")
     if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
         resolved["age_months"] = age_months
+    # Care facts (#331): the same whitelist rule, one field at a time — a malformed care
+    # value drops that field, not the breed next to it. ``on_medication`` passes only as
+    # ``True``; ``False`` would claim a fact the profile cannot state (blank = unknown).
+    feeding_style = dog.get("feeding_style")
+    if feeding_style in ("free", "scheduled"):
+        resolved["feeding_style"] = feeding_style
+    health_conditions = dog.get("health_conditions")
+    if isinstance(health_conditions, str) and health_conditions.strip():
+        resolved["health_conditions"] = health_conditions.strip()[:200]
+    if dog.get("on_medication") is True:
+        resolved["on_medication"] = True
     return resolved or None
+
+
+_CARE_LOG_COUNTS = ("meal", "medication", "snack", "walk")
+_CARE_LOG_LAST = ("last_meal_at", "last_medication_at", "last_snack_at")
+_CARE_LOG_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_CARE_LOG_CLOCK = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def _care_log_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read today's care summary, dropping anything the caller did not resolve (#344).
+
+    Same rule as ``_dog_context``: only the caller's structured values reach a payload,
+    never model output, and a malformed field drops that field rather than the request.
+    The caller is ``routers/assistant.py`` `_with_dog_context`, which already proved ownership
+    and reduced the day to counts and last times (``services/care_log_context``).
+
+    **This whitelist knows no ``note`` and no event list.** ``CareLogContext`` would reject
+    them downstream, but the reason is upstream of the type: the owner's free text must not
+    sit next to the prompt's instructions, and a summary is all the answer needs. A summary
+    without a single count is no summary — it yields None, not an empty block.
+    """
+    care_log = context.get("care_log")
+    if not isinstance(care_log, Mapping):
+        return None
+    day = care_log.get("day")
+    if not isinstance(day, str) or not _CARE_LOG_DAY.match(day):
+        return None
+    resolved: dict[str, Any] = {"day": day}
+    for kind in _CARE_LOG_COUNTS:
+        count = care_log.get(kind)
+        if isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= 200:
+            resolved[kind] = count
+    for key in _CARE_LOG_LAST:
+        clock = care_log.get(key)
+        if isinstance(clock, str) and _CARE_LOG_CLOCK.match(clock):
+            resolved[key] = clock
+    if not any(kind in resolved for kind in _CARE_LOG_COUNTS):
+        return None
+    return resolved
+
+
+def _screening_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the recorded screening verdict, dropping anything the caller did not resolve.
+
+    Same rule as ``_dog_context``: only the caller's structured values reach a payload,
+    never model output, and a malformed entry yields None rather than an error. The caller
+    is ``routers/assistant.py`` `_with_screening_context`, which already proved ownership
+    and narrowed the record to two fields (#307).
+
+    **This function must never learn a third field.** The lesion name is wrong 56.6% of the
+    time on holdout (D-023) and `stage1` is uncalibrated, so what keeps that defence standing
+    is that no code path speaks either — invariant 15 in `docs/orchestration/contracts.md`.
+    Widening the whitelist here would not raise; it would just quietly put a wrong lesion
+    name in a prompt.
+    """
+    screening = context.get("screening")
+    if not isinstance(screening, Mapping):
+        return None
+    verdict = screening.get("verdict")
+    if verdict not in _SCREENING_VERDICTS:
+        return None
+    days_ago = screening.get("days_ago")
+    if not isinstance(days_ago, int) or isinstance(days_ago, bool) or days_ago < 0:
+        return None
+    return {"verdict": verdict, "days_ago": days_ago}
+
+
+def screening_history(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the earlier screenings of the same dog, entry by entry (#79 3번).
+
+    The same whitelist as ``_screening_context``, applied per entry, and for the same reason:
+    a list of the narrow thing is only narrow while every element goes through the filter.
+    Invariant 15 does not weaken with count — widening this loop would not raise either.
+
+    **Bad entries are dropped, not raised on, and the list is truncated rather than refused.**
+    The caller already capped it (``services/screening_context.py``), so an over-long list
+    here means a bug upstream — but failing the request would turn an answerable question
+    into an error over a defect the user cannot see or fix. Truncating keeps the contract's
+    promise (`ScreeningHistory` would reject the long list downstream) without that cost.
+
+    **공개인 것은 `aggregate` 도 같은 좁힘을 지나야 하기 때문입니다.** 답변에 붙는 이력 절이
+    payload 와 다른 경로로 컨텍스트를 읽으면 좁힘이 두 벌이 되고, 한쪽만 넓어져도 아무것도
+    안 깨집니다 — 능력 이름 사본이 셋이던 자리(#269)가 만든 습관입니다.
+    """
+    history = context.get("screening_history")
+    if not isinstance(history, Sequence) or isinstance(history, (str, bytes)):
+        return None
+    entries: list[dict[str, Any]] = []
+    for entry in history:
+        if not isinstance(entry, Mapping):
+            continue
+        verdict = entry.get("verdict")
+        if verdict not in _SCREENING_VERDICTS:
+            continue
+        days_ago = entry.get("days_ago")
+        if not isinstance(days_ago, int) or isinstance(days_ago, bool) or days_ago < 0:
+            continue
+        entries.append({"verdict": verdict, "days_ago": days_ago})
+        if len(entries) == SCREENING_HISTORY_LIMIT:
+            break
+    return {"entries": entries} if entries else None
 
 
 def _missing_coordinates(context: dict[str, Any]) -> list[str]:

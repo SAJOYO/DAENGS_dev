@@ -92,18 +92,122 @@ MORPH_GROUP: dict[str, str] = {
 #: 유일한 클래스라, 다른 것과 한 이름으로 부르면 그 뜻이 사라집니다.
 #: 실측(STEP 28): 커버리지 62.1% → **61.4%** 로 **0.7%p 밖에 안 잃습니다.**
 #: 전체 데이터 정확도도 0.8365 → 0.8315.
+URGENT_GROUPS = ("미란·궤양", "결절·종괴")
+"""★ 계열 4군 중 **급한 쪽**. 나머지(융기·발진 · 표면 변화)가 덜 급한 쪽입니다.
+
+`MORPH_GROUP_KEEP_A6` 의 묶음 이름과 **글자 그대로** 맞아야 합니다 —
+`tests/test_granularity_gates.py` 가 대조합니다."""
+
+DOWNGRADE_BLOCK_MIN = 0.25
+"""★ **하향 방지 규칙**의 문턱 (STEP 35).
+
+    급한 쪽(`URGENT_GROUPS`) 확률의 **합**이 이 값 이상이면,
+    덜 급한 묶음은 **답 후보에서 뺍니다.**
+
+그러면 급한 쪽 이름을 말하거나, 확신이 모자라면 **아무 말도 안 합니다.**
+
+왜 필요한가 — 전체 하향은 3.7% 로 관문(5%)을 통과하는데 **말한 미란·궤양의
+43.8%** 가 하향이었습니다. 표면 변화(전체의 51%)가 평균을 떠받쳐 A5 가 묻힙니다.
+
+실측(holdout): 커버리지 67.9 → **66.5%**(−1.3%p), A5 하향 43.8 → **36.8%**
+(−7.0%p), 전체 하향 3.7 → 2.9%. **추론 0회**이고 릴리스 단독보다 두 축 다 낫습니다.
+
+⚠️ 문턱은 **val 에서 고르고 holdout 은 확인만** 했습니다 (통과한 건 0.25 하나).
+
+★ 이 값은 **판단으로 번역됩니다** — `0.25 ≈ "하향은 다른 오답의 2배로 나쁘다"`.
+3배로 보면 커버리지 62.7%, 5배면 55.0%, 8배면 39.8% 입니다. *"0.25 로 하자"* 는
+반박 불가지만 *"하향은 과잉보다 2배 나쁘다"* 는 **반박 가능**합니다 — 그게 이
+상수가 있는 자리입니다. 재현: `uv run python tools/a5_downgrade.py`"""
+
+A6_ALERT_MIN = 0.40
+"""★ **"덩어리가 의심됩니다" 경보**의 문턱 (STEP 34, 2026-09-08 켜기로 결정).
+
+⚠️ **`p(이상) × p(A6)` 에 겁니다** — `p(A6)` 단독이 아닙니다.
+`tools/naming_granularity.py` 의 `score = p1 * ens[:, ia6]` 와 같은 값이어야
+STEP 34 의 표를 그대로 읽을 수 있습니다. `GROUP_CONF_MIN` 과 같은 모양입니다.
+
+실측 (STEP 34 — **같은 문턱**에서 val / holdout):
+
+    문턱    val 재현율   ho 재현율   val 정밀도   ho 정밀도
+    0.30     68.6%      68.2%       71.6%      58.2%
+    0.40     61.1%      59.4%       81.4%      71.3%      <- 채택
+    0.50     55.0%      51.8%       84.0%      77.6%
+    0.70     38.4%      36.9%       90.4%      85.1%
+
+★ **정밀도가 아니라 재현율로 정했습니다.** 정밀도는 모델의 성질이 아니라
+**모델 × 유병률**의 성질이라 문턱을 고정해도 안 고정됩니다 (A6 이 holdout 에서
+절반만큼 드물어 정밀도만 5~13%p 떨어졌습니다). 재현율은 유병률과 무관해
+양쪽에서 유지됩니다 — 0.40 에서 **약 60%**.
+
+⚠️ 이 경보만 **병변 이름을 말합니다.** 예외인 이유:
+  · 임상 해설이 *"A6 으로 오탐하는 건 상대적으로 안전"* 이라고 적어뒀습니다
+    (병원에 가서 확인하면 되니까) — 반대 방향(놓침)이 훨씬 나쁩니다
+  · A6 은 **종양 감별**이 필요한 유일한 클래스라 4묶음에서도 혼자 뒀습니다
+끄려면 `DOG_SKIN_SHOW_A6_ALERT=0`."""
+
 MORPH_GROUP_KEEP_A6: dict[str, str] = {
     "A1": "융기·발진", "A4": "융기·발진",
     "A2": "표면 변화", "A3": "표면 변화",
     "A5": "미란·궤양", "A6": "결절·종괴",
 }
 
+#: ★ **문헌 근거 (2026-09-08, 원문을 직접 열어 확인)** — 세 축이 각각 표준입니다:
+#:   ① primary / secondary — Merck Vet Manual 이 목록으로 나눕니다
+#:      (secondary: epidermal collarettes · erosions/ulcers · lichenification …)
+#:   ② **1cm 경계** → **A6 을 따로 둔 근거**
+#:      *"solid elevated lesion **<1cm** diameter"* (papule) /
+#:      *"circumscribed solid elevation **>1cm** in diameter that usually
+#:       **extends into deeper layers of skin**"* (nodule) — Cornell AHDC.
+#:      Veterian Key 도 *"approximately 1 cm in diameter or smaller"*.
+#:      ⚠️ **Merck 페이지 자체에는 cm 수치가 없습니다** — 여기 근거로 대지 마세요.
+#:   ③ **표피 소실 여부** → **A5 를 가르는 선**
+#:      Merck: 미란·궤양은 *"**loss of the epidermis**"*.
+#:      ⚠️ **"기저막(basement membrane) 파괴 여부" 로 말하면 틀립니다.**
+#:         미란(erosion)은 표피 일부만 잃고 **기저막은 온전**하며 흉터 없이
+#:         낫습니다. 기저막까지 가는 것은 궤양(ulcer)뿐입니다. 그 축으로
+#:         가르면 **미란이 A2·A3 쪽에 붙어** 묶음이 무너집니다.
+#:         우리 축은 *표피가 쌓이는가(A2·A3) / 소실되는가(A5)* 입니다.
+#:      장벽이 깨지면 `S. pseudintermedius` 2차 감염 위험 —
+#:      Hillier et al. (2014) *Vet Dermatol* 25(3):163-e43 (ISCAID 지침)
+#:   그리고 A2+A3 는 **Hensel, Santoro, Favrot, Hill, Griffin (2015),
+#:   BMC Vet Res**(ICADA 개 아토피 가이드라인)의 한 문장에 같이 있습니다:
+#:      "Typical secondary skin lesions are excoriations, alopecia,
+#:       **lichenification, hyperpigmentation, crusting, and seborrhea**."
+#: ⚠️ 단 그 목록엔 `excoriations` 도 들어 있는데 우리는 그걸 A5 쪽으로 가릅니다.
+#:    즉 그 문장 하나로 정해지지 않고 **②③ 축과의 조합**이 우리 묶음입니다.
+#:    **이 조합을 쓴 선례는 못 찾았습니다.**
+#:
 #: ⚠️ **정직하게 적어둡니다** — 임상 해설이 "안전한 혼동" 으로 **명시한 것은
-#: 두 쌍뿐**입니다 (A1↔A4 · A5↔A6). `MORPH_GROUP` 의 A2+A3 은 문서가 인정한
+#: 두 쌍뿐**입니다 (A1↔A4 · A5↔A6). `MORPH_GROUP` 의 A2+A3 은 그 문서가 인정한
 #: 게 아니라 **남은 것**이고, 이득의 대부분이 거기서 나옵니다:
 #:     6종 33.7% → 문서가 인정한 병합만 42.5% → A2+A3 까지 62.1%
 #: 즉 **"임상적으로 비슷해서 묶었다" 는 절반만 맞습니다.**
 DOC_ENDORSED_MERGES: tuple[tuple[str, str], ...] = (("A1", "A4"), ("A5", "A6"))
+
+#: ★ 수의피부과 **표준 축** — primary(병이 직접 만든 것) vs secondary(그 뒤에
+#: 생긴 것). 우리가 만든 묶음이 아니라 교과서 분류입니다:
+#:   primary    macule · papule · plaque · wheal · vesicle · **pustule** · **nodule**
+#:   secondary  **collarette** · scar · excoriation · **erosion** · **ulcer** ·
+#:              fissure · **lichenification** · callus
+#:   둘 다 됨    **scale · crust · 색소 변화** (원인에 따라)
+#: 출처: MSD Veterinary Manual · Clinicians Brief (2026-09-06 확인)
+#:
+#: ⚠️ **A2·A3 는 깨끗이 안 갈립니다** — A2 의 잔고리는 secondary 인데 비듬·가피는
+#:    '둘 다', A3 의 태선화는 secondary 인데 색소침착은 '둘 다' 입니다.
+#:    ★ 그런데 **둘이 똑같이 애매합니다.** 출처가 *"secondary 는 여러 primary 에서
+#:    나올 수 있어 진단 가치가 낮다"* 고 적는데, A2+A3 를 한 통에 넣는다는 건
+#:    **덜 진단적인 둘을 묶는 것**이라 사후 정당화가 아닌 근거가 됩니다.
+#: ⚠️ A1·A4(≤1cm)와 A6(>1cm)를 가르는 **1cm 는 교과서 경계**입니다
+#:    (papule ≤1cm / nodule >1cm) — A6 를 따로 둔 것이 표준과 맞습니다.
+#: 🚫 **그런데 이 축으로 2군을 만들면 기각입니다** (STEP 32): 커버리지는 제일
+#:    높은데(74.6%) primary 에 A6 이 들어 있어 **과잉 분류가 88.4%** 입니다 —
+#:    구진 하나에도 '조기 진료' 가 붙어 그 말이 뜻을 잃습니다.
+LESION_ORIGIN: dict[str, str] = {
+    "A1": "primary", "A4": "primary", "A6": "primary",
+    "A5": "secondary",
+    "A2": "mixed",   # 잔고리 secondary / 비듬·가피 '둘 다'
+    "A3": "mixed",   # 태선화 secondary / 색소침착 '둘 다'
+}
 
 #: 🔴 위험한 혼동 — 임상 해설에 적힌 그대로. **긴급도를 낮춰 말하는 것**입니다.
 #:    (A6→A2 가 최악, A5→A1, A6→A1). 일반화하면 "실제 등급 > 말한 등급".

@@ -14,6 +14,7 @@ from daengs_backend.core.deps import Perm, admin_or_app_user
 from daengs_backend.core.tracing import configure_tracing
 from daengs_backend.core.warm_up import STATE_ATTR, WarmUp, WarmUpPhase, now
 from daengs_backend.routers import (
+    activity,
     admin_account,
     admin_audit,
     app_auth,
@@ -21,6 +22,7 @@ from daengs_backend.routers import (
     app_user_admin,
     assistant,
     auth,
+    care_event,
     chat,
     crawl,
     dogcard,
@@ -134,11 +136,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await asyncio.to_thread(warm_up_encoder)
         before = getattr(app.state, STATE_ATTR)
         phase = WarmUpPhase.READY if encoder_loaded() else WarmUpPhase.FAILED
-        setattr(app.state, STATE_ATTR,
-                WarmUp(phase=phase, started_at=before.started_at, finished_at=now()))
+        setattr(
+            app.state,
+            STATE_ATTR,
+            WarmUp(phase=phase, started_at=before.started_at, finished_at=now()),
+        )
 
-    warm_up = (asyncio.create_task(_warm_up_and_record())
-               if settings.warm_up_encoder else None)
+    warm_up = asyncio.create_task(_warm_up_and_record()) if settings.warm_up_encoder else None
 
     yield
 
@@ -175,6 +179,9 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
+# 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
+app.include_router(care_event.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
@@ -190,6 +197,7 @@ app.include_router(walk_storyboard.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 app.include_router(territory_claim.router)
+app.include_router(activity.router)
 
 # 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —
 # 그쪽은 인증 없이 판정만 하고 아무것도 안 남기며, 앱이 아직 그것을 씁니다.

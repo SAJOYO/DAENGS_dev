@@ -48,7 +48,7 @@ from langchain.agents import create_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from daengs_backend.config import settings
-from daengs_backend.core.tracing import trace_config
+from daengs_backend.core.tracing import request_trace, trace_config
 from daengs_backend.orchestration.agent.tools import CapabilityToolbox
 from daengs_backend.orchestration.contracts import (
     AssistantResponse,
@@ -78,7 +78,11 @@ from daengs_backend.orchestration.social import build_social_response
 # 트레이스와 RoutePlan 이 "어느 구현이 골랐나" 를 이 값으로 적기 때문이고, 값이 갈리면
 # 아래 `build_agent_model` 을 잰 테스트가 먼저 깨진다.
 AGENT_MODEL_ID = ROUTER_MODEL_ID
-AGENT_PROMPT_VERSION = "agent-ko-v2"
+# v3 (#279): 의미 라우터 v8 의 배제 문장을 거울로 넣고, "답할 수 없다고만" 을 "도구 없이
+# 마쳐라 — 일반 답변은 시스템이 붙인다" 로 바꿨다. 다른 문장은 v2 그대로다.
+# v4 (D-057 ①): 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 일반 돌봄은
+# 전문 도구에 **더해** 부르고, 반려견과 무관하면 아무 도구도 안 부른다.
+AGENT_PROMPT_VERSION = "agent-ko-v4"
 # 프로바이더 재시도. 의미 라우터의 `google-genai` 클라이언트는 retry_options 를 안 주어
 # 재시도가 없다. `langchain-google-genai` 는 기본 `max_retries=6` 이라 명시로 0 이다 —
 # 실패한 호출을 조용히 여섯 번 더 부르면 지연·토큰이 "프로바이더 사정" 에 묻힌다.
@@ -90,7 +94,8 @@ _SYSTEM_PROMPT = """당신은 DAENGS 반려견 비서입니다. 한국어로 답
 지어내거나, 당신이 알고 있는 일반 상식으로 채우지 마세요. 진단하지 않습니다.
 
 무엇을 물었는지 보고 필요한 도구를 **모두** 부르세요. 한 발화가 두 가지를 물으면 둘 다
-부릅니다. 필요 없는 도구는 부르지 않습니다.
+부릅니다. 필요 없는 도구는 부르지 않습니다. 사용자가 한 주제를 분명히 빼 달라고 하면(하나는
+말고 다른 하나만) 그 어휘가 문장에 보여도 빠진 쪽 도구는 부르지 않습니다.
 
 **도구는 실행하지 않고 선택을 기록합니다.** 도구를 부르면 "기록했다"는 확인만 돌아오고,
 실제 실행은 당신이 선택을 마친 뒤 시스템이 한꺼번에 합니다. 그러니 도구 결과를 기다리거나
@@ -106,12 +111,17 @@ _SYSTEM_PROMPT = """당신은 DAENGS 반려견 비서입니다. 한국어로 답
 경계:
 - 행동을 바꾸거나 가르치는 것 → ask_training
 - 제도·법령·행정·정책·계약의 공식 정보 → ask_life. **일반적인 사육·돌봄 조언은 여기가
-  아니고, 다른 어떤 도구도 아닙니다.** 산책 횟수, 급여량, 수면, 음수량, 견종·나이별
-  돌봄 같은 통상적 조언은 이 서비스가 답하지 않습니다. 그럴 때는 도구를 부르지 말고
-  답할 수 없다고만 하세요.
+  아니라 answer_generally 입니다.** 맞는 도구가 하나도 없으면 도구를
+  부르지 말고 그냥 마치세요 — 일반 답변은 시스템이 붙입니다.
 - 지금 나가도 되는 환경인가 → check_walk_conditions
 - 어디로 갈까 → search_places. 장소 이름이 훈련이나 산책 질문의 배경으로 나온 것뿐이면
   장소 요청이 아닙니다.
+- 위 어느 것도 답하지 않는 일반 돌봄·사육·습성·건강 걱정(급여, 음수, 목욕, 수면, 준비물,
+  "이 정도면 괜찮은가") → answer_generally. 같은 발화에 전문 도구가 맞는 부분이 있으면 그 도구에
+  **더해** 부르고 대신하지 않으며, 반려견과 무관한 요청(사람 음식·금융·사람용 날씨 등)은 어느
+  도구도 부르지 않습니다. 발화에 **별도의** 돌봄 질문이 있을 때만이고, 훈련·제도·산책·장소로
+  온전히 답해지는 질문에는 부르지 않습니다 — 개·견종·나이·증상이 배경으로 언급된 것만으로는
+  일반 답변이 아니고, 행동 질문에서 훈련과 일반 사이가 애매하면 훈련만 부릅니다.
 - 눈에 보이는 피부 상태 → hand_off_to_skin
 - 걸음걸이·절뚝임·자세 → hand_off_to_gait
 - 발화 전체가 인사·감사·작별뿐 → reply_socially
@@ -195,6 +205,43 @@ class AgentOrchestrationService:
         # 엔진도 거르지만, 모델이 엔진보다 먼저 돈다 — 날 자격증명이 프롬프트에 닿기 전에.
         _reject_raw_credentials(structured_context)
 
+        # 요청의 루트 런 (`orchestration/service.py` 와 같은 자리 · 같은 이유). 선택
+        # 루프와 엔진이 전부 이 아래 자식이다. 전에는 선택 루프와 엔진이 **둘 다**
+        # `run_id=request_id` 인 루트를 만들어 같은 id 의 런이 둘이었다.
+        root = self._trace_config(request_id=rid, principal=principal)
+        async with request_trace(
+            request_id=rid,
+            run_name=root["run_name"],
+            inputs={
+                "query": query,
+                "requested_capability": requested_capability,
+                "context": structured_context,
+                "locale": locale,
+            },
+            metadata=root["metadata"],
+            tags=root["tags"],
+        ):
+            return await self._plan_and_execute(
+                query=query,
+                principal=principal,
+                structured_context=structured_context,
+                requested_capability=requested_capability,
+                rid=rid,
+                locale=locale,
+                include_route_trace=include_route_trace,
+            )
+
+    async def _plan_and_execute(
+        self,
+        *,
+        query: str,
+        principal: PrincipalContext,
+        structured_context: dict[str, Any],
+        requested_capability: str | None,
+        rid: str,
+        locale: str,
+        include_route_trace: bool,
+    ) -> AssistantResponse:
         route_plan = resolve_deterministic_route(
             requested_capability=requested_capability,
             query=query,
@@ -234,6 +281,9 @@ class AgentOrchestrationService:
                 router=RouterKind.LLM,
                 model=AGENT_MODEL_ID,
                 prompt_version=AGENT_PROMPT_VERSION,
+                # LangGraph 쪽과 **같은 값 · 같은 규칙**이다 (#279). 툴을 하나도 안 부르고
+                # 마친 것이 라우터의 빈 결정과 같은 길로 폴백을 지난다.
+                general_fallback=settings.general_fallback,
             )
 
         return await self._engine.run(
@@ -265,7 +315,9 @@ class AgentOrchestrationService:
             agent.ainvoke(
                 {"messages": [{"role": "user", "content": content}]},
                 config={
-                    **self._trace_config(request_id=request_id, principal=principal),
+                    # 루트(`assistant_query_agent`, `run()`)의 자식이다. `run_id` 를
+                    # 여기서도 `request_id` 로 주면 루트와 같은 id 가 둘이 된다.
+                    **trace_config(request_id=request_id, run_name="agent_select", root=False),
                     # 루프 상한. 답이 아니라 **안전장치**다 — 에이전트가 루프를 돌아
                     # 비싼 것 자체는 비교가 재야 할 발견이므로 여기서 깎지 않는다.
                     "recursion_limit": settings.agent_recursion_limit,
@@ -283,8 +335,9 @@ class AgentOrchestrationService:
         지연·토큰 비용이 한쪽에서만 나온다.
 
         **`run_name` 만 다르다.** 두 구현을 트레이스에서 갈라 보는 자리가 필요하고,
-        `graph.py` 를 건드리지 않고 그것을 얻는 가장 싼 방법이다. 이 config 는 선택
-        루프에 붙는다 — 실행은 엔진이 자기 config(RoutePlan 의 메타데이터)로 남긴다.
+        `graph.py` 를 건드리지 않고 그것을 얻는 가장 싼 방법이다. 이 config 는 `run()` 의
+        **루트 런**(`request_trace`)에 붙는다 — 선택 루프(`agent_select`)와 엔진
+        (`orchestration_engine`)은 그 아래 자식으로, 각자 `run_id` 없이 남긴다.
 
         **`tags` 는 비운다.** `graph.py` 는 RoutePlan 이 이미 있어 `cap:training` 을 미리
         달 수 있지만, 에이전트는 무엇을 부를지 돌기 전에 모른다.

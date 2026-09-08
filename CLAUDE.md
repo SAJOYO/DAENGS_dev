@@ -30,6 +30,10 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 `gait-analysis` 컨테이너로 따로 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
 | `backend/src/daengs_place/` | Place 검색과 중립 점령지 읽기 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`·`/territory/sites/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `docs/journey/UPSTREAM.md` — D-039 |
+| `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
+| `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
+| `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
+| `backend/gait_v4/` | 별도 uv 프로젝트입니다 — 의도된 예외이고, 이유는 `backend/gait_v4/DAENGS-NOTE.md`. #304 뒤에 정리합니다 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
@@ -112,7 +116,10 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   고칠 때는 `uv sync --group ml` 로 부르세요.
   상시 비용은 **RAM 약 2.4GB** 이고, 그것이 서버 여유를 위협하면 그때 별도 프로세스로 뗍니다
   (D-021 의 재개 조건 ⓐ~ⓓ). **개발 PC 는 `uv sync` 만 해도 backend 가 뜹니다** — `ml` 이
-  없으면 `/life/ask` 만 503 입니다. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수 있습니다.
+  없으면 `/life/ask` 가 503 이고, **훈련 능력도 검색 단계에서 실패합니다**
+  (`daengs_training/retrieval/pgvector.py` 가 sentence-transformers 를 씁니다). 라우팅·
+  트레이스까지 보려면 `uv sync --group ml`. 예열은 `DAENGS_WARM_UP_ENCODER=false` 로 끌 수
+  있습니다.
 - **서빙 임베딩 모델과 코퍼스가 어긋나면 조용히 틀립니다.** 문서 벡터와 질의 벡터가 다른
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
@@ -190,6 +197,12 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `db_user` / `db_password` / `db_name` 을 `config.py` 가 `URL.create` 로 조립합니다.
   이어 붙이지 않는 이유는 비밀번호의 특수문자 때문입니다 (D-013).
   옛 `DAENGS_DATABASE_URL` 이 `.env` 에 남아 있으면 backend 가 뜨지 않고 알려 줍니다.
+  **서버의 `backend/.env` 를 고쳤으면 `docker compose restart` 로는 반영되지 않습니다** —
+  `env_file` 은 컨테이너를 만들 때 굳습니다. `docker compose up -d backend` 로 다시 만들되,
+  그 전에 **셸에 `GEMINI_API_KEY` 를 올려야 합니다**: compose 의 `environment:` 가 `env_file` 보다
+  우선하고 `${GEMINI_API_KEY:-}` 는 셸/최상단 `.env` 에서만 오므로, 빈 셸에서 `up -d` 를 치면 빈 키가
+  박혀 의미 라우터가 죽습니다 (2026-09-07 실측). 자동 배포는 `deploy.yml` 이 그 변수를 올려 줍니다.
+  절차는 루트 `README.md` "backend" 절.
 - **암호화 키 3개는 기본값이 없습니다** (`DAENGS_JWE_KEY` `DAENGS_AES_KEY`
   `DAENGS_BLIND_INDEX_KEY`). 없으면 backend 가 아예 뜨지 않습니다 — 만드는 법은
   `backend/.env.example` 에 있습니다. 개인정보 암복호화는 `core/crypto.py`,

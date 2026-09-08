@@ -282,6 +282,9 @@ async def record_vision_decision(
     if not model.strip() or not model_version.strip():
         raise ValueError("VLM 모델과 버전은 비어 있을 수 없습니다.")
 
+    from daengs_backend.services.activity_game import acquire
+
+    await acquire(session)
     attempt = await territory_repo.get_for_decision(session, attempt_id)
     if attempt is None:
         raise TerritoryAttemptNotFoundError

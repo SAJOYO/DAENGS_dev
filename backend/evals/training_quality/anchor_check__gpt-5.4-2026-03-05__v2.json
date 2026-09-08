@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "n": 3,
+  "n_passed": 3,
+  "prompt_version": 2,
+  "results": [
+    {
+      "id": "ungrounded_treat",
+      "passed": true,
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "verdict_ok": true,
+      "missing_reasons": [],
+      "unsupported": [
+        "느슨한 상태에서 간식을 주어 위치를 알려 주세요."
+      ],
+      "rationale": "자료 1은 보호자가 따라가면 '당기면 앞으로 간다'가 성립해 행동이 강화된다고 말한다. 자료 2는 줄이 팽팽해지면 즉시 멈추고, 개가 돌아보거나 줄이 느슨해지면 다시 출발하며, 1회 5~10분의 짧은 세션을 반복한다고 말한다. 자료 3은 초크체인·프롱칼라가 기도와 경추에 손상을 줄 수 있어 권장하지 않고 하네스나 일반 목줄을 권장한다고 말한다. 그러나 자료 2의 '멈춤-보상 구조'는 이 문맥에서 다시 출발하는 것을 뜻할 뿐, 답변처럼 '느슨한 상태에서 간식을 준다'는 구체적 방법은 자료에 없다."
+    },
+    {
+      "id": "grounded_clean",
+      "passed": true,
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "verdict_ok": true,
+      "missing_reasons": [],
+      "unsupported": [],
+      "rationale": "답변의 핵심 주장들은 모두 자료에 있다. 자료 1은 보호자가 따라가면 '당기면 앞으로 간다'가 성립해 행동이 강화된다고 말한다. 자료 2는 줄이 팽팽해지면 즉시 멈추고, 줄이 느슨해지면 다시 출발하며 1회 5~10분의 짧은 세션을 반복한다고 말한다. 자료 3은 초크체인이 목 부위 압박으로 기도와 경추에 손상을 줄 수 있어 권장하지 않는다고 말한다. 답변의 표현은 자료의 재진술 범위 안에 있다."
+    },
+    {
+      "id": "contradicts_source",
+      "passed": true,
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "verdict_ok": true,
+      "missing_reasons": [],
+      "unsupported": [
+        "당김이 심한 경우에는 초크체인을 써서 당길 때마다 목에 압박을 주면 빠르게 교정됩니다."
+      ],
+      "rationale": "첫 문장은 [자료 2]의 '줄이 팽팽해지면 즉시 멈추고, 개가 돌아보거나 줄이 느슨해지면 다시 출발한다'와 일치한다. 둘째 문장은 [자료 3]과 반대된다. [자료 3]은 초크체인·프롱칼라가 목 부위에 압박을 주어 손상을 줄 수 있으므로 하네스나 일반 목줄을 권장한다고만 말하며, 초크체인을 사용해 압박을 주면 빠르게 교정된다는 내용은 없다."
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05"
+}

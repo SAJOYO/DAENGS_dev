@@ -27,6 +27,7 @@ from daengs_backend.orchestration.contracts import (
     PrincipalContext,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
+from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     GeminiSemanticRouter,
@@ -40,7 +41,7 @@ from daengs_backend.orchestration.social import build_social_response, social_me
 from daengs_backend.routers import assistant as assistant_router
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
-UNSUPPORTED_MESSAGE = "실행하거나 안내할 수 있는 기능이 없습니다."
+UNSUPPORTED_MESSAGE = NO_CAPABILITY_MESSAGE
 
 
 class ScriptedTransport:
@@ -297,12 +298,13 @@ async def test_requested_capability_still_bypasses_gemini_even_for_social_text()
 
 
 def test_prompt_keeps_the_v4_social_rules_without_keyword_lists() -> None:
-    # v5/v6 (PR #172) only refined the Life / unsupported-care / Walk-window boundary and
-    # v7 (PR #204) only added the `place` destination; the social rules are intact, which
-    # is what the assertions below actually check.
-    assert PROMPT_VERSION == "semantic-router-ko-v7"
+    # v5/v6 (PR #172) only refined the Life / unsupported-care / Walk-window boundary,
+    # v7 (PR #204) only added the `place` destination, v8 (PR #279) only added the
+    # exclusion sentence and v9 (D-057) only added the additive `general` destination; the
+    # social rules are intact, which is what the assertions below actually check.
+    assert PROMPT_VERSION == "semantic-router-ko-v10"
     prompt = build_semantic_router_prompt(query="고마워", context={})
-    assert "PROMPT_VERSION: semantic-router-ko-v7" in prompt
+    assert "PROMPT_VERSION: semantic-router-ko-v10" in prompt
     assert "social_intent" in prompt
     assert "purely social" in prompt
     assert "leave social_intent null" in prompt

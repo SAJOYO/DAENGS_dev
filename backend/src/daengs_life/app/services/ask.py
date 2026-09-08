@@ -117,9 +117,10 @@ def ask(question: str, *, k: int | None = None, encoder=None, conn=None, client=
         # 422 인 것은 **요청이 잘못돼서가 아니라 답할 수 없는 요청이어서**다. 4xx 중 이 뜻에
         # 가장 가깝고, 상류가 죽은 5xx 와 갈라야 어댑터가 REFUSED 와 ERROR 를 안 뭉갠다.
         # `message` 는 생성이 만든 문장 그대로다 — 여기서 고정 문구를 끼우면 어댑터가 지킬
-        # 무손실(불변식 3)이 이미 여기서 깨진다
-        raise HTTPException(status_code=422, detail={
-            "code": f"{answer.boundary}_boundary", "message": answer.text})
+        # 무손실(불변식 3)이 이미 여기서 깨진다.
+        # **근거도 같이 간다** (RAG-077). 경계 답변이 `[1][3]` 을 달고 오는데 본문만 보내면
+        # 그 번호가 가리킬 곳이 사라진다 — #318 실측의 거절 15건 중 14건이 그랬다
+        raise HTTPException(status_code=422, detail=refusal_detail(answer))
 
     if not answer.hits:
         # **근거가 0건이면 답을 만들지 않는다.** 컨텍스트가 빈 채로 Gemini 에 넘기면 그건 검색
@@ -148,6 +149,28 @@ def _as_row(answer: generate.Answer) -> dict:
             "hits": [{"score": h.score} for h in answer.hits]}
 
 
+def refusal_detail(answer: generate.Answer) -> dict:
+    """경계 거절의 422 `detail` (RAG-055 · RAG-077).
+
+    `code`·`message` 는 RAG-055 그대로이고, `hits`·`cited`·`ungrounded` 가 RAG-077 이다 — 모양은
+    200 응답(`AskOut`)의 같은 칸과 **같다.** 어댑터가 OK 를 줄이는 코드로 REFUSED 도 줄이라고
+    같은 모양을 쓴다.
+
+    **`hits` 를 답변이 지목한 것만으로 추리지 않는다.** `[3]` 은 컨텍스트의 세 번째 자리라는
+    뜻이라, 목록에서 빠지는 것이 있으면 번호가 어긋나고 그것을 맞추려면 본문을 고쳐 써야
+    한다 — 불변식 3 이 막는 일이다. 200 응답도 지목 여부와 무관하게 컨텍스트 전부를 싣는다.
+    근거가 0건인 거절(빈 코퍼스의 응급 질문)은 `hits` 가 비고, 그때는 본문에도 가리킬 번호가
+    없어야 정상이다 — 어댑터 테스트가 그 성질을 붙잡는다.
+    """
+    return {
+        "code": f"{answer.boundary}_boundary",
+        "message": answer.text,
+        "hits": [_hit(h).model_dump() for h in answer.hits],
+        "cited": list(answer.cited),
+        "ungrounded": list(answer.ungrounded),
+    }
+
+
 def to_dto(answer: generate.Answer) -> AskOut:
     """도메인 → 계약. **이 함수가 `dto/` 가 존재하는 이유 그 자체다** (RAG-027)."""
     return AskOut(
@@ -169,4 +192,4 @@ def _hit(h: Hit) -> HitOut:
     )
 
 
-__all__ = ["ask", "to_dto", "SERVING_K", "SERVING_SUPPLEMENTARY"]
+__all__ = ["ask", "refusal_detail", "to_dto", "SERVING_K", "SERVING_SUPPLEMENTARY"]

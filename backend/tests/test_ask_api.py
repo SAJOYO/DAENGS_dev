@@ -238,3 +238,42 @@ def test_walk_still_registered() -> None:
     assert "/life/walk-conditions" in paths and "/life/ask" in paths
     # 옛 경로는 리다이렉트 없이 사라졌다 (#176) — 소비자가 콘솔 하나뿐이라 같이 나간다.
     assert "/walk" not in paths and "/ask" not in paths
+
+
+# ---------------------------------------------------------------- RAG-077 — 거절에도 근거가 간다
+def test_a_refusal_carries_the_context_its_markers_point_to(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**경계 답변이 `[N]` 을 달고 오면 그 번호가 가리킬 목록도 같이 간다** (RAG-077 · #328).
+
+    RAG-055 가 거절 문장을 생성에게 맡겼더니 제도 질문의 거절이 조항을 짚고 `[1][3]` 을 단 채로
+    왔다 — #318 실측의 거절 15건 중 14건. 본문만 보내면 어댑터가 줄 것이 없고, 사용자는
+    번호만 본다. 그래서 422 의 `detail` 이 200 과 **같은 모양의** `hits`·`cited`·`ungrounded` 를
+    싣는다. 지목한 것만 추리지 않는다 — `[3]` 은 자리 번호라 목록이 줄면 어긋난다.
+    """
+    said = "보험개시일로부터 30일 이내에 발생한 질병은 보상하지 않습니다[1]. 진료는 수의사에게."
+    refused = Answer(question="q", text=said, hits=HITS, model="m", embedding_model="bge-m3",
+                     cited=["제101조"], ungrounded=[], boundary="medical", covered=True)
+    monkeypatch.setattr(service.generate, "ask", lambda *a, **k: refused)
+
+    r = client.post("/life/ask", json={"question": "보험 들면 바로 보장되나요"})
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["code"] == "medical_boundary"
+    assert detail["message"] == said                       # 불변식 3 — 문장은 그대로
+    assert [h["citation"] for h in detail["hits"]] == [HITS[0].citation]
+    assert detail["hits"][0]["citation_url"] == HITS[0].citation_url
+    assert detail["hits"][0]["content"] == HITS[0].content  # 200 과 같은 모양 (RAG-028 ②)
+    assert detail["cited"] == ["제101조"]
+    assert detail["ungrounded"] == []
+
+
+def test_a_zero_hit_refusal_sends_an_empty_list_not_nothing(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """근거 0건의 응급 거절은 `hits` 가 **빈 목록**이다 — 칸이 없는 옛 모양과 갈린다."""
+    both = Answer(question="q", text="지금 병원으로 가세요.", hits=[], model="m",
+                  embedding_model="bge-m3", boundary="emergency", covered=False)
+    monkeypatch.setattr(service.generate, "ask", lambda *a, **k: both)
+
+    detail = client.post("/life/ask", json={"question": "q"}).json()["detail"]
+    assert detail["hits"] == []
+    assert detail["cited"] == [] and detail["ungrounded"] == []

@@ -247,10 +247,16 @@ class LifeCapabilityAdapter:
             code, detail = _outcome(exc.detail)
             if exc.status_code == 422:
                 # Life refuses a question about this animal's body; keep its own wording intact.
+                # The wording may cite its context as `[N]` (RAG-055 lets the model write the
+                # refusal itself), so the evidence Life sends alongside travels too (RAG-077):
+                # without it the reader sees `[1][3]` and no list for the numbers to point at.
+                # It is reduced by the same rule as an OK answer (O-9) — this adapter does not
+                # decide whether a refusal deserves its sources; Life already did by citing them.
                 return CapabilityResult(
                     capability=self.capability,
                     status=CapabilityStatus.REFUSED,
                     refusal=OutcomeDetail(code=code or "life_boundary", message=detail),
+                    data=_refusal_data(exc.detail),
                     elapsed_ms=_elapsed_ms(started),
                 )
             if exc.status_code == 404:
@@ -280,21 +286,12 @@ class LifeCapabilityAdapter:
         except Exception as exc:  # noqa: BLE001 - normalize an unexpected boundary failure
             return self._error(started, type(exc).__name__, "생활 정보 기능 실행에 실패했습니다.")
 
-        citations = [
-            {
-                "label": hit.citation,
-                "url": hit.citation_url,
-                "document_title": hit.document_title,
-            }
-            for hit in upstream.hits
-        ]
         return CapabilityResult(
             capability=self.capability,
             status=CapabilityStatus.OK,
             data={
                 "answer": upstream.answer,
-                "citations": citations,
-                "quality": {"cited": upstream.cited, "ungrounded": upstream.ungrounded},
+                **_evidence(upstream.hits, cited=upstream.cited, ungrounded=upstream.ungrounded),
             },
             elapsed_ms=_elapsed_ms(started),
         )
@@ -306,6 +303,48 @@ class LifeCapabilityAdapter:
             error=ErrorDetail(kind=kind, detail=detail),
             elapsed_ms=_elapsed_ms(started),
         )
+
+
+def _evidence(hits: Any, *, cited: Any, ungrounded: Any) -> dict[str, Any]:
+    """The O-9 reduction of Life's evidence: label, URL, title — never the chunk or its score.
+
+    One function for both outcomes on purpose. An OK answer and a refusal that cites its
+    context must reduce identically, or the `[N]` markers in one of them point at a list
+    shaped differently from the other. `hits` arrive as DTO objects from the 200 path and as
+    plain mappings from the 422 detail (an ``HTTPException`` carries JSON, not models); the
+    accessor below reads both so the reduction itself stays a single list of three names.
+    """
+    return {
+        "citations": [
+            {
+                "label": _field(hit, "citation"),
+                "url": _field(hit, "citation_url"),
+                "document_title": _field(hit, "document_title"),
+            }
+            for hit in hits or []
+        ],
+        "quality": {"cited": list(cited or []), "ungrounded": list(ungrounded or [])},
+    }
+
+
+def _field(hit: Any, name: str) -> Any:
+    return hit.get(name) if isinstance(hit, dict) else getattr(hit, name, None)
+
+
+def _refusal_data(detail: Any) -> dict[str, Any] | None:
+    """Evidence travelling with a 422, reduced like an OK answer; ``None`` when Life sent none.
+
+    Life sends `hits` on every boundary refusal since RAG-077 and an empty list when it had
+    nothing (a zero-hit emergency). An older or bare-string detail has no `hits` at all. Both
+    of those map to ``None`` rather than an empty list: `data` on a REFUSED result means "the
+    refusal has sources", and an empty envelope would make a reader look for a list that is
+    not there.
+    """
+    if not isinstance(detail, dict) or not detail.get("hits"):
+        return None
+    return _evidence(
+        detail["hits"], cited=detail.get("cited"), ungrounded=detail.get("ungrounded")
+    )
 
 
 def _outcome(detail: Any) -> tuple[str | None, str]:

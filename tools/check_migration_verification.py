@@ -112,6 +112,30 @@ CRAWL_RUNS_OLD = (
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
 
+# 훈련 RAG 청크 표의 **옛** 모양 — `chunk_id` 가 PK 이던 시절이다. 2026-09-08 마이그레이션이
+# 그 PK 를 복합키로 옮긴다. 픽스처가 옛 모양이어야 마이그레이션이 실제로 할 일이 생긴다.
+TRAINING_RAG_OLD = VECTOR_EXTENSION + (
+    "CREATE TABLE training_rag_documents("
+    " document_id text PRIMARY KEY,"
+    " source_id text NOT NULL,"
+    " source_url text,"
+    " content_sha256 text NOT NULL,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb,"
+    " created_at timestamptz NOT NULL DEFAULT now());"
+    "CREATE TABLE training_rag_chunks("
+    " chunk_id text PRIMARY KEY,"
+    " document_id text NOT NULL REFERENCES training_rag_documents(document_id) ON DELETE CASCADE,"
+    " chunk_index integer NOT NULL,"
+    " text text NOT NULL,"
+    " token_count integer NOT NULL,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb,"
+    " embedding_model text NOT NULL,"
+    " embedding vector(768) NOT NULL,"
+    " content_sha256 text NOT NULL,"
+    " created_at timestamptz NOT NULL DEFAULT now(),"
+    " UNIQUE(document_id, chunk_index, embedding_model));"
+)
+
 
 # 회원의 상태 칸까지 필요한 항목용. `activity_game` 의 트리거가 `AFTER UPDATE OF status
 # ON app_users` 라 그 칸이 없으면 마이그레이션 자체가 안 붙는다.
@@ -686,6 +710,17 @@ CHECKS = (
             'DROP TRIGGER activity_ownership_guard ON territory_occupancies',
             'DROP INDEX activity_one_active_season',
             'DROP INDEX activity_one_open_holding',
+        ]),
+        # 2026-09-08 (#329) — 한 청킹의 여러 임베딩이 공존하게. **첫 변조가 핵심이다** —
+        # PK 가 chunk_id 로 되돌아가면 다른 모델 적재가 옛 벡터를 조용히 덮어쓴다.
+        ('2026-09-08', 'training_rag_embedding_key', TRAINING_RAG_OLD,
+         'training_rag_chunks', [
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_pkey; '
+            'ALTER TABLE training_rag_chunks ADD PRIMARY KEY (chunk_id)',
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_chunk_id_model_key',
+            'ALTER TABLE training_rag_chunks ALTER COLUMN chunk_id DROP NOT NULL',
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey',
+            'ALTER TABLE training_rag_chunks ADD UNIQUE (document_id, chunk_index, embedding_model)',
         ]),
 )
 

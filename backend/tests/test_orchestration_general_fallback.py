@@ -65,8 +65,8 @@ from daengs_backend.orchestration.semantic import (
 )
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_backend.orchestration.social import social_message
-from tools.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
-from tools.router_benchmark.schemas import load_gold_v3_cases
+from daengs_evals.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
+from daengs_evals.router_benchmark.schemas import load_gold_v3_cases
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 SEOUL = {"location": {"lat": 37.5, "lon": 127.0}}

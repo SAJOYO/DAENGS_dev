@@ -61,7 +61,7 @@ def run_crawl(source_ids: list[str] | None, *, dry_run: bool) -> CrawlSummary:
         row_id = None if dry_run else crawl_runs.start(source_id, trigger)
         try:
             result = crawler_run.run(source_id, dry_run=dry_run)
-        except Exception as e:                  # noqa: BLE001 — 한 소스가 나머지를 못 막는다
+        except Exception as e:
             log.exception("[refresh] crawl %s 실패", source_id)
             summary.failed += 1
             if not dry_run:
@@ -110,4 +110,4 @@ def run_embed(*, full: bool, dry_run: bool) -> int:
         backfill_hashes=False, restamp=False))
 
 
-__all__ = ["ORDER", "CrawlSummary", "parse_stages", "run_crawl", "run_parse", "run_chunk", "run_embed"]
+__all__ = ["ORDER", "CrawlSummary", "parse_stages", "run_chunk", "run_crawl", "run_embed", "run_parse"]

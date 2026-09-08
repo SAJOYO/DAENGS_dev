@@ -18,6 +18,7 @@ from daengs_backend.orchestration.contracts import (
 from daengs_evals.answer_quality import anchors, collect, generate_questions, judge, report
 from daengs_evals.answer_quality.gemini import TokenBudgetExceeded, TokenLedger, parse_structured
 from daengs_evals.answer_quality.questions import (
+    ASSETS_DIR,
     QUESTIONS_V1_PATH,
     QuestionCase,
     dedupe,
@@ -37,16 +38,37 @@ from daengs_evals.answer_quality.strata import (
 
 
 def test_strata_are_topic_times_style_with_unique_ids_and_briefs() -> None:
-    # 세트가 둘이다: v1 9주제 + screening 1주제 (#314). 곱은 그대로 주제 × 문체다.
-    assert len(STRATA) == 10 * 7
+    # 세트가 셋이다: v1 9주제 + screening 1주제 (#314) + life 5주제 (#343). 곱은 그대로 주제 × 문체다.
+    assert len(STRATA) == 15 * 7
     assert len(strata_for_set("v1")) == 9 * 7
     assert len(strata_for_set("screening")) == 1 * 7
+    assert len(strata_for_set("life")) == 5 * 7
     assert len(STRATA_BY_ID) == len(STRATA)
     for stratum in STRATA:
         assert stratum.id == f"{stratum.topic.name}__{stratum.style.name}"
         brief = stratum.generator_brief()
         assert stratum.id in brief and stratum.topic.description in brief
         assert stratum.style.description in brief
+
+
+def test_life_set_has_five_topics_four_per_style_and_one_boundary_expectation() -> None:
+    life = strata_for_set("life")
+    topics = {s.topic.name for s in life}
+    assert topics == {"life_policy", "life_insurance", "life_food", "life_travel", "life_boundary"}
+    assert all(s.topic.name.startswith("life_") for s in life)
+    assert all(s.questions_target == 4 for s in life)
+    assert sum(s.questions_target for s in life) == 140
+    # 경계 주제만 Life 가 REFUSED 를 내야 한다. 나머지 넷은 OK 가 기대값이다 — report_life 가 이 값으로
+    # 오거절(false_refuse) · 오답변(false_answer) 을 센다.
+    expected = {s.topic.name: s.topic.expected_life_status for s in life}
+    assert expected == {
+        "life_policy": "OK", "life_insurance": "OK", "life_food": "OK", "life_travel": "OK",
+        "life_boundary": "REFUSED",
+    }
+    # v1 · screening 주제는 이 칸이 비어 있다 — 라우터용 주제라 Life 기대값이 없다.
+    assert all(s.topic.expected_life_status is None for s in strata_for_set("v1"))
+    # Life 주제는 좌표가 필요 없다 — `no_location` 문체에서도 CLARIFY 가 되면 안 된다.
+    assert all(s.expected_route_kind == "specialized" for s in life)
 
 
 def test_no_location_style_turns_coordinate_topics_into_clarify_only() -> None:
@@ -145,6 +167,19 @@ def test_frozen_questions_v1_file_validates_and_covers_every_stratum() -> None:
     expected = {s.id for s in strata_for_set("v1")}
     assert covered == expected, sorted(expected - covered)
     assert {c.generator_version for c in cases} == {generate_questions.GENERATOR_VERSION}
+    assert all("lat" not in c.query and "lon" not in c.query for c in cases)
+
+
+def test_frozen_questions_life_file_validates_and_covers_the_life_set() -> None:
+    path = ASSETS_DIR / "questions_life_v1.jsonl"
+    assert path.exists(), "questions_life_v1.jsonl 은 동결돼 커밋돼 있어야 한다 (#343)"
+    cases = load_questions(path)
+    # 목표 140. 중복 제거로 조금 모자랄 수 있고, 그것은 예산을 안 늘리는 규칙의 결과라 허용한다.
+    assert 120 <= len(cases) <= 140
+    covered = {c.stratum for c in cases}
+    expected = {s.id for s in strata_for_set("life")}
+    assert covered == expected, sorted(expected - covered)
+    assert all(c.stratum.startswith("life_") for c in cases)
     assert all("lat" not in c.query and "lon" not in c.query for c in cases)
 
 

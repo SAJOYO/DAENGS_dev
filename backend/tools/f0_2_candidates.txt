@@ -1,0 +1,36 @@
+# F0-2 후보 (2026-09-08). 형식: URL  메모. 기관 · 협회 · 공공 데이터만 — 블로그 · 카페 · 지식iN 은 넣지 않는다.
+# 각 URL 은 WebSearch/WebFetch 로 실제 찾아 존재를 확인한 것만 적는다.
+
+# 이동 — 숙박 · 고속버스 · 출국 (검역본부 qia.go.kr 은 robots 🚫 — 대체 기관 위주로 찾음)
+https://www.mafra.go.kr/bbs/home/792/574492/artclView.do  농림축산식품부 '반려동물과 함께하는 해외여행, 출국' 안내
+https://www.mafra.go.kr/bbs/home/792/567968/artclView.do  농림축산식품부 '고양이와 함께하는 해외여행 준비' 안내
+https://www.airport.kr/ap_ko/951/subview.do  인천국제공항공사 반려동물 동반 안내
+https://kobus.co.kr/etc/busstpl/BusStpl.do  고속버스통합예매(코버스) 운송약관 페이지
+https://easylaw.go.kr/CSP/CnpClsMainBtr.laf?popMenu=ov&csmSeq=894&ccfNo=3&cciNo=1&cnpClsNo=1&menuType=onhunqna  찾기쉬운 생활법령정보 — 반려동물과의 해외여행
+https://easylaw.go.kr/CSP/CnpClsMainBtr.laf?popMenu=ov&csmSeq=1662&ccfNo=2&cciNo=1&cnpClsNo=1  찾기쉬운 생활법령정보 — 국내여행자 버스 이용하기
+https://www.qia.go.kr/livestock/qua/livestock_outforeign_hygiene_inf.jsp  농림축산검역본부 입출국시 개·고양이 검역절차 (qia.go.kr robots 재확인용)
+
+# 음식 — 기관 안내
+https://www.mafra.go.kr/bbs/home/792/572561/artclView.do  농림축산식품부 '반려동물 사료, 영양 정보까지 한눈에' 보도자료
+https://www.mafra.go.kr/bbs/home/792/566734/artclView.do  농림축산식품부 CMS 반려동물 사료 관련 게시글
+https://www.rda.go.kr/board/board.do?boardId=farmprmninfo&prgId=day_farmprmninfoEntry&mode=updateCnt&searchOrgDeptKey=org&dataNo=100000809170  농촌진흥청 '반려동물 사료도 국가 기준으로 관리한다' 보도자료
+http://kopfa.org/nutrition-information/?bmode=view&idx=162262298  한국펫사료협회 — 사료 기능성 원료 함량·표시광고 안내
+https://www.qia.go.kr/Incheon/popup/AnimalCereal.html  농림축산검역본부 애완동물사료 검역안내 (qia.go.kr robots 확인용)
+
+# guideline — 가이드북 PDF (조 번호 없음이 정상)
+https://www.ekara.org/file/getBlob/41286/%EC%84%9C%EC%9A%B8%EC%8B%9C%20%EC%9A%B0%EB%A6%AC%EB%8F%99%EB%84%A4%20%EB%8F%99%EB%AC%BC%EB%B3%B5%EC%A7%80%20%EC%95%88%EB%82%B4%EC%84%9C.pdf  카라(ekara.org) 재게시: 서울시 우리동네 동물복지 안내서 PDF
+https://www.mafra.go.kr/bbs/home/792/595849/download.do  농림축산식품부 길고양이 돌봄 지침(가이드라인) PDF
+https://www.mafra.go.kr/bbs/home/792/595841/download.do  농림축산식품부 우리동네 길고양이 안내서(리플릿) PDF
+https://www.ekara.org/file/getBlob/47810/%3C%EC%B9%B4%EB%9D%BC%20%ED%99%9C%EB%8F%99%EC%A7%80%3E%20%EC%B4%88%EB%93%B1%204-6%ED%95%99%EB%85%84_01%20%EC%B1%85%EC%9E%84%EC%9E%88%EB%8A%94%20%EB%B0%98%EB%A0%A4%EB%AC%B8%ED%99%94.pdf  동물권행동 카라 — 초등 4-6학년 반려문화 활동지 PDF
+http://swlc.welfare.seoul.kr/swlc/html/sub/index.action?pno=050101&mode=view&ID=2974  서울사회복지공익법센터 발간물 목록('동물의 권리' 반려생활 가이드 수록)
+
+# 커뮤니티 원천 — 공개 라이선스가 명확한 것만
+https://www.animal.go.kr/front/awtis/faq/faqList.do?menuNo=5000000016  국가동물보호정보시스템 동물등록 FAQ (WebFetch 로 37건 확인, 공공누리 표시 없음)
+https://www.animal.go.kr/front/awtis/faq/faqList.do?menuNo=2000000021  국가동물보호정보시스템 FAQ (다른 메뉴)
+https://aihub.or.kr/aihubdata/data/view.do?dataSetSn=71520  AI Hub 반려견·반려묘 건강정보 데이터 (질의응답 아님 — 참고용, 라이선스 미기재)
+
+# 못 찾음: 대한수의사회(kvma.or.kr) 반려동물 안내 자료의 직접 PDF/페이지 링크 — 자료실이 로그인·검색 UI 뒤에 있어 특정 못 함
+# 못 찾음: 한국관광공사 '반려동물 동반여행 친화시설 조성 가이드라인' 직접 PDF — 한국관광데이터랩 페이지가 JS 다운로드 버튼이라 href 미노출 (기사·게시글 URL만 확인됨, 후보에서 제외)
+# 못 찾음: 식품의약품안전처의 반려동물 사료 전용 안내 — 사료관리법 소관이 농림축산식품부라 mfds.go.kr 에 해당 페이지가 없음
+# 못 찾음: 경기도 반려동물 가이드북 단독 PDF — animal.gg.go.kr·gg.go.kr 에서 개별 가이드북 다운로드 링크를 찾지 못함(반려마루 시설 안내만 확인)
+# 네이버 블로그·카페·지식iN: robots.txt·이용약관 확인 결과 🚫 수집 안 함 — cafe.naver.com 은 `Disallow: /`(전면 차단), blog.naver.com·kin.naver.com 은 특정 경로만 막지만 "BOT ACCESS FOR THE PURPOSES OF AI TRAINING AND RETRIEVAL-AUGMENTED GENERATION (RAG) IS STRICTLY PROHIBITED" 문구가 named AI 봇 목록에 명시돼 있어 URL 은 후보에 넣지 않는다

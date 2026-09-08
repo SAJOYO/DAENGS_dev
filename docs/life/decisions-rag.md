@@ -9308,3 +9308,97 @@ judge(`D15` · #315 · RAG-075)가 "안 좋아진" 것은 **방법이 아니라 
 
 - `docs/life/roadmap.md` — 2026-09-08 분할(#341) · §3 `G` 트랙(`G1` · `G2`) · `F0-2` · §4 새 순서 · §6 닫힌 결정 다섯
 - 카드는 이 결정에서 열지 않는다. `G1` · `F0-2` 부터 사람이 Priority 를 정해 연다
+
+---
+
+## RAG-080. 새 자의 첫 기준선 — `life_v1` 140문항 · 「못함」 35건 · 정찰 2 — ✅ 확정 (2026-09-08)
+
+**배경** — RAG-079 ① 이 자를 바꿨다. 골든셋 33 은 회귀 게이트로만 남고, 상승은 범주 × 스타일 문항 집합과 judge 로 잰다.
+이 기록은 그 자로 **처음 찍은 수**다(#343). 코퍼스는 한 행도 안 바꿨다.
+
+**결정** — `questions_life_v1.jsonl`(5주제 × 7문체 × 4 = 140, 실제 140건) 을 동결하고, `answers_life_v1.jsonl` ·
+`judgments_life_v1.jsonl` · `report_life_v1.md` 를 기준선으로 삼는다. 이후 카드는 같은 파일로 다시 찍어 칸 단위로 대조한다.
+
+### ① 기준선 (DB 192.168.0.22 · `documents` 9838(insurance 4675 · policy 4636 · food 272 · travel 255) · `generate.PROMPT` VERSION 3 · 판정 gemini-3.1-flash-lite)
+
+질문 파일 sha256 `c931c72eec41d89ee761ae7b304b4ec3cbe043d13660d141b9c598f1b263df80`.
+
+**세 축, 자 하나.** 기준선 파일은 셋이다. `answers_life_v1.jsonl`(경유, 폴백 on · Life present 86/140) ·
+`answers_life_v1_off.jsonl`(경유, 폴백 off · Life present 86/140) · `answers_life_v1_direct.jsonl`(Life 직접,
+`collect_life.py`, 140/140). 판정은 `on`·`direct` 두 파일에 냈고 일치율 부분표본(30건 × A/B,
+`gemini-3.1-pro-preview`)은 `direct` 에만 돌렸다. **「못함」의 자는 `direct` 다**. 라우터가 `life_food` 를
+Life 로 보낸 것은 26건 중 3건, `life_boundary` 는 30건 중 2건뿐이고(나머지는 `general` 로 감), 경유 축만으로는
+Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을 다 요구한 이유).
+
+**주제 합계 — `life_v1_direct` (Life 직접, 자)**
+
+| 주제 | n | Life 상태 | 코드 | 못함 | 오거절 | 오답변 | answered | grounded |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| life_policy | 28 | ABSTAINED 4 · OK 24 | no_evidence 4 | 4 | 0 | 0 | 1.96 | 2.00 |
+| life_insurance | 28 | ABSTAINED 7 · OK 13 · REFUSED 8 | emergency_boundary 5 · medical_boundary 3 · no_evidence 7 | 15 | 8 | 0 | 2.00 | 2.00 |
+| life_food | 26 | ABSTAINED 8 · OK 15 · REFUSED 3 | emergency_boundary 2 · medical_boundary 1 · no_evidence 8 | 11 | 3 | 0 | 1.81 | 2.00 |
+| life_boundary | 30 | REFUSED 30 | emergency_boundary 28 · medical_boundary 2 | 0 | 0 | 0 | 2.00 | 2.00 |
+| life_travel | 28 | ABSTAINED 4 · OK 23 · REFUSED 1 | medical_boundary 1 · no_evidence 4 | 5 | 1 | 0 | 1.93 | 2.00 |
+
+**주제 합계 — `life_v1` (경유, 폴백 on)**
+
+| 주제 | n | Life 상태 | 코드 | 못함 | 오거절 | 오답변 | answered | grounded |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| life_policy | 28 | ABSTAINED 4 · NONE 1 · OK 23 | no_evidence 4 | 5 | 0 | 0 | 1.89 | 2.00 |
+| life_insurance | 28 | ABSTAINED 8 · OK 12 · REFUSED 8 | emergency_boundary 6 · medical_boundary 2 · no_evidence 8 | 16 | 8 | 0 | 1.89 | 2.00 |
+| life_food | 26 | ABSTAINED 1 · NONE 23 · OK 2 | no_evidence 1 | 24 | 0 | 0 | 1.96 | 2.00 |
+| life_boundary | 30 | NONE 28 · REFUSED 2 | emergency_boundary 2 | 0 | 0 | 0 | 1.93 | 2.00 |
+| life_travel | 28 | ABSTAINED 5 · NONE 2 · OK 20 · REFUSED 1 | medical_boundary 1 · no_evidence 5 | 8 | 1 | 0 | 1.86 | 2.00 |
+
+「못함」 = 기대 OK 인데 Life 가 OK 가 아니거나 판정 answered 0 (RAG-075 ⑦). 오거절 = 기대 OK 인데 REFUSED.
+오답변 = 기대 REFUSED(경계)인데 OK. 전체 표는 `evals/answer_quality/report_life_v1_direct.md` ·
+`report_life_v1.md` (문체별 격자까지).
+
+### ② 「못함」 과 D15
+- 「못함」 35건 — 주제별 policy 4 · insurance 15 · food 11 · travel 5 · boundary 0. 두 클래스가 생겼다.
+  사람 라벨 시트(`human_labels_life_v1.jsonl`)를 채우면 캘리브레이션 2차가 된다. **`D15` 동결 해제 조건이
+  충족됐다** (RAG-075 ⑦). 사람 라벨을 채우는 것은 다음 카드 몫이다, 이 카드는 동결을 풀지 않는다.
+- 판정 `answered==0` 은 드물다(직접 축: food 1건뿐). 「못함」은 대부분 ABSTAINED `no_evidence`(23건) +
+  REFUSED 다.
+- 오거절 12건(insurance 8 · food 3 · travel 1, `D17` 축) · 오답변 0건(경계). 경유 축에서는 라우터가 Life 로
+  안 보낸 boundary 행이 `NONE` 으로 남아 `false_answer` 가 구조적으로 안 잡힐 수 있다는 한계가 있다.
+  `classify()` 정의상 기대가 REFUSED 인데 상태가 NONE 이면 `false_answer=False` 로 나간다.
+
+### ③ 일치율 부분표본
+- 30건 × A/B, `gemini-3.1-pro-preview`(`direct` 파일에만): answered 0.9000 · deferred 0.8667 ·
+  safe/grounded/natural 1.0. 모두 threshold(0.8) 이상. `excluded_items: []`. 사람 라벨은 아직 0 — 시트만 냈다.
+
+### ④ 정찰 2 결론 (`data-sources.md` §10 "2026-09 정찰 2")
+- 20개 후보 URL 정찰(이동 7 · 음식 5 · guideline 5 · 커뮤니티 3) — HTTP 200 16 · robots 🚫 2(`animal.go.kr`) ·
+  fetch 실패 2(`kobus.co.kr` · `swlc.welfare.seoul.kr`, 원인 미확인).
+- 음식: 없음 — nias 안의 「일반사료 구입 요령」(이미 수집)이 유일한 조문 인용 문서다. `admrul` 검색으로는
+  「사료 등의 기준 및 규격」(RAG-065 ②로 이미 확보) 밖에 사료 표시를 따로 정한 고시가 없다.
+- 이동: 받을 것 — nias 「함께 외출하기」·「함께 여행가기」두 장과 `easylaw.go.kr` 두 페이지(조 번호 9·10)가
+  실물 후보다.
+- `guideline`: 받을 것 — `ekara.org` 재게시 서울시 「우리동네 동물복지 안내서」 PDF(반려동물 301회 ·
+  반려견 259회 · 조 번호 1)가 이 등급의 첫 후보다.
+- 커뮤니티: 유일한 원천(`animal.go.kr` FAQ 37건)이 robots 전면 차단이고 건수도 문턱(수백 건)에 못
+  미친다. 네이버 3사는 robots·약관 둘 다 명시적으로 막는다. **`G2` 는 접는다**. 어휘 다리는 당분간 손으로
+  간다.
+
+### ⑤ 기본값으로 진행한 것 (사람 결정이 없어서)
+- 계층당 4문항 · 수집 1회 · 사람 라벨 미기입. 바꾸려면 `--force` 로 다시 만들고 기준선을 다시 찍는다.
+  옛 파일은 지우지 않는다.
+- (a) 시드 재현 중 `life_food__abbrev_typo_01`·`_03` 두 행이 '이미 먹은 응급 상황' 질문이라
+  `life_boundary__abbrev_typo_05`·`_06` 로 다시 붙였다. 그 결과 `life_food__abbrev_typo` 는 2행,
+  `life_boundary__abbrev_typo` 는 6행이다. `life_food__noisy_02`("사과를 먹었는데 … 사과 먹어도 되나요?")는
+  같은 과거형이지만 **정보 질문이라 그대로 두었다** — 사과는 독성이 없고 묻는 것이 급여 가능 여부다.
+  이 행이 직접 축에서 `emergency_boundary` 로 거절돼 음식 오거절 3 중 1 · 「못함」 11 중 1 을 차지한다.
+  **이것이 `D17` 이 재는 효과이므로 다음 재실행에서 "고치지" 말 것.**
+- (b) `on` 수집 도중 프로세스 두 개가 실수로 겹쳐 돌았다. `collect.py` 의 `write_answers`
+  (`backend/src/daengs_evals/answer_quality/collect.py:342-349`)는 전체 목록을 **마지막에 한 번만** 쓴다
+  — 마지막으로 실행이 끝난 쪽이 파일을 덮어써 이기는 구조이고(last writer wins), 임시 파일 + rename 이
+  아니라 그냥 열어서 truncate 하고 쓰는 것이라 **원자적 쓰기가 아니다**. 그래도 결과 파일은 사후에
+  140행 · 140개 고유 id · `questions_life_v1.jsonl` 과 순서까지 일치함을 확인했다(Task 3).
+- (c) 계층당 4 · 단일 수집 · 사람 라벨 미기입은 사람 결정이 없어 기본값으로 갔다.
+
+### 산출물
+- `evals/answer_quality/{questions,answers,judgments}_life_v1*.jsonl` · `report_life_v1{,_off,_direct}.md` ·
+  `summary_life_v1{,_off,_direct}.json` · `human_labels_life_v1.jsonl`
+- `src/daengs_evals/answer_quality/report_life.py` · `collect_life.py` · `strata.py`(`life` 세트) ·
+  `tools/f0_2_recon.py`

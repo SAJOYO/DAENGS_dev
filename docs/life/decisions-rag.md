@@ -9084,6 +9084,6 @@ dense 전수 스캔이 142ms 다).
 
 - `backend/src/daengs_life/app/services/ask.py` — `refusal_detail()`
 - `backend/src/daengs_backend/orchestration/adapters/life.py` — `_evidence()` · `_refusal_data()`
-- `backend/tools/answer_quality/cited_diff.py` — 머리말 정정
+- `backend/src/daengs_evals/answer_quality/cited_diff.py` — 머리말 정정
 - `backend/evals/answer_quality/report_screening_v2.md` — #318 의 두 문장 정정
 - 테스트: `tests/test_ask_api.py` · `tests/test_orchestration_adapters.py` · `tests/test_cited_diff.py`

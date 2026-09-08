@@ -16,7 +16,7 @@ LangGraph 전략이고, `agent/` 가 그 셋을 통째로 대체합니다.
 
 **기존 파일을 `langgraph/` 하위로 옮기지 않았습니다.** 대칭적이라 그게 맞아 보이지만
 `orchestration.graph|planner|semantic|service|social` 을 import 하는 파일이 25개이고,
-그중 `tools/router_benchmark/runner_v5~v8.py` 와 `tests/test_router_benchmark_v5~v8.py`
+그중 `src/daengs_evals/router_benchmark/runner_v5~v8.py` 와 `tests/test_router_benchmark_v5~v8.py`
 는 **동결된 벤치마크를 재현하는 코드**입니다. 경로를 건드리면 동결의 의미가 흐려집니다.
 """
 

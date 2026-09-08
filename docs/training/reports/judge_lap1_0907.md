@@ -199,7 +199,7 @@ LLM 일치로 승격하는 길도 버렸다 — 위 표대로 같은 계열 판�
     export GEMINI_API_KEY=...            # 생성부가 os.getenv 를 읽는다
     export RAG_PGVECTOR_DSN=...          # backend/.env 의 DAENGS_DB_* 로 조립
     uv sync --group ml                   # 검색이 sentence-transformers 를 쓴다
-    uv run python -m tools.training_quality.collect \
+    uv run python -m daengs_evals.training_quality.collect \
         --questions evals/training_quality/questions_v1.jsonl --label lap1
-    uv run python -m tools.training_quality check-anchors
-    uv run python -m tools.training_quality score --label lap1
+    uv run python -m daengs_evals.training_quality check-anchors
+    uv run python -m daengs_evals.training_quality score --label lap1

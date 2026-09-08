@@ -279,6 +279,19 @@ CHECKS = (
             ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
             'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
         ]),
+        # 2026-09-08 (#331) — 돌봄 칸 넷. 기본값 변조는 `pets_registered` 와 같은 이유이고,
+        # **제약을 지우는 변조가 이 항목의 추가 이유다** — 제약이 빠져도 칸 모양은 그대로라
+        # 칸만 보는 verify 는 통과하는데, 그 뒤로 자율급식에 시각이 붙은 행이 조용히 쌓인다.
+        # ⚠ 타입 변조는 `feeding_style` 에 건다. `feeding_times` 를 text 로 바꾸면 그 위의
+        #   `jsonb_typeof(feeding_times)` CHECK 가 재검증에서 죽어 **변조 자체가 실패**하고,
+        #   하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr 낱말로 가르므로
+        #   그 항목은 아무것도 증명하지 않는다 (2026-09-08 CI 실측).
+        ('2026-09-08', 'pets_care', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN feeding_times',
+            'ALTER TABLE pets ALTER COLUMN feeding_style TYPE text',
+            'ALTER TABLE pets ALTER COLUMN feeding_style SET DEFAULT \'free\'',
+            'ALTER TABLE pets DROP CONSTRAINT pets_feeding_times_need_schedule',
+        ]),
         # 2026-09-07 (#297) — 요청 메타데이터. **변조 목록의 마지막 둘이 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 "있어야 할 열이 있나" 만이 아니라 **"없어야 할 열이
         # 없나" 이다** (D-037 은 질문 원문을, D-054 는 회원 식별자를 금지했다). 열을 하나

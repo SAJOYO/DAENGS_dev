@@ -20,11 +20,15 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from daengs_backend.models.base import Base
 
 PET_SEXES = ("male", "female")
+
+#: 급식 방식. `free` 자율급식 · `scheduled` 시간제 (`feeding_times` 에 시각).
+PET_FEEDING_STYLES = ("free", "scheduled")
 
 #: 생일 칸에 든 날짜가 무슨 날인지.
 #:
@@ -49,6 +53,18 @@ class Pet(Base):
         ),
         CheckConstraint(
             "weight_kg > 0 AND weight_kg <= 200", name="pets_weight_kg_check"
+        ),
+        # 돌봄 (#331). 급식 시각은 시간제일 때만, 그리고 JSON 배열이어야 합니다.
+        CheckConstraint(
+            "feeding_style IN ('free','scheduled')", name="pets_feeding_style_check"
+        ),
+        CheckConstraint(
+            "feeding_times IS NULL OR feeding_style = 'scheduled'",
+            name="pets_feeding_times_need_schedule",
+        ),
+        CheckConstraint(
+            "feeding_times IS NULL OR jsonb_typeof(feeding_times) = 'array'",
+            name="pets_feeding_times_array",
         ),
         # 확정 사진의 칸들은 같이 있거나 같이 없어야 합니다 — 하나만 남으면 "어디
         # 있는지는 아는데 그게 무엇인지 모르는" 행이 됩니다 (birth_date 짝과 같은 결).
@@ -117,6 +133,21 @@ class Pet(Base):
     #: 삭제와 다른 일이라 칸을 따로 둡니다 — 목록에서 지우는 것은 없던 일로 만드는
     #: 것이고, 배웅은 있었던 일을 적어 두는 것입니다. 행을 안 지우고 이 날짜만 채웁니다.
     farewell_on: Mapped[date | None] = mapped_column(Date)
+
+    # ── 돌봄 (#331) ────────────────────────────────────────────────────
+    #: 급식 방식. None 은 '모름'입니다.
+    feeding_style: Mapped[str | None] = mapped_column(String(10))
+
+    #: 시간제 급식 시각 목록 `["08:00","19:30"]`. **시간제가 아니면 NULL** (CHECK).
+    #:
+    #: ⚠ `none_as_null=True` 를 빼면 시각 없는 행이 JSON `null` 로 들어가
+    #: `jsonb_typeof(...) = 'array'` CHECK 에 걸립니다 — `AdminAuditLog.detail` 과 같은 함정.
+    feeding_times: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
+
+    #: 앓는 병 · 정기 복용 약. 자유 텍스트, None 은 '모름'. 상한은 schemas 와 같은 200자.
+    #: 비서 프롬프트에는 병은 그대로, 약은 **복약 여부만** 갑니다 (`services/dog_context.py`).
+    health_conditions: Mapped[str | None] = mapped_column(String(200))
+    medications: Mapped[str | None] = mapped_column(String(200))
 
     # ── 프로필 사진 (D-052) ────────────────────────────────────────────
     #: 확정된 사진의 저장소 키. **None 이면 사진이 없고 앱이 견종 그림을 씁니다.**

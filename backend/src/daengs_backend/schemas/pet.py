@@ -5,16 +5,29 @@
 `false` 나 기본값으로 바꾸지 마세요 — 안 물어본 것과 아니라고 답한 것은 다릅니다.
 """
 
+import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 #: 생일 칸의 날짜가 무슨 날인지. 모델 쪽 `PET_BIRTH_DATE_KINDS` 와 같은 값입니다.
 BirthDateKind = Literal["birthday", "family_day"]
 PetSex = Literal["male", "female"]
+
+#: 급식 방식. 모델 쪽 `PET_FEEDING_STYLES` 와 같은 값입니다.
+#:   free       자율급식 — 그릇에 늘 두고 알아서 먹는다
+#:   scheduled  시간제 — 정해진 때에 준다 (`feeding_times`)
+FeedingStyle = Literal["free", "scheduled"]
+
+#: 급식 시각 한 칸의 모양. **화면이 고른 시각**이 오는 자리라 `HH:MM` 만 받습니다 —
+#: "아침" 같은 말은 나중에 알림(roadmap F5)이 시각으로 못 바꿉니다.
+_FEEDING_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+#: 지병·약 자유 텍스트의 상한. 비서 프롬프트에 실리는 값이라 무한정 받지 않습니다.
+CARE_TEXT_MAX = 200
 
 
 class PetUpsert(BaseModel):
@@ -46,6 +59,56 @@ class PetUpsert(BaseModel):
     #:
     #: 삭제와 다른 일입니다 — 이 날짜가 차도 아이는 목록에 남고 함께한 산책도 남습니다.
     farewell_on: date | None = None
+
+    # ── 돌봄 (#331) ────────────────────────────────────────────────────
+    # 넷 다 **None 이 '모름'** 입니다. 안 물어본 것과 "없다"고 답한 것이 다릅니다 —
+    # 약 칸이 비어 있다고 "약 안 먹는 아이"가 아니고, 비서도 그렇게 읽지 않습니다.
+
+    #: 자율급식인지 시간제인지. 비서가 "밥 몇 번 줘요?" 류에 이 아이 기준으로 답합니다.
+    feeding_style: FeedingStyle | None = None
+
+    #: 시간제일 때의 급식 시각 목록(`HH:MM`). **시간제가 아니면 못 옵니다** — 자율급식에
+    #: 시각이 붙으면 어느 쪽이 맞는지 알 수 없는 행이 됩니다. 시간제인데 시각을 모르면 None.
+    feeding_times: list[str] | None = Field(default=None, min_length=1, max_length=12)
+
+    #: 앓는 병. 자유 텍스트 — 비서 프롬프트에 그대로 실립니다.
+    health_conditions: str | None = Field(default=None, max_length=CARE_TEXT_MAX)
+
+    #: 정기적으로 먹는 약. 자유 텍스트. **비서 프롬프트에는 이름이 아니라 "복약 중" 여부만
+    #: 갑니다** (`services/dog_context.py`) — 약 이름을 주면 약·용량 질문을 거절하는 방어가
+    #: 지시문 한 줄로 약해집니다. 이름의 소비자는 케어 기록과 알림입니다.
+    medications: str | None = Field(default=None, max_length=CARE_TEXT_MAX)
+
+    @field_validator("health_conditions", "medications")
+    @classmethod
+    def _blank_care_text_is_unknown(cls, value: str | None) -> str | None:
+        """공백만 있는 값은 **모름(None)** 입니다. 빈 문자열이 저장되면 "적었는데 내용이
+        없는" 행이 되고, 비서가 그걸 "복약 중"으로 읽습니다."""
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("feeding_times")
+    @classmethod
+    def _feeding_times_shape(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        for item in value:
+            if not _FEEDING_TIME.match(item):
+                raise ValueError(f"급식 시각은 HH:MM 이어야 합니다: {item!r}")
+        return value
+
+    @model_validator(mode="after")
+    def _feeding_times_need_schedule(self) -> Self:
+        """급식 시각은 **시간제일 때만** 있을 수 있습니다.
+
+        DB 에도 같은 CHECK 가 있지만 여기서 막아야 422 로 이유를 말해 줄 수 있습니다 —
+        DB 까지 가면 500 입니다 (`_birth_date_pair` 와 같은 이유).
+        """
+        if self.feeding_times is not None and self.feeding_style != "scheduled":
+            raise ValueError("급식 시각은 feeding_style 이 scheduled 일 때만 보낼 수 있습니다.")
+        return self
 
     @model_validator(mode="after")
     def _farewell_on(self) -> Self:
@@ -89,6 +152,12 @@ class PetResponse(BaseModel):
     birth_date: date | None
     birth_date_kind: BirthDateKind | None
     farewell_on: date | None
+
+    #: 돌봄 (#331). 넷 다 None 이 '모름'입니다 — `PetUpsert` 의 같은 칸 주석 참고.
+    feeding_style: FeedingStyle | None = None
+    feeding_times: list[str] | None = None
+    health_conditions: str | None = None
+    medications: str | None = None
 
     #: 이 아이가 대표인가. `app_users.primary_pet_id` 에서 옵니다 —
     #: pets 테이블에는 그런 칸이 없습니다 (05_pets.sql 주석 참고).

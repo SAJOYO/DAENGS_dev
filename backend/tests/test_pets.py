@@ -142,6 +142,66 @@ def test_날짜와_종류는_같이_와야_한다(client: TestClient) -> None:
     assert both.json()["birth_date_kind"] == "family_day"
 
 
+# ---------------------------------------------------------------- 돌봄 (#331)
+
+
+def test_돌봄_칸은_안_보내면_모름이다(client: TestClient) -> None:
+    """급식 방식·급식 시간·지병·약은 **안 물어본 것과 없다고 답한 것이 다르다.** 전부 null."""
+    r = client.post("/app/pets", json=_body()).json()
+    assert r["feeding_style"] is None
+    assert r["feeding_times"] is None
+    assert r["health_conditions"] is None
+    assert r["medications"] is None
+
+
+def test_돌봄_칸을_적으면_그대로_돌아온다(client: TestClient) -> None:
+    r = client.post(
+        "/app/pets",
+        json=_body(
+            feeding_style="scheduled",
+            feeding_times=["08:00", "19:30"],
+            health_conditions="신부전 초기",
+            medications="포르테콜 아침 1정",
+        ),
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["feeding_style"] == "scheduled"
+    assert body["feeding_times"] == ["08:00", "19:30"]
+    assert body["health_conditions"] == "신부전 초기"
+    assert body["medications"] == "포르테콜 아침 1정"
+
+
+def test_급식_시간은_시간제일_때만_받는다(client: TestClient) -> None:
+    """자율급식에 시간이 붙거나, 방식 없이 시간만 오면 422. 시간제인데 시간을 모르는 건 된다."""
+    free_with_times = client.post(
+        "/app/pets", json=_body(feeding_style="free", feeding_times=["08:00"])
+    )
+    times_only = client.post("/app/pets", json=_body(feeding_times=["08:00"]))
+    scheduled_unknown = client.post("/app/pets", json=_body(feeding_style="scheduled"))
+    assert free_with_times.status_code == 422
+    assert times_only.status_code == 422
+    assert scheduled_unknown.status_code == 201, scheduled_unknown.text
+    assert scheduled_unknown.json()["feeding_times"] is None
+
+
+def test_급식_시간은_HH_MM_이다(client: TestClient) -> None:
+    """화면이 고른 시각이 오는 자리다. "아침" 같은 말이나 25시는 422."""
+    for bad in (["아침"], ["8:00"], ["25:00"], ["08:60"]):
+        r = client.post("/app/pets", json=_body(feeding_style="scheduled", feeding_times=bad))
+        assert r.status_code == 422, bad
+    r = client.post("/app/pets", json=_body(feeding_style="scheduled", feeding_times=[]))
+    assert r.status_code == 422, "빈 목록은 모름(null)으로 보내야 한다"
+
+
+def test_돌봄_텍스트는_길이_상한이_있다(client: TestClient) -> None:
+    """자유 텍스트지만 프롬프트에 실리는 값이라 상한을 둔다. 지병 200자 · 약 200자."""
+    r = client.post("/app/pets", json=_body(health_conditions="가" * 201))
+    assert r.status_code == 422
+    r = client.post("/app/pets", json=_body(medications="가" * 201))
+    assert r.status_code == 422
+
+
 def test_배웅한_날은_비어_있다(client: TestClient) -> None:
     """새로 등록한 아이는 **아직 함께 있는 아이다.** 기본이 null 이어야 한다."""
     r = client.post("/app/pets", json=_body()).json()

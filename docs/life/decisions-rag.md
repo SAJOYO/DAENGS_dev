@@ -6674,7 +6674,7 @@ RAG-029 가 예고한 *"라벨 자체의 문제를 그대로 물려받는다"* �
 
 ### ③ 실측 — 확장은 늘었고 지표는 안 움직였다
 
-랩 전에 `backend/tools/expansion_probe.py` 로 **"무엇이 더 들어오는가"만** 셌다 (Gemini 없이 몇 초):
+랩 전에 `backend/tools/expansion_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제) 로 **"무엇이 더 들어오는가"만** 셌다 (Gemini 없이 몇 초):
 
 ```
 문항 30 · 바뀐 문항 7 · 확장 청크 합계 17 → 29 · 새로 들어온 must 0
@@ -7882,7 +7882,7 @@ KB 의 조각은 그 낱말을 **품고 있다**(`…따라 특별약관`). 규�
 진짜 약관 이름은 명사구이고 조각에는 서술어가 있다. 이미 쓰는 Kiwi(`core.tokenize`)로 본다 —
 낱말 사전을 손으로 적으면 보험사가 늘 때마다 늘고, 그 목록은 조용히 낡는다.
 
-규칙 셋은 **26종의 실물을 놓고** 정했다 (`tools/d3_terms_boundary_probe.py`):
+규칙 셋은 **26종의 실물을 놓고** 정했다 (`tools/d3_terms_boundary_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제)):
 
 - **ⓐ 지시관형사로 시작하면 제외** (`이 특별약관`).
   ⚠ **띄어쓰기를 요구한다** — Kiwi 가 `이륜자동차` 를 `이`(MM)+`륜` 으로 쪼갠다. 공백을 안 보면
@@ -8842,7 +8842,7 @@ RRF 상수로 못 넘는다는 ③⑤ 는 **검색 사실**이라 그대로다. 
 
 **⚠ 파일은 하나도 안 고쳤다.** 카드 본문이 *"먼저 재고, 안 오르면 나머지를 안 한다"* 를
 게이트로 세웠고 거기서 멈췄다. `search.py` 도 DB 도 코퍼스도 안 건드렸다. 남긴 것은 정찰
-스크립트 둘(`tools/d2_candidate_probe.py` · `tools/d2_rerank_probe.py`)뿐이다.
+스크립트 둘(`tools/d2_candidate_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제) · `tools/d2_rerank_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제))뿐이다.
 
 ---
 
@@ -8850,7 +8850,7 @@ RRF 상수로 못 넘는다는 ③⑤ 는 **검색 사실**이라 그대로다. 
 
 리랭커는 **후보 안에서만 재정렬한다.** `RAG-072` ③ 이 렉시컬에 대해 적은 *"dense 후보를
 재정렬할 뿐 후보를 못 들여온다"* 가 리랭커에도 그대로 걸린다. 그래서 도입을 재기 전에
-**후보 안에 답이 얼마나 들어와 있는지**부터 셌다 (`tools/d2_candidate_probe.py`).
+**후보 안에 답이 얼마나 들어와 있는지**부터 셌다 (`tools/d2_candidate_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제)).
 
 `must` 의 **요구**(RAG-055) 45개를 네 칸에 넣는다. 서빙과 같은 경로다 — `search.encode()`
 (어휘 확장 포함) · 교통 배제 · 지역 `org` · 부칙 포함 · **전수 스캔 위**.
@@ -8883,7 +8883,7 @@ RRF 기준이었는데, **리랭커 기준으로도 넓힐 이유가 없다.**
 ### ③ 게이트 ② — 하나 얻고 둘~셋 잃는다
 
 `search._SQL` 로 후보를 그대로 받아 `bge-reranker-v2-m3`(fp32 · GPU)로 재정렬하고,
-**인용 확장까지 다시 돌렸다** (`tools/d2_rerank_probe.py`). 5,932쌍.
+**인용 확장까지 다시 돌렸다** (`tools/d2_rerank_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제)). 5,932쌍.
 
 | | 근거에 `must` 가 있는 문항 | `must` 가 top-5 안 |
 | --- | --- | --- |
@@ -8963,9 +8963,9 @@ dense 전수 스캔이 142ms 다).
 
 ### 산출물
 
-- `backend/tools/d2_candidate_probe.py` — 게이트 ①. 읽기 전용
-- `backend/tools/d2_rerank_probe.py` — 게이트 ②. 읽기 전용. `--titled` 로 ④의 변형
-- 재현: `cd backend && uv run --no-sync python tools/d2_candidate_probe.py`
+- `backend/tools/d2_candidate_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제) — 게이트 ①. 읽기 전용
+- `backend/tools/d2_rerank_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제) — 게이트 ②. 읽기 전용. `--titled` 로 ④의 변형
+- 재현: `cd backend && uv run --no-sync python tools/d2_candidate_probe.py`(ed0178b 까지 있던 파일 — #340 에서 삭제)
 
 ---
 

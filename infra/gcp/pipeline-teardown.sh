@@ -3,6 +3,11 @@
 # `gcloud config set project` 로 사용자의 기본 프로젝트를 바꾸지 않는다 — `CLOUDSDK_CORE_PROJECT`
 # 환경변수를 이 스크립트 프로세스에만 export 한다. 모든 gcloud 명령이 이 변수를 본다.
 set -euo pipefail
+
+# Windows Git Bash(MSYS)가 네이티브 exe 인자의 `/data` 같은 경로를 `C:/Program Files/Git/data` 로 바꿔 버린다.
+# gcloud 가 그 값을 그대로 받아 mount-path 가 깨진다 (2026-09-08 실측). 리눅스에서는 아무 효과 없다.
+export MSYS_NO_PATHCONV=1
+
 : "${PROJECT:?}"
 REGION=asia-northeast3; GPU_REGION=asia-southeast1
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"

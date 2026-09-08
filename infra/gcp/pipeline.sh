@@ -9,6 +9,10 @@
 # 환경변수를 이 스크립트 프로세스에만 export 한다. 모든 gcloud 명령이 이 변수를 본다.
 set -euo pipefail
 
+# Windows Git Bash(MSYS)가 네이티브 exe 인자의 `/data` 같은 경로를 `C:/Program Files/Git/data` 로 바꿔 버린다.
+# gcloud 가 그 값을 그대로 받아 mount-path 가 깨진다 (2026-09-08 실측). 리눅스에서는 아무 효과 없다.
+export MSYS_NO_PATHCONV=1
+
 : "${PROJECT:?GCP 프로젝트 id}"
 : "${VM_INTERNAL_IP:?pgvector 가 있는 VM 의 내부 IP (gcloud compute instances list)}"
 REGION=asia-northeast3          # 서울 — 버킷·refresh 잡·Scheduler

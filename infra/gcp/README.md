@@ -47,6 +47,10 @@
 
 ## 자주 걸리는 것
 
+- **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가
+  `/data` 같은 인자를 네이티브 exe(gcloud) 에 넘길 때 `C:/Program Files/Git/data` 로 바꿔 버린다.
+  스크립트가 `MSYS_NO_PATHCONV=1` 을 export 하지만, 명령을 손으로 칠 때는 앞에
+  `MSYS_NO_PATHCONV=1` 을 붙일 것.
 - **잡이 `코퍼스가 없습니다` 로 바로 죽는다** — 버킷에 `manifests/crawl_log.jsonl` 이 없다(5번).
 - **`load` 가 connection refused** — 방화벽 규칙의 source range 가 잡이 쓰는 서브넷과 다르거나, VM 의 compose 가 5432 를 `0.0.0.0` 에 게시하지 않았다(`docker compose ps` 로 확인).
 - **`embed` 가 모델을 받으려 한다** — 이미지 빌드의 가중치 굽기가 실패한 것이다. `HF_HOME=/models` 는

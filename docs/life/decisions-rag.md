@@ -9407,7 +9407,7 @@ Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을
 
 ## RAG-082. 사람 라벨 30 이 judge 를 통과시켰다 — `D15` 동결을 푼다 — ✅ 확정 (2026-09-09)
 
-**배경** — `D15` 는 2026-09-07 에 열렸다가 같은 날 동결됐다(#315 · RAG-075 ⑦) — 골든셋 33 판정이 32/33 답함이라 한 클래스가 97%를 차지해 judge 의 변별력을 잴 수 없었다. `G1` 의 새 자(#343 · RAG-080 ②)가 `life_v1_direct` 에서 「못함」 35건을 내며 두 클래스가 생겼고, 남은 전제는 사람 라벨이었다. **#348** 이 그 라벨 30건을 채우고(Task 1 · `human_labels_life_v1.jsonl`), `report_life agreement` 로 사람 대 judge 를 쟀다(Task 2). 이 결정은 그 결과를 받아 동결을 푼다.
+**배경** — `D15` 는 2026-09-07 에 열렸다가 같은 날 동결됐다(#315 · RAG-075 ⑦). 골든셋 33 판정이 32/33 답함이라 한 클래스가 97%를 차지해 judge 의 변별력을 잴 수 없었다. `G1` 의 새 자(#343 · RAG-080 ②)가 `life_v1_direct` 에서 「못함」 35건을 내며 두 클래스가 생겼고, 남은 전제는 사람 라벨이었다. **#348** 이 그 라벨 30건을 채우고(Task 1 · `human_labels_life_v1.jsonl`), `report_life agreement` 로 사람 대 judge 를 쟀다(Task 2). 이 결정은 그 결과를 받아 동결을 푼다.
 
 **결정** — 사람 라벨 30 대 judge 의 일치가 기준(threshold 0.8)을 넘겨 `D15` 동결을 풀고, judge 를 Life `G1` 격자의 지표로 승격한다.
 
@@ -9415,18 +9415,18 @@ Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을
 
 n = 30. 사람=A **26/30** (0.8667) · 사람=B **27/30** (0.9) · A=B **27/30** (0.9, `answered` 항목 기준) · 1점 이내 **30/30**(두 variant 모두). 혼동표(사람,judge → 건수), variant A 기준: `2,2` 24 · `1,2` 3 · `1,1` 2 · `1,0` 1. 사람 라벨 분포: 0 → 0 · 1 → 6 · 2 → 24.
 
-🔴 **A 와 B 는 같은 모델이다.** `judgments_life_v1_direct_agreement.jsonl` 의 두 variant 모두 `gemini-3.1-pro-preview` 가 판정했다(부분표본은 `--judge-model auto` 로 돌렸다). 그래서 사람-vs-A · 사람-vs-B 는 **한 모델을 두 프롬프트 변형으로 비교한 것**이지, 두 모델 비교가 아니다. 140행 `judgments_life_v1_direct.jsonl` 은 `gemini-3.1-flash-lite` — 부분표본과 다른 모델이다. (PR 본문과 앞 기록은 flash-lite/pro 분리로 적었는데 틀렸다.)
+🔴 **A 와 B 는 같은 모델이다.** `judgments_life_v1_direct_agreement.jsonl` 의 두 variant 모두 `gemini-3.1-pro-preview` 가 판정했다(부분표본은 `--judge-model auto` 로 돌렸다). 그래서 사람-vs-A · 사람-vs-B 는 **한 모델을 두 프롬프트 변형으로 비교한 것**이지, 두 모델 비교가 아니다. 140행 `judgments_life_v1_direct.jsonl` 은 `gemini-3.1-flash-lite` 다. 부분표본과 다른 모델이다. (PR 본문과 앞 기록은 flash-lite/pro 분리로 적었는데 틀렸다.)
 
 ### ② 불일치 넷은 한 방향이 아니다
 
-전부 사람=1 인데, `life_policy__multi_intent_01`(1,2,2) · `life_food__polite_01`(1,2,2) · `life_food__no_location_01`(1,2,1) 은 judge 가 더 후하고, `life_food__noisy_01`(1,0,1) 은 오히려 judge A 가 사람보다 박하다. **3건은 judge 가 후하고 1건은 오히려 박하다** — "judge 가 관대하다"로 뭉뚱그려 적지 않는다. 0↔2 뒤집힘은 하나도 없다.
+전부 사람=1 인데, `life_policy__multi_intent_01`(1,2,2) · `life_food__polite_01`(1,2,2) · `life_food__no_location_01`(1,2,1) 은 judge 가 더 후하고 `life_food__noisy_01`(1,0,1) 은 judge A 가 사람보다 박하다. **3건은 judge 가 후하고 1건은 오히려 박하다.** "judge 가 관대하다"로 뭉뚱그려 적지 않는다. 0↔2 뒤집힘은 하나도 없다.
 
 사람 메모 둘을 그대로 인용한다:
 
 - `life_food__noisy_01`: "답은 맞지만 뒤에 사료관리법 관련하여 질문의 요지와 벗어난 답이 길게 포함됨"
 - `life_policy__multi_intent_01`: "등록 변경 관련 질문은 제대로 답했으나, 공원 추천은 잘 거부함. 오케스트레이션 단에서 다른 서브 에이전트가 답을 할 수 있을 것임."
 
-다섯 번째 불일치 `life_insurance__abbrev_typo_01` 은 B 하고만 다르다 — 불일치 표는 A 기준이라 A 만 보면 안 보인다.
+다섯 번째 불일치 `life_insurance__abbrev_typo_01` 은 B 하고만 다르다. 불일치 표는 A 기준이라 A 만 보면 안 보인다.
 
 ### ③ 승격이 뜻하는 것
 
@@ -9434,13 +9434,13 @@ n = 30. 사람=A **26/30** (0.8667) · 사람=B **27/30** (0.9) · A=B **27/30**
 
 ### ④ 안 한 것
 
-관대함을 보정하려 루브릭 문구(`_RUBRIC_A`/`_RUBRIC_B`)를 고치는 것은 **안 넣었다.** 넣으면 프롬프트 버전이 갈리고 #277 의 84건이 물려 있는 축이 갈라진다. 사람 결정으로 남긴다 — 사용자가 이 권고를 그대로 받아들였다. `rag judge`(골든셋 33, OpenAI 계열)와 `answer_quality.judge`(RAG-074)는 합치지 않는다.
+관대함을 보정하려 루브릭 문구(`_RUBRIC_A`/`_RUBRIC_B`)를 고치는 것은 **안 넣었다.** 넣으면 프롬프트 버전이 갈리고 #277 의 84건이 물려 있는 축이 갈라진다. 사람 결정으로 남긴다. 사용자가 이 권고를 그대로 받아들였다. `rag judge`(골든셋 33, OpenAI 계열)와 `answer_quality.judge`(RAG-074)는 합치지 않는다.
 
 ### ⑤ 한계
 
-라벨이 30건이고 분포가 쏠려 있다(30건 중 24건이 2, 0건이 0). 「못함」의 대부분은 judge 가 아니라 Life 자체 상태(기권·거절)로 잡힌다 — 그것이 이 자의 성질이다. 라벨을 넓히려면 「못함」 쪽에서 뽑아야 한다.
+라벨이 30건이고 분포가 쏠려 있다(30건 중 24건이 2, 0건이 0). 「못함」의 대부분은 judge 가 아니라 Life 자체 상태(기권·거절)로 잡힌다. 그것이 이 자의 성질이다. 라벨을 넓히려면 「못함」 쪽에서 뽑아야 한다.
 
-**남은 잔가지** — `disagreements` 는 variant A/B 를 하드코딩한다(가드는 있어 없는 variant 에는 예외 대신 `None` 을 낸다). CLI 의 단일 "1점 이내" 수치는 `min(within1_A, within1_B)` 이다 — 지금은 정확히 맞지만 합친 지표는 아니다.
+**남은 잔가지** — `disagreements` 는 variant A/B 를 하드코딩한다(가드는 있어 없는 variant 에는 예외 대신 `None` 을 낸다). CLI 의 단일 "1점 이내" 수치는 `min(within1_A, within1_B)` 이다. 지금은 정확히 맞지만 합친 지표는 아니다.
 
 ### 산출물
 

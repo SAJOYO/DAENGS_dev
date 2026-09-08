@@ -7,8 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 from daengs_backend.config import settings
+from daengs_backend.schemas.status import StatusState
 from daengs_backend.services import cloudrun_jobs as cr
 from daengs_backend.services import crawl as crawl_service
+from daengs_backend.services import status as status_service
 from tests.test_crawl_api import _auth, client  # noqa: F401 — client 는 fixture 로만 쓰인다(재사용)
 
 JOB = "projects/p/locations/r/jobs/corpus-refresh"
@@ -28,15 +30,15 @@ def _ex(name, done):
 
 class FakeExecutions:
     def __init__(self, items): self.items = items; self.parent = None
-    def list_executions(self, parent): self.parent = parent; return self.items
+    def list_executions(self, parent, **kwargs): self.parent = parent; return self.items
 
 
 class FakeJobs:
     def __init__(self): self.requests = []
-    def run_job(self, request):
+    def run_job(self, request, **kwargs):
         self.requests.append(request)
         return SimpleNamespace(metadata=SimpleNamespace(name=f"{JOB}/executions/corpus-refresh-new1"))
-    def get_job(self, name): return SimpleNamespace(name=name)
+    def get_job(self, name, **kwargs): return SimpleNamespace(name=name)
 
 
 def test_job_path():
@@ -76,7 +78,7 @@ def test_job_exists():
     from google.api_core.exceptions import NotFound
 
     class Missing:
-        def get_job(self, name): raise NotFound("no")
+        def get_job(self, name, **kwargs): raise NotFound("no")
     assert cr.job_exists("p", "r", "corpus-refresh", jobs_client=Missing()) is False
 
 
@@ -86,7 +88,12 @@ def _cloudrun(monkeypatch, *, active=None, project="p"):
     monkeypatch.setattr(settings, "gcp_project", project)
     calls = {}
     monkeypatch.setattr(cr, "active_execution", lambda *a, **k: active)
-    monkeypatch.setattr(cr, "run", lambda p, r, j, args, **k: calls.setdefault("run", (p, r, j, list(args))) and "corpus-refresh-x1")
+
+    def _run(p, r, j, args, **k):
+        calls["run"] = (p, r, j, list(args))
+        return "corpus-refresh-x1"
+
+    monkeypatch.setattr(cr, "run", _run)
     monkeypatch.setattr(cr, "job_exists", lambda *a, **k: True)
     return calls
 
@@ -132,6 +139,20 @@ def test_cloudrun_crawl_workers_는_잡_존재로_답한다(monkeypatch):
     assert crawl_service.crawl_workers() == []
 
 
+def test_cloudrun_crawl_workers_는_timeout_을_job_exists_에_전달한다(monkeypatch):
+    """상태 페이지가 `WORKER_PING_SEC` 예산을 넘기지 않으려면 여기까지 전달돼야 한다(#326 라운드 1)."""
+    _cloudrun(monkeypatch)
+    seen = {}
+
+    def _job_exists(*a, **k):
+        seen.update(k)
+        return True
+
+    monkeypatch.setattr(cr, "job_exists", _job_exists)
+    crawl_service.crawl_workers(1.5)
+    assert seen.get("timeout") == 1.5
+
+
 def test_celery_갈래는_그대로다(monkeypatch):
     monkeypatch.setattr(settings, "crawl_backend", "celery")
     monkeypatch.setattr(settings, "redis_url", "")
@@ -155,3 +176,43 @@ def test_보통_202_에는_note_가_없다(client, monkeypatch):  # noqa: F811 �
     monkeypatch.setattr(crawl_service, "trigger", lambda source_ids=None: "t1")
     got = client.post("/admin/crawl", json={}, headers=_auth())
     assert got.status_code == 202 and got.json()["note"] is None
+
+
+# ---------------------------------------------------------------- 상태 페이지: absent vs down
+async def _no_runs(_session):
+    return []
+
+
+async def _zero_running(_session):
+    return 0
+
+
+async def test_상태_페이지는_cloudrun_워커_이름을_잡_이름으로_보여준다(monkeypatch):
+    """워커 대수가 아니라 잡 이름이다 — Cloud Run 에는 "대수" 개념이 없다(#326 라운드 1)."""
+    monkeypatch.setattr(settings, "crawl_backend", "cloudrun")
+    monkeypatch.setattr(settings, "gcp_project", "p")
+    monkeypatch.setattr(crawl_service, "latest", _no_runs)
+    monkeypatch.setattr(crawl_service, "running_count", _zero_running)
+    monkeypatch.setattr(crawl_service, "crawl_workers",
+                        lambda *a, **k: ["corpus-refresh@asia-northeast3"])
+
+    state, detail = await status_service._crawl(object())
+    assert state == StatusState.OK
+    assert "Cloud Run 잡 corpus-refresh@asia-northeast3" in detail
+
+
+async def test_상태_페이지는_cloudrun_API_고장을_없음이_아니라_down_으로_본다(monkeypatch):
+    """`BrokerUnavailable` 이 곧 "여기엔 크롤러가 없다"가 아니다 — 설정은 있는데 API 가 안
+    답하는 것일 수 있고, 그때는 고장이다(#326 리뷰 라운드 1)."""
+    monkeypatch.setattr(settings, "crawl_backend", "cloudrun")
+    monkeypatch.setattr(settings, "gcp_project", "p")
+    monkeypatch.setattr(crawl_service, "latest", _no_runs)
+
+    def _broken(*a, **k):
+        raise crawl_service.BrokerUnavailable("Cloud Run 에 묻지 못했다")
+
+    monkeypatch.setattr(crawl_service, "crawl_workers", _broken)
+
+    state, detail = await status_service._crawl(object())
+    assert state == StatusState.DOWN
+    assert "Cloud Run 잡에 묻지 못했습니다" in detail

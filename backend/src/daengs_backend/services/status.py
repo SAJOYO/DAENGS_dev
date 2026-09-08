@@ -256,6 +256,12 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
 
     행이 있다는 것과 크롤러가 있다는 것은 다릅니다 — GCP 는 09-02 로컬 덤프를 쓰고 있어서
     행은 있는데 워커가 없습니다 (`services/crawl.py` 의 `crawl_workers` 주석).
+
+    **GCP 에서는 `absent` 와 `down` 이 또 갈립니다.** `crawl_backend` 가 `cloudrun` 인데
+    `crawl_workers` 가 `BrokerUnavailable` 을 던지면 그건 "여기엔 원래 크롤러가 없다"가 아니라
+    "있어야 하는데 Cloud Run API 가 안 답한다"입니다 — 권한이 잘못됐거나, 프로젝트를 잘못 적었거나,
+    API 가 죽은 것이라 `down` 으로 봅니다(#326 리뷰 라운드 1). `gcp_project` 가 비어 있으면 그마저
+    설정이 안 된 것이라 여전히 `absent` 입니다.
     """
     runs = await crawl_service.latest(session)
     last = max((r.started_at for r in runs), default=None)
@@ -263,7 +269,10 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
 
     try:
         workers = await asyncio.to_thread(crawl_service.crawl_workers, WORKER_PING_SEC)
-    except crawl_service.BrokerUnavailable:
+    except crawl_service.BrokerUnavailable as e:
+        if settings.crawl_backend == "cloudrun" and settings.gcp_project:
+            # 설정은 있는데 API 가 답하지 않는 것 — 없는 게 아니라 고장이다 (#326)
+            return StatusState.DOWN, f"Cloud Run 잡에 묻지 못했습니다: {e}. {when}."
         return StatusState.ABSENT, f"이 환경에는 크롤러가 없습니다 (브로커 없음). {when}."
     if not workers:
         return StatusState.ABSENT, f"이 환경에는 크롤러 워커가 떠 있지 않습니다. {when}."
@@ -272,7 +281,10 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
     # (`db/init` 의 `crawl_runs.status` 주석).
     failed = [r.source_id for r in runs if r.status in ("failed", "unavailable")]
     running = await crawl_service.running_count(session)
-    detail = f"워커 {len(workers)}대. {when}. 소스 {len(runs)}개"
+    if settings.crawl_backend == "cloudrun":
+        detail = f"Cloud Run 잡 {workers[0]}. {when}. 소스 {len(runs)}개"
+    else:
+        detail = f"워커 {len(workers)}대. {when}. 소스 {len(runs)}개"
     if failed:
         return StatusState.DEGRADED, f"{detail}, 마지막 실행이 어긋난 소스 {len(failed)}개: {', '.join(failed[:5])}."
     if running:

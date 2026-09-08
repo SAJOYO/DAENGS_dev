@@ -38,6 +38,11 @@ CRAWL_TASK = "daengs_life.tasks.crawl.crawl_due"
 #: 기본 `celery` 큐로 보내면 실시간 워커가 가져가려다 실패하거나, 아무도 안 가져갑니다.
 CRAWL_QUEUE = "crawl"
 
+#: Cloud Run API 를 부를 때 주는 시간. 트리거는 사람이 버튼을 누르고 기다리는 요청이라
+#: 상태 페이지의 `WORKER_PING_SEC`(2초 예산 안)보다 넉넉하게 잡는다 — 그래도 무한은 아니라서
+#: API 가 죽으면 요청 스레드가 영영 물려 있지는 않는다(#326 리뷰 라운드 1).
+CLOUDRUN_TRIGGER_TIMEOUT_SEC = 30.0
+
 
 class BrokerUnavailable(RuntimeError):
     """브로커 주소가 없거나 연결이 안 됨. 라우터가 503 으로 바꿉니다."""
@@ -97,11 +102,13 @@ def _trigger_cloudrun(source_ids: Sequence[str] | None) -> str:
         raise BrokerUnavailable("DAENGS_GCP_PROJECT 가 없다 — backend/.env 를 확인할 것")
     project, region, job = settings.gcp_project, settings.gcp_region, settings.corpus_job
     try:
-        active = cloudrun_jobs.active_execution(project, region, job)
+        active = cloudrun_jobs.active_execution(
+            project, region, job, timeout=CLOUDRUN_TRIGGER_TIMEOUT_SEC)
         if active:
             raise AlreadyRunning(active)
         args = ["--sources", *source_ids] if source_ids else []
-        execution = cloudrun_jobs.run(project, region, job, args)
+        execution = cloudrun_jobs.run(
+            project, region, job, args, timeout=CLOUDRUN_TRIGGER_TIMEOUT_SEC)
     except AlreadyRunning:
         raise
     except Exception as e:                      # API 가 죽은 것은 500 이 아니다
@@ -144,7 +151,9 @@ def crawl_workers(timeout_sec: float = 1.0) -> list[str]:
         if not settings.gcp_project:
             raise BrokerUnavailable("DAENGS_GCP_PROJECT 가 없다")
         try:
-            exists = cloudrun_jobs.job_exists(settings.gcp_project, settings.gcp_region, settings.corpus_job)
+            exists = cloudrun_jobs.job_exists(
+                settings.gcp_project, settings.gcp_region, settings.corpus_job,
+                timeout=timeout_sec)
         except Exception as e:                  # API 가 죽은 것은 500 이 아니다
             raise BrokerUnavailable(f"Cloud Run 에 묻지 못했다: {type(e).__name__}: {e}") from e
         return [f"{settings.corpus_job}@{settings.gcp_region}"] if exists else []

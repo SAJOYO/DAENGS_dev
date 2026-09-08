@@ -96,7 +96,7 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 것이라 건드리지 않는다). ⚠ **`torch==X` 로 적으면 이미 깔린 `X+cpu` 가 그것을 만족시켜 조용히
 아무 일도 안 한다** — `X+cu126` 까지 핀하고 `--reinstall-package` 를 주며, 빌드 끝에
 `torch.version.cuda` 를 확인해 아니면 빌드를 실패시킨다. Triton JIT 이 C 컴파일러를 부르므로
-CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. 실측 크기는 두 장 합쳐 약 4.5GB.
+CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. Artifact Registry 실측(2026-09-09, 압축 저장 크기)은 **CPU 2.4GB · CUDA 9.7GB, 합 12.1GB** — CUDA 판은 nvidia-* 런타임 휠 때문에 네 배다.
 roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 간다.
 
 **설정은 환경 변수로만** — `DAENGS_DATA_DIR=/data`, `POSTGRES_IP=<VM 내부 IP>` 와 계정 조각,
@@ -154,7 +154,7 @@ due 판정 그대로). **끝나지 않은 실행이 있으면**(pending 포함) 
 | `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
 | `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
 | 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
-| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| Artifact Registry | 이미지 2장 12.1GB (CPU 2.4 · CUDA 9.7, 2026-09-09 실측) | 약 ₩1,600 (GB당 월 $0.10) |
 | 버킷 | 약 300MB + 버전 | 수백 원 |
 | Scheduler · Secret | | 무료 구간 |
 | **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |

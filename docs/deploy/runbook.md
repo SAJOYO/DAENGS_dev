@@ -416,7 +416,7 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 | `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
 | `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
 | 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
-| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| Artifact Registry | 이미지 2장 12.1GB (CPU 2.4 · CUDA 9.7, 2026-09-09 실측) | 약 ₩1,600 (GB당 월 $0.10) |
 | 버킷 | 약 300MB + 버전 | 수백 원 |
 | Scheduler · Secret | | 무료 구간 |
 | **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |

@@ -90,8 +90,10 @@ v4 를 통틀어 0 입니다.
 
 ## 재현
 
-`#330` 본문 C 절과 같은 명령, 라벨만 `v4_*`. `POSTGRES_IP` 를 셸에 올리고(`report_screening_v2.md` 함정 1)
-`uv sync --group ml` 이 돼 있어야 합니다. `dev_source_sha` 는 `055e3cc`, `questions_sha256` 은 `39ce3c95…`.
+`#330` 본문 C 절과 같은 명령, 라벨만 `v4_*`. ⚠ 모듈 이름이 바뀌었습니다 — #336 뒤로는
+`python -m tools.answer_quality.collect` 가 아니라 **`python -m daengs_evals.answer_quality.collect`** 입니다
+(`record_diff`·`cited_diff` 도 같은 패키지). 이 수집은 #336 머지 전 dev(`055e3cc`)에서 옛 이름으로 돌렸습니다.
+`POSTGRES_IP` 를 셸에 올리고(`report_screening_v2.md` 함정 1) `uv sync --group ml` 이 돼 있어야 합니다. `dev_source_sha` 는 `055e3cc`, `questions_sha256` 은 `39ce3c95…`.
 
 ## 남은 것
 

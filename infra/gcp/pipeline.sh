@@ -143,6 +143,16 @@ gcloud run jobs deploy corpus-embed-full --region="${GPU_REGION}" --image="${IMA
 echo "== Scheduler (매일 04:00 KST → corpus-refresh)"
 gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
   --member="serviceAccount:${SA_EMAIL}" --role=roles/run.invoker >/dev/null
+
+echo "== 관리자 콘솔 트리거(#326) — VM 의 backend 가 이 계정으로 잡을 실행·조회한다"
+# VM 은 기본 컴퓨트 SA(=BUILD_SA, 위에서 이미 계산)로 메타데이터 서버 인증을 쓴다. 이 바인딩이
+# README 산문에만 있으면 teardown 뒤 재배포 때 조용히 빠진다 — 여기 스크립트에 있어야
+# `pipeline.sh` 한 번으로 항상 같이 생긴다. add-iam-policy-binding 은 멱등이다.
+gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
+  --member="serviceAccount:${BUILD_SA}" --role=roles/run.invoker >/dev/null
+gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
+  --member="serviceAccount:${BUILD_SA}" --role=roles/run.viewer >/dev/null
+
 JOB_URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/corpus-refresh:run"
 if gcloud scheduler jobs describe corpus-refresh-daily --location="${REGION}" >/dev/null 2>&1; then
   gcloud scheduler jobs update http corpus-refresh-daily --location="${REGION}" \

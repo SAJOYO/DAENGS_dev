@@ -18,10 +18,14 @@ log = logging.getLogger(__name__)
 
 
 def _default_list_executions(parent: str) -> Iterable:
+    """첫 페이지(20개)만 본다 — 실행은 최신순으로 오므로 안 끝난 것을 찾는 데 넉넉하다
+    (`daengs_backend/services/cloudrun_jobs.py` 의 `active_execution` 과 같은 판단, #326 최종 리뷰)."""
     from google.cloud import run_v2
 
     client = run_v2.ExecutionsClient()
-    return client.list_executions(parent=parent)
+    request = run_v2.ListExecutionsRequest(parent=parent, page_size=20)
+    pager = client.list_executions(request=request)
+    return next(iter(pager.pages)).executions
 
 
 def another_execution_running(*, job: str | None, execution: str | None,

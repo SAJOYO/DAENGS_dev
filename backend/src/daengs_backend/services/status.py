@@ -252,16 +252,19 @@ async def _gait() -> tuple[StatusState, str]:
 
 
 async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
-    """마지막 크롤. **워커가 없는 환경은 `absent`** 입니다.
+    """마지막 크롤. **워커(또는 잡)가 없는 환경은 `absent`**, **있어야 하는데 안 보이면 `down`**
+    입니다 — 갈림은 `crawl_backend` 를 따라갑니다(#326).
 
-    행이 있다는 것과 크롤러가 있다는 것은 다릅니다 — GCP 는 09-02 로컬 덤프를 쓰고 있어서
-    행은 있는데 워커가 없습니다 (`services/crawl.py` 의 `crawl_workers` 주석).
+    행이 있다는 것과 크롤러가 있다는 것은 다릅니다 — 예를 들어 09-02 GCP 는 한동안 로컬 덤프를
+    쓰고 있어서 행은 있는데 크롤러가 없었습니다 (`services/crawl.py` 의 `crawl_workers` 주석).
 
-    **GCP 에서는 `absent` 와 `down` 이 또 갈립니다.** `crawl_backend` 가 `cloudrun` 인데
-    `crawl_workers` 가 `BrokerUnavailable` 을 던지면 그건 "여기엔 원래 크롤러가 없다"가 아니라
-    "있어야 하는데 Cloud Run API 가 안 답한다"입니다 — 권한이 잘못됐거나, 프로젝트를 잘못 적었거나,
-    API 가 죽은 것이라 `down` 으로 봅니다(#326 리뷰 라운드 1). `gcp_project` 가 비어 있으면 그마저
-    설정이 안 된 것이라 여전히 `absent` 입니다.
+    - **celery**: `BrokerUnavailable`(REDIS_URL 없음·브로커 불통)도, 워커 목록이 빈 것도 다
+      "이 환경엔 원래 크롤러가 없다"로 읽어 `absent` 입니다.
+    - **cloudrun**: `gcp_project` 가 채워진 채 `BrokerUnavailable` 이면 API 가 안 답하는
+      것이라 `down`, `gcp_project` 가 비어 있으면 설정 자체가 안 된 것이라 `absent`. 잡이
+      존재해야 하는데 `crawl_workers` 가 빈 목록을 돌려주면(`job_exists` 가 `False`) 배포가
+      안 됐거나 잡 이름이 틀린 것이라 — 이것도 "환경에 원래 없다"가 아니라 "있어야 하는데
+      없다"라 `down` 입니다.
     """
     runs = await crawl_service.latest(session)
     last = max((r.started_at for r in runs), default=None)
@@ -275,6 +278,12 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
             return StatusState.DOWN, f"Cloud Run 잡에 묻지 못했습니다: {e}. {when}."
         return StatusState.ABSENT, f"이 환경에는 크롤러가 없습니다 (브로커 없음). {when}."
     if not workers:
+        if settings.crawl_backend == "cloudrun" and settings.gcp_project:
+            # 잡이 있어야 하는데 없다 — 배포가 안 됐거나 이름이 틀렸다. "환경에 원래 없다"가
+            # 아니라 "있어야 하는데 없다"라 down 이다 (#326 최종 리뷰 미너 4).
+            return StatusState.DOWN, (
+                f"Cloud Run 잡 {settings.corpus_job} 이 {settings.gcp_region} 에 없습니다 — "
+                f"DAENGS_CORPUS_JOB·배포를 확인하세요. {when}.")
         return StatusState.ABSENT, f"이 환경에는 크롤러 워커가 떠 있지 않습니다. {when}."
 
     # `unavailable` 도 같이 셉니다 — "사람이 고쳐야 하는 것" 이라 `failed` 와 할 일이 같습니다

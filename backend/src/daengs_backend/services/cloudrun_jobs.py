@@ -5,8 +5,9 @@
 
 클라이언트는 인자로 받는다(`executions_client`·`jobs_client`). 테스트가 가짜를 넣고, 운영은 None 으로
 불러 ADC(VM 메타데이터 서버)로 만든다. 키 파일은 없다. **기본 클라이언트는 모듈에 한 번만 만들어
-캐시한다** — 상태 페이지가 2초 예산 안에서 자주 부르는 경로라, 매번 새 채널을 여는 비용이 그대로
-누적된다(#326 리뷰 라운드 1). 주입된 클라이언트(테스트)는 이 캐시를 거치지 않는다.
+캐시한다** — 상태 페이지가 `WORKER_PING_SEC`(1초, 항목 전체 예산은 2초) 안에서 자주 부르는
+경로라, 매번 새 채널을 여는 비용이 그대로 누적된다(#326 리뷰 라운드 1). 주입된 클라이언트
+(테스트)는 이 캐시를 거치지 않는다.
 
 google API 예외는 여기서 안 잡는다 — 부르는 쪽(`services/crawl.py`)이 `BrokerUnavailable` 로 바꾼다.
 """
@@ -47,9 +48,17 @@ def active_execution(
     `completion_time` 이 없으면 활성으로 본다 — `running_count` 를 보면 아직 태스크가 안 뜬 pending
     실행을 놓친다(#325 최종 리뷰). `timeout` 은 그대로 `list_executions` 에 넘어간다 — 상태 페이지의
     짧은 예산 안에서 API 가 안 답할 때 스레드가 무한정 물려 있지 않게 하려는 것이다(#326 라운드 1).
+
+    **첫 페이지(20개)만 본다.** 실행은 최신순으로 오므로 안 끝난 것을 찾는 데 20개면 넉넉하다 —
+    안 그러면 실행 이력이 쌓인 잡에서 전체를 훑느라 API 를 여러 번 부르게 된다(#326 최종 리뷰
+    미너 8).
     """
+    from google.cloud import run_v2
+
     client = executions_client or _executions_client()
-    executions = client.list_executions(parent=job_path(project, region, job), timeout=timeout)
+    request = run_v2.ListExecutionsRequest(parent=job_path(project, region, job), page_size=20)
+    pager = client.list_executions(request=request, timeout=timeout)
+    executions = next(iter(pager.pages)).executions
     for ex in executions:
         if getattr(ex, "completion_time", None) is None:
             return ex.name.rsplit("/", 1)[-1]
@@ -64,11 +73,15 @@ def run(
     from google.cloud import run_v2
 
     client = jobs_client or _jobs_client()
-    overrides = run_v2.RunJobRequest.Overrides()
+    # `args` 가 없으면 `overrides` 필드를 아예 안 붙인다 — 빈 `Overrides()` 를 붙이면
+    # `task_count=0` 까지 같이 직렬화돼 Cloud Run 이 "실행할 태스크가 없다"로 읽을 수 있다
+    # (#326 최종 리뷰 미너 3).
     if args:
-        overrides.container_overrides.append(
-            run_v2.RunJobRequest.Overrides.ContainerOverride(args=list(args)))
-    request = run_v2.RunJobRequest(name=job_path(project, region, job), overrides=overrides)
+        overrides = run_v2.RunJobRequest.Overrides(container_overrides=[
+            run_v2.RunJobRequest.Overrides.ContainerOverride(args=list(args))])
+        request = run_v2.RunJobRequest(name=job_path(project, region, job), overrides=overrides)
+    else:
+        request = run_v2.RunJobRequest(name=job_path(project, region, job))
     operation = client.run_job(request=request, timeout=timeout)
     return operation.metadata.name.rsplit("/", 1)[-1]
 

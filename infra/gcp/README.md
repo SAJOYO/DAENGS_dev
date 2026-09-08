@@ -68,11 +68,15 @@ CUDA 15~23분이다.
 
 관리자 콘솔의 크롤 버튼은 집 서버에서는 Celery 를 부르지만, GCP 에서는 `services/crawl.py`
 가 이 잡(`corpus-refresh`)을 직접 실행한다 — 크롤만이 아니라 적재까지 간다. 인증은 VM 의
-기본 컴퓨트 서비스 계정 + 메타데이터 서버다(키 파일 없음). 그 계정에 잡 실행 권한을 준다:
+기본 컴퓨트 서비스 계정 + 메타데이터 서버다(키 파일 없음).
+
+**`pipeline.sh` 가 그 계정에 잡 실행 권한을 이미 준다** (Scheduler 바인딩 바로 다음, "관리자
+콘솔 트리거" 절) — 처음에는 이 README 산문에만 있어서 teardown 뒤 재배포하면 조용히
+빠졌다(#326 최종 리뷰). 손으로 다시 줄 일은 없어야 하지만, 스크립트가 하는 일은 이렇다:
 
 ```bash
 PROJECT_NUMBER="$(gcloud projects describe daengs --format='value(projectNumber)')"
-VM_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+VM_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"   # = pipeline.sh 의 BUILD_SA
 gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \
   --member="serviceAccount:${VM_SA}" --role=roles/run.invoker
 gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \

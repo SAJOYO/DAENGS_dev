@@ -28,9 +28,24 @@ def _ex(name, done):
                            completion_time=object() if done else None)
 
 
+class _FakePage:
+    def __init__(self, executions): self.executions = executions
+
+
+class _FakePager:
+    """`ListExecutionsPager` 흉내 — `.pages` 가 페이지(첫 페이지만)를 낸다(#326 최종 리뷰 미너 8)."""
+    def __init__(self, items): self._items = items
+    @property
+    def pages(self):
+        yield _FakePage(self._items)
+
+
 class FakeExecutions:
     def __init__(self, items): self.items = items; self.parent = None
-    def list_executions(self, parent, **kwargs): self.parent = parent; return self.items
+    def list_executions(self, request=None, parent=None, **kwargs):
+        # 운영 코드는 이제 `request=` 로 부른다 — `parent=` 는 옛 호출 방식과의 호환용이다.
+        self.parent = request.parent if request is not None else parent
+        return _FakePager(self.items)
 
 
 class FakeJobs:
@@ -66,10 +81,12 @@ def test_run_은_인자를_override_로_넘기고_실행_이름을_돌려준다(
 
 
 def test_run_은_인자가_없으면_override_를_안_붙인다():
+    """빈 `Overrides()` 도 안 된다 — `task_count=0` 까지 같이 직렬화된다(#326 최종 리뷰 미너 3).
+    proto-plus 에서는 `not req.overrides` 로 필드 부재를 못 본다 — `in` 으로 존재 자체를 본다."""
     fj = FakeJobs()
     cr.run("p", "r", "corpus-refresh", [], jobs_client=fj)
     req = fj.requests[0]
-    assert not req.overrides.container_overrides
+    assert "overrides" not in req
 
 
 def test_job_exists():
@@ -216,3 +233,20 @@ async def test_상태_페이지는_cloudrun_API_고장을_없음이_아니라_do
     state, detail = await status_service._crawl(object())
     assert state == StatusState.DOWN
     assert "Cloud Run 잡에 묻지 못했습니다" in detail
+
+
+async def test_상태_페이지는_cloudrun_잡이_없으면_없음이_아니라_down_으로_본다(monkeypatch):
+    """`crawl_workers` 가 예외 없이 빈 목록을 돌려주는 경우 — API 는 멀쩡히 답했지만 잡 자체가
+    없다(`job_exists` 가 `False`). 배포가 안 됐거나 이름이 틀린 것이라 "환경에 원래 없다"가
+    아니라 "있어야 하는데 없다"라 `down` 이다(#326 최종 리뷰 미너 4)."""
+    monkeypatch.setattr(settings, "crawl_backend", "cloudrun")
+    monkeypatch.setattr(settings, "gcp_project", "p")
+    monkeypatch.setattr(settings, "corpus_job", "corpus-refresh")
+    monkeypatch.setattr(settings, "gcp_region", "asia-northeast3")
+    monkeypatch.setattr(crawl_service, "latest", _no_runs)
+    monkeypatch.setattr(crawl_service, "crawl_workers", lambda *a, **k: [])
+
+    state, detail = await status_service._crawl(object())
+    assert state == StatusState.DOWN
+    assert "corpus-refresh" in detail
+    assert "asia-northeast3" in detail

@@ -39,8 +39,9 @@ CRAWL_TASK = "daengs_life.tasks.crawl.crawl_due"
 CRAWL_QUEUE = "crawl"
 
 #: Cloud Run API 를 부를 때 주는 시간. 트리거는 사람이 버튼을 누르고 기다리는 요청이라
-#: 상태 페이지의 `WORKER_PING_SEC`(2초 예산 안)보다 넉넉하게 잡는다 — 그래도 무한은 아니라서
-#: API 가 죽으면 요청 스레드가 영영 물려 있지는 않는다(#326 리뷰 라운드 1).
+#: 상태 페이지의 `WORKER_PING_SEC`(1초, 항목 전체 예산은 `ITEM_TIMEOUT_SEC` 2초)보다 넉넉하게
+#: 잡는다 — 그래도 무한은 아니라서 API 가 죽으면 요청 스레드가 영영 물려 있지는 않는다
+#: (#326 리뷰 라운드 1).
 CLOUDRUN_TRIGGER_TIMEOUT_SEC = 30.0
 
 
@@ -131,21 +132,25 @@ async def running_count(session: AsyncSession) -> int:
 
 
 def crawl_workers(timeout_sec: float = 1.0) -> list[str]:
-    """`crawl` 큐를 듣고 있는 워커 이름들. 없으면 빈 목록입니다 (#180 상태 페이지).
+    """크롤러가 지금 떠 있다는 신호. 없으면 빈 목록입니다 (#180 상태 페이지).
 
     **DB 만으로는 "이 환경에 크롤러가 있나"를 알 수 없습니다.** `crawl_runs` 에 행이 있다는
-    것은 *언젠가* 돌았다는 뜻이지 지금 워커가 떠 있다는 뜻이 아닙니다 — GCP 는 09-02 로컬
-    덤프를 그대로 쓰고 있어서 **행은 있는데 워커는 없습니다** (`docs/deploy/roadmap.md` §2-4).
-    그 둘을 안 가르면 상태 화면이 GCP 에서 "크롤 정상" 이라고 거짓말합니다.
+    것은 *언젠가* 돌았다는 뜻이지 지금도 있다는 뜻이 아닙니다 — 예를 들어 09-02 GCP 는 로컬
+    덤프를 그대로 쓰고 있어서 한동안 **행은 있는데 크롤러는 없었습니다**
+    (`docs/deploy/roadmap.md` §2-4). 그 둘을 안 가르면 상태 화면이 거짓말을 합니다.
 
-    그래서 브로커에 직접 묻습니다. `active_queues()` 는 살아 있는 워커에게 "무슨 큐를 듣고
-    있나"를 브로드캐스트하고 `timeout_sec` 동안 답을 모읍니다. `ping()` 이 아니라 이것을
-    쓰는 이유 — 이 브로커에는 실시간 워커도 붙어 있어서, ping 은 **크롤러가 아닌 워커의
-    답**을 크롤러가 있다는 뜻으로 읽습니다.
+    **`crawl_backend` 에 따라 갈립니다** (#326).
 
-    **동기입니다** (kombu). 부르는 쪽이 스레드로 돌립니다.
+    - **celery**: 브로커에 직접 묻습니다. `active_queues()` 는 살아 있는 워커에게 "무슨 큐를
+      듣고 있나"를 브로드캐스트하고 `timeout_sec` 동안 답을 모읍니다. `ping()` 이 아니라
+      이것을 쓰는 이유 — 이 브로커에는 실시간 워커도 붙어 있어서, ping 은 **크롤러가 아닌
+      워커의 답**을 크롤러가 있다는 뜻으로 읽습니다. 브로커 주소가 없으면
+      `BrokerUnavailable` 입니다 — `trigger` 와 같은 규칙입니다.
+    - **cloudrun**: 워커라는 것이 없으므로 `job_exists` 로 잡 자체가 있는지만 봅니다 —
+      있으면 `[f"{job}@{region}"]` 하나, 없으면 빈 목록입니다. `gcp_project` 가 없거나 API 가
+      죽으면 마찬가지로 `BrokerUnavailable` 입니다.
 
-    브로커 주소가 없으면 `BrokerUnavailable` 입니다 — `trigger` 와 같은 규칙입니다.
+    **동기입니다** (kombu · google-cloud-run 클라이언트 둘 다). 부르는 쪽이 스레드로 돌립니다.
     """
     if settings.crawl_backend == "cloudrun":
         if not settings.gcp_project:

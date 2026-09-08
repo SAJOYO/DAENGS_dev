@@ -45,6 +45,60 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 `git show <ref>:<파일>` 로 SQL 만 꺼내 psql 에 흘려보냅니다.
 
 
+## ⚠️ 표 일부는 `postgres` 소유다 — `must be owner of table` 의 정체 (2026-09-08, #329)
+
+`db-migrate.yml` 은 `-U $POSTGRES_USER` 로 붙는데 그 계정은 **`daengs`** 이고 슈퍼유저가
+아니다. 그런데 서버 DB 의 표 일부는 **`postgres`** 소유다 — `db/init/` 이 볼륨을 처음 만들 때
+그 계정으로 돌았기 때문이다. 나머지는 나중에 `daengs` 가 만들어서 갈렸다.
+
+`ALTER TABLE` 은 소유자만 할 수 있으므로 **그 표를 건드리는 마이그레이션은 워크플로로
+적용되지 않는다.**
+
+```
+ERROR:  must be owner of table <표>
+CONTEXT:  SQL statement "ALTER TABLE <표> DROP CONSTRAINT ..."
+```
+
+⚠️ **BEGIN/COMMIT 으로 감싼 마이그레이션은 여기서 통째로 롤백된다** — 반쯤 적용되지 않는다.
+#329 에서 실제로 그랬고 DB 는 그대로였다. 감싸지 않은 파일은 그 보장이 없다.
+
+### 지금 상태
+
+| 소유자 | 표 |
+| --- | --- |
+| `daengs` | 대부분 (#329 에서 `training_rag_chunks` · `training_rag_documents` 를 옮겼다) |
+| **`postgres`** | **`documents` · `crawl_runs`** — 아직 남아 있다 |
+
+**이 둘을 건드릴 일이 생기면 먼저 옮겨야 한다.** 지금 옮겨 두지 않은 것은 각각 Life RAG ·
+크롤러 쪽 표라 그 카드에서 판단할 몫이기 때문이다.
+
+### 옮기는 법 — 서버 PC 에서
+
+`postgres` 로 붙어야 하는데 그 계정의 비밀번호는 아무도 안 갖고 있을 수 있다(볼륨 최초 생성
+때의 계정). **컨테이너 안에서는 비밀번호 없이 붙는다** — 공식 이미지가 로컬 소켓을 `trust`
+로 두기 때문이다.
+
+```powershell
+docker exec -i pgvector psql -U postgres -d vectordb -c "ALTER TABLE <표> OWNER TO daengs;"
+```
+
+확인:
+
+```powershell
+docker exec -i pgvector psql -U daengs -d vectordb -c "SELECT relname, pg_get_userbyid(relowner) FROM pg_class WHERE relname='<표>';"
+```
+
+### 서버 PC 터미널의 함정 셋
+
+1. **`docker compose exec` 를 쓰지 마라.** 배포 폴더가 아닌 checkout 에서 치면
+   `REDIS_PASSWORD` · `DAENGS_CORPUS_DIR` 이 없어 **SQL 을 실행하기도 전에** compose 가 설정
+   해석 단계에서 죽는다. `docker exec` 는 `.env` 를 안 본다 (컨테이너 이름은 `pgvector`).
+2. **PowerShell 은 `<` 입력 리다이렉션을 안 받는다** (`'<' 연산자는 나중에 사용하도록
+   예약되어 있습니다`). 파일을 먹이려면 `cmd /c "... < 파일"` 로 감싼다.
+3. **SQL 을 PowerShell 파이프에 태우지 마라** (`Get-Content ... | docker exec`). 파이프를
+   지나며 다시 인코딩돼 한글 주석이 깨진다 — `db-migrate.yml` 이 `shell: cmd` 를 쓰는 이유와
+   같다.
+
 ## 검증 성공의 의미
 
 `verify=true`(기본값)이면 같은 ref의 `verify_<파일>`이 없거나 비어 있을 때

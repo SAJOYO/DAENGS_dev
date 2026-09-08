@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.territory_claim import (
+    ChallengeRequest,
     ClaimResponse,
     MarkRequest,
+    PhotoAccessResponse,
     SessionPhase,
     SessionResponse,
     SessionStart,
@@ -85,3 +87,19 @@ async def claim(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
 async def bind_photo(claim_id: uuid.UUID, photo_id: uuid.UUID, user: CurrentAppUser, db: Session):
     """Bind a freshly issued photo attempt before upload; verdict worker then resolves the claim."""
     return await _call(service.bind_photo(db, user.app_user_id, claim_id, photo_id))
+
+
+@router.get("/claims/{claim_id}/photo-access", response_model=PhotoAccessResponse)
+async def photo_access(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
+    return await _call(service.photo_access(db, user.app_user_id, claim_id))
+
+
+@router.put("/claims/{claim_id}/challenges/{challenge_id}")
+async def challenge(
+    claim_id: uuid.UUID,
+    challenge_id: uuid.UUID,
+    body: ChallengeRequest,
+    user: CurrentAppUser,
+    db: Session,
+):
+    return await _call(service.admit_challenge(db, user.app_user_id, claim_id, challenge_id, body))

@@ -28,7 +28,7 @@ async def test_disabled_hooks_never_touch_new_tables(monkeypatch):
 
 
 def test_imported_ownership_keeps_protection_without_backdated_points():
-    rules = policy.Rules()
+    rules = policy.Rules(version="draft-2026-09-06")
     season = policy.SeasonContext("dev", 100000, 1000000, rules)
     owner = policy.Ownership("a", "old-walk", "old-claim", "UNVERIFIED", 0)
     site = policy.SiteSnapshot("dev", "site", 1, owner)

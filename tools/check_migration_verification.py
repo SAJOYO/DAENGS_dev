@@ -209,6 +209,17 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_challenges', [
+            'ALTER TABLE territory_occupancies DROP COLUMN certified_at',
+            'ALTER TABLE territory_challenges DROP COLUMN completed_at',
+            'ALTER TABLE territory_challenges ALTER COLUMN expected_site_version TYPE integer',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_key',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_claim_id_fkey',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_fkey',
+            'DROP INDEX ix_territory_challenges_claim_id',
+        ]),
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',

@@ -100,6 +100,7 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
             old.source_attempt_id,
             old.certification.value,
             old.occupied_at_millis,
+            old.certified_at_millis,
         )
     )
     snapshot = policy.SiteSnapshot(season.id, before.site_id, before.version, old_owner)
@@ -200,6 +201,7 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
             owner.attempt_id,
             claim_rules.Certification(owner.certification),
             owner.occupied_ms,
+            owner.certified_ms,
         ),
         plan.after.version,
     )

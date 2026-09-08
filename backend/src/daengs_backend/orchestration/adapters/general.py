@@ -59,6 +59,11 @@ from daengs_backend.orchestration.semantic import (
 # v3: 같은 규칙을 **영문**으로 옮겼다 — 의미 라우터의 `_POLICY` 와 같은 언어로 두라는 사람 결정.
 # 출력 언어(한국어)와 어조는 지시문 안에서 정한다. `ko` 는 출력 언어다.
 GENERAL_PROMPT_VERSION = "general-answer-ko-v3"
+# v4-carelog (#344): v3 본문에 CARE_LOG_TODAY 규칙 한 문단과 블록 한 줄이 **더해진** 판본.
+# 오늘 케어 로그가 payload 에 있을 때만 이 판본이 나가고, 없으면 v3 가 글자까지 그대로 나간다 —
+# v3 는 D-057 ③ 에서 84건 쌍대 비교 뒤 승인된 본문이라, 그 84건(로그 없음)의 프롬프트를 이
+# 카드가 바꾸지 않게 하려는 분기다. 버전 문자열이 갈리는 이유는 프롬프트 텍스트가 다르기 때문이다.
+GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v4-carelog"
 GENERAL_MODEL_ID = ROUTER_MODEL_ID
 # 답 문장 3~5개 + JSON 봉투. 라우터의 256 은 분류 한 줄을 위한 예산이라 여기엔 좁다.
 GENERAL_MAX_OUTPUT_TOKENS = 512
@@ -116,14 +121,31 @@ Refuse (kind="refuse") only in these cases:
 reason is one of the five values above, and null when kind="answer"."""
 
 
+# 로그가 있을 때만 붙는 규칙 (#344). 로그가 무엇인지, 무엇을 해도 되고 무엇은 안 되는지.
+# "did I / has it been done today" 류에 쓰라는 것과, 로그에 없는 용량·일정을 지어내지 말라는 것.
+# 약 이름은 로그에도 DOG_CONTEXT 에도 없으므로 v3 의 medication 거절은 그대로 선다.
+_CARE_LOG_RULE = """CARE_LOG_TODAY, when present, is what the owner has already logged for this dog today: counts per kind (meal, medication, snack, walk) and the last time each was logged, as HH:MM in Seoul time. Treat it as fact for questions like "did I feed / medicate / walk today", "has the morning medication been given", or "how many meals so far". You may say what was logged and when, and note plainly when a kind has no entry today. Never infer a dose, a schedule, or whether more is needed from it — the log records what happened, not what should happen. If the question is not about today's care, ignore the log. When CARE_LOG_TODAY is absent, say nothing about a log."""
+
+
 def build_general_prompt(payload: GeneralPayload) -> str:
     schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
     dog = payload.dog.model_dump(mode="json", exclude_none=True) if payload.dog else {}
+    if payload.care_log is None:
+        return (
+            f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
+            f"{_SAFETY_PROMPT}\n\n"
+            f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+            f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
+            f"USER_QUERY: {payload.question}\n"
+        )
+    care_log = payload.care_log.model_dump(mode="json", exclude_none=True)
     return (
-        f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
+        f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
+        f"{_CARE_LOG_RULE}\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
         f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
+        f"CARE_LOG_TODAY: {json.dumps(care_log, ensure_ascii=False, sort_keys=True)}\n"
         f"USER_QUERY: {payload.question}\n"
     )
 

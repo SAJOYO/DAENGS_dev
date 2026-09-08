@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
 
@@ -92,6 +93,39 @@ class DogContext(ContractModel):
     feeding_style: Literal["free", "scheduled"] | None = None
     health_conditions: str | None = Field(default=None, max_length=200)
     on_medication: Literal[True] | None = None
+
+
+#: ``HH:MM`` on a 24-hour clock — the only shape a "last time" may take here.
+_CLOCK_PATTERN = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+
+
+class CareLogContext(ContractModel):
+    """What the owner already logged for this dog today: counts per kind and the last time each.
+
+    Assembled by ``services/care_log_context`` from the care log (#332) for the general-answer
+    fallback only (#344). The point is the sentence "오늘 아침 약이 아직 체크 안 됐어요", and
+    counts plus last times are all that sentence needs.
+
+    **No note.** ``care_events.note`` is the owner's free text ("약 반만"); it would be the one
+    place user-written words sit next to the instructions in a prompt, and it adds nothing
+    a count and a time do not. **No event list** for the same reason — the day is already
+    summarised. **No dosage, no schedule**: the log records what happened, and the prompt rule
+    forbids inferring either from it. Times are ``HH:MM`` in the log's day timezone (Seoul),
+    never a timestamp — the model needs "this morning", not an instant.
+
+    A day with nothing logged never reaches here (the resolver returns None): an empty log
+    means "the owner does not use the log", not "nothing was done", and the prompt must not
+    say either.
+    """
+
+    day: date
+    meal: int = Field(default=0, ge=0, le=200)
+    medication: int = Field(default=0, ge=0, le=200)
+    snack: int = Field(default=0, ge=0, le=200)
+    walk: int = Field(default=0, ge=0, le=200)
+    last_meal_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+    last_medication_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+    last_snack_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
 
 
 class ScreeningContext(ContractModel):
@@ -192,10 +226,15 @@ class GeneralPayload(ContractModel):
     The question is the user's exact words and ``dog`` comes only from the resolved
     profile (``planner._dog_context``). No coordinates — the fallback must not answer
     "where" or "is now a good time"; those are Place and Walk, and they were not selected.
+
+    ``care_log`` (#344) is today's care summary from the trusted log, and it comes here
+    **only** — Life answers from ordinances and subsidy documents, which today's meal count
+    does not change, and Training never sees dog facts at all.
     """
 
     question: str = Field(min_length=1, max_length=1_000)
     dog: DogContext | None = None
+    care_log: CareLogContext | None = None
 
 
 CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload

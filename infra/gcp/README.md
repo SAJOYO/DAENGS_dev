@@ -25,11 +25,17 @@
    광장 키다 (`seoul-notice-api` 소스가 이 값 없이는 수집을 건너뛴다).
 3. **사람** — VM 내부 IP: `gcloud compute instances list --format='value(name,networkInterfaces[0].networkIP)'`
 4. **사람** — `PROJECT=… VM_INTERNAL_IP=… bash infra/gcp/pipeline.sh` (저장소 루트에서. 이미지 두 장을 Cloud Build 가 굽는다, 20~40분).
-5. **사람** — 초기 사본. 집 서버 `DAENGS_CORPUS_DIR` 의 `raw/` 와 `manifests/crawl_log.jsonl` 만:
+5. **사람** — 초기 사본. **개발 PC 의 `DAENGS_DATA_DIR`**(메인 체크아웃의 `data/`) 에서
+   `raw/` 와 `manifests/crawl_log.jsonl` 만 올린다:
    ```powershell
-   gcloud storage rsync -r C:\deploy\daengs\corpus\raw gs://daengs-corpus/raw
-   gcloud storage cp C:\deploy\daengs\corpus\manifests\crawl_log.jsonl gs://daengs-corpus/manifests/crawl_log.jsonl
+   gcloud storage rsync -r <메인 체크아웃>\data\raw gs://daengs-corpus/raw
+   gcloud storage cp <메인 체크아웃>\data\manifests\crawl_log.jsonl gs://daengs-corpus/manifests/crawl_log.jsonl
    ```
+   ⚠ **집 서버(`C:/deploy/daengs/corpus`)가 아니라 개발 PC 인 것이 맞다** (D-062 ①).
+   ⓐ 집 서버에는 SMB 도 SSH 도 없어 개발 PC 에서 그 폴더에 못 닿고, ⓑ 더 중요하게는 GCP DB 의
+   `documents` 가 개발 PC 의 `processed/`(= 개발 PC 의 `raw/`) 에서 나온 것이라 **개발 PC raw ↔
+   GCP DB 가 이미 한 줄**이다. 2026-09-08 에 올린 실물은 raw **673개** · 로그 **373줄**(마지막
+   수집 09-06)이고, 그 위에서 돌린 parse 가 청크 **10,304** — 개발 PC 와 같은 수 — 를 냈다.
    `processed/` 는 올리지 않는다 — 잡이 만든다. `seed_sources.yaml` 도 올리지 않는다 — 이미지가 넣는다.
    `pipeline.sh` 의 `BUCKET=` 을 다른 이름으로 바꿨다면(버킷 이름 충돌 시) 위 두 줄의
    `gs://daengs-corpus` 도 그 이름으로 바꿔야 한다.
@@ -48,9 +54,12 @@
 ## 이미지를 다시 구울 때
 
 코드가 바뀌면 `pipeline.sh` 를 다시 돌린다 — 태그(`cpu-<hash>`)는 git 커밋 sha 가 아니라
-`backend/`·`docker/pipeline/Dockerfile`·시드(`data/manifests/seed_sources.yaml`)의 **내용
-해시**다. 그 경로가 바뀐 뒤에만 새 태그가 나와 다시 굽고 잡 정의가 새 이미지로 update 된다 —
-무관한 커밋(문서·`infra/` 스크립트만)에서 다시 돌리면 이미지는 그대로 재사용된다.
+**이미지에 들어가는 파일들의 내용 해시**다: `backend/pyproject.toml` · `backend/uv.lock` ·
+`backend/README.md` · `backend/src` · `data/manifests/seed_sources.yaml` · `docker/pipeline`.
+그 경로가 바뀐 뒤에만 새 태그가 나와 다시 굽고 잡 정의가 새 이미지로 update 된다 —
+무관한 커밋(문서·`infra/` 스크립트만)에서 다시 돌리면 이미지는 그대로 재사용되고
+**전체가 약 80초**에 끝난다 (2026-09-08 실측). 빌드가 실제로 도는 경우는 CPU 약 5분,
+CUDA 15~23분이다.
 
 ## 자주 걸리는 것
 
@@ -66,6 +75,10 @@
   잡 env 가 아니라 **이미지에 굽혀 있다** (`docker/pipeline/Dockerfile` 의 `ENV`) — 잡 설정이 아니라
   Cloud Build 로그의 모델 굽기 단계(`SentenceTransformer(...)` 호출)가 성공했는지를 본다.
 - **GPU 잡이 quota 에러** — 첫 실행에 자동 할당(3장)이 안 된 경우. 콘솔 할당량에서 `Cloud Run Admin API` × `NVIDIA L4` 를 1 로 요청.
+  (2026-09-08 에는 **아무 신청 없이** 잡이 만들어졌다 — 자동 할당이 실제로 됐다.)
+- **GPU 잡 생성이 타임아웃 때문에 거부된다** — Cloud Run **GPU 잡의 `--task-timeout` 상한은 1h**
+  다. `corpus-embed-full` 이 3h 가 아닌 이유가 그것이고, 전체 임베딩은 L4 에서 약 11분이라 여유가
+  있다. 코퍼스가 커져 1h 를 넘기게 되면 소스를 나눠 여러 번 돌리는 수밖에 없다.
 - **Cloud Build 가 권한 부족으로 실패한다** — 2024년 중반 이후 만든 프로젝트엔 legacy Cloud Build
   SA 가 없어 빌드가 기본 컴퓨트 SA(`<프로젝트번호>-compute@developer.gserviceaccount.com`)로 돈다.
   `pipeline.sh` 가 APIs 단계 바로 뒤에 그 SA 에 `roles/cloudbuild.builds.builder` ·
@@ -73,7 +86,10 @@
   이 SA 가 그 역할들을 가졌는지 확인한다.
 - **크로스 리전 비용** — GPU 잡 `corpus-embed-full` 은 싱가포르(`asia-southeast1`)에서 서울
   (`asia-northeast3`) 버킷을 읽고 쓴다. 코퍼스가 ~200MB 라 크로스 리전 egress 비용은 작지만 0 은 아니다.
-- **`cuda` 이미지 빌드가 실패한다** — `pipeline.sh` 의 `build_image cuda` 는 이 스크립트로 처음
-  굽는 것이다(CPU 판만 로컬에서 확인됐다). 실패하면 먼저 `docker/pipeline/Dockerfile` 의
-  `torch-cuda` 스테이지 — `uv pip install ... cu126` 줄 — 을 본다 (버전 문자열에 `+` 뒤 로컬
-  세그먼트가 남았는지, cu126 인덱스에 해당 버전이 있는지).
+- **`cuda` 이미지 빌드가 실패한다** — 실패하면 먼저 `docker/pipeline/Dockerfile` 의 `torch-cuda`
+  스테이지 — `uv pip install ... cu126` 줄 — 을 본다 (버전 문자열에 `+` 뒤 로컬 세그먼트가
+  남았는지, cu126 인덱스에 해당 버전이 있는지). 2026-09-08 에 여기서 걸린 것 셋:
+  torchvision 은 `ml` 이 아니라 `gait` 그룹이라 같이 적으면 안 되고, `torch==X` 는 이미 깔린
+  `X+cpu` 로 충족돼 **조용히 CPU 이미지가 나오며**(그래서 `+cu126` 핀 + `--reinstall-package`
+  + 빌드 끝의 `torch.version.cuda` 검사가 있다), Triton JIT 이 `gcc`·`libc6-dev` 를 요구한다.
+  ⚠ 그 검사를 빼면 실패가 **빌드가 아니라 GPU 잡 로그**에서만 보인다 (`torch 2.13.0+cpu`).

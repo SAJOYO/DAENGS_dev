@@ -22,6 +22,7 @@
 | 적재 게이트 | 사람 승인 없음. 기계 가드만 | §3 의 가드 세 가지 |
 | 전체 재임베딩 | Cloud Run Jobs + GPU(L4) 1순위. 보조안 순서: CPU 잡 → 개발 PC parquet 업로드 → Spot GPU VM | GPU 잡이 어떤 이유로든 안 될 때만 내려간다. 셋 다 코드 차이 없음 |
 | 초기 사본 | `raw/` + `manifests/crawl_log.jsonl` 만. `processed/` 는 GCP 가 만든다 | 버킷 안 모든 산출물이 GCP 산이 되어 "로컬 작업 없음" 이 처음부터 성립 |
+| 초기 사본의 **출처** | **개발 PC 의 `data/`** (2026-09-08 실측 — raw 673개 · 로그 373줄, 마지막 수집 09-06). 집 서버가 아니다 | ⓐ 개발 PC 에서 집 서버 폴더에 못 닿는다 — SMB 도 SSH 도 없다(루트 `README.md`). ⓑ 더 중요한 이유: GCP 의 `documents` 는 #289 에서 **개발 PC 의 `processed/`** 를 실은 것이고 그것은 **개발 PC 의 `raw/`** 를 파싱한 것이라, 개발 PC raw ↔ GCP DB 가 이미 한 줄이었다. 집 서버 raw 는 GCP 에 간 적이 없다 |
 | 관리자 트리거 | 범위에 포함. GCP 에서는 Celery 대신 Cloud Run Jobs API | 버튼 → 몇십 분 뒤 앱에 새 문서, 가 이 카드의 목적 |
 | 접근 | A(잡 하나, Scheduler 직결). Workflows 는 2차 | 두 달 실험에 배관이 파이프라인보다 커지지 않게 |
 
@@ -75,7 +76,8 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 
 **가드 세 가지** (임계값은 환경 변수, 괄호가 기본):
 ① 적재 뒤 행 수가 적재 전 대비 비율 이상 줄어드는 계획이면 중단 (20%).
-② 파서 예외 건수 상한 — 초과 시 경고, 소스 하나가 통째로 0건이면 중단.
+② 파서 예외는 **가드까지 못 온다** — `rag parse` 가 예외 1건이면 종료 코드 1 이라 거기서 멈춘다.
+   그래서 이 자리에 따로 셀 것이 없다.
 ③ 기존 `metadata_loss` 검사에 걸리는 행이 하나라도 있으면 중단.
 전체 재임베딩 뒤의 1만 행 upsert 는 "줄어드는 계획" 이 아니라 ① 을 통과한다.
 
@@ -85,13 +87,18 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 **`crawl_runs` 기록**은 `tasks/crawl_runs.py` 가 Celery 와 무관한 psycopg 코드라 그대로 부른다.
 위치를 옮길지는 구현 때.
 
-**이미지** `docker/pipeline/Dockerfile` 하나, 빌드 인자로 CPU/CUDA. 공통은 `uv sync --frozen --group ml`
-과 가중치 다운로드(`HF_HOME=/models`, 빌드 때). CUDA 변형은 lock 이 리눅스에서 CPU torch 를
-고정하므로 sync 뒤 같은 버전의 torch·torchvision 을 cu126 인덱스로 덮어쓴다 — lock 은 안 건드리고
-Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roadmap §7-2 "이미지 굽기" 가
-파이프라인에 한해 여기서 먼저 간다.
+**이미지** `docker/pipeline/Dockerfile` 하나, 빌드 인자로 CPU/CUDA. 공통은
+`uv sync --frozen --group ml --group pipeline --group pdf` 와 가중치 다운로드(`HF_HOME=/models`, 빌드 때).
+`pdf`(PyMuPDF)가 들어가는 것은 AGPL 격리(RAG-032 ②)가 말하는 **오프라인 파이프라인이 이 잡이기
+때문**이다 — 서빙 이미지에는 계속 안 넣는다. CUDA 변형은 lock 이 리눅스에서 CPU torch 를
+고정하므로 sync 뒤 **torch 만** cu126 인덱스로 덮어쓴다 (torchvision 은 `ml` 이 아니라 `gait` 그룹
+것이라 건드리지 않는다). ⚠ **`torch==X` 로 적으면 이미 깔린 `X+cpu` 가 그것을 만족시켜 조용히
+아무 일도 안 한다** — `X+cu126` 까지 핀하고 `--reinstall-package` 를 주며, 빌드 끝에
+`torch.version.cuda` 를 확인해 아니면 빌드를 실패시킨다. Triton JIT 이 C 컴파일러를 부르므로
+CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. 실측 크기는 두 장 합쳐 약 4.5GB.
+roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 간다.
 
-**설정은 환경 변수로만** — `DAENGS_DATA_DIR=/data`, `POSTGRES_HOST=<VM 내부 IP>` 와 계정 조각,
+**설정은 환경 변수로만** — `DAENGS_DATA_DIR=/data`, `POSTGRES_IP=<VM 내부 IP>` 와 계정 조각,
 `EMBEDDING_MODEL_KEY`, 가드 임계값. 비밀번호는 Secret Manager. `.env` 는 이미지에 안 들어간다.
 
 **관리자 트리거** (별도 PR) — `services/crawl.py` 가 `DAENGS_CRAWL_BACKEND=celery|cloudrun` 으로
@@ -104,18 +111,20 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 
 ## 4. GCP 리소스와 역할
 
-| 리소스 | 이름(안) | 비고 |
+**전부 2026-09-08 에 실제로 만들었다** (프로젝트 `daengs`). 아래는 그때의 실물이다.
+
+| 리소스 | 이름 | 비고 |
 | --- | --- | --- |
 | Cloud Storage | `daengs-corpus` | 서울 단일 리전. **버전 관리 켬** (잘못된 적재를 되돌리는 유일한 길) |
-| Artifact Registry | `daengs` | `pipeline:cpu-<sha>` · `pipeline:cuda-<sha>` |
-| Cloud Run Job | `corpus-refresh` | 서울, 4vCPU/16GB, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다) |
-| Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장, 타임아웃 1h (GPU 잡 상한). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
-| Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음 |
+| Artifact Registry | `daengs` | `pipeline:cpu-<hash>` · `pipeline:cuda-<hash>`. **`<hash>` 는 git 커밋이 아니라 이미지 입력의 내용 해시**다 — `backend/pyproject.toml`·`uv.lock`·`README.md`·`backend/src`·`data/manifests/seed_sources.yaml`·`docker/pipeline`. 태그가 이미 있으면 빌드를 건너뛰므로, 문서만 바뀐 커밋에서 스크립트를 다시 돌려도 **약 80초**에 끝난다 |
+| Cloud Run Job | `corpus-refresh` | 서울(`asia-northeast3`), 4vCPU/16Gi, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다). Direct VPC 이그레스 · 버킷 볼륨 `daengs-corpus` 를 `/data` 로 |
+| Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장 · 8vCPU/32Gi · 인자 `--stages embed --full`. **타임아웃 1h — 이건 GPU 잡의 상한이지 선택이 아니다** (3h 로 만들면 생성이 거부된다). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
+| Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul → `corpus-refresh`. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음. **첫 자동 실행은 2026-09-09 04:00 KST** |
 | Secret Manager | `corpus-db-password` · `corpus-law-oc` · `corpus-data-go-kr-key` · `corpus-seoul-open-data-key` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |
 | VPC 방화벽 | `allow-pg-from-run` | 서울 서브넷 범위 → VM tcp:5432. 인터넷에는 여전히 안 연다 |
 | IAM | VM 기본 서비스 계정에 잡 실행 권한 | 관리자 트리거용 (별도 PR) |
-| Monitoring | 잡 실패 → 이메일 | 실행 실패 로그 1건 이상 |
+| Monitoring | 잡 실패 → 이메일 | **아직 안 만들었다** — 알림 채널이 없어 `pipeline.sh` 가 건너뛴다. 선택이고, 붙일 때는 `CHANNEL=<알림 채널 id> bash infra/gcp/pipeline.sh` 로 다시 돌리면 정책이 선다 |
 | 예산 알림 | 기존 것 확인 | GPU 잡 폭주 안전판 |
 
 **설정 방식** — `gcloud` 명령을 `infra/gcp/pipeline.sh` 에 순서대로. 삭제 스크립트
@@ -126,9 +135,20 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 = 사람 / Dockerfile · 진입점 · 가드 · 트리거 갈래 · 스크립트 · 문서 · 검증 절차 = Claude
 (roadmap §4 의 기존 규칙과 같다).
 
-**비용 어림** (전부 크레딧 차감, 월 1만 원 안쪽) — refresh 매일 30분×4vCPU 약 ₩3,000 · 버킷 수백 원 ·
-Registry 10GB 약 ₩1,500 · GPU 1회 20분 약 ₩600. **L4 쿼터는 신청이 필요 없다** — 리전에서 첫 GPU 잡을 만들 때 3장(영역 중복 없음)이 자동 할당된다
-(2026-09-08 문서 확인). 무료 체험 계정만 GPU 가 막힌다.
+**비용 어림** (전부 크레딧 차감) — 아래는 2026-09-08 실측 시간에서 뽑은 것이다.
+
+| 항목 | 실측 (2026-09-08) | 월 어림 |
+| --- | --- | --- |
+| `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
+| `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
+| 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
+| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| 버킷 | 약 300MB + 버전 | 수백 원 |
+| Scheduler · Secret | | 무료 구간 |
+| **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |
+
+**L4 쿼터는 신청이 필요 없었다** — 리전에서 첫 GPU 잡을 만들 때 3장(영역 중복 없음)이 자동
+할당된다. **아무 신청 없이 잡이 만들어진 것으로 실제 확인했다.** 무료 체험 계정만 GPU 가 막힌다.
 
 ## 5. 오류 처리와 되돌리기
 
@@ -144,11 +164,24 @@ Registry 10GB 약 ₩1,500 · GPU 1회 20분 약 ₩600. **L4 쿼터는 신청�
 ## 6. 검증
 
 1. 로컬 CPU 이미지 빌드 → `docker run … corpus-refresh --dry-run` 이 임시 `data/` 사본에서 끝까지. DB 안 봄
+   **실측 ✅ (통과했으나 값이 낮았다)** — 이미 처리된 코퍼스를 재사용해 parse 가 "할 일 없음" 으로
+   지나갔고, 그래서 `pdf` 그룹 누락을 여기서 못 잡았다. **다음에 이 검사를 할 사람은 `processed/`
+   가 빈 사본에서 돌릴 것.**
 2. Registry 에 push, 잡 생성, `--stages parse,chunk` 로 버킷 마운트와 산출물 확인
+   **실측 ✅** — `parsed 25, same 302, skipped 6, failed 0` · 청크 **10,304** (개발 PC 와 같은 수).
 3. `--stages embed` CPU 로 청크 몇 개(`--limit`) — 벡터가 나오고 메모리 상한 안
+   **실측 ✅** — 뒤의 전체 실행에서 증분 369청크를 CPU 로 처리.
 4. GPU 잡 전체 임베딩. 시간과 parquet 행 수(약 1만) 기록
+   **실측 ✅** — 10,304행 · parquet **43.5MB** · **약 11분** · `cuda_available=True torch=2.13.0+cu126`.
+   (그 전 43분짜리 한 판은 `+cpu` 였다 — §3 의 cu126 함정.)
 5. `--stages load --dry-run` 으로 VM DB 접속(방화벽·비밀번호) → 실제 적재 → `documents` 행 수·카테고리 분포를 집 서버와 대조
+   **실측 ✅** — 9,838 → 9,838 (upsert 9,838 · prune 0), VM 에서 전 행 갱신 · 1024차원 ·
+   `content_tsv` 채워짐 확인.
 6. 전체 잡 수동 1회 → 다음 날 04:00 Scheduler 실행을 `crawl_runs` 와 Logging 에서 확인
+   **실측: 수동 1회 ✅ (17분)** — crawl due 11개 중 10개 성공(1개는 서울 열린데이터 키가 없어
+   건너뜀 → 네 번째 Secret 을 넣고 다시 돌려 **2건 수집**), parse 48 · chunk 48 · embed 369(CPU) ·
+   load 9,838 → **9,885**. ⏳ **Scheduler 자동 실행은 아직 안 봤다 — 2026-09-09 04:00 KST 가
+   처음이다.** 그날 `crawl_runs` 에 `trigger='due'` 행이 있으면 이 항목이 닫힌다.
 7. (별도 PR) 관리자 콘솔 트리거 → 잡이 뜨고 화면 폴링이 진행을 보여 준다
 8. 앱 `/life/ask` 로 새 문서가 근거에 잡힌다
 

@@ -14,6 +14,7 @@ from daengs_backend.schemas.walk_entry import (
     EntryWrite,
     RecordProfileQuery,
 )
+from daengs_backend.services.walk_entry_context import reserve
 
 
 class EntryNotFound(Exception):
@@ -89,6 +90,7 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
         content.model_dump(mode="json"),
     )
     session.add(row)
+    await reserve(session, row)
     await session.commit()
     return response(row)
 

@@ -95,3 +95,35 @@ def test_no_token_is_unauthorized():
     app.include_router(router.router)
     with TestClient(app) as client:
         assert client.get(f"/app/walks/{WALK}/entries").status_code == 401
+
+
+def test_context_read_keeps_record_owner_and_tombstone_boundary(client):
+    path = f"/app/walks/{WALK}/entries/{ENTRY}"
+    assert client.get(path + "/contexts").status_code == 404
+    assert client.put(path, json=body()).status_code == 200
+    context = client.get(path + "/contexts")
+    assert context.status_code == 200
+    assert context.json() == {
+        "entry_id": str(ENTRY),
+        "revision": 1,
+        "status": "disabled",
+        "sources": [],
+    }
+    assert client.get(f"/app/walks/{uuid.uuid4()}/entries/{ENTRY}/contexts").status_code == 404
+    client.delete(path, params={"expected_revision": 1, "mutation_id": str(uuid.uuid4())})
+    assert client.get(path + "/contexts").status_code == 404
+
+
+def test_enabled_writer_reserves_before_commit_without_provider_io(client, monkeypatch):
+    from daengs_backend.config import settings
+    from daengs_backend.repositories import walk_entry_context
+
+    monkeypatch.setattr(settings, "walk_entry_context_enabled", True)
+    reserve = AsyncMock()
+    monkeypatch.setattr(walk_entry_context, "enqueue", reserve)
+    request = body()
+    request["content"] = {"kind": "note", "note": "위치 없는 글", "recorded_at": START.isoformat()}
+    response = client.put(f"/app/walks/{WALK}/entries/{ENTRY}", json=request)
+    assert response.status_code == 200
+    reserve.assert_awaited_once()
+    assert reserve.call_args.args[1].payload["note"] == "위치 없는 글"

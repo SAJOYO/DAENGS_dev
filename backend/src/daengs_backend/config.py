@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # Requires #260 + 21_activity_game.sql on web and worker DBs. Explicit activation only.
     activity_game_enabled: bool = False
 
+    # Enable on web/worker only after 24_walk_entry_contexts.sql has been applied.
+    walk_entry_context_enabled: bool = False
+
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
     # 사실상 호스트 하나뿐인데, URL 로 받으면 그 한 글자 때문에 접속 정보 전체를

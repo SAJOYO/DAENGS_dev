@@ -313,6 +313,24 @@ async def walk_summary(db, owner, from_ms, to_ms, pet_id=None):
     }
 
 
+async def current_season(db):
+    enabled()
+    await repo.barrier(db)
+    season = await repo.active_season(db)
+    now = activity_game.now_ms()
+    if season is None or not season.starts_ms <= now < season.ends_ms:
+        return {"server_now_ms": now, "season": None}
+    return {
+        "server_now_ms": now,
+        "season": {
+            "id": season.id,
+            "starts_ms": season.starts_ms,
+            "ends_ms": season.ends_ms,
+            "policy_version": season.rules["version"],
+        },
+    }
+
+
 async def territory_summary(db, owner, season_id, pet_id):
     enabled()
     await repo.barrier(db)

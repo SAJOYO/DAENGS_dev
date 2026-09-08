@@ -1,5 +1,7 @@
 # 온라인 점유 저장·API
 
+> 2026-09-08 후속: [인증 우선 정책 v2](certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.
+
 [DAENGS_dev#260](https://github.com/SAJOYO/DAENGS_dev/pull/260)는
 [Geo 제작 계획](https://github.com/rkbuhtig/DAENGS_geo/pull/230)의 4단계 중 서버 부분이다.
 APP의 지도·접근 피드백은 [DAENGS_APP#155](https://github.com/SAJOYO/DAENGS_APP/pull/155)를

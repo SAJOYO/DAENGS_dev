@@ -109,7 +109,7 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 | Cloud Storage | `daengs-corpus` | 서울 단일 리전. **버전 관리 켬** (잘못된 적재를 되돌리는 유일한 길) |
 | Artifact Registry | `daengs` | `pipeline:cpu-<sha>` · `pipeline:cuda-<sha>` |
 | Cloud Run Job | `corpus-refresh` | 서울, 4vCPU/16GB, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다) |
-| Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장, 타임아웃 2h. 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
+| Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장, 타임아웃 1h (GPU 잡 상한). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
 | Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음 |
 | Secret Manager | `corpus-db-password` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |

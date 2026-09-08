@@ -90,6 +90,12 @@ echo "== 이미지 (Cloud Build 가 굽는다 — 개발 PC 에서 7GB 를 올�
 # `env: DOCKER_BUILDKIT=1` 도 준다 — 레거시 빌더는 Dockerfile 별 `.dockerignore` 를 무시하고
 # 모든 스테이지를 다 빌드해서, cpu 빌드 안에서도 torch-cuda 스테이지의 cu126 설치가 돌아 버린다.
 build_image() {   # $1 = cpu|cuda
+  # 태그에 git sha 가 들어 있으므로, 같은 태그가 이미 있으면 같은 소스라는 뜻이다 — 다시 안 굽는다.
+  # 이 확인이 없으면 스크립트를 다시 돌릴 때마다(코드가 안 바뀌었어도) 이미지 두 장을 5~7분씩 또 굽는다.
+  if gcloud artifacts docker images describe "${IMAGE_BASE}:$1-${SHA}" >/dev/null 2>&1; then
+    echo "(이미지 ${IMAGE_BASE}:$1-${SHA} 이미 있음 — 빌드 생략)"
+    return 0
+  fi
   local cfg
   cfg="$(mktemp)"
   trap 'rm -f "$cfg"' RETURN
@@ -120,9 +126,10 @@ gcloud run jobs deploy corpus-refresh --region="${REGION}" --image="${IMAGE_BASE
   --set-env-vars="${COMMON_ENV},DAENGS_GCP_REGION=${REGION}" --set-secrets="${COMMON_SECRETS}"
 
 echo "== Job corpus-embed-full (싱가포르, L4)"
+# Cloud Run GPU 잡은 타임아웃 상한이 1시간이다(2026-09-08 실측). L4 로 1만 청크는 10~20분이라 들어간다.
 gcloud run jobs deploy corpus-embed-full --region="${GPU_REGION}" --image="${IMAGE_BASE}:cuda-${SHA}" \
   --service-account="${SA_EMAIL}" --cpu=8 --memory=32Gi --gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy \
-  --task-timeout=2h --max-retries=0 \
+  --task-timeout=1h --max-retries=0 \
   --add-volume=name=corpus,type=cloud-storage,bucket="${BUCKET}" --add-volume-mount=volume=corpus,mount-path=/data \
   --set-env-vars="${COMMON_ENV},DAENGS_GCP_REGION=${GPU_REGION}" --set-secrets="${COMMON_SECRETS}" \
   --args="--stages,embed,--full"

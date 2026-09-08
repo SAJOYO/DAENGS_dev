@@ -15,9 +15,9 @@ from daengs_backend.orchestration.contracts import (
     CapabilityName,
     ClarifyRequest,
 )
-from tools.answer_quality import anchors, collect, generate_questions, judge, report
-from tools.answer_quality.gemini import TokenBudgetExceeded, TokenLedger, parse_structured
-from tools.answer_quality.questions import (
+from daengs_evals.answer_quality import anchors, collect, generate_questions, judge, report
+from daengs_evals.answer_quality.gemini import TokenBudgetExceeded, TokenLedger, parse_structured
+from daengs_evals.answer_quality.questions import (
     QUESTIONS_V1_PATH,
     QuestionCase,
     dedupe,
@@ -25,7 +25,7 @@ from tools.answer_quality.questions import (
     normalized_key,
     write_questions,
 )
-from tools.answer_quality.strata import (
+from daengs_evals.answer_quality.strata import (
     SEOUL_LOCATION,
     STRATA,
     STRATA_BY_ID,

@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from tools.place_fixtures import CONTRACT_VERSION, FIXTURE_DIR, build_fixtures, serialize
+from daengs_evals.place_fixtures import CONTRACT_VERSION, FIXTURE_DIR, build_fixtures, serialize
 
 EXPECTED = {
     "place_success",
@@ -42,7 +42,7 @@ def test_every_expected_fixture_is_committed_and_nothing_else_is() -> None:
 @pytest.mark.parametrize("name", sorted(EXPECTED))
 def test_committed_fixture_matches_the_production_path_byte_for_byte(name: str) -> None:
     """Regenerating must be a no-op. If this fails, the wire shape moved: rerun
-    `uv run python -m tools.place_fixtures --write`, read the diff, and tell the
+    `uv run python -m daengs_evals.place_fixtures --write`, read the diff, and tell the
     Android session what changed before committing it."""
     rebuilt = serialize(build_fixtures()[name])
     assert (FIXTURE_DIR / f"{name}.json").read_text(encoding="utf-8") == rebuilt

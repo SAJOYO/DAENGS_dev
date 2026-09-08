@@ -2685,7 +2685,7 @@ notice 예산 절단 **뒤에** 넣습니다 — 결과가 시끄러울 때 하�
 
 Android가 실제로 받는 JSON 7종을 **`backend/tests/fixtures/place_capability/`에 커밋**했습니다.
 production projection·aggregation·Walk DTO를 그대로 거쳐 생성하고
-(`uv run python -m tools.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
+(`uv run python -m daengs_evals.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
 재생성해 바이트 단위로 대조합니다 — 계약이 움직이면 다른 저장소가 아니라 여기서 깨집니다.
 표시 규칙(대화에서 후보 3개 상한, 알 수 없음을 긍정으로 바꾸지 않기, borrowed 사실의
 `link_state` 보존)은 **클라이언트의 몫**이고 이 결정은 그 근거 데이터를 보존할 뿐입니다.
@@ -3427,7 +3427,7 @@ judge 때문인지 안 갈립니다. 생성 모델(`GEMINI_MODEL`)을 `.env` 로
 
 | | 재는 것 | 판정자가 보는 것 |
 | --- | --- | --- |
-| `tools/answer_quality/` (#277) | 오케스트레이터 답변률·품질 | 질문 + 답변 **문장만** |
+| `src/daengs_evals/answer_quality/` (#277) | 오케스트레이터 답변률·품질 | 질문 + 답변 **문장만** |
 | `daengs_life/rag/stages/judge.py` (#305) | Life RAG `answers_question` | 질문 + 답변 **문장만** |
 | **이 카드** | 훈련 RAG faithfulness | 질문 + 답변 + **검색된 청크** |
 
@@ -3448,7 +3448,7 @@ hit 를 그대로 받아 적습니다. 서빙 코드는 한 글자도 안 바뀌
 부르면 그 사이 코퍼스가 바뀔 수 있고 임베딩 호출도 두 번입니다), 덤프가 **그 시점의 자료**를
 통째로 들고 있어 나중에 재판정해도 같은 것을 봅니다. #277 의 `RecordingEngine` 과 같은 수법입니다.
 
-**자리는 `tools/training_quality/` 입니다.** `daengs_training` 안에 두지 않는 이유가 둘입니다 —
+**자리는 `src/daengs_evals/training_quality/` 입니다.** `daengs_training` 안에 두지 않는 이유가 둘입니다 —
 judge 코드가 서빙 패키지에 안 들어가고(②에서 `openai` 를 못 가둔 것을 여기서 일부 회수합니다),
 `daengs_training` 이 `daengs_backend` 를 import 하지 않는 경계도 지킵니다.
 

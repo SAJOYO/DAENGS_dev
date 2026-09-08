@@ -16,15 +16,15 @@ import json
 from pathlib import Path
 
 from daengs_backend.orchestration.semantic import PROMPT_VERSION
-from tools.router_benchmark.runner_v10 import BENCHMARK_ID as V10_BENCHMARK_ID
-from tools.router_benchmark.runner_v11 import (
+from daengs_evals.router_benchmark.runner_v10 import BENCHMARK_ID as V10_BENCHMARK_ID
+from daengs_evals.router_benchmark.runner_v11 import (
     BENCHMARK_ID,
     REPORT_PATH,
     RESULTS_PATH,
     STRIPPED_BENCHMARK_ID,
     SUMMARY_PATH,
 )
-from tools.router_benchmark.schemas import load_gold_v3_cases
+from daengs_evals.router_benchmark.schemas import load_gold_v3_cases
 
 EVALS_DIR = Path(__file__).parents[1] / "evals" / "orchestration_router"
 

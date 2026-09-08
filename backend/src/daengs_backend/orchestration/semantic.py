@@ -73,7 +73,7 @@ suppressed Walk for today's / this evening's walking time-window questions
 normative exercise advice (unsupported) from CURRENT-day timing/suitability
 (Walk). Neither v5 nor v6 answers care questions; they only stop routing them
 to a domain whose evidence cannot support them. The frozen v3 benchmark copy
-under tools/router_benchmark/ is the acceptance record and stays untouched;
+under src/daengs_evals/router_benchmark/ is the acceptance record and stays untouched;
 the v4 regression against the same 80 gold cases is runner_v5.py, v5 is
 runner_v6.py (FAIL, one gate), v6 is runner_v7.py, and v7 is runner_v8.py.
 The v7 Place acceptance set is evals/orchestration_router/gold_place_v1.jsonl.

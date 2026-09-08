@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.prompt_v3 import build_semantic_router_prompt
-from tools.router_benchmark.schemas import (
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.prompt_v3 import build_semantic_router_prompt
+from daengs_evals.router_benchmark.schemas import (
     load_benchmark_config,
     load_gold_cases,
     load_gold_v3_cases,
 )
-from tools.router_benchmark.semantic_v2 import SemanticRoutingDecision, assemble_route_plan
+from daengs_evals.router_benchmark.semantic_v2 import SemanticRoutingDecision, assemble_route_plan
 
 
 def test_v3_gold_changes_only_mixed_09_plan_and_rationale() -> None:

@@ -7,7 +7,7 @@ API 를 안 부릅니다. 여기서 보는 것은 **세는 규칙**입니다 —
 갑니다 — 이 카드가 재려는 것과 정확히 반대입니다.
 """
 
-from tools.answer_quality.cited_diff import compare
+from daengs_evals.answer_quality.cited_diff import compare
 
 
 def _row(question_id, *, stratum="pet_insurance_skin__polite", status="ANSWERED", cited=(),

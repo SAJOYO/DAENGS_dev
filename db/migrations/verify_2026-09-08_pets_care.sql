@@ -58,7 +58,9 @@ BEGIN
             SELECT 1 FROM pg_constraint c
             WHERE c.conrelid = relation AND c.conname = col.name AND c.contype = 'c'
         ) THEN
-            RAISE EXCEPTION 'missing check constraint: pets.%', col.name;
+            -- 낱말 `mismatch` 는 하네스가 "verifier 가 잡았다" 를 가르는 표지다
+            -- (`tools/check_migration_verification.py` sql_checks) — 바꾸지 말 것.
+            RAISE EXCEPTION 'constraint mismatch: pets.% (want check constraint)', col.name;
         END IF;
     END LOOP;
 END

@@ -37,16 +37,37 @@ from daengs_evals.answer_quality.strata import (
 
 
 def test_strata_are_topic_times_style_with_unique_ids_and_briefs() -> None:
-    # 세트가 둘이다: v1 9주제 + screening 1주제 (#314). 곱은 그대로 주제 × 문체다.
-    assert len(STRATA) == 10 * 7
+    # 세트가 셋이다: v1 9주제 + screening 1주제 (#314) + life 5주제 (#343). 곱은 그대로 주제 × 문체다.
+    assert len(STRATA) == 15 * 7
     assert len(strata_for_set("v1")) == 9 * 7
     assert len(strata_for_set("screening")) == 1 * 7
+    assert len(strata_for_set("life")) == 5 * 7
     assert len(STRATA_BY_ID) == len(STRATA)
     for stratum in STRATA:
         assert stratum.id == f"{stratum.topic.name}__{stratum.style.name}"
         brief = stratum.generator_brief()
         assert stratum.id in brief and stratum.topic.description in brief
         assert stratum.style.description in brief
+
+
+def test_life_set_has_five_topics_four_per_style_and_one_boundary_expectation() -> None:
+    life = strata_for_set("life")
+    topics = {s.topic.name for s in life}
+    assert topics == {"life_policy", "life_insurance", "life_food", "life_travel", "life_boundary"}
+    assert all(s.topic.name.startswith("life_") for s in life)
+    assert all(s.questions_target == 4 for s in life)
+    assert sum(s.questions_target for s in life) == 140
+    # 경계 주제만 Life 가 REFUSED 를 내야 한다. 나머지 넷은 OK 가 기대값이다 — report_life 가 이 값으로
+    # 오거절(false_refuse) · 오답변(false_answer) 을 센다.
+    expected = {s.topic.name: s.topic.expected_life_status for s in life}
+    assert expected == {
+        "life_policy": "OK", "life_insurance": "OK", "life_food": "OK", "life_travel": "OK",
+        "life_boundary": "REFUSED",
+    }
+    # v1 · screening 주제는 이 칸이 비어 있다 — 라우터용 주제라 Life 기대값이 없다.
+    assert all(s.topic.expected_life_status is None for s in strata_for_set("v1"))
+    # Life 주제는 좌표가 필요 없다 — `no_location` 문체에서도 CLARIFY 가 되면 안 된다.
+    assert all(s.expected_route_kind == "specialized" for s in life)
 
 
 def test_no_location_style_turns_coordinate_topics_into_clarify_only() -> None:

@@ -160,7 +160,7 @@ def main() -> None:
     parser.add_argument("--strata", nargs="*", help="계층 id · 주제 · 문체 이름으로 거른다")
     parser.add_argument(
         "--question-set",
-        choices=("v1", "screening"),
+        choices=("v1", "screening", "life"),
         default="v1",
         help="이 세트의 계층만 만든다. **파일과 세트는 1:1 이다** — `questions_v1.jsonl` 은 동결이고 "
         "그 sha256 이 #277 의 답변 메타에 박혀 있어, 나중에 더한 주제를 섞으면 안 된다 (#314)",

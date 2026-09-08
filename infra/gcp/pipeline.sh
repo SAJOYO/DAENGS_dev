@@ -25,7 +25,13 @@ REPO="daengs"
 SA="corpus-pipeline"
 SA_EMAIL="${SA}@${PROJECT}.iam.gserviceaccount.com"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/pipeline"
-SHA="$(git rev-parse --short HEAD)"
+# 이미지 태그는 커밋이 아니라 **이미지에 들어가는 파일의 내용 해시**다. 커밋마다 굽던 것을
+# (문서·스크립트만 바뀌어도 5~23분씩) backend/·Dockerfile·시드가 바뀔 때만 굽게 한다.
+# `git ls-files -s` 는 그 경로들 아래 추적 파일들의 blob id 를 찍고, 그걸 해시한다 —
+# 그 파일들의 커밋된 내용이 바뀔 때만 값이 바뀐다. 커밋되지 않은 수정은 반영되지 않는다 —
+# 커밋된 내용 기준이다.
+SHA="$(git ls-files -s backend/pyproject.toml backend/uv.lock backend/README.md backend/src \
+  data/manifests/seed_sources.yaml docker/pipeline | git hash-object --stdin | cut -c1-7)"
 
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"
 
@@ -71,7 +77,7 @@ done
 # 루프의 마지막 명령이 항상 `sleep 10`(성공)이면 3번 다 실패해도 set -e 가 못 잡는다 —
 # 성공 플래그로 직접 확인해서 크게 실패한다.
 [ -n "$ok" ] || { echo "run.viewer 바인딩 실패 — SA 가 아직 안 보이거나 권한 문제" >&2; exit 1; }
-for s in corpus-db-password corpus-law-oc corpus-data-go-kr-key; do
+for s in corpus-db-password corpus-law-oc corpus-data-go-kr-key corpus-seoul-open-data-key; do
   gcloud secrets describe "$s" >/dev/null 2>&1 || gcloud secrets create "$s" --replication-policy=automatic
   gcloud secrets add-iam-policy-binding "$s" --member="serviceAccount:${SA_EMAIL}" \
     --role=roles/secretmanager.secretAccessor >/dev/null
@@ -90,8 +96,8 @@ echo "== 이미지 (Cloud Build 가 굽는다 — 개발 PC 에서 7GB 를 올�
 # `env: DOCKER_BUILDKIT=1` 도 준다 — 레거시 빌더는 Dockerfile 별 `.dockerignore` 를 무시하고
 # 모든 스테이지를 다 빌드해서, cpu 빌드 안에서도 torch-cuda 스테이지의 cu126 설치가 돌아 버린다.
 build_image() {   # $1 = cpu|cuda
-  # 태그에 git sha 가 들어 있으므로, 같은 태그가 이미 있으면 같은 소스라는 뜻이다 — 다시 안 굽는다.
-  # 이 확인이 없으면 스크립트를 다시 돌릴 때마다(코드가 안 바뀌었어도) 이미지 두 장을 5~7분씩 또 굽는다.
+  # 태그에 내용 해시가 들어 있으므로, 같은 태그가 이미 있으면 같은 소스라는 뜻이다 — 다시 안 굽는다.
+  # 이 확인이 없으면 스크립트를 다시 돌릴 때마다(코드가 안 바뀌었어도) 이미지 두 장을 5~23분씩 또 굽는다.
   if gcloud artifacts docker images describe "${IMAGE_BASE}:$1-${SHA}" >/dev/null 2>&1; then
     echo "(이미지 ${IMAGE_BASE}:$1-${SHA} 이미 있음 — 빌드 생략)"
     return 0
@@ -116,7 +122,7 @@ build_image cpu
 build_image cuda
 
 COMMON_ENV="DAENGS_GCP_PROJECT=${PROJECT},POSTGRES_IP=${VM_INTERNAL_IP},POSTGRES_PORT=5432,POSTGRES_USER=daengs,POSTGRES_DB=vectordb,EMBEDDING_MODEL_KEY=qwen3-embedding-0.6b"
-COMMON_SECRETS="POSTGRES_PASSWORD=corpus-db-password:latest,LAW_OC=corpus-law-oc:latest,DATA_GO_KR_KEY=corpus-data-go-kr-key:latest"
+COMMON_SECRETS="POSTGRES_PASSWORD=corpus-db-password:latest,LAW_OC=corpus-law-oc:latest,DATA_GO_KR_KEY=corpus-data-go-kr-key:latest,SEOUL_OPEN_DATA_KEY=corpus-seoul-open-data-key:latest"
 
 echo "== Job corpus-refresh (서울, CPU)"
 gcloud run jobs deploy corpus-refresh --region="${REGION}" --image="${IMAGE_BASE}:cpu-${SHA}" \

@@ -12,13 +12,17 @@
    gcloud secrets create corpus-db-password --replication-policy=automatic
    gcloud secrets create corpus-law-oc --replication-policy=automatic
    gcloud secrets create corpus-data-go-kr-key --replication-policy=automatic
+   gcloud secrets create corpus-seoul-open-data-key --replication-policy=automatic
    printf '%s' '<VM pgvector 의 daengs 비밀번호>' | gcloud secrets versions add corpus-db-password --data-file=-
-   printf '%s' '<LAW_OC>'          | gcloud secrets versions add corpus-law-oc --data-file=-
-   printf '%s' '<DATA_GO_KR_KEY>'  | gcloud secrets versions add corpus-data-go-kr-key --data-file=-
+   printf '%s' '<LAW_OC>'              | gcloud secrets versions add corpus-law-oc --data-file=-
+   printf '%s' '<DATA_GO_KR_KEY>'      | gcloud secrets versions add corpus-data-go-kr-key --data-file=-
+   printf '%s' '<SEOUL_OPEN_DATA_KEY>' | gcloud secrets versions add corpus-seoul-open-data-key --data-file=-
    ```
-   `create` 를 4번 뒤에 다시 하면 "이미 있음" 에러가 난다 — 그때는 `versions add` 세 줄만
+   `create` 를 4번 뒤에 다시 하면 "이미 있음" 에러가 난다 — 그때는 `versions add` 네 줄만
    돌리면 된다. 값(버전)이 없는 채로 잡을 배포해도 배포 자체는 성공한다 — Secret Manager
    참조는 **첫 실행 시점**에 읽히므로, 값을 안 넣으면 배포가 아니라 실행이 실패한다.
+   네 값 다 `backend/.env` 에 이미 있는 것과 같다 — 특히 `SEOUL_OPEN_DATA_KEY` 는 서울 열린데이터
+   광장 키다 (`seoul-notice-api` 소스가 이 값 없이는 수집을 건너뛴다).
 3. **사람** — VM 내부 IP: `gcloud compute instances list --format='value(name,networkInterfaces[0].networkIP)'`
 4. **사람** — `PROJECT=… VM_INTERNAL_IP=… bash infra/gcp/pipeline.sh` (저장소 루트에서. 이미지 두 장을 Cloud Build 가 굽는다, 20~40분).
 5. **사람** — 초기 사본. 집 서버 `DAENGS_CORPUS_DIR` 의 `raw/` 와 `manifests/crawl_log.jsonl` 만:
@@ -43,7 +47,10 @@
 
 ## 이미지를 다시 구울 때
 
-코드가 바뀌면 `pipeline.sh` 를 다시 돌린다 — 태그가 `cpu-<sha>` 라 잡 정의가 새 이미지로 update 된다.
+코드가 바뀌면 `pipeline.sh` 를 다시 돌린다 — 태그(`cpu-<hash>`)는 git 커밋 sha 가 아니라
+`backend/`·`docker/pipeline/Dockerfile`·시드(`data/manifests/seed_sources.yaml`)의 **내용
+해시**다. 그 경로가 바뀐 뒤에만 새 태그가 나와 다시 굽고 잡 정의가 새 이미지로 update 된다 —
+무관한 커밋(문서·`infra/` 스크립트만)에서 다시 돌리면 이미지는 그대로 재사용된다.
 
 ## 자주 걸리는 것
 

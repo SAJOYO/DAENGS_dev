@@ -111,7 +111,7 @@ Dockerfile 에 이유를 적는다. 크기 예상 CPU 약 3GB, CUDA 약 7GB. roa
 | Cloud Run Job | `corpus-refresh` | 서울, 4vCPU/16GB, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다) |
 | Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장, 타임아웃 1h (GPU 잡 상한). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
 | Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음 |
-| Secret Manager | `corpus-db-password` | 잡 환경 변수로 주입 |
+| Secret Manager | `corpus-db-password` · `corpus-law-oc` · `corpus-data-go-kr-key` · `corpus-seoul-open-data-key` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |
 | VPC 방화벽 | `allow-pg-from-run` | 서울 서브넷 범위 → VM tcp:5432. 인터넷에는 여전히 안 연다 |
 | IAM | VM 기본 서비스 계정에 잡 실행 권한 | 관리자 트리거용 (별도 PR) |

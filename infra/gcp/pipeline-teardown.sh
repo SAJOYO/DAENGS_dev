@@ -18,7 +18,7 @@ gcloud run jobs delete corpus-refresh --region="${REGION}" --quiet || true
 gcloud run jobs delete corpus-embed-full --region="${GPU_REGION}" --quiet || true
 gcloud compute firewall-rules delete allow-pg-from-run --quiet || true
 gcloud artifacts repositories delete daengs --location="${REGION}" --quiet || true
-for s in corpus-db-password corpus-law-oc corpus-data-go-kr-key; do gcloud secrets delete "$s" --quiet || true; done
+for s in corpus-db-password corpus-law-oc corpus-data-go-kr-key corpus-seoul-open-data-key; do gcloud secrets delete "$s" --quiet || true; done
 gcloud iam service-accounts delete "corpus-pipeline@${PROJECT}.iam.gserviceaccount.com" --quiet || true
 for p in $(gcloud monitoring policies list --filter='displayName="corpus job failed"' --format='value(name)'); do
   gcloud monitoring policies delete "$p" --quiet || true

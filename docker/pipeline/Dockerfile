@@ -62,6 +62,10 @@ FROM base AS torch-cpu
 # lock 그대로 (CPU torch) — frozen sync 를 다시 부르지 않는다.
 
 FROM base AS torch-cuda
+# torch 2.13 의 CUDA 경로는 Triton 커널을 실행 시점에 컴파일한다 — C 컴파일러가 없으면
+# "Failed to find C compiler" 로 인코딩 도중 죽는다 (2026-09-08 L4 실측). slim 베이스엔 gcc 가 없다.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 # `uv pip` 는 uv sync/run 과 달리 UV_PROJECT_ENVIRONMENT 를 보지 않고 VIRTUAL_ENV 나
 # 현재 디렉터리의 .venv 를 찾는다 — 여기엔 둘 다 없으므로 --python 으로 /opt/venv 를
 # 명시하지 않으면 uv 가 새 venv 를 만들거나 에러를 낸다.

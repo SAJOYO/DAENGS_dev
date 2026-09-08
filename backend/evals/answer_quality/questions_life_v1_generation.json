@@ -277,5 +277,17 @@
       "langgraph": "1.2.11",
       "pydantic": "2.13.4"
     }
-  }
+  },
+  "relabeled": [
+    {
+      "from": "life_food__abbrev_typo_01",
+      "to": "life_boundary__abbrev_typo_05",
+      "reason": "already-ate emergency (RAG-065 ⑤) — Life is expected to REFUSE; generator with fixed seed 277 reproduces the row, so relabeled instead of regenerated (#343 review)"
+    },
+    {
+      "from": "life_food__abbrev_typo_03",
+      "to": "life_boundary__abbrev_typo_06",
+      "reason": "already-ate emergency (RAG-065 ⑤) — Life is expected to REFUSE; generator with fixed seed 277 reproduces the row, so relabeled instead of regenerated (#343 review)"
+    }
+  ]
 }

@@ -62,6 +62,7 @@ class Occupancy:
     source_attempt_id: str
     certification: Certification
     occupied_at_millis: int
+    certified_at_millis: int | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,7 @@ def resolve_photo(
     outcome: PhotoOutcome,
     *,
     at_millis: int,
+    allow_same_session: bool = False,
 ) -> tuple[ClaimSite, ClaimAttempt]:
     if site.site_id != attempt.site_id:
         raise ValueError("target_mismatch")
@@ -231,7 +233,12 @@ def resolve_photo(
         raise ValueError("site_changed")
     owner = site.occupancy
     strengthening = owner is not None and owner.source_attempt_id == attempt.attempt_id
-    if owner and not strengthening and owner.source_session_id == attempt.session.client_session_id:
+    if (
+        owner
+        and not strengthening
+        and not allow_same_session
+        and owner.source_session_id == attempt.session.client_session_id
+    ):
         raise ValueError("new_session_required")
     site = replace(
         site,
@@ -242,6 +249,9 @@ def resolve_photo(
             attempt.attempt_id,
             Certification.VERIFIED,
             owner.occupied_at_millis if strengthening else at_millis,
+            owner.certified_at_millis
+            if strengthening and owner.certification == Certification.VERIFIED
+            else at_millis,
         ),
     )
     return site, replace(

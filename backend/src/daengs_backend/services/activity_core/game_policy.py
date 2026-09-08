@@ -27,7 +27,7 @@ def require(condition: bool, code: str) -> None:
 
 @dataclass(frozen=True)
 class Rules:
-    version: str = "draft-2026-09-06"
+    version: str = "certified-protection-v2"
     protection_ms: int = 600_000
     claim_points: int = 100
     takeover_points: int = 100
@@ -38,6 +38,10 @@ class Rules:
     unverified_scores: bool = True
 
     def __post_init__(self):
+        require(
+            self.version in {"draft-2026-09-06", "certified-protection-v2"},
+            "unsupported_policy_version",
+        )
         require(self.protection_ms == 600_000, "protection_must_be_ten_minutes")
         for value in (
             self.claim_points,
@@ -84,6 +88,7 @@ class Ownership:
     attempt_id: str
     certification: Certification
     occupied_ms: int
+    certified_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -196,11 +201,20 @@ def settle(score: Score, at_ms: int, rules: Rules) -> Score:
 
 
 def protected_until(owner: Ownership | None, rules: Rules) -> int | None:
-    return owner.occupied_ms + rules.protection_ms if owner else None
+    if owner is None:
+        return None
+    if rules.version == "certified-protection-v2":
+        if owner.certification != "VERIFIED":
+            return None
+        return (
+            owner.certified_ms if owner.certified_ms is not None else owner.occupied_ms
+        ) + rules.protection_ms
+    return owner.occupied_ms + rules.protection_ms
 
 
 def is_protected(owner: Ownership | None, pet_id: str, at_ms: int, rules: Rules) -> bool:
-    return bool(owner and owner.pet_id != pet_id and at_ms < protected_until(owner, rules))
+    until = protected_until(owner, rules)
+    return bool(owner and owner.pet_id != pet_id and until is not None and at_ms < until)
 
 
 def bonus_key(candidate: OwnershipCandidate, at_ms: int, rules: Rules) -> BonusKey | None:
@@ -225,7 +239,15 @@ def validate_context(
         require(0 <= site.owner.occupied_ms <= at_ms, "invalid_ownership_time")
         if site.owner.pet_id != candidate.pet_id:
             require(candidate.cause == "PHOTO_VERIFIED", "photo_required")
-            require(site.owner.session_id != candidate.session_id, "new_session_required")
+            require(
+                rules_allow_same_session(season.rules)
+                or site.owner.session_id != candidate.session_id,
+                "new_session_required",
+            )
+
+
+def rules_allow_same_session(rules: Rules) -> bool:
+    return rules.version == "certified-protection-v2"
 
 
 def plan_ownership(
@@ -284,7 +306,7 @@ def plan_ownership(
             takeovers=incoming.takeovers + int(old is not None),
         )
     owner = (
-        replace(old, certification=candidate.certification)
+        replace(old, certification=candidate.certification, certified_ms=at_ms)
         if same_pet
         else Ownership(
             candidate.pet_id,
@@ -292,6 +314,7 @@ def plan_ownership(
             candidate.attempt_id,
             candidate.certification,
             at_ms,
+            at_ms if candidate.certification == "VERIFIED" else None,
         )
     )
     return OwnershipPlan(

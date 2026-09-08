@@ -81,6 +81,19 @@ async def database():
                     encoding="utf-8"
                 )
             )
+            certified = (ROOT / "db/migrations/2026-09-08_certified_territory.sql").read_text(
+                encoding="utf-8"
+            )
+            await raw.execute(certified)
+            await raw.execute(certified)
+            await raw.execute(
+                (ROOT / "db/init/24_certified_territory.sql").read_text(encoding="utf-8")
+            )
+            await raw.execute(
+                (ROOT / "db/migrations/verify_2026-09-08_certified_territory.sql").read_text(
+                    encoding="utf-8"
+                )
+            )
         factory = async_sessionmaker(engine, expire_on_commit=False)
         yield factory
     finally:
@@ -139,7 +152,9 @@ async def mark(factory, owner, client_id, pet, **overrides):
         return await svc.mark(db, owner, mark_body(client_id, pet, **overrides), Lookup())
 
 
-async def photo(factory, owner, client_id, claim, *, captured_at=None, site_id=SITE):
+async def photo(
+    factory, owner, client_id, claim, *, captured_at=None, site_id=SITE, capture_id=None
+):
     photo_id = uuid.uuid4()
     now = datetime.now(UTC)
     async with factory() as db:
@@ -147,7 +162,7 @@ async def photo(factory, owner, client_id, claim, *, captured_at=None, site_id=S
             TerritoryAttempt(
                 id=photo_id,
                 app_user_id=owner,
-                client_capture_id=uuid.uuid4(),
+                client_capture_id=capture_id or uuid.uuid4(),
                 client_session_id=client_id,
                 site_id=site_id,
                 captured_at=captured_at or now,
@@ -404,6 +419,8 @@ async def test_real_http_roundtrip_returns_shared_dog_without_owner_private_fiel
                 "is_mine",
                 "certification",
                 "occupied_at",
+                "certified_at",
+                "protected_until",
             }
     finally:
         app.dependency_overrides.clear()

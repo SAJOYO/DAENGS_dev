@@ -11,14 +11,14 @@ from tools.answer_quality.cited_diff import compare
 
 
 def _row(question_id, *, stratum="pet_insurance_skin__polite", status="ANSWERED", cited=(),
-         capability="life"):
+         capability="life", result_status="OK"):
     data = {"citations": [{"label": c} for c in cited]} if cited else {}
     return {
         "kind": "answer",
         "question_id": question_id,
         "stratum": stratum,
         "status": status,
-        "results": [{"capability": capability, "status": "OK", "data": data}],
+        "results": [{"capability": capability, "status": result_status, "data": data}],
     }
 
 
@@ -105,3 +105,18 @@ def test_한쪽에만_있는_문항은_안_센다() -> None:
     result = compare(a, b)
     assert result["questions"] == 1
     assert result["comparable"] == 1
+
+
+def test_인용을_실은_거절은_비교에_들어온다() -> None:
+    """#328 뒤로는 `REFUSED` 도 `data.citations` 를 가질 수 있습니다 (RAG-077) — 경계 답변이
+    조항을 짚고 `[N]` 을 단 채로 거절이 된 자리입니다. 그 인용은 생성이 실제로 한 인용이므로
+    **상태가 아니라 인용의 유무**로 비교 대상을 정합니다. 옛 수집(`data` 없음)은 그대로 빠집니다.
+    """
+    a = [_row("q1", cited=("제1조",))]
+    b = [_row("q1", status="REFUSED", cited=("제1조",), result_status="REFUSED")]
+    result = compare(a, b)
+    assert result["comparable"] == 1
+    assert result["identical"] == 1
+    (detail,) = result["details"]
+    assert detail["b_status"] == "REFUSED"
+    assert detail["b_count"] == 1

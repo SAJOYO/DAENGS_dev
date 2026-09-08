@@ -101,13 +101,16 @@ def test_questions_come_from_the_goldenset() -> None:
 
     09-04 에 사망·장례 3문항(FW1~FW3)이 붙어 33 이 됐다 (RAG-059).
     09-06 에 음식 4문항(FD1~FD4)과 주거 1문항(HS1)이 붙어 38 이 됐다 (RAG-065).
+    09-08 에 증상 + 제도 3문항(B7~B9)이 붙어 41 이 됐다 (RAG-078 · D17).
     """
     items = search.hand_questions()
     gs = goldenset.load()
     assert [i[0] for i in items] == [i.id for i in gs.items if i.origin == "hand"]
-    assert len(items) == 38
+    assert len(items) == 41
     assert all(q for _, q, _, _ in items)
     assert {"B2", "B4", "B6"} <= {i[0] for i in items}
+    # 증상 + 제도 문항도 랩이 실제로 물어야 `false_refuse` 가 재진다 (RAG-078)
+    assert {"B7", "B8", "B9"} <= {i[0] for i in items}
     # 프로필 문항도 여기로 온다 — 프로필은 `cmd_generate` 가 id 로 따로 붙인다 (RAG-056)
     assert {"DP1", "DP2"} <= {i[0] for i in items}
 

@@ -6,6 +6,9 @@
         --meta-documents 9838 --meta-db-host 192.168.0.22 --meta-prompt-version 3
     uv run python -m daengs_evals.answer_quality.report_life export-labels \\
         --answers evals/answer_quality/answers_life_v1.jsonl
+    uv run python -m daengs_evals.answer_quality.report_life agreement \\
+        --labels evals/answer_quality/human_labels_life_v1.jsonl \\
+        --judgments evals/answer_quality/judgments_life_v1_direct_agreement.jsonl
 
 `report.py`(#277) 는 어시스턴트 축 — 최상위 상태와 `message` 를 본다. 여기는 **Life 축** — 같은 행의
 `results[]` 에서 `capability == "life"` 인 결과의 상태 · 거절/기권 코드를 읽는다. 두 축을 한 리포트에 섞지
@@ -29,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from daengs_evals.answer_quality.collect import load_answers
+from daengs_evals.answer_quality.judge import agreement_rates
 from daengs_evals.answer_quality.questions import ASSETS_DIR, QuestionCase, load_questions
 from daengs_evals.answer_quality.record_diff import _life, _life_code
 from daengs_evals.answer_quality.strata import STRATA_BY_ID
@@ -216,6 +220,148 @@ def label_sheet(cases: Sequence[QuestionCase], rows: Sequence[Mapping[str, Any]]
     return sheet
 
 
+def load_labels(path: Path) -> list[dict[str, Any]]:
+    """사람 라벨 시트를 읽는다. `export-labels` 산출물과 모양이 같다 — `kind` 행이 없는 순수 jsonl."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
+
+
+def human_vs_judge(
+    labels: Sequence[Mapping[str, Any]], judgments: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """이 카드(#348 · D15)가 승격하는 것 — 사람 라벨을 judge 판정과 대조해, judge 를 믿고 나머지
+    질문에 자동 채점을 맡겨도 되는지를 잰다. **두 judge(A, B)를 합치지 않는다** — 각 변형을 사람과
+    따로 재고, A 대 B 는 `judge.agreement_rates` 결과를 그대로 싣는다(``ab``). 사람 라벨이 없거나
+    (``human_answered is None``) 판정 쪽에 짝이 없는 문항은 계산에서 뺀다.
+    """
+    order: list[str] = []
+    human: dict[str, Mapping[str, Any]] = {}
+    for row in labels:
+        if row.get("human_answered") is None:
+            continue
+        qid = str(row["question_id"])
+        human[qid] = row
+        order.append(qid)
+
+    by_variant: dict[str, dict[str, Mapping[str, Any]]] = defaultdict(dict)
+    judge_model_by_variant: dict[str, str] = {}
+    for j in judgments:
+        variant = str(j["variant"])
+        qid = str(j["question_id"])
+        by_variant[variant][qid] = j
+        judge_model_by_variant.setdefault(variant, j.get("judge_model"))
+
+    variants = sorted(by_variant)
+    shared = [qid for qid in order if all(qid in by_variant[v] for v in variants)]
+    n = len(shared)
+
+    pairs: dict[str, dict[str, dict[str, int]]] = {}
+    agreement: dict[str, dict[str, Any]] = {}
+    confusion: dict[str, dict[str, int]] = {}
+    for variant in variants:
+        variant_pairs: dict[str, dict[str, int]] = {}
+        same = 0
+        within1 = 0
+        counts: Counter[str] = Counter()
+        for qid in shared:
+            h = int(human[qid]["human_answered"])
+            g = int(by_variant[variant][qid]["scores"]["answered"])
+            variant_pairs[qid] = {"human": h, "judge": g}
+            if h == g:
+                same += 1
+            if abs(h - g) <= 1:
+                within1 += 1
+            counts[f"{h},{g}"] += 1
+        pairs[variant] = variant_pairs
+        agreement[variant] = {"same": same, "within1": within1, "rate": round(same / n, 4) if n else None}
+        confusion[variant] = dict(counts)
+
+    primary = "A" if "A" in variants else (variants[0] if variants else None)
+    disagreements: list[dict[str, Any]] = []
+    if primary is not None:
+        for qid in shared:
+            h = int(human[qid]["human_answered"])
+            g_primary = int(by_variant[primary][qid]["scores"]["answered"])
+            if h == g_primary:
+                continue
+            row = human[qid]
+            disagreements.append({
+                "question_id": qid,
+                "stratum": row.get("stratum"),
+                "life_status": row.get("life_status"),
+                "human": h,
+                "judge_a": int(by_variant["A"][qid]["scores"]["answered"]) if "A" in by_variant and qid in by_variant["A"] else None,
+                "judge_b": int(by_variant["B"][qid]["scores"]["answered"]) if "B" in by_variant and qid in by_variant["B"] else None,
+                "note": row.get("human_note", ""),
+            })
+
+    judge_models = [judge_model_by_variant[v] for v in variants]
+
+    scores_by_variant: dict[str, dict[str, Mapping[str, int]]] = defaultdict(dict)
+    for j in judgments:
+        scores_by_variant[str(j["variant"])][str(j["question_id"])] = j["scores"]
+    ab = agreement_rates(scores_by_variant.get("A", {}), scores_by_variant.get("B", {}))
+
+    return {
+        "n": n,
+        "pairs": pairs,
+        "agreement": agreement,
+        "confusion": confusion,
+        "disagreements": disagreements,
+        "judge_models": judge_models,
+        "ab": ab,
+    }
+
+
+def render_agreement(summary: Mapping[str, Any], *, label: str) -> str:
+    n = summary["n"]
+    lines = [
+        f"# 사람 대 judge 일치율 — `{label}` (#348 · D15)",
+        "",
+        f"n = {n} (사람 라벨과 A·B 판정이 모두 있는 문항). judge 모델: "
+        + " · ".join(summary["judge_models"]),
+        "",
+        "## 사람 대 judge",
+        "",
+        "| variant | n | 일치 | 1점 이내 | 비율 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for variant, agreement in summary["agreement"].items():
+        lines.append(
+            f"| {variant} | {n} | {agreement['same']} | {agreement['within1']} | {_fmt(agreement['rate'])} |"
+        )
+    ab = summary["ab"]
+    lines += [
+        "",
+        f"## A 대 B (judge.agreement_rates, question_count={ab['question_count']} · threshold={ab['threshold']})",
+        "",
+        "| 항목 | 일치율 |",
+        "| --- | --- |",
+    ]
+    for item, rate in ab["rates"].items():
+        lines.append(f"| {item} | {_fmt(rate)} |")
+    lines += ["", "## 혼동 (사람,judge → 건수)", ""]
+    for variant, confusion in summary["confusion"].items():
+        cells = " · ".join(f"{k} {v}" for k, v in sorted(confusion.items())) or "—"
+        lines.append(f"- {variant}: {cells}")
+    lines += [
+        "",
+        "## 불일치 (사람과 judge A 가 다른 문항 — 시트 순서)",
+        "",
+        "| question_id | 계층 | life | 사람 | A | B | 메모 |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for d in summary["disagreements"]:
+        lines.append(
+            f"| {d['question_id']} | {d['stratum']} | {d['life_status']} | {d['human']} | "
+            f"{_fmt(d['judge_a'])} | {_fmt(d['judge_b'])} | {d['note']} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _judgments(path: Path | None) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     if path is None:
         return None, []
@@ -239,7 +385,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     exp.add_argument("--answers", type=Path, required=True)
     exp.add_argument("--questions", type=Path, default=QUESTIONS_LIFE_PATH)
     exp.add_argument("--out", type=Path, default=ASSETS_DIR / "human_labels_life_v1.jsonl")
+    agr = sub.add_parser("agreement")
+    agr.add_argument("--labels", type=Path, required=True)
+    agr.add_argument("--judgments", type=Path, required=True)
+    agr.add_argument("--label", default="life_v1")
+    agr.add_argument("--dir", type=Path, default=ASSETS_DIR)
     args = parser.parse_args(argv)
+
+    if args.command == "agreement":
+        labels = load_labels(args.labels)
+        _jmeta, judgments = load_answers(args.judgments)
+        summary = human_vs_judge(labels, judgments)
+        args.dir.mkdir(parents=True, exist_ok=True)
+        report_path = args.dir / f"agreement_{args.label}.md"
+        summary_path = args.dir / f"summary_agreement_{args.label}.json"
+        report_path.write_text(render_agreement(summary, label=args.label), encoding="utf-8")
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"일치율 리포트 {report_path}")
+        print(f"요약        {summary_path}")
+        n = summary["n"]
+        a = summary["agreement"].get("A", {})
+        b = summary["agreement"].get("B", {})
+        ab_answered_shared = sorted(set(summary["pairs"].get("A", {})) & set(summary["pairs"].get("B", {})))
+        ab_same = sum(
+            1
+            for qid in ab_answered_shared
+            if summary["pairs"]["A"][qid]["judge"] == summary["pairs"]["B"][qid]["judge"]
+        )
+        within1 = min((a.get("within1", 0), b.get("within1", 0))) if a and b else a.get("within1") or b.get("within1") or 0
+        print(
+            f"  사람=A {a.get('same', 0)}/{n} · 사람=B {b.get('same', 0)}/{n} · "
+            f"A=B {ab_same}/{len(ab_answered_shared)} · 1점 이내 {within1}/{n}"
+        )
+        return 0
 
     cases = load_questions(args.questions)
     ameta, rows = load_answers(args.answers)

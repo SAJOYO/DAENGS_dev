@@ -31,7 +31,6 @@
 | 카드 | 예약한 결정 | 랩 |
 | --- | --- | --- |
 | #287 (`D13`) | **RAG-070** — 사람은 `목줄`, 법은 `안전조치`. 시연 첫 질문이 21랩 동안 안 나왔다 | `lap30` |
-| #347 (소스 확장 1) | **RAG-081** — `guideline` 첫 소스(서울시 동물복지 안내서)와 nias 이동 두 장. 새 자로 전후 대조 | `lap32` |
 
 ---
 
@@ -9403,3 +9402,131 @@ Life 능력 자체의 「못함」을 볼 수 없다 (RAG-079 ① 이 두 축을
   `summary_life_v1{,_off,_direct}.json` · `human_labels_life_v1.jsonl`
 - `src/daengs_evals/answer_quality/report_life.py` · `collect_life.py` · `strata.py`(`life` 세트) ·
   `tools/f0_2_recon.py`
+
+---
+
+## RAG-081. 소스 확장 1 — nias 이동 두 장, 그리고 guideline 은 라이선스로 보류 — ✅ 확정 (2026-09-09)
+
+**배경** — RAG-079 ③④ 와 `F0-2`(#343)가 고른 것 둘 중 하나가 게이트에서 떨어졌다. `data-sources.md` §10
+"2026-09 정찰 2"가 이동·`guideline` 두 후보를 "받을 것"으로 골랐고(#347), 이 카드가 그 둘을 실행했다.
+
+### ① `guideline` 첫 소스는 보류
+
+서울시 「우리동네 동물복지 안내서」 PDF(`ekara.org` 재게시)를 실측했다(`.superpowers/sdd/2026-09-08-src1-nias-travel/license-gate.md`).
+robots 허용·HTTP 200·79쪽까지는 문제없었지만:
+- 본문에 **이용조건 표기가 없다** — `공공누리` 0회 · `저작권` 0회 · `무단` 0회
+- 카라 사이트 푸터가 **"COPYRIGHT 2018 KARA. ALL RIGHTS RESERVED"** — PDF 재사용 조건 안내 없음
+- 발행 주체가 서울시가 아니라 **동물권행동 카라**다 (2024 정보공개청구로 모은 25개 자치구 시행계획을 카라가 재구성)
+
+내용 자체는 잘 맞았다 — 자치구별 동물복지 사업·지원금·담당부서 연락처이고, **증상 어휘가 0**이라
+`medical` 경계와도 부딪히지 않는다(`증상`·`구토`·`설사` 각 0회, `진료` 78회는 진료비 지원 제도 문맥).
+그런데도 보류한 것은 **저작물의 이용조건이 "all rights reserved"이고 재사용 허락이 없기 때문**이다 —
+청킹·임베딩·인용은 명백한 2차적 이용이다. 선례는 RAG-048 ①(robots 상 열려 있던 DB손보 공시실을 의도를
+존중해 뺀 것)과 같은 결이다.
+
+`F0-2`가 고른 다른 `guideline` 후보들도 등급을 못 채운다 — mafra 길고양이 지침은 반려동물 6회로 스코프
+밖, 리플릿은 반려동물 0회. **`guideline` 첫 소스는 이 카드에서 나오지 않는다.**
+
+**푸는 길**: 카라에 이용 허락을 묻거나(info@ekara.org), 같은 내용의 **서울시 발행본**을 찾는다.
+`animal.go.kr`은 robots 전면 차단이라 대안이 아니다.
+
+### ② 받은 것 — nias 이동 두 장
+
+`nias-pet`(§2 동물등록 시드, 새 시드 아님)에 「함께 외출하기」·「함께 여행가기」 두 장을 더했다.
+`category=travel` · `subcategory=travel-guide`(신설) — 기존 `transport-rail`·`transport-air`는 조문 인용
+위주 운송약관이고 이 두 장은 "행동 안내" 서술이라(제N조 매치 0건) 같은 subcategory 아래 섞으면 안
+된다고 판단했다.
+
+- 청크: 전체 코퍼스 10,631 → 10,637(+6) · `nias-pet` 52 → 58(all `heading`) · docs 10 → 12
+- 임베딩: 재사용 10,304 · 신규 인코딩 6 · 사라짐 0(전량 재인코딩 아님)
+- 적재: `documents` 9,838 → 9,844(+6, 감소 없음) · `stale` 없음 · `travel` 카테고리 255 → 261
+- `travel-guide` subcategory 신규 6행(`nias-pet` source_id 로 필터하면 travel 카테고리에 정확히 6행)
+
+### ③ 전후 대조 — 새 자로 처음 찍은 델타, 그런데 VERSION 이 섞였다
+
+⚠️ **기준선(`life_v1_direct`)은 `generate.PROMPT` VERSION 3, 이 카드(`life_v2_direct`)는 VERSION 4** —
+#337 이 경계 판정(boundary·covered)을 고치며 3→4 로 올렸다. **이 대조는 코퍼스 변화(이 카드)와
+프롬프트 변화(#337)가 섞여 있다** — 아래 델타를 코퍼스 효과로만 읽으면 안 된다. `life_travel`만
+이 카드가 먹인 문서에 직결되고, 나머지 네 주제(policy·insurance·food·boundary)의 이동은 VERSION 변화
+쪽으로 더 크게 읽힌다.
+
+**주제 합계 (`report_life_v2_direct.md`, v1→v2)**
+
+| 주제 | n | 못함 v1→v2 | 오거절 v1→v2 | answered_mean v1→v2 |
+| --- | --- | --- | --- | --- |
+| life_policy | 28 | 4→3 | 0→0 | 1.96→2.00 |
+| life_insurance | 28 | 15→11 | 8→3 | 2.00→1.96 |
+| life_food | 26 | 11→7 | 3→2 | 1.81→1.92 |
+| life_boundary | 30 | 0→0 | 0→0 | 2.00→1.93 |
+| life_travel | 28 | 5→3 | 1→0 | 1.93→2.00 |
+
+「못함」총계 35 → 24. **격자(주제 × 문체) 칸 중 14개가 움직였다** — `life_travel` 3칸 + 나머지 11칸.
+`life_travel` 3칸(`casual`·`multi_intent`·`no_location`)은 이 카드가 실제로 먹인 문서와 직결되지만, 아래
+문단의 청킹 갭 때문에 개선이 약하다. 나머지 11칸(`life_food` 3 · `life_insurance` 4 · `life_policy` 1 ·
+`life_boundary` 3 — 마지막 3칸은 최상위 카운트는 그대로고 거절 사유 분류 `emergency_boundary`↔
+`medical_boundary` 만 이동)은 #337 의 경계 판정 수정 쪽에 더 가깝게 읽힌다.
+
+**알려진 결함**: 새 「함께 여행가기」 문서는 소제목이 heading 태그가 아니라 `para` 블록 첫 줄에 묻혀 있어
+(heading 2개, 형제 페이지 「함께 외출하기」는 4개) 12개 소주제(운전 중 안기 금지·장애인 보조견·버스·전철·
+기차·항공 수하물·택시·연안여객선·화물자동차·해외 출국 검역·동물위탁관리업 등)가 2,694자 청크 하나로
+뭉쳤다(RAG-004 소프트 상한 2,000자 초과). **파서 구멍이지 줄일 수 없는 청크가 아니다** — 컨트롤러 판단으로
+이 카드에서는 고치지 않는다(다른 nias 11장·#268 이 맞춘 음식 페이지까지 흔들리고 재파싱·재청킹·재임베딩·
+재적재 + 140문항 재측정이 딸려온다). 그래서 `life_travel` 개선이 약하게 나온 것은 측정 오류가 아니라
+예상된 결과다 — 후속 카드로 미룬다(⑤).
+
+**`questions_sha256` 이 v1·v2 사이에 다르다 — 조작 아님**: v1 리포트는
+`c931c72eec41d89ee761ae7b304b4ec3cbe043d13660d141b9c598f1b263df80`, v2 리포트는
+`b5df62daf5f8ae183724fd22531b3ff5936f2ebbb4d5ee0e0b4056fb303ce0e5`(+140바이트)를 적었다 — 같은 동결
+파일 `questions_life_v1.jsonl` 인데 값이 다르다. 원인은 저장소 `core.autocrlf=true` — git blob 은 LF, 이
+Windows 워크트리는 checkout 때 CRLF 다. `\r\n`→`\n`로 CR 만 벗기면 v2 값이 v1 값과 정확히 일치함을
+확인했다 — 140문항 내용은 동일하다. **경고**: 이 해시만으로 코퍼스를 기계 대조하는 감사 도구가 있다면
+이 차이를 조작 신호로 잘못 읽는다. 다음 카드는 개행을 정규화하거나 `git hash-object` 처럼 checkout
+환경에 무관한 방식을 쓸 것.
+
+### ④ 회귀 — lap32 대 lap31, 헤드라인만
+
+`lap31.jsonl` 은 이 머신에 없고 **재생성도 불가능하다** — #337 저자의 개발 PC 에서 만들어졌고 lap 파일은
+per-developer·git 미추적이라 이 머신으로 건너오지 않았다. 오늘 다시 돌리면 코퍼스가 이미 이 카드의
+문서 두 장을 담고 있어 그 결과는 lap31 재구성이 아니라 또 다른 lap32 일 뿐이다 — 이 코퍼스 변화에는
+**문항 단위 회귀 게이트로 가는 길이 없다.**
+
+대신 RAG-078 ①이 이미 기록해 둔 lap31 총계로 헤드라인만 대조했다(36문항 채점 기준):
+`grounded` 33 → 33(변화 없음) · `cited` 23 → 22(−1, 문서화된 ±2~3 노이즈 폭 안). 이 −1 은 어느 문항이
+움직였는지 말할 수 없고, **관계없는 문항이 하나 얻고 다른 문항이 하나 잃는 상쇄를 가릴 수 있다** — 그래서
+이것은 게이트가 아니라 헤드라인 점검일 뿐이다.
+
+**구조적 문제**: lap 산출물은 개발자별·git 미추적으로 설계됐는데(`data/` 미추적, RAG-017), 의사결정
+기록(`decisions-rag.md`)은 특정 lap 파일명을 공유 기준선처럼 인용한다. RAG-078 산출물 절의 "메인
+체크아웃에도 복사해 뒀다"는 주장은 이 머신 기준으로 성립하지 않는다(전체 디스크 검색으로 확인) — 이
+머신이 곧 `DAENGS_DATA_DIR`(팀 관행상 "메인 체크아웃")이기 때문이다. 다른 개발자의 lap 을 잇는 카드는
+전부 이 벽을 만난다. 풀 수 있는 두 갈래만 이름을 남긴다: lap 파일을 커밋 대상으로 바꾸거나, 의사결정
+기록이 총계가 아니라 문항 단위 결과까지 남겨 원본 `.jsonl` 없이도 ADR 텍스트만으로 대조할 수 있게 한다.
+
+**참고 — 골든셋 규모**: 현재 골든셋은 **41 문항(36 채점)**이다. RAG-078 이 `B7`–`B9` 세 문항을 더해
+38 → 41 이 됐다 — 이후 33 이라는 옛 수치를 인용하는 자리가 있으면 41 로 고쳐 읽는다.
+
+### ⑤ 바꾸려면 — 다음 소스 카드가 알아야 할 것
+
+- **공유 `data/` 수집 규칙**: 임시 `DAENGS_DATA_DIR` 로 먼저 받고, 새 파일만 골라 공유 `raw/`로 복사한다.
+  공유 `manifests/crawl_log.jsonl` 은 손대지 않는다 — 크롤은 서버가 정본이고 개발 PC 의 `crawler run`
+  으로 공유 `data/`를 채우지 않는다(CLAUDE.md "크롤은 서버가 합니다").
+- **`--prune` 금지**: `load`는 `--prune` 없이 돌린다 — 줬으면 기존 9,838행이 stale 로 잡혀 지워졌을
+  것이다. dry-run 게이트로 삭제 대상 0을 먼저 확인하고 실 적재한다.
+- **청킹 파서 갭**은 이 카드가 고치지 않았다 — 「함께 여행가기」의 소제목이 `para` 블록에 묻힌 문제는
+  다른 nias 11장(음식 페이지 포함, #268)까지 건드리는 변경이라 후속 카드로 남긴다.
+- **VERSION 3→4 재기준선**은 이 카드가 맡지 않는다 — 프롬프트만 바뀐 상태로 140문항을 다시 찍는 것은
+  #337 이 소유한 변수이고, 이 카드가 그 비용(140 수집 + 140 판정)을 대신 지지 않는다.
+- **lap31 은 못 구한다** — 위 ④ 를 그대로 물려받는다. 다음 회귀 게이트는 새 lap 을 baseline 으로
+  다시 잡거나, ADR 에 문항 단위 결과를 남기는 관행부터 바꿔야 한다.
+
+### 산출물
+- `backend/src/daengs_life/crawler/sources/registration/nias_pet.py`(`WANTED` 두 줄) ·
+  `backend/tests/test_nias_travel.py`(신규)
+- `backend/tests/test_chunk.py`(`BY_SOURCE["nias-pet"]`, `SOFT_CAP_OVER["nias-pet"]` 1→2)
+- `backend/src/daengs_life/rag/stages/goldenset.yaml`(`corpus.collected_on`, `corpus.chunk_count`
+  10304→10310)
+- `backend/evals/answer_quality/{answers,judgments,report,summary}_life_v2_direct.{jsonl,md,json}`
+- 데이터(git 밖, `DAENGS_DATA_DIR`): `raw/registration/nias-pet-{outing,travel}__20260908.{html,meta.json}` ·
+  `processed/answers/lap32.jsonl`
+- 문서: `docs/life/data-sources.md`(§0·§5·§10) · `docs/life/decisions-rag.md`(이 항목) ·
+  `docs/life/roadmap.md`

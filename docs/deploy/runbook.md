@@ -93,7 +93,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 
 | 무엇 | 어디로 | 비고 |
 | --- | --- | --- |
-| 스크리닝 가중치 2개 | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋) |
+| 스크리닝 릴리스 — **폴더를 통째로** (`checkpoints/` + `stage1_threshold.json`) | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋). ⚠️ **개수를 세지 마세요.** 예전에 이 줄은 "가중치 2개" 였는데 그 사이 2단계가 **앙상블 3팔**이 됐습니다 (2026-09-08 `/screen/healthz` 실측: `stage2_convnextv2_base_m2.5_…` · `stage2_effnetv2_s_f320_…` · `stage2_effnetv2_s_m2.5_…`). 덜 옮기면 §5 를 보세요 |
 | gait `best.pt` · `yolov8n.pt` | `/srv/daengs/models/release/gait-analysis/` | git 에 없음. **`GAIT_RELEASE_DIR` 과 같은 값입니다** — 스크리닝 release 폴더의 하위. 2026-09-07 VM 실측(best.pt 53MB · yolov8n.pt 6.5MB) |
 | 최상단 `.env` | `~/daengs/.env` | 아래 수정표 |
 | `backend/.env` | `~/daengs/backend/.env` | 암호화 키 3개는 **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 엽니다 |
@@ -196,7 +196,7 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 정답**이고, 404 가 나오면 그 엔드포인트가 아직 이 서버에 없다는 뜻입니다:
 
 ```bash
-for p in /health /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
+for p in /health /screen/healthz /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
   printf "%-24s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
 done
 ```
@@ -204,10 +204,34 @@ done
 | 경로 | 기대 | 아니면 |
 | --- | --- | --- |
 | `/health` | 200 (`{"status":"ok","db":"ok"}`) | backend 기동 실패 |
+| `/screen/healthz` | 200. ★ **본문의 `stage2_arms_available` 이 `3`** | 아래 |
 | `/gait/records` | **410** — 옛 무인증 경로는 닫혀 있어야 합니다 (#145) | **400·200 이면 설정이 반영 안 된 것.** §6 의 inode 함정 |
 | `/app/gait/analyze` (POST) | 401 | 404 면 새 계약이 안 올라온 것 |
 | `/app/walks` (POST) | 401 | 〃 |
 | `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
+
+★ **스크리닝 팔 개수는 상태 코드로 안 잡힙니다** — 팔이 하나뿐이어도 `/screen/healthz`
+도 `POST /screen/v1/screen` 도 **200** 입니다. 집 서버에서 2026-09-07 에 실제로 3팔이
+1팔로 강등됐고, 알아챈 단서는 로그에 성공 줄이 **안 찍힌 것** 하나였습니다. 그래서
+여기서는 코드가 아니라 **본문**을 봅니다:
+
+```bash
+curl -s https://daengapi.weareithero.cloud/screen/healthz
+```
+
+| 본문 값 | 뜻 |
+| --- | --- |
+| `stage2_arms_available: 3` | 릴리스 폴더에 팔이 **다 있음** (모델을 안 올려도 나옵니다) |
+| `stage2_arms_available: 1` | §2 에서 **덜 옮긴 것.** `checkpoints/stage2_*` 를 마저 복사하세요 |
+| `available` 3 인데 `stage2_arms` 1 | 릴리스는 새것인데 **프로세스가 옛것**을 물고 있음 → backend 재시작 |
+| `loaded: false` | 정상입니다. 첫 요청이 모델을 올리는 설계라 `stage2_arms` 는 그 뒤에 나옵니다 |
+
+⚠️ 잃는 것이 눈에 안 보입니다 — 1팔이어도 화면은 똑같이 뜨고, 줄어드는 건 계열
+커버리지 **67.9% → 58.4%** 입니다 (holdout 실측).
+
+⚠️ **순서는 코드가 먼저, 가중치가 나중**입니다. 가중치를 먼저 넣고 옛 코드가 뜨면
+`from_release` 가 마지막 팔 하나만 물고 **기준 팔(convnextv2)이 더 약한 팔로 대체**됩니다.
+그 사고가 그렇게 났습니다.
 
 `/life/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
 

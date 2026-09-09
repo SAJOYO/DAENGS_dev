@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -128,7 +129,40 @@ async def history(session: AsyncSession, source_id: str, limit: int = 20) -> Seq
 
 
 async def running_count(session: AsyncSession) -> int:
+    """안 끝난 실행 **전부.** `CrawlStatusOut.running` 이 이 값입니다 — 관리자 화면이 폴링하는
+    계약이라 뜻을 안 바꿉니다. 도는 중과 죽어 남은 것을 갈라야 하면 아래 `running_split`."""
     return await repo.count_running(session)
+
+
+#: `running` 이 이보다 오래됐으면 **워커가 죽어 남은 것**으로 봅니다.
+#:
+#: 잔존 행 자체는 버그가 아닙니다 — `daengs_life/tasks/crawl_runs.py` 의 `start()` 가
+#: *"워커가 중간에 죽으면 이 행이 `running` 으로 남는데, 그것이 정보다"* 라고 적어 뒀고,
+#: 기록이 크롤을 죽이지 않는다는 계약 때문에 `finish()` 를 못 부르고 죽는 경로가 **항상
+#: 열려 있습니다.** 그래서 고칠 것은 쓰는 쪽이 아니라 **읽는 쪽**이고, 그 판단이 이 상수입니다.
+#:
+#: 6시간인 근거는 위아래 두 벽입니다.
+#:   · **아래** — 소스 하나의 수집은 요청 간격 1~2초의 네트워크 I/O 라 **길어야 분 단위**입니다.
+#:   · **위**   — Beat 가 **하루 한 번 KST 04:00** 에 돕니다 (RAG-050). 24시간을 넘기면
+#:                "어제 죽어 남은 행"과 "오늘 도는 행"이 겹쳐 **애초에 못 가릅니다.**
+#: 늘리면 죽은 워커를 늦게 알아채고, 줄이면 느린 수집을 죽었다고 오해합니다.
+#: ⚠ **크롤 주기가 하루보다 촘촘해지면 이 값을 다시 봐야 합니다.**
+RUNNING_STALE_AFTER = timedelta(hours=6)
+
+
+async def running_split(session: AsyncSession) -> tuple[int, int]:
+    """안 끝난 실행을 `(도는 중, 죽어 남은 것)` 으로 가릅니다.
+
+    **자르는 시각을 여기서 계산해 repositories 에 넘깁니다** — 저쪽은 쿼리만 있고 판단이 없고
+    (`repositories/crawl_run.py` 머리), "얼마나 오래면 죽은 것인가"는 판단이라 services 몫입니다
+    (D-011 의 계층 구분).
+
+    합은 `running_count()` 와 같습니다. 두 질의를 따로 던지는 것은 `COUNT` 두 번이 인덱스
+    스캔이라 싸고, 한 질의에 `FILTER` 로 묶으면 repositories 가 임계값을 알아야 해서입니다.
+    """
+    stale = await repo.count_running(
+        session, started_before=datetime.now(UTC) - RUNNING_STALE_AFTER)
+    return await repo.count_running(session) - stale, stale
 
 
 def crawl_workers(timeout_sec: float = 1.0) -> list[str]:

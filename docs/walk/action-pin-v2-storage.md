@@ -78,10 +78,10 @@ pin/content의 정밀한 값을 저장 때 덮어쓰지는 않는다. observed�
 
 - v1 목록/프로필 범위에 활성 v2가 있으면 426 `walk_entry_upgrade_required`다. v2 대상의 v1 PUT/DELETE와
   기존 contexts 읽기도 차단한다. 다른 v1 기록은 계속 쓸 수 있다. 삭제된 v2만 있으면 목록은 최소 표식으로 읽는다.
-- v2 쓰기는 기존 주변 정보 예약 함수를 호출하지 않는다. profile context_status는 not_requested다.
-  추정값을 원본 인증 GPS나 주변 시설 조회 좌표로 전달하지 않는다.
-- storyboard는 현재 v1 입력이다. 활성 v2가 있는 산책은 소유권 확인 후 명시적 409로 차단한다.
-  pin_revision을 포함한 연결은 후속 단위이며, 이 상태에서 v2 쓰기를 실사용에 켜지 않는다.
+- v2 쓰기는 별도 v2 정책으로 주변 정보를 예약하며 원본 인증 GPS와 핀 좌표를 분리한다.
+  profile context_status의 요약 연결은 별도이고, v2 contexts API로 결과를 조회한다.
+- 활성 v2가 있는 산책의 구버전 storyboard는 소유권 확인 후 명시적 409로 차단한다.
+  v5는 pin_revision과 위치 출처를 보존한다. [장면·주변 정보 연결](action-pin-context.md)을 따른다.
 
 ## 적용·활성화·롤백
 

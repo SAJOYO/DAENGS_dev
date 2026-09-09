@@ -197,8 +197,60 @@ class StoryboardBundleV4(StoryboardBundleV3):
         return self
 
 
+class PinPoint(StrictModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class ScenePin(StrictModel):
+    revision: int = Field(ge=0)
+    resolution_id: str
+    state: Literal["resolved", "unlocated"]
+    method: Literal["observed", "estimated", "last_known", "none"]
+    target_at: AwareDatetime
+    point: PinPoint | None
+    uncertainty_m: float | None = Field(gt=0)
+    uncertainty_basis: Literal["provider_accuracy", "model_bound", "unknown"]
+
+    @model_validator(mode="after")
+    def consistent(self):
+        if (self.point is None) != (self.state == "unlocated") or (
+            (self.point is None) != (self.method == "none")
+        ):
+            raise ValueError("Pin location and state disagree")
+        if (self.uncertainty_m is None) != (self.uncertainty_basis == "unknown"):
+            raise ValueError("Unknown uncertainty must be null")
+        if self.method != "observed" and self.uncertainty_basis == "provider_accuracy":
+            raise ValueError("Estimated position is not provider GPS")
+        return self
+
+
+class SceneV5(SceneV4):
+    pin: ScenePin | None
+
+    @model_validator(mode="after")
+    def pin_provenance(self):
+        if self.pin and (self.entry is None or self.pin.target_at != self.started_at):
+            raise ValueError("Pin must belong to its original entry time")
+        return self
+
+
+class StoryboardBundleV5(StoryboardBundleV4):
+    format: Literal["walk-storyboard-candidates-v5"] = "walk-storyboard-candidates-v5"
+    scenes: list[SceneV5] = Field(min_length=1, max_length=250)
+
+
 def compatible_bundle(payload, target):
     """Stored v3 can be read by strict older clients without extra keys."""
+    if payload["format"] == "walk-storyboard-candidates-v5":
+        bundle = StoryboardBundleV5.model_validate(payload)
+        if target == bundle.format:
+            return bundle
+        # Facts keep location qualifications even in older projections.
+        payload = bundle.model_dump(mode="json")
+        payload["format"] = "walk-storyboard-candidates-v4"
+        for scene in payload["scenes"]:
+            scene.pop("pin")
     if payload["format"] == "walk-storyboard-candidates-v4":
         bundle = StoryboardBundleV4.model_validate(payload)
         if target == bundle.format:
@@ -228,6 +280,7 @@ def legacy_bundle(bundle):
     for scene in payload["scenes"]:
         scene.pop("entry", None)
         scene.pop("observation", None)
+        scene.pop("pin", None)
     return StoryboardBundle.model_validate(payload)
 
 
@@ -243,6 +296,7 @@ def build_storyboard(
     *,
     synthetic=False,
     include_observations=False,
+    include_pins=False,
 ):
     local_source = {
         "id": "local-walk",
@@ -286,6 +340,7 @@ def build_storyboard(
         entry=None,
         coverage=(),
         observation=None,
+        pin=None,
     ):
         scene_id = "scene-" + fingerprint({"session": session_id, "identity": identity})[:24]
         if not synthetic and (identity in {"start", "end"} or identity.startswith("entry:")):
@@ -294,6 +349,22 @@ def build_storyboard(
         facts = [
             {"id": scene_id + ":fact", "kind": kind, "text": text, "source_ids": ["local-walk"]}
         ]
+        if pin:
+            labels = {
+                "observed": "GPS 위치",
+                "estimated": "추정 위치",
+                "last_known": "마지막 확인 위치",
+                "none": "위치 없이 남긴 행동",
+            }
+            facts.append(
+                {
+                    "id": scene_id + ":location",
+                    "kind": "coverage",
+                    "text": labels[pin["method"]]
+                    + " · 행동 시각의 위치 근거이며 방문 사실을 뜻하지 않아요.",
+                    "source_ids": ["local-walk"],
+                }
+            )
         for i, value in enumerate(coverage):
             facts.append(
                 {
@@ -382,6 +453,8 @@ def build_storyboard(
         }
         if include_observations:
             content["observation"] = observation
+        if include_pins:
+            content["pin"] = pin
         revision = fingerprint(
             {
                 **content,
@@ -389,7 +462,7 @@ def build_storyboard(
                 "ended_at": content["ended_at"].isoformat(),
             }
         )
-        scene_type = SceneV4 if include_observations else SceneV2
+        scene_type = SceneV5 if include_pins else SceneV4 if include_observations else SceneV2
         scenes.append(scene_type(**content, revision=revision))
 
     boundaries = selection.get("boundary_observations", {})
@@ -424,6 +497,8 @@ def build_storyboard(
                 "revision": entry.get("revision"),
                 "pet_id": entry.get("pet_id"),
             },
+            pin=entry.get("pin") if include_pins else None,
+            context=contexts.get("entry:" + entry["id"]) if include_pins else None,
         )
     for anchor in selection["anchors"]:
         # Identity comes from the observed anchor, never its ordinal selection position.
@@ -493,7 +568,13 @@ def build_storyboard(
     )
     scenes.sort(key=lambda s: (s.started_at, s.id))
     payload = [s.model_dump(mode="json") for s in scenes]
-    bundle_type = StoryboardBundleV4 if include_observations else StoryboardBundleV2
+    bundle_type = (
+        StoryboardBundleV5
+        if include_pins
+        else StoryboardBundleV4
+        if include_observations
+        else StoryboardBundleV2
+    )
     return bundle_type(
         session_id=session_id,
         synthetic=synthetic,

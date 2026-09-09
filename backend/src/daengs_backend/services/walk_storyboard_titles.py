@@ -6,7 +6,13 @@ import json
 from pydantic import Field, field_validator
 
 from daengs_backend.config import settings
-from daengs_walk.storyboard import StoryboardBundleV3, StoryboardBundleV4, StrictModel, fingerprint
+from daengs_walk.storyboard import (
+    StoryboardBundleV3,
+    StoryboardBundleV4,
+    StoryboardBundleV5,
+    StrictModel,
+    fingerprint,
+)
 
 MODEL = "gemini-3.1-flash-lite"
 TIMEOUT_SECONDS = 12
@@ -20,6 +26,7 @@ scenes에는 입력의 모든 장면 id를 한 번씩 그대로 반환한다. �
 익숙한 길/낯선 길/특별한 산책/평소와 다른 길이라는 판단은 하지 않는다.
 주변 시설 자료는 실제 방문이나 내부 진입, 산책 당시 상황의 증거가 아니다.
 주변 카페를 확인한 장면을 카페에 들른 장면으로 바꾸지 않는다. 지명을 만들어 내지 않는다.
+추정 위치와 마지막 확인 위치의 주변 자료는 그 좌표 기준의 참고 정보다. 실제 행동 장소로 확정하지 않는다.
 시간·거리·속도는 입력 값만 사용한다. 자료가 빈약하면 산책 시작/이동 기록/산책 마무리처럼 쓴다.
 본문과 관측 사실을 새로 서술하지 않는다. 응답은 지정된 JSON 스키마만 사용한다.
 """
@@ -92,7 +99,11 @@ async def generate_headings(payload):
 async def title_storyboard(bundle, generate=generate_headings):
     payload = bundle.model_dump(mode="json")
     bundle_type = (
-        StoryboardBundleV4 if isinstance(bundle, StoryboardBundleV4) else StoryboardBundleV3
+        StoryboardBundleV5
+        if isinstance(bundle, StoryboardBundleV5)
+        else StoryboardBundleV4
+        if isinstance(bundle, StoryboardBundleV4)
+        else StoryboardBundleV3
     )
     payload["format"] = bundle_type.model_fields["format"].default
     fallback = bundle_type.model_validate(payload)

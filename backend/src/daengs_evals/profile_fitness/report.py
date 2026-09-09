@@ -499,9 +499,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--variant", default="A")
     parser.add_argument("--figures", action="store_true")
     parser.add_argument("--note", default="")
+    parser.add_argument(
+        "--judgments",
+        default=None,
+        help="판정 파일 경로. 기본은 지금 프롬프트 버전의 것 — 옛 버전을 다시 그릴 때 준다",
+    )
+    parser.add_argument("--suffix", default="", help="산출물 이름 뒤에 붙일 표시 (예: v1a)")
     args = parser.parse_args(argv)
 
-    meta, rows, ledgers = load_judgments(judgments_path(args.label, args.variant))
+    src = Path(args.judgments) if args.judgments else judgments_path(args.label, args.variant)
+    meta, rows, ledgers = load_judgments(src)
     other = "B" if args.variant == "A" else "A"
     b_path = judgments_path(args.label, other)
     b_rows = load_judgments(b_path)[1] if b_path.exists() else None
@@ -510,15 +517,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.note:
         summary["note"] = args.note
 
-    md = ASSETS_DIR / f"report_pf_{args.label}.md"
-    js = ASSETS_DIR / f"summary_pf_{args.label}.json"
+    tag = f"{args.label}_{args.suffix}" if args.suffix else args.label
+    md = ASSETS_DIR / f"report_pf_{tag}.md"
+    js = ASSETS_DIR / f"summary_pf_{tag}.json"
     md.write_text(
         render_markdown(summary) + (f"\n> {args.note}\n" if args.note else ""), encoding="utf-8"
     )
     js.write_text(json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print(render_markdown(summary))
     if args.figures:
-        svg = ASSETS_DIR / f"figure_pf_{args.label}_conditions.svg"
+        svg = ASSETS_DIR / f"figure_pf_{tag}_conditions.svg"
         svg.write_text(render_svg(summary), encoding="utf-8")
         print(f"→ {svg.name}")
     print(f"→ {md.name} · {js.name}")

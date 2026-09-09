@@ -320,6 +320,9 @@ def run_bias_suite(
                 "pair_id": p.pair_id,
                 "changed_consistent": len(set(changed_votes)) == 1,
                 "fabricated_consistent": len(set(fab_votes)) == 1,
+                # 어긋났을 때 **왜** 어긋났는지 사람이 읽을 수 있게 — 앵커 기록과 같은 이유
+                "notes": [r["ab"]["note"] for r in runs],
+                "unstated_facts": [r["ab"]["unstated_facts"] for r in runs],
             }
         )
         position.append(

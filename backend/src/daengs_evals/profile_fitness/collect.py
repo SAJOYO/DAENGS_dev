@@ -330,6 +330,53 @@ def is_transient_failure(row: Mapping[str, Any]) -> bool:
     return False
 
 
+def seed_cells(
+    path: Path,
+    seed_label: str,
+    planned: Sequence[tuple[Question, str, int]],
+    done: set[CellKey],
+    questions_path: Path,
+    *,
+    log: Callable[[str], None] = print,
+) -> set[CellKey]:
+    """다른 label 의 셀을 이 파일로 옮겨 심는다. **질문 문장이 글자까지 같고** arm · run 이 같으며
+    답(ANSWERED · REFUSED)이 있는 셀만. 옮긴 행에는 `seeded_from` 을 남긴다.
+
+    성립 근거: general 은 온도 0 에서 결정론적이다 (2026-09-09 잡음 쌍 34개 전부 글자까지 동일).
+    같은 입력이면 같은 답이므로 다시 부르는 것은 토큰 낭비이고, 무료 한도가 막힌 날엔 아예 못 부른다.
+    질문 문장이 한 글자라도 다르면 옮기지 않는다 — v1.1 이 v1 과 갈린 자리가 바로 그 문항들이다.
+    """
+    seed_path = cells_path(seed_label)
+    seed_meta, seed_rows = load_cells(seed_path)
+    seed_questions = {
+        q.question_id: q.query for q in load_questions(Path(seed_meta["questions_path"]))
+    }
+    seed_index = {
+        (seed_questions.get(r["question_id"]), r["arm"], int(r["run"])): r
+        for r in seed_rows
+        if r.get("status") in ("ANSWERED", "REFUSED", "PARTIAL")
+    }
+    seeded: set[CellKey] = set()
+    for q, arm, run in planned:
+        key: CellKey = (q.question_id, arm, run)
+        if key in done:
+            continue
+        src = seed_index.get((q.query, arm, run))
+        if src is None:
+            continue
+        row = dict(src)
+        row["question_id"] = q.question_id
+        row["seeded_from"] = {
+            "label": seed_label,
+            "question_id": src["question_id"],
+            "collected_at": src.get("collected_at"),
+        }
+        _append(path, row)
+        seeded.add(key)
+    log(f"  {seed_label} 에서 옮겨 심은 셀 {len(seeded)}개 (질문 문장 · arm · run 이 같은 것만)")
+    return seeded
+
+
 def _resume_or_start(
     path: Path, meta: Mapping[str, Any], *, resume: bool, retry_failed: bool = False
 ) -> set[CellKey]:
@@ -378,6 +425,7 @@ async def collect(
     resume: bool,
     retry_failed: bool = False,
     auto_retry: int = 2,
+    seed_from: str | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
     from daengs_backend.config import settings
@@ -407,6 +455,9 @@ async def collect(
         profiles_path=profiles_path,
     )
     done = _resume_or_start(path, meta, resume=resume, retry_failed=retry_failed)
+    if seed_from:
+        seeded = seed_cells(path, seed_from, planned, done, questions_path, log=log)
+        done |= seeded
     todo = [(q, arm, run) for q, arm, run in planned if (q.question_id, arm, run) not in done]
 
     log(
@@ -468,6 +519,7 @@ async def collect(
                 resume=True,
                 retry_failed=True,
                 auto_retry=auto_retry - 1,
+                seed_from=seed_from,
                 log=log,
             )
     return path
@@ -494,6 +546,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="앞에서부터 N 문항만")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
+        "--seed-from",
+        default=None,
+        help="다른 label 의 셀을 옮겨 심는다 — 질문 문장 · arm · run 이 같고 답이 있는 것만. 출처를 남긴다",
+    )
+    parser.add_argument(
         "--retry-failed",
         action="store_true",
         help="--resume 과 함께. 일시적 실패 셀을 지우고 다시 돌린다",
@@ -513,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             resume=args.resume,
             retry_failed=args.retry_failed,
+            seed_from=args.seed_from,
         )
     )
     return 0

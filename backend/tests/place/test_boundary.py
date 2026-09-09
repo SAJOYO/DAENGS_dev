@@ -199,6 +199,8 @@ def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
         "/health/ready",
         "/territory/sites/nearby",
         "/v2/places/search",
+        "/v3/places/search",
+        "/v3/places/capabilities",
     }, (
         f"검색 서버의 공개 표면이 계약과 다르다: {sorted(public)}"
     )
@@ -214,4 +216,5 @@ def test_nginx_does_not_publish_the_internal_discovery_prefix():
 
     assert "location /internal" not in nginx
     assert "location /v2/places/" in nginx
+    assert "location /v3/places/" in nginx
     assert "location /territory/sites/" in nginx

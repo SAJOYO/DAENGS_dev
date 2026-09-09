@@ -1,6 +1,6 @@
 # 시설 조건 필터 엔진
 
-`place.filters.service.search_filtered_places(session, state)`는 수동 입력과 자연어 해석이 함께 사용할 내부 실행 진입점이다. 현재 HTTP endpoint·Android UI·LLM 편집기는 연결하지 않았다. 기존 `/v2/places/search`와 discovery의 요청 의미는 유지한다.
+`place.filters.service.search_filtered_places(session, state)`는 수동 입력과 자연어 해석이 함께 사용할 내부 실행 진입점이다. 수동 검색용 `/v3/places/search`에서 호출하며 LLM 편집기는 후속 단계다. 기존 `/v2/places/search`와 discovery의 요청 의미는 유지한다.
 
 ## 입력과 실행
 
@@ -48,7 +48,7 @@ KCISA `_flag`를 기존 source-fact 파서와 동일하게 Y/N/미상으로 맞�
 
 DB 검증은 임시 PostGIS 18/3.6의 빈 DB에 기존 Alembic 0001~0022를 적용한 뒤 수행한다. 운영 DB를 사용하지 않는다. `DAENGS_DATABASE_URL`은 backend 공통 설정과 충돌하므로 사용하지 않는다. CI와 같은 `DAENGS_PLACE_DATABASE_URL` 또는 `DAENGS_DB_HOST/PORT/USER/PASSWORD/NAME`을 사용한다. 이번 로컬 실행은 조각 설정을 썼으며 root conftest가 HOST와 PASSWORD를 덮어쓰는 값에 맞췄다. 임시 DB는 loopback 전용 포트로 노출한다.
 
-다음 단계는 버전이 분리된 공개 요청·응답 어댑터와 앱 필터 UI다. 세션 revision, 수정안의 원자적 반영, 출처/잠금 권한, 미지원 요구의 사용자 안내는 그 경계에서 구현한다. 자연어 근거 구간·명시적 정정과 추론 구분은 이후 LLM 연결 단계의 대상이다. 새 조건을 기존 v2 DTO로 축약해 필터를 누락시키는 fallback은 만들지 않는다.
+4단계 공개 API는 아래와 같고 앱 연결은 [DAENGS_APP#229](https://github.com/SAJOYO/DAENGS_APP/pull/229)에서 다룬다. 자연어 편집, 출처/잠금 권한과 서버 세션 CAS는 5단계 대상이다. 새 조건을 기존 v2 DTO로 축약해 필터를 누락시키는 fallback은 만들지 않는다.
 
 앱은 각 그룹의 서버 순서를 유지해야 한다. 표시용 정수 distance만으로 다시 정렬하면 SQL이 보존한 소수점 거리 순서가 사라진다. 그룹 간 별도 표시 집계를 만들 때도 원래 그룹 순위·조건 근거를 잃지 않도록 한다.
 
@@ -57,3 +57,34 @@ DB 검증은 임시 PostGIS 18/3.6의 빈 DB에 기존 Alembic 0001~0022를 적�
 ```powershell
 uv run --no-sync pytest -q --tb=short tests/place/place/filters tests/place/integration/test_condition_filters.py tests/place/place/test_search_v2.py tests/place/place/test_name_search.py tests/place/ingest/test_kcisa_concept_filter.py tests/place/integration/test_facility_layer.py tests/place/integration/test_facility_ranking.py
 ```
+
+## 공개 API · 4단계
+
+- `GET /v3/places/capabilities`: `place-filter-v1`, 업종/연산자/선호 허용 값, 상한, 항상 정보가 없는 업종을 반환한다. DB·LLM 없이 조회할 수 있다. SQL 컬럼은 공개하지 않는다.
+- `POST /v3/places/search`: `{revision, search_request_id, state}`. `state`는 엔진의 `FilterState` 전체다. v2는 기존 계약을 유지한다.
+- 성공은 엔진 응답에 `revision`, `search_request_id`를 더한다. `applied_state`, `evaluated_at`, `ranking_version`, 그룹별 `matched`/`uncertain`, 각각의 `*_truncated`, 각 장소의 판정/원천 근거를 보존한다. `total: null`은 미집계이며 반환 개수를 전체 개수로 주장하지 않는다.
+- 오타/미지원 필터/모순/범위 위반은 FastAPI 422 `detail`로 거부하며 실행하지 않는다. DB 오류나 15초 실행 제한 초과는 503 `detail.code=filter_search_unavailable`이며 부분 결과를 내보내지 않는다.
+- `revision`은 **클라이언트 요청 세대의 에코**다. 서버 저장 세션이나 CAS가 없으므로 같은 revision 재요청을 409로 거부하지 않는다. 앱은 요청 세대와 UUID를 확인하고, 응답의 필터 전체·반려견 snapshot·그룹 및 개별 판정이 요청과 맞을 때만 편집을 원자적으로 적용한다. LLM의 세션 편집 권한은 이 값을 신뢰해 구현하면 안 된다.
+- nginx의 `/v3/places/`는 기존 Place 서비스로 접두사를 보존하여 전달하고 v2와 같은 IP rate limit을 적용한다. 서버 적용 시 nginx와 Place 서비스 양쪽이 필요하다. DB 마이그레이션은 없다.
+
+예: 주차 불가로 확인된 카페 중 반려동물 전용인 곳만 검색한다. 주차 미상은 ‘불가’에 포함하지 않으며 별도 목록으로 받는다.
+
+```json
+{
+  "revision": 1,
+  "search_request_id": "manual-1",
+  "state": {
+    "contract_version": "place-filter-v1",
+    "candidate_kinds": ["cafe"],
+    "spatial": {"lat": 37.5, "lng": 127, "radius_m": 3000},
+    "hard": {"all": [
+      {"id": "parking", "capability": "operations.parking", "op": "eq", "value": false},
+      {"id": "exclusive", "capability": "pet_access.exclusive", "op": "eq", "value": true}
+    ]},
+    "unknown_policy": "separate",
+    "result_policy": {"limit_per_kind": 50, "uncertain_limit_per_kind": 20}
+  }
+}
+```
+
+HTTP 스키마·검증·실패·공개 경계는 `tests/place/api/test_condition_search.py`, `tests/place/test_boundary.py`에서 검증한다. `tests/place/api/condition_wire.json`은 Python 모델과 실제 판정 함수로 만든 합성 응답이며 앱의 `place_filter_wire.json`과 동일한 계약 fixture다. 두 저장소의 테스트가 동일한 요청과 응답을 읽는다. 현재 API 작업은 SQL을 변경하지 않는다.

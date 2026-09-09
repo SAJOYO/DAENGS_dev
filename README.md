@@ -5,7 +5,7 @@ Next.js 프론트엔드와 FastAPI 백엔드를 PM2 + nginx 로 자체 서버에
 ```
 daengs.~     :80   → nginx 컨테이너 → host.docker.internal:3000 → PM2 (Next, 호스트)
 daengback.~  :8000 → nginx 컨테이너 → backend:8000              (기본 API 경로)
-                                      → place-search:8000         (`/v2/places/`, `/territory/sites/`)
+                                      → place-search:8000         (`/v2/places/`, `/v3/places/`, `/territory/sites/`)
                                       → journey-service:8000      (`/journey`만)
 ```
 
@@ -257,7 +257,7 @@ Copy-Item .env.example .env
 `backend/src/daengs_place`를 실행하는 `place-search`와 별도 PostGIS인 `place-db`는
 기본 `docker compose up -d`에 포함됩니다.
 기동 전에 기존 Alembic 이력이 자동 적용되며, 외부 요청은 nginx의
-`POST /v2/places/search`와 `GET /territory/sites/nearby`로 받습니다. 시설 검색과 중립
+`POST /v2/places/search`, 조건 검색용 `/v3/places/search`·`/v3/places/capabilities`, `GET /territory/sites/nearby`로 받습니다. 조건 검색 계약은 [condition-filters.md](docs/place/condition-filters.md)를 참고합니다. 시설 검색과 중립
 점령지 게임판은 HTTP 계약을 섞지 않습니다. place-db 자체 포트는 호스트에 열지 않습니다.
 
 점령지 140u 게임판 적재와 배포 확인은

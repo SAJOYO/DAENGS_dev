@@ -1,0 +1,382 @@
+{
+  "request": {
+    "revision": 7,
+    "search_request_id": "search-7",
+    "state": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "separate",
+      "result_policy": {
+        "limit_per_kind": 50,
+        "uncertain_limit_per_kind": 20
+      },
+      "dogs": [
+        {
+          "ref": "a",
+          "revision": "v1",
+          "dog_size": null,
+          "dog_weight_kg": 10.0,
+          "dog_age_years": null
+        },
+        {
+          "ref": "unknown",
+          "revision": null,
+          "dog_size": null,
+          "dog_weight_kg": null,
+          "dog_age_years": null
+        }
+      ]
+    }
+  },
+  "response": {
+    "applied_state": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "separate",
+      "result_policy": {
+        "limit_per_kind": 50,
+        "uncertain_limit_per_kind": 20
+      },
+      "dogs": [
+        {
+          "ref": "a",
+          "revision": "v1",
+          "dog_size": null,
+          "dog_weight_kg": 10.0,
+          "dog_age_years": null
+        },
+        {
+          "ref": "unknown",
+          "revision": null,
+          "dog_size": null,
+          "dog_weight_kg": null,
+          "dog_age_years": null
+        }
+      ]
+    },
+    "execution_status": "complete",
+    "evaluated_at": "2026-09-09T00:00:00Z",
+    "ranking_version": "distance-band-500-v1",
+    "groups": [
+      {
+        "kind": "cafe",
+        "matched": [
+          {
+            "place": {
+              "key": {
+                "source": "fixture",
+                "ref": "matched"
+              },
+              "aliases": [],
+              "name": "주차 확인 카페",
+              "lat": 37.5,
+              "lng": 127.0,
+              "distance_m": 5,
+              "match": {
+                "source": {
+                  "source": "fixture",
+                  "ref": "matched"
+                },
+                "kind": "cafe"
+              },
+              "classifications": [
+                {
+                  "source": {
+                    "source": "fixture",
+                    "ref": "matched"
+                  },
+                  "source_category": "cafe",
+                  "kind": "cafe",
+                  "mapping_version": "fixture",
+                  "as_of": null
+                }
+              ],
+              "facts": {
+                "address": null,
+                "phone": null,
+                "homepage": null,
+                "hours_text": null,
+                "closed_days": null,
+                "parking": true,
+                "indoor": null,
+                "outdoor": null,
+                "pet_access": null,
+                "restrictions": null,
+                "medical": null
+              },
+              "field_sources": {},
+              "icon_group": "food"
+            },
+            "evaluations": {
+              "dogs": [
+                {
+                  "ref": "a",
+                  "dog_access": {
+                    "state": "unknown",
+                    "reason": "missing_restriction"
+                  },
+                  "restrictions": {
+                    "state": "unknown",
+                    "reason": "restrictions_unknown",
+                    "chips": [],
+                    "blocking": []
+                  }
+                },
+                {
+                  "ref": "unknown",
+                  "dog_access": {
+                    "state": "unknown",
+                    "reason": "missing_restriction"
+                  },
+                  "restrictions": {
+                    "state": "unknown",
+                    "reason": "restrictions_unknown",
+                    "chips": [],
+                    "blocking": []
+                  }
+                }
+              ]
+            },
+            "filter_evaluation": {
+              "state": "true",
+              "matched_branch_ids": [],
+              "atoms": [
+                {
+                  "id": "parking",
+                  "capability": "operations.parking",
+                  "state": "true",
+                  "expected": true,
+                  "observed": true,
+                  "source": "fixture",
+                  "ref": "matched",
+                  "as_of": null,
+                  "borrowed": false,
+                  "unknown_reason": null,
+                  "parser_version": "place-filter-facts/1"
+                }
+              ]
+            }
+          }
+        ],
+        "uncertain": [
+          {
+            "place": {
+              "key": {
+                "source": "fixture",
+                "ref": "uncertain"
+              },
+              "aliases": [],
+              "name": "주차 미상 카페",
+              "lat": 37.5,
+              "lng": 127.0,
+              "distance_m": 5,
+              "match": {
+                "source": {
+                  "source": "fixture",
+                  "ref": "uncertain"
+                },
+                "kind": "cafe"
+              },
+              "classifications": [
+                {
+                  "source": {
+                    "source": "fixture",
+                    "ref": "uncertain"
+                  },
+                  "source_category": "cafe",
+                  "kind": "cafe",
+                  "mapping_version": "fixture",
+                  "as_of": null
+                }
+              ],
+              "facts": {
+                "address": null,
+                "phone": null,
+                "homepage": null,
+                "hours_text": null,
+                "closed_days": null,
+                "parking": null,
+                "indoor": null,
+                "outdoor": null,
+                "pet_access": null,
+                "restrictions": null,
+                "medical": null
+              },
+              "field_sources": {},
+              "icon_group": "food"
+            },
+            "evaluations": {
+              "dogs": [
+                {
+                  "ref": "a",
+                  "dog_access": {
+                    "state": "unknown",
+                    "reason": "missing_restriction"
+                  },
+                  "restrictions": {
+                    "state": "unknown",
+                    "reason": "restrictions_unknown",
+                    "chips": [],
+                    "blocking": []
+                  }
+                },
+                {
+                  "ref": "unknown",
+                  "dog_access": {
+                    "state": "unknown",
+                    "reason": "missing_restriction"
+                  },
+                  "restrictions": {
+                    "state": "unknown",
+                    "reason": "restrictions_unknown",
+                    "chips": [],
+                    "blocking": []
+                  }
+                }
+              ]
+            },
+            "filter_evaluation": {
+              "state": "unknown",
+              "matched_branch_ids": [],
+              "atoms": [
+                {
+                  "id": "parking",
+                  "capability": "operations.parking",
+                  "state": "unknown",
+                  "expected": true,
+                  "observed": null,
+                  "source": "fixture",
+                  "ref": "uncertain",
+                  "as_of": null,
+                  "borrowed": false,
+                  "unknown_reason": "not_provided",
+                  "parser_version": "place-filter-facts/1"
+                }
+              ]
+            }
+          }
+        ],
+        "matched_truncated": false,
+        "uncertain_truncated": false,
+        "total": null
+      }
+    ],
+    "revision": 7,
+    "search_request_id": "search-7"
+  },
+  "capabilities": {
+    "contract_version": "place-filter-v1",
+    "candidate_kinds": [
+      "hospital",
+      "pharmacy",
+      "pet_shop",
+      "shopping",
+      "grooming",
+      "boarding",
+      "travel",
+      "leisure",
+      "museum",
+      "gallery",
+      "arts_center",
+      "culture",
+      "cafe",
+      "restaurant",
+      "pension",
+      "hotel",
+      "stay",
+      "etc"
+    ],
+    "max_candidate_kinds": 6,
+    "max_branches": 4,
+    "max_atoms_per_group": 8,
+    "max_hard_atoms": 24,
+    "unknown_policies": [
+      "exclude",
+      "separate"
+    ],
+    "capabilities": [
+      {
+        "id": "purpose.kind",
+        "label": "업종",
+        "value_type": "kind_set",
+        "operators": [
+          "in",
+          "not_in"
+        ],
+        "prefer_values": [],
+        "fact_path": "match.kind",
+        "always_unknown_kinds": []
+      },
+      {
+        "id": "operations.parking",
+        "label": "주차 여부",
+        "value_type": "boolean",
+        "operators": [
+          "eq"
+        ],
+        "prefer_values": [
+          true
+        ],
+        "fact_path": "facts.parking",
+        "always_unknown_kinds": [
+          "hospital",
+          "pharmacy"
+        ]
+      },
+      {
+        "id": "pet_access.exclusive",
+        "label": "반려동물 전용 여부",
+        "value_type": "boolean",
+        "operators": [
+          "eq"
+        ],
+        "prefer_values": [],
+        "fact_path": "facts.pet_access.exclusive",
+        "always_unknown_kinds": [
+          "hospital",
+          "pharmacy"
+        ]
+      }
+    ]
+  }
+}

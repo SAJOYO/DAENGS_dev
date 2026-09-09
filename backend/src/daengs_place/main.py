@@ -18,11 +18,18 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_place.api import discovery_internal, facility_internal, places_v2, territory_sites
+from daengs_place.api import (
+    discovery_internal,
+    facility_internal,
+    places_v2,
+    places_v3,
+    territory_sites,
+)
 from daengs_place.core.db import get_session
 
 app = FastAPI(title="DAENGS Place Search", version="0.1.0")
 app.include_router(places_v2.router)
+app.include_router(places_v3.router)
 app.include_router(territory_sites.router)
 app.include_router(discovery_internal.router)
 app.include_router(facility_internal.router)

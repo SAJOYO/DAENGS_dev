@@ -82,8 +82,9 @@ v2 주변 정보 수집은 이미 머지된 Dev #371을 재사용한다. sidecar
 대입하지 않으며 v1 봉투를 v2용으로 재라벨하지 않는다. 핀이 없는 v2 메모도 구분한다.
 [스탬프 준비 단위](diary-stamps.md)에서는 검증된 현재 `known/partial` 봉투를
 `selected_background_ids`에 사용 가능한 입력으로 지정하고 조각 선택은 스탬프 코어가 한다.
-움직임 계산은 아직 하지 않아 `observations=[]`다. 원본 GPS의 출처는 추측하지 않고
-`evidence_origin=unknown`으로 둔다.
+후속 [확정 동선 관측 공급](diary-observations.md)에서 `read_input()`은 저장 chunk와
+확정 분석을 검증해 체류·상대 속도 후보와 원본 출처를 함께 전달한다.
+유효한 분석이 없으면 관측은 비우고 `evidence_origin=unknown`으로 유지한다.
 출발 시 날씨를 모든 장면의 날씨로 확장하지 않는다.
 
 ## 적용과 검증
@@ -104,6 +105,7 @@ App 대상 5개 클래스는 Kotlin 컴파일·Room 스키마 생성과 함께 �
 실제 PostgreSQL의 멱등·CAS 경쟁·계정 삭제 검사는 기존 walk DB CI에
 `tests/test_walk_photo_db.py`로 추가했다. CI 결과는 PR 상태를 따른다.
 
-다음은 **사용자 기록 중심 선택·스탬프 코어** 이식이다.
+후속 **사용자 기록 중심 선택·스탬프 코어**는 [diary-stamps.md](diary-stamps.md),
+실제 동선 후보 연결은 [diary-observations.md](diary-observations.md)에 정리한다.
 입력 어댑터는 준비됐지만 기존 `walk_storyboard.generate()`가 새 일기를 생성하거나
 App 화면을 새 format으로 전환한 단계는 아니다.

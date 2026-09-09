@@ -392,7 +392,7 @@ def test_deleted_photo_history_limit_is_422_and_can_be_corrected(api):
 async def test_input_reader_locks_owner_and_expires_prior_generation_identity_map(monkeypatch):
     session = SimpleNamespace(new=set(), dirty=set(), deleted=set(), expire_all=Mock())
     owned = AsyncMock(return_value=walk())
-    monkeypatch.setattr(adapter.entries, "owned_walk", owned)
+    monkeypatch.setattr(adapter.walks, "get_owned_for_update", owned)
     monkeypatch.setattr(adapter.entries, "entries", AsyncMock(return_value=[entry()]))
     monkeypatch.setattr(adapter.storyboards, "latest_analysis", AsyncMock(return_value=None))
     monkeypatch.setattr(settings, "walk_entry_v2_enabled", False)
@@ -401,7 +401,7 @@ async def test_input_reader_locks_owner_and_expires_prior_generation_identity_ma
     missing_table = AsyncMock(side_effect=AssertionError("optional table access"))
     monkeypatch.setattr(adapter.photos, "current", missing_table)
     result = await adapter.read_input(session, OWNER, WALK)
-    owned.assert_awaited_once_with(session, OWNER, WALK, lock=True)
+    owned.assert_awaited_once_with(session, OWNER, WALK)
     session.expire_all.assert_called_once()
     missing_table.assert_not_called()
     assert result.source.records[0].content.text == "  있는 그대로\n  "
@@ -410,7 +410,7 @@ async def test_input_reader_locks_owner_and_expires_prior_generation_identity_ma
 
 async def test_input_reader_does_not_read_private_sources_for_another_owner(monkeypatch):
     session = SimpleNamespace(new=set(), dirty=set(), deleted=set(), expire_all=Mock())
-    monkeypatch.setattr(adapter.entries, "owned_walk", AsyncMock(return_value=None))
+    monkeypatch.setattr(adapter.walks, "get_owned_for_update", AsyncMock(return_value=None))
     private = AsyncMock(side_effect=AssertionError("private records read"))
     monkeypatch.setattr(adapter.entries, "entries", private)
     with pytest.raises(LookupError):
@@ -497,7 +497,7 @@ async def test_input_reader_queries_the_saved_v2_policy_including_a_pinless_note
     sidecar.payload = None
     envelope["target"]["pin"] = None
     envelope["provenance"]["location_basis"] = "original_location"
-    monkeypatch.setattr(adapter.entries, "owned_walk", AsyncMock(return_value=walk()))
+    monkeypatch.setattr(adapter.walks, "get_owned_for_update", AsyncMock(return_value=walk()))
     monkeypatch.setattr(adapter.entries, "entries", AsyncMock(return_value=[original]))
     monkeypatch.setattr(adapter.pins, "pins", AsyncMock(return_value=[sidecar]))
     current = AsyncMock(return_value=([], {"space.facility": SimpleNamespace(envelope=envelope)}))

@@ -89,6 +89,11 @@ def uncovered(nodes, selected, radius):
     return sorted(gaps, key=lambda g: (-(g["end_m"] - g["start_m"]), g["block"], g["start_m"]))
 
 
+def session_speed_baseline(nodes):
+    speeds = [n["speed"] for n in nodes if n.get("speed", 0) >= 0.5]
+    return statistics.median(speeds) if len(speeds) >= 5 else None
+
+
 def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, started_at):
     selected, deferred, steps = [], [], []
     start = started_at
@@ -105,8 +110,7 @@ def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, star
         if len(history) >= 3
         else None
     )
-    speeds = [n["speed"] for n in nodes if n.get("speed", 0) >= 0.5]
-    baseline = statistics.median(speeds) if len(speeds) >= 5 else None
+    baseline = session_speed_baseline(nodes)
 
     def add(candidate, force=False):
         near = next(

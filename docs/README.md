@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |
 | [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |
 | [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |

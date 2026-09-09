@@ -110,6 +110,26 @@ gcloud compute instances describe daengs --zone=asia-northeast3-c \
   --format='value(serviceAccounts[0].scopes)'
 ```
 
+**`pipeline.sh` 가 이것을 확인하고 경고한다** (`VM_NAME`·`VM_ZONE` 기본값, `SKIP_SCOPE_CHECK=1` 로 끔).
+**고치지는 않는다** — 아래처럼 인스턴스를 멈춰야 해서, "여러 번 돌려도 안전한" 배포 스크립트가
+말없이 할 일이 아니다.
+
+#### 🟢 애초에 안 겪는 법 — **VM 을 만들 때 범위를 준다**
+
+범위는 **만들 때는 자유롭게 정하고, 나중에 바꾸려면 멈춰야 한다.** 그러니 새로 세울 때 주면
+아래 정지·재기동이 통째로 필요 없다:
+
+```bash
+gcloud compute instances create daengs --zone=asia-northeast3-c \
+  --scopes=https://www.googleapis.com/auth/cloud-platform \
+  ...나머지 옵션
+```
+
+⚠ **콘솔에서 만들면 기본 범위가 그대로 박힌다** — 지금 VM 이 그렇게 만들어졌고, 그래서 2026-09-09 에
+운영을 멈춰야 했다. **VM 생성은 이 저장소에 없다**(사람이 콘솔에서 만들었고 `pipeline.sh` 는 그 VM 의
+내부 IP 를 받아 쓸 뿐이다). `docs/deploy/roadmap.md` §8 로 GCP 를 지우고 다시 세우는 날,
+**이 한 줄을 빠뜨리면 같은 일을 반복한다.**
+
 ⚠ **고치려면 인스턴스를 멈춰야 한다** — `set-service-account` 는 `TERMINATED` 상태에서만 먹는다.
 즉 **운영 전체가 몇 분 내려간다.**
 

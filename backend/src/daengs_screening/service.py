@@ -20,6 +20,7 @@ backend 로 옮겨 오면서 nginx 의 upstream 만 바뀌었고, 경로는 안 
 import io
 import json
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -39,6 +40,74 @@ STATIC = Path(__file__).resolve().parent / "static"
 #: 저장소에는 없습니다 — best.pt 가 100MB 리밋을 넘습니다 (D-022).
 RELEASE_DIR = os.environ.get("SCREENING_RELEASE_DIR", "/models/release")
 
+#: 허깅페이스 리포에서 받아 옵니다. **비어 있으면 예전처럼 위 폴더를 봅니다** —
+#: 되돌리기가 환경 변수 하나이고, 토큰 없는 개발 PC 도 그대로 돕니다.
+RELEASE_REPO = os.environ.get("SCREENING_RELEASE_REPO", "").strip()
+
+#: ⚠️ **반드시 고정하세요.** 비우면 `main` 을 따라가므로, 리포에 푸시하는 순간
+#: 운영 모델이 바뀝니다 — PR 도 리뷰도 배포도 없이. `.env` 에 태그를 적어 두면
+#: 모델 교체가 **리뷰되는 행위**가 됩니다.
+RELEASE_REVISION = os.environ.get("SCREENING_RELEASE_REVISION", "").strip() or None
+
+
+def _expect_arms() -> int | None:
+    """기대하는 2단계 팔 수. 비어 있거나 숫자가 아니면 검사하지 않습니다.
+
+    개발 PC 에는 1팔짜리 릴리스가 있을 수 있어 기본값을 두지 않았습니다.
+    **배포에서는 compose 가 3 을 박아 줍니다.**
+    """
+    raw = os.environ.get("SCREENING_EXPECT_STAGE2_ARMS", "").strip()
+    return int(raw) if raw.isdigit() else None
+
+
+#: 다운로드는 한 번만 합니다. `_agent()` 는 `run_in_threadpool` 로 불리므로
+#: **첫 요청 둘이 동시에 오면 두 스레드가 같이 들어옵니다** — `lru_cache` 는
+#: 그것을 막아 주지 않습니다.
+_download_lock = threading.Lock()
+_downloaded: str | None = None
+
+
+def _release_path(download: bool) -> str | None:
+    """가중치 폴더의 **실제** 경로.
+
+    `SCREENING_RELEASE_REPO` 가 없으면 예전 그대로 `RELEASE_DIR` 입니다.
+
+    있으면 허깅페이스에서 받습니다. **`local_dir` 을 주지 않는 것이 중요합니다** —
+    `/models/release` 는 compose 가 `:ro` 로 물려 주므로 거기에 쓰면 실패합니다.
+    `snapshot_download` 는 이미 쓰기 가능하게 물려 있는 `hf-cache` 볼륨
+    (`/root/.cache/huggingface`)에 받고 **스냅샷 폴더 경로**를 돌려주므로,
+    compose 를 안 고쳐도 됩니다.
+
+    ⚠️ *"폴더가 비어 있으면 받는다"* 로 하지 마세요. 반쯤 찬 폴더(받다 끊긴 것,
+       손으로 복사해 둔 옛 릴리스)는 *"안 비었네"* 로 통과하고 **팔이 모자란 채
+       200 을 돌려줍니다.** 그래서 늘 부릅니다 — 최신이면 HEAD 한 번입니다.
+
+    Args:
+        download: False 면 **이미 받아 둔 것만** 봅니다. `/healthz` 가 1.2GB 를
+            끌어오면 안 되기 때문입니다 (헬스체크는 무거우면 안 됩니다).
+    """
+    global _downloaded
+
+    if not RELEASE_REPO:
+        return RELEASE_DIR
+    if _downloaded:
+        return _downloaded
+
+    from huggingface_hub import snapshot_download
+
+    if not download:
+        try:
+            return snapshot_download(repo_id=RELEASE_REPO, revision=RELEASE_REVISION,
+                                     local_files_only=True)
+        except Exception:  # noqa: BLE001 — 헬스체크는 **어떤 이유로도** 죽으면 안 됩니다
+            return None            # 아직 안 받았습니다 — 헬스체크는 그렇게 답합니다
+
+    with _download_lock:
+        if _downloaded is None:
+            _downloaded = snapshot_download(repo_id=RELEASE_REPO,
+                                            revision=RELEASE_REVISION)
+    return _downloaded
+
 router = APIRouter(prefix="/screen", tags=["screening"])
 
 
@@ -55,7 +124,23 @@ def _agent():
     """
     from daengs_screening.agent import ScreeningAgent
 
-    return ScreeningAgent.from_release(RELEASE_DIR)
+    path = _release_path(download=True)
+
+    # ★ 팔 수가 안 맞으면 **여기서 죽습니다.** 2026-09-07 에 앙상블이 조용히
+    #   1팔로 줄어든 적이 있는데, 응답은 200 이었고 에러도 경고도 없었습니다 —
+    #   유일한 단서가 **성공 로그의 부재**였습니다. 그때 커버리지가 67.9% 에서
+    #   58.4% 로 떨어졌고 아무도 몰랐습니다.
+    want = _expect_arms()
+    if want is not None:
+        arms = _arms_on_disk()
+        if len(arms) != want:
+            raise RuntimeError(
+                f"2단계 팔이 {len(arms)}개입니다 — {want}개를 기대했습니다 "
+                f"(SCREENING_EXPECT_STAGE2_ARMS). 릴리스: {path} / "
+                f"있는 것: {arms or '(없음)'}"
+            )
+
+    return ScreeningAgent.from_release(path)
 
 
 def _fail(exc: Exception) -> HTTPException:
@@ -63,7 +148,8 @@ def _fail(exc: Exception) -> HTTPException:
     return HTTPException(
         503,
         "스크리닝 모델을 불러오지 못했습니다. 서버에 가중치가 놓여 있는지 "
-        f"확인하세요 (SCREENING_RELEASE_DIR={RELEASE_DIR}). 원인: {exc}",
+        f"확인하세요 (SCREENING_RELEASE_REPO={RELEASE_REPO or '(없음)'} / "
+        f"SCREENING_RELEASE_DIR={RELEASE_DIR}). 원인: {exc}",
     )
 
 
@@ -73,7 +159,10 @@ def _arms_on_disk() -> list[str]:
     `ScreeningAgent.from_release()` 가 `stage2_*` 폴더를 전부 훑어 앙상블을
     구성하므로, 폴더만 세어도 몇 팔로 뜰지 알 수 있습니다.
     """
-    ck = Path(RELEASE_DIR) / "checkpoints"
+    path = _release_path(download=False)
+    if path is None:
+        return []                  # 리포는 정해졌는데 아직 안 받았습니다
+    ck = Path(path) / "checkpoints"
     if not ck.is_dir():
         return []
     return sorted(d.name for d in ck.iterdir()
@@ -104,7 +193,10 @@ def healthz():
     loaded = _agent.cache_info().currsize > 0
     avail = _arms_on_disk()
     body = {"ok": True, "mock": False, "contract_version": CONTRACT_VERSION,
-            "loaded": loaded, "release_dir": RELEASE_DIR,
+            "loaded": loaded,
+            "release_dir": _release_path(download=False) or RELEASE_DIR,
+            "release_repo": RELEASE_REPO or None,
+            "release_revision": RELEASE_REVISION,
             "stage2_arms_available": len(avail),
             "stage2_experiments_available": avail}
     if loaded:

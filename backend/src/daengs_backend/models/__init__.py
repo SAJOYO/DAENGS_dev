@@ -175,4 +175,5 @@ from daengs_backend.models.walk_entry_context import (  # noqa: F401
     WalkEntryContextJob,
 )
 from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin  # noqa: F401
+from daengs_backend.models.walk_photo import WalkPhotoManifest  # noqa: F401
 from daengs_backend.models.walk_storyboard import WalkStoryboard  # noqa: F401

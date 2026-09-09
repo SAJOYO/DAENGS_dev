@@ -79,6 +79,7 @@ class Anchor(DiaryContract):
     time_basis: Literal["recorded_at", "photo_capture", "session_fallback", "route_observation"]
     point: Point | None
     location_at: Instant | None
+    accuracy_m: float | None = Field(default=None, ge=0)
     position_state: Literal["legacy", "provisional", "resolved", "unlocated"]
     method: Literal["observed", "estimated", "last_known", "none"]
     source_fixes: tuple[FixRef, ...] = Field(default=(), max_length=256)
@@ -136,11 +137,13 @@ class UserRecord(DiaryContract):
     deleted: bool = False
     content: RecordContent | None
     anchor: Anchor | None
+    # Original v2 resolution metadata stays private; no loss of uncertainty/policy history.
+    pin_payload: dict[str, JsonValue] | None = None
 
     @model_validator(mode="after")
     def original(self):
         if self.deleted:
-            if self.content is not None or self.anchor is not None:
+            if self.content is not None or self.anchor is not None or self.pin_payload is not None:
                 raise ValueError("tombstone carries no live record or position")
         else:
             if self.content is None or self.anchor is None:
@@ -265,6 +268,11 @@ class SavedBackground(DiaryContract):
         return self
 
 
+class PhotoManifestRef(DiaryContract):
+    publisher_id: Identifier
+    revision: int = Field(ge=1)
+
+
 class DiaryInput(DiaryContract):
     format: Literal["walk-diary-input-v1"] = "walk-diary-input-v1"
     owner_id: Identifier
@@ -277,6 +285,7 @@ class DiaryInput(DiaryContract):
     route: RouteVersion
     records: tuple[UserRecord, ...] = Field(max_length=400)
     photos_status: Literal["complete", "not_available", "pending"]
+    photo_manifest: PhotoManifestRef | None = None
     observations: tuple[MovementObservation, ...] = Field(default=(), max_length=200)
     backgrounds: tuple[SavedBackground, ...] = Field(default=(), max_length=2000)
     selected_background_ids: tuple[Identifier, ...] = ()
@@ -285,6 +294,8 @@ class DiaryInput(DiaryContract):
 
     @model_validator(mode="after")
     def source_scope(self):
+        if self.photo_manifest is not None and self.photos_status != "complete":
+            raise ValueError("a published photo manifest requires a complete server snapshot")
         if self.ended_at < self.started_at or len(set(self.pet_ids)) != len(self.pet_ids):
             raise ValueError("invalid session scope")
         records = {r.ref.identity: r for r in self.records}

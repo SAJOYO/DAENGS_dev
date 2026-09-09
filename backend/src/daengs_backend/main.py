@@ -38,6 +38,7 @@ from daengs_backend.routers import (
     training,
     walk_entry,
     walk_entry_v2,
+    walk_photo,
     walk_spatial_diary,
     walk_storyboard,
 )
@@ -197,6 +198,7 @@ app.include_router(walk_entry.router)
 app.include_router(walk_entry_v2.capabilities_router)
 app.include_router(walk_entry_v2.router)
 app.include_router(walk_storyboard.router)
+app.include_router(walk_photo.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 app.include_router(territory_claim.router)

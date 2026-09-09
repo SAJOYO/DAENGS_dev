@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
     walk_entry_v2_enabled: bool = False
     walk_entry_v2_write_enabled: bool = False
+    # Enable only after 26_walk_photo_manifests.sql. Capability stays off on older DBs.
+    walk_photo_metadata_enabled: bool = False
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은

@@ -209,6 +209,14 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-09', 'walk_photo_manifests', WALKS, 'walk_photo_manifests', [
+            'ALTER TABLE walk_photo_manifests DROP COLUMN publisher_id',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_pkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_walk_id_fkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_revision_positive',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_hash_valid',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_records_bounded',
+        ]),
         ('2026-09-09', 'walk_entry_pins',
          WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
          'walk_entry_pins', [

@@ -42,10 +42,12 @@ class CareEvent(Base):
         Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
 
-    #: 소유자. `pets.app_user_id` 와 같은 값이고 **서비스가 강아지에서 읽어 채웁니다.**
-    #: 조회·삭제가 강아지를 거치지 않고도 "내 것" 을 거르려고 따로 둡니다 (`walks` 와 같은 결).
-    app_user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("app_users.id", ondelete="CASCADE")
+    #: **챙긴 사람.** 소유자가 아닙니다 — 이 기록의 주인은 강아지입니다 (docs/co-care.md).
+    #:
+    #: `None` 은 **탈퇴한 보호자**입니다. 화면에 이름을 낼지는 "지금도 구성원인가" 가 정하고,
+    #: 그 규칙은 `services/pet_member.py` 의 `actor_label` 하나입니다.
+    actor_app_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_users.id", ondelete="SET NULL")
     )
     #: 강아지를 지우면 기록도 같이 지워집니다. 배웅은 행을 안 지우므로 배웅한 아이의 기록은 남습니다.
     pet_id: Mapped[uuid.UUID] = mapped_column(

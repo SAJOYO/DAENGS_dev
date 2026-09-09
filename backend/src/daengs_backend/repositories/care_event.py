@@ -32,7 +32,7 @@ async def get_owned(
 ) -> CareEvent | None:
     """**내 것일 때만** 돌려줍니다. 소유자 조건을 여기 묶는 이유는 `pet_repo.get_owned` 와 같습니다."""
     stmt = select(CareEvent).where(
-        CareEvent.id == event_id, CareEvent.app_user_id == app_user_id
+        CareEvent.id == event_id, CareEvent.actor_app_user_id == app_user_id
     )
     return await session.scalar(stmt)
 
@@ -58,7 +58,7 @@ async def list_between(
     stmt = (
         select(CareEvent)
         .where(
-            CareEvent.app_user_id == app_user_id,
+            CareEvent.actor_app_user_id == app_user_id,
             CareEvent.pet_id == pet_id,
             CareEvent.occurred_at >= start,
             CareEvent.occurred_at < end,
@@ -79,7 +79,7 @@ async def count_by_kind(
     stmt = (
         select(CareEvent.kind, func.count())
         .where(
-            CareEvent.app_user_id == app_user_id,
+            CareEvent.actor_app_user_id == app_user_id,
             CareEvent.pet_id == pet_id,
             CareEvent.occurred_at >= start,
             CareEvent.occurred_at < end,

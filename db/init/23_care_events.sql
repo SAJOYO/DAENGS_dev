@@ -21,10 +21,11 @@
 CREATE TABLE IF NOT EXISTS care_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- 소유자. **`pets.app_user_id` 와 같은 값**이고 서비스가 강아지에서 읽어 채운다.
-    -- 따로 두는 이유는 조회·삭제가 강아지를 거치지 않고도 "내 것" 을 거르기 위해서다
-    -- (`walks.app_user_id` 와 같은 결). 계정이 지워지면 같이 지워진다.
-    app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    -- **챙긴 사람.** 소유자가 아니다 — 이 기록의 주인은 강아지다 (docs/co-care.md).
+    -- 공동 돌봄에서는 대표든 돌보미든 기록할 수 있어 `pets.app_user_id` 와 같은 값이라는
+    -- 보장이 없다. `app_users` 는 탈퇴해도 안 지워지므로(위 함정과 같음) NULL 을 허용하고
+    -- FK 도 SET NULL 이다 — 챙긴 사람이 떠나도 "그날 밥을 먹은 사실" 은 강아지에 남는다.
+    actor_app_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
 
     -- 어느 아이의 기록인가. 강아지를 지우면 기록도 같이 지운다 — 배웅(`farewell_on`)은
     -- 행을 안 지우므로 배웅한 아이의 기록은 남는다. 그것이 의도다.

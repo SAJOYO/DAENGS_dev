@@ -62,6 +62,8 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
+from daengs_backend.models.pet_invite import PetInvite
+from daengs_backend.models.pet_member import PetMember
 from daengs_backend.models.refresh_token import RefreshToken
 from daengs_backend.models.request_metrics import (
     PRINCIPAL_KINDS,
@@ -151,6 +153,8 @@ __all__ = [
     "DogCard",
     "GaitRecord",
     "Pet",
+    "PetInvite",
+    "PetMember",
     "RefreshToken",
     "RequestMetric",
     "ScreeningRecord",

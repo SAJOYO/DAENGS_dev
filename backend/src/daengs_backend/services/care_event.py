@@ -88,7 +88,7 @@ async def record(
         return existing, False
 
     event = CareEvent(
-        app_user_id=app_user_id,
+        actor_app_user_id=app_user_id,
         pet_id=pet.id,
         kind=body.kind,
         occurred_at=body.occurred_at,

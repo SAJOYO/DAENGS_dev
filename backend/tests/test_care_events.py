@@ -30,7 +30,7 @@ SEOUL = ZoneInfo("Asia/Seoul")
 
 @dataclass
 class FakeCareEvent:
-    app_user_id: uuid.UUID
+    actor_app_user_id: uuid.UUID
     pet_id: uuid.UUID
     kind: str
     occurred_at: datetime
@@ -63,7 +63,7 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     def add(session, event):
         # 진짜 모델은 CareEvent 지만 대역이 같은 칸을 갖고 있어 그대로 담습니다.
         fake = FakeCareEvent(
-            app_user_id=event.app_user_id, pet_id=event.pet_id, kind=event.kind,
+            actor_app_user_id=event.actor_app_user_id, pet_id=event.pet_id, kind=event.kind,
             occurred_at=event.occurred_at, note=event.note, client_event_id=event.client_event_id,
         )
         # 서비스가 commit 뒤 `event` 를 응답에 씁니다 — 진짜는 flush 가 id·created_at 을 채웁니다.
@@ -74,7 +74,8 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
 
     async def get_owned(session, app_user_id, event_id):
         return next(
-            (e for e in cs.events if e.id == event_id and e.app_user_id == app_user_id), None
+            (e for e in cs.events if e.id == event_id and e.actor_app_user_id == app_user_id),
+            None,
         )
 
     async def get_by_client_event(session, pet_id, client_event_id):
@@ -86,7 +87,9 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     def _between(app_user_id, pet_id, start, end):
         return [
             e for e in cs.events
-            if e.app_user_id == app_user_id and e.pet_id == pet_id and start <= e.occurred_at < end
+            if e.actor_app_user_id == app_user_id
+            and e.pet_id == pet_id
+            and start <= e.occurred_at < end
         ]
 
     async def list_between(session, app_user_id, pet_id, start, end):
@@ -148,7 +151,7 @@ def _body(pet_id: uuid.UUID, **kw: object) -> dict:
 
 def _event(app_user_id: uuid.UUID, pet_id: uuid.UUID, kind: str, at: datetime) -> FakeCareEvent:
     return FakeCareEvent(
-        app_user_id=app_user_id, pet_id=pet_id, kind=kind, occurred_at=at,
+        actor_app_user_id=app_user_id, pet_id=pet_id, kind=kind, occurred_at=at,
         note=None, client_event_id=uuid.uuid4(),
     )
 

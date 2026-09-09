@@ -142,6 +142,17 @@ uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
 uv run pytest -q tests/walk/photos/test_walk_photo_db.py tests/walk/diary/test_diary_generation_db.py
 ```
 
+#### 행동 기록으로 산책 비교
+
+`test_behavior_comparison.py`는 현재 기록으로 A/B를 선택하는 집계·HTTP 계약과
+PostgreSQL SQL 구성을 검증한다. 저장소는 대역을 사용하며 실제 DB 접속이나 별도 DB 준비는 없다.
+공통 공간 로더 변경은 기존 `test_spatial_diary_query.py`와 함께 확인한다.
+`walk/support/behavior_comparison.py`는 같은 사례를 테스트와 APP용 응답 직렬화에 제공한다.
+
+```powershell
+uv run pytest -q tests/walk/diary/test_behavior_comparison.py tests/walk/diary/test_spatial_diary_query.py
+```
+
 ### 9. 전봇대 점령
 
 - 근거: PR #178, #193, #197, #249, #260, #281, #335, #360.

@@ -60,6 +60,13 @@ class SpatialDiaryViewResult:
     receipt: SpatialDiaryViewReceipt
 
 
+@dataclass(frozen=True)
+class SpatialDiarySources:
+    selected: tuple[CapsuleIndex, ...]
+    sheets: tuple[Cellophane, ...]
+    paint_spec: PaintSpec
+
+
 async def query_view(
     session: AsyncSession,
     app_user_id: uuid.UUID,
@@ -69,15 +76,37 @@ async def query_view(
 ) -> SpatialDiaryViewResult:
     """한 read-only repeatable-read 세션 안에서 View 전체를 조립합니다."""
 
+    sources = await load_view_sources(session, app_user_id, spec)
+    selected, sheets, paint_spec = sources.selected, sources.sheets, sources.paint_spec
     selector = spec.walk_selector
-    if await pet_repo.get_owned(session, app_user_id, selector.pet_id) is None:
-        raise SpatialDiaryPetNotFoundError
-
     total_capsules = await diary_repo.count_capsules_for_pet(
         session,
         app_user_id,
         selector.pet_id,
     )
+    field = aggregate_spatial_field(sheets, spec.field_metric, paint_spec=paint_spec)
+    validate_result_size(field)
+    known = sum(context_is_known(item.context, selector) for item in selected)
+    receipt = build_view_receipt(
+        spec,
+        field,
+        view_as_of=view_as_of or datetime.now(UTC),
+        total_capsules=total_capsules,
+        context_known_count=known,
+    )
+    return SpatialDiaryViewResult(spec=spec, field=field, receipt=receipt)
+
+
+async def load_view_sources(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    spec: SpatialDiaryViewSpec,
+) -> SpatialDiarySources:
+    """소유권·선택·세대·용량 검증을 공유하되 분모 해석은 호출자가 정합니다."""
+    selector = spec.walk_selector
+    if await pet_repo.get_owned(session, app_user_id, selector.pet_id) is None:
+        raise SpatialDiaryPetNotFoundError
+
     stored_index = await diary_repo.list_capsule_index(
         session,
         app_user_id,
@@ -123,22 +152,15 @@ async def query_view(
         )
 
     sheets = await _load_selected_sheets(session, selected)
-    field = aggregate_spatial_field(sheets, spec.field_metric, paint_spec=paint_spec)
+    return SpatialDiarySources(selected=selected, sheets=sheets, paint_spec=paint_spec)
+
+
+def validate_result_size(field: SpatialField) -> None:
     if len(field.values) > MAX_RESULT_CELLS:
         raise SpatialDiaryViewTooLargeError(
             "spatial_diary_result_cell_limit",
             f"결과 Cell은 최대 {MAX_RESULT_CELLS}개입니다. 필터를 좁혀 주세요.",
         )
-
-    known = sum(context_is_known(item.context, selector) for item in selected)
-    receipt = build_view_receipt(
-        spec,
-        field,
-        view_as_of=view_as_of or datetime.now(UTC),
-        total_capsules=total_capsules,
-        context_known_count=known,
-    )
-    return SpatialDiaryViewResult(spec=spec, field=field, receipt=receipt)
 
 
 def _decode_index(row: diary_repo.SpatialDiaryIndexRow) -> CapsuleIndex:

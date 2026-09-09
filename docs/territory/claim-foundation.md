@@ -51,10 +51,10 @@ enum 이름은 양쪽에서 동일하다. ID는 1단계 도메인에서 문자�
 
 ```text
 cd backend
-uv run pytest tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py -q
-uv run ruff check src/daengs_backend/services/territory_claim.py tests/test_territory_claim.py
+uv run pytest tests/territory/claims/test_territory_claim.py tests/territory/visits/test_territory_attempts.py tests/territory/visits/test_territory_vision.py -q
+uv run ruff check src/daengs_backend/services/territory_claim.py tests/territory/claims/test_territory_claim.py
 ```
 
-`tests/fixtures/territory-claim-scenarios.tsv`는 APP의 테스트 리소스와 동일한 20단계 예시다.
+`tests/territory/fixtures/territory-claim-scenarios.tsv`는 APP의 테스트 리소스와 동일한 20단계 예시다.
 양쪽 테스트가 상태와 동일 시도 재사용을 검증한다. fixture 변경 시 두 PR에서 같이 갱신한다.
 DB·API·실제 VLM을 연결한 온라인 점유는 아직 완료 범위가 아니다.

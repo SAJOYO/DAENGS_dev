@@ -118,10 +118,10 @@ PK·UNIQUE·CHECK·FK(삭제 동작 포함), 유효한 인덱스를 검사하고
 
 ```powershell
 cd backend
-uv run pytest -q tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py
+uv run pytest -q tests/territory/ownership/test_territory_ownership_api.py tests/territory/claims/test_territory_claim.py tests/territory/visits/test_territory_attempts.py tests/territory/visits/test_territory_vision.py
 # 팀 DB가 아닌 별도 로컬 테스트 DB에서만 실행. 앱 .env로 fallback하지 않는다.
 $env:TERRITORY_TEST_DATABASE_URL='postgresql+asyncpg://postgres@127.0.0.1:55439/claims_test'
-uv run pytest -q tests/test_territory_ownership_db.py tests/test_main_stays_light.py
+uv run pytest -q tests/territory/ownership/test_territory_ownership_db.py tests/test_main_stays_light.py
 ```
 
 DB 테스트는 실제 init SQL 및 마이그레이션을 실행하고 매 테스트마다 임시 schema를 제거한다.

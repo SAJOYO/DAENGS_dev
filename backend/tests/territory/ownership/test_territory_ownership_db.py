@@ -5,207 +5,35 @@ No fallback to app settings or the team's shared DB. Production schema files are
 """
 
 import asyncio
-import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from pathlib import Path
 
 import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, select, text
-from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy import delete, func, select
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, current_app_user
 from daengs_backend.main import app
-from daengs_backend.models import AppUser, Pet, TerritoryAttempt
+from daengs_backend.models import AppUser, TerritoryAttempt
 from daengs_backend.models.territory_claim import TerritoryClaim, TerritoryClaimPhoto
-from daengs_backend.schemas.territory_claim import MarkRequest, SessionPhase, SessionStart
-from daengs_backend.services import territory as visits
+from daengs_backend.schemas.territory_claim import SessionPhase, SessionStart
 from daengs_backend.services import territory_ownership as svc
 from daengs_backend.services.territory_site_lookup import (
-    TerritorySiteSnapshot,
     get_territory_site_lookup,
 )
-
-ROOT = Path(__file__).resolve().parents[2]
-SITE = "territory-site:hex-v1:140:324:777"
-SITE2 = "territory-site:hex-v1:140:325:777"
-
-
-class Lookup:
-    async def find_near_capture(self, *, site_id, **kwargs):
-        if site_id not in {SITE, SITE2}:
-            return None
-        return TerritorySiteSnapshot(site_id, Decimal("37.5000000"), Decimal("127.0000000"))
-
-
-@pytest.fixture
-async def database():
-    address = os.environ.get("TERRITORY_TEST_DATABASE_URL")
-    if not address:
-        pytest.skip("disposable local PostgreSQL not configured")
-    url = make_url(address)
-    if url.host not in {"127.0.0.1", "localhost"} or url.database != "claims_test":
-        pytest.fail("only localhost/claims_test is allowed")
-    admin = create_async_engine(url, poolclass=NullPool)
-    schema = "territory_test_" + uuid.uuid4().hex
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url,
-        poolclass=NullPool,
-        connect_args={"server_settings": {"search_path": schema, "lock_timeout": "5000"}},
-    )
-    try:
-        async with engine.begin() as connection:
-            raw = (await connection.get_raw_connection()).driver_connection
-            trigger = (ROOT / "db/init/02_trigger.sql").read_text(encoding="utf-8")
-            await raw.execute(trigger.split("DROP TRIGGER")[0])
-            for file in ("03_auth.sql", "05_pets.sql", "08_territory_visits.sql"):
-                await raw.execute((ROOT / "db/init" / file).read_text(encoding="utf-8"))
-            migration = (ROOT / "db/migrations/2026-09-05_territory_claims.sql").read_text(
-                encoding="utf-8"
-            )
-            await raw.execute(migration)
-            await raw.execute(migration)  # Existing-volume replay.
-            await raw.execute(
-                (ROOT / "db/init/20_territory_claims.sql").read_text(encoding="utf-8")
-            )
-            await raw.execute(
-                (ROOT / "db/migrations/verify_2026-09-05_territory_claims.sql").read_text(
-                    encoding="utf-8"
-                )
-            )
-            certified = (ROOT / "db/migrations/2026-09-08_certified_territory.sql").read_text(
-                encoding="utf-8"
-            )
-            await raw.execute(certified)
-            await raw.execute(certified)
-            await raw.execute(
-                (ROOT / "db/init/24_certified_territory.sql").read_text(encoding="utf-8")
-            )
-            await raw.execute(
-                (ROOT / "db/migrations/verify_2026-09-08_certified_territory.sql").read_text(
-                    encoding="utf-8"
-                )
-            )
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        yield factory
-    finally:
-        await engine.dispose()
-        async with admin.begin() as connection:
-            # The name is generated above, never read from configuration or user input.
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()
-
-
-@pytest.fixture
-async def actors(database):
-    owners = [uuid.uuid4(), uuid.uuid4()]
-    pets = [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()]
-    async with database() as db:
-        db.add_all([AppUser(id=owner, kakao_id=index + 1) for index, owner in enumerate(owners)])
-        await db.flush()
-        db.add_all(
-            [
-                Pet(
-                    id=pet,
-                    app_user_id=owners[0 if index < 2 else 1],
-                    name=f"dog{index}",
-                    breed="mixed",
-                )
-                for index, pet in enumerate(pets)
-            ]
-        )
-        await db.commit()
-    return owners, pets
-
-
-async def begin(factory, owner, pets, client_id=None):
-    client_id = client_id or uuid.uuid4()
-    body = SessionStart(started_at=datetime.now(UTC) - timedelta(minutes=1), pet_ids=pets)
-    async with factory() as db:
-        await svc.start_session(db, owner, client_id, body)
-    return client_id
-
-
-def mark_body(client_id, pet, **overrides):
-    return MarkRequest(
-        client_session_id=client_id,
-        claiming_pet_id=pet,
-        site_id=overrides.pop("site_id", SITE),
-        observed_at=overrides.pop("observed_at", datetime.now(UTC)),
-        lat=overrides.pop("lat", "37.5000000"),
-        lng="127.0000000",
-        accuracy_m=overrides.pop("accuracy_m", 3),
-        **overrides,
-    )
-
-
-async def mark(factory, owner, client_id, pet, **overrides):
-    async with factory() as db:
-        return await svc.mark(db, owner, mark_body(client_id, pet, **overrides), Lookup())
-
-
-async def photo(
-    factory, owner, client_id, claim, *, captured_at=None, site_id=SITE, capture_id=None
-):
-    photo_id = uuid.uuid4()
-    now = datetime.now(UTC)
-    async with factory() as db:
-        db.add(
-            TerritoryAttempt(
-                id=photo_id,
-                app_user_id=owner,
-                client_capture_id=capture_id or uuid.uuid4(),
-                client_session_id=client_id,
-                site_id=site_id,
-                captured_at=captured_at or now,
-                capture_lat=Decimal("37.5000000"),
-                capture_lng=Decimal("127.0000000"),
-                site_lat=Decimal("37.5000000"),
-                site_lng=Decimal("127.0000000"),
-                accuracy_m=3,
-                is_mock=False,
-                distance_m=0,
-                status="PENDING_UPLOAD",
-                photo_storage_key=f"test/{photo_id}",
-                photo_content_type="image/jpeg",
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        await db.commit()
-    async with factory() as db:
-        await svc.bind_photo(db, owner, claim.claim_id, photo_id)
-    async with factory() as db:
-        row = await db.get(TerritoryAttempt, photo_id)
-        row.status = "VISION_PENDING"
-        row.photo_object_generation = "test-generation"
-        row.photo_size_bytes = 4
-        await db.commit()
-    return photo_id
-
-
-async def decide(factory, photo_id, monkeypatch, decision="verified"):
-    class Storage:
-        def redact(self, *args, **kwargs):
-            return "redacted"
-
-    monkeypatch.setattr(visits, "get_storage", lambda: Storage())
-    async with factory() as db:
-        return await visits.record_vision_decision(
-            db,
-            photo_id,
-            decision=decision,
-            model="test",
-            model_version="1",
-        )
+from tests.territory.support.ownership import (
+    SITE,
+    SITE2,
+    Lookup,
+    begin,
+    decide,
+    mark,
+    mark_body,
+    photo,
+)
+from tests.territory.support.paths import REPO as ROOT
 
 
 async def test_two_accounts_mark_certify_takeover_and_new_session(database, actors, monkeypatch):

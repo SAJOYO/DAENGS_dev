@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,7 +28,7 @@ CAPTURE = uuid.uuid4()
 SESSION = uuid.uuid4()
 SITE_ID = "territory-site:hex-v1:140:324:777"
 NOW = datetime.datetime(2026, 9, 3, 3, 0, tzinfo=datetime.UTC)
-REPO = Path(__file__).resolve().parents[2]
+from tests.territory.support.paths import REPO
 
 
 @pytest.fixture(autouse=True)

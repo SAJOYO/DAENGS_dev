@@ -7,7 +7,8 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
 이 문서는 **실행 범위 목록이며 모든 기능의 통과 보고서가 아니다.** 1단계 조사 시점의 backend
 전체에는 `test_*.py` 272개, 루트 직속 184개가 있었다. 2단계에서 Walk 파일 37개를 기능별로
 옮기고 공용 도구를 분리했다. 테스트 파일 수는 272개 그대로이며 루트 직속은 172개다.
-이번 단계의 로컬 검증 결과는 아래 Walk 정리 항목에 기록한다. DB 준비·CI 실행은 하지 않았다.
+이 수치는 최초 Walk 정리 시점의 기록이다. 이후 Walk·Territory·Activity의 로컬 검증 결과는
+아래 각 정리 항목에 기록한다. 원격 CI를 실행한 결과는 아니다.
 
 ## 실행 원칙
 
@@ -151,14 +152,14 @@ uv run pytest -q tests/walk/photos/test_walk_photo_db.py tests/walk/diary/test_d
   응답 품질은 vision 대역 테스트 통과만으로 확인되지 않는다.
 
 ```powershell
-uv run pytest -q tests/test_territory_attempts.py tests/test_territory_vision.py tests/test_territory_claim.py tests/test_territory_ownership_api.py tests/test_territory_owner_summary.py tests/test_activity.py
-uv run pytest -q tests/test_territory_ownership_db.py tests/test_territory_certified_db.py tests/test_activity_db.py
+uv run pytest -q tests/territory/visits/test_territory_attempts.py tests/territory/visits/test_territory_vision.py tests/territory/claims/test_territory_claim.py tests/territory/ownership/test_territory_ownership_api.py tests/territory/ownership/test_territory_owner_summary.py tests/activity/test_activity.py
+uv run pytest -q tests/territory/ownership/test_territory_ownership_db.py tests/territory/certification/test_territory_certified_db.py tests/activity/test_activity_db.py
 uv run pytest -q tests/place/api/test_territory_sites.py tests/place/ingest/test_territory_sites.py
 ```
 
 ## 실제 DB 검증 조건
 
-아래는 향후 실행 조건이다. 이번 문서 작업에서 DB를 생성하거나 마이그레이션하지 않았다.
+아래는 실제 DB 테스트의 실행 조건이다. 로컬 검증에는 실행 후 제거하는 임시 DB를 사용한다.
 공유 개발 DB 주소를 테스트 환경 변수에 복사하지 않는다. 각 fixture가 SQL/schema 생성·삭제를 수행한다.
 
 | 환경 변수 | 대상 | 현재 코드의 허용 조건 / 준비 |
@@ -226,10 +227,48 @@ Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 �
 실행했다. migration 이름·검증 짝 검사는 통과했지만 Windows 바이트 검사는 이 PC의 PowerShell
 스크립트 실행 정책에 막혀 미검증이다. 실행 정책은 변경하지 않았다.
 
+## Territory·Activity 정리
+
+`origin/dev`의 `2fe6afc`에서 시작해 점령 테스트 7개와 활동 테스트 2개를 이동했다.
+Place의 중립 점령지 조회·적재 테스트는 기존 Place 위치에 유지한다.
+
+| 위치 | 담당 범위 |
+| --- | --- |
+| `territory/visits/` | 방문·사진 업로드·비동기 판정 |
+| `territory/claims/` | 점령 상태 전이·권한과 APP 공유 시나리오 |
+| `territory/ownership/` | 소유권 API·주인 요약 및 실제 SQL·동시성·rollback |
+| `territory/certification/` | 사진 인증·보호 시간·재시도·점수의 DB 계약 |
+| `territory/support/` | 임시 claims schema·사용자 fixture, 점령/사진/판정 생성 도구, SQL 경로 |
+| `territory/fixtures/` | 기존 APP 공유 TSV 시나리오. 내용 유지 |
+| `activity/` | 활동 측정·산책 연결·점수·worker·공개/개인 조회 |
+| `activity/support/` | 활동 schema 확장·시계 fixture와 시즌·시간 지정 점령 생성 도구 |
+
+기존 점령 DB 테스트 → 활동 DB 테스트 → 인증 점령 DB 테스트의 import 관계를 제거했다.
+각 `conftest.py`는 필요한 fixture만 등록한다. 소유권 검증은 claims schema를,
+활동·인증 검증은 여기에 활동 schema를 추가한 구성을 사용한다. fixture는 요청받을 때만
+DB를 열며, 기존 localhost/`claims_test` 제한과 UUID schema 생성·제거 동작을 유지한다.
+변경 전후 테스트 함수 84개와 helper 본문을 대조했고, 경로 변경과 매 수집마다 생성되는
+UUID를 정규화한 뒤 파라미터 케이스 123개가 일치함을 확인했다.
+
+```powershell
+# 점령·활동 공용 도구/배치 변경 범위. 폐기 가능한 로컬 claims_test DB를 지정한 뒤 실행한다.
+uv run --no-sync pytest -q -rs tests/territory tests/activity
+```
+
+기존 territory CI는 두 디렉터리를 실행해 주인 요약 API도 포함한다. 테스트·support·TSV 변경을
+함께 감지하며, pytest 성공 뒤 JUnit 결과가 비었거나 skip이 있으면 실패한다.
+제품 코드·스키마·의존성은 변경하지 않고 별도 DB 설치 도구나 실행기를 추가하지 않는다.
+
+로컬 PostgreSQL 17에서 위 명령으로 **123 passed / 0 skipped**를 확인했다.
+각 DB fixture가 운영 초기화·마이그레이션·검증 SQL을 실행했고, 실행 후 테스트 schema가
+0개임을 확인한 뒤 임시 컨테이너와 DB를 제거했다. 대상 Python 25개 파일의 ruff·format 검사,
+이전 import/실행 경로 잔재 확인, CI 변경 감지 및 JUnit 정상·skip·빈 결과 검사도 통과했다.
+전체 backend suite나 원격 CI를 실행한 결과는 아니다.
+
 ## 남은 공유 관계
 
 fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범위에 포함한다.
-아래 Place·Territory 등의 구조는 이번 Walk 정리에서 바꾸지 않았다.
+아래는 Walk·Territory·Activity의 지원 도구와 아직 남아 있는 Place 공유 관계다.
 
 | 공용 장치 또는 테스트 모듈 | 연결된 소비자 / 다음 단계에서 보존할 계약 |
 | --- | --- |
@@ -240,7 +279,8 @@ fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범�
 | `walk/support/diary.py`, `photo_input.py`, `observations.py` | 일기 계약·stamp·writing·generation 및 사진 입력의 생성 도구 |
 | `walk/support/storyboard.py` | storyboard/pin의 live fixture 및 제목 응답 생성 도구 |
 | `place/place/discovery/test_service.py` → `test_facility.py` → `test_facility_actions.py` | discovery 내부 의존. 루트 `test_facility_discovery_api.py`도 facility 테스트 모듈을 import |
-| `test_territory_ownership_db.py` → `test_activity_db.py` → `test_territory_certified_db.py` | DB/actor/시즌 장치 공유. Walk 정리와 함께 무작정 이동하지 않음 |
+| `territory/support/database.py`, `ownership.py` | 소유권·활동·인증 점령의 DB/사용자 fixture 및 점령·사진·판정 생성 도구 |
+| `activity/support/database.py`, `actions.py` | 활동·인증 점령의 활동 schema·시계·시즌 및 시간 지정 점령 생성 도구 |
 | `fixtures/`, `walk/fixtures/`, Place 하위 fixtures/JSON | capability, 점령 시나리오, 산책 스타일/finalize, 공간 일기/observation, 원천 데이터 기준값. 파일 이동 시 상대 경로도 검증 |
 
 `pythonpath = ["."]`는 `tests` namespace와 공용 도구 import에 계속 필요하다.
@@ -256,7 +296,7 @@ fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범�
 | [journey-tests](../../.github/workflows/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
 | [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·pin-context·기존 기록 HTTP. backend/Walk/Life 소스와 Walk 테스트 전체 변경을 감지 |
 | [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation 및 live storyboard DB. 위와 같은 소스·테스트 변경을 감지 |
-| [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스. 산책 결과 소비자이므로 Walk 소스 변경도 감지 |
+| [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스·주인 요약. 두 테스트 디렉터리와 Walk 소스 변경 감지, 빈 결과·skip 거부 |
 | [migration-verification-tests](../../.github/workflows/migration-verification-tests.yml) | 별도 migration 검증. Python 대역 테스트로 대체할 수 없는 SQL 검증 경계 |
 
 3단계에서 live storyboard DB 검증을 기존 v2 job에 연결했다. `LIVE_STORYBOARD_TEST_DSN`은

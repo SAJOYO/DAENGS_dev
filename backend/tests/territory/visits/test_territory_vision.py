@@ -49,9 +49,7 @@ async def test_invalid_provider_output_is_retryable_without_leaking_raw_output()
         return {"verdict": "please trust me", "private": "provider detail"}
 
     with pytest.raises(TerritoryVisionTransientError) as caught:
-        await GeminiTerritoryVision(generate).classify(
-            photo=b"jpeg", content_type="image/jpeg"
-        )
+        await GeminiTerritoryVision(generate).classify(photo=b"jpeg", content_type="image/jpeg")
     assert caught.value.reason_code == "vision_invalid_response"
     assert "private" not in str(caught.value)
 

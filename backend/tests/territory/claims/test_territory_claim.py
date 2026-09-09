@@ -2,7 +2,6 @@
 
 import csv
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -20,6 +19,7 @@ from daengs_backend.services.territory_claim import (
     resume,
     submit_photo,
 )
+from tests.territory.support.paths import FIXTURES
 
 SESSION = ClaimSession("s1", "u1", "p1")
 
@@ -35,7 +35,7 @@ def started():
 def test_shared_scenario_cycle():
     sites = {key: ClaimSite(key) for key in ("A", "B")}
     attempts = {}
-    fixture = Path(__file__).parent / "fixtures/territory-claim-scenarios.tsv"
+    fixture = FIXTURES / "territory-claim-scenarios.tsv"
     with fixture.open(encoding="utf-8") as stream:
         for row in csv.DictReader(stream, delimiter="\t"):
             key = (row["session"], row["site"])

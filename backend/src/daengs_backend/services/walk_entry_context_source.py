@@ -20,6 +20,8 @@ class Collected:
     payload: dict | None = None
     retrieved_at: str | None = None
     retryable: bool = False
+    provider: str | None = None
+    operation: str | None = None
 
 
 def digest(value):
@@ -85,6 +87,10 @@ async def collect(tag, content, *, client=None):
     point = pin.get("point") if pin else content.get("location")
     if point is None:
         return Collected("not_requested", "no_location")
+    if tag in {"space.address", "space.park"}:
+        from daengs_backend.services.walk_public_context import collect_public
+
+        return await collect_public(tag, point, pin)
     if tag != "space.facility":
         return Collected("not_requested", "provider_not_connected")
     if client is None:

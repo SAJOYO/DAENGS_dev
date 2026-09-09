@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     # Enable on web/worker only after 24_walk_entry_contexts.sql has been applied.
     walk_entry_context_enabled: bool = False
 
+    # Apply 27_walk_public_context.sql before enabling address jobs on web/worker.
+    walk_public_context_enabled: bool = False
+    walk_sgis_key: SecretStr = SecretStr("")
+    walk_sgis_secret: SecretStr = SecretStr("")
+    walk_public_data_key: SecretStr = SecretStr("")
+    walk_park_catalog_path: str = ""
+
     # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
     walk_entry_v2_enabled: bool = False
     walk_entry_v2_write_enabled: bool = False

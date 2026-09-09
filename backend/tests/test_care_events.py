@@ -124,12 +124,24 @@ def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
     async def count_walks(session, app_user_id, pet_id, start, end):
         return sum(1 for t in cs.walk_starts.get(pet_id, []) if start <= t < end)
 
+    async def list_kind_between(session, pet_id, kind, start, end):
+        # 진짜와 같게 최근 먼저입니다 — 약 중복 확인이 conflicts[0] 을 "가장 최근" 으로 씁니다.
+        return sorted(
+            (
+                e for e in cs.events
+                if e.pet_id == pet_id and e.kind == kind and start <= e.occurred_at <= end
+            ),
+            key=lambda e: e.occurred_at,
+            reverse=True,
+        )
+
     monkeypatch.setattr(care_repo, "add", add)
     monkeypatch.setattr(care_repo, "get_deletable", get_deletable)
     monkeypatch.setattr(care_repo, "get_by_client_event", get_by_client_event)
     monkeypatch.setattr(care_repo, "list_between", list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
     monkeypatch.setattr(care_repo, "delete", delete)
+    monkeypatch.setattr(care_repo, "list_kind_between", list_kind_between)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", count_walks)
     return cs
 
@@ -446,3 +458,89 @@ def test_남남은_우리_아이의_기록을_못_지운다(client, client_as, p
     created = client.post("/app/care-events", json=_body(pet.id)).json()
     assert client_as(STRANGER).delete(f"/app/care-events/{created['id']}").status_code == 404
     assert len(care.events) == 1
+
+
+# ── 약 중복 확인 (docs/co-care.md §4) ────────────────────────────────
+
+
+def _med(pet: FakePet, when: str, confirm: bool = False, key: uuid.UUID | None = None) -> dict:
+    return {
+        "pet_id": str(pet.id),
+        "kind": "medication",
+        "occurred_at": when,
+        "client_event_id": str(key or uuid.uuid4()),
+        "confirm": confirm,
+    }
+
+
+def test_second_medication_within_window_is_409(client, client_as, pet, care) -> None:
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00")
+    )
+    assert r.status_code == 409
+    body = r.json()["detail"]
+    assert "conflicts" in body and len(body["conflicts"]) == 1
+
+
+def test_confirm_true_records_anyway(client_as, pet, care) -> None:
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True)
+    )
+    assert r.status_code == 201
+
+
+def test_twelve_hours_apart_is_fine(client_as, pet, care) -> None:
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:00:00+09:00"))
+    r = client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T20:00:00+09:00"))
+    assert r.status_code == 201
+
+
+def test_meal_is_never_blocked(client_as, pet, care) -> None:
+    body = {
+        "pet_id": str(pet.id), "kind": "meal", "occurred_at": "2026-09-09T08:00:00+09:00",
+        "client_event_id": str(uuid.uuid4()),
+    }
+    client_as(OWNER).post("/app/care-events", json=body)
+    body["client_event_id"] = str(uuid.uuid4())
+    body["occurred_at"] = "2026-09-09T09:00:00+09:00"
+    assert client_as(OWNER).post("/app/care-events", json=body).status_code == 201
+
+
+def test_idempotency_wins_over_conflict_check(client_as, pet, care) -> None:
+    """확인하고 기록한 직후 재시도가 409 가 되면 앱은 올라갔는지 모르게 된다.
+
+    이 테스트가 services/care_event.py 의 검사 **순서**를 지킨다 — 멱등이 먼저다.
+    """
+    key = uuid.uuid4()
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+    first = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True, key=key)
+    )
+    assert first.status_code == 201
+    retry = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True, key=key)
+    )
+    assert retry.status_code == 200, "재시도가 409 가 되면 멱등이 깨진 것이다"
+
+
+def test_idempotency_wins_over_conflict_check_even_without_explicit_confirm(
+    client_as, pet, care
+) -> None:
+    """더 강한 회귀: `confirm=True` 가 없어도(그날의 첫 약이라 원래 확인이 필요 없었던 경우)
+    재시도가 자기 자신을 중복으로 보면 안 된다.
+
+    위 `test_idempotency_wins_over_conflict_check` 는 두 요청 모두 `confirm=True` 라, 검사
+    순서를 뒤집어도 `not body.confirm` 이 항상 거짓이라 창 검사 자체가 안 돌아 순서를
+    구분하지 못한다 (실제로 검증함 — task-9-report.md 참고). 이 테스트는 `confirm=False` 인
+    첫 기록의 재시도로, 검사 순서가 뒤바뀌면 재시도가 **방금 자기가 만든 행**을 창 안에서
+    찾아 409 를 내는지를 진짜로 가른다.
+    """
+    key = uuid.uuid4()
+    first = client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00", key=key))
+    assert first.status_code == 201
+    retry = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00", key=key)
+    )
+    assert retry.status_code == 200, "재시도가 409 가 되면 멱등이 깨진 것이다"

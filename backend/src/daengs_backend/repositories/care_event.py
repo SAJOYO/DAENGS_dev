@@ -19,6 +19,7 @@ __all__ = [
     "get_by_client_event",
     "get_deletable",
     "list_between",
+    "list_kind_between",
 ]
 
 
@@ -86,6 +87,31 @@ async def list_between(
             CareEvent.occurred_at < end,
         )
         .order_by(CareEvent.occurred_at.desc(), CareEvent.id)
+    )
+    return list(await session.scalars(stmt))
+
+
+async def list_kind_between(
+    session: AsyncSession,
+    pet_id: uuid.UUID,
+    kind: str,
+    start: datetime,
+    end: datetime,
+) -> list[CareEvent]:
+    """그 아이의 같은 종류 기록, 창 안에서 최근 먼저. 약 중복 확인이 씁니다 (docs/co-care.md §4).
+
+    **양끝을 포함합니다** (`<=`) — 창이 `occurred_at ± 6시간` 으로 대칭이라, `list_between` 의
+    `[start, end)` 반열림과 달리 여기서는 끝점도 부딪혀야 합니다.
+    """
+    stmt = (
+        select(CareEvent)
+        .where(
+            CareEvent.pet_id == pet_id,
+            CareEvent.kind == kind,
+            CareEvent.occurred_at >= start,
+            CareEvent.occurred_at <= end,
+        )
+        .order_by(CareEvent.occurred_at.desc())
     )
     return list(await session.scalars(stmt))
 

@@ -38,9 +38,28 @@ DEFAULT_RANGE = timedelta(days=7)
 #: 지금 요청마다 받게 하면 앱이 늘 같은 값을 보내는 칸이 하나 늡니다.
 DAY_TIMEZONE = "Asia/Seoul"
 
+#: 약 중복 확인 창. 새 기록의 occurred_at 앞뒤로 이만큼 안에 다른 약 기록이 있으면 확인을 받는다.
+#:
+#: **하루(서울 자정) 가 아닌 이유**는 1일 2회 투약이 정상이기 때문이다 — 하루로 잡으면 저녁 약마다
+#: 경고가 떠서 사람이 경고를 안 읽고 누르는 습관이 든다. 실제 위험은 교대 경계의 짧은 중복이라
+#: 6시간이면 잡히고 12시간 간격은 안 걸린다 (docs/co-care.md §4).
+MEDICATION_CONFIRM_WINDOW = timedelta(hours=6)
+
+#: 확인을 받는 종류. **밥·간식은 안 받는다** — 한 번 더 줘도 위험하지 않고, 경고가 잦으면 정작
+#: 약 경고가 안 읽힌다. 종류를 늘리려면 이 집합만 고친다.
+CONFIRM_KINDS = frozenset({"medication"})
+
 
 class CareEventNotFoundError(Exception):
     """내 기록이 아니거나 없습니다. 남의 것일 때도 이 예외입니다 (`PetNotFoundError` 와 같은 이유)."""
+
+
+class MedicationConflictError(Exception):
+    """창 안에 이미 같은 종류가 있습니다. `confirm=True` 로 다시 보내면 기록됩니다."""
+
+    def __init__(self, conflicts: list[CareEvent]) -> None:
+        self.conflicts = conflicts
+        super().__init__(f"{len(conflicts)}건")
 
 
 class CareRangeError(ValueError):
@@ -93,6 +112,27 @@ async def record(
     existing = await care_repo.get_by_client_event(session, pet.id, body.client_event_id)
     if existing is not None:
         return existing, False
+
+    # ⚠️ 이 검사는 멱등 조회보다 **뒤**여야 합니다. 앞으로 옮기면, 확인하고 기록한 직후의
+    #    재시도가 방금 자기가 만든 행을 중복으로 보고 409 를 냅니다 — 앱은 올라갔는지
+    #    모르게 됩니다 (test_idempotency_wins_over_conflict_check_even_without_explicit_confirm
+    #    이 이것을 실제로 검증합니다 — `confirm=True` 인 왕복은 창 검사 자체를 건너뛰어
+    #    순서를 구분하지 못합니다).
+    #
+    # 락은 걸지 않습니다 — 동시 기록은 **불변식이 아니라 경고**입니다. `care_events` 는 원래
+    # 하루에 약 두 건을 허용하고(다른 약일 수 있다), 진짜 위험은 교대 경계의 몇십 분 차이지
+    # 같은 순간의 동시 탭이 아닙니다 (docs/co-care.md §4 "일부러 안 하는 것").
+    if body.kind in CONFIRM_KINDS and not body.confirm:
+        window = MEDICATION_CONFIRM_WINDOW
+        conflicts = await care_repo.list_kind_between(
+            session,
+            pet.id,
+            body.kind,
+            body.occurred_at - window,
+            body.occurred_at + window,
+        )
+        if conflicts:
+            raise MedicationConflictError(conflicts)
 
     event = CareEvent(
         actor_app_user_id=app_user_id,
@@ -190,12 +230,15 @@ async def day_summary(
 
 
 __all__ = [
+    "CONFIRM_KINDS",
     "DAY_TIMEZONE",
     "DEFAULT_RANGE",
     "MAX_RANGE",
+    "MEDICATION_CONFIRM_WINDOW",
     "CareEventNotFoundError",
     "CareRangeError",
     "DaySummary",
+    "MedicationConflictError",
     "day_bounds",
     "day_summary",
     "delete_event",

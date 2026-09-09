@@ -43,6 +43,13 @@ class CareEventCreate(BaseModel):
 
     client_event_id: uuid.UUID
 
+    #: 중복 경고를 이미 보고 "그래도 기록" 을 누른 요청. **쿼리가 아니라 body 인 것이 의도**
+    #: 입니다 — 재시도가 같은 body 를 그대로 다시 보내면 됩니다.
+    #:
+    #: ⚠️ 앱은 이때 **`client_event_id` 를 그대로 둡니다.** 새 키를 만들면 재시도가 두 줄이
+    #: 됩니다 (docs/co-care.md §4).
+    confirm: bool = False
+
     @field_validator("occurred_at")
     @classmethod
     def _occurred_at(cls, value: datetime) -> datetime:

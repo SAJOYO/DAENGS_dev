@@ -110,7 +110,7 @@ _ROUTING_METADATA_KEYS = ("source", "action", "active_dog_id")
 
 # `general` (D-057 ①): additive destination since v9. The planner strips it when the
 # fallback flag is off, so naming it here changes nothing in production until then.
-ExecuteName = Literal["training", "life", "walk", "place", "general"]
+ExecuteName = Literal["training", "life", "walk", "place", "general", "vet_contact"]
 HandoffName = Literal["skin", "gait"]
 SocialIntent = Literal["greeting", "thanks", "goodbye"]
 _UniqueExecuteList = Annotated[list[ExecuteName], Field(json_schema_extra={"uniqueItems": True})]

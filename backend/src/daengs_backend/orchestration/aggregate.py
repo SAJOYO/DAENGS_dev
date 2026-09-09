@@ -24,6 +24,8 @@ _LABELS = {
     # 폴백은 전문 능력이 하나도 안 골렸을 때만 붙으므로(#279) 실제로는 단독 결과라
     # 이 라벨이 화면에 찍힐 일이 없다. 그래도 빠뜨리면 KeyError 다.
     CapabilityName.GENERAL: "일반",
+    # 배타 실행이라 단독 결과여서 화면에 안 찍힌다. 그래도 빠뜨리면 KeyError 다 (GENERAL 과 같다).
+    CapabilityName.VET_CONTACT: "응급",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라

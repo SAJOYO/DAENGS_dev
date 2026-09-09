@@ -18,10 +18,14 @@ log = logging.getLogger(__name__)
 
 
 def _default_list_executions(parent: str) -> Iterable:
+    """첫 페이지(20개)만 본다 — 실행은 최신순으로 오므로 안 끝난 것을 찾는 데 넉넉하다
+    (`daengs_backend/services/cloudrun_jobs.py` 의 `active_execution` 과 같은 판단, #326 최종 리뷰)."""
     from google.cloud import run_v2
 
     client = run_v2.ExecutionsClient()
-    return client.list_executions(parent=parent)
+    request = run_v2.ListExecutionsRequest(parent=parent, page_size=20)
+    pager = client.list_executions(request=request)
+    return next(iter(pager.pages)).executions
 
 
 def another_execution_running(*, job: str | None, execution: str | None,
@@ -36,8 +40,9 @@ def another_execution_running(*, job: str | None, execution: str | None,
         short = ex.name.rsplit("/", 1)[-1]
         if short == execution:
             continue
-        # 끝난 실행은 completion_time 이 있다. 도는 것만 센다.
-        if getattr(ex, "completion_time", None) is None and getattr(ex, "running_count", 0) > 0:
+        # 끝난 실행은 completion_time 이 있다. 없으면 pending 이든 running 이든 활성이다 —
+        # running_count 를 보면 태스크가 아직 안 뜬 실행을 놓친다 (#325 최종 리뷰, #326).
+        if getattr(ex, "completion_time", None) is None:
             return short
     return None
 

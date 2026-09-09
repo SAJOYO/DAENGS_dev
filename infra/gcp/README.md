@@ -64,6 +64,46 @@ CUDA 15~23분이다.
 `gcloud builds submit .` 이 올리는 파일은 루트 `.gcloudignore` 가 정한다 — 이미지에 안 들어가는
 것을 새로 넣으면 거기도 열어야 한다.
 
+## 관리자 트리거 (#326)
+
+관리자 콘솔의 크롤 버튼은 집 서버에서는 Celery 를 부르지만, GCP 에서는 `services/crawl.py`
+가 이 잡(`corpus-refresh`)을 직접 실행한다 — 크롤만이 아니라 적재까지 간다. 인증은 VM 의
+기본 컴퓨트 서비스 계정 + 메타데이터 서버다(키 파일 없음).
+
+**`pipeline.sh` 가 그 계정에 잡 실행 권한을 이미 준다** (Scheduler 바인딩 바로 다음, "관리자
+콘솔 트리거" 절) — 처음에는 이 README 산문에만 있어서 teardown 뒤 재배포하면 조용히
+빠졌다(#326 최종 리뷰). 손으로 다시 줄 일은 없어야 하지만, 스크립트가 하는 일은 이렇다:
+
+```bash
+PROJECT_NUMBER="$(gcloud projects describe daengs --format='value(projectNumber)')"
+VM_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"   # = pipeline.sh 의 BUILD_SA
+gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \
+  --member="serviceAccount:${VM_SA}" --role=roles/run.invoker
+gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \
+  --member="serviceAccount:${VM_SA}" --role=roles/run.viewer
+```
+
+`run.invoker` 가 실행을, `run.viewer` 가 "끝나지 않은 실행이 있나" 조회를 위한 것이다 —
+버튼을 다시 눌러도 새로 안 띄우고 그 실행 이름을 돌려주는 것과, 상태 페이지의 "크롤" 항목이
+둘 다 이 조회를 쓴다.
+
+VM 의 `backend/.env` 에 네 줄을 더한다 (집 서버는 그대로 비워 둔다 — 기본이 `celery`):
+
+```
+DAENGS_CRAWL_BACKEND=cloudrun
+DAENGS_GCP_PROJECT=daengs
+DAENGS_GCP_REGION=asia-northeast3
+DAENGS_CORPUS_JOB=corpus-refresh
+```
+
+(`GCP_REGION`·`CORPUS_JOB` 은 기본값이 위와 같아 사실 안 적어도 되지만, 적어 두면 리전이나
+잡 이름을 바꿀 때 여기부터 보게 된다.)
+
+`backend/.env` 를 고쳤으면 `docker compose restart` 로는 반영되지 않는다 — `env_file` 은
+컨테이너를 만들 때 굳는다. `docker compose up -d backend` 로 다시 만들되, 그 전에 셸에
+`GEMINI_API_KEY` 를 올려야 한다(CLAUDE.md) — 빈 셸에서 `up -d` 를 치면 빈 키가 박혀 의미
+라우터가 죽는다.
+
 ## 자주 걸리는 것
 
 - **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가

@@ -121,7 +121,7 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
 | Artifact Registry | `daengs` | `pipeline:cpu-<hash>` · `pipeline:cuda-<hash>`. **`<hash>` 는 git 커밋이 아니라 이미지 입력의 내용 해시**다 — `backend/pyproject.toml`·`uv.lock`·`README.md`·`backend/src`·`data/manifests/seed_sources.yaml`·`docker/pipeline`. 태그가 이미 있으면 빌드를 건너뛰므로, 문서만 바뀐 커밋에서 스크립트를 다시 돌려도 **약 80초**에 끝난다 |
 | Cloud Run Job | `corpus-refresh` | 서울(`asia-northeast3`), 4vCPU/16Gi, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다). Direct VPC 이그레스 · 버킷 볼륨 `daengs-corpus` 를 `/data` 로 |
 | Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장 · 8vCPU/32Gi · 인자 `--stages embed --full`. **타임아웃 1h — 이건 GPU 잡의 상한이지 선택이 아니다** (3h 로 만들면 생성이 거부된다). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
-| Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul → `corpus-refresh`. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음. **첫 자동 실행은 2026-09-09 04:00 KST** |
+| Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul → `corpus-refresh`. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음. **첫 자동 실행 2026-09-09 04:00 KST 확인** |
 | Secret Manager | `corpus-db-password` · `corpus-law-oc` · `corpus-data-go-kr-key` · `corpus-seoul-open-data-key` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |
 | VPC 방화벽 | `allow-pg-from-run` | 서울 서브넷 범위 → VM tcp:5432. 인터넷에는 여전히 안 연다 |
@@ -182,8 +182,10 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
 6. 전체 잡 수동 1회 → 다음 날 04:00 Scheduler 실행을 `crawl_runs` 와 Logging 에서 확인
    **실측: 수동 1회 ✅ (17분)** — crawl due 11개 중 10개 성공(1개는 서울 열린데이터 키가 없어
    건너뜀 → 네 번째 Secret 을 넣고 다시 돌려 **2건 수집**), parse 48 · chunk 48 · embed 369(CPU) ·
-   load 9,838 → **9,885**. ⏳ **Scheduler 자동 실행은 아직 안 봤다 — 2026-09-09 04:00 KST 가
-   처음이다.** 그날 `crawl_runs` 에 `trigger='due'` 행이 있으면 이 항목이 닫힌다.
+   load 9,838 → **9,885**. **Scheduler 자동 실행 ✅ — 2026-09-09 04:00:00 KST 정각에 발사,
+   실행 `corpus-refresh-nrfk7` 3분 40초 성공.** due 소스 0개(전날 16:40 수동 전체 실행이 다 받아서),
+   parse·chunk·embed 전부 same, load 9,885 → 9,885. 그래서 `crawl_runs` 에 `trigger='due'` 행은
+   없다 — 주기가 돌아오는 날 생긴다. 완료 기준("Scheduler 가 매일 돈다")은 여기서 닫혔다.
 7. (별도 PR) 관리자 콘솔 트리거 → 잡이 뜨고 화면 폴링이 진행을 보여 준다
 8. 앱 `/life/ask` 로 새 문서가 근거에 잡힌다
 

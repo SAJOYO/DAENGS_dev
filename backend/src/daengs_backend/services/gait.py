@@ -415,10 +415,10 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
 
         record.status = "DONE"
         record.quality_status = result["quality"].get("status")
-        # ⚠️ 컬럼은 CHECK(good, low) 입니다. v4 는 3단계(good/ok/low)를 내므로 그대로 넣으면
-        #    커밋이 CheckViolation 으로 죽고, 아래 except 가 잡기 전엔 행이 PROCESSING 으로
-        #    남았습니다 (2026-09-09, 47.mp4 두 번 연속). 여기서 어휘를 맞춥니다 —
-        #    `quality` JSONB 에는 원값을 그대로 두어 정보를 잃지 않습니다.
+        # ⚠️ 컬럼 CHECK(good/ok/low)는 엔진 어휘와 같아야 합니다. 2026-09-09 까지 CHECK 가
+        #    good/low 뿐이라 20~80 구간(`ok`)의 DONE 커밋이 CheckViolation 으로 죽고 행이
+        #    PROCESSING 으로 남았습니다(47.mp4 두 번 연속). CHECK 를 넓혀 값은 그대로 넣고,
+        #    `_db_quality_tier` 는 CHECK 밖의 값만 None 으로 거릅니다(예외를 내면 다시 좀비).
         record.quality_tier = _db_quality_tier(result["quality"].get("quality_tier"))
         record.quality = result["quality"]
         record.summary_for_ui = (result.get("features") or {}).get("summary_for_ui")
@@ -531,33 +531,33 @@ def _analyze_from_storage(storage_key: str) -> dict:
 
 
 #: `gait_records.quality_tier` 의 CHECK 가 허용하는 값 (db/init/07_gait_records.sql).
-#: legacy 엔진은 이 둘만 냅니다.
-DB_QUALITY_TIERS = frozenset({"good", "low"})
+#: 엔진(legacy `daengs_gait/quality_gate.py` · v4 `gait_v4/quality.py`)이 내는 어휘와
+#: **같아야 합니다** — `tests/test_gait_quality_tier_contract.py` 가 두 엔진 소스와 SQL 을
+#: 실제로 읽어 이 상수까지 대조합니다.
+DB_QUALITY_TIERS = frozenset({"good", "ok", "low"})
 
 
 def _db_quality_tier(raw: str | None) -> str | None:
-    """엔진이 낸 tier 를 DB/앱 어휘(good · low)로 옮깁니다.
+    """엔진이 낸 tier 를 **그대로** 컬럼에 넣되, CHECK 밖의 값만 걸러냅니다.
 
-    v4 는 유효 프레임 수(`n_frames_gait_usable`)로 **세 단계**를 냅니다 (gait_v4/quality.py):
+    두 엔진 다 유효 프레임 수(`n_frames_gait_usable`)로 세 단계를 냅니다:
 
         good  81 이상      quality_note 없음
         ok    20 ~ 80      quality_note 붙음 (80 미만이라 참고용)
         low    4 ~ 19      quality_note 붙음
         (4 미만은 status=unavailable, tier 없음)
 
-    앱과 비교 규칙의 경계는 80 프레임 하나뿐이라(`MIN_VALID_FRAMES`, D-058 의 "80 미만은
-    참고용"), `ok` 와 `low` 는 앱 기준으로 **같은 취급**입니다. 그래서 `ok → low` 로 접습니다.
-    원값은 `quality` JSONB 에 그대로 남아 있어 나중에 구간을 살릴 수 있습니다.
+    앱(`GaitQualityTier`)도 같은 세 값을 각각 다른 문장·색으로 그리므로 **변환하지 않습니다.**
+    한때 `ok → low` 로 접는 안이 있었는데, 그건 앱이 만든 "보통" 문장을 못 쓰게 하는
+    격하라 버렸습니다 (2026-09-09).
 
     모르는 값이 오면 None 으로 둡니다 — 컬럼이 nullable 이라 CHECK 를 지나고, 앱은
-    "등급 없음" 으로 보여 줍니다. 여기서 예외를 내면 다시 좀비가 됩니다.
+    `effectiveTier` 로 보정합니다. 여기서 예외를 내면 DONE 커밋이 죽어 다시 좀비가 됩니다.
     """
     if raw in DB_QUALITY_TIERS:
         return raw
-    if raw == "ok":
-        return "low"
     if raw is not None:
-        log.warning("gait.analyze: 알 수 없는 quality_tier=%r → None 으로 저장", raw)
+        log.warning("gait.analyze: CHECK 밖의 quality_tier=%r → None 으로 저장", raw)
     return None
 
 

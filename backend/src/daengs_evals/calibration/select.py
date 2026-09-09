@@ -73,6 +73,7 @@ def select_for_labeling(
     seed: int = DEFAULT_SEED,
     exclude_control: bool = True,
     exclude: set[str] | frozenset[str] = frozenset(),
+    only_kind: str | None = None,
 ) -> Selection:
     """판정 행 → 선별. `exclude_control` 이면 noise 쌍은 빼고 뽑는다 (점수가 없어 라벨할 항목이 적다)."""
     rng = random.Random(seed)
@@ -80,7 +81,9 @@ def select_for_labeling(
     pool = [
         r
         for r in rows
-        if not (exclude_control and r.get("condition") == "noise") and r["pair_id"] not in exclude
+        if not (exclude_control and r.get("condition") == "noise")
+        and r["pair_id"] not in exclude
+        and (only_kind is None or r.get("question_kind") == only_kind)
     ]
 
     reasons: dict[str, list[str]] = {}

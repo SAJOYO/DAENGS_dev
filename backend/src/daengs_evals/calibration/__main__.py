@@ -81,6 +81,7 @@ def cmd_review(args: argparse.Namespace) -> int:
         n_repeats=args.repeats,
         seed=args.seed + args.round,
         exclude=already,
+        only_kind=args.only_kind,
     )
     n, r = export_sheet(
         selection,
@@ -205,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     p_review.add_argument("--seed", type=int, default=20260909)
     p_review.add_argument(
         "--round", type=int, default=1, help="2 이상이면 앞 회차 라벨을 뺀 새 시트 (sheet_2 …)"
+    )
+    p_review.add_argument(
+        "--only-kind", default=None, help="reactive 만 등 — responsiveness 라벨을 채울 때"
     )
 
     p_label = sub.add_parser("label", help="터미널에서 한 쌍씩 0/1 을 받아 시트를 채운다")

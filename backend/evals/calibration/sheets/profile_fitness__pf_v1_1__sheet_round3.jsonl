@@ -1,0 +1,1 @@
+{"kind": "meta", "created_at": "2026-09-09T06:36:08+00:00", "fields": ["changed", "profile", "fabricated", "stereotype", "responsiveness", "note"], "guide": "changed/profile/fabricated/stereotype 는 0 또는 1, responsiveness 는 0~2 (reactive 만), note 는 자유. 판정기 출력은 이 시트에 없다 — 보지 말고 매긴다."}

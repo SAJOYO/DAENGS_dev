@@ -14,6 +14,7 @@ from daengs_backend.models import VetVisit, VetVisitDraft
 
 __all__ = [
     "add",
+    "delete",
     "delete_draft",
     "expired_drafts",
     "find_duplicate",
@@ -38,6 +39,12 @@ async def get_owned(
     return await session.scalar(
         select(VetVisit).where(VetVisit.id == visit_id, VetVisit.app_user_id == app_user_id)
     )
+
+
+async def delete(session: AsyncSession, visit: VetVisit) -> None:
+    """확정된 기록 하나를 지웁니다. 사진 객체는 여기서 안 지웁니다 — 그 판단은
+    services 의 몫입니다 (`delete_draft` 와 같은 자리 규칙)."""
+    await session.delete(visit)
 
 
 async def get_by_client_event(

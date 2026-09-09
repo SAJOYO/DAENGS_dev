@@ -67,6 +67,18 @@ class VetVisitConflictError(Exception):
         self.detail = detail
 
 
+class VetRangeError(ValueError):
+    """조회 창이 뒤집혔거나 상한을 넘었다. 라우터가 422 로 바꾼다 (`care_event.
+    CareRangeError` 와 같은 자리)."""
+
+
+#: 기간 조회의 상한. "피부로 1년간 얼마 썼나" 가 실제 질문이라 (docs 머리말),
+#: 케어 로그(31일)보다 훨씬 넉넉하게 둔다.
+MAX_RANGE = timedelta(days=366 * 5)
+#: 안 보내면 최근 1년.
+DEFAULT_RANGE = timedelta(days=366)
+
+
 @dataclass(frozen=True)
 class StartDraftRequest:
     """`start_draft` 의 입력. 라우터가 pydantic 요청 본문에서 이걸 만든다."""
@@ -375,8 +387,48 @@ async def confirm_draft(
     return visit
 
 
+def _window(start: date | None, end: date | None) -> tuple[date, date]:
+    """조회 창. 안 보낸 쪽을 채우고 상한을 본다 (`care_event._window` 와 같은 자리)."""
+    end = end or datetime.now(UTC).date()
+    start = start or end - DEFAULT_RANGE
+    if end < start:
+        raise VetRangeError("to 는 from 보다 뒤여야 합니다.")
+    if end - start > MAX_RANGE:
+        raise VetRangeError(f"조회 기간은 {MAX_RANGE.days}일까지입니다.")
+    return start, end
+
+
+async def list_visits(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> tuple[list[VetVisit], date, date]:
+    """기간 조회, 최근 먼저. 창을 같이 돌려주는 이유는 기본값을 앱이 되짚어 볼 수
+    있게 하려는 것이다 (`care_event.list_events` 와 같은 자리)."""
+    await _owned_pet(session, app_user_id, pet_id)
+    start, end = _window(start, end)
+    return await vet_repo.list_between(session, app_user_id, pet_id, start, end), start, end
+
+
+async def delete_visit(session: AsyncSession, app_user_id: uuid.UUID, visit_id: uuid.UUID) -> None:
+    """지운다. **사진 파일까지 지운다** (`screening.delete_record` 와 같은 이유) —
+    확정된 기록이 사라지면 그 사진을 다른 표가 참조하지 않는다."""
+    visit = await vet_repo.get_owned(session, app_user_id, visit_id)
+    if visit is None:
+        raise VetVisitNotFoundError
+    if visit.receipt_image_key is not None:
+        get_storage().delete(visit.receipt_image_key)
+    await vet_repo.delete(session, visit)
+    await session.commit()
+
+
 __all__ = [
+    "DEFAULT_RANGE",
     "DRAFT_TTL",
+    "MAX_RANGE",
     "MAX_RECEIPT_BYTES",
     "SWEEP_LIMIT",
     "VET_RECEIPT_BRIDGE_DOWNLOAD_PATH",
@@ -384,10 +436,13 @@ __all__ = [
     "ConfirmDraftRequest",
     "DraftExtraction",
     "StartDraftRequest",
+    "VetRangeError",
     "VetVisitConflictError",
     "VetVisitNotFoundError",
     "confirm_draft",
+    "delete_visit",
     "extract_draft",
+    "list_visits",
     "reason_options",
     "start_draft",
 ]

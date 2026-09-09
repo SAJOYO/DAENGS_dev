@@ -13,12 +13,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.core.storage import LocalBridgeStorage
 from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
+from daengs_backend.routers import vet_visit as vet_router
+from daengs_backend.schemas.vet_visit import VetVisitConfirmRequest
 from daengs_backend.services import vet_receipt
 from daengs_backend.services import vet_visit as vet_service
 from daengs_backend.services.vet_receipt import (
@@ -466,6 +471,13 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
             None,
         )
 
+    async def get_owned_visit(_session, app_user_id, visit_id):
+        v = visits.get(visit_id)
+        return v if v is not None and v.app_user_id == app_user_id else None
+
+    async def delete_visit_row(_session, visit):
+        visits.pop(visit.id, None)
+
     async def list_between(_session, app_user_id, pet_id, start, end):
         matched = [
             v
@@ -489,6 +501,8 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vet_repo, "expired_drafts", expired_drafts)
     monkeypatch.setattr(vet_repo, "find_duplicate", find_duplicate)
     monkeypatch.setattr(vet_repo, "get_by_client_event", get_by_client_event)
+    monkeypatch.setattr(vet_repo, "get_owned", get_owned_visit)
+    monkeypatch.setattr(vet_repo, "delete", delete_visit_row)
     monkeypatch.setattr(vet_repo, "list_between", list_between)
     monkeypatch.setattr(pet_repo, "get_owned", get_owned_pet)
     monkeypatch.setattr(app_user_repo, "get_by_id", get_app_user)
@@ -819,3 +833,286 @@ async def test_reason_options_puts_recent_first_then_the_rest(svc_session, svc_s
 async def test_reason_options_rejects_pet_i_do_not_own(svc_session, svc_store):
     with pytest.raises(vet_service.VetVisitNotFoundError):
         await vet_service.reason_options(svc_session, SVC_OWNER, uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# routers/vet_visit.py + schemas/vet_visit.py — HTTP 경계 (task-5)
+# ---------------------------------------------------------------------------
+#
+# 서비스 판단은 위에서 이미 봤다. 여기서 보는 것은 상태 코드다 — 멱등 ①의 201/200,
+# 세 가지 추출 상태가 모두 200, 남의 초안은 404, 목록 밖의 사유는 422.
+# `svc_store`·`svc_storage` 는 위 서비스 테스트와 같은 대역을 그대로 쓴다 —
+# 라우터가 실제로 어떤 세션을 받아도 리포지토리가 그것을 건드리지 않는다
+# (`test_care_events.py` 의 `client` 와 같은 결).
+
+OTHER_OWNER = uuid.uuid4()
+
+
+def _client(app_user_id: uuid.UUID) -> TestClient:
+    app = FastAPI()
+    app.include_router(vet_router.router)
+    app.dependency_overrides[
+        next(iter(CurrentAppUser.__metadata__)).dependency
+    ] = lambda: AppPrincipal(app_user_id=app_user_id)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def app_client(svc_store, svc_storage) -> TestClient:
+    return _client(SVC_OWNER)
+
+
+@pytest.fixture
+def app_client_other(svc_store, svc_storage) -> TestClient:
+    """남의 계정으로 같은 앱을 두드린다 — 존재하는 draft_id 라도 404 여야 한다."""
+    return _client(OTHER_OWNER)
+
+
+def _start_body(**kw) -> dict:
+    body = {
+        "pet_id": str(SVC_PET),
+        "content_type": "image/jpeg",
+        "client_event_id": str(uuid.uuid4()),
+    }
+    body.update(kw)
+    return body
+
+
+def _extract(
+    app_client: TestClient, svc_storage: LocalBridgeStorage, monkeypatch, extraction=_OK_EXTRACTION
+):
+    """초안을 열고, 사진을 저장소에 직접 놓고(bridge 는 이 테스트의 관심사가 아니다),
+    추출을 부른다. `(start_response.json(), extract_response)` 를 돌려준다."""
+    started = app_client.post("/app/vet-visits", json=_start_body())
+    assert started.status_code == 201, started.text
+    started_body = started.json()
+    svc_storage.write(started_body["storage_key"], b"receipt-bytes")
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([], extraction))
+    extracted = app_client.post(f"/app/vet-visits/{started_body['draft_id']}/extract")
+    return started_body, extracted
+
+
+def _confirm_json_body(**kw) -> dict:
+    body = {
+        "client_event_id": str(uuid.uuid4()),
+        "reason_code": "cardiac",
+        "visited_on": "2026-09-02",
+        "total_krw": 80000,
+    }
+    body.update(kw)
+    return body
+
+
+# ── 멱등 ①의 HTTP 표현 ───────────────────────────────────────────────
+
+
+def test_second_post_returns_200_not_201(app_client):
+    """멱등 ①의 HTTP 표현 — care_events·walks 와 같은 규칙."""
+    body = _start_body()
+    first = app_client.post("/app/vet-visits", json=body)
+    second = app_client.post("/app/vet-visits", json=body)
+    assert first.status_code == 201, first.text
+    assert second.status_code == 200
+    assert first.json()["draft_id"] == second.json()["draft_id"]
+
+
+def test_start_draft_http_rejects_pet_i_do_not_own(app_client):
+    r = app_client.post("/app/vet-visits", json=_start_body(pet_id=str(uuid.uuid4())))
+    assert r.status_code == 404
+
+
+# ── extract — 세 상태 모두 200, 남의 것은 404 ─────────────────────────
+
+
+def test_draft_response_carries_possible_duplicate(app_client, svc_store, svc_storage, monkeypatch):
+    svc_store.visits[uuid.uuid4()] = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 9, 2), total_krw=80000,
+        reason_code="skin", client_event_id=uuid.uuid4(),
+    )
+    _started, extracted = _extract(app_client, svc_storage, monkeypatch)
+    assert extracted.status_code == 200, extracted.text
+    assert extracted.json()["possible_duplicate"] is True
+
+
+def test_draft_response_carries_reason_options_recent_first(
+    app_client, svc_store, svc_storage, monkeypatch
+):
+    """이 강아지가 실제로 겪은 사유가 맨 앞 — 적중률이 제일 높다."""
+    svc_store.visits[uuid.uuid4()] = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 8, 1), total_krw=1000,
+        reason_code="skin", client_event_id=uuid.uuid4(),
+    )
+    _started, extracted = _extract(app_client, svc_storage, monkeypatch)
+    body = extracted.json()
+    assert body["reason_options"][0] == "skin"
+    assert set(body["reason_options"]) == set(VET_REASON_CODES)
+
+
+def test_extract_response_carries_extracted_fields_and_items(app_client, svc_storage, monkeypatch):
+    _started, extracted = _extract(app_client, svc_storage, monkeypatch)
+    body = extracted.json()
+    assert body["extraction_status"] == "ok"
+    assert body["visited_on"] == "2026-09-02"
+    assert body["total_krw"] == 80000
+    assert body["hospital_name"] == "○○동물병원"
+    assert body["items"] == [{"name": "초진료", "amount_krw": 80000}]
+    assert body["suggested_reason_code"] == "skin"
+
+
+def test_unreadable_returns_200_with_status(app_client, svc_storage, monkeypatch):
+    unreadable = ReceiptExtraction(status="unreadable", unreadable_reason="blurry")
+    _started, extracted = _extract(app_client, svc_storage, monkeypatch, extraction=unreadable)
+    assert extracted.status_code == 200, extracted.text
+    body = extracted.json()
+    assert body["extraction_status"] == "unreadable"
+    assert body["unreadable_reason"] == "blurry"
+    assert body["items"] == []
+
+
+def test_gemini_failure_is_200_not_500(app_client, svc_storage, monkeypatch):
+    started = app_client.post("/app/vet-visits", json=_start_body())
+    started_body = started.json()
+    svc_storage.write(started_body["storage_key"], b"receipt-bytes")
+
+    def _raise(_bytes, _content_type):
+        async def _inner():
+            raise ReceiptExtractionFailed("boom")
+
+        return _inner()
+
+    monkeypatch.setattr(vet_receipt, "extract", _raise)
+    r = app_client.post(f"/app/vet-visits/{started_body['draft_id']}/extract")
+    assert r.status_code == 200, r.text
+    assert r.json()["extraction_status"] == "failed"
+
+
+def test_other_users_draft_is_404(app_client, app_client_other, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client_other.post(f"/app/vet-visits/{started['draft_id']}/extract")
+    assert r.status_code == 404
+
+
+def test_unknown_draft_is_404(app_client):
+    assert app_client.post(f"/app/vet-visits/{uuid.uuid4()}/extract").status_code == 404
+
+
+# ── confirm — 닫힌 목록·편집 가능한 병원 정보 ──────────────────────────
+
+
+def test_confirm_rejects_code_outside_list(app_client, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(reason_code="tumor"),
+    )
+    assert r.status_code == 422
+
+
+def test_confirm_rejects_malformed_phone(app_client, svc_storage, monkeypatch):
+    """카드번호 네 묶음 같은 모양은 `tel:` 링크가 되기 전에 여기서 막는다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(hospital_phone="5432-1234-5678-9012"),
+    )
+    assert r.status_code == 422
+
+
+def test_confirm_accepts_edited_hospital_fields(app_client, svc_storage, monkeypatch):
+    """확인 화면에서 고친 병원 이름·주소·전화가 그대로 저장된다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(
+            hospital_name="고친병원",
+            hospital_address="서울시 강남구",
+            hospital_phone="02-123-4567",
+        ),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["hospital_name"] == "고친병원"
+    assert body["hospital_address"] == "서울시 강남구"
+    assert body["hospital_phone"] == "02-123-4567"
+    assert body["suggested_reason_code"] == "skin"
+    assert body["reason_code"] == "cardiac"
+
+
+def test_confirm_request_schema_cannot_carry_items():
+    """요청 본문의 items 를 믿으면 앱이 동의 분기를 우회한다 — 그런 필드가 없어야 한다."""
+    assert "items" not in VetVisitConfirmRequest.model_fields
+    assert "raw_ocr_items" not in VetVisitConfirmRequest.model_fields
+
+
+def test_confirm_ignores_unknown_items_field_in_body(app_client, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json={**_confirm_json_body(), "items": [{"name": "주입", "amount_krw": 1}]},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_confirm_of_other_users_draft_is_404(
+    app_client, app_client_other, svc_storage, monkeypatch
+):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client_other.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body()
+    )
+    assert r.status_code == 404
+
+
+# ── 목록·삭제 ────────────────────────────────────────────────────────
+
+
+def test_list_visits_returns_confirmed_records(app_client, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    app_client.post(f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body())
+    r = app_client.get("/app/vet-visits", params={"pet_id": str(SVC_PET)})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["visits"]) == 1
+    assert body["visits"][0]["total_krw"] == 80000
+
+
+def test_list_visits_rejects_reversed_range(app_client):
+    r = app_client.get(
+        "/app/vet-visits",
+        params={"pet_id": str(SVC_PET), "from": "2026-09-02", "to": "2026-09-01"},
+    )
+    assert r.status_code == 422
+
+
+def test_list_visits_rejects_pet_i_do_not_own(app_client):
+    r = app_client.get("/app/vet-visits", params={"pet_id": str(uuid.uuid4())})
+    assert r.status_code == 404
+
+
+def test_delete_visit_removes_it(app_client, svc_store, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    confirmed = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body()
+    ).json()
+    r = app_client.delete(f"/app/vet-visits/{confirmed['id']}")
+    assert r.status_code == 204
+    assert svc_store.visits == {}
+
+
+def test_delete_of_other_users_visit_is_404(app_client, app_client_other, svc_storage, monkeypatch):
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    confirmed = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body()
+    ).json()
+    r = app_client_other.delete(f"/app/vet-visits/{confirmed['id']}")
+    assert r.status_code == 404
+
+
+# ── reason-options 는 `/{draft_id}` 보다 먼저 선언돼야 한다 ────────────
+
+
+def test_reason_options_endpoint_is_not_shadowed_by_draft_id_route(app_client):
+    """`/reason-options` 가 `/{draft_id}/...` 뒤에 있으면 이 요청이 그쪽으로 샌다."""
+    r = app_client.get("/app/vet-visits/reason-options", params={"pet_id": str(SVC_PET)})
+    assert r.status_code == 200, r.text
+    assert set(r.json()) == set(VET_REASON_CODES)

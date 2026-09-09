@@ -36,6 +36,7 @@ from daengs_backend.routers import (
     territory,
     territory_claim,
     training,
+    vet_visit,
     walk_entry,
     walk_spatial_diary,
     walk_storyboard,
@@ -182,6 +183,9 @@ app.include_router(pet.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
+# 진료비 기록(`/app/vet-visits` · #353) — 영수증 사진에서 읽고, 유저가 확정한
+# 것만 남긴다. 라우터가 CurrentAppUser 로 잠겨 있습니다.
+app.include_router(vet_visit.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.

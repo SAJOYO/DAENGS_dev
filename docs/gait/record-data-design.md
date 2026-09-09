@@ -157,7 +157,7 @@ JSONB에 담고 **표준 키는 주석으로 문서화, DB가 강제하지 않�
 | `internal_feature_vector` | `JSONB`, nullable | **비교 전용.** API 응답 스키마가 절대 내보내지 않도록 강제 — §5 |
 | `trajectories` | `JSONB`, nullable | 선택 — 필요해지면 |
 | `gait_filter_version` | `text NOT NULL` | 다른 버전끼리 비교 시 경고에 씀 |
-| `pose_model` | `text`, nullable (2026-09-09, D-063) | 기록을 만든 pose model / 관절 정의 ID — `rtmpose_ap10k_ssd`(v4, AP-10K 17) · `yolov8_12kp_best`(legacy 12). **실행 엔진 선택이 아니라 메타데이터**다. 새 분석은 unavailable 이어도 항상 저장. 옛 행은 `summary_for_ui` 관절 키로 명확히 판별될 때만 백필, 아니면 NULL. CHECK 없음 — 정본은 `daengs_gait/contract.py`. 관절 정의가 다른 기록의 비교 차단은 2단계 |
+| `pose_model` | `text`, nullable (2026-09-09, D-063) | 기록을 만든 pose model / 관절 정의 ID — `rtmpose_ap10k_ssd`(v4, AP-10K 17) · `yolov8_12kp_best`(legacy 12). **실행 엔진 선택이 아니라 메타데이터**다. 새 분석은 unavailable 이어도 항상 저장. 옛 행은 `summary_for_ui` 관절 키로 명확히 판별될 때만 백필, 아니면 NULL. CHECK 없음 — 정본은 `daengs_gait/contract.py`. **비교는 이 값으로 가른다** (2단계): 둘 다 NOT NULL 이고 같을 때만 그 모델의 비교 함수(`rtmpose_ap10k_ssd` → gait_v4 compare, `yolov8_12kp_best` → `daengs_gait.compare`), 다르거나 한쪽이라도 NULL 이거나 레지스트리에 없으면 `CompareError` → 400 (같은 기록·다른 반려견과 같은 통로). 서버의 `GAIT_ENGINE` 은 비교에 관여하지 않는다 |
 | `video_meta` | `JSONB` | `{resolution, native_fps}` |
 | `original_video_path` | `text NOT NULL` | 파일 저장 영역의 경로/식별자. §3 |
 | `overlay_video_path` | `text`, nullable | `status='ok'`일 때만 |

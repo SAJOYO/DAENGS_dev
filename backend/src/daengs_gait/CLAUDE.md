@@ -9,11 +9,15 @@
 - **런타임이 갈라져 있습니다** (D-038). 소스와 의존성만 backend 로 통합했고,
   compose 의 `gait-analysis` 서비스가 `daengs_gait.service` 를 **자기 프로세스**로 띄웁니다.
   `daengs_backend` 프로세스에 붙지 않습니다.
-- **접점이 0 개입니다.** `daengs_training` 은 프로세스를 합쳤기 때문에
-  `routers/training.py` + `services/training_rag.py` 접점이 필요했지만, 여기는 합치지
-  않으므로 그런 파일이 없습니다. **양방향 모두 import 하지 마세요** —
-  `daengs_gait` → `daengs_backend` 도, 그 반대도 아닙니다. 늘려야 할 것 같으면
-  D-038 을 먼저 다시 보세요.
+- **접점은 한 방향, 함수 안에서만입니다** (D-043 ⓒ · D-063). `daengs_backend` 가
+  `daengs_gait` 를 부르는 자리는 워커의 `engines.get_engine(...)`(엔진 선택·실행)과 웹의
+  `compare`·`contract`(비교·계약) 뿐이고, 전부 **함수 안 지연 import** 입니다. backend
+  설정값(`GAIT_ENGINE`·`GAIT_V4_*`)은 인자로 넘어옵니다 — **`daengs_gait` 는 `daengs_backend`
+  를 import 하지 않습니다** (`tests/test_gait_engines.py` 가 소스를 훑어 지킵니다). 접점을
+  늘려야 할 것 같으면 D-063 을 먼저 다시 보세요.
+- **`engines/` 는 가벼워야 합니다.** `engines/__init__` 은 하위 모듈을 `get_engine` 안에서만
+  import 합니다. `legacy.py` 가 `pipeline`(torch)을, `v4.py` 가 서브프로세스를 다룹니다 —
+  둘 다 워커에서만 실행됩니다.
 - `daengs_backend` 의 MVC2 계층 규칙(D-011)이 여기에는 걸려 있지 않습니다. 평평합니다.
 - **의존성은 `backend/pyproject.toml` 의 `gait` 그룹 하나**입니다. `ml` 그룹과 겹치지
   않습니다 — gait 는 sentence-transformers · transformers · pyarrow 를 안 씁니다.

@@ -32,7 +32,7 @@ sequenceDiagram
 ## 편집과 적용 경계
 
 - LLM은 전체 상태를 다시 만들지 않는다. 공통 원자·OR 묶음·주차 선호의 추가/교체/삭제, 후보 업종, 장소명만 제안한다. 전체 변경안이 유효해야 적용한다.
-- 원문 근거는 Unicode code point `[start,end)`다. 인용문이 정확히 일치하는지 검증하며, 모델이 붙인 `explicit`만으로 기존 조건의 해제를 허용하지 않는다.
+- 원문 근거는 Unicode code point `[start,end)`다. 모델의 위치 계산이 틀렸을 때 인용문이 원문에 정확히 한 번 등장하면 서버가 위치만 다시 계산한다. 띄어쓰기 변경·없는 인용문·잘못된 위치의 중복 인용문은 거절한다. 정확한 위치를 지정한 중복 인용문은 유지한다. compiler가 최종 근거를 다시 검증하며, 모델이 붙인 `explicit`만으로 기존 조건의 해제를 허용하지 않는다.
 - 추가 조건은 기존 상태에 AND로 붙는다. 처음 만드는 여러 OR 묶음은 함께 적용할 수 있다. 기존 OR에 대안을 더하거나 기존 원자를 바꾸는 것은 확인 대상이다.
 - `아까 주차 필수는 빼줘`, `주차 상관없어`처럼 전체 입력이 서버의 제한된 해제 패턴과 일치하면 공통 조건을 바로 해제한다. 분기에 같은 속성이 있거나 문장이 더 복잡하면 변경 전후 확인으로 보낸다. 모든 명시적 한국어 수정 표현을 인식하는 것은 아니다.
 - `inferred`는 주차=true 선호 추가만 허용한다. 기존 선호의 교체·hard 변경은 허용하지 않는다. 주차=false는 명시적인 불가이며 조건 해제나 정보 미상과 다르다.
@@ -51,7 +51,8 @@ Redis CAS는 **편집 세션**에 대한 잠금이다. 수동 v3 검색의 전�
 
 - 신규 편집 compiler/provider/인증 gateway 26개, 기존 필터·검색 API·서비스 경계 68개: 중복 제외 94개 대상 테스트 통과. DB 실행은 모의 처리했고 SQL 엔진을 변경하지 않았다.
 - Python 모델의 실제 직렬화 결과 `backend/tests/place/api/filter_edit_wire.json`을 앱 fixture와 동일하게 유지한다. 기존 상태·정확한 액션·revision·반려견·결과 버킷을 검증한다.
-- Gemini Interactions의 `store=false`, `response_format.schema`, Pydantic JSON schema는 [공식 Structured outputs 문서](https://ai.google.dev/gemini-api/docs/structured-output)와 [Interactions 문서](https://ai.google.dev/gemini-api/docs/interactions-overview)를 기준으로 연결했다. 새 SDK나 의존성은 추가하지 않았다.
-- 실제 Gemini와 운영 Redis/DB를 포함한 왕복은 미검증이다. 기존에 제공된 환경 파일 경로가 현재 없으며 현재 프로세스에도 Gemini 키가 없다. 문장 해석의 정확도, 누락된 요구, 근거 구간 오류율, 지연은 다음 단계의 실호출 평가가 필요하다. 스키마 검증이 의미 해석의 정확성을 보장하지 않는다.
+- Gemini Interactions의 `store=false`, `response_format.schema`를 사용한다. [공식 Structured outputs 문서](https://ai.google.dev/gemini-api/docs/structured-output)는 JSON Schema 일부 지원과 복잡한 스키마의 거절 가능성을 명시한다. 2026-09-09 실호출에서 전체 Pydantic 스키마는 HTTP 400, 참조를 펼치고 길이·개수·수치 경계 등을 생략한 전송용 스키마는 성공했다. 특정 키워드 하나가 원인이라고 단정하지 않는다. 공개 계약은 바꾸지 않고 `EditProposal`과 compiler가 생성 후 모든 경계를 검증한다. 새 SDK나 의존성은 추가하지 않았다.
+- 2026-09-09 제공된 키로 `gemini-3.1-flash-lite`와 production proposer/compiler를 연결해 합성 문장을 평가했다. 결과와 재현 방법은 [실호출 평가 기록](../../backend/evals/place_filter_edits/2026-09-09.md)에 남긴다. HTTP 400, 한글 근거 위치 오류, AND/OR 범위 혼동, 삭제 payload 오류를 발견해 보완했다. 스키마 검증이 의미 해석의 정확성을 보장하지 않는다.
+- 이번 후속 수정은 provider·compiler·인증 gateway의 대상 테스트 37개가 통과했다. 운영 Redis/DB와 앱 HTTP를 포함한 전체 왕복은 아직 미검증이다.
 - Backend·Place를 함께 반영한 뒤 앱을 연결해야 한다. 기존 발견 API는 이전 앱 호환을 위해 유지한다. DB 마이그레이션·배포는 수행하지 않았다.
 - CI에서 발견한 선행 v3의 클라우드 nginx 경로 누락도 보완했다. 로컬과 GCP include 모두 `/v3/places/`를 같은 Place upstream과 요청 제한으로 전달한다. 이 보완 없이 #358만 클라우드에 반영하면 조건 검색 경로가 동작하지 않는다.

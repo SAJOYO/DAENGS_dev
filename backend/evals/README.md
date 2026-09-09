@@ -11,6 +11,7 @@
 | `answer_quality/` | `daengs_evals.answer_quality` | `/life/ask` 답변 품질용 질문·답변(jsonl)·판정(jsonl)·리포트(md) |
 | `orchestration_router/` | `daengs_evals.router_benchmark` · `daengs_evals.orchestrator_comparison` | 시맨틱 라우터 골드 세트·벤치마크 yaml·실행 결과·요약·리포트. 상세는 `orchestration_router/README.md` |
 | `training_quality/` | `daengs_evals.training_quality` | 훈련 RAG judge 의 질문·답변·판정 출력 |
+| `place_filter_edits/` | `tools/eval_place_filter_edits_20260909.py` (일회성) | 실제 Gemini → 공통 필터 편집 compiler의 합성 문장·응답·판정·실패 기록 |
 
 과거 결과 파일(`*.json`·`*.jsonl`) 안에는 `backend/tools/...` 같은 옛 경로가 그대로 남아
 있습니다. 그 파일은 **그때 실제로 쓰인 경로를 적은 기록**이라 일부러 고치지 않습니다 (md 리포트의

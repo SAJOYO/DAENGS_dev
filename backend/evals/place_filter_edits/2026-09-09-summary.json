@@ -1,0 +1,50 @@
+{
+  "runs": [
+    {
+      "stage": "baseline",
+      "model": "gemini-3.1-flash-lite",
+      "started_at": "2026-09-09T04:04:04.855102+00:00",
+      "count": 16,
+      "passed": 8,
+      "failed_ids": [
+        "intersection",
+        "clear",
+        "preserve",
+        "or",
+        "or_with_common",
+        "unsupported",
+        "large_dog",
+        "negated_clear"
+      ],
+      "median_s": 4.05,
+      "min_s": 0.42,
+      "max_s": 5.98
+    },
+    {
+      "stage": "revised",
+      "model": "gemini-3.1-flash-lite",
+      "started_at": "2026-09-09T05:09:40.715858+00:00",
+      "count": 20,
+      "passed": 18,
+      "failed_ids": [
+        "indifferent",
+        "name_clear"
+      ],
+      "median_s": 3.91,
+      "min_s": 2.19,
+      "max_s": 5.11
+    },
+    {
+      "stage": "final",
+      "model": "gemini-3.1-flash-lite",
+      "started_at": "2026-09-09T05:14:38.520446+00:00",
+      "count": 28,
+      "passed": 28,
+      "failed_ids": [],
+      "median_s": 3.64,
+      "min_s": 1.8,
+      "max_s": 7.22
+    }
+  ],
+  "final_provider_sha256_lf": "63633059c51cbb87a179afc146bcba6a27b4cf1a75c8cdee9e0cdca36f0e1bc8"
+}

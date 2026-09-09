@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_place.api import (
     discovery_internal,
     facility_internal,
+    filter_edits_internal,
     places_v2,
     places_v3,
     territory_sites,
@@ -33,6 +34,7 @@ app.include_router(places_v3.router)
 app.include_router(territory_sites.router)
 app.include_router(discovery_internal.router)
 app.include_router(facility_internal.router)
+app.include_router(filter_edits_internal.router)
 
 
 @app.get("/health")

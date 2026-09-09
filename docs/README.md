@@ -71,6 +71,7 @@
 | --- | --- |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
+| [place/filter-edits.md](place/filter-edits.md) | 공통 필터 자연어 편집 — 근거·변경 확인·세션 CAS·앱 반영 경계와 검증 범위 |
 | [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
 
 실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.

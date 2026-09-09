@@ -31,6 +31,7 @@ from daengs_backend.routers import (
     health,
     metrics,
     pet,
+    place_filter_edits,
     report_admin,
     status,
     territory,
@@ -212,6 +213,7 @@ app.include_router(training.router)
 # 엔드포인트 자체의 파라미터 의존성(`admin_or_app_user(Perm.READ)`)이 겁니다.
 app.include_router(assistant.router)
 app.include_router(facility_discovery.router)
+app.include_router(place_filter_edits.router)
 # 대화 기록(`/app/chats`)과 저장된 AI 요약. 라우터가 CurrentAppUser 로 잠겨 있습니다 —
 # 신원으로 남의 것을 걸러야 해서 `admin_or_app_user` 를 쓰지 않습니다 (core/deps.py).
 app.include_router(chat.router)

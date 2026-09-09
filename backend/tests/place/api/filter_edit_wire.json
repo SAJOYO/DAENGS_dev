@@ -1,0 +1,539 @@
+{
+  "request": {
+    "client_request_id": "00000000-0000-0000-0000-000000000001",
+    "base_revision": 7,
+    "query": "아까 주차 필수는 빼줘",
+    "base_state": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "separate",
+      "result_policy": {
+        "limit_per_kind": 50,
+        "uncertain_limit_per_kind": 20
+      },
+      "dogs": [
+        {
+          "ref": "a",
+          "revision": "v1",
+          "dog_size": null,
+          "dog_weight_kg": 10.0,
+          "dog_age_years": null
+        },
+        {
+          "ref": "unknown",
+          "revision": null,
+          "dog_size": null,
+          "dog_weight_kg": null,
+          "dog_age_years": null
+        }
+      ]
+    }
+  },
+  "proposal_response": {
+    "contract_version": "place-filter-edit-v1",
+    "search_id": "00000000-0000-0000-0000-000000000002",
+    "revision": 1,
+    "request": {
+      "client_request_id": "00000000-0000-0000-0000-000000000001",
+      "base_revision": 7,
+      "query": "아까 주차 필수는 빼줘",
+      "base_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "parking",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      }
+    },
+    "compiled": {
+      "status": "ready",
+      "base_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "parking",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "proposed_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "proposal": {
+        "edits": [
+          {
+            "type": "remove_all",
+            "evidence": {
+              "quote": "아까 주차 필수는 빼줘",
+              "start": 0,
+              "end": 12,
+              "origin": "explicit"
+            },
+            "target_id": "parking",
+            "atom": null,
+            "branch": null,
+            "preference": null,
+            "kinds": null,
+            "name_query": null
+          }
+        ],
+        "unresolved": []
+      },
+      "requires_confirmation": false,
+      "issues": []
+    },
+    "expires_at": "2026-09-09T12:00:00Z",
+    "action_request": null,
+    "result": null
+  },
+  "action": {
+    "client_request_id": "00000000-0000-0000-0000-000000000003",
+    "search_id": "00000000-0000-0000-0000-000000000002",
+    "expected_revision": 1,
+    "current_state": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "separate",
+      "result_policy": {
+        "limit_per_kind": 50,
+        "uncertain_limit_per_kind": 20
+      },
+      "dogs": [
+        {
+          "ref": "a",
+          "revision": "v1",
+          "dog_size": null,
+          "dog_weight_kg": 10.0,
+          "dog_age_years": null
+        },
+        {
+          "ref": "unknown",
+          "revision": null,
+          "dog_size": null,
+          "dog_weight_kg": null,
+          "dog_age_years": null
+        }
+      ]
+    },
+    "confirm_changes": false
+  },
+  "applied_response": {
+    "contract_version": "place-filter-edit-v1",
+    "search_id": "00000000-0000-0000-0000-000000000002",
+    "revision": 2,
+    "request": {
+      "client_request_id": "00000000-0000-0000-0000-000000000001",
+      "base_revision": 7,
+      "query": "아까 주차 필수는 빼줘",
+      "base_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "parking",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      }
+    },
+    "compiled": {
+      "status": "ready",
+      "base_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "parking",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "proposed_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "proposal": {
+        "edits": [
+          {
+            "type": "remove_all",
+            "evidence": {
+              "quote": "아까 주차 필수는 빼줘",
+              "start": 0,
+              "end": 12,
+              "origin": "explicit"
+            },
+            "target_id": "parking",
+            "atom": null,
+            "branch": null,
+            "preference": null,
+            "kinds": null,
+            "name_query": null
+          }
+        ],
+        "unresolved": []
+      },
+      "requires_confirmation": false,
+      "issues": []
+    },
+    "expires_at": "2026-09-09T12:00:00Z",
+    "action_request": {
+      "client_request_id": "00000000-0000-0000-0000-000000000003",
+      "search_id": "00000000-0000-0000-0000-000000000002",
+      "expected_revision": 1,
+      "current_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "parking",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "confirm_changes": false
+    },
+    "result": {
+      "applied_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 50,
+          "uncertain_limit_per_kind": 20
+        },
+        "dogs": [
+          {
+            "ref": "a",
+            "revision": "v1",
+            "dog_size": null,
+            "dog_weight_kg": 10.0,
+            "dog_age_years": null
+          },
+          {
+            "ref": "unknown",
+            "revision": null,
+            "dog_size": null,
+            "dog_weight_kg": null,
+            "dog_age_years": null
+          }
+        ]
+      },
+      "execution_status": "complete",
+      "evaluated_at": "2026-09-09T11:45:00Z",
+      "ranking_version": "distance-band-500-v1",
+      "groups": [
+        {
+          "kind": "cafe",
+          "matched": [],
+          "uncertain": [],
+          "matched_truncated": false,
+          "uncertain_truncated": false,
+          "total": null
+        }
+      ],
+      "revision": 8,
+      "search_request_id": "00000000-0000-0000-0000-000000000003"
+    }
+  }
+}

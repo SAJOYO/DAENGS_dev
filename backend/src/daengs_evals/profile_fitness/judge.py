@@ -89,15 +89,16 @@ def _safe(name: str) -> str:
 
 
 def anchor_record_path(anchor_set: AnchorSet, model: str, variant: Variant) -> Path:
-    return ASSETS_DIR / f"anchor_check_{anchor_set}_{_safe(model)}_{variant}.json"
+    # 프롬프트 버전이 이름에 있어야 "holdout 은 버전당 한 번" 이 성립한다 — v1a 의 기록이 v2a 를 막으면 안 된다
+    return ASSETS_DIR / f"anchor_check_{anchor_set}_{PROMPT_VERSIONS[variant]}_{_safe(model)}.json"
 
 
 def bias_record_path(cells_label: str, model: str, variant: Variant) -> Path:
-    return ASSETS_DIR / f"bias_suite_{cells_label}_{_safe(model)}_{variant}.json"
+    return ASSETS_DIR / f"bias_suite_{cells_label}_{PROMPT_VERSIONS[variant]}_{_safe(model)}.json"
 
 
 def judgments_path(cells_label: str, variant: Variant) -> Path:
-    return ASSETS_DIR / f"judgments_{cells_label}_{variant}.jsonl"
+    return ASSETS_DIR / f"judgments_{cells_label}_{PROMPT_VERSIONS[variant]}.jsonl"
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +432,17 @@ def run_score(
 
     path = judgments_path(cells_label, variant)
     done = _existing_pair_ids(path)
-    if not path.exists():
+    if path.exists():
+        # 재개: 셀이 재시도로 바뀌었을 수 있으니 meta 의 건너뜀 목록을 새로 쓴다 — 옛 값을 두면
+        # 리포트가 이미 답한 셀을 "못 잰 것" 으로 센다 (2026-09-09 실측: not_answered 50 이 그대로 남았다)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        head = json.loads(lines[0])
+        head["skipped_pairs"] = [{"pair_id": p.pair_id, "reason": p.skip_reason} for p in skipped]
+        head["resumed_at"] = utc_now()
+        path.write_text(
+            "\n".join([json.dumps(head, ensure_ascii=False), *lines[1:]]) + "\n", encoding="utf-8"
+        )
+    else:
         path.parent.mkdir(parents=True, exist_ok=True)
         head = {
             "kind": "meta",

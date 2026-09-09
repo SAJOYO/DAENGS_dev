@@ -27,9 +27,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: 프롬프트 변형 둘. 같은 기준을 다른 순서 · 다른 말로 적는다 (일치율의 재료).
+#: v1 → v2 (2026-09-09): **중요도 규칙**. v1a 는 부가 문장 하나에 changed 가 흔들려 위치 뒤집힘 12%,
+#: invariant 질문에서 "개봉 후 한 달 이내" 한 줄이 changed 로 잡혔다. 사용자가 따를 행동이 달라질
+#: 때만 변화로 본다. v1a 기록은 그대로 둔다 — 판정기를 실험으로 고친 전/후.
 PROMPT_VERSIONS: dict[str, str] = {
-    "A": "profile-fitness-diff-ko-v1a",
-    "B": "profile-fitness-diff-ko-v1b",
+    "A": "profile-fitness-diff-ko-v2a",
+    "B": "profile-fitness-diff-ko-v2b",
 }
 TEMPERATURE = 0.0
 #: 사고 토큰이 이 한도를 같이 쓴다 — `answer_quality/judge.py` 가 512 로 잘려 본 뒤 올린 값과 같다.
@@ -151,10 +154,14 @@ def score_pair(
 _SHARED_HEADER = (
     "당신은 반려견 케어 도우미의 답변 **두 개를 비교**하는 판정기다. 두 답변은 같은 질문에 대한 "
     "것이고, 달라진 조건은 **강아지 프로필 하나뿐**이다. 당신이 할 일은 점수를 매기는 것이 아니라 "
-    "**무엇이 어떻게 다른지 적는 것**이다. 문체 · 인사말 · 어순 · 문장 길이 차이는 실질 변화가 "
-    "아니다 — 사용자가 받는 **조언의 내용**이 달라졌을 때만 변화로 본다. 견종이나 나이를 "
-    "**부르기만** 한 것('골든리트리버시군요!', '7살이시면')도 인사말이다: 그 뒤의 권고가 그에 맞춰 "
-    "바뀌지 않았으면 changed 는 false 다. 언급은 개인화가 아니다.\n\n"
+    "**무엇이 어떻게 다른지 적는 것**이다.\n\n"
+    "**changed 의 갈림선 — 사용자가 따를 행동이 달라지는가.** 두 답을 받은 사용자가 실제로 다르게 "
+    "행동하게 될 때만 changed 는 true 다: 횟수 · 시간 · 양 · 방법 · 피해야 할 것 · 병원에 갈지가 "
+    "달라졌을 때. 다음은 changed 가 **false** 다 — differences 에는 적되 변화로 세지 않는다: "
+    "문체 · 인사말 · 어순 · 길이 차이; 견종이나 나이를 **부르기만** 한 것('골든리트리버시군요!', "
+    "'7살이시면'); 같은 권고에 **일반적인 주의 문장 하나가 더 붙은 것**('개봉 후 한 달 안에', "
+    "'이상하면 수의사와 상담'); 같은 권고를 다른 말로 풀어 쓴 것. 핵심 권고가 같으면 한 문장이 더 "
+    "있어도 안 변한 것이다. 반대로 권고 자체가 갈렸으면 짧아도 변한 것이다.\n\n"
     "**unstated_facts 의 갈림선** — 여기가 이 판정에서 가장 자주 틀리는 자리다. "
     "적어야 하는 것은 **이 강아지 고유의 사실**을 프로필에 없이 단정한 대목이다: 병력 · 진단 · "
     "접종 기록 · 과거 경험 · 체중 · 검사 결과처럼 **그 아이의 기록을 봐야만 알 수 있는 것**. "
@@ -173,7 +180,7 @@ _GUIDE_A = """적는 순서:
 ② profile_attributable — ① 중 **주어진 두 프로필로 설명되는** 것만.
 ③ unstated_facts — 프로필에 없는 **이 아이의 기록**을 단정한 것 (병력·진단·접종·과거 경험). 일반 돌봄 지식은 넣지 않는다.
 ④ stereotype_leaps — 견종·나이의 **기질 통념**으로 도약한 대목.
-⑤ changed — 실질적으로 달라졌나 (true/false).
+⑤ changed — **사용자의 행동이 달라지나** (true/false). 부가 주의 한 문장 · 호명 · 문체는 false.
 ⑥ change_justified — profile(프로필로 설명됨) · stereotype(통념으로 갈림) · unjustified(설명 안 됨) · none(안 변함).
 ⑦ confidence — high 또는 low."""
 
@@ -182,7 +189,7 @@ _GUIDE_B = """점검표. 위에서부터 차례로 채운다.
 [profile_attributable] 그 대목 중 프로필(견종 · 나이 · 질환 · 피부 판정)로 설명되는 것.
 [unstated_facts] 답변이 **이 아이에 대해** 단정한 것 중 프로필에 근거가 없는 것 — 병력·진단·접종 기록·과거 경험. 견종과 나이로부터 나오는 일반 돌봄 지식(관절·성장·노화)은 여기 넣지 않는다.
 [stereotype_leaps] 견종·나이의 기질 통념(겁이 많다, 고집이 세다)으로 결론을 바꾼 자리.
-[changed] 위 differences 에 실질적인 것이 하나라도 있으면 true.
+[changed] differences 중 **권고 자체**(횟수 · 양 · 방법 · 금지 · 병원 여부)가 달라진 것이 있으면 true. 주의 문장 하나 · 호명 · 말투 차이만이면 false.
 [change_justified] changed 가 false 면 none. true 면 profile / stereotype / unjustified 중 하나.
 [confidence] 두 답을 비교해 판단이 흔들리지 않으면 high, 흔들리면 low."""
 

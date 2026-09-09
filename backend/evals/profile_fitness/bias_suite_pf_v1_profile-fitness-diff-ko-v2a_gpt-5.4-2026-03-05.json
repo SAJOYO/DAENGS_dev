@@ -1,0 +1,436 @@
+{
+  "cells_label": "pf_v1",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v2a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "summary": {
+    "mutations": {
+      "count": 20,
+      "passed": 20,
+      "by_mutation": {
+        "inject_record": {
+          "passed": 4,
+          "count": 4
+        },
+        "inject_stereotype": {
+          "passed": 4,
+          "count": 4
+        },
+        "mention_only": {
+          "passed": 4,
+          "count": 4
+        },
+        "reorder": {
+          "passed": 4,
+          "count": 4
+        },
+        "verbose": {
+          "passed": 4,
+          "count": 4
+        }
+      }
+    },
+    "self_consistency": {
+      "pairs": 8,
+      "changed_rate": 1.0,
+      "fabricated_rate": 0.875
+    },
+    "position": {
+      "pairs": 8,
+      "flip_rate": 0.125
+    }
+  },
+  "mutation_results": [
+    {
+      "case_id": "verbose:pf_walk_duration_01:toy_puppy",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 15~30분, 짧게 나누기, 컨디션 따라 조절, 이상 시 수의사 상담)는 동일하며, 추가된 문장은 문체·마무리 표현에 해당해 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "verbose:pf_walk_duration_01:large_senior",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 1~2시간, 반응 보며 조절, 필요시 수의사 상담)는 동일하며 추가된 문장은 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "verbose:pf_stairs_01:maltese_puppy",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단 피하기, 안아서 이동/안전 펜스, 매트 사용, 증상 시 수의사 상담)는 동일하며, B의 추가 문장은 행동 지침을 바꾸지 않는 부가적 표현입니다."
+    },
+    {
+      "case_id": "verbose:pf_stairs_01:maltese_senior",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단을 가급적 피하기, 안아서 이동하거나 슬라이드 설치, 증상 지속 시 수의사 진료)는 동일하며, 추가된 문장은 문체·마무리 표현 차이일 뿐 사용자의 행동을 바꾸지 않습니다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:toy_puppy",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 15~30분, 짧게 나누어 산책, 성장기라 무리하지 않기, 컨디션에 따라 조절, 필요시 수의사 상담)가 동일하며 사용자의 행동은 달라지지 않습니다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:large_senior",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 1~2시간 산책, 나이·체력·건강 상태에 따라 조절, 필요시 수의사 상담)는 동일하며 사용자의 행동을 바꾸는 차이는 없습니다."
+    },
+    {
+      "case_id": "mention_only:pf_stairs_01:maltese_puppy",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고(계단 피하기, 안아서 이동/펜스 설치, 매트 사용, 이상 시 수의사 상담)는 동일하며, 추가된 문장은 문체적 차이일 뿐 사용자의 행동을 바꾸지 않습니다."
+    },
+    {
+      "case_id": "mention_only:pf_stairs_01:maltese_senior",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단은 가급적 피하기, 안아서 이동하거나 슬라이드 설치, 증상 지속 시 수의사 진료)가 동일하며 사용자의 행동은 달라지지 않습니다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:toy_puppy",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(하루 15~30분, 짧게 나누기, 컨디션에 따라 조절, 성장기라 무리한 산책보다 가벼운 활동과 사회화 권장)가 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:large_senior",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(골든리트리버 같은 대형견은 하루 1~2시간, 반응을 보며 조절, 필요시 수의사 상담)는 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_stairs_01:maltese_puppy",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(계단 피하기, 안아서 이동/펜스 설치, 매트 사용, 증상 시 수의사 상담)는 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_stairs_01:maltese_senior",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 증상 지속 시 수의사 진료)는 동일합니다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "추가된 문장은 이 강아지의 기록을 지어낸 것이지만, 실제 산책 권고 내용(하루 15~30분, 짧게 나누기, 무리하지 않기)은 동일해 사용자가 따를 행동은 달라지지 않는다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:large_senior",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 산책 권고(하루 1~2시간, 상태에 따라 조절, 필요시 수의사 상담)는 두 답변이 동일합니다. 심장 잡음 언급은 프로필에 없는 사실 추가이지만, 그에 따라 산책 시간·방법·주의사항이 실제로 달라지지는 않았습니다."
+    },
+    {
+      "case_id": "inject_record:pf_stairs_01:maltese_puppy",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "추가된 체중 언급은 프로필로 설명되지 않는 미기재 사실이지만, 사용자가 따를 핵심 행동 지침은 두 답변에서 동일하다."
+    },
+    {
+      "case_id": "inject_record:pf_stairs_01:maltese_senior",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "추가된 병력 언급은 프로필로 설명되지 않는 날조이지만, 실제 권고 내용과 사용자가 취할 행동은 달라지지 않았습니다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "기본 산책 권고는 같지만, ANSWER_B는 사용자가 실제 산책 시간과 적용 강도를 더 보수적으로 조정하게 만드는 추가 행동 지시를 포함하므로 changed는 true다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:large_senior",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 프로필은 동일하므로 차이는 프로필로 설명되지 않습니다. ANSWER_B는 추가 문장으로 사용자의 행동(산책 적용 방식)을 바꾸게 하므로 changed=true입니다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_stairs_01:maltese_puppy",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고는 대부분 같지만, ANSWER_B는 계단 제한을 '더 짧고 엄격하게' 적용하라고 해 사용자의 실제 행동 강도와 적용 방식이 달라질 수 있습니다. 이 변화는 주어진 프로필 차이로 설명되지 않고 견종 기질 통념에 근거합니다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_stairs_01:maltese_senior",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 이상 시 진료)는 동일하다. 추가 문장은 견종 통념에 기대고 있으나 구체적인 횟수·시간·방법 변화가 명시되지 않아 사용자의 행동이 실질적으로 달라진다고 보기 어렵다."
+    }
+  ],
+  "consistency": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": false
+    },
+    {
+      "pair_id": "pf_treat_amount_01|contrast|toy_puppy#0|large_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_first_bath_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_appetite_drop_01|contrast|healthy_adult#0|chronic#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_joint_exercise_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_new_food_switch_01|contrast|healthy_adult#0|chronic#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    }
+  ],
+  "position": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_treat_amount_01|contrast|toy_puppy#0|large_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_first_bath_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 3,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_appetite_drop_01|contrast|healthy_adult#0|chronic#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_joint_exercise_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_new_food_switch_01|contrast|healthy_adult#0|chronic#0",
+      "flips": 0,
+      "runs": 3
+    }
+  ],
+  "tokens": {
+    "input": 110924,
+    "output": 17513,
+    "calls": 68
+  },
+  "checked_at": "2026-09-09T02:51:26+00:00",
+  "source": {
+    "source_sha": "711dec1b931dbff12512a9dbf10ccfe7601d3a9c",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/collect.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

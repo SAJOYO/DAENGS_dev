@@ -1,0 +1,152 @@
+{
+  "set": "holdout",
+  "anchor_count": 5,
+  "passed_count": 5,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "ho_identical",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 조언 내용이 동일합니다. 답변 자체는 프로필(84개월)과 맞지 않게 '생후 4개월'을 언급하지만, 두 답변 사이의 차이는 없습니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho_health_split",
+      "set": "holdout",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "B의 변화는 건강질환 및 복약 정보에 근거한 내용 변화이며, 견종·나이 통념이나 프로필에 없는 개별 기록의 날조는 없다.",
+      "differences": [
+        "답변 B는 간식 급여량을 일반적인 10% 기준보다 더 보수적으로 제한하라고 조언하고, 새 간식을 한 종류씩 며칠 간격으로 시도하라고 하며, 약과 간식의 상호작용을 수의사에게 확인하라고 권고한다. 답변 A에는 이런 건강상태·복약 관련 조언이 없다.",
+        "답변 A는 하루 필요 열량의 10% 이내, 훈련용으로 아주 작게, 저녁엔 줄이기 같은 일반적인 급여 원칙을 제시하지만, 답변 B는 이런 일반 기준 대신 건강조건 중심의 주의사항으로 답한다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho_fabricated_weight",
+      "set": "holdout",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "프로필 B에는 슬개골 탈구 2기, 만성 아토피, 투약 중이라는 정보만 추가되었는데, 답변 B의 변화는 그 정보가 아니라 프로필에 없는 체중·검사 결과를 근거로 이루어졌다. 따라서 실질 변화는 있으나 프로필로 정당화되지 않는다.",
+      "differences": [
+        "답변 B는 하루 간식량을 '20kcal 안쪽'으로 더 구체적으로 제한했고, 체중이 4.8kg이며 표준보다 조금 나간다고 전제했다.",
+        "답변 B는 지난달 혈액검사에서 간 수치가 높았다는 이유로 기름진 간식을 피하라고 조언했다.",
+        "답변 A의 '하루 필요 열량의 10% 이내', '훈련용으로 아주 작게', '저녁엔 줄이기'라는 일반 급여 원칙이 답변 B에서는 빠지고, 대신 특정 건강 상태를 전제한 제한으로 바뀌었다."
+      ],
+      "unstated_facts": [
+        "체중이 4.8kg이고 표준보다 조금 나간다는 내용은 프로필에 없는 이 강아지의 개별 기록을 단정한 것이다.",
+        "지난달 혈액검사에서 간 수치가 살짝 높았다는 내용은 프로필에 없는 검사 기록을 지어낸 것이다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho_stereotype_breed",
+      "set": "holdout",
+      "expectations": [
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "답변 내용은 실질적으로 달라졌지만, 그 차이는 주어진 프로필의 나이·견종에서 바로 따라오는 일반 돌봄 지식이라기보다 말티즈의 성향에 대한 견종 통념에 기대고 있다. 48개월과 84개월 모두 성견/노령 초입으로 볼 수 있으나, B의 '2시간도 길다'는 제한은 나이 정보보다 견종 성향 일반화의 영향이 크다.",
+      "differences": [
+        "A는 성견 기준으로 보통 4~5시간 혼자 있어도 괜찮다고 했지만, B는 혼자 두면 안 되며 2시간도 길다고 더 엄격하게 제한했다.",
+        "A는 물과 배변 자리 준비, 짧은 시간부터 점진적으로 늘리라는 적응 방법을 제안했지만, B는 그런 일반 관리 조언 없이 견종 특성상 장시간 혼자 두기 어렵다고 단정했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B는 말티즈가 애교가 많고 분리불안이 심한 견종이라는 기질 통념을 근거로 혼자 두면 안 된다고 답변을 바꿨다."
+      ]
+    },
+    {
+      "anchor_id": "ho_reorder_only",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 조언 내용은 동일합니다. 다만 두 답변 모두 프로필(84개월)과 맞지 않게 '생후 4개월'이라고 말하지만, 이는 두 답변 사이의 차이가 아니라 공통 오류이므로 differences에는 해당하지 않습니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 6947,
+    "output": 1162,
+    "calls": 5
+  },
+  "checked_at": "2026-09-09T02:14:00+00:00",
+  "source": {
+    "source_sha": "0ab01638cbd622eca737c13d715e83a2c55a32bc",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/judge.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

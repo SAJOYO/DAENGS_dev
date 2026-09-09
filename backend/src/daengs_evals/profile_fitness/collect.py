@@ -316,6 +316,10 @@ TRANSIENT_ERROR_KINDS: frozenset[str] = frozenset(
 def is_transient_failure(row: Mapping[str, Any]) -> bool:
     if row.get("error"):
         return True  # 러너 예외 — 네트워크 · 타임아웃 류
+    # 의미 라우터가 두 번 다 스키마를 못 지켜 FAILED (plan 없음). 실측 2026-09-09 에 158셀 중 35 —
+    # 질문의 성질이 아니라(같은 질문이 다른 셀에선 통과) 프로바이더 쪽 흔들림이다.
+    if row.get("status") == "FAILED" and not row.get("plan") and not row.get("results"):
+        return True
     for result in row.get("results") or []:
         err = result.get("error") or {}
         if (
@@ -372,6 +376,8 @@ async def collect(
     profiles_path: Path,
     limit: int | None,
     resume: bool,
+    retry_failed: bool = False,
+    auto_retry: int = 2,
     log: Callable[[str], None] = print,
 ) -> Path:
     from daengs_backend.config import settings
@@ -400,7 +406,7 @@ async def collect(
         questions_path=questions_path,
         profiles_path=profiles_path,
     )
-    done = _resume_or_start(path, meta, resume=resume)
+    done = _resume_or_start(path, meta, resume=resume, retry_failed=retry_failed)
     todo = [(q, arm, run) for q, arm, run in planned if (q.question_id, arm, run) not in done]
 
     log(
@@ -444,6 +450,26 @@ async def collect(
         f"끝. 상태 {statuses} · 라우터 토큰 {totals['router_in']}/{totals['router_out']} · "
         f"general 토큰 {totals['general_in']}/{totals['general_out']} → {path}"
     )
+    # 일시적 실패는 스스로 두 번까지 다시 돈다. 실측(2026-09-09) 158셀 중 35 가 라우터 흔들림으로
+    # 죽었고 두 번 재시도로 전부 복구됐다. 사람이 --retry-failed 를 두 번 치게 두지 않는다.
+    if auto_retry > 0:
+        _, rows_now = load_cells(path)
+        if any(is_transient_failure(r) for r in rows_now):
+            log(f"  일시적 실패가 남아 있다 — 자동 재시도 (남은 횟수 {auto_retry})")
+            return await collect(
+                label=label,
+                conditions=conditions,
+                adapters=adapters,
+                flag=flag,
+                life_temperature=life_temperature,
+                questions_path=questions_path,
+                profiles_path=profiles_path,
+                limit=limit,
+                resume=True,
+                retry_failed=True,
+                auto_retry=auto_retry - 1,
+                log=log,
+            )
     return path
 
 
@@ -467,6 +493,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profiles", default=str(PROFILES_V1_PATH))
     parser.add_argument("--limit", type=int, default=None, help="앞에서부터 N 문항만")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="--resume 과 함께. 일시적 실패 셀을 지우고 다시 돌린다",
+    )
     args = parser.parse_args(argv)
 
     conditions = list(CONDITIONS) if args.condition == "all" else [args.condition]
@@ -481,6 +512,7 @@ def main(argv: list[str] | None = None) -> int:
             profiles_path=Path(args.profiles),
             limit=args.limit,
             resume=args.resume,
+            retry_failed=args.retry_failed,
         )
     )
     return 0

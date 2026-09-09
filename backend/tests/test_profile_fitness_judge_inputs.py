@@ -53,8 +53,9 @@ def test_every_anchor_states_at_least_one_expectation_on_a_known_observation() -
 def test_anchor_sets_are_disjoint_and_both_nonempty() -> None:
     dev = {a.anchor_id for a in ANCHORS_BY_SET["dev"]}
     holdout = {a.anchor_id for a in ANCHORS_BY_SET["holdout"]}
-    assert dev and holdout and not (dev & holdout)
-    assert dev | holdout == {a.anchor_id for a in ANCHORS}
+    retired = {a.anchor_id for a in ANCHORS_BY_SET["retired"]}
+    assert dev and holdout and not (dev & holdout) and not (holdout & retired)
+    assert dev | holdout | retired == {a.anchor_id for a in ANCHORS}
 
 
 def test_anchor_ids_are_unique() -> None:

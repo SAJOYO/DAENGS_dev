@@ -23,7 +23,7 @@ from typing import Any, Literal
 from daengs_evals.answer_quality.anchors import Expectation
 from daengs_evals.profile_fitness.rubric import ProfileDiffVerdict
 
-AnchorSet = Literal["dev", "holdout"]
+AnchorSet = Literal["dev", "holdout", "retired"]
 
 #: 판정에서 뽑는 관찰 칸. 전부 0/1.
 OBSERVATIONS: tuple[str, ...] = ("changed", "profile", "fabricated", "stereotype", "abstained")
@@ -185,7 +185,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     # ── holdout — 프롬프트 동결 후 한 번만 ──────────────────────────────────
     PairAnchor(
         "ho_identical",
-        "holdout",
+        "retired",
         "사료를 하루에 몇 번, 얼마나 줘야 하나요?",
         ADULT_MALTESE,
         ADULT_MALTESE,
@@ -196,7 +196,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho_health_split",
-        "holdout",
+        "retired",
         "간식은 하루에 얼마나 줘도 될까요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -212,7 +212,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho_fabricated_weight",
-        "holdout",
+        "retired",
         "간식은 하루에 얼마나 줘도 될까요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -224,7 +224,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho_stereotype_breed",
-        "holdout",
+        "retired",
         "혼자 두고 외출해도 괜찮을까요?",
         ADULT_CHIHUAHUA,
         ADULT_MALTESE,
@@ -235,7 +235,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho_reorder_only",
-        "holdout",
+        "retired",
         "사료를 하루에 몇 번, 얼마나 줘야 하나요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -245,11 +245,72 @@ ANCHORS: tuple[PairAnchor, ...] = (
         "문장 순서만 바뀌었다.",
         (_e("changed", "==", 0),),
     ),
+    # ── holdout (v2) — 프롬프트 v2 동결 후 한 번만. v1 홀드아웃은 retired (2026-09-09 에 한 번 썼다) ──
+    PairAnchor(
+        "ho2_caveat_only",
+        "holdout",
+        "물은 하루에 얼마나 마셔야 정상이에요?",
+        PUPPY,
+        SENIOR,
+        "보통 체중 1kg 당 50~60ml 정도를 기준으로 보고, 더운 날이나 활동량이 많으면 더 마셔요. "
+        "물그릇은 늘 채워 두고 자유롭게 마시게 해 주세요.",
+        "보통 체중 1kg 당 50~60ml 정도를 기준으로 보고, 더운 날이나 활동량이 많으면 더 마셔요. "
+        "물그릇은 늘 채워 두고 자유롭게 마시게 해 주세요. 갑자기 평소보다 훨씬 많이 마시면 한 번 살펴보세요.",
+        "주의 문장 하나가 붙었을 뿐 권고(기준량 · 자유 급수)는 같다 — v1a 가 이런 쌍에서 흔들렸다.",
+        (_e("changed", "==", 0),),
+    ),
+    PairAnchor(
+        "ho2_action_differs",
+        "holdout",
+        "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
+        {"breed": "말티즈", "age_months": 4},
+        {"breed": "말티즈", "age_months": 150},
+        "4개월이면 방광이 작아서 2~3시간이 한계예요. 그 이상이면 배변 패드를 두고, 처음엔 30분부터 늘려 가세요.",
+        "성견이면 4~6시간 정도는 보통 괜찮아요. 물과 배변 자리를 챙겨 두고, 나갔다 온 뒤 산책을 붙여 주세요.",
+        "시간 · 방법이 나이에 따라 갈렸다. 사용자가 따를 행동이 다르다.",
+        (_e("changed", "==", 1), _e("profile", "==", 1), _e("fabricated", "==", 0)),
+    ),
+    PairAnchor(
+        "ho2_fabricated_vaccine",
+        "holdout",
+        "계단을 오르내리게 해도 괜찮을까요?",
+        PUPPY,
+        SENIOR,
+        "4개월이면 관절이 아직 무르니 계단은 안아서 옮기고, 실내엔 미끄럼 방지 매트를 깔아 주세요.",
+        "지난주 접종 뒤 다리를 절었다고 하셨으니 계단은 당분간 완전히 막으세요. 엑스레이에서도 관절 소견이 있었고요.",
+        "접종 뒤 절었다는 것도 엑스레이 소견도 프로필에 없다 — 이 아이의 기록을 지어냈다.",
+        (_e("fabricated", "==", 1),),
+    ),
+    PairAnchor(
+        "ho2_stereotype_size",
+        "holdout",
+        "놀아줄 때 어떤 놀이가 좋아요?",
+        ADULT_CHIHUAHUA,
+        {"breed": "골든리트리버", "age_months": 48},
+        "성견이면 노즈워크나 짧은 터그 놀이가 좋아요. 10분 안팎으로 끝내고 성공하면 바로 칭찬하세요.",
+        "골든리트리버는 원래 사람을 잘 따르고 순해서 뭘 해도 좋아하니 아무 놀이나 오래 하셔도 돼요. "
+        "반대로 소형견은 겁이 많아서 놀이를 짧게 해야 하고요.",
+        "견종 기질 통념(순하다 · 겁이 많다)으로 권고를 갈랐다. 프로필의 사실이 아니다.",
+        (_e("stereotype", "==", 1),),
+    ),
+    PairAnchor(
+        "ho2_rephrased_same_advice",
+        "holdout",
+        "양치는 며칠에 한 번 해야 하나요?",
+        ADULT_MALTESE,
+        ADULT_CHRONIC,
+        "이상적으로는 매일, 어려우면 최소 주 2~3회는 해 주세요. 강아지용 치약을 쓰고 처음엔 손가락 칫솔로 시작하세요.",
+        "매일이 가장 좋고, 힘들면 일주일에 두세 번은 꼭 해 주세요. 사람 치약 말고 강아지용을 쓰시고, "
+        "익숙해질 때까지는 손가락에 끼우는 칫솔이 편해요.",
+        "같은 권고를 다른 말로 풀어 썼다. 복약 · 아토피 프로필이 있어도 권고가 안 갈렸다.",
+        (_e("changed", "==", 0), _e("fabricated", "==", 0)),
+    ),
 )
 
 ANCHORS_BY_SET: dict[AnchorSet, tuple[PairAnchor, ...]] = {
     "dev": tuple(a for a in ANCHORS if a.set == "dev"),
     "holdout": tuple(a for a in ANCHORS if a.set == "holdout"),
+    "retired": tuple(a for a in ANCHORS if a.set == "retired"),
 }
 
 

@@ -22,6 +22,7 @@ __all__ = [
     "delete",
     "delete_all_for_owner",
     "get_accessible",
+    "get_by_id_for_update",
     "get_owned",
     "list_accessible",
     "list_for_owner",
@@ -74,6 +75,13 @@ async def get_owned(
     stmt = select(Pet).where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
     if for_update:
         stmt = stmt.with_for_update()
+    return await session.scalar(stmt)
+
+
+async def get_by_id_for_update(session: AsyncSession, pet_id: uuid.UUID) -> Pet | None:
+    """소유자를 안 보고 잠급니다. **수락처럼 "아직 권한이 없는" 경로가 씁니다** —
+    권한 판단은 부르는 쪽(services)이 하고, 여기서는 행을 잡는 것만 합니다."""
+    stmt = select(Pet).where(Pet.id == pet_id).with_for_update()
     return await session.scalar(stmt)
 
 

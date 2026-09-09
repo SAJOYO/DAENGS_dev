@@ -5,13 +5,17 @@ DB 는 쓰지 않습니다 (`test_care_events.py` 와 같은 규칙). 트리거�
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from fakes import FakeAdmin, FakePet, FakeSession, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, Store, install
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.routers import pet_member as pet_member_router
 from daengs_backend.schemas.pet import PetUpsert
 from daengs_backend.schemas.walk import WalkUpload
 from daengs_backend.services import care_event as care_service
@@ -25,12 +29,31 @@ OWNER = uuid.uuid4()
 CARER = uuid.uuid4()
 STRANGER = uuid.uuid4()
 
+#: `store.app_users` 는 kakao_id 로 키가 걸린 dict 입니다 (fakes.py). 초대 수락의
+#: 부수효과(`primary_pet_id` 채우기)를 보려면 OWNER·CARER 가 그 dict 에도 있어야 합니다.
+OWNER_KAKAO = 1001
+CARER_KAKAO = 1002
+
 
 @pytest.fixture
 def store(monkeypatch: pytest.MonkeyPatch) -> Store:
     s = Store(FakeAdmin(login_id="admin", password_hash="x", name="관리자", role="OWNER"))
     install(s, monkeypatch)
+    s.add_app_user(FakeAppUser(kakao_id=OWNER_KAKAO, id=OWNER))
+    s.add_app_user(FakeAppUser(kakao_id=CARER_KAKAO, id=CARER))
     return s
+
+
+def client_as(app_user_id: uuid.UUID) -> TestClient:
+    """그 사람으로 인증을 통과한 클라이언트. `test_care_events.py` 의 `_client_for` 와 같은 요령 —
+    라우터가 `CurrentAppUser` 로 잠겨 있으므로 그 의존성만 갈아 끼웁니다.
+    """
+    app = FastAPI()
+    app.include_router(pet_member_router.router)
+    app.dependency_overrides[
+        next(iter(CurrentAppUser.__metadata__)).dependency
+    ] = lambda: AppPrincipal(app_user_id=app_user_id)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
@@ -173,3 +196,93 @@ async def test_miniroom_cap_counts_carer_pets(store: Store):
     body = PetUpsert(name="여섯째", breed="믹스")
     with pytest.raises(pet_service.PetLimitReachedError):
         await pet_service.create_pet(None, CARER, body)
+
+
+# ── 초대 생성 · 수락 (docs/co-care.md §3) ────────────────────────────
+
+
+def _invite(store: Store, pet: FakePet, owner: uuid.UUID = OWNER) -> str:
+    """대표가 초대를 만들고 평문 토큰을 얻는다."""
+    r = client_as(owner).post(f"/app/pets/{pet.id}/invites")
+    assert r.status_code == 201, r.text
+    return r.json()["token"]
+
+
+async def test_carer_cannot_invite(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    assert client_as(CARER).post(f"/app/pets/{pet.id}/invites").status_code == 404
+
+
+async def test_accept_makes_member(store: Store, pet: FakePet):
+    token = _invite(store, pet)
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 200
+    assert (pet.id, CARER) in store.pet_members
+
+
+async def test_accept_is_idempotent(store: Store, pet: FakePet):
+    """카톡 링크는 두 번 거의 동시에 눌린다.
+
+    ⚠️ 완전히 순차적인(첫 요청이 끝난 뒤 둘째가 시작하는) 재전송은 이걸로 못 봅니다 —
+    첫 수락이 커밋되며 초대 행 자체를 지우므로(`services/pet_member.py` 의
+    `InviteNotFoundError` 설명 — "이미 쓴 초대도 이것입니다"), 완전히 끝난 뒤의 재전송은
+    토큰을 못 찾아 404 입니다. 그것과 다른 상황이 진짜 "두 번 눌림" 입니다: 두 요청이
+    **동시에** 같은(아직 안 지워진) 초대 행을 읽어서, 하나가 먼저 구성원으로 넣고
+    커밋하는 사이에 다른 하나도 그 초대를 들고 있는 경우입니다. 그때 나중 요청이
+    보는 것이 `is_member() == True` 이고, 그 분기가 초대를 다시 지우지 않고 200 을
+    돌려줍니다(`accept_invite` 의 `# 멱등입니다` 분기) — 그 경합을 여기서 흉내 냅니다.
+    """
+    token = _invite(store, pet)
+    store.pet_members.append((pet.id, CARER))  # 먼저 커밋된 동시 요청을 흉내 낸다
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 200
+
+
+async def test_unknown_token_is_404(store: Store, pet: FakePet):
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": "nope"})
+    assert r.status_code == 404
+
+
+async def test_expired_token_is_410(store: Store, pet: FakePet):
+    token = _invite(store, pet)
+    store.pet_invites[0].expires_at = datetime(2020, 1, 1, tzinfo=UTC)
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 410
+
+
+async def test_owner_accepting_own_invite_is_409(store: Store, pet: FakePet):
+    """트리거 ② 가 DB 에서도 막지만, 서비스가 먼저 거절해야 500 이 안 난다."""
+    token = _invite(store, pet)
+    r = client_as(OWNER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 409
+
+
+async def test_invite_limit_is_three(store: Store, pet: FakePet):
+    for _ in range(3):
+        _invite(store, pet)
+    assert client_as(OWNER).post(f"/app/pets/{pet.id}/invites").status_code == 409
+
+
+async def test_creating_invite_clears_expired(store: Store, pet: FakePet):
+    _invite(store, pet)
+    store.pet_invites[0].expires_at = datetime(2020, 1, 1, tzinfo=UTC)
+    _invite(store, pet)
+    assert len(store.pet_invites) == 1
+
+
+async def test_accept_fills_empty_primary_pet(store: Store, pet: FakePet):
+    """등록한 강아지가 없는 신규 돌보미는 첫 수락에서 대표 강아지를 얻는다."""
+    user = store.app_users[CARER_KAKAO]
+    user.primary_pet_id = None
+    token = _invite(store, pet)
+    client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert user.primary_pet_id == pet.id
+
+
+async def test_accept_respects_miniroom_limit(store: Store, pet: FakePet):
+    """수락자가 이미 5마리면 6번째가 방에 못 선다."""
+    for i in range(5):
+        store.pets.append(FakePet(app_user_id=CARER, name=f"강아지{i}", breed="믹스"))
+    token = _invite(store, pet)
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 409

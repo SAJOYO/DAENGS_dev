@@ -23,6 +23,7 @@ from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_member as pet_member_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import screening as screening_repo
 from daengs_backend.repositories import walk as walk_repo
@@ -302,6 +303,18 @@ class FakePet:
     photo_pending_key: str | None = None
     photo_pending_content_type: str | None = None
     photo_pending_at: object | None = None
+
+
+@dataclass
+class FakeInvite:
+    """PetInvite 대역. 공동 돌봄 초대 (docs/co-care.md §3)."""
+
+    pet_id: uuid.UUID
+    invited_by: uuid.UUID
+    token_hash: str
+    expires_at: datetime
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    created_at: datetime = field(default_factory=lambda: datetime(2026, 9, 9, tzinfo=UTC))
 
 
 @dataclass
@@ -612,6 +625,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ids = _member_pet_ids(app_user_id)
         return sum(1 for p in store.pets if p.app_user_id == app_user_id or p.id in ids)
 
+    async def pet_get_by_id_for_update(session, pet_id):
+        # 진짜와 같게 **소유자 조건이 없습니다** — 초대 수락처럼 권한 판단 전에
+        # 행을 잠그기만 하는 경로가 씁니다. 가짜에는 동시성이 없어 락 자체는 흉내
+        # 내지 않고, "누구 것이든 id 로 찾는다" 는 뜻만 지킵니다.
+        return next((p for p in store.pets if p.id == pet_id), None)
+
     async def pet_find_by_photo_key(session, storage_key, *, pending):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
         # "backend 가 발급한 키인가" 만 봅니다.
@@ -687,6 +706,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "get_accessible", pet_get_accessible)
     monkeypatch.setattr(pet_repo, "count_accessible", pet_count_accessible)
+    monkeypatch.setattr(pet_repo, "get_by_id_for_update", pet_get_by_id_for_update)
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "accessible_ids", pet_accessible_ids)
@@ -697,6 +717,93 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
+
+    # -- pet_members / pet_invites (공동 돌봄, docs/co-care.md §3) ---------
+    async def member_list_members(session, pet_id):
+        return [uid for pid, uid in store.pet_members if pid == pet_id]
+
+    async def member_is_member(session, pet_id, app_user_id):
+        # 진짜와 같게 **대표도 True 입니다** — 구성원은 대표 ∪ 돌보미입니다.
+        owner = next((p.app_user_id for p in store.pets if p.id == pet_id), None)
+        if owner == app_user_id:
+            return True
+        return (pet_id, app_user_id) in store.pet_members
+
+    async def member_count_members(session, pet_id):
+        # 진짜와 같게 **대표를 포함해서** 셉니다.
+        return sum(1 for pid, _ in store.pet_members if pid == pet_id) + 1
+
+    def member_add(session, pet_id, app_user_id):
+        store.pet_members.append((pet_id, app_user_id))
+        return (pet_id, app_user_id)
+
+    async def member_remove(session, pet_id, app_user_id):
+        before = len(store.pet_members)
+        store.pet_members = [
+            row for row in store.pet_members if row != (pet_id, app_user_id)
+        ]
+        return before - len(store.pet_members)
+
+    async def member_get_invite_by_hash(session, token_hash):
+        return next(
+            (i for i in store.pet_invites if i.token_hash == token_hash), None
+        )
+
+    async def member_count_valid_invites(session, pet_id, now):
+        return sum(
+            1
+            for i in store.pet_invites
+            if i.pet_id == pet_id and i.expires_at > now
+        )
+
+    def member_add_invite(session, *, pet_id, invited_by, token_hash, expires_at):
+        invite = FakeInvite(
+            pet_id=pet_id,
+            invited_by=invited_by,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        store.pet_invites.append(invite)
+        return invite
+
+    async def member_delete_invite(session, invite_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [i for i in store.pet_invites if i.id != invite_id]
+        return before - len(store.pet_invites)
+
+    async def member_delete_expired_invites(session, pet_id, now):
+        before = len(store.pet_invites)
+        store.pet_invites = [
+            i
+            for i in store.pet_invites
+            if not (i.pet_id == pet_id and i.expires_at <= now)
+        ]
+        return before - len(store.pet_invites)
+
+    async def member_delete_invites_for_pet(session, pet_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [i for i in store.pet_invites if i.pet_id != pet_id]
+        return before - len(store.pet_invites)
+
+    monkeypatch.setattr(pet_member_repo, "list_members", member_list_members)
+    monkeypatch.setattr(pet_member_repo, "is_member", member_is_member)
+    monkeypatch.setattr(pet_member_repo, "count_members", member_count_members)
+    monkeypatch.setattr(pet_member_repo, "add", member_add)
+    monkeypatch.setattr(pet_member_repo, "remove", member_remove)
+    monkeypatch.setattr(
+        pet_member_repo, "get_invite_by_hash", member_get_invite_by_hash
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "count_valid_invites", member_count_valid_invites
+    )
+    monkeypatch.setattr(pet_member_repo, "add_invite", member_add_invite)
+    monkeypatch.setattr(pet_member_repo, "delete_invite", member_delete_invite)
+    monkeypatch.setattr(
+        pet_member_repo, "delete_expired_invites", member_delete_expired_invites
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invites_for_pet", member_delete_invites_for_pet
+    )
 
     # D-043 gait 행은 별도 focused tests 가 대역을 넣습니다. 일반 pet/auth 테스트에는
     # 보행 기록이 없으므로 빈 잠금 결과를 돌려 storage 설정과 무관하게 둡니다.

@@ -36,9 +36,13 @@ from daengs_screening.agent import CONTRACT_VERSION
 MAX_BYTES = 12 * 1024 * 1024          # 휴대폰 사진 한 장이면 충분합니다
 STATIC = Path(__file__).resolve().parent / "static"
 
-#: 가중치가 있는 폴더. compose 가 `:ro` 로 물려 줍니다.
-#: 저장소에는 없습니다 — best.pt 가 100MB 리밋을 넘습니다 (D-022).
-RELEASE_DIR = os.environ.get("SCREENING_RELEASE_DIR", "/models/release")
+#: 가중치가 있는 **폴더**. 기본값이 없습니다 — 채운 사람만 씁니다.
+#:
+#: 예전에는 `/models/release` 가 기본이었고 compose 가 서버 디스크의 폴더를
+#: `:ro` 로 물려 줬습니다. 지금은 허깅페이스에서 받으므로 그 마운트를 없앴고,
+#: 이 변수는 **로컬에서 직접 만든 릴리스로 돌려 볼 때만** 씁니다.
+#: 둘 다 비어 있으면 `/screen/` 이 503 이고 **왜인지 말해 줍니다.**
+RELEASE_DIR = os.environ.get("SCREENING_RELEASE_DIR", "").strip()
 
 #: 허깅페이스 리포에서 받아 옵니다. **비어 있으면 예전처럼 위 폴더를 봅니다** —
 #: 되돌리기가 환경 변수 하나이고, 토큰 없는 개발 PC 도 그대로 돕니다.
@@ -96,6 +100,17 @@ def _release_path(download: bool) -> str | None:
     global _downloaded
 
     if not RELEASE_REPO:
+        if not RELEASE_DIR:
+            # 헬스체크는 죽으면 안 되므로 여기서는 조용히 물러섭니다
+            # (`stage2_arms_available: 0` 으로 보입니다). 실제로 쓰려고 부르면
+            # 아래 `_agent()` 가 명확한 문장으로 503 을 냅니다.
+            if not download:
+                return None
+            raise RuntimeError(
+                "가중치를 어디서 가져올지 정해지지 않았습니다. "
+                "backend/.env 에 SCREENING_RELEASE_REPO (+ SCREENING_RELEASE_REVISION, "
+                "HF_TOKEN) 를 넣으세요. 로컬 폴더로 돌리려면 SCREENING_RELEASE_DIR 입니다."
+            )
         return RELEASE_DIR
     if _downloaded:
         return _downloaded
@@ -156,7 +171,7 @@ def _fail(exc: Exception) -> HTTPException:
         503,
         "스크리닝 모델을 불러오지 못했습니다. 서버에 가중치가 놓여 있는지 "
         f"확인하세요 (SCREENING_RELEASE_REPO={RELEASE_REPO or '(없음)'} / "
-        f"SCREENING_RELEASE_DIR={RELEASE_DIR}). 원인: {exc}",
+        f"SCREENING_RELEASE_DIR={RELEASE_DIR or '(없음)'}). 원인: {exc}",
     )
 
 
@@ -201,7 +216,7 @@ def healthz():
     avail = _arms_on_disk()
     body = {"ok": True, "mock": False, "contract_version": CONTRACT_VERSION,
             "loaded": loaded,
-            "release_dir": _release_path(download=False) or RELEASE_DIR,
+            "release_dir": _release_path(download=False) or RELEASE_DIR or None,
             "release_repo": RELEASE_REPO or None,
             "release_revision": RELEASE_REVISION,
             "stage2_arms_available": len(avail),

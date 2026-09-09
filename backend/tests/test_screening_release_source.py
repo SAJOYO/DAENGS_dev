@@ -49,11 +49,29 @@ def _fake_hub(monkeypatch, path="/cache/snap", boom_offline=True):
     return calls
 
 
-def test_리포가_없으면_예전_폴더를_본다(monkeypatch):
-    """되돌리기가 환경 변수 하나여야 합니다. 토큰 없는 개발 PC 도 그대로 돌아야 하고요."""
+def test_폴더를_직접_정하면_그것을_본다(monkeypatch):
+    """로컬에서 직접 만든 릴리스로 돌려 볼 때. **기본값은 없습니다.**"""
     monkeypatch.setattr(service, "RELEASE_REPO", "")
-    assert service._release_path(download=True) == service.RELEASE_DIR
-    assert service._release_path(download=False) == service.RELEASE_DIR
+    monkeypatch.setattr(service, "RELEASE_DIR", "/tmp/rel")
+    assert service._release_path(download=True) == "/tmp/rel"
+    assert service._release_path(download=False) == "/tmp/rel"
+
+
+def test_둘_다_비면_왜인지_말한다(monkeypatch):
+    """★ 마운트를 없앤 뒤로는 **조용히 빈 폴더를 보는 일이 없어야** 합니다.
+
+    예전에는 `/models/release` 가 기본값이라, 마운트가 빠져도 "없는 폴더를 보는"
+    상태로 조용히 굴러갔습니다. 지금은 어디서 가져올지 안 정하면 말을 합니다.
+    """
+    monkeypatch.setattr(service, "RELEASE_REPO", "")
+    monkeypatch.setattr(service, "RELEASE_DIR", "")
+
+    # 헬스체크는 죽으면 안 됩니다 — 조용히 0팔로 보입니다.
+    assert service._release_path(download=False) is None
+    assert service._arms_on_disk() == []
+
+    with pytest.raises(RuntimeError, match="SCREENING_RELEASE_REPO"):
+        service._release_path(download=True)
 
 
 def test_local_dir_을_주지_않는다(monkeypatch):

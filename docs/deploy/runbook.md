@@ -255,7 +255,12 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   # ② VM — 객체만 받는다 (워크트리는 아직 안 움직입니다)
   cd ~/daengs && git fetch
   git diff --stat HEAD origin/main
+  git diff --name-only HEAD origin/main -- db/migrations   # ③ 에서 적용할 목록 = 이 출력
   ```
+
+  GCP 에 무엇이 적용됐는지는 **워크트리(`HEAD`)가 곧 기록**입니다 — ③ 을 빠뜨리지 않는 한
+  `main` 에 있는 마이그레이션은 전부 적용된 것이고, 두 번째 줄이 곧 미적용 목록입니다.
+  여러 장이면 **날짜순**으로 한 장씩 ③ 을 반복합니다.
   ```bash
   # ③ db/migrations/ 에 새 파일이 있으면 **pull 보다 먼저** 적용한다
   git show origin/main:db/migrations/<파일>.sql \
@@ -277,7 +282,18 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   쪽이 따라오지 않으므로 두 줄로 적어 둡니다 (roadmap §2-5).
 
   ④ 뒤, 바뀐 종류별 조치:
-  - **백엔드 코드만** → 없음. ④ 로 끝입니다
+  - **백엔드 코드만** → 웹(`backend`)은 리로드라 없음. **단, Celery 워커는 리로드가
+    없습니다** — `backend/src` 가 바뀐 배포는 워커도 재시작합니다 (몇 초, 분석이 돌고
+    있지 않을 때):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      restart gait-worker territory-vision-worker
+    docker compose logs --tail 5 gait-worker    # `celery@… ready.` 가 새로 찍히면 끝
+    ```
+
+    2026-09-09(#355) 에 로컬 서버에서 실제로 겪었습니다 — 웹은 새 코드인데 워커가 44시간
+    전 코드로 남아, 같은 영상이 같은 자리에서 다시 죽었습니다. 로그로는 구분이 안 됩니다.
   - **`uv.lock` · compose** → 영향받는 컨테이너 재생성:
 
     ```bash

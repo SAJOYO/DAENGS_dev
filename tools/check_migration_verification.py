@@ -317,10 +317,21 @@ CHECKS = (
             'ALTER TABLE vet_visit_drafts DROP COLUMN extracted',
             'ALTER TABLE vet_visit_drafts ALTER COLUMN receipt_image_key DROP NOT NULL',
             'DROP INDEX idx_vet_visit_drafts_created_at',
+            'ALTER TABLE vet_visits DROP COLUMN is_emergency',
+            'ALTER TABLE vet_visits DROP COLUMN is_oncology',
+            'ALTER TABLE vet_visits ALTER COLUMN is_emergency DROP NOT NULL',
+            # 기본값이 뒤집히는 변조. 아무 에러 없이 **모든 방문이 종양 진료로** 쌓인다.
+            'ALTER TABLE vet_visits ALTER COLUMN is_oncology SET DEFAULT true',
             # **닫힌 목록이 열리는 변조.** 이름은 살아 있으므로 ④ 로는 안 잡힌다.
             'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check;'
             ' ALTER TABLE vet_visits ADD CONSTRAINT vet_visits_reason_code_check'
             ' CHECK (length(reason_code) > 0)',
+            # **축이 둘로 돌아가는 변조 — ⑦ 만 잡는다.** 목록은 여전히 닫혀 있고
+            # 'cardiac'·'other' 도 살아 있어 ④ 도 ⑥ 도 통과한다. 그런데 'tumor' 가 돌아온
+            # 순간 피부 종괴가 skin 이자 tumor 라, 지키려던 사유별 누계가 조용히 갈린다.
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check;'
+            ' ALTER TABLE vet_visits ADD CONSTRAINT vet_visits_reason_code_check'
+            " CHECK (reason_code IN ('skin','cardiac','other','tumor'))",
         ]),
         ('2026-09-07', 'pets_registered', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN registered',

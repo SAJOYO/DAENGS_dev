@@ -42,14 +42,22 @@ CREATE TABLE IF NOT EXISTS vet_visits (
         CONSTRAINT vet_visits_hospital_phone_shape
         CHECK (hospital_phone IS NULL OR hospital_phone ~ '^[0-9]{2,4}(-[0-9]{3,4}){1,2}$'),
 
-    -- 유저가 확정한 사유. **닫힌 목록이다.** 자유 텍스트면 피부염·피부질환·피부병이
-    -- 서로 다른 키가 되어 "피부로 1년간 얼마" 가 영영 안 모인다 — 사유별 누계가 이 기능의
-    -- 존재 이유이므로 그 집계가 서는 쪽을 고른다. 사람의 말은 reason_detail 이 받는다.
+    -- 유저가 확정한 사유. **닫힌 목록이고, 축이 하나다.** 자유 텍스트면 피부염·피부질환·
+    -- 피부병이 서로 다른 키가 되어 "피부로 1년간 얼마" 가 영영 안 모인다 — 사유별 누계가
+    -- 이 기능의 존재 이유이므로 그 집계가 서는 쪽을 고른다. 사람의 말은 reason_detail 이 받는다.
+    --
+    -- 축은 "이 방문이 무엇을 겨눴나" 하나다 — 신체계통 열둘, 아니면 예방 넷(겨누는 계통이
+    -- 없다), 아니면 other. **병리(종양·외상)와 응급도를 코드에서 뺀 것이 이 목록의 요점이다.**
+    -- 그 둘은 방문이 겨눈 대상이 아니라 방문의 성질이라, 코드에 섞으면 한 방문에 코드가
+    -- 둘씩 맞아떨어진다 — 피부 종괴 제거가 skin 이자 tumor 이고, 야간 골절이 injury 이자
+    -- musculoskeletal 이자 emergency 다. 같은 병이 방문마다 다른 칸에 떨어지면 지키려던
+    -- 누계가 바로 그 지점에서 조용히 깨진다. 응급도는 is_emergency, 종양은 is_oncology 로
+    -- 뺐다 (아래).
     reason_code VARCHAR(20) NOT NULL
         CONSTRAINT vet_visits_reason_code_check CHECK (reason_code IN (
-            'skin','digestive','vaccination','checkup','dental','injury','neuter',
-            'eye','ear','respiratory','musculoskeletal','urinary','tumor',
-            'parasite','emergency','other')),
+            'skin','ear','eye','dental','digestive','respiratory','cardiac',
+            'urinary','reproductive','musculoskeletal','neurologic','endocrine',
+            'vaccination','parasite_prevention','checkup','neuter','other')),
 
     -- 유저가 덧붙인 한 줄("왼쪽 뒷다리"). 집계에 안 쓰고 프롬프트에도 안 간다.
     reason_detail VARCHAR(60)
@@ -62,9 +70,20 @@ CREATE TABLE IF NOT EXISTS vet_visits (
     suggested_reason_code VARCHAR(20)
         CONSTRAINT vet_visits_suggested_reason_code_check CHECK (
             suggested_reason_code IS NULL OR suggested_reason_code IN (
-            'skin','digestive','vaccination','checkup','dental','injury','neuter',
-            'eye','ear','respiratory','musculoskeletal','urinary','tumor',
-            'parasite','emergency','other')),
+            'skin','ear','eye','dental','digestive','respiratory','cardiac',
+            'urinary','reproductive','musculoskeletal','neurologic','endocrine',
+            'vaccination','parasite_prevention','checkup','neuter','other')),
+
+    -- 응급 방문이었나. **코드가 아니라 칸인 이유**는 응급이 겨눈 대상이 아니라 방문의
+    -- 성질이어서다. 부수 효과가 하나 있다 — 이 칸은 이 표에서 OCR 이 **진단보다 더 확실하게**
+    -- 읽는 값이다: 야간진료비·응급진료비·공휴일 할증이 영수증에 항목으로 찍혀 있어서,
+    -- 판단이 아니라 글자를 읽으면 된다.
+    is_emergency BOOLEAN NOT NULL DEFAULT false,
+
+    -- 종양 진료였나. 응급과 같은 이유로 칸이고, **다른 점은 기계가 못 채운다는 것이다** —
+    -- 이것은 영수증에 찍힌 글자가 아니라 임상 판단이라 추출 스키마에 칸을 두지 않는다
+    -- (docs/vet-visits.md §2). 확인 화면의 체크 하나로 유저만 켠다.
+    is_oncology BOOLEAN NOT NULL DEFAULT false,
 
     -- 추출된 진료 항목 [{"name": "초진료", "amount_krw": 15000}, ...].
     -- **보호자 이름·전화·카드번호는 여기 없다** — 추출 스키마에 그 칸 자체가 없다.

@@ -41,6 +41,8 @@ BEGIN
         ('reason_code',           'character varying(20)',    'true'),
         ('reason_detail',         'character varying(60)',    'false'),
         ('suggested_reason_code', 'character varying(20)',    'false'),
+        ('is_emergency',          'boolean',                  'true'),
+        ('is_oncology',           'boolean',                  'true'),
         ('raw_ocr_items',         'jsonb',                    'true'),
         ('receipt_image_key',     'text',                     'false'),
         ('client_event_id',       'uuid',                     'true'),
@@ -165,16 +167,51 @@ BEGIN
     END LOOP;
 
     -- ⑥ 사유가 **닫힌 목록**이어야 한다. CHECK 이름만 보면 목록을 통째로 갈아 끼운
-    --    변조를 못 잡는다 — 실제 값 둘을 정의문에서 확인한다. 이것이 풀리면
-    --    피부염·피부질환·피부병이 서로 다른 키가 되어 사유별 누계가 조용히 쪼개진다.
+    --    변조를 못 잡는다 — 실제 값을 정의문에서 확인한다. 이것이 풀리면 피부염·피부질환·
+    --    피부병이 서로 다른 키가 되어 사유별 누계가 조용히 쪼개진다.
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint c
         WHERE c.conrelid = relation AND c.conname = 'vet_visits_reason_code_check'
-          AND pg_get_constraintdef(c.oid) LIKE '%''skin''%'
+          AND pg_get_constraintdef(c.oid) LIKE '%''cardiac''%'
           AND pg_get_constraintdef(c.oid) LIKE '%''other''%'
     ) THEN
         RAISE EXCEPTION 'constraint mismatch on vet_visits: reason_code 가 닫힌 목록이 아니다';
     END IF;
+
+    -- ⑦ 목록의 **축이 하나여야 한다.** care_events 의 kind 에 'walk' 가 없어야 하는 것과
+    --    같은 종류의 단언이다 — 병리(tumor·injury·parasite)와 응급도(emergency)는 방문이
+    --    겨눈 대상이 아니라 방문의 성질이라, 코드로 되돌아오면 한 방문에 코드가 둘씩
+    --    맞아떨어진다. 피부 종괴가 skin 이자 tumor 가 되는 순간, 지키려던 누계가 바로
+    --    그 지점에서 깨진다. 응급도는 is_emergency, 종양은 is_oncology 가 받는다.
+    FOR item IN SELECT * FROM (VALUES
+        ('tumor'), ('injury'), ('parasite'), ('emergency')
+    ) AS banned(code) LOOP
+        IF EXISTS (
+            SELECT 1 FROM pg_constraint c
+            WHERE c.conrelid = relation AND c.conname = 'vet_visits_reason_code_check'
+              AND pg_get_constraintdef(c.oid) LIKE '%''' || item.code || '''%'
+        ) THEN
+            RAISE EXCEPTION
+                'constraint mismatch on vet_visits: reason_code 에 % 가 있으면 안 된다 (축이 둘이 된다)',
+                item.code;
+        END IF;
+    END LOOP;
+
+    -- ⑧ 불리언 둘의 기본값. false 가 아니면 아무 에러 없이 **모든 방문이 응급·종양으로**
+    --    쌓이고, 화면에서만 이상해 보인다 (pets_registered 의 기본값 변조와 같은 함정).
+    FOR item IN SELECT * FROM (VALUES
+        ('is_emergency'), ('is_oncology')
+    ) AS expected(column_name) LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_attrdef d
+            JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+            WHERE d.adrelid = relation AND a.attname = item.column_name
+              AND pg_get_expr(d.adbin, d.adrelid) = 'false'
+        ) THEN
+            RAISE EXCEPTION 'column mismatch: vet_visits.% 의 기본값이 false 가 아니다',
+                item.column_name;
+        END IF;
+    END LOOP;
 END
 $verify$;
 

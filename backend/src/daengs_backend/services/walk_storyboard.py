@@ -31,14 +31,20 @@ class StoryboardConflict(ValueError):
     pass
 
 
-async def source(session, owner, walk_id):
+async def source(session, owner, walk_id, bundle_format="walk-storyboard-candidates-v1"):
     walk = await walks.get_owned_for_update(session, owner, walk_id)
     if walk is None:
         raise StoryboardNotFound
+    from daengs_backend.config import settings
     from daengs_backend.services.walk_entry_v2 import EntryUpgradeRequired, guard_v1
 
+    pin_aware = bundle_format == "walk-storyboard-candidates-v5"
+    if pin_aware and not settings.walk_entry_v2_enabled:
+        raise StoryboardConflict("v2 행동 핀 읽기가 활성화되지 않았습니다.")
+
     try:
-        await guard_v1(session, [walk_id])
+        if not pin_aware:
+            await guard_v1(session, [walk_id])
     except EntryUpgradeRequired:
         raise StoryboardConflict("v2 행동 핀의 장면 연결은 아직 지원하지 않습니다.") from None
     analysis = await repo.latest_analysis(session, walk_id)
@@ -47,12 +53,21 @@ async def source(session, owner, walk_id):
     rows = await entries_repo.entries(session, [walk_id])
     if len(rows) > 200:
         raise StoryboardConflict("이번 장면 계약은 최대 200개 기록을 지원합니다.")
-    entries = [entry_response(r).model_dump(mode="json") for r in rows]
+    if pin_aware:
+        from daengs_backend.repositories import walk_entry_v2 as pins_repo
+        from daengs_backend.services.walk_entry_v2 import response
+
+        pins = {p.entry_id: p for p in await pins_repo.pins(session, [walk_id])}
+        entries = [response(r, pins.get(r.id)) for r in rows]
+        if any(e.get("pin", {}).get("state") == "provisional" for e in entries if e.get("pin")):
+            raise StoryboardConflict("행동 핀 위치 확정을 먼저 완료해 주세요.")
+    else:
+        entries = [entry_response(r).model_dump(mode="json") for r in rows]
     revisions = {r["id"]: r["revision"] for r in entries}
     history = await repo.reference_walks(session, walk)
     revision = fingerprint(
         {
-            "policy": POLICY_VERSION,
+            "policy": "live-storyboard-pin-v1" if pin_aware else POLICY_VERSION,
             "analysis_id": str(analysis.id),
             "input": analysis.input_fingerprint,
             "entries": entries,
@@ -79,14 +94,16 @@ def result(walk, row, revisions, revision, bundle_format="walk-storyboard-candid
 
 
 async def get(session, owner, walk_id, bundle_format="walk-storyboard-candidates-v1"):
-    walk, _, _, revisions, revision, _ = await source(session, owner, walk_id)
+    walk, _, _, revisions, revision, _ = await source(session, owner, walk_id, bundle_format)
     value = result(walk, await repo.current(session, walk_id), revisions, revision, bundle_format)
     await session.commit()
     return value
 
 
 async def generate(session, owner, walk_id, request, lookup, titles=title_storyboard):
-    walk, analysis, entries, revisions, revision, history = await source(session, owner, walk_id)
+    walk, analysis, entries, revisions, revision, history = await source(
+        session, owner, walk_id, request.bundle_format
+    )
     if {str(k): v for k, v in request.expected_entries.items()} != revisions:
         raise StoryboardConflict("행동 기록이 변경됐어요. 기록을 다시 동기화해 주세요.")
     row = await repo.current(session, walk_id)
@@ -139,11 +156,14 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
             selection,
             contexts,
             evidence.gaps,
-            include_observations=request.bundle_format == "walk-storyboard-candidates-v4",
+            include_observations=request.bundle_format
+            in {"walk-storyboard-candidates-v4", "walk-storyboard-candidates-v5"},
+            include_pins=request.bundle_format == "walk-storyboard-candidates-v5",
         )
         if request.bundle_format in {
             "walk-storyboard-candidates-v3",
             "walk-storyboard-candidates-v4",
+            "walk-storyboard-candidates-v5",
         }:
             bundle = await titles(bundle)
         bundle = bundle.model_dump(mode="json")
@@ -154,7 +174,9 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
 
     # Entries can change, another request can claim an expired lease, or the owner can delete the walk.
     session.expire_all()
-    latest_walk, _, _, latest_revisions, latest_revision, _ = await source(session, owner, walk_id)
+    latest_walk, _, _, latest_revisions, latest_revision, _ = await source(
+        session, owner, walk_id, request.bundle_format
+    )
     current = await repo.current(session, walk_id)
     if current and current.generation == generation and latest_revision == revision:
         current.status = "failed" if failure else "ready"

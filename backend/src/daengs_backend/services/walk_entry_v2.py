@@ -48,6 +48,8 @@ def capabilities():
         "write_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if writing else []),
         "active_policy_versions": [POLICY] if writing else [],
         "pin_observation_cutoff_supported": enabled,
+        "storyboard_formats": ["walk-storyboard-candidates-v5"] if enabled else [],
+        "entry_context_versions": ["walk-entry-context-v2"] if enabled else [],
     }
 
 
@@ -155,6 +157,9 @@ async def store(session, row, sidecar, request_hash):
     # Parent before sidecar/receipt; still the same transaction and walk lock.
     await session.flush()
     session.add(sidecar)
+    from daengs_backend.services.walk_entry_context import reserve_pin
+
+    await reserve_pin(session, row, sidecar)
     value = response(row, sidecar)
     session.add(
         WalkEntryMutation(

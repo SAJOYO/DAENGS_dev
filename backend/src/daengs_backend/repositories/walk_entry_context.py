@@ -10,9 +10,10 @@ from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, W
 
 TAGS = ("space.facility", "space.park", "space.river", "environment.weather")
 POLICY = "walk-entry-context-v1"
+PIN_POLICY = "walk-entry-context-v2"
 
 
-async def enqueue(session, row, now):
+async def enqueue(session, row, now, policy=POLICY):
     await session.flush()
     await session.execute(
         update(WalkEntryContextJob)
@@ -32,7 +33,7 @@ async def enqueue(session, row, now):
                 walk_id=row.walk_id,
                 entry_id=row.id,
                 revision=row.revision,
-                policy_version=POLICY,
+                policy_version=policy,
                 tag=tag,
                 state="pending",
                 attempts=0,
@@ -45,10 +46,14 @@ async def enqueue(session, row, now):
 
 
 async def claim(session, now):
+    from daengs_backend.config import settings
+
     row = await session.scalar(
         select(WalkEntryContextJob)
         .where(
-            WalkEntryContextJob.policy_version == POLICY,
+            WalkEntryContextJob.policy_version.in_(
+                [POLICY, PIN_POLICY] if settings.walk_entry_v2_enabled else [POLICY]
+            ),
             or_(
                 and_(
                     WalkEntryContextJob.state == "pending", WalkEntryContextJob.available_at <= now
@@ -74,7 +79,7 @@ async def claim(session, now):
     return row
 
 
-async def current(session, row):
+async def current(session, row, policy=POLICY):
     jobs = list(
         await session.scalars(
             select(WalkEntryContextJob)
@@ -82,7 +87,7 @@ async def current(session, row):
                 WalkEntryContextJob.walk_id == row.walk_id,
                 WalkEntryContextJob.entry_id == row.id,
                 WalkEntryContextJob.revision == row.revision,
-                WalkEntryContextJob.policy_version == POLICY,
+                WalkEntryContextJob.policy_version == policy,
             )
             .order_by(WalkEntryContextJob.tag)
         )

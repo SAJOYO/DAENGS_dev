@@ -209,6 +209,12 @@ class Store:
         #: 같은 순서라, "대표를 지우면 먼저 등록한 아이가 승계한다"를 볼 수 있습니다.
         self.pets: list[FakePet] = []
 
+        #: 공동 돌봄의 돌보미. `(pet_id, app_user_id)` 짝입니다 — 대표는 여기 없고
+        #: `FakePet.app_user_id` 가 대표입니다 (docs/co-care.md).
+        self.pet_members: list[tuple[uuid.UUID, uuid.UUID]] = []
+        #: 초대. `install` 이 만드는 `FakeInvite` 를 담습니다.
+        self.pet_invites: list = []
+
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
@@ -588,6 +594,24 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    def _member_pet_ids(user_id):
+        return {pid for pid, uid in store.pet_members if uid == user_id}
+
+    async def pet_get_accessible(session, app_user_id, pet_id, *, for_update=False):
+        ids = _member_pet_ids(app_user_id)
+        return next(
+            (
+                p
+                for p in store.pets
+                if p.id == pet_id and (p.app_user_id == app_user_id or p.id in ids)
+            ),
+            None,
+        )
+
+    async def pet_count_accessible(session, app_user_id):
+        ids = _member_pet_ids(app_user_id)
+        return sum(1 for p in store.pets if p.app_user_id == app_user_id or p.id in ids)
+
     async def pet_find_by_photo_key(session, storage_key, *, pending):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
         # "backend 가 발급한 키인가" 만 봅니다.
@@ -645,6 +669,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_repo, "list_for_owner_for_update", pet_list_for_owner
     )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "get_accessible", pet_get_accessible)
+    monkeypatch.setattr(pet_repo, "count_accessible", pet_count_accessible)
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)

@@ -8,17 +8,19 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.models import Pet
+from daengs_backend.models import Pet, PetMember
 
 __all__ = [
     "add",
+    "count_accessible",
     "count_by_owners",
     "count_for_owner",
     "delete",
     "delete_all_for_owner",
+    "get_accessible",
     "get_owned",
     "list_for_owner",
     "list_for_owner_for_update",
@@ -71,6 +73,44 @@ async def get_owned(
     if for_update:
         stmt = stmt.with_for_update()
     return await session.scalar(stmt)
+
+
+def _is_member(app_user_id: uuid.UUID):
+    """구성원 = 대표 ∪ 돌보미. **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다."""
+    return or_(
+        Pet.app_user_id == app_user_id,
+        Pet.id.in_(
+            select(PetMember.pet_id).where(PetMember.app_user_id == app_user_id)
+        ),
+    )
+
+
+async def get_accessible(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> Pet | None:
+    """**구성원일 때** 돌려줍니다. 읽기와 기록이 이것을 씁니다.
+
+    `get_owned` 와 이름을 갈라 둔 것이 의도입니다 — 프로필 수정·배웅·삭제는 대표만이라
+    거기서 이 함수를 부르면 돌보미가 강아지를 지웁니다. 잘못 부른 것이 이름으로 보여야
+    합니다.
+    """
+    stmt = select(Pet).where(Pet.id == pet_id, _is_member(app_user_id))
+    if for_update:
+        stmt = stmt.with_for_update(of=Pet)
+    return await session.scalar(stmt)
+
+
+async def count_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """**미니룸에 서는 아이 수.** 상한 검사가 이것을 씁니다 (docs/co-care.md §2).
+
+    `count_for_owner` 와 다릅니다 — 저건 파기·소유 판단용이고 이건 화면 용량입니다.
+    """
+    stmt = select(func.count()).select_from(Pet).where(_is_member(app_user_id))
+    return int(await session.scalar(stmt) or 0)
 
 
 async def owned_ids(

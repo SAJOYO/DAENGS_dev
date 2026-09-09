@@ -19,12 +19,19 @@ import {
  * 도구라 `meta` 와 원문 JSON 까지 다 보여 줍니다. 앱(DAENGS_APP)이 그리는 화면은
  * 이것보다 훨씬 적게 씁니다.
  *
- * ★ **여기서 절대 하면 안 되는 것 — `distribution[0]` 을 강조하는 것입니다.**
- *   2단계가 고른 이름은 holdout 에서 **56.6% 틀립니다.** 그래서 계약에 "1등 병변"
- *   필드가 아예 없고(D-023), 백엔드는 `tests/test_screening_agent.py` 가 그런 키가
- *   생기는지 감시합니다. **프론트에는 그런 감시가 없습니다** — 아래 분포를 그리는
- *   코드가 index 로 스타일을 가르지 않는 것이 유일한 방어입니다. 굵게·크게·
- *   "가장 유력" 어느 것도 붙이지 마세요.
+ * ★ **여기서 절대 하면 안 되는 것 — 분포에서 1등을 강조하는 것입니다.**
+ *   2단계가 고른 6종 이름은 holdout 에서 **46.3% 틀립니다.** 그래서 계약에
+ *   "1등 병변" 필드가 아예 없고(D-023), 백엔드는 `tests/test_screening_agent.py`
+ *   가 그런 키가 생기는지 감시합니다. **프론트에는 그런 감시가 없습니다** —
+ *   막대를 그리는 코드가 index 로 스타일을 가르지 않는 것이 유일한 방어입니다.
+ *   굵게·크게·"가장 유력" 어느 것도 붙이지 마세요.
+ *
+ * ★ **2026-09-09 — 6종(`stage2.distribution`)을 안 그립니다.** 콘솔도 앱과 같은
+ *   알갱이(계열 네 묶음)로 봅니다. holdout 커버리지가 6종 이름 41.1% vs 네 묶음
+ *   66.5% 라, 콘솔에서만 6종을 보면 **두 화면이 다른 것을 말하게 됩니다.**
+ *   계약에는 `distribution` 이 그대로 오므로 되살리는 건 이 파일 몇 줄입니다.
+ *   ⚠️ 옛 서버는 `groups` 를 안 보냅니다. 그때 **6종으로 물러서지 않습니다** —
+ *      그 이름을 안 보여 주기로 한 것이 이 변경의 이유입니다.
  *
  * ★ **`stage2.group`(계열)은 그 규칙의 예외가 아닙니다.** 여섯 개 중 하나를 고른 게
  *   아니라 **네 묶음** 중 하나이고, 확률은 묶음 안을 **더한 값**입니다. 그래서
@@ -34,7 +41,13 @@ import {
  *     앱과 표현이 갈리고, 갈리면 한쪽이 단정적으로 읽힙니다
  *   · **긴급도 문구를 붙이지 마세요.** 계열 묶음은 긴급도를 높은 쪽으로 잡아서
  *     말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%)
- *   · **지금은 콘솔에만** 나갑니다. 앱은 이 필드를 안 읽습니다
+ *   · **앱도 같은 것을 그립니다** (`DAENGS_APP` #214). 한쪽만 고치면 갈라집니다
+ *
+ * ★ **`stage2.alert`(덩어리 경보)만 병변 이름을 말합니다.** 계약 전체가 "이름을
+ *   말하지 마라"인데 여기만 예외이고, 이유는 `config.A6_ALERT_MIN` 에 있습니다 —
+ *   임상 해설이 *"결절·종괴로 오탐하는 건 상대적으로 안전"* 이라 했고 **놓치는
+ *   쪽이 훨씬 나쁩니다.** 문턱은 정밀도가 아니라 **재현율**로 잡혀 있습니다.
+ *   · 문턱을 여기서 다시 재지 마세요 — 켤지 말지는 서버가 이미 정했습니다
  *
  * 부르는 주소가 `/api/screen/*` 인 이유: nginx 의 `/api/` 가 접두사를 떼고 backend 로
  * 넘겨서 앱이 쓰는 `/screen/` 과 같은 곳에 닿습니다. 오리진을 박으면 쿠키가 안 실립니다 (D-015).
@@ -488,14 +501,20 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
       {stage2.shown && (
         <article className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-sm font-medium">2단계 — 병변 형태 분포</h3>
+            <h3 className="text-sm font-medium">2단계 — 형태 계열 분포</h3>
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              {stage2.distribution.length}줄 — 받은 만큼 전부
+              {(stage2.groups ?? []).length}묶음 — 받은 만큼 전부
             </span>
           </div>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <strong className="font-medium">1등을 뽑지 않습니다.</strong> holdout 에서 2단계가 고른 이름이 56.6%
-            틀렸습니다 (D-023). 줄은 전부 같은 무게로 읽으세요 — 병명이 아니라 병변 &ldquo;형태&rdquo; 입니다.
+            <strong className="font-medium">1등을 뽑지 않습니다.</strong> holdout 에서 2단계가 고른 6종 이름이
+            46.3% 틀렸습니다 (D-023). 줄은 전부 같은 무게로 읽으세요 — 병명이 아니라 병변 &ldquo;형태&rdquo; 입니다.
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <strong className="font-medium">6종은 안 그립니다</strong> (2026-09-09). 앱과 같은 알갱이로 봅니다 —
+            holdout 커버리지가 6종 이름 41.1% vs 계열 네 묶음 66.5% 입니다. 계약(`stage2.distribution`)에는
+            그대로 오니 언제든 되살릴 수 있습니다. 네 묶음은 6종을 <strong className="font-medium">자른 게 아니라
+            더한 것</strong>이라 숨기는 게 없습니다.
           </p>
 
           {/*
@@ -510,12 +529,34 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
             ⚠️ 긴급도 문구를 붙이지 마세요 — 계열 묶음은 긴급도를 높은 쪽으로
                잡아서 말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%).
           */}
+          {/*
+            ★ 덩어리 경보. **계약에서 유일하게 병변 이름을 말하는 자리**이고,
+              그래서 제일 위에 둡니다 (앱과 같은 순서).
+
+            ⚠️ 문턱을 여기서 다시 재지 마세요 — `score`·`threshold` 는 보여 주기용이고
+               켤지 말지는 서버가 이미 정했습니다. 다시 재면 앱과 갈라집니다.
+            ⚠️ 문턱은 정밀도가 아니라 **재현율**로 잡혀 있습니다. 정밀도는 모델이 아니라
+               *모델 × 유병률*의 성질이라 문턱을 고정해도 안 고정됩니다.
+          */}
+          {stage2.alert && (
+            <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3 dark:border-rose-900 dark:bg-rose-950/40">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium">{stage2.alert.text}</span>
+                <span className="text-sm">{stage2.alert.action}</span>
+                <span className="ml-auto text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
+                  {stage2.alert.code} · 점수 {stage2.alert.score.toFixed(4)} ≥ 문턱{" "}
+                  {stage2.alert.threshold.toFixed(2)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{stage2.alert.caveat}</p>
+              <p className="mt-1 text-[11px] leading-5 text-zinc-500 dark:text-zinc-500">
+                점수는 <strong className="font-medium">p(이상) × p(A6)</strong> 입니다 — p(A6) 단독이 아닙니다.
+              </p>
+            </div>
+          )}
           {stage2.group && (
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
               <div className="flex flex-wrap items-baseline gap-2">
-                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                  시험 중
-                </span>
                 <span className="text-sm font-medium">{stage2.group.text}</span>
                 <span className="ml-auto text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
                   묶음 {stage2.group.percent.toFixed(1)}% · 확신 {stage2.group.confidence.toFixed(3)}
@@ -525,19 +566,23 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
               <p className="mt-1 text-[11px] leading-5 text-zinc-500 dark:text-zinc-500">
                 <strong className="font-medium">여섯 개 중 하나를 고른 게 아닙니다.</strong> 네 묶음
                 (융기·발진 / 표면 변화 / 미란·궤양 / 결절·종괴) 중 하나이고, 확률은 묶음 안을 더한 값입니다.
-                holdout 에서 이 알갱이는 열에 일곱(67.9%)을 오답률 20% 안에서 말할 수 있었고, 6종 이름은
-                41.1% 였습니다. <strong className="font-medium">앱에는 아직 안 나갑니다</strong> — 여기서 먼저 봅니다.
+                holdout 에서 이 알갱이는 오답률 20% 안에서 66.5%(하향 방지 규칙 적용)를 말할 수 있었고,
+                6종 이름은 41.1% 였습니다. <strong className="font-medium">앱도 같은 것을 그립니다</strong> —
+                두 화면이 갈라지면 안 됩니다.
               </p>
             </div>
           )}
-          {/* 모든 행이 같은 className 입니다. index 로 스타일을 가르는 코드를 넣지 마세요. */}
+          {/*
+            모든 행이 같은 className 입니다. index 로 스타일을 가르는 코드를 넣지 마세요.
+            ⚠️ `distribution`(6종)이 아니라 `groups`(계열 네 묶음)입니다.
+            ⚠️ 옛 서버는 `groups` 를 안 보냅니다. 그때 **6종으로 물러서지 않습니다** —
+               그 이름을 안 보여 주기로 한 것이 이 변경의 이유입니다.
+          */}
           <ul className="mt-3 flex flex-col gap-2">
-            {stage2.distribution.map((row) => (
-              <li key={row.code} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
+            {(stage2.groups ?? []).map((row) => (
+              <li key={row.name} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{row.code}</span>
-                  <span className="text-sm">{row.name_ko}</span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{row.name_en}</span>
+                  <span className="text-sm">{row.name}</span>
                   <span className="ml-auto text-sm tabular-nums">{row.percent.toFixed(1)}%</span>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
@@ -549,6 +594,12 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
               </li>
             ))}
           </ul>
+          {(stage2.groups ?? []).length === 0 && (
+            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              계열 분포가 응답에 없습니다 — 서버가 옛 버전입니다.
+              <strong className="font-medium"> 6종으로 물러서지 않습니다</strong> (D-023).
+            </p>
+          )}
           {meta.stage2_low_confidence && (
             <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
               종류를 가리기 특히 어려웠습니다 (1등 {meta.stage2_top_prob?.toFixed(4) ?? "—"} · 문턱{" "}

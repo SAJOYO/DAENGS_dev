@@ -77,13 +77,63 @@ export type LesionGroup = {
   caveat: string;
 };
 
+/**
+ * ★ **계열 네 묶음의 분포** — 막대는 이걸로 그립니다.
+ *
+ * `group`(주장)과 다릅니다. 이건 **분포**라 확신과 무관하게 늘 옵니다 —
+ * 확신이 낮으면 `group` 이 `null` 이 되고 막대만 남습니다.
+ *
+ * ⚠️ 6종을 **자른 게 아니라 더한 것**입니다. 여섯 개가 전부 어딘가에 들어가
+ *    있어 숨기는 게 없습니다 — *"상위 몇 개로 자르지 마라"* 규칙과 다릅니다.
+ */
+export type LesionGroupRow = {
+  /** 융기·발진 | 표면 변화 | 미란·궤양 | 결절·종괴 */
+  name: string;
+  prob: number;
+  percent: number;
+};
+
+/**
+ * ★ **"덩어리가 의심됩니다"** — 계약에서 **유일하게 병변 이름을 말하는 자리**입니다.
+ *
+ * 나머지가 전부 "이름을 말하지 마라"(D-023)인데 여기만 예외인 이유는
+ * `config.A6_ALERT_MIN` 에 적혀 있습니다 — 임상 해설이 *"결절·종괴로 오탐하는 건
+ * 상대적으로 안전"* 이라 했고(병원에 가서 확인하면 되니까) **놓치는 쪽이 훨씬
+ * 나쁩니다.** 그래서 문턱을 정밀도가 아니라 **재현율**로 잡았습니다.
+ *
+ * ⚠️ 문턱을 화면에서 다시 재지 마세요. `score`·`threshold` 는 **보여 주기용**이고
+ *    켤지 말지는 서버가 이미 정했습니다. 여기서 다시 재면 앱과 갈라집니다.
+ */
+export type LesionAlert = {
+  /** 지금은 항상 `A6`. */
+  code: string;
+  /** `p(이상) × p(A6)`. `p(A6)` 단독이 **아닙니다.** */
+  score: number;
+  threshold: number;
+  /** 서버가 준 문장을 **그대로** 띄웁니다. */
+  text: string;
+  action: string;
+  caveat: string;
+};
+
 export type ScreenStage2 = {
   /** false 면 분포 영역을 **통째로 그리지 않습니다.** */
   shown: boolean;
-  /** 확률 내림차순. **개수가 고정이 아닙니다** (mock 6줄 / release 3줄). */
+  /**
+   * 병변 6종 분포.
+   *
+   * ⚠️ **화면에 안 그립니다** (2026-09-09). 콘솔도 앱과 같은 알갱이로 봅니다 —
+   *    holdout 에서 6종 이름은 커버리지 41.1%, 계열 네 묶음은 66.5% 입니다.
+   *    계약에는 그대로 오므로 언제든 되살릴 수 있고, 여기서는 계약이 오는지
+   *    확인하는 용도로만 들고 있습니다.
+   */
   distribution: LesionRow[];
-  /** ★ 계열. **`null` 이면 안 그립니다** (기본값). */
+  /** ★ 계열 **분포**. 막대는 이걸로 그립니다. 확신과 무관하게 늘 옵니다. */
+  groups?: LesionGroupRow[];
+  /** ★ 계열 **주장** 한 줄. **`null` 이면 안 그립니다** (확신이 낮을 때). */
   group?: LesionGroup | null;
+  /** ★ 덩어리 경보. 안 뜨면 `null`. */
+  alert?: LesionAlert | null;
 };
 
 /** 가이드 프레임 검사 결과. `box` 를 보냈을 때만 옵니다. */
@@ -138,6 +188,12 @@ export type ScreeningHealth = {
   loaded: boolean;
   release_dir: string;
   threshold?: number | null;
+  /** 허깅페이스에서 받는 구성이면 리포 이름. 폴더를 쓰면 `null`. */
+  release_repo?: string | null;
+  release_revision?: string | null;
+  /** 릴리스에 **준비된** 2단계 팔 수. 3 이 아니면 앙상블이 줄어든 것입니다. */
+  stage2_arms_available?: number;
+  stage2_experiments_available?: string[];
 };
 
 /** 정규화 `[x, y, w, h]` (0~1, 원본 사진 기준). */

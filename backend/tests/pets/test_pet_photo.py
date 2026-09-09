@@ -13,15 +13,13 @@ import asyncio
 import uuid
 
 import pytest
-from fakes import FakeAdmin, FakeAppUser, FakePet, Store, install
-from fastapi import FastAPI
+from fakes import FakePet, Store
 from fastapi.testclient import TestClient
 
 from daengs_backend.core import storage as storage_module
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.core.storage import LocalBridgeStorage, NotConfiguredStorage
-from daengs_backend.routers import pet as pet_router
 from daengs_backend.services import pet as pet_service
+from tests.pets.support.api import make_client, make_store
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
@@ -31,9 +29,7 @@ JPEG = "image/jpeg"
 
 @pytest.fixture
 def store(monkeypatch: pytest.MonkeyPatch) -> Store:
-    s = install(Store(FakeAdmin()), monkeypatch)
-    s.add_app_user(FakeAppUser(kakao_id=1, id=OWNER))
-    return s
+    return make_store(OWNER, monkeypatch)
 
 
 @pytest.fixture
@@ -47,12 +43,7 @@ def storage(monkeypatch: pytest.MonkeyPatch, tmp_path) -> LocalBridgeStorage:
 
 @pytest.fixture
 def client(store: Store, storage: LocalBridgeStorage) -> TestClient:
-    app = FastAPI()
-    app.include_router(pet_router.router)
-    app.dependency_overrides[
-        next(iter(CurrentAppUser.__metadata__)).dependency
-    ] = lambda: AppPrincipal(app_user_id=OWNER)
-    return TestClient(app, raise_server_exceptions=False)
+    return make_client(OWNER)
 
 
 @pytest.fixture
@@ -260,9 +251,7 @@ def test_발급된_형식과_다른_Content_Type_은_거절한다(client, pet) -
     assert r.status_code == 415
 
 
-def test_상한을_넘으면_bridge_가_막고_흔적을_안_남긴다(
-    client, pet, storage, monkeypatch
-) -> None:
+def test_상한을_넘으면_bridge_가_막고_흔적을_안_남긴다(client, pet, storage, monkeypatch) -> None:
     """**중간에 끊긴 파일이 남으면 안 됩니다** — 다음 PUT 이 create-only 409 에 막히고,
     0바이트로 남으면 redact() 의 tombstone 과 구별되지 않습니다."""
     monkeypatch.setattr(pet_service, "MAX_PET_PHOTO_BYTES", 4)
@@ -317,9 +306,7 @@ def test_저장소가_꺼져_있으면_503_이고_사유는_안_샌다(client, p
     assert "GAIT_" not in r.text
 
 
-def test_저장소가_꺼져_있어도_사진_없는_아이는_지울_수_있다(
-    client, pet, monkeypatch
-) -> None:
+def test_저장소가_꺼져_있어도_사진_없는_아이는_지울_수_있다(client, pet, monkeypatch) -> None:
     """지울 사진이 없으면 저장소를 안 건드립니다 — 저장소가 꺼졌다고 탈퇴가
     막히면 안 됩니다."""
     monkeypatch.setattr(pet_service, "get_storage", NotConfiguredStorage)

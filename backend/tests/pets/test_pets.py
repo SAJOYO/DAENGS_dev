@@ -7,16 +7,13 @@ DB 는 쓰지 않습니다. `fakes.py` 가 리포지토리를 바꿔치기하므
 
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
 
 import pytest
-from fastapi import Depends, FastAPI
+from fakes import FakePet, FakeWalk, FakeWalkPet, Store
 from fastapi.testclient import TestClient
 
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
-from daengs_backend.routers import pet as pet_router
 from daengs_backend.services import pet as pet_service
-from fakes import FakeAdmin, FakeAppUser, FakePet, FakeWalk, FakeWalkPet, Store, install
+from tests.pets.support.api import make_client, make_store
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
@@ -24,20 +21,13 @@ STRANGER = uuid.uuid4()
 
 @pytest.fixture
 def store(monkeypatch: pytest.MonkeyPatch) -> Store:
-    s = install(Store(FakeAdmin()), monkeypatch)
-    s.add_app_user(FakeAppUser(kakao_id=1, id=OWNER))
-    return s
+    return make_store(OWNER, monkeypatch)
 
 
 @pytest.fixture
 def client(store: Store) -> TestClient:
     """인증을 통과한 상태로 고정합니다. 토큰 검증은 test_app_auth 가 봅니다."""
-    app = FastAPI()
-    app.include_router(pet_router.router)
-    app.dependency_overrides[
-        next(iter(CurrentAppUser.__metadata__)).dependency
-    ] = lambda: AppPrincipal(app_user_id=OWNER)
-    return TestClient(app, raise_server_exceptions=False)
+    return make_client(OWNER)
 
 
 def _body(name: str = "네옹", **kw: object) -> dict:
@@ -225,7 +215,8 @@ def test_배웅한_날을_적는다(client: TestClient) -> None:
 
 def test_앞날은_못_적는다(client: TestClient) -> None:
     """오타 한 자로 2033년이 적히면 아직 오지 않은 날에 배웅한 것이 된다."""
-    later = (date.today() + timedelta(days=1)).isoformat()
+    # Pet schema validates against the same local date.today().
+    later = (date.today() + timedelta(days=1)).isoformat()  # noqa: DTZ011
     r = client.post("/app/pets", json=_body(farewell_on=later))
     assert r.status_code == 422
 

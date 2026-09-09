@@ -98,7 +98,7 @@ lease 재획득·버전 차단·SKIP LOCKED를 검증한다. 기존 migration �
 FK 변조를 검출하는 케이스를 등록했다.
 
 ```powershell
-uv run pytest tests/test_walk_entry_context.py tests/test_walk_entry_context_db.py tests/test_walk_entry_http.py tests/test_walk_entries.py tests/test_config.py tests/test_config_env.py -q
+uv run pytest tests/walk/context/test_walk_entry_context.py tests/walk/context/test_walk_entry_context_db.py tests/walk/entries/test_walk_entry_http.py tests/walk/entries/test_walk_entries.py tests/test_config.py tests/test_config_env.py -q
 ```
 
 DB 통합 테스트는 `WALK_CONTEXT_TEST_DATABASE_URL`로 지정한 localhost의 `walk_context_test`만

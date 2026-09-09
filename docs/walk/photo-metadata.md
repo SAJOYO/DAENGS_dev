@@ -103,7 +103,7 @@ v2 주변 정보 수집은 이미 머지된 Dev #371을 재사용한다. sidecar
 App 대상 5개 클래스는 Kotlin 컴파일·Room 스키마 생성과 함께 통과했다.
 전체 로컬 스위트나 실사용 사진/LLM 호출은 수행하지 않았다.
 실제 PostgreSQL의 멱등·CAS 경쟁·계정 삭제 검사는 기존 walk DB CI에
-`tests/test_walk_photo_db.py`로 추가했다. CI 결과는 PR 상태를 따른다.
+`tests/walk/photos/test_walk_photo_db.py`로 추가했다. CI 결과는 PR 상태를 따른다.
 
 후속 **사용자 기록 중심 선택·스탬프 코어**는 [diary-stamps.md](diary-stamps.md),
 실제 동선 후보 연결은 [diary-observations.md](diary-observations.md)에 정리한다.

@@ -143,9 +143,9 @@ flowchart TD
 전체 로컬 스위트는 실행하지 않는다.
 
 ```powershell
-uv run --no-sync python -m pytest tests/walk/test_diary_writing.py tests/walk/test_diary_generation.py tests/walk/test_diary_contract.py tests/walk/test_diary_stamps.py tests/walk/test_walk_storyboard.py tests/walk/test_walk_storyboard_titles.py tests/walk/test_storyboard_pins.py tests/walk/test_storyboard_observations.py tests/test_config.py tests/test_main_stays_light.py -q
-uv run --no-sync python -m pytest tests/walk/test_diary_writing.py tests/walk/test_diary_generation.py -q
-uv run --no-sync python -m pytest tests/walk/test_diary_generation_db.py -q -rs
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_writing.py tests/walk/diary/test_diary_generation.py tests/walk/diary/test_diary_contract.py tests/walk/diary/test_diary_stamps.py tests/walk/storyboard/test_walk_storyboard.py tests/walk/storyboard/test_walk_storyboard_titles.py tests/walk/storyboard/test_storyboard_pins.py tests/walk/storyboard/test_storyboard_observations.py tests/test_config.py tests/test_main_stays_light.py -q
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_writing.py tests/walk/diary/test_diary_generation.py -q
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_generation_db.py -q -rs
 ```
 
 로컬 PostgreSQL 검사는 전용 DSN이 없어 1 skip이다.

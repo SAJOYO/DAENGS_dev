@@ -82,9 +82,9 @@ app은 별도 Room `walk_scene_analysis`에 결과를 저장한다. 사용자 �
 이번 작업에서 운영 DB migration이나 배포는 실행하지 않았다.
 
 ```powershell
-uv run pytest -q tests/walk/test_walk_storyboard.py
+uv run pytest -q tests/walk/storyboard/test_walk_storyboard.py
 $env:LIVE_STORYBOARD_TEST_DSN = 'postgresql://postgres@127.0.0.1:55439/postgres'
-uv run pytest -q tests/walk/test_walk_storyboard_db.py
+uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
 ```
 
 DB 검증은 Docker 없이 별도 로컬 PostgreSQL에서 수행했다. 테스트는 loopback만 허용하고

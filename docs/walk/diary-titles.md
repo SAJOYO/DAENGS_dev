@@ -41,7 +41,7 @@ SQL 변경은 없다. 생성 장면은 제목·revision만 변경하고 사실·
 
 ## 검증 범위
 
-`tests/walk/test_walk_storyboard.py`와 `test_walk_storyboard_titles.py`: 단일 호출, 캐시,
+`tests/walk/storyboard/test_walk_storyboard.py`와 `test_walk_storyboard_titles.py`: 단일 호출, 캐시,
 구버전 응답, 원본 수정 중 생성, 시간 초과/취소, 근거 오류, 실제 SDK 요청 설정을 검사한다.
 테스트는 fake provider와 repository 경계를 사용하며 운영 DB/LLM에 연결하지 않는다.
 DB 스키마/쿼리는 변경하지 않았다. 배포 및 실제 계정에서의 일기 생성 확인은 별도다.
@@ -50,5 +50,5 @@ DB 스키마/쿼리는 변경하지 않았다. 배포 및 실제 계정에서의
 format --check 통과. 로컬 전체 스위트와 실제 PostgreSQL/LLM 호출은 실행하지 않았다.
 
 ```powershell
-uv run --no-sync pytest -q tests/walk/test_walk_storyboard.py tests/walk/test_walk_storyboard_titles.py
+uv run --no-sync pytest -q tests/walk/storyboard/test_walk_storyboard.py tests/walk/storyboard/test_walk_storyboard_titles.py
 ```

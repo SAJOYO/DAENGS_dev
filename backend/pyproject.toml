@@ -225,8 +225,8 @@ testpaths = ["tests"]
 # `tests/place/place/discovery/test_facility_actions.py` 가
 # `from tests.place.place.discovery.test_facility import make_service, request` 를,
 # `tests/test_facility_discovery_api.py` 가 `from tests.facility_session_store import
-# MemorySessions` 를, `tests/walk/test_storyboard_observations.py` 가
-# `from tests.walk.test_walk_storyboard_titles import headings` 를 쓴다. `tests/` 에
+# MemorySessions` 를, `tests/walk/storyboard/test_storyboard_observations.py` 가
+# `from tests.walk.support.storyboard import headings` 를 쓴다. `tests/` 에
 # `__init__.py` 가 없어 이것들은 namespace 패키지로만 잡히는데, 그러려면 `backend/` 가
 # sys.path 에 있어야 한다 — 지우면 `ModuleNotFoundError: No module named 'tests'`.
 pythonpath = ["."]

@@ -18,6 +18,11 @@
 - **`engines/` 는 가벼워야 합니다.** `engines/__init__` 은 하위 모듈을 `get_engine` 안에서만
   import 합니다. `legacy.py` 가 `pipeline`(torch)을, `v4.py` 가 서브프로세스를 다룹니다 —
   둘 다 워커에서만 실행됩니다.
+- **영상 입력 판정은 `intake.py` 한 곳입니다** (D-063 3단계). 읽을 수 있으면 원본 그대로,
+  못 읽을 때만 H.264 변환, 그래도 못 읽으면 `VideoDecodeError`. 워커가 엔진 직전에
+  `prepare_for_analysis` 로 부르고, 엔진은 판정을 모릅니다. `cv2`·`imageio_ffmpeg` 는 함수
+  안에서만 import — 모듈 import 는 가볍습니다. `video_intake.py` 는 옛 HTTP 서비스용 잔재이고
+  같은 함수를 재export 합니다(4단계에서 삭제).
 - `daengs_backend` 의 MVC2 계층 규칙(D-011)이 여기에는 걸려 있지 않습니다. 평평합니다.
 - **의존성은 `backend/pyproject.toml` 의 `gait` 그룹 하나**입니다. `ml` 그룹과 겹치지
   않습니다 — gait 는 sentence-transformers · transformers · pyarrow 를 안 씁니다.

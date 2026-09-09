@@ -99,6 +99,8 @@ def test_v4_engine_calls_subprocess_and_returns_legacy_shaped_record(
     monkeypatch.setattr(settings, "gait_v4_dir", str(tmp_path))
     monkeypatch.setattr(settings, "gait_v4_python", "")
     monkeypatch.setattr(storage_module, "get_storage", lambda: LocalStorage())
+    # 입력 판정(3단계)은 여기 주제가 아닙니다 — 가짜 바이트라 실제 프로브는 실패합니다.
+    monkeypatch.setattr("daengs_gait.intake.prepare_for_analysis", lambda p: p)
     run, calls = _fake_v4_run(tmp_path)
     import subprocess
 

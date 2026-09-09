@@ -2,6 +2,10 @@
 
 2026-09-05 구현. 앱 연결 PR: [DAENGS_APP#144](https://github.com/SAJOYO/DAENGS_APP/pull/144). 서버 PR: [#251](https://github.com/SAJOYO/DAENGS_dev/pull/251).
 
+후속 명세: [행동 즉시 기록·핀 위치 추정 공통 계약](action-pin-location-contract.md),
+[DEV #354](https://github.com/SAJOYO/DAENGS_dev/pull/354). 아래 v1 구현을 대체한 상태가 아니라
+별도 v2 표현과 위치 확정 경계를 정의하는 문서다.
+
 ## 기록 계약
 
 `/app/walks/{walk_id}/entries` GET은 현재 기록과 최소 삭제 표식을 반환한다. `/{entry_id}` PUT은 생성·수정, DELETE는 제거다. 기존 GPS finalize의 의미와 보관 수명은 변경하지 않는다.

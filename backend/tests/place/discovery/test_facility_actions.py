@@ -7,7 +7,7 @@ from daengs_place.place.discovery.facility import (
 )
 from daengs_place.place.planning.contract import CapabilityId, GateOrigin
 from daengs_place.place.planning.execution import prefers_parking
-from tests.place.place.discovery.test_facility import make_service, request
+from tests.place.support.discovery import make_service, request
 
 
 def action_payload(envelope, action):

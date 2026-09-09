@@ -27,8 +27,7 @@ from daengs_place.place.facility_resolver import (
     RestrictionsOut,
     resolve_facilities,
 )
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 
 def medical_result(**overrides) -> PlaceOut:

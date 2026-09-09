@@ -7,7 +7,8 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
 이 문서는 **실행 범위 목록이며 모든 기능의 통과 보고서가 아니다.** 1단계 조사 시점의 backend
 전체에는 `test_*.py` 272개, 루트 직속 184개가 있었다. 2단계에서 Walk 파일 37개를 기능별로
 옮기고 공용 도구를 분리했다. 테스트 파일 수는 272개 그대로이며 루트 직속은 172개다.
-이번 단계의 로컬 검증 결과는 아래 Walk 정리 항목에 기록한다. DB 준비·CI 실행은 하지 않았다.
+이 수치는 최초 Walk 정리 시점의 기록이다. 이후 Walk·Place 정리와 임시 DB 검증 결과는
+아래 각 정리 항목에 기록한다. 원격 CI를 실행한 결과는 아니다.
 
 ## 실행 원칙
 
@@ -47,14 +48,14 @@ uv run pytest -q tests/test_pets.py
 - 기본: 이름/다견/필터/축 변환 계약. DB 연결이 섞인 파일은 아래 통합 묶음으로 구분한다.
 - DB 추가: PostGIS 설정 후 `test_search_v2.py`, `test_contract.py`, `integration/`.
   정렬·검색 SQL·AND/OR 변경이면 이 검증이 필요하다.
-- 확대: 원천 데이터·제한조건 변경은 `place/place/source_facts/`,
-  `place/place/test_restriction_*.py`에 해당하는 개별 파일과 `place/ingest/` 중 변경 원천 테스트.
+- 확대: 원천 데이터·제한조건 변경은 `place/source_facts/`,
+  `place/search/test_restriction_*.py`에 해당하는 개별 파일과 `place/ingest/` 중 변경 원천 테스트.
   자연어 검색 결과 구조에 영향이 있으면 3번 소비자도 확인한다.
 
 ```powershell
-uv run pytest -q tests/place/place/test_name_search.py tests/place/api/test_multi_dog_search.py tests/place/api/test_contract_validation.py tests/place/place/filters tests/place/geo
+uv run pytest -q tests/place/search/test_name_search.py tests/place/api/test_multi_dog_search.py tests/place/api/test_contract_validation.py tests/place/filters tests/place/geo
 # 아래 명령은 격리된 PostGIS와 마이그레이션 준비 후 선택한다.
-uv run pytest -q tests/place/place/test_search_v2.py tests/place/place/test_contract.py tests/place/integration
+uv run pytest -q tests/place/search/test_search_v2.py tests/place/search/test_contract.py tests/place/integration
 ```
 
 ### 3. 자연어 시설 검색
@@ -68,7 +69,7 @@ uv run pytest -q tests/place/place/test_search_v2.py tests/place/place/test_cont
   PR #275에서 DEV 밖으로 돌린 web review 화면은 현재 서버 검증 범위에 넣지 않는다.
 
 ```powershell
-uv run pytest -q tests/place/place/intent tests/place/place/planning tests/place/place/presentation tests/place/place/discovery tests/place/place/providers tests/place/api/test_discovery_internal.py tests/test_facility_discovery_api.py
+uv run pytest -q tests/place/intent tests/place/planning tests/place/presentation tests/place/discovery tests/place/providers tests/place/api/test_discovery_internal.py tests/place/api/test_facility_discovery_api.py
 uv run pytest -q tests/test_place_capability_fixtures.py tests/test_orchestration_place_adapter.py tests/test_orchestration_place_projection.py tests/test_orchestration_place_routing.py
 ```
 
@@ -158,7 +159,7 @@ uv run pytest -q tests/place/api/test_territory_sites.py tests/place/ingest/test
 
 ## 실제 DB 검증 조건
 
-아래는 향후 실행 조건이다. 이번 문서 작업에서 DB를 생성하거나 마이그레이션하지 않았다.
+아래는 실제 DB 테스트의 실행 조건이다. 로컬 검증에는 실행 후 제거하는 임시 DB를 사용한다.
 공유 개발 DB 주소를 테스트 환경 변수에 복사하지 않는다. 각 fixture가 SQL/schema 생성·삭제를 수행한다.
 
 | 환경 변수 | 대상 | 현재 코드의 허용 조건 / 준비 |
@@ -167,7 +168,7 @@ uv run pytest -q tests/place/api/test_territory_sites.py tests/place/ingest/test
 | `WALK_PIN_TEST_DATABASE_URL` | v2 pin, photo, diary generation DB | 같은 형식, localhost/127.0.0.1의 `walk_pin_test`. 공유 fixture가 실제 초기화·migration·검증 SQL 실행 |
 | `TERRITORY_TEST_DATABASE_URL` | ownership/certified/activity DB | 같은 형식, localhost/127.0.0.1의 `claims_test`. UUID schema로 실제 SQL 검증 |
 | `LIVE_STORYBOARD_TEST_DSN` | `walk/storyboard/test_walk_storyboard_db.py` | `postgresql://` 형식. localhost/127.0.0.1/::1 제한만 있고 DB 이름 제한은 없음. 별도 폐기 가능한 DB 지정 |
-| `DAENGS_PLACE_DATABASE_URL` | Place DB 포함 파일 | 격리된 로컬 PostGIS와 Place Alembic 전체 schema 필요. `place/conftest.py`는 localhost/DB 이름을 강제하지 않고 설정 URL을 사용하므로 실행자가 명시적으로 지정 |
+| `DAENGS_PLACE_DATABASE_URL` | Place DB 포함 파일 | 격리된 로컬 PostGIS와 Place Alembic 전체 schema 필요. `place/support/database.py`는 localhost/DB 이름을 강제하지 않고 설정 URL을 사용하므로 실행자가 명시적으로 지정 |
 
 첫 네 환경 변수가 없으면 해당 fixture는 skip한다. Place는 연결 실패를 skip으로 처리하지만
 연결 가능한 DB를 찾으면 seed를 쓰고 commit할 수 있다. 단순히 `.env` 기본값에 맡기지 않는다.
@@ -226,20 +227,53 @@ Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 �
 실행했다. migration 이름·검증 짝 검사는 통과했지만 Windows 바이트 검사는 이 PC의 PowerShell
 스크립트 실행 정책에 막혀 미검증이다. 실행 정책은 변경하지 않았다.
 
+## Place 정리
+
+`origin/dev`의 `2fe6afc`에서 시작해 테스트 파일 35개를 이동했다. `place/place/` 중복 경로를
+없애고 검색·자연어 검색의 각 단계와 API 테스트를 다음처럼 배치했다.
+
+| `place/` 아래 위치 | 담당 범위 |
+| --- | --- |
+| `search/` | 검색 결과·이름·장소 유형·반려견 평가·제한조건. 기존 JSON도 함께 이동 |
+| `filters/`, `intent/`, `planning/`, `presentation/` | 필터 계약, 자연어 해석, 실행 계획, 결과 표현 |
+| `discovery/`, `providers/`, `source_facts/` | 검색 조립, 모델 transport 대역, 원천 사실 |
+| `api/` | Place API와 backend의 시설 discovery API 계약 |
+| `integration/`, `ingest/`, `geo/`, `core/` | 기존 DB·적재·공간·설정 검증 위치 유지 |
+| `support/` | discovery 입력/서비스 생성, 메모리 세션 대역, DB seed·세션 도구 |
+
+테스트 모듈을 다른 테스트에서 import하던 관계를 `support/discovery.py`로 옮겼다.
+기존 `place/conftest.py`는 pytest fixture 없이 일반 도구만 제공했으므로
+`support/database.py`로 이동했다. 루트의 시설 세션 대역은 `support/session_store.py`에 둔다.
+기존 테스트 함수 421개와 공용 도구의 본문·데코레이터가 유지됐음을 AST로 대조했다.
+capability·오케스트레이션 소비자 4개와 앱 로딩 검사는 루트에 유지하며 공용 경계 검증에 포함한다.
+
+```powershell
+# Place 배치/공용 도구 변경 범위. 임시 PostGIS와 Alembic 적용 후 실행한다.
+uv run --no-sync pytest -q -rs tests/place tests/test_place_capability_fixtures.py tests/test_orchestration_place_adapter.py tests/test_orchestration_place_projection.py tests/test_orchestration_place_routing.py tests/test_main_stays_light.py
+```
+
+로컬 검증은 PostGIS 18-3.6에 Place Alembic 전체 이력을 적용한 뒤 위 범위에서
+**666 passed / 0 skipped**였다. 실행 후 임시 DB와 컨테이너를 제거했다.
+Place 소스·테스트 ruff 검사도 통과했다. workflow의 변경 감지 경로와 실행 대상을 대조했고,
+JUnit 확인 단계가 정상 결과를 허용하고 skip·빈 결과를 거부하는 것을 로컬에서 확인했다.
+기존 Place CI에 시설 API 및 공용 소비자 검증을 연결했다. 제품 코드·DB 스키마·의존성은
+변경하지 않았으며 팀원이 설치할 별도 DB 도구나 실행기를 추가하지 않았다.
+
 ## 남은 공유 관계
 
 fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범위에 포함한다.
-아래 Place·Territory 등의 구조는 이번 Walk 정리에서 바꾸지 않았다.
+Walk·Place 지원 도구의 현재 소비 관계와 아직 정리하지 않은 Territory 관계를 함께 기록한다.
 
 | 공용 장치 또는 테스트 모듈 | 연결된 소비자 / 다음 단계에서 보존할 계약 |
 | --- | --- |
 | 루트 `conftest.py` | 암호화 키·DB 기본값·warmup, crawl/metrics/Celery autouse 대역. 모든 하위 테스트에 적용 |
-| `fakes.py`, `facility_session_store.py`, `place_capability_cases.py` | 프로필/시설 API/능력 fixture. 테스트 이름만 검색하면 빠지는 지원 파일 |
+| `fakes.py`, `place_capability_cases.py` | 프로필 API/능력 fixture. 테스트 이름만 검색하면 빠지는 지원 파일 |
 | `walk/support/entry_context.py` | context와 pin-context의 응답 생성 도구·state fixture |
 | `walk/support/entry_v2.py`, `pin_database.py`, `photo_database.py` | 핀·사진·일기 DB에서 공유. 제공 도구 변경 시 세 기능의 소비자를 확인 |
 | `walk/support/diary.py`, `photo_input.py`, `observations.py` | 일기 계약·stamp·writing·generation 및 사진 입력의 생성 도구 |
 | `walk/support/storyboard.py` | storyboard/pin의 live fixture 및 제목 응답 생성 도구 |
-| `place/place/discovery/test_service.py` → `test_facility.py` → `test_facility_actions.py` | discovery 내부 의존. 루트 `test_facility_discovery_api.py`도 facility 테스트 모듈을 import |
+| `place/support/discovery.py`, `session_store.py` | discovery 서비스·행동 및 시설 API의 공용 생성 도구·세션 대역 |
+| `place/support/database.py` | 검색·통합·territory site API의 실제 DB 세션·seed. 일반 모듈로 import |
 | `test_territory_ownership_db.py` → `test_activity_db.py` → `test_territory_certified_db.py` | DB/actor/시즌 장치 공유. Walk 정리와 함께 무작정 이동하지 않음 |
 | `fixtures/`, `walk/fixtures/`, Place 하위 fixtures/JSON | capability, 점령 시나리오, 산책 스타일/finalize, 공간 일기/observation, 원천 데이터 기준값. 파일 이동 시 상대 경로도 검증 |
 
@@ -252,7 +286,7 @@ fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범�
 | 현재 workflow | 담당 검증 / 확인한 한계 |
 | --- | --- |
 | [backend-tests](../../.github/workflows/backend-tests.yml) | 기본 pytest 전체. 기본 marker/의존성/DB 미설정으로 제외·skip되는 검증이 있을 수 있음 |
-| [place-search-tests](../../.github/workflows/place-search-tests.yml) | PostGIS + Alembic + Place 테스트 |
+| [place-search-tests](../../.github/workflows/place-search-tests.yml) | PostGIS + Alembic + Place·시설 API·capability·오케스트레이션·앱 로딩. 빈 결과·skip 거부 |
 | [journey-tests](../../.github/workflows/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
 | [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·pin-context·기존 기록 HTTP. backend/Walk/Life 소스와 Walk 테스트 전체 변경을 감지 |
 | [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation 및 live storyboard DB. 위와 같은 소스·테스트 변경을 감지 |

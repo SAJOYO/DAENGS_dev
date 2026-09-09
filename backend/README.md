@@ -5,6 +5,7 @@ FastAPI + uv (Python 3.12).
 ```powershell
 Copy-Item .env.example .env   # 처음 한 번
 uv sync --extra place  # 전체 로컬 테스트용 .venv 동기화
+uv run check   # 저장소 규칙 검사 (약 3초) — 머지 전에 무조건
 uv run dev     # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run     # 운영 서버 http://0.0.0.0:8000
 uv run pytest  # 테스트

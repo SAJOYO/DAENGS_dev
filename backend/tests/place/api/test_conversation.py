@@ -43,6 +43,14 @@ def chat_body(previous, query="아무 데나 하나 골라줘"):
     }
 
 
+def answer_body(previous):
+    return {key: previous[key] for key in ("session_id", "revision", "client_request_id")}
+
+
+def recovery_body(previous):
+    return {key: previous[key] for key in ("session_id", "client_request_id")}
+
+
 @pytest.fixture
 async def harness(monkeypatch):
     store, searcher, model_calls = MemorySessions(), Searcher(), []
@@ -114,6 +122,9 @@ async def test_manual_to_gemini_plan_to_cached_pick_to_answer_through_both_http_
     picked = response.json()
     assert picked["selected"]["ref"] == "first"
     assert picked["receipt"]["execution"] == "reused"
+    assert picked["answer"] is None and picked["answer_status"] == "pending"
+    assert len(calls) == 1
+    picked = (await client.post("/app/places/conversation/answer", json=answer_body(picked))).json()
     assert picked["answer"]["source"] == "llm"
     assert picked["filters"]["candidate_kinds"] == ["shopping", "pet_shop"]
     assert len(searcher.calls) == 1 and len(calls) == 2
@@ -175,3 +186,145 @@ async def test_newer_manual_request_prevents_old_ai_from_committing_server_state
     assert saved["state"]["filters"]["candidate_kinds"] == ["cafe"]
     assert saved["revision"] == 2
     assert calls == []
+
+
+async def test_committed_state_is_visible_while_answer_is_blocked_and_new_manual_wins(
+    harness, monkeypatch
+):
+    client, _, _, _, _, app = harness
+    initial = (await client.post("/app/places/conversation", json=manual_body())).json()
+    committed = (await client.post("/app/places/conversation", json=chat_body(initial))).json()
+    service = app.dependency_overrides[get_facility_conversation_service]()
+    exchange = service.exchange
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_answer(step, payload):
+        if step == "answer":
+            entered.set()
+            await release.wait()
+        return await exchange(step, payload)
+
+    monkeypatch.setattr(service, "exchange", slow_answer)
+    answering = asyncio.create_task(
+        client.post("/app/places/conversation/answer", json=answer_body(committed))
+    )
+    await entered.wait()
+    recovered = await client.post("/app/places/conversation/recover", json=recovery_body(committed))
+    assert recovered.json() == committed
+    update = manual_body(committed)
+    update["manual"]["radius_m"] = 1000
+    latest = (await client.post("/app/places/conversation", json=update)).json()
+    assert latest["revision"] == 3 and latest["filters"]["spatial"]["radius_m"] == 1000
+    release.set()
+    assert (await answering).status_code == 409
+    assert (
+        await client.post("/app/places/conversation/recover", json=recovery_body(latest))
+    ).json() == latest
+
+
+async def test_lost_initial_and_later_reply_retry_same_identity_without_reexecution(harness):
+    client, _, searcher, calls, _, _ = harness
+    first_request = manual_body()
+    first = (await client.post("/app/places/conversation", json=first_request)).json()
+    assert (await client.post("/app/places/conversation", json=first_request)).json() == first
+    assert (
+        await client.post(
+            "/app/places/conversation/recover",
+            json={"client_request_id": first_request["client_request_id"]},
+        )
+    ).json() == first
+    request = chat_body(first, "두 번째 골라줘")
+    committed = (await client.post("/app/places/conversation", json=request)).json()
+    assert (await client.post("/app/places/conversation", json=request)).json() == committed
+    assert len(searcher.calls) == 1 and len(calls) == 1
+    latest = (await client.post("/app/places/conversation", json=manual_body(committed))).json()
+    assert (await client.post("/app/places/conversation", json=request)).status_code == 409
+    assert (
+        await client.post("/app/places/conversation/recover", json=recovery_body(committed))
+    ).json() == latest
+    assert len(calls) == 1
+
+
+async def test_manual_failure_returns_old_conditions_together_with_old_results(harness):
+    client, _, searcher, _, _, _ = harness
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    searcher.error = True
+    update = manual_body(first)
+    update["manual"].update(radius_m=1000, name_query="새 이름", kinds=["cafe"])
+    failed = (await client.post("/app/places/conversation", json=update)).json()
+    assert failed["revision"] == 2
+    assert failed["receipt"]["execution"] == "failed"
+    assert failed["filters"] == first["filters"] and failed["search"] == first["search"]
+
+
+async def test_expired_session_restores_full_filters_in_new_session_without_old_history(harness):
+    client, store, searcher, calls, plans, _ = harness
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append(
+        {
+            "goal": "show",
+            "changes": {
+                "upsert_all": [
+                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
+                ],
+                "upsert_any": [
+                    {
+                        "id": "shopping",
+                        "all": [
+                            {
+                                "id": "kind",
+                                "capability": "purpose.kind",
+                                "op": "in",
+                                "value": ["shopping"],
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+    )
+    filtered = (
+        await client.post("/app/places/conversation", json=chat_body(first, "주차되는 쇼핑시설"))
+    ).json()
+    assert filtered["filters"]["hard"]["all"] and filtered["filters"]["hard"]["any"]
+    store.items.pop(first["session_id"])
+    assert (
+        await client.post("/app/places/conversation", json=chat_body(filtered))
+    ).status_code == 410
+    restored = await client.post(
+        "/app/places/conversation",
+        json={
+            "client_request_id": str(uuid4()),
+            "mode": "restore",
+            "restore_filters": filtered["filters"],
+        },
+    )
+    assert restored.status_code == 200, restored.text
+    restored = restored.json()
+    assert restored["filters"] == filtered["filters"]
+    assert restored["session_id"] != filtered["session_id"] and restored["revision"] == 1
+    assert restored["receipt"]["snapshot_id"] != filtered["receipt"]["snapshot_id"]
+    assert restored["answer_status"] == "none" and len(calls) == 1
+    assert len(searcher.calls) == 3
+    assert json.loads(store.items[restored["session_id"]])["state"]["history"] == []
+    continued = await client.post("/app/places/conversation", json=chat_body(restored))
+    assert continued.status_code == 200
+
+
+async def test_recovery_and_answer_are_owner_bound_and_restore_rejects_invalid_filters(harness):
+    client, _, _, _, _, app = harness
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    app.dependency_overrides[gateway.facility_owner] = lambda: "other-owner"
+    assert (
+        await client.post("/app/places/conversation/recover", json=recovery_body(first))
+    ).status_code == 410
+    assert (
+        await client.post("/app/places/conversation/answer", json=answer_body(first))
+    ).status_code == 410
+    bad = {**first["filters"], "spatial": {"lat": 37.5, "lng": 127, "radius_m": -1}}
+    assert (
+        await client.post(
+            "/app/places/conversation",
+            json={"client_request_id": str(uuid4()), "mode": "restore", "restore_filters": bad},
+        )
+    ).status_code == 422

@@ -5,7 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from daengs_backend.core.deps import CurrentAppMemberTokenOnly
-from daengs_backend.schemas.facility_conversation import ConversationRequest, ConversationResponse
+from daengs_backend.schemas.facility_conversation import (
+    ConversationAnswerRequest,
+    ConversationRecoveryRequest,
+    ConversationRequest,
+    ConversationResponse,
+)
 from daengs_backend.schemas.facility_discovery import (
     FacilityActionRequest,
     FacilityDiscoveryRequest,
@@ -28,6 +33,8 @@ _ERRORS = {
     "facility_login_required": (401, "다시 로그인해 주세요."),
     "facility_expired": (410, "검색이 만료됐어요. 다시 검색해 주세요."),
     "facility_conflict": (409, "검색 상태가 바뀌었어요. 다시 검색해 주세요."),
+    "facility_pending": (409, "이전 요청을 처리 중이에요. 잠시 뒤 다시 시도해 주세요."),
+    "facility_not_committed": (409, "아직 확정된 검색이 없어요. 다시 시도해 주세요."),
     "facility_invalid_action": (422, "현재 검색에서 선택할 수 없는 조건이에요."),
     "facility_session_unavailable": (503, "검색 상태를 저장하거나 불러올 수 없어요."),
     "facility_timeout": (504, "AI 검색 시간이 초과됐어요."),
@@ -57,6 +64,32 @@ async def converse(
     except FacilityDiscoveryError as exc:
         status_code, message = _ERRORS[exc.code]
         raise HTTPException(status_code, detail={"code": exc.code, "message": message}) from exc
+
+
+@router.post("/conversation/recover", response_model=ConversationResponse)
+async def recover_conversation(
+    request: ConversationRecoveryRequest,
+    owner: Annotated[str, Depends(facility_owner)],
+    service: Annotated[FacilityConversationService, Depends(get_facility_conversation_service)],
+):
+    try:
+        return await service.recover(request, owner)
+    except FacilityDiscoveryError as exc:
+        status, message = _ERRORS[exc.code]
+        raise HTTPException(status, detail={"code": exc.code, "message": message}) from exc
+
+
+@router.post("/conversation/answer", response_model=ConversationResponse)
+async def answer_conversation(
+    request: ConversationAnswerRequest,
+    owner: Annotated[str, Depends(facility_owner)],
+    service: Annotated[FacilityConversationService, Depends(get_facility_conversation_service)],
+):
+    try:
+        return await service.answer(request, owner)
+    except FacilityDiscoveryError as exc:
+        status, message = _ERRORS[exc.code]
+        raise HTTPException(status, detail={"code": exc.code, "message": message}) from exc
 
 
 @router.post(

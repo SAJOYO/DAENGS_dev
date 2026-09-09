@@ -53,9 +53,10 @@ class ConversationState(PlanningModel):
 
 
 class PrepareRequest(PlanningModel):
-    mode: Literal["manual", "chat"]
+    mode: Literal["manual", "chat", "restore"]
     query: str = Field(default="", max_length=1000)
     manual: PlaceSearchRequest | None = None
+    restore_filters: FilterState | None = None
     previous: ConversationState | None = None
     # IDs in the exact order the user saw, scoped to the saved snapshot.
     visible_order: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
@@ -63,6 +64,14 @@ class PrepareRequest(PlanningModel):
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
+        if self.mode == "restore":
+            if self.restore_filters is None or self.previous or self.manual or self.query:
+                raise ValueError("restore starts from validated filters, never previous results")
+            policy = self.restore_filters.result_policy
+            if policy.limit_per_kind > 20 or policy.uncertain_limit_per_kind != 0:
+                raise ValueError("restore must respect the conversation result budget")
+        elif self.restore_filters is not None:
+            raise ValueError("saved filters require restore mode")
         if self.mode == "manual" and self.manual is None:
             raise ValueError("manual search requires filters")
         if self.mode == "chat" and (self.previous is None or not self.query.strip()):

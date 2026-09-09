@@ -12,9 +12,10 @@ class ConversationRequest(InputModel):
     client_request_id: UUID
     session_id: UUID | None = None
     expected_revision: int = Field(default=0, ge=0)
-    mode: Literal["manual", "chat"]
+    mode: Literal["manual", "chat", "restore"]
     query: str = Field(default="", max_length=1000)
     manual: dict[str, Any] | None = None
+    restore_filters: dict[str, Any] | None = None
     visible_order: list[dict[str, str]] = Field(default_factory=list, max_length=120)
     visible_selected: dict[str, str] | None = None
 
@@ -26,13 +27,34 @@ class ConversationRequest(InputModel):
             raise ValueError("chat requires an existing session and query, not replacement filters")
         if self.mode == "manual" and self.manual is None:
             raise ValueError("manual search requires filter input")
+        if self.mode == "restore":
+            if (
+                self.session_id is not None
+                or self.restore_filters is None
+                or self.manual
+                or self.query
+            ):
+                raise ValueError("restore requires only filters in a new session")
+        elif self.restore_filters is not None:
+            raise ValueError("only restore accepts saved filters")
         if self.session_id is None and self.expected_revision != 0:
             raise ValueError("new session revision must be zero")
         return self
 
 
+class ConversationRecoveryRequest(InputModel):
+    session_id: UUID | None = None
+    client_request_id: UUID
+
+
+class ConversationAnswerRequest(InputModel):
+    session_id: UUID
+    client_request_id: UUID
+    revision: int = Field(ge=1)
+
+
 class ConversationResponse(InputModel):
-    contract_version: Literal["facility-conversation-v1"] = "facility-conversation-v1"
+    contract_version: Literal["facility-conversation-v2"] = "facility-conversation-v2"
     session_id: UUID
     revision: int
     client_request_id: UUID
@@ -42,3 +64,4 @@ class ConversationResponse(InputModel):
     display_order: list[dict[str, str]]
     receipt: dict[str, Any]
     answer: dict[str, Any] | None = None
+    answer_status: Literal["none", "pending", "ready"] = "none"

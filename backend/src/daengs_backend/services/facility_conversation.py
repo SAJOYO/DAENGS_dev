@@ -3,7 +3,7 @@
 import asyncio
 import json
 import time
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
@@ -18,7 +18,7 @@ from daengs_backend.services.facility_discovery import (
 class ConversationSessions(RedisFacilitySessions):
     @staticmethod
     def key(session_id):
-        return f"facility:conversation:v1:{session_id}"
+        return f"facility:conversation:v2:{session_id}"
 
 
 class FacilityConversationService(FacilityDiscoveryService):
@@ -38,11 +38,34 @@ class FacilityConversationService(FacilityDiscoveryService):
             raise FacilityDiscoveryError("facility_invalid_response")
         return raw
 
+    @staticmethod
+    def initial_id(owner, request_id):
+        # First-response loss is recoverable without having received a session ID.
+        return uuid5(NAMESPACE_URL, f"daengs:facility:v2:{owner}:{request_id}")
+
+    async def load(self, session_id, owner):
+        raw = await self._storage("get", session_id)
+        if raw is None:
+            raise FacilityDiscoveryError("facility_expired")
+        saved = json.loads(raw)
+        if saved["owner"] != owner or saved["expires"] <= time.time():
+            raise FacilityDiscoveryError("facility_expired")
+        return raw, saved
+
+    async def recover(self, request, owner):
+        session_id = request.session_id or self.initial_id(owner, request.client_request_id)
+        _, saved = await self.load(session_id, owner)
+        if saved["pending"] is not None:
+            raise FacilityDiscoveryError("facility_pending")
+        if saved["response"] is None:
+            raise FacilityDiscoveryError("facility_not_committed")
+        return ConversationResponse.model_validate(saved["response"])
+
     async def turn(self, request, owner):
-        session_id = request.session_id or uuid4()
+        session_id = request.session_id or self.initial_id(owner, request.client_request_id)
         request_data = request.model_dump(mode="json")
         if request.session_id is None:
-            saved = {
+            initial = {
                 "owner": owner,
                 "expires": time.time() + TTL_SECONDS,
                 "revision": 0,
@@ -50,22 +73,23 @@ class FacilityConversationService(FacilityDiscoveryService):
                 "response": None,
                 "pending": None,
             }
-            raw = self.encode(saved)
-            if not await self._storage("create", session_id, raw):
-                raise FacilityDiscoveryError("facility_conflict")
-        else:
-            raw = await self._storage("get", session_id)
-            if raw is None:
-                raise FacilityDiscoveryError("facility_expired")
-            saved = json.loads(raw)
-            if saved["owner"] != owner or saved["expires"] <= time.time():
-                raise FacilityDiscoveryError("facility_expired")
-            if saved.get("request") == request_data and saved.get("response"):
-                return ConversationResponse.model_validate(saved["response"])
+            await self._storage("create", session_id, self.encode(initial))
+        raw, saved = await self.load(session_id, owner)
+        if saved.get("request") == request_data and saved.get("response"):
+            return ConversationResponse.model_validate(saved["response"])
         if saved["revision"] != request.expected_revision:
             raise FacilityDiscoveryError("facility_conflict")
+        if (
+            saved["pending"] == str(request.client_request_id)
+            and saved.get("lease_until", 0) > time.time()
+        ):
+            raise FacilityDiscoveryError("facility_pending")
         # A newer request at the same committed revision supersedes the old reservation.
-        reserved = {**saved, "pending": str(request.client_request_id)}
+        reserved = {
+            **saved,
+            "pending": str(request.client_request_id),
+            "lease_until": time.time() + 90,
+        }
         reservation = self.encode(reserved)
         if not await self._storage("replace", session_id, raw, reservation):
             raise FacilityDiscoveryError("facility_conflict")
@@ -76,6 +100,7 @@ class FacilityConversationService(FacilityDiscoveryService):
                     "mode": request.mode,
                     "query": request.query,
                     "manual": request.manual,
+                    "restore_filters": request.restore_filters,
                     "previous": saved["state"],
                     "visible_order": request.visible_order,
                     "visible_selected": request.visible_selected,
@@ -93,6 +118,7 @@ class FacilityConversationService(FacilityDiscoveryService):
                 selected=receipt["selected"],
                 display_order=state["snapshot"]["display_order"] if state["snapshot"] else [],
                 receipt=receipt,
+                answer_status="pending" if request.mode == "chat" else "none",
             )
             committed = {
                 **saved,
@@ -109,28 +135,54 @@ class FacilityConversationService(FacilityDiscoveryService):
             # Never restore over a newer reservation or commit, including cancellation.
             await asyncio.shield(self._storage("replace", session_id, reservation, raw))
             raise
-        if request.mode == "chat":
-            try:
-                answer = await self.exchange(
-                    "answer",
-                    {"query": request.query, "committed_revision": revision, "prepared": prepared},
-                )
-                if answer.get("revision") != revision:
-                    raise FacilityDiscoveryError("facility_invalid_response")
-            except FacilityDiscoveryError:
-                answer = {
-                    "text": "요청 처리 결과를 화면에서 확인해 주세요.",
-                    "source": "fallback",
-                    "revision": revision,
-                    "evidence_ids": [],
-                }
-            response = response.model_copy(update={"answer": answer})
-            final = {**committed, "response": response.model_dump(mode="json")}
-            if not await self._storage("replace", session_id, committed_raw, self.encode(final)):
-                raise FacilityDiscoveryError("facility_conflict")
-        elif await self._storage("get", session_id) != committed_raw:
-            raise FacilityDiscoveryError("facility_conflict")
+        # Publish the commit now. Answer generation is a separate, revision-bound operation.
         return response
+
+    async def answer(self, request, owner):
+        raw, saved = await self.load(request.session_id, owner)
+        response = saved["response"]
+        if (
+            response is None
+            or saved["revision"] != request.revision
+            or response["client_request_id"] != str(request.client_request_id)
+        ):
+            raise FacilityDiscoveryError("facility_conflict")
+        if response["answer_status"] != "pending":
+            return ConversationResponse.model_validate(response)
+        if saved["pending"] is not None:
+            raise FacilityDiscoveryError("facility_conflict")
+        try:
+            answer = await self.exchange(
+                "answer",
+                {
+                    "query": saved["request"]["query"],
+                    "committed_revision": request.revision,
+                    "prepared": {"state": saved["state"], "receipt": response["receipt"]},
+                },
+            )
+            if answer.get("revision") != request.revision:
+                raise FacilityDiscoveryError("facility_invalid_response")
+        except FacilityDiscoveryError:
+            answer = {
+                "text": "요청 처리 결과를 화면에서 확인해 주세요.",
+                "source": "fallback",
+                "revision": request.revision,
+                "evidence_ids": [],
+            }
+        completed = {**response, "answer": answer, "answer_status": "ready"}
+        # A new turn reservation/commit wins. This answer never increments or replaces its state.
+        if not await self._storage(
+            "replace", request.session_id, raw, self.encode({**saved, "response": completed})
+        ):
+            _, latest = await self.load(request.session_id, owner)
+            if (
+                latest["revision"] == request.revision
+                and latest["response"]
+                and latest["response"]["answer_status"] == "ready"
+            ):
+                return ConversationResponse.model_validate(latest["response"])
+            raise FacilityDiscoveryError("facility_conflict")
+        return ConversationResponse.model_validate(completed)
 
     async def exchange(self, step, payload):
         from daengs_backend.config import settings

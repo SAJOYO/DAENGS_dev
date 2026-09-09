@@ -21,7 +21,8 @@ flowchart TD
     S --> RC
     N --> RC
     RC --> CAS[Backend: CAS 상태 확정]
-    CAS --> A[Place: 답변 정책 → 별도 Gemini 답변 → 근거 검증]
+    CAS --> UI
+    UI -->|확정 상태 반영 후 answer 요청| A[Place: 답변 정책 → 별도 Gemini 답변 → 근거 검증]
     A --> UI
 ```
 
@@ -57,22 +58,41 @@ LLM은 `goal`, 선택적인 `changes`, 명시적 `refresh`, `reference_index`, �
 
 ## HTTP·상태 저장
 
-공개: `POST /app/places/conversation` (기존 Bearer 인증).
+공개: `POST /app/places/conversation`, `/conversation/recover`, `/conversation/answer`
+(모두 기존 Bearer 인증 및 세션 소유자 검사).
 내부: `POST /internal/place/facility-conversation/prepare`, `/answer`.
 내부 경로를 공개 nginx 경로에 추가하지 않는다.
 
 첫 요청은 `mode=manual`, `manual=<기존 PlaceSearchRequest>`이며 `session_id`를 생략한다.
 후속 수동/AI 요청은 `session_id`, `expected_revision`, UUID `client_request_id`를 보낸다.
 AI 요청은 `mode=chat`, `query`, `visible_order`, 선택적 `visible_selected`를 보낸다.
-응답은 `filters`, `search`, `selected`, `display_order`, `receipt`, `answer`, 확정 revision이다.
+`facility-conversation-v2` 응답은 `filters`, `search`, `selected`, `display_order`, `receipt`,
+`answer`, `answer_status`, 확정 revision이다. `conversation`은 상태 확정 직후 응답하며 답변을
+기다리지 않는다. 앱이 조건·지도·목록·선택을 반영한 뒤 `answer`에 `session_id`, `revision`,
+`client_request_id`를 보낸다. 답변은 그 상태의 근거로만 생성되고 상태 revision을 증가시키지 않는다.
 
 수동 입력도 같은 세션을 쓴다. 지도·반려견은 수동 값을 사용하고 AI 필수 조건은 보존한다.
 명시적 수동 카테고리 교체 시 이전 업종 조건을 제거한다. `edit_only`의 결과 불일치는
 `result_matches_filters=false`다. 검색 실패는 이전 상태를 보존하고, 답변 실패는 검색을 되돌리지 않는다.
 
-Redis 키는 `facility:conversation:v1:<session_id>`, TTL은 최초 생성부터 15분이다.
-새 요청의 예약은 이전 요청의 확정을 막는다. 상태 확정 후 답변을 요청하고 그 사이 새 요청이
-확정되면 이전 답변은 409로 폐기한다. 완료한 동일 ID·본문의 재전송은 재실행하지 않는다.
+Redis 키는 `facility:conversation:v2:<session_id>`, TTL은 최초 생성부터 15분이다.
+새 요청의 예약은 이전 요청의 확정을 막는다. 답변 생성 중 새 요청이 예약/확정되면 이전 답변은
+409로 폐기한다. 완료한 동일 ID·본문의 재전송은 재실행하지 않는다. 최신 요청만 저장하므로
+그 뒤 다른 턴이 확정된 이전 요청의 재전송은 409이며, 재해석 대신 전체 상태를 복구한다.
+
+- 첫 세션 ID는 소유자와 요청 UUID로 결정한다. 첫 응답이 유실돼 세션 ID를 몰라도 같은 요청을
+  재전송하거나 `recover`에 `client_request_id`만 보내 복구할 수 있다. 보장 범위는 세션 TTL 이내다.
+- `recover`는 해당 세션의 최신 확정 응답 전체를 반환한다. 진행 중 예약이 있으면 409로 기다리게
+  한다. 동일 요청의 중복 실행은 90초 예약 동안 차단한다. 프로세스 종료 뒤 같은 ID로 재시도하면
+  예약이 지난 뒤 다시 준비할 수 있다. 앱은 자동 폴링하지 않고 재시도 버튼을 제공한다.
+- 앱은 타임아웃·취소 후에도 요청 UUID·본문·기준 revision을 유지한다. 충돌 복구는 조건·목록·
+  선택을 함께 반영하며 “두 번째” 같은 이전 문장을 새 목록에 자동 재실행하지 않는다.
+- 410이면 `mode=restore`, `restore_filters=<마지막 전체 FilterState>`로 새 세션을 만든다.
+  Place가 AND/OR·반려견·정렬·반경을 검증하고 새 결과를 검색한다. 기존 스냅샷·선택·대화 이력은
+  복제하지 않는다. 복원 요청도 같은 UUID로 재시도한다. 복원 실패 시 이전 표시를 남기고 오류와
+  재시도를 제공한다. 업종별 20개 제한을 우회하는 복원 입력은 거부한다.
+- 요청 식별자 보존은 현재 앱 저장소의 생애 안에서 동작한다. 앱 프로세스 종료 후 영속 복원은
+  이번 범위에 포함하지 않는다. 서버 역시 TTL이 지난 요청의 영구 중복 제거를 제공하지 않는다.
 
 ## 앱 연결과 검증
 
@@ -93,7 +113,10 @@ Android `feat/place-conversation-skeleton`에서 `-PfacilityConversation=true`�
   이것은 자연어 전체 정확도를 보증하는 평가셋이 아니다.
 - Android: 서버 직렬화 합성 응답으로 기존 ViewModel·Compose 화면·선택 반영·오래된 응답 폐기를 검증한다.
 - 실제 폰 설치, 운영 인증/Redis/PostGIS의 배포 검증은 아직 하지 않았다.
-- 후속 범위: 세션 만료·충돌 재동기화 UX, 전체 업종 AI, 복합 비교·파생 태그, 폭넓은 자연어 평가셋.
+- 1단계 보강: 수동·AI 공통 상태 반영, 충돌/유실/만료 복구, 답변 전 상태 전달. 수동 실패 시
+  적용되지 않은 반경·이름·카테고리를 목록 위에 남기지 않으며, 복구/실패 안내는 AI를 꺼도 보인다.
+- 후속 범위: 전체 적용 조건 UI, 명확화 맥락, 답변의 의미·근거 정책, 전체 업종 AI,
+  복합 비교·파생 태그, 폭넓은 자연어 평가셋.
 
 형식 참고: [Gemini 함수 호출](https://ai.google.dev/gemini-api/docs/function-calling),
 [Interactions](https://ai.google.dev/gemini-api/docs/interactions-overview).

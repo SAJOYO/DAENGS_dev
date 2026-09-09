@@ -123,6 +123,8 @@ class ConversationService:
         plan = TurnPlan(goal="show")
         if request.mode == "manual":
             candidate = manual_filters(request.manual, old)
+        elif request.mode == "restore":
+            candidate = request.restore_filters
         else:
             assert old is not None
             try:

@@ -8,6 +8,7 @@ from daengs_walk.storyboard import (
     StoryboardBundleV2,
     StoryboardBundleV3,
     StoryboardBundleV4,
+    StoryboardBundleV5,
 )
 
 BundleFormat = Literal[
@@ -15,6 +16,7 @@ BundleFormat = Literal[
     "walk-storyboard-candidates-v2",
     "walk-storyboard-candidates-v3",
     "walk-storyboard-candidates-v4",
+    "walk-storyboard-candidates-v5",
 ]
 
 
@@ -32,6 +34,11 @@ class StoryboardResponse(BaseModel):
     status: Literal["pending", "running", "ready", "failed", "stale"]
     entry_revisions: dict[str, int]
     bundle: (
-        StoryboardBundleV4 | StoryboardBundleV3 | StoryboardBundleV2 | StoryboardBundle | None
+        StoryboardBundleV5
+        | StoryboardBundleV4
+        | StoryboardBundleV3
+        | StoryboardBundleV2
+        | StoryboardBundle
+        | None
     ) = None
     error_code: str | None = None

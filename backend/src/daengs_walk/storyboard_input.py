@@ -46,7 +46,7 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         previous = (segment.chain_index, segment.b.client_seq)
     projected = []
     for entry in entries:
-        content = entry["content"]
+        content = entry.get("content")
         if content is None:
             continue
         at = datetime.fromisoformat(content["recorded_at"])
@@ -72,6 +72,25 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
                 "route_known": containing is not None,
             }
         )
+        pin = entry.get("pin")
+        if pin is not None:
+            projected[-1]["pin"] = {
+                "revision": entry["pin_revision"],
+                **{
+                    k: pin[k]
+                    for k in (
+                        "resolution_id",
+                        "state",
+                        "method",
+                        "target_at",
+                        "point",
+                        "uncertainty_m",
+                        "uncertainty_basis",
+                    )
+                },
+            }
+            # Pin-based lookup is entry-owned; do not claim it covers the raw route.
+            projected[-1]["route_known"] = False
     projected.sort(key=lambda e: (e["elapsed_s"], e["id"]))
     selection = select_nodes(
         nodes,
@@ -86,4 +105,13 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         "start": nodes[0]["observation"] if nodes else None,
         "end": nodes[-1]["observation"] if nodes else None,
     }
+    selection["entry_anchors"] = [
+        {
+            "id": "entry:" + e["id"],
+            "location": e["pin"]["point"],
+            "location_basis": e["pin"]["method"],
+        }
+        for e in projected
+        if e.get("pin", {}).get("point") is not None
+    ][:8]
     return projected, selection

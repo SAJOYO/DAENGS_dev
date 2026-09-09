@@ -56,9 +56,14 @@ class OccupancyResponse(BaseModel):
     is_mine: bool
     certification: Literal["UNVERIFIED", "VERIFIED"]
     occupied_at: datetime
+    certified_at: datetime | None = None
+    protected_until: datetime | None = None
 
 
 class SiteResponse(BaseModel):
+    server_now: datetime | None = None
+    season_id: str | None = None
+    policy_version: str | None = None
     site_id: str
     version: int
     occupancy: OccupancyResponse | None
@@ -73,3 +78,20 @@ class ClaimResponse(BaseModel):
     current_photo_id: uuid.UUID | None
     resolution_code: str | None
     site: SiteResponse
+
+
+class ChallengeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_site_version: int = Field(ge=0)
+
+
+class PhotoAccessResponse(BaseModel):
+    server_now: datetime
+    site_version: int
+    season_id: str | None
+    policy_version: str | None
+    allowed_action: Literal[
+        "PHOTO_TAKEOVER", "PHOTO_UPGRADE", "WAIT", "ALREADY_CERTIFIED", "UNAVAILABLE"
+    ]
+    reason: str | None = None
+    protected_until: datetime | None = None

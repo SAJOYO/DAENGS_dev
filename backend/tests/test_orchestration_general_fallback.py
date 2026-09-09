@@ -65,8 +65,8 @@ from daengs_backend.orchestration.semantic import (
 )
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_backend.orchestration.social import social_message
-from tools.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
-from tools.router_benchmark.schemas import load_gold_v3_cases
+from daengs_evals.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
+from daengs_evals.router_benchmark.schemas import load_gold_v3_cases
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 SEOUL = {"location": {"lat": 37.5, "lon": 127.0}}
@@ -109,7 +109,8 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
     assert request.timeout_ms is None
     assert built.handoffs == [] and built.clarify is None
     # 좌표가 있어도 payload 로 건너가지 않는다 — 폴백은 Walk·Place 의 질문에 답하지 않는다.
-    assert set(request.payload.model_dump()) == {"question", "dog"}
+    assert set(request.payload.model_dump()) == {"question", "dog", "care_log"}
+    assert request.payload.care_log is None
 
 
 def test_general_payload_follows_the_life_rule_exactly() -> None:

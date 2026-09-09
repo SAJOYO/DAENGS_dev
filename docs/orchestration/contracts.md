@@ -65,6 +65,19 @@ context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_styl
 있으면 그 거절이 힌트로 바뀝니다. 안전 프롬프트 본문은 `general-answer-ko-v3` 그대로입니다
 — 바뀐 것은 그 안에 실리는 JSON 뿐입니다.
 
+**케어 로그 (CURRENT — #344)** — 같은 조건(앱 회원 + `active_dog_id`), 같은 세션에서 오늘의
+케어 요약을 읽어 `context["care_log"]` 에 얹습니다 (`services/care_log_context` ←
+`services/care_event.day_summary`, #332). 모양은 `CareLogContext` — `day` · 종류별 건수(`meal` ·
+`medication` · `snack` · `walk`) · 마지막 시각 셋(`HH:MM`, 서울). planner 가 칸마다 화이트리스트로
+옮겨 **`GeneralPayload.care_log` 로만** 보냅니다 — Life 는 조례·보조금 문서로 답하는 자리라 오늘
+밥 횟수가 답을 안 가르고, Training 은 반려견 사실을 애초에 안 받습니다. **`note` 와 이벤트 목록은
+이 경계를 안 넘습니다** — 사용자가 적은 자유 텍스트가 지시문 옆에 놓이는 자리이고, 요약이 답에
+필요한 전부입니다. 오늘 기록이 0건이면 키 자체가 없습니다(빈 로그는 "안 챙겼다" 가 아니라 "안
+쓴다" 일 수 있어 어느 쪽으로도 안 읽히게). 표가 아직 없거나 DB 가 아프면(`SQLAlchemyError`)
+경고만 남기고 로그 없이 답합니다. 프롬프트는 로그가 있을 때만 `CARE_LOG_TODAY` 블록과 규칙
+한 문단이 붙고 버전이 `general-answer-ko-v4-carelog` 로 갈립니다 — 로그가 없는 요청은 여전히
+v3 와 글자까지 같습니다 (`tests/test_assistant_care_log.py` 가 고정).
+
 **스크리닝 컨텍스트 (CURRENT — #307)** — `context` 의 두 번째 예약 키가 `screening` 입니다.
 사용자가 피부 판정 결과에서 이어 물을 때, 앱이 보내는 것은 **기록 id 하나**(`screening_record_id`,
 §8)이고 판정 내용은 서버가 DB 에서 읽습니다 — `screening_records` 소유권을 확인하고

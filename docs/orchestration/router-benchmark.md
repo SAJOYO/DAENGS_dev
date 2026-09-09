@@ -11,7 +11,7 @@ Card 2A는 이미 선정된 `gemini-3.5-flash-lite`가 DAENGS v1 라우팅 계�
 Phase 1에서 다음 세 자산을 하나로 동결합니다.
 
 - 골드: `backend/evals/orchestration_router/gold_v1.jsonl`
-- 프롬프트: `semantic-router-ko-v1` (`backend/tools/router_benchmark/prompt.py`)
+- 프롬프트: `semantic-router-ko-v1` (`backend/src/daengs_evals/router_benchmark/prompt.py`)
 - 구성·게이트: `backend/evals/orchestration_router/benchmark_v1.yaml`
 
 EXECUTE는 `training`, `life`, `walk`만 허용합니다. HANDOFF는 `skin`, `gait`만 허용하고

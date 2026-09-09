@@ -62,6 +62,8 @@ def clock(monkeypatch):
 
 
 async def season(database, clock, name="test", **rule_values):
+    # Preserve the already-running season contract; v2 scenarios opt in explicitly.
+    rule_values.setdefault("version", "draft-2026-09-06")
     async with database() as db:
         return await activity_game.create_season(
             db, name, clock[0] - 1000, clock[0] + 86_400_000, policy.Rules(**rule_values)

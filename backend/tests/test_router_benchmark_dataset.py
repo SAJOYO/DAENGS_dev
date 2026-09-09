@@ -8,7 +8,11 @@ from collections import Counter
 from difflib import SequenceMatcher
 
 from daengs_backend.orchestration.contracts import RoutePlan
-from tools.router_benchmark.schemas import BENCHMARK_DIR, load_benchmark_config, load_gold_cases
+from daengs_evals.router_benchmark.schemas import (
+    BENCHMARK_DIR,
+    load_benchmark_config,
+    load_gold_cases,
+)
 
 EXPECTED_COUNTS = {
     "training_only": 10,

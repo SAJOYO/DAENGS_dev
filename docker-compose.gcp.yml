@@ -4,8 +4,9 @@
 #   docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
 #     up -d nginx backend place-search journey-service gait-analysis gait-worker
 #
-# 크롤러(crawler-worker · crawler-beat)는 **일부러 목록에 없습니다** — 코퍼스 정본은
-# 로컬 서버입니다. 단 compose 는 파일 해석 시점에 `:?` 가드를 평가하므로, 안 띄워도
+# 크롤러(crawler-worker · crawler-beat)는 **일부러 목록에 없습니다** — GCP 에서는 Cloud Run 잡
+# `corpus-refresh` 가 크롤~적재를 대신합니다 (D-062, docs/deploy/corpus-pipeline.md). 코퍼스 정본은
+# 여전히 로컬 서버입니다. 단 compose 는 파일 해석 시점에 `:?` 가드를 평가하므로, 안 띄워도
 # 최상단 .env 의 DAENGS_CORPUS_DIR 에는 더미 경로가 있어야 합니다 (runbook §2).
 # ⚠ **서비스 이름을 빼고 `up -d` 하지 마세요** — profile 이 없는 크롤러까지 뜹니다 (#150).
 #

@@ -32,6 +32,7 @@ from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
+from daengs_backend.services import care_log_context as care_log_context_service
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
 from daengs_backend.services import request_metrics as metrics_service
@@ -102,15 +103,27 @@ async def _with_dog_context(
     **못 채워도 그냥 지나간다.** 관리자 토큰(pets 가 없다) · 활성 강아지 미지정 ·
     지워진 강아지 전부 여기로 온다. 프로필이 없다고 답할 수 있는 질문을 실패시키지 않는다 —
     B4 이전과 똑같은 답이 나갈 뿐이다.
+
+    **오늘의 케어 로그도 같은 세션에서 읽어 `context["care_log"]` 에 얹는다** (#344). 조건이
+    같고(앱 회원 + `active_dog_id`) 열어야 하는 DB 도 같아서, 세션을 하나 더 열면 요청당 연결만
+    는다 — 무상태 요청이 DB 를 안 여는 성질(D-048)은 여전히 이 조건에서만, 세션 하나로만 깨진다.
+    로그 쪽도 못 채우면 그냥 지나간다: 남의 강아지 · 오늘 기록 없음 · **표가 아직 없음**(#332
+    마이그레이션 전) 전부 로그 없이, 이 카드 전과 똑같이 답한다.
     """
     active_dog_id = context.get("active_dog_id")
     if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
         return context
     async with session_factory() as session:
         dog = await dog_context_service.resolve(session, principal.app_user_id, active_dog_id)
-    if dog is None:
-        return context
-    return {**context, "dog": dog}
+        care_log = await care_log_context_service.resolve(
+            session, principal.app_user_id, active_dog_id
+        )
+    resolved = dict(context)
+    if dog is not None:
+        resolved["dog"] = dog
+    if care_log is not None:
+        resolved["care_log"] = care_log
+    return resolved
 
 
 async def _with_screening_context(

@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from tools.router_benchmark.prompt_v2 import build_semantic_router_prompt
-from tools.router_benchmark.runner import build_artifacts
-from tools.router_benchmark.runner_v2 import GENERATION_CONFIG, run_cases
-from tools.router_benchmark.schemas import GoldCase, load_gold_cases
-from tools.router_benchmark.semantic_v2 import (
+from daengs_evals.router_benchmark.prompt_v2 import build_semantic_router_prompt
+from daengs_evals.router_benchmark.runner import build_artifacts
+from daengs_evals.router_benchmark.runner_v2 import GENERATION_CONFIG, run_cases
+from daengs_evals.router_benchmark.schemas import GoldCase, load_gold_cases
+from daengs_evals.router_benchmark.semantic_v2 import (
     SemanticRoutingDecision,
     assemble_route_plan,
     validate_semantic_decision,

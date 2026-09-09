@@ -93,7 +93,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 
 | 무엇 | 어디로 | 비고 |
 | --- | --- | --- |
-| 스크리닝 가중치 2개 | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋) |
+| 스크리닝 릴리스 — **폴더를 통째로** (`checkpoints/` + `stage1_threshold.json`) | `/srv/daengs/models/release/` | git 에 없음 (100MB 리밋). ⚠️ **개수를 세지 마세요.** 예전에 이 줄은 "가중치 2개" 였는데 그 사이 2단계가 **앙상블 3팔**이 됐습니다 (2026-09-08 `/screen/healthz` 실측: `stage2_convnextv2_base_m2.5_…` · `stage2_effnetv2_s_f320_…` · `stage2_effnetv2_s_m2.5_…`). 덜 옮기면 §5 를 보세요 |
 | gait `best.pt` · `yolov8n.pt` | `/srv/daengs/models/release/gait-analysis/` | git 에 없음. **`GAIT_RELEASE_DIR` 과 같은 값입니다** — 스크리닝 release 폴더의 하위. 2026-09-07 VM 실측(best.pt 53MB · yolov8n.pt 6.5MB) |
 | 최상단 `.env` | `~/daengs/.env` | 아래 수정표 |
 | `backend/.env` | `~/daengs/backend/.env` | 암호화 키 3개는 **로컬과 같은 값** — 새로 만들면 덤프해 온 암호문을 못 엽니다 |
@@ -136,7 +136,8 @@ docker compose exec pgvector pg_restore -U daengs -d vectordb --clean --if-exist
 docker cp /srv/daengs/dumps/place.dump daengs-place-db:/tmp/
 docker compose exec place-db pg_restore -U place -d place --clean --if-exists /tmp/place.dump
 
-# ③ 서비스 — 크롤러(worker·beat)는 일부러 목록에 없습니다 (코퍼스 정본은 로컬 서버)
+# ③ 서비스 — 크롤러(worker·beat)는 일부러 목록에 없습니다 (코퍼스 정본은 로컬 서버.
+#    GCP 의 크롤~적재는 Cloud Run 잡이 합니다 — D-062, 아래 §6)
 # ⚠ 여기서는 gcp 오버레이를 **얹지 않습니다.** gcp.conf 는 인증서 파일을 참조하는데
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
@@ -196,7 +197,7 @@ curl -s  https://daengapi.weareithero.cloud/docs       # FastAPI 문서
 정답**이고, 404 가 나오면 그 엔드포인트가 아직 이 서버에 없다는 뜻입니다:
 
 ```bash
-for p in /health /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
+for p in /health /screen/healthz /gait/records /app/gait/analyze /app/walks /journey /v2/places/search; do
   printf "%-24s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
 done
 ```
@@ -204,10 +205,34 @@ done
 | 경로 | 기대 | 아니면 |
 | --- | --- | --- |
 | `/health` | 200 (`{"status":"ok","db":"ok"}`) | backend 기동 실패 |
+| `/screen/healthz` | 200. ★ **본문의 `stage2_arms_available` 이 `3`** | 아래 |
 | `/gait/records` | **410** — 옛 무인증 경로는 닫혀 있어야 합니다 (#145) | **400·200 이면 설정이 반영 안 된 것.** §6 의 inode 함정 |
 | `/app/gait/analyze` (POST) | 401 | 404 면 새 계약이 안 올라온 것 |
 | `/app/walks` (POST) | 401 | 〃 |
 | `/journey` · `/v2/places/search` | 405 (GET 이라서) | 502 면 해당 컨테이너가 죽은 것 |
+
+★ **스크리닝 팔 개수는 상태 코드로 안 잡힙니다** — 팔이 하나뿐이어도 `/screen/healthz`
+도 `POST /screen/v1/screen` 도 **200** 입니다. 서버 PC 에서 2026-09-07 에 실제로 3팔이
+1팔로 강등됐고, 알아챈 단서는 로그에 성공 줄이 **안 찍힌 것** 하나였습니다. 그래서
+여기서는 코드가 아니라 **본문**을 봅니다:
+
+```bash
+curl -s https://daengapi.weareithero.cloud/screen/healthz
+```
+
+| 본문 값 | 뜻 |
+| --- | --- |
+| `stage2_arms_available: 3` | 릴리스 폴더에 팔이 **다 있음** (모델을 안 올려도 나옵니다) |
+| `stage2_arms_available: 1` | §2 에서 **덜 옮긴 것.** `checkpoints/stage2_*` 를 마저 복사하세요 |
+| `available` 3 인데 `stage2_arms` 1 | 릴리스는 새것인데 **프로세스가 옛것**을 물고 있음 → backend 재시작 |
+| `loaded: false` | 정상입니다. 첫 요청이 모델을 올리는 설계라 `stage2_arms` 는 그 뒤에 나옵니다 |
+
+⚠️ 잃는 것이 눈에 안 보입니다 — 1팔이어도 화면은 똑같이 뜨고, 줄어드는 건 계열
+커버리지 **67.9% → 58.4%** 입니다 (holdout 실측).
+
+⚠️ **순서는 코드가 먼저, 가중치가 나중**입니다. 가중치를 먼저 넣고 옛 코드가 뜨면
+`from_release` 가 마지막 팔 하나만 물고 **기준 팔(convnextv2)이 더 약한 팔로 대체**됩니다.
+그 사고가 그렇게 났습니다.
 
 `/life/ask` 는 첫 요청이 예열로 느립니다(두 번째가 정상). `/assistant/query` 는 인증 필수.
 
@@ -310,16 +335,135 @@ done
 - **코퍼스를 재적재했다면(`rag load`) — GCP 는 바뀌지 않습니다.** 개발 PC 는 로컬
   서버 DB 를 보고 두 DB 사이에 복제가 없습니다 (roadmap §2-5). 적재는 성공하고
   스모크도 통과하는데 앱에만 새 문서가 안 보입니다.
-  🔴 **§2 의 덤프 → §3 ② 의 복원으로 하지 마세요.** 2026-09-07(#289)까지 이 문단이 그렇게
-  적고 있었는데, **그 길은 운영 데이터를 지웁니다** — 아래 "Life 코퍼스만 동기화 (GCP)"
-  를 따르세요. 구조적 해소는 roadmap §7-1
+  🔴 **2026-09-08 부터는 그것을 손으로 맞추지 않습니다** (D-062). GCP 의 `documents` 는
+  잡 `corpus-refresh` 가 **자기 코퍼스로** 채우므로, 개발 PC 의 적재를 GCP 로 옮기는 일
+  자체가 없습니다 — 아래 "코퍼스 파이프라인 (GCP)" 를 보세요. (실험 기간이 끝나 잡을 지운
+  뒤에 다시 필요해지면 그때가 "Life 코퍼스만 동기화 (GCP)" 이고, 🔴 **§2 의 덤프 → §3 ② 의
+  복원으로는 하지 마세요** — 2026-09-07(#289)까지 이 문단이 그렇게 적고 있었는데 **그 길은
+  운영 데이터를 지웁니다.**)
 - **9/18 부터 main 프리즈** — 발표(9/21) 당일 무배포 (roadmap §4)
 - **인증서 갱신**: 90일 — 9/21 전에는 갱신이 없습니다. 유지 시 60일쯤부터 월 1회,
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
 
+### 코퍼스 파이프라인 (GCP)
+
+**언제** — 보통 **할 일이 없습니다.** 매일 04:00 KST 에 Cloud Scheduler `corpus-refresh-daily` 가
+잡 `corpus-refresh` 를 돌려 크롤부터 적재까지 갑니다 (D-062). 사람이 오는 것은 ⓐ 실패 알림이
+왔을 때 ⓑ 모델·청커를 바꿔 전체 재임베딩이 필요할 때 ⓒ 특정 소스만 급히 받을 때입니다.
+
+설계는 `corpus-pipeline.md`, 리소스 생성은 `infra/gcp/README.md` 입니다. 리소스는 2026-09-08 에
+섰고 **첫 자동 실행은 2026-09-09 04:00 KST** 입니다 (그때까지의 실행은 전부 수동입니다).
+
+**수동 실행**
+
+```bash
+gcloud run jobs execute corpus-refresh --region=asia-northeast3 --wait                        # 전체 (crawl~load)
+gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages,crawl,--sources,easylaw-pet" --wait
+gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages,parse,chunk" --wait
+gcloud run jobs execute corpus-embed-full --region=asia-southeast1 --wait                     # 전체 재임베딩 (GPU)
+```
+
+⚠ **`--args` 는 쉼표로 쪼개집니다** — `--args="--stages,parse,chunk"` 는 `--stages parse chunk`
+세 토큰이 됩니다. 그래서 `--stages` 와 `--sources` 는 **쉼표든 공백이든** 여러 값을 받습니다
+(`--stages parse,chunk` 와 `--stages parse chunk` 가 같습니다). Windows Git Bash 에서 칠 때는
+아래 "걸린 것" 6번을 먼저 보세요.
+
+**로그**
+
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="corpus-refresh"' \
+  --limit=200 --format='value(textPayload)' | grep '\[refresh\]'
+```
+
+**정상 실행의 모습** — 2026-09-08 전체 수동 실행 1회가 **17분**이었고 이랬습니다:
+
+```
+[refresh] ▶ crawl        due 11개 → ok 10 (1건은 키가 없어 건너뜀)
+[refresh] ▶ parse        parsed 48 …
+[refresh] ▶ chunk        48 …
+[refresh] ▶ embed        369 chunks (CPU 증분)
+[refresh] load 가드 — 통과
+[refresh] ▶ load         9,838 → 9,885
+[refresh] 끝
+```
+
+- **parse/chunk 만** 돌렸을 때(초기 사본 위): `parsed 25, same 302, skipped 6, failed 0` · 청크
+  **10,304** — 개발 PC 와 같은 수입니다. **이 대조가 사본이 제대로 갔다는 증거**입니다.
+- **GPU 전체 임베딩**: 10,304행 · parquet **43.5MB** · L4 에서 **약 11분**
+  (로그에 `cuda_available=True torch=2.13.0+cu126` 이 찍혀야 합니다 — `+cpu` 면 3번 함정입니다).
+- **load**: 9,838 → 9,838 (upsert 9,838 · prune 0). VM DB 확인은 전 행 갱신 · 1024차원 ·
+  `content_tsv` 채워짐.
+
+**되돌리기** — 잘못된 적재는 버킷 버전에서 이전 parquet 을 꺼내 다시 적재합니다:
+
+```bash
+gcloud storage ls -a gs://daengs-corpus/processed/embeddings/qwen3-embedding-0.6b.parquet   # 세대 목록
+gcloud storage cp gs://daengs-corpus/processed/embeddings/qwen3-embedding-0.6b.parquet#<generation> \
+  gs://daengs-corpus/processed/embeddings/qwen3-embedding-0.6b.parquet
+gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages,load" --wait
+```
+
+**가드에 걸렸을 때** — 로그의 이유를 보고 원인을 고친 뒤 다시 실행합니다. DB 는 안 건드린
+상태입니다. 정말 그 급감이 맞으면 `--args="--stages,load,--max-drop,0.9"` 처럼 **한 번만**
+한계를 올립니다.
+
+**비용** (전부 크레딧에서 나갑니다)
+
+| 항목 | 실측 (2026-09-08) | 월 어림 |
+| --- | --- | --- |
+| `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
+| `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
+| 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
+| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| 버킷 | 약 300MB + 버전 | 수백 원 |
+| Scheduler · Secret | | 무료 구간 |
+| **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |
+
+**L4 는 쿼터 신청이 필요 없었습니다** — 리전 첫 GPU 잡을 만들 때 3장이 자동 할당됩니다.
+아무 신청 없이 잡이 생성된 것으로 확인했습니다 (무료 체험 계정만 막힙니다).
+
+#### 걸린 것 (2026-09-08, 처음 굽고 돌리며)
+
+1. 🔴 **`FROM uv:1` 은 로컬에만 있는 베이스입니다.** 다른 서비스 Dockerfile 을 흉내 내면
+   Cloud Build 가 `pull access denied` 로 죽습니다 — 빌더에는 개발 PC 의 로컬 이미지가 없습니다.
+   `docker/pipeline/Dockerfile` 은 그래서 **자립**입니다 (uv 를 직접 받습니다).
+2. ⚠️ **torchvision 은 `ml` 그룹에 없습니다** — `gait` 그룹의 것입니다. CUDA 덮어쓰기에
+   torchvision 을 같이 적으면 없는 것을 지우려다 실패합니다. **torch 만** 핀합니다.
+3. 🔴 **`torch==X` 는 이미 깔린 `X+cpu` 로 충족됩니다.** cu126 인덱스를 줘도 uv 가 "이미 만족"
+   이라며 **아무 일도 안 합니다** — 오류 없이 CPU 이미지가 나오고, GPU 잡은 뜨는데 43분을
+   CPU 로 돕니다. 지금은 `X+cu126` 으로 **로컬 세그먼트까지** 핀하고 `--reinstall-package` 를
+   붙였고, 빌드 안에서 `torch.version.cuda` 를 확인해 아니면 **빌드를 실패시킵니다.**
+   그 검사가 없으면 이 함정은 실행 로그에서만 보입니다.
+4. ⚠️ **Triton JIT 은 C 컴파일러를 부릅니다.** 없으면 첫 임베딩에서 죽습니다 — CUDA 스테이지에
+   `gcc` · `libc6-dev` 가 그래서 들어 있습니다.
+5. ⚠️ **Cloud Run GPU 잡은 `--task-timeout` 상한이 1h** 입니다. 3h 로 만들면 생성이 거부됩니다.
+   `corpus-embed-full` 이 1h 인 것은 취향이 아니라 상한입니다.
+6. 🔴 **Windows Git Bash 가 `mount-path=/data` 를 `C:/Program Files/Git/data` 로 바꿉니다**
+   (MSYS 경로 변환). `MSYS_NO_PATHCONV=1` 로 전부 끄면 이번엔 **gcloud 런처 자체가 안 뜹니다.**
+   답은 인자 하나만 빼는 것입니다 — `MSYS2_ARG_CONV_EXCL="--add-volume-mount"`.
+   `pipeline.sh` 는 이미 export 하지만, 손으로 칠 때는 앞에 붙이세요.
+7. ⚠️ **`pdf` 그룹(PyMuPDF)이 파이프라인 이미지에 들어가야 합니다.** AGPL 격리(RAG-032 ②)가
+   말하는 "오프라인 파이프라인" 이 바로 이 잡이라 여기에는 **넣는 것이 맞습니다** — 사용자가
+   네트워크로 상호작용하는 프로그램이 아닙니다. 없으면 PDF 소스가 파싱에서 통째로 실패합니다.
+   **서빙 backend 이미지에는 여전히 넣지 않습니다.**
+8. ⚠️ **2024년 중반 이후 만든 프로젝트에는 legacy Cloud Build SA 가 없습니다.** 빌드가 기본
+   컴퓨트 SA 로 돌아 권한 부족으로 죽습니다. `pipeline.sh` 가 `cloudbuild.builds.builder` ·
+   `artifactregistry.writer` · `logging.logWriter` 를 그 SA 에 줍니다.
+9. ⚠️ **로컬 `--dry-run` 은 파싱을 검사하지 못합니다.** 이미 처리된 코퍼스를 재사용해서
+   parse 가 "할 일 없음" 으로 지나가고, 그래서 7번(`pdf` 누락)을 못 잡았습니다. 진짜로 보려면
+   **`processed/` 가 빈 사본**에서 돌리세요.
+10. ⚠️ **`--args` 는 쉼표로 쪼개집니다** (위 "수동 실행"). `--args="--stages,parse,chunk"` 가
+    `--stages parse chunk` 가 되므로, 단계·소스 인자는 공백 나열도 받게 되어 있습니다.
+    한 인자 안에 쉼표를 넣어 넘길 방법은 없다고 보는 편이 낫습니다.
+
 ### Life 코퍼스만 동기화 (GCP)
+
+> 🔴 **2026-09-08 부터 실험 기간(~11-17) 동안 이 절을 쓰지 마세요** (D-062). GCP 의 `documents` 는
+> 이제 Cloud Run 잡 `corpus-refresh` 가 채웁니다. 이 절차로 갈아 끼우면 잡의 결과를 덮어씁니다.
+> 위 "코퍼스 파이프라인 (GCP)" 이 지금의 절차입니다. 이 절은 실험이 끝나 잡을 지운 뒤에만
+> 다시 씁니다.
 
 **언제** — 개발 PC 에서 `rag load` 로 집 서버 코퍼스를 늘린 뒤, 그것을 GCP 에 반영할 때.
 처음 돈 것은 2026-09-07 (#289, `documents` 8,990 → 9,838).

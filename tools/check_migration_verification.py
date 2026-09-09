@@ -217,6 +217,17 @@ CHECKS = (
             'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_walk_id_entry_id_fkey',
             'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_job_id_fkey',
          ]),
+        ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_challenges', [
+            'ALTER TABLE territory_occupancies DROP COLUMN certified_at',
+            'ALTER TABLE territory_challenges DROP COLUMN completed_at',
+            'ALTER TABLE territory_challenges ALTER COLUMN expected_site_version TYPE integer',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_key',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_claim_id_fkey',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_fkey',
+            'DROP INDEX ix_territory_challenges_claim_id',
+        ]),
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',

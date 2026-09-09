@@ -1,6 +1,6 @@
 """#330 — 두 수집의 레코드별 대조. API 를 안 부른다. 보는 것은 **축을 가르는 규칙**이다."""
 
-from tools.answer_quality.record_diff import diff
+from daengs_evals.answer_quality.record_diff import diff
 
 
 def _row(qid, *, life_status="OK", text="답", cited=("제1조",), code=None, plan=None,

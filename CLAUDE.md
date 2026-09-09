@@ -30,6 +30,10 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 `gait-analysis` 컨테이너로 따로 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
 | `backend/src/daengs_place/` | Place 검색과 중립 점령지 읽기 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`·`/territory/sites/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `docs/journey/UPSTREAM.md` — D-039 |
+| `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
+| `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
+| `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
+| `backend/gait_v4/` | 별도 uv 프로젝트입니다 — 의도된 예외이고, 이유는 `backend/gait_v4/DAENGS-NOTE.md`. #304 뒤에 정리합니다 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
@@ -161,6 +165,16 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   수집은 임시 `DAENGS_DATA_DIR` 로, 적재할 원본은 서버에서 가져옵니다 (루트 `README.md`
   "크롤러 · 코퍼스"). 워커는 로그 파일이 없으면 **일부러 뜨지 않습니다** — 로그 없이 뜨면 전 소스가
   due 로 잡혀 다른 코퍼스를 만들기 때문입니다.
+
+  **GCP 는 다릅니다** (D-062, 2026-09-08 ~ 11-17 실험). 거기서는 Cloud Run 잡 `corpus-refresh` 가
+  크롤부터 적재까지 사람 없이 돌고, 코퍼스는 GCS 버킷 `daengs-corpus` 의 **별도 사본**입니다
+  (초기 사본의 출처는 집 서버가 아니라 **개발 PC 의 `raw/`** 입니다 — GCP DB 가 그것에서 나왔기
+  때문입니다). 집 서버 정본과는 갈라져 있고 합치지 않습니다. GCP 의 `documents` 를 손으로 갈아
+  끼우지 마세요. 절차와 **처음 굽고 돌리며 걸린 것 열 가지**는 `docs/deploy/runbook.md` §6
+  "코퍼스 파이프라인 (GCP)" 에 있습니다 — 이미지를 만질 일이 생기면 그것부터 읽으세요
+  (CUDA torch 가 조용히 CPU 로 깔리는 것, GPU 잡 타임아웃 1h 상한, Git Bash 의 경로 변환 등).
+  ⚠ **파이프라인 이미지에는 `pdf` 그룹(PyMuPDF)이 들어갑니다** — AGPL 격리(RAG-032 ②)가 말하는
+  오프라인 쪽이 이 잡이라 맞습니다. **서빙 backend 이미지에는 여전히 넣지 마세요.**
 - **DB 포트는 일부러 LAN 에 열어 둡니다.** 같은 네트워크의 팀원이 붙어야 해서
   `0.0.0.0:5432` 바인딩을 유지합니다. 대신 `POSTGRES_PASSWORD` 를 `.env` 에서
   기본값이 아닌 값으로 지정하세요. pgAdmin(tools 프로파일)은 로그인 없는 모드라

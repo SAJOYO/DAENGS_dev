@@ -50,4 +50,4 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
-      - run: uv run pytest -q tests/test_activity_db.py tests/test_activity.py tests/test_territory_ownership_db.py tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py
+      - run: uv run pytest -q tests/test_territory_certified_db.py tests/test_activity_db.py tests/test_activity.py tests/test_territory_ownership_db.py tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py

@@ -2685,7 +2685,7 @@ notice 예산 절단 **뒤에** 넣습니다 — 결과가 시끄러울 때 하�
 
 Android가 실제로 받는 JSON 7종을 **`backend/tests/fixtures/place_capability/`에 커밋**했습니다.
 production projection·aggregation·Walk DTO를 그대로 거쳐 생성하고
-(`uv run python -m tools.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
+(`uv run python -m daengs_evals.place_fixtures --write`), `tests/test_place_capability_fixtures.py`가
 재생성해 바이트 단위로 대조합니다 — 계약이 움직이면 다른 저장소가 아니라 여기서 깨집니다.
 표시 규칙(대화에서 후보 3개 상한, 알 수 없음을 긍정으로 바꾸지 않기, borrowed 사실의
 `link_state` 보존)은 **클라이언트의 몫**이고 이 결정은 그 근거 데이터를 보존할 뿐입니다.
@@ -3179,7 +3179,7 @@ LangGraph 를 남기고 `agent/` 와 `agent` extra 를 지웁니다.** 병존 �
 ## D-056
 ### 게임 점유는 별도 세션·시도로 저장하고 사진 판정과 같은 트랜잭션에서 확정한다
 
-2026-09-05, DAENGS_dev#260. [온라인 점유 계약](territory-ownership-api.md).
+2026-09-05, DAENGS_dev#260. [온라인 점유 계약](territory/ownership-api.md).
 
 기존 walks는 끝난 산책의 기록이다. 진행 중 산책을 그 테이블에 억지로 넣지 않고,
 게임 세션에 회원·로컬 산책 UUID·참여견을 등록한다. 대표견은 장소별 시도에서 선택한다.
@@ -3427,7 +3427,7 @@ judge 때문인지 안 갈립니다. 생성 모델(`GEMINI_MODEL`)을 `.env` 로
 
 | | 재는 것 | 판정자가 보는 것 |
 | --- | --- | --- |
-| `tools/answer_quality/` (#277) | 오케스트레이터 답변률·품질 | 질문 + 답변 **문장만** |
+| `src/daengs_evals/answer_quality/` (#277) | 오케스트레이터 답변률·품질 | 질문 + 답변 **문장만** |
 | `daengs_life/rag/stages/judge.py` (#305) | Life RAG `answers_question` | 질문 + 답변 **문장만** |
 | **이 카드** | 훈련 RAG faithfulness | 질문 + 답변 + **검색된 청크** |
 
@@ -3448,7 +3448,7 @@ hit 를 그대로 받아 적습니다. 서빙 코드는 한 글자도 안 바뀌
 부르면 그 사이 코퍼스가 바뀔 수 있고 임베딩 호출도 두 번입니다), 덤프가 **그 시점의 자료**를
 통째로 들고 있어 나중에 재판정해도 같은 것을 봅니다. #277 의 `RecordingEngine` 과 같은 수법입니다.
 
-**자리는 `tools/training_quality/` 입니다.** `daengs_training` 안에 두지 않는 이유가 둘입니다 —
+**자리는 `src/daengs_evals/training_quality/` 입니다.** `daengs_training` 안에 두지 않는 이유가 둘입니다 —
 judge 코드가 서빙 패키지에 안 들어가고(②에서 `openai` 를 못 가둔 것을 여기서 일부 회수합니다),
 `daengs_training` 이 `daengs_backend` 를 import 하지 않는 경계도 지킵니다.
 
@@ -3674,3 +3674,86 @@ D-057 ④ 와 D-058 ④ 가 함께 넘긴 자리입니다. 폴백을 들인 뒤�
 정책 문장은 "아무것도 고르지 않는다" 인데 실제로는 `general` 을 골라 그 어댑터가 거절합니다.
 사용자 문장은 같고 경로만 다릅니다(REFUSED). 도메인 밖 요청당 Gemini 호출이 한 번 더 붙는 것이
 비용으로 느껴질 때 좁히면 됩니다.
+
+### #335 후속: 인증 시점의 보호와 산책 안의 재도전을 분리한다
+
+2026-09-08. [인증 우선 정책 v2](certified-territory-v2.md).
+미인증 점령은 사진으로 즉시 탈취할 수 있고 인증 완료 시점부터만 10분 보호한다.
+claim은 산책/site의 안정적인 식별자로 남기며 촬영마다 시즌/version에 연결된 challenge를 만든다.
+보호 차단과 경합 패배는 산책 전체를 종결하지 않는다. 동일 사진 재전송과 새로운 도전을
+구별하여 보호 종료 후 같은 산책에서 재촬영할 수 있다. 기존 시즌 rules는 갱신하지 않는다.
+
+---
+
+## D-062
+### 코퍼스 정본은 집 서버에 그대로 두고, GCP 는 별도 사본으로 크롤~적재를 사람 없이 돌린다
+
+2026-09-08 · #325. 설계는 `docs/deploy/corpus-pipeline.md`, 절차는 `docs/deploy/runbook.md` §6
+"코퍼스 파이프라인 (GCP)", 리소스 생성은 `infra/gcp/README.md` 입니다.
+**2026-11-17(크레딧 만료)까지의 실험**이고 그때 GCP 쪽은 전부 지웁니다.
+
+코퍼스 갱신이 개발 PC(파싱~적재)와 집 서버(크롤)에 묶여 있었고, 그것을 GCP 에 반영하는 것은
+`runbook.md` §6 의 `documents` 테이블 갈아끼우기 손작업(#290)이었습니다. `docs/deploy/roadmap.md`
+§7-1 의 원안은 *"정본을 VM 으로 옮기고 크롤러 컨테이너를 VM 에 띄운다"* 였는데, 그러면 파싱
+이후는 여전히 사람이 VM 에서 CLI 를 칩니다. 방향을 바꿉니다.
+
+### ① 정본은 안 옮깁니다 — GCP 코퍼스는 초기 사본에서 갈라진 **별도 코퍼스**입니다
+
+개정되는 원문이라 두 코퍼스는 합칠 수 없고(RAG-008 · RAG-017), 그래서 11-17 에 지울 때
+**잃을 것도 되돌릴 것도 없습니다.** 집 서버의 워커·Beat·코퍼스·§6 절차는 그대로입니다.
+
+**초기 사본의 출처는 집 서버가 아니라 개발 PC 의 `data/` 입니다** — `raw/` 673개와
+`manifests/crawl_log.jsonl` 373줄(마지막 수집 2026-09-06). 사정과 근거가 각각 있습니다:
+
+- **사정** — 집 서버의 `C:/deploy/daengs/corpus` 에는 개발 PC 에서 닿지 못합니다. SMB 도 SSH 도
+  없고 열린 포트는 5432 · 6379 뿐이라(루트 `README.md`), 가져오려면 사람이 서버 앞에서 zip 을
+  싸야 합니다.
+- **근거** — 그래도 이쪽이 맞습니다. GCP DB 의 `documents` 는 #289 에서 **개발 PC 의
+  `processed/`** 를 실은 것이고 그 `processed/` 는 **개발 PC 의 `raw/`** 를 파싱한 것이라,
+  개발 PC raw ↔ GCP DB 가 이미 한 줄이었습니다. **집 서버의 `raw/` 는 GCP 에 간 적이 없습니다.**
+  서버 것을 씌웠다면 DB 와 어긋난 상류에서 증분을 다시 시작하는 셈입니다.
+
+### ② Cloud Scheduler → Cloud Run Job `corpus-refresh` 하나가 끝까지 갑니다
+
+crawl → parse → chunk → embed → guard → load 를 한 프로세스에서 돕니다
+(`daengs_life/jobs/corpus_refresh.py`). VM 에 Beat 도 크롤 워커도 안 띄웁니다 — 시계는
+Scheduler, 실행은 잡입니다. 코퍼스는 GCS 버킷 `daengs-corpus` 를 `/data` 로 마운트해
+**경로 코드를 안 고칩니다.** DB 는 VM 의 pgvector 를 VPC 내부로 봅니다.
+
+### ③ 적재 앞은 기계 가드만입니다 — 사람 승인이 없습니다
+
+행 수 급감(20%) · 메타 키 손실은 적재 직전 가드가 보고, 파서 예외는 그 전에 `rag parse` 가
+종료 코드 1 로 멈춥니다. 걸리면 DB 를 안 건드리고 종료 코드 1 이라 사람이 로그를 보고 다시
+실행합니다.
+
+### ④ GCP 의 `documents` 는 파이프라인만 씁니다
+
+§6 의 "Life 코퍼스만 동기화" 는 **실험 기간 사용 금지**입니다. 손으로 갈아 끼우면 잡의 결과를
+덮어씁니다. 그 절은 실험이 끝나 잡을 지운 뒤에만 다시 씁니다.
+
+### ⑤ 전체 재임베딩은 GPU 잡, 매일 증분은 CPU
+
+`corpus-embed-full`(Cloud Run Jobs, L4 1장, `asia-southeast1`)이 parquet 만 만들고 DB 는 안 봅니다.
+다음 `corpus-refresh` 가 지문 변화를 보고 전부 upsert 합니다. 10,304행 재임베딩이 L4 에서 약 11분
+입니다. ⚠ **GPU 잡의 `--task-timeout` 상한은 1h** 이라 그보다 오래 걸릴 일감은 쪼개야 합니다.
+
+### ⑥ 관리자 콘솔 수동 크롤은 GCP 에서 Cloud Run Jobs API 로 (#326)
+
+집 서버는 종전대로 Celery 큐입니다. 이 갈래는 backend 를 바꾸므로 **별도 PR** 입니다.
+
+### 되돌리기
+
+`infra/gcp/pipeline-teardown.sh` 하나입니다. **집 서버는 아무것도 안 바뀌었으므로 되돌릴 것이
+없습니다.**
+
+### 재개 조건
+
+11-17 뒤에도 GCP 를 유지하기로 하면 *"정본을 어디에 둘 것인가"* 를 다시 결정합니다. 그때
+§7-1 의 원안(정본 이전)이 후보로 돌아옵니다.
+
+### 처음 굽고 돌리며 걸린 것 열 가지는 runbook 에 있습니다
+
+2026-09-08 하루에 이미지 빌드 15회 · GPU 57분(그중 43분은 CPU 로 헛돈 것)을 쓴 이유가 그
+목록입니다 — **코드를 봐도 알 수 없는 것들**이라 `docs/deploy/runbook.md` §6 "걸린 것
+(2026-09-08, 처음 굽고 돌리며)" 에 번호로 적어 두었습니다. 이미지를 다시 만지는 사람은 그것부터
+읽으세요.

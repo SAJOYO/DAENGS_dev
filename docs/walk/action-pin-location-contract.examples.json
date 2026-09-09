@@ -1,0 +1,710 @@
+{
+  "contract_version": "walk-entry-v2",
+  "purpose": "Synthetic wire examples, not executed API tests or production estimator thresholds.",
+  "source_observation_fixtures": [
+    {
+      "walk_id": "00000000-0000-4000-8000-000000000001",
+      "client_seq": 100,
+      "chain_index": 0,
+      "at": "2026-09-09T02:59:57Z",
+      "lat": 37.5,
+      "lng": 127.0,
+      "accuracy_m": 8.0,
+      "is_mock": false
+    },
+    {
+      "walk_id": "00000000-0000-4000-8000-000000000001",
+      "client_seq": 101,
+      "chain_index": 0,
+      "at": "2026-09-09T03:00:00Z",
+      "lat": 37.5001,
+      "lng": 127.0001,
+      "accuracy_m": 45.0,
+      "is_mock": false
+    },
+    {
+      "walk_id": "00000000-0000-4000-8000-000000000001",
+      "client_seq": 102,
+      "chain_index": 0,
+      "at": "2026-09-09T03:00:04Z",
+      "lat": 37.50002,
+      "lng": 127.00004,
+      "accuracy_m": 7.0,
+      "is_mock": false
+    }
+  ],
+  "cases": [
+    {
+      "name": "provisional_create",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002",
+        "body": {
+          "expected_revision": 0,
+          "mutation_id": "00000000-0000-4000-8000-000000000010",
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "provisional",
+            "method": "last_known",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "computed_at": "2026-09-09T03:00:00Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              }
+            ],
+            "uncertainty_m": null,
+            "uncertainty_basis": "unknown",
+            "reason": "awaiting_observations"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000002",
+          "revision": 1,
+          "pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000010",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "provisional",
+            "method": "last_known",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "computed_at": "2026-09-09T03:00:00Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              }
+            ],
+            "uncertainty_m": null,
+            "uncertainty_basis": "unknown",
+            "reason": "awaiting_observations"
+          }
+        }
+      }
+    },
+    {
+      "name": "resolve_same_action",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002/pin",
+        "body": {
+          "expected_revision": 1,
+          "expected_pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000011",
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000002",
+          "revision": 2,
+          "pin_revision": 2,
+          "mutation_id": "00000000-0000-4000-8000-000000000011",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      }
+    },
+    {
+      "name": "content_edit_keeps_pin",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002",
+        "body": {
+          "expected_revision": 2,
+          "mutation_id": "00000000-0000-4000-8000-000000000012",
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "barking",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000002",
+          "revision": 3,
+          "pin_revision": 2,
+          "mutation_id": "00000000-0000-4000-8000-000000000012",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "barking",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      }
+    },
+    {
+      "name": "retry_resolve_after_content_edit",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002/pin",
+        "body": {
+          "expected_revision": 1,
+          "expected_pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000011",
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000002",
+          "revision": 2,
+          "pin_revision": 2,
+          "mutation_id": "00000000-0000-4000-8000-000000000011",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      },
+      "note": "최초 mutation의 ACK다. 서버 현재 revision은 3이며 APP은 revision-2 ACK로 더 최신 원본을 덮지 않는다."
+    },
+    {
+      "name": "delete",
+      "request": {
+        "method": "DELETE",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002?expected_revision=3&mutation_id=00000000-0000-4000-8000-000000000013",
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "revision": 4,
+          "mutation_id": "00000000-0000-4000-8000-000000000013",
+          "deleted": true
+        }
+      }
+    },
+    {
+      "name": "late_result_after_delete",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000002/pin",
+        "body": {
+          "expected_revision": 1,
+          "expected_pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000011",
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000003",
+            "state": "resolved",
+            "method": "estimated",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.50001,
+              "lng": 127.00002
+            },
+            "computed_at": "2026-09-09T03:00:05Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              },
+              {
+                "client_seq": 102,
+                "chain_index": 0,
+                "at": "2026-09-09T03:00:04Z"
+              }
+            ],
+            "uncertainty_m": 18.0,
+            "uncertainty_basis": "model_bound",
+            "reason": "refined"
+          }
+        }
+      },
+      "response": {
+        "status": 410,
+        "body": {
+          "code": "walk_entry_deleted"
+        }
+      }
+    },
+    {
+      "name": "observed_create",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000022",
+        "body": {
+          "expected_revision": 0,
+          "mutation_id": "00000000-0000-4000-8000-000000000020",
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "captured_at": "2026-09-09T02:59:57Z",
+              "accuracy_m": 8.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000023",
+            "state": "resolved",
+            "method": "observed",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "computed_at": "2026-09-09T03:00:00Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:00Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              }
+            ],
+            "uncertainty_m": 8.0,
+            "uncertainty_basis": "provider_accuracy",
+            "reason": "direct_fix"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000022",
+          "revision": 1,
+          "pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000020",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "captured_at": "2026-09-09T02:59:57Z",
+              "accuracy_m": 8.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000023",
+            "state": "resolved",
+            "method": "observed",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "computed_at": "2026-09-09T03:00:00Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:00Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              }
+            ],
+            "uncertainty_m": 8.0,
+            "uncertainty_basis": "provider_accuracy",
+            "reason": "direct_fix"
+          }
+        }
+      }
+    },
+    {
+      "name": "no_evidence_terminal_create",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000031/entries/00000000-0000-4000-8000-000000000032",
+        "body": {
+          "expected_revision": 0,
+          "mutation_id": "00000000-0000-4000-8000-000000000030",
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": null,
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000033",
+            "state": "unlocated",
+            "method": "none",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": null,
+            "computed_at": "2026-09-09T03:00:12Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [],
+            "uncertainty_m": null,
+            "uncertainty_basis": "unknown",
+            "reason": "no_evidence"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "contract_version": "walk-entry-v2",
+          "id": "00000000-0000-4000-8000-000000000032",
+          "revision": 1,
+          "pin_revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000030",
+          "deleted": false,
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": null,
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000033",
+            "state": "unlocated",
+            "method": "none",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": null,
+            "computed_at": "2026-09-09T03:00:12Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [],
+            "uncertainty_m": null,
+            "uncertainty_basis": "unknown",
+            "reason": "no_evidence"
+          }
+        }
+      }
+    },
+    {
+      "name": "delete_before_first_upload",
+      "request": {
+        "method": "DELETE",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000042?expected_revision=0&mutation_id=00000000-0000-4000-8000-000000000040",
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "00000000-0000-4000-8000-000000000042",
+          "revision": 1,
+          "mutation_id": "00000000-0000-4000-8000-000000000040",
+          "deleted": true
+        }
+      }
+    },
+    {
+      "name": "late_create_after_early_delete",
+      "request": {
+        "method": "PUT",
+        "path": "/app/v2/walks/00000000-0000-4000-8000-000000000001/entries/00000000-0000-4000-8000-000000000042",
+        "body": {
+          "expected_revision": 0,
+          "mutation_id": "00000000-0000-4000-8000-000000000041",
+          "content": {
+            "vocabulary_version": "walk-behavior-v1",
+            "kind": "behavior",
+            "behavior_code": "sniffing",
+            "recorded_at": "2026-09-09T03:00:00Z",
+            "location": {
+              "lat": 37.5001,
+              "lng": 127.0001,
+              "captured_at": "2026-09-09T03:00:00Z",
+              "accuracy_m": 45.0
+            },
+            "pet_id": null,
+            "note": null
+          },
+          "pin": {
+            "resolution_id": "00000000-0000-4000-8000-000000000043",
+            "state": "provisional",
+            "method": "last_known",
+            "target_at": "2026-09-09T03:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "computed_at": "2026-09-09T03:00:00Z",
+            "policy_version": "example-policy-v1",
+            "algorithm_version": "example-estimator-v1",
+            "resolve_by": "2026-09-09T03:00:12Z",
+            "source_refs": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-09T02:59:57Z"
+              }
+            ],
+            "uncertainty_m": null,
+            "uncertainty_basis": "unknown",
+            "reason": "awaiting_observations"
+          }
+        }
+      },
+      "response": {
+        "status": 410,
+        "body": {
+          "code": "walk_entry_deleted"
+        }
+      }
+    }
+  ]
+}

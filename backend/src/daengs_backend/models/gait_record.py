@@ -83,6 +83,10 @@ class GaitRecord(Base):
     internal_feature_vector: Mapped[dict | None] = mapped_column(JSONB)
 
     gait_filter_version: Mapped[str | None] = mapped_column(Text)
+    # 어떤 pose model / 관절 정의로 만든 기록인가 (D-063). 실행 엔진 선택이 아니라 메타데이터.
+    # NULL = 판별 불가한 옛 기록, 또는 엔진 결과 없이 실패한 기록. 값의 정본은
+    # daengs_gait.contract.POSE_MODELS.
+    pose_model: Mapped[str | None] = mapped_column(Text)
 
     captured_at: Mapped[datetime.date | None] = mapped_column(Date)
     video_meta: Mapped[dict | None] = mapped_column(JSONB)

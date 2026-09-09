@@ -185,13 +185,11 @@ services:
       # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
       # 같은 이유이고, 여기는 단위가 GB 입니다.
       - hf-cache:/root/.cache/huggingface
-      # 피부 스크리닝 가중치 (D-039). **저장소에 없습니다** — best.pt 가
-      # 163MB / 189MB 라 GitHub 의 파일당 100MB 리밋에 걸립니다. 서버 디스크의
-      # 배포 폴더 **바깥**에 두고 여기로 물립니다. 추론 경로에 쓰기가 없어 :ro 로
-      # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
-      # ⚠️ `SCREENING_RELEASE_REPO` 를 채우면 **이 마운트는 안 씁니다** —
-      #    허깅페이스에서 받아 `hf-cache` 에 둡니다. 되돌릴 때를 위해 남겨 둡니다.
-      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
+      # ⚠️ 피부 스크리닝 가중치 폴더 마운트는 **없앴습니다.** 이제 허깅페이스에서
+      #    받아 위 `hf-cache` 볼륨에 둡니다 (`backend/.env` 의
+      #    `SCREENING_RELEASE_REPO` · `SCREENING_RELEASE_REVISION` · `HF_TOKEN`).
+      #    되살리려면 그 셋을 비우고 `SCREENING_RELEASE_DIR` 을 채우면 됩니다 —
+      #    다만 그때는 이 마운트도 같이 되살려야 합니다.
       # ★ **공용 파일 저장소** (D-052). gait-worker · territory-vision-worker 와 셋이
       #   **공유**합니다. backend 는 bridge 엔드포인트로 여기에 쓰고, 워커들은 같은
       #   경로에서 읽습니다 — 그래서 한 볼륨입니다.

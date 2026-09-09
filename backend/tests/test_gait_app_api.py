@@ -369,8 +369,9 @@ def test_task_module_imports_without_gait_deps():
     import sys
 
     probe = (
-        "import sys; import daengs_backend.tasks.gait; "
-        "leaked = [m for m in ('daengs_gait.pipeline', 'torch') if m in sys.modules]; "
+        "import sys; import daengs_backend.tasks.gait; import daengs_backend.services.gait; "
+        "leaked = [m for m in ('daengs_gait.pipeline', 'daengs_gait.engines.legacy', "
+        "'daengs_gait.engines.v4', 'torch') if m in sys.modules]; "
         "print(','.join(leaked)); "
         "sys.exit(1 if leaked else 0)"
     )

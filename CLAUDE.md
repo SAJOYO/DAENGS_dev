@@ -68,9 +68,10 @@ npm run lint
 
 ```powershell
 uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
+uv run check               # 저장소 규칙 검사 (약 3초) — 머지 전에 무조건
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
-uv run pytest              # 테스트 전체 (backend/tests/, 약 6분)
+uv run pytest              # 테스트 전체 (backend/tests/, 약 9분)
 uv run pytest tests/place  # Place 테스트만
 uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)
@@ -80,6 +81,16 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 
 - **브랜치는 `dev` 가 기본입니다.** `dev` 에 push/merge 하면 self-hosted 러너가 자동 배포합니다.
   `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
+- **머지 전에 `uv run check`. 백엔드를 건드렸으면 `uv run pytest` 까지.**
+  `dev` 머지가 곧 배포라 그 둘이 사실상 마지막 관문입니다. `check` 는 **3초**이고
+  (`pytest` 는 약 9분), 봐 주는 자리가 서로 다릅니다 — `pytest` 는 `testpaths = ["tests"]` 라
+  `backend/tests/` 만 보고, 마이그레이션 규칙 체커는 저장소 루트 `tools/` 에 있어서
+  **`pytest` 를 아무리 돌려도 한 번도 안 돕니다.** 2026-09 에 CI 가 그 자리에서만 12건을
+  잡았는데, 그때는 로컬에서 재현할 방법 자체가 없었습니다.
+  검사 목록은 `daengs_backend/cli/check.py` 한 곳에 있고 `uv run pytest` 도 같은 것을
+  부릅니다(`tests/test_repo_checks.py`) — **거기에 느린 것을 넣지 마세요.** 3초라서 매번
+  돌리는 것이고, `pytest` 와 묶는 순간 이쪽까지 같이 안 돌게 됩니다.
+  `sql` 모드만 예외로 CI 에 남아 있습니다 (`psql` 과 버리는 로컬 Postgres 가 필요합니다).
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **Python 코드는 uv 기본 src 레이아웃**입니다. 팀 소유 패키지는 `backend/src/daengs_*`에 두고

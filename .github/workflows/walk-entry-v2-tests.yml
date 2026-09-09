@@ -1,0 +1,54 @@
+name: walk entry v2 PostgreSQL
+on:
+  pull_request:
+    paths:
+      - 'backend/src/daengs_backend/**'
+      - 'backend/tests/test_walk_entry_v2*'
+      - 'backend/tests/test_walk_photo_db.py'
+      - 'backend/tests/walk/test_diary_generation_db.py'
+      - 'backend/tests/conftest.py'
+      - 'backend/pyproject.toml'
+      - 'backend/uv.lock'
+      - 'db/**'
+      - '.github/workflows/walk-entry-v2-tests.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'backend/src/daengs_backend/**'
+      - 'backend/tests/test_walk_entry_v2*'
+      - 'backend/tests/test_walk_photo_db.py'
+      - 'backend/tests/walk/test_diary_generation_db.py'
+      - 'backend/tests/conftest.py'
+      - 'backend/pyproject.toml'
+      - 'backend/uv.lock'
+      - 'db/**'
+      - '.github/workflows/walk-entry-v2-tests.yml'
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: walk_pin_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d walk_pin_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      WALK_PIN_TEST_DATABASE_URL: postgresql+asyncpg://postgres:test-password@127.0.0.1:5432/walk_pin_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      - run: uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_entry_v2.py tests/test_walk_photo_db.py tests/walk/test_diary_generation_db.py

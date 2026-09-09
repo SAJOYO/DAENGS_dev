@@ -2,81 +2,81 @@
   "axis": "profile_fitness",
   "label": "pf_v1_1",
   "labeler": "hong",
-  "n_labels": 49,
+  "n_labels": 57,
   "n_repeats": 10,
   "kappa_by_block": {
     "random": {
       "changed": {
-        "kappa": 0.5247524752475248,
-        "n": 36,
+        "kappa": 0.47391304347826085,
+        "n": 44,
         "undefined": null,
         "marginals": {
           "human": {
-            "1": 21,
-            "0": 15
+            "1": 25,
+            "0": 19
           },
           "judge": {
-            "1": 25,
-            "0": 11
+            "1": 30,
+            "0": 14
           }
         }
       },
       "profile": {
-        "kappa": 0.7770897832817336,
-        "n": 36,
+        "kappa": 0.7727272727272727,
+        "n": 44,
         "undefined": null,
         "marginals": {
           "human": {
-            "0": 17,
-            "1": 19
+            "0": 21,
+            "1": 23
           },
           "judge": {
-            "1": 19,
-            "0": 17
+            "1": 22,
+            "0": 22
           }
         }
       },
       "fabricated": {
         "kappa": null,
-        "n": 36,
+        "n": 44,
         "undefined": "single_category",
         "marginals": {
           "human": {
-            "0": 36
+            "0": 44
           },
           "judge": {
-            "0": 36
+            "0": 44
           }
         }
       },
       "stereotype": {
         "kappa": 0.0,
-        "n": 36,
+        "n": 44,
         "undefined": null,
         "marginals": {
           "human": {
-            "0": 35,
+            "0": 43,
             "1": 1
           },
           "judge": {
-            "0": 36
+            "0": 44
           }
         }
       },
       "responsiveness": {
-        "kappa": 0.6161137440758293,
-        "n": 27,
+        "kappa": 0.5955555555555555,
+        "n": 35,
         "undefined": null,
         "marginals": {
           "human": {
             "1": 2,
-            "2": 17,
-            "0": 8
+            "2": 21,
+            "0": 12
           },
           "judge": {
-            "2": 17,
-            "0": 7,
-            "1": 3
+            "2": 20,
+            "0": 10,
+            "1": 5
           }
         }
       }
@@ -160,77 +160,77 @@
     },
     "all": {
       "changed": {
-        "kappa": 0.32835820895522405,
-        "n": 48,
+        "kappa": 0.31799729364005414,
+        "n": 56,
         "undefined": null,
         "marginals": {
           "human": {
-            "1": 29,
-            "0": 19
+            "1": 33,
+            "0": 23
           },
           "judge": {
-            "1": 32,
-            "0": 16
+            "1": 37,
+            "0": 19
           }
         }
       },
       "profile": {
-        "kappa": 0.6262975778546712,
-        "n": 48,
+        "kappa": 0.6446700507614213,
+        "n": 56,
         "undefined": null,
         "marginals": {
           "human": {
-            "1": 26,
-            "0": 22
+            "1": 30,
+            "0": 26
           },
           "judge": {
-            "1": 23,
-            "0": 25
+            "1": 26,
+            "0": 30
           }
         }
       },
       "fabricated": {
         "kappa": null,
-        "n": 48,
+        "n": 56,
         "undefined": "single_category",
         "marginals": {
           "human": {
-            "0": 48
+            "0": 56
           },
           "judge": {
-            "0": 48
+            "0": 56
           }
         }
       },
       "stereotype": {
-        "kappa": 0.789473684210526,
-        "n": 48,
+        "kappa": 0.7910447761194024,
+        "n": 56,
         "undefined": null,
         "marginals": {
           "human": {
-            "0": 45,
+            "0": 53,
             "1": 3
           },
           "judge": {
-            "0": 46,
+            "0": 54,
             "1": 2
           }
         }
       },
       "responsiveness": {
-        "kappa": 0.42329778506972937,
-        "n": 37,
+        "kappa": 0.4462279293739968,
+        "n": 45,
         "undefined": null,
         "marginals": {
           "human": {
-            "2": 23,
+            "2": 27,
             "1": 3,
-            "0": 11
+            "0": 15
           },
           "judge": {
-            "2": 21,
-            "1": 6,
-            "0": 10
+            "2": 24,
+            "1": 8,
+            "0": 13
           }
         }
       }

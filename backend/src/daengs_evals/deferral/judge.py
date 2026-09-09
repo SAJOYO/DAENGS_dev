@@ -169,6 +169,85 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
     return path
 
 
+CONSISTENCY_REPEATS = 3
+CONSISTENCY_SAMPLE = 8
+
+
+def run_consistency(*, cells_label: str, model: str, variant: str, budget: int, log=print) -> Path:
+    """답한 셀 몇 개를 같은 프롬프트로 3번 판정한다. `answer_move` 가 흔들리면 그 답은 사람 큐다.
+
+    실측(2026-09-09): pf_v1 과 pf_v1_1 은 같은 답변인데 '밥 안 먹는데 기다려도 되나' 가 한 번은
+    deferred, 한 번은 mixed 로 갈렸다. 단일 답변 판정기라 위치 편향은 없지만 자기일관성은 재야 한다.
+    """
+    meta, cells = load_cells(cells_path(cells_label))
+    questions = {q.question_id: q for q in load_questions(Path(meta["questions_path"]))}
+    real = {"general"} if meta.get("adapters") == "fallback-only" else None
+    hygiene = require_judge_hygiene(model, _generation_models())
+    ledger = TokenLedger(budget=budget, log=log)
+    cli = openai_client()
+
+    seen: set[str] = set()
+    sample = []
+    for c in cells:
+        by = next(
+            (r.get("capability") for r in c.get("results") or [] if r.get("status") == "OK"), None
+        )
+        if c["status"] != "ANSWERED" or (real and by not in real) or c["question_id"] in seen:
+            continue
+        seen.add(c["question_id"])
+        sample.append(c)
+        if len(sample) >= CONSISTENCY_SAMPLE:
+            break
+
+    results = []
+    for c in sample:
+        moves = []
+        notes = []
+        for _ in range(CONSISTENCY_REPEATS):
+            v = generate_structured(
+                model=model,
+                prompt=build_prompt(
+                    question=questions[c["question_id"]].query, answer=c["message"], variant=variant
+                ),
+                schema=DeferralVerdict,
+                temperature=TEMPERATURE,
+                ledger=ledger,
+                cli=cli,
+                label=c["question_id"],
+            )
+            moves.append(v.answer_move)
+            notes.append(v.note)
+        results.append(
+            {
+                "question_id": c["question_id"],
+                "moves": moves,
+                "consistent": len(set(moves)) == 1,
+                "notes": notes,
+            }
+        )
+        log(f"  {c['question_id']:28s} {moves} {'' if len(set(moves)) == 1 else '← 흔들림'}")
+
+    rate = sum(1 for r in results if r["consistent"]) / max(1, len(results))
+    record = {
+        "cells_label": cells_label,
+        "judge_model": model,
+        "variant": variant,
+        "prompt_version": PROMPT_VERSIONS[variant],
+        "hygiene": hygiene,
+        "repeats": CONSISTENCY_REPEATS,
+        "sample": len(results),
+        "consistency_rate": rate,
+        "results": results,
+        "tokens": {"input": ledger.input_tokens, "output": ledger.output_tokens},
+        "checked_at": utc_now(),
+        "source": source_provenance(),
+    }
+    path = ASSETS_DIR / f"consistency_{cells_label}_{PROMPT_VERSIONS[variant]}.json"
+    path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    log(f"자기일관성 {rate:.2f} ({len(results)}답 × {CONSISTENCY_REPEATS}회) → {path.name}")
+    return path
+
+
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     labeled = [r for r in rows if r["outcome"] not in ("unlabeled", "unmeasured_fake_adapter")]
     by_reason: dict[str, Counter] = defaultdict(Counter)
@@ -209,8 +288,10 @@ def render(s: dict[str, Any], meta: dict[str, Any]) -> str:
         "",
         f"판정 {meta['judge_model']} · {meta['prompt_version']} · 고유 답변 {meta['unique_answers_judged']}건 판정 · {utc_now()}",
         "",
-        f"> 잠정. 기대 라벨 중 사람 검토 대기 {s['review_pending']}건. 사람 라벨 κ 전. "
-        f"가짜 어댑터가 답한 셀 {s['unmeasured_fake_adapter']}개는 미측정.",
+        (
+            f"> 잠정. 기대 라벨 중 사람 검토 대기 {s['review_pending']}건. 사람 라벨 κ 전. "
+            f"가짜 어댑터가 답한 셀 {s['unmeasured_fake_adapter']}개는 미측정."
+        ),
         "",
         "## 양방향 — 총계 하나로 줄이지 않는다",
         "",
@@ -280,11 +361,25 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("report")
     r.add_argument("--cells", required=True)
     r.add_argument("--variant", choices=("A", "B"), default="A")
+    k = sub.add_parser("consistency")
+    k.add_argument("--cells", required=True)
+    k.add_argument("--variant", choices=("A", "B"), default="A")
+    k.add_argument("--judge-model", default=None)
+    k.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
     args = parser.parse_args(argv)
     if args.command == "score":
         from daengs_backend.config import settings
 
         run_score(
+            cells_label=args.cells,
+            model=args.judge_model or settings.openai_judge_model,
+            variant=args.variant,
+            budget=args.token_budget,
+        )
+    elif args.command == "consistency":
+        from daengs_backend.config import settings
+
+        run_consistency(
             cells_label=args.cells,
             model=args.judge_model or settings.openai_judge_model,
             variant=args.variant,

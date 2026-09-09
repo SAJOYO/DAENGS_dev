@@ -541,6 +541,94 @@ def run_score(
 
 
 # ---------------------------------------------------------------------------
+# 판정기 대 판정기 — 같은 답변, 다른 프롬프트 버전
+# ---------------------------------------------------------------------------
+
+
+def _load_judgments(path: Path) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            r = json.loads(line)
+            if r.get("kind") == "judgment":
+                out[r["pair_id"]] = r
+    return out
+
+
+def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
+    """같은 셀을 두 프롬프트 버전으로 채점한 파일을 쌍 단위로 맞댄다. 판정기 효과만 분리된다.
+
+    2026-09-09: v1a→v2 는 같은 90쌍에서 S 100%→29%, 뒤집힘 12%→8%. v2→v3 는 32쌍(크레딧 소진으로
+    중단)에서 뒤집힘 6%→19% — 가설(대칭 필드 + 기권)이 지지되지 않았다. 이 함수가 그 표를 낸다.
+    """
+    a, b = _load_judgments(a_path), _load_judgments(b_path)
+    shared = sorted(set(a) & set(b))
+
+    def rate(rows: list[dict[str, Any]], cond: str, kind: str | None = None) -> dict[str, Any]:
+        rs = [
+            r
+            for r in rows
+            if r["condition"] == cond
+            and (kind is None or r["question_kind"] == kind)
+            and not r["position_dependent"]
+        ]
+        k = sum(int(r["observation"]["changed"]) for r in rs)
+        return {"k": k, "n": len(rs), "rate": round(k / len(rs), 3) if rs else None}
+
+    def side(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        flips = sum(1 for r in rows if r["position_dependent"])
+        abst = sum(1 for r in rows if r["observation"].get("abstained"))
+        return {
+            "N_noise": rate(rows, "noise"),
+            "S_invariant": rate(rows, "contrast", "invariant"),
+            "P_ablation": rate(rows, "ablation"),
+            "reactive_contrast": rate(rows, "contrast", "reactive"),
+            "position_flips": {"k": flips, "n": len(rows), "rate": round(flips / len(rows), 3) if rows else None},
+            "abstained": abst,
+        }
+
+    ra, rb = [a[k] for k in shared], [b[k] for k in shared]
+    changed_transitions: dict[str, int] = {}
+    flip_transitions: dict[str, int] = {}
+    for k in shared:
+        ct = f"{a[k]['observation']['changed']}->{b[k]['observation']['changed']}"
+        changed_transitions[ct] = changed_transitions.get(ct, 0) + 1
+        ft = f"{int(a[k]['position_dependent'])}->{int(b[k]['position_dependent'])}"
+        flip_transitions[ft] = flip_transitions.get(ft, 0) + 1
+    return {
+        "a": {"file": a_path.name, "pairs": len(a), **side(ra)},
+        "b": {"file": b_path.name, "pairs": len(b), **side(rb)},
+        "shared_pairs": len(shared),
+        "changed_transitions": changed_transitions,
+        "flip_transitions": flip_transitions,
+    }
+
+
+def render_compare(c: dict[str, Any]) -> str:
+    def row(name: str, s: dict[str, Any]) -> str:
+        f = lambda d: f"{d['rate'] * 100:.0f}% ({d['k']}/{d['n']})" if d["rate"] is not None else "—"
+        return (
+            f"| {name} | {f(s['N_noise'])} | {f(s['S_invariant'])} | {f(s['P_ablation'])} | "
+            f"{f(s['reactive_contrast'])} | {f(s['position_flips'])} | {s['abstained']} |"
+        )
+
+    return "
+".join(
+        [
+            f"공유 쌍 {c['shared_pairs']} (A {c['a']['pairs']} · B {c['b']['pairs']})",
+            "",
+            "| 판정 | N 잡음 | S 특이도 | P 절제 | 본 비교 | 위치 뒤집힘 | 기권 |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+            row(c["a"]["file"], c["a"]),
+            row(c["b"]["file"], c["b"]),
+            "",
+            f"changed 전이 (A→B): {c['changed_transitions']}",
+            f"뒤집힘 전이 (A→B): {c['flip_transitions']}",
+        ]
+    )
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -563,6 +651,10 @@ def main(argv: list[str] | None = None) -> int:
     p_bias.add_argument("--per-mutation", type=int, default=4)
     common(p_bias)
 
+    p_cmp = sub.add_parser("compare", help="같은 셀을 두 프롬프트 버전으로 채점한 파일을 맞댄다")
+    p_cmp.add_argument("--a", required=True)
+    p_cmp.add_argument("--b", required=True)
+
     p_score = sub.add_parser("score")
     p_score.add_argument("--cells", required=True)
     p_score.add_argument("--subsample", type=int, default=None)
@@ -570,6 +662,9 @@ def main(argv: list[str] | None = None) -> int:
     common(p_score)
 
     args = parser.parse_args(argv)
+    if args.command == "compare":
+        print(render_compare(compare_versions(Path(args.a), Path(args.b))))
+        return 0
     model = _judge_model(args.judge_model)
     if args.command == "check-anchors":
         run_check_anchors(

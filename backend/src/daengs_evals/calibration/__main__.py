@@ -40,7 +40,7 @@ def _paths(axis: str, label: str) -> dict[str, Path]:
 
 
 def _load_axis(
-    axis: str, label: str
+    axis: str, label: str, judgments: Path | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None, dict, dict, dict]:
     if axis != "profile_fitness":
         raise SystemExit(f"아직 없는 축: {axis}")
@@ -51,7 +51,8 @@ def _load_axis(
     from daengs_evals.profile_fitness.questions import load_questions
     from daengs_evals.profile_fitness.report import load_judgments
 
-    meta, rows, _ = load_judgments(judgments_path(label, "A"))
+    # 선별은 가장 넓은 판정 파일에서 — 겨냥 재판정 파일(부분)로 뽑으면 이미 라벨한 것만 남는다
+    meta, rows, _ = load_judgments(judgments or judgments_path(label, "A"))
     b_path = judgments_path(label, "B")
     b_rows = load_judgments(b_path)[1] if b_path.exists() else None
     cmeta, cells = load_cells(cells_path(meta["cells_label"]))
@@ -63,7 +64,9 @@ def _load_axis(
 
 
 def cmd_review(args: argparse.Namespace) -> int:
-    rows, b_rows, cells, profiles, _ = _load_axis(args.axis, args.label)
+    rows, b_rows, cells, profiles, _ = _load_axis(
+        args.axis, args.label, Path(args.judgments) if args.judgments else None
+    )
     p = _paths(args.axis, args.label)
     already: set[str] = set()
     if args.round > 1 and p["labels"].exists():
@@ -209,6 +212,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_review.add_argument(
         "--only-kind", default=None, help="reactive 만 등 — responsiveness 라벨을 채울 때"
+    )
+    p_review.add_argument(
+        "--judgments", default=None, help="선별에 쓸 판정 파일 (기본: 지금 프롬프트 버전의 것)"
     )
 
     p_label = sub.add_parser("label", help="터미널에서 한 쌍씩 0/1 을 받아 시트를 채운다")

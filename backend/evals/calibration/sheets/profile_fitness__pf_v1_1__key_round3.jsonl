@@ -1,1 +1,9 @@
-{"kind": "meta", "created_at": "2026-09-09T06:36:08+00:00", "seed": 20260909}
+{"kind": "meta", "created_at": "2026-09-09T06:36:50+00:00", "seed": 20260909}
+{"sheet_no": 1, "pair_id": "pf_tooth_brush_01|ablation|none#0|maltese_puppy#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 2, "pair_id": "pf_appetite_drop_02|contrast|healthy_adult#0|chronic#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 3, "pair_id": "pf_nail_trim_01|ablation|none#0|toy_puppy#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 4, "pair_id": "pf_nail_trim_01|contrast|toy_puppy#0|large_senior#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 5, "pair_id": "pf_first_bath_01|ablation|none#0|maltese_puppy#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 6, "pair_id": "pf_brushing_01|contrast|maltese_puppy#0|maltese_senior#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 7, "pair_id": "pf_water_intake_01|contrast|toy_puppy#0|large_senior#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 8, "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0", "swapped": true, "block": "random", "reasons": []}

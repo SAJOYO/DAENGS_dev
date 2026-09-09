@@ -3179,7 +3179,7 @@ LangGraph 를 남기고 `agent/` 와 `agent` extra 를 지웁니다.** 병존 �
 ## D-056
 ### 게임 점유는 별도 세션·시도로 저장하고 사진 판정과 같은 트랜잭션에서 확정한다
 
-2026-09-05, DAENGS_dev#260. [온라인 점유 계약](territory-ownership-api.md).
+2026-09-05, DAENGS_dev#260. [온라인 점유 계약](territory/ownership-api.md).
 
 기존 walks는 끝난 산책의 기록이다. 진행 중 산책을 그 테이블에 억지로 넣지 않고,
 게임 세션에 회원·로컬 산책 UUID·참여견을 등록한다. 대표견은 장소별 시도에서 선택한다.

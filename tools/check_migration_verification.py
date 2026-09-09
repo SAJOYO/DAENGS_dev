@@ -325,6 +325,13 @@ CHECKS = (
             'ALTER TABLE vet_visit_drafts DROP COLUMN extracted',
             'ALTER TABLE vet_visit_drafts ALTER COLUMN receipt_image_key DROP NOT NULL',
             'DROP INDEX idx_vet_visit_drafts_created_at',
+            # **초안의 멱등키가 빠지는 변조.** 아무 에러도 안 나고 Gemini 요금만 는다.
+            'ALTER TABLE vet_visit_drafts DROP CONSTRAINT'
+            ' vet_visit_drafts_client_event_unique',
+            'ALTER TABLE vet_visit_drafts DROP COLUMN receipt_sha256',
+            'ALTER TABLE vet_visit_drafts DROP CONSTRAINT'
+            ' vet_visit_drafts_receipt_sha256_shape',
+            'DROP INDEX idx_vet_visit_drafts_user_sha',
             'ALTER TABLE vet_visits DROP COLUMN is_emergency',
             'ALTER TABLE vet_visits DROP COLUMN is_oncology',
             'ALTER TABLE vet_visits ALTER COLUMN is_emergency DROP NOT NULL',
@@ -372,6 +379,22 @@ CHECKS = (
         #
         # 픽스처가 없다(''). 이 표는 아무것도 참조하지 않으므로 선행 테이블이 필요 없고,
         # 그 성질 자체를 verify ④ 가 단언한다.
+        # 2026-09-09 (#353) — OCR 학습 이용 동의 두 칸. **마지막 변조가 이 항목의 이유다.**
+        # 다른 변조는 스키마를 깨서 코드가 시끄럽게 죽지만, DEFAULT NOW() 한 줄은 아무것도
+        # 안 깨뜨리면서 **아무도 누른 적 없는 동의를 전 회원에게 만든다.** 그 상태로 학습셋을
+        # 뽑으면 근거 없이 모은 데이터가 되고, 그때는 되돌릴 수 없다.
+        ('2026-09-09', 'ocr_consent', APP_USERS, 'app_users', [
+            'ALTER TABLE app_users DROP COLUMN ocr_consent_at',
+            'ALTER TABLE app_users DROP COLUMN ocr_consent_version',
+            'ALTER TABLE app_users ALTER COLUMN ocr_consent_at TYPE text'
+            ' USING ocr_consent_at::text',
+            'ALTER TABLE app_users DROP CONSTRAINT app_users_ocr_consent_pair',
+            # 미동의를 표현할 수 없게 되는 변조. 값을 먼저 채워야 ALTER 가 안 죽는다.
+            'UPDATE app_users SET ocr_consent_at = NOW();'
+            ' ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET NOT NULL',
+            # **조용히 틀리는 변조 — ③ 만 잡는다.**
+            'ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET DEFAULT NOW()',
+        ]),
         ('2026-09-07', 'request_metrics', '', 'request_metrics', [
             'ALTER TABLE request_metrics DROP COLUMN elapsed_ms',
             'ALTER TABLE request_metrics ALTER COLUMN elapsed_ms TYPE bigint',

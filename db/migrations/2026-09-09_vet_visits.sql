@@ -127,12 +127,30 @@ CREATE TABLE IF NOT EXISTS vet_visit_drafts (
         CHECK (extracted IS NULL OR jsonb_typeof(extracted) = 'object'),
     extracted_at TIMESTAMPTZ,
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    -- 멱등키. vet_visits 에도 있지만 **여기 있는 것이 더 중요하다** — 확정은 사람이 한 번
+    -- 누르는 버튼이고, 업로드는 얼어 보이는 화면에서 두 번 눌리는 버튼이다. 이 키가 없으면
+    -- 두 번째 탭이 초안 한 줄과 사진 한 장을 더 만들고 **Gemini 를 한 번 더 부른다.**
+    client_event_id UUID NOT NULL,
+
+    -- 올라온 사진의 sha256 (core/storage 의 StoredObject.generation 이 이미 계산한다).
+    -- client_event_id 가 못 잡는 경우를 잡는다 — 앱이 재시작하면 같은 사진에 새 키가
+    -- 붙는다. UNIQUE 가 아닌 이유는 기록을 지우고 같은 영수증을 다시 올리는 것이 정당해서다.
+    -- 제약이 아니라 **추출 전에 되묻는 근거**이고, possible_duplicate 로도 이어진다.
+    receipt_sha256 CHAR(64)
+        CONSTRAINT vet_visit_drafts_receipt_sha256_shape
+        CHECK (receipt_sha256 IS NULL OR receipt_sha256 ~ '^[0-9a-f]{64}$'),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT vet_visit_drafts_client_event_unique UNIQUE (app_user_id, client_event_id)
 );
 
 -- 24시간 지난 초안을 지우는 청소가 이 인덱스로 간다 (docs/vet-visits.md "초안 청소").
 CREATE INDEX IF NOT EXISTS idx_vet_visit_drafts_created_at
     ON vet_visit_drafts (created_at);
+
+-- 같은 사진이 이미 올라왔는지 되묻는 조회. Gemini 를 부르기 **전에** 지난다.
+CREATE INDEX IF NOT EXISTS idx_vet_visit_drafts_user_sha
+    ON vet_visit_drafts (app_user_id, receipt_sha256);
 
 COMMENT ON TABLE vet_visit_drafts IS
     '확정 전 진료비 초안. 채팅도 목록도 이 표를 안 읽는다 — 24시간 뒤 사진과 함께 지운다';

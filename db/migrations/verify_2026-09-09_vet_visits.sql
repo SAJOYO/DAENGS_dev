@@ -12,6 +12,10 @@
 -- 전자가 풀리면 사유가 자유 텍스트가 되어 사유별 누계가 조용히 쪼개지고, 후자가 풀리면
 -- 유저가 확정 안 한 행이 vet_visits 에 앉을 수 있다 — 그 순간 기계가 지어낸 병명이
 -- 저장소 목록과 프롬프트에 의료 기록처럼 실린다. 이 표를 둘로 가른 이유가 거기 있다.
+--
+-- 초안 쪽에서 제일 중요한 것은 **멱등키 UNIQUE (app_user_id, client_event_id)** 다. 그것이
+-- 빠지면 얼어 보이는 화면에서 두 번 눌린 업로드가 초안 두 줄과 사진 두 장을 만들고
+-- **Gemini 를 두 번 부른다** — 아무 에러도 안 나고 요금만 는다.
 DO $verify$
 DECLARE
     item record;
@@ -68,6 +72,8 @@ BEGIN
         ('receipt_image_key', 'text',                     'true'),
         ('extracted',         'jsonb',                    'false'),
         ('extracted_at',      'timestamp with time zone', 'false'),
+        ('client_event_id',   'uuid',                     'true'),
+        ('receipt_sha256',    'character(64)',            'false'),
         ('created_at',        'timestamp with time zone', 'true')
     ) AS expected(column_name, type_name, required) LOOP
         IF NOT EXISTS (
@@ -92,7 +98,8 @@ BEGIN
         ('vet_visits',       'u', 'app_user_id,client_event_id', NULL,        NULL, NULL),
         ('vet_visit_drafts', 'p', 'id',                          NULL,        NULL, NULL),
         ('vet_visit_drafts', 'f', 'app_user_id',                 'app_users', 'id', 'c'),
-        ('vet_visit_drafts', 'f', 'pet_id',                      'pets',      'id', 'c')
+        ('vet_visit_drafts', 'f', 'pet_id',                      'pets',      'id', 'c'),
+        ('vet_visit_drafts', 'u', 'app_user_id,client_event_id', NULL,        NULL, NULL)
     ) AS expected(table_name, kind, columns, target_table, target_columns, delete_action) LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_constraint c
@@ -142,7 +149,8 @@ BEGIN
     SELECT string_agg(want.name, ', ') INTO missing
     FROM (VALUES
         ('vet_visit_drafts_receipt_image_key_not_blank'),
-        ('vet_visit_drafts_extracted_is_object')
+        ('vet_visit_drafts_extracted_is_object'),
+        ('vet_visit_drafts_receipt_sha256_shape')
     ) AS want(name)
     WHERE NOT EXISTS (
         SELECT 1 FROM pg_constraint c
@@ -155,7 +163,8 @@ BEGIN
     -- ⑤ 조회 인덱스 둘. 초안 쪽은 24시간 청소가 이것으로 간다.
     FOR item IN SELECT * FROM (VALUES
         ('vet_visits',       'idx_vet_visits_pet_visited'),
-        ('vet_visit_drafts', 'idx_vet_visit_drafts_created_at')
+        ('vet_visit_drafts', 'idx_vet_visit_drafts_created_at'),
+        ('vet_visit_drafts', 'idx_vet_visit_drafts_user_sha')
     ) AS expected(table_name, index_name) LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_class i

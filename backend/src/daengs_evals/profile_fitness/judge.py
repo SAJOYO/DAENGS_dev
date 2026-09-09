@@ -614,6 +614,7 @@ def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
 
     def side(rows: list[dict[str, Any]]) -> dict[str, Any]:
         flips = sum(1 for r in rows if r["position_dependent"])
+        checked = sum(1 for r in rows if r["position_dependent"] is not None)
         abst = sum(1 for r in rows if r["observation"].get("abstained"))
         return {
             "N_noise": rate(rows, "noise"),
@@ -622,8 +623,8 @@ def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
             "reactive_contrast": rate(rows, "contrast", "reactive"),
             "position_flips": {
                 "k": flips,
-                "n": len(rows),
-                "rate": round(flips / len(rows), 3) if rows else None,
+                "n": checked,
+                "rate": round(flips / checked, 3) if checked else None,
             },
             "abstained": abst,
         }
@@ -634,7 +635,9 @@ def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
     for k in shared:
         ct = f"{a[k]['observation']['changed']}->{b[k]['observation']['changed']}"
         changed_transitions[ct] = changed_transitions.get(ct, 0) + 1
-        ft = f"{int(a[k]['position_dependent'])}->{int(b[k]['position_dependent'])}"
+        pa, pb = a[k]["position_dependent"], b[k]["position_dependent"]
+        # None = 한 방향만 봐서 모름. 뒤집힘 전이는 양쪽 다 본 쌍에서만
+        ft = f"{int(pa)}->{int(pb)}" if pa is not None and pb is not None else "unchecked"
         flip_transitions[ft] = flip_transitions.get(ft, 0) + 1
     return {
         "a": {"file": a_path.name, "pairs": len(a), **side(ra)},

@@ -43,7 +43,10 @@ async def validate_sources(session, walk_id, content: ContentV2, pin: Pin | None
     if pin is None:
         return
     if pin.state == "unlocated" and any(
-        not p.is_mock and p.at <= min(pin.computed_at, pin.resolve_by) for p in points
+        not p.is_mock
+        and p.at
+        <= min(pin.computed_at, pin.resolve_by, pin.observation_cutoff_at or pin.computed_at)
+        for p in points
     ):
         raise EntryInvalid("사용 가능한 원본 좌표가 있으면 근거 없음으로 종료할 수 없습니다.")
     if pin.target_at != content.recorded_at:

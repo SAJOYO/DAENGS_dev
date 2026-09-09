@@ -47,6 +47,7 @@ def capabilities():
         "read_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if enabled else []),
         "write_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if writing else []),
         "active_policy_versions": [POLICY] if writing else [],
+        "pin_observation_cutoff_supported": enabled,
     }
 
 
@@ -98,6 +99,15 @@ def digest(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
     ).hexdigest()
+
+
+def request_payload(body):
+    value = body.model_dump(mode="json")
+    pin = value.get("pin")
+    if isinstance(pin, dict) and pin.get("observation_cutoff_at") is None:
+        # Adding an optional field must not invalidate receipts from earlier v2 clients.
+        pin.pop("observation_cutoff_at", None)
+    return value
 
 
 async def list_entries(session, owner, walk_id):
@@ -165,7 +175,7 @@ async def write(session, owner, walk_id, entry_id, body):
         {
             "operation": "content",
             "pin_supplied": "pin" in body.model_fields_set,
-            **body.model_dump(mode="json"),
+            **request_payload(body),
         }
     )
     replayed = await replay(session, row, body.mutation_id, request_hash)
@@ -218,7 +228,7 @@ async def finalize_pin(session, owner, walk_id, entry_id, body):
     _, row = await locked(session, owner, walk_id, entry_id)
     if row is None:
         raise EntryNotFound
-    request_hash = digest({"operation": "pin", **body.model_dump(mode="json")})
+    request_hash = digest({"operation": "pin", **request_payload(body)})
     replayed = await replay(session, row, body.mutation_id, request_hash)
     if replayed is not None:
         return replayed

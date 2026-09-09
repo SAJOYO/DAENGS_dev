@@ -18,7 +18,7 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin
 from daengs_backend.routers import walk_entry, walk_entry_v2
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.schemas.walk_entry_v2 import Pin
+from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2, Pin
 from daengs_backend.services import walk_entry_v2 as service
 from daengs_backend.services.walk_chunk import encode_chunk
 
@@ -210,6 +210,52 @@ def test_null_location_action_finalize_profile_and_minimal_delete(api):
     assert not db.receipts and db.pins[ENTRY].payload is None
     assert client.put(PATH, json=request).status_code == 410
     assert client.get(PATH.rsplit("/", 1)[0]).json()["entries"] == [result.json()]
+
+
+def test_pause_cutoff_does_not_use_later_resumed_gps_to_reject_unlocated(api):
+    client, db = api
+    request = body()
+    assert client.put(PATH, json=request).status_code == 200
+    db.points = [raw_point(seconds=3).model_copy(update={"chain_index": 1})]
+    final = completion(request)
+    final["pin"].update(
+        reason="session_ended", observation_cutoff_at=(AT + timedelta(seconds=1)).isoformat()
+    )
+    response = client.put(PATH + "/pin", json=final)
+    assert response.status_code == 200, response.text
+    assert response.json()["pin"]["state"] == "unlocated"
+    assert client.get("/app/walks/entry-capabilities").json()["pin_observation_cutoff_supported"]
+
+
+def test_optional_cutoff_keeps_pre_extension_receipt_hash(api):
+    client, db = api
+    request = body()
+    old_payload = EntryWriteV2.model_validate(request).model_dump(mode="json")
+    old_payload["pin"].pop("observation_cutoff_at")
+    expected = service.digest({"operation": "content", "pin_supplied": True, **old_payload})
+    assert client.put(PATH, json=request).status_code == 200
+    assert next(iter(db.receipts.values())).request_hash == expected
+    request["pin"]["observation_cutoff_at"] = None
+    assert client.put(PATH, json=request).status_code == 200
+
+
+def test_cutoff_cannot_hide_a_past_fix_or_include_post_cutoff_references(api):
+    client, db = api
+    request = body()
+    assert client.put(PATH, json=request).status_code == 200
+    db.points = [raw_point()]
+    final = completion(request)
+    final["pin"]["observation_cutoff_at"] = AT.isoformat()
+    assert client.put(PATH + "/pin", json=final).status_code == 422
+    invalid = completion(request, located_pin=True)["pin"]
+    invalid["observation_cutoff_at"] = (AT - timedelta(seconds=1)).isoformat()
+    with pytest.raises(ValidationError):
+        Pin.model_validate(invalid)
+    invalid["observation_cutoff_at"] = AT.isoformat()
+    invalid["method"] = "estimated"
+    invalid["source_refs"][0]["at"] = (AT + timedelta(seconds=1)).isoformat()
+    with pytest.raises(ValidationError):
+        Pin.model_validate(invalid)
 
 
 def test_receipts_return_original_ack_after_intervening_update_and_normalize_dates(api):

@@ -96,7 +96,16 @@ pin/content의 정밀한 값을 저장 때 덮어쓰지는 않는다. observed�
 5. **v2 데이터가 생긴 뒤에는 ENABLED나 읽기/sidecar를 제거하지 않는다.** v1이 nullable 행동을 파싱하거나
    v2 기록을 수정하게 되므로 안전한 롤백이 아니다. v1으로 몰래 변환하지 않는다.
 
-이번 작업에서는 운영 DB 적용, 머지/배포, 플래그 활성화를 실행하지 않았다.
+2026-09-09 12:15 KST에 사용자가 지정한 DB에 SQL을 트랜잭션으로 적용했고, 같은 TX와
+새 읽기 전용 연결에서 verifier를 통과했다. 기존 데이터 backfill은 없었다. 머지/배포와
+플래그 활성화는 실행하지 않았다.
+
+APP #232 연동에서 terminal pin의 선택 필드 `observation_cutoff_at`을 추가했다.
+일시정지/종료 이후에 받은 좌표를 과거 행동의 계산에 섞지 않도록 실제 관측 종료 시각을
+전달한다. target_at 이상이며 computed_at/resolve_by 이하여야 하고, source_refs 및
+unlocated의 원본 존재 검사는 이 cutoff까지 수행한다. capabilities의
+`pin_observation_cutoff_supported`로 협상한다. 필드 생략/null은 기존 관측 창과 같고,
+기존 mutation receipt의 요청 해시는 유지한다. JSON 메타데이터여서 추가 SQL은 없다.
 
 ## 검증
 

@@ -63,6 +63,8 @@ class Pin(StrictModel):
     policy_version: str = Field(min_length=1, max_length=100)
     algorithm_version: str = Field(min_length=1, max_length=100)
     resolve_by: datetime
+    # Optional for older v2 clients; pause/end/recovery may close collection before computation.
+    observation_cutoff_at: datetime | None = None
     source_refs: list[SourceRef] = Field(max_length=256)
     uncertainty_m: float | None = Field(gt=0, strict=True)
     uncertainty_basis: Literal["provider_accuracy", "model_bound", "unknown"]
@@ -78,6 +80,11 @@ class Pin(StrictModel):
     ]
     _utc = field_validator("target_at", "computed_at", "resolve_by")(utc)
 
+    @field_validator("observation_cutoff_at")
+    @classmethod
+    def cutoff_utc(cls, value):
+        return utc(value) if value is not None else None
+
     @model_validator(mode="after")
     def invariants(self):
         if (self.state == "provisional") != (self.reason == "awaiting_observations"):
@@ -86,6 +93,13 @@ class Pin(StrictModel):
             raise ValueError("direct_fix is only the observed reason")
         if self.computed_at < self.target_at or self.resolve_by < self.target_at:
             raise ValueError("calculation/deadline cannot precede target")
+        if self.observation_cutoff_at is not None and (
+            self.state == "provisional"
+            or not self.target_at
+            <= self.observation_cutoff_at
+            <= min(self.computed_at, self.resolve_by)
+        ):
+            raise ValueError("collection cutoff must close a terminal pin within its window")
         if (self.uncertainty_basis == "unknown") != (self.uncertainty_m is None):
             raise ValueError("unknown uncertainty must be null; other bases need a positive radius")
         if self.uncertainty_basis == "provider_accuracy" and self.method != "observed":
@@ -103,7 +117,10 @@ class Pin(StrictModel):
         keys = [(ref.at, ref.client_seq) for ref in self.source_refs]
         if keys != sorted(keys) or len({r.client_seq for r in self.source_refs}) != len(keys):
             raise ValueError("references must be sorted and unique")
-        if any(r.at > min(self.resolve_by, self.computed_at) for r in self.source_refs):
+        cutoff = min(
+            self.resolve_by, self.computed_at, self.observation_cutoff_at or self.computed_at
+        )
+        if any(r.at > cutoff for r in self.source_refs):
             raise ValueError("reference exceeds available observation window")
         if self.state == "provisional" and any(r.at > self.target_at for r in self.source_refs):
             raise ValueError("initial pin cannot use post-tap observations")

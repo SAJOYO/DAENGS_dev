@@ -17,6 +17,7 @@ __all__ = [
     "delete",
     "delete_draft",
     "expired_drafts",
+    "find_draft_by_image_key",
     "find_duplicate",
     "get_by_client_event",
     "get_draft_by_client_event",
@@ -130,6 +131,22 @@ async def get_draft_owned(
         select(VetVisitDraft).where(
             VetVisitDraft.id == draft_id, VetVisitDraft.app_user_id == app_user_id
         )
+    )
+
+
+async def find_draft_by_image_key(
+    session: AsyncSession, storage_key: str
+) -> VetVisitDraft | None:
+    """저장소 키 하나로 초안을 찾습니다. **bridge 전용입니다.**
+
+    ⚠️ **소유자 조건이 없습니다.** bridge 는 인증 헤더를 안 받습니다 — Signed URL 을
+       흉내 내는 자리라, 헤더를 요구하면 저장소를 GCS 로 바꿀 때 앱 코드가 또
+       바뀝니다. 대신 **backend 가 실제로 발급한 키인지**를 여기서 봅니다
+       (`screening.find_by_storage_key` 와 같은 이유). 확정되면 초안 행 자체가
+       지워지므로(services.confirm_draft), 확정 뒤에는 이 조회가 자연히 404 입니다.
+    """
+    return await session.scalar(
+        select(VetVisitDraft).where(VetVisitDraft.receipt_image_key == storage_key)
     )
 
 

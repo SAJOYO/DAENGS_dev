@@ -118,7 +118,10 @@ class DraftExtraction:
     extraction: ReceiptExtraction | None
 
 
-def _content_type_from_key(key: str) -> str:
+def content_type_from_key(key: str) -> str:
+    """확장자로 되짚는 Content-Type. **공개 함수다** — `routers/vet_visit.py` 의
+    bridge 업로드가 이 값으로 앱이 보낸 Content-Type 헤더를 대조한다(`VetVisitDraft`
+    에는 그 값을 담을 칸이 따로 없다)."""
     for suffix, content_type in _CONTENT_TYPE_BY_SUFFIX.items():
         if key.endswith(suffix):
             return content_type
@@ -130,7 +133,7 @@ def _ticket_for(draft: VetVisitDraft) -> UploadTicket:
     `(draft, ticket, created)` 를 받는다."""
     return get_storage().create_upload_ticket(
         object_key=draft.receipt_image_key,
-        content_type=_content_type_from_key(draft.receipt_image_key),
+        content_type=content_type_from_key(draft.receipt_image_key),
         bridge_upload_path=VET_RECEIPT_BRIDGE_UPLOAD_PATH,
         create_only=True,
     )
@@ -269,7 +272,7 @@ async def extract_draft(
     if match is not None and match.id != draft.id and match.extracted_at is not None:
         response_payload = dict(match.extracted or {})
     else:
-        content_type = _content_type_from_key(draft.receipt_image_key)
+        content_type = content_type_from_key(draft.receipt_image_key)
         try:
             extraction = await vet_receipt.extract(raw, content_type)
         except ReceiptExtractionFailed:
@@ -440,6 +443,7 @@ __all__ = [
     "VetVisitConflictError",
     "VetVisitNotFoundError",
     "confirm_draft",
+    "content_type_from_key",
     "delete_visit",
     "extract_draft",
     "list_visits",

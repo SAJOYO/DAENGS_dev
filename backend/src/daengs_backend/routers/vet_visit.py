@@ -11,13 +11,14 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
+from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.schemas.vet_visit import (
     VetVisitConfirmRequest,
     VetVisitDraftResponse,
@@ -243,6 +244,105 @@ async def delete_visit(
         await vet_service.delete_visit(session, user.app_user_id, visit_id)
     except vet_service.VetVisitNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND) from None
+
+
+# ── local 저장소의 bridge (`screening.py` 의 `_bridge_upload`·`_bridge_download` 와
+#    같은 자리 규칙) ─────────────────────────────────────────────────────
+#
+# ⚠️ **인증 헤더를 요구하지 않습니다 — 대신 키가 자격입니다.** Signed URL 을 흉내 내는
+#    자리라, 헤더를 요구하면 저장소를 GCS 로 되돌릴 때 앱 코드가 또 바뀝니다. 대신
+#    **backend 가 실제로 발급한 키인지**를 DB 로 확인합니다(`vet_repo.
+#    find_draft_by_image_key`). 키에 draft_id(uuid)가 들어 있어 추측이 안 되는 것이
+#    나머지 절반입니다.
+
+
+def _local_bridge():
+    from daengs_backend.core.storage import LocalBridgeStorage
+
+    storage = vet_service.get_storage()
+    if not isinstance(storage, LocalBridgeStorage):
+        # gcs/none 모드에서는 이 경로가 없는 것처럼 404.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND)
+    return storage
+
+
+@router.put("/_bridge/upload/{storage_key:path}", include_in_schema=False)
+async def _bridge_upload(session: Session, storage_key: str, request: Request) -> Response:
+    """발급된 초안 하나에만 영수증 사진을 받습니다. 디스크로 흘려 씁니다.
+
+    **바이트를 메모리에 안 올립니다** — `core/storage.py` 머리말이 말하는 대로 모든
+    바이트가 backend 를 지나므로(D-052), 통째로 읽으면 사진 하나가 그대로 메모리다.
+    """
+    storage = _local_bridge()
+    draft = await vet_repo.find_draft_by_image_key(session, storage_key)
+    if draft is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND)
+
+    expected_type = vet_service.content_type_from_key(draft.receipt_image_key)
+    declared_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if declared_type != expected_type:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "발급된 사진 형식과 Content-Type 이 다릅니다.",
+        )
+
+    # 영수증 하나의 상한 — 추출이 읽는 값과 같은 숫자다(services.vet_visit.
+    # MAX_RECEIPT_BYTES). 여기서 따로 정하면 둘이 어긋나는 날이 온다.
+    limit = vet_service.MAX_RECEIPT_BYTES
+    too_large = HTTPException(
+        status.HTTP_413_CONTENT_TOO_LARGE,
+        f"사진은 {limit // (1024 * 1024)} MiB 이하여야 합니다.",
+    )
+
+    # 큰 파일을 다 받고 나서 거절하면 대역폭과 디스크를 이미 쓴 뒤입니다.
+    # Content-Length 는 앱이 주는 값이라 **믿지 않고**, 아래 누적 검사로 다시 봅니다.
+    declared_size = request.headers.get("content-length")
+    if declared_size is not None:
+        try:
+            if int(declared_size) > limit:
+                raise too_large
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Content-Length 가 올바르지 않습니다."
+            ) from None
+
+    # exclusive=True 는 create-only 입니다. 도중에 끊기면 open_write 가 반쯤 쓴
+    # 파일을 지웁니다 — 남으면 다음 PUT 이 409 에 막히고, 0바이트로 남으면
+    # 다른 tombstone 과 구별되지 않습니다.
+    try:
+        written = 0
+        with storage.open_write(storage_key, exclusive=True) as stream:
+            async for chunk in request.stream():
+                written += len(chunk)
+                if written > limit:
+                    raise too_large
+                stream.write(chunk)
+            if written == 0:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, "빈 사진은 업로드할 수 없습니다."
+                )
+    except FileExistsError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "이미 올린 사진은 같은 티켓으로 덮어쓸 수 없습니다.",
+        ) from None
+    return Response(status_code=status.HTTP_200_OK)
+
+
+@router.get("/_bridge/download/{storage_key:path}", include_in_schema=False)
+async def _bridge_download(session: Session, storage_key: str):
+    """초안의 영수증 사진을 내려줍니다. 확정되면 초안 행이 지워지므로(services.
+    confirm_draft) 확정 뒤에는 이 경로도 자연히 404 입니다."""
+    from fastapi.responses import FileResponse
+
+    storage = _local_bridge()
+    draft = await vet_repo.find_draft_by_image_key(session, storage_key)
+    if draft is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND)
+    path = storage.local_path(storage_key)
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND)
+    return FileResponse(path, media_type=vet_service.content_type_from_key(storage_key))
 
 
 __all__ = ["router"]

@@ -434,6 +434,10 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
         d = drafts.get(draft_id)
         return d if d is not None and d.app_user_id == app_user_id else None
 
+    async def find_draft_by_image_key(_session, storage_key):
+        """bridge 전용 — 소유자 조건이 없다(`vet_repo.find_draft_by_image_key` 와 같다)."""
+        return next((d for d in drafts.values() if d.receipt_image_key == storage_key), None)
+
     async def get_draft_by_sha(_session, app_user_id, sha256_hex):
         matches = [
             d
@@ -497,6 +501,7 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vet_repo, "delete_draft", delete_draft)
     monkeypatch.setattr(vet_repo, "get_draft_by_client_event", get_draft_by_client_event)
     monkeypatch.setattr(vet_repo, "get_draft_owned", get_draft_owned)
+    monkeypatch.setattr(vet_repo, "find_draft_by_image_key", find_draft_by_image_key)
     monkeypatch.setattr(vet_repo, "get_draft_by_sha", get_draft_by_sha)
     monkeypatch.setattr(vet_repo, "expired_drafts", expired_drafts)
     monkeypatch.setattr(vet_repo, "find_duplicate", find_duplicate)
@@ -1116,3 +1121,53 @@ def test_reason_options_endpoint_is_not_shadowed_by_draft_id_route(app_client):
     r = app_client.get("/app/vet-visits/reason-options", params={"pet_id": str(SVC_PET)})
     assert r.status_code == 200, r.text
     assert set(r.json()) == set(VET_REASON_CODES)
+
+
+# ── bridge — local 저장소의 업로드/다운로드 (fix round 1) ──────────────
+#
+# 티켓의 `upload_url`/스토리지 키가 실제로 뭔가를 가리켜야 사진이 backend 에
+# 도착한다. `screening.py` 의 bridge 테스트와 같은 결 — 인증 헤더 없이, 키 자체가
+# 자격이다.
+
+
+def _upload_bridge(app_client: TestClient, url: str, data: bytes, content_type="image/jpeg"):
+    return app_client.put(
+        url.removeprefix("http://x"), content=data, headers={"Content-Type": content_type}
+    )
+
+
+def test_bridge_upload_then_download_round_trips_the_same_bytes(app_client, svc_storage):
+    started = app_client.post("/app/vet-visits", json=_start_body()).json()
+    r = _upload_bridge(app_client, started["upload_url"], b"receipt-bytes")
+    assert r.status_code == 200, r.text
+
+    got = app_client.get(f"/app/vet-visits/_bridge/download/{started['storage_key']}")
+    assert got.status_code == 200, got.text
+    assert got.content == b"receipt-bytes"
+
+
+def test_bridge_upload_rejects_oversized_body(app_client, svc_storage, monkeypatch):
+    monkeypatch.setattr(vet_service, "MAX_RECEIPT_BYTES", 4)
+    started = app_client.post("/app/vet-visits", json=_start_body()).json()
+    r = _upload_bridge(app_client, started["upload_url"], b"x" * 40)
+    assert r.status_code == 413
+    assert not svc_storage.local_path(started["storage_key"]).exists()
+
+
+def test_bridge_upload_rejects_mismatched_content_type(app_client, svc_storage):
+    """티켓은 `image/jpeg` 로 발급됐는데 다른 형식으로 밀어 넣는 경우."""
+    started = app_client.post("/app/vet-visits", json=_start_body(content_type="image/jpeg")).json()
+    r = _upload_bridge(app_client, started["upload_url"], b"webp-bytes", content_type="image/webp")
+    assert r.status_code == 415
+    assert not svc_storage.local_path(started["storage_key"]).exists()
+
+
+def test_bridge_upload_rejects_unknown_key(app_client):
+    """backend 가 발급하지 않은 키 — 존재하는 척도 안 한다."""
+    r = _upload_bridge(app_client, "/app/vet-visits/_bridge/upload/made-up.jpg", b"x")
+    assert r.status_code == 404
+
+
+def test_bridge_download_of_unknown_key_is_404(app_client):
+    r = app_client.get("/app/vet-visits/_bridge/download/made-up.jpg")
+    assert r.status_code == 404

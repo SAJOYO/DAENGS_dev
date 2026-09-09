@@ -7,7 +7,8 @@ from daengs_walk.storyboard_selection import SelectionPolicy, select_nodes
 LABELS = {"sniffing": "킁킁", "excretion": "배설", "barking": "짖기", "note": "특별한 순간"}
 
 
-def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
+def route_nodes(evidence):
+    """Canonical continuity blocks and exact source observations, shared by diary preparation."""
     start = evidence.facts.started_at
     nodes, offset, block, previous = [], 0.0, -1, None
 
@@ -44,6 +45,12 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         )
         nodes.append(end)
         previous = (segment.chain_index, segment.b.client_seq)
+    return nodes
+
+
+def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
+    start = evidence.facts.started_at
+    nodes = route_nodes(evidence)
     projected = []
     for entry in entries:
         content = entry.get("content")

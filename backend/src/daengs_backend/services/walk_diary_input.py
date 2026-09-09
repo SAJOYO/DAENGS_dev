@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from daengs_backend.config import settings
+from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_entry as entries
 from daengs_backend.repositories import walk_entry_context as contexts
 from daengs_backend.repositories import walk_entry_v2 as pins
@@ -16,6 +17,10 @@ from daengs_backend.repositories import walk_photo as photos
 from daengs_backend.repositories import walk_storyboard as storyboards
 from daengs_backend.schemas.walk_entry_v2 import Pin
 from daengs_backend.schemas.walk_photo import PhotoRecord
+from daengs_backend.services.walk_diary_observations import (
+    ObservationSource,
+    prepare_observation_source,
+)
 from daengs_walk.diary_input import (
     Anchor,
     Behavior,
@@ -35,6 +40,7 @@ class InputAssembly:
     source: DiaryInput
     # Do not log provider payload or user text; stable envelope IDs and reasons suffice.
     excluded_backgrounds: tuple[dict[str, str], ...]
+    observation_source: ObservationSource | None = None
 
 
 def entry_anchor(event_at, location, raw_pin=None):
@@ -216,7 +222,9 @@ def saved_background(envelope, record, walk_id):
     )
 
 
-def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelopes):
+def assemble_input(
+    walk, analysis, entry_rows, pin_rows, photo_manifest, envelopes, *, observation_source=None
+):
     pin_map = {r.entry_id: r for r in pin_rows}
     records = [entry_record(row, pin_map.get(row.id)) for row in entry_rows]
     if photo_manifest is not None:
@@ -234,7 +242,9 @@ def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelop
                 {"id": str(envelope.get("id", "unknown")), "reason": "invalid_or_stale_context"}
             )
     route = (
-        RouteVersion(
+        observation_source.route
+        if observation_source is not None
+        else RouteVersion(
             status="ready",
             analysis_id=str(analysis.id),
             input_fingerprint=analysis.input_fingerprint.removeprefix("sha256:"),
@@ -256,9 +266,12 @@ def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelop
         started_at=walk.started_at,
         ended_at=walk.ended_at,
         pet_ids=tuple(str(p) for p in walk.pet_ids),
-        evidence_origin="unknown",
+        evidence_origin=observation_source.evidence_origin if observation_source else "unknown",
         route=route,
         records=tuple(records),
+        observations=observation_source.pool.observations
+        if observation_source and observation_source.pool
+        else (),
         photos_status="complete" if photo_manifest is not None else "not_available",
         photo_manifest={
             "publisher_id": str(photo_manifest.publisher_id),
@@ -276,7 +289,7 @@ def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelop
         writing_policy_version="diary-background-v1",
     )
     source.revision()
-    return InputAssembly(source, tuple(excluded))
+    return InputAssembly(source, tuple(excluded), observation_source)
 
 
 async def read_input(session, owner, walk_id):
@@ -285,7 +298,7 @@ async def read_input(session, owner, walk_id):
     # AsyncSession is reused across the existing generation's commits; expire_on_commit=False.
     # A second read must not reuse its pre-LLM identity map after another request edits a pin.
     session.expire_all()
-    walk = await entries.owned_walk(session, owner, walk_id, lock=True)
+    walk = await walks.get_owned_for_update(session, owner, walk_id)
     if walk is None:
         raise LookupError("walk not found")
     rows = await entries.entries(session, [walk_id])
@@ -302,11 +315,13 @@ async def read_input(session, owner, walk_id):
             policy = contexts.PIN_POLICY if row.id in pin_ids else contexts.POLICY
             _, latest = await contexts.current(session, row, policy=policy)
             envelopes.extend(r.envelope for r in latest.values())
+    analysis = await storyboards.latest_analysis(session, walk_id)
     return assemble_input(
         walk,
-        await storyboards.latest_analysis(session, walk_id),
+        analysis,
         rows,
         pin_rows,
         photo_manifest,
         envelopes,
+        observation_source=prepare_observation_source(walk, analysis),
     )

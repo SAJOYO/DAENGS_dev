@@ -3,7 +3,8 @@
 상태: **이관 1단계 — 계약과 순수 검사 구현, 운영 호출 경로에는 미연결.**
 기준: Dev `01a7bbe`, Geo `walk-input-v1` 실험. 관련 작업은 [Dev #370](https://github.com/SAJOYO/DAENGS_dev/pull/370).
 합성 자료로 계약을 검사했으며 실제 산책·공공데이터·LLM 품질을 평가한 결과는 아니다.
-후속 구현은 [저장 입력](photo-metadata.md), [장면 선택·스탬프](diary-stamps.md)에 정리한다.
+후속 구현은 [저장 입력](photo-metadata.md), [장면 선택·스탬프](diary-stamps.md),
+[확정 동선 관측 공급](diary-observations.md)에 정리한다.
 
 ## 기존 오케스트레이션에 붙이는 위치
 

@@ -85,6 +85,12 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSite,
     TerritoryOccupancy,
 )
+from daengs_backend.models.vet_visit import (
+    VET_REASON_CODES,
+    VET_REASON_LABELS,
+    VetVisit,
+    VetVisitDraft,
+)
 from daengs_backend.models.walk import (
     WALK_ANALYSIS_STATES,
     Walk,
@@ -130,6 +136,8 @@ __all__ = [
     "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
+    "VET_REASON_CODES",
+    "VET_REASON_LABELS",
     "WALK_ANALYSIS_STATES",
     "ActivityAccount",
     "ActivityBonusKey",
@@ -161,6 +169,8 @@ __all__ = [
     "TerritoryClaimSite",
     "TerritoryOccupancy",
     "VerifiedVisit",
+    "VetVisit",
+    "VetVisitDraft",
     "Walk",
     "WalkAnalysis",
     "WalkCapsule",

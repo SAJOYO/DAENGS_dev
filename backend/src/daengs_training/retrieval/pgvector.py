@@ -141,7 +141,7 @@ def _medical_verdict(question: str):
             from daengs_training.guardrails import medical as medical_guardrail
             _MEDICAL_LEXICONS = (
                 medical_guardrail,
-                medical_guardrail.load_medical_terms_v2(RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"),
+                medical_guardrail.load_serving_medical_terms(),
                 medical_guardrail.load_training_whitelist(RUNTIME_ROOT / "data/guardrail/training_whitelist_v1.json"),
             )
         except Exception:  # noqa: BLE001 - missing/malformed lexicon or import path

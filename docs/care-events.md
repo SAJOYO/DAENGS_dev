@@ -19,15 +19,16 @@
 
 ## 경로
 
-전부 앱 회원 전용(`CurrentAppUser`). 내 강아지가 아니면 **404** — 403 으로 나누면 그 id 가 존재한다는
-것을 알려 주는 셈이라 없는 것과 남의 것을 같은 404 로 뭉갠다 (`/app/pets` 와 같은 규칙).
+전부 앱 회원 전용(`CurrentAppUser`). **그 아이의 구성원(대표 ∪ 돌보미)이 아니면 404** — 403 으로
+나누면 그 id 가 존재한다는 것을 알려 주는 셈이라 없는 것과 남의 것을 같은 404 로 뭉갠다
+(`/app/pets` 와 같은 규칙). 구성원 판정은 `docs/co-care.md` §2 가 원본이다.
 
 | 메서드 · 경로 | 하는 일 | 응답 |
 | --- | --- | --- |
 | `POST /app/care-events` | 기록 한 건 | **201** 새로 만듦 · **200** 같은 `client_event_id` 가 이미 있어 있던 것을 돌려줌 |
 | `GET /app/care-events?pet_id&from&to` | 기간 조회, 최근 먼저 | `{pet_id, start, end, events[]}` — 창을 같이 돌려준다 |
 | `GET /app/care-events/today?pet_id&day` | 하루 요약 | `{day, timezone, start, end, meal, medication, snack, walk, events[]}` |
-| `DELETE /app/care-events/{id}` | 지움 | **204** · 내 것 아니면 404 |
+| `DELETE /app/care-events/{id}` | 지움 | **204** · **적은 사람 또는 그 아이의 대표**만. 그 밖에는 404 (돌보미끼리도 못 지운다) |
 
 ### 기록 본문
 

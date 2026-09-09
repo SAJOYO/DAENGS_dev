@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from daengs_backend.models import Pet, Walk, WalkPet
 from daengs_backend.models.walk_entry import WalkEntry
+from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.schemas.walk_entry import RecordProfileQuery
 
 
@@ -36,8 +37,16 @@ async def get_entry(session: AsyncSession, walk_id: uuid.UUID, entry_id: uuid.UU
     return await session.get(WalkEntry, (walk_id, entry_id))
 
 
-async def owns_pet(session: AsyncSession, owner: uuid.UUID, pet_id: uuid.UUID):
-    return await session.scalar(select(Pet.id).where(Pet.id == pet_id, Pet.app_user_id == owner))
+async def pet_is_accessible(session: AsyncSession, member: uuid.UUID, pet_id: uuid.UUID):
+    """그 아이를 산책 기록에 붙일 수 있는가 — **구성원(대표 ∪ 돌보미)이면 됩니다**
+    (docs/co-care.md §2).
+
+    **산책 자체의 소유는 안 옮깁니다** — 여기 걸린 판정은 "동행한 아이를 고를 수 있나" 뿐이고,
+    어느 산책을 고칠 수 있는지는 위 `owned_walk` 가 `Walk.app_user_id` 로 계속 봅니다.
+    """
+    return await session.scalar(
+        select(Pet.id).where(Pet.id == pet_id, pet_repo._is_member(member))
+    )
 
 
 async def profile_walks(session: AsyncSession, owner: uuid.UUID, spec: RecordProfileQuery):

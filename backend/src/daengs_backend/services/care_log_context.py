@@ -49,8 +49,8 @@ async def resolve(
 ) -> dict[str, object] | None:
     """`context["care_log"]` 에 넣을 값. **없으면 None 이고, 그것은 오류가 아닙니다.**
 
-    id 가 UUID 가 아니거나 남의 강아지면 조용히 None 입니다 — 소유권은 `day_summary` 가
-    `pet_repo.get_owned` 로 묶고 있어 남의 id 로는 못 읽습니다. `today` 는 테스트가 시계를
+    id 가 UUID 가 아니거나 **구성원이 아닌** 강아지면 조용히 None 입니다 — 판정은
+    `day_summary` 가 `pet_repo.get_accessible` 로 묶고 있어 남의 id 로는 못 읽습니다. `today` 는 테스트가 시계를
     고정하는 자리이고, 안 주면 서울 기준 오늘입니다 (`care_service.DAY_TIMEZONE`).
     """
     try:

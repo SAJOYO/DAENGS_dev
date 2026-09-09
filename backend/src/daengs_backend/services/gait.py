@@ -196,7 +196,7 @@ async def compare(
     if record_id_a == record_id_b:
         raise CompareError("같은 기록끼리는 비교할 수 없습니다.")
 
-    rows = await gait_repo.get_owned_pair(session, app_user_id, (record_id_a, record_id_b))
+    rows = await gait_repo.get_accessible_pair(session, app_user_id, (record_id_a, record_id_b))
     if len(rows) != 2:
         # 없는 것과 남의 것을 구분하지 않습니다 (이 모듈의 규칙).
         raise NotFoundError("record")

@@ -160,7 +160,8 @@ async def list_records(
 async def get_record(
     user: CurrentAppUser, session: Session, record_id: uuid.UUID
 ) -> GaitRecordDetail:
-    record = await gait_repo.get_owned(session, user.app_user_id, record_id)
+    # 보기만 하므로 **구성원** 기준입니다 (docs/co-care.md §2) — 확정·삭제는 그대로 대표만.
+    record = await gait_repo.get_accessible(session, user.app_user_id, record_id)
     if record is None:
         raise _NOT_FOUND
     return GaitRecordDetail(

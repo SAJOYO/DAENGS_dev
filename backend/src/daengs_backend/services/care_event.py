@@ -1,6 +1,6 @@
 """케어 로그(밥 · 약 · 간식)의 규칙. 트랜잭션 경계도 여기입니다 (#332).
 
-라우터는 HTTP 만 보고, 리포지토리는 쿼리만 합니다. "이 강아지가 내 것인가"·"같은 기록을
+라우터는 HTTP 만 보고, 리포지토리는 쿼리만 합니다. "이 강아지를 내가 돌보는가"·"같은 기록을
 두 번 받았나"·"기간이 너무 넓은가"·"하루의 경계가 어디인가" 는 전부 여기 모입니다.
 
 **오케스트레이터를 모릅니다.** 비서가 이 로그를 읽는 것은 후속 카드이고, 채팅으로 기록하는
@@ -58,10 +58,17 @@ class DaySummary:
     events: list[CareEvent]
 
 
-async def _owned_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID):
-    """내 강아지가 아니면 404 감. **배웅한 아이도 통과합니다** — 배웅은 행을 안 지우고,
-    있었던 일을 적어 두는 것이라 그 아이의 기록은 계속 보이고 남길 수 있어야 합니다."""
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+async def _accessible_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID):
+    """**구성원(대표 ∪ 돌보미)이 아니면** 404 감 (docs/co-care.md §2).
+
+    돌보미가 기록하고 대표가 보는 것이 이 기능의 전부라, 기록·조회는 대표 기준이면
+    안 됩니다. 대신 여기를 지나도 **고치거나 지우지는 못합니다** — 그쪽은 `pet_repo.get_owned`
+    를 그대로 씁니다.
+
+    **배웅한 아이도 통과합니다** — 배웅은 행을 안 지우고, 있었던 일을 적어 두는 것이라
+    그 아이의 기록은 계속 보이고 남길 수 있어야 합니다.
+    """
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
     return pet
@@ -81,7 +88,7 @@ async def record(
 
     :returns: (기록, 이번에 새로 만들었는가)
     """
-    pet = await _owned_pet(session, app_user_id, body.pet_id)
+    pet = await _accessible_pet(session, app_user_id, body.pet_id)
 
     existing = await care_repo.get_by_client_event(session, pet.id, body.client_event_id)
     if existing is not None:
@@ -128,7 +135,7 @@ async def list_events(
     end: datetime | None = None,
 ) -> tuple[list[CareEvent], datetime, datetime]:
     """기간 조회. 창을 같이 돌려주는 이유는 기본값을 앱이 되짚어 볼 수 있게 하려는 것입니다."""
-    await _owned_pet(session, app_user_id, pet_id)
+    await _accessible_pet(session, app_user_id, pet_id)
     start, end = _window(start, end)
     return await care_repo.list_between(session, app_user_id, pet_id, start, end), start, end
 
@@ -136,7 +143,14 @@ async def list_events(
 async def delete_event(
     session: AsyncSession, app_user_id: uuid.UUID, event_id: uuid.UUID
 ) -> None:
-    event = await care_repo.get_owned(session, app_user_id, event_id)
+    """지우기. **적은 사람 또는 그 아이의 대표만** 지웁니다 (docs/co-care.md §2).
+
+    돌봄 기록은 강아지 것이라(결정 ①) 대표는 돌보미의 오기록을 지울 수 있어야 하고,
+    적은 사람은 자기 오기록을 지울 수 있어야 합니다. 반대로 **돌보미끼리는 못 지웁니다** —
+    구성원 전체에 열면 아빠가 내가 적은 약 기록을 지우고, 그 사실이 아무 데도 안 남습니다.
+    판정은 `care_repo.get_deletable` 이 쿼리 조건으로 들고 있습니다.
+    """
+    event = await care_repo.get_deletable(session, app_user_id, event_id)
     if event is None:
         raise CareEventNotFoundError
     await care_repo.delete(session, event)
@@ -163,7 +177,7 @@ async def day_summary(
 
     `day` 를 안 보내면 그 시간대의 오늘입니다.
     """
-    await _owned_pet(session, app_user_id, pet_id)
+    await _accessible_pet(session, app_user_id, pet_id)
     day = day or datetime.now(ZoneInfo(timezone)).date()
     start, end = day_bounds(day, timezone)
     counts = await care_repo.count_by_kind(session, app_user_id, pet_id, start, end)

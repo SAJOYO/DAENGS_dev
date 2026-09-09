@@ -223,7 +223,7 @@ class Store:
         #: 케어 로그(밥·약·간식) 행 (#332). **기본은 비어 있습니다** — 비서가 `active_dog_id`
         #: 요청마다 오늘 요약을 읽으므로(#344), 여기 대역이 없으면 관련 없는 테스트가
         #: 진짜 리포지토리를 타서 `FakeSession` 에서 죽습니다. 모양은 `test_care_events.py`
-        #: 의 `FakeCareEvent` 처럼 `app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
+        #: 의 `FakeCareEvent` 처럼 `actor_app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
         self.care_events: list = []
 
         #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
@@ -791,11 +791,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             # naive 시각을 넣은 옛 산책 대역 — 하루 창과 비교할 수 없으면 안 센다.
             return False
 
-    def _care_between(app_user_id, pet_id, start, end):
+    def _care_between(_app_user_id, pet_id, start, end):
+        # 진짜와 같게 **actor 로 안 거릅니다** — 돌봄 기록은 강아지 것이라, 사람으로 거르면
+        # 다른 보호자가 적은 줄만 빠집니다 (docs/co-care.md §2).
         return [
             e for e in store.care_events
-            if e.app_user_id == app_user_id and e.pet_id == pet_id
-            and _in_window(e.occurred_at, start, end)
+            if e.pet_id == pet_id and _in_window(e.occurred_at, start, end)
         ]
 
     async def care_list_between(session, app_user_id, pet_id, start, end):
@@ -810,11 +811,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             counts[e.kind] = counts.get(e.kind, 0) + 1
         return counts
 
-    async def walk_count_for_pet_between(session, app_user_id, pet_id, start, end):
+    async def walk_count_for_pet_between(session, _app_user_id, pet_id, start, end):
+        # 진짜와 같게 **소유자 조건이 없습니다** — 부르는 쪽이 이미 접근 권한을 봤고,
+        # 여기서 다시 사람으로 거르면 다른 보호자의 산책만 빠집니다 (docs/co-care.md §2).
         return sum(
             1 for w in store.walks
-            if w.app_user_id == app_user_id and pet_id in w.pet_ids
-            and _in_window(w.started_at, start, end)
+            if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
         )
 
     monkeypatch.setattr(care_repo, "list_between", care_list_between)
@@ -832,9 +834,15 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
         return sorted(mine, key=lambda row: (row.last_message_at, row.id), reverse=True)
 
-    async def get_owned_pet_id(session, app_user_id, pet_id):
+    async def get_accessible_pet_id(session, app_user_id, pet_id):
+        # 진짜와 같게 **구성원(대표 ∪ 돌보미)** 입니다 (docs/co-care.md §2).
+        ids = _member_pet_ids(app_user_id)
         return next(
-            (p.id for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
+            (
+                p.id
+                for p in store.pets
+                if p.id == pet_id and (p.app_user_id == app_user_id or p.id in ids)
+            ),
             None,
         )
 
@@ -1057,8 +1065,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         row.last_message_at = store.tick()
         row.agent_categories = categories
 
-    monkeypatch.setattr(chat_repo, "get_owned_pet_id", get_owned_pet_id)
-    monkeypatch.setattr(chat_repo, "lock_owned_pet", get_owned_pet_id)
+    monkeypatch.setattr(chat_repo, "get_accessible_pet_id", get_accessible_pet_id)
+    monkeypatch.setattr(chat_repo, "lock_accessible_pet", get_accessible_pet_id)
     monkeypatch.setattr(chat_repo, "get_owned_session", get_owned_session)
     monkeypatch.setattr(chat_repo, "get_owned_session_for_update", get_owned_session)
     monkeypatch.setattr(chat_repo, "get_draft", get_draft)

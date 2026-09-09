@@ -24,6 +24,8 @@ from daengs_backend.routers import care_event as care_router
 from daengs_backend.services import care_event as care_service
 
 OWNER = uuid.uuid4()
+#: 돌보미. 기록하고 보지만, 프로필을 고치거나 남의 기록을 지우지는 못합니다 (docs/co-care.md).
+CARER = uuid.uuid4()
 STRANGER = uuid.uuid4()
 SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -57,8 +59,12 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 
 
 @pytest.fixture
-def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
+def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
     cs = CareStore()
+
+    def _pet_owner(pet_id):
+        """그 아이의 대표. 삭제 판정이 "적은 사람 또는 대표" 라 대역도 pets 를 봐야 합니다."""
+        return next((p.app_user_id for p in store.pets if p.id == pet_id), None)
 
     def add(session, event):
         # 진짜 모델은 CareEvent 지만 대역이 같은 칸을 갖고 있어 그대로 담습니다.
@@ -72,9 +78,18 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
         cs.events.append(fake)
         return event
 
-    async def get_owned(session, app_user_id, event_id):
+    async def get_deletable(session, app_user_id, event_id):
+        # 진짜와 같게 **적은 사람 또는 그 아이의 대표** 입니다 (docs/co-care.md §2).
         return next(
-            (e for e in cs.events if e.id == event_id and e.actor_app_user_id == app_user_id),
+            (
+                e
+                for e in cs.events
+                if e.id == event_id
+                and (
+                    e.actor_app_user_id == app_user_id
+                    or _pet_owner(e.pet_id) == app_user_id
+                )
+            ),
             None,
         )
 
@@ -84,12 +99,11 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
             None,
         )
 
-    def _between(app_user_id, pet_id, start, end):
+    def _between(_app_user_id, pet_id, start, end):
+        # 진짜와 같게 **actor 로 안 거릅니다** — 기록의 주인은 강아지입니다 (docs/co-care.md §2).
         return [
             e for e in cs.events
-            if e.actor_app_user_id == app_user_id
-            and e.pet_id == pet_id
-            and start <= e.occurred_at < end
+            if e.pet_id == pet_id and start <= e.occurred_at < end
         ]
 
     async def list_between(session, app_user_id, pet_id, start, end):
@@ -111,7 +125,7 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
         return sum(1 for t in cs.walk_starts.get(pet_id, []) if start <= t < end)
 
     monkeypatch.setattr(care_repo, "add", add)
-    monkeypatch.setattr(care_repo, "get_owned", get_owned)
+    monkeypatch.setattr(care_repo, "get_deletable", get_deletable)
     monkeypatch.setattr(care_repo, "get_by_client_event", get_by_client_event)
     monkeypatch.setattr(care_repo, "list_between", list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
@@ -120,15 +134,30 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     return cs
 
 
-@pytest.fixture
-def client(store: Store, care: CareStore) -> TestClient:
-    """인증을 통과한 상태로 고정합니다. 토큰 검증은 test_app_auth 가 봅니다."""
+def _client_for(app_user_id: uuid.UUID) -> TestClient:
+    """그 사람으로 인증을 통과한 클라이언트. 토큰 검증은 test_app_auth 가 봅니다."""
     app = FastAPI()
     app.include_router(care_router.router)
     app.dependency_overrides[
         next(iter(CurrentAppUser.__metadata__)).dependency
-    ] = lambda: AppPrincipal(app_user_id=OWNER)
+    ] = lambda: AppPrincipal(app_user_id=app_user_id)
     return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def client(store: Store, care: CareStore) -> TestClient:
+    """대표로 부릅니다 — 이 파일의 기본 화자입니다."""
+    return _client_for(OWNER)
+
+
+@pytest.fixture
+def client_as(store: Store, care: CareStore):
+    """다른 사람으로 같은 API 를 부릅니다.
+
+    공동 돌봄의 규칙은 사람이 둘이라야 보입니다 — 돌보미가 적고 대표가 보는 것이
+    이 기능의 전부라서, 한 사람짜리 클라이언트로는 아무것도 증명되지 않습니다.
+    """
+    return _client_for
 
 
 @pytest.fixture
@@ -351,3 +380,69 @@ def test_공백뿐인_메모는_None_이다(client, pet, care) -> None:
     assert r.status_code == 201
     assert r.json()["note"] is None
     assert care.events[0].note is None
+
+
+# ── 공동 돌봄 (docs/co-care.md §2) ────────────────────────────────────
+
+
+def test_돌보미가_기록하고_대표가_본다(client, client_as, store, pet, care) -> None:
+    """이 기능의 전부입니다 — 아빠가 아침에 적은 밥이 내 오늘 요약에 보입니다.
+
+    요약이 사람이 아니라 **강아지** 기준이라야 보입니다. actor 로 거르면 각자 자기가
+    적은 것만 보게 되어, 두 사람이 같은 밥을 두 번 줍니다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    body = _body(pet.id, occurred_at="2026-09-09T08:12:00+09:00")
+    assert client_as(CARER).post("/app/care-events", json=body).status_code == 201
+
+    seen = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert seen["meal"] == 1
+    assert len(seen["events"]) == 1
+
+
+def test_돌보미가_아니면_기록도_조회도_404(client_as, pet, care) -> None:
+    """구성원 판정이 열린 것은 돌보미까지입니다 — 초대받지 않은 사람은 그대로 404 입니다."""
+    outsider = client_as(STRANGER)
+    assert outsider.post("/app/care-events", json=_body(pet.id)).status_code == 404
+    assert outsider.get("/app/care-events", params={"pet_id": str(pet.id)}).status_code == 404
+    assert care.events == []
+
+
+# ── 삭제 권한: 기록한 사람 또는 대표 ─────────────────────────────────
+
+
+def test_기록한_사람이_자기_기록을_지운다(client_as, store, pet, care) -> None:
+    store.pet_members.append((pet.id, CARER))
+    carer = client_as(CARER)
+    created = carer.post("/app/care-events", json=_body(pet.id)).json()
+    assert carer.delete(f"/app/care-events/{created['id']}").status_code == 204
+    assert care.events == []
+
+
+def test_대표는_돌보미의_오기록을_지운다(client, client_as, store, pet, care) -> None:
+    """돌봄 기록은 **강아지 것**입니다 (docs/co-care.md 결정 ①).
+
+    actor 로만 거르면 대표가 자기 아이의 잘못 적힌 줄을 영영 못 지웁니다 — 적은 사람이
+    나가면 그 줄은 아무도 못 건드립니다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    created = client_as(CARER).post("/app/care-events", json=_body(pet.id)).json()
+    assert client.delete(f"/app/care-events/{created['id']}").status_code == 204
+    assert care.events == []
+
+
+def test_다른_돌보미는_남의_기록을_못_지운다(client_as, store, pet, care) -> None:
+    """열어 준 것은 **적은 사람과 대표**까지입니다. 돌보미끼리는 서로의 기록을 못 지웁니다."""
+    other = uuid.uuid4()
+    store.pet_members.extend([(pet.id, CARER), (pet.id, other)])
+    created = client_as(CARER).post("/app/care-events", json=_body(pet.id)).json()
+    assert client_as(other).delete(f"/app/care-events/{created['id']}").status_code == 404
+    assert len(care.events) == 1
+
+
+def test_남남은_우리_아이의_기록을_못_지운다(client, client_as, pet, care) -> None:
+    created = client.post("/app/care-events", json=_body(pet.id)).json()
+    assert client_as(STRANGER).delete(f"/app/care-events/{created['id']}").status_code == 404
+    assert len(care.events) == 1

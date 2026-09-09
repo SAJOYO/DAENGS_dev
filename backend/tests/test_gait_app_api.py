@@ -256,9 +256,30 @@ def test_get_and_delete_unowned_are_404(client, monkeypatch):
         return None
 
     monkeypatch.setattr(gait_repo, "get_owned", none)
+    monkeypatch.setattr(gait_repo, "get_accessible", none)
     rid = uuid.uuid4()
     assert client.get(f"/app/gait/records/{rid}").status_code == 404
     assert client.delete(f"/app/gait/records/{rid}").status_code == 404
+
+
+def test_carer_reads_detail_but_cannot_delete(client, monkeypatch):
+    """돌보미는 보행 기록을 **본다.** 지우는 것은 대표만이다 (docs/co-care.md §2).
+
+    보행은 강아지의 건강 데이터라 돌보미도 봐야 하지만, 바닥 쿼리를 하나로 합치면
+    이 두 줄이 같은 답을 내고, 그 순간 돌보미가 남의 집 보행 영상을 지웁니다.
+    """
+    rec = _record(status="DONE", quality_status="ok", overlay_storage_key=None)
+
+    async def accessible(session, app_user_id, record_id):
+        return rec
+
+    async def not_owned(session, app_user_id, record_id, **kwargs):
+        return None
+
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
+    monkeypatch.setattr(gait_repo, "get_owned", not_owned)
+    assert client.get(f"/app/gait/records/{rec.id}").status_code == 200
+    assert client.delete(f"/app/gait/records/{rec.id}").status_code == 404
 
 
 def test_list_limit_bounds_and_stale_cursor(client, monkeypatch):
@@ -298,10 +319,10 @@ def test_detail_never_exposes_internal_feature_vector(client, monkeypatch):
         summary_for_ui={"hip": {"x_range": 1.0}},
     )
 
-    async def owned(session, app_user_id, record_id):
+    async def accessible(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
     body = client.get(f"/app/gait/records/{rec.id}").json()
     assert "internal_feature_vector" not in body
     assert not any("_dev_only" in k for k in body)
@@ -314,10 +335,10 @@ def test_detail_gives_overlay_url_when_overlay_exists(client, monkeypatch):
 
     rec = _record(status="DONE", quality_status="ok", overlay_storage_key="gait/p/overlay/o.mp4")
 
-    async def owned(session, app_user_id, record_id):
+    async def accessible(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
     monkeypatch.setattr(gait_router, "get_storage", lambda: FakeStorage())
     body = client.get(f"/app/gait/records/{rec.id}").json()
     assert body["has_overlay"] is True
@@ -328,10 +349,10 @@ def test_detail_overlay_url_is_null_without_overlay(client, monkeypatch):
     """overlay 가 없으면 null — 앱은 그때 기기의 원본을 재생합니다."""
     rec = _record(status="DONE", quality_status="ok", overlay_storage_key=None)
 
-    async def owned(session, app_user_id, record_id):
+    async def accessible(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
     body = client.get(f"/app/gait/records/{rec.id}").json()
     assert body["has_overlay"] is False
     assert body["overlay_url"] is None
@@ -344,10 +365,10 @@ def test_detail_overlay_url_null_when_storage_not_configured(client, monkeypatch
 
     rec = _record(status="DONE", quality_status="ok", overlay_storage_key="gait/p/overlay/o.mp4")
 
-    async def owned(session, app_user_id, record_id):
+    async def accessible(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
     monkeypatch.setattr(gait_router, "get_storage", lambda: NotConfiguredStorage())
     body = client.get(f"/app/gait/records/{rec.id}").json()
     assert body["has_overlay"] is True

@@ -8,23 +8,30 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import ChatSession, ChatSummary, ChatTurn, Pet
+from daengs_backend.repositories import pet as pet_repo
 
 
-async def get_owned_pet_id(
+async def get_accessible_pet_id(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> uuid.UUID | None:
+    """그 아이 얘기를 해도 되는가 — **구성원(대표 ∪ 돌보미)이면 됩니다** (docs/co-care.md §2).
+
+    대화 **세션**의 소유는 별개입니다 — `chat_sessions.app_user_id` 가 따로 걸려 있어
+    아빠의 대화가 나에게 새지 않습니다. 여기서 보는 것은 "그 아이를 돌보는 사람인가" 뿐입니다.
+    """
     return await session.scalar(
-        select(Pet.id).where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
+        select(Pet.id).where(Pet.id == pet_id, pet_repo._is_member(app_user_id))
     )
 
 
-async def lock_owned_pet(
+async def lock_accessible_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> uuid.UUID | None:
+    """같은 판정을 행 잠금까지. 동시에 두 세션을 여는 것을 `pets` 행으로 줄 세웁니다."""
     return await session.scalar(
         select(Pet.id)
-        .where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
-        .with_for_update()
+        .where(Pet.id == pet_id, pet_repo._is_member(app_user_id))
+        .with_for_update(of=Pet)
     )
 
 

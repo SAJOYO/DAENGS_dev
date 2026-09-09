@@ -73,9 +73,9 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
         raise EntryInvalid("기록 시각이 산책 범위 밖입니다.")
     if content.pet_id is not None and (
         content.pet_id not in walk.pet_ids
-        or not await repo.owns_pet(session, owner, content.pet_id)
+        or not await repo.pet_is_accessible(session, owner, content.pet_id)
     ):
-        raise EntryInvalid("그 산책에 동행한 내 강아지만 선택할 수 있습니다.")
+        raise EntryInvalid("그 산책에 동행한, 내가 돌보는 강아지만 선택할 수 있습니다.")
     previous = await repo.get_entry(session, walk_id, entry_id)
     if previous and previous.payload:
         for field in ("kind", "recorded_at", "location"):
@@ -170,7 +170,7 @@ def build_profile(spec, walks, rows):
 
 
 async def profile(session, owner, spec: RecordProfileQuery):
-    if not await repo.owns_pet(session, owner, spec.pet_id):
+    if not await repo.pet_is_accessible(session, owner, spec.pet_id):
         raise EntryNotFound
     walks = await repo.profile_walks(session, owner, spec)
     rows = await repo.entries(session, [w.id for w in walks])

@@ -262,10 +262,15 @@ async def confirm_photo(session: AsyncSession, app_user_id: uuid.UUID, pet_id: u
 async def photo_download_url(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> tuple[Pet, str]:
-    """사진을 내려받을 주소. 사진이 없으면 404 입니다."""
+    """사진을 내려받을 주소. 사진이 없으면 404 입니다.
+
+    **여기만 구성원 기준입니다** (docs/co-care.md §2) — 돌보미 화면에도 그 아이의 얼굴이
+    떠야 합니다. 사진을 **올리고 지우는** 쪽(`issue_photo_ticket`·`confirm_photo`·
+    `delete_photo`)은 `get_owned` 그대로입니다: 되돌릴 수 없는 것은 대표만 합니다.
+    """
     from daengs_backend.config import settings
 
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
     if pet.photo_storage_key is None:

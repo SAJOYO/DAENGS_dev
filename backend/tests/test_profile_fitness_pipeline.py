@@ -244,3 +244,14 @@ def test_pair_id_is_stable_and_distinct() -> None:
     ]
     ids = [p.pair_id for p in build_pairs([REACTIVE], PROFILES, cells)]
     assert len(ids) == len(set(ids))
+
+
+def test_real_capabilities_by_adapter_mode() -> None:
+    """모드마다 "진짜였던 능력" 이 다르다 — pairs · report 가 범위 밖 셀을 가르는 근거."""
+    from daengs_evals.profile_fitness.collect import real_capabilities
+
+    assert real_capabilities("fallback-only") == frozenset({"general"})
+    assert real_capabilities("life") == frozenset({"general", "life"})
+    assert real_capabilities("fake") == frozenset()
+    assert real_capabilities("real") is None
+    assert real_capabilities(None) is None  # 옛 meta 에 adapters 가 없으면 전부 진짜로 본다

@@ -183,6 +183,17 @@ def failure_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"scored_pairs": len(scored), **{f: counts.get(f, 0) for f in FAILURES}}
 
 
+def cells_adapter_mode(meta: Mapping[str, Any]) -> str | None:
+    """판정 meta 가 가리키는 셀 파일의 `adapters` 모드. 셀 파일이 없으면 None(전부 진짜로 본다)."""
+    from daengs_evals.profile_fitness.collect import cells_path, load_cells
+
+    label = meta.get("cells_label")
+    if not label or not cells_path(label).exists():
+        return None
+    cmeta, _ = load_cells(cells_path(label))
+    return cmeta.get("adapters")
+
+
 def drop_fake_adapter_pairs(
     meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -191,19 +202,20 @@ def drop_fake_adapter_pairs(
     `pairs.build_pairs` 가 이제 그런 쌍을 아예 안 만들지만, 그 전에 판정된 파일(pf_v1_1 의 2쌍)이
     있다. 리포트가 셀을 다시 읽어 걸러내므로 옛 판정 파일도 바르게 읽힌다.
     """
-    from daengs_evals.profile_fitness.collect import cells_path, load_cells
+    from daengs_evals.profile_fitness.collect import cells_path, load_cells, real_capabilities
 
     label = meta.get("cells_label")
     if not label or not cells_path(label).exists():
         return list(rows), []
     cmeta, cells = load_cells(cells_path(label))
-    if cmeta.get("adapters") != "fallback-only":
+    real_caps = real_capabilities(cmeta.get("adapters"))
+    if real_caps is None:
         return list(rows), []
     idx = {(c["question_id"], c["arm"], int(c["run"])): c for c in cells}
 
     def real(cell: Mapping[str, Any]) -> bool:
         return any(
-            r.get("status") == "OK" and r.get("capability") == "general"
+            r.get("status") == "OK" and r.get("capability") in real_caps
             for r in cell.get("results") or []
         )
 
@@ -309,6 +321,9 @@ def summarize(
     rows, dropped = drop_fake_adapter_pairs(meta, rows)
     if dropped:
         meta = {**meta, "skipped_pairs": [*(meta.get("skipped_pairs") or []), *dropped]}
+    from daengs_evals.profile_fitness.collect import real_capabilities
+
+    adapters = cells_adapter_mode(meta)
     rates = condition_rates(rows)
     ledger_in = sum(int(x.get("input_tokens") or 0) for x in ledgers)
     ledger_out = sum(int(x.get("output_tokens") or 0) for x in ledgers)
@@ -321,6 +336,9 @@ def summarize(
             "hygiene": meta.get("hygiene"),
         },
         "generation": meta.get("generation"),
+        # 어느 어댑터가 진짜였나 — "측정 대상이 아닌 것" 을 이걸로 쓴다. None 은 전부 진짜(real)
+        "adapters": adapters,
+        "real_capabilities": (None if (rc := real_capabilities(adapters)) is None else sorted(rc)),
         "anchor_record": meta.get("anchor_record"),
         "rates": rates,
         "inequality": inequality(rates, rows),
@@ -467,7 +485,15 @@ def render_markdown(s: Mapping[str, Any]) -> str:
         "## 측정 대상이 아닌 것",
         "",
         "- 훈련 능력 — `TrainingPayload = {question}`, 프로필이 구조적으로 안 간다 (계약 테스트로 못 박음)",
-        "- Life 경로 — 실서버(pgvector · Redis) 필요. v1 은 `general` 만",
+        *(
+            [
+                "- Life 경로 — 이 수집에선 가짜 어댑터(자리표시). 팀 DB(pgvector) 가 있어야 진짜로 돈다 — `--adapters life`"
+            ]
+            if s.get("real_capabilities") is not None and "life" not in s["real_capabilities"]
+            else [
+                "- Life 경로 — **진짜 RAG 로 쟀다** (팀 DB `documents`). 질환은 Life 계약상 안 받으므로 견종·나이만"
+            ]
+        ),
         "- 안전 상호작용(unsafe_escalation) — 축 B 의 `safe` 판정으로 따로 잰다",
         "",
     ]

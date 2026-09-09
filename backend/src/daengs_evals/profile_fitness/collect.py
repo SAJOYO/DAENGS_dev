@@ -177,6 +177,19 @@ def _metered_general_generate(
     return generate
 
 
+#: 모드별로 진짜였던 능력. `None` 은 전부 진짜(real). pairs · report 가 범위 밖 셀을 가를 때 본다.
+REAL_CAPABILITIES: dict[str, frozenset[str] | None] = {
+    "real": None,
+    "fake": frozenset(),
+    "fallback-only": frozenset({"general"}),
+    "life": frozenset({"general", "life"}),
+}
+
+
+def real_capabilities(mode: str | None) -> frozenset[str] | None:
+    return REAL_CAPABILITIES.get(mode or "real")
+
+
 def build_adapters(mode: str, general_meter: Meter) -> Mapping[CapabilityName, Any] | None:
     if mode == "real":
         return None
@@ -190,7 +203,16 @@ def build_adapters(mode: str, general_meter: Meter) -> Mapping[CapabilityName, A
             generate=_metered_general_generate(general_meter)
         )
         return adapters
-    raise ValueError(f"--adapters 는 real|fake|fallback-only 입니다: {mode!r}")
+    if mode == "life":
+        # fallback-only + 진짜 Life. Life 는 팀 DB(`documents` 9,844행 · pgvector)를 검색해 답하므로
+        # `.env` 의 POSTGRES_* 와 로컬 임베딩 모델(Qwen3-Embedding-0.6B)이 있어야 돈다 (2026-09-09 개통).
+        # Life 의 Gemini 토큰은 daengs_life 자체 클라이언트를 타서 여기 장부에 안 잡힌다 — meta 에 그렇게 적는다.
+        from daengs_backend.orchestration.adapters.life import LifeCapabilityAdapter
+
+        adapters = dict(build_adapters("fallback-only", general_meter))
+        adapters[CapabilityName.LIFE] = LifeCapabilityAdapter()
+        return adapters
+    raise ValueError(f"--adapters 는 real|fake|fallback-only|life 입니다: {mode!r}")
 
 
 def build_orchestrator(
@@ -535,7 +557,10 @@ def main(argv: list[str] | None = None) -> int:
         help="contrast|ablation|noise|all",
     )
     parser.add_argument(
-        "--adapters", choices=("real", "fake", "fallback-only"), default="fallback-only"
+        "--adapters",
+        choices=("real", "fake", "fallback-only", "life"),
+        default="fallback-only",
+        help="life = general + 진짜 Life RAG(팀 DB 필요), 나머지는 가짜",
     )
     parser.add_argument(
         "--flag", choices=("on", "off"), default="on", help="general 폴백. off 는 실험용"

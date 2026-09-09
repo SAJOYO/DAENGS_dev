@@ -69,8 +69,10 @@ BIAS_SAMPLE = 8
 
 
 def _real(meta: Mapping[str, Any]) -> frozenset[str] | None:
-    """이 수집에서 진짜였던 어댑터. fallback-only 면 general 뿐."""
-    return frozenset({"general"}) if meta.get("adapters") == "fallback-only" else None
+    """이 수집에서 진짜였던 어댑터. fallback-only 면 general 뿐, life 면 general+life."""
+    from daengs_evals.profile_fitness.collect import real_capabilities
+
+    return real_capabilities(meta.get("adapters"))
 
 
 def _generation_models() -> list[str]:

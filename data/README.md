@@ -206,6 +206,7 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 | 예방접종 — 권장 스케줄 | `policy` | `vaccination-schedule` | `guideline` |
 | 목줄·입마개·맹견 | `policy` | `leash-muzzle` | `law` |
 | 동반 이동 (철도/지하철/버스/항공/검역) | `travel` | `transport-rail` (2026-08-28 첫 사용) 등 | `official` |
+| 동반 이동 — 행동 안내(조문 없는 안내문, nias-pet) | `travel` | `travel-guide` (2026-09-08 첫 사용, #347) | `official` |
 | 지자체 지원사업 | `policy` | `subsidy` | `official` |
 | 지자체 지원 조례 (자치법규) | `policy` | `ordinance` | `law` |
 | 펫보험 | `policy` | `insurance` | `official` |

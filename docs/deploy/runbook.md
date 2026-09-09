@@ -33,6 +33,21 @@
 
 ## 1. VM 셋업
 
+> 🔴 **인스턴스를 새로 만든다면 `--scopes=cloud-platform` 을 빠뜨리지 마세요.**
+>
+> ```bash
+> gcloud compute instances create daengs --zone=asia-northeast3-c \
+>   --scopes=https://www.googleapis.com/auth/cloud-platform \
+>   ...나머지 옵션
+> ```
+>
+> **콘솔에서 만들면 기본 범위가 박힙니다.** 지금 VM 이 그렇게 만들어졌고, 그래서 관리자 콘솔의
+> 크롤 버튼이 IAM 을 맞게 줬는데도 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` 로 안 섰습니다 —
+> 범위는 **만들 때는 자유롭지만 나중에 바꾸려면 인스턴스를 멈춰야** 해서, 2026-09-09 에
+> 운영을 몇 분 내리고 고쳤습니다. 자세한 것은 `infra/gcp/README.md` 의 "IAM 만으로는 안 된다".
+>
+> 아래는 **그렇게 만든 VM 안에서** 하는 일입니다.
+
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER        # 재로그인 필요

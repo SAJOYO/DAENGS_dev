@@ -62,6 +62,10 @@ class NotAllowedError(Exception):
     """남을 내보낼 수 있는 것은 대표뿐입니다."""
 
 
+class NotAMemberError(Exception):
+    """승계 대상이 돌보미가 아닙니다. 승계와 초대를 한 번에 하지 않습니다."""
+
+
 async def create_invite(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> tuple[PetInvite, str]:
@@ -193,6 +197,42 @@ async def remove_member(
     await session.commit()
 
 
+async def transfer_owner(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    new_owner_id: uuid.UUID,
+) -> Pet:
+    """대표를 넘깁니다. **대표만.**
+
+    ⚠️ **순서가 중요합니다.** 옛 대표를 `pet_members` 에 먼저 넣으면 `pet_members_not_owner`
+    트리거가 터집니다 — 그 순간 옛 대표는 아직 `pets.app_user_id` 입니다. 그래서
+    ① `pets.app_user_id` 를 새 대표로 먼저 바꾸고, ② 새 대표의 돌보미 행을 지운 뒤,
+    ③ 그제서야 옛 대표를 돌보미로 넣습니다.
+    """
+    pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
+    if pet is None:
+        raise PetNotFoundError
+    if not await member_repo.is_member(session, pet_id, new_owner_id):
+        raise NotAMemberError
+
+    # 승계는 새 대표의 **소유**를 늘립니다. 미니룸 상한은 소유 기준이 아니지만
+    # (`count_accessible`), 이 검사만은 소유로 봅니다 — 방에 선 아이 수는 안 변하고
+    # (그 아이는 이미 새 대표의 방에 서 있습니다) 늘어나는 것은 소유뿐이기 때문입니다.
+    if await pet_repo.count_for_owner(session, new_owner_id) >= MAX_PETS_PER_USER:
+        raise PetLimitError
+
+    pet.app_user_id = new_owner_id                              # ① 먼저
+    await member_repo.remove(session, pet_id, new_owner_id)     # ②
+    member_repo.add(session, pet_id, app_user_id)               # ③ 이제 안전
+    await member_repo.delete_invites_for_pet(session, pet_id)   # ④ 옛 링크를 죽인다
+
+    # 옛 대표의 primary_pet_id 는 건드리지 않습니다 — 돌보미로 남아 계속 접근합니다.
+    await session.commit()
+    log.info("대표 승계 (pet=%s, %s → %s)", pet_id, app_user_id, new_owner_id)
+    return pet
+
+
 async def actor_label(
     session: AsyncSession, pet_id: uuid.UUID, app_user_id: uuid.UUID | None
 ) -> str | None:
@@ -220,6 +260,7 @@ __all__ = [
     "InviteLimitError",
     "InviteNotFoundError",
     "MemberLimitError",
+    "NotAMemberError",
     "NotAllowedError",
     "PetLimitError",
     "accept_invite",
@@ -227,4 +268,5 @@ __all__ = [
     "create_invite",
     "list_members",
     "remove_member",
+    "transfer_owner",
 ]

@@ -403,3 +403,58 @@ async def test_actor_label_for_non_member_is_none(store: Store, pet: FakePet):
     from daengs_backend.services import pet_member as member_service
 
     assert await member_service.actor_label(None, pet.id, STRANGER) is None
+
+
+# ── 승계 (docs/co-care.md §3) ─────────────────────────────────────────
+
+
+async def test_transfer_swaps_roles(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    r = client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
+    assert r.status_code == 200
+    assert pet.app_user_id == CARER
+    assert (pet.id, CARER) not in store.pet_members   # 새 대표는 돌보미가 아니다
+    assert (pet.id, OWNER) in store.pet_members       # 옛 대표는 돌보미로 남는다
+
+
+async def test_transfer_keeps_old_owner_primary_pet(store: Store, pet: FakePet):
+    """옛 대표는 돌보미로 남아 계속 접근한다 — primary 를 건드리면 안 된다."""
+    user = store.app_users[OWNER_KAKAO]
+    user.primary_pet_id = pet.id
+    store.pet_members.append((pet.id, CARER))
+    client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
+    assert user.primary_pet_id == pet.id
+
+
+async def test_transfer_requires_membership(store: Store, pet: FakePet):
+    r = client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(STRANGER)})
+    assert r.status_code == 409
+
+
+async def test_transfer_respects_new_owner_limit(store: Store, pet: FakePet):
+    """새 대표가 이미 **자기 소유** 5마리면 승계로 6마리가 된다.
+
+    ⚠️ 4마리가 아니라 5마리다 — 4마리면 `count_accessible` (돌보미로 참여 중인 `pet` 까지
+    포함해 5) 로 검사해도 우연히 같은 결과(거절)가 나와 어느 카운터를 쓰는지가 안 갈린다.
+    승계는 방에 서는 아이 수를 안 늘리므로(이미 `pet` 은 CARER 의 방에 서 있다) 검사 대상은
+    반드시 `count_for_owner` 여야 한다 — `count_accessible` 로 재면 승계 후에도 여전히
+    5(=MAX) 라 통과해 버려 상한이 뚫린다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    for i in range(5):
+        store.pets.append(FakePet(app_user_id=CARER, name=f"강아지{i}", breed="믹스"))
+    r = client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
+    assert r.status_code == 409
+
+
+async def test_transfer_kills_old_invites(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    _invite(store, pet)
+    client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
+    assert store.pet_invites == []
+
+
+async def test_carer_cannot_transfer(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    r = client_as(CARER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
+    assert r.status_code == 404

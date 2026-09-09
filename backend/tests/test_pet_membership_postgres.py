@@ -93,6 +93,58 @@ def test_owner_cannot_be_carer():
         conn.close()
 
 
+def test_succession_order_matters():
+    """`pet_members_not_owner` 는 실제로 순서에 민감하다 — 가짜 리포지토리로는 증명이 안 된다.
+
+    옛 대표를 새 대표보다 먼저 `pet_members` 에 넣으면(=서투른 순서), 그 순간에는 아직
+    `pets.app_user_id` 가 옛 대표라 트리거가 그대로 거절해야 한다. 올바른 순서
+    (`pets.app_user_id` 를 먼저 바꾸고 → 새 대표의 돌보미 행을 지우고 → 그제서야 옛 대표를
+    넣는다)로 하면 같은 삽입이 통과해야 한다. `services/pet_member.py` 의 `transfer_owner`
+    가 실제로 이 순서를 따르는지를 이 테스트가 지킨다.
+    """
+    conn = _postgres_or_skip()
+    try:
+        with conn.cursor() as cur:
+            owner, carer, pet = _seed(cur)
+
+            # ── 나쁜 순서: 옛 대표를 pet_members 에 먼저 넣는다 ──────────────
+            # 이 시점에 pets.app_user_id 는 아직 owner 이므로 트리거가 거절해야 한다.
+            with pytest.raises(psycopg.errors.RaiseException):
+                cur.execute(
+                    "INSERT INTO pet_members (pet_id, app_user_id) VALUES (%s, %s)",
+                    (pet, owner),
+                )
+        # 트리거가 터진 문장은 이 서브트랜잭션을 오염시키므로, 다음 절을 위해 되돌린다.
+        conn.rollback()
+
+        with conn.cursor() as cur:
+            owner, carer, pet = _seed(cur)
+
+            # ── 올바른 순서: pets.app_user_id 를 먼저 새 대표로 바꾼다 ───────
+            cur.execute("UPDATE pets SET app_user_id=%s WHERE id=%s", (carer, pet))
+            # 새 대표의 돌보미 행을 지운다 — 대표는 pet_members 에 없어야 한다.
+            cur.execute(
+                "DELETE FROM pet_members WHERE pet_id=%s AND app_user_id=%s", (pet, carer)
+            )
+            # 이제 옛 대표를 돌보미로 넣어도 트리거가 통과해야 한다.
+            cur.execute(
+                "INSERT INTO pet_members (pet_id, app_user_id) VALUES (%s, %s)",
+                (pet, owner),
+            )
+            cur.execute(
+                "SELECT app_user_id FROM pets WHERE id=%s", (pet,)
+            )
+            assert cur.fetchone()[0] == carer
+            cur.execute(
+                "SELECT count(*) FROM pet_members WHERE pet_id=%s AND app_user_id=%s",
+                (pet, owner),
+            )
+            assert cur.fetchone()[0] == 1, "옛 대표가 돌보미로 안 들어갔다"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def test_member_lookup_index_exists():
     """app_user_id 인덱스. 마이그레이션에서 누락되면 여기서 걸린다."""
     conn = _postgres_or_skip()

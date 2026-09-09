@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.schemas.pet_member import InviteAccept, InviteCreated, MemberListResponse
+from daengs_backend.schemas.pet_member import (
+    InviteAccept,
+    InviteCreated,
+    MemberListResponse,
+    OwnerTransfer,
+)
 from daengs_backend.services import pet_member as member_service
 from daengs_backend.services.pet import PetNotFoundError
 
@@ -102,6 +107,28 @@ async def remove_member(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "다른 보호자를 내보낼 수 있는 것은 대표뿐입니다."
         ) from None
+
+
+@router.post("/pets/{pet_id}/owner", status_code=status.HTTP_200_OK)
+async def transfer_owner(
+    pet_id: uuid.UUID, body: OwnerTransfer, user: CurrentAppUser, session: Session
+) -> dict:
+    """대표를 넘깁니다. 대상은 **이미 돌보미여야** 합니다."""
+    try:
+        pet = await member_service.transfer_owner(
+            session, user.app_user_id, pet_id, body.app_user_id
+        )
+    except PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except member_service.NotAMemberError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "먼저 초대해서 보호자로 참여시키세요."
+        ) from None
+    except member_service.PetLimitError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "넘겨받는 분이 등록할 수 있는 마릿수를 넘습니다."
+        ) from None
+    return {"pet_id": str(pet.id), "owner_app_user_id": str(pet.app_user_id)}
 
 
 __all__ = ["router"]

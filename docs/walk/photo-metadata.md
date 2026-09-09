@@ -68,8 +68,10 @@ pin revision을 분리하고 원본 pin의 정책·불확실성도 입력에 보
 v2 주변 정보 수집은 이미 머지된 Dev #371을 재사용한다. sidecar가 있으면 v2 정책으로
 조회하고 pin revision·원본 pin·위치 산출 방법도 맞춘다. 위치 없는 핀에 옛 원본 좌표를
 대입하지 않으며 v1 봉투를 v2용으로 재라벨하지 않는다. 핀이 없는 v2 메모도 구분한다.
-선택은 다음 단위여서 `selected_background_ids=[]`이고 움직임 계산도 아직 하지 않아
-`observations=[]`다. 원본 GPS의 출처는 추측하지 않고 `evidence_origin=unknown`으로 둔다.
+[스탬프 준비 단위](diary-stamps.md)에서는 검증된 현재 `known/partial` 봉투를
+`selected_background_ids`에 사용 가능한 입력으로 지정하고 조각 선택은 스탬프 코어가 한다.
+움직임 계산은 아직 하지 않아 `observations=[]`다. 원본 GPS의 출처는 추측하지 않고
+`evidence_origin=unknown`으로 둔다.
 출발 시 날씨를 모든 장면의 날씨로 확장하지 않는다.
 
 ## 적용과 검증

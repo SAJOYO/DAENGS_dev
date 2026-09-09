@@ -120,7 +120,9 @@ def photo_record(raw):
 def saved_background(envelope, record, walk_id):
     """Reuse the saved source version, including the v2 pin's identity and location basis."""
     schema = envelope["schema_version"]
-    expected_schema = contexts.PIN_POLICY if record.ref.pin_revision is not None else contexts.POLICY
+    expected_schema = (
+        contexts.PIN_POLICY if record.ref.pin_revision is not None else contexts.POLICY
+    )
     if schema != expected_schema:
         raise ValueError("unsupported_context_schema")
     target = envelope["target"]
@@ -139,7 +141,9 @@ def saved_background(envelope, record, walk_id):
         if target["pin_revision"] != record.ref.pin_revision:
             raise ValueError("stale_context_pin_revision")
         pin = Pin.model_validate(raw_pin) if raw_pin is not None else None
-        original = Pin.model_validate(record.pin_payload) if record.pin_payload is not None else None
+        original = (
+            Pin.model_validate(record.pin_payload) if record.pin_payload is not None else None
+        )
         if pin != original or (pin and pin.state == "provisional"):
             raise ValueError("stale_context_pin")
         if provenance["location_basis"] != (pin.method if pin else "original_location"):
@@ -227,7 +231,11 @@ def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelop
         if photo_manifest is not None
         else None,
         backgrounds=tuple(backgrounds),
-        selected_background_ids=(),
+        # Current, validated envelopes are eligible inputs. The stamp selector separately
+        # projects them and decides which pieces fit each scene's background slots.
+        selected_background_ids=tuple(
+            b.id for b in backgrounds if b.status in {"known", "partial"}
+        ),
         scene_policy_version="records-first-v1",
         writing_policy_version="diary-background-v1",
     )

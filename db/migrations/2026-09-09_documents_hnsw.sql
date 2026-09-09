@@ -12,18 +12,25 @@
 --    "없는 컬럼을 SELECT 해서 500 이 난다"를 막는 것이고, 이 장은 컬럼이 아니라 **비용**의
 --    문제라 방향이 반대다.)
 --
--- ⚠️ **`documents` 의 소유자는 `postgres` 다** (README 「표 일부는 postgres 소유다」).
--- `CREATE INDEX` 는 표 소유자만 할 수 있으므로 **`db-migrate.yml` 로는 적용되지 않는다** —
--- 그 워크플로는 `daengs` 로 붙는다. 서버 PC 에서 다음 중 하나로 적용하라:
+-- ⚠️ **적용 계정을 먼저 확인하라.** `CREATE INDEX` 는 표 소유자(또는 슈퍼유저)만 할 수 있다.
+-- 한 줄이면 갈린다 — 둘 중 하나만 맞으면 그냥 적용하면 된다:
+--
+--   SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE relname = 'documents';
+--   SELECT usesuper FROM pg_user WHERE usename = current_user;
+--
+-- 왜 확인부터인가 — `db/migrations/README.md` 의 「표 일부는 postgres 소유다」(2026-09-08 · #329)가
+-- *"`daengs` 는 슈퍼유저가 아니고 `documents`·`crawl_runs` 는 `postgres` 소유"* 라고 적어 두었다.
+-- **그런데 2026-09-09 에 사람은 `daengs` 도 슈퍼유저이고 여태 그 계정으로 해 왔다고 했다.**
+-- 둘 중 하나가 낡았고, 서버 DB 를 못 본 채로는 가릴 수 없어서 단정하지 않는다
+-- (그날 서버 PC 가 꺼져 있었다). 맞는 쪽을 확인했으면 **README 의 그 절을 같이 고쳐라.**
+--
+-- 슈퍼유저가 아니고 소유자도 아니라면 `db-migrate.yml`(= `$POSTGRES_USER` 로 붙는다)로는 안 되고,
+-- 서버 PC 에서 둘 중 하나로 간다:
 --
 --   docker exec -i pgvector psql -U postgres -d vectordb -f - < db/migrations/2026-09-09_documents_hnsw.sql
---
--- 또는 소유권을 먼저 옮기고(그 뒤로는 워크플로가 이 표를 다룰 수 있다):
---
 --   docker exec -i pgvector psql -U postgres -d vectordb -c "ALTER TABLE documents OWNER TO daengs;"
 --
--- GCP 는 다르다 — 그쪽 수퍼유저가 `daengs` 라 소유권 문제가 없을 수 있다. 적용 전에 확인하라:
---   SELECT relname, pg_get_userbyid(relowner) FROM pg_class WHERE relname = 'documents';
+-- GCP 는 사람이 프로젝트 소유자이고 SSH 로 들어간다 — 권한 문제가 없다 (2026-09-09 사람).
 --
 -- ⚠️ **`CONCURRENTLY` 를 안 쓴다.** 빌드 동안 표가 쓰기 잠금에 걸리지만, 이 표에 쓰는 것은
 -- 사람이 돌리는 `rag load` 와 GCP 잡(KST 04:00) 하나뿐이라 그 시간을 피하면 된다.

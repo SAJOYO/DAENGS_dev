@@ -35,6 +35,12 @@ async def source(session, owner, walk_id):
     walk = await walks.get_owned_for_update(session, owner, walk_id)
     if walk is None:
         raise StoryboardNotFound
+    from daengs_backend.services.walk_entry_v2 import EntryUpgradeRequired, guard_v1
+
+    try:
+        await guard_v1(session, [walk_id])
+    except EntryUpgradeRequired:
+        raise StoryboardConflict("v2 행동 핀의 장면 연결은 아직 지원하지 않습니다.") from None
     analysis = await repo.latest_analysis(session, walk_id)
     if walk.analysis_state != "derived" or analysis is None:
         raise StoryboardConflict("GPS 업로드와 산책 계산을 먼저 완료해 주세요.")

@@ -10,9 +10,22 @@ import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
+
+from daengs_backend.core.storage import LocalBridgeStorage
 from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
+from daengs_backend.repositories import app_user as app_user_repo
+from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
+from daengs_backend.services import vet_receipt
+from daengs_backend.services import vet_visit as vet_service
+from daengs_backend.services.vet_receipt import (
+    ReceiptExtraction,
+    ReceiptExtractionFailed,
+    ReceiptItem,
+)
 
 _SQL = Path(__file__).resolve().parents[2] / "db" / "init" / "25_vet_visits.sql"
 
@@ -314,3 +327,450 @@ async def test_expired_drafts_respects_limit_and_oldest_first():
     assert fresh not in got
     # 가장 오래된 것부터 지운다 — 순서가 아니라 상한을 시험하는 테스트가 놓치는 지점.
     assert got[0].created_at < got[-1].created_at
+
+
+# ---------------------------------------------------------------------------
+# services/vet_visit.py — 동의 분기 · 멱등 세 층 · 초안 청소
+# ---------------------------------------------------------------------------
+#
+# 리포지토리를 진짜 SQL 대역(`_FakeSession`)이 아니라 dict 기반 대역으로 갈아 끼운다
+# (`care_event.py`/`screening.py` 테스트와 같은 결) — 여기서 보고 싶은 것은 서비스의
+# 판단(동의·멱등·트랜잭션 경계)이고, 위쪽 리포지토리 테스트가 이미 쿼리 모양을 본다.
+# 저장소는 진짜 `LocalBridgeStorage`(임시 디렉터리)를 쓴다 — create-only·바이트 읽기가
+# 구현에 붙어 있는 성질이라 가짜로 바꾸면 보고 싶은 것이 안 보인다 (test_screening_records.py 주석).
+
+SVC_OWNER = uuid.uuid4()
+SVC_PET = uuid.uuid4()
+
+JPEG = "image/jpeg"
+
+_OK_EXTRACTION = ReceiptExtraction(
+    status="ok",
+    visited_on=date(2026, 9, 2),
+    total_krw=80000,
+    hospital_name="○○동물병원",
+    items=[ReceiptItem(name="초진료", amount_krw=80000)],
+    suggested_reason_code="skin",
+)
+
+
+def _unreadable_extract(_bytes, _content_type):
+    async def _inner():
+        return ReceiptExtraction(status="unreadable", unreadable_reason="blurry")
+
+    return _inner()
+
+
+def _raising_extract(exc):
+    def _fn(_bytes, _content_type):
+        async def _inner():
+            raise exc
+
+        return _inner()
+
+    return _fn
+
+
+def _counting_extract(calls, extraction=_OK_EXTRACTION):
+    def _fn(image_bytes, content_type):
+        async def _inner():
+            calls.append((image_bytes, content_type))
+            return extraction
+
+        return _inner()
+
+    return _fn
+
+
+class _NullSession:
+    """`vet_repo` 를 통째로 대역으로 갈아 끼웠으므로 세션 자신은 commit/rollback 만
+    필요하다."""
+
+    async def commit(self) -> None:
+        pass
+
+    async def rollback(self) -> None:
+        pass
+
+
+@pytest.fixture
+def svc_store(monkeypatch: pytest.MonkeyPatch):
+    drafts: dict[uuid.UUID, VetVisitDraft] = {}
+    visits: dict[uuid.UUID, VetVisit] = {}
+    pets: dict[uuid.UUID, object] = {SVC_PET: SimpleNamespace(id=SVC_PET, app_user_id=SVC_OWNER)}
+    app_users: dict[uuid.UUID, object] = {}
+
+    def add(_session, row):
+        if isinstance(row, VetVisitDraft):
+            if row.created_at is None:
+                row.created_at = datetime.now(UTC)
+            drafts[row.id] = row
+        else:
+            if row.id is None:
+                row.id = uuid.uuid4()
+            if row.created_at is None:
+                row.created_at = datetime.now(UTC)
+            visits[row.id] = row
+
+    async def delete_draft(_session, draft):
+        drafts.pop(draft.id, None)
+
+    async def get_draft_by_client_event(_session, app_user_id, client_event_id):
+        return next(
+            (
+                d
+                for d in drafts.values()
+                if d.app_user_id == app_user_id and d.client_event_id == client_event_id
+            ),
+            None,
+        )
+
+    async def get_draft_owned(_session, app_user_id, draft_id):
+        d = drafts.get(draft_id)
+        return d if d is not None and d.app_user_id == app_user_id else None
+
+    async def get_draft_by_sha(_session, app_user_id, sha256_hex):
+        matches = [
+            d
+            for d in drafts.values()
+            if d.app_user_id == app_user_id and d.receipt_sha256 == sha256_hex
+        ]
+        return max(matches, key=lambda d: d.created_at, default=None)
+
+    async def expired_drafts(_session, before, limit=50):
+        old = sorted((d for d in drafts.values() if d.created_at < before), key=lambda d: d.created_at)
+        return old[:limit]
+
+    async def find_duplicate(_session, app_user_id, pet_id, visited_on, total_krw):
+        return next(
+            (
+                v
+                for v in visits.values()
+                if v.app_user_id == app_user_id
+                and v.pet_id == pet_id
+                and v.visited_on == visited_on
+                and v.total_krw == total_krw
+            ),
+            None,
+        )
+
+    async def get_by_client_event(_session, app_user_id, client_event_id):
+        return next(
+            (
+                v
+                for v in visits.values()
+                if v.app_user_id == app_user_id and v.client_event_id == client_event_id
+            ),
+            None,
+        )
+
+    async def list_between(_session, app_user_id, pet_id, start, end):
+        matched = [
+            v
+            for v in visits.values()
+            if v.app_user_id == app_user_id and v.pet_id == pet_id and start <= v.visited_on <= end
+        ]
+        return sorted(matched, key=lambda v: v.visited_on, reverse=True)
+
+    async def get_owned_pet(_session, app_user_id, pet_id):
+        pet = pets.get(pet_id)
+        return pet if pet is not None and pet.app_user_id == app_user_id else None
+
+    async def get_app_user(_session, app_user_id):
+        return app_users.get(app_user_id)
+
+    monkeypatch.setattr(vet_repo, "add", add)
+    monkeypatch.setattr(vet_repo, "delete_draft", delete_draft)
+    monkeypatch.setattr(vet_repo, "get_draft_by_client_event", get_draft_by_client_event)
+    monkeypatch.setattr(vet_repo, "get_draft_owned", get_draft_owned)
+    monkeypatch.setattr(vet_repo, "get_draft_by_sha", get_draft_by_sha)
+    monkeypatch.setattr(vet_repo, "expired_drafts", expired_drafts)
+    monkeypatch.setattr(vet_repo, "find_duplicate", find_duplicate)
+    monkeypatch.setattr(vet_repo, "get_by_client_event", get_by_client_event)
+    monkeypatch.setattr(vet_repo, "list_between", list_between)
+    monkeypatch.setattr(pet_repo, "get_owned", get_owned_pet)
+    monkeypatch.setattr(app_user_repo, "get_by_id", get_app_user)
+
+    return SimpleNamespace(drafts=drafts, visits=visits, pets=pets, app_users=app_users)
+
+
+@pytest.fixture
+def svc_storage(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    s = LocalBridgeStorage(str(tmp_path), base_url="http://x")
+    monkeypatch.setattr(vet_service, "get_storage", lambda: s)
+    return s
+
+
+@pytest.fixture
+def svc_session():
+    return _NullSession()
+
+
+def _consent(store, *, at: datetime | None, version: str | None = "v1") -> None:
+    store.app_users[SVC_OWNER] = SimpleNamespace(ocr_consent_at=at, ocr_consent_version=version)
+
+
+async def _start(session, store, *, client_event_id=None):
+    body = vet_service.StartDraftRequest(
+        pet_id=SVC_PET, content_type=JPEG, client_event_id=client_event_id or uuid.uuid4()
+    )
+    return await vet_service.start_draft(session, SVC_OWNER, body)
+
+
+def _upload(storage: LocalBridgeStorage, draft: VetVisitDraft, data: bytes = b"receipt-bytes") -> None:
+    storage.write(draft.receipt_image_key, data)
+
+
+# ── 멱등 ① client_event_id ───────────────────────────────────────────
+
+
+async def test_second_tap_returns_existing_draft_without_new_ticket(svc_session, svc_store, svc_storage):
+    """얼어 보이는 화면에서 두 번 탭 — Gemini 도 저장소도 다시 안 간다."""
+    key = uuid.uuid4()
+    draft1, _ticket1, created1 = await _start(svc_session, svc_store, client_event_id=key)
+    draft2, _ticket2, created2 = await _start(svc_session, svc_store, client_event_id=key)
+    assert created1 is True and created2 is False
+    assert draft1.id == draft2.id
+    assert len(svc_store.drafts) == 1
+
+
+async def test_start_draft_rejects_pet_i_do_not_own(svc_session, svc_store, svc_storage):
+    body = vet_service.StartDraftRequest(
+        pet_id=uuid.uuid4(), content_type=JPEG, client_event_id=uuid.uuid4()
+    )
+    with pytest.raises(vet_service.VetVisitNotFoundError):
+        await vet_service.start_draft(svc_session, SVC_OWNER, body)
+
+
+# ── 초안 청소 ──────────────────────────────────────────────────────────
+
+
+async def test_start_draft_sweeps_expired(svc_session, svc_store, svc_storage):
+    """청소는 초안을 만들 때 같이 간다 (Beat 가 없다) — 요청당 최대 50건, 사진도 같이."""
+    now = datetime.now(UTC)
+    for i in range(60):
+        old = VetVisitDraft(
+            id=uuid.uuid4(),
+            app_user_id=SVC_OWNER,
+            pet_id=SVC_PET,
+            receipt_image_key=f"vet-receipts/{SVC_OWNER}/old-{i}/receipt.jpg",
+            client_event_id=uuid.uuid4(),
+            created_at=now - timedelta(hours=30 + i),
+        )
+        svc_storage.write(old.receipt_image_key, b"x")
+        svc_store.drafts[old.id] = old
+    await _start(svc_session, svc_store)
+    assert len(svc_store.drafts) == 11  # 60건 중 50건이 쓸리고 새 것 하나
+    # 지운 초안의 사진도 같이 지운다 — 가장 오래된 것(old-59)은 확실히 지워진다.
+    assert not svc_storage.local_path(f"vet-receipts/{SVC_OWNER}/old-59/receipt.jpg").exists()
+
+
+# ── 동의 분기 (extract 에서 갈린다) ────────────────────────────────────
+
+
+async def test_no_consent_drops_items_from_draft(svc_session, svc_store, svc_storage, monkeypatch):
+    """**동의 분기는 초안을 쓸 때다.** 미동의면 items 가 DB 에 안 앉는다."""
+    _consent(svc_store, at=None, version=None)
+    draft, _ticket, _created = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    result = await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert "items" not in draft.extracted
+    # 응답에는 그대로 실려 있다 — 화면은 손해를 안 본다.
+    assert result.extraction.items
+
+
+async def test_consent_keeps_items_in_draft(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _ticket, _created = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert draft.extracted["items"]
+
+
+# ── 멱등 ③ extracted_at ───────────────────────────────────────────────
+
+
+async def test_extract_twice_does_not_call_gemini_again(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _ticket, _created = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    calls: list = []
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract(calls))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert len(calls) == 1
+
+
+# ── 멱등 ② receipt_sha256 ─────────────────────────────────────────────
+
+
+async def test_same_photo_new_draft_skips_gemini(svc_session, svc_store, svc_storage, monkeypatch):
+    """앱이 재시작해 새 키로 같은 사진을 올린다 — 추출 **전에** sha256 으로 잡는다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft1, _t1, _c1 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft1, b"same-bytes")
+    calls: list = []
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract(calls))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft1.id)
+    assert len(calls) == 1
+
+    draft2, _t2, _c2 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft2, b"same-bytes")
+    result2 = await vet_service.extract_draft(svc_session, SVC_OWNER, draft2.id)
+    assert len(calls) == 1  # Gemini 재호출 없음
+    assert result2.status == "ok"
+    assert draft2.extracted_at is not None
+
+
+# ── 못 읽었을 때 — 500 이 아니다 ───────────────────────────────────────
+
+
+async def test_unreadable_extraction_is_not_an_error(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _unreadable_extract)
+    result = await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert result.status == "unreadable"
+    assert result.unreadable_reason == "blurry"
+
+
+async def test_gemini_failure_becomes_failed_not_500(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _raising_extract(ReceiptExtractionFailed("boom")))
+    result = await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert result.status == "failed"
+    assert draft.extracted_at is None  # 저장 안 함 — 다시 시도할 수 있다
+
+
+# ── possible_duplicate ─────────────────────────────────────────────────
+
+
+async def test_possible_duplicate_true_when_confirmed_match_exists(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    existing = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 9, 2), total_krw=80000,
+        reason_code="skin", client_event_id=uuid.uuid4(),
+    )
+    svc_store.visits[uuid.uuid4()] = existing
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    result = await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    assert result.possible_duplicate is True
+
+
+# ── confirm — items 는 초안에서만 ───────────────────────────────────────
+
+
+def _confirm_body(**kw) -> "vet_service.ConfirmDraftRequest":
+    defaults = {
+        "client_event_id": uuid.uuid4(),
+        "reason_code": "cardiac",
+        "visited_on": date(2026, 9, 2),
+        "total_krw": 80000,
+    }
+    defaults.update(kw)
+    return vet_service.ConfirmDraftRequest(**defaults)
+
+
+async def test_confirm_reads_items_from_draft_not_request(svc_session, svc_store, svc_storage, monkeypatch):
+    """요청 본문의 items 를 믿으면 앱이 동의 분기를 우회한다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    stored_items = draft.extracted["items"]
+
+    body = _confirm_body(items=[{"name": "주입", "amount_krw": 1}])
+    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert visit.raw_ocr_items == stored_items
+    assert visit.raw_ocr_items != body.items
+
+
+async def test_confirm_without_consent_stores_empty_items(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=None, version=None)
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+
+    body = _confirm_body()
+    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert visit.raw_ocr_items == []
+
+
+async def test_confirm_records_suggested_code_for_comparison(svc_session, svc_store, svc_storage, monkeypatch):
+    """제안과 확정을 둘 다 남겨야 "받아들였나 고쳤나" 가 나온다 (label_source 없는 이유)."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+
+    body = _confirm_body(reason_code="cardiac")
+    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert visit.suggested_reason_code == "skin"
+    assert visit.reason_code == "cardiac"
+
+
+async def test_confirm_deletes_draft_but_keeps_the_photo(svc_session, svc_store, svc_storage, monkeypatch):
+    """확정돼도 사진 키가 안 바뀐다 — 초안 행만 지우고 객체는 그대로 물려준다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    key = draft.receipt_image_key
+
+    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, _confirm_body())
+    assert draft.id not in svc_store.drafts
+    assert visit.receipt_image_key == key
+    assert svc_storage.local_path(key).exists()
+
+
+async def test_confirm_is_idempotent_on_its_own_client_event_id(svc_session, svc_store, svc_storage, monkeypatch):
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+
+    body = _confirm_body()
+    first = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert draft.id not in svc_store.drafts
+    # 두 번째는 draft 가 이미 지워졌어도 vet_visits 자신의 멱등키로 잡힌다 — 404 가 아니다.
+    second = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert second is first
+    assert len(svc_store.visits) == 1
+
+
+# ── reason_options ───────────────────────────────────────────────────
+
+
+async def test_reason_options_puts_recent_first_then_the_rest(svc_session, svc_store):
+    svc_store.visits[uuid.uuid4()] = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 8, 1), total_krw=1000,
+        reason_code="skin", client_event_id=uuid.uuid4(),
+    )
+    svc_store.visits[uuid.uuid4()] = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 9, 1), total_krw=1000,
+        reason_code="cardiac", client_event_id=uuid.uuid4(),
+    )
+    options = await vet_service.reason_options(svc_session, SVC_OWNER, SVC_PET)
+    assert options[0] == "cardiac"  # 가장 최근
+    assert options[1] == "skin"
+    assert set(options) == set(VET_REASON_CODES)
+    assert len(options) == len(VET_REASON_CODES)
+
+
+async def test_reason_options_rejects_pet_i_do_not_own(svc_session, svc_store):
+    with pytest.raises(vet_service.VetVisitNotFoundError):
+        await vet_service.reason_options(svc_session, SVC_OWNER, uuid.uuid4())

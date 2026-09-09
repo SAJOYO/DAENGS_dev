@@ -103,7 +103,16 @@ class ReceiptExtraction(BaseModel):
             return self
         if self.unreadable_reason is None:
             raise ValueError("an unreadable extraction needs a reason")
-        if self.total_krw is not None or self.items or self.hospital_name:
+        if (
+            self.total_krw is not None
+            or self.items
+            or self.hospital_name
+            or self.hospital_address
+            or self.hospital_phone
+            or self.visited_on is not None
+            or self.suggested_reason_code is not None
+            or self.is_emergency
+        ):
             raise ValueError("an unreadable extraction carries nothing else")
         return self
 

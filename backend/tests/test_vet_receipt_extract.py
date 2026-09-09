@@ -56,6 +56,22 @@ def test_unreadable_requires_reason_and_empty_rest():
         ReceiptExtraction(status="unreadable", unreadable_reason="blurry", total_krw=1000)
 
 
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"hospital_address": "서울시 강남구"},
+        {"hospital_phone": "02-123-4567"},
+        {"visited_on": "2026-09-01"},
+        {"suggested_reason_code": "skin"},
+        {"is_emergency": True},
+    ],
+)
+def test_unreadable_rejects_every_other_field(extra):
+    """이전 검증은 total_krw · items · hospital_name 만 봤다 — 나머지 칸도 비어야 한다."""
+    with pytest.raises(ValidationError):
+        ReceiptExtraction(status="unreadable", unreadable_reason="blurry", **extra)
+
+
 def test_phone_rejects_card_shaped_value():
     """네 묶음은 전화번호가 아니다 — 카드번호가 이 칸에 앉는 것을 막는 그물."""
     with pytest.raises(ValidationError):

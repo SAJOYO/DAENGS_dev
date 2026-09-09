@@ -548,6 +548,7 @@ services:
   # 이유는 confirm이 VISION_PENDING을 발행한 뒤 이 소비자가 없으면 영원히 대기하기
   # 때문입니다. 모델 가중치는 없고 base backend 의 google-genai만 사용합니다.
   territory-vision-worker:
+    init: true
     build:
       context: ./docker/uv
     image: uv:1

@@ -415,7 +415,11 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
 
         record.status = "DONE"
         record.quality_status = result["quality"].get("status")
-        record.quality_tier = result["quality"].get("quality_tier")
+        # ⚠️ 컬럼 CHECK(good/ok/low)는 엔진 어휘와 같아야 합니다. 2026-09-09 까지 CHECK 가
+        #    good/low 뿐이라 20~80 구간(`ok`)의 DONE 커밋이 CheckViolation 으로 죽고 행이
+        #    PROCESSING 으로 남았습니다(47.mp4 두 번 연속). CHECK 를 넓혀 값은 그대로 넣고,
+        #    `_db_quality_tier` 는 CHECK 밖의 값만 None 으로 거릅니다(예외를 내면 다시 좀비).
+        record.quality_tier = _db_quality_tier(result["quality"].get("quality_tier"))
         record.quality = result["quality"]
         record.summary_for_ui = (result.get("features") or {}).get("summary_for_ui")
         record.internal_feature_vector = (result.get("features") or {}).get(
@@ -427,7 +431,7 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
         record.failure_reason = None
         try:
             await session.commit()
-        except Exception:
+        except Exception as exc:
             await session.rollback()
             if overlay_key is not None:
                 try:
@@ -437,7 +441,40 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
                         "gait.analyze: DB commit 실패 뒤 overlay 정리 실패 key=%s",
                         overlay_key,
                     )
+            # ⚠️ 여기서 그냥 raise 만 하면 행이 **PROCESSING 으로 영원히 남습니다** — DONE 전이가
+            #    방금 롤백됐고, acks_late 재전달은 `status != "UPLOADED"` 라 건너뛰기 때문입니다.
+            #    2026-09-09 에 CheckViolation(quality_tier) 으로 실제로 두 건이 그렇게 갇혔습니다.
+            #    실패는 실패로 적어야 앱이 "다시 시도" 를 띄우고 사람이 원인을 봅니다.
+            await _mark_failed_after_commit_error(session, record_id, exc)
             raise
+
+
+async def _mark_failed_after_commit_error(session, record_id: uuid.UUID, exc: Exception) -> None:
+    """DONE 커밋이 실패한 행을 **새 트랜잭션**에서 FAILED 로 닫습니다.
+
+    best-effort 입니다 — 여기서 또 실패하면 로그만 남기고 원래 예외를 살립니다. 원인이
+    DB 자체(연결 끊김 등)면 이것도 안 되지만, 제약 위반처럼 **값 문제**면 이 UPDATE 는
+    (그 값을 안 쓰므로) 통과해서 좀비를 막습니다.
+    """
+    from sqlalchemy import select
+
+    try:
+        row = (
+            await session.execute(
+                select(GaitRecord)
+                .where(GaitRecord.id == record_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if row is None or row.status != "PROCESSING":
+            return
+        row.status = "FAILED"
+        row.failure_reason = f"결과 저장 실패: {str(exc)[:1900]}"
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        log.exception("gait.analyze: 커밋 실패 뒤 FAILED 표시도 실패 record_id=%s", record_id)
 
 
 def _analyze_from_storage(storage_key: str) -> dict:
@@ -491,6 +528,37 @@ def _analyze_from_storage(storage_key: str) -> dict:
             overlay_data = Path(overlay_path).read_bytes()
         record["_overlay_bytes"] = overlay_data
         return record
+
+
+#: `gait_records.quality_tier` 의 CHECK 가 허용하는 값 (db/init/07_gait_records.sql).
+#: 엔진(legacy `daengs_gait/quality_gate.py` · v4 `gait_v4/quality.py`)이 내는 어휘와
+#: **같아야 합니다** — `tests/test_gait_quality_tier_contract.py` 가 두 엔진 소스와 SQL 을
+#: 실제로 읽어 이 상수까지 대조합니다.
+DB_QUALITY_TIERS = frozenset({"good", "ok", "low"})
+
+
+def _db_quality_tier(raw: str | None) -> str | None:
+    """엔진이 낸 tier 를 **그대로** 컬럼에 넣되, CHECK 밖의 값만 걸러냅니다.
+
+    두 엔진 다 유효 프레임 수(`n_frames_gait_usable`)로 세 단계를 냅니다:
+
+        good  81 이상      quality_note 없음
+        ok    20 ~ 80      quality_note 붙음 (80 미만이라 참고용)
+        low    4 ~ 19      quality_note 붙음
+        (4 미만은 status=unavailable, tier 없음)
+
+    앱(`GaitQualityTier`)도 같은 세 값을 각각 다른 문장·색으로 그리므로 **변환하지 않습니다.**
+    한때 `ok → low` 로 접는 안이 있었는데, 그건 앱이 만든 "보통" 문장을 못 쓰게 하는
+    격하라 버렸습니다 (2026-09-09).
+
+    모르는 값이 오면 None 으로 둡니다 — 컬럼이 nullable 이라 CHECK 를 지나고, 앱은
+    `effectiveTier` 로 보정합니다. 여기서 예외를 내면 DONE 커밋이 죽어 다시 좀비가 됩니다.
+    """
+    if raw in DB_QUALITY_TIERS:
+        return raw
+    if raw is not None:
+        log.warning("gait.analyze: CHECK 밖의 quality_tier=%r → None 으로 저장", raw)
+    return None
 
 
 # ── walk_demo v4 엔진 (#304) ─────────────────────────────────────────────

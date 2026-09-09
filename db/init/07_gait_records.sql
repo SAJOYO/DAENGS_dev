@@ -31,8 +31,12 @@ CREATE TABLE IF NOT EXISTS gait_records (
     -- 분석해 보니 쓸 만한가. DONE 일 때만 채워진다.
     quality_status VARCHAR(20)
         CHECK (quality_status IN ('ok','unavailable')),
+    -- ⚠ 엔진이 내는 어휘와 **같아야 한다** — legacy(daengs_gait/quality_gate.py)·v4(gait_v4/quality.py)
+    --   둘 다 good(>80) / ok(20~80) / low(<20) 세 단계다. 처음(D-043)에 good/low 둘만 적어서
+    --   20~80 구간 영상의 DONE 커밋이 CheckViolation 으로 죽고 행이 PROCESSING 으로 남았다
+    --   (2026-09-09). tests/test_gait_quality_tier_contract.py 가 두 엔진 소스와 이 CHECK 를 대조한다.
     quality_tier VARCHAR(10)
-        CHECK (quality_tier IN ('good','low')),
+        CHECK (quality_tier IN ('good','ok','low')),
 
     -- 클라우드 저장소 키 (#78). 원본은 presign 발급 때, overlay 는 분석 뒤에 채워진다.
     original_storage_key TEXT,

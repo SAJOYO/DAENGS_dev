@@ -217,6 +217,28 @@ CHECKS = (
             'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_walk_id_entry_id_fkey',
             'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_job_id_fkey',
          ]),
+        # gait_records.quality_tier CHECK 를 good/low → good/ok/low 로. 픽스처는 **9/2 의 옛 표**
+        # 그대로(prerequisites 로 그 마이그레이션 텍스트를 재사용) — 그래야 이 마이그레이션이
+        # 실제로 하는 일(옛 제약을 떼고 새 제약을 거는 것)을 그대로 밟는다.
+        ('2026-09-09', 'gait_quality_tier_ok',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-02_gait_records'),
+         'gait_records', [
+            # 제약을 통째로 잃는 변조.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check',
+            # **사고 이전으로 되돌리는 변조 — 이 항목의 이유다.** 옛 verify(9/2)는 good·low
+            # "포함" 검사라 이걸 못 잡는다. 20~80 구간 영상이 다시 PROCESSING 좀비가 된다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','low'))",
+            # 이름만 같고 값이 하나 빠진 변조(low 를 잃음).
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok'))",
+            # 검증 안 된(NOT VALID) 제약은 "있어도 없는 것" — convalidated 를 본다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok','low')) NOT VALID",
+        ]),
         ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
          + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
          'territory_challenges', [

@@ -49,8 +49,10 @@ class GaitRecord(Base):
             "quality_status IN ('ok','unavailable')",
             name="gait_records_quality_status_check",
         ),
+        # ⚠ db/init/07_gait_records.sql 과 같아야 한다. 엔진(legacy·v4)이 내는 세 단계
+        #   good/ok/low 전부 — tests/test_gait_quality_tier_contract.py 가 SQL·엔진과 대조한다.
         CheckConstraint(
-            "quality_tier IN ('good','low')",
+            "quality_tier IN ('good','ok','low')",
             name="gait_records_quality_tier_check",
         ),
         Index("idx_gait_records_pet_created", "pet_id", "created_at"),

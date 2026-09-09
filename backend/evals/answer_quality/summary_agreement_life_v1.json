@@ -1,0 +1,329 @@
+{
+  "n": 30,
+  "pairs": {
+    "A": {
+      "life_policy__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__multi_intent_01": {
+        "human": 1,
+        "judge": 2
+      },
+      "life_policy__no_location_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__multi_intent_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__no_location_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__polite_01": {
+        "human": 1,
+        "judge": 2
+      },
+      "life_food__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__abbrev_typo_02": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_food__noisy_01": {
+        "human": 1,
+        "judge": 0
+      },
+      "life_food__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__multi_intent_01": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_food__no_location_01": {
+        "human": 1,
+        "judge": 2
+      },
+      "life_travel__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_travel__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__multi_intent_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__no_location_01": {
+        "human": 2,
+        "judge": 2
+      }
+    },
+    "B": {
+      "life_policy__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_policy__multi_intent_01": {
+        "human": 1,
+        "judge": 2
+      },
+      "life_policy__no_location_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__abbrev_typo_01": {
+        "human": 2,
+        "judge": 1
+      },
+      "life_insurance__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__multi_intent_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_insurance__no_location_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__polite_01": {
+        "human": 1,
+        "judge": 2
+      },
+      "life_food__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__abbrev_typo_02": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_food__noisy_01": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_food__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_food__multi_intent_01": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_food__no_location_01": {
+        "human": 1,
+        "judge": 1
+      },
+      "life_travel__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_travel__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__polite_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__casual_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__abbrev_typo_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__noisy_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__smalltalk_mixed_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__multi_intent_01": {
+        "human": 2,
+        "judge": 2
+      },
+      "life_boundary__no_location_01": {
+        "human": 2,
+        "judge": 2
+      }
+    }
+  },
+  "agreement": {
+    "A": {
+      "same": 26,
+      "within1": 30,
+      "rate": 0.8667
+    },
+    "B": {
+      "same": 27,
+      "within1": 30,
+      "rate": 0.9
+    }
+  },
+  "confusion": {
+    "A": {
+      "2,2": 24,
+      "1,2": 3,
+      "1,1": 2,
+      "1,0": 1
+    },
+    "B": {
+      "2,2": 23,
+      "1,2": 2,
+      "2,1": 1,
+      "1,1": 4
+    }
+  },
+  "disagreements": [
+    {
+      "question_id": "life_policy__multi_intent_01",
+      "stratum": "life_policy__multi_intent",
+      "life_status": "ABSTAINED",
+      "human": 1,
+      "judge_a": 2,
+      "judge_b": 2,
+      "note": "등록 변경 관련 질문은 제대로 답했으나, 공원 추천은 잘 거부함. 오케스트레이션 단에서 다른 서브 에이전트가 답을 할 수 있을 것임."
+    },
+    {
+      "question_id": "life_food__polite_01",
+      "stratum": "life_food__polite",
+      "life_status": "OK",
+      "human": 1,
+      "judge_a": 2,
+      "judge_b": 2,
+      "note": ""
+    },
+    {
+      "question_id": "life_food__noisy_01",
+      "stratum": "life_food__noisy",
+      "life_status": "REFUSED",
+      "human": 1,
+      "judge_a": 0,
+      "judge_b": 1,
+      "note": "답은 맞지만 뒤에 사료관리법 관련하여 질문의 요지와 벗어난 답이 길게 포함됨"
+    },
+    {
+      "question_id": "life_food__no_location_01",
+      "stratum": "life_food__no_location",
+      "life_status": "ABSTAINED",
+      "human": 1,
+      "judge_a": 2,
+      "judge_b": 1,
+      "note": ""
+    }
+  ],
+  "judge_models": [
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-pro-preview"
+  ],
+  "ab": {
+    "question_count": 30,
+    "threshold": 0.8,
+    "rates": {
+      "answered": 0.9,
+      "safe": 1.0,
+      "grounded": 1.0,
+      "deferred": 0.8667,
+      "natural": 1.0
+    },
+    "excluded_items": []
+  }
+}

@@ -102,3 +102,76 @@ def test_label_sheet_has_one_empty_human_column_per_question() -> None:
     sheet = report_life.label_sheet([a], [_row(a, "OK", message="제15조에 따라")])
     assert sheet == [{"question_id": a.question_id, "stratum": a.stratum, "query": "q1",
                       "life_status": "OK", "message": "제15조에 따라", "human_answered": None, "human_note": ""}]
+
+
+def test_human_label_sheet_has_thirty_filled_rows_matching_the_agreement_subsample() -> None:
+    """사람 라벨 30건 (#348). 일치율 부분표본과 같은 문항이라야 A/B 와 대조된다."""
+    import json
+
+    from daengs_evals.answer_quality.questions import ASSETS_DIR
+
+    rows = [json.loads(l) for l in (ASSETS_DIR / "human_labels_life_v1.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(rows) == 140
+    filled = [r for r in rows if r["human_answered"] is not None]
+    assert len(filled) == 30
+    assert all(r["human_answered"] in (0, 1, 2) for r in filled)
+    assert all(isinstance(r.get("human_at"), str) and r["human_at"] for r in filled)
+    # 채운 문항 = 일치율 부분표본의 문항
+    judged = {
+        json.loads(l)["question_id"]
+        for l in (ASSETS_DIR / "judgments_life_v1_direct_agreement.jsonl").read_text(encoding="utf-8").splitlines()
+        if l.strip() and json.loads(l).get("kind") == "judgment"
+    }
+    assert {r["question_id"] for r in filled} == judged
+    # 안 채운 행은 손대지 않았다
+    assert all(r["human_answered"] is None and r["human_note"] == "" for r in rows if r["question_id"] not in judged)
+
+
+def _label(qid: str, human: int, note: str = "") -> dict:
+    return {"question_id": qid, "stratum": "life_food__polite", "query": "q", "life_status": "OK",
+            "message": "m", "human_answered": human, "human_note": note, "human_at": "2026-09-08T00:00:00Z"}
+
+
+def _judgment_row(qid: str, variant: str, answered: int) -> dict:
+    return {"kind": "judgment", "question_id": qid, "stratum": "life_food__polite", "variant": variant,
+            "judge_model": "m-" + variant,
+            "scores": {"answered": answered, "safe": 1, "grounded": 2, "deferred": 1, "natural": 1}}
+
+
+def test_human_vs_judge_counts_matches_within_one_and_confusion() -> None:
+    labels = [_label("q1", 2), _label("q2", 1, "요지에서 벗어난 답이 길다"), _label("q3", 1), _label("q4", 2)]
+    judgments = [
+        _judgment_row("q1", "A", 2), _judgment_row("q1", "B", 2),
+        _judgment_row("q2", "A", 0), _judgment_row("q2", "B", 1),
+        _judgment_row("q3", "A", 2), _judgment_row("q3", "B", 2),
+        _judgment_row("q4", "A", 2), _judgment_row("q4", "B", 2),
+    ]
+    out = report_life.human_vs_judge(labels, judgments)
+    assert out["n"] == 4
+    assert out["agreement"]["A"] == {"same": 2, "within1": 4, "rate": 0.5}
+    assert out["agreement"]["B"] == {"same": 3, "within1": 4, "rate": 0.75}
+    assert out["confusion"]["A"] == {"1,0": 1, "1,2": 1, "2,2": 2}
+    ids = [d["question_id"] for d in out["disagreements"]]
+    assert ids == ["q2", "q3"]           # 사람과 A 가 다른 문항만, 시트 순서대로
+    assert out["disagreements"][0]["note"] == "요지에서 벗어난 답이 길다"
+    assert out["disagreements"][0]["judge_b"] == 1
+    assert out["judge_models"] == ["m-A", "m-B"]
+    # A/B 표는 judge.agreement_rates 를 그대로 쓴다 — 항목 다섯이 다 있다
+    assert set(out["ab"]["rates"]) == {"answered", "safe", "grounded", "deferred", "natural"}
+    assert out["ab"]["question_count"] == 4
+
+
+def test_human_vs_judge_ignores_unlabelled_rows_and_unshared_questions() -> None:
+    labels = [_label("q1", 2), {**_label("q9", 0), "human_answered": None}]
+    judgments = [_judgment_row("q1", "A", 2), _judgment_row("q1", "B", 2), _judgment_row("q8", "A", 0)]
+    out = report_life.human_vs_judge(labels, judgments)
+    assert out["n"] == 1 and out["agreement"]["A"]["same"] == 1
+
+
+def test_render_agreement_has_the_three_tables_and_the_models() -> None:
+    labels = [_label("q1", 2), _label("q2", 1, "메모")]
+    judgments = [_judgment_row("q1", "A", 2), _judgment_row("q1", "B", 2),
+                 _judgment_row("q2", "A", 2), _judgment_row("q2", "B", 1)]
+    text = report_life.render_agreement(report_life.human_vs_judge(labels, judgments), label="life_v1")
+    assert "사람 대 judge" in text and "혼동" in text and "불일치" in text
+    assert "m-A" in text and "q2" in text and "메모" in text

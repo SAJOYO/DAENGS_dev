@@ -42,6 +42,8 @@ class DiaryPlan(DiaryContract):
     format: Literal["walk-diary-plan-v1"] = "walk-diary-plan-v1"
     input_revision: Digest
     target_scene_count: int = Field(ge=1, le=50)
+    # The domain records all slot/separation parameters, including unused ones, for replay.
+    preparation_policy: dict[str, JsonValue] | None = None
     scenes: tuple[SceneStamp, ...] = Field(max_length=600)
 
     def revision(self) -> str:

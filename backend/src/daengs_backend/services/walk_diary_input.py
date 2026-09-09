@@ -6,6 +6,7 @@ snapshot as proof of ownership.
 """
 
 from dataclasses import dataclass
+from uuid import UUID
 
 from daengs_backend.config import settings
 from daengs_backend.repositories import walk_entry as entries
@@ -37,6 +38,31 @@ class InputAssembly:
 
 
 def entry_anchor(event_at, location, raw_pin=None):
+    if raw_pin is not None and raw_pin.get("policy_version") == "legacy-v1":
+        # v2 content edits preserve this server-created v1 sidecar without source refs.
+        # Its "observed" label does not turn the old sample into an observation at tap time.
+        anchor = entry_anchor(event_at, location)
+        if anchor.point is None:
+            raise ValueError("legacy pin requires its original location")
+        at = anchor.event_at.isoformat().replace("+00:00", "Z")
+        expected = {
+            "resolution_id": str(UUID(raw_pin["resolution_id"])),
+            "state": "resolved",
+            "method": "observed",
+            "target_at": at,
+            "point": anchor.point.model_dump(),
+            "computed_at": at,
+            "resolve_by": at,
+            "policy_version": "legacy-v1",
+            "algorithm_version": "legacy-v1",
+            "source_refs": [],
+            "uncertainty_m": None,
+            "uncertainty_basis": "unknown",
+            "reason": "direct_fix",
+        }
+        if raw_pin != expected:
+            raise ValueError("legacy pin differs from its stored v1 origin")
+        return anchor
     if raw_pin is not None:
         pin = Pin.model_validate(raw_pin)
         source_fixes = pin.model_dump(mode="json")["source_refs"]
@@ -81,6 +107,12 @@ def entry_record(row, sidecar=None):
     if payload is None:
         return UserRecord(ref=ref, deleted=True, content=None, anchor=None)
     raw_pin = sidecar.payload if sidecar else None
+    if (
+        raw_pin
+        and raw_pin.get("policy_version") == "legacy-v1"
+        and (sidecar.pin_revision != 0 or raw_pin.get("resolution_id") != str(row.id))
+    ):
+        raise ValueError("legacy pin differs from its original record")
     anchor = entry_anchor(payload["recorded_at"], payload.get("location"), raw_pin)
     content = (
         Behavior(
@@ -117,10 +149,18 @@ def photo_record(raw):
     )
 
 
+def _context_pin(raw):
+    if raw is None or raw.get("policy_version") == "legacy-v1":
+        return raw  # entry_anchor checks the complete legacy shape against the original location.
+    return Pin.model_validate(raw).model_dump(mode="json")
+
+
 def saved_background(envelope, record, walk_id):
     """Reuse the saved source version, including the v2 pin's identity and location basis."""
     schema = envelope["schema_version"]
-    expected_schema = contexts.PIN_POLICY if record.ref.pin_revision is not None else contexts.POLICY
+    expected_schema = (
+        contexts.PIN_POLICY if record.ref.pin_revision is not None else contexts.POLICY
+    )
     if schema != expected_schema:
         raise ValueError("unsupported_context_schema")
     target = envelope["target"]
@@ -138,11 +178,11 @@ def saved_background(envelope, record, walk_id):
         raw_pin = target["pin"]
         if target["pin_revision"] != record.ref.pin_revision:
             raise ValueError("stale_context_pin_revision")
-        pin = Pin.model_validate(raw_pin) if raw_pin is not None else None
-        original = Pin.model_validate(record.pin_payload) if record.pin_payload is not None else None
-        if pin != original or (pin and pin.state == "provisional"):
+        pin = _context_pin(raw_pin)
+        original = _context_pin(record.pin_payload)
+        if pin != original or (pin and pin["state"] == "provisional"):
             raise ValueError("stale_context_pin")
-        if provenance["location_basis"] != (pin.method if pin else "original_location"):
+        if provenance["location_basis"] != (pin["method"] if pin else "original_location"):
             raise ValueError("invalid_context_location_basis")
     target_anchor = entry_anchor(target["event_at"], target.get("location"), raw_pin)
     if target_anchor != record.anchor:
@@ -227,7 +267,11 @@ def assemble_input(walk, analysis, entry_rows, pin_rows, photo_manifest, envelop
         if photo_manifest is not None
         else None,
         backgrounds=tuple(backgrounds),
-        selected_background_ids=(),
+        # Current, validated envelopes are eligible inputs. The stamp selector separately
+        # projects them and decides which pieces fit each scene's background slots.
+        selected_background_ids=tuple(
+            b.id for b in backgrounds if b.status in {"known", "partial"}
+        ),
         scene_policy_version="records-first-v1",
         writing_policy_version="diary-background-v1",
     )

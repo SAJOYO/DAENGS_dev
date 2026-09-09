@@ -18,6 +18,10 @@ class PhotoConflict(ValueError):
     pass
 
 
+class PhotoInvalid(ValueError):
+    """This request was rejected without a write; the publisher may correct its snapshot."""
+
+
 def capabilities():
     return {
         "write_versions": ["walk-photo-metadata-v1"]
@@ -63,12 +67,12 @@ def transition(row, request: PhotoManifestWrite, walk) -> tuple[list[dict], str]
     previous = {r["id"]: PhotoRecord.model_validate(r) for r in row.records} if row else {}
     incoming = {str(p.id): p for p in request.photos}
     if len(previous.keys() | incoming.keys()) > 200:
-        raise PhotoConflict("한 산책은 삭제 기록을 포함해 사진 200개까지 지원합니다.")
+        raise PhotoInvalid("한 산책은 삭제 기록을 포함해 사진 200개까지 지원합니다.")
     records = []
     for id in sorted(previous.keys() | incoming.keys()):
         old, photo = previous.get(id), incoming.get(id)
         if photo is not None and not walk.started_at <= photo.captured_at <= walk.ended_at:
-            raise PhotoConflict("촬영 시각이 산책 범위 밖에 있어요.")
+            raise PhotoInvalid("촬영 시각이 산책 범위 밖에 있어요.")
         if old and old.content is None and photo is not None:
             raise PhotoConflict("삭제된 사진 ID를 다시 사용할 수 없어요.")
         revision = old.revision + (old.content != photo) if old else 1

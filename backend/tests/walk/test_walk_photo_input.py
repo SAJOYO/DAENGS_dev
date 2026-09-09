@@ -17,6 +17,7 @@ from daengs_backend.routers import walk_photo as router
 from daengs_backend.schemas.walk_photo import PhotoManifestWrite
 from daengs_backend.services import walk_diary_input as adapter
 from daengs_backend.services import walk_photo as service
+from daengs_backend.services.walk_entry_v2 import legacy_pin
 from daengs_walk.diary_input import digest
 
 OWNER, WALK, SESSION, PUBLISHER, PHOTO, ENTRY = [uuid.uuid4() for _ in range(6)]
@@ -130,7 +131,7 @@ def test_transport_rejects_shutter_outside_walk():
     spec = request()
     short = walk()
     short.ended_at = AT + timedelta(minutes=1)
-    with pytest.raises(service.PhotoConflict, match="촬영"):
+    with pytest.raises(service.PhotoInvalid, match="촬영"):
         service.transition(None, spec, short)
 
 
@@ -175,6 +176,80 @@ def test_v2_unlocated_and_provisional_pin_metadata_are_preserved():
         assert result.content.code == "sniffing"
         assert result.anchor.point is None and result.anchor.position_state == state
         assert result.pin_payload == pin
+
+
+def legacy_behavior():
+    original = entry()
+    original.payload.update(kind="behavior", behavior_code="sniffing", note=None)
+    original.payload["location"]["captured_at"] = (AT - timedelta(seconds=5)).isoformat()
+    sidecar = SimpleNamespace(entry_id=original.id, pin_revision=0, payload=legacy_pin(original))
+    return original, sidecar
+
+
+def test_v1_behavior_edited_via_v2_keeps_original_sample_time_and_accuracy():
+    original, sidecar = legacy_behavior()
+    result = adapter.assemble_input(walk(), None, [original], [sidecar], None, [])
+    record = result.source.records[0]
+    assert record.content.code == "sniffing"
+    assert record.ref.pin_revision == 0 and record.pin_payload == sidecar.payload
+    assert record.anchor == adapter.entry_anchor(AT, original.payload["location"])
+    assert record.anchor.method == "last_known" and record.anchor.position_state == "legacy"
+    assert record.anchor.location_at == AT - timedelta(seconds=5)
+    assert record.anchor.accuracy_m == 5 and record.anchor.source_fixes == ()
+
+
+@pytest.mark.parametrize("change", ["point", "time", "refs", "algorithm", "identity", "revision"])
+def test_legacy_sidecar_must_still_match_its_original_record(change):
+    original, sidecar = legacy_behavior()
+    if change == "point":
+        sidecar.payload["point"]["lat"] += 1
+    elif change == "time":
+        sidecar.payload["target_at"] = (AT + timedelta(seconds=1)).isoformat()
+    elif change == "refs":
+        sidecar.payload["source_refs"] = [{"client_seq": 1, "chain_index": 0, "at": AT.isoformat()}]
+    elif change == "algorithm":
+        sidecar.payload["algorithm_version"] = "walk-action-pin-v1"
+    elif change == "identity":
+        sidecar.payload["resolution_id"] = str(uuid.uuid4())
+    else:
+        sidecar.pin_revision = 1
+    with pytest.raises(ValueError, match="legacy pin"):
+        adapter.entry_record(original, sidecar)
+
+
+def test_native_v2_pin_without_source_refs_is_still_rejected():
+    original, sidecar = legacy_behavior()
+    sidecar.payload.update(policy_version="walk-action-pin-v1", algorithm_version="native-v1")
+    sidecar.pin_revision = 1
+    with pytest.raises(ValueError, match="coordinates need source references"):
+        adapter.entry_record(original, sidecar)
+
+
+def test_legacy_v2_background_survives_only_with_its_exact_stored_pin_and_location():
+    original, sidecar = legacy_behavior()
+    envelope = context_envelope()
+    envelope["schema_version"] = "walk-entry-context-v2"
+    envelope["target"].update(
+        pin=deepcopy(sidecar.payload),
+        pin_revision=0,
+        location=deepcopy(original.payload["location"]),
+    )
+    envelope["provenance"].update(policy_version="walk-entry-context-v2", location_basis="observed")
+    assert (
+        len(
+            adapter.assemble_input(
+                walk(), None, [original], [sidecar], None, [envelope]
+            ).source.backgrounds
+        )
+        == 1
+    )
+    envelope["target"]["location"]["captured_at"] = AT.isoformat()
+    result = adapter.assemble_input(walk(), None, [original], [sidecar], None, [envelope])
+    assert not result.source.backgrounds and len(result.excluded_backgrounds) == 1
+    envelope["target"]["location"] = deepcopy(original.payload["location"])
+    envelope["target"]["pin"]["resolution_id"] = str(uuid.uuid4())
+    result = adapter.assemble_input(walk(), None, [original], [sidecar], None, [envelope])
+    assert not result.source.backgrounds and len(result.excluded_backgrounds) == 1
 
 
 def context_envelope():
@@ -280,6 +355,40 @@ def test_disabled_capability_and_endpoint_never_access_optional_table(api, monke
     blocked.assert_not_called()
 
 
+def test_photo_validation_rejection_is_422_without_advancing_the_server_revision(api):
+    client, db, state = api
+    path = f"/app/walks/{WALK}/photo-metadata"
+    assert client.put(path, json=request().model_dump(mode="json")).status_code == 200
+    prior = deepcopy(state["row"].records)
+    bad = request(2, 1).model_dump(mode="json")
+    bad["photos"][0]["captured_at"] = (AT + timedelta(hours=2)).isoformat()
+    db.commit.reset_mock()
+    assert client.put(path, json=bad).status_code == 422
+    db.commit.assert_not_awaited()
+    assert state["row"].revision == 1 and state["row"].records == prior
+    # A corrected later local revision can still use the last actual ACK.
+    assert (
+        client.put(path, json=request(3, 1, include=False).model_dump(mode="json")).status_code
+        == 200
+    )
+    assert client.put(path, json=request(4, 1).model_dump(mode="json")).status_code == 409
+
+
+def test_deleted_photo_history_limit_is_422_and_can_be_corrected(api):
+    client, db, state = api
+    stored = row()
+    stored.records = [{"id": str(uuid.uuid4()), "revision": 2, "content": None} for _ in range(200)]
+    state["row"] = stored
+    path = f"/app/walks/{WALK}/photo-metadata"
+    assert client.put(path, json=request(2, 1).model_dump(mode="json")).status_code == 422
+    db.commit.assert_not_awaited()
+    assert stored.revision == 1
+    assert (
+        client.put(path, json=request(3, 1, include=False).model_dump(mode="json")).status_code
+        == 200
+    )
+
+
 async def test_input_reader_locks_owner_and_expires_prior_generation_identity_map(monkeypatch):
     session = SimpleNamespace(new=set(), dirty=set(), deleted=set(), expire_all=Mock())
     owned = AsyncMock(return_value=walk())
@@ -362,11 +471,18 @@ def test_pin_context_uses_current_estimate_and_rejects_stale_sources(change):
 def test_v2_unlocated_pin_never_borrows_original_location_for_context():
     sidecar, envelope = pin_context()
     sidecar.payload.update(
-        state="unlocated", method="none", point=None, source_refs=[],
-        uncertainty_m=None, uncertainty_basis="unknown", reason="no_evidence",
+        state="unlocated",
+        method="none",
+        point=None,
+        source_refs=[],
+        uncertainty_m=None,
+        uncertainty_basis="unknown",
+        reason="no_evidence",
     )
     envelope["target"]["pin"] = deepcopy(sidecar.payload)
-    envelope["provenance"].update(location_basis="none", retrieved_at=None, temporal_basis="unknown")
+    envelope["provenance"].update(
+        location_basis="none", retrieved_at=None, temporal_basis="unknown"
+    )
     envelope.update(status="not_requested", reason="no_location", payload=None, payload_sha256=None)
     result = adapter.assemble_input(walk(), None, [entry()], [sidecar], None, [envelope])
     assert len(result.source.backgrounds) == 1

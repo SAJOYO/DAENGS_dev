@@ -1,0 +1,87 @@
+{
+  "format": "walk-diary-input-v1",
+  "owner_id": "3a58a0e5-4739-57e7-a090-81d6d092b28d",
+  "walk_id": "f7ebbe63-ed77-58ef-9754-d17cf9669a49",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "started_at": "2026-09-09T00:00:00Z",
+  "ended_at": "2026-09-09T00:40:00Z",
+  "pet_ids": [],
+  "evidence_origin": "mock",
+  "route": {
+    "status": "ready",
+    "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+    "input_fingerprint": "faa1c7ac0462145ffb84d7306360f9378ad087955fee35d83b87aae9a83e51c8",
+    "calculation_version": 1,
+    "reason": null
+  },
+  "records": [],
+  "photos_status": "complete",
+  "photo_manifest": {
+    "publisher_id": "dfdd43f7-aa13-5547-b396-d9bfa9771256",
+    "revision": 1
+  },
+  "observations": [
+    {
+      "id": "dwell",
+      "version": "db0ba00e6292c8402899d0ba918c971c01d9f30a44bfad35875562411f6002c0",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_dwell",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:12:00Z",
+      "ended_at": "2026-09-09T00:13:30Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:12:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:12:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 12,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "slow",
+      "version": "f66d7c753e84608c844d222652856b45ff3c1722b34085468d5c1bcc5bb4e7a8",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_slow",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:32:00Z",
+      "ended_at": "2026-09-09T00:33:00Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:32:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:32:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 32,
+            "chain_index": 0,
+            "at": "2026-09-09T00:32:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "backgrounds": [],
+  "selected_background_ids": [],
+  "scene_policy_version": "records-first-v1",
+  "writing_policy_version": "diary-background-v1"
+}

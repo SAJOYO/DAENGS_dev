@@ -10,6 +10,7 @@ from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.routers.walk_entry import translate as translate_entry
 from daengs_backend.schemas.walk_entry import RecordProfileQuery
+from daengs_backend.schemas.walk_entry_context import EntryContexts
 from daengs_backend.schemas.walk_entry_v2 import (
     EntryListV2,
     EntryResponseV2,
@@ -59,6 +60,15 @@ async def write(
     session: Session,
 ):
     return await translate(service.write(session, user.app_user_id, walk_id, entry_id, body))
+
+
+@router.get("/{walk_id}/entries/{entry_id}/contexts", response_model=EntryContexts)
+async def contexts(
+    walk_id: uuid.UUID, entry_id: uuid.UUID, user: CurrentAppUser, session: Snapshot
+):
+    from daengs_backend.services.walk_entry_context import read
+
+    return await translate(read(session, user.app_user_id, walk_id, entry_id, v2=True))
 
 
 @router.put("/{walk_id}/entries/{entry_id}/pin", response_model=EntryResponseV2)

@@ -150,3 +150,27 @@ async def test_skip_locked_claims_another_job(database):
         assert a.id != b.id
         await first.rollback()
         await second.rollback()
+
+
+async def test_pin_policy_is_idempotent_isolated_and_read_flag_gated(database, monkeypatch):
+    from daengs_backend.config import settings
+
+    walk, entry = await seed(database)
+    async with database() as db:
+        row = await db.get(WalkEntry, (walk, entry))
+        await repo.enqueue(db, row, NOW, policy=repo.PIN_POLICY)
+        await repo.enqueue(db, row, NOW, policy=repo.PIN_POLICY)
+        legacy, _ = await repo.current(db, row)
+        current, envelopes = await repo.current(db, row, policy=repo.PIN_POLICY)
+        assert len(legacy) == len(current) == 4 and not envelopes
+        assert {job.id for job in legacy}.isdisjoint(job.id for job in current)
+        for job in legacy:
+            job.state = "completed"
+        await db.commit()
+    async with database() as db:
+        monkeypatch.setattr(settings, "walk_entry_v2_enabled", False)
+        assert await repo.claim(db, NOW + timedelta(seconds=1)) is None
+        monkeypatch.setattr(settings, "walk_entry_v2_enabled", True)
+        claimed = await repo.claim(db, NOW + timedelta(seconds=1))
+        assert claimed.policy_version == repo.PIN_POLICY and claimed.attempts == 1
+        await db.rollback()

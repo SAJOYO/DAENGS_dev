@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import httpx
+
 from daengs_backend.orchestration.adapters.vet_contact import VetContactCapabilityAdapter
 from daengs_backend.orchestration.contracts import (
     CapabilityRequest,
@@ -197,3 +198,77 @@ async def test_upstream_failure_is_an_error_result_not_an_exception() -> None:
 
     assert result.status is CapabilityStatus.ERROR
     assert result.error.kind == "vet_contact_upstream_failure"
+
+
+async def test_timeout_still_tells_the_user_to_go_to_a_vet_now() -> None:
+    """병원 목록이 시간 초과여도 "응급이면 병원부터" 는 빠지면 안 된다 — ABSTAINED(위치
+    없음)가 이미 지키는 것과 같은 약속이다."""
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timeout")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = await VetContactCapabilityAdapter(client=client).run(
+            _request(), request_id="request-timeout"
+        )
+    finally:
+        await client.aclose()
+
+    assert result.status is CapabilityStatus.TIMEOUT
+    assert result.error.detail.startswith("응급 상황으로 보여요")
+    assert "병원 목록 응답 시간이 초과됐습니다." in result.error.detail
+
+
+async def test_transport_error_still_tells_the_user_to_go_to_a_vet_now() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = await VetContactCapabilityAdapter(client=client).run(
+            _request(), request_id="request-transport-error"
+        )
+    finally:
+        await client.aclose()
+
+    assert result.status is CapabilityStatus.ERROR
+    assert result.error.kind == "vet_contact_unavailable"
+    assert result.error.detail.startswith("응급 상황으로 보여요")
+    assert "병원 목록 기능에 연결할 수 없습니다." in result.error.detail
+
+
+async def test_4xx_still_tells_the_user_to_go_to_a_vet_now() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"detail": "bad request"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = await VetContactCapabilityAdapter(client=client).run(
+            _request(), request_id="request-4xx"
+        )
+    finally:
+        await client.aclose()
+
+    assert result.status is CapabilityStatus.ERROR
+    assert result.error.kind == "vet_contact_invalid_request"
+    assert result.error.detail.startswith("응급 상황으로 보여요")
+    assert "병원 목록을 가져오지 못했습니다." in result.error.detail
+
+
+async def test_malformed_json_body_still_tells_the_user_to_go_to_a_vet_now() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not json")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = await VetContactCapabilityAdapter(client=client).run(
+            _request(), request_id="request-malformed"
+        )
+    finally:
+        await client.aclose()
+
+    assert result.status is CapabilityStatus.ERROR
+    assert result.error.kind == "vet_contact_invalid_response"
+    assert result.error.detail.startswith("응급 상황으로 보여요")
+    assert "병원 목록을 해석할 수 없습니다." in result.error.detail

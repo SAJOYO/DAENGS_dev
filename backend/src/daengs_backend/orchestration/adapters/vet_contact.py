@@ -42,6 +42,12 @@ _RADIUS_M = 10_000
 _LIMIT_PER_KIND = 5
 _EMERGENCY_OPENER = SCOPED_REDIRECT_MESSAGES["emergency"]
 
+
+def _emergency_detail(detail: str) -> str:
+    """TIMEOUT·ERROR 문구 앞에 응급 오프너를 붙인다. ABSTAINED(위치 없음) 가 이미 하는
+    일과 같다 — 병원 목록이 실패해도 "지금 병원으로 가라" 는 문장은 반드시 나가야 한다."""
+    return f"{_EMERGENCY_OPENER}\n{detail}"
+
 _HOURS_UNKNOWN_NOTICE = {
     "code": "vet_contact.hours_unknown",
     "message": VET_CONTACT_HOURS_UNKNOWN,
@@ -104,13 +110,15 @@ class VetContactCapabilityAdapter:
                 status=CapabilityStatus.TIMEOUT,
                 error=ErrorDetail(
                     kind="vet_contact_timeout",
-                    detail="병원 목록 응답 시간이 초과됐습니다.",
+                    detail=_emergency_detail("병원 목록 응답 시간이 초과됐습니다."),
                 ),
                 elapsed_ms=_elapsed_ms(started),
             )
         except httpx.RequestError:
             return self._error(
-                started, "vet_contact_unavailable", "병원 목록 기능에 연결할 수 없습니다."
+                started,
+                "vet_contact_unavailable",
+                _emergency_detail("병원 목록 기능에 연결할 수 없습니다."),
             )
 
         if not response.is_success:
@@ -119,13 +127,15 @@ class VetContactCapabilityAdapter:
                 if response.status_code >= 500
                 else "vet_contact_invalid_request"
             )
-            return self._error(started, kind, "병원 목록을 가져오지 못했습니다.")
+            return self._error(started, kind, _emergency_detail("병원 목록을 가져오지 못했습니다."))
 
         try:
             candidates = _candidates(response.json())
         except (ValueError, TypeError, KeyError):
             return self._error(
-                started, "vet_contact_invalid_response", "병원 목록을 해석할 수 없습니다."
+                started,
+                "vet_contact_invalid_response",
+                _emergency_detail("병원 목록을 해석할 수 없습니다."),
             )
 
         return CapabilityResult(

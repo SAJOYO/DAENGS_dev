@@ -122,6 +122,7 @@ from daengs_training.resources import RUNTIME_ROOT
 
 DEFAULT_LEXICON_PATH = RUNTIME_ROOT / "data/guardrail/medical_terms_v1.json"
 DEFAULT_LEXICON_V2_PATH = RUNTIME_ROOT / "data/guardrail/medical_terms_v2.json"
+DEFAULT_LEXICON_V1_CURATED_PATH = RUNTIME_ROOT / "data/guardrail/medical_terms_v1_curated.json"
 DEFAULT_WHITELIST_PATH = RUNTIME_ROOT / "data/guardrail/training_whitelist_v1.json"
 
 MIN_TERM_CHARS = 2
@@ -231,6 +232,26 @@ def load_medical_terms(path: Path = DEFAULT_LEXICON_PATH) -> list[str]:
 def load_medical_terms_v2(path: Path = DEFAULT_LEXICON_V2_PATH) -> list[str]:
     """Load the hand-authored, out-of-corpus veterinary vocabulary (v2)."""
     return _load_terms_file(path, "This file is hand-authored; it has no build script.")
+
+
+def load_medical_terms_v1_curated(path: Path = DEFAULT_LEXICON_V1_CURATED_PATH) -> list[str]:
+    """Load the hand-approved subset of v1 (corpus-inside disease names/clinical signs)."""
+    return _load_terms_file(path, "This file is hand-curated; it has no build script.")
+
+
+def load_serving_medical_terms() -> list[str]:
+    """The dictionary the serving path matches against — **the one owner of that set.**
+
+    v2 alone left a hole: `슬개골 탈구`·`외이염` live in v1 only, and v1 is not loaded, so
+    diagnosis questions naming them reached generation (`b02`, lap1 2026-09-07).  v1 cannot
+    be loaded whole — its `curation` is `none`, so it carries behaviour vocabulary
+    (짖음·불안·공포·긴장·두려움·배회 …) that refuses ordinary training questions 7/7.
+
+    So the two curated files are joined here rather than at each call site.  There were two
+    call sites loading v2 by hand (`service.RAGService.__init__` and
+    `retrieval.pgvector._medical_verdict`), and a set that lives in two places drifts.
+    """
+    return sorted(set(load_medical_terms_v1_curated()) | set(load_medical_terms_v2()), key=len, reverse=True)
 
 
 def load_training_whitelist(path: Path = DEFAULT_WHITELIST_PATH) -> list[str]:

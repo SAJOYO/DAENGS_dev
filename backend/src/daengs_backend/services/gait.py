@@ -519,6 +519,9 @@ def _analyze_from_storage(storage_key: str) -> dict:
 
     ⚠️ 저장소가 미설정(none)이면 여기 도달하기 전에 confirm 이 이미 막습니다. gcs 인데
        자격증명이 없으면 download 에서 실패해 FAILED 가 됩니다 — 의도된 명확한 실패입니다.
+
+    순서: 다운로드 → `intake.prepare_for_analysis`(판정) → 엔진 → overlay bytes. 임시 디렉터리는
+    이 함수가 유일하게 소유하고, 판정·변환·overlay 전부 그 안에서만 파일을 만듭니다.
     """
     import tempfile
     from pathlib import Path
@@ -540,6 +543,13 @@ def _analyze_from_storage(storage_key: str) -> dict:
                 storage_key, expires_in_seconds=settings.gait_download_url_ttl_seconds
             )
             urlretrieve(url, local)
+
+        # 입력 판정 (D-063 3단계): 읽을 수 있으면 원본 그대로, 못 읽을 때만 H.264 로 변환,
+        # 그래도 못 읽으면 VideoDecodeError → 바깥 except 가 FAILED + 사유로 닫습니다.
+        # 변환본은 같은 임시 디렉터리 안에 생기고 원본은 지워지므로 정리는 그대로입니다.
+        from daengs_gait.intake import prepare_for_analysis
+
+        local = prepare_for_analysis(local)
 
         # 엔진 선택과 실행은 daengs_gait 의 몫입니다 (D-063 2단계). 설정값은 인자로 넘깁니다 —
         # daengs_gait 는 daengs_backend 를 import 하지 않습니다. legacy 는 그 안에서

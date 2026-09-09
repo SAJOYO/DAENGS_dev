@@ -220,3 +220,11 @@ def test_nginx_does_not_publish_the_internal_discovery_prefix():
     assert "location /v2/places/" in nginx
     assert "location /v3/places/" in nginx
     assert "location /territory/sites/" in nginx
+    cloud = (PACKAGE_DIR.parents[2] / "nginx" / "api-locations.inc").read_text(encoding="utf-8")
+    for config in (nginx, cloud):
+        assert "location /internal" not in config
+        block = config.split("location /v3/places/ {", 1)[1].split("}", 1)[0]
+        assert "set $place_search_upstream place-search:8000;" in block
+        assert "proxy_pass http://$place_search_upstream;" in block
+        assert "limit_req zone=place_search_per_ip burst=10 nodelay;" in block
+        assert "limit_req_status 429;" in block

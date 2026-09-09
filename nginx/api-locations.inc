@@ -54,6 +54,24 @@ location /v2/places/ {
     proxy_read_timeout    60s;
 }
 
+# 수동 조건 검색 — 로컬 default.conf와 같은 v3 경로·제한을 유지합니다.
+location /v3/places/ {
+    limit_req zone=place_search_per_ip burst=10 nodelay;
+    limit_req_status 429;
+
+    set $place_search_upstream place-search:8000;
+    proxy_pass http://$place_search_upstream;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_connect_timeout 5s;
+    proxy_read_timeout    60s;
+}
+
 # 점령 게임판 읽기 — 경로 변환 없이 place-search로 전달합니다.
 location /territory/sites/ {
     limit_req zone=place_search_per_ip burst=10 nodelay;

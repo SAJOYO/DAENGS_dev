@@ -54,3 +54,4 @@ Redis CAS는 **편집 세션**에 대한 잠금이다. 수동 v3 검색의 전�
 - Gemini Interactions의 `store=false`, `response_format.schema`, Pydantic JSON schema는 [공식 Structured outputs 문서](https://ai.google.dev/gemini-api/docs/structured-output)와 [Interactions 문서](https://ai.google.dev/gemini-api/docs/interactions-overview)를 기준으로 연결했다. 새 SDK나 의존성은 추가하지 않았다.
 - 실제 Gemini와 운영 Redis/DB를 포함한 왕복은 미검증이다. 기존에 제공된 환경 파일 경로가 현재 없으며 현재 프로세스에도 Gemini 키가 없다. 문장 해석의 정확도, 누락된 요구, 근거 구간 오류율, 지연은 다음 단계의 실호출 평가가 필요하다. 스키마 검증이 의미 해석의 정확성을 보장하지 않는다.
 - Backend·Place를 함께 반영한 뒤 앱을 연결해야 한다. 기존 발견 API는 이전 앱 호환을 위해 유지한다. DB 마이그레이션·배포는 수행하지 않았다.
+- CI에서 발견한 선행 v3의 클라우드 nginx 경로 누락도 보완했다. 로컬과 GCP include 모두 `/v3/places/`를 같은 Place upstream과 요청 제한으로 전달한다. 이 보완 없이 #358만 클라우드에 반영하면 조건 검색 경로가 동작하지 않는다.

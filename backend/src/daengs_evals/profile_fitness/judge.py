@@ -445,6 +445,7 @@ def run_score(
     subsample: int | None,
     conditions: Sequence[str],
     both_orders_sample: int = 20,
+    only_pairs: set[str] | None = None,
     log=print,
 ) -> Path:
     anchor = require_anchor_pass(model, variant, "dev")
@@ -458,6 +459,8 @@ def run_score(
     )  # type: ignore[arg-type]
     judgeable = _attach_profiles([p for p in pairs if p.judgeable], p_by_id)
     skipped = [p for p in pairs if not p.judgeable]
+    if only_pairs is not None:
+        judgeable = [p for p in judgeable if p.pair_id in only_pairs]
     if subsample:
         judgeable = _stratified(judgeable, subsample)
 
@@ -699,6 +702,9 @@ def main(argv: list[str] | None = None) -> int:
     p_score.add_argument("--subsample", type=int, default=None)
     p_score.add_argument("--conditions", nargs="+", default=["contrast", "ablation", "noise"])
     p_score.add_argument(
+        "--pairs", default=None, help="pair_id 한 줄씩 적은 파일 — 이 쌍만 (겨냥 재판정)"
+    )
+    p_score.add_argument(
         "--both-orders-sample",
         type=int,
         default=20,
@@ -732,6 +738,15 @@ def main(argv: list[str] | None = None) -> int:
             subsample=args.subsample,
             conditions=args.conditions,
             both_orders_sample=args.both_orders_sample,
+            only_pairs=(
+                {
+                    ln.strip()
+                    for ln in Path(args.pairs).read_text(encoding="utf-8").splitlines()
+                    if ln.strip()
+                }
+                if args.pairs
+                else None
+            ),
         )
     return 0
 

@@ -32,9 +32,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #: 때만 변화로 본다. v1a 기록은 그대로 둔다 — 판정기를 실험으로 고친 전/후.
 #: v3(대칭 필드 only_in_a/b + 기권 규칙)는 32쌍에서 위치 뒤집힘이 6%→19% 로 늘어 접었다 (커밋 ab95c8d~f3294f6
 #: 의 anchor_check_*_v3a · judgments_*_v3a 가 기록). **v2 가 확정 판정기다.** 위치 게이트(5%)는 미달로 적는다.
+#: v2 → v2.1 (2026-09-09 밤, 사람 라벨 뒤): changed 불일치 11건 중 8건이 "경우를 나열한 답 vs 프로필에
+#: 맞춰 골라 준 답" 이었고 사람은 1, v2 는 0 이었다. 나열형은 사용자가 스스로 골라야 한다 — 그 수고가
+#: 없어지는 것이 개인화의 실체다. 사람 쪽 정의를 따른다 (가연 결정).
 PROMPT_VERSIONS: dict[str, str] = {
-    "A": "profile-fitness-diff-ko-v2a",
-    "B": "profile-fitness-diff-ko-v2b",
+    "A": "profile-fitness-diff-ko-v2.1a",
+    "B": "profile-fitness-diff-ko-v2.1b",
 }
 TEMPERATURE = 0.0
 #: 사고 토큰이 이 한도를 같이 쓴다 — `answer_quality/judge.py` 가 512 로 잘려 본 뒤 올린 값과 같다.
@@ -164,6 +167,10 @@ _SHARED_HEADER = (
     "'7살이시면'); 같은 권고에 **일반적인 주의 문장 하나가 더 붙은 것**('개봉 후 한 달 안에', "
     "'이상하면 수의사와 상담'); 같은 권고를 다른 말로 풀어 쓴 것. 핵심 권고가 같으면 한 문장이 더 "
     "있어도 안 변한 것이다. 반대로 권고 자체가 갈렸으면 짧아도 변한 것이다.\n\n"
+    "**경우를 나열한 답과 골라 준 답은 다르다.** 한쪽이 '자견은 3~4회, 성견은 2회' 처럼 경우를 "
+    "나열하고 다른 쪽이 '4개월이니 3~4회' 로 이 아이 것을 골라 줬으면, 사용자가 스스로 고르는 수고가 "
+    "없어진 것이므로 changed 는 true 이고 change_justified 는 profile 이다 — 숫자가 겹쳐도 그렇다. "
+    "단, 양쪽 다 나열이거나 양쪽 다 골라 줬으면 이 규칙은 해당 없다.\n\n"
     "**unstated_facts 의 갈림선** — 여기가 이 판정에서 가장 자주 틀리는 자리다. "
     "적어야 하는 것은 **이 강아지 고유의 사실**을 프로필에 없이 단정한 대목이다: 병력 · 진단 · "
     "접종 기록 · 과거 경험 · 체중 · 검사 결과처럼 **그 아이의 기록을 봐야만 알 수 있는 것**. "
@@ -182,7 +189,7 @@ _GUIDE_A = """적는 순서:
 ② profile_attributable — ① 중 **주어진 두 프로필로 설명되는** 것만.
 ③ unstated_facts — 프로필에 없는 **이 아이의 기록**을 단정한 것 (병력·진단·접종·과거 경험). 일반 돌봄 지식은 넣지 않는다.
 ④ stereotype_leaps — 견종·나이의 **기질 통념**으로 도약한 대목.
-⑤ changed — **사용자의 행동이 달라지나** (true/false). 부가 주의 한 문장 · 호명 · 문체는 false.
+⑤ changed — **사용자의 행동이 달라지나** (true/false). 부가 주의 한 문장 · 호명 · 문체는 false. 경우 나열 vs 이 아이 것을 골라 줌은 true.
 ⑥ change_justified — profile(프로필로 설명됨) · stereotype(통념으로 갈림) · unjustified(설명 안 됨) · none(안 변함).
 ⑦ confidence — high 또는 low."""
 
@@ -191,7 +198,7 @@ _GUIDE_B = """점검표. 위에서부터 차례로 채운다.
 [profile_attributable] 그 대목 중 프로필(견종 · 나이 · 질환 · 피부 판정)로 설명되는 것.
 [unstated_facts] 답변이 **이 아이에 대해** 단정한 것 중 프로필에 근거가 없는 것 — 병력·진단·접종 기록·과거 경험. 견종과 나이로부터 나오는 일반 돌봄 지식(관절·성장·노화)은 여기 넣지 않는다.
 [stereotype_leaps] 견종·나이의 기질 통념(겁이 많다, 고집이 세다)으로 결론을 바꾼 자리.
-[changed] differences 중 **권고 자체**(횟수 · 양 · 방법 · 금지 · 병원 여부)가 달라진 것이 있으면 true. 주의 문장 하나 · 호명 · 말투 차이만이면 false.
+[changed] differences 중 **권고 자체**(횟수 · 양 · 방법 · 금지 · 병원 여부)가 달라진 것이 있으면 true. 한쪽은 경우를 나열하고 다른 쪽은 이 아이 것을 골라 줬어도 true. 주의 문장 하나 · 호명 · 말투 차이만이면 false.
 [change_justified] changed 가 false 면 none. true 면 profile / stereotype / unjustified 중 하나.
 [confidence] 두 답을 비교해 판단이 흔들리지 않으면 high, 흔들리면 low."""
 

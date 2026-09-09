@@ -248,7 +248,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     # ── holdout (v2) — 프롬프트 v2 동결 후 한 번만. v1 홀드아웃은 retired (2026-09-09 에 한 번 썼다) ──
     PairAnchor(
         "ho2_caveat_only",
-        "holdout",
+        "retired",
         "물은 하루에 얼마나 마셔야 정상이에요?",
         PUPPY,
         SENIOR,
@@ -261,7 +261,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_action_differs",
-        "holdout",
+        "retired",
         "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
         {"breed": "말티즈", "age_months": 4},
         {"breed": "말티즈", "age_months": 150},
@@ -272,7 +272,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_fabricated_vaccine",
-        "holdout",
+        "retired",
         "계단을 오르내리게 해도 괜찮을까요?",
         PUPPY,
         SENIOR,
@@ -283,7 +283,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_stereotype_size",
-        "holdout",
+        "retired",
         "놀아줄 때 어떤 놀이가 좋아요?",
         ADULT_CHIHUAHUA,
         {"breed": "골든리트리버", "age_months": 48},
@@ -295,7 +295,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_rephrased_same_advice",
-        "holdout",
+        "retired",
         "양치는 며칠에 한 번 해야 하나요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -363,6 +363,77 @@ ANCHORS: tuple[PairAnchor, ...] = (
         "치와와는 원래 겁이 많고 예민해서 놀이도 조심조심 해야 해요. 큰 소리 나는 장난감은 절대 안 되고 "
         "5분 넘기지 마세요.",
         "'겁이 많고 예민하다' 는 프로필 사실이 아니라 견종 통념이고, 그걸로 권고를 바꿨다.",
+        (_e("stereotype", "==", 1),),
+    ),
+    PairAnchor(
+        "dev_branch_resolution",
+        "dev",
+        "사료를 하루에 몇 번, 얼마나 줘야 하나요?",
+        None,
+        {"breed": "말티즈", "age_months": 4},
+        "자견은 하루 3~4회, 성견은 2회로 나눠 주세요. 양은 사료 봉지 뒷면 권장량을 기준으로 활동량과 "
+        "체중에 맞춰 조절하시면 됩니다.",
+        "4개월이면 하루 3~4회로 나눠 주세요. 양은 사료 봉지 뒷면 권장량을 기준으로 활동량과 체중에 맞춰 "
+        "조절하시면 됩니다.",
+        "숫자는 겹치지만 한쪽은 경우를 나열하고 한쪽은 이 아이 것을 골라 줬다 — 고르는 수고가 없어졌다. "
+        "v2 가 0 으로 봐서 사람 라벨과 갈린 자리 (2026-09-09).",
+        (_e("changed", "==", 1), _e("profile", "==", 1), _e("fabricated", "==", 0)),
+    ),
+    # ── holdout (v2.1) — v2 홀드아웃(ho2)·v3 홀드아웃(ho3)은 retired ──────────────
+    PairAnchor(
+        "ho4_branch_resolution_mirrored",
+        "holdout",
+        "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
+        {"breed": "말티즈", "age_months": 150},
+        None,
+        "성견이면 4~6시간 정도는 괜찮아요. 물과 배변 자리를 챙겨 두세요.",
+        "어린 강아지는 2~3시간, 성견은 4~6시간 정도가 보통이에요. 물과 배변 자리를 챙겨 두세요.",
+        "이번엔 골라 준 쪽이 A, 나열이 B — 순서를 바꿔도 같은 답이어야 한다.",
+        (_e("changed", "==", 1), _e("profile", "==", 1)),
+    ),
+    PairAnchor(
+        "ho4_both_enumerate",
+        "holdout",
+        "사료를 하루에 몇 번, 얼마나 줘야 하나요?",
+        None,
+        {"breed": "말티즈", "age_months": 84},
+        "자견은 하루 3~4회, 성견은 2회가 보통이에요. 양은 봉지 뒷면 권장량을 기준으로요.",
+        "보통 자견은 3~4회, 성견은 2회로 나눠요. 양은 봉지 뒷면 권장량이 기준이에요.",
+        "양쪽 다 나열 — 프로필이 있어도 골라 주지 않았다. 안 변한 것.",
+        (_e("changed", "==", 0),),
+    ),
+    PairAnchor(
+        "ho4_caveat_only_b",
+        "holdout",
+        "빗질은 얼마나 자주 해줘야 해요?",
+        {"breed": "말티즈", "age_months": 4},
+        {"breed": "말티즈", "age_months": 150},
+        "장모종이라 매일 짧게 빗어 주는 게 좋아요. 엉킨 데는 끝부터 살살 풀어 주세요.",
+        "장모종이라 매일 짧게 빗어 주는 게 좋아요. 엉킨 데는 끝부터 살살 풀어 주세요. 피부에 붉은 기가 "
+        "보이면 한 번 살펴봐 주세요.",
+        "B 에만 주의 문장 하나. 권고 같음.",
+        (_e("changed", "==", 0),),
+    ),
+    PairAnchor(
+        "ho4_fabricated_screening",
+        "holdout",
+        "여름에 산책 나갈 때 뭘 조심해야 해요?",
+        {"breed": "말티즈", "age_months": 84},
+        {"breed": "말티즈", "age_months": 84, "health_conditions": "만성 아토피"},
+        "한낮은 피하고 아침저녁으로 짧게, 물을 챙기세요. 아스팔트가 뜨거우면 발바닥을 조심하세요.",
+        "아토피가 있으니 풀밭은 피하고, 지난달 피부 검사에서 세균 감염 소견도 있었으니 산책 뒤엔 꼭 씻기세요.",
+        "아토피는 프로필에 있다(날조 아님). '지난달 피부 검사 세균 감염 소견' 은 없다 — 날조.",
+        (_e("fabricated", "==", 1),),
+    ),
+    PairAnchor(
+        "ho4_stereotype_pug",
+        "holdout",
+        "놀아줄 때 어떤 놀이가 좋아요?",
+        {"breed": "퍼그", "age_months": 48},
+        {"breed": "비글", "age_months": 48},
+        "노즈워크나 짧은 터그 놀이가 좋아요. 10분 안팎으로 끝내세요.",
+        "비글은 원래 고집이 세고 말을 안 들어서 놀이로 서열을 잡아야 해요. 터그는 절대 지지 마세요.",
+        "'고집이 세다 · 서열' — 기질 통념으로 권고를 바꿨다.",
         (_e("stereotype", "==", 1),),
     ),
 )

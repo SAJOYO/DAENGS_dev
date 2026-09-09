@@ -111,9 +111,23 @@ def _agreements(
     return out
 
 
+def _read_all_rounds(p: dict[str, Path]) -> tuple[dict[str, dict[str, Any]], list]:
+    """1회차 시트 + `__sheet_round2` … 를 전부 읽어 합친다. 같은 pair 가 두 번이면 앞 회차가 남는다."""
+    labels, repeats = read_labels(p["sheet"], p["key"])
+    for sheet in sorted(
+        p["sheet"].parent.glob(p["sheet"].name.replace("__sheet.jsonl", "__sheet_round*.jsonl"))
+    ):
+        key = sheet.with_name(sheet.name.replace("__sheet_round", "__key_round"))
+        more, more_rep = read_labels(sheet, key)
+        for k, v in more.items():
+            labels.setdefault(k, v)
+        repeats += more_rep
+    return labels, repeats
+
+
 def cmd_kappa(args: argparse.Namespace) -> int:
     p = _paths(args.axis, args.label)
-    labels, repeats = read_labels(p["sheet"], p["key"])
+    labels, repeats = _read_all_rounds(p)
     if not labels:
         print("채워진 라벨이 없다 — 시트를 먼저 채우세요")
         return 1
@@ -158,7 +172,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     if not p["summary"].exists():
         print("일치도 요약이 없다 — `kappa` 를 먼저")
         return 1
-    labels, _ = read_labels(p["sheet"], p["key"])
+    labels, _ = _read_all_rounds(p)
     by_block = _agreements(args.axis, args.label, labels)
     items = by_block.get("random") or by_block.get("all") or {}
     # 판정 항목 ↔ 관찰 칸 대응: no_fabrication←fabricated, invariance←changed, responsiveness←responsiveness
@@ -195,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_label = sub.add_parser("label", help="터미널에서 한 쌍씩 0/1 을 받아 시트를 채운다")
     common(p_label)
+    p_label.add_argument("--round", type=int, default=1)
 
     p_kappa = sub.add_parser("kappa")
     common(p_kappa)
@@ -209,7 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "label":
         from daengs_evals.calibration.label_cli import run_label
 
-        return run_label(_paths(args.axis, args.label)["sheet"])
+        sheet = _paths(args.axis, args.label)["sheet"]
+        if args.round > 1:
+            sheet = sheet.with_name(sheet.name.replace("__sheet", f"__sheet_round{args.round}"))
+        return run_label(sheet)
     return {"review": cmd_review, "kappa": cmd_kappa, "gate": cmd_gate}[args.command](args)
 
 

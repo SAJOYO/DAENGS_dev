@@ -37,3 +37,8 @@ CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
 [routing.md](routing.md) §6. 계약의 권위는 이 문서들과 실제
 `backend/src/daengs_backend/orchestration/contracts.py` 가 함께 가집니다 — 어긋난 자리를
 발견하면 어느 쪽이 맞는지부터 정하고 양쪽을 같이 고칩니다.
+
+**산책 일기 이관**의 입력·장면 계약은 도메인 소유인
+[../walk/diary-contract.md](../walk/diary-contract.md)에 있습니다. 현재 Walk adapter의
+산책 조건 판단을 바꾸지 않고, 기존 `walk_storyboard` 생성 수명주기에 붙이는 접점을 정의합니다.
+새 capability 등록이나 운영 호출 연결까지 끝난 상태는 아닙니다.

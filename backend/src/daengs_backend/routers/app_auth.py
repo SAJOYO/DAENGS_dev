@@ -33,6 +33,7 @@ from daengs_backend.schemas.app_auth import (
     RefreshRequest,
 )
 from daengs_backend.services import app_auth as app_auth_service
+from daengs_backend.services import pet as pet_service
 
 logger = logging.getLogger(__name__)
 
@@ -307,5 +308,18 @@ async def withdraw(
 
     여러 번 불러도 같은 결과입니다. 다만 첫 호출로 세션이 끊기므로 두 번째 호출은
     401 을 받습니다.
+
+    **돌보미가 남은 강아지가 있으면 409 입니다** (docs/co-care.md §3). 막는 것이
+    목적이 아니라 순서를 요구하는 것이라, 메시지에 두 출구를 같이 안내합니다 —
+    ⓐ 대표를 넘기고 탈퇴 ⓑ 돌보미를 내보내고 탈퇴(그러면 지금처럼 강아지도 같이
+    파기됩니다). 돌보미로만 참여 중인 사람은 이 검사에 걸리지 않고 그냥 나갑니다.
     """
-    await app_auth_service.withdraw(session, app_user_id=user.app_user_id)
+    try:
+        await app_auth_service.withdraw(session, app_user_id=user.app_user_id)
+    except pet_service.OwnerHasCarersError as exc:
+        names = ", ".join(exc.pet_names)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{names}의 공동 보호자가 남아 있습니다. 대표를 넘기거나 보호자를 "
+            f"내보낸 뒤에 탈퇴할 수 있습니다.",
+        ) from None

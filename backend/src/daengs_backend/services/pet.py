@@ -14,6 +14,7 @@ from daengs_backend.core.storage import UploadTicket, build_pet_photo_key, get_s
 from daengs_backend.models import AppUser, Pet
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_member as member_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.pet import PetUpsert
 from daengs_backend.services import gait as gait_service
@@ -66,6 +67,19 @@ class PetNotFoundError(Exception):
     **남의 것일 때도 이 예외입니다.** 403 으로 나누면 "그 id 는 존재한다"를
     알려 주는 셈이라, 없는 것과 남의 것을 같은 404 로 뭉갭니다.
     """
+
+
+class OwnerHasCarersError(Exception):
+    """돌보미가 남은 강아지의 대표는 그냥 탈퇴할 수 없습니다 (docs/co-care.md §3).
+
+    막는 것이 목적이 아니라 **순서를 요구하는 것**입니다 — 대표를 넘기거나 돌보미를
+    내보내면 바로 탈퇴할 수 있습니다. 라우터가 이 두 출구를 메시지에 같이 담아
+    409 로 바꿉니다.
+    """
+
+    def __init__(self, pet_names: list[str]) -> None:
+        self.pet_names = pet_names
+        super().__init__(", ".join(pet_names))
 
 
 async def list_pets(
@@ -380,11 +394,23 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
 
     보행 영상과 **프로필 사진 둘 다** 지우고 나서 행을 지웁니다 — 공개한 처리방침
     4항("탈퇴 시 지체 없이 파기")을 지키려면 DB 행만으로는 모자랍니다.
+
+    ⚠️ **돌보미가 남은 아이가 하나라도 있으면 거절합니다 (`OwnerHasCarersError`).**
+    검사는 아래 `list_for_owner_for_update` 가 `pets` 행을 잠근 **바로 다음**, 무엇을
+    지우기도 전이라야 합니다 — 검사와 삭제 사이에 초대 수락이 끼어들면(둘 다 같은
+    `pets` 행을 잠그므로 줄을 서지만, 검사를 락 밖에 두면 그 줄이 의미가 없어집니다)
+    방금까지 돌보미가 있던 강아지가 대표 탈퇴로 조용히 지워집니다. 돌보미로만 참여
+    중인 사람은 여기 걸리지 않습니다 — 이 함수는 **대표인** pets 행만 봅니다.
     """
     from daengs_backend.services.activity_game import acquire
 
     await acquire(session)
     pets = await pet_repo.list_for_owner_for_update(session, app_user_id)
+
+    shared = [p.name for p in pets if await member_repo.list_members(session, p.id)]
+    if shared:
+        raise OwnerHasCarersError(shared)
+
     await gait_service.cleanup_for_pets(session, [pet.id for pet in pets])
     await cleanup_photos_for_pets(session, pets)
     return await pet_repo.delete_all_for_owner(session, app_user_id)

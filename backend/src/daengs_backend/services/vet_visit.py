@@ -184,7 +184,9 @@ async def start_draft(
     except IntegrityError:
         # 같은 키가 동시에 두 번 온 경쟁. 진 쪽이다 — 이긴 쪽의 행을 돌려준다.
         await session.rollback()
-        winner = await vet_repo.get_draft_by_client_event(session, app_user_id, body.client_event_id)
+        winner = await vet_repo.get_draft_by_client_event(
+            session, app_user_id, body.client_event_id
+        )
         if winner is None:  # pragma: no cover — UNIQUE 가 터졌는데 행이 없을 수는 없다
             raise
         return winner, _ticket_for(winner), False
@@ -245,9 +247,15 @@ async def extract_draft(
 
     # 멱등 ② — 앱 재시작으로 새 키인데 같은 사진. **Gemini 를 부르기 전에** 본다.
     match = await vet_repo.get_draft_by_sha(session, app_user_id, receipt_sha256)
-    response_payload: dict | None = None
+
+    # **동의는 경로와 무관하게, 쓰기 하나 앞에서 한 번만 본다.** 재사용 경로(멱등 ②)로
+    # 왔다고 동의 확인을 건너뛰면, "동의 → 추출(항목 저장) → 동의 철회 → 같은 사진
+    # 재업로드" 순서에서 옛 항목이 그대로 새 초안에, 그리고 곧 학습 코퍼스로 들어간다.
+    app_user = await app_user_repo.get_by_id(session, app_user_id)
+    consented = app_user is not None and app_user.ocr_consent_at is not None
+
     if match is not None and match.id != draft.id and match.extracted_at is not None:
-        payload = dict(match.extracted or {})
+        response_payload = dict(match.extracted or {})
     else:
         content_type = _content_type_from_key(draft.receipt_image_key)
         try:
@@ -271,25 +279,22 @@ async def extract_draft(
             )
             possible_duplicate = duplicate is not None
 
-        app_user = await app_user_repo.get_by_id(session, app_user_id)
-        consented = app_user is not None and app_user.ocr_consent_at is not None
-
-        # **동의 분기는 여기다.** 응답에는 항목을 실어 보내되(response_payload), DB 에
-        # 앉는 것(payload)은 미동의면 items 를 뺀다 (docs §3).
         response_payload = extraction.model_dump(mode="json")
         response_payload["possible_duplicate"] = possible_duplicate
-        payload = dict(response_payload)
-        if not consented:
-            payload.pop("items", None)
+
+    # 응답에는 항목을 실어 보내되(response_payload, 화면은 손해를 안 본다), DB 에
+    # 앉는 것(payload)은 미동의면 items 를 뺀다 — **분기는 딱 한 곳, 이 쓰기 앞에서만**
+    # 이므로 이후 세 번째 경로가 생겨도 이 문을 지나야만 `draft.extracted` 에 닿는다.
+    payload = dict(response_payload)
+    if not consented:
+        payload.pop("items", None)
 
     draft.extracted = payload
     draft.extracted_at = datetime.now(UTC)
     draft.receipt_sha256 = receipt_sha256
     await session.commit()
 
-    return _draft_extraction_from_payload(
-        draft, response_payload if response_payload is not None else payload
-    )
+    return _draft_extraction_from_payload(draft, response_payload)
 
 
 async def _owned_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID):

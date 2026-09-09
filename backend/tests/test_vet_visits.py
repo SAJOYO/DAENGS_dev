@@ -438,7 +438,9 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
         return max(matches, key=lambda d: d.created_at, default=None)
 
     async def expired_drafts(_session, before, limit=50):
-        old = sorted((d for d in drafts.values() if d.created_at < before), key=lambda d: d.created_at)
+        old = sorted(
+            (d for d in drafts.values() if d.created_at < before), key=lambda d: d.created_at
+        )
         return old[:limit]
 
     async def find_duplicate(_session, app_user_id, pet_id, visited_on, total_krw):
@@ -517,14 +519,18 @@ async def _start(session, store, *, client_event_id=None):
     return await vet_service.start_draft(session, SVC_OWNER, body)
 
 
-def _upload(storage: LocalBridgeStorage, draft: VetVisitDraft, data: bytes = b"receipt-bytes") -> None:
+def _upload(
+    storage: LocalBridgeStorage, draft: VetVisitDraft, data: bytes = b"receipt-bytes"
+) -> None:
     storage.write(draft.receipt_image_key, data)
 
 
 # ── 멱등 ① client_event_id ───────────────────────────────────────────
 
 
-async def test_second_tap_returns_existing_draft_without_new_ticket(svc_session, svc_store, svc_storage):
+async def test_second_tap_returns_existing_draft_without_new_ticket(
+    svc_session, svc_store, svc_storage
+):
     """얼어 보이는 화면에서 두 번 탭 — Gemini 도 저장소도 다시 안 간다."""
     key = uuid.uuid4()
     draft1, _ticket1, created1 = await _start(svc_session, svc_store, client_event_id=key)
@@ -592,7 +598,9 @@ async def test_consent_keeps_items_in_draft(svc_session, svc_store, svc_storage,
 # ── 멱등 ③ extracted_at ───────────────────────────────────────────────
 
 
-async def test_extract_twice_does_not_call_gemini_again(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_extract_twice_does_not_call_gemini_again(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _ticket, _created = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)
@@ -624,10 +632,35 @@ async def test_same_photo_new_draft_skips_gemini(svc_session, svc_store, svc_sto
     assert draft2.extracted_at is not None
 
 
+async def test_revoked_consent_still_strips_items_on_sha_reuse_path(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """Fix round 1, Finding 1 — 동의 O 로 추출(항목 저장) → 동의 철회 → 같은 사진을
+    새 초안으로 재업로드(멱등 ②, sha256 재사용). 재사용 경로도 **현재** 동의를 봐야
+    한다 — 옛 초안에 있던 항목을 그대로 베끼면 학습 코퍼스로 새는 문이 열린다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft1, _t1, _c1 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft1, b"same-bytes")
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft1.id)
+    assert draft1.extracted["items"]  # 동의 상태였으니 저장됐다
+
+    _consent(svc_store, at=None, version=None)  # 철회
+    draft2, _t2, _c2 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft2, b"same-bytes")
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft2.id)
+    assert "items" not in draft2.extracted
+
+    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft2.id, _confirm_body())
+    assert visit.raw_ocr_items == []
+
+
 # ── 못 읽었을 때 — 500 이 아니다 ───────────────────────────────────────
 
 
-async def test_unreadable_extraction_is_not_an_error(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_unreadable_extraction_is_not_an_error(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)
@@ -637,7 +670,9 @@ async def test_unreadable_extraction_is_not_an_error(svc_session, svc_store, svc
     assert result.unreadable_reason == "blurry"
 
 
-async def test_gemini_failure_becomes_failed_not_500(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_gemini_failure_becomes_failed_not_500(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)
@@ -680,7 +715,9 @@ def _confirm_body(**kw) -> "vet_service.ConfirmDraftRequest":
     return vet_service.ConfirmDraftRequest(**defaults)
 
 
-async def test_confirm_reads_items_from_draft_not_request(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_confirm_reads_items_from_draft_not_request(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     """요청 본문의 items 를 믿으면 앱이 동의 분기를 우회한다."""
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
@@ -695,7 +732,9 @@ async def test_confirm_reads_items_from_draft_not_request(svc_session, svc_store
     assert visit.raw_ocr_items != body.items
 
 
-async def test_confirm_without_consent_stores_empty_items(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_confirm_without_consent_stores_empty_items(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     _consent(svc_store, at=None, version=None)
     draft, _t, _c = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)
@@ -707,7 +746,9 @@ async def test_confirm_without_consent_stores_empty_items(svc_session, svc_store
     assert visit.raw_ocr_items == []
 
 
-async def test_confirm_records_suggested_code_for_comparison(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_confirm_records_suggested_code_for_comparison(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     """제안과 확정을 둘 다 남겨야 "받아들였나 고쳤나" 가 나온다 (label_source 없는 이유)."""
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
@@ -721,7 +762,9 @@ async def test_confirm_records_suggested_code_for_comparison(svc_session, svc_st
     assert visit.reason_code == "cardiac"
 
 
-async def test_confirm_deletes_draft_but_keeps_the_photo(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_confirm_deletes_draft_but_keeps_the_photo(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     """확정돼도 사진 키가 안 바뀐다 — 초안 행만 지우고 객체는 그대로 물려준다."""
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
@@ -736,7 +779,9 @@ async def test_confirm_deletes_draft_but_keeps_the_photo(svc_session, svc_store,
     assert svc_storage.local_path(key).exists()
 
 
-async def test_confirm_is_idempotent_on_its_own_client_event_id(svc_session, svc_store, svc_storage, monkeypatch):
+async def test_confirm_is_idempotent_on_its_own_client_event_id(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)

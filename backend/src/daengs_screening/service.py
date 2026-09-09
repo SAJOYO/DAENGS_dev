@@ -53,11 +53,18 @@ RELEASE_REVISION = os.environ.get("SCREENING_RELEASE_REVISION", "").strip() or N
 def _expect_arms() -> int | None:
     """기대하는 2단계 팔 수. 비어 있거나 숫자가 아니면 검사하지 않습니다.
 
-    개발 PC 에는 1팔짜리 릴리스가 있을 수 있어 기본값을 두지 않았습니다.
-    **배포에서는 compose 가 3 을 박아 줍니다.**
+    `SCREENING_EXPECT_STAGE2_ARMS` 가 비어 있으면 **리포에서 받는 구성일 때만**
+    3 을 기대합니다. 폴더를 쓰는 개발 PC 는 1팔짜리로도 돌아야 하기 때문입니다.
+
+    ⚠️ compose 의 `environment:` 에 넣지 마세요 — `backend/.env` 자리입니다
+       (`HF_TOKEN` 이 거기서 덮이는 것과 같은 이유).
     """
     raw = os.environ.get("SCREENING_EXPECT_STAGE2_ARMS", "").strip()
-    return int(raw) if raw.isdigit() else None
+    if raw:
+        return int(raw) if raw.isdigit() else None
+    # 안 정했으면 — 리포에서 받아 오는 구성일 때만 3 을 기대합니다.
+    # 폴더를 쓰는 개발 PC 는 1팔짜리 릴리스로도 돌 수 있어야 합니다.
+    return 3 if RELEASE_REPO else None
 
 
 #: 다운로드는 한 번만 합니다. `_agent()` 는 `run_in_threadpool` 로 불리므로

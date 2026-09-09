@@ -1,0 +1,38 @@
+{
+  "scope": "supplement_selection_only",
+  "geo_file": "scripts/spikes/diary_storyboard/scene_core.py",
+  "geo_file_sha256": "d5224fe86be0ce0aada6a4fc49d299d3c85f063cbcec9937af5fe6dfe2626d2d",
+  "source_kind": "synthetic",
+  "cases": [
+    {
+      "case": "missing-route",
+      "candidate_decisions": {},
+      "matches_geo": true
+    },
+    {
+      "case": "mixed",
+      "candidate_decisions": {
+        "dwell": "fill_scene_deficit",
+        "near-action": "near_user_record_time",
+        "overlap": "overlapping_selected_observation",
+        "slow": "fill_scene_deficit"
+      },
+      "matches_geo": true
+    },
+    {
+      "case": "observations-only",
+      "candidate_decisions": {
+        "dwell": "fill_scene_deficit",
+        "slow": "fill_scene_deficit"
+      },
+      "matches_geo": true
+    },
+    {
+      "case": "records-enough",
+      "candidate_decisions": {
+        "unused-dwell": "user_target_met"
+      },
+      "matches_geo": true
+    }
+  ]
+}

@@ -27,9 +27,9 @@ from daengs_backend.orchestration.semantic import (
     SemanticRoutingDecision,
     router_generation_config,
 )
-from tools.orchestrator_comparison import runner_v2 as v2
-from tools.orchestrator_comparison.runner import Meter
-from tools.router_benchmark.schemas import (
+from daengs_evals.orchestrator_comparison import runner_v2 as v2
+from daengs_evals.orchestrator_comparison.runner import Meter
+from daengs_evals.router_benchmark.schemas import (
     AttemptValidation,
     GoldCase,
     PerformanceObservation,

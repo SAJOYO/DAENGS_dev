@@ -48,7 +48,12 @@ class CrawlTriggerRequest(BaseModel):
 
 
 class CrawlTriggerAccepted(BaseModel):
-    """202 응답. **결과가 아니라 접수증입니다** — 크롤은 분 단위라 기다리지 않습니다."""
+    """202 응답. **결과가 아니라 접수증입니다** — 크롤은 분 단위라 기다리지 않습니다.
+
+    `note` 는 GCP 에서 **이미 실행 중이라 새로 띄우지 않았을 때**만 찹니다 (#326). 그때 `task_id` 는
+    그 실행의 이름입니다.
+    """
 
     task_id: str
     source_ids: list[str]
+    note: str | None = None

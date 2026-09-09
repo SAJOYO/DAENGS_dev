@@ -1,0 +1,70 @@
+{
+  "format": "walk-diary-prepared-v1",
+  "policy": {
+    "version": "records-first-v1",
+    "target_scene_count": 5,
+    "separation_s": 20.0,
+    "place_slots": 1,
+    "space_slots": 3,
+    "environment_slots": 1,
+    "time_slots": 1
+  },
+  "plan": {
+    "format": "walk-diary-plan-v1",
+    "input_revision": "c0258ddf2d5af3946ec4fb8406c040305a62c5a4f5fb7942068e6f12e71d81c6",
+    "target_scene_count": 5,
+    "preparation_policy": {
+      "version": "records-first-v1",
+      "target_scene_count": 5,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "scenes": [
+      {
+        "id": "stamp:72aa346bcb5528260d0c96767ab6c62346fc7b189e4a9046aaed7cec024a06b3",
+        "core": {
+          "identity": "observation:dwell",
+          "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:52e872c5fba2b7a4a7f8a4740140107b9bea76c239872c556b6697d93048e94e",
+        "core": {
+          "identity": "observation:slow",
+          "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+        },
+        "background": []
+      }
+    ]
+  },
+  "core_decisions": [
+    {
+      "material": {
+        "identity": "observation:dwell",
+        "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+      },
+      "reason": "fill_scene_deficit"
+    },
+    {
+      "material": {
+        "identity": "observation:slow",
+        "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+      },
+      "reason": "fill_scene_deficit"
+    }
+  ],
+  "background_decisions": [],
+  "counts": {
+    "target": 5,
+    "user_records": 0,
+    "initial_deficit": 5,
+    "supplemented": 2,
+    "remaining_deficit": 3,
+    "total": 2
+  },
+  "limits": []
+}

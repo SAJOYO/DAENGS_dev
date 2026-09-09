@@ -84,6 +84,7 @@ class TerritoryOccupancy(Base):
     )
     certification: Mapped[str] = mapped_column(String(16))
     occupied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    certified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TerritoryClaimPhoto(Base):
@@ -94,3 +95,22 @@ class TerritoryClaimPhoto(Base):
     claim_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("territory_claims.id", ondelete="CASCADE"), index=True
     )
+
+
+class TerritoryChallenge(Base):
+    """One immutable admission per capture UUID; claim remains the session/site aggregate."""
+
+    __tablename__ = "territory_challenges"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    claim_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("territory_claims.id", ondelete="CASCADE"), index=True
+    )
+    expected_site_version: Mapped[int] = mapped_column(BigInteger)
+    season_id: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    photo_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("territory_attempts.id", ondelete="SET NULL"), unique=True
+    )
+    resolution_code: Mapped[str | None] = mapped_column(String(40))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

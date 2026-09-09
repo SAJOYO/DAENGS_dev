@@ -54,12 +54,36 @@ check("긴급도 문구(URGENCY_HINT) 없음",
       not any(h in msg for h in hints),
       next((h for h in hints if h in msg), ""))
 
-# ── 2. 여섯 개를 전부 보여준다 ────────────────────────────────
-print("\n[2] 분포 전체 노출")
-for c in LESION:
-    check(f"{c}({CLASS_KO[c]}) 가 화면에 있음", CLASS_KO[c] in msg)
-check("여섯 줄 모두 백분율이 붙음",
-      sum(1 for ln in msg.splitlines() if ln.startswith("    ") and "%" in ln) == 6)
+# ── 2. 계열 네 묶음을 전부 보여준다 (2026-09-08 부터) ──────────
+#   ⚠️ 예전엔 "6종을 전부" 였습니다. 4묶음은 6종을 **자른 게 아니라 더한 것**이라
+#      아무것도 안 숨깁니다 — 취지(상위 몇 개로 자르지 마라)는 그대로입니다.
+#      6종은 계약(`stage2.distribution`)에 남아 콘솔이 씁니다 — [2b] 가 감시.
+print("\n[2] 계열 네 묶음 전체 노출")
+from daengs_screening.config import MORPH_GROUP_KEEP_A6                     # noqa: E402
+
+GROUPS = sorted(set(MORPH_GROUP_KEEP_A6.values()))
+for g in GROUPS:
+    check(f"계열 '{g}' 가 화면에 있음", g in msg)
+check("네 줄 모두 백분율이 붙음",
+      sum(1 for ln in msg.splitlines() if ln.startswith("    ") and "%" in ln) == 4,
+      str([ln for ln in msg.splitlines() if ln.startswith("    ") and "%" in ln]))
+# ⚠️ A5·A6 은 혼자 있는 묶음이라 **계열 이름 == 클래스 이름**입니다.
+#    그래서 "6종 이름이 뜨나" 를 그대로 세면 항상 걸립니다. 물어야 할 것은
+#    **묶여 없어진 이름(A1~A4)이 새어 나오나** 입니다.
+def _leaked(text):
+    return [CLASS_KO[c] for c in LESION
+            if CLASS_KO[c] in text and CLASS_KO[c] not in GROUPS]
+
+
+check("★ 묶여 없어진 6종 이름(A1~A4)이 안 샌다", not _leaked(msg), str(_leaked(msg)))
+
+print("\n[2b] ★ 면책은 두 번까지 (주저리주저리 금지)")
+#   2026-09-08 이전엔 같은 말을 **다섯 번** 했습니다. 반복하면 아무도 안 읽습니다.
+_DENY = ("판단할 수 없", "진단이 아니", "진료를 대체하지")
+_n_deny = sum(1 for ln in msg.splitlines() if any(d in ln for d in _DENY))
+check("면책 줄이 2줄 이하", _n_deny <= 2,
+      str([ln for ln in msg.splitlines() if any(d in ln for d in _DENY)]))
+check("그래도 최소 한 번은 한다", _n_deny >= 1)
 
 # ── 3. 순서 — "판단할 수 없습니다" 가 숫자보다 위 ──────────────
 print("\n[3] 순서")
@@ -72,7 +96,10 @@ check("면책 문구 포함", infer.DISCLAIMER in msg)
 
 # ── 4. 깎기 전 원본 분포를 쓴다 ───────────────────────────────
 print("\n[4] 원본 분포 (합 = 1)")
-check("A2 는 31% 로 뜸 (깎은 19% 아님)", "31%" in msg and "19%" not in msg)
+# 계열 확률은 6종을 **깎기 전 원본**으로 더한 값이어야 합니다.
+#   A2 31% + A3 22% = 53% (표면 변화).  깎은 값이면 19%+13%=32% 가 뜹니다.
+check("계열 합이 깎기 전 원본 (53%, 32% 아님)", "53%" in msg and "32%" not in msg,
+      str([ln for ln in msg.splitlines() if ln.startswith("    ")]))
 check("1단계 이상 확률을 머리말에 씀", "이상 가능성 62%" in msg)
 check("abnormal_p 를 직접 주면 그게 우선",
       "이상 가능성 80%" in infer.compose_screening_message(abnormal_pred(), 0.80))
@@ -103,7 +130,7 @@ abstained.abstain = True
 _ab_txt = infer.compose_screening_message(abstained)
 check("기권이어도 재촬영으로 안 보냄", "판단이 어려운 사진입니다" not in _ab_txt)
 check("기권이어도 이상 소견을 말함", "이상 소견이 보입니다" in _ab_txt)
-check("기권이어도 분포가 보임", any(CLASS_KO[c] in _ab_txt for c in LESION))
+check("기권이어도 분포가 보임", any(g in _ab_txt for g in GROUPS))
 check("기권이어도 진료를 권함", "수의사 진료를 받아보시기를 권합니다" in _ab_txt)
 # 2단계의 불확실은 사진 탓이 아니라 모델 한계라, 다시 찍으라고 하면 안 됩니다
 check("기권일 때 다시 찍으라고 안 함", "더 선명하게 다시 찍으면" not in _ab_txt)
@@ -138,7 +165,7 @@ check("to_dict 에 stage1_abnormal 이 남음", d["stage1_abnormal"] == 0.62)
 # ──────────────────────────────────────────────────────────────
 # ★ 계열 한 줄 (STEP 34) — 기본 꺼짐, 켜도 규칙을 깨지 않는가
 # ──────────────────────────────────────────────────────────────
-print("\n[계열] SHOW_GROUP — 기본은 꺼져 있어야 합니다")
+print("\n[계열] SHOW_GROUP — 2026-09-08 부터 기본 **켜짐** (사용자 결정)")
 import os as _os                                                  # noqa: E402
 
 import daengs_screening.message as _M                                          # noqa: E402
@@ -147,10 +174,22 @@ from daengs_screening.message import Prediction, compose_screening_message      
 _DIST = [("A1", .45), ("A4", .30), ("A2", .10), ("A3", .06), ("A5", .05), ("A6", .04)]
 _FLAT = [("A1", .2), ("A2", .2), ("A3", .2), ("A4", .2), ("A5", .1), ("A6", .1)]
 
-check("환경변수가 없으면 꺼져 있다",
-      _M.SHOW_GROUP is False or _os.environ.get("DOG_SKIN_SHOW_GROUP") == "1")
-check("꺼져 있으면 빈 문자열", _M.lesion_group_line(_DIST, 0.9) == ""
-      if not _M.SHOW_GROUP else True)
+check("환경변수가 없으면 **켜져 있다** (2026-09-08 결정)",
+      _M.SHOW_GROUP is True or _os.environ.get("DOG_SKIN_SHOW_GROUP") == "0")
+# ★ 되돌릴 수 있어야 합니다 — 제품 결정은 뒤집힐 수 있고, 그때 코드를 고치는
+#   게 아니라 환경변수 하나로 꺼져야 합니다.
+_env_was = _os.environ.get("DOG_SKIN_SHOW_GROUP")
+_os.environ["DOG_SKIN_SHOW_GROUP"] = "0"
+import importlib as _il                                            # noqa: E402
+_il.reload(_M)
+check("★ DOG_SKIN_SHOW_GROUP=0 이면 꺼진다", _M.SHOW_GROUP is False)
+check("꺼지면 빈 문자열", _M.lesion_group_line(_DIST, 0.9) == "")
+if _env_was is None:
+    _os.environ.pop("DOG_SKIN_SHOW_GROUP", None)
+else:
+    _os.environ["DOG_SKIN_SHOW_GROUP"] = _env_was
+_il.reload(_M)
+check("되돌리면 다시 켜진다", _M.SHOW_GROUP is True)
 
 _was = _M.SHOW_GROUP
 _M.SHOW_GROUP = True
@@ -167,7 +206,9 @@ try:
     check("★ 6종 이름이 안 새어 나간다", not leaked, str(leaked))
     check("계열 이름만 쓴다",
           any(g in line for g in ("융기·발진", "표면 변화", "미란·궤양", "결절·종괴")))
-    check("진단이 아니라고 밝힌다", "진단이 아닙니다" in line)
+    # ⚠️ 계열 줄 꼬리에 "(진단이 아닙니다)" 를 **안 붙입니다** — 바로 다음
+    #    줄이 "판단할 수 없습니다" 라 같은 말이 두 번 됩니다 (2026-09-08).
+    check("★ 계열 줄에 면책 꼬리를 안 붙인다", "진단이 아닙니다" not in line, repr(line))
 
     # 전체 문구에 얹었을 때도 규칙이 유지되는가
     p = Prediction(topk=[(c, v * .9) for c, v in _DIST],
@@ -179,8 +220,9 @@ try:
           not any(h in msg for h in ("종양 감별 필요", "감염 동반 가능",
                                      "만성 경과 가능", "피부 장벽 손상")),
           "계열과 긴급도를 같이 띄우면 절반이 한 단계 부풀려집니다 (STEP 30·33)")
-    check("여섯 개 분포는 그대로 다 나온다",
-          all(CLASS_KO[c] in msg for c in CLASSES))
+    _lk = [CLASS_KO[c] for c in CLASSES
+           if CLASS_KO[c] in msg and CLASS_KO[c] not in GROUPS]
+    check("★ 묶여 없어진 6종 이름이 안 샌다", not _lk, str(_lk))
     check("진료 권고가 그대로 있다", "수의사 진료를 받아보시기를 권합니다" in msg)
 finally:
     _M.SHOW_GROUP = _was

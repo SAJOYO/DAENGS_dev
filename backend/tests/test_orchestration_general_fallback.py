@@ -65,8 +65,8 @@ from daengs_backend.orchestration.semantic import (
 )
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_backend.orchestration.social import social_message
-from tools.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
-from tools.router_benchmark.schemas import load_gold_v3_cases
+from daengs_evals.router_benchmark.evaluate import ALLOWED_EXECUTE, evaluate_benchmark
+from daengs_evals.router_benchmark.schemas import load_gold_v3_cases
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 SEOUL = {"location": {"lat": 37.5, "lon": 127.0}}
@@ -109,7 +109,8 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
     assert request.timeout_ms is None
     assert built.handoffs == [] and built.clarify is None
     # 좌표가 있어도 payload 로 건너가지 않는다 — 폴백은 Walk·Place 의 질문에 답하지 않는다.
-    assert set(request.payload.model_dump()) == {"question", "dog"}
+    assert set(request.payload.model_dump()) == {"question", "dog", "care_log"}
+    assert request.payload.care_log is None
 
 
 def test_general_payload_follows_the_life_rule_exactly() -> None:
@@ -479,6 +480,28 @@ def test_general_prompt_carries_the_question_and_dog_but_never_coordinates() -> 
         assert word in prompt
     assert "veterinary hospital" in prompt and "institutional-information capability" in prompt
     assert build_general_prompt(GeneralPayload(question=QUERY)).count("DOG_CONTEXT: {}") == 1
+
+
+def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
+    """#331: the dog block widens to feeding style, conditions and *whether* it is on
+    medication. The safety prompt text itself stays at v3 — that text was approved after a
+    paired comparison (D-057 ③) and this card only changes the JSON that flows into it."""
+    payload = GeneralPayload(
+        question=QUERY,
+        dog=DogContext(
+            breed="푸들", feeding_style="scheduled",
+            health_conditions="신부전 초기", on_medication=True,
+        ),
+    )
+    prompt = build_general_prompt(payload)
+    assert (
+        'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
+        ' "health_conditions": "신부전 초기", "on_medication": true}'
+    ) in prompt
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    # the contract has no field that could carry a drug name into the prompt
+    assert "medications" not in DogContext.model_fields
+    assert "feeding_times" not in DogContext.model_fields
 
 
 def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> None:

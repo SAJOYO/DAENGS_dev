@@ -37,6 +37,11 @@ Claude Code 에게:
       `dev` 만 보면 부족합니다 — 남의 예약이 아직 그 사람 브랜치에만 있을 수 있습니다:
       `git fetch origin && git log --all --oneline --grep="예약"`
       예약 커밋 제목은 `chore: 착수 — RAG-0NN 예약 (#카드)` 로 고정합니다
+      ⚠ **랩을 돌렸으면 산출물 `data/processed/answers/lapN.jsonl` 을 그 카드에서 커밋합니다.**
+      `data/` 는 미추적이지만 랩은 예외입니다 (`.gitignore` 의 `!data/processed/answers/*.jsonl`,
+      RAG-017 '예외' 절 · RAG-028 ⑥) — 같은 질문에도 LLM 출력이 매번 달라 **옛 랩이 곧 유일본**이고,
+      코퍼스가 바뀐 뒤에는 재생성이 아예 불가능합니다. 예약만 하고 파일을 안 올리면 다음 카드가
+      회귀 게이트를 못 돌립니다 — `lap31`(#337)·`lap32`(#347)가 실제로 그랬습니다 (#349)
 - [ ] 이 본문을 다시 읽습니다 — 열어 둔 사이 다른 카드가 전제를 바꿨을 수 있습니다
 
 ## 무엇을 / 왜
@@ -77,7 +82,10 @@ Claude Code 에게:
 
 ## 확인한 것
 
+- [ ] `uv run check` 통과 — **3초입니다. 머지 전에 무조건.** `dev` 머지가 곧 배포이고,
+      이 검사(마이그레이션 짝·이름·Windows 바이트)는 pytest 가 안 봅니다
 - [ ] 로컬에서 동작 확인 (`npm run dev` / `uv run dev`)
+- [ ] 백엔드를 건드렸으면 `uv run pytest` 통과 (약 9분)
 - [ ] 프론트를 건드렸으면 `npm run lint` 통과
 - [ ] 의존성은 `uv add` / `npm install` 로 넣고 lock 파일도 커밋 (`uv.lock`, `package-lock.json`)
 - [ ] `.env`·키·비밀번호가 diff 에 없고, `.env.example` 이 실제 변수와 일치

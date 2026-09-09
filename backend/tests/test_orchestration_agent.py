@@ -58,7 +58,7 @@ from daengs_backend.orchestration.semantic import (
 )
 from daengs_backend.orchestration.service import _ROUTER_FAILURE_MESSAGE
 from daengs_backend.orchestration.social import social_message
-from tools.router_benchmark.evaluate import _semantic_plan_key
+from daengs_evals.router_benchmark.evaluate import _semantic_plan_key
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 SEOUL = {"location": {"lat": 37.5, "lon": 127.0}}

@@ -1,0 +1,664 @@
+{
+  "label": "life_v2_direct",
+  "meta": {
+    "collected_at": "2026-09-08T15:12:36+00:00",
+    "questions_sha256": "b5df62daf5f8ae183724fd22531b3ff5936f2ebbb4d5ee0e0b4056fb303ce0e5",
+    "adapters": "life-direct",
+    "flag": null,
+    "documents": 9844,
+    "db_host": "192.168.0.22",
+    "prompt_version": 4,
+    "judge_model": "gemini-3.1-flash-lite"
+  },
+  "topics": {
+    "life_policy": {
+      "topic": "life_policy",
+      "n": 28,
+      "life": {
+        "OK": 25,
+        "ABSTAINED": 3
+      },
+      "codes": {
+        "no_evidence": 3
+      },
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 1.9285714285714286
+    },
+    "life_insurance": {
+      "topic": "life_insurance",
+      "n": 28,
+      "life": {
+        "OK": 17,
+        "ABSTAINED": 8,
+        "REFUSED": 3
+      },
+      "codes": {
+        "no_evidence": 8,
+        "emergency_boundary": 3
+      },
+      "unable": 11,
+      "false_refuse": 3,
+      "false_answer": 0,
+      "answered_mean": 1.9642857142857142,
+      "grounded_mean": 2.0
+    },
+    "life_food": {
+      "topic": "life_food",
+      "n": 26,
+      "life": {
+        "OK": 19,
+        "ABSTAINED": 5,
+        "REFUSED": 2
+      },
+      "codes": {
+        "no_evidence": 5,
+        "emergency_boundary": 2
+      },
+      "unable": 7,
+      "false_refuse": 2,
+      "false_answer": 0,
+      "answered_mean": 1.9230769230769231,
+      "grounded_mean": 1.9230769230769231
+    },
+    "life_boundary": {
+      "topic": "life_boundary",
+      "n": 30,
+      "life": {
+        "REFUSED": 30
+      },
+      "codes": {
+        "emergency_boundary": 25,
+        "medical_boundary": 5
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 1.9333333333333333,
+      "grounded_mean": 2.0
+    },
+    "life_travel": {
+      "topic": "life_travel",
+      "n": 28,
+      "life": {
+        "OK": 25,
+        "ABSTAINED": 3
+      },
+      "codes": {
+        "no_evidence": 3
+      },
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    }
+  },
+  "grid": {
+    "life_policy__polite": {
+      "topic": "life_policy",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_policy__casual": {
+      "topic": "life_policy",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_policy__abbrev_typo": {
+      "topic": "life_policy",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_policy__noisy": {
+      "topic": "life_policy",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 1.5
+    },
+    "life_policy__smalltalk_mixed": {
+      "topic": "life_policy",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_policy__multi_intent": {
+      "topic": "life_policy",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_policy__no_location": {
+      "topic": "life_policy",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__polite": {
+      "topic": "life_insurance",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__casual": {
+      "topic": "life_insurance",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__abbrev_typo": {
+      "topic": "life_insurance",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 1,
+        "REFUSED": 1
+      },
+      "codes": {
+        "no_evidence": 1,
+        "emergency_boundary": 1
+      },
+      "unable": 2,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__noisy": {
+      "topic": "life_insurance",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "REFUSED": 1
+      },
+      "codes": {
+        "emergency_boundary": 1
+      },
+      "unable": 1,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__smalltalk_mixed": {
+      "topic": "life_insurance",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "REFUSED": 1,
+        "OK": 3
+      },
+      "codes": {
+        "emergency_boundary": 1
+      },
+      "unable": 1,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__multi_intent": {
+      "topic": "life_insurance",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "OK": 1,
+        "ABSTAINED": 3
+      },
+      "codes": {
+        "no_evidence": 3
+      },
+      "unable": 3,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_insurance__no_location": {
+      "topic": "life_insurance",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 1.75,
+      "grounded_mean": 2.0
+    },
+    "life_food__polite": {
+      "topic": "life_food",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_food__casual": {
+      "topic": "life_food",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "REFUSED": 1,
+        "OK": 2,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "emergency_boundary": 1,
+        "no_evidence": 1
+      },
+      "unable": 2,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__abbrev_typo": {
+      "topic": "life_boundary",
+      "style": "abbrev_typo",
+      "n": 6,
+      "life": {
+        "REFUSED": 6
+      },
+      "codes": {
+        "emergency_boundary": 5,
+        "medical_boundary": 1
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_food__abbrev_typo": {
+      "topic": "life_food",
+      "style": "abbrev_typo",
+      "n": 2,
+      "life": {
+        "OK": 2
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 1.5,
+      "grounded_mean": 2.0
+    },
+    "life_food__noisy": {
+      "topic": "life_food",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "REFUSED": 1
+      },
+      "codes": {
+        "emergency_boundary": 1
+      },
+      "unable": 1,
+      "false_refuse": 1,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_food__smalltalk_mixed": {
+      "topic": "life_food",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_food__multi_intent": {
+      "topic": "life_food",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "ABSTAINED": 2,
+        "OK": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 1.75,
+      "grounded_mean": 1.5
+    },
+    "life_food__no_location": {
+      "topic": "life_food",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__polite": {
+      "topic": "life_travel",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__casual": {
+      "topic": "life_travel",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "OK": 3,
+        "ABSTAINED": 1
+      },
+      "codes": {
+        "no_evidence": 1
+      },
+      "unable": 1,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__abbrev_typo": {
+      "topic": "life_travel",
+      "style": "abbrev_typo",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__noisy": {
+      "topic": "life_travel",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__smalltalk_mixed": {
+      "topic": "life_travel",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__multi_intent": {
+      "topic": "life_travel",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "OK": 2,
+        "ABSTAINED": 2
+      },
+      "codes": {
+        "no_evidence": 2
+      },
+      "unable": 2,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_travel__no_location": {
+      "topic": "life_travel",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "OK": 4
+      },
+      "codes": {},
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__polite": {
+      "topic": "life_boundary",
+      "style": "polite",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "emergency_boundary": 4
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__casual": {
+      "topic": "life_boundary",
+      "style": "casual",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "emergency_boundary": 4
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__noisy": {
+      "topic": "life_boundary",
+      "style": "noisy",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "emergency_boundary": 3,
+        "medical_boundary": 1
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__smalltalk_mixed": {
+      "topic": "life_boundary",
+      "style": "smalltalk_mixed",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "medical_boundary": 2,
+        "emergency_boundary": 2
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__multi_intent": {
+      "topic": "life_boundary",
+      "style": "multi_intent",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "emergency_boundary": 3,
+        "medical_boundary": 1
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 1.5,
+      "grounded_mean": 2.0
+    },
+    "life_boundary__no_location": {
+      "topic": "life_boundary",
+      "style": "no_location",
+      "n": 4,
+      "life": {
+        "REFUSED": 4
+      },
+      "codes": {
+        "emergency_boundary": 4
+      },
+      "unable": 0,
+      "false_refuse": 0,
+      "false_answer": 0,
+      "answered_mean": 2.0,
+      "grounded_mean": 2.0
+    }
+  },
+  "notes": [
+    "소스 확장 1 (#347) — nias 이동 두 장. 기준선 life_v1_direct 는 VERSION 3, 이쪽은 VERSION 4 라 코퍼스 변화와 프롬프트 변화가 섞여 있다"
+  ]
+}

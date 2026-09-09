@@ -246,3 +246,18 @@ def test_dump_row_carries_the_three_comparison_axes() -> None:
     a = generate.answer("q", HITS, client=FakeClient("제16조 와 제999조"), model="fake")
     row = generate.dump_rows([("Q1", a, set(), set())])[0]
     assert [h.chunk_id for h in row.hits] and row.cited and row.ungrounded == ["제999조"]
+
+
+# ---------------------------------------------------------------- 경계 규칙 (RAG-078 · D17)
+def test_boundary_rule_is_about_what_is_asked_not_what_is_described() -> None:
+    """**증상을 곁들인 제도 질문은 `none` 이다** (RAG-077 ④ · D17).
+
+    다섯 조건의 Life 거절 15건 중 14건이 조항을 인용해 답해 놓고 `medical`/`emergency` 로 나갔다.
+    `boundary` 정의가 *묻는 것* 으로 적혀 있는데 예시(*"먹었어요" 는 벌어진 일*)가 *서술한 것* 으로
+    읽혔다. 규칙을 묻는 것 기준으로 다시 적고, 누가 그 문장을 지우면 여기서 깨진다.
+    프롬프트가 랩 비교의 축이라 `VERSION` 도 같이 오른다.
+    """
+    assert generate.VERSION == 4
+    prompt = generate.build_prompt("귀가 빨개졌는데 지금 가입하면 보장되나요", HITS)
+    assert "증상을 곁들여" in prompt and "`none`" in prompt
+    assert "진료 권함" in prompt or "진료를 권하는" in prompt

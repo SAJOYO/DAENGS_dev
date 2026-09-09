@@ -104,6 +104,7 @@ async def read_sites(db, site_ids):
                 TerritoryClaimSite.version,
                 TerritoryOccupancy.certification,
                 TerritoryOccupancy.occupied_at,
+                TerritoryOccupancy.certified_at,
                 Pet.id.label("pet_id"),
                 Pet.name.label("pet_name"),
                 TerritoryClaimSession.app_user_id,

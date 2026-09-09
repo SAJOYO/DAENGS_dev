@@ -201,6 +201,27 @@ def unqualified(sql):
     return sql.replace('public.', '')
 
 
+# pose_model 백필(2026-09-09, D-063)은 **값**을 검사하므로 픽스처에 행이 있어야 한다.
+# 여섯 행이 백필 규칙의 가지 하나씩이다 — v4 관절 / legacy 관절 / 빈 객체 / 두 체계가 섞임 /
+# 어느 집합에도 없는 키 / summary 자체가 NULL. 앞 넷은 DONE, 뒤 둘은 각각 DONE(unavailable)·FAILED.
+# 마이그레이션 **전** 상태라 pose_model 컬럼이 없다 — 컬럼은 마이그레이션이 만든다.
+GAIT_RECORDS_POSE_MODEL_ROWS = (
+    "INSERT INTO gait_records(id, pet_id, status, quality_status, quality_tier, summary_for_ui) VALUES"
+    " ('a0000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"R_Knee\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000002', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'low', '{\"Iliac crest\": {\"x_range\": 0.5}, \"Femorotibial joint\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'unavailable', NULL, '{}'),"
+    " ('a0000000-0000-0000-0000-000000000004', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Iliac crest\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000005', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Tail_tip\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000006', '33333333-3333-3333-3333-333333333333',"
+    "  'FAILED', NULL, NULL, NULL);"
+)
+
+
 # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
 # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
 # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
@@ -209,6 +230,67 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-09', 'walk_photo_manifests', WALKS, 'walk_photo_manifests', [
+            'ALTER TABLE walk_photo_manifests DROP COLUMN publisher_id',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_pkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_walk_id_fkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_revision_positive',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_hash_valid',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_records_bounded',
+        ]),
+        ('2026-09-09', 'walk_entry_pins',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
+         'walk_entry_pins', [
+            'DROP TRIGGER walk_entry_pins_deleted ON walk_entries',
+            'ALTER TABLE walk_entries DISABLE TRIGGER walk_entry_pins_deleted',
+            'DROP TRIGGER walk_entry_pin_live ON walk_entry_pins',
+            'DROP TRIGGER walk_entry_mutation_live ON walk_entry_mutations',
+            'ALTER TABLE walk_entry_pins DROP COLUMN payload',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_pkey',
+            'ALTER TABLE walk_entry_pins DROP CONSTRAINT walk_entry_pins_walk_id_entry_id_fkey',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_walk_id_entry_id_fkey',
+         ]),
+        ('2026-09-08', 'walk_entry_contexts',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
+         'walk_entry_context_jobs', [
+            'DROP TRIGGER walk_entry_contexts_deleted ON walk_entries',
+            'ALTER TABLE walk_entries DISABLE TRIGGER walk_entry_contexts_deleted',
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_walk_id_entry_id_fkey',
+            'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_job_id_fkey',
+         ]),
+        # gait_records.quality_tier CHECK 를 good/low → good/ok/low 로. 픽스처는 **9/2 의 옛 표**
+        # 그대로(prerequisites 로 그 마이그레이션 텍스트를 재사용) — 그래야 이 마이그레이션이
+        # 실제로 하는 일(옛 제약을 떼고 새 제약을 거는 것)을 그대로 밟는다.
+        ('2026-09-09', 'gait_quality_tier_ok',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-02_gait_records'),
+         'gait_records', [
+            # 제약을 통째로 잃는 변조.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check',
+            # **사고 이전으로 되돌리는 변조 — 이 항목의 이유다.** 옛 verify(9/2)는 good·low
+            # "포함" 검사라 이걸 못 잡는다. 20~80 구간 영상이 다시 PROCESSING 좀비가 된다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','low'))",
+            # 이름만 같고 값이 하나 빠진 변조(low 를 잃음).
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok'))",
+            # 검증 안 된(NOT VALID) 제약은 "있어도 없는 것" — convalidated 를 본다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok','low')) NOT VALID",
+        ]),
+        ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_challenges', [
+            'ALTER TABLE territory_occupancies DROP COLUMN certified_at',
+            'ALTER TABLE territory_challenges DROP COLUMN completed_at',
+            'ALTER TABLE territory_challenges ALTER COLUMN expected_site_version TYPE integer',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_key',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_claim_id_fkey',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_fkey',
+            'DROP INDEX ix_territory_challenges_claim_id',
+        ]),
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
@@ -293,6 +375,19 @@ CHECKS = (
             'UPDATE pets SET registered = true;'
             ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
             'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
+        ]),
+        # 2026-09-08 (#331) — 돌봄 칸 넷. 기본값 변조는 `pets_registered` 와 같은 이유이고,
+        # **제약을 지우는 변조가 이 항목의 추가 이유다** — 제약이 빠져도 칸 모양은 그대로라
+        # 칸만 보는 verify 는 통과하는데, 그 뒤로 자율급식에 시각이 붙은 행이 조용히 쌓인다.
+        # ⚠ 타입 변조는 `feeding_style` 에 건다. `feeding_times` 를 text 로 바꾸면 그 위의
+        #   `jsonb_typeof(feeding_times)` CHECK 가 재검증에서 죽어 **변조 자체가 실패**하고,
+        #   하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr 낱말로 가르므로
+        #   그 항목은 아무것도 증명하지 않는다 (2026-09-08 CI 실측).
+        ('2026-09-08', 'pets_care', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN feeding_times',
+            'ALTER TABLE pets ALTER COLUMN feeding_style TYPE text',
+            'ALTER TABLE pets ALTER COLUMN feeding_style SET DEFAULT \'free\'',
+            'ALTER TABLE pets DROP CONSTRAINT pets_feeding_times_need_schedule',
         ]),
         # 2026-09-07 (#297) — 요청 메타데이터. **변조 목록의 마지막 둘이 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 "있어야 할 열이 있나" 만이 아니라 **"없어야 할 열이
@@ -736,6 +831,29 @@ CHECKS = (
             'ALTER TABLE training_rag_chunks ALTER COLUMN chunk_id DROP NOT NULL',
             'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey',
             'ALTER TABLE training_rag_chunks ADD UNIQUE (document_id, chunk_index, embedding_model)',
+        ]),
+        # 2026-09-09 (D-063) — pose_model 컬럼 + 관절 키로 판별되는 행만 백필. 픽스처는 09-02 의
+        # 표 + 09-09 tier CHECK 확장 위에 여섯 행(GAIT_RECORDS_POSE_MODEL_ROWS). 변조는 규칙의
+        # 양쪽을 다 민다 — "명확한 행에 틀린 값/NULL" 과 "허용되지 않은 ID". **빈 객체 행에
+        # 허용된 ID 를 넣는 것은 변조가 아니다**(새 분석의 unavailable 기록이 그 모양) — 그
+        # 통과 조건은 backend/tests/test_gait_pose_model.py 가 verify SQL 의 조건을 읽어 지킨다.
+        ('2026-09-09', 'gait_records_pose_model',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok')
+         + GAIT_RECORDS_POSE_MODEL_ROWS,
+         'gait_records', [
+            'ALTER TABLE gait_records DROP COLUMN pose_model',
+            # 값이 들어갈 만큼 넓게 잡는다 — 좁히면 ALTER 자체가 죽어 verify 가 아니라 변조가
+            # 실패하고, 하네스는 그것을 "못 잡음" 으로 읽는다 (#271 NOT VALID 과 같은 함정).
+            'ALTER TABLE gait_records ALTER COLUMN pose_model TYPE varchar(40)',
+            # AP-10K 관절 행에 legacy 값 — 관절 정의가 다른 기록끼리 비교되게 하는 변조.
+            "UPDATE gait_records SET pose_model = 'yolov8_12kp_best'"
+            " WHERE summary_for_ui ? 'L_Hip' AND NOT summary_for_ui ? 'Iliac crest'",
+            # legacy 관절 행을 NULL 로 — 백필이 안 돈 상태와 같은 모양.
+            "UPDATE gait_records SET pose_model = NULL"
+            " WHERE summary_for_ui ? 'Iliac crest' AND NOT summary_for_ui ? 'L_Hip'",
+            # 레지스트리에 없는 ID. v4 compare 가 키 없을 때 쓰던 옛 기본값이 그대로 들어오는 사고.
+            "UPDATE gait_records SET pose_model = 'best_pt' WHERE summary_for_ui = '{}'::jsonb",
         ]),
 )
 

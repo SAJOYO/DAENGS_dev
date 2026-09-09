@@ -14,6 +14,7 @@ from daengs_backend.schemas.walk_entry import (
     EntryWrite,
     RecordProfileQuery,
 )
+from daengs_backend.services.walk_entry_context import reserve
 
 
 class EntryNotFound(Exception):
@@ -40,6 +41,9 @@ def response(row: WalkEntry) -> EntryResponse:
 async def list_entries(session, owner, walk_id):
     if await repo.owned_walk(session, owner, walk_id) is None:
         raise EntryNotFound
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    await guard_v1(session, [walk_id])
     return [response(row) for row in await repo.entries(session, [walk_id])]
 
 
@@ -67,6 +71,9 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
     walk = await repo.owned_walk(session, owner, walk_id, lock=True)
     if walk is None:
         raise EntryNotFound
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    await guard_v1(session, [walk_id], entry_id=entry_id)
     content = body.content
     if not walk.started_at <= content.recorded_at <= walk.ended_at:
         raise EntryInvalid("기록 시각이 산책 범위 밖입니다.")
@@ -89,6 +96,7 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
         content.model_dump(mode="json"),
     )
     session.add(row)
+    await reserve(session, row)
     await session.commit()
     return response(row)
 
@@ -96,6 +104,9 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
 async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
     if await repo.owned_walk(session, owner, walk_id, lock=True) is None:
         raise EntryNotFound
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    await guard_v1(session, [walk_id], entry_id=entry_id)
     row = apply_change(
         await repo.get_entry(session, walk_id, entry_id),
         walk_id,
@@ -109,7 +120,7 @@ async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
     return response(row)
 
 
-def build_profile(spec, walks, rows):
+def build_profile(spec, walks, rows, *, content_type=EntryContent):
     behaviors = {
         code: {"entry_count": 0, "walks_with_entries": 0}
         for code in ("sniffing", "excretion", "barking")
@@ -120,7 +131,7 @@ def build_profile(spec, walks, rows):
     for row in rows:
         if not row.payload:
             continue
-        content = EntryContent.model_validate(row.payload)
+        content = content_type.model_validate(row.payload)
         if content.kind != "behavior":
             continue
         if content.pet_id is None:
@@ -171,5 +182,8 @@ async def profile(session, owner, spec: RecordProfileQuery):
     if not await repo.owns_pet(session, owner, spec.pet_id):
         raise EntryNotFound
     walks = await repo.profile_walks(session, owner, spec)
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    await guard_v1(session, [w.id for w in walks])
     rows = await repo.entries(session, [w.id for w in walks])
     return build_profile(spec, walks, rows)

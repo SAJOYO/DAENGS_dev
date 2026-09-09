@@ -18,8 +18,7 @@ from sqlalchemy import text
 from daengs_place.ingest.restrictions import derive_all
 from daengs_place.place.facility_resolver import FacilityParams, resolve_facilities
 from daengs_place.place.restriction_map import RESTRICTION_SEMANTICS_VERSION
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 # 동해 한복판 — 다른 통합 테스트와 같은 격리 전략(좌표 + 전용 source)을 쓴다.
 SOURCE = "test:restrictions"

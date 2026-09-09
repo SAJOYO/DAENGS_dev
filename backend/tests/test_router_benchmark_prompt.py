@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from tools.router_benchmark.prompt import MODEL_ID, PROMPT_VERSION, build_router_prompt
-from tools.router_benchmark.schemas import load_gold_cases
+from daengs_evals.router_benchmark.prompt import MODEL_ID, PROMPT_VERSION, build_router_prompt
+from daengs_evals.router_benchmark.schemas import load_gold_cases
 
-TOOLS_DIR = Path(__file__).parents[1] / "tools" / "router_benchmark"
+TOOLS_DIR = Path(__file__).parents[1] / "src" / "daengs_evals" / "router_benchmark"
 
 
 def test_prompt_version_policy_and_schema_are_frozen() -> None:
@@ -115,7 +115,7 @@ def test_only_phase_2_runner_references_provider_or_network_client() -> None:
 
 def test_benchmark_imports_stay_lightweight_and_offline() -> None:
     code = (
-        "import json,sys; import tools.router_benchmark; "
+        "import json,sys; import daengs_evals.router_benchmark; "
         "print(json.dumps(sorted({m.split('.')[0] for m in sys.modules})))"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)

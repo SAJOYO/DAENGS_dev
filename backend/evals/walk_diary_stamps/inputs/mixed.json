@@ -1,0 +1,415 @@
+{
+  "format": "walk-diary-input-v1",
+  "owner_id": "3a58a0e5-4739-57e7-a090-81d6d092b28d",
+  "walk_id": "f7ebbe63-ed77-58ef-9754-d17cf9669a49",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "started_at": "2026-09-09T00:00:00Z",
+  "ended_at": "2026-09-09T00:40:00Z",
+  "pet_ids": [],
+  "evidence_origin": "mock",
+  "route": {
+    "status": "ready",
+    "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+    "input_fingerprint": "faa1c7ac0462145ffb84d7306360f9378ad087955fee35d83b87aae9a83e51c8",
+    "calculation_version": 1,
+    "reason": null
+  },
+  "records": [
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "d2c76343-5770-5e19-ab1a-ffd8ca618731",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "behavior",
+        "code": "sniffing",
+        "pet_id": null
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:05:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:05:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "  사진 대신 글로 남긴 합성 기록.\n원문 공백도 유지한다.  "
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:18:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:18:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_photo",
+        "id": "eb92770e-481d-542e-9588-08aa222e5807",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "photo",
+        "media_ref": "app-private-photo:eb92770e-481d-542e-9588-08aa222e5807"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:25:00Z",
+        "time_basis": "photo_capture",
+        "point": {
+          "lat": 37.502,
+          "lng": 127.002
+        },
+        "location_at": "2026-09-09T00:25:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    }
+  ],
+  "photos_status": "complete",
+  "photo_manifest": {
+    "publisher_id": "dfdd43f7-aa13-5547-b396-d9bfa9771256",
+    "revision": 1
+  },
+  "observations": [
+    {
+      "id": "near-action",
+      "version": "0e30fcdc6ff414e92b59209c41c661251d3fef9de4bcc99bd1580699ce585ad2",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_dwell",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:05:00Z",
+      "ended_at": "2026-09-09T00:06:00Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:05:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:05:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 5,
+            "chain_index": 0,
+            "at": "2026-09-09T00:05:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dwell",
+      "version": "db0ba00e6292c8402899d0ba918c971c01d9f30a44bfad35875562411f6002c0",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_dwell",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:12:00Z",
+      "ended_at": "2026-09-09T00:13:30Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:12:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:12:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 12,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap",
+      "version": "f774c0ff1610ccdd6abd976e5a2c631318f0589940227c4bdb6fe82b2f02982a",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_fast",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:13:00Z",
+      "ended_at": "2026-09-09T00:14:00Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:13:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:13:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 13,
+            "chain_index": 0,
+            "at": "2026-09-09T00:13:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "slow",
+      "version": "f66d7c753e84608c844d222652856b45ff3c1722b34085468d5c1bcc5bb4e7a8",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_slow",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:32:00Z",
+      "ended_at": "2026-09-09T00:33:00Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:32:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:32:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 32,
+            "chain_index": 0,
+            "at": "2026-09-09T00:32:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "backgrounds": [
+    {
+      "id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+      "target": {
+        "identity": "walk_entry:d2c76343-5770-5e19-ab1a-ffd8ca618731",
+        "version": "de9525ae65b1fdb5254efc1e29e0ead648ffdf4da3d5f8f3d14fd2b85ed114f2"
+      },
+      "supporting_targets": [],
+      "provider": "place-search",
+      "payload_schema": "walk-entry-context-v1",
+      "policy_version": "walk-entry-context-v1",
+      "query_point": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "tags": [
+        "space"
+      ],
+      "status": "known",
+      "reason": null,
+      "retrieved_at": "2026-09-09T01:00:00Z",
+      "temporal_basis": "lookup_snapshot",
+      "valid_from": null,
+      "valid_until": null,
+      "payload": {
+        "geometry": "registered_location",
+        "visit_confirmed": false,
+        "radius_m": 250,
+        "coverage": "selected_place_categories_only",
+        "items": [
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "0"
+              },
+              "name": "합성 카페 A",
+              "distance_m": 35
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "1"
+              },
+              "name": "합성 카페 B",
+              "distance_m": 90
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "2"
+              },
+              "name": "합성 카페 C",
+              "distance_m": 140
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "3"
+              },
+              "name": "합성 카페 D",
+              "distance_m": 180
+            }
+          }
+        ]
+      },
+      "payload_sha256": "5b51b90ecfd1cea11c986a5f9f50b650ea4679c2ac572ea2c2fd6a4dedb2ad4d"
+    },
+    {
+      "id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+      "target": {
+        "identity": "walk_entry:0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+        "version": "2f7bc6e701da81d80fca5b2a5f9e3e5ff2e4c72cb53e6a78f7e9069ae9dbc617"
+      },
+      "supporting_targets": [],
+      "provider": "place-search",
+      "payload_schema": "walk-entry-context-v1",
+      "policy_version": "walk-entry-context-v1",
+      "query_point": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "tags": [
+        "space"
+      ],
+      "status": "known",
+      "reason": null,
+      "retrieved_at": "2026-09-09T01:00:00Z",
+      "temporal_basis": "lookup_snapshot",
+      "valid_from": null,
+      "valid_until": null,
+      "payload": {
+        "geometry": "registered_location",
+        "visit_confirmed": false,
+        "radius_m": 250,
+        "coverage": "selected_place_categories_only",
+        "items": [
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "0"
+              },
+              "name": "합성 카페 A",
+              "distance_m": 35
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "1"
+              },
+              "name": "합성 카페 B",
+              "distance_m": 90
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "2"
+              },
+              "name": "합성 카페 C",
+              "distance_m": 140
+            }
+          },
+          {
+            "kind": "cafe",
+            "place": {
+              "key": {
+                "source": "synthetic",
+                "ref": "3"
+              },
+              "name": "합성 카페 D",
+              "distance_m": 180
+            }
+          }
+        ]
+      },
+      "payload_sha256": "5b51b90ecfd1cea11c986a5f9f50b650ea4679c2ac572ea2c2fd6a4dedb2ad4d"
+    },
+    {
+      "id": "3264395d-8777-5cd7-8d8f-9ae07212e6db",
+      "target": {
+        "identity": "walk_entry:0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+        "version": "2f7bc6e701da81d80fca5b2a5f9e3e5ff2e4c72cb53e6a78f7e9069ae9dbc617"
+      },
+      "supporting_targets": [],
+      "provider": "unconfigured",
+      "payload_schema": "walk-entry-context-v1",
+      "policy_version": "walk-entry-context-v1",
+      "query_point": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "tags": [
+        "environment"
+      ],
+      "status": "not_requested",
+      "reason": "provider_not_connected",
+      "retrieved_at": null,
+      "temporal_basis": "unknown",
+      "valid_from": null,
+      "valid_until": null,
+      "payload": null,
+      "payload_sha256": null
+    }
+  ],
+  "selected_background_ids": [
+    "f58d675a-3226-5208-99fd-43c826b5d47b",
+    "149ef508-1eae-582d-ab8f-1d52dc5ab595"
+  ],
+  "scene_policy_version": "records-first-v1",
+  "writing_policy_version": "diary-background-v1"
+}

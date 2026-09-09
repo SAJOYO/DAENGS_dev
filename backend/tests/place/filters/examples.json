@@ -1,0 +1,1070 @@
+{
+  "artifact_version": "phase2-examples-v1",
+  "status": "design_examples_not_runtime_results",
+  "notes": [
+    "가상 후보이며 모든 후보는 공간·이름 경계 안에 있다고 가정한다.",
+    "parking/exclusive null은 unknown이며 나머지는 known이다. 실제 구현은 근거 상태도 비교해야 한다.",
+    "expected.matched/uncertain/excluded는 응답 limit 적용 전의 분류 집합이다. exclude 정책에서는 uncertain을 응답에 싣지 않는다.",
+    "utterance는 의미 설명용이며 LLM 추출 테스트를 실행했다는 뜻이 아니다.",
+    "predicate_cases는 완전한 도메인 상태다. validation_cases/transition_cases는 행위 명세이며 실행한 API 요청이 아니다."
+  ],
+  "candidates": [
+    {
+      "id": "c1",
+      "kind": "cafe",
+      "distance_m": 180,
+      "parking": true,
+      "exclusive": true
+    },
+    {
+      "id": "c2",
+      "kind": "cafe",
+      "distance_m": 120,
+      "parking": false,
+      "exclusive": false
+    },
+    {
+      "id": "c3",
+      "kind": "cafe",
+      "distance_m": 90,
+      "parking": null,
+      "exclusive": true
+    },
+    {
+      "id": "c4",
+      "kind": "cafe",
+      "distance_m": 300,
+      "parking": true,
+      "exclusive": false
+    },
+    {
+      "id": "r1",
+      "kind": "restaurant",
+      "distance_m": 150,
+      "parking": false,
+      "exclusive": false
+    },
+    {
+      "id": "r2",
+      "kind": "restaurant",
+      "distance_m": 650,
+      "parking": true,
+      "exclusive": false
+    },
+    {
+      "id": "r3",
+      "kind": "restaurant",
+      "distance_m": 200,
+      "parking": null,
+      "exclusive": true
+    }
+  ],
+  "predicate_cases": [
+    {
+      "id": "parking_required",
+      "utterance": "카페나 식당 중 주차 가능한 곳",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c4",
+          "r2"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": [
+          "c2",
+          "r1"
+        ]
+      }
+    },
+    {
+      "id": "parking_false",
+      "utterance": "주차 불가인 카페나 식당만",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": false
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c2",
+          "r1"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": [
+          "c1",
+          "c4",
+          "r2"
+        ]
+      }
+    },
+    {
+      "id": "parking_cleared",
+      "utterance": "카페나 식당, 주차는 상관없어",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "uncertain": [],
+        "excluded": []
+      }
+    },
+    {
+      "id": "and_parking_exclusive",
+      "utterance": "주차 가능하고 반려동물 전용인 카페나 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "id": "x",
+              "capability": "pet_access.exclusive",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": [
+          "c2",
+          "c4",
+          "r1",
+          "r2"
+        ]
+      }
+    },
+    {
+      "id": "scoped_parking",
+      "utterance": "카페는 주차 필수, 식당은 상관없어",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": [
+            {
+              "id": "bc",
+              "all": [
+                {
+                  "id": "kc",
+                  "capability": "purpose.kind",
+                  "op": "in",
+                  "value": [
+                    "cafe"
+                  ]
+                },
+                {
+                  "id": "p",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            {
+              "id": "br",
+              "all": [
+                {
+                  "id": "kr",
+                  "capability": "purpose.kind",
+                  "op": "in",
+                  "value": [
+                    "restaurant"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c4",
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "uncertain": [
+          "c3"
+        ],
+        "excluded": [
+          "c2"
+        ]
+      }
+    },
+    {
+      "id": "or_true_unknown",
+      "utterance": "주차가 가능하거나 반려동물 전용인 카페나 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": [
+            {
+              "id": "bp",
+              "all": [
+                {
+                  "id": "p",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            {
+              "id": "bx",
+              "all": [
+                {
+                  "id": "x",
+                  "capability": "pet_access.exclusive",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            }
+          ]
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c3",
+          "c4",
+          "r2",
+          "r3"
+        ],
+        "uncertain": [],
+        "excluded": [
+          "c2",
+          "r1"
+        ]
+      }
+    },
+    {
+      "id": "known_boolean_or",
+      "utterance": "주차 가능 또는 불가가 확인된 카페나 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": [
+            {
+              "id": "by",
+              "all": [
+                {
+                  "id": "py",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            {
+              "id": "bn",
+              "all": [
+                {
+                  "id": "pn",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c2",
+          "c4",
+          "r1",
+          "r2"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": []
+      }
+    },
+    {
+      "id": "kind_exclusion",
+      "utterance": "현재 카페·식당 범위에서 카페 제외",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "nk",
+              "capability": "purpose.kind",
+              "op": "not_in",
+              "value": [
+                "cafe"
+              ]
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "uncertain": [],
+        "excluded": [
+          "c1",
+          "c2",
+          "c3",
+          "c4"
+        ]
+      }
+    },
+    {
+      "id": "false_beats_unknown",
+      "utterance": "주차 가능하고 반려동물 전용이 아닌 카페나 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "id": "x",
+              "capability": "pet_access.exclusive",
+              "op": "eq",
+              "value": false
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c4",
+          "r2"
+        ],
+        "uncertain": [],
+        "excluded": [
+          "c1",
+          "c2",
+          "c3",
+          "r1",
+          "r3"
+        ]
+      }
+    },
+    {
+      "id": "separate_unknown",
+      "utterance": "주차 가능한 카페나 식당, 정보 없는 후보는 따로",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "separate",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 10
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c4",
+          "r2"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": [
+          "c2",
+          "r1"
+        ]
+      }
+    },
+    {
+      "id": "parking_preference",
+      "utterance": "주차되면 좋은 카페나 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [
+          {
+            "id": "p",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true,
+            "scope_kinds": [
+              "cafe",
+              "restaurant"
+            ]
+          }
+        ],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "uncertain": [],
+        "excluded": [],
+        "ordered_matched_by_kind": {
+          "cafe": [
+            "c1",
+            "c4",
+            "c3",
+            "c2"
+          ],
+          "restaurant": [
+            "r1",
+            "r3",
+            "r2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "global_and_branches",
+      "utterance": "반려동물 전용 중 주차 가능한 카페 또는 주차 불가 식당",
+      "state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "x",
+              "capability": "pet_access.exclusive",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": [
+            {
+              "id": "bc",
+              "all": [
+                {
+                  "id": "kc",
+                  "capability": "purpose.kind",
+                  "op": "in",
+                  "value": [
+                    "cafe"
+                  ]
+                },
+                {
+                  "id": "pc",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            {
+              "id": "br",
+              "all": [
+                {
+                  "id": "kr",
+                  "capability": "purpose.kind",
+                  "op": "in",
+                  "value": [
+                    "restaurant"
+                  ]
+                },
+                {
+                  "id": "pr",
+                  "capability": "operations.parking",
+                  "op": "eq",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "expected": {
+        "matched": [
+          "c1"
+        ],
+        "uncertain": [
+          "c3",
+          "r3"
+        ],
+        "excluded": [
+          "c2",
+          "c4",
+          "r1",
+          "r2"
+        ]
+      }
+    }
+  ],
+  "validation_cases": [
+    {
+      "id": "opposite_global",
+      "input_hard": {
+        "all": [
+          {
+            "id": "a",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          },
+          {
+            "id": "b",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": false
+          }
+        ],
+        "any": []
+      },
+      "expected": "needs_resolution",
+      "issue": "contradictory_filters"
+    },
+    {
+      "id": "dead_or_branch",
+      "input_hard": {
+        "all": [],
+        "any": [
+          {
+            "id": "dead",
+            "all": [
+              {
+                "id": "a",
+                "capability": "operations.parking",
+                "op": "eq",
+                "value": true
+              },
+              {
+                "id": "b",
+                "capability": "operations.parking",
+                "op": "eq",
+                "value": false
+              }
+            ]
+          },
+          {
+            "id": "live",
+            "all": [
+              {
+                "id": "k",
+                "capability": "purpose.kind",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": "needs_resolution",
+      "issue": "contradictory_filters"
+    },
+    {
+      "id": "empty_or_branch",
+      "input_hard": {
+        "all": [],
+        "any": [
+          {
+            "id": "empty",
+            "all": []
+          }
+        ]
+      },
+      "expected": "invalid_request",
+      "issue": "empty_branch"
+    },
+    {
+      "id": "string_false",
+      "input_atom": {
+        "id": "bad",
+        "capability": "operations.parking",
+        "op": "eq",
+        "value": "false"
+      },
+      "expected": "invalid_request",
+      "issue": "invalid_value_type"
+    },
+    {
+      "id": "unsupported_fee",
+      "input_atom": {
+        "id": "fee",
+        "capability": "cost.pet_fee",
+        "op": "eq",
+        "value": 0
+      },
+      "expected": "invalid_request",
+      "issue": "unsupported_capability"
+    },
+    {
+      "id": "unsupported_hard_nl",
+      "utterance": "실내 동반 가능한 카페만",
+      "expected": "needs_resolution",
+      "issue": "unsupported_required_condition"
+    },
+    {
+      "id": "unsupported_soft_nl",
+      "utterance": "카페, 조용하면 좋겠어",
+      "expected": "ready_with_notices",
+      "issue": "unsupported_preference",
+      "required_action": "기존 공간과 카페 조건 유지, 조용함 조건 미적용을 표시"
+    },
+    {
+      "id": "complexity_overflow",
+      "input_description": "OR 분기 5개",
+      "expected": "invalid_request",
+      "issue": "filter_complexity_limit"
+    },
+    {
+      "id": "missing_candidate_scope",
+      "input_candidate_kinds": [],
+      "expected": "invalid_request",
+      "issue": "candidate_scope_required"
+    },
+    {
+      "id": "unknown_policy_conflict",
+      "input": {
+        "unknown_policy": "exclude",
+        "uncertain_limit_per_kind": 10
+      },
+      "expected": "invalid_request",
+      "issue": "invalid_result_policy"
+    }
+  ],
+  "transition_cases": [
+    {
+      "id": "explicit_clear",
+      "previous": "주차 필수",
+      "event": "아까 주차 조건 빼줘",
+      "expected": "ready",
+      "change": "해당 범위 parking 조건 제거"
+    },
+    {
+      "id": "ambiguous_conflict",
+      "previous": "수동: 주차 필수",
+      "event": "주차가 안 될 수도 있겠네",
+      "expected": "needs_resolution",
+      "change": "없음"
+    },
+    {
+      "id": "inferred_preference",
+      "previous": "카페 검색",
+      "event": "차로 갈 거야",
+      "expected": "ready_with_notices",
+      "change": "주차 prefer 제안·추론 근거 표시, hard 추가 금지"
+    },
+    {
+      "id": "stale_ai",
+      "base_revision": 3,
+      "current_revision": 4,
+      "expected": "revision_conflict",
+      "change": "없음"
+    },
+    {
+      "id": "atomic_failure",
+      "event": "주차 필수 추가와 미지원 실내 동반 필수 추가를 동시에 제안",
+      "expected": "needs_resolution",
+      "change": "둘 다 적용 안 함"
+    },
+    {
+      "id": "repeat_search",
+      "previous": "카페 AND 주차 필수",
+      "event": "근처 다른 데는?",
+      "expected": "preserve_state",
+      "change": "명시적 새 조건이 없으면 기존 공간·업종·주차 유지"
+    },
+    {
+      "id": "late_search_response",
+      "response_revision": 3,
+      "current_revision": 4,
+      "expected": "ignore_for_current_view",
+      "change": "최신 화면 상태를 덮어쓰지 않음"
+    }
+  ],
+  "response_examples": [
+    {
+      "description": "and_parking_exclusive를 가상 후보에 적용한 응답. place 본문은 기존 DTO가 채울 자리이며 여기서는 key와 필터 판정만 발췌한다.",
+      "status": "ready",
+      "execution_status": "complete",
+      "revision": 1,
+      "search_request_id": "example-1",
+      "applied_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5665,
+          "lng": 126.978,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [
+            {
+              "id": "p",
+              "capability": "operations.parking",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "id": "x",
+              "capability": "pet_access.exclusive",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "changes": [],
+      "issues": [],
+      "groups": [
+        {
+          "kind": "cafe",
+          "matched": [
+            {
+              "key": {
+                "source": "fixture",
+                "ref": "c1"
+              },
+              "filter_evaluation": {
+                "state": "true",
+                "matched_branch_ids": [],
+                "atoms": [
+                  {
+                    "id": "p",
+                    "state": "true",
+                    "observed_value": true
+                  },
+                  {
+                    "id": "x",
+                    "state": "true",
+                    "observed_value": true
+                  }
+                ]
+              }
+            }
+          ],
+          "uncertain": [],
+          "counts": {
+            "matched_returned": 1,
+            "uncertain_returned": 0,
+            "total": null
+          },
+          "truncated": {
+            "matched": false,
+            "uncertain": false
+          }
+        },
+        {
+          "kind": "restaurant",
+          "matched": [],
+          "uncertain": [],
+          "counts": {
+            "matched_returned": 0,
+            "uncertain_returned": 0,
+            "total": null
+          },
+          "truncated": {
+            "matched": false,
+            "uncertain": false
+          }
+        }
+      ],
+      "execution_context": {
+        "ranking_version": "distance-band-500-v1",
+        "source_snapshot": "synthetic-fixture",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        }
+      }
+    }
+  ]
+}

@@ -30,10 +30,15 @@ CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
 **읽는 순서.** 처음이면 `architecture.md` §논리 오케스트레이션 → `contracts.md` →
 `routing.md`. 라우터 품질만 볼 때는 `router-benchmark.md` 하나로 충분합니다 —
 골드 세트는 `backend/evals/orchestration_router/`, 실행기는
-`backend/tools/router_benchmark/` 입니다.
+`backend/src/daengs_evals/router_benchmark/` 입니다.
 
 **결정 기록은 두 갈래입니다.** 공통·인프라 결정 `D-` 는 [../decisions.md](../decisions.md)
 (오케스트레이션 관련은 D-030 · D-033~D-037 · D-041), 라우팅 자체의 사람 결정 `O-` 는
 [routing.md](routing.md) §6. 계약의 권위는 이 문서들과 실제
 `backend/src/daengs_backend/orchestration/contracts.py` 가 함께 가집니다 — 어긋난 자리를
 발견하면 어느 쪽이 맞는지부터 정하고 양쪽을 같이 고칩니다.
+
+**산책 일기 이관**의 입력·장면 계약은 도메인 소유인
+[../walk/diary-contract.md](../walk/diary-contract.md)에 있습니다. 현재 Walk adapter의
+산책 조건 판단을 바꾸지 않고, 기존 `walk_storyboard` 생성 수명주기에 붙이는 접점을 정의합니다.
+새 capability 등록이나 운영 호출 연결까지 끝난 상태는 아닙니다.

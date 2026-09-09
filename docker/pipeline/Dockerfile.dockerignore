@@ -1,0 +1,8 @@
+*
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/README.md
+!backend/src
+!data/manifests/seed_sources.yaml
+!docker/pipeline/entrypoint.sh
+backend/src/**/__pycache__

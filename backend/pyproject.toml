@@ -14,6 +14,7 @@ dependencies = [
     "celery>=5.5",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
+    "google-cloud-run>=0.16.1",
     "google-cloud-storage>=2.18",
     "google-genai>=2.18.1",
     "httpx>=0.28.1",
@@ -42,10 +43,15 @@ run = "daengs_backend.main:run"
 # 보행 분석은 **별도 프로세스**입니다 (D-038). backend 앱에 붙지 않으므로 진입점이 따로입니다.
 # compose 의 gait-analysis 서비스가 이것을 부릅니다.
 gait-serve = "daengs_gait.service:main"
+# 저장소 규칙 검사. **3초** 안에 끝나는 것만 들어갑니다 — pytest 가 안 보는 자리
+# (루트 `tools/` 의 마이그레이션 체커)를 봅니다. 느린 것을 넣지 마세요, 이유는 그 파일 첫머리에.
+check = "daengs_backend.cli.check:main"
 # 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
 seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
 kakao-token = "daengs_backend.cli.kakao_token:main"
+# 코퍼스 파이프라인 — Cloud Run Job 이 부른다 (D-062). Celery 없이 crawl~load 를 한 프로세스에서.
+corpus-refresh = "daengs_life.jobs.corpus_refresh:main"
 
 [project.optional-dependencies]
 place = [
@@ -116,6 +122,7 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = [
     "daengs_backend",
+    "daengs_evals",
     "daengs_gait",
     "daengs_journey",
     "daengs_life",
@@ -197,6 +204,10 @@ screening = [
     "pillow>=10.2",
     "pandas>=2.1",
     "tqdm>=4.66",
+    "huggingface-hub>=0.34",
+]
+pipeline = [
+    "google-cloud-run>=0.16.1",
 ]
 
 [tool.ruff]
@@ -207,12 +218,17 @@ target-version = "py312"
 # (패키지 안이 아니라 밖입니다 — 배포 아티팩트에 테스트가 들어가지 않게).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# **rootdir(=backend/)을 sys.path 에 넣습니다** (#224). `tools/` 는 `__init__.py` 가 있는
-# 진짜 패키지지만 아래 [tool.uv.build-backend] 의 module-name 에 없어 venv 에 설치되지
-# 않습니다 — 일회성 스크립트·벤치마크라 런타임 이미지에 들어갈 것이 아니고, 루트 CLAUDE.md 도
-# tools/ 를 그렇게 규정합니다. 손으로 돌릴 때(`uv run python -m tools.x`)는 CWD 가 sys.path 에
-# 들어가 되지만 pytest 는 rootdir 을 넣지 않아 `from tools... import` 가 13개 파일에서
-# ModuleNotFoundError 였습니다. 설치 대상을 늘리는 대신 테스트에서만 경로를 엽니다.
+# **rootdir(=backend/)을 sys.path 에 넣습니다.** `tools/` 를 `daengs_evals` 로 승격하면서
+# (#336) 원래 이 줄이 있던 이유(#224 — `from tools... import` 가 venv 에 안 깔린 패키지를
+# 찾지 못함)는 없어졌지만, 줄을 지우고 돌려 보니 다른 이유로 여전히 필요했다: 여러 테스트가
+# `tests/` 자체를 패키지처럼 써서 서로를 import 한다 —
+# `tests/place/discovery/test_facility_actions.py` 가
+# `from tests.place.support.discovery import make_service, request` 를,
+# `tests/place/api/test_facility_discovery_api.py` 가 `from tests.place.support.session_store import
+# MemorySessions` 를, `tests/walk/storyboard/test_storyboard_observations.py` 가
+# `from tests.walk.support.storyboard import headings` 를 쓴다. `tests/` 에
+# `__init__.py` 가 없어 이것들은 namespace 패키지로만 잡히는데, 그러려면 `backend/` 가
+# sys.path 에 있어야 한다 — 지우면 `ModuleNotFoundError: No module named 'tests'`.
 pythonpath = ["."]
 # async 테스트에 @pytest.mark.asyncio 를 매번 붙이지 않아도 되게 합니다.
 asyncio_mode = "auto"

@@ -5,8 +5,9 @@ on:
   pull_request:
     paths:
       - "backend/src/daengs_backend/**"
-      - "backend/tests/test_territory*"
-      - "backend/tests/test_activity*"
+      - "backend/src/daengs_walk/**"
+      - "backend/tests/territory/**"
+      - "backend/tests/activity/**"
       - "backend/tests/conftest.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
@@ -16,8 +17,9 @@ on:
     branches: [dev]
     paths:
       - "backend/src/daengs_backend/**"
-      - "backend/tests/test_territory*"
-      - "backend/tests/test_activity*"
+      - "backend/src/daengs_walk/**"
+      - "backend/tests/territory/**"
+      - "backend/tests/activity/**"
       - "backend/tests/conftest.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
@@ -50,4 +52,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
-      - run: uv run pytest -q tests/test_activity_db.py tests/test_activity.py tests/test_territory_ownership_db.py tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py
+      - run: uv run pytest -q -rs tests/territory tests/activity --junitxml=territory-results.xml
+      - name: Require executed checks
+        run: |
+          uv run python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = list(ET.parse("territory-results.xml").iter("testcase"))
+          if not cases or any(case.find("skipped") is not None for case in cases):
+              raise SystemExit("Territory verification had no tests or skipped cases")
+          PY

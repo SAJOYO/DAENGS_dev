@@ -7,7 +7,8 @@ from daengs_walk.storyboard_selection import SelectionPolicy, select_nodes
 LABELS = {"sniffing": "킁킁", "excretion": "배설", "barking": "짖기", "note": "특별한 순간"}
 
 
-def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
+def route_nodes(evidence):
+    """Canonical continuity blocks and exact source observations, shared by diary preparation."""
     start = evidence.facts.started_at
     nodes, offset, block, previous = [], 0.0, -1, None
 
@@ -44,9 +45,15 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         )
         nodes.append(end)
         previous = (segment.chain_index, segment.b.client_seq)
+    return nodes
+
+
+def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
+    start = evidence.facts.started_at
+    nodes = route_nodes(evidence)
     projected = []
     for entry in entries:
-        content = entry["content"]
+        content = entry.get("content")
         if content is None:
             continue
         at = datetime.fromisoformat(content["recorded_at"])
@@ -72,6 +79,25 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
                 "route_known": containing is not None,
             }
         )
+        pin = entry.get("pin")
+        if pin is not None:
+            projected[-1]["pin"] = {
+                "revision": entry["pin_revision"],
+                **{
+                    k: pin[k]
+                    for k in (
+                        "resolution_id",
+                        "state",
+                        "method",
+                        "target_at",
+                        "point",
+                        "uncertainty_m",
+                        "uncertainty_basis",
+                    )
+                },
+            }
+            # Pin-based lookup is entry-owned; do not claim it covers the raw route.
+            projected[-1]["route_known"] = False
     projected.sort(key=lambda e: (e["elapsed_s"], e["id"]))
     selection = select_nodes(
         nodes,
@@ -86,4 +112,13 @@ def scene_inputs(evidence, entries, *, session_id, pet_id=None, references=()):
         "start": nodes[0]["observation"] if nodes else None,
         "end": nodes[-1]["observation"] if nodes else None,
     }
+    selection["entry_anchors"] = [
+        {
+            "id": "entry:" + e["id"],
+            "location": e["pin"]["point"],
+            "location_basis": e["pin"]["method"],
+        }
+        for e in projected
+        if e.get("pin", {}).get("point") is not None
+    ][:8]
     return projected, selection

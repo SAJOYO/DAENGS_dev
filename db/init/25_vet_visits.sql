@@ -1,5 +1,5 @@
 -- 25_vet_visits.sql
--- 영수증 사진에서 읽은 진료비 기록(vet_visits)과, 유저가 확정하기 전의 초안(vet_visit_drafts).
+-- 영수증 사진에서 읽은 진료비 기록(vet_visits)과, 유저가 확정하기 전의 초안(vet_visit_drafts) (#353).
 -- db/migrations/2026-09-09_vet_visits.sql 과 같은 결과가 되게 한다.
 --
 -- **표가 둘인 것이 이 설계의 핵심이다.** OCR·LLM 이 추측한 진단 라벨은 vet_visit_drafts 에만

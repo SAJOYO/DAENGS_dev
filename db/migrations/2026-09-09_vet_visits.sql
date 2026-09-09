@@ -1,5 +1,5 @@
 -- 2026-09-09_vet_visits.sql
--- 진료비 기록 표 둘을 만든다 — 확정된 기록(vet_visits)과 확정 전 초안(vet_visit_drafts).
+-- 진료비 기록 표 둘을 만든다 — 확정된 기록(vet_visits)과 확정 전 초안(vet_visit_drafts) (#353).
 -- db/init/25_vet_visits.sql 과 같은 결과가 되게 한다.
 --
 -- **여러 번 돌려도 안전하다.** 이 저장소는 버전 테이블이 없어서 DB 가 적용 여부를

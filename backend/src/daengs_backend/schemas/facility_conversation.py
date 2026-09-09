@@ -12,15 +12,21 @@ class ConversationRequest(InputModel):
     client_request_id: UUID
     session_id: UUID | None = None
     expected_revision: int = Field(default=0, ge=0)
-    mode: Literal["manual", "chat", "restore"]
+    mode: Literal["manual", "chat", "restore", "filters"]
     query: str = Field(default="", max_length=1000)
     manual: dict[str, Any] | None = None
     restore_filters: dict[str, Any] | None = None
+    remove_filters: dict[str, Any] | None = None
     visible_order: list[dict[str, str]] = Field(default_factory=list, max_length=120)
     visible_selected: dict[str, str] | None = None
 
     @model_validator(mode="after")
     def required_context(self) -> Self:
+        if self.mode == "filters":
+            if self.session_id is None or self.remove_filters is None or self.manual or self.query:
+                raise ValueError("filter removal requires an existing session and removal IDs only")
+        elif self.remove_filters is not None:
+            raise ValueError("only filters mode accepts removal IDs")
         if self.mode == "chat" and (
             self.session_id is None or not self.query.strip() or self.manual is not None
         ):

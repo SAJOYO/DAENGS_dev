@@ -17,7 +17,7 @@ from daengs_place.main import app as place_app
 from daengs_place.place.conversation.contract import TurnPlan
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
-from tests.place.support.conversation import Searcher
+from tests.place.support.conversation import Searcher, place
 from tests.place.support.session_store import MemorySessions
 
 
@@ -49,6 +49,16 @@ def answer_body(previous):
 
 def recovery_body(previous):
     return {key: previous[key] for key in ("session_id", "client_request_id")}
+
+
+def filters_body(previous, **removals):
+    return {
+        "client_request_id": str(uuid4()),
+        "mode": "filters",
+        "session_id": previous["session_id"],
+        "expected_revision": previous["revision"],
+        "remove_filters": removals,
+    }
 
 
 @pytest.fixture
@@ -328,3 +338,121 @@ async def test_recovery_and_answer_are_owner_bound_and_restore_rejects_invalid_f
             json={"client_request_id": str(uuid4()), "mode": "restore", "restore_filters": bad},
         )
     ).status_code == 422
+
+
+async def test_direct_filter_removal_preserves_other_conditions_and_never_calls_model(harness):
+    client, _, searcher, calls, plans, _ = harness
+    searcher.rows.append(place("no-parking", parking=False))
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append(
+        {
+            "goal": "show",
+            "changes": {
+                "upsert_all": [
+                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
+                ],
+                "upsert_any": [
+                    {
+                        "id": "shopping",
+                        "all": [
+                            {
+                                "id": "shop-kind",
+                                "capability": "purpose.kind",
+                                "op": "in",
+                                "value": ["shopping"],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "pet-shop",
+                        "all": [
+                            {
+                                "id": "pet-kind",
+                                "capability": "purpose.kind",
+                                "op": "in",
+                                "value": ["pet_shop"],
+                            }
+                        ],
+                    },
+                ],
+            },
+        }
+    )
+    filtered = (
+        await client.post("/app/places/conversation", json=chat_body(first, "주차되는 곳만"))
+    ).json()
+    assert filtered["receipt"]["returned_count"] == 2
+    request = filters_body(filtered, remove_all=["parking"])
+    relaxed_response = await client.post("/app/places/conversation", json=request)
+    assert relaxed_response.status_code == 200, relaxed_response.text
+    relaxed = relaxed_response.json()
+    assert relaxed["filters"]["hard"]["all"] == []
+    assert relaxed["filters"]["hard"]["any"] == filtered["filters"]["hard"]["any"]
+    for field in ("candidate_kinds", "spatial", "name_query", "dogs", "preferences"):
+        assert relaxed["filters"][field] == filtered["filters"][field]
+    assert relaxed["receipt"]["returned_count"] == 3
+    assert relaxed["answer"] is None and relaxed["answer_status"] == "none"
+    assert len(calls) == 1 and len(searcher.calls) == 3
+    assert (await client.post("/app/places/conversation", json=request)).json() == relaxed
+    assert len(searcher.calls) == 3
+    ungrouped = (
+        await client.post(
+            "/app/places/conversation",
+            json=filters_body(relaxed, remove_any=["shopping", "pet-shop"]),
+        )
+    ).json()
+    assert ungrouped["filters"]["hard"] == {"all": [], "any": []}
+    assert len(calls) == 1 and len(searcher.calls) == 4
+
+
+async def test_failed_removal_keeps_applied_condition_and_retry_uses_new_commit(harness):
+    client, _, searcher, calls, plans, _ = harness
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append(
+        {
+            "goal": "show",
+            "changes": {
+                "upsert_all": [
+                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
+                ]
+            },
+        }
+    )
+    filtered = (await client.post("/app/places/conversation", json=chat_body(first))).json()
+    searcher.error = True
+    failed = (
+        await client.post(
+            "/app/places/conversation", json=filters_body(filtered, remove_all=["parking"])
+        )
+    ).json()
+    assert failed["receipt"]["execution"] == "failed"
+    assert failed["filters"] == filtered["filters"] and failed["search"] == filtered["search"]
+    searcher.error = False
+    completed = (
+        await client.post(
+            "/app/places/conversation", json=filters_body(failed, remove_all=["parking"])
+        )
+    ).json()
+    assert completed["filters"]["hard"]["all"] == []
+    assert completed["revision"] == failed["revision"] + 1 and len(calls) == 1
+
+
+async def test_direct_filter_operation_rejects_stale_or_unknown_ids_and_searches_edit_only_state(
+    harness,
+):
+    client, _, searcher, calls, plans, _ = harness
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append({"goal": "edit_only", "changes": {"radius_m": 1000}})
+    edited = (await client.post("/app/places/conversation", json=chat_body(first))).json()
+    assert not edited["receipt"]["result_matches_filters"] and len(searcher.calls) == 1
+    assert (
+        await client.post("/app/places/conversation", json=filters_body(first))
+    ).status_code == 409
+    for bad in ({"remove_all": ["missing"]}, {"remove_all": ["same", "same"]}, {"upsert_all": []}):
+        assert (
+            await client.post("/app/places/conversation", json=filters_body(edited, **bad))
+        ).status_code == 422
+    refreshed = (await client.post("/app/places/conversation", json=filters_body(edited))).json()
+    assert refreshed["filters"] == edited["filters"]
+    assert refreshed["receipt"]["result_matches_filters"]
+    assert len(searcher.calls) == 2 and len(calls) == 1

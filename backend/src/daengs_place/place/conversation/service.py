@@ -27,6 +27,7 @@ from daengs_place.place.filters.contract import (
 from daengs_place.place.filters.service import search_filtered_places
 from daengs_place.place.search import PlaceSearchGroup, PlaceSearchResponse, _parking_preference_key
 from daengs_place.place.tools.changes import apply_changes
+from daengs_place.place.tools.contract import FilterChanges
 
 CACHE_SECONDS = 300
 
@@ -125,6 +126,11 @@ class ConversationService:
             candidate = manual_filters(request.manual, old)
         elif request.mode == "restore":
             candidate = request.restore_filters
+        elif request.mode == "filters":
+            # Direct UI operation: validate IDs, preserve all other fields, no planner or answer.
+            candidate = apply_changes(
+                old.filters, FilterChanges.model_validate(request.remove_filters.model_dump())
+            )
         else:
             assert old is not None
             try:

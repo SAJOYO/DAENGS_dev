@@ -96,6 +96,26 @@ Redis 키는 `facility:conversation:v2:<session_id>`, TTL은 최초 생성부터
 
 ## 앱 연결과 검증
 
+### 직접 조건 해제
+
+일반/AI 모드 모두 검색창의 필터 아이콘과 조건 요약에서 현재 필수 조건을 확인한다.
+카테고리·반경·반려견·주차 우선은 기존 조작부에 남긴다. 필수 조건은 태그로 변환하지 않는다.
+
+- `hard.all`의 각 조건은 ID 하나로 해제한다.
+- `hard.any`는 “다음 조합 중 하나”로 표시하고 각 분기의 AND 관계도 보존한다. UI는 모든 OR
+  분기의 ID를 한 번에 제거한다. 분기 하나만 삭제해 오히려 검색 범위를 좁히는 조작은 제공하지 않는다.
+- 주차 가능 필수 조건과 주차 우선 정렬은 따로 표시한다. 해제해도 정렬·반경·이름·반려견 등
+  언급하지 않은 필드는 유지한다.
+- `mode=filters`, `remove_filters={remove_all: [...], remove_any: [...]}`를 기존 세션과
+  `expected_revision`에 묶어 보낸다. 직접 조작은 계획·답변 LLM을 호출하지 않는다.
+- Place의 제한된 `FilterRemoval` → 공통 `FilterChanges` 검증 → 필터 엔진 → CAS 확정 경로다.
+  없는 ID·중복 ID·조건 추가·교체 입력은 거부한다. 빈 제거 요청은 현재 필터로 결과를 확보한다.
+- 실패하면 조건·목록을 유지한다. 응답 유실 재시도는 같은 요청 ID, 확정된 검색 실패 후 재시도는
+  실패 응답의 새 revision을 사용한다. 이전 화면에서 만들어진 해제 조작은 자동 적용하지 않는다.
+- `result_matches_filters=false` 안내와 “현재 조건으로 검색”은 AI 모드와 관계없이 제공한다.
+
+### 실행과 검증
+
 Android `feat/place-conversation-skeleton`에서 `-PfacilityConversation=true`로 디버그 빌드한다.
 릴리즈와 옵션 없는 빌드는 기존 경로다. `daengs.apiBaseUrl`은 새 Backend + Place + Redis가
 연결된 서버여야 한다. 현재 운영 서버에는 배포되지 않았다.
@@ -115,7 +135,9 @@ Android `feat/place-conversation-skeleton`에서 `-PfacilityConversation=true`�
 - 실제 폰 설치, 운영 인증/Redis/PostGIS의 배포 검증은 아직 하지 않았다.
 - 1단계 보강: 수동·AI 공통 상태 반영, 충돌/유실/만료 복구, 답변 전 상태 전달. 수동 실패 시
   적용되지 않은 반경·이름·카테고리를 목록 위에 남기지 않으며, 복구/실패 안내는 AI를 꺼도 보인다.
-- 후속 범위: 전체 적용 조건 UI, 명확화 맥락, 답변의 의미·근거 정책, 전체 업종 AI,
+- 2단계 보강: 적용 조건 요약·필터 창, AND/OR 묶음과 필수/선호 구분, LLM 없는 직접 해제,
+  실패/재시도 및 변경 전 결과에서 현재 조건으로 검색하는 경로.
+- 후속 범위: 조건 추가·복합 조건 편집기, 명확화 맥락, 답변의 의미·근거 정책, 전체 업종 AI,
   복합 비교·파생 태그, 폭넓은 자연어 평가셋.
 
 형식 참고: [Gemini 함수 호출](https://ai.google.dev/gemini-api/docs/function-calling),

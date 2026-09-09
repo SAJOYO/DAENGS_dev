@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from daengs_place.place.contracts import PlaceRef
-from daengs_place.place.filters.contract import FilterState
+from daengs_place.place.filters.contract import FilterState, Identifier
 from daengs_place.place.filters.service import FilterResponse
 from daengs_place.place.planning.contract import PlanningModel
 from daengs_place.place.search import PlaceSearchRequest
@@ -52,11 +52,18 @@ class ConversationState(PlanningModel):
     pending_question: str = Field(default="", max_length=200)
 
 
+class FilterRemoval(PlanningModel):
+    # Deliberately narrower than model-proposed edits. Empty means search current filters.
+    remove_all: tuple[Identifier, ...] = Field(default=(), max_length=8)
+    remove_any: tuple[Identifier, ...] = Field(default=(), max_length=4)
+
+
 class PrepareRequest(PlanningModel):
-    mode: Literal["manual", "chat", "restore"]
+    mode: Literal["manual", "chat", "restore", "filters"]
     query: str = Field(default="", max_length=1000)
     manual: PlaceSearchRequest | None = None
     restore_filters: FilterState | None = None
+    remove_filters: FilterRemoval | None = None
     previous: ConversationState | None = None
     # IDs in the exact order the user saw, scoped to the saved snapshot.
     visible_order: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
@@ -64,6 +71,11 @@ class PrepareRequest(PlanningModel):
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
+        if self.mode == "filters":
+            if self.previous is None or self.remove_filters is None or self.manual or self.query:
+                raise ValueError("filter removal requires a saved state and removal IDs only")
+        elif self.remove_filters is not None:
+            raise ValueError("removal IDs require filters mode")
         if self.mode == "restore":
             if self.restore_filters is None or self.previous or self.manual or self.query:
                 raise ValueError("restore starts from validated filters, never previous results")

@@ -29,7 +29,11 @@ class MemberOut(BaseModel):
     #: 지금도 구성원일 때만 이름이 옵니다. 아니면 `None` 이고 앱이 "이전 보호자" 로 그립니다.
     nickname: str | None
     is_owner: bool
-    joined_at: datetime | None
+    #: `joined_at` 은 일부러 없습니다 — 돌보미는 `list_members` 가 id 만 돌려주고, 대표는 애초에
+    #: "가입" 개념이 없어(`pet.created_at` 은 강아지 등록 시각이지 대표의 참여 시각이 아니다) 항상
+    #: `None` 일 수밖에 없는 자리였습니다. 값을 못 채우는 필드를 계약에 두면 앱이 그 자리에
+    #: null 처리를 둘러 짓게 되므로 아예 뺐습니다 (필드 추가는 하위 호환이지만 삭제는 아니라서,
+    #: 값이 생기기 전에 빼는 것이 지금이 제일 쌉니다).
 
 
 class MemberListResponse(BaseModel):

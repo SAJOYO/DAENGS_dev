@@ -357,6 +357,29 @@ async def test_leaving_last_pet_nulls_primary(store: Store, pet: FakePet):
     assert user.primary_pet_id is None
 
 
+async def test_owner_removing_carer_clears_carers_primary_pet(store: Store, pet: FakePet):
+    """대표가 돌보미를 내보낼 때도 **비워지는 것은 나간 사람의** `primary_pet_id` 다.
+
+    `remove_member` 가 `target_id` 대신 `app_user_id`(호출자)로 회귀하면, 두 자기-탈퇴
+    테스트(`test_leaving_clears_primary_pet` · `test_leaving_last_pet_nulls_primary`)는
+    `app_user_id == target_id` 라 회귀를 못 잡는다. 여기서는 호출자(대표)와 대상(돌보미)이
+    달라야 그 구분이 선다 — 대표의 `primary_pet_id` 는 손대지 않았다는 것까지 본다.
+    """
+    carer = store.app_users[CARER_KAKAO]
+    owner = store.app_users[OWNER_KAKAO]
+    store.pet_members.append((pet.id, CARER))
+    carer.primary_pet_id = pet.id
+    owner_untouched = uuid.uuid4()
+    owner.primary_pet_id = owner_untouched
+    mine = FakePet(app_user_id=CARER, name="네오", breed="푸들")
+    store.pets.append(mine)
+
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/members/{CARER}")
+    assert r.status_code == 204
+    assert carer.primary_pet_id == mine.id
+    assert owner.primary_pet_id == owner_untouched
+
+
 async def test_member_list_shows_owner_and_carer(store: Store, pet: FakePet):
     store.pet_members.append((pet.id, CARER))
     got = client_as(CARER).get(f"/app/pets/{pet.id}/members").json()

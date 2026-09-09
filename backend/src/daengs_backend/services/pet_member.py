@@ -157,11 +157,10 @@ async def list_members(
             app_user_id=pet.app_user_id,
             nickname=names.get(pet.app_user_id),
             is_owner=True,
-            joined_at=None,
         )
     ]
     out += [
-        MemberOut(app_user_id=cid, nickname=names.get(cid), is_owner=False, joined_at=None)
+        MemberOut(app_user_id=cid, nickname=names.get(cid), is_owner=False)
         for cid in carer_ids
     ]
     return out

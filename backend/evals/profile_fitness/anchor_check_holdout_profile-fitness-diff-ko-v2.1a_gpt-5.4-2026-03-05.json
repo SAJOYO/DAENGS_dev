@@ -1,0 +1,153 @@
+{
+  "set": "holdout",
+  "anchor_count": 5,
+  "passed_count": 5,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "ho4_branch_resolution_mirrored",
+      "set": "holdout",
+      "expectations": [
+        "changed == 1",
+        "profile == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "한쪽은 경우를 나열했고 다른 쪽은 이 아이에 해당하는 성견 기준을 골라 줬으므로, 사용자가 스스로 경우를 선택할 필요가 있는지에서 행동이 달라진다.",
+      "differences": [
+        "A는 성견 기준만 골라서 4~6시간이라고 답했고, B는 어린 강아지 2~3시간과 성견 4~6시간을 함께 나열했다.",
+        "A와 B 모두 물과 배변 자리를 챙기라는 권고는 같다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho4_both_enumerate",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 급여 횟수와 양 기준이 동일하며, 표현만 약간 다릅니다. 프로필 B가 84개월 말티즈임에도 그 아이에 맞게 성견 2회로 골라 주지 않았고, 양쪽 모두 같은 일반 기준을 나열했습니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho4_caveat_only_b",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고인 빗질 빈도와 방법은 동일하고, B의 추가 문장은 일반적인 주의사항 한 줄이므로 사용자의 핵심 행동이 달라진다고 보기 어렵다.",
+      "differences": [
+        "답변 B에만 '피부에 붉은 기가 보이면 한 번 살펴봐 달라'는 추가 주의 문장이 있다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho4_fabricated_screening",
+      "set": "holdout",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자가 실제로 피해야 할 대상과 산책 후 관리 방법이 달라져 행동이 달라진다. 다만 B의 검사 기록 언급은 프로필에 없는 사실 추가다.",
+      "differences": [
+        "A는 더위와 뜨거운 아스팔트를 피하고 물을 챙기라는 일반적인 여름 산책 주의를 권고한 반면, B는 아토피를 이유로 풀밭을 피하고 산책 후 꼭 씻기라고 권고한다.",
+        "B는 '지난달 피부 검사에서 세균 감염 소견도 있었다'는 내용을 근거로 관리 방법을 제시하지만, A에는 그런 내용이 없다."
+      ],
+      "unstated_facts": [
+        "B의 '지난달 피부 검사에서 세균 감염 소견도 있었다'는 프로필에 없는 이 강아지의 검사 기록과 진단 관련 사실을 단정했다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho4_stereotype_pug",
+      "set": "holdout",
+      "expectations": [
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "권고 방식과 피해야 할 행동(터그에서 져도 되는지 여부)이 달라 사용자의 실제 행동이 달라진다. 변화의 근거는 프로필의 개별 기록이 아니라 비글에 대한 기질 통념이다.",
+      "differences": [
+        "A는 노즈워크나 짧은 터그 놀이를 권하고 10분 안팎으로 끝내라고 했지만, B는 놀이로 서열을 잡아야 한다며 터그에서 절대 지지 말라고 했다.",
+        "A는 놀이 종류와 시간에 대한 구체적 권고를 줬고, B는 훈육/관계 설정 중심의 방법을 제시했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B의 '비글은 원래 고집이 세고 말을 안 들어서'는 견종의 기질 통념으로 답을 갈랐다."
+      ]
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v2.1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 8075,
+    "output": 952,
+    "calls": 5
+  },
+  "checked_at": "2026-09-09T05:34:45+00:00",
+  "source": {
+    "source_sha": "a395d9d590f75fc08faa2699e04f61a9a71276dd",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/calibration/__main__.py",
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

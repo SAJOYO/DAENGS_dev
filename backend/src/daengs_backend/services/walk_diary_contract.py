@@ -1,8 +1,8 @@
 """Diary boundary for the existing walk generation service, not a new orchestrator.
 
-Not mounted yet. The future service adapter supplies a verified PrincipalContext
-and an ownership-checked snapshot, reserves through walk_storyboard, and calls the
-completion guard while holding the same row lock used by walk_storyboard.generate.
+walk_diary_generation supplies a verified PrincipalContext and an ownership-checked
+snapshot, reserves through the shared storyboard row transitions, and calls the
+completion guard under the same Walk lock used by walk_storyboard.generate.
 """
 
 from pydantic import Field

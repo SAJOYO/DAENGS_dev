@@ -3,7 +3,8 @@
 [Dev #377](https://github.com/SAJOYO/DAENGS_dev/pull/377).
 [저장 입력](photo-metadata.md)과 [기록 중심 스탬프](diary-stamps.md) 사이에 실제 저장 동선의
 관측 공급자를 연결한다. 기존 내부 `prepare_saved_diary()`까지 구현했으며,
-HTTP 생성·LLM·App의 새 일기 표시는 아직 연결하지 않았다.
+이 단위에서는 HTTP 생성·LLM·App 표시를 연결하지 않았다.
+후속 서버 생성 연결은 [diary-generation.md](diary-generation.md)에 정리한다.
 
 ## 실행 흐름
 
@@ -129,6 +130,6 @@ uv run --no-sync python -m pytest tests/walk/test_diary_observations.py::test_dw
 기기 화면, 공공데이터와 LLM 호출은 검증하지 않았다. 기존 Starlette/httpx 경고 1건이 있었다.
 전체 로컬 스위트는 실행하지 않는다. 변경 파일 Ruff와 PR CI 결과는 PR에 별도 기록한다.
 
-다음 단위는 이 스탬프를 LLM용 배경 딕셔너리와 산책 제목 작성에 넘기고,
-기존 예약·완료 트랜잭션에서 고정 입력의 버전을 확인하는 연결이다.
+후속 [배경 작성·생성 연결](diary-generation.md)은 이 스탬프를 배경 딕셔너리와 제목 작성에
+넘기고 기존 예약·완료 트랜잭션에서 고정 입력의 버전을 확인한다.
 관측을 사용자 행동 서술로 바꾸거나 LLM이 원본 기록을 덮어쓰게 하지 않는다.

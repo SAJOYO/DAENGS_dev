@@ -168,7 +168,7 @@ class DiaryScene(DiaryContract):
 
 
 class DiaryBundle(DiaryContract):
-    # Opt-in format; not StoryboardBundle v4 and not yet an HTTP response variant.
+    # Opt-in format; never downcast into an older StoryboardBundle.
     format: Literal["walk-diary-bundle-v1"] = "walk-diary-bundle-v1"
     client_session_id: Identifier
     input_revision: Digest
@@ -177,7 +177,9 @@ class DiaryBundle(DiaryContract):
     title_origin: Literal["model", "system"]
     model_status: Literal["accepted", "not_requested", "unavailable"]
     semantic_status: Literal["not_evaluated"] = "not_evaluated"
-    failure_code: Literal["provider_failed", "invalid_response", "interrupted"] | None
+    failure_code: (
+        Literal["provider_failed", "invalid_response", "interrupted", "budget_exceeded"] | None
+    )
     photos_status: Literal["complete", "not_available"]
     scenes: tuple[DiaryScene, ...]
 
@@ -201,7 +203,8 @@ def assemble_diary(
     plan: DiaryPlan,
     receipt: WritingReceipt | None,
     *,
-    failure_code: Literal["provider_failed", "invalid_response", "interrupted"] | None = None,
+    failure_code: Literal["provider_failed", "invalid_response", "interrupted", "budget_exceeded"]
+    | None = None,
 ) -> DiaryBundle:
     """Validate references and copy originals. No selection or semantic verification."""
     # Reparse nested dicts: frozen Pydantic models do not make dict values immutable.

@@ -1,9 +1,8 @@
 """Versioned, retryable scene generation after GPS finalization and entry synchronization."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_entry as entries_repo
 from daengs_backend.repositories import walk_storyboard as repo
@@ -12,6 +11,14 @@ from daengs_backend.schemas.walk_storyboard import StoryboardResponse
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
+from daengs_backend.services.walk_storyboard_state import (
+    LEASE_SECONDS,
+    StoryboardConflict,
+    StoryboardNotFound,
+    complete,
+    reserve,
+    reusable,
+)
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk import analyze_walk
 from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
@@ -19,16 +26,7 @@ from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk
 
 POLICY_VERSION = "live-storyboard-v2"
-LEASE_SECONDS = 60
 CONTEXT_TIMEOUT_SECONDS = 10
-
-
-class StoryboardNotFound(LookupError):
-    pass
-
-
-class StoryboardConflict(ValueError):
-    pass
 
 
 async def source(session, owner, walk_id, bundle_format="walk-storyboard-candidates-v1"):
@@ -93,14 +91,31 @@ def result(walk, row, revisions, revision, bundle_format="walk-storyboard-candid
     )
 
 
-async def get(session, owner, walk_id, bundle_format="walk-storyboard-candidates-v1"):
+async def get(
+    session,
+    owner,
+    walk_id,
+    bundle_format="walk-storyboard-candidates-v1",
+    *,
+    target_scene_count=None,
+):
+    if bundle_format == "walk-diary-bundle-v1":
+        from daengs_backend.services.walk_diary_generation import get_diary
+
+        return await get_diary(session, owner, walk_id, target_scene_count)
     walk, _, _, revisions, revision, _ = await source(session, owner, walk_id, bundle_format)
     value = result(walk, await repo.current(session, walk_id), revisions, revision, bundle_format)
     await session.commit()
     return value
 
 
-async def generate(session, owner, walk_id, request, lookup, titles=title_storyboard):
+async def generate(
+    session, owner, walk_id, request, lookup, titles=title_storyboard, *, diary_writer=None
+):
+    if request.bundle_format == "walk-diary-bundle-v1":
+        from daengs_backend.services.walk_diary_generation import generate_diary
+
+        return await generate_diary(session, owner, walk_id, request, writer=diary_writer)
     walk, analysis, entries, revisions, revision, history = await source(
         session, owner, walk_id, request.bundle_format
     )
@@ -108,14 +123,10 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
         raise StoryboardConflict("행동 기록이 변경됐어요. 기록을 다시 동기화해 주세요.")
     row = await repo.current(session, walk_id)
     now = datetime.now(UTC)
-    if row is not None and row.input_revision == revision:
-        running = row.status == "running" and row.updated_at > now - timedelta(
-            seconds=LEASE_SECONDS
-        )
-        if running or (row.status == "ready" and not request.refresh):
-            value = result(walk, row, revisions, revision, request.bundle_format)
-            await session.commit()
-            return value
+    if reusable(row, revision, request.refresh, now, LEASE_SECONDS):
+        value = result(walk, row, revisions, revision, request.bundle_format)
+        await session.commit()
+        return value
     prepared = prepare_finalized_walk(
         walk.points,
         WalkFinalizeRequest(
@@ -126,13 +137,7 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
     )
     started_at, ended_at, session_id = walk.started_at, walk.ended_at, str(walk.client_session_id)
     pet_id = str(walk.pet_ids[0]) if len(walk.pet_ids) == 1 else None
-    generation = (row.generation if row else 0) + 1
-    if row is None:
-        row = WalkStoryboard(walk_id=walk_id)
-        session.add(row)
-    row.generation, row.input_revision = generation, revision
-    row.status, row.updated_at, row.error_code = "running", now, None
-    row.bundle = None
+    generation = reserve(session, walk_id, row, revision, now)
     await session.commit()  # No row lock or active DB transaction during environment I/O.
     bundle, failure = None, None
     try:
@@ -178,9 +183,7 @@ async def generate(session, owner, walk_id, request, lookup, titles=title_storyb
         session, owner, walk_id, request.bundle_format
     )
     current = await repo.current(session, walk_id)
-    if current and current.generation == generation and latest_revision == revision:
-        current.status = "failed" if failure else "ready"
-        current.bundle, current.error_code, current.updated_at = bundle, failure, datetime.now(UTC)
+    complete(current, generation, revision, latest_revision, bundle, failure, datetime.now(UTC))
     value = result(latest_walk, current, latest_revisions, latest_revision, request.bundle_format)
     await session.commit()
     return value

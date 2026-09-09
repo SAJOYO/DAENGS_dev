@@ -295,6 +295,33 @@ CHECKS = (
             'ALTER TABLE care_events ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
             'DROP INDEX idx_care_events_pet_occurred',
         ]),
+        # 2026-09-09 (#<PR>) — 진료비 기록 둘. **변조 목록의 마지막 하나가 이 항목의 이유다.**
+        # 이 표에서 지켜야 하는 것은 칸의 모양이 아니라 **reason_code 가 닫힌 목록이라는 사실**
+        # 이다. 목록을 통째로 permissive 한 CHECK 으로 갈아 끼우면 이름은 그대로라 ④ 는
+        # 통과하는데, 그때부터 사유가 자유 텍스트가 되어 사유별 누계가 조용히 쪼개진다 —
+        # 그것을 잡는 것이 verify ⑥ 이고, 그 그물이 실제로 걸리는지 여기서 잰다.
+        #
+        # 빈 표에 거는 변조라 CHECK 재검증이 죽지 않는다 (#271 의 NOT VALID 함정이 없다).
+        ('2026-09-09', 'vet_visits', PETS, 'vet_visits', [
+            'ALTER TABLE vet_visits DROP COLUMN raw_ocr_items',
+            'ALTER TABLE vet_visits ALTER COLUMN reason_code TYPE text',
+            # NOT NULL 을 잃는 변조. 유저가 확정 안 한 행이 vet_visits 에 앉을 수 있게 된다.
+            'ALTER TABLE vet_visits ALTER COLUMN reason_code DROP NOT NULL',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_client_event_unique',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_total_krw_range',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_hospital_phone_shape',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_pet_id_fkey; '
+            'ALTER TABLE vet_visits ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX idx_vet_visits_pet_visited',
+            'ALTER TABLE vet_visit_drafts DROP COLUMN extracted',
+            'ALTER TABLE vet_visit_drafts ALTER COLUMN receipt_image_key DROP NOT NULL',
+            'DROP INDEX idx_vet_visit_drafts_created_at',
+            # **닫힌 목록이 열리는 변조.** 이름은 살아 있으므로 ④ 로는 안 잡힌다.
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check;'
+            ' ALTER TABLE vet_visits ADD CONSTRAINT vet_visits_reason_code_check'
+            ' CHECK (length(reason_code) > 0)',
+        ]),
         ('2026-09-07', 'pets_registered', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN registered',
             'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',

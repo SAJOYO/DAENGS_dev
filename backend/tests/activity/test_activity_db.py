@@ -5,7 +5,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import test_territory_ownership_db as base
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -29,64 +28,8 @@ from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload, Wa
 from daengs_backend.services import activity, activity_game, territory_owner
 from daengs_backend.services import walk as walks
 from daengs_backend.services.activity_core import game_policy as policy
-
-territory_database = base.database
-actors = base.actors
-
-
-@pytest.fixture
-async def database(territory_database):
-    async with territory_database() as db:
-        raw = (await (await db.connection()).get_raw_connection()).driver_connection
-        await raw.execute((base.ROOT / "db/init/06_walks.sql").read_text(encoding="utf-8"))
-        sql = (base.ROOT / "db/migrations/2026-09-06_activity_game.sql").read_text(encoding="utf-8")
-        await raw.execute(sql)
-        await raw.execute(sql)
-        await raw.execute((base.ROOT / "db/init/21_activity_game.sql").read_text(encoding="utf-8"))
-        await raw.execute(
-            (base.ROOT / "db/migrations/verify_2026-09-06_activity_game.sql").read_text(
-                encoding="utf-8"
-            )
-        )
-        await db.commit()
-    return territory_database
-
-
-@pytest.fixture
-def clock(monkeypatch):
-    current = [int(datetime.now(UTC).timestamp() * 1000)]
-    monkeypatch.setattr(settings, "activity_game_enabled", True)
-    monkeypatch.setattr(activity_game, "now_ms", lambda: current[0])
-    monkeypatch.setattr(base.svc, "_now", lambda: datetime.fromtimestamp(current[0] / 1000, UTC))
-    return current
-
-
-async def season(database, clock, name="test", **rule_values):
-    # Preserve the already-running season contract; v2 scenarios opt in explicitly.
-    rule_values.setdefault("version", "draft-2026-09-06")
-    async with database() as db:
-        return await activity_game.create_season(
-            db, name, clock[0] - 1000, clock[0] + 86_400_000, policy.Rules(**rule_values)
-        )
-
-
-async def mark(database, clock, owner, client, pet, **overrides):
-    return await base.mark(
-        database,
-        owner,
-        client,
-        pet,
-        observed_at=datetime.fromtimestamp(clock[0] / 1000, UTC),
-        **overrides,
-    )
-
-
-async def certify(database, clock, owner, client, claim, monkeypatch):
-    photo = await base.photo(
-        database, owner, client, claim, captured_at=datetime.fromtimestamp(clock[0] / 1000, UTC)
-    )
-    await base.decide(database, photo, monkeypatch)
-    return photo
+from tests.activity.support.actions import certify, mark, season
+from tests.territory.support import ownership as base
 
 
 async def upload(database, owner, pets, client, started, *, observed=True):

@@ -5,8 +5,6 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-import test_activity_db as activity_base
-import test_territory_ownership_db as base
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
@@ -17,11 +15,9 @@ from daengs_backend.models.activity import ActivityAccount, ActivityGameReceipt
 from daengs_backend.models.territory_claim import TerritoryChallenge
 from daengs_backend.schemas.territory_claim import ChallengeRequest
 from daengs_backend.services import activity
+from tests.activity.support import actions as activity_base
+from tests.territory.support import ownership as base
 
-territory_database = activity_base.territory_database
-database = activity_base.database
-actors = base.actors
-clock = activity_base.clock
 svc = base.svc
 
 

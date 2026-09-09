@@ -54,6 +54,15 @@ CREATE TABLE IF NOT EXISTS gait_records (
 
     -- 판정 로직 버전. 버전이 다른 두 기록을 비교하면 경고를 붙인다.
     gait_filter_version TEXT,
+    -- 어떤 pose model / 관절 정의로 만든 기록인가 (D-063). **실행 엔진 선택이 아니라
+    -- 메타데이터다** — 그 모델이 더는 안 돌아도 옛 기록이 그 모델로 만들어진 사실은 남는다.
+    --   rtmpose_ap10k_ssd  v4 (AP-10K 17 관절)
+    --   yolov8_12kp_best   legacy (12 관절)
+    -- NULL = 판별 불가한 옛 기록, 또는 엔진 결과 없이 FAILED 로 끝난 기록. 값의 정본은
+    -- daengs_gait/contract.py 의 POSE_MODELS 이고, CHECK 로 못 박지 않는다 — 모델이 바뀔
+    -- 때마다 마이그레이션이 필요해지는 것을 피한다. 관절 이름이 다른 기록끼리는 비교하지
+    -- 않는다 (2단계, services/gait.py).
+    pose_model TEXT,
 
     -- 사용자가 준 촬영일. 없을 수 있다 (analyzed 시각과 다르다).
     captured_at DATE,

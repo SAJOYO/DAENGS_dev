@@ -14,13 +14,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from daengs_gait.compare import compare_loaded_records
-from daengs_gait.config import GAIT_FILTER_VERSION, OVERLAYS_DIR
+from daengs_gait.config import GAIT_FILTER_VERSION, OVERLAYS_DIR, POSE_MODEL_ID
 from daengs_gait.features import build_features
 from daengs_gait.keypoint_infer import run_keypoint_inference
 from daengs_gait.overlay import OverlayEncodeError, render_overlay_video
 from daengs_gait.quality_gate import check_quality
 from daengs_gait.record_store import load_record, save_record
 from daengs_gait.trajectory import build_trajectories
+
 
 def process_video(
     video_path,
@@ -56,6 +57,9 @@ def process_video(
         "note": note,
         "dog_id": dog_id,
         "created_at": datetime.now(UTC).isoformat(),
+        # 어떤 관절 정의로 만든 기록인가 (D-063). 품질 판정 **앞**에 넣습니다 — unavailable
+        # 이어도 엔진은 돌았으니 값이 있고, backend 가 그대로 gait_records.pose_model 에 씁니다.
+        "pose_model": POSE_MODEL_ID,
         "video_meta": {
             "resolution": f"{meta['width']}x{meta['height']}",
             "native_fps": round(meta["native_fps"], 2),

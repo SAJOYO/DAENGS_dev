@@ -146,3 +146,26 @@ def test_sheet_is_blind_and_key_round_trips(tmp_path: Path) -> None:
 def test_unlabeled_rows_are_skipped_not_counted() -> None:
     rows = make_rows(6)
     assert select_for_labeling(rows, n_contradiction=1, n_random=2, n_repeats=1).repeats
+
+
+def test_responsiveness_is_derived_when_the_labeler_leaves_it_blank() -> None:
+    from daengs_evals.calibration.labels import _coerce
+
+    assert (
+        _coerce({"changed": 0, "profile": 0, "fabricated": 0, "stereotype": 0})["responsiveness"]
+        == 0
+    )
+    assert (
+        _coerce({"changed": 1, "profile": 1, "fabricated": 0, "stereotype": 0})["responsiveness"]
+        == 2
+    )
+    assert (
+        _coerce({"changed": 1, "profile": 0, "fabricated": 0, "stereotype": 0})["responsiveness"]
+        == 1
+    )
+    assert (
+        _coerce(
+            {"changed": 1, "profile": 1, "fabricated": 0, "stereotype": 0, "responsiveness": 1}
+        )["responsiveness"]
+        == 1
+    )

@@ -35,7 +35,12 @@ def _coerce(row: Mapping[str, Any]) -> dict[str, Any]:
         v = row.get(f)
         out[f] = None if v in (None, "") else int(v)
     v = row.get("responsiveness")
-    out["responsiveness"] = None if v in (None, "") else int(v)
+    if v in (None, ""):
+        # 사람이 안 적었으면 루브릭대로 파생 — rubric.score_pair 와 같은 진리표
+        c, pr = out["changed"], out["profile"]
+        out["responsiveness"] = None if c is None else (0 if c == 0 else (2 if pr == 1 else 1))
+    else:
+        out["responsiveness"] = int(v)
     out["note"] = row.get("note") or ""
     return out
 

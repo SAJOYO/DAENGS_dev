@@ -181,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     p_review.add_argument("--repeats", type=int, default=10)
     p_review.add_argument("--seed", type=int, default=20260909)
 
+    p_label = sub.add_parser("label", help="터미널에서 한 쌍씩 0/1 을 받아 시트를 채운다")
+    common(p_label)
+
     p_kappa = sub.add_parser("kappa")
     common(p_kappa)
     p_kappa.add_argument("--labeler", required=True)
@@ -191,6 +194,10 @@ def main(argv: list[str] | None = None) -> int:
     p_gate.add_argument("--min-labels", type=int, default=30)
 
     args = parser.parse_args(argv)
+    if args.command == "label":
+        from daengs_evals.calibration.label_cli import run_label
+
+        return run_label(_paths(args.axis, args.label)["sheet"])
     return {"review": cmd_review, "kappa": cmd_kappa, "gate": cmd_gate}[args.command](args)
 
 

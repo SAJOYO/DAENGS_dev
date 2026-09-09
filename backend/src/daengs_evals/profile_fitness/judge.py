@@ -504,6 +504,24 @@ def run_score(
         log(
             f"⚠ {exc} — 지금까지의 판정은 파일에 남아 있습니다. --resume 없이 같은 명령을 다시 돌리면 이어서 합니다"
         )
+    # 이 실행의 장부. 재개하면 한 줄 더 쌓이고, 리포트가 합쳐서 "1000쌍당 비용" 을 낸다.
+    with path.open("a", encoding="utf-8") as h:
+        h.write(
+            json.dumps(
+                {
+                    "kind": "ledger",
+                    "judge_model": model,
+                    "variant": variant,
+                    "pairs_judged": len(todo),
+                    "input_tokens": ledger.input_tokens,
+                    "output_tokens": ledger.output_tokens,
+                    "calls": ledger.calls,
+                    "finished_at": utc_now(),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
     log(f"토큰 {ledger.input_tokens}/{ledger.output_tokens} (호출 {ledger.calls}) → {path.name}")
     return path
 

@@ -200,6 +200,7 @@ screening = [
     "pillow>=10.2",
     "pandas>=2.1",
     "tqdm>=4.66",
+    "huggingface-hub>=0.34",
 ]
 pipeline = [
     "google-cloud-run>=0.16.1",

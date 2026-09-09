@@ -430,6 +430,7 @@ pipeline = [
     { name = "google-cloud-run" },
 ]
 screening = [
+    { name = "huggingface-hub" },
     { name = "pandas" },
     { name = "pillow" },
     { name = "timm" },
@@ -499,6 +500,7 @@ ml = [
 pdf = [{ name = "pymupdf", specifier = ">=1.28.2" }]
 pipeline = [{ name = "google-cloud-run", specifier = ">=0.16.1" }]
 screening = [
+    { name = "huggingface-hub", specifier = ">=0.34" },
     { name = "pandas", specifier = ">=2.1" },
     { name = "pillow", specifier = ">=10.2" },
     { name = "timm", specifier = ">=1.0.9" },

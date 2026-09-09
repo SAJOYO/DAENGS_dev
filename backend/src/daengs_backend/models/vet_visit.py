@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    CHAR,
     Boolean,
     CheckConstraint,
     Date,
@@ -169,7 +170,7 @@ class VetVisitDraft(Base):
     client_event_id: Mapped[uuid.UUID] = mapped_column(Uuid)
 
     #: 올라온 사진의 sha256. client_event_id 가 못 잡는 경우(앱 재시작)를 잡는다.
-    receipt_sha256: Mapped[str | None] = mapped_column(String(64))
+    receipt_sha256: Mapped[str | None] = mapped_column(CHAR(64))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

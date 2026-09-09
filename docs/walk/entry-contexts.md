@@ -68,7 +68,7 @@ Geo wire를 그대로 복제한 것은 아니다: 현재 서버의 `(walk_id, en
 
 ## 활성화와 롤백
 
-1. 서버 테이블 소유권과 배포 환경을 확인한다. [마이그레이션 안내](../db/migrations/README.md)를 따른다.
+1. 서버 테이블 소유권과 배포 환경을 확인한다. [마이그레이션 안내](../../db/migrations/README.md)를 따른다.
 2. `2026-09-08_walk_entry_contexts.sql`과 `verify_2026-09-08_walk_entry_contexts.sql`을 적용한다.
    신규 볼륨 원본은 `db/init/24_walk_entry_contexts.sql`이다. SQL은 재실행할 수 있다.
 3. 웹과 전용 워커에 `DAENGS_WALK_ENTRY_CONTEXT_ENABLED=true`를 설정한다.

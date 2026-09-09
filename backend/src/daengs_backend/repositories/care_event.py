@@ -30,7 +30,9 @@ def add(session: AsyncSession, event: CareEvent) -> CareEvent:
 async def get_owned(
     session: AsyncSession, app_user_id: uuid.UUID, event_id: uuid.UUID
 ) -> CareEvent | None:
-    """**내 것일 때만** 돌려줍니다. 소유자 조건을 여기 묶는 이유는 `pet_repo.get_owned` 와 같습니다."""
+    """**`actor_app_user_id` 가 `app_user_id` 인 것만** 돌려줍니다 — 지금 이 조건은 "챙긴
+    사람" 이지 "소유자" 가 아닙니다 (docs/co-care.md). 삭제 권한을 이대로 둘지는 아직
+    안 정해졌습니다 — 그 규칙은 이후 태스크가 다시 정합니다."""
     stmt = select(CareEvent).where(
         CareEvent.id == event_id, CareEvent.actor_app_user_id == app_user_id
     )

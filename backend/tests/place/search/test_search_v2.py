@@ -18,8 +18,7 @@ from daengs_place.place.search import (
 from daengs_place.place.search_preview import preview_search_plan
 from daengs_place.place.source_catalog import KCISA_KINDS, KTO_KINDS, MOIS_SOURCES
 from daengs_place.place.source_facts.states import DetailAcquisitionState
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 _MEDICAL_SOURCE = "public:mois:animal_hospital"
 _MEDICAL_REF = "test:v2:medical:hospital"

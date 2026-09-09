@@ -9,11 +9,10 @@ from sqlalchemy import text
 from daengs_place.place.filters.contract import FilterState
 from daengs_place.place.filters.service import search_filtered_places
 from daengs_place.place.source_catalog import MOIS_SOURCES
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 FIXTURE = json.loads(
-    (Path(__file__).parents[1] / "place/filters/examples.json").read_text(encoding="utf-8")
+    (Path(__file__).parents[1] / "filters/examples.json").read_text(encoding="utf-8")
 )
 PREFIX = "filter-phase3-"
 

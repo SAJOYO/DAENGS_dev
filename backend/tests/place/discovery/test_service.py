@@ -4,11 +4,7 @@ from collections.abc import Iterator
 import pytest
 
 from daengs_place.place.contracts import (
-    PlaceClassification,
-    PlaceFacts,
-    PlaceMatch,
     PlaceRef,
-    PlaceResult,
 )
 from daengs_place.place.discovery.contract import (
     PlaceDiscoveryRequest,
@@ -57,6 +53,7 @@ from daengs_place.place.source_facts.bundle import (
 )
 from daengs_place.place.source_facts.kto import project_kto
 from daengs_place.place.source_facts.states import DetailAcquisitionState, FactState
+from tests.place.support.discovery import _place
 
 _SPATIAL = PlaceSpatialConstraint(lat=37.5563, lng=126.9236, radius_m=3_000)
 
@@ -113,27 +110,6 @@ def _intent_service(output: LLMIntentOutput) -> PlaceIntentSuggestionService:
     return PlaceIntentSuggestionService(
         _OutputProposer(output),
         observation_id_factory=lambda: next(ids),
-    )
-
-
-def _place(ref: str, *, kind: str = "travel", address: str = "서울 마포구") -> PlaceResult:
-    key = PlaceRef(source="kto", ref=ref)
-    return PlaceResult(
-        key=key,
-        name=f"테스트 장소 {ref}",
-        lat=37.556,
-        lng=126.923,
-        distance_m=420,
-        match=PlaceMatch(source=key, kind=kind),
-        classifications=[
-            PlaceClassification(
-                source=key,
-                source_category="12",
-                kind=kind,
-                mapping_version="test-v1",
-            )
-        ],
-        facts=PlaceFacts(address=address),
     )
 
 

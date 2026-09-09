@@ -222,9 +222,9 @@ testpaths = ["tests"]
 # (#336) 원래 이 줄이 있던 이유(#224 — `from tools... import` 가 venv 에 안 깔린 패키지를
 # 찾지 못함)는 없어졌지만, 줄을 지우고 돌려 보니 다른 이유로 여전히 필요했다: 여러 테스트가
 # `tests/` 자체를 패키지처럼 써서 서로를 import 한다 —
-# `tests/place/place/discovery/test_facility_actions.py` 가
-# `from tests.place.place.discovery.test_facility import make_service, request` 를,
-# `tests/test_facility_discovery_api.py` 가 `from tests.facility_session_store import
+# `tests/place/discovery/test_facility_actions.py` 가
+# `from tests.place.support.discovery import make_service, request` 를,
+# `tests/place/api/test_facility_discovery_api.py` 가 `from tests.place.support.session_store import
 # MemorySessions` 를, `tests/walk/storyboard/test_storyboard_observations.py` 가
 # `from tests.walk.support.storyboard import headings` 를 쓴다. `tests/` 에
 # `__init__.py` 가 없어 이것들은 namespace 패키지로만 잡히는데, 그러려면 `backend/` 가

@@ -19,8 +19,7 @@ from daengs_place.ingest.facility_store import upsert_rows
 from daengs_place.ingest.kcisa import source_ref
 from daengs_place.ingest.pet_axes import derive_all
 from daengs_place.place.facility_resolver import FacilityParams, resolve_facilities
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 SOURCES = ("test:rank_base", "test:rank_newer")
 SNAPSHOT = "2025-03-24"

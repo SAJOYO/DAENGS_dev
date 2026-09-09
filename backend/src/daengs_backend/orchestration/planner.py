@@ -35,6 +35,7 @@ strips `general` from the decision, so production builds the plans it built befo
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -227,6 +228,11 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
         dog = _dog_context(context)
         if dog is not None:
             payload["dog"] = dog
+        # Today's care log goes to the fallback and nowhere else (#344): "did I give the
+        # medication this morning" is a general question, and Life's documents do not care.
+        care_log = _care_log_context(context)
+        if care_log is not None:
+            payload["care_log"] = care_log
         return payload
     if capability == "walk":
         location = context["location"]
@@ -258,7 +264,57 @@ def _dog_context(context: dict[str, Any]) -> dict[str, Any] | None:
     age_months = dog.get("age_months")
     if isinstance(age_months, int) and not isinstance(age_months, bool) and age_months >= 0:
         resolved["age_months"] = age_months
+    # Care facts (#331): the same whitelist rule, one field at a time — a malformed care
+    # value drops that field, not the breed next to it. ``on_medication`` passes only as
+    # ``True``; ``False`` would claim a fact the profile cannot state (blank = unknown).
+    feeding_style = dog.get("feeding_style")
+    if feeding_style in ("free", "scheduled"):
+        resolved["feeding_style"] = feeding_style
+    health_conditions = dog.get("health_conditions")
+    if isinstance(health_conditions, str) and health_conditions.strip():
+        resolved["health_conditions"] = health_conditions.strip()[:200]
+    if dog.get("on_medication") is True:
+        resolved["on_medication"] = True
     return resolved or None
+
+
+_CARE_LOG_COUNTS = ("meal", "medication", "snack", "walk")
+_CARE_LOG_LAST = ("last_meal_at", "last_medication_at", "last_snack_at")
+_CARE_LOG_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_CARE_LOG_CLOCK = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def _care_log_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read today's care summary, dropping anything the caller did not resolve (#344).
+
+    Same rule as ``_dog_context``: only the caller's structured values reach a payload,
+    never model output, and a malformed field drops that field rather than the request.
+    The caller is ``routers/assistant.py`` `_with_dog_context`, which already proved ownership
+    and reduced the day to counts and last times (``services/care_log_context``).
+
+    **This whitelist knows no ``note`` and no event list.** ``CareLogContext`` would reject
+    them downstream, but the reason is upstream of the type: the owner's free text must not
+    sit next to the prompt's instructions, and a summary is all the answer needs. A summary
+    without a single count is no summary — it yields None, not an empty block.
+    """
+    care_log = context.get("care_log")
+    if not isinstance(care_log, Mapping):
+        return None
+    day = care_log.get("day")
+    if not isinstance(day, str) or not _CARE_LOG_DAY.match(day):
+        return None
+    resolved: dict[str, Any] = {"day": day}
+    for kind in _CARE_LOG_COUNTS:
+        count = care_log.get(kind)
+        if isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= 200:
+            resolved[kind] = count
+    for key in _CARE_LOG_LAST:
+        clock = care_log.get(key)
+        if isinstance(clock, str) and _CARE_LOG_CLOCK.match(clock):
+            resolved[key] = clock
+    if not any(kind in resolved for kind in _CARE_LOG_COUNTS):
+        return None
+    return resolved
 
 
 def _screening_context(context: dict[str, Any]) -> dict[str, Any] | None:

@@ -142,6 +142,42 @@ async def test_아무것도_모르면_None(store: Store) -> None:
     assert await dog_context.resolve(object(), OWNER, str(pet.id)) is None
 
 
+# ---------------------------------------------------------------- 돌봄 (#331)
+
+
+async def test_급식_방식과_지병은_그대로_간다(store: Store) -> None:
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix",
+                  feeding_style="scheduled", health_conditions="신부전 초기")
+    store.pets.append(pet)
+    resolved = await dog_context.resolve(object(), OWNER, str(pet.id))
+    assert resolved == {"feeding_style": "scheduled", "health_conditions": "신부전 초기"}
+
+
+async def test_약은_이름이_아니라_복약_여부만_간다(store: Store) -> None:
+    """약 이름이 프롬프트에 가면 약·용량 질문을 거절하는 방어가 지시문 한 줄로 약해집니다."""
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix", medications="포르테콜 아침 1정")
+    store.pets.append(pet)
+    resolved = await dog_context.resolve(object(), OWNER, str(pet.id))
+    assert resolved == {"on_medication": True}
+    assert "포르테콜" not in repr(resolved)
+
+
+async def test_약_칸이_비면_복약_여부도_모름이다(store: Store) -> None:
+    """빈 칸은 "약 안 먹는다"가 아닙니다. False 를 만들지 않고 키를 안 냅니다."""
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix", medications="   ")
+    store.pets.append(pet)
+    assert await dog_context.resolve(object(), OWNER, str(pet.id)) is None
+
+
+async def test_급식_시각은_비서에게_안_간다(store: Store) -> None:
+    """시각의 소비자는 알림(F5)과 케어 기록이지 일반 답변이 아닙니다 — 늘릴 때는 문항부터."""
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix",
+                  feeding_style="scheduled", feeding_times=["08:00", "19:30"])
+    store.pets.append(pet)
+    resolved = await dog_context.resolve(object(), OWNER, str(pet.id))
+    assert resolved == {"feeding_style": "scheduled"}
+
+
 # ---------------------------------------------------------------- planner
 
 
@@ -164,6 +200,27 @@ def test_신뢰된_context_의_dog_만_payload_로_간다() -> None:
 
 def test_프로필이_없으면_payload_도_그대로다() -> None:
     assert _life_plan({}).dog is None
+
+
+def test_돌봄_사실도_신뢰된_context_에서만_payload_로_간다() -> None:
+    payload = _life_plan({"dog": {
+        "breed": "퍼그", "feeding_style": "scheduled",
+        "health_conditions": "신부전 초기", "on_medication": True,
+    }})
+    assert payload.dog == DogContext(
+        breed="퍼그", feeding_style="scheduled",
+        health_conditions="신부전 초기", on_medication=True,
+    )
+
+
+def test_모양이_틀린_돌봄_사실은_버려진다() -> None:
+    """부르는 쪽이 넣는 값이지만 계약이 정한 모양만 지나갑니다 — 나머지 칸은 살립니다."""
+    payload = _life_plan({"dog": {
+        "breed": "퍼그", "feeding_style": "아무 때나",
+        "health_conditions": "   ", "on_medication": "yes",
+    }})
+    assert payload.dog == DogContext(breed="퍼그")
+    assert _life_plan({"dog": {"on_medication": False}}).dog is None
 
 
 def test_모양이_틀린_dog_는_요청을_깨지_않는다() -> None:

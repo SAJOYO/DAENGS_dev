@@ -15,18 +15,22 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from daengs_backend.orchestration.semantic import PROMPT_VERSION, SemanticRoutingDecision
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.runner import build_artifacts
-from tools.router_benchmark.runner_v2 import GENERATION_CONFIG
-from tools.router_benchmark.runner_v4 import MODEL_ID as V4_MODEL_ID
-from tools.router_benchmark.runner_v5 import (
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.runner import build_artifacts
+from daengs_evals.router_benchmark.runner_v2 import GENERATION_CONFIG
+from daengs_evals.router_benchmark.runner_v4 import MODEL_ID as V4_MODEL_ID
+from daengs_evals.router_benchmark.runner_v5 import (
     BENCHMARK_ID,
     GOLD_VERSION,
     MODEL_ID,
     run_cases,
     social_intent_section,
 )
-from tools.router_benchmark.schemas import GoldCase, load_benchmark_config, load_gold_v3_cases
+from daengs_evals.router_benchmark.schemas import (
+    GoldCase,
+    load_benchmark_config,
+    load_gold_v3_cases,
+)
 
 EVALS_DIR = Path(__file__).parents[1] / "evals" / "orchestration_router"
 

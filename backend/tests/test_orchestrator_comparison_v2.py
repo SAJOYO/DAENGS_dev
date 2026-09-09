@@ -27,9 +27,9 @@ from daengs_backend.orchestration.semantic import (
     SemanticRoutingDecision,
     router_generation_config,
 )
-from tools.orchestrator_comparison import runner_v2 as v2
-from tools.orchestrator_comparison.runner import Meter
-from tools.router_benchmark.schemas import (
+from daengs_evals.orchestrator_comparison import runner_v2 as v2
+from daengs_evals.orchestrator_comparison.runner import Meter
+from daengs_evals.router_benchmark.schemas import (
     AttemptValidation,
     GoldCase,
     PerformanceObservation,
@@ -189,7 +189,7 @@ def test_controlled_settings_come_from_code_constants_and_match() -> None:
     assert s["temperature"]["langgraph"] == 0.0
     # 두 프롬프트는 #279 에서 같은 PR 안에 함께 올라갔다 (D-055 ⑦ 규칙 1). 기록된
     # `comparison_v2_*` 는 v7/v2 로 남아 있고, 이 값은 **지금** 러너가 보낼 버전이다.
-    assert s["prompt_version"] == {"langgraph": "semantic-router-ko-v9", "agent": "agent-ko-v4"}
+    assert s["prompt_version"] == {"langgraph": "semantic-router-ko-v10", "agent": "agent-ko-v4"}
     assert "never printed" in s["credential"]
 
 

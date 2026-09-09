@@ -9,14 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.prompt_v3 import PROMPT_VERSION as V3_PROMPT_VERSION
-from tools.router_benchmark.prompt_v3 import build_semantic_router_prompt
-from tools.router_benchmark.runner import build_artifacts
-from tools.router_benchmark.runner_v2 import GENERATION_CONFIG, run_cases
-from tools.router_benchmark.runner_v4 import MODEL_ID as V4_MODEL_ID
-from tools.router_benchmark.schemas import GoldCase, load_benchmark_config, load_gold_v3_cases
-from tools.router_benchmark.semantic_v2 import SemanticRoutingDecision
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.prompt_v3 import PROMPT_VERSION as V3_PROMPT_VERSION
+from daengs_evals.router_benchmark.prompt_v3 import build_semantic_router_prompt
+from daengs_evals.router_benchmark.runner import build_artifacts
+from daengs_evals.router_benchmark.runner_v2 import GENERATION_CONFIG, run_cases
+from daengs_evals.router_benchmark.runner_v4 import MODEL_ID as V4_MODEL_ID
+from daengs_evals.router_benchmark.schemas import (
+    GoldCase,
+    load_benchmark_config,
+    load_gold_v3_cases,
+)
+from daengs_evals.router_benchmark.semantic_v2 import SemanticRoutingDecision
 
 
 @dataclass

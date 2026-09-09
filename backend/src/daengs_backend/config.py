@@ -160,7 +160,7 @@ class Settings(BaseSettings):
 
     # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
     # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은
-    # 그 값을 `daengs_backend` 쪽 도구(`tools/answer_quality/`)도 읽어야 해서이고,
+    # 그 값을 `daengs_backend` 쪽 도구(`src/daengs_evals/answer_quality/`)도 읽어야 해서이고,
     # 위 `redis_url`·`gemini_api_key` 와 **같은 판단**입니다 — 두 패키지가 같은 env 를
     # 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
     #

@@ -96,9 +96,9 @@ journey-service · crawler-worker · crawler-beat
   **하나**입니다 — Training 전용이던 `training-rag-pgvector` 컨테이너는 #105 로,
   Training 전용 `dog_rag` **데이터베이스**는 #112 로 없어졌습니다. Training 은 이제
   본체와 **같은 `vectordb` DB** 를 쓰고, `public.training_rag_documents`/
-  `training_rag_chunks` 테이블로만 나뉩니다. 스키마 원본은 여전히
-  `backend/infra/training_pgvector/schema.sql`(768차원)이고, 본체 DB 규칙과 같게
-  `db/init/05_training_rag.sql` 에도 같은 정의가 있습니다 (#92·#94·#105·#112 —
+  `training_rag_chunks` 테이블로만 나뉩니다. 스키마 원본은 `db/init/05_training_rag.sql`
+  (768차원)이고, 본체 DB 규칙대로 Alembic 은 쓰지 않습니다 — 이미 떠 있는 DB 를 바꿀 때는
+  `db/migrations/` 에 파일로 남깁니다 (#92·#94·#105·#112 —
   상세는 아래 "Training 토폴로지" 절). redis 는 없어도 앱이 뜨지만,
   캐시 폴백 판단이 프로세스 생애에 한 번뿐이라 순서를 보장해야 일 예산 카운터가
   동작합니다 (D-019).
@@ -363,10 +363,10 @@ frontend → backend POST /training/chat
    └─ public.training_rag_documents · public.training_rag_chunks   (Training 전용, #112)
 ```
 
-스키마 원본은 여전히 `backend/infra/training_pgvector/schema.sql`(768차원)이고, 본체 DB
-규칙과 같게 `db/init/05_training_rag.sql` 에도 같은 정의가 추가됐습니다(#112) — 빈
-볼륨에서 새로 뜨면 Training 테이블까지 한 번에 만들어집니다. 더 이상 전용
-`TRAINING_RAG_DB_PASSWORD`/`dog_rag` LOGIN role 이 없습니다.
+스키마 원본은 `db/init/05_training_rag.sql`(768차원)입니다(#112 로 여기에 정의가
+추가됐습니다) — 본체 DB 규칙대로 Alembic 은 쓰지 않고, 빈 볼륨에서 새로 뜨면 Training
+테이블까지 한 번에 만들어집니다. 이미 떠 있는 DB 를 바꿀 때는 `db/migrations/` 에
+파일로 남깁니다. 더 이상 전용 `TRAINING_RAG_DB_PASSWORD`/`dog_rag` LOGIN role 이 없습니다.
 
 **저장소·런타임 설정과 서버의 실제 상태는 다른 질문입니다.** 위 내용은 이 저장소의
 코드·compose·`db/init/` 이 가리키는 대상이 `vectordb.training_rag_*` 라는 뜻입니다.

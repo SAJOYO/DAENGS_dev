@@ -10,7 +10,7 @@
 - Agent 구현 SHA: `4260ff62e3167687434f195eec6a9efb690aa008`
 - LangGraph 구현 SHA: `4260ff62e3167687434f195eec6a9efb690aa008`
 - 패키지: langchain 1.4.0, langchain-core 1.6.1, langchain-google-genai 4.4.0, langgraph 1.2.11, google-genai 2.20.0, pydantic 2.13.4
-- 채점기: `tools/router_benchmark/evaluate.py` (v1~v8 · 비교 v1 과 **같은 자**)
+- 채점기: `src/daengs_evals/router_benchmark/evaluate.py` (v1~v8 · 비교 v1 과 **같은 자**)
 - 어댑터: 가짜(즉시 OK) — 재는 것은 능력 선택 · 계약 준수 · 오케스트레이션 오버헤드다.
   Training RAG · Life 답 품질 · Place HTTP · DB 지연 · 운영 end-to-end 지연은 재지 않는다
 - 예열(비채점): r1: langgraph ANSWERED 1218.0ms, agent ANSWERED 1985.1ms; r2: agent ANSWERED 2239.0ms, langgraph ANSWERED 1132.2ms; r3: langgraph ANSWERED 1364.5ms, agent ANSWERED 1928.3ms

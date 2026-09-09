@@ -112,7 +112,9 @@ judge 와 Codex 가 **둘 다 확인 목록에 안 올린 문장**을 교차했�
 
 ### 그 문장은 자료에 있다
 
-`7eb39284` 에 축자로 있고 `t19`·`t03` 양쪽 청크에 다 들어 있다:
+같은 내용이 `7eb39284` 에 있고 `t19`·`t03` 양쪽 청크에 다 들어 있다. ⚠ **축자는 아니다**
+(2026-09-08 정정) — 어미와 낱말이 다르다. 다만 프롬프트가 *"자료를 다른 말로 바꿔 쓴 것은
+참이다"* 라고 명시하므로 이 축에서는 뒷받침된 것이다:
 
 > "놀이는 별도로 정해진 시간에 반려인과 함께 논다"라는 인식을 심어 줍니다.
 
@@ -130,7 +132,8 @@ judge 의 `t19` 근거도 스스로 그것을 인정한다 — *"자료 3**에�
 ### 그래서 「엄한 쪽으로 기운다」는 부분적으로 되살아난다
 
 처음에 그렇게 적었다가 6/6 을 보고 철회했는데, **`t19` 에 한해서는 맞았다.** 다만 근거가
-바뀌었다 — 그때는 "표현 트집으로 보인다" 는 읽기였고, 지금은 *"자료에 축자로 있다"* 는 확인
+바뀌었다 — 그때는 "표현 트집으로 보인다" 는 읽기였고, 지금은 *judge 자신이 «자료 3에서
+제시되며» 라고 적었다* 는 확인
 가능한 사실과 *"t03 에서는 같은 주장을 통과시켰다"* 는 내부 불일치다. **읽기가 아니라 증거다.**
 
 ⚠ **일반화하지 않는다.** 1건이고, 남은 5건에서는 judge 가 맞았다.
@@ -196,7 +199,7 @@ LLM 일치로 승격하는 길도 버렸다 — 위 표대로 같은 계열 판�
     export GEMINI_API_KEY=...            # 생성부가 os.getenv 를 읽는다
     export RAG_PGVECTOR_DSN=...          # backend/.env 의 DAENGS_DB_* 로 조립
     uv sync --group ml                   # 검색이 sentence-transformers 를 쓴다
-    uv run python -m tools.training_quality.collect \
+    uv run python -m daengs_evals.training_quality.collect \
         --questions evals/training_quality/questions_v1.jsonl --label lap1
-    uv run python -m tools.training_quality check-anchors
-    uv run python -m tools.training_quality score --label lap1
+    uv run python -m daengs_evals.training_quality check-anchors
+    uv run python -m daengs_evals.training_quality score --label lap1

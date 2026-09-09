@@ -1,0 +1,314 @@
+"""계층 정의 — 주제 × 문체 (#277).
+
+계층은 **코드가 정의**한다. 생성기는 여기 적힌 설명으로 질문을 만들고, 리포트는 같은 목록으로
+"어느 계층이 약한가" 를 묶는다. 두 곳이 같은 객체를 읽으므로 계층 이름이 어긋날 수 없다.
+
+`expected_route_kind` 는 **묶음 힌트이지 정답이 아니다.** 리포트가 계층을 specialized(전문 능력이
+받는다) · fallback(#279 의 일반 폴백이 받는다) · clarify(좌표가 없어 되묻는다) 로 묶어 보여 주는
+데만 쓰고, 어떤 점수도 이 값으로 매기지 않는다 — 정답 라우팅을 재는 것은 라우팅 골드의 일이다.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Literal
+
+RouteKind = Literal["specialized", "fallback", "clarify"]
+
+#: 좌표가 필요한 계층에 넣는 신뢰된 위치 — 서울시청. 실제 사용자 위치가 아니다.
+SEOUL_LOCATION: dict[str, float] = {"lat": 37.5665, "lon": 126.9780}
+
+#: 폴백이 받을 주제는 이 카드의 측정 대상이라 문체당 한 건 더 만든다 (예산: 총 150건 안팎).
+_QUESTIONS_PER_STYLE_SPECIALIZED = 2
+_QUESTIONS_PER_STYLE_FALLBACK = 3
+#: `screening` 세트만 문체당 넷이다 (#318). #314 실측에서 14문항 중 **인용이 나온 것이 9건**
+#: 이었다 — 나머지는 REFUSED · ABSTAINED · FAILED 라 인용 집합을 비교할 대상이 아니다.
+#: 조합을 늘리기 전에 표본을 늘려야 같은 결론을 조합마다 반복하지 않는다.
+_QUESTIONS_PER_STYLE_SCREENING = 4
+
+#: `life` 세트는 문체당 넷이다 (#343 · RAG-079 ①). 5주제 × 7문체 × 4 = 140 — 랩 잡음이 ±2~3 문항이라
+#: 100 아래로는 격자 한 칸이 잡음에 잠긴다. 계층당 N 은 사람 결정이 없어 이 기본값으로 갔다.
+_QUESTIONS_PER_STYLE_LIFE = 4
+
+
+#: 질문 세트. **`questions_v1.jsonl` 은 동결돼 있고 그 sha256 이 #277 의 답변 메타에 박혀 있습니다** —
+#: 주제를 더해서 그 파일의 "모든 계층을 덮는다" 를 깨면 #277 의 출처 추적이 끊깁니다. 그래서 새 주제는
+#: 자기 세트에 들어가고, 세트마다 질문 파일이 따로입니다 (#314).
+#: `life` 는 #343 이 더한 세트다 — `questions_life_v1.jsonl`. Life 능력만 겨냥한 다섯 주제라
+#: `v1` 의 `life_institutional` 하나를 다섯으로 가른 모양인데, **`v1` 주제는 고치지 않는다** —
+#: #328 · #330 의 결과 파일이 옛 주제 id 를 가리킨다.
+QuestionSet = Literal["v1", "screening", "life"]
+
+
+@dataclass(frozen=True)
+class Topic:
+    name: str
+    description: str
+    expected_route_kind: RouteKind
+    needs_location: bool = False
+    question_set: QuestionSet = "v1"
+    #: Life 능력이 내야 할 상태. `life` 세트만 채운다 — `report_life` 가 오거절·오답변을 이 값으로 센다.
+    #: 라우팅 정답이 아니다(그건 라우팅 골드의 일). None 이면 그 축을 안 센다.
+    expected_life_status: Literal["OK", "REFUSED"] | None = None
+
+    @property
+    def questions_per_style(self) -> int:
+        # 세트를 먼저 본다 — `screening` 은 전문 능력 주제지만 표본이 따로 필요하다 (#318).
+        if self.question_set == "screening":
+            return _QUESTIONS_PER_STYLE_SCREENING
+        if self.question_set == "life":
+            return _QUESTIONS_PER_STYLE_LIFE
+        if self.expected_route_kind == "fallback":
+            return _QUESTIONS_PER_STYLE_FALLBACK
+        return _QUESTIONS_PER_STYLE_SPECIALIZED
+
+
+@dataclass(frozen=True)
+class Style:
+    name: str
+    description: str
+    #: 이 문체는 좌표를 넘기지 않는다 — `context` 가 빈 dict 가 된다.
+    without_location: bool = False
+
+
+#: `pet_insurance_skin` 은 #314 가 더한 주제다. 다른 주제와 달리 **판정 컨텍스트가 답을 가를 수
+#: 있는 유일한 자리**라서 있다 — 코퍼스에서 피부병을 명시한 보장 조항(KB반려행복펫보험 반려견
+#: 피부병 확장보장 추가특별약관 제1조 ②)과 그 면책 짝(치료비 특별약관 제3조 6·7호)이 **경과일**로
+#: 갈리기 때문이다. 조례·보조금 쪽에는 그런 갈래가 없어 판정을 넣어도 같은 답이 나온다
+#: (`evals/answer_quality/screening_corpus_survey.md`).
+TOPICS: tuple[Topic, ...] = (
+    Topic(
+        "training",
+        "강아지의 행동을 바꾸거나 기술을 가르치는 질문 — 짖음, 배변 실수, 산책 줄 당김, 앉아·기다려, "
+        "분리불안, 손님에게 뛰어오르기, 물건 물어뜯기 같은 훈련 문제",
+        "specialized",
+    ),
+    Topic(
+        "life_institutional",
+        "제도 · 법령 · 행정 · 정책 · 계약에 관한 공식 정보 — 동물등록, 지자체 지원금이나 보조금, "
+        "반려견 동반 대중교통 · 항공 · 숙박 규정, 펫보험 약관, 과태료, 유기 · 학대 신고 절차, 맹견 규제",
+        "specialized",
+    ),
+    Topic(
+        "walk_now",
+        "지금 · 오늘 · 이따가 산책을 나가도 되는지 — 더위, 추위, 비, 미세먼지, 눈, 바람 같은 "
+        "**현재** 환경 조건이 산책에 맞는지 묻는 질문 (평소 산책 횟수 같은 일반 조언이 아니다)",
+        "specialized",
+        needs_location=True,
+    ),
+    Topic(
+        "place",
+        "어디로 갈지 — 근처 애견 카페, 공원, 동물병원, 미용실, 강아지 운동장, 동반 식당 같은 "
+        "장소를 찾거나 추천해 달라는 질문",
+        "specialized",
+        needs_location=True,
+    ),
+    Topic(
+        "skin_gait",
+        "눈에 보이는 피부 상태(발진, 탈모, 딱지, 붉은 반점)를 사진으로 봐 달라거나, 걷는 모습"
+        "(절뚝임, 다리 절기, 비대칭, 자세)을 영상으로 분석해 달라는 요청",
+        "specialized",
+    ),
+    Topic(
+        "pet_insurance_skin",
+        "펫보험이 피부병(피부염, 발진, 탈모, 외이염, 알러지)을 보장하는지 — 가입 전부터 있던 "
+        "증상은 어떻게 되는지, 가입하고 며칠 뒤부터 보장되는지, 면책 기간이 있는지 같은 "
+        "**보장 여부와 시점**을 묻는 질문",
+        "specialized",
+        question_set="screening",
+    ),
+    Topic(
+        "general_care",
+        "일반 돌봄 상식 — 사료 급여량과 횟수, 간식, 수면 시간, 물 마시는 양, 목욕 · 빗질 · 발톱 같은 "
+        "미용, 견종 · 나이 · 체구별 돌봄 (제도도 훈련도 아닌 생활 상식)",
+        "fallback",
+    ),
+    Topic(
+        "medical_boundary",
+        "건강 · 의료의 경계 — 구토, 설사, 기침, 식욕부진 같은 증상, 약과 용량, 예방접종 시기, "
+        "중성화, 슬개골 같은 질환 상담처럼 수의사 판단이 필요할 수 있는 질문",
+        "fallback",
+    ),
+    Topic(
+        "emergency",
+        "응급 상황 — 초콜릿 · 포도 · 양파 · 자일리톨 섭취, 호흡 곤란, 경련, 교통사고, 열사병, "
+        "이물질 삼킴처럼 즉시 대응이 필요한 상황을 다급하게 묻는 질문",
+        "fallback",
+    ),
+    Topic(
+        "off_domain",
+        "반려견과 무관한 질문 — 고양이나 다른 동물, 사람의 건강, 요리, 코딩, 연애, 주식, 일반 상식처럼 "
+        "이 서비스의 범위 밖인 질문",
+        "fallback",
+    ),
+    # --- life 세트 (#343 · RAG-079) — Life 능력의 범주 다섯. 코퍼스 분포가 insurance 4,675 · policy 4,636 ·
+    # food 272 · travel 255 라 음식·이동이 얇고, 그 얇은 곳에서 「못함」이 나와야 D15 동결이 풀린다 (RAG-075 ⑦).
+    Topic(
+        "life_policy",
+        "반려견 제도 · 행정 — 동물등록과 변경신고(이사 · 소유자 변경 · 사망 후 30일), 미등록 과태료, "
+        "지자체 지원금과 보조금(내장형 칩 · 등록비 · 중성화), 맹견 지정과 입마개 · 목줄 의무, 공동주택 "
+        "사육 동의, 장묘업 허가 확인 같은 법령 · 조례 · 고시가 정하는 것",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_insurance",
+        "펫보험 약관 — 보장 범위와 면책(가입 전 질병 · 대기 기간 · 특정 질환), 자기부담금과 보상 비율, "
+        "갱신 · 가입 나이 제한, 청구 서류. **증상을 곁들여 물어도 된다**(\"피부가 빨간데 보험 되나요\") — "
+        "묻는 것은 보장 여부이지 진단이 아니다",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_food",
+        "음식 · 사료 제도와 안내 — 먹여도 되는 음식과 안 되는 음식(초콜릿 · 포도 · 양파 · 자일리톨), "
+        "사료 구입 요령과 표시 사항(성분 · 유통기한 · 등록 표시), 사료 관련 법령 · 고시. "
+        "\"먹여도 되나요\" 는 여기이고 \"먹었어요\" 는 응급이다",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_travel",
+        "반려견 동반 이동 규정 — 항공(기내 · 위탁 · 케이지 규격 · 요금), 철도(KTX · SRT) · 지하철 · 버스의 "
+        "탑승 조건, 숙박 · 해외 출국과 검역 절차, 이동 중 목줄 · 케이지 의무",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_boundary",
+        "이 개의 몸에 대한 판단 — 구토 · 설사 · 절뚝임 같은 증상의 원인, 약 이름과 용량, 진단, "
+        "그리고 응급(초콜릿 · 포도 · 이물질을 **이미 먹었다**, 경련, 호흡 곤란). 제도나 약관을 묻지 않고 "
+        "몸 상태의 판단만 구하는 질문",
+        "specialized",
+        question_set="life",
+        expected_life_status="REFUSED",
+    ),
+)
+
+STYLES: tuple[Style, ...] = (
+    Style("polite", "존댓말로 쓴 정중하고 완전한 문장"),
+    Style("casual", "반말로 쓴 짧은 구어체 문장 (친구에게 말하듯)"),
+    Style(
+        "abbrev_typo",
+        "줄임말 · 초성 · 오타 · 띄어쓰기 오류가 섞인 문장 (예: 강쥐, 갠춘, ㅅㅊ, 어케, 안먹어여)",
+    ),
+    Style(
+        "noisy",
+        "잡음이 섞인 문장 — 이모지, 감탄사, 반복 문자(ㅠㅠㅠ, !!!), 불필요한 배경 이야기가 앞뒤에 붙어 "
+        "핵심 요청이 묻혀 있음",
+    ),
+    Style(
+        "smalltalk_mixed",
+        "인사 · 감사 · 잡담으로 시작하거나 끝나면서 그 사이에 실제 요청이 하나 들어 있는 문장",
+    ),
+    Style(
+        "multi_intent",
+        "한 문장에 요청이 둘 — 이 주제의 요청 하나와, 다른 주제(훈련 · 제도 · 지금 산책 · 장소 · "
+        "돌봄 중 하나)의 요청 하나가 함께 들어 있음",
+    ),
+    Style(
+        "no_location",
+        "위치를 넘기지 않은 요청 — '여기', '근처', '우리 동네', '지금 있는 곳' 처럼 위치를 전제한 표현이 "
+        "자연스럽게 들어가지만 실제 좌표는 없음",
+        without_location=True,
+    ),
+)
+
+
+@dataclass(frozen=True)
+class Stratum:
+    topic: Topic
+    style: Style
+
+    @property
+    def id(self) -> str:
+        return f"{self.topic.name}__{self.style.name}"
+
+    @property
+    def expected_route_kind(self) -> RouteKind:
+        """좌표가 필요한 주제가 좌표 없는 문체를 만나면 되묻는 것이 계약이다 (planner O-8)."""
+        if self.style.without_location and self.topic.needs_location:
+            return "clarify"
+        return self.topic.expected_route_kind
+
+    @property
+    def questions_target(self) -> int:
+        return self.topic.questions_per_style
+
+    def context(self) -> dict[str, Any]:
+        """질문에 붙일 신뢰된 구조화 컨텍스트. 좌표 없는 문체만 비운다.
+
+        좌표를 필요로 하지 않는 주제에도 위치를 넣는 이유: 실제 앱은 기기 위치를 늘 보내고,
+        `multi_intent` 문체가 산책 · 장소 요청을 섞어 넣을 수 있어 좌표가 없으면 그 계층이 통째로
+        CLARIFY 가 된다 — 그건 문체가 아니라 컨텍스트를 잰 것이 된다.
+        """
+        if self.style.without_location:
+            return {}
+        return {"location": dict(SEOUL_LOCATION)}
+
+    def generator_brief(self) -> str:
+        """생성기 프롬프트에 들어가는 계층 설명. 기계가 읽는 자리라 형식을 고정한다."""
+        return (
+            f"STRATUM_ID: {self.id}\n"
+            f"TOPIC ({self.topic.name}): {self.topic.description}\n"
+            f"STYLE ({self.style.name}): {self.style.description}\n"
+            f"LOCATION_CONTEXT: {'none' if self.style.without_location else 'device coordinates present'}"
+        )
+
+
+STRATA: tuple[Stratum, ...] = tuple(Stratum(topic, style) for topic in TOPICS for style in STYLES)
+STRATA_BY_ID: dict[str, Stratum] = {stratum.id: stratum for stratum in STRATA}
+
+
+def strata_for_set(question_set: QuestionSet) -> tuple[Stratum, ...]:
+    """한 질문 파일이 덮어야 하는 계층. **파일과 세트는 1:1 입니다.**
+
+    `resolve_strata` 가 여전히 `STRATA` 전체를 보는 것은 의도입니다 — `--strata` 로 세트를
+    가로질러 고르는 것은 막을 이유가 없고, 막으면 연기 시험이 불편해집니다. 덮는 범위를
+    따지는 자리(질문 생성 · 동결 파일 검사)만 이 함수를 씁니다.
+    """
+    return tuple(s for s in STRATA if s.topic.question_set == question_set)
+TOPICS_BY_NAME: dict[str, Topic] = {topic.name: topic for topic in TOPICS}
+STYLES_BY_NAME: dict[str, Style] = {style.name: style for style in STYLES}
+
+
+def resolve_strata(selectors: list[str] | None) -> list[Stratum]:
+    """`--strata` 필터. 계층 id, 주제 이름, 문체 이름을 섞어 받고 순서는 정의 순서를 따른다."""
+    if not selectors:
+        return list(STRATA)
+    chosen: set[str] = set()
+    for raw in selectors:
+        selector = raw.strip()
+        if not selector:
+            continue
+        if selector in STRATA_BY_ID:
+            chosen.add(selector)
+        elif selector in TOPICS_BY_NAME:
+            chosen.update(s.id for s in STRATA if s.topic.name == selector)
+        elif selector in STYLES_BY_NAME:
+            chosen.update(s.id for s in STRATA if s.style.name == selector)
+        else:
+            raise ValueError(f"알 수 없는 계층 선택자입니다: {selector!r}")
+    return [stratum for stratum in STRATA if stratum.id in chosen]
+
+
+__all__ = [
+    "SEOUL_LOCATION",
+    "STRATA",
+    "STRATA_BY_ID",
+    "STYLES",
+    "STYLES_BY_NAME",
+    "TOPICS",
+    "TOPICS_BY_NAME",
+    "QuestionSet",
+    "RouteKind",
+    "Stratum",
+    "Style",
+    "Topic",
+    "resolve_strata",
+    "strata_for_set",
+]

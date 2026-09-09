@@ -20,6 +20,11 @@ router = APIRouter(prefix="/app/activity", tags=["activity"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
+@router.get("/seasons/current")
+async def current_season(user: CurrentAppUser, db: Session):
+    return await _call(service.current_season(db))
+
+
 async def _call(operation):
     try:
         return await operation

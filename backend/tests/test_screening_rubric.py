@@ -6,11 +6,11 @@ API 를 안 부릅니다. 여기서 보는 것은 **규칙**입니다 — 공유
 
 import pytest
 
-from tools.answer_quality import collect, screening_rubric
-from tools.answer_quality.judge import JUDGE_PROMPT_VERSIONS, RUBRIC_ITEMS
-from tools.answer_quality.questions import QuestionCase
-from tools.answer_quality.screening_rubric import ScreeningScore
-from tools.answer_quality.strata import STRATA_BY_ID, TOPICS_BY_NAME
+from daengs_evals.answer_quality import collect, screening_rubric
+from daengs_evals.answer_quality.judge import JUDGE_PROMPT_VERSIONS, RUBRIC_ITEMS
+from daengs_evals.answer_quality.questions import QuestionCase
+from daengs_evals.answer_quality.screening_rubric import ScreeningScore
+from daengs_evals.answer_quality.strata import STRATA_BY_ID, TOPICS_BY_NAME
 
 # ---------------------------------------------------------------- 공유 루브릭 불가침
 
@@ -128,7 +128,7 @@ def test_앵커가_두_항목을_모두_덮는다() -> None:
 
 def test_일치율_문턱이_공유_루브릭과_같다() -> None:
     """이 루브릭에만 문턱을 낮추면 '일치율' 이라는 낱말이 두 뜻이 됩니다."""
-    from tools.answer_quality.judge import AGREEMENT_THRESHOLD
+    from daengs_evals.answer_quality.judge import AGREEMENT_THRESHOLD
 
     assert screening_rubric.SCREENING_AGREEMENT_THRESHOLD == AGREEMENT_THRESHOLD
 
@@ -191,6 +191,21 @@ def test_펫보험_피부_주제가_있다() -> None:
     topic = TOPICS_BY_NAME["pet_insurance_skin"]
     assert topic.expected_route_kind == "specialized"
     assert not topic.needs_location
+
+
+def test_screening_세트만_문체당_넷이다() -> None:
+    """#314 실측에서 14문항 중 인용이 나온 것이 9건이었습니다 — 나머지는 REFUSED · ABSTAINED ·
+    FAILED 라 인용 집합을 비교할 대상이 아닙니다. 조합을 늘리기 전에 표본을 늘려야 같은
+    결론을 조합마다 반복하지 않습니다 (#318).
+
+    **v1 세트는 안 건드립니다.** 그쪽 목표 합계가 바뀌면 `questions_v1.jsonl` 의 동결이
+    깨진 것처럼 보입니다.
+    """
+    from daengs_evals.answer_quality.strata import strata_for_set
+
+    assert all(s.questions_target == 4 for s in strata_for_set("screening"))
+    assert sum(s.questions_target for s in strata_for_set("screening")) == 28
+    assert 140 <= sum(s.questions_target for s in strata_for_set("v1")) <= 160
 
 
 def test_기존_계층은_그대로다() -> None:

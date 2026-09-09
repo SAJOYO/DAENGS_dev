@@ -73,7 +73,7 @@ DAENGS 저장소의 훈련 RAG 답변을 독립적으로 채점해 줘.
 판정자의 결론이 들어 있고, 네가 그걸 보면 이 작업의 의미가 사라진다. 네 판정을 다 쓰고
 난 뒤에만 열어 봐도 된다.
 
-`backend/tools/training_quality/judge.py` 의 PROMPT 상수도 읽지 마. 아래 루브릭이 네가
+`backend/src/daengs_evals/training_quality/judge.py` 의 PROMPT 상수도 읽지 마. 아래 루브릭이 네가
 알아야 할 전부다.
 
 ## 읽을 것
@@ -134,7 +134,7 @@ false. 예외 없다. 사소하다고 판단했으면 애초에 `unsupported` �
 ## 다 쓴 뒤에
 
     cd backend
-    uv run python -m tools.training_quality agreement --label lap1__codex --against lap1
+    uv run python -m daengs_evals.training_quality agreement --label lap1__codex --against lap1
 
 일치율이 나온다. **갈린 문항마다** 네 근거와 상대 근거를 나란히 읽고, 어느 쪽이 자료에
 비추어 맞는지 `chunks` 를 직접 인용해서 짧게 적어 줘. 그 대조가 이 작업의 산출물이다.
@@ -219,7 +219,7 @@ DB 에 못 붙으면 `backend/evals/training_quality/answers_lap1.jsonl` 의 `ch
     export GEMINI_API_KEY=...          # 생성부가 os.getenv 를 읽는다
     export RAG_PGVECTOR_DSN=...
     uv sync --group ml                 # 검색이 sentence-transformers 를 쓴다
-    uv run python -m tools.training_quality.collect \
+    uv run python -m daengs_evals.training_quality.collect \
         --questions evals/training_quality/questions_v2.jsonl --label lap2
 
 `decision` 분포를 보고하라. **`t*` 가 ANSWER 로 안 나오면 그 문항은 실패다** — 코퍼스가 답할

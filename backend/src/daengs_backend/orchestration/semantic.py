@@ -48,7 +48,18 @@ specialized destination gets none, a mentioned dog/breed/age/symptom is not a tr
 and a doubtful behavior question is Training alone. The version name stays v9 because
 the draft was never released.
 
-The prompt below is `semantic-router-ko-v9`, which keeps intact everything of v8:
+v10 narrows one destination: Place. #277's off-domain stratum leaked 6 of 21 requests into an
+answer, and a 12-case probe (2026-09-07, controls included) showed every leak had the same shape —
+`place`. A cat cafe, a cat-food shop, a human internal-medicine clinic and an Italian restaurant all
+selected Place, because v9's Place definition ("finding somewhere to go near the user") reads the
+*asking for a place* and not *what the place is for*. `general.py` was already refusing its share
+correctly ("고양이는 산책 안해도 되나?" → off_topic), so the safety prompt is untouched. v10 says the
+venue must be for the dog, names another animal as a subject in the not-about-dogs sentence, and
+says asking for somewhere nearby is not by itself Place. Multi-intent is restated in the same
+breath so that "주식 얘기 + 강아지 동반 카페" keeps Place — that is the over-correction this change
+is most likely to cause, and it is in the probe as a control.
+
+The prompt below is `semantic-router-ko-v10`, which keeps intact everything of v8:
 the accepted v3 routing boundary, the v4 PURELY social utterance classification
 (greeting/thanks/goodbye — never enters RoutePlan or LangGraph, answered by fixed
 templates in social.py), plus one v5 boundary refinement (PR #172): Life is
@@ -62,7 +73,7 @@ suppressed Walk for today's / this evening's walking time-window questions
 normative exercise advice (unsupported) from CURRENT-day timing/suitability
 (Walk). Neither v5 nor v6 answers care questions; they only stop routing them
 to a domain whose evidence cannot support them. The frozen v3 benchmark copy
-under tools/router_benchmark/ is the acceptance record and stays untouched;
+under src/daengs_evals/router_benchmark/ is the acceptance record and stays untouched;
 the v4 regression against the same 80 gold cases is runner_v5.py, v5 is
 runner_v6.py (FAIL, one gate), v6 is runner_v7.py, and v7 is runner_v8.py.
 The v7 Place acceptance set is evals/orchestration_router/gold_place_v1.jsonl.
@@ -81,7 +92,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from daengs_backend.config import settings
 
-PROMPT_VERSION = "semantic-router-ko-v9"
+PROMPT_VERSION = "semantic-router-ko-v10"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이
@@ -152,7 +163,10 @@ Select every semantically requested destination:
   institutional or policy topics.
 - execute.walk: current environmental walking suitability.
 - execute.place: finding somewhere to go near the user — a kind of venue, a purpose, or a
-  described place. Place answers "where should I go", not "is now a good time".
+  described place. Place answers "where should I go", not "is now a good time". The venue must be
+  for the dog or for the user together with the dog: a dog-friendly place, somewhere selling
+  supplies for a dog, or a veterinary, grooming, or training venue for a dog. Finding somewhere for
+  a person's own errand, or for another animal, is NOT Place.
 - execute.general: ONLY when the utterance contains a SEPARATE general-care, husbandry, or
   health-worry question that no specialized destination covers — feeding, water, grooming, sleep,
   gear, socialization, or whether something about the dog is normal. Select it IN ADDITION to any
@@ -196,8 +210,12 @@ deciding whether or when to walk now, today, or this evening — including choos
 time window for today — IS Walk (current environmental suitability), even when weather or air
 quality is not named explicitly; do not extend Walk to recurring exercise routines.
 A request that is not about dogs at all — food or restaurants for people, finance, weather for
-people, or anything else unrelated to a dog — selects NOTHING: do not stretch Place, Life, Walk, or
-General to cover it; return both lists empty and leave social_intent null.
+people, a venue or care question whose subject is another animal such as a cat, or anything else
+unrelated to a dog — selects NOTHING: do not stretch Place, Life, Walk, or General to cover it;
+return both lists empty and leave social_intent null. Wanting somewhere nearby found does not by
+itself make a request Place: select destinations from what the venue is for, not from the fact that
+the user asks for a place. When the same utterance also asks something about a dog, route that part
+as usual and leave the unrelated part unanswered.
 
 social_intent is a classification only, never an answer. Set it to greeting, thanks, or goodbye
 ONLY when the entire request is purely social small talk toward the assistant with no actionable

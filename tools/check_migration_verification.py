@@ -112,6 +112,30 @@ CRAWL_RUNS_OLD = (
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
 
+# 훈련 RAG 청크 표의 **옛** 모양 — `chunk_id` 가 PK 이던 시절이다. 2026-09-08 마이그레이션이
+# 그 PK 를 복합키로 옮긴다. 픽스처가 옛 모양이어야 마이그레이션이 실제로 할 일이 생긴다.
+TRAINING_RAG_OLD = VECTOR_EXTENSION + (
+    "CREATE TABLE training_rag_documents("
+    " document_id text PRIMARY KEY,"
+    " source_id text NOT NULL,"
+    " source_url text,"
+    " content_sha256 text NOT NULL,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb,"
+    " created_at timestamptz NOT NULL DEFAULT now());"
+    "CREATE TABLE training_rag_chunks("
+    " chunk_id text PRIMARY KEY,"
+    " document_id text NOT NULL REFERENCES training_rag_documents(document_id) ON DELETE CASCADE,"
+    " chunk_index integer NOT NULL,"
+    " text text NOT NULL,"
+    " token_count integer NOT NULL,"
+    " metadata jsonb NOT NULL DEFAULT '{}'::jsonb,"
+    " embedding_model text NOT NULL,"
+    " embedding vector(768) NOT NULL,"
+    " content_sha256 text NOT NULL,"
+    " created_at timestamptz NOT NULL DEFAULT now(),"
+    " UNIQUE(document_id, chunk_index, embedding_model));"
+)
+
 
 # 회원의 상태 칸까지 필요한 항목용. `activity_game` 의 트리거가 `AFTER UPDATE OF status
 # ON app_users` 라 그 칸이 없으면 마이그레이션 자체가 안 붙는다.
@@ -185,6 +209,17 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_challenges', [
+            'ALTER TABLE territory_occupancies DROP COLUMN certified_at',
+            'ALTER TABLE territory_challenges DROP COLUMN completed_at',
+            'ALTER TABLE territory_challenges ALTER COLUMN expected_site_version TYPE integer',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_key',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_claim_id_fkey',
+            'ALTER TABLE territory_challenges DROP CONSTRAINT territory_challenges_photo_id_fkey',
+            'DROP INDEX ix_territory_challenges_claim_id',
+        ]),
         ('2026-09-05', 'walk_entries', WALKS, 'walk_entries', [
             'ALTER TABLE walk_entries DROP COLUMN payload',
             'ALTER TABLE walk_entries ALTER COLUMN revision TYPE bigint',
@@ -245,6 +280,21 @@ CHECKS = (
         # 2026-09-07 (#288) — 동물등록 여부 한 칸. **변조 넷 중 마지막이 이 항목의 이유다.**
         # DEFAULT 를 거는 것은 타입도 널 허용도 안 건드리므로 컬럼 모양만 보는 verify 는
         # 통과시킨다. 그런데 그 순간 "안 물어봤다"가 전부 "안 했다"가 된다.
+        # 2026-09-08 (#332) — 케어 이벤트(밥·약·간식) 새 표. **멱등키 UNIQUE 를 지우는 변조가
+        # 이 항목의 추가 이유다** — 빠져도 아무 에러가 안 나고 앱의 재시도가 두 줄이 된다.
+        # kind CHECK 를 지우는 변조도 같은 결이다 ('walk' 가 들어오면 walks 와 두 곳이 된다).
+        ('2026-09-08', 'care_events', PETS, 'care_events', [
+            'ALTER TABLE care_events DROP COLUMN client_event_id',
+            'ALTER TABLE care_events ALTER COLUMN kind TYPE text',
+            'ALTER TABLE care_events ALTER COLUMN occurred_at DROP NOT NULL',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_client_event_unique',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_kind_check',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_note_not_blank',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_pet_id_fkey',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_pet_id_fkey; '
+            'ALTER TABLE care_events ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX idx_care_events_pet_occurred',
+        ]),
         ('2026-09-07', 'pets_registered', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN registered',
             'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',
@@ -254,6 +304,19 @@ CHECKS = (
             'UPDATE pets SET registered = true;'
             ' ALTER TABLE pets ALTER COLUMN registered SET NOT NULL',
             'ALTER TABLE pets ALTER COLUMN registered SET DEFAULT false',
+        ]),
+        # 2026-09-08 (#331) — 돌봄 칸 넷. 기본값 변조는 `pets_registered` 와 같은 이유이고,
+        # **제약을 지우는 변조가 이 항목의 추가 이유다** — 제약이 빠져도 칸 모양은 그대로라
+        # 칸만 보는 verify 는 통과하는데, 그 뒤로 자율급식에 시각이 붙은 행이 조용히 쌓인다.
+        # ⚠ 타입 변조는 `feeding_style` 에 건다. `feeding_times` 를 text 로 바꾸면 그 위의
+        #   `jsonb_typeof(feeding_times)` CHECK 가 재검증에서 죽어 **변조 자체가 실패**하고,
+        #   하네스는 "verifier 가 잡았다"와 "ALTER 가 실패했다"를 stderr 낱말로 가르므로
+        #   그 항목은 아무것도 증명하지 않는다 (2026-09-08 CI 실측).
+        ('2026-09-08', 'pets_care', PETS, 'pets', [
+            'ALTER TABLE pets DROP COLUMN feeding_times',
+            'ALTER TABLE pets ALTER COLUMN feeding_style TYPE text',
+            'ALTER TABLE pets ALTER COLUMN feeding_style SET DEFAULT \'free\'',
+            'ALTER TABLE pets DROP CONSTRAINT pets_feeding_times_need_schedule',
         ]),
         # 2026-09-07 (#297) — 요청 메타데이터. **변조 목록의 마지막 둘이 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 "있어야 할 열이 있나" 만이 아니라 **"없어야 할 열이
@@ -686,6 +749,17 @@ CHECKS = (
             'DROP TRIGGER activity_ownership_guard ON territory_occupancies',
             'DROP INDEX activity_one_active_season',
             'DROP INDEX activity_one_open_holding',
+        ]),
+        # 2026-09-08 (#329) — 한 청킹의 여러 임베딩이 공존하게. **첫 변조가 핵심이다** —
+        # PK 가 chunk_id 로 되돌아가면 다른 모델 적재가 옛 벡터를 조용히 덮어쓴다.
+        ('2026-09-08', 'training_rag_embedding_key', TRAINING_RAG_OLD,
+         'training_rag_chunks', [
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_pkey; '
+            'ALTER TABLE training_rag_chunks ADD PRIMARY KEY (chunk_id)',
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_chunk_id_model_key',
+            'ALTER TABLE training_rag_chunks ALTER COLUMN chunk_id DROP NOT NULL',
+            'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey',
+            'ALTER TABLE training_rag_chunks ADD UNIQUE (document_id, chunk_index, embedding_model)',
         ]),
 )
 

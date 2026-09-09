@@ -8,6 +8,12 @@
 > **그 항목은 지표에서 뺍니다.** 아래 표의 "갈래 선택 평균 1.083 → 1.500" 은 **쓰지 마세요.**
 > `eligibility_claim` 은 0.929~1.000 으로 살아남아 **자격 단정 2 → 0 은 유효합니다.**
 > 자세한 것은 `report_screening_anchors.md`.
+>
+> ⚠️ **2026-09-07 2차 정정 (#318).** 표본을 28 로 늘려 다시 재니 **남은 결론도 재현되지
+> 않습니다** — `off` 와 `abnormal:3` 의 자격 단정이 똑같이 4/28 입니다. 아래의 "자격 단정
+> 2 → 0" 은 2건이 움직인 것을 효과로 읽은 것이었습니다. **이 리포트의 두 결론이 모두
+> 무효입니다.** 대신 #318 이 다른 것을 찾았습니다 — 판정은 **인용 조항이 아니라 거절 경계**
+> 를 바꿉니다. `report_screening_v2.md`.
 
 ## 결론
 
@@ -99,14 +105,14 @@ v1 은 판정 없는 쪽에 `"(판정 기록 없음 — 이 답은 판정을 못
 $env:POSTGRES_IP = "<서버>"; $env:POSTGRES_USER = "..."; $env:POSTGRES_PASSWORD = "..."
 $env:POSTGRES_DB = "vectordb"; $env:POSTGRES_PORT = "5432"
 
-uv run python -m tools.answer_quality.generate_questions --question-set screening `
+uv run python -m daengs_evals.answer_quality.generate_questions --question-set screening `
     --out evals/answer_quality/questions_screening_v1.jsonl
 foreach ($run in @(@("off_t0",@()), @("off_t0_ctl",@()), @("on_t0",@("--screening","abnormal:3")))) {
-    uv run python -m tools.answer_quality.collect --flag on --adapters real `
+    uv run python -m daengs_evals.answer_quality.collect --flag on --adapters real `
         --label $run[0] --questions evals/answer_quality/questions_screening_v1.jsonl `
         --strata pet_insurance_skin --life-temperature 0 @($run[1])
 }
-uv run python -m tools.answer_quality.judge screening `
+uv run python -m daengs_evals.answer_quality.judge screening `
     --answers evals/answer_quality/answers_on_t0.jsonl `
     --questions evals/answer_quality/questions_screening_v1.jsonl
 ```

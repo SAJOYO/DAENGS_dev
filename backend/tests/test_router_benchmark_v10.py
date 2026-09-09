@@ -18,11 +18,11 @@ from types import SimpleNamespace
 
 from daengs_backend.orchestration.contracts import CapabilityName
 from daengs_backend.orchestration.semantic import PROMPT_VERSION, SemanticRoutingDecision
-from tools.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
-from tools.router_benchmark.runner import build_artifacts
-from tools.router_benchmark.runner_v2 import GENERATION_CONFIG
-from tools.router_benchmark.runner_v9 import BENCHMARK_ID as V9_BENCHMARK_ID
-from tools.router_benchmark.runner_v10 import (
+from daengs_evals.router_benchmark.evaluate import apply_acceptance_gates, evaluate_benchmark
+from daengs_evals.router_benchmark.runner import build_artifacts
+from daengs_evals.router_benchmark.runner_v2 import GENERATION_CONFIG
+from daengs_evals.router_benchmark.runner_v9 import BENCHMARK_ID as V9_BENCHMARK_ID
+from daengs_evals.router_benchmark.runner_v10 import (
     BENCHMARK_ID,
     GOLD_VERSION,
     MODEL_ID,
@@ -34,9 +34,12 @@ from tools.router_benchmark.runner_v10 import (
     run_cases,
     strip_general_everywhere,
 )
-from tools.router_benchmark.schemas import load_benchmark_config, load_gold_v3_cases
+from daengs_evals.router_benchmark.schemas import load_benchmark_config, load_gold_v3_cases
 
 EVALS_DIR = Path(__file__).parents[1] / "evals" / "orchestration_router"
+
+#: 이 런이 돌 때의 프로덕션 프롬프트. 기록이지 현재 값이 아니다 (위 주석).
+RECORDED_PROMPT_VERSION = "semantic-router-ko-v9"
 
 
 class FakeModels:
@@ -68,7 +71,10 @@ def test_v10_is_the_next_run_identifier_with_the_v9_prompt_and_unchanged_model_g
     assert V9_BENCHMARK_ID == "orchestration-router-v9"
     assert BENCHMARK_ID == "orchestration-router-v10"
     assert STRIPPED_BENCHMARK_ID == "orchestration-router-v10-general-stripped"
-    assert PROMPT_VERSION == "semantic-router-ko-v9"
+    # v10 은 **끝난 런**이다. 살아 있는 `PROMPT_VERSION` 과 묶어 두면 프롬프트가 움직일 때마다
+    # 이 파일이 깨지므로, 여기서는 이 런이 실제로 쓴 문자열을 고정하고 "지금 프로덕션 프롬프트가
+    # 기록된 런과 같은가" 는 **가장 최근 런의 테스트**(v11)가 본다.
+    assert RECORDED_PROMPT_VERSION == "semantic-router-ko-v9"
     assert MODEL_ID == "gemini-3.1-flash-lite"
     assert GOLD_VERSION == "gold-v3-overlay-mixed-09"
     assert len(load_gold_v3_cases()) == 80
@@ -86,7 +92,7 @@ def test_v10_recorded_run_is_the_narrowed_prompt_with_both_views_passing() -> No
     both PASS, and the stripped view did not regress against v9 (0.975).
     """
     recorded = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
-    assert recorded["prompt_version"] == "semantic-router-ko-v9"
+    assert recorded["prompt_version"] == RECORDED_PROMPT_VERSION
     assert recorded["benchmark_id"] == BENCHMARK_ID
     assert recorded["general_selected_case_ids"] == []
     assert recorded["verdict"] == "PASS"

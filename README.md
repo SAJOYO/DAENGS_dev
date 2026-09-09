@@ -408,7 +408,14 @@ backend/                  Python 패키지·테스트·단일 pyproject/uv.lock 
   src/daengs_training/    훈련 RAG
   src/daengs_place/       Place 검색 API·적재기 (별도 컨테이너)
   src/daengs_journey/     단발 이동 스냅샷 (별도 컨테이너)
+  src/daengs_screening/   피부 스크리닝 (main backend 의 /screen/* 에 등록)
+  src/daengs_gait/        보행 영상 분석 (gait-analysis 컨테이너, profile: gait)
+  src/daengs_walk/        산책 측정·공간 일기 조립 (DB/HTTP 를 모르는 측정 커널)
+  src/daengs_evals/       평가·벤치마크 도구. 결과는 backend/evals/
   infra/place/            Place 전용 Alembic (별도 PostGIS)
+  evals/                  평가·벤치마크 결과 데이터 (코드 아님)
+  tools/                  단일 파일 일회성 스크립트만 (패키지 금지)
+  gait_v4/                별도 uv 프로젝트 (의도된 예외, #304 뒤 정리)
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        서버용 컨테이너 구성
 docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)

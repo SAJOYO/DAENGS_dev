@@ -30,7 +30,7 @@ CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
 **읽는 순서.** 처음이면 `architecture.md` §논리 오케스트레이션 → `contracts.md` →
 `routing.md`. 라우터 품질만 볼 때는 `router-benchmark.md` 하나로 충분합니다 —
 골드 세트는 `backend/evals/orchestration_router/`, 실행기는
-`backend/tools/router_benchmark/` 입니다.
+`backend/src/daengs_evals/router_benchmark/` 입니다.
 
 **결정 기록은 두 갈래입니다.** 공통·인프라 결정 `D-` 는 [../decisions.md](../decisions.md)
 (오케스트레이션 관련은 D-030 · D-033~D-037 · D-041), 라우팅 자체의 사람 결정 `O-` 는

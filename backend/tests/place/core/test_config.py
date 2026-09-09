@@ -52,3 +52,30 @@ def test_place_gemini_settings_are_optional(monkeypatch):
     assert settings.gemini_api_key.get_secret_value() == ""
     assert settings.gemini_model == "gemini-3.1-flash-lite"
     assert settings.gemini_timeout_ms == 30_000
+
+
+def test_place_database_url_has_its_own_environment_name(monkeypatch):
+    """CI 는 `DAENGS_PLACE_DATABASE_URL` 로 준다 (#346).
+
+    옛 이름 `DAENGS_DATABASE_URL` 은 `daengs_backend.config` 가 보면 기동을 거부한다 (D-013).
+    place CI 가 그 이름을 쓰면 루트 conftest 의 autouse fixture 가 backend 를 import 하는
+    순간 place 테스트가 죽는다 — 이름을 place 전용으로 갈라 두 설정이 같은 변수를 안 본다.
+    """
+    monkeypatch.delenv("DAENGS_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DAENGS_PLACE_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5544/test_place")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.sqlalchemy_url.port == 5544
+    assert settings.sqlalchemy_url.database == "test_place"
+
+
+def test_place_database_url_still_accepts_the_upstream_name(monkeypatch):
+    """로컬 한 줄 설정과 상류(UPSTREAM.md)는 `DAENGS_DATABASE_URL` 을 쓴다 — 그대로 받는다."""
+    monkeypatch.delenv("DAENGS_PLACE_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DAENGS_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5545/legacy_place")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.sqlalchemy_url.port == 5545
+    assert settings.sqlalchemy_url.database == "legacy_place"

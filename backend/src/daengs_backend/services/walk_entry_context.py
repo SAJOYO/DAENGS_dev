@@ -26,6 +26,9 @@ async def read(session, owner, walk_id, entry_id):
     row = await entries.get_entry(session, walk_id, entry_id)
     if row is None or row.payload is None:
         raise EntryNotFound
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    await guard_v1(session, [walk_id], entry_id=entry_id)
     if not settings.walk_entry_context_enabled:
         return {"entry_id": row.id, "revision": row.revision, "status": "disabled", "sources": []}
     jobs, latest = await repo.current(session, row)

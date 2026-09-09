@@ -1,5 +1,8 @@
 # 산책 기록과 산책 기록 프로필 v0
 
+위치 없는 행동과 별도 핀 확정은 [v2 서버 저장 구현](action-pin-v2-storage.md)을 참고한다.
+기본 비활성 기능이며, 아래는 기존 v1 계약이다.
+
 2026-09-05 구현. 앱 연결 PR: [DAENGS_APP#144](https://github.com/SAJOYO/DAENGS_APP/pull/144). 서버 PR: [#251](https://github.com/SAJOYO/DAENGS_dev/pull/251).
 
 후속 명세: [행동 즉시 기록·핀 위치 추정 공통 계약](action-pin-location-contract.md),

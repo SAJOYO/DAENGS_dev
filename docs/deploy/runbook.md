@@ -277,7 +277,18 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   쪽이 따라오지 않으므로 두 줄로 적어 둡니다 (roadmap §2-5).
 
   ④ 뒤, 바뀐 종류별 조치:
-  - **백엔드 코드만** → 없음. ④ 로 끝입니다
+  - **백엔드 코드만** → 웹(`backend`)은 리로드라 없음. **단, Celery 워커는 리로드가
+    없습니다** — `backend/src` 가 바뀐 배포는 워커도 재시작합니다 (몇 초, 분석이 돌고
+    있지 않을 때):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      restart gait-worker territory-vision-worker
+    docker compose logs --tail 5 gait-worker    # `celery@… ready.` 가 새로 찍히면 끝
+    ```
+
+    2026-09-09(#355) 에 로컬 서버에서 실제로 겪었습니다 — 웹은 새 코드인데 워커가 44시간
+    전 코드로 남아, 같은 영상이 같은 자리에서 다시 죽었습니다. 로그로는 구분이 안 됩니다.
   - **`uv.lock` · compose** → 영향받는 컨테이너 재생성:
 
     ```bash

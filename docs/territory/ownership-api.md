@@ -33,6 +33,8 @@ POLICY_UNDECIDED를 유지한다. 어느 경우든 사진 인증으로 점유를
 
 ## APP 호출 순서
 
+선택한 주인의 시즌 점수·점령 수 공개 조회는 [주인 요약 API](owner-summary-api.md)를 참조한다.
+
 모든 아래 API는 앱 회원 인증을 요구한다. owner ID는 요청으로 받지 않는다.
 
 | 메서드·경로 (`/app/territory` 아래) | 역할 |

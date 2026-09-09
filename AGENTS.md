@@ -10,6 +10,10 @@
 관리하며, `backend/src/daengs_gait/CLAUDE.md`와 `backend/src/daengs_screening/CLAUDE.md`에는
 각 분석 서비스의 추가 규칙이 있습니다. 이 파일이 하위 지침을 대체하지는 않습니다.
 
+문서를 생성·이동하기 전에 [docs/README.md](docs/README.md)의 배치 규칙과 기존 유닛
+폴더를 확인합니다. 유닛 문서는 해당 `docs/<유닛>/`에 두고, 루트에는 배치 규칙에 맞는
+팀 공통 문서만 둡니다. 문서 추가·이동 시 색인과 참조 링크도 함께 갱신합니다.
+
 Next.js 프론트엔드 + FastAPI 백엔드. 자체 서버(Windows PC)에 PM2 + nginx 로 배포합니다.
 
 ```

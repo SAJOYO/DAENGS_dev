@@ -7,11 +7,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import test_territory_ownership_db as base
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.config import settings
-from daengs_backend.core.database import get_session
+from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import AppPrincipal, current_app_user
 from daengs_backend.main import app
 from daengs_backend.models import AppUser, Pet, TerritoryAttempt
@@ -26,7 +26,7 @@ from daengs_backend.models.territory_claim import TerritoryClaimSession, Territo
 from daengs_backend.repositories import activity as repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload, WalkUpload
-from daengs_backend.services import activity, activity_game
+from daengs_backend.services import activity, activity_game, territory_owner
 from daengs_backend.services import walk as walks
 from daengs_backend.services.activity_core import game_policy as policy
 
@@ -345,6 +345,72 @@ async def test_api_owner_scope_validation_pending_and_ready(database, actors, cl
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(current_app_user, None)
+
+
+async def test_public_owner_summary_reads_peer_score_but_not_private_history(
+    database, actors, clock
+):
+    (owner, stranger), (pet, _, _) = actors
+    await season(database, clock)
+    client = await base.begin(database, owner, [pet])
+    await mark(database, clock, owner, client, pet)
+
+    async def session():
+        async with database() as db:
+            yield db
+
+    async def snapshot():
+        async with database() as db:
+            await db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+            await db.execute(text("SET TRANSACTION READ ONLY"))
+            yield db
+
+    app.dependency_overrides[get_session] = session
+    app.dependency_overrides[get_snapshot_session] = snapshot
+    app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=stranger)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            response = await http.get("/app/territory/owner-summary", params={"site_id": base.SITE})
+            assert response.status_code == 200
+            result = response.json()
+            assert result["status"] == "READY"  # Cached private statistics are still PENDING.
+            assert result["owner"]["pet_id"] == str(pet)
+            assert result["owner"]["is_mine"] is False
+            assert result["owner"]["season_record"]["owned_site_count"] == 1
+            assert set(result["owner"]["season_record"]) == {
+                "points",
+                "owned_site_count",
+                "score_as_of_ms",
+            }
+            assert (await http.get(f"/app/activity/territory/test/pets/{pet}")).status_code == 404
+            assert (await http.get(f"/app/activity/sessions/{client}")).status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_public_owner_snapshot_survives_committed_takeover(
+    database, actors, clock, monkeypatch
+):
+    (a, b), (pa, _, pb) = actors
+    await season(database, clock)
+    sa = await base.begin(database, a, [pa])
+    await mark(database, clock, a, sa, pa)
+    async with database() as snapshot:
+        await snapshot.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        await snapshot.execute(text("SET TRANSACTION READ ONLY"))
+        before = await territory_owner.summary(snapshot, b, base.SITE)
+        clock[0] += 600000
+        sb = await base.begin(database, b, [pb])
+        claim = await mark(database, clock, b, sb, pb)
+        await certify(database, clock, b, sb, claim, monkeypatch)
+        after = await territory_owner.summary(snapshot, b, base.SITE)
+        assert after["owner"] == before["owner"]
+        assert after["version"] == before["version"]
+    async with database() as fresh:
+        result = await territory_owner.summary(fresh, a, base.SITE)
+        assert result["owner"]["pet_id"] == pb
+        assert result["version"] > before["version"]
+        assert result["owner"]["season_record"]["owned_site_count"] == 1
 
 
 async def test_daily_bonus_is_not_reawarded_after_real_reacquisition(

@@ -202,6 +202,18 @@ docker compose restart backend      # 의존성(uv.lock)을 바꿨을 때
 리로드되므로 재시작이 필요 없습니다. **의존성을 바꿨을 때만** 위 restart 를 실행하세요.
 (`uv sync` 는 컨테이너가 뜰 때만 돕니다)
 
+⚠ **Celery 워커(`gait-worker` · `territory-vision-worker`)는 리로드가 없고, 자동 배포도
+`backend` 만 재시작합니다** (`deploy.yml`). 워커가 쓰는 코드(`services/gait.py` 등
+`backend/src`)를 머지했으면 서버 PC 러너 체크아웃 폴더에서 직접:
+
+```powershell
+docker compose restart gait-worker territory-vision-worker
+docker compose logs --tail 5 gait-worker      # `celery@… ready.` 가 새로 찍히면 반영
+```
+
+빠뜨리면 웹은 새 코드인데 워커는 옛 코드로 남아 **고친 버그가 그대로 재현**되고, 로그로는
+구분이 안 됩니다 (2026-09-09, #355 에서 실제로 겪음 — 워커가 44시간 전 코드였습니다).
+
 **`backend/.env` 를 고쳤을 때는 restart 로는 반영되지 않습니다.** `env_file` 값은 컨테이너를
 만들 때 굳어지고, `restart` 는 그 컨테이너의 프로세스만 다시 띄웁니다. 컨테이너를 다시 만들어야
 합니다 — 그런데 **`up -d` 를 손으로 돌리기 전에 셸에 `GEMINI_API_KEY` 를 올려야 합니다.**

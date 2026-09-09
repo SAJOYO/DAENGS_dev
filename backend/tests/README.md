@@ -21,7 +21,7 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
   `-m unit`/`-m integration` 구분은 아직 없다. 파일·디렉터리 경로로 선택한다.
 - DB 미설정으로 `skipped`이면 해당 DB 동작은 **미검증**이다. 통과 수와 skip 사유를 함께 기록한다.
 - CI 예산이 소진된 현재 작업에서는 로컬 변경·타겟 검증까지만 한다. push·PR 생성·workflow dispatch는
-  하지 않는다. 기존 workflow는 이동한 테스트·fixture의 경로만 갱신하며 실행 정책 개편은 후속 단계다.
+  하지 않는다. 3단계에서는 Walk DB workflow의 변경 감지·실행 대상·skip 확인을 로컬에서 검증한다.
 
 ## 9개 기능 지도
 
@@ -218,7 +218,9 @@ uv run --no-sync pytest -q -rs tests/walk
 첫 실행은 464 passed / 6 failed / 20 skipped였고, 6개 실패는 공간 일기 fixture 경로 한 곳의
 이동 누락이었다. 경로 수정 후 `uv run --no-sync pytest -q tests/walk/diary/test_spatial_diary.py`로
 해당 파일 29개 모두 통과했다. 합산하면 기존 470개 실행 케이스를 확인했고, 실제 DB 20개는
-환경 변수 미설정으로 미검증이다. 전체 backend suite나 원격 CI를 실행한 결과는 아니다.
+환경 변수 미설정으로 당시 미검증이었다. 이후 `e3ba4f9`에서 임시 PostgreSQL 17로 DB 파일 5개를
+실행해 20 passed / 0 skipped를 확인했고 임시 DB와 컨테이너를 제거했다.
+전체 backend suite나 원격 CI를 실행한 결과는 아니다.
 Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 경로 130개 정적 확인도 완료했다.
 로컬 venv에 `check` 진입점이 없어 동일 코드인 `uv run --no-sync python -m daengs_backend.cli.check`를
 실행했다. migration 이름·검증 짝 검사는 통과했지만 Windows 바이트 검사는 이 PC의 PowerShell
@@ -242,7 +244,7 @@ fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범�
 | `fixtures/`, `walk/fixtures/`, Place 하위 fixtures/JSON | capability, 점령 시나리오, 산책 스타일/finalize, 공간 일기/observation, 원천 데이터 기준값. 파일 이동 시 상대 경로도 검증 |
 
 `pythonpath = ["."]`는 `tests` namespace와 공용 도구 import에 계속 필요하다.
-남은 도메인 정리와 CI 실행 범위 정렬은 후속 단계다. 중복 검증은 같은 동작·입력·실패 경계를
+남은 도메인 정리는 후속 단계다. 중복 검증은 같은 동작·입력·실패 경계를
 실제로 비교한 뒤 합친다. 파일 이름이 비슷하다는 이유로 삭제하지 않는다.
 
 ## CI 연결 현황 — 참고용, 실행하지 않음
@@ -252,14 +254,24 @@ fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범�
 | [backend-tests](../../.github/workflows/backend-tests.yml) | 기본 pytest 전체. 기본 marker/의존성/DB 미설정으로 제외·skip되는 검증이 있을 수 있음 |
 | [place-search-tests](../../.github/workflows/place-search-tests.yml) | PostGIS + Alembic + Place 테스트 |
 | [journey-tests](../../.github/workflows/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
-| [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·기존 기록 HTTP |
-| [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation DB. 2단계에서 이동 경로·공용 도구·conftest 경로를 갱신. `src/daengs_walk/**` 변경은 여전히 직접 trigger에 포함되지 않아 후속 정렬 필요 |
-| [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스 |
+| [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·pin-context·기존 기록 HTTP. backend/Walk/Life 소스와 Walk 테스트 전체 변경을 감지 |
+| [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation 및 live storyboard DB. 위와 같은 소스·테스트 변경을 감지 |
+| [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스. 산책 결과 소비자이므로 Walk 소스 변경도 감지 |
 | [migration-verification-tests](../../.github/workflows/migration-verification-tests.yml) | 별도 migration 검증. Python 대역 테스트로 대체할 수 없는 SQL 검증 경계 |
 
-live storyboard 전용 DB 검증을 실행하는 workflow는 이번 조사에서 확인하지 못했다.
-위 표는 설정 파일을 읽은 결과이며 최근 CI 성공 상태를 뜻하지 않는다.
-CI 경로/실행 범위 정렬은 이후 단계에서 다룬다. 지금은 이 문서에 따라 필요한 로컬 검증을 선택한다.
+3단계에서 live storyboard DB 검증을 기존 v2 job에 연결했다. `LIVE_STORYBOARD_TEST_DSN`은
+동일한 임시 PostgreSQL의 `walk_pin_test`를 사용하되 fixture마다 별도 UUID schema를 만든다.
+새 DB job을 추가하지 않는다. 두 Walk job은 pytest 성공 뒤 JUnit 결과를 확인하여
+빈 결과나 skip이 있으면 실패한다. DB 접속 실패는 기존 fixture에서 오류로 처리된다.
+Walk 테스트 경로는 파일별 나열 대신 `backend/tests/walk/**`로 묶어 새 테스트·fixture·JSON이
+추가돼도 검증 실행이 빠지지 않게 한다. 기존 전체 backend workflow와 점령 job의 테스트 명령은 유지한다.
+위 내용은 로컬 설정·검증 기준이며 원격 CI 성공 상태를 뜻하지 않는다.
+
+3단계 로컬 확인: 두 workflow에 적힌 pytest 대상을 임시 PostgreSQL 17에서 실행했다.
+context 50 passed, v2/photo/diary/storyboard 46 passed, 양쪽 모두 0 skipped였다.
+JUnit 확인 단계는 정상 결과를 허용하고 skip·빈 결과를 거부하는 것도 확인했다.
+임시 컨테이너와 DB는 삭제했다. 점령 job은 변경 감지 경로만 정적으로 확인했으며
+해당 DB 테스트나 전체 backend suite를 다시 실행하지 않았다. push·원격 CI 실행도 하지 않았다.
 
 ## 이 지도를 갱신하는 기준
 

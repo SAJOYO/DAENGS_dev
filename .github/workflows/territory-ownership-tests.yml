@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_walk/**"
       - "backend/tests/test_territory*"
       - "backend/tests/test_activity*"
       - "backend/tests/conftest.py"
@@ -16,6 +17,7 @@ on:
     branches: [dev]
     paths:
       - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_walk/**"
       - "backend/tests/test_territory*"
       - "backend/tests/test_activity*"
       - "backend/tests/conftest.py"

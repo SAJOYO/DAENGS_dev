@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from daengs_backend.orchestration.emergency import is_emergency
 
 EVALS = Path(__file__).resolve().parents[1] / "evals"
@@ -129,6 +130,6 @@ def test_every_ambiguous_term_is_covered_by_a_pair() -> None:
         if line.strip()
     }
     # 활용형(토해·토하·토했)은 대표형 `구토` 하나로 덮는다.
-    representative = {"구토", "설사", "고열", "탈수"}
+    representative = {"구토", "설사", "고열", "탈수", "기력"}
     assert representative <= covered
     assert representative <= set(AMBIGUOUS_TERMS)

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
+
 from daengs_backend.orchestration.contracts import (
     CapabilityName,
     CapabilityRequest,
     VetContactPayload,
 )
-from pydantic import ValidationError
 
 
 def test_coordinates_are_optional_together() -> None:

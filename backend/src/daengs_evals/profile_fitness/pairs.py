@@ -82,6 +82,10 @@ def answering_capability(cell: Mapping[str, Any]) -> str | None:
     return caps[0] if len(caps) == 1 else None
 
 
+#: build_pairs 가 _make_pair 에 넘기는 "진짜 어댑터" 집합 (모듈 내부 전달용)
+_REAL: list[frozenset[str] | None] = [None]
+
+
 def _reach(profile: Profile) -> set[str]:
     return set(profile.visible_to)
 
@@ -113,6 +117,8 @@ def _make_pair(
         if cap_a is None or cap_a != cap_b:
             # 두 답이 다른 능력에서 왔으면 차이의 원인이 프로필이 아니다
             skip = "out_of_scope"
+        elif _REAL[0] is not None and cap_a not in _REAL[0]:
+            skip = "out_of_scope"  # 가짜 어댑터의 자리표시 답 — 판정할 것이 없다
         else:
             capability = cap_a
             reach = _reach(by_id[a[0]]) & _reach(by_id[b[0]])
@@ -143,12 +149,20 @@ def build_pairs(
     cells: Iterable[Mapping[str, Any]],
     *,
     conditions: Iterable[Condition] = ("contrast", "ablation", "noise"),
+    real_capabilities: frozenset[str] | None = None,
 ) -> list[Pair]:
     """조건별 쌍. 셀이 없는 쌍도 만든다(`skip_reason="missing_cell"`) — 리포트가 "몇 개를
-    못 쟀는가" 를 셀 수 있어야 하고, 없는 것을 조용히 빼면 그 수가 사라진다."""
+    못 쟀는가" 를 셀 수 있어야 하고, 없는 것을 조용히 빼면 그 수가 사라진다.
+
+    `real_capabilities` 는 이 수집에서 **진짜 어댑터**였던 능력. `fallback-only` 면 {"general"} 뿐이고,
+    training · life 는 "(가짜 training 어댑터)" 같은 자리표시를 ANSWERED 로 돌려준다. 그 셀을 판정하면
+    자리표시 두 개를 비교하게 된다 — 2026-09-09 사람 라벨에서 드러났다("가짜 life 어댑터가 뭔지
+    모르겠다"). 그런 쌍은 out_of_scope 다.
+    """
     index = index_cells(cells)
     by_id = profiles_by_id(profiles)
     wanted = set(conditions)
+    _REAL[0] = real_capabilities
     pairs: list[Pair] = []
     for q in questions:
         base = q.arms[BASELINE]

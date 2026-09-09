@@ -68,6 +68,11 @@ CONSISTENCY_REPEATS = 3
 BIAS_SAMPLE = 8
 
 
+def _real(meta: Mapping[str, Any]) -> frozenset[str] | None:
+    """이 수집에서 진짜였던 어댑터. fallback-only 면 general 뿐."""
+    return frozenset({"general"}) if meta.get("adapters") == "fallback-only" else None
+
+
 def _generation_models() -> list[str]:
     from daengs_backend.orchestration.adapters.general import GENERAL_MODEL_ID
     from daengs_backend.orchestration.semantic import ROUTER_MODEL_ID
@@ -448,7 +453,9 @@ def run_score(
     profiles = load_profiles(Path(meta["profiles_path"]))
     p_by_id = profiles_by_id(profiles)
 
-    pairs = build_pairs(questions, profiles, cells, conditions=tuple(conditions))  # type: ignore[arg-type]
+    pairs = build_pairs(
+        questions, profiles, cells, conditions=tuple(conditions), real_capabilities=_real(meta)
+    )  # type: ignore[arg-type]
     judgeable = _attach_profiles([p for p in pairs if p.judgeable], p_by_id)
     skipped = [p for p in pairs if not p.judgeable]
     if subsample:

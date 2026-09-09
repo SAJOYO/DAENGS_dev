@@ -1,6 +1,6 @@
 # 개체 적합성 — `pf_v1_1`
 
-판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T03:33:52+00:00
+판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T05:27:40+00:00
 
 > ⚠ **잠정.** 사람 라벨 κ 게이트를 아직 못 지났다. 발표에 쓰는 숫자는 확정 표가 있는 것뿐이다.
 
@@ -8,32 +8,32 @@
 
 | 조건 | 무엇 | changed 비율 [95% CI] |
 | --- | --- | --- |
-| **N** 잡음 | 같은 프로필 두 번 | 0% [0, 10] (n=35) |
+| **N** 잡음 | 같은 프로필 두 번 | 0% [0, 10] (n=34) |
 | **S** 특이도 | 다른 프로필 · 법령류 | 43% [16, 75] (n=7) |
 | **P** 절제 | 프로필 없음 vs 있음 | 59% [36, 78] (n=17) |
 | 본 비교 | 다른 프로필 · reactive | 67% [45, 83] (n=21) |
 
 - N < S: **True** · S < P: **True** · 전체: **True**
 - P − N (문항 단위 부트스트랩, 17문항): +0.59 [+0.35, +0.82] — 0 을 안 걸침
-- probe 에서 날조: 0% [0, 56] (n=3)
+- probe 에서 날조: 0% [0, 66] (n=2)
 
 ## 항목 (종합 점수는 없다)
 
 | 항목 | 평균 / 만점 | n | 분포 | 게이트 |
 | --- | --- | --- | --- | --- |
-| responsiveness | 1.18 / 2 | 38 | {2: 21, 0: 14, 1: 3} | not_calibrated |
-| invariance | 0.57 / 1 | 7 | {1: 4, 0: 3} | not_calibrated |
-| no_fabrication | 1.00 / 1 | 48 | {1: 48} | not_calibrated |
+| responsiveness | **보류** / 2 | 38 | {2: 21, 0: 14, 1: 3} | too_few_labels |
+| invariance | **보류** / 1 | 7 | {1: 4, 0: 3} | below_threshold |
+| no_fabrication | **보류** / 1 | 47 | {1: 47} | undefined |
 
 ### 계층별
 
-- tier=coarse: responsiveness 1.20 (n=20), no_fabrication 1.00 (n=27), invariance 0.60 (n=5)
+- tier=coarse: responsiveness 1.20 (n=20), no_fabrication 1.00 (n=26), invariance 0.60 (n=5)
 - tier=fine: responsiveness 1.17 (n=18), no_fabrication 1.00 (n=21), invariance 0.50 (n=2)
 - kind=reactive: responsiveness 1.18 (n=38), no_fabrication 1.00 (n=38)
 - kind=invariant: invariance 0.57 (n=7), no_fabrication 1.00 (n=7)
-- kind=probe: no_fabrication 1.00 (n=3)
+- kind=probe: no_fabrication 1.00 (n=2)
 
-## 실패 종류 (채점된 쌍 48개)
+## 실패 종류 (채점된 쌍 47개)
 
 | 실패 | 건수 |
 | --- | --- |
@@ -44,9 +44,9 @@
 
 ## 못 잰 것
 
-- 쌍 116 중 판정 93 · 판정 전 제외 {'out_of_scope': 15, 'not_answered': 8} · 위치 뒤집힘 10/93 (양방향 본 쌍 중) · 기권 1 → 미측정 비율 **0.293**
+- 쌍 116 중 판정 91 · 판정 전 제외 {'out_of_scope': 17, 'not_answered': 8} · 위치 뒤집힘 10/91 (양방향 본 쌍 중) · 기권 1 → 미측정 비율 **0.31**
 - 패러프레이즈 일치: 0.778 (18쌍)
-- 비용: 입력 298,420 / 출력 38,466 토큰 · 1000쌍당 3,622,430
+- 비용: 입력 298,420 / 출력 38,466 토큰 · 1000쌍당 3,702,044
 
 ## 측정 대상이 아닌 것
 
@@ -56,11 +56,27 @@
 
 ## 프롬프트 변형 A/B 일치
 
-공유 쌍 20
+공유 쌍 18
 
-- changed: 일치 0.95 · κ 0.89
-- profile: 일치 0.95 · κ 0.83
+- changed: 일치 0.94 · κ 0.88
+- profile: 일치 0.94 · κ 0.82
 - fabricated: 일치 1.00 · κ (single_category)
 - stereotype: 일치 1.00 · κ (single_category)
 
-> 확정 판정 v2 · 변형 B 20쌍 일치율 포함
+## 사람 라벨 κ
+
+라벨 36건
+
+- changed: κ 0.39 (n=36) 사람 주변 {1: 23, 0: 13}
+- profile: κ 0.57 (n=36) 사람 주변 {1: 21, 0: 15}
+- fabricated: κ 못 잼 (single_category) (n=36) 사람 주변 {0: 36}
+- stereotype: κ 0.79 (n=36) 사람 주변 {0: 33, 1: 3}
+- responsiveness: κ 0.48 (n=17) 사람 주변 {'2': 14, '0': 2, '1': 1}
+
+## 보류된 항목
+
+- no_fabrication: undefined: κ 정의 안 됨: single_category
+- responsiveness: too_few_labels: 라벨 17건 < 30
+- invariance: below_threshold: κ 0.39 < 0.6
+
+> 확정 v2 · 사람 라벨 37건 반영 · 가짜 어댑터 2쌍 제외

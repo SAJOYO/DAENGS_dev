@@ -183,6 +183,42 @@ def failure_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"scored_pairs": len(scored), **{f: counts.get(f, 0) for f in FAILURES}}
 
 
+def drop_fake_adapter_pairs(
+    meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """가짜 어댑터의 자리표시 답을 비교한 쌍을 판정에서 뺀다 — 범위 밖으로 센다.
+
+    `pairs.build_pairs` 가 이제 그런 쌍을 아예 안 만들지만, 그 전에 판정된 파일(pf_v1_1 의 2쌍)이
+    있다. 리포트가 셀을 다시 읽어 걸러내므로 옛 판정 파일도 바르게 읽힌다.
+    """
+    from daengs_evals.profile_fitness.collect import cells_path, load_cells
+
+    label = meta.get("cells_label")
+    if not label or not cells_path(label).exists():
+        return list(rows), []
+    cmeta, cells = load_cells(cells_path(label))
+    if cmeta.get("adapters") != "fallback-only":
+        return list(rows), []
+    idx = {(c["question_id"], c["arm"], int(c["run"])): c for c in cells}
+
+    def real(cell: Mapping[str, Any]) -> bool:
+        return any(
+            r.get("status") == "OK" and r.get("capability") == "general"
+            for r in cell.get("results") or []
+        )
+
+    kept, dropped = [], []
+    for r in rows:
+        q, _cond, a, b = r["pair_id"].split("|")
+        ca = idx.get((q, *a.rsplit("#", 1)[:1], int(a.rsplit("#", 1)[1])))
+        cb = idx.get((q, *b.rsplit("#", 1)[:1], int(b.rsplit("#", 1)[1])))
+        if ca is None or cb is None or (real(ca) and real(cb)):
+            kept.append(r)
+        else:
+            dropped.append({"pair_id": r["pair_id"], "reason": "out_of_scope"})
+    return kept, dropped
+
+
 def unmeasured(meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     skipped = Counter(s["reason"] for s in meta.get("skipped_pairs") or [])
     pos = sum(1 for r in rows if r.get("position_dependent"))
@@ -270,6 +306,9 @@ def summarize(
     labels: Mapping[str, Mapping[str, Any]] | None = None,
     thresholds: Thresholds = DEFAULT_THRESHOLDS,
 ) -> dict[str, Any]:
+    rows, dropped = drop_fake_adapter_pairs(meta, rows)
+    if dropped:
+        meta = {**meta, "skipped_pairs": [*(meta.get("skipped_pairs") or []), *dropped]}
     rates = condition_rates(rows)
     ledger_in = sum(int(x.get("input_tokens") or 0) for x in ledgers)
     ledger_out = sum(int(x.get("output_tokens") or 0) for x in ledgers)

@@ -5,10 +5,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from daengs_backend.core.deps import CurrentAppMemberTokenOnly
+from daengs_backend.schemas.facility_conversation import ConversationRequest, ConversationResponse
 from daengs_backend.schemas.facility_discovery import (
     FacilityActionRequest,
     FacilityDiscoveryRequest,
     FacilityDiscoveryResponse,
+)
+from daengs_backend.services.facility_conversation import (
+    FacilityConversationService,
+    get_facility_conversation_service,
 )
 from daengs_backend.services.facility_discovery import (
     FacilityDiscoveryError,
@@ -39,6 +44,19 @@ async def facility_owner(user: CurrentAppMemberTokenOnly) -> str:
         status, message = _ERRORS[exc.code]
         raise HTTPException(status, detail={"code": exc.code, "message": message}) from exc
     return str(user.app_user_id)
+
+
+@router.post("/conversation", response_model=ConversationResponse)
+async def converse(
+    request: ConversationRequest,
+    owner: Annotated[str, Depends(facility_owner)],
+    service: Annotated[FacilityConversationService, Depends(get_facility_conversation_service)],
+):
+    try:
+        return await service.turn(request, owner)
+    except FacilityDiscoveryError as exc:
+        status_code, message = _ERRORS[exc.code]
+        raise HTTPException(status_code, detail={"code": exc.code, "message": message}) from exc
 
 
 @router.post(

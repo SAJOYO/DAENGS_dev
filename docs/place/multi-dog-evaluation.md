@@ -52,5 +52,5 @@ HTTP 200만으로 지원을 판단하지 않는다. 나이 계산 기준일은 �
 
 ```powershell
 cd backend
-uv run pytest -q tests/place/api/test_multi_dog_search.py tests/place/api/test_contract_validation.py tests/place/search/test_evaluations.py tests/place/search/test_restriction_projection.py tests/test_pets.py tests/test_pet_photo.py
+uv run pytest -q tests/place/api/test_multi_dog_search.py tests/place/api/test_contract_validation.py tests/place/search/test_evaluations.py tests/place/search/test_restriction_projection.py tests/pets/test_pets.py tests/pets/test_pet_photo.py
 ```

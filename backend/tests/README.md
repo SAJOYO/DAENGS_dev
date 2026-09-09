@@ -32,14 +32,15 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
 ### 1. 반려견 프로필
 
 - 근거: PR #64. 경계: `daengs_backend`의 pet 라우터·스키마·저장소.
-- 기본: CRUD/검증은 fake 저장소를 사용하는 `test_pets.py`.
-- 확대: 인증 변경은 `test_app_auth.py`, 사진 계약 변경은 `test_pet_photo.py`.
+- 기본: CRUD/검증은 fake 저장소를 사용하는 `pets/test_pets.py`.
+- 확대: 인증 변경은 `test_app_auth.py`, 사진 계약 변경은 `pets/test_pet_photo.py`.
   반려견 조건 필드를 바꾸면 장소 검색의 `place/api/test_multi_dog_search.py`,
   `place/geo/test_pet_axes.py` 및 PostGIS `place/integration/test_pet_filter.py`도 연결된다.
 - 한계: 프로필 fake 테스트만으로 실제 DB 스키마·제약조건 변경을 검증할 수 없다.
 
 ```powershell
-uv run pytest -q tests/test_pets.py
+uv run pytest -q tests/pets/test_pets.py
+uv run pytest -q tests/pets/test_pet_photo.py
 ```
 
 ### 2. 장소 검색
@@ -297,6 +298,35 @@ uv run --no-sync pytest -q -rs tests/territory tests/activity
 이전 import/실행 경로 잔재 확인, CI 변경 감지 및 JUnit 정상·skip·빈 결과 검사도 통과했다.
 전체 backend suite나 원격 CI를 실행한 결과는 아니다.
 
+## 반려견 프로필 정리와 Journey 점검
+
+`origin/dev`의 `96e4529` 기준으로 프로필·사진 테스트 2개를 `pets/`로 이동했다.
+두 파일이 반복하던 메모리 저장소와 인증된 pet API 클라이언트 생성은
+`pets/support/api.py`로 모았다. 소유자 UUID와 테스트별 fixture 등록은 각 파일에 유지하고,
+사진 클라이언트는 기존처럼 `storage` fixture를 먼저 준비한다. 공용 생성 도구는 호출마다
+새 Store와 FastAPI 앱을 만들며 전역 상태를 보관하지 않는다.
+
+루트 `fakes.py`는 인증·대화·산책 등 25개 테스트 파일이 공유하므로 이번에 분리하지 않았다.
+`FakePet`과 pet 저장소 대역도 계정 탈퇴·산책·대화 검증에서 사용한다. 기존 `from fakes`
+import 방식과 루트 pytest 설정은 유지한다. 제품 코드·DB 스키마·공용 인증 fixture 변경은 없다.
+
+```powershell
+uv run --no-sync pytest -q -rs tests/pets
+uv run --no-sync pytest -q -rs tests/test_app_auth.py -k '강아지와 or 데이터_삭제'
+```
+
+로컬 결과는 프로필·사진 **48 passed / 0 skipped**, 탈퇴 시 데이터 삭제 **3 passed / 0 skipped**다.
+두 번째 명령은 인증 파일의 다른 52개 케이스를 선택하지 않는다. 기존 테스트 함수 48개와
+수집된 케이스가 모두 보존됐고, fixture의 인자·데코레이터도 유지됐음을 확인했다.
+사진 검증은 임시 폴더의 실제 LocalBridgeStorage를 사용하지만 DB는 메모리 대역이므로
+이번 단계에서 DB를 생성하지 않았다. 사진 테스트에는 기존 HTTP 413 이름 사용에 따른
+Starlette deprecation 경고 14개가 있으며 테스트 실패는 아니다.
+
+Journey는 기존 `tests/journey/`의 7개 파일과 전용 workflow 연결을 정적으로 확인했다.
+테스트 간 직접 import와 추가 이동이 필요한 경로는 발견하지 못했다. Journey 코드를 바꾸거나
+테스트를 재실행한 결과는 아니다. 프로필은 기존 `backend-tests`의 전체 자동 수집 대상이므로
+새 CI job이나 실행 도구를 추가하지 않는다. 원격 CI는 이번 단계에서 실행하지 않았다.
+
 ## 남은 공유 관계
 
 fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범위에 포함한다.
@@ -306,14 +336,13 @@ Walk·Place·Territory·Activity 지원 도구의 현재 소비 관계를 기록
 | --- | --- |
 | 루트 `conftest.py` | 암호화 키·DB 기본값·warmup, crawl/metrics/Celery autouse 대역. 모든 하위 테스트에 적용 |
 | `fakes.py`, `place_capability_cases.py` | 프로필 API/능력 fixture. 테스트 이름만 검색하면 빠지는 지원 파일 |
+| `pets/support/api.py` | 프로필·사진 테스트가 공유하는 Store와 인증된 API 클라이언트 생성 도구 |
 | `walk/support/entry_context.py` | context와 pin-context의 응답 생성 도구·state fixture |
 | `walk/support/entry_v2.py`, `pin_database.py`, `photo_database.py` | 핀·사진·일기 DB에서 공유. 제공 도구 변경 시 세 기능의 소비자를 확인 |
 | `walk/support/diary.py`, `photo_input.py`, `observations.py` | 일기 계약·stamp·writing·generation 및 사진 입력의 생성 도구 |
 | `walk/support/storyboard.py` | storyboard/pin의 live fixture 및 제목 응답 생성 도구 |
 | `place/support/discovery.py`, `session_store.py` | discovery 서비스·행동 및 시설 API의 공용 생성 도구·세션 대역 |
 | `place/support/database.py` | 검색·통합·territory site API의 실제 DB 세션·seed. 일반 모듈로 import |
-| `territory/support/` | 임시 claims schema·사용자 fixture, 점령/사진/판정 생성 도구, SQL 경로 |
-| `activity/support/` | 활동 schema 확장·시계 fixture와 시즌·시간 지정 점령 생성 도구 |
 | `territory/support/database.py`, `ownership.py` | 소유권·활동·인증 점령의 DB/사용자 fixture 및 점령·사진·판정 생성 도구 |
 | `activity/support/database.py`, `actions.py` | 활동·인증 점령의 활동 schema·시계·시즌 및 시간 지정 점령 생성 도구 |
 | `fixtures/`, `walk/fixtures/`, Place 하위 fixtures/JSON | capability, 점령 시나리오, 산책 스타일/finalize, 공간 일기/observation, 원천 데이터 기준값. 파일 이동 시 상대 경로도 검증 |

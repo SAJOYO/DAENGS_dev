@@ -583,7 +583,11 @@ def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
             "S_invariant": rate(rows, "contrast", "invariant"),
             "P_ablation": rate(rows, "ablation"),
             "reactive_contrast": rate(rows, "contrast", "reactive"),
-            "position_flips": {"k": flips, "n": len(rows), "rate": round(flips / len(rows), 3) if rows else None},
+            "position_flips": {
+                "k": flips,
+                "n": len(rows),
+                "rate": round(flips / len(rows), 3) if rows else None,
+            },
             "abstained": abst,
         }
 
@@ -606,14 +610,15 @@ def compare_versions(a_path: Path, b_path: Path) -> dict[str, Any]:
 
 def render_compare(c: dict[str, Any]) -> str:
     def row(name: str, s: dict[str, Any]) -> str:
-        f = lambda d: f"{d['rate'] * 100:.0f}% ({d['k']}/{d['n']})" if d["rate"] is not None else "—"
+        f = lambda d: (
+            f"{d['rate'] * 100:.0f}% ({d['k']}/{d['n']})" if d["rate"] is not None else "—"
+        )
         return (
             f"| {name} | {f(s['N_noise'])} | {f(s['S_invariant'])} | {f(s['P_ablation'])} | "
             f"{f(s['reactive_contrast'])} | {f(s['position_flips'])} | {s['abstained']} |"
         )
 
-    return "
-".join(
+    return "\n".join(
         [
             f"공유 쌍 {c['shared_pairs']} (A {c['a']['pairs']} · B {c['b']['pairs']})",
             "",

@@ -1,7 +1,7 @@
 # 점령 게임 1단계 — 공유 점유 판정 모델
 
 > 이 문서는 1단계 범위를 기록한다. 후속 서버 저장·API 연결은
-> [온라인 점유 계약](territory-ownership-api.md)과 DAENGS_dev#260을 참조한다.
+> [온라인 점유 계약](ownership-api.md)과 DAENGS_dev#260을 참조한다.
 
 [Geo 제작 계획](https://github.com/rkbuhtig/DAENGS_geo/pull/230)의 1단계다.
 `backend/src/daengs_backend/services/territory_claim.py`에 HTTP·DB와 독립인 불변 모델과

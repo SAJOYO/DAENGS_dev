@@ -171,7 +171,8 @@ uv run --no-sync ruff check src/daengs_walk/diary_input.py src/daengs_walk/diary
 이번 워크트리는 기존 Dev venv를 `UV_PROJECT_ENVIRONMENT`로 재사용하고,
 `PYTHONPATH`를 **이 워크트리의 `backend/src` 절대 경로**로 지정해 새 코드를 검사했다.
 
-다음 단위는 **App 사진 메타데이터 동기화와 Dev 입력 어댑터 연결**이다. 계약 객체에 필요한
-자료가 실제로 저장/조회되게 만든 후 Geo의 선택·스탬프 계산기를 이식한다.
+후속 **App 사진 메타데이터 동기화와 Dev 입력 어댑터 연결**의 구현과 검증은
+[photo-metadata.md](photo-metadata.md)에 정리한다. 실제 저장 자료를 연결한 뒤
+Geo의 선택·스탬프 계산기를 이식한다.
 공공데이터 연결, LLM 딕셔너리 작성/호출·분할·비용 상한·의미 검증, HTTP 새 format 등록과
 App 렌더링은 각각 후속 단위다. 이번 단계가 운영 일기를 생성하기 시작한 것은 아니다.

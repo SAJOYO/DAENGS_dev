@@ -99,6 +99,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | [walk/storyboard-live.md](walk/storyboard-live.md) | 실제 산책의 관측 분석·장면 구성과 앱 검토 연결 |
 | [walk/diary-titles.md](walk/diary-titles.md) | 스토리보드 대표·장면 제목의 LLM 생성과 저장·실패 처리 |
 | [walk/diary-contract.md](walk/diary-contract.md) | 산책 일기 이관 1단계 — 입력·스탬프·분리 서술 계약과 기존 오케스트레이션/생성 서비스 접점 |
+| [walk/photo-metadata.md](walk/photo-metadata.md) | 산책 일기 이관 2단계 — 사진 메타데이터 CAS 동기화와 Dev 저장 입력 어댑터 |
 | [walk/scene-anchors.md](walk/scene-anchors.md) | 자동 장면을 원본 GPS 관측 위치에 연결하는 v4 계약 |
 | [walk/speed-style.md](walk/speed-style.md) | 산책 지도 속도 색상과 앱 표시 정책 |
 | [walk/finalize-operating-db-smoke.md](walk/finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke와 당시 앱 왕복 검증 기록 |

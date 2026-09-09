@@ -170,7 +170,7 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
 
 
 CONSISTENCY_REPEATS = 3
-CONSISTENCY_SAMPLE = 8
+CONSISTENCY_SAMPLE = 6  # 6답 × 3회 = 18호출 ≈ 1.5만 토큰
 
 
 def run_consistency(*, cells_label: str, model: str, variant: str, budget: int, log=print) -> Path:

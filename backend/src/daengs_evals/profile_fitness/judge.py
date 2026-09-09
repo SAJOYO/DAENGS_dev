@@ -30,11 +30,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
 
-from daengs_evals.answer_quality.gemini import (
-    DEFAULT_TOKEN_BUDGET,
-    TokenBudgetExceeded,
-    TokenLedger,
-)
+from daengs_evals.answer_quality.gemini import TokenBudgetExceeded, TokenLedger
+
+#: 한 명령의 기본 예산. 2026-09-09 에 하루 140만 토큰을 쓴 뒤 5만으로 내렸다 — 넘길 일이면 사람이
+#: --token-budget 으로 명시한다. 양방향 판정은 표본 20쌍만 (--both-orders-sample).
+DEFAULT_TOKEN_BUDGET = 50_000
 from daengs_evals.answer_quality.judge import stratified_subsample
 from daengs_evals.answer_quality.provenance import source_provenance, utc_now
 from daengs_evals.answer_quality.questions import file_sha256
@@ -143,8 +143,14 @@ def make_judge(
     return judge, hygiene
 
 
-def judge_both_orders(judge: Judge, pair: Pair, label: str = "") -> dict[str, Any]:
-    """(A,B) 와 (B,A). 관찰은 (A,B) 것을 쓰되 `changed` 가 뒤집히면 position_dependent."""
+def judge_both_orders(
+    judge: Judge, pair: Pair, label: str = "", *, both: bool = True
+) -> dict[str, Any]:
+    """(A,B) 와 (B,A). 관찰은 (A,B) 것을 쓰되 `changed` 가 뒤집히면 position_dependent.
+
+    `both=False` 면 (A,B) 한 번만 — 위치 편향은 표본에서만 재고 나머지는 한 방향으로 채점한다
+    (토큰 절반). 그 쌍은 `position_dependent=None` 으로 남아 "안 봤다" 와 "안 뒤집혔다" 가 갈린다.
+    """
     assert pair.cell_a is not None and pair.cell_b is not None
     prof_a = pair.cell_a.get("_profile")
     prof_b = pair.cell_b.get("_profile")
@@ -156,6 +162,14 @@ def judge_both_orders(judge: Judge, pair: Pair, label: str = "") -> dict[str, An
         answer_b=pair.cell_b["message"],
         label=f"{label} ab",
     )
+    if not both:
+        return {
+            "ab": ab.model_dump(mode="json"),
+            "ba": None,
+            "position_dependent": None,
+            "observation": observe(ab),
+            "observation_ba": None,
+        }
     ba = judge(
         question=pair.query,
         profile_a=prof_b,
@@ -412,6 +426,7 @@ def run_score(
     budget: int,
     subsample: int | None,
     conditions: Sequence[str],
+    both_orders_sample: int = 20,
     log=print,
 ) -> Path:
     anchor = require_anchor_pass(model, variant, "dev")
@@ -478,7 +493,10 @@ def run_score(
 
     try:
         for i, p in enumerate(todo, start=1):
-            result = judge_both_orders(judge, p, label=p.pair_id)
+            # 위치 편향은 앞 N쌍만 양방향으로 잰다 — 나머지는 한 방향 (토큰 절반)
+            result = judge_both_orders(
+                judge, p, label=p.pair_id, both=(i + len(done)) <= both_orders_sample
+            )
             ab = ProfileDiffVerdict.model_validate(result["ab"])
             score = score_pair(ab, kind=p.kind, is_control=p.is_control, in_scope=True)
             if result["position_dependent"] and score.scored:
@@ -664,6 +682,12 @@ def main(argv: list[str] | None = None) -> int:
     p_score.add_argument("--cells", required=True)
     p_score.add_argument("--subsample", type=int, default=None)
     p_score.add_argument("--conditions", nargs="+", default=["contrast", "ablation", "noise"])
+    p_score.add_argument(
+        "--both-orders-sample",
+        type=int,
+        default=20,
+        help="앞 N쌍만 (A,B)·(B,A) 둘 다. 나머지는 한 방향",
+    )
     common(p_score)
 
     args = parser.parse_args(argv)
@@ -691,6 +715,7 @@ def main(argv: list[str] | None = None) -> int:
             budget=args.token_budget,
             subsample=args.subsample,
             conditions=args.conditions,
+            both_orders_sample=args.both_orders_sample,
         )
     return 0
 

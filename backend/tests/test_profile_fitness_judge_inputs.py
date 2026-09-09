@@ -26,8 +26,6 @@ from daengs_evals.profile_fitness.rubric import ProfileDiffVerdict
 def verdict(**kwargs: object) -> ProfileDiffVerdict:
     base: dict[str, object] = {
         "differences": [],
-        "only_in_a": [],
-        "only_in_b": [],
         "profile_attributable": [],
         "unstated_facts": [],
         "stereotype_leaps": [],

@@ -248,7 +248,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     # ── holdout (v2) — 프롬프트 v2 동결 후 한 번만. v1 홀드아웃은 retired (2026-09-09 에 한 번 썼다) ──
     PairAnchor(
         "ho2_caveat_only",
-        "retired",
+        "holdout",
         "물은 하루에 얼마나 마셔야 정상이에요?",
         PUPPY,
         SENIOR,
@@ -261,7 +261,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_action_differs",
-        "retired",
+        "holdout",
         "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
         {"breed": "말티즈", "age_months": 4},
         {"breed": "말티즈", "age_months": 150},
@@ -272,7 +272,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_fabricated_vaccine",
-        "retired",
+        "holdout",
         "계단을 오르내리게 해도 괜찮을까요?",
         PUPPY,
         SENIOR,
@@ -283,7 +283,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_stereotype_size",
-        "retired",
+        "holdout",
         "놀아줄 때 어떤 놀이가 좋아요?",
         ADULT_CHIHUAHUA,
         {"breed": "골든리트리버", "age_months": 48},
@@ -295,7 +295,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_rephrased_same_advice",
-        "retired",
+        "holdout",
         "양치는 며칠에 한 번 해야 하나요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -308,7 +308,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     # ── holdout (v3) — 위치 대칭 · 기권. v2 홀드아웃은 retired ──────────────────
     PairAnchor(
         "ho3_extra_sentence_in_a_only",
-        "holdout",
+        "retired",
         "발톱은 얼마나 자주 깎아 줘야 해요?",
         PUPPY,
         SENIOR,
@@ -320,7 +320,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho3_extra_sentence_in_b_only",
-        "holdout",
+        "retired",
         "발톱은 얼마나 자주 깎아 줘야 해요?",
         PUPPY,
         SENIOR,
@@ -332,7 +332,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho3_real_split_short",
-        "holdout",
+        "retired",
         "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
         {"breed": "말티즈", "age_months": 4},
         {"breed": "말티즈", "age_months": 150},
@@ -343,7 +343,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho3_fabricated_history_b",
-        "holdout",
+        "retired",
         "여름에 산책 나갈 때 뭘 조심해야 해요?",
         {"breed": "퍼그", "age_months": 48},
         {"breed": "비글", "age_months": 48},
@@ -355,7 +355,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho3_stereotype_not_fact",
-        "holdout",
+        "retired",
         "놀아줄 때 어떤 놀이가 좋아요?",
         {"breed": "치와와", "age_months": 48},
         {"breed": "골든리트리버", "age_months": 48},

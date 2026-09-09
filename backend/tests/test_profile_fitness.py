@@ -184,8 +184,6 @@ def verdict(**kwargs: object) -> ProfileDiffVerdict:
     """기본값이 '아무 차이 없음'인 판정. 테스트가 바꾸는 칸만 적게 한다."""
     base: dict[str, object] = {
         "differences": [],
-        "only_in_a": [],
-        "only_in_b": [],
         "profile_attributable": [],
         "unstated_facts": [],
         "stereotype_leaps": [],

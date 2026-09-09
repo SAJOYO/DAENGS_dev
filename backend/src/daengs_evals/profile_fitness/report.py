@@ -186,6 +186,7 @@ def failure_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def unmeasured(meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     skipped = Counter(s["reason"] for s in meta.get("skipped_pairs") or [])
     pos = sum(1 for r in rows if r.get("position_dependent"))
+    pos_checked = sum(1 for r in rows if r.get("position_dependent") is not None)
     abst = sum(1 for r in rows if r["observation"].get("abstained"))
     total = len(rows) + sum(skipped.values())
     return {
@@ -193,6 +194,8 @@ def unmeasured(meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> di
         "judged": len(rows),
         "skipped_before_judging": dict(skipped),
         "position_dependent": pos,
+        "position_checked": pos_checked,
+        "position_flip_rate": round(pos / pos_checked, 3) if pos_checked else None,
         "abstained": abst,
         "unmeasured_rate": round((sum(skipped.values()) + pos + abst) / total, 3)
         if total
@@ -405,7 +408,7 @@ def render_markdown(s: Mapping[str, Any]) -> str:
         (
             f"- 쌍 {s['coverage']['total_pairs']} 중 판정 {s['coverage']['judged']} · "
             f"판정 전 제외 {s['coverage']['skipped_before_judging']} · "
-            f"위치 뒤집힘 {s['coverage']['position_dependent']} · 기권 {s['coverage']['abstained']} → "
+            f"위치 뒤집힘 {s['coverage']['position_dependent']}/{s['coverage']['position_checked']} (양방향 본 쌍 중) · 기권 {s['coverage']['abstained']} → "
             f"미측정 비율 **{s['coverage']['unmeasured_rate']}**"
         ),
         f"- 패러프레이즈 일치: {s['paraphrase']['agreement']} ({s['paraphrase']['pairs']}쌍)",

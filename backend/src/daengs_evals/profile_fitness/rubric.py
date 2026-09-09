@@ -30,13 +30,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #: v1 → v2 (2026-09-09): **중요도 규칙**. v1a 는 부가 문장 하나에 changed 가 흔들려 위치 뒤집힘 12%,
 #: invariant 질문에서 "개봉 후 한 달 이내" 한 줄이 changed 로 잡혔다. 사용자가 따를 행동이 달라질
 #: 때만 변화로 본다. v1a 기록은 그대로 둔다 — 판정기를 실험으로 고친 전/후.
-#: v2 → v3 (2026-09-09 밤): 위치 뒤집힘이 v1.1 에서 11% (기준 5%). 뒤집힌 10쌍 전부 "한쪽에만 있는 문장
-#: 하나가 행동인가" 였고 양쪽 다 confidence high 였다. 두 가지를 바꾼다 — ① A 에만 있는 것과 B 에만
-#: 있는 것을 **각각** 적게 해 순서 비대칭을 구조로 막고, ② 그 차이가 문장 한둘뿐이고 행동을 바꾸는지
-#: 흔들리면 confidence 를 low 로 두게 한다(기권 → 사람 큐). 기준 5% 는 안 낮췄다.
+#: v3(대칭 필드 only_in_a/b + 기권 규칙)는 32쌍에서 위치 뒤집힘이 6%→19% 로 늘어 접었다 (커밋 ab95c8d~f3294f6
+#: 의 anchor_check_*_v3a · judgments_*_v3a 가 기록). **v2 가 확정 판정기다.** 위치 게이트(5%)는 미달로 적는다.
 PROMPT_VERSIONS: dict[str, str] = {
-    "A": "profile-fitness-diff-ko-v3a",
-    "B": "profile-fitness-diff-ko-v3b",
+    "A": "profile-fitness-diff-ko-v2a",
+    "B": "profile-fitness-diff-ko-v2b",
 }
 TEMPERATURE = 0.0
 #: 사고 토큰이 이 한도를 같이 쓴다 — `answer_quality/judge.py` 가 512 로 잘려 본 뒤 올린 값과 같다.
@@ -64,9 +62,6 @@ class ProfileDiffVerdict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     differences: list[str] = Field(max_length=10)
-    #: v3 — 한쪽에만 있는 내용을 각각. 순서를 바꿔도 같은 목록이 나와야 한다 (위치 편향의 구조적 방지).
-    only_in_a: list[str] = Field(max_length=10)
-    only_in_b: list[str] = Field(max_length=10)
     profile_attributable: list[str] = Field(max_length=10)
     unstated_facts: list[str] = Field(max_length=10)
     stereotype_leaps: list[str] = Field(max_length=10)
@@ -169,11 +164,6 @@ _SHARED_HEADER = (
     "'7살이시면'); 같은 권고에 **일반적인 주의 문장 하나가 더 붙은 것**('개봉 후 한 달 안에', "
     "'이상하면 수의사와 상담'); 같은 권고를 다른 말로 풀어 쓴 것. 핵심 권고가 같으면 한 문장이 더 "
     "있어도 안 변한 것이다. 반대로 권고 자체가 갈렸으면 짧아도 변한 것이다.\n\n"
-    "**순서에 흔들리지 마라.** A 에만 있는 내용과 B 에만 있는 내용을 각각 적고, 둘을 **같은 잣대**로 "
-    "본다. 'A 에만 수의사 상담 한 줄' 과 'B 에만 수의사 상담 한 줄' 은 같은 무게다. "
-    "**흔들리면 기권하라.** 차이가 한쪽에만 있는 문장 하나 정도이고 그것이 행동을 바꾸는지 판단이 "
-    "흔들리면 changed 를 억지로 정하지 말고 confidence 를 low 로 적는다 — 그건 사람이 본다. "
-    "low 는 실패가 아니다. 흔들리는데 high 를 적는 것이 실패다.\n\n"
     "**unstated_facts 의 갈림선** — 여기가 이 판정에서 가장 자주 틀리는 자리다. "
     "적어야 하는 것은 **이 강아지 고유의 사실**을 프로필에 없이 단정한 대목이다: 병력 · 진단 · "
     "접종 기록 · 과거 경험 · 체중 · 검사 결과처럼 **그 아이의 기록을 봐야만 알 수 있는 것**. "
@@ -189,23 +179,21 @@ _SHARED_HEADER = (
 
 _GUIDE_A = """적는 순서:
 ① differences — 두 답변의 실질적 차이를 문장으로. 없으면 빈 목록.
-①-1 only_in_a / only_in_b — A 에만 있는 내용, B 에만 있는 내용. 각각. 같은 잣대로.
 ② profile_attributable — ① 중 **주어진 두 프로필로 설명되는** 것만.
 ③ unstated_facts — 프로필에 없는 **이 아이의 기록**을 단정한 것 (병력·진단·접종·과거 경험). 일반 돌봄 지식은 넣지 않는다.
 ④ stereotype_leaps — 견종·나이의 **기질 통념**으로 도약한 대목.
 ⑤ changed — **사용자의 행동이 달라지나** (true/false). 부가 주의 한 문장 · 호명 · 문체는 false.
 ⑥ change_justified — profile(프로필로 설명됨) · stereotype(통념으로 갈림) · unjustified(설명 안 됨) · none(안 변함).
-⑦ confidence — high 또는 low. 차이가 문장 하나뿐이고 행동을 바꾸는지 흔들리면 low."""
+⑦ confidence — high 또는 low."""
 
 _GUIDE_B = """점검표. 위에서부터 차례로 채운다.
 [differences] 조언의 내용이 달라진 대목을 모은다. 말투만 다른 것은 넣지 않는다.
-[only_in_a] [only_in_b] 한쪽에만 있는 내용을 각각 적는다. 순서를 바꿔 읽어도 같은 목록이어야 한다.
 [profile_attributable] 그 대목 중 프로필(견종 · 나이 · 질환 · 피부 판정)로 설명되는 것.
 [unstated_facts] 답변이 **이 아이에 대해** 단정한 것 중 프로필에 근거가 없는 것 — 병력·진단·접종 기록·과거 경험. 견종과 나이로부터 나오는 일반 돌봄 지식(관절·성장·노화)은 여기 넣지 않는다.
 [stereotype_leaps] 견종·나이의 기질 통념(겁이 많다, 고집이 세다)으로 결론을 바꾼 자리.
 [changed] differences 중 **권고 자체**(횟수 · 양 · 방법 · 금지 · 병원 여부)가 달라진 것이 있으면 true. 주의 문장 하나 · 호명 · 말투 차이만이면 false.
 [change_justified] changed 가 false 면 none. true 면 profile / stereotype / unjustified 중 하나.
-[confidence] 판단이 흔들리지 않으면 high. 한쪽에만 있는 문장 하나가 행동을 바꾸는지 흔들리면 low — 억지로 정하지 않는다."""
+[confidence] 두 답을 비교해 판단이 흔들리지 않으면 high, 흔들리면 low."""
 
 
 def build_prompt(

@@ -392,6 +392,16 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
             )
             return
 
+        # 계약 검사는 **경고만** 냅니다 (daengs_gait.contract). 여기서 예외를 내면 DONE 이
+        # 못 되고 행이 FAILED/좀비가 되는데, 계약 위반은 사고를 만들 게 아니라 발견할 일입니다.
+        from daengs_gait.contract import check_analysis_record  # 가벼운 모듈 (numpy 없음)
+
+        problems = check_analysis_record(result)
+        if problems:
+            log.warning(
+                "gait.analyze: 엔진 출력이 계약과 어긋남 record_id=%s: %s", record_id, problems
+            )
+
         overlay_data = result.pop("_overlay_bytes", None)
         overlay_key = None
         if overlay_data is not None:
@@ -409,11 +419,16 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
                     log.exception("gait.analyze: 실패한 overlay 정리도 실패 key=%s", overlay_key)
                 record.status = "FAILED"
                 record.failure_reason = str(exc)[:2000]
+                # 엔진은 돌았으므로 어떤 모델이었는지는 안다 — 결과 없이 실패한 경우와 구분.
+                record.pose_model = result.get("pose_model")
                 await session.commit()
                 log.error("gait.analyze overlay 업로드 실패 record_id=%s: %s", record_id, exc)
                 return
 
         record.status = "DONE"
+        # 어떤 pose model / 관절 정의로 만든 기록인가 (D-063). 두 엔진 다 품질 판정 전에
+        # 넣으므로 unavailable 이어도 값이 있다. 검증하지 않고 그대로 저장 — CHECK 도 없다.
+        record.pose_model = result.get("pose_model")
         record.quality_status = result["quality"].get("status")
         # ⚠️ 컬럼 CHECK(good/ok/low)는 엔진 어휘와 같아야 합니다. 2026-09-09 까지 CHECK 가
         #    good/low 뿐이라 20~80 구간(`ok`)의 DONE 커밋이 CheckViolation 으로 죽고 행이

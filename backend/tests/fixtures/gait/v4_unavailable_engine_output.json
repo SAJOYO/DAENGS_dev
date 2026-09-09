@@ -1,0 +1,56 @@
+{
+ "record_id": null,
+ "source_file": "fixture.mp4",
+ "date": null,
+ "note": null,
+ "dog_id": null,
+ "created_at": "2026-09-09T06:05:21.994911+00:00",
+ "pose_model": "rtmpose_ap10k_ssd",
+ "pose_model_label": "RTMPose AP-10K + ssdlite 박스 (17kp)",
+ "pose_model_meta": {
+  "priority": [
+   "L_Hip",
+   "L_Knee",
+   "L_B_Paw",
+   "R_Hip",
+   "R_Knee",
+   "R_B_Paw"
+  ],
+  "kp_conf": 0.3,
+  "n_joints": 17
+ },
+ "group_id": null,
+ "follow_cam": false,
+ "timing": {
+  "pose_elapsed_sec": 6.2,
+  "superanimal": null,
+  "ssd_backend": "direct",
+  "detect_sec": 5.2
+ },
+ "lr_fix": {
+  "rule": "x-order (rear, bbox h/w>1.0)",
+  "frames_checked": 3,
+  "frames_swapped": 0,
+  "pairs_swapped": 0
+ },
+ "video_meta": {
+  "resolution": "320x240",
+  "native_fps": 30.0
+ },
+ "quality": {
+  "status": "unavailable",
+  "reason": "분석 가능한 보행 프레임이 부족합니다.",
+  "recommendation": "밝은 환경에서 강아지 전신이 보이도록, 흔들림 없이 다시 촬영해 주세요.",
+  "n_frames_sampled": 10,
+  "n_frames_detected": 10,
+  "n_frames_gait_usable": 1,
+  "detection_rate": 1.0,
+  "gait_usable_rate": 0.1,
+  "exclude_reason_counts": {
+   "insufficient_keypoints": 9
+  },
+  "n_frames_flagged_night": 0,
+  "n_frames_flagged_blur": 0
+ },
+ "gait_filter_version": "v5-stationary-speed-based-20260826"
+}

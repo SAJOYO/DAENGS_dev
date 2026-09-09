@@ -240,6 +240,8 @@
       "not_answered": 8
     },
     "position_dependent": 10,
+    "position_checked": 93,
+    "position_flip_rate": 0.108,
     "abstained": 1,
     "unmeasured_rate": 0.293
   },
@@ -255,7 +257,32 @@
   },
   "calibration": null,
   "provisional": true,
-  "generated_at": "2026-09-09T03:06:28+00:00",
+  "generated_at": "2026-09-09T03:33:52+00:00",
+  "variant_agreement": {
+    "shared_pairs": 20,
+    "items": {
+      "changed": {
+        "agreement": 0.95,
+        "kappa": 0.8863636363636362,
+        "undefined": null
+      },
+      "profile": {
+        "agreement": 0.95,
+        "kappa": 0.8275862068965515,
+        "undefined": null
+      },
+      "fabricated": {
+        "agreement": 1.0,
+        "kappa": null,
+        "undefined": "single_category"
+      },
+      "stereotype": {
+        "agreement": 1.0,
+        "kappa": null,
+        "undefined": "single_category"
+      }
+    }
+  },
   "gate": {
     "responsiveness": {
       "passed": false,
@@ -270,5 +297,5 @@
       "reason": "not_calibrated"
     }
   },
-  "note": "v1.1 질문 × 판정 v2 — 최종"
+  "note": "확정 판정 v2 · 변형 B 20쌍 일치율 포함"
 }

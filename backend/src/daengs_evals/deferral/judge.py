@@ -173,7 +173,15 @@ CONSISTENCY_REPEATS = 3
 CONSISTENCY_SAMPLE = 6  # 6답 × 3회 = 18호출 ≈ 1.5만 토큰
 
 
-def run_consistency(*, cells_label: str, model: str, variant: str, budget: int, log=print) -> Path:
+def run_consistency(
+    *,
+    cells_label: str,
+    model: str,
+    variant: str,
+    budget: int,
+    only_questions: list[str] | None = None,
+    log=print,
+) -> Path:
     """답한 셀 몇 개를 같은 프롬프트로 3번 판정한다. `answer_move` 가 흔들리면 그 답은 사람 큐다.
 
     실측(2026-09-09): pf_v1 과 pf_v1_1 은 같은 답변인데 '밥 안 먹는데 기다려도 되나' 가 한 번은
@@ -193,6 +201,8 @@ def run_consistency(*, cells_label: str, model: str, variant: str, budget: int, 
             (r.get("capability") for r in c.get("results") or [] if r.get("status") == "OK"), None
         )
         if c["status"] != "ANSWERED" or (real and by not in real) or c["question_id"] in seen:
+            continue
+        if only_questions and c["question_id"] not in only_questions:
             continue
         seen.add(c["question_id"])
         sample.append(c)
@@ -242,7 +252,8 @@ def run_consistency(*, cells_label: str, model: str, variant: str, budget: int, 
         "checked_at": utc_now(),
         "source": source_provenance(),
     }
-    path = ASSETS_DIR / f"consistency_{cells_label}_{PROMPT_VERSIONS[variant]}.json"
+    tag = "_targeted" if only_questions else ""
+    path = ASSETS_DIR / f"consistency_{cells_label}_{PROMPT_VERSIONS[variant]}{tag}.json"
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"자기일관성 {rate:.2f} ({len(results)}답 × {CONSISTENCY_REPEATS}회) → {path.name}")
     return path
@@ -366,6 +377,9 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--variant", choices=("A", "B"), default="A")
     k.add_argument("--judge-model", default=None)
     k.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET)
+    k.add_argument(
+        "--questions", nargs="*", default=None, help="이 질문들만 (흔들렸던 답을 겨냥할 때)"
+    )
     args = parser.parse_args(argv)
     if args.command == "score":
         from daengs_backend.config import settings
@@ -384,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
             model=args.judge_model or settings.openai_judge_model,
             variant=args.variant,
             budget=args.token_budget,
+            only_questions=args.questions,
         )
     else:
         run_report(cells_label=args.cells, variant=args.variant)

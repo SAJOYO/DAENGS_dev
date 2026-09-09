@@ -1,6 +1,6 @@
 # 개체 적합성 — `pf_v1_1`
 
-판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T03:06:28+00:00
+판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T03:33:52+00:00
 
 > ⚠ **잠정.** 사람 라벨 κ 게이트를 아직 못 지났다. 발표에 쓰는 숫자는 확정 표가 있는 것뿐이다.
 
@@ -44,7 +44,7 @@
 
 ## 못 잰 것
 
-- 쌍 116 중 판정 93 · 판정 전 제외 {'out_of_scope': 15, 'not_answered': 8} · 위치 뒤집힘 10 · 기권 1 → 미측정 비율 **0.293**
+- 쌍 116 중 판정 93 · 판정 전 제외 {'out_of_scope': 15, 'not_answered': 8} · 위치 뒤집힘 10/93 (양방향 본 쌍 중) · 기권 1 → 미측정 비율 **0.293**
 - 패러프레이즈 일치: 0.778 (18쌍)
 - 비용: 입력 298,420 / 출력 38,466 토큰 · 1000쌍당 3,622,430
 
@@ -54,4 +54,13 @@
 - Life 경로 — 실서버(pgvector · Redis) 필요. v1 은 `general` 만
 - 안전 상호작용(unsafe_escalation) — 축 B 의 `safe` 판정으로 따로 잰다
 
-> v1.1 질문 × 판정 v2 — 최종
+## 프롬프트 변형 A/B 일치
+
+공유 쌍 20
+
+- changed: 일치 0.95 · κ 0.89
+- profile: 일치 0.95 · κ 0.83
+- fabricated: 일치 1.00 · κ (single_category)
+- stereotype: 일치 1.00 · κ (single_category)
+
+> 확정 판정 v2 · 변형 B 20쌍 일치율 포함

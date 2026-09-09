@@ -5,6 +5,7 @@
   "review_pending": 15,
   "confusion": {
     "n": 137,
+    "abstained": 0,
     "correct_answer": 123,
     "correct_defer": 12,
     "wrong_reason": 0,

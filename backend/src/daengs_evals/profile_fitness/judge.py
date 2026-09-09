@@ -35,7 +35,6 @@ from daengs_evals.answer_quality.gemini import TokenBudgetExceeded, TokenLedger
 #: 한 명령의 기본 예산. 2026-09-09 에 하루 140만 토큰을 쓴 뒤 5만으로 내렸다 — 넘길 일이면 사람이
 #: --token-budget 으로 명시한다. 양방향 판정은 표본 20쌍만 (--both-orders-sample).
 DEFAULT_TOKEN_BUDGET = 50_000
-from daengs_evals.answer_quality.judge import stratified_subsample
 from daengs_evals.answer_quality.provenance import source_provenance, utc_now
 from daengs_evals.answer_quality.questions import file_sha256
 from daengs_evals.calibration.hygiene import require_judge_hygiene
@@ -406,6 +405,20 @@ def run_bias_suite(
 # ---------------------------------------------------------------------------
 
 
+def _stratified(pairs: list[Pair], n: int) -> list[Pair]:
+    """조건 × 종류 층에서 돌아가며 하나씩 — 부분표본이 한 조건에 쏠리지 않게. 결정론(pair_id 순)."""
+    strata: dict[str, list[Pair]] = {}
+    for p in sorted(pairs, key=lambda x: x.pair_id):
+        strata.setdefault(f"{p.condition}|{p.kind}", []).append(p)
+    out: list[Pair] = []
+    keys = sorted(strata)
+    while len(out) < n and any(strata[k] for k in keys):
+        for k in keys:
+            if strata[k] and len(out) < n:
+                out.append(strata[k].pop(0))
+    return out
+
+
 def _existing_pair_ids(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -439,11 +452,7 @@ def run_score(
     judgeable = _attach_profiles([p for p in pairs if p.judgeable], p_by_id)
     skipped = [p for p in pairs if not p.judgeable]
     if subsample:
-        # 조건 × 종류 층화 — 부분표본이 한 조건에 쏠리지 않게
-        strata = {}
-        for p in judgeable:
-            strata.setdefault(f"{p.condition}|{p.kind}", []).append(p)
-        judgeable = stratified_subsample(strata, subsample)  # type: ignore[arg-type]
+        judgeable = _stratified(judgeable, subsample)
 
     ledger = TokenLedger(budget=budget, log=log)
     judge, hygiene = make_judge(model=model, variant=variant, ledger=ledger)

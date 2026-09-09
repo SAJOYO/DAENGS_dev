@@ -161,22 +161,16 @@ services:
       #   ⚠️ 확신이 낮으면 서버가 알아서 `null` 을 보냅니다 — 화면은 안 그립니다.
       #   근거: 원본 docs/results/STEP28~34.
       DOG_SKIN_SHOW_GROUP: ${DOG_SKIN_SHOW_GROUP:-1}
-      # ★ 가중치를 **허깅페이스에서 받아 옵니다**. 비우면 아래 volumes 의
-      #   `/models/release` 폴더를 예전처럼 봅니다 — 되돌리기가 변수 하나입니다.
+      # ★ 가중치를 허깅페이스에서 받는 설정(`SCREENING_RELEASE_REPO` ·
+      #   `SCREENING_RELEASE_REVISION` · `HF_TOKEN` · `SCREENING_EXPECT_STAGE2_ARMS`)은
+      #   **여기 두지 않습니다.** `backend/.env` 에 넣으세요 (env_file 로 들어갑니다).
       #
-      #   ⚠️ REVISION 을 **반드시 채우세요.** 비면 리포의 `main` 을 따라가므로
-      #      누가 푸시하는 순간 운영 모델이 바뀝니다 (PR 도 리뷰도 배포도 없이).
-      #      태그를 적어 두면 모델 교체가 **리뷰되는 행위**가 됩니다.
-      #   ⚠️ 개발서버와 GCP 의 값이 **같아야** 합니다. 다르면 두 곳이 다른
-      #      모델로 도는데 응답은 양쪽 다 200 이라 눈으로는 안 보입니다.
-      #   받는 곳은 위 `hf-cache` 볼륨입니다 (`/models/release` 는 :ro 라 못 씁니다).
-      SCREENING_RELEASE_REPO: ${SCREENING_RELEASE_REPO:-}
-      SCREENING_RELEASE_REVISION: ${SCREENING_RELEASE_REVISION:-}
-      HF_TOKEN: ${HF_TOKEN:-}
-      # 2단계 앙상블 팔 수. 안 맞으면 모델을 **안 올리고 503** 입니다.
-      # 2026-09-07 에 조용히 1팔로 줄어 커버리지가 67.9 → 58.4% 로 떨어진
-      # 적이 있는데, 응답은 200 이었고 유일한 단서가 성공 로그의 부재였습니다.
-      SCREENING_EXPECT_STAGE2_ARMS: ${SCREENING_EXPECT_STAGE2_ARMS:-3}
+      #   ⚠️ 여기에 `HF_TOKEN: ${HF_TOKEN:-}` 를 추가하지 마세요. `environment` 가
+      #      `env_file` 보다 **우선**이라, 그 줄이 있으면 `backend/.env` 의 토큰이
+      #      빈 값으로 덮입니다. `deploy.yml` 이 셸로 끌어올려 주는 건
+      #      `GEMINI_API_KEY` **하나뿐**입니다 (48~56줄) — 그래서 자동 배포마다
+      #      빈 토큰이 박히고 `/screen/` 만 401 로 죽습니다. 다른 API 는 멀쩡해서
+      #      로그에 아무 문제도 안 보입니다 (`GEMINI_API_KEY` 와 똑같은 함정).
     volumes:
       # 폴더째 마운트하지 않습니다. backend/.venv 가 딸려 들어오면 깨집니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro

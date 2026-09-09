@@ -105,11 +105,26 @@ def test_한_번만_받는다(monkeypatch):
 
 
 def test_기대하는_팔_수(monkeypatch):
-    """비어 있거나 숫자가 아니면 검사하지 않습니다 (1팔짜리로 개발할 때)."""
+    """안 정했으면 **리포에서 받는 구성일 때만** 3 을 기대합니다.
+
+    폴더를 쓰는 개발 PC 는 1팔짜리 릴리스로도 돌아야 합니다 — 거기서 막으면
+    `/screen/` 이 통째로 안 뜨고, 그건 "가중치가 없어도 backend 는 뜬다" 는
+    지금 설계와 어긋납니다.
+
+    ⚠️ 이 값을 `docker-compose.yml` 의 `environment:` 에 두지 않습니다.
+       `environment` 가 `env_file` 을 이겨서 `backend/.env` 값이 덮입니다.
+    """
     monkeypatch.delenv("SCREENING_EXPECT_STAGE2_ARMS", raising=False)
-    assert service._expect_arms() is None
-    monkeypatch.setenv("SCREENING_EXPECT_STAGE2_ARMS", "3")
-    assert service._expect_arms() == 3
+
+    monkeypatch.setattr(service, "RELEASE_REPO", "")
+    assert service._expect_arms() is None, "폴더 구성에서는 검사하지 않습니다"
+
+    monkeypatch.setattr(service, "RELEASE_REPO", "org/repo")
+    assert service._expect_arms() == 3, "리포 구성이면 기본 3"
+
+    monkeypatch.setenv("SCREENING_EXPECT_STAGE2_ARMS", "2")
+    assert service._expect_arms() == 2, "적어 두면 그 값이 이깁니다"
+
     monkeypatch.setenv("SCREENING_EXPECT_STAGE2_ARMS", "어쩌구")
     assert service._expect_arms() is None
 

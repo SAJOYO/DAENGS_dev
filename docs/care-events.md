@@ -77,6 +77,6 @@
 | Model | `models/care_event.py` |
 | Schema | `schemas/care_event.py` |
 | DAO | `repositories/care_event.py` · `repositories/walk.py` 의 `count_for_pet_between` |
-| Service | `services/care_event.py` — 소유권·멱등·기간 상한·하루 경계 |
+| Service | `services/care_event.py` — 구성원 판정·멱등·기간 상한·하루 경계·삭제 자격 |
 | Controller | `routers/care_event.py` |
 | 테스트 | `tests/test_care_events.py` — `fakes.py` 를 안 건드리고 이 파일 안의 가짜를 쓴다 (#331 과 파일이 안 겹치게) |

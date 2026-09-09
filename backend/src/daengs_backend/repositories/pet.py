@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.models import Pet, PetMember
 
 __all__ = [
+    "accessible_ids",
     "add",
     "count_accessible",
     "count_by_owners",
@@ -22,6 +23,7 @@ __all__ = [
     "delete_all_for_owner",
     "get_accessible",
     "get_owned",
+    "list_accessible",
     "list_for_owner",
     "list_for_owner_for_update",
     "names_by_ids",
@@ -127,6 +129,41 @@ async def owned_ids(
         return set()
     stmt = select(Pet.id).where(Pet.app_user_id == app_user_id, Pet.id.in_(pet_ids))
     return set(await session.scalars(stmt))
+
+
+async def accessible_ids(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    """주어진 id 중 **내가 돌보는 아이**만 (대표 ∪ 돌보미). `owned_ids` 의 구성원판입니다.
+
+    산책을 올릴 때 동행한 아이를 거르는 데 씁니다 (docs/co-care.md §2 — 계획 리뷰의
+    판단). 산책 **소유**는 여전히 올린 사람 것이고, 여기서 여는 것은 "누구를 태그할 수
+    있나" 뿐입니다 — 밥·약을 적을 수 있는 사람이면 같이 걸었다고 적을 수도 있어야
+    합니다. 이것이 안 열리면 돌보미가 태그된 산책이 **아예 만들어지지 않아**,
+    `walk.count_for_pet_between` 에서 소유자 조건을 뺀 것이 무의미해집니다.
+
+    `owned_ids` 는 그대로 둡니다 — 성취·점령 요약(`services/activity.py`)은 여전히
+    사람 것이라 그쪽이 씁니다 (스펙 결정 ①).
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return set()
+    stmt = select(Pet.id).where(_is_member(app_user_id), Pet.id.in_(pet_ids))
+    return set(await session.scalars(stmt))
+
+
+async def list_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> list[Pet]:
+    """**내가 돌보는 아이 전부** (대표 ∪ 돌보미), 등록 순서대로.
+
+    `list_for_owner` 와 같은 정렬(`created_at, id`)입니다 — 앱의 카드 순서가 그것이고,
+    두 목록의 순서가 다르면 초대를 수락한 순간 카드가 재배열됩니다.
+
+    ⚠️ **승계 대상을 여기서 고르지 마세요.** 대표를 지웠을 때 물려받을 아이는
+    `list_for_owner` 로 골라야 합니다 — 여기서 고르면 남의 강아지를 내 대표로 세웁니다.
+    """
+    stmt = select(Pet).where(_is_member(app_user_id)).order_by(Pet.created_at, Pet.id)
+    return list(await session.scalars(stmt))
 
 
 async def count_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:

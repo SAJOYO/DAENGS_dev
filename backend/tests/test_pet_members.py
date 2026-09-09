@@ -9,13 +9,15 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from fakes import FakeAdmin, FakePet, FakeWalk, FakeWalkPet, Store, install
+from fakes import FakeAdmin, FakePet, FakeSession, Store, install
 
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.schemas.pet import PetUpsert
+from daengs_backend.schemas.walk import WalkUpload
 from daengs_backend.services import care_event as care_service
 from daengs_backend.services import dog_context
 from daengs_backend.services import pet as pet_service
+from daengs_backend.services import walk as walk_service
 
 SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -108,19 +110,66 @@ async def test_carer_sees_dog_context(store: Store, pet: FakePet):
 
 
 async def test_day_summary_counts_other_members_walks(store: Store, pet: FakePet):
-    """하루 요약은 아빠의 산책도 센다 — `repositories/walk.py` 의 소유자 조건을 뺀 결과다.
+    """하루 요약은 아빠의 산책도 센다.
 
-    산책의 소유는 여전히 사람 것이고(§"산책 쓰기는 안 건드린다"), 요약에서만 합쳐 보입니다.
+    **산책을 진짜 쓰기 경로로 만듭니다.** `store.walks` 에 직접 얹으면 `pet_repo.accessible_ids`
+    를 되돌려도 이 테스트가 통과합니다 — 실제로는 그러면 아빠가 맥스를 태그한 산책이 **아예
+    만들어지지 않아** 요약이 셀 것이 없습니다. 두 변경(`walk.count_for_pet_between` 의 소유자
+    조건 삭제 + 태그 검사의 구성원 전환)이 **같이** 있어야 1 이 나옵니다.
+
+    산책의 **소유**는 여전히 사람 것입니다 — 아래 목록이 그것을 지킵니다.
     """
     store.pet_members.append((pet.id, CARER))
-    store.walks.append(
-        FakeWalk(
-            app_user_id=CARER,
+    session = FakeSession(store)
+    walk, created = await walk_service.upload_walk(
+        session,
+        CARER,
+        WalkUpload(
             client_session_id=uuid.uuid4(),
+            pet_ids=[pet.id],
             started_at=datetime(2026, 9, 9, 8, 0, tzinfo=SEOUL),
             ended_at=datetime(2026, 9, 9, 8, 40, tzinfo=SEOUL),
-            pets=[FakeWalkPet(pet_id=pet.id)],
-        )
+        ),
     )
-    summary = await care_service.day_summary(None, OWNER, pet.id, day=date(2026, 9, 9))
+    assert created and walk.pet_ids == [pet.id], "돌보미가 그 아이를 태그하지 못했다"
+
+    summary = await care_service.day_summary(session, OWNER, pet.id, day=date(2026, 9, 9))
     assert summary.walks == 1
+
+    # 소유는 안 옮겼다 — 그 산책은 대표의 산책 목록에 안 뜬다.
+    assert await walk_service.list_walks(session, OWNER) == []
+    assert [w.id for w in await walk_service.list_walks(session, CARER)] == [walk.id]
+
+
+async def test_carer_sees_the_dog_in_the_pet_list(store: Store, pet: FakePet):
+    """돌보미의 `GET /app/pets` 에 그 아이가 보인다.
+
+    안 보이면 기록·조회를 열어 놔도 앱이 그 아이를 못 고릅니다 — 기능이 있는데 못 찾는
+    상태가 됩니다 (docs/co-care.md §2).
+    """
+    store.pet_members.append((pet.id, CARER))
+    pets, _primary = await pet_service.list_pets(None, CARER)
+    assert [p.id for p in pets] == [pet.id]
+
+    outsider, _ = await pet_service.list_pets(None, STRANGER)
+    assert outsider == []
+
+
+async def test_miniroom_cap_counts_carer_pets(store: Store):
+    """상한은 소유가 아니라 **내 방에 서는 아이 수** 다 (docs/co-care.md §2 끝).
+
+    소유로 세면 돌보미로 참여한 아이가 안 세어져, 방에 상한을 넘는 마릿수가 섭니다.
+    """
+    # 대표로 4마리 + 돌보미로 1마리 = 방에 5마리.
+    for i in range(pet_service.MAX_PETS_PER_USER - 1):
+        store.pets.append(FakePet(app_user_id=CARER, name=f"내아이{i}", breed="믹스"))
+    theirs = FakePet(app_user_id=OWNER, name="맥스", breed="믹스")
+    store.pets.append(theirs)
+    store.pet_members.append((theirs.id, CARER))
+
+    assert await pet_repo.count_for_owner(None, CARER) == pet_service.MAX_PETS_PER_USER - 1
+    assert await pet_repo.count_accessible(None, CARER) == pet_service.MAX_PETS_PER_USER
+
+    body = PetUpsert(name="여섯째", breed="믹스")
+    with pytest.raises(pet_service.PetLimitReachedError):
+        await pet_service.create_pet(None, CARER, body)

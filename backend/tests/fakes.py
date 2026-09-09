@@ -622,6 +622,22 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
         return mine & set(pet_ids)
 
+    async def pet_accessible_ids(session, app_user_id, pet_ids):
+        # 진짜와 같게 **구성원(대표 ∪ 돌보미)** 입니다 (docs/co-care.md §2).
+        ids = _member_pet_ids(app_user_id)
+        mine = {
+            p.id for p in store.pets if p.app_user_id == app_user_id or p.id in ids
+        }
+        return mine & set(pet_ids)
+
+    async def pet_list_accessible(session, app_user_id):
+        ids = _member_pet_ids(app_user_id)
+        # 진짜는 `created_at, id` 로 정렬합니다. 대역의 `store.pets` 는 등록 순서라
+        # 그 순서가 곧 같은 뜻입니다 (`pet_list_for_owner` 와 같은 규칙).
+        return [
+            p for p in store.pets if p.app_user_id == app_user_id or p.id in ids
+        ]
+
     async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
@@ -673,6 +689,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "count_accessible", pet_count_accessible)
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
+    monkeypatch.setattr(pet_repo, "accessible_ids", pet_accessible_ids)
+    monkeypatch.setattr(pet_repo, "list_accessible", pet_list_accessible)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
     monkeypatch.setattr(pet_repo, "names_by_ids", pet_names_by_ids)

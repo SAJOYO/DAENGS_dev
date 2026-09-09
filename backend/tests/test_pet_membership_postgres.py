@@ -13,12 +13,12 @@ from urllib.parse import urlparse
 import psycopg
 import pytest
 
+#: loopback 기본값. 두 가드가 같은 값을 봐야 하므로 한 곳에 둔다.
+_DEFAULT_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/vectordb"
+
 
 def _postgres_or_skip():
-    dsn = os.environ.get(
-        "DAENGS_TEST_DATABASE_URL",
-        "postgresql://postgres:postgres@127.0.0.1:5432/vectordb",
-    )
+    dsn = os.environ.get("DAENGS_TEST_DATABASE_URL", _DEFAULT_DSN)
     parsed = urlparse(dsn)
     if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
         pytest.fail("공동 돌봄 증명은 loopback 이 아닌 DB 를 거부한다")
@@ -138,3 +138,98 @@ def test_migration_is_rerunnable():
     finally:
         conn.rollback()
         conn.close()
+
+
+def _sqlalchemy_dsn_or_skip() -> str:
+    """같은 loopback 가드를 지난 뒤 **SQLAlchemy(asyncpg) DSN** 을 돌려준다.
+
+    아래 삭제 자격 증명만 이것을 쓴다. 그 판정은 psycopg 로 **흉내 내면 의미가 없다** —
+    테스트가 직접 쓴 SQL 을 테스트가 확인하는 꼴이 된다. 진짜 `care_repo.get_deletable`
+    을 진짜 DB 에서 불러야, 조건을 `pet_repo._is_member` 로 잘못 바꿔 놓은 구현이 여기서
+    걸린다 (가짜 대역으로는 그 실수가 통과한다).
+
+    가드를 새로 쓰지 않고 `_postgres_or_skip` 을 빌린다 — 두 벌이 되면 한쪽만 고쳐진다.
+    """
+    conn = _postgres_or_skip()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.care_events')")
+            if cur.fetchone()[0] is None:
+                pytest.skip("로컬 PostgreSQL 에 care_events 가 없다")
+    finally:
+        conn.close()
+    dsn = os.environ.get("DAENGS_TEST_DATABASE_URL", _DEFAULT_DSN)
+    return dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+
+async def test_care_event_delete_is_recorder_or_owner():
+    """케어 기록은 **적은 사람 또는 그 아이의 대표**만 지운다 (docs/co-care.md §2).
+
+    네 갈래를 한 트랜잭션에서 본다: 적은 사람 ✅ · 대표 ✅ · **다른 돌보미** ❌ · 남남 ❌.
+    셋째가 이 테스트의 이유다 — 구성원 전체(`_is_member`)로 열어 놓아도 나머지 셋은 전부
+    통과하므로, 그 실수는 여기서만 잡힌다.
+
+    다른 테스트와 달리 SQLAlchemy 세션을 쓰는 것은 **진짜 리포지토리 함수를 부르기
+    위해서**다. 트랜잭션 하나 · 끝에서 rollback 은 같다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from daengs_backend.repositories import care_event as care_repo
+
+    engine = create_async_engine(dsn)
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        owner, carer, other, stranger = (str(uuid.uuid4()) for _ in range(4))
+        pet, event = str(uuid.uuid4()), str(uuid.uuid4())
+
+        # 값은 전부 문자열로 넘기고 SQL 에서 CAST 한다 — asyncpg 는 타입을 엄격히 본다.
+        for uid in (owner, carer, other, stranger):
+            await session.execute(
+                text(
+                    "INSERT INTO app_users (id, kakao_id, status)"
+                    " VALUES (CAST(:i AS uuid), :k, 'active')"
+                ),
+                {"i": uid, "k": uuid.uuid4().int % 10**12},
+            )
+        await session.execute(
+            text(
+                "INSERT INTO pets (id, app_user_id, name, breed)"
+                " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), '맥스', '믹스')"
+            ),
+            {"p": pet, "o": owner},
+        )
+        # 돌보미 둘 — 하나는 기록한 사람, 하나는 같은 아이의 **다른** 돌보미.
+        for uid in (carer, other):
+            await session.execute(
+                text(
+                    "INSERT INTO pet_members (pet_id, app_user_id)"
+                    " VALUES (CAST(:p AS uuid), CAST(:u AS uuid))"
+                ),
+                {"p": pet, "u": uid},
+            )
+        await session.execute(
+            text(
+                "INSERT INTO care_events"
+                " (id, pet_id, actor_app_user_id, kind, occurred_at, client_event_id)"
+                " VALUES (CAST(:e AS uuid), CAST(:p AS uuid), CAST(:a AS uuid),"
+                "         'meal', NOW(), CAST(:k AS uuid))"
+            ),
+            {"e": event, "p": pet, "a": carer, "k": str(uuid.uuid4())},
+        )
+
+        async def deletable_by(who: str):
+            return await care_repo.get_deletable(
+                session, uuid.UUID(who), uuid.UUID(event)
+            )
+
+        assert await deletable_by(carer) is not None, "적은 사람이 자기 기록을 못 지운다"
+        assert await deletable_by(owner) is not None, "대표가 돌보미의 오기록을 못 지운다"
+        assert await deletable_by(other) is None, "다른 돌보미가 남의 기록을 지울 수 있다"
+        assert await deletable_by(stranger) is None, "남남이 우리 아이 기록을 지울 수 있다"
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()

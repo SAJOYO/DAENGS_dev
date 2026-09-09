@@ -59,7 +59,11 @@ def _photo_conflict(exc: pet_service.PetPhotoConflictError) -> HTTPException:
     )
 
 
-def _to_response(pet: Pet, primary_pet_id: uuid.UUID | None) -> PetResponse:
+def _to_response(
+    pet: Pet, primary_pet_id: uuid.UUID | None, viewer: uuid.UUID
+) -> PetResponse:
+    """`viewer` 는 **부른 사람**입니다 — 목록에 돌보미로 참여 중인 아이가 섞여 오므로
+    (docs/co-care.md §2), 그 아이의 대표가 나인지를 여기서 붙입니다."""
     return PetResponse(
         id=pet.id,
         name=pet.name,
@@ -75,6 +79,7 @@ def _to_response(pet: Pet, primary_pet_id: uuid.UUID | None) -> PetResponse:
         health_conditions=pet.health_conditions,
         medications=pet.medications,
         is_primary=pet.id == primary_pet_id,
+        is_owner=pet.app_user_id == viewer,
         updated_at=pet.updated_at,
         has_photo=pet.photo_storage_key is not None,
         photo_updated_at=pet.photo_updated_at,
@@ -86,14 +91,17 @@ async def list_pets(
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> PetListResponse:
-    """내 강아지 전부. 등록 순서대로입니다.
+    """**내가 돌보는 아이 전부.** 등록 순서대로입니다.
+
+    돌보미로 참여 중인 아이도 섞여 옵니다 (docs/co-care.md §2). 그 아이는 `is_owner` 가
+    false 라, 앱은 수정·배웅·삭제·사진 버튼을 가려야 합니다.
 
     `max_pets` 를 같이 보내는 이유는 앱이 `+` 버튼을 언제 감출지 정하기 때문입니다.
     앱에 숫자를 박아 두면 서버가 상한을 바꿀 때 갈라집니다.
     """
     pets, primary_id = await pet_service.list_pets(session, user.app_user_id)
     return PetListResponse(
-        pets=[_to_response(p, primary_id) for p in pets],
+        pets=[_to_response(p, primary_id, user.app_user_id) for p in pets],
         max_pets=pet_service.MAX_PETS_PER_USER,
     )
 
@@ -112,7 +120,7 @@ async def create_pet(
             status.HTTP_409_CONFLICT,
             f"강아지는 {pet_service.MAX_PETS_PER_USER}마리까지 등록할 수 있습니다.",
         ) from None
-    return _to_response(pet, primary_id)
+    return _to_response(pet, primary_id, user.app_user_id)
 
 
 # ⚠️ **`/{pet_id}` 보다 먼저 선언해야 한다.** FastAPI 는 등록 순서대로 매칭하므로,
@@ -147,7 +155,7 @@ async def update_pet(
     except pet_service.PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
     _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(pet, primary_id)
+    return _to_response(pet, primary_id, user.app_user_id)
 
 
 @router.delete("/{pet_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -222,7 +230,7 @@ async def confirm_photo(
     except StorageNotConfiguredError as exc:
         raise _photo_unavailable(exc) from None
     _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(pet, primary_id)
+    return _to_response(pet, primary_id, user.app_user_id)
 
 
 @router.get("/{pet_id}/photo", response_model=PetPhotoResponse)

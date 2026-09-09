@@ -71,8 +71,16 @@ class PetNotFoundError(Exception):
 async def list_pets(
     session: AsyncSession, app_user_id: uuid.UUID
 ) -> tuple[list[Pet], uuid.UUID | None]:
-    """내 강아지와 대표 id. 대표는 계정 쪽에 있어서 같이 읽어 옵니다."""
-    pets = await pet_repo.list_for_owner(session, app_user_id)
+    """**내가 돌보는 아이 전부**와 대표 id. 대표는 계정 쪽에 있어서 같이 읽어 옵니다.
+
+    구성원 기준입니다 (docs/co-care.md §2) — 대표만 돌려주면 돌보미의 `GET /app/pets`
+    가 비어서, 초대를 수락해도 앱에 그 아이가 아예 안 보입니다. 기록·조회는 열어 놓고
+    목록만 닫으면 기능이 있는데 못 찾는 상태가 됩니다.
+
+    누가 대표인지는 응답의 `is_owner` 로 갈립니다 — 앱이 수정·삭제 버튼을 그 값으로
+    가립니다 (`routers/pet.py::_to_response`).
+    """
+    pets = await pet_repo.list_accessible(session, app_user_id)
     user = await app_user_repo.get_by_id(session, app_user_id)
     return pets, (user.primary_pet_id if user else None)
 
@@ -87,7 +95,12 @@ async def create_pet(
     대표 id 를 같이 돌려주는 이유는 라우터가 응답을 만들 때 필요해서입니다 —
     안 주면 라우터가 목록을 한 번 더 읽어야 합니다.
     """
-    if await pet_repo.count_for_owner(session, app_user_id) >= MAX_PETS_PER_USER:
+    # **구성원 기준으로 셉니다** (docs/co-care.md §2). 상한은 남용 한도가 아니라 미니룸
+    # 렌더링 제약이라(위 MAX_PETS_PER_USER 주석), 세는 대상은 소유가 아니라 "내 방에 서는
+    # 아이 수" 여야 합니다. 소유로 세면 돌보미로 5마리를 받은 사람이 자기 강아지를 계속
+    # 등록해 방이 넘칩니다. **승계는 다릅니다** — 거기서 늘어나는 것은 소유뿐이라
+    # `count_for_owner` 로 봅니다 (Task 7).
+    if await pet_repo.count_accessible(session, app_user_id) >= MAX_PETS_PER_USER:
         raise PetLimitReachedError
 
     pet = Pet(app_user_id=app_user_id, **body.model_dump())

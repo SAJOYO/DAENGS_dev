@@ -56,6 +56,7 @@ async def database(monkeypatch):
                 "db/migrations/2026-09-09_walk_entry_pins.sql",
                 "db/migrations/2026-09-09_walk_entry_pins.sql",
                 "db/init/25_walk_entry_pins.sql",
+                "db/migrations/verify_2026-09-09_walk_entry_pins.sql",
             ]:
                 await raw.execute((ROOT / filename).read_text(encoding="utf-8"))
             await raw.execute("INSERT INTO app_users(id) VALUES ($1)", OWNER)
@@ -195,3 +196,74 @@ async def test_delete_before_upload_survives_late_creation_and_owner_cascade(dat
         await db.commit()
         for table in (WalkEntry, WalkEntryPin, WalkEntryMutation):
             assert await count(db, table) == 0
+
+
+async def test_concurrent_delete_and_pin_never_resurrect(database):
+    entry_id, spec = uuid.uuid4(), request()
+    await create(database, entry_id, spec)
+    final = PinWrite.model_validate(completion(spec.model_dump(mode="json")))
+
+    async def finish():
+        async with database() as db:
+            return await service.finalize_pin(db, OWNER, WALK, entry_id, final)
+
+    async def delete():
+        async with database() as db:
+            return await service.remove(db, OWNER, WALK, entry_id, 1, uuid.uuid4())
+
+    outcomes = await asyncio.gather(finish(), delete(), return_exceptions=True)
+    assert sum(isinstance(result, dict) for result in outcomes) == 1
+    assert any(
+        isinstance(result, (service.EntryConflict, service.EntryDeleted)) for result in outcomes
+    )
+    async with database() as db:
+        row = await service.entries.get_entry(db, WALK, entry_id)
+        await service.remove(db, OWNER, WALK, entry_id, row.revision, uuid.uuid4())
+    async with database() as db:
+        with pytest.raises(service.EntryDeleted):
+            await service.finalize_pin(db, OWNER, WALK, entry_id, final)
+        assert await count(db, WalkEntryMutation) == 0
+
+
+async def test_repeatable_read_list_does_not_mix_before_and_after_commit(database):
+    entry_id, spec = uuid.uuid4(), request()
+    await create(database, entry_id, spec)
+    async with database() as snapshot:
+        await snapshot.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+        first = await service.list_entries(snapshot, OWNER, WALK)
+        final = PinWrite.model_validate(completion(spec.model_dump(mode="json")))
+        async with database() as db:
+            await service.finalize_pin(db, OWNER, WALK, entry_id, final)
+        again = await service.list_entries(snapshot, OWNER, WALK)
+        assert again == first
+    async with database() as db:
+        assert (await service.list_entries(db, OWNER, WALK))["revision"] != first["revision"]
+
+
+async def test_raw_chunk_reference_uses_persisted_precision(database):
+    from daengs_backend.models.walk import WalkPointChunk
+    from daengs_backend.services.walk_chunk import encode_chunk
+    from tests.test_walk_entry_v2 import located, pin, raw_point
+
+    raw = raw_point(lat=37.5000004)
+    async with database() as db:
+        db.add(
+            WalkPointChunk(
+                walk_id=WALK, seq_from=0, seq_to=0, point_count=1, payload=encode_chunk([raw])
+            )
+        )
+        await db.commit()
+    spec = request().model_dump(mode="json")
+    spec["content"]["location"] = {
+        "lat": float(raw.lat),
+        "lng": 127.0,
+        "captured_at": raw.at.isoformat(),
+        "accuracy_m": 5,
+    }
+    spec["pin"] = located(pin(state="resolved"), method="observed", raw=raw)
+    spec["pin"]["reason"] = "direct_fix"
+    result = await create(database, uuid.uuid4(), EntryWriteV2.model_validate(spec))
+    assert result["pin"]["point"]["lat"] == float(raw.lat)
+    spec["pin"]["source_refs"][0]["client_seq"] = 1
+    with pytest.raises(service.EntryInvalid):
+        await create(database, uuid.uuid4(), EntryWriteV2.model_validate(spec))

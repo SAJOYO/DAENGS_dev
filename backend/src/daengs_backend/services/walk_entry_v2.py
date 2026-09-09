@@ -142,9 +142,8 @@ def compare_revision(row, expected):
 
 async def store(session, row, sidecar, request_hash):
     session.add(row)
-    await (
-        session.flush()
-    )  # Parent before sidecar/receipt; still the same transaction and walk lock.
+    # Parent before sidecar/receipt; still the same transaction and walk lock.
+    await session.flush()
     session.add(sidecar)
     value = response(row, sidecar)
     session.add(

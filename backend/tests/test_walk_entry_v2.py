@@ -408,3 +408,77 @@ def test_owner_boundary_before_entry_and_unauthenticated_capabilities(api):
     app = FastAPI()
     app.include_router(walk_entry_v2.capabilities_router)
     assert TestClient(app).get("/app/walks/entry-capabilities").status_code == 401
+
+
+def test_future_only_estimation_preserves_target_and_deadline(api):
+    client, db = api
+    request = body()
+    assert client.put(PATH, json=request).status_code == 200
+    raw = raw_point(seq=1, seconds=4)
+    db.points = [raw]
+    final = completion(request, located_pin=True)
+    located(final["pin"], method="estimated", raw=raw)
+    result = client.put(PATH + "/pin", json=final)
+    assert result.status_code == 200, result.text
+    assert result.json()["pin"]["target_at"] == result.json()["content"]["recorded_at"]
+    assert result.json()["content"]["location"] is None
+
+
+def test_finish_cannot_discard_existing_coordinate_or_accept_mock(api):
+    client, db = api
+    db.points = [raw_point()]
+    request = body()
+    located(request["pin"])
+    assert client.put(PATH, json=request).status_code == 200
+    final = completion(request)
+    final["pin"].update(method="none", point=None, source_refs=[])
+    assert client.put(PATH + "/pin", json=final).status_code == 422
+    db.points = [raw_point(mock=True)]
+    assert client.put(PATH + "/pin", json=completion(request, located_pin=True)).status_code == 422
+
+
+def test_note_creation_and_content_correction_keep_pin_separate(api):
+    client, _ = api
+    request = body()
+    request.update(
+        content={"kind": "note", "note": "  오늘의 기억  ", "recorded_at": AT.isoformat()}, pin=None
+    )
+    result = client.put(PATH, json=request)
+    assert result.status_code == 200, result.text
+    assert result.json()["content"]["note"] == "오늘의 기억"
+    assert result.json()["pin"] is None
+    request.update(expected_revision=1, mutation_id=str(uuid.uuid4()))
+    assert (
+        client.put(PATH, json=request).status_code == 422
+    )  # pin=null is still a forbidden update.
+    request.pop("pin")
+    request["content"]["note"] = "정정"
+    assert client.put(PATH, json=request).status_code == 200
+
+
+def test_v1_behavior_put_does_not_mutate_v2_record_and_unknown_pet_rejected(api):
+    client, _ = api
+    request = body()
+    bad = copy.deepcopy(request)
+    bad["content"]["pet_id"] = str(uuid.uuid4())
+    assert client.put(PATH, json=bad).status_code == 422
+    assert client.put(PATH, json=request).status_code == 200
+    v1 = copy.deepcopy(request)
+    v1.pop("pin")
+    v1["content"]["location"] = {"lat": 37.5, "lng": 127, "captured_at": AT.isoformat()}
+    assert client.put(V1, json=v1).status_code == 426
+
+
+def test_pin_revision_and_observation_window_are_checked(api):
+    client, db = api
+    request = body()
+    assert client.put(PATH, json=request).status_code == 200
+    final = completion(request)
+    final["expected_pin_revision"] = 0
+    assert client.put(PATH + "/pin", json=final).status_code == 409
+    raw = raw_point(seq=1, seconds=9)
+    db.points = [raw]
+    final = completion(request, located_pin=True)
+    located(final["pin"], method="estimated", raw=raw)
+    final["pin"]["computed_at"] = (AT + timedelta(seconds=10)).isoformat()
+    assert client.put(PATH + "/pin", json=final).status_code == 422

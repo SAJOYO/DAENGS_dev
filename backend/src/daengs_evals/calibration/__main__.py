@@ -64,15 +64,24 @@ def _load_axis(
 
 def cmd_review(args: argparse.Namespace) -> int:
     rows, b_rows, cells, profiles, _ = _load_axis(args.axis, args.label)
+    p = _paths(args.axis, args.label)
+    already: set[str] = set()
+    if args.round > 1 and p["labels"].exists():
+        from daengs_evals.calibration.labels import _read as _read_rows
+
+        already = {r["pair_id"] for r in _read_rows(p["labels"])}
+        suffix = f"_round{args.round}"
+        p["sheet"] = p["sheet"].with_name(p["sheet"].name.replace("__sheet", f"__sheet{suffix}"))
+        p["key"] = p["key"].with_name(p["key"].name.replace("__key", f"__key{suffix}"))
     selection = select_for_labeling(
         rows,
         b_rows=b_rows,
         n_contradiction=args.contradiction,
         n_random=args.random,
         n_repeats=args.repeats,
-        seed=args.seed,
+        seed=args.seed + args.round,
+        exclude=already,
     )
-    p = _paths(args.axis, args.label)
     n, r = export_sheet(
         selection,
         {x["pair_id"]: x for x in rows},
@@ -180,6 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     p_review.add_argument("--random", type=int, default=25)
     p_review.add_argument("--repeats", type=int, default=10)
     p_review.add_argument("--seed", type=int, default=20260909)
+    p_review.add_argument(
+        "--round", type=int, default=1, help="2 이상이면 앞 회차 라벨을 뺀 새 시트 (sheet_2 …)"
+    )
 
     p_label = sub.add_parser("label", help="터미널에서 한 쌍씩 0/1 을 받아 시트를 채운다")
     common(p_label)

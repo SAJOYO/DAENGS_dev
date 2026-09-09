@@ -266,9 +266,7 @@ SCREENING_ANCHORS: tuple[ScreeningAnchor, ...] = (
 )
 
 
-def evaluate_screening_anchor(
-    anchor: ScreeningAnchor, scores: Mapping[str, int]
-) -> dict[str, Any]:
+def evaluate_screening_anchor(anchor: ScreeningAnchor, scores: Mapping[str, int]) -> dict[str, Any]:
     failed = [str(exp) for exp in anchor.expectations if not exp.holds(int(scores[exp.item]))]
     return {
         "anchor_id": anchor.anchor_id,
@@ -303,8 +301,13 @@ def summarize(scores: Sequence[ScreeningScore]) -> dict[str, Any]:
     """계층 하나의 집계. **두 항목을 더하지 않는다** — `ScreeningScore.usable` 참고."""
     total = len(scores)
     if total == 0:
-        return {"count": 0, "usable": 0, "usable_rate": None, "branch_selected_mean": None,
-                "eligibility_claims": 0}
+        return {
+            "count": 0,
+            "usable": 0,
+            "usable_rate": None,
+            "branch_selected_mean": None,
+            "eligibility_claims": 0,
+        }
     usable = [s for s in scores if s.usable]
     return {
         "count": total,

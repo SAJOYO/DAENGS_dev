@@ -61,11 +61,21 @@ def _message(result: Any) -> str:
 async def run_question(adapter: LifeCapabilityAdapter, case: QuestionCase) -> dict[str, Any]:
     started = time.perf_counter()
     row: dict[str, Any] = {
-        "kind": "answer", "question_id": case.question_id, "stratum": case.stratum,
-        "status": "FAILED", "message": "", "results": [], "handoffs": [], "clarify": None, "plan": None, "error": None,
+        "kind": "answer",
+        "question_id": case.question_id,
+        "stratum": case.stratum,
+        "status": "FAILED",
+        "message": "",
+        "results": [],
+        "handoffs": [],
+        "clarify": None,
+        "plan": None,
+        "error": None,
     }
     try:
-        request = CapabilityRequest(capability=CapabilityName.LIFE, payload=LifePayload(question=case.query))
+        request = CapabilityRequest(
+            capability=CapabilityName.LIFE, payload=LifePayload(question=case.query)
+        )
         result = await adapter.run(request, request_id=f"life-direct-{case.question_id}")
         row["results"] = [result.model_dump(mode="json")]
         row["status"] = _STATUS.get(result.status, "FAILED")
@@ -77,14 +87,19 @@ async def run_question(adapter: LifeCapabilityAdapter, case: QuestionCase) -> di
 
 
 async def collect(
-    cases: Sequence[QuestionCase], *, adapter: LifeCapabilityAdapter, log: Callable[[str], None] = print
+    cases: Sequence[QuestionCase],
+    *,
+    adapter: LifeCapabilityAdapter,
+    log: Callable[[str], None] = print,
 ) -> list[dict[str, Any]]:
     rows = []
     for index, case in enumerate(cases, start=1):
         row = await run_question(adapter, case)
         rows.append(row)
         life = row["results"][0]["status"] if row["results"] else "-"
-        log(f"  [{index:>3}/{len(cases)}] {case.question_id:<40} {row['status']:<9} life={life} {row['latency_ms']:.0f}ms")
+        log(
+            f"  [{index:>3}/{len(cases)}] {case.question_id:<40} {row['status']:<9} life={life} {row['latency_ms']:.0f}ms"
+        )
     return rows
 
 
@@ -101,13 +116,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     chosen = cases[: args.limit] if args.limit else cases
     adapter = LifeCapabilityAdapter(ask=_fake_ask) if args.fake else LifeCapabilityAdapter()
     started = utc_now()
-    print(f"Life 직접 수집 · {len(chosen)}/{len(cases)}문항 · {'가짜' if args.fake else '실제'} 어댑터")
+    print(
+        f"Life 직접 수집 · {len(chosen)}/{len(cases)}문항 · {'가짜' if args.fake else '실제'} 어댑터"
+    )
     rows = asyncio.run(collect(chosen, adapter=adapter))
     meta = {
-        "label": args.label, "adapters": "life-direct", "flag": None,
-        "questions_file": args.questions.name, "questions_sha256": file_sha256(args.questions),
-        "question_count": len(rows), "requested_count": len(cases), "limited": bool(args.limit),
-        "started_at": started, "finished_at": utc_now(), "provenance": source_provenance(),
+        "label": args.label,
+        "adapters": "life-direct",
+        "flag": None,
+        "questions_file": args.questions.name,
+        "questions_sha256": file_sha256(args.questions),
+        "question_count": len(rows),
+        "requested_count": len(cases),
+        "limited": bool(args.limit),
+        "started_at": started,
+        "finished_at": utc_now(),
+        "provenance": source_provenance(),
     }
     out = args.out or answers_path(args.label)
     write_answers(out, rows, meta=meta)

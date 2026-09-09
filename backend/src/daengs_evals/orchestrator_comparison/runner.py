@@ -350,8 +350,7 @@ async def run_all(cases: list[GoldCase]) -> dict[str, list[CaseRun]]:
             print(
                 f"  [{index:>3}/{len(cases)}] {case.case_id:<24} {name:<10} "
                 f"{marker} status={run.status:<9} turns={run.turns} "
-                f"{run.performance.latency_ms:.0f}ms"
-                + (f"  {run.error}" if run.error else "")
+                f"{run.performance.latency_ms:.0f}ms" + (f"  {run.error}" if run.error else "")
             )
     return runs
 
@@ -379,9 +378,7 @@ def _explicit_signal_case_ids(cases: list[GoldCase]) -> set[str]:
     }
 
 
-def _divergence(
-    cases: list[GoldCase], runs: dict[str, list[CaseRun]]
-) -> dict[str, Any]:
+def _divergence(cases: list[GoldCase], runs: dict[str, list[CaseRun]]) -> dict[str, Any]:
     """두 구현이 **의미상** 갈린 케이스만 추린다.
 
     `RoutePlan` 을 그대로 비교하면 안 된다 — `model`·`prompt_version` 이 구현마다
@@ -397,8 +394,7 @@ def _divergence(
 
     gold_by_id = {case.case_id: case for case in cases}
     plans = {
-        name: {run.case_id: run.attempt.plan for run in runs[name]}
-        for name in IMPLEMENTATIONS
+        name: {run.case_id: run.attempt.plan for run in runs[name]} for name in IMPLEMENTATIONS
     }
 
     rows: list[dict[str, Any]] = []
@@ -412,8 +408,7 @@ def _divergence(
         gold_clarifies = gold_by_id[case.case_id].gold_route_plan.clarify is not None
         losers = [n for n in IMPLEMENTATIONS if not matches[n]]
         contract = gold_clarifies and any(
-            (plans[n][case.case_id] is not None and plans[n][case.case_id].requests)
-            for n in losers
+            (plans[n][case.case_id] is not None and plans[n][case.case_id].requests) for n in losers
         )
         if contract:
             contract_ids.append(case.case_id)
@@ -444,9 +439,7 @@ def _divergence(
     }
 
 
-def build_summary(
-    cases: list[GoldCase], runs: dict[str, list[CaseRun]]
-) -> dict[str, Any]:
+def build_summary(cases: list[GoldCase], runs: dict[str, list[CaseRun]]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "benchmark_id": "orchestrator-comparison-v1",
         "card": "#252",
@@ -488,9 +481,7 @@ def build_summary(
                 "max": round(max(latencies), 1) if latencies else None,
             },
             "runner_errors": [
-                {"case_id": run.case_id, "error": run.error}
-                for run in case_runs
-                if run.error
+                {"case_id": run.case_id, "error": run.error} for run in case_runs if run.error
             ],
         }
     return summary
@@ -552,9 +543,7 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         f"{impls[name]['llm_turns']['total']} (평균 {impls[name]['llm_turns']['mean']})"
         for name in IMPLEMENTATIONS
     )
-    latency_row = " | ".join(
-        f"{impls[name]['latency_ms']['mean']}" for name in IMPLEMENTATIONS
-    )
+    latency_row = " | ".join(f"{impls[name]['latency_ms']['mean']}" for name in IMPLEMENTATIONS)
 
     div = summary["divergence"]
     div_rows = [

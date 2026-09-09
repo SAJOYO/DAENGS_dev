@@ -1,6 +1,6 @@
 # 개체 적합성 — `pf_v1_1`
 
-판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T05:27:40+00:00
+판정 gpt-5.4-2026-03-05 · profile-fitness-diff-ko-v2a · 생성 gemini-3.1-flash-lite (general-answer-ko-v3) · 2026-09-09T05:28:48+00:00
 
 > ⚠ **잠정.** 사람 라벨 κ 게이트를 아직 못 지났다. 발표에 쓰는 숫자는 확정 표가 있는 것뿐이다.
 
@@ -22,8 +22,8 @@
 | 항목 | 평균 / 만점 | n | 분포 | 게이트 |
 | --- | --- | --- | --- | --- |
 | responsiveness | **보류** / 2 | 38 | {2: 21, 0: 14, 1: 3} | too_few_labels |
-| invariance | **보류** / 1 | 7 | {1: 4, 0: 3} | below_threshold |
-| no_fabrication | **보류** / 1 | 47 | {1: 47} | undefined |
+| invariance | **보류** / 1 | 7 | {1: 4, 0: 3} | too_few_labels |
+| no_fabrication | **보류** / 1 | 47 | {1: 47} | too_few_labels |
 
 ### 계층별
 
@@ -63,20 +63,18 @@
 - fabricated: 일치 1.00 · κ (single_category)
 - stereotype: 일치 1.00 · κ (single_category)
 
-## 사람 라벨 κ
+## 사람 라벨 κ (무작위 블록 — 게이트가 보는 값)
 
-라벨 36건
+라벨 24건
 
-- changed: κ 0.39 (n=36) 사람 주변 {1: 23, 0: 13}
-- profile: κ 0.57 (n=36) 사람 주변 {1: 21, 0: 15}
-- fabricated: κ 못 잼 (single_category) (n=36) 사람 주변 {0: 36}
-- stereotype: κ 0.79 (n=36) 사람 주변 {0: 33, 1: 3}
-- responsiveness: κ 0.48 (n=17) 사람 주변 {'2': 14, '0': 2, '1': 1}
+- changed: κ 0.49 (n=24) 사람 주변 {1: 15, 0: 9}
+- profile: κ 0.67 (n=24) 사람 주변 {1: 14, 0: 10}
+- fabricated: κ 못 잼 (single_category) (n=24) 사람 주변 {0: 24}
+- stereotype: κ 0.00 (n=24) 사람 주변 {0: 23, 1: 1}
+- responsiveness: κ 0.46 (n=15) 사람 주변 {'2': 12, '0': 2, '1': 1}
 
 ## 보류된 항목
 
-- no_fabrication: undefined: κ 정의 안 됨: single_category
-- responsiveness: too_few_labels: 라벨 17건 < 30
-- invariance: below_threshold: κ 0.39 < 0.6
-
-> 확정 v2 · 사람 라벨 37건 반영 · 가짜 어댑터 2쌍 제외
+- no_fabrication: too_few_labels: 라벨 24건 < 30
+- responsiveness: too_few_labels: 라벨 15건 < 30
+- invariance: too_few_labels: 라벨 24건 < 30

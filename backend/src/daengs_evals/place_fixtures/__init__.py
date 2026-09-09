@@ -176,9 +176,7 @@ def _walk_data(grade: str = "GOOD") -> dict[str, Any]:
             label="서교동 (측정소: 마포) 기준",
         ),
         generated_at=_AT,
-        now=VerdictOut(
-            at=_AT, grade=grade, dominant=[], axes=axes, unknown_axes=[], capped=False
-        ),
+        now=VerdictOut(at=_AT, grade=grade, dominant=[], axes=axes, unknown_axes=[], capped=False),
         timeline=[TimelinePoint(at=_AT + timedelta(hours=n), grade=grade) for n in range(3)],
         windows=[WindowOut(**{"from": _AT, "to": _AT + timedelta(hours=2), "grade": grade})],
         sources=[SourceOut(provider="kma", ok=True), SourceOut(provider="airkorea", ok=True)],

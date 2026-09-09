@@ -1,0 +1,13 @@
+{"kind": "meta", "created_at": "2026-09-09T05:28:44+00:00", "seed": 20260909}
+{"sheet_no": 1, "pair_id": "pf_swimming_01|ablation|none#0|brachy_adult#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 2, "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 3, "pair_id": "pf_joint_exercise_01|ablation|none#0|maltese_puppy#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 4, "pair_id": "pf_meal_amount_02|contrast|maltese_puppy#0|maltese_senior#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 5, "pair_id": "pf_water_intake_01|ablation|none#0|toy_puppy#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 6, "pair_id": "pf_alone_hours_01|contrast|maltese_puppy#0|maltese_senior#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 7, "pair_id": "pf_treat_amount_01|ablation|none#0|toy_puppy#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 8, "pair_id": "pf_nail_trim_02|contrast|toy_puppy#0|large_senior#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 9, "pair_id": "pf_toy_material_01|ablation|none#0|healthy_adult#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 10, "pair_id": "pf_appetite_drop_01|contrast|healthy_adult#0|chronic#0", "swapped": true, "block": "random", "reasons": []}
+{"sheet_no": 11, "pair_id": "pf_appetite_drop_01|ablation|none#0|healthy_adult#0", "swapped": false, "block": "random", "reasons": []}
+{"sheet_no": 12, "pair_id": "pf_walk_duration_02|contrast|toy_puppy#0|large_senior#0", "swapped": false, "block": "random", "reasons": []}

@@ -109,7 +109,9 @@ def parse_screening(raw: str | None) -> dict[str, Any] | None:
         return None
     verdict, _, days = raw.partition(":")
     if verdict not in SCREENING_VERDICTS:
-        raise ValueError(f"--screening 의 판정은 {'|'.join(SCREENING_VERDICTS)} 입니다: {verdict!r}")
+        raise ValueError(
+            f"--screening 의 판정은 {'|'.join(SCREENING_VERDICTS)} 입니다: {verdict!r}"
+        )
     if not days.isdigit():
         raise ValueError(f"--screening 의 경과일은 0 이상 정수입니다: {days!r}")
     return {"verdict": verdict, "days_ago": int(days)}

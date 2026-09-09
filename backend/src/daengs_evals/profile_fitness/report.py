@@ -348,8 +348,17 @@ def summarize(
         summary["variant_agreement"] = variant_agreement(rows, b_rows)
     agreements: dict[str, Any]
     if labels:
-        ha = human_agreement(rows, labels)
+        # 게이트는 **무작위 블록**으로 — 자기모순 블록은 판정기가 어려워한 것만 모아서 κ 가 과소추정된다
+        random_labels = {k: v for k, v in labels.items() if v.get("block") in (None, "random")}
+        ha = human_agreement(rows, random_labels or labels)
+        ha_all = human_agreement(rows, labels)
+        summary["calibration_all_blocks"] = {
+            "n": ha_all["n"],
+            "items": {k: {"kappa": v.value, "n": v.n} for k, v in ha_all["items"].items()},
+            "note": "합산 — 모집단 추정이 아니다",
+        }
         summary["calibration"] = {
+            "block": "random",
             "n": ha["n"],
             "items": {
                 k: {"kappa": v.value, "n": v.n, "undefined": v.undefined, "marginals": v.marginals}
@@ -475,7 +484,7 @@ def render_markdown(s: Mapping[str, Any]) -> str:
         lines.append("")
     if s.get("calibration"):
         c = s["calibration"]
-        lines += ["## 사람 라벨 κ", "", f"라벨 {c['n']}건", ""]
+        lines += ["## 사람 라벨 κ (무작위 블록 — 게이트가 보는 값)", "", f"라벨 {c['n']}건", ""]
         for item, d in c["items"].items():
             k = f"{d['kappa']:.2f}" if d["kappa"] is not None else f"못 잼 ({d['undefined']})"
             lines.append(

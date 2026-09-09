@@ -20,6 +20,7 @@ async def resolve_medical_places(
     limit: int,
     judge_at: datetime,
     name_query: str = "",
+    precise_order: bool = False,
 ) -> list[PlaceOut]:
     """같은 kind의 dev/임의 source를 섞지 않고 해당 MOIS endpoint만 읽는다."""
     try:
@@ -38,4 +39,5 @@ async def resolve_medical_places(
             name_query=name_query,
         )),
         source=source.source,
+        precise_order=precise_order,
     )

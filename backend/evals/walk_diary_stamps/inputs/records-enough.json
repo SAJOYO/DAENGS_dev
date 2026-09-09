@@ -1,0 +1,227 @@
+{
+  "format": "walk-diary-input-v1",
+  "owner_id": "3a58a0e5-4739-57e7-a090-81d6d092b28d",
+  "walk_id": "f7ebbe63-ed77-58ef-9754-d17cf9669a49",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "started_at": "2026-09-09T00:00:00Z",
+  "ended_at": "2026-09-09T00:40:00Z",
+  "pet_ids": [],
+  "evidence_origin": "mock",
+  "route": {
+    "status": "ready",
+    "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+    "input_fingerprint": "faa1c7ac0462145ffb84d7306360f9378ad087955fee35d83b87aae9a83e51c8",
+    "calculation_version": 1,
+    "reason": null
+  },
+  "records": [
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "fa02289f-746d-58d8-9f88-a3d203ce0fd3",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 1"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:02:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:02:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "df844f9b-5cb5-5710-b8fb-e90b1b7a354f",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 2"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:07:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:07:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "480aaee2-af88-5509-ab6d-4071db866eb9",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 3"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:12:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:12:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "283e76bd-ea4e-5c96-9406-662229528121",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 4"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:17:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:17:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "50f88113-6b3f-5a7b-93b4-3075aa1fbf38",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 5"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:22:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:22:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    },
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "69bcce19-8eab-5c10-9a07-198ae3ee2f15",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "합성 사용자 기록 6"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:27:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:27:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    }
+  ],
+  "photos_status": "complete",
+  "photo_manifest": {
+    "publisher_id": "dfdd43f7-aa13-5547-b396-d9bfa9771256",
+    "revision": 1
+  },
+  "observations": [
+    {
+      "id": "unused-dwell",
+      "version": "8a09a2bc3b176a0f526c06c96a5cefbef69c4ec26a3dcb74a1b7b4c1e6f51b74",
+      "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+      "kind": "observed_dwell",
+      "subject": "recording_device",
+      "action_meaning": "not_inferred",
+      "started_at": "2026-09-09T00:35:00Z",
+      "ended_at": "2026-09-09T00:36:00Z",
+      "anchor": {
+        "event_at": "2026-09-09T00:35:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:35:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 35,
+            "chain_index": 0,
+            "at": "2026-09-09T00:35:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "backgrounds": [],
+  "selected_background_ids": [],
+  "scene_policy_version": "records-first-v1",
+  "writing_policy_version": "diary-background-v1"
+}

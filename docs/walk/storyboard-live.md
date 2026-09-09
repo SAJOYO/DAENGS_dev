@@ -1,8 +1,9 @@
 # 실제 산책 → 장면 분석 → app 검토
 
 아래는 현재 서버의 규칙 기반 관측 분석 구현을 설명한다. v3의 대표/장면 제목 생성은
-[walk-diary-titles.md](walk-diary-titles.md)를 함께 본다.
-자동 장면의 원본 관측 위치를 전달하는 v4는 [walk-scene-anchors.md](walk-scene-anchors.md)를 본다.
+[diary-titles.md](diary-titles.md)를 함께 본다.
+사용자 기록 중심의 새 일기 형식과 배경·제목 작성은 [diary-generation.md](diary-generation.md)를 본다.
+자동 장면의 원본 관측 위치를 전달하는 v4는 [scene-anchors.md](scene-anchors.md)를 본다.
 전체 이해 → 장면별 갱신 → 재검토 → 검토본 → 선택적 일기는 geo에서 실험 중이며,
 설계와 구현 범위의 기준은 DAENGS_geo `docs/explorations/walk/diary-storyboard-plan.md`다.
 

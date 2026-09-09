@@ -4,6 +4,9 @@
 #
 #   PROJECT=my-proj VM_INTERNAL_IP=10.178.0.2 bash infra/gcp/pipeline.sh
 #
+# VM 이름·존은 기본값이 있다 (`VM_NAME`·`VM_ZONE`). 관리자 트리거가 설 수 있는 상태인지
+# **확인만** 하는 데 쓴다 — 아래 "VM 액세스 범위" 절. `SKIP_SCOPE_CHECK=1` 로 끌 수 있다.
+#
 # 사람이 먼저 할 것 (infra/gcp/README.md): API 켜기 · Secret 값 넣기 · 초기 사본 업로드.
 # `gcloud config set project` 로 사용자의 기본 프로젝트를 바꾸지 않는다 — `CLOUDSDK_CORE_PROJECT`
 # 환경변수를 이 스크립트 프로세스에만 export 한다. 모든 gcloud 명령이 이 변수를 본다.
@@ -17,6 +20,8 @@ export MSYS2_ARG_CONV_EXCL="--add-volume-mount"
 
 : "${PROJECT:?GCP 프로젝트 id}"
 : "${VM_INTERNAL_IP:?pgvector 가 있는 VM 의 내부 IP (gcloud compute instances list)}"
+VM_NAME="${VM_NAME:-daengs}"    # 관리자 트리거를 거는 backend 가 도는 VM (범위 확인에만 쓴다)
+VM_ZONE="${VM_ZONE:-asia-northeast3-c}"
 REGION=asia-northeast3          # 서울 — 버킷·refresh 잡·Scheduler
 GPU_REGION=asia-southeast1      # 싱가포르 — Cloud Run Jobs 의 L4 가 있는 가장 가까운 리전
 BUCKET="daengs-corpus"          # 버킷 이름은 프로젝트가 아니라 전역이다 — create 가 409/403 이면
@@ -143,6 +148,48 @@ gcloud run jobs deploy corpus-embed-full --region="${GPU_REGION}" --image="${IMA
 echo "== Scheduler (매일 04:00 KST → corpus-refresh)"
 gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
   --member="serviceAccount:${SA_EMAIL}" --role=roles/run.invoker >/dev/null
+
+echo "== 관리자 콘솔 트리거(#326) — VM 의 backend 가 이 계정으로 잡을 실행·조회한다"
+# VM 은 기본 컴퓨트 SA(=BUILD_SA, 위에서 이미 계산)로 메타데이터 서버 인증을 쓴다. 이 바인딩이
+# README 산문에만 있으면 teardown 뒤 재배포 때 조용히 빠진다 — 여기 스크립트에 있어야
+# `pipeline.sh` 한 번으로 항상 같이 생긴다. add-iam-policy-binding 은 멱등이다.
+gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
+  --member="serviceAccount:${BUILD_SA}" --role=roles/run.invoker >/dev/null
+gcloud run jobs add-iam-policy-binding corpus-refresh --region="${REGION}" \
+  --member="serviceAccount:${BUILD_SA}" --role=roles/run.viewer >/dev/null
+
+# ── VM 액세스 범위 — **역할만으로는 안 선다** (2026-09-09 실측, #326 후속)
+#
+# 위 바인딩이 다 성공해도 버튼이 503 이고 상태 페이지가 down 일 수 있다. 막는 것이 역할이
+# 아니라 **인스턴스에 박힌 OAuth 범위**이기 때문이다 — 메타데이터 서버가 내주는 토큰의 범위에
+# run.googleapis.com 이 없으면 IAM 을 아무리 줘도 못 부른다:
+#
+#     PermissionDenied: 403 Request had insufficient authentication scopes.
+#     reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT"  method: google.cloud.run.v2.Jobs.GetJob
+#
+# GCE 기본값(devstorage.read_only·logging.write·monitoring.write·…)에는 안 들어 있다.
+#
+# ⚠ **여기서 고치지 않는다.** `set-service-account` 는 인스턴스가 TERMINATED 여야 먹으므로
+# 고치는 것은 운영을 몇 분 내리는 일이고, 배포 스크립트가 말없이 할 일이 아니다. 감지해서
+# 알려 주는 데까지다. 그래서 실패로 끝내지도 않는다 — 첫 설치 때는 VM 이 아직 없을 수 있다.
+SCOPE_WARNING=""
+if [ -n "${SKIP_SCOPE_CHECK:-}" ]; then
+  echo "== VM 액세스 범위 확인 건너뜀 (SKIP_SCOPE_CHECK)"
+else
+  echo "== VM 액세스 범위 확인 — ${VM_NAME}/${VM_ZONE}"
+  VM_SCOPES="$(gcloud compute instances describe "${VM_NAME}" --zone="${VM_ZONE}" \
+                 --format='value(serviceAccounts[0].scopes)' 2>/dev/null || true)"
+  case "${VM_SCOPES}" in
+    *cloud-platform*)
+      echo "   ok — cloud-platform 이 있다" ;;
+    "")
+      echo "   (VM 을 못 찾았다 — 아직 안 세웠거나 이름·존이 다르다. VM_NAME·VM_ZONE 으로 준다)" ;;
+    *)
+      SCOPE_WARNING="yes"
+      echo "   🔴 cloud-platform 이 없다 — 관리자 트리거가 안 선다" ;;
+  esac
+fi
+
 JOB_URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/corpus-refresh:run"
 if gcloud scheduler jobs describe corpus-refresh-daily --location="${REGION}" >/dev/null 2>&1; then
   gcloud scheduler jobs update http corpus-refresh-daily --location="${REGION}" \
@@ -165,6 +212,26 @@ if [ -n "${CHANNEL:-}" ]; then
   else
     echo "(알림 정책 'corpus job failed' 이미 있음)"
   fi
+fi
+
+# 경고를 마지막에 **한 번 더** 찍는다 — 이 스크립트는 로그가 길어서 중간에 낸 것은 묻힌다.
+# 실패로 끝내지 않는 대신(위 주석) 사람 눈에 남는 자리를 여기로 잡았다.
+if [ -n "${SCOPE_WARNING}" ]; then
+  cat >&2 <<MSG
+
+🔴 확인 필요 — VM(${VM_NAME}) 의 액세스 범위에 cloud-platform 이 없다.
+   위에서 건 IAM 역할은 맞지만 **관리자 콘솔의 크롤 버튼은 503 이고 상태 페이지는 down** 이다
+   (ACCESS_TOKEN_SCOPE_INSUFFICIENT). 범위는 인스턴스를 멈춰야 바뀐다 — 운영이 몇 분 내려간다:
+
+     gcloud compute instances stop ${VM_NAME} --zone=${VM_ZONE}
+     gcloud compute instances set-service-account ${VM_NAME} --zone=${VM_ZONE} \\
+       --service-account=${BUILD_SA} --scopes=https://www.googleapis.com/auth/cloud-platform
+     gcloud compute instances start ${VM_NAME} --zone=${VM_ZONE}
+
+   ⚠ 멈추기 전에 **외부 IP 가 예약된 고정 주소인지** 볼 것 — 임시 IP 면 정지만으로 주소를 잃고
+     DNS 가 끊긴다:  gcloud compute addresses list
+   자세한 것은 infra/gcp/README.md 의 "IAM 만으로는 안 된다".
+MSG
 fi
 
 echo "끝. 다음: infra/gcp/README.md 의 '초기 사본' 과 '검증'."

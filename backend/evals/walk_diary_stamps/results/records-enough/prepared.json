@@ -1,0 +1,137 @@
+{
+  "format": "walk-diary-prepared-v1",
+  "policy": {
+    "version": "records-first-v1",
+    "target_scene_count": 5,
+    "separation_s": 20.0,
+    "place_slots": 1,
+    "space_slots": 3,
+    "environment_slots": 1,
+    "time_slots": 1
+  },
+  "plan": {
+    "format": "walk-diary-plan-v1",
+    "input_revision": "292e830d25033a0dd833e5e0b71b0db80d910e4d9366e0d269697cf1b7e5cac0",
+    "target_scene_count": 5,
+    "preparation_policy": {
+      "version": "records-first-v1",
+      "target_scene_count": 5,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "scenes": [
+      {
+        "id": "stamp:f94357cd050e663ef8ce50f9979f9ef85dff6ec7bb2769b57a5cf1a83fb4dc44",
+        "core": {
+          "identity": "walk_entry:fa02289f-746d-58d8-9f88-a3d203ce0fd3",
+          "version": "3d4e9cd9e7febb879ef3d9530549ad1cbbb001717ee920c414ae61da5918b4f6"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:3b652f949c34183c167f2a03ecfc610c33a7af1b6f0ae7f2724c2db007a8e8a6",
+        "core": {
+          "identity": "walk_entry:df844f9b-5cb5-5710-b8fb-e90b1b7a354f",
+          "version": "8048a3d173f22d619bfc649ff405fe8521d12c9213aa25830cd410f5161aeee0"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:6d33ba409b6cb66e628a58e896222d7255593a60d0276559ba0fb15ec2a24cff",
+        "core": {
+          "identity": "walk_entry:480aaee2-af88-5509-ab6d-4071db866eb9",
+          "version": "5387b0311427bd8eb6d58b9b459253c199f30752f8b53affa612b34e64dd82e6"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:90d1cbe701ba3e200f5a16e6f2375491855b38358dee883afff68d9570ed72bf",
+        "core": {
+          "identity": "walk_entry:283e76bd-ea4e-5c96-9406-662229528121",
+          "version": "db18080b4b82b84133f8561d75cd774a89b3da8c1e0280205e028149cbd0ee4a"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:f006b52387933085861c8a0893008cb44569e0756590d06f8d7d5c6379798a7d",
+        "core": {
+          "identity": "walk_entry:50f88113-6b3f-5a7b-93b4-3075aa1fbf38",
+          "version": "9be08566beaf186740cb6a541bd8bfc59a788d2f8d6e087a2593798e5d5849d1"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:e228e11168a36b41c9042c29e578e8fcc8ef837e5d2dfd9ee4c47bd75069c828",
+        "core": {
+          "identity": "walk_entry:69bcce19-8eab-5c10-9a07-198ae3ee2f15",
+          "version": "105f30cea4415fc5493ce99345c23e9a5dc20a90b8a214ad73cdd8460d511d53"
+        },
+        "background": []
+      }
+    ]
+  },
+  "core_decisions": [
+    {
+      "material": {
+        "identity": "walk_entry:283e76bd-ea4e-5c96-9406-662229528121",
+        "version": "db18080b4b82b84133f8561d75cd774a89b3da8c1e0280205e028149cbd0ee4a"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:480aaee2-af88-5509-ab6d-4071db866eb9",
+        "version": "5387b0311427bd8eb6d58b9b459253c199f30752f8b53affa612b34e64dd82e6"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:50f88113-6b3f-5a7b-93b4-3075aa1fbf38",
+        "version": "9be08566beaf186740cb6a541bd8bfc59a788d2f8d6e087a2593798e5d5849d1"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:69bcce19-8eab-5c10-9a07-198ae3ee2f15",
+        "version": "105f30cea4415fc5493ce99345c23e9a5dc20a90b8a214ad73cdd8460d511d53"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:df844f9b-5cb5-5710-b8fb-e90b1b7a354f",
+        "version": "8048a3d173f22d619bfc649ff405fe8521d12c9213aa25830cd410f5161aeee0"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:fa02289f-746d-58d8-9f88-a3d203ce0fd3",
+        "version": "3d4e9cd9e7febb879ef3d9530549ad1cbbb001717ee920c414ae61da5918b4f6"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "observation:unused-dwell",
+        "version": "8459577919e1a9b916a0558a2f7baebaba795dd1de031825596d98fc7002321e"
+      },
+      "reason": "user_target_met"
+    }
+  ],
+  "background_decisions": [],
+  "counts": {
+    "target": 5,
+    "user_records": 6,
+    "initial_deficit": 0,
+    "supplemented": 0,
+    "remaining_deficit": 0,
+    "total": 6
+  },
+  "limits": []
+}

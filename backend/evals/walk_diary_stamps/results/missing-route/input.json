@@ -1,0 +1,51 @@
+{
+  "format": "walk-diary-input-v1",
+  "owner_id": "3a58a0e5-4739-57e7-a090-81d6d092b28d",
+  "walk_id": "f7ebbe63-ed77-58ef-9754-d17cf9669a49",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "started_at": "2026-09-09T00:00:00Z",
+  "ended_at": "2026-09-09T00:40:00Z",
+  "pet_ids": [],
+  "evidence_origin": "mock",
+  "route": {
+    "status": "unavailable",
+    "analysis_id": null,
+    "input_fingerprint": null,
+    "calculation_version": null,
+    "reason": "analysis_not_finalized"
+  },
+  "records": [
+    {
+      "ref": {
+        "store": "walk_entry",
+        "id": "c99a3d4d-693e-59be-9275-fe85393de44e",
+        "version": "1",
+        "version_kind": "revision",
+        "pin_revision": null
+      },
+      "deleted": false,
+      "content": {
+        "kind": "note",
+        "text": "위치 없이 남긴 합성 메모"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:10:00Z",
+        "time_basis": "recorded_at",
+        "point": null,
+        "location_at": null,
+        "accuracy_m": null,
+        "position_state": "unlocated",
+        "method": "none",
+        "source_fixes": []
+      },
+      "pin_payload": null
+    }
+  ],
+  "photos_status": "not_available",
+  "photo_manifest": null,
+  "observations": [],
+  "backgrounds": [],
+  "selected_background_ids": [],
+  "scene_policy_version": "records-first-v1",
+  "writing_policy_version": "diary-background-v1"
+}

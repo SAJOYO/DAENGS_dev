@@ -50,7 +50,7 @@
   `medical_terms_v1_curated.json`(코퍼스 안, v1 에서 사람이 승인한 50개). 합치는 곳은
   `guardrails.medical.load_serving_medical_terms()` 한 군데다. **`medical_terms_v1.json`
   자체는 서빙에 싣지 마라** — `curation: none` 이라 행동 어휘가 섞여 있고, 통째로 실으면
-  평범한 훈련 질의가 7/7 막힌다. 이유는 `HISTORY.md` 12절, 결정은 `docs/decisions.md` D-063.
+  평범한 훈련 질의가 7/7 막힌다. 이유는 `HISTORY.md` 12절, 결정은 `docs/decisions.md` D-064.
 
 ## 환경 메모
 

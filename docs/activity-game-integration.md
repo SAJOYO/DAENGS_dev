@@ -12,7 +12,7 @@ Geo는 가짜 보호자·강아지와 독립 PostgreSQL로 계약을 검증하�
 - 선행 PR: [DEV #260](https://github.com/SAJOYO/DAENGS_dev/pull/260), 실제 점령 시도·현재 소유권.
 - 코어/저장 참조: [Geo #249](https://github.com/rkbuhtig/DAENGS_geo/pull/249).
 - DEV 연결: [#281](https://github.com/SAJOYO/DAENGS_dev/pull/281).
-- 선행 배포 절차: [territory-ownership-api.md](territory-ownership-api.md).
+- 선행 배포 절차: [territory/ownership-api.md](territory/ownership-api.md).
 
 #260은 dev에 병합되었으며, 이 PR도 최신 dev를 반영하고 base를 dev로 변경했다.
 운영 적용에는 #260 SQL과 이 문서의 후속 SQL이 모두 필요하다.

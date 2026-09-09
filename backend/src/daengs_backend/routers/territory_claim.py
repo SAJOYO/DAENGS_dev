@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.core.database import get_session
+from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.territory_claim import (
     ChallengeRequest,
@@ -19,6 +19,8 @@ from daengs_backend.schemas.territory_claim import (
     SiteId,
     SiteResponse,
 )
+from daengs_backend.schemas.territory_owner import TerritoryOwnerSummary
+from daengs_backend.services import activity, territory_owner
 from daengs_backend.services import territory_ownership as service
 from daengs_backend.services.activity_core.game_policy import GameError
 from daengs_backend.services.territory_site_lookup import (
@@ -30,6 +32,15 @@ from daengs_backend.services.territory_site_lookup import (
 router = APIRouter(prefix="/app/territory", tags=["territory-ownership"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Lookup = Annotated[TerritorySiteLookup, Depends(get_territory_site_lookup)]
+Snapshot = Annotated[AsyncSession, Depends(get_snapshot_session)]
+
+
+@router.get("/owner-summary", response_model=TerritoryOwnerSummary)
+async def owner_summary(site_id: SiteId, user: CurrentAppUser, db: Snapshot):
+    try:
+        return await territory_owner.summary(db, user.app_user_id, site_id)
+    except activity.ActivityDisabled:
+        raise HTTPException(503, {"code": "activity_disabled"}) from None
 
 
 async def _call(operation):

@@ -64,6 +64,106 @@ CUDA 15~23분이다.
 `gcloud builds submit .` 이 올리는 파일은 루트 `.gcloudignore` 가 정한다 — 이미지에 안 들어가는
 것을 새로 넣으면 거기도 열어야 한다.
 
+## 관리자 트리거 (#326)
+
+관리자 콘솔의 크롤 버튼은 집 서버에서는 Celery 를 부르지만, GCP 에서는 `services/crawl.py`
+가 이 잡(`corpus-refresh`)을 직접 실행한다 — 크롤만이 아니라 적재까지 간다. 인증은 VM 의
+기본 컴퓨트 서비스 계정 + 메타데이터 서버다(키 파일 없음).
+
+**`pipeline.sh` 가 그 계정에 잡 실행 권한을 이미 준다** (Scheduler 바인딩 바로 다음, "관리자
+콘솔 트리거" 절) — 처음에는 이 README 산문에만 있어서 teardown 뒤 재배포하면 조용히
+빠졌다(#326 최종 리뷰). 손으로 다시 줄 일은 없어야 하지만, 스크립트가 하는 일은 이렇다:
+
+```bash
+PROJECT_NUMBER="$(gcloud projects describe daengs --format='value(projectNumber)')"
+VM_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"   # = pipeline.sh 의 BUILD_SA
+gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \
+  --member="serviceAccount:${VM_SA}" --role=roles/run.invoker
+gcloud run jobs add-iam-policy-binding corpus-refresh --region=asia-northeast3 \
+  --member="serviceAccount:${VM_SA}" --role=roles/run.viewer
+```
+
+`run.invoker` 가 실행을, `run.viewer` 가 "끝나지 않은 실행이 있나" 조회를 위한 것이다 —
+버튼을 다시 눌러도 새로 안 띄우고 그 실행 이름을 돌려주는 것과, 상태 페이지의 "크롤" 항목이
+둘 다 이 조회를 쓴다.
+
+### 🔴 IAM 만으로는 안 된다 — VM 의 **액세스 범위**도 봐야 한다 (2026-09-09 실측)
+
+역할을 맞게 줘도 상태 페이지가 이렇게 죽는다:
+
+```
+PermissionDenied: 403 Request had insufficient authentication scopes.
+reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+service: run.googleapis.com  method: google.cloud.run.v2.Jobs.GetJob
+```
+
+**메타데이터 서버가 내주는 토큰의 범위(OAuth scope)가 인스턴스에 박혀 있기 때문이다.** GCE 기본값은
+`devstorage.read_only`·`logging.write`·`monitoring.write`·`service.management.readonly`·
+`servicecontrol`·`trace.append` 뿐이라 `run.googleapis.com` 이 아예 안 들어간다. **범위에 없으면
+IAM 을 아무리 줘도 못 부른다** — 역할과 범위는 다른 층이고, 위의 `add-iam-policy-binding` 은
+범위를 안 건드린다.
+
+확인:
+
+```bash
+gcloud compute instances describe daengs --zone=asia-northeast3-c \
+  --format='value(serviceAccounts[0].scopes)'
+```
+
+**`pipeline.sh` 가 이것을 확인하고 경고한다** (`VM_NAME`·`VM_ZONE` 기본값, `SKIP_SCOPE_CHECK=1` 로 끔).
+**고치지는 않는다** — 아래처럼 인스턴스를 멈춰야 해서, "여러 번 돌려도 안전한" 배포 스크립트가
+말없이 할 일이 아니다.
+
+#### 🟢 애초에 안 겪는 법 — **VM 을 만들 때 범위를 준다**
+
+범위는 **만들 때는 자유롭게 정하고, 나중에 바꾸려면 멈춰야 한다.** 그러니 새로 세울 때 주면
+아래 정지·재기동이 통째로 필요 없다:
+
+```bash
+gcloud compute instances create daengs --zone=asia-northeast3-c \
+  --scopes=https://www.googleapis.com/auth/cloud-platform \
+  ...나머지 옵션
+```
+
+⚠ **콘솔에서 만들면 기본 범위가 그대로 박힌다** — 지금 VM 이 그렇게 만들어졌고, 그래서 2026-09-09 에
+운영을 멈춰야 했다. **VM 생성은 이 저장소에 없다**(사람이 콘솔에서 만들었고 `pipeline.sh` 는 그 VM 의
+내부 IP 를 받아 쓸 뿐이다). `docs/deploy/roadmap.md` §8 로 GCP 를 지우고 다시 세우는 날,
+**이 한 줄을 빠뜨리면 같은 일을 반복한다.**
+
+⚠ **고치려면 인스턴스를 멈춰야 한다** — `set-service-account` 는 `TERMINATED` 상태에서만 먹는다.
+즉 **운영 전체가 몇 분 내려간다.**
+
+```bash
+gcloud compute instances stop  daengs --zone=asia-northeast3-c
+gcloud compute instances set-service-account daengs --zone=asia-northeast3-c \
+  --service-account=584617819762-compute@developer.gserviceaccount.com \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
+gcloud compute instances start daengs --zone=asia-northeast3-c
+```
+
+- **외부 IP 는 안 바뀐다** — `daengs-ip` 로 예약된 고정 주소다 (`gcloud compute addresses list`).
+  임시 IP 였다면 정지만으로 주소를 잃고 DNS 가 끊긴다. 멈추기 전에 반드시 확인할 것.
+- **되살아나는 것은 자동이다** — docker 가 systemd `enabled` 이고 컨테이너가 `restart: unless-stopped`,
+  `pm2-daengs` 도 `enabled` 다. 다만 backend 가 뜨며 **임베딩 모델을 다시 올리는 데 75초**쯤 걸리고
+  그동안 `/life/ask` 는 503 이다.
+
+VM 의 `backend/.env` 에 네 줄을 더한다 (집 서버는 그대로 비워 둔다 — 기본이 `celery`):
+
+```
+DAENGS_CRAWL_BACKEND=cloudrun
+DAENGS_GCP_PROJECT=daengs
+DAENGS_GCP_REGION=asia-northeast3
+DAENGS_CORPUS_JOB=corpus-refresh
+```
+
+(`GCP_REGION`·`CORPUS_JOB` 은 기본값이 위와 같아 사실 안 적어도 되지만, 적어 두면 리전이나
+잡 이름을 바꿀 때 여기부터 보게 된다.)
+
+`backend/.env` 를 고쳤으면 `docker compose restart` 로는 반영되지 않는다 — `env_file` 은
+컨테이너를 만들 때 굳는다. `docker compose up -d backend` 로 다시 만들되, 그 전에 셸에
+`GEMINI_API_KEY` 를 올려야 한다(CLAUDE.md) — 빈 셸에서 `up -d` 를 치면 빈 키가 박혀 의미
+라우터가 죽는다.
+
 ## 자주 걸리는 것
 
 - **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가

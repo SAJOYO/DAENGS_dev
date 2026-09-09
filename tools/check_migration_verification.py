@@ -209,6 +209,14 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-08', 'walk_entry_contexts',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
+         'walk_entry_context_jobs', [
+            'DROP TRIGGER walk_entry_contexts_deleted ON walk_entries',
+            'ALTER TABLE walk_entries DISABLE TRIGGER walk_entry_contexts_deleted',
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_walk_id_entry_id_fkey',
+            'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_job_id_fkey',
+         ]),
         # gait_records.quality_tier CHECK 를 good/low → good/ok/low 로. 픽스처는 **9/2 의 옛 표**
         # 그대로(prerequisites 로 그 마이그레이션 텍스트를 재사용) — 그래야 이 마이그레이션이
         # 실제로 하는 일(옛 제약을 떼고 새 제약을 거는 것)을 그대로 밟는다.

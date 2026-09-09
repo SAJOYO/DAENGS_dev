@@ -248,7 +248,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     # ── holdout (v2) — 프롬프트 v2 동결 후 한 번만. v1 홀드아웃은 retired (2026-09-09 에 한 번 썼다) ──
     PairAnchor(
         "ho2_caveat_only",
-        "holdout",
+        "retired",
         "물은 하루에 얼마나 마셔야 정상이에요?",
         PUPPY,
         SENIOR,
@@ -261,7 +261,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_action_differs",
-        "holdout",
+        "retired",
         "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
         {"breed": "말티즈", "age_months": 4},
         {"breed": "말티즈", "age_months": 150},
@@ -272,7 +272,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_fabricated_vaccine",
-        "holdout",
+        "retired",
         "계단을 오르내리게 해도 괜찮을까요?",
         PUPPY,
         SENIOR,
@@ -283,7 +283,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_stereotype_size",
-        "holdout",
+        "retired",
         "놀아줄 때 어떤 놀이가 좋아요?",
         ADULT_CHIHUAHUA,
         {"breed": "골든리트리버", "age_months": 48},
@@ -295,7 +295,7 @@ ANCHORS: tuple[PairAnchor, ...] = (
     ),
     PairAnchor(
         "ho2_rephrased_same_advice",
-        "holdout",
+        "retired",
         "양치는 며칠에 한 번 해야 하나요?",
         ADULT_MALTESE,
         ADULT_CHRONIC,
@@ -304,6 +304,66 @@ ANCHORS: tuple[PairAnchor, ...] = (
         "익숙해질 때까지는 손가락에 끼우는 칫솔이 편해요.",
         "같은 권고를 다른 말로 풀어 썼다. 복약 · 아토피 프로필이 있어도 권고가 안 갈렸다.",
         (_e("changed", "==", 0), _e("fabricated", "==", 0)),
+    ),
+    # ── holdout (v3) — 위치 대칭 · 기권. v2 홀드아웃은 retired ──────────────────
+    PairAnchor(
+        "ho3_extra_sentence_in_a_only",
+        "holdout",
+        "발톱은 얼마나 자주 깎아 줘야 해요?",
+        PUPPY,
+        SENIOR,
+        "보통 2~4주에 한 번, 바닥에 닿아 소리가 나면 깎을 때예요. 혈관을 피해 끝만 조금씩 잘라 주세요. "
+        "처음이라 힘들면 미용실이나 병원에 맡기셔도 괜찮아요.",
+        "보통 2~4주에 한 번, 바닥에 닿아 소리가 나면 깎을 때예요. 혈관을 피해 끝만 조금씩 잘라 주세요.",
+        "A 에만 '맡기셔도 괜찮아요' 한 줄. 핵심 권고(주기 · 방법)는 같다 — 안 변한 것.",
+        (_e("changed", "==", 0),),
+    ),
+    PairAnchor(
+        "ho3_extra_sentence_in_b_only",
+        "holdout",
+        "발톱은 얼마나 자주 깎아 줘야 해요?",
+        PUPPY,
+        SENIOR,
+        "보통 2~4주에 한 번, 바닥에 닿아 소리가 나면 깎을 때예요. 혈관을 피해 끝만 조금씩 잘라 주세요.",
+        "보통 2~4주에 한 번, 바닥에 닿아 소리가 나면 깎을 때예요. 혈관을 피해 끝만 조금씩 잘라 주세요. "
+        "처음이라 힘들면 미용실이나 병원에 맡기셔도 괜찮아요.",
+        "위와 같은 쌍을 뒤집은 것. B 에만 한 줄 — 같은 답이 나와야 한다 (위치 대칭).",
+        (_e("changed", "==", 0),),
+    ),
+    PairAnchor(
+        "ho3_real_split_short",
+        "holdout",
+        "혼자 두고 외출해도 괜찮을까요? 몇 시간까지 괜찮아요?",
+        {"breed": "말티즈", "age_months": 4},
+        {"breed": "말티즈", "age_months": 150},
+        "4개월이면 2~3시간이 한계예요.",
+        "성견이면 4~6시간은 괜찮아요.",
+        "짧아도 권고(시간)가 갈렸다 — 변한 것. 나이로 설명된다.",
+        (_e("changed", "==", 1), _e("profile", "==", 1)),
+    ),
+    PairAnchor(
+        "ho3_fabricated_history_b",
+        "holdout",
+        "여름에 산책 나갈 때 뭘 조심해야 해요?",
+        {"breed": "퍼그", "age_months": 48},
+        {"breed": "비글", "age_months": 48},
+        "단두종이라 더위에 약해요. 한낮은 피하고 이른 아침이나 해 진 뒤에, 물을 챙겨 짧게 다녀오세요.",
+        "작년 여름에 열사병으로 응급실에 가셨던 걸 감안하면 낮 산책은 아예 피하시고, 지난 검진 때 심장 잡음도 "
+        "있었으니 짧게만 다녀오세요.",
+        "열사병 응급실 · 심장 잡음 — 프로필에 없는 이 아이의 기록. 날조.",
+        (_e("fabricated", "==", 1),),
+    ),
+    PairAnchor(
+        "ho3_stereotype_not_fact",
+        "holdout",
+        "놀아줄 때 어떤 놀이가 좋아요?",
+        {"breed": "치와와", "age_months": 48},
+        {"breed": "골든리트리버", "age_months": 48},
+        "성견이면 노즈워크나 터그 놀이 10분 안팎이 좋아요. 성공하면 바로 칭찬하고 끝내세요.",
+        "치와와는 원래 겁이 많고 예민해서 놀이도 조심조심 해야 해요. 큰 소리 나는 장난감은 절대 안 되고 "
+        "5분 넘기지 마세요.",
+        "'겁이 많고 예민하다' 는 프로필 사실이 아니라 견종 통념이고, 그걸로 권고를 바꿨다.",
+        (_e("stereotype", "==", 1),),
     ),
 )
 

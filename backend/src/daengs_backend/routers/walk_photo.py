@@ -42,3 +42,5 @@ async def put_metadata(
         raise HTTPException(404, "사진 메타데이터를 찾을 수 없습니다.") from None
     except service.PhotoConflict as exc:
         raise HTTPException(409, str(exc)) from None
+    except service.PhotoInvalid as exc:
+        raise HTTPException(422, str(exc)) from None

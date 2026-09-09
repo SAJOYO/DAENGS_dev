@@ -96,3 +96,9 @@ uv run python tools/preview_diary_stamps.py --input evals/walk_diary_stamps/inpu
 이 워크트리는 기존 Dev venv를 재사용하고 `PYTHONPATH`를 이 워크트리의 `backend/src`로
 지정해 검사했다. 프리뷰는 `input.json`, `prepared.json`, `bundle.json`, `preview.md`를 만든다.
 실제 개인정보가 든 입력이나 출력은 저장소 밖에서 관리한다.
+
+2026-09-09 리뷰 보완: v1 행동을 v2에서 수정한 legacy sidecar와 그 배경을 입력으로
+읽는 경로를 보강했다. 사진 입력 오류의 422/버전 충돌의 409도 구분해 App이 거절 후
+편집한 목록으로 복구할 수 있게 했다. 상세 계약은 [사진 메타데이터](photo-metadata.md).
+위 3개 테스트 파일을 다시 실행해 **89개 통과**, 변경 Python 4개 파일 Ruff 통과.
+이번 실행은 앞선 검사와 겹치는 회귀 검증이며 전체 로컬 스위트·실서버 검증은 아니다.

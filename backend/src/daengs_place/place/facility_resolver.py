@@ -137,6 +137,7 @@ class FacilityOut(BaseModel):
     place_field_sources: dict[str, FacilitySourceOut] = Field(
         default_factory=dict, exclude=True, repr=False,
     )
+    filter_unknown_reasons: dict[str, str] = Field(default_factory=dict, exclude=True)
 
 
 class FacilitySearchOut(BaseModel):
@@ -153,7 +154,7 @@ class FacilitySearchOut(BaseModel):
 # pet 은 원문과 파생 축이 한 묶음이다. 먼저 `merged` 에서 실제로 노출할 봉투/축을 한 번 정한 뒤
 # 바깥 WHERE 도 그 effective 축을 본다. 그래야 KTO 행이 KCISA 의 "5kg 이하"를 빌린 경우
 # 대형견 필터를 NULL(미상)로 통과한 뒤 small 을 표시하는 모순이 생기지 않는다.
-_SEARCH = text("""
+FACILITY_CANDIDATES_SQL = """
 WITH merged AS (
     SELECT f.id, f.source_ref, f.name, f.kind, f.category3,
            CASE WHEN f.source = 'kto'
@@ -210,6 +211,10 @@ WITH merged AS (
                      AND b.pet IS NOT NULL AND b.pet <> '{}'::jsonb
                 THEN b.restriction_semantics_version
                 ELSE f.restriction_semantics_version END AS restriction_semantics_version,
+           f.raw->>'주차 가능여부' AS source_parking_raw,
+           f.raw ? '주차 가능여부' AS source_parking_present,
+           b.parking_raw AS borrowed_parking_raw,
+           b.parking_present AS borrowed_parking_present,
            f.source, COALESCE(f.last_written::text, f.snapshot) AS as_of,
            b.homepage AS b_homepage, b.hours_text AS b_hours_text,
            b.closed_days AS b_closed_days,
@@ -218,7 +223,9 @@ WITH merged AS (
     FROM facility f
     CROSS JOIN (SELECT ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography AS geom) o
     LEFT JOIN LATERAL (
-        SELECT f2.homepage, f2.hours_text, f2.closed_days,
+        SELECT f2.raw->>'주차 가능여부' AS parking_raw,
+               f2.raw ? '주차 가능여부' AS parking_present,
+               f2.homepage, f2.hours_text, f2.closed_days,
                f2.parking, f2.indoor, f2.outdoor, f2.pet,
                f2.pet_allowed, f2.pet_exclusive, f2.pet_dog_ok, f2.pet_size_class, f2.pet_max_kg,
                f2.restriction_state, f2.restriction_parse_state, f2.restriction_predicates,
@@ -232,7 +239,8 @@ WITH merged AS (
           -- cross-kind link는 동일 장소의 복수 분류 후보일 수 있다. scalar kind 응답에서는
           -- 다른 후보군의 값을 빌리지 않는다.
           AND f2.kind = f.kind
-        ORDER BY (f2.hours_text IS NULL), f2.last_written DESC NULLS LAST
+        ORDER BY (f2.hours_text IS NULL), f2.last_written DESC NULLS LAST,
+                 f2.source, f2.source_ref NULLS LAST, f2.id
         LIMIT 1
     ) b ON true
     WHERE f.kind <> ALL(:medical)
@@ -252,6 +260,9 @@ WITH merged AS (
             AND winner.kind = f.kind
       )
 )
+"""
+
+_SEARCH = text(FACILITY_CANDIDATES_SQL + """
 SELECT *,
        -- 선호 적중 수. 부스트 점수(`prefer_boost`)가 적중 수에 단조라 순서가 같다 —
        -- 점수식을 SQL 에 복제하지 않으려고 수를 센다. 부스트에 다른 재료가 더해지면
@@ -384,36 +395,7 @@ async def resolve_facilities(
     truncated = len(fetched) > effective_limit
     if truncated:
         fetched = fetched[:effective_limit]
-    results = []
-    for r in fetched:
-        values, borrowed = _merge(r)
-        hit = sorted(_prefer_tags(values) & prefer)
-        results.append(FacilityOut(
-            id=r.id, source_ref=r.source_ref, name=r.name, kind=r.kind,
-            icon_group=icon_group(r.kind), category3=r.category3,
-            lat=r.lat, lng=r.lng, distance_m=int(r.distance_m),
-            address=r.address, phone=r.phone,
-            homepage=values["homepage"], hours_text=values["hours_text"],
-            closed_days=values["closed_days"], parking=values["parking"],
-            indoor=values["indoor"], outdoor=values["outdoor"],
-            pet=values["pet"] or {},
-            pet_axes=PetAxesOut(
-                allowed=values["pet_allowed"], exclusive=values["pet_exclusive"],
-                dog_ok=values["pet_dog_ok"], size_class=values["pet_size_class"],
-                max_kg=values["pet_max_kg"],
-            ),
-            restrictions=_restrictions_out(values),
-            source=FacilitySourceOut(name=r.source, ref=r.source_ref, as_of=r.as_of),
-            # resolver 결과에는 표시하는 필드의 출처만 유지한다. Place adapter는 숨은
-            # 실내외 사실까지 포함한 내부 맵을 쓴다.
-            field_sources={
-                name: source for name, source in borrowed.items()
-                if name not in {"indoor", "outdoor"}
-            },
-            place_field_sources=borrowed,
-            prefer_hit=hit, boost=prefer_boost(hit),
-            classification_category=r.classification_category,
-        ))
+    results = [facility_from_row(r, prefer) for r in fetched]
     # SQL 은 **어느 행을 후보로 삼을지**를 정하고, 최종 순서는 여기서 정의된다 —
     # 결정 #20 의 rank key 는 `geo/ranking.py` 한 곳에만 산다. 둘이 어긋나면 순서가 아니라
     # 후보 선택이 틀어지므로, 빽빽한 밴드에서 그걸 잡는 회귀 테스트가 붙어 있다.
@@ -421,3 +403,35 @@ async def resolve_facilities(
         results, distance_of=lambda f: f.distance_m, boost_of=lambda f: f.boost,
     )
     return FacilitySearchOut(params=params, truncated=truncated, results=results)
+
+
+def facility_from_row(r, prefer: set[str]) -> FacilityOut:
+    """Adapt the same effective row for legacy and bounded-filter execution."""
+    values, borrowed = _merge(r)
+    hit = sorted(_prefer_tags(values) & prefer)
+    return FacilityOut(
+        id=r.id, source_ref=r.source_ref, name=r.name, kind=r.kind,
+        icon_group=icon_group(r.kind), category3=r.category3,
+        lat=r.lat, lng=r.lng, distance_m=int(r.distance_m),
+        address=r.address, phone=r.phone,
+        homepage=values["homepage"], hours_text=values["hours_text"],
+        closed_days=values["closed_days"], parking=values["parking"],
+        indoor=values["indoor"], outdoor=values["outdoor"],
+        pet=values["pet"] or {},
+        pet_axes=PetAxesOut(
+            allowed=values["pet_allowed"], exclusive=values["pet_exclusive"],
+            dog_ok=values["pet_dog_ok"], size_class=values["pet_size_class"],
+            max_kg=values["pet_max_kg"],
+        ),
+        restrictions=_restrictions_out(values),
+        source=FacilitySourceOut(name=r.source, ref=r.source_ref, as_of=r.as_of),
+        # resolver 결과에는 표시하는 필드의 출처만 유지한다. Place adapter는 숨은
+        # 실내외 사실까지 포함한 내부 맵을 쓴다.
+        field_sources={
+            name: source for name, source in borrowed.items()
+            if name not in {"indoor", "outdoor"}
+        },
+        place_field_sources=borrowed,
+        prefer_hit=hit, boost=prefer_boost(hit),
+        classification_category=r.classification_category,
+    )

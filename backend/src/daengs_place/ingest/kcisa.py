@@ -75,7 +75,8 @@ def _flag(value: str | None) -> bool | None:
     v = _clean(value)
     if v is None:
         return None
-    return v.upper().startswith("Y")
+    head = v[:1].upper()
+    return True if head == "Y" else False if head == "N" else None
 
 
 def parse_row(row: dict) -> dict | None:

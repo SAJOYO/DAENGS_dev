@@ -6,17 +6,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.core.database import get_session
+from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.territory_claim import (
+    ChallengeRequest,
     ClaimResponse,
     MarkRequest,
+    PhotoAccessResponse,
     SessionPhase,
     SessionResponse,
     SessionStart,
     SiteId,
     SiteResponse,
 )
+from daengs_backend.schemas.territory_owner import TerritoryOwnerSummary
+from daengs_backend.services import activity, territory_owner
 from daengs_backend.services import territory_ownership as service
 from daengs_backend.services.activity_core.game_policy import GameError
 from daengs_backend.services.territory_site_lookup import (
@@ -28,6 +32,15 @@ from daengs_backend.services.territory_site_lookup import (
 router = APIRouter(prefix="/app/territory", tags=["territory-ownership"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Lookup = Annotated[TerritorySiteLookup, Depends(get_territory_site_lookup)]
+Snapshot = Annotated[AsyncSession, Depends(get_snapshot_session)]
+
+
+@router.get("/owner-summary", response_model=TerritoryOwnerSummary)
+async def owner_summary(site_id: SiteId, user: CurrentAppUser, db: Snapshot):
+    try:
+        return await territory_owner.summary(db, user.app_user_id, site_id)
+    except activity.ActivityDisabled:
+        raise HTTPException(503, {"code": "activity_disabled"}) from None
 
 
 async def _call(operation):
@@ -85,3 +98,19 @@ async def claim(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
 async def bind_photo(claim_id: uuid.UUID, photo_id: uuid.UUID, user: CurrentAppUser, db: Session):
     """Bind a freshly issued photo attempt before upload; verdict worker then resolves the claim."""
     return await _call(service.bind_photo(db, user.app_user_id, claim_id, photo_id))
+
+
+@router.get("/claims/{claim_id}/photo-access", response_model=PhotoAccessResponse)
+async def photo_access(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
+    return await _call(service.photo_access(db, user.app_user_id, claim_id))
+
+
+@router.put("/claims/{claim_id}/challenges/{challenge_id}")
+async def challenge(
+    claim_id: uuid.UUID,
+    challenge_id: uuid.UUID,
+    body: ChallengeRequest,
+    user: CurrentAppUser,
+    db: Session,
+):
+    return await _call(service.admit_challenge(db, user.app_user_id, claim_id, challenge_id, body))

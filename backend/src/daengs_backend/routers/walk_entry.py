@@ -15,6 +15,7 @@ from daengs_backend.schemas.walk_entry import (
     RecordProfileQuery,
     RecordProfileResponse,
 )
+from daengs_backend.schemas.walk_entry_context import EntryContexts
 from daengs_backend.services import walk_entry as service
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
@@ -46,6 +47,18 @@ async def entries(walk_id: uuid.UUID, user: CurrentAppUser, session: Session):
     return EntryList(
         entries=await translate(service.list_entries(session, user.app_user_id, walk_id))
     )
+
+
+@router.get("/{walk_id}/entries/{entry_id}/contexts", response_model=EntryContexts)
+async def contexts(
+    walk_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_snapshot_session)],
+):
+    from daengs_backend.services.walk_entry_context import read
+
+    return await translate(read(session, user.app_user_id, walk_id, entry_id))
 
 
 @router.put("/{walk_id}/entries/{entry_id}", response_model=EntryResponse)

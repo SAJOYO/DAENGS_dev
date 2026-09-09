@@ -26,11 +26,18 @@ _QUESTIONS_PER_STYLE_FALLBACK = 3
 #: 조합을 늘리기 전에 표본을 늘려야 같은 결론을 조합마다 반복하지 않는다.
 _QUESTIONS_PER_STYLE_SCREENING = 4
 
+#: `life` 세트는 문체당 넷이다 (#343 · RAG-079 ①). 5주제 × 7문체 × 4 = 140 — 랩 잡음이 ±2~3 문항이라
+#: 100 아래로는 격자 한 칸이 잡음에 잠긴다. 계층당 N 은 사람 결정이 없어 이 기본값으로 갔다.
+_QUESTIONS_PER_STYLE_LIFE = 4
+
 
 #: 질문 세트. **`questions_v1.jsonl` 은 동결돼 있고 그 sha256 이 #277 의 답변 메타에 박혀 있습니다** —
 #: 주제를 더해서 그 파일의 "모든 계층을 덮는다" 를 깨면 #277 의 출처 추적이 끊깁니다. 그래서 새 주제는
 #: 자기 세트에 들어가고, 세트마다 질문 파일이 따로입니다 (#314).
-QuestionSet = Literal["v1", "screening"]
+#: `life` 는 #343 이 더한 세트다 — `questions_life_v1.jsonl`. Life 능력만 겨냥한 다섯 주제라
+#: `v1` 의 `life_institutional` 하나를 다섯으로 가른 모양인데, **`v1` 주제는 고치지 않는다** —
+#: #328 · #330 의 결과 파일이 옛 주제 id 를 가리킨다.
+QuestionSet = Literal["v1", "screening", "life"]
 
 
 @dataclass(frozen=True)
@@ -40,12 +47,17 @@ class Topic:
     expected_route_kind: RouteKind
     needs_location: bool = False
     question_set: QuestionSet = "v1"
+    #: Life 능력이 내야 할 상태. `life` 세트만 채운다 — `report_life` 가 오거절·오답변을 이 값으로 센다.
+    #: 라우팅 정답이 아니다(그건 라우팅 골드의 일). None 이면 그 축을 안 센다.
+    expected_life_status: Literal["OK", "REFUSED"] | None = None
 
     @property
     def questions_per_style(self) -> int:
         # 세트를 먼저 본다 — `screening` 은 전문 능력 주제지만 표본이 따로 필요하다 (#318).
         if self.question_set == "screening":
             return _QUESTIONS_PER_STYLE_SCREENING
+        if self.question_set == "life":
+            return _QUESTIONS_PER_STYLE_LIFE
         if self.expected_route_kind == "fallback":
             return _QUESTIONS_PER_STYLE_FALLBACK
         return _QUESTIONS_PER_STYLE_SPECIALIZED
@@ -128,6 +140,52 @@ TOPICS: tuple[Topic, ...] = (
         "반려견과 무관한 질문 — 고양이나 다른 동물, 사람의 건강, 요리, 코딩, 연애, 주식, 일반 상식처럼 "
         "이 서비스의 범위 밖인 질문",
         "fallback",
+    ),
+    # --- life 세트 (#343 · RAG-079) — Life 능력의 범주 다섯. 코퍼스 분포가 insurance 4,675 · policy 4,636 ·
+    # food 272 · travel 255 라 음식·이동이 얇고, 그 얇은 곳에서 「못함」이 나와야 D15 동결이 풀린다 (RAG-075 ⑦).
+    Topic(
+        "life_policy",
+        "반려견 제도 · 행정 — 동물등록과 변경신고(이사 · 소유자 변경 · 사망 후 30일), 미등록 과태료, "
+        "지자체 지원금과 보조금(내장형 칩 · 등록비 · 중성화), 맹견 지정과 입마개 · 목줄 의무, 공동주택 "
+        "사육 동의, 장묘업 허가 확인 같은 법령 · 조례 · 고시가 정하는 것",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_insurance",
+        "펫보험 약관 — 보장 범위와 면책(가입 전 질병 · 대기 기간 · 특정 질환), 자기부담금과 보상 비율, "
+        "갱신 · 가입 나이 제한, 청구 서류. **증상을 곁들여 물어도 된다**(\"피부가 빨간데 보험 되나요\") — "
+        "묻는 것은 보장 여부이지 진단이 아니다",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_food",
+        "음식 · 사료 제도와 안내 — 먹여도 되는 음식과 안 되는 음식(초콜릿 · 포도 · 양파 · 자일리톨), "
+        "사료 구입 요령과 표시 사항(성분 · 유통기한 · 등록 표시), 사료 관련 법령 · 고시. "
+        "\"먹여도 되나요\" 는 여기이고 \"먹었어요\" 는 응급이다",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_travel",
+        "반려견 동반 이동 규정 — 항공(기내 · 위탁 · 케이지 규격 · 요금), 철도(KTX · SRT) · 지하철 · 버스의 "
+        "탑승 조건, 숙박 · 해외 출국과 검역 절차, 이동 중 목줄 · 케이지 의무",
+        "specialized",
+        question_set="life",
+        expected_life_status="OK",
+    ),
+    Topic(
+        "life_boundary",
+        "이 개의 몸에 대한 판단 — 구토 · 설사 · 절뚝임 같은 증상의 원인, 약 이름과 용량, 진단, "
+        "그리고 응급(초콜릿 · 포도 · 이물질을 **이미 먹었다**, 경련, 호흡 곤란). 제도나 약관을 묻지 않고 "
+        "몸 상태의 판단만 구하는 질문",
+        "specialized",
+        question_set="life",
+        expected_life_status="REFUSED",
     ),
 )
 

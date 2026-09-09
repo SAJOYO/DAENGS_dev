@@ -1,0 +1,19 @@
+# gcloud builds submit 이 올리는 것만 — 없으면 .gitignore 규칙으로 대체되는데, 그 우연에
+# .env 가 안 올라가는 것을 맡기지 않는다 (D-062, 2026-09-08 최종 리뷰). docker/pipeline/Dockerfile.dockerignore 와 같은 집합.
+# ⚠ 맨 위는 반드시 `**` 다 — gcloudignore 의 bare `*` 는 한 단계(최상위)만 무시하고 하위 경로는
+# 다시 안 훑는다(gitignore 와 다르다, 2026-09-08 gcloud meta list-files-for-upload 실측: `*` 로 두면
+# backend/.env · backend/.venv/* 가 그대로 올라간다). `**` 라야 모든 깊이를 무시한 뒤 아래 `!` 로만 연다.
+**
+!backend/
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/README.md
+!backend/src/
+!backend/src/**
+!data/
+!data/manifests/
+!data/manifests/seed_sources.yaml
+!docker/
+!docker/pipeline/
+!docker/pipeline/**
+backend/src/**/__pycache__/

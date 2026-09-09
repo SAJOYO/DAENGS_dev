@@ -106,6 +106,11 @@ async def active_season(db):
     )
 
 
+async def read_active_season(db):
+    """For read-only snapshots; unlike writers, do not acquire a season row lock."""
+    return await db.scalar(select(ActivitySeason).where(ActivitySeason.status == "ACTIVE"))
+
+
 async def accounts(db, season_id):
     return list(
         await db.scalars(select(ActivityAccount).where(ActivityAccount.season_id == season_id))

@@ -1,9 +1,11 @@
 """Transactional adapters for territory_claim rules. GPS remains client attestation."""
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from daengs_backend.models.territory_claim import (
+    TerritoryChallenge,
     TerritoryClaim,
     TerritoryClaimPhoto,
     TerritoryOccupancy,
@@ -13,6 +15,7 @@ from daengs_backend.repositories import territory_claim as repo
 from daengs_backend.schemas.territory_claim import (
     ClaimResponse,
     OccupancyResponse,
+    PhotoAccessResponse,
     SessionResponse,
     SiteResponse,
 )
@@ -101,6 +104,9 @@ async def change_phase(db, owner, client_id, body):
 
 
 async def list_sites(db, owner, site_ids):
+    await activity_game.acquire(db)
+    season = await _season(db)
+    now = _now()
     rows = {row.site_id: row for row in await repo.read_sites(db, site_ids)}
     result = []
     for site_id in dict.fromkeys(site_ids):
@@ -113,10 +119,17 @@ async def list_sites(db, owner, site_ids):
                 is_mine=row.app_user_id == owner,
                 certification=row.certification,
                 occupied_at=row.occupied_at,
+                certified_at=getattr(row, "certified_at", None),
+                protected_until=_protection(
+                    row.certification, row.occupied_at, getattr(row, "certified_at", None), season
+                ),
             )
         result.append(
             SiteResponse(
                 site_id=site_id,
+                server_now=now,
+                season_id=season.id if season else None,
+                policy_version=season.rules["version"] if season else None,
                 version=row.version if row else 0,
                 occupancy=occupancy,
             )
@@ -161,6 +174,7 @@ async def _rule_site(db, site):
             str(source.id),
             rules.Certification(occupied.certification),
             int(occupied.occupied_at.timestamp() * 1000),
+            int(occupied.certified_at.timestamp() * 1000) if occupied.certified_at else None,
         )
     return rules.ClaimSite(site.site_id, owner, site.version)
 
@@ -178,6 +192,11 @@ async def _save_site(db, row, state, *, game=None, claim=None, event_id=None, at
             db.add(occupied)
         occupied.claim_id = uuid.UUID(state.occupancy.source_attempt_id)
         occupied.certification = state.occupancy.certification.value
+        occupied.certified_at = (
+            datetime.fromtimestamp(state.occupancy.certified_at_millis / 1000, UTC)
+            if state.occupancy.certified_at_millis is not None
+            else None
+        )
         occupied.occupied_at = datetime.fromtimestamp(
             state.occupancy.occupied_at_millis / 1000, UTC
         )
@@ -237,6 +256,8 @@ async def mark(db, owner, body, lookup):
         encounter_id=str(claim_id),
         at_millis=int(now.timestamp() * 1000),
     )
+    if _is_v2(await _season(db)) and attempt.disposition == rules.Disposition.POLICY_UNDECIDED:
+        attempt = replace(attempt, disposition=rules.Disposition.PHOTO_REQUIRED)
     claim = TerritoryClaim(
         id=claim_id,
         session_id=game_session.id,
@@ -285,11 +306,36 @@ async def bind_photo(db, owner, claim_id, photo_id):
     else:
         if game_session.phase != "RECORDING":
             raise ClaimConflict("NOT_RECORDING")
-        if claim.resolution_code or claim.photo_status not in {
-            "NOT_SUBMITTED",
-            "REJECTED",
-            "RETRY_PENDING",
-        }:
+        challenge = (
+            await db.get(TerritoryChallenge, photo.client_capture_id)
+            if activity.settings.activity_game_enabled
+            else None
+        )
+        season = await _season(db)
+        v2 = _is_v2(season)
+        if challenge is not None and (season is None or challenge.season_id != season.id):
+            raise ClaimConflict("season_ended")
+        if v2:
+            if challenge is None or challenge.claim_id != claim_id:
+                raise ClaimConflict("challenge_required")
+            if challenge.completed_at is not None or challenge.expires_at <= _now():
+                raise ClaimConflict("challenge_expired")
+            if photo.captured_at < challenge.created_at - timedelta(seconds=5):
+                raise ClaimConflict("photo_time_mismatch")
+            if challenge.expected_site_version != site.version:
+                raise ClaimConflict("site_changed")
+            access = await _check_photo_access(db, owner, claim, game_session)
+            if access.reason:
+                raise ClaimConflict(access.reason)
+        if not v2 and (
+            claim.resolution_code
+            or claim.photo_status
+            not in {
+                "NOT_SUBMITTED",
+                "REJECTED",
+                "RETRY_PENDING",
+            }
+        ):
             raise ClaimConflict("photo_already_in_progress_or_verified")
         if (
             photo.client_session_id != game_session.client_session_id
@@ -302,6 +348,10 @@ async def bind_photo(db, owner, claim_id, photo_id):
         if await repo.eligible_pets(db, owner, [claim.pet_id]) != {claim.pet_id}:
             raise ClaimConflict("ineligible_pet")
         db.add(TerritoryClaimPhoto(photo_id=photo_id, claim_id=claim_id))
+        if v2:
+            challenge.photo_id = photo_id
+            claim.expected_site_version = challenge.expected_site_version
+            claim.resolution_code = None
         claim.current_photo_id = photo_id
         claim.photo_status = "PENDING"
         await db.flush()
@@ -349,6 +399,26 @@ async def _apply_photo(db, photo, site, claim, game_session):
         str(photo.id),
         rules.PhotoStatus.PENDING,
     )
+    challenge = (
+        await db.get(TerritoryChallenge, photo.client_capture_id)
+        if activity.settings.activity_game_enabled
+        else None
+    )
+    if challenge is not None:
+        if (
+            challenge.claim_id != claim.id
+            or challenge.photo_id != photo.id
+            or challenge.completed_at is not None
+        ):
+            return
+        season = await _season(db)
+        if season is None or season.id != challenge.season_id:
+            claim.photo_status = "VERIFIED" if photo.status == "VERIFIED" else "REJECTED"
+            claim.resolution_code = "season_ended"
+            challenge.resolution_code, challenge.completed_at = "season_ended", _now()
+            return
+        attempt = replace(attempt, expected_site_version=challenge.expected_site_version)
+        challenge.completed_at = _now()
     state = await _rule_site(db, site)
     at_ms = int(_now().timestamp() * 1000)
     try:
@@ -358,6 +428,7 @@ async def _apply_photo(db, photo, site, claim, game_session):
             str(photo.id),
             outcome,
             at_millis=at_ms,
+            allow_same_session=challenge is not None,
         )
     except ValueError as exc:
         if str(exc) not in {"site_changed", "new_session_required"}:
@@ -365,6 +436,8 @@ async def _apply_photo(db, photo, site, claim, game_session):
         # The visit stays verified; losing the race must not roll back that fact or retry forever.
         claim.photo_status = "VERIFIED"
         claim.resolution_code = str(exc)
+        if challenge is not None:
+            challenge.resolution_code = str(exc)
         return
     try:
         await _save_site(
@@ -381,7 +454,109 @@ async def _apply_photo(db, photo, site, claim, game_session):
             raise
         claim.photo_status = "VERIFIED"
         claim.resolution_code = str(exc)
+        if challenge is not None:
+            challenge.resolution_code = str(exc)
         return
     claim.photo_status = resolved.photo_status.value
     claim.disposition = resolved.disposition.value
     claim.expected_site_version = site.version
+
+
+async def _season(db):
+    if not activity.settings.activity_game_enabled:
+        return None
+    return await activity_game.repo.active_season(db)
+
+
+def _is_v2(season):
+    return season is not None and season.rules.get("version") == "certified-protection-v2"
+
+
+def _protection(certification, occupied_at, certified_at, season):
+    if season is None:
+        return None
+    if _is_v2(season):
+        if certification != "VERIFIED":
+            return None
+        return (certified_at or occupied_at) + timedelta(milliseconds=season.rules["protection_ms"])
+    return occupied_at + timedelta(milliseconds=season.rules["protection_ms"])
+
+
+async def _check_photo_access(db, owner, claim, game):
+    site = (await list_sites(db, owner, [claim.site_id]))[0]
+    now = _now()
+    season = await _season(db)
+    reason, action = None, "PHOTO_TAKEOVER"
+    if not _is_v2(season):
+        reason, action = "policy_unavailable", "UNAVAILABLE"
+    elif not season.starts_ms <= int(now.timestamp() * 1000) < season.ends_ms:
+        reason, action = "season_ended", "UNAVAILABLE"
+    elif game.phase != "RECORDING":
+        reason, action = "NOT_RECORDING", "UNAVAILABLE"
+    elif await repo.eligible_pets(db, owner, [claim.pet_id]) != {claim.pet_id}:
+        reason, action = "ineligible_pet", "UNAVAILABLE"
+    elif claim.photo_status == "PENDING":
+        reason, action = "photo_already_in_progress_or_verified", "UNAVAILABLE"
+    elif site.occupancy:
+        if site.occupancy.owner_pet_id == claim.pet_id:
+            if site.occupancy.certification == "VERIFIED":
+                reason, action = "already_certified", "ALREADY_CERTIFIED"
+            else:
+                action = "PHOTO_UPGRADE"
+        elif site.occupancy.protected_until and now < site.occupancy.protected_until:
+            reason, action = "protected", "WAIT"
+    return PhotoAccessResponse(
+        server_now=now,
+        site_version=site.version,
+        season_id=site.season_id,
+        policy_version=site.policy_version,
+        allowed_action=action,
+        reason=reason,
+        protected_until=site.occupancy.protected_until if site.occupancy else None,
+    )
+
+
+async def photo_access(db, owner, claim_id):
+    await activity_game.acquire(db)
+    pair = await repo.owned_claim(db, owner, claim_id)
+    if pair is None:
+        raise ClaimNotFound
+    return await _check_photo_access(db, owner, *pair)
+
+
+async def admit_challenge(db, owner, claim_id, challenge_id, body):
+    await activity_game.acquire(db)
+    pair = await repo.owned_claim(db, owner, claim_id)
+    if pair is None:
+        raise ClaimNotFound
+    claim, game = pair
+    game = await repo.session_by_client(db, owner, game.client_session_id, lock=True)
+    await repo.lock_site(db, claim.site_id)
+    existing = await db.get(TerritoryChallenge, challenge_id)
+    if existing:
+        if (
+            existing.claim_id != claim_id
+            or existing.expected_site_version != body.expected_site_version
+        ):
+            raise ClaimConflict("challenge_identity_conflict")
+        # Admission replay is not a new authorization; expired or completed admissions cannot be shot again.
+        if existing.expires_at < _now() or existing.completed_at is not None:
+            raise ClaimConflict("challenge_expired")
+        return {"challenge_id": existing.id, "expires_at": existing.expires_at}
+    access = await _check_photo_access(db, owner, claim, game)
+    if access.reason is not None:
+        raise ClaimConflict(access.reason)
+    if access.site_version != body.expected_site_version:
+        raise ClaimConflict("site_changed")
+    now = _now()
+    challenge = TerritoryChallenge(
+        id=challenge_id,
+        claim_id=claim_id,
+        expected_site_version=access.site_version,
+        season_id=access.season_id,
+        created_at=now,
+        expires_at=now + timedelta(seconds=30),
+    )
+    db.add(challenge)
+    await db.commit()
+    return {"challenge_id": challenge.id, "expires_at": challenge.expires_at}

@@ -57,6 +57,12 @@ WANTED: dict[str, Page] = {
     # 나머지(예방접종·계절별 돌보기·수명표)는 roadmap §5 가 🚫 한 건강 상식이다.
     "반려견 건강상식": Page("dog-food", "pet-food", "food"),
     "반려묘 건강상식": Page("cat-food", "pet-food", "food"),
+    # --- 동반 이동 (2026-09-08, #347 / F0-2 정찰) ---
+    # 2026-08-27 정찰이 "travel 도메인이라 운송약관 카드와 같이 간다" 며 미뤄 둔 두 장이다.
+    # 운송약관(코레일 · SRT · 지하철 · 항공)은 규정 본문이고 이쪽은 **동반 외출·여행 안내**라
+    # subcategory 를 나눈다 — 값 사전은 `data/README.md`.
+    "함께 외출하기": Page("outing", "travel-guide", "travel"),
+    "함께 여행가기": Page("travel", "travel-guide", "travel"),
 }
 
 

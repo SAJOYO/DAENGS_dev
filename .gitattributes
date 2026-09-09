@@ -5,3 +5,7 @@
 # 랩 답변 덤프는 바이트 그대로 둡니다 (D-018 · RAG-028 ⑥).
 # LLM 출력이라 다시 돌려도 같은 글이 안 나오는, 1랩↔2랩 비교의 유일한 기준선입니다.
 data/processed/answers/*.jsonl -text
+
+# 셸 스크립트는 컨테이너·Cloud Build 에서 실행되므로 항상 LF (D-062). 지금 .sh 는
+# docker/pipeline/entrypoint.sh 하나뿐이라 전역 규칙이 안전하다.
+*.sh text eol=lf

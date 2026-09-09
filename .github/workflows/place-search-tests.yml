@@ -60,7 +60,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DAENGS_DATABASE_URL: postgresql+asyncpg://place:place@localhost:5432/place
+      # place 전용 이름입니다 (#346). `DAENGS_DATABASE_URL` 로 주면 루트 tests/conftest.py 의
+      # autouse fixture 가 daengs_backend 를 import 하는 순간 D-013 가드가 기동을 거부해
+      # 첫 place 테스트가 ERROR 납니다. `DAENGS_DB_*` 조각으로 줘도 안 됩니다 — 같은
+      # conftest 가 DAENGS_DB_PASSWORD 를 test-password 로 덮어써 DB 에 못 붙고 전부 skip 됩니다.
+      DAENGS_PLACE_DATABASE_URL: postgresql+asyncpg://place:place@localhost:5432/place
     steps:
       - uses: actions/checkout@v4
       - name: Compose 설정

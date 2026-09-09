@@ -1,5 +1,7 @@
 # 온라인 점유 저장·API
 
+> 2026-09-08 후속: [인증 우선 정책 v2](../certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.
+
 [DAENGS_dev#260](https://github.com/SAJOYO/DAENGS_dev/pull/260)는
 [Geo 제작 계획](https://github.com/rkbuhtig/DAENGS_geo/pull/230)의 4단계 중 서버 부분이다.
 APP의 지도·접근 피드백은 [DAENGS_APP#155](https://github.com/SAJOYO/DAENGS_APP/pull/155)를
@@ -30,6 +32,8 @@ POLICY_UNDECIDED를 유지한다. 어느 경우든 사진 인증으로 점유를
 동시 인증 중 먼저 점유를 확정한 트랜잭션이 이긴다. 이탈/재진입·쿨다운·점수 정책은 추가하지 않는다.
 
 ## APP 호출 순서
+
+선택한 주인의 시즌 점수·점령 수 공개 조회는 [주인 요약 API](owner-summary-api.md)를 참조한다.
 
 모든 아래 API는 앱 회원 인증을 요구한다. owner ID는 요청으로 받지 않는다.
 
@@ -100,12 +104,12 @@ site_id와 버전만 남는다. 시즌 점수/장기 이력은 아직 이 저장
 ## 배포와 검증
 
 **머지로 새 웹/워커가 배포되기 전에** 기존 DB에
-[`2026-09-05_territory_claims.sql`](../db/migrations/2026-09-05_territory_claims.sql)을 적용한다.
+[`2026-09-05_territory_claims.sql`](../../db/migrations/2026-09-05_territory_claims.sql)을 적용한다.
 기존 방문 인증 워커도 연결 조회를 하므로 이 순서가 필요하다. 신규 DB는
-[`20_territory_claims.sql`](../db/init/20_territory_claims.sql)이 같은 테이블을 만든다.
+[`20_territory_claims.sql`](../../db/init/20_territory_claims.sql)이 같은 테이블을 만든다.
 두 파일은 동일하고 재실행 가능하다. 운영 DB 변경은 PR 구현/로컬 검증에 포함하지 않는다.
 
-적용 뒤 [`verify_2026-09-05_territory_claims.sql`](../db/migrations/verify_2026-09-05_territory_claims.sql)을
+적용 뒤 [`verify_2026-09-05_territory_claims.sql`](../../db/migrations/verify_2026-09-05_territory_claims.sql)을
 `psql -X -v ON_ERROR_STOP=1`로 실행한다. 다섯 테이블의 컬럼 형식/NULL 허용,
 PK·UNIQUE·CHECK·FK(삭제 동작 포함), 유효한 인덱스를 검사하고 불일치하면 예외를 낸다.
 스키마 검증 성공을 확인한 뒤 웹/워커 코드를 배포한다. 데이터·VLM·앱 종단 검증은 별도다.
@@ -127,5 +131,5 @@ DB 테스트는 실제 init SQL 및 마이그레이션을 실행하고 매 테�
 
 후속 [DEV #281](https://github.com/SAJOYO/DAENGS_dev/pull/281)은 이 확정 경계에
 보호 시간·점수·시즌과 산책/점령 통계 원본을 연결한다. 별도 migration과 기본 비활성 flag를
-사용하며, 계약·조회 API·활성화 순서는 [activity-game-integration.md](activity-game-integration.md)에 있다.
+사용하며, 계약·조회 API·활성화 순서는 [activity-game-integration.md](../activity-game-integration.md)에 있다.
 

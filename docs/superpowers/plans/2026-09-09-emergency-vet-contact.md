@@ -1289,12 +1289,16 @@ from __future__ import annotations
 
 import httpx
 from daengs_backend.orchestration.adapters.vet_contact import VetContactCapabilityAdapter
-from daengs_backend.orchestration.aggregate import aggregate_results
-from daengs_backend.orchestration.contracts import AssistantStatus, CapabilityName
+from daengs_backend.orchestration.contracts import (
+    AssistantStatus,
+    CapabilityName,
+    PrincipalContext,
+)
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import resolve_emergency_route
 
 SEOUL = {"location": {"lat": 37.5665, "lon": 126.978}}
+PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 
 
 def test_engine_registers_the_capability_by_default() -> None:
@@ -1347,13 +1351,16 @@ async def test_emergency_utterance_answers_with_phone_numbers() -> None:
         engine = OrchestrationEngine(
             adapters={CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(client=client)}
         )
-        state = await engine.graph.ainvoke(
-            {"route_plan": plan, "request_id": "request-e2e", "results": []}
+        response = await engine.run(
+            route_plan=plan,
+            query="강아지가 초콜릿을 먹었어요",
+            principal=PRINCIPAL,
+            request_id="request-e2e",
+            context=SEOUL,
         )
     finally:
         await client.aclose()
 
-    response = state["response"]
     assert response.status is AssistantStatus.ANSWERED
     assert response.message.startswith("응급 상황으로 보여요.")
     assert "확인해 드릴 수 없습니다" in response.message
@@ -1371,10 +1378,12 @@ async def test_missing_location_is_uncertain_and_carries_the_cta_code() -> None:
     engine = OrchestrationEngine(
         adapters={CapabilityName.VET_CONTACT: VetContactCapabilityAdapter()}
     )
-    state = await engine.graph.ainvoke(
-        {"route_plan": plan, "request_id": "request-nolocation", "results": []}
+    response = await engine.run(
+        route_plan=plan,
+        query="강아지가 초콜릿을 먹었어요",
+        principal=PRINCIPAL,
+        request_id="request-nolocation",
     )
-    response = state["response"]
     assert response.status is AssistantStatus.UNCERTAIN
     assert response.results[0].abstention.code == "vet_contact.location_required"
     assert "위도" not in response.message
@@ -1385,7 +1394,7 @@ async def test_missing_location_is_uncertain_and_carries_the_cta_code() -> None:
 Run: `uv run pytest tests/test_orchestration_vet_contact_e2e.py -v`
 Expected: FAIL — `assert CapabilityName.VET_CONTACT in engine._adapters` 에서 KeyError/AssertionError
 
-> `engine.graph.ainvoke` 의 상태 키가 이 파일의 것과 다르면 `tests/test_assistant_orchestration_e2e.py` 에서 실제 호출 모양을 확인해 맞춘다. 이 저장소의 그래프 상태는 `OrchestratorState` 다.
+> **`engine.graph.ainvoke` 를 직접 부르지 말 것.** `OrchestratorState` 는 `principal`·`query`·`locale`·`context`·`response`·`include_route_trace` 까지 요구하는 TypedDict 라, 일부만 넣으면 노드에서 KeyError 가 난다. `OrchestrationEngine.run(route_plan=..., query=..., principal=..., request_id=..., context=...)` 가 그 상태를 만들어 주고 `AssistantResponse` 를 바로 돌려준다 — `tests/test_orchestration_graph.py:97` 의 헬퍼가 그 형식이다.
 
 - [ ] **Step 3: 엔진에 등록한다**
 

@@ -158,5 +158,6 @@ APK 빌드 성공 및 에뮬레이터 설치 APK 해시 일치, 읽기/편집 �
 - [SGIS OpenAPI 데이터 API 문서](https://sgis.mods.go.kr/developer/html/openApi/api/data.html)
 - [전국도시공원정보표준데이터](https://www.data.go.kr/data/15012890/standard.do)
 
-상권·하천 제공자, 경계 간 이동 관계, 사진/관측 배경 수집, 기존 일기 backfill,
+상권·하천 제공자는 [지역 배경 공급 #390](area-context.md)에서 이어간다.
+경계 간 이동 관계, 사진/관측 배경 수집, 기존 일기 backfill,
 서버 캐시 마운트·갱신 잡 및 실제 활성화는 후속 작업이다.

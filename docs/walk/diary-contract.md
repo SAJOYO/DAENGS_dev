@@ -158,8 +158,8 @@ assistant graph/trace에는 raw GPS, 메모 원문, provider 원문을 복사하
 
 ## 확인과 다음 단위
 
-검사는 `backend/tests/walk/test_diary_contract.py`와 기존
-`tests/walk/test_walk_storyboard.py`, `tests/test_orchestration_contracts.py` 범위다.
+검사는 `backend/tests/walk/diary/test_diary_contract.py`와 기존
+`tests/walk/storyboard/test_walk_storyboard.py`, `tests/test_orchestration_contracts.py` 범위다.
 소유권·세대 경쟁, 메모/사진/삭제 보존, 핀 변경 후 배경 무효화, 시간 범위,
 관측의 부족분 보충, 별도 위치 표시, 다른 장면 근거 거부, 모델 실패 시 원본 보존을 확인한다.
 외부 API·운영 DB·실제 LLM 호출은 없다. 데이터베이스 통합과 실제 사용자 E2E는 남아 있다.
@@ -168,8 +168,8 @@ assistant graph/trace에는 raw GPS, 메모 원문, provider 원문을 복사하
 기존 FastAPI/Starlette의 httpx 사용 경고 1건이 있었다. 전체 로컬 스위트는 실행하지 않았다.
 
 ```powershell
-uv run --no-sync python -m pytest tests/walk/test_diary_contract.py tests/walk/test_walk_storyboard.py tests/test_orchestration_contracts.py -q
-uv run --no-sync ruff check src/daengs_walk/diary_input.py src/daengs_walk/diary_output.py src/daengs_backend/services/walk_diary_contract.py tests/walk/test_diary_contract.py
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_contract.py tests/walk/storyboard/test_walk_storyboard.py tests/test_orchestration_contracts.py -q
+uv run --no-sync ruff check src/daengs_walk/diary_input.py src/daengs_walk/diary_output.py src/daengs_backend/services/walk_diary_contract.py tests/walk/diary/test_diary_contract.py
 ```
 
 이번 워크트리는 기존 Dev venv를 `UV_PROJECT_ENVIRONMENT`로 재사용하고,

@@ -113,12 +113,12 @@ unlocated의 원본 존재 검사는 이 cutoff까지 수행한다. capabilities
 101개를 통과했다. v2 사례 추가 후 해당 파일 28개를 다시 통과했다. 변경 backend Python의 ruff 검사도 통과했다.
 
 ```powershell
-uv run pytest -q tests/test_walk_entry_v2.py tests/test_walk_entries.py tests/test_walk_entry_http.py tests/test_walk_entry_context.py tests/walk/test_walk_storyboard.py tests/walk/test_finalize_contract.py tests/test_main_stays_light.py
+uv run pytest -q tests/walk/entries/test_walk_entry_v2.py tests/walk/entries/test_walk_entries.py tests/walk/entries/test_walk_entry_http.py tests/walk/context/test_walk_entry_context.py tests/walk/storyboard/test_walk_storyboard.py tests/walk/measurement/test_finalize_contract.py tests/test_main_stays_light.py
 ```
 
 `walk entry v2 PostgreSQL` CI는 격리된 PostgreSQL 17에서 실제 SQL 반복 적용, raw 참조 정밀도, 원래 ACK,
 CAS, commit rollback, 동시 생성/삭제·확정, snapshot 및 계정 CASCADE를 검증한다. 명령은
-`uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_entry_v2.py`다. 로컬 실행에는 명시적인
+`uv run pytest -q tests/walk/entries/test_walk_entry_v2_db.py tests/walk/entries/test_walk_entry_v2.py`다. 로컬 실행에는 명시적인
 WALK_PIN_TEST_DATABASE_URL이 필요하며 localhost의 walk_pin_test DB만 허용한다. 미설정이면 DB 검증은 skip이다.
 
 기존 migration verifier에도 등록해 정상 스키마의 성공과 트리거/PK/FK/필수 컬럼 제거 시 실패를 확인한다.

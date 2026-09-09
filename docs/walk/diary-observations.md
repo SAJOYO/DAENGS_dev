@@ -122,8 +122,8 @@ flowchart TD
 해당 케이스만 실행했고 **1 passed**, 합계 145개를 확인했다.
 
 ```powershell
-uv run --no-sync python -m pytest tests/walk/test_diary_observations.py tests/walk/test_walk_photo_input.py tests/walk/test_diary_stamps.py tests/walk/test_diary_contract.py tests/walk/test_storyboard_observations.py tests/walk/test_walk_storyboard.py -q
-uv run --no-sync python -m pytest tests/walk/test_diary_observations.py::test_dwell_anchor_uses_a_real_fix_instead_of_the_average_position -q
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_observations.py tests/walk/photos/test_walk_photo_input.py tests/walk/diary/test_diary_stamps.py tests/walk/diary/test_diary_contract.py tests/walk/storyboard/test_storyboard_observations.py tests/walk/storyboard/test_walk_storyboard.py -q
+uv run --no-sync python -m pytest tests/walk/diary/test_diary_observations.py::test_dwell_anchor_uses_a_real_fix_instead_of_the_average_position -q
 ```
 
 좌표는 합성 자료이며 DB 조회 경계는 mock이다. 실제 PostgreSQL 경쟁, 실사용자 GPS,

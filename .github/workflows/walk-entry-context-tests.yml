@@ -3,7 +3,11 @@ on:
   pull_request:
     paths:
       - 'backend/src/daengs_backend/**'
-      - 'backend/tests/test_walk_entr*'
+      - 'backend/tests/walk/entries/**'
+      - 'backend/tests/walk/context/**'
+      - 'backend/tests/walk/support/**'
+      - 'backend/tests/walk/conftest.py'
+      - 'backend/tests/walk/**/conftest.py'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -13,7 +17,11 @@ on:
     branches: [dev]
     paths:
       - 'backend/src/daengs_backend/**'
-      - 'backend/tests/test_walk_entr*'
+      - 'backend/tests/walk/entries/**'
+      - 'backend/tests/walk/context/**'
+      - 'backend/tests/walk/support/**'
+      - 'backend/tests/walk/conftest.py'
+      - 'backend/tests/walk/**/conftest.py'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -47,4 +55,4 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
-      - run: uv run pytest -q tests/test_walk_entry_context_db.py tests/test_walk_entry_context.py tests/test_walk_entry_http.py tests/test_walk_entries.py
+      - run: uv run pytest -q tests/walk/context/test_walk_entry_context_db.py tests/walk/context/test_walk_entry_context.py tests/walk/entries/test_walk_entry_http.py tests/walk/entries/test_walk_entries.py

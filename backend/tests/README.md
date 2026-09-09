@@ -4,9 +4,10 @@
 rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Geo 이관과 공동 작업이 포함되므로
 여기에 연결한 코드·테스트 전체의 단독 소유권을 뜻하지 않는다. APP의 Kotlin 테스트는 별도 범위다.
 
-이 문서는 **실행 범위 목록이며 통과 보고서가 아니다.** 이번 단계에서는 파일 이동, fixture 수정,
-pytest 실행, DB 준비, CI 실행을 하지 않았다. 조사 시점의 backend 전체에는 `test_*.py` 272개가 있고
-그중 184개가 `tests/` 바로 아래에 있다. 이 수는 아래 9개 기능만의 테스트 수가 아니다.
+이 문서는 **실행 범위 목록이며 모든 기능의 통과 보고서가 아니다.** 1단계 조사 시점의 backend
+전체에는 `test_*.py` 272개, 루트 직속 184개가 있었다. 2단계에서 Walk 파일 37개를 기능별로
+옮기고 공용 도구를 분리했다. 테스트 파일 수는 272개 그대로이며 루트 직속은 172개다.
+이번 단계의 로컬 검증 결과는 아래 Walk 정리 항목에 기록한다. DB 준비·CI 실행은 하지 않았다.
 
 ## 실행 원칙
 
@@ -19,8 +20,8 @@ pytest 실행, DB 준비, CI 실행을 하지 않았다. 조사 시점의 backen
 - 현재 pytest에 실행용으로 선언된 marker는 `slow`이고 기본값은 `-m 'not slow'`다.
   `-m unit`/`-m integration` 구분은 아직 없다. 파일·디렉터리 경로로 선택한다.
 - DB 미설정으로 `skipped`이면 해당 DB 동작은 **미검증**이다. 통과 수와 skip 사유를 함께 기록한다.
-- CI 예산이 소진된 현재 작업에서는 로컬 문서 변경까지만 한다. push·PR 생성·workflow dispatch는
-  하지 않는다. 기존 workflow를 끄거나 바꾸는 작업도 이 단계에 포함하지 않는다.
+- CI 예산이 소진된 현재 작업에서는 로컬 변경·타겟 검증까지만 한다. push·PR 생성·workflow dispatch는
+  하지 않는다. 기존 workflow는 이동한 테스트·fixture의 경로만 갱신하며 실행 정책 개편은 후속 단계다.
 
 ## 9개 기능 지도
 
@@ -92,8 +93,8 @@ uv run pytest -q tests/journey
   8번 storyboard·diary 소비자, 활동 반영을 바꾸면 9번 activity DB 검증을 추가한다.
 
 ```powershell
-uv run pytest -q tests/walk/test_walk_measurement.py tests/walk/test_cellophane.py tests/walk/test_hex_grid.py tests/walk/test_walk_capsule.py tests/walk/test_walk_facts.py tests/walk/test_finalize_contract.py tests/walk/test_walk_analysis_storage.py tests/walk/test_walk_repository.py tests/walk/test_walks.py tests/walk/test_package_boundary.py
-uv run pytest -q tests/test_walk_api.py tests/test_walk_auth.py tests/test_walk_chunk.py tests/test_walk_style.py
+uv run pytest -q tests/walk/measurement/test_walk_measurement.py tests/walk/measurement/test_cellophane.py tests/walk/measurement/test_hex_grid.py tests/walk/measurement/test_walk_capsule.py tests/walk/measurement/test_walk_facts.py tests/walk/measurement/test_finalize_contract.py tests/walk/measurement/test_walk_analysis_storage.py tests/walk/api/test_walk_repository.py tests/walk/api/test_walks.py tests/walk/test_package_boundary.py
+uv run pytest -q tests/walk/api/test_walk_api.py tests/walk/api/test_walk_auth.py tests/walk/api/test_walk_chunk.py tests/walk/measurement/test_walk_style.py
 ```
 
 ### 6. 산책 환경 정보
@@ -104,7 +105,7 @@ uv run pytest -q tests/test_walk_api.py tests/test_walk_auth.py tests/test_walk_
   핀 context 또는 일기 observation에 전달하는 값 변경은 7·8번 해당 소비자를 추가한다.
 
 ```powershell
-uv run pytest -q tests/test_weather_at.py tests/test_weather_at_api.py tests/walk/test_walk_weather_adapter.py tests/walk/test_walk_observation.py
+uv run pytest -q tests/test_weather_at.py tests/test_weather_at_api.py tests/walk/environment/test_walk_weather_adapter.py tests/walk/environment/test_walk_observation.py
 ```
 
 ### 7. 산책 기록·행동 핀
@@ -113,14 +114,14 @@ uv run pytest -q tests/test_weather_at.py tests/test_weather_at_api.py tests/wal
   경계: backend walk_entry/walk_entry_v2 라우터, 스키마·저장소, context 수집·작업 큐.
 - 기본: 기존 기록 HTTP, v2 핀 계약, context 및 pin-context 서비스.
 - DB 추가: context와 pin의 DB가 서로 다르다. 아래 DB 표에 따라 필요한 명령을 선택한다.
-- 확대: 핀 위치/타입/버전 계약 변경은 `walk/test_storyboard_pins.py`와 8번 관련 일기 입력을 확인한다.
+- 확대: 핀 위치/타입/버전 계약 변경은 `walk/storyboard/test_storyboard_pins.py`와 8번 관련 일기 입력을 확인한다.
   사진과 연결되는 키/삭제/재시도 계약은 `test_walk_photo_db.py`까지 포함한다.
   앱의 위치 추정·오프라인 큐·v1 임시 전환 동작은 APP에서 별도 검증해야 한다.
 
 ```powershell
-uv run pytest -q tests/test_walk_entries.py tests/test_walk_entry_http.py tests/test_walk_entry_context.py tests/test_walk_entry_pin_context.py tests/test_walk_entry_v2.py
-uv run pytest -q tests/test_walk_entry_context_db.py
-uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_photo_db.py
+uv run pytest -q tests/walk/entries/test_walk_entries.py tests/walk/entries/test_walk_entry_http.py tests/walk/context/test_walk_entry_context.py tests/walk/context/test_walk_entry_pin_context.py tests/walk/entries/test_walk_entry_v2.py
+uv run pytest -q tests/walk/context/test_walk_entry_context_db.py
+uv run pytest -q tests/walk/entries/test_walk_entry_v2_db.py tests/walk/photos/test_walk_photo_db.py
 ```
 
 ### 8. 산책 일기·스토리보드
@@ -133,10 +134,10 @@ uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_photo_db.py
   모델 공급자 운영 품질 평가나 앱 화면 검증까지 대신하지 않는다.
 
 ```powershell
-uv run pytest -q tests/walk/test_spatial_diary.py tests/walk/test_spatial_diary_query.py tests/walk/test_walk_storyboard.py tests/walk/test_walk_storyboard_titles.py tests/walk/test_storyboard_pins.py tests/walk/test_storyboard_observations.py
-uv run pytest -q tests/walk/test_diary_contract.py tests/walk/test_diary_stamps.py tests/walk/test_diary_observations.py tests/walk/test_diary_writing.py tests/walk/test_diary_generation.py tests/walk/test_walk_photo_input.py
-uv run pytest -q tests/walk/test_walk_storyboard_db.py
-uv run pytest -q tests/test_walk_photo_db.py tests/walk/test_diary_generation_db.py
+uv run pytest -q tests/walk/diary/test_spatial_diary.py tests/walk/diary/test_spatial_diary_query.py tests/walk/storyboard/test_walk_storyboard.py tests/walk/storyboard/test_walk_storyboard_titles.py tests/walk/storyboard/test_storyboard_pins.py tests/walk/storyboard/test_storyboard_observations.py
+uv run pytest -q tests/walk/diary/test_diary_contract.py tests/walk/diary/test_diary_stamps.py tests/walk/diary/test_diary_observations.py tests/walk/diary/test_diary_writing.py tests/walk/diary/test_diary_generation.py tests/walk/photos/test_walk_photo_input.py
+uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
+uv run pytest -q tests/walk/photos/test_walk_photo_db.py tests/walk/diary/test_diary_generation_db.py
 ```
 
 ### 9. 전봇대 점령
@@ -165,7 +166,7 @@ uv run pytest -q tests/place/api/test_territory_sites.py tests/place/ingest/test
 | `WALK_CONTEXT_TEST_DATABASE_URL` | `test_walk_entry_context_db.py` | `postgresql+asyncpg://` 형식, localhost/127.0.0.1의 `walk_context_test`. fixture가 UUID schema와 실제 SQL 준비/제거 |
 | `WALK_PIN_TEST_DATABASE_URL` | v2 pin, photo, diary generation DB | 같은 형식, localhost/127.0.0.1의 `walk_pin_test`. 공유 fixture가 실제 초기화·migration·검증 SQL 실행 |
 | `TERRITORY_TEST_DATABASE_URL` | ownership/certified/activity DB | 같은 형식, localhost/127.0.0.1의 `claims_test`. UUID schema로 실제 SQL 검증 |
-| `LIVE_STORYBOARD_TEST_DSN` | `walk/test_walk_storyboard_db.py` | `postgresql://` 형식. localhost/127.0.0.1/::1 제한만 있고 DB 이름 제한은 없음. 별도 폐기 가능한 DB 지정 |
+| `LIVE_STORYBOARD_TEST_DSN` | `walk/storyboard/test_walk_storyboard_db.py` | `postgresql://` 형식. localhost/127.0.0.1/::1 제한만 있고 DB 이름 제한은 없음. 별도 폐기 가능한 DB 지정 |
 | `DAENGS_PLACE_DATABASE_URL` | Place DB 포함 파일 | 격리된 로컬 PostGIS와 Place Alembic 전체 schema 필요. `place/conftest.py`는 localhost/DB 이름을 강제하지 않고 설정 URL을 사용하므로 실행자가 명시적으로 지정 |
 
 첫 네 환경 변수가 없으면 해당 fixture는 skip한다. Place는 연결 실패를 skip으로 처리하지만
@@ -177,27 +178,72 @@ Place 전용 URL을 명시하고 대상이 폐기 가능한 로컬 DB인지 확�
 uv run alembic -c infra/place/alembic.ini upgrade head
 ```
 
-## 현재 얽힌 부분과 다음 정리 범위
+## Walk 정리 — 2단계
 
-폴더 이동 전에 아래 import 관계를 풀어야 한다. fixture 변경 시에는 제공 파일뿐 아니라
-소비 파일도 검증 범위에 포함한다. 이번 단계에서는 관계를 기록하고 코드를 유지한다.
+Walk 테스트 38개 중 패키지 경계 검사는 `walk/test_package_boundary.py`에 유지하고,
+나머지 37개를 아래 기능 폴더로 옮겼다. 테스트끼리 직접 import하던 관계를 없애고
+공용 생성 도구는 `support/`, pytest fixture 등록은 필요한 기능의 `conftest.py`에 둔다.
+
+| `walk/` 아래 위치 | 담당 범위 |
+| --- | --- |
+| `measurement/` | GPS 측정, 격자·분석 저장, finalize, 스타일 정책 |
+| `api/` | 산책 업로드·조회·인증·chunk·저장소 응답 계약 |
+| `entries/` | 기존 기록 HTTP와 v2 핀 계약·실제 DB 검증 |
+| `context/` | 기록/핀의 주변 정보 수집·작업 큐·실제 DB 검증 |
+| `photos/` | 사진 metadata, 저장 형식 입력 변환·실제 DB 검증 |
+| `diary/` | 공간 일기 조회·계약·관측·stamp·writing·generation |
+| `storyboard/` | scene·anchor·제목·핀·환경 관측·live DB 검증 |
+| `environment/` | 산책 환경 adapter·observation |
+| `support/` | 공용 도구 8개 모듈과 fixture/SQL 경로 기준인 `paths.py`. 테스트 케이스는 두지 않음 |
+| `fixtures/` | 기존 JSON 기준값. 내용·배치를 유지 |
+
+공용 fixture는 import 시 DB를 열지 않으며 테스트가 요청할 때만 실행된다.
+`entries`, `photos`, `diary`에서 사용하는 pin DB 장치는 `support/pin_database.py`가 제공하고,
+사진 schema 추가 장치는 `support/photo_database.py`가 제공한다. `context`와 `storyboard`의
+별도 DB fixture는 해당 DB 테스트 파일에 남겨 서로의 DB 설정을 덮어쓰지 않는다.
+루트 `tests/conftest.py`와 `walk/conftest.py`의 기존 장치는 바꾸지 않았다.
+
+함수별로 필요한 입력을 만들고 각 테스트가 값을 수정하는 방식은 유지한다.
+공용 도구에는 assertion을 이동하지 않고, 검사 케이스를 추가·삭제하거나 marker로 제외하지 않는다.
+기존 fixture 내부의 장치 무결성 assertion은 그대로 유지한다.
+
+```powershell
+# 해당 기능만 선택. 아래 두 명령을 매번 함께 실행할 필요는 없다.
+uv run --no-sync pytest -q tests/walk/entries
+# Walk 공용 도구 전체/폴더 배치 변경의 검증 범위
+uv run --no-sync pytest -q -rs tests/walk
+```
+
+2단계 로컬 검증: 변경 전 Walk 수집 490개, 변경 후 실행 490개.
+첫 실행은 464 passed / 6 failed / 20 skipped였고, 6개 실패는 공간 일기 fixture 경로 한 곳의
+이동 누락이었다. 경로 수정 후 `uv run --no-sync pytest -q tests/walk/diary/test_spatial_diary.py`로
+해당 파일 29개 모두 통과했다. 합산하면 기존 470개 실행 케이스를 확인했고, 실제 DB 20개는
+환경 변수 미설정으로 미검증이다. 전체 backend suite나 원격 CI를 실행한 결과는 아니다.
+Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 경로 130개 정적 확인도 완료했다.
+로컬 venv에 `check` 진입점이 없어 동일 코드인 `uv run --no-sync python -m daengs_backend.cli.check`를
+실행했다. migration 이름·검증 짝 검사는 통과했지만 Windows 바이트 검사는 이 PC의 PowerShell
+스크립트 실행 정책에 막혀 미검증이다. 실행 정책은 변경하지 않았다.
+
+## 남은 공유 관계
+
+fixture 변경 시에는 제공 파일뿐 아니라 소비 파일도 검증 범위에 포함한다.
+아래 Place·Territory 등의 구조는 이번 Walk 정리에서 바꾸지 않았다.
 
 | 공용 장치 또는 테스트 모듈 | 연결된 소비자 / 다음 단계에서 보존할 계약 |
 | --- | --- |
 | 루트 `conftest.py` | 암호화 키·DB 기본값·warmup, crawl/metrics/Celery autouse 대역. 모든 하위 테스트에 적용 |
 | `fakes.py`, `facility_session_store.py`, `place_capability_cases.py` | 프로필/시설 API/능력 fixture. 테스트 이름만 검색하면 빠지는 지원 파일 |
-| `test_walk_entry_context.py` | `test_walk_entry_pin_context.py`가 테스트 모듈에서 helper를 import |
-| `test_walk_entry_v2.py` → `test_walk_entry_v2_db.py` | 상수/생성 도구와 DB fixture가 연결됨 |
-| 위 v2 모듈들 → `test_walk_photo_db.py` → `walk/test_diary_generation_db.py` | 사진·일기 DB 검증이 핀 테스트에 의존. fixture를 이동할 때 세 기능을 함께 추적 |
-| `walk/test_diary_contract.py`, `test_walk_photo_input.py`, stamps/observations/writing 테스트 | 일기 테스트끼리 샘플/helper를 import. 생성 방식은 공유하고 시나리오 값은 각 테스트가 소유하도록 후속 정리 |
-| `walk/test_walk_storyboard_titles.py`, `test_walk_storyboard.py` | storyboard/observation/pin 테스트가 helper를 공유 |
+| `walk/support/entry_context.py` | context와 pin-context의 응답 생성 도구·state fixture |
+| `walk/support/entry_v2.py`, `pin_database.py`, `photo_database.py` | 핀·사진·일기 DB에서 공유. 제공 도구 변경 시 세 기능의 소비자를 확인 |
+| `walk/support/diary.py`, `photo_input.py`, `observations.py` | 일기 계약·stamp·writing·generation 및 사진 입력의 생성 도구 |
+| `walk/support/storyboard.py` | storyboard/pin의 live fixture 및 제목 응답 생성 도구 |
 | `place/place/discovery/test_service.py` → `test_facility.py` → `test_facility_actions.py` | discovery 내부 의존. 루트 `test_facility_discovery_api.py`도 facility 테스트 모듈을 import |
 | `test_territory_ownership_db.py` → `test_activity_db.py` → `test_territory_certified_db.py` | DB/actor/시즌 장치 공유. Walk 정리와 함께 무작정 이동하지 않음 |
 | `fixtures/`, `walk/fixtures/`, Place 하위 fixtures/JSON | capability, 점령 시나리오, 산책 스타일/finalize, 공간 일기/observation, 원천 데이터 기준값. 파일 이동 시 상대 경로도 검증 |
 
-현재 `pythonpath = ["."]`와 테스트 간 import에 의존한다. 2단계에서는 Walk부터
-**공용 생성 도구 분리 → 기능별 파일 배치 → import·fixture 경로 갱신 → 해당 묶음 검증** 순서로 진행한다.
-중복 검증은 같은 동작·입력·실패 경계를 실제로 비교한 뒤 합친다. 파일 이름이 비슷하다는 이유로 삭제하지 않는다.
+`pythonpath = ["."]`는 `tests` namespace와 공용 도구 import에 계속 필요하다.
+남은 도메인 정리와 CI 실행 범위 정렬은 후속 단계다. 중복 검증은 같은 동작·입력·실패 경계를
+실제로 비교한 뒤 합친다. 파일 이름이 비슷하다는 이유로 삭제하지 않는다.
 
 ## CI 연결 현황 — 참고용, 실행하지 않음
 
@@ -207,7 +253,7 @@ uv run alembic -c infra/place/alembic.ini upgrade head
 | [place-search-tests](../../.github/workflows/place-search-tests.yml) | PostGIS + Alembic + Place 테스트 |
 | [journey-tests](../../.github/workflows/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
 | [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·기존 기록 HTTP |
-| [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation DB. 현재 paths에 `src/daengs_walk/**`, `tests/walk/conftest.py` 및 다른 Walk helper 변경이 직접 포함되지 않음 |
+| [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation DB. 2단계에서 이동 경로·공용 도구·conftest 경로를 갱신. `src/daengs_walk/**` 변경은 여전히 직접 trigger에 포함되지 않아 후속 정렬 필요 |
 | [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스 |
 | [migration-verification-tests](../../.github/workflows/migration-verification-tests.yml) | 별도 migration 검증. Python 대역 테스트로 대체할 수 없는 SQL 검증 경계 |
 

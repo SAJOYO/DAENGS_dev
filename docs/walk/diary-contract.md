@@ -1,6 +1,7 @@
 # 산책 일기 입력·출력 계약
 
-상태: **이관 1단계 — 계약과 순수 검사 구현, 운영 호출 경로에는 미연결.**
+이 문서는 이관 1단계의 계약을 설명한다. 후속 [생성 연결](diary-generation.md)이
+기존 HTTP API와 LLM 작성을 연결하며 새 형식의 기본 활성화 값은 false다.
 기준: Dev `01a7bbe`, Geo `walk-input-v1` 실험. 관련 작업은 [Dev #370](https://github.com/SAJOYO/DAENGS_dev/pull/370).
 합성 자료로 계약을 검사했으며 실제 산책·공공데이터·LLM 품질을 평가한 결과는 아니다.
 후속 구현은 [저장 입력](photo-metadata.md), [장면 선택·스탬프](diary-stamps.md),
@@ -133,7 +134,8 @@ repository `owned()`를 대체하지 않는다. 이미 인증되고 소유권을
 실패/미호출의 날짜 제목은 시스템이 만든다. `semantic_status=not_evaluated`는 근거 ID 검사만으로
 문장이 사실이라고 증명하지 않았음을 뜻한다. 모델이 문장 안에 행동을 섞는 문제까지 스키마가 막지는 못한다.
 
-이 새 bundle은 아직 HTTP 응답에 등록하지 않았다. 기존 v1~v4를 새 형식으로 조용히 바꾸지 않는다.
+새 bundle의 명시적 HTTP 형식은 [생성 연결](diary-generation.md)에 등록한다.
+기존 v1~v5를 새 형식으로 조용히 바꾸지 않는다.
 [기존 v3/v4의 LLM 장면 제목](diary-titles.md)은 그대로이며, 새 일기 형식은 Geo에서 확인한
 산책 전체 제목만 사용한다. 개별 장면 제목을 원하면 별도 근거·표시 정책으로 확장한다.
 
@@ -149,8 +151,8 @@ repository `owned()`를 대체하지 않는다. 이미 인증되고 소유권을
    generation·입력 revision을 검사한다. 이후 같은 고정 plan에 대한 `assemble_diary()` 결과를 저장한다.
    두 검사 모두 통과해야 하며, 도중 입력이 바뀐 완료는 `StaleDiaryGeneration`으로 버린다.
 
-helper가 직접 DB 예약이나 원자적 저장을 하는 것은 아니다. 실제 연결 때 위 검사를 기존 트랜잭션 안에
-넣어야 한다. 공개 pending/running/ready/failed/stale 수명주기는 기존 서비스에 남긴다.
+helper가 직접 DB 예약이나 원자적 저장을 하는 것은 아니다. `walk_diary_generation`이 위 검사를
+기존 트랜잭션 안에 넣는다. 공개 pending/running/ready/failed/stale 수명주기는 기존 서비스에 남긴다.
 LLM 실패는 사용자 권한 거부와 다르며 공통 오케스트레이션에서도 ERROR/TIMEOUT과 REFUSED를 혼동하지 않는다.
 assistant graph/trace에는 raw GPS, 메모 원문, provider 원문을 복사하지 않는다.
 
@@ -176,5 +178,5 @@ uv run --no-sync ruff check src/daengs_walk/diary_input.py src/daengs_walk/diary
 후속 **App 사진 메타데이터 동기화와 Dev 입력 어댑터 연결**의 구현과 검증은
 [photo-metadata.md](photo-metadata.md)에 정리한다. 실제 저장 자료를 연결한 뒤
 Geo의 선택·스탬프 계산기를 이식한다.
-공공데이터 연결, LLM 딕셔너리 작성/호출·분할·비용 상한·의미 검증, HTTP 새 format 등록과
-App 렌더링은 각각 후속 단위다. 이번 단계가 운영 일기를 생성하기 시작한 것은 아니다.
+LLM 딕셔너리·제한된 단일 호출·HTTP 새 format은 [생성 연결](diary-generation.md)에 정리한다.
+공공데이터 공급 확장, 여러 호출 분할·의미 검증·App 렌더링은 후속 단위다.

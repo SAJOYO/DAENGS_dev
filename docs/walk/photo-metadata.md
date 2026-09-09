@@ -107,5 +107,5 @@ App 대상 5개 클래스는 Kotlin 컴파일·Room 스키마 생성과 함께 �
 
 후속 **사용자 기록 중심 선택·스탬프 코어**는 [diary-stamps.md](diary-stamps.md),
 실제 동선 후보 연결은 [diary-observations.md](diary-observations.md)에 정리한다.
-입력 어댑터는 준비됐지만 기존 `walk_storyboard.generate()`가 새 일기를 생성하거나
-App 화면을 새 format으로 전환한 단계는 아니다.
+기존 `walk_storyboard.generate()`의 새 일기 분기는 [diary-generation.md](diary-generation.md)에
+연결한다. App 화면 전환은 별도이며 서버 기본 활성화 값은 false다.

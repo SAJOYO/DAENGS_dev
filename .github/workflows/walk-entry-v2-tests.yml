@@ -5,6 +5,7 @@ on:
       - 'backend/src/daengs_backend/**'
       - 'backend/tests/test_walk_entry_v2*'
       - 'backend/tests/test_walk_photo_db.py'
+      - 'backend/tests/walk/test_diary_generation_db.py'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -16,6 +17,7 @@ on:
       - 'backend/src/daengs_backend/**'
       - 'backend/tests/test_walk_entry_v2*'
       - 'backend/tests/test_walk_photo_db.py'
+      - 'backend/tests/walk/test_diary_generation_db.py'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -49,4 +51,4 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
-      - run: uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_entry_v2.py tests/test_walk_photo_db.py
+      - run: uv run pytest -q tests/test_walk_entry_v2_db.py tests/test_walk_entry_v2.py tests/test_walk_photo_db.py tests/walk/test_diary_generation_db.py

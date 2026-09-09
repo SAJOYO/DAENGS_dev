@@ -734,6 +734,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return sum(1 for pid, _ in store.pet_members if pid == pet_id) + 1
 
     def member_add(session, pet_id, app_user_id):
+        # `pet_members` 의 PK `(pet_id, app_user_id)` 를 흉내 냅니다. 진짜 DB 는 flush 에서
+        # IntegrityError 를 냅니다 — `admin_create` 의 `admin_users_login_id_key` 대역과
+        # 같은 요령입니다. 이게 없으면 `accept_invite` 의 `is_member()` 조기 반환이
+        # 지워져도 이 자리가 조용히 중복 행을 쌓아 테스트가 그 회귀를 못 잡습니다.
+        if (pet_id, app_user_id) in store.pet_members:
+            raise IntegrityError("pet_members_pkey", None, Exception())
         store.pet_members.append((pet_id, app_user_id))
         return (pet_id, app_user_id)
 

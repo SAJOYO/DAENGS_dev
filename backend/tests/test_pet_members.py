@@ -231,11 +231,21 @@ async def test_accept_is_idempotent(store: Store, pet: FakePet):
     커밋하는 사이에 다른 하나도 그 초대를 들고 있는 경우입니다. 그때 나중 요청이
     보는 것이 `is_member() == True` 이고, 그 분기가 초대를 다시 지우지 않고 200 을
     돌려줍니다(`accept_invite` 의 `# 멱등입니다` 분기) — 그 경합을 여기서 흉내 냅니다.
+
+    **상태코드만으로는 이 분기를 못 지킵니다.** `is_member()` 조기 반환이 지워지면
+    흐름이 `member_repo.add` 로 떨어지는데, 가짜 `member_add` 는 이제 `(pet_id,
+    app_user_id)` 중복을 진짜 DB 의 PK 처럼 `IntegrityError` 로 거절합니다
+    (`fakes.py` — `admin_create` 의 `admin_users_login_id_key` 대역과 같은 요령).
+    그 예외를 서비스가 잡지 않으므로 그 회귀는 200 이 아니라 500 으로 드러나
+    상태코드 단언만으로는 안 잡히던 것을 잡습니다. 여기서는 그와 별개로
+    구성원 행이 **정확히 하나**인지까지 봅니다 — 조기 반환이 살아 있으면 두 번째
+    `add` 호출 자체가 없어 애초에 중복이 생기지 않는다는 것의 직접 증거입니다.
     """
     token = _invite(store, pet)
     store.pet_members.append((pet.id, CARER))  # 먼저 커밋된 동시 요청을 흉내 낸다
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 200
+    assert store.pet_members.count((pet.id, CARER)) == 1
 
 
 async def test_unknown_token_is_404(store: Store, pet: FakePet):
@@ -246,6 +256,19 @@ async def test_unknown_token_is_404(store: Store, pet: FakePet):
 async def test_expired_token_is_410(store: Store, pet: FakePet):
     token = _invite(store, pet)
     store.pet_invites[0].expires_at = datetime(2020, 1, 1, tzinfo=UTC)
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 410
+
+
+async def test_invite_stale_after_owner_changes_is_410(store: Store, pet: FakePet):
+    """그새 대표가 바뀌면(승계 등) 옛 대표가 뿌린 링크는 죽는다 (docs/co-care.md §3 표 3번).
+
+    `invite.invited_by` 는 발급 당시의 대표를 담습니다. 승계로 `pets.app_user_id` 가
+    바뀌면 그 값과 어긋나므로, 이 검사가 없으면 옛 대표의 초대로 새 구성원이 계속
+    들어옵니다.
+    """
+    token = _invite(store, pet)
+    pet.app_user_id = STRANGER  # 그 사이 대표가 바뀐 상태를 흉내 낸다
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 410
 

@@ -1,34 +1,20 @@
-# `skin/` — 피부 스크리닝 파트 (`daengs_screening` · `POST /screen/v1/screen`)
+# skin — 피부 스크리닝
 
-**아직 옮겨 온 문서가 없습니다.** 폴더 규칙(`docs/README.md` 의 "배치 규칙 — 유닛별
-폴더", #82)에 따라 자리를 먼저 만들어 둡니다. 스킨 관련 결정이 지금은 공통
-`decisions.md` 와 오케스트레이션 문서에 흩어져 있는데, **그건 스킨의 문서가 아니라
-스킨을 부르는 쪽의 문서**라 그대로 둡니다.
-
-## 여기 들어올 것
-
-| 무엇 | 지금 어디 |
+| 문서 | 내용 |
 | --- | --- |
-| 스크리닝 인수인계 (모델·전처리·판정 기준) | 아직 없음 — 카드 #79 가 그 자리다 |
-| 스킨 유닛의 설계 결정 기록 | 아직 없음 |
-| 데이터셋·학습 관련 노트 | `gayeoniee/deeplearning_test` (다른 저장소) |
+| [photo-safe-input-audit.md](photo-safe-input-audit.md) | 고정 후보의 앱 입력 경로·개발/운영 경계와 오프라인 검증 (#394) |
 
-## 여기 안 들어오는 것
+앱의 현재 경로는 인증된 `/app/screening/records` 생성 → 사진 업로드 →
+`/app/screening/records/{id}/confirm`이다. confirm이 모델을 실행하고 기록을 보관한다.
+`/screen/v1/screen`은 별도로 남아 있는 직접 multipart 경로다.
+이 설명은 2026-09-10 백엔드 `8f8f913`와 앱 `13009bd`의 호출 코드를 대조한 결과다.
 
-- **"어떻게 돌리나"** 는 코드 옆 README 에 둡니다. 여기는 **"왜"와 "지금 어디까지"** 입니다
-- 오케스트레이션이 스킨을 **HANDOFF** 하는 규칙은 스킨이 아니라 오케스트레이션의
-  결정입니다 (`docs/orchestration/routing.md` 의 인가 매트릭스, D-036)
-- 앱이 사진을 찍고 네모를 맞추는 흐름은 앱 저장소(`SAJOYO/DAENGS_APP`)의
-  `HISTORY.md` 에 있습니다
+## 문서 경계
 
-## 지금 알아 둘 것
+- 실행 방법·HTTP 계약은 `backend/src/daengs_screening/` 코드 옆 문서.
+- 모델·전처리의 이유와 검증 상태는 이 폴더.
+- 학습 실험 원본은 `gayeoniee/deeplearning_test`.
+- 오케스트레이션 HANDOFF와 인가는 호출하는 쪽의 문서.
+- 앱 사진 촬영/네모 UI 구현은 `SAJOYO/DAENGS_APP`.
 
-- 진입점은 `POST /screen/v1/screen` (multipart). nginx 가 `/screen/` 접두사를
-  **그대로 두고** backend 로 넘깁니다 — 최상위 `skin-screening` 컨테이너였던 것이
-  backend 프로세스 안으로 들어왔습니다 (D-039 · D-040)
-- 콘솔의 **`기능 / 검색 점검 > 피부 스크리닝`** 에서 사진 한 장으로 계약 전체를
-  볼 수 있습니다. 콘솔은 같은 오리진 `/api/screen/*` 으로 부릅니다 (D-015) —
-  nginx `/api/` 가 접두사를 떼므로 앱이 쓰는 `/screen/` 과 같은 곳에 닿습니다
-- ⚠️ **인증이 없습니다.** 앱이 토큰 없이 사진만 보냅니다. 오케스트레이션은 스킨을
-  실행하지 않고 HANDOFF 만 하므로(D-036) 소유권 검증이 어디에도 없습니다 —
-  보행(`gait`)과 같은 상태이고, 그쪽은 `SAJOYO/DAENGS_APP` #64 에서 다루고 있습니다
+스크리닝 소스는 원본에서 수정 후 동기화한다. 위 후보 감사는 서비스 모델 교체가 아니다.

@@ -235,9 +235,8 @@ class ReceiptExtraction(BaseModel):
 어느 쪽인지는 진단·처치 항목이 가른다.
 - 영수증이 아니거나 합계를 못 읽으면 `status="unreadable"` 과 사유를 낸다.
 
-모델은 `VET_RECEIPT_MODEL_ID` 설정으로 고른다. 기본은 라우터와 같은 계열이되,
-**영수증 판독에 flash-lite 가 모자랄 수 있다** — 설정으로 뺀 이유가 그것이고, 첫 평가가
-정한다. `temperature=0`.
+모델 ID 는 `services/vet_receipt.py` 의 상수다 — 라우터 모델과 같은 규칙이고, `.env` 로
+빼지 않는다. `temperature=0`.
 
 ### 못 읽었을 때
 

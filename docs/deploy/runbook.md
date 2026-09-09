@@ -255,12 +255,7 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   # ② VM — 객체만 받는다 (워크트리는 아직 안 움직입니다)
   cd ~/daengs && git fetch
   git diff --stat HEAD origin/main
-  git diff --name-only HEAD origin/main -- db/migrations   # ③ 에서 적용할 목록 = 이 출력
   ```
-
-  GCP 에 무엇이 적용됐는지는 **워크트리(`HEAD`)가 곧 기록**입니다 — ③ 을 빠뜨리지 않는 한
-  `main` 에 있는 마이그레이션은 전부 적용된 것이고, 두 번째 줄이 곧 미적용 목록입니다.
-  여러 장이면 **날짜순**으로 한 장씩 ③ 을 반복합니다.
   ```bash
   # ③ db/migrations/ 에 새 파일이 있으면 **pull 보다 먼저** 적용한다
   git show origin/main:db/migrations/<파일>.sql \

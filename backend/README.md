@@ -42,6 +42,7 @@ uv run pytest tests/journey
 - `src/daengs_backend/config.py` — 설정. 환경 변수 접두사는 `DAENGS_`, `backend/.env` 를 읽습니다.
 - `src/daengs_backend/core/crypto.py` — 개인정보 암복호화(AES-GCM) · blind index
 - `src/daengs_backend/core/password.py` — 관리자 비밀번호 해시(Argon2id)
-- `tests/` — pytest. 패키지 밖에 두고 도메인별 하위 폴더로 나눕니다
+- `tests/` — pytest. 패키지 밖에 두고 도메인별 하위 폴더로 나눕니다.
+  변경별 실행 범위와 DB 조건은 [기능별 테스트 실행 지도](tests/README.md)를 참고합니다.
 
 자세한 규칙은 루트 [CLAUDE.md](../CLAUDE.md) 참고.

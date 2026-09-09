@@ -6,17 +6,16 @@
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
-| [walk-finalize-operating-db-smoke.md](walk-finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke — 선행 migration 누락 발견, 932점 백업·chunk 이관, 최종 PASS |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · 오케스트레이션 · 관리자 콘솔)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · Walk · Territory · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
-지금은 `orchestration/` · `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` 를 옮겼고,
+지금은 `orchestration/` · `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` · `walk/` 를 옮겼고,
 `skin/` 은 옮겨 올 문서가 아직 없어 **자리만** 만들어 두었습니다. 마지막까지 루트에 남아 있던
 오케스트레이션 4건도 `orchestration/` 으로 옮겼습니다(#82) — 폴더가 유닛을 말하므로 파일 이름의
 `orchestration-` 접두사는 뗐습니다 (`orchestration-contracts.md` → `orchestration/contracts.md`).
@@ -88,14 +87,31 @@ Place는 별도 PostGIS와 Alembic을 소유하며, 그 물리·런타임 경계
 [README.md](../backend/src/daengs_journey/README.md)에 둡니다. Journey는 Place 검색,
 Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 
+### `walk/` — 산책 기록·공간 일기 (`/app/walks/*`)
+
+| 파일 | 내용 |
+| --- | --- |
+| [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |
+| [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
+| [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | 공간 일기 조회 API — 인증·일관된 조회·운영 상한·Place/Journey 경계 |
+| [walk/storyboard-live.md](walk/storyboard-live.md) | 실제 산책의 관측 분석·장면 구성과 앱 검토 연결 |
+| [walk/diary-titles.md](walk/diary-titles.md) | 스토리보드 대표·장면 제목의 LLM 생성과 저장·실패 처리 |
+| [walk/scene-anchors.md](walk/scene-anchors.md) | 자동 장면을 원본 GPS 관측 위치에 연결하는 v4 계약 |
+| [walk/speed-style.md](walk/speed-style.md) | 산책 지도 속도 색상과 앱 표시 정책 |
+| [walk/finalize-operating-db-smoke.md](walk/finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke와 당시 앱 왕복 검증 기록 |
+
 ### `territory/` — 점령 방문 증거·상태 (`/app/territory/*`)
 
 | | |
 | --- | --- |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
+| [territory/claim-foundation.md](territory/claim-foundation.md) | 공유 점유 모델과 상태 전이의 1단계 설계 |
+| [territory/ownership-api.md](territory/ownership-api.md) | 온라인 점유 저장·API·동시성 및 배포 계약 |
+| [territory/vision-worker.md](territory/vision-worker.md) | 방문 사진의 비동기 판정·재시도와 점유 연결 경계 |
 
 중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
-`VerifiedVisit`은 backend가 소유합니다. 실제 점령·방어·갱신 게임 정책은 아직 정하지 않았습니다.
+`VerifiedVisit`과 공유 점유는 backend가 소유합니다. 점유 계약과 후속 정책은
+[온라인 점유 API](territory/ownership-api.md)에서 확인합니다.
 
 ### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
 

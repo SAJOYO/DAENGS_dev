@@ -177,10 +177,10 @@ def test_v2_unlocated_and_provisional_pin_metadata_are_preserved():
         assert result.pin_payload == pin
 
 
-def test_context_hash_and_target_are_checked_before_reusing_saved_provider_data():
+def context_envelope():
     original = entry()
     payload = {"items": [], "radius_m": 250}
-    envelope = {
+    return {
         "id": str(uuid.uuid4()),
         "schema_version": "walk-entry-context-v1",
         "target": {
@@ -203,6 +203,11 @@ def test_context_hash_and_target_are_checked_before_reusing_saved_provider_data(
         "payload": payload,
         "payload_sha256": digest(payload),
     }
+
+
+def test_context_hash_and_target_are_checked_before_reusing_saved_provider_data():
+    original = entry()
+    envelope = context_envelope()
     result = adapter.assemble_input(walk(), None, [original], [], None, [envelope])
     assert len(result.source.backgrounds) == 1
     assert result.source.selected_background_ids == ()  # The selector is the next unit.
@@ -302,3 +307,90 @@ async def test_input_reader_does_not_read_private_sources_for_another_owner(monk
     with pytest.raises(LookupError):
         await adapter.read_input(session, uuid.uuid4(), WALK)
     private.assert_not_called()
+
+
+def pin_context():
+    pin = {
+        "resolution_id": str(uuid.uuid4()),
+        "state": "resolved",
+        "method": "estimated",
+        "target_at": AT.isoformat(),
+        "point": {"lat": 37.6, "lng": 127.1},
+        "computed_at": (AT + timedelta(seconds=5)).isoformat(),
+        "resolve_by": (AT + timedelta(seconds=30)).isoformat(),
+        "policy_version": "walk-action-pin-v1",
+        "algorithm_version": "synthetic-v1",
+        "source_refs": [
+            {"client_seq": 1, "chain_index": 0, "at": (AT - timedelta(seconds=5)).isoformat()},
+            {"client_seq": 2, "chain_index": 0, "at": (AT + timedelta(seconds=5)).isoformat()},
+        ],
+        "uncertainty_m": 20.0,
+        "uncertainty_basis": "model_bound",
+        "reason": "refined",
+    }
+    sidecar = SimpleNamespace(entry_id=ENTRY, pin_revision=3, payload=pin)
+    envelope = context_envelope()
+    envelope["schema_version"] = "walk-entry-context-v2"
+    envelope["target"].update(pin=deepcopy(pin), pin_revision=3)
+    envelope["provenance"].update(
+        policy_version="walk-entry-context-v2", location_basis="estimated"
+    )
+    return sidecar, envelope
+
+
+@pytest.mark.parametrize("change", [None, "revision", "pin", "method", "v1"])
+def test_pin_context_uses_current_estimate_and_rejects_stale_sources(change):
+    sidecar, envelope = pin_context()
+    if change == "revision":
+        envelope["target"]["pin_revision"] = 2
+    elif change == "pin":
+        envelope["target"]["pin"]["point"]["lng"] = 127.2
+    elif change == "method":
+        envelope["provenance"]["location_basis"] = "observed"
+    elif change == "v1":
+        envelope = context_envelope()
+    result = adapter.assemble_input(walk(), None, [entry()], [sidecar], None, [envelope])
+    if change:
+        assert not result.source.backgrounds and len(result.excluded_backgrounds) == 1
+    else:
+        background = result.source.backgrounds[0]
+        assert background.query_point.lat == 37.6  # Not the original location's 37.5.
+        assert result.source.records[0].anchor.method == "estimated"
+        assert background.payload_schema == "walk-entry-context-v2"
+
+
+def test_v2_unlocated_pin_never_borrows_original_location_for_context():
+    sidecar, envelope = pin_context()
+    sidecar.payload.update(
+        state="unlocated", method="none", point=None, source_refs=[],
+        uncertainty_m=None, uncertainty_basis="unknown", reason="no_evidence",
+    )
+    envelope["target"]["pin"] = deepcopy(sidecar.payload)
+    envelope["provenance"].update(location_basis="none", retrieved_at=None, temporal_basis="unknown")
+    envelope.update(status="not_requested", reason="no_location", payload=None, payload_sha256=None)
+    result = adapter.assemble_input(walk(), None, [entry()], [sidecar], None, [envelope])
+    assert len(result.source.backgrounds) == 1
+    assert result.source.backgrounds[0].query_point is None
+    assert result.source.records[0].anchor.point is None
+
+
+async def test_input_reader_queries_the_saved_v2_policy_including_a_pinless_note(monkeypatch):
+    session = SimpleNamespace(new=set(), dirty=set(), deleted=set(), expire_all=Mock())
+    original = entry()
+    sidecar, envelope = pin_context()
+    sidecar.payload = None
+    envelope["target"]["pin"] = None
+    envelope["provenance"]["location_basis"] = "original_location"
+    monkeypatch.setattr(adapter.entries, "owned_walk", AsyncMock(return_value=walk()))
+    monkeypatch.setattr(adapter.entries, "entries", AsyncMock(return_value=[original]))
+    monkeypatch.setattr(adapter.pins, "pins", AsyncMock(return_value=[sidecar]))
+    current = AsyncMock(return_value=([], {"space.facility": SimpleNamespace(envelope=envelope)}))
+    monkeypatch.setattr(adapter.contexts, "current", current)
+    monkeypatch.setattr(adapter.storyboards, "latest_analysis", AsyncMock(return_value=None))
+    monkeypatch.setattr(settings, "walk_entry_v2_enabled", True)
+    monkeypatch.setattr(settings, "walk_entry_context_enabled", True)
+    monkeypatch.setattr(settings, "walk_photo_metadata_enabled", False)
+    result = await adapter.read_input(session, OWNER, WALK)
+    current.assert_awaited_once_with(session, original, policy="walk-entry-context-v2")
+    assert len(result.source.backgrounds) == 1
+    assert result.source.records[0].ref.pin_revision == 3

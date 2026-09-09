@@ -36,19 +36,7 @@ class InputAssembly:
     excluded_backgrounds: tuple[dict[str, str], ...]
 
 
-def entry_record(row, sidecar=None):
-    payload = row.payload
-    ref = RecordRef(
-        store="walk_entry",
-        id=str(row.id),
-        version=str(row.revision),
-        version_kind="revision",
-        pin_revision=sidecar.pin_revision if sidecar else None,
-    )
-    if payload is None:
-        return UserRecord(ref=ref, deleted=True, content=None, anchor=None)
-    event_at, location = payload["recorded_at"], payload.get("location")
-    raw_pin = sidecar.payload if sidecar else None
+def entry_anchor(event_at, location, raw_pin=None):
     if raw_pin is not None:
         pin = Pin.model_validate(raw_pin)
         source_fixes = pin.model_dump(mode="json")["source_refs"]
@@ -78,6 +66,22 @@ def entry_record(row, sidecar=None):
             position_state="legacy" if location else "unlocated",
             method="last_known" if location else "none",
         )
+    return anchor
+
+
+def entry_record(row, sidecar=None):
+    payload = row.payload
+    ref = RecordRef(
+        store="walk_entry",
+        id=str(row.id),
+        version=str(row.revision),
+        version_kind="revision",
+        pin_revision=sidecar.pin_revision if sidecar else None,
+    )
+    if payload is None:
+        return UserRecord(ref=ref, deleted=True, content=None, anchor=None)
+    raw_pin = sidecar.payload if sidecar else None
+    anchor = entry_anchor(payload["recorded_at"], payload.get("location"), raw_pin)
     content = (
         Behavior(
             kind="behavior",
@@ -114,32 +118,37 @@ def photo_record(raw):
 
 
 def saved_background(envelope, record, walk_id):
-    """Accept the currently shipped v1 context only; never relabel it as v2 pin support."""
-    if envelope["schema_version"] != "walk-entry-context-v1":
+    """Reuse the saved source version, including the v2 pin's identity and location basis."""
+    schema = envelope["schema_version"]
+    expected_schema = contexts.PIN_POLICY if record.ref.pin_revision is not None else contexts.POLICY
+    if schema != expected_schema:
         raise ValueError("unsupported_context_schema")
     target = envelope["target"]
     if (
         record.deleted
-        or record.pin_payload is not None
         or target["store"] != "walk_entry"
         or str(target["walk_id"]) != str(walk_id)
         or str(target["id"]) != record.ref.id
         or str(target["revision"]) != record.ref.version
     ):
         raise ValueError("stale_context_target")
-    location = target.get("location")
-    target_anchor = Anchor(
-        event_at=target["event_at"],
-        time_basis="recorded_at",
-        point={"lat": location["lat"], "lng": location["lng"]} if location else None,
-        location_at=location["captured_at"] if location else None,
-        accuracy_m=location.get("accuracy_m") if location else None,
-        position_state="legacy" if location else "unlocated",
-        method="last_known" if location else "none",
-    )
+    raw_pin = None
+    provenance = envelope["provenance"]
+    if schema == contexts.PIN_POLICY:
+        raw_pin = target["pin"]
+        if target["pin_revision"] != record.ref.pin_revision:
+            raise ValueError("stale_context_pin_revision")
+        pin = Pin.model_validate(raw_pin) if raw_pin is not None else None
+        original = Pin.model_validate(record.pin_payload) if record.pin_payload is not None else None
+        if pin != original or (pin and pin.state == "provisional"):
+            raise ValueError("stale_context_pin")
+        if provenance["location_basis"] != (pin.method if pin else "original_location"):
+            raise ValueError("invalid_context_location_basis")
+    target_anchor = entry_anchor(target["event_at"], target.get("location"), raw_pin)
     if target_anchor != record.anchor:
         raise ValueError("stale_context_location")
-    provenance = envelope["provenance"]
+    if provenance["policy_version"] != schema:
+        raise ValueError("invalid_context_policy")
     if not envelope["tags"] or not set(envelope["tags"]) <= {
         "space.facility",
         "space.park",
@@ -244,9 +253,10 @@ async def read_input(session, owner, walk_id):
     if settings.walk_entry_context_enabled:
         pin_ids = {r.entry_id for r in pin_rows}
         for row in rows:
-            if row.payload is None or row.id in pin_ids:
-                continue  # The v2 context consumer is a separate in-flight change (#371).
-            _, latest = await contexts.current(session, row)
+            if row.payload is None:
+                continue
+            policy = contexts.PIN_POLICY if row.id in pin_ids else contexts.POLICY
+            _, latest = await contexts.current(session, row, policy=policy)
             envelopes.extend(r.envelope for r in latest.values())
     return assemble_input(
         walk,

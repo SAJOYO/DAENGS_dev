@@ -63,9 +63,11 @@ pin revision을 분리하고 원본 pin의 정책·불확실성도 입력에 보
 상태를 실제 GPS 관측으로 바꾸지 않는다. 사진의 `app-private-photo:<id>`는 원본 연결 참조이며
 파일이 다른 기기에 존재한다는 보장이 아니다.
 
-기존 `walk-entry-context-v1`은 대상 revision·좌표·시각·payload hash가 맞는 것만 보존한다.
+`walk-entry-context-v1/v2`는 대상 revision·좌표·시각·payload hash가 맞는 것만 보존한다.
 잘못되거나 오래된 봉투는 원문을 출력하지 않는 제외 사유와 함께 분리한다.
-v2 핀의 주변 정보 연결은 Dev #371의 책임이며 v1 봉투를 v2용으로 재라벨하지 않는다.
+v2 주변 정보 수집은 이미 머지된 Dev #371을 재사용한다. sidecar가 있으면 v2 정책으로
+조회하고 pin revision·원본 pin·위치 산출 방법도 맞춘다. 위치 없는 핀에 옛 원본 좌표를
+대입하지 않으며 v1 봉투를 v2용으로 재라벨하지 않는다. 핀이 없는 v2 메모도 구분한다.
 선택은 다음 단위여서 `selected_background_ids=[]`이고 움직임 계산도 아직 하지 않아
 `observations=[]`다. 원본 GPS의 출처는 추측하지 않고 `evidence_origin=unknown`으로 둔다.
 출발 시 날씨를 모든 장면의 날씨로 확장하지 않는다.
@@ -79,8 +81,9 @@ v2 핀의 주변 정보 연결은 Dev #371의 책임이며 v1 봉투를 v2용으
    기본값은 false다. 이번 작업에서 운영 migration/설정 변경/배포는 하지 않았다.
 4. App #235가 capability 협상 후 기존 동기화 경로로 메타데이터를 보낸다.
 
-로컬: Dev 대상 76개 통과, PostgreSQL 3개는 격리 DB 미설정으로 skip.
-마지막 manifest 참조 보강 후 직접 영향받는 55개 재검사.
+로컬: 사진 전송·입력·계약·기존 storyboard 대상 76개 통과, PostgreSQL 3개는 격리 DB
+미설정으로 skip. Dev #371 반영과 v2 문맥 어댑터 보강 뒤 직접 영향받는 5개 파일에서
+95개 통과(앞선 검사와 겹치는 항목을 포함한다).
 수정 Python Ruff, migration 이름/짝/검증 등록 검사 통과.
 App 대상 5개 클래스는 Kotlin 컴파일·Room 스키마 생성과 함께 통과했다.
 전체 로컬 스위트나 실사용 사진/LLM 호출은 수행하지 않았다.
@@ -90,4 +93,3 @@ App 대상 5개 클래스는 Kotlin 컴파일·Room 스키마 생성과 함께 �
 다음은 **사용자 기록 중심 선택·스탬프 코어** 이식이다.
 입력 어댑터는 준비됐지만 기존 `walk_storyboard.generate()`가 새 일기를 생성하거나
 App 화면을 새 format으로 전환한 단계는 아니다.
-

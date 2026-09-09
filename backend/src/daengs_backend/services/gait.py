@@ -415,7 +415,11 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
 
         record.status = "DONE"
         record.quality_status = result["quality"].get("status")
-        record.quality_tier = result["quality"].get("quality_tier")
+        # ⚠️ 컬럼은 CHECK(good, low) 입니다. v4 는 3단계(good/ok/low)를 내므로 그대로 넣으면
+        #    커밋이 CheckViolation 으로 죽고, 아래 except 가 잡기 전엔 행이 PROCESSING 으로
+        #    남았습니다 (2026-09-09, 47.mp4 두 번 연속). 여기서 어휘를 맞춥니다 —
+        #    `quality` JSONB 에는 원값을 그대로 두어 정보를 잃지 않습니다.
+        record.quality_tier = _db_quality_tier(result["quality"].get("quality_tier"))
         record.quality = result["quality"]
         record.summary_for_ui = (result.get("features") or {}).get("summary_for_ui")
         record.internal_feature_vector = (result.get("features") or {}).get(
@@ -427,7 +431,7 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
         record.failure_reason = None
         try:
             await session.commit()
-        except Exception:
+        except Exception as exc:
             await session.rollback()
             if overlay_key is not None:
                 try:
@@ -437,7 +441,40 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
                         "gait.analyze: DB commit 실패 뒤 overlay 정리 실패 key=%s",
                         overlay_key,
                     )
+            # ⚠️ 여기서 그냥 raise 만 하면 행이 **PROCESSING 으로 영원히 남습니다** — DONE 전이가
+            #    방금 롤백됐고, acks_late 재전달은 `status != "UPLOADED"` 라 건너뛰기 때문입니다.
+            #    2026-09-09 에 CheckViolation(quality_tier) 으로 실제로 두 건이 그렇게 갇혔습니다.
+            #    실패는 실패로 적어야 앱이 "다시 시도" 를 띄우고 사람이 원인을 봅니다.
+            await _mark_failed_after_commit_error(session, record_id, exc)
             raise
+
+
+async def _mark_failed_after_commit_error(session, record_id: uuid.UUID, exc: Exception) -> None:
+    """DONE 커밋이 실패한 행을 **새 트랜잭션**에서 FAILED 로 닫습니다.
+
+    best-effort 입니다 — 여기서 또 실패하면 로그만 남기고 원래 예외를 살립니다. 원인이
+    DB 자체(연결 끊김 등)면 이것도 안 되지만, 제약 위반처럼 **값 문제**면 이 UPDATE 는
+    (그 값을 안 쓰므로) 통과해서 좀비를 막습니다.
+    """
+    from sqlalchemy import select
+
+    try:
+        row = (
+            await session.execute(
+                select(GaitRecord)
+                .where(GaitRecord.id == record_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if row is None or row.status != "PROCESSING":
+            return
+        row.status = "FAILED"
+        row.failure_reason = f"결과 저장 실패: {str(exc)[:1900]}"
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        log.exception("gait.analyze: 커밋 실패 뒤 FAILED 표시도 실패 record_id=%s", record_id)
 
 
 def _analyze_from_storage(storage_key: str) -> dict:
@@ -491,6 +528,37 @@ def _analyze_from_storage(storage_key: str) -> dict:
             overlay_data = Path(overlay_path).read_bytes()
         record["_overlay_bytes"] = overlay_data
         return record
+
+
+#: `gait_records.quality_tier` 의 CHECK 가 허용하는 값 (db/init/07_gait_records.sql).
+#: legacy 엔진은 이 둘만 냅니다.
+DB_QUALITY_TIERS = frozenset({"good", "low"})
+
+
+def _db_quality_tier(raw: str | None) -> str | None:
+    """엔진이 낸 tier 를 DB/앱 어휘(good · low)로 옮깁니다.
+
+    v4 는 유효 프레임 수(`n_frames_gait_usable`)로 **세 단계**를 냅니다 (gait_v4/quality.py):
+
+        good  81 이상      quality_note 없음
+        ok    20 ~ 80      quality_note 붙음 (80 미만이라 참고용)
+        low    4 ~ 19      quality_note 붙음
+        (4 미만은 status=unavailable, tier 없음)
+
+    앱과 비교 규칙의 경계는 80 프레임 하나뿐이라(`MIN_VALID_FRAMES`, D-058 의 "80 미만은
+    참고용"), `ok` 와 `low` 는 앱 기준으로 **같은 취급**입니다. 그래서 `ok → low` 로 접습니다.
+    원값은 `quality` JSONB 에 그대로 남아 있어 나중에 구간을 살릴 수 있습니다.
+
+    모르는 값이 오면 None 으로 둡니다 — 컬럼이 nullable 이라 CHECK 를 지나고, 앱은
+    "등급 없음" 으로 보여 줍니다. 여기서 예외를 내면 다시 좀비가 됩니다.
+    """
+    if raw in DB_QUALITY_TIERS:
+        return raw
+    if raw == "ok":
+        return "low"
+    if raw is not None:
+        log.warning("gait.analyze: 알 수 없는 quality_tier=%r → None 으로 저장", raw)
+    return None
 
 
 # ── walk_demo v4 엔진 (#304) ─────────────────────────────────────────────

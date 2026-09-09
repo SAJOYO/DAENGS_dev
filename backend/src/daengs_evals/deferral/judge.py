@@ -77,8 +77,18 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
     path = judgments_path(cells_label, variant)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    rows: list[dict[str, Any]] = []
+    real_capabilities = {"general"} if meta.get("adapters") == "fallback-only" else None
+    # 이미 판정한 답은 다시 안 부른다 — 같은 label 의 이전 판정 파일에서 (문장이 같으면 같은 답)
     cache: dict[tuple[str, str], DeferralVerdict] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                old = json.loads(line)
+                if old.get("kind") == "judgment" and old.get("verdict") and old.get("message_key"):
+                    cache[(old["question_id"], old["message_key"])] = (
+                        DeferralVerdict.model_validate(old["verdict"])
+                    )
+    rows: list[dict[str, Any]] = []
     judged = 0
     for c in cells:
         qid = c["question_id"]
@@ -95,8 +105,24 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
             "review": e.review if e else None,
         }
         verdict: DeferralVerdict | None = None
+        answered_by = next(
+            (r.get("capability") for r in c.get("results") or [] if r.get("status") == "OK"), None
+        )
+        if (
+            real_capabilities is not None
+            and answered_by is not None
+            and answered_by not in real_capabilities
+        ):
+            # 가짜 어댑터의 자리표시 답 — 물러섬을 잰 것이 아니라 못 잰 것이다
+            row.update(
+                move="unmeasured", outcome="unmeasured_fake_adapter", answered_by=answered_by
+            )
+            rows.append(row)
+            log(f"  {row['cell']:44s} 미측정 ({answered_by} 가짜 어댑터)")
+            continue
         if row["refusal_code"] is None and c["status"] in ("ANSWERED", "PARTIAL"):
             key = (qid, (c.get("message") or "").strip())
+            row["message_key"] = key[1]
             if key not in cache:
                 cache[key] = generate_structured(
                     model=model,
@@ -144,7 +170,7 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
 
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    labeled = [r for r in rows if r["outcome"] != "unlabeled"]
+    labeled = [r for r in rows if r["outcome"] not in ("unlabeled", "unmeasured_fake_adapter")]
     by_reason: dict[str, Counter] = defaultdict(Counter)
     for r in labeled:
         by_reason[r["expected_reason"] or "none"][r["outcome"]] += 1
@@ -153,7 +179,10 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     under_n = c["correct_defer"] + c["wrong_reason"] + c["under_refusal"]
     return {
         "n_cells": len(rows),
-        "unlabeled": len(rows) - len(labeled),
+        "unlabeled": sum(1 for r in rows if r["outcome"] == "unlabeled"),
+        "unmeasured_fake_adapter": sum(
+            1 for r in rows if r["outcome"] == "unmeasured_fake_adapter"
+        ),
         "review_pending": sum(1 for r in labeled if r.get("review")),
         "confusion": c,
         "over_refusal": wilson_interval(c["over_refusal"], over_n).as_dict() if over_n else None,
@@ -180,7 +209,8 @@ def render(s: dict[str, Any], meta: dict[str, Any]) -> str:
         "",
         f"판정 {meta['judge_model']} · {meta['prompt_version']} · 고유 답변 {meta['unique_answers_judged']}건 판정 · {utc_now()}",
         "",
-        f"> 잠정. 기대 라벨 중 사람 검토 대기 {s['review_pending']}건. 사람 라벨 κ 전.",
+        f"> 잠정. 기대 라벨 중 사람 검토 대기 {s['review_pending']}건. 사람 라벨 κ 전. "
+        f"가짜 어댑터가 답한 셀 {s['unmeasured_fake_adapter']}개는 미측정.",
         "",
         "## 양방향 — 총계 하나로 줄이지 않는다",
         "",

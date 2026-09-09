@@ -50,7 +50,12 @@ async def list_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> list[
 async def list_for_owner_for_update(
     session: AsyncSession, app_user_id: uuid.UUID
 ) -> list[Pet]:
-    """탈퇴가 지울 반려견을 잠가 새 gait FK 참조가 끼어들지 못하게 합니다."""
+    """탈퇴가 지울 반려견을 잠가 새 gait FK 참조가 끼어들지 못하게 합니다.
+
+    **`farewell_on` 으로 거르지 않습니다.** 떠난 아이도 행은 그대로 있고 돌보미도 남아 있을
+    수 있어, 탈퇴 가드(`services/pet.py::delete_all_for_owner`)가 똑같이 걸어야 합니다 —
+    빼면 떠난 아이 뒤에 남은 공동 보호자를 대표가 조용히 지울 수 있게 됩니다.
+    """
     stmt = (
         select(Pet)
         .where(Pet.app_user_id == app_user_id)

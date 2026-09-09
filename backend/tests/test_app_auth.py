@@ -475,6 +475,42 @@ class TestSessionFlow:
         assert res.status_code == 204
         assert pet not in store.pets
 
+    def test_대표를_넘긴_뒤에는_탈퇴가_되고_강아지는_살아남는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """출구 ⓐ 전체를 한 번에 걷습니다 — 이것이 409 메시지가 실제로 약속하는 경로입니다.
+
+        승계 테스트는 승계가 되는 것을, 탈퇴 테스트는 탈퇴가 되는 것을 따로 증명하지만
+        둘을 이어 붙인 테스트는 없었습니다. 대표를 넘기면 `list_for_owner_for_update` 가
+        더 이상 이 강아지를 돌려주지 않으므로 가드가 구조적으로 안 걸려야 "정상"인데,
+        그 구조적 논리가 실제로 맞는지는 이렇게 끝까지 걸어 봐야 압니다 — 회귀가 생기면
+        이 테스트가 잡습니다(탈퇴가 다시 막히거나, 최악의 경우 넘긴 강아지가 지워지거나).
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=111))
+        store.pet_members.append((pet.id, carer.id))
+
+        # 넘기기 전: 돌보미가 남아 있으니 여전히 409.
+        blocked = client.post("/auth/app/withdraw", headers=headers)
+        assert blocked.status_code == 409
+
+        transfer = client.post(
+            f"/app/pets/{pet.id}/owner",
+            json={"app_user_id": str(carer.id)},
+            headers=headers,
+        )
+        assert transfer.status_code == 200
+
+        res = client.post("/auth/app/withdraw", headers=headers)
+
+        assert res.status_code == 204
+        assert pet in store.pets, "넘긴 강아지가 탈퇴로 같이 지워지면 안 됩니다"
+        assert pet.app_user_id == carer.id
+
     def test_탈퇴하면_내_강아지와_산책_좌표만_지운다(
         self, client: TestClient, store: Store
     ) -> None:

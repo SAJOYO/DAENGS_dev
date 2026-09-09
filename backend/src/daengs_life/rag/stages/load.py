@@ -56,6 +56,23 @@ class Prepared:
     model_repo: str = ""
 
 
+@dataclass
+class Written:
+    """`upsert()` 가 **실제로** 무엇을 했나 (RAG-084 ④).
+
+    셋을 가르지 않으면 화면에 `upserted 9844행` 한 줄만 남는데, 그 줄은 증분화가 도는 날과
+    안 도는 날에 똑같이 찍힌다. `unchanged` 가 이 카드의 성공 지표다.
+    """
+    inserted: int = 0
+    updated: int = 0
+    unchanged: int = 0
+
+    @property
+    def touched(self) -> int:
+        """실제로 새 튜플이 생긴 행 = 인덱스가 갱신된 행."""
+        return self.inserted + self.updated
+
+
 def prepare(model_key: str) -> Prepared:
     """청크와 벡터를 맞물려 `documents` 행으로 만든다. **DB 를 건드리지 않는다.**
 
@@ -165,23 +182,49 @@ ON CONFLICT (content_hash) DO UPDATE SET
     -- 똑같은 이유이고, 증상도 똑같이 조용하다 (RAG-035)
     content_tokens = EXCLUDED.content_tokens,
     metadata       = EXCLUDED.metadata
+WHERE documents.embedding      IS DISTINCT FROM EXCLUDED.embedding
+   OR documents.content_tokens IS DISTINCT FROM EXCLUDED.content_tokens
+   OR documents.metadata       IS DISTINCT FROM EXCLUDED.metadata
 """.format(cols=", ".join(COLUMNS), vals=", ".join(f"%({c})s" for c in COLUMNS))
 
 
-def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> None:
-    """**한 트랜잭션**으로 전부 넣는다 (RAG-025 ①).
+def upsert(conn, rows: list[dict[str, Any]], batch: int = 500) -> Written:
+    """**한 트랜잭션**으로 전부 넣는다 (RAG-025 ①). 안 바뀐 행은 **쓰지 않는다** (RAG-084).
 
     `content` 와 나머지 컬럼은 갱신하지 않는다 — `content_hash` 가 `content` 의 해시라 정의상
     같고, 다른 컬럼은 같은 청크에서 나온 같은 값이다. 바뀌는 것은 `embedding` 과 `metadata`
     (`embedding_model` 이 그 안에 있다) 뿐이다. `updated_at` 은 트리거가 맡는다.
+
+    **`UPSERT` 의 `WHERE` 가 증분화의 전부다** (RAG-084 ②). 조건이 없으면 값이 하나도 안
+    달라져도 `DO UPDATE` 가 돌아 전 행에 새 튜플 버전이 생기고, 그 수만큼 **테이블의 모든
+    인덱스**에 항목이 들어간다. 2026-09-09 실측: 9,844행 중 실제로 달라진 것 **0행**인데
+    upsert 는 9.22초를 쓰고 인덱스 넷을 통째로 갈았다. HNSW 를 켜면 그 자리에 제일 비싼
+    다섯 번째가 붙는다 — `D16` 이 증분화와 인덱스를 **한 카드로 묶은 이유**가 이것이다.
+
+    판별은 **DB 가 한다.** 클라이언트가 "안 바뀌었을 것"이라고 미리 거르지 않는 이유는,
+    그 판단이 틀리면 행이 **조용히 낡은 채로 남기** 때문이다 — `metadata` 를 통째로 갈아
+    끼우는 이 upsert 에서 그 실수는 `org` 2,592행이 사라진 사고(RAG-066 ①)와 같은 모양이 된다.
+    `IS DISTINCT FROM` 은 세 값을 서버에서 직접 비교하므로 틀릴 여지가 없다. `metadata` 는
+    JSONB 라 키 순서·공백이 정규화된 뒤에 비교되고, `embedding` 은 pgvector 의 `=` 를 탄다.
+
+    돌려주는 `Written` 이 **화면에 나오는 수**다. 없으면 증분화가 됐는지 안 됐는지 알 길이
+    없다 — 성공한 적재는 어느 쪽이든 똑같이 조용하다.
     """
     from psycopg.types.json import Jsonb
 
     payload = [{**r, "metadata": Jsonb(r["metadata"])} for r in rows]
     with conn.transaction():                       # 중간에 죽으면 통째로 되돌린다 = 모델 혼입 불가
         with conn.cursor() as cur:
+            # 신규와 갱신을 가르려고 **먼저** 읽는다. 같은 트랜잭션 안이라 그사이 바뀌지 않는다.
+            cur.execute("SELECT content_hash FROM documents")
+            known = {h for (h,) in cur}
+            touched = 0
             for i in range(0, len(payload), batch):
                 cur.executemany(UPSERT, payload[i:i + batch])
+                touched += cur.rowcount            # `WHERE` 가 막은 행은 0으로 센다
+    inserted = sum(1 for r in rows if r["content_hash"] not in known)
+    return Written(inserted=inserted, updated=touched - inserted,
+                   unchanged=len(rows) - touched)
 
 
 def metadata_loss(conn, rows: list[dict[str, Any]]) -> list[tuple[str, int, int]]:

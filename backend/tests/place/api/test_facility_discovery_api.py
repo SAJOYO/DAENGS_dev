@@ -23,8 +23,8 @@ from daengs_backend.services.facility_discovery import (
 from daengs_place.api import facility_internal
 from daengs_place.core.db import get_session
 from daengs_place.main import app as place_app
-from tests.facility_session_store import MemorySessions
-from tests.place.place.discovery.test_facility import make_service, request
+from tests.place.support.discovery import make_service, request
+from tests.place.support.session_store import MemorySessions
 
 
 @pytest.fixture(autouse=True)

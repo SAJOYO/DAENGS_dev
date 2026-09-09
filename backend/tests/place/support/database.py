@@ -34,18 +34,32 @@ TEST_ORIGIN = (37.4979, 130.9000)
 TEST_SOURCE = "test:conftest"
 
 
-def place_row(source_id: str, name: str, *, east_m: int, kind: str = "hospital",
-              tags: list[str] | tuple[str, ...] = (), hours: str | None = None) -> dict:
+def place_row(
+    source_id: str,
+    name: str,
+    *,
+    east_m: int,
+    kind: str = "hospital",
+    tags: list[str] | tuple[str, ...] = (),
+    hours: str | None = None,
+) -> dict:
     """`place` 행 하나. 원점에서 동쪽으로 `east_m` 미터 — 거리 순서를 테스트가 직접 정한다.
 
     `hours=None` 이 공공데이터 기본값이다 (인허가 원천은 영업시간을 안 준다).
     태그는 파이썬 리스트로 나간다 — asyncpg 는 text[] 에 '{a,b}' 리터럴을 안 받는다.
     """
-    return {"sid": source_id, "name": name, "kind": kind,
-            "tags": list(tags), "hours": hours, "east_m": east_m}
+    return {
+        "sid": source_id,
+        "name": name,
+        "kind": kind,
+        "tags": list(tags),
+        "hours": hours,
+        "east_m": east_m,
+    }
 
 
 # ============================================================ DB 장치
+
 
 @asynccontextmanager
 async def db_session():
@@ -57,13 +71,14 @@ async def db_session():
     - `statement_timeout`: 멈추더라도 테이블을 붙잡고 있지 않게.
     """
     engine = create_async_engine(
-        settings.sqlalchemy_url, poolclass=NullPool,
+        settings.sqlalchemy_url,
+        poolclass=NullPool,
         connect_args={"server_settings": {"statement_timeout": "15000"}},
     )
     session = async_sessionmaker(engine, expire_on_commit=False)()
     try:
         await session.execute(text("SELECT 1"))
-    except Exception as exc:                                  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         await session.close()
         await engine.dispose()
         pytest.skip(f"PostGIS 없음 — place-db 를 띄운 뒤 재실행 ({type(exc).__name__})")
@@ -81,8 +96,9 @@ def _lng_at(origin: tuple[float, float], east_m: int) -> float:
 
 
 @asynccontextmanager
-async def seeded_places(rows: list[dict], *, origin: tuple[float, float] = TEST_ORIGIN,
-                        source: str = TEST_SOURCE):
+async def seeded_places(
+    rows: list[dict], *, origin: tuple[float, float] = TEST_ORIGIN, source: str = TEST_SOURCE
+):
     """`place_row()` 목록을 심고 세션을 넘긴다. 끝나면 **이 source 만** 지운다.
 
     다른 행은 건드리지 않는다 — 격리는 좌표로 한다.
@@ -91,16 +107,26 @@ async def seeded_places(rows: list[dict], *, origin: tuple[float, float] = TEST_
         try:
             await session.execute(text("DELETE FROM place WHERE source = :s"), {"s": source})
             for r in rows:
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     INSERT INTO place (kind, name, address, phone, location, is_night, is_24h,
                                        hours, tags, source, source_id, active)
                     VALUES (:kind, :name, '테스트', '02-0',
                             ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
                             false, false, CAST(:hours AS jsonb), CAST(:tags AS text[]),
                             :s, :sid, true)
-                """), {"kind": r["kind"], "name": r["name"], "hours": r["hours"],
-                       "tags": r["tags"], "sid": r["sid"], "s": source,
-                       "lat": origin[0], "lng": _lng_at(origin, r["east_m"])})
+                """),
+                    {
+                        "kind": r["kind"],
+                        "name": r["name"],
+                        "hours": r["hours"],
+                        "tags": r["tags"],
+                        "sid": r["sid"],
+                        "s": source,
+                        "lat": origin[0],
+                        "lng": _lng_at(origin, r["east_m"]),
+                    },
+                )
             await session.commit()
             yield session
         finally:

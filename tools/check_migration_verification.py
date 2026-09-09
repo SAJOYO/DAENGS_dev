@@ -389,8 +389,11 @@ CHECKS = (
             'ALTER TABLE app_users ALTER COLUMN ocr_consent_at TYPE text'
             ' USING ocr_consent_at::text',
             'ALTER TABLE app_users DROP CONSTRAINT app_users_ocr_consent_pair',
-            # 미동의를 표현할 수 없게 되는 변조. 값을 먼저 채워야 ALTER 가 안 죽는다.
-            'UPDATE app_users SET ocr_consent_at = NOW();'
+            # 미동의를 표현할 수 없게 되는 변조. 값을 먼저 채워야 ALTER 가 안 죽는데,
+            # ⚠ **두 칸을 같이 채워야 한다** — 시각만 채우면 짝 CHECK 이 UPDATE 를
+            #   죽이고, 하네스는 "verifier 가 잡았다"와 "변조가 죽었다"를 stderr 낱말로
+            #   가르므로 그 항목은 아무것도 증명하지 않는다 (2026-09-09 CI 실측).
+            "UPDATE app_users SET ocr_consent_at = NOW(), ocr_consent_version = 'v1';"
             ' ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET NOT NULL',
             # **조용히 틀리는 변조 — ③ 만 잡는다.**
             'ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET DEFAULT NOW()',

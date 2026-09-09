@@ -213,6 +213,12 @@ async def transfer_owner(
     pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
     if pet is None:
         raise PetNotFoundError
+    if new_owner_id == pet.app_user_id:
+        # 대표가 자기 자신을 지목했습니다. `is_member` 는 대표도 True 로 치므로 이 검사가
+        # 없으면 아래를 그대로 통과해 무의미한 UPDATE 뒤 `member_repo.add(self)` 에서
+        # `pet_members_not_owner` 트리거가 터집니다(아직 안 잡히는 예외 → 500). 더 구체적인
+        # 답이 이기도록 멤버십 검사보다 먼저 둡니다.
+        raise AlreadyOwnerError
     if not await member_repo.is_member(session, pet_id, new_owner_id):
         raise NotAMemberError
 

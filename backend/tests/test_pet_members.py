@@ -458,3 +458,17 @@ async def test_carer_cannot_transfer(store: Store, pet: FakePet):
     store.pet_members.append((pet.id, CARER))
     r = client_as(CARER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
     assert r.status_code == 404
+
+
+async def test_transfer_to_self_is_409(store: Store, pet: FakePet):
+    """대표가 자기 자신을 지목하면 409 다 — 그냥 통과시키면 `member_repo.add(self)` 에서
+    `pet_members_not_owner` 트리거가 터져 500 이 된다(리뷰 지적, round 1).
+
+    `is_member` 는 대표도 True 로 치므로 이 가드가 없으면 `NotAMemberError` 분기를
+    지나쳐 그대로 쓰기 단계까지 간다 — 그래서 가드는 멤버십 검사보다 **앞**이어야
+    한다. 아이의 대표는 그대로고 새 `pet_members` 행도 생기지 않았음까지 본다.
+    """
+    r = client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(OWNER)})
+    assert r.status_code == 409
+    assert pet.app_user_id == OWNER
+    assert (pet.id, OWNER) not in store.pet_members

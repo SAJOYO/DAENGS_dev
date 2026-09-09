@@ -120,6 +120,8 @@ async def transfer_owner(
         )
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except member_service.AlreadyOwnerError:
+        raise HTTPException(status.HTTP_409_CONFLICT, "이미 이 아이의 대표입니다.") from None
     except member_service.NotAMemberError:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "먼저 초대해서 보호자로 참여시키세요."

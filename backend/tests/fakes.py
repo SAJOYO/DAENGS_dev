@@ -525,6 +525,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         user = await app_get_by_id(session, app_user_id)
         return user if user is not None and user.status == "active" else None
 
+    async def app_nicknames_by_ids(session, app_user_ids):
+        wanted = set(app_user_ids)
+        return {u.id: u.nickname for u in store.app_users.values() if u.id in wanted}
+
     async def app_is_nickname_taken(session, nickname):
         # 진짜와 같이 **소문자로 접어서** 봅니다 (lower(nickname) UNIQUE 인덱스).
         folded = nickname.lower()
@@ -581,6 +585,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(app_user_repo, "is_nickname_taken", app_is_nickname_taken)
     monkeypatch.setattr(app_user_repo, "search_by_nickname", app_search_by_nickname)
     monkeypatch.setattr(app_user_repo, "list_page", app_list_page)
+    monkeypatch.setattr(app_user_repo, "nicknames_by_ids", app_nicknames_by_ids)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)

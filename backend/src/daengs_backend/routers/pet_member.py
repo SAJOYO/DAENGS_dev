@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.schemas.pet_member import InviteAccept, InviteCreated
+from daengs_backend.schemas.pet_member import InviteAccept, InviteCreated, MemberListResponse
 from daengs_backend.services import pet_member as member_service
 from daengs_backend.services.pet import PetNotFoundError
 
@@ -72,6 +72,36 @@ async def accept_invite(body: InviteAccept, user: CurrentAppUser, session: Sessi
             status.HTTP_409_CONFLICT, "돌보는 아이가 너무 많습니다."
         ) from None
     return {"pet_id": str(pet.id), "name": pet.name}
+
+
+@router.get("/pets/{pet_id}/members", response_model=MemberListResponse)
+async def list_members(pet_id: uuid.UUID, user: CurrentAppUser, session: Session) -> MemberListResponse:
+    """구성원 목록. 대표가 맨 앞입니다. **구성원만 볼 수 있습니다.**"""
+    try:
+        members = await member_service.list_members(session, user.app_user_id, pet_id)
+    except PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    return MemberListResponse(pet_id=pet_id, members=members)
+
+
+@router.delete("/pets/{pet_id}/members/{target_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_member(
+    pet_id: uuid.UUID, target_id: uuid.UUID, user: CurrentAppUser, session: Session
+) -> None:
+    """내보내기(대표) 또는 나가기(본인). **대표는 자기를 못 뺍니다** — 승계로 가야 합니다."""
+    try:
+        await member_service.remove_member(session, user.app_user_id, pet_id, target_id)
+    except PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except member_service.CannotRemoveOwnerError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "대표는 이 방법으로 나갈 수 없습니다. 다른 보호자에게 대표를 넘기세요.",
+        ) from None
+    except member_service.NotAllowedError:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "다른 보호자를 내보낼 수 있는 것은 대표뿐입니다."
+        ) from None
 
 
 __all__ = ["router"]

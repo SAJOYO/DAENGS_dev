@@ -15,6 +15,7 @@ from daengs_backend.models import Pet, PetInvite
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import pet_member as member_repo
+from daengs_backend.schemas.pet_member import MemberOut
 from daengs_backend.services.pet import MAX_PETS_PER_USER, PetNotFoundError
 
 log = logging.getLogger(__name__)
@@ -51,6 +52,14 @@ class PetLimitError(Exception):
 
 class InviteLimitError(Exception):
     """유효 초대 상한."""
+
+
+class CannotRemoveOwnerError(Exception):
+    """대표는 이 경로로 못 나갑니다. 승계 엔드포인트로 가야 합니다."""
+
+
+class NotAllowedError(Exception):
+    """남을 내보낼 수 있는 것은 대표뿐입니다."""
 
 
 async def create_invite(
@@ -133,16 +142,90 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
     return pet
 
 
+async def list_members(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
+) -> list[MemberOut]:
+    """대표를 맨 앞에, 그다음 돌보미를 참여 순으로. **구성원만 볼 수 있습니다.**"""
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
+    if pet is None:
+        raise PetNotFoundError
+
+    carer_ids = await member_repo.list_members(session, pet_id)
+    names = await app_user_repo.nicknames_by_ids(session, [pet.app_user_id, *carer_ids])
+    out = [
+        MemberOut(
+            app_user_id=pet.app_user_id,
+            nickname=names.get(pet.app_user_id),
+            is_owner=True,
+            joined_at=None,
+        )
+    ]
+    out += [
+        MemberOut(app_user_id=cid, nickname=names.get(cid), is_owner=False, joined_at=None)
+        for cid in carer_ids
+    ]
+    return out
+
+
+async def remove_member(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    target_id: uuid.UUID,
+) -> None:
+    """내보내기(대표) 또는 나가기(본인). 같은 경로입니다."""
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
+    if pet is None:
+        raise PetNotFoundError
+    if target_id == pet.app_user_id:
+        raise CannotRemoveOwnerError
+    if app_user_id != pet.app_user_id and app_user_id != target_id:
+        raise NotAllowedError
+
+    await member_repo.remove(session, pet_id, target_id)
+
+    # ⚠️ `primary_pet_id` 의 FK 는 ON DELETE SET NULL 이지만 **강아지 행은 안 지워지므로
+    #    안 돕니다.** 여기서 명시로 비웁니다 — 안 그러면 접근 못 하는 아이를 가리킵니다.
+    user = await app_user_repo.get_by_id(session, target_id)
+    if user is not None and user.primary_pet_id == pet_id:
+        remaining = await pet_repo.list_accessible(session, target_id)
+        user.primary_pet_id = remaining[0].id if remaining else None
+
+    await session.commit()
+
+
+async def actor_label(
+    session: AsyncSession, pet_id: uuid.UUID, app_user_id: uuid.UUID | None
+) -> str | None:
+    """케어 기록에 이름을 낼지 정합니다 — **지금도 구성원일 때만** 냅니다.
+
+    탈퇴자는 트리거가 `pet_members` 에서 지우므로 자동으로 비구성원이 되고, **재가입해도**
+    다시 초대받기 전엔 이름이 안 납니다. 이 규칙이 없으면 옛 기록이 어느 날 갑자기 남의
+    현재 닉네임으로 뜹니다 (docs/co-care.md §3).
+    """
+    if app_user_id is None:
+        return None
+    if not await member_repo.is_member(session, pet_id, app_user_id):
+        return None
+    names = await app_user_repo.nicknames_by_ids(session, [app_user_id])
+    return names.get(app_user_id)
+
+
 __all__ = [
     "INVITE_TTL",
     "MAX_ACTIVE_INVITES",
     "MAX_MEMBERS_PER_PET",
     "AlreadyOwnerError",
+    "CannotRemoveOwnerError",
     "InviteExpiredError",
     "InviteLimitError",
     "InviteNotFoundError",
     "MemberLimitError",
+    "NotAllowedError",
     "PetLimitError",
     "accept_invite",
+    "actor_label",
     "create_invite",
+    "list_members",
+    "remove_member",
 ]

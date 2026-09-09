@@ -309,3 +309,74 @@ async def test_accept_respects_miniroom_limit(store: Store, pet: FakePet):
     token = _invite(store, pet)
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 409
+
+
+# ── 구성원 목록 · 퇴장 · 내보내기 (docs/co-care.md §3) ────────────────
+
+
+async def test_owner_can_remove_carer(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/members/{CARER}")
+    assert r.status_code == 204
+    assert (pet.id, CARER) not in store.pet_members
+
+
+async def test_carer_can_leave(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    assert client_as(CARER).delete(f"/app/pets/{pet.id}/members/{CARER}").status_code == 204
+
+
+async def test_carer_cannot_remove_another_carer(store: Store, pet: FakePet):
+    other = uuid.uuid4()
+    store.pet_members.extend([(pet.id, CARER), (pet.id, other)])
+    assert client_as(CARER).delete(f"/app/pets/{pet.id}/members/{other}").status_code == 403
+
+
+async def test_owner_cannot_remove_self(store: Store, pet: FakePet):
+    """대표는 승계 엔드포인트로 가야 한다."""
+    assert client_as(OWNER).delete(f"/app/pets/{pet.id}/members/{OWNER}").status_code == 409
+
+
+async def test_leaving_clears_primary_pet(store: Store, pet: FakePet):
+    """접근 못 하는 강아지를 primary 로 가리키면 앱 첫 화면이 깨진다."""
+    user = store.app_users[CARER_KAKAO]
+    store.pet_members.append((pet.id, CARER))
+    user.primary_pet_id = pet.id
+    mine = FakePet(app_user_id=CARER, name="네오", breed="푸들")
+    store.pets.append(mine)
+
+    client_as(CARER).delete(f"/app/pets/{pet.id}/members/{CARER}")
+    assert user.primary_pet_id == mine.id
+
+
+async def test_leaving_last_pet_nulls_primary(store: Store, pet: FakePet):
+    user = store.app_users[CARER_KAKAO]
+    store.pet_members.append((pet.id, CARER))
+    user.primary_pet_id = pet.id
+    client_as(CARER).delete(f"/app/pets/{pet.id}/members/{CARER}")
+    assert user.primary_pet_id is None
+
+
+async def test_member_list_shows_owner_and_carer(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    got = client_as(CARER).get(f"/app/pets/{pet.id}/members").json()
+    assert [m["is_owner"] for m in got["members"]] == [True, False]
+
+
+async def test_stranger_cannot_list_members(store: Store, pet: FakePet):
+    """구성원만 볼 수 있다 — 접근 못 하는 사람에게는 404."""
+    assert client_as(STRANGER).get(f"/app/pets/{pet.id}/members").status_code == 404
+
+
+async def test_actor_label_for_member(store: Store, pet: FakePet):
+    from daengs_backend.services import pet_member as member_service
+
+    store.app_users[OWNER_KAKAO].nickname = "아빠"
+    assert await member_service.actor_label(None, pet.id, OWNER) == "아빠"
+
+
+async def test_actor_label_for_non_member_is_none(store: Store, pet: FakePet):
+    """지금 구성원이 아니면 이름을 내지 않는다 — 탈퇴자의 새 닉네임이 옛 기록에 새는 것을 막는다."""
+    from daengs_backend.services import pet_member as member_service
+
+    assert await member_service.actor_label(None, pet.id, STRANGER) is None

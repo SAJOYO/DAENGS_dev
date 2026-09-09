@@ -106,7 +106,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'daengs_backend.orchest
 (동결 골든셋 `gold_v1.jsonl` 에 실재). 배타 실행이라 훈련 답이 통째로 사라진다.
 `주워 먹었`·`주워 먹어` 로 좁혔다 — **이미 일어난 일이 응급이고, 가르치는 법은 훈련이다.**
 
-**`이물질` 을 넣지 말 것.** #350 이 실을 `medical_terms_v1_curated.json` 의 `귓속 이물질`
+**`이물질` 을 넣지 말 것.** #350 이 싣는 `medical_terms_v1_curated.json` 의 `귓속 이물질`
 을 부분일치로 삼켜, 귀 이물질 질문이 의료 게이트에 도달하지 못한다. `이물 섭취` 를 쓴다.
 
 매칭은 형태소 분석 없는 평문 부분일치다 — 코드베이스에 이미 있는 방식이고, 두 번째

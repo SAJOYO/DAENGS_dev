@@ -25,6 +25,8 @@
 - `daengs_backend` 의 MVC2 계층 규칙(D-011)이 여기에는 걸려 있지 않습니다. 평평합니다.
 - **의존성은 `backend/pyproject.toml` 의 `gait` 그룹 하나**입니다. `ml` 그룹과 겹치지
   않습니다 — gait 는 sentence-transformers · transformers · pyarrow 를 안 씁니다.
+  (v4 엔진 코드 `backend/gait_v4/` 는 같은 pyproject 의 `gait-v4` 그룹 — `==` 핀, 별도 venv.
+  D-063 5A 에서 그 폴더의 자기 lock 을 없애고 여기로 모았습니다. 5B 에서 코드도 들어옵니다.)
 - **원본 `YH-KIKI/walk_demo` 에서의 일방향 이전**입니다. 되돌려 보낼 일이 없어서 실험
   코드와 얽힌 부분을 정리해서 가져왔습니다 (`skin-screening/` 은 외부 저장소의 *사본*
   이라 구조를 못 바꾸는 것과 다른 점입니다).

@@ -1,10 +1,11 @@
 """walk_demo v4 엔진 (#304) — 별도 venv 의 서브프로세스.
 
-`backend/gait_v4/` 는 **자기 venv 를 가진 별도 uv 프로젝트**입니다. 워커 venv 에는
-설치되지 않으므로 import 할 수 없고, 그 venv 의 python 을 서브프로세스로 부릅니다.
-그래서 얻는 것 — ① 골든이 나온 버전 조합(torch 2.13.0 · numpy 2.5.2 …)을 그대로 두고
-② 라이선스 결정 전 가중치가 운영 이미지에 들어가지 않으며 ③ 이 프로세스에 torch 가
+`backend/gait_v4/` 코드는 **자기 venv**(backend lock 의 `gait-v4` 그룹, D-063 5A)에서 돕니다.
+워커 venv 에는 설치되지 않으므로 import 할 수 없고, 그 venv 의 python 을 서브프로세스로
+부릅니다. 그래서 얻는 것 — ① 골든이 나온 버전 조합(torch 2.13.0 · numpy 2.5.2 …, `==` 핀)을
+그대로 두고 ② 라이선스 결정 전 가중치가 운영 이미지에 들어가지 않으며 ③ 이 프로세스에 torch 가
 안 올라옵니다. 대가는 호출마다 모델 로드 ≈4s 인데, 분석 자체가 분 단위라 무시할 만합니다.
+(5A 전에는 그 폴더가 자기 pyproject·uv.lock 을 가진 별도 uv 프로젝트였습니다.)
 
 `daengs_backend.services.gait` 에 있던 `_v4_dir` · `_v4_python` · `_analyze_with_v4` 를
 그대로 옮긴 것입니다 (D-063 2단계). 명령·cwd·timeout·오류 문구·record.json 처리는 같습니다.
@@ -47,8 +48,11 @@ def resolve_python(configured: str | Path | None, root: Path) -> Path:
         return exe
     exe = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     if not exe.exists():
+        # 5A 부터 v4 의존성은 backend lock 의 `gait-v4` 그룹입니다 — 그 폴더에는 자기 pyproject 가 없습니다.
         raise RuntimeError(
-            f"gait_v4 venv 가 없습니다: {exe} — `cd {root} && uv sync` 를 먼저 하세요."
+            f"gait_v4 venv 가 없습니다: {exe} — backend 에서 "
+            f"`UV_PROJECT_ENVIRONMENT={root / '.venv'} uv sync --only-group gait-v4 --no-install-project` "
+            "를 먼저 하세요."
         )
     return exe
 

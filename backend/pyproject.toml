@@ -87,7 +87,13 @@ agent = [
 # ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 ultralytics
 #   가 다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
 [tool.uv]
-override-dependencies = ["opencv-python; sys_platform == 'never'"]
+# opencv 는 **headless 만** 들어옵니다 — GUI 판(opencv-python · opencv-contrib-python)은 어느 그룹이
+# 끌고 와도 이 override 로 막힙니다. ultralytics(gait) 와 rtmlib(gait-v4) 둘 다 GUI 판을 요구하는데,
+# slim 컨테이너에는 libxcb 가 없어 첫 분석에서 죽습니다 (2026-08-31 실측). 같은 버전·같은 API 입니다.
+override-dependencies = [
+    "opencv-python; sys_platform == 'never'",
+    "opencv-contrib-python; sys_platform == 'never'",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
@@ -207,6 +213,22 @@ screening = [
 ]
 pipeline = [
     "google-cloud-run>=0.16.1",
+]
+# walk_demo v4 엔진(`backend/gait_v4/`, GAIT_ENGINE=v4)의 venv. **`==` 핀 그대로** — 골든
+# (`gait_v4/tests/golden_v4_rear.json`, 0.01px)이 이 조합에서 나왔고 `tests/test_gait_v4_lock.py` 가 지킵니다.
+# `gait` 와 따로 두는 이유: 저쪽은 `>=` 이고 torch·numpy 를 ml·screening 과 공유하는데 여기에 `==` 를
+# 섞으면 남의 그룹 해석까지 못 박힙니다. 5B 에서 inference 가 daengs_gait 로 들어오면 하나로 합칩니다.
+# 기본 그룹이 아니라 `uv sync` 로는 안 깔립니다. compose 의 gait-worker 가 `--only-group gait-v4` 로
+# /opt/gait-v4-venv 를 만들고, 개발 PC 절차는 `backend/gait_v4/DAENGS-NOTE.md`.
+gait-v4 = [
+    "imageio-ffmpeg==0.6.0",
+    "numpy==2.5.2",
+    "onnxruntime==1.29.0",
+    "opencv-contrib-python-headless==5.0.0.93",
+    "opencv-python-headless==5.0.0.93",
+    "rtmlib==0.0.16",
+    "torch==2.13.0",
+    "torchvision==0.28.0",
 ]
 
 [tool.ruff]

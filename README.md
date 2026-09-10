@@ -427,7 +427,7 @@ backend/                  Python 패키지·테스트·단일 pyproject/uv.lock 
   infra/place/            Place 전용 Alembic (별도 PostGIS)
   evals/                  평가·벤치마크 결과 데이터 (코드 아님)
   tools/                  단일 파일 일회성 스크립트만 (패키지 금지)
-  gait_v4/                별도 uv 프로젝트 (의도된 예외, #304 뒤 정리)
+  gait_v4/                walk_demo v4 엔진 코드 (의존성은 pyproject 의 gait-v4 그룹, 5B 에서 daengs_gait 로)
 nginx/default.conf        리버스 프록시 설정
 docker-compose.yml        서버용 컨테이너 구성
 docker/uv/Dockerfile      uv 를 얹은 공용 베이스 이미지 (uv:1)

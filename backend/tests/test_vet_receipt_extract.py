@@ -269,3 +269,75 @@ async def test_extract_does_not_retry_a_valid_unreadable_answer(monkeypatch):
     result = await vet_receipt.extract(b"bytes", "image/jpeg")
     assert result.status == "unreadable"
     assert len(calls) == 1
+
+
+# ── M2: status="ok" 인데 total_krw 가 없으면 no_amount 로 정규화한다 ───────────
+# 압구정동물병원(2019-05-17) 실측 원본 payload 그대로 — 프롬프트 규칙은 지켰지만
+# (계산 안 함) status 를 unreadable 로 안 바꾼 사고.
+
+_REAL_OK_WITHOUT_TOTAL = {
+    "status": "ok",
+    "visited_on": "2019-05-17",
+    "hospital_name": "압구정동물병원",
+    "hospital_address": "서울 강남구 압구정로 224",
+    "hospital_phone": "02-547-7588",
+    "items": [
+        {"name": "진료비,진찰료", "amount_krw": 5500},
+        {"name": "일반조제-1일", "amount_krw": 46200},
+        {"name": "주사-비오칸엠-곰팡이피부접종-20%", "amount_krw": 10000},
+    ],
+    "suggested_reason_code": "skin",
+    "is_emergency": False,
+}
+
+
+def test_validate_extraction_normalizes_ok_without_total_to_no_amount():
+    """`status="ok"` 인데 `total_krw` 가 없으면(누락이든 null 이든) `unreadable`/
+    `no_amount` 로 바뀌고, 나머지 필드는 모두 사라진다 — `shape_matches_status` 의
+    "unreadable 은 나머지를 안 가진다" 규칙을 그대로 만족해야 한다."""
+    extraction = vet_receipt._validate_extraction(_REAL_OK_WITHOUT_TOTAL)
+    assert extraction is not None
+    assert extraction.status == "unreadable"
+    assert extraction.unreadable_reason == "no_amount"
+    assert extraction.total_krw is None
+    assert extraction.items == []
+    assert extraction.hospital_name is None
+    assert extraction.hospital_address is None
+    assert extraction.hospital_phone is None
+    assert extraction.visited_on is None
+    assert extraction.suggested_reason_code is None
+    assert extraction.is_emergency is False
+
+
+def test_validate_extraction_leaves_ok_with_total_untouched():
+    """총액이 있는 `ok` 는 정규화의 대상이 아니다."""
+    payload = dict(_REAL_OK_WITHOUT_TOTAL, total_krw=61700)
+    extraction = vet_receipt._validate_extraction(payload)
+    assert extraction is not None
+    assert extraction.status == "ok"
+    assert extraction.total_krw == 61700
+    assert extraction.hospital_name == "압구정동물병원"
+    assert len(extraction.items) == 3
+
+
+def test_validate_extraction_leaves_model_reported_unreadable_untouched():
+    """모델이 스스로 낸 `unreadable` 은 이유를 건드리지 않는다."""
+    extraction = vet_receipt._validate_extraction(
+        {"status": "unreadable", "unreadable_reason": "blurry"}
+    )
+    assert extraction is not None
+    assert extraction.status == "unreadable"
+    assert extraction.unreadable_reason == "blurry"
+
+
+async def test_extract_normalizes_real_ok_without_total_instead_of_raising(monkeypatch):
+    """실측 원본 payload — `extract` 가 `ReceiptExtractionFailed` 로 오르지 않고
+    `unreadable`/`no_amount` 를 정상적으로 반환해야 한다."""
+
+    async def _returns_real_payload(*_args, **_kwargs):
+        return dict(_REAL_OK_WITHOUT_TOTAL)
+
+    monkeypatch.setattr(vet_receipt, "_generate_with_gemini", _returns_real_payload)
+    result = await vet_receipt.extract(b"bytes", "image/jpeg")
+    assert result.status == "unreadable"
+    assert result.unreadable_reason == "no_amount"

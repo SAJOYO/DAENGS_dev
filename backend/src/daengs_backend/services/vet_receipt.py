@@ -175,6 +175,23 @@ async def _generate_with_gemini(image_bytes: bytes, content_type: str, prompt: s
     return await asyncio.to_thread(_call)
 
 
+def _normalize_ok_without_total(parsed: object) -> object:
+    """모델이 `status="ok"` 인데 `total_krw` 가 없을 때를 `unreadable`/`no_amount` 로
+    옮긴다. 프롬프트가 "계산하지 말라"만 지켜서 총액 없이 `ok` 를 내는 실측 사례가
+    있다 — `shape_matches_status` 는 그대로 두고 여기서 계약 모양에 맞춘다."""
+    if not isinstance(parsed, dict):
+        return parsed
+    if parsed.get("status") != "ok":
+        return parsed
+    if parsed.get("total_krw") is not None:
+        return parsed
+    log.warning(
+        "vet receipt extraction: model returned status=ok with no total_krw — "
+        "normalizing to unreadable/no_amount"
+    )
+    return {"status": "unreadable", "unreadable_reason": "no_amount"}
+
+
 def _validate_extraction(raw: object) -> ReceiptExtraction | None:
     parsed: object = raw
     if isinstance(raw, str):
@@ -184,6 +201,7 @@ def _validate_extraction(raw: object) -> ReceiptExtraction | None:
             return None
     if isinstance(parsed, ReceiptExtraction):
         return parsed
+    parsed = _normalize_ok_without_total(parsed)
     try:
         return ReceiptExtraction.model_validate(parsed)
     except Exception:  # noqa: BLE001 - invalid model output is never surfaced

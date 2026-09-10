@@ -125,3 +125,29 @@ async def test_restart_cannot_silently_clear_exclusions(query):
     )
     assert result.receipt.action == "clarify"
     assert result.state.exploration == excluded.state.exploration
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "scope", "remaining"),
+    [
+        ("테스트 first 빼고 다른 곳 보여줘", "테스트 first", "current", ["second"]),
+        ("테스트 first 빼고 더 보여줘", "테스트 first", "next", []),
+        ("더카페 빼고 다른 곳 보여줘", "더카페", "current", ["second"]),
+    ],
+)
+async def test_exclusion_does_not_skip_other_displayed_places_without_advance(
+    query, name, scope, remaining
+):
+    searcher = Searcher()
+    searcher.rows = [place("first").model_copy(update={"name": name}), place("second")]
+    service = ConversationService(Planner(), searcher=searcher)
+    first = await service.prepare(None, manual())
+    service.planner.next = Interpretation(
+        goal="show", browse="next", place_edit=edit("name", name, "빼고")
+    )
+    result = await service.prepare(
+        None, PrepareRequest(mode="chat", query=query, previous=first.state)
+    )
+    assert result.receipt.browse == scope
+    assert [key.ref for key in result.state.snapshot.display_order] == remaining
+    assert [p.key.ref for p in result.receipt.excluded_places] == ["first"]

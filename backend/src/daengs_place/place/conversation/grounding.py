@@ -11,7 +11,9 @@ def literal_span(query, text):
     # Keep word boundaries: '다' in '달나라', '여기' in a business name, etc. is not a reference.
     pattern = re.escape(text.strip()).replace(r"\ ", r"\s*")
     return bool(
-        re.search(r"(?<!\w)" + pattern + r"(?=$|[\s.,!?]|[은는을를이가와과도])", query, re.IGNORECASE)
+        re.search(
+            r"(?<!\w)" + pattern + r"(?=$|[\s.,!?]|[은는을를이가와과도])", query, re.IGNORECASE
+        )
     )
 
 
@@ -46,6 +48,21 @@ def assert_restart(query):
     text = compact(query)
     if not ("초기화" in text or re.search(r"제외.*(?:풀|해제|취소).*처음부터", text)):
         raise ValueError("restart needs explicit exploration reset")
+
+
+def browse_scope(query, intent):
+    if intent is None:
+        return "current"
+    if intent.browse != "next" or intent.place_edit is None:
+        return intent.browse
+    # Editing this list defaults to the remaining list. Skipping every shown place
+    # requires an additional advance expression, beyond a model's "next" label.
+    text = compact(query)
+    for target in intent.place_edit.targets:
+        if target.kind == "name":
+            text = text.replace(compact(target.text), "")
+    advances = r"더|다음|미제시|아직.*(?:안|못)|안본|못본|새로운|새후보|또"
+    return "next" if re.search(advances, text) else "current"
 
 
 def resolve_target(query, target, places, selected):

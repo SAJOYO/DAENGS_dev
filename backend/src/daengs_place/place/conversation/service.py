@@ -19,6 +19,7 @@ from daengs_place.place.conversation.contract import (
     SelectionBasis,
     TurnPlan,
 )
+from daengs_place.place.conversation.grounding import browse_scope
 from daengs_place.place.conversation.policy import Decision, base_revision, decide
 from daengs_place.place.conversation.render import selected_facts
 from daengs_place.place.filters.contract import (
@@ -152,7 +153,7 @@ class ConversationService:
             plan, candidate = decision.plan, decision.candidate
         changed = old is None or fingerprint(old.filters) != fingerprint(candidate)
         intent = decision.intent
-        browse = intent.browse if intent else "current"
+        browse = browse_scope(request.query, intent)
         try:
             excluded, newly_excluded, restored = edit_exclusions(request, intent)
         except ValueError:

@@ -125,6 +125,34 @@ def test_client_turns_transport_failure_into_its_own_error(
         realtime_client.get_walk(37.4979, 127.0276, base_url="https://rt.example")
 
 
+def test_token_fetch_failure_also_becomes_realtime_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADC 조회 자체가 실패해도(메타데이터 서버가 안 닿는 등) 같은 예외로 닫혀야 한다.
+
+    `_id_token` 을 통째로 갈아끼우면 이 자리를 안 지난다 — 그래서 다른 테스트들과 달리
+    `google.oauth2.id_token.fetch_id_token_credentials` 를 직접 갈아끼워 실제 `_id_token`
+    본문(캐시 조회 → 실패)을 지나가게 한다. 여기서 안 잡히면 raw `DefaultCredentialsError`
+    가 새 나가는데, Task 4 의 프록시 라우터는 `RealtimeUnavailable` 만 502 로 잡으므로 이
+    경로만 500 이 된다.
+    """
+    import google.auth.exceptions
+    import google.oauth2.id_token
+
+    from daengs_backend.services import realtime_client
+
+    def boom(audience, request=None, **kwargs):  # noqa: ANN001, ANN003, ARG001
+        raise google.auth.exceptions.DefaultCredentialsError("no ADC in test env")
+
+    monkeypatch.setattr(google.oauth2.id_token, "fetch_id_token_credentials", boom)
+    # 다른 테스트가 이 audience 로 자격증명을 캐시해 두면 이 테스트가 실제 조회를
+    # 건너뛰고 거짓으로 통과한다 — audience 를 이 테스트 전용으로 갈라 둔다.
+    monkeypatch.setattr(realtime_client, "_credentials", {})
+
+    with pytest.raises(realtime_client.RealtimeUnavailable):
+        realtime_client.get_walk(37.4979, 127.0276, base_url="https://token-fail.example")
+
+
 # ---------------------------------------------------------------- 갈림길
 
 def test_default_registration_still_uses_the_in_process_router() -> None:

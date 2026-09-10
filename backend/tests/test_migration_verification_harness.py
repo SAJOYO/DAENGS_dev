@@ -108,9 +108,10 @@ def _run_sql() -> subprocess.CompletedProcess:
     )
 
 
-def test_sql_mutation_testing_skips_when_psql_unavailable():
-    """mutation-testing 하네스(`sql` 서브커맨드)는 `psql` CLI 바이너리를 요구한다.
+def test_verify_files_catch_a_broken_schema():
+    """각 마이그레이션의 `verify_*.sql` 이 스키마 손상을 실제로 잡는지 증명한다.
 
+    mutation-testing 하네스(`sql` 서브커맨드)는 `psql` CLI 바이너리를 요구한다.
     이 바이너리는 이 개발 환경 PATH 에 없다(`which psql` → not found, 2026-09-10).
     그러면 하네스는 실행 자체를 못 한다. 이 테스트는 **이 로컬 환경에서 스킵된다**.
 

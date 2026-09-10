@@ -10,6 +10,7 @@
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
+| [ci/README.md](ci/README.md) | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 `docs/ci/` 로 빠졌습니다** (Actions 한도 소진). **그것들이 잡던 것을 이제 사람이 머지 전에 로컬에서 돌립니다** — 명령 목록이 거기 있습니다. 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
@@ -53,7 +54,6 @@
 | [life/roadmap.md](life/roadmap.md) | ①+② **생활 파트 로드맵** — 지금 상태 · 경계 · 트랙 A~G · 순서 · 하지 않기로 한 것. **열린 것만** 담고, 결정의 "왜"는 없고 번호로만 가리킨다 (living doc) |
 | [life/roadmap-archive-2026-09.md](life/roadmap-archive-2026-09.md) | 🗄 위 로드맵의 **2026-09-08 까지의 판** — 닫힌 카드의 결과 · 랩 추이 · 닫힌 결정 · 갱신 이력. 같은 §뼈대라 옛 `roadmap.md §N` 인용은 여기를 본다. 갱신하지 않는다 (#341) |
 | [life/decisions-rag.md](life/decisions-rag.md) | ① 설계 결정 기록 (RAG-001 ~ RAG-052, `037` 결번) — 임베딩·청킹·저장 규약·골든셋·적재·검색·서빙·크롤 운영·PDF 약관 |
-| [ci/README.md](ci/README.md) | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 `docs/ci/` 로 빠졌습니다** (Actions 한도 소진). **그것들이 잡던 것을 이제 사람이 로컬에서 돌립니다** — 명령 목록이 거기 있습니다. 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |
 | [life/search-quality.md](life/search-quality.md) | ① **검색 품질·속도 연대기** — `decisions-rag.md` 의 검색 관련 결정 스무 건을 **주제 순**으로 다시 세운 것. 청킹 전략 4종 비교 · 임베딩 3파전 · 하이브리드 · 가중치 스윕 두 번 · 리랭커 · HNSW. **기각한 것을 채택한 것과 같은 무게로** 수치와 함께 적는다 (BM25 · `ts_rank_cd` · `CANDIDATE_N` 확대 · 리랭커 …) |
 | [life/decisions-realtime.md](life/decisions-realtime.md) | ② 설계 결정 기록 (RT-) — 실시간 엔진 18결정 (계층·관측 모델·산책 적합도·캐시·부분 실패·응답 계약) |
 | [life/data-sources.md](life/data-sources.md) | ① 데이터 소스 수집 체크리스트 — 시드 30개 진행 현황, 키 발급처. **2026-08-30 기준 문서형 23 중 16 수집, 남은 7은 막힘** |

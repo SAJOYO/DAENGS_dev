@@ -731,3 +731,139 @@ def test_judge_makes_no_live_call_at_import_time():
     # provider 클라이언트도 API 키도 import 만으로는 필요 없어야 한다
     assert "openai" not in m.__dict__
     assert "settings" not in m.__dict__
+
+
+# --- Task 7: 앵커와 변이 ---
+
+
+def test_anchors_are_split_into_dev_and_holdout():
+    from daengs_evals.conversation_quality.anchors import ANCHORS, ids
+
+    assert set(ANCHORS) == {"dev", "holdout"}
+    assert not (ids("dev") & ids("holdout"))
+
+
+def test_both_directions_exist_for_the_two_axes_that_floor_at_zero():
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    # baseline 이 전부 0 이라 캘리브레이션은 앵커에서만 온다 — 성공 예시가 없으면
+    # 판정기가 "항상 0" 이어도 통과한다
+    for axis in ("context_continuity", "repair_success"):
+        scores = {a.expected for a in ANCHORS["dev"] if a.axis == axis}
+        assert 0 in scores and 2 in scores
+
+
+def test_anchor_cases_are_not_embedded_in_the_judge_prompt():
+    from daengs_evals.conversation_quality import judge
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    for anchor in ANCHORS["dev"]:
+        assert anchor.text[:30] not in judge.PROMPTS["response_mode_fit"]
+
+
+def test_no_anchor_text_appears_in_any_axis_prompt():
+    # 자기 앵커에 맞춰진 판정기는 아무것도 못 잰다 — 세 프롬프트 전부를 본다.
+    from daengs_evals.conversation_quality import judge
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    prompts = judge.PROMPTS.values()
+    for split in ANCHORS:
+        for anchor in ANCHORS[split]:
+            snippet = anchor.text[:30]
+            assert not any(snippet in prompt for prompt in prompts), anchor.anchor_id
+
+
+def test_every_axis_has_a_middle_band_anchor_in_dev():
+    # 1 은 판정기가 도망갈 수 있는 자리다 — 0/2 만 있으면 그 도망이 안 걸린다
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+    from daengs_evals.conversation_quality.judge import AXES
+
+    for axis in AXES:
+        scores = {a.expected for a in ANCHORS["dev"] if a.axis == axis}
+        assert 1 in scores, axis
+
+
+def test_two_anchors_break_the_user_input_needed_collinearity():
+    # 오늘 13 개 케이스는 need=True <-> ASK, need=False <-> ANSWER/REDIRECT 로 완전히
+    # 겹친다 — 이 비트가 아니라 답을 재는지는 반례가 있어야 갈린다.
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    rmf = [a for a in ANCHORS["dev"] if a.axis == "response_mode_fit"]
+    needed_true_high_score = [
+        a for a in rmf if a.payload["user_input_needed"] is True and a.expected == 2
+    ]
+    needed_false_present = [a for a in rmf if a.payload["user_input_needed"] is False]
+    assert needed_true_high_score  # need=True 인데 되묻지 않은 답이 맞는 앵커가 있다
+    assert needed_false_present
+
+
+def test_context_continuity_pins_a_correct_decline_at_two():
+    # 상태가 답에 영향이 없으면 «안 쓰는» 것이 옳다 — v3 프롬프트가 그렇게 말한다.
+    # 이 자리가 0 으로 잘못 채점되면 판정기가 프롬프트를 안 따르는 것이다.
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    decline = next(a for a in ANCHORS["dev"] if a.anchor_id == "ctx_decline_correct")
+    assert decline.expected == 2
+    assert decline.axis == "context_continuity"
+    assert "보더콜리" not in decline.payload["answer"]
+
+
+def test_mutations_state_a_checkable_expected_direction():
+    # 변이는 "정답이 바뀌어야 하는 최소 편집" 이다 — 방향을 못 말하면 변이가 아니라 잡음이다.
+    from daengs_evals.conversation_quality.anchors import ANCHORS, mutation_pairs
+
+    for split in ANCHORS:
+        for base, mutated in mutation_pairs(split):
+            assert base.axis == mutated.axis
+            assert base.expected != mutated.expected
+            assert mutated.edit  # 무엇을 바꿨는지 적혀 있어야 확인할 수 있다
+
+
+def test_anchor_payloads_are_shaped_like_build_payload_output():
+    # anchors.py 가 만든 payload 가 judge.build_prompt 를 실제로 통과해야 한다 —
+    # 그래야 이 앵커가 진짜 판정기 입력과 같은 모양이라는 것이 보장된다.
+    from daengs_evals.conversation_quality import judge
+    from daengs_evals.conversation_quality.anchors import ANCHORS
+
+    for split in ANCHORS:
+        for anchor in ANCHORS[split]:
+            prompt = judge.build_prompt(anchor.axis, anchor.payload)
+            assert isinstance(prompt, str) and prompt.strip()
+
+
+def test_anchor_check_produces_a_record_require_anchor_pass_accepts(tmp_path):
+    from daengs_evals.conversation_quality import anchors, judge
+
+    def all_correct(*, axis, prompt, payload, model):
+        del prompt, model
+        anchor = next(a for a in anchors.ANCHORS["dev"] if a.axis == axis and a.payload == payload)
+        return _fake_verdict(score=anchor.expected, axis=axis)
+
+    path = anchors.run_and_write(
+        "dev", generate=all_correct, model=FAKE_JUDGE_MODEL, anchor_dir=tmp_path
+    )
+    record = judge.require_anchor_pass(
+        tmp_path,
+        anchor_set="dev",
+        model=FAKE_JUDGE_MODEL,
+        anchors_sha256=anchors.anchors_sha256(),
+    )
+    assert record["passed"] is True
+    assert path.exists()
+
+
+def test_anchor_check_fails_when_a_verdict_disagrees(tmp_path):
+    from daengs_evals.conversation_quality import anchors, judge
+
+    def always_zero(*, axis, prompt, payload, model):
+        del prompt, payload, model
+        return _fake_verdict(score=0, axis=axis)
+
+    anchors.run_and_write("dev", generate=always_zero, model=FAKE_JUDGE_MODEL, anchor_dir=tmp_path)
+    with pytest.raises(SystemExit):
+        judge.require_anchor_pass(
+            tmp_path,
+            anchor_set="dev",
+            model=FAKE_JUDGE_MODEL,
+            anchors_sha256=anchors.anchors_sha256(),
+        )

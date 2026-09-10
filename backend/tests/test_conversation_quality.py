@@ -1239,3 +1239,51 @@ def test_cli_score_computes_the_anchor_hash_and_passes_it_as_a_required_keyword(
 
     assert "anchors_sha256" in captured
     assert captured["anchors_sha256"] == anchors_mod.anchors_sha256()
+
+
+def test_every_module_in_the_package_imports_without_backend_settings():
+    """`transcript.py` · `report.py` 둘 다 겪었던 결함의 재발 방지.
+
+    **같은 프로세스 테스트로는 못 잡는다** — `conftest.py` 가 `DAENGS_*` 를 이미 채워
+    뒀고, 그 시점에 `sys.modules` 에 `daengs_backend.config` 가 이미 캐시돼 있을 수도
+    있다. 그래서 하위 프로세스를 새로 띄우고, 그 프로세스의 환경에서만 `DAENGS_*` 를
+    지운 채로 이 패키지의 모듈을 하나씩 `import` 한다 — 판정기·오케스트레이터를
+    부르는 것이 아니라 **import 만 해도** 죽는지를 본다.
+
+    `daengs_backend.orchestration.redirects` 자체는 순수 모듈이지만, 최상단에서
+    import 하면 그 위 패키지 `__init__`(→ `graph` → `planner` → `semantic` →
+    `daengs_backend.config`)이 통째로 딸려 와 DB 접속 정보 · 암호화 키를 요구한다 —
+    이 테스트가 실제로 잡은 결함의 모양이다(Task 8 리뷰).
+    """
+    import os
+    import pkgutil
+    import subprocess
+    import sys
+
+    import daengs_evals.conversation_quality as pkg
+
+    module_names = [
+        info.name for info in pkgutil.iter_modules(pkg.__path__, prefix=f"{pkg.__name__}.")
+    ]
+    # 패키지가 비었으면 이 테스트는 아무것도 안 잰 것이다 — 그 자체가 실패여야 한다.
+    assert module_names
+
+    env = {key: value for key, value in os.environ.items() if not key.startswith("DAENGS_")}
+
+    failures: dict[str, str] = {}
+    for name in module_names:
+        result = subprocess.run(
+            [sys.executable, "-c", f"import {name}"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if result.returncode != 0:
+            failures[name] = result.stderr.strip().splitlines()[-1] if result.stderr else ""
+
+    assert not failures, (
+        "다음 모듈이 DAENGS_* 환경 변수 없이는 import 조차 안 됩니다"
+        f" (backend 설정을 최상단에서 물었다는 뜻입니다): {failures}"
+    )

@@ -366,9 +366,24 @@ def test_route_plan_dump_drops_the_dog_profile_payload():
 FAKE_JUDGE_MODEL = "fake-judge-0000-00-00"
 
 
-def _fake_verdict(score=0):
-    from daengs_evals.conversation_quality.judge import Verdict
+#: 앵커 통과 기록이 말하는 앵커 해시. 테스트에서는 값이 무엇인지가 아니라 **대조가 되는지**가
+#: 요점이라 아무 64자나 쓴다.
+FAKE_ANCHORS_SHA256 = "b" * 64
 
+
+def _fake_verdict(score=0, axis="response_mode_fit"):
+    """축마다 스키마가 다르므로 가짜도 갈린다 — 하나로 뭉개면 스키마 분기가 안 잡힌다."""
+    from daengs_evals.conversation_quality.judge import ContinuityVerdict, Verdict
+
+    if axis == "context_continuity":
+        return ContinuityVerdict(
+            observations=["앞 턴을 다시 묻는다"],
+            rationale="근거",
+            relevant_state_used=False,
+            state_used_correctly=False,
+            unsupported_or_superficial_personalization=True,
+            score=score,
+        )
     return Verdict(observations=["앞 턴을 다시 묻는다"], rationale="근거", score=score)
 
 
@@ -397,13 +412,14 @@ def _lap_rows(case, reply="산책은 하루 두 번이 좋습니다."):
     return [target_turn_row(case, i, driver).model_dump() for i in case.target_turns]
 
 
-def _anchor_pass(tmp_path, *, anchor_set="dev", model=FAKE_JUDGE_MODEL):
+def _anchor_pass(tmp_path, *, anchor_set="dev", model=FAKE_JUDGE_MODEL, **over):
     import json
 
     from daengs_evals.conversation_quality.judge import anchor_record_name
 
     name = anchor_record_name(anchor_set=anchor_set, model=model)
-    (tmp_path / name).write_text(json.dumps({"passed": True}), encoding="utf-8")
+    record = {"passed": True, "anchors_sha256": FAKE_ANCHORS_SHA256, **over}
+    (tmp_path / name).write_text(json.dumps(record), encoding="utf-8")
     return tmp_path
 
 
@@ -417,7 +433,7 @@ def test_each_axis_is_a_separate_call_with_its_own_inputs(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
-        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     assert [c["axis"] for c in calls] == [
         "response_mode_fit",
@@ -448,7 +464,7 @@ def test_na_axes_are_not_called_at_all(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
-        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     assert "repair_success" not in [c["axis"] for c in calls]
     # 못 잰 축은 0 이 아니라 없음이다
@@ -466,7 +482,7 @@ def test_score_refuses_to_run_without_an_anchor_pass_record(tmp_path):
             cases=[case],
             model=FAKE_JUDGE_MODEL,
             anchor_dir=tmp_path,
-            generate=lambda **kw: _fake_verdict(),
+            generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         )
 
 
@@ -482,18 +498,22 @@ def test_judgment_file_header_pins_the_judge_model_and_prompt_version(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
-        generate=lambda **kw: _fake_verdict(),
+        generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         lap="t",
         out_path=out,
     )
     header = json.loads(out.read_text("utf-8").splitlines()[0])
     assert header["judge_model"] == FAKE_JUDGE_MODEL
     assert header["prompt_version"] == PROMPT_VERSION
+    # 이름만으로는 어떤 앵커를 통과했는지 모른다 — 판정 파일이 그것을 들고 있어야 한다
+    assert header["anchors_sha256"] == FAKE_ANCHORS_SHA256
 
 
 def test_the_expected_mode_label_never_reaches_the_judge(tmp_path):
     import json
+    from typing import get_args
 
+    from daengs_evals.conversation_quality.cases import ExpectedMode
     from daengs_evals.conversation_quality.judge import PROMPTS, run_score
 
     calls = []
@@ -503,13 +523,104 @@ def test_the_expected_mode_label_never_reaches_the_judge(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
-        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     sent = json.dumps([c["payload"] for c in calls], ensure_ascii=False)
     sent += "\n".join(c["prompt"] for c in calls) + "\n".join(PROMPTS.values())
-    # 정답지를 보여주면 판정기가 정확도 채점기로 변한다 — 모드 이름 자체가 새면 안 된다
-    for label in ("expected_mode", "repair_applicable", case.expected_mode, "REDIRECT"):
+    # 정답지를 보여주면 판정기가 정확도 채점기로 변한다 — 모드 이름 **전부**가 새면 안 된다.
+    # 케이스 하나의 모드만 보면 나머지 모드 이름이 프롬프트에 박혀도 안 잡힌다.
+    for label in ("expected_mode", "repair_applicable", *get_args(ExpectedMode)):
         assert label not in sent
+
+
+def test_state_audit_comes_from_the_judge_not_from_a_score(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.judge import ContinuityVerdict, run_score
+
+    case = _case()  # 상태가 있고 target_turns=[1] — 앞 턴은 없다
+    out = tmp_path / "judgments_t.jsonl"
+    judgments = run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+        out_path=out,
+    )
+    audit = judgments[0].state_audit
+    # 네 칸 중 하나는 payload 가 알고(상태가 실렸나), 셋은 판정기가 답한다
+    assert audit.relevant_state_available is True
+    assert audit.relevant_state_used is False
+    assert audit.unsupported_or_superficial_personalization is True
+    # 서수 하나로 뭉개지 않고 판정 파일에 그대로 남아야 Task 8 이 사실 집계를 낼 수 있다
+    row = json.loads(out.read_text("utf-8").splitlines()[1])
+    assert row["state_audit"]["unsupported_or_superficial_personalization"] is True
+    assert row["verdicts"]["context_continuity"]["relevant_state_used"] is False
+    # 세 칸이 점수보다 **먼저** 생성돼야 한다 — 뒤에 두면 점수를 정해 놓고 칸을 맞춘다
+    fields = list(ContinuityVerdict.model_fields)
+    assert fields.index("unsupported_or_superficial_personalization") < fields.index("score")
+
+
+def test_state_audit_is_absent_when_the_axis_was_not_measured(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+
+    # 상태도 없고 앞 턴도 없다 → context_continuity 자체가 해당 없음
+    case = _case(user_input_needed=False, state_snapshot={})
+    judgments = run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+    )
+    # 감사를 안 한 것과 "안 썼다" 는 다르다
+    assert judgments[0].state_audit is None
+
+
+def test_anchor_record_must_say_which_anchors_it_passed(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.judge import anchor_record_name, require_anchor_pass
+
+    name = anchor_record_name(anchor_set="dev", model=FAKE_JUDGE_MODEL)
+    (tmp_path / name).write_text(json.dumps({"passed": True}), encoding="utf-8")
+    # 옛 모양의 기록 — 무엇을 통과한 것인지 말하지 못하면 게이트가 아니다
+    with pytest.raises(SystemExit):
+        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+
+
+def test_gate_catches_anchors_edited_after_the_pass_record(tmp_path):
+    from daengs_evals.conversation_quality.judge import require_anchor_pass
+
+    _anchor_pass(tmp_path)
+    # 앵커를 고치거나 늘려도 파일 이름은 그대로다 — 해시 대조 말고는 못 잡는 자리
+    with pytest.raises(SystemExit):
+        require_anchor_pass(
+            tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL, anchors_sha256="c" * 64
+        )
+    # 같은 해시면 통과한다
+    record = require_anchor_pass(
+        tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL, anchors_sha256=FAKE_ANCHORS_SHA256
+    )
+    assert record["anchors_sha256"] == FAKE_ANCHORS_SHA256
+
+
+def test_a_failed_anchor_run_does_not_open_the_gate(tmp_path):
+    from daengs_evals.conversation_quality.judge import require_anchor_pass
+
+    _anchor_pass(tmp_path, passed=False)  # 돌려는 봤고, 통과는 못 했다
+    with pytest.raises(SystemExit):
+        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+
+
+def test_a_malformed_anchor_record_is_a_readable_stop_not_a_traceback(tmp_path):
+    from daengs_evals.conversation_quality.judge import anchor_record_name, require_anchor_pass
+
+    name = anchor_record_name(anchor_set="dev", model=FAKE_JUDGE_MODEL)
+    (tmp_path / name).write_text("{깨진 json", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
 
 
 def test_rows_the_seam_never_answered_are_not_judged(tmp_path):
@@ -525,11 +636,35 @@ def test_rows_the_seam_never_answered_are_not_judged(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
-        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     # 센티널을 채점시키면 판정기가 우리 문자열에 점수를 매긴다
     assert calls == []
     assert judgments == []
+
+
+def test_the_judgment_file_says_how_many_rows_it_skipped(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.drivers import NOT_REACHED
+    from daengs_evals.conversation_quality.judge import run_score
+
+    case = _case()
+    rows = _lap_rows(case) + _lap_rows(case) + _lap_rows(case)
+    rows[0]["message"] = NOT_REACHED
+    rows[1]["message"] = "   "
+    out = tmp_path / "judgments_t.jsonl"
+    run_score(
+        rows=rows,
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+        out_path=out,
+    )
+    header = json.loads(out.read_text("utf-8").splitlines()[0])
+    # 판정 파일이 자기를 설명해야 한다 — 리포트가 랩 파일과 차집합을 뜨게 두지 않는다
+    assert (header["items"], header["skipped"]) == (1, 2)
 
 
 def test_judge_makes_no_live_call_at_import_time():

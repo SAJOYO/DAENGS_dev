@@ -7,7 +7,7 @@
 # 롤백이 된다.
 #
 # **`--no-install-project` + `PYTHONPATH` 도 #427 이 찾은 것과 같은 수다** —
-# pyproject.toml 의 `[tool.uv.build-backend] module-name` 이 여덟 패키지를 나열해서
+# pyproject.toml 의 `[tool.uv.build-backend] module-name` 이 아홉 패키지를 나열해서
 # 일부만 이미지에 넣으면 설치 단계가 깨진다. 설치하지 않고 경로만 알려 주면 그 제약이 없다.
 ARG PYTHON_VERSION=3.12.13
 ARG UV_VERSION=0.12.3

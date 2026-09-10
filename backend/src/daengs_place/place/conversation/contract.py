@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from daengs_place.place.contracts import PlaceRef
+from daengs_place.place.conversation.intent import Attribute, UnsupportedAttribute
 from daengs_place.place.filters.contract import FilterState, Identifier
 from daengs_place.place.filters.service import FilterResponse
 from daengs_place.place.planning.contract import PlanningModel
@@ -36,6 +37,19 @@ class ResultSnapshot(PlanningModel):
     created_at: datetime
     result: FilterResponse
     display_order: tuple[PlaceRef, ...]
+    exclusions: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
+    omitted: tuple[PlaceRef, ...] = Field(default=(), max_length=1320)
+
+
+class NamedPlace(PlanningModel):
+    key: PlaceRef
+    name: str
+
+
+class ExplorationState(PlanningModel):
+    excluded: tuple[NamedPlace, ...] = Field(default=(), max_length=120)
+    presented: tuple[PlaceRef, ...] = Field(default=(), max_length=1200)
+    fingerprint: str = ""
 
 
 class DialogueTurn(PlanningModel):
@@ -44,12 +58,43 @@ class DialogueTurn(PlanningModel):
     selected: PlaceRef | None = None
 
 
+class PendingChange(PlanningModel):
+    id: UUID
+    revision: int = Field(ge=1)
+    base_fingerprint: str
+    original_query: str = Field(max_length=1000)
+    question: str = Field(max_length=1000)
+    candidate: FilterState
+    goal: Literal["show", "pick_one", "edit_only"]
+    refresh: bool = False
+    unsupported: tuple[UnsupportedAttribute, ...] = ()
+    expires_at: datetime
+
+
+class SelectionBasis(PlanningModel):
+    place: PlaceRef
+    snapshot_id: UUID
+    method: Literal["visible_order", "distance", "parking_then_distance", "user_reference"]
+
+
+class AnswerFact(PlanningModel):
+    attribute: Attribute
+    status: Literal["known", "unknown", "unsupported"]
+    value: bool | int | str | None = None
+    source: PlaceRef | None = None
+    as_of: str | None = None
+
+
 class ConversationState(PlanningModel):
     filters: FilterState
     snapshot: ResultSnapshot | None = None
     selected: PlaceRef | None = None
     history: tuple[DialogueTurn, ...] = Field(default=(), max_length=6)
     pending_question: str = Field(default="", max_length=200)
+    revision: int = Field(default=0, ge=0)
+    pending_proposal: PendingChange | None = None
+    selection_basis: SelectionBasis | None = None
+    exploration: ExplorationState = Field(default_factory=ExplorationState)
 
 
 class FilterRemoval(PlanningModel):
@@ -65,6 +110,8 @@ class PrepareRequest(PlanningModel):
     restore_filters: FilterState | None = None
     remove_filters: FilterRemoval | None = None
     previous: ConversationState | None = None
+    # Set by the owner-bound gateway, never copied from an app-supplied state.
+    base_revision: int | None = Field(None, ge=0)
     # IDs in the exact order the user saw, scoped to the saved snapshot.
     visible_order: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
     visible_selected: PlaceRef | None = None
@@ -72,7 +119,12 @@ class PrepareRequest(PlanningModel):
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
         if self.mode == "filters":
-            if self.previous is None or self.remove_filters is None or self.manual or self.query:
+            if (
+                self.previous is None
+                or self.remove_filters is None
+                or self.manual is not None
+                or self.query
+            ):
                 raise ValueError("filter removal requires a saved state and removal IDs only")
         elif self.remove_filters is not None:
             raise ValueError("removal IDs require filters mode")
@@ -103,6 +155,19 @@ class ExecutionReceipt(PlanningModel):
     question: str = ""
     # Allowed explanation statements, generated from actual result facts.
     evidence: dict[str, str] = Field(default_factory=dict)
+    action: Literal[
+        "execute", "await_confirmation", "clarify", "explain", "reject", "unsupported"
+    ] = "execute"
+    pending_id: UUID | None = None
+    asked_attributes: tuple[Attribute, ...] = ()
+    facts: tuple[AnswerFact, ...] = ()
+    unsupported: tuple[UnsupportedAttribute, ...] = ()
+    selection_basis: SelectionBasis | None = None
+    browse: Literal["current", "next", "restart"] = "current"
+    new_places: tuple[PlaceRef, ...] = ()
+    excluded_places: tuple[NamedPlace, ...] = ()
+    restored_places: tuple[NamedPlace, ...] = ()
+    remaining: Literal["more", "exhausted", "unknown"] = "unknown"
 
 
 class PreparedTurn(PlanningModel):

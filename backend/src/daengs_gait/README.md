@@ -10,29 +10,22 @@
 
 ## 빠르게 보기
 
-가중치 없이 계약(스키마)만 확인할 때:
+이 패키지에는 **자기 HTTP 서버가 없습니다** (옛 `gait-serve`·`service.py` 는 D-063 4단계에서
+제거). 실행부는 backend 의 Celery 워커입니다:
 
 ```powershell
-cd gait-analysis
 cd backend
-uv sync
-uv run gait-serve                 # http://127.0.0.1:8000/docs
-```
-
-`/healthz` 가 `ready: false` 를 냅니다 — 가중치가 없으니 정상입니다.
-
-실제로 분석하려면 가중치를 놓고 `--group gait` 로 받습니다:
-
-```powershell
 uv sync --group gait              # torch·ultralytics·opencv (약 2GB)
 $env:GAIT_RELEASE_DIR = "C:\어딘가\release"
-uv run gait-serve
+uv run celery -A daengs_backend.tasks.gait worker --queues gait --concurrency 1
 ```
 
-테스트 (가중치 없이 돕니다):
+앱 쪽 계약은 backend 의 `/app/gait/*` (`daengs_backend/routers/gait.py`) 입니다.
+
+테스트 (가중치 없이 돕니다 — cv2 가 있으면 실영상 테스트까지):
 
 ```powershell
-uv run pytest
+uv run pytest tests/test_gait_*.py
 ```
 
 ## 가중치
@@ -73,52 +66,32 @@ GAIT_RELEASE_DIR=C:\deploy\daengs\models\gait\release
 기본 `docker compose up -d` 에서는 **안 뜹니다.** profile 뒤에 있습니다.
 
 ```powershell
-docker compose --profile gait up -d
-docker compose logs -f gait-analysis
+docker compose --profile gait up -d gait-worker
+docker compose logs -f gait-worker            # `celery@… ready.`
 ```
 
-앱이 부르는 주소는 `http://daengback.~/gait/analyze` 입니다 — 새 포트를 쓰지 않고
-이미 열려 있는 8000 에 경로만 얹었습니다 (D-024 와 같은 판단).
+앱이 부르는 주소는 `http://daengback.~/app/gait/*` 이고 backend 가 받습니다 — 영상은
+bridge 업로드로 backend 를 지나 저장소에 놓이고, 워커가 큐에서 꺼내 분석합니다 (D-043 · D-052).
+`backend/src` 가 바뀌면 워커는 자동 reload 되지 않으니 `docker compose restart gait-worker`.
 
-`nginx/default.conf` 를 고쳤다면 반영이 필요합니다:
-
-```powershell
-docker compose exec nginx nginx -t          # 문법 검사
-docker compose exec nginx nginx -s reload   # 무중단 반영
-```
-
-> ⚠️ **인증이 없습니다.** profile 을 켜는 순간 `daengback/gait/` 가 인증 없는 업로드
-> 엔드포인트가 됩니다. 스크리닝과 같은 상태이고, 켜는 시점은 사람이 정합니다.
+옛 `location /gait/` 는 `nginx/default.conf` 에 **410 Gone** 묘비로만 남아 있습니다 — 옛 앱
+빌드가 "서버가 잠깐 이상한가" 하고 재시도하지 않게 하려는 것입니다.
 
 ## API
 
-**계약 원본은 [`API.md`](API.md) 입니다** (앱이 볼 문서). 아래는 목차입니다.
+**앱이 쓰는 계약은 backend 의 `/app/gait/*` 입니다** (`daengs_backend/routers/gait.py`,
+`schemas/gait.py`). 이 패키지가 직접 내던 옛 `/gait/*` 계약은 [`API.md`](API.md) 에
+역사 기록으로만 남아 있습니다 (D-063 4단계에서 제거).
 
-| | |
-| --- | --- |
-| `GET /gait/healthz` | 가중치가 실제로 있는지까지 봅니다 (`ready`) |
-| `POST /gait/analyze` | multipart: `video` (필수), `date` · `note` · `dog_id` (선택) → 기록. 413 은 아래 참고 |
-| `GET /gait/records` | 강아지별 기록 목록. **`dog_id` 필수**, `limit` · `cursor`. 요약만 냅니다 |
-| `GET /gait/records/{id}` | 기록 단건 |
-| `DELETE /gait/records/{id}` | 기록과 영상(원본·overlay)을 즉시 삭제 |
-| `POST /gait/compare` | `{record_id_a, record_id_b}` → 두 기록 비교 |
-| `GET /gait/records/{id}/overlay` | 분석 결과를 그린 영상 (mp4) |
-
-- **`record_id` 는 32자 소문자 16진수**입니다 (`uuid4().hex`).
-- **응답에 디스크 경로가 나가지 않습니다.** `overlay_video` 대신 `has_overlay` 와
-  `overlay_url` 을 냅니다 — 컨테이너 안 경로는 앱이 쓸 수 없고, 파일이 공용 저장소로
-  옮겨지면 거짓이 됩니다.
-- ⚠️ **`dog_id` 는 보안 장치가 아닙니다.** 소유권 검증은 `daengs_backend` 의 auth
-  계층 몫입니다 — `API.md` §소유권.
-
-원본 영상 재생(`GET /gait/records/{id}/original`)은 아직 없습니다 — 앱 요구사항이
-확정되면 추가합니다.
+- **`record_id` 는 UUID** 입니다 (DB `gait_records.id`).
+- **응답에 디스크 경로가 나가지 않습니다.** overlay 는 bridge 다운로드 URL 로 냅니다.
+- 소유권 검증은 `daengs_backend` 의 auth 계층 몫입니다.
 
 ### 업로드 크기 제한 (413)
 
 `GAIT_MAX_UPLOAD_BYTES` (기본 150MB). skin-screening 의 12MB(사진 한 장)를 그대로
 쓰지 않은 이유와 근거는 `docs/gait/record-data-design.md` 참고. `nginx/default.conf`
-의 `location /gait/` 가 `client_max_body_size 200m` 로 바깥 상한을 잡아 두었으므로
+의 `location /app/gait/` 가 `client_max_body_size 200m` 로 바깥 상한을 잡아 두었으므로
 **이 값은 항상 그보다 낮게** 유지하세요 — 그래야 nginx 의 맨 HTML 대신 앱이 이유가
 담긴 JSON 413 을 먼저 돌려줍니다.
 
@@ -150,8 +123,8 @@ production 코드였고, 동시에 module 최상단에서 `pandas` · `scipy` ·
 | `e14.apply_gait_filter`, `e14._kp_spread_ratio` | `gait_filter.py` |
 | `e13.build_tracks`, `e3_trajectory_features._track_static_temporal`/`_stats`, `e14.kp_static_feats_from_recs` | `feature_engine.py` |
 | `gait_demo/*.py` | `daengs_gait/*.py` (같은 이름) |
-| `frontend/server.py` 의 `_ensure_mp4` · `_download_url` | `video_intake.py` |
-| `frontend/server.py` (HTTP 어댑터) | `service.py` (FastAPI 로 새로) |
+| `frontend/server.py` 의 `_ensure_mp4` · `_download_url` | `video_intake.py` → 판정만 `intake.py` 로 (3단계), 나머지는 4단계에서 제거 |
+| `frontend/server.py` (HTTP 어댑터) | `service.py` (FastAPI) → 4단계에서 제거, 역할은 backend `/app/gait/*` + `gait-worker` |
 
 **계산은 한 줄도 바꾸지 않았습니다.** 같은 영상을 두 구현으로 분석해 대조했고,
 feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습니다.

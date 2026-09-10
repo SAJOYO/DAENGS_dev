@@ -133,6 +133,48 @@ flowchart TD
 최상위 input_revision은 생성 캐시용이며 bundle.input_revision은 원본 snapshot용이다.
 목표·작성 정책이 캐시 revision에 추가되므로 두 값을 동일시하지 않는다.
 
+## 배경 갱신 뒤 완성 일기 유지 (#406)
+
+2026-09-10, [Dev #406](https://github.com/SAJOYO/DAENGS_dev/pull/406).
+완성 보드를 읽는 조건과 최신 재료로 새로 만드는 조건을 구별한다.
+
+| 변경 | GET / 일반 POST (`refresh=false`) |
+| --- | --- |
+| 동일 입력 | 같은 ready 보드 재사용 |
+| 배경 envelope 추가·교체·수집 실패·선택 변경만 있음 | 같은 ready 보드와 생성 번호·원래 revision 유지, `background_update_available=true` |
+| 원본 메모·행동·삭제·핀·사진 manifest·동선·세션 범위 변경 | 기존처럼 stale, bundle 없음 |
+| 목표 장수·스탬프 또는 작성 정책 변경 | 기존처럼 stale |
+| 저장 결과 손상·다른 세션/생성 receipt | failed, `invalid_stored_diary` |
+
+배경 변경 플래그는 새로 쓰면 사용할 입력이 달라졌다는 뜻이며, 자료의 품질 향상이나
+실제 장소 변화의 판정이 아니다. 새 자료가 없어진 경우에도 켜질 수 있다.
+GET과 일반 POST는 이 플래그 때문에 LLM을 호출하거나 일기를 덮어쓰지 않는다.
+명시적 `refresh=true`는 기존대로 최신 전체 입력으로 새 generation을 예약한다.
+생성 도중 원본 또는 배경이 다시 바뀌면 기존 완료 검사를 통과할 수 없다.
+
+반환 bundle의 제목·본문·핀·장면 순서·내부 input/plan revision, 바깥 input_revision과 준비
+개수/사유는 모두 저장된 보드 기준이다. 최신 자료의 revision을 옛 내용에 붙이지 않는다.
+현재 기록 revision과 사진 manifest는 원본 일치 확인을 통과했으므로 기존 앱 검사를 만족한다.
+추가된 boolean 외에 HTTP 형식은 그대로다. APP의 `WalkDiarySync`/`ServerDiaryBundle`
+origin/dev를 읽어 ready 재사용과 추가 필드 허용을 확인했으며 앱 수정이나 새 UI 문구는 없다.
+사람의 편집 데이터는 이번 서버 저장 처리의 대상이 아니다.
+
+저장은 기존 `walk_storyboards.bundle` JSONB에 `walk-diary-storage-v1` receipt로 감싼다.
+원본/정책 지문, 생성 revision, 내용 해시와 저장 당시 준비 결과만 추가하며, 사용자 글·사진·
+동선을 별도 snapshot으로 복제하지 않는다. HTTP에는 안쪽 `walk-diary-bundle-v1`만 반환한다.
+원본 지문은 배경과 배경 선택 ID만 제외하고 모든 입력을 검증·정규화해 계산한다.
+메모 내용·삭제 tombstone·pin_revision/위치·사진 승인 publisher/revision·동선 계산 버전은 포함한다.
+
+기존 bare bundle은 **전체 입력·계획이 아직 일치할 때만** Walk 잠금 아래에서 receipt를 붙인다.
+본문·생성 번호는 바뀌지 않으며 LLM 호출도 없다. 이미 stale인 옛 결과는 원본 변화와 배경 변화를
+구분할 증거가 없으므로 자동 승격하지 않는다. SQL 마이그레이션과 환경 변수 변경은 없다.
+이전 서버 코드는 새 저장 receipt를 읽지 못하므로, 롤백 때도 이 읽기 호환 코드를 유지해야 한다.
+새 receipt를 제거하거나 최신 지문을 임의로 옛 일기에 붙이는 데이터 변경으로 되돌리지 않는다.
+
+이 단위는 `ready` 보드의 배경 갱신 보존이다. 명시적 다시 쓰기 진행 중 이전 보드 유지,
+사용자 편집과 생성 결과의 충돌 처리, 앱의 다시 쓰기 UX는 후속이다.
+[기존 기록 backfill](context-backfill.md)의 `stored_board` 제외 규칙은 아직 유지한다.
+
 ## 검증
 
 로컬 테스트 범위는 작성·새 생성·계약·선택·기존 storyboard/핀/제목·설정·가벼운 앱 기동이다.

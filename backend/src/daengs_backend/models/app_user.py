@@ -34,6 +34,10 @@ class AppUser(Base):
             "status IN ('active','suspended','withdrawn')",
             name="app_users_status_check",
         ),
+        CheckConstraint(
+            "(ocr_consent_at IS NULL) = (ocr_consent_version IS NULL)",
+            name="app_users_ocr_consent_pair",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -85,6 +89,15 @@ class AppUser(Base):
     primary_pet_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("pets.id", ondelete="SET NULL")
     )
+
+    # 영수증 OCR 항목(vet_visits.raw_ocr_items)을 서비스 제공 범위 밖의 목적(진단 추천
+    # 모델 학습)으로 쓰는 데 대한 동의 (#353, docs/vet-visits.md §3).
+    #
+    # **불리언이 아니라 시각입니다** — `ocr_consent_at IS NOT NULL` 이 곧 그 불리언이고,
+    # 시각·판 번호까지 남아야 근거가 됩니다. **기본값이 없습니다** — DEFAULT 를 걸면
+    # 아무도 누른 적 없는 동의가 전 회원에게 생깁니다. 철회는 둘 다 NULL 로 되돌립니다.
+    ocr_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ocr_consent_version: Mapped[str | None] = mapped_column(String(20))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

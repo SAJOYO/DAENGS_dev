@@ -1,0 +1,36 @@
+{
+  "targets": 14,
+  "repeats_per_arm": 3,
+  "observations": 84,
+  "task_completion_by_arm": {
+    "current-input": {
+      "pass": 9,
+      "fail": 33
+    },
+    "context-input": {
+      "pass": 12,
+      "fail": 30
+    }
+  },
+  "automatic_by_arm": {
+    "current-input": {
+      "review_required": 27,
+      "fail": 15
+    },
+    "context-input": {
+      "review_required": 30,
+      "fail": 12
+    }
+  },
+  "improved_task_pairs": 6,
+  "regressed_task_pairs": 3,
+  "unchanged_task_pairs": 33,
+  "reference_resolution_only_improved_pairs": 3,
+  "invalid_plan_by_arm": {
+    "current-input": 3,
+    "context-input": 0
+  },
+  "policy_sensitive_target": "PC-X05, six observations; not universal interpretation accuracy",
+  "repeated_behavior_identical": true,
+  "caveat": "Frozen independent turns; no claim of production adoption or general dialogue accuracy."
+}

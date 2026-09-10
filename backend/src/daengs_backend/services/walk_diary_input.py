@@ -5,7 +5,8 @@ and completing the existing storyboard generation. Public routes do not accept t
 snapshot as proof of ownership.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from uuid import UUID
 
 from daengs_backend.config import settings
@@ -41,6 +42,9 @@ class InputAssembly:
     # Do not log provider payload or user text; stable envelope IDs and reasons suffice.
     excluded_backgrounds: tuple[dict[str, str], ...]
     observation_source: ObservationSource | None = None
+    # Readiness is server-side metadata, not part of the diary source/revision.
+    uploaded_at: datetime | None = None
+    context_pending: bool = False
 
 
 def entry_anchor(event_at, location, raw_pin=None):
@@ -196,6 +200,8 @@ def saved_background(envelope, record, walk_id):
     if provenance["policy_version"] != schema:
         raise ValueError("invalid_context_policy")
     if not envelope["tags"] or not set(envelope["tags"]) <= {
+        "space.address",
+        "space.commerce",
         "space.facility",
         "space.park",
         "space.river",
@@ -307,21 +313,29 @@ async def read_input(session, owner, walk_id):
         await photos.current(session, walk_id) if settings.walk_photo_metadata_enabled else None
     )
     envelopes = []
+    context_pending = False
     if settings.walk_entry_context_enabled:
         pin_ids = {r.entry_id for r in pin_rows}
         for row in rows:
             if row.payload is None:
                 continue
             policy = contexts.PIN_POLICY if row.id in pin_ids else contexts.POLICY
-            _, latest = await contexts.current(session, row, policy=policy)
+            jobs, latest = await contexts.current(session, row, policy=policy)
+            context_pending = context_pending or any(
+                job.state in {"pending", "running"} for job in jobs
+            )
             envelopes.extend(r.envelope for r in latest.values())
     analysis = await storyboards.latest_analysis(session, walk_id)
-    return assemble_input(
-        walk,
-        analysis,
-        rows,
-        pin_rows,
-        photo_manifest,
-        envelopes,
-        observation_source=prepare_observation_source(walk, analysis),
+    return replace(
+        assemble_input(
+            walk,
+            analysis,
+            rows,
+            pin_rows,
+            photo_manifest,
+            envelopes,
+            observation_source=prepare_observation_source(walk, analysis),
+        ),
+        uploaded_at=getattr(walk, "created_at", None),
+        context_pending=context_pending,
     )

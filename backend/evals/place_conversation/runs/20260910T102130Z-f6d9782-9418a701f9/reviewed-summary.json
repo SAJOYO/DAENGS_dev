@@ -1,0 +1,40 @@
+{
+  "observed_turns": 6,
+  "reviewed_turns": 2,
+  "turn_statuses": {
+    "fail": 1,
+    "blocked": 1,
+    "not_run": 3,
+    "pass": 1
+  },
+  "case_repetitions": [
+    {
+      "case_id": "EX08",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX09",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX10",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    }
+  ],
+  "provider_calls": 3,
+  "provider_errors": 1,
+  "provider_latency_median_ms": 2479,
+  "reported_usage": {
+    "total_input_tokens": 6176,
+    "total_output_tokens": 83,
+    "total_tokens": 6259
+  },
+  "usage_missing_calls": 1,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

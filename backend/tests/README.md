@@ -142,6 +142,25 @@ uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
 uv run pytest -q tests/walk/photos/test_walk_photo_db.py tests/walk/diary/test_diary_generation_db.py
 ```
 
+#### 산책별 봉인 원판 조회 — PR #422
+
+`POST /app/walks/spatial-diary/sheets/query`는 같은 `test_spatial_diary_query.py`에 연결한다.
+현재 owner의 명시적 기기 ID, 요청 순서, ready/미봉인 pending/unavailable,
+빈 원판·mixed paint·occupancy 0인 support 보존, payload 사전 상한, 봉인 원판 손상 500을 검증한다.
+최신 sealed 대표 SQL과 검증 도우미를 기존 집계 API와 공유하므로 기존 query 테스트도 포함한다.
+
+```powershell
+uv run --no-sync pytest -q -rs tests/walk/diary/test_spatial_diary_query.py tests/walk/measurement/test_walk_analysis_storage.py
+```
+
+2026-09-10, `origin/dev f65aebf` 위 PR #422 구현에서 **49 passed / 0 skipped (14.91초)**를
+확인했다. 기존 venv를 동기화 없이 재사용하고 `PYTHONPATH`는 해당 작업트리 `src`로 지정했다.
+실제 native encoder의 응답 fixture는 앱 [DAENGS_APP#271](https://github.com/SAJOYO/DAENGS_APP/pull/271)에 전달했다.
+DB 대역과 PostgreSQL SQL compile 검증이며 실제 DB에서 쿼리·동시 snapshot을 실행한 결과는 아니다.
+전체 suite·실서비스·배포 검증은 수행하지 않았다. 변경 Python 5파일 ruff check/format과
+`uv run --no-sync check`도 통과했다. Windows 임시 검증 스크립트를 위해 검사 프로세스의
+`PSExecutionPolicyPreference=Bypass`만 지정했으며 사용자 실행 정책은 변경하지 않았다.
+
 ### 9. 전봇대 점령
 
 - 근거: PR #178, #193, #197, #249, #260, #281, #335, #360.
@@ -351,17 +370,28 @@ Walk·Place·Territory·Activity 지원 도구의 현재 소비 관계를 기록
 남은 도메인 정리는 후속 단계다. 중복 검증은 같은 동작·입력·실패 경계를
 실제로 비교한 뒤 합친다. 파일 이름이 비슷하다는 이유로 삭제하지 않는다.
 
-## CI 연결 현황 — 참고용, 실행하지 않음
+## CI 연결 현황 — 🔴 **2026-09-10 부터 이 일곱은 CI 에서 안 돕니다**
 
-| 현재 workflow | 담당 검증 / 확인한 한계 |
+Actions 무료 한도가 소진돼 아래 워크플로 전부를 **`docs/ci/` 로 옮겼습니다.** GitHub 은
+`.github/workflows/` 만 읽으므로 거기서는 실행되지 않습니다. **여기 적힌 검증은 이제
+사람이 로컬에서 돌립니다 — 명령은 [`docs/ci/README.md`](../../docs/ci/README.md) 에 있습니다.**
+
+⚠ **아래 표의 "빈 결과·skip 거부" 는 그 워크플로가 하던 일입니다.** 지금은 아무도 안
+합니다 — `uv run pytest` 는 DSN 이 없으면 **조용히 skip 하고 초록으로 끝냅니다**
+(2026-09-10 실측: walk 저장 검사 15건 전부 skip). 돌릴 때 `-rs` 를 붙여 확인하세요.
+
+| 옮겨 간 workflow | 담당 검증 / 확인한 한계 |
 | --- | --- |
-| [backend-tests](../../.github/workflows/backend-tests.yml) | 기본 pytest 전체. 기본 marker/의존성/DB 미설정으로 제외·skip되는 검증이 있을 수 있음 |
-| [place-search-tests](../../.github/workflows/place-search-tests.yml) | PostGIS + Alembic + Place·시설 API·capability·오케스트레이션·앱 로딩. 빈 결과·skip 거부 |
-| [journey-tests](../../.github/workflows/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
-| [walk-entry-context-tests](../../.github/workflows/walk-entry-context-tests.yml) | context DB·서비스·pin-context·기존 기록 HTTP. backend/Walk/Life 소스와 Walk 테스트 전체 변경을 감지 |
-| [walk-entry-v2-tests](../../.github/workflows/walk-entry-v2-tests.yml) | pin/photo/diary generation 및 live storyboard DB. 위와 같은 소스·테스트 변경을 감지 |
-| [territory-ownership-tests](../../.github/workflows/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스·주인 요약. 두 테스트 디렉터리와 Walk 소스 변경 감지, 빈 결과·skip 거부 |
-| [migration-verification-tests](../../.github/workflows/migration-verification-tests.yml) | 별도 migration 검증. Python 대역 테스트로 대체할 수 없는 SQL 검증 경계 |
+| [backend-tests](../../docs/ci/backend-tests.yml) | 기본 pytest 전체. 기본 marker/의존성/DB 미설정으로 제외·skip되는 검증이 있을 수 있음 |
+| [place-search-tests](../../docs/ci/place-search-tests.yml) | PostGIS + Alembic + Place·시설 API·capability·오케스트레이션·앱 로딩. 빈 결과·skip 거부 |
+| [journey-tests](../../docs/ci/journey-tests.yml) | Journey 테스트와 서비스 설정 검증 |
+| [walk-entry-context-tests](../../docs/ci/walk-entry-context-tests.yml) | context DB·서비스·pin-context·기존 기록 HTTP. backend/Walk/Life 소스와 Walk 테스트 전체 변경을 감지 |
+| [walk-entry-v2-tests](../../docs/ci/walk-entry-v2-tests.yml) | pin/photo/diary generation 및 live storyboard DB. 위와 같은 소스·테스트 변경을 감지 |
+| [territory-ownership-tests](../../docs/ci/territory-ownership-tests.yml) | claims DB·activity·점령 API/서비스·주인 요약. 두 테스트 디렉터리와 Walk 소스 변경 감지, 빈 결과·skip 거부 |
+| [migration-verification-tests](../../docs/ci/migration-verification-tests.yml) | 별도 migration 검증. Python 대역 테스트로 대체할 수 없는 SQL 검증 경계 |
+
+**`.github/workflows/` 에 남아 있는 다섯**(`deploy` · `db-migrate` · 인제스트 둘 ·
+`walk-diary-runtime`)은 전부 self-hosted 라 한도와 무관하고 지금도 정상으로 돕니다.
 
 3단계에서 live storyboard DB 검증을 기존 v2 job에 연결했다. `LIVE_STORYBOARD_TEST_DSN`은
 동일한 임시 PostgreSQL의 `walk_pin_test`를 사용하되 fixture마다 별도 UUID schema를 만든다.

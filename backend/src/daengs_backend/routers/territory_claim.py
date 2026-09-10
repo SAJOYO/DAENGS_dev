@@ -13,16 +13,23 @@ from daengs_backend.schemas.territory_claim import (
     ClaimResponse,
     MarkRequest,
     PhotoAccessResponse,
+    RenewalRequest,
+    RenewalResponse,
     SessionPhase,
     SessionResponse,
     SessionStart,
     SiteId,
     SiteResponse,
 )
+from daengs_backend.schemas.territory_owned import OwnedTerritoryPage
 from daengs_backend.schemas.territory_owner import TerritoryOwnerSummary
-from daengs_backend.services import activity, territory_owner
+from daengs_backend.services import activity, territory_owned, territory_owner, territory_renewal
 from daengs_backend.services import territory_ownership as service
 from daengs_backend.services.activity_core.game_policy import GameError
+from daengs_backend.services.territory_site_batch_lookup import (
+    TerritorySiteBatchLookup,
+    get_territory_site_batch_lookup,
+)
 from daengs_backend.services.territory_site_lookup import (
     TerritorySiteLookup,
     TerritorySiteUnavailableError,
@@ -33,6 +40,36 @@ router = APIRouter(prefix="/app/territory", tags=["territory-ownership"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Lookup = Annotated[TerritorySiteLookup, Depends(get_territory_site_lookup)]
 Snapshot = Annotated[AsyncSession, Depends(get_snapshot_session)]
+
+
+@router.get("/my-sites", response_model=OwnedTerritoryPage)
+async def my_sites(
+    user: CurrentAppUser,
+    db: Snapshot,
+    lookup: Annotated[TerritorySiteBatchLookup, Depends(get_territory_site_batch_lookup)],
+    pet_id: uuid.UUID | None = None,
+    cursor: Annotated[str | None, Query(min_length=1, max_length=1024)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+):
+    try:
+        return await territory_owned.list_owned(
+            db,
+            user.app_user_id,
+            lookup,
+            pet_id=pet_id,
+            cursor=cursor,
+            limit=limit,
+        )
+    except activity.ActivityDisabled:
+        raise HTTPException(503, {"code": "activity_disabled"}) from None
+    except activity.ActivityNotFound:
+        raise HTTPException(404, {"code": "pet_not_found"}) from None
+    except territory_owned.InvalidOwnedCursor:
+        raise HTTPException(400, {"code": "invalid_cursor"}) from None
+    except territory_owned.OwnedSeasonChanged:
+        raise HTTPException(409, {"code": "season_changed"}) from None
+    except TerritorySiteUnavailableError:
+        raise HTTPException(503, {"code": "territory_sites_unavailable"}) from None
 
 
 @router.get("/owner-summary", response_model=TerritoryOwnerSummary)
@@ -92,6 +129,20 @@ async def mark(body: MarkRequest, user: CurrentAppUser, db: Session, lookup: Loo
 @router.get("/claims/{claim_id}", response_model=ClaimResponse)
 async def claim(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
     return await _call(service.get_claim(db, user.app_user_id, claim_id))
+
+
+@router.put("/claims/{claim_id}/renewals/{renewal_id}", response_model=RenewalResponse)
+async def renew(
+    claim_id: uuid.UUID,
+    renewal_id: uuid.UUID,
+    body: RenewalRequest,
+    user: CurrentAppUser,
+    db: Session,
+    lookup: Lookup,
+):
+    return await _call(
+        territory_renewal.renew(db, user.app_user_id, claim_id, renewal_id, body, lookup)
+    )
 
 
 @router.put("/claims/{claim_id}/photos/{photo_id}", response_model=ClaimResponse)

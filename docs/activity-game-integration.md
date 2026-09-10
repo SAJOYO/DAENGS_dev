@@ -1,5 +1,13 @@
 # 산책·점령 통계와 게임 정책의 DEV 연결
 
+> 2026-09-10 후속: [월간 자동 결산](territory/monthly-seasons.md) — `start-monthly`로 명시적 최초 활성화, 이후 자동 전환과 저장된 `final_rank`.
+
+> 2026-09-10 후속: [72시간 만료·현장 연장](territory/ownership-expiry.md).
+> 첫 시즌의 worker는 각 영역의 실제 만료 시각에서 보유 개수와 점수 구간을 나눈다.
+
+> 2026-09-10 후속: [첫 시즌 회원별 보상](territory/first-season-rewards.md).
+> 새 버전의 기본 20/100 차액·탈취 20·시간당 2/10 정산과 회원 원장은 해당 문서를 따른다.
+
 > 2026-09-08 후속: [인증 우선 정책 v2](certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.
 
 ## 목적과 선행 조건
@@ -172,7 +180,8 @@ Beat 간격은 30초이고 한 배치의 산책/계정 각각 최대 100개를 �
 `tests/activity/test_activity_db.py`는 localhost의 `claims_test` DB 안에서 테스트마다 임의 schema를
 만들고 제거한다. 팀 DB 설정으로 fallback하지 않는다. #260과 후속 SQL을 재실행하고 실제
 산책 finalize, 사진 판정, 처리기, API, 삭제 및 시즌 종료를 검증한다.
-`.github/workflows/territory-ownership-tests.yml`은 PostgreSQL 17에서 이를 실행한다.
+`docs/ci/territory-ownership-tests.yml`이 PostgreSQL 17에서 이를 실행**했다** — 2026-09-10 에
+CI 에서 빠졌으므로 지금은 사람이 돌린다 (`docs/ci/README.md`).
 전체 기본 backend 테스트 워크플로우도 그대로 유지한다.
 
 APP에는 아직 이 조회 계약 연결, 동일 client UUID 전달 확인, pending/stale 표시,

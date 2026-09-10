@@ -78,6 +78,7 @@ class ActivityAccount(Base):
         CheckConstraint("revision > 0"),
         CheckConstraint("processed_revision >= 0"),
         CheckConstraint("processed_revision <= revision"),
+        CheckConstraint("final_rank > 0", name="activity_final_rank_positive"),
     )
     season_id: Mapped[str] = mapped_column(
         ForeignKey("activity_seasons.id", ondelete="CASCADE"), primary_key=True
@@ -87,9 +88,23 @@ class ActivityAccount(Base):
     )
     score: Mapped[dict] = mapped_column(JSONB)
     final_score: Mapped[dict | None] = mapped_column(JSONB)
+    final_rank: Mapped[int | None] = mapped_column(BigInteger)
     revision: Mapped[int] = mapped_column(BigInteger)
     processed_revision: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     statistics: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ActivityMonthlySeason(Base):
+    __tablename__ = "activity_monthly_seasons"
+    __table_args__ = (
+        CheckConstraint("previous_season_id IS NULL OR previous_season_id <> season_id"),
+    )
+    season_id: Mapped[str] = mapped_column(
+        ForeignKey("activity_seasons.id", ondelete="CASCADE"), primary_key=True
+    )
+    previous_season_id: Mapped[str | None] = mapped_column(
+        ForeignKey("activity_seasons.id"), unique=True
+    )
 
 
 class ActivityHoldingPeriod(Base):

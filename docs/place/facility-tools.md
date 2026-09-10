@@ -110,11 +110,21 @@ Redis 키는 `facility:conversation:v2:<session_id>`, TTL은 최초 생성부터
   `expected_revision`에 묶어 보낸다. 직접 조작은 계획·답변 LLM을 호출하지 않는다.
 - Place의 제한된 `FilterRemoval` → 공통 `FilterChanges` 검증 → 필터 엔진 → CAS 확정 경로다.
   없는 ID·중복 ID·조건 추가·교체 입력은 거부한다. 빈 제거 요청은 현재 필터로 결과를 확보한다.
+- ID는 현재 응답의 `filters.hard`에서 가져온다. 자연어 처리에서 서버가 생성한 ID를 사용하며,
+  클라이언트가 `parking` 같은 고정 ID를 가정하지 않는다.
+- 직접 조건 해제는 [장소 탐색](conversation-exploration.md)의 명시적 장소 제외를 유지한다.
+  조건이 바뀌면 새 조건으로 후보를 확보하고, 빈 제거 요청은 다음 페이지 소진 뒤에도 현재 조건의
+  전체 검색 풀로 돌아간다. 이때 명시적으로 제외한 장소는 다시 보여주지 않는다.
+- 성공한 직접 조작은 확인 대기 중인 AI 제안을 지운다. 늦게 도착한 이전 제안 수락은 CAS에서
+  거부되고, 이후 단순 동의만으로 취소된 제안을 다시 적용하지 않는다.
 - 실패하면 조건·목록을 유지한다. 응답 유실 재시도는 같은 요청 ID, 확정된 검색 실패 후 재시도는
   실패 응답의 새 revision을 사용한다. 이전 화면에서 만들어진 해제 조작은 자동 적용하지 않는다.
 - `result_matches_filters=false` 안내와 “현재 조건으로 검색”은 AI 모드와 관계없이 제공한다.
 
 ### 실행과 검증
+
+자연어 평가의 케이스 원본과 판정·반복 규칙은 [conversation-evaluation.md](conversation-evaluation.md)에 있다.
+기존 4턴 live 스모크와 새 시나리오 전체의 검증 상태는 구분한다.
 
 Android `feat/place-conversation-skeleton`에서 `-PfacilityConversation=true`로 디버그 빌드한다.
 릴리즈와 옵션 없는 빌드는 기존 경로다. `daengs.apiBaseUrl`은 새 Backend + Place + Redis가

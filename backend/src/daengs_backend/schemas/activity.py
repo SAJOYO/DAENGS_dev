@@ -80,6 +80,8 @@ class TerritoryStatistics(BaseModel):
 
 class ScoreResponse(BaseModel):
     bonus: int
+    base_bonus: int | None = None
+    takeover_bonus: int | None = None
     holding_units: int
     held_site_ms: int
     current_count: int
@@ -106,4 +108,5 @@ class TerritorySummaryResponse(BaseModel):
     statistics: TerritoryStatistics | None
     score: ScoreResponse | None
     score_as_of_ms: int | None = None
+    final_rank: int | None = None
     sources: list[HoldingSourceRef]

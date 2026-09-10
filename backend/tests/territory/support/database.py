@@ -35,7 +35,15 @@ async def database():
             raw = (await connection.get_raw_connection()).driver_connection
             trigger = (ROOT / "db/init/02_trigger.sql").read_text(encoding="utf-8")
             await raw.execute(trigger.split("DROP TRIGGER")[0])
-            for file in ("03_auth.sql", "05_pets.sql", "08_territory_visits.sql"):
+            # Claim admission now reads pet_members (owner OR caregiver). Build the
+            # current dependency schema even for tests using only primary owners.
+            for file in (
+                "03_auth.sql",
+                "05_pets.sql",
+                "08_territory_visits.sql",
+                "23_care_events.sql",
+                "24_pet_members.sql",
+            ):
                 await raw.execute((ROOT / "db/init" / file).read_text(encoding="utf-8"))
             migration = (ROOT / "db/migrations/2026-09-05_territory_claims.sql").read_text(
                 encoding="utf-8"
@@ -62,6 +70,9 @@ async def database():
                 (ROOT / "db/migrations/verify_2026-09-08_certified_territory.sql").read_text(
                     encoding="utf-8"
                 )
+            )
+            await raw.execute(
+                (ROOT / "db/migrations/2026-09-10_territory_expiry.sql").read_text("utf-8")
             )
         factory = async_sessionmaker(engine, expire_on_commit=False)
         yield factory

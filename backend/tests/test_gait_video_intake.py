@@ -1,6 +1,9 @@
-"""업로드 영상을 **원본 그대로 쓸지 변환할지** 판정하는 부분.
+"""업로드 영상을 **원본 그대로 쓸지 변환할지** 판정하는 부분 — 실제 ffmpeg·cv2 로.
 
-**`--extra model` 이 있어야 돕니다** (cv2 · imageio-ffmpeg). 기본 설치에서는 skip 됩니다.
+**`--group gait` 가 있어야 돕니다** (cv2 · imageio-ffmpeg). 기본 설치에서는 skip 됩니다.
+정책의 뼈대는 cv2 없이 도는 `test_gait_intake.py` 가 지키고, 여기서는 **진짜 파일**로 같은
+것을 확인합니다. (옛 HTTP 서비스의 `video_intake.save_upload` 를 시험하던 파일인데, 그 서비스가
+D-063 4단계에서 제거되면서 워커가 쓰는 `prepare_for_analysis` 기준으로 다시 썼습니다.)
 
 지키는 것:
   · 읽을 수 있는 영상은 **재인코딩하지 않는다** — 손실 변환이 결과를 바꿉니다
@@ -12,22 +15,19 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parent.parent
 
 cv2 = pytest.importorskip("cv2", reason="영상 판정에는 --group gait 이 필요합니다")
 imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
 np = pytest.importorskip("numpy")
 
-from daengs_gait import config, video_intake  # noqa: E402
-from daengs_gait.video_intake import (  # noqa: E402
+from daengs_gait import intake
+from daengs_gait.intake import (
     VideoDecodeError,
+    prepare_for_analysis,
     probe_decodable,
-    save_upload,
 )
 
 
@@ -54,14 +54,6 @@ def _make_video(path: Path, *, n_frames=40, width=64, height=48, container=None)
     proc.stderr.close()
     assert proc.wait() == 0, f"테스트 영상 생성 실패: {err}"
     return path
-
-
-@pytest.fixture()
-def uploads(tmp_path, monkeypatch):
-    d = tmp_path / "uploads"
-    monkeypatch.setattr(config, "UPLOADS_DIR", d)
-    monkeypatch.setattr(video_intake, "UPLOADS_DIR", d)
-    return d
 
 
 # --------------------------------------------------------------------------
@@ -93,7 +85,7 @@ def test_probe_checks_more_than_the_first_frame(tmp_path):
     src = _make_video(tmp_path / "long.mp4", n_frames=120)
     r = probe_decodable(src)
     assert r.ok
-    assert r.frames_read == video_intake.PROBE_POINTS
+    assert r.frames_read == intake.PROBE_POINTS
 
 
 def test_probe_falls_back_to_sequential_when_seek_is_broken(tmp_path, monkeypatch):
@@ -138,9 +130,9 @@ def test_probe_falls_back_to_sequential_when_seek_is_broken(tmp_path, monkeypatc
 
 
 # --------------------------------------------------------------------------
-# save_upload — 원본 보존이 핵심
+# prepare_for_analysis — 원본 보존이 핵심
 # --------------------------------------------------------------------------
-def test_readable_upload_is_not_reencoded(uploads, tmp_path):
+def test_readable_input_is_not_reencoded(tmp_path):
     """⚠️ **이 테스트가 이 변경의 핵심입니다.**
 
     예전에는 확장자가 `.mp4` 가 아니면 무조건 재인코딩했고, 그 손실이 결과를
@@ -151,70 +143,73 @@ def test_readable_upload_is_not_reencoded(uploads, tmp_path):
     src = _make_video(tmp_path / "clip.mov", container="mov")
     original = src.read_bytes()
 
-    saved = save_upload(original, "clip.mov")
+    got = prepare_for_analysis(src)
 
-    assert saved.suffix == ".mov"              # 확장자가 안 바뀜
-    assert saved.read_bytes() == original      # 바이트가 그대로 (재인코딩 없음)
+    assert got == src                          # 같은 경로 — 확장자가 안 바뀜
+    assert got.read_bytes() == original        # 바이트가 그대로 (재인코딩 없음)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["clip.mov"]   # 새 파일 없음
 
 
-def test_undecodable_upload_is_converted(uploads, tmp_path, monkeypatch):
-    """읽을 수 없는 입력은 기존처럼 H.264 로 변환합니다 (webm/vp9 등)."""
-    src = _make_video(tmp_path / "src.mp4")
-    content = src.read_bytes()
+def test_undecodable_input_is_converted_then_reprobed(tmp_path, monkeypatch):
+    """읽을 수 없는 입력은 기존처럼 H.264 로 변환합니다 (webm/vp9 등) — 그리고 **다시 확인**합니다."""
+    # 내용은 H.264/mp4, 이름만 .webm — ffmpeg 는 확장자로 컨테이너를 고르므로 mp4 로 만들고 이름만 바꿉니다.
+    src = _make_video(tmp_path / "src.mp4").rename(tmp_path / "recording.webm")
 
     calls = {"n": 0}
-    real_probe = video_intake.probe_decodable
+    real_probe = intake.probe_decodable
 
     def probe_once_bad(path):
         calls["n"] += 1
         if calls["n"] == 1:
-            return video_intake.ProbeResult(False, "코덱 미지원(대역)")
+            return intake.ProbeResult(False, "코덱 미지원(대역)")
         return real_probe(path)
 
-    monkeypatch.setattr(video_intake, "probe_decodable", probe_once_bad)
+    monkeypatch.setattr(intake, "probe_decodable", probe_once_bad)
 
-    saved = save_upload(content, "recording.webm")
-    assert saved.suffix == ".mp4"              # 변환됨
+    got = prepare_for_analysis(src)
+    assert got.suffix == ".mp4"                # 변환됨
+    assert got.parent == tmp_path              # 같은 디렉터리 안에서만 움직임
+    assert not src.exists()                    # 변환은 원본을 지움
     assert calls["n"] == 2                     # 변환 뒤 **다시** 확인함
 
 
-def test_conversion_failure_raises_instead_of_passing_through(uploads, monkeypatch):
+def test_conversion_failure_raises_instead_of_passing_through(tmp_path, monkeypatch):
     """⚠️ 변환 후에도 못 읽으면 **조용히 넘기면 안 됩니다.**
 
     넘기면 분석이 `sampled: 0` 으로 끝나고 사용자는 "밝은 환경에서 다시 촬영해 주세요"
     라는 **엉뚱한 안내**를 받습니다 — 코덱을 못 읽은 것인데 촬영을 탓하게 됩니다.
     """
-    monkeypatch.setattr(
-        video_intake, "probe_decodable",
-        lambda p: video_intake.ProbeResult(False, "언제나 실패(대역)"),
-    )
-    monkeypatch.setattr(video_intake, "transcode_to_h264", lambda p: p)
+    src = tmp_path / "clip.av1.mp4"
+    src.write_bytes(b"whatever")
+    monkeypatch.setattr(intake, "probe_decodable",
+                        lambda p: intake.ProbeResult(False, "언제나 실패(대역)"))
+    monkeypatch.setattr(intake, "transcode_to_h264", lambda p: p)
 
     with pytest.raises(VideoDecodeError):
-        save_upload(b"whatever", "clip.av1.mp4")
+        prepare_for_analysis(src)
 
 
-def test_extension_does_not_decide(uploads, tmp_path, monkeypatch):
+def test_extension_does_not_decide(tmp_path, monkeypatch):
     """`.mp4` 라는 이름만으로 통과시키지 않습니다 — AV1 이 정확히 그 경우였습니다
     (컨테이너는 mp4, 디코더가 없어 한 장도 못 읽음)."""
     seen = {"probed": 0}
-    real_probe = video_intake.probe_decodable
+    real_probe = intake.probe_decodable
 
     def counting(path):
         seen["probed"] += 1
         return real_probe(path)
 
-    monkeypatch.setattr(video_intake, "probe_decodable", counting)
+    monkeypatch.setattr(intake, "probe_decodable", counting)
 
     src = _make_video(tmp_path / "x.mp4")
-    save_upload(src.read_bytes(), "x.mp4")
+    prepare_for_analysis(src)
     assert seen["probed"] >= 1                 # .mp4 여도 프로브를 거침
 
 
-def test_ffmpeg_failure_becomes_videodecodeerror_without_leaking_paths(uploads, tmp_path):
+def test_ffmpeg_failure_becomes_videodecodeerror_without_leaking_paths(tmp_path):
     """⚠️ ffmpeg 가 실패할 때 `CalledProcessError` 를 그대로 올리면 안 됩니다.
 
-    `service.py` 가 그것을 `except Exception` 으로 받아 detail 에 문자열화하는데, 그 안에
+    워커가 그것을 `failure_reason` 에 문자열화하고 앱이 사용자에게 보여 줄 수 있는데, 그 안에
     **ffmpeg 명령줄 전체와 서버 내부 경로**가 들어갑니다 (실측 614자). 앱에 나가면 안 되는
     정보이고 사용자에게도 아무 도움이 안 됩니다.
 
@@ -230,7 +225,7 @@ def test_ffmpeg_failure_becomes_videodecodeerror_without_leaking_paths(uploads, 
     )
 
     with pytest.raises(VideoDecodeError) as caught:
-        save_upload(audio_only.read_bytes(), "audio_only.mp4")
+        prepare_for_analysis(audio_only)
 
     msg = str(caught.value)
     assert "지원되지 않는 코덱" in msg

@@ -14,7 +14,7 @@ from daengs_backend.services.facility_conversation import (
 from daengs_place.api import conversation_internal
 from daengs_place.core.db import get_session
 from daengs_place.main import app as place_app
-from daengs_place.place.conversation.contract import TurnPlan
+from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
 from tests.place.support.conversation import Searcher, place
@@ -51,16 +51,6 @@ def recovery_body(previous):
     return {key: previous[key] for key in ("session_id", "client_request_id")}
 
 
-def filters_body(previous, **removals):
-    return {
-        "client_request_id": str(uuid4()),
-        "mode": "filters",
-        "session_id": previous["session_id"],
-        "expected_revision": previous["revision"],
-        "remove_filters": removals,
-    }
-
-
 @pytest.fixture
 async def harness(monkeypatch):
     store, searcher, model_calls = MemorySessions(), Searcher(), []
@@ -69,28 +59,10 @@ async def harness(monkeypatch):
     async def gemini(request):
         payload = json.loads(request.content)
         model_calls.append(payload)
-        if "tools" in payload:
-            assert [tool["name"] for tool in payload["tools"]] == ["propose_facility_turn"]
-            plan = plans.pop(0) if plans else {"goal": "pick_one"}
-            steps = [{"type": "function_call", "name": "propose_facility_turn", "arguments": plan}]
-        else:
-            assert "tools" not in payload
-            receipt = json.loads(payload["input"])["receipt"]
-            evidence = receipt["evidence"]
-            text = evidence.get("place", "") + "을 살펴보세요. " + evidence.get("distance", "")
-            steps = [
-                {
-                    "type": "model_output",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": json.dumps(
-                                {"text": text, "evidence_ids": list(evidence)}, ensure_ascii=False
-                            ),
-                        }
-                    ],
-                }
-            ]
+        tool = payload["tools"][0]["name"]
+        assert tool in {"propose_facility_turn", "classify_pending_decision"}
+        plan = plans.pop(0) if plans else {"goal": "pick_one"}
+        steps = [{"type": "function_call", "name": tool, "arguments": plan}]
         return httpx.Response(200, json={"status": "completed", "steps": steps})
 
     model = GeminiConversation("test-key", "test-model", transport=httpx.MockTransport(gemini))
@@ -135,17 +107,17 @@ async def test_manual_to_gemini_plan_to_cached_pick_to_answer_through_both_http_
     assert picked["answer"] is None and picked["answer_status"] == "pending"
     assert len(calls) == 1
     picked = (await client.post("/app/places/conversation/answer", json=answer_body(picked))).json()
-    assert picked["answer"]["source"] == "llm"
+    assert picked["answer"]["source"] == "fallback"
     assert picked["filters"]["candidate_kinds"] == ["shopping", "pet_shop"]
-    assert len(searcher.calls) == 1 and len(calls) == 2
-    assert json.loads(calls[0]["input"])["current_state"]["candidate_kinds"] == [
+    assert len(searcher.calls) == 1 and len(calls) == 1
+    assert set(json.loads(calls[0]["input"])["current_state"]["candidate_kinds"]) == {
         "shopping",
         "pet_shop",
-    ]
-    assert json.loads(calls[1]["input"])["committed_revision"] == picked["revision"]
+    }
+    assert picked["answer"]["revision"] == picked["revision"]
     again = await client.post("/app/places/conversation", json=request)
     assert again.json() == picked
-    assert len(calls) == 2
+    assert len(calls) == 1
     plans.append({"goal": "explain", "reference_index": 2})
     explanation = (
         await client.post("/app/places/conversation", json=chat_body(picked, "두 번째는 왜?"))
@@ -273,24 +245,7 @@ async def test_expired_session_restores_full_filters_in_new_session_without_old_
     plans.append(
         {
             "goal": "show",
-            "changes": {
-                "upsert_all": [
-                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
-                ],
-                "upsert_any": [
-                    {
-                        "id": "shopping",
-                        "all": [
-                            {
-                                "id": "kind",
-                                "capability": "purpose.kind",
-                                "op": "in",
-                                "value": ["shopping"],
-                            }
-                        ],
-                    }
-                ],
-            },
+            "changes": {"parking": "required_true", "alternatives": [{"kinds": ["shopping"]}]},
         }
     )
     filtered = (
@@ -340,119 +295,67 @@ async def test_recovery_and_answer_are_owner_bound_and_restore_rejects_invalid_f
     ).status_code == 422
 
 
-async def test_direct_filter_removal_preserves_other_conditions_and_never_calls_model(harness):
-    client, _, searcher, calls, plans, _ = harness
-    searcher.rows.append(place("no-parking", parking=False))
+async def test_next_exclude_retry_and_manual_change_keep_committed_exploration(harness):
+    client, store, searcher, calls, plans, _ = harness
+    searcher.rows = [place(str(i), distance=i + 1) for i in range(26)]
     first = (await client.post("/app/places/conversation", json=manual_body())).json()
     plans.append(
         {
             "goal": "show",
-            "changes": {
-                "upsert_all": [
-                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
-                ],
-                "upsert_any": [
-                    {
-                        "id": "shopping",
-                        "all": [
-                            {
-                                "id": "shop-kind",
-                                "capability": "purpose.kind",
-                                "op": "in",
-                                "value": ["shopping"],
-                            }
-                        ],
-                    },
-                    {
-                        "id": "pet-shop",
-                        "all": [
-                            {
-                                "id": "pet-kind",
-                                "capability": "purpose.kind",
-                                "op": "in",
-                                "value": ["pet_shop"],
-                            }
-                        ],
-                    },
-                ],
+            "browse": "next",
+            "place_edit": {
+                "operation": "exclude",
+                "operation_quote": "빼고",
+                "targets": [{"kind": "ordinal", "text": "첫 번째"}],
             },
         }
     )
-    filtered = (
-        await client.post("/app/places/conversation", json=chat_body(first, "주차되는 곳만"))
-    ).json()
-    assert filtered["receipt"]["returned_count"] == 2
-    request = filters_body(filtered, remove_all=["parking"])
-    relaxed_response = await client.post("/app/places/conversation", json=request)
-    assert relaxed_response.status_code == 200, relaxed_response.text
-    relaxed = relaxed_response.json()
-    assert relaxed["filters"]["hard"]["all"] == []
-    assert relaxed["filters"]["hard"]["any"] == filtered["filters"]["hard"]["any"]
-    for field in ("candidate_kinds", "spatial", "name_query", "dogs", "preferences"):
-        assert relaxed["filters"][field] == filtered["filters"][field]
-    assert relaxed["receipt"]["returned_count"] == 3
-    assert relaxed["answer"] is None and relaxed["answer_status"] == "none"
-    assert len(calls) == 1 and len(searcher.calls) == 3
-    assert (await client.post("/app/places/conversation", json=request)).json() == relaxed
-    assert len(searcher.calls) == 3
-    ungrouped = (
-        await client.post(
-            "/app/places/conversation",
-            json=filters_body(relaxed, remove_any=["shopping", "pet-shop"]),
-        )
-    ).json()
-    assert ungrouped["filters"]["hard"] == {"all": [], "any": []}
-    assert len(calls) == 1 and len(searcher.calls) == 4
-
-
-async def test_failed_removal_keeps_applied_condition_and_retry_uses_new_commit(harness):
-    client, _, searcher, calls, plans, _ = harness
-    first = (await client.post("/app/places/conversation", json=manual_body())).json()
-    plans.append(
-        {
-            "goal": "show",
-            "changes": {
-                "upsert_all": [
-                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
-                ]
-            },
-        }
-    )
-    filtered = (await client.post("/app/places/conversation", json=chat_body(first))).json()
-    searcher.error = True
-    failed = (
-        await client.post(
-            "/app/places/conversation", json=filters_body(filtered, remove_all=["parking"])
-        )
-    ).json()
-    assert failed["receipt"]["execution"] == "failed"
-    assert failed["filters"] == filtered["filters"] and failed["search"] == filtered["search"]
-    searcher.error = False
-    completed = (
-        await client.post(
-            "/app/places/conversation", json=filters_body(failed, remove_all=["parking"])
-        )
-    ).json()
-    assert completed["filters"]["hard"]["all"] == []
-    assert completed["revision"] == failed["revision"] + 1 and len(calls) == 1
-
-
-async def test_direct_filter_operation_rejects_stale_or_unknown_ids_and_searches_edit_only_state(
-    harness,
-):
-    client, _, searcher, calls, plans, _ = harness
-    first = (await client.post("/app/places/conversation", json=manual_body())).json()
-    plans.append({"goal": "edit_only", "changes": {"radius_m": 1000}})
-    edited = (await client.post("/app/places/conversation", json=chat_body(first))).json()
-    assert not edited["receipt"]["result_matches_filters"] and len(searcher.calls) == 1
-    assert (
-        await client.post("/app/places/conversation", json=filters_body(first))
-    ).status_code == 409
-    for bad in ({"remove_all": ["missing"]}, {"remove_all": ["same", "same"]}, {"upsert_all": []}):
-        assert (
-            await client.post("/app/places/conversation", json=filters_body(edited, **bad))
-        ).status_code == 422
-    refreshed = (await client.post("/app/places/conversation", json=filters_body(edited))).json()
-    assert refreshed["filters"] == edited["filters"]
-    assert refreshed["receipt"]["result_matches_filters"]
+    request = chat_body(first, "첫 번째 빼고 더 보여줘")
+    second = (await client.post("/app/places/conversation", json=request)).json()
+    assert [p["ref"] for p in second["display_order"]] == [str(i) for i in range(20, 26)]
+    assert (await client.post("/app/places/conversation", json=request)).json() == second
     assert len(searcher.calls) == 2 and len(calls) == 1
+    answered = (
+        await client.post("/app/places/conversation/answer", json=answer_body(second))
+    ).json()
+    assert "6곳" in answered["answer"]["text"] and "제외" in answered["answer"]["text"]
+    saved = json.loads(store.items[second["session_id"]])
+    assert len(saved["state"]["exploration"]["presented"]) == 26
+    assert saved["state"]["exploration"]["excluded"][0]["key"]["ref"] == "0"
+    wire = json.loads(calls[0]["input"])
+    assert list(wire)[-1] == "query"
+    assert wire["screen"]["current_places"][0]["name"] == "테스트 0"
+    update = manual_body(second)
+    update["manual"]["radius_m"] = 2000
+    changed = (await client.post("/app/places/conversation", json=update)).json()
+    assert "0" not in [p["ref"] for p in changed["display_order"]]
+    assert len(changed["display_order"]) == 20
+
+
+async def test_late_next_request_cannot_consume_page_after_manual_wins(harness, monkeypatch):
+    client, store, searcher, _, _, _ = harness
+    searcher.rows = [place(str(i), distance=i + 1) for i in range(26)]
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    class SlowNext:
+        async def plan(self, request):
+            entered.set()
+            await release.wait()
+            return TurnPlan(goal="show", browse="next")
+
+    monkeypatch.setattr(conversation_internal, "provider", lambda: SlowNext())
+    task = asyncio.create_task(
+        client.post("/app/places/conversation", json=chat_body(first, "더 보여줘"))
+    )
+    await entered.wait()
+    update = manual_body(first)
+    update["manual"]["radius_m"] = 2000
+    winner = (await client.post("/app/places/conversation", json=update)).json()
+    release.set()
+    assert (await task).status_code == 409
+    saved = json.loads(store.items[first["session_id"]])
+    assert saved["revision"] == winner["revision"]
+    assert [p["ref"] for p in saved["state"]["exploration"]["presented"]] == [
+        str(i) for i in range(20)
+    ]

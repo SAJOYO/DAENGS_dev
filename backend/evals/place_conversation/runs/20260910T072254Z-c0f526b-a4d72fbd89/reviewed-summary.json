@@ -1,0 +1,452 @@
+{
+  "observed_turns": 90,
+  "reviewed_turns": 81,
+  "turn_statuses": {
+    "pass": 81,
+    "not_run": 9
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-E01",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E01",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E01",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E02",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E02",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E02",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E03",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E03",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E03",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E04",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E04",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E04",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E05",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E05",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E05",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E10",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E10",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E10",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E12",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E12",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E12",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E13",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E13",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E13",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E14",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E14",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E14",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E15",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E15",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E15",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "direct-answer",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "direct-answer",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "direct-answer",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E16",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N01",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N01",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N01",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N02",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N02",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N02",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N03",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N03",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N03",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N04",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N04",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-N04",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-R01",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R01",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R01",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R02",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R02",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R02",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R03",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R03",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "not_run"
+    },
+    {
+      "case_id": "PC-R03",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "not_run"
+    }
+  ],
+  "provider_calls": 78,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 2314.0,
+  "reported_usage": {
+    "total_input_tokens": 168792,
+    "total_output_tokens": 2643,
+    "total_tokens": 171435
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

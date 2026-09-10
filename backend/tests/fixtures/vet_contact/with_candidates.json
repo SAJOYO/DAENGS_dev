@@ -1,0 +1,33 @@
+{
+  "capability": "vet_contact",
+  "status": "OK",
+  "data": {
+    "answer": "응급 상황으로 보여요. 지금 바로 동물병원으로 가세요.\n전화로 지금 진료 가능한지 먼저 확인하세요.\n진료 시간과 응급 진료 여부는 공공 데이터에 없어서 확인해 드릴 수 없습니다.\n현재 기기 위치를 기준으로 가까운 순으로 1곳을 찾았습니다.",
+    "searched_radius_m": 10000,
+    "at_night": false,
+    "candidates": [
+      {
+        "name": "가까운동물병원",
+        "phone": "02-123-4567",
+        "distance_m": 320,
+        "address": "서울시 중구",
+        "license_status_name": "영업/정상",
+        "open_now": null
+      }
+    ],
+    "notices": [
+      {
+        "code": "vet_contact.hours_unknown",
+        "message": "진료 시간과 응급 진료 여부는 공공 데이터에 없어서 확인해 드릴 수 없습니다."
+      },
+      {
+        "code": "place.searched_around_current_location",
+        "message": "현재 기기 위치를 기준으로 가까운 순으로 찾았습니다."
+      }
+    ]
+  },
+  "abstention": null,
+  "refusal": null,
+  "job": null,
+  "error": null
+}

@@ -82,12 +82,24 @@ async def start_record(
     **행을 먼저 만듭니다.** 티켓만 주고 행을 나중에 만들면, 업로드는 됐는데 그 키가
     무엇인지 아무도 모르는 파일이 볼륨에 남습니다 — 저장소에는 FK 가 없어서
     아무도 안 치웁니다.
+
+    **아이를 지정하면 구성원(대표 ∪ 돌보미)이 엽니다 — `pet_repo.get_accessible`**
+    (Task 14, docs/co-care.md §2). Task 12 는 여기를 `get_owned`(대표만)로 닫았다 —
+    `screening_records` 는 `gait_records` 와 달리 소유가 강아지에서 유도되지 않고
+    (`ScreeningRecord.app_user_id` 에 만든 사람이 직접 저장됩니다) `repositories/screening.py`
+    가 그때는 구성원 판정을 쓴 적이 없어서, 돌보미의 생성을 열면 **대표가 못 보는**
+    기록이 생겼습니다. 지금은 `repositories/screening.py` 가 `gait_record.py` 처럼
+    `_owned`/`_accessible`(정확히는 그 이름의 함수들 `get_owned`/`get_accessible`·
+    `get_deletable`) 바닥 둘로 갈려 있어, **강아지에 붙은** 기록은 그 아이의 구성원
+    전체가 봅니다 — 대표도 예외가 아닙니다. `pet_id` 를 아예 안 주는 개인 기록은
+    이 검사를 거치지 않고, 그 기록은 만든 사람만 볼 수 있습니다(구성원이라는 개념이
+    성립하지 않으므로) — 그래서 생성을 여는 것이 안전합니다.
     """
     # 남의 아이에 기록을 붙일 수 없습니다. FK 는 "존재하는 pets 행" 까지만 보장하고
     # 그게 내 것인지는 안 봅니다 (05_pets.sql 주석과 같은 자리).
     if (
         body.pet_id is not None
-        and await pet_repo.get_owned(session, app_user_id, body.pet_id) is None
+        and await pet_repo.get_accessible(session, app_user_id, body.pet_id) is None
     ):
         raise ScreeningNotFoundError
 
@@ -229,19 +241,24 @@ async def list_records(
     *,
     pet_id: uuid.UUID | None = None,
 ) -> list[ScreeningRecord]:
-    """내 기록을 최근 순으로. `pet_id` 를 주면 그 아이 것만 봅니다."""
-    if pet_id is not None and await pet_repo.get_owned(session, app_user_id, pet_id) is None:
+    """**내 기록 + 내가 구성원인 강아지의 기록**을 최근 순으로. `pet_id` 를 주면 그
+    아이 것만 봅니다 (Task 14 — 구성원으로 열림, docs/co-care.md §2)."""
+    if pet_id is not None and await pet_repo.get_accessible(session, app_user_id, pet_id) is None:
         raise ScreeningNotFoundError
-    return await screening_repo.list_for_owner(session, app_user_id, pet_id=pet_id)
+    return await screening_repo.list_accessible(session, app_user_id, pet_id=pet_id)
 
 
 async def get_record(
     session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
 ) -> tuple[ScreeningRecord, str | None]:
-    """기록 하나와 사진 주소. 아직 안 올라왔으면 주소는 None 입니다."""
+    """기록 하나와 사진 주소. 아직 안 올라왔으면 주소는 None 입니다.
+
+    **구성원이면 봅니다** — 창작자가 아니어도 그 강아지의 대표·돌보미면 됩니다
+    (Task 14). 개인 기록(`pet_id IS NULL`)은 창작자만입니다.
+    """
     from daengs_backend.config import settings
 
-    record = await screening_repo.get_owned(session, app_user_id, record_id)
+    record = await screening_repo.get_accessible(session, app_user_id, record_id)
     if record is None:
         raise ScreeningNotFoundError
 
@@ -259,8 +276,15 @@ async def get_record(
 async def delete_record(
     session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
 ) -> None:
-    """기록 하나를 지웁니다. **사진 파일까지 지웁니다.**"""
-    record = await screening_repo.get_owned(session, app_user_id, record_id, for_update=True)
+    """기록 하나를 지웁니다. **사진 파일까지 지웁니다.**
+
+    지울 수 있는 사람은 **창작자 또는 그 아이의 대표** — 케어 로그
+    (`care_repo.get_deletable`)와 같은 모양입니다(Task 14). 볼 수 있는 사람
+    전체(구성원)에 열면 돌보미끼리 서로의 기록을 지웁니다.
+    """
+    record = await screening_repo.get_deletable(
+        session, app_user_id, record_id, for_update=True
+    )
     if record is None:
         raise ScreeningNotFoundError
 
@@ -270,6 +294,57 @@ async def delete_record(
 
     await screening_repo.delete(session, record)
     await session.commit()
+
+
+async def annotate(
+    session: AsyncSession, app_user_id: uuid.UUID, records: list[ScreeningRecord]
+) -> dict[uuid.UUID, dict]:
+    """`can_confirm`·`can_delete`·`created_by` 를 레코드 여러 개에 **한 번에** 계산합니다
+    (Task 19, docs/co-care.md §2 "앱이 어느 버튼을 보여줄지 모른다"). gait 의 `gait_service
+    .annotate` 와 같은 모양입니다 — 스크리닝은 확정이 **창작자 전용**(대표도 안 됨)이라는
+    점만 다릅니다.
+
+    `pet_id IS NULL` 인 개인 기록은 "그 아이의 대표" 라는 개념 자체가 없으므로
+    `can_delete` 는 창작자 여부만 봅니다(`screening_repo.get_deletable` 의 outer join과
+    같은 성질) — 그리고 `created_by` 는 항상 None 입니다(구성원이라는 개념이 성립하지
+    않는 기록이라, 그 기록을 볼 수 있는 사람은 애초에 창작자 자신뿐입니다).
+
+    쿼리 수는 목록 크기(N)와 무관하게 셋입니다(gait 와 같은 이유).
+
+    ⚠️ **아래 `is_creator`(can_confirm)와 `is_creator or is_owner`(can_delete)는
+    `repositories/screening.py` 의 `get_owned`(확정이 쓰는 창작자 판정)·`get_deletable`
+    을 Python 으로 다시 쓴 것입니다.** 이미 가져온 행에 플래그를 얹는 자리라 그 SQL
+    조건을 그대로 재사용할 수 없습니다 — 그쪽이 바뀌면 여기도 같이 바꾸세요. 안 그러면
+    앱은 버튼을 보고 눌렀는데 서버는 404(또는 그 반대)를 냅니다.
+    """
+    if not records:
+        return {}
+
+    # 순환 import 회피 — services.gait 와 같은 이유로 지연 import 합니다.
+    from daengs_backend.services import pet_member as pet_member_service
+
+    pet_ids = {r.pet_id for r in records if r.pet_id is not None}
+    owners = await pet_repo.owners_by_ids(session, list(pet_ids))
+    labels = await pet_member_service.actor_labels(
+        session,
+        [(r.pet_id, r.app_user_id) for r in records if r.pet_id is not None],
+        owners=owners,
+    )
+
+    result: dict[uuid.UUID, dict] = {}
+    for r in records:
+        is_creator = r.app_user_id == app_user_id
+        owner_id = owners.get(r.pet_id) if r.pet_id is not None else None
+        is_owner = owner_id is not None and owner_id == app_user_id
+        result[r.id] = {
+            # 확정은 창작자 전용 — 대표도 못 한다(§2 "확정은 그대로 창작자만이다").
+            "can_confirm": r.status == "PENDING_UPLOAD" and is_creator,
+            "can_delete": is_creator or is_owner,
+            "created_by": (
+                labels.get((r.pet_id, r.app_user_id)) if r.pet_id is not None else None
+            ),
+        }
+    return result
 
 
 async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:

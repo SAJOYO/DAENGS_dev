@@ -1,0 +1,80 @@
+{
+  "observed_turns": 19,
+  "reviewed_turns": 19,
+  "turn_statuses": {
+    "pass": 14,
+    "fail": 5
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-P01",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P02",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P03",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P04",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P05",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-P06",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-P07",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P08",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P09",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-P10",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "fail"
+    }
+  ],
+  "provider_calls": 21,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 1978,
+  "reported_usage": {
+    "total_input_tokens": 30575,
+    "total_output_tokens": 707,
+    "total_tokens": 31282
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

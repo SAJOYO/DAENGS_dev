@@ -58,6 +58,7 @@ class OccupancyResponse(BaseModel):
     occupied_at: datetime
     certified_at: datetime | None = None
     protected_until: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class SiteResponse(BaseModel):
@@ -91,7 +92,17 @@ class PhotoAccessResponse(BaseModel):
     season_id: str | None
     policy_version: str | None
     allowed_action: Literal[
-        "PHOTO_TAKEOVER", "PHOTO_UPGRADE", "WAIT", "ALREADY_CERTIFIED", "UNAVAILABLE"
+        "PHOTO_TAKEOVER", "PHOTO_UPGRADE", "PHOTO_RENEW", "WAIT", "ALREADY_CERTIFIED", "UNAVAILABLE"
     ]
     reason: str | None = None
     protected_until: datetime | None = None
+
+
+class RenewalRequest(MarkRequest):
+    expected_site_version: int = Field(ge=0)
+
+
+class RenewalResponse(BaseModel):
+    renewal_id: uuid.UUID
+    site_version: int
+    expires_at: datetime

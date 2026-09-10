@@ -23,7 +23,12 @@ class ConversationRequest(InputModel):
     @model_validator(mode="after")
     def required_context(self) -> Self:
         if self.mode == "filters":
-            if self.session_id is None or self.remove_filters is None or self.manual or self.query:
+            if (
+                self.session_id is None
+                or self.remove_filters is None
+                or self.manual is not None
+                or self.query
+            ):
                 raise ValueError("filter removal requires an existing session and removal IDs only")
         elif self.remove_filters is not None:
             raise ValueError("only filters mode accepts removal IDs")

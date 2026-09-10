@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-base-board.md](walk/diary-base-board.md) | AI 없이 완성하는 내부 기본 보드 — 사용자 기록·관측·동선 지점·시작/종료와 기존 v1 보존 |
 | [walk/diary-generation.md](walk/diary-generation.md) | 스탬프의 LLM 배경·제목 작성과 기존 생성 예약·완료, 명시적 일기 HTTP 형식 |
 | [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |
 | [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |

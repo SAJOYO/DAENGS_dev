@@ -11,6 +11,7 @@
 | `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
+[1차 연구 결과](../../../docs/place/conversation-research-2026-09-10.md)에 실행별 링크와 구조 제안을 정리했다.
 `cases.v1.jsonl`은 시나리오 **명세**다. `setup`은 HTTP 요청이나 FilterState의 직접 직렬화가 아니며,
 이 값을 실제 상태/fixture로 바꾸는 어댑터는 `src/daengs_evals/place_conversation/`에 있다.
 예를 들어 `parking=required_true`는 원본의 의미를 나타내며 production enum이 아니다.
@@ -49,6 +50,12 @@ uv run python -m daengs_evals.place_conversation.runner --live --variant policy-
 uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/transfer.v1.jsonl --variant policy-context --key-file C:\path\to\.env
 # 저장된 원본 계획 재생 및 거짓 답변 주입. 모델 호출 없음
 uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run>
+# false와 unknown이 답변 입력에서 구별되는지
+uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run> --evidence-gap
+# 실제 제안에 대한 구조화된 동의/거절 재생 (policy-context E08 실행 폴더)
+uv run python -m daengs_evals.place_conversation.pending_replay evals/place_conversation/runs/<run>
+# reviews.jsonl 작성 후 보고서만 재생성. 원본 관측은 보존
+uv run python -m daengs_evals.place_conversation.report evals/place_conversation/runs/<run>
 ~~~
 
 `--model` 기본값은 기존 live 스모크와 같은 `gemini-3.1-flash-lite`다.

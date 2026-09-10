@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import copy
 import json
 from pathlib import Path
 
@@ -26,6 +27,39 @@ class FixedPlanner:
 
     async def plan(self, request):
         return self.next
+
+
+async def evidence_gap(run):
+    """Show that false and unknown become identical answer inputs, even with opaque IDs."""
+    fixtures = json.loads((DATA / "fixtures.v1.json").read_text(encoding="utf-8"))
+    setup = copy.deepcopy(read_cases(DATA / "cases.v1.jsonl")[0]["setup"])
+    setup["selected"] = "opaque-place-001"
+    records = []
+    for parking in (False, None):
+        variant = copy.deepcopy(fixtures)
+        variant["standard"][0].update(ref=setup["selected"], name="테스트 장소", parking=parking)
+        searcher = FixtureSearcher(setup, variant)
+        state = await initial_state(setup, searcher)
+        prepared = await ConversationService(
+            FixedPlanner(TurnPlan(goal="explain")),
+            searcher=searcher,
+        ).prepare(None, PrepareRequest(mode="chat", query="이 장소 주차 가능해?", previous=state))
+        receipt = prepared.receipt.model_dump(mode="json")
+        # Snapshot identities differ, but carry no parking semantics.
+        receipt["snapshot_id"] = "<same-opaque-snapshot>"
+        records.append({"underlying_parking": parking, "answer_receipt": receipt})
+    result = {
+        "variant": "false-versus-unknown-evidence",
+        "records": records,
+        "answer_inputs_identical": records[0]["answer_receipt"] == records[1]["answer_receipt"],
+        "boundary": "production explanation receipt, opaque selected ID; no model call",
+        "implication": "The answer layer cannot distinguish confirmed false from missing evidence.",
+    }
+    target = run / "evidence-gap.json"
+    if target.exists():
+        raise ValueError("evidence gap observation already exists")
+    write_json(target, result)
+    print(json.dumps({"answer_inputs_identical": result["answer_inputs_identical"]}))
 
 
 async def replay(run):
@@ -138,7 +172,11 @@ async def replay(run):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", type=Path)
+    parser.add_argument("--evidence-gap", action="store_true")
     args = parser.parse_args()
+    if args.evidence_gap:
+        asyncio.run(evidence_gap(args.run))
+        return
     if (args.run / "diagnostics.json").exists():
         parser.error("diagnostics already exists; never overwrite observations")
     asyncio.run(replay(args.run))

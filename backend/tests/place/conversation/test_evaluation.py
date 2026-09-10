@@ -6,9 +6,14 @@ import httpx
 import pytest
 
 from daengs_evals.place_conversation.checks import parking_mode
-from daengs_evals.place_conversation.experiments import PolicyGemini, compile_replacement_branches
+from daengs_evals.place_conversation.experiments import (
+    PendingProposal,
+    PolicyGemini,
+    compile_replacement_branches,
+)
 from daengs_evals.place_conversation.fixtures import FixtureSearcher, initial_state
 from daengs_evals.place_conversation.provider import ObservedGemini
+from daengs_evals.place_conversation.report import summarize
 from daengs_evals.place_conversation.runner import DATA, read_cases, run_case
 from daengs_place.place.conversation.contract import PrepareRequest, TurnPlan
 from daengs_place.place.conversation.service import ConversationService, snapshot_hits
@@ -232,3 +237,53 @@ async def test_question_gate_blocks_changes_and_retains_original_until_consent()
     assert requests[1]["pending_request"]["original_query"] == case["steps"][0]["input"]
     assert records[1]["prepared"]["receipt"]["execution"] == "searched"
     assert provider.pending is None
+
+
+async def test_pending_proposal_applies_exact_offered_scope_and_rejects_stale_or_changed_decision():
+    case, fixtures = data("PC-E08")
+    searcher = FixtureSearcher(case["setup"], fixtures)
+    state = await initial_state(case["setup"], searcher)
+    offered = TurnPlan(
+        goal="show",
+        question="주차 가능한 카페를 찾을까요?",
+        changes={
+            "candidate_kinds": ["cafe"],
+            "upsert_all": [
+                {
+                    "id": "parking",
+                    "capability": "operations.parking",
+                    "op": "eq",
+                    "value": True,
+                }
+            ],
+        },
+    )
+    pending = PendingProposal.capture(offered, state, 2)
+    assert pending.resolve("reject", state, 2) is None
+    with pytest.raises(ValueError, match="stale"):
+        pending.resolve("accept", state, 3)
+    with pytest.raises(ValueError, match="planned separately"):
+        pending.resolve("음식점도", state, 2)
+    accepted = pending.resolve("accept", state, 2)
+    result = await searcher(None, apply_changes(state.filters, accepted.changes))
+    assert [h.place.key.ref for g in result.groups for h in g.matched] == ["cafe-yes"]
+
+
+def test_report_never_turns_unreviewed_or_semantically_wrong_answers_into_pass(tmp_path):
+    row = {
+        "case_id": "PC-E08",
+        "variant": "research",
+        "repetition": 1,
+        "turn": 2,
+        "status": "review_required",
+        "checks": [{"status": "pass"}],
+    }
+    (tmp_path / "observations.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    summarize(tmp_path)
+    summary = json.loads((tmp_path / "reviewed-summary.json").read_text(encoding="utf-8"))
+    assert summary["case_repetitions"][0]["status"] == "review_required"
+    review = {**row, "faithfulness": {"status": "pass"}, "task_completion": {"status": "fail"}}
+    (tmp_path / "reviews.jsonl").write_text(json.dumps(review) + "\n", encoding="utf-8")
+    summarize(tmp_path)
+    summary = json.loads((tmp_path / "reviewed-summary.json").read_text(encoding="utf-8"))
+    assert summary["case_repetitions"][0]["status"] == "fail"

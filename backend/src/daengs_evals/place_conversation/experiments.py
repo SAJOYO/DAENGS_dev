@@ -2,9 +2,11 @@
 
 import copy
 import json
+from dataclasses import dataclass
 
 from daengs_place.place.conversation.contract import TurnPlan
 from daengs_place.place.conversation.service import fingerprint
+from daengs_place.place.tools.changes import apply_changes
 
 from .provider import ObservedGemini
 
@@ -20,6 +22,44 @@ POLICY_HINT = """
 - pending_request는 아직 실행하지 않은 원문과 실제 확인 질문이다. 현재 질문의 동의가
   명확하면 제안했던 범위만 적용한다. 거절이면 실행하지 않고 조건을 보존한다.
 """
+
+
+@dataclass(frozen=True)
+class PendingProposal:
+    """Research-only transaction: bind explicit consent to a validated proposal.
+
+    The API must additionally bind owner/session/pending ID and reject stale revisions.
+    This object accepts a structured decision, never guesses consent from free text.
+    """
+
+    question: str
+    plan: TurnPlan
+    base_fingerprint: str
+    base_revision: int
+    candidate_fingerprint: str
+
+    @classmethod
+    def capture(cls, raw_plan, state, revision):
+        if not raw_plan.question.strip() or raw_plan.goal not in {"show", "pick_one", "edit_only"}:
+            raise ValueError("requires a question and executable proposal")
+        # Revalidate the whole candidate before offering it. Do not retain arbitrary raw patches.
+        plan = TurnPlan.model_validate({**raw_plan.model_dump(exclude_unset=True), "question": ""})
+        candidate = apply_changes(state.filters, plan.changes)
+        return cls(
+            raw_plan.question, plan, fingerprint(state.filters), revision, fingerprint(candidate)
+        )
+
+    def resolve(self, decision, state, revision):
+        if revision != self.base_revision or fingerprint(state.filters) != self.base_fingerprint:
+            raise ValueError("stale_pending_proposal")
+        if decision == "reject":
+            return None
+        if decision != "accept":
+            raise ValueError("a changed request must be planned separately")
+        candidate = apply_changes(state.filters, self.plan.changes)
+        if fingerprint(candidate) != self.candidate_fingerprint:
+            raise ValueError("pending_candidate_changed")
+        return self.plan
 
 
 class PolicyGemini(ObservedGemini):

@@ -1,0 +1,128 @@
+{
+  "observed_turns": 21,
+  "reviewed_turns": 21,
+  "turn_statuses": {
+    "pass": 12,
+    "fail": 9
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-E05",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E05",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E05",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E06",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E07",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E08",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E09",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "policy-context",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "policy-context",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-E11",
+      "variant": "policy-context",
+      "repetition": 3,
+      "status": "fail"
+    }
+  ],
+  "provider_calls": 21,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 1942,
+  "reported_usage": {
+    "total_input_tokens": 54702,
+    "total_output_tokens": 1842,
+    "total_tokens": 56544
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

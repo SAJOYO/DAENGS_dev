@@ -463,24 +463,65 @@ def test_남남은_우리_아이의_기록을_못_지운다(client, client_as, p
 # ── 약 중복 확인 (docs/co-care.md §4) ────────────────────────────────
 
 
-def _med(pet: FakePet, when: str, confirm: bool = False, key: uuid.UUID | None = None) -> dict:
+def _med(
+    pet: FakePet,
+    when: str,
+    confirm: bool = False,
+    key: uuid.UUID | None = None,
+    note: str | None = None,
+) -> dict:
     return {
         "pet_id": str(pet.id),
         "kind": "medication",
         "occurred_at": when,
         "client_event_id": str(key or uuid.uuid4()),
         "confirm": confirm,
+        "note": note,
     }
 
 
-def test_second_medication_within_window_is_409(client, client_as, pet, care) -> None:
-    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+def _set_nickname(store: Store, app_user_id: uuid.UUID, nickname: str) -> None:
+    """`app_users` 는 kakao_id 로 인덱싱되어 있어, id 로 찾아 닉네임을 채웁니다."""
+    next(u for u in store.app_users.values() if u.id == app_user_id).nickname = nickname
+
+
+def test_second_medication_within_window_is_409(client, client_as, store, pet, care) -> None:
+    """409 본문의 conflict 는 화면이 "아빠가 08:15에 줬어요" 를 그릴 재료라, actor 까지 채워져야 합니다."""
+    _set_nickname(store, OWNER, "아빠")
+    client_as(OWNER).post(
+        "/app/care-events",
+        json=_med(pet, "2026-09-09T08:15:00+09:00", note="심장사상충"),
+    )
     r = client_as(OWNER).post(
         "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00")
     )
     assert r.status_code == 409
     body = r.json()["detail"]
     assert "conflicts" in body and len(body["conflicts"]) == 1
+    conflict = body["conflicts"][0]
+    assert conflict["occurred_at"].startswith("2026-09-09T08:15:00")
+    assert conflict["note"] == "심장사상충"
+    assert conflict["actor"]["nickname"] == "아빠"
+
+
+def test_구성원이_아닌_사람의_기록은_409_에서도_nickname_이_null(
+    client, client_as, store, pet, care
+) -> None:
+    """적은 사람이 나가면 409 conflict 의 actor.nickname 도 다른 곳과 같이 None 입니다."""
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "동생")
+    client_as(CARER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00")
+    )
+    store.pet_members.remove((pet.id, CARER))
+
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00")
+    )
+    assert r.status_code == 409
+    conflict = r.json()["detail"]["conflicts"][0]
+    assert conflict["actor"]["nickname"] is None
 
 
 def test_confirm_true_records_anyway(client_as, pet, care) -> None:
@@ -523,6 +564,46 @@ def test_idempotency_wins_over_conflict_check(client_as, pet, care) -> None:
         "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True, key=key)
     )
     assert retry.status_code == 200, "재시도가 409 가 되면 멱등이 깨진 것이다"
+
+
+# ── actor (이름 표시 규칙, docs/co-care.md §3) ────────────────────────
+
+
+def test_actor_shows_nickname_for_current_member(client, client_as, store, pet, care) -> None:
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "아빠")
+    client_as(CARER).post("/app/care-events", json=_body(pet.id, occurred_at="2026-09-09T08:12:00+09:00"))
+
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"]["nickname"] == "아빠"
+    assert got["events"][0]["actor"]["app_user_id"] == str(CARER)
+
+
+def test_actor_hides_nickname_after_leaving(client, client_as, store, pet, care) -> None:
+    """나간 사람의 이름은 안 낸다. 재가입해도 다시 초대받기 전엔 그대로다."""
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "아빠")
+    client_as(CARER).post("/app/care-events", json=_body(pet.id, occurred_at="2026-09-09T08:12:00+09:00"))
+    store.pet_members.remove((pet.id, CARER))
+
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"]["nickname"] is None
+
+
+def test_actor_is_none_when_no_recorder(client, pet, care) -> None:
+    """이 컬럼보다 먼저 쌓인 기록 대역 — actor_app_user_id 가 없어도 actor 자체는 항상 옵니다."""
+    care.events.append(_event(OWNER, pet.id, "meal", datetime(2026, 9, 9, 8, tzinfo=SEOUL)))
+    care.events[-1].actor_app_user_id = None
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"] == {"app_user_id": None, "nickname": None}
 
 
 def test_idempotency_wins_over_conflict_check_even_without_explicit_confirm(

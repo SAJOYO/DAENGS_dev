@@ -849,6 +849,19 @@ CHECKS = (
             'DROP INDEX ix_territory_claim_photos_claim_id',
             'DROP INDEX territory_claims_pet_idx',
         ]),
+        ('2026-09-10', 'activity_monthly', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims',
+                         '2026-09-06_activity_game'),
+         'activity_monthly_seasons', [
+            'ALTER TABLE activity_accounts DROP COLUMN final_rank',
+            'ALTER TABLE activity_accounts DROP CONSTRAINT activity_final_rank_positive',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_pkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_previous_season_id_key',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_previous_season_id_fkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_season_id_fkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_check',
+        ]),
         ('2026-09-10', 'territory_expiry', PETS + SET_UPDATED_AT
          + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
          'territory_renewals', [

@@ -17,6 +17,7 @@
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
 | [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
 | [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
+| [territory/monthly-seasons.md](territory/monthly-seasons.md) | 명시적 첫 월간 시즌 시작·자동 결산·최종 순위·다음 시즌과 장애 복구 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · Walk · Territory · 오케스트레이션 · 관리자 콘솔)의

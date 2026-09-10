@@ -110,5 +110,7 @@ DB 변경만 완료했으며 PR 머지·코드 배포·시즌 생성·게임 ON�
 [유지·만료 계약](ownership-expiry.md)을 따른다. 첫 시즌의 자기 인증 영역에는
 `PHOTO_RENEW`를 제공하고, 기존 v2 시즌은 `already_certified`를 유지한다.
 
-**후속:** 월간 자동 결산·다음 시즌 시작, APP의 새 정책 버전·보상/연장 표시,
-워커 배포와 실제 활성화.
+월간 자동 결산·다음 시즌 시작은 [월간 시즌 계약](monthly-seasons.md)과
+[DEV #403](https://github.com/SAJOYO/DAENGS_dev/pull/403)을 따른다.
+
+**후속:** APP의 새 정책 버전·보상/연장 표시, 워커 배포와 실제 활성화.

@@ -108,4 +108,5 @@ class TerritorySummaryResponse(BaseModel):
     statistics: TerritoryStatistics | None
     score: ScoreResponse | None
     score_as_of_ms: int | None = None
+    final_rank: int | None = None
     sources: list[HoldingSourceRef]

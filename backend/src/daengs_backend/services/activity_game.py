@@ -10,16 +10,18 @@ from daengs_backend.models.activity import (
     ActivityBonusKey,
     ActivityGameReceipt,
     ActivityHoldingPeriod,
+    ActivityMonthlySeason,
     ActivitySeason,
 )
 from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRewardDetail
 from daengs_backend.repositories import activity as repo
 from daengs_backend.repositories import territory_claim as claim_repo
+from daengs_backend.services import activity_monthly, territory_expiry
 from daengs_backend.services import territory_claim as claim_rules
-from daengs_backend.services import territory_expiry
 from daengs_backend.services.activity_core import first_season_policy as first
 from daengs_backend.services.activity_core import first_season_rewards as rewards
 from daengs_backend.services.activity_core import game_policy as policy
+from daengs_backend.services.activity_core.monthly_calendar import month
 
 
 def now_ms():
@@ -29,6 +31,7 @@ def now_ms():
 async def acquire(db):
     if settings.activity_game_enabled:
         await repo.barrier(db)
+        await activity_monthly.rollover(db, now_ms())
         await territory_expiry.expire_due(db, await repo.active_season(db), now_ms())
 
 
@@ -50,7 +53,7 @@ def engine(season):
     return first if season.rules.get("version") == rewards.REWARD_VERSION else policy
 
 
-async def create_season(db, season_id, starts_ms, ends_ms, rules: policy.Rules):
+async def create_season(db, season_id, starts_ms, ends_ms, rules: policy.Rules, *, monthly=False):
     """Explicit administration, imported ownership retains its original protection time."""
     await repo.barrier(db)
     policy.require(await repo.active_season(db) is None, "active_season_exists")
@@ -58,6 +61,10 @@ async def create_season(db, season_id, starts_ms, ends_ms, rules: policy.Rules):
     policy.require(starts_ms <= at < ends_ms, "season_must_cover_now")
     prior = await repo.latest_season(db)
     policy.require(prior is None or starts_ms >= prior.ends_ms, "season_overlap")
+    if monthly:
+        key, _, end = month(starts_ms)
+        policy.require(isinstance(rules, first.Rules), "monthly_policy_mismatch")
+        policy.require(season_id == key and ends_ms == end, "monthly_boundary_mismatch")
     season = ActivitySeason(
         id=season_id,
         starts_ms=starts_ms,
@@ -101,6 +108,8 @@ async def create_season(db, season_id, starts_ms, ends_ms, rules: policy.Rules):
         )
     for pet, score in counts.items():
         db.add(ActivityAccount(season_id=season_id, pet_id=pet, score=asdict(score), revision=1))
+    if monthly:
+        db.add(ActivityMonthlySeason(season_id=season_id))
     await db.commit()
     return season
 
@@ -281,6 +290,11 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
 
 
 async def close_if_due(db, at_ms):
+    await activity_monthly.rollover(db, at_ms)
+    return await _close_if_due(db, at_ms)
+
+
+async def _close_if_due(db, at_ms):
     season = await repo.active_season(db)
     if season is None:
         return None
@@ -296,10 +310,12 @@ async def close_if_due(db, at_ms):
         )
         scores = {r.pet_id: r.score for r in final.accounts}
         archived = {r.pet_id: r.score for r in final.results}
+        ranks = {r.pet_id: r.rank for r in final.results}
         season.revision += 1
         for row in accounts:
             row.score = asdict(scores[str(row.pet_id)])
             row.final_score = asdict(archived[str(row.pet_id)])
+            row.final_rank = ranks[str(row.pet_id)]
             row.revision = season.revision
         for period in await repo.periods(db, season.id):
             if period.ended_ms is None:

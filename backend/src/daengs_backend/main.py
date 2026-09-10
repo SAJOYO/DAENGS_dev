@@ -35,6 +35,7 @@ from daengs_backend.routers import (
     report_admin,
     status,
     territory,
+    territory_bookmark,
     territory_claim,
     territory_game,
     training,
@@ -215,6 +216,7 @@ app.include_router(walk_photo.router)
 app.include_router(territory.router)
 app.include_router(territory_claim.router)
 app.include_router(territory_game.router)
+app.include_router(territory_bookmark.router)
 app.include_router(activity.router)
 
 # 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —

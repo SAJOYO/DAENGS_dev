@@ -167,7 +167,10 @@ async def finish(factory, ticket, result):
         job.state = (
             ("pending" if job.attempts < 3 else "failed") if result.retryable else "completed"
         )
-        job.available_at = datetime.now(UTC) + timedelta(seconds=30 * 2 ** (job.attempts - 1))
+        # Catalog downloads have their own worker. Keep the same three-attempt limit;
+        # maintenance wakes this pending retry as soon as its cache is actually usable.
+        delay = 300 if result.reason == "catalog_preparing" else 30 * 2 ** (job.attempts - 1)
+        job.available_at = datetime.now(UTC) + timedelta(seconds=delay)
         job.lease_token, job.lease_until = None, None
         await session.commit()
         return True

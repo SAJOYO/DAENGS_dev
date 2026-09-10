@@ -53,7 +53,7 @@ async def standard_metadata(transport, key):
     }
 
 
-async def refresh(transport, key, path, point, radius):
+async def refresh(transport, key, path, point, radius, *, standard=None):
     region = catalog.area(point, radius)
     x, y = catalog.xy(point)
     clip = box(x - radius, y - radius, x + radius, y + radius)
@@ -120,7 +120,8 @@ async def refresh(transport, key, path, point, radius):
         }
 
     rows, rejected = catalog.unique_rows(features, feature_row)
-    standard = await standard_metadata(transport, key)
+    if standard is None:
+        standard = await standard_metadata(transport, key)
     return catalog.publish(
         path,
         "river",

@@ -39,7 +39,14 @@ def ready(monkeypatch):
 async def test_ready_checks_every_dependency_without_leaking_keys(ready):
     report = await runtime.check(ready)
     assert report["ready"]
-    assert set(report["checks"]) == {"flags", "keys_present", "catalogs", "schema", "broker"}
+    assert set(report["checks"]) == {
+        "flags",
+        "keys_present",
+        "catalogs",
+        "schema",
+        "broker",
+        "catalog_refresh_enabled",
+    }
     assert "private-test-credential" not in json.dumps(report)
 
 

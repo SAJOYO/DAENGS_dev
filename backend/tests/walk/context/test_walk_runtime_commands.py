@@ -69,13 +69,16 @@ catch { $failed = $true }
     changes = [call for call in calls if "up" in call or "stop" in call]
     assert all("--no-deps" in call for call in changes if "up" in call)
     if action == "Start" and not reject:
-        assert len([call for call in calls if call[0] == "exec"]) == 2
+        assert len([call for call in calls if call[0] == "exec"]) == 3
         changed = public.read_text(encoding="utf-8")
         assert changed.count("DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true") == 1
         assert "DAENGS_WALK_PHOTO_METADATA_ENABLED=true" in changed
+        assert "DAENGS_WALK_CATALOG_REFRESH_ENABLED=true" in changed
+        assert "DAENGS_WALK_PUBLIC_CATALOG_ROOT=/data/walk-public/regions" in changed
         assert "UNCHANGED=value" in changed
         assert [call[-1] for call in changes] == [
             "walk-context-worker",
+            "walk-catalog-worker",
             "walk-context-beat",
             "backend",
         ]
@@ -92,6 +95,7 @@ catch { $failed = $true }
                 "stop",
                 "walk-context-beat",
                 "walk-context-worker",
+                "walk-catalog-worker",
             ]
         ]
     else:
@@ -140,11 +144,17 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
         )
         return json.loads(run.stdout)["services"]
 
-    assert "walk-context-worker" not in render([])
+    assert not {"walk-context-worker", "walk-catalog-worker"} & render([]).keys()
     services = render(["--profile", "*"])
     environments = []
     venvs = []
-    for name in ("backend", "walk-context-worker", "walk-context-beat", "walk-context-tools"):
+    for name in (
+        "backend",
+        "walk-context-worker",
+        "walk-context-beat",
+        "walk-context-tools",
+        "walk-catalog-worker",
+    ):
         service = services[name]
         environments.append(
             {
@@ -163,13 +173,16 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
         )
         volume = next(v for v in service["volumes"] if v["target"] == "/data/walk-public")
         assert volume["source"] == "walk-public-catalogs"
-        assert volume.get("read_only", False) is (name != "walk-context-tools")
+        assert volume.get("read_only", False) is (
+            name not in {"walk-context-tools", "walk-catalog-worker"}
+        )
         venvs.append(next(v["source"] for v in service["volumes"] if v["target"] == "/opt/venv"))
     assert all(value == environments[0] for value in environments)
-    assert len(set(venvs)) == 4
+    assert len(set(venvs)) == 5
     # Compose config escapes dollars so the rendered configuration can be reused.
     assert '"$$@"' in services["walk-context-tools"]["entrypoint"][2]
     assert "--queues=walk-entry-context" in " ".join(services["walk-context-worker"]["command"])
+    assert "--queues=walk-public-catalog" in " ".join(services["walk-catalog-worker"]["command"])
 
 
 @pytest.mark.parametrize("valid", [True, False])

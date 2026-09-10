@@ -945,6 +945,25 @@ services:
       exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app beat
       --schedule=/var/lib/celery/beat-schedule --loglevel=WARNING"
 
+  # Slow public downloads have their own queue and write access, outside entry leases.
+  walk-catalog-worker:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-catalog-worker
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-catalog-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public
+      - uv-cache:/root/.cache/uv
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app worker
+      --hostname=walk-catalog@%h --pool=solo --concurrency=1 --queues=walk-public-catalog --loglevel=WARNING"
+
   # One-shot operator CLI only; never starts on an ordinary profile up.
   walk-context-tools:
     <<: *walk-context-runtime
@@ -1001,6 +1020,7 @@ volumes:
   backend-venv:
   walk-public-catalogs:
   walk-context-venv:
+  walk-catalog-venv:
   walk-context-beat-venv:
   walk-context-tools-venv:
   walk-context-beat-state:

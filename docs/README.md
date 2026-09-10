@@ -24,7 +24,7 @@
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
 지금은 `orchestration/` · `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` · `walk/` 를 옮겼고,
-`skin/` 은 옮겨 올 문서가 아직 없어 **자리만** 만들어 두었습니다. 마지막까지 루트에 남아 있던
+`skin/` 은 [입력 연결 감사](skin/photo-safe-input-audit.md)와 [유닛 색인](skin/README.md)을 둡니다. 마지막까지 루트에 남아 있던
 오케스트레이션 4건도 `orchestration/` 으로 옮겼습니다(#82) — 폴더가 유닛을 말하므로 파일 이름의
 `orchestration-` 접두사는 뗐습니다 (`orchestration-contracts.md` → `orchestration/contracts.md`).
 

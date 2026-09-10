@@ -97,12 +97,17 @@ PRIOR_TURNS_REACH_INFERENCE = False
 이력 기제가 생기면 `SessionDriver`를 더하되 **하네스는 안 고칩니다** — 그래야 두 랩에서
 케이스·판정·리포트가 같은 물건으로 남습니다.
 
-`report.render_compare`는 다음 다섯이 안 움직여야 비교를 만듭니다(하나라도 다르면
+`report.render_compare`는 다음 여섯이 안 움직여야 비교를 만듭니다(하나라도 다르면
 `ValueError`로 거부) — `cases_sha256`·`judge_model`·`prompt_version`·`anchor_set`·
-`adapter_mode`. 여섯째로 **미측정 비율의 정의**(판정 전 제외 + 가짜 어댑터 셀 + 해당 없는
-축, 분모=턴수×3)를 두 랩에서 같은 계산으로 고정합니다 — 이것은 값이 아니라 계산 방법이라
-`PINNED_FIELDS`에는 안 들어가지만, `report.py` 모듈 하나가 그 정의를 유일하게 갖고
-있어 두 번 다른 방식으로 계산될 수 없습니다.
+`adapter_mode`·`general_fallback`. `general_fallback`은 실측(2026-09-10)으로 더해졌습니다
+— 프로세스 기본값(꺼짐)으로 돌리면 라우터가 전문 capability를 하나도 못 고른 턴마다
+General이 아예 안 조립되고 빈 계획 그대로 `FAILED`로 끝나는데, 서버 값(켜짐,
+`docs/decisions.md:3252`)으로 돌리면 그 자리에 Gemini 생성 답변이 붙습니다 — 나머지
+다섯 핀이 전부 같아도 이 스위치 하나로 랩의 성격이 달라집니다. 일곱째로 **미측정 비율의
+정의**(판정 전 제외 + 가짜 어댑터 셀 + 해당 없는 축, 분모=턴수×3)를 두 랩에서 같은
+계산으로 고정합니다 — 이것은 값이 아니라 계산 방법이라 `PINNED_FIELDS`에는 안 들어가지만,
+`report.py` 모듈 하나가 그 정의를 유일하게 갖고 있어 두 번 다른 방식으로 계산될 수
+없습니다.
 
 `dead_end`는 판정 축이 아니라 **부분** 파생 진단입니다 — 답이
 `daengs_backend.orchestration.redirects.SCOPED_REDIRECT_MESSAGES`의 고정 리다이렉트

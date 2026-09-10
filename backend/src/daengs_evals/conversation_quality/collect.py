@@ -8,9 +8,22 @@
 
 ## 랩이 반드시 박아 두는 것 (카드 #401)
 
-`before` 랩과 `after` 랩을 나중에 견주려면 다섯 가지가 안 움직여야 한다 — `LapHeader` 의
-`cases_sha256` · `judge_model` · `prompt_version` · `anchor_set` · `adapter_mode`. 여섯째인
-"판정 못 한 비율" 은 리포트가 계산할 값이라 여기서 만들지 않는다.
+`before` 랩과 `after` 랩을 나중에 견주려면 여섯 가지가 안 움직여야 한다 — `LapHeader` 의
+`cases_sha256` · `judge_model` · `prompt_version` · `anchor_set` · `adapter_mode` ·
+`general_fallback`. 일곱째인 "판정 못 한 비율" 은 리포트가 계산할 값이라 여기서 만들지 않는다.
+
+## `general_fallback` 도 값이 아니라 고정값이다
+
+실측(2026-09-10) — 프로세스 기본값(`settings.general_fallback = False`)으로 `--adapter-mode
+real` 을 돌리면 라우터가 전문 capability 를 하나도 못 고른 턴마다 General 이 아예 안
+조립되고 빈 계획 그대로 `FAILED` 로 끝난다. `DAENGS_GENERAL_FALLBACK=true`(서버 값,
+`docs/decisions.md:3252`)로 돌리면 그 자리에 Gemini 생성 답변이 붙는다 — 같은 케이스,
+같은 모델, 같은 프롬프트인데 이 스위치 하나로 답 자체가 다른 종류가 된다. 다른 다섯 핀은
+전부 그대로라 이 차이가 헤더에 안 남으면 `render_compare` 가 조용히 통과시킨다 — 그래서
+`LapHeader.general_fallback` 에 수집 시점에 실제로 켜져 있었는지를 적는다.
+`run_collect` 는 이 값을 함수 안에서 늦게 읽는다 — 모듈 최상단에서 읽으면 이 패키지를
+import 만 해도 `daengs_backend.config.settings`(DB 접속 정보 · 암호화 키)가 필요해지고,
+`test_every_module_in_the_package_imports_without_backend_settings` 가 그것을 막는다.
 
 **`judge_model` · `prompt_version` · `anchor_set` 은 여기서는 아직 계획일 뿐이다.** `collect`
 시점에는 judge 를 부르지 않았으니 이 세 값은 "이 랩을 나중에 이 조건으로 판정할 생각이다"
@@ -60,7 +73,7 @@ ALL_ADAPTER_MODES: tuple[str, ...] = (*ADAPTER_MODES, "fake-driver")
 
 
 class LapHeader(BaseModel):
-    """랩 파일의 meta 행. 카드가 요구하는 다섯 개의 고정값 + 랩 라벨."""
+    """랩 파일의 meta 행. 카드가 요구하는 여섯 개의 고정값 + 랩 라벨."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -70,6 +83,9 @@ class LapHeader(BaseModel):
     prompt_version: int
     anchor_set: str
     adapter_mode: str
+    #: 수집 시점에 `settings.general_fallback` 이 실제로 켜져 있었는지 — 모듈
+    #: docstring "`general_fallback` 도 값이 아니라 고정값이다" 참고.
+    general_fallback: bool
     case_count: int = 0
     started_at: str = ""
     finished_at: str = ""
@@ -193,8 +209,16 @@ def run_collect(
 
     한 랩 안의 모든 케이스가 같은 `driver` 를 쓴다 — 어댑터 모드는 드라이버를 조립할 때
     한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row` 가 얹는다).
+
+    `settings.general_fallback` 은 여기서 늦게 읽는다(함수 안, 이 줄에서만) — 모듈
+    최상단에서 읽으면 이 패키지를 import 만 해도 backend 설정이 필요해진다. `FakeDriver`
+    처럼 오케스트레이터를 안 돌리는 이음매를 써도 이 값은 실제 프로세스 설정 그대로
+    적힌다 — 무엇을 돌렸는지와 무관하게 "그 순간 스위치가 어느 쪽이었는지"는 항상 사실이다.
     """
+    from daengs_backend.config import settings as backend_settings
+
     adapter_mode = getattr(driver, "adapter_mode", NOT_REACHED)
+    general_fallback = backend_settings.general_fallback
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
         target_turn_row(case, turn_index, driver)
@@ -209,6 +233,7 @@ def run_collect(
         prompt_version=prompt_version,
         anchor_set=anchor_set,
         adapter_mode=str(adapter_mode),
+        general_fallback=general_fallback,
         case_count=len(cases),
         started_at=started_at,
         finished_at=finished_at,

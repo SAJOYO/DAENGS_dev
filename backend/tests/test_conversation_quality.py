@@ -280,10 +280,12 @@ def test_fake_driver_records_only_the_current_query():
     assert driver.seen_payloads == [{"query": "첫 질문"}, {"query": "둘째 질문"}]
 
 
-def test_lap_header_pins_the_five_things_run_collect_actually_recorded(tmp_path):
+def test_lap_header_pins_the_six_things_run_collect_actually_recorded(tmp_path, monkeypatch):
+    from daengs_backend.config import settings
     from daengs_evals.conversation_quality.collect import load_lap, run_collect
     from daengs_evals.conversation_quality.drivers import FakeDriver
 
+    monkeypatch.setattr(settings, "general_fallback", True)
     case = _case()
     out = run_collect(
         cases=[case],
@@ -301,6 +303,36 @@ def test_lap_header_pins_the_five_things_run_collect_actually_recorded(tmp_path)
     assert lap_meta["prompt_version"] == 7
     assert lap_meta["anchor_set"] == "holdout"
     assert lap_meta["adapter_mode"] == "fake-driver"
+    assert lap_meta["general_fallback"] is True
+
+
+def test_lap_header_records_general_fallback_actual_value_not_a_cached_default(
+    tmp_path, monkeypatch
+):
+    """스모크 런 실측(#401) — 켜진 채 돈 랩과 꺼진 채 돈 랩은 다른 것을 잰 것이다.
+
+    `general_fallback` 이 꺼져 있으면(프로세스 기본값) 라우터가 아무 capability 도
+    못 고른 턴은 빈 계획 그대로 `FAILED` 로 끝난다 — General 캐패빌리티 자체가 안
+    조립된다. 켜져 있으면 그 자리에 Gemini 생성 답변이 붙는다. `run_collect` 가 이 값을
+    함수 안에서 늦게 읽는지(모듈 최상단에서 한 번 캐싱하지 않는지)를, 같은 프로세스
+    안에서 값을 바꿔 가며 두 번 불러 확인한다."""
+    from daengs_backend.config import settings
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+
+    monkeypatch.setattr(settings, "general_fallback", False)
+    out_off = run_collect(
+        cases=[_case()], driver=FakeDriver(replies=["답"]), out_dir=tmp_path, lap="off"
+    )
+    off_meta, _ = load_lap(out_off)
+    assert off_meta["general_fallback"] is False
+
+    monkeypatch.setattr(settings, "general_fallback", True)
+    out_on = run_collect(
+        cases=[_case()], driver=FakeDriver(replies=["답"]), out_dir=tmp_path, lap="on"
+    )
+    on_meta, _ = load_lap(out_on)
+    assert on_meta["general_fallback"] is True
 
 
 def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path):
@@ -1419,6 +1451,7 @@ def _summary(**over):
         "prompt_version": 3,
         "anchor_set": "dev",
         "adapter_mode": "fake",
+        "general_fallback": False,
         "n_turns_total": 13,
         "n_turns_judged": 13,
         "axis_stats": _axis_stats(),
@@ -1540,6 +1573,7 @@ def test_compare_labels_response_mode_fit_as_a_genuine_before_after_column():
         ("prompt_version", 4),
         ("anchor_set", "holdout"),
         ("adapter_mode", "real"),
+        ("general_fallback", True),
     ],
 )
 def test_compare_refuses_when_a_pinned_thing_moved(field, new_value):
@@ -1556,7 +1590,7 @@ def test_compare_does_not_refuse_when_only_the_lap_label_differs():
 
     before = _summary()
     after = _summary(lap="lap2")
-    # 랩 라벨은 고정 다섯에 안 든다 - 이것까지 막으면 애초에 비교할 것이 없다
+    # 랩 라벨은 고정 여섯에 안 든다 - 이것까지 막으면 애초에 비교할 것이 없다
     render_compare(before=before, after=after)
 
 

@@ -18,7 +18,7 @@
 으로 읽지 마라.
 
 ────────────────────────────────────────────────────────────────────────────
-미측정 비율 — 카드가 요구하는 여섯째 고정값
+미측정 비율 — 카드가 요구하는 일곱째 고정값
 ────────────────────────────────────────────────────────────────────────────
 분모는 **랩의 턴 수 × 3 축**이다(턴 하나가 축 셋을 채울 수 있는 자리다). 분자는 다음
 셋의 합이다 — 전부 랩 · 판정 파일이 이미 들고 있는 값에서만 나온다, 다시 판정하지 않는다:
@@ -104,14 +104,18 @@ def _try_fixed_refusals() -> tuple[frozenset[str], bool]:
 
 CARD = "#401"
 
-#: 랩 두 개를 견주려면 이 다섯이 안 움직여야 한다 (카드가 요구한 여섯 중 다섯 —
-#: 여섯째인 "미측정 비율 정의"는 값이 아니라 이 모듈의 계산 방법이라 여기 안 낀다).
+#: 랩 두 개를 견주려면 이 여섯이 안 움직여야 한다 (카드가 요구한 일곱 중 여섯 —
+#: 일곱째인 "미측정 비율 정의"는 값이 아니라 이 모듈의 계산 방법이라 여기 안 낀다).
+#: `general_fallback` 은 실측(2026-09-10)으로 더해졌다 — 프로세스 기본값(꺼짐)으로 돈
+#: 랩과 서버 값(켜짐, `docs/decisions.md:3252`)으로 돈 랩은 다른 다섯 핀이 전부 같아도
+#: General 이 아예 조립되는지부터 갈리므로, 나머지 핀만으로는 그 차이를 못 잡는다.
 PINNED_FIELDS: tuple[str, ...] = (
     "cases_sha256",
     "judge_model",
     "prompt_version",
     "anchor_set",
     "adapter_mode",
+    "general_fallback",
 )
 
 #: 오늘 정답이 0 으로 고정된 두 축 (`transcript.PRIOR_TURNS_REACH_INFERENCE is False`).
@@ -226,6 +230,9 @@ class Summary(BaseModel):
     prompt_version: int
     anchor_set: str
     adapter_mode: str
+    #: 수집 시점의 `settings.general_fallback` — `LapHeader.general_fallback` 을 그대로
+    #: 옮긴다. `PINNED_FIELDS` 참고.
+    general_fallback: bool
     n_turns_total: int
     n_turns_judged: int
     axis_stats: dict[str, AxisStat]
@@ -395,6 +402,7 @@ def summarize(
         # 그러면 "어느 앵커로 통과했는지" 를 판정 파일이 스스로 말 못 하는 자리가 하나 생긴다.
         anchor_set=str(judge_header.get("anchor_set", "")),
         adapter_mode=str(lap_meta.get("adapter_mode", "")),
+        general_fallback=bool(lap_meta.get("general_fallback", False)),
         n_turns_total=n_turns_total,
         n_turns_judged=len(judgments),
         axis_stats=axis_stats,
@@ -455,7 +463,7 @@ def render(summary: Summary) -> str:
     lines.append(
         f"고정: cases_sha256={summary.cases_sha256[:12]}… · judge_model={summary.judge_model} · "
         f"prompt_version={summary.prompt_version} · anchor_set={summary.anchor_set} · "
-        f"adapter_mode={summary.adapter_mode}"
+        f"adapter_mode={summary.adapter_mode} · general_fallback={summary.general_fallback}"
     )
     lines.append(f"턴 {summary.n_turns_total}개 중 판정 {summary.n_turns_judged}건")
     lines.append("")
@@ -592,7 +600,7 @@ def _check_pins(before: Summary, after: Summary) -> None:
 
 
 def render_compare(*, before: Summary, after: Summary) -> str:
-    """두 랩을 견준다. **다섯 고정 항목 중 하나라도 다르면 거부한다.**"""
+    """두 랩을 견준다. **여섯 고정 항목 중 하나라도 다르면 거부한다.**"""
     _check_pins(before, after)
 
     def _fmt_pin(field: str) -> str:

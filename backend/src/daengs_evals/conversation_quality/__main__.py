@@ -171,7 +171,7 @@ def _load_summary(lap_file: str, judgments_file: str) -> report_mod.Summary:
 def cmd_compare(args: argparse.Namespace) -> int:
     before = _load_summary(args.before_lap, args.before_judgments)
     after = _load_summary(args.after_lap, args.after_judgments)
-    # 다섯 고정 항목 중 하나라도 다르면 `render_compare` 가 `ValueError` 로 거부한다 —
+    # 여섯 고정 항목 중 하나라도 다르면 `render_compare` 가 `ValueError` 로 거부한다 —
     # 여기서 잡아 사람이 읽을 수 있는 종료 메시지로만 바꾼다.
     try:
         text = report_mod.render_compare(before=before, after=after)

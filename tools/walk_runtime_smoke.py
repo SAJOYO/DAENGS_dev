@@ -199,9 +199,27 @@ async def cycle(owner):
         ):
             raise SmokeFailure("generated diary not ready or readback differs")
         scenes = result["bundle"]["scenes"]
-        narration = "\n".join(s["narration"]["text"] for s in scenes)
-        if not all(note in narration for note in notes):
-            raise SmokeFailure("user notes were not preserved in the unified scene text")
+        # The app assembles one editable body from narration + user_record. Requiring the
+        # writer to repeat original notes in narration would contradict that contract.
+        records = {s["core"]["identity"]: s["user_record"] for s in scenes if s["user_record"]}
+        for entry, note in zip(entries[1:], notes, strict=True):
+            record = records.get("walk_entry:" + entry["id"], {})
+            if record.get("kind") != "note" or record.get("text") != note:
+                raise SmokeFailure("original note missing or changed in its scene")
+        behavior = records.get("walk_entry:" + entries[0]["id"], {})
+        if behavior.get("kind") != "behavior" or behavior.get("code") != "sniffing":
+            raise SmokeFailure("original action missing or changed in its scene")
+        addressed = sum(
+            any(
+                p["schema_version"] == "sgis-dong-v1" and p["facts"].get("dong")
+                for p in s["place_reference"]
+            )
+            for s in scenes
+            if s["core"]["identity"] in records
+        )
+        generated = sum(s["narration"]["status"] == "generated" for s in scenes)
+        if addressed != len(entries) or not generated:
+            raise SmokeFailure("dong address or public background missing in diary output")
         return {
             "source_statuses": statuses,
             "scene_count": len(scenes),
@@ -209,6 +227,9 @@ async def cycle(owner):
             "model_status": result["bundle"]["model_status"],
             "same_readback": True,
             "user_notes_preserved": True,
+            "user_action_preserved": True,
+            "addressed_scene_count": addressed,
+            "generated_background_count": generated,
             "http_requests": requests,
         }
 

@@ -71,4 +71,12 @@ def load_cases(path: Path) -> list[ConversationCase]:
 
 
 def file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # 원바이트 해시가 아니라 줄바꿈을 LF 로 맞춘 텍스트를 해시한다 — 이 저장소는
+    # core.autocrlf=true 라 개발 PC(Windows) 워킹 카피는 CRLF, CI(ubuntu-latest)는
+    # LF 로 체크아웃된다. 바이트 해시를 값으로 박으면 둘 중 한쪽에서 반드시 깨진다.
+    # 그 대가로 줄바꿈만 바뀐 변경은 이 해시로 못 잡는다 — 내용이 같으면 같은 값을 내는
+    # 것이 이 함수의 목적이라 감수한다. `answer_quality.questions.file_sha256` 은 출처
+    # 증빙용 바이트 해시라 이 함수와 다르게 유지한다.
+    text = path.read_text("utf-8")
+    normalized = "\n".join(text.splitlines())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

@@ -867,3 +867,282 @@ def test_anchor_check_fails_when_a_verdict_disagrees(tmp_path):
             model=FAKE_JUDGE_MODEL,
             anchors_sha256=anchors.anchors_sha256(),
         )
+
+
+# --- Task 8: 리포트와 전후 비교 ---
+
+
+def _axis_stats(**over):
+    from daengs_evals.conversation_quality.report import AxisStat
+
+    base = {
+        "response_mode_fit": AxisStat(n=10, mean=1.4, distribution={0: 2, 1: 3, 2: 5}),
+        "context_continuity": AxisStat(n=8, mean=0.0, distribution={0: 8}),
+        "repair_success": AxisStat(n=3, mean=0.0, distribution={0: 3}),
+    }
+    base.update(over)
+    return base
+
+
+def _summary(**over):
+    from daengs_evals.conversation_quality.report import (
+        StateAuditTally,
+        Summary,
+        UnmeasuredTally,
+        UsabilityTally,
+    )
+
+    base = {
+        "lap": "lap1",
+        "cases_sha256": "a" * 64,
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "adapter_mode": "fake",
+        "n_turns_total": 13,
+        "n_turns_judged": 13,
+        "axis_stats": _axis_stats(),
+        "usability": UsabilityTally(
+            usable=8,
+            unusable_safety=0,
+            unusable_response_mode_fit=2,
+            unusable_repair_success=3,
+        ),
+        "state_audit": StateAuditTally(
+            n_audited=8,
+            relevant_state_available=5,
+            relevant_state_used=3,
+            state_used_correctly=2,
+            unsupported_or_superficial_personalization=1,
+        ),
+        "unmeasured": UnmeasuredTally(
+            numerator=9,
+            denominator=39,
+            excluded_before_judging_slots=3,
+            fake_adapter_slots=3,
+            not_applicable_slots=3,
+        ),
+        "dead_end_count": 2,
+        "dead_end_n": 13,
+    }
+    base.update(over)
+    return Summary(**base)
+
+
+def test_report_is_deterministic():
+    from daengs_evals.conversation_quality.report import render
+
+    summary = _summary()
+    assert render(summary) == render(summary)
+
+
+def test_report_never_prints_a_combined_score():
+    from daengs_evals.conversation_quality.report import render
+
+    text = render(_summary())
+    assert "종합" not in text and "총점" not in text
+
+
+def test_report_states_the_unmeasured_ratio():
+    from daengs_evals.conversation_quality.report import render
+
+    assert "미측정" in render(_summary())
+
+
+def test_report_labels_dead_end_as_a_diagnostic_not_an_axis():
+    from daengs_evals.conversation_quality.report import render
+
+    text = render(_summary())
+    assert "dead_end" in text
+    assert "진단" in text
+
+
+def test_report_reports_state_audit_as_facts_not_scores():
+    from daengs_evals.conversation_quality.report import render
+
+    text = render(_summary())
+    assert "relevant_state_available" in text
+    assert "사실" in text
+
+
+def test_report_breaks_down_the_usability_gate_by_reason():
+    from daengs_evals.conversation_quality.report import render
+
+    text = render(_summary())
+    assert "safety" in text
+    assert "response_mode_fit" in text
+    assert "repair_success" in text
+
+
+def test_report_states_all_three_axes_are_not_calibrated():
+    from daengs_evals.conversation_quality.report import render
+
+    text = render(_summary())
+    assert "not_calibrated" in text
+
+
+def test_compare_labels_the_before_column_as_feature_absent_for_floored_axes():
+    from daengs_evals.conversation_quality.report import AxisStat, render_compare
+
+    before = _summary(
+        axis_stats=_axis_stats(context_continuity=AxisStat(n=8, mean=0.0, distribution={0: 8}))
+    )
+    after = _summary(
+        axis_stats=_axis_stats(
+            context_continuity=AxisStat(n=8, mean=1.7, distribution={1: 3, 2: 5})
+        )
+    )
+    # 0 -> 1.7 을 "모델이 좋아졌다" 로 읽히게 두지 않는다
+    text = render_compare(before=before, after=after)
+    assert "기능 부재" in text
+
+
+def test_compare_labels_response_mode_fit_as_a_genuine_before_after_column():
+    from daengs_evals.conversation_quality.report import render_compare
+
+    before = _summary()
+    after = _summary(
+        lap="lap2", axis_stats=_axis_stats(response_mode_fit=_axis_stats()["response_mode_fit"])
+    )
+    text = render_compare(before=before, after=after)
+    # 실제 변량이 있는 축은 "기능 부재" 라벨을 달지 않는다
+    rmf_line = next(
+        line for line in text.splitlines() if "response_mode_fit" in line and "|" in line
+    )
+    assert "기능 부재" not in rmf_line
+
+
+@pytest.mark.parametrize(
+    "field,new_value",
+    [
+        ("cases_sha256", "c" * 64),
+        ("judge_model", "different-model"),
+        ("prompt_version", 4),
+        ("anchor_set", "holdout"),
+        ("adapter_mode", "real"),
+    ],
+)
+def test_compare_refuses_when_a_pinned_thing_moved(field, new_value):
+    from daengs_evals.conversation_quality.report import render_compare
+
+    before = _summary()
+    after = _summary(lap="lap2", **{field: new_value})
+    with pytest.raises(ValueError, match=field):
+        render_compare(before=before, after=after)
+
+
+def test_compare_does_not_refuse_when_only_the_lap_label_differs():
+    from daengs_evals.conversation_quality.report import render_compare
+
+    before = _summary()
+    after = _summary(lap="lap2")
+    # 랩 라벨은 고정 다섯에 안 든다 - 이것까지 막으면 애초에 비교할 것이 없다
+    render_compare(before=before, after=after)
+
+
+def test_summarize_excludes_fake_adapter_rows_from_axis_stats_but_counts_them_unmeasured(
+    tmp_path,
+):
+    from daengs_evals.conversation_quality.judge import run_score
+    from daengs_evals.conversation_quality.report import summarize
+
+    case = _repair_case()
+    row = {
+        "case_id": case.case_id,
+        "turn_index": 3,
+        "query": case.turns[2].text,
+        "message": "산책은 하루 두 번이 좋습니다.",
+        "state_supplied": {},
+        "answered_by_fake_adapter": True,
+        "adapter_mode": "fallback-only",
+    }
+    judgments = run_score(
+        rows=[row],
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=lambda **kw: _fake_verdict(score=2, axis=kw["axis"]),
+    )
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "fallback-only"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=[row], judge_header=judge_header, judgments=judgments
+    )
+    assert all(stat.n == 0 for stat in summary.axis_stats.values())
+    assert summary.unmeasured.numerator == summary.unmeasured.denominator
+    assert summary.unmeasured.fake_adapter_slots == summary.unmeasured.numerator
+
+
+def test_summarize_counts_rows_excluded_before_judging_as_unmeasured():
+    from daengs_evals.conversation_quality.report import summarize
+
+    lap_rows = [
+        {"case_id": "cq_a", "turn_index": 1, "answered_by_fake_adapter": False},
+        {"case_id": "cq_b", "turn_index": 1, "answered_by_fake_adapter": False},
+    ]
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 2,
+    }
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=lap_rows, judge_header=judge_header, judgments=[]
+    )
+    assert summary.unmeasured.denominator == 6
+    assert summary.unmeasured.numerator == 6
+    assert summary.unmeasured.excluded_before_judging_slots == 6
+
+
+def test_cli_score_computes_the_anchor_hash_and_passes_it_as_a_required_keyword(
+    tmp_path, monkeypatch
+):
+    """CLI 가 `anchors.anchors_sha256()` 을 스스로 내어 `run_score` 에 넘기는지 본다.
+    **실제 judge 를 부르지 않는다** — `run_score` 를 얇은 스텁으로 갈아 끼운다."""
+    import json
+
+    from daengs_evals.conversation_quality import __main__ as cli_mod
+    from daengs_evals.conversation_quality import anchors as anchors_mod
+
+    lap_path = tmp_path / "lap_t1.jsonl"
+    lap_path.write_text(
+        json.dumps({"kind": "meta", "lap": "t1", "cases_sha256": "a" * 64})
+        + "\n"
+        + json.dumps(
+            {"kind": "turn", "case_id": "cq_wellness_vague_01", "turn_index": 1, "message": "x"}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_run_score(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(cli_mod, "run_score", fake_run_score)
+    monkeypatch.setattr(cli_mod, "load_cases", lambda path: [_case()])
+
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(
+        [
+            "score",
+            "--lap-file",
+            str(lap_path),
+            "--judge-model",
+            FAKE_JUDGE_MODEL,
+            "--out",
+            str(tmp_path / "judgments_t1.jsonl"),
+        ]
+    )
+    args.func(args)
+
+    assert "anchors_sha256" in captured
+    assert captured["anchors_sha256"] == anchors_mod.anchors_sha256()

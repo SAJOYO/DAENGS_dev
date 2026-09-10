@@ -196,6 +196,8 @@ def saved_background(envelope, record, walk_id):
     if provenance["policy_version"] != schema:
         raise ValueError("invalid_context_policy")
     if not envelope["tags"] or not set(envelope["tags"]) <= {
+        "space.address",
+        "space.commerce",
         "space.facility",
         "space.park",
         "space.river",

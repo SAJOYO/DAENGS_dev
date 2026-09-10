@@ -25,7 +25,12 @@ async def enqueue(session, row, now, policy=POLICY):
         )
         .values(state="cancelled", lease_token=None, lease_until=None)
     )
-    for tag in TAGS:
+    from daengs_backend.config import settings
+
+    tags = (*TAGS, "space.address") if settings.walk_public_context_enabled else TAGS
+    if settings.walk_public_context_enabled and settings.walk_area_context_enabled:
+        tags = (*tags, "space.commerce")
+    for tag in tags:
         await session.execute(
             insert(WalkEntryContextJob)
             .values(

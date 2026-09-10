@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from daengs_backend.orchestration.adapters.general import (
     GENERAL_ASK_MISSING,
@@ -38,7 +39,9 @@ from daengs_backend.orchestration.contracts import (
     CapabilityResult,
     CapabilityStatus,
     CareLogContext,
+    ClarifyRequest,
     GeneralPayload,
+    ObservationAxis,
     RoutePlan,
     RouterKind,
 )
@@ -104,7 +107,9 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
         json.dumps({"kind": "ask", "text": "", "question": f"  {ASK} ", "reason": None})
     )
     assert result.status == CapabilityStatus.OK
-    assert result.data == {"ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING]}}
+    assert result.data == {
+        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []}
+    }
     assert result.capability == CapabilityName.GENERAL and result.elapsed_ms >= 0
 
 
@@ -350,7 +355,7 @@ async def test_adapter_keeps_the_grounded_part_next_to_the_question() -> None:
     assert result.status == CapabilityStatus.OK
     assert result.data == {
         "answer": SUMMARY,
-        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING]},
+        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []},
     }
 
 
@@ -535,3 +540,129 @@ async def test_case8_an_emergency_is_answered_at_once_not_asked_back() -> None:
     assert response.status == AssistantStatus.REFUSED
     assert response.clarify is None
     assert "지금 바로 동물병원" in response.message
+
+
+# ── 되묻기가 남기는 구조화된 흔적 (#416 결합 지점) ────────────────────
+#
+# 사람 결정 (2026-09-10): 되묻기는 **무엇을 물었는지**를 기계가 읽을 수 있게 남긴다.
+# `#416` 의 Turn Resolver 가 `밥은 잘 먹는데 계속 누워 있어` 를 앞 질문에 묶을 때 한국어
+# 문장을 다시 파싱하지 않아도 되게 하려는 것이다.
+#
+# ⚠ **이 값은 "아직 물어본 항목" 이지 강아지의 상태나 관찰 결과가 아니다.** 사용자 상태로
+# 저장하는 길을 만들지 않는다. 그리고 **모델이 안 고른 축을 코드가 채우지 않는다** — 비면
+# 빈 채로 나간다.
+# ⚠ **이 PR 은 흔적과 테스트까지다.** 잇는 로직은 `#416` 이다.
+
+
+def test_the_observation_axes_are_the_minimum_the_acceptance_cases_need() -> None:
+    """축 목록을 여기서 못 박는다 — 늘리는 것이 의도된 행동이 되게.
+
+    `OTHER` 로 다 밀어 넣지 않으려면 수용 케이스가 실제로 요구하는 것을 먼저 세운다:
+    `cq_wellness_vague_01`(식욕·활력) · `cq_symptom_missing_triage_01`(구토) ·
+    `cq_correction_explicit_01`(구토) · **`cq_repeat_after_failure_01`(발을 전다)**.
+    마지막 것 때문에 `MOBILITY` 가 있다 — 승인된 질문 문구의 다섯 축(식욕·활력·배변·
+    구토/설사·호흡)에는 보행이 없는데, 수용 케이스에는 있다.
+    """
+    assert [axis.value for axis in ObservationAxis] == [
+        "APPETITE",
+        "ENERGY",
+        "STOOL",
+        "VOMIT",
+        "BREATHING",
+        "MOBILITY",
+        "OTHER",
+    ]
+
+
+def test_a_clarify_records_at_most_two_axes_and_defaults_to_none() -> None:
+    """한 질문에서 실제로 물은 축은 1~2개까지. 기본값은 비어 있다 — 좌표 게이트의
+    CLARIFY 처럼 관찰과 무관한 되묻기가 축을 갖지 않게."""
+    assert ClarifyRequest(question="q", missing=["location.lat"]).missing_axes == []
+    two = ClarifyRequest(question="q", missing=["observation"], missing_axes=["APPETITE", "ENERGY"])
+    assert two.missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+    with pytest.raises(ValidationError):
+        ClarifyRequest(
+            question="q", missing=["observation"], missing_axes=["APPETITE", "ENERGY", "STOOL"]
+        )
+
+
+def test_the_model_names_the_axes_and_the_code_never_fills_them_in() -> None:
+    """**코드가 임의로 보완하지 않는다.** 모델이 축을 안 냈으면 빈 채로 나간다 —
+    "질문이 식욕을 언급했으니 APPETITE 를 넣자" 같은 추론을 코드가 하지 않는다."""
+    answer = validate_general_answer(
+        {"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY"]}
+    )
+    assert answer is not None and answer.axes == [
+        ObservationAxis.APPETITE,
+        ObservationAxis.ENERGY,
+    ]
+    # 세 개는 스키마가 막는다.
+    assert (
+        validate_general_answer(
+            {"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY", "STOOL"]}
+        )
+        is None
+    )
+    # 답과 거절은 축을 갖지 않는다.
+    assert validate_general_answer({"kind": "answer", "text": "답", "axes": ["ENERGY"]}) is None
+
+
+async def test_the_axes_reach_the_clarify_verbatim() -> None:
+    result = await run_adapter(
+        json.dumps({"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY"]})
+    )
+    assert result.data == {
+        "ask": {
+            "question": ASK,
+            "missing": [GENERAL_ASK_MISSING],
+            "missing_axes": ["APPETITE", "ENERGY"],
+        }
+    }
+    response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
+    assert response.clarify is not None
+    assert response.clarify.missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+
+
+async def test_an_ask_without_axes_stays_empty() -> None:
+    result = await run_adapter(json.dumps({"kind": "ask", "text": "", "question": ASK}))
+    response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
+    assert response.clarify is not None and response.clarify.missing_axes == []
+
+
+def test_the_ask_marks_its_kind_apart_from_the_coordinate_gate() -> None:
+    """`missing` 은 **어떤 종류의 되묻기인가**를, `missing_axes` 는 **무엇을 물었는가**를
+    말한다. 좌표(`location.lat`)와 관찰이 같은 목록에 섞이지 않게 어휘를 가른다."""
+    assert GENERAL_ASK_MISSING == "observation"
+
+
+def test_the_trace_survives_the_round_trip_that_chat_turns_stores() -> None:
+    """`services/chat.public_response_of` 가 `model_dump(mode="json")` 으로 저장한다 —
+    `#416` 이 직전 턴에서 읽을 수 있으려면 이 왕복에서 축이 살아남아야 한다."""
+    response = aggregate_results(
+        request_id="r1",
+        route_plan=plan("general"),
+        results=[
+            CapabilityResult(
+                capability=CapabilityName.GENERAL,
+                status=CapabilityStatus.OK,
+                data={
+                    "ask": {
+                        "question": ASK,
+                        "missing": [GENERAL_ASK_MISSING],
+                        "missing_axes": ["APPETITE", "ENERGY"],
+                    }
+                },
+                elapsed_ms=1,
+            )
+        ],
+    )
+    stored = response.model_dump(mode="json")
+    assert stored["clarify"]["missing_axes"] == ["APPETITE", "ENERGY"]
+    assert stored["status"] == "CLARIFY"
+
+
+def test_prompt_asks_the_model_to_name_one_or_two_axes_from_the_closed_list() -> None:
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "name the one or two axes you most need answered" in prompt
+    assert "APPETITE" in prompt and "MOBILITY" in prompt
+    assert "Use OTHER only when none of the others fit" in prompt

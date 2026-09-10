@@ -52,6 +52,7 @@ from daengs_backend.orchestration.contracts import (
     ClarifyRequest,
     ErrorDetail,
     GeneralPayload,
+    ObservationAxis,
     OutcomeDetail,
 )
 from daengs_backend.orchestration.redirects import SCOPED_REDIRECT_MESSAGES, RefusalReason
@@ -91,12 +92,10 @@ GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v6-carelog"
 # are present.
 GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v6-vetspend"
 GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v6-carelog-vetspend"
-#: `ClarifyRequest.missing` 은 min_length=1 이라 되묻기에도 키가 하나 필요하다. 좌표 게이트가
-#: 쓰는 `location.lat` 과 같은 점 표기를 따르되 **네임스페이스를 갈라 둔다** — 두 CLARIFY 는
-#: 성격이 다르고(하나는 클라이언트가 채울 수 있는 좌표, 하나는 사람만 아는 관찰), 이 값으로
-#: 그 둘을 구별하는 소비자가 나중에 생긴다. 모델이 고르게 하지 않는 이유는 승인된 경계가
-#: "관찰 축 하나" 라서다 — 고를 것이 없으면 모델 표면을 늘릴 이유도 없다.
-GENERAL_ASK_MISSING = "observation.detail"
+#: `ClarifyRequest.missing` 이 말하는 것은 **되묻기의 종류**다 — 좌표 게이트의 `location.lat`
+#: 과 같은 목록에 관찰 어휘를 섞지 않으려고 값을 하나로 둔다. **무엇을 물었는지는
+#: `ClarifyRequest.missing_axes` 가 따로 갖는다** (#416 의 결합 지점).
+GENERAL_ASK_MISSING = "observation"
 GENERAL_MODEL_ID = ROUTER_MODEL_ID
 # 답 문장 3~5개 + JSON 봉투. 라우터의 256 은 분류 한 줄을 위한 예산이라 여기엔 좁다.
 GENERAL_MAX_OUTPUT_TOKENS = 512
@@ -122,13 +121,18 @@ class GeneralAnswer(BaseModel):
     #: 그린다. 길이 제한(500자)은 여기 말고 어댑터가 `ClarifyRequest` 로 조립할 때 건다 —
     #: 검사하는 곳이 하나여야 "여기선 통과했는데 저기서 터진다" 가 안 생긴다.
     question: str | None = None
+    #: 그 질문이 **실제로 물은 관찰 항목** 1~2개. 되묻기일 때만 쓴다.
+    #: **코드가 채우지 않는다** — 모델이 고른 것만 그대로 나간다. 사용자에게 보이는 문장은
+    #: `question` 이고, 이 칸은 `#416` 이 후속 답변을 앞 질문에 묶을 때 읽는 기계용 흔적이다.
+    axes: list[ObservationAxis] | None = Field(default=None, max_length=2)
     reason: RefusalReason | None = None
 
     @model_validator(mode="after")
     def shape_matches_kind(self) -> GeneralAnswer:
         if self.kind == "ask":
             # 되묻기를 되묻기로 만드는 것은 `question` 이다. `text` 는 비어도 된다 —
-            # 기록이 하나도 없으면 먼저 말할 것이 없는 자리가 실제로 있다.
+            # 기록이 하나도 없으면 먼저 말할 것이 없는 자리가 실제로 있다. `axes` 도
+            # 비어도 된다: 모델이 안 골랐다는 사실을 코드가 메우지 않는다.
             if self.question is None or not self.question.strip():
                 raise ValueError("an ask needs a question")
             if self.reason is not None:
@@ -136,6 +140,8 @@ class GeneralAnswer(BaseModel):
             return self
         if self.question is not None:
             raise ValueError(f"a {self.kind} carries no question")
+        if self.axes is not None:
+            raise ValueError(f"a {self.kind} carries no observation axes")
         if self.kind == "answer":
             if not self.text.strip():
                 raise ValueError("an answer needs text")
@@ -164,6 +170,7 @@ Ask back (kind="ask") in this case:
 - ask: the message is about how the dog is doing, or about a symptom, and what the owner actually observed is still missing or too thin to act on. Put the question in question, in Korean. In text, say first what you may report: when a rule below hands you the owner's records, report those there; when no rule below hands you any, say in text that today's records alone cannot tell how the dog is.
 - One question per turn. You MAY name several related things inside that one sentence — 식욕 · 활력 · 배변 · 구토/설사 · 호흡 — but ask the owner to start with whatever stands out most. Never demand that they answer every item, and never spread the items across several turns as an intake interview.
 - Ask for what the owner can observe. Never list candidate diseases, and never say the dog is healthy, fine, normal, or lacking anything.
+- In axes, name the one or two axes you most need answered, from this closed list: APPETITE, ENERGY, STOOL, VOMIT, BREATHING, MOBILITY, OTHER. The sentence in question may invite more than these; axes is what you are actually waiting on. Use OTHER only when none of the others fit, and leave axes out when none applies — nothing downstream will guess it for you.
 - If the owner has already said enough to answer, answer instead of asking. If the message describes an emergency sign, refuse with emergency instead of asking — an emergency is answered at once, never asked back.
 
 Refuse (kind="refuse") only in these cases:
@@ -337,7 +344,11 @@ class GeneralCapabilityAdapter:
         if answer.kind == "ask":
             try:
                 ask = ClarifyRequest(
-                    question=(answer.question or "").strip(), missing=[GENERAL_ASK_MISSING]
+                    question=(answer.question or "").strip(),
+                    missing=[GENERAL_ASK_MISSING],
+                    # 모델이 고른 것 그대로. 안 골랐으면 빈 목록이고, 그 빈 자리를
+                    # 질문 문장에서 유추해 메우지 않는다 (사람 결정, 2026-09-10).
+                    missing_axes=answer.axes or [],
                 )
             except ValidationError:
                 # `ClarifyRequest.question` 은 500자, `GeneralAnswer.text` 는 1,000자다.

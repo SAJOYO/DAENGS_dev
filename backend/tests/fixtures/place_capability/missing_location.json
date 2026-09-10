@@ -9,7 +9,8 @@
     "missing": [
       "location.lat",
       "location.lon"
-    ]
+    ],
+    "missing_axes": []
   },
   "route": null
 }

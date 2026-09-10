@@ -33,7 +33,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
 | `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
 | `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
-| `backend/gait_v4/` | 별도 uv 프로젝트입니다 — 의도된 예외이고, 이유는 `backend/gait_v4/DAENGS-NOTE.md`. #304 뒤에 정리합니다 |
+| `backend/gait_v4/` | walk_demo v4 엔진 코드(별도 폴더, 워커가 서브프로세스로 부름). 의존성은 **backend `pyproject.toml` 의 `gait-v4` 그룹**이고 자기 pyproject/lock 은 없습니다 (D-063 5A). 사정은 `backend/gait_v4/DAENGS-NOTE.md`. 5B 에서 `daengs_gait/inference/` 로 옮깁니다 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |

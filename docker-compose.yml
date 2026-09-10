@@ -453,22 +453,19 @@ services:
     # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다 — `>` 가 더 깊이 들여쓴 줄바꿈을 살려 두면
     #    sh 가 여러 줄 스크립트를 받아 exec 뒤 인자가 실행되지 않습니다 (#55 의 함정).
     #
-    # v4 (#304): GAIT_ENGINE=v4 일 때만 /app/gait_v4 의 venv 를 lock 그대로 동기화합니다.
+    # v4 (#304 · D-063 5A): GAIT_ENGINE=v4 일 때만 v4 용 venv 를 **같은 backend lock 의 `gait-v4` 그룹**으로
+    # 동기화합니다. 옛날에는 /app/gait_v4 의 자기 uv.lock 으로 풀고 opencv 를 GUI→headless 로 손으로 갈아
+    # 끼웠는데(uninstall → install --no-deps), 5A 에서 그 lock 을 없애고 pyproject 의 `gait-v4` 그룹 +
+    # opencv override 로 옮겨 그 해킹이 사라졌습니다.
     #   · `UV_PROJECT_ENVIRONMENT` 를 **반드시 덮어씁니다** — 위 environment 의 /opt/venv 가 그대로면
     #     exact 동기화가 gait-venv 의 ultralytics 를 지웁니다. 값은 위 GAIT_V4_PYTHON 의 venv 입니다.
-    #   · `--no-install-project`: 프로젝트 자체는 안 깝니다(setuptools 가 :ro 폴더에 egg-info 를 쓰려다
-    #     실패). `python -m gait_v4` 는 cwd 가 /app/gait_v4 라 패키지를 그냥 찾습니다.
-    #   · opencv 를 **headless 로 바꿉니다** — lock 은 GUI 판(opencv-python)인데 slim 컨테이너에는
-    #     libxcb 가 없어 첫 분석에서 죽습니다 (legacy 가 8/31 에 겪은 것과 같음). 같은 버전·같은 API 라
-    #     골든에 영향 없습니다. pyproject 의 버전은 안 건드립니다.
+    #   · `--only-group gait-v4`: 그 그룹만(프로젝트 본체 의존성 제외). `--no-install-project`: 프로젝트
+    #     자체도 안 깝니다. `python -m gait_v4` 는 cwd 가 /app/gait_v4 라 패키지를 그냥 찾습니다.
     command: >
       sh -c "uv sync --frozen --group gait &&
       if [ \"$$GAIT_ENGINE\" = v4 ]; then
-      cd /app/gait_v4 &&
-      UV_PROJECT_ENVIRONMENT=/opt/gait-v4-venv uv sync --frozen --no-install-project &&
-      VIRTUAL_ENV=/opt/gait-v4-venv uv pip uninstall opencv-python opencv-contrib-python &&
-      VIRTUAL_ENV=/opt/gait-v4-venv uv pip install --no-deps opencv-python-headless==5.0.0.93 opencv-contrib-python-headless==5.0.0.93 &&
-      cd /app; fi &&
+      UV_PROJECT_ENVIRONMENT=/opt/gait-v4-venv uv sync --frozen --only-group gait-v4 --no-install-project;
+      fi &&
       exec uv run --no-sync celery -A daengs_backend.tasks.gait worker
       --loglevel info --concurrency 1 --queues gait"
 

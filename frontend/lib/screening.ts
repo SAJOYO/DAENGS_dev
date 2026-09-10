@@ -219,7 +219,6 @@ export type NormBox = [number, number, number, number];
  */
 const GUIDE_RECOMMEND: [number, number] = [0.28, 0.48];
 const GUIDE_ALLOW: [number, number] = [0.24, 0.56];
-const GUIDE_CENTER_MAX = 0.1;
 
 export type GuideHint = {
   level: "recommend" | "allow" | "out";
@@ -230,7 +229,7 @@ export type GuideHint = {
   centerOff: number;
 };
 
-/** 네모가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
+/** 네모 크기가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
 export function guideHint([x, y, w, h]: NormBox): GuideHint {
   const centerOff = Math.max(Math.abs(x + w / 2 - 0.5), Math.abs(y + h / 2 - 0.5));
   const base = { widthFrac: w, centerOff };
@@ -241,9 +240,6 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
   if (w > GUIDE_ALLOW[1]) {
     return { ...base, level: "out", ok: false, reason: "너무 가까워서 주변 피부가 안 보입니다. 조금 더 멀리." };
   }
-  if (centerOff > GUIDE_CENTER_MAX) {
-    return { ...base, level: "out", ok: false, reason: "병변이 화면 가운데에서 벗어났습니다." };
-  }
   if (w < GUIDE_RECOMMEND[0] || w > GUIDE_RECOMMEND[1]) {
     return { ...base, level: "allow", ok: true, reason: "허용 안이지만 권장 밖입니다." };
   }
@@ -252,4 +248,4 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
 
 export const GUIDE_BAND_TEXT =
   `권장 가로 ${GUIDE_RECOMMEND[0]}~${GUIDE_RECOMMEND[1]} · ` +
-  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]} · 중심 이탈 ${GUIDE_CENTER_MAX} 이내`;
+  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]}`;

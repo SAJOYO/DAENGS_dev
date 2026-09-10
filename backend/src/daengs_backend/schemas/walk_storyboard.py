@@ -70,5 +70,7 @@ class DiaryStoryboardResponse(BaseModel):
     target_scene_count: int
     preparation_counts: dict[str, int]
     preparation_limits: tuple[str, ...]
+    # The returned ready bundle keeps its saved revision; never auto-regenerate for this flag.
+    background_update_available: bool = False
     bundle: DiaryBundle | None = None
     error_code: str | None = None

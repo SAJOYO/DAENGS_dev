@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from daengs_backend.core.storage import UploadTicket, build_vet_receipt_key, get_storage
-from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
+from daengs_backend.models import VET_REASON_CODES, VET_REASON_LABELS, VetVisit, VetVisitDraft
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
@@ -90,8 +90,10 @@ class StartDraftRequest:
 
 @dataclass(frozen=True)
 class ConfirmDraftRequest:
-    """`confirm_draft` 의 입력. **`items` 는 받아도 무시한다** — `raw_ocr_items` 는
-    초안에서만 읽는다 (docs §3)."""
+    """`confirm_draft` 의 입력. **`items` 를 받는 필드가 여기 없다** — `raw_ocr_items`
+    는 초안에서만 읽는다 (docs §3). 여기 다시 `items` 를 더하고 싶어지면, HTTP 경계의
+    `schemas.vet_visit.VetVisitConfirmRequest` 머리말이 이미 막아 둔 그 판단부터
+    다시 보라는 뜻이다 — 받아도 안 쓰는 필드는 다음 편집이 집어 들 총이다."""
 
     client_event_id: uuid.UUID
     reason_code: str
@@ -103,7 +105,15 @@ class ConfirmDraftRequest:
     hospital_phone: str | None = None
     is_emergency: bool = False
     is_oncology: bool = False
-    items: list[dict] | None = None
+
+
+@dataclass(frozen=True)
+class ReasonOption:
+    """[edit] 드롭다운 한 줄. **코드와 표시명을 같이 낸다** — 앱이 17개 한글 표시명을
+    하드코딩하면, 닫힌 목록을 서버가 지키는 이유(§1)가 그 하드코딩 자리에서 다시 샌다."""
+
+    code: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -151,11 +161,15 @@ async def _sweep_expired(session: AsyncSession) -> None:
     expired = await vet_repo.expired_drafts(session, cutoff, limit=SWEEP_LIMIT)
     if not expired:
         return
+    # **커밋을 먼저 한다.** 행을 지우기 전에 사진을 지우면, 커밋이 실패했을 때
+    # 여전히 존재하는 초안의 사진이 이미 사라진 뒤다. 순서를 바꾸면 실패의 대가가
+    # DB 행이 아니라 사용자의 사진이 된다.
+    for draft in expired:
+        await vet_repo.delete_draft(session, draft)
+    await session.commit()
     storage = get_storage()
     for draft in expired:
         storage.delete(draft.receipt_image_key)
-        await vet_repo.delete_draft(session, draft)
-    await session.commit()
 
 
 async def start_draft(
@@ -270,7 +284,25 @@ async def extract_draft(
     consented = app_user is not None and app_user.ocr_consent_at is not None
 
     if match is not None and match.id != draft.id and match.extracted_at is not None:
+        # 사진은 그대로 물려받지만 **`possible_duplicate` 는 다시 잰다** — 그 초안이
+        # 추출됐던 시점과 지금 사이에 매칭되는 방문이 확정됐을 수 있다(#M3 real bug:
+        # 예전에는 `match.extracted` 를 통째로 베껴 이 칸이 그때 값에 갇혔다).
         response_payload = dict(match.extracted or {})
+        reused = _validate_extraction_dict(
+            {k: v for k, v in response_payload.items() if k != "possible_duplicate"}
+        )
+        possible_duplicate = False
+        if (
+            reused is not None
+            and reused.status == "ok"
+            and reused.visited_on is not None
+            and reused.total_krw is not None
+        ):
+            duplicate = await vet_repo.find_duplicate(
+                session, app_user_id, draft.pet_id, reused.visited_on, reused.total_krw
+            )
+            possible_duplicate = duplicate is not None
+        response_payload["possible_duplicate"] = possible_duplicate
     else:
         content_type = content_type_from_key(draft.receipt_image_key)
         try:
@@ -321,9 +353,11 @@ async def _owned_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
 
 async def reason_options(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
-) -> list[str]:
+) -> list[ReasonOption]:
     """[edit] 드롭다운의 목록 — **이 강아지가 실제로 겪은 사유가 맨 앞**, 그 뒤 전체
-    목록 (docs §2 "초안 응답"). 앱이 목록을 하드코딩하지 않게 서버가 준다."""
+    목록 (docs §2 "초안 응답"). **코드와 표시명을 같이 준다** — `VET_REASON_LABELS` 가
+    HTTP 경계를 안 건너면 앱이 17개 한글 표시명을 직접 하드코딩해야 하고, 그것이 닫힌
+    목록으로 막으려던 드리프트다."""
     await _owned_pet(session, app_user_id, pet_id)
     visits = await vet_repo.list_between(session, app_user_id, pet_id, date.min, date.max)
     recent: list[str] = []
@@ -331,7 +365,7 @@ async def reason_options(
         if visit.reason_code not in recent:
             recent.append(visit.reason_code)
     rest = [code for code in VET_REASON_CODES if code not in recent]
-    return recent + rest
+    return [ReasonOption(code=code, label=VET_REASON_LABELS[code]) for code in recent + rest]
 
 
 async def confirm_draft(
@@ -438,6 +472,7 @@ __all__ = [
     "VET_RECEIPT_BRIDGE_UPLOAD_PATH",
     "ConfirmDraftRequest",
     "DraftExtraction",
+    "ReasonOption",
     "StartDraftRequest",
     "VetRangeError",
     "VetVisitConflictError",

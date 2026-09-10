@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from daengs_backend.models import VET_REASON_CODES
+from daengs_backend.services import vet_receipt
 from daengs_backend.services.vet_receipt import (
     ReceiptExtraction,
+    ReceiptExtractionFailed,
     ReceiptItem,
     VetReasonCode,
     build_receipt_prompt,
@@ -194,3 +196,51 @@ def test_hospital_phone_rejects_real_business_registration_number():
     가운데 묶음이 2자리라 이 칸에 못 앉는다."""
     with pytest.raises(ValidationError):
         ReceiptExtraction(status="ok", total_krw=1000, hospital_phone="850-61-00139")
+
+
+# ── M1: 전송 오류는 한 번만 재시도한다 (docs §2 "못 읽었을 때") ─────────────
+
+
+async def test_extract_retries_once_then_raises_after_two_transport_failures(monkeypatch):
+    """정확히 두 번 시도한 뒤 `ReceiptExtractionFailed` 로 오른다 — 그 이상은 재시도하지
+    않는다."""
+    calls: list[int] = []
+
+    async def _always_fails(*_args, **_kwargs):
+        calls.append(1)
+        raise TimeoutError("connection reset")
+
+    monkeypatch.setattr(vet_receipt, "_generate_with_gemini", _always_fails)
+    with pytest.raises(ReceiptExtractionFailed):
+        await vet_receipt.extract(b"bytes", "image/jpeg")
+    assert len(calls) == 2
+
+
+async def test_extract_succeeds_on_second_attempt(monkeypatch):
+    """첫 시도가 전송 오류로 죽어도, 두 번째 시도가 성공하면 정상 반환한다."""
+    calls: list[int] = []
+
+    async def _fails_then_succeeds(*_args, **_kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise TimeoutError("connection reset")
+        return ReceiptExtraction(status="unreadable", unreadable_reason="blurry")
+
+    monkeypatch.setattr(vet_receipt, "_generate_with_gemini", _fails_then_succeeds)
+    result = await vet_receipt.extract(b"bytes", "image/jpeg")
+    assert result.status == "unreadable"
+    assert len(calls) == 2
+
+
+async def test_extract_does_not_retry_a_valid_unreadable_answer(monkeypatch):
+    """모델이 정상적으로 낸 `status="unreadable"` 은 실패가 아니다 — 재시도하지 않는다."""
+    calls: list[int] = []
+
+    async def _once(*_args, **_kwargs):
+        calls.append(1)
+        return ReceiptExtraction(status="unreadable", unreadable_reason="not_a_receipt")
+
+    monkeypatch.setattr(vet_receipt, "_generate_with_gemini", _once)
+    result = await vet_receipt.extract(b"bytes", "image/jpeg")
+    assert result.status == "unreadable"
+    assert len(calls) == 1

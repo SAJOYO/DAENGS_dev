@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.core.storage import LocalBridgeStorage
-from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
+from daengs_backend.models import VET_REASON_CODES, VET_REASON_LABELS, VetVisit, VetVisitDraft
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
@@ -720,6 +720,34 @@ async def test_possible_duplicate_true_when_confirmed_match_exists(
     assert result.possible_duplicate is True
 
 
+async def test_possible_duplicate_recomputed_on_sha_reuse_path(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """M3 — real bug. 사진 재사용(멱등 ②) 경로는 예전에 `match.extracted` 를 통째로
+    베껴 `possible_duplicate` 가 그때 값에 갇혔다. 매칭되는 방문이 그 뒤에 확정돼도
+    안 켜졌다 — 이 테스트가 그 회귀를 막는다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+
+    # draft1 — 추출은 되지만 확정 안 하고 남긴다. 나중에 sha 재사용의 매치가 된다.
+    draft1, _t1, _c1 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft1, b"same-bytes")
+    result1 = await vet_service.extract_draft(svc_session, SVC_OWNER, draft1.id)
+    assert result1.possible_duplicate is False  # 아직 매칭되는 확정 기록이 없다
+
+    # draft1 과 무관한 다른 초안을 확정해 (pet_id, visited_on, total_krw) 매치를 만든다.
+    other, _t2, _c2 = await _start(svc_session, svc_store)
+    _upload(svc_storage, other, b"different-bytes")
+    await vet_service.extract_draft(svc_session, SVC_OWNER, other.id)
+    await vet_service.confirm_draft(svc_session, SVC_OWNER, other.id, _confirm_body())
+
+    # 같은 사진을 다시 올린다 — draft1 이 멱등 ② 로 매치된다(사진과 함께 재사용).
+    draft2, _t3, _c3 = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft2, b"same-bytes")
+    result2 = await vet_service.extract_draft(svc_session, SVC_OWNER, draft2.id)
+    assert result2.possible_duplicate is True  # 그 사이 확정된 매치를 다시 잰다
+
+
 # ── confirm — items 는 초안에서만 ───────────────────────────────────────
 
 
@@ -734,10 +762,11 @@ def _confirm_body(**kw) -> "vet_service.ConfirmDraftRequest":
     return vet_service.ConfirmDraftRequest(**defaults)
 
 
-async def test_confirm_reads_items_from_draft_not_request(
+async def test_confirm_reads_items_from_draft(
     svc_session, svc_store, svc_storage, monkeypatch
 ):
-    """요청 본문의 items 를 믿으면 앱이 동의 분기를 우회한다."""
+    """`raw_ocr_items` 는 초안에서만 온다 (`ConfirmDraftRequest` 에는 `items` 를 받는
+    필드가 없다 — L5, 요청 본문을 믿으면 앱이 동의 분기를 우회한다)."""
     _consent(svc_store, at=datetime.now(UTC), version="v1")
     draft, _t, _c = await _start(svc_session, svc_store)
     _upload(svc_storage, draft)
@@ -745,10 +774,9 @@ async def test_confirm_reads_items_from_draft_not_request(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
     stored_items = draft.extracted["items"]
 
-    body = _confirm_body(items=[{"name": "주입", "amount_krw": 1}])
+    body = _confirm_body()
     visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert visit.raw_ocr_items == stored_items
-    assert visit.raw_ocr_items != body.items
 
 
 async def test_confirm_without_consent_stores_empty_items(
@@ -820,6 +848,7 @@ async def test_confirm_is_idempotent_on_its_own_client_event_id(
 
 
 async def test_reason_options_puts_recent_first_then_the_rest(svc_session, svc_store):
+    """M4 — 코드만이 아니라 표시명도 같이 낸다 (`VET_REASON_LABELS`)."""
     svc_store.visits[uuid.uuid4()] = VetVisit(
         app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2026, 8, 1), total_krw=1000,
         reason_code="skin", client_event_id=uuid.uuid4(),
@@ -829,10 +858,14 @@ async def test_reason_options_puts_recent_first_then_the_rest(svc_session, svc_s
         reason_code="cardiac", client_event_id=uuid.uuid4(),
     )
     options = await vet_service.reason_options(svc_session, SVC_OWNER, SVC_PET)
-    assert options[0] == "cardiac"  # 가장 최근
-    assert options[1] == "skin"
-    assert set(options) == set(VET_REASON_CODES)
+    codes = [o.code for o in options]
+    assert codes[0] == "cardiac"  # 가장 최근
+    assert codes[1] == "skin"
+    assert set(codes) == set(VET_REASON_CODES)
     assert len(options) == len(VET_REASON_CODES)
+    by_code = {o.code: o.label for o in options}
+    assert by_code["skin"] == VET_REASON_LABELS["skin"]
+    assert by_code["cardiac"] == VET_REASON_LABELS["cardiac"]
 
 
 async def test_reason_options_rejects_pet_i_do_not_own(svc_session, svc_store):
@@ -949,8 +982,8 @@ def test_draft_response_carries_reason_options_recent_first(
     )
     _started, extracted = _extract(app_client, svc_storage, monkeypatch)
     body = extracted.json()
-    assert body["reason_options"][0] == "skin"
-    assert set(body["reason_options"]) == set(VET_REASON_CODES)
+    assert body["reason_options"][0] == {"code": "skin", "label": VET_REASON_LABELS["skin"]}
+    assert {o["code"] for o in body["reason_options"]} == set(VET_REASON_CODES)
 
 
 def test_extract_response_carries_extracted_fields_and_items(app_client, svc_storage, monkeypatch):
@@ -1120,7 +1153,9 @@ def test_reason_options_endpoint_is_not_shadowed_by_draft_id_route(app_client):
     """`/reason-options` 가 `/{draft_id}/...` 뒤에 있으면 이 요청이 그쪽으로 샌다."""
     r = app_client.get("/app/vet-visits/reason-options", params={"pet_id": str(SVC_PET)})
     assert r.status_code == 200, r.text
-    assert set(r.json()) == set(VET_REASON_CODES)
+    body = r.json()
+    assert {o["code"] for o in body} == set(VET_REASON_CODES)
+    assert all(o["label"] == VET_REASON_LABELS[o["code"]] for o in body)
 
 
 # ── bridge — local 저장소의 업로드/다운로드 (fix round 1) ──────────────

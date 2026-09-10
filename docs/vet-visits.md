@@ -207,6 +207,7 @@ class ReceiptExtraction(BaseModel):
 - 연속 숫자 8자리 이상
 - 사업자등록번호 모양 `\d{3}-\d{2}-\d{5}`
 - 카드 모양 `\d{4}[- ]\d{4}[- ]\d{4}`
+- 휴대폰 모양 `\d{2,3}-\d{3,4}-\d{4}`
 
 ### 프롬프트 규칙
 
@@ -285,7 +286,7 @@ hospital_name, hospital_address, hospital_phone
 items[]                [{name, amount_krw}, ...]
 suggested_reason_code  코드 | null
 possible_duplicate     bool
-reason_options[]       이 강아지의 최근 사유가 앞, 그 뒤 전체 목록
+reason_options[]       [{code, label}, ...] — 이 강아지의 최근 사유가 앞, 그 뒤 전체 목록
 ```
 
 - **`possible_duplicate`** — 같은 `(pet_id, visited_on, total_krw)` 로 **확정된** 기록이 이미
@@ -293,7 +294,10 @@ reason_options[]       이 강아지의 최근 사유가 앞, 그 뒤 전체 목
   손쓸 수 있는 유일한 순간인 확인 화면에서 "같은 날 같은 금액 기록이 있어요" 라고 말해 주려는
   플래그다.
 - **`reason_options`** — [edit] 의 드롭다운. 이 강아지가 실제로 겪은 사유가 맨 앞에 오는 것이
-  적중률이 제일 높다. 앱이 목록을 하드코딩하지 않게 서버가 준다.
+  적중률이 제일 높다. **코드만이 아니라 표시명(`code`·`label`)을 같이 낸다** — 코드만
+  주면 앱이 17개 한글 표시명을 직접 하드코딩해야 하고, 그것이 §1 에서 닫힌 목록으로
+  막으려던 드리프트가 다시 새는 자리다. `GET /app/vet-visits/reason-options` 도 같은 모양
+  (`[{code, label}, ...]`)을 낸다.
 
 ### 확인 화면에서 고칠 수 있는 것
 
@@ -362,7 +366,7 @@ confirm:  raw_ocr_items ← **초안에서만** 읽는다
 | 층 | 무엇을 잡나 | 어떻게 |
 | --- | --- | --- |
 | `vet_visit_drafts` 의 `UNIQUE (app_user_id, client_event_id)` | 같은 화면에서 두 번 탭 | 두 번째 요청은 **201 이 아니라 200 으로 있던 초안을 그대로 돌려준다.** 사진도 Gemini 도 다시 안 간다 |
-| `receipt_sha256` | 앱이 재시작해 **새 키로 같은 사진** | 추출 **전에** 조회한다. 같은 바이트의 초안이 있으면 그것을 돌려주고, 확정된 기록이 있으면 `possible_duplicate` 를 켠다 |
+| `receipt_sha256` | 앱이 재시작해 **새 키로 같은 사진** | 추출 **전에** 조회한다. 같은 바이트의 초안이 있으면 Gemini 를 다시 안 부르고 그 결과를 재사용한다 — **이 칸의 일은 그것뿐이다.** `possible_duplicate` 는 이 sha 매치와 무관한 별도 조회다(아래) |
 | `extracted_at IS NOT NULL` | extract 를 두 번 부름 | 저장된 결과를 돌려준다. **Gemini 재호출 없음** |
 
 `vet_visits` 의 멱등키는 이 셋 **뒤에** 선다. 확정은 사람이 한 번 누르는 버튼이라 실제로

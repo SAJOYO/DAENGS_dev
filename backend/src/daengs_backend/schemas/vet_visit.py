@@ -57,6 +57,15 @@ class VetVisitReceiptItemOut(BaseModel):
     amount_krw: int
 
 
+class VetVisitReasonOptionOut(BaseModel):
+    """[edit] 드롭다운 한 줄 — 코드와 표시명을 같이 낸다 (`services.vet_visit.
+    ReasonOption` 과 같은 모양). 표시명을 여기서 안 실으면 앱이 17개 한글 표시명을
+    직접 하드코딩해야 하고, 그것이 닫힌 목록으로 막으려던 드리프트다 (docs §2)."""
+
+    code: VetVisitReasonCode
+    label: str
+
+
 class VetVisitDraftResponse(BaseModel):
     """확인 화면 하나를 채우는 값 전부 (docs §2 "초안 응답").
 
@@ -84,8 +93,9 @@ class VetVisitDraftResponse(BaseModel):
     is_emergency: bool
     #: 같은 `(pet_id, visited_on, total_krw)` 로 **확정된** 기록이 이미 있다.
     possible_duplicate: bool
-    #: [edit] 드롭다운 — 이 강아지가 실제로 겪은 사유가 맨 앞이다.
-    reason_options: list[str]
+    #: [edit] 드롭다운 — 이 강아지가 실제로 겪은 사유가 맨 앞이다. 코드만이 아니라
+    #: 표시명도 같이 온다 — 앱이 한글 라벨을 하드코딩하지 않게.
+    reason_options: list[VetVisitReasonOptionOut]
 
 
 class VetVisitConfirmRequest(BaseModel):
@@ -145,6 +155,7 @@ __all__ = [
     "VetVisitDraftResponse",
     "VetVisitListResponse",
     "VetVisitReasonCode",
+    "VetVisitReasonOptionOut",
     "VetVisitReceiptItemOut",
     "VetVisitResponse",
     "VetVisitStartRequest",

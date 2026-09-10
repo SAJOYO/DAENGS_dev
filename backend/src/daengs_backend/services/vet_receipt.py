@@ -190,18 +190,34 @@ def _validate_extraction(raw: object) -> ReceiptExtraction | None:
         return None
 
 
+#: 전송 오류(타임아웃·API 오류)의 시도 횟수 — **한 번만 재시도한다** (docs §2 "못 읽었을 때").
+#: 모델이 정상적으로 답한 `status="unreadable"` 은 실패가 아니라 이 재시도의 대상이 아니다.
+VET_RECEIPT_TRANSPORT_ATTEMPTS = 2
+
+
 async def extract(image_bytes: bytes, content_type: str) -> ReceiptExtraction:
     """영수증 사진 → `ReceiptExtraction`. **DB 를 모른다** (#353).
 
     전송·타임아웃 등 우리 쪽 문제는 `ReceiptExtractionFailed` 로 오른다 — 라우터가
     `status="failed"` 로 옮긴다. 모델이 "이 사진은 읽을 수 없다" 고 답한 것은 다르다
     — 정상적으로 반환된 `status="unreadable"` 이다.
+
+    **전송 오류는 한 번만 재시도한다** (docs §2) — 총 두 번 부른다. 모델이 정상적으로
+    돌려준 값을 파싱한 뒤(스키마가 안 맞아도)는 재시도하지 않는다 — 그건 모델의 답이지
+    전송 실패가 아니다.
     """
     prompt = build_receipt_prompt()
-    try:
-        raw = await _generate_with_gemini(image_bytes, content_type, prompt)
-    except Exception as exc:
-        raise ReceiptExtractionFailed(str(exc)) from exc
+    last_exc: Exception | None = None
+    raw: object = None
+    for attempt in range(VET_RECEIPT_TRANSPORT_ATTEMPTS):
+        try:
+            raw = await _generate_with_gemini(image_bytes, content_type, prompt)
+            last_exc = None
+            break
+        except Exception as exc:  # noqa: BLE001 - 전송 계층 오류는 모두 재시도 대상
+            last_exc = exc
+    if last_exc is not None:
+        raise ReceiptExtractionFailed(str(last_exc)) from last_exc
 
     extraction = _validate_extraction(raw)
     if extraction is None:
@@ -217,6 +233,7 @@ __all__ = [
     "VET_RECEIPT_MAX_OUTPUT_TOKENS",
     "VET_RECEIPT_MODEL_ID",
     "VET_RECEIPT_PROMPT_VERSION",
+    "VET_RECEIPT_TRANSPORT_ATTEMPTS",
     "ReceiptExtraction",
     "ReceiptExtractionFailed",
     "ReceiptItem",

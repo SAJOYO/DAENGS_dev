@@ -184,7 +184,9 @@ app.include_router(pet.router)
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
 # 진료비 기록(`/app/vet-visits` · #353) — 영수증 사진에서 읽고, 유저가 확정한
-# 것만 남긴다. 라우터가 CurrentAppUser 로 잠겨 있습니다.
+# 것만 남긴다. 여섯 개 엔드포인트가 CurrentAppUser 로 잠겨 있습니다 — 예외는
+# 사진 bridge 둘(`_bridge/upload`·`_bridge/download`)뿐이고, 그 둘은 추측 불가능한
+# 키 + exclusive=True 한 번뿐인 쓰기로 안전을 대신합니다(라우터 머리말).
 app.include_router(vet_visit.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —

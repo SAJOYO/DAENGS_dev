@@ -4,7 +4,14 @@
 "언제 확정 행이 생기는가" 는 전부 `services/vet_visit.py` 가 정한다.
 
 **경로가 `/app/` 아래인 이유**는 앱 회원 전용이기 때문이다 (`/app/care-events`·
-`/app/walks` 와 같은 규칙). 라우터 자체가 `CurrentAppUser` 로 잠겨 있다.
+`/app/walks` 와 같은 규칙). 여섯 개 엔드포인트는 각자 `CurrentAppUser` 로 잠겨 있다.
+
+⚠️ **예외가 둘 있다 — `/_bridge/upload`·`/_bridge/download`.** 이 둘은 인증 헤더를
+안 받는다(Signed URL 을 흉내 내는 자리, `screening.py` 와 같은 규칙). 대신 **키 자체가
+자격이다** — 추측 불가능한 uuid 가 들어 있고, backend 가 실제로 발급한 키인지를
+`vet_repo.find_draft_by_image_key` 로 DB 에 대조하며, 업로드는 `exclusive=True` 라
+그 키로 한 번만 쓸 수 있다. 그래서 인증 없이도 안전하다 — 자세한 근거는 두 함수
+바로 위 주석.
 """
 
 import uuid
@@ -17,12 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.models import VET_REASON_CODES, VetVisit, VetVisitDraft
+from daengs_backend.models import VET_REASON_CODES, VET_REASON_LABELS, VetVisit, VetVisitDraft
 from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.schemas.vet_visit import (
     VetVisitConfirmRequest,
     VetVisitDraftResponse,
     VetVisitListResponse,
+    VetVisitReasonOptionOut,
     VetVisitReceiptItemOut,
     VetVisitResponse,
     VetVisitStartRequest,
@@ -51,8 +59,12 @@ def _receipt_image_url(draft: VetVisitDraft) -> str | None:
     )
 
 
+def _reason_option_out(option: vet_service.ReasonOption) -> VetVisitReasonOptionOut:
+    return VetVisitReasonOptionOut(code=option.code, label=option.label)
+
+
 def _to_draft_response(
-    result: vet_service.DraftExtraction, reason_options: list[str]
+    result: vet_service.DraftExtraction, reason_options: list[vet_service.ReasonOption]
 ) -> VetVisitDraftResponse:
     extraction = result.extraction
     return VetVisitDraftResponse(
@@ -74,7 +86,7 @@ def _to_draft_response(
         suggested_reason_code=extraction.suggested_reason_code if extraction else None,
         is_emergency=extraction.is_emergency if extraction else False,
         possible_duplicate=result.possible_duplicate,
-        reason_options=reason_options,
+        reason_options=[_reason_option_out(o) for o in reason_options],
     )
 
 
@@ -130,17 +142,22 @@ async def start_draft(
 
 # ⚠️ `/{draft_id}` 보다 먼저 선언한다. `/app/pets/primary` 가 그 순서 때문에 422 를
 #    낸 적이 있어 같은 규칙을 지킨다 (`care_event.py` 의 `/today` 와 같은 이유).
-@router.get("/reason-options", response_model=list[str])
+@router.get("/reason-options", response_model=list[VetVisitReasonOptionOut])
 async def get_reason_options(
     user: CurrentAppUser,
     session: Session,
     pet_id: Annotated[uuid.UUID, Query()],
-) -> list[str]:
-    """[edit] 드롭다운의 목록. 이 강아지가 실제로 겪은 사유가 맨 앞이다."""
+) -> list[VetVisitReasonOptionOut]:
+    """[edit] 드롭다운의 목록. 이 강아지가 실제로 겪은 사유가 맨 앞이다.
+
+    코드만이 아니라 표시명도 같이 낸다 — 앱이 17개 한글 표시명을 하드코딩하면
+    닫힌 목록을 서버가 지키는 이유(docs §1)가 그 자리에서 다시 샌다.
+    """
     try:
-        return await vet_service.reason_options(session, user.app_user_id, pet_id)
+        options = await vet_service.reason_options(session, user.app_user_id, pet_id)
     except vet_service.VetVisitNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    return [_reason_option_out(o) for o in options]
 
 
 @router.get("", response_model=VetVisitListResponse)
@@ -198,7 +215,10 @@ async def extract_draft(
             session, user.app_user_id, result.draft.pet_id
         )
     except vet_service.VetVisitNotFoundError:  # pragma: no cover — 초안이 있으면 강아지도 있다
-        reason_opts = list(VET_REASON_CODES)
+        reason_opts = [
+            vet_service.ReasonOption(code=code, label=VET_REASON_LABELS[code])
+            for code in VET_REASON_CODES
+        ]
     return _to_draft_response(result, reason_opts)
 
 

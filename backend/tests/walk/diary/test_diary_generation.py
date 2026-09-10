@@ -114,7 +114,10 @@ def test_photo_approval_and_entry_revision_checked_before_spending(api):
 
 def test_opt_in_ownership_validation_and_explicit_target(api, monkeypatch):
     client, state, _ = api
-    assert client.get("/app/walks/storyboard/capabilities").json()["diary_formats"] == [FORMAT]
+    assert client.get("/app/walks/storyboard/capabilities").json()["diary_formats"] == [
+        FORMAT,
+        "walk-diary-board-v1",
+    ]
     missing = body(state)
     missing.pop("target_scene_count")
     assert client.post(PATH, json=missing).status_code == 422

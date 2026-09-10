@@ -80,3 +80,79 @@ DB/Redis/HTTP 경합/실제 앱 사용성은 이 실험에 포함하지 않는�
 이는 문맥 전체를 빼는 비교가 아니라, 주입 블록이 최신 쿼리와 경쟁한다는 가설을 분해하기 위한 비교다.
 운영 도입이나 일반적인 개선을 전제하지 않는다. 주차 퇴행 복구와 반대 방향 undo 둘의 보존을 같이 본다.
 실행: `uv run --no-sync python -m daengs_evals.place_conversation.context_followup --live --repeat 3 --key-file C:\path\to\.env`.
+
+## 완료한 결과
+
+본 비교는 `e9cfa82`, 후속은 `482d8ef`의 평가 코드로 실행했다. 두 실행 모두 시작 시 clean이며,
+원본 metadata의 코드/입력/fixture 해시를 보존했다.
+총 **102회 실제 Gemini 호출**, 제공자/통신 오류 0회다. 아래 점수는 의도적으로 어려운 고정 턴의 판정이며
+일반 자연어 정확도나 서비스 전체 대화 성공률이 아니다.
+
+| 비교 | 현재 입력 A | 문맥 보강 B |
+| --- | --- | --- |
+| 대상 | 동일 14턴 × 3회 | 동일 14턴 × 3회 |
+| 작업 완료 | 9통과 / 33실패 | 12통과 / 30실패 |
+| 원본 reference_index=0 계약 위반 | 3회 | 0회 |
+| 입력 토큰 중앙값 | 2,208 | 2,949 |
+| 모델 호출 지연 중앙값(평가 간격 제외) | 2,476ms | 3,075ms |
+
+42쌍 중 완료 개선 6쌍(X03/X14), 퇴행 3쌍(X13), 완료 판정 동일 33쌍이다.
+X08은 그 동일 판정 중 참조 오류만 개선된 3쌍이다. 재미 X05의 양쪽 6회는 제품 정책에 민감한 판정이다.
+각 대상/arm에서 3회 계획·제공 문구·결과·판정이 동일했다.
+
+| 사례 | 관측 | 해석 |
+| --- | --- | --- |
+| 수동 추가 취소, 반대 방향 반사실 | A는 모두 무변경, B는 각각 cafe/restaurant 복원 | 이 두 경우는 **문맥만 보강해 기존 실행 도구로 해결**됐다 |
+| “거기 없던데?” | A는 index=0 차단, B는 index=1로 대상 식별 | 단서는 참조에 도움이 됐지만 존재 제보를 selection_reason으로 답하는 문제는 남음 |
+| 새 주차 요청 | A는 cafe-26 반환, B는 parking=keep/refresh=true로 같은 20개 표시 | 최신 요청을 누락하는 문맥 주입 퇴행 |
+| 더 보기 | 양쪽 같은 20개 | 잘림 여부를 알려줘도 다음 후보를 실행하는 수단은 생기지 않음 |
+| A 제외 | 양쪽 A를 그대로 표시 | 이름/ID 대응을 알려줘도 현 스키마에 개별 장소 제외 동작은 없음 |
+| 불만·폐업 확인 | 실제 직전 답변/장소 단서를 줘도 같은 일반 안내·선택 이유 | 현재 의미 표현과 답변 경계에서 다음 행동으로 연결되지 않음 |
+
+후속에서 같은 정보의 **query 키만 마지막으로 옮긴 조건은 9/9 통과**했다.
+주차 cafe-26을 다시 찾고 양방향 수동 취소도 유지했다.
+중복된 과거 user_query만 제거한 조건은 **6통과/3실패**로 주차 퇴행이 남았다.
+과거 발화가 원래 history에도 있기 때문에 이를 “과거 문맥 전체 제거”로 해석하면 안 된다.
+이는 X03/X13/X14 세 요청의 사후 대조 결과이며 query-last로 14개 전부를 재평가한 결과가 아니다.
+특정 입력 배치가 모델 내부에서 작동한 원리까지 입증한 것은 아니다.
+
+## 원본과 독립 확인
+
+- [본 A/B 실행](../../backend/evals/place_conversation/runs/20260910T083600Z-e9cfa82-194ff74278/):
+  [원본 관측](../../backend/evals/place_conversation/runs/20260910T083600Z-e9cfa82-194ff74278/observations.jsonl),
+  [개별 의미 검토](../../backend/evals/place_conversation/runs/20260910T083600Z-e9cfa82-194ff74278/reviews.jsonl),
+  [비교 집계](../../backend/evals/place_conversation/runs/20260910T083600Z-e9cfa82-194ff74278/comparison.json).
+- [입력 배치 후속 실행](../../backend/evals/place_conversation/runs/20260910T084740Z-482d8ef-08ec65d41b/):
+  [원본 관측](../../backend/evals/place_conversation/runs/20260910T084740Z-482d8ef-08ec65d41b/observations.jsonl),
+  [개별 의미 검토](../../backend/evals/place_conversation/runs/20260910T084740Z-482d8ef-08ec65d41b/reviews.jsonl),
+  [비교·사용량·검증](../../backend/evals/place_conversation/runs/20260910T084740Z-482d8ef-08ec65d41b/comparison.json).
+
+Codex가 실제 출력의 의미를 검토했으며 사용자 직접 채점은 아니다. 관측 자체는 덮어쓰지 않았다.
+본 비교의 [wire 감사](../../backend/evals/place_conversation/runs/20260910T083600Z-e9cfa82-194ff74278/intervention-audit.json)는
+42개 A 입력이 과거 production 입력과 같고, 각 A/B 쌍의 직전 상태가 같으며 input.context만 다름을 실제 요청으로 확인한다.
+후속 [wire 감사](../../backend/evals/place_conversation/runs/20260910T084740Z-482d8ef-08ec65d41b/intervention-audit.json)는
+18개 입력에서 키 순서 또는 중복 과거 user_query만 달라짐을 확인한다.
+기록한 source 해시는 각 실행 이후 그대로다.
+
+후속 배치 함수 검증:
+`uv run --no-sync pytest -q -rs tests/place/conversation/test_context_followup.py` **2통과, skip 0**(10.85초).
+본 비교의 14개와 합쳐 **고유 테스트 16개**이며 전체 서비스 테스트가 아니다.
+추가한 Python 4파일 ruff 통과. 전체 pytest, uv run check, DB/Redis/HTTP 경합/Android/compose 검증은 실행하지 않았다.
+운영 코드는 변경하지 않았고 머지/배포하지 않는다. PR CI는 현재 docs/ci로 이동되어 자동 실행되지 않는다.
+
+## 앞선 판단에서 수정할 점과 다음 구조
+
+“문맥이 없어도 실행 기능부터 추가해야 한다”는 식으로 묶을 근거는 부족했다.
+**이번 카테고리 수동 취소는 변경 전후 단서를 주면 현재 스키마와 실행기로 가능했다.**
+반면 범용 undo가 모든 변경을 정확히 역전하고 경합을 처리한다는 검증은 아니므로,
+운영에 옮길 때는 실제 확정 변경 전후를 revision과 함께 보존하고 사용 범위를 정해야 한다.
+
+다음 구현 후보는 필요한 현재 화면/직전 확정 변경을 명시적인 문맥으로 만들고,
+사용자의 최신 쿼리를 문맥 뒤에 분명하게 배치하는 것이다.
+정보를 많이 복제할수록 좋다고 보지 않는다. 이번 묶음은 선택 장소·전체 표시 목록·이력을 함께 넣었으므로
+필드별 최소 필요량과 처음 보는 표현에 대한 효과는 후속 검증이 필요하다.
+
+이와 별개로 다음 후보/개별 장소 제외/정보 오류 제보는 현 Interpretation의 동작·속성으로 표현하기 어렵다.
+불만을 이해했는지를 제한된 스키마 출력만으로 단정할 수는 없다.
+다만 현재 출력과 서버 응답이 실제 다음 행동으로 이어지지 않는다는 관측은 분명하다.
+문맥 전달 개선을 먼저 작게 적용할 후보로 삼고, 남은 실패 유형별로 필요한 의미/실행/응답 계약을 추가하는 순서를 제안한다.

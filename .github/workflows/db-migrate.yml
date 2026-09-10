@@ -80,6 +80,9 @@ jobs:
       - name: Inspect running services and schema
         shell: powershell
         run: |
+          docker context ls --format '{{.Name}}'
+          Get-Process -Name '*docker*' -ErrorAction SilentlyContinue | Select-Object ProcessName, Id
+          Get-Service -Name 'com.docker.service' -ErrorAction SilentlyContinue | Select-Object Name, Status
           $names = @(docker ps --format '{{.Names}}')
           if ($LASTEXITCODE -ne 0) { throw 'docker inventory failed' }
           Write-Host ('Running containers: ' + ($names -join ', '))

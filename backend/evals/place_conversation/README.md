@@ -9,11 +9,13 @@
 | [run-record.example.json](run-record.example.json) | 실행 기록 형식 예시. 실제 실행 결과가 아님 |
 | [transfer.v1.jsonl](transfer.v1.jsonl) | 첫 관측 뒤 작성한 별도 전이 검사 4개. 원래 23개와 합산하지 않음 |
 | [policy.v1.jsonl](policy.v1.jsonl) / [fixtures.policy.v1.json](fixtures.policy.v1.json) | 확인 후속 발화 10개와 불투명 ID fixture |
+| [corrections.v1.jsonl](corrections.v1.jsonl) | 교정 5개와 사용자 불만·재탐색 원문/확장 9개. 27단계 중 수동 이벤트 2개 |
 | `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
 [1차 연구 결과](../../../docs/place/conversation-research-2026-09-10.md)에 실행별 링크와 구조 제안을 정리했다.
 [채택한 실행 정책](../../../docs/place/conversation-policy.md)은 PR #417의 해석·확인·사실 응답 경계를 설명한다.
+[교정·재탐색 연구](../../../docs/place/conversation-corrections-2026-09-10.md)는 그 정책을 고정한 후속 실험이다.
 `cases.v1.jsonl`은 시나리오 **명세**다. `setup`은 HTTP 요청이나 FilterState의 직접 직렬화가 아니며,
 이 값을 실제 상태/fixture로 바꾸는 어댑터는 `src/daengs_evals/place_conversation/`에 있다.
 예를 들어 `parking=required_true`는 원본의 의미를 나타내며 production enum이 아니다.
@@ -49,6 +51,8 @@ uv run python -m daengs_evals.place_conversation.runner --live --ids PC-E05,PC-E
 uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/transfer.v1.jsonl --key-file C:\path\to\.env
 # 확인 후속 발화와 불투명 ID의 사실 설명
 uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/policy.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json --key-file C:\path\to\.env
+# 교정·불만 뒤 재탐색: 사용자 원문 연속/단독, 순차 수동 조작
+uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/corrections.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json --repeat 3 --key-file C:\path\to\.env
 # false와 unknown이 답변 입력에서 구별되는지
 uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run> --evidence-gap
 # 실제 제안에 대한 구조화된 동의/거절 재생 (policy-context E08 실행 폴더)
@@ -77,6 +81,11 @@ JUnit의 scenario_id/trace 속성에 경합별 확정·복구 상태를 남긴�
 확정 필터를 읽고 `reviews.jsonl`에 근거 충실도와 작업 완료 여부를 따로 기록한다.
 관측의 상태는 변경하지 않고, 리포트에서 관측과 검토를 합친다.
 현재 runner는 `production-policy-v1`만 실행하며 답변은 커밋된 receipt에서 서버가 렌더링한다.
+순차 `manual` 이벤트는 production prepare에 실제 PlaceSearchRequest를 전달하며 모델을 호출하지 않는다.
+관측의 event는 원래 입력, result_delta는 직전 목록 대비 추가/제거 ref다. 동일 ref가 다른 source에
+존재하는 fixture에서는 이 지표를 사용하지 않는다. 이번 fixture는 ref가 모두 유일하다.
+`min_new_refs`는 검색 호출 성공과 별개로 실제 새 후보가 있는지 검사한다. HTTP 경합 이벤트는
+여전히 별도 하네스 대상이며 이 확장은 Redis CAS나 앱 클릭 검증이 아니다.
 과거 `production-baseline`, `prompt-only`, `policy-context`와 원본 계획 재생 진단은 **ac2b062 체크아웃**에서 실행한다.
 원본 관측은 보존하며, 현재 코드로 과거 variant 이름의 결과를 생성하지 않는다.
 `pending_replay`의 저장된 계획·동의 재생은 당시 구조 연구용이며 운영 정책은 conversation/policy.py에 있다.

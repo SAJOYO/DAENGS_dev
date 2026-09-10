@@ -86,9 +86,10 @@ async def run_case(case, fixtures, provider, repetition):
             "variant": "production-policy-v1",
             "layer": case["layer"],
             "query": step.get("input"),
+            "event": {k: v for k, v in step.items() if k not in {"expect", "review"}},
             "before": state.model_dump(mode="json"),
         }
-        if step["action"] != "chat":
+        if step["action"] not in {"chat", "manual"}:
             record.update(
                 status="not_run", reason="Controlled API scenario requires separate HTTP harness."
             )
@@ -103,22 +104,26 @@ async def run_case(case, fixtures, provider, repetition):
         started = perf_counter()
         try:
             request = PrepareRequest(
-                mode="chat",
-                query=step["input"],
+                mode=step["action"],
+                query=step.get("input", ""),
+                manual=step.get("manual"),
                 previous=state,
                 visible_order=state.snapshot.display_order if state.snapshot else (),
                 visible_selected=state.selected,
             )
             prepared = await service.prepare(None, request)
             answer_request = AnswerRequest(
-                query=step["input"], committed_revision=prepared.state.revision, prepared=prepared
+                query=step.get("input", ""),
+                committed_revision=prepared.state.revision,
+                prepared=prepared,
             )
             answer = await compose_answer(answer_request, provider)
             # Acceptance executes the stored candidate without another semantic plan.
             # A new independent request also clears pending, but must NOT be graded
             # against the cancelled proposal's candidate.
             accepting_pending = (
-                state.pending_proposal is not None
+                step["action"] == "chat"
+                and state.pending_proposal is not None
                 and prepared.receipt.action == "execute"
                 and len(provider.plans) == plan_start
             )
@@ -131,6 +136,16 @@ async def run_case(case, fixtures, provider, repetition):
                 prepared=prepared.model_dump(mode="json"),
                 served_answer=answer.model_dump(mode="json"),
                 returned_refs=[h.place.key.ref for h in snapshot_hits(prepared.state.snapshot)],
+                result_delta={
+                    "added": sorted(
+                        {h.place.key.ref for h in snapshot_hits(prepared.state.snapshot)}
+                        - {h.place.key.ref for h in snapshot_hits(state.snapshot)}
+                    ),
+                    "removed": sorted(
+                        {h.place.key.ref for h in snapshot_hits(state.snapshot)}
+                        - {h.place.key.ref for h in snapshot_hits(prepared.state.snapshot)}
+                    ),
+                },
             )
             state = prepared.state
         except (GeminiIntentProposerError, ValueError, RuntimeError, TimeoutError) as error:

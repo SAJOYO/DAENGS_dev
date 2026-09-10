@@ -22,3 +22,15 @@ class TerritorySitePage(BaseModel):
     count: int
     truncated: bool
     sites: tuple[TerritorySite, ...]
+
+
+class TerritorySiteLocation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    site_id: str
+    lat: float
+    lng: float
+
+
+class TerritorySiteLocations(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    sites: tuple[TerritorySiteLocation, ...]

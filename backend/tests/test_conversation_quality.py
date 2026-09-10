@@ -112,3 +112,99 @@ def test_repair_applicable_needs_only_one_target_turn_at_or_after_index_two():
         repair_applicable=True,
     )
     assert case.target_turns == [1, 3]
+
+
+# --- Task 3: 루브릭 · 적용가능성 · 사용성 게이트 ---
+
+
+def test_safety_failure_makes_the_turn_unusable_regardless_of_other_axes():
+    from daengs_evals.conversation_quality.rubric import AxisScores, derive_usability
+
+    u = derive_usability(
+        AxisScores(response_mode_fit=2, context_continuity=2, repair_success=2),
+        safety_failed=True,
+    )
+    assert u.usable is False and u.reason == "safety"
+
+
+def test_response_mode_fit_zero_makes_the_turn_unusable():
+    from daengs_evals.conversation_quality.rubric import AxisScores, derive_usability
+
+    u = derive_usability(AxisScores(response_mode_fit=0), safety_failed=False)
+    assert u.usable is False and u.reason == "response_mode_fit"
+
+
+def test_repair_zero_is_unusable_only_when_repair_was_applicable():
+    from daengs_evals.conversation_quality.rubric import AxisScores, derive_usability
+
+    assert (
+        derive_usability(
+            AxisScores(response_mode_fit=2, repair_success=0), safety_failed=False
+        ).usable
+        is False
+    )
+    # 복구가 해당 없으면 None 이고, None 은 실패가 아니다
+    assert (
+        derive_usability(
+            AxisScores(response_mode_fit=2, repair_success=None), safety_failed=False
+        ).usable
+        is True
+    )
+
+
+def test_axes_are_never_summed_into_a_total():
+    from daengs_evals.conversation_quality.rubric import AxisScores
+
+    assert not hasattr(AxisScores(response_mode_fit=2), "total")
+    assert "total" not in AxisScores.model_fields
+    assert "overall" not in AxisScores.model_fields
+
+
+def test_not_asking_is_not_penalised_when_no_input_was_needed():
+    from daengs_evals.conversation_quality.rubric import applicability
+
+    case = _case(user_input_needed=False, state_snapshot={})
+    applic = applicability(case, 1)
+    assert applic["response_mode_fit"] is True
+    # 상태가 없으면 상태를 안 썼다고 감점하지 않는다 — 잴 수 없으면 False(해당 없음)다
+    assert applic["context_continuity"] is False
+
+
+def test_axis_with_nothing_to_measure_is_not_applicable_rather_than_zero():
+    from daengs_evals.conversation_quality.rubric import applicability
+
+    # repair_applicable=False 인 케이스에서는 repair_success 를 잴 수 없다 —
+    # 0 점이 아니라 False(해당 없음)로 나와야 한다.
+    case = _case()
+    assert case.repair_applicable is False
+    assert applicability(case, 1)["repair_success"] is False
+
+
+def test_superficial_profile_mention_does_not_count_as_state_use():
+    from daengs_evals.conversation_quality.rubric import StateAudit
+
+    audit = StateAudit(
+        relevant_state_available=True,
+        relevant_state_used=True,
+        state_used_correctly=False,
+        unsupported_or_superficial_personalization=True,
+    )
+    # 상태 감사는 사실 기록이지 점수가 아니다 — 점수로 승격되는 칸이 없어야 한다
+    assert "score" not in StateAudit.model_fields
+    assert audit.unsupported_or_superficial_personalization is True
+
+
+def test_repair_applicability_is_per_target_turn_not_per_case():
+    # Task 2 의 관찰 케이스: target_turns=[1, 5, 7], repair_applicable=True.
+    # 턴 1 은 앞에 복구할 assistant 턴이 없어 repair_success 의 대상이 될 수 없다 —
+    # 케이스 단위로 답하면 턴 1 에서도 복구를 재려 하거나(오판) 턴 1 을 통째로
+    # 빼야 한다(스펙의 헤드라인 실패를 놓친다). 그래서 적용가능성은 턴마다 갈린다.
+    from daengs_evals.conversation_quality import CASES_V1_PATH
+    from daengs_evals.conversation_quality.cases import load_cases
+    from daengs_evals.conversation_quality.rubric import applicability
+
+    observed = next(
+        c for c in load_cases(CASES_V1_PATH) if c.case_id == "cq_observed_wellness_repair_01"
+    )
+    assert applicability(observed, 1)["repair_success"] is False
+    assert applicability(observed, 5)["repair_success"] is True

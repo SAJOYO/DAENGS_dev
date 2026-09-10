@@ -138,8 +138,10 @@ async def finish(factory, ticket, result):
             "status": result.status,
             "reason": result.reason,
             "provenance": {
-                "provider": "place-search" if job.tag == "space.facility" else "unconfigured",
-                "operation": "/v2/places/search" if job.tag == "space.facility" else None,
+                "provider": result.provider
+                or ("place-search" if job.tag == "space.facility" else "unconfigured"),
+                "operation": result.operation
+                or ("/v2/places/search" if job.tag == "space.facility" else None),
                 "retrieved_at": result.retrieved_at,
                 "temporal_basis": "lookup_snapshot" if result.retrieved_at else "unknown",
                 "policy_version": job.policy_version,

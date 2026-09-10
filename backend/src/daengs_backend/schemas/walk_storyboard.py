@@ -32,9 +32,12 @@ class StoryboardRequest(BaseModel):
     bundle_format: BundleFormat = "walk-storyboard-candidates-v1"
     target_scene_count: int | None = Field(default=None, ge=1, le=50)
     expected_photo_manifest: PhotoManifestRef | None = None
+    preparation_budget_ms: int | None = Field(default=None, ge=0, le=10_000)
 
     @model_validator(mode="after")
     def diary_options(self):
+        if self.preparation_budget_ms is not None and self.bundle_format != BOARD_FORMAT:
+            raise ValueError("publication budget requires the base board format")
         if self.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
             if self.target_scene_count is None:
                 raise ValueError("diary requires an explicit target_scene_count")

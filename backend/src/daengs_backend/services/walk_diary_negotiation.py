@@ -11,7 +11,7 @@ def stored_format(row):
     if not isinstance(raw, dict):
         return None
     kind = raw.get("format")
-    if kind == "walk-diary-reservation-v1":
+    if kind in {"walk-diary-reservation-v1", "walk-diary-preparation-v1"}:
         return raw.get("bundle_format")
     if kind == "walk-diary-board-storage-v1":
         return BOARD_FORMAT

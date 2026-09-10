@@ -91,3 +91,72 @@ async def test_cancelled_new_lease_stays_typed_and_recovers_after_expiry(board_d
 
         recovered = await generate_diary(db, OWNER, WALK, spec(), writer=write)
     assert recovered.status == "ready" and recovered.generation == 2
+
+
+async def test_publication_deadline_survives_disconnect_and_get_wins_over_late_writer(
+    board_database,
+):
+    factory = board_database
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def write(source, prepared):
+        entered.set()
+        await release.wait()
+        return assemble_diary(source, prepared.plan, None)
+
+    async def generate():
+        async with factory() as db:
+            return await generate_diary(
+                db, OWNER, WALK, spec(preparation_budget_ms=10000), writer=write
+            )
+
+    task = asyncio.create_task(generate())
+    try:
+        await asyncio.wait_for(entered.wait(), 10)
+        async with factory() as db:
+            row = await db.get(WalkStoryboard, WALK)
+            marker = deepcopy(row.bundle)
+            assert marker["format"] == "walk-diary-preparation-v1"
+            marker["deadline_at"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+            row.bundle = marker
+            await db.commit()
+        async with factory() as db:
+            published = await get_diary(db, OWNER, WALK, 3, BOARD_FORMAT)
+        assert published.status == "ready" and published.generation == 1
+        assert published.bundle.model_dump(mode="json") == marker["fallback"]["bundle"]
+        release.set()
+        late = await asyncio.wait_for(task, 10)
+        assert late.bundle == published.bundle and late.generation == published.generation
+        async with factory() as db:
+            repeated = await generate_diary(
+                db, OWNER, WALK, spec(preparation_budget_ms=10000), writer=write
+            )
+        assert repeated.bundle == published.bundle and repeated.generation == 1
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_cancelled_publication_is_recovered_from_saved_jsonb_on_another_connection(
+    board_database,
+):
+    factory = board_database
+
+    async def cancel(*_):
+        raise asyncio.CancelledError
+
+    async with factory() as db:
+        with pytest.raises(asyncio.CancelledError):
+            await generate_diary(db, OWNER, WALK, spec(preparation_budget_ms=10000), writer=cancel)
+    async with factory() as db:
+        row = await db.get(WalkStoryboard, WALK)
+        marker = deepcopy(row.bundle)
+        marker["deadline_at"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+        row.bundle = marker
+        await db.commit()
+    async with factory() as db:
+        result = await get_diary(db, OWNER, WALK, 3, BOARD_FORMAT)
+    assert result.status == "ready" and result.generation == 1
+    assert result.bundle.model_dump(mode="json") == marker["fallback"]["bundle"]

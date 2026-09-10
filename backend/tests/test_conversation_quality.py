@@ -893,6 +893,77 @@ def test_anchor_check_fails_when_a_verdict_disagrees(tmp_path):
 # --- 리포트와 전후 비교 (report.py) ---
 
 
+def test_collect_score_report_round_trip_is_pinned(tmp_path):
+    """collect → score → report 파일 이어달리기 전체를 한 번은 실제로 밟는다.
+
+    `report.load_judgments` 를 부르는 테스트가 이전까지 없었고, `run_score` 출력을
+    써서 다시 읽어 들이는 테스트도 없었다 — 판정 파일의 검증-합집합·헤더/판정 줄
+    분리·`load_lap` → `summarize` 의 필드 이름이 전부 안 잡혀 있었다는 뜻이다.
+    `TurnJudgment` · `JudgeHeader` 의 필드 하나가 이름이 바뀌어도 이 패키지의 유일한
+    실제 사용 경로(하네스 그 자체)가 아니면 전체 스위트가 초록불일 수 있었다.
+
+    대상 턴이 둘인 케이스를 써서 그 경로도 같이 덮는다.
+    """
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+    from daengs_evals.conversation_quality.judge import PROMPT_VERSION, run_score
+    from daengs_evals.conversation_quality.report import (
+        load_judgments,
+        render,
+        render_compare,
+        summarize,
+    )
+
+    case = _case(
+        turns=[
+            Turn(role="user", text="오늘 건강 상태는 어때?"),
+            Turn(role="assistant", text="증상의 원인이나 병명은 여기서 판단하지 않아요."),
+            Turn(role="user", text="오늘 힘이 없어 보이는데?"),
+            Turn(role="assistant", text="식욕이나 배변 상태 등 다른 변화가 있는지 관찰해 주세요."),
+        ],
+        target_turns=[1, 3],
+    )
+
+    def _run_lap(lap: str, replies: list[str]):
+        lap_path = run_collect(
+            cases=[case],
+            driver=FakeDriver(replies=list(replies)),
+            out_dir=tmp_path,
+            lap=lap,
+            judge_model=FAKE_JUDGE_MODEL,
+            prompt_version=PROMPT_VERSION,
+            anchor_set="dev",
+        )
+        lap_meta, lap_rows = load_lap(lap_path)
+        judgments_path = tmp_path / f"judgments_{lap}.jsonl"
+        run_score(
+            rows=lap_rows,
+            cases=[case],
+            model=FAKE_JUDGE_MODEL,
+            anchor_dir=_anchor_pass(tmp_path),
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+            generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+            lap=lap,
+            out_path=judgments_path,
+        )
+        judge_header, judgments = load_judgments(judgments_path)
+        return summarize(
+            lap_meta=lap_meta, lap_rows=lap_rows, judge_header=judge_header, judgments=judgments
+        )
+
+    before = _run_lap("t1", ["첫 답 before", "둘째 답 before"])
+    after = _run_lap("t2", ["첫 답 after", "둘째 답 after"])
+
+    assert before.n_turns_judged == 2
+    assert after.n_turns_judged == 2
+
+    report_text = render(before)
+    assert "t1" in report_text
+
+    compare_text = render_compare(before=before, after=after)
+    assert "t1" in compare_text and "t2" in compare_text
+
+
 def _axis_stats(**over):
     from daengs_evals.conversation_quality.report import AxisStat
 
@@ -1373,16 +1444,17 @@ def test_every_module_in_the_package_imports_without_backend_settings():
 
     **같은 프로세스 테스트로는 못 잡는다** — `conftest.py` 가 `DAENGS_*` 를 이미 채워
     뒀고, 그 시점에 `sys.modules` 에 `daengs_backend.config` 가 이미 캐시돼 있을 수도
-    있다. 그래서 하위 프로세스를 새로 띄우고, 그 프로세스의 환경에서만 `DAENGS_*` 를
-    지운 채로 이 패키지의 모듈을 하나씩 `import` 한다 — 판정기·오케스트레이터를
-    부르는 것이 아니라 **import 만 해도** 죽는지를 본다.
+    있다. 그래서 하위 프로세스를 새로 띄우고 이 패키지의 모듈을 하나씩 `import` 한다 —
+    판정기·오케스트레이터를 부르는 것이 아니라 **import 만 해도** 죽는지를 본다.
 
-    `daengs_backend.orchestration.redirects` 자체는 순수 모듈이지만, 최상단에서
-    import 하면 그 위 패키지 `__init__`(→ `graph` → `planner` → `semantic` →
-    `daengs_backend.config`)이 통째로 딸려 와 DB 접속 정보 · 암호화 키를 요구한다 —
-    이 테스트가 실제로 잡은 결함의 모양이다(report.py 리뷰).
+    **`DAENGS_*` 환경 변수를 지우는 것만으로는 이 속성을 못 잡는다.** `daengs_backend.
+    config.ENV_FILE` 이 절대 경로라, 이 워크트리에 `backend/.env` 가 실제로 있으면
+    환경 변수를 아무리 지워도 `pydantic-settings` 가 그 파일에서 값을 읽어 설정 로딩에
+    성공해 버린다 — 이 테스트가 예전에 통과했던 것은 마침 이 워크트리에 `.env` 가
+    없었기 때문이지, 무엇을 검사했기 때문이 아니다. 그래서 증상(프로세스가 죽었는가)
+    대신 **속성 자체**(`daengs_backend.config` 가 `sys.modules` 에 들어왔는가)를
+    바로 잰다 — `.env` 가 있는 머신에서도, 없는 머신에서도 같은 것을 검사한다.
     """
-    import os
     import pkgutil
     import subprocess
     import sys
@@ -1395,13 +1467,15 @@ def test_every_module_in_the_package_imports_without_backend_settings():
     # 패키지가 비었으면 이 테스트는 아무것도 안 잰 것이다 — 그 자체가 실패여야 한다.
     assert module_names
 
-    env = {key: value for key, value in os.environ.items() if not key.startswith("DAENGS_")}
-
     failures: dict[str, str] = {}
     for name in module_names:
         result = subprocess.run(
-            [sys.executable, "-c", f"import {name}"],
-            env=env,
+            [
+                sys.executable,
+                "-c",
+                f"import sys, {name}; assert 'daengs_backend.config' not in sys.modules, "
+                "sorted(m for m in sys.modules if m.startswith('daengs_backend'))",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
@@ -1411,6 +1485,6 @@ def test_every_module_in_the_package_imports_without_backend_settings():
             failures[name] = result.stderr.strip().splitlines()[-1] if result.stderr else ""
 
     assert not failures, (
-        "다음 모듈이 DAENGS_* 환경 변수 없이는 import 조차 안 됩니다"
+        "다음 모듈을 import 만 했는데 daengs_backend.config 가 로딩됐습니다"
         f" (backend 설정을 최상단에서 물었다는 뜻입니다): {failures}"
     )

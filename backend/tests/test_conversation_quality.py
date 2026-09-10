@@ -86,3 +86,22 @@ def test_the_frozen_277_question_set_is_untouched():
 
     # 값은 최초 실행 때 채운다. 바뀌면 이 테스트가 잡는다.
     assert file_sha256(QUESTIONS_V1_PATH) == PINNED_277_SHA256
+
+
+def test_repair_applicable_needs_only_one_target_turn_at_or_after_index_two():
+    # repair_applicable 은 "어느 대상 턴에선가 복구가 성립한다"는 뜻이지 모든 대상 턴이
+    # 복구 대상이라는 뜻이 아니다 — 턴별 적용가능성은 판정 시점(Task 3)의 일이다.
+    with pytest.raises(ValidationError):
+        _case(target_turns=[1], repair_applicable=True)
+
+    case = _case(
+        turns=[
+            Turn(role="user", text="오늘 건강 상태는 어때?"),
+            Turn(role="assistant", text="증상의 원인이나 병명은 여기서 판단하지 않아요."),
+            Turn(role="user", text="오늘 힘이 없어 보이는데?"),
+            Turn(role="assistant", text="식욕이나 배변 상태 등 다른 변화가 있는지 관찰해 주세요."),
+        ],
+        target_turns=[1, 3],
+        repair_applicable=True,
+    )
+    assert case.target_turns == [1, 3]

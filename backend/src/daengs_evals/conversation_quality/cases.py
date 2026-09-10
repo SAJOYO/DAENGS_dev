@@ -60,8 +60,10 @@ class ConversationCase(BaseModel):
                 raise ValueError(f"target_turns {idx} 가 범위를 벗어난다")
             if self.turns[idx].role != "assistant":
                 raise ValueError(f"target_turns {idx} 가 assistant 턴이 아니다")
-        if self.repair_applicable and min(self.target_turns) < 2:
-            raise ValueError("복구는 앞 턴이 있어야 성립한다")
+        # 복구는 어느 대상 턴에선가 성립하면 되고, 턴마다 되는지는 판정 시점에 정한다 —
+        # target_turns 전부가 복구 대상이라는 뜻이 아니다. 그래서 min 이 아니라 max 를 본다.
+        if self.repair_applicable and max(self.target_turns) < 2:
+            raise ValueError("복구가 성립할 대상 턴이 하나도 없다")
         return self
 
 

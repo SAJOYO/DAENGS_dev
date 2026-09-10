@@ -64,7 +64,7 @@ def _pair(monkeypatch, rows):
         assert app_user_id == OWNER          # 소유권이 토큰 주인으로 확인되는지
         return rows
 
-    monkeypatch.setattr(gait_repo, "get_owned_pair", fake)
+    monkeypatch.setattr(gait_repo, "get_accessible_pair", fake)
 
 
 def _post(client, a, b):

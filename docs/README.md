@@ -8,6 +8,7 @@
 | [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
+| [co-care.md](co-care.md) | 공동 돌봄 설계 — 한 강아지를 여러 보호자가. `pet_members` · 대표/돌보미 · 초대·승계·탈퇴 · 약 중복 확인. **`app_users` 는 탈퇴해도 안 지워진다**는 함정이 이 문서 전체를 관통한다 |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [ci/README.md](ci/README.md) | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 `docs/ci/` 로 빠졌습니다** (Actions 한도 소진). **그것들이 잡던 것을 이제 사람이 머지 전에 로컬에서 돌립니다** — 명령 목록이 거기 있습니다. 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |

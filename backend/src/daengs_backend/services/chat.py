@@ -52,7 +52,11 @@ class ChatTurnNotFoundError(Exception):
 
 
 class PetNotOwnedError(Exception):
-    pass
+    """그 아이의 **구성원이 아닙니다** (docs/co-care.md §2).
+
+    이름은 소유를 말하지만 판정은 대표 ∪ 돌보미입니다 — 라우터·앱이 이 이름으로 404 를
+    내고 있어 그대로 둡니다. 판정의 원본은 `chat_repo.get_accessible_pet_id` 입니다.
+    """
 
 
 class AppUserNotActiveError(Exception):
@@ -202,10 +206,10 @@ def public_response_of(response: AssistantResponse) -> dict[str, object]:
     return response.model_dump(mode="json")
 
 
-async def _require_owned_pet(
+async def _require_accessible_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> None:
-    if await chat_repo.get_owned_pet_id(session, app_user_id, pet_id) is None:
+    if await chat_repo.get_accessible_pet_id(session, app_user_id, pet_id) is None:
         raise PetNotOwnedError
 
 
@@ -221,7 +225,7 @@ async def _require_owned_session(
 async def list_sessions(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSession]:
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     return await chat_repo.list_active_sessions(
         session, app_user_id, pet_id, MAX_SESSIONS_PER_PET
     )
@@ -234,7 +238,7 @@ async def create_session(
     title: str | None = None,
 ) -> ChatSession:
     """Return the one draft for this owner/pet, creating it without a pet row lock."""
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     existing = await chat_repo.get_draft(session, app_user_id, pet_id)
     if existing is not None:
         return existing
@@ -435,7 +439,7 @@ async def complete_turn(
 
     first_activation = chat_session.last_message_at is None
     if first_activation and (
-        await chat_repo.lock_owned_pet(
+        await chat_repo.lock_accessible_pet(
             session, chat_session.app_user_id, chat_session.pet_id
         )
         is None
@@ -834,7 +838,7 @@ async def create_summary(
 async def list_summaries(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSummary]:
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     return await chat_repo.list_completed_summaries(session, app_user_id, pet_id)
 
 

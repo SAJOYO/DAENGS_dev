@@ -68,6 +68,23 @@ class GaitRecord(Base):
         Uuid, ForeignKey("pets.id", ondelete="CASCADE")
     )
 
+    # ⚠️ **이것은 소유권이 아닙니다 — 업로드한 사람입니다.** 위 주석대로 소유는 여전히
+    # `pet_id → pets.app_user_id` 로만 유도됩니다. 이 칸이 생긴 이유는 Task 19 —
+    # `start_analysis` 가 구성원(대표 ∪ 돌보미)에게 열려 있는데 `confirm_upload` 는
+    # 대표만이라, 돌보미가 티켓 발급·업로드까지는 성공하고 **confirm 에서만 404** 를
+    # 받는 "반쯤 열린" 상태였습니다(docs/co-care.md §2 "보행 carer's gait recording is
+    # broken halfway"). 고치는 방법은 확정 권한을 구성원 전체로 여는 것이 아니라
+    # **업로더 본인 또는 대표**로 좁히는 것입니다(`care_repo.get_deletable` 과 같은 모양) —
+    # 그러려면 "누가 올렸는지"를 알아야 하므로 이 칸이 필요합니다. 다음 사람이 이것을
+    # "그럼 owner_user_id 를 하나 더 추가한 셈 아닌가" 로 **단순화하지 마세요** — 대표가
+    # 바뀌어도(승계) 이 칸은 그대로 "그때 올린 사람"을 가리켜야 하고, 지운 권한 판단은
+    # 언제나 `pet_id → pets.app_user_id`(대표) OR 이 칸(업로더) 둘의 OR 이지 이 칸
+    # 하나가 아닙니다. NULL 은 이 칸이 생기기 전에 만들어진 옛 기록입니다 — 그런 기록은
+    # confirm 이 이미 끝났거나 고아이므로 업로더를 몰라도 문제가 안 됩니다.
+    actor_app_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_users.id", ondelete="SET NULL")
+    )
+
     status: Mapped[str] = mapped_column(
         String(20), server_default=text("'PENDING'")
     )

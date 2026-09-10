@@ -8,6 +8,7 @@ services/care_event.py 가 정합니다.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Annotated
 
@@ -18,6 +19,7 @@ from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.models import CareEvent
 from daengs_backend.schemas.care_event import (
+    ActorOut,
     CareDaySummaryResponse,
     CareEventCreate,
     CareEventListResponse,
@@ -25,6 +27,7 @@ from daengs_backend.schemas.care_event import (
     CareEventResponse,
 )
 from daengs_backend.services import care_event as care_service
+from daengs_backend.services import pet_member as member_service
 from daengs_backend.services.pet import PetNotFoundError
 
 router = APIRouter(prefix="/app/care-events", tags=["care-events"])
@@ -35,7 +38,25 @@ _PET_NOT_FOUND = "강아지를 찾을 수 없습니다."
 _EVENT_NOT_FOUND = "기록을 찾을 수 없습니다."
 
 
-def _to_response(event: CareEvent) -> CareEventResponse:
+async def _actor_labels(
+    session: AsyncSession, pet_id: uuid.UUID, events: Sequence[CareEvent]
+) -> dict[uuid.UUID, str | None]:
+    """actor id → 표시 이름. **등장하는 사람 수만큼만** `actor_label` 을 부릅니다.
+
+    이벤트마다 부르면 목록 길이만큼 왕복합니다 — 아빠가 쓴 줄이 30개면 30번을 묻게 됩니다.
+    같은 사람이 여러 줄을 남긴 경우가 흔하므로, 먼저 등장하는 `actor_app_user_id` 를
+    집합으로 모아 **사람 수만큼만** 묻습니다. `None`(컬럼보다 먼저 쌓인 기록·탈퇴자)은
+    `actor_label` 을 부를 것도 없이 `None` 이라, 애초에 집합에 넣지 않습니다.
+    """
+    ids = {e.actor_app_user_id for e in events if e.actor_app_user_id is not None}
+    return {uid: await member_service.actor_label(session, pet_id, uid) for uid in ids}
+
+
+def _to_response(
+    event: CareEvent, labels: dict[uuid.UUID, str | None] | None = None
+) -> CareEventResponse:
+    labels = labels or {}
+    actor_id = event.actor_app_user_id
     return CareEventResponse(
         id=event.id,
         pet_id=event.pet_id,
@@ -44,6 +65,7 @@ def _to_response(event: CareEvent) -> CareEventResponse:
         note=event.note,
         client_event_id=event.client_event_id,
         created_at=event.created_at,
+        actor=ActorOut(app_user_id=actor_id, nickname=labels.get(actor_id) if actor_id else None),
     )
 
 
@@ -76,8 +98,12 @@ async def list_events(
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
     except care_service.CareRangeError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+    labels = await _actor_labels(session, pet_id, events)
     return CareEventListResponse(
-        pet_id=pet_id, start=start_, end=end_, events=[_to_response(e) for e in events]
+        pet_id=pet_id,
+        start=start_,
+        end=end_,
+        events=[_to_response(e, labels) for e in events],
     )
 
 
@@ -92,13 +118,51 @@ async def record_event(
 
     새로 만들었으면 201, 같은 `client_event_id` 가 이미 있으면 200 과 함께 있던 것을
     돌려줍니다 — 앱은 둘 다 "올라갔다" 로 봅니다 (`/app/walks` 와 같은 규칙).
+
+    **약(`medication`) 은 6시간 창 안에 같은 종류가 있으면 409 입니다** (docs/co-care.md §4).
+    사용자가 그래도 기록하겠다고 하면, 앱은 **같은 `client_event_id` 를 그대로 두고**
+    `confirm: true` 만 붙여 재전송해야 합니다 — 새 키를 쓰면 재시도가 두 줄이 됩니다.
     """
     try:
         event, created = await care_service.record(session, user.app_user_id, body)
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except care_service.MedicationConflictError as exc:
+        # ⚠️ `HTTPException(detail=...)` 에 문자열이 아닌 dict 를 넣는 것은 이 저장소에서
+        #    여기가 처음입니다. 다른 라우터는 전부 문자열만 씁니다 — 여기서는 사람 승인을
+        #    받았습니다. 앱이 "아빠가 08:15에 줬어요" 를 그리려면 메시지 문장 하나로는
+        #    부족하고 occurred_at·note·who 가 구조째로 필요하기 때문입니다.
+        #
+        #    `await` 는 리스트 컴프리헨션 안에서 못 쓰므로, 각 conflict 의 actor 이름을
+        #    먼저 딕셔너리로 만들어 둔 뒤에 씁니다. **event id 가 아니라 actor 의
+        #    user id 로 키를 잡습니다** — 같은 사람이 conflict 를 두 줄 남겼으면 event id
+        #    로 잡을 때 그 사람만 두 번 묻게 됩니다. 사람 수만큼만 물어야 합니다.
+        labels = await _actor_labels(session, body.pet_id, exc.conflicts)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "message": "이미 약을 챙긴 기록이 있습니다.",
+                "conflicts": [
+                    {
+                        "id": str(e.id),
+                        "occurred_at": e.occurred_at.isoformat(),
+                        "note": e.note,
+                        "actor": {
+                            "app_user_id": str(e.actor_app_user_id)
+                            if e.actor_app_user_id
+                            else None,
+                            "nickname": labels.get(e.actor_app_user_id)
+                            if e.actor_app_user_id
+                            else None,
+                        },
+                    }
+                    for e in exc.conflicts
+                ],
+            },
+        ) from None
+    labels = await _actor_labels(session, event.pet_id, [event])
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-    return _to_response(event)
+    return _to_response(event, labels)
 
 
 # ⚠️ `/{event_id}` 보다 먼저 선언합니다. 지금은 메서드가 달라(GET 대 DELETE) 안 부딪히지만,
@@ -119,6 +183,7 @@ async def today(
         summary = await care_service.day_summary(session, user.app_user_id, pet_id, day=day)
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    labels = await _actor_labels(session, pet_id, summary.events)
     return CareDaySummaryResponse(
         pet_id=pet_id,
         day=summary.day,
@@ -129,7 +194,7 @@ async def today(
         medication=summary.counts.get("medication", 0),
         snack=summary.counts.get("snack", 0),
         walk=summary.walks,
-        events=[_to_response(e) for e in summary.events],
+        events=[_to_response(e, labels) for e in summary.events],
     )
 
 

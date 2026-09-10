@@ -558,6 +558,12 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-sm font-medium">{stage2.group.text}</span>
+                {/* ★ 병원에서 쓰는 이름 (2026-09-10). 순서는 코드순 고정이라 확률과 무관. */}
+                {stage2.group.labels && (
+                  <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                    ({stage2.group.labels})
+                  </span>
+                )}
                 <span className="ml-auto text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
                   묶음 {stage2.group.percent.toFixed(1)}% · 확신 {stage2.group.confidence.toFixed(3)}
                 </span>

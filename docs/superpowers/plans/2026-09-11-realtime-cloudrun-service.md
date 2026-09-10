@@ -603,7 +603,13 @@ from daengs_backend.routers import life_walk
 
 | | 분리 전 | 처음 안대로 하면 |
 | --- | --- | --- |
-| 판정 불가일 때 | `walk()` 서비스는 **예외를 안 낸다.** `grade="unknown"` 인 `WalkOut` 을 준다. 503 을 만드는 것은 그 위의 **HTTP 컨트롤러**이고 어시스턴트는 거기를 안 지난다 → **`CapabilityStatus.OK`** | HTTP 503 → `HTTPException` → `WalkCapabilityAdapter` 의 `except Exception` → **`CapabilityStatus.ERROR`** |
+| 판정 불가일 때 | `walk()` 서비스는 **예외를 안 낸다.** `grade="unknown"` 인 `WalkOut` 을 준다. 503 을 만드는 것은 그 위의 **HTTP 컨트롤러**이고 어시스턴트는 거기를 안 지난다 → 어댑터가 그것을 보고 **`CapabilityStatus.ABSTAINED`**(`code="unknown_verdict"`) 로 닫는다 | HTTP 503 → `HTTPException` → `WalkCapabilityAdapter` 의 `except Exception` → **`CapabilityStatus.ERROR`** |
+
+🔴 **위 표의 `ABSTAINED` 는 2026-09-11 에 정정한 것이다.** 처음에는 `OK` 라고 적었는데 틀렸다 —
+`orchestration/adapters/walk.py:47~57` 이 `upstream.now.grade == "unknown"` 을 보고
+**`ABSTAINED`** 로 닫는다. `OK` 는 등급이 GOOD·CAUTION·UNSAFE 일 때뿐이다. **결론(예외를 올리지
+않는다)은 그대로다** — 바뀐 것은 "무엇이 보존되는가"의 이름이고, 보존되는 것은 `OK` 가 아니라
+`ABSTAINED` 다.
 
 같은 날씨 상황에서 어시스턴트 답이 달라진다 — 기준 ①(안 깨뜨린다)의 정면 위반이다.
 **503 의 본문이 곧 `WalkOut` 전체**이므로(`controllers/walk.py:37` 이

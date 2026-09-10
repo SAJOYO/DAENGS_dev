@@ -26,7 +26,86 @@ class SmokeFailure(Exception):
         self.validation_fields = validation_fields
 
 
-async def cycle(owner, *, center=None, require_regional=False):
+async def prepare_backfill(owner, walk_id):
+    """Only this probe's disposable account: emulate missing public collection, then recover."""
+    from sqlalchemy import select
+
+    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.models.walk import Walk
+    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.models.walk_entry_context import WalkEntryContextJob as Job
+    from daengs_backend.services.walk_context_backfill import TAGS, run
+
+    walk_id = uuid.UUID(str(walk_id))
+    saved = {}
+    async with SessionLocal() as db:
+        owned = await db.scalar(
+            select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner).with_for_update()
+        )
+        if owned is None:
+            raise SmokeFailure("synthetic walk ownership mismatch")
+        jobs = list(
+            await db.scalars(
+                select(Job).where(Job.walk_id == walk_id, Job.tag.in_(TAGS)).with_for_update()
+            )
+        )
+        if len(jobs) != 12 or any(j.collection_round != 0 or j.attempts >= 3 for j in jobs):
+            raise SmokeFailure("unexpected synthetic collection state")
+        for job in jobs:
+            job.state, job.attempts = "failed", 3
+            job.lease_token, job.lease_until = None, None
+            raw = {"status": "unavailable", "reason": "synthetic_prior_provider_unavailable"}
+            row = Envelope(
+                id=uuid.uuid4(),
+                job_id=job.id,
+                collection_round=0,
+                attempt=3,
+                created_at=datetime.now(UTC),
+                envelope=raw,
+            )
+            db.add(row)
+            saved[row.id] = raw
+        await db.commit()
+    preview = await run(SessionLocal, walk_ids=[walk_id])
+    applied = await run(
+        SessionLocal, walk_ids=[walk_id], apply=True, expected_plan=preview["plan_digest"]
+    )
+    repeated = await run(SessionLocal, walk_ids=[walk_id])
+    if applied["scheduled_sources"] != 12 or repeated["eligible_sources"] != 0:
+        raise SmokeFailure("backfill did not schedule exactly once")
+    return saved
+
+
+async def verify_backfill(owner, walk_id, saved):
+    from sqlalchemy import select
+
+    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.models.walk import Walk
+    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.services.walk_context_backfill import run
+
+    walk_id = uuid.UUID(str(walk_id))
+    async with SessionLocal() as db:
+        if (
+            await db.scalar(select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner))
+            is None
+        ):
+            raise SmokeFailure("synthetic walk ownership mismatch")
+        kept = list(await db.scalars(select(Envelope).where(Envelope.id.in_(saved))))
+        if len(kept) != 12 or any(e.envelope != saved[e.id] for e in kept):
+            raise SmokeFailure("previous collection history changed")
+    final = await run(SessionLocal, walk_ids=[walk_id])
+    if final["eligible_sources"] or final["skipped"] != {"stored_board": 1}:
+        raise SmokeFailure("stored diary was not protected from backfill")
+    return {
+        "scheduled_sources": 12,
+        "prior_envelopes_preserved": True,
+        "duplicate_request_skipped": True,
+        "stored_board_protected": True,
+    }
+
+
+async def cycle(owner, *, center=None, require_regional=False, backfill=False):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
     center = center or {"lat": 37.4878, "lng": 127.052}
@@ -152,6 +231,7 @@ async def cycle(owner, *, center=None, require_regional=False):
                 },
             )
             entries.append(entry)
+        saved = await prepare_backfill(owner, wid) if backfill else None
         contexts = []
         for _ in range(36):
             contexts = [
@@ -229,7 +309,9 @@ async def cycle(owner, *, center=None, require_regional=False):
         generated = sum(s["narration"]["status"] == "generated" for s in scenes)
         if addressed != len(entries) or not generated:
             raise SmokeFailure("dong address or public background missing in diary output")
+        recovery = await verify_backfill(owner, wid, saved) if backfill else None
         return {
+            **({"backfill": recovery} if backfill else {}),
             "source_statuses": statuses,
             "scene_count": len(scenes),
             "generation": result["generation"],
@@ -244,7 +326,7 @@ async def cycle(owner, *, center=None, require_regional=False):
         }
 
 
-async def main(*, regional=False):
+async def main(*, regional=False, backfill=False):
     owner = uuid.uuid4()
     kakao = -(
         owner.int % (2**62) + 1
@@ -277,7 +359,7 @@ async def main(*, regional=False):
                         }
                     )
             else:
-                result.update(await cycle(owner))
+                result.update(await cycle(owner, backfill=True) if backfill else await cycle(owner))
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001 - never print API bodies, tokens, SQL parameters or user IDs
         result["error_type"] = type(exc).__name__
@@ -307,5 +389,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", required=True)
     parser.add_argument("--regional", action="store_true")
+    parser.add_argument("--backfill", action="store_true")
     arguments = parser.parse_args()
-    raise SystemExit(asyncio.run(main(regional=arguments.regional)))
+    if arguments.regional and arguments.backfill:
+        parser.error("choose one probe mode")
+    raise SystemExit(asyncio.run(main(regional=arguments.regional, backfill=arguments.backfill)))

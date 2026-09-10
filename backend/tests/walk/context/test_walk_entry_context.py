@@ -96,7 +96,7 @@ async def test_provider_runs_with_no_session_and_result_keeps_original_anchor(st
     assert state.record.payload == CONTENT
 
 
-@pytest.mark.parametrize("change", ["revision", "delete", "token", "expired", "cancelled"])
+@pytest.mark.parametrize("change", ["revision", "delete", "token", "expired", "cancelled", "round"])
 async def test_late_reply_cannot_attach_to_changed_or_deleted_record(state, change):
     if change == "revision":
         state.record.revision = 2
@@ -106,6 +106,8 @@ async def test_late_reply_cannot_attach_to_changed_or_deleted_record(state, chan
         state.job.lease_token = uuid.uuid4()
     elif change == "expired":
         state.job.lease_until = NOW - timedelta(seconds=1)
+    elif change == "round":
+        state.job.collection_round = 1
     else:
         state.job.state = "cancelled"
     assert not await service.finish(

@@ -100,7 +100,11 @@ async def current(session, row, policy=POLICY):
     envelopes = list(
         await session.scalars(
             select(WalkEntryContextEnvelope)
-            .where(WalkEntryContextEnvelope.job_id.in_([job.id for job in jobs]))
+            .join(WalkEntryContextJob, WalkEntryContextEnvelope.job_id == WalkEntryContextJob.id)
+            .where(
+                WalkEntryContextEnvelope.job_id.in_([job.id for job in jobs]),
+                WalkEntryContextEnvelope.collection_round == WalkEntryContextJob.collection_round,
+            )
             .order_by(WalkEntryContextEnvelope.job_id, WalkEntryContextEnvelope.attempt.desc())
         )
     )

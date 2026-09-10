@@ -102,6 +102,7 @@ class FacilityConversationService(FacilityDiscoveryService):
                     "manual": request.manual,
                     "restore_filters": request.restore_filters,
                     "previous": saved["state"],
+                    "base_revision": saved["revision"],
                     "visible_order": request.visible_order,
                     "visible_selected": request.visible_selected,
                 },

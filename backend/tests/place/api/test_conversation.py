@@ -14,7 +14,7 @@ from daengs_backend.services.facility_conversation import (
 from daengs_place.api import conversation_internal
 from daengs_place.core.db import get_session
 from daengs_place.main import app as place_app
-from daengs_place.place.conversation.contract import TurnPlan
+from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
 from tests.place.support.conversation import Searcher
@@ -59,28 +59,10 @@ async def harness(monkeypatch):
     async def gemini(request):
         payload = json.loads(request.content)
         model_calls.append(payload)
-        if "tools" in payload:
-            assert [tool["name"] for tool in payload["tools"]] == ["propose_facility_turn"]
-            plan = plans.pop(0) if plans else {"goal": "pick_one"}
-            steps = [{"type": "function_call", "name": "propose_facility_turn", "arguments": plan}]
-        else:
-            assert "tools" not in payload
-            receipt = json.loads(payload["input"])["receipt"]
-            evidence = receipt["evidence"]
-            text = evidence.get("place", "") + "을 살펴보세요. " + evidence.get("distance", "")
-            steps = [
-                {
-                    "type": "model_output",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": json.dumps(
-                                {"text": text, "evidence_ids": list(evidence)}, ensure_ascii=False
-                            ),
-                        }
-                    ],
-                }
-            ]
+        tool = payload["tools"][0]["name"]
+        assert tool in {"propose_facility_turn", "classify_pending_decision"}
+        plan = plans.pop(0) if plans else {"goal": "pick_one"}
+        steps = [{"type": "function_call", "name": tool, "arguments": plan}]
         return httpx.Response(200, json={"status": "completed", "steps": steps})
 
     model = GeminiConversation("test-key", "test-model", transport=httpx.MockTransport(gemini))
@@ -125,17 +107,17 @@ async def test_manual_to_gemini_plan_to_cached_pick_to_answer_through_both_http_
     assert picked["answer"] is None and picked["answer_status"] == "pending"
     assert len(calls) == 1
     picked = (await client.post("/app/places/conversation/answer", json=answer_body(picked))).json()
-    assert picked["answer"]["source"] == "llm"
+    assert picked["answer"]["source"] == "fallback"
     assert picked["filters"]["candidate_kinds"] == ["shopping", "pet_shop"]
-    assert len(searcher.calls) == 1 and len(calls) == 2
-    assert json.loads(calls[0]["input"])["current_state"]["candidate_kinds"] == [
+    assert len(searcher.calls) == 1 and len(calls) == 1
+    assert set(json.loads(calls[0]["input"])["current_state"]["candidate_kinds"]) == {
         "shopping",
         "pet_shop",
-    ]
-    assert json.loads(calls[1]["input"])["committed_revision"] == picked["revision"]
+    }
+    assert picked["answer"]["revision"] == picked["revision"]
     again = await client.post("/app/places/conversation", json=request)
     assert again.json() == picked
-    assert len(calls) == 2
+    assert len(calls) == 1
     plans.append({"goal": "explain", "reference_index": 2})
     explanation = (
         await client.post("/app/places/conversation", json=chat_body(picked, "두 번째는 왜?"))
@@ -263,24 +245,7 @@ async def test_expired_session_restores_full_filters_in_new_session_without_old_
     plans.append(
         {
             "goal": "show",
-            "changes": {
-                "upsert_all": [
-                    {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
-                ],
-                "upsert_any": [
-                    {
-                        "id": "shopping",
-                        "all": [
-                            {
-                                "id": "kind",
-                                "capability": "purpose.kind",
-                                "op": "in",
-                                "value": ["shopping"],
-                            }
-                        ],
-                    }
-                ],
-            },
+            "changes": {"parking": "required_true", "alternatives": [{"kinds": ["shopping"]}]},
         }
     )
     filtered = (

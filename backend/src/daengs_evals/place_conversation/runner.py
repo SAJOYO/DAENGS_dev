@@ -14,12 +14,12 @@ from time import perf_counter
 from uuid import uuid4
 
 from daengs_place.place.conversation.answer import compose_answer
-from daengs_place.place.conversation.contract import AnswerRequest, PrepareRequest, TurnPlan
+from daengs_place.place.conversation.contract import AnswerRequest, PrepareRequest
+from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.service import ConversationService, snapshot_hits
 from daengs_place.place.providers.gemini import GeminiIntentProposerError
 
 from .checks import assess
-from .experiments import PolicyGemini
 from .fixtures import FixtureSearcher, initial_state
 from .provider import ObservedGemini
 
@@ -66,7 +66,7 @@ def metadata(cases_path, fixtures_path, model, repeat, ids):
         "model": model,
         "repeat": repeat,
         "case_ids": ids,
-        "variant": "production-baseline",
+        "variant": "production-policy-v1",
         "seed": None,
         "boundary": "live Gemini + production prepare/answer + synthetic search; no HTTP/DB",
         "revision_scope": "local turn ordinal, NOT Redis CAS verification",
@@ -75,9 +75,6 @@ def metadata(cases_path, fixtures_path, model, repeat, ids):
 
 
 async def run_case(case, fixtures, provider, repetition):
-    if isinstance(provider, PolicyGemini):
-        provider.pending = None
-        provider.policy_events.clear()
     searcher = FixtureSearcher(case["setup"], fixtures)
     state = await initial_state(case["setup"], searcher)
     service = ConversationService(provider, searcher=searcher, now=lambda: searcher.now)
@@ -86,7 +83,7 @@ async def run_case(case, fixtures, provider, repetition):
             "case_id": case["id"],
             "repetition": repetition,
             "turn": ordinal,
-            "variant": "production-baseline",
+            "variant": "production-policy-v1",
             "layer": case["layer"],
             "query": step.get("input"),
             "before": state.model_dump(mode="json"),
@@ -114,10 +111,20 @@ async def run_case(case, fixtures, provider, repetition):
             )
             prepared = await service.prepare(None, request)
             answer_request = AnswerRequest(
-                query=step["input"], committed_revision=ordinal, prepared=prepared
+                query=step["input"], committed_revision=prepared.state.revision, prepared=prepared
             )
             answer = await compose_answer(answer_request, provider)
-            checks = assess(case, step, state, prepared, answer)
+            # Acceptance executes the stored candidate without another semantic plan.
+            # A new independent request also clears pending, but must NOT be graded
+            # against the cancelled proposal's candidate.
+            accepting_pending = (
+                state.pending_proposal is not None
+                and prepared.receipt.action == "execute"
+                and len(provider.plans) == plan_start
+            )
+            checks = assess(
+                case, step, state, prepared, answer, accepting_pending=accepting_pending
+            )
             record.update(
                 status="fail" if any(c["status"] == "fail" for c in checks) else "review_required",
                 checks=checks,
@@ -135,9 +142,6 @@ async def run_case(case, fixtures, provider, repetition):
             search_calls=len(searcher.calls) - search_start,
             latency_ms=round((perf_counter() - started) * 1000),
         )
-        if isinstance(provider, PolicyGemini):
-            record["policy_events"] = list(provider.policy_events)
-            record["pending_request"] = provider.pending
         yield record
         if record["status"] == "blocked":
             # Never grade follow-ups against a fabricated prior turn.
@@ -157,7 +161,7 @@ async def direct_answer_probe(case, fixtures, provider, repetition):
 
     class Explain:
         async def plan(self, request):
-            return TurnPlan(goal="explain")
+            return Interpretation(goal="explain", asked_attributes=("quiet", "free"))
 
     searcher = FixtureSearcher(case["setup"], fixtures)
     state = await initial_state(case["setup"], searcher)
@@ -219,16 +223,7 @@ async def execute(args):
     meta["min_call_interval_seconds"] = args.interval
     meta["variant"] = args.variant
     write_json(run / "metadata.json", meta)
-    if args.variant == "production-baseline":
-        provider = ObservedGemini(key, args.model, interval=args.interval)
-    else:
-        provider = PolicyGemini(
-            key,
-            args.model,
-            interval=args.interval,
-            pending_context=args.variant == "policy-context",
-            question_gate=args.variant == "policy-context",
-        )
+    provider = ObservedGemini(key, args.model, interval=args.interval)
     counts = Counter()
     print("run:", run, flush=True)
     with (run / "observations.jsonl").open("x", encoding="utf-8") as output:
@@ -273,8 +268,8 @@ def main():
     parser.add_argument("--ids", help="Comma-separated case IDs")
     parser.add_argument(
         "--variant",
-        choices=("production-baseline", "prompt-only", "policy-context"),
-        default="production-baseline",
+        choices=("production-policy-v1",),
+        default="production-policy-v1",
     )
     parser.add_argument("--cases", type=Path, default=DATA / "cases.v1.jsonl")
     parser.add_argument("--fixtures", type=Path, default=DATA / "fixtures.v1.json")

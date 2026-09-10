@@ -1,0 +1,91 @@
+{
+  "observed_turns": 24,
+  "reviewed_turns": 24,
+  "turn_statuses": {
+    "pass": 24
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-P05",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P05",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P05",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P06",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P06",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P06",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P09",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P09",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P09",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P10",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P10",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-P10",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    }
+  ],
+  "provider_calls": 27,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 3015,
+  "reported_usage": {
+    "total_input_tokens": 43962,
+    "total_output_tokens": 981,
+    "total_tokens": 44943
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

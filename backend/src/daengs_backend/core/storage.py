@@ -191,6 +191,24 @@ def build_screening_photo_key(
         raise ValueError(f"지원하지 않는 피부 사진 형식: {content_type}") from exc
     return f"screening/{app_user_id}/{record_id}/photo{suffix}"
 
+
+def build_vet_receipt_key(
+    app_user_id: uuid.UUID, draft_id: uuid.UUID, *, content_type: str
+) -> str:
+    """영수증 사진의 키. `build_screening_photo_key` 와 같은 규칙입니다 —
+    **draft_id 가 uuid 라 추측이 안 됩니다** (bridge 는 "키를 아는 것이 자격").
+
+    ⚠️ 확정돼도 키가 안 바뀝니다. 초안의 키를 vet_visits 가 그대로 물려받아,
+       확정 한 번에 객체를 옮기는 일이 없습니다.
+    """
+    suffixes = {"image/jpeg": ".jpg", "image/webp": ".webp"}
+    try:
+        suffix = suffixes[content_type]
+    except KeyError as exc:
+        raise ValueError(f"지원하지 않는 영수증 형식: {content_type}") from exc
+    return f"vet-receipts/{app_user_id}/{draft_id}/receipt{suffix}"
+
+
 def build_card_face_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
     """도감 카드 얼굴 그림의 키.
 

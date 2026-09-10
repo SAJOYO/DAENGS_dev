@@ -130,6 +130,21 @@ CREATE TABLE app_users (
     -- 그림 위에 걸리는 자리 때문인데 이건 글자로만 나온다.
     nickname VARCHAR(30),
 
+    -- 영수증 OCR 항목(vet_visits.raw_ocr_items) 을 **서비스 제공 범위 밖의 목적**
+    -- (진단 추천 모델 학습)으로 쓰는 데 대한 동의 (#353).
+    --
+    -- **불리언이 아니라 시각인 것이 요점이다.** 근거로 쓰이려면 "켜졌나" 만으로는
+    -- 부족하고 "언제, 어느 판에 동의했나" 가 남아야 한다. 불리언은 그 둘을 못 담는데,
+    -- 시각은 불리언을 포함한다 — `ocr_consent_at IS NOT NULL` 이 곧 그 불리언이다.
+    --
+    -- **기본값을 두지 않는다. NULL 이 미동의다.** DEFAULT 를 거는 순간 아무도 누른 적
+    -- 없는 동의가 전 회원에게 생긴다 — verify 가 이 칸에 기본값이 없다는 것을 단언한다.
+    -- 철회는 둘 다 NULL 로 되돌린다.
+    ocr_consent_at TIMESTAMPTZ,
+    ocr_consent_version VARCHAR(20),
+    CONSTRAINT app_users_ocr_consent_pair CHECK (
+        (ocr_consent_at IS NULL) = (ocr_consent_version IS NULL)),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -365,7 +380,8 @@ COMMENT ON COLUMN app_users.email_enc          IS '이메일 AES-256-GCM 암호�
 COMMENT ON COLUMN app_users.email_hash         IS '이메일 blind index / HMAC-SHA256 hex 64자. 검색은 이쪽으로';
 COMMENT ON COLUMN app_users.phone_enc          IS '전화번호 AES-256-GCM 암호문 (검색 불가)';
 COMMENT ON COLUMN app_users.name_enc           IS '이름 AES-256-GCM 암호문 (검색 불가)';
-COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspended/withdrawn';
+COMMENT ON COLUMN app_users.status             IS '회원 상태 active/suspended/withdrawn';
+
 COMMENT ON COLUMN app_users.room_name          IS '미니룸 이름표 / NULL 이면 앱이 대표 강아지 이름으로 짓는다';
 COMMENT ON COLUMN app_users.nickname           IS '사람 이름 / 가입 때 서버가 발급. lower() 로 유일. NULL 이면 아직 발급 전';
 COMMENT ON COLUMN app_users.created_at         IS '가입 시각';

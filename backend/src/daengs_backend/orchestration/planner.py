@@ -233,6 +233,11 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
         care_log = _care_log_context(context)
         if care_log is not None:
             payload["care_log"] = care_log
+        # Same rule again for confirmed vet spend (#353 Task 7): "피부로 1년간 얼마 썼지"
+        # is a general question too, and Life's ordinances do not carry that answer either.
+        vet_spend = _vet_spend_context(context)
+        if vet_spend is not None:
+            payload["vet_spend"] = vet_spend
         return payload
     if capability == "walk":
         location = context["location"]
@@ -314,6 +319,91 @@ def _care_log_context(context: dict[str, Any]) -> dict[str, Any] | None:
             resolved[key] = clock
     if not any(kind in resolved for kind in _CARE_LOG_COUNTS):
         return None
+    return resolved
+
+
+_VET_SPEND_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _vet_spend_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the trusted recent vet-spend summary, dropping anything the caller did not
+    resolve (#353 Task 7). Same whitelist rule as ``_care_log_context``: only the caller's
+    structured values reach a payload, never model output, and a malformed field drops
+    that field (or, for ``last_visit``, the whole block — a partial last visit is not a
+    fact worth stating) rather than the request.
+
+    The caller is ``routers/assistant.py`` `_with_dog_context`, which already proved
+    ownership and narrowed confirmed ``vet_visits`` rows to this shape
+    (``services/vet_spend_context``).
+
+    **This whitelist knows no ``reason_detail``, no ``raw_ocr_items``, and no
+    ``hospital_address``.** ``VetSpendContext`` would reject the first as an unknown field
+    downstream, but the reason is upstream of the type — the same reason
+    ``_care_log_context`` never learns ``note``.
+    """
+    vet_spend = context.get("vet_spend")
+    if not isinstance(vet_spend, Mapping):
+        return None
+    month_total = vet_spend.get("month_total_krw")
+    visit_count = vet_spend.get("visit_count_30d")
+    last_visit = vet_spend.get("last_visit")
+    if (
+        not isinstance(month_total, int)
+        or isinstance(month_total, bool)
+        or month_total < 0
+        or not isinstance(visit_count, int)
+        or isinstance(visit_count, bool)
+        or visit_count < 0
+        or not isinstance(last_visit, Mapping)
+    ):
+        return None
+    resolved_last = _vet_last_visit(last_visit)
+    if resolved_last is None:
+        return None
+    resolved: dict[str, Any] = {
+        "month_total_krw": month_total,
+        "visit_count_30d": visit_count,
+        "last_visit": resolved_last,
+    }
+    by_reason = vet_spend.get("by_reason_12m")
+    if isinstance(by_reason, Mapping):
+        filtered = {
+            key: value
+            for key, value in by_reason.items()
+            if isinstance(key, str)
+            and key.strip()
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+            and value >= 0
+        }
+        if filtered:
+            resolved["by_reason_12m"] = filtered
+    return resolved
+
+
+def _vet_last_visit(last_visit: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The three required facts plus the two optional contact fields, or None if any
+    required fact is missing or malformed."""
+    date_value = last_visit.get("date")
+    reason = last_visit.get("reason")
+    total_krw = last_visit.get("total_krw")
+    if (
+        not isinstance(date_value, str)
+        or not _VET_SPEND_DATE.match(date_value)
+        or not isinstance(reason, str)
+        or not reason.strip()
+        or not isinstance(total_krw, int)
+        or isinstance(total_krw, bool)
+        or total_krw < 0
+    ):
+        return None
+    resolved: dict[str, Any] = {"date": date_value, "reason": reason, "total_krw": total_krw}
+    hospital = last_visit.get("hospital")
+    if isinstance(hospital, str) and hospital.strip():
+        resolved["hospital"] = hospital
+    phone = last_visit.get("phone")
+    if isinstance(phone, str) and phone.strip():
+        resolved["phone"] = phone
     return resolved
 
 

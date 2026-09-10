@@ -64,6 +64,16 @@ GENERAL_PROMPT_VERSION = "general-answer-ko-v3"
 # v3 는 D-057 ③ 에서 84건 쌍대 비교 뒤 승인된 본문이라, 그 84건(로그 없음)의 프롬프트를 이
 # 카드가 바꾸지 않게 하려는 분기다. 버전 문자열이 갈리는 이유는 프롬프트 텍스트가 다르기 때문이다.
 GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v4-carelog"
+# v5-vetspend / v5-carelog-vetspend (#353 Task 7): confirmed vet-visit spend joins the same
+# fallback, same rule as care log — a rule paragraph plus a context line, added only when
+# the payload carries it. Four combinations of {care_log, vet_spend} now exist; the two
+# that existed before this card (absent/absent → v3, present/absent → v4-carelog) are
+# reproduced by the same literal strings as before, not reconstructed, so D-057 ③'s
+# approved v3 body cannot drift by refactor. The new two get their own version strings
+# because their prompt text differs from both — `build_general_prompt` picks the version
+# from exactly which of the two optional blocks are present.
+GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v5-vetspend"
+GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v5-carelog-vetspend"
 GENERAL_MODEL_ID = ROUTER_MODEL_ID
 # 답 문장 3~5개 + JSON 봉투. 라우터의 256 은 분류 한 줄을 위한 예산이라 여기엔 좁다.
 GENERAL_MAX_OUTPUT_TOKENS = 512
@@ -126,11 +136,26 @@ reason is one of the five values above, and null when kind="answer"."""
 # 약 이름은 로그에도 DOG_CONTEXT 에도 없으므로 v3 의 medication 거절은 그대로 선다.
 _CARE_LOG_RULE = """CARE_LOG_TODAY, when present, is what the owner has already logged for this dog today: counts per kind (meal, medication, snack, walk) and the last time each was logged, as HH:MM in Seoul time. Treat it as fact for questions like "did I feed / medicate / walk today", "has the morning medication been given", or "how many meals so far". You may say what was logged and when, and note plainly when a kind has no entry today. Never infer a dose, a schedule, or whether more is needed from it — the log records what happened, not what should happen. If the question is not about today's care, ignore the log. When CARE_LOG_TODAY is absent, say nothing about a log."""
 
+# 진료비가 있을 때만 붙는 규칙 (#353 Task 7). VET_RECENT 가 무엇인지, 무엇을 해도 되고
+# 무엇은 안 되는지 — `_CARE_LOG_RULE` 과 같은 결. 진단·처치를 권하지 말라는 것과, 기록에
+# 없는 사유·금액을 지어내지 말라는 것.
+_VET_SPEND_RULE = """VET_RECENT, when present, is what the owner has confirmed about this dog's vet visits: this month's total spend, the visit count in the last 30 days, the most recent visit (date, reason, amount, and the hospital's name/phone if known), and total spend per reason over the last 12 months. Treat it as fact for questions like "how much have I spent on skin issues this year" or "what was that hospital's phone number". Use only the reasons and numbers present; never invent a visit, a reason, or an amount that is not there. Never diagnose, recommend treatment, or judge whether spending is high or normal from it — it is a spending record, not a medical opinion. If the question is not about vet visits or spending, ignore it. When VET_RECENT is absent, say nothing about vet spending or visit history."""
+
 
 def build_general_prompt(payload: GeneralPayload) -> str:
+    """Assemble the fallback prompt from optional blocks.
+
+    **The two combinations that predate this card are reproduced by the exact same
+    literal strings as before** (D-057 ③ / #344) — the ``care_log is None and vet_spend
+    is None`` branch below is untouched code, not a block reconstruction, so v3's
+    84-pairwise-approved body cannot drift through this refactor. The v4-carelog case
+    *is* now assembled from blocks (below), but the assembly is byte-for-byte the same
+    string the old dedicated branch produced — see the block order comment.
+    """
     schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
     dog = payload.dog.model_dump(mode="json", exclude_none=True) if payload.dog else {}
-    if payload.care_log is None:
+
+    if payload.care_log is None and payload.vet_spend is None:
         return (
             f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
             f"{_SAFETY_PROMPT}\n\n"
@@ -138,14 +163,42 @@ def build_general_prompt(payload: GeneralPayload) -> str:
             f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
             f"USER_QUERY: {payload.question}\n"
         )
-    care_log = payload.care_log.model_dump(mode="json", exclude_none=True)
+
+    if payload.care_log is not None and payload.vet_spend is not None:
+        version = GENERAL_CARE_LOG_VET_PROMPT_VERSION
+    elif payload.care_log is not None:
+        version = GENERAL_CARE_LOG_PROMPT_VERSION
+    else:
+        version = GENERAL_VET_PROMPT_VERSION
+
+    # Rule paragraphs: safety always, care-log rule before vet-spend rule — that order is
+    # what keeps the care-log-only prompt identical to the pre-vet-spend v4-carelog body.
+    rule_blocks = [_SAFETY_PROMPT]
+    if payload.care_log is not None:
+        rule_blocks.append(_CARE_LOG_RULE)
+    if payload.vet_spend is not None:
+        rule_blocks.append(_VET_SPEND_RULE)
+
+    # Context lines: DOG_CONTEXT always, CARE_LOG_TODAY before VET_RECENT — same reason.
+    context_lines = [f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}"]
+    if payload.care_log is not None:
+        care_log = payload.care_log.model_dump(mode="json", exclude_none=True)
+        context_lines.append(
+            f"CARE_LOG_TODAY: {json.dumps(care_log, ensure_ascii=False, sort_keys=True)}"
+        )
+    if payload.vet_spend is not None:
+        vet_spend = payload.vet_spend.model_dump(mode="json", exclude_none=True)
+        context_lines.append(
+            f"VET_RECENT: {json.dumps(vet_spend, ensure_ascii=False, sort_keys=True)}"
+        )
+
     return (
-        f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n"
-        f"{_SAFETY_PROMPT}\n\n"
-        f"{_CARE_LOG_RULE}\n\n"
+        f"PROMPT_VERSION: {version}\n\n"
+        + "\n\n".join(rule_blocks)
+        + "\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
-        f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
-        f"CARE_LOG_TODAY: {json.dumps(care_log, ensure_ascii=False, sort_keys=True)}\n"
+        + "\n".join(context_lines)
+        + "\n"
         f"USER_QUERY: {payload.question}\n"
     )
 
@@ -255,9 +308,12 @@ def _elapsed_ms(started: float) -> int:
 
 
 __all__ = [
+    "GENERAL_CARE_LOG_PROMPT_VERSION",
+    "GENERAL_CARE_LOG_VET_PROMPT_VERSION",
     "GENERAL_MAX_OUTPUT_TOKENS",
     "GENERAL_MODEL_ID",
     "GENERAL_PROMPT_VERSION",
+    "GENERAL_VET_PROMPT_VERSION",
     "GeneralAnswer",
     "GeneralCapabilityAdapter",
     "build_general_prompt",

@@ -359,13 +359,22 @@ confirm:  raw_ocr_items ← **초안에서만** 읽는다
 
 ```
 VET_RECENT: {"month_total_krw": 180000, "visit_count_30d": 2,
-             "last_visit": {"date": "2026-09-02", "reason": "피부",  # reason_code 의 표시명
+             "last_visit": {"date": "2026-09-02", "reason": "피부",
                             "total_krw": 80000,
                             "hospital": "○○동물병원", "phone": "02-123-4567"},
-             "by_reason_12m": {"skin": 320000, "cardiac": 240000,
-                               "vaccination": 80000},
-             "emergency_count_12m": 1, "oncology_total_12m": 0}
+             "by_reason_12m": {"피부": 320000, "심장": 240000,
+                               "예방접종": 80000}}
 ```
+
+**`by_reason_12m` 의 키는 표시명이다, 코드가 아니다** (`skin` 이 아니라 `피부`) —
+`last_visit.reason` 도 표시명이라, 한 프롬프트 안에서 같은 것이 `피부` 와 `skin` 두
+이름으로 보이면 모델이 한국어로 답할 때 영문 코드를 끌어올 자리가 된다. 둘 다
+`VET_REASON_LABELS` 로 만든다.
+
+**`emergency_count_12m` · `oncology_total_12m` 은 아직 안 보낸다.** 승인된 범위는
+마지막 방문 + 이번 달 합계 + 사유별 누계뿐이다. 두 칸은 나중에 표에 추가된 것이라 이
+문서 초안에 남아 있었을 뿐, 아직 정해지지 않았다 — "열린 것" 참고. 필요해지면 그때
+범위를 넓힌다.
 
 **안 가는 것** — `reason_detail`(유저 자유 텍스트), `raw_ocr_items`, `hospital_address`,
 영수증 사진. 앞의 둘은 `#344` 가 `note` 를 뺀 것과 같은 이유다.
@@ -391,5 +400,8 @@ VET_RECENT: {"month_total_krw": 180000, "visit_count_30d": 2,
 - 사유 17개(계통 12 · 예방 4 · 기타)가 맞는지는 실제 영수증이 쌓인 뒤에 안다. `other` 비중이
   높으면 쪼개고, 1년간 한 건도 안 온 코드는 합친다. **쪼개는 것은 싸고 합치는 것은 비싸다** —
   누계가 이미 그 코드로 계산돼 있어서다.
+- 채팅에 보낼 응급·종양 누계(`emergency_count_12m`·`oncology_total_12m`). 승인된 범위는
+  마지막 방문 + 이번 달 합계 + 사유별 누계뿐이라 아직 안 보낸다 — 필요해지면 그때
+  `VetSpendContext` 와 `services/vet_spend_context.py` 를 넓힌다.
 - 어떤 표준에도 기대지 않은 목록이다. 축과 한국 임상 빈도로 짰다 — 펫보험 청구 질병분류에
   공개된 공통 체계가 있으면 그쪽에 맞추는 편이 낫다 (보험 청구가 붙을 때 다시 본다).

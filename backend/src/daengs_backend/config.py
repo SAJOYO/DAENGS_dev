@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     walk_area_context_enabled: bool = False
     walk_commerce_catalog_path: str = ""
     walk_river_catalog_path: str = ""
+    # Shared read-only regional directory; only the dedicated catalog worker writes it.
+    walk_public_catalog_root: str = ""
+    walk_catalog_refresh_enabled: bool = False
+    walk_catalog_daily_requests: int = Field(default=300, ge=1, le=1000)
 
     # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
     walk_entry_v2_enabled: bool = False

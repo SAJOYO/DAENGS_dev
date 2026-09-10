@@ -57,7 +57,7 @@ async def test_probe_cleanup_is_owned_and_errors_are_redacted(monkeypatch, capsy
     engine.dispose.assert_awaited_once()
 
 
-@pytest.mark.parametrize("note_change", [None, "missing", "changed"])
+@pytest.mark.parametrize("note_change", [None, "missing", "changed", "wrong_region"])
 async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, note_change):
     """A real clock's submillisecond precision must not break GPS source verification."""
     spec = importlib.util.spec_from_file_location(
@@ -124,7 +124,20 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
                 200,
                 json={
                     "sources": [
-                        {"tag": tag, "state": "completed", "envelope": {"status": "known"}}
+                        {
+                            "tag": tag,
+                            "state": "completed",
+                            "envelope": {
+                                "status": "known",
+                                "payload": {
+                                    "catalog_area": {
+                                        "center": {"lat": 0, "lng": 0}
+                                        if note_change == "wrong_region"
+                                        else {"lat": 37.4878, "lng": 127.052}
+                                    }
+                                },
+                            },
+                        }
                         for tag in (
                             "space.address",
                             "space.park",
@@ -146,10 +159,16 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
         lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs),
     )
     if note_change:
-        with pytest.raises(module.SmokeFailure, match="original note missing or changed"):
-            await module.cycle(uuid.uuid4())
+        reason = (
+            "managed regional catalog"
+            if note_change == "wrong_region"
+            else "original note missing or changed"
+        )
+        with pytest.raises(module.SmokeFailure, match=reason):
+            await module.cycle(uuid.uuid4(), require_regional=True)
     else:
-        result = await module.cycle(uuid.uuid4())
+        result = await module.cycle(uuid.uuid4(), require_regional=True)
+        assert result["managed_region_verified"]
         assert result["user_notes_preserved"] and result["user_action_preserved"]
         assert result["same_readback"] and result["addressed_scene_count"] == 3
         assert result["generated_background_count"] == 3

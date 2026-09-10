@@ -139,6 +139,12 @@ jobs:
             docker compose --profile walk-diary up -d --no-deps --force-recreate walk-context-worker walk-context-beat
             if ($LASTEXITCODE -ne 0) { throw 'failed to update Walk runtime' }
           }
+          $walkCatalog = @(docker ps --filter 'name=^/daengs-walk-catalog-worker$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect Walk catalog worker' }
+          if ($walkCatalog.Count -gt 0) {
+            docker compose --profile walk-diary up -d --no-deps --force-recreate walk-catalog-worker
+            if ($LASTEXITCODE -ne 0) { throw 'failed to update Walk catalog worker' }
+          }
 
           $forceAll = '${{ github.event_name }}' -eq 'workflow_dispatch'
           $changed = @()

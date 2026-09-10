@@ -1,4 +1,4 @@
-"""Bounded regional snapshots; only explicit CLI refreshes use the network."""
+"""Bounded regional snapshots; CLI and catalog worker refresh outside entry leases."""
 
 import json
 import math

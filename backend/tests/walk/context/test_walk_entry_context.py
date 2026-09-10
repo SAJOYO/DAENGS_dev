@@ -131,3 +131,20 @@ async def test_disabled_worker_does_not_open_database(state, monkeypatch):
     monkeypatch.setattr(settings, "walk_entry_context_enabled", False)
     assert await service.process(state.factory) == 0
     state.db.scalar.assert_not_awaited()
+
+
+@pytest.mark.parametrize("attempt,expected", [(1, "pending"), (2, "pending"), (3, "failed")])
+async def test_catalog_wait_keeps_three_attempt_limit_with_longer_download_window(
+    state, attempt, expected
+):
+    from datetime import UTC, datetime
+
+    state.job.attempts = attempt
+    before = datetime.now(UTC)
+    assert await service.finish(
+        state.factory,
+        state.ticket,
+        source.Collected("unavailable", "catalog_preparing", retryable=True),
+    )
+    assert state.job.state == expected and state.job.attempts == attempt
+    assert state.job.available_at >= before + timedelta(seconds=299)

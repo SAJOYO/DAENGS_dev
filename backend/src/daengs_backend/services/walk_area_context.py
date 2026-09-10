@@ -1,18 +1,17 @@
-"""Regional cache -> the same fenced context envelope, with no worker-side API calls."""
+"""Regional cache -> the same fenced context envelope, with no entry-worker API calls."""
 
 import asyncio
 
 from shapely.errors import ShapelyError
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_area_catalog, walk_commerce_catalog, walk_river_catalog
+from daengs_backend.services import walk_catalog_regions, walk_commerce_catalog, walk_river_catalog
 from daengs_backend.services.walk_entry_context_source import Collected
 from daengs_backend.services.walk_public_http import PublicSourceError
 
 
 def snapshot(kind, point):
-    path = getattr(settings, f"walk_{kind}_catalog_path")
-    value = walk_area_catalog.read(path, kind)
+    value = walk_catalog_regions.select(kind, point)
     module = walk_commerce_catalog if kind == "commerce" else walk_river_catalog
     return module.nearby(value, point), value["retrieved_at"]
 
@@ -27,7 +26,7 @@ async def collect_area(tag, point, pin=None):
         if kind == "commerce"
         else "river-polygon-area-catalog",
     }
-    if not getattr(settings, f"walk_{kind}_catalog_path"):
+    if not getattr(settings, f"walk_{kind}_catalog_path") and not settings.walk_public_catalog_root:
         return Collected("not_requested", "provider_not_configured", **meta)
     point = {"lat": point["lat"], "lng": point["lng"]}
     try:
@@ -48,6 +47,10 @@ async def collect_area(tag, point, pin=None):
             **meta,
         )
     except PublicSourceError as exc:
+        if walk_catalog_regions.can_prepare(point):
+            return Collected("unavailable", "catalog_preparing", retryable=True, **meta)
         return Collected("unavailable", exc.reason, **meta)
     except (ValueError, KeyError, TypeError, OSError, OverflowError, ShapelyError):
+        if walk_catalog_regions.can_prepare(point):
+            return Collected("unavailable", "catalog_preparing", retryable=True, **meta)
         return Collected("unavailable", "catalog_not_ready", **meta)

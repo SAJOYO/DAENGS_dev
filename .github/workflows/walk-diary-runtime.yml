@@ -17,6 +17,10 @@ on:
       radius:
         type: string
         default: '1200'
+      regional_smoke:
+        description: 'Two synthetic walks using distinct managed region caches'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,6 +63,8 @@ jobs:
     if: ${{ inputs.operation == 'Smoke' }}
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
+    env:
+      WALK_REGIONAL_SMOKE: ${{ inputs.regional_smoke }}
     steps:
       # Only the probe is copied. Feature-branch checks must not replace live backend/src.
       - uses: actions/checkout@v5
@@ -77,7 +83,9 @@ jobs:
           try {
             docker cp $source ('daengs-backend:' + $target)
             if ($LASTEXITCODE -ne 0) { throw 'Probe copy failed' }
-            docker exec -w /app daengs-backend uv run --no-sync python $target --execute
+            $arguments = @('exec', '-w', '/app', 'daengs-backend', 'uv', 'run', '--no-sync', 'python', $target, '--execute')
+            if ($env:WALK_REGIONAL_SMOKE -eq 'true') { $arguments += '--regional' }
+            & docker @arguments
             if ($LASTEXITCODE -ne 0) { throw 'Walk runtime probe failed' }
           } finally {
             docker exec daengs-backend rm -f $target

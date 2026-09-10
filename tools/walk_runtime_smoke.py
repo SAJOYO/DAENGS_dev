@@ -26,9 +26,10 @@ class SmokeFailure(Exception):
         self.validation_fields = validation_fields
 
 
-async def cycle(owner):
+async def cycle(owner, *, center=None, require_regional=False):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
+    center = center or {"lat": 37.4878, "lng": 127.052}
     points = []
     corners = [
         (-0.0012, -0.0007),
@@ -46,8 +47,8 @@ async def cycle(owner):
                 "client_seq": index,
                 "chain_index": 0,
                 "at": (started + timedelta(seconds=index * 10)).isoformat(),
-                "lat": round(37.4878 + a[0] * (1 - fraction) + b[0] * fraction, 7),
-                "lng": round(127.052 + a[1] * (1 - fraction) + b[1] * fraction, 7),
+                "lat": round(center["lat"] + a[0] * (1 - fraction) + b[0] * fraction, 7),
+                "lng": round(center["lng"] + a[1] * (1 - fraction) + b[1] * fraction, 7),
                 "accuracy_m": 5.0,
                 "is_mock": False,
             }
@@ -179,6 +180,14 @@ async def cycle(owner):
             for row in statuses
         ):
             raise SmokeFailure("public context not ready through the running worker")
+        if require_regional:
+            for context in contexts:
+                for source in context["sources"]:
+                    if source["tag"] not in {"space.commerce", "space.river"}:
+                        continue
+                    payload = source["envelope"]["payload"]
+                    if payload["catalog_area"]["center"] != center:
+                        raise SmokeFailure("context did not use its managed regional catalog")
         result = await request(
             "POST",
             f"/app/walks/{wid}/storyboard",
@@ -231,10 +240,11 @@ async def cycle(owner):
             "addressed_scene_count": addressed,
             "generated_background_count": generated,
             "http_requests": requests,
+            "managed_region_verified": require_regional,
         }
 
 
-async def main():
+async def main(*, regional=False):
     owner = uuid.uuid4()
     kakao = -(
         owner.int % (2**62) + 1
@@ -248,8 +258,26 @@ async def main():
                 {"id": owner, "kakao": kakao},
             )
         created = True
-        async with asyncio.timeout(240):
-            result.update(await cycle(owner))
+        async with asyncio.timeout(480 if regional else 240):
+            if regional:
+                from daengs_backend.services.walk_catalog_regions import path_for, region
+
+                # Entire synthetic route stays inside each distinct 1 km cell.
+                cases = []
+                result["regional_cases"] = cases
+                for point in ({"lat": 37.5172, "lng": 127.0473}, {"lat": 37.556, "lng": 126.9238}):
+                    _, center = region(point)
+                    existed = all(
+                        path_for(kind, center).is_file() for kind in ("commerce", "river")
+                    )
+                    cases.append(
+                        {
+                            "catalogs_present_before": existed,
+                            **await cycle(owner, center=center, require_regional=True),
+                        }
+                    )
+            else:
+                result.update(await cycle(owner))
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001 - never print API bodies, tokens, SQL parameters or user IDs
         result["error_type"] = type(exc).__name__
@@ -278,5 +306,6 @@ async def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", required=True)
-    parser.parse_args()
-    raise SystemExit(asyncio.run(main()))
+    parser.add_argument("--regional", action="store_true")
+    arguments = parser.parse_args()
+    raise SystemExit(asyncio.run(main(regional=arguments.regional)))

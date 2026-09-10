@@ -12,8 +12,13 @@ from __future__ import annotations
 
 from daengs_gait.config import MIN_USABLE_FRAMES
 
+#: tier 가 `good` 이 아닐 때 붙는 안내. **엔진마다 문구가 조금 다릅니다** (D-063 5C) —
+#: v4 는 여기에 `(§21 기준 80프레임 미만)` 을 넣습니다. 계산·임계값은 완전히 같고 문구만
+#: 다르므로 인자로 받되 기본값은 legacy 것 그대로입니다.
+LOW_TIER_NOTE = "분석은 가능하지만 유효 프레임이 적어 비교 결과의 신뢰도가 낮을 수 있습니다."
 
-def check_quality(records: list) -> dict:
+
+def check_quality(records: list, *, low_tier_note: str = LOW_TIER_NOTE) -> dict:
     n_sampled = len(records)
     n_detected = sum(1 for r in records if r["detected"])
     n_usable = sum(1 for r in records if r.get("gait_usable"))
@@ -61,10 +66,6 @@ def check_quality(records: list) -> dict:
         "reason": None,
         "recommendation": None,
         "quality_tier": tier,
-        "quality_note": (
-            "분석은 가능하지만 유효 프레임이 적어 비교 결과의 신뢰도가 낮을 수 있습니다."
-            if tier != "good"
-            else None
-        ),
+        "quality_note": low_tier_note if tier != "good" else None,
         **stats,
     }

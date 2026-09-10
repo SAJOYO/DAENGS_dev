@@ -105,6 +105,68 @@ def test_dev_only_fields_never_reach_the_app(client, monkeypatch):
     assert not [k for k in body if k.startswith("_dev_only")]
 
 
+# ── 판정 경계 — "차이 관찰됨" 은 임계값을 **넘을 때만** ────────────────────
+#
+# 5C 에서 계산을 두 엔진이 공유하게 되면서, 경계의 의미(`>` 인가 `>=` 인가)가 리팩터링에
+# 조용히 뒤집힐 수 있는 자리가 됐습니다. 임계값 바로 아래·정확히·바로 위 셋을 다 봅니다.
+# **숫자를 여기 옮겨 적지 않습니다** — 상수에서 유도해야 상수를 바꿔도 의미가 지켜집니다.
+def _rel(va: float, vb: float) -> float:
+    """`direction_note` 가 쓰는 상대 차이 — 경계값을 만들 때 같은 식을 씁니다."""
+    return abs(va - vb) / max(abs(va), abs(vb), 1e-9)
+
+
+def test_threshold_boundary_stays_strictly_greater():
+    from daengs_gait.compare import direction_note
+    from daengs_gait.config import COMPARE_DIFF_THRESHOLD as T
+
+    base = 10.0
+    below, at, above = base * (1 - T / 2), base * (1 - T), base * (1 - T * 1.5)
+
+    # 경계값이 **정말** 경계인지 먼저 확인합니다. 부동소수 때문에 `at` 이 임계값에서
+    # 미끄러지면 아래 단언이 경계를 안 보고 통과해 버립니다.
+    assert _rel(below, base) < T
+    assert _rel(at, base) == T
+    assert _rel(above, base) > T
+
+    assert direction_note(below, base) == "비슷함"
+    assert direction_note(at, base) == "비슷함"          # 정확히 임계값이면 "비슷함"
+    assert direction_note(above, base) == "차이 관찰됨"
+
+
+def test_direction_note_does_not_say_which_way(client, monkeypatch):  # noqa: ARG001
+    """**늘었는지 줄었는지는 말하지 않습니다.** 표본이 작을 때 관절별 비율이 크게 흩어지는
+    것을 실측했고, 방향까지 단언하면 진단처럼 읽힙니다. 그래서 순서를 바꿔도 답이 같습니다."""
+    from daengs_gait.compare import direction_note
+
+    assert direction_note(4.0, 10.0) == direction_note(10.0, 4.0) == "차이 관찰됨"
+    assert direction_note(9.5, 10.0) == direction_note(10.0, 9.5) == "비슷함"
+
+
+def test_direction_note_when_one_side_has_no_value():
+    """없는 값을 "비슷함" 으로 뭉치지 않습니다 — 데이터가 없는 것을 변화가 없다고 말하게 됩니다."""
+    from daengs_gait.compare import direction_note
+
+    assert direction_note(None, 10.0) == "비교 불가(한쪽 기록에 없음)"
+    assert direction_note(10.0, None) == "비교 불가(한쪽 기록에 없음)"
+
+
+@pytest.mark.parametrize(
+    ("factor", "expected"),
+    [(1.0, "비슷함"), (1.5, "차이 관찰됨")],  # 임계값의 1배(경계) · 1.5배
+)
+def test_threshold_boundary_reaches_the_app_response(client, monkeypatch, factor, expected):
+    """경계 판정이 응답까지 그대로 실려 나가는지 — 계산이 맞아도 배선이 끊기면 소용없습니다."""
+    from daengs_gait.config import COMPARE_DIFF_THRESHOLD as T
+
+    base = 10.0
+    a, b = _rec(day=1, x=base * (1 - T * factor)), _rec(day=5, x=base)
+    _pair(monkeypatch, [a, b])
+
+    body = _post(client, a.id, b.id).json()
+    assert body["joint_movement_range_comparison"]["Hock"]["comparison_note"]["x"] == expected
+    assert body["joint_movement_range_comparison"]["Hock"]["comparison_note"]["y"] == "비슷함"
+
+
 # ── 차단 규칙 ───────────────────────────────────────────────────────────
 def test_same_record_is_rejected(client, monkeypatch):
     """같은 기록끼리는 400 — 존재 여부가 새지 않는 요청 오류입니다."""

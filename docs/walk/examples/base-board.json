@@ -1,0 +1,557 @@
+[
+  {
+    "case": "ordinary",
+    "fixture": "synthetic_not_a_real_walk",
+    "evidence_origin": "mock",
+    "target_intermediate": 5,
+    "counts": {
+      "target": 5,
+      "user_records": 0,
+      "initial_deficit": 5,
+      "supplemented": 0,
+      "remaining_deficit": 0,
+      "total": 7,
+      "checkpoints": 5,
+      "boundaries": 2,
+      "intermediate_total": 5
+    },
+    "limits": [
+      "observation_pool_empty",
+      "photo_metadata_not_available"
+    ],
+    "board_format": "walk-diary-base-board-v1",
+    "title": "2026.09.09 산책",
+    "model_status": "not_requested",
+    "scenes": [
+      {
+        "order": 1,
+        "id": "stamp:77a5727414d2cb71ad8e2a311956143ecb1571a273e5a45ce1903a0b9335a823",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:00:00+00:00",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 0,
+            "chain_index": 0,
+            "at": "2026-09-09T00:00:00Z"
+          }
+        ],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 시작",
+        "body": "산책을 시작했다."
+      },
+      {
+        "order": 2,
+        "id": "stamp:6c1a3f0152796c6e9fd4e3f5ae75a9e517446dbcba89b0c0590a8d6486ad406e",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:02:10+00:00",
+        "point": {
+          "lat": 37.502338,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 13,
+            "chain_index": 0,
+            "at": "2026-09-09T00:02:10Z"
+          }
+        ],
+        "route_m": 259.97373849517487,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 3,
+        "id": "stamp:61b7c3e1174ffc7c675f814467a3c8e38f13ef020a1e0dffdc9433af33c71f70",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:04:10+00:00",
+        "point": {
+          "lat": 37.504497,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 25,
+            "chain_index": 0,
+            "at": "2026-09-09T00:04:10Z"
+          }
+        ],
+        "route_m": 500.04358512078636,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 4,
+        "id": "stamp:fcab5d399a49d6b6e6b2c7d84350d186009d24223dbb6452f5b6f898f8551ece",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:08:20+00:00",
+        "point": {
+          "lat": 37.508993,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 50,
+            "chain_index": 0,
+            "at": "2026-09-09T00:08:20Z"
+          }
+        ],
+        "route_m": 999.975975313781,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 5,
+        "id": "stamp:fca2ab90420dff452f036ce25bf633aded57973409564868f4ea70968c202231",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:10:20+00:00",
+        "point": {
+          "lat": 37.511152,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 62,
+            "chain_index": 0,
+            "at": "2026-09-09T00:10:20Z"
+          }
+        ],
+        "route_m": 1240.0458219400998,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 6,
+        "id": "stamp:e60881f064c60a7813fc3d49b6747d0140803f3d6f89d9b07f8abc1f481b9689",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:12:30+00:00",
+        "point": {
+          "lat": 37.51349,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 75,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:30Z"
+          }
+        ],
+        "route_m": 1500.0195604345672,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 7,
+        "id": "stamp:d9155fb4c8ace300cc6e0169b576caf58ce31e66c6e6257c9154928f8fbbd5d4",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:16:40+00:00",
+        "point": {
+          "lat": 37.517986,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 100,
+            "chain_index": 0,
+            "at": "2026-09-09T00:16:40Z"
+          }
+        ],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다."
+      }
+    ]
+  },
+  {
+    "case": "with_note",
+    "fixture": "synthetic_not_a_real_walk",
+    "evidence_origin": "mock",
+    "target_intermediate": 5,
+    "counts": {
+      "target": 5,
+      "user_records": 1,
+      "initial_deficit": 4,
+      "supplemented": 0,
+      "remaining_deficit": 0,
+      "total": 7,
+      "checkpoints": 4,
+      "boundaries": 2,
+      "intermediate_total": 5
+    },
+    "limits": [
+      "observation_pool_empty",
+      "photo_metadata_not_available"
+    ],
+    "board_format": "walk-diary-base-board-v1",
+    "title": "2026.09.09 산책",
+    "model_status": "not_requested",
+    "scenes": [
+      {
+        "order": 1,
+        "id": "stamp:cba40e7802d08966c955956120d03b22d1c38f83619cf78c9b6af8ed3ee2cbef",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:00:00+00:00",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 0,
+            "chain_index": 0,
+            "at": "2026-09-09T00:00:00Z"
+          }
+        ],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 시작",
+        "body": "산책을 시작했다."
+      },
+      {
+        "order": 2,
+        "id": "stamp:f2506810809781de6a1063aa968a73265b894ae3b3b71b90bd142ce471cb8e0e",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:02:10+00:00",
+        "point": {
+          "lat": 37.502338,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 13,
+            "chain_index": 0,
+            "at": "2026-09-09T00:02:10Z"
+          }
+        ],
+        "route_m": 259.97373849517487,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 3,
+        "id": "stamp:b1c27112b69d0dd18c2943c3d697cda6a204980d3b99ac34cc3b3d231c4f6b75",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:04:10+00:00",
+        "point": {
+          "lat": 37.504497,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 25,
+            "chain_index": 0,
+            "at": "2026-09-09T00:04:10Z"
+          }
+        ],
+        "route_m": 500.04358512078636,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 4,
+        "id": "stamp:747f9a9c7aa08a411449549bd16cb8269f561ad1960fecf3cfa5c47f62adf0ee",
+        "core_kind": "user_record",
+        "event_at": "2026-09-09T00:08:20+00:00",
+        "point": {
+          "lat": 37.508993,
+          "lng": 127.0
+        },
+        "source_fixes": [],
+        "route_m": null,
+        "block": null,
+        "title": "남긴 이야기",
+        "body": "  두부와 사진을 남겼다.\n바람이 잠깐 불었다.  "
+      },
+      {
+        "order": 5,
+        "id": "stamp:41ff12fca94689973892fbf72e89d127ed661a49018e930b7d57aa6b1667474a",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:10:20+00:00",
+        "point": {
+          "lat": 37.511152,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 62,
+            "chain_index": 0,
+            "at": "2026-09-09T00:10:20Z"
+          }
+        ],
+        "route_m": 1240.0458219400998,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 6,
+        "id": "stamp:f125ce8b43949bd6562ae7e382a61181a8042571b09b63f7da0d694db54169fa",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:12:30+00:00",
+        "point": {
+          "lat": 37.51349,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 75,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:30Z"
+          }
+        ],
+        "route_m": 1500.0195604345672,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 7,
+        "id": "stamp:29de5df20966e466db2eff36bee3f1efb00314cb037841fb5e0d484e2c25e823",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:16:40+00:00",
+        "point": {
+          "lat": 37.517986,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 100,
+            "chain_index": 0,
+            "at": "2026-09-09T00:16:40Z"
+          }
+        ],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다."
+      }
+    ]
+  },
+  {
+    "case": "late_start_and_gap",
+    "fixture": "synthetic_not_a_real_walk",
+    "evidence_origin": "mock",
+    "target_intermediate": 5,
+    "counts": {
+      "target": 5,
+      "user_records": 0,
+      "initial_deficit": 5,
+      "supplemented": 0,
+      "remaining_deficit": 0,
+      "total": 7,
+      "checkpoints": 5,
+      "boundaries": 2,
+      "intermediate_total": 5
+    },
+    "limits": [
+      "observation_pool_empty",
+      "photo_metadata_not_available"
+    ],
+    "board_format": "walk-diary-base-board-v1",
+    "title": "2026.09.09 산책",
+    "model_status": "not_requested",
+    "scenes": [
+      {
+        "order": 1,
+        "id": "stamp:93125aed11df425ac272e7d72062f07d85440de8b1e50d3975668d313281b6e5",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:00:00+00:00",
+        "point": null,
+        "source_fixes": [],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 시작",
+        "body": "산책을 시작했다."
+      },
+      {
+        "order": 2,
+        "id": "stamp:3e87e27017d7c8d803f1bac9a5db94f9acb8ac17aa24283141bd36c2a49f09eb",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:00:30+00:00",
+        "point": {
+          "lat": 37.50036,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 2,
+            "chain_index": 0,
+            "at": "2026-09-09T00:00:30Z"
+          }
+        ],
+        "route_m": 40.030173591880214,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 3,
+        "id": "stamp:f79d7821054290f917aca07f84a7bc658b0d7e65db24d68adafc5940c8cdb1d9",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:01:50+00:00",
+        "point": {
+          "lat": 37.501799,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 10,
+            "chain_index": 0,
+            "at": "2026-09-09T00:01:50Z"
+          }
+        ],
+        "route_m": 200.03967303302417,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 4,
+        "id": "stamp:293ea806d00dfd2de5406af0e32334dfbd0452c30380c7f2f96248c8c9214d88",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:03:00+00:00",
+        "point": {
+          "lat": 37.503058,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 17,
+            "chain_index": 0,
+            "at": "2026-09-09T00:03:00Z"
+          }
+        ],
+        "route_m": 340.0340856789352,
+        "block": 0,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 5,
+        "id": "stamp:efdce3a72aba18ef782fbdab82cdf4be28f9c213acd0ce31053d29b3b04701ec",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:11:10+00:00",
+        "point": {
+          "lat": 37.510252,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 28,
+            "chain_index": 0,
+            "at": "2026-09-09T00:11:10Z"
+          }
+        ],
+        "route_m": 539.9625637862896,
+        "block": 1,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 6,
+        "id": "stamp:20d63b69e9a78035b7ff98f498aacf9eb8f3da4cbd74949bccbaed25d9d26b76",
+        "core_kind": "route_checkpoint",
+        "event_at": "2026-09-09T00:12:20+00:00",
+        "point": {
+          "lat": 37.511511,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 35,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:20Z"
+          }
+        ],
+        "route_m": 679.9569764314933,
+        "block": 1,
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다."
+      },
+      {
+        "order": 7,
+        "id": "stamp:f5f724b039c3891db30f5efa27d4657a40a8bdd93dcb94e0f9ed3eccbada83f3",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:13:20+00:00",
+        "point": {
+          "lat": 37.51259,
+          "lng": 127.0
+        },
+        "source_fixes": [
+          {
+            "client_seq": 41,
+            "chain_index": 0,
+            "at": "2026-09-09T00:13:20Z"
+          }
+        ],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다."
+      }
+    ]
+  },
+  {
+    "case": "no_gps",
+    "fixture": "synthetic_not_a_real_walk",
+    "evidence_origin": "unknown",
+    "target_intermediate": 5,
+    "counts": {
+      "target": 5,
+      "user_records": 0,
+      "initial_deficit": 5,
+      "supplemented": 0,
+      "remaining_deficit": 5,
+      "total": 2,
+      "checkpoints": 0,
+      "boundaries": 2,
+      "intermediate_total": 0
+    },
+    "limits": [
+      "observation_pool_empty",
+      "photo_metadata_not_available",
+      "intermediate_target_not_reached"
+    ],
+    "board_format": "walk-diary-base-board-v1",
+    "title": "2026.09.09 산책",
+    "model_status": "not_requested",
+    "scenes": [
+      {
+        "order": 1,
+        "id": "stamp:a137c15001f32b086e6923ae39b9911d9f63a158b24af884ee50925ef2fe4c94",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:00:00+00:00",
+        "point": null,
+        "source_fixes": [],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 시작",
+        "body": "산책을 시작했다."
+      },
+      {
+        "order": 2,
+        "id": "stamp:66c71ec0a7906692cab3719bde5ab5190eb9eef0904463ea009bc52bc7c6f0cd",
+        "core_kind": "session_boundary",
+        "event_at": "2026-09-09T00:03:00+00:00",
+        "point": null,
+        "source_fixes": [],
+        "route_m": null,
+        "block": null,
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다."
+      }
+    ]
+  }
+]

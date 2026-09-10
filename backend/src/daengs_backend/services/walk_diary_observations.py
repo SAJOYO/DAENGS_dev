@@ -1,6 +1,6 @@
 """Bind a diary observation pool to verified stored analysis and its exact uploaded points."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.services.walk_analysis import decode_analysis_model
@@ -9,6 +9,7 @@ from daengs_walk import analyze_walk
 from daengs_walk.contracts import WALK_CALCULATION_VERSION, EvidenceOrigin
 from daengs_walk.diary_input import RouteVersion
 from daengs_walk.diary_observations import ObservationPool, build_observation_pool
+from daengs_walk.evidence import WalkEvidenceBundle
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,8 @@ class ObservationSource:
     route: RouteVersion
     evidence_origin: EvidenceOrigin = "unknown"
     pool: ObservationPool | None = None
+    # Already replayed canonical evidence; private base-board preparation reuses it.
+    evidence: WalkEvidenceBundle | None = field(default=None, repr=False)
 
 
 def _unavailable(reason):
@@ -66,7 +69,7 @@ def prepare_observation_source(walk, analysis) -> ObservationSource:
             calculation_version=analysis.calculation_version,
         )
         return ObservationSource(
-            route, evidence.facts.evidence_origin, build_observation_pool(evidence, route)
+            route, evidence.facts.evidence_origin, build_observation_pool(evidence, route), evidence
         )
     except (ValueError, TypeError, KeyError, ArithmeticError):
         # Missing/invalid motion must not erase the user's original records or expose raw GPS.

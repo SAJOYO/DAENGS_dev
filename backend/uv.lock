@@ -449,6 +449,14 @@ pdf = [
 pipeline = [
     { name = "google-cloud-run" },
 ]
+realtime = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "redis" },
+    { name = "tzdata" },
+]
 screening = [
     { name = "huggingface-hub" },
     { name = "pandas" },
@@ -536,6 +544,14 @@ ml = [
 ]
 pdf = [{ name = "pymupdf", specifier = ">=1.28.2" }]
 pipeline = [{ name = "google-cloud-run", specifier = ">=0.16.1" }]
+realtime = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "redis", specifier = ">=6.0" },
+    { name = "tzdata", specifier = ">=2026.3" },
+]
 screening = [
     { name = "huggingface-hub", specifier = ">=0.34" },
     { name = "pandas", specifier = ">=2.1" },

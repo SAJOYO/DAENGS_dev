@@ -230,6 +230,31 @@ gait-v4 = [
     "torch==2.13.0",
     "torchvision==0.28.0",
 ]
+# 실시간 산책·날씨 서비스(D-068)가 받는 것 전부. **base 의존성을 안 받는다** —
+# `uv sync --frozen --only-group realtime --no-install-project` 로 깐다 (`gait-v4` 와 같은 방식).
+#
+# base 를 안 받는 이유 둘. ① base 에는 realtime 이 안 쓰는 것이 스무 개쯤 있고
+# (sqlalchemy · celery · langgraph · kiwipiepy · shapely · google-genai …) **앞으로 늘어난다.**
+# 다른 팀원이 base 에 무거운 것을 넣으면 이 이미지가 따라 커지는데 **그 사람은 모른다.**
+# ② 그룹으로 적으면 **경계가 기계가 읽는 형태로 남는다** — 지금 "realtime 이 쓰는 것은 여섯"은
+# import 전수 조사 결과일 뿐 어디에도 안 적혀 있었다. `gait` 그룹이 같은 논리로 만들어졌다.
+#
+# ⚠ **`tzdata` 는 코드가 직접 import 하지 않는다.** `zoneinfo.ZoneInfo("Asia/Seoul")` 이
+#   간접적으로 쓴다 — 전수 조사에서 놓치기 쉬운 자리이고, 빠지면 import 는 되는데 시간대
+#   조회에서 터진다.
+# ⚠ **놓친 패키지는 빌드가 아니라 런타임 import 에서 터진다.** 그물이 둘 있다:
+#   `uv sync --only-group realtime` 한 별도 venv 로 앱을 import 해 보는 것과,
+#   이미지를 띄워 실제로 두 엔드포인트를 부르는 것 (docker/realtime/).
+# ⚠ 이름을 바꾸면 `docker/realtime/Dockerfile` 의 `--only-group` 인자도 같이 고쳐라.
+#   `--frozen` 이라 빌드가 바로 죽지만, 그때는 이미 Cloud Build 위다.
+realtime = [
+    "fastapi[standard]>=0.141.1",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "redis>=6.0",
+    "tzdata>=2026.3",
+]
 
 [tool.ruff]
 line-length = 100

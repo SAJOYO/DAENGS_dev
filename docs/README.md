@@ -19,6 +19,7 @@
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
 | [territory/my-sites-api.md](territory/my-sites-api.md) | 회원 전체·강아지별 현재 점령지 목록, 좌표·페이지 조회와 Place ID 조회 |
+| [territory/public-game-api.md](territory/public-game-api.md) | 현재 시즌 강아지 순위·공개 게임 프로필·현재 점령지·프로필 사진 조회 |
 | [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
 | [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
 | [territory/monthly-seasons.md](territory/monthly-seasons.md) | 명시적 첫 월간 시즌 시작·자동 결산·최종 순위·다음 시즌과 장애 복구 |

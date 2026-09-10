@@ -1,0 +1,528 @@
+[
+  {
+    "case_id": "PC-E05",
+    "repetition": 1,
+    "turn": 1,
+    "variant": "server-assigned-expression-ids",
+    "original_plan": {
+      "goal": "show",
+      "changes": {
+        "upsert_any": [
+          {
+            "id": "cafe-parking-or-exclusive-restaurant",
+            "all": [
+              {
+                "capability": "purpose.kind",
+                "id": "kind-cafe-parking",
+                "op": "in",
+                "value": [
+                  "cafe"
+                ]
+              },
+              {
+                "op": "eq",
+                "id": "parking-cafe",
+                "capability": "operations.parking",
+                "value": true
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "capability": "purpose.kind",
+                "id": "kind-restaurant-exclusive",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ]
+              },
+              {
+                "value": true,
+                "capability": "pet_access.exclusive",
+                "id": "exclusive-restaurant",
+                "op": "eq"
+              }
+            ],
+            "id": "cafe-parking-or-exclusive-restaurant"
+          }
+        ]
+      }
+    },
+    "alternative_plan": {
+      "goal": "show",
+      "changes": {
+        "upsert_any": [
+          {
+            "id": "expr-branch-0",
+            "all": [
+              {
+                "id": "expr-0-atom-0",
+                "capability": "purpose.kind",
+                "op": "in",
+                "value": [
+                  "cafe"
+                ]
+              },
+              {
+                "id": "expr-0-atom-1",
+                "op": "eq",
+                "capability": "operations.parking",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "expr-branch-1",
+            "all": [
+              {
+                "id": "expr-1-atom-0",
+                "capability": "purpose.kind",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ]
+              },
+              {
+                "id": "expr-1-atom-1",
+                "value": true,
+                "capability": "pet_access.exclusive",
+                "op": "eq"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "receipt": {
+      "goal": "show",
+      "execution": "searched",
+      "filters_changed": true,
+      "result_matches_filters": true,
+      "returned_count": 2,
+      "snapshot_id": "32dd97c9-2ec4-41a3-8cf2-752261f33d0c",
+      "selected": null,
+      "code": "",
+      "question": "",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "restaurant-exclusive"
+    ],
+    "filters_preserved": false,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E06",
+    "repetition": 1,
+    "turn": 1,
+    "variant": "question-gate",
+    "original_plan": {
+      "goal": "show",
+      "changes": {
+        "upsert_all": [
+          {
+            "op": "eq",
+            "capability": "operations.parking",
+            "id": "parking-filter",
+            "value": false
+          }
+        ]
+      },
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?"
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 6,
+      "snapshot_id": "cf93e0de-c730-433a-b462-e9d92e2f030e",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "cafe-no",
+      "cafe-unknown",
+      "restaurant-exclusive",
+      "restaurant-parking",
+      "restaurant-unknown"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E08",
+    "repetition": 2,
+    "turn": 1,
+    "variant": "question-gate",
+    "original_plan": {
+      "goal": "show",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "changes": {
+        "upsert_all": [
+          {
+            "op": "eq",
+            "capability": "operations.parking",
+            "value": true,
+            "id": "parking_required"
+          }
+        ],
+        "candidate_kinds": [
+          "cafe"
+        ]
+      }
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 6,
+      "snapshot_id": "eff42235-1895-439f-80e1-392a4a391b1c",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "cafe-no",
+      "cafe-unknown",
+      "restaurant-exclusive",
+      "restaurant-parking",
+      "restaurant-unknown"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E05",
+    "repetition": 3,
+    "turn": 1,
+    "variant": "server-assigned-expression-ids",
+    "original_plan": {
+      "changes": {
+        "upsert_any": [
+          {
+            "all": [
+              {
+                "id": "kind-cafe-parking",
+                "op": "in",
+                "value": [
+                  "cafe"
+                ],
+                "capability": "purpose.kind"
+              },
+              {
+                "id": "parking-cafe",
+                "op": "eq",
+                "capability": "operations.parking",
+                "value": true
+              }
+            ],
+            "id": "cafe-parking-or-exclusive-restaurant"
+          },
+          {
+            "id": "cafe-parking-or-exclusive-restaurant",
+            "all": [
+              {
+                "id": "kind-restaurant-exclusive",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ],
+                "capability": "purpose.kind"
+              },
+              {
+                "capability": "pet_access.exclusive",
+                "op": "eq",
+                "id": "exclusive-restaurant",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "goal": "show"
+    },
+    "alternative_plan": {
+      "changes": {
+        "upsert_any": [
+          {
+            "id": "expr-branch-0",
+            "all": [
+              {
+                "id": "expr-0-atom-0",
+                "op": "in",
+                "value": [
+                  "cafe"
+                ],
+                "capability": "purpose.kind"
+              },
+              {
+                "id": "expr-0-atom-1",
+                "op": "eq",
+                "capability": "operations.parking",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "expr-branch-1",
+            "all": [
+              {
+                "id": "expr-1-atom-0",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ],
+                "capability": "purpose.kind"
+              },
+              {
+                "id": "expr-1-atom-1",
+                "capability": "pet_access.exclusive",
+                "op": "eq",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "goal": "show"
+    },
+    "receipt": {
+      "goal": "show",
+      "execution": "searched",
+      "filters_changed": true,
+      "result_matches_filters": true,
+      "returned_count": 2,
+      "snapshot_id": "d077580c-b0d4-4530-9687-a0933bb5ec02",
+      "selected": null,
+      "code": "",
+      "question": "",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "restaurant-exclusive"
+    ],
+    "filters_preserved": false,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E06",
+    "repetition": 3,
+    "turn": 1,
+    "variant": "question-gate",
+    "original_plan": {
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?",
+      "goal": "show",
+      "changes": {
+        "upsert_all": [
+          {
+            "id": "parking-filter",
+            "op": "eq",
+            "capability": "operations.parking",
+            "value": false
+          }
+        ]
+      }
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 6,
+      "snapshot_id": "1bcbccb0-b46c-45db-bcdd-856d38e8558c",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "주차 가능한 곳과 주차 불가능한 곳을 동시에 찾으실 수는 없습니다. 주차 시설이 없는 곳으로 검색을 진행할까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "cafe-no",
+      "cafe-unknown",
+      "restaurant-exclusive",
+      "restaurant-parking",
+      "restaurant-unknown"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E07",
+    "repetition": 3,
+    "turn": 1,
+    "variant": "question-gate",
+    "original_plan": {
+      "changes": {
+        "upsert_all": [
+          {
+            "value": true,
+            "id": "parking_required",
+            "capability": "operations.parking",
+            "op": "eq"
+          }
+        ],
+        "candidate_kinds": [
+          "cafe"
+        ]
+      },
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "goal": "show"
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 6,
+      "snapshot_id": "df39a002-dfde-4575-9819-ac24edf67f29",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "cafe-no",
+      "cafe-unknown",
+      "restaurant-exclusive",
+      "restaurant-parking",
+      "restaurant-unknown"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E08",
+    "repetition": 3,
+    "turn": 1,
+    "variant": "question-gate",
+    "original_plan": {
+      "changes": {
+        "upsert_all": [
+          {
+            "value": true,
+            "capability": "operations.parking",
+            "op": "eq",
+            "id": "parking_required"
+          }
+        ],
+        "candidate_kinds": [
+          "cafe"
+        ]
+      },
+      "goal": "show",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 6,
+      "snapshot_id": "f1f015bc-5271-4ffa-9d16-8a51a1e5e83d",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes",
+      "cafe-no",
+      "cafe-unknown",
+      "restaurant-exclusive",
+      "restaurant-parking",
+      "restaurant-unknown"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E08",
+    "repetition": 3,
+    "turn": 2,
+    "variant": "question-gate",
+    "original_plan": {
+      "question": "'조용한' 분위기는 검색 조건으로 설정하기 어렵습니다. 주차 가능한 카페를 먼저 보여드릴까요?",
+      "goal": "show"
+    },
+    "alternative_plan": {
+      "goal": "clarify",
+      "question": "'조용한' 분위기는 검색 조건으로 설정하기 어렵습니다. 주차 가능한 카페를 먼저 보여드릴까요?"
+    },
+    "receipt": {
+      "goal": "clarify",
+      "execution": "not_run",
+      "filters_changed": false,
+      "result_matches_filters": true,
+      "returned_count": 1,
+      "snapshot_id": "97c84630-5ce0-4ea6-aaeb-9b5c3dc7801b",
+      "selected": null,
+      "code": "clarification_required",
+      "question": "'조용한' 분위기는 검색 조건으로 설정하기 어렵습니다. 주차 가능한 카페를 먼저 보여드릴까요?",
+      "evidence": {}
+    },
+    "returned_refs": [
+      "cafe-yes"
+    ],
+    "filters_preserved": true,
+    "boundary": "captured-plan replay; not a fresh semantic-compiler LLM experiment"
+  },
+  {
+    "case_id": "PC-E16",
+    "variant": "controlled-prose-injection",
+    "draft": {
+      "text": "테스트 카페 A는 조용하고 무료예요.",
+      "evidence_ids": [
+        "place"
+      ]
+    },
+    "evidence": {
+      "place": "테스트 카페 A",
+      "distance": "검색 중심에서 100m 거리예요.",
+      "scope": "저장된 검색 후보에 포함된 장소예요.",
+      "parking": "원천 정보에 주차 가능으로 확인돼요.",
+      "address": "테스트 주소"
+    },
+    "served": {
+      "text": "테스트 카페 A는 조용하고 무료예요.",
+      "source": "llm",
+      "evidence_ids": [
+        "place"
+      ],
+      "revision": 1
+    },
+    "unsupported_draft_accepted": true,
+    "evidence_only_render": "테스트 카페 A 검색 중심에서 100m 거리예요. 원천 정보에 주차 가능으로 확인돼요.",
+    "boundary": "fault injection; does not claim the live model generated this draft"
+  }
+]

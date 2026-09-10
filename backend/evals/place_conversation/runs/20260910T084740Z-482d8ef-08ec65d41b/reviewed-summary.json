@@ -1,0 +1,128 @@
+{
+  "observed_turns": 18,
+  "reviewed_turns": 18,
+  "turn_statuses": {
+    "pass": 15,
+    "fail": 3
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-X03",
+      "variant": "no-duplicate-past-query",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "no-duplicate-past-query",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "no-duplicate-past-query",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "query-last",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "query-last",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "query-last",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "no-duplicate-past-query",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "no-duplicate-past-query",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "no-duplicate-past-query",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "query-last",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "query-last",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "query-last",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "no-duplicate-past-query",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "no-duplicate-past-query",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "no-duplicate-past-query",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "query-last",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "query-last",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "query-last",
+      "repetition": 3,
+      "status": "pass"
+    }
+  ],
+  "provider_calls": 18,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 3275.5,
+  "reported_usage": {
+    "total_input_tokens": 79140,
+    "total_output_tokens": 588,
+    "total_tokens": 79728
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

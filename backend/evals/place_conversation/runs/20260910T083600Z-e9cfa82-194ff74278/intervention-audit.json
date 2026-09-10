@@ -1,0 +1,10 @@
+{
+  "observations_checked": 84,
+  "complete_pairs_checked": 42,
+  "baseline_requests_matching_archived_production_input": 42,
+  "pair_before_states_identical": true,
+  "only_input_context_changed": true,
+  "changed_source_files_since_run": [],
+  "source_production_hash_comparison": "main production files unchanged; see source_sha256",
+  "complete": true
+}

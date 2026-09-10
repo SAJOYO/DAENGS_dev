@@ -10,12 +10,21 @@
 | [transfer.v1.jsonl](transfer.v1.jsonl) | 첫 관측 뒤 작성한 별도 전이 검사 4개. 원래 23개와 합산하지 않음 |
 | [policy.v1.jsonl](policy.v1.jsonl) / [fixtures.policy.v1.json](fixtures.policy.v1.json) | 확인 후속 발화 10개와 불투명 ID fixture |
 | [corrections.v1.jsonl](corrections.v1.jsonl) | 교정 5개와 사용자 불만·재탐색 원문/확장 9개. 27단계 중 수동 이벤트 2개 |
+| [context-ablation.v1.json](context-ablation.v1.json) | 동일 턴 직전 상태에서 현재 입력/화면 문맥 보강을 비교할 14개 대상 |
+| [context-followup.v1.json](context-followup.v1.json) | 주입 후 관측한 최신 요청 누락을 입력 키 순서/중복 과거 발화로 나눈 3개 대상 |
 | `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
 [1차 연구 결과](../../../docs/place/conversation-research-2026-09-10.md)에 실행별 링크와 구조 제안을 정리했다.
 [채택한 실행 정책](../../../docs/place/conversation-policy.md)은 PR #417의 해석·확인·사실 응답 경계를 설명한다.
 [교정·재탐색 연구](../../../docs/place/conversation-corrections-2026-09-10.md)는 그 정책을 고정한 후속 실험이다.
+[문맥 주입 대조](../../../docs/place/conversation-context-ablation-2026-09-10.md)는 동일 query/상태에
+현재 화면과 완료된 직전 행동만 추가한다. 실행: `uv run python -m daengs_evals.place_conversation.context_ablation --live --repeat 3 --key-file C:\path\to\.env`.
+이 대조의 cases.json은 원래 케이스 전체가 아니라 고정 턴/단서 snapshot이고,
+report의 case_repetitions는 독립 턴 대상의 반복이다. 전체 대화 완료로 집계하지 않는다.
+제한적 배치 후속은 `uv run python -m daengs_evals.place_conversation.context_followup --live --repeat 3 --key-file C:\path\to\.env`로 실행한다.
+두 모듈은 기존 run의 고정 입력을 읽으며 새 고유 run을 생성한다. 기본 spec의 source_run은 수정하지 않고,
+다른 근거로 비교하려면 spec을 새 버전으로 만든다.
 `cases.v1.jsonl`은 시나리오 **명세**다. `setup`은 HTTP 요청이나 FilterState의 직접 직렬화가 아니며,
 이 값을 실제 상태/fixture로 바꾸는 어댑터는 `src/daengs_evals/place_conversation/`에 있다.
 예를 들어 `parking=required_true`는 원본의 의미를 나타내며 production enum이 아니다.

@@ -96,8 +96,8 @@ def member_condition(app_user_id: uuid.UUID):
 
     **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다.
 
-    이름에 밑줄이 없는 것이 의도입니다. `chat`·`gait_record`·`territory_claim`·
-    `walk_entry` 네 리포지토리가 이것을 가져다 씁니다 — 구성원 판정은 **한 자리에만**
+    이름에 밑줄이 없는 것이 의도입니다. `chat`·`gait_record`·`screening`·`territory_claim`·
+    `walk_entry` 다섯 리포지토리가 이것을 가져다 씁니다 — 구성원 판정은 **한 자리에만**
     있어야 하므로 복사하지 말고 이것을 부르세요 (docs/co-care.md §2).
     """
     return or_(

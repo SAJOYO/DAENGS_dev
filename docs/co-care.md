@@ -188,10 +188,11 @@ async def get_accessible(...) -> Pet | None:   # 구성원. 새로 추가
 | `services/care_event.py:61` `_owned_pet` | 구성원 | 기록·조회. 이름도 `_accessible_pet` 으로 |
 | `repositories/chat.py:17,26` | 구성원 | "이 아이 얘기를 해도 되나". 대화 **세션**의 소유는 `chat_sessions.app_user_id` 로 따로 걸려 아빠 대화가 나에게 안 샌다 |
 | `repositories/gait_record.py:27` | 구성원 | 보행은 강아지의 건강 데이터 |
+| `repositories/screening.py` (`get_accessible`/`list_accessible`, Task 14) | 구성원 — **단, `pet_id` 가 있을 때만** | 강아지에 붙은 피부 이력. 소유(창작자)는 그대로 두고 조회 바닥만 연다 — `pet_id IS NULL` 인 개인 기록은 이 판정 바깥이라 창작자만 본다 |
 | `repositories/walk_entry.py:40` | 구성원 | 산책 기록 편집 |
 | `repositories/territory_claim.py:38` | 구성원 | 아빠가 걸어서 점령하려면 그 아이에 닿아야 한다. 점령 **결과**는 `territory_claims.app_user_id` 라 여전히 아빠 것 |
 
-### 보행 **생성**은 구성원이 연다 — 스크리닝은 그대로 대표만 (Task 12)
+### 보행 **생성**은 구성원이 연다 (Task 12)
 
 위 표에서 `repositories/gait_record.py` 가 "구성원" 인 것은 처음엔 **읽기**뿐이었다. 새 기록을
 여는 `services/gait.py::start_analysis` 가 `get_owned` 를 쓰던 동안은 **돌보미가 보행 영상을
@@ -258,6 +259,13 @@ D-052 가 점령지 사진에 대해 지적한 문제("저장소에는 FK 가 �
 강아지가 있을 때 보이던 기록이 사라지는 것이 아니라 **범위가 좁아지는** 것이다. 이미 있던
 `ON DELETE SET NULL` 이 그대로 만들어 내는 동작이라 이번 변경이 새로 만든 것이 아니고,
 고칠 결함도 아니다.
+
+**거울상도 하나 있다 — 이번엔 강아지가 아니라 사람이 나간다.** 돌보미가 **탈퇴**하면
+`screening_service.cleanup_for_owner` 가 그 사람이 창작한 기록의 **행과 사진을 함께**
+지운다(`app_user_id` 기준 — §1 트리거와 달리 이건 원래부터 있던 탈퇴 파기 경로다). 그
+기록이 강아지에 붙어 있었고 대표가 방금까지 구성원 목록·컨텍스트로 보고 있었더라도
+예외가 아니다 — 대표가 볼 수 있던 기록이 그 돌보미의 탈퇴 한 번으로 사라진다. 강아지
+삭제가 "범위가 좁아지는" 쪽이라면, 돌보미 탈퇴는 "통째로 없어지는" 쪽이다.
 
 ### 산책 읽기 — 두 줄
 

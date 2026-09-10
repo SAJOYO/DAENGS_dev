@@ -419,6 +419,157 @@ async def test_transfer_owner_survives_the_trigger():
         await engine.dispose()
 
 
+async def _seed_screening_fixture(session):
+    """스크리닝 진짜-DB 테스트 둘이 같이 쓰는 세팅.
+
+    강아지 둘(A·B), A 의 대표(owner)·창작자 겸 돌보미(carer)·A 의 **다른** 돌보미
+    (other_carer), B 의 돌보미(cross_member — A 에는 안 걸림), 아무 데도 안 걸린
+    stranger. 기록 둘 — A 에 붙은 것(rec_pet, carer 가 만듦)과 개인 기록
+    (rec_personal, 역시 carer 가 만듦, `pet_id IS NULL`).
+    """
+    from sqlalchemy import text
+
+    ids = {
+        name: uuid.uuid4()
+        for name in ("owner", "carer", "other_carer", "cross_owner", "cross_member", "stranger")
+    }
+    pet_a, pet_b = uuid.uuid4(), uuid.uuid4()
+    rec_pet, rec_personal = uuid.uuid4(), uuid.uuid4()
+
+    for uid in ids.values():
+        await session.execute(
+            text(
+                "INSERT INTO app_users (id, kakao_id, status)"
+                " VALUES (CAST(:i AS uuid), :k, 'active')"
+            ),
+            {"i": str(uid), "k": uuid.uuid4().int % 10**12},
+        )
+    await session.execute(
+        text(
+            "INSERT INTO pets (id, app_user_id, name, breed)"
+            " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), '맥스', '믹스'),"
+            "        (CAST(:p2 AS uuid), CAST(:o2 AS uuid), '두찌', '믹스')"
+        ),
+        {"p": str(pet_a), "o": str(ids["owner"]), "p2": str(pet_b), "o2": str(ids["cross_owner"])},
+    )
+    for pid, uid in (
+        (pet_a, ids["carer"]),
+        (pet_a, ids["other_carer"]),
+        (pet_b, ids["cross_member"]),
+    ):
+        await session.execute(
+            text(
+                "INSERT INTO pet_members (pet_id, app_user_id)"
+                " VALUES (CAST(:p AS uuid), CAST(:u AS uuid))"
+            ),
+            {"p": str(pid), "u": str(uid)},
+        )
+    for rid, pid in ((rec_pet, str(pet_a)), (rec_personal, None)):
+        await session.execute(
+            text(
+                "INSERT INTO screening_records"
+                " (id, app_user_id, pet_id, photo_storage_key, photo_content_type)"
+                " VALUES (CAST(:r AS uuid), CAST(:a AS uuid), CAST(:p AS uuid),"
+                "         :k, 'image/jpeg')"
+            ),
+            {"r": str(rid), "a": str(ids["carer"]), "p": pid, "k": f"screening/{rid}.jpg"},
+        )
+    await session.flush()
+    return ids, rec_pet, rec_personal
+
+
+async def test_screening_accessible_respects_dog_membership_and_personal_privacy():
+    """`screening_repo.get_accessible`/`list_accessible` — 창작자 ∪ **그 아이의 구성원**만,
+    개인 기록(`pet_id IS NULL`)은 **창작자만** (docs/co-care.md §2, Task 14).
+
+    가짜 리포지토리는 이 쿼리를 통째로 갈아치우므로, 개인 기록이 `pet_id IN (...)` 서브쿼리
+    바깥에 있다는 사실 — 이 기능 전체가 기대는 구조적 성질 — 은 진짜 DB 로만 증명된다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from daengs_backend.repositories import screening as screening_repo
+
+    engine = create_async_engine(dsn)
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        ids, rec_pet, rec_personal = await _seed_screening_fixture(session)
+
+        async def sees(who: str, record_id: uuid.UUID) -> bool:
+            return (
+                await screening_repo.get_accessible(session, ids[who], record_id)
+                is not None
+            )
+
+        # 강아지에 붙은 기록 — 창작자와 **그 아이의 구성원**(대표 포함) 전원이 본다.
+        assert await sees("carer", rec_pet), "창작자가 자기 기록을 못 본다"
+        assert await sees("owner", rec_pet), "대표가 돌보미가 만든 기록을 못 본다"
+        assert await sees("other_carer", rec_pet), "같은 아이의 다른 돌보미가 못 본다"
+        # 다른 강아지의 구성원과 남남은 못 본다.
+        assert not await sees("cross_member", rec_pet), "남의 강아지 돌보미가 봤다"
+        assert not await sees("stranger", rec_pet), "남남이 봤다"
+
+        # 개인 기록 — **창작자만.** 같은 강아지를 함께 돌보는 사이여도 못 본다.
+        assert await sees("carer", rec_personal), "창작자가 자기 개인 기록을 못 본다"
+        assert not await sees("owner", rec_personal), "대표가 돌보미의 개인 기록을 봤다"
+        assert not await sees("other_carer", rec_personal), "다른 돌보미가 개인 기록을 봤다"
+
+        # list_accessible 도 같은 판정이어야 한다 — 대표의 목록엔 rec_pet 만, 창작자의
+        # 목록엔 둘 다.
+        owner_ids = {
+            r.id for r in await screening_repo.list_accessible(session, ids["owner"])
+        }
+        assert owner_ids == {rec_pet}, f"대표 목록이 개인 기록을 흘렸다: {owner_ids}"
+        carer_ids = {
+            r.id for r in await screening_repo.list_accessible(session, ids["carer"])
+        }
+        assert carer_ids == {rec_pet, rec_personal}, f"창작자 목록이 모자랐다: {carer_ids}"
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()
+
+
+async def test_screening_deletable_is_creator_or_dog_owner():
+    """`screening_repo.get_deletable` — **창작자 또는 그 아이의 대표**만 (`care_repo.
+    get_deletable` 과 같은 모양). 구성원 전체로 잘못 열면 `other_carer` 가 통과해 여기서 잡힌다.
+
+    `for_update=True` 로도 한 번 불러 — LEFT OUTER JOIN 위의 `with_for_update(of=
+    ScreeningRecord)` 가 nullable 쪽(Pet)이 아니라 non-nullable 쪽(ScreeningRecord)을
+    잠그기 때문에 합법이라는 것을 **진짜 DB 에서** 확인한다. 가짜로는 이 SQL 자체가
+    안 돈다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from daengs_backend.repositories import screening as screening_repo
+
+    engine = create_async_engine(dsn)
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        ids, rec_pet, _rec_personal = await _seed_screening_fixture(session)
+
+        async def deletable_by(who: str, *, for_update: bool = False):
+            return await screening_repo.get_deletable(
+                session, ids[who], rec_pet, for_update=for_update
+            )
+
+        assert await deletable_by("carer") is not None, "창작자가 자기 기록을 못 지운다"
+        assert await deletable_by("owner") is not None, "대표가 돌보미의 기록을 못 지운다"
+        assert await deletable_by("other_carer") is None, "다른 돌보미가 남의 기록을 지울 수 있다"
+        assert await deletable_by("stranger") is None, "남남이 지울 수 있다"
+
+        # 잠금 경로 — LEFT JOIN 위의 FOR UPDATE OF 가 실제로 실행된다.
+        locked = await deletable_by("owner", for_update=True)
+        assert locked is not None, "for_update 경로에서 대표가 못 찾는다"
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()
+
+
 async def test_record_profile_sees_other_members_walks():
     """산책 기록 프로필은 **그 아이의 산책 전부**를 본다 — 부른 사람 것만이 아니다.
 

@@ -244,3 +244,50 @@ def test_scored_rows_exclude_empty_and_error_turns():
 
     checks = check_transcript(assistant_texts=["", "정상 답"])
     assert checks.excluded_before_judging == {"not_answered": 1}
+
+
+# --- Task 5: 드라이버 이음매와 랩 수집 ---
+
+
+def test_stateless_driver_sends_only_the_current_query():
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+
+    # 오늘의 런타임을 그대로 흉내낸다 — 드라이버가 이전 턴을 안 싣는다는 것이 계약이다
+    driver = FakeDriver(replies=["a", "b"])
+    driver.send("첫 질문")
+    driver.send("둘째 질문")
+    assert driver.seen_payloads == [{"query": "첫 질문"}, {"query": "둘째 질문"}]
+
+
+def test_lap_header_pins_the_six_things_that_must_not_move():
+    from daengs_evals.conversation_quality.collect import LapHeader
+
+    header = LapHeader(
+        lap="before",
+        cases_sha256="a" * 64,
+        judge_model="gpt-5.4-2026-03-05",
+        prompt_version=1,
+        anchor_set="dev",
+        adapter_mode="fake",
+    )
+    for field in ("cases_sha256", "judge_model", "prompt_version", "anchor_set", "adapter_mode"):
+        assert field in header.model_dump()
+
+
+def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.collect import run_collect
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+
+    case = _case()
+    out = run_collect(cases=[case], driver=FakeDriver(replies=["답"]), out_dir=tmp_path, lap="t")
+    row = json.loads(out.read_text("utf-8").splitlines()[1])
+    assert row["state_supplied"] == case.state_snapshot  # 재조회가 아니라 그 시점 값
+
+
+def test_collect_makes_no_live_call_in_tests():
+    # 자동 테스트는 가짜만 쓴다. 실제 provider 모듈을 import 하지 않는다.
+    import daengs_evals.conversation_quality.collect as m
+
+    assert "openai" not in m.__dict__

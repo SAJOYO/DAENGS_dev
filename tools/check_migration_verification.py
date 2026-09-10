@@ -111,6 +111,14 @@ CRAWL_RUNS_OLD = (
 # 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
+# HNSW 장(2026-09-09)은 **벡터 칸이 있어야** 마이그레이션 자체가 돈다. 위 `DOCUMENTS` 는
+# 일부러 확장에 안 기대는 픽스처라 그 칸이 없어서, 이 한 장만 따로 세운다.
+# 행은 안 넣는다 — 이 장이 만드는 것은 인덱스이고 빈 표에도 선다.
+DOCUMENTS_WITH_EMBEDDING = VECTOR_EXTENSION + (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " embedding vector(1024));"
+)
 
 # 훈련 RAG 청크 표의 **옛** 모양 — `chunk_id` 가 PK 이던 시절이다. 2026-09-08 마이그레이션이
 # 그 PK 를 복합키로 옮긴다. 픽스처가 옛 모양이어야 마이그레이션이 실제로 할 일이 생긴다.
@@ -230,6 +238,21 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-09', 'documents_hnsw', DOCUMENTS_WITH_EMBEDDING, 'documents', [
+            # ⓐ 인덱스가 아예 없다 — 전수 스캔으로 돌아간다. **결과는 맞고 느리기만 하다.**
+            'DROP INDEX idx_documents_embedding',
+            # ⓑ 접근 방식을 바꾸는 변조. 이름도 같고 인덱스도 있는데 recall 특성이 다르다 —
+            # `D16` 이 재려는 것이 바로 그 특성이라, 이름만 보는 검사로는 아무 의미가 없다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING ivfflat (embedding vector_cosine_ops)',
+            # ⓒ 연산자 클래스를 바꾸는 변조. 검색은 `<=>`(코사인)로 묻는데 이 인덱스는
+            # `<->` 용이라 **질의가 인덱스를 안 탄다.** 결과는 여전히 맞아서 아무도 안 알려준다 —
+            # `db/indexes.sql` 이 2026-08 부터 같은 경고를 달고 있던 자리다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING hnsw (embedding vector_l2_ops)',
+        ]),
         ('2026-09-09', 'walk_photo_manifests', WALKS, 'walk_photo_manifests', [
             'ALTER TABLE walk_photo_manifests DROP COLUMN publisher_id',
             'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_pkey',

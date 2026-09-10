@@ -90,7 +90,7 @@ def compose_message(pred: Prediction, topk_show: int = 3) -> str:
     if pred.abstain or not pred.topk:
         L.append("📷 **판단이 어려운 사진입니다.**")
         L.append("")
-        L.append("이상한 부위가 잘 보이도록, 밝은 곳에서 초점을 맞춰 다시 찍어주세요.")
+        L.append("이상한 부위가 화면 가운데에 오도록, 밝은 곳에서 초점을 맞춰 다시 찍어주세요.")
         L.append("털에 가려져 있다면 손으로 살짝 헤쳐 피부가 보이게 해주시면 좋습니다.")
         L.append("")
         L.append(f"_{DISCLAIMER}_")
@@ -187,6 +187,9 @@ def lesion_group_line(dist: list[tuple[str, float]],
     # ★ 특징 한 줄을 같이 냅니다 (2026-09-10) — 이름만으로는 보호자가 **자기 개
     #   사진과 대조할 수 없습니다.** 문장은 `agent.lesion_group` 이 만듭니다.
     line = f"모양만 보면 **{g['name']}**에 가깝습니다."
+    # ★ 병원에서 쓰는 이름을 괄호로 붙입니다 (2026-09-10) — 보호자가 전달할 말입니다.
+    if g.get("labels"):
+        line += f"\n({g['labels']})"
     if g.get("feature"):
         line += f"\n{g['feature']} 같은 모습이 보이는 상태예요."
     return line

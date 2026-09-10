@@ -210,6 +210,14 @@ async def annotate(
 
     쿼리 수는 목록 크기(N)와 **무관하게 셋**입니다 — 대표 맵 하나, 돌보미 여부 하나,
     닉네임 하나. 행마다 물으면 N+1(`test_gait_annotate_query_count` 가 이것을 잽니다).
+
+    ⚠️ **아래 `is_actor or is_owner`(can_confirm)와 `is_owner`(can_delete)는
+    `repositories/gait_record.py` 의 `_confirmable`·`_owned` 를 Python 으로 다시 쓴
+    것입니다.** 이미 SQLAlchemy 로 가져온 행에 플래그를 얹는 자리라 그 SQL 조건을
+    그대로 재사용할 수 없습니다 — 둘은 **같은 조건을 두 곳에 적은 것**이라 SQL 쪽
+    (`_confirmable`/`_owned`)이 바뀌면 여기도 같이 바꿔야 합니다. 안 그러면 앱은
+    `can_confirm: true` 를 보고 버튼을 그리는데 실제 확정은 404(또는 그 반대: 버튼이
+    안 뜨는데 서버는 허용)가 됩니다.
     """
     if not records:
         return {}

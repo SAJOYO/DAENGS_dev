@@ -40,10 +40,13 @@ async def get_owned(
     *,
     for_update: bool = False,
 ) -> ScreeningRecord | None:
-    """**내 것일 때만** 돌려줍니다.
+    """**내 것일 때만** 돌려줍니다. `confirm_record`(확정 — 창작자 전용)가 이것을 씁니다.
 
     PK 로만 찾으면 남의 record id 를 넣어 남의 피부 사진을 볼 수 있습니다. 소유자
     조건을 이 함수 안에 묶어 둬서 부르는 쪽이 잊을 자리를 없앱니다 (pet 과 같은 규칙).
+
+    ⚠️ `services/screening.py::annotate` 의 `can_confirm`(`is_creator`)이 이 조건(창작자
+    본인)을 Python 으로 다시 씁니다 — 바꾸면 그쪽도 같이 보세요.
     """
     stmt = select(ScreeningRecord).where(
         ScreeningRecord.id == record_id,
@@ -161,6 +164,10 @@ async def get_deletable(
     `pet_id IS NULL` 인 개인 기록은 outer join 이 `Pet` 행을 못 찾아 `Pet.app_user_id`
     가 NULL 이 되므로 둘째 조건이 자동으로 거짓입니다 — **창작자만** 지웁니다. 대표라는
     개념 자체가 없는 기록이니 따로 갈라 쓸 필요가 없습니다.
+
+    ⚠️ `services/screening.py::annotate` 의 `can_delete`(`is_creator or is_owner`)가 이
+    조건을 Python 으로 다시 씁니다 — 바꾸면 그쪽도 같이 보세요(`get_owned` 의 같은
+    경고 참고).
     """
     stmt = (
         select(ScreeningRecord)

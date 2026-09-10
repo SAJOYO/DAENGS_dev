@@ -310,6 +310,12 @@ async def annotate(
     않는 기록이라, 그 기록을 볼 수 있는 사람은 애초에 창작자 자신뿐입니다).
 
     쿼리 수는 목록 크기(N)와 무관하게 셋입니다(gait 와 같은 이유).
+
+    ⚠️ **아래 `is_creator`(can_confirm)와 `is_creator or is_owner`(can_delete)는
+    `repositories/screening.py` 의 `get_owned`(확정이 쓰는 창작자 판정)·`get_deletable`
+    을 Python 으로 다시 쓴 것입니다.** 이미 가져온 행에 플래그를 얹는 자리라 그 SQL
+    조건을 그대로 재사용할 수 없습니다 — 그쪽이 바뀌면 여기도 같이 바꾸세요. 안 그러면
+    앱은 버튼을 보고 눌렀는데 서버는 404(또는 그 반대)를 냅니다.
     """
     if not records:
         return {}

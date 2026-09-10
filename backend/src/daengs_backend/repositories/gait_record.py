@@ -69,6 +69,11 @@ def _confirmable(app_user_id: uuid.UUID):
 
     `actor_app_user_id` 가 NULL 인 옛 기록(이 칸이 생기기 전)은 첫 조건이 항상 거짓이라
     자동으로 대표만 남습니다 — 예전 동작과 같습니다.
+
+    ⚠️ **`services/gait.py::annotate` 의 `can_confirm` 이 이 조건을 Python 으로 다시
+    씁니다** — 이미 읽은 행에 권한 플래그를 얹는 자리라 SQL 을 그대로 재사용할 수
+    없습니다. 이 조건(누가·언제 확정 가능한가)을 고치면 그쪽의 `is_actor or is_owner`
+    도 같이 고치세요 — 안 그러면 버튼은 뜨는데 실제 확정은 404(또는 그 반대)가 됩니다.
     """
     return (
         select(GaitRecord)
@@ -90,7 +95,11 @@ async def get_owned(
     *,
     for_update: bool = False,
 ) -> GaitRecord | None:
-    """**대표만.** 삭제(`soft_delete`)가 이것을 씁니다. (확정은 `get_confirmable`.)"""
+    """**대표만.** 삭제(`soft_delete`)가 이것을 씁니다. (확정은 `get_confirmable`.)
+
+    ⚠️ `services/gait.py::annotate` 의 `can_delete`(`is_owner`)가 이 조건을 다시 씁니다 —
+    바꾸면 그쪽도 같이 보세요(`_confirmable` 의 같은 경고 참고).
+    """
     stmt = _owned(app_user_id).where(GaitRecord.id == record_id)
     if for_update:
         stmt = stmt.with_for_update(of=GaitRecord)

@@ -1,0 +1,12 @@
+{
+  "capability": "vet_contact",
+  "status": "ABSTAINED",
+  "data": null,
+  "abstention": {
+    "code": "vet_contact.location_required",
+    "message": "응급 상황으로 보여요. 지금 바로 동물병원으로 가세요.\n현재 위치를 알 수 없어 가까운 병원을 찾지 못했습니다."
+  },
+  "refusal": null,
+  "job": null,
+  "error": null
+}

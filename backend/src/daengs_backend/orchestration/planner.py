@@ -31,6 +31,12 @@ router never uses it to replace Training/Life/Walk/Place. With the flag off the 
 strips `general` from the decision, so production builds the plans it built before.
 `general` orders last, never needs coordinates, and the explicit
 `requested_capability` signal is untouched — `general` is not a resolvable signal.
+
+**`vet_contact` skips this module's semantic path entirely.** `resolve_emergency_route`
+runs before any LLM call (deterministic lexicon gate or explicit signal), builds an
+exclusive single-request plan itself, and never lets `vet_contact` reach the shared
+`assemble_route_plan`/`_payload_for` machinery — see `resolve_emergency_route`'s
+docstring and D-051 ②.
 """
 
 from __future__ import annotations
@@ -44,6 +50,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     RouterKind,
 )
+from daengs_backend.orchestration.emergency import is_emergency
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -58,11 +65,17 @@ from daengs_backend.orchestration.semantic import (
 # router benchmark is unaffected either way: `_semantic_plan_key` compares requests as
 # a multiset. Order follows the `CapabilityName` declaration order.
 _GENERAL = "general"
-_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL)
+_VET_CONTACT = "vet_contact"
+_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL, _VET_CONTACT)
 # The names the router (and the explicit signal) may select. `general` is executable but
 # never selectable — it only ever enters a plan through the fallback rule below, so it is
 # excluded here on purpose: `requested_capability="general"` is an unresolved signal.
-_EXECUTE_NAMES = frozenset(name for name in _EXECUTION_ORDER if name != _GENERAL)
+# `general` 과 `vet_contact` 는 둘 다 `_EXECUTE_NAMES` 밖이지만 이유가 정반대다.
+# general 은 명시 신호로도 못 부르고, vet_contact 는 **명시 신호로만** 부른다 —
+# 그 신호는 `resolve_emergency_route` 가 라우터보다 앞에서 소비한다.
+_EXECUTE_NAMES = frozenset(
+    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT}
+)
 _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # Capabilities whose payload carries trusted coordinates. Missing coordinates make
 # the whole plan a CLARIFY, so this set is what the coordinate gate reads.
@@ -79,6 +92,60 @@ _HANDOFF_REASONS = {
 # (lat 32~40 · lng 123~133); the public boundary deliberately stays the stricter one
 # so Place cannot loosen validation for everyone else (discovery-migration.md §5).
 _COORDINATE_BOUNDS = (("lat", 33.0, 39.0), ("lon", 124.0, 132.0))
+
+
+def resolve_emergency_route(
+    *,
+    query: str,
+    context: dict[str, Any],
+    requested_capability: str | None,
+    at_night: bool,
+) -> RoutePlan | None:
+    """응급이면 `vet_contact` 하나짜리 계획을, 아니면 None 을 낸다.
+
+    **의미 라우터보다 앞에 선다.** 그래서 응급 경로에는 모델 호출이 0회다.
+
+    **배타다.** 응급 답에 산책 조건이나 훈련 요령이 섞이면 보호자의 인지 부하만 늘린다.
+
+    **좌표가 없어도 CLARIFY 를 내지 않는다.** `vet_contact` 는 `_NEEDS_COORDINATES` 에
+    없고, 좌표는 있으면 싣고 없으면 None 으로 간다 — 응급에 "위도를 알려주세요" 로
+    되묻는 것이 최악이기 때문이다. 없는 좌표의 처리는 adapter 가 ABSTAINED 로 한다.
+
+    두 진입점(어휘 게이트 · 명시 신호)이 **이 함수 하나**를 지난다. 계획이 한 곳에서
+    만들어져야 두 경로가 서로 다른 답을 낼 수 없다 (D-051 ② 와 같은 이유).
+    """
+    if requested_capability != _VET_CONTACT and not is_emergency(query):
+        return None
+
+    location = _trusted_location(context)
+    payload: dict[str, Any] = {"at_night": at_night}
+    if location is not None:
+        payload["lat"] = location["lat"]
+        payload["lon"] = location["lon"]
+
+    return RoutePlan.model_validate(
+        {
+            "requests": [
+                {"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}
+            ],
+            "handoffs": [],
+            "clarify": None,
+            "router": RouterKind.DETERMINISTIC,
+            "model": None,
+            "prompt_version": None,
+        }
+    )
+
+
+def _trusted_location(context: dict[str, Any]) -> dict[str, float] | None:
+    """검증된 좌표만 돌려준다. 상자를 벗어나면 **없는 것으로 친다** (D-051 ③).
+
+    `_missing_coordinates` 와 같은 판정을 쓰되, 여기서는 없다고 해서 요청을 세우지 않는다.
+    """
+    if _missing_coordinates(context):
+        return None
+    location = context["location"]
+    return {"lat": location["lat"], "lon": location["lon"]}
 
 
 def resolve_deterministic_route(
@@ -240,6 +307,13 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
     if capability == "place":
         location = context["location"]
         return {"query": query, "lat": location["lat"], "lon": location["lon"]}
+    if capability == _VET_CONTACT:
+        # 이 경로로는 오지 않는다 — `resolve_emergency_route` 가 payload 를 직접 만든다.
+        # 그래도 규칙을 적어 두는 이유는 D-051 ② 다: 새 ExecuteName 은 자기 payload 를
+        # 적거나 요청을 소리 나게 세우거나 둘 중 하나다.
+        raise ValueError(
+            "vet_contact payloads are built by resolve_emergency_route, not by the shared assembler"
+        )
     # A destination the router can now emit but the planner has no payload rule for.
     # Failing here is the point: the alternative is silently sending some other
     # capability's payload shape (D-051).
@@ -426,4 +500,4 @@ def _clarify_question(missing: list[str], *, needs: frozenset[str] | set[str]) -
     return "현재 위치의 경도를 알려주세요."
 
 
-__all__ = ["assemble_route_plan", "resolve_deterministic_route"]
+__all__ = ["assemble_route_plan", "resolve_deterministic_route", "resolve_emergency_route"]

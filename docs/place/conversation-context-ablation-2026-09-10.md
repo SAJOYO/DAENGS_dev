@@ -66,3 +66,17 @@ uv run --no-sync python -m daengs_evals.place_conversation.context_ablation --li
 테스트는 wire에서 context 외 프롬프트/도구/쿼리 동일, arm 사이 상태 비전파,
 미래/기대값·미표시 후보 누출 없음, 반대 수동 이력의 구분, 잘못된 원본 계획 보존을 확인한다.
 DB/Redis/HTTP 경합/실제 앱 사용성은 이 실험에 포함하지 않는다.
+
+## 관측 중 정한 제한적 후속 비교
+
+첫 두 반복에서 X03의 수동 undo는 문맥 보강으로 성공했지만, X13은 새 주차 요구를 적용하지 않고
+직전 “더 가져와”처럼 refresh만 하는 퇴행이 반복됐다. 이 결과를 보고 작성한 후속 비교이며 사전 A/B와 섞지 않는다.
+[후속 명세](../../backend/evals/place_conversation/context-followup.v1.json)는 X03/X13/X14만 각각 3회씩 두 조건으로 본다.
+
+- query-last: A/B의 보강 입력과 정보·프롬프트·스키마는 같고, JSON query 키만 맨 끝으로 옮긴다.
+- no-duplicate-past-query: 기존 배치는 유지하고 context.recent_interactions의 user_query 필드만 뺀다.
+  원래 top-level history의 사용자 발화와 직전 실제 답변·필터 전후·화면 단서는 그대로 둔다.
+
+이는 문맥 전체를 빼는 비교가 아니라, 주입 블록이 최신 쿼리와 경쟁한다는 가설을 분해하기 위한 비교다.
+운영 도입이나 일반적인 개선을 전제하지 않는다. 주차 퇴행 복구와 반대 방향 undo 둘의 보존을 같이 본다.
+실행: `uv run --no-sync python -m daengs_evals.place_conversation.context_followup --live --repeat 3 --key-file C:\path\to\.env`.

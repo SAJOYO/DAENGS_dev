@@ -26,9 +26,12 @@ services:
     networks:
       - daengs-network
     # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
-    env_file:
+    env_file: &walk-context-env
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
       - path: ./backend/.env
+        required: false
+      # Public-source secrets/flags survive checkout in a separate server file.
+      - path: ${WALK_PUBLIC_ENV_FILE:-./backend/.env.walk-public.local}
         required: false
     environment:
       # venv 를 마운트 경로 밖에 둡니다.
@@ -180,6 +183,7 @@ services:
       - ./backend/README.md:/app/README.md:ro
       - ./backend/src:/app/src
       - backend-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
       - uv-cache:/root/.cache/uv
       # 임베딩 모델 가중치(약 1.2GB)를 컨테이너 밖에 둡니다 (D-021).
       # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
@@ -882,6 +886,83 @@ services:
       exec uv run --no-sync celery -A daengs_life.tasks.celery_app beat
       --loglevel info --schedule /var/lib/celery/beat-schedule"
 
+  # Opt-in: prepare catalogs and verify schema before starting either daemon.
+  # Separate venvs preserve backend's ML packages and avoid concurrent uv sync.
+  walk-context-worker: &walk-context-runtime
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-walk-context-worker
+    profiles: ["walk-diary"]
+    restart: unless-stopped
+    networks: [daengs-network]
+    env_file: *walk-context-env
+    environment: &walk-context-settings
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_DB_HOST: pgvector
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
+      DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app worker
+      --hostname=walk-context@%h --pool=solo --concurrency=1 --queues=walk-entry-context --loglevel=WARNING"
+
+  walk-context-beat:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-context-beat
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-beat-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
+      - walk-context-beat-state:/var/lib/celery
+      - uv-cache:/root/.cache/uv
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app beat
+      --schedule=/var/lib/celery/beat-schedule --loglevel=WARNING"
+
+  # One-shot operator CLI only; never starts on an ordinary profile up.
+  walk-context-tools:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-context-tools
+    profiles: ["walk-diary-tools"]
+    restart: "no"
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-tools-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public
+      - uv-cache:/root/.cache/uv
+    entrypoint: ["sh", "-c", "uv sync --frozen && exec uv run --no-sync python -m \"$$@\"", "walk-tools"]
+    command: ["daengs_backend.cli.walk_runtime_check", "--allow-disabled", "--lat", "37.4878", "--lng", "127.052"]
+
   # ── pgAdmin (GUI 가 필요할 때만) ─────────────────────────────────────
   #
   # **기본 기동에는 안 뜹니다** — `profiles: ["tools"]` 라 명시해야 올라옵니다:
@@ -918,6 +999,11 @@ volumes:
   pgadmin-data:
   redis-data:
   backend-venv:
+  walk-public-catalogs:
+  walk-context-venv:
+  walk-context-beat-venv:
+  walk-context-tools-venv:
+  walk-context-beat-state:
   # ⚠ backend-venv 와 나눠 둡니다 — 합치면 크롤러의 `uv sync` 가 backend 의 torch 를
   #   지웁니다 (crawler-worker 주석 참고).
   crawler-venv:

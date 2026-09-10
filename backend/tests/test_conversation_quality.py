@@ -49,7 +49,7 @@ def test_case_carries_no_personal_identifier_fields():
     assert "app_user_id" not in ConversationCase.model_fields
 
 
-PINNED_277_SHA256 = "e851a334c642db1d8531a59fd3e12fdb1d6a1a406e1777b957938389a8dd7d07"
+PINNED_277_SHA256 = "4e6f6462d152701186786b968a3cd920ddd125d07b95f9fd46bbfe4a7b440fa6"
 
 
 def test_cases_v1_loads_and_covers_the_required_shapes():
@@ -82,9 +82,16 @@ def test_observed_scenario_keeps_its_correction_and_repetition_structure():
 
 
 def test_the_frozen_277_question_set_is_untouched():
-    from daengs_evals.answer_quality.questions import QUESTIONS_V1_PATH, file_sha256
+    from daengs_evals.answer_quality.questions import QUESTIONS_V1_PATH
+    from daengs_evals.conversation_quality.cases import file_sha256
 
-    # 값은 최초 실행 때 채운다. 바뀌면 이 테스트가 잡는다.
+    # answer_quality.questions.file_sha256 (바이트 해시) 를 여기서 쓰면 안 된다 — 이
+    # 저장소는 questions_v1.jsonl 을 .gitattributes 로 안 고정해서 git 블롭은 LF, 이
+    # Windows 워킹 카피는 core.autocrlf=true 때문에 CRLF 다. 바이트 해시로 값을 박으면
+    # 그 값을 만든 체크아웃과 CI(ubuntu-latest, LF 로 체크아웃)가 서로 다른 값을 내서
+    # 이 가드가 세트 변경과 무관하게 상시 빨간불이 된다. 그래서 여기서는 LF 정규화 텍스트를
+    # 해시하는 conversation_quality.cases.file_sha256 을 대신 쓴다 — 경로만
+    # answer_quality 것을 빌려 온다.
     assert file_sha256(QUESTIONS_V1_PATH) == PINNED_277_SHA256
 
 

@@ -58,6 +58,14 @@ def test_unreadable_requires_reason_and_empty_rest():
         ReceiptExtraction(status="unreadable", unreadable_reason="blurry", total_krw=1000)
 
 
+def test_unreadable_no_amount_is_valid_shape_with_no_total():
+    """합계 줄이 안 보이면(사진이 그 앞에서 잘렸어도) 항목 금액을 다 읽었더라도
+    `total_krw` 없이 `unreadable`/`no_amount` 여야 한다 — 압구정동물병원 실측(2026-09-10)."""
+    extraction = ReceiptExtraction(status="unreadable", unreadable_reason="no_amount")
+    assert extraction.total_krw is None
+    assert extraction.items == []
+
+
 @pytest.mark.parametrize(
     "extra",
     [
@@ -153,6 +161,23 @@ def test_prompt_states_amount_is_post_discount():
     prompt = build_receipt_prompt()
     assert "total_krw and every item's amount_krw are the post-discount amount column" in prompt
     assert "never the discount column" in prompt
+
+
+def test_prompt_forbids_computing_total_from_items():
+    """total_krw 는 계산이 아니라 인쇄된 합계 줄에서만 온다 — 압구정동물병원 실측(2026-09-10):
+    항목 5,500+46,200+10,000 을 더해 61,700 을 합계처럼 낸 사고가 이 규칙의 이유다."""
+    prompt = build_receipt_prompt()
+    assert "total_krw comes only from a printed total line on the receipt" in prompt
+    assert "Never compute total_krw" in prompt
+    assert "do not add up the line items" in prompt
+    assert "A sum you calculated is not a total you read" in prompt
+
+
+def test_prompt_states_cropped_total_line_is_no_amount():
+    """합계 줄이 사진에서 잘려 안 보이면 항목 금액을 다 읽었어도 no_amount 다."""
+    prompt = build_receipt_prompt()
+    assert 'output status="unreadable" with unreadable_reason="no_amount"' in prompt
+    assert "even when every individual item's amount_krw was legible" in prompt
 
 
 # 아래 셋은 압구정동물병원(2019-05-17) 실제 영수증의 문자열을 그대로 쓴 회귀 핀이다 —

@@ -27,7 +27,8 @@ class SmokeFailure(Exception):
 
 
 async def cycle(owner):
-    started = datetime.now(UTC) - timedelta(minutes=21)
+    # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
+    started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
     points = []
     corners = [
         (-0.0012, -0.0007),

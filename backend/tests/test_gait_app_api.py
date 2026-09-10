@@ -60,6 +60,7 @@ def _record(**over):
         "id": uuid.uuid4(),
         "pet_id": PET,
         "status": "PENDING",
+        "actor_app_user_id": None,
         "quality_status": None,
         "quality_tier": None,
         "gait_filter_version": None,
@@ -101,12 +102,20 @@ class FakeStorage:
         pass
 
 
+async def _no_perms(session, app_user_id, records):
+    """`gait_service.annotate` 의 기본 대역 — 전부 False/None(`_summary` 의 기본값과
+    같습니다). can_confirm/can_delete/created_by 를 직접 보는 테스트는 이것을
+    따로 덮어씁니다."""
+    return {r.id: {} for r in records}
+
+
 @pytest.fixture()
 def client(monkeypatch):
     session = FakeSession()
     app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=OWNER)
     app.dependency_overrides[get_session] = lambda: session
     monkeypatch.setattr(gait_service, "get_storage", lambda: FakeStorage())
+    monkeypatch.setattr(gait_service, "annotate", _no_perms)
     # 큐 발행은 브로커가 필요하니 막습니다 — 발행 여부만 봅니다.
     sent: list[str] = []
 
@@ -242,10 +251,10 @@ def test_analyze_rejects_non_uuid_pet_id(client):
 def test_confirm_enqueues_after_upload(client, monkeypatch):
     rec = _record(status="PENDING")
 
-    async def owned(session, app_user_id, record_id):
+    async def confirmable(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
     r = client.post(f"/app/gait/records/{rec.id}/confirm")
     assert r.status_code == 200
     assert r.json()["status"] == "UPLOADED"
@@ -256,10 +265,10 @@ def test_confirm_wrong_state_is_409(client, monkeypatch):
     """재전달·중복 confirm — 두 번 발행되면 안 됩니다."""
     rec = _record(status="DONE")
 
-    async def owned(session, app_user_id, record_id):
+    async def confirmable(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
     assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 409
     assert client.sent_jobs == []
 
@@ -268,10 +277,10 @@ def test_confirm_rejects_when_file_missing(client, monkeypatch):
     """앱의 말만 믿지 않습니다 — 실존 확인이 실패하면 발행하지 않습니다."""
     rec = _record(status="PENDING")
 
-    async def owned(session, app_user_id, record_id):
+    async def confirmable(session, app_user_id, record_id):
         return rec
 
-    monkeypatch.setattr(gait_repo, "get_owned", owned)
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
     monkeypatch.setattr(gait_service, "get_storage", lambda: FakeStorage(exists=False))
     assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 409
     assert client.sent_jobs == []
@@ -309,20 +318,68 @@ def test_carer_reads_detail_but_cannot_delete(client, monkeypatch):
     assert client.delete(f"/app/gait/records/{rec.id}").status_code == 404
 
 
-def test_carer_cannot_confirm(client, monkeypatch):
-    """확정(`confirm_upload`)도 대표만이다 — `get_owned` 그대로다.
+def test_owner_can_confirm_carers_upload(client, monkeypatch):
+    """대표는 돌보미가 올린 영상도 확정할 수 있다 — `_confirmable` 의 OR 절 두 번째 가지."""
+    CARER = uuid.uuid4()
+    rec = _record(status="PENDING", actor_app_user_id=CARER)  # 대표(OWNER)가 아니라 돌보미가 올렸다
 
-    구성원 확장(§2)은 생성·읽기만이고, 상태를 UPLOADED 로 바꾸는 이 경로는 열지
-    않는다. `confirm_upload` 가 `gait_repo.get_accessible` 로 바뀌면 이 테스트가
-    200 을 받아 실패한다.
+    async def confirmable(session, app_user_id, record_id):
+        # 진짜 `_confirmable` 과 같은 조건: 올린 사람 또는 대표.
+        return rec if app_user_id in (rec.actor_app_user_id, OWNER) else None
+
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
+    assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 200
+
+
+def test_다른_돌보미는_confirm_을_못_한다(client, monkeypatch):
+    """올린 사람도 대표도 아닌 다른 돌보미는 여전히 404 — 구성원 전체로 열지 않았다."""
+    CARER = uuid.uuid4()
+    OTHER_CARER = uuid.uuid4()
+    rec = _record(status="PENDING", actor_app_user_id=CARER)
+
+    async def confirmable(session, app_user_id, record_id):
+        return rec if app_user_id in (rec.actor_app_user_id, OWNER) else None
+
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
+    app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=OTHER_CARER)
+    assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 404
+
+
+def test_돌보미가_업로드_전_과정을_끝내지만_삭제는_여전히_못_한다(client, monkeypatch):
+    """Task 19 의 핵심 회귀: 티켓 발급 → PUT(가정) → confirm 을 **돌보미 본인**이
+    끝까지 마친다 — Task 19 이전에는 confirm 이 `get_owned`(대표만)라 여기서 404 였다
+    (그것이 이 태스크의 "반쯤 열린" 문제였다). 그런데 삭제는 여전히 대표만이다 —
+    `soft_delete` 의 경계는 이번 변경 범위 밖이라 그대로다.
     """
-    rec = _record(status="PENDING")
+    CARER = uuid.uuid4()
+    app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=CARER)
 
-    async def not_owned(session, app_user_id, record_id, **kwargs):
+    # ① analyze — 구성원(대표∪돌보미)에게 열려 있다 (Task 12, 그대로).
+    async def accessible(session, app_user_id, pet_id):
+        return object() if app_user_id in (OWNER, CARER) else None
+
+    monkeypatch.setattr(pet_repo, "get_accessible", accessible)
+    r = client.post("/app/gait/analyze", json=_analyze_body())
+    assert r.status_code == 201
+    record_id = r.json()["record_id"]
+
+    # ② confirm — 이번 변경으로 **업로더 본인**도 된다.
+    rec = _record(id=uuid.UUID(record_id), status="PENDING", actor_app_user_id=CARER)
+
+    async def confirmable(session, app_user_id, rid):
+        return rec if app_user_id in (rec.actor_app_user_id, OWNER) else None
+
+    monkeypatch.setattr(gait_repo, "get_confirmable", confirmable)
+    r = client.post(f"/app/gait/records/{record_id}/confirm")
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "UPLOADED"
+
+    # ③ delete — 여전히 대표만. 돌보미(업로더 본인 포함)는 404.
+    async def not_owned(session, app_user_id, rid, **kwargs):
         return None
 
     monkeypatch.setattr(gait_repo, "get_owned", not_owned)
-    assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 404
+    assert client.delete(f"/app/gait/records/{record_id}").status_code == 404
 
 
 def test_list_limit_bounds_and_stale_cursor(client, monkeypatch):
@@ -353,6 +410,35 @@ def test_list_builds_next_cursor_from_overfetch(client, monkeypatch):
 
 
 # ── 금지 필드 ──────────────────────────────────────────────────────────
+def test_detail_와_list_는_annotate_가_준_권한_플래그를_그대로_싣는다(client, monkeypatch):
+    """라우터 배선 테스트 — `gait_service.annotate` 가 계산한 값이 응답에 그대로
+    실리는지만 봅니다(계산 자체의 정확성은 `test_gait_annotate.py`)."""
+    rec = _record(status="PENDING")
+
+    async def accessible(session, app_user_id, record_id):
+        return rec
+
+    async def list_for_pet(session, app_user_id, pet_id, *, limit, cursor):
+        return [rec]
+
+    async def fake_annotate(session, app_user_id, records):
+        assert [r.id for r in records] == [rec.id]  # 넘어온 레코드가 맞는지
+        return {rec.id: {"can_confirm": True, "can_delete": False, "created_by": "산책요정"}}
+
+    monkeypatch.setattr(gait_repo, "get_accessible", accessible)
+    monkeypatch.setattr(gait_repo, "list_for_pet", list_for_pet)
+    monkeypatch.setattr(gait_service, "annotate", fake_annotate)
+
+    detail = client.get(f"/app/gait/records/{rec.id}").json()
+    assert detail["can_confirm"] is True
+    assert detail["can_delete"] is False
+    assert detail["created_by"] == "산책요정"
+
+    listing = client.get(f"/app/gait/records?pet_id={PET}").json()["records"][0]
+    assert listing["can_confirm"] is True
+    assert listing["created_by"] == "산책요정"
+
+
 def test_detail_never_exposes_internal_feature_vector(client, monkeypatch):
     """스키마가 그 필드를 아예 모르므로 **실수로도** 못 내보냅니다 — 모델 대역에
     값을 채워 두고, 응답에 안 나오는 것을 봅니다."""

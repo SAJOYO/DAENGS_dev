@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet, PetInvite, PetMember
@@ -26,6 +26,7 @@ __all__ = [
     "is_member",
     "list_invites",
     "list_members",
+    "members_in",
     "remove",
 ]
 
@@ -51,6 +52,26 @@ async def is_member(
         PetMember.pet_id == pet_id, PetMember.app_user_id == app_user_id
     )
     return await session.scalar(member) is not None
+
+
+async def members_in(
+    session: AsyncSession, pairs: list[tuple[uuid.UUID, uuid.UUID]]
+) -> set[tuple[uuid.UUID, uuid.UUID]]:
+    """주어진 (pet_id, app_user_id) 짝 중 **`pet_members` 에 돌보미로 있는 것**만.
+
+    `is_member` 의 목록판입니다 — 대표 여부는 안 봅니다(그건 `pet_repo.owners_by_ids`
+    가 따로 압니다). 응답 하나에 여러 (강아지, 사람) 짝의 구성원 여부를 물을 때
+    (`services/pet_member.py::actor_labels`) 짝마다 `is_member` 를 부르면 목록 크기만큼
+    왕복합니다 — 여기서는 한 번에 받습니다.
+
+    빈 목록이면 쿼리도 안 날립니다.
+    """
+    if not pairs:
+        return set()
+    stmt = select(PetMember.pet_id, PetMember.app_user_id).where(
+        tuple_(PetMember.pet_id, PetMember.app_user_id).in_(pairs)
+    )
+    return {(pet_id, uid) for pet_id, uid in (await session.execute(stmt)).all()}
 
 
 async def count_members(session: AsyncSession, pet_id: uuid.UUID) -> int:

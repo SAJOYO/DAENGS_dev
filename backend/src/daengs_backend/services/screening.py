@@ -296,6 +296,51 @@ async def delete_record(
     await session.commit()
 
 
+async def annotate(
+    session: AsyncSession, app_user_id: uuid.UUID, records: list[ScreeningRecord]
+) -> dict[uuid.UUID, dict]:
+    """`can_confirm`·`can_delete`·`created_by` 를 레코드 여러 개에 **한 번에** 계산합니다
+    (Task 19, docs/co-care.md §2 "앱이 어느 버튼을 보여줄지 모른다"). gait 의 `gait_service
+    .annotate` 와 같은 모양입니다 — 스크리닝은 확정이 **창작자 전용**(대표도 안 됨)이라는
+    점만 다릅니다.
+
+    `pet_id IS NULL` 인 개인 기록은 "그 아이의 대표" 라는 개념 자체가 없으므로
+    `can_delete` 는 창작자 여부만 봅니다(`screening_repo.get_deletable` 의 outer join과
+    같은 성질) — 그리고 `created_by` 는 항상 None 입니다(구성원이라는 개념이 성립하지
+    않는 기록이라, 그 기록을 볼 수 있는 사람은 애초에 창작자 자신뿐입니다).
+
+    쿼리 수는 목록 크기(N)와 무관하게 셋입니다(gait 와 같은 이유).
+    """
+    if not records:
+        return {}
+
+    # 순환 import 회피 — services.gait 와 같은 이유로 지연 import 합니다.
+    from daengs_backend.services import pet_member as pet_member_service
+
+    pet_ids = {r.pet_id for r in records if r.pet_id is not None}
+    owners = await pet_repo.owners_by_ids(session, list(pet_ids))
+    labels = await pet_member_service.actor_labels(
+        session,
+        [(r.pet_id, r.app_user_id) for r in records if r.pet_id is not None],
+        owners=owners,
+    )
+
+    result: dict[uuid.UUID, dict] = {}
+    for r in records:
+        is_creator = r.app_user_id == app_user_id
+        owner_id = owners.get(r.pet_id) if r.pet_id is not None else None
+        is_owner = owner_id is not None and owner_id == app_user_id
+        result[r.id] = {
+            # 확정은 창작자 전용 — 대표도 못 한다(§2 "확정은 그대로 창작자만이다").
+            "can_confirm": r.status == "PENDING_UPLOAD" and is_creator,
+            "can_delete": is_creator or is_owner,
+            "created_by": (
+                labels.get((r.pet_id, r.app_user_id)) if r.pet_id is not None else None
+            ),
+        }
+    return result
+
+
 async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
     """탈퇴가 부릅니다. **사진 파일을 지우고 행을 지웁니다.**
 

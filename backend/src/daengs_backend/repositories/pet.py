@@ -30,6 +30,7 @@ __all__ = [
     "member_condition",
     "names_by_ids",
     "owned_ids",
+    "owners_by_ids",
 ]
 
 
@@ -214,6 +215,24 @@ async def count_by_owners(
         .group_by(Pet.app_user_id)
     )
     return {owner: count for owner, count in (await session.execute(stmt)).all()}
+
+
+async def owners_by_ids(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """id → 대표(`app_user_id`). `can_confirm`/`can_delete`/`created_by` 를 목록 하나에
+    한 번에 계산할 때 씁니다 (Task 19, docs/co-care.md §2).
+
+    한 마리씩 `get_owned`/`get_accessible` 로 물으면 목록 크기만큼 왕복합니다(N+1) —
+    gait·screening 목록 응답이 행마다 "이 사람이 대표인가"를 알아야 해서, 여기서
+    **강아지 id 집합 하나**로 대표 전부를 한 번에 받습니다. `names_by_ids` 와 같은 모양.
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return {}
+    stmt = select(Pet.id, Pet.app_user_id).where(Pet.id.in_(pet_ids))
+    return {pet_id: owner_id for pet_id, owner_id in (await session.execute(stmt)).all()}
 
 
 async def names_by_ids(

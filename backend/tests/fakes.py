@@ -686,6 +686,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         wanted = set(pet_ids)
         return {p.id: p.name for p in store.pets if p.id in wanted}
 
+    async def pet_owners_by_ids(session, pet_ids):
+        # gait·screening 의 can_confirm/can_delete/created_by 가 한 번에 쓰는 대표 맵
+        # (Task 19, docs/co-care.md §2). `pet_names_by_ids` 와 같은 모양.
+        wanted = set(pet_ids)
+        return {p.id: p.app_user_id for p in store.pets if p.id in wanted}
+
     async def pet_count_by_owners(session, app_user_ids):
         # 진짜와 같이 **한 마리도 없는 주인은 키가 아예 없습니다** (GROUP BY 가 행을
         # 안 만듭니다). 부르는 쪽이 .get(id, 0) 을 안 쓰면 여기서 걸립니다.
@@ -745,6 +751,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
     monkeypatch.setattr(pet_repo, "names_by_ids", pet_names_by_ids)
+    monkeypatch.setattr(pet_repo, "owners_by_ids", pet_owners_by_ids)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
@@ -759,6 +766,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         if owner == app_user_id:
             return True
         return (pet_id, app_user_id) in store.pet_members
+
+    async def member_members_in(session, pairs):
+        # `member_is_member` 의 목록판 — **대표 여부는 안 봅니다**(진짜와 같습니다,
+        # `pet_owners_by_ids` 가 따로 압니다). `actor_labels` 가 씁니다 (Task 19).
+        wanted = set(pairs)
+        return {row for row in store.pet_members if row in wanted}
 
     async def member_count_members(session, pet_id):
         # 진짜와 같게 **대표를 포함해서** 셉니다.
@@ -838,6 +851,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(pet_member_repo, "list_members", member_list_members)
     monkeypatch.setattr(pet_member_repo, "is_member", member_is_member)
+    monkeypatch.setattr(pet_member_repo, "members_in", member_members_in)
     monkeypatch.setattr(pet_member_repo, "count_members", member_count_members)
     monkeypatch.setattr(pet_member_repo, "add", member_add)
     monkeypatch.setattr(pet_member_repo, "remove", member_remove)

@@ -697,6 +697,52 @@ async def test_actor_label_for_non_member_is_none(store: Store, pet: FakePet):
     assert await member_service.actor_label(None, pet.id, STRANGER) is None
 
 
+# ── actor_labels — `actor_label` 의 목록판 (Task 19) ─────────────────────
+
+
+async def test_actor_labels_matches_actor_label_one_by_one(store: Store, pet: FakePet):
+    """목록판과 단건판이 같은 답을 낸다 — 대표·돌보미·비구성원·None 짝을 섞어서."""
+    from daengs_backend.services import pet_member as member_service
+
+    store.app_users[OWNER_KAKAO].nickname = "아빠"
+    store.app_users[CARER_KAKAO].nickname = "산책요정"
+    store.pet_members.append((pet.id, CARER))
+
+    pairs = [(pet.id, OWNER), (pet.id, CARER), (pet.id, STRANGER), (pet.id, None), (None, OWNER)]
+    got = await member_service.actor_labels(None, pairs)
+
+    assert got[(pet.id, OWNER)] == await member_service.actor_label(None, pet.id, OWNER)
+    assert got[(pet.id, CARER)] == await member_service.actor_label(None, pet.id, CARER)
+    assert got[(pet.id, STRANGER)] == await member_service.actor_label(None, pet.id, STRANGER)
+    # None 짝은 결과에 아예 없다 — 걸러지므로.
+    assert (pet.id, None) not in got
+    assert (None, OWNER) not in got
+
+
+async def test_actor_labels_reuses_given_owners_map(
+    store: Store, pet: FakePet, monkeypatch: pytest.MonkeyPatch
+):
+    """`owners` 를 미리 주면 대표 맵을 다시 묻지 않는다 — gait/screening 의 `annotate`
+    가 이미 구한 맵을 넘겨 쿼리를 아끼는 자리다."""
+    from daengs_backend.repositories import pet as pet_repo
+    from daengs_backend.services import pet_member as member_service
+
+    calls = 0
+    real = pet_repo.owners_by_ids
+
+    async def counting(session, pet_ids):
+        nonlocal calls
+        calls += 1
+        return await real(session, pet_ids)
+
+    monkeypatch.setattr(pet_repo, "owners_by_ids", counting)
+
+    await member_service.actor_labels(
+        None, [(pet.id, OWNER)], owners={pet.id: OWNER}
+    )
+    assert calls == 0
+
+
 # ── 승계 (docs/co-care.md §3) ─────────────────────────────────────────
 
 

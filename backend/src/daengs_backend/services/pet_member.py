@@ -6,6 +6,7 @@
 
 import logging
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -315,6 +316,48 @@ async def actor_label(
     return names.get(app_user_id)
 
 
+async def actor_labels(
+    session: AsyncSession,
+    pairs: Iterable[tuple[uuid.UUID | None, uuid.UUID | None]],
+    *,
+    owners: dict[uuid.UUID, uuid.UUID] | None = None,
+) -> dict[tuple[uuid.UUID, uuid.UUID], str | None]:
+    """`actor_label` 의 목록판 — 응답 하나(gait·screening 목록)에 **쿼리 세 번**으로 끝냅니다.
+
+    행마다 `actor_label` 을 부르면 N 개 목록에 `is_member` 왕복이 N 번입니다 (Task 19,
+    "watch the query cost" 요구사항). 여기서는 (pet_id, app_user_id) 짝을 모아
+      ① 대표 맵(`pet_repo.owners_by_ids`, 이미 있으면 재사용 — `owners` 인자)
+      ② 돌보미 여부(`member_repo.members_in`)
+      ③ 닉네임(`app_user_repo.nicknames_by_ids`)
+    셋만 묻습니다. 목록 크기(N)가 30 이든 300 이든 쿼리 수는 그대로입니다.
+
+    `pet_id`·`app_user_id` 가 None 인 짝(예: `pet_id IS NULL` 인 개인 스크리닝 기록,
+    탈퇴로 `actor_app_user_id` 가 비워진 gait 기록)은 걸러 아예 묻지 않습니다 —
+    "구성원" 이라는 개념 자체가 없거나 누구인지 모르니 결과는 항상 None 입니다.
+    """
+    valid = [(pet_id, uid) for pet_id, uid in pairs if pet_id is not None and uid is not None]
+    if not valid:
+        return {}
+
+    if owners is None:
+        owners = await pet_repo.owners_by_ids(session, list({pet_id for pet_id, _ in valid}))
+
+    member_pairs = await member_repo.members_in(session, valid)
+
+    current_members = {
+        pair for pair in valid if owners.get(pair[0]) == pair[1] or pair in member_pairs
+    }
+    if not current_members:
+        return dict.fromkeys(valid)
+
+    names = await app_user_repo.nicknames_by_ids(
+        session, list({uid for _, uid in current_members})
+    )
+    return {
+        pair: (names.get(pair[1]) if pair in current_members else None) for pair in valid
+    }
+
+
 __all__ = [
     "INVITE_TTL",
     "MAX_ACTIVE_INVITES",
@@ -330,6 +373,7 @@ __all__ = [
     "PetLimitError",
     "accept_invite",
     "actor_label",
+    "actor_labels",
     "cancel_invite",
     "create_invite",
     "list_invites",

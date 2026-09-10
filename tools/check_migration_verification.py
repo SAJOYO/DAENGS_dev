@@ -473,6 +473,23 @@ CHECKS = (
             ' ALTER TABLE pet_invites ADD CONSTRAINT pet_invites_accepted_by_fkey'
             ' FOREIGN KEY (accepted_by) REFERENCES app_users(id) ON DELETE CASCADE',
          ]),
+        # 2026-09-10 (co-care 보행 확정 — "반쯤 열린" 돌보미 업로드, docs/co-care.md §2,
+        # #388 · #261) — gait_records 에 actor_app_user_id(업로더) 한 칸. 픽스처는 9/2
+        # gait_records + 9/9 tier CHECK 확장을 그대로 재사용한다(그래야 대상 표가 이미
+        # 있다). FK 의 삭제 동작(SET NULL)을 바꾸는 변조가 pet_invite_receipts 와 같은
+        # 이유로 이 항목의 핵심이다 — CASCADE 로 바뀌면 이력 칸 하나 때문에 기록 전체가
+        # 사라질 수 있다(이 칸은 소유권이 아니라 "누가 올렸나" 이력이다).
+        ('2026-09-10', 'gait_records_actor',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok'),
+         'gait_records', [
+            'ALTER TABLE gait_records DROP COLUMN actor_app_user_id',
+            'ALTER TABLE gait_records ALTER COLUMN actor_app_user_id TYPE text',
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey',
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey;'
+            ' ALTER TABLE gait_records ADD CONSTRAINT gait_records_actor_app_user_id_fkey'
+            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
         # 2026-09-09 (#353) — 진료비 기록 둘. **변조 목록의 마지막 하나가 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 칸의 모양이 아니라 **reason_code 가 닫힌 목록이라는 사실**
         # 이다. 목록을 통째로 permissive 한 CHECK 으로 갈아 끼우면 이름은 그대로라 ④ 는

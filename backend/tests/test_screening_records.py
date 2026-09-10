@@ -339,6 +339,77 @@ def test_확정은_그대로_창작자만이다(store, pet, storage, model) -> N
     assert r.status_code == 404
 
 
+# ── can_confirm · can_delete · created_by (Task 19, docs/co-care.md §2) ─────
+#
+# "앱이 어느 버튼을 보여줄지 모른다" 문제 — is_owner 하나로는 확정(창작자 전용)도
+# 삭제(창작자 또는 대표)도 옳게 못 가른다. 서버가 계산해 내려준다.
+
+
+def test_대표_응답의_권한_플래그는_지우기만_된다(store, pet, storage, model) -> None:
+    """대표는 돌보미 기록을 **지울 수는 있지만 확정은 못 한다** — is_owner 로 게이트를
+    걸면 이 비대칭이 안 드러난다."""
+    carer = uuid.uuid4()
+    store.add_app_user(FakeAppUser(kakao_id=2, id=carer, nickname="산책요정"))
+    store.pet_members.append((pet.id, carer))
+
+    made = _round_trip(_client_as(carer), pet_id=str(pet.id))
+
+    row = _client_as(OWNER).get(
+        f"/app/screening/records/{made['record_id']}"
+    ).json()
+    assert row["can_confirm"] is False
+    assert row["can_delete"] is True
+    assert row["created_by"] == "산책요정"
+
+
+def test_창작자_응답의_권한_플래그는_확정과_삭제_둘_다다(store, pet, storage, model) -> None:
+    """창작자 본인은 (아직 안 끝났다면) 확정도, 지우기도 할 수 있다."""
+    carer = uuid.uuid4()
+    store.add_app_user(FakeAppUser(kakao_id=3, id=carer, nickname="산책요정"))
+    store.pet_members.append((pet.id, carer))
+
+    carer_client = _client_as(carer)
+    ticket = carer_client.post(
+        "/app/screening/records", json={"pet_id": str(pet.id)}
+    ).json()
+    _upload(carer_client, ticket["upload_url"], b"skin-photo")
+
+    row = carer_client.get(f"/app/screening/records/{ticket['record_id']}").json()
+    assert row["status"] == "PENDING_UPLOAD"
+    assert row["can_confirm"] is True
+    assert row["can_delete"] is True
+    assert row["created_by"] == "산책요정"
+
+
+def test_탈퇴한_창작자의_created_by_는_None(store, pet, storage, model) -> None:
+    """지금은 구성원이 아니면(예: 나가기) 닉네임이 안 실린다 — 케어 로그의 actor 라벨과
+    같은 규칙(`services/pet_member.py::actor_label`)."""
+    carer = uuid.uuid4()
+    store.add_app_user(FakeAppUser(kakao_id=4, id=carer, nickname="산책요정"))
+    store.pet_members.append((pet.id, carer))
+
+    made = _round_trip(_client_as(carer), pet_id=str(pet.id))
+
+    # 나간다 — pet_members 에서 빠진다(탈퇴 트리거·나가기와 같은 결과).
+    store.pet_members.remove((pet.id, carer))
+
+    row = _client_as(OWNER).get(f"/app/screening/records/{made['record_id']}").json()
+    assert row["created_by"] is None
+    # 여전히 볼 수는 있다 — created_by 만 가려졌다.
+    assert row["status"] == "DONE"
+
+
+def test_개인_기록의_created_by_는_항상_None(store, pet, storage, model) -> None:
+    """`pet_id` 없는 개인 기록은 "구성원" 개념이 없다 — 볼 수 있는 사람이 창작자
+    자신뿐이라도 created_by 는 None 이다."""
+    made = _round_trip(client=_client_as(OWNER))
+    row = _client_as(OWNER).get(f"/app/screening/records/{made['record_id']}").json()
+    assert row["pet_id"] is None
+    assert row["created_by"] is None
+    assert row["can_confirm"] is False  # 이미 DONE 이라 확정은 못 한다
+    assert row["can_delete"] is True
+
+
 def test_남의_기록은_없는_것과_같다(client, store) -> None:
     """403 을 주면 "그 기록이 존재한다" 가 샙니다."""
     alien = ScreeningRecord(

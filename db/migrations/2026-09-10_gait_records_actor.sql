@@ -1,0 +1,37 @@
+-- ---------------------------------------------------------------------
+-- gait_records : 업로더 한 칸 (docs/co-care.md §2 "보행 carer's gait recording is
+--                broken halfway", 앱 계약 SAJOYO/DAENGS_dev#388 · SAJOYO/DAENGS_APP#261)
+-- ---------------------------------------------------------------------
+-- 이미 도는 DB 에 손으로 적용한다. 버전 테이블이 없으므로 여러 번 돌려도 안전해야 한다
+-- (ADD COLUMN ... IF NOT EXISTS 는 컬럼이 이미 있으면 그 절 전체를 건너뛴다 — FK 포함).
+--
+-- Task 12 가 start_analysis(티켓 발급)를 구성원(대표∪돌보미)에게 열었는데,
+-- confirm_upload(업로드 확정)는 계속 대표만(get_owned)이었다. 그래서 돌보미는
+-- 티켓 발급·영상 PUT 까지는 성공하고 confirm 에서만 404 를 받는다 — 이미 영상이
+-- 올라간 뒤라 "닫혀 있었다"보다 나쁘다(반쯤 열림).
+--
+-- 고치는 답은 확정 권한을 구성원 전체로 여는 것이 아니다(그러면 다른 돌보미가 남의
+-- 업로드를 확정할 수 있다) — **업로더 본인 또는 대표**로 좁힌다
+-- (care_repo.get_deletable 과 같은 모양). 그러려면 "누가 올렸는지"를 알아야 하므로
+-- 이 칸이 필요하다.
+--
+-- ⚠️ **이것은 소유권이 아니다.** gait_records 의 소유는 여전히 pet_id -> pets.app_user_id
+-- 하나로만 유도된다(models/gait_record.py 머리말, 중복 owner 칸을 일부러 안 둔 이유).
+-- 이 칸은 "그때 누가 올렸는지"만 남긴다 — 대표가 승계로 바뀌어도 이 칸은 그 사람을
+-- 그대로 가리킨다.
+--
+-- accepted_by(2026-09-10 pet_invite_receipts)와 같은 이유로 SET NULL 이다 — 다만
+-- app_users 는 탈퇴해도 행이 안 지워지므로(docs/co-care.md §1 "함정") 이 SET NULL 은
+-- 실질적으로 거의 안 돈다. 언젠가 행을 진짜로 지우는 날을 위한 안전망일 뿐이다.
+-- 탈퇴 트리거(pet_membership_owner_cleanup)를 이 칸까지 비우도록 넓히지 않는다 —
+-- created_by 노출은 이미 `services/pet_member.py::actor_labels` 가 "지금도 구성원인가"로
+-- 가리므로(§2 "created_by"), 탈퇴한 업로더의 id 가 남아 있어도 닉네임은 안 샌다. 반면
+-- care_events.actor_app_user_id 를 비우는 것은 그 칸 자체가 사람을 몰라야 해서였다
+-- (탈퇴자 재가입이 "다시 구성원"이 되는 것과 이 칸의 용도가 다르다 — 여기는 감사성
+-- 이력이라 "누가 올렸나"가 탈퇴 뒤에도 사실로 남아야 한다).
+--
+-- 백필 없음 — 옛 기록은 NULL 이다. 그런 기록은 confirm 이 이미 끝났거나(더 이상 이
+-- 칸을 볼 일이 없다) 고아(confirm 자체가 안 될 것이다)라, 업로더를 몰라도 문제가
+-- 안 된다.
+ALTER TABLE gait_records ADD COLUMN IF NOT EXISTS actor_app_user_id UUID
+    REFERENCES app_users(id) ON DELETE SET NULL;

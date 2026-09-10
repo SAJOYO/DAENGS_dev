@@ -96,9 +96,11 @@ async def start_analysis(
 
     **구성원(대표 ∪ 돌보미)이면 됩니다** — 대표만이 아닙니다 (docs/co-care.md §2,
     결정 ② "돌보미는 기록하고 본다"). 보행은 강아지의 건강 데이터라 돌보미도 영상을
-    올릴 수 있어야 합니다. `confirm_upload`·`soft_delete` 는 여전히 `get_owned`
-    (대표만) 입니다 — 상태를 바꾸거나 지우는 쪽까지 열면 돌보미가 남의 집 보행
-    영상을 지울 수 있게 됩니다 (`repositories/gait_record.py` 와 같은 경계).
+    올릴 수 있어야 합니다. `soft_delete` 는 여전히 `get_owned`(대표만) 입니다 —
+    지우는 쪽까지 열면 돌보미가 남의 집 보행 영상을 지울 수 있게 됩니다
+    (`repositories/gait_record.py` 와 같은 경계). `confirm_upload` 는 대표만이
+    아니라 **업로더 본인 또는 대표**입니다(Task 19, 바로 아래 참고) — 그래서 이
+    함수가 `actor_app_user_id` 를 찍어 둡니다.
 
     반환: (record, ticket). 스토리지가 미설정이면 **기록을 만들기 전에** 실패합니다 —
     티켓 없는 PENDING 은 앱이 어찌할 수 없는 쓰레기 행입니다.
@@ -121,6 +123,8 @@ async def start_analysis(
         captured_at=req.captured_at,
         source_file=req.source_file,
         note=req.note,
+        # 소유권이 아니라 "누가 올렸나" 다 — models/gait_record.py 머리말과 같은 주의.
+        actor_app_user_id=app_user_id,
     )
     session.add(record)
     await session.commit()
@@ -133,10 +137,19 @@ async def confirm_upload(
 ) -> GaitRecord:
     """앱이 "올렸어" — 실존 확인 후 큐에 발행합니다.
 
+    **업로더 본인 또는 대표면 됩니다** — 대표만이 아닙니다 (Task 19,
+    docs/co-care.md §2). `start_analysis` 는 구성원(대표 ∪ 돌보미)에게 열려 있는데
+    여기가 대표만이면, 돌보미는 티켓 발급·영상 PUT 까지 성공하고 **이 자리에서만
+    404** 를 받습니다 — 영상이 이미 올라간 뒤라 "닫혀 있다"보다 나쁩니다("반쯤 열린"
+    상태). 그렇다고 구성원 전체로 열면 **다른** 돌보미가 남의 업로드를 확정할 수
+    있게 되므로, "올린 사람 또는 대표"(`gait_repo.get_confirmable`, `care_repo
+    .get_deletable` 과 같은 모양)로 좁힙니다. `soft_delete` 는 여전히 대표만입니다 —
+    이 변경 범위 밖입니다.
+
     ⚠️ **앱의 말만 믿지 않습니다.** `exists()` 로 실제로 올라왔는지 봅니다 — 안 보면
        빈 기록이 PROCESSING 으로 넘어가 워커가 없는 파일을 받으러 갑니다.
     """
-    record = await gait_repo.get_owned(session, app_user_id, record_id)
+    record = await gait_repo.get_confirmable(session, app_user_id, record_id)
     if record is None:
         raise NotFoundError("record")
     if record.status != "PENDING":
@@ -182,6 +195,52 @@ async def soft_delete(
         await session.rollback()
         raise
     return record
+
+
+async def annotate(
+    session: AsyncSession, app_user_id: uuid.UUID, records: list[GaitRecord]
+) -> dict[uuid.UUID, dict]:
+    """`can_confirm`·`can_delete`·`created_by` 를 레코드 여러 개에 **한 번에** 계산합니다
+    (Task 19, docs/co-care.md §2 "앱이 어느 버튼을 보여줄지 모른다").
+
+    앱이 이 서버 권한 규칙(`get_confirmable`·`get_owned`)을 다시 구현하면 언젠가
+    어긋납니다 — `is_owner` 하나로는 확정도 삭제도 옳게 못 가릅니다(업로더가 아닌
+    대표는 확정할 수 있지만, 대표가 아닌 다른 돌보미는 확정도 삭제도 못 합니다).
+    그래서 서버가 계산해 내려줍니다.
+
+    쿼리 수는 목록 크기(N)와 **무관하게 셋**입니다 — 대표 맵 하나, 돌보미 여부 하나,
+    닉네임 하나. 행마다 물으면 N+1(`test_gait_annotate_query_count` 가 이것을 잽니다).
+    """
+    if not records:
+        return {}
+
+    # 순환 import 회피 — services.pet_member → services.pet → services.gait 로
+    # 이미 사슬이 있어(services/pet.py 가 cleanup_for_pets 로 이 모듈을 부릅니다),
+    # 모듈 최상단에서 services.pet_member 를 부르면 순환이 됩니다.
+    from daengs_backend.services import pet_member as pet_member_service
+
+    owners = await pet_repo.owners_by_ids(session, list({r.pet_id for r in records}))
+    labels = await pet_member_service.actor_labels(
+        session,
+        [(r.pet_id, r.actor_app_user_id) for r in records],
+        owners=owners,
+    )
+
+    result: dict[uuid.UUID, dict] = {}
+    for r in records:
+        owner_id = owners.get(r.pet_id)
+        is_actor = r.actor_app_user_id is not None and r.actor_app_user_id == app_user_id
+        is_owner = owner_id is not None and owner_id == app_user_id
+        result[r.id] = {
+            "can_confirm": r.status == "PENDING" and (is_actor or is_owner),
+            "can_delete": is_owner,
+            "created_by": (
+                labels.get((r.pet_id, r.actor_app_user_id))
+                if r.actor_app_user_id is not None
+                else None
+            ),
+        }
+    return result
 
 
 class CompareError(RuntimeError):

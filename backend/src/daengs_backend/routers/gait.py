@@ -67,7 +67,11 @@ def _storage_unavailable(exc: StorageNotConfiguredError) -> HTTPException:
     return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _STORAGE_NOT_READY)
 
 
-def _summary(r: GaitRecord) -> dict:
+def _summary(r: GaitRecord, perms: dict | None = None) -> dict:
+    """`perms` 는 `gait_service.annotate` 가 준 `{"can_confirm", "can_delete", "created_by"}`
+    한 건입니다. 안 주면(테스트 등에서 permission 을 안 보는 자리) 전부 False/None 으로
+    채웁니다 — 스키마가 필수 필드라 비워 둘 수 없습니다."""
+    perms = perms or {}
     return {
         "record_id": r.id,
         "pet_id": r.pet_id,
@@ -82,6 +86,9 @@ def _summary(r: GaitRecord) -> dict:
         # /v1 시절 계약의 파생 필드 — 비교 화면이 고를 수 있는 것만 보여주는 데 씁니다.
         "comparable": r.status == "DONE" and r.quality_status == "ok",
         "has_overlay": r.overlay_storage_key is not None,
+        "can_confirm": perms.get("can_confirm", False),
+        "can_delete": perms.get("can_delete", False),
+        "created_by": perms.get("created_by"),
     }
 
 
@@ -125,7 +132,8 @@ async def confirm_upload(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
     except StorageNotConfiguredError as exc:
         raise _storage_unavailable(exc) from None
-    return GaitRecordSummary(**_summary(record))
+    perms = (await gait_service.annotate(session, user.app_user_id, [record])).get(record.id)
+    return GaitRecordSummary(**_summary(record, perms))
 
 
 @router.get("/records", response_model=GaitRecordListResponse)
@@ -150,8 +158,11 @@ async def list_records(
         ) from None
     has_more = len(rows) > limit
     page = rows[:limit]
+    # 한 번에 계산합니다 — 행마다 부르면 페이지 크기만큼 왕복합니다(gait_service.annotate
+    # 독스트링, Task 19).
+    perms_by_id = await gait_service.annotate(session, user.app_user_id, page)
     return GaitRecordListResponse(
-        records=[GaitRecordSummary(**_summary(r)) for r in page],
+        records=[GaitRecordSummary(**_summary(r, perms_by_id.get(r.id))) for r in page],
         next_cursor=page[-1].id if (page and has_more) else None,
     )
 
@@ -164,8 +175,9 @@ async def get_record(
     record = await gait_repo.get_accessible(session, user.app_user_id, record_id)
     if record is None:
         raise _NOT_FOUND
+    perms = (await gait_service.annotate(session, user.app_user_id, [record])).get(record.id)
     return GaitRecordDetail(
-        **_summary(record),
+        **_summary(record, perms),
         quality=record.quality,
         summary_for_ui=record.summary_for_ui,
         video_meta=record.video_meta,

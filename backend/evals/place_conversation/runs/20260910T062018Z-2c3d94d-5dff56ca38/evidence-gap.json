@@ -1,0 +1,54 @@
+{
+  "variant": "false-versus-unknown-evidence",
+  "records": [
+    {
+      "underlying_parking": false,
+      "answer_receipt": {
+        "goal": "explain",
+        "execution": "reused",
+        "filters_changed": false,
+        "result_matches_filters": true,
+        "returned_count": 6,
+        "snapshot_id": "<same-opaque-snapshot>",
+        "selected": {
+          "source": "test:conversation-eval",
+          "ref": "opaque-place-001"
+        },
+        "code": "",
+        "question": "",
+        "evidence": {
+          "place": "테스트 장소",
+          "distance": "검색 중심에서 100m 거리예요.",
+          "scope": "저장된 검색 후보에 포함된 장소예요.",
+          "address": "테스트 주소"
+        }
+      }
+    },
+    {
+      "underlying_parking": null,
+      "answer_receipt": {
+        "goal": "explain",
+        "execution": "reused",
+        "filters_changed": false,
+        "result_matches_filters": true,
+        "returned_count": 6,
+        "snapshot_id": "<same-opaque-snapshot>",
+        "selected": {
+          "source": "test:conversation-eval",
+          "ref": "opaque-place-001"
+        },
+        "code": "",
+        "question": "",
+        "evidence": {
+          "place": "테스트 장소",
+          "distance": "검색 중심에서 100m 거리예요.",
+          "scope": "저장된 검색 후보에 포함된 장소예요.",
+          "address": "테스트 주소"
+        }
+      }
+    }
+  ],
+  "answer_inputs_identical": true,
+  "boundary": "production explanation receipt, opaque selected ID; no model call",
+  "implication": "The answer layer cannot distinguish confirmed false from missing evidence."
+}

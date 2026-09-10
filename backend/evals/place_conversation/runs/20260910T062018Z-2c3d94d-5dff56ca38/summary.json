@@ -1,0 +1,10 @@
+{
+  "completed_at": "2026-09-10T06:27:36.344156+00:00",
+  "turn_status_counts": {
+    "review_required": 63,
+    "fail": 18,
+    "not_run": 9
+  },
+  "whole_case_pass_count": 0,
+  "semantic_review": "pending"
+}

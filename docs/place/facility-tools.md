@@ -96,6 +96,9 @@ Redis 키는 `facility:conversation:v2:<session_id>`, TTL은 최초 생성부터
 
 ## 앱 연결과 검증
 
+자연어 평가의 케이스 원본과 판정·반복 규칙은 [conversation-evaluation.md](conversation-evaluation.md)에 있다.
+기존 4턴 live 스모크와 새 시나리오 전체의 검증 상태는 구분한다.
+
 Android `feat/place-conversation-skeleton`에서 `-PfacilityConversation=true`로 디버그 빌드한다.
 릴리즈와 옵션 없는 빌드는 기존 경로다. `daengs.apiBaseUrl`은 새 Backend + Place + Redis가
 연결된 서버여야 한다. 현재 운영 서버에는 배포되지 않았다.

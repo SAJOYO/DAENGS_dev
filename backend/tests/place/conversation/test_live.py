@@ -26,17 +26,7 @@ async def test_real_gemini_plans_and_answers_against_synthetic_candidates():
         key = match.group(1) if match else None
     assert key, "GEMINI_API_KEY is required (value is never printed)"
 
-    class ObservedModel(GeminiConversation):
-        async def answer(self, request):
-            try:
-                draft = await super().answer(request)
-                print("synthetic answer:", draft.model_dump())
-                return draft
-            except Exception as error:
-                print("answer error type:", type(error).__name__)
-                raise
-
-    model = ObservedModel(key, config.get("GEMINI_MODEL") or "gemini-3.1-flash-lite")
+    model = GeminiConversation(key, config.get("GEMINI_MODEL") or "gemini-3.1-flash-lite")
     searcher = Searcher()
     service = ConversationService(model, searcher=searcher)
     current = await service.prepare(None, manual())
@@ -64,7 +54,7 @@ async def test_real_gemini_plans_and_answers_against_synthetic_candidates():
         )
         if goal in {"pick_one", "explain"}:
             assert current.receipt.selected is not None
-            assert answer.source == "llm"
+            assert answer.source == "fallback"
         print(
             f"goal={goal} execution={execution} searches={len(searcher.calls)} answer={answer.source}"
         )

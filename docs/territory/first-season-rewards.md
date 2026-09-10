@@ -59,7 +59,7 @@ DEV의 `services/activity_core`로 바꿨다. 제품 합의는
 
 2026-09-10 사용자 제공 접속 정보로 PostgreSQL의 `information_schema.columns`와 시즌 상태
 집계를 **read-only 트랜잭션**에서 조회했다. 기존 activity 테이블·인증 도전·`certified_at`은
-있었고 시즌 행은 0개였다. 이 작업에서 운영 DB에 쓰거나 게임 설정을 변경하지 않았다.
+있었고 시즌 행은 0개였다. 초기 구현 검증에서는 운영 DB에 쓰거나 게임 설정을 변경하지 않았다.
 
 1. 기존 활동/인증 스키마 위에 `db/migrations/2026-09-10_activity_rewards.sql`을 적용한다.
    새 DB 원본은 `db/init/29_activity_rewards.sql`. 현재 데이터나 시즌 규칙을 백필하지 않는다.
@@ -71,7 +71,14 @@ DEV의 `services/activity_core`로 바꿨다. 제품 합의는
 
 원격 적용은 기존 `db-migrate.yml`을 사용하며 `file=2026-09-10_activity_rewards.sql`,
 `ref=이 PR의 검증된 커밋`, `verify=true`, `backup=true`로 실행할 수 있다.
-**이번 작업에서는 운영 마이그레이션·머지·시즌 생성/활성화를 실행하지 않았다.**
+**2026-09-10 10:50 KST, 사용자 요청으로 운영 마이그레이션 적용 완료.**
+검증한 커밋 `18367e7530d42aa49b604d53cb3ef2503ef65604`의 SQL과 작업 파일의 일치를
+확인하고, PostgreSQL 18의 `pg_dump --schema-only --format=custom` 백업과 목록 검증을
+완료한 뒤 직접 접속으로 적용했다. 적용 SQL과 verify SQL을 같은 트랜잭션에서 실행했으며
+커밋 후 새 read-only 연결에서도 verify가 통과했다. 새 원장/내역은 각각 0행, 시즌은 0행이고
+기존 시즌 규칙·revision·점수 계정/영수증 수가 보존된 것을 확인했다.
+백업과 실행 보고서는 작업 환경의 `outputs/reward-migration-20260910/`에 보관한다.
+DB 변경만 완료했으며 PR 머지·코드 배포·시즌 생성·게임 ON은 실행하지 않았다.
 
 새 정책 JSON은 모든 필드를 명시한다. 아래는 계약 예시이며 지금 운영 시즌을 만들라는 뜻이 아니다.
 

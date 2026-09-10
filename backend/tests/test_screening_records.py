@@ -228,7 +228,7 @@ def test_남의_아이로는_기록을_못_연다(client, store) -> None:
     assert r.status_code == 404
 
 
-# ── 공동 돌봄 — 생성 (docs/co-care.md §2, Task 12) ───────────────────────
+# ── 공동 돌봄 — 생성은 아직 대표만 (docs/co-care.md §2, Task 12 fix round 1) ─────
 
 
 def _client_as(app_user_id: uuid.UUID) -> TestClient:
@@ -240,61 +240,23 @@ def _client_as(app_user_id: uuid.UUID) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_돌보미도_기록을_열_수_있다(store, storage, model, pet) -> None:
-    """결정 ②("돌보미는 기록하고 본다") — 생성 게이트가 `get_accessible` 로 열린다.
+def test_돌보미는_아직_기록을_못_연다(store, pet) -> None:
+    """⚠️ **의도적으로 대표만입니다.** `gait_records` 는 `pet_id → pets.app_user_id`
+    로 소유가 유도되어 생성을 구성원(대표 ∪ 돌보미)으로 열어도 대표가 그대로
+    봅니다(`repositories/gait_record.py`). `screening_records` 는 다릅니다 — 소유가
+    만든 사람(`ScreeningRecord.app_user_id`)에 **직접** 저장되고
+    `repositories/screening.py` 는 `pet_repo.member_condition` 을 쓴 적이 없습니다.
 
-    `pet_repo.get_owned` 로 되돌리면 돌보미가 대표가 아니라서 404 를 받아
-    이 테스트가 실패한다 — 그것이 이 테스트가 가르는 것이다.
+    돌보미의 생성만 열면 **대표가 못 보는** 스크리닝 기록이 생깁니다 — 한 집의 피부
+    이력이 둘로 쪼개지는데 어느 쪽도 전체를 못 봅니다. 그래서 여기는 닫아 둡니다
+    (Task 12 fix round 1). `pet_repo.get_accessible` 로 바꾸면 이 테스트가 201 을
+    받아 실패합니다 — 그것이 이 테스트가 가르는 것입니다.
     """
     carer = uuid.uuid4()
     store.pet_members.append((pet.id, carer))
 
-    got = _round_trip(_client_as(carer), pet_id=str(pet.id))
-    assert got["status"] == "DONE"
-    assert got["pet_id"] == str(pet.id)
-
-
-def test_돌보미가_아니면_여전히_못_연다(store, pet) -> None:
-    """§2 의 구성원 조건 — 초대받지 않은 사람은 대표의 강아지를 못 연다."""
-    stranger = uuid.uuid4()
-    r = _client_as(stranger).post("/app/screening/records", json={"pet_id": str(pet.id)})
+    r = _client_as(carer).post("/app/screening/records", json={"pet_id": str(pet.id)})
     assert r.status_code == 404
-
-
-def test_돌보미는_자기가_연_기록을_스스로_관리한다(store, storage, model, pet) -> None:
-    """스크리닝은 `gait_records` 와 다르게 소유가 **강아지가 아니라 만든 사람**에
-    직접 걸린다 (`ScreeningRecord.app_user_id`, pet_id 는 유도되지 않는다). 그래서
-    돌보미가 연 기록은 확정·조회·삭제까지 그 돌보미 자신에게는 계속 열려 있다 —
-    `gait` 의 confirm/soft_delete 가 대표로 좁히는 것과 다른 경계다.
-    """
-    carer = uuid.uuid4()
-    store.pet_members.append((pet.id, carer))
-    carer_client = _client_as(carer)
-
-    got = _round_trip(carer_client, pet_id=str(pet.id))
-    assert carer_client.get(f"/app/screening/records/{got['record_id']}").status_code == 200
-    assert (
-        carer_client.delete(f"/app/screening/records/{got['record_id']}").status_code
-        == 204
-    )
-
-
-def test_대표는_돌보미가_연_기록을_못_본다(client, store, storage, model, pet) -> None:
-    """⚠️ **알려진 비대칭입니다 (Task 12 발견).** `gait_records` 는 `pet_id →
-    pets.app_user_id` 로 소유가 유도되어 돌보미가 만든 기록도 대표가 봅니다
-    (`repositories/gait_record.py`). `screening_records` 는 그렇지 않습니다 —
-    소유가 만든 사람(`app_user_id`)에 그대로 저장되고 조회·확정·삭제가 전부 그
-    값으로만 걸립니다. 그래서 돌보미가 연 기록은 **대표에게도 안 보입니다** —
-    결정 ②의 "본다" 절반이 스크리닝에서는 아직 안 열려 있습니다. 이 테스트는
-    회귀가 아니라 지금 동작을 고정합니다 — 넓히려면 제품 결정과 별도 변경이
-    필요합니다 (report 참고).
-    """
-    carer = uuid.uuid4()
-    store.pet_members.append((pet.id, carer))
-    got = _round_trip(_client_as(carer), pet_id=str(pet.id))
-
-    assert client.get(f"/app/screening/records/{got['record_id']}").status_code == 404
-    assert client.get("/app/screening/records").json()["records"] == []
 
 
 def test_남의_기록은_없는_것과_같다(client, store) -> None:

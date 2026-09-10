@@ -83,20 +83,21 @@ async def start_record(
     무엇인지 아무도 모르는 파일이 볼륨에 남습니다 — 저장소에는 FK 가 없어서
     아무도 안 치웁니다.
 
-    **아이를 지정하면 구성원(대표 ∪ 돌보미)이면 됩니다** — 대표만이 아닙니다
-    (docs/co-care.md §2, 결정 ② "돌보미는 기록하고 본다"). ⚠️ 다만 이 기록 자체의
-    소유는 `gait_records` 와 달리 강아지에서 유도되지 않고 **만든 사람
-    (`ScreeningRecord.app_user_id`)에 그대로 저장됩니다** — 그래서 이후 조회·확정·
-    삭제(`screening_repo.get_owned` 등)는 계속 그 사람 자신에게만 열립니다. 돌보미가
-    연 기록을 대표가 보게 하려면 이 레포지토리 자체를 구성원 기준으로 바꾸는 별도
-    변경이 필요합니다(Task 12 report 참고) — 여기서는 "누가 새로 열 수 있는가"만
-    엽니다.
+    ⚠️ **아이를 지정해도 대표만입니다 — `pet_repo.get_owned`.** `gait_records` 는
+    `pet_id → pets.app_user_id` 로 소유가 유도되어 생성을 구성원(대표 ∪ 돌보미)으로
+    열어도 대표가 그대로 봅니다. `screening_records` 는 다릅니다 — 소유가 만든 사람
+    (`ScreeningRecord.app_user_id`)에 **직접** 저장되고 `repositories/screening.py` 는
+    `pet_repo.member_condition` 을 쓴 적이 없습니다. 돌보미의 생성을 열면 대표가
+    **못 보는** 스크리닝 기록이 생깁니다 — 한 집의 피부 이력이 둘로 쪼개지는데 어느
+    쪽도 전체를 못 봅니다. 닫아 두는 쪽이 최소한 하나로 모인 이력을 지킵니다. 이
+    레포지토리를 구성원 기준으로 다시 짜는 결정이 먼저이고, 그것은 이 카드의 범위
+    밖입니다(docs/co-care.md §2, Task 12 follow-up).
     """
     # 남의 아이에 기록을 붙일 수 없습니다. FK 는 "존재하는 pets 행" 까지만 보장하고
     # 그게 내 것인지는 안 봅니다 (05_pets.sql 주석과 같은 자리).
     if (
         body.pet_id is not None
-        and await pet_repo.get_accessible(session, app_user_id, body.pet_id) is None
+        and await pet_repo.get_owned(session, app_user_id, body.pet_id) is None
     ):
         raise ScreeningNotFoundError
 

@@ -16,6 +16,7 @@ from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRe
 from daengs_backend.repositories import activity as repo
 from daengs_backend.repositories import territory_claim as claim_repo
 from daengs_backend.services import territory_claim as claim_rules
+from daengs_backend.services import territory_expiry
 from daengs_backend.services.activity_core import first_season_policy as first
 from daengs_backend.services.activity_core import first_season_rewards as rewards
 from daengs_backend.services.activity_core import game_policy as policy
@@ -28,6 +29,7 @@ def now_ms():
 async def acquire(db):
     if settings.activity_game_enabled:
         await repo.barrier(db)
+        await territory_expiry.expire_due(db, await repo.active_season(db), now_ms())
 
 
 def context(season):
@@ -71,6 +73,9 @@ async def create_season(db, season_id, starts_ms, ends_ms, rules: policy.Rules):
     counts = {}
     calculator = engine(season)
     for occupancy in await repo.occupancies(db):
+        if territory_expiry.enabled(season):
+            # Import starts a new lease at activation; historical protection stays unchanged.
+            occupancy.expires_at = territory_expiry.deadline(at, season)
         claim, game = await claim_repo.claim_and_session(db, occupancy.claim_id)
         verified = occupancy.certification == "VERIFIED"
         score = counts.get(claim.pet_id, calculator.Score(last_ms=at))
@@ -269,7 +274,9 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
             owner.occupied_ms,
             owner.certified_ms,
         ),
-        plan.after.version,
+        before.version + 1
+        if calculator is first and plan.kind == "UNCHANGED"
+        else plan.after.version,
     )
 
 
@@ -277,6 +284,7 @@ async def close_if_due(db, at_ms):
     season = await repo.active_season(db)
     if season is None:
         return None
+    await territory_expiry.expire_due(db, season, at_ms)
     policy.require(at_ms >= season.confirmed_ms, "time_before_confirmed_cut")
     accounts = await repo.accounts(db, season.id)
     calculator = engine(season)

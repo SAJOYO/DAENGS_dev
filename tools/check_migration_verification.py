@@ -849,6 +849,17 @@ CHECKS = (
             'DROP INDEX ix_territory_claim_photos_claim_id',
             'DROP INDEX territory_claims_pet_idx',
         ]),
+        ('2026-09-10', 'territory_expiry', PETS + SET_UPDATED_AT
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_renewals', [
+            'ALTER TABLE territory_occupancies DROP COLUMN expires_at',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_pkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_claim_id_fkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_check',
+            'ALTER TABLE territory_renewals ALTER COLUMN contact DROP NOT NULL',
+            'DROP INDEX territory_occupancies_expiry_idx',
+            'DROP INDEX territory_renewals_claim_idx',
+        ]),
         ('2026-09-10', 'activity_rewards', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
          + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
                          '2026-09-03_territory_visits', '2026-09-05_territory_claims',

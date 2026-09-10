@@ -1,5 +1,7 @@
 # 온라인 점유 저장·API
 
+> 2026-09-10 후속: [72시간 만료·현장 연장](ownership-expiry.md) — `expires_at`, 미인증 연장 API, 인증 `PHOTO_RENEW`.
+
 > 2026-09-10 후속: [첫 시즌 회원별 보상](first-season-rewards.md) — 새 보상 원장과 정책 분기.
 
 > 2026-09-08 후속: [인증 우선 정책 v2](../certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.

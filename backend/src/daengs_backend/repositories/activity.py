@@ -37,6 +37,24 @@ async def occupancies(db):
     return list(await db.scalars(select(TerritoryOccupancy)))
 
 
+async def expiring_occupancies(db, at_ms):
+    return (
+        await db.execute(
+            select(TerritoryOccupancy, ActivityHoldingPeriod)
+            .join(
+                ActivityHoldingPeriod, ActivityHoldingPeriod.site_id == TerritoryOccupancy.site_id
+            )
+            .join(ActivitySeason, ActivitySeason.id == ActivityHoldingPeriod.season_id)
+            .where(
+                ActivitySeason.status == "ACTIVE",
+                ActivityHoldingPeriod.ended_ms.is_(None),
+                TerritoryOccupancy.expires_at <= datetime.fromtimestamp(at_ms / 1000, UTC),
+            )
+            .order_by(TerritoryOccupancy.expires_at, TerritoryOccupancy.site_id)
+        )
+    ).all()
+
+
 async def reset_occupancies(db):
     await db.execute(
         update(TerritoryClaimSite)

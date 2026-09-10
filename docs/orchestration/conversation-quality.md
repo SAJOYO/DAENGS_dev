@@ -127,7 +127,20 @@ uv run python -m daengs_evals.conversation_quality report --lap-file <dir>/lap_b
 uv run python -m daengs_evals.conversation_quality compare \
   --before-lap <lap_before.jsonl> --before-judgments <judgments_before.jsonl> \
   --after-lap <lap_after.jsonl> --after-judgments <judgments_after.jsonl>
+uv run python -m daengs_evals.conversation_quality case-report \
+  --before-lap <lap_before.jsonl> --after-lap <lap_after.jsonl>
 ```
+
+`case-report`(#415)는 **판정기를 안 부르고 판정 파일도 안 받습니다** — 랩 행에서만 뽑으므로
+공짜이고 `score` 전에도 돌릴 수 있습니다. `compare`가 집계를 내는 자리라면 이쪽은 **케이스마다
+두 랩의 실제 답변을 나란히** 놓고, `response mode`(계약 상태에서 파생한 라벨) · `elicited` ·
+`clarify.question` · `clarify.missing_axes` · `dead_end`를 같이 찍습니다. 뒤에 **안전 회귀
+sentinel** 일곱이 붙고, 신호가 하나라도 있으면 종료 코드 1입니다.
+
+⚠ sentinel은 **종합 안전성 평가가 아닙니다.** `#415` 범위의 명시적 안전 계약에 회귀 신호가
+있는지만 봅니다 — 통과를 "안전성이 검증됐다"로 쓰지 마세요. 케어 로그를 실어 보내는 케이스가
+`cases_v1.jsonl`에 없어서 기록 관련 둘(④⑤)은 **미측정**으로 나옵니다. 그 둘은
+`tests/test_orchestration_ask_mode.py`가 유닛으로 봅니다.
 
 `collect`·`check-anchors`는 실제 모델을 부릅니다(`--adapter-mode real`이거나 세만틱
 라우터가 Gemini를 물기 때문에 유료 호출입니다). **랩 실행 자체는 이 카드 밖이고, 하네스가

@@ -112,6 +112,11 @@ class TurnSnapshot(BaseModel):
     capability: Any
     #: General 의 raw 구조화 결정(`kind`·`reason`). 평가 래퍼가 닿을 때만 채워진다.
     general_decision: Any
+    #: 되묻기의 구조화된 흔적 (#415) — `question` · `missing` · `missing_axes`.
+    #: 드라이버가 이 키를 안 주면(이음매가 안 닿으면) `NOT_REACHED`, 되묻지 않았으면 `None`.
+    #: **기본값이 있는 것은 before 랩 때문이다** — 이 필드가 생기기 전에 얼어붙은 파일을
+    #: 다시 돌리지 않고 읽어야 `compare` 가 성립한다.
+    clarify: Any = None
     status: str
     message: str
     #: 이 행이 가짜 어댑터의 답인가. `fallback-only` 처럼 능력마다 갈리는 모드가 있어
@@ -181,6 +186,7 @@ def target_turn_row(
         route_plan=payload.get("route_plan", NOT_REACHED),
         capability=capability,
         general_decision=payload.get("general_decision", NOT_REACHED),
+        clarify=payload.get("clarify", NOT_REACHED),
         status=str(payload.get("status", NOT_REACHED)),
         message=str(payload.get("message", NOT_REACHED)),
         answered_by_fake_adapter=_answered_by_fake_adapter(adapter_mode, capability),

@@ -85,6 +85,7 @@ async def take(factory):
             "tag": job.tag,
             "token": job.lease_token,
             "attempt": job.attempts,
+            "collection_round": job.collection_round,
             "content": dict(row.payload) if valid else None,
         }
         if valid and job.policy_version == repo.PIN_POLICY:
@@ -113,6 +114,7 @@ async def finish(factory, ticket, result):
             job is None
             or job.state != "running"
             or job.lease_token != ticket["token"]
+            or job.collection_round != ticket["collection_round"]
             or job.lease_until <= datetime.now(UTC)
         ):
             return False
@@ -160,6 +162,7 @@ async def finish(factory, ticket, result):
                 id=envelope_id,
                 job_id=job.id,
                 attempt=job.attempts,
+                collection_round=job.collection_round,
                 created_at=datetime.now(UTC),
                 envelope=envelope,
             )

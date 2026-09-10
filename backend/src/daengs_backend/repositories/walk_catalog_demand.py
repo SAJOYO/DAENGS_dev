@@ -70,6 +70,7 @@ async def wake_ready(session, ids, now):
             .where(
                 Envelope.job_id == Job.id,
                 Envelope.attempt == Job.attempts,
+                Envelope.collection_round == Job.collection_round,
                 Envelope.envelope["reason"].astext == "catalog_preparing",
             )
             .exists(),

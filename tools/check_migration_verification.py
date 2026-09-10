@@ -273,6 +273,20 @@ CHECKS = (
             'ALTER TABLE walk_entry_pins DROP CONSTRAINT walk_entry_pins_walk_id_entry_id_fkey',
             'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_walk_id_entry_id_fkey',
          ]),
+        ('2026-09-10', 'walk_context_recollection',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP COLUMN collection_round CASCADE',
+            'ALTER TABLE walk_entry_context_envelopes DROP COLUMN collection_round CASCADE',
+            'ALTER TABLE walk_entry_context_jobs DROP COLUMN backfill_policy',
+            'ALTER TABLE walk_entry_context_jobs ALTER COLUMN collection_round DROP DEFAULT',
+            'ALTER TABLE walk_entry_context_envelopes ALTER COLUMN collection_round DROP DEFAULT',
+            'ALTER TABLE walk_entry_context_envelopes ALTER COLUMN collection_round DROP NOT NULL',
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_collection_round_check',
+            'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_round_attempt_key',
+            'ALTER TABLE walk_entry_context_envelopes ADD UNIQUE (job_id, attempt)',
+         ]),
         ('2026-09-09', 'walk_public_context_commerce',
          WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
          + prerequisites('2026-09-08_walk_entry_contexts', '2026-09-09_walk_public_context'),

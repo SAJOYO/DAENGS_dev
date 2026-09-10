@@ -224,6 +224,68 @@ def test_default_registration_still_uses_the_in_process_router() -> None:
     assert walk_endpoint.__module__ == "daengs_life.app.controllers.walk"
 
 
+def test_realtime_branch_registers_with_the_same_auth_as_the_default_branch() -> None:
+    """프록시 갈래(`life_walk.router`)가 기본 갈래와 **같은 `dependencies=`** 로 등록되는지,
+    `main.py` 소스를 파싱해서 확인한다.
+
+    **왜 이 가드가 필요한가** — `test_ask_auth.py` · `tests/walk/api/test_walk_auth.py` 등
+    기존 인증 테스트는 전부 `DAENGS_REALTIME_URL` 이 빈 **기본 갈래만** 지난다. 누가 실수로
+    `if settings.realtime_url:` 쪽의 `dependencies=` 를 빼먹어도(프록시가 무인증으로
+    등록돼도) 그 테스트들은 하나도 안 깨진다 — D-068 §5 가 명시적으로 기각한 "무인증
+    공개"(누구나 우리 기상청 키로 하루 예산을 태울 수 있다)가 조용히 재현되는데, 잡아 줄
+    것이 없다.
+
+    **왜 `importlib.reload` 대신 AST 인가** — `main.py` 는 모듈 최상단에서 앱을 조립한다.
+    `settings.realtime_url` 을 바꿔 가며 두 번 reload 하면 되돌리기를 빠뜨렸을 때 다른
+    테스트가 낡은 모듈이나 중복 등록된 라우트를 보게 된다 — 4,600건 스위트를 통째로
+    불안정하게 만들 위험이 이 가드 하나의 이득보다 크다. 그래서 앱을 실행하지 않고 소스만
+    읽는다 — `test_main_stays_light.py::test_backend_to_life_imports_stay_at_the_approved_boundaries`
+    가 `ast` 로 import 경계를 보는 것, `test_realtime_app_does_not_touch_the_encoder` 가
+    `inspect.getsource` 로 보는 것과 같은 판단이다.
+    """
+    import ast
+    import inspect
+
+    import daengs_backend.main as main_module
+
+    tree = ast.parse(inspect.getsource(main_module))
+    if_node = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Attribute)
+        and node.test.attr == "realtime_url"
+    )
+
+    def _dependencies_kwarg(stmts: list[ast.stmt]) -> ast.expr | None:
+        for stmt in stmts:
+            if not (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Call)
+                and isinstance(stmt.value.func, ast.Attribute)
+                and stmt.value.func.attr == "include_router"
+            ):
+                continue
+            for kw in stmt.value.keywords:
+                if kw.arg == "dependencies":
+                    return kw.value
+        return None
+
+    if_branch = _dependencies_kwarg(if_node.body)
+    else_branch = _dependencies_kwarg(if_node.orelse)
+
+    assert if_branch is not None, (
+        "if 갈래(프록시, life_walk.router)의 include_router 에 dependencies= 가 없다"
+        " — 무인증 공개다."
+    )
+    assert else_branch is not None, (
+        "else 갈래(기본, walk.router)의 include_router 에 dependencies= 가 없다."
+    )
+    assert ast.dump(if_branch) == ast.dump(else_branch), (
+        "두 갈래의 dependencies= 가 다르다 — 프록시와 기본 갈래의 인증이 갈렸다."
+    )
+
+
 def test_weather_lookup_reduces_http_body_the_same_way(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

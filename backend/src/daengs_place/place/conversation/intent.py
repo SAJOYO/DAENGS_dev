@@ -1,6 +1,6 @@
 """Model-owned meaning, without filter IDs, executable actions or answer prose."""
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, model_validator
 
@@ -55,6 +55,8 @@ class Interpretation(PlanningModel):
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
     changes: SemanticChanges = Field(default_factory=SemanticChanges)
     refresh: bool = False
+    browse: Literal["current", "next", "restart"] = "current"
+    place_edit: "PlaceEdit | None" = None
     reference_index: int | None = Field(None, ge=1, le=120)
     asked_attributes: tuple[Attribute, ...] = Field(default=(), max_length=9)
     unsupported: tuple[UnsupportedAttribute, ...] = Field(default=(), max_length=4)
@@ -62,6 +64,25 @@ class Interpretation(PlanningModel):
     unresolved: Literal[
         "none", "conflicting_conditions", "missing_target", "unsupported_goal", "ambiguous"
     ] = "none"
+
+    @model_validator(mode="after")
+    def exploration_goal(self) -> Self:
+        if (self.browse != "current" or self.place_edit) and self.goal != "show":
+            raise ValueError("exploration edits require show")
+        if self.browse == "restart" and self.place_edit:
+            raise ValueError("restart cannot also edit previous exclusions")
+        return self
+
+
+class PlaceEdit(PlanningModel):
+    operation: Literal["exclude", "restore"]
+    # exclude indexes current_places; restore indexes excluded_places.
+    indices: tuple[Annotated[int, Field(strict=True, ge=1, le=120)], ...] = Field(
+        min_length=1, max_length=120
+    )
+
+
+Interpretation.model_rebuild()
 
 
 class PendingDecision(PlanningModel):

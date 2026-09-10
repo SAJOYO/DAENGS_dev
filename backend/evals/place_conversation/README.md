@@ -12,6 +12,7 @@
 | [corrections.v1.jsonl](corrections.v1.jsonl) | 교정 5개와 사용자 불만·재탐색 원문/확장 9개. 27단계 중 수동 이벤트 2개 |
 | [context-ablation.v1.json](context-ablation.v1.json) | 동일 턴 직전 상태에서 현재 입력/화면 문맥 보강을 비교할 14개 대상 |
 | [context-followup.v1.json](context-followup.v1.json) | 주입 후 관측한 최신 요청 누락을 입력 키 순서/중복 과거 발화로 나눈 3개 대상 |
+| [exploration.v1.jsonl](exploration.v1.jsonl) | 다음 후보·제외·해제·초기화·현재 요청 우선의 연속 시나리오 10개 |
 | `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
@@ -89,7 +90,10 @@ JUnit의 scenario_id/trace 속성에 경합별 확정·복구 상태를 남긴�
 자동 기준이 모두 맞아도 전체 `pass`로 만들지 않는다. 사람이 실제 확인 질문, 원본/제공 답변,
 확정 필터를 읽고 `reviews.jsonl`에 근거 충실도와 작업 완료 여부를 따로 기록한다.
 관측의 상태는 변경하지 않고, 리포트에서 관측과 검토를 합친다.
-현재 runner는 `production-policy-v1`만 실행하며 답변은 커밋된 receipt에서 서버가 렌더링한다.
+현재 runner는 `production-exploration-v1`만 실행하며 답변은 커밋된 receipt에서 서버가 렌더링한다.
+이전 production-policy-v1 및 문맥 대조는 각 run metadata의 code_sha 체크아웃에서 재현한다.
+탐색 평가는 `--cases evals/place_conversation/exploration.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json`을 사용한다.
+범위와 결과는 [탐색 정책](../../../docs/place/conversation-exploration.md)에 기록한다.
 순차 `manual` 이벤트는 production prepare에 실제 PlaceSearchRequest를 전달하며 모델을 호출하지 않는다.
 관측의 event는 원래 입력, result_delta는 직전 목록 대비 추가/제거 ref다. 동일 ref가 다른 source에
 존재하는 fixture에서는 이 지표를 사용하지 않는다. 이번 fixture는 ref가 모두 유일하다.

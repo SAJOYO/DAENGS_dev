@@ -135,6 +135,29 @@ def render_answer(receipt):
         return "검색을 완료하지 못했어요. 기존 조건과 결과를 유지했어요."
     if receipt.question:
         return receipt.question
+    if receipt.browse != "current" or receipt.excluded_places or receipt.restored_places:
+        parts = []
+        if receipt.excluded_places:
+            names = "·".join(p.name for p in receipt.excluded_places[:2])
+            suffix = (
+                f" 등 {len(receipt.excluded_places)}곳" if len(receipt.excluded_places) > 2 else ""
+            )
+            parts.append(f"{names}{suffix}은 이번 탐색에서 제외했어요.")
+        if receipt.restored_places:
+            parts.append(f"{len(receipt.restored_places)}곳의 제외를 해제했어요.")
+        if receipt.browse == "restart":
+            parts.append("제시 기록과 제외를 초기화하고 현재 조건으로 다시 찾았어요.")
+        if receipt.browse == "next":
+            if receipt.new_places:
+                scope = "바뀐 조건으로" if receipt.filters_changed else "조건은 그대로 두고"
+                parts.append(f"{scope}, 아직 제시하지 않은 {len(receipt.new_places)}곳을 찾았어요.")
+            else:
+                parts.append("이번 조회에서는 현재 조건의 미제시 후보를 더 찾지 못했어요.")
+        elif receipt.returned_count:
+            parts.append(f"현재 조건의 후보 {receipt.returned_count}곳을 표시했어요.")
+        else:
+            parts.append("이번 조회에서는 현재 조건과 제외를 반영한 후보를 찾지 못했어요.")
+        return " ".join(parts)
     if receipt.goal == "edit_only":
         return (
             "조건을 변경했어요. 검색 결과는 다시 찾기 전 목록이에요."

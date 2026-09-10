@@ -37,6 +37,19 @@ class ResultSnapshot(PlanningModel):
     created_at: datetime
     result: FilterResponse
     display_order: tuple[PlaceRef, ...]
+    exclusions: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
+    omitted: tuple[PlaceRef, ...] = Field(default=(), max_length=1320)
+
+
+class NamedPlace(PlanningModel):
+    key: PlaceRef
+    name: str
+
+
+class ExplorationState(PlanningModel):
+    excluded: tuple[NamedPlace, ...] = Field(default=(), max_length=120)
+    presented: tuple[PlaceRef, ...] = Field(default=(), max_length=1200)
+    fingerprint: str = ""
 
 
 class DialogueTurn(PlanningModel):
@@ -81,6 +94,7 @@ class ConversationState(PlanningModel):
     revision: int = Field(default=0, ge=0)
     pending_proposal: PendingChange | None = None
     selection_basis: SelectionBasis | None = None
+    exploration: ExplorationState = Field(default_factory=ExplorationState)
 
 
 class PrepareRequest(PlanningModel):
@@ -132,6 +146,11 @@ class ExecutionReceipt(PlanningModel):
     facts: tuple[AnswerFact, ...] = ()
     unsupported: tuple[UnsupportedAttribute, ...] = ()
     selection_basis: SelectionBasis | None = None
+    browse: Literal["current", "next", "restart"] = "current"
+    new_places: tuple[PlaceRef, ...] = ()
+    excluded_places: tuple[NamedPlace, ...] = ()
+    restored_places: tuple[NamedPlace, ...] = ()
+    remaining: Literal["more", "exhausted", "unknown"] = "unknown"
 
 
 class PreparedTurn(PlanningModel):

@@ -17,7 +17,7 @@ from daengs_place.main import app as place_app
 from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
-from tests.place.support.conversation import Searcher
+from tests.place.support.conversation import Searcher, place
 from tests.place.support.session_store import MemorySessions
 
 
@@ -293,3 +293,61 @@ async def test_recovery_and_answer_are_owner_bound_and_restore_rejects_invalid_f
             json={"client_request_id": str(uuid4()), "mode": "restore", "restore_filters": bad},
         )
     ).status_code == 422
+
+
+async def test_next_exclude_retry_and_manual_change_keep_committed_exploration(harness):
+    client, store, searcher, calls, plans, _ = harness
+    searcher.rows = [place(str(i), distance=i + 1) for i in range(26)]
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append(
+        {"goal": "show", "browse": "next", "place_edit": {"operation": "exclude", "indices": [1]}}
+    )
+    request = chat_body(first, "첫 번째 빼고 더 보여줘")
+    second = (await client.post("/app/places/conversation", json=request)).json()
+    assert [p["ref"] for p in second["display_order"]] == [str(i) for i in range(20, 26)]
+    assert (await client.post("/app/places/conversation", json=request)).json() == second
+    assert len(searcher.calls) == 2 and len(calls) == 1
+    answered = (
+        await client.post("/app/places/conversation/answer", json=answer_body(second))
+    ).json()
+    assert "6곳" in answered["answer"]["text"] and "제외" in answered["answer"]["text"]
+    saved = json.loads(store.items[second["session_id"]])
+    assert len(saved["state"]["exploration"]["presented"]) == 26
+    assert saved["state"]["exploration"]["excluded"][0]["key"]["ref"] == "0"
+    wire = json.loads(calls[0]["input"])
+    assert list(wire)[-1] == "query"
+    assert wire["screen"]["current_places"][0]["name"] == "테스트 0"
+    update = manual_body(second)
+    update["manual"]["radius_m"] = 2000
+    changed = (await client.post("/app/places/conversation", json=update)).json()
+    assert "0" not in [p["ref"] for p in changed["display_order"]]
+    assert len(changed["display_order"]) == 20
+
+
+async def test_late_next_request_cannot_consume_page_after_manual_wins(harness, monkeypatch):
+    client, store, searcher, _, _, _ = harness
+    searcher.rows = [place(str(i), distance=i + 1) for i in range(26)]
+    first = (await client.post("/app/places/conversation", json=manual_body())).json()
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    class SlowNext:
+        async def plan(self, request):
+            entered.set()
+            await release.wait()
+            return TurnPlan(goal="show", browse="next")
+
+    monkeypatch.setattr(conversation_internal, "provider", lambda: SlowNext())
+    task = asyncio.create_task(
+        client.post("/app/places/conversation", json=chat_body(first, "더 보여줘"))
+    )
+    await entered.wait()
+    update = manual_body(first)
+    update["manual"]["radius_m"] = 2000
+    winner = (await client.post("/app/places/conversation", json=update)).json()
+    release.set()
+    assert (await task).status_code == 409
+    saved = json.loads(store.items[first["session_id"]])
+    assert saved["revision"] == winner["revision"]
+    assert [p["ref"] for p in saved["state"]["exploration"]["presented"]] == [
+        str(i) for i in range(20)
+    ]

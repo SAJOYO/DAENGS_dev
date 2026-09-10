@@ -92,6 +92,16 @@ class AppMeResponse(BaseModel):
     #: **None 은 아직 발급 전**입니다 — 이 칸보다 먼저 가입한 회원이고, 다음 로그인에
     #: 채워집니다. 앱은 그동안 이 줄을 비워 둡니다.
     nickname: str | None = None
+    #: 영수증 OCR 항목을 진단 추천 모델 학습에 쓰는 데 대한 동의 여부.
+    #:
+    #: **시각이 아니라 불리언입니다.** 원본은 `app_users.ocr_consent_at`
+    #: (`models/app_user.py`) 이지만, 앱에게는 "언제"가 아니라 "켜져 있나"만
+    #: 필요합니다. 원본 시각을 그대로 내보내면 앱이 그것으로 만료 계산 같은 것을
+    #: 재해석하려 들 여지가 생기는데, 그 판단은 서버의 것입니다.
+    ocr_consent: bool = False
+    #: 어느 판에 동의했는지. **미동의면 None** 입니다. 화면에 안 써도 되지만,
+    #: 문의 대응에서 "이 사람이 최신 판에 동의했나"를 가리는 데 씁니다.
+    ocr_consent_version: str | None = None
 
 
 class AppProfileUpdate(BaseModel):
@@ -115,6 +125,21 @@ class AppProfileUpdate(BaseModel):
     #:
     #: 바꾸지 않으려면 **칸 자체를 안 보내면** 됩니다.
     nickname: str | None = Field(default=None, max_length=30)
+
+    #: 영수증 OCR 항목을 진단 추천 모델 학습에 쓰는 데 대한 동의.
+    #:
+    #: `True` 로 보내면 `ocr_consent_at` · `ocr_consent_version` 이 **둘 다** 채워지고
+    #: (버전은 서버가 정합니다 — `routers/app_auth.py` 의 `OCR_CONSENT_VERSION`.
+    #: 클라이언트가 판을 골라 보낼 수 있으면 동의 기록의 근거가 무의미해집니다),
+    #: `False` 로 보내면 둘 다 NULL 로 되돌아갑니다. **이미 동의한 상태에서 다시
+    #: `True` 를 보내도 무시하지 않습니다** — 새 동의 이벤트로 보고 시각·판을
+    #: 새로 씁니다 (재동의).
+    #:
+    #: 다른 칸과 마찬가지로 **안 보내면 그대로**입니다 — 라우터가
+    #: `model_fields_set` 으로 가립니다. 닉네임만 고치려는 요청이 동의를 몰래
+    #: 꺼버리면, 그건 사용자가 동의를 취소한 적 없는데 취소된 것으로 남는
+    #: 사고입니다.
+    ocr_consent: bool | None = Field(default=None)
 
     @field_validator("room_name")
     @classmethod

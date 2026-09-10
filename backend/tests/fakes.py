@@ -25,6 +25,7 @@ from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import screening as screening_repo
+from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.repositories import walk as walk_repo
 
 PASSWORD = "correct-horse-battery-staple"
@@ -70,6 +71,11 @@ class FakeAppUser:
     room_name: str | None = None
     #: 사람 이름. None 이면 아직 발급 전입니다 (서버가 로그인할 때 채웁니다).
     nickname: str | None = None
+    #: OCR 학습 이용 동의 시각. None 이면 미동의입니다 (기본값).
+    ocr_consent_at: datetime | None = None
+    #: 어느 판에 동의했는지. CHECK `app_users_ocr_consent_pair` 대로 위 칸과
+    #: 항상 짝으로 채워지거나 둘 다 None 입니다.
+    ocr_consent_version: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -219,6 +225,14 @@ class Store:
         #: 진짜 리포지토리를 타서 `FakeSession` 에서 죽습니다. 모양은 `test_care_events.py`
         #: 의 `FakeCareEvent` 처럼 `app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
         self.care_events: list = []
+
+        #: 확정된 진료비 기록 (#353 Task 7). **기본은 비어 있습니다** — 비서가
+        #: `active_dog_id` 요청마다 최근 진료비 요약을 읽으므로(`services
+        #: .vet_spend_context`), 여기 대역이 없으면 관련 없는 테스트가 진짜
+        #: 리포지토리를 타서 `FakeSession` 에서 죽습니다 — `care_events` 와 같은 이유
+        #: (바로 위 주석). 모양은 `app_user_id · pet_id · reason_code · visited_on ·
+        #: total_krw · hospital_name · hospital_phone · id` 면 됩니다.
+        self.vet_visits: list = []
 
         #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
         self.screenings: list = []
@@ -794,6 +808,36 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(care_repo, "list_between", care_list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
+
+    # -- vet visits (#353 Task 7) --------------------------------------------
+    # 비서의 최근 진료비 요약(`services/vet_spend_context`)이 `active_dog_id` 요청마다
+    # 읽는 둘. 정렬 규칙은 진짜 리포지토리(최근 먼저)와 같습니다. `test_vet_visits.py` 는
+    # 이 대역을 안 씁니다 — 그 파일은 실제 `select()` 를 해석하는 자기만의 얇은 세션
+    # 대역을 씁니다(그 파일 머리말).
+    def _vet_between(app_user_id, pet_id, start, end):
+        return [
+            v for v in store.vet_visits
+            if v.app_user_id == app_user_id and v.pet_id == pet_id
+            and start <= v.visited_on <= end
+        ]
+
+    async def vet_list_between(session, app_user_id, pet_id, start, end):
+        # 진짜 리포지토리와 같은 순서: visited_on DESC, id ASC. 튜플째로 reverse=True
+        # 하면 id 까지 뒤집혀 같은 날 두 건일 때 순서가 갈린다 — id 오름차순으로 먼저
+        # 정렬한 뒤 visited_on 만 내림차순으로 다시 정렬한다(안정 정렬이라 동률의
+        # 상대 순서가 유지된다).
+        rows = sorted(_vet_between(app_user_id, pet_id, start, end), key=lambda v: v.id)
+        rows.sort(key=lambda v: v.visited_on, reverse=True)
+        return rows
+
+    async def vet_sum_by_reason(session, app_user_id, pet_id, start, end):
+        totals: dict[str, int] = {}
+        for v in _vet_between(app_user_id, pet_id, start, end):
+            totals[v.reason_code] = totals.get(v.reason_code, 0) + v.total_krw
+        return totals
+
+    monkeypatch.setattr(vet_repo, "list_between", vet_list_between)
+    monkeypatch.setattr(vet_repo, "sum_by_reason", vet_sum_by_reason)
 
     # -- chats -------------------------------------------------------------
     def active_sessions(app_user_id, pet_id):

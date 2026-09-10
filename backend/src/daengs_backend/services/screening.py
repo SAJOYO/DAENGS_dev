@@ -82,12 +82,21 @@ async def start_record(
     **행을 먼저 만듭니다.** 티켓만 주고 행을 나중에 만들면, 업로드는 됐는데 그 키가
     무엇인지 아무도 모르는 파일이 볼륨에 남습니다 — 저장소에는 FK 가 없어서
     아무도 안 치웁니다.
+
+    **아이를 지정하면 구성원(대표 ∪ 돌보미)이면 됩니다** — 대표만이 아닙니다
+    (docs/co-care.md §2, 결정 ② "돌보미는 기록하고 본다"). ⚠️ 다만 이 기록 자체의
+    소유는 `gait_records` 와 달리 강아지에서 유도되지 않고 **만든 사람
+    (`ScreeningRecord.app_user_id`)에 그대로 저장됩니다** — 그래서 이후 조회·확정·
+    삭제(`screening_repo.get_owned` 등)는 계속 그 사람 자신에게만 열립니다. 돌보미가
+    연 기록을 대표가 보게 하려면 이 레포지토리 자체를 구성원 기준으로 바꾸는 별도
+    변경이 필요합니다(Task 12 report 참고) — 여기서는 "누가 새로 열 수 있는가"만
+    엽니다.
     """
     # 남의 아이에 기록을 붙일 수 없습니다. FK 는 "존재하는 pets 행" 까지만 보장하고
     # 그게 내 것인지는 안 봅니다 (05_pets.sql 주석과 같은 자리).
     if (
         body.pet_id is not None
-        and await pet_repo.get_owned(session, app_user_id, body.pet_id) is None
+        and await pet_repo.get_accessible(session, app_user_id, body.pet_id) is None
     ):
         raise ScreeningNotFoundError
 

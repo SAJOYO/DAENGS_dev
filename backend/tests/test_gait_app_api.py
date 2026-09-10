@@ -140,20 +140,24 @@ def _analyze_body():
 
 
 def test_analyze_rejects_unowned_pet(client, monkeypatch):
-    """남의 강아지 = 없는 강아지 — 같은 404 입니다 (pet 라우터와 같은 규칙)."""
+    """구성원(대표∪돌보미)이 아니면 없는 강아지와 같은 404 입니다 (pet 라우터와 같은 규칙).
+
+    ⚠️ **`get_accessible` 을 봅니다 — `get_owned` 가 아닙니다.** 결정 ②("돌보미는
+    기록하고 본다", docs/co-care.md §2) 이 생성을 구성원 기준으로 엽니다.
+    """
     async def none(session, app_user_id, pet_id):
         return None
 
-    monkeypatch.setattr(pet_repo, "get_owned", none)
+    monkeypatch.setattr(pet_repo, "get_accessible", none)
     assert client.post("/app/gait/analyze", json=_analyze_body()).status_code == 404
 
 
 def test_analyze_creates_pending_and_ticket(client, monkeypatch):
-    async def owned(session, app_user_id, pet_id):
-        assert app_user_id == OWNER          # 소유권이 토큰의 주인으로 확인되는지
+    async def accessible(session, app_user_id, pet_id):
+        assert app_user_id == OWNER          # 구성원 확인이 토큰의 주인으로 되는지
         return object()
 
-    monkeypatch.setattr(pet_repo, "get_owned", owned)
+    monkeypatch.setattr(pet_repo, "get_accessible", accessible)
     r = client.post("/app/gait/analyze", json=_analyze_body())
     assert r.status_code == 201
     body = r.json()
@@ -163,12 +167,35 @@ def test_analyze_creates_pending_and_ticket(client, monkeypatch):
     assert client.sent_jobs == []            # confirm 전에는 발행하지 않습니다
 
 
+def test_carer_can_start_analysis(client, monkeypatch):
+    """돌보미도 새 보행 분석을 시작할 수 있다 (docs/co-care.md §2, Task 12).
+
+    `get_owned` 를 스텁으로 남겨(대표만 통과) `start_analysis` 가 실제로
+    `get_accessible` 을 부르는지 가른다 — `get_owned` 로 되돌리면 이 테스트가
+    404 를 받아 실패한다.
+    """
+    CARER = uuid.uuid4()
+
+    async def owned_only_for_owner(session, app_user_id, pet_id):
+        return object() if app_user_id == OWNER else None
+
+    async def accessible_for_carer(session, app_user_id, pet_id):
+        return object() if app_user_id in (OWNER, CARER) else None
+
+    monkeypatch.setattr(pet_repo, "get_owned", owned_only_for_owner)
+    monkeypatch.setattr(pet_repo, "get_accessible", accessible_for_carer)
+    app.dependency_overrides[current_app_user] = lambda: AppPrincipal(app_user_id=CARER)
+
+    r = client.post("/app/gait/analyze", json=_analyze_body())
+    assert r.status_code == 201
+
+
 def test_analyze_returns_503_when_storage_not_configured(client, monkeypatch):
     """#78 전의 실제 상태 — 기록을 만들기 **전에** 실패해야 쓰레기 PENDING 이 안 남습니다."""
     async def owned(session, app_user_id, pet_id):
         return object()
 
-    monkeypatch.setattr(pet_repo, "get_owned", owned)
+    monkeypatch.setattr(pet_repo, "get_accessible", owned)
     monkeypatch.setattr(gait_service, "get_storage", lambda: NotConfiguredStorage())
     r = client.post("/app/gait/analyze", json=_analyze_body())
     assert r.status_code == 503
@@ -192,7 +219,7 @@ def test_storage_error_detail_never_reaches_the_user(client, monkeypatch):
                 "GAIT_BRIDGE_BASE_URL 에 경로가 붙어 있습니다: 'http://host/gait' — #78"
             )
 
-    monkeypatch.setattr(pet_repo, "get_owned", owned)
+    monkeypatch.setattr(pet_repo, "get_accessible", owned)
     monkeypatch.setattr(gait_service, "get_storage", lambda: Leaky())
     r = client.post("/app/gait/analyze", json=_analyze_body())
 
@@ -280,6 +307,22 @@ def test_carer_reads_detail_but_cannot_delete(client, monkeypatch):
     monkeypatch.setattr(gait_repo, "get_owned", not_owned)
     assert client.get(f"/app/gait/records/{rec.id}").status_code == 200
     assert client.delete(f"/app/gait/records/{rec.id}").status_code == 404
+
+
+def test_carer_cannot_confirm(client, monkeypatch):
+    """확정(`confirm_upload`)도 대표만이다 — `get_owned` 그대로다.
+
+    구성원 확장(§2)은 생성·읽기만이고, 상태를 UPLOADED 로 바꾸는 이 경로는 열지
+    않는다. `confirm_upload` 가 `gait_repo.get_accessible` 로 바뀌면 이 테스트가
+    200 을 받아 실패한다.
+    """
+    rec = _record(status="PENDING")
+
+    async def not_owned(session, app_user_id, record_id, **kwargs):
+        return None
+
+    monkeypatch.setattr(gait_repo, "get_owned", not_owned)
+    assert client.post(f"/app/gait/records/{rec.id}/confirm").status_code == 404
 
 
 def test_list_limit_bounds_and_stale_cursor(client, monkeypatch):

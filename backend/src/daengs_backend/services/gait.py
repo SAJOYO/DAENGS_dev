@@ -48,12 +48,18 @@ class WrongStateError(RuntimeError):
 async def start_analysis(
     session: AsyncSession, app_user_id: uuid.UUID, req: GaitAnalyzeRequest
 ):
-    """소유권 확인 → PENDING 기록 생성 → 업로드 티켓.
+    """접근 확인 → PENDING 기록 생성 → 업로드 티켓.
+
+    **구성원(대표 ∪ 돌보미)이면 됩니다** — 대표만이 아닙니다 (docs/co-care.md §2,
+    결정 ② "돌보미는 기록하고 본다"). 보행은 강아지의 건강 데이터라 돌보미도 영상을
+    올릴 수 있어야 합니다. `confirm_upload`·`soft_delete` 는 여전히 `get_owned`
+    (대표만) 입니다 — 상태를 바꾸거나 지우는 쪽까지 열면 돌보미가 남의 집 보행
+    영상을 지울 수 있게 됩니다 (`repositories/gait_record.py` 와 같은 경계).
 
     반환: (record, ticket). 스토리지가 미설정이면 **기록을 만들기 전에** 실패합니다 —
     티켓 없는 PENDING 은 앱이 어찌할 수 없는 쓰레기 행입니다.
     """
-    pet = await pet_repo.get_owned(session, app_user_id, req.pet_id)
+    pet = await pet_repo.get_accessible(session, app_user_id, req.pet_id)
     if pet is None:
         raise NotFoundError("pet")
 

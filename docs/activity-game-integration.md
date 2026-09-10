@@ -1,5 +1,7 @@
 # 산책·점령 통계와 게임 정책의 DEV 연결
 
+> 2026-09-10 후속: [월간 자동 결산](territory/monthly-seasons.md) — `start-monthly`로 명시적 최초 활성화, 이후 자동 전환과 저장된 `final_rank`.
+
 > 2026-09-10 후속: [72시간 만료·현장 연장](territory/ownership-expiry.md).
 > 첫 시즌의 worker는 각 영역의 실제 만료 시각에서 보유 개수와 점수 구간을 나눈다.
 

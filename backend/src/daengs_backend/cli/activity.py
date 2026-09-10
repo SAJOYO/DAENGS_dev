@@ -28,10 +28,20 @@ async def run(args):
     from daengs_backend.services import activity, activity_game
 
     async with worker_session() as db:
-        if args.command == "start-season":
+        if args.command in {"start-season", "start-monthly"}:
             activity.enabled()
+            if args.command == "start-monthly":
+                from daengs_backend.services.activity_core.monthly_calendar import month
+
+                args.starts_ms = activity_game.now_ms()
+                args.season_id, _, args.ends_ms = month(args.starts_ms)
             season = await activity_game.create_season(
-                db, args.season_id, args.starts_ms, args.ends_ms, parse_rules(args.rules)
+                db,
+                args.season_id,
+                args.starts_ms,
+                args.ends_ms,
+                parse_rules(args.rules),
+                monthly=args.command == "start-monthly",
             )
             print(
                 json.dumps({"season_id": season.id, "coverage_start_ms": season.coverage_start_ms})
@@ -51,6 +61,10 @@ def main():
     start.add_argument("--starts-ms", type=int, required=True)
     start.add_argument("--ends-ms", type=int, required=True)
     start.add_argument("--rules", required=True, help="JSON path; no implicit product balance")
+    monthly = commands.add_parser(
+        "start-monthly", help="Explicit first activation; KST month end and automatic successors"
+    )
+    monthly.add_argument("--rules", required=True, help="Complete first-season reward rules JSON")
     process = commands.add_parser("process")
     process.add_argument("--limit", type=int, default=100)
     commands.add_parser("rebuild")

@@ -101,7 +101,9 @@ def _walk_life(payload: WalkPayload) -> Any:
     **503 을 예외로 올리지 않는다.** 분리 전에 이 자리에 오던 것은 `walk()` 서비스의 반환값
     이고, 그것은 판정 불가에도 예외를 내지 않았다 — 503 을 만드는 것은 그 위의 HTTP
     컨트롤러이고 어시스턴트는 거기를 안 지난다. 여기서 올리면 같은 날씨에 어시스턴트 답이
-    `OK`(모른다)에서 `ERROR`(실행 실패)로 바뀐다.
+    `ABSTAINED`(모른다)에서 `ERROR`(실행 실패)로 바뀐다 — `grade == "unknown"` 일 때
+    `ABSTAINED` 로 닫는 판정은 `orchestration/adapters/walk.py` 의 `WalkCapabilityAdapter.run`
+    이 한다.
 
     다행히 그 503 의 본문이 **`WalkOut` 전체**다 (`controllers/walk.py` 가
     `detail=result.model_dump(mode="json", by_alias=True)` 로 싣는다). 그래서 되돌릴 수 있다.
@@ -109,9 +111,8 @@ def _walk_life(payload: WalkPayload) -> Any:
     from daengs_backend.config import settings
 
     if settings.realtime_url:
-        from daengs_life.app.dto.walk import WalkOut
-
         from daengs_backend.services import realtime_client
+        from daengs_life.app.dto.walk import WalkOut
 
         code, body = realtime_client.get_walk(
             payload.lat, payload.lon, base_url=settings.realtime_url

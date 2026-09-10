@@ -93,4 +93,4 @@ def post_weather_at(payload: dict[str, Any], *, base_url: str) -> tuple[int, Any
     return _call("POST", "/weather/at", base_url=base_url, json=payload)
 
 
-__all__ = ["RealtimeUnavailable", "TIMEOUT_SEC", "get_walk", "post_weather_at"]
+__all__ = ["TIMEOUT_SEC", "RealtimeUnavailable", "get_walk", "post_weather_at"]

@@ -29,6 +29,7 @@ from daengs_backend.routers import (
     facility_discovery,
     gait,
     health,
+    life_walk,
     metrics,
     pet,
     pet_member,
@@ -56,7 +57,6 @@ from daengs_backend.routers import (
 # import 하는데, 그쪽이 나중에 와서 이걸 가려 버립니다. 모듈 이름은 여전히 겹치므로
 # 별칭은 남깁니다 — 다만 **경로는 A4(#176)로 갈렸습니다**: 기록은 `/app/walks`,
 # 적합도는 `/life/walk-conditions` 입니다.
-from daengs_backend.routers import life_walk
 from daengs_backend.routers import walk as app_walks
 from daengs_backend.services.training_rag import release_training_runtime
 

@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -94,7 +94,7 @@ def test_client_keeps_status_and_body_untouched_on_503(monkeypatch: pytest.Monke
         }
     }
 
-    def fake_send(self, request, **kwargs):  # noqa: ANN001, ANN003, ARG001
+    def fake_send(self, request, **kwargs):
         return httpx.Response(503, json=body, request=request)
 
     monkeypatch.setattr(httpx.Client, "send", fake_send)
@@ -115,7 +115,7 @@ def test_client_turns_transport_failure_into_its_own_error(
 
     from daengs_backend.services import realtime_client
 
-    def boom(self, request, **kwargs):  # noqa: ANN001, ANN003, ARG001
+    def boom(self, request, **kwargs):
         raise httpx.ConnectTimeout("nope", request=request)
 
     monkeypatch.setattr(httpx.Client, "send", boom)
@@ -141,7 +141,7 @@ def test_token_fetch_failure_also_becomes_realtime_unavailable(
 
     from daengs_backend.services import realtime_client
 
-    def boom(audience, request=None, **kwargs):  # noqa: ANN001, ANN003, ARG001
+    def boom(audience, request=None, **kwargs):
         raise google.auth.exceptions.DefaultCredentialsError("no ADC in test env")
 
     monkeypatch.setattr(google.oauth2.id_token, "fetch_id_token_credentials", boom)
@@ -151,6 +151,64 @@ def test_token_fetch_failure_also_becomes_realtime_unavailable(
 
     with pytest.raises(realtime_client.RealtimeUnavailable):
         realtime_client.get_walk(37.4979, 127.0276, base_url="https://token-fail.example")
+
+
+# ---------------------------------------------------------------- 프록시 라우터
+
+def test_life_walk_router_proxies_200_body_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 갈래의 200 도 손대지 않고 그대로 넘어가는지 라우터 레벨에서 확인한다.
+
+    `test_client_keeps_status_and_body_untouched_on_503` 은 `realtime_client.get_walk` 하나만
+    본다 — 그 위의 `routers/life_walk.py` 가 실제로 상태 코드·본문을 안 바꾸는지는 라우터를
+    직접 돌려야 보인다.
+    """
+    from fastapi.testclient import TestClient
+
+    from daengs_backend.routers import life_walk
+
+    body = {"now": {"grade": "GOOD"}, "windows": []}
+    monkeypatch.setattr(
+        "daengs_backend.services.realtime_client.get_walk",
+        lambda lat, lon, *, base_url: (200, body),
+    )
+
+    app = FastAPI()
+    app.include_router(life_walk.router)
+    client = TestClient(app)
+
+    response = client.get("/life/walk-conditions", params={"lat": 37.4979, "lon": 127.0276})
+    assert response.status_code == 200
+    assert response.json() == body
+
+
+def test_life_walk_router_turns_realtime_unavailable_into_502(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`RealtimeUnavailable`(전송 실패·토큰 발급 실패)이 502 로 닫히는지 라우터 레벨에서 확인한다.
+
+    IAM 설정이 틀리는 등 운영에서 실제로 탈 수 있는 자리인데, 지금까지는 `realtime_client`
+    레벨 테스트(`test_client_turns_transport_failure_into_its_own_error` 등)만 있었다 — 그
+    예외를 라우터가 실제로 502 로 바꾸는지는 별개다.
+    """
+    from fastapi.testclient import TestClient
+
+    from daengs_backend.routers import life_walk
+    from daengs_backend.services import realtime_client
+
+    def boom(lat, lon, *, base_url):
+        raise realtime_client.RealtimeUnavailable("ConnectTimeout: nope")
+
+    monkeypatch.setattr("daengs_backend.services.realtime_client.get_walk", boom)
+
+    app = FastAPI()
+    app.include_router(life_walk.router)
+    client = TestClient(app)
+
+    response = client.get("/life/walk-conditions", params={"lat": 37.4979, "lon": 127.0276})
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["code"] == "realtime_unavailable"
+    assert "ConnectTimeout" in detail["message"]
 
 
 # ---------------------------------------------------------------- 갈림길
@@ -201,7 +259,7 @@ def test_weather_lookup_reduces_http_body_the_same_way(
         lambda payload, *, base_url: (200, body),
     )
 
-    observed = datetime(2026, 9, 11, 5, 0, tzinfo=timezone.utc)
+    observed = datetime(2026, 9, 11, 5, 0, tzinfo=UTC)
     out = life_adapter._weather_at_life(37.4979, 127.0276, observed)
     assert out.status == "captured"
     assert out.temperature_c == 21.5
@@ -224,7 +282,7 @@ def test_walk_alias_roundtrip_restores_windows_from_field(
     from daengs_backend.orchestration.contracts import WalkPayload
     from daengs_life.app.dto.walk import LocationOut, VerdictOut, WalkOut, WindowOut
 
-    now = datetime(2026, 9, 11, 5, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 11, 5, 0, tzinfo=UTC)
     original = WalkOut(
         location=LocationOut(dong="역삼동", grid=(61, 125), label="역삼동 (측정소: 강남) 기준"),
         generated_at=now,

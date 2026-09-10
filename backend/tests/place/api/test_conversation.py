@@ -300,7 +300,15 @@ async def test_next_exclude_retry_and_manual_change_keep_committed_exploration(h
     searcher.rows = [place(str(i), distance=i + 1) for i in range(26)]
     first = (await client.post("/app/places/conversation", json=manual_body())).json()
     plans.append(
-        {"goal": "show", "browse": "next", "place_edit": {"operation": "exclude", "indices": [1]}}
+        {
+            "goal": "show",
+            "browse": "next",
+            "place_edit": {
+                "operation": "exclude",
+                "operation_quote": "빼고",
+                "targets": [{"kind": "ordinal", "text": "첫 번째"}],
+            },
+        }
     )
     request = chat_body(first, "첫 번째 빼고 더 보여줘")
     second = (await client.post("/app/places/conversation", json=request)).json()

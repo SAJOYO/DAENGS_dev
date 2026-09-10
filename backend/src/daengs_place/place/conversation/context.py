@@ -1,6 +1,11 @@
 """Current display facts, with explicit reference scope. No inferred click preferences."""
 
 from daengs_place.place.conversation.contract import NamedPlace
+from daengs_place.place.conversation.grounding import (
+    assert_operation,
+    assert_restart,
+    resolve_target,
+)
 
 
 def identity(key):
@@ -52,6 +57,7 @@ def screen_context(request):
 def edit_exclusions(request, intent):
     old = request.previous.exploration.excluded if request.previous else ()
     if intent and intent.browse == "restart":
+        assert_restart(request.query)
         return (), (), old
     edit = intent.place_edit if intent else None
     if edit is None:
@@ -61,9 +67,14 @@ def edit_exclusions(request, intent):
         if edit.operation == "exclude"
         else old
     )
-    if any(i > len(places) for i in edit.indices):
-        raise ValueError("place edit reference outside displayed scope")
-    targets = tuple(places[i - 1] for i in dict.fromkeys(edit.indices))
+    assert_operation(request.query, edit)
+    selected = request.visible_selected or request.previous.selected
+    resolved = (
+        p
+        for target in edit.targets
+        for p in resolve_target(request.query, target, places, selected)
+    )
+    targets = tuple({identity(p.key): p for p in resolved}.values())
     previous = {identity(p.key): p for p in old}
     if edit.operation == "exclude":
         added = tuple(p for p in targets if identity(p.key) not in previous)

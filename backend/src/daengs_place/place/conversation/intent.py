@@ -1,6 +1,6 @@
 """Model-owned meaning, without filter IDs, executable actions or answer prose."""
 
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictBool, model_validator
 
@@ -74,12 +74,16 @@ class Interpretation(PlanningModel):
         return self
 
 
+class PlaceTarget(PlanningModel):
+    kind: Literal["name", "selected", "ordinal", "all"]
+    # A literal span from the latest query, never a generated key or screen index.
+    text: str = Field(min_length=1, max_length=200)
+
+
 class PlaceEdit(PlanningModel):
     operation: Literal["exclude", "restore"]
-    # exclude indexes current_places; restore indexes excluded_places.
-    indices: tuple[Annotated[int, Field(strict=True, ge=1, le=120)], ...] = Field(
-        min_length=1, max_length=120
-    )
+    operation_quote: str = Field(min_length=1, max_length=500)
+    targets: tuple[PlaceTarget, ...] = Field(min_length=1, max_length=120)
 
 
 Interpretation.model_rebuild()

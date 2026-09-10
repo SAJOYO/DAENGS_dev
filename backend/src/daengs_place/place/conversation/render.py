@@ -142,7 +142,7 @@ def render_answer(receipt):
             suffix = (
                 f" 등 {len(receipt.excluded_places)}곳" if len(receipt.excluded_places) > 2 else ""
             )
-            parts.append(f"{names}{suffix}은 이번 탐색에서 제외했어요.")
+            parts.append(f"이번 탐색에서 제외했어요: {names}{suffix}.")
         if receipt.restored_places:
             parts.append(f"{len(receipt.restored_places)}곳의 제외를 해제했어요.")
         if receipt.browse == "restart":

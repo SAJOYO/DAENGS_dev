@@ -13,8 +13,9 @@ from tests.walk.support.paths import REPO
 @pytest.mark.parametrize(
     "action,reject", [("Prepare", False), ("Start", False), ("Start", True), ("Stop", False)]
 )
-def test_server_commands_and_preflight_gate(tmp_path, action, reject):
-    pwsh = shutil.which("pwsh")
+@pytest.mark.parametrize("shell", ["pwsh", "powershell"])
+def test_server_commands_and_preflight_gate(tmp_path, action, reject, shell):
+    pwsh = shutil.which(shell)
     if not pwsh:
         pytest.skip("PowerShell runtime is not installed")
     (tmp_path / "tools").mkdir()
@@ -164,8 +165,9 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
 
 
 @pytest.mark.parametrize("valid", [True, False])
-def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid):
-    pwsh = shutil.which("pwsh")
+@pytest.mark.parametrize("shell", ["pwsh", "powershell"])
+def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid, shell):
+    pwsh = shutil.which(shell)
     if not pwsh:
         pytest.skip("PowerShell runtime is not installed")
     (tmp_path / "tools").mkdir()
@@ -194,14 +196,18 @@ def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid
         "-SettingsFile",
         str(target),
     ]
-    first = subprocess.run(command, env=env, text=True, capture_output=True, timeout=20, check=False)
+    first = subprocess.run(
+        command, env=env, text=True, capture_output=True, timeout=20, check=False
+    )
     assert (first.returncode == 0) is valid
     assert "dummysecret" not in first.stdout + first.stderr
     assert target.exists() is valid
     assert "EXISTING=keep" in root_env.read_text()
     if valid:
         value = target.read_bytes()
-        second = subprocess.run(command, env=env, text=True, capture_output=True, timeout=20, check=False)
+        second = subprocess.run(
+            command, env=env, text=True, capture_output=True, timeout=20, check=False
+        )
         assert second.returncode != 0
         assert target.read_bytes() == value
         assert "DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=false" in value.decode()

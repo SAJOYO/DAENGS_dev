@@ -68,7 +68,7 @@ Check는 공공자료 및 스키마 검증이며, 사용자 기록이나 Gemini 
 .\tools\walk-diary-runtime.ps1 -Action Start
 ```
 
-원격에서는 `Walk diary runtime` workflow의 Configure/Prepare/Check/Start/Stop을 사용한다.
+원격에서는 `Walk diary runtime` workflow의 Configure/Prepare/Check/Start/Stop/Smoke를 사용한다.
 Configure는 저장소 secrets `WALK_SGIS_KEY`, `WALK_SGIS_SECRET`, `WALK_PUBLIC_DATA_KEY`를
 서버 전용 파일에 기록하고 최상단 `.env`에 경로를 지정한다. 파일이나 경로 설정이 이미 있으면
 덮어쓰지 않고 중단한다. 키를 코드·앱·로그에 넣지 않으며 초기 기능 flag는 false다.
@@ -77,6 +77,13 @@ checkout하지 않으며, 기존 배포 폴더의 도구와 Compose를 실행한
 DB migration이나 앱 로그인 계정 생성은 이 도구가 대신하지 않는다.
 
 ## 새 산책 한 사이클 확인
+
+`Smoke`는 이 단위의 도곡동 합성 동선 121점과 행동 1개·메모 2개를 임시 계정으로 업로드한다.
+실행 중인 nginx API의 정상 인증·저장 경로를 사용하고, 수집 함수를 직접 호출하지 않는다.
+실제 Beat/워커의 네 공공자료 상태를 기다린 뒤 Gemini 생성을 한 번 요청하고 동일 결과를 조회한다.
+사용자 메모가 하나의 장면 본문에 보존되는지도 검사한다. API 응답·토큰·계정 ID는 로그에
+남기지 않으며, 정상 종료와 오류 모두 자신이 만든 계정만 UUID+음수 kakao_id로 제한해 삭제한다.
+실제 사용자 로그인·물리 폰·실제 GPS 산책을 검증한 것으로 보지 않는다.
 
 대상 지역에서 본인 소유의 새 산책에 확정 위치가 있는 행동·글을 남긴 뒤 종료한다.
 그 산책의 인증된 API로 context를 조회해 주소·공원·상권·하천 상태를 확인한다.
@@ -120,4 +127,8 @@ context·photo·public·commerce 네 migration과 짝 verifier를 순서대로 �
 로컬 수집·사전 점검 31개, 별도 localhost PostgreSQL의 read-only verifier 2개,
 PowerShell 동작·Compose 렌더·Configure 검사 7개를 통과했다.
 `uv run check`는 Windows 검사를 실행하는 자식 프로세스에만 실행 정책을 지정해 통과했다.
-전역 실행 정책을 변경하지 않았다. Linux 컨테이너의 기본 CI 테스트는 배포 전에 별도 확인한다.
+전역 실행 정책을 변경하지 않았다. Linux 컨테이너에서 CI 의존성(`--extra place --extra agent`)으로
+기본 pytest를 실행해 3,890 passed / 221 skipped / 2 xfailed였다. 실패 2개는 컨테이너에 Git이
+없어 발생했고, 실제 Git 워크트리에서 해당 파일을 재실행해 3개 모두 통과했다.
+이후 최신 dev 통합과 Smoke/PowerShell 5.1·7 검증을 포함한 대상 검사 68 passed / 2 skipped,
+`uv run check` 통과. 전체 테스트를 재실행한 결과로 합산하지 않는다.

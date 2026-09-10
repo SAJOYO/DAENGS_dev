@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Configure', 'Prepare', 'Check', 'Start', 'Stop')]
+    [ValidateSet('Configure', 'Prepare', 'Check', 'Start', 'Stop', 'Smoke')]
     [string]$Action = 'Check',
     [double]$Latitude = 37.4878,
     [double]$Longitude = 127.052,
@@ -57,6 +57,17 @@ Invoke-Docker -DockerArgs @('compose', 'config', '--quiet')
 $containers = @(& docker ps --format '{{.Names}}')
 if ($LASTEXITCODE -ne 0) { throw 'Docker is unavailable' }
 if ('daengs-backend' -notin $containers) { throw 'Existing backend must be running' }
+
+if ($Action -eq 'Smoke') {
+    $target = '/tmp/walk-runtime-smoke-' + [guid]::NewGuid().ToString('N') + '.py'
+    try {
+        Invoke-Docker -DockerArgs @('cp', (Join-Path $root 'tools/walk_runtime_smoke.py'), ('daengs-backend:' + $target))
+        Invoke-Docker -DockerArgs @('exec', '-w', '/app', 'daengs-backend', 'uv', 'run', '--no-sync', 'python', $target, '--execute')
+    } finally {
+        & docker exec daengs-backend rm -f $target
+    }
+    return
+}
 
 $lat = $Latitude.ToString([Globalization.CultureInfo]::InvariantCulture)
 $lng = $Longitude.ToString([Globalization.CultureInfo]::InvariantCulture)

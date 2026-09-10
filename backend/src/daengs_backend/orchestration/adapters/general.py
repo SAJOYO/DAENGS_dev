@@ -192,14 +192,17 @@ def build_general_prompt(payload: GeneralPayload) -> str:
             f"VET_RECENT: {json.dumps(vet_spend, ensure_ascii=False, sort_keys=True)}"
         )
 
+    # 인접 리터럴의 암묵적 연결에 기대지 않는다 — `+` 로만 잇는다. 이유는 이 파일이
+    # 존재하는 이유와 같다: 나중에 이 두 조각 사이에 표현식 하나가 끼어들면, 암묵적
+    # 연결은 구분자를 조용히 빠뜨리지만 명시적 `+` 는 그 자리에서 문법 오류로 걸린다.
     return (
         f"PROMPT_VERSION: {version}\n\n"
         + "\n\n".join(rule_blocks)
         + "\n\n"
-        f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+        + f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
         + "\n".join(context_lines)
         + "\n"
-        f"USER_QUERY: {payload.question}\n"
+        + f"USER_QUERY: {payload.question}\n"
     )
 
 

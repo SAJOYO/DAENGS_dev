@@ -822,10 +822,13 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
 
     async def vet_list_between(session, app_user_id, pet_id, start, end):
-        return sorted(
-            _vet_between(app_user_id, pet_id, start, end),
-            key=lambda v: (v.visited_on, v.id), reverse=True,
-        )
+        # 진짜 리포지토리와 같은 순서: visited_on DESC, id ASC. 튜플째로 reverse=True
+        # 하면 id 까지 뒤집혀 같은 날 두 건일 때 순서가 갈린다 — id 오름차순으로 먼저
+        # 정렬한 뒤 visited_on 만 내림차순으로 다시 정렬한다(안정 정렬이라 동률의
+        # 상대 순서가 유지된다).
+        rows = sorted(_vet_between(app_user_id, pet_id, start, end), key=lambda v: v.id)
+        rows.sort(key=lambda v: v.visited_on, reverse=True)
+        return rows
 
     async def vet_sum_by_reason(session, app_user_id, pet_id, start, end):
         totals: dict[str, int] = {}

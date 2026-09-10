@@ -15,6 +15,7 @@ v3 와 글자까지 같은가.**
 마지막 것이 D-057 ③ 의 승인을 지키는 자리다 (#344 의 같은 문단).
 """
 
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -33,6 +34,10 @@ from daengs_backend.orchestration.adapters.general import (
     GENERAL_CARE_LOG_VET_PROMPT_VERSION,
     GENERAL_PROMPT_VERSION,
     GENERAL_VET_PROMPT_VERSION,
+    GeneralAnswer,
+    _CARE_LOG_RULE,
+    _SAFETY_PROMPT,
+    _VET_SPEND_RULE,
     build_general_prompt,
 )
 from daengs_backend.orchestration.contracts import (
@@ -96,10 +101,14 @@ def vet(monkeypatch: pytest.MonkeyPatch) -> VetStore:
         ]
 
     async def list_between(session, app_user_id, pet_id, start, end):
-        return sorted(
-            _between(app_user_id, pet_id, start, end),
-            key=lambda v: (v.visited_on, v.id), reverse=True,
-        )
+        # 진짜 리포지토리와 같은 순서: visited_on DESC, id ASC. 튜플을 통째로
+        # reverse=True 하면 id 까지 뒤집혀 같은 날 두 건일 때 순서가 갈린다 — 먼저
+        # id 로 오름차순 정렬한 뒤 visited_on 으로만 내림차순 정렬한다. 파이썬 sort 는
+        # 안정 정렬이라 reverse=True 에서도 동률(같은 날)의 상대 순서(id 오름차순)가
+        # 유지된다.
+        rows = sorted(_between(app_user_id, pet_id, start, end), key=lambda v: v.id)
+        rows.sort(key=lambda v: v.visited_on, reverse=True)
+        return rows
 
     async def sum_by_reason(session, app_user_id, pet_id, start, end):
         totals: dict[str, int] = {}
@@ -145,6 +154,21 @@ async def test_이번_달_합계와_최근_30일_건수와_마지막_방문을_�
     }
 
 
+async def test_같은_날_두_건이면_id_오름차순으로_첫_행을_고른다(pet, vet) -> None:
+    """진짜 리포지토리는 `ORDER BY visited_on DESC, id`(id ASC) 다. 가짜가 튜플째
+    reverse=True 로 정렬하면 id 까지 뒤집혀 같은 날 두 건일 때 서로 다른 행을 고른다 —
+    두 구현이 같은 행을 고르는지 여기서 고정한다."""
+    small_id = uuid.UUID(int=1)
+    large_id = uuid.UUID(int=2)
+    vet.visits += [
+        FakeVetVisit(OWNER, pet.id, "vaccination", date(2026, 9, 2), 50_000, id=large_id),
+        FakeVetVisit(OWNER, pet.id, "skin", date(2026, 9, 2), 80_000, id=small_id),
+    ]
+    resolved = await _resolve(pet.id)
+    assert resolved is not None
+    assert resolved["last_visit"]["reason"] == "피부"  # id 가 작은 쪽
+
+
 async def test_병원_이름과_전화가_없으면_그_칸만_빠진다(pet, vet) -> None:
     vet.visits.append(FakeVetVisit(OWNER, pet.id, "skin", date(2026, 9, 2), 80_000))
     resolved = await _resolve(pet.id)
@@ -163,6 +187,9 @@ async def test_reason_detail_은_안_넘어간다(pet, vet) -> None:
     assert resolved is not None
     assert "reason_detail" not in resolved["last_visit"]
     assert "발바닥" not in repr(resolved)
+    # 실제로 모델에 가는 것은 이 딕셔너리가 아니라 프롬프트 문자열이다 — 거기까지 확인한다.
+    payload = GeneralPayload(question=QUERY, vet_spend=VetSpendContext(**resolved))
+    assert "발바닥" not in build_general_prompt(payload)
 
 
 async def test_raw_ocr_items_는_안_넘어간다(pet, vet) -> None:
@@ -174,6 +201,8 @@ async def test_raw_ocr_items_는_안_넘어간다(pet, vet) -> None:
     assert resolved is not None
     assert "raw_ocr_items" not in resolved["last_visit"]
     assert "초진료" not in repr(resolved)
+    payload = GeneralPayload(question=QUERY, vet_spend=VetSpendContext(**resolved))
+    assert "초진료" not in build_general_prompt(payload)
 
 
 async def test_hospital_address_는_안_넘어간다(pet, vet) -> None:
@@ -187,6 +216,8 @@ async def test_hospital_address_는_안_넘어간다(pet, vet) -> None:
     assert "hospital_address" not in resolved["last_visit"]
     assert "address" not in resolved["last_visit"]
     assert "역삼동" not in repr(resolved)
+    payload = GeneralPayload(question=QUERY, vet_spend=VetSpendContext(**resolved))
+    assert "역삼동" not in build_general_prompt(payload)
 
 
 async def test_기록이_없으면_None(pet, vet) -> None:
@@ -311,22 +342,47 @@ def test_by_reason_의_잘못된_항목만_버려진다() -> None:
 
 def test_prompt_without_vet_spend_is_byte_identical_to_v4() -> None:
     """로그·진료비가 없는 요청은 v3 와 글자까지 같다. 로그만 있는 요청은 v4-carelog 와
-    글자까지 같다 — 이 카드가 그 둘을 조금도 바꾸지 않는다."""
+    글자까지 같다 — 이 카드가 그 둘을 조금도 바꾸지 않는다.
+
+    **한 자도 안 빠뜨리려고, 기대값을 `_SAFETY_PROMPT`/`_CARE_LOG_RULE`/스키마/컨텍스트
+    줄에서 직접 다시 짓는다.** 버전 접두사와 부분 문자열만 보면, 리팩터로 두 판본
+    사이에 조용히 공백 한 칸이 늘거나 줄어도 이 테스트가 못 잡는다 — D-057 ③ 의 84건
+    쌍대 비교가 실제로 지키는 것은 이 바이트들이다."""
+    schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
+    dog_json = json.dumps({"breed": "퍼그"}, ensure_ascii=False, sort_keys=True)
+
     v3 = build_general_prompt(GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그")))
     assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
-    assert v3.startswith(f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n")
+    expected_v3 = (
+        f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
+        f"{_SAFETY_PROMPT}\n\n"
+        f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+        f"DOG_CONTEXT: {dog_json}\n"
+        f"USER_QUERY: {QUERY}\n"
+    )
+    assert v3 == expected_v3
     assert "CARE_LOG" not in v3
     assert "VET_RECENT" not in v3
     assert "care log" not in v3.lower()
 
-    payload = GeneralPayload(
-        question=QUERY, dog=DogContext(breed="퍼그"),
-        care_log=CareLogContext(day=TODAY, meal=2, medication=1, snack=0, walk=1,
-                                last_meal_at="18:30", last_medication_at="08:12"),
-    )
+    care_log = CareLogContext(day=TODAY, meal=2, medication=1, snack=0, walk=1,
+                              last_meal_at="18:30", last_medication_at="08:12")
+    payload = GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log)
     v4 = build_general_prompt(payload)
     assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v4-carelog"
-    assert v4.startswith(f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n")
+    care_log_json = json.dumps(
+        care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
+    )
+    expected_v4 = (
+        f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n"
+        f"{_SAFETY_PROMPT}\n\n"
+        f"{_CARE_LOG_RULE}\n\n"
+        f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+        f"DOG_CONTEXT: {dog_json}\n"
+        f"CARE_LOG_TODAY: {care_log_json}\n"
+        f"USER_QUERY: {QUERY}\n"
+    )
+    assert v4 == expected_v4
     assert "VET_RECENT" not in v4
 
 
@@ -340,35 +396,52 @@ def test_prompt_version_flips_when_vet_spend_present() -> None:
         by_reason_12m={"피부": 320_000, "예방접종": 80_000},
     )
 
+    schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
+    dog_json = json.dumps({"breed": "퍼그"}, ensure_ascii=False, sort_keys=True)
+    vet_spend_json = json.dumps(
+        vet_spend.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
+    )
+
     only_vet = build_general_prompt(
         GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), vet_spend=vet_spend)
     )
     assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v5-vetspend"
-    assert only_vet.startswith(f"PROMPT_VERSION: {GENERAL_VET_PROMPT_VERSION}\n\n")
+    expected_only_vet = (
+        f"PROMPT_VERSION: {GENERAL_VET_PROMPT_VERSION}\n\n"
+        f"{_SAFETY_PROMPT}\n\n"
+        f"{_VET_SPEND_RULE}\n\n"
+        f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+        f"DOG_CONTEXT: {dog_json}\n"
+        f"VET_RECENT: {vet_spend_json}\n"
+        f"USER_QUERY: {QUERY}\n"
+    )
+    assert only_vet == expected_only_vet
     assert "CARE_LOG_TODAY" not in only_vet
-    assert '"hospital": "○○동물병원"' in only_vet
-    assert '"reason": "피부"' in only_vet
-    assert only_vet.rstrip().endswith(f"USER_QUERY: {QUERY}")
-    for word in ("diagnose", "spending"):
-        assert word in only_vet
 
+    care_log = CareLogContext(day=TODAY, meal=1)
     both = build_general_prompt(
         GeneralPayload(
-            question=QUERY, dog=DogContext(breed="퍼그"),
-            care_log=CareLogContext(day=TODAY, meal=1),
-            vet_spend=vet_spend,
+            question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log, vet_spend=vet_spend
         )
     )
     assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v5-carelog-vetspend"
-    assert both.startswith(f"PROMPT_VERSION: {GENERAL_CARE_LOG_VET_PROMPT_VERSION}\n\n")
-    assert "CARE_LOG_TODAY" in both
-    assert "VET_RECENT" in both
-    # 순서: CARE_LOG_TODAY 가 VET_RECENT 보다 먼저다.
+    care_log_json = json.dumps(
+        care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
+    )
+    expected_both = (
+        f"PROMPT_VERSION: {GENERAL_CARE_LOG_VET_PROMPT_VERSION}\n\n"
+        f"{_SAFETY_PROMPT}\n\n"
+        f"{_CARE_LOG_RULE}\n\n"
+        f"{_VET_SPEND_RULE}\n\n"
+        f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+        f"DOG_CONTEXT: {dog_json}\n"
+        f"CARE_LOG_TODAY: {care_log_json}\n"
+        f"VET_RECENT: {vet_spend_json}\n"
+        f"USER_QUERY: {QUERY}\n"
+    )
+    assert both == expected_both
+    # 순서: CARE_LOG_TODAY 가 VET_RECENT 보다 먼저다(그 자리를 의도한 줄 순서로 다시 확인).
     assert both.index("CARE_LOG_TODAY") < both.index("VET_RECENT")
-    rules_section = both.split("GENERAL_ANSWER_JSON_SCHEMA")[0]
-    assert "CARE_LOG_TODAY," in rules_section  # _CARE_LOG_RULE 규칙 본문
-    assert "VET_RECENT," in rules_section  # _VET_SPEND_RULE 규칙 본문
-    assert rules_section.index("CARE_LOG_TODAY,") < rules_section.index("VET_RECENT,")
 
 
 def test_모든_네_조합의_프롬프트_버전() -> None:

@@ -421,7 +421,7 @@ backend/                  Python 패키지·테스트·단일 pyproject/uv.lock 
   src/daengs_place/       Place 검색 API·적재기 (별도 컨테이너)
   src/daengs_journey/     단발 이동 스냅샷 (별도 컨테이너)
   src/daengs_screening/   피부 스크리닝 (main backend 의 /screen/* 에 등록)
-  src/daengs_gait/        보행 영상 분석 (gait-analysis 컨테이너, profile: gait)
+  src/daengs_gait/        보행 영상 분석 (Celery gait-worker 컨테이너, profile: gait)
   src/daengs_walk/        산책 측정·공간 일기 조립 (DB/HTTP 를 모르는 측정 커널)
   src/daengs_evals/       평가·벤치마크 도구. 결과는 backend/evals/
   infra/place/            Place 전용 Alembic (별도 PostGIS)

@@ -42,9 +42,6 @@ dependencies = [
 [project.scripts]
 dev = "daengs_backend.main:dev"
 run = "daengs_backend.main:run"
-# 보행 분석은 **별도 프로세스**입니다 (D-038). backend 앱에 붙지 않으므로 진입점이 따로입니다.
-# compose 의 gait-analysis 서비스가 이것을 부릅니다.
-gait-serve = "daengs_gait.service:main"
 # 저장소 규칙 검사. **3초** 안에 끝나는 것만 들어갑니다 — pytest 가 안 보는 자리
 # (루트 `tools/` 의 마이그레이션 체커)를 봅니다. 느린 것을 넣지 마세요, 이유는 그 파일 첫머리에.
 check = "daengs_backend.cli.check:main"
@@ -161,9 +158,9 @@ ml = [
 # `ml` 과 같은 선(>=2.6)에 묶어 둔다 ② 아래 [tool.uv.sources] 의 인덱스 바인딩이
 # **패키지 단위**라 어느 그룹이 요구하든 리눅스에서 CPU 판을 받는다는 것을 여기서 보이게 한다.
 #
-# ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 `/gait/` 만 503 이 된다** —
-#   다른 API 는 멀쩡해서 로그에 아무 문제도 안 보인다. 이름을 바꾸면
-#   docker-compose.yml 의 gait-analysis `command` 도 같이 고쳐라.
+# ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 gait-worker 가 기동에서 멈춘다** —
+#   `--frozen` 이라 로그에 바로 나오지만, 웹은 멀쩡해서 상태 화면의 보행만 `absent` 로 보인다.
+#   이름을 바꾸면 docker-compose.yml 의 gait-worker `command` 도 같이 고쳐라.
 #
 # ⚠ **`gait-venv` 를 `backend-venv` 와 공유하면 안 된다.** 인자 없는 `uv sync` 는 exact
 #   동기화라 같은 볼륨에 돌리면 서로의 그룹을 지운다 (crawler-worker 주석과 같은 함정).

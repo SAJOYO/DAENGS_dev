@@ -312,7 +312,7 @@ class Settings(BaseSettings):
     #
     # nginx 의 `location /app/gait/` client_max_body_size(200m) **보다 낮게** 두세요.
     # 높으면 nginx 가 먼저 끊어서 앱이 우리 413 대신 nginx HTML 을 받습니다.
-    # 이름·기본값은 레거시 gait-analysis 의 GAIT_MAX_UPLOAD_BYTES 와 일부러 같습니다.
+    # 이름·기본값은 옛 gait-analysis HTTP 서비스(D-063 4단계에서 제거)의 것을 그대로 이었습니다.
     gait_max_upload_bytes: int = Field(
         default=150 * 1024 * 1024,
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
@@ -338,7 +338,7 @@ class Settings(BaseSettings):
     gait_v4_python: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_PYTHON"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
-    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와
+    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. backend 와
     # **다른 컨테이너**라 프로세스 안에서는 알 수 없고, nginx 를 거치지도 않습니다
     # (compose 네트워크 안에서 서비스 이름으로 직접 닿습니다).
     #
@@ -357,9 +357,6 @@ class Settings(BaseSettings):
     #   컨테이너의 주소를 두 이름으로 두면 한쪽만 고치는 날 상태 화면과 실제 호출이
     #   서로 다른 곳을 봅니다.
     journey_service_url: str = "http://journey-service:8000"
-    # gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
-    # 그래서 여기 이름이 있어도 평소에는 `absent` 로 보이는 것이 정상입니다.
-    gait_service_url: str = "http://gait-analysis:8000"
 
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #

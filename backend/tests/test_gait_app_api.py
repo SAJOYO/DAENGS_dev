@@ -3,8 +3,8 @@
 DB 에는 붙지 않습니다 — repositories 와 storage 를 바꿔치기하고, 여기서 보는 것은
 라우터·서비스의 판단(인증 · 소유권 404 · 상태 전이 · 금지 필드 · 503)입니다.
 
-⚠️ 기존 `/gait/*`(gait-analysis FastAPI) 테스트와 별개입니다 — 저쪽은
-   `test_gait_service.py` 등이 보고, 앱 전환(#64) 뒤 단계적으로 사라질 계약입니다.
+옛 `/gait/*`(gait-analysis FastAPI)와 그 테스트(`test_gait_service.py` 등)는 D-063 4단계에서
+제거됐습니다 — 업로드 상한 413/400 은 아래 bridge 업로드 테스트가 같은 것을 지킵니다.
 """
 
 from __future__ import annotations

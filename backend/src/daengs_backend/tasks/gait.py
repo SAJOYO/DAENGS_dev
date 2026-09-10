@@ -5,8 +5,8 @@
 `services/training_rag.py` 가 `daengs_training` 을 함수 안에서 부르는 것과 같은
 규율이고, `daengs_gait` 는 여전히 backend 를 모릅니다.
 
-워커는 **별도 프로세스**로 뜹니다 (#78 뒤, compose 의 gait-analysis 서비스가
-FastAPI 대신 이것을 돌게 됩니다):
+워커는 **별도 프로세스**로 뜹니다 (compose 의 `gait-worker`. 옛 `gait-analysis` HTTP
+서비스는 D-063 4단계에서 제거됐고, 보행 분석의 실행부는 이제 이 워커 하나입니다):
 
     celery -A daengs_backend.tasks.gait worker --queues gait --concurrency 1
 

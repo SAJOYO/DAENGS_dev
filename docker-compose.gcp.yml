@@ -2,7 +2,7 @@
 #
 # 기동 (docs/deploy/runbook.md 의 절차 안에서):
 #   docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-#     up -d nginx backend place-search journey-service gait-analysis gait-worker
+#     up -d nginx backend place-search journey-service gait-worker
 #
 # 크롤러(crawler-worker · crawler-beat)는 **일부러 목록에 없습니다** — GCP 에서는 Cloud Run 잡
 # `corpus-refresh` 가 크롤~적재를 대신합니다 (D-062, docs/deploy/corpus-pipeline.md). 코퍼스 정본은
@@ -16,7 +16,7 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.gcp.yml
 #     --profile gait --profile tracing
-#     up -d nginx backend place-search journey-service gait-analysis gait-worker otel-collector
+#     up -d nginx backend place-search journey-service gait-worker otel-collector
 #
 # (한 줄로 이어 쓰세요 — 위는 읽기 좋게 끊어 둔 것입니다.)
 services:
@@ -37,22 +37,16 @@ services:
       # volume 이름을 맞추는 것보다 경로 공유가 단순합니다.
       - /srv/daengs/letsencrypt:/etc/letsencrypt:ro
 
-  gait-analysis:
-    # 영상 분석이 CPU 를 분 단위로 잡습니다. 4vCPU 중 2.5 로 묶어 분석이 도는 동안에도
-    # 나머지 API 에 1.5 vCPU 를 남깁니다 (노션 클라우드 이전 검토 · D-042).
-    cpus: 2.5
-
-  # gait-worker (D-043) — 새 흐름 `/app/gait/*` 의 실행부. 여기에 **상한을 안 겁니다.**
+  # gait-worker (D-043) — `/app/gait/*` 의 실행부이자 이제 보행 분석의 **유일한** 실행부.
+  # 여기에 **상한을 안 겁니다.**
   #
-  # 위 gait-analysis 와 같은 무게의 추론(torch·ultralytics, `--concurrency 1`)인데 한쪽만
-  # 묶여 있는 것이 어색해 보이지만, 근거 없는 숫자를 박지 않기로 했습니다 (#150에서 검토).
-  # 두 서비스가 **동시에** 일할 일이 아직 없습니다 — 앱이 옛 `/gait/`(gait-analysis) 또는
-  # 새 `/app/gait/`(gait-worker) 중 한쪽만 씁니다. 2.5 라는 숫자도 gait-analysis 를 실측해
-  # 나온 값이 아니라 "4vCPU 중 API 에 1.5 를 남긴다"는 배분에서 나온 것이라, 그대로 복사하면
-  # 둘이 같이 도는 순간 4.0 을 넘겨 오히려 틀립니다.
+  # 옛 `gait-analysis`(HTTP)에는 `cpus: 2.5` 가 걸려 있었고 D-063 4단계에서 서비스와 함께
+  # 지웠습니다. 그 값은 gait-analysis 를 실측해 나온 것이 아니라 "4vCPU 중 API 에 1.5 를
+  # 남긴다"는 배분에서 나온 숫자였습니다. **워커에 같은 cap 을 옮겨 붙이지 않았습니다** —
+  # HTTP 컨테이너의 cap 이 워커에도 맞다는 근거가 없고, GCP 의 보행 분석이 오래 걸리는 문제를
+  # 보고 있는 중이라 CPU 제한은 성능에 직접 닿습니다. 워커 cap 은 실측 뒤 별도 결정입니다.
   #
   # 걸어야 할 때의 신호 — 분석 중 `/walk`·`/ask` 응답이 눈에 띄게 느려지거나, `docker stats`
-  # 에서 gait-worker 가 3 vCPU 이상을 지속적으로 먹을 때. 그때는 **둘의 합이 2.5 를 넘지
-  # 않도록** 나눠 잡으세요 (예: 각 1.25, 또는 옛 흐름을 끄고 worker 에 2.5).
+  # 에서 gait-worker 가 3 vCPU 이상을 지속적으로 먹을 때. 그때 API 에 남길 몫을 정해 잡으세요.
   # gait-worker:
-  #   cpus: 1.25
+  #   cpus: 2.5

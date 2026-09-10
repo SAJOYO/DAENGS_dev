@@ -205,3 +205,44 @@ def test_weather_lookup_reduces_http_body_the_same_way(
     out = life_adapter._weather_at_life(37.4979, 127.0276, observed)
     assert out.status == "captured"
     assert out.temperature_c == 21.5
+
+
+def test_walk_alias_roundtrip_restores_windows_from_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """503 본문은 `model_dump(mode="json", by_alias=True)`로 나간다(`daengs_life`
+    `controllers/walk.py`). 그 본문을 `WalkOut.model_validate()`로 되돌릴 때 `WindowOut`의
+    `from`(파이썬 예약어라 별칭을 쓴다) 이 `from_` 로 정확히 매핑되는지 확인한다 —
+
+    안 되면 `ValidationError`가 나서 `_walk_life` 가 예외로 죽고, `WalkCapabilityAdapter`가
+    그것을 `ERROR`로 닫는다. 분리 전에는 같은 상황(판정 불가)이 `ABSTAINED`였다 —
+    Task 4 의 핵심 불변식(기본값에서 동작이 글자 그대로 같다)이 HTTP 경로에서도
+    지켜지는지는 이 별칭 복원이 관문이다.
+    """
+    from daengs_backend.config import settings
+    from daengs_backend.orchestration.adapters import life as life_adapter
+    from daengs_backend.orchestration.contracts import WalkPayload
+    from daengs_life.app.dto.walk import LocationOut, VerdictOut, WalkOut, WindowOut
+
+    now = datetime(2026, 9, 11, 5, 0, tzinfo=timezone.utc)
+    original = WalkOut(
+        location=LocationOut(dong="역삼동", grid=(61, 125), label="역삼동 (측정소: 강남) 기준"),
+        generated_at=now,
+        now=VerdictOut(at=now, grade="unknown"),
+        windows=[WindowOut(from_=now, to=now, grade="GOOD")],
+    )
+    body = {"detail": original.model_dump(mode="json", by_alias=True)}
+    # 이 단언이 없으면 아래 검증이 "애초에 별칭으로 안 나갔다"는 다른 이유로도 통과한다.
+    assert "from" in body["detail"]["windows"][0]
+    assert "from_" not in body["detail"]["windows"][0]
+
+    monkeypatch.setattr(settings, "realtime_url", "https://rt.example")
+    monkeypatch.setattr(
+        "daengs_backend.services.realtime_client.get_walk",
+        lambda lat, lon, *, base_url: (503, body),
+    )
+
+    result = life_adapter._walk_life(WalkPayload(lat=37.4979, lon=127.0276))
+    assert isinstance(result, WalkOut)
+    assert result.now.grade == "unknown"
+    assert result.windows[0].from_ == now

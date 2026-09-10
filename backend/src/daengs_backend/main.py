@@ -56,6 +56,7 @@ from daengs_backend.routers import (
 # import 하는데, 그쪽이 나중에 와서 이걸 가려 버립니다. 모듈 이름은 여전히 겹치므로
 # 별칭은 남깁니다 — 다만 **경로는 A4(#176)로 갈렸습니다**: 기록은 `/app/walks`,
 # 적합도는 `/life/walk-conditions` 입니다.
+from daengs_backend.routers import life_walk
 from daengs_backend.routers import walk as app_walks
 from daengs_backend.services.training_rag import release_training_runtime
 
@@ -289,7 +290,15 @@ app.include_router(screening_router)
 #
 # ⚠ `/training/chat` 과는 **결론이 다릅니다.** 저쪽은 `#25` 가 만든 임시 게이트웨이라
 # 앱 클라이언트가 없어서 관리자 전용으로 좁혔습니다 (`routers/training.py`).
-app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+# 🔴 D-068 — 분리 갈림길. `DAENGS_REALTIME_URL` 이 있으면 이 앱은 **판정을 하지 않고
+# 전달만** 합니다. 인증은 두 갈래에서 **같은 의존성**이라 앱 회원·관리자 판정이 안 갈립니다.
+#
+# 비어 있을 때의 줄은 분리 전과 **글자 그대로 같습니다** — 그래야 되돌리기가 변수 하나가 되고,
+# 개발 PC·개발서버의 기존 동작과 테스트가 안 바뀝니다.
+if settings.realtime_url:
+    app.include_router(life_walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+else:
+    app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
 
 # 제도·문서형 질의응답. **`/life/walk-conditions` 와 같은 판단입니다** (메모 ⑦) — 인증을 라우터가 아니라
 # 등록 시점에 걸고, 앱 회원과 관리자를 함께 받습니다.

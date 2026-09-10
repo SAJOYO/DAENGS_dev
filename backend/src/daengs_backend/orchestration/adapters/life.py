@@ -96,7 +96,35 @@ def _ask_life(
 
 
 def _walk_life(payload: WalkPayload) -> Any:
-    """Call the existing deterministic Walk service with domain-owned dependencies."""
+    """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-068).
+
+    **503 을 예외로 올리지 않는다.** 분리 전에 이 자리에 오던 것은 `walk()` 서비스의 반환값
+    이고, 그것은 판정 불가에도 예외를 내지 않았다 — 503 을 만드는 것은 그 위의 HTTP
+    컨트롤러이고 어시스턴트는 거기를 안 지난다. 여기서 올리면 같은 날씨에 어시스턴트 답이
+    `OK`(모른다)에서 `ERROR`(실행 실패)로 바뀐다.
+
+    다행히 그 503 의 본문이 **`WalkOut` 전체**다 (`controllers/walk.py` 가
+    `detail=result.model_dump(mode="json", by_alias=True)` 로 싣는다). 그래서 되돌릴 수 있다.
+    """
+    from daengs_backend.config import settings
+
+    if settings.realtime_url:
+        from daengs_life.app.dto.walk import WalkOut
+
+        from daengs_backend.services import realtime_client
+
+        code, body = realtime_client.get_walk(
+            payload.lat, payload.lon, base_url=settings.realtime_url
+        )
+        if code == 503 and isinstance(body, dict) and isinstance(body.get("detail"), dict):
+            # 판정 불가 — 분리 전과 같이 **정상 반환**이다.
+            return WalkOut.model_validate(body["detail"])
+        if code >= 400:
+            # 4xx 와 그 밖의 5xx 는 분리 전에 없던 상황이다(HTTP 경계가 없었으니까).
+            # 어댑터가 ERROR 로 닫게 예외로 올린다.
+            raise RuntimeError(f"실시간 서비스 {code}: {body}")
+        return WalkOut.model_validate(body)
+
     from daengs_life.app.deps import get_cache, get_now
     from daengs_life.app.services.walk import walk
     from daengs_life.realtime.geo import LatLon
@@ -105,17 +133,34 @@ def _walk_life(payload: WalkPayload) -> Any:
 
 
 def _weather_at_life(lat: float, lon: float, observed_at: datetime) -> WalkWeatherObservation:
-    """Life의 공개 DTO 경계에서 과거 관측을 읽고 Walk용 값만 남긴다."""
+    """Life의 공개 DTO 경계에서 과거 관측을 읽고 Walk용 값만 남긴다.
 
-    from daengs_life.app.deps import get_cache, get_now
-    from daengs_life.app.dto.weather import WeatherAtRequest
-    from daengs_life.app.services.weather import weather_at
+    `DAENGS_REALTIME_URL` 이 있으면 그 경계를 HTTP 로 넘는다 (D-068). **아래의 원자 추출은
+    한 벌 그대로다** — 두 갈래가 같은 `WeatherAtOut` 을 보기 때문이고, 그래야 분리 때문에
+    산책 기록에 박히는 값이 달라지는 일이 없다.
+    """
+    from daengs_backend.config import settings
+    from daengs_life.app.dto.weather import WeatherAtOut, WeatherAtRequest
 
-    result = weather_at(
-        WeatherAtRequest(lat=lat, lon=lon, observed_at=observed_at),
-        get_now(),
-        cache=get_cache(),
-    )
+    if settings.realtime_url:
+        from daengs_backend.services import realtime_client
+
+        code, body = realtime_client.post_weather_at(
+            {"lat": lat, "lon": lon, "observed_at": observed_at.isoformat()},
+            base_url=settings.realtime_url,
+        )
+        if code >= 400:
+            raise RuntimeError(f"실시간 서비스 {code}: {body}")
+        result = WeatherAtOut.model_validate(body)
+    else:
+        from daengs_life.app.deps import get_cache, get_now
+        from daengs_life.app.services.weather import weather_at
+
+        result = weather_at(
+            WeatherAtRequest(lat=lat, lon=lon, observed_at=observed_at),
+            get_now(),
+            cache=get_cache(),
+        )
     atoms = {item.quantity: item for item in result.observations}
     precip = atoms.get("precip_kind")
     amount = atoms.get("precip_mm")

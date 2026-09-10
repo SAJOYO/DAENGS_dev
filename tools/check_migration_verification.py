@@ -107,7 +107,8 @@ CRAWL_RUNS_OLD = (
     " VALUES ('ordinance-search','due','ok');"
 )
 # `training_rag_*` 는 pgvector 를 요구한다. CI 서비스가 `pgvector/pgvector:pg17` 인 이유다
-# (`.github/workflows/migration-verification-tests.yml`). 일회용 스키마 안에 만들고 ROLLBACK
+# (2026-09-10 부터 CI 에 없다 — `docs/ci/migration-verification-tests.yml` 로 빠졌고
+#  지금은 `docs/ci/README.md` 를 보고 사람이 돌린다). 일회용 스키마 안에 만들고 ROLLBACK
 # 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'

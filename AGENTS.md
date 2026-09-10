@@ -56,8 +56,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
-| `.github/workflows/backend-tests.yml` | **모든 PR 에서 `uv run pytest` 전체.** `paths` 필터가 없는 것이 의도입니다 — 필터에 안 걸려 검사가 안 돌던 것이 이 파일이 생긴 이유입니다 (#230). `ml`·`gait`·`screening` 그룹은 안 깔고, 그 테스트는 skip 됩니다 |
-| `.github/workflows/{journey,place-search}-tests.yml` | 그 두 서비스 전용. pytest 는 위와 겹치지만 **compose 렌더·nginx 문법 검사·패키지별 ruff** 를 들고 있어 남겨 둡니다 |
+| `docs/ci/` | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 여기로 빠졌습니다** — Actions 무료 한도가 소진돼 2~3초 만에 전부 빨갛게 뜨는데, 실패 이유가 annotation 에만 있어 **진짜 실패와 구별이 안 되기** 때문입니다. GitHub 은 `.github/workflows/` 만 읽으므로 여기 것은 안 돕니다. **그것들이 잡던 것을 이제 사람이 로컬에서 돌립니다 — 목록과 명령이 `docs/ci/README.md` 에 있습니다.** 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |
 
 도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
 나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).
@@ -152,10 +151,19 @@ uv run pytest -q
 
 ### 로컬 검증과 CI의 역할
 
-`.github/workflows/backend-tests.yml`의 **모든 PR 대상 전체 기본 테스트는 유지**합니다.
-과거 경로 필터 밖 패키지의 검사가 누락됐던 것을 막기 위한 설정입니다. 로컬 타겟 테스트
-기준을 CI의 `paths` 필터나 테스트 축소로 옮기지 않습니다. Journey/Place 전용 워크플로도
-DB 통합·compose·nginx·패키지 lint 등 추가 검증이 있으므로 단순 중복으로 삭제하지 않습니다.
+🔴 **2026-09-10 부터 CI 는 이 역할을 하지 않습니다.** Actions 무료 한도가 소진돼
+PR 마다 돌던 워크플로 일곱을 `docs/ci/` 로 옮겼습니다(지우지는 않았습니다 — 되살릴 때
+`git mv` 한 번이면 되고, 파일 주석에 각 검사가 왜 생겼는지가 적혀 있습니다).
+
+**그래서 게이트가 전부 로컬입니다.** `uv run check` · `uv run pytest` · `npm run lint`
+**만으로는 부족합니다** — compose 렌더 · `nginx -t` · 패키지별 `ruff`, 그리고 **버리는
+Postgres 가 있어야만 도는 검사 둘**이 더 있습니다. 마지막 것이 특히 위험합니다:
+**`uv run pytest` 가 그것들을 조용히 건너뛰고 초록으로 통과합니다**(2026-09-10 실측
+15건 skip — 서버 DB 를 켜 둬도 skip 입니다). 명령은 전부 **`docs/ci/README.md`** 에 있고,
+돌릴 때 `-rs` 를 붙여 skip 이 안 보이는지 확인하세요.
+
+`db/` 를 건드렸으면 **마이그레이션 변조 하네스**를 손으로 돌리세요 — 지금 그것이
+도는 곳이 어디에도 없습니다.
 
 로컬에서 같은 전체 스위트를 관례적으로 재실행하지 말고, 해당 커밋의 CI 결과를 활용합니다.
 필요한 로컬 검증이 끝나면 PR과 결과를 공유할 수 있습니다. CI가 진행 중이면 그 상태를

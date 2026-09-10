@@ -66,6 +66,10 @@ def assess(case, step, before, prepared, answer, *, accepting_pending=False):
         check("filters.unchanged", fingerprint(after.filters), fingerprint(before.filters))
     if "parking" in expected:
         check("parking", parking_mode(after.filters), expected["parking"])
+    if "pending" in expected:
+        check("pending", after.pending_proposal is not None, expected["pending"])
+    if "radius_m" in expected:
+        check("radius_m", after.filters.spatial.radius_m, expected["radius_m"])
     if expected.get("hard_parking") == "absent":
         check(
             "hard_parking.absent", any(a.capability == PARKING for a in atoms(after.filters)), False
@@ -84,6 +88,9 @@ def assess(case, step, before, prepared, answer, *, accepting_pending=False):
         check("pending.saved", after.pending_proposal is not None, True)
     hits = snapshot_hits(after.snapshot)
     refs = [h.place.key.ref for h in hits]
+    if "min_new_refs" in expected:
+        previous_refs = {h.place.key.ref for h in snapshot_hits(before.snapshot)}
+        check("new_results.minimum", len(set(refs) - previous_refs) >= expected["min_new_refs"], True)
     if "expected_refs" in expected:
         check("expected_refs", sorted(refs), sorted(expected["expected_refs"]))
         check("result_matches_filters", receipt.result_matches_filters, True)

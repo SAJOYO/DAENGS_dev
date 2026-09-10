@@ -598,13 +598,28 @@ from daengs_backend.routers import life_walk
 
 `backend/src/daengs_backend/orchestration/adapters/life.py` 의 `_walk_life` 를 이렇게 바꾼다:
 
+🔴 **계획을 고쳤다 (Ruling 2, 2026-09-11 사전 점검).** 처음 안은 HTTP 503 을 `HTTPException`
+으로 올리게 돼 있었는데 **그러면 분리 전과 동작이 달라진다:**
+
+| | 분리 전 | 처음 안대로 하면 |
+| --- | --- | --- |
+| 판정 불가일 때 | `walk()` 서비스는 **예외를 안 낸다.** `grade="unknown"` 인 `WalkOut` 을 준다. 503 을 만드는 것은 그 위의 **HTTP 컨트롤러**이고 어시스턴트는 거기를 안 지난다 → **`CapabilityStatus.OK`** | HTTP 503 → `HTTPException` → `WalkCapabilityAdapter` 의 `except Exception` → **`CapabilityStatus.ERROR`** |
+
+같은 날씨 상황에서 어시스턴트 답이 달라진다 — 기준 ①(안 깨뜨린다)의 정면 위반이다.
+**503 의 본문이 곧 `WalkOut` 전체**이므로(`controllers/walk.py:37` 이
+`detail=result.model_dump(mode="json", by_alias=True)` 로 싣는다) 되돌려서 정상 반환한다.
+
 ```python
 def _walk_life(payload: WalkPayload) -> Any:
     """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-068).
 
-    HTTP 쪽이 `WalkOut` 이 아니라 dict 를 돌려주지만, 위의 `WalkCapabilityAdapter` 가
-    이 값을 **속성이 아니라 키로** 읽지 않는다면 깨진다 — 그래서 dict 를 그대로 쓰지 않고
-    `WalkOut` 으로 되돌린다. 계약이 한 벌로 남는 것이 요점이다.
+    **503 을 예외로 올리지 않는다.** 분리 전에 이 자리에 오던 것은 `walk()` 서비스의 반환값
+    이고, 그것은 판정 불가에도 예외를 내지 않았다 — 503 을 만드는 것은 그 위의 HTTP
+    컨트롤러이고 어시스턴트는 거기를 안 지난다. 여기서 올리면 같은 날씨에 어시스턴트 답이
+    `OK`(모른다)에서 `ERROR`(실행 실패)로 바뀐다.
+
+    다행히 그 503 의 본문이 **`WalkOut` 전체**다 (`controllers/walk.py` 가
+    `detail=result.model_dump(mode="json", by_alias=True)` 로 싣는다). 그래서 되돌릴 수 있다.
     """
     from daengs_backend.config import settings
 
@@ -616,11 +631,13 @@ def _walk_life(payload: WalkPayload) -> Any:
         code, body = realtime_client.get_walk(
             payload.lat, payload.lon, base_url=settings.realtime_url
         )
-        if code == 503 and isinstance(body, dict) and "detail" in body:
-            # 판정 불가. 분리 전에는 `HTTPException(503, detail=...)` 이 그대로 올라왔다.
-            raise HTTPException(status_code=503, detail=body["detail"])
+        if code == 503 and isinstance(body, dict) and isinstance(body.get("detail"), dict):
+            # 판정 불가 — 분리 전과 같이 **정상 반환**이다.
+            return WalkOut.model_validate(body["detail"])
         if code >= 400:
-            raise HTTPException(status_code=code, detail=body)
+            # 4xx 와 그 밖의 5xx 는 분리 전에 없던 상황이다(HTTP 경계가 없었으니까).
+            # 어댑터가 ERROR 로 닫게 예외로 올린다.
+            raise RuntimeError(f"실시간 서비스 {code}: {body}")
         return WalkOut.model_validate(body)
 
     from daengs_life.app.deps import get_cache, get_now
@@ -629,6 +646,10 @@ def _walk_life(payload: WalkPayload) -> Any:
 
     return walk(LatLon(payload.lat, payload.lon), get_now(), cache=get_cache())
 ```
+
+⚠ **`WalkOut.model_validate(body["detail"])` 가 alias 직렬화를 되돌리는지 테스트로 확인하라.**
+`by_alias=True` 로 나간 값이라 `WindowOut` 의 `from` 같은 별칭이 들어 있다. Task 4 Step 4 에
+그 단언을 더한다.
 
 그리고 `_weather_at_life` 의 머리를 이렇게 바꾼다 — **`result` 를 만드는 방식만 갈리고 아래의 원자 추출은 그대로다:**
 

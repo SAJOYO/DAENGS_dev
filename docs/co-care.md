@@ -603,6 +603,11 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 `db/init/*.sql` 적용 단계를 붙인다.** 덤으로 지금 조용히 skip 되고 있는
 `test_release_fk_postgres.py` 도 같이 살아난다.
 
+⚠ **그런데 그 워크플로는 `ubuntu-latest` 라 이 팀에서는 실행되지 않는다** — GitHub 호스티드
+러너를 안 쓰기로 한 팀 결정 때문이다. 그래서 위에서 붙인 postgres 서비스는 지금 아무도 안
+띄운다. 층 2 를 실제로 돌리는 방법은 로컬 `cd backend && uv run pytest` 뿐이다 — 위 "머지 전에
+할 일" 참고.
+
 ---
 
 ## 앱 계약이 바뀐 자리 넷
@@ -652,9 +657,11 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 
 **`dev` 머지는 곧 자동 배포다** (`deploy.yml` 이 `push: branches: [dev]`). 그러니 순서는:
 
-1. PR 에서 CI 를 한 번 통과시킨다 — `backend-tests.yml` 이 postgres 서비스를 띄워
-   트리거·FK 층(`test_pet_membership_postgres.py`)을 처음으로 실물 검증한다.
-2. Actions 탭에서 **`db-migrate.yml`** 을 돌린다 —
+1. 로컬에서 `cd backend && uv run pytest` 를 한 번 통과시킨다 — 트리거·FK 층
+   (`test_pet_membership_postgres.py`)이 그 안에서 실물 검증된다. **`backend-tests.yml` 은
+   `ubuntu-latest` 라 이 팀의 GitHub 호스티드 러너 미사용 결정 때문에 돌지 않는다** — postgres
+   서비스가 붙어 있어도 아무도 실행하지 않으니, PR 이 초록이어도 그것으로 착각하지 말 것.
+2. Actions 탭에서 **`db-migrate.yml`** 을 돌린다 — 이건 `self-hosted` 라 실제로 돈다.
    `file=2026-09-09_pet_members.sql`, `ref=docs/co-care-design`(**아직 머지 안 된 브랜치도 된다**),
    `verify=true`. 짝 파일(`verify_2026-09-09_pet_members.sql`)이 적용 직후 스키마를 단언으로
    검사하고, 틀리면 시끄럽게 실패한다.

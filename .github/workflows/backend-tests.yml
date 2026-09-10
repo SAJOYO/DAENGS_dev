@@ -1,3 +1,13 @@
+# ⚠ **이 워크플로는 돌지 않습니다.** `runs-on: ubuntu-latest` 인데, 이 팀은 GitHub 호스티드
+# 러너를 쓰지 않기로 했습니다(비용 — 영구 결정). `self-hosted` 인 `db-migrate.yml`·`deploy.yml`
+# 만 실제로 돕니다. 그래서 이 파일이 말하는 "PR 마다 전체 테스트" 와 아래 postgres 서비스는
+# **아무도 실행하지 않는 설정**입니다 — 지금 백엔드 테스트는 사람이 로컬에서
+# `cd backend && uv run pytest` 로 돌립니다 (`tests/place/**`·`test_facility_discovery_api.py`
+# 는 `geoalchemy2` 미설치로 수집 단계에서 실패하니 그 둘은 빼고 돌리세요).
+# **postgres 서비스는 지우지 않습니다** — 나중에 self-hosted 러너로 옮기면 그대로 켜질
+# 자리이기 때문입니다. 옮길 때는 포트를 **5432 로 매핑하지 마세요** — 서버 PC 의 유일한
+# pgvector 가 이미 5432 를 씁니다. 겹치면 팀 DB 컨테이너와 충돌합니다.
+#
 # 백엔드 전체 테스트 (#230).
 #
 # **`paths` 필터를 일부러 걸지 않습니다.** 이 워크플로가 생긴 이유가 정확히 "필터에 안 걸려서

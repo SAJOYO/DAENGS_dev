@@ -12,6 +12,13 @@
 `cases_sha256` · `judge_model` · `prompt_version` · `anchor_set` · `adapter_mode`. 여섯째인
 "판정 못 한 비율" 은 리포트가 계산할 값이라 여기서 만들지 않는다.
 
+**`judge_model` · `prompt_version` · `anchor_set` 은 여기서는 아직 계획일 뿐이다.** `collect`
+시점에는 judge 를 부르지 않았으니 이 세 값은 "이 랩을 나중에 이 조건으로 판정할 생각이다"
+라는 의도이지, 실제로 그 조건으로 판정됐다는 보증이 아니다. 실제 판정은 나중에 `run_score`
+가 별도로 `JudgeHeader` 에 같은 이름의 세 값을 적는데, 그때 `--judge-model` 을 다르게 넘기면
+둘이 어긋난다 — 이 파일은 그 어긋남을 만들지도 막지도 않는다. 랩과 판정 파일이 서로 맞는
+전제로 만들어졌는지는 `report.summarize` 가 두 헤더를 실제로 대조해서 확인한다.
+
 ## 가짜 어댑터가 답한 행
 
 `fallback-only` 모드는 General 만 진짜다. 그래서 행 하나가 가짜로 답했는지는 헤더의
@@ -42,7 +49,14 @@ from daengs_evals.conversation_quality.drivers import NOT_REACHED, ConversationD
 
 CARD = "#401"
 AdapterMode = Literal["real", "fake", "fallback-only"]
+#: `build_adapters` 가 실제로 조립할 수 있는 값 — 이 셋은 전부 **진짜 오케스트레이터**를
+#: 돌린다("fake" 도 오케스트레이터는 진짜고 capability 어댑터만 가짜다).
 ADAPTER_MODES: tuple[AdapterMode, ...] = ("real", "fake", "fallback-only")
+#: 랩 헤더 `adapter_mode` 에 나타날 수 있는 값 전부. `ADAPTER_MODES` 에 `FakeDriver` 전용
+#: 값을 더한 것 — `FakeDriver` 는 오케스트레이터 자체를 안 돌리므로 `build_adapters` 의
+#: 어휘에는 없지만, 헤더를 읽는 사람이 "이 문자열이 낯설면 오타다"라고 판단할 수 있으려면
+#: 어딘가 한곳에 전체 어휘가 있어야 한다.
+ALL_ADAPTER_MODES: tuple[str, ...] = (*ADAPTER_MODES, "fake-driver")
 
 
 class LapHeader(BaseModel):
@@ -96,7 +110,16 @@ class TurnSnapshot(BaseModel):
 
 
 def _answered_by_fake_adapter(adapter_mode: Any, capability: Any) -> Any:
-    """`build_adapters` 의 모드별 배선을 그대로 되짚는다. `answer_quality.collect.build_adapters` 참고."""
+    """`build_adapters` 의 모드별 배선을 그대로 되짚는다. `answer_quality.collect.build_adapters` 참고.
+
+    `"fake-driver"`(`drivers.FakeDriver`)는 capability 를 안 물어도 무조건 `True` 다 —
+    이 드라이버는 오케스트레이터 자체를 안 돌리므로 그 행에 실제 응답이라 부를 것이 처음부터
+    없다. capability 가 `NOT_REACHED` 라고 여기서 `NOT_REACHED` 를 돌리면(과거의 결함이
+    그랬다) 100% 합성 랩이 리포트에서 "전부 측정됨"으로 보인다 — 진짜 응답이 하나도 없는
+    랩이 가장 신뢰도 높은 랩처럼 읽히는 것이다.
+    """
+    if adapter_mode == "fake-driver":
+        return True
     if adapter_mode == NOT_REACHED or capability == NOT_REACHED:
         return NOT_REACHED
     if capability is None:

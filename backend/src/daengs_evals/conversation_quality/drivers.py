@@ -24,7 +24,13 @@ class FakeDriver:
     """테스트용. 실제 호출을 하지 않는다."""
 
     #: 랩 헤더가 어댑터 출처를 적을 자리 — `FakeDriver` 는 늘 가짜다.
-    adapter_mode = "fake"
+    #: **`"fake"` 를 쓰지 않는다.** 그것은 `collect.AdapterMode` 의 `"fake"`(진짜
+    #: 오케스트레이터 + 가짜 capability 어댑터)가 이미 쓰는 값이다 — 여기서 같은 문자열을
+    #: 쓰면 오케스트레이터를 통째로 건너뛴 이 드라이버의 행과 진짜 오케스트레이터를 돌린
+    #: 랩이 헤더의 `adapter_mode` 만으로는 구별되지 않는다. `render_compare` 가 그 둘을 같은
+    #: 것으로 여기고 비교를 허락하면, 두 랩 사이의 가장 큰 차이가 핀 위에서 안 보이게 된다.
+    #: CLI 의 `--adapter-mode fake-driver` 선택지와 같은 이름을 쓴다.
+    adapter_mode = "fake-driver"
 
     def __init__(self, replies: list[str]) -> None:
         self._replies = list(replies)

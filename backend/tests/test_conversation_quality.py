@@ -323,6 +323,27 @@ def test_answered_by_fake_adapter_is_not_applicable_when_no_capability_ran():
     assert _answered_by_fake_adapter("real", None) is None
 
 
+def test_fake_driver_adapter_mode_does_not_collide_with_the_real_fake_mode():
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+
+    # `FakeDriver`(오케스트레이터 자체를 안 돌린다)와 `--adapter-mode fake`(진짜
+    # 오케스트레이터 + 가짜 capability 어댑터)는 서로 다른 이음매다 — 헤더의 `adapter_mode`
+    # 가 같은 문자열이면 `render_compare` 가 그 둘을 구별 못 한다.
+    assert FakeDriver.adapter_mode == "fake-driver"
+    assert FakeDriver.adapter_mode != "fake"
+
+
+def test_answered_by_fake_adapter_recognises_fake_driver_regardless_of_capability():
+    from daengs_evals.conversation_quality.collect import _answered_by_fake_adapter
+    from daengs_evals.conversation_quality.drivers import NOT_REACHED
+
+    # `FakeDriver` 는 capability 를 안 실어 보내(`NOT_REACHED`) 예전 로직으로는 여기서
+    # `NOT_REACHED` 가 나왔다 — 그러면 100% 합성 랩이 리포트에서 "전부 측정됨"으로 보인다.
+    assert _answered_by_fake_adapter("fake-driver", NOT_REACHED) is True
+    assert _answered_by_fake_adapter("fake-driver", None) is True
+    assert _answered_by_fake_adapter("fake-driver", "training") is True
+
+
 def test_route_plan_dump_drops_the_dog_profile_payload():
     import json
 
@@ -1040,6 +1061,18 @@ def test_compare_does_not_refuse_when_only_the_lap_label_differs():
     render_compare(before=before, after=after)
 
 
+def test_compare_refuses_a_fake_driver_lap_against_a_fake_lap():
+    from daengs_evals.conversation_quality.report import render_compare
+
+    # 오케스트레이터를 아예 안 돌린 합성 랩(`fake-driver`)과 진짜 오케스트레이터 +
+    # 가짜 capability 어댑터로 돌린 랩(`fake`)은 두 랩 사이의 가장 큰 차이인데, 예전에는
+    # 둘 다 헤더에 `"fake"` 를 적어 이 비교가 조용히 허락됐다.
+    before = _summary(adapter_mode="fake-driver")
+    after = _summary(lap="lap2", adapter_mode="fake")
+    with pytest.raises(ValueError, match="adapter_mode"):
+        render_compare(before=before, after=after)
+
+
 def test_summarize_excludes_fake_adapter_rows_from_axis_stats_but_counts_them_unmeasured(
     tmp_path,
 ):
@@ -1077,6 +1110,100 @@ def test_summarize_excludes_fake_adapter_rows_from_axis_stats_but_counts_them_un
     assert all(stat.n == 0 for stat in summary.axis_stats.values())
     assert summary.unmeasured.numerator == summary.unmeasured.denominator
     assert summary.unmeasured.fake_adapter_slots == summary.unmeasured.numerator
+
+
+def test_summarize_refuses_when_lap_and_judge_header_disagree_on_judge_model():
+    from daengs_evals.conversation_quality.report import summarize
+
+    # `score --judge-model X` 를 `judge_model=Y` 라고 적힌 랩에 대고 돌리면, 판정 파일은
+    # X 를 정직하게 적지만 아무것도 그것이 랩의 계획과 어긋났다고 말해 주지 않았다 —
+    # 리포트는 조용히 X 를 보여줬다. 이제는 여기서 거부해야 한다.
+    lap_meta = {
+        "lap": "t1",
+        "cases_sha256": "a" * 64,
+        "adapter_mode": "real",
+        "judge_model": "declared-model",
+        "prompt_version": 3,
+        "anchor_set": "dev",
+    }
+    judge_header = {
+        "judge_model": "actually-used-model",
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    with pytest.raises(ValueError, match="judge_model"):
+        summarize(lap_meta=lap_meta, lap_rows=[], judge_header=judge_header, judgments=[])
+
+
+def test_summarize_allows_a_lap_that_does_not_declare_the_shared_pins():
+    from daengs_evals.conversation_quality.report import summarize
+
+    # 손으로 만든 랩 메타(테스트 fixture, 옛 랩)는 judge_model 등을 아예 안 적었을 수 있다 —
+    # 없음과 다름은 다르다. 여기서는 거부하지 않는다.
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summarize(lap_meta=lap_meta, lap_rows=[], judge_header=judge_header, judgments=[])
+
+
+def test_summarize_reports_code_checks_per_case():
+    from daengs_evals.conversation_quality.report import summarize
+
+    lap_rows = [
+        {"case_id": "cq_a", "turn_index": 1, "message": "같은 답", "answered_by_fake_adapter": False},
+        {"case_id": "cq_a", "turn_index": 3, "message": "같은 답", "answered_by_fake_adapter": False},
+        {"case_id": "cq_b", "turn_index": 1, "message": "다른 답", "answered_by_fake_adapter": False},
+    ]
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=lap_rows, judge_header=judge_header, judgments=[]
+    )
+    assert summary.code_checks_measured is True
+    assert summary.code_checks["cq_a"].max_repeat_count == 2
+    assert summary.code_checks["cq_b"].max_repeat_count == 1
+
+
+def test_summarize_reports_dead_end_and_code_checks_as_unmeasured_without_settings(monkeypatch):
+    import daengs_evals.conversation_quality.report as report_mod
+
+    # `report`·`compare` 는 "이미 있는 파일만 읽는다"는 약속이다 — backend 설정
+    # (DB 접속 정보 · 암호화 키)이 없는 체크아웃에서도 죽지 않고 미측정으로 내려야 한다.
+    def _boom():
+        raise RuntimeError("settings 없음")
+
+    monkeypatch.setattr(report_mod, "_fixed_refusals", _boom)
+
+    lap_rows = [
+        {"case_id": "cq_a", "turn_index": 1, "message": "답", "answered_by_fake_adapter": False}
+    ]
+    judgment = _judgment(response_mode_fit=2)
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = report_mod.summarize(
+        lap_meta=lap_meta, lap_rows=lap_rows, judge_header=judge_header, judgments=[judgment]
+    )
+    assert summary.dead_end_measured is False
+    assert summary.code_checks_measured is False
+    assert summary.code_checks == {}
+    # 렌더도 죽지 않고 미측정임을 말해야 한다
+    text = report_mod.render(summary)
+    assert "측정 불가" in text
 
 
 def test_summarize_counts_rows_excluded_before_judging_as_unmeasured():

@@ -65,10 +65,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from daengs_evals.conversation_quality.judge import AXES, TurnJudgment
 from daengs_evals.conversation_quality.rubric import derive_usability
+from daengs_evals.conversation_quality.transcript import check_transcript
 
 
 def _fixed_refusals() -> frozenset[str]:
@@ -86,6 +87,21 @@ def _fixed_refusals() -> frozenset[str]:
     return frozenset(SCOPED_REDIRECT_MESSAGES.values())
 
 
+def _try_fixed_refusals() -> tuple[frozenset[str], bool]:
+    """`_fixed_refusals()` 를 죽지 않게 부른다.
+
+    `report`·`compare` 는 "이미 있는 파일만 읽는다"는 약속인데, `_fixed_refusals` 가
+    실제로는 `daengs_backend.config.settings` 를 요구한다(DB 접속 정보 · 암호화 키) —
+    체크아웃에 `backend/.env` 가 없으면 이 두 명령이 파일만 읽다가 죽는다. 그 실패를 여기서
+    삼키고 `dead_end` 를 "0 건" 이 아니라 **미측정**으로 보고한다 — 0 은 "쟀는데 없었다"로
+    읽히는데 실제로는 잰 적이 없다.
+    """
+    try:
+        return _fixed_refusals(), True
+    except RuntimeError:
+        return frozenset(), False
+
+
 CARD = "#401"
 
 #: 랩 두 개를 견주려면 이 다섯이 안 움직여야 한다 (카드가 요구한 여섯 중 다섯 —
@@ -101,6 +117,30 @@ PINNED_FIELDS: tuple[str, ...] = (
 #: 오늘 정답이 0 으로 고정된 두 축 (`transcript.PRIOR_TURNS_REACH_INFERENCE is False`).
 #: 이 둘의 before → after 는 "모델이 좋아졌다"가 아니라 "기능이 생겼다"다.
 FLOORED_AXES: tuple[str, ...] = ("context_continuity", "repair_success")
+
+#: `LapHeader` 와 `JudgeHeader` 가 **이름이 같은 값**을 각자 따로 적는 세 자리. `collect.py`
+#: 는 "이 조건으로 판정할 생각이다"라는 계획을 적고, `judge.header()` 는 실제로 무엇으로
+#: 판정했는지를 적는다 — 둘은 서로 다른 시점에 쓰이므로 저절로 맞는다는 보장이 없다.
+#: `score --judge-model X` 를 `judge_model=Y` 라고 적힌 랩에 대고 돌리면 판정 파일은 X 를
+#: 정직하게 적지만, 아무도 그것이 랩의 계획과 어긋났다고 말해 주지 않는다 — 그 조용한
+#: 어긋남을 여기서 잡는다. 랩이 이 값을 아예 안 적은 자리(옛 랩 · 손으로 만든 테스트 fixture)
+#: 는 검사하지 않는다 — 없음과 다름은 다르다.
+_SHARED_HEADER_PINS: tuple[str, ...] = ("judge_model", "prompt_version", "anchor_set")
+
+
+def _check_shared_header_pins(
+    lap_meta: Mapping[str, Any], judge_header: Mapping[str, Any]
+) -> None:
+    for field in _SHARED_HEADER_PINS:
+        if field not in lap_meta:
+            continue
+        lap_val, judge_val = lap_meta[field], judge_header.get(field)
+        if lap_val != judge_val:
+            raise ValueError(
+                f"랩과 판정 파일이 `{field}` 에서 어긋났습니다: "
+                f"랩={lap_val!r} 판정={judge_val!r}. 이 판정 파일은 이 랩을 판정한 것이"
+                " 아니거나, 랩이 선언한 조건과 다른 모델·설정으로 판정됐습니다."
+            )
 
 _FEATURE_ABSENT = "기능 부재"
 
@@ -161,6 +201,21 @@ class UnmeasuredTally(BaseModel):
         return round(self.numerator / self.denominator, 4) if self.denominator else None
 
 
+class CaseCodeCheck(BaseModel):
+    """`transcript.check_transcript` 가 케이스 하나에 대해 낸 것 중 리포트가 보이는 두 칸.
+
+    **판정이 아니라 사실이다.** `max_repeat_count` 는 같은 답이 몇 번 되풀이됐는지, 판정기가
+    아니라 코드가 문자열을 세어서 낸 값이고, `refusal_source_ambiguous` 는 그 케이스에
+    `daengs_backend.orchestration.redirects.NO_CAPABILITY_MESSAGE` 와 글자 그대로 같은
+    답이 있었는지다(General 의 off-topic 거절과 빈 계획 FAILED 가 같은 문장을 내서 문장만
+    으로는 어느 쪽인지 못 가린다)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_repeat_count: int
+    refusal_source_ambiguous: bool
+
+
 class Summary(BaseModel):
     """리포트 한 장이 담는 것 전부. **합계 칸이 없다.**"""
 
@@ -185,6 +240,14 @@ class Summary(BaseModel):
     #: 못 잡는다** — 위 모듈 docstring "`dead_end` — 부분 신호다" 참고.
     dead_end_count: int
     dead_end_n: int
+    #: `False` 면 위 둘은 "0 건" 이 아니라 **잰 적이 없다** — `backend/.env` 가 없어
+    #: `_fixed_refusals` 가 못 뜬 환경에서 리포트가 죽는 대신 이 값을 내린다.
+    dead_end_measured: bool = True
+    #: 케이스 아이디 → 코드 기반 사실 두 칸(`transcript.check_transcript`). 판정 축이
+    #: 아니다 — 판정기를 부르지 않고 랩 행의 답 텍스트만 센다.
+    code_checks: dict[str, CaseCodeCheck] = Field(default_factory=dict)
+    #: `dead_end_measured` 와 같은 이유로 `code_checks` 가 비어 있을 수 있다.
+    code_checks_measured: bool = True
     calibration: Literal["not_calibrated"] = "not_calibrated"
 
 
@@ -216,6 +279,7 @@ def summarize(
     judgments: Sequence[TurnJudgment],
 ) -> Summary:
     """랩 헤더·행 + 판정 헤더·판정 목록 → `Summary`. **여기서 판정기를 부르지 않는다.**"""
+    _check_shared_header_pins(lap_meta, judge_header)
     fake_keys = {
         (str(row.get("case_id")), int(row.get("turn_index", -1)))
         for row in lap_rows
@@ -227,7 +291,7 @@ def summarize(
         (str(row.get("case_id")), int(row.get("turn_index", -1))): str(row.get("message", ""))
         for row in lap_rows
     }
-    fixed_refusals = _fixed_refusals()
+    fixed_refusals, settings_available = _try_fixed_refusals()
 
     axis_values: dict[str, list[int]] = {axis: [] for axis in AXES}
     usable = unusable_safety = unusable_rmf = unusable_repair = 0
@@ -269,7 +333,7 @@ def summarize(
         # 과 값이 같아 보여도 우연이 아니라 정의가 같기 때문이고, 이 진단이 새로 재는 것은
         # 분자(정형 문구 + 모드 통과) 쪽이다.
         rmf = judgment.scores.response_mode_fit
-        if rmf is not None:
+        if rmf is not None and settings_available:
             dead_end_n += 1
             message = messages_by_key.get(key, "").strip()
             if message in fixed_refusals and rmf != 0:
@@ -296,6 +360,21 @@ def summarize(
     excluded_before_judging_slots = int(judge_header.get("skipped", 0)) * len(AXES)
     numerator = excluded_before_judging_slots + fake_adapter_slots + not_applicable_slots
     denominator = n_turns_total * len(AXES)
+
+    # 케이스별 코드 기반 검사 — `check_transcript` 도 같은 lazy import 를 겪으므로
+    # `_fixed_refusals` 가 못 뜬 환경에서는 여기도 같이 미측정으로 내린다.
+    code_checks: dict[str, CaseCodeCheck] = {}
+    if settings_available:
+        assistant_texts_by_case: dict[str, list[str]] = {}
+        for row in lap_rows:
+            case_id = str(row.get("case_id"))
+            assistant_texts_by_case.setdefault(case_id, []).append(str(row.get("message", "")))
+        for case_id, assistant_texts in assistant_texts_by_case.items():
+            checks = check_transcript(assistant_texts=assistant_texts)
+            code_checks[case_id] = CaseCodeCheck(
+                max_repeat_count=checks.max_repeat_count,
+                refusal_source_ambiguous=checks.refusal_source_ambiguous,
+            )
 
     return Summary(
         lap=str(lap_meta.get("lap", "")),
@@ -332,6 +411,9 @@ def summarize(
         ),
         dead_end_count=dead_end_count,
         dead_end_n=dead_end_n,
+        dead_end_measured=settings_available,
+        code_checks=code_checks,
+        code_checks_measured=settings_available,
     )
 
 
@@ -439,17 +521,41 @@ def render(summary: Summary) -> str:
 
     lines.append("## dead_end — 부분 파생 진단 (축 아님)")
     lines.append("")
-    lines.append(
-        f"- {summary.dead_end_count} / {summary.dead_end_n} 턴이 고정 리다이렉트 문구"
-        "(`daengs_backend.orchestration.redirects.SCOPED_REDIRECT_MESSAGES`)로 답했으면서"
-        " `response_mode_fit` 은 0 이 아니었습니다 — 모드는 괜찮다고 판정됐는데 사용자가"
-        " 받은 것은 정형 문구 한 줄뿐이었던 자리입니다."
-    )
-    lines.append(
-        "  ⚠ 이것은 **진단**이지 축이 아니고, 그나마도 **부분 신호**입니다 — 병원 안내처럼"
-        " 형식상 다음 행동이 있는 막다른 길 중 **고정 문구가 아닌 것**(모델이 매번 다른 말로"
-        " 같은 벽을 세우는 경우)은 이 수로 못 잡습니다."
-    )
+    if not summary.dead_end_measured:
+        lines.append(
+            "  ⚠ 측정 불가 — backend 설정(`backend/.env`)이 없어 고정 리다이렉트 문구를"
+            " 대조하지 못했습니다. 0 건이 아니라 **잰 적이 없다**는 뜻입니다."
+        )
+    else:
+        lines.append(
+            f"- {summary.dead_end_count} / {summary.dead_end_n} 턴이 고정 리다이렉트 문구"
+            "(`daengs_backend.orchestration.redirects.SCOPED_REDIRECT_MESSAGES`)로 답했으면서"
+            " `response_mode_fit` 은 0 이 아니었습니다 — 모드는 괜찮다고 판정됐는데 사용자가"
+            " 받은 것은 정형 문구 한 줄뿐이었던 자리입니다."
+        )
+        lines.append(
+            "  ⚠ 이것은 **진단**이지 축이 아니고, 그나마도 **부분 신호**입니다 — 병원 안내처럼"
+            " 형식상 다음 행동이 있는 막다른 길 중 **고정 문구가 아닌 것**(모델이 매번 다른 말로"
+            " 같은 벽을 세우는 경우)은 이 수로 못 잡습니다."
+        )
+    lines.append("")
+
+    lines.append("## 코드 기반 검사 — 케이스별 사실 (판정 아님)")
+    lines.append("")
+    if not summary.code_checks_measured:
+        lines.append(
+            "  ⚠ 측정 불가 — backend 설정(`backend/.env`)이 없어 계산하지 못했습니다."
+        )
+    elif not summary.code_checks:
+        lines.append("  (케이스 없음)")
+    else:
+        lines.append("| 케이스 | 최다 반복 횟수 | 거절 출처 모호 |")
+        lines.append("| --- | --- | --- |")
+        for case_id in sorted(summary.code_checks):
+            check = summary.code_checks[case_id]
+            lines.append(
+                f"| {case_id} | {check.max_repeat_count} | {check.refusal_source_ambiguous} |"
+            )
     lines.append("")
 
     lines.append(f"## 캘리브레이션 상태: **{summary.calibration}**")
@@ -578,9 +684,14 @@ def render_compare(*, before: Summary, after: Summary) -> str:
 
     lines.append("## dead_end — 부분 파생 진단, before / after")
     lines.append("")
+
+    def _dead_end_cell(summary: Summary) -> str:
+        if not summary.dead_end_measured:
+            return "측정 불가(settings 없음)"
+        return f"{summary.dead_end_count}/{summary.dead_end_n}"
+
     lines.append(
-        f"- before: {before.dead_end_count}/{before.dead_end_n} · "
-        f"after: {after.dead_end_count}/{after.dead_end_n}"
+        f"- before: {_dead_end_cell(before)} · after: {_dead_end_cell(after)}"
         " — 축이 아니라 진단이고, 고정 리다이렉트 문구인 경우만 잡는 부분 신호입니다."
     )
     lines.append("")

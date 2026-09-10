@@ -121,7 +121,9 @@ class _Cursor:
     def __enter__(self): return self
     def __exit__(self, *a): return False
 
-    def execute(self, sql, params):
+    def execute(self, sql, params=None):
+        # `params` 에 기본값이 있는 이유 — `search()` 가 본 검색 앞에 `SET hnsw.ef_search` 를
+        # 파라미터 없이 보낸다 (RAG-084 ⑦). 없으면 그 한 줄에 TypeError 가 난다.
         self._conn.log.append((sql, params))
         # 지역 사전 질의(RAG-063)에만 답한다 — 본 검색은 그대로 0행이다
         self._rows = self._conn.orgs if "DISTINCT metadata->>'org'" in sql else []
@@ -149,6 +151,24 @@ def _sql_for(text: str):
     search.search(search.Query(vector=[0.0] * 4, tsquery="", text=text), k=5, conn=conn)
     sql, params = next((s, p) for s, p in conn.log if isinstance(p, dict) and "q" in p)
     return sql, params
+
+
+def test_ef_search_is_set_before_the_search() -> None:
+    """**HNSW 가 있으면 이 한 줄이 recall 을 정한다** (RAG-084 ⑦).
+
+    pgvector 기본값 40 으로 두면 dense 축이 `CANDIDATE_N`(100)을 못 채운다 — 2026-09-09 실측으로
+    최종 recall@8 이 88.5% 로 떨어지고 189질의 중 3분의 1의 top-8 이 달라졌다. **인덱스가 없으면
+    아무 일도 안 하므로** 인덱스를 켜기 전에 배포해도 안전하고, 그래서 여기서 순서를 단언한다.
+    """
+    search.forget_orgs()
+    conn = _Conn()
+    search.search(search.Query(vector=[0.0] * 4, tsquery="", text="아무 질의"), k=5, conn=conn)
+    sent = [sql for sql, _ in conn.log]
+    ef = next(i for i, sql in enumerate(sent) if "hnsw.ef_search" in sql)
+    main = next(i for i, (sql, p) in enumerate(conn.log) if isinstance(p, dict) and "q" in p)
+    assert ef < main, "본 검색 뒤에 걸면 그 질의는 기본값 40 으로 돈다"
+    assert f"= {search.EF_SEARCH}" in sent[ef]
+    assert search.EF_SEARCH >= search.CANDIDATE_N,         "ef_search 가 후보 수보다 작으면 인덱스가 후보를 다 못 준다"
 
 
 def test_transport_signal_excludes_the_other_mode_on_both_axes() -> None:

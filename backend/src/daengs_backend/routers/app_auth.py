@@ -12,6 +12,7 @@
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -37,6 +38,18 @@ from daengs_backend.services import app_auth as app_auth_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/app", tags=["app-auth"])
+
+#: 영수증 OCR 항목(`vet_visits.raw_ocr_items`)을 진단 추천 모델 학습에 쓰는 데 대한
+#: 동의의 "어느 판" — 서버가 정하는 코드 상수입니다. 클라이언트는 절대 보내지
+#: 않습니다 (`schemas/app_auth.py` 의 `AppProfileUpdate.ocr_consent` 주석) —
+#: 동의 기록의 일부를 클라이언트가 고를 수 있으면 그 기록이 근거가 못 됩니다.
+#:
+#: ⚠️ **아직 진짜 판이 없습니다.** 개인정보처리방침 / 이용약관에 이 학습 이용을
+#: 명시한 판이 게시되기 전까지는, 이 값이 실제로 존재하는 문서를 가리키지
+#: 않습니다. 동의 UI 를 사용자에게 내놓기 **전에** 게시된 판 번호로 바꿔야
+#: 합니다 (docs/vet-visits.md §3, #353). 그전까지는 아무 문제 없이 돕니다 — 전
+#: 회원이 그냥 미동의 상태이고 `raw_ocr_items` 는 `[]` 로만 쌓입니다.
+OCR_CONSENT_VERSION = "unset"
 
 
 def _client_ip(request: Request) -> str:
@@ -186,9 +199,12 @@ async def update_me(
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AppMeResponse:
-    """회원이 스스로 고치는 것 — 미니룸 이름표와 닉네임.
+    """회원이 스스로 고치는 것 — 미니룸 이름표·닉네임·OCR 학습 이용 동의.
 
-    ⚠️ **보낸 칸만 바뀝니다.** `{"nickname": "..."}` 만 보내면 이름표는 그대로입니다.
+    ⚠️ **보낸 칸만 바뀝니다.** `{"nickname": "..."}` 만 보내면 이름표와 동의는
+    그대로입니다. 동의가 이 규칙에서 특히 중요한 이유는, 안 지키면 닉네임만
+    고치려던 요청이 **동의를 조용히 꺼버리기** 때문입니다 — 사용자는 취소한 적이
+    없는데 취소된 것으로 남습니다.
 
     **`room_name` 을 null(또는 공백)로 보내면 되돌립니다** — 다시 대표 강아지를
     따라갑니다. 빈 문자열로 저장하지 않는 이유는, 그러면 "아직 안 정했다" 와
@@ -196,6 +212,13 @@ async def update_me(
 
     이름을 서버가 지어 주지 않습니다. 받침에 따라 "이네"/"네" 가 갈리는 것은 한국어
     규칙이라 앱의 것이고, 서버가 같이 지으면 규칙이 두 벌이 됩니다.
+
+    **`ocr_consent: true` 는 켤 때마다 시각·판을 새로 씁니다** — 이미 켜져 있어도
+    무시하지 않습니다. 새 판이 나온 뒤의 재동의를 그냥 넘기면 옛 판에 대한
+    동의가 계속 근거로 쓰입니다. `false` 는 `ocr_consent_at` / `ocr_consent_version`
+    둘 다 NULL 로 되돌립니다 — CHECK `app_users_ocr_consent_pair` 가 하나만 NULL 인
+    것을 막습니다. 판 번호(`OCR_CONSENT_VERSION`)는 서버가 정하고 클라이언트는
+    보낼 수 없습니다.
     """
     row = await app_user_repo.get_by_id(session, user.app_user_id)
     if row is None or row.status != "active":
@@ -228,6 +251,19 @@ async def update_me(
             )
         else:
             row.nickname = body.nickname
+
+    if "ocr_consent" in sent:
+        if body.ocr_consent:
+            # 이미 동의한 상태에서 또 켜도 **덮어씁니다** — 새 동의 이벤트로 보고
+            # 시각·판을 다시 씁니다 (재동의). 무시하면 옛 판에 대한 동의가 새 판이
+            # 나온 뒤에도 그대로 남습니다.
+            row.ocr_consent_at = datetime.now(UTC)
+            row.ocr_consent_version = OCR_CONSENT_VERSION
+        else:
+            # CHECK `app_users_ocr_consent_pair` 가 둘 중 하나만 NULL 인 것을
+            # 막습니다 — 항상 같이 되돌립니다.
+            row.ocr_consent_at = None
+            row.ocr_consent_version = None
 
     try:
         await session.commit()
@@ -291,6 +327,11 @@ def _to_me(row: AppUser) -> AppMeResponse:
         created_at=row.created_at,
         room_name=row.room_name,
         nickname=row.nickname,
+        # 원본은 시각(`ocr_consent_at`)이지만 앱에는 불리언만 내보냅니다 — 앱이
+        # 시각을 받아 만료 계산 등으로 재해석하는 것을 막습니다
+        # (schemas/app_auth.py 의 `ocr_consent` 주석).
+        ocr_consent=row.ocr_consent_at is not None,
+        ocr_consent_version=row.ocr_consent_version,
     )
 
 

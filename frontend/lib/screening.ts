@@ -53,7 +53,8 @@ export type ScreenStage1 = {
  *   · 확신이 문턱 아래 — **확신 없으면 말하지 않습니다**
  *
  * ⚠️ **이건 `distribution[0]` 이 아닙니다.** 여섯 개 중 하나를 고른 게 아니라
- *    네 묶음(융기·발진 / 표면 변화 / 미란·궤양 / 결절·종괴) 중 하나이고,
+ *    네 묶음(솟아오른 변화 / 피부 표면·색·두께 변화 / 벗겨지거나 패인 상처 /
+ *    깊거나 단단한 혹) 중 하나이고,
  *    `prob` 은 묶음 안 확률을 **더한 값**입니다. D-023 은 그대로입니다 —
  *    6종 이름은 여기 안 들어옵니다.
  *
@@ -64,7 +65,8 @@ export type ScreenStage1 = {
  *    높은 쪽으로 잡아서, 말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%).
  */
 export type LesionGroup = {
-  /** 융기·발진 | 표면 변화 | 미란·궤양 | 결절·종괴 */
+  /** 솟아오른 변화 | 피부 표면·색·두께 변화 | 벗겨지거나 패인 상처 | 깊거나 단단한 혹
+   *  (2026-09-10 에 보호자가 알아들을 수 있는 말로 바꿨습니다) */
   name: string;
   /** 묶음 안 확률의 **합** (0~1). */
   prob: number;
@@ -73,6 +75,13 @@ export type LesionGroup = {
   confidence: number;
   /** 화면에 그대로 띄울 문장. */
   text: string;
+  /** ★ 보호자가 **사진에서 직접 확인할 수 있는** 특징 (2026-09-10).
+   *  이름만으로는 자기 개 사진과 대조가 안 됩니다. 옛 서버는 안 보냅니다. */
+  feature?: string;
+  /** ★ "자세히 보기" 전용 — 수의학적 의미. **본문에 띄우지 마세요.**
+   *  primary/secondary 는 진단 순서의 축이지 보호자에게 뭐라고 부를지의 축이
+   *  아닙니다 (그 축으로 2군을 만들었다가 과잉 88.4% 로 기각). 옛 서버는 안 보냅니다. */
+  detail?: string;
   /** 같이 띄울 단서. 빼지 마세요. */
   caveat: string;
 };
@@ -87,7 +96,7 @@ export type LesionGroup = {
  *    있어 숨기는 게 없습니다 — *"상위 몇 개로 자르지 마라"* 규칙과 다릅니다.
  */
 export type LesionGroupRow = {
-  /** 융기·발진 | 표면 변화 | 미란·궤양 | 결절·종괴 */
+  /** 솟아오른 변화 | 피부 표면·색·두께 변화 | 벗겨지거나 패인 상처 | 깊거나 단단한 혹 */
   name: string;
   prob: number;
   percent: number;
@@ -210,7 +219,6 @@ export type NormBox = [number, number, number, number];
  */
 const GUIDE_RECOMMEND: [number, number] = [0.28, 0.48];
 const GUIDE_ALLOW: [number, number] = [0.24, 0.56];
-const GUIDE_CENTER_MAX = 0.1;
 
 export type GuideHint = {
   level: "recommend" | "allow" | "out";
@@ -221,7 +229,7 @@ export type GuideHint = {
   centerOff: number;
 };
 
-/** 네모가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
+/** 네모 크기가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
 export function guideHint([x, y, w, h]: NormBox): GuideHint {
   const centerOff = Math.max(Math.abs(x + w / 2 - 0.5), Math.abs(y + h / 2 - 0.5));
   const base = { widthFrac: w, centerOff };
@@ -232,9 +240,6 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
   if (w > GUIDE_ALLOW[1]) {
     return { ...base, level: "out", ok: false, reason: "너무 가까워서 주변 피부가 안 보입니다. 조금 더 멀리." };
   }
-  if (centerOff > GUIDE_CENTER_MAX) {
-    return { ...base, level: "out", ok: false, reason: "병변이 화면 가운데에서 벗어났습니다." };
-  }
   if (w < GUIDE_RECOMMEND[0] || w > GUIDE_RECOMMEND[1]) {
     return { ...base, level: "allow", ok: true, reason: "허용 안이지만 권장 밖입니다." };
   }
@@ -243,4 +248,4 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
 
 export const GUIDE_BAND_TEXT =
   `권장 가로 ${GUIDE_RECOMMEND[0]}~${GUIDE_RECOMMEND[1]} · ` +
-  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]} · 중심 이탈 ${GUIDE_CENTER_MAX} 이내`;
+  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]}`;

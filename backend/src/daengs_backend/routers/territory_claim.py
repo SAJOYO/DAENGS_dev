@@ -13,6 +13,8 @@ from daengs_backend.schemas.territory_claim import (
     ClaimResponse,
     MarkRequest,
     PhotoAccessResponse,
+    RenewalRequest,
+    RenewalResponse,
     SessionPhase,
     SessionResponse,
     SessionStart,
@@ -20,7 +22,7 @@ from daengs_backend.schemas.territory_claim import (
     SiteResponse,
 )
 from daengs_backend.schemas.territory_owner import TerritoryOwnerSummary
-from daengs_backend.services import activity, territory_owner
+from daengs_backend.services import activity, territory_owner, territory_renewal
 from daengs_backend.services import territory_ownership as service
 from daengs_backend.services.activity_core.game_policy import GameError
 from daengs_backend.services.territory_site_lookup import (
@@ -92,6 +94,20 @@ async def mark(body: MarkRequest, user: CurrentAppUser, db: Session, lookup: Loo
 @router.get("/claims/{claim_id}", response_model=ClaimResponse)
 async def claim(claim_id: uuid.UUID, user: CurrentAppUser, db: Session):
     return await _call(service.get_claim(db, user.app_user_id, claim_id))
+
+
+@router.put("/claims/{claim_id}/renewals/{renewal_id}", response_model=RenewalResponse)
+async def renew(
+    claim_id: uuid.UUID,
+    renewal_id: uuid.UUID,
+    body: RenewalRequest,
+    user: CurrentAppUser,
+    db: Session,
+    lookup: Lookup,
+):
+    return await _call(
+        territory_renewal.renew(db, user.app_user_id, claim_id, renewal_id, body, lookup)
+    )
 
 
 @router.put("/claims/{claim_id}/photos/{photo_id}", response_model=ClaimResponse)

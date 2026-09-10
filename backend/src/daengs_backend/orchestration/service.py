@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from daengs_backend.config import settings
 from daengs_backend.core.tracing import request_trace
@@ -27,7 +29,11 @@ from daengs_backend.orchestration.contracts import (
     RouteTrace,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
-from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
+from daengs_backend.orchestration.planner import (
+    assemble_route_plan,
+    resolve_deterministic_route,
+    resolve_emergency_route,
+)
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -38,6 +44,16 @@ from daengs_backend.orchestration.social import build_social_response
 
 _ROUTER_FAILURE_MESSAGE = "요청을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요."
 LOGGER = logging.getLogger(__name__)
+_KST = ZoneInfo("Asia/Seoul")
+#: 야간의 경계. 문구만 가르고 순위는 안 바꾸므로 정밀할 필요가 없다 —
+#: 야간 순위 부스트는 `24h` 태그 실측 뒤의 별도 카드다.
+_NIGHT_FROM_HOUR = 20
+_NIGHT_UNTIL_HOUR = 8
+
+
+def _is_night(now: datetime) -> bool:
+    hour = now.astimezone(_KST).hour
+    return hour >= _NIGHT_FROM_HOUR or hour < _NIGHT_UNTIL_HOUR
 
 
 class AssistantOrchestrationService:
@@ -121,11 +137,19 @@ class AssistantOrchestrationService:
             if include_route_trace
             else None
         )
-        route_plan = resolve_deterministic_route(
-            requested_capability=requested_capability,
+        # 응급은 라우터보다 앞이다 — 모델을 태우지 않고, 배타로 끝낸다.
+        route_plan = resolve_emergency_route(
             query=query,
             context=structured_context,
+            requested_capability=requested_capability,
+            at_night=_is_night(datetime.now(tz=_KST)),
         )
+        if route_plan is None:
+            route_plan = resolve_deterministic_route(
+                requested_capability=requested_capability,
+                query=query,
+                context=structured_context,
+            )
         if route_plan is None:
             try:
                 decision = await self._semantic_router.select(

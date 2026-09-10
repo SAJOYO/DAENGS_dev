@@ -25,7 +25,12 @@ async def enqueue(session, row, now, policy=POLICY):
         )
         .values(state="cancelled", lease_token=None, lease_until=None)
     )
-    for tag in TAGS:
+    from daengs_backend.config import settings
+
+    tags = (*TAGS, "space.address") if settings.walk_public_context_enabled else TAGS
+    if settings.walk_public_context_enabled and settings.walk_area_context_enabled:
+        tags = (*tags, "space.commerce")
+    for tag in tags:
         await session.execute(
             insert(WalkEntryContextJob)
             .values(
@@ -95,7 +100,11 @@ async def current(session, row, policy=POLICY):
     envelopes = list(
         await session.scalars(
             select(WalkEntryContextEnvelope)
-            .where(WalkEntryContextEnvelope.job_id.in_([job.id for job in jobs]))
+            .join(WalkEntryContextJob, WalkEntryContextEnvelope.job_id == WalkEntryContextJob.id)
+            .where(
+                WalkEntryContextEnvelope.job_id.in_([job.id for job in jobs]),
+                WalkEntryContextEnvelope.collection_round == WalkEntryContextJob.collection_round,
+            )
             .order_by(WalkEntryContextEnvelope.job_id, WalkEntryContextEnvelope.attempt.desc())
         )
     )

@@ -63,6 +63,9 @@ async def database():
                     encoding="utf-8"
                 )
             )
+            await raw.execute(
+                (ROOT / "db/migrations/2026-09-10_territory_expiry.sql").read_text("utf-8")
+            )
         factory = async_sessionmaker(engine, expire_on_commit=False)
         yield factory
     finally:

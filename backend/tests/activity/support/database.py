@@ -22,6 +22,9 @@ async def database(territory_database):
         await raw.execute(
             (ROOT / "db/migrations/verify_2026-09-06_activity_game.sql").read_text(encoding="utf-8")
         )
+        await raw.execute(
+            (ROOT / "db/migrations/2026-09-10_activity_monthly.sql").read_text("utf-8")
+        )
         await db.commit()
     return territory_database
 

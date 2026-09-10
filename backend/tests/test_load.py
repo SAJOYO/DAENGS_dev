@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import functools
+import re
 import hashlib
 
 import pytest
@@ -281,3 +282,92 @@ def test_upsert_is_idempotent() -> None:
         except _Rollback:
             pass
         assert load.count(conn) == before            # 되돌린 뒤에도 그대로
+
+
+# --------------------------------------------------------------- 증분화 (RAG-084)
+
+def test_upsert_guards_every_column_it_updates() -> None:
+    """**갱신하는 컬럼 셋을 전부 `WHERE` 가 지키는가** (RAG-084 ②). DB 가 필요 없다.
+
+    하나라도 빠지면 그 컬럼만 바뀐 날에 **조용히 낡은 값이 남는다.** `SET` 목록과 `WHERE`
+    목록이 갈리는 것은 `COLUMNS` 튜플과 SQL 이 갈렸던 RAG-035 와 같은 모양의 사고라,
+    여기서 둘을 맞대어 본다.
+    """
+    sets, _, wheres = load.UPSERT.partition("\nWHERE ")
+    pair = r"(\w+)\s*{op}\s*EXCLUDED\.\1"
+    updated = set(re.findall(pair.format(op="="), sets.split("DO UPDATE SET")[1]))
+    guarded = set(re.findall(r"documents\." + pair.format(op="IS DISTINCT FROM"), wheres))
+    assert updated == {"embedding", "content_tokens", "metadata"}, load.UPSERT
+    assert guarded == updated, (
+        f"WHERE 가 안 지키는 컬럼: {updated - guarded} — 그 컬럼만 바뀐 날에 낡은 값이 남는다")
+
+
+
+def test_unchanged_rows_are_not_rewritten() -> None:
+    """**이미 적재된 것을 다시 넣으면 아무 행도 안 쓴다** (RAG-084 ②).
+
+    이 카드의 성공 지표다. 조건 없는 `DO UPDATE` 는 값이 하나도 안 달라져도 전 행에 새 튜플을
+    만들고, 그 수만큼 **테이블의 모든 인덱스**에 항목이 들어간다 — HNSW 를 켜면 매일 그래프를
+    통째로 가는 그 자리다 (`D16`).
+    """
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        sample = p.rows[:50]
+        try:
+            with conn.transaction():
+                written = load.upsert(conn, sample)
+                raise _Rollback
+        except _Rollback:
+            pass
+        if written.inserted:                         # DB 가 코퍼스보다 낡았으면 잴 수 없다
+            pytest.skip(f"DB 에 없는 행이 {written.inserted}개 — `python -m rag load` 먼저")
+        assert written.unchanged == len(sample)
+        assert written.touched == 0, "안 바뀐 행에 새 튜플이 생겼다 — WHERE 가 안 먹었다"
+
+
+def test_a_changed_row_is_the_only_one_written() -> None:
+    """한 행만 바뀌면 **그 한 행만** 쓴다 — 증분화가 너무 많이 건너뛰지도 않는다 (RAG-084 ②).
+
+    위 테스트의 짝이다. `unchanged` 만 보면 "아무것도 안 쓴다"와 "제대로 거른다"가 안 갈린다.
+    """
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        sample = p.rows[:50]
+        changed = {**sample[0], "metadata": {**sample[0]["metadata"], "part": "RAG-084-probe"}}
+        try:
+            with conn.transaction():
+                written = load.upsert(conn, [changed] + sample[1:])
+                raise _Rollback
+        except _Rollback:
+            pass
+        if written.inserted:
+            pytest.skip("DB 가 코퍼스보다 낡았다 — `python -m rag load` 먼저")
+        assert (written.updated, written.unchanged) == (1, len(sample) - 1)
+
+
+def test_stale_still_sees_the_whole_corpus() -> None:
+    """**증분화가 `stale()` 의 전제를 안 깬다** (RAG-084 ⑤).
+
+    `stale()` docstring 이 *"소스 단위 적재가 생기면 이 전제가 깨진다"* 고 미리 경고해 둔
+    자리다. 이 카드는 **쓰기만** 건너뛰고 `prepare()` 는 여전히 코퍼스 전체를 만들므로
+    전제가 산다 — 건너뛴 행도 `rows` 에 그대로 있어서 "사라진 청크"로 오인되지 않는다.
+    """
+    p = _prepared_or_skip()
+    with _conn_or_skip() as conn:
+        if load.count(conn) == 0:
+            pytest.skip("아직 적재하지 않았다")
+        try:
+            with conn.transaction():
+                written = load.upsert(conn, p.rows)
+                left = load.stale(conn, p.rows)      # 같은 목록을 그대로 넘긴다
+                raise _Rollback
+        except _Rollback:
+            pass
+        if written.inserted:
+            pytest.skip("DB 가 코퍼스보다 낡았다 — `python -m rag load` 먼저")
+        assert written.unchanged == len(p.rows)
+        assert left == [], f"안 쓴 행이 유령으로 잡혔다: {left[:3]}"

@@ -15,9 +15,12 @@
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
+| [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
+| [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
+| [territory/monthly-seasons.md](territory/monthly-seasons.md) | 명시적 첫 월간 시즌 시작·자동 결산·최종 순위·다음 시즌과 장애 복구 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
-유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · Walk · Territory · 오케스트레이션 · 관리자 콘솔)의
+유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `daengs_gait` · Walk · Territory · 오케스트레이션 · 관리자 콘솔)의
 결정 기록과 로드맵은 `docs/<유닛>/` 에 둡니다. 사람이 아니라 코드 경계로 묶는 이유는 담당자가
 바뀌어도 폴더가 남기 때문입니다. "어떻게 돌리나"는 코드 옆 README 에, "왜"와 "지금 어디까지"는 여기에.
 지금은 `orchestration/` · `life/` · `training/` · `gait/` · `place/` · `journey/` · `territory/` · `walk/` 를 옮겼고,
@@ -99,6 +102,11 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | --- | --- |
 | [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |
 | [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
+| [walk/public-context.md](walk/public-context.md) | SGIS 행정동·도시공원 실제 배경 공급, 캐시·배포 순서와 Gemini/앱 검증 |
+| [walk/area-context.md](walk/area-context.md) | 상권 업종 집계·EGIS 하천 형상 배경, 지역 카탈로그와 실제 생성 검증 |
+| [walk/runtime.md](walk/runtime.md) | 산책 공공자료 운영 워커·Beat·공유 캐시, 준비·검사·활성화·복구 |
+| [walk/regional-catalogs.md](walk/regional-catalogs.md) | 산책 위치별 지역 캐시 선택·자동 갱신·요청 상한·대기 작업 재개 |
+| [walk/context-backfill.md](walk/context-backfill.md) | 기존 산책의 누락 공공자료 미리보기·제한 재수집·회차 이력과 저장 보드 보호 |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | 공간 일기 조회 API — 인증·일관된 조회·운영 상한·Place/Journey 경계 |
 | [walk/storyboard-live.md](walk/storyboard-live.md) | 실제 산책의 관측 분석·장면 구성과 앱 검토 연결 |
 | [walk/diary-titles.md](walk/diary-titles.md) | 스토리보드 대표·장면 제목의 LLM 생성과 저장·실패 처리 |
@@ -121,7 +129,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 `VerifiedVisit`과 공유 점유는 backend가 소유합니다. 점유 계약과 후속 정책은
 [온라인 점유 API](territory/ownership-api.md)에서 확인합니다.
 
-### `gait/` — 보행 분석 (`/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
+### `gait/` — 보행 분석 (`/app/gait/*`, 영상에서 관절 움직임 → 같은 개체의 시간 변화 비교)
 
 | | |
 | --- | --- |

@@ -45,6 +45,50 @@ class WrongStateError(RuntimeError):
     """지금 상태에서 허용되지 않는 전이. 라우터가 409 로 옮깁니다."""
 
 
+class BrokerUnavailable(RuntimeError):
+    """브로커 주소가 없거나 브로커에 묻지 못함. 상태 페이지는 이것을 `absent` 로 읽습니다."""
+
+
+#: 워커가 듣는 큐. `tasks/gait.py` 의 `task_default_queue` 와 같아야 합니다 —
+#: `tests/test_gait_worker_status.py` 가 둘을 대조합니다.
+GAIT_QUEUE = "gait"
+
+
+def gait_workers(timeout_sec: float = 1.0) -> list[str]:
+    """`gait` 큐를 듣고 있는 Celery 워커 이름들. 없으면 빈 목록입니다 (상태 페이지, D-063 4단계).
+
+    옛 `gait-analysis` HTTP 서비스의 `/healthz` 를 대신합니다 — 이제 보행 분석의 실행부는
+    `gait-worker` 하나뿐이라, "살아 있나" 는 그 워커가 큐를 듣고 있나로 묻습니다.
+
+    `crawl_workers` 의 celery 갈래와 같은 모양입니다. `ping()` 이 아니라 `active_queues()` 를
+    쓰는 이유도 같습니다 — 이 브로커에는 크롤러·실시간 워커도 붙어 있어서 ping 은
+    **보행 워커가 아닌 답**을 보행 워커로 읽습니다. 큐 이름으로 걸러야 합니다.
+
+    브로커 주소가 없거나 브로커가 안 답하면 `BrokerUnavailable` 입니다 — 500 이 아니라
+    "이 환경엔 없다" 입니다. **동기입니다** (kombu). 부르는 쪽이 스레드로 돌립니다.
+    """
+    from daengs_backend.config import settings
+
+    if not settings.redis_url:
+        raise BrokerUnavailable("REDIS_URL 이 없다 — backend/.env 를 확인할 것")
+    from celery import Celery
+
+    app = Celery(broker=settings.redis_url)      # 보내기 전용 — 이 프로세스는 워커가 아닙니다
+    try:
+        replies = app.control.inspect(timeout=timeout_sec).active_queues()
+    except Exception as e:                      # 브로커가 죽은 것은 500 이 아니다
+        raise BrokerUnavailable(f"브로커에 묻지 못했다: {type(e).__name__}: {e}") from e
+
+    # 아무도 답하지 않으면 None 입니다 (빈 dict 가 아닙니다).
+    if not replies:
+        return []
+    return sorted(
+        node
+        for node, queues in replies.items()
+        if any(q.get("name") == GAIT_QUEUE for q in queues or [])
+    )
+
+
 async def start_analysis(
     session: AsyncSession, app_user_id: uuid.UUID, req: GaitAnalyzeRequest
 ):

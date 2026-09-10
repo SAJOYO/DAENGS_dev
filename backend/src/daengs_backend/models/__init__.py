@@ -15,10 +15,12 @@ from daengs_backend.models.activity import (
     ActivityBonusKey,
     ActivityGameReceipt,
     ActivityHoldingPeriod,
+    ActivityMonthlySeason,
     ActivitySeason,
     ActivitySessionLink,
     ActivityWalkHead,
 )
+from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRewardDetail
 from daengs_backend.models.admin_audit_log import (
     AUDIT_ACCOUNT_CREATED,
     AUDIT_ACCOUNT_PASSWORD_CHANGED,
@@ -84,6 +86,13 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSession,
     TerritoryClaimSite,
     TerritoryOccupancy,
+    TerritoryRenewal,
+)
+from daengs_backend.models.vet_visit import (
+    VET_REASON_CODES,
+    VET_REASON_LABELS,
+    VetVisit,
+    VetVisitDraft,
 )
 from daengs_backend.models.walk import (
     WALK_ANALYSIS_STATES,
@@ -130,11 +139,16 @@ __all__ = [
     "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
+    "VET_REASON_CODES",
+    "VET_REASON_LABELS",
     "WALK_ANALYSIS_STATES",
     "ActivityAccount",
+    "ActivityBaseReward",
     "ActivityBonusKey",
     "ActivityGameReceipt",
     "ActivityHoldingPeriod",
+    "ActivityMonthlySeason",
+    "ActivityRewardDetail",
     "ActivitySeason",
     "ActivitySessionLink",
     "ActivityWalkHead",
@@ -160,7 +174,10 @@ __all__ = [
     "TerritoryClaimSession",
     "TerritoryClaimSite",
     "TerritoryOccupancy",
+    "TerritoryRenewal",
     "VerifiedVisit",
+    "VetVisit",
+    "VetVisitDraft",
     "Walk",
     "WalkAnalysis",
     "WalkCapsule",

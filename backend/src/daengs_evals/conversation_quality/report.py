@@ -256,12 +256,22 @@ class Summary(BaseModel):
 
 
 def load_judgments(path: Path) -> tuple[dict[str, Any], list[TurnJudgment]]:
-    """판정 파일(헤더 한 줄 + 판정 줄들)을 읽는다. `collect.load_lap` 과 같은 모양."""
+    """판정 파일(헤더 한 줄 + 판정 줄들)을 읽는다. `collect.load_lap` 과 같은 모양.
+
+    본문에는 `TurnJudgment` 줄 말고 `judge.SkipRecord`(`type == "skip"`) 줄도 섞일 수
+    있다 — 판정기 콜 하나가 실패해 그 행을 건너뛴 자리다(`judge.run_score`). 그 줄은
+    `TurnJudgment` 스키마가 아니라 여기 걸러서 뺀다: 건너뛴 수는 이미 헤더의 `skipped` 가
+    말하고 있고, 이 함수가 돌려주는 목록은 "실제로 판정된 것"만이라는 계약을 지킨다."""
     lines = [line for line in path.read_text("utf-8").splitlines() if line.strip()]
     if not lines:
         raise ValueError(f"{path} 가 비어 있습니다")
     header = json.loads(lines[0])
-    judgments = [TurnJudgment.model_validate(json.loads(line)) for line in lines[1:]]
+    judgments = []
+    for line in lines[1:]:
+        row = json.loads(line)
+        if row.get("type") != "judgment":
+            continue
+        judgments.append(TurnJudgment.model_validate(row))
     return header, judgments
 
 

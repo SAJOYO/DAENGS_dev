@@ -58,6 +58,7 @@ judge 위생 — `daengs_life/rag/stages/judge.py` · `training_quality/judge.py
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -410,6 +411,28 @@ class TurnJudgment(BaseModel):
     not_applicable: list[str]
 
 
+class SkipRecord(BaseModel):
+    """판정기 콜 하나가 죽어서 그 행을 건너뛴 자리의 기록.
+
+    빈 답변 · `NOT_REACHED` 는 지금도 줄을 안 남긴다 — 그 둘의 이유는 랩 파일의
+    `message` 를 보면 바로 갈리니 판정 파일에 따로 적을 것이 없다(헤더의 `skipped` 수에만
+    잡힌다). 에러는 다르다 — **무엇이 실패했는지가 랩 파일 어디에도 없어서**, 사람이
+    나중에 "이 39콜 중 하나가 5xx 였구나"를 알아볼 유일한 자리가 이 줄이다.
+
+    담지 않는 것이 담는 것만큼 중요하다: 트레이스백도, 판정기에 갔던 프롬프트도, 랩의
+    답변도 안 담는다. 이 파일은 사람이 공유해서 볼 수도 있는 산출물이라 예외 메시지에
+    프롬프트·답변이 실려 있을 가능성 자체를 코드로 막는다 — 남기는 것은 예외 **타입 이름**뿐이다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = "skip"
+    reason: Literal["error"] = "error"
+    case_id: str
+    turn_index: int
+    error_type: str
+
+
 class JudgeHeader(BaseModel):
     """판정 파일 한 장의 전제. **judge 모델과 프롬프트 버전이 여기 있어야** 두 판정 파일의
     차이가 답변 때문인지 judge 때문인지 갈린다 (`collect.LapHeader` 와 같은 규약)."""
@@ -683,6 +706,106 @@ def header(
     )
 
 
+#: 이어 돌릴 때 어긋나면 안 되는 네 자리. `judge_model` · `anchor_set` · `anchors_sha256` 은
+#: `run_score` 의 인자로, `prompt_version` 은 모듈 상수로 온다 — 넷이 같은 튜플에 있는 이유는
+#: 넷 다 "이 판정 파일이 어떤 전제로 만들어졌나"를 말하는 핀이기 때문이다(`report._SHARED_
+#: HEADER_PINS` 와 같은 자리, 다만 거기는 랩 헤더와 판정 헤더를 맞추고 여기는 판정 헤더
+#: 자기 자신의 과거·현재를 맞춘다).
+_RESUME_PINNED_FIELDS: tuple[str, ...] = (
+    "judge_model",
+    "prompt_version",
+    "anchor_set",
+    "anchors_sha256",
+)
+
+
+def _load_existing_output(path: Path) -> tuple[dict[str, Any], list[str]]:
+    """이어 돌릴 판정 파일을 헤더 dict + 본문 줄(원문 그대로)로 가른다.
+
+    본문을 다시 파싱해서 객체로 만들지 않는다 — 판정 줄은 그대로 새 파일에 옮겨 적을
+    뿐이라 원문 문자열이면 충분하고, 깨진 JSON 한 줄 때문에 이어 돌리기 전체가 죽을
+    이유도 없다(그런 줄은 `_carry_forward_judgments` 가 무시한다).
+    """
+    lines = [line for line in path.read_text("utf-8").splitlines() if line.strip()]
+    if not lines:
+        raise SystemExit(f"이어 돌릴 판정 파일이 비어 있습니다: {path}")
+    try:
+        head = json.loads(lines[0])
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"이어 돌릴 판정 파일의 헤더를 읽을 수 없습니다: {path}\n  {exc}") from exc
+    return head, lines[1:]
+
+
+def _check_resume_pins(
+    existing_header: Mapping[str, Any], *, resolved_model: str, anchor_set: str, anchors_sha256: str
+) -> None:
+    """옮겨진 핀 위에서 이어 돌리면 한 파일에 서로 다른 전제로 판정된 행이 섞인다 —
+    비교 게이트(`report._check_shared_header_pins`)가 막으려는 바로 그 실패를 여기서
+    미리 막는다. 넷 중 **어느 것이 움직였는지 이름으로** 말해야 사람이 "새로 돌려라"
+    말고 "이게 왜 달라졌지"를 볼 수 있다."""
+    now = {
+        "judge_model": resolved_model,
+        "prompt_version": PROMPT_VERSION,
+        "anchor_set": anchor_set,
+        "anchors_sha256": anchors_sha256,
+    }
+    for field in _RESUME_PINNED_FIELDS:
+        before = existing_header.get(field)
+        after = now[field]
+        if before != after:
+            raise SystemExit(
+                f"이어 돌릴 수 없습니다 — `{field}` 이 바뀌었습니다: "
+                f"기존={before!r} 지금={after!r}\n"
+                "  옮겨진 핀 위에서 이어 돌리면 한 파일에 서로 다른 전제로 판정된 행이"
+                " 섞입니다. 새 판정 파일로 처음부터 돌리세요."
+            )
+
+
+def _carry_forward_judgments(
+    existing_lines: Sequence[str],
+) -> tuple[list[str], set[tuple[str, int]]]:
+    """이전 파일의 본문 줄 중 **성공한 판정만** 그대로 옮겨 적을 목록으로 고른다.
+
+    에러로 건너뛴 줄(`SkipRecord`, `type == "skip"`)은 옮기지 않는다 — «이어 돌리기»의
+    요점이 실패했던 콜을 다시 태워 보는 것이라, 옛 실패 기록을 그대로 두면 이번에 성공해도
+    파일에 실패와 성공이 둘 다 남는다. 판정으로도 스킵으로도 안 읽히는 줄(수동으로 헤더
+    말고 다른 걸 넣었다거나)도 조용히 버린다 — 이어 돌리기가 죽을 이유는 아니다.
+    """
+    kept: list[str] = []
+    done: set[tuple[str, int]] = set()
+    for raw in existing_lines:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if data.get("type") != "judgment":
+            continue
+        try:
+            key = (str(data["case_id"]), int(data["turn_index"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        kept.append(raw)
+        done.add(key)
+    return kept, done
+
+
+def _rewrite_header_line(path: Path, new_header: JudgeHeader) -> None:
+    """헤더 한 줄만 최종값으로 바꿔 쓴다. **본문 줄은 손대지 않는다.**
+
+    `skipped`(그리고 최종 `items`)는 루프가 다 돌아야 아는 값인데, 헤더는 루프가 돌기
+    **전에** 나가 있어야 한다 — 그래야 죽어도 부분 파일이 읽힌다(요구사항 1). 그래서
+    자리표시 헤더로 시작해서 끝에 이 함수로 한 번만 고쳐 쓴다. 임시 파일에 쓰고
+    `os.replace` 로 바꿔치기하는 이유는 이 마지막 한 걸음에서마저 죽더라도 **원본 파일은
+    반쪽으로 남지 않게** 하기 위해서다(반쪽으로 남는 것은 임시 파일 쪽이고, 그것은 아무도
+    안 읽는다).
+    """
+    lines = path.read_text("utf-8").splitlines()
+    lines[0] = new_header.model_dump_json()
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
 def run_score(
     *,
     rows: Sequence[Mapping[str, Any]],
@@ -694,8 +817,13 @@ def run_score(
     anchor_set: str = "dev",
     lap: str = "",
     out_path: Path | None = None,
+    resume: bool = False,
 ) -> list[TurnJudgment]:
-    """랩 행 목록 → 판정 목록. `out_path` 를 주면 헤더 한 줄 + 판정 줄들로 쓴다.
+    """랩 행 목록 → 판정 목록. `out_path` 를 주면 헤더 한 줄 + 판정 줄들로 **한 줄씩** 쓴다.
+
+    **한 랩은 대략 39 콜이다.** 예전에는 다 돈 뒤 한 번에 썼다 — 그러면 어디선가 죽었을 때
+    이미 낸 값까지 전부 잃는다(이미 돈 만큼은 이미 돈 만큼의 돈이다). 그래서 지금은 판정이
+    하나 나올 때마다 그 줄을 바로 쓰고 `flush` 한다.
 
     **앵커 게이트를 통과하지 못하면 한 줄도 안 돈다** — 판정을 시작한 뒤에 검사하면 이미
     돈 만큼 토큰이 나갔고, 사람은 그 파일을 신뢰할 수 있는 것으로 오해한다.
@@ -711,38 +839,106 @@ def run_score(
     자리에 `NOT_REACHED` 가 적힌 행도 뺀다 — 그것은 답이 아니라 "이 이음매로는 못 봤다"는
     표시라, 채점하면 판정기가 우리 센티널 문자열을 읽고 점수를 매긴다. **뺀 수는 헤더에
     적는다.**
+
+    **판정기 콜 하나가 죽어도 랩 전체를 잃지 않는다.** `judge_turn` 이 던지는 예외를 행
+    단위로 잡아 그 행을 스킵 처리하고 계속 돈다 — 축 하나만 실패해도 그 행은 통째로
+    스킵한다(부분 판정을 완전한 판정처럼 파일에 남기지 않는다). `KeyboardInterrupt` ·
+    `SystemExit` 같은 `BaseException` 은 안 잡는다 — 그건 사람이 진짜로 멈추라고 한 것이고,
+    죽더라도 이미 flush 된 줄까지는 파일에 남는다.
+
+    **`resume=True` 면 `out_path` 가 있어야 한다.** 그 파일이 있으면 헤더의 네 핀
+    (judge_model · prompt_version · anchor_set · anchors_sha256)이 지금 돌리려는 조건과
+    같은지 먼저 본다 — 다르면 SystemExit. 같으면 이미 성공한 판정 행은 다시 안 부르고
+    (`_carry_forward_judgments`), 나머지(에러로 죽었던 행 포함)만 새로 돈다.
     """
+    if resume and out_path is None:
+        raise ValueError("`resume=True` 는 `out_path` 가 있어야 이어 돌릴 파일을 압니다")
+
     resolved_model = model or judge_model()
     record = require_anchor_pass(
         anchor_dir, anchor_set=anchor_set, model=resolved_model, anchors_sha256=anchors_sha256
     )
+    resolved_anchors_sha256 = str(record["anchors_sha256"])
+
+    kept_lines: list[str] = []
+    done_keys: set[tuple[str, int]] = set()
+    if resume and out_path is not None and out_path.exists():
+        existing_header, existing_lines = _load_existing_output(out_path)
+        _check_resume_pins(
+            existing_header,
+            resolved_model=resolved_model,
+            anchor_set=anchor_set,
+            anchors_sha256=resolved_anchors_sha256,
+        )
+        kept_lines, done_keys = _carry_forward_judgments(existing_lines)
 
     by_id = {case.case_id: case for case in cases}
     call = generate or openai_generate
     judgments: list[TurnJudgment] = []
     skipped = 0
-    for row in rows:
-        case = by_id.get(str(row.get("case_id")))
-        if case is None:
-            raise ValueError(f"랩 행의 케이스를 못 찾습니다: {row.get('case_id')!r}")
-        message = str(row.get("message", "")).strip()
-        if not message or message == NOT_REACHED:
-            skipped += 1
-            continue
-        judgments.append(judge_turn(case, row, generate=call, model=resolved_model))
 
+    handle = None
     if out_path is not None:
-        head = header(
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        handle = out_path.open("w", encoding="utf-8")
+        # 자리표시 헤더 — `skipped`·`items` 는 루프가 끝나야 안다. 끝에서 다시 쓴다
+        # (`_rewrite_header_line`). 죽으면 이 값이 최종이 아니지만, 파일은 여전히 읽힌다.
+        placeholder = header(
             lap=lap,
-            items=len(judgments),
+            items=len(kept_lines),
             model=resolved_model,
             anchor_set=anchor_set,
-            anchors_sha256=str(record["anchors_sha256"]),
+            anchors_sha256=resolved_anchors_sha256,
+            skipped=0,
+        )
+        handle.write(placeholder.model_dump_json() + "\n")
+        for raw in kept_lines:
+            handle.write(raw + "\n")
+        handle.flush()
+
+    try:
+        for row in rows:
+            case_id = str(row.get("case_id"))
+            turn_index = int(row.get("turn_index", -1))
+            case = by_id.get(case_id)
+            if case is None:
+                raise ValueError(f"랩 행의 케이스를 못 찾습니다: {row.get('case_id')!r}")
+            if (case_id, turn_index) in done_keys:
+                continue  # 이어 돌리기 — 이 행은 이전 실행에서 이미 성공했다
+            message = str(row.get("message", "")).strip()
+            if not message or message == NOT_REACHED:
+                skipped += 1
+                continue
+            try:
+                judgment = judge_turn(case, row, generate=call, model=resolved_model)
+            except Exception as exc:  # noqa: BLE001 — 콜 하나의 실패로 39콜 전부를 잃지 않는다
+                skipped += 1
+                if handle is not None:
+                    skip = SkipRecord(
+                        case_id=case_id, turn_index=turn_index, error_type=type(exc).__name__
+                    )
+                    handle.write(skip.model_dump_json() + "\n")
+                    handle.flush()
+                continue
+            judgments.append(judgment)
+            if handle is not None:
+                handle.write(judgment.model_dump_json() + "\n")
+                handle.flush()
+    finally:
+        if handle is not None:
+            handle.close()
+
+    if out_path is not None:
+        final = header(
+            lap=lap,
+            items=len(kept_lines) + len(judgments),
+            model=resolved_model,
+            anchor_set=anchor_set,
+            anchors_sha256=resolved_anchors_sha256,
             skipped=skipped,
         )
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", encoding="utf-8") as handle:
-            handle.write(head.model_dump_json() + "\n")
-            for judgment in judgments:
-                handle.write(judgment.model_dump_json() + "\n")
+        _rewrite_header_line(out_path, final)
+
+    if kept_lines:
+        judgments = [TurnJudgment.model_validate(json.loads(raw)) for raw in kept_lines] + judgments
     return judgments

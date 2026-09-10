@@ -4,6 +4,8 @@
         --adapter-mode fake
     uv run python -m daengs_evals.conversation_quality check-anchors --anchor-set dev
     uv run python -m daengs_evals.conversation_quality score --lap-file <lap.jsonl>
+    uv run python -m daengs_evals.conversation_quality score --lap-file <lap.jsonl> \\
+        --out <judgments.jsonl> --resume   # 죽었던 판정 파일을 이어서 돈다
     uv run python -m daengs_evals.conversation_quality report --lap-file <lap.jsonl> \\
         --judgments <judgments.jsonl>
     uv run python -m daengs_evals.conversation_quality compare \\
@@ -111,6 +113,7 @@ def cmd_score(args: argparse.Namespace) -> int:
         anchors_sha256=anchors_mod.anchors_sha256(),
         lap=str(lap_meta.get("lap", "")),
         out_path=out_path,
+        resume=args.resume,
     )
     print(f"판정 {len(judgments)}건 → {out_path}")
     return 0
@@ -182,6 +185,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_score.add_argument("--anchor-set", default="dev")
     p_score.add_argument("--anchor-dir")
     p_score.add_argument("--out")
+    # 39콜짜리 랩 한복판에서 죽으면 이 하나로 이어서 돈다 — 이미 성공한 판정은 다시 안
+    # 부르고, 헤더 핀(judge_model·prompt_version·anchor_set·anchors_sha256)이 하나라도
+    # 옮겨졌으면 run_score 가 SystemExit 으로 거부한다.
+    p_score.add_argument("--resume", action="store_true")
     p_score.set_defaults(func=cmd_score)
 
     p_report = sub.add_parser("report", help="랩·판정 파일에서 리포트를 렌더한다")

@@ -775,6 +775,218 @@ def test_the_judgment_file_says_how_many_rows_it_skipped(tmp_path):
     assert (header["items"], header["skipped"]) == (1, 2)
 
 
+# --- 크래시 저항 — 증분 기록 · 이어 돌리기 · 콜 하나 실패해도 랩을 안 잃는다 (#401) ---
+
+
+def test_a_partial_file_is_readable_after_a_mid_loop_crash(tmp_path):
+    """한 랩이 39 콜인데 어디선가 죽으면 이미 낸 판정까지 잃는다 — 그게 이 카드의 문제다.
+
+    `KeyboardInterrupt` 는 `Exception` 이 아니라 `run_score` 의 콜별 방어(요구사항 3)로도
+    안 잡힌다 — 그래서 여기서는 «죽는다»를 그대로 흉내 낼 수 있다. 죽기 전까지 쓴 파일이
+    `load_judgments` 로 읽히면, 헤더가 아직 최종값이 아니어도 부분 결과는 산다."""
+    from daengs_evals.conversation_quality.judge import run_score
+    from daengs_evals.conversation_quality.report import load_judgments
+
+    case_a = _case(case_id="cq_case_a")
+    case_b = _case(case_id="cq_case_b")
+    rows = _lap_rows(case_a) + _lap_rows(case_b)
+    calls = {"n": 0}
+
+    def crashing_generate(**kw):
+        calls["n"] += 1
+        if calls["n"] > 2:  # case_a 의 두 축(모드·이어짐)을 다 돈 뒤 case_b 에서 죽는다
+            raise KeyboardInterrupt
+        return _fake_verdict(axis=kw["axis"])
+
+    out = tmp_path / "judgments_crash.jsonl"
+    with pytest.raises(KeyboardInterrupt):
+        run_score(
+            rows=rows,
+            cases=[case_a, case_b],
+            model=FAKE_JUDGE_MODEL,
+            anchor_dir=_anchor_pass(tmp_path),
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+            generate=crashing_generate,
+            lap="crash",
+            out_path=out,
+        )
+
+    _header, judgments = load_judgments(out)
+    assert [j.case_id for j in judgments] == ["cq_case_a"]
+
+
+def test_resume_skips_already_judged_rows_and_appends_the_rest(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+    from daengs_evals.conversation_quality.report import load_judgments
+
+    case_a = _case(case_id="cq_case_a")
+    case_b = _case(case_id="cq_case_b")
+    rows = _lap_rows(case_a) + _lap_rows(case_b)
+    out = tmp_path / "judgments_resume.jsonl"
+
+    calls_first = {"n": 0}
+
+    def first_pass(**kw):
+        calls_first["n"] += 1
+        if calls_first["n"] > 2:  # case_a 는 성공, case_b 는 매번 실패
+            raise RuntimeError("일시적 오류라고 치자")
+        return _fake_verdict(axis=kw["axis"])
+
+    judgments_first = run_score(
+        rows=rows,
+        cases=[case_a, case_b],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=first_pass,
+        lap="resume",
+        out_path=out,
+    )
+    assert [j.case_id for j in judgments_first] == ["cq_case_a"]
+
+    second_calls: list[dict] = []
+
+    def second_pass(**kw):
+        second_calls.append(kw)
+        return _fake_verdict(axis=kw["axis"])
+
+    judgments_second = run_score(
+        rows=rows,
+        cases=[case_a, case_b],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=second_pass,
+        lap="resume",
+        out_path=out,
+        resume=True,
+    )
+    # case_a 는 이미 판정 파일에 있으니 다시 부르지 않는다 — case_b 의 두 축만 새로 불린다
+    assert len(second_calls) == 2
+    assert {j.case_id for j in judgments_second} == {"cq_case_a", "cq_case_b"}
+
+    header, judgments = load_judgments(out)
+    assert header["items"] == 2
+    assert header["skipped"] == 0
+    assert len(judgments) == 2
+
+
+def test_resume_refuses_when_a_header_pin_disagrees(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+
+    case = _case()
+    out = tmp_path / "judgments_pin.jsonl"
+    run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+        lap="pin",
+        out_path=out,
+    )
+    other_model = "fake-judge-9999-99-99"
+    # 옮겨진 핀 위에서 이어 돌리면 한 파일에 서로 다른 전제로 판정된 행이 섞인다 — 그게
+    # 비교 게이트가 막으려는 바로 그 실패라 조용히 넘어가지 않고 SystemExit 으로 거부한다
+    with pytest.raises(SystemExit, match="judge_model"):
+        run_score(
+            rows=_lap_rows(case),
+            cases=[case],
+            model=other_model,
+            anchor_dir=_anchor_pass(tmp_path, model=other_model),
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+            generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+            lap="pin",
+            out_path=out,
+            resume=True,
+        )
+
+
+def test_a_single_failing_judge_call_is_recorded_and_the_loop_continues(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.judge import run_score
+
+    case = _repair_case()  # 세 축이 모두 적용되는 케이스
+
+    def flaky(**kw):
+        if kw["axis"] == "context_continuity":
+            raise RuntimeError("일시적 5xx 라고 치자")
+        return _fake_verdict(axis=kw["axis"])
+
+    out = tmp_path / "judgments_flaky.jsonl"
+    judgments = run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=flaky,
+        lap="flaky",
+        out_path=out,
+    )
+    # 축 하나만 실패해도 그 행 전체를 판정으로 안 남긴다 — 부분 판정이 완전한 판정처럼 보이면 안 된다
+    assert judgments == []
+
+    lines = [line for line in out.read_text("utf-8").splitlines() if line.strip()]
+    header = json.loads(lines[0])
+    assert header["skipped"] == 1
+    body = [json.loads(line) for line in lines[1:]]
+    assert len(body) == 1
+    assert body[0]["type"] == "skip"
+    assert body[0]["error_type"] == "RuntimeError"
+    # 트레이스백도 프롬프트도 답변도 담지 않는다
+    raw = lines[1]
+    assert "일시적 5xx" not in raw
+    assert case.turns[0].text not in raw
+    assert "산책은 하루 두 번이 좋습니다" not in raw
+
+
+def test_a_file_with_a_skipped_row_still_round_trips_through_report(tmp_path):
+    """`load_judgments` → `summarize` → `render` 가 스킵 행이 섞인 파일에서도 죽지 않아야 한다."""
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+    from daengs_evals.conversation_quality.judge import PROMPT_VERSION, run_score
+    from daengs_evals.conversation_quality.report import load_judgments, render, summarize
+
+    case = _repair_case()
+    lap_path = run_collect(
+        cases=[case],
+        driver=FakeDriver(replies=["산책은 하루 두 번이 좋습니다."]),
+        out_dir=tmp_path,
+        lap="rt",
+        judge_model=FAKE_JUDGE_MODEL,
+        prompt_version=PROMPT_VERSION,
+        anchor_set="dev",
+    )
+    lap_meta, lap_rows = load_lap(lap_path)
+
+    def flaky(**kw):
+        if kw["axis"] == "repair_success":
+            raise RuntimeError("boom")
+        return _fake_verdict(axis=kw["axis"])
+
+    out = tmp_path / "judgments_rt.jsonl"
+    run_score(
+        rows=lap_rows,
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
+        generate=flaky,
+        lap="rt",
+        out_path=out,
+    )
+    judge_header, judgments = load_judgments(out)
+    assert judgments == []
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=lap_rows, judge_header=judge_header, judgments=judgments
+    )
+    text = render(summary)
+    assert "rt" in text
+
+
 def test_judge_makes_no_live_call_at_import_time():
     import daengs_evals.conversation_quality.judge as m
 

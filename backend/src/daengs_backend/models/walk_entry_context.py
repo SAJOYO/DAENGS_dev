@@ -28,7 +28,7 @@ class WalkEntryContextJob(Base):
         CheckConstraint("revision > 0"),
         CheckConstraint("attempts BETWEEN 0 AND 3"),
         CheckConstraint(
-            "tag IN ('space.facility', 'space.park', 'space.river', 'environment.weather')"
+            "tag IN ('space.facility', 'space.park', 'space.river', 'environment.weather', 'space.address', 'space.commerce')"
         ),
         CheckConstraint("state IN ('pending', 'running', 'completed', 'failed', 'cancelled')"),
         CheckConstraint(

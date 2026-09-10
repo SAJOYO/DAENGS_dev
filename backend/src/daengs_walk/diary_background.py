@@ -19,6 +19,10 @@ class Projection:
 
 
 def project_background(saved: SavedBackground, core) -> Projection:
+    if saved.provider in {"sgis", "data-go-kr-parks", "data-go-kr-commerce", "egis-rivers"}:
+        from daengs_walk.diary_public_background import project_public_background
+
+        return project_public_background(saved, core)
     if (
         saved.provider != "place-search"
         or saved.payload_schema not in {"walk-entry-context-v1", "walk-entry-context-v2"}
@@ -98,4 +102,10 @@ def piece_identity(piece: BackgroundPiece):
 
 
 def piece_rank(piece: BackgroundPiece, saved: SavedBackground):
-    return (piece.facts["distance_m"], -saved.retrieved_at.timestamp(), saved.id, piece.id)
+    # Area aggregates use their footprint; a missing point distance must not become zero.
+    return (
+        piece.facts.get("distance_m", piece.facts.get("radius_m", 0)),
+        -saved.retrieved_at.timestamp(),
+        saved.id,
+        piece.id,
+    )

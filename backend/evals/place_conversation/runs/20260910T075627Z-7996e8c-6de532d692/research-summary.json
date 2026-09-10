@@ -1,0 +1,27 @@
+{
+  "case_types": 14,
+  "repetitions": 3,
+  "events": 81,
+  "chat_events": 75,
+  "manual_events": 6,
+  "automatic_statuses": {
+    "review_required": 60,
+    "fail": 21
+  },
+  "semantic_task_statuses": {
+    "pass": 42,
+    "fail": 39
+  },
+  "policy_sensitive_events": 6,
+  "invalid_plan_events": 3,
+  "repeated_behavior_fields_equal": true,
+  "changed_source_files_since_run": [],
+  "interpretation": "A deliberately difficult synthetic corpus, not overall accuracy or production usage success.",
+  "validation": {
+    "targeted_tests": "13 passed, 0 skipped in 2.74s",
+    "initial_test_failure": "1 failed, 12 passed: manual event misclassified by evaluator as pending acceptance; corrected before live run",
+    "ruff": "3 changed Python files passed",
+    "not_run": "full suite, uv run check, DB/Redis/HTTP concurrency/Android/compose gates; production code unchanged",
+    "ci": "PR workflows relocated to docs/ci; no automatic PR checks"
+  }
+}

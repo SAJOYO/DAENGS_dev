@@ -123,3 +123,74 @@ def test_prompt_forbids_personal_data_in_item_names():
     prompt = build_receipt_prompt()
     assert "item names" in prompt
     assert "card number" in prompt
+
+
+def test_prompt_states_preventive_wins_over_targeted_system():
+    """R1 — 예방이 이긴다. 실제 영수증의 `*주사-비오칸엠-곰팡이피부접종-20%` 이 이 규칙이
+    없으면 `skin` 으로 잘못 떨어진다."""
+    prompt = build_receipt_prompt()
+    assert "Preventive care wins over the body system it happens to target" in prompt
+    assert '"vaccination", not "skin"' in prompt
+
+
+def test_prompt_states_preventive_falls_back_to_body_system_when_no_code_fits():
+    """R2 — 예방인데 넷 중 맞는 코드가 없으면(스케일링) 신체계통으로 내려간다."""
+    prompt = build_receipt_prompt()
+    assert "fall back to the body-system code instead" in prompt
+    assert 'so it becomes "dental"' in prompt
+
+
+def test_prompt_states_date_range_takes_start_date():
+    """R3 — `2019-05-17 ~ 2019-05-17` 처럼 범위로 찍히면 시작일이 `visited_on` 이다."""
+    prompt = build_receipt_prompt()
+    assert "visited_on is the start date of the range" in prompt
+
+
+def test_prompt_states_amount_is_post_discount():
+    """R4 — 수량/할인/금액 열이 있으면 할인 열이 아니라 금액(할인 반영 후) 열을 읽는다."""
+    prompt = build_receipt_prompt()
+    assert "total_krw and every item's amount_krw are the post-discount amount column" in prompt
+    assert "never the discount column" in prompt
+
+
+# 아래 셋은 압구정동물병원(2019-05-17) 실제 영수증의 문자열을 그대로 쓴 회귀 핀이다 —
+# 규칙을 못 고치게 잡아 두는 것이지 이 커밋이 만드는 동작이 아니다.
+
+
+def test_scrubber_keeps_real_receipt_item_names_untouched():
+    """`곰팡이피부접종` 같은 실제 항목명이 스크러버에 오검열되면 §2 의 R1 예시가
+    확인 화면에서 사라진다."""
+    items = [
+        ReceiptItem(name="*주사-비오칸엠-곰팡이피부접종-20%", amount_krw=12000),
+        ReceiptItem(name="일반조제-1일", amount_krw=3000),
+        ReceiptItem(name="진료비,진찰료", amount_krw=15000),
+    ]
+    assert scrub_items(items) == items
+
+
+def test_scrubber_redacts_real_business_registration_number():
+    got = scrub_items([ReceiptItem(name="850-61-00139 압구정동물병원", amount_krw=15000)])
+    assert got[0].name == "<redacted>"
+    assert got[0].amount_krw == 15000
+
+
+def test_scrubber_redacts_real_receipt_number():
+    got = scrub_items([ReceiptItem(name="000025003 영수증번호", amount_krw=15000)])
+    assert got[0].name == "<redacted>"
+    assert got[0].amount_krw == 15000
+
+
+def test_hospital_phone_accepts_real_hospital_number():
+    assert (
+        ReceiptExtraction(
+            status="ok", total_krw=1000, hospital_phone="02-547-7588"
+        ).hospital_phone
+        == "02-547-7588"
+    )
+
+
+def test_hospital_phone_rejects_real_business_registration_number():
+    """`850-61-00139` 은 사업자등록번호 모양이지 전화번호가 아니다 — `{2,4}-{3,4}-{3,4}` 의
+    가운데 묶음이 2자리라 이 칸에 못 앉는다."""
+    with pytest.raises(ValidationError):
+        ReceiptExtraction(status="ok", total_krw=1000, hospital_phone="850-61-00139")

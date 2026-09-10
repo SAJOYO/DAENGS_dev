@@ -36,12 +36,19 @@ CREATE TABLE IF NOT EXISTS pet_invites (
     token_hash CHAR(64) NOT NULL UNIQUE,
 
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- 수락 영수증 (2026-09-10, docs/co-care.md §3, #388 · #261). 수락은 더 이상 이 행을
+    -- 안 지운다 — 대신 이 둘을 채운다. 같은 사람이 같은 토큰으로 다시 오면 이 값으로
+    -- 그때의 응답을 그대로 돌려준다(200). 다른 사람이 오면 여전히 404 다. 수명은 새 칸을
+    -- 안 두고 위 expires_at 그대로 쓴다 — 만료건 청소가 수락 여부를 안 가린다.
+    accepted_at TIMESTAMPTZ,
+    -- SET NULL 은 care_events.actor_app_user_id 와 같은 이유다 — 영수증은 행을 지우지
+    -- 않고 사람만 비운다. app_users 는 탈퇴해도 행이 안 지워지므로(위 "함정") 이 SET NULL
+    -- 은 실질적으로 거의 안 돈다.
+    accepted_by UUID REFERENCES app_users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pet_invites_pet ON pet_invites (pet_id);
-
--- accepted_at 칸이 없다. 수락하면 행을 지운다 — 그것만으로 일회용이 되고, "이미 쓴 초대"와
--- "없는 토큰"이 같은 404 가 되어 정보도 덜 샌다.
 
 -- ① app_users 는 탈퇴해도 살아남으므로 FK 로는 절대 안 지워진다.
 --   21_activity_game.sql 의 activity_owner_cleanup 과 같은 선례다.

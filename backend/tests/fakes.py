@@ -329,6 +329,9 @@ class FakeInvite:
     expires_at: datetime
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     created_at: datetime = field(default_factory=lambda: datetime(2026, 9, 9, tzinfo=UTC))
+    #: 영수증(2026-09-10, #388·#261). `None` 이면 아직 안 쓴 초대입니다.
+    accepted_at: datetime | None = None
+    accepted_by: uuid.UUID | None = None
 
 
 @dataclass
@@ -784,10 +787,11 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         )
 
     async def member_count_valid_invites(session, pet_id, now):
+        # 수락된(영수증) 행은 뺍니다 — repositories/pet_member.py 의 진짜 쿼리와 같은 규칙.
         return sum(
             1
             for i in store.pet_invites
-            if i.pet_id == pet_id and i.expires_at > now
+            if i.pet_id == pet_id and i.expires_at > now and i.accepted_by is None
         )
 
     def member_add_invite(session, *, pet_id, invited_by, token_hash, expires_at):
@@ -819,6 +823,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.pet_invites = [i for i in store.pet_invites if i.pet_id != pet_id]
         return before - len(store.pet_invites)
 
+    async def member_delete_invite_for_pet(session, pet_id, invite_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [
+            i for i in store.pet_invites if not (i.id == invite_id and i.pet_id == pet_id)
+        ]
+        return before - len(store.pet_invites)
+
+    async def member_list_invites(session, pet_id):
+        return sorted(
+            (i for i in store.pet_invites if i.pet_id == pet_id),
+            key=lambda i: (i.created_at, i.id),
+        )
+
     monkeypatch.setattr(pet_member_repo, "list_members", member_list_members)
     monkeypatch.setattr(pet_member_repo, "is_member", member_is_member)
     monkeypatch.setattr(pet_member_repo, "count_members", member_count_members)
@@ -834,6 +851,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_member_repo, "delete_invite", member_delete_invite)
     monkeypatch.setattr(
         pet_member_repo, "delete_expired_invites", member_delete_expired_invites
+    )
+    monkeypatch.setattr(pet_member_repo, "list_invites", member_list_invites)
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invite_for_pet", member_delete_invite_for_pet
     )
     monkeypatch.setattr(
         pet_member_repo, "delete_invites_for_pet", member_delete_invites_for_pet

@@ -31,7 +31,10 @@ INVITE_TTL = timedelta(hours=24)
 
 
 class InviteNotFoundError(Exception):
-    """없는 토큰. **이미 쓴 초대도 이것입니다** — 수락이 행을 지우기 때문입니다."""
+    """없는 토큰. **다른 사람이 이미 쓴 토큰도 이것입니다** — 그 토큰이 한 번이라도 존재했다는
+    사실 자체를 안 알려주기 위해서입니다(§3 "행 3/4"). 같은 사람이 같은 토큰을 다시 보내는
+    것은 이것이 아니라 영수증 200 입니다 — `accept_invite` 를 보세요.
+    """
 
 
 class InviteExpiredError(Exception):
@@ -97,12 +100,24 @@ async def create_invite(
 
 
 async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: str) -> Pet:
-    """초대 수락. 검증 순서는 docs/co-care.md §3 의 표와 같습니다."""
+    """초대 수락. 검증 순서는 docs/co-care.md § 3 의 표와 같습니다.
+
+    **수락은 더 이상 초대 행을 지우지 않습니다** (2026-09-10, #388 · #261). 대신
+    `accepted_at`/`accepted_by` 를 채워 영수증으로 남깁니다 — 응답을 못 받은 재시도가
+    행이 사라져 404 를 받으면, 이미 다른 강아지를 돌보는 사람은 그것이 "이번 요청이
+    실패했다" 인지 "이미 성공했는데 응답만 못 받았다" 인지 구별할 방법이 없었습니다.
+    영수증이 있으면 **같은 토큰 + 같은 사람**은 그대로 같은 `{pet_id, name}` 을 다시
+    받고, **다른 사람**은 여전히 404 입니다(그 토큰이 존재했다는 사실 자체를 안 새게).
+
+    ⚠️ 영수증 분기는 그 사이 다른 일(탈퇴·내보내기)이 있었는지 다시 확인하지 않습니다 —
+    "응답을 못 받은 재시도" 는 거의 곧바로 다시 오는 것을 전제하기 때문입니다. 그 사이
+    실제로 나간 사람을 되살리고 싶으면 새 초대를 받아야 합니다.
+    """
     invite = await member_repo.get_invite_by_hash(session, hash_refresh_token(token))
     if invite is None:
         raise InviteNotFoundError
 
-    # ⚠️ pets 행을 잠급니다. 동시 수락이 상한을 넘기지 못하게 하고, 아래 3번 검사가
+    # ⚠️ pets 행을 잠급니다. 동시 수락이 상한을 넘기지 못하게 하고, 아래 검사가
     #    동시 승계와 경쟁하지 않게 합니다.
     pet = await pet_repo.get_by_id_for_update(session, invite.pet_id)
     if pet is None:  # pragma: no cover — FK 가 CASCADE 라 강아지 없이 초대만 남을 수 없습니다
@@ -110,9 +125,18 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
 
     now = datetime.now(UTC)
     if invite.expires_at <= now:
+        # 영수증이든 아니든 수명은 expires_at 까지입니다 — 지나면 지웁니다.
         await member_repo.delete_invite(session, invite.id)
         await session.commit()
         raise InviteExpiredError
+
+    if invite.accepted_by is not None:
+        # 이미 쓴 토큰입니다. **같은 사람이면 그때의 응답을 그대로 돌려줍니다** — 새로
+        # 아무것도 확인하지 않습니다(위 docstring 참고). 다른 사람이면 "없는 토큰" 과
+        # 똑같은 404 입니다 — 그래야 그 토큰이 한 번이라도 유효했다는 사실이 안 샙니다.
+        if invite.accepted_by == app_user_id:
+            return pet
+        raise InviteNotFoundError
 
     if invite.invited_by != pet.app_user_id:
         # 그새 대표가 바뀌었습니다. 옛 대표가 뿌린 링크는 죽습니다.
@@ -122,14 +146,13 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
         raise AlreadyOwnerError
 
     if await member_repo.is_member(session, pet.id, app_user_id):
-        # 멱등입니다 — 동시 수락에서 진 쪽이 여기로 옵니다 (docs/co-care.md §3 의 행 5).
-        #
-        # **여기서도 초대를 지웁니다.** "수락하면 행을 지운다 — 그것만으로 일회용" 이
-        # 이 표의 규칙이라, 이 분기만 초대를 살려 두면 토큰이 24시간까지 유효하게 남고
-        # `MAX_ACTIVE_INVITES` 한 자리를 계속 먹으며, 나중에 이 사람을 내보내도 같은
-        # 링크로 다시 들어옵니다. 이미 지워진 행을 지우는 것은 no-op(rowcount 0)이라
-        # 이긴 쪽의 삭제와 경쟁하지 않습니다 — 락은 이미 `pets` 행이 잡고 있습니다.
-        await member_repo.delete_invite(session, invite.id)
+        # 멱등입니다 — 동시 수락에서 진 쪽이 여기로 옵니다(docs/co-care.md § 3 의 행 7).
+        # 이 함수 안에서 딱 한 번 읽은 `invite` 객체라 위 `accepted_by` 분기는 못 봤을
+        # 수 있습니다(이긴 쪽이 그새 커밋했더라도 이 객체는 그 값을 다시 읽지 않습니다) —
+        # 그래서 여기서도 영수증을 채웁니다. 이래야 이 사람이 **다음** 재시도부터는
+        # 바로 위 분기(빠른 경로)로 들어옵니다.
+        invite.accepted_at = now
+        invite.accepted_by = app_user_id
         await session.commit()
         return pet
 
@@ -140,7 +163,8 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
         raise PetLimitError
 
     member_repo.add(session, pet.id, app_user_id)
-    await member_repo.delete_invite(session, invite.id)
+    invite.accepted_at = now
+    invite.accepted_by = app_user_id
 
     # 등록한 강아지가 없던 사람은 첫 수락에서 대표 강아지를 얻습니다 —
     # 없으면 앱 첫 화면이 빕니다 (`services/pet.py` 의 등록 경로와 같은 규칙).
@@ -151,6 +175,34 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
     await session.commit()
     log.info("공동 돌봄 참여 (pet=%s, user=%s)", pet.id, app_user_id)
     return pet
+
+
+async def list_invites(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
+) -> list[PetInvite]:
+    """그 아이의 초대 전부, 만든 순서대로. **대표만** — 평문 토큰이 발급 응답에 한 번만
+    나오므로, 나중에 그 초대를 찾아 취소하려면 이 목록이 유일한 길입니다. 해시도 토큰도
+    안 돌려줍니다(라우터의 `InviteOut` 이 그 둘을 아예 담지 않습니다).
+    """
+    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    if pet is None:
+        raise PetNotFoundError
+    return await member_repo.list_invites(session, pet_id)
+
+
+async def cancel_invite(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID, invite_id: uuid.UUID
+) -> None:
+    """초대 취소. **대표만.** 돌보미·제3자는 강아지가 안 보이므로 404, 남의 강아지의
+    초대 id 를 넣어도 404 — `delete_invite_for_pet` 이 `pet_id` 까지 같이 걸기 때문입니다.
+    """
+    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    if pet is None:
+        raise PetNotFoundError
+    deleted = await member_repo.delete_invite_for_pet(session, pet_id, invite_id)
+    if deleted == 0:
+        raise InviteNotFoundError
+    await session.commit()
 
 
 async def list_members(
@@ -278,7 +330,9 @@ __all__ = [
     "PetLimitError",
     "accept_invite",
     "actor_label",
+    "cancel_invite",
     "create_invite",
+    "list_invites",
     "list_members",
     "remove_member",
     "transfer_owner",

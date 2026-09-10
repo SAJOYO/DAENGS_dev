@@ -456,6 +456,23 @@ CHECKS = (
             ' ALTER TABLE care_events ADD CONSTRAINT care_events_actor_fkey'
             ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
          ]),
+        # 2026-09-10 (co-care 수락 영수증, docs/co-care.md §3, #388 · #261) — pet_invites 에
+        # accepted_at · accepted_by 두 칸. 픽스처는 9/9 pet_members 마이그레이션을 그대로
+        # 재사용한다(그래야 대상 표 pet_invites 가 이미 있다). FK 의 삭제 동작(SET NULL)을
+        # 바꾸는 변조가 이 항목의 핵심이다 — CASCADE 로 바뀌면 영수증 행이 사람 탈퇴(가
+        # 실제로 도는 먼 미래)에 통째로 사라진다.
+        ('2026-09-10', 'pet_invite_receipts',
+         APP_USERS_WITH_STATUS + PETS_ONLY
+         + prerequisites('2026-09-08_care_events', '2026-09-09_pet_members'),
+         'pet_invites', [
+            'ALTER TABLE pet_invites DROP COLUMN accepted_at',
+            'ALTER TABLE pet_invites DROP COLUMN accepted_by',
+            'ALTER TABLE pet_invites ALTER COLUMN accepted_at TYPE text',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_accepted_by_fkey',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_accepted_by_fkey;'
+            ' ALTER TABLE pet_invites ADD CONSTRAINT pet_invites_accepted_by_fkey'
+            ' FOREIGN KEY (accepted_by) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
         # 2026-09-09 (#353) — 진료비 기록 둘. **변조 목록의 마지막 하나가 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 칸의 모양이 아니라 **reason_code 가 닫힌 목록이라는 사실**
         # 이다. 목록을 통째로 permissive 한 CHECK 으로 갈아 끼우면 이름은 그대로라 ④ 는

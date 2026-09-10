@@ -20,9 +20,11 @@ __all__ = [
     "count_valid_invites",
     "delete_expired_invites",
     "delete_invite",
+    "delete_invite_for_pet",
     "delete_invites_for_pet",
     "get_invite_by_hash",
     "is_member",
+    "list_invites",
     "list_members",
     "remove",
 ]
@@ -82,10 +84,20 @@ async def get_invite_by_hash(session: AsyncSession, token_hash: str) -> PetInvit
 async def count_valid_invites(
     session: AsyncSession, pet_id: uuid.UUID, now: datetime
 ) -> int:
+    """**아직 쓸 수 있는** 초대 수. `MAX_ACTIVE_INVITES` 상한이 이것을 봅니다.
+
+    수락된 행(영수증)은 뺍니다 — 예전에는 수락과 동시에 행이 지워져 상한 자리가 자동으로
+    비었지만, 지금은 영수증이 `expires_at` 까지 남아 있습니다. 빼지 않으면 3명이 수락한
+    강아지는 그 3개가 최대 24시간 동안 상한을 계속 먹어 새로 초대를 못 보냅니다.
+    """
     stmt = (
         select(func.count())
         .select_from(PetInvite)
-        .where(PetInvite.pet_id == pet_id, PetInvite.expires_at > now)
+        .where(
+            PetInvite.pet_id == pet_id,
+            PetInvite.expires_at > now,
+            PetInvite.accepted_by.is_(None),
+        )
     )
     return int(await session.scalar(stmt) or 0)
 
@@ -110,6 +122,22 @@ async def delete_invite(session: AsyncSession, invite_id: uuid.UUID) -> int:
     return int(result.rowcount or 0)
 
 
+async def delete_invite_for_pet(
+    session: AsyncSession, pet_id: uuid.UUID, invite_id: uuid.UUID
+) -> int:
+    """취소(`DELETE /app/pets/{pet_id}/invites/{invite_id}`) 전용.
+
+    `pet_id` 를 같이 거는 이유는 URL 의 두 id 가 실제로 짝인지 DB 에 묻기 위해서입니다 —
+    남의 강아지의 초대 id 를 넣어 보는 자리를 열지 않습니다. 0 행이면 서비스가 404 로
+    답합니다(대표가 아니거나, 그 강아지의 초대가 아니거나, 애초에 없는 id — 셋 다 같은
+    응답이라 정보가 안 샙니다).
+    """
+    result = await session.execute(
+        sql_delete(PetInvite).where(PetInvite.id == invite_id, PetInvite.pet_id == pet_id)
+    )
+    return int(result.rowcount or 0)
+
+
 async def delete_expired_invites(
     session: AsyncSession, pet_id: uuid.UUID, now: datetime
 ) -> int:
@@ -121,6 +149,24 @@ async def delete_expired_invites(
 
 
 async def delete_invites_for_pet(session: AsyncSession, pet_id: uuid.UUID) -> int:
-    """그 아이의 초대 전부. 승계가 부릅니다 — 옛 대표가 뿌린 링크를 죽입니다."""
+    """그 아이의 초대 전부. 승계가 부릅니다 — 옛 대표가 뿌린 링크를 죽입니다.
+
+    수락된 영수증도 같이 지웁니다 — 손대지 않은 동작입니다. 승계 직후 "그새 대표가
+    바뀌었다" 재시도 창을 남기는 것보다 옛 대표의 흔적을 한 번에 지우는 쪽이 이 트랜잭션의
+    본래 목적(④ 옛 링크를 죽인다)에 더 맞습니다.
+    """
     result = await session.execute(sql_delete(PetInvite).where(PetInvite.pet_id == pet_id))
     return int(result.rowcount or 0)
+
+
+async def list_invites(session: AsyncSession, pet_id: uuid.UUID) -> list[PetInvite]:
+    """그 아이의 초대 전부, 만든 순서대로. **수락된 것도 포함합니다** —
+    `GET /app/pets/{pet_id}/invites` 가 이것을 씁니다. 평문 토큰이 이 응답에 한 번만
+    나오므로(`InviteCreated`), 대표가 나중에 그 초대를 다시 찾을 유일한 길이 이 목록입니다.
+    """
+    stmt = (
+        select(PetInvite)
+        .where(PetInvite.pet_id == pet_id)
+        .order_by(PetInvite.created_at, PetInvite.id)
+    )
+    return list(await session.scalars(stmt))

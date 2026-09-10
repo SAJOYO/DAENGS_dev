@@ -45,9 +45,30 @@ class OwnerTransfer(BaseModel):
     app_user_id: uuid.UUID
 
 
+class InviteOut(BaseModel):
+    """`GET /app/pets/{pet_id}/invites` 의 항목 하나. **토큰도 해시도 담지 않습니다** —
+    서버는 해시만 들고 있고, DB 읽기 권한이 있는 사람이라도 이 응답을 그대로 살아 있는
+    초대에 쓸 수 있게 하면 안 되기 때문입니다.
+    """
+
+    id: uuid.UUID
+    expires_at: datetime
+    created_at: datetime
+    #: `None` 이면 아직 아무도 안 눌렀습니다. 값이 있으면 "이미 쓴 초대" — 대표가 이것으로
+    #: 구분해서 그립니다.
+    accepted_at: datetime | None
+
+
+class InviteListResponse(BaseModel):
+    pet_id: uuid.UUID
+    invites: list[InviteOut]
+
+
 __all__ = [
     "InviteAccept",
     "InviteCreated",
+    "InviteListResponse",
+    "InviteOut",
     "MemberListResponse",
     "MemberOut",
     "OwnerTransfer",

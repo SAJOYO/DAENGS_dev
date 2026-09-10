@@ -230,14 +230,10 @@ async def test_accept_makes_member(store: Store, pet: FakePet):
 async def test_accept_is_idempotent(store: Store, pet: FakePet):
     """카톡 링크는 두 번 거의 동시에 눌린다.
 
-    ⚠️ 완전히 순차적인(첫 요청이 끝난 뒤 둘째가 시작하는) 재전송은 이걸로 못 봅니다 —
-    첫 수락이 커밋되며 초대 행 자체를 지우므로(`services/pet_member.py` 의
-    `InviteNotFoundError` 설명 — "이미 쓴 초대도 이것입니다"), 완전히 끝난 뒤의 재전송은
-    토큰을 못 찾아 404 입니다. 그것과 다른 상황이 진짜 "두 번 눌림" 입니다: 두 요청이
-    **동시에** 같은(아직 안 지워진) 초대 행을 읽어서, 하나가 먼저 구성원으로 넣고
-    커밋하는 사이에 다른 하나도 그 초대를 들고 있는 경우입니다. 그때 나중 요청이
-    보는 것이 `is_member() == True` 이고, 그 분기가 200 을 돌려줍니다
-    (`accept_invite` 의 `# 멱등입니다` 분기) — 그 경합을 여기서 흉내 냅니다.
+    이것은 **동시** 두 번 눌림(같은 초대 객체를 들고 있는 동시 요청)을 흉내 냅니다 —
+    `accept_invite` 의 "행 7" 분기(`is_member() == True` → 멱등 200)를 봅니다. 응답을 못
+    받은 재시도(완전히 끝난 뒤 다시 오는 것, "행 3")는 `test_accept_retry_same_acceptor_...`
+    가 따로 봅니다 — 지금은 초대 행을 지우지 않으므로 그 둘은 서로 다른 분기입니다.
 
     **상태코드만으로는 이 분기를 못 지킵니다.** `is_member()` 조기 반환이 지워지면
     흐름이 `member_repo.add` 로 떨어지는데, 가짜 `member_add` 는 이제 `(pet_id,
@@ -255,24 +251,76 @@ async def test_accept_is_idempotent(store: Store, pet: FakePet):
     assert store.pet_members.count((pet.id, CARER)) == 1
 
 
-async def test_idempotent_accept_still_burns_the_invite(store: Store, pet: FakePet):
-    """멱등 분기도 **초대를 지웁니다** — "수락하면 행을 지운다" 가 일회용의 전부입니다.
+async def test_idempotent_branch_writes_the_receipt(store: Store, pet: FakePet):
+    """행 7(동시 경쟁의 멱등 분기)도 영수증을 채운다.
 
-    이 분기가 초대를 살려 두면 셋이 한꺼번에 깨집니다: 토큰이 24시간까지 계속 유효하고,
-    `MAX_ACTIVE_INVITES` 한 자리를 계속 먹고, 그 사람을 내보낸 뒤에도 같은 링크로 다시
-    들어옵니다. 마지막 것을 여기서 끝까지 봅니다 — 지운 뒤 재수락이 404 여야 합니다.
+    이 분기가 채우지 않으면 이 사람의 **다음** 재시도가 행 3(빠른 경로)이 아니라 행
+    7 로 다시 떨어지는데, 그러면 `member_repo.add` 가 다시 불려 PK 충돌로 500 이 나야
+    정상인데도 `is_member` 가 먼저 걸러 조용히 200 을 낸다 — 겉보기엔 문제가 없어 보여도
+    영수증이 없다는 뜻이라, 초대 목록(GET)에서 이 초대가 계속 "안 쓴 초대" 로 보인다.
     """
     token = _invite(store, pet)
     store.pet_members.append((pet.id, CARER))  # 먼저 커밋된 동시 요청을 흉내 낸다
 
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 200
-    assert store.pet_invites == [], "멱등 분기가 초대 행을 살려 뒀다"
+    assert store.pet_invites[0].accepted_by == CARER
+    assert store.pet_invites[0].accepted_at is not None
 
-    # 내보낸 뒤에도 그 링크로 다시 못 들어온다.
-    store.pet_members.remove((pet.id, CARER))
-    again = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
-    assert again.status_code == 404
+
+async def test_accept_retry_by_same_acceptor_returns_identical_receipt(
+    store: Store, pet: FakePet
+):
+    """응답을 못 받은 재시도 — **같은 사람**이 같은 토큰을 다시 보내면 그때와 같은 200.
+
+    이것이 이번 개정의 핵심이다: 예전에는 수락이 초대 행을 지워서 재시도가 무조건
+    404 였다. 그러면 앱은 "이번 요청이 실패했다" 와 "이미 성공했는데 응답만 못 받았다" 를
+    구별할 수 없었다(docs/co-care.md §3). 지금은 행이 남아 있어 같은 응답을 그대로
+    다시 줄 수 있다 — 그리고 **구성원 행이 중복으로 늘지 않는다**(재시도가 `member_repo.add`
+    를 다시 부르면 PK 충돌로 500 이 나야 정상이므로, 여기가 200 으로 통과했다는 것
+    자체가 `member_repo.add` 를 다시 안 불렀다는 증거다).
+    """
+    token = _invite(store, pet)
+    first = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert first.status_code == 200
+
+    retry = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert retry.status_code == 200
+    assert retry.json() == first.json()
+    assert store.pet_members.count((pet.id, CARER)) == 1
+    # 초대 행 자체가 살아 있다 — 예전처럼 지워지지 않는다.
+    assert len(store.pet_invites) == 1
+
+
+async def test_accept_by_different_person_after_use_is_404(store: Store, pet: FakePet):
+    """**다른 사람**이 이미 쓴 토큰을 보내면 여전히 404 다 — 없는 토큰과 같은 응답.
+
+    이 토큰이 한 번이라도 유효했다는 사실 자체가 새면 안 된다(§1 의 일반 원칙). 영수증
+    분기가 `accepted_by` 를 안 가리고 아무에게나 200 을 주면 이 원칙이 깨진다.
+    """
+    token = _invite(store, pet)
+    assert client_as(CARER).post("/app/pet-invites/accept", json={"token": token}).status_code == 200
+
+    stranger = client_as(STRANGER).post("/app/pet-invites/accept", json={"token": token})
+    assert stranger.status_code == 404
+    assert (pet.id, STRANGER) not in store.pet_members
+
+
+async def test_accepted_invite_survives_and_does_not_count_toward_limit(
+    store: Store, pet: FakePet
+):
+    """수락된 초대는 **행이 남지만** 유효 초대 상한(3개)에는 안 걸린다.
+
+    안 걸리게 하지 않으면 3명이 수락한 강아지는 영수증이 만료될 때까지(최대 24시간)
+    새 초대를 못 보낸다 — 대표에게 "돌보미가 다 찼다" 는 거짓 신호다.
+    """
+    tokens = [_invite(store, pet) for _ in range(3)]
+    client_as(CARER).post("/app/pet-invites/accept", json={"token": tokens[0]})
+    assert len(store.pet_invites) == 3, "행이 지워지면 안 된다"
+
+    # 수락된 1개는 안 세므로 아직 2개만 "유효" — 새 초대를 하나 더 보낼 수 있다.
+    r = client_as(OWNER).post(f"/app/pets/{pet.id}/invites")
+    assert r.status_code == 201, r.text
 
 
 async def test_unknown_token_is_404(store: Store, pet: FakePet):
@@ -336,6 +384,102 @@ async def test_accept_respects_miniroom_limit(store: Store, pet: FakePet):
     token = _invite(store, pet)
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 409
+
+
+# ── 초대 목록 · 취소 (docs/co-care.md §3, #388 · #261) ────────────────
+
+
+async def test_owner_lists_invites(store: Store, pet: FakePet):
+    _invite(store, pet)
+    r = client_as(OWNER).get(f"/app/pets/{pet.id}/invites")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pet_id"] == str(pet.id)
+    assert len(body["invites"]) == 1
+    item = body["invites"][0]
+    assert set(item) == {"id", "expires_at", "created_at", "accepted_at"}
+    assert item["accepted_at"] is None
+
+
+async def test_invite_list_includes_accepted_with_receipt(store: Store, pet: FakePet):
+    """수락된 초대도 목록에 남는다 — 대표가 "이건 이미 썼다" 를 볼 수 있어야 한다."""
+    token = _invite(store, pet)
+    client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+
+    body = client_as(OWNER).get(f"/app/pets/{pet.id}/invites").json()
+    assert len(body["invites"]) == 1
+    assert body["invites"][0]["accepted_at"] is not None
+
+
+async def test_invite_list_never_leaks_token_or_hash(store: Store, pet: FakePet):
+    _invite(store, pet)
+    body = client_as(OWNER).get(f"/app/pets/{pet.id}/invites").json()
+    item = body["invites"][0]
+    assert "token" not in item and "token_hash" not in item
+
+
+async def test_carer_cannot_list_invites(store: Store, pet: FakePet):
+    store.pet_members.append((pet.id, CARER))
+    _invite(store, pet)
+    assert client_as(CARER).get(f"/app/pets/{pet.id}/invites").status_code == 404
+
+
+async def test_stranger_cannot_list_invites(store: Store, pet: FakePet):
+    assert client_as(STRANGER).get(f"/app/pets/{pet.id}/invites").status_code == 404
+
+
+async def test_owner_can_cancel_invite(store: Store, pet: FakePet):
+    _invite(store, pet)
+    invite_id = store.pet_invites[0].id
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/invites/{invite_id}")
+    assert r.status_code == 204
+    assert store.pet_invites == []
+
+
+async def test_cancel_unknown_invite_is_404(store: Store, pet: FakePet):
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/invites/{uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+async def test_carer_cannot_cancel_invite(store: Store, pet: FakePet):
+    """돌보미는 404 다 — 403 이면 "강아지는 있는데 내 것이 아니다" 가 샌다."""
+    store.pet_members.append((pet.id, CARER))
+    _invite(store, pet)
+    invite_id = store.pet_invites[0].id
+    r = client_as(CARER).delete(f"/app/pets/{pet.id}/invites/{invite_id}")
+    assert r.status_code == 404
+    assert store.pet_invites != []  # 안 지워졌다
+
+
+async def test_stranger_cannot_cancel_invite(store: Store, pet: FakePet):
+    _invite(store, pet)
+    invite_id = store.pet_invites[0].id
+    r = client_as(STRANGER).delete(f"/app/pets/{pet.id}/invites/{invite_id}")
+    assert r.status_code == 404
+    assert store.pet_invites != []
+
+
+async def test_cannot_cancel_another_pets_invite(store: Store, pet: FakePet):
+    """남의 강아지의 초대 id 를 넣어도 404 — `pet_id` 가 짝인지까지 같이 본다."""
+    other_pet = FakePet(app_user_id=OWNER, name="다른아이", breed="믹스")
+    store.pets.append(other_pet)
+    _invite(store, other_pet)
+    invite_id = store.pet_invites[0].id
+
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/invites/{invite_id}")
+    assert r.status_code == 404
+    assert store.pet_invites != []  # 다른 강아지의 초대는 안 지워졌다
+
+
+async def test_owner_can_cancel_already_accepted_invite(store: Store, pet: FakePet):
+    """이미 수락된(영수증) 초대도 취소할 수 있다 — 취소는 토큰의 생사와 무관하다."""
+    token = _invite(store, pet)
+    client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    invite_id = store.pet_invites[0].id
+
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/invites/{invite_id}")
+    assert r.status_code == 204
+    assert store.pet_invites == []
 
 
 # ── 구성원 목록 · 퇴장 · 내보내기 (docs/co-care.md §3) ────────────────

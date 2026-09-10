@@ -232,6 +232,56 @@ def test_migration_is_rerunnable():
         conn.close()
 
 
+def test_invite_receipts_migration_is_rerunnable():
+    """`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 두 번 — 버전 테이블이 없어 매번 다시
+    돌 수 있어야 한다(CLAUDE.md).
+    """
+    conn = _postgres_or_skip()
+    try:
+        sql = open(
+            "../db/migrations/2026-09-10_pet_invite_receipts.sql", encoding="utf-8"
+        ).read()
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            cur.execute(sql)
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_accepted_by_fk_is_set_null_not_cascade():
+    """`pet_invites.accepted_by` 의 FK 삭제 동작은 **SET NULL** 이다 — CASCADE 가 아니다.
+
+    영수증(그 사람이 그날 받았다는 사실)은 그 사람의 행이 훗날 진짜로 지워지는 날에도
+    남아야 한다(`care_events.actor_app_user_id` 와 같은 이유, `models/pet_invite.py`).
+    가짜 리포지토리는 FK 의 삭제 동작을 아예 흉내 내지 않으므로 이것은 진짜 DB 에서만
+    증명된다. 탈퇴(`withdraw()`)는 `app_users` 행을 안 지우므로(§1 "함정") 이 경로가
+    실제로 도는 유일한 자리는 그 행이 언젠가 진짜로 지워지는 날인데, 그 날을 여기서
+    앞당겨 확인한다.
+    """
+    conn = _postgres_or_skip()
+    try:
+        with conn.cursor() as cur:
+            owner, carer, pet = _seed(cur)
+            invite = uuid.uuid4()
+            cur.execute(
+                "INSERT INTO pet_invites"
+                " (id, pet_id, invited_by, token_hash, expires_at, accepted_at, accepted_by)"
+                " VALUES (%s, %s, %s, %s, NOW() + INTERVAL '1 day', NOW(), %s)",
+                (invite, pet, owner, "c" * 64, carer),
+            )
+
+            cur.execute("DELETE FROM app_users WHERE id=%s", (carer,))
+
+            cur.execute("SELECT accepted_by FROM pet_invites WHERE id=%s", (invite,))
+            row = cur.fetchone()
+            assert row is not None, "영수증 행이 CASCADE 로 같이 지워졌다 — SET NULL 이어야 한다"
+            assert row[0] is None, "accepted_by 가 안 비워졌다"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def _sqlalchemy_dsn_or_skip() -> str:
     """같은 loopback 가드를 지난 뒤 **SQLAlchemy(asyncpg) DSN** 을 돌려준다.
 

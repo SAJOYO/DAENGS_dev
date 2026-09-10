@@ -14,6 +14,8 @@ from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.pet_member import (
     InviteAccept,
     InviteCreated,
+    InviteListResponse,
+    InviteOut,
     MemberListResponse,
     OwnerTransfer,
 )
@@ -51,6 +53,42 @@ async def create_invite(pet_id: uuid.UUID, user: CurrentAppUser, session: Sessio
     return InviteCreated(
         id=invite.id, pet_id=invite.pet_id, token=token, expires_at=invite.expires_at
     )
+
+
+@router.get("/pets/{pet_id}/invites", response_model=InviteListResponse)
+async def list_invites(pet_id: uuid.UUID, user: CurrentAppUser, session: Session) -> InviteListResponse:
+    """살아 있는·이미 쓴 초대 전부. **대표만.** 평문 토큰은 발급 응답에만 있으므로,
+    이 목록이 나중에 그 초대를 찾아 취소할 유일한 길입니다.
+    """
+    try:
+        invites = await member_service.list_invites(session, user.app_user_id, pet_id)
+    except PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    return InviteListResponse(
+        pet_id=pet_id,
+        invites=[
+            InviteOut(
+                id=i.id, expires_at=i.expires_at, created_at=i.created_at,
+                accepted_at=i.accepted_at,
+            )
+            for i in invites
+        ],
+    )
+
+
+@router.delete("/pets/{pet_id}/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_invite(
+    pet_id: uuid.UUID, invite_id: uuid.UUID, user: CurrentAppUser, session: Session
+) -> None:
+    """초대 취소. **대표만** — 돌보미·제3자는 강아지가 안 보이므로 404 입니다
+    (403 이면 "강아지는 있는데 내 것이 아니다" 가 새 나갑니다).
+    """
+    try:
+        await member_service.cancel_invite(session, user.app_user_id, pet_id, invite_id)
+    except PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except member_service.InviteNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _INVITE_NOT_FOUND) from None
 
 
 @router.post("/pet-invites/accept", status_code=status.HTTP_200_OK)

@@ -1,41 +1,53 @@
 """Opt-in diary branch of the existing WalkStoryboard lifecycle; no second queue/table."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
+from daengs_backend.services.walk_diary_base_board import prepare_saved_base_board
+from daengs_backend.services.walk_diary_board_storage import read_board, store_board
+from daengs_backend.services.walk_diary_board_writing import complete_board
 from daengs_backend.services.walk_diary_contract import (
     StaleDiaryGeneration,
     bind_generation,
     require_current,
 )
-from daengs_backend.services.walk_diary_prepare import prepare_saved_diary
+from daengs_backend.services.walk_diary_negotiation import guard_old_writer
+from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary, prepare_saved_diary
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
+    LEASE_SECONDS,
     StoryboardConflict,
     StoryboardNotFound,
     complete,
     reserve,
     reusable,
 )
+from daengs_walk.diary_board import BaseBoardPolicy
+from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, publish_board
 from daengs_walk.diary_input import digest
 from daengs_walk.diary_stamps import StampPolicy
 
 
-async def snapshot(session, owner, walk_id, target):
+async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):
     if not settings.walk_diary_enabled:
         raise StoryboardNotFound
     if target is None:
         raise StoryboardConflict("일기 장면 목표 수를 지정해 주세요.")
     principal = PrincipalContext(kind="APP_USER", subject=str(owner))
     try:
-        prepared = await prepare_saved_diary(
-            session, principal, walk_id, StampPolicy(target_scene_count=target)
-        )
+        policy = StampPolicy(target_scene_count=target)
+        if bundle_format == BOARD_FORMAT:
+            base = await prepare_saved_base_board(
+                session, principal, walk_id, BaseBoardPolicy(intermediate=policy)
+            )
+            prepared = PreparedWalkDiary(base.input, base.plan.intermediate, base)
+        else:
+            prepared = await prepare_saved_diary(session, principal, walk_id, policy)
     except LookupError:
         raise StoryboardNotFound from None
     except ValueError:
@@ -44,8 +56,10 @@ async def snapshot(session, owner, walk_id, target):
         ) from None
     revision = digest(
         {
-            "format": "walk-diary-bundle-v1",
-            "plan": prepared.prepared.plan.revision(),
+            "format": bundle_format,
+            "plan": prepared.board.plan.revision()
+            if prepared.board
+            else prepared.prepared.plan.revision(),
             "writer": writing_version(),
         }
     )
@@ -57,14 +71,15 @@ def revisions(source):
 
 
 def result(prepared, row, revision):
-    source, plan = prepared.input.source, prepared.prepared.plan
+    source = prepared.input.source
     state = "pending" if row is None else "stale" if row.input_revision != revision else row.status
     bundle, error = None, row.error_code if row is not None and state == "failed" else None
-    counts, limits = prepared.prepared.counts, prepared.prepared.limits
+    preparation = prepared.board.plan if prepared.board else prepared.prepared
+    counts, limits = preparation.counts, preparation.limits
     background_update = False
     if row is not None and row.status == "ready":
         try:
-            stored = read_diary(prepared, row, revision)
+            stored = (read_board if prepared.board else read_diary)(prepared, row, revision)
             if stored is not None:
                 state, bundle = "ready", stored.bundle
                 counts, limits = stored.preparation_counts, stored.preparation_limits
@@ -74,7 +89,7 @@ def result(prepared, row, revision):
         except ValueError:
             state, error, bundle = "failed", "invalid_stored_diary", None
     return DiaryStoryboardResponse(
-        format="walk-diary-response-v1",
+        format=BOARD_RESPONSE if prepared.board else "walk-diary-response-v1",
         session_id=source.client_session_id,
         generation=row.generation if row else 0,
         input_revision=row.input_revision if bundle is not None else revision,
@@ -82,7 +97,7 @@ def result(prepared, row, revision):
         entry_revisions=revisions(source),
         photos_status=source.photos_status,
         photo_manifest=source.photo_manifest,
-        target_scene_count=plan.target_scene_count,
+        target_scene_count=counts["target"],
         preparation_counts=counts,
         preparation_limits=limits,
         background_update_available=background_update,
@@ -91,8 +106,8 @@ def result(prepared, row, revision):
     )
 
 
-async def get_diary(session, owner, walk_id, target):
-    _, prepared, revision = await snapshot(session, owner, walk_id, target)
+async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):
+    _, prepared, revision = await snapshot(session, owner, walk_id, target, bundle_format)
     value = result(prepared, await repo.current(session, walk_id), revision)
     await session.commit()
     return value
@@ -100,7 +115,7 @@ async def get_diary(session, owner, walk_id, target):
 
 async def generate_diary(session, owner, walk_id, request, *, writer=None):
     principal, prepared, revision = await snapshot(
-        session, owner, walk_id, request.target_scene_count
+        session, owner, walk_id, request.target_scene_count, request.bundle_format
     )
     source = prepared.input.source
     if {str(k): v for k, v in request.expected_entries.items()} != revisions(source):
@@ -108,8 +123,19 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     if request.expected_photo_manifest != source.photo_manifest:
         raise StoryboardConflict("사진 목록이 변경됐어요. 승인된 사진 버전을 확인해 주세요.")
     row = await repo.current(session, walk_id)
+    if not prepared.board:
+        guard_old_writer(row)
     now = datetime.now(UTC)
     value = result(prepared, row, revision)
+    # A new-format client cannot take over another format's live generation lease.
+    if (
+        prepared.board
+        and row is not None
+        and row.status == "running"
+        and row.updated_at > now - timedelta(seconds=LEASE_SECONDS)
+    ):
+        await session.commit()
+        return value.model_copy(update={"status": "running"})
     if (value.status == "ready" and not request.refresh) or (
         row is not None
         and row.status == "running"
@@ -117,7 +143,9 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     ):
         await session.commit()
         return value
-    generation = reserve(session, walk_id, row, revision, now)
+    generation = reserve(
+        session, walk_id, row, revision, now, bundle_format=BOARD_FORMAT if prepared.board else None
+    )
     ticket = bind_generation(principal, source, generation)
     await session.commit()  # Release the Walk lock/transaction before the LLM call.
     bundle, failure = None, None
@@ -128,13 +156,22 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
             or output.plan_revision != prepared.prepared.plan.revision()
         ):
             raise ValueError("writer returned another generation's bundle")
-        bundle = store_diary(prepared, output, revision)
+        if prepared.board:
+            bundle = store_board(prepared, complete_board(prepared, output), revision)
+        else:
+            bundle = store_diary(prepared, output, revision)
     except asyncio.CancelledError:
         raise  # The shared 60-second lease permits recovery after interruption.
     except Exception:  # noqa: BLE001 - never persist raw source/provider exception details
-        bundle, failure = None, "diary_generation_failed"
+        if prepared.board:
+            fallback = prepared.board.board.model_copy(
+                update={"model_status": "unavailable", "failure_code": "provider_failed"}
+            )
+            bundle = store_board(prepared, publish_board(fallback, prepared.board.plan), revision)
+        else:
+            bundle, failure = None, "diary_generation_failed"
     principal, latest, latest_revision = await snapshot(
-        session, owner, walk_id, request.target_scene_count
+        session, owner, walk_id, request.target_scene_count, request.bundle_format
     )
     current = await repo.current(session, walk_id)
     try:

@@ -19,6 +19,7 @@ from daengs_backend.models.activity import (
     ActivitySessionLink,
     ActivityWalkHead,
 )
+from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRewardDetail
 from daengs_backend.models.admin_audit_log import (
     AUDIT_ACCOUNT_CREATED,
     AUDIT_ACCOUNT_PASSWORD_CHANGED,
@@ -132,9 +133,11 @@ __all__ = [
     "TERRITORY_EVIDENCE_VERSION",
     "WALK_ANALYSIS_STATES",
     "ActivityAccount",
+    "ActivityBaseReward",
     "ActivityBonusKey",
     "ActivityGameReceipt",
     "ActivityHoldingPeriod",
+    "ActivityRewardDetail",
     "ActivitySeason",
     "ActivitySessionLink",
     "ActivityWalkHead",

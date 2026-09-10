@@ -469,7 +469,10 @@ async def _season(db):
 
 
 def _is_v2(season):
-    return season is not None and season.rules.get("version") == "certified-protection-v2"
+    return season is not None and season.rules.get("version") in {
+        "certified-protection-v2",
+        activity_game.rewards.REWARD_VERSION,
+    }
 
 
 def _protection(certification, occupied_at, certified_at, season):

@@ -6,14 +6,21 @@ import json
 from dataclasses import fields
 from pathlib import Path
 
+from daengs_backend.services.activity_core.first_season_policy import Rules as FirstSeasonRules
+from daengs_backend.services.activity_core.first_season_rewards import REWARD_VERSION
 from daengs_backend.services.activity_core.game_policy import Rules
 
 
 def parse_rules(path):
     values = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(values, dict) or set(values) != {f.name for f in fields(Rules)}:
+    rule_class = (
+        FirstSeasonRules
+        if isinstance(values, dict) and values.get("version") == REWARD_VERSION
+        else Rules
+    )
+    if not isinstance(values, dict) or set(values) != {f.name for f in fields(rule_class)}:
         raise ValueError("rules JSON must explicitly specify every Rules field")
-    return Rules(**values)
+    return rule_class(**values)
 
 
 async def run(args):

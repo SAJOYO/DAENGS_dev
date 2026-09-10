@@ -849,6 +849,18 @@ CHECKS = (
             'DROP INDEX ix_territory_claim_photos_claim_id',
             'DROP INDEX territory_claims_pet_idx',
         ]),
+        ('2026-09-10', 'activity_rewards', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims',
+                         '2026-09-06_activity_game'),
+         'activity_base_rewards', [
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_pkey CASCADE',
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_paid_check',
+            'ALTER TABLE activity_reward_details DROP CONSTRAINT activity_reward_details_pkey',
+            'ALTER TABLE activity_reward_details DROP COLUMN takeover_points',
+            'DROP TRIGGER activity_reward_owner_cleanup ON app_users',
+            'DROP INDEX activity_base_rewards_member',
+        ]),
         ('2026-09-06', 'activity_game', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
          + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
                          '2026-09-03_territory_visits', '2026-09-05_territory_claims'),

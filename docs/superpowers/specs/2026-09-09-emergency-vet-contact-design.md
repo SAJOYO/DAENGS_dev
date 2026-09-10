@@ -319,9 +319,13 @@ projection 이 그대로 실어 보낸다"고 한 것과 같은 처리다.
 
 **실제로 만들어진 것.** 회귀는 `evals/orchestration_emergency/gold_pairs_v1.jsonl` 이다 —
 아래 짝 대조군 요구(D-064 ②)만 담고, `pair_id`·`term`·`emergency`·`normal` 네 필드로
-`AMBIGUOUS_TERMS`(`구토`·`설사`·`고열`·`탈수`) 각각의 응급/정상 짝을 고정한다. 테스트는
-`tests/test_orchestration_emergency_gate.py` 에 있고 `tests/test_medical_gate_pairs.py` 의
-형식을 따른다. **`evals/orchestration_emergency/gold_v1.jsonl`(위 21건을 포함한 응급 유형
+`AMBIGUOUS_TERMS`(`구토`·`설사`·`고열`·`탈수`·`기력`) 각각의 응급/정상 짝을 고정한다. 테스트는
+`tests/test_orchestration_emergency_gate.py` 에 있다. 짝 대조군이라는 **아이디어**는
+`tests/test_medical_gate_pairs.py`(#350)가 선례다 — 저장 형식은 그것을 따르지 않는다.
+`test_medical_gate_pairs.py` 는 코드 안 파이썬 튜플(`MEDICAL_CONTROLS` 등)로 대조군을
+쥐고 있고 데이터 파일이 없다. 여기는 반대로 `gold_pairs_v1.jsonl` 이라는 JSONL 데이터
+파일을 만들고 테스트가 그것을 읽는다. 형식이 갈린 이유는 중요하지 않다.
+**`evals/orchestration_emergency/gold_v1.jsonl`(위 21건을 포함한 응급 유형
 전체의 골든셋)은 만들지 않았다** — 이 문단이 원래 요구한 것이지만, 그 작업은 §6 로 미뤄진
 "골든셋 쏠림 보정" 그대로 남아 있다. 아래 쏠림 문제도 `gold_v1.jsonl` 을 만들 때 같이 푼다.
 
@@ -335,10 +339,12 @@ projection 이 그대로 실어 보낸다"고 한 것과 같은 처리다.
 **짝 대조군은 D-064 ② 가 거는 요구다.** 그 결정이 결합 규칙에 대해 이렇게 못 박았다 —
 *"추가할 때는 같은 의료 명사를 배경으로 쓰는 정상 훈련 질문을 **짝 대조군으로 함께
 고정한다**."* §3-1 의 AMBIG×URG 가 정확히 그 결합 규칙이므로 이 요구가 그대로 걸린다.
-`구토`·`설사`·`고열`·`탈수` **각각에 대해** 그 낱말을 배경으로만 쓰는 정상 질문을 골든셋에
-짝으로 넣는다 — 예: "밤새 계속 토해요"(응급) ↔ "사료 바꾸면 구토하는 애들이 있다던데
-천천히 바꾸는 방법이 있나요?"(정상). 형식은 #350 이 이미 세운
-`tests/test_medical_gate_pairs.py` 를 따르고 새로 만들지 않는다.
+`구토`·`설사`·`고열`·`탈수`·`기력` **각각에 대해** 그 낱말을 배경으로만 쓰는 정상 질문을
+골든셋에 짝으로 넣는다 — 예: "밤새 계속 토해요"(응급) ↔ "사료 바꾸면 구토하는 애들이
+있다던데 천천히 바꾸는 방법이 있나요?"(정상). 짝 대조군을 함께 고정한다는 아이디어는
+#350 이 세운 `tests/test_medical_gate_pairs.py` 가 선례고 새로 만든 것이 아니다 — 다만
+저장 형식은 그 파일의 코드 내 튜플이 아니라 `gold_pairs_v1.jsonl` 이라는 JSONL 데이터
+파일이다.
 
 지표는 둘이고 값이 다르다 — **미탐(응급인데 못 잡음)이 오탐보다 훨씬 비싸다.** 오탐은 병원
 목록이 뜨는 것이고 미탐은 기능이 없는 것이다. 이 비대칭을 골든셋 문서에 명시해, 나중에 누가

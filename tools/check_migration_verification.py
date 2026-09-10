@@ -209,6 +209,33 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 2026-09-09 (co-care, docs/co-care.md) — 공동 돌봄 표 둘 + 트리거 둘 + care_events
+        # 개명. 픽스처는 9/8 의 care_events 마이그레이션을 **그대로** 재사용한다 — 이 마이그레이션이
+        # 옛 app_user_id 를 전제로 RENAME 하므로, 스텁을 손으로 쓰면 그 전제가 갈릴 수 있다.
+        # 트리거를 지우는 변조 둘이 이 항목의 핵심이다 — app_users 는 탈퇴해도 안 지워지므로
+        # FK 로는 절대 정리가 안 돌고, 그 트리거가 유일한 방어선이다.
+        ('2026-09-09', 'pet_members',
+         APP_USERS_WITH_STATUS + PETS_ONLY + prerequisites('2026-09-08_care_events'),
+         'pet_members', [
+            'DROP TABLE pet_invites CASCADE',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pet_id_fkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_app_user_id_fkey',
+            'ALTER TABLE pet_members ALTER COLUMN joined_at DROP NOT NULL',
+            'DROP INDEX idx_pet_members_app_user',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_token_hash_key',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_pet_id_fkey',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_invited_by_fkey',
+            'DROP INDEX idx_pet_invites_pet',
+            'DROP TRIGGER pet_membership_owner_cleanup ON app_users',
+            'DROP TRIGGER pet_members_not_owner ON pet_members',
+            'ALTER TABLE care_events RENAME COLUMN actor_app_user_id TO app_user_id',
+            'ALTER TABLE care_events ALTER COLUMN actor_app_user_id SET NOT NULL',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey;'
+            ' ALTER TABLE care_events ADD CONSTRAINT care_events_actor_fkey'
+            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
         ('2026-09-08', 'walk_entry_contexts',
          WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
          'walk_entry_context_jobs', [

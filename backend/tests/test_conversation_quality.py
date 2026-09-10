@@ -208,3 +208,39 @@ def test_repair_applicability_is_per_target_turn_not_per_case():
     )
     assert applicability(observed, 1)["repair_success"] is False
     assert applicability(observed, 5)["repair_success"] is True
+
+
+# --- Task 4: 코드 기반 검사 ---
+
+
+def test_prior_turns_do_not_reach_inference_today():
+    from daengs_evals.conversation_quality.transcript import PRIOR_TURNS_REACH_INFERENCE
+
+    # 이 상수가 True 로 바뀌는 순간 두 축의 정답이 0 이 아니게 된다.
+    # 런타임이 바뀌면 여기부터 고친다.
+    assert PRIOR_TURNS_REACH_INFERENCE is False
+
+
+def test_repeat_count_counts_identical_assistant_messages():
+    from daengs_evals.conversation_quality.transcript import check_transcript
+
+    checks = check_transcript(
+        assistant_texts=["증상의 원인이나 병명은", "다른 답", "증상의 원인이나 병명은"]
+    )
+    assert checks.max_repeat_count == 2
+
+
+def test_refusal_source_is_ambiguous_for_the_off_topic_sentence():
+    from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
+    from daengs_evals.conversation_quality.transcript import check_transcript
+
+    checks = check_transcript(assistant_texts=[NO_CAPABILITY_MESSAGE])
+    # 문장만으로는 General reason=off_topic 인지 빈 계획 FAILED 인지 못 가린다
+    assert checks.refusal_source_ambiguous is True
+
+
+def test_scored_rows_exclude_empty_and_error_turns():
+    from daengs_evals.conversation_quality.transcript import check_transcript
+
+    checks = check_transcript(assistant_texts=["", "정상 답"])
+    assert checks.excluded_before_judging == {"not_answered": 1}

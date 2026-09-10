@@ -140,6 +140,62 @@ async def test_public_migration_repeated_enqueue_and_saved_provider(database, mo
         await db.rollback()
 
 
+async def test_commerce_migration_repeated_queue_and_provider_identity(database, monkeypatch):
+    from daengs_backend.config import settings
+
+    stem = "2026-09-09_walk_public_context_commerce"
+    migration = (ROOT / f"db/migrations/{stem}.sql").read_text(encoding="utf-8")
+    verifier = (ROOT / f"db/migrations/verify_{stem}.sql").read_text(encoding="utf-8")
+    async with database() as db:
+        raw = (await (await db.connection()).get_raw_connection()).driver_connection
+        await raw.execute((ROOT / "db/init/27_walk_public_context.sql").read_text(encoding="utf-8"))
+        await raw.execute(migration)
+        await raw.execute(migration)
+        await raw.execute(
+            (ROOT / "db/init/28_walk_commerce_context.sql").read_text(encoding="utf-8")
+        )
+        await raw.execute(verifier)
+        await db.commit()
+    monkeypatch.setattr(settings, "walk_public_context_enabled", True)
+    monkeypatch.setattr(settings, "walk_area_context_enabled", True)
+    await seed(database)
+    async with database() as db:
+        jobs = list(await db.scalars(select(WalkEntryContextJob)))
+        assert len(jobs) == 6 and {j.tag for j in jobs} == {
+            *repo.TAGS,
+            "space.address",
+            "space.commerce",
+        }
+        for job in jobs:
+            if job.tag != "space.commerce":
+                job.state = "completed"
+        await db.commit()
+    ticket = await service.take(database)
+    assert ticket["tag"] == "space.commerce"
+    assert await service.finish(
+        database,
+        ticket,
+        Collected(
+            "known",
+            payload={"format": "public-commerce-nearby-v1"},
+            provider="data-go-kr-commerce",
+            operation="registered-business-area-catalog",
+            retrieved_at=NOW.isoformat(),
+        ),
+    )
+    async with database() as db:
+        envelope = await db.scalar(select(WalkEntryContextEnvelope))
+        assert envelope.envelope["provenance"]["provider"] == "data-go-kr-commerce"
+        assert envelope.envelope["tags"] == ["space.commerce"]
+        raw = (await (await db.connection()).get_raw_connection()).driver_connection
+        await raw.execute(
+            "ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check"
+        )
+        with pytest.raises(Exception, match="tag constraint mismatch"):
+            await raw.execute(verifier)
+        await db.rollback()
+
+
 @pytest.mark.parametrize("sql_null", [False, True])
 async def test_durable_enqueue_idempotency_rollback_and_delete_purge(database, sql_null):
     walk, entry = await seed(database)

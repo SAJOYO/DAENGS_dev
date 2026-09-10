@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     walk_sgis_secret: SecretStr = SecretStr("")
     walk_public_data_key: SecretStr = SecretStr("")
     walk_park_catalog_path: str = ""
+    # Apply 28_walk_commerce_context.sql first; regional caches refresh separately.
+    walk_area_context_enabled: bool = False
+    walk_commerce_catalog_path: str = ""
+    walk_river_catalog_path: str = ""
 
     # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
     walk_entry_v2_enabled: bool = False

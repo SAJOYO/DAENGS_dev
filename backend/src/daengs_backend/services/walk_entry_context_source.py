@@ -87,7 +87,7 @@ async def collect(tag, content, *, client=None):
     point = pin.get("point") if pin else content.get("location")
     if point is None:
         return Collected("not_requested", "no_location")
-    if tag in {"space.address", "space.park"}:
+    if tag in {"space.address", "space.park", "space.commerce", "space.river"}:
         from daengs_backend.services.walk_public_context import collect_public
 
         return await collect_public(tag, point, pin)

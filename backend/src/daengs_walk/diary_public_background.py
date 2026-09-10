@@ -57,6 +57,10 @@ def project_public_background(saved, core):
         )
 
     try:
+        if saved.provider in {"data-go-kr-commerce", "egis-rivers"}:
+            from daengs_walk.diary_area_background import project_area
+
+            return project_area(saved, core, piece)
         if saved.provider == "sgis":
             if (
                 payload.get("format") != "sgis-dong-v1"

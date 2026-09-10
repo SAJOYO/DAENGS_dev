@@ -14,6 +14,10 @@ from daengs_backend.services.walk_sgis import sgis
 async def collect_public(tag, point, pin=None, *, transport=None):
     if not settings.walk_public_context_enabled:
         return Collected("not_requested", "provider_not_connected")
+    if tag in {"space.commerce", "space.river"}:
+        from daengs_backend.services.walk_area_context import collect_area
+
+        return await collect_area(tag, point, pin)
     # Legacy locations also carry captured_at/accuracy; the query identity is coordinates only.
     point = {"lat": point["lat"], "lng": point["lng"]}
     address = tag == "space.address"

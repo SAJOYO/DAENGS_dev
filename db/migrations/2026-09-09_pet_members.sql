@@ -3,6 +3,20 @@
 -- ---------------------------------------------------------------------
 -- 이미 도는 DB 에 손으로 적용한다. 버전 테이블이 없으므로 여러 번 돌려도 안전해야 한다.
 -- 아래(두 표 · 인덱스 · 두 트리거)는 db/init/24_pet_members.sql 과 글자 그대로 같다.
+--
+-- ⚠️ **머지보다 먼저 적용해야 한다.** 이 파일은 덧붙이기만 하지 않는다 —
+--    care_events.app_user_id 를 actor_app_user_id 로 **개명**한다. README 의 "옛 코드가 도는
+--    상태에서 먼저 적용해도 안전" 은 덧붙이기 전용 마이그레이션 이야기라 여기엔 그대로
+--    적용되지 않는다. 그래도 순서는 여전히 "적용 먼저, 머지 나중" 이다:
+--
+--      적용 먼저 → 지금 도는 backend 가 app_user_id 를 SELECT 해서 케어 로그만 500.
+--      머지 먼저 → 새 코드가 pet_members · actor_app_user_id 를 찾는다. 그 둘이 없으면
+--                 get_accessible 을 쓰는 **모든 경로**(케어 · 대화 · 보행 · 산책 기록)가 죽는다.
+--
+--    두 번째가 훨씬 넓다. 그리고 dev 머지는 곧 자동 배포다(deploy.yml).
+--    적용은 Actions 탭의 `db-migrate.yml` 로 한다 — ref 에 아직 머지 안 된 PR 브랜치를
+--    넣을 수 있고, verify=true 면 짝 파일이 적용 직후 스키마를 단언으로 검사한다.
+--    서버 PC 터미널에서 직접 하지 말 것 (db/migrations/README.md "함정 셋").
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS pet_members (
     pet_id      UUID NOT NULL REFERENCES pets(id)      ON DELETE CASCADE,

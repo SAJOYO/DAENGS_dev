@@ -1101,6 +1101,99 @@ def test_summarize_counts_rows_excluded_before_judging_as_unmeasured():
     assert summary.unmeasured.excluded_before_judging_slots == 6
 
 
+def _judgment(case_id="cq_x", turn_index=1, response_mode_fit=2, not_applicable=None):
+    from daengs_evals.conversation_quality.judge import TurnJudgment
+    from daengs_evals.conversation_quality.rubric import AxisScores
+
+    return TurnJudgment(
+        case_id=case_id,
+        turn_index=turn_index,
+        scores=AxisScores(response_mode_fit=response_mode_fit),
+        verdicts={},
+        not_applicable=not_applicable or ["context_continuity", "repair_success"],
+    )
+
+
+def test_dead_end_catches_a_fixed_redirect_that_still_scored_well_on_mode():
+    """이 변경의 요점 — `response_mode_fit` 이 실패로 안 잡는 막다른 길을 잡는다."""
+    from daengs_backend.orchestration.redirects import SCOPED_REDIRECT_MESSAGES
+    from daengs_evals.conversation_quality.report import summarize
+
+    fixed_text = SCOPED_REDIRECT_MESSAGES["off_topic"]
+    row = {
+        "case_id": "cq_x",
+        "turn_index": 1,
+        "message": fixed_text,
+        "answered_by_fake_adapter": False,
+    }
+    judgment = _judgment(response_mode_fit=2)  # 모드는 통과 판정
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=[row], judge_header=judge_header, judgments=[judgment]
+    )
+    assert summary.dead_end_count == 1
+    assert summary.dead_end_n == 1
+
+
+def test_dead_end_does_not_flag_a_non_fixed_answer_even_at_a_perfect_mode_score():
+    """부분 신호라는 것을 확인한다 — 고정 문구가 아니면 이 진단으로는 안 잡힌다."""
+    from daengs_evals.conversation_quality.report import summarize
+
+    row = {
+        "case_id": "cq_x",
+        "turn_index": 1,
+        "message": "산책은 하루 두 번이 좋습니다.",
+        "answered_by_fake_adapter": False,
+    }
+    judgment = _judgment(response_mode_fit=2)
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=[row], judge_header=judge_header, judgments=[judgment]
+    )
+    assert summary.dead_end_count == 0
+    assert summary.dead_end_n == 1
+
+
+def test_dead_end_does_not_double_count_a_response_mode_fit_failure():
+    """`response_mode_fit == 0` 인 고정 문구 답은 이미 `unusable_response_mode_fit` 이 잡는다 —
+    같은 실패를 `dead_end` 로 다시 세지 않는다."""
+    from daengs_backend.orchestration.redirects import SCOPED_REDIRECT_MESSAGES
+    from daengs_evals.conversation_quality.report import summarize
+
+    fixed_text = SCOPED_REDIRECT_MESSAGES["off_topic"]
+    row = {
+        "case_id": "cq_x",
+        "turn_index": 1,
+        "message": fixed_text,
+        "answered_by_fake_adapter": False,
+    }
+    judgment = _judgment(response_mode_fit=0)
+    lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(
+        lap_meta=lap_meta, lap_rows=[row], judge_header=judge_header, judgments=[judgment]
+    )
+    assert summary.dead_end_count == 0
+    assert summary.usability.unusable_response_mode_fit == 1
+
+
 def test_cli_score_computes_the_anchor_hash_and_passes_it_as_a_required_keyword(
     tmp_path, monkeypatch
 ):

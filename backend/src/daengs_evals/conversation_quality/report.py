@@ -35,6 +35,25 @@
 
 **적용 안 됨(0 이 아니다) 과 미측정을 섞지 않는다.** 이 셋 중 무엇에도 안 걸리는
 축-자리만 "측정됨"으로 표의 평균·분포에 들어간다.
+
+────────────────────────────────────────────────────────────────────────────
+`dead_end` — 부분 신호다, 전체가 아니다
+────────────────────────────────────────────────────────────────────────────
+처음 버전은 `response_mode_fit == 0` 을 셌다. 그런데 `applicability` 가 이 축을 늘
+True 로 두므로 그 수는 **축별 표의 0점 칸 · `usability.unusable_response_mode_fit`
+과 같은 값을 이름만 셋으로 부르는 것**이었다 — `rubric.py` 가 진짜 걱정한 경우(형식상
+다음 행동이 있어 `response_mode_fit` 이 2 여도 실제로는 막다른 병원 안내)는 애초에 그
+정의로는 못 걸렀다.
+
+지금 정의는 그 경우를 실제로 겨눈다: **답이 `daengs_backend.orchestration.redirects.
+SCOPED_REDIRECT_MESSAGES` 의 고정 리다이렉트 문구와 같고, 동시에 `response_mode_fit`
+이 0 이 아니다.** 모드는 괜찮다고 판정됐는데 사용자가 받은 것이 정형 문구 한 줄뿐인
+자리 — 그것이 "형식상 다음 행동은 있는데 상호작용으로는 막다른 길"의 확인 가능한
+부분집합이다.
+
+**그래도 부분 신호다.** 고정 문구가 아닌 답으로 똑같이 막다른 자리(모델이 매번 다른
+말로 같은 벽을 세우는 경우)는 이 신호로 못 잡는다 — 렌더 문구와 `Summary.dead_end_*`
+docstring 이 그것을 명시한다. 못 잡는 부분은 여전히 사람이 대화를 읽어야 한다.
 """
 
 from __future__ import annotations
@@ -50,6 +69,22 @@ from pydantic import BaseModel, ConfigDict
 
 from daengs_evals.conversation_quality.judge import AXES, TurnJudgment
 from daengs_evals.conversation_quality.rubric import derive_usability
+
+
+def _fixed_refusals() -> frozenset[str]:
+    """지연 읽기 — `judge.client` · `judge.judge_model` 과 같은 자리.
+
+    `daengs_backend.orchestration.redirects` 를 최상단에서 import 하면 그 모듈이 물고 있는
+    `daengs_backend.orchestration` 패키지 전체(→ `planner` → `semantic` → `config.settings`)가
+    딸려 와서, **`report` 모듈을 import 만 해도** DB 접속 정보 · 암호화 키가 있어야 뜬다 —
+    `report`·`compare` 는 "이미 있는 파일만 읽는다"는 이 모듈의 약속과 어긋난다. `summarize`
+    가 실제로 이 값을 쓸 때만 늦게 물어서, `render`·`render_compare` 처럼 이미 만든
+    `Summary` 만 다루는 자리는 그 설정 없이도 계속 동작한다.
+    """
+    from daengs_backend.orchestration.redirects import SCOPED_REDIRECT_MESSAGES
+
+    return frozenset(SCOPED_REDIRECT_MESSAGES.values())
+
 
 CARD = "#401"
 
@@ -143,8 +178,11 @@ class Summary(BaseModel):
     usability: UsabilityTally
     state_audit: StateAuditTally
     unmeasured: UnmeasuredTally
-    #: 판정 축이 아니라 파생 진단이다 — `response_mode_fit == 0` 인 턴 수 위에서만 잰다.
-    #: 병원 안내처럼 형식상 다음 행동이 있는 막다른 길은 이 수에 안 잡힌다 (`rubric.py` 참고).
+    #: 판정 축이 아니라 **부분** 파생 진단이다 — 답이 고정 리다이렉트 문구
+    #: (`daengs_backend.orchestration.redirects.SCOPED_REDIRECT_MESSAGES`)와 같은데
+    #: `response_mode_fit` 은 0 이 아닌 턴만 센다("모드는 괜찮다고 판정됐는데 사용자가
+    #: 받은 것은 정형 문구 한 줄"). **모델이 매번 다른 말로 세우는 막다른 길은 이 수로
+    #: 못 잡는다** — 위 모듈 docstring "`dead_end` — 부분 신호다" 참고.
     dead_end_count: int
     dead_end_n: int
     calibration: Literal["not_calibrated"] = "not_calibrated"
@@ -183,6 +221,13 @@ def summarize(
         for row in lap_rows
         if row.get("answered_by_fake_adapter") is True
     }
+    #: `dead_end` 가 "이 답이 고정 리다이렉트 문구였나"를 묻으려면 판정이 아니라 랩 행의
+    #: 실제 답 텍스트가 있어야 한다 — `TurnJudgment` 는 답 텍스트를 안 들고 있다.
+    messages_by_key = {
+        (str(row.get("case_id")), int(row.get("turn_index", -1))): str(row.get("message", ""))
+        for row in lap_rows
+    }
+    fixed_refusals = _fixed_refusals()
 
     axis_values: dict[str, list[int]] = {axis: [] for axis in AXES}
     usable = unusable_safety = unusable_rmf = unusable_repair = 0
@@ -219,9 +264,15 @@ def summarize(
         elif gate.reason == "repair_success":
             unusable_repair += 1
 
-        if judgment.scores.response_mode_fit is not None:
+        # `response_mode_fit` 은 `applicability` 가 늘 True 로 두는 축이라 여기서 세는
+        # 분모는 사실상 "판정된(가짜 아닌) 턴 수" 다 — `axis_stats['response_mode_fit'].n`
+        # 과 값이 같아 보여도 우연이 아니라 정의가 같기 때문이고, 이 진단이 새로 재는 것은
+        # 분자(정형 문구 + 모드 통과) 쪽이다.
+        rmf = judgment.scores.response_mode_fit
+        if rmf is not None:
             dead_end_n += 1
-            if judgment.scores.response_mode_fit == 0:
+            message = messages_by_key.get(key, "").strip()
+            if message in fixed_refusals and rmf != 0:
                 dead_end_count += 1
 
         if judgment.state_audit is not None:
@@ -251,7 +302,10 @@ def summarize(
         cases_sha256=str(lap_meta.get("cases_sha256", "")),
         judge_model=str(judge_header.get("judge_model", "")),
         prompt_version=int(judge_header.get("prompt_version", 0)),
-        anchor_set=str(judge_header.get("anchor_set", lap_meta.get("anchor_set", ""))),
+        # `judge.header()` 가 `anchor_set` 을 늘 채워 쓴다 — `lap_meta` 로의 대체 경로는
+        # 안 둔다. 대체 경로를 두면 판정 헤더가 비어 있어도 조용히 랩 헤더 값으로 넘어가고,
+        # 그러면 "어느 앵커로 통과했는지" 를 판정 파일이 스스로 말 못 하는 자리가 하나 생긴다.
+        anchor_set=str(judge_header.get("anchor_set", "")),
         adapter_mode=str(lap_meta.get("adapter_mode", "")),
         n_turns_total=n_turns_total,
         n_turns_judged=len(judgments),
@@ -361,25 +415,40 @@ def render(summary: Summary) -> str:
 
     lines.append("## 미측정 비율")
     lines.append("")
+    lines.append(
+        f"  - 판정 전 제외: {summary.unmeasured.excluded_before_judging_slots}"
+        " (빈 답변 · NOT_REACHED — judge 를 아예 안 불렀다)"
+    )
+    lines.append(
+        f"  - 가짜 어댑터 셀: {summary.unmeasured.fake_adapter_slots}"
+        " (판정은 됐지만 자리표시자를 채점한 것)"
+    )
+    lines.append(
+        f"  - 해당 없는 축: {summary.unmeasured.not_applicable_slots}"
+        " (잴 수 없어서 애초에 안 불렀다 — 실패가 아니다)"
+    )
     ratio = summary.unmeasured.ratio
     ratio_text = "N/A" if ratio is None else f"{ratio:.2%}"
     lines.append(
         f"- 미측정 {summary.unmeasured.numerator} / {summary.unmeasured.denominator} "
-        f"({ratio_text}) — 분모는 턴 {summary.n_turns_total}개 × 축 3"
+        f"({ratio_text}) — 분모는 턴 {summary.n_turns_total}개 × 축 3. ⚠ 이 하나의 비율은"
+        " 위 세 가지 서로 다른 사정(judge 가 안 불렀다 · 자리표시자였다 · 애초에 해당 없다)을"
+        " 섞은 값입니다 — 위 항목별 수를 먼저 보고, 이 비율만 따로 인용하지 마세요."
     )
-    lines.append(f"  - 판정 전 제외: {summary.unmeasured.excluded_before_judging_slots}")
-    lines.append(f"  - 가짜 어댑터 셀: {summary.unmeasured.fake_adapter_slots}")
-    lines.append(f"  - 해당 없는 축: {summary.unmeasured.not_applicable_slots}")
     lines.append("")
 
-    lines.append("## dead_end — 파생 진단 (축 아님)")
+    lines.append("## dead_end — 부분 파생 진단 (축 아님)")
     lines.append("")
     lines.append(
-        f"- {summary.dead_end_count} / {summary.dead_end_n} 턴이 `response_mode_fit == 0` 입니다."
+        f"- {summary.dead_end_count} / {summary.dead_end_n} 턴이 고정 리다이렉트 문구"
+        "(`daengs_backend.orchestration.redirects.SCOPED_REDIRECT_MESSAGES`)로 답했으면서"
+        " `response_mode_fit` 은 0 이 아니었습니다 — 모드는 괜찮다고 판정됐는데 사용자가"
+        " 받은 것은 정형 문구 한 줄뿐이었던 자리입니다."
     )
     lines.append(
-        "  ⚠ 이것은 **진단**이지 축이 아닙니다 — 병원 안내처럼 형식상 다음 행동이 있는 막다른"
-        " 길(`response_mode_fit` 이 2 여도 실제로는 대화가 끝나는 경우)은 이 수로 못 잡습니다."
+        "  ⚠ 이것은 **진단**이지 축이 아니고, 그나마도 **부분 신호**입니다 — 병원 안내처럼"
+        " 형식상 다음 행동이 있는 막다른 길 중 **고정 문구가 아닌 것**(모델이 매번 다른 말로"
+        " 같은 벽을 세우는 경우)은 이 수로 못 잡습니다."
     )
     lines.append("")
 
@@ -485,21 +554,34 @@ def render_compare(*, before: Summary, after: Summary) -> str:
 
     lines.append("## 미측정 비율 — before / after")
     lines.append("")
+    lines.append(
+        f"  - 판정 전 제외: {before.unmeasured.excluded_before_judging_slots} → "
+        f"{after.unmeasured.excluded_before_judging_slots}"
+    )
+    lines.append(
+        f"  - 가짜 어댑터 셀: {before.unmeasured.fake_adapter_slots} → "
+        f"{after.unmeasured.fake_adapter_slots}"
+    )
+    lines.append(
+        f"  - 해당 없는 축: {before.unmeasured.not_applicable_slots} → "
+        f"{after.unmeasured.not_applicable_slots}"
+    )
     b_ratio, a_ratio = before.unmeasured.ratio, after.unmeasured.ratio
     b_txt = "N/A" if b_ratio is None else f"{b_ratio:.2%}"
     a_txt = "N/A" if a_ratio is None else f"{a_ratio:.2%}"
     lines.append(
-        f"- before: {before.unmeasured.numerator}/{before.unmeasured.denominator} ({b_txt})"
+        f"- 미측정 비율(세 사정을 섞은 값, 위 항목별 수를 먼저 보세요): "
+        f"before {before.unmeasured.numerator}/{before.unmeasured.denominator} ({b_txt}) · "
+        f"after {after.unmeasured.numerator}/{after.unmeasured.denominator} ({a_txt})"
     )
-    lines.append(f"- after: {after.unmeasured.numerator}/{after.unmeasured.denominator} ({a_txt})")
     lines.append("")
 
-    lines.append("## dead_end — 파생 진단, before / after")
+    lines.append("## dead_end — 부분 파생 진단, before / after")
     lines.append("")
     lines.append(
         f"- before: {before.dead_end_count}/{before.dead_end_n} · "
         f"after: {after.dead_end_count}/{after.dead_end_n}"
-        " — 축이 아니라 진단입니다."
+        " — 축이 아니라 진단이고, 고정 리다이렉트 문구인 경우만 잡는 부분 신호입니다."
     )
     lines.append("")
 

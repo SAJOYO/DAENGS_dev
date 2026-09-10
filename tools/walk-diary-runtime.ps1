@@ -114,8 +114,17 @@ catch {
 Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'up', '-d', '--no-deps', 'walk-context-worker')
 $ready = $false
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
-    & docker exec daengs-walk-context-worker sh -c 'uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app inspect ping --destination="walk-context@$HOSTNAME" --timeout=2' *> $null
-    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+    # Windows PowerShell turns native stderr into ErrorRecords, even when redirected.
+    # A missing Celery binary while uv sync is running is an expected retry here only.
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & docker exec daengs-walk-context-worker sh -c 'uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app inspect ping --destination="walk-context@$HOSTNAME" --timeout=2' *> $null
+        $pingExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($pingExit -eq 0) { $ready = $true; break }
     Start-Sleep -Seconds 3
 }
 if (-not $ready) { throw 'Walk worker did not become ready; web was not replaced' }

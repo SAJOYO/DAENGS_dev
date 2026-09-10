@@ -7,11 +7,12 @@
 | [cases.v1.jsonl](cases.v1.jsonl) | 고유 ID, 초기 상태, 입력/이벤트 순서, 통과 기준의 원본 |
 | [fixtures.v1.json](fixtures.v1.json) | 고정된 합성 장소 후보와 경계 데이터 |
 | [run-record.example.json](run-record.example.json) | 실행 기록 형식 예시. 실제 실행 결과가 아님 |
-| `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | 향후 각 실행의 metadata.json, observations.jsonl, report.md |
+| [transfer.v1.jsonl](transfer.v1.jsonl) | 첫 관측 뒤 작성한 별도 전이 검사 4개. 원래 23개와 합산하지 않음 |
+| `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
 `cases.v1.jsonl`은 시나리오 **명세**다. `setup`은 HTTP 요청이나 FilterState의 직접 직렬화가 아니며,
-이 값을 실제 상태/fixture로 바꾸는 평가 어댑터는 아직 연결하지 않았다.
+이 값을 실제 상태/fixture로 바꾸는 어댑터는 `src/daengs_evals/place_conversation/`에 있다.
 예를 들어 `parking=required_true`는 원본의 의미를 나타내며 production enum이 아니다.
 
 ## 원본 읽기
@@ -29,7 +30,49 @@ $cases | Where-Object id -eq 'PC-E08' | ConvertTo-Json -Depth 20
 명시하지 않은 사실은 미상이다. 이 합성 후보는 LLM/상태 검증용으로, 실제 공간 SQL 정확도의 증거가 아니다.
 스냅샷은 해당 초기 조건을 적용한 결과로 만들고, source+ref를 유지하며 distance_m 오름차순으로 표시한다.
 
-## 현재 실행 가능한 관련 테스트
+## 반복 평가 실행
+
+backend 디렉터리, Python 3.12 / `uv sync --frozen --extra place` 환경에서 실행한다.
+명령마다 고유한 실행 폴더를 생성하며 이전 관측을 덮어쓰지 않는다.
+
+~~~powershell
+# 목록만 확인. 모델 호출 없음
+uv run python -m daengs_evals.place_conversation.runner
+# 실제 Gemini + 현재 서버 prepare/answer + 합성 검색. 키 파일은 저장소 밖에 둔다
+uv run python -m daengs_evals.place_conversation.runner --live --repeat 3 --key-file C:\path\to\.env
+# 실패 범위만 재검사
+uv run python -m daengs_evals.place_conversation.runner --live --ids PC-E05,PC-E08 --repeat 3 --key-file C:\path\to\.env
+# 프롬프트만 / 프롬프트와 확인 정책·대기 원문을 함께 바꾸는 연구 변형
+uv run python -m daengs_evals.place_conversation.runner --live --variant prompt-only --ids PC-E05,PC-E06,PC-E07,PC-E08,PC-E09,PC-E11 --key-file C:\path\to\.env
+uv run python -m daengs_evals.place_conversation.runner --live --variant policy-context --ids PC-E05,PC-E06,PC-E07,PC-E08,PC-E09,PC-E11 --key-file C:\path\to\.env
+# 별도 전이 입력. 원래 평가셋 점수에 섞지 않는다
+uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/transfer.v1.jsonl --variant policy-context --key-file C:\path\to\.env
+# 저장된 원본 계획 재생 및 거짓 답변 주입. 모델 호출 없음
+uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run>
+~~~
+
+`--model` 기본값은 기존 live 스모크와 같은 `gemini-3.1-flash-lite`다.
+`--interval 5`는 호출 사이 최소 간격이며 모델 자체 지연과 구별한다. 오류는 조용히 재시도하지
+않고 기록한다. 키 파일은 `GEMINI_API_KEY=...` 또는 기존 `gemini: ...` 형식을 읽으며,
+키 경로/값·HTTP 헤더·예외 본문을 결과에 저장하지 않는다.
+
+대화형 20개는 모델+엔진으로 실행한다. PC-E16은 계획을 거친 경로와 답변층 직접 호출을 별도로
+남긴다. HTTP 경합 3개는 이 CLI에서 `not_run`으로 표기하고 다음 통제 테스트로 검증한다.
+
+~~~powershell
+uv run pytest -q tests/place/api/test_conversation_evaluation.py --junitxml=evals/place_conversation/runs/<run>/controlled.xml -o junit_family=xunit1
+uv run pytest -q tests/place/conversation/test_evaluation.py
+~~~
+
+JUnit의 scenario_id/trace 속성에 경합별 확정·복구 상태를 남긴다. 이는 in-process HTTP와
+메모리 세션 저장소 검증이며 실제 Redis 원자성, 네트워크, 앱 화면 검증을 대신하지 않는다.
+
+자동 기준이 모두 맞아도 전체 `pass`로 만들지 않는다. 사람이 실제 확인 질문, 원본/제공 답변,
+확정 필터를 읽고 `reviews.jsonl`에 근거 충실도와 작업 완료 여부를 따로 기록한다.
+관측의 상태는 변경하지 않고, 리포트에서 관측과 검토를 합친다.
+연구용 `PolicyGemini`와 OR 표현식 컴파일러는 운영 코드가 아니며 채택 결정도 아니다.
+
+## 기존 관련 테스트
 
 2026-09-10 코드에서 확인한 기존 테스트다. **아래 명령은 새 23개 시나리오 전체 실행 명령이 아니다.**
 케이스의 existing_tests는 관련 범위 연결이며, coverage_note를 함께 읽는다.

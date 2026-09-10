@@ -32,11 +32,18 @@ def test_server_commands_and_preflight_gate(tmp_path, action, reject, shell):
 $env:GEMINI_API_KEY = 'local-command-test'
 $global:rolloutCalls = [Collections.Generic.List[object]]::new()
 $global:rejectCheck = $Reject -eq 'true'
+$global:firstPing = $true
+function global:Start-Sleep { param([int]$Seconds) }
 function global:docker {
     param([Parameter(ValueFromRemainingArguments=$true)][string[]]$DockerArgs)
     $global:rolloutCalls.Add(@($DockerArgs))
     $global:LASTEXITCODE = 0
     if ($DockerArgs[0] -eq 'ps') { Write-Output 'daengs-backend' }
+    if ($DockerArgs[0] -eq 'exec' -and $global:firstPing) {
+        $global:firstPing = $false
+        Write-Error 'worker is still installing'
+        $global:LASTEXITCODE = 1
+    }
     if ($global:rejectCheck -and 'daengs_backend.cli.walk_runtime_check' -in $DockerArgs) {
         $global:LASTEXITCODE = 1
     }
@@ -62,6 +69,7 @@ catch { $failed = $true }
     changes = [call for call in calls if "up" in call or "stop" in call]
     assert all("--no-deps" in call for call in changes if "up" in call)
     if action == "Start" and not reject:
+        assert len([call for call in calls if call[0] == "exec"]) == 2
         changed = public.read_text(encoding="utf-8")
         assert changed.count("DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true") == 1
         assert "DAENGS_WALK_PHOTO_METADATA_ENABLED=true" in changed

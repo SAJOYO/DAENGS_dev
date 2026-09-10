@@ -40,7 +40,7 @@ class Searcher:
         self.error = False
         self.rows = [place("first"), place("second", distance=200), place("cafe", kind="cafe")]
 
-    async def __call__(self, db, state):
+    async def __call__(self, db, state, *, omitted=()):
         self.calls.append(state)
         if self.error:
             raise SQLAlchemyError("private database address")
@@ -49,7 +49,9 @@ class Searcher:
             rows = [
                 row
                 for row in self.rows
-                if row.match.kind == kind and evaluate(state, kind, row.facts.parking, None) is True
+                if row.match.kind == kind
+                and row.key not in omitted
+                and evaluate(state, kind, row.facts.parking, None) is True
             ]
             limit = state.result_policy.limit_per_kind
             groups.append(

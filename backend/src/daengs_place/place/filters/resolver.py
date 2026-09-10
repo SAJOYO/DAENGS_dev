@@ -1,5 +1,6 @@
 """Bounded filters over the existing canonical facility merge, before any LIMIT."""
 
+import json
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -36,6 +37,8 @@ async def resolve_filtered_facilities(
     db: AsyncSession,
     state: FilterState,
     kind: str,
+    *,
+    omitted=(),
 ) -> tuple[list[FacilityOut], list[FacilityOut], bool, bool]:
     compiled = compile_filter_sql(state)
     prefer_parking = any(kind in p.scope_kinds for p in state.preferences)
@@ -60,7 +63,11 @@ async def resolve_filtered_facilities(
     SELECT evaluated.*,
            row_number() OVER (PARTITION BY filter_value ORDER BY {order}) AS filter_rank
     FROM evaluated
-    WHERE filter_value IS TRUE OR (:include_unknown AND filter_value IS NULL)
+    WHERE (filter_value IS TRUE OR (:include_unknown AND filter_value IS NULL))
+      AND NOT EXISTS (
+          SELECT 1 FROM jsonb_to_recordset(CAST(:omitted AS jsonb)) AS omit(source text, ref text)
+          WHERE omit.source = evaluated.source AND omit.ref = evaluated.source_ref
+      )
 )
 SELECT * FROM ranked
 WHERE filter_rank <= CASE WHEN filter_value IS TRUE THEN :matched_limit + 1
@@ -85,6 +92,7 @@ ORDER BY filter_value DESC NULLS LAST, filter_rank
                 "include_unknown": state.unknown_policy == "separate",
                 "matched_limit": policy.limit_per_kind,
                 "uncertain_limit": policy.uncertain_limit_per_kind,
+                "omitted": json.dumps([key.model_dump() for key in omitted]),
             },
         )
     ).all()

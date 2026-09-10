@@ -1,0 +1,200 @@
+{
+  "observed_turns": 63,
+  "reviewed_turns": 63,
+  "turn_statuses": {
+    "pass": 54,
+    "fail": 9
+  },
+  "case_repetitions": [
+    {
+      "case_id": "EX01",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX01",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX01",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX02",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX02",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX02",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX03",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX03",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX03",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX07",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX07",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX07",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX08",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX08",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX08",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX09",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX09",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX09",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX10",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX10",
+      "variant": "production-exploration-v1",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "EX10",
+      "variant": "production-exploration-v1",
+      "repetition": 3,
+      "status": "fail"
+    }
+  ],
+  "provider_calls": 54,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 2504.0,
+  "reported_usage": {
+    "total_input_tokens": 164778,
+    "total_output_tokens": 1605,
+    "total_tokens": 166383
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

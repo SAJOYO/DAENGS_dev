@@ -5,6 +5,7 @@ import json
 import httpx
 
 from daengs_place.place.conversation.compiler import canonical
+from daengs_place.place.conversation.context import screen_context
 from daengs_place.place.conversation.intent import Interpretation, PendingDecision
 from daengs_place.place.conversation.static_tools import (
     PENDING_TOOL,
@@ -51,7 +52,6 @@ class GeminiConversation:
                 "tools": [TURN_TOOL],
                 "input": json.dumps(
                     {
-                        "query": request.query,
                         "current_state": canonical(state.filters.model_dump(mode="json")),
                         "history": [turn.model_dump(mode="json") for turn in state.history],
                         "pending_question": state.pending_question,
@@ -59,6 +59,8 @@ class GeminiConversation:
                         if request.visible_selected or state.selected
                         else None,
                         "visible_order": [key.model_dump() for key in request.visible_order],
+                        "screen": screen_context(request),
+                        "query": request.query,
                     },
                     ensure_ascii=False,
                 ),

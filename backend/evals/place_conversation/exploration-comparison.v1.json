@@ -1,0 +1,329 @@
+{
+  "runs": [
+    {
+      "run": "20260910T095337Z-9a46dc2-c47a1416b4",
+      "provider_calls": 54,
+      "provider_errors": 0,
+      "axes": {
+        "reviewed_observations": 63,
+        "live_chat_turns": 54,
+        "manual_turns": 9,
+        "state_and_reference_acceptance_chat": {
+          "pass": 48,
+          "fail": 6
+        },
+        "task_completion_chat": {
+          "pass": 45,
+          "fail": 9
+        },
+        "answer_faithfulness_to_receipt_chat": {
+          "pass": 54
+        },
+        "response_usefulness_chat": {
+          "pass": 45,
+          "fail": 9
+        },
+        "limits": "Fixed synthetic 10-case dataset, 3 repeats; no general accuracy estimate. Informed by the baseline failures, not a held-out comparison. EX07/08 remain conversational gaps even when mutation guards pass."
+      }
+    },
+    {
+      "run": "20260910T100819Z-5634f9f-e99817be7d",
+      "provider_calls": 54,
+      "provider_errors": 0,
+      "axes": {
+        "reviewed_observations": 63,
+        "live_chat_turns": 54,
+        "manual_turns": 9,
+        "state_and_reference_acceptance_chat": {
+          "pass": 51,
+          "fail": 3
+        },
+        "task_completion_chat": {
+          "pass": 45,
+          "fail": 9
+        },
+        "answer_faithfulness_to_receipt_chat": {
+          "pass": 54
+        },
+        "response_usefulness_chat": {
+          "pass": 45,
+          "fail": 9
+        },
+        "limits": "Fixed synthetic 10-case dataset, 3 repeats; no general accuracy estimate. Informed by the baseline failures, not a held-out comparison. EX07/08 remain conversational gaps even when mutation guards pass."
+      }
+    },
+    {
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "provider_calls": 47,
+      "provider_errors": 10,
+      "axes": {
+        "reviewed_observations": 46,
+        "live_chat_turns": 37,
+        "blocked_observations": 10,
+        "not_run_observations": 7,
+        "manual_turns": 9,
+        "state_and_reference_acceptance_chat": {
+          "pass": 37
+        },
+        "task_completion_chat": {
+          "pass": 34,
+          "fail": 3
+        },
+        "answer_faithfulness_to_receipt_chat": {
+          "pass": 37
+        },
+        "response_usefulness_chat": {
+          "pass": 34,
+          "fail": 3
+        },
+        "limits": "Fixed synthetic 10-case dataset, 3 repeats; no general accuracy estimate. Informed by the baseline failures, not a held-out comparison. EX07/08 remain conversational gaps even when mutation guards pass."
+      }
+    },
+    {
+      "run": "20260910T102130Z-f6d9782-9418a701f9",
+      "provider_calls": 3,
+      "provider_errors": 1,
+      "axes": {
+        "reviewed_observations": 2,
+        "live_chat_turns": 2,
+        "blocked_observations": 1,
+        "not_run_observations": 3,
+        "manual_turns": 0,
+        "state_and_reference_acceptance_chat": {
+          "pass": 2
+        },
+        "task_completion_chat": {
+          "fail": 1,
+          "pass": 1
+        },
+        "answer_faithfulness_to_receipt_chat": {
+          "pass": 2
+        },
+        "response_usefulness_chat": {
+          "fail": 1,
+          "pass": 1
+        },
+        "limits": "Fixed synthetic dataset: 3 cases, 1 repeat(s) in this run; no general accuracy estimate. Informed by baseline failures, not held-out. EX07/08 remain conversational gaps even when mutation guards pass."
+      }
+    },
+    {
+      "run": "20260910T102327Z-38eb856-45aa0ead9f",
+      "provider_calls": 7,
+      "provider_errors": 6,
+      "axes": {
+        "reviewed_observations": 4,
+        "live_chat_turns": 1,
+        "blocked_observations": 6,
+        "not_run_observations": 8,
+        "manual_turns": 3,
+        "state_and_reference_acceptance_chat": {
+          "pass": 1
+        },
+        "task_completion_chat": {
+          "pass": 1
+        },
+        "answer_faithfulness_to_receipt_chat": {
+          "pass": 1
+        },
+        "response_usefulness_chat": {
+          "pass": 1
+        },
+        "limits": "Fixed synthetic dataset: 7 cases, 1 repeat(s) in this run; no general accuracy estimate. Informed by baseline failures, not held-out. EX07/08 remain conversational gaps even when mutation guards pass."
+      }
+    }
+  ],
+  "all_run_provider_calls": 165,
+  "all_run_provider_errors": 17,
+  "final_source_hashes_equal_across_original_and_replays": true,
+  "case_and_fixture_hashes_equal_across_all_runs": true,
+  "final_planned_case_repetitions": 30,
+  "final_complete_case_repetitions_including_replays": 23,
+  "final_case_repetition_statuses_including_replays": {
+    "pass": 19,
+    "blocked": 7,
+    "fail": 4
+  },
+  "final_slots": [
+    {
+      "case_id": "EX01",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX01",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX01",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX02",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX02",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX02",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX03",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX03",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX03",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX04",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX05",
+      "repetition": 3,
+      "run": "20260910T102327Z-38eb856-45aa0ead9f",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX06",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX07",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "fail"
+    },
+    {
+      "case_id": "EX07",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "fail"
+    },
+    {
+      "case_id": "EX07",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX08",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "fail"
+    },
+    {
+      "case_id": "EX08",
+      "repetition": 2,
+      "run": "20260910T102130Z-f6d9782-9418a701f9",
+      "status": "fail"
+    },
+    {
+      "case_id": "EX08",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX09",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX09",
+      "repetition": 2,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX09",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX10",
+      "repetition": 1,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX10",
+      "repetition": 2,
+      "run": "20260910T102130Z-f6d9782-9418a701f9",
+      "status": "pass"
+    },
+    {
+      "case_id": "EX10",
+      "repetition": 3,
+      "run": "20260910T101455Z-adcf019-de94bda7ca",
+      "status": "blocked"
+    }
+  ],
+  "note": "Only whole-case completed replays fill an original incomplete slot. Raw failed observations remain unchanged. Partial successful prefixes are not whole-case completions. Replays are adaptive and are not a held-out or general accuracy estimate."
+}

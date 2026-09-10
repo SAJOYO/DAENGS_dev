@@ -1,0 +1,14 @@
+{
+  "observations_sha256": "42c7883162cf59ebaaf0134460f486274feb543de2ce2e7233b42cc9816e85c4",
+  "source_hashes_match_after_run": true,
+  "recorded_source_count": 126,
+  "state_continuity": true,
+  "observations": 63,
+  "provider_calls": 54,
+  "statuses": {
+    "review_required": 57,
+    "fail": 6
+  },
+  "behaviorally_identical_repeats": true,
+  "provider_inputs_contain_no_oracle_fields": true
+}

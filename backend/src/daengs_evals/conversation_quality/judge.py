@@ -100,7 +100,7 @@ RUBRIC = "conversation_quality"
 #: 읽는 사람이 어느 쪽 순서로 읽어야 하는지 모른다.
 AXES: tuple[str, ...] = ("response_mode_fit", "context_continuity", "repair_success")
 
-#: 앵커 통과 기록의 파일 이름. **Task 7(`anchors.py`)이 이 규약을 그대로 써서 파일을 만든다** —
+#: 앵커 통과 기록의 파일 이름. **`anchors.py` 가 이 규약을 그대로 써서 파일을 만든다** —
 #: 만드는 쪽과 읽는 쪽이 갈리면 게이트가 조용히 열린 채로 남는다. 모델 · 앵커 세트 ·
 #: 프롬프트 버전 셋 중 하나만 바뀌어도 다른 파일이 되는 것이 요점이다: 셋 중 무엇이 바뀌든
 #: 판정기는 다른 물건이라 앵커를 다시 통과해야 한다.
@@ -328,8 +328,9 @@ PROMPT_REPAIR_SUCCESS = """너는 반려견 상담 대화의 채점자다.
 {answer}
 """
 
-#: 축 이름 → 프롬프트. **공개 인터페이스다** — Task 7 의 위생 검사가 "앵커 본문이 프롬프트에
-#: 박혀 있지 않은가"를 여기서 읽는다. 자기 앵커에 맞춰진 판정기는 아무것도 못 재기 때문이다.
+#: 축 이름 → 프롬프트. **공개 인터페이스다** — `anchors.py` 의 위생 검사(`test_no_anchor_text_
+#: appears_in_any_axis_prompt`)가 "앵커 본문이 프롬프트에 박혀 있지 않은가"를 여기서 읽는다.
+#: 자기 앵커에 맞춰진 판정기는 아무것도 못 재기 때문이다.
 PROMPTS: dict[str, str] = {
     "response_mode_fit": PROMPT_RESPONSE_MODE_FIT,
     "context_continuity": PROMPT_CONTEXT_CONTINUITY,
@@ -462,8 +463,8 @@ def build_payload(case: ConversationCase, row: Mapping[str, Any], axis: str) -> 
         #   프롬프트가 이 비트를 0 점 규칙으로
         #   양방향에 쓰므로, 이 세트만으로는 판정기가 답변을 재는지 이 비트를 되읽는지 갈리지
         #   않는다. 그렇다고 빼면 스펙이 금지한 "입력이 필요 없었는데 안 물었다고 감점" 이
-        #   되살아나므로 **칸은 유지하고**, 가르는 일은 앵커가 한다 (Task 7: `need=True` 인데
-        #   ASK 가 답이 아닌 앵커와 그 역을 넣는다).
+        #   되살아나므로 **칸은 유지하고**, 가르는 일은 앵커가 한다 (`anchors.py`:
+        #   `need=True` 인데 ASK 가 답이 아닌 앵커와 그 역을 넣는다).
         #
         # ⚠ 이 비트는 **케이스 단위**라 모든 대상 턴에 같은 값이 간다 —
         #   `cq_observed_wellness_repair_01` 은 턴 1 에도 턴 7 에도 «예»가 붙는다. 턴마다

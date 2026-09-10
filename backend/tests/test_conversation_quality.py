@@ -97,7 +97,7 @@ def test_the_frozen_277_question_set_is_untouched():
 
 def test_repair_applicable_needs_only_one_target_turn_at_or_after_index_two():
     # repair_applicable 은 "어느 대상 턴에선가 복구가 성립한다"는 뜻이지 모든 대상 턴이
-    # 복구 대상이라는 뜻이 아니다 — 턴별 적용가능성은 판정 시점(Task 3)의 일이다.
+    # 복구 대상이라는 뜻이 아니다 — 턴별 적용가능성은 판정 시점(`rubric.applicability`)의 일이다.
     with pytest.raises(ValidationError):
         _case(target_turns=[1], repair_applicable=True)
 
@@ -114,7 +114,7 @@ def test_repair_applicable_needs_only_one_target_turn_at_or_after_index_two():
     assert case.target_turns == [1, 3]
 
 
-# --- Task 3: 루브릭 · 적용가능성 · 사용성 게이트 ---
+# --- 루브릭 · 적용가능성 · 사용성 게이트 (rubric.py) ---
 
 
 def test_safety_failure_makes_the_turn_unusable_regardless_of_other_axes():
@@ -195,7 +195,7 @@ def test_superficial_profile_mention_does_not_count_as_state_use():
 
 
 def test_repair_applicability_is_per_target_turn_not_per_case():
-    # Task 2 의 관찰 케이스: target_turns=[1, 5, 7], repair_applicable=True.
+    # 관찰 케이스: target_turns=[1, 5, 7], repair_applicable=True.
     # 턴 1 은 앞에 복구할 assistant 턴이 없어 repair_success 의 대상이 될 수 없다 —
     # 케이스 단위로 답하면 턴 1 에서도 복구를 재려 하거나(오판) 턴 1 을 통째로
     # 빼야 한다(스펙의 헤드라인 실패를 놓친다). 그래서 적용가능성은 턴마다 갈린다.
@@ -210,7 +210,7 @@ def test_repair_applicability_is_per_target_turn_not_per_case():
     assert applicability(observed, 5)["repair_success"] is True
 
 
-# --- Task 4: 코드 기반 검사 ---
+# --- 코드 기반 검사 (transcript.py) ---
 
 
 def test_prior_turns_do_not_reach_inference_today():
@@ -246,7 +246,7 @@ def test_scored_rows_exclude_empty_and_error_turns():
     assert checks.excluded_before_judging == {"not_answered": 1}
 
 
-# --- Task 5: 드라이버 이음매와 랩 수집 ---
+# --- 드라이버 이음매와 랩 수집 (drivers.py · collect.py) ---
 
 
 def test_stateless_driver_sends_only_the_current_query():
@@ -293,7 +293,7 @@ def test_collect_makes_no_live_call_in_tests():
     assert "openai" not in m.__dict__
 
 
-# --- Task 5 fixes: 코디네이터 리뷰 반영 ---
+# --- 드라이버 이음매·랩 수집 리뷰 반영 ---
 
 
 def test_answered_by_fake_adapter_real_mode_is_never_fake():
@@ -379,7 +379,7 @@ def test_route_plan_dump_drops_the_dog_profile_payload():
     assert dumped["capabilities"] == ["general"]
 
 
-# --- Task 6: 세 축 판정기 ---
+# --- 세 축 판정기 (judge.py) ---
 
 #: 실제 핀(`settings.openai_judge_model`)을 테스트에 박지 않는다 — 핀이 바뀌면 이 파일이
 #: 함께 빨개질 이유가 없고, 무엇보다 **테스트에서 진짜 모델 이름을 쓰면** 나중에 실제
@@ -424,7 +424,7 @@ def _repair_case():
 
 
 def _lap_rows(case, reply="산책은 하루 두 번이 좋습니다."):
-    """Task 5 의 산출물을 그대로 판정기에 먹인다 — 손으로 만든 dict 를 쓰면 랩 파일의
+    """랩 수집(collect.target_turn_row)의 산출물을 그대로 판정기에 먹인다 — 손으로 만든 dict 를 쓰면 랩 파일의
     실제 모양이 바뀌어도 이 테스트가 안 깨진다."""
     from daengs_evals.conversation_quality.collect import target_turn_row
     from daengs_evals.conversation_quality.drivers import FakeDriver
@@ -580,7 +580,7 @@ def test_state_audit_comes_from_the_judge_not_from_a_score(tmp_path):
     assert audit.relevant_state_available is True
     assert audit.relevant_state_used is False
     assert audit.unsupported_or_superficial_personalization is True
-    # 서수 하나로 뭉개지 않고 판정 파일에 그대로 남아야 Task 8 이 사실 집계를 낼 수 있다
+    # 서수 하나로 뭉개지 않고 판정 파일에 그대로 남아야 report.summarize 가 사실 집계를 낼 수 있다
     row = json.loads(out.read_text("utf-8").splitlines()[1])
     assert row["state_audit"]["unsupported_or_superficial_personalization"] is True
     assert row["verdicts"]["context_continuity"]["relevant_state_used"] is False
@@ -649,7 +649,7 @@ def test_user_input_needed_is_collinear_with_the_answer_key_today():
     dist = Counter((c.user_input_needed, c.expected_mode) for c in cases)
     # judge.py 가 이 수를 두 자리(모듈 머리말 · build_payload)에 적어 두고 있다. 그 수가
     # 문서의 산출물이라 여기서 못 박는다 — **이 테스트가 깨지면 세트가 바뀐 것이고, 그러면
-    # judge.py 의 두 주석을 같이 고쳐야 한다.** 겹침이 깨지는 쪽이 목표다 (Task 7 의 앵커).
+    # judge.py 의 두 주석을 같이 고쳐야 한다.** 겹침이 깨지는 쪽이 목표다 (anchors.py 의 앵커).
     assert dist == {(True, "ASK"): 5, (False, "ANSWER"): 6, (False, "REDIRECT"): 2}
     need = [c for c in cases if c.user_input_needed]
     assert len(need) == 5 and all(c.expected_mode == "ASK" for c in need)
@@ -754,7 +754,7 @@ def test_judge_makes_no_live_call_at_import_time():
     assert "settings" not in m.__dict__
 
 
-# --- Task 7: 앵커와 변이 ---
+# --- 앵커와 변이 (anchors.py) ---
 
 
 def test_anchors_are_split_into_dev_and_holdout():
@@ -890,7 +890,7 @@ def test_anchor_check_fails_when_a_verdict_disagrees(tmp_path):
         )
 
 
-# --- Task 8: 리포트와 전후 비교 ---
+# --- 리포트와 전후 비교 (report.py) ---
 
 
 def _axis_stats(**over):
@@ -1380,7 +1380,7 @@ def test_every_module_in_the_package_imports_without_backend_settings():
     `daengs_backend.orchestration.redirects` 자체는 순수 모듈이지만, 최상단에서
     import 하면 그 위 패키지 `__init__`(→ `graph` → `planner` → `semantic` →
     `daengs_backend.config`)이 통째로 딸려 와 DB 접속 정보 · 암호화 키를 요구한다 —
-    이 테스트가 실제로 잡은 결함의 모양이다(Task 8 리뷰).
+    이 테스트가 실제로 잡은 결함의 모양이다(report.py 리뷰).
     """
     import os
     import pkgutil

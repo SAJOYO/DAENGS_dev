@@ -23,7 +23,7 @@
 
 `fallback-only` 모드는 General 만 진짜다. 그래서 행 하나가 가짜로 답했는지는 헤더의
 `adapter_mode` 만으로 못 가린다 — 그 행에서 **어느 capability 가 뛰었는지**까지 봐야 한다.
-`answered_by_fake_adapter` 를 행마다 남기는 이유가 그것이다: 리포트(Task 8)가 두 랩에서
+`answered_by_fake_adapter` 를 행마다 남기는 이유가 그것이다: 리포트(`report.py`)가 두 랩에서
 같은 행을 빼려면 랩 파일 자체에 그 표시가 있어야 한다. 표시 없이 비율만 계산하면 다른
 브랜치의 평가가 실제로 겪은 일(가짜 답 섞인 14% 대 뺀 5%)이 여기서도 조용히 반복된다.
 

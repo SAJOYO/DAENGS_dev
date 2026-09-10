@@ -291,3 +291,68 @@ def test_collect_makes_no_live_call_in_tests():
     import daengs_evals.conversation_quality.collect as m
 
     assert "openai" not in m.__dict__
+
+
+# --- Task 5 fixes: 코디네이터 리뷰 반영 ---
+
+
+def test_answered_by_fake_adapter_real_mode_is_never_fake():
+    from daengs_evals.conversation_quality.collect import _answered_by_fake_adapter
+
+    assert _answered_by_fake_adapter("real", "general") is False
+
+
+def test_answered_by_fake_adapter_fake_mode_is_always_fake():
+    from daengs_evals.conversation_quality.collect import _answered_by_fake_adapter
+
+    assert _answered_by_fake_adapter("fake", "training") is True
+
+
+def test_answered_by_fake_adapter_fallback_only_marks_general_as_real():
+    from daengs_evals.conversation_quality.collect import _answered_by_fake_adapter
+
+    assert _answered_by_fake_adapter("fallback-only", "general") is False
+    assert _answered_by_fake_adapter("fallback-only", "training") is True
+
+
+def test_answered_by_fake_adapter_is_not_applicable_when_no_capability_ran():
+    from daengs_evals.conversation_quality.collect import _answered_by_fake_adapter
+
+    # 계획 자체가 없거나(스몰토크) FAILED 로 끝나 어떤 capability 도 안 뛴 턴 —
+    # "가짜가 답했다" 는 질문 자체가 성립하지 않는다.
+    assert _answered_by_fake_adapter("real", None) is None
+
+
+def test_route_plan_dump_drops_the_dog_profile_payload():
+    import json
+
+    from daengs_backend.orchestration.contracts import (
+        CapabilityName,
+        CapabilityRequest,
+        DogContext,
+        GeneralPayload,
+        RoutePlan,
+        RouterKind,
+    )
+    from daengs_evals.conversation_quality.drivers import _sanitize_route_plan
+
+    plan = RoutePlan(
+        requests=[
+            CapabilityRequest(
+                capability=CapabilityName.GENERAL,
+                payload=GeneralPayload(
+                    question="밥은 얼마나 줘야 해?",
+                    dog=DogContext(breed="dog_pug", age_months=24, on_medication=True),
+                ),
+            )
+        ],
+        router=RouterKind.LLM,
+        model="gemini-test",
+        prompt_version="v3",
+    )
+    dumped = _sanitize_route_plan(plan)
+    dumped_text = json.dumps(dumped, ensure_ascii=False)
+    assert "payload" not in dumped
+    assert "dog_pug" not in dumped_text
+    assert "on_medication" not in dumped_text
+    assert dumped["capabilities"] == ["general"]

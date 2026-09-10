@@ -69,11 +69,15 @@ class TurnSnapshot(BaseModel):
     case_id: str
     turn_index: int
     query: str
-    #: 이 드라이버가 실제로 실어 보낸 이전 턴. `PRIOR_TURNS_REACH_INFERENCE` 가 False 인 오늘은
-    #: 늘 빈 리스트다 — 그것이 발견이라, 생략하지 않고 명시적으로 적는다.
-    prior_turns_supplied: list[dict]
-    #: 그 시점에 실제로 공급된 구조화 상태. `case.state_snapshot` 그대로 — 재조회가 아니다.
-    state_supplied: dict
+    #: 이 드라이버가 실제로 실어 보낸 이전 턴. 드라이버의 `send()` payload 에서 그대로 옮긴다 —
+    #: 하드코딩이 아니다. `PRIOR_TURNS_REACH_INFERENCE` 가 False 인 오늘은 모든 `ConversationDriver`
+    #: 구현이 늘 빈 리스트를 돌려주고, 그것이 발견이라 생략하지 않고 명시적으로 적는다. 드라이버가
+    #: 이 키를 안 주면(이음매가 안 닿으면) `NOT_REACHED`.
+    prior_turns_supplied: Any
+    #: 그 시점에 실제로 공급된 구조화 상태. 드라이버가 상태를 받을 자리(`context` 속성)가 있을
+    #: 때만 `case.state_snapshot` 그대로 — 재조회가 아니다. 그 자리 자체가 없으면 `NOT_REACHED`:
+    #: 실어 보낸 적 없는 값을 실었다고 적지 않는다.
+    state_supplied: Any
     route_plan: Any
     capability: Any
     #: General 의 raw 구조화 결정(`kind`·`reason`). 평가 래퍼가 닿을 때만 채워진다.
@@ -115,8 +119,15 @@ def target_turn_row(
     질의 하나만 받는 계약(오늘 런타임과 같다)이라, 상태는 그 계약 밖에서 실어야 한다.
     이 함수를 벗어나면 그 값을 다시 읽지 않는다: 스냅샷에 적는 `state_supplied` 는 지금
     이 줄이 실은 값이지, 나중에 드라이버나 DB 에서 되짚은 값이 아니다.
+
+    드라이버가 `context` 속성 자체를 안 가지면(=상태를 받을 자리가 없으면) `state_supplied`
+    도 `NOT_REACHED` 다 — 실어 보낸 적 없는 값을 실었다고 적으면 그것이야말로 "부재와 미측정이
+    같아 보이는" 실패다. `prior_turns_supplied` 는 하드코딩하지 않는다: 드라이버가 `send()`
+    payload 로 돌려준 값을 그대로 옮긴다 — `SessionDriver` 가 이력을 실으면 이 한 줄이 자동으로
+    달라지고, `collect.py` 는 안 고쳐도 된다.
     """
-    if hasattr(driver, "context"):
+    has_context_seam = hasattr(driver, "context")
+    if has_context_seam:
         driver.context = dict(case.state_snapshot)
     query = case.turns[turn_index - 1].text
     payload = driver.send(query)
@@ -126,8 +137,8 @@ def target_turn_row(
         case_id=case.case_id,
         turn_index=turn_index,
         query=query,
-        prior_turns_supplied=[],
-        state_supplied=dict(case.state_snapshot),
+        prior_turns_supplied=payload.get("prior_turns_supplied", NOT_REACHED),
+        state_supplied=dict(case.state_snapshot) if has_context_seam else NOT_REACHED,
         route_plan=payload.get("route_plan", NOT_REACHED),
         capability=capability,
         general_decision=payload.get("general_decision", NOT_REACHED),

@@ -29,10 +29,16 @@ class FakeDriver:
     def __init__(self, replies: list[str]) -> None:
         self._replies = list(replies)
         self.seen_payloads: list[dict] = []
+        #: `StatelessDriver` 와 같은 자리 — `collect.py` 가 호출 전에 갈아 끼운다. `send()` 는
+        #: 이 값을 읽지 않는다(가짜라 라우팅할 것이 없다), 그래도 속성이 있어야 `collect.py`
+        #: 가 "이 드라이버는 상태를 받는다" 고 판단해 `state_supplied` 를 채운다.
+        self.context: dict = {}
 
     def send(self, query: str) -> dict:
         self.seen_payloads.append({"query": query})
-        return {"message": self._replies.pop(0), "status": "ANSWERED"}
+        # 오늘의 런타임과 같은 진실 — 이전 턴은 안 싣는다. 하드코딩이 아니라 이 드라이버가
+        # 실제로 보낸 것을 그대로 말하는 것이다(`StatelessDriver.send` 와 같은 값).
+        return {"message": self._replies.pop(0), "status": "ANSWERED", "prior_turns_supplied": []}
 
 
 class StatelessDriver:
@@ -85,6 +91,29 @@ class StatelessDriver:
             "status": response.status.value,
             "message": response.message,
             "capability": capability,
-            "route_plan": plan.model_dump(mode="json") if plan not in (None, NOT_REACHED) else plan,
+            "route_plan": _sanitize_route_plan(plan) if plan not in (None, NOT_REACHED) else plan,
             "general_decision": general_decision,
+            # `send()` 는 질의 하나만 보낸다 — 이전 턴을 실은 적이 없으므로 이 드라이버가
+            # 정직하게 말할 수 있는 값은 늘 빈 리스트다. `collect.py` 는 이 값을 하드코딩하지
+            # 않고 여기서 읽는다 — `SessionDriver` 가 이력을 실으면 이 자리만 달라진다.
+            "prior_turns_supplied": [],
         }
+
+
+def _sanitize_route_plan(plan: Any) -> dict[str, Any]:
+    """`RoutePlan` 에서 라우팅 메타데이터만 남기고 `requests[].payload` 는 버린다.
+
+    `CapabilityRequest.payload` 는 `DogContext`(견종 · 개월령 · 급여 방식 · 병력 · 투약 여부)
+    를 실어 나른다 — 그대로 덤프하면 `real` 어댑터로 한 번만 돌려도 실견 프로필이 랩 파일에
+    박힌다("개인정보를 로그에 남기지 않는다" 위반). 질의는 `TurnSnapshot.query` 에, 공급된
+    상태는 `TurnSnapshot.state_supplied` 에 이미 따로 있으니 여기서 payload 를 버려도 잃는
+    정보가 없다. **편의로라도 다시 넣지 말 것** — 다음에 이 자리를 만지는 사람에게 남기는 경고.
+    """
+    return {
+        "router": plan.router.value if hasattr(plan.router, "value") else str(plan.router),
+        "model": plan.model,
+        "prompt_version": plan.prompt_version,
+        "capabilities": [r.capability.value for r in plan.requests],
+        "handoffs": [h.model_dump(mode="json") for h in plan.handoffs],
+        "clarify_requested": plan.clarify is not None,
+    }

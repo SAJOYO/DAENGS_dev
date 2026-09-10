@@ -188,7 +188,12 @@ async def delete_pet(
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {
-                "message": f"다른 보호자가 {exc.pet_name}을(를) 돌보고 있어요. 정말 지울까요?",
+                # ⚠️ 이름 뒤에 조사를 붙이지 않습니다 — "맥스을(를)" 처럼 받침 유무에
+                # 안 맞는 조사가 그대로 나갑니다. 받침 감지 헬퍼를 문장 하나를 위해
+                # 새로 만들지 않고, 이름을 조사가 필요 없는 자리(문장 끝, 괄호)로
+                # 옮겨서 피합니다. 앱은 `pet_name` 을 구조적으로 받으므로 실제 문장은
+                # 앱이 그립니다 — 여기 문장은 구조화 안 된 클라이언트를 위한 기본값입니다.
+                "message": f"다른 보호자가 돌보고 있는 강아지예요 ({exc.pet_name}). 정말 지울까요?",
                 "pet_name": exc.pet_name,
                 "carers": [
                     {"app_user_id": str(uid), "nickname": nickname}

@@ -1283,6 +1283,63 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
         return rows[:limit]
 
+    def _screening_accessible_pet_ids(app_user_id):
+        # `pet_repo.member_condition` 의 대역과 같은 모양입니다 (대표 ∪ 돌보미).
+        return {
+            p.id
+            for p in store.pets
+            if p.app_user_id == app_user_id
+        } | {pid for pid, uid in store.pet_members if uid == app_user_id}
+
+    async def screening_get_accessible(session, app_user_id, record_id):
+        # 진짜와 같게 **창작자이거나, 강아지에 붙었고 내가 그 아이의 구성원**입니다.
+        # `pet_id IS NULL` 인 개인 기록은 아무 구성원 집합에도 안 걸려 창작자만입니다.
+        ids = _screening_accessible_pet_ids(app_user_id)
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id
+                and (r.app_user_id == app_user_id or r.pet_id in ids)
+            ),
+            None,
+        )
+
+    async def screening_list_accessible(
+        session, app_user_id, *, pet_id=None, before=None, limit=50
+    ):
+        ids = _screening_accessible_pet_ids(app_user_id)
+        rows = [
+            r
+            for r in store.screenings
+            if r.app_user_id == app_user_id or r.pet_id in ids
+        ]
+        if pet_id is not None:
+            rows = [r for r in rows if r.pet_id == pet_id]
+        rows.sort(key=lambda r: (r.created_at, r.id), reverse=True)
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
+        return rows[:limit]
+
+    async def screening_get_deletable(session, app_user_id, record_id, *, for_update=False):
+        # 진짜와 같게 **창작자 또는 그 아이의 대표**입니다 — 구성원 전체가 아닙니다
+        # (docs/co-care.md §2, care_event 의 get_deletable 과 같은 모양).
+        def _pet_owner(pet_id):
+            return next((p.app_user_id for p in store.pets if p.id == pet_id), None)
+
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id
+                and (
+                    r.app_user_id == app_user_id
+                    or (r.pet_id is not None and _pet_owner(r.pet_id) == app_user_id)
+                )
+            ),
+            None,
+        )
+
     async def screening_find_by_storage_key(session, storage_key, *, status=None):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
         # "backend 가 발급한 키인가" 만 봅니다.
@@ -1309,7 +1366,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(screening_repo, "add", screening_add)
     monkeypatch.setattr(screening_repo, "get_owned", screening_get_owned)
+    monkeypatch.setattr(screening_repo, "get_accessible", screening_get_accessible)
     monkeypatch.setattr(screening_repo, "list_for_owner", screening_list_for_owner)
+    monkeypatch.setattr(screening_repo, "list_accessible", screening_list_accessible)
+    monkeypatch.setattr(screening_repo, "get_deletable", screening_get_deletable)
     monkeypatch.setattr(screening_repo, "find_by_storage_key", screening_find_by_storage_key)
     monkeypatch.setattr(
         screening_repo, "list_for_owner_for_update", screening_list_for_owner_for_update

@@ -83,21 +83,23 @@ async def start_record(
     무엇인지 아무도 모르는 파일이 볼륨에 남습니다 — 저장소에는 FK 가 없어서
     아무도 안 치웁니다.
 
-    ⚠️ **아이를 지정해도 대표만입니다 — `pet_repo.get_owned`.** `gait_records` 는
-    `pet_id → pets.app_user_id` 로 소유가 유도되어 생성을 구성원(대표 ∪ 돌보미)으로
-    열어도 대표가 그대로 봅니다. `screening_records` 는 다릅니다 — 소유가 만든 사람
-    (`ScreeningRecord.app_user_id`)에 **직접** 저장되고 `repositories/screening.py` 는
-    `pet_repo.member_condition` 을 쓴 적이 없습니다. 돌보미의 생성을 열면 대표가
-    **못 보는** 스크리닝 기록이 생깁니다 — 한 집의 피부 이력이 둘로 쪼개지는데 어느
-    쪽도 전체를 못 봅니다. 닫아 두는 쪽이 최소한 하나로 모인 이력을 지킵니다. 이
-    레포지토리를 구성원 기준으로 다시 짜는 결정이 먼저이고, 그것은 이 카드의 범위
-    밖입니다(docs/co-care.md §2, Task 12 follow-up).
+    **아이를 지정하면 구성원(대표 ∪ 돌보미)이 엽니다 — `pet_repo.get_accessible`**
+    (Task 14, docs/co-care.md §2). Task 12 는 여기를 `get_owned`(대표만)로 닫았다 —
+    `screening_records` 는 `gait_records` 와 달리 소유가 강아지에서 유도되지 않고
+    (`ScreeningRecord.app_user_id` 에 만든 사람이 직접 저장됩니다) `repositories/screening.py`
+    가 그때는 구성원 판정을 쓴 적이 없어서, 돌보미의 생성을 열면 **대표가 못 보는**
+    기록이 생겼습니다. 지금은 `repositories/screening.py` 가 `gait_record.py` 처럼
+    `_owned`/`_accessible`(정확히는 그 이름의 함수들 `get_owned`/`get_accessible`·
+    `get_deletable`) 바닥 둘로 갈려 있어, **강아지에 붙은** 기록은 그 아이의 구성원
+    전체가 봅니다 — 대표도 예외가 아닙니다. `pet_id` 를 아예 안 주는 개인 기록은
+    이 검사를 거치지 않고, 그 기록은 만든 사람만 볼 수 있습니다(구성원이라는 개념이
+    성립하지 않으므로) — 그래서 생성을 여는 것이 안전합니다.
     """
     # 남의 아이에 기록을 붙일 수 없습니다. FK 는 "존재하는 pets 행" 까지만 보장하고
     # 그게 내 것인지는 안 봅니다 (05_pets.sql 주석과 같은 자리).
     if (
         body.pet_id is not None
-        and await pet_repo.get_owned(session, app_user_id, body.pet_id) is None
+        and await pet_repo.get_accessible(session, app_user_id, body.pet_id) is None
     ):
         raise ScreeningNotFoundError
 
@@ -239,19 +241,24 @@ async def list_records(
     *,
     pet_id: uuid.UUID | None = None,
 ) -> list[ScreeningRecord]:
-    """내 기록을 최근 순으로. `pet_id` 를 주면 그 아이 것만 봅니다."""
-    if pet_id is not None and await pet_repo.get_owned(session, app_user_id, pet_id) is None:
+    """**내 기록 + 내가 구성원인 강아지의 기록**을 최근 순으로. `pet_id` 를 주면 그
+    아이 것만 봅니다 (Task 14 — 구성원으로 열림, docs/co-care.md §2)."""
+    if pet_id is not None and await pet_repo.get_accessible(session, app_user_id, pet_id) is None:
         raise ScreeningNotFoundError
-    return await screening_repo.list_for_owner(session, app_user_id, pet_id=pet_id)
+    return await screening_repo.list_accessible(session, app_user_id, pet_id=pet_id)
 
 
 async def get_record(
     session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
 ) -> tuple[ScreeningRecord, str | None]:
-    """기록 하나와 사진 주소. 아직 안 올라왔으면 주소는 None 입니다."""
+    """기록 하나와 사진 주소. 아직 안 올라왔으면 주소는 None 입니다.
+
+    **구성원이면 봅니다** — 창작자가 아니어도 그 강아지의 대표·돌보미면 됩니다
+    (Task 14). 개인 기록(`pet_id IS NULL`)은 창작자만입니다.
+    """
     from daengs_backend.config import settings
 
-    record = await screening_repo.get_owned(session, app_user_id, record_id)
+    record = await screening_repo.get_accessible(session, app_user_id, record_id)
     if record is None:
         raise ScreeningNotFoundError
 
@@ -269,8 +276,15 @@ async def get_record(
 async def delete_record(
     session: AsyncSession, app_user_id: uuid.UUID, record_id: uuid.UUID
 ) -> None:
-    """기록 하나를 지웁니다. **사진 파일까지 지웁니다.**"""
-    record = await screening_repo.get_owned(session, app_user_id, record_id, for_update=True)
+    """기록 하나를 지웁니다. **사진 파일까지 지웁니다.**
+
+    지울 수 있는 사람은 **창작자 또는 그 아이의 대표** — 케어 로그
+    (`care_repo.get_deletable`)와 같은 모양입니다(Task 14). 볼 수 있는 사람
+    전체(구성원)에 열면 돌보미끼리 서로의 기록을 지웁니다.
+    """
+    record = await screening_repo.get_deletable(
+        session, app_user_id, record_id, for_update=True
+    )
     if record is None:
         raise ScreeningNotFoundError
 

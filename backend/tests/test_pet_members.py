@@ -504,6 +504,10 @@ async def test_delete_pet_route_returns_409_with_carers(store: Store, pet: FakeP
     body = r.json()["detail"]
     assert body["pet_name"] == "맥스"
     assert body["carers"] == [{"app_user_id": str(CARER), "nickname": "아빠"}]
+    # 이름 뒤에 조사가 안 붙어야 합니다 — "맥스을(를)" 은 받침 없는 이름에 안 맞는
+    # 조사입니다. 이름을 조사 없는 자리로 옮기는 것이 이 리뷰의 수정입니다.
+    assert "을(를)" not in body["message"]
+    assert "맥스" in body["message"]
 
     r2 = client_as(OWNER).delete(f"/app/pets/{pet.id}?confirm=true")
     assert r2.status_code == 204

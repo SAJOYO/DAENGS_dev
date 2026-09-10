@@ -138,6 +138,9 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
             cwd=tmp_path,
             env=env,
             text=True,
+            # compose 는 UTF-8 JSON 을 냅니다. 로케일 기본(한국어 Windows 는 cp949)으로 읽으면
+            # crawler-worker command 의 한글에서 UnicodeDecodeError 가 나 stdout 이 None 이 됩니다.
+            encoding="utf-8",
             capture_output=True,
             check=True,
             timeout=30,

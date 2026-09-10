@@ -3,9 +3,11 @@
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from daengs_backend.models import WalkCellophaneSheet
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk_spatial_diary as diary_repo
 from daengs_backend.services.walk_analysis import decode_stored_cellophane
@@ -58,6 +60,61 @@ class SpatialDiaryViewResult:
     spec: SpatialDiaryViewSpec
     field: SpatialField
     receipt: SpatialDiaryViewReceipt
+
+
+@dataclass(frozen=True)
+class WalkRecordSheet:
+    client_session_id: uuid.UUID
+    walk_id: uuid.UUID | None
+    status: Literal["ready", "pending", "unavailable"]
+    analysis_id: uuid.UUID | None = None
+    sheet_fingerprint: str | None = None
+    sheet: dict[str, Any] | None = None
+
+
+async def query_record_sheets(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    client_session_ids: tuple[uuid.UUID, ...],
+) -> tuple[WalkRecordSheet, ...]:
+    """같은 snapshot의 내 원판을 요청 순서로 읽습니다. 집계·재분석하지 않습니다."""
+    if not client_session_ids or len(set(client_session_ids)) != len(client_session_ids):
+        raise ValueError("client_session_ids must be nonempty and unique")
+    if len(client_session_ids) > MAX_SELECTED_CAPSULES:
+        raise SpatialDiaryViewTooLargeError(
+            "spatial_diary_selected_limit",
+            f"한 번에 읽는 산책은 최대 {MAX_SELECTED_CAPSULES}개입니다.",
+        )
+    owned = await diary_repo.list_owned_record_ids(session, app_user_id, client_session_ids)
+    rows = await diary_repo.list_record_capsule_index(session, app_user_id, tuple(owned.values()))
+    selected = tuple(_decode_index(row) for row in rows)
+    if sum(item.cell_count for item in selected) > MAX_RAW_CELLS:
+        raise SpatialDiaryViewTooLargeError(
+            "spatial_diary_raw_cell_limit",
+            f"선택된 원시 Cell은 최대 {MAX_RAW_CELLS}개입니다. 요청을 나눠 주세요.",
+        )
+    verified = await _load_verified_sheets(session, selected)
+    by_walk = {index.walk_id: stored for index, (_, stored) in zip(selected, verified, strict=True)}
+    result = []
+    for client_id in client_session_ids:
+        walk_id = owned.get(client_id)
+        stored = by_walk.get(walk_id)
+        if walk_id is None:
+            result.append(WalkRecordSheet(client_id, None, "unavailable"))
+        elif stored is None:
+            result.append(WalkRecordSheet(client_id, walk_id, "pending"))
+        else:
+            result.append(
+                WalkRecordSheet(
+                    client_id,
+                    walk_id,
+                    "ready",
+                    stored.analysis_id,
+                    stored.sheet_fingerprint,
+                    stored.payload,
+                )
+            )
+    return tuple(result)
 
 
 async def query_view(
@@ -197,6 +254,13 @@ async def _load_selected_sheets(
     session: AsyncSession,
     selected: tuple[CapsuleIndex, ...],
 ) -> tuple[Cellophane, ...]:
+    return tuple(sheet for sheet, _ in await _load_verified_sheets(session, selected))
+
+
+async def _load_verified_sheets(
+    session: AsyncSession,
+    selected: tuple[CapsuleIndex, ...],
+) -> tuple[tuple[Cellophane, WalkCellophaneSheet], ...]:
     keys = [(item.analysis_id, item.paint_spec.fingerprint) for item in selected]
     stored = await diary_repo.list_cellophane_sheets(session, keys)
     by_key = {(item.analysis_id, item.paint_fp): item for item in stored}
@@ -218,9 +282,10 @@ async def _load_selected_sheets(
             sheet.walk_id != item.walk_id
             or sheet.at != item.started_at
             or sheet.paint_fp != item.paint_spec.fingerprint
+            or len(sheet.occupancy) != item.cell_count
         ):
             raise IncompleteSpatialDiaryCapsuleError(
                 "Cellophane 원판이 선택된 Capsule identity와 일치하지 않습니다."
             )
-        decoded.append(sheet)
+        decoded.append((sheet, by_key[key]))
     return tuple(decoded)

@@ -54,6 +54,17 @@ class GaitRecordSummary(BaseModel):
     comparable: bool
     has_overlay: bool
 
+    # 서버가 계산한 권한 플래그 (Task 19, docs/co-care.md §2). **앱은 이 값만 보고
+    # 버튼을 그립니다** — `is_owner` 하나로는 확정(업로더 또는 대표)도 삭제(대표만)도
+    # 옳게 못 가리고, 서버 규칙을 앱이 다시 구현하면 언젠가 어긋납니다.
+    can_confirm: bool
+    can_delete: bool
+
+    # 누가 올렸나. **지금도 그 아이의 구성원일 때만** 닉네임이 실립니다(탈퇴·내보내기
+    # 됐으면 None) — 케어 로그의 actor 라벨과 같은 규칙(`services/pet_member.actor_label`).
+    # 이 칸이 생기기 전의 옛 기록(actor_app_user_id NULL)도 None 입니다.
+    created_by: str | None = None
+
 
 class GaitRecordListResponse(BaseModel):
     records: list[GaitRecordSummary]

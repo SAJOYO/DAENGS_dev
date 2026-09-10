@@ -19,15 +19,38 @@
 
 ## 경로
 
-전부 앱 회원 전용(`CurrentAppUser`). 내 강아지가 아니면 **404** — 403 으로 나누면 그 id 가 존재한다는
-것을 알려 주는 셈이라 없는 것과 남의 것을 같은 404 로 뭉갠다 (`/app/pets` 와 같은 규칙).
+전부 앱 회원 전용(`CurrentAppUser`). **그 아이의 구성원(대표 ∪ 돌보미)이 아니면 404** — 403 으로
+나누면 그 id 가 존재한다는 것을 알려 주는 셈이라 없는 것과 남의 것을 같은 404 로 뭉갠다
+(`/app/pets` 와 같은 규칙). 구성원 판정은 `docs/co-care.md` §2 가 원본이다 — 공동 돌봄 전
+에는 대표 1인 소유였고, 여기 적힌 것은 그 뒤의 모양이다.
 
 | 메서드 · 경로 | 하는 일 | 응답 |
 | --- | --- | --- |
-| `POST /app/care-events` | 기록 한 건 | **201** 새로 만듦 · **200** 같은 `client_event_id` 가 이미 있어 있던 것을 돌려줌 |
+| `POST /app/care-events` | 기록 한 건 | **201** 새로 만듦 · **200** 같은 `client_event_id` 가 이미 있어 있던 것을 돌려줌 · **409** 약 중복(아래) |
 | `GET /app/care-events?pet_id&from&to` | 기간 조회, 최근 먼저 | `{pet_id, start, end, events[]}` — 창을 같이 돌려준다 |
 | `GET /app/care-events/today?pet_id&day` | 하루 요약 | `{day, timezone, start, end, meal, medication, snack, walk, events[]}` |
-| `DELETE /app/care-events/{id}` | 지움 | **204** · 내 것 아니면 404 |
+| `DELETE /app/care-events/{id}` | 지움 | **204** · **적은 사람 또는 그 아이의 대표**만. 그 밖에는 404 (돌보미끼리도 못 지운다) |
+
+각 이벤트 응답에 `actor` 가 붙는다 — 누가 챙겼는지다. `{app_user_id, nickname}` 이고, 그 사람이
+**지금** 그 강아지의 구성원이 아니면 `nickname` 은 `null` 이다("이전 보호자", `docs/co-care.md`
+§3 "이름 표시 규칙"). 이 컬럼보다 먼저 쌓인 기록은 `actor` 자체가 없을 수 있다.
+
+### 약 중복 확인 (409)
+
+`kind`가 `medication`이고 `confirm`을 안 보냈는데, `occurred_at` 앞뒤 6시간 안에 같은 강아지의
+다른 약 기록이 있으면 **409** 다 — 밥·간식은 대상이 아니다. 몸이 다치지 않게 막는 불변식이
+아니라 **경고**라 동시 기록은 막지 않는다. 자세한 창·순서·동시성 판단은
+`docs/co-care.md` §4.
+
+```json
+{ "detail": {
+    "message": "오늘 08:15에 이미 약을 챙겼습니다.",
+    "conflicts": [ { "id": "…", "occurred_at": "…", "note": "심장사상충",
+                     "actor": { "app_user_id": "…", "nickname": "아빠" } } ] } }
+```
+
+그래도 기록하려면 **같은 `client_event_id` 를 그대로 두고** `confirm: true` 만 붙여 다시
+보낸다 — 새 키를 쓰면 재시도가 두 줄이 된다.
 
 ### 기록 본문
 
@@ -60,7 +83,10 @@
 
 - `day` 를 안 보내면 **서울 기준 오늘**이고, 하루의 경계도 서울 자정이다 (`DAY_TIMEZONE`). 서버 시간(UTC)으로
   자르면 밤 9시 뒤의 저녁밥이 "내일" 로 간다. 여행 중 사용자까지 맞추는 `tz` 쿼리는 앱이 필요해지면 그때.
-- `walk` 는 `walks` 에서 센다 — 그 아이가 나간 산책의 `started_at` 이 그날인 것.
+- `walk` 는 `walks` 에서 센다 — **소유자 조건 없이**, 그 아이가 나간 산책의 `started_at` 이
+  그날인 것. 아빠가 올린 산책도 강아지가 같으면 잡힌다(`repositories/walk.py` 의
+  `count_for_pet_between`) — 공동 돌봄 전에는 부른 사람 소유의 산책만 셌다. 근거는
+  `docs/co-care.md` §2 "산책 읽기".
 
 ## 스키마
 
@@ -76,6 +102,6 @@
 | Model | `models/care_event.py` |
 | Schema | `schemas/care_event.py` |
 | DAO | `repositories/care_event.py` · `repositories/walk.py` 의 `count_for_pet_between` |
-| Service | `services/care_event.py` — 소유권·멱등·기간 상한·하루 경계 |
+| Service | `services/care_event.py` — 구성원 판정·멱등·기간 상한·하루 경계·삭제 자격 |
 | Controller | `routers/care_event.py` |
 | 테스트 | `tests/test_care_events.py` — `fakes.py` 를 안 건드리고 이 파일 안의 가짜를 쓴다 (#331 과 파일이 안 겹치게) |

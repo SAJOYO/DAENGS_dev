@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "source_run": "20260910T083600Z-e9cfa82-194ff74278",
+  "target_ids": ["PC-X03", "PC-X13", "PC-X14"],
+  "arms": ["query-last", "no-duplicate-past-query"],
+  "repeat": 3,
+  "reason": "Follow up X13 regression after full context injection while retaining the two opposite manual undo controls. Only JSON query position or duplicated past user_query fields changes. Existing top-level history, current clues and production instructions remain."
+}

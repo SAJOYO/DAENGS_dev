@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import SQLAlchemyError
 
 from daengs_place.place.contracts import PlaceResult
-from daengs_place.place.conversation.contract import PrepareRequest, TurnPlan
+from daengs_place.place.conversation.contract import PrepareRequest
+from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.filters.evaluation import evaluate
 from daengs_place.place.filters.service import FilterGroup, FilterResponse, explain_hit
 

@@ -73,14 +73,14 @@ def test_pet_row_is_locked_only_on_first_activation(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = 0
-    original = chat_repo.lock_owned_pet
+    original = chat_repo.lock_accessible_pet
 
     async def counted(session, app_user_id, pet_id):
         nonlocal calls
         calls += 1
         return await original(session, app_user_id, pet_id)
 
-    monkeypatch.setattr(chat_repo, "lock_owned_pet", counted)
+    monkeypatch.setattr(chat_repo, "lock_accessible_pet", counted)
     draft = create_draft()
     activate(draft)
     activate(draft)

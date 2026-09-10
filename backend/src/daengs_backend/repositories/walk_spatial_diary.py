@@ -59,12 +59,15 @@ def capsule_count_statement(app_user_id: uuid.UUID, pet_id: uuid.UUID) -> Select
 
 def capsule_index_statement(
     app_user_id: uuid.UUID,
-    pet_id: uuid.UUID,
+    pet_id: uuid.UUID | None,
     *,
     since: date | None,
     until: date | None,
     limit: int,
+    walk_ids: tuple[uuid.UUID, ...] | None = None,
 ) -> Select:
+    if pet_id is None and walk_ids is None:
+        raise ValueError("a pet or explicit walk IDs are required")
     local_day = cast(func.timezone(DIARY_CALENDAR_TIMEZONE, Walk.started_at), Date)
     representative_rank = func.row_number().over(
         partition_by=Walk.id,
@@ -95,16 +98,19 @@ def capsule_index_statement(
             WalkCellophaneSheet.cell_count.label("cell_count"),
             representative_rank.label("representative_rank"),
         )
-        .select_from(WalkPet)
-        .join(Walk, Walk.id == WalkPet.walk_id)
+        .select_from(Walk)
         .join(WalkAnalysis, WalkAnalysis.walk_id == Walk.id)
         .join(WalkCapsule, WalkCapsule.analysis_id == WalkAnalysis.id)
         .outerjoin(
             WalkCellophaneSheet,
             WalkCellophaneSheet.analysis_id == WalkAnalysis.id,
         )
-        .where(Walk.app_user_id == app_user_id, WalkPet.pet_id == pet_id)
+        .where(Walk.app_user_id == app_user_id)
     )
+    if pet_id is not None:
+        ranked = ranked.join(WalkPet, WalkPet.walk_id == Walk.id).where(WalkPet.pet_id == pet_id)
+    if walk_ids is not None:
+        ranked = ranked.where(Walk.id.in_(walk_ids))
     if since is not None:
         ranked = ranked.where(local_day >= since)
     if until is not None:
@@ -161,6 +167,41 @@ async def list_capsule_index(
         )
     ).all()
     return [SpatialDiaryIndexRow(*row) for row in rows]
+
+
+async def list_owned_record_ids(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    client_session_ids: tuple[uuid.UUID, ...],
+) -> dict[uuid.UUID, uuid.UUID]:
+    """GPS·반려견 관계를 로딩하지 않고 기기 ID와 내 서버 Walk ID만 연결합니다."""
+    rows = await session.execute(
+        select(Walk.client_session_id, Walk.id).where(
+            Walk.app_user_id == app_user_id,
+            Walk.client_session_id.in_(client_session_ids),
+        )
+    )
+    return dict(rows.all())
+
+
+async def list_record_capsule_index(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    walk_ids: tuple[uuid.UUID, ...],
+) -> list[SpatialDiaryIndexRow]:
+    if not walk_ids:
+        return []
+    rows = await session.execute(
+        capsule_index_statement(
+            app_user_id,
+            None,
+            since=None,
+            until=None,
+            limit=len(walk_ids),
+            walk_ids=walk_ids,
+        )
+    )
+    return [SpatialDiaryIndexRow(*row) for row in rows.all()]
 
 
 async def list_cellophane_sheets(

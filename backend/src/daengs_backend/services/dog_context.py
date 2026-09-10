@@ -104,15 +104,19 @@ async def resolve(
 ) -> dict[str, object] | None:
     """`context["dog"]` 에 넣을 값. **없으면 None 이고, 그것은 오류가 아닙니다.**
 
-    id 가 UUID 가 아니거나 남의 강아지면 조용히 None 입니다 — 여기서 4xx 를 내면 프로필이
-    없다는 이유로 답할 수 있는 질문이 실패합니다. 소유권은 `pet_repo.get_owned` 가 쿼리
-    조건으로 묶고 있어, 남의 id 를 넣어도 못 읽습니다.
+    id 가 UUID 가 아니거나 **구성원이 아닌** 강아지면 조용히 None 입니다 — 여기서 4xx 를 내면
+    프로필이 없다는 이유로 답할 수 있는 질문이 실패합니다. 판정은 `pet_repo.get_accessible`
+    이 쿼리 조건으로 묶고 있어, 남의 id 를 넣어도 못 읽습니다.
+
+    **구성원 기준인 이유**는 같은 요청의 채팅 쪽(`repositories/chat.py`)이 이미 구성원까지
+    열려 있어서입니다 (docs/co-care.md §2). 여기만 대표 기준으로 남기면 돌보미의 답변에서
+    지병·복약이 조용히 빠집니다 — 아무 오류도 안 나고 답만 나빠집니다.
     """
     try:
         pet_id = uuid.UUID(active_dog_id)
     except (ValueError, AttributeError, TypeError):
         return None
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         return None
     resolved: dict[str, object] = {}

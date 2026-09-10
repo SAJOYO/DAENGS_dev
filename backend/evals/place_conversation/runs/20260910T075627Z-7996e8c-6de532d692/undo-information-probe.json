@@ -1,0 +1,135 @@
+{
+  "boundary": "production manual prepare and Gemini payload construction; mocked transport, no live calls",
+  "initial_candidate_kinds": [
+    [
+      "cafe"
+    ],
+    [
+      "restaurant"
+    ]
+  ],
+  "correct_undo_candidate_kinds": [
+    [
+      "cafe"
+    ],
+    [
+      "restaurant"
+    ]
+  ],
+  "model_inputs_identical": true,
+  "model_inputs": [
+    {
+      "query": "방금 추가한 것만 취소해줘",
+      "current_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "history": [],
+      "pending_question": "",
+      "selected": null,
+      "visible_order": [
+        {
+          "source": "test:conversation-eval",
+          "ref": "f81d"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "a207"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "d94c"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "b036"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "e572"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "c468"
+        }
+      ]
+    },
+    {
+      "query": "방금 추가한 것만 취소해줘",
+      "current_state": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "history": [],
+      "pending_question": "",
+      "selected": null,
+      "visible_order": [
+        {
+          "source": "test:conversation-eval",
+          "ref": "f81d"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "a207"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "d94c"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "b036"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "e572"
+        },
+        {
+          "source": "test:conversation-eval",
+          "ref": "c468"
+        }
+      ]
+    }
+  ],
+  "conclusion": "Different correct undo states map to identical planner input. A prompt alone cannot deterministically recover both."
+}

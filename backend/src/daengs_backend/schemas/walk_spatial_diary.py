@@ -1,9 +1,10 @@
 """앱이 요청하고 받는 Walk 공간 일기 View HTTP 계약."""
 
+import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from daengs_walk.spatial_diary import (
     CONTEXT_FACET_POLICY_VERSION,
@@ -79,3 +80,29 @@ class SpatialDiaryViewResponse(FrozenApiModel):
     projection: SpatialDiaryProjectionResponse
     field: SpatialDiaryFieldResponse
     receipt: SpatialDiaryReceiptResponse
+
+
+class WalkRecordSheetsRequest(FrozenApiModel):
+    client_session_ids: tuple[uuid.UUID, ...] = Field(min_length=1, max_length=400)
+
+    @field_validator("client_session_ids")
+    @classmethod
+    def unique_ids(cls, value: tuple[uuid.UUID, ...]) -> tuple[uuid.UUID, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("client_session_ids must be unique")
+        return value
+
+
+class WalkRecordSheetResponse(FrozenApiModel):
+    client_session_id: uuid.UUID
+    walk_id: uuid.UUID | None
+    status: Literal["ready", "pending", "unavailable"]
+    analysis_id: uuid.UUID | None
+    sheet_fingerprint: str | None
+    # native Cellophane envelope; service validates its persisted fingerprint first.
+    sheet: dict[str, Any] | None
+
+
+class WalkRecordSheetsResponse(FrozenApiModel):
+    schema_version: Literal[1] = 1
+    items: tuple[WalkRecordSheetResponse, ...]

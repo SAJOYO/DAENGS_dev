@@ -275,3 +275,48 @@ def test_report_never_turns_unreviewed_or_semantically_wrong_answers_into_pass(t
     summarize(tmp_path)
     summary = json.loads((tmp_path / "reviewed-summary.json").read_text(encoding="utf-8"))
     assert summary["case_repetitions"][0]["status"] == "fail"
+
+
+async def test_new_independent_request_is_not_graded_as_accepting_cancelled_proposal():
+    case, fixtures = data("PC-E08")
+    case["steps"][1] = {
+        "action": "chat",
+        "input": "그건 취소하고 음식점만 찾아줘",
+        "expect": {"candidate_kinds": ["restaurant"], "parking": "none", "action": "execute"},
+    }
+    outputs = iter(
+        [
+            {
+                "goal": "show",
+                "unsupported": ["quiet"],
+                "changes": {
+                    "kinds": {"operation": "set", "values": ["cafe"]},
+                    "parking": "required_true",
+                },
+            },
+            {"decision": "new_request"},
+            {"goal": "show", "changes": {"kinds": {"operation": "set", "values": ["restaurant"]}}},
+        ]
+    )
+
+    def response(request):
+        payload = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "steps": [
+                    {
+                        "type": "function_call",
+                        "name": payload["tools"][0]["name"],
+                        "arguments": next(outputs),
+                    }
+                ],
+            },
+        )
+
+    provider = ObservedGemini("key", "fake", transport=httpx.MockTransport(response))
+    records = [record async for record in run_case(case, fixtures, provider, 1)]
+    assert records[1]["status"] == "review_required"
+    assert records[1]["prepared"]["state"]["pending_proposal"] is None
+    assert not any(c["criterion"] == "accepted.saved_candidate" for c in records[1]["checks"])

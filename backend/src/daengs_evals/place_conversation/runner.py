@@ -114,7 +114,17 @@ async def run_case(case, fixtures, provider, repetition):
                 query=step["input"], committed_revision=prepared.state.revision, prepared=prepared
             )
             answer = await compose_answer(answer_request, provider)
-            checks = assess(case, step, state, prepared, answer)
+            # Acceptance executes the stored candidate without another semantic plan.
+            # A new independent request also clears pending, but must NOT be graded
+            # against the cancelled proposal's candidate.
+            accepting_pending = (
+                state.pending_proposal is not None
+                and prepared.receipt.action == "execute"
+                and len(provider.plans) == plan_start
+            )
+            checks = assess(
+                case, step, state, prepared, answer, accepting_pending=accepting_pending
+            )
             record.update(
                 status="fail" if any(c["status"] == "fail" for c in checks) else "review_required",
                 checks=checks,

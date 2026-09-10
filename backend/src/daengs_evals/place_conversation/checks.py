@@ -27,7 +27,7 @@ def parking_mode(state):
     )
 
 
-def assess(case, step, before, prepared, answer):
+def assess(case, step, before, prepared, answer, *, accepting_pending=False):
     after, receipt = prepared.state, prepared.receipt
     expected = step["expect"]
     checks = []
@@ -76,7 +76,7 @@ def assess(case, step, before, prepared, answer):
             any(p.capability == PARKING for p in after.filters.preferences),
             False,
         )
-    if before.pending_proposal and receipt.action == "execute" and after.pending_proposal is None:
+    if accepting_pending:
         check("accepted.saved_candidate", after.filters == before.pending_proposal.candidate, True)
     if receipt.action == "await_confirmation":
         check("pending.no_mutation", after.filters == before.filters, True)

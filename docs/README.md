@@ -101,6 +101,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
 | [walk/public-context.md](walk/public-context.md) | SGIS 행정동·도시공원 실제 배경 공급, 캐시·배포 순서와 Gemini/앱 검증 |
 | [walk/area-context.md](walk/area-context.md) | 상권 업종 집계·EGIS 하천 형상 배경, 지역 카탈로그와 실제 생성 검증 |
+| [walk/runtime.md](walk/runtime.md) | 산책 공공자료 운영 워커·Beat·공유 캐시, 준비·검사·활성화·복구 |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | 공간 일기 조회 API — 인증·일관된 조회·운영 상한·Place/Journey 경계 |
 | [walk/storyboard-live.md](walk/storyboard-live.md) | 실제 산책의 관측 분석·장면 구성과 앱 검토 연결 |
 | [walk/diary-titles.md](walk/diary-titles.md) | 스토리보드 대표·장면 제목의 LLM 생성과 저장·실패 처리 |

@@ -20,6 +20,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class SmokeFailure(Exception):
     """Only predefined messages; never constructed from external responses."""
 
+    def __init__(self, message, *, request_number=None, validation_fields=None):
+        super().__init__(message)
+        self.request_number = request_number
+        self.validation_fields = validation_fields
+
 
 async def cycle(owner):
     started = datetime.now(UTC) - timedelta(minutes=21)
@@ -59,7 +64,28 @@ async def cycle(owner):
                 headers={"Authorization": "Bearer " + create_access_token(owner, SubjectType.APP)},
             )
             if response.status_code >= 300:
-                raise SmokeFailure(f"API status {response.status_code}")
+                fields = []
+                if response.status_code == 422:
+                    try:
+                        details = response.json().get("detail")
+                    except (ValueError, AttributeError):
+                        details = None
+                    if isinstance(details, list):
+                        for item in details[:10]:
+                            loc = item.get("loc", []) if isinstance(item, dict) else []
+                            fields.append(
+                                [
+                                    v
+                                    for v in loc
+                                    if isinstance(v, int)
+                                    or (isinstance(v, str) and v.replace("_", "").isalpha())
+                                ]
+                            )
+                raise SmokeFailure(
+                    f"API status {response.status_code}",
+                    request_number=requests,
+                    validation_fields=fields,
+                )
             return response.json()
 
         walk = await request(
@@ -208,6 +234,8 @@ async def main():
         # Only locally generated messages are safe; external exception strings are omitted.
         if isinstance(exc, SmokeFailure):
             result["reason"] = str(exc)
+            result["request_number"] = exc.request_number
+            result["validation_fields"] = exc.validation_fields
     finally:
         try:
             if created:

@@ -1,0 +1,186 @@
+[
+  {
+    "schema_version": 1,
+    "id": "EX08",
+    "title": "존재 이의만으로 제외하지 않기",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "f81d"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "거기 없잖아 씨발!",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "제외·폐업 확정 금지. 정보 이의에 맞는 응답 유용성은 다음 구현 단위로 분리한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX09",
+    "title": "페이지 참조 제외 후 탐색 초기화",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null,
+      "fixture": "beyond_top20"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "다음 후보 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "returned_count": 6,
+          "browse": "next"
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "첫 번째 장소 빼줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [
+            "cafe-21"
+          ],
+          "returned_count": 20
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "제외도 풀고 처음부터 다시 찾아줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "restart",
+          "returned_count": 20
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "그 다음도 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "next",
+          "returned_count": 6,
+          "expected_refs": [
+            "cafe-21",
+            "cafe-22",
+            "cafe-23",
+            "cafe-24",
+            "cafe-25",
+            "cafe-26"
+          ]
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX10",
+    "title": "현재 목록에 없는 이름 제외",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "달나라카페 빼줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "화면 밖 이름을 임의 ID에 연결하거나 이름 검색으로 바꾸지 않는다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  }
+]

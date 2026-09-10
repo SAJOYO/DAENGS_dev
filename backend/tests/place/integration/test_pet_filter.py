@@ -16,8 +16,7 @@ from daengs_place.ingest.kcisa import source_ref
 from daengs_place.ingest.pet_axes import derive_all as derive_pet_axes
 from daengs_place.ingest.restrictions import derive_all as derive_restrictions
 from daengs_place.place.facility_resolver import FacilityParams, resolve_facilities
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 SOURCES = ("test:pet_base", "test:pet_newer")
 SNAPSHOT = "2025-03-24"

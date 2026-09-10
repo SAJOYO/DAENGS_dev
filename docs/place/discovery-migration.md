@@ -119,10 +119,10 @@ Geo 이름은 다음처럼 바꿔 옮긴다.
 
 | Geo | 운영 대상 | 이유 |
 | --- | --- | --- |
-| `app/discovery/place_intent/*` | `daengs_place/place/intent/*` | 범용 discovery가 아니라 Place 소유 의미 해석이다 |
-| `app/place/presentation/*` | `daengs_place/place/presentation/*` | 기존 planning/source facts와 같은 제품 계약이다 |
+| `app/discovery/place_intent/*` | `daengs_place/intent/*` | 범용 discovery가 아니라 Place 소유 의미 해석이다 |
+| `app/place/presentation/*` | `daengs_place/presentation/*` | 기존 planning/source facts와 같은 제품 계약이다 |
 | `presentation.needs.InformationNeedId` | `daengs_place/place/information_needs.py` | intent가 presentation 구현을 선행 참조하지 않게 식별자만 공유한다 |
-| `place_intent/assembly.py` | `daengs_place/place/discovery/service.py` | planning·검색·표시를 묶는 응용 서비스다 |
+| `place_intent/assembly.py` | `daengs_place/discovery/service.py` | planning·검색·표시를 묶는 응용 서비스다 |
 | `PlaceCapabilityInput` | `PlaceDiscoveryRequest` | capability는 공통 오케스트레이터가 소유하는 용어다 |
 | `orchestration_bridge.py` | 그대로 승격하지 않음 | Geo 호환성 실험을 운영 계약처럼 복제하지 않는다 |
 

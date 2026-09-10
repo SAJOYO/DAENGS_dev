@@ -44,7 +44,7 @@ KCISA `_flag`를 기존 source-fact 파서와 동일하게 Y/N/미상으로 맞�
 
 ## 검증과 후속 연결
 
-합의된 가상 후보·예상 결과는 `backend/tests/place/place/filters/examples.json`에 고정했다. 순수 평가기와 실제 PostGIS SQL을 같은 기대 결과에 대조하고, 별도 사례로 filter-before-limit, 미상 bucket 상한, 차용 사실, 소수점 거리, 중복 분기, 업종별 선호, 기존 v2 후보·개별 반려견 판정 보존을 검증한다.
+합의된 가상 후보·예상 결과는 `backend/tests/place/filters/examples.json`에 고정했다. 순수 평가기와 실제 PostGIS SQL을 같은 기대 결과에 대조하고, 별도 사례로 filter-before-limit, 미상 bucket 상한, 차용 사실, 소수점 거리, 중복 분기, 업종별 선호, 기존 v2 후보·개별 반려견 판정 보존을 검증한다.
 
 DB 검증은 임시 PostGIS 18/3.6의 빈 DB에 기존 Alembic 0001~0022를 적용한 뒤 수행한다. 운영 DB를 사용하지 않는다. `DAENGS_DATABASE_URL`은 backend 공통 설정과 충돌하므로 사용하지 않는다. CI와 같은 `DAENGS_PLACE_DATABASE_URL` 또는 `DAENGS_DB_HOST/PORT/USER/PASSWORD/NAME`을 사용한다. 이번 로컬 실행은 조각 설정을 썼으며 root conftest가 HOST와 PASSWORD를 덮어쓰는 값에 맞췄다. 임시 DB는 loopback 전용 포트로 노출한다.
 
@@ -55,5 +55,5 @@ DB 검증은 임시 PostGIS 18/3.6의 빈 DB에 기존 Alembic 0001~0022를 적�
 2026-09-09 로컬 검증: 아래 타겟 테스트 123개 통과, skip 없음. 변경한 소스·테스트의 ruff check와 git diff --check 통과. 전체 저장소 테스트·운영 DB 조회·실제 LLM 호출은 수행하지 않았다.
 
 ```powershell
-uv run --no-sync pytest -q --tb=short tests/place/place/filters tests/place/integration/test_condition_filters.py tests/place/place/test_search_v2.py tests/place/place/test_name_search.py tests/place/ingest/test_kcisa_concept_filter.py tests/place/integration/test_facility_layer.py tests/place/integration/test_facility_ranking.py
+uv run --no-sync pytest -q --tb=short tests/place/filters tests/place/integration/test_condition_filters.py tests/place/search/test_search_v2.py tests/place/search/test_name_search.py tests/place/ingest/test_kcisa_concept_filter.py tests/place/integration/test_facility_layer.py tests/place/integration/test_facility_ranking.py
 ```

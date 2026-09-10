@@ -8,8 +8,7 @@ from daengs_place.ingest.source_record_store import upsert_source_records
 from daengs_place.place.source_facts.bundle import SourceFactKey
 from daengs_place.place.source_facts.reader import load_candidate_fact_bundles
 from daengs_place.place.source_facts.states import DetailAcquisitionState
-
-from ..conftest import db_session
+from tests.place.support.database import db_session
 
 KCISA_REFS = ("test:candidate-bundle:kcisa:a", "test:candidate-bundle:kcisa:b")
 KTO_REF = "test:candidate-bundle:kto"

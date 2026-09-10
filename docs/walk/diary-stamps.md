@@ -89,7 +89,7 @@ generation 예약을 하지 않는다. 결과의 `input.source`가 기존 `bind_
 공통 인증·DB·기존 storyboard 런타임은 변경하지 않았으며 실서버/실기기 검증은 하지 않았다.
 
 ```powershell
-uv run python -m pytest tests/walk/test_diary_stamps.py tests/walk/test_diary_contract.py tests/walk/test_walk_photo_input.py -q
+uv run python -m pytest tests/walk/diary/test_diary_stamps.py tests/walk/diary/test_diary_contract.py tests/walk/photos/test_walk_photo_input.py -q
 uv run python tools/preview_diary_stamps.py --input evals/walk_diary_stamps/inputs/mixed.json --target 5 --out ../diary-preview
 ```
 

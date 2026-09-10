@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # 두 패키지가 같은 env 를 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
     redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
 
+    # 실시간 산책·날씨를 어디서 부르나 (D-068).
+    #
+    # **비어 있으면 지금까지와 똑같다** — 같은 프로세스의 함수를 부른다. 값이 있으면 그
+    # 주소의 Cloud Run 서비스를 HTTP 로 부른다. 개발 PC·개발서버는 비워 두고 GCP VM 의
+    # backend/.env 에만 넣는다.
+    #
+    # **되돌리기가 이 한 줄이다.** 지우고 `docker compose up -d backend` 로 컨테이너를
+    # 다시 만들면 분리 전 경로로 돌아온다 (`env_file` 은 컨테이너를 만들 때 굳는다).
+    realtime_url: str = ""
+
     # 관리자 수동 크롤이 어디로 가나 (#326, D-062 §3). `celery` 는 집 서버(브로커에 태스크),
     # `cloudrun` 은 GCP(Cloud Run Job `corpus-refresh` 를 Jobs API 로 실행 — 크롤부터 적재까지).
     # GCP VM 의 backend/.env 에만 `DAENGS_CRAWL_BACKEND=cloudrun` 을 둔다. 인증은 VM 서비스

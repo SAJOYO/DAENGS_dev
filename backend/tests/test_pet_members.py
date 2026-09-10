@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.routers import pet as pet_router
 from daengs_backend.routers import pet_member as pet_member_router
 from daengs_backend.schemas.pet import PetUpsert
 from daengs_backend.schemas.walk import WalkUpload
@@ -47,9 +48,15 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 def client_as(app_user_id: uuid.UUID) -> TestClient:
     """그 사람으로 인증을 통과한 클라이언트. `test_care_events.py` 의 `_client_for` 와 같은 요령 —
     라우터가 `CurrentAppUser` 로 잠겨 있으므로 그 의존성만 갈아 끼웁니다.
+
+    `pet_router` 도 같이 얹습니다 — `DELETE /app/pets/{pet_id}` 의 돌보미 확인 게이트
+    (Task 13)를 여기서 같이 검증하려면 강아지 삭제 라우터도 필요합니다. 경로가
+    겹치지 않는 것은 위에서 확인했습니다 (`pet.py` 는 `/app/pets`, `pet_member.py` 는
+    `/app/pets/{pet_id}/members` 등 하위 경로).
     """
     app = FastAPI()
     app.include_router(pet_member_router.router)
+    app.include_router(pet_router.router)
     app.dependency_overrides[
         next(iter(CurrentAppUser.__metadata__)).dependency
     ] = lambda: AppPrincipal(app_user_id=app_user_id)
@@ -413,7 +420,9 @@ async def test_deleting_shared_pet_repairs_carers_primary_pet(store: Store, pet:
     mine = FakePet(app_user_id=CARER, name="네오", breed="푸들")
     store.pets.append(mine)
 
-    await pet_service.delete_pet(FakeSession(), OWNER, pet.id)
+    # 돌보미가 남아 있으므로 확인 없이는 게이트에 걸린다 (Task 13) — 이 테스트가 보는
+    # 것은 그 게이트를 지난 *뒤*의 뒤처리이므로 confirm=True 로 지나간다.
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=True)
 
     assert carer.primary_pet_id == mine.id
 
@@ -426,9 +435,93 @@ async def test_deleting_shared_pet_nulls_primary_when_carer_has_no_other(
     store.pet_members.append((pet.id, CARER))
     carer.primary_pet_id = pet.id
 
-    await pet_service.delete_pet(FakeSession(), OWNER, pet.id)
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=True)
 
     assert carer.primary_pet_id is None
+
+
+# ── 삭제 확인 게이트 (Task 13, docs/co-care.md §3) ────────────────────────
+#
+# 탈퇴 가드(OwnerHasCarersError)와 다른 메커니즘이다 — 저건 하드 블록(두 출구를
+# 안내), 이건 확인-후-통과다. 대표가 강아지를 "겨냥"해 지우는 것이므로 무엇을 할지는
+# 이미 알고, 모르는 것은 "누가 돌보고 있는가" 뿐이다.
+
+
+async def test_deleting_shared_pet_without_confirm_is_gated(store: Store, pet: FakePet):
+    """돌보미가 있는데 confirm 없이 지우면 막힌다 — 강아지는 그대로 남는다.
+
+    **이 테스트가 게이트를 실제로 판별한다**: `confirm` 검사를 지우거나 뒤집으면
+    (되돌리면) 이 테스트가 실패한다 — 대신 `PetHasCarersError` 가 안 나거나 강아지가
+    지워진다.
+    """
+    store.pet_members.append((pet.id, CARER))
+
+    with pytest.raises(pet_service.PetHasCarersError) as exc_info:
+        await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=False)
+
+    assert exc_info.value.pet_name == pet.name
+    assert pet in store.pets  # 지워지지 않았다
+
+
+async def test_deleting_shared_pet_without_confirm_names_carers(store: Store, pet: FakePet):
+    """예외에 강아지 이름과 돌보미 닉네임이 실려야 앱이 "아빠도 맥스를 돌보고
+    있어요" 를 그릴 수 있다.
+    """
+    carer = store.app_users[CARER_KAKAO]
+    carer.nickname = "아빠"
+    store.pet_members.append((pet.id, CARER))
+
+    with pytest.raises(pet_service.PetHasCarersError) as exc_info:
+        await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=False)
+
+    assert exc_info.value.carers == [(CARER, "아빠")]
+
+
+async def test_deleting_shared_pet_with_confirm_succeeds(store: Store, pet: FakePet):
+    """confirm=True 면 돌보미가 있어도 그대로 지운다 — 확인만 요구할 뿐 막지 않는다."""
+    store.pet_members.append((pet.id, CARER))
+
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=True)
+
+    assert pet not in store.pets
+
+
+async def test_deleting_pet_without_carers_needs_no_confirm(store: Store, pet: FakePet):
+    """흔한 경우 — 돌보미가 아무도 없으면 첫 호출부터 그냥 지워진다. 회귀 금지 대상."""
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id, confirm=False)
+
+    assert pet not in store.pets
+
+
+async def test_delete_pet_route_returns_409_with_carers(store: Store, pet: FakePet):
+    """라우터 층 — 돌보미가 있으면 첫 DELETE 는 409, `?confirm=true` 로 재요청하면 204."""
+    carer = store.app_users[CARER_KAKAO]
+    carer.nickname = "아빠"
+    store.pet_members.append((pet.id, CARER))
+
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}")
+    assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["pet_name"] == "맥스"
+    assert body["carers"] == [{"app_user_id": str(CARER), "nickname": "아빠"}]
+
+    r2 = client_as(OWNER).delete(f"/app/pets/{pet.id}?confirm=true")
+    assert r2.status_code == 204
+    assert pet not in store.pets
+
+
+async def test_delete_pet_route_still_owner_only_even_with_confirm(
+    store: Store, pet: FakePet
+):
+    """확인 게이트는 대표만 지운다 — 돌보미나 제3자가 confirm=true 를 붙여도 404 다.
+
+    "게이트가 새로 지울 수 있는 사람을 늘리지 않는다"를 지키는 테스트다.
+    """
+    store.pet_members.append((pet.id, CARER))
+
+    r = client_as(CARER).delete(f"/app/pets/{pet.id}?confirm=true")
+    assert r.status_code == 404
+    assert pet in store.pets
 
 
 async def test_member_list_shows_owner_and_carer(store: Store, pet: FakePet):

@@ -161,7 +161,11 @@ async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
     async def destructive(*args, **kwargs):
         destructive_calls.append("called")
 
+    async def no_carers(session, pet_id):
+        return []
+
     monkeypatch.setattr(pet_service.pet_repo, "get_owned", owned)
+    monkeypatch.setattr(pet_service.member_repo, "list_members", no_carers)
     monkeypatch.setattr(pet_service.gait_service, "cleanup_for_pets", storage_failure)
     monkeypatch.setattr(pet_service.walk_repo, "delete_walks_only_with", destructive)
     monkeypatch.setattr(pet_service.pet_repo, "delete", destructive)

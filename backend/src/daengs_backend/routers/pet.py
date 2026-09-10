@@ -163,12 +163,39 @@ async def delete_pet(
     pet_id: uuid.UUID,
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
+    confirm: bool = False,
 ) -> None:
-    """지웁니다. 대표를 지우면 남은 아이 중 먼저 등록한 아이가 승계합니다."""
+    """지웁니다. 대표를 지우면 남은 아이 중 먼저 등록한 아이가 승계합니다.
+
+    **돌보미가 남아 있으면 확인 없이는 409 입니다** (docs/co-care.md §3, Task 13).
+    대표 탈퇴 가드(`OwnerHasCarersError`, 항상 409 로 막고 두 출구를 안내)와는 다른
+    메커니즘입니다 — 저건 강아지 파괴가 *부수효과*라 하드 블록이 맞지만, 삭제는
+    대표가 강아지를 **겨냥**한 행동이라 무엇을 할지는 이미 알고 있습니다. 모르는 것은
+    "누가 돌보고 있는가" 뿐이라, 그 정보만 주고 `?confirm=true` 로 다시 부르면 지웁니다.
+    이 확인은 새로 지울 수 있는 사람을 늘리지 않습니다 — 대표가 아니면 여전히 404 입니다.
+
+    **`confirm` 이 쿼리 파라미터인 이유** — 약 중복 확인(`POST /app/care-events`)은
+    `confirm` 을 body 에 두는데, 그건 같은 `client_event_id` 로 재전송하는 멱등 재시도
+    계약이 있어서입니다(docs/co-care.md §4). `DELETE` 에는 그런 재시도 계약이 없고
+    `DELETE` 에 body 를 싣는 것도 어색해, 여기는 쿼리로 둡니다 — `care_event` 와
+    모양이 다른 것은 의도입니다.
+    """
     try:
-        await pet_service.delete_pet(session, user.app_user_id, pet_id)
+        await pet_service.delete_pet(session, user.app_user_id, pet_id, confirm=confirm)
     except pet_service.PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
+    except pet_service.PetHasCarersError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "message": f"다른 보호자가 {exc.pet_name}을(를) 돌보고 있어요. 정말 지울까요?",
+                "pet_name": exc.pet_name,
+                "carers": [
+                    {"app_user_id": str(uid), "nickname": nickname}
+                    for uid, nickname in exc.carers
+                ],
+            },
+        ) from None
 
 
 # ── 프로필 사진 (D-052) ──────────────────────────────────────────────────

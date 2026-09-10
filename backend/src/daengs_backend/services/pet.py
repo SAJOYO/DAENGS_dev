@@ -82,6 +82,23 @@ class OwnerHasCarersError(Exception):
         super().__init__(", ".join(pet_names))
 
 
+class PetHasCarersError(Exception):
+    """돌보미가 남은 강아지는 확인 없이 지울 수 없습니다 (docs/co-care.md §3, Task 13).
+
+    **`OwnerHasCarersError`(탈퇴 가드)와 다른 메커니즘입니다.** 탈퇴는 강아지를
+    파괴하는 것이 *부수효과*라 하드 블록에 출구 두 개를 안내합니다 — 사람이 강아지를
+    생각하고 있지 않기 때문입니다. 삭제는 대표가 그 강아지를 **겨냥**한 행동이라 무엇을
+    할지는 이미 알고 있고, 모르는 것은 "누가 돌보고 있는가" 뿐입니다. 그래서 여기는
+    막지 않고 **확인만** 요구합니다 — `confirm=True` 로 다시 부르면 그대로 지웁니다.
+    """
+
+    def __init__(self, pet_name: str, carers: list[tuple[uuid.UUID, str | None]]) -> None:
+        self.pet_name = pet_name
+        #: (app_user_id, nickname) 목록. 라우터가 그대로 409 본문의 `carers` 로 내보냅니다.
+        self.carers = carers
+        super().__init__(pet_name)
+
+
 async def list_pets(
     session: AsyncSession, app_user_id: uuid.UUID
 ) -> tuple[list[Pet], uuid.UUID | None]:
@@ -341,7 +358,13 @@ async def delete_photo(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uu
     await session.commit()
 
 
-async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> None:
+async def delete_pet(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    *,
+    confirm: bool = False,
+) -> None:
     """삭제. **대표를 지우면 남은 아이 중 먼저 등록한 아이가 승계합니다.**
 
     "대표가 없는 상태"를 안 만들면 화면이 단순해집니다 — 앱이 매번 "대표가 없으면"
@@ -357,9 +380,9 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
     같은 일을 하므로 규칙도 그것과 같습니다: 남은 **구성원** 강아지 중 `list_for_owner`
     정렬의 첫 아이, 없으면 `None`.
 
-    **돌보미가 남은 아이의 삭제 자체는 막지 않습니다.** 탈퇴는 막는데(대표 탈퇴 가드)
-    직접 삭제는 안 막는 비대칭이 의도인지는 사람이 정할 제품 결정이라, 지금은 그대로 두고
-    docs/co-care.md §3 에 적어 둡니다.
+    **돌보미가 남은 아이는 `confirm=True` 없이는 `PetHasCarersError` 로 막습니다**
+    (Task 13, docs/co-care.md §3). 탈퇴 가드(`OwnerHasCarersError`)와 다른 메커니즘입니다 —
+    그쪽은 하드 블록, 여기는 확인-후-통과입니다. 클래스 독스트링에 이유를 적었습니다.
     """
     from daengs_backend.services.activity_game import acquire
 
@@ -367,6 +390,18 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
     pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
     if pet is None:
         raise PetNotFoundError
+
+    # ⚠️ **소유 확인(`get_owned`) 바로 다음, 어떤 cleanup 도 하기 전**이라야 합니다.
+    #    gait·사진·산책을 먼저 지운 뒤에 게이트를 걸면 409 를 받은 사용자가 다시
+    #    `confirm=true` 로 불렀을 때 이미 반쯤 지워진 상태에서 재개해야 합니다.
+    #    `list_members` 는 방금 읽은 **지금** 명단이라, `actor_label` 이 하는 "지금도
+    #    구성원인가" 재확인이 필요 없습니다 — 그 재확인은 오래된 케어 로그의
+    #    `actor_app_user_id` 처럼 "그때는 구성원이었는지 모르는" 값에만 필요합니다.
+    if not confirm:
+        carer_ids = await member_repo.list_members(session, pet.id)
+        if carer_ids:
+            names = await app_user_repo.nicknames_by_ids(session, carer_ids)
+            raise PetHasCarersError(pet.name, [(cid, names.get(cid)) for cid in carer_ids])
 
     try:
         # gait 행이 pet FK CASCADE 로 사라지기 전에, 잠근 행에서 원본·overlay 키를

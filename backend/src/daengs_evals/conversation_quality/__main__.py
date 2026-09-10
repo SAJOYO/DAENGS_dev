@@ -47,6 +47,26 @@ from daengs_evals.conversation_quality.judge import PROMPT_VERSION, openai_gener
 from daengs_evals.conversation_quality.judge import judge_model as default_judge_model
 
 
+def _setup_output_encoding() -> None:
+    """콘솔 코드페이지(이 저장소 개발 PC 의 cp949 포함)와 무관하게 표준출력이 살아남게 한다.
+
+    실측(#401) — cp949 콘솔에서 `check-anchors` 가 결과를 다 낸 뒤 `⚠` 하나를 찍다
+    `UnicodeEncodeError` 로 죽었고, 그 전에 찍힌 한글 줄들도 콘솔이 cp949 로 잘못
+    해석해 모두 mojibake 였다. 이 CLI 경계에서만 stdout/stderr 를 UTF-8 로 다시 연다 —
+    라이브러리 쪽 파일 쓰기는 이미 `encoding="utf-8"` 을 명시하므로 그대로 둔다.
+    `reconfigure` 가 없는 스트림(예: 일부 파이프)도 있으므로 있을 때만, 실패해도
+    조용히 넘어간다 — 인코딩을 못 바꾼다고 CLI 자체가 죽을 이유는 없다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+
 def _resolve_model(override: str | None) -> str:
     return override or default_judge_model()
 
@@ -86,8 +106,16 @@ def cmd_check_anchors(args: argparse.Namespace) -> int:
         anchor_set=args.anchor_set,
     )
     print(f"\n앵커 {record['n_passed']}/{record['n']} 통과 → {path}")
+    failing = [row for row in record["results"] if not row["passed"]]
+    if failing:
+        # JSON 을 열지 않아도 판정기가 왜 어긋났는지 보이게 — 근거를 못 보면 앵커가
+        # 틀렸는지 판정기가 틀렸는지를 사람이 그 자리에서 판단할 수 없다.
+        print("\n판정기가 다르게 본 이유:")
+        for row in failing:
+            print(f"  [FAIL] {row['anchor_id']} (기대={row['expected']} 실제={row['actual']})")
+            print(f"    근거: {row['rationale']}")
     if not record["passed"]:
-        print("⚠ 통과하지 못했습니다. 프롬프트를 고치면 PROMPT_VERSION 을 올려야 합니다.")
+        print("[FAIL] 통과하지 못했습니다. 프롬프트를 고치면 PROMPT_VERSION 을 올려야 합니다.")
         return 1
     return 0
 
@@ -209,6 +237,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _setup_output_encoding()
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))

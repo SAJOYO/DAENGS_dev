@@ -1124,6 +1124,200 @@ def test_anchor_check_fails_when_a_verdict_disagrees(tmp_path):
         )
 
 
+def test_anchor_check_records_the_judges_reasoning_for_every_anchor():
+    """실패한 앵커만 이유를 남기면 통과했지만 앞뒤가 안 맞는 판정(거짓 확신)을 놓친다 —
+    통과·실패 가리지 않고 `observations`·`rationale` 을 전부 남긴다."""
+    from daengs_evals.conversation_quality import anchors
+
+    def all_correct(*, axis, prompt, payload, model):
+        del prompt, model
+        anchor = next(a for a in anchors.ANCHORS["dev"] if a.axis == axis and a.payload == payload)
+        return _fake_verdict(score=anchor.expected, axis=axis)
+
+    record = anchors.check("dev", generate=all_correct, model=FAKE_JUDGE_MODEL)
+    assert record["results"], "dev 앵커가 비어 있으면 이 테스트는 아무것도 안 잰 것이다"
+    for row in record["results"]:
+        assert row["passed"] is True
+        assert row["observations"] == ["앞 턴을 다시 묻는다"]
+        assert row["rationale"] == "근거"
+        if row["axis"] == "context_continuity":
+            # ContinuityVerdict 만 갖는 세 상태 칸 — 점수보다 먼저 사실을 적게 하는 축이다.
+            assert row["relevant_state_used"] is False
+            assert row["state_used_correctly"] is False
+            assert row["unsupported_or_superficial_personalization"] is True
+        else:
+            assert "relevant_state_used" not in row
+
+
+def test_anchor_check_reasoning_survives_on_disk(tmp_path):
+    """`write_record` 가 이유 칸을 지우지 않고 그대로 파일에 남기는지 본다."""
+    import json
+
+    from daengs_evals.conversation_quality import anchors
+
+    def all_correct(*, axis, prompt, payload, model):
+        del prompt, model
+        anchor = next(a for a in anchors.ANCHORS["dev"] if a.axis == axis and a.payload == payload)
+        return _fake_verdict(score=anchor.expected, axis=axis)
+
+    path = anchors.run_and_write(
+        "dev", generate=all_correct, model=FAKE_JUDGE_MODEL, anchor_dir=tmp_path
+    )
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["results"], "저장된 기록에 결과가 없다"
+    for row in saved["results"]:
+        assert row["observations"] and row["rationale"]
+
+
+def test_anchor_check_top_level_fields_are_unchanged_by_the_reasoning_addition(tmp_path):
+    """`judge.require_anchor_pass` 가 읽는 최상위 다섯 칸은 그대로여야 한다 —
+    이유 칸 추가는 `results[]` 안의 확장이지, 기록 전체의 재구성이 아니다."""
+    from daengs_evals.conversation_quality import anchors
+
+    def all_correct(*, axis, prompt, payload, model):
+        del prompt, model
+        anchor = next(a for a in anchors.ANCHORS["dev"] if a.axis == axis and a.payload == payload)
+        return _fake_verdict(score=anchor.expected, axis=axis)
+
+    record = anchors.check("dev", generate=all_correct, model=FAKE_JUDGE_MODEL)
+    for key in ("passed", "anchor_set", "anchors_sha256", "n", "n_passed", "prompt_version"):
+        assert key in record
+
+
+# --- CLI 가 Windows 콘솔 코드페이지에서도 살아남는지 (__main__.py) ---
+
+
+def test_setup_output_encoding_lets_stdout_survive_a_narrow_console_codec(monkeypatch):
+    """실제 콘솔 로케일에 기대지 않고, cp949 처럼 좁은 스트림을 직접 흉내낸다.
+
+    #401 실측 — cp949 콘솔에서 `⚠`(⚠) 하나가 앵커 검사 결과 출력 전체를
+    `UnicodeEncodeError` 로 죽였다. reconfigure 뒤에는 같은 문자를 찍어도 죽지 않아야 한다.
+    """
+    import io
+    import sys
+
+    from daengs_evals.conversation_quality import __main__ as cli_mod
+
+    narrow_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp949", errors="strict")
+    monkeypatch.setattr(sys, "stdout", narrow_stdout)
+
+    cli_mod._setup_output_encoding()
+
+    # cp949 는 이 문자를 인코딩하지 못한다 — reconfigure 가 실제로 걸렸는지 이 한 줄로 잰다.
+    print("⚠ 판정 결과 한글도 같이", file=sys.stdout)
+    sys.stdout.flush()
+
+
+def test_check_anchors_cli_does_not_crash_on_a_narrow_stdout_codec(monkeypatch, tmp_path):
+    """`check-anchors` 전체 경로(진입점 → 출력)가 좁은 스트림 위에서도 안 죽어야 한다."""
+    import io
+    import sys
+
+    from daengs_evals.conversation_quality import __main__ as cli_mod
+
+    def always_zero(*, axis, prompt, payload, model):
+        del prompt, payload, model
+        return _fake_verdict(score=0, axis=axis)
+
+    monkeypatch.setattr(cli_mod, "openai_generate", always_zero)
+    narrow_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp949", errors="strict")
+    monkeypatch.setattr(sys, "stdout", narrow_stdout)
+
+    exit_code = cli_mod.main(
+        [
+            "check-anchors",
+            "--anchor-set",
+            "dev",
+            "--judge-model",
+            FAKE_JUDGE_MODEL,
+            "--anchor-dir",
+            str(tmp_path),
+        ]
+    )
+    assert exit_code == 1
+
+
+def test_check_anchors_cli_output_has_no_glyphs_a_narrow_codec_cant_carry(monkeypatch, tmp_path):
+    """`⚠` 처럼 콘솔 코드페이지가 못 나르는 장식 기호는 CLI 출력에서 뺀다 —
+    `[FAIL]`/`[OK]` 표시가 이미 의미를 나른다."""
+    import contextlib
+    import io
+
+    from daengs_evals.conversation_quality import __main__ as cli_mod
+
+    def always_zero(*, axis, prompt, payload, model):
+        del prompt, payload, model
+        return _fake_verdict(score=0, axis=axis)
+
+    monkeypatch.setattr(cli_mod, "openai_generate", always_zero)
+
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(
+        [
+            "check-anchors",
+            "--anchor-set",
+            "dev",
+            "--judge-model",
+            FAKE_JUDGE_MODEL,
+            "--anchor-dir",
+            str(tmp_path),
+        ]
+    )
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        exit_code = args.func(args)
+
+    out = buf.getvalue()
+    assert exit_code == 1
+    assert "⚠" not in out
+    assert "[FAIL]" in out
+
+
+def test_check_anchors_cli_prints_the_rationale_for_failing_anchors(monkeypatch, tmp_path):
+    """실패 이유(rationale)를 JSON 을 열지 않고도 표준출력에서 볼 수 있어야 한다."""
+    import contextlib
+    import io
+
+    from daengs_evals.conversation_quality import __main__ as cli_mod
+
+    def always_zero_distinct_rationale(*, axis, prompt, payload, model):
+        del prompt, payload, model
+        from daengs_evals.conversation_quality.judge import ContinuityVerdict, Verdict
+
+        if axis == "context_continuity":
+            return ContinuityVerdict(
+                observations=["표식"],
+                rationale="이것이야말로 그 이유다-표식",
+                relevant_state_used=False,
+                state_used_correctly=False,
+                unsupported_or_superficial_personalization=True,
+                score=0,
+            )
+        return Verdict(observations=["표식"], rationale="이것이야말로 그 이유다-표식", score=0)
+
+    monkeypatch.setattr(cli_mod, "openai_generate", always_zero_distinct_rationale)
+
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(
+        [
+            "check-anchors",
+            "--anchor-set",
+            "dev",
+            "--judge-model",
+            FAKE_JUDGE_MODEL,
+            "--anchor-dir",
+            str(tmp_path),
+        ]
+    )
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        args.func(args)
+
+    assert "이것이야말로 그 이유다-표식" in buf.getvalue()
+
+
 # --- 리포트와 전후 비교 (report.py) ---
 
 

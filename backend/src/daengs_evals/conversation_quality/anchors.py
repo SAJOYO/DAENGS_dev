@@ -585,15 +585,27 @@ def check(anchor_set: Split, *, generate: judge_mod.Generate, model: str) -> dic
         prompt = judge_mod.build_prompt(anchor.axis, anchor.payload)
         verdict = generate(axis=anchor.axis, prompt=prompt, payload=anchor.payload, model=model)
         ok = verdict.score == anchor.expected
-        results.append(
-            {
-                "anchor_id": anchor.anchor_id,
-                "axis": anchor.axis,
-                "expected": anchor.expected,
-                "actual": verdict.score,
-                "passed": ok,
-            }
-        )
+        # 판정기의 이유(관찰·근거)를 통과 여부와 무관하게 전부 남긴다(#401) — 실패만 남기면
+        # "통과했지만 앞뒤가 안 맞는 판정" 이라는, 이 게이트가 정작 잡아야 할 거짓 확신을
+        # 놓친다. 이미 그 답을 받으려고 모델을 부른 뒤라 남기는 데 비용이 더 들지 않는다.
+        row: dict[str, Any] = {
+            "anchor_id": anchor.anchor_id,
+            "axis": anchor.axis,
+            "expected": anchor.expected,
+            "actual": verdict.score,
+            "passed": ok,
+            "observations": verdict.observations,
+            "rationale": verdict.rationale,
+        }
+        if isinstance(verdict, judge_mod.ContinuityVerdict):
+            # context_continuity 만 갖는 세 상태 칸 — `ContinuityVerdict` 가 점수보다 먼저
+            # 적게 하는 사실 기록이라, 앵커 기록에서도 점수만 남기면 그 셋이 사라진다.
+            row["relevant_state_used"] = verdict.relevant_state_used
+            row["state_used_correctly"] = verdict.state_used_correctly
+            row["unsupported_or_superficial_personalization"] = (
+                verdict.unsupported_or_superficial_personalization
+            )
+        results.append(row)
     n_passed = sum(1 for r in results if r["passed"])
     return {
         "passed": n_passed == len(results),

@@ -23,6 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 # 이 파일은 backend/tests/ 에 있고 하네스는 저장소 루트의 tools/ 에 있다. pytest 는
 # backend/ 에서 도는데(루트 CLAUDE.md), `../..` 같은 상대 홉은 실행 위치가 바뀌면 깨진다 —
 # 그래서 이 파일 자신의 절대 경로에서 거슬러 올라간다: tests/ -> backend/ -> 저장소 루트.
@@ -76,3 +78,55 @@ def test_coverage_fails_when_a_migration_loses_its_verifier():
         assert FIXTURE_MIGRATION in result.stdout
     finally:
         target.write_bytes(backup)
+
+
+def _run_sql() -> subprocess.CompletedProcess:
+    """하네스를 서브프로세스로 부른다. 같은 방식으로 PGHOST 등 libpq 환경 변수를 넘긴다.
+
+    마이그레이션 검증 SQL 을 일회용 PostgreSQL DB 에 적용하고 의도적으로 망가뜨려
+    verify 파일이 실제로 그 망가짐을 종료 코드로 잡는지를 본다.
+    """
+    import os
+    import copy
+
+    env = copy.deepcopy(os.environ)
+    # sql_checks() 는 PGHOST 를 명시적으로 확인한다 (tools/check_migration_verification.py L834).
+    # loopback DB 를 요구하고, psql 바이너리로 libpq 환경 변수를 읽는다.
+    env.update({
+        'PGHOST': '127.0.0.1',
+        'PGPORT': '55432',  # 개발 PC 로컬 postgres:postgres@127.0.0.1:55432/vectordb
+        'PGUSER': 'postgres',
+        'PGPASSWORD': 'postgres',
+        'PGDATABASE': 'vectordb',
+    })
+    return subprocess.run(
+        [sys.executable, str(HARNESS), "sql"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_sql_mutation_testing_skips_when_psql_unavailable():
+    """mutation-testing 하네스(`sql` 서브커맨드)는 `psql` CLI 바이너리를 요구한다.
+
+    이 바이너리는 이 개발 환경 PATH 에 없다(`which psql` → not found, 2026-09-10).
+    그러면 하네스는 실행 자체를 못 한다. 이 테스트는 **이 로컬 환경에서 스킵된다**.
+
+    테스트가 실행되려면:
+    - Windows: PostgreSQL 공식 배포판을 설치하거나(`C:\\Program Files\\PostgreSQL\\bin\\psql`)
+      `psql` 을 PATH 에 놓아야 합니다.
+    - Linux: `postgresql-client` 패키지를 설치하세요.
+    - macOS: `brew install postgresql` 등.
+
+    따라서 이 테스트는 **CI/CD 또는 로컬에 psql 이 설치된 환경에서만 실행됩니다.**
+    로컬 테스트 흐름(`uv run pytest`)에서는 스킵하는 것이 정상입니다.
+    """
+    import shutil
+
+    if shutil.which('psql') is None:
+        pytest.skip("psql 바이너리가 PATH 에 없음 — mutation-testing 하네스 실행 불가")
+
+    result = _run_sql()
+    assert result.returncode == 0, result.stdout + result.stderr

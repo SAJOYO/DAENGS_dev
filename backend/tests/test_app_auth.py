@@ -39,6 +39,7 @@ from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
 from daengs_backend.routers import app_auth as app_auth_router
 from daengs_backend.routers import pet as pet_router
+from daengs_backend.routers import pet_member as pet_member_router
 from daengs_backend.routers import walk as walk_router
 from daengs_backend.services import app_auth as app_auth_service
 
@@ -91,6 +92,7 @@ def app() -> FastAPI:
     test_app = FastAPI()
     test_app.include_router(app_auth_router.router)
     test_app.include_router(pet_router.router)
+    test_app.include_router(pet_member_router.router)
     test_app.include_router(walk_router.router)
 
     @test_app.get("/_app_only")
@@ -390,6 +392,124 @@ class TestSessionFlow:
         )
 
         assert response.status_code == 401
+
+    def test_탈퇴가_돌보미가_남은_강아지를_지우면_안_된다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """서버가 막습니다 — 앱 UX 만으로는 구버전 앱·직접 호출에서 뚫립니다.
+
+        공동 돌봄이 생기면서 대표의 탈퇴가 더 이상 "내 것만 지운다"가 아니게 됐습니다 —
+        돌보미가 딸린 강아지를 대표 혼자 지우면 그 돌보미의 접근이 통보 없이 사라집니다.
+        """
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=111))
+        store.pet_members.append((pet.id, carer.id))
+
+        res = client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        )
+
+        assert res.status_code == 409
+        assert "맥스" in res.json()["detail"]
+        assert pet in store.pets
+
+    def test_탈퇴_거부_메시지가_두_출구를_같이_안내한다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """탈퇴를 영구히 막는 모양이 되면 안 됩니다 — 승계와 내보내기 둘 다 언급해야 합니다."""
+        access = _login(client).json()["access_token"]
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=111))
+        store.pet_members.append((pet.id, carer.id))
+
+        detail = client.post(
+            "/auth/app/withdraw", headers={"Authorization": f"Bearer {access}"}
+        ).json()["detail"]
+
+        assert "대표" in detail  # 승계 출구 ⓐ
+        assert "내보" in detail  # 내보내기 출구 ⓑ
+
+    def test_돌보미로만_참여_중이면_탈퇴가_막히지_않는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """돌보미는 소유한 것이 없으므로 그냥 나갑니다 — 트리거가 pet_members 를 정리합니다."""
+        owner = store.add_app_user(FakeAppUser(kakao_id=222))
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=KAKAO_ID))
+        store.pet_members.append((pet.id, carer.id))
+        carer_token = create_access_token(carer.id, SubjectType.APP)
+
+        res = client.post(
+            "/auth/app/withdraw",
+            headers={"Authorization": f"Bearer {carer_token}"},
+        )
+
+        assert res.status_code == 204
+        assert pet in store.pets
+
+    def test_돌보미를_내보낸_뒤에는_탈퇴가_된다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """가드는 순서를 요구할 뿐입니다 — 내보내면 바로 탈퇴할 수 있습니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=111))
+        store.pet_members.append((pet.id, carer.id))
+
+        remove_res = client.delete(
+            f"/app/pets/{pet.id}/members/{carer.id}", headers=headers
+        )
+        assert remove_res.status_code == 204
+
+        res = client.post("/auth/app/withdraw", headers=headers)
+
+        assert res.status_code == 204
+        assert pet not in store.pets
+
+    def test_대표를_넘긴_뒤에는_탈퇴가_되고_강아지는_살아남는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """출구 ⓐ 전체를 한 번에 걷습니다 — 이것이 409 메시지가 실제로 약속하는 경로입니다.
+
+        승계 테스트는 승계가 되는 것을, 탈퇴 테스트는 탈퇴가 되는 것을 따로 증명하지만
+        둘을 이어 붙인 테스트는 없었습니다. 대표를 넘기면 `list_for_owner_for_update` 가
+        더 이상 이 강아지를 돌려주지 않으므로 가드가 구조적으로 안 걸려야 "정상"인데,
+        그 구조적 논리가 실제로 맞는지는 이렇게 끝까지 걸어 봐야 압니다 — 회귀가 생기면
+        이 테스트가 잡습니다(탈퇴가 다시 막히거나, 최악의 경우 넘긴 강아지가 지워지거나).
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        owner = store.app_users[KAKAO_ID]
+        pet = FakePet(app_user_id=owner.id, name="맥스", breed="믹스")
+        store.pets.append(pet)
+        carer = store.add_app_user(FakeAppUser(kakao_id=111))
+        store.pet_members.append((pet.id, carer.id))
+
+        # 넘기기 전: 돌보미가 남아 있으니 여전히 409.
+        blocked = client.post("/auth/app/withdraw", headers=headers)
+        assert blocked.status_code == 409
+
+        transfer = client.post(
+            f"/app/pets/{pet.id}/owner",
+            json={"app_user_id": str(carer.id)},
+            headers=headers,
+        )
+        assert transfer.status_code == 200
+
+        res = client.post("/auth/app/withdraw", headers=headers)
+
+        assert res.status_code == 204
+        assert pet in store.pets, "넘긴 강아지가 탈퇴로 같이 지워지면 안 됩니다"
+        assert pet.app_user_id == carer.id
 
     def test_탈퇴하면_내_강아지와_산책_좌표만_지운다(
         self, client: TestClient, store: Store

@@ -1,0 +1,49 @@
+"""Opt-in saved-input preparation, reusing the existing owner check and analysis replay.
+
+No API exposure, writes, provider request, generation reservation or new orchestrator.
+The caller owns the DB transaction just as with prepare_saved_diary.
+"""
+
+import uuid
+from dataclasses import dataclass
+
+from daengs_backend.orchestration.contracts import PrincipalContext
+from daengs_backend.services.walk_diary_contract import require_owner
+from daengs_backend.services.walk_diary_input import InputAssembly, read_input
+from daengs_walk.diary_board import (
+    BaseBoard,
+    BaseBoardPolicy,
+    PreparedBaseBoard,
+    VerifiedBoardRoute,
+)
+from daengs_walk.diary_board_assembly import assemble_base_board
+from daengs_walk.diary_board_selection import prepare_base_board
+
+
+@dataclass(frozen=True)
+class PreparedSavedBaseBoard:
+    input: InputAssembly
+    plan: PreparedBaseBoard
+    board: BaseBoard
+
+
+def assemble_saved_base_board(assembled: InputAssembly, policy: BaseBoardPolicy):
+    observation = assembled.observation_source
+    route = (
+        VerifiedBoardRoute(observation.route, observation.evidence)
+        if observation is not None and observation.evidence is not None
+        else None
+    )
+    plan = prepare_base_board(assembled.source, policy, route=route)
+    board = assemble_base_board(assembled.source, plan, route=route)
+    return PreparedSavedBaseBoard(assembled, plan, board)
+
+
+async def prepare_saved_base_board(
+    session, principal: PrincipalContext, walk_id, policy: BaseBoardPolicy
+):
+    if principal.kind != "APP_USER":
+        raise PermissionError("diary requires its walk owner")
+    assembled = await read_input(session, uuid.UUID(principal.subject), walk_id)
+    require_owner(principal, assembled.source)
+    return assemble_saved_base_board(assembled, policy)

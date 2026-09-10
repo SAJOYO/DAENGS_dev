@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "source_run": "20260910T075627Z-7996e8c-6de532d692",
+  "source_repetition": 1,
+  "arms": [
+    "current-input",
+    "context-input"
+  ],
+  "repeat": 3,
+  "targets": [
+    {
+      "id": "PC-X01",
+      "source_case_id": "PC-C01",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X02",
+      "source_case_id": "PC-C04",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X03",
+      "source_case_id": "PC-C05",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X04",
+      "source_case_id": "PC-U01",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X05",
+      "source_case_id": "PC-U02",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X06",
+      "source_case_id": "PC-U03",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X07",
+      "source_case_id": "PC-U04",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X08",
+      "source_case_id": "PC-U05",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X09",
+      "source_case_id": "PC-U06",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X10",
+      "source_case_id": "PC-U07",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X11",
+      "source_case_id": "PC-U08",
+      "source_turn": 1
+    },
+    {
+      "id": "PC-X12",
+      "source_case_id": "PC-U08",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X13",
+      "source_case_id": "PC-U09",
+      "source_turn": 2
+    },
+    {
+      "id": "PC-X14",
+      "source_case_id": "PC-C05",
+      "source_turn": 2,
+      "counterfactual_initial_kinds": [
+        "restaurant"
+      ],
+      "expect_override": {
+        "candidate_kinds": [
+          "restaurant"
+        ]
+      }
+    }
+  ]
+}

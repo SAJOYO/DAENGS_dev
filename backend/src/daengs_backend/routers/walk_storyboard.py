@@ -19,6 +19,7 @@ from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_diary_writing import write_diary
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
+from daengs_walk.diary_board_output import BOARD_FORMAT
 
 router = APIRouter(prefix="/app/walks", tags=["walk-storyboard"])
 
@@ -40,9 +41,13 @@ async def capabilities(user: CurrentAppUser):
     from daengs_backend.config import settings
 
     return {
-        "diary_formats": ["walk-diary-bundle-v1"] if settings.walk_diary_enabled else [],
+        "diary_formats": ["walk-diary-bundle-v1", BOARD_FORMAT]
+        if settings.walk_diary_enabled
+        else [],
         "target_scene_count": {"min": 1, "max": 50},
         "photo_manifest_required_if_available": True,
+        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": 10_000}
+        if settings.walk_diary_enabled else None,
     }
 
 
@@ -55,7 +60,7 @@ async def get_storyboard(
     target_scene_count: Annotated[int | None, Query(ge=1, le=50)] = None,
 ):
     try:
-        if bundle_format == "walk-diary-bundle-v1":
+        if bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
             return await service.get(
                 session,
                 user.app_user_id,
@@ -81,7 +86,7 @@ async def generate_storyboard(
     diary_writer: Annotated[Callable, Depends(get_diary_writer)],
 ):
     try:
-        if body.bundle_format == "walk-diary-bundle-v1":
+        if body.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
             return await service.generate(
                 session, user.app_user_id, walk_id, body, lookup, titles, diary_writer=diary_writer
             )

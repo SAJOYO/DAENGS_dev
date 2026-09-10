@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_place.core.clock import SystemClock
 from daengs_place.place.adapters import facility_place_result, medical_place_result
-from daengs_place.place.contracts import PlaceResult
+from daengs_place.place.contracts import PlaceRef, PlaceResult
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
 from daengs_place.place.filters.evaluation import evaluate, evaluate_atom, evaluate_atoms
 from daengs_place.place.filters.resolver import resolve_filtered_facilities
@@ -124,9 +124,14 @@ def explain_hit(
     )
 
 
-async def search_filtered_places(db: AsyncSession, state: FilterState) -> FilterResponse:
+async def search_filtered_places(
+    db: AsyncSession, state: FilterState, *, omitted: tuple[PlaceRef, ...] = ()
+) -> FilterResponse:
     """Execute validated conditions; failures propagate rather than becoming empty results."""
     state = guard_filter_state(state)
+    if len(omitted) > 1320:
+        raise ValueError("exploration omission budget exceeded")
+    omitted = tuple(PlaceRef.model_validate(key.model_dump()) for key in omitted)
     judged_at = SystemClock().now()
     groups = []
     for kind in state.candidate_kinds:
@@ -150,6 +155,7 @@ async def search_filtered_places(db: AsyncSession, state: FilterState) -> Filter
                 judge_at=judged_at,
                 name_query=state.name_query,
                 precise_order=True,
+                **({"omitted": omitted} if omitted else {}),
             )
             hits = tuple(
                 explain_hit(medical_place_result(r), state, uncertain=verdict is None)
@@ -169,6 +175,7 @@ async def search_filtered_places(db: AsyncSession, state: FilterState) -> Filter
                 db,
                 state,
                 kind.value,
+                **({"omitted": omitted} if omitted else {}),
             )
             groups.append(
                 FilterGroup(

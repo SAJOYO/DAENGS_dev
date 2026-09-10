@@ -8,10 +8,24 @@
 | [fixtures.v1.json](fixtures.v1.json) | 고정된 합성 장소 후보와 경계 데이터 |
 | [run-record.example.json](run-record.example.json) | 실행 기록 형식 예시. 실제 실행 결과가 아님 |
 | [transfer.v1.jsonl](transfer.v1.jsonl) | 첫 관측 뒤 작성한 별도 전이 검사 4개. 원래 23개와 합산하지 않음 |
+| [policy.v1.jsonl](policy.v1.jsonl) / [fixtures.policy.v1.json](fixtures.policy.v1.json) | 확인 후속 발화 10개와 불투명 ID fixture |
+| [corrections.v1.jsonl](corrections.v1.jsonl) | 교정 5개와 사용자 불만·재탐색 원문/확장 9개. 27단계 중 수동 이벤트 2개 |
+| [context-ablation.v1.json](context-ablation.v1.json) | 동일 턴 직전 상태에서 현재 입력/화면 문맥 보강을 비교할 14개 대상 |
+| [context-followup.v1.json](context-followup.v1.json) | 주입 후 관측한 최신 요청 누락을 입력 키 순서/중복 과거 발화로 나눈 3개 대상 |
+| [exploration.v1.jsonl](exploration.v1.jsonl) | 다음 후보·제외·해제·초기화·현재 요청 우선의 연속 시나리오 10개 |
 | `runs/<UTC 시각>-<코드 SHA>-<실행 ID>/` | metadata.json, observations.jsonl, 별도 reviews.jsonl과 연구 기록 |
 
 [설계·판정 원칙](../../../docs/place/conversation-evaluation.md)을 먼저 읽는다.
 [1차 연구 결과](../../../docs/place/conversation-research-2026-09-10.md)에 실행별 링크와 구조 제안을 정리했다.
+[채택한 실행 정책](../../../docs/place/conversation-policy.md)은 PR #417의 해석·확인·사실 응답 경계를 설명한다.
+[교정·재탐색 연구](../../../docs/place/conversation-corrections-2026-09-10.md)는 그 정책을 고정한 후속 실험이다.
+[문맥 주입 대조](../../../docs/place/conversation-context-ablation-2026-09-10.md)는 동일 query/상태에
+현재 화면과 완료된 직전 행동만 추가한다. 실행: `uv run python -m daengs_evals.place_conversation.context_ablation --live --repeat 3 --key-file C:\path\to\.env`.
+이 대조의 cases.json은 원래 케이스 전체가 아니라 고정 턴/단서 snapshot이고,
+report의 case_repetitions는 독립 턴 대상의 반복이다. 전체 대화 완료로 집계하지 않는다.
+제한적 배치 후속은 `uv run python -m daengs_evals.place_conversation.context_followup --live --repeat 3 --key-file C:\path\to\.env`로 실행한다.
+두 모듈은 기존 run의 고정 입력을 읽으며 새 고유 run을 생성한다. 기본 spec의 source_run은 수정하지 않고,
+다른 근거로 비교하려면 spec을 새 버전으로 만든다.
 `cases.v1.jsonl`은 시나리오 **명세**다. `setup`은 HTTP 요청이나 FilterState의 직접 직렬화가 아니며,
 이 값을 실제 상태/fixture로 바꾸는 어댑터는 `src/daengs_evals/place_conversation/`에 있다.
 예를 들어 `parking=required_true`는 원본의 의미를 나타내며 production enum이 아니다.
@@ -43,13 +57,12 @@ uv run python -m daengs_evals.place_conversation.runner
 uv run python -m daengs_evals.place_conversation.runner --live --repeat 3 --key-file C:\path\to\.env
 # 실패 범위만 재검사
 uv run python -m daengs_evals.place_conversation.runner --live --ids PC-E05,PC-E08 --repeat 3 --key-file C:\path\to\.env
-# 프롬프트만 / 프롬프트와 확인 정책·대기 원문을 함께 바꾸는 연구 변형
-uv run python -m daengs_evals.place_conversation.runner --live --variant prompt-only --ids PC-E05,PC-E06,PC-E07,PC-E08,PC-E09,PC-E11 --key-file C:\path\to\.env
-uv run python -m daengs_evals.place_conversation.runner --live --variant policy-context --ids PC-E05,PC-E06,PC-E07,PC-E08,PC-E09,PC-E11 --key-file C:\path\to\.env
 # 별도 전이 입력. 원래 평가셋 점수에 섞지 않는다
-uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/transfer.v1.jsonl --variant policy-context --key-file C:\path\to\.env
-# 저장된 원본 계획 재생 및 거짓 답변 주입. 모델 호출 없음
-uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run>
+uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/transfer.v1.jsonl --key-file C:\path\to\.env
+# 확인 후속 발화와 불투명 ID의 사실 설명
+uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/policy.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json --key-file C:\path\to\.env
+# 교정·불만 뒤 재탐색: 사용자 원문 연속/단독, 순차 수동 조작
+uv run python -m daengs_evals.place_conversation.runner --live --cases evals/place_conversation/corrections.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json --repeat 3 --key-file C:\path\to\.env
 # false와 unknown이 답변 입력에서 구별되는지
 uv run python -m daengs_evals.place_conversation.diagnose evals/place_conversation/runs/<run> --evidence-gap
 # 실제 제안에 대한 구조화된 동의/거절 재생 (policy-context E08 실행 폴더)
@@ -77,7 +90,20 @@ JUnit의 scenario_id/trace 속성에 경합별 확정·복구 상태를 남긴�
 자동 기준이 모두 맞아도 전체 `pass`로 만들지 않는다. 사람이 실제 확인 질문, 원본/제공 답변,
 확정 필터를 읽고 `reviews.jsonl`에 근거 충실도와 작업 완료 여부를 따로 기록한다.
 관측의 상태는 변경하지 않고, 리포트에서 관측과 검토를 합친다.
-연구용 `PolicyGemini`와 OR 표현식 컴파일러는 운영 코드가 아니며 채택 결정도 아니다.
+현재 runner는 `production-exploration-v1`만 실행하며 답변은 커밋된 receipt에서 서버가 렌더링한다.
+이전 production-policy-v1 및 문맥 대조는 각 run metadata의 code_sha 체크아웃에서 재현한다.
+탐색 평가는 `--cases evals/place_conversation/exploration.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json`을 사용한다.
+범위와 결과는 [탐색 정책](../../../docs/place/conversation-exploration.md)에 기록한다.
+이번 구현의 실패·수정·429 재실행 대응은 [비교 기록](exploration-comparison.v1.json)에 있다.
+원본 관측과 별도 의미 평가는 각 run에 보존하며, 중간에 끊긴 대화의 성공한 앞부분을 완주로 집계하지 않는다.
+순차 `manual` 이벤트는 production prepare에 실제 PlaceSearchRequest를 전달하며 모델을 호출하지 않는다.
+관측의 event는 원래 입력, result_delta는 직전 목록 대비 추가/제거 ref다. 동일 ref가 다른 source에
+존재하는 fixture에서는 이 지표를 사용하지 않는다. 이번 fixture는 ref가 모두 유일하다.
+`min_new_refs`는 검색 호출 성공과 별개로 실제 새 후보가 있는지 검사한다. HTTP 경합 이벤트는
+여전히 별도 하네스 대상이며 이 확장은 Redis CAS나 앱 클릭 검증이 아니다.
+과거 `production-baseline`, `prompt-only`, `policy-context`와 원본 계획 재생 진단은 **ac2b062 체크아웃**에서 실행한다.
+원본 관측은 보존하며, 현재 코드로 과거 variant 이름의 결과를 생성하지 않는다.
+`pending_replay`의 저장된 계획·동의 재생은 당시 구조 연구용이며 운영 정책은 conversation/policy.py에 있다.
 
 ## 기존 관련 테스트
 

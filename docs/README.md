@@ -2,20 +2,27 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
+| [walk/diary-publication.md](walk/diary-publication.md) | 종료 후 남은 시간 예산·영속 기본 보드·단일 확정과 중단 복구 |
+| [walk/diary-base-board.md](walk/diary-base-board.md) | AI 없이 완성하는 내부 기본 보드 — 사용자 기록·관측·동선 지점·시작/종료와 기존 v1 보존 |
 | [walk/diary-generation.md](walk/diary-generation.md) | 스탬프의 LLM 배경·제목 작성과 기존 생성 예약·완료, 명시적 일기 HTTP 형식 |
 | [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |
 | [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |
 | [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
+| [co-care.md](co-care.md) | 공동 돌봄 설계 — 한 강아지를 여러 보호자가. `pet_members` · 대표/돌보미 · 초대·승계·탈퇴 · 약 중복 확인. **`app_users` 는 탈퇴해도 안 지워진다**는 함정이 이 문서 전체를 관통한다 |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [ci/README.md](ci/README.md) | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 `docs/ci/` 로 빠졌습니다** (Actions 한도 소진). **그것들이 잡던 것을 이제 사람이 머지 전에 로컬에서 돌립니다** — 명령 목록이 거기 있습니다. 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |
-| [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
+| [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 집계·산책별 봉인 원판 조회 API — 인증·repeatable-read snapshot·원본/가용 상태·운영 상한 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
+| [territory/bookmarks-api.md](territory/bookmarks-api.md) | 회원별 점령지 북마크 저장·해제·목록, 20개 한도·중립 장소·탈퇴 정리 |
+| [territory/my-sites-api.md](territory/my-sites-api.md) | 회원 전체·강아지별 현재 점령지 목록, 좌표·페이지 조회와 Place ID 조회 |
+| [territory/public-game-api.md](territory/public-game-api.md) | 현재 시즌 강아지 순위·공개 게임 프로필·현재 점령지·프로필 사진 조회 |
 | [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
 | [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
 | [territory/monthly-seasons.md](territory/monthly-seasons.md) | 명시적 첫 월간 시즌 시작·자동 결산·최종 순위·다음 시즌과 장애 복구 |
@@ -81,7 +88,10 @@
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
 | [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
+| [place/conversation-exploration.md](place/conversation-exploration.md) | 다음 후보·명시적 제외의 세션 상태, SQL·캐시 경계와 연속 평가 |
 | [place/conversation-evaluation.md](place/conversation-evaluation.md) | 시설 검색 LLM 정상·엣지·경합 시나리오, 판정 원칙과 반복 검증 |
+| [place/conversation-corrections-2026-09-10.md](place/conversation-corrections-2026-09-10.md) | 시설 대화 교정·사용자 불만 뒤 재탐색 실험과 구조 연구 |
+| [place/conversation-context-ablation-2026-09-10.md](place/conversation-context-ablation-2026-09-10.md) | 동일 요청에 화면·직전 행동 단서만 추가한 A/B 출력 평가 |
 | [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
 
 실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.

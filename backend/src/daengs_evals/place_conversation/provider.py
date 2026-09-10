@@ -44,7 +44,7 @@ class ObservedGemini(GeminiConversation):
         self.plans.append(plan.model_dump(mode="json"))
         return plan
 
-    async def answer(self, request):
-        draft = await super().answer(request)
-        self.drafts.append(draft.model_dump(mode="json"))
-        return draft
+    async def decide_pending(self, request):
+        decision = await super().decide_pending(request)
+        # Raw classifier requests/responses are retained in calls; it is not a new filter plan.
+        return decision

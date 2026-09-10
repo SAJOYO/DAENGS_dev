@@ -24,13 +24,15 @@ from daengs_backend.routers import care_event as care_router
 from daengs_backend.services import care_event as care_service
 
 OWNER = uuid.uuid4()
+#: 돌보미. 기록하고 보지만, 프로필을 고치거나 남의 기록을 지우지는 못합니다 (docs/co-care.md).
+CARER = uuid.uuid4()
 STRANGER = uuid.uuid4()
 SEOUL = ZoneInfo("Asia/Seoul")
 
 
 @dataclass
 class FakeCareEvent:
-    app_user_id: uuid.UUID
+    actor_app_user_id: uuid.UUID
     pet_id: uuid.UUID
     kind: str
     occurred_at: datetime
@@ -57,13 +59,17 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 
 
 @pytest.fixture
-def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
+def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
     cs = CareStore()
+
+    def _pet_owner(pet_id):
+        """그 아이의 대표. 삭제 판정이 "적은 사람 또는 대표" 라 대역도 pets 를 봐야 합니다."""
+        return next((p.app_user_id for p in store.pets if p.id == pet_id), None)
 
     def add(session, event):
         # 진짜 모델은 CareEvent 지만 대역이 같은 칸을 갖고 있어 그대로 담습니다.
         fake = FakeCareEvent(
-            app_user_id=event.app_user_id, pet_id=event.pet_id, kind=event.kind,
+            actor_app_user_id=event.actor_app_user_id, pet_id=event.pet_id, kind=event.kind,
             occurred_at=event.occurred_at, note=event.note, client_event_id=event.client_event_id,
         )
         # 서비스가 commit 뒤 `event` 를 응답에 씁니다 — 진짜는 flush 가 id·created_at 을 채웁니다.
@@ -72,9 +78,19 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
         cs.events.append(fake)
         return event
 
-    async def get_owned(session, app_user_id, event_id):
+    async def get_deletable(session, app_user_id, event_id):
+        # 진짜와 같게 **적은 사람 또는 그 아이의 대표** 입니다 (docs/co-care.md §2).
         return next(
-            (e for e in cs.events if e.id == event_id and e.app_user_id == app_user_id), None
+            (
+                e
+                for e in cs.events
+                if e.id == event_id
+                and (
+                    e.actor_app_user_id == app_user_id
+                    or _pet_owner(e.pet_id) == app_user_id
+                )
+            ),
+            None,
         )
 
     async def get_by_client_event(session, pet_id, client_event_id):
@@ -83,10 +99,11 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
             None,
         )
 
-    def _between(app_user_id, pet_id, start, end):
+    def _between(_app_user_id, pet_id, start, end):
+        # 진짜와 같게 **actor 로 안 거릅니다** — 기록의 주인은 강아지입니다 (docs/co-care.md §2).
         return [
             e for e in cs.events
-            if e.app_user_id == app_user_id and e.pet_id == pet_id and start <= e.occurred_at < end
+            if e.pet_id == pet_id and start <= e.occurred_at < end
         ]
 
     async def list_between(session, app_user_id, pet_id, start, end):
@@ -107,25 +124,52 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     async def count_walks(session, app_user_id, pet_id, start, end):
         return sum(1 for t in cs.walk_starts.get(pet_id, []) if start <= t < end)
 
+    async def list_kind_between(session, pet_id, kind, start, end):
+        # 진짜와 같게 최근 먼저입니다 — 약 중복 확인이 conflicts[0] 을 "가장 최근" 으로 씁니다.
+        return sorted(
+            (
+                e for e in cs.events
+                if e.pet_id == pet_id and e.kind == kind and start <= e.occurred_at <= end
+            ),
+            key=lambda e: e.occurred_at,
+            reverse=True,
+        )
+
     monkeypatch.setattr(care_repo, "add", add)
-    monkeypatch.setattr(care_repo, "get_owned", get_owned)
+    monkeypatch.setattr(care_repo, "get_deletable", get_deletable)
     monkeypatch.setattr(care_repo, "get_by_client_event", get_by_client_event)
     monkeypatch.setattr(care_repo, "list_between", list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
     monkeypatch.setattr(care_repo, "delete", delete)
+    monkeypatch.setattr(care_repo, "list_kind_between", list_kind_between)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", count_walks)
     return cs
 
 
-@pytest.fixture
-def client(store: Store, care: CareStore) -> TestClient:
-    """인증을 통과한 상태로 고정합니다. 토큰 검증은 test_app_auth 가 봅니다."""
+def _client_for(app_user_id: uuid.UUID) -> TestClient:
+    """그 사람으로 인증을 통과한 클라이언트. 토큰 검증은 test_app_auth 가 봅니다."""
     app = FastAPI()
     app.include_router(care_router.router)
     app.dependency_overrides[
         next(iter(CurrentAppUser.__metadata__)).dependency
-    ] = lambda: AppPrincipal(app_user_id=OWNER)
+    ] = lambda: AppPrincipal(app_user_id=app_user_id)
     return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def client(store: Store, care: CareStore) -> TestClient:
+    """대표로 부릅니다 — 이 파일의 기본 화자입니다."""
+    return _client_for(OWNER)
+
+
+@pytest.fixture
+def client_as(store: Store, care: CareStore):
+    """다른 사람으로 같은 API 를 부릅니다.
+
+    공동 돌봄의 규칙은 사람이 둘이라야 보입니다 — 돌보미가 적고 대표가 보는 것이
+    이 기능의 전부라서, 한 사람짜리 클라이언트로는 아무것도 증명되지 않습니다.
+    """
+    return _client_for
 
 
 @pytest.fixture
@@ -148,7 +192,7 @@ def _body(pet_id: uuid.UUID, **kw: object) -> dict:
 
 def _event(app_user_id: uuid.UUID, pet_id: uuid.UUID, kind: str, at: datetime) -> FakeCareEvent:
     return FakeCareEvent(
-        app_user_id=app_user_id, pet_id=pet_id, kind=kind, occurred_at=at,
+        actor_app_user_id=app_user_id, pet_id=pet_id, kind=kind, occurred_at=at,
         note=None, client_event_id=uuid.uuid4(),
     )
 
@@ -348,3 +392,236 @@ def test_공백뿐인_메모는_None_이다(client, pet, care) -> None:
     assert r.status_code == 201
     assert r.json()["note"] is None
     assert care.events[0].note is None
+
+
+# ── 공동 돌봄 (docs/co-care.md §2) ────────────────────────────────────
+
+
+def test_돌보미가_기록하고_대표가_본다(client, client_as, store, pet, care) -> None:
+    """이 기능의 전부입니다 — 아빠가 아침에 적은 밥이 내 오늘 요약에 보입니다.
+
+    요약이 사람이 아니라 **강아지** 기준이라야 보입니다. actor 로 거르면 각자 자기가
+    적은 것만 보게 되어, 두 사람이 같은 밥을 두 번 줍니다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    body = _body(pet.id, occurred_at="2026-09-09T08:12:00+09:00")
+    assert client_as(CARER).post("/app/care-events", json=body).status_code == 201
+
+    seen = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert seen["meal"] == 1
+    assert len(seen["events"]) == 1
+
+
+def test_돌보미가_아니면_기록도_조회도_404(client_as, pet, care) -> None:
+    """구성원 판정이 열린 것은 돌보미까지입니다 — 초대받지 않은 사람은 그대로 404 입니다."""
+    outsider = client_as(STRANGER)
+    assert outsider.post("/app/care-events", json=_body(pet.id)).status_code == 404
+    assert outsider.get("/app/care-events", params={"pet_id": str(pet.id)}).status_code == 404
+    assert care.events == []
+
+
+# ── 삭제 권한: 기록한 사람 또는 대표 ─────────────────────────────────
+
+
+def test_기록한_사람이_자기_기록을_지운다(client_as, store, pet, care) -> None:
+    store.pet_members.append((pet.id, CARER))
+    carer = client_as(CARER)
+    created = carer.post("/app/care-events", json=_body(pet.id)).json()
+    assert carer.delete(f"/app/care-events/{created['id']}").status_code == 204
+    assert care.events == []
+
+
+def test_대표는_돌보미의_오기록을_지운다(client, client_as, store, pet, care) -> None:
+    """돌봄 기록은 **강아지 것**입니다 (docs/co-care.md 결정 ①).
+
+    actor 로만 거르면 대표가 자기 아이의 잘못 적힌 줄을 영영 못 지웁니다 — 적은 사람이
+    나가면 그 줄은 아무도 못 건드립니다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    created = client_as(CARER).post("/app/care-events", json=_body(pet.id)).json()
+    assert client.delete(f"/app/care-events/{created['id']}").status_code == 204
+    assert care.events == []
+
+
+def test_다른_돌보미는_남의_기록을_못_지운다(client_as, store, pet, care) -> None:
+    """열어 준 것은 **적은 사람과 대표**까지입니다. 돌보미끼리는 서로의 기록을 못 지웁니다."""
+    other = uuid.uuid4()
+    store.pet_members.extend([(pet.id, CARER), (pet.id, other)])
+    created = client_as(CARER).post("/app/care-events", json=_body(pet.id)).json()
+    assert client_as(other).delete(f"/app/care-events/{created['id']}").status_code == 404
+    assert len(care.events) == 1
+
+
+def test_남남은_우리_아이의_기록을_못_지운다(client, client_as, pet, care) -> None:
+    created = client.post("/app/care-events", json=_body(pet.id)).json()
+    assert client_as(STRANGER).delete(f"/app/care-events/{created['id']}").status_code == 404
+    assert len(care.events) == 1
+
+
+# ── 약 중복 확인 (docs/co-care.md §4) ────────────────────────────────
+
+
+def _med(
+    pet: FakePet,
+    when: str,
+    confirm: bool = False,
+    key: uuid.UUID | None = None,
+    note: str | None = None,
+) -> dict:
+    return {
+        "pet_id": str(pet.id),
+        "kind": "medication",
+        "occurred_at": when,
+        "client_event_id": str(key or uuid.uuid4()),
+        "confirm": confirm,
+        "note": note,
+    }
+
+
+def _set_nickname(store: Store, app_user_id: uuid.UUID, nickname: str) -> None:
+    """`app_users` 는 kakao_id 로 인덱싱되어 있어, id 로 찾아 닉네임을 채웁니다."""
+    next(u for u in store.app_users.values() if u.id == app_user_id).nickname = nickname
+
+
+def test_second_medication_within_window_is_409(client, client_as, store, pet, care) -> None:
+    """409 본문의 conflict 는 화면이 "아빠가 08:15에 줬어요" 를 그릴 재료라, actor 까지 채워져야 합니다."""
+    _set_nickname(store, OWNER, "아빠")
+    client_as(OWNER).post(
+        "/app/care-events",
+        json=_med(pet, "2026-09-09T08:15:00+09:00", note="심장사상충"),
+    )
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00")
+    )
+    assert r.status_code == 409
+    body = r.json()["detail"]
+    assert "conflicts" in body and len(body["conflicts"]) == 1
+    conflict = body["conflicts"][0]
+    assert conflict["occurred_at"].startswith("2026-09-09T08:15:00")
+    assert conflict["note"] == "심장사상충"
+    assert conflict["actor"]["nickname"] == "아빠"
+
+
+def test_구성원이_아닌_사람의_기록은_409_에서도_nickname_이_null(
+    client, client_as, store, pet, care
+) -> None:
+    """적은 사람이 나가면 409 conflict 의 actor.nickname 도 다른 곳과 같이 None 입니다."""
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "동생")
+    client_as(CARER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00")
+    )
+    store.pet_members.remove((pet.id, CARER))
+
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00")
+    )
+    assert r.status_code == 409
+    conflict = r.json()["detail"]["conflicts"][0]
+    assert conflict["actor"]["nickname"] is None
+
+
+def test_confirm_true_records_anyway(client_as, pet, care) -> None:
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+    r = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True)
+    )
+    assert r.status_code == 201
+
+
+def test_twelve_hours_apart_is_fine(client_as, pet, care) -> None:
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:00:00+09:00"))
+    r = client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T20:00:00+09:00"))
+    assert r.status_code == 201
+
+
+def test_meal_is_never_blocked(client_as, pet, care) -> None:
+    body = {
+        "pet_id": str(pet.id), "kind": "meal", "occurred_at": "2026-09-09T08:00:00+09:00",
+        "client_event_id": str(uuid.uuid4()),
+    }
+    client_as(OWNER).post("/app/care-events", json=body)
+    body["client_event_id"] = str(uuid.uuid4())
+    body["occurred_at"] = "2026-09-09T09:00:00+09:00"
+    assert client_as(OWNER).post("/app/care-events", json=body).status_code == 201
+
+
+def test_idempotency_wins_over_conflict_check(client_as, pet, care) -> None:
+    """확인하고 기록한 직후 재시도가 409 가 되면 앱은 올라갔는지 모르게 된다.
+
+    이 테스트가 services/care_event.py 의 검사 **순서**를 지킨다 — 멱등이 먼저다.
+    """
+    key = uuid.uuid4()
+    client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00"))
+    first = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True, key=key)
+    )
+    assert first.status_code == 201
+    retry = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T10:00:00+09:00", confirm=True, key=key)
+    )
+    assert retry.status_code == 200, "재시도가 409 가 되면 멱등이 깨진 것이다"
+
+
+# ── actor (이름 표시 규칙, docs/co-care.md §3) ────────────────────────
+
+
+def test_actor_shows_nickname_for_current_member(client, client_as, store, pet, care) -> None:
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "아빠")
+    client_as(CARER).post("/app/care-events", json=_body(pet.id, occurred_at="2026-09-09T08:12:00+09:00"))
+
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"]["nickname"] == "아빠"
+    assert got["events"][0]["actor"]["app_user_id"] == str(CARER)
+
+
+def test_actor_hides_nickname_after_leaving(client, client_as, store, pet, care) -> None:
+    """나간 사람의 이름은 안 낸다. 재가입해도 다시 초대받기 전엔 그대로다."""
+    store.add_app_user(FakeAppUser(kakao_id=2, id=CARER))
+    store.pet_members.append((pet.id, CARER))
+    _set_nickname(store, CARER, "아빠")
+    client_as(CARER).post("/app/care-events", json=_body(pet.id, occurred_at="2026-09-09T08:12:00+09:00"))
+    store.pet_members.remove((pet.id, CARER))
+
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"]["nickname"] is None
+
+
+def test_actor_is_none_when_no_recorder(client, pet, care) -> None:
+    """이 컬럼보다 먼저 쌓인 기록 대역 — actor_app_user_id 가 없어도 actor 자체는 항상 옵니다."""
+    care.events.append(_event(OWNER, pet.id, "meal", datetime(2026, 9, 9, 8, tzinfo=SEOUL)))
+    care.events[-1].actor_app_user_id = None
+    got = client.get(
+        "/app/care-events/today", params={"pet_id": str(pet.id), "day": "2026-09-09"}
+    ).json()
+    assert got["events"][0]["actor"] == {"app_user_id": None, "nickname": None}
+
+
+def test_idempotency_wins_over_conflict_check_even_without_explicit_confirm(
+    client_as, pet, care
+) -> None:
+    """더 강한 회귀: `confirm=True` 가 없어도(그날의 첫 약이라 원래 확인이 필요 없었던 경우)
+    재시도가 자기 자신을 중복으로 보면 안 된다.
+
+    위 `test_idempotency_wins_over_conflict_check` 는 두 요청 모두 `confirm=True` 라, 검사
+    순서를 뒤집어도 `not body.confirm` 이 항상 거짓이라 창 검사 자체가 안 돌아 순서를
+    구분하지 못한다 (실제로 검증함 — task-9-report.md 참고). 이 테스트는 `confirm=False` 인
+    첫 기록의 재시도로, 검사 순서가 뒤바뀌면 재시도가 **방금 자기가 만든 행**을 창 안에서
+    찾아 409 를 내는지를 진짜로 가른다.
+    """
+    key = uuid.uuid4()
+    first = client_as(OWNER).post("/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00", key=key))
+    assert first.status_code == 201
+    retry = client_as(OWNER).post(
+        "/app/care-events", json=_med(pet, "2026-09-09T08:15:00+09:00", key=key)
+    )
+    assert retry.status_code == 200, "재시도가 409 가 되면 멱등이 깨진 것이다"

@@ -81,6 +81,18 @@ class ScreeningRecordResponse(BaseModel):
     #: 두드리게 되므로 단건 조회에서만 만듭니다.
     photo_url: str | None = None
 
+    # 서버가 계산한 권한 플래그 (Task 19, docs/co-care.md §2). **앱은 이 값만 보고
+    # 버튼을 그립니다** — `is_owner` 로는 확정(창작자 전용)도 삭제(창작자 또는 대표)도
+    # 옳게 못 가립니다: `is_owner` 만 보면 창작자인 돌보미가 자기 기록을 못 지우고,
+    # 전부 보여주면 다른 돌보미가 404 를 받습니다.
+    can_confirm: bool = False
+    can_delete: bool = False
+
+    #: 만든 사람. **지금도 그 아이의 구성원일 때만** 닉네임이 실립니다 — 케어 로그의
+    #: actor 라벨과 같은 규칙. `pet_id` 가 없는 개인 기록은 "구성원" 개념이 없어 항상
+    #: None 입니다(그 기록을 볼 수 있는 사람은 창작자 자신뿐입니다).
+    created_by: str | None = None
+
 
 class ScreeningListResponse(BaseModel):
     """**최근 순**입니다. 변화 기록은 늘 최근 것을 위에 놓고 봅니다."""

@@ -1,0 +1,10 @@
+{
+  "checked_rows": 18,
+  "same_frozen_states_as_parent": true,
+  "query_last_only_changes_key_order": true,
+  "other_arm_only_omits_duplicate_context_user_query": true,
+  "existing_top_level_history_preserved": true,
+  "recorded_clues_equal_actual_wire_clues": true,
+  "changed_source_files_since_run": [],
+  "repeated_behavior_identical": true
+}

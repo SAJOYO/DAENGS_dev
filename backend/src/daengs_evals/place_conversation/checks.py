@@ -27,7 +27,7 @@ def parking_mode(state):
     )
 
 
-def assess(case, step, before, prepared, answer):
+def assess(case, step, before, prepared, answer, *, accepting_pending=False):
     after, receipt = prepared.state, prepared.receipt
     expected = step["expect"]
     checks = []
@@ -42,7 +42,16 @@ def assess(case, step, before, prepared, answer):
             }
         )
 
-    for key in ("goal", "execution", "code", "returned_count", "filters_changed"):
+    for key in (
+        "action",
+        "goal",
+        "execution",
+        "code",
+        "returned_count",
+        "filters_changed",
+        "browse",
+        "remaining",
+    ):
         if key in expected:
             check(key, getattr(receipt, key), expected[key])
     for key in ("spatial", "dogs", "name_query", "unknown_policy", "result_policy"):
@@ -66,6 +75,10 @@ def assess(case, step, before, prepared, answer):
         check("filters.unchanged", fingerprint(after.filters), fingerprint(before.filters))
     if "parking" in expected:
         check("parking", parking_mode(after.filters), expected["parking"])
+    if "pending" in expected:
+        check("pending", after.pending_proposal is not None, expected["pending"])
+    if "radius_m" in expected:
+        check("radius_m", after.filters.spatial.radius_m, expected["radius_m"])
     if expected.get("hard_parking") == "absent":
         check(
             "hard_parking.absent", any(a.capability == PARKING for a in atoms(after.filters)), False
@@ -76,8 +89,27 @@ def assess(case, step, before, prepared, answer):
             any(p.capability == PARKING for p in after.filters.preferences),
             False,
         )
+    if accepting_pending:
+        check("accepted.saved_candidate", after.filters == before.pending_proposal.candidate, True)
+    if receipt.action == "await_confirmation":
+        check("pending.no_mutation", after.filters == before.filters, True)
+        check("pending.no_execution", receipt.execution, "not_run")
+        check("pending.saved", after.pending_proposal is not None, True)
     hits = snapshot_hits(after.snapshot)
     refs = [h.place.key.ref for h in hits]
+    if "excluded_refs" in expected:
+        check(
+            "excluded_refs",
+            sorted(p.key.ref for p in after.exploration.excluded),
+            sorted(expected["excluded_refs"]),
+        )
+    if "new_count" in expected:
+        check("new_count", len(receipt.new_places), expected["new_count"])
+    if "min_new_refs" in expected:
+        previous_refs = {h.place.key.ref for h in snapshot_hits(before.snapshot)}
+        check(
+            "new_results.minimum", len(set(refs) - previous_refs) >= expected["min_new_refs"], True
+        )
     if "expected_refs" in expected:
         check("expected_refs", sorted(refs), sorted(expected["expected_refs"]))
         check("result_matches_filters", receipt.result_matches_filters, True)

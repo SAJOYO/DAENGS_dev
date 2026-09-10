@@ -30,7 +30,7 @@ def client(monkeypatch):
     )
     monkeypatch.setattr(repo, "get_entry", AsyncMock(side_effect=lambda s, w, e: rows.get(e)))
     monkeypatch.setattr(repo, "entries", AsyncMock(side_effect=lambda s, ws: list(rows.values())))
-    monkeypatch.setattr(repo, "owns_pet", AsyncMock(side_effect=lambda s, o, p: p == PET))
+    monkeypatch.setattr(repo, "pet_is_accessible", AsyncMock(side_effect=lambda s, o, p: p == PET))
     monkeypatch.setattr(repo, "profile_walks", AsyncMock(return_value=[walk]))
     app = FastAPI()
     app.include_router(router.router)

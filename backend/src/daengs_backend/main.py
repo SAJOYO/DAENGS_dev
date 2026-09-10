@@ -31,10 +31,13 @@ from daengs_backend.routers import (
     health,
     metrics,
     pet,
+    pet_member,
     report_admin,
     status,
     territory,
+    territory_bookmark,
     territory_claim,
+    territory_game,
     training,
     vet_visit,
     walk_entry,
@@ -182,6 +185,10 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 공동 돌봄 초대 · 수락 (docs/co-care.md §3). pet 라우터와 별도 파일인 이유는
+# 수락 경로가 /app/pets/{pet_id}/... 아래가 아니기 때문입니다 — 수락 전에는
+# 그 강아지에 아무 권한이 없어 URL 에 pet_id 를 실으면 안 됩니다.
+app.include_router(pet_member.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
@@ -208,6 +215,8 @@ app.include_router(walk_photo.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 app.include_router(territory_claim.router)
+app.include_router(territory_game.router)
+app.include_router(territory_bookmark.router)
 app.include_router(activity.router)
 
 # 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —

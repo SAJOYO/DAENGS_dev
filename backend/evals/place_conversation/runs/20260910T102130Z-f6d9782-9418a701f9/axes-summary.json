@@ -1,0 +1,22 @@
+{
+  "reviewed_observations": 2,
+  "live_chat_turns": 2,
+  "blocked_observations": 1,
+  "not_run_observations": 3,
+  "manual_turns": 0,
+  "state_and_reference_acceptance_chat": {
+    "pass": 2
+  },
+  "task_completion_chat": {
+    "fail": 1,
+    "pass": 1
+  },
+  "answer_faithfulness_to_receipt_chat": {
+    "pass": 2
+  },
+  "response_usefulness_chat": {
+    "fail": 1,
+    "pass": 1
+  },
+  "limits": "Fixed synthetic dataset: 3 cases, 1 repeat(s) in this run; no general accuracy estimate. Informed by baseline failures, not held-out. EX07/08 remain conversational gaps even when mutation guards pass."
+}

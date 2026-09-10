@@ -1,0 +1,212 @@
+{
+  "boundary": "controlled opaque-ID facts; no live provider",
+  "records": [
+    {
+      "parking": true,
+      "receipt": {
+        "goal": "explain",
+        "execution": "reused",
+        "filters_changed": false,
+        "result_matches_filters": true,
+        "returned_count": 6,
+        "snapshot_id": "6da27ffc-328a-4d86-9edd-545e3df50dc7",
+        "selected": {
+          "source": "test:conversation-eval",
+          "ref": "f81d"
+        },
+        "code": "",
+        "question": "",
+        "evidence": {
+          "place": "테스트 장소",
+          "distance": "검색 중심에서 100m 거리예요.",
+          "scope": "저장된 검색 후보에 포함된 장소예요.",
+          "address": "테스트 주소"
+        },
+        "action": "explain",
+        "pending_id": null,
+        "asked_attributes": [
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "facts": [
+          {
+            "attribute": "parking",
+            "status": "known",
+            "value": true,
+            "source": {
+              "source": "test:conversation-eval",
+              "ref": "f81d"
+            },
+            "as_of": null
+          },
+          {
+            "attribute": "quiet",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          },
+          {
+            "attribute": "free",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          }
+        ],
+        "unsupported": [],
+        "selection_basis": null
+      },
+      "answer": {
+        "text": "테스트 장소에 대해 알려드릴게요. 원천 정보에는 주차 가능으로 나와요. 조용함에 관한 정보는 현재 제공되지 않아 확인할 수 없어요. 무료 여부에 관한 정보는 현재 제공되지 않아 확인할 수 없어요.",
+        "source": "fallback",
+        "evidence_ids": [
+          "place",
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "revision": 2
+      }
+    },
+    {
+      "parking": false,
+      "receipt": {
+        "goal": "explain",
+        "execution": "reused",
+        "filters_changed": false,
+        "result_matches_filters": true,
+        "returned_count": 6,
+        "snapshot_id": "ec15fc70-a6ef-4bf3-a8f6-268186ac02e1",
+        "selected": {
+          "source": "test:conversation-eval",
+          "ref": "f81d"
+        },
+        "code": "",
+        "question": "",
+        "evidence": {
+          "place": "테스트 장소",
+          "distance": "검색 중심에서 100m 거리예요.",
+          "scope": "저장된 검색 후보에 포함된 장소예요.",
+          "address": "테스트 주소"
+        },
+        "action": "explain",
+        "pending_id": null,
+        "asked_attributes": [
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "facts": [
+          {
+            "attribute": "parking",
+            "status": "known",
+            "value": false,
+            "source": {
+              "source": "test:conversation-eval",
+              "ref": "f81d"
+            },
+            "as_of": null
+          },
+          {
+            "attribute": "quiet",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          },
+          {
+            "attribute": "free",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          }
+        ],
+        "unsupported": [],
+        "selection_basis": null
+      },
+      "answer": {
+        "text": "테스트 장소에 대해 알려드릴게요. 원천 정보에는 주차 불가로 나와요. 조용함에 관한 정보는 현재 제공되지 않아 확인할 수 없어요. 무료 여부에 관한 정보는 현재 제공되지 않아 확인할 수 없어요.",
+        "source": "fallback",
+        "evidence_ids": [
+          "place",
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "revision": 2
+      }
+    },
+    {
+      "parking": null,
+      "receipt": {
+        "goal": "explain",
+        "execution": "reused",
+        "filters_changed": false,
+        "result_matches_filters": true,
+        "returned_count": 6,
+        "snapshot_id": "c8849d6f-79dc-4f5f-a947-dc9537e1474b",
+        "selected": {
+          "source": "test:conversation-eval",
+          "ref": "f81d"
+        },
+        "code": "",
+        "question": "",
+        "evidence": {
+          "place": "테스트 장소",
+          "distance": "검색 중심에서 100m 거리예요.",
+          "scope": "저장된 검색 후보에 포함된 장소예요.",
+          "address": "테스트 주소"
+        },
+        "action": "explain",
+        "pending_id": null,
+        "asked_attributes": [
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "facts": [
+          {
+            "attribute": "parking",
+            "status": "unknown",
+            "value": null,
+            "source": {
+              "source": "test:conversation-eval",
+              "ref": "f81d"
+            },
+            "as_of": null
+          },
+          {
+            "attribute": "quiet",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          },
+          {
+            "attribute": "free",
+            "status": "unsupported",
+            "value": null,
+            "source": null,
+            "as_of": null
+          }
+        ],
+        "unsupported": [],
+        "selection_basis": null
+      },
+      "answer": {
+        "text": "테스트 장소에 대해 알려드릴게요. 주차 정보는 없어서 확인이 필요해요. 조용함에 관한 정보는 현재 제공되지 않아 확인할 수 없어요. 무료 여부에 관한 정보는 현재 제공되지 않아 확인할 수 없어요.",
+        "source": "fallback",
+        "evidence_ids": [
+          "place",
+          "parking",
+          "quiet",
+          "free"
+        ],
+        "revision": 2
+      }
+    }
+  ]
+}

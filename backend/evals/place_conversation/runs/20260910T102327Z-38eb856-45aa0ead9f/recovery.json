@@ -1,0 +1,8 @@
+{
+  "source_run": "20260910T101455Z-adcf019-de94bda7ca",
+  "source_repetition": 3,
+  "whole_case_replays": ["EX01", "EX02", "EX05", "EX07", "EX08", "EX09", "EX10"],
+  "attempt": 1,
+  "interval_seconds": 15,
+  "note": "Each failed original case gets one replay from initial setup. EX05 completed; the other six cases received HTTP 429 again. No further retries were made."
+}

@@ -142,6 +142,25 @@ uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
 uv run pytest -q tests/walk/photos/test_walk_photo_db.py tests/walk/diary/test_diary_generation_db.py
 ```
 
+#### 산책별 봉인 원판 조회 — PR #422
+
+`POST /app/walks/spatial-diary/sheets/query`는 같은 `test_spatial_diary_query.py`에 연결한다.
+현재 owner의 명시적 기기 ID, 요청 순서, ready/미봉인 pending/unavailable,
+빈 원판·mixed paint·occupancy 0인 support 보존, payload 사전 상한, 봉인 원판 손상 500을 검증한다.
+최신 sealed 대표 SQL과 검증 도우미를 기존 집계 API와 공유하므로 기존 query 테스트도 포함한다.
+
+```powershell
+uv run --no-sync pytest -q -rs tests/walk/diary/test_spatial_diary_query.py tests/walk/measurement/test_walk_analysis_storage.py
+```
+
+2026-09-10, `origin/dev f65aebf` 위 PR #422 구현에서 **49 passed / 0 skipped (14.91초)**를
+확인했다. 기존 venv를 동기화 없이 재사용하고 `PYTHONPATH`는 해당 작업트리 `src`로 지정했다.
+실제 native encoder의 응답 fixture는 앱 [DAENGS_APP#271](https://github.com/SAJOYO/DAENGS_APP/pull/271)에 전달했다.
+DB 대역과 PostgreSQL SQL compile 검증이며 실제 DB에서 쿼리·동시 snapshot을 실행한 결과는 아니다.
+전체 suite·실서비스·배포 검증은 수행하지 않았다. 변경 Python 5파일 ruff check/format과
+`uv run --no-sync check`도 통과했다. Windows 임시 검증 스크립트를 위해 검사 프로세스의
+`PSExecutionPolicyPreference=Bypass`만 지정했으며 사용자 실행 정책은 변경하지 않았다.
+
 ### 9. 전봇대 점령
 
 - 근거: PR #178, #193, #197, #249, #260, #281, #335, #360.

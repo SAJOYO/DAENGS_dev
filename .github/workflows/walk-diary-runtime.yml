@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   operate:
+    if: ${{ inputs.operation != 'Smoke' }}
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 25
     env:
@@ -53,3 +54,31 @@ jobs:
           $lng = [double]::Parse($env:WALK_LONGITUDE, $culture)
           $radius = [int]::Parse($env:WALK_RADIUS, $culture)
           & .\tools\walk-diary-runtime.ps1 -Action $env:WALK_OPERATION -Latitude $lat -Longitude $lng -Radius $radius
+
+  smoke:
+    if: ${{ inputs.operation == 'Smoke' }}
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      # Only the probe is copied. Feature-branch checks must not replace live backend/src.
+      - uses: actions/checkout@v5
+        with:
+          path: _walk-runtime-smoke
+          clean: false
+      - name: Probe the running application with a disposable account
+        shell: powershell
+        run: |
+          Set-Location $env:GITHUB_WORKSPACE
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Live checkout is missing' }
+          Write-Host ('Tested server source: ' + $head)
+          $source = Join-Path $env:GITHUB_WORKSPACE '_walk-runtime-smoke\tools\walk_runtime_smoke.py'
+          $target = '/tmp/walk-runtime-smoke-' + $env:GITHUB_RUN_ID + '.py'
+          try {
+            docker cp $source ('daengs-backend:' + $target)
+            if ($LASTEXITCODE -ne 0) { throw 'Probe copy failed' }
+            docker exec -w /app daengs-backend uv run --no-sync python $target --execute
+            if ($LASTEXITCODE -ne 0) { throw 'Walk runtime probe failed' }
+          } finally {
+            docker exec daengs-backend rm -f $target
+          }

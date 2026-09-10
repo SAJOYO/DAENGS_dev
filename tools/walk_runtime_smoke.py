@@ -20,9 +20,15 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class SmokeFailure(Exception):
     """Only predefined messages; never constructed from external responses."""
 
+    def __init__(self, message, *, request_number=None, validation_fields=None):
+        super().__init__(message)
+        self.request_number = request_number
+        self.validation_fields = validation_fields
+
 
 async def cycle(owner):
-    started = datetime.now(UTC) - timedelta(minutes=21)
+    # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
+    started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
     points = []
     corners = [
         (-0.0012, -0.0007),
@@ -59,7 +65,28 @@ async def cycle(owner):
                 headers={"Authorization": "Bearer " + create_access_token(owner, SubjectType.APP)},
             )
             if response.status_code >= 300:
-                raise SmokeFailure(f"API status {response.status_code}")
+                fields = []
+                if response.status_code == 422:
+                    try:
+                        details = response.json().get("detail")
+                    except (ValueError, AttributeError):
+                        details = None
+                    if isinstance(details, list):
+                        for item in details[:10]:
+                            loc = item.get("loc", []) if isinstance(item, dict) else []
+                            fields.append(
+                                [
+                                    v
+                                    for v in loc
+                                    if isinstance(v, int)
+                                    or (isinstance(v, str) and v.replace("_", "").isalpha())
+                                ]
+                            )
+                raise SmokeFailure(
+                    f"API status {response.status_code}",
+                    request_number=requests,
+                    validation_fields=fields,
+                )
             return response.json()
 
         walk = await request(
@@ -172,9 +199,27 @@ async def cycle(owner):
         ):
             raise SmokeFailure("generated diary not ready or readback differs")
         scenes = result["bundle"]["scenes"]
-        narration = "\n".join(s["narration"]["text"] for s in scenes)
-        if not all(note in narration for note in notes):
-            raise SmokeFailure("user notes were not preserved in the unified scene text")
+        # The app assembles one editable body from narration + user_record. Requiring the
+        # writer to repeat original notes in narration would contradict that contract.
+        records = {s["core"]["identity"]: s["user_record"] for s in scenes if s["user_record"]}
+        for entry, note in zip(entries[1:], notes, strict=True):
+            record = records.get("walk_entry:" + entry["id"], {})
+            if record.get("kind") != "note" or record.get("text") != note:
+                raise SmokeFailure("original note missing or changed in its scene")
+        behavior = records.get("walk_entry:" + entries[0]["id"], {})
+        if behavior.get("kind") != "behavior" or behavior.get("code") != "sniffing":
+            raise SmokeFailure("original action missing or changed in its scene")
+        addressed = sum(
+            any(
+                p["schema_version"] == "sgis-dong-v1" and p["facts"].get("dong")
+                for p in s["place_reference"]
+            )
+            for s in scenes
+            if s["core"]["identity"] in records
+        )
+        generated = sum(s["narration"]["status"] == "generated" for s in scenes)
+        if addressed != len(entries) or not generated:
+            raise SmokeFailure("dong address or public background missing in diary output")
         return {
             "source_statuses": statuses,
             "scene_count": len(scenes),
@@ -182,6 +227,9 @@ async def cycle(owner):
             "model_status": result["bundle"]["model_status"],
             "same_readback": True,
             "user_notes_preserved": True,
+            "user_action_preserved": True,
+            "addressed_scene_count": addressed,
+            "generated_background_count": generated,
             "http_requests": requests,
         }
 
@@ -208,6 +256,8 @@ async def main():
         # Only locally generated messages are safe; external exception strings are omitted.
         if isinstance(exc, SmokeFailure):
             result["reason"] = str(exc)
+            result["request_number"] = exc.request_number
+            result["validation_fields"] = exc.validation_fields
     finally:
         try:
             if created:

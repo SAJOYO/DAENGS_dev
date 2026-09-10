@@ -72,8 +72,11 @@ Check는 공공자료 및 스키마 검증이며, 사용자 기록이나 Gemini 
 Configure는 저장소 secrets `WALK_SGIS_KEY`, `WALK_SGIS_SECRET`, `WALK_PUBLIC_DATA_KEY`를
 서버 전용 파일에 기록하고 최상단 `.env`에 경로를 지정한다. 파일이나 경로 설정이 이미 있으면
 덮어쓰지 않고 중단한다. 키를 코드·앱·로그에 넣지 않으며 초기 기능 flag는 false다.
-**workflow를 선택한 커밋과 서버 checkout HEAD가 같아야 한다.** workflow는 서버 소스를
-checkout하지 않으며, 기존 배포 폴더의 도구와 Compose를 실행한다.
+**Smoke 이외의 작업은 선택한 커밋과 서버 checkout HEAD가 같아야 한다.**
+기존 배포 폴더의 도구와 Compose를 실행하며 서버 소스를 checkout하지 않는다.
+Smoke는 선택한 커밋을 별도 하위 폴더에 받고 검증 스크립트 하나만 컨테이너의 임시 경로로
+복사한다. 따라서 기능 브랜치의 검증 도구로 이미 배포된 앱을 확인할 수 있다.
+로그의 `Tested server source`는 실제 검사한 서버 커밋이다.
 DB migration이나 앱 로그인 계정 생성은 이 도구가 대신하지 않는다.
 
 ## 새 산책 한 사이클 확인
@@ -81,9 +84,17 @@ DB migration이나 앱 로그인 계정 생성은 이 도구가 대신하지 않
 `Smoke`는 이 단위의 도곡동 합성 동선 121점과 행동 1개·메모 2개를 임시 계정으로 업로드한다.
 실행 중인 nginx API의 정상 인증·저장 경로를 사용하고, 수집 함수를 직접 호출하지 않는다.
 실제 Beat/워커의 네 공공자료 상태를 기다린 뒤 Gemini 생성을 한 번 요청하고 동일 결과를 조회한다.
-사용자 메모가 하나의 장면 본문에 보존되는지도 검사한다. API 응답·토큰·계정 ID는 로그에
+각 장면의 원문 필드에 메모·행동이 보존되고 동 주소와 생성 배경이 전달되는지도 검사한다.
+앱은 원문과 배경을 하나의 편집 가능한 본문으로 조립한다. 생성 배경에 원문을 중복해서
+요구하지 않으며, 이 서버 검증이 앱 화면 테스트를 대신하지는 않는다. API 응답·토큰·계정 ID는 로그에
 남기지 않으며, 정상 종료와 오류 모두 자신이 만든 계정만 UUID+음수 kakao_id로 제한해 삭제한다.
 실제 사용자 로그인·물리 폰·실제 GPS 산책을 검증한 것으로 보지 않는다.
+
+합성 좌표와 행동 시각은 GPS chunk의 밀리초 저장 정밀도 안에서 만든다. 실행 시각의
+마이크로초를 그대로 붙이면 저장 후 원본 GPS와 행동 핀의 시각이 달라져 422가 된다.
+검증 도구가 이 계약을 지키며, 서버의 원본 시각 일치 검사를 완화하지 않는다.
+실패 로그에는 요청 순서와 422 검증 필드 경로만 남긴다. 응답의 값·본문·오류 메시지는
+노출하지 않는다. 서비스 단계의 422는 필드 경로가 없을 수 있다.
 
 대상 지역에서 본인 소유의 새 산책에 확정 위치가 있는 행동·글을 남긴 뒤 종료한다.
 그 산책의 인증된 API로 context를 조회해 주소·공원·상권·하천 상태를 확인한다.
@@ -123,6 +134,29 @@ context·photo·public·commerce 네 migration과 짝 verifier를 순서대로 �
 [public](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34423365296),
 [commerce](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34423548826) 모두 성공했다.
 세 public-source 키는 서버 워크플로 secrets에 등록했다. 이 시점에는 아직 기능을 켜지 않았다.
+
+이후 서버 전용 설정을 [Configure](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34424995704)로
+만들고, [Prepare](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34425212701)에서
+전국 공원 16,167건·도곡동 주변 상가 5,057건과 하천 캐시를 준비했다.
+기존 수집기의 유효성·범위 검사와 SGIS 실제 응답 및 DB/Redis 점검을 통과했다.
+하천은 부분 자료(`partial`)이며 전체 하천을 확보했다는 의미는 아니다.
+
+처음 Start는 worker의 의존성 설치 중 Celery 명령을 찾지 못한 오류를 PowerShell 5.1이
+즉시 예외로 처리해 중단됐다. [#397](https://github.com/SAJOYO/DAENGS_dev/pull/397)에서
+이 대기 구간만 재시도하도록 수정했다. [Start 재실행](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34425517717)이
+성공해 전용 worker·Beat와 웹의 일기·공공자료 기능을 활성화했다.
+
+최종 [운영 Smoke](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34426967602)는
+배포 커밋 `c4fec1038a0435ca0e48bb617cb97dd44ca21d55`에서 성공했다.
+실제 nginx API → outbox → Beat/worker → Gemini → 저장 결과 재조회 경로를 거쳤다.
+세 기록 모두 주소·상권 `known`, 공원·하천 `partial`이었다. 장면 3개에 동 주소와
+생성 배경이 들어갔고(`model_status=accepted`, `generation=1`), 행동 1개와 메모 2개의
+원문이 보존됐다. 조회 결과는 생성 결과와 같았으며 임시 계정과 연결 자료를 삭제했다.
+
+검증 도구 자체의 오류도 [#398](https://github.com/SAJOYO/DAENGS_dev/pull/398)에서 수정했다.
+첫 오류는 합성 시각의 마이크로초와 GPS 저장 정밀도 차이였고, 두 번째는 배경 문장에
+원문을 중복 요구한 검사였다. 실제 원문 보존 필드를 검사하도록 고쳤다.
+GPS 저장 왕복·원문 누락/변조·임시 계정 삭제 대상 테스트 6개와 Ruff를 통과했다.
 
 로컬 수집·사전 점검 31개, 별도 localhost PostgreSQL의 read-only verifier 2개,
 PowerShell 동작·Compose 렌더·Configure 검사 7개를 통과했다.

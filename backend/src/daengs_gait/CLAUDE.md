@@ -18,6 +18,16 @@
 - **`engines/` 는 가벼워야 합니다.** `engines/__init__` 은 하위 모듈을 `get_engine` 안에서만
   import 합니다. `legacy.py` 가 `pipeline`(torch)을, `v4.py` 가 서브프로세스를 다룹니다 —
   둘 다 워커에서만 실행됩니다.
+- **계산 모듈은 두 엔진이 함께 씁니다** (D-063 5C). `gait_filter` · `quality_gate` ·
+  `trajectory` · `features`/`feature_engine` 는 walk_demo 에서 나온 같은 계산이고,
+  `backend/gait_v4/gait_v4/` 에 있던 복사본과 **결과가 같아야 합니다.** 엔진마다 다른 부분은
+  전부 **인자**이고 **기본값이 legacy 경로의 지금 동작**입니다 — `spread_ratio`(v4 는 `None`) ·
+  `stationary_check`(follow-cam 이면 `False`) · `bbox_frac_range` · `priority_joints` ·
+  `p90p10`(v4 만) · `feature_version`(v4 만) · `low_tier_note`(문구만 다름).
+  **인자를 안 주면 출력이 한 글자도 바뀌지 않아야 합니다** — `tests/test_gait_v4_parity.py` 가
+  v4 CLI 의 프레임 덤프로 그 둘을 다 지킵니다(모델·영상 없이 numpy 만으로 돕니다).
+  판정 경계(`>` 이지 `>=` 아님)는 `tests/test_gait_compare.py` 가 못 박습니다.
+  `overlay.py` 는 영상 I/O 라 아직 두 벌입니다 — 5B 에서 inference 와 함께 합칩니다.
 - **영상 입력 판정은 `intake.py` 한 곳입니다** (D-063 3단계). 읽을 수 있으면 원본 그대로,
   못 읽을 때만 H.264 변환, 그래도 못 읽으면 `VideoDecodeError`. 워커가 엔진 직전에
   `prepare_for_analysis` 로 부르고, 엔진은 판정을 모릅니다. `cv2`·`imageio_ffmpeg` 는 함수

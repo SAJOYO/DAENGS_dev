@@ -25,6 +25,18 @@
 변화가 아니라 모델의 잡음일 수 있습니다 (D-023 — 2단계 병변명 holdout 오답 56.6%,
 `stage1` 은 보정 전). 이 층이 내는 것은 "이전 기록이 있고 그때는 이런 판정이었다"
 까지이고, 비교할 데이터를 계약에 안 두는 것이 그 방어입니다.
+
+**판정은 `_accessible` — 구성원(대표 ∪ 돌보미)입니다** (Task 14, docs/co-care.md §2).
+`dog_context.py` 가 먼저 구성원으로 열렸는데 여기만 창작자로 남으면, 돌보미가 목록에서
+자기가 본 기록(`GET /app/screening/records/{id}` 로 이미 볼 수 있는 것)을 짚어 물어도
+어시스턴트 컨텍스트만 조용히 비어 — Task 12 가 생성을 닫았던 "쪼개진 이력" 모양이 대화
+쪽에서 되풀이됩니다. 넓혀도 **새로 보이는 것은 없습니다** — 여기 넘어오는 `app_user_id`
+는 언제나 **지금 묻는 사람 자신**이라, `get_accessible`/`list_accessible` 은 그 사람이
+`/app/screening/*` 로 이미 읽을 수 있는 것과 정확히 같은 집합을 돌려줍니다. 개인 기록
+(`pet_id IS NULL`)은 그 서브쿼리 바깥이라 여기서도 그대로 창작자만입니다.
+
+`confirm_record`(판정 상태를 실제로 바꾸는 자리)는 이 파일이 안 씁니다 — 거긴 여전히
+`screening_repo.get_owned` 로 창작자만입니다. 이 파일이 넓힌 것은 **읽기**뿐입니다.
 """
 
 from __future__ import annotations
@@ -77,12 +89,12 @@ async def resolve(
     `dog_context.resolve` 와 같은 판단이고, 앱이 옛 `/screen/v1/screen` fallback 으로 찍은
     건은 애초에 행이 없어서 이 자리가 상시로 열려 있어야 합니다 (#239 컨텍스트).
 
-    소유권은 `_owned` 가 봅니다 — "없음" 과 "남의 것" 이 거기서 이미 같은 답입니다.
+    접근은 `_accessible` 가 봅니다 — "없음" 과 "못 보는 것" 이 거기서 이미 같은 답입니다.
 
     **이력은 여기 없습니다.** 부르는 쪽이 둘 다 필요하면 `resolve_context` 를 부르세요 —
     기록을 두 번 읽지 않으려고 그쪽이 한 함수입니다.
     """
-    record = await _owned(session, app_user_id, screening_record_id)
+    record = await _accessible(session, app_user_id, screening_record_id)
     if record is None:
         return None
     return _narrowed(record, now=now)
@@ -109,7 +121,7 @@ async def resolve_context(
     "지난번엔 어땠지" 를 묻는 것이 그대로 유효한 질문이라, `screening` 만 비고 이력은 갑니다.
     거꾸로 **기록을 못 찾으면 이력도 없습니다** — 아이를 알 방법이 그 기록뿐입니다.
     """
-    record = await _owned(session, app_user_id, screening_record_id)
+    record = await _accessible(session, app_user_id, screening_record_id)
     if record is None:
         return {}
     context: dict[str, object] = {}
@@ -122,19 +134,21 @@ async def resolve_context(
     return context
 
 
-async def _owned(
+async def _accessible(
     session: AsyncSession, app_user_id: uuid.UUID, screening_record_id: uuid.UUID | str
 ) -> ScreeningRecord | None:
-    """내 기록 한 건. 모양이 틀린 id 도 **없는 기록과 같은 답**입니다.
+    """내가 볼 수 있는 기록 한 건 — 창작자이거나, 강아지에 붙었고 그 아이의 구성원.
+    모양이 틀린 id 도 **없는 기록과 같은 답**입니다.
 
-    소유권은 `screening_repo.get_owned` 가 쿼리 조건으로 묶습니다 — 남의 id 를 넣어도
-    못 읽고, 그래서 "없음" 과 "남의 것" 이 여기서 이미 같습니다.
+    `screening_repo.get_accessible` 이 쿼리 조건으로 묶습니다 — 남의 id 를 넣어도
+    못 읽고, 그래서 "없음" 과 "남의 것" 이 여기서 이미 같습니다. 개인 기록
+    (`pet_id IS NULL`)은 그 함수의 구성원 서브쿼리 바깥이라 여전히 창작자만입니다.
     """
     try:
         record_id = uuid.UUID(str(screening_record_id))
     except (ValueError, AttributeError, TypeError):
         return None
-    return await screening_repo.get_owned(session, app_user_id, record_id)
+    return await screening_repo.get_accessible(session, app_user_id, record_id)
 
 
 def _narrowed(
@@ -165,7 +179,9 @@ async def _history(
 
     **아이를 모르면 이력이 없습니다.** `pet_id` 는 NULL 일 수 있습니다 — 아이를 지우면
     FK 가 SET NULL 이고, 기록은 남습니다 (`models/screening_record.py`). 그때 소유자
-    전체로 넓히면 **다른 아이의 판정이 "지난번" 으로 섞여** 들어갑니다. 넓히지 않습니다.
+    전체로 넓히면 **다른 아이의 판정이 "지난번" 으로 섞여** 들어갑니다. 넓히지 않습니다 —
+    아래 `pet_id=record.pet_id` 로 이미 그 아이 하나로 좁혀 두므로, `list_accessible` 이
+    구성원까지 보는 것은 안전합니다.
 
     **`before` 로 자릅니다 — 부르는 쪽에서 거를 수 없습니다.** 기준 기록보다 나중 것을 여기서
     걸러 내면 `limit` 이 이미 그 앞에 걸린 뒤라, 기준 기록이 최신 12건 밖일 때 창 안에 나중
@@ -175,7 +191,7 @@ async def _history(
     """
     if record.pet_id is None:
         return []
-    rows = await screening_repo.list_for_owner(
+    rows = await screening_repo.list_accessible(
         session,
         app_user_id,
         pet_id=record.pet_id,

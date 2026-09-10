@@ -16,6 +16,27 @@ import numpy as np
 from daengs_gait.config import COMPARE_DIFF_THRESHOLD
 
 
+def direction_note(va: float | None, vb: float | None) -> str:
+    """관절 지표 두 값 → 화면에 나갈 한 마디.
+
+    상대 차이가 임계값을 **넘을 때만** "차이 관찰됨" 입니다 — 경계값(정확히 임계값)은
+    "비슷함" 쪽입니다(`>`, `>=` 아님). `backend/tests/test_gait_compare.py` 가 경계 셋을
+    못 박고 있습니다.
+
+    **방향(늘었다/줄었다)은 말하지 않습니다.** 표본이 작을 때 관절별 비율이 크게 흩어지는
+    것을 실측했고, 방향까지 단언하면 진단처럼 읽히기 때문입니다. 그래서 인자 순서를 바꿔도
+    같은 답이 나옵니다.
+
+    v4 엔진(`backend/gait_v4/compare.py`)의 같은 이름 함수와 **계산이 동일**합니다 —
+    5B 에서 그쪽이 이 함수를 쓰게 됩니다 (D-063 5C).
+    """
+    if va is None or vb is None:
+        return "비교 불가(한쪽 기록에 없음)"
+    denom = max(abs(va), abs(vb), 1e-9)
+    rel_diff = abs(va - vb) / denom
+    return "차이 관찰됨" if rel_diff > COMPARE_DIFF_THRESHOLD else "비슷함"
+
+
 def compare_loaded_records(a: dict, b: dict) -> dict:
     """두 기록 비교 — **이미 불러온 기록**을 받습니다.
 
@@ -41,13 +62,6 @@ def compare_loaded_records(a: dict, b: dict) -> dict:
                 "recommendation": r["quality"].get("recommendation"),
             }
 
-    def _direction_note(va, vb):
-        if va is None or vb is None:
-            return "비교 불가(한쪽 기록에 없음)"
-        denom = max(abs(va), abs(vb), 1e-9)
-        rel_diff = abs(va - vb) / denom
-        return "차이 관찰됨" if rel_diff > COMPARE_DIFF_THRESHOLD else "비슷함"
-
     joint_comparison = {}
     sa = a["features"]["summary_for_ui"]
     sb = b["features"]["summary_for_ui"]
@@ -57,10 +71,10 @@ def compare_loaded_records(a: dict, b: dict) -> dict:
             "record_a": ja,
             "record_b": jb,
             "comparison_note": {
-                "x": _direction_note(
+                "x": direction_note(
                     ja.get("x_range") if ja else None, jb.get("x_range") if jb else None
                 ),
-                "y": _direction_note(
+                "y": direction_note(
                     ja.get("y_range") if ja else None, jb.get("y_range") if jb else None
                 ),
             },

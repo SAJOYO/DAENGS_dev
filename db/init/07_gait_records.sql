@@ -22,6 +22,14 @@ CREATE TABLE IF NOT EXISTS gait_records (
     -- 유도한다 — owner_user_id 를 중복 저장하면 반려견 양도 같은 경우에 어긋난다.
     pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
 
+    -- ⚠ 소유권이 아니라 **업로드한 사람**이다 (Task 19, docs/co-care.md §2). 확정
+    -- (confirm_upload)을 "업로더 본인 또는 대표"로 열기 위해 있다 — 대표만으로 좁히면
+    -- start_analysis 를 구성원(대표∪돌보미)에게 연 것과 어긋나 돌보미가 티켓 발급·업로드는
+    -- 되는데 confirm 에서만 404 를 받는 "반쯤 열린" 상태가 된다. **소유권 칸으로 오해해
+    -- 단순화하지 말 것** — 소유는 여전히 pet_id -> pets.app_user_id 하나뿐이고, 이 칸은
+    -- "그때 누가 올렸는지"만 남긴다. NULL 은 이 칸이 생기기 전의 옛 기록.
+    actor_app_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
+
     -- 파이프라인이 어디까지 갔나. quality_status 와 **다른 축**이다 —
     -- FAILED(워커가 죽음 → 재시도)와 unavailable(영상이 분석 부적합 → 재촬영)은
     -- 사용자 안내가 완전히 다르다 (D-033 이 ABSTAINED≠REFUSED 를 가른 것과 같은 이유).

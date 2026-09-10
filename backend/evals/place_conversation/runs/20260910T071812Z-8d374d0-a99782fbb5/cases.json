@@ -1,0 +1,232 @@
+[
+  {
+    "schema_version": 1,
+    "id": "PC-P05",
+    "title": "장소 질문은 대기 제안을 취소하고 설명",
+    "layer": "policy",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "d94c"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 조용한 카페 찾아줘",
+        "expect": {
+          "action": "await_confirmation",
+          "execution": "not_run",
+          "filters": "unchanged",
+          "candidate_kinds": [
+            "cafe",
+            "restaurant"
+          ]
+        }
+      },
+      {
+        "action": "chat",
+        "input": "선택한 이 카페 주차 가능해?",
+        "expect": {
+          "action": "explain",
+          "goal": "explain",
+          "execution": "reused",
+          "filters": "unchanged",
+          "selected": "d94c"
+        }
+      }
+    ],
+    "invariants": [
+      "동의는 저장된 후보와 정확히 일치해야 한다",
+      "모호한 답변은 필터를 변경하지 않는다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_policy.py",
+      "tests/place/api/test_conversation_pending.py"
+    ],
+    "coverage_note": "실제 해석과 동의 판별 + 합성 검색; CAS는 별도 HTTP 테스트",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-P06",
+    "title": "제안 없는 짧은 동의",
+    "layer": "policy",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "응",
+        "expect": {
+          "action": "clarify",
+          "execution": "not_run",
+          "filters": "unchanged"
+        }
+      }
+    ],
+    "invariants": [
+      "동의는 저장된 후보와 정확히 일치해야 한다",
+      "모호한 답변은 필터를 변경하지 않는다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_policy.py",
+      "tests/place/api/test_conversation_pending.py"
+    ],
+    "coverage_note": "실제 해석과 동의 판별 + 합성 검색; CAS는 별도 HTTP 테스트",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-P09",
+    "title": "복합 OR 뒤 주차만 해제",
+    "layer": "policy",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 카페 또는 반려동물 전용 음식점",
+        "expect": {
+          "expected_refs": [
+            "f81d",
+            "b036"
+          ]
+        }
+      },
+      {
+        "action": "chat",
+        "input": "이제 주차 조건은 빼줘",
+        "expect": {
+          "hard_parking": "absent",
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c",
+            "b036"
+          ]
+        }
+      }
+    ],
+    "invariants": [
+      "동의는 저장된 후보와 정확히 일치해야 한다",
+      "모호한 답변은 필터를 변경하지 않는다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_policy.py",
+      "tests/place/api/test_conversation_pending.py"
+    ],
+    "coverage_note": "실제 해석과 동의 판별 + 합성 검색; CAS는 별도 HTTP 테스트",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-P10",
+    "title": "제안의 주차 조건 수정",
+    "layer": "policy",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127.0
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 조용한 카페 찾아줘",
+        "expect": {
+          "action": "await_confirmation",
+          "execution": "not_run",
+          "filters": "unchanged",
+          "candidate_kinds": [
+            "cafe",
+            "restaurant"
+          ]
+        }
+      },
+      {
+        "action": "chat",
+        "input": "주차는 없어도 돼. 카페만으로 해줘",
+        "expect": {
+          "action": "await_confirmation",
+          "execution": "not_run",
+          "filters": "unchanged"
+        }
+      },
+      {
+        "action": "chat",
+        "input": "그렇게 해줘",
+        "expect": {
+          "action": "execute",
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "parking": "none",
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        }
+      }
+    ],
+    "invariants": [
+      "동의는 저장된 후보와 정확히 일치해야 한다",
+      "모호한 답변은 필터를 변경하지 않는다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_policy.py",
+      "tests/place/api/test_conversation_pending.py"
+    ],
+    "coverage_note": "실제 해석과 동의 판별 + 합성 검색; CAS는 별도 HTTP 테스트",
+    "status": "specified"
+  }
+]

@@ -1,0 +1,258 @@
+[
+  {
+    "schema_version": 1,
+    "id": "PC-E05",
+    "group": "edge",
+    "title": "AND와 OR 분기 범위",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 카페 또는 반려동물 전용 음식점",
+        "expect": {
+          "meaning": "(kind=cafe AND parking=true) OR (kind=restaurant AND exclusive=true)",
+          "expected_refs": [
+            "cafe-yes",
+            "restaurant-exclusive"
+          ]
+        }
+      }
+    ],
+    "invariants": [
+      "카페에도 전용 조건을 붙이거나 음식점에도 주차를 요구하지 않는다.",
+      "OR 분기의 합집합을 중복 없이 반환한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-E06",
+    "group": "edge",
+    "title": "상반되는 필수 조건",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 곳만, 근데 주차 없는 곳만 보여줘",
+        "expect": {
+          "goal": "clarify",
+          "execution": "not_run",
+          "filters": "unchanged"
+        }
+      }
+    ],
+    "invariants": [
+      "명확한 정정 표현이 없는 모순은 임의로 한쪽을 적용하지 않는다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-E07",
+    "group": "edge",
+    "title": "실행 가능한 요구와 미지원 요구 혼합",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 조용한 카페 찾아줘",
+        "expect": {
+          "goal": "clarify",
+          "execution": "not_run",
+          "filters": "unchanged",
+          "question": "조용함의 검증 불가와 가능한 다음 검색을 설명"
+        }
+      }
+    ],
+    "invariants": [
+      "현재 v2의 clarify는 필터 변경과 동시에 실행할 수 없다.",
+      "조용함을 주차·전용 여부로 바꾸거나 적용 완료했다고 주장하지 않는다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-E08",
+    "group": "edge",
+    "title": "명확화 뒤 한 단어 응답",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 조용한 카페 찾아줘",
+        "expect": {
+          "goal": "clarify",
+          "execution": "not_run"
+        }
+      },
+      {
+        "action": "chat",
+        "input": "응",
+        "expect": {
+          "when_question_unambiguous": "실제로 제안한 확인 질문에 동의한 범위만 적용; 조용함을 제외한 주차 가능한 카페 검색을 제안했다면 해당 조건을 보존",
+          "when_question_ambiguous": "무엇에 동의했는지 다시 확인하고 상태 보존"
+        }
+      }
+    ],
+    "invariants": [
+      "첫 질문과 실제 봇의 확인 질문을 함께 기록한다.",
+      "사용자 원문의 조건을 잃고 적용했다고 주장하면 실패한다.",
+      "안전하게 재질문한 경우와 의도한 검색 완료 여부를 별도로 판정한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-E09",
+    "group": "edge",
+    "title": "지원하지 않는 검색 중심 이동",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "제주도 카페 찾아줘",
+        "expect": {
+          "goal": "clarify",
+          "execution": "not_run",
+          "filters": "unchanged",
+          "question": "지도에서 검색 지역을 바꾸도록 안내"
+        }
+      }
+    ],
+    "invariants": [
+      "현재 도구에는 검색 중심 좌표 변경이 없다.",
+      "제주도를 장소명 검색으로 오인하거나 기존 지역 결과를 제주 결과라고 설명하지 않는다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "PC-E11",
+    "group": "edge",
+    "title": "정보 미상을 불가로 단정하지 않기",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "cafe-unknown"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "여기 주차 안 돼?",
+        "expect": {
+          "goal": "explain",
+          "filters": "unchanged",
+          "answer": "주차 여부 미확인임을 표현"
+        }
+      }
+    ],
+    "invariants": [
+      "parking=null에 가능/불가를 만들어내지 않는다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "이 시나리오의 실제 모델 입력과 기대 결과를 아직 자동 실행기에 연결하지 않음",
+    "status": "specified"
+  }
+]

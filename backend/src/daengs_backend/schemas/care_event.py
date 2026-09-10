@@ -43,6 +43,13 @@ class CareEventCreate(BaseModel):
 
     client_event_id: uuid.UUID
 
+    #: 중복 경고를 이미 보고 "그래도 기록" 을 누른 요청. **쿼리가 아니라 body 인 것이 의도**
+    #: 입니다 — 재시도가 같은 body 를 그대로 다시 보내면 됩니다.
+    #:
+    #: ⚠️ 앱은 이때 **`client_event_id` 를 그대로 둡니다.** 새 키를 만들면 재시도가 두 줄이
+    #: 됩니다 (docs/co-care.md §4).
+    confirm: bool = False
+
     @field_validator("occurred_at")
     @classmethod
     def _occurred_at(cls, value: datetime) -> datetime:
@@ -60,6 +67,15 @@ class CareEventCreate(BaseModel):
         return stripped or None
 
 
+class ActorOut(BaseModel):
+    """누가 챙겼나. **`nickname` 은 지금도 그 강아지의 구성원일 때만** 옵니다 — 탈퇴자·나간
+    돌보미는 `app_user_id` 가 있어도 `nickname` 은 `None` 입니다 (docs/co-care.md §3).
+    """
+
+    app_user_id: uuid.UUID | None
+    nickname: str | None
+
+
 class CareEventResponse(BaseModel):
     id: uuid.UUID
     pet_id: uuid.UUID
@@ -68,6 +84,10 @@ class CareEventResponse(BaseModel):
     note: str | None
     client_event_id: uuid.UUID
     created_at: datetime
+    #: 이 컬럼보다 먼저 쌓인 기록엔 `app_user_id` 자체가 없습니다. 기본값을 두는 것은,
+    #: 이 필드가 생기기 전에 이미 있던 호출부·테스트가 `actor` 를 안 채워도 계속 돌게
+    #: 하려는 것입니다.
+    actor: ActorOut | None = None
 
 
 class CareEventQuery(BaseModel):
@@ -118,6 +138,7 @@ class CareDaySummaryResponse(BaseModel):
 
 __all__ = [
     "FUTURE_GRACE",
+    "ActorOut",
     "CareDaySummaryResponse",
     "CareEventCreate",
     "CareEventKind",

@@ -107,7 +107,8 @@ CRAWL_RUNS_OLD = (
     " VALUES ('ordinance-search','due','ok');"
 )
 # `training_rag_*` 는 pgvector 를 요구한다. CI 서비스가 `pgvector/pgvector:pg17` 인 이유다
-# (`.github/workflows/migration-verification-tests.yml`). 일회용 스키마 안에 만들고 ROLLBACK
+# (2026-09-10 부터 CI 에 없다 — `docs/ci/migration-verification-tests.yml` 로 빠졌고
+#  지금은 `docs/ci/README.md` 를 보고 사람이 돌린다). 일회용 스키마 안에 만들고 ROLLBACK
 # 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
@@ -421,6 +422,75 @@ CHECKS = (
             'ALTER TABLE care_events ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
             'DROP INDEX idx_care_events_pet_occurred',
         ]),
+        # 2026-09-09 (co-care, docs/co-care.md) — 공동 돌봄 표 둘 + 트리거 둘 + care_events
+        # 개명. 픽스처는 9/8 의 care_events 마이그레이션을 **그대로** 재사용한다 — 이 마이그레이션이
+        # 옛 app_user_id 를 전제로 RENAME 하므로, 스텁을 손으로 쓰면 그 전제가 갈릴 수 있다.
+        # 트리거를 지우는 변조 둘이 이 항목의 핵심이다 — app_users 는 탈퇴해도 안 지워지므로
+        # FK 로는 절대 정리가 안 돌고, 그 트리거가 유일한 방어선이다.
+        ('2026-09-09', 'pet_members',
+         APP_USERS_WITH_STATUS + PETS_ONLY + prerequisites('2026-09-08_care_events'),
+         'pet_members', [
+            'DROP TABLE pet_invites CASCADE',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pet_id_fkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_app_user_id_fkey',
+            'ALTER TABLE pet_members ALTER COLUMN joined_at DROP NOT NULL',
+            'DROP INDEX idx_pet_members_app_user',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_token_hash_key',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_pet_id_fkey',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_invited_by_fkey',
+            'DROP INDEX idx_pet_invites_pet',
+            'DROP TRIGGER pet_membership_owner_cleanup ON app_users',
+            'DROP TRIGGER pet_members_not_owner ON pet_members',
+            # 트리거는 붙어 있고 **본문에서 care_events 익명화만** 빠진 모양. 카탈로그에는
+            # "트리거가 무엇을 하는가" 가 안 적힐 것이라, verify 가 prosrc 를 안 보면 이것을
+            # 아무도 안 잡는다 — 그러면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에 영원히 남는다.
+            "CREATE OR REPLACE FUNCTION pet_membership_owner_cleanup() RETURNS trigger"
+            " LANGUAGE plpgsql AS $tamper$ BEGIN IF NEW.status = 'withdrawn' THEN"
+            " DELETE FROM pet_members WHERE app_user_id = NEW.id;"
+            " DELETE FROM pet_invites WHERE invited_by = NEW.id;"
+            " END IF; RETURN NEW; END $tamper$",
+            'ALTER TABLE care_events RENAME COLUMN actor_app_user_id TO app_user_id',
+            'ALTER TABLE care_events ALTER COLUMN actor_app_user_id SET NOT NULL',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey;'
+            ' ALTER TABLE care_events ADD CONSTRAINT care_events_actor_fkey'
+            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
+        # 2026-09-10 (co-care 수락 영수증, docs/co-care.md §3, #388 · #261) — pet_invites 에
+        # accepted_at · accepted_by 두 칸. 픽스처는 9/9 pet_members 마이그레이션을 그대로
+        # 재사용한다(그래야 대상 표 pet_invites 가 이미 있다). FK 의 삭제 동작(SET NULL)을
+        # 바꾸는 변조가 이 항목의 핵심이다 — CASCADE 로 바뀌면 영수증 행이 사람 탈퇴(가
+        # 실제로 도는 먼 미래)에 통째로 사라진다.
+        ('2026-09-10', 'pet_invite_receipts',
+         APP_USERS_WITH_STATUS + PETS_ONLY
+         + prerequisites('2026-09-08_care_events', '2026-09-09_pet_members'),
+         'pet_invites', [
+            'ALTER TABLE pet_invites DROP COLUMN accepted_at',
+            'ALTER TABLE pet_invites DROP COLUMN accepted_by',
+            'ALTER TABLE pet_invites ALTER COLUMN accepted_at TYPE text',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_accepted_by_fkey',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_accepted_by_fkey;'
+            ' ALTER TABLE pet_invites ADD CONSTRAINT pet_invites_accepted_by_fkey'
+            ' FOREIGN KEY (accepted_by) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
+        # 2026-09-10 (co-care 보행 확정 — "반쯤 열린" 돌보미 업로드, docs/co-care.md §2,
+        # #388 · #261) — gait_records 에 actor_app_user_id(업로더) 한 칸. 픽스처는 9/2
+        # gait_records + 9/9 tier CHECK 확장을 그대로 재사용한다(그래야 대상 표가 이미
+        # 있다). FK 의 삭제 동작(SET NULL)을 바꾸는 변조가 pet_invite_receipts 와 같은
+        # 이유로 이 항목의 핵심이다 — CASCADE 로 바뀌면 이력 칸 하나 때문에 기록 전체가
+        # 사라질 수 있다(이 칸은 소유권이 아니라 "누가 올렸나" 이력이다).
+        ('2026-09-10', 'gait_records_actor',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok'),
+         'gait_records', [
+            'ALTER TABLE gait_records DROP COLUMN actor_app_user_id',
+            'ALTER TABLE gait_records ALTER COLUMN actor_app_user_id TYPE text',
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey',
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey;'
+            ' ALTER TABLE gait_records ADD CONSTRAINT gait_records_actor_app_user_id_fkey'
+            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
         # 2026-09-09 (#353) — 진료비 기록 둘. **변조 목록의 마지막 하나가 이 항목의 이유다.**
         # 이 표에서 지켜야 하는 것은 칸의 모양이 아니라 **reason_code 가 닫힌 목록이라는 사실**
         # 이다. 목록을 통째로 permissive 한 CHECK 으로 갈아 끼우면 이름은 그대로라 ④ 는

@@ -42,10 +42,20 @@ class CareEvent(Base):
         Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
 
-    #: 소유자. `pets.app_user_id` 와 같은 값이고 **서비스가 강아지에서 읽어 채웁니다.**
-    #: 조회·삭제가 강아지를 거치지 않고도 "내 것" 을 거르려고 따로 둡니다 (`walks` 와 같은 결).
-    app_user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("app_users.id", ondelete="CASCADE")
+    #: **챙긴 사람.** 소유자가 아닙니다 — 이 기록의 주인은 강아지입니다 (docs/co-care.md).
+    #:
+    #: `None` 은 **탈퇴한 보호자**입니다. 다만 그렇게 만드는 것은 아래 `ondelete` 가
+    #: **아닙니다** — 탈퇴는 `app_users` 행을 안 지우므로(`services/app_auth.py` 의 `withdraw`
+    #: 는 `status` 만 바꿉니다) 저 FK 는 **영영 안 돕니다.** 실제로 비우는 것은
+    #: `db/init/24_pet_members.sql` 의 `pet_membership_owner_cleanup` 트리거입니다 — 탈퇴 UPDATE
+    #: 를 받아 이 컬럼을 NULL 로 만듭니다. `ondelete` 는 언젠가 행을 진짜로 지우는 날을
+    #: 위한 안전망일 뿐입니다.
+    #:
+    #: 화면에 이름을 낼지는 별개로 "지금도 구성원인가" 가 정하고, 그 규칙은
+    #: `services/pet_member.py` 의 `actor_label` 하나입니다 — 즉 여기에 id 가 남아 있더라도
+    #: 비구성원에게 닉네임은 안 나갑니다.
+    actor_app_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_users.id", ondelete="SET NULL")
     )
     #: 강아지를 지우면 기록도 같이 지워집니다. 배웅은 행을 안 지우므로 배웅한 아이의 기록은 남습니다.
     pet_id: Mapped[uuid.UUID] = mapped_column(

@@ -180,7 +180,8 @@ Beat 간격은 30초이고 한 배치의 산책/계정 각각 최대 100개를 �
 `tests/activity/test_activity_db.py`는 localhost의 `claims_test` DB 안에서 테스트마다 임의 schema를
 만들고 제거한다. 팀 DB 설정으로 fallback하지 않는다. #260과 후속 SQL을 재실행하고 실제
 산책 finalize, 사진 판정, 처리기, API, 삭제 및 시즌 종료를 검증한다.
-`.github/workflows/territory-ownership-tests.yml`은 PostgreSQL 17에서 이를 실행한다.
+`docs/ci/territory-ownership-tests.yml`이 PostgreSQL 17에서 이를 실행**했다** — 2026-09-10 에
+CI 에서 빠졌으므로 지금은 사람이 돌린다 (`docs/ci/README.md`).
 전체 기본 backend 테스트 워크플로우도 그대로 유지한다.
 
 APP에는 아직 이 조회 계약 연결, 동일 client UUID 전달 확인, pending/stale 표시,

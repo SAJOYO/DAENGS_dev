@@ -1,0 +1,91 @@
+{
+  "observed_turns": 12,
+  "reviewed_turns": 12,
+  "turn_statuses": {
+    "pass": 12
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-H01",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H01",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H01",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-policy-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-policy-v1",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-policy-v1",
+      "repetition": 3,
+      "status": "pass"
+    }
+  ],
+  "provider_calls": 12,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 2811.0,
+  "reported_usage": {
+    "total_input_tokens": 26958,
+    "total_output_tokens": 513,
+    "total_tokens": 27471
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

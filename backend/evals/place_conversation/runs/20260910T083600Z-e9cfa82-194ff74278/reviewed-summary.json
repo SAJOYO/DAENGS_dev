@@ -1,0 +1,524 @@
+{
+  "observed_turns": 84,
+  "reviewed_turns": 84,
+  "turn_statuses": {
+    "pass": 21,
+    "fail": 63
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-X01",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X01",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X01",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X01",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X01",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X01",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X02",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X03",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X04",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X05",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X06",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X07",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X08",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X09",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X10",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X11",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X12",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X13",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "context-input",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "context-input",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "context-input",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "current-input",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "current-input",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-X14",
+      "variant": "current-input",
+      "repetition": 3,
+      "status": "fail"
+    }
+  ],
+  "provider_calls": 84,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 2692.0,
+  "reported_usage": {
+    "total_input_tokens": 238536,
+    "total_output_tokens": 2481,
+    "total_tokens": 241017
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

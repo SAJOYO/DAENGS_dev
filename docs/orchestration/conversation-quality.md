@@ -61,7 +61,7 @@ conversation_quality`(코드는 `backend/src/daengs_evals/conversation_quality/`
 PRIOR_TURNS_REACH_INFERENCE = False
 ```
 
-`routers/assistant.py:262`가 `service.run(query=body.query, ...)`로 현재 질의 하나만
+`routers/assistant.py:261`가 `service.run(query=body.query, ...)`로 현재 질의 하나만
 넘기고, `services/chat.py:run_persisted_turn`은 턴을 저장만 합니다 — 세션에서 오케스트레이터로
 가는 것은 `active_dog_id`뿐이고, 이전 턴을 다시 읽는 유일한 경로는 같은 `client_message_id`의
 정확한 재생(저장된 `public_response`를 그대로 돌려줌)입니다. 저장은 대화 메모리가 아닙니다.

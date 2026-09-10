@@ -158,6 +158,16 @@ uv run python -m daengs_evals.conversation_quality compare \
 하나를 알려주세요.
 ```
 
+> **결정됐습니다 (2026-09-10, `#415` · D-068) — ①′.** 아래 표의 ①을 골랐지만, 거기 적힌
+> "General이 `route_plan.clarify`를 채운다"는 모양으로는 **안 됩니다**: 계획은 어댑터가 돌기
+> 전에 굳고, 그 계획에는 이미 `general` 요청이 들어 있어 `clarify_is_exclusive`에 걸립니다.
+> 실제 구현은 **집계**에서 옮깁니다 — General이 `kind="ask"`를 내면 어댑터가 `data["ask"]`에
+> `ClarifyRequest`를 담고, `aggregate`가 **general 단독일 때만** `CLARIFY`로 냅니다.
+> `RoutePlan.clarify`는 끝까지 `None`이라 배타성 불변식이 그대로 서고, 그 응답의 `results`는
+> 비워 나갑니다. 아래 표의 ①에 적힌 대가("다른 능력 결과를 같이 못 준다")는 이 카드에서는
+> 물지 않습니다 — 폴백은 규칙상 라우터가 아무것도 안 골랐을 때만 조립되므로(`planner.py`),
+> 같이 낼 결과가 애초에 없습니다.
+
 **결정할 것 — `ASK`가 어디 사는가.** `contracts.py`의 `RoutePlan.clarify`는 이미 있는
 계약이고 정확히 "도구가 직접 되묻지 않고 오케스트레이터가 후속 질문을 담당한다"는 원칙을
 구현합니다(`contracts.md` §서문). 그런데 오늘 `CLARIFY`는 **배타적**입니다 —
@@ -184,6 +194,13 @@ uv run python -m daengs_evals.conversation_quality compare \
 **수용 케이스.** `cq_wellness_vague_01`처럼 `expected_mode == "ASK"`이고
 `user_input_needed == True`인 케이스들이 이 카드의 통과 기준입니다 — 위 결정이 난 뒤
 after 랩에서 이 케이스들의 `response_mode_fit`이 오르는지를 봅니다.
+
+before 랩과 케이스 파일을 맞춰 보면 대상은 **턴 여섯**입니다(`#415`가
+`tests/test_orchestration_ask_mode.py`로 그 수를 고정합니다). 그 여섯이 전부 `diagnosis`
+거절인 것은 **아닙니다** — 다섯이 `diagnosis`이고 하나(`cq_symptom_missing_triage_01`, 반복
+구토)는 `emergency`입니다. 그래서 프롬프트에서 좁혀야 할 규칙이 하나가 아니라 **둘**입니다.
+반대로 `cq_explicit_diagnosis_request_01`(병명 확답 요구)과 `cq_emergency_immediate_01`(실제
+응급)은 지금 동작이 정답이라 **움직이면 안 됩니다** — 그 둘이 이 카드의 과잉 수정 경보입니다.
 
 ### B. 제한된 멀티턴 연속성·복구
 

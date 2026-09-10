@@ -62,8 +62,10 @@ context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_styl
 견종·나이만 계속 읽습니다. **약 이름과 급식 시각은 이 경계를 안 넘습니다** — `pets.medications`
 는 프로필에 머물고 복약 *여부*만 건너가며, 빈 약 칸은 `False` 가 아니라 모름이라 키 자체가
 없습니다. 일반 답변 프롬프트가 약·용량 질문을 거절하는데(D-057), 약 이름이 DOG_CONTEXT 에
-있으면 그 거절이 힌트로 바뀝니다. 안전 프롬프트 본문은 `general-answer-ko-v3` 그대로입니다
-— 바뀐 것은 그 안에 실리는 JSON 뿐입니다.
+있으면 그 거절이 힌트로 바뀝니다. 그 카드가 안전 프롬프트 본문을 안 건드렸다는 뜻으로 여기
+버전이 적혀 있었는데, 본문은 이후 #415 에서 되묻기 규칙이 붙어 `general-answer-ko-v6` 이
+됐습니다 — **이 절이 말하는 것은 지금도 같습니다: 바뀌는 것은 그 안에 실리는 JSON 뿐이고,
+프롬프트 본문은 이 배관과 무관하게 움직입니다.**
 
 **케어 로그 (CURRENT — #344)** — 같은 조건(앱 회원 + `active_dog_id`), 같은 세션에서 오늘의
 케어 요약을 읽어 `context["care_log"]` 에 얹습니다 (`services/care_log_context` ←
@@ -75,8 +77,10 @@ context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_styl
 필요한 전부입니다. 오늘 기록이 0건이면 키 자체가 없습니다(빈 로그는 "안 챙겼다" 가 아니라 "안
 쓴다" 일 수 있어 어느 쪽으로도 안 읽히게). 표가 아직 없거나 DB 가 아프면(`SQLAlchemyError`)
 경고만 남기고 로그 없이 답합니다. 프롬프트는 로그가 있을 때만 `CARE_LOG_TODAY` 블록과 규칙
-한 문단이 붙고 버전이 `general-answer-ko-v4-carelog` 로 갈립니다 — 로그가 없는 요청은 여전히
-v3 와 글자까지 같습니다 (`tests/test_assistant_care_log.py` 가 고정).
+한 문단이 붙고 버전이 `-carelog` 접미사로 갈립니다(지금은 `general-answer-ko-v6-carelog`) —
+로그가 없는 요청은 여전히 기본 본문과 글자까지 같습니다 (`tests/test_assistant_care_log.py`
+가 고정). **버전 번호는 네 조합이 함께 움직입니다** — 프롬프트에 박히는 JSON 스키마가 넷에
+공통이라, 모델 출력 모양이 바뀌면 넷의 본문이 한꺼번에 달라지기 때문입니다 (#415).
 
 **스크리닝 컨텍스트 (CURRENT — #307)** — `context` 의 두 번째 예약 키가 `screening` 입니다.
 사용자가 피부 판정 결과에서 이어 물을 때, 앱이 보내는 것은 **기록 id 하나**(`screening_record_id`,
@@ -159,9 +163,16 @@ RoutePlan:
 
 - **`requests[]` 와 `handoffs[]` 는 공존할 수 있습니다.** 예: "오늘 산책 괜찮은지도
   알려주고 피부에 난 것도 봐줘" → Walk 실행 + Skin 업로드 플로우 핸드오프.
-- **CLARIFY 는 배타적입니다.** `clarify != None` 이면 그 요청에서는 능력도 핸드오프도
-  실행하지 않습니다. 부분 실행 후 되물으면, stateless 재요청(§O-8, routing 문서 §3)이
-  이미 실행된 능력을 **다시 실행해 비용을 이중으로** 뭅니다.
+- **`RoutePlan.clarify` 는 배타적입니다.** `clarify != None` 이면 그 요청에서는 능력도
+  핸드오프도 실행하지 않습니다. 부분 실행 후 되물으면, stateless 재요청(§O-8, routing
+  문서 §3)이 이미 실행된 능력을 **다시 실행해 비용을 이중으로** 뭅니다.
+- **`AssistantStatus.CLARIFY` 의 생산자는 둘입니다** (#415 · D-068). 위의 계획 시점
+  되묻기(좌표 누락, `planner._clarify_question`)와, **답 시점** 되묻기 — General 이
+  미명세 질문에 `kind="ask"` 를 내면 `aggregate` 가 그것을 같은 `CLARIFY` 로 옮깁니다.
+  **`RoutePlan.clarify` 는 그때도 `None` 입니다** — 계획은 이미 굳었고 배타성 불변식
+  (§6-9)은 그대로여야 하므로, 되묻기가 사는 곳은 계획이 아니라 집계입니다. 답 시점
+  되묻기는 `results` 가 general **단독**일 때만 성립하고, 그 응답의 `results` 는 비어
+  나갑니다(진리표 §5) — General 이 돌았다는 사실은 `route` 트레이스에만 남습니다.
 - 요약이 필요하면 mode 는 세 목록에서 **파생**합니다 — 진실 원천이 아닙니다.
 - 이 구조를 범용 워크플로 액션 DSL 로 일반화하지 않습니다.
 - `router` 출처 필드는 관측용이자 회귀 판별용입니다. 결정적 경로가 낸 오답과 LLM 이 낸
@@ -375,7 +386,8 @@ AssistantResponse:
 | PENDING + OK | PARTIAL | pending job 메타데이터 보존 |
 | 순수 HANDOFF | HANDOFF | 대상 플로우 안내 |
 | EXECUTE + HANDOFF 혼합 | 실행 결과에서 계산 | `handoffs[]` 는 별도 보존·항상 렌더 |
-| CLARIFY | CLARIFY | 아무것도 실행되지 않았음 |
+| CLARIFY (계획 시점) | CLARIFY | 아무것도 실행되지 않았음 |
+| CLARIFY (답 시점, general 단독 `ask`) | CLARIFY | General 만 돌았고 `results` 는 비어 나감 — `route` 에만 남음 (#415) |
 
 미래 Gait 의 PENDING 이 얽히는 조합(예: PENDING + REFUSED 우선순위)은 지금 필요한 것
 이상으로 확정하지 않습니다 — Gait 비동기 도입 카드의 몫입니다.
@@ -402,8 +414,10 @@ AssistantResponse:
    만능 공용 페이로드를 만들지 않습니다.
 7. **elapsed_ms 는 모든 CapabilityResult 에 기록.**
 8. **locale 은 상태 필수 필드.** 값이 하나뿐인 지금도 자리를 비우지 않습니다 (§7).
-9. **CLARIFY 는 배타적.** clarify 를 낼 요청에서는 능력도 핸드오프도 실행하지 않습니다 —
-   stateless 재요청의 이중 실행·이중 과금을 막는 규칙입니다 (O-8).
+9. **CLARIFY 는 배타적.** `RoutePlan.clarify` 를 낼 요청에서는 능력도 핸드오프도 실행하지
+   않습니다 — stateless 재요청의 이중 실행·이중 과금을 막는 규칙입니다 (O-8). 답 시점
+   되묻기(#415)도 이 불변식을 안 건드립니다: `RoutePlan.clarify` 를 **사후에 쓰지 않고**,
+   응답의 `results` 를 비워 클라이언트가 보는 배타성을 그대로 지킵니다.
 10. **라우터 실패 ≠ CLARIFY** (O-14). 스키마 검증 실패는 1회 한정 재시도 후 FAILED 이고,
     아무 능력도 실행하지 않으며, 잘못된 모델 원출력을 사용자에게 노출하지 않습니다.
 11. **일반 운영 로그·트레이스에 사용자 질문 원문 금지** (O-13, D-037). 기본 관측에

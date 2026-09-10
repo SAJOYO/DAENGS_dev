@@ -3968,3 +3968,50 @@ NULL 로 만듭니다 — 재가입할 때 같은 사람으로 알아보기 위�
 **되돌리려면**: `withdraw()` 가 `app_users` 행을 실제로 DELETE 하도록 바꿔야 하는데,
 그러면 재가입 시 "같은 사람으로 알아본다"는 지금의 계약이 깨져 별도의 재식별 로직이
 필요합니다. 가볍게 되돌릴 결정이 아닙니다.
+
+## D-068
+### 되묻기(`ASK`)는 계약을 안 늘리고 `CLARIFY` 로 나간다 — 계획이 아니라 집계에서
+
+2026-09-10 · `#415`. `#401` 의 before 랩이 실제 대화의 실패 하나를 그대로 재현했습니다 —
+`오늘 건강 상태는 어때?` 가 `{kind: refuse, reason: diagnosis}` 로 닫혔고, 사용자가 네 번
+정정하는 동안 한 번도 되묻지 않았습니다. **라우터는 `general` 을 제대로 골랐습니다**
+(`route_plan.capabilities: ["general"]`). 오분류는 General 능력 **안에서** 났고, 그래서 고치는
+자리도 `adapters/general.py` 의 분류 프롬프트입니다 — `planner.py` · `semantic.py` 는 범위 밖입니다.
+
+`docs/orchestration/conversation-quality.md` §7-A 가 선택지 셋을 적어 두었고, 팀은 ①
+(`CLARIFY` 재사용)을 골랐습니다. 다만 **거기 적힌 모양 그대로는 안 됩니다**: `RoutePlan.clarify`
+는 계획 시점에 굳고 `clarify_is_exclusive`(`contracts.py`)가 `requests` 와의 공존을 막는데,
+General 어댑터는 그 계획이 굳은 **뒤에** 돌고 그 계획에는 이미 `general` 요청이 들어 있습니다.
+그래서 실제로 고른 것은 ①′ 입니다 — **되묻기가 사는 곳은 계획이 아니라 집계입니다.**
+
+- General 이 `kind="ask"` 를 내면 어댑터가 `ClarifyRequest` 로 조립해 `data["ask"]` 에 담습니다.
+- `aggregate` 가 **결과가 general 단독일 때만** 그것을 이미 있는 `AssistantStatus.CLARIFY` 로
+  옮깁니다. `RoutePlan.clarify` 는 **끝까지 `None`** 이라 배타성 검증기 둘
+  (`contracts.RoutePlan.clarify_is_exclusive` · `graph._validate_route_plan`)이 그대로 섭니다.
+- `AssistantStatus` 도 `CapabilityStatus` 도 안 넓혔습니다. 능력 수준의 `OK` 는 "능력이 돌아서
+  자기 출력을 냈다" 는 뜻이고, 그 출력이 질문인지 답인지는 `data` 의 모양이 말합니다 — `data`
+  는 원래 능력마다 다른 자리입니다(walk 는 `now`, general 은 `answer`).
+- 그 응답의 `results` 는 **비워 나갑니다.** 진리표의 "CLARIFY = 아무것도 실행되지 않았음" 을
+  클라이언트 쪽에서 그대로 지키기 위해서고, 그것이 이 선택이 치른 값입니다 — General 이
+  돌았다는 사실은 `route` 트레이스와 `#401` 하네스의 `general_decision` 에만 남습니다.
+
+②(`ANSWERED` 에 질문 얹기)를 버린 이유는 계약이 거짓말을 하기 때문입니다 — `status` 만 보고
+분기하는 클라이언트가 되묻기를 답으로 셉니다. ③(새 상태 `NEEDS_INPUT`)은 뜻이 가장 정직하지만
+값이 큽니다: `chat_turns` 의 CHECK 제약(`db/init/07_chats.sql` + 마이그레이션) · 프론트의
+`AssistantStatus` 유니온과 `Record<AssistantStatus, …>` 둘 · 메트릭 콘솔 · D-033/D-034 재리뷰가
+전부 딸려 옵니다. **되묻기가 실제로 얼마나 쓰이는지 재기 전에 치를 값이 아닙니다.**
+
+**승인된 경계**: 되묻기는 **관찰 축만** 묻고, 구체 증상이 오면 지금처럼 병원으로 넘깁니다.
+질문은 하나이고, 병명 후보를 늘어놓거나 문진표를 걷지 않습니다 — 그것은 증상을 근거로 판단하는
+흐름이라 지금 의료 경계 밖입니다 (`#415` 정책 모서리, 사람 결정).
+
+**프롬프트 버전 넷이 함께 올라간 이유** (v3/v4-carelog/v5-vetspend/v5-carelog-vetspend →
+`general-answer-ko-v6` 계열): `build_general_prompt` 가 `GeneralAnswer.model_json_schema()` 를
+**네 가지 본문 전부**에 끼워 넣습니다. `kind` 에 `ask` 를 더한 순간 네 본문의 글자가 이미
+달라졌으므로, 버전을 안 올리면 D-057 ③ 이 84건 쌍대 비교로 승인한 이름이 다른 물건을 가리키게
+됩니다. 규칙을 고친 것은 한 판본인데 번호가 넷 다 움직이는 것은 그래서입니다.
+
+**되돌리려면**: 프롬프트에서 `ask` 문단을 빼고 `GeneralAnswer.kind` 를 두 값으로 되돌리면
+됩니다. DB·프론트·상태 집합에 남긴 것이 없어 되돌리는 값은 작습니다 — **그것이 ①′ 를 고른
+이유이기도 합니다.** 반대로 되묻기가 쓸모를 증명해 `results` 를 응답에 싣거나 독립 상태가
+필요해지면, 그때가 ③ 을 다시 보는 자리입니다.

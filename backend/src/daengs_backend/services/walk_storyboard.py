@@ -128,6 +128,7 @@ async def generate(
                 if target is not None
                 else None,
                 "refresh": False,
+                "preparation_budget_ms": request.preparation_budget_ms if chosen == BOARD_FORMAT else None,
             }
         )
     if request.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:

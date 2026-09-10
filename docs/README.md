@@ -3,6 +3,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
+| [walk/diary-publication.md](walk/diary-publication.md) | 종료 후 남은 시간 예산·영속 기본 보드·단일 확정과 중단 복구 |
 | [walk/diary-base-board.md](walk/diary-base-board.md) | AI 없이 완성하는 내부 기본 보드 — 사용자 기록·관측·동선 지점·시작/종료와 기존 v1 보존 |
 | [walk/diary-generation.md](walk/diary-generation.md) | 스탬프의 LLM 배경·제목 작성과 기존 생성 예약·완료, 명시적 일기 HTTP 형식 |
 | [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |

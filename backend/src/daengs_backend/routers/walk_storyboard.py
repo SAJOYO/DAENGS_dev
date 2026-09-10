@@ -46,6 +46,8 @@ async def capabilities(user: CurrentAppUser):
         else [],
         "target_scene_count": {"min": 1, "max": 50},
         "photo_manifest_required_if_available": True,
+        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": 10_000}
+        if settings.walk_diary_enabled else None,
     }
 
 

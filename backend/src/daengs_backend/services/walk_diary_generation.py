@@ -17,6 +17,13 @@ from daengs_backend.services.walk_diary_contract import (
 )
 from daengs_backend.services.walk_diary_negotiation import guard_old_writer
 from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary, prepare_saved_diary
+from daengs_backend.services.walk_diary_publication import (
+    fallback,
+    preparation,
+    publication_reservation,
+    settle_expired,
+    within_budget,
+)
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
@@ -108,12 +115,21 @@ def result(prepared, row, revision):
 
 async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):
     _, prepared, revision = await snapshot(session, owner, walk_id, target, bundle_format)
-    value = result(prepared, await repo.current(session, walk_id), revision)
+    row = await repo.current(session, walk_id)
+    if prepared.board:
+        settle_expired(prepared, row)
+    value = result(prepared, row, revision)
     await session.commit()
     return value
 
 
 async def generate_diary(session, owner, walk_id, request, *, writer=None):
+    started = datetime.now(UTC)
+    deadline = (
+        started + timedelta(milliseconds=request.preparation_budget_ms)
+        if request.preparation_budget_ms is not None
+        else None
+    )
     principal, prepared, revision = await snapshot(
         session, owner, walk_id, request.target_scene_count, request.bundle_format
     )
@@ -125,6 +141,8 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     row = await repo.current(session, walk_id)
     if not prepared.board:
         guard_old_writer(row)
+    else:
+        settle_expired(prepared, row)
     now = datetime.now(UTC)
     value = result(prepared, row, revision)
     # A new-format client cannot take over another format's live generation lease.
@@ -132,7 +150,12 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
         prepared.board
         and row is not None
         and row.status == "running"
-        and row.updated_at > now - timedelta(seconds=LEASE_SECONDS)
+        and (
+            preparation(row) is not None
+            and now < datetime.fromisoformat(preparation(row)["deadline_at"])
+            or row.updated_at > now - timedelta(seconds=LEASE_SECONDS)
+            and preparation(row) is None
+        )
     ):
         await session.commit()
         return value.model_copy(update={"status": "running"})
@@ -144,13 +167,25 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
         await session.commit()
         return value
     generation = reserve(
-        session, walk_id, row, revision, now, bundle_format=BOARD_FORMAT if prepared.board else None
+        session,
+        walk_id,
+        row,
+        revision,
+        now,
+        bundle_format=BOARD_FORMAT if prepared.board else None,
+        pending_bundle=publication_reservation(prepared, revision, started, deadline)
+        if prepared.board and deadline is not None
+        else None,
     )
     ticket = bind_generation(principal, source, generation)
     await session.commit()  # Release the Walk lock/transaction before the LLM call.
     bundle, failure = None, None
     try:
-        output = await (writer or write_diary)(source, prepared.prepared)
+        output = (
+            await within_budget(writer or write_diary, source, prepared.prepared, deadline)
+            if prepared.board and deadline is not None
+            else await (writer or write_diary)(source, prepared.prepared)
+        )
         if (
             output.input_revision != ticket.input_revision
             or output.plan_revision != prepared.prepared.plan.revision()
@@ -161,19 +196,28 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
         else:
             bundle = store_diary(prepared, output, revision)
     except asyncio.CancelledError:
-        raise  # The shared 60-second lease permits recovery after interruption.
+        raise  # New publications retain their deadline/base; older requests retain the lease.
+    except TimeoutError:
+        if prepared.board:
+            bundle = fallback(prepared, revision)
+        else:
+            failure = "diary_generation_failed"
     except Exception:  # noqa: BLE001 - never persist raw source/provider exception details
         if prepared.board:
-            fallback = prepared.board.board.model_copy(
+            default_board = prepared.board.board.model_copy(
                 update={"model_status": "unavailable", "failure_code": "provider_failed"}
             )
-            bundle = store_board(prepared, publish_board(fallback, prepared.board.plan), revision)
+            bundle = store_board(
+                prepared, publish_board(default_board, prepared.board.plan), revision
+            )
         else:
             bundle, failure = None, "diary_generation_failed"
     principal, latest, latest_revision = await snapshot(
         session, owner, walk_id, request.target_scene_count, request.bundle_format
     )
     current = await repo.current(session, walk_id)
+    if latest.board:
+        settle_expired(latest, current)
     try:
         require_current(
             ticket, principal, latest.input.source, current.generation if current else 0

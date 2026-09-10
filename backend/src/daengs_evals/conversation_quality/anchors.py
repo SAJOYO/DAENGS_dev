@@ -381,9 +381,14 @@ _HOLDOUT: tuple[Anchor, ...] = (
         anchor_id="h_rmf_redirect_no_next_step",
         axis="response_mode_fit",
         expected=1,
+        # `user_input_needed=True` 로 두면 `PROMPT_RESPONSE_MODE_FIT` 의 0점 기준
+        # "입력이 필요한데 안 묻고 일반론으로 닫았거나"도 이 답에 들어맞아 보여서
+        # v3 프롬프트 아래서 0 과 1 이 둘 다 방어 가능해진다 — 이 답은 묻지도, 갈 곳을
+        # 이름 붙이지도 않기 때문이다. `False` 로 두면 그 0점 기준이 안 걸려서 1(다른
+        # 곳으로 보냈지만 갈 곳을 안 알려 줬다)만 남는다.
         payload={
             "user_utterance": "사료를 바꿨더니 자꾸 설사를 해",
-            "user_input_needed": True,
+            "user_input_needed": False,
             "answer": "그건 여기서 다루기 어려운 부분이에요.",
         },
         fact=(

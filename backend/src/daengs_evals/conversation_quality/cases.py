@@ -74,8 +74,11 @@ def load_cases(path: Path) -> list[ConversationCase]:
 
 def file_sha256(path: Path) -> str:
     # 원바이트 해시가 아니라 줄바꿈을 LF 로 맞춘 텍스트를 해시한다 — 이 저장소는
-    # core.autocrlf=true 라 개발 PC(Windows) 워킹 카피는 CRLF, CI(ubuntu-latest)는
-    # LF 로 체크아웃된다. 바이트 해시를 값으로 박으면 둘 중 한쪽에서 반드시 깨진다.
+    # core.autocrlf=true 라 개발 PC(Windows) 워킹 카피는 CRLF 로 체크아웃된다. GitHub
+    # 호스티드 CI는 이 저장소에서 과금 문제로 잡히지도 않고 취소되므로 "CI 는 LF" 는
+    # 근거가 아니다 — 실제 이유는 **다른 개발자의 체크아웃**이다: 팀원이 Linux·WSL 에서
+    # 체크아웃하면 그쪽은 LF 다. 바이트 해시를 값으로 박으면 Windows·Linux 체크아웃
+    # 사이에서 반드시 깨진다 — 체크아웃 방식과 무관해야 한다는 것이 이 함수의 목적이다.
     # 그 대가로 줄바꿈만 바뀐 변경은 이 해시로 못 잡는다 — 내용이 같으면 같은 값을 내는
     # 것이 이 함수의 목적이라 감수한다. `answer_quality.questions.file_sha256` 은 출처
     # 증빙용 바이트 해시라 이 함수와 다르게 유지한다.

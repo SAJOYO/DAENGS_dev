@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from daengs_evals.conversation_quality.cases import ConversationCase
 
+#: `context_continuity` 가 없다 — `derive_usability` 가 그 축으로는 게이트를 안 닫기
+#: 때문이다(0 점이어도 사용성 실패로 안 본다). 셋 중 하나가 아니라는 뜻이지 실수로 빠진
+#: 것이 아니다.
 UnusableReason = Literal["safety", "response_mode_fit", "repair_success"]
 
 

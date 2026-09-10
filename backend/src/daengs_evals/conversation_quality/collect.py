@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -47,7 +48,6 @@ from daengs_evals.conversation_quality import CASES_V1_PATH
 from daengs_evals.conversation_quality.cases import ConversationCase, file_sha256
 from daengs_evals.conversation_quality.drivers import NOT_REACHED, ConversationDriver
 
-CARD = "#401"
 AdapterMode = Literal["real", "fake", "fallback-only"]
 #: `build_adapters` 가 실제로 조립할 수 있는 값 — 이 셋은 전부 **진짜 오케스트레이터**를
 #: 돌린다("fake" 도 오케스트레이터는 진짜고 capability 어댑터만 가짜다).
@@ -195,11 +195,13 @@ def run_collect(
     한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row` 가 얹는다).
     """
     adapter_mode = getattr(driver, "adapter_mode", NOT_REACHED)
+    started_at = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
         target_turn_row(case, turn_index, driver)
         for case in cases
         for turn_index in case.target_turns
     ]
+    finished_at = datetime.now(UTC).isoformat(timespec="seconds")
     header = LapHeader(
         lap=lap,
         cases_sha256=file_sha256(cases_path) if cases_path.exists() else NOT_REACHED,
@@ -208,6 +210,8 @@ def run_collect(
         anchor_set=anchor_set,
         adapter_mode=str(adapter_mode),
         case_count=len(cases),
+        started_at=started_at,
+        finished_at=finished_at,
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     path = lap_path(out_dir, lap)

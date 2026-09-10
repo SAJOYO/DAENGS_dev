@@ -87,11 +87,13 @@ def test_the_frozen_277_question_set_is_untouched():
 
     # answer_quality.questions.file_sha256 (바이트 해시) 를 여기서 쓰면 안 된다 — 이
     # 저장소는 questions_v1.jsonl 을 .gitattributes 로 안 고정해서 git 블롭은 LF, 이
-    # Windows 워킹 카피는 core.autocrlf=true 때문에 CRLF 다. 바이트 해시로 값을 박으면
-    # 그 값을 만든 체크아웃과 CI(ubuntu-latest, LF 로 체크아웃)가 서로 다른 값을 내서
-    # 이 가드가 세트 변경과 무관하게 상시 빨간불이 된다. 그래서 여기서는 LF 정규화 텍스트를
-    # 해시하는 conversation_quality.cases.file_sha256 을 대신 쓴다 — 경로만
-    # answer_quality 것을 빌려 온다.
+    # Windows 워킹 카피는 core.autocrlf=true 때문에 CRLF 다. GitHub 호스티드 CI 는 이
+    # 저장소에서 과금 문제로 애초에 안 돈다(잡히기 전에 취소된다) — 근거는 그게 아니라
+    # **다른 개발자의 체크아웃**이다: 팀원이 Linux·WSL 에서 체크아웃하면 그쪽은 LF 라,
+    # 바이트 해시로 값을 박으면 그 값을 만든 체크아웃과 그쪽이 서로 다른 값을 내서 이
+    # 가드가 세트 변경과 무관하게, 체크아웃 방식에 따라서만 빨간불이 된다. 그래서 여기서는
+    # LF 정규화 텍스트를 해시하는 conversation_quality.cases.file_sha256 을 대신 쓴다 —
+    # 경로만 answer_quality 것을 빌려 온다.
     assert file_sha256(QUESTIONS_V1_PATH) == PINNED_277_SHA256
 
 
@@ -168,6 +170,24 @@ def test_not_asking_is_not_penalised_when_no_input_was_needed():
     assert applic["response_mode_fit"] is True
     # 상태가 없으면 상태를 안 썼다고 감점하지 않는다 — 잴 수 없으면 False(해당 없음)다
     assert applic["context_continuity"] is False
+
+
+def test_context_continuity_is_applicable_at_turn_index_two_even_without_state():
+    from daengs_evals.conversation_quality.rubric import applicability
+
+    # `turn_index >= 2 or bool(case.state_snapshot)` 의 첫 갈래만으로도 적용 가능해야
+    # 한다 — 상태가 아예 없어도(빈 `state_snapshot`) 앞 턴이 있으면 이을 것이 있다.
+    case = _case(
+        turns=[
+            Turn(role="user", text="오늘 건강 상태는 어때?"),
+            Turn(role="assistant", text="증상의 원인이나 병명은 여기서 판단하지 않아요."),
+            Turn(role="user", text="그래서 뭘 봐야 하는데?"),
+            Turn(role="assistant", text="식욕이나 배변 상태 등을 관찰해 주세요."),
+        ],
+        target_turns=[3],
+        state_snapshot={},
+    )
+    assert applicability(case, 3)["context_continuity"] is True
 
 
 def test_axis_with_nothing_to_measure_is_not_applicable_rather_than_zero():
@@ -249,29 +269,38 @@ def test_scored_rows_exclude_empty_and_error_turns():
 # --- 드라이버 이음매와 랩 수집 (drivers.py · collect.py) ---
 
 
-def test_stateless_driver_sends_only_the_current_query():
+def test_fake_driver_records_only_the_current_query():
     from daengs_evals.conversation_quality.drivers import FakeDriver
 
-    # 오늘의 런타임을 그대로 흉내낸다 — 드라이버가 이전 턴을 안 싣는다는 것이 계약이다
+    # `FakeDriver` 는 이전 턴을 안 싣는다 — `StatelessDriver.send` 와 같은 계약이다
+    # (오늘의 런타임이 실제로 그렇다).
     driver = FakeDriver(replies=["a", "b"])
     driver.send("첫 질문")
     driver.send("둘째 질문")
     assert driver.seen_payloads == [{"query": "첫 질문"}, {"query": "둘째 질문"}]
 
 
-def test_lap_header_pins_the_six_things_that_must_not_move():
-    from daengs_evals.conversation_quality.collect import LapHeader
+def test_lap_header_pins_the_five_things_run_collect_actually_recorded(tmp_path):
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import FakeDriver
 
-    header = LapHeader(
+    case = _case()
+    out = run_collect(
+        cases=[case],
+        driver=FakeDriver(replies=["답"]),
+        out_dir=tmp_path,
         lap="before",
-        cases_sha256="a" * 64,
         judge_model="gpt-5.4-2026-03-05",
-        prompt_version=1,
-        anchor_set="dev",
-        adapter_mode="fake",
+        prompt_version=7,
+        anchor_set="holdout",
     )
-    for field in ("cases_sha256", "judge_model", "prompt_version", "anchor_set", "adapter_mode"):
-        assert field in header.model_dump()
+    lap_meta, _ = load_lap(out)
+    # 값 자체가 실제로 실렸는지를 본다 — 필드가 모델에 있다는 것만으로는 아무것도 못 잡는다.
+    assert lap_meta["cases_sha256"] != ""
+    assert lap_meta["judge_model"] == "gpt-5.4-2026-03-05"
+    assert lap_meta["prompt_version"] == 7
+    assert lap_meta["anchor_set"] == "holdout"
+    assert lap_meta["adapter_mode"] == "fake-driver"
 
 
 def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path):
@@ -286,11 +315,11 @@ def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path
     assert row["state_supplied"] == case.state_snapshot  # 재조회가 아니라 그 시점 값
 
 
-def test_collect_makes_no_live_call_in_tests():
-    # 자동 테스트는 가짜만 쓴다. 실제 provider 모듈을 import 하지 않는다.
-    import daengs_evals.conversation_quality.collect as m
-
-    assert "openai" not in m.__dict__
+# `collect.py` 가 실제로 어느 provider 를 무는지(Gemini)는
+# `test_every_module_in_the_package_imports_without_backend_settings` 가 이미 잡는다 —
+# 그 테스트는 "이 패키지의 어떤 모듈도 import 만으로는 backend 설정을 안 문다"는 속성을
+# 직접 재므로, 여기서 `m.__dict__` 에 없는 모듈 이름을 확인하는 것(그나마도 틀린 이름이었다
+# — collect.py 는 OpenAI 가 아니라 Gemini 를 문다)은 더 약한 중복이다.
 
 
 # --- 드라이버 이음매·랩 수집 리뷰 반영 ---
@@ -774,14 +803,6 @@ def test_both_directions_exist_for_the_two_axes_that_floor_at_zero():
         assert 0 in scores and 2 in scores
 
 
-def test_anchor_cases_are_not_embedded_in_the_judge_prompt():
-    from daengs_evals.conversation_quality import judge
-    from daengs_evals.conversation_quality.anchors import ANCHORS
-
-    for anchor in ANCHORS["dev"]:
-        assert anchor.text[:30] not in judge.PROMPTS["response_mode_fit"]
-
-
 def test_no_anchor_text_appears_in_any_axis_prompt():
     # 자기 앵커에 맞춰진 판정기는 아무것도 못 잰다 — 세 프롬프트 전부를 본다.
     from daengs_evals.conversation_quality import judge
@@ -804,18 +825,19 @@ def test_every_axis_has_a_middle_band_anchor_in_dev():
         assert 1 in scores, axis
 
 
-def test_two_anchors_break_the_user_input_needed_collinearity():
+def test_a_needed_true_anchor_scores_high_without_asking_breaking_one_collinearity_direction():
     # 오늘 13 개 케이스는 need=True <-> ASK, need=False <-> ANSWER/REDIRECT 로 완전히
-    # 겹친다 — 이 비트가 아니라 답을 재는지는 반례가 있어야 갈린다.
+    # 겹친다 — 이 앵커가 그 방향 하나(need=True 인데 안 물어도 맞는 경우가 있다)를 깬다.
+    # 역방향(need=False 인데 되묻는 것이 맞는 경우)은 `PROMPT_RESPONSE_MODE_FIT` 의 0점
+    # 기준이 되묻기를 항상 0 으로 못박아서 프롬프트를 안 고치는 한 지을 수 없다 — 리뷰가
+    # 그 방향은 만들지 않기로 정했다(`anchors.py` 모듈 docstring 참고).
     from daengs_evals.conversation_quality.anchors import ANCHORS
 
     rmf = [a for a in ANCHORS["dev"] if a.axis == "response_mode_fit"]
     needed_true_high_score = [
         a for a in rmf if a.payload["user_input_needed"] is True and a.expected == 2
     ]
-    needed_false_present = [a for a in rmf if a.payload["user_input_needed"] is False]
     assert needed_true_high_score  # need=True 인데 되묻지 않은 답이 맞는 앵커가 있다
-    assert needed_false_present
 
 
 def test_context_continuity_pins_a_correct_decline_at_two():
@@ -1226,9 +1248,24 @@ def test_summarize_reports_code_checks_per_case():
     from daengs_evals.conversation_quality.report import summarize
 
     lap_rows = [
-        {"case_id": "cq_a", "turn_index": 1, "message": "같은 답", "answered_by_fake_adapter": False},
-        {"case_id": "cq_a", "turn_index": 3, "message": "같은 답", "answered_by_fake_adapter": False},
-        {"case_id": "cq_b", "turn_index": 1, "message": "다른 답", "answered_by_fake_adapter": False},
+        {
+            "case_id": "cq_a",
+            "turn_index": 1,
+            "message": "같은 답",
+            "answered_by_fake_adapter": False,
+        },
+        {
+            "case_id": "cq_a",
+            "turn_index": 3,
+            "message": "같은 답",
+            "answered_by_fake_adapter": False,
+        },
+        {
+            "case_id": "cq_b",
+            "turn_index": 1,
+            "message": "다른 답",
+            "answered_by_fake_adapter": False,
+        },
     ]
     lap_meta = {"lap": "t1", "cases_sha256": "a" * 64, "adapter_mode": "real"}
     judge_header = {
@@ -1473,8 +1510,10 @@ def test_every_module_in_the_package_imports_without_backend_settings():
             [
                 sys.executable,
                 "-c",
-                f"import sys, {name}; assert 'daengs_backend.config' not in sys.modules, "
-                "sorted(m for m in sys.modules if m.startswith('daengs_backend'))",
+                (
+                    f"import sys, {name}; assert 'daengs_backend.config' not in sys.modules, "
+                    "sorted(m for m in sys.modules if m.startswith('daengs_backend'))"
+                ),
             ],
             capture_output=True,
             text=True,

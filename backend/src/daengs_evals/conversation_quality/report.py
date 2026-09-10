@@ -128,9 +128,7 @@ FLOORED_AXES: tuple[str, ...] = ("context_continuity", "repair_success")
 _SHARED_HEADER_PINS: tuple[str, ...] = ("judge_model", "prompt_version", "anchor_set")
 
 
-def _check_shared_header_pins(
-    lap_meta: Mapping[str, Any], judge_header: Mapping[str, Any]
-) -> None:
+def _check_shared_header_pins(lap_meta: Mapping[str, Any], judge_header: Mapping[str, Any]) -> None:
     for field in _SHARED_HEADER_PINS:
         if field not in lap_meta:
             continue
@@ -141,6 +139,7 @@ def _check_shared_header_pins(
                 f"랩={lap_val!r} 판정={judge_val!r}. 이 판정 파일은 이 랩을 판정한 것이"
                 " 아니거나, 랩이 선언한 조건과 다른 모델·설정으로 판정됐습니다."
             )
+
 
 _FEATURE_ABSENT = "기능 부재"
 
@@ -328,12 +327,12 @@ def summarize(
         elif gate.reason == "repair_success":
             unusable_repair += 1
 
-        # `response_mode_fit` 은 `applicability` 가 늘 True 로 두는 축이라 여기서 세는
-        # 분모는 사실상 "판정된(가짜 아닌) 턴 수" 다 — `axis_stats['response_mode_fit'].n`
-        # 과 값이 같아 보여도 우연이 아니라 정의가 같기 때문이고, 이 진단이 새로 재는 것은
-        # 분자(정형 문구 + 모드 통과) 쪽이다.
+        # `response_mode_fit` 은 `applicability` 가 늘 True 로 두는 축이라(`AxisScores` 에서도
+        # 기본값 없는 필수 `int`) 여기서 세는 분모는 사실상 "판정된(가짜 아닌) 턴 수" 다 —
+        # `axis_stats['response_mode_fit'].n` 과 값이 같아 보여도 우연이 아니라 정의가 같기
+        # 때문이고, 이 진단이 새로 재는 것은 분자(정형 문구 + 모드 통과) 쪽이다.
         rmf = judgment.scores.response_mode_fit
-        if rmf is not None and settings_available:
+        if settings_available:
             dead_end_n += 1
             message = messages_by_key.get(key, "").strip()
             if message in fixed_refusals and rmf != 0:
@@ -543,9 +542,7 @@ def render(summary: Summary) -> str:
     lines.append("## 코드 기반 검사 — 케이스별 사실 (판정 아님)")
     lines.append("")
     if not summary.code_checks_measured:
-        lines.append(
-            "  ⚠ 측정 불가 — backend 설정(`backend/.env`)이 없어 계산하지 못했습니다."
-        )
+        lines.append("  ⚠ 측정 불가 — backend 설정(`backend/.env`)이 없어 계산하지 못했습니다.")
     elif not summary.code_checks:
         lines.append("  (케이스 없음)")
     else:
@@ -574,13 +571,9 @@ def render(summary: Summary) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _pinned_value(summary: Summary, field: str) -> Any:
-    return getattr(summary, field)
-
-
 def _check_pins(before: Summary, after: Summary) -> None:
     for field in PINNED_FIELDS:
-        b, a = _pinned_value(before, field), _pinned_value(after, field)
+        b, a = getattr(before, field), getattr(after, field)
         if b != a:
             raise ValueError(
                 f"비교를 거부합니다 — 고정 항목 `{field}` 이 움직였습니다: "
@@ -592,12 +585,16 @@ def render_compare(*, before: Summary, after: Summary) -> str:
     """두 랩을 견준다. **다섯 고정 항목 중 하나라도 다르면 거부한다.**"""
     _check_pins(before, after)
 
+    def _fmt_pin(field: str) -> str:
+        value = getattr(before, field)
+        # `render()` 와 같은 길이로 줄인다 — 여기서만 64 자 전체를 보이면 같은 값이
+        # 두 렌더에서 다른 모양으로 찍혀, 사람이 눈으로 대조할 때 헷갈린다.
+        return f"{field}={value[:12]}…" if field == "cases_sha256" else f"{field}={value}"
+
     lines: list[str] = []
     lines.append(f"# 대화 품질 전후 비교 ({CARD}) — `{before.lap}` → `{after.lap}`")
     lines.append("")
-    lines.append(
-        "고정 항목 확인: " + " · ".join(f"{f}={_pinned_value(before, f)}" for f in PINNED_FIELDS)
-    )
+    lines.append("고정 항목 확인: " + " · ".join(_fmt_pin(f) for f in PINNED_FIELDS))
     lines.append(
         "미측정 비율은 두 랩에서 같은 정의(판정 전 제외 + 가짜 어댑터 셀 + 해당 없는 축, "
         "분모=턴×3)로 계산했습니다."

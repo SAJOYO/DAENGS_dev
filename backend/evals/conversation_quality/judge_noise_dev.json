@@ -1,0 +1,248 @@
+{
+  "type": "judge_noise",
+  "measured_at": "2026-09-10T08:19:20.336122+00:00",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "anchor_set": "dev",
+  "anchors_sha256": "08af3cfc31796393ee9750f4afd6e3a0ae093d554919567465c499d2773061d7",
+  "runs": 5,
+  "n_anchors": 12,
+  "passed_per_run": [
+    10,
+    10,
+    10,
+    9,
+    9
+  ],
+  "gate_verdict_per_run": [
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "unstable_anchors": 2,
+  "unstable_ratio": 0.1667,
+  "always_wrong": [
+    "rmf_needed_true_redirect_right"
+  ],
+  "per_anchor": [
+    {
+      "anchor_id": "rmf_ask_specific_02",
+      "axis": "response_mode_fit",
+      "expected": 2,
+      "scores": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "distinct": [
+        2
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "rmf_ask_specific_02_mut",
+      "axis": "response_mode_fit",
+      "expected": 1,
+      "scores": [
+        0,
+        1,
+        1,
+        0,
+        0
+      ],
+      "distinct": [
+        0,
+        1
+      ],
+      "unstable": true,
+      "always_wrong": false,
+      "always_right": false
+    },
+    {
+      "anchor_id": "rmf_answer_closes_when_needed",
+      "axis": "response_mode_fit",
+      "expected": 0,
+      "scores": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "distinct": [
+        0
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "rmf_needed_true_redirect_right",
+      "axis": "response_mode_fit",
+      "expected": 2,
+      "scores": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "distinct": [
+        1
+      ],
+      "unstable": false,
+      "always_wrong": true,
+      "always_right": false
+    },
+    {
+      "anchor_id": "rmf_needed_false_ask_wrong",
+      "axis": "response_mode_fit",
+      "expected": 0,
+      "scores": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "distinct": [
+        0
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "ctx_decline_correct",
+      "axis": "context_continuity",
+      "expected": 2,
+      "scores": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "distinct": [
+        2
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "ctx_decline_correct_mut",
+      "axis": "context_continuity",
+      "expected": 0,
+      "scores": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "distinct": [
+        0
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "ctx_relevant_state_ignored",
+      "axis": "context_continuity",
+      "expected": 0,
+      "scores": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "distinct": [
+        0
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "ctx_half_used_prior_and_state",
+      "axis": "context_continuity",
+      "expected": 1,
+      "scores": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "distinct": [
+        1
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "repair_full_change",
+      "axis": "repair_success",
+      "expected": 2,
+      "scores": [
+        2,
+        1,
+        1,
+        1,
+        1
+      ],
+      "distinct": [
+        1,
+        2
+      ],
+      "unstable": true,
+      "always_wrong": false,
+      "always_right": false
+    },
+    {
+      "anchor_id": "repair_zero_verbatim",
+      "axis": "repair_success",
+      "expected": 0,
+      "scores": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "distinct": [
+        0
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    },
+    {
+      "anchor_id": "repair_partial_one_of_two",
+      "axis": "repair_success",
+      "expected": 1,
+      "scores": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "distinct": [
+        1
+      ],
+      "unstable": false,
+      "always_wrong": false,
+      "always_right": true
+    }
+  ]
+}

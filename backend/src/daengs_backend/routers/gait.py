@@ -1,10 +1,10 @@
 """`/app/gait/*` — 보행 분석 orchestration API (D-043).
 
-기존 `/gait/*`(gait-analysis FastAPI 직접 호출)의 **proxy 가 아닙니다.** backend 가
+옛 `/gait/*`(gait-analysis FastAPI 직접 호출 — D-063 4단계에서 제거)의 **proxy 가 아닙니다.** backend 가
 소유하는 새 계약입니다 — 인증 · pet 소유권 · record/job lifecycle · presigned 발급.
 영상 바이너리는 여기를 지나가지 않고, 분석은 별도 워커에서 돕니다.
 
-기존 `/gait/*` 는 앱(#64)이 이쪽으로 전환한 뒤 단계적으로 제거합니다.
+옛 `/gait/*` 는 nginx 가 410 으로 닫아 두었고(옛 앱 빌드용 묘비), 서비스 코드는 제거됐습니다.
 
 ⚠️ **없는 것과 남의 것은 같은 404 입니다** — 403 을 주면 "그 기록이 존재한다"가
    샙니다 (pet 라우터와 같은 규칙).

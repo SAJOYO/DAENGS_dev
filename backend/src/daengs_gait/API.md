@@ -1,12 +1,12 @@
 # 보행 분석 API 계약 v1 — 앱이 볼 문서
 
-> ⚠️ **이 계약은 전환 예정입니다 (D-043).** 앱의 새 계약은 backend 의 `/app/gait/*`
-> (인증 · pet 소유권 · presigned 업로드 · job 상태)이고, 이 문서의 `/gait/*` 직접
-> 호출은 앱 전환(DAENGS_APP#64) 이 끝난 뒤 **단계적으로 제거**됩니다.
-> 그때까지는 유효하지만 **새로 붙지 마세요.**
+> ⛔ **이 API 는 제거됐습니다 (D-063 4단계, 2026-09-10).** `service.py` 와 `gait-analysis`
+> 컨테이너가 없어졌고, nginx 의 `/gait/*` 는 옛 앱 빌드를 위해 **410 Gone** 만 돌려줍니다.
+> 앱이 쓰는 계약은 backend 의 `/app/gait/*` (`daengs_backend/routers/gait.py`,
+> 인증 · pet 소유권 · bridge 업로드 · job 상태) 입니다.
+> 아래는 **역사 기록**으로 남겨 둔 옛 계약입니다 — 응답 필드 이름의 유래를 찾을 때만 보세요.
 
-앱이 이 서비스에 붙을 때 지켜야 하는 것. 코드는 `service.py` 이고
-`backend/tests/test_gait_*.py` 가 감시합니다.
+앱이 이 서비스에 붙을 때 지켜야 했던 것. (코드는 제거됨.)
 
 `skin-screening` 과 같은 모양으로 nginx 뒤에 붙습니다. **아래 경로는 전부 앱이
 부르는 주소 기준**입니다 — 그대로 `http://daengback.~` 뒤에 붙이면 됩니다.

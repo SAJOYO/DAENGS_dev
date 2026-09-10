@@ -35,6 +35,7 @@ from daengs_backend.config import settings
 from daengs_backend.core.warm_up import WarmUp, WarmUpPhase
 from daengs_backend.schemas.status import StatusState
 from daengs_backend.services import crawl as crawl_service
+from daengs_backend.services import gait as gait_service
 
 log = logging.getLogger(__name__)
 
@@ -246,9 +247,23 @@ async def _journey() -> tuple[StatusState, str]:
 
 
 async def _gait() -> tuple[StatusState, str]:
-    """gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
-    그래서 `absent` 가 정상이고, 그것이 이 화면에서 `down` 과 갈려야 하는 이유입니다."""
-    return await _probe(settings.gait_service_url, ["/healthz"])
+    """`gait` 큐를 듣는 Celery 워커가 있는지 봅니다 (D-063 4단계 — 옛 `/healthz` 프로브 대체).
+
+    gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038). 그래서 워커가
+    없는 것은 `absent` 가 정상이고, `_crawl` 의 celery 갈래와 같은 규칙입니다 —
+    `BrokerUnavailable`(브로커 없음·불통)도, 답한 워커가 없는 것도 "이 환경엔 원래 없다".
+
+    한계: profile 을 켜 뒀는데 워커만 죽은 경우도 `absent` 로 보입니다. 옛 DNS 기반
+    프로브와 같은 한계라 나빠지진 않습니다 — 갈라야 하면 "이 환경에 보행이 있어야 하는가"
+    를 알려 주는 설정이 먼저입니다 (`crawl_backend` 가 크롤에서 한 역할).
+    """
+    try:
+        workers = await asyncio.to_thread(gait_service.gait_workers, WORKER_PING_SEC)
+    except gait_service.BrokerUnavailable:
+        return StatusState.ABSENT, "이 환경에는 보행 워커가 없습니다 (브로커 없음)."
+    if not workers:
+        return StatusState.ABSENT, "이 환경에는 보행 워커가 떠 있지 않습니다."
+    return StatusState.OK, f"gait-worker {len(workers)}대 — {', '.join(workers)}."
 
 
 async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:

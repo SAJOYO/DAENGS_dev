@@ -109,15 +109,6 @@ def test_intake_module_import_stays_light():
     assert done.returncode == 0, f"딸려 온 것: {done.stdout.strip() or done.stderr.strip()}"
 
 
-def test_video_intake_reexports_the_same_objects():
-    """옛 HTTP 서비스 모듈이 같은 함수를 쓴다 — 정책이 두 벌이 되지 않게."""
-    from daengs_gait import video_intake
-
-    assert video_intake.probe_decodable is intake.probe_decodable
-    assert video_intake.transcode_to_h264 is intake.transcode_to_h264
-    assert video_intake.VideoDecodeError is intake.VideoDecodeError
-
-
 # ── 워커 경로: 저장소 → 판정 → 엔진 ───────────────────────────────────────
 class _Engine:
     name = "fake"

@@ -4,12 +4,13 @@
 
 ## 이 패키지의 위치 (D-038)
 
-`backend/src/` 밑에 있지만 **`daengs_backend` 프로세스에 붙지 않습니다.**
-소스와 의존성만 backend 로 통합했고, 런타임은 갈라 둡니다 —
-compose 의 `gait-analysis` 서비스가 `daengs_gait.service` 를 자기 프로세스로 띄웁니다.
+`backend/src/` 밑에 있지만 **`daengs_backend` 웹 프로세스에 붙지 않습니다.**
+소스와 의존성만 backend 로 통합했고, 런타임은 갈라 둡니다 — 이 패키지의 무거운 코드는
+compose 의 `gait-worker`(Celery, `daengs_backend.tasks.gait`)에서만 실행됩니다.
+옛 `gait-analysis` HTTP 서비스(`daengs_gait.service`)는 D-063 4단계에서 제거됐습니다.
 
     uv sync --frozen --group gait
-    uv run --no-sync gait-serve --host 0.0.0.0 --port 8000
+    uv run --no-sync celery -A daengs_backend.tasks.gait worker --queues gait --concurrency 1
 
 ⚠️ **여기서 `daengs_backend` 를 import 하지 마세요.** 그 순간 격리가 깨집니다.
    D-029 가 지키려던 것은 "영상 분석(분 단위 CPU)이 넘어질 때 로그인과 `/life/ask` 까지

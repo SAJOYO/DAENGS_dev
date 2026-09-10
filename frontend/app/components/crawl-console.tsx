@@ -107,7 +107,7 @@ export default function CrawlConsole() {
     setNotice(null);
     try {
       const body = { source_ids: sourceIds };
-      await apiJson<{ task_id: string }>("/api/admin/crawl", {
+      const res = await apiJson<{ task_id: string; note?: string | null }>("/api/admin/crawl", {
         method: "POST",
         // **`apiJson` 은 헤더를 붙여 주지 않습니다.** 빼면 브라우저가 문자열 본문에
         // `text/plain` 을 달고, FastAPI 는 maintype 이 `application` 이 아니면 본문을
@@ -117,17 +117,22 @@ export default function CrawlConsole() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      // `note` 는 GCP 에서 이미 돌고 있는 실행이 있어 새로 안 띄웠을 때만 옵니다
+      // (`"실행 중인 것이 있어 새로 띄우지 않았습니다: <이름>"`). 없으면 기본 문구인데,
+      // 프론트는 집 서버인지 GCP 인지 몰라서 문구를 환경 중립으로 둡니다 — 집 서버는
+      // 수집만, GCP 는 적재까지 하지만 "실행을 요청했다"는 둘 다 맞습니다.
       setNotice(
-        sourceIds.length > 0
-          ? `${sourceIds.join(", ")} 수집을 요청했습니다.`
-          : "주기 대상(due) 수집을 요청했습니다.",
+        res.note ??
+          (sourceIds.length > 0
+            ? `${sourceIds.join(", ")} 실행을 요청했습니다. 진행은 아래 표에서 갱신됩니다.`
+            : "주기 대상(due) 실행을 요청했습니다. 진행은 아래 표에서 갱신됩니다."),
       );
       await load();
     } catch (e) {
-      // 503 은 **앱이 아니라 워커/브로커가 없는 것**이라 문구를 가릅니다.
+      // 503 은 **앱이 아니라 실행기가 없는 것**이라 문구를 가릅니다.
       setNotice(
         e instanceof ApiError && e.status === 503
-          ? "워커나 브로커가 떠 있지 않습니다. 서버에서 crawler-worker 를 확인하세요."
+          ? "실행기가 떠 있지 않습니다. 집 서버는 crawler-worker, GCP 는 Cloud Run 잡과 backend/.env 의 DAENGS_CRAWL_BACKEND 를 확인하세요."
           : e instanceof ApiError
             ? e.message
             : "요청에 실패했습니다.",
@@ -169,18 +174,19 @@ export default function CrawlConsole() {
       </div>
 
       {/*
-        **어느 배포에서 보고 있는지에 따라 이 화면의 뜻이 다릅니다.** 크롤러와 코퍼스
-        정본은 로컬 서버에만 두기로 했고(`docs/deploy/roadmap.md` §2-4), 운영(GCP)
-        서버에는 crawler-worker·beat 가 아예 안 뜹니다. 거기서는 표가 덤프 시점의
-        이력이고 트리거는 202 만 받고 아무 일도 일어나지 않습니다 — 눌러 본 사람이
-        "고장" 으로 읽지 않게 미리 적어 둡니다.
+        **어느 배포에서 보고 있는지에 따라 이 버튼이 하는 일이 다릅니다.** 집 서버에서는
+        Celery 워커(crawler-worker)가 **수집까지**만 하고, 파싱·청킹·임베딩·적재는 개발
+        PC 에서 사람이 합니다. 운영(GCP)에서는 Cloud Run 잡 `corpus-refresh` 가 **크롤부터
+        적재까지** 한 번에 돌아 수십 분이 걸립니다 (D-062, #326). 둘의 코퍼스는 서로 다른
+        사본이라 한쪽에서 트리거한다고 다른 쪽이 채워지지 않습니다. 이미 실행 중인 것이
+        있으면 GCP 는 새로 안 띄우고 그 실행 이름을 `note` 로 알려 줍니다.
 
-        환경을 **감지**해서 버튼을 감추지 않는 이유는 지금 프론트가 그것을 알 방법이
-        없어서입니다. 상태 API 가 생기면 그때 가립니다 (`docs/console/roadmap.md` B1).
+        이제 어느 환경에서든 버튼이 뜻이 있어 가릴 이유가 없습니다.
       */}
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        크롤러(worker · Beat)와 코퍼스 정본은 로컬 서버에만 있습니다. 운영 서버에서 보고 있다면 이
-        표는 옮겨 온 시점의 이력이고, 수동 트리거는 동작하지 않습니다.
+        집 서버에서는 크롤러가 수집까지만 하고 파싱·적재는 개발 PC 에서 합니다. 운영(GCP)에서는
+        Cloud Run 잡이 수집부터 적재까지 한 번에 돌며 수십 분이 걸립니다. 두 코퍼스는 서로 다른
+        사본입니다.
       </p>
 
       {notice && (

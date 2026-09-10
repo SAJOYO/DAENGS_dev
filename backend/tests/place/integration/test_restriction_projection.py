@@ -17,8 +17,7 @@ from sqlalchemy import text
 
 from daengs_place.place.restriction_map import derive
 from daengs_place.place.search import PlaceSearchRequest, search_place_groups
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 SOURCE = "kcisa"
 REFS = ("test:proj:big-no", "test:proj:muzzle", "test:proj:plain")

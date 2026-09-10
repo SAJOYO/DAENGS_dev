@@ -2,6 +2,7 @@
 
 아래는 현재 서버의 규칙 기반 관측 분석 구현을 설명한다. v3의 대표/장면 제목 생성은
 [diary-titles.md](diary-titles.md)를 함께 본다.
+사용자 기록 중심의 새 일기 형식과 배경·제목 작성은 [diary-generation.md](diary-generation.md)를 본다.
 자동 장면의 원본 관측 위치를 전달하는 v4는 [scene-anchors.md](scene-anchors.md)를 본다.
 전체 이해 → 장면별 갱신 → 재검토 → 검토본 → 선택적 일기는 geo에서 실험 중이며,
 설계와 구현 범위의 기준은 DAENGS_geo `docs/explorations/walk/diary-storyboard-plan.md`다.
@@ -81,9 +82,9 @@ app은 별도 Room `walk_scene_analysis`에 결과를 저장한다. 사용자 �
 이번 작업에서 운영 DB migration이나 배포는 실행하지 않았다.
 
 ```powershell
-uv run pytest -q tests/walk/test_walk_storyboard.py
+uv run pytest -q tests/walk/storyboard/test_walk_storyboard.py
 $env:LIVE_STORYBOARD_TEST_DSN = 'postgresql://postgres@127.0.0.1:55439/postgres'
-uv run pytest -q tests/walk/test_walk_storyboard_db.py
+uv run pytest -q tests/walk/storyboard/test_walk_storyboard_db.py
 ```
 
 DB 검증은 Docker 없이 별도 로컬 PostgreSQL에서 수행했다. 테스트는 loopback만 허용하고

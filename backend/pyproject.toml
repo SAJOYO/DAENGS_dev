@@ -14,6 +14,7 @@ dependencies = [
     "celery>=5.5",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
+    "google-cloud-run>=0.16.1",
     "google-cloud-storage>=2.18",
     "google-genai>=2.18.1",
     "httpx>=0.28.1",
@@ -28,8 +29,10 @@ dependencies = [
     "pgvector>=0.3",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
+    "pyproj>=3.7",
     "pyyaml>=6.0.3",
     "redis>=6.0",
+    "shapely>=2.1",
     "sqlalchemy[asyncio]>=2.0.52",
     "tzdata>=2026.3",
 ]
@@ -42,6 +45,9 @@ run = "daengs_backend.main:run"
 # 보행 분석은 **별도 프로세스**입니다 (D-038). backend 앱에 붙지 않으므로 진입점이 따로입니다.
 # compose 의 gait-analysis 서비스가 이것을 부릅니다.
 gait-serve = "daengs_gait.service:main"
+# 저장소 규칙 검사. **3초** 안에 끝나는 것만 들어갑니다 — pytest 가 안 보는 자리
+# (루트 `tools/` 의 마이그레이션 체커)를 봅니다. 느린 것을 넣지 마세요, 이유는 그 파일 첫머리에.
+check = "daengs_backend.cli.check:main"
 # 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
 seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
@@ -200,6 +206,7 @@ screening = [
     "pillow>=10.2",
     "pandas>=2.1",
     "tqdm>=4.66",
+    "huggingface-hub>=0.34",
 ]
 pipeline = [
     "google-cloud-run>=0.16.1",
@@ -217,11 +224,11 @@ testpaths = ["tests"]
 # (#336) 원래 이 줄이 있던 이유(#224 — `from tools... import` 가 venv 에 안 깔린 패키지를
 # 찾지 못함)는 없어졌지만, 줄을 지우고 돌려 보니 다른 이유로 여전히 필요했다: 여러 테스트가
 # `tests/` 자체를 패키지처럼 써서 서로를 import 한다 —
-# `tests/place/place/discovery/test_facility_actions.py` 가
-# `from tests.place.place.discovery.test_facility import make_service, request` 를,
-# `tests/test_facility_discovery_api.py` 가 `from tests.facility_session_store import
-# MemorySessions` 를, `tests/walk/test_storyboard_observations.py` 가
-# `from tests.walk.test_walk_storyboard_titles import headings` 를 쓴다. `tests/` 에
+# `tests/place/discovery/test_facility_actions.py` 가
+# `from tests.place.support.discovery import make_service, request` 를,
+# `tests/place/api/test_facility_discovery_api.py` 가 `from tests.place.support.session_store import
+# MemorySessions` 를, `tests/walk/storyboard/test_storyboard_observations.py` 가
+# `from tests.walk.support.storyboard import headings` 를 쓴다. `tests/` 에
 # `__init__.py` 가 없어 이것들은 namespace 패키지로만 잡히는데, 그러려면 `backend/` 가
 # sys.path 에 있어야 한다 — 지우면 `ModuleNotFoundError: No module named 'tests'`.
 pythonpath = ["."]

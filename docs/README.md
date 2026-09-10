@@ -2,6 +2,10 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-generation.md](walk/diary-generation.md) | 스탬프의 LLM 배경·제목 작성과 기존 생성 예약·완료, 명시적 일기 HTTP 형식 |
+| [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |
+| [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |
+| [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
@@ -10,6 +14,9 @@
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
+| [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
+| [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
+| [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
 
 **배치 규칙 — 유닛별 폴더.** 팀 공통(협업 규칙 · 공통/인프라 결정 `D-`)은 이 폴더 루트에,
 유닛(코드 경계 — `daengs_life` · `daengs_place` · `daengs_journey` · `daengs_screening` · `gait-analysis` · Walk · Territory · 오케스트레이션 · 관리자 콘솔)의
@@ -70,6 +77,7 @@
 | --- | --- |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
+| [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
 | [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
 
 실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.
@@ -93,9 +101,15 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | --- | --- |
 | [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |
 | [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
+| [walk/public-context.md](walk/public-context.md) | SGIS 행정동·도시공원 실제 배경 공급, 캐시·배포 순서와 Gemini/앱 검증 |
+| [walk/area-context.md](walk/area-context.md) | 상권 업종 집계·EGIS 하천 형상 배경, 지역 카탈로그와 실제 생성 검증 |
+| [walk/runtime.md](walk/runtime.md) | 산책 공공자료 운영 워커·Beat·공유 캐시, 준비·검사·활성화·복구 |
+| [walk/regional-catalogs.md](walk/regional-catalogs.md) | 산책 위치별 지역 캐시 선택·자동 갱신·요청 상한·대기 작업 재개 |
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | 공간 일기 조회 API — 인증·일관된 조회·운영 상한·Place/Journey 경계 |
 | [walk/storyboard-live.md](walk/storyboard-live.md) | 실제 산책의 관측 분석·장면 구성과 앱 검토 연결 |
 | [walk/diary-titles.md](walk/diary-titles.md) | 스토리보드 대표·장면 제목의 LLM 생성과 저장·실패 처리 |
+| [walk/diary-contract.md](walk/diary-contract.md) | 산책 일기 이관 1단계 — 입력·스탬프·분리 서술 계약과 기존 오케스트레이션/생성 서비스 접점 |
+| [walk/photo-metadata.md](walk/photo-metadata.md) | 산책 일기 이관 2단계 — 사진 메타데이터 CAS 동기화와 Dev 저장 입력 어댑터 |
 | [walk/scene-anchors.md](walk/scene-anchors.md) | 자동 장면을 원본 GPS 관측 위치에 연결하는 v4 계약 |
 | [walk/speed-style.md](walk/speed-style.md) | 산책 지도 속도 색상과 앱 표시 정책 |
 | [walk/finalize-operating-db-smoke.md](walk/finalize-operating-db-smoke.md) | #140 finalize 운영 DB rollback smoke와 당시 앱 왕복 검증 기록 |

@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # 두 패키지가 같은 env 를 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
     redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
 
+    # 관리자 수동 크롤이 어디로 가나 (#326, D-062 §3). `celery` 는 집 서버(브로커에 태스크),
+    # `cloudrun` 은 GCP(Cloud Run Job `corpus-refresh` 를 Jobs API 로 실행 — 크롤부터 적재까지).
+    # GCP VM 의 backend/.env 에만 `DAENGS_CRAWL_BACKEND=cloudrun` 을 둔다. 인증은 VM 서비스
+    # 계정(메타데이터 서버)이라 키 파일이 없고, 그 계정에 잡 실행·실행 조회 권한이 있어야 한다
+    # (infra/gcp/README.md "관리자 트리거").
+    crawl_backend: Literal["celery", "cloudrun"] = "celery"
+    gcp_project: str = ""
+    gcp_region: str = "asia-northeast3"
+    corpus_job: str = "corpus-refresh"
+
     # 개발 서버가 바인딩할 주소.
     # 호스트에서 띄울 때는 루프백이면 충분하지만,
     # 컨테이너 안에서는 0.0.0.0 이어야 밖에서 닿습니다. (compose 가 DAENGS_HOST 로 넘겨줍니다)
@@ -86,6 +96,29 @@ class Settings(BaseSettings):
 
     # Enable on web/worker only after 24_walk_entry_contexts.sql has been applied.
     walk_entry_context_enabled: bool = False
+
+    # Apply 27_walk_public_context.sql before enabling address jobs on web/worker.
+    walk_public_context_enabled: bool = False
+    walk_sgis_key: SecretStr = SecretStr("")
+    walk_sgis_secret: SecretStr = SecretStr("")
+    walk_public_data_key: SecretStr = SecretStr("")
+    walk_park_catalog_path: str = ""
+    # Apply 28_walk_commerce_context.sql first; regional caches refresh separately.
+    walk_area_context_enabled: bool = False
+    walk_commerce_catalog_path: str = ""
+    walk_river_catalog_path: str = ""
+    # Shared read-only regional directory; only the dedicated catalog worker writes it.
+    walk_public_catalog_root: str = ""
+    walk_catalog_refresh_enabled: bool = False
+    walk_catalog_daily_requests: int = Field(default=300, ge=1, le=1000)
+
+    # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
+    walk_entry_v2_enabled: bool = False
+    walk_entry_v2_write_enabled: bool = False
+    # Enable only after 26_walk_photo_manifests.sql. Capability stays off on older DBs.
+    walk_photo_metadata_enabled: bool = False
+    # Opt-in diary bundle; enable only with a client that explicitly requests the new format.
+    walk_diary_enabled: bool = False
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은

@@ -556,7 +556,7 @@ def _plans_by_case(runs: Sequence[CaseRun]) -> dict[str, RoutePlan | None]:
 def capability_metrics(
     cases: Sequence[GoldCase], plans: Mapping[str, RoutePlan | None]
 ) -> dict[str, dict[str, float]]:
-    """네 능력 각각의 precision / recall. 채점기는 place 를 따로 안 내서 여기서 센다."""
+    """능력별 precision / recall. 채점기는 place 를 따로 안 내서 여기서 센다."""
     gold_total: Counter[str] = Counter()
     pred_total: Counter[str] = Counter()
     true_total: Counter[str] = Counter()

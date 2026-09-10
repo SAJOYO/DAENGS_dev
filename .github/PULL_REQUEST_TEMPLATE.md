@@ -82,7 +82,10 @@ Claude Code 에게:
 
 ## 확인한 것
 
+- [ ] `uv run check` 통과 — **3초입니다. 머지 전에 무조건.** `dev` 머지가 곧 배포이고,
+      이 검사(마이그레이션 짝·이름·Windows 바이트)는 pytest 가 안 봅니다
 - [ ] 로컬에서 동작 확인 (`npm run dev` / `uv run dev`)
+- [ ] 백엔드를 건드렸으면 `uv run pytest` 통과 (약 9분)
 - [ ] 프론트를 건드렸으면 `npm run lint` 통과
 - [ ] 의존성은 `uv add` / `npm install` 로 넣고 lock 파일도 커밋 (`uv.lock`, `package-lock.json`)
 - [ ] `.env`·키·비밀번호가 diff 에 없고, `.env.example` 이 실제 변수와 일치

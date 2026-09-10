@@ -23,6 +23,10 @@ class CapabilityName(StrEnum):
     #: assembles it by a deterministic rule when the router selected nothing, so the model
     #: can never trade an evidence-backed capability for an ungrounded answer.
     GENERAL = "general"
+    #: 응급 발화의 병원 연락 능력. GENERAL 과 마찬가지로 `semantic.ExecuteName` 에 없지만
+    #: 이유가 정반대다 — GENERAL 은 모델이 근거 있는 능력과 바꿔치기하지 못하게 뺐고,
+    #: 이것은 **모델을 아예 안 태우려고** 뺐다. 결정론적 어휘 게이트와 명시 신호로만 들어온다.
+    VET_CONTACT = "vet_contact"
 
 
 class CapabilityStatus(StrEnum):
@@ -296,13 +300,40 @@ class GeneralPayload(ContractModel):
     vet_spend: VetSpendContext | None = None
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload
+class VetContactPayload(ContractModel):
+    """응급 병원 연락의 입력. 질의 원문을 싣지 않는다 — 검색어가 아니라 좌표로만 찾는다.
+
+    좌표가 ``None`` 일 수 있는 것이 이 payload 의 요점이다. `vet_contact` 는
+    `planner._NEEDS_COORDINATES` 에 들어가지 않으므로 좌표가 없어도 CLARIFY 가 걸리지
+    않는다 — 응급에 "위도를 알려주세요" 로 되묻는 것이 최악이기 때문이다. 대신 adapter 가
+    ABSTAINED + `vet_contact.location_required` 로 끝낸다.
+
+    반쪽 좌표는 거부한다. 신뢰하지 않는 좌표는 좌표가 아니라는 D-051 ③ 의 처분과 같다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lat: float | None = Field(None, ge=33.0, le=39.0)
+    lon: float | None = Field(None, ge=124.0, le=132.0)
+    #: planner 가 채운다. adapter 가 시계를 읽으면 테스트가 시계에 묶인다 —
+    #: 이 저장소는 `SearchMust.judge_at`·`evaluated_at` 으로 시각을 인자로 넘긴다.
+    at_night: bool
+
+    @model_validator(mode="after")
+    def coordinates_come_as_a_pair(self) -> VetContactPayload:
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("lat and lon must be given together")
+        return self
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
     CapabilityName.PLACE: PlacePayload,
     CapabilityName.GENERAL: GeneralPayload,
+    CapabilityName.VET_CONTACT: VetContactPayload,
 }
 
 
@@ -479,6 +510,7 @@ __all__ = [
     "ScreeningContext",
     "ScreeningHistory",
     "TrainingPayload",
+    "VetContactPayload",
     "VetSpendContext",
     "WalkPayload",
 ]

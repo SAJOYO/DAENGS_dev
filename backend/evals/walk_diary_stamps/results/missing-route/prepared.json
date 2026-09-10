@@ -1,0 +1,59 @@
+{
+  "format": "walk-diary-prepared-v1",
+  "policy": {
+    "version": "records-first-v1",
+    "target_scene_count": 5,
+    "separation_s": 20.0,
+    "place_slots": 1,
+    "space_slots": 3,
+    "environment_slots": 1,
+    "time_slots": 1
+  },
+  "plan": {
+    "format": "walk-diary-plan-v1",
+    "input_revision": "ac224527fdc663d86d3aef7bcc58c4af9e6bffbdf952810ca3b63e413153dad5",
+    "target_scene_count": 5,
+    "preparation_policy": {
+      "version": "records-first-v1",
+      "target_scene_count": 5,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "scenes": [
+      {
+        "id": "stamp:e95897e07d1ba617e4782814d4e0bff6e6c9a82fb4170fadd13589e35eb96965",
+        "core": {
+          "identity": "walk_entry:c99a3d4d-693e-59be-9275-fe85393de44e",
+          "version": "23c8e585505db7289d26592d2719dc3bd5aa2d8971997819ee37fc1b7b7fd78a"
+        },
+        "background": []
+      }
+    ]
+  },
+  "core_decisions": [
+    {
+      "material": {
+        "identity": "walk_entry:c99a3d4d-693e-59be-9275-fe85393de44e",
+        "version": "23c8e585505db7289d26592d2719dc3bd5aa2d8971997819ee37fc1b7b7fd78a"
+      },
+      "reason": "user_record"
+    }
+  ],
+  "background_decisions": [],
+  "counts": {
+    "target": 5,
+    "user_records": 1,
+    "initial_deficit": 4,
+    "supplemented": 0,
+    "remaining_deficit": 4,
+    "total": 1
+  },
+  "limits": [
+    "route_unavailable",
+    "observation_pool_empty",
+    "photo_metadata_not_available"
+  ]
+}

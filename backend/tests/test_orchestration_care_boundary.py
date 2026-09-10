@@ -284,6 +284,8 @@ def test_no_care_capability_exists_in_the_contracts() -> None:
         "walk",
         "place",
         "general",
+        # `vet_contact` 는 발명된 능력이 아니라 결정적 어휘 게이트로만 닿는 실제 계약이다.
+        "vet_contact",
     }
     for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}

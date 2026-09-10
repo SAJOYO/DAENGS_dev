@@ -129,7 +129,9 @@ def test_probe_falls_back_to_sequential_when_seek_is_broken(tmp_path, monkeypatc
         def release(self):
             return self._cap.release()
 
-    monkeypatch.setattr("daengs_gait.video_intake.cv2.VideoCapture", NoSeek)
+    # `intake.probe_decodable` 은 함수 안에서 `import cv2` 하므로 (모듈 import 를 가볍게 —
+    # 3단계) 모듈 속성이 아니라 **cv2 모듈 자체**를 패치합니다.
+    monkeypatch.setattr(cv2, "VideoCapture", NoSeek)
     r = probe_decodable(src)
     assert r.ok                       # 순차 폴백으로 통과해야 합니다
     assert r.method == "sequential"

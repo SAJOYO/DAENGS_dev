@@ -80,6 +80,8 @@ class TerritoryStatistics(BaseModel):
 
 class ScoreResponse(BaseModel):
     bonus: int
+    base_bonus: int | None = None
+    takeover_bonus: int | None = None
     holding_units: int
     held_site_ms: int
     current_count: int

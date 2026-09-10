@@ -33,6 +33,21 @@
 
 ## 1. VM 셋업
 
+> 🔴 **인스턴스를 새로 만든다면 `--scopes=cloud-platform` 을 빠뜨리지 마세요.**
+>
+> ```bash
+> gcloud compute instances create daengs --zone=asia-northeast3-c \
+>   --scopes=https://www.googleapis.com/auth/cloud-platform \
+>   ...나머지 옵션
+> ```
+>
+> **콘솔에서 만들면 기본 범위가 박힙니다.** 지금 VM 이 그렇게 만들어졌고, 그래서 관리자 콘솔의
+> 크롤 버튼이 IAM 을 맞게 줬는데도 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` 로 안 섰습니다 —
+> 범위는 **만들 때는 자유롭지만 나중에 바꾸려면 인스턴스를 멈춰야** 해서, 2026-09-09 에
+> 운영을 몇 분 내리고 고쳤습니다. 자세한 것은 `infra/gcp/README.md` 의 "IAM 만으로는 안 된다".
+>
+> 아래는 **그렇게 만든 VM 안에서** 하는 일입니다.
+
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER        # 재로그인 필요
@@ -277,7 +292,18 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   쪽이 따라오지 않으므로 두 줄로 적어 둡니다 (roadmap §2-5).
 
   ④ 뒤, 바뀐 종류별 조치:
-  - **백엔드 코드만** → 없음. ④ 로 끝입니다
+  - **백엔드 코드만** → 웹(`backend`)은 리로드라 없음. **단, Celery 워커는 리로드가
+    없습니다** — `backend/src` 가 바뀐 배포는 워커도 재시작합니다 (몇 초, 분석이 돌고
+    있지 않을 때):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      restart gait-worker territory-vision-worker
+    docker compose logs --tail 5 gait-worker    # `celery@… ready.` 가 새로 찍히면 끝
+    ```
+
+    2026-09-09(#355) 에 로컬 서버에서 실제로 겪었습니다 — 웹은 새 코드인데 워커가 44시간
+    전 코드로 남아, 같은 영상이 같은 자리에서 다시 죽었습니다. 로그로는 구분이 안 됩니다.
   - **`uv.lock` · compose** → 영향받는 컨테이너 재생성:
 
     ```bash
@@ -416,7 +442,7 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 | `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
 | `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
 | 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
-| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| Artifact Registry | 이미지 2장 12.1GB (CPU 2.4 · CUDA 9.7, 2026-09-09 실측) | 약 ₩1,600 (GB당 월 $0.10) |
 | 버킷 | 약 300MB + 버전 | 수백 원 |
 | Scheduler · Secret | | 무료 구간 |
 | **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |
@@ -457,6 +483,28 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 10. ⚠️ **`--args` 는 쉼표로 쪼개집니다** (위 "수동 실행"). `--args="--stages,parse,chunk"` 가
     `--stages parse chunk` 가 되므로, 단계·소스 인자는 공백 나열도 받게 되어 있습니다.
     한 인자 안에 쉼표를 넣어 넘길 방법은 없다고 보는 편이 낫습니다.
+
+#### 관리자 콘솔에서
+
+관리자 콘솔의 크롤 버튼은 위 "수동 실행"과 **같은 잡**을 돌립니다 — 소스를 골랐으면
+`--sources a b`, 안 골랐으면 due 판정 그대로(전체, crawl~load). 이미 실행 중인 것이 있으면
+새로 안 띄우고 202 와 함께 `note: "실행 중인 것이 있어 새로 띄우지 않았습니다: <실행 이름>"`
+으로 그 실행을 알려 줍니다 — 실패가 아닙니다.
+
+권한(`run.invoker`·`run.viewer`)과 VM `backend/.env` 네 줄은 `infra/gcp/README.md` "관리자
+트리거 (#326)" 를 보세요. 그 바인딩은 `infra/gcp/pipeline.sh` 가 Scheduler 바인딩 바로 다음에
+같이 줍니다 — teardown 뒤 재배포해도 다시 빠지지 않습니다.
+
+상태 페이지(`/console/status`)의 "크롤" 항목은 GCP 에서 잡이 있으면 "Cloud Run 잡
+`corpus-refresh@asia-northeast3`" 로 뜹니다. Cloud Run API 가 안 답하면(권한이 잘못됐거나
+프로젝트를 잘못 적은 경우) `absent` 가 아니라 `down` 이고 "Cloud Run 잡에 묻지 못했습니다"
+라고 이유가 붙습니다. API 는 멀쩡히 답했는데 잡 자체가 없으면(배포가 안 됐거나
+`DAENGS_CORPUS_JOB` 이름이 틀린 경우) 마찬가지로 `down` 이고 "Cloud Run 잡 ... 이 없습니다"
+라고 붙습니다 — 설정 자체(`DAENGS_GCP_PROJECT`)가 비어 있을 때만 여전히 `absent` 입니다.
+
+실행이 멈춘 채 안 끝나면(최대 3시간 타임아웃) 버튼이 계속 "실행 중" 만 돌려줍니다 —
+`gcloud run jobs executions cancel <실행 이름> --region=asia-northeast3` 로 취소한 뒤
+다시 누릅니다.
 
 ### Life 코퍼스만 동기화 (GCP)
 

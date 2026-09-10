@@ -111,6 +111,14 @@ CRAWL_RUNS_OLD = (
 # 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
+# HNSW 장(2026-09-09)은 **벡터 칸이 있어야** 마이그레이션 자체가 돈다. 위 `DOCUMENTS` 는
+# 일부러 확장에 안 기대는 픽스처라 그 칸이 없어서, 이 한 장만 따로 세운다.
+# 행은 안 넣는다 — 이 장이 만드는 것은 인덱스이고 빈 표에도 선다.
+DOCUMENTS_WITH_EMBEDDING = VECTOR_EXTENSION + (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " embedding vector(1024));"
+)
 
 # 훈련 RAG 청크 표의 **옛** 모양 — `chunk_id` 가 PK 이던 시절이다. 2026-09-08 마이그레이션이
 # 그 PK 를 복합키로 옮긴다. 픽스처가 옛 모양이어야 마이그레이션이 실제로 할 일이 생긴다.
@@ -201,6 +209,27 @@ def unqualified(sql):
     return sql.replace('public.', '')
 
 
+# pose_model 백필(2026-09-09, D-063)은 **값**을 검사하므로 픽스처에 행이 있어야 한다.
+# 여섯 행이 백필 규칙의 가지 하나씩이다 — v4 관절 / legacy 관절 / 빈 객체 / 두 체계가 섞임 /
+# 어느 집합에도 없는 키 / summary 자체가 NULL. 앞 넷은 DONE, 뒤 둘은 각각 DONE(unavailable)·FAILED.
+# 마이그레이션 **전** 상태라 pose_model 컬럼이 없다 — 컬럼은 마이그레이션이 만든다.
+GAIT_RECORDS_POSE_MODEL_ROWS = (
+    "INSERT INTO gait_records(id, pet_id, status, quality_status, quality_tier, summary_for_ui) VALUES"
+    " ('a0000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"R_Knee\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000002', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'low', '{\"Iliac crest\": {\"x_range\": 0.5}, \"Femorotibial joint\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'unavailable', NULL, '{}'),"
+    " ('a0000000-0000-0000-0000-000000000004', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Iliac crest\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000005', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Tail_tip\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000006', '33333333-3333-3333-3333-333333333333',"
+    "  'FAILED', NULL, NULL, NULL);"
+)
+
+
 # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
 # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
 # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
@@ -209,6 +238,59 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-09', 'documents_hnsw', DOCUMENTS_WITH_EMBEDDING, 'documents', [
+            # ⓐ 인덱스가 아예 없다 — 전수 스캔으로 돌아간다. **결과는 맞고 느리기만 하다.**
+            'DROP INDEX idx_documents_embedding',
+            # ⓑ 접근 방식을 바꾸는 변조. 이름도 같고 인덱스도 있는데 recall 특성이 다르다 —
+            # `D16` 이 재려는 것이 바로 그 특성이라, 이름만 보는 검사로는 아무 의미가 없다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING ivfflat (embedding vector_cosine_ops)',
+            # ⓒ 연산자 클래스를 바꾸는 변조. 검색은 `<=>`(코사인)로 묻는데 이 인덱스는
+            # `<->` 용이라 **질의가 인덱스를 안 탄다.** 결과는 여전히 맞아서 아무도 안 알려준다 —
+            # `db/indexes.sql` 이 2026-08 부터 같은 경고를 달고 있던 자리다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING hnsw (embedding vector_l2_ops)',
+        ]),
+        ('2026-09-09', 'walk_photo_manifests', WALKS, 'walk_photo_manifests', [
+            'ALTER TABLE walk_photo_manifests DROP COLUMN publisher_id',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_pkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_walk_id_fkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_revision_positive',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_hash_valid',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_records_bounded',
+        ]),
+        ('2026-09-09', 'walk_entry_pins',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
+         'walk_entry_pins', [
+            'DROP TRIGGER walk_entry_pins_deleted ON walk_entries',
+            'ALTER TABLE walk_entries DISABLE TRIGGER walk_entry_pins_deleted',
+            'DROP TRIGGER walk_entry_pin_live ON walk_entry_pins',
+            'DROP TRIGGER walk_entry_mutation_live ON walk_entry_mutations',
+            'ALTER TABLE walk_entry_pins DROP COLUMN payload',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_pkey',
+            'ALTER TABLE walk_entry_pins DROP CONSTRAINT walk_entry_pins_walk_id_entry_id_fkey',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_walk_id_entry_id_fkey',
+         ]),
+        ('2026-09-09', 'walk_public_context_commerce',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts', '2026-09-09_walk_public_context'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check',
+            ('ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check;'
+             " ALTER TABLE walk_entry_context_jobs ADD CONSTRAINT walk_entry_context_jobs_tag_check"
+             " CHECK (tag IN ('space.facility','space.park','space.river','environment.weather','space.address'))"),
+         ]),
+        ('2026-09-09', 'walk_public_context',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check',
+            ('ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check;'
+             " ALTER TABLE walk_entry_context_jobs ADD CONSTRAINT walk_entry_context_jobs_tag_check"
+             " CHECK (tag IN ('space.facility','space.park','space.river','environment.weather'))"),
+         ]),
         ('2026-09-08', 'walk_entry_contexts',
          WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
          'walk_entry_context_jobs', [
@@ -217,6 +299,28 @@ CHECKS = (
             'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_walk_id_entry_id_fkey',
             'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_job_id_fkey',
          ]),
+        # gait_records.quality_tier CHECK 를 good/low → good/ok/low 로. 픽스처는 **9/2 의 옛 표**
+        # 그대로(prerequisites 로 그 마이그레이션 텍스트를 재사용) — 그래야 이 마이그레이션이
+        # 실제로 하는 일(옛 제약을 떼고 새 제약을 거는 것)을 그대로 밟는다.
+        ('2026-09-09', 'gait_quality_tier_ok',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-02_gait_records'),
+         'gait_records', [
+            # 제약을 통째로 잃는 변조.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check',
+            # **사고 이전으로 되돌리는 변조 — 이 항목의 이유다.** 옛 verify(9/2)는 good·low
+            # "포함" 검사라 이걸 못 잡는다. 20~80 구간 영상이 다시 PROCESSING 좀비가 된다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','low'))",
+            # 이름만 같고 값이 하나 빠진 변조(low 를 잃음).
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok'))",
+            # 검증 안 된(NOT VALID) 제약은 "있어도 없는 것" — convalidated 를 본다.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_quality_tier_check;'
+            " ALTER TABLE gait_records ADD CONSTRAINT gait_records_quality_tier_check"
+            " CHECK (quality_tier IN ('good','ok','low')) NOT VALID",
+        ]),
         ('2026-09-08', 'certified_territory', APP_USERS + PETS_ONLY
          + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
          'territory_challenges', [
@@ -809,6 +913,29 @@ CHECKS = (
             'DROP INDEX ix_territory_claim_photos_claim_id',
             'DROP INDEX territory_claims_pet_idx',
         ]),
+        ('2026-09-10', 'territory_expiry', PETS + SET_UPDATED_AT
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_renewals', [
+            'ALTER TABLE territory_occupancies DROP COLUMN expires_at',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_pkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_claim_id_fkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_check',
+            'ALTER TABLE territory_renewals ALTER COLUMN contact DROP NOT NULL',
+            'DROP INDEX territory_occupancies_expiry_idx',
+            'DROP INDEX territory_renewals_claim_idx',
+        ]),
+        ('2026-09-10', 'activity_rewards', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims',
+                         '2026-09-06_activity_game'),
+         'activity_base_rewards', [
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_pkey CASCADE',
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_paid_check',
+            'ALTER TABLE activity_reward_details DROP CONSTRAINT activity_reward_details_pkey',
+            'ALTER TABLE activity_reward_details DROP COLUMN takeover_points',
+            'DROP TRIGGER activity_reward_owner_cleanup ON app_users',
+            'DROP INDEX activity_base_rewards_member',
+        ]),
         ('2026-09-06', 'activity_game', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
          + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
                          '2026-09-03_territory_visits', '2026-09-05_territory_claims'),
@@ -832,6 +959,29 @@ CHECKS = (
             'ALTER TABLE training_rag_chunks ALTER COLUMN chunk_id DROP NOT NULL',
             'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey',
             'ALTER TABLE training_rag_chunks ADD UNIQUE (document_id, chunk_index, embedding_model)',
+        ]),
+        # 2026-09-09 (D-063) — pose_model 컬럼 + 관절 키로 판별되는 행만 백필. 픽스처는 09-02 의
+        # 표 + 09-09 tier CHECK 확장 위에 여섯 행(GAIT_RECORDS_POSE_MODEL_ROWS). 변조는 규칙의
+        # 양쪽을 다 민다 — "명확한 행에 틀린 값/NULL" 과 "허용되지 않은 ID". **빈 객체 행에
+        # 허용된 ID 를 넣는 것은 변조가 아니다**(새 분석의 unavailable 기록이 그 모양) — 그
+        # 통과 조건은 backend/tests/test_gait_pose_model.py 가 verify SQL 의 조건을 읽어 지킨다.
+        ('2026-09-09', 'gait_records_pose_model',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok')
+         + GAIT_RECORDS_POSE_MODEL_ROWS,
+         'gait_records', [
+            'ALTER TABLE gait_records DROP COLUMN pose_model',
+            # 값이 들어갈 만큼 넓게 잡는다 — 좁히면 ALTER 자체가 죽어 verify 가 아니라 변조가
+            # 실패하고, 하네스는 그것을 "못 잡음" 으로 읽는다 (#271 NOT VALID 과 같은 함정).
+            'ALTER TABLE gait_records ALTER COLUMN pose_model TYPE varchar(40)',
+            # AP-10K 관절 행에 legacy 값 — 관절 정의가 다른 기록끼리 비교되게 하는 변조.
+            "UPDATE gait_records SET pose_model = 'yolov8_12kp_best'"
+            " WHERE summary_for_ui ? 'L_Hip' AND NOT summary_for_ui ? 'Iliac crest'",
+            # legacy 관절 행을 NULL 로 — 백필이 안 돈 상태와 같은 모양.
+            "UPDATE gait_records SET pose_model = NULL"
+            " WHERE summary_for_ui ? 'Iliac crest' AND NOT summary_for_ui ? 'L_Hip'",
+            # 레지스트리에 없는 ID. v4 compare 가 키 없을 때 쓰던 옛 기본값이 그대로 들어오는 사고.
+            "UPDATE gait_records SET pose_model = 'best_pt' WHERE summary_for_ui = '{}'::jsonb",
         ]),
 )
 

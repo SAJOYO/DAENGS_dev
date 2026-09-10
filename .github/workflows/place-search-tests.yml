@@ -10,6 +10,15 @@ on:
   pull_request:
     paths:
       - "backend/src/daengs_place/**"
+      - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_life/**"
+      - "backend/src/daengs_evals/place_fixtures/**"
+      - "backend/tests/conftest.py"
+      - "backend/tests/test_place_capability_fixtures.py"
+      - "backend/tests/test_orchestration_place*"
+      - "backend/tests/place_capability_cases.py"
+      - "backend/tests/test_main_stays_light.py"
+      - "backend/tests/fixtures/place_capability/**"
       - "backend/tests/place/**"
       - "backend/infra/place/**"
       - "backend/pyproject.toml"
@@ -26,6 +35,15 @@ on:
     branches: [dev]
     paths:
       - "backend/src/daengs_place/**"
+      - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_life/**"
+      - "backend/src/daengs_evals/place_fixtures/**"
+      - "backend/tests/conftest.py"
+      - "backend/tests/test_place_capability_fixtures.py"
+      - "backend/tests/test_orchestration_place*"
+      - "backend/tests/place_capability_cases.py"
+      - "backend/tests/test_main_stays_light.py"
+      - "backend/tests/fixtures/place_capability/**"
       - "backend/tests/place/**"
       - "backend/infra/place/**"
       - "backend/pyproject.toml"
@@ -147,6 +165,21 @@ jobs:
       - name: 스키마 (Alembic 전체 이력이 실제로 적용되는지도 여기서 검증됩니다)
         run: uv run alembic -c infra/place/alembic.ini upgrade head
       - name: 테스트
-        run: uv run pytest -q tests/place
+        run: >-
+          uv run pytest -q -rs tests/place
+          tests/test_place_capability_fixtures.py
+          tests/test_orchestration_place_adapter.py
+          tests/test_orchestration_place_projection.py
+          tests/test_orchestration_place_routing.py
+          tests/test_main_stays_light.py
+          --junitxml=place-results.xml
+      - name: Require executed checks
+        run: |
+          uv run python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = list(ET.parse("place-results.xml").iter("testcase"))
+          if not cases or any(case.find("skipped") is not None for case in cases):
+              raise SystemExit("Place verification had no tests or skipped cases")
+          PY
       - name: 린트
         run: uv run ruff check src/daengs_place tests/place

@@ -508,9 +508,15 @@ def cmd_load(args: argparse.Namespace) -> int:
                 return 1
             print("    --allow-metadata-loss 가 있어 그대로 진행합니다.")
 
-        loader.upsert(conn, prepared.rows)
+        written = loader.upsert(conn, prepared.rows)
         total = loader.count(conn)
-        print(f"  {'upserted':11s} {len(prepared.rows)}행  ·  documents 총 {total}행")
+        # 셋을 가른다 (RAG-084 ④). `upserted 9844행` 한 줄은 증분화가 도는 날과 안 도는 날에
+        # 똑같이 찍혀서, 그 줄만 보고는 인덱스를 갈았는지 아닌지 알 수가 없었다.
+        print(f"  {'inserted':11s} {written.inserted}행")
+        print(f"  {'updated':11s} {written.updated}행")
+        print(f"  {'unchanged':11s} {written.unchanged}행"
+              f"  — 안 건드렸다. 새 튜플이 없으니 인덱스도 그대로다 (RAG-084)")
+        print(f"  {'':11s} documents 총 {total}행")
 
         # 이번 적재가 안 건드린 행 = 사라진 청크 (RAG-045 ①). upsert 는 지우지 않는다.
         left = loader.stale(conn, prepared.rows)

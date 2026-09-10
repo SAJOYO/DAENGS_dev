@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
@@ -75,7 +76,14 @@ class TerritoryClaim(Base):
 
 class TerritoryOccupancy(Base):
     __tablename__ = "territory_occupancies"
-    __table_args__ = (CheckConstraint("certification IN ('UNVERIFIED','VERIFIED')"),)
+    __table_args__ = (
+        CheckConstraint("certification IN ('UNVERIFIED','VERIFIED')"),
+        Index(
+            "territory_occupancies_expiry_idx",
+            "expires_at",
+            postgresql_where=text("expires_at IS NOT NULL"),
+        ),
+    )
     site_id: Mapped[str] = mapped_column(
         ForeignKey("territory_claim_sites.site_id"), primary_key=True
     )
@@ -85,6 +93,27 @@ class TerritoryOccupancy(Base):
     certification: Mapped[str] = mapped_column(String(16))
     occupied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     certified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TerritoryRenewal(Base):
+    """A fresh onsite action and its immutable result; retries do not renew again."""
+
+    __tablename__ = "territory_renewals"
+    __table_args__ = (
+        Index("territory_renewals_claim_idx", "claim_id"),
+        CheckConstraint("site_version >= 0"),
+        CheckConstraint("expires_at > created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    claim_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("territory_claims.id", ondelete="CASCADE")
+    )
+    season_id: Mapped[str] = mapped_column(String(128))
+    contact: Mapped[str] = mapped_column(String(1024))
+    site_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class TerritoryClaimPhoto(Base):

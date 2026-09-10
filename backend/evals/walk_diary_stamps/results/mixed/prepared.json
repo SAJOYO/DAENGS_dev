@@ -1,0 +1,318 @@
+{
+  "format": "walk-diary-prepared-v1",
+  "policy": {
+    "version": "records-first-v1",
+    "target_scene_count": 5,
+    "separation_s": 20.0,
+    "place_slots": 1,
+    "space_slots": 3,
+    "environment_slots": 1,
+    "time_slots": 1
+  },
+  "plan": {
+    "format": "walk-diary-plan-v1",
+    "input_revision": "bd70996e1f9a9f95277a52add91a696c5f92f0b20841d4317a615fcaad35ef65",
+    "target_scene_count": 5,
+    "preparation_policy": {
+      "version": "records-first-v1",
+      "target_scene_count": 5,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "scenes": [
+      {
+        "id": "stamp:c5d8fb509b4103cdcf01edced6e9bf77aaf3769f3a7b298e6b108072627346d7",
+        "core": {
+          "identity": "walk_entry:d2c76343-5770-5e19-ab1a-ffd8ca618731",
+          "version": "de9525ae65b1fdb5254efc1e29e0ead648ffdf4da3d5f8f3d14fd2b85ed114f2"
+        },
+        "background": [
+          {
+            "id": "piece:a54dba96edf2e74af5899b8701a91c910ef819c67245249210cd6680b6a9ccf0",
+            "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 A",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "0"
+              },
+              "distance_m": 35,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          },
+          {
+            "id": "piece:6e34011be2a58eba6b7578bb88c87cefb141fec2af402b89975e9c49b225c20a",
+            "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 B",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "1"
+              },
+              "distance_m": 90,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          },
+          {
+            "id": "piece:4ddcb960c59a0e3f2b5918e72629352ab2ed0fe6727535d3966eb770bcf61257",
+            "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 C",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "2"
+              },
+              "distance_m": 140,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          }
+        ]
+      },
+      {
+        "id": "stamp:72aa346bcb5528260d0c96767ab6c62346fc7b189e4a9046aaed7cec024a06b3",
+        "core": {
+          "identity": "observation:dwell",
+          "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:a3245705dcd9cde2063349ef1cf5e7e791fea311fd403159f3c3d77b4f56b4a9",
+        "core": {
+          "identity": "walk_entry:0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+          "version": "2f7bc6e701da81d80fca5b2a5f9e3e5ff2e4c72cb53e6a78f7e9069ae9dbc617"
+        },
+        "background": [
+          {
+            "id": "piece:a22135977fda7b7ce19964418d384954c91d388f437463902251c32202343175",
+            "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 A",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "0"
+              },
+              "distance_m": 35,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          },
+          {
+            "id": "piece:a8a7d550be75c2d7bb4200f358337b0890b7f71b66e92d8a1a7747840dd03d35",
+            "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 B",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "1"
+              },
+              "distance_m": 90,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          },
+          {
+            "id": "piece:d6600af3b26c50bb77ffcaf23be2896c01e9858725e626dbd03d5ab768ac00b3",
+            "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+            "kind": "space_relation",
+            "schema_version": "place-nearby-v1",
+            "facts": {
+              "name": "합성 카페 C",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "2"
+              },
+              "distance_m": 140,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "last_known",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only"
+            }
+          }
+        ]
+      },
+      {
+        "id": "stamp:b778d7850dc48aaac2b2d025a1dba710440c18a50223cd5a0ab34bab5c59e67f",
+        "core": {
+          "identity": "walk_photo:eb92770e-481d-542e-9588-08aa222e5807",
+          "version": "66eff01e2226f35e4ee4c8ed297a26c47a84ef04eb50366f9810606723608782"
+        },
+        "background": []
+      },
+      {
+        "id": "stamp:52e872c5fba2b7a4a7f8a4740140107b9bea76c239872c556b6697d93048e94e",
+        "core": {
+          "identity": "observation:slow",
+          "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+        },
+        "background": []
+      }
+    ]
+  },
+  "core_decisions": [
+    {
+      "material": {
+        "identity": "walk_entry:0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+        "version": "2f7bc6e701da81d80fca5b2a5f9e3e5ff2e4c72cb53e6a78f7e9069ae9dbc617"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_entry:d2c76343-5770-5e19-ab1a-ffd8ca618731",
+        "version": "de9525ae65b1fdb5254efc1e29e0ead648ffdf4da3d5f8f3d14fd2b85ed114f2"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "walk_photo:eb92770e-481d-542e-9588-08aa222e5807",
+        "version": "66eff01e2226f35e4ee4c8ed297a26c47a84ef04eb50366f9810606723608782"
+      },
+      "reason": "user_record"
+    },
+    {
+      "material": {
+        "identity": "observation:dwell",
+        "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+      },
+      "reason": "fill_scene_deficit"
+    },
+    {
+      "material": {
+        "identity": "observation:near-action",
+        "version": "1220b26c74ac1eb252d7467d9d6597c211ee18040df67581126f1c6fc28d0a7b"
+      },
+      "reason": "near_user_record_time"
+    },
+    {
+      "material": {
+        "identity": "observation:overlap",
+        "version": "15ae91aade2ad90b638b4418a0106e76e1bd0c53b5c9d84aff2a7890b3db61a6"
+      },
+      "reason": "overlapping_selected_observation"
+    },
+    {
+      "material": {
+        "identity": "observation:slow",
+        "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+      },
+      "reason": "fill_scene_deficit"
+    }
+  ],
+  "background_decisions": [
+    {
+      "background_id": "3264395d-8777-5cd7-8d8f-9ae07212e6db",
+      "reason": "source_not_requested",
+      "piece_id": null,
+      "rejected_rows": []
+    },
+    {
+      "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+      "reason": "admit",
+      "piece_id": "piece:a54dba96edf2e74af5899b8701a91c910ef819c67245249210cd6680b6a9ccf0",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+      "reason": "admit",
+      "piece_id": "piece:6e34011be2a58eba6b7578bb88c87cefb141fec2af402b89975e9c49b225c20a",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+      "reason": "admit",
+      "piece_id": "piece:4ddcb960c59a0e3f2b5918e72629352ab2ed0fe6727535d3966eb770bcf61257",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "f58d675a-3226-5208-99fd-43c826b5d47b",
+      "reason": "slot_capacity",
+      "piece_id": "piece:b7e1c3654c79178bbd0957b780de9e48a3ca0a28bb4acb6933a492d99eac60f3",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+      "reason": "admit",
+      "piece_id": "piece:a22135977fda7b7ce19964418d384954c91d388f437463902251c32202343175",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+      "reason": "admit",
+      "piece_id": "piece:a8a7d550be75c2d7bb4200f358337b0890b7f71b66e92d8a1a7747840dd03d35",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+      "reason": "admit",
+      "piece_id": "piece:d6600af3b26c50bb77ffcaf23be2896c01e9858725e626dbd03d5ab768ac00b3",
+      "rejected_rows": []
+    },
+    {
+      "background_id": "149ef508-1eae-582d-ab8f-1d52dc5ab595",
+      "reason": "slot_capacity",
+      "piece_id": "piece:4b80d43592463431bf9b5ec3680e42cba22b325191470bb1e156f9ab832c06c5",
+      "rejected_rows": []
+    }
+  ],
+  "counts": {
+    "target": 5,
+    "user_records": 3,
+    "initial_deficit": 2,
+    "supplemented": 2,
+    "remaining_deficit": 0,
+    "total": 5
+  },
+  "limits": []
+}

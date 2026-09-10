@@ -8,8 +8,7 @@ from sqlalchemy import text
 
 from daengs_place.core.db import get_session
 from daengs_place.main import app
-
-from ..conftest import TEST_ORIGIN, db_session
+from tests.place.support.database import TEST_ORIGIN, db_session
 
 SOURCE = "test:territory-sites"
 

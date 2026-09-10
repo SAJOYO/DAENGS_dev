@@ -13,6 +13,7 @@ from daengs_backend.models.activity import (
     ActivitySessionLink,
     ActivityWalkHead,
 )
+from daengs_backend.models.activity_reward import ActivityBaseReward
 from daengs_backend.models.territory_claim import (
     TerritoryClaimSession,
     TerritoryClaimSite,
@@ -34,6 +35,24 @@ async def latest_season(db):
 
 async def occupancies(db):
     return list(await db.scalars(select(TerritoryOccupancy)))
+
+
+async def expiring_occupancies(db, at_ms):
+    return (
+        await db.execute(
+            select(TerritoryOccupancy, ActivityHoldingPeriod)
+            .join(
+                ActivityHoldingPeriod, ActivityHoldingPeriod.site_id == TerritoryOccupancy.site_id
+            )
+            .join(ActivitySeason, ActivitySeason.id == ActivityHoldingPeriod.season_id)
+            .where(
+                ActivitySeason.status == "ACTIVE",
+                ActivityHoldingPeriod.ended_ms.is_(None),
+                TerritoryOccupancy.expires_at <= datetime.fromtimestamp(at_ms / 1000, UTC),
+            )
+            .order_by(TerritoryOccupancy.expires_at, TerritoryOccupancy.site_id)
+        )
+    ).all()
 
 
 async def reset_occupancies(db):
@@ -104,6 +123,24 @@ async def active_season(db):
     return await db.scalar(
         select(ActivitySeason).where(ActivitySeason.status == "ACTIVE").with_for_update()
     )
+
+
+async def base_reward(db, season_id, member_id, site_id):
+    """Lock existing eligibility under the activity barrier; absent means truly new."""
+    return await db.scalar(
+        select(ActivityBaseReward)
+        .where(
+            ActivityBaseReward.season_id == season_id,
+            ActivityBaseReward.app_user_id == member_id,
+            ActivityBaseReward.site_id == site_id,
+        )
+        .with_for_update()
+    )
+
+
+async def read_active_season(db):
+    """For read-only snapshots; unlike writers, do not acquire a season row lock."""
+    return await db.scalar(select(ActivitySeason).where(ActivitySeason.status == "ACTIVE"))
 
 
 async def accounts(db, season_id):

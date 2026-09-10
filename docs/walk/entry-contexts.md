@@ -1,6 +1,8 @@
 # 산책 기록 봉투 저장과 비동기 수집
 
-2026-09-08 코드 확인 기준. [Dev #339](https://github.com/SAJOYO/DAENGS_dev/pull/339).
+2026-09-08 최초 연결 기준. [Dev #339](https://github.com/SAJOYO/DAENGS_dev/pull/339).
+2026-09-09에 추가한 SGIS 행정동·공원 제공자 및 다섯 번째 태그는
+[공공 배경 공급](public-context.md)을 따른다. 아래 초기 상태 설명과 구분한다.
 Geo의 [기록/봉투 실험 #260](https://github.com/rkbuhtig/DAENGS_geo/pull/260)을
 현재 서버의 행동·자유 글 원본에 연결한다. 원본의 관측 시각·위치·내용을 바꾸지 않는다.
 
@@ -98,7 +100,7 @@ lease 재획득·버전 차단·SKIP LOCKED를 검증한다. 기존 migration �
 FK 변조를 검출하는 케이스를 등록했다.
 
 ```powershell
-uv run pytest tests/test_walk_entry_context.py tests/test_walk_entry_context_db.py tests/test_walk_entry_http.py tests/test_walk_entries.py tests/test_config.py tests/test_config_env.py -q
+uv run pytest tests/walk/context/test_walk_entry_context.py tests/walk/context/test_walk_entry_context_db.py tests/walk/entries/test_walk_entry_http.py tests/walk/entries/test_walk_entries.py tests/test_config.py tests/test_config_env.py -q
 ```
 
 DB 통합 테스트는 `WALK_CONTEXT_TEST_DATABASE_URL`로 지정한 localhost의 `walk_context_test`만

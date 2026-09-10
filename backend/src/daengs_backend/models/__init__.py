@@ -19,6 +19,7 @@ from daengs_backend.models.activity import (
     ActivitySessionLink,
     ActivityWalkHead,
 )
+from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRewardDetail
 from daengs_backend.models.admin_audit_log import (
     AUDIT_ACCOUNT_CREATED,
     AUDIT_ACCOUNT_PASSWORD_CHANGED,
@@ -84,6 +85,7 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSession,
     TerritoryClaimSite,
     TerritoryOccupancy,
+    TerritoryRenewal,
 )
 from daengs_backend.models.vet_visit import (
     VET_REASON_CODES,
@@ -140,9 +142,11 @@ __all__ = [
     "VET_REASON_LABELS",
     "WALK_ANALYSIS_STATES",
     "ActivityAccount",
+    "ActivityBaseReward",
     "ActivityBonusKey",
     "ActivityGameReceipt",
     "ActivityHoldingPeriod",
+    "ActivityRewardDetail",
     "ActivitySeason",
     "ActivitySessionLink",
     "ActivityWalkHead",
@@ -168,6 +172,7 @@ __all__ = [
     "TerritoryClaimSession",
     "TerritoryClaimSite",
     "TerritoryOccupancy",
+    "TerritoryRenewal",
     "VerifiedVisit",
     "VetVisit",
     "VetVisitDraft",
@@ -184,4 +189,6 @@ from daengs_backend.models.walk_entry_context import (  # noqa: F401
     WalkEntryContextEnvelope,
     WalkEntryContextJob,
 )
+from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin  # noqa: F401
+from daengs_backend.models.walk_photo import WalkPhotoManifest  # noqa: F401
 from daengs_backend.models.walk_storyboard import WalkStoryboard  # noqa: F401

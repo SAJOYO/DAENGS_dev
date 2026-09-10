@@ -252,10 +252,19 @@ async def _gait() -> tuple[StatusState, str]:
 
 
 async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
-    """마지막 크롤. **워커가 없는 환경은 `absent`** 입니다.
+    """마지막 크롤. **워커(또는 잡)가 없는 환경은 `absent`**, **있어야 하는데 안 보이면 `down`**
+    입니다 — 갈림은 `crawl_backend` 를 따라갑니다(#326).
 
-    행이 있다는 것과 크롤러가 있다는 것은 다릅니다 — GCP 는 09-02 로컬 덤프를 쓰고 있어서
-    행은 있는데 워커가 없습니다 (`services/crawl.py` 의 `crawl_workers` 주석).
+    행이 있다는 것과 크롤러가 있다는 것은 다릅니다 — 예를 들어 09-02 GCP 는 한동안 로컬 덤프를
+    쓰고 있어서 행은 있는데 크롤러가 없었습니다 (`services/crawl.py` 의 `crawl_workers` 주석).
+
+    - **celery**: `BrokerUnavailable`(REDIS_URL 없음·브로커 불통)도, 워커 목록이 빈 것도 다
+      "이 환경엔 원래 크롤러가 없다"로 읽어 `absent` 입니다.
+    - **cloudrun**: `gcp_project` 가 채워진 채 `BrokerUnavailable` 이면 API 가 안 답하는
+      것이라 `down`, `gcp_project` 가 비어 있으면 설정 자체가 안 된 것이라 `absent`. 잡이
+      존재해야 하는데 `crawl_workers` 가 빈 목록을 돌려주면(`job_exists` 가 `False`) 배포가
+      안 됐거나 잡 이름이 틀린 것이라 — 이것도 "환경에 원래 없다"가 아니라 "있어야 하는데
+      없다"라 `down` 입니다.
     """
     runs = await crawl_service.latest(session)
     last = max((r.started_at for r in runs), default=None)
@@ -263,23 +272,44 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
 
     try:
         workers = await asyncio.to_thread(crawl_service.crawl_workers, WORKER_PING_SEC)
-    except crawl_service.BrokerUnavailable:
+    except crawl_service.BrokerUnavailable as e:
+        if settings.crawl_backend == "cloudrun" and settings.gcp_project:
+            # 설정은 있는데 API 가 답하지 않는 것 — 없는 게 아니라 고장이다 (#326)
+            return StatusState.DOWN, f"Cloud Run 잡에 묻지 못했습니다: {e}. {when}."
         return StatusState.ABSENT, f"이 환경에는 크롤러가 없습니다 (브로커 없음). {when}."
     if not workers:
+        if settings.crawl_backend == "cloudrun" and settings.gcp_project:
+            # 잡이 있어야 하는데 없다 — 배포가 안 됐거나 이름이 틀렸다. "환경에 원래 없다"가
+            # 아니라 "있어야 하는데 없다"라 down 이다 (#326 최종 리뷰 미너 4).
+            return StatusState.DOWN, (
+                f"Cloud Run 잡 {settings.corpus_job} 이 {settings.gcp_region} 에 없습니다 — "
+                f"DAENGS_CORPUS_JOB·배포를 확인하세요. {when}.")
         return StatusState.ABSENT, f"이 환경에는 크롤러 워커가 떠 있지 않습니다. {when}."
 
     # `unavailable` 도 같이 셉니다 — "사람이 고쳐야 하는 것" 이라 `failed` 와 할 일이 같습니다
     # (`db/init` 의 `crawl_runs.status` 주석).
     failed = [r.source_id for r in runs if r.status in ("failed", "unavailable")]
-    running = await crawl_service.running_count(session)
-    detail = f"워커 {len(workers)}대. {when}. 소스 {len(runs)}개"
+    # 안 끝난 실행을 **시간으로 가릅니다** (#393 · RAG-085 ③). 예전에는 `running` 이 1건이라도
+    # 있으면 DEGRADED 였는데, 잔존 행은 워커가 죽을 때마다 생기고 **아무도 안 지웁니다**
+    # (지우면 안 됩니다 — `tasks/crawl_runs.py` 참고). 그래서 몇 달 전 행 하나가 화면을 영영
+    # 노랗게 잡고, 진짜 문제가 생겨도 이미 노랑이라 안 보였습니다.
+    active, stale = await crawl_service.running_split(session)
+    if settings.crawl_backend == "cloudrun":
+        detail = f"Cloud Run 잡 {workers[0]}. {when}. 소스 {len(runs)}개"
+    else:
+        detail = f"워커 {len(workers)}대. {when}. 소스 {len(runs)}개"
     if failed:
         return StatusState.DEGRADED, f"{detail}, 마지막 실행이 어긋난 소스 {len(failed)}개: {', '.join(failed[:5])}."
-    if running:
-        # 0 이 아니면 "지금 돌고 있거나, 워커가 죽어서 남았거나" 입니다 (`crawl_run.py`).
-        return StatusState.DEGRADED, f"{detail}, 안 끝난 실행 {running}건 — 도는 중이거나 워커가 죽어 남은 것입니다."
+    if stale:
+        # 사람이 볼 것이 있는 쪽을 먼저 말합니다 — 도는 중인 것과 같이 있어도 이 문장이 이깁니다.
+        hours = int(crawl_service.RUNNING_STALE_AFTER.total_seconds() // 3600)
+        return StatusState.DEGRADED, (
+            f"{detail}, 워커가 죽어 남은 실행 {stale}건 — {hours}시간 넘게 `running` 입니다.")
     if last is not None and datetime.now(last.tzinfo) - last > CRAWL_STALE_AFTER:
         return StatusState.DEGRADED, f"{detail}. {CRAWL_STALE_AFTER.days}일 넘게 새 수집이 없습니다."
+    if active:
+        # **도는 중인 것은 정상입니다.** 예전에 이것까지 DEGRADED 로 본 것이 지표를 죽였습니다.
+        return StatusState.OK, f"{detail}, 지금 도는 중 {active}건."
     return StatusState.OK, f"{detail}."
 
 

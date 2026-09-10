@@ -316,6 +316,9 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "walk",
         "place",
         "general",
+        # `vet_contact` 는 맨 끝이고 라우터의 목적지가 아니다 — 결정적 어휘 게이트와
+        # 명시적 신호로만 닿는다.
+        "vet_contact",
     ]
 
 

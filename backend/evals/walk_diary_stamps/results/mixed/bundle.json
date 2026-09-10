@@ -1,0 +1,237 @@
+{
+  "format": "walk-diary-bundle-v1",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "input_revision": "bd70996e1f9a9f95277a52add91a696c5f92f0b20841d4317a615fcaad35ef65",
+  "plan_revision": "24e7525d10e1f7997f4844fdef91fd70066fe7d86b150a97482b7a985016f6d0",
+  "title": "2026.09.09 산책",
+  "title_origin": "system",
+  "model_status": "not_requested",
+  "semantic_status": "not_evaluated",
+  "failure_code": null,
+  "photos_status": "complete",
+  "scenes": [
+    {
+      "id": "stamp:c5d8fb509b4103cdcf01edced6e9bf77aaf3769f3a7b298e6b108072627346d7",
+      "order": 1,
+      "core": {
+        "identity": "walk_entry:d2c76343-5770-5e19-ab1a-ffd8ca618731",
+        "version": "de9525ae65b1fdb5254efc1e29e0ead648ffdf4da3d5f8f3d14fd2b85ed114f2"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:05:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:05:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "user_record": {
+        "kind": "behavior",
+        "code": "sniffing",
+        "pet_id": null
+      },
+      "observation": null,
+      "place_reference": [],
+      "narration": {
+        "status": "not_requested",
+        "text": null,
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "stamp:72aa346bcb5528260d0c96767ab6c62346fc7b189e4a9046aaed7cec024a06b3",
+      "order": 2,
+      "core": {
+        "identity": "observation:dwell",
+        "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:12:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:12:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 12,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:00Z"
+          }
+        ]
+      },
+      "user_record": null,
+      "observation": {
+        "id": "dwell",
+        "version": "db0ba00e6292c8402899d0ba918c971c01d9f30a44bfad35875562411f6002c0",
+        "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+        "kind": "observed_dwell",
+        "subject": "recording_device",
+        "action_meaning": "not_inferred",
+        "started_at": "2026-09-09T00:12:00Z",
+        "ended_at": "2026-09-09T00:13:30Z",
+        "anchor": {
+          "event_at": "2026-09-09T00:12:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.501,
+            "lng": 127.001
+          },
+          "location_at": "2026-09-09T00:12:00Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 12,
+              "chain_index": 0,
+              "at": "2026-09-09T00:12:00Z"
+            }
+          ]
+        }
+      },
+      "place_reference": [],
+      "narration": {
+        "status": "no_background",
+        "text": null,
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "stamp:a3245705dcd9cde2063349ef1cf5e7e791fea311fd403159f3c3d77b4f56b4a9",
+      "order": 3,
+      "core": {
+        "identity": "walk_entry:0a90be84-69a1-5c37-b0e5-9310d72ce8ba",
+        "version": "2f7bc6e701da81d80fca5b2a5f9e3e5ff2e4c72cb53e6a78f7e9069ae9dbc617"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:18:00Z",
+        "time_basis": "recorded_at",
+        "point": {
+          "lat": 37.5,
+          "lng": 127.0
+        },
+        "location_at": "2026-09-09T00:18:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "user_record": {
+        "kind": "note",
+        "text": "  사진 대신 글로 남긴 합성 기록.\n원문 공백도 유지한다.  "
+      },
+      "observation": null,
+      "place_reference": [],
+      "narration": {
+        "status": "not_requested",
+        "text": null,
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "stamp:b778d7850dc48aaac2b2d025a1dba710440c18a50223cd5a0ab34bab5c59e67f",
+      "order": 4,
+      "core": {
+        "identity": "walk_photo:eb92770e-481d-542e-9588-08aa222e5807",
+        "version": "66eff01e2226f35e4ee4c8ed297a26c47a84ef04eb50366f9810606723608782"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:25:00Z",
+        "time_basis": "photo_capture",
+        "point": {
+          "lat": 37.502,
+          "lng": 127.002
+        },
+        "location_at": "2026-09-09T00:25:00Z",
+        "accuracy_m": 8.0,
+        "position_state": "legacy",
+        "method": "last_known",
+        "source_fixes": []
+      },
+      "user_record": {
+        "kind": "photo",
+        "media_ref": "app-private-photo:eb92770e-481d-542e-9588-08aa222e5807"
+      },
+      "observation": null,
+      "place_reference": [],
+      "narration": {
+        "status": "no_background",
+        "text": null,
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "stamp:52e872c5fba2b7a4a7f8a4740140107b9bea76c239872c556b6697d93048e94e",
+      "order": 5,
+      "core": {
+        "identity": "observation:slow",
+        "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:32:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:32:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 32,
+            "chain_index": 0,
+            "at": "2026-09-09T00:32:00Z"
+          }
+        ]
+      },
+      "user_record": null,
+      "observation": {
+        "id": "slow",
+        "version": "f66d7c753e84608c844d222652856b45ff3c1722b34085468d5c1bcc5bb4e7a8",
+        "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+        "kind": "observed_slow",
+        "subject": "recording_device",
+        "action_meaning": "not_inferred",
+        "started_at": "2026-09-09T00:32:00Z",
+        "ended_at": "2026-09-09T00:33:00Z",
+        "anchor": {
+          "event_at": "2026-09-09T00:32:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.501,
+            "lng": 127.001
+          },
+          "location_at": "2026-09-09T00:32:00Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 32,
+              "chain_index": 0,
+              "at": "2026-09-09T00:32:00Z"
+            }
+          ]
+        }
+      },
+      "place_reference": [],
+      "narration": {
+        "status": "no_background",
+        "text": null,
+        "evidence_ids": []
+      }
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 # 온라인 점유 저장·API
 
+> 2026-09-10 후속: [72시간 만료·현장 연장](ownership-expiry.md) — `expires_at`, 미인증 연장 API, 인증 `PHOTO_RENEW`.
+
+> 2026-09-10 후속: [첫 시즌 회원별 보상](first-season-rewards.md) — 새 보상 원장과 정책 분기.
+
 > 2026-09-08 후속: [인증 우선 정책 v2](../certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.
 
 [DAENGS_dev#260](https://github.com/SAJOYO/DAENGS_dev/pull/260)는
@@ -32,6 +36,8 @@ POLICY_UNDECIDED를 유지한다. 어느 경우든 사진 인증으로 점유를
 동시 인증 중 먼저 점유를 확정한 트랜잭션이 이긴다. 이탈/재진입·쿨다운·점수 정책은 추가하지 않는다.
 
 ## APP 호출 순서
+
+선택한 주인의 시즌 점수·점령 수 공개 조회는 [주인 요약 API](owner-summary-api.md)를 참조한다.
 
 모든 아래 API는 앱 회원 인증을 요구한다. owner ID는 요청으로 받지 않는다.
 
@@ -116,10 +122,10 @@ PK·UNIQUE·CHECK·FK(삭제 동작 포함), 유효한 인덱스를 검사하고
 
 ```powershell
 cd backend
-uv run pytest -q tests/test_territory_ownership_api.py tests/test_territory_claim.py tests/test_territory_attempts.py tests/test_territory_vision.py
+uv run pytest -q tests/territory/ownership/test_territory_ownership_api.py tests/territory/claims/test_territory_claim.py tests/territory/visits/test_territory_attempts.py tests/territory/visits/test_territory_vision.py
 # 팀 DB가 아닌 별도 로컬 테스트 DB에서만 실행. 앱 .env로 fallback하지 않는다.
 $env:TERRITORY_TEST_DATABASE_URL='postgresql+asyncpg://postgres@127.0.0.1:55439/claims_test'
-uv run pytest -q tests/test_territory_ownership_db.py tests/test_main_stays_light.py
+uv run pytest -q tests/territory/ownership/test_territory_ownership_db.py tests/test_main_stays_light.py
 ```
 
 DB 테스트는 실제 init SQL 및 마이그레이션을 실행하고 매 테스트마다 임시 schema를 제거한다.

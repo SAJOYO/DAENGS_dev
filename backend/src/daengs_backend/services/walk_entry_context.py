@@ -18,7 +18,14 @@ async def reserve(session, row):
         await repo.enqueue(session, row, datetime.now(UTC))
 
 
-async def read(session, owner, walk_id, entry_id):
+async def reserve_pin(session, row, sidecar):
+    if settings.walk_entry_context_enabled and row.payload is not None:
+        if sidecar.payload and sidecar.payload["state"] == "provisional":
+            return  # Finalization increments the parent revision and reserves the terminal pin.
+        await repo.enqueue(session, row, datetime.now(UTC), policy=repo.PIN_POLICY)
+
+
+async def read(session, owner, walk_id, entry_id, *, v2=False):
     from daengs_backend.services.walk_entry import EntryNotFound
 
     if await entries.owned_walk(session, owner, walk_id) is None:
@@ -26,9 +33,23 @@ async def read(session, owner, walk_id, entry_id):
     row = await entries.get_entry(session, walk_id, entry_id)
     if row is None or row.payload is None:
         raise EntryNotFound
+    from daengs_backend.services.walk_entry_v2 import guard_v1
+
+    policy = repo.POLICY
+    if not v2:
+        await guard_v1(session, [walk_id], entry_id=entry_id)
+    else:
+        from daengs_backend.repositories import walk_entry_v2 as pins
+        from daengs_backend.services.walk_entry_v2 import require_enabled
+
+        require_enabled()
+        if await pins.pin(session, walk_id, entry_id) is not None:
+            policy = repo.PIN_POLICY
     if not settings.walk_entry_context_enabled:
         return {"entry_id": row.id, "revision": row.revision, "status": "disabled", "sources": []}
-    jobs, latest = await repo.current(session, row)
+    jobs, latest = (
+        await repo.current(session, row, policy=policy) if v2 else await repo.current(session, row)
+    )
     return {
         "entry_id": row.id,
         "revision": row.revision,
@@ -66,6 +87,15 @@ async def take(factory):
             "attempt": job.attempts,
             "content": dict(row.payload) if valid else None,
         }
+        if valid and job.policy_version == repo.PIN_POLICY:
+            from daengs_backend.repositories import walk_entry_v2 as pins
+
+            sidecar = await pins.pin(session, job.walk_id, job.entry_id)
+            if sidecar is None or (sidecar.payload and sidecar.payload["state"] == "provisional"):
+                job.state, job.lease_token, job.lease_until = "cancelled", None, None
+                ticket["token"] = None
+            else:
+                ticket["content"].update(pin=sidecar.payload, pin_revision=sidecar.pin_revision)
         await session.commit()
         return ticket
 
@@ -108,8 +138,10 @@ async def finish(factory, ticket, result):
             "status": result.status,
             "reason": result.reason,
             "provenance": {
-                "provider": "place-search" if job.tag == "space.facility" else "unconfigured",
-                "operation": "/v2/places/search" if job.tag == "space.facility" else None,
+                "provider": result.provider
+                or ("place-search" if job.tag == "space.facility" else "unconfigured"),
+                "operation": result.operation
+                or ("/v2/places/search" if job.tag == "space.facility" else None),
                 "retrieved_at": result.retrieved_at,
                 "temporal_basis": "lookup_snapshot" if result.retrieved_at else "unknown",
                 "policy_version": job.policy_version,
@@ -117,6 +149,12 @@ async def finish(factory, ticket, result):
             "payload": result.payload,
             "payload_sha256": digest(result.payload) if result.payload is not None else None,
         }
+        if job.policy_version == repo.PIN_POLICY:
+            envelope["schema_version"] = "walk-entry-context-v2"
+            envelope["target"].update(pin=content.get("pin"), pin_revision=content["pin_revision"])
+            envelope["provenance"]["location_basis"] = (
+                content["pin"]["method"] if content.get("pin") else "original_location"
+            )
         session.add(
             WalkEntryContextEnvelope(
                 id=envelope_id,
@@ -129,7 +167,10 @@ async def finish(factory, ticket, result):
         job.state = (
             ("pending" if job.attempts < 3 else "failed") if result.retryable else "completed"
         )
-        job.available_at = datetime.now(UTC) + timedelta(seconds=30 * 2 ** (job.attempts - 1))
+        # Catalog downloads have their own worker. Keep the same three-attempt limit;
+        # maintenance wakes this pending retry as soon as its cache is actually usable.
+        delay = 300 if result.reason == "catalog_preparing" else 30 * 2 ** (job.attempts - 1)
+        job.available_at = datetime.now(UTC) + timedelta(seconds=delay)
         job.lease_token, job.lease_until = None, None
         await session.commit()
         return True

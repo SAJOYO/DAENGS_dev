@@ -157,7 +157,7 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker territory-vision-worker
+  gait-worker territory-vision-worker
 
 # ③-1 점령 게임판 — 덤프에는 안 따라옵니다(옛 115u 세대). §6 "점령 게임판 적재 (GCP)"
 #     를 여기서 한 번 밟으세요. 안 하면 지도에 점령지가 하나도 안 뜹니다
@@ -188,8 +188,7 @@ docker run --rm -p 80:80 -v /srv/daengs/letsencrypt:/etc/letsencrypt certbot/cer
   certonly --standalone --agree-tos --register-unsafely-without-email -n \
   -d daengapp.weareithero.cloud -d daengapi.weareithero.cloud
 # 발급 후에야 gcp 오버레이(443, gcp.conf)로 nginx 를 재생성합니다.
-# gait 도 같이 — 오버레이의 cpus 제한이 이때 적용됩니다.
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx gait-analysis
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx
 ```
 
 - 이메일 없이 등록하는 이유: Let's Encrypt 는 만료 안내 메일 서비스를 종료했고(2025-06),
@@ -308,7 +307,7 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      up -d --force-recreate backend place-search journey-service gait-worker \
       territory-vision-worker
     ```
 

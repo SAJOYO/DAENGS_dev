@@ -13,6 +13,7 @@ from daengs_backend.services.walk_diary_contract import (
     require_current,
 )
 from daengs_backend.services.walk_diary_prepare import prepare_saved_diary
+from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
     StoryboardConflict,
@@ -22,7 +23,6 @@ from daengs_backend.services.walk_storyboard_state import (
     reusable,
 )
 from daengs_walk.diary_input import digest
-from daengs_walk.diary_output import DiaryBundle
 from daengs_walk.diary_stamps import StampPolicy
 
 
@@ -60,29 +60,32 @@ def result(prepared, row, revision):
     source, plan = prepared.input.source, prepared.prepared.plan
     state = "pending" if row is None else "stale" if row.input_revision != revision else row.status
     bundle, error = None, row.error_code if row is not None and state == "failed" else None
-    if row is not None and state == "ready":
+    counts, limits = prepared.prepared.counts, prepared.prepared.limits
+    background_update = False
+    if row is not None and row.status == "ready":
         try:
-            bundle = DiaryBundle.model_validate(row.bundle)
-            if (
-                bundle.input_revision != source.revision()
-                or bundle.plan_revision != plan.revision()
-                or bundle.client_session_id != source.client_session_id
-            ):
-                raise ValueError("stored diary binding mismatch")
+            stored = read_diary(prepared, row, revision)
+            if stored is not None:
+                state, bundle = "ready", stored.bundle
+                counts, limits = stored.preparation_counts, stored.preparation_limits
+                background_update = row.input_revision != revision
+            else:
+                state = "stale"
         except ValueError:
             state, error, bundle = "failed", "invalid_stored_diary", None
     return DiaryStoryboardResponse(
         format="walk-diary-response-v1",
         session_id=source.client_session_id,
         generation=row.generation if row else 0,
-        input_revision=revision,
+        input_revision=row.input_revision if bundle is not None else revision,
         status=state,
         entry_revisions=revisions(source),
         photos_status=source.photos_status,
         photo_manifest=source.photo_manifest,
         target_scene_count=plan.target_scene_count,
-        preparation_counts=prepared.prepared.counts,
-        preparation_limits=prepared.prepared.limits,
+        preparation_counts=counts,
+        preparation_limits=limits,
+        background_update_available=background_update,
         bundle=bundle,
         error_code=error,
     )
@@ -106,8 +109,12 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
         raise StoryboardConflict("사진 목록이 변경됐어요. 승인된 사진 버전을 확인해 주세요.")
     row = await repo.current(session, walk_id)
     now = datetime.now(UTC)
-    if reusable(row, revision, request.refresh, now):
-        value = result(prepared, row, revision)
+    value = result(prepared, row, revision)
+    if (value.status == "ready" and not request.refresh) or (
+        row is not None
+        and row.status == "running"
+        and reusable(row, revision, request.refresh, now)
+    ):
         await session.commit()
         return value
     generation = reserve(session, walk_id, row, revision, now)
@@ -116,12 +123,12 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     bundle, failure = None, None
     try:
         output = await (writer or write_diary)(source, prepared.prepared)
-        bundle = output.model_dump(mode="json")
         if (
             output.input_revision != ticket.input_revision
             or output.plan_revision != prepared.prepared.plan.revision()
         ):
             raise ValueError("writer returned another generation's bundle")
+        bundle = store_diary(prepared, output, revision)
     except asyncio.CancelledError:
         raise  # The shared 60-second lease permits recovery after interruption.
     except Exception:  # noqa: BLE001 - never persist raw source/provider exception details

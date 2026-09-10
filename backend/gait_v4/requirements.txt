@@ -1,8 +1,0 @@
-# pip 용 (uv 는 pyproject.toml). CPU 휠: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0
-torchvision==0.28.0
-onnxruntime==1.29.0
-rtmlib==0.0.16
-opencv-python==5.0.0.93
-numpy==2.5.2
-imageio-ffmpeg==0.6.0

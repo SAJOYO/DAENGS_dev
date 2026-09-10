@@ -76,7 +76,7 @@ $check = @('daengs_backend.cli.walk_runtime_check', '--lat', $lat, '--lng', $lng
 
 if ($Action -eq 'Stop') {
     # Queue pause only: pending jobs are retained. See the runbook for flag rollback.
-    Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'stop', 'walk-context-beat', 'walk-context-worker')
+    Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'stop', 'walk-context-beat', 'walk-context-worker', 'walk-catalog-worker')
     return
 }
 if ($Action -eq 'Prepare') {
@@ -99,10 +99,14 @@ $publicFile = [IO.Path]::GetFullPath($publicPath)
 $env:WALK_PUBLIC_ENV_FILE = $publicFile
 $previous = [IO.File]::ReadAllText($publicFile)
 $enabled = $previous
-foreach ($flag in @('ENTRY_CONTEXT', 'PUBLIC_CONTEXT', 'AREA_CONTEXT', 'DIARY', 'ENTRY_V2', 'ENTRY_V2_WRITE', 'PHOTO_METADATA')) {
+foreach ($flag in @('ENTRY_CONTEXT', 'PUBLIC_CONTEXT', 'AREA_CONTEXT', 'DIARY', 'ENTRY_V2', 'ENTRY_V2_WRITE', 'PHOTO_METADATA', 'CATALOG_REFRESH')) {
     $name = 'DAENGS_WALK_' + $flag + '_ENABLED'
     $enabled = [regex]::Replace($enabled, ('(?m)^\s*' + $name + '\s*=.*\r?\n?'), '')
     $enabled = $enabled.TrimEnd() + "`n" + $name + "=true`n"
+}
+if ($enabled -notmatch '(?m)^\s*DAENGS_WALK_PUBLIC_CATALOG_ROOT\s*=\s*\S+') {
+    $enabled = [regex]::Replace($enabled, '(?m)^\s*DAENGS_WALK_PUBLIC_CATALOG_ROOT\s*=.*\r?\n?', '')
+    $enabled = $enabled.TrimEnd() + "`nDAENGS_WALK_PUBLIC_CATALOG_ROOT=/data/walk-public/regions`n"
 }
 $utf8 = [Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText($publicFile, $enabled, $utf8)
@@ -111,14 +115,26 @@ catch {
     [IO.File]::WriteAllText($publicFile, $previous, $utf8)
     throw
 }
-Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'up', '-d', '--no-deps', 'walk-context-worker')
+foreach ($worker in @('context', 'catalog')) {
+Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'up', '-d', '--no-deps', ('walk-' + $worker + '-worker'))
 $ready = $false
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
-    & docker exec daengs-walk-context-worker sh -c 'uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app inspect ping --destination="walk-context@$HOSTNAME" --timeout=2' *> $null
-    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+    # Windows PowerShell turns native stderr into ErrorRecords, even when redirected.
+    # A missing Celery binary while uv sync is running is an expected retry here only.
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $pingCommand = 'uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app inspect ping --destination="walk-' + $worker + '@$HOSTNAME" --timeout=2'
+        & docker exec ('daengs-walk-' + $worker + '-worker') sh -c $pingCommand *> $null
+        $pingExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($pingExit -eq 0) { $ready = $true; break }
     Start-Sleep -Seconds 3
 }
-if (-not $ready) { throw 'Walk worker did not become ready; web was not replaced' }
+if (-not $ready) { throw ('Walk ' + $worker + ' worker did not become ready; web was not replaced') }
+}
 Invoke-Docker -DockerArgs @('compose', '--profile', 'walk-diary', 'up', '-d', '--no-deps', 'walk-context-beat')
 Invoke-Docker -DockerArgs @('compose', 'up', '-d', '--no-deps', 'backend')
 Write-Host 'Walk runtime started. Verify a new owned walk through the authenticated API.'

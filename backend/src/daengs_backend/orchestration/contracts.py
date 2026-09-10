@@ -23,6 +23,10 @@ class CapabilityName(StrEnum):
     #: assembles it by a deterministic rule when the router selected nothing, so the model
     #: can never trade an evidence-backed capability for an ungrounded answer.
     GENERAL = "general"
+    #: 응급 발화의 병원 연락 능력. GENERAL 과 마찬가지로 `semantic.ExecuteName` 에 없지만
+    #: 이유가 정반대다 — GENERAL 은 모델이 근거 있는 능력과 바꿔치기하지 못하게 뺐고,
+    #: 이것은 **모델을 아예 안 태우려고** 뺐다. 결정론적 어휘 게이트와 명시 신호로만 들어온다.
+    VET_CONTACT = "vet_contact"
 
 
 class CapabilityStatus(StrEnum):
@@ -128,6 +132,60 @@ class CareLogContext(ContractModel):
     last_snack_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
 
 
+class LastVetVisitContext(ContractModel):
+    """The single most recent confirmed vet visit: when, what it was for, and how much.
+
+    ``reason`` is the reason code's **display label** ("피부"), not the code ("skin") —
+    see ``VetSpendContext`` for why the two must not disagree inside one prompt.
+    ``hospital``/``phone`` are the hospital's own contact details, present only when the
+    owner's confirmed record has them; the address never crosses (module docstring on
+    ``VetSpendContext``).
+    """
+
+    date: date
+    reason: str = Field(min_length=1, max_length=20)
+    total_krw: int = Field(ge=0, le=100_000_000)
+    hospital: str | None = Field(default=None, max_length=60)
+    phone: str | None = Field(default=None, max_length=32)
+
+
+class VetSpendContext(ContractModel):
+    """What the owner has confirmed about this dog's vet visits, for the general-answer
+    fallback only (#353 Task 7 — the twin of ``CareLogContext``, #344).
+
+    Assembled by ``services/vet_spend_context`` from confirmed ``vet_visits`` rows. The
+    point is sentences like "피부로 1년간 32만원 썼고, 마지막은 9/2 ○○동물병원" and "그
+    병원 번호 뭐였지" — a running total, a recent-activity count, the last visit's facts,
+    and a per-reason breakdown are all that needs.
+
+    **``by_reason_12m`` keys are display labels, the same ones ``last_visit.reason``
+    uses — never the underlying reason code.** Within one prompt, showing "피부" next to
+    an aggregate keyed "skin" gives the model two names for the same thing and invites it
+    to answer with the English one to a Korean-speaking user.
+
+    **No ``reason_detail``.** The owner's free-text note on a confirmed visit is exactly
+    the kind of user-written string that must not sit beside a prompt's instructions —
+    the same reason ``CareLogContext`` excludes ``note`` (#344). **No ``raw_ocr_items``**:
+    those are receipt line items, already excluded from the extraction schema for personal
+    data (docs/vet-visits.md §2) and no more useful to an answer than the amounts already
+    here. **No ``hospital_address``**: the prompt only ever says "이 병원" and a phone
+    number, never a street.
+
+    **No ``emergency_count_12m`` or ``oncology_total_12m``.** The approved scope for this
+    card is last visit + month total + per-reason totals; those two columns are recorded as
+    undecided (docs/vet-visits.md "열린 것") and stay out until scope is widened on purpose.
+
+    A dog with no confirmed visits never reaches here (the resolver returns None): an
+    empty history means "the owner does not use this feature", not "spent nothing", and
+    the prompt must not say either.
+    """
+
+    month_total_krw: int = Field(ge=0, le=100_000_000_000)
+    visit_count_30d: int = Field(ge=0, le=10_000)
+    last_visit: LastVetVisitContext
+    by_reason_12m: dict[str, int] = Field(default_factory=dict)
+
+
 class ScreeningContext(ContractModel):
     """A recorded skin screening this question follows on from: what it concluded, and how long ago.
 
@@ -230,20 +288,52 @@ class GeneralPayload(ContractModel):
     ``care_log`` (#344) is today's care summary from the trusted log, and it comes here
     **only** — Life answers from ordinances and subsidy documents, which today's meal count
     does not change, and Training never sees dog facts at all.
+
+    ``vet_spend`` (#353 Task 7) is the same rule applied to confirmed vet visits: "피부로
+    1년간 얼마 썼지" and "그 병원 번호 뭐였지" are general questions, and Life's documents
+    do not carry either answer.
     """
 
     question: str = Field(min_length=1, max_length=1_000)
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
+    vet_spend: VetSpendContext | None = None
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload
+class VetContactPayload(ContractModel):
+    """응급 병원 연락의 입력. 질의 원문을 싣지 않는다 — 검색어가 아니라 좌표로만 찾는다.
+
+    좌표가 ``None`` 일 수 있는 것이 이 payload 의 요점이다. `vet_contact` 는
+    `planner._NEEDS_COORDINATES` 에 들어가지 않으므로 좌표가 없어도 CLARIFY 가 걸리지
+    않는다 — 응급에 "위도를 알려주세요" 로 되묻는 것이 최악이기 때문이다. 대신 adapter 가
+    ABSTAINED + `vet_contact.location_required` 로 끝낸다.
+
+    반쪽 좌표는 거부한다. 신뢰하지 않는 좌표는 좌표가 아니라는 D-051 ③ 의 처분과 같다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lat: float | None = Field(None, ge=33.0, le=39.0)
+    lon: float | None = Field(None, ge=124.0, le=132.0)
+    #: planner 가 채운다. adapter 가 시계를 읽으면 테스트가 시계에 묶인다 —
+    #: 이 저장소는 `SearchMust.judge_at`·`evaluated_at` 으로 시각을 인자로 넘긴다.
+    at_night: bool
+
+    @model_validator(mode="after")
+    def coordinates_come_as_a_pair(self) -> VetContactPayload:
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("lat and lon must be given together")
+        return self
+
+
+CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
     CapabilityName.WALK: WalkPayload,
     CapabilityName.PLACE: PlacePayload,
     CapabilityName.GENERAL: GeneralPayload,
+    CapabilityName.VET_CONTACT: VetContactPayload,
 }
 
 
@@ -407,6 +497,7 @@ __all__ = [
     "ErrorDetail",
     "GeneralPayload",
     "Handoff",
+    "LastVetVisitContext",
     "LifePayload",
     "OrchestratorState",
     "OutcomeDetail",
@@ -419,5 +510,7 @@ __all__ = [
     "ScreeningContext",
     "ScreeningHistory",
     "TrainingPayload",
+    "VetContactPayload",
+    "VetSpendContext",
     "WalkPayload",
 ]

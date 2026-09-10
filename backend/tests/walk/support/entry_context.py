@@ -57,6 +57,7 @@ def state(monkeypatch):
         tag="space.facility",
         state="running",
         attempts=1,
+        collection_round=0,
         lease_token=uuid.uuid4(),
         lease_until=datetime.now(UTC) + timedelta(seconds=45),
     )
@@ -91,6 +92,7 @@ def state(monkeypatch):
         "tag": job.tag,
         "token": job.lease_token,
         "attempt": 1,
+        "collection_round": 0,
         "content": dict(CONTENT),
     }
     return SimpleNamespace(

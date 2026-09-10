@@ -60,7 +60,7 @@ async def test_late_generation_cannot_replace_a_new_photo_snapshot(photo_databas
         async with factory() as db:
             assert (
                 await db.scalar(text("SELECT bundle->>'format' FROM walk_storyboards"))
-                == "walk-diary-bundle-v1"
+                == "walk-diary-storage-v1"
             )
             await db.execute(text("DELETE FROM app_users WHERE id=:id"), {"id": OWNER})
             await db.commit()

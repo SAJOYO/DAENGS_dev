@@ -1,0 +1,203 @@
+[
+  {
+    "case_id": "PC-E08",
+    "repetition": 1,
+    "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+    "offered_plan": {
+      "changes": {
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "upsert_all": [
+          {
+            "op": "eq",
+            "id": "parking-required",
+            "capability": "operations.parking",
+            "value": true
+          }
+        ]
+      },
+      "goal": "show",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "observed_followup_filters": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking_required",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "exclude",
+      "result_policy": {
+        "limit_per_kind": 20,
+        "uncertain_limit_per_kind": 0
+      },
+      "dogs": []
+    },
+    "observed_followup_refs": [
+      "cafe-yes",
+      "restaurant-parking"
+    ],
+    "accepted_exact_refs": [
+      "cafe-yes"
+    ],
+    "expected_refs": [
+      "cafe-yes"
+    ],
+    "acceptance_pass": true,
+    "rejection_has_no_plan": true,
+    "stale_revision_blocked": true,
+    "boundary": "observed proposal + structured decision replay; free-text consent classifier not evaluated"
+  },
+  {
+    "case_id": "PC-E08",
+    "repetition": 2,
+    "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+    "offered_plan": {
+      "goal": "show",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+      "changes": {
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "upsert_all": [
+          {
+            "id": "parking-required",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ]
+      }
+    },
+    "observed_followup_filters": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking_required",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "exclude",
+      "result_policy": {
+        "limit_per_kind": 20,
+        "uncertain_limit_per_kind": 0
+      },
+      "dogs": []
+    },
+    "observed_followup_refs": [
+      "cafe-yes",
+      "restaurant-parking"
+    ],
+    "accepted_exact_refs": [
+      "cafe-yes"
+    ],
+    "expected_refs": [
+      "cafe-yes"
+    ],
+    "acceptance_pass": true,
+    "rejection_has_no_plan": true,
+    "stale_revision_blocked": true,
+    "boundary": "observed proposal + structured decision replay; free-text consent classifier not evaluated"
+  },
+  {
+    "case_id": "PC-E08",
+    "repetition": 3,
+    "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?",
+    "offered_plan": {
+      "changes": {
+        "upsert_all": [
+          {
+            "op": "eq",
+            "capability": "operations.parking",
+            "id": "parking-required",
+            "value": true
+          }
+        ],
+        "candidate_kinds": [
+          "cafe"
+        ]
+      },
+      "goal": "show",
+      "question": "'조용한' 분위기는 현재 검색 조건으로 필터링하기 어렵습니다. 주차가 가능한 카페를 먼저 찾아드릴까요?"
+    },
+    "observed_followup_filters": {
+      "contract_version": "place-filter-v1",
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "spatial": {
+        "lat": 37.5,
+        "lng": 127.0,
+        "radius_m": 3000
+      },
+      "name_query": "",
+      "hard": {
+        "all": [
+          {
+            "id": "parking_required",
+            "capability": "operations.parking",
+            "op": "eq",
+            "value": true
+          }
+        ],
+        "any": []
+      },
+      "preferences": [],
+      "unknown_policy": "exclude",
+      "result_policy": {
+        "limit_per_kind": 20,
+        "uncertain_limit_per_kind": 0
+      },
+      "dogs": []
+    },
+    "observed_followup_refs": [
+      "cafe-yes",
+      "restaurant-parking"
+    ],
+    "accepted_exact_refs": [
+      "cafe-yes"
+    ],
+    "expected_refs": [
+      "cafe-yes"
+    ],
+    "acceptance_pass": true,
+    "rejection_has_no_plan": true,
+    "stale_revision_blocked": true,
+    "boundary": "observed proposal + structured decision replay; free-text consent classifier not evaluated"
+  }
+]

@@ -228,7 +228,7 @@ def prepare_for_analysis(path: Path) -> Path:
     - 변환 후에도 못 읽거나 ffmpeg 가 실패하면 `VideoDecodeError` 입니다 — 조용히 넘기면 분석이
       `sampled: 0` 으로 끝나고 사용자는 "다시 촬영해 주세요" 라는 엉뚱한 안내를 받습니다.
 
-    옛 HTTP 서비스의 `video_intake.save_upload` 에서 **판정 부분만** 떼어 낸 것입니다 —
+    옛 HTTP 서비스의 `video_intake.save_upload`(4단계에서 제거)에서 **판정 부분만** 떼어 낸 것입니다 —
     저장·이름 짓기는 호출자(워커의 임시 디렉터리) 몫입니다.
     """
     path = Path(path)

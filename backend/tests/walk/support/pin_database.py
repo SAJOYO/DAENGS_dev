@@ -47,6 +47,7 @@ async def database(monkeypatch):
                 "db/init/06_walks.sql",
                 "db/init/19_walk_entries.sql",
                 "db/init/24_walk_entry_contexts.sql",
+                "db/init/32_walk_context_recollection.sql",
                 "db/migrations/2026-09-09_walk_entry_pins.sql",
                 "db/migrations/2026-09-09_walk_entry_pins.sql",
                 "db/init/25_walk_entry_pins.sql",

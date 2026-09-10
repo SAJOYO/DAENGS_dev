@@ -86,6 +86,7 @@
 | [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
 | [place/conversation-evaluation.md](place/conversation-evaluation.md) | 시설 검색 LLM 정상·엣지·경합 시나리오, 판정 원칙과 반복 검증 |
 | [place/conversation-corrections-2026-09-10.md](place/conversation-corrections-2026-09-10.md) | 시설 대화 교정·사용자 불만 뒤 재탐색 실험과 구조 연구 |
+| [place/conversation-context-ablation-2026-09-10.md](place/conversation-context-ablation-2026-09-10.md) | 동일 요청에 화면·직전 행동 단서만 추가한 A/B 출력 평가 |
 | [place/territory-sites.md](place/territory-sites.md) | 중립 점령지 게임판의 읽기 경계·데이터 세대·적재와 배포 판정 |
 
 실행 명령은 루트 [README.md](../README.md)와 코드·인프라 옆 문서를 따릅니다.

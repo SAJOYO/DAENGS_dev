@@ -32,6 +32,8 @@ from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, publish
 from daengs_walk.diary_input import digest
 from daengs_walk.diary_stamps import StampPolicy
 
+FIRST_BOARD_CONTEXT_GRACE = timedelta(minutes=10)
+
 
 async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):
     if not settings.walk_diary_enabled:
@@ -127,6 +129,21 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
         guard_old_writer(row)
     now = datetime.now(UTC)
     value = result(prepared, row, revision)
+    uploaded_at = prepared.input.uploaded_at
+    if (
+        prepared.board
+        and row is None
+        and settings.walk_entry_context_enabled
+        and prepared.input.context_pending
+        and uploaded_at is not None
+        and uploaded_at.utcoffset() is not None
+        and now < uploaded_at + FIRST_BOARD_CONTEXT_GRACE
+    ):
+        # The existing client retries pending responses. Do not spend a generation or
+        # hold the Walk lock while collection runs. A stalled worker cannot extend the
+        # deadline: it is fixed to server upload time, not attempts or retry timestamps.
+        await session.commit()
+        return value
     # A new-format client cannot take over another format's live generation lease.
     if (
         prepared.board

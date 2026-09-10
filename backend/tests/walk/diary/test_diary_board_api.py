@@ -2,11 +2,15 @@
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
+from daengs_backend.config import settings
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+from daengs_backend.services import walk_diary_generation as generation
+from daengs_backend.services import walk_diary_input as reader
 from daengs_backend.services import walk_diary_writing as writer
 from daengs_backend.services.walk_diary_board_storage import StoredBoard
 from daengs_backend.services.walk_diary_generation import generate_diary
@@ -20,6 +24,133 @@ QUERY = f"?bundle_format={BOARD_FORMAT}&target_scene_count=3"
 
 def request(state, **updates):
     return body(state, bundle_format=BOARD_FORMAT, **updates)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    value = SimpleNamespace(now=datetime(2026, 9, 10, 12, tzinfo=UTC))
+    monkeypatch.setattr(generation, "datetime", SimpleNamespace(now=lambda _tz: value.now))
+    return value
+
+
+@pytest.mark.parametrize("job_state", ["pending", "running"])
+def test_first_board_waits_without_reservation_then_uses_completed_context(api, clock, job_state):
+    client, state, db = api
+    state.walk.created_at = clock.now  # The recorded walk happened yesterday, before this upload.
+    background, state.envelope = state.envelope, None
+    job = SimpleNamespace(state=job_state)
+    state.context_jobs[state.entries[0].id] = [job]
+
+    for response in (
+        client.get(PATH + QUERY),
+        client.post(PATH, json=request(state)),
+        client.post(PATH, json=request(state, refresh=True)),
+    ):
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["status"] == "pending" and result["generation"] == 0
+        assert result["bundle"] is None
+    assert state.row is None
+    state.writer.assert_not_awaited()
+    state.provider.assert_not_awaited()
+    assert db.commit.await_count == 3  # Release each read transaction while collection is pending.
+
+    job.state, state.envelope = "completed", background
+    result = client.post(PATH, json=request(state)).json()
+    assert result["status"] == "ready" and result["generation"] == 1
+    scene = next(scene for scene in result["bundle"]["scenes"] if scene["kind"] == "user_record")
+    assert "등록된 카페" in scene["body"]
+    assert scene["body"].endswith(state.entries[0].payload["note"])
+    state.writer.assert_awaited_once()
+    state.provider.assert_awaited_once()
+
+
+def test_stalled_collection_stops_waiting_exactly_ten_minutes_after_server_upload(api, clock):
+    client, state, _ = api
+    uploaded_at = clock.now
+    state.walk.created_at = uploaded_at
+    state.envelope = None
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state="running")]
+    # A small DB/API clock difference and repeated retries cannot spend a generation early.
+    for elapsed in (timedelta(seconds=-2), timedelta(minutes=10, microseconds=-1)):
+        clock.now = uploaded_at + elapsed
+        result = client.post(PATH, json=request(state)).json()
+        assert result["status"] == "pending" and result["generation"] == 0
+        assert state.row is None
+        state.writer.assert_not_awaited()
+    clock.now = uploaded_at + timedelta(minutes=10)
+    result = client.post(PATH, json=request(state)).json()
+    assert result["status"] == "ready" and result["generation"] == 1
+    assert state.context_jobs[state.entries[0].id][0].state == "running"
+    scene = next(scene for scene in result["bundle"]["scenes"] if scene["kind"] == "user_record")
+    assert scene["body"].endswith(state.entries[0].payload["note"])
+    assert "등록된 카페" not in scene["body"]
+    state.writer.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("enabled", "job_states"),
+    [
+        (True, []),
+        (True, ["completed"]),
+        (True, ["failed"]),
+        (True, ["cancelled"]),
+        (False, ["pending"]),
+    ],
+    ids=["no-jobs", "completed", "failed", "cancelled", "disabled"],
+)
+def test_first_board_does_not_wait_without_active_collection(
+    api, clock, monkeypatch, enabled, job_states
+):
+    client, state, _ = api
+    state.walk.created_at = clock.now
+    state.envelope = None
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state=value) for value in job_states]
+    monkeypatch.setattr(settings, "walk_entry_context_enabled", enabled)
+    result = client.post(PATH, json=request(state)).json()
+    assert result["status"] == "ready" and result["generation"] == 1
+    state.writer.assert_awaited_once()
+
+
+@pytest.mark.parametrize("uploaded_at", [None, datetime(2026, 9, 10, 12, tzinfo=UTC).replace(tzinfo=None)])
+def test_unknown_server_upload_time_does_not_block_first_board(api, clock, uploaded_at):
+    client, state, _ = api
+    state.walk.created_at = uploaded_at
+    state.envelope = None
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state="pending")]
+    result = client.post(PATH, json=request(state)).json()
+    assert result["status"] == "ready" and result["generation"] == 1
+    state.writer.assert_awaited_once()
+
+
+def test_published_board_is_preserved_when_current_context_is_pending(api, clock):
+    client, state, _ = api
+    state.walk.created_at = clock.now
+    first = client.post(PATH, json=request(state)).json()
+    saved = deepcopy(state.row.bundle)
+    state.envelope = None
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state="pending")]
+    for response in (
+        client.get(PATH + QUERY),
+        client.post(PATH, json=request(state, refresh=True)),
+    ):
+        result = response.json()
+        assert result["status"] == "ready" and result["generation"] == 1
+        assert result["bundle"] == first["bundle"]
+    assert state.row.bundle == saved
+    state.writer.assert_awaited_once()
+
+
+def test_deleted_entry_collection_does_not_delay_first_board(api, clock):
+    client, state, _ = api
+    state.walk.created_at = clock.now
+    state.envelope = None
+    state.entries[0].payload = None
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state="pending")]
+    result = client.post(PATH, json=request(state)).json()
+    assert result["status"] == "ready" and result["generation"] == 1
+    assert all(scene["kind"] != "user_record" for scene in result["bundle"]["scenes"])
+    reader.contexts.current.assert_not_awaited()
 
 
 def test_fixed_board_reuses_existing_writer_and_hides_private_input(api):

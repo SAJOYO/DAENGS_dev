@@ -116,17 +116,31 @@ class GeneralAnswer(BaseModel):
     # 그대로 허용한다 — 실측에서 모델이 `{"kind": "answer", "reason": null}` 로 text 를 통째로
     # 빼고 답해 `general_invalid_output` 이 됐다 (#279 라이브 확인). 거절일 때는 "" 을 낸다.
     text: str = Field(max_length=1_000)
+    #: 되묻기의 **질문 한 문장**. `text` 와 나누어 두는 이유는 둘이 가는 곳이 달라서다 —
+    #: `text` 는 기록으로 지금 말할 수 있는 것이고, 이 칸만 `ClarifyRequest.question` 이
+    #: 된다. 한 칸에 뭉치면 되묻기를 따로 렌더하려는 클라이언트가 요약까지 질문 자리에
+    #: 그린다. 길이 제한(500자)은 여기 말고 어댑터가 `ClarifyRequest` 로 조립할 때 건다 —
+    #: 검사하는 곳이 하나여야 "여기선 통과했는데 저기서 터진다" 가 안 생긴다.
+    question: str | None = None
     reason: RefusalReason | None = None
 
     @model_validator(mode="after")
     def shape_matches_kind(self) -> GeneralAnswer:
-        # `ask` 는 `answer` 와 같은 모양이다 — 문장이 있고 거절 사유가 없다. 두 값을 한
-        # 가지로 묶어 두면 나중에 되묻기에만 사유를 허용하고 싶은 유혹이 자리를 못 잡는다.
-        if self.kind in ("answer", "ask"):
-            if not self.text.strip():
-                raise ValueError(f"an {self.kind} needs text")
+        if self.kind == "ask":
+            # 되묻기를 되묻기로 만드는 것은 `question` 이다. `text` 는 비어도 된다 —
+            # 기록이 하나도 없으면 먼저 말할 것이 없는 자리가 실제로 있다.
+            if self.question is None or not self.question.strip():
+                raise ValueError("an ask needs a question")
             if self.reason is not None:
-                raise ValueError(f"an {self.kind} carries no refusal reason")
+                raise ValueError("an ask carries no refusal reason")
+            return self
+        if self.question is not None:
+            raise ValueError(f"a {self.kind} carries no question")
+        if self.kind == "answer":
+            if not self.text.strip():
+                raise ValueError("an answer needs text")
+            if self.reason is not None:
+                raise ValueError("an answer carries no refusal reason")
         elif self.reason is None:
             raise ValueError("a refusal needs a reason category")
         return self
@@ -136,25 +150,28 @@ class GeneralAnswer(BaseModel):
 # 어조는 지시문이 정한다 — 답은 한국어다. 골드·평가 세트의 문구를 옮겨 적지 않는다.
 _SAFETY_PROMPT = """You are the general-answer component of the DAENGS dog-care assistant. Only questions that none of the specialized capabilities (training, institutional information, walking conditions, place search) handle arrive here.
 
-Output exactly one JSON object conforming to the supplied schema. If kind is "answer", write the answer in text and set reason to null. If kind is "ask", put the question in text and set reason to null. If kind is "refuse", set reason to one of the reason categories and leave text empty. No Markdown, no greetings, no filler.
+Output exactly one JSON object conforming to the supplied schema. If kind is "answer", write the answer in text and set reason to null. If kind is "ask", put the one question in question, put in text only what you may report first, and set reason to null. If kind is "refuse", set reason to one of the reason categories and leave text empty. No Markdown, no greetings, no filler.
 
 Rules when answering:
 - Write in Korean, briefly (3 to 5 sentences). Answer what can be said safely at a common-sense level: general dog care, habits, gear, and everyday routines.
 - Ordinary husbandry norms ARE answerable: feeding frequency and a rough amount range, daily water intake, bathing / brushing / nail-trimming frequency, walking gear, socialization timing, sleep duration. Give the typical range, state that individual variation is large, and add that the feeding table on the food package or the veterinarian is the authority for exact values. These ordinary norms are NOT institutional.
 - A question of the form "is this okay / is this normal" about a behavior or an intake amount is answered with the normal range plus a note to see a veterinarian if it persists or changes sharply. Do not refuse it.
 - Say you do not know when unsure; never invent. Do not assert facts that require a source document (laws, regulations, procedures, fees, deadlines, official programs, statistics).
-- If a symptom is mentioned, end with a short note such as "if the symptom persists, have a veterinarian look at it" and nothing more.
-- Use DOG_CONTEXT when present, but never invent facts that are not in it.
+- A symptom the owner mentions is NOT a request for a diagnosis. Say what can safely be said about it at a general level — what to watch for, what to adjust at home — and add a short note to see a veterinarian if it persists or worsens. Do not close the conversation by sending them to a hospital when the sign is not an emergency.
+- Use DOG_CONTEXT only when the owner asked about it, or when it changes what is safe to advise. Do not sprinkle the breed, the age, or a health condition into an answer to make it look personalized. Never infer how the dog is today from the profile, and never invent facts that are not in it.
 
 Ask back (kind="ask") in this case:
-- ask: the message is about the dog's condition or a symptom, and what the owner actually observed is still missing or too thin to act on. Put ONE short Korean question in text and ask only for what the owner can see: what looks different from usual today, or what else changed alongside the symptom. Never list candidate diseases, never walk a diagnostic checklist, and never ask more than one question. When a symptom was mentioned you may add the usual one-line note to have a veterinarian look at it if it persists. If the owner has already said enough to answer, answer instead of asking.
+- ask: the message is about how the dog is doing, or about a symptom, and what the owner actually observed is still missing or too thin to act on. Put the question in question, in Korean. In text, say first what you may report: when a rule below hands you the owner's records, report those there; when no rule below hands you any, say in text that today's records alone cannot tell how the dog is.
+- One question per turn. You MAY name several related things inside that one sentence — 식욕 · 활력 · 배변 · 구토/설사 · 호흡 — but ask the owner to start with whatever stands out most. Never demand that they answer every item, and never spread the items across several turns as an intake interview.
+- Ask for what the owner can observe. Never list candidate diseases, and never say the dog is healthy, fine, normal, or lacking anything.
+- If the owner has already said enough to answer, answer instead of asking. If the message describes an emergency sign, refuse with emergency instead of asking — an emergency is answered at once, never asked back.
 
 Refuse (kind="refuse") only in these cases:
-- diagnosis: the user explicitly asks for a disease name, asks to determine the cause of a symptom, or asks to interpret test results. "Is this okay / is this normal" is NOT diagnosis. A question about the dog's condition that names no observation is an ask, not a diagnosis refusal.
+- diagnosis: the user explicitly asks for a disease name, asks to determine the cause of a symptom, or asks to interpret test results. "Is this okay / is this normal" is NOT diagnosis. Mentioning a symptom is NOT asking for a diagnosis either — only an explicit request for a disease name, for the cause, or for a test reading is. A question about how the dog is doing that names no observation is an ask, not a diagnosis refusal.
 - medication: questions about drugs, supplements, dosages, or administration.
 - emergency: questions about handling an emergency such as poisoning, breathing difficulty, bleeding, seizures, or loss of consciousness. Say nothing beyond "go to a veterinary hospital right now". Vomiting, diarrhea, limping, and appetite loss are not on this list — they are ask or answer.
 - institutional: facts that require a source document, such as laws, regulations, administrative procedures, fees, deadlines, or official support programs. The assistant's institutional-information capability answers those. Ordinary husbandry numbers do NOT belong here.
-- off_topic: the question is not about dogs. Check this first: a request that is not about dogs at all is off_topic even when it mentions money, schedules, or procedures.
+- off_topic: the question is not about dogs. Check this first: a request that is not about dogs at all is off_topic even when it mentions money, schedules, or procedures. A message about this conversation itself — a complaint, a correction, or the owner telling you to ask them something — is NOT off_topic: ask what they want to know about their dog.
 
 reason is one of the five values above, and null when kind is "answer" or "ask"."""
 
@@ -162,7 +179,9 @@ reason is one of the five values above, and null when kind is "answer" or "ask".
 # 로그가 있을 때만 붙는 규칙 (#344). 로그가 무엇인지, 무엇을 해도 되고 무엇은 안 되는지.
 # "did I / has it been done today" 류에 쓰라는 것과, 로그에 없는 용량·일정을 지어내지 말라는 것.
 # 약 이름은 로그에도 DOG_CONTEXT 에도 없으므로 기본 본문의 medication 거절은 그대로 선다.
-_CARE_LOG_RULE = """CARE_LOG_TODAY, when present, is what the owner has already logged for this dog today: counts per kind (meal, medication, snack, walk) and the last time each was logged, as HH:MM in Seoul time. Treat it as fact for questions like "did I feed / medicate / walk today", "has the morning medication been given", or "how many meals so far". You may say what was logged and when, and note plainly when a kind has no entry today. Never infer a dose, a schedule, or whether more is needed from it — the log records what happened, not what should happen. If the question is not about today's care, ignore the log. When CARE_LOG_TODAY is absent, say nothing about a log."""
+_CARE_LOG_RULE = """CARE_LOG_TODAY, when present, is what the owner has already logged for this dog today: counts per kind (meal, medication, snack, walk) and the last time each was logged, as HH:MM in Seoul time. Treat it as fact for questions like "did I feed / medicate / walk today", "has the morning medication been given", or "how many meals so far". You may say what was logged and when, and note plainly when a kind has no entry today.
+
+A question about how the dog is doing today — "오늘 건강 상태는 어때?", "오늘 컨디션 어때?" — is also a question this log speaks to. Report what is recorded and what is not, briefly, always framed as 기록상 / 기록에는 (what the record says), and then ask what the owner observed. **A missing entry means the record has no entry. It does NOT mean the dog did not eat, was not walked, or was not medicated, and it does NOT mean anything is wrong** — say that the record has none, never that it did not happen. Never infer a dose, a schedule, or whether more is needed from it, and never call the dog healthy, fine, normal, unwell, or lacking from it — the log records what happened, not how the dog is. Ignore the log only when the question has nothing to do with this dog's day. When CARE_LOG_TODAY is absent, say nothing about a log."""
 
 # 진료비가 있을 때만 붙는 규칙 (#353 Task 7). VET_RECENT 가 무엇인지, 무엇을 해도 되고
 # 무엇은 안 되는지 — `_CARE_LOG_RULE` 과 같은 결. 진단·처치를 권하지 말라는 것과, 기록에
@@ -317,7 +336,9 @@ class GeneralCapabilityAdapter:
             )
         if answer.kind == "ask":
             try:
-                ask = ClarifyRequest(question=answer.text.strip(), missing=[GENERAL_ASK_MISSING])
+                ask = ClarifyRequest(
+                    question=(answer.question or "").strip(), missing=[GENERAL_ASK_MISSING]
+                )
             except ValidationError:
                 # `ClarifyRequest.question` 은 500자, `GeneralAnswer.text` 는 1,000자다.
                 # 그 사이를 여기서 막아야 집계가 계약 위반으로 터지지 않는다 — 못 담을
@@ -325,10 +346,16 @@ class GeneralCapabilityAdapter:
                 return self._error(
                     started, "general_invalid_output", "일반 답변 결과를 해석할 수 없습니다."
                 )
+            data: dict[str, Any] = {"ask": ask.model_dump(mode="json")}
+            # 기록으로 먼저 말할 수 있는 것이 있으면 같이 싣는다. 없으면 키가 아예 없다 —
+            # 빈 문자열을 두면 집계가 "말할 것이 없다" 와 "빈 말을 했다" 를 못 가른다.
+            grounded = answer.text.strip()
+            if grounded:
+                data["answer"] = grounded
             return CapabilityResult(
                 capability=self.capability,
                 status=CapabilityStatus.OK,
-                data={"ask": ask.model_dump(mode="json")},
+                data=data,
                 elapsed_ms=_elapsed_ms(started),
             )
         if answer.kind == "refuse":

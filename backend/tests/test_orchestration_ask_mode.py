@@ -37,6 +37,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityRequest,
     CapabilityResult,
     CapabilityStatus,
+    CareLogContext,
     GeneralPayload,
     RoutePlan,
     RouterKind,
@@ -48,6 +49,9 @@ pytestmark = pytest.mark.anyio
 
 QUERY = "오늘 건강 상태는 어때?"
 ASK = "오늘 평소와 달라 보이는 점이 있나요?"
+CARE_LOG = CareLogContext(
+    day="2026-09-10", meal=2, medication=0, snack=0, walk=1, last_meal_at="18:30"
+)
 
 
 # ── 모델 출력 스키마: 세 번째 kind ────────────────────────────────────
@@ -61,13 +65,6 @@ def test_answer_schema_has_a_third_kind_for_asking_back() -> None:
     """
     kinds = GeneralAnswer.model_json_schema()["properties"]["kind"]["enum"]
     assert sorted(kinds) == ["answer", "ask", "refuse"]
-
-
-def test_an_ask_carries_text_and_no_refusal_reason() -> None:
-    """`ask` 는 답이 아니라 질문이다 — 문장은 필수, 거절 사유는 없어야 한다."""
-    assert validate_general_answer({"kind": "ask", "text": ASK, "reason": None}) is not None
-    assert validate_general_answer({"kind": "ask", "text": "", "reason": None}) is None
-    assert validate_general_answer({"kind": "ask", "text": ASK, "reason": "diagnosis"}) is None
 
 
 # ── 어댑터: 모델 출력 → CapabilityResult ──────────────────────────────
@@ -103,7 +100,9 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
     답인지는 `data` 의 모양이 말한다 — `data` 는 원래 능력마다 다른 자리다(walk 는 `now`,
     general 은 `answer`). 턴이 답해졌는지는 `AssistantStatus` 가 말한다.
     """
-    result = await run_adapter(json.dumps({"kind": "ask", "text": f"  {ASK} ", "reason": None}))
+    result = await run_adapter(
+        json.dumps({"kind": "ask", "text": "", "question": f"  {ASK} ", "reason": None})
+    )
     assert result.status == CapabilityStatus.OK
     assert result.data == {"ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING]}}
     assert result.capability == CapabilityName.GENERAL and result.elapsed_ms >= 0
@@ -111,7 +110,9 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
 
 async def test_adapter_rejects_an_ask_that_the_clarify_contract_cannot_hold() -> None:
     """`ClarifyRequest.question` 은 500자다. 어댑터가 그 자리에서 걸러야 집계가 안 터진다."""
-    result = await run_adapter(json.dumps({"kind": "ask", "text": "가" * 501, "reason": None}))
+    result = await run_adapter(
+        json.dumps({"kind": "ask", "text": "", "question": "가" * 501, "reason": None})
+    )
     assert result.status == CapabilityStatus.ERROR
     assert result.error is not None and result.error.kind == "general_invalid_output"
     assert "가가가" not in result.error.detail
@@ -248,19 +249,23 @@ def test_prompt_versions_move_with_the_schema_to_v6() -> None:
     assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v6-carelog-vetspend"
 
 
-def test_prompt_asks_only_for_what_the_owner_can_see() -> None:
-    """승인된 경계 (D-068): 관찰 축만 묻고, 구체 증상이 오면 병원으로.
+def test_prompt_allows_related_axes_in_one_question_but_not_an_intake_interview() -> None:
+    """승인된 되묻기 모양 (D-068).
 
-    문진표를 걷거나 병명 후보를 늘어놓는 것은 증상을 근거로 판단하는 흐름이라 지금 의료
-    경계 밖이다. 질문은 **하나**다.
+    **"관찰 축 하나만" 이 아니다.** 식욕 · 활력 · 배변 · 구토/설사 · 호흡처럼 서로 붙어
+    있는 항목은 한 문장에 묶어도 되고, 대신 사용자가 전부 답하게 요구하지 않는다 —
+    "가장 눈에 띄는 것부터" 다. 금지되는 것은 짧은 질문을 여러 턴에 걸쳐 던지는 문진이다.
     """
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     assert "ask: " in prompt
-    assert "ONE short Korean question" in prompt
-    assert "only for what the owner can see" in prompt
+    assert "One question per turn." in prompt
+    assert "식욕 · 활력 · 배변 · 구토/설사 · 호흡" in prompt
+    assert "start with whatever stands out most" in prompt
+    assert "Never demand that they answer every item" in prompt
+    assert "never spread the items across several turns as an intake interview" in prompt
+    # 판단은 어느 쪽으로도 안 붙인다.
     assert "Never list candidate diseases" in prompt
-    assert "never walk a diagnostic checklist" in prompt
-    assert "never ask more than one question" in prompt
+    assert "never say the dog is healthy, fine, normal, or lacking anything" in prompt
 
 
 def test_prompt_narrows_the_two_rules_that_closed_the_observed_turns() -> None:
@@ -303,3 +308,230 @@ def test_the_acceptance_set_is_the_six_turns_the_before_lap_closed() -> None:
     # 움직이면 안 되는 둘 — 병명 확답 요구와 실제 응급은 지금 동작이 정답이다.
     redirect = sorted(cid for cid, case in cases.items() if case.expected_mode == "REDIRECT")
     assert redirect == ["cq_emergency_immediate_01", "cq_explicit_diagnosis_request_01"]
+
+
+# ── 기록으로 먼저 답하고 되묻는다 (#415 2차) ──────────────────────────
+#
+# 스크린샷의 진짜 실패는 되묻지 않은 것만이 아니었다. 그 요청에는 **오늘의 케어 로그가
+# 실려 있었는데**(`routers/assistant.py` 가 앱 회원 + 활성 강아지면 매번 얹는다) 프롬프트가
+# "If the question is not about today's care, ignore the log" 라고 시켜서 버려졌다.
+# `오늘 건강 상태는 어때?` 는 그 규칙이 말하는 "오늘 밥 줬나" 가 아니기 때문이다.
+# 사람 결정: **기록은 사실대로 말하고, 판단은 안 붙이고, 못 채우는 칸만 되묻는다.**
+
+SUMMARY = "오늘 밥 2번 먹었고(마지막 18:30) 산책도 1번 다녀왔네요. 투약 기록은 아직 없어요."
+
+
+def test_an_ask_carries_the_question_apart_from_what_it_can_already_say() -> None:
+    """되묻기는 이제 두 조각이다 — `text`(기록으로 말할 수 있는 것)와 `question`(물을 것).
+
+    한 칸에 뭉쳐 담으면 `ClarifyRequest.question` 이 "질문" 이 아니라 문단이 되고,
+    되묻기만 따로 렌더하려는 클라이언트가 질문을 다시 잘라내야 한다.
+    """
+    ok = validate_general_answer({"kind": "ask", "text": SUMMARY, "question": ASK, "reason": None})
+    assert ok is not None and ok.question == ASK and ok.text == SUMMARY
+    # 기록이 없으면 말할 것이 없다 — 질문만 나간다.
+    assert validate_general_answer({"kind": "ask", "text": "", "question": ASK, "reason": None})
+    # 질문 없는 되묻기는 되묻기가 아니다.
+    assert validate_general_answer({"kind": "ask", "text": SUMMARY, "reason": None}) is None
+    # 답과 거절은 질문 칸을 쓰지 않는다.
+    assert validate_general_answer({"kind": "answer", "text": "답", "question": ASK}) is None
+    assert (
+        validate_general_answer(
+            {"kind": "refuse", "text": "", "question": ASK, "reason": "diagnosis"}
+        )
+        is None
+    )
+
+
+async def test_adapter_keeps_the_grounded_part_next_to_the_question() -> None:
+    result = await run_adapter(
+        json.dumps({"kind": "ask", "text": f" {SUMMARY} ", "question": f" {ASK} ", "reason": None})
+    )
+    assert result.status == CapabilityStatus.OK
+    assert result.data == {
+        "answer": SUMMARY,
+        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING]},
+    }
+
+
+def test_the_clarify_message_leads_with_the_records_and_ends_with_the_question() -> None:
+    """사용자가 보는 것은 `message` 한 칸이다 — 거기에 둘 다 있어야 한다.
+
+    `clarify.question` 은 질문만 갖는다. 둘을 같은 값으로 두면 되묻기를 따로 렌더하는
+    클라이언트가 기록 요약까지 질문 자리에 그린다.
+    """
+    result = CapabilityResult(
+        capability=CapabilityName.GENERAL,
+        status=CapabilityStatus.OK,
+        data={"answer": SUMMARY, "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING]}},
+        elapsed_ms=1,
+    )
+    response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
+    assert response.status == AssistantStatus.CLARIFY
+    assert response.message == f"{SUMMARY}\n\n{ASK}"
+    assert response.clarify is not None and response.clarify.question == ASK
+
+
+def test_without_records_the_message_is_just_the_question() -> None:
+    """비로그인·활성 강아지 없음이면 얹을 기록이 없다 — 그때는 질문 하나로 돌아간다."""
+    response = aggregate_results(
+        request_id="r1", route_plan=plan("general"), results=[ask_result()]
+    )
+    assert response.message == ASK
+
+
+def test_the_care_log_rule_no_longer_sends_todays_condition_question_away() -> None:
+    """**이 한 줄이 스크린샷의 원인이었다.**
+
+    `오늘 건강 상태는 어때?` 는 "오늘 밥 줬나" 가 아니라서 옛 규칙이 로그를 버렸다.
+    그 요청에는 밥·투약·산책 건수와 마지막 시각이 실려 있었는데도 견종 하나만 남아
+    백과사전 문장이 나갔다.
+    """
+    payload = GeneralPayload(question=QUERY, care_log=CARE_LOG)
+    prompt = build_general_prompt(payload)
+    assert "If the question is not about today's care, ignore the log." not in prompt
+    assert "A question about how the dog is doing today" in prompt
+    assert "Report what is recorded and what is not" in prompt
+    # 사실 범위를 벗어나지 않게 — 답은 "기록상" 이라고 말해야 한다.
+    assert "always framed as 기록상 / 기록에는" in prompt
+
+
+def test_the_care_log_rule_forbids_calling_the_dog_fine_from_a_record() -> None:
+    """사람이 그은 선: **사실만, 판단은 안 붙임.** 기록은 무슨 일이 있었는지를 말하지
+    아이가 어떤지를 말하지 않는다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY, care_log=CARE_LOG))
+    assert "never call the dog healthy, fine, normal, unwell, or lacking from it" in prompt
+    # v3 부터 서 있던 선도 그대로다.
+    assert "Never infer a dose, a schedule, or whether more is needed from it" in prompt
+
+
+def test_the_base_prompt_admits_the_records_cannot_tell_instead_of_lecturing() -> None:
+    """기록 규칙은 로그가 있을 때만 붙는다. 로그가 없어도 **되묻기 전에 그 사실을 말한다** —
+    그냥 질문만 던지면 사용자는 앱이 자기 기록을 안 본 건지 없는 건지 알 수 없다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "when no rule below hands you any" in prompt
+    assert "today's records alone cannot tell how the dog is" in prompt
+    assert "CARE_LOG_TODAY" not in prompt
+
+
+# ── 사람이 지정한 케이스 여덟 (2026-09-10) ────────────────────────────
+#
+# ⚠ **`evals/conversation_quality/cases_v1.jsonl` 에는 못 넣습니다.** 그 파일은 `#401` 의
+# `cases_sha256` 로 핀 박혀 있어서, 한 줄만 더해도 before 랩과의 `compare` 가 거부됩니다
+# (`report.render_compare`). 새 케이스는 케이스 파일의 **다음 판**에 들어갈 몫이고, 여기서는
+# 계약·프롬프트 쪽 절반을 유닛으로 고정합니다. 모델이 실제로 그렇게 답하는지는 랩의 몫입니다.
+
+CARE_LOG_CONTEXT = {
+    "care_log": {
+        "day": "2026-09-10",
+        "meal": 2,
+        "medication": 0,
+        "snack": 0,
+        "walk": 1,
+        "last_meal_at": "18:30",
+    }
+}
+GROUNDED_ASK = (
+    "오늘 기록에는 식사 2회와 산책 1회가 있어요. 기록만으로 건강 상태를 판단할 수는 없는데, "
+    "평소와 비교해 식욕·활력·배변이나 구토·호흡에서 달라진 점이 있나요? "
+    "가장 눈에 띄는 것부터 말씀해 주세요."
+)
+
+
+async def test_case1_condition_question_with_todays_records() -> None:
+    """① 오늘 기록이 있는 상태의 `오늘 건강 상태는 어때?` — 기록이 프롬프트에 실리고,
+    되묻기가 그 기록을 앞세운 채 나간다."""
+    transport = Transport(
+        json.dumps(
+            {
+                "kind": "ask",
+                "text": "오늘 기록에는 식사 2회와 산책 1회가 있어요.",
+                "question": GROUNDED_ASK,
+                "reason": None,
+            }
+        )
+    )
+    result = await GeneralCapabilityAdapter(generate=transport).run(
+        general_request(CARE_LOG_CONTEXT), request_id="r1"
+    )
+    assert "CARE_LOG_TODAY" in transport.prompts[0]
+    assert '"meal": 2' in transport.prompts[0] and '"walk": 1' in transport.prompts[0]
+    response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
+    assert response.status == AssistantStatus.CLARIFY
+    assert response.message.startswith("오늘 기록에는 식사 2회와 산책 1회가 있어요.")
+    assert response.message.endswith(GROUNDED_ASK)
+    assert response.clarify is not None and response.clarify.question == GROUNDED_ASK
+
+
+def test_case2_condition_question_without_any_records() -> None:
+    """② 기록이 없는 상태의 같은 질문 — 로그 블록이 아예 없고, 기본 본문이 "오늘 기록만으로는
+    알기 어렵다" 를 말하게 시킨다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "CARE_LOG_TODAY:" not in prompt
+    assert "today's records alone cannot tell how the dog is" in prompt
+
+
+def test_case3_a_reported_sign_is_not_closed_with_a_hospital_line() -> None:
+    """③ `오늘 힘이 없어 보여` — 증상을 말한 것이지 진단을 요구한 것이 아니다.
+
+    v3 는 증상이 언급되면 "병원 가 보세요" 한 줄로 **닫으라고**(`and nothing more`) 시켰다.
+    그 줄이 스크린샷의 일반론·막다른 길을 만든 규칙 중 하나다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="오늘 힘이 없어 보여"))
+    assert "and nothing more" not in prompt
+    assert "A symptom the owner mentions is NOT a request for a diagnosis" in prompt
+    assert "Do not close the conversation by sending them to a hospital" in prompt
+
+
+def test_case4_a_complaint_about_this_conversation_is_not_off_topic() -> None:
+    """④ `그니까 그걸 네가 물어봐야지` — 지금은 `off_topic` 거절이 나간다(스크린샷 3).
+
+    무상태라 그 문장만 놓고 보면 강아지 얘기가 아니어서 나는 실패다. 앞 턴을 잇는 것은
+    `#416` 이지만, **대화 자체에 대한 말을 주제 이탈로 읽지 않는 것**은 여기서 막을 수 있다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="그니까 그걸 네가 물어봐야지"))
+    assert "A message about this conversation itself" in prompt
+    assert "is NOT off_topic" in prompt
+
+
+def test_case5_a_follow_up_answer_needs_416_but_is_not_a_diagnosis_request() -> None:
+    """⑤ `밥은 잘 먹는데 계속 누워 있어` — 되묻기에 대한 **대답**이다.
+
+    이것을 앞 질문과 잇는 것은 `#416` 이다(무상태인 지금은 새 질문으로 읽힌다). 이 카드가
+    책임지는 것은 그 문장이 `diagnosis` 거절로 닫히지 않는 것까지다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="밥은 잘 먹는데 계속 누워 있어"))
+    assert (
+        "only an explicit request for a disease name, for the cause, or for a test reading"
+        in prompt
+    )
+
+
+def test_case6_a_missing_entry_is_not_a_missed_meal() -> None:
+    """⑥ 미기록을 "안 했다" 로 읽지 않는다.
+
+    투약 기록이 0인 것은 약을 안 줬다는 뜻도, 줄 필요가 없다는 뜻도 아니다 — 기록에 없다는
+    뜻뿐이다. 이걸 안 박아 두면 "오늘 투약을 안 하셨네요" 가 사실처럼 나간다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question=QUERY, care_log=CARE_LOG))
+    assert "A missing entry means the record has no entry" in prompt
+    assert "It does NOT mean the dog did not eat, was not walked, or was not medicated" in prompt
+    assert "say that the record has none, never that it did not happen" in prompt
+
+
+def test_case7_non_urgent_signs_are_not_on_the_emergency_list() -> None:
+    """⑦ 비응급 증상이 거절로 안 간다. `cq_symptom_missing_triage_01`(반복 구토)이 before
+    랩에서 `emergency` 로 닫힌 자리다."""
+    prompt = build_general_prompt(GeneralPayload(question="강아지가 오늘 세 번이나 토했어"))
+    assert "Vomiting, diarrhea, limping, and appetite loss are not on this list" in prompt
+
+
+async def test_case8_an_emergency_is_answered_at_once_not_asked_back() -> None:
+    """⑧ 응급 신호에는 되묻기보다 즉시 안내가 먼저다 — 규칙으로도, 매핑으로도."""
+    prompt = build_general_prompt(GeneralPayload(question="갑자기 경련을 일으켜"))
+    assert "an emergency is answered at once, never asked back" in prompt
+    result = await run_adapter(json.dumps({"kind": "refuse", "text": "", "reason": "emergency"}))
+    response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
+    assert response.status == AssistantStatus.REFUSED
+    assert response.clarify is None
+    assert "지금 바로 동물병원" in response.message

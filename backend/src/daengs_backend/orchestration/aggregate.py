@@ -83,13 +83,17 @@ def aggregate_results(
     이 카드 이전과 같은 응답을 받는다.
     """
     route = _route_trace(route_plan) if include_route_trace else None
-    ask = _general_ask(results)
-    if ask is not None and route_plan.clarify is None:
+    asked = _general_ask(results)
+    if asked is not None and route_plan.clarify is None:
+        ask, grounded = asked
         # CLARIFY 의 **두 번째** 생산자 (D-068). 계획 시점 것(좌표 누락)이 먼저다.
         return AssistantResponse(
             request_id=request_id,
             status=AssistantStatus.CLARIFY,
-            message=ask.question,
+            # 사용자가 보는 것은 이 한 칸이다 — 기록으로 말할 수 있는 것과 물을 것이 둘 다
+            # 여기 있어야 한다. `clarify.question` 은 질문만 갖는다(되묻기를 따로 렌더하는
+            # 클라이언트가 요약까지 질문 자리에 그리지 않게).
+            message=_ask_message(ask.question, grounded),
             # 진리표의 "CLARIFY = 아무것도 실행되지 않았음" 을 클라이언트 쪽에서 그대로
             # 지킨다 — General 이 돌았다는 사실은 `route` 트레이스에만 남는다. 여기에
             # 결과를 실으면 프론트의 상태 설명과 `chat.categories_of` 가 같이 틀어진다.
@@ -164,12 +168,23 @@ def aggregate_results(
     )
 
 
-def _general_ask(results: list[CapabilityResult]) -> ClarifyRequest | None:
+def _ask_message(question: str, grounded: str | None) -> str:
+    """되묻기 한 턴의 사용자 문장 — 기록으로 말할 수 있는 것이 먼저, 물을 것이 나중.
+
+    기록이 없으면 질문만 남는다. 빈 줄 두 칸을 앞에 붙이지 않으려고 이 자리를 함수로 뺀다.
+    """
+    return f"{grounded}\n\n{question}" if grounded else question
+
+
+def _general_ask(results: list[CapabilityResult]) -> tuple[ClarifyRequest, str | None] | None:
     """General 이 **단독으로** 되물었을 때만 되묻기로 읽는다 (D-068).
 
     `RoutePlan.clarify` 는 안 건드린다 — 계획은 이미 굳었고, 배타성 불변식
     (`contracts.RoutePlan.clarify_is_exclusive` · `graph._validate_route_plan`)은 그대로
     서 있어야 한다. 되묻기가 사는 곳은 계획이 아니라 **집계**다.
+
+    돌려주는 것은 (질문, 기록으로 먼저 말할 수 있는 것) 두 쪽이다. 뒤쪽은 없을 수 있다 —
+    비로그인이거나 활성 강아지가 없으면 실을 기록 자체가 없다.
 
     단독 조건은 폴백 규칙(`planner.py`: 라우터가 아무것도 안 골랐을 때만 `general`)이
     이미 보장하지만, 여기서 한 번 더 건다 — 그 규칙이 풀리는 날 되묻기가 다른 능력의
@@ -183,12 +198,14 @@ def _general_ask(results: list[CapabilityResult]) -> ClarifyRequest | None:
         return None
     if result.status is not CapabilityStatus.OK:
         return None
-    raw = (result.data or {}).get("ask")
+    data = result.data or {}
+    raw = data.get("ask")
     if raw is None:
         return None
+    grounded = data.get("answer")
     # 어댑터가 이미 `ClarifyRequest` 로 조립해 검증한 값이다. 여기서 깨지면 우리 코드의
     # 버그이지 모델 출력 문제가 아니므로, 삼키지 않고 그대로 터뜨린다.
-    return ClarifyRequest.model_validate(raw)
+    return ClarifyRequest.model_validate(raw), grounded if isinstance(grounded, str) else None
 
 
 def _route_trace(route_plan: RoutePlan) -> RouteTrace:

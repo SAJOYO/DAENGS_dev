@@ -415,7 +415,7 @@ def test_the_base_prompt_admits_the_records_cannot_tell_instead_of_lecturing() -
     그냥 질문만 던지면 사용자는 앱이 자기 기록을 안 본 건지 없는 건지 알 수 없다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     assert "when no rule below hands you any" in prompt
-    assert "today's records alone cannot tell how the dog is" in prompt
+    assert "the records alone cannot tell how the dog is" in prompt
     assert "CARE_LOG_TODAY" not in prompt
 
 
@@ -473,7 +473,7 @@ def test_case2_condition_question_without_any_records() -> None:
     알기 어렵다" 를 말하게 시킨다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     assert "CARE_LOG_TODAY:" not in prompt
-    assert "today's records alone cannot tell how the dog is" in prompt
+    assert "nothing recorded for today so the records alone cannot tell" in prompt
 
 
 def test_case3_a_reported_sign_is_not_closed_with_a_hospital_line() -> None:
@@ -665,4 +665,54 @@ def test_prompt_asks_the_model_to_name_one_or_two_axes_from_the_closed_list() ->
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     assert "name the one or two axes you most need answered" in prompt
     assert "APPETITE" in prompt and "MOBILITY" in prompt
-    assert "Use OTHER only when none of the others fit" in prompt
+    assert "Use OTHER only for an observation that is genuinely none of the six" in prompt
+
+
+# ── after 랩 v1 이 잡은 새는 자리 (2026-09-10) ────────────────────────
+#
+# 첫 after 랩에서 `그거 얼마나 오래 해야 해?` 가 이렇게 돌아왔다:
+#   "**오늘의 기록만으로는** 어떤 활동에 대해 질문하시는지 알기 어렵습니다 … 식욕, 활력,
+#    배변, 구토/설사, 호흡 등 …"  (missing_axes=["OTHER"])
+# 지시대명사가 안 풀린 것은 "기록이 없어서" 가 아니고, 그 질문에는 관찰 축이 없다.
+
+
+def test_the_record_sentence_is_scoped_to_condition_questions() -> None:
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "When the message is about how the dog is doing or about a symptom" in prompt
+    assert "When you are asking for any other reason" in prompt
+    assert "bring up nothing else" in prompt
+    assert "is not a question about how the dog is doing" in prompt
+    # 로그 블록이 없는 본문이 로그를 언급하면 안 된다 — `test_assistant_care_log.py` 가
+    # 그것을 지키고 있고, 이 규칙을 적다가 실제로 한 번 어겼다.
+    assert "care log" not in prompt.lower()
+
+
+def test_axes_are_left_out_when_the_question_is_not_about_the_condition() -> None:
+    """`OTHER` 는 "관찰 축인데 여섯에 없다" 는 뜻이지 "축이 없다" 는 뜻이 아니다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "Leave axes out entirely when you are not asking about the dog's condition" in prompt
+    assert "OTHER is not the place to put it" in prompt
+    assert "Use OTHER only for an observation that is genuinely none of the six" in prompt
+
+
+def test_the_observation_items_are_not_recited_off_topic() -> None:
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert (
+        "Do not recite the observation items when the question is not about the dog's condition"
+        in prompt
+    )
+
+
+def test_no_records_invites_logging_without_promising_a_verdict() -> None:
+    """사람 지시 (2026-09-11): 기록이 없으면 막다른 길로 두지 말고 **기록을 권한다.**
+
+    다만 "기록하면 건강 상태를 알려드릴게요" 로 읽히면 안 된다 — 기록이 바꾸는 것은
+    **볼 수 있는 것**이지 **말해도 되는 것**이 아니다. 그 선을 프롬프트가 직접 긋는다.
+    그리고 권유는 문장이지 질문이 아니다 — 한 턴에 질문은 하나다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "inviting the owner to log meals, walks and medication" in prompt
+    assert "next time you can look at that record together with what they tell you" in prompt
+    assert "Never promise that a log will let you judge the dog's health" in prompt
+    assert "logging changes what you can see, not what you are allowed to conclude" in prompt
+    assert "do not phrase it as a second question" in prompt

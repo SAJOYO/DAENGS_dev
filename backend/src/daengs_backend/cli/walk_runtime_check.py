@@ -33,6 +33,7 @@ VERIFIERS = (
     "2026-09-05_walk_storyboards",
     "2026-09-08_walk_entry_contexts",
     "2026-09-09_walk_public_context_commerce",
+    "2026-09-10_walk_context_recollection",
 )
 
 

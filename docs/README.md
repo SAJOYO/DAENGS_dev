@@ -11,7 +11,7 @@
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |
 | [collaboration.md](collaboration.md) | 협업 규칙 — 우선순위 · Iteration · PR 기준 · 데일리 · 회고 |
 | [ci/README.md](ci/README.md) | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 `docs/ci/` 로 빠졌습니다** (Actions 한도 소진). **그것들이 잡던 것을 이제 사람이 머지 전에 로컬에서 돌립니다** — 명령 목록이 거기 있습니다. 특히 **버리는 Postgres 가 있어야만 도는 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip) |
-| [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 조회 API — 인증·repeatable-read snapshot·요청/응답·운영 상한·Place/Journey 경계 |
+| [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 집계·산책별 봉인 원판 조회 API — 인증·repeatable-read snapshot·원본/가용 상태·운영 상한 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |

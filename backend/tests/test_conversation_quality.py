@@ -433,6 +433,7 @@ def test_each_axis_is_a_separate_call_with_its_own_inputs(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     assert [c["axis"] for c in calls] == [
@@ -464,6 +465,7 @@ def test_na_axes_are_not_called_at_all(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     assert "repair_success" not in [c["axis"] for c in calls]
@@ -482,6 +484,7 @@ def test_score_refuses_to_run_without_an_anchor_pass_record(tmp_path):
             cases=[case],
             model=FAKE_JUDGE_MODEL,
             anchor_dir=tmp_path,
+            anchors_sha256=FAKE_ANCHORS_SHA256,
             generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         )
 
@@ -498,6 +501,7 @@ def test_judgment_file_header_pins_the_judge_model_and_prompt_version(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         lap="t",
         out_path=out,
@@ -523,6 +527,7 @@ def test_the_expected_mode_label_never_reaches_the_judge(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     sent = json.dumps([c["payload"] for c in calls], ensure_ascii=False)
@@ -545,6 +550,7 @@ def test_state_audit_comes_from_the_judge_not_from_a_score(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         out_path=out,
     )
@@ -572,6 +578,7 @@ def test_state_audit_is_absent_when_the_axis_was_not_measured(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
     )
     # 감사를 안 한 것과 "안 썼다" 는 다르다
@@ -587,7 +594,12 @@ def test_anchor_record_must_say_which_anchors_it_passed(tmp_path):
     (tmp_path / name).write_text(json.dumps({"passed": True}), encoding="utf-8")
     # 옛 모양의 기록 — 무엇을 통과한 것인지 말하지 못하면 게이트가 아니다
     with pytest.raises(SystemExit):
-        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+        require_anchor_pass(
+            tmp_path,
+            anchor_set="dev",
+            model=FAKE_JUDGE_MODEL,
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+        )
 
 
 def test_gate_catches_anchors_edited_after_the_pass_record(tmp_path):
@@ -606,12 +618,51 @@ def test_gate_catches_anchors_edited_after_the_pass_record(tmp_path):
     assert record["anchors_sha256"] == FAKE_ANCHORS_SHA256
 
 
+def test_user_input_needed_is_collinear_with_the_answer_key_today():
+    from collections import Counter
+
+    from daengs_evals.conversation_quality import CASES_V1_PATH
+    from daengs_evals.conversation_quality.cases import load_cases
+
+    cases = load_cases(CASES_V1_PATH)
+    dist = Counter((c.user_input_needed, c.expected_mode) for c in cases)
+    # judge.py 가 이 수를 두 자리(모듈 머리말 · build_payload)에 적어 두고 있다. 그 수가
+    # 문서의 산출물이라 여기서 못 박는다 — **이 테스트가 깨지면 세트가 바뀐 것이고, 그러면
+    # judge.py 의 두 주석을 같이 고쳐야 한다.** 겹침이 깨지는 쪽이 목표다 (Task 7 의 앵커).
+    assert dist == {(True, "ASK"): 5, (False, "ANSWER"): 6, (False, "REDIRECT"): 2}
+    need = [c for c in cases if c.user_input_needed]
+    assert len(need) == 5 and all(c.expected_mode == "ASK" for c in need)
+
+
+def test_the_anchor_hash_check_cannot_be_skipped_by_omitting_it(tmp_path):
+    from daengs_evals.conversation_quality.judge import require_anchor_pass, run_score
+
+    case = _case()
+    # 넘길 수 있게만 해 두면 **안 넘기는 길이 기본 경로**가 되고, 그러면 기록은 있고
+    # passed 는 참인데 해시는 아무도 안 보는 상태가 그대로 남는다. 서명으로 든다.
+    with pytest.raises(TypeError):
+        run_score(
+            rows=_lap_rows(case),
+            cases=[case],
+            model=FAKE_JUDGE_MODEL,
+            anchor_dir=_anchor_pass(tmp_path),
+            generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
+        )
+    with pytest.raises(TypeError):
+        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+
+
 def test_a_failed_anchor_run_does_not_open_the_gate(tmp_path):
     from daengs_evals.conversation_quality.judge import require_anchor_pass
 
     _anchor_pass(tmp_path, passed=False)  # 돌려는 봤고, 통과는 못 했다
     with pytest.raises(SystemExit):
-        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+        require_anchor_pass(
+            tmp_path,
+            anchor_set="dev",
+            model=FAKE_JUDGE_MODEL,
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+        )
 
 
 def test_a_malformed_anchor_record_is_a_readable_stop_not_a_traceback(tmp_path):
@@ -620,7 +671,12 @@ def test_a_malformed_anchor_record_is_a_readable_stop_not_a_traceback(tmp_path):
     name = anchor_record_name(anchor_set="dev", model=FAKE_JUDGE_MODEL)
     (tmp_path / name).write_text("{깨진 json", encoding="utf-8")
     with pytest.raises(SystemExit):
-        require_anchor_pass(tmp_path, anchor_set="dev", model=FAKE_JUDGE_MODEL)
+        require_anchor_pass(
+            tmp_path,
+            anchor_set="dev",
+            model=FAKE_JUDGE_MODEL,
+            anchors_sha256=FAKE_ANCHORS_SHA256,
+        )
 
 
 def test_rows_the_seam_never_answered_are_not_judged(tmp_path):
@@ -636,6 +692,7 @@ def test_rows_the_seam_never_answered_are_not_judged(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: calls.append(kw) or _fake_verdict(axis=kw["axis"]),
     )
     # 센티널을 채점시키면 판정기가 우리 문자열에 점수를 매긴다
@@ -659,6 +716,7 @@ def test_the_judgment_file_says_how_many_rows_it_skipped(tmp_path):
         cases=[case],
         model=FAKE_JUDGE_MODEL,
         anchor_dir=_anchor_pass(tmp_path),
+        anchors_sha256=FAKE_ANCHORS_SHA256,
         generate=lambda **kw: _fake_verdict(axis=kw["axis"]),
         out_path=out,
     )

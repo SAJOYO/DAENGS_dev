@@ -202,10 +202,17 @@ async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
     async def no_user(session, owner):
         return None
 
+    async def no_carers(session, pet_id):
+        # 이 아이는 혼자 돌본다. 삭제 경로는 돌보미의 `primary_pet_id` 도 수선하므로
+        # (docs/co-care.md §3) 그 조회를 여기서 비워 둡니다 — `TxSession` 은 쿼리를
+        # 못 받고, 이 테스트가 재는 것은 gait·walk·pet 의 **순서**입니다.
+        return []
+
     monkeypatch.setattr(pet_service.pet_repo, "get_owned", owned)
     monkeypatch.setattr(pet_service.gait_service, "cleanup_for_pets", cleanup)
     monkeypatch.setattr(pet_service.walk_repo, "delete_walks_only_with", delete_walks)
     monkeypatch.setattr(pet_service.app_user_repo, "get_by_id", no_user)
+    monkeypatch.setattr(pet_service.member_repo, "list_members", no_carers)
     monkeypatch.setattr(pet_service.pet_repo, "delete", delete_pet_row)
 
     await pet_service.delete_pet(session, uuid.uuid4(), pet.id)

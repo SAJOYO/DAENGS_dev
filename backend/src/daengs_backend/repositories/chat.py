@@ -20,7 +20,7 @@ async def get_accessible_pet_id(
     아빠의 대화가 나에게 새지 않습니다. 여기서 보는 것은 "그 아이를 돌보는 사람인가" 뿐입니다.
     """
     return await session.scalar(
-        select(Pet.id).where(Pet.id == pet_id, pet_repo._is_member(app_user_id))
+        select(Pet.id).where(Pet.id == pet_id, pet_repo.member_condition(app_user_id))
     )
 
 
@@ -30,7 +30,7 @@ async def lock_accessible_pet(
     """같은 판정을 행 잠금까지. 동시에 두 세션을 여는 것을 `pets` 행으로 줄 세웁니다."""
     return await session.scalar(
         select(Pet.id)
-        .where(Pet.id == pet_id, pet_repo._is_member(app_user_id))
+        .where(Pet.id == pet_id, pet_repo.member_condition(app_user_id))
         .with_for_update(of=Pet)
     )
 

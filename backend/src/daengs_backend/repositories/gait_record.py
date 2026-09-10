@@ -10,6 +10,13 @@
 **판정이 둘입니다** (docs/co-care.md §2). 보행은 강아지의 건강 데이터라 **읽기는
 구성원**(대표 ∪ 돌보미, `_accessible`)이고, **확정·삭제는 대표만**(`_owned`)입니다.
 바닥을 하나로 합치지 마세요 — 합치는 순간 돌보미가 남의 집 보행 영상을 지웁니다.
+
+⚠ **새 기록을 만드는 것도 대표만입니다.** 그 게이트는 이 파일이 아니라
+`services/gait.py::start_analysis` 의 `pet_repo.get_owned` 입니다 — 여기 세 줄만 읽고
+"돌보미도 올릴 수 있다" 로 읽지 마세요. 스펙(결정 ②)은 "돌보미는 기록하고 본다" 지만
+보행·스크리닝의 생성은 **영상·사진 객체를 만드는 쓰기**라 다음 장으로 미뤄 둔
+후속입니다 (docs/co-care.md §2 "보행·스크리닝 생성은 대표만"). 나중에 여는 것은
+호환적이고, 잘못 여는 것은 아닙니다.
 """
 
 from __future__ import annotations
@@ -43,7 +50,7 @@ def _accessible(app_user_id: uuid.UUID):
     return (
         select(GaitRecord)
         .join(Pet, Pet.id == GaitRecord.pet_id)
-        .where(pet_repo._is_member(app_user_id), GaitRecord.deleted_at.is_(None))
+        .where(pet_repo.member_condition(app_user_id), GaitRecord.deleted_at.is_(None))
     )
 
 

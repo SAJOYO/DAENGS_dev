@@ -693,6 +693,15 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         # 산책 자체는 남습니다.
         for walk in store.walks:
             walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
+        # `pet_members.pet_id` 의 CASCADE 자리 — 강아지가 사라지면 돌보미 행도 같이
+        # 사라집니다. **여기서는 실제로 돕니다** (탈퇴와 달리 행이 진짜로 지워집니다).
+        store.pet_members = [row for row in store.pet_members if row[0] != pet.id]
+        # `app_users.primary_pet_id` 의 ON DELETE SET NULL 자리. 대표든 돌보미든
+        # 가리키고 있던 사람은 전부 NULL 이 됩니다 — **누구를 대신 세울지는 서비스가
+        # 정합니다.** 이 대역이 없으면 "지운 뒤에 확인하는" 잘못된 구현이 통과합니다.
+        for user in store.app_users.values():
+            if user.primary_pet_id == pet.id:
+                user.primary_pet_id = None
 
     async def pet_delete_all_for_owner(session, app_user_id):
         owned_ids = {pet.id for pet in store.pets if pet.app_user_id == app_user_id}

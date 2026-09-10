@@ -96,6 +96,10 @@ ALTER TABLE care_events RENAME COLUMN app_user_id TO actor_app_user_id;
 ALTER TABLE care_events ALTER COLUMN actor_app_user_id DROP NOT NULL;
 -- FK 도 CASCADE → SET NULL. '소유자' 였을 땐 같이 지우는 게 맞았지만, '챙긴 사람' 은
 -- 떠나도 "그날 밥을 먹은 사실" 은 강아지의 것으로 남아야 한다.
+--
+-- ⚠️ 다만 **이 SET NULL 이 탈퇴를 처리해 주지는 않는다** — 위 "함정" 그대로, 행이 안 지워져
+--    영영 안 돈다. 탈퇴 때 실제로 이 칸을 비우는 것은 아래 트리거 ① 이다. 여기 SET NULL 은
+--    언젠가 행을 진짜로 지우는 날을 위한 안전망이다 (`pet_members` 의 CASCADE 와 같다).
 ```
 
 **이름을 반드시 바꾼다.** 안 바꾸면 `models/care_event.py:45` 의 *"`pets.app_user_id` 와 같은 값"*
@@ -115,6 +119,11 @@ BEGIN
     IF NEW.status = 'withdrawn' THEN
         DELETE FROM pet_members WHERE app_user_id = NEW.id;
         DELETE FROM pet_invites  WHERE invited_by  = NEW.id;
+        -- 케어 로그의 actor 도 여기서 비운다. 위 `SET NULL` 은 **안 돈다** — 행이 안 지워지니까.
+        -- 안 비우면 탈퇴한 돌보미의 id 가 **남의 집** 케어 로그에 영원히 남는다. 행은 남긴다:
+        -- "그날 밥을 먹은 사실" 은 강아지의 것이다. 남는 흔적은 닉네임이 아니라 가명 id 하나다
+        -- (이름은 `actor_label` 이 비구성원에게 이미 안 낸다).
+        UPDATE care_events SET actor_app_user_id = NULL WHERE actor_app_user_id = NEW.id;
     END IF;
     RETURN NEW;
 END $func$;
@@ -159,7 +168,7 @@ FOR EACH ROW EXECUTE FUNCTION pet_members_not_owner();
 
 ```python
 # repositories/pet.py
-def _is_member(app_user_id):          # 대표 ∪ 돌보미
+def member_condition(app_user_id):    # 대표 ∪ 돌보미. 네 리포지토리가 가져다 쓰므로 공개 이름이다
     return or_(
         Pet.app_user_id == app_user_id,
         Pet.id.in_(select(PetMember.pet_id).where(PetMember.app_user_id == app_user_id)),
@@ -182,13 +191,36 @@ async def get_accessible(...) -> Pet | None:   # 구성원. 새로 추가
 | `repositories/walk_entry.py:40` | 구성원 | 산책 기록 편집 |
 | `repositories/territory_claim.py:38` | 구성원 | 아빠가 걸어서 점령하려면 그 아이에 닿아야 한다. 점령 **결과**는 `territory_claims.app_user_id` 라 여전히 아빠 것 |
 
-### 산책 읽기 — 한 줄
+### 보행·스크리닝 **생성**은 대표만 — 후속으로 미룬다
+
+위 표에서 `repositories/gait_record.py` 가 "구성원" 인 것은 **읽기**뿐이다. 새 기록을 여는
+`services/gait.py::start_analysis` 와 `services/screening.py::start_record` 는 `get_owned`
+그대로라 **돌보미는 보행 영상도 스크리닝 사진도 못 올린다.** 결정 ②("돌보미는 기록하고
+본다")와 어긋나는 자리이고, 그것을 알고 남긴다.
+
+이유는 그 둘이 밥·약과 성질이 다르기 때문이다 — 케어 로그는 행 하나지만 이쪽은 **저장소
+객체(영상·사진)를 만든다.** 업로드 티켓·키 발급·고아 객체 청소·용량이 전부 "누가 올렸나" 에
+매달려 있어서, 여는 순간 검토할 면이 케어 로그와 비교가 안 되게 넓다. **나중에 여는 것은
+호환적이고 잘못 여는 것은 아니라서**, 이 장에서는 안 연다.
+
+**후속(follow-up)이다.** 열 때 같이 볼 것 — 티켓 키에 들어가는 `app_user_id`(스크리닝은
+`build_screening_photo_key` 가 사람 id 로 키를 만든다), 대표가 아닌 사람이 만든 객체의 파기
+경로(탈퇴·강아지 삭제), 그리고 `_owned`/`_accessible` 두 바닥 중 어디에 붙일지.
+
+### 산책 읽기 — 두 줄
 
 `repositories/walk.py:127` 의 `Walk.app_user_id == app_user_id` 를 **뺀다** (구성원 조건으로 갈지
 않고 삭제). 부르는 쪽인 `care_event.day_summary` 가 이미 강아지 접근 권한을 확인한 뒤라, 여기서
 다시 사람으로 거르면 **아빠의 산책만 빠진다.** `walk_pets` 조인이 이미 "그 아이가 나간 산책" 을
 정확히 집는다. 함수 docstring 의 *"소유자 조건은 `walks.app_user_id` 로 겁니다"* 도 같이 고친다 —
 그 문장이 이 결정으로 거짓이 된다.
+
+**둘째 줄은 `repositories/walk_entry.py` 의 `profile_walks` 다** — 같은 자리가 하나 더 있었다.
+게이트(`services/walk_entry.py::profile`)만 구성원으로 열고 질의를 그대로 두면 돌보미가
+**200 을 받으면서 내용은 빈** 응답을 받는다 — 예전에는 404 였으므로 "권한이 없다" 가
+"기록이 없다" 로 조용히 바뀌는 셈이다. 기록 프로필은 **강아지의 행동 요약**이지 사람의
+성과가 아니므로(결정 ①) 같은 모양으로 소유자 조건을 뺀다. 산책의 **소유와 편집**은
+그대로다 — `owned_walk` 가 계속 `Walk.app_user_id` 를 본다.
 
 **산책 쓰기도 연다 — 계획을 뒤집었다.** 처음 판단은 "각자 자기 산책을 올리고 요약에서만
 합쳐 보인다" 였는데, 그러면 **돌보미가 대표의 강아지를 산책에 태그할 수 없다.** 산책을
@@ -317,6 +349,15 @@ async def get_accessible(...) -> Pet | None:   # 구성원. 새로 추가
 
 돌보미로만 참여 중인 사람의 탈퇴는 **안 막는다.** 그냥 나가고 트리거 ①이 정리한다.
 
+> **비대칭이 하나 남아 있다 — 탈퇴는 막고 직접 삭제는 안 막는다.** `services/pet.py` 의
+> `delete_pet` 은 돌보미가 남은 강아지도 그대로 지운다. 대표가 남의 돌봄까지 걸린 아이를
+> 혼자 지울 수 있어도 되는지는 **제품 결정**이라 코드가 정할 자리가 아니고, 지금은 **의도적으로
+> 비워 둔 채**(deliberate-by-omission) 사람 결정을 기다린다.
+>
+> 막지 않는 대신 **뒤처리는 한다** — 지울 때 돌보미들의 `primary_pet_id` 를 퇴장과 같은
+> 규칙으로 갈아 준다. 여기서는 `pets` 행이 진짜로 지워져 그쪽 FK 의 `SET NULL` 이 **이번엔
+> 실제로 돌기** 때문에, 안 하면 돌보미 전원의 앱 첫 화면이 한꺼번에 빈다.
+
 ### 이름 표시 규칙
 
 > **이름은 그 사람이 *지금* 이 강아지의 구성원일 때만 보여 준다. 아니면 "이전 보호자".**
@@ -326,7 +367,10 @@ async def get_accessible(...) -> Pet | None:   # 구성원. 새로 추가
 나중에 재가입할 때(같은 행이 되살아난다) 옛 기록이 갑자기 그 사람의 **새 닉네임**으로 뜬다 —
 우리 집 화면에 지금은 남인 사람의 현재 닉네임이 뜨는 것이다.
 
-`GET …/members` 와 케어 로그 응답의 `actor` 필드가 같은 헬퍼를 쓴다.
+`GET …/members` 와 케어 로그 응답의 `actor` 필드는 **같은 결과를 내되 코드는 다르다.**
+목록 쪽은 이미 "구성원 명단" 을 손에 들고 있어 `app_user_repo.nicknames_by_ids` 를 곧장
+부르고, 케어 로그 쪽은 행마다 남은 `actor_app_user_id` 가 **지금도 구성원인지 모르는** 값이라
+`services/pet_member.py::actor_label` 을 거친다 — 위 규칙을 거는 것은 그 하나뿐이다.
 
 ### 케어 로그 삭제 권한
 
@@ -450,7 +494,14 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 
 - 트리거 ①: `app_users.status='withdrawn'` 으로 **UPDATE** 하면 `pet_members`·`pet_invites` 행이
   사라진다 ← 이것의 유일한 증명
+- 트리거 ①의 둘째 몫: 같은 UPDATE 로 `care_events.actor_app_user_id` 가 **NULL 이 되고 행은 남는다**
+  ← 남의 집 케어 로그에 탈퇴자의 id 가 남는 것을 막는 유일한 증명
 - 트리거 ②: 대표를 INSERT 하면 예외
+- **진짜 `transfer_owner` 를 진짜 DB 에서 부른다** ← 생 SQL 로 "트리거가 순서에 민감하다" 만
+  재는 것으로는 서비스가 그 순서를 지키는지를 못 본다. 지금 그 정확성은 SQLAlchemy autoflush 가
+  `pets` UPDATE 를 `pet_members` INSERT 보다 먼저 내보내는 것에 기대고 있는데, 그것을 재는 자리다
+- **돌보미가 `profile_walks` 로 대표의 산책을 본다** ← 이 질의는 가짜 대역이 통째로 갈아치워서
+  진짜 DB 에서만 증명된다
 - `idx_pet_members_app_user` 가 존재한다 ← 마이그레이션에서 누락되는 것을 막는다
 - `pet_invites.token_hash` UNIQUE
 - **`db/migrations/` 파일을 두 번 연속 적용해도 에러가 없다** ← 버전 테이블이 없어 재실행
@@ -478,6 +529,9 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 - **초대 수락은 일회용이다** — §3 "수락 — 검증 순서" 뒤에 적은 대로, 응답을 놓친 재시도는
   404 를 받는다. 그것을 실패로 보여주지 말고 `GET /app/pets` 로 이미 구성원이 됐는지
   다시 확인해야 한다.
+- **보행·스크리닝의 "새 기록" 버튼은 돌보미 화면에서 숨긴다** — 읽기는 열렸지만 **생성은
+  대표만**이라(§2 "보행·스크리닝 **생성**은 대표만") 돌보미가 누르면 404 다. `is_owner` 로
+  수정·배웅·삭제·사진 버튼을 가리는 것과 같은 자리에서 같이 가린다. 목록·상세·비교는 그대로 보인다.
 
 ---
 
@@ -485,3 +539,7 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 
 - **미니룸이 돌보미의 강아지를 세우는가** — §2 의 상한 의미가 여기 달렸다. 앱 결정.
 - **앱 짝 PR** — 초대 링크 딥링크 처리, 탈퇴 409 화면, 약 확인 다이얼로그, `actor` 표시.
+- **보행·스크리닝 생성을 돌보미에게 열 것인가** — 지금은 대표만이다 (§2). 저장소 객체를
+  만드는 쓰기라 다음 장으로 미뤄 둔 후속이다.
+- **돌보미가 남은 강아지를 대표가 혼자 지울 수 있는가** — 탈퇴는 막고 직접 삭제는 안 막는
+  비대칭이 지금 비워 둔 채로 남아 있다 (§3). 제품 결정.

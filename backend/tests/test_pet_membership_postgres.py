@@ -77,6 +77,41 @@ def test_withdrawal_deletes_membership():
         conn.close()
 
 
+def test_withdrawal_nulls_care_event_actor():
+    """탈퇴하면 **남의 집** 케어 로그에서도 그 사람의 id 가 사라진다.
+
+    `care_events.actor_app_user_id` 의 FK 는 `ON DELETE SET NULL` 이지만 탈퇴가 `app_users`
+    행을 안 지우므로 **안 돈다** — 비우는 것은 트리거 ① 뿐이고, 이것이 그 유일한 증명이다.
+    돌보미가 대표의 강아지에 약을 적고 떠나면, 전에는 그 id 가 대표의 화면 뒤에 영원히
+    남았다 (공동 돌봄 이전에는 케어 기록이 대표 것이라 대표 탈퇴와 함께 사라졌다).
+
+    **행은 남아야 한다** — "그날 약을 먹은 사실" 은 강아지의 것이다 (결정 ①).
+    """
+    conn = _postgres_or_skip()
+    try:
+        with conn.cursor() as cur:
+            _owner, carer, pet = _seed(cur)
+            event = uuid.uuid4()
+            cur.execute(
+                "INSERT INTO care_events"
+                " (id, pet_id, actor_app_user_id, kind, occurred_at, client_event_id)"
+                " VALUES (%s, %s, %s, 'medication', NOW(), %s)",
+                (event, pet, carer, uuid.uuid4()),
+            )
+
+            cur.execute("UPDATE app_users SET status='withdrawn' WHERE id=%s", (carer,))
+
+            cur.execute(
+                "SELECT actor_app_user_id FROM care_events WHERE id=%s", (event,)
+            )
+            row = cur.fetchone()
+            assert row is not None, "케어 기록 행까지 지워졌다 — 사실은 강아지의 것이다"
+            assert row[0] is None, "탈퇴한 돌보미의 id 가 남의 집 케어 로그에 남았다"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def test_owner_cannot_be_carer():
     """트리거 ② — 대표를 pet_members 에 넣으면 거절한다."""
     conn = _postgres_or_skip()
@@ -99,8 +134,13 @@ def test_succession_order_matters():
     옛 대표를 새 대표보다 먼저 `pet_members` 에 넣으면(=서투른 순서), 그 순간에는 아직
     `pets.app_user_id` 가 옛 대표라 트리거가 그대로 거절해야 한다. 올바른 순서
     (`pets.app_user_id` 를 먼저 바꾸고 → 새 대표의 돌보미 행을 지우고 → 그제서야 옛 대표를
-    넣는다)로 하면 같은 삽입이 통과해야 한다. `services/pet_member.py` 의 `transfer_owner`
-    가 실제로 이 순서를 따르는지를 이 테스트가 지킨다.
+    넣는다)로 하면 같은 삽입이 통과해야 한다.
+
+    ⚠️ **이 테스트는 `transfer_owner` 를 안 부른다.** 여기 있는 것은 생 SQL 뿐이라
+    "트리거가 순서에 민감하다" 는 사실만 재고, 서비스가 그 순서를 실제로 따르는지는
+    아래 `test_transfer_owner_survives_the_trigger` 가 진짜 서비스를 불러서 본다 —
+    SQLAlchemy 의 autoflush 가 `pets` UPDATE 를 `pet_members` INSERT 보다 먼저 내보내는
+    것에 기대고 있는데, 그것을 재는 자리가 거기다.
     """
     conn = _postgres_or_skip()
     try:
@@ -197,7 +237,7 @@ def _sqlalchemy_dsn_or_skip() -> str:
 
     아래 삭제 자격 증명만 이것을 쓴다. 그 판정은 psycopg 로 **흉내 내면 의미가 없다** —
     테스트가 직접 쓴 SQL 을 테스트가 확인하는 꼴이 된다. 진짜 `care_repo.get_deletable`
-    을 진짜 DB 에서 불러야, 조건을 `pet_repo._is_member` 로 잘못 바꿔 놓은 구현이 여기서
+    을 진짜 DB 에서 불러야, 조건을 `pet_repo.member_condition` 로 잘못 바꿔 놓은 구현이 여기서
     걸린다 (가짜 대역으로는 그 실수가 통과한다).
 
     가드를 새로 쓰지 않고 `_postgres_or_skip` 을 빌린다 — 두 벌이 되면 한쪽만 고쳐진다.
@@ -218,7 +258,7 @@ async def test_care_event_delete_is_recorder_or_owner():
     """케어 기록은 **적은 사람 또는 그 아이의 대표**만 지운다 (docs/co-care.md §2).
 
     네 갈래를 한 트랜잭션에서 본다: 적은 사람 ✅ · 대표 ✅ · **다른 돌보미** ❌ · 남남 ❌.
-    셋째가 이 테스트의 이유다 — 구성원 전체(`_is_member`)로 열어 놓아도 나머지 셋은 전부
+    셋째가 이 테스트의 이유다 — 구성원 전체(`member_condition`)로 열어 놓아도 나머지 셋은 전부
     통과하므로, 그 실수는 여기서만 잡힌다.
 
     다른 테스트와 달리 SQLAlchemy 세션을 쓰는 것은 **진짜 리포지토리 함수를 부르기
@@ -281,6 +321,172 @@ async def test_care_event_delete_is_recorder_or_owner():
         assert await deletable_by(owner) is not None, "대표가 돌보미의 오기록을 못 지운다"
         assert await deletable_by(other) is None, "다른 돌보미가 남의 기록을 지울 수 있다"
         assert await deletable_by(stranger) is None, "남남이 우리 아이 기록을 지울 수 있다"
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()
+
+
+async def test_transfer_owner_survives_the_trigger():
+    """**진짜 `transfer_owner` 를 진짜 DB 에서** 부른다 — 이것 하나가 두 구멍을 덮는다.
+
+    ① `pet_members_not_owner` 트리거가 승계를 거절하지 않는가. 위
+       `test_succession_order_matters` 는 생 SQL 이라 "트리거가 순서에 민감하다" 까지만
+       재고, 서비스가 그 순서를 지키는지는 아무것도 안 본다.
+    ② `transfer_owner` 는 오늘 **SQLAlchemy autoflush 가 `pets` UPDATE 를 `pet_members`
+       INSERT 보다 먼저 내보내기 때문에** 맞다. 그 순서는 코드 어디에도 안 적혀 있고
+       가짜 리포지토리에는 트리거가 없어 뒤집혀도 조용히 통과한다. 여기서만 걸린다.
+
+    바깥 트랜잭션에 savepoint 로 얹어(`join_transaction_mode="create_savepoint"`)
+    서비스의 `commit()` 을 그 안에 가두고, 끝에서 통째로 rollback 한다 — 이 파일의
+    "모든 쓰기를 한 트랜잭션에서 검사하고 rollback" 규칙 그대로다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from daengs_backend.services import pet_member as member_service
+
+    engine = create_async_engine(dsn)
+    conn = await engine.connect()
+    outer = await conn.begin()
+    session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        owner, carer = (uuid.uuid4() for _ in range(2))
+        pet = uuid.uuid4()
+        for uid in (owner, carer):
+            await session.execute(
+                text(
+                    "INSERT INTO app_users (id, kakao_id, status)"
+                    " VALUES (CAST(:i AS uuid), :k, 'active')"
+                ),
+                {"i": str(uid), "k": uuid.uuid4().int % 10**12},
+            )
+        await session.execute(
+            text(
+                "INSERT INTO pets (id, app_user_id, name, breed)"
+                " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), '맥스', '믹스')"
+            ),
+            {"p": str(pet), "o": str(owner)},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO pet_members (pet_id, app_user_id)"
+                " VALUES (CAST(:p AS uuid), CAST(:u AS uuid))"
+            ),
+            {"p": str(pet), "u": str(carer)},
+        )
+        # 옛 대표가 뿌린 초대도 하나 — 승계가 그것을 죽이는지까지 본다.
+        await session.execute(
+            text(
+                "INSERT INTO pet_invites (pet_id, invited_by, token_hash, expires_at)"
+                " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), :h,"
+                "         NOW() + INTERVAL '1 day')"
+            ),
+            {"p": str(pet), "o": str(owner), "h": "b" * 64},
+        )
+        await session.flush()
+
+        await member_service.transfer_owner(session, owner, pet, carer)
+
+        new_owner = await session.scalar(
+            text("SELECT app_user_id FROM pets WHERE id = CAST(:p AS uuid)"),
+            {"p": str(pet)},
+        )
+        assert new_owner == carer, "대표가 안 바뀌었다"
+        carers = list(
+            await session.scalars(
+                text(
+                    "SELECT app_user_id FROM pet_members"
+                    " WHERE pet_id = CAST(:p AS uuid)"
+                ),
+                {"p": str(pet)},
+            )
+        )
+        assert carers == [owner], f"옛 대표만 돌보미로 남아야 한다 (지금 {carers})"
+        left = await session.scalar(
+            text(
+                "SELECT count(*) FROM pet_invites WHERE pet_id = CAST(:p AS uuid)"
+            ),
+            {"p": str(pet)},
+        )
+        assert left == 0, "옛 대표가 뿌린 초대가 살아남았다"
+    finally:
+        await session.close()
+        await outer.rollback()
+        await conn.close()
+        await engine.dispose()
+
+
+async def test_record_profile_sees_other_members_walks():
+    """산책 기록 프로필은 **그 아이의 산책 전부**를 본다 — 부른 사람 것만이 아니다.
+
+    게이트(`services/walk_entry.py::profile`)가 구성원에게 열린 뒤에도 이 질의가
+    `Walk.app_user_id` 로 거르면 돌보미는 **200 인데 내용이 빈** 응답을 받는다 — 예전에는
+    404 였으므로 "권한이 없다" 가 "기록이 없다" 로 조용히 바뀌는 셈이다. `walk.py` 의
+    `count_for_pet_between` 에서 소유자 조건을 뺀 것과 같은 자리다.
+
+    가짜 대역은 이 질의를 통째로 monkeypatch 하므로(`test_walk_entry_http.py`)
+    **진짜 DB 에서만** 증명된다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from daengs_backend.repositories import walk_entry as walk_entry_repo
+    from daengs_backend.schemas.walk_entry import RecordProfileQuery
+
+    engine = create_async_engine(dsn)
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        owner, carer = (str(uuid.uuid4()) for _ in range(2))
+        pet, walk = str(uuid.uuid4()), str(uuid.uuid4())
+        for uid in (owner, carer):
+            await session.execute(
+                text(
+                    "INSERT INTO app_users (id, kakao_id, status)"
+                    " VALUES (CAST(:i AS uuid), :k, 'active')"
+                ),
+                {"i": uid, "k": uuid.uuid4().int % 10**12},
+            )
+        await session.execute(
+            text(
+                "INSERT INTO pets (id, app_user_id, name, breed)"
+                " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), '맥스', '믹스')"
+            ),
+            {"p": pet, "o": owner},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO pet_members (pet_id, app_user_id)"
+                " VALUES (CAST(:p AS uuid), CAST(:u AS uuid))"
+            ),
+            {"p": pet, "u": carer},
+        )
+        # 산책은 **대표가** 올렸고 그 아이가 동행했다.
+        await session.execute(
+            text(
+                "INSERT INTO walks (id, app_user_id, client_session_id, started_at, ended_at)"
+                " VALUES (CAST(:w AS uuid), CAST(:o AS uuid), CAST(:c AS uuid),"
+                "         NOW() - INTERVAL '1 hour', NOW())"
+            ),
+            {"w": walk, "o": owner, "c": str(uuid.uuid4())},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO walk_pets (walk_id, pet_id)"
+                " VALUES (CAST(:w AS uuid), CAST(:p AS uuid))"
+            ),
+            {"w": walk, "p": pet},
+        )
+
+        spec = RecordProfileQuery(pet_id=uuid.UUID(pet))
+        found = await walk_entry_repo.profile_walks(session, uuid.UUID(carer), spec)
+        assert [str(w.id) for w in found] == [walk], (
+            "돌보미의 프로필에서 대표의 산책이 빠졌다 — 200 인데 빈 응답이 된다"
+        )
     finally:
         await session.rollback()
         await session.close()

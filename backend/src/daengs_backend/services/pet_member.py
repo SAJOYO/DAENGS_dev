@@ -122,8 +122,15 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
         raise AlreadyOwnerError
 
     if await member_repo.is_member(session, pet.id, app_user_id):
-        # 멱등입니다 — 카톡 링크는 두 번 눌립니다. 초대는 그대로 두어야 첫 수락의
-        # 삭제와 경쟁하지 않습니다.
+        # 멱등입니다 — 동시 수락에서 진 쪽이 여기로 옵니다 (docs/co-care.md §3 의 행 5).
+        #
+        # **여기서도 초대를 지웁니다.** "수락하면 행을 지운다 — 그것만으로 일회용" 이
+        # 이 표의 규칙이라, 이 분기만 초대를 살려 두면 토큰이 24시간까지 유효하게 남고
+        # `MAX_ACTIVE_INVITES` 한 자리를 계속 먹으며, 나중에 이 사람을 내보내도 같은
+        # 링크로 다시 들어옵니다. 이미 지워진 행을 지우는 것은 no-op(rowcount 0)이라
+        # 이긴 쪽의 삭제와 경쟁하지 않습니다 — 락은 이미 `pets` 행이 잡고 있습니다.
+        await member_repo.delete_invite(session, invite.id)
+        await session.commit()
         return pet
 
     if await member_repo.count_members(session, pet.id) >= MAX_MEMBERS_PER_PET:

@@ -23,8 +23,16 @@ CREATE TABLE IF NOT EXISTS care_events (
 
     -- **챙긴 사람.** 소유자가 아니다 — 이 기록의 주인은 강아지다 (docs/co-care.md).
     -- 공동 돌봄에서는 대표든 돌보미든 기록할 수 있어 `pets.app_user_id` 와 같은 값이라는
-    -- 보장이 없다. `app_users` 는 탈퇴해도 안 지워지므로(위 함정과 같음) NULL 을 허용하고
-    -- FK 도 SET NULL 이다 — 챙긴 사람이 떠나도 "그날 밥을 먹은 사실" 은 강아지에 남는다.
+    -- 보장이 없다. 챙긴 사람이 떠나도 "그날 밥을 먹은 사실" 은 강아지에 남아야 하므로
+    -- NULL 을 허용한다.
+    --
+    -- ⚠ **그 NULL 을 넣는 것은 아래 SET NULL 이 아니다.** 탈퇴는 app_users 행을 안 지우므로
+    --   (`services/app_auth.py` 의 withdraw 는 status 만 바꾼다) 이 FK 는 **영영 안 돌고**,
+    --   실제로 비우는 것은 24_pet_members.sql 의 pet_membership_owner_cleanup 트리거다.
+    --   SET NULL 은 언젠가 app_users 행을 진짜로 지우는 날을 위한 안전망이다 — pet_members 의
+    --   CASCADE 가 그런 것과 같다. 여기에 기대면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에
+    --   영원히 남는다.
+    --
     -- 이름을 명시하는 이유는 db/migrations/2026-09-09_pet_members.sql 이 이미 도는 DB 에서
     -- 같은 이름(care_events_actor_fkey)으로 제약을 다는 것과 맞추기 위해서다. 이름을 안
     -- 적으면 PostgreSQL 이 care_events_actor_app_user_id_fkey 로 자동 생성해 빈 볼륨과

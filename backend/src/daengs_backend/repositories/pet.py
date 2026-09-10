@@ -27,6 +27,7 @@ __all__ = [
     "list_accessible",
     "list_for_owner",
     "list_for_owner_for_update",
+    "member_condition",
     "names_by_ids",
     "owned_ids",
 ]
@@ -90,8 +91,15 @@ async def get_by_id_for_update(session: AsyncSession, pet_id: uuid.UUID) -> Pet 
     return await session.scalar(stmt)
 
 
-def _is_member(app_user_id: uuid.UUID):
-    """구성원 = 대표 ∪ 돌보미. **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다."""
+def member_condition(app_user_id: uuid.UUID):
+    """구성원 = 대표 ∪ 돌보미 — `WHERE` 에 그대로 넣는 조건입니다.
+
+    **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다.
+
+    이름에 밑줄이 없는 것이 의도입니다. `chat`·`gait_record`·`territory_claim`·
+    `walk_entry` 네 리포지토리가 이것을 가져다 씁니다 — 구성원 판정은 **한 자리에만**
+    있어야 하므로 복사하지 말고 이것을 부르세요 (docs/co-care.md §2).
+    """
     return or_(
         Pet.app_user_id == app_user_id,
         Pet.id.in_(
@@ -113,7 +121,7 @@ async def get_accessible(
     거기서 이 함수를 부르면 돌보미가 강아지를 지웁니다. 잘못 부른 것이 이름으로 보여야
     합니다.
     """
-    stmt = select(Pet).where(Pet.id == pet_id, _is_member(app_user_id))
+    stmt = select(Pet).where(Pet.id == pet_id, member_condition(app_user_id))
     if for_update:
         stmt = stmt.with_for_update(of=Pet)
     return await session.scalar(stmt)
@@ -124,7 +132,7 @@ async def count_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> int
 
     `count_for_owner` 와 다릅니다 — 저건 파기·소유 판단용이고 이건 화면 용량입니다.
     """
-    stmt = select(func.count()).select_from(Pet).where(_is_member(app_user_id))
+    stmt = select(func.count()).select_from(Pet).where(member_condition(app_user_id))
     return int(await session.scalar(stmt) or 0)
 
 
@@ -162,7 +170,7 @@ async def accessible_ids(
     """
     if not pet_ids:
         return set()
-    stmt = select(Pet.id).where(_is_member(app_user_id), Pet.id.in_(pet_ids))
+    stmt = select(Pet.id).where(member_condition(app_user_id), Pet.id.in_(pet_ids))
     return set(await session.scalars(stmt))
 
 
@@ -175,7 +183,7 @@ async def list_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> list
     ⚠️ **승계 대상을 여기서 고르지 마세요.** 대표를 지웠을 때 물려받을 아이는
     `list_for_owner` 로 골라야 합니다 — 여기서 고르면 남의 강아지를 내 대표로 세웁니다.
     """
-    stmt = select(Pet).where(_is_member(app_user_id)).order_by(Pet.created_at, Pet.id)
+    stmt = select(Pet).where(member_condition(app_user_id)).order_by(Pet.created_at, Pet.id)
     return list(await session.scalars(stmt))
 
 

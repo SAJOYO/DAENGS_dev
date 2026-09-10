@@ -45,7 +45,7 @@ async def eligible_pets(db, member, pet_ids):
         await db.scalars(
             select(Pet.id).where(
                 Pet.id.in_(pet_ids),
-                pet_repo._is_member(member),
+                pet_repo.member_condition(member),
                 Pet.farewell_on.is_(None),
             )
         )

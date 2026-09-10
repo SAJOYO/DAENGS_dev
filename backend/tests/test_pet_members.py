@@ -229,8 +229,8 @@ async def test_accept_is_idempotent(store: Store, pet: FakePet):
     토큰을 못 찾아 404 입니다. 그것과 다른 상황이 진짜 "두 번 눌림" 입니다: 두 요청이
     **동시에** 같은(아직 안 지워진) 초대 행을 읽어서, 하나가 먼저 구성원으로 넣고
     커밋하는 사이에 다른 하나도 그 초대를 들고 있는 경우입니다. 그때 나중 요청이
-    보는 것이 `is_member() == True` 이고, 그 분기가 초대를 다시 지우지 않고 200 을
-    돌려줍니다(`accept_invite` 의 `# 멱등입니다` 분기) — 그 경합을 여기서 흉내 냅니다.
+    보는 것이 `is_member() == True` 이고, 그 분기가 200 을 돌려줍니다
+    (`accept_invite` 의 `# 멱등입니다` 분기) — 그 경합을 여기서 흉내 냅니다.
 
     **상태코드만으로는 이 분기를 못 지킵니다.** `is_member()` 조기 반환이 지워지면
     흐름이 `member_repo.add` 로 떨어지는데, 가짜 `member_add` 는 이제 `(pet_id,
@@ -246,6 +246,26 @@ async def test_accept_is_idempotent(store: Store, pet: FakePet):
     r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
     assert r.status_code == 200
     assert store.pet_members.count((pet.id, CARER)) == 1
+
+
+async def test_idempotent_accept_still_burns_the_invite(store: Store, pet: FakePet):
+    """멱등 분기도 **초대를 지웁니다** — "수락하면 행을 지운다" 가 일회용의 전부입니다.
+
+    이 분기가 초대를 살려 두면 셋이 한꺼번에 깨집니다: 토큰이 24시간까지 계속 유효하고,
+    `MAX_ACTIVE_INVITES` 한 자리를 계속 먹고, 그 사람을 내보낸 뒤에도 같은 링크로 다시
+    들어옵니다. 마지막 것을 여기서 끝까지 봅니다 — 지운 뒤 재수락이 404 여야 합니다.
+    """
+    token = _invite(store, pet)
+    store.pet_members.append((pet.id, CARER))  # 먼저 커밋된 동시 요청을 흉내 낸다
+
+    r = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert r.status_code == 200
+    assert store.pet_invites == [], "멱등 분기가 초대 행을 살려 뒀다"
+
+    # 내보낸 뒤에도 그 링크로 다시 못 들어온다.
+    store.pet_members.remove((pet.id, CARER))
+    again = client_as(CARER).post("/app/pet-invites/accept", json={"token": token})
+    assert again.status_code == 404
 
 
 async def test_unknown_token_is_404(store: Store, pet: FakePet):
@@ -378,6 +398,37 @@ async def test_owner_removing_carer_clears_carers_primary_pet(store: Store, pet:
     assert r.status_code == 204
     assert carer.primary_pet_id == mine.id
     assert owner.primary_pet_id == owner_untouched
+
+
+async def test_deleting_shared_pet_repairs_carers_primary_pet(store: Store, pet: FakePet):
+    """대표가 함께 돌보던 아이를 지우면 **돌보미의 첫 화면도 같이 수선한다.**
+
+    여기서는 `pets` 행이 진짜로 지워지므로 돌보미 쪽 FK(`ON DELETE SET NULL`)가 이번엔
+    실제로 돈다 — 그래서 아무것도 안 하면 돌보미 전원이 `primary_pet_id = NULL` 로 남고,
+    대표만 대체 아이를 받는다. 퇴장 경로가 이미 하는 수선을 여기서도 한다.
+    """
+    carer = store.app_users[CARER_KAKAO]
+    store.pet_members.append((pet.id, CARER))
+    carer.primary_pet_id = pet.id
+    mine = FakePet(app_user_id=CARER, name="네오", breed="푸들")
+    store.pets.append(mine)
+
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id)
+
+    assert carer.primary_pet_id == mine.id
+
+
+async def test_deleting_shared_pet_nulls_primary_when_carer_has_no_other(
+    store: Store, pet: FakePet
+):
+    """대체할 아이가 없으면 `None` — 없는 강아지를 계속 가리키게 두지 않는다."""
+    carer = store.app_users[CARER_KAKAO]
+    store.pet_members.append((pet.id, CARER))
+    carer.primary_pet_id = pet.id
+
+    await pet_service.delete_pet(FakeSession(), OWNER, pet.id)
+
+    assert carer.primary_pet_id is None
 
 
 async def test_member_list_shows_owner_and_carer(store: Store, pet: FakePet):

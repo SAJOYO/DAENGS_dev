@@ -229,6 +229,14 @@ CHECKS = (
             'DROP INDEX idx_pet_invites_pet',
             'DROP TRIGGER pet_membership_owner_cleanup ON app_users',
             'DROP TRIGGER pet_members_not_owner ON pet_members',
+            # 트리거는 붙어 있고 **본문에서 care_events 익명화만** 빠진 모양. 카탈로그에는
+            # "트리거가 무엇을 하는가" 가 안 적힐 것이라, verify 가 prosrc 를 안 보면 이것을
+            # 아무도 안 잡는다 — 그러면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에 영원히 남는다.
+            "CREATE OR REPLACE FUNCTION pet_membership_owner_cleanup() RETURNS trigger"
+            " LANGUAGE plpgsql AS $tamper$ BEGIN IF NEW.status = 'withdrawn' THEN"
+            " DELETE FROM pet_members WHERE app_user_id = NEW.id;"
+            " DELETE FROM pet_invites WHERE invited_by = NEW.id;"
+            " END IF; RETURN NEW; END $tamper$",
             'ALTER TABLE care_events RENAME COLUMN actor_app_user_id TO app_user_id',
             'ALTER TABLE care_events ALTER COLUMN actor_app_user_id SET NOT NULL',
             'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey',

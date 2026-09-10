@@ -161,7 +161,21 @@ BEGIN
         RAISE EXCEPTION 'trigger mismatch: pet_members.pet_members_not_owner missing or disabled';
     END IF;
 
-    -- ⑧ care_events.actor_app_user_id — 개명이 안 됐으면 다음 사람이 옛 이름을 '소유자'로
+    -- ⑧ 정리 함수가 care_events 의 actor 까지 비우는가. 트리거가 붙어 있어도 본문에서
+    --   이 UPDATE 만 빠지면 탈퇴한 돌보미의 id 가 **남의 집** 케어 로그에 영원히 남는다 —
+    --   그 열의 FK 는 SET NULL 이지만 app_users 행이 안 지워져 안 돌기 때문이다.
+    --   카탈로그에는 "트리거가 무엇을 하는가" 가 안 적힌다 — 그래서 이 한 줄만
+    --   함수 본문(prosrc)을 본다.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_proc
+        WHERE proname = 'pet_membership_owner_cleanup'
+          AND prosrc ILIKE '%UPDATE care_events%actor_app_user_id%NULL%actor_app_user_id%'
+    ) THEN
+        RAISE EXCEPTION
+            'trigger mismatch: pet_membership_owner_cleanup does not null care_events.actor_app_user_id';
+    END IF;
+
+    -- ⑨ care_events.actor_app_user_id — 개명이 안 됐으면 다음 사람이 옛 이름을 '소유자'로
     --   읽고 권한 검사를 잘못 짠다 (models/care_event.py 의 옛 주석이 그 함정이다).
     relation := to_regclass('care_events');
     IF NOT EXISTS (

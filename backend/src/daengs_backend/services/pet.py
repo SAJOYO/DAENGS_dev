@@ -349,6 +349,17 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
 
     FK 가 `ON DELETE SET NULL` 이라 지우면 `primary_pet_id` 는 저절로 비지만,
     **누구를 대신 세울지는 정책이라 DB 가 못 정합니다.**
+
+    ⚠️ **그 수선을 대표뿐 아니라 돌보미에게도 해 줍니다** (docs/co-care.md §3). 여기서는
+    `pets` 행이 **진짜로** 지워지므로 돌보미 쪽 FK 도 이번엔 돌아서, 그 아이를
+    `primary_pet_id` 로 가리키던 돌보미들이 한꺼번에 NULL 이 됩니다. 그러면 그 사람들의
+    앱 첫 화면이 빕니다 — 내보내기·나가기(`services/pet_member.py::remove_member`)가 이미
+    같은 일을 하므로 규칙도 그것과 같습니다: 남은 **구성원** 강아지 중 `list_for_owner`
+    정렬의 첫 아이, 없으면 `None`.
+
+    **돌보미가 남은 아이의 삭제 자체는 막지 않습니다.** 탈퇴는 막는데(대표 탈퇴 가드)
+    직접 삭제는 안 막는 비대칭이 의도인지는 사람이 정할 제품 결정이라, 지금은 그대로 두고
+    docs/co-care.md §3 에 적어 둡니다.
     """
     from daengs_backend.services.activity_game import acquire
 
@@ -374,12 +385,32 @@ async def delete_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid
         user = await app_user_repo.get_by_id(session, app_user_id)
         was_primary = user is not None and user.primary_pet_id == pet.id
 
+        # 돌보미도 **지우기 전에** 모읍니다. 지운 뒤에는 `pet_members` 가 CASCADE 로
+        # 사라져 누가 돌보던 아이인지 알 길이 없고, 그들의 `primary_pet_id` 는 이미
+        # FK 가 NULL 로 만든 뒤라 "그 아이를 가리켰는가" 도 못 봅니다.
+        carers = [
+            carer
+            for carer in [
+                await app_user_repo.get_by_id(session, carer_id)
+                for carer_id in await member_repo.list_members(session, pet.id)
+            ]
+            if carer is not None and carer.primary_pet_id == pet.id
+        ]
+
         await pet_repo.delete(session, pet)
         await session.flush()
 
         if was_primary and user is not None:
             remaining = await pet_repo.list_for_owner(session, app_user_id)
             user.primary_pet_id = remaining[0].id if remaining else None
+
+        # 돌보미는 자기가 **돌보는** 아이 중에서 고릅니다 — 대표처럼 `list_for_owner` 로
+        # 고르면 남의 집 아이를 못 세워 첫 화면이 빈 채로 남습니다.
+        for carer in carers:
+            remaining_for_carer = await pet_repo.list_accessible(session, carer.id)
+            carer.primary_pet_id = (
+                remaining_for_carer[0].id if remaining_for_carer else None
+            )
 
         await session.commit()
     except Exception:

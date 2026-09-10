@@ -42,11 +42,21 @@ CREATE INDEX IF NOT EXISTS idx_pet_invites_pet ON pet_invites (pet_id);
 
 -- ① app_users 는 탈퇴해도 살아남으므로 FK 로는 절대 안 지워진다.
 --   21_activity_game.sql 의 activity_owner_cleanup 과 같은 선례다.
+--
+--   **care_events 의 UPDATE 도 그래서 여기 있다.** 돌보미가 남의 집 강아지에 약을 적고
+--   탈퇴하면 actor_app_user_id 에 그 사람의 id 가 그대로 남는다 — 그 열의 FK 가 SET NULL 이지만
+--   행이 지워져야 도는데 탈퇴는 행을 안 지운다(위 CASCADE 와 같은 함정).
+--   공동 돌봄 이전에는 케어 기록이 대표의 것이라 대표가 탈퇴하면 강아지와 함께 사라졌고,
+--   지금은 **남의 집 기록에 내 흔적이 남는** 새 보존이다. 남는 것은 닉네임이 아니라
+--   **가명 id 하나**다 — 이름은 services/pet_member.py 의 actor_label 이 비구성원에게 이미 안
+--   내준다. 그래도 탈퇴한 사람과 그 집을 잇는 식별자라 같이 지운다.
+--   **행은 안 지우고 사람만 비운다** — "그날 밥을 먹은 사실" 은 강아지의 것이다.
 CREATE OR REPLACE FUNCTION pet_membership_owner_cleanup() RETURNS trigger LANGUAGE plpgsql AS $func$
 BEGIN
     IF NEW.status = 'withdrawn' THEN
         DELETE FROM pet_members WHERE app_user_id = NEW.id;
         DELETE FROM pet_invites  WHERE invited_by  = NEW.id;
+        UPDATE care_events SET actor_app_user_id = NULL WHERE actor_app_user_id = NEW.id;
     END IF;
     RETURN NEW;
 END $func$;

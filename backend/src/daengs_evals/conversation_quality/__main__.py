@@ -1,6 +1,7 @@
 """대화 품질 명령 (#401).
 
-    uv run python -m daengs_evals.conversation_quality collect --lap lap1 --adapter-mode fake
+    uv run python -m daengs_evals.conversation_quality collect --lap lap1 --out-dir <dir> \\
+        --adapter-mode fake
     uv run python -m daengs_evals.conversation_quality check-anchors --anchor-set dev
     uv run python -m daengs_evals.conversation_quality score --lap-file <lap.jsonl>
     uv run python -m daengs_evals.conversation_quality report --lap-file <lap.jsonl> \\
@@ -16,8 +17,11 @@
 않는다.
 
 `collect` · `check-anchors` 도 실 모델을 부른다(`--adapter-mode real` 이거나 세만틱
-라우터가 Gemini 를 물기 때문). **`report` · `compare` 는 이미 있는 파일만 읽고 아무것도
-부르지 않는다.**
+라우터가 Gemini 를 물기 때문). `report` · `compare` 는 모델을 다시 안 부르고 이미 있는
+파일만 읽는다는 점은 같지만, **완전히 설정 없이 도는 것은 아니다** — `summarize` 가
+`daengs_backend.orchestration.redirects`(`dead_end` 진단 · 코드 기반 검사) 를 늦게 물기
+때문에, `backend/.env` 가 없는 체크아웃에서는 그 두 자리가 죽는 대신 "측정 불가"로
+내려갈 뿐 값을 계산하지는 못한다. 판정 파일을 다시 만들거나 judge 를 부르지는 않는다.
 """
 
 from __future__ import annotations

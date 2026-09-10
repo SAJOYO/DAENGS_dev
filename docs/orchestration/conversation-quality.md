@@ -126,8 +126,12 @@ uv run python -m daengs_evals.conversation_quality compare \
 
 `collect`·`check-anchors`는 실제 모델을 부릅니다(`--adapter-mode real`이거나 세만틱
 라우터가 Gemini를 물기 때문에 유료 호출입니다). **랩 실행 자체는 이 카드 밖이고, 하네스가
-끝난 뒤 사람이 명시적으로 승인할 때 돕니다.** `report`·`compare`는 이미 있는 파일만 읽고
-아무것도 다시 판정하지 않습니다 — 재현 가능한 표를 만드는 것이 이 두 함수의 전부입니다.
+끝난 뒤 사람이 명시적으로 승인할 때 돕니다.** `report`·`compare`는 판정기를 다시 안 부르고
+이미 있는 파일만 읽는다는 점은 같지만, **완전히 설정 없이 도는 것은 아닙니다** —
+`summarize`가 `dead_end` 진단·코드 기반 검사를 내려고
+`daengs_backend.orchestration.redirects`를 늦게 물어서, `backend/.env`가 없는
+체크아웃에서는 그 두 자리가 죽는 대신 "측정 불가"로 표시될 뿐 값을 내지는 못합니다.
+판정 파일을 다시 만들거나 judge를 부르지는 않습니다.
 
 ---
 
@@ -153,8 +157,10 @@ uv run python -m daengs_evals.conversation_quality compare \
 계약이고 정확히 "도구가 직접 되묻지 않고 오케스트레이터가 후속 질문을 담당한다"는 원칙을
 구현합니다(`contracts.md` §서문). 그런데 오늘 `CLARIFY`는 **배타적**입니다 —
 `aggregate.py:83`이 `route_plan.clarify is not None`이면 `results=[]`로 즉시 돌아가고,
-`RoutePlan.clarify_is_exclusive`(`contracts.py:302`, `graph.py:143`)가 `clarify`와
-`requests`/`handoffs`의 동시 존재를 아예 막습니다. 지금 이 값을 채우는 유일한 자리는
+`RoutePlan.clarify_is_exclusive`(`contracts.py:302`)가 `clarify`와 `requests`/`handoffs`의
+동시 존재를 아예 막습니다 — `graph.py:143`(`_validate_route_plan`)은 같은 규칙을 그래프
+쪽에서 한 번 더 거는 별도의 중복 검사이지, 같은 검증기가 아닙니다. 지금 이 값을 채우는
+유일한 자리는
 `planner.py`의 규칙 기반 좌표 누락 검사(`_clarify_question`)이고, General 어댑터나
 세만틱 라우터는 채우지 않습니다.
 

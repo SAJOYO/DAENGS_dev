@@ -82,6 +82,7 @@ from daengs_backend.models.territory import (
     TerritoryAttempt,
     VerifiedVisit,
 )
+from daengs_backend.models.territory_bookmark import TerritoryBookmark
 from daengs_backend.models.territory_claim import (
     TerritoryClaim,
     TerritoryClaimPhoto,
@@ -173,6 +174,7 @@ __all__ = [
     "RequestMetric",
     "ScreeningRecord",
     "TerritoryAttempt",
+    "TerritoryBookmark",
     "TerritoryClaim",
     "TerritoryClaimPhoto",
     "TerritoryClaimSession",

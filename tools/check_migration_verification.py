@@ -239,6 +239,25 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-10', 'territory_bookmarks', APP_USERS_WITH_STATUS,
+         'territory_bookmarks', [
+            'ALTER TABLE territory_bookmarks DROP COLUMN created_at',
+            'ALTER TABLE territory_bookmarks ALTER COLUMN site_id TYPE varchar(120)',
+            'ALTER TABLE territory_bookmarks ALTER COLUMN created_at DROP NOT NULL',
+            'ALTER TABLE territory_bookmarks ALTER COLUMN created_at DROP DEFAULT',
+            'ALTER TABLE territory_bookmarks DROP CONSTRAINT territory_bookmarks_pkey',
+            'ALTER TABLE territory_bookmarks DROP CONSTRAINT territory_bookmarks_app_user_id_fkey',
+            'ALTER TABLE territory_bookmarks DROP CONSTRAINT territory_bookmarks_app_user_id_fkey;'
+            ' ALTER TABLE territory_bookmarks ADD FOREIGN KEY (app_user_id) REFERENCES app_users(id)',
+            'ALTER TABLE territory_bookmarks DROP CONSTRAINT territory_bookmarks_site_id_check',
+            'ALTER TABLE territory_bookmarks DROP CONSTRAINT territory_bookmarks_site_id_check;'
+            " ALTER TABLE territory_bookmarks ADD CHECK (site_id <> '')",
+            'DROP INDEX territory_bookmarks_site_idx',
+            'DROP TRIGGER territory_bookmark_owner_cleanup ON app_users',
+            'ALTER TABLE app_users DISABLE TRIGGER territory_bookmark_owner_cleanup',
+            'CREATE OR REPLACE FUNCTION territory_bookmark_owner_cleanup() RETURNS trigger'
+            ' LANGUAGE plpgsql AS $f$ BEGIN RETURN NEW; END $f$',
+         ]),
         ('2026-09-09', 'documents_hnsw', DOCUMENTS_WITH_EMBEDDING, 'documents', [
             # ⓐ 인덱스가 아예 없다 — 전수 스캔으로 돌아간다. **결과는 맞고 느리기만 하다.**
             'DROP INDEX idx_documents_embedding',
@@ -485,7 +504,9 @@ CHECKS = (
          + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok'),
          'gait_records', [
             'ALTER TABLE gait_records DROP COLUMN actor_app_user_id',
-            'ALTER TABLE gait_records ALTER COLUMN actor_app_user_id TYPE text',
+            # Drop the UUID FK first so the mutation reaches the verifier.
+            'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey;'
+            ' ALTER TABLE gait_records ALTER COLUMN actor_app_user_id TYPE text',
             'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey',
             'ALTER TABLE gait_records DROP CONSTRAINT gait_records_actor_app_user_id_fkey;'
             ' ALTER TABLE gait_records ADD CONSTRAINT gait_records_actor_app_user_id_fkey'

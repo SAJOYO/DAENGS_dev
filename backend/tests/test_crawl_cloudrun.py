@@ -201,7 +201,8 @@ async def _no_runs(_session):
 
 
 async def _zero_running(_session):
-    return 0
+    """`(도는 중, 죽어 남은 것)` — 둘 다 0 (#393). 예전에는 합 하나였다."""
+    return 0, 0
 
 
 async def test_상태_페이지는_cloudrun_워커_이름을_잡_이름으로_보여준다(monkeypatch):
@@ -209,7 +210,7 @@ async def test_상태_페이지는_cloudrun_워커_이름을_잡_이름으로_�
     monkeypatch.setattr(settings, "crawl_backend", "cloudrun")
     monkeypatch.setattr(settings, "gcp_project", "p")
     monkeypatch.setattr(crawl_service, "latest", _no_runs)
-    monkeypatch.setattr(crawl_service, "running_count", _zero_running)
+    monkeypatch.setattr(crawl_service, "running_split", _zero_running)
     monkeypatch.setattr(crawl_service, "crawl_workers",
                         lambda *a, **k: ["corpus-refresh@asia-northeast3"])
 

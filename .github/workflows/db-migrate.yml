@@ -36,6 +36,11 @@ name: DB 마이그레이션 적용
 on:
   workflow_dispatch:
     inputs:
+      inspect_walk:
+        description: "Read-only Walk runtime inventory; ignores migration inputs"
+        required: false
+        default: false
+        type: boolean
       file:
         description: "db/migrations/ 안의 파일 이름 (예: 2026-09-04_pet_photo.sql)"
         required: true
@@ -63,7 +68,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  inspect_walk:
+    if: ${{ inputs.inspect_walk }}
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Read inspection tool in an isolated checkout
+        uses: actions/checkout@v5
+        with:
+          path: _walk-runtime-inspect
+          clean: false
+      - name: Inspect running services and schema
+        shell: powershell
+        run: |
+          $names = @(docker ps --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'docker inventory failed' }
+          Write-Host ('Running containers: ' + ($names -join ', '))
+          if ('daengs-backend' -notin $names) { throw 'backend is not running' }
+          $script = Join-Path $env:GITHUB_WORKSPACE '_walk-runtime-inspect\tools\inspect_walk_runtime.py'
+          $target = '/tmp/walk-runtime-' + $env:GITHUB_RUN_ID + '.py'
+          try {
+            docker cp $script ('daengs-backend:' + $target)
+            if ($LASTEXITCODE -ne 0) { throw 'inspection tool copy failed' }
+            docker exec -w /app daengs-backend uv run --no-sync python $target
+            if ($LASTEXITCODE -ne 0) { throw 'runtime inventory failed' }
+          } finally {
+            docker exec daengs-backend rm -f $target
+          }
+
   migrate:
+    if: ${{ !inputs.inspect_walk }}
     name: ${{ inputs.file }} 적용
     runs-on: [self-hosted, Windows, X64]
     defaults:

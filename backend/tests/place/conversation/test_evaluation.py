@@ -8,7 +8,6 @@ import pytest
 from daengs_evals.place_conversation.checks import parking_mode
 from daengs_evals.place_conversation.experiments import (
     PendingProposal,
-    PolicyGemini,
     compile_replacement_branches,
 )
 from daengs_evals.place_conversation.fixtures import FixtureSearcher, initial_state
@@ -16,6 +15,7 @@ from daengs_evals.place_conversation.provider import ObservedGemini
 from daengs_evals.place_conversation.report import summarize
 from daengs_evals.place_conversation.runner import DATA, read_cases, run_case
 from daengs_place.place.conversation.contract import PrepareRequest, TurnPlan
+from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.service import ConversationService, snapshot_hits
 from daengs_place.place.tools.changes import apply_changes
 
@@ -153,22 +153,21 @@ async def test_provider_failure_marks_dependent_turns_not_run():
     assert [r["status"] for r in records] == ["blocked", "not_run", "not_run"]
 
 
-async def test_pending_clarification_baseline_drops_original_query():
-    # A characterization for research: passing this is evidence of a gap, not desired behavior.
+async def test_clarification_retains_original_query_without_applying_changes():
     case, fixtures = data("PC-E08")
     searcher = FixtureSearcher(case["setup"], fixtures)
     state = await initial_state(case["setup"], searcher)
 
     class Clarify:
         async def plan(self, request):
-            return TurnPlan(goal="clarify", question="확인할 수 없는 조건을 빼고 찾을까요?")
+            return Interpretation(goal="clarify", unresolved="ambiguous")
 
     prepared = await ConversationService(Clarify(), searcher=searcher).prepare(
         None, PrepareRequest(mode="chat", query=case["steps"][0]["input"], previous=state)
     )
-    assert prepared.state.history == ()
+    assert prepared.state.history[-1].query == case["steps"][0]["input"]
     assert parking_mode(prepared.state.filters) == "none"
-    assert case["steps"][0]["input"] not in prepared.state.model_dump_json()
+    assert case["steps"][0]["input"] in prepared.state.model_dump_json()
 
 
 def test_replacement_compiler_reserves_existing_ids_and_rejects_incremental_ids():
@@ -191,24 +190,14 @@ async def test_question_gate_blocks_changes_and_retains_original_until_consent()
         arguments = (
             {
                 "goal": "show",
-                "question": "확인 가능한 조건으로 찾아볼까요?",
-                "changes": {"candidate_kinds": ["cafe"]},
-            }
-            if len(requests) == 1
-            else {
-                "goal": "show",
+                "unsupported": ["quiet"],
                 "changes": {
-                    "candidate_kinds": ["cafe"],
-                    "upsert_all": [
-                        {
-                            "id": "parking",
-                            "capability": "operations.parking",
-                            "op": "eq",
-                            "value": True,
-                        }
-                    ],
+                    "kinds": {"operation": "set", "values": ["cafe"]},
+                    "parking": "required_true",
                 },
             }
+            if len(requests) == 1
+            else {"decision": "accept"}
         )
         return httpx.Response(
             200,
@@ -217,26 +206,25 @@ async def test_question_gate_blocks_changes_and_retains_original_until_consent()
                 "steps": [
                     {
                         "type": "function_call",
-                        "name": "propose_facility_turn",
+                        "name": payload["tools"][0]["name"],
                         "arguments": arguments,
                     }
                 ],
             },
         )
 
-    provider = PolicyGemini(
-        "key",
-        "fake",
-        question_gate=True,
-        pending_context=True,
-        transport=httpx.MockTransport(response),
-    )
+    provider = ObservedGemini("key", "fake", transport=httpx.MockTransport(response))
     records = [r async for r in run_case(case, fixtures, provider, 1)]
     assert records[0]["prepared"]["receipt"]["execution"] == "not_run"
     assert records[0]["search_calls"] == 0
-    assert requests[1]["pending_request"]["original_query"] == case["steps"][0]["input"]
+    assert requests[1]["original_query"] == case["steps"][0]["input"]
     assert records[1]["prepared"]["receipt"]["execution"] == "searched"
-    assert provider.pending is None
+    assert records[1]["prepared"]["state"]["pending_proposal"] is None
+    assert (
+        records[1]["prepared"]["state"]["filters"]
+        == records[0]["prepared"]["state"]["pending_proposal"]["candidate"]
+    )
+    assert len(provider.plans) == 1
 
 
 async def test_pending_proposal_applies_exact_offered_scope_and_rejects_stale_or_changed_decision():

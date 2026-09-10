@@ -6,7 +6,7 @@ import json
 from daengs_evals.place_conversation.fixtures import FixtureSearcher
 from daengs_evals.place_conversation.runner import DATA, read_cases
 from daengs_place.api import conversation_internal
-from daengs_place.place.conversation.contract import TurnPlan
+from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from tests.place.api import test_conversation as support
 from tests.place.api.test_conversation import (
     answer_body,
@@ -20,16 +20,7 @@ harness = support.harness
 ENDPOINT = "/app/places/conversation"
 PARKING_PLAN = TurnPlan(
     goal="show",
-    changes={
-        "upsert_all": [
-            {
-                "id": "parking",
-                "capability": "operations.parking",
-                "op": "eq",
-                "value": True,
-            }
-        ]
-    },
+    changes={"parking": "required_true"},
 )
 
 
@@ -86,7 +77,7 @@ async def test_pc_r01_manual_none_wins_over_late_parking(harness, monkeypatch, r
 
 
 async def test_pc_r02_failed_answer_preserves_commit(harness, monkeypatch, record_property):
-    client, _, searcher, _, _, _ = harness
+    client, _, searcher, _, _, app = harness
     initial = await start(harness, "PC-R02")
 
     class BrokenAnswer:
@@ -98,6 +89,17 @@ async def test_pc_r02_failed_answer_preserves_commit(harness, monkeypatch, recor
 
     monkeypatch.setattr(conversation_internal, "provider", lambda: BrokenAnswer())
     committed = (await client.post(ENDPOINT, json=chat_body(initial, "하나 골라줘"))).json()
+    service = app.dependency_overrides[support.get_facility_conversation_service]()
+    exchange = service.exchange
+
+    async def broken_exchange(step, payload):
+        if step == "answer":
+            from daengs_backend.services.facility_discovery import FacilityDiscoveryError
+
+            raise FacilityDiscoveryError("facility_timeout")
+        return await exchange(step, payload)
+
+    monkeypatch.setattr(service, "exchange", broken_exchange)
     calls = len(searcher.calls)
     answered = await client.post(ENDPOINT + "/answer", json=answer_body(committed))
     assert answered.status_code == 200

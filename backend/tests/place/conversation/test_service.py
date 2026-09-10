@@ -7,8 +7,8 @@ from daengs_place.place.conversation.contract import (
     AnswerDraft,
     AnswerRequest,
     PrepareRequest,
-    TurnPlan,
 )
+from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.conversation.service import ConversationService, snapshot_hits
 from tests.place.support.conversation import Planner, Searcher, manual, place
 
@@ -49,11 +49,7 @@ async def test_changed_filter_does_not_refilter_only_cached_top_twenty():
     assert len(snapshot_hits(initial.state.snapshot)) == 20
     planner.next = TurnPlan(
         goal="show",
-        changes={
-            "upsert_all": [
-                {"id": "parking", "capability": "operations.parking", "op": "eq", "value": True}
-            ]
-        },
+        changes={"parking": "required_true"},
     )
     filtered = await service.prepare(
         None, PrepareRequest(mode="chat", query="주차되는 곳만", previous=initial.state)
@@ -100,7 +96,9 @@ async def test_manual_and_ai_share_filters_edit_only_marks_old_results_and_failu
     assert edited.receipt.execution == "not_run"
     assert not edited.receipt.result_matches_filters
     assert len(searcher.calls) == 1
-    planner.next = TurnPlan(goal="show", changes={"candidate_kinds": ["cafe"]})
+    planner.next = TurnPlan(
+        goal="show", changes={"kinds": {"operation": "set", "values": ["cafe"]}}
+    )
     searcher.error = True
     failed = await service.prepare(
         None, PrepareRequest(mode="chat", query="카페로", previous=edited.state)

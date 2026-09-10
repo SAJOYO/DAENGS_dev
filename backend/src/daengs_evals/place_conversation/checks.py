@@ -42,7 +42,7 @@ def assess(case, step, before, prepared, answer):
             }
         )
 
-    for key in ("goal", "execution", "code", "returned_count", "filters_changed"):
+    for key in ("action", "goal", "execution", "code", "returned_count", "filters_changed"):
         if key in expected:
             check(key, getattr(receipt, key), expected[key])
     for key in ("spatial", "dogs", "name_query", "unknown_policy", "result_policy"):
@@ -76,6 +76,12 @@ def assess(case, step, before, prepared, answer):
             any(p.capability == PARKING for p in after.filters.preferences),
             False,
         )
+    if before.pending_proposal and receipt.action == "execute" and after.pending_proposal is None:
+        check("accepted.saved_candidate", after.filters == before.pending_proposal.candidate, True)
+    if receipt.action == "await_confirmation":
+        check("pending.no_mutation", after.filters == before.filters, True)
+        check("pending.no_execution", receipt.execution, "not_run")
+        check("pending.saved", after.pending_proposal is not None, True)
     hits = snapshot_hits(after.snapshot)
     refs = [h.place.key.ref for h in hits]
     if "expected_refs" in expected:

@@ -70,6 +70,11 @@ class FakeAppUser:
     room_name: str | None = None
     #: 사람 이름. None 이면 아직 발급 전입니다 (서버가 로그인할 때 채웁니다).
     nickname: str | None = None
+    #: OCR 학습 이용 동의 시각. None 이면 미동의입니다 (기본값).
+    ocr_consent_at: datetime | None = None
+    #: 어느 판에 동의했는지. CHECK `app_users_ocr_consent_pair` 대로 위 칸과
+    #: 항상 짝으로 채워지거나 둘 다 None 입니다.
+    ocr_consent_version: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )

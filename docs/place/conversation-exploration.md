@@ -17,7 +17,7 @@ PR #430은 #425 문맥 대조 이후 합의한 첫 구현 단위다. 현재 필�
 - A 제외와 다른 곳 표시는 current, A 제외와 **더/다음 후보** 표시는 next다.
   다음 후보의 중복 제거를 모든 일반 검색에 적용하지 않는다.
   제외·복구와 next를 함께 제안한 경우 서버가 추가 전진 표현(더/다음 등)을 확인한다.
-  그 표현이 없으면 current로 남은 목록을 조회한다. 상호명 안의 표현은 전진 지시에서 제외한다.
+  그 표현이 없으면 current로 남은 목록을 조회한다. 이름으로 지칭한 대상의 상호명은 전진 지시에서 제외한다.
 - 후보의 자료상 일치/불일치/정보 부족은 기존 3값 판정을 사용한다. 이 PR에서 정보 이의나
   미확인 후보를 새로 일치로 취급하지 않는다.
 
@@ -86,7 +86,33 @@ uv run --no-sync python -m daengs_evals.place_conversation.runner --live --cases
 next로 해석해 이미 표시한 B/C도 건너뛰는 실패가 3회 재현됐다.
 [두 번째 실행 기록](../../backend/evals/place_conversation/runs/20260910T100819Z-5634f9f-e99817be7d/reviewed-summary.json)을 보존했다.
 이 관측에 따라 제외·복구와 추가 전진을 결합하는 위 서버 규칙을 추가했다.
-최종 재실행 결과는 완료 후 기록한다.
+최종 코드(adcf019)의 3회 반복에서는 완료된 채팅 37턴의 상태·대상 기준이 모두 맞았다.
+그러나 HTTP 429가 10회 발생했고, 이어지는 7턴은 미실행했다.
+[원본 실행](../../backend/evals/place_conversation/runs/20260910T101455Z-adcf019-de94bda7ca/reviewed-summary.json)의
+오류를 성공률 분모에서 조용히 빼거나 통과로 올리지 않는다. 실패한 대화 묶음 전체를
+15초 간격으로 한 차례 다시 실행한다. 재시도 결과는 별도 run으로 보존한다.
+
+### 로컬 검증
+
+2026-09-10, Python 3.12/uv 환경에서 변경 경계의 타겟 검사 164개를 통과했다(중복 실행 제외).
+각 실행은 아래 파일로 한정했고 skip은 없었다. 전체 저장소 pytest를 실행한 결과가 아니다.
+
+| 경계 | 실행 파일 (backend/tests/ 기준) | 결과 |
+| --- | --- | --- |
+| 최종 탐색·검증·HTTP | place/conversation/{test_exploration_grounding,test_exploration,test_service,test_policy}.py, place/api/test_conversation.py | 69 passed |
+| 기존 평가·확인 대기·필터 계약 | place/conversation/{test_evaluation,test_correction_evaluation,test_context_ablation,test_context_followup}.py, place/api/test_conversation_pending.py, place/filters/test_contract.py | 72 passed |
+| 실제 SQL | place/integration/{test_exploration_search,test_condition_filters}.py | 23 passed |
+
+모든 pytest 명령은 `uv run --no-sync pytest -q -rs <명시 파일들>` 형태다.
+SQL은 별도 임시 PostGIS 18-3.6을 loopback 55435에 띄우고 기존 Place Alembic head를 적용해 실행했다.
+시설/의료의 LIMIT 이전 제외, 원천 키 구분, 20개 밖 후보, 소진, unknown lookahead를 확인했다.
+사용한 컨테이너는 종료·제거했다. 운영 DB나 서버 compose를 실행하지 않았다.
+HTTP 경합은 실제 ASGI 경로와 메모리 세션 더블을 사용했다. 실제 Redis 원자성·앱 화면 검증은 아니다.
+
+변경한 Place/eval 코드와 테스트의 ruff, git diff --check 및 자격 증명 유입 검사는 통과했다.
+`uv run --no-sync check`는 마이그레이션 이름·짝 검사 후 **Windows 바이트 하네스에서 실패**했다.
+Windows PowerShell 실행 정책이 임시 validate.ps1을 거부했으며 기기 정책을 바꾸거나 우회하지 않았다.
+전체 pytest·앱 빌드·compose/nginx 검사는 이번 범위에서 실행하지 않았다. 머지 전 전체 게이트 통과로 표현하지 않는다.
 
 ## 후속 범위
 

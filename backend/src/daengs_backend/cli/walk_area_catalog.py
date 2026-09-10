@@ -17,12 +17,12 @@ async def main():
     parser.add_argument("--lng", type=float, required=True)
     parser.add_argument("--radius", type=int, default=1200)
     args = parser.parse_args()
-    key = settings.walk_public_data_key.get_secret_value()
+    key = settings.walk_public_data_key.get_secret_value().strip()
     path = getattr(settings, f"walk_{args.kind}_catalog_path")
-    if not key or not path:
-        raise SystemExit(
-            "Set WALK_PUBLIC_DATA_KEY and the selected WALK_*_CATALOG_PATH (DAENGS_ prefix)"
-        )
+    if not path:
+        raise SystemExit(f"Set DAENGS_WALK_{args.kind.upper()}_CATALOG_PATH")
+    if args.kind == "commerce" and not key:
+        raise SystemExit("Set DAENGS_WALK_PUBLIC_DATA_KEY")
     source = walk_commerce_catalog if args.kind == "commerce" else walk_river_catalog
     try:
         async with httpx.AsyncHTTPTransport() as transport:
@@ -36,6 +36,10 @@ async def main():
     print(
         f"kind={args.kind} rows={len(result['rows'])} rejected={result['rejected_rows']} pages={len(result['pages'])}"
     )
+    if args.kind == "river":
+        print(
+            f"standard_status={result['standard']['status']} reason={result['standard']['reason']}"
+        )
 
 
 if __name__ == "__main__":

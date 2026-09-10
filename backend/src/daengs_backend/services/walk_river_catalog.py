@@ -26,10 +26,35 @@ def standard_row(raw):
     }
 
 
+async def standard_metadata(transport, key):
+    """Optional name metadata cannot prevent publishing independently valid EGIS shapes."""
+    try:
+        if not key.strip():
+            raise PublicSourceError("provider_not_configured")
+        raw, receipts = await catalog.pages(transport, STANDARD, key, {})
+        rows, rejected = catalog.unique_rows(raw, standard_row)
+        return {
+            "rows": rows,
+            "pages": receipts,
+            "rejected_rows": rejected,
+            "status": "partial" if rejected else "known" if rows else "empty",
+            "reason": "invalid_standard_rows" if rejected else None,
+        }
+    except PublicSourceError as exc:
+        reason = exc.reason
+    except (ValueError, KeyError, TypeError, OverflowError):
+        reason = "invalid_standard_response"
+    return {
+        "rows": [],
+        "pages": [],
+        "rejected_rows": 0,
+        "status": "unavailable",
+        "reason": reason,
+    }
+
+
 async def refresh(transport, key, path, point, radius):
     region = catalog.area(point, radius)
-    raw, receipts = await catalog.pages(transport, STANDARD, key, {})
-    standards, rejected_standard = catalog.unique_rows(raw, standard_row)
     x, y = catalog.xy(point)
     clip = box(x - radius, y - radius, x + radius, y + radius)
     bounds = TO_WEB.transform_bounds(*clip.bounds, densify_pts=21)
@@ -95,6 +120,7 @@ async def refresh(transport, key, path, point, radius):
         }
 
     rows, rejected = catalog.unique_rows(features, feature_row)
+    standard = await standard_metadata(transport, key)
     return catalog.publish(
         path,
         "river",
@@ -105,7 +131,7 @@ async def refresh(transport, key, path, point, radius):
         extra={
             "geometry_crs": "EPSG:5179",
             "geometry_reference_date": None,
-            "standard": {"rows": standards, "pages": receipts, "rejected_rows": rejected_standard},
+            "standard": standard,
         },
     )
 
@@ -115,6 +141,11 @@ def nearby(value, point):
         raise PublicSourceError("outside_catalog_coverage")
     if value.get("geometry_crs") != "EPSG:5179":
         raise ValueError("invalid river CRS")
+    standard = value["standard"]
+    # Old v1 catalogs did not carry a separate metadata status.
+    standard_status = standard.get("status") or (
+        "partial" if standard["rejected_rows"] else "known" if standard["rows"] else "empty"
+    )
     anchor = Point(*catalog.xy(point))
     found = []
     for row in value["rows"]:
@@ -131,7 +162,7 @@ def nearby(value, point):
         nearest = nearest_points(anchor, geometry)[1]
         lng, lat = catalog.REVERSE.transform(nearest.x, nearest.y)
         # A matching name is not an entity join; never substitute standard endpoints for shape.
-        matches = [r for r in value["standard"]["rows"] if r["name"] == row["name"]]
+        matches = [r for r in standard["rows"] if r["name"] == row["name"]]
         found.append(
             {
                 "id": row["id"],
@@ -157,6 +188,8 @@ def nearby(value, point):
         "coverage": "egis_catalog_geometry",
         "complete": value["rejected_rows"] == 0 and len(found) <= 3,
         "standard_coverage": "name_lookup_not_identity_join",
-        "standard_rejected_rows": value["standard"]["rejected_rows"],
+        "standard_rejected_rows": standard["rejected_rows"],
+        "standard_status": standard_status,
+        "standard_reason": standard.get("reason"),
         "relation": "geometry_distance_not_bank_path_or_visit",
     }

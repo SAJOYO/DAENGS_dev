@@ -117,6 +117,7 @@ async def test_catalog_to_stamps_and_writer_preserves_records(tmp_path, monkeypa
     assert [r.status for r in results] == ["known", "known"]
     assert results[1].payload["items"][0]["distance_m"] == 50
     assert results[1].payload["items"][0]["standard_name_matches"] == []
+    assert results[1].payload["standard_status"] == "known"
     source = with_backgrounds(core, backgrounds=[saved(core, r) for r in results])
     prepared = prepare_stamps(source, StampPolicy(target_scene_count=3))
     request = prepare_writing(source, prepared)
@@ -296,3 +297,184 @@ async def test_malformed_api_page_is_a_safe_failure(tmp_path):
     with pytest.raises(PublicSourceError, match="invalid_public_page"):
         await commerce.refresh(tr, "fake-key", tmp_path / "commerce.json", POINT, 1200)
     assert not (tmp_path / "commerce.json").exists()
+
+
+@pytest.mark.parametrize("failure", ["reordered", "overlap", "changed_entity"])
+async def test_cross_page_shop_overlap_preserves_catalog(tmp_path, failure):
+    path = tmp_path / "commerce.json"
+    await commerce.refresh(transport(), "fake-key", path, POINT, 1200)
+    previous = path.read_bytes()
+    first = [shop(str(i)) for i in range(1000)]
+    second = (
+        list(reversed(first))
+        if failure == "reordered"
+        else [shop(str(i)) for i in range(999, 1999)]
+    )
+    if failure == "changed_entity":
+        second[0] = shop(" 999 ", lon=127.0001)
+
+    def handle(request):
+        rows = first if request.url.params["pageNo"] == "1" else second
+        return httpx.Response(200, json=page(rows, 2000))
+
+    with pytest.raises(PublicSourceError, match="catalog_changed_or_incomplete"):
+        await commerce.refresh(httpx.MockTransport(handle), "fake-key", path, POINT, 1200)
+    assert path.read_bytes() == previous
+
+
+async def test_disjoint_shop_pages_allow_same_page_duplicates(tmp_path):
+    def handle(request):
+        rows = (
+            [shop("a"), shop("a"), shop("b")]
+            if request.url.params["pageNo"] == "1"
+            else [shop("c")]
+        )
+        return httpx.Response(200, json=page(rows, 4))
+
+    value = await commerce.refresh(
+        httpx.MockTransport(handle), "fake-key", tmp_path / "commerce.json", POINT, 1200
+    )
+    result = commerce.nearby(catalog.read(tmp_path / "commerce.json", "commerce"), POINT)
+    assert len(value["pages"]) == 2
+    assert result["registered_count"] == 3 and result["complete"] is True
+
+
+@pytest.mark.parametrize("failure", ["http", "timeout", "malformed", "missing_key", "late_page"])
+async def test_standard_failure_keeps_river_geometry_usable(tmp_path, monkeypatch, failure):
+    calls = []
+
+    def handle(request):
+        if "river_info_api" not in request.url.path:
+            calls.append("egis")
+            return httpx.Response(200, json=water())
+        calls.append("standard")
+        if failure == "timeout":
+            raise httpx.ReadTimeout("secret may be echoed", request=request)
+        if failure == "late_page" and request.url.params["pageNo"] == "1":
+            return httpx.Response(
+                200,
+                json=page([{"rvrCd": "std-1", "rvrNm": "시험천", "dataCrtrYmd": "2026-01-01"}], 2),
+            )
+        return (
+            httpx.Response(503, text="secret may be echoed")
+            if failure in {"http", "late_page"}
+            else httpx.Response(200, json=[])
+        )
+
+    path = tmp_path / "river.json"
+    await river.refresh(
+        httpx.MockTransport(handle),
+        "" if failure == "missing_key" else "fake-key",
+        path,
+        POINT,
+        1200,
+    )
+    monkeypatch.setattr(settings, "walk_public_context_enabled", True)
+    monkeypatch.setattr(settings, "walk_area_context_enabled", True)
+    monkeypatch.setattr(settings, "walk_river_catalog_path", str(path))
+    result = await collect_public("space.river", POINT)
+    assert calls.count("egis") == 1
+    assert calls.count("standard") == (2 if failure == "late_page" else failure != "missing_key")
+    assert result.status == "known" and result.payload["complete"] is True
+    assert result.payload["standard_status"] == "unavailable"
+    assert (
+        result.payload["standard_reason"]
+        == {
+            "http": "http_503",
+            "timeout": "transport_error",
+            "malformed": "invalid_public_page",
+            "missing_key": "provider_not_configured",
+            "late_page": "http_503",
+        }[failure]
+    )
+    assert result.payload["items"][0]["standard_name_matches"] == []
+    core = record()
+    projection = project_background(saved(core, result), core)
+    assert len(projection.pieces) == 1 and projection.pieces[0].facts["distance_m"] == 50
+    assert "secret may be echoed" not in path.read_text(encoding="utf-8")
+
+
+async def test_reordered_standard_page_is_unavailable_not_complete(tmp_path):
+    rows = [
+        {"rvrCd": "std-1", "rvrNm": "시험천", "dataCrtrYmd": "2026-01-01"},
+        {"rvrCd": "std-2", "rvrNm": "다른천", "dataCrtrYmd": "2026-01-01"},
+    ]
+
+    def handle(request):
+        if "river_info_api" not in request.url.path:
+            return httpx.Response(200, json=water())
+        return httpx.Response(
+            200,
+            json=page(
+                rows if request.url.params["pageNo"] == "1" else list(reversed(rows)),
+                4,
+            ),
+        )
+
+    value = await river.refresh(
+        httpx.MockTransport(handle),
+        "fake-key",
+        tmp_path / "river.json",
+        POINT,
+        1200,
+    )
+    result = river.nearby(value, POINT)
+    assert result["complete"] is True and result["items"][0]["distance_m"] == 50
+    assert result["standard_status"] == "unavailable"
+    assert result["standard_reason"] == "catalog_changed_or_incomplete"
+
+
+async def test_egis_failure_preserves_previous_catalog(tmp_path):
+    path = tmp_path / "river.json"
+    await river.refresh(transport(), "fake-key", path, POINT, 1200)
+    previous, calls = path.read_bytes(), []
+
+    def handle(request):
+        calls.append(request.url.path)
+        return httpx.Response(503, text="unavailable")
+
+    with pytest.raises(PublicSourceError, match="http_503"):
+        await river.refresh(httpx.MockTransport(handle), "fake-key", path, POINT, 1200)
+    assert calls == ["/geoserver/wfs"] and path.read_bytes() == previous
+
+
+async def test_legacy_river_catalog_remains_readable(tmp_path):
+    path = tmp_path / "river.json"
+    value = await river.refresh(transport(), "fake-key", path, POINT, 1200)
+    for key in ("status", "reason"):
+        value["standard"].pop(key)
+    value.pop("sha256")
+    value["sha256"] = digest(value)
+    path.write_text(json.dumps(value), encoding="utf-8")
+    result = river.nearby(catalog.read(path, "river"), POINT)
+    assert result["standard_status"] == "known" and result["items"][0]["distance_m"] == 50
+
+
+@pytest.mark.parametrize("kind", ["commerce", "river"])
+async def test_cli_requires_key_only_for_commerce(tmp_path, monkeypatch, capsys, kind):
+    import sys
+
+    from pydantic import SecretStr
+
+    from daengs_backend.cli.walk_area_catalog import main
+
+    path, calls = tmp_path / f"{kind}.json", []
+    monkeypatch.setattr(sys, "argv", ["catalog", kind, "--lat", "37.5", "--lng", "127.0"])
+    monkeypatch.setattr(settings, "walk_public_data_key", SecretStr(""))
+    monkeypatch.setattr(settings, f"walk_{kind}_catalog_path", str(path))
+
+    def handle(request):
+        calls.append(request.url.path)
+        return httpx.Response(200, json=water())
+
+    monkeypatch.setattr(httpx, "AsyncHTTPTransport", lambda: httpx.MockTransport(handle))
+    if kind == "commerce":
+        with pytest.raises(SystemExit, match="Set DAENGS_WALK_PUBLIC_DATA_KEY"):
+            await main()
+        assert calls == [] and not path.exists()
+    else:
+        await main()
+        assert calls == ["/geoserver/wfs"] and path.exists()
+        assert (
+            "standard_status=unavailable reason=provider_not_configured" in capsys.readouterr().out
+        )

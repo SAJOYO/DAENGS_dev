@@ -49,9 +49,10 @@ def covers(catalog, point, radius):
     )
 
 
-async def pages(transport, endpoint, key, query, *, max_pages=30):
+async def pages(transport, endpoint, key, query, *, max_pages=30, identity_field=None):
     """No partial publication on a missing/repeated/changed page or exhausted budget."""
     result, hashes, total = [], [], None
+    seen_pages, seen_ids = set(), set()
     for number in range(1, max_pages + 1):
         body = await get_json(
             transport,
@@ -84,10 +85,25 @@ async def pages(transport, endpoint, key, query, *, max_pages=30):
             raise PublicSourceError("catalog_page_limit")
         if total is None:
             total = count
-        signature = digest(rows)
-        if count != total or signature in hashes or (not rows and len(result) < total):
+        # Compare a multiset so reordered repeats cannot look like a new page.
+        signature = digest(sorted(digest(row) for row in rows))
+        page_ids = set()
+        if identity_field is not None:
+            for row in rows:
+                try:
+                    page_ids.add(label(row[identity_field]))
+                except (KeyError, ValueError, TypeError):
+                    continue  # Normalization records invalid rows as incomplete coverage.
+        if (
+            count != total
+            or signature in seen_pages
+            or seen_ids & page_ids
+            or (not rows and len(result) < total)
+        ):
             raise PublicSourceError("catalog_changed_or_incomplete")
-        hashes.append(signature)
+        seen_pages.add(signature)
+        seen_ids.update(page_ids)
+        hashes.append(digest(rows))  # Preserve receipts of the actual ordered response rows.
         result.extend(rows)
         if len(result) == total:
             return result, hashes

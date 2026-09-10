@@ -38,8 +38,13 @@ flowchart LR
 페이지 수집 중 전체 건수가 달라지거나 반복/누락/상한 초과가 생기면 발행하지 않는다.
 기존 캐시는 그대로 남는다.
 
+페이지 반복은 행 순서를 무시해 검사한다. 상가 수집은 페이지 사이의 업소번호도 대조하므로,
+일부 업소만 겹치거나 같은 업소의 필드가 달라져도 발행을 중단한다. 응답 페이지 원래 순서의
+해시는 수집 영수증으로 계속 보존한다.
+
 - 상가업소번호·중분류 코드/명·좌표만 남긴다. 상호·상세 주소·연락처는 저장하지 않는다.
-- 같은 업소번호의 같은 행은 한 번만 센다. 서로 다른 행은 해당 업소번호를 제외한다.
+- 같은 페이지 안에서 같은 업소번호의 같은 행은 한 번만 센다. 서로 다른 행은 해당 업소번호를
+  제외한다. 다른 페이지에서 재등장한 업소는 페이지 수집의 완전성을 확인할 수 없어 발행하지 않는다.
 - 기록 좌표에서 125m 안의 등록 업소 수, 상위 5개 중분류 집계와 나머지 건수를 만든다.
   분류 합계가 전체 건수와 맞지 않으면 배경에 넣지 않는다.
 - `registered_business_composition`, `registration_only_not_visit_open_or_crowding`을 전달한다.
@@ -58,6 +63,12 @@ flowchart LR
 `numberMatched`/`numberReturned`/실제 개수가 일치하고 300개 미만이어야 발행한다.
 응답은 8MB로 제한하고 CRS가 3857인지 확인한다. Shapely/pyproj로 실제 형상을 5179로
 변환하고 지역 사각형으로 자른다. 유효하지 않은 형상은 수정해서 추정하지 않고 제외한다.
+
+EGIS 형상을 먼저 검증하고 표준자료를 보조 메타데이터로 조회한다. 표준자료의 HTTP 오류·
+타임아웃·잘못된 응답·키 미설정은 형상 발행을 막지 않는다. 실패한 표준자료의 일부 페이지를
+정상 자료로 남기지 않고, `standard_status=unavailable`과 키를 포함하지 않는
+`standard_reason`을 봉투에 보존한다. 성공한 경우에는 known/partial/empty를 구분한다.
+기존 상태 필드가 없는 v1 캐시도 계속 읽는다. EGIS 자체의 실패는 기존 캐시를 보존한다.
 
 기록점부터 폴리곤까지 250m 이내의 거리와 최근접점을 계산해 최대 3개를 저장한다.
 배경 투영 때 저장된 기록점·최근접점 간 거리를 다시 확인한다. 원본 폴리곤의 해시도 보존하되,
@@ -80,6 +91,8 @@ EGIS 형상의 기준일로 옮기지 않는다. 현재 형상 기준일은 미�
 - 파일 없음/만료/손상/범위 밖은 `unavailable`, 설정이나 flag가 없으면 `not_requested`다.
 - 유효한 전체 범위에서 결과가 없을 때만 `empty`다. 제외 행 또는 결과 상한이 있으면 `partial`이다.
   어떤 상태도 실제 주변에 해당 대상이 없다는 서술로 바꾸지 않는다.
+- 하천 거리의 완전성은 EGIS 형상을 기준으로 한다. 표준 이름 자료의 실패·제외 행은 별도
+  상태이며, 유효한 형상으로 계산한 거리의 known/partial 상태를 대신하지 않는다.
 - 모든 HTTP 요청은 기존 키 비노출 transport를 쓴다. 원문 응답·키는 Git에 추가하지 않는다.
 
 ## 적용 순서
@@ -109,6 +122,9 @@ DAENGS_WALK_RIVER_CATALOG_PATH=/persistent/walk-public/river.json
 uv run python -m daengs_backend.cli.walk_area_catalog commerce --lat 37.4878 --lng 127.052 --radius 1200
 uv run python -m daengs_backend.cli.walk_area_catalog river --lat 37.4878 --lng 127.052 --radius 1200
 ```
+
+상가 수집에는 공공데이터 키가 필요하다. 하천 수집은 키가 없어도 EGIS 형상을 발행하며,
+CLI 출력의 `standard_status`/`reason`으로 표준자료 미수집 상태를 확인할 수 있다.
 
 5. 캐시 읽기를 확인한 뒤 `DAENGS_WALK_AREA_CONTEXT_ENABLED=true`로 활성화한다.
    전체 context 워커 활성화 등 부모 단위의 설정도 필요하다. public/area 두 flag가 켜졌을 때만
@@ -151,6 +167,22 @@ uv run python -m daengs_backend.cli.walk_area_catalog river --lat 37.4878 --lng 
 변경 Python Ruff와 migration 이름·짝/등록 검사(41개 migration)도 통과했다.
 전체 pytest는 실행하지 않았다. Windows workflow 검사는 #387에서 확인한 실행 정책 문제가
 남아 있어 이번에 반복 실행하지 않았으며, 전체 `uv run check` 통과로 기록하지 않는다.
+
+### 2026-09-10 리뷰 수정 검증
+
+동일 1,000행의 순서만 뒤집은 두 페이지를 2,000건의 완전한 상가 자료로 발행하던 경우와,
+표준 하천 API의 503 오류가 정상 EGIS 조회까지 막던 경우를 오프라인 HTTP 응답으로 재현했다.
+수정 전 관련 7개 케이스가 실패했고, 수정 후 다음 명령에서 신규 14개를 포함한 **64개가 통과**했다.
+
+```bash
+uv run pytest -q tests/walk/context/test_walk_area_context.py tests/walk/diary/test_diary_stamps.py tests/walk/diary/test_diary_writing.py
+```
+
+검사 범위는 변경한 수집·캐시·CLI와 이를 사용하는 장면 투영·작성 경계다. 순서 변경/일부 겹침/
+필드 변경 페이지 차단, 정상 페이지 수집, 표준자료의 오류·키 미설정·후속 페이지 실패,
+EGIS 실패 시 이전 캐시 보존, 기존 v1 캐시 호환, 하천 배경 투영을 확인했다.
+변경 Python 파일의 Ruff도 통과했다. 이번 수정은 DB·앱·작성 프롬프트를 바꾸지 않으므로
+운영 DB나 실제 공공 API·Gemini 호출, 전체 pytest, 기기 테스트는 반복하지 않았다.
 
 ## 공식 원천
 

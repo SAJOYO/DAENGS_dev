@@ -34,6 +34,7 @@ async def refresh(transport, key, path, point, radius):
             "cy": point["lat"],
             "radius": radius,
         },
+        identity_field="bizesId",
     )
     rows, rejected = catalog.unique_rows(raw, shop)
     return catalog.publish(path, "commerce", region, rows, rejected=rejected, receipts=receipts)

@@ -38,6 +38,7 @@ def api(monkeypatch):
         entries=[entry()],
         photo=None,
         envelope=envelope,
+        context_jobs={},
         before_write=None,
     )
     state.entries[0].mutation_id = uuid.uuid4()
@@ -63,9 +64,11 @@ def api(monkeypatch):
         reader.contexts,
         "current",
         AsyncMock(
-            side_effect=lambda *a, **kw: (
-                [],
-                {"space.facility": SimpleNamespace(envelope=state.envelope)},
+            side_effect=lambda _session, row, **kw: (
+                state.context_jobs.get(row.id, []),
+                {}
+                if state.envelope is None
+                else {"space.facility": SimpleNamespace(envelope=state.envelope)},
             )
         ),
     )

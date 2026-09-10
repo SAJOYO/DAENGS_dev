@@ -1,0 +1,63 @@
+{
+  "observed_turns": 18,
+  "reviewed_turns": 4,
+  "turn_statuses": {
+    "blocked": 6,
+    "not_run": 8,
+    "pass": 4
+  },
+  "case_repetitions": [
+    {
+      "case_id": "EX01",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX02",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX05",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "EX07",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX08",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX09",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "EX10",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    }
+  ],
+  "provider_calls": 7,
+  "provider_errors": 6,
+  "provider_latency_median_ms": 744,
+  "reported_usage": {
+    "total_input_tokens": 3074,
+    "total_output_tokens": 29,
+    "total_tokens": 3103
+  },
+  "usage_missing_calls": 6,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

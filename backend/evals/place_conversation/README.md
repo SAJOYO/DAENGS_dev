@@ -94,6 +94,8 @@ JUnit의 scenario_id/trace 속성에 경합별 확정·복구 상태를 남긴�
 이전 production-policy-v1 및 문맥 대조는 각 run metadata의 code_sha 체크아웃에서 재현한다.
 탐색 평가는 `--cases evals/place_conversation/exploration.v1.jsonl --fixtures evals/place_conversation/fixtures.policy.v1.json`을 사용한다.
 범위와 결과는 [탐색 정책](../../../docs/place/conversation-exploration.md)에 기록한다.
+이번 구현의 실패·수정·429 재실행 대응은 [비교 기록](exploration-comparison.v1.json)에 있다.
+원본 관측과 별도 의미 평가는 각 run에 보존하며, 중간에 끊긴 대화의 성공한 앞부분을 완주로 집계하지 않는다.
 순차 `manual` 이벤트는 production prepare에 실제 PlaceSearchRequest를 전달하며 모델을 호출하지 않는다.
 관측의 event는 원래 입력, result_delta는 직전 목록 대비 추가/제거 ref다. 동일 ref가 다른 source에
 존재하는 fixture에서는 이 지표를 사용하지 않는다. 이번 fixture는 ref가 모두 유일하다.

@@ -81,8 +81,7 @@ async def test_upgrade_holding_worker_and_public_summary(database, actors, clock
             )
         )
         assert [(d.base_points, d.takeover_points) for d in details] == [(20, 0), (80, 0)]
-    with pytest.raises(base.svc.ClaimConflict, match="already_certified"):
-        await admit(database, a, item[2])  # 72h renewal is a subsequent implementation.
+    await admit(database, a, item[2])  # A new onsite photo can renew the verified lease.
 
 
 @pytest.mark.parametrize("old_verified", [False, True])

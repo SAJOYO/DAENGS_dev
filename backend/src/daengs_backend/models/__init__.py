@@ -85,6 +85,7 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSession,
     TerritoryClaimSite,
     TerritoryOccupancy,
+    TerritoryRenewal,
 )
 from daengs_backend.models.walk import (
     WALK_ANALYSIS_STATES,
@@ -163,6 +164,7 @@ __all__ = [
     "TerritoryClaimSession",
     "TerritoryClaimSite",
     "TerritoryOccupancy",
+    "TerritoryRenewal",
     "VerifiedVisit",
     "Walk",
     "WalkAnalysis",

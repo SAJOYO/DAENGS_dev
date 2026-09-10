@@ -66,6 +66,32 @@ def test_unreadable_no_amount_is_valid_shape_with_no_total():
     assert extraction.items == []
 
 
+def test_unreadable_no_amount_may_carry_everything_but_total():
+    """`no_amount` 는 "읽었지만 합계가 없다" 다 — `blurry`/`not_a_receipt` 와 달리
+    나머지 필드는 채워도 된다. 이 규칙 반전이 이번 변경의 핵심이다 (docs §2, 2026-09-10)."""
+    extraction = ReceiptExtraction(
+        status="unreadable",
+        unreadable_reason="no_amount",
+        visited_on="2019-05-17",
+        hospital_name="압구정동물병원",
+        hospital_address="서울 강남구 압구정로 224",
+        hospital_phone="02-547-7588",
+        items=[{"name": "진료비,진찰료", "amount_krw": 5500}],
+        suggested_reason_code="skin",
+        is_emergency=False,
+    )
+    assert extraction.total_krw is None
+    assert extraction.hospital_phone == "02-547-7588"
+    assert len(extraction.items) == 1
+
+
+def test_unreadable_no_amount_still_rejects_a_total():
+    """`no_amount` 인데 `total_krw` 가 있으면 모순이다 — 합계를 읽었으면 그 사유가 아니다."""
+    with pytest.raises(ValidationError):
+        ReceiptExtraction(status="unreadable", unreadable_reason="no_amount", total_krw=1000)
+
+
+@pytest.mark.parametrize("reason", ["blurry", "not_a_receipt"])
 @pytest.mark.parametrize(
     "extra",
     [
@@ -76,10 +102,11 @@ def test_unreadable_no_amount_is_valid_shape_with_no_total():
         {"is_emergency": True},
     ],
 )
-def test_unreadable_rejects_every_other_field(extra):
-    """이전 검증은 total_krw · items · hospital_name 만 봤다 — 나머지 칸도 비어야 한다."""
+def test_unreadable_rejects_every_other_field(reason, extra):
+    """`blurry`·`not_a_receipt` 는 여전히 나머지 칸도 비어야 한다 — `no_amount` 만 풀렸다는
+    회귀를 여기서 잡는다 (이번 변경의 회귀 위험 지점)."""
     with pytest.raises(ValidationError):
-        ReceiptExtraction(status="unreadable", unreadable_reason="blurry", **extra)
+        ReceiptExtraction(status="unreadable", unreadable_reason=reason, **extra)
 
 
 def test_phone_rejects_card_shaped_value():
@@ -293,19 +320,21 @@ _REAL_OK_WITHOUT_TOTAL = {
 
 def test_validate_extraction_normalizes_ok_without_total_to_no_amount():
     """`status="ok"` 인데 `total_krw` 가 없으면(누락이든 null 이든) `unreadable`/
-    `no_amount` 로 바뀌고, 나머지 필드는 모두 사라진다 — `shape_matches_status` 의
-    "unreadable 은 나머지를 안 가진다" 규칙을 그대로 만족해야 한다."""
+    `no_amount` 로 바뀐다 — `total_krw` 만 지워지고, 모델이 이미 읽은 나머지 필드는
+    **살아남는다**. 이것이 `ee18dd5` 의 전신 동작(모두 삭제)을 뒤집는 지점이다 —
+    총액 줄만 잘린 사진에서 이미 읽힌 병원·날짜·항목까지 버릴 이유가 없다
+    (docs §2, 2026-09-10 실측)."""
     extraction = vet_receipt._validate_extraction(_REAL_OK_WITHOUT_TOTAL)
     assert extraction is not None
     assert extraction.status == "unreadable"
     assert extraction.unreadable_reason == "no_amount"
     assert extraction.total_krw is None
-    assert extraction.items == []
-    assert extraction.hospital_name is None
-    assert extraction.hospital_address is None
-    assert extraction.hospital_phone is None
-    assert extraction.visited_on is None
-    assert extraction.suggested_reason_code is None
+    assert extraction.hospital_phone == "02-547-7588"
+    assert len(extraction.items) == 3
+    assert extraction.hospital_name == "압구정동물병원"
+    assert extraction.hospital_address == "서울 강남구 압구정로 224"
+    assert str(extraction.visited_on) == "2019-05-17"
+    assert extraction.suggested_reason_code == "skin"
     assert extraction.is_emergency is False
 
 
@@ -341,3 +370,6 @@ async def test_extract_normalizes_real_ok_without_total_instead_of_raising(monke
     result = await vet_receipt.extract(b"bytes", "image/jpeg")
     assert result.status == "unreadable"
     assert result.unreadable_reason == "no_amount"
+    assert result.total_krw is None
+    assert result.hospital_phone == "02-547-7588"
+    assert len(result.items) == 3

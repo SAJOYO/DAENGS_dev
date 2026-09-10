@@ -103,6 +103,13 @@ class ReceiptExtraction(BaseModel):
             return self
         if self.unreadable_reason is None:
             raise ValueError("an unreadable extraction needs a reason")
+        if self.unreadable_reason == "no_amount":
+            # `no_amount` 는 "읽었지만 합계가 없다" 다 — `blurry`/`not_a_receipt` 와 다르다.
+            # 나머지 칸은 남아도 되지만 `total_krw` 만은 안 된다: 합계가 있으면 읽었다는
+            # 뜻이라 애초에 이 사유가 아니어야 한다 (docs/vet-visits.md §2, 2026-09-10 실측).
+            if self.total_krw is not None:
+                raise ValueError("no_amount extraction cannot carry a total")
+            return self
         if (
             self.total_krw is not None
             or self.items
@@ -178,7 +185,12 @@ async def _generate_with_gemini(image_bytes: bytes, content_type: str, prompt: s
 def _normalize_ok_without_total(parsed: object) -> object:
     """모델이 `status="ok"` 인데 `total_krw` 가 없을 때를 `unreadable`/`no_amount` 로
     옮긴다. 프롬프트가 "계산하지 말라"만 지켜서 총액 없이 `ok` 를 내는 실측 사례가
-    있다 — `shape_matches_status` 는 그대로 두고 여기서 계약 모양에 맞춘다."""
+    있다 — `shape_matches_status` 는 그대로 두고 여기서 계약 모양에 맞춘다.
+
+    **나머지 칸은 지우지 않는다** — `no_amount` 는 "읽었지만 합계가 없다" 다. 총액 줄이
+    잘려 나간 사진(가장 흔한 실패 형태)에서도 병원·날짜·항목은 이미 다 읽혀 있는데, 여기서
+    비우면 확인 화면이 그것까지 버려서 유저가 다시 타이핑해야 한다 (2026-09-10 실측 —
+    압구정동물병원 영수증, 총액 줄만 잘림). `total_krw` 만 지운다."""
     if not isinstance(parsed, dict):
         return parsed
     if parsed.get("status") != "ok":
@@ -189,7 +201,11 @@ def _normalize_ok_without_total(parsed: object) -> object:
         "vet receipt extraction: model returned status=ok with no total_krw — "
         "normalizing to unreadable/no_amount"
     )
-    return {"status": "unreadable", "unreadable_reason": "no_amount"}
+    normalized = dict(parsed)
+    normalized["status"] = "unreadable"
+    normalized["unreadable_reason"] = "no_amount"
+    normalized["total_krw"] = None
+    return normalized
 
 
 def _validate_extraction(raw: object) -> ReceiptExtraction | None:

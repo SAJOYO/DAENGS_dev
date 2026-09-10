@@ -180,8 +180,25 @@ class ReceiptExtraction(BaseModel):
     is_emergency: bool = False
 ```
 
-`status="ok"` 는 `total_krw` 가 있어야 하고, `status="unreadable"` 은 `unreadable_reason` 이
-있고 나머지가 비어야 한다 (`model_validator`). `GeneralAnswer.shape_matches_kind` 와 같은 결이다.
+`status="ok"` 는 `total_krw` 가 있어야 한다. `status="unreadable"` 은 `unreadable_reason` 이
+있어야 하고, 그 사유에 따라 나머지 칸의 규칙이 갈린다 (`model_validator`,
+`GeneralAnswer.shape_matches_kind` 와 같은 결):
+
+| `unreadable_reason` | 뜻 | 나머지 칸 |
+| --- | --- | --- |
+| `blurry` | 흐려서 아예 못 읽었다 | 전부 비어야 한다 |
+| `not_a_receipt` | 영수증이 아니다 | 전부 비어야 한다 |
+| `no_amount` | **읽었지만 합계가 없다** | `total_krw` 만 반드시 `None` — 나머지는 채워도 된다 |
+
+**이 표는 컨트롤러 결정을 한 번 뒤집은 것이다.** 원래는 세 필드만 봤는데, Task 4 의 컨트롤러
+결정으로 여덟 필드 전부로 넓어졌고 리뷰어가 그것을 확인했다 — `blurry`·`not_a_receipt` 는
+정말 아무것도 못 건지므로 그 확장이 맞았다. 그런데 `no_amount` 는 다른 종류다: "못 읽었다"가
+아니라 **"읽었는데 하나가 없다"** 다. 총액 줄이 잘려 나간 사진(압구정동물병원, 2019-05-17,
+2026-09-10 실측 — 병원명·주소·전화·날짜·항목 셋을 모델이 다 읽었는데 총액 줄만 사진 밖에
+있었다)에서 여덜 필드 규칙을 그대로 적용하면, 거의 다 읽은 영수증을 통째로 버리고 유저에게
+빈 폼을 준다. 사진이 총액 줄 앞에서 잘리는 것이 이 기능에서 **제일 흔한 실패 형태**라 그
+비용이 작지 않다. 그래서 `no_amount` 만 갈랐다 — `blurry`/`not_a_receipt` 의 "전부 비어야
+한다" 는 그대로 지킨다.
 
 **`is_oncology` 가 여기 없는 것은 빠뜨린 게 아니다.** 응급은 영수증에 항목으로 찍히지만
 (야간진료비·공휴일 할증) 종양 진료인지는 **글자가 아니라 임상 판단**이다. 개인정보를 못 쓰게
@@ -282,6 +299,8 @@ class ReceiptExtraction(BaseModel):
 지키고 `status` 를 안 바꾼 실측 사고(압구정동물병원, 2026-09-10)가 있어서다. 이걸
 `failed` 로 두면 유저에게 "다시 시도" 를 안내하는데, 같은 사진을 다시 넣어도 합계 줄이
 다시 생기지 않아 **영원히 실패한다** — `failed` 는 우리 쪽 문제에만 쓴다.
+**이 정규화도 `total_krw` 만 지운다** — 모델이 이미 읽어 낸 병원·날짜·항목·제안 사유는
+그대로 옮긴다. 위 표의 `no_amount` 행과 같은 이유다.
 
 세 경우 모두 **유저는 손으로 채워 확정할 수 있다.** 손입력 화면을 따로 만들지 않는 이유가
 이것이다 — 확인 화면이 곧 입력 폼이고, 실패 경로는 성공 경로에서 미리 채움만 빠진 것이다.

@@ -356,3 +356,185 @@ def test_route_plan_dump_drops_the_dog_profile_payload():
     assert "dog_pug" not in dumped_text
     assert "on_medication" not in dumped_text
     assert dumped["capabilities"] == ["general"]
+
+
+# --- Task 6: 세 축 판정기 ---
+
+#: 실제 핀(`settings.openai_judge_model`)을 테스트에 박지 않는다 — 핀이 바뀌면 이 파일이
+#: 함께 빨개질 이유가 없고, 무엇보다 **테스트에서 진짜 모델 이름을 쓰면** 나중에 실제
+#: 앵커 기록 파일과 이름이 겹칠 수 있다.
+FAKE_JUDGE_MODEL = "fake-judge-0000-00-00"
+
+
+def _fake_verdict(score=0):
+    from daengs_evals.conversation_quality.judge import Verdict
+
+    return Verdict(observations=["앞 턴을 다시 묻는다"], rationale="근거", score=score)
+
+
+def _repair_case():
+    """정정 뒤 같은 답이 다시 나오는 케이스 — 세 축이 모두 적용되는 최소 모양."""
+    return _case(
+        case_id="cq_repair_probe_01",
+        turns=[
+            Turn(role="user", text="우리 동네 산책 코스 알려줘"),
+            Turn(role="assistant", text="산책은 하루 두 번이 좋습니다."),
+            Turn(role="user", text="그게 아니라 코스를 알려달라고요"),
+            Turn(role="assistant", text="산책은 하루 두 번이 좋습니다."),
+        ],
+        target_turns=[3],
+        repair_applicable=True,
+    )
+
+
+def _lap_rows(case, reply="산책은 하루 두 번이 좋습니다."):
+    """Task 5 의 산출물을 그대로 판정기에 먹인다 — 손으로 만든 dict 를 쓰면 랩 파일의
+    실제 모양이 바뀌어도 이 테스트가 안 깨진다."""
+    from daengs_evals.conversation_quality.collect import target_turn_row
+    from daengs_evals.conversation_quality.drivers import FakeDriver
+
+    driver = FakeDriver(replies=[reply] * len(case.target_turns))
+    return [target_turn_row(case, i, driver).model_dump() for i in case.target_turns]
+
+
+def _anchor_pass(tmp_path, *, anchor_set="dev", model=FAKE_JUDGE_MODEL):
+    import json
+
+    from daengs_evals.conversation_quality.judge import anchor_record_name
+
+    name = anchor_record_name(anchor_set=anchor_set, model=model)
+    (tmp_path / name).write_text(json.dumps({"passed": True}), encoding="utf-8")
+    return tmp_path
+
+
+def test_each_axis_is_a_separate_call_with_its_own_inputs(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+
+    calls = []
+    case = _repair_case()
+    run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+    )
+    assert [c["axis"] for c in calls] == [
+        "response_mode_fit",
+        "context_continuity",
+        "repair_success",
+    ]
+    # 근거 오염 방지: 모드 판정기는 앞 턴도 프로필도 안 본다
+    assert "prior_turns" not in calls[0]["payload"]
+    assert "state_supplied" not in calls[0]["payload"]
+    # 복구 판정기에 상태를 주면 «그럴듯한 개인화»로 정정 실패를 합리화한다
+    assert "state_supplied" not in calls[2]["payload"]
+
+
+def test_rationale_is_generated_before_the_score():
+    from daengs_evals.conversation_quality.judge import Verdict
+
+    # 칸 순서가 곧 생성 순서다 — 점수를 위에 두면 모델이 답을 정해 놓고 이유를 붙인다
+    assert list(Verdict.model_fields) == ["observations", "rationale", "score"]
+
+
+def test_na_axes_are_not_called_at_all(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+
+    calls = []
+    case = _case()  # repair_applicable=False
+    judgments = run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+    )
+    assert "repair_success" not in [c["axis"] for c in calls]
+    # 못 잰 축은 0 이 아니라 없음이다
+    assert judgments[0].scores.repair_success is None
+    assert "repair_success" in judgments[0].not_applicable
+
+
+def test_score_refuses_to_run_without_an_anchor_pass_record(tmp_path):
+    from daengs_evals.conversation_quality.judge import run_score
+
+    case = _repair_case()
+    with pytest.raises(SystemExit):
+        run_score(  # 통과 기록 없음
+            rows=_lap_rows(case),
+            cases=[case],
+            model=FAKE_JUDGE_MODEL,
+            anchor_dir=tmp_path,
+            generate=lambda **kw: _fake_verdict(),
+        )
+
+
+def test_judgment_file_header_pins_the_judge_model_and_prompt_version(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.judge import PROMPT_VERSION, run_score
+
+    case = _repair_case()
+    out = tmp_path / "judgments_t.jsonl"
+    run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: _fake_verdict(),
+        lap="t",
+        out_path=out,
+    )
+    header = json.loads(out.read_text("utf-8").splitlines()[0])
+    assert header["judge_model"] == FAKE_JUDGE_MODEL
+    assert header["prompt_version"] == PROMPT_VERSION
+
+
+def test_the_expected_mode_label_never_reaches_the_judge(tmp_path):
+    import json
+
+    from daengs_evals.conversation_quality.judge import PROMPTS, run_score
+
+    calls = []
+    case = _repair_case()
+    run_score(
+        rows=_lap_rows(case),
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+    )
+    sent = json.dumps([c["payload"] for c in calls], ensure_ascii=False)
+    sent += "\n".join(c["prompt"] for c in calls) + "\n".join(PROMPTS.values())
+    # 정답지를 보여주면 판정기가 정확도 채점기로 변한다 — 모드 이름 자체가 새면 안 된다
+    for label in ("expected_mode", "repair_applicable", case.expected_mode, "REDIRECT"):
+        assert label not in sent
+
+
+def test_rows_the_seam_never_answered_are_not_judged(tmp_path):
+    from daengs_evals.conversation_quality.drivers import NOT_REACHED
+    from daengs_evals.conversation_quality.judge import run_score
+
+    calls = []
+    case = _repair_case()
+    rows = _lap_rows(case)
+    rows[0]["message"] = NOT_REACHED  # 답이 아니라 "이 이음매로는 못 봤다" 는 표시다
+    judgments = run_score(
+        rows=rows,
+        cases=[case],
+        model=FAKE_JUDGE_MODEL,
+        anchor_dir=_anchor_pass(tmp_path),
+        generate=lambda **kw: calls.append(kw) or _fake_verdict(),
+    )
+    # 센티널을 채점시키면 판정기가 우리 문자열에 점수를 매긴다
+    assert calls == []
+    assert judgments == []
+
+
+def test_judge_makes_no_live_call_at_import_time():
+    import daengs_evals.conversation_quality.judge as m
+
+    # provider 클라이언트도 API 키도 import 만으로는 필요 없어야 한다
+    assert "openai" not in m.__dict__
+    assert "settings" not in m.__dict__

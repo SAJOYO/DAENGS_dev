@@ -50,6 +50,9 @@ def apply_gait_filter(
     diag: float,
     min_confident_kp: int = MIN_CONFIDENT_KP,
     sample_fps: float = TARGET_FPS,
+    spread_ratio: float | None = MIN_KP_SPREAD_RATIO,
+    stationary_check: bool = True,
+    bbox_frac_range: tuple[float, float] = (MIN_BBOX_FRAC, MAX_BBOX_FRAC),
 ) -> list:
     """검출된 프레임에 `exclude_reason` 을 붙이고, 없으면 `gait_usable=True` 로 표시합니다.
 
@@ -60,6 +63,14 @@ def apply_gait_filter(
     프레임 폭을 그 fps 에 맞는 프레임 개수로 환산하는 데 씁니다 — **여기를 `TARGET_FPS`
     로 고정하면 안 됩니다.** 실제 샘플링 fps 는 `native_fps / step` 이라 반올림 오차가 있고,
     그 차이가 정지 판정에 그대로 들어갑니다.
+
+    뒤의 셋은 **엔진마다 다른 값** 입니다 (D-063 5C). 기본값은 legacy 경로가 지금 쓰는 것과
+    같으므로 인자를 안 주면 동작이 바뀌지 않습니다:
+
+    - `spread_ratio=None` 이면 keypoint 밀집 검사를 **건너뜁니다.**
+    - `stationary_check=False` 는 follow-cam(카메라가 개를 따라가는) 영상용입니다 — bbox 중심이
+      화면에 고정돼 걷고 있는데도 전부 '정지' 로 오판하기 때문입니다.
+    - `bbox_frac_range` 는 화면 대비 개 크기의 허용 구간입니다.
     """
     max_gap_frames = max(1, round(STATIONARY_MAX_GAP_SEC * sample_fps))
     detected_idx = [i for i, r in enumerate(records) if r["detected"]]
@@ -69,11 +80,12 @@ def apply_gait_filter(
         if r["n_confident_kp"] < min_confident_kp:
             r["exclude_reason"] = "insufficient_keypoints"
             continue
-        if r["bbox_frac"] is None or not (MIN_BBOX_FRAC <= r["bbox_frac"] <= MAX_BBOX_FRAC):
+        lo, hi = bbox_frac_range
+        if r["bbox_frac"] is None or not (lo <= r["bbox_frac"] <= hi):
             r["exclude_reason"] = "bad_bbox_size"
             continue
-        spread = kp_spread_ratio(r, diag)
-        if spread is not None and spread < MIN_KP_SPREAD_RATIO:
+        spread = kp_spread_ratio(r, diag) if spread_ratio is not None else None
+        if spread is not None and spread < spread_ratio:
             r["exclude_reason"] = "keypoints_collapsed"
             continue
         # 정지 여부는 이웃 프레임과 비교해야 하므로 아래에서 따로 채웁니다.
@@ -82,7 +94,11 @@ def apply_gait_filter(
     # 정지 판정 — 앞뒤 이웃 **양쪽 모두** 저속일 때만 정지로 봅니다.
     # 한쪽만 보면 걷다가 잠깐 멈칫하는 순간이 전부 잘려 나갑니다. 이웃이 없는 고립된
     # 검출 프레임은 판단 근거가 없으므로 정지로 치지 않습니다 (benefit of doubt).
-    still_ok = [i for i in detected_idx if records[i]["exclude_reason"] is None]
+    still_ok = (
+        [i for i in detected_idx if records[i]["exclude_reason"] is None]
+        if stationary_check
+        else []
+    )
     for pos, i in enumerate(still_ok):
         r = records[i]
         prev_i = still_ok[pos - 1] if pos > 0 else None

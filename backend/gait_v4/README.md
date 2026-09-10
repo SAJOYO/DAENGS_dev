@@ -26,6 +26,9 @@ tests/verify.py     골든 일치·재현성·DLC 미사용 검사   tests/golde
 ```
 
 ## 설치 (uv)
+> **DAENGS 안에서는 이 절을 쓰지 마세요.** 이 폴더의 `pyproject.toml`·`uv.lock`·`requirements.txt` 는 D-063 5A 에서
+> 없앴고 의존성은 `backend/pyproject.toml` 의 `gait-v4` 그룹입니다 — 절차는 `DAENGS-NOTE.md`. 아래는 walk_demo 원본 그대로입니다.
+
 ```bash
 cd port/gait_v4
 uv sync                      # .venv 생성, torch CPU 휠은 pyproject 의 pytorch-cpu 인덱스에서

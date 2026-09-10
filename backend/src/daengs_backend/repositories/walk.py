@@ -109,7 +109,7 @@ async def get_by_client_session(
 
 async def count_for_pet_between(
     session: AsyncSession,
-    app_user_id: uuid.UUID,
+    _app_user_id: uuid.UUID,
     pet_id: uuid.UUID,
     start: datetime,
     end: datetime,
@@ -117,14 +117,21 @@ async def count_for_pet_between(
     """그 아이가 나간 산책 수 — `started_at` 이 `[start, end)` 인 것. 케어 로그의 하루 요약이 씁니다 (#332).
 
     산책을 케어 이벤트로 다시 적지 않고 **여기서 센다** — `walks` 가 진실이고, 한 사실이 두 곳에
-    있으면 반드시 어긋납니다. 소유자 조건은 `walks.app_user_id` 로 겁니다: `walk_pets` 는
-    강아지만 알고, 남의 강아지 id 가 와도 그 사람 산책은 안 셉니다.
+    있으면 반드시 어긋납니다.
+
+    **소유자 조건을 걸지 않습니다** (docs/co-care.md §2). 부르는 쪽(`care_event.day_summary`)이
+    이미 강아지 접근 권한을 확인한 뒤라, 여기서 다시 사람으로 거르면 **다른 보호자의 산책만
+    빠집니다** — 아빠가 아침에 다녀온 산책이 내 오늘 요약에서 사라집니다. `walk_pets` 조인이
+    "그 아이가 나간 산책" 을 정확히 집으니 사람 조건은 필요 없습니다. 인자는 부르는 쪽을
+    안 고치려고 시그니처에만 남겨 둡니다.
+
+    **산책의 소유는 그대로 사람 것입니다** — 여기서 여는 것은 세는 것뿐이고, 목록·수정은
+    `walks.app_user_id` 를 계속 봅니다.
     """
     stmt = (
         select(func.count(func.distinct(Walk.id)))
         .join(WalkPet, WalkPet.walk_id == Walk.id)
         .where(
-            Walk.app_user_id == app_user_id,
             WalkPet.pet_id == pet_id,
             Walk.started_at >= start,
             Walk.started_at < end,

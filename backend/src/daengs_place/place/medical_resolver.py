@@ -21,6 +21,7 @@ async def resolve_medical_places(
     judge_at: datetime,
     name_query: str = "",
     precise_order: bool = False,
+    omitted=(),
 ) -> list[PlaceOut]:
     """같은 kind의 dev/임의 source를 섞지 않고 해당 MOIS endpoint만 읽는다."""
     try:
@@ -40,4 +41,8 @@ async def resolve_medical_places(
         )),
         source=source.source,
         precise_order=precise_order,
+        **(
+            {"excluded_source_refs": tuple(k.ref for k in omitted if k.source == source.source)}
+            if omitted else {}
+        ),
     )

@@ -57,6 +57,9 @@ async def database():
                     encoding="utf-8"
                 )
             )
+            await raw.execute(
+                (ROOT / "db/init/32_walk_context_recollection.sql").read_text(encoding="utf-8")
+            )
         yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()

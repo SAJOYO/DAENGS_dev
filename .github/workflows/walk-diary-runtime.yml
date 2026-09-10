@@ -5,7 +5,7 @@ on:
     inputs:
       operation:
         type: choice
-        options: [Configure, Check, Prepare, Start, Stop, Smoke]
+        options: [Configure, Check, Prepare, Start, Stop, Smoke, Backfill]
         default: Check
         required: true
       latitude:
@@ -17,6 +17,19 @@ on:
       radius:
         type: string
         default: '1200'
+      regional_smoke:
+        description: 'Two synthetic walks using distinct managed region caches'
+        type: boolean
+        default: false
+      backfill_mode:
+        type: choice
+        options: [Preview, Apply, Migrate, Smoke]
+        default: Preview
+      backfill_scope:
+        description: 'JSON object: walk_id OR since/until; optional after, limit (1..10)'
+        type: string
+      backfill_plan:
+        type: string
 
 permissions:
   contents: read
@@ -26,7 +39,7 @@ concurrency:
 
 jobs:
   operate:
-    if: ${{ inputs.operation != 'Smoke' }}
+    if: ${{ inputs.operation != 'Smoke' && inputs.operation != 'Backfill' }}
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 25
     env:
@@ -59,6 +72,8 @@ jobs:
     if: ${{ inputs.operation == 'Smoke' }}
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
+    env:
+      WALK_REGIONAL_SMOKE: ${{ inputs.regional_smoke }}
     steps:
       # Only the probe is copied. Feature-branch checks must not replace live backend/src.
       - uses: actions/checkout@v5
@@ -77,8 +92,39 @@ jobs:
           try {
             docker cp $source ('daengs-backend:' + $target)
             if ($LASTEXITCODE -ne 0) { throw 'Probe copy failed' }
-            docker exec -w /app daengs-backend uv run --no-sync python $target --execute
+            $arguments = @('exec', '-w', '/app', 'daengs-backend', 'uv', 'run', '--no-sync', 'python', $target, '--execute')
+            if ($env:WALK_REGIONAL_SMOKE -eq 'true') { $arguments += '--regional' }
+            & docker @arguments
             if ($LASTEXITCODE -ne 0) { throw 'Walk runtime probe failed' }
           } finally {
             docker exec daengs-backend rm -f $target
           }
+
+  backfill:
+    if: ${{ inputs.operation == 'Backfill' }}
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    env:
+      BACKFILL_MODE: ${{ inputs.backfill_mode }}
+      BACKFILL_SCOPE: ${{ inputs.backfill_scope }}
+      BACKFILL_PLAN: ${{ inputs.backfill_plan }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: _walk-backfill
+          clean: false
+      - name: Preview or recover missing public context
+        shell: powershell
+        run: |
+          $script = Join-Path $env:GITHUB_WORKSPACE '_walk-backfill/tools/walk-context-backfill.ps1'
+          $scope = @{}
+          if (-not [string]::IsNullOrWhiteSpace($env:BACKFILL_SCOPE)) {
+            $value = ConvertFrom-Json $env:BACKFILL_SCOPE
+            if ($value -isnot [pscustomobject]) { throw 'Scope must be a JSON object' }
+            $names = @{since='Since'; until='Until'; after='After'; walk_id='WalkId'; limit='Limit'}
+            foreach ($field in $value.PSObject.Properties) {
+              if (-not $names.ContainsKey($field.Name)) { throw 'Unknown scope field' }
+              $scope[$names[$field.Name]] = $field.Value
+            }
+          }
+          & $script -LiveRoot $env:GITHUB_WORKSPACE -Mode $env:BACKFILL_MODE -ExpectedPlan $env:BACKFILL_PLAN @scope

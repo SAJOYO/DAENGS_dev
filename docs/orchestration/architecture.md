@@ -29,8 +29,8 @@ README · CLAUDE.md 에 흩어졌습니다. 이 문서는 그 전체 지도를 �
 기본 기동에서 FastAPI 프로세스는 **셋**입니다: `backend`, `place-search`,
 `journey-service`. Training·Life·Walk·Skin 은 `backend` 한 프로세스 안의 모듈/라우터이고,
 Place·Journey 는 소스와 lock 만 backend 프로젝트에 합쳤을 뿐 각자 별도 프로세스를
-유지합니다 (D-039). `gait-analysis` 는 `gait` profile 을 켰을 때만 추가되는 넷째
-FastAPI 프로세스입니다. self-hosted 러너는 배포 주체이지 요청 처리 프로세스가 아닙니다.
+유지합니다 (D-039). 보행 분석은 `gait` profile 을 켰을 때만 뜨는 Celery `gait-worker` 가 맡습니다 — HTTP
+프로세스가 아니며, 옛 `gait-analysis` FastAPI 는 D-063 4단계에서 제거됐습니다. self-hosted 러너는 배포 주체이지 요청 처리 프로세스가 아닙니다.
 
 크롤링(Celery worker · beat)은 #65 로 profile 이 떨어져 기본 세트로 뜹니다 — 매일
 KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-050, 루트 README 참고).
@@ -52,7 +52,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
                      │                 ─▶ place-search:8000  (rate limit)
                      │   /journey     ─▶ journey-service:8000         │
                      │   /screen/*    ─▶ backend:8000  (daengs_screening)
-                     │   /gait/*      ─▶ gait-analysis:8000   (profile)
+                     │   /gait/*      ─▶ 410 (옛 앱용 묘비, 서비스 없음)
                      │   그 외        ─▶ backend:8000                 │
                      └────────────────────────────────────────────────┘
                           backend (Training · Life · Walk · Skin)
@@ -71,7 +71,7 @@ KST 04:00 due 소스만 수집하고 거기서 멈춥니다 (RAG-044 ⑤ · RAG-
 | :8000 | `/territory/sites/*` | place-search | 중립 점령지 좌표만 제공. 같은 rate limit, 접두사 제거 없음 |
 | :8000 | `/journey` | journey-service | URI·본문 무변환. Place 의 rate limit 을 여기로 넓히지 않습니다 |
 | :8000 | `/screen/*` | backend (`daengs_screening`) | 접두사 제거 없음. main backend 의 무인증 multipart 라우터이며 가중치는 첫 요청에 지연 로딩 (D-040) |
-| :8000 | `/gait/*` | gait-analysis | profile 뒤. 여기만 body 200m · timeout 600s (영상) |
+| :8000 | `/gait/*` | (nginx 410) | 옛 무인증 경로의 묘비 — 뒤에 서비스 없음 (D-063 4단계). 영상은 `/app/gait/*` → backend (body 200m · timeout 600s) |
 | :8000 | 그 외 | backend | 접두사 제거 없음 |
 
 컨테이너 대상 경로는 전부 **upstream 블록이 아니라 `set` 변수 + resolver** 입니다.
@@ -113,7 +113,7 @@ journey-service · crawler-worker · crawler-beat
 
 | profile | 서비스 | 상태와 이유 |
 | --- | --- | --- |
-| `gait` | gait-analysis | 같은 방식. 가중치 2개를 `GAIT_RELEASE_DIR` 로 물립니다 (D-029) |
+| `gait` | gait-worker | Celery 워커(HTTP 아님). 가중치를 `GAIT_RELEASE_DIR` 로 물립니다 (D-029 · D-043) |
 | `tools` | pgadmin | GUI 가 필요할 때만. 로그인 없는 모드라 띄워 둔 동안 누구나 접근 가능합니다 |
 
 crawler-worker · crawler-beat 의 `crawler` profile 은 #65(코퍼스 서버 이관)가 뗐습니다 —
@@ -170,7 +170,8 @@ C:\deploy\daengs\
 
 부분 장애의 모양을 알아두면 진단이 빠릅니다:
 
-- `gait` profile 이 꺼져 있으면 **`/gait/*` 만 502**, 나머지는 멀쩡합니다.
+- `gait` profile 이 꺼져 있으면 `/app/gait/*` 의 분석 job 만 `UPLOADED` 에서 멈추고(워커 없음),
+  나머지는 멀쩡합니다. 상태 화면의 보행은 `absent` 입니다.
 - Screening 가중치가 없거나 손상되면 `/screen/v1/screen` 은 503 입니다. Skin 은 이제
   backend 와 프로세스를 공유하므로 backend 자체가 죽으면 로그인·`/life/ask` 를 포함한 main
   API 전체가 함께 영향을 받습니다 (D-040).
@@ -278,7 +279,7 @@ Skin·Gait 는 의미 라우터가 실제로 선택하는 **HANDOFF 대상**입�
 | **Life** | backend `POST /life/ask` — 같은 프로세스 안 (daengs_life, D-018 · D-021). 인증 앱 회원+관리자 (`admin_or_app_user(READ)`, main.py) | 실행 ✅ | in-process 어댑터 (D-035 — 기존 서비스 심 `daengs_life.app.services.ask`) | **예** | 기계 신호: 무근거 404 · 503(설정)/504(타임아웃)/502(상류) · `ungrounded` 품질 지표. **없는 것**: Training 급 안전 분류·산문 물러섬의 기계 신호 — 수용된 v1 한계 (D-035). 로드맵은 docs/life/roadmap.md 트랙 A·B |
 | **Walk** | backend `/life/walk-conditions` — 같은 프로세스 안 (daengs_life.realtime). 인증 동일. 생성 없음 — **결정적** | 실행 ✅ | in-process 어댑터 (동일) | **예** | 판정은 자체 규칙 계층 소유 (RT-). **UNSAFE 는 성공한 도메인 판정**이지 거절이 아닙니다. 판정 불가 `unknown`(503+전체 본문)은 ABSTAINED 로 보존합니다 |
 | **Skin** | 소스 `backend/src/daengs_screening/`, main backend 라우터 `POST /screen/v1/screen` (#100, D-040). 별도 서비스/profile 은 제거됐고 nginx 는 `/screen/*` 를 backend 로 전달합니다. screening lock 복구 완료 (#101). 가중치는 첫 요청에 지연 로딩 | **HANDOFF 만** | 전용 multipart 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **예** — 가중치·의존성이 배포된 backend 에서 호출 가능 | 기술 가용성이 Card 1 범위를 넓히지 않습니다. PR #79 계약대로 `headline`·`body`·`action`·`disclaimer` 무수정 통과, top-1 병변명 없음(D-023). **기록된 판정은 승인된 컨텍스트 입력입니다** — `screening_record_id` 참조 → `ScreeningContext {verdict, days_ago}` (#307, contracts §1). **같은 아이의 이전 판정들(`screening_history`, 최근 3건)도 같은 자격의 입력입니다** — 진입 신호는 그 `screening_record_id` 하나이고, 항목이 `ScreeningContext` 자체라 좁힘이 건수와 무관하게 걸립니다. 다만 **"나아졌다/진행됐다" 는 계약에 없습니다**: 두 시점의 차이는 모델의 잡음일 수 있어(D-023) 이력은 나열·안내까지이고 판단은 진료 권함으로 끝납니다 (#79 3번, contracts §1). 실행이 아니라 이미 끝난 판정의 기록이라 EXECUTE 는 여전히 NO 입니다. 옛 `/screen/v1/screen` 라우터는 현재도 인증·rate limit 이 없어 보안 후속은 별도(#239 Hold) |
-| **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 계속 별도 `gait-analysis` FastAPI/venv/볼륨이며 `gait` profile 로 기본 꺼짐 | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 nginx `/gait/` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (contracts.md) |
+| **Gait** | 소스는 `backend/src/daengs_gait/` 와 shared lock으로 이관됐습니다 (#98, D-038). 런타임은 별도 Celery `gait-worker`(venv·볼륨 분리)이며 `gait` profile 로 기본 꺼짐. 옛 `gait-analysis` FastAPI 는 제거(D-063 4단계) | **HANDOFF 만** | 전용 영상 업로드 UI/API — 오케스트레이터가 실행하지 않음 | **조건부** — profile·가중치를 갖추면 backend `/app/gait/*` 경유 호출 가능 | 소스 통합은 Card 1 편입이 아닙니다. 분 단위 영상 추론이라 동기 대화에 안 맞음 — 미래 도입 시 PENDING + job 메타데이터 경로 (contracts.md) |
 | **Place** | 소스 `backend/src/daengs_place/`, shared lock (#99, D-039). 런타임은 `place-search` 별도 FastAPI + 전용 PostGIS로 기본 기동. 내부 `POST /internal/place/discovery`는 Place 전용 Gemini proposer와 검색/presentation을 조립 | **실행 ✅** — 명시 신호(`requested_capability=place`, #196)와 **전역 의미 선택(#204, D-051, `semantic-router-ko-v7`)** 둘 다 | backend adapter → compose 내부 HTTP | **예** | payload는 원문+검증 좌표뿐이고 profile identity를 보내지 않습니다. 내부 43~89KB 응답은 최대 3 lens·9후보·48KiB의 공개 projection으로 줄이며 KTO/KCISA provenance와 unresolved signal은 보존합니다 (#195·#196) |
 | **Journey** | 소스 `backend/src/daengs_journey/`, shared lock (#99, D-039). 런타임은 `journey-service` 별도 FastAPI로 기본 기동, nginx `/journey` 유지 | v1 실행 대상 아님 | 별도 프로세스 직접 API | **예** | Place와 함께 소스가 이동했지만 기존 Usage Gate·프로세스 경계와 외부 계약은 유지. Card 1 실행 범위 확대 없음 |
 

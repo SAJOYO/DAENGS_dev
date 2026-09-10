@@ -21,10 +21,24 @@
 CREATE TABLE IF NOT EXISTS care_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- 소유자. **`pets.app_user_id` 와 같은 값**이고 서비스가 강아지에서 읽어 채운다.
-    -- 따로 두는 이유는 조회·삭제가 강아지를 거치지 않고도 "내 것" 을 거르기 위해서다
-    -- (`walks.app_user_id` 와 같은 결). 계정이 지워지면 같이 지워진다.
-    app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    -- **챙긴 사람.** 소유자가 아니다 — 이 기록의 주인은 강아지다 (docs/co-care.md).
+    -- 공동 돌봄에서는 대표든 돌보미든 기록할 수 있어 `pets.app_user_id` 와 같은 값이라는
+    -- 보장이 없다. 챙긴 사람이 떠나도 "그날 밥을 먹은 사실" 은 강아지에 남아야 하므로
+    -- NULL 을 허용한다.
+    --
+    -- ⚠ **그 NULL 을 넣는 것은 아래 SET NULL 이 아니다.** 탈퇴는 app_users 행을 안 지우므로
+    --   (`services/app_auth.py` 의 withdraw 는 status 만 바꾼다) 이 FK 는 **영영 안 돌고**,
+    --   실제로 비우는 것은 24_pet_members.sql 의 pet_membership_owner_cleanup 트리거다.
+    --   SET NULL 은 언젠가 app_users 행을 진짜로 지우는 날을 위한 안전망이다 — pet_members 의
+    --   CASCADE 가 그런 것과 같다. 여기에 기대면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에
+    --   영원히 남는다.
+    --
+    -- 이름을 명시하는 이유는 db/migrations/2026-09-09_pet_members.sql 이 이미 도는 DB 에서
+    -- 같은 이름(care_events_actor_fkey)으로 제약을 다는 것과 맞추기 위해서다. 이름을 안
+    -- 적으면 PostgreSQL 이 care_events_actor_app_user_id_fkey 로 자동 생성해 빈 볼륨과
+    -- 이미 도는 DB 가 같은 FK 에 다른 이름을 갖게 된다.
+    actor_app_user_id UUID
+        CONSTRAINT care_events_actor_fkey REFERENCES app_users(id) ON DELETE SET NULL,
 
     -- 어느 아이의 기록인가. 강아지를 지우면 기록도 같이 지운다 — 배웅(`farewell_on`)은
     -- 행을 안 지우므로 배웅한 아이의 기록은 남는다. 그것이 의도다.

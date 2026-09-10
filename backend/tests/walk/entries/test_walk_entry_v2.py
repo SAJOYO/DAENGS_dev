@@ -85,7 +85,9 @@ def api(monkeypatch):
     )
     monkeypatch.setattr(service.entries, "profile_walks", AsyncMock(return_value=[walk]))
     monkeypatch.setattr(
-        service.entries, "owns_pet", AsyncMock(side_effect=lambda s, o, p: o == OWNER and p == PET)
+        service.entries,
+        "pet_is_accessible",
+        AsyncMock(side_effect=lambda s, o, p: o == OWNER and p == PET),
     )
     monkeypatch.setattr(service.repo, "pin", AsyncMock(side_effect=lambda s, w, e: db.pins.get(e)))
     monkeypatch.setattr(

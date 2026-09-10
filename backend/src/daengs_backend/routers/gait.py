@@ -1,10 +1,10 @@
 """`/app/gait/*` — 보행 분석 orchestration API (D-043).
 
-기존 `/gait/*`(gait-analysis FastAPI 직접 호출)의 **proxy 가 아닙니다.** backend 가
+옛 `/gait/*`(gait-analysis FastAPI 직접 호출 — D-063 4단계에서 제거)의 **proxy 가 아닙니다.** backend 가
 소유하는 새 계약입니다 — 인증 · pet 소유권 · record/job lifecycle · presigned 발급.
 영상 바이너리는 여기를 지나가지 않고, 분석은 별도 워커에서 돕니다.
 
-기존 `/gait/*` 는 앱(#64)이 이쪽으로 전환한 뒤 단계적으로 제거합니다.
+옛 `/gait/*` 는 nginx 가 410 으로 닫아 두었고(옛 앱 빌드용 묘비), 서비스 코드는 제거됐습니다.
 
 ⚠️ **없는 것과 남의 것은 같은 404 입니다** — 403 을 주면 "그 기록이 존재한다"가
    샙니다 (pet 라우터와 같은 규칙).
@@ -67,7 +67,11 @@ def _storage_unavailable(exc: StorageNotConfiguredError) -> HTTPException:
     return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _STORAGE_NOT_READY)
 
 
-def _summary(r: GaitRecord) -> dict:
+def _summary(r: GaitRecord, perms: dict | None = None) -> dict:
+    """`perms` 는 `gait_service.annotate` 가 준 `{"can_confirm", "can_delete", "created_by"}`
+    한 건입니다. 안 주면(테스트 등에서 permission 을 안 보는 자리) 전부 False/None 으로
+    채웁니다 — 스키마가 필수 필드라 비워 둘 수 없습니다."""
+    perms = perms or {}
     return {
         "record_id": r.id,
         "pet_id": r.pet_id,
@@ -82,6 +86,9 @@ def _summary(r: GaitRecord) -> dict:
         # /v1 시절 계약의 파생 필드 — 비교 화면이 고를 수 있는 것만 보여주는 데 씁니다.
         "comparable": r.status == "DONE" and r.quality_status == "ok",
         "has_overlay": r.overlay_storage_key is not None,
+        "can_confirm": perms.get("can_confirm", False),
+        "can_delete": perms.get("can_delete", False),
+        "created_by": perms.get("created_by"),
     }
 
 
@@ -125,7 +132,8 @@ async def confirm_upload(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
     except StorageNotConfiguredError as exc:
         raise _storage_unavailable(exc) from None
-    return GaitRecordSummary(**_summary(record))
+    perms = (await gait_service.annotate(session, user.app_user_id, [record])).get(record.id)
+    return GaitRecordSummary(**_summary(record, perms))
 
 
 @router.get("/records", response_model=GaitRecordListResponse)
@@ -150,8 +158,11 @@ async def list_records(
         ) from None
     has_more = len(rows) > limit
     page = rows[:limit]
+    # 한 번에 계산합니다 — 행마다 부르면 페이지 크기만큼 왕복합니다(gait_service.annotate
+    # 독스트링, Task 19).
+    perms_by_id = await gait_service.annotate(session, user.app_user_id, page)
     return GaitRecordListResponse(
-        records=[GaitRecordSummary(**_summary(r)) for r in page],
+        records=[GaitRecordSummary(**_summary(r, perms_by_id.get(r.id))) for r in page],
         next_cursor=page[-1].id if (page and has_more) else None,
     )
 
@@ -160,11 +171,13 @@ async def list_records(
 async def get_record(
     user: CurrentAppUser, session: Session, record_id: uuid.UUID
 ) -> GaitRecordDetail:
-    record = await gait_repo.get_owned(session, user.app_user_id, record_id)
+    # 보기만 하므로 **구성원** 기준입니다 (docs/co-care.md §2) — 확정·삭제는 그대로 대표만.
+    record = await gait_repo.get_accessible(session, user.app_user_id, record_id)
     if record is None:
         raise _NOT_FOUND
+    perms = (await gait_service.annotate(session, user.app_user_id, [record])).get(record.id)
     return GaitRecordDetail(
-        **_summary(record),
+        **_summary(record, perms),
         quality=record.quality,
         summary_for_ui=record.summary_for_ui,
         video_meta=record.video_meta,

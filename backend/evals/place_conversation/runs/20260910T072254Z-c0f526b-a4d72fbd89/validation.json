@@ -1,0 +1,33 @@
+{
+  "code_sha": "c0f526b",
+  "targeted_pytest": {
+    "command": "uv run --no-sync pytest -q tests/place/conversation/test_service.py tests/place/conversation/test_policy.py tests/place/conversation/test_evaluation.py tests/place/api/test_conversation.py tests/place/api/test_conversation_evaluation.py tests/place/api/test_conversation_pending.py",
+    "passed": 46,
+    "failed": 0,
+    "duration_seconds": 133.58,
+    "boundary": "test doubles + in-process gateway/place HTTP + memory CAS, not Redis/Postgres/Android"
+  },
+  "ruff": "changed Python files passed",
+  "repository_check": {
+    "command": "uv run --no-sync check",
+    "migration_names": "pass",
+    "migration_coverage": "pass",
+    "windows_bytes": "blocked: PowerShell script execution disabled",
+    "output_warning": "UTF-8/cp949 subprocess reader warning",
+    "execution_policy_changed": false
+  },
+  "ci": {
+    "url": "https://github.com/SAJOYO/DAENGS_dev/actions/runs/34449739744",
+    "started": false,
+    "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased."
+  },
+  "full_pytest_run": false,
+  "evaluation_oracle_followup": {
+    "command": "uv run --no-sync pytest -q tests/place/conversation/test_evaluation.py",
+    "passed": 10,
+    "failed": 0,
+    "duration_seconds": 36.04,
+    "unique_additional_test": 1
+  },
+  "unique_tests_passed": 47
+}

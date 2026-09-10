@@ -24,7 +24,12 @@ async def summary(db, viewer_id, site_id):
     if season is not None and not season.starts_ms <= now < season.ends_ms:
         season = None
     owner = None
-    if row is not None and row.pet_id is not None:
+    expired = (
+        row is not None
+        and getattr(row, "expires_at", None) is not None
+        and int(row.expires_at.timestamp() * 1000) <= now
+    )
+    if row is not None and row.pet_id is not None and not expired:
         owner = {
             "pet_id": row.pet_id,
             "name": row.pet_name,
@@ -35,7 +40,7 @@ async def summary(db, viewer_id, site_id):
         }
     result = {
         "site_id": site_id,
-        "version": row.version if row else 0,
+        "version": row.version + int(expired) if row else 0,
         "server_now_ms": now,
         "season_id": season.id if season else None,
         "status": "NO_ACTIVE_SEASON" if season is None else "UNOCCUPIED",

@@ -192,9 +192,9 @@ async def write(session, owner, walk_id, entry_id, body):
         raise EntryInvalid("기록 시각이 산책 범위 밖입니다.")
     if content.pet_id is not None and (
         content.pet_id not in walk.pet_ids
-        or not await entries.owns_pet(session, owner, content.pet_id)
+        or not await entries.pet_is_accessible(session, owner, content.pet_id)
     ):
-        raise EntryInvalid("동행한 내 강아지만 선택할 수 있습니다.")
+        raise EntryInvalid("동행한, 내가 돌보는 강아지만 선택할 수 있습니다.")
     if row is None:
         if not settings.walk_entry_v2_write_enabled:
             raise EntryWritesDisabled
@@ -277,7 +277,7 @@ async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
 
 async def profile(session, owner, spec):
     require_enabled()
-    if not await entries.owns_pet(session, owner, spec.pet_id):
+    if not await entries.pet_is_accessible(session, owner, spec.pet_id):
         raise EntryNotFound
     walks = await entries.profile_walks(session, owner, spec)
     walk_ids = [w.id for w in walks]

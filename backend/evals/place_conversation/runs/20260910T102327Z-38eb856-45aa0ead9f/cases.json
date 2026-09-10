@@ -1,0 +1,508 @@
+[
+  {
+    "schema_version": 1,
+    "id": "EX01",
+    "title": "다음 6개·소진 뒤 새 조건 검색",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null,
+      "fixture": "beyond_top20"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "더 많은 장소 갖고와",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "next",
+          "returned_count": 6,
+          "new_count": 6,
+          "remaining": "exhausted",
+          "expected_refs": [
+            "cafe-21",
+            "cafe-22",
+            "cafe-23",
+            "cafe-24",
+            "cafe-25",
+            "cafe-26"
+          ]
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "그 다음 장소도 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "next",
+          "returned_count": 0,
+          "new_count": 0,
+          "remaining": "exhausted"
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "그럼 주차 되는 카페만 찾아줘",
+        "expect": {
+          "parking": "required_true",
+          "expected_refs": [
+            "cafe-26"
+          ],
+          "excluded_refs": []
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX02",
+    "title": "명시적 제외·조건 변경·제외 해제",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "f81d"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "평가 장소 A는 빼고 다른 카페 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [
+            "f81d"
+          ],
+          "expected_refs": [
+            "a207",
+            "d94c"
+          ],
+          "browse": "current"
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "주차 되는 카페만 찾아줘",
+        "expect": {
+          "parking": "required_true",
+          "excluded_refs": [
+            "f81d"
+          ],
+          "expected_refs": []
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "주차는 상관없어",
+        "expect": {
+          "parking": "none",
+          "excluded_refs": [
+            "f81d"
+          ],
+          "expected_refs": [
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "평가 장소 A 제외한 거 풀어줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX05",
+    "title": "무관한 수동 클릭 뒤 현재 요청",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "manual",
+        "manual": {
+          "lat": 37.5,
+          "lng": 127,
+          "radius_m": 3000,
+          "kinds": [
+            "restaurant"
+          ]
+        },
+        "expect": {
+          "candidate_kinds": [
+            "restaurant"
+          ],
+          "excluded_refs": []
+        },
+        "review": "현재 조건만 바뀌며 취향을 추론하지 않는다."
+      },
+      {
+        "action": "manual",
+        "manual": {
+          "lat": 37.5,
+          "lng": 127,
+          "radius_m": 3000,
+          "kinds": [
+            "cafe",
+            "restaurant"
+          ]
+        },
+        "expect": {
+          "candidate_kinds": [
+            "cafe",
+            "restaurant"
+          ],
+          "excluded_refs": []
+        },
+        "review": "현재 조건만 바뀌며 취향을 추론하지 않는다."
+      },
+      {
+        "action": "manual",
+        "manual": {
+          "lat": 37.5,
+          "lng": 127,
+          "radius_m": 3000,
+          "kinds": [
+            "cafe"
+          ]
+        },
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "excluded_refs": []
+        },
+        "review": "현재 조건만 바뀌며 취향을 추론하지 않는다."
+      },
+      {
+        "action": "chat",
+        "input": "주차 되는 데만 보여줘 씨발",
+        "expect": {
+          "parking": "required_true",
+          "expected_refs": [
+            "f81d"
+          ],
+          "excluded_refs": []
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX07",
+    "title": "아는 장소 발화만으로 제외하지 않기",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "f81d"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "이미 알고 있는 곳이라고",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "명시적 제외를 하지 않는지 평가한다. 질문의 유용성은 별도 미완성 항목으로 기록한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX08",
+    "title": "존재 이의만으로 제외하지 않기",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "f81d"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "거기 없잖아 씨발!",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "제외·폐업 확정 금지. 정보 이의에 맞는 응답 유용성은 다음 구현 단위로 분리한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX09",
+    "title": "페이지 참조 제외 후 탐색 초기화",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null,
+      "fixture": "beyond_top20"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "다음 후보 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "returned_count": 6,
+          "browse": "next"
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "첫 번째 장소 빼줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [
+            "cafe-21"
+          ],
+          "returned_count": 20
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "제외도 풀고 처음부터 다시 찾아줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "restart",
+          "returned_count": 20
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      },
+      {
+        "action": "chat",
+        "input": "그 다음도 보여줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "browse": "next",
+          "returned_count": 6,
+          "expected_refs": [
+            "cafe-21",
+            "cafe-22",
+            "cafe-23",
+            "cafe-24",
+            "cafe-25",
+            "cafe-26"
+          ]
+        },
+        "review": "실제 요청·적용 상태·화면·답변을 함께 확인한다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "EX10",
+    "title": "현재 목록에 없는 이름 제외",
+    "layer": "exploration",
+    "input_origin": "agent-authored",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "달나라카페 빼줘",
+        "expect": {
+          "filters": "unchanged",
+          "excluded_refs": [],
+          "expected_refs": [
+            "f81d",
+            "a207",
+            "d94c"
+          ]
+        },
+        "review": "화면 밖 이름을 임의 ID에 연결하거나 이름 검색으로 바꾸지 않는다."
+      }
+    ],
+    "invariants": [
+      "현재 요청이 조건 변경의 근거다",
+      "제외는 세션 범위이며 이미 제시됨은 더 보기에서만 사용한다",
+      "답변은 실제 조회와 확정 변경만 설명한다"
+    ],
+    "existing_tests": [
+      "tests/place/conversation/test_exploration.py"
+    ],
+    "coverage_note": "실제 Gemini + production prepare/answer + 합성 검색, 순차 상태 전파. SQL/HTTP 검증은 별도.",
+    "status": "specified"
+  }
+]

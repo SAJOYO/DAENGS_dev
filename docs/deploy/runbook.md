@@ -157,7 +157,7 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker territory-vision-worker
+  gait-worker territory-vision-worker
 
 # ③-1 점령 게임판 — 덤프에는 안 따라옵니다(옛 115u 세대). §6 "점령 게임판 적재 (GCP)"
 #     를 여기서 한 번 밟으세요. 안 하면 지도에 점령지가 하나도 안 뜹니다
@@ -188,8 +188,7 @@ docker run --rm -p 80:80 -v /srv/daengs/letsencrypt:/etc/letsencrypt certbot/cer
   certonly --standalone --agree-tos --register-unsafely-without-email -n \
   -d daengapp.weareithero.cloud -d daengapi.weareithero.cloud
 # 발급 후에야 gcp 오버레이(443, gcp.conf)로 nginx 를 재생성합니다.
-# gait 도 같이 — 오버레이의 cpus 제한이 이때 적용됩니다.
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx gait-analysis
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx
 ```
 
 - 이메일 없이 등록하는 이유: Let's Encrypt 는 만료 안내 메일 서비스를 종료했고(2025-06),
@@ -285,6 +284,13 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   git merge --ff-only origin/main
   ```
 
+  ⚠ **예외 한 장 — `2026-09-09_documents_hnsw.sql` 은 ④ 뒤에 적용하세요** (#427 · RAG-086 ⑦).
+  ③ 이 먼저인 이유는 *"없는 컬럼을 새 코드가 친다"* 를 막는 것인데, 그 장은 컬럼이 아니라
+  **recall** 의 문제라 방향이 반대입니다. `EF_SEARCH` 가 없는 코드로 인덱스를 켜면 pgvector
+  기본값 40 이 쓰여 **top-8 이 189질의 중 69개에서 달라집니다**(63.5%만 일치). ④ 로 코드가
+  올라온 뒤에 켜세요. **켜도 빨라지지는 않습니다** — 그 상태에서는 플래너가 인덱스를 고르지
+  않습니다(집 서버 실측). 켜는 목적은 두 DB 를 같은 상태로 두는 것뿐입니다.
+
   ③ 을 ④ 뒤로 미루면 **없는 테이블을 새 코드가 칩니다.** 리로드라 그 사이에 창이 없습니다.
   계정이 `-U daengs` 인 것도 잊기 쉽습니다 — 이 VM 의 수퍼유저는 `postgres` 가 아닙니다(§3).
   버전 테이블이 없어 **무엇을 적용했는지 DB 가 기억하지 않으니** 적용한 파일명은 사람이
@@ -308,7 +314,7 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      up -d --force-recreate backend place-search journey-service gait-worker \
       territory-vision-worker
     ```
 
@@ -381,6 +387,22 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
 
 설계는 `corpus-pipeline.md`, 리소스 생성은 `infra/gcp/README.md` 입니다. 리소스는 2026-09-08 에
 섰고 **첫 자동 실행은 2026-09-09 04:00 KST** 입니다 (그때까지의 실행은 전부 수동입니다).
+
+🔴 **`daengs_life` 를 고쳤으면 코드를 올려야 합니다** (2026-09-10 · #427 · RAG-086). 잡이 도는
+코드는 **이미지에 없고** `gs://daengs-corpus/code/` 에 있습니다. 올리는 것은 이 한 줄입니다:
+
+```bash
+PROJECT=daengs VM_INTERNAL_IP=<VM 내부 IP> bash infra/gcp/pipeline.sh   # rsync 몇 초. 보통 안 굽습니다
+```
+
+⚠ **이것을 잊으면 잡이 옛 코드로 돕니다** — 잡은 성공으로 끝나고 로그도 깨끗해서 **안 보입니다.**
+확인은 실행 로그 **첫 줄**입니다: `[entrypoint] 코드 <커밋 해시> <업로드 시각>`. `+dirty` 면 커밋
+안 된 워킹 트리를 올린 것입니다. 이미지는 `pyproject.toml`·`uv.lock`·`docker/pipeline/` 이 바뀔
+때만 굽습니다 (`backend/src` 는 이제 태그 입력이 아닙니다).
+
+⚠ **serving 코드는 이 길로 안 갑니다.** `/life/ask` 가 읽는 것은 VM 워크트리(`main`)이므로
+`dev → main` 스냅샷을 지나야 합니다. 잡을 갱신해도 `/life/ask` 의 설정은 안 바뀝니다 —
+`EF_SEARCH` 가 GCP 에 아직 없는 이유가 그것입니다.
 
 **수동 실행**
 

@@ -13,7 +13,7 @@ import datetime
 import uuid
 
 import pytest
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, Store, install
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -34,6 +34,8 @@ from daengs_backend.services import screening_context
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
+#: 돌보미. 대표의 강아지에 붙은 기록을 컨텍스트로도 볼 수 있어야 한다(Task 14, docs/co-care.md §2).
+CARER = uuid.uuid4()
 
 NOW = datetime.datetime(2026, 9, 7, 12, 0, tzinfo=datetime.UTC)
 
@@ -143,10 +145,40 @@ def test_계약이_넓어지면_소리가_난다() -> None:
 
 
 async def test_남의_기록은_없는_것과_같다(store: Store) -> None:
-    """소유권은 `screening_repo.get_owned` 가 쿼리 조건으로 묶습니다."""
+    """접근은 `screening_repo.get_accessible` 이 쿼리 조건으로 묶습니다 — 창작자도 아니고
+    그 기록에 붙은 아이의 구성원도 아니면 없는 것과 같습니다."""
     alien = _record(owner=STRANGER)
     store.screenings.append(alien)
     assert await screening_context.resolve(object(), OWNER, alien.id, now=NOW) is None
+
+
+async def test_돌보미가_대표의_강아지_기록을_컨텍스트로_본다(store: Store) -> None:
+    """`_accessible` 이 `_owned` 를 대체한 이유 — Task 14, docs/co-care.md §2.
+
+    돌보미가 `GET /app/screening/records/{id}` 로 이미 볼 수 있는 기록이라면, 그 기록을
+    짚어 물었을 때 어시스턴트 컨텍스트도 같은 것을 봐야 한다. 좁힌 계약을 실제로 통과시켜
+    확인한다 — `resolve` 가 `_narrowed`(D-023 좁힘)까지 지나야 값이 나온다.
+    """
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    store.pet_members.append((pet.id, CARER))
+    record = _record(pet_id=pet.id)
+    store.screenings.append(record)
+
+    resolved = await screening_context.resolve(object(), CARER, record.id, now=NOW)
+    assert resolved == {"verdict": "abnormal", "days_ago": 0}
+
+
+async def test_돌보미도_개인_기록은_컨텍스트에서_못_본다(store: Store) -> None:
+    """`pet_id IS NULL` 인 개인 기록은 강아지가 없어 구성원이라는 개념이 안 걸린다 —
+    같은 강아지를 함께 돌보는 사이여도 예외가 없다."""
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    store.pet_members.append((pet.id, CARER))
+    personal = _record(pet_id=None)  # OWNER 의 개인 기록
+    store.screenings.append(personal)
+
+    assert await screening_context.resolve(object(), CARER, personal.id, now=NOW) is None
 
 
 async def test_없는_기록도_오류가_아니다(store: Store) -> None:

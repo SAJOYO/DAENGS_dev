@@ -249,7 +249,9 @@ async def test_real_http_roundtrip_returns_shared_dog_without_owner_private_fiel
                 "occupied_at",
                 "certified_at",
                 "protected_until",
+                "expires_at",
             }
+            assert occupied["expires_at"] is None  # Historical/game-OFF policy has no lease.
     finally:
         app.dependency_overrides.clear()
 

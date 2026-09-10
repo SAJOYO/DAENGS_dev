@@ -24,6 +24,7 @@ SITE = "territory-site:hex-v1:140:324:777"
         ("post", "/claims", {}),
         ("get", f"/claims/{uuid.uuid4()}", None),
         ("put", f"/claims/{uuid.uuid4()}/photos/{uuid.uuid4()}", None),
+        ("put", f"/claims/{uuid.uuid4()}/renewals/{uuid.uuid4()}", {}),
     ],
 )
 def test_claim_endpoints_require_app_auth(method, path, body):

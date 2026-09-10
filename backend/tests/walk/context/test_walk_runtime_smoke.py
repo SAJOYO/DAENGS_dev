@@ -18,7 +18,10 @@ from tests.walk.support.paths import REPO
 
 
 @pytest.mark.parametrize("failure", [None, "cycle", "insert"])
-async def test_probe_cleanup_is_owned_and_errors_are_redacted(monkeypatch, capsys, failure):
+@pytest.mark.parametrize("backfill", [False, True])
+async def test_probe_cleanup_is_owned_and_errors_are_redacted(
+    monkeypatch, capsys, failure, backfill
+):
     spec = importlib.util.spec_from_file_location(
         "walk_smoke_test", REPO / "tools/walk_runtime_smoke.py"
     )
@@ -36,7 +39,7 @@ async def test_probe_cleanup_is_owned_and_errors_are_redacted(monkeypatch, capsy
         run.side_effect = RuntimeError("private-connection-value")
     elif failure == "insert":
         connection.execute.side_effect = RuntimeError("private-connection-value")
-    code = await module.main()
+    code = await module.main(backfill=backfill)
     output = capsys.readouterr().out
     report = json.loads(output)
     assert "private-connection-value" not in output
@@ -54,10 +57,12 @@ async def test_probe_cleanup_is_owned_and_errors_are_redacted(monkeypatch, capsy
         assert report["cleaned"]
         assert str(calls[1].args[0]) == "DELETE FROM app_users WHERE id=:id AND kakao_id=:kakao"
         assert calls[1].args[1] == inserted
+        if backfill:
+            assert run.call_args.kwargs == {"backfill": True}
     engine.dispose.assert_awaited_once()
 
 
-@pytest.mark.parametrize("note_change", [None, "missing", "changed"])
+@pytest.mark.parametrize("note_change", [None, "missing", "changed", "wrong_region", "backfill"])
 async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, note_change):
     """A real clock's submillisecond precision must not break GPS source verification."""
     spec = importlib.util.spec_from_file_location(
@@ -65,6 +70,10 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    recovery = AsyncMock(return_value={"previous": "saved"})
+    verify = AsyncMock(return_value={"prior_envelopes_preserved": True})
+    monkeypatch.setattr(module, "prepare_backfill", recovery)
+    monkeypatch.setattr(module, "verify_backfill", verify)
 
     class Clock(datetime):
         @classmethod
@@ -124,7 +133,20 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
                 200,
                 json={
                     "sources": [
-                        {"tag": tag, "state": "completed", "envelope": {"status": "known"}}
+                        {
+                            "tag": tag,
+                            "state": "completed",
+                            "envelope": {
+                                "status": "known",
+                                "payload": {
+                                    "catalog_area": {
+                                        "center": {"lat": 0, "lng": 0}
+                                        if note_change == "wrong_region"
+                                        else {"lat": 37.4878, "lng": 127.052}
+                                    }
+                                },
+                            },
+                        }
                         for tag in (
                             "space.address",
                             "space.park",
@@ -145,13 +167,26 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
         "AsyncClient",
         lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs),
     )
-    if note_change:
-        with pytest.raises(module.SmokeFailure, match="original note missing or changed"):
-            await module.cycle(uuid.uuid4())
+    if note_change and note_change != "backfill":
+        reason = (
+            "managed regional catalog"
+            if note_change == "wrong_region"
+            else "original note missing or changed"
+        )
+        with pytest.raises(module.SmokeFailure, match=reason):
+            await module.cycle(uuid.uuid4(), require_regional=True)
     else:
-        result = await module.cycle(uuid.uuid4())
+        result = await module.cycle(
+            uuid.uuid4(), require_regional=True, backfill=note_change == "backfill"
+        )
+        assert result["managed_region_verified"]
         assert result["user_notes_preserved"] and result["user_action_preserved"]
         assert result["same_readback"] and result["addressed_scene_count"] == 3
         assert result["generated_background_count"] == 3
+        if note_change == "backfill":
+            recovery.assert_awaited_once()
+            verify.assert_awaited_once()
+            assert verify.call_args.args[2] == recovery.return_value
+            assert result["backfill"]["prior_envelopes_preserved"]
     assert checked == ["behavior", "note", "note"]
     assert raw_chunks.await_count == 3

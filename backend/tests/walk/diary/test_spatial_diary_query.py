@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from daengs_backend.core import database
-from daengs_backend.core.database import get_snapshot_session
+from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.models import WalkCellophaneSheet
 from daengs_backend.repositories import walk_spatial_diary as diary_repo
@@ -520,3 +520,235 @@ def test_api_rejects_invalid_selector_before_service(api_client):
     response = api_client.post("/app/walks/spatial-diary/views/query", json=request)
 
     assert response.status_code == 422
+
+
+SHEETS_PATH = "/app/walks/spatial-diary/sheets/query"
+
+
+def _install_record_repository(monkeypatch, owned, indexes, sheets):
+    sessions = []
+
+    async def ids(session, owner, requested):
+        assert owner == OWNER_ID
+        sessions.append(session)
+        return {client: walk for client, walk in owned.items() if client in requested}
+
+    async def index(session, owner, walk_ids):
+        assert owner == OWNER_ID
+        assert set(walk_ids) == set(owned.values())
+        assert session is sessions[0]
+        return indexes
+
+    async def payloads(session, keys):
+        assert session is sessions[0]
+        return [sheet for sheet in sheets if (sheet.analysis_id, sheet.paint_fp) in keys]
+
+    monkeypatch.setattr(diary_repo, "list_owned_record_ids", ids)
+    monkeypatch.setattr(diary_repo, "list_record_capsule_index", index)
+    monkeypatch.setattr(diary_repo, "list_cellophane_sheets", payloads)
+
+
+def test_record_sheet_api_preserves_order_native_payload_and_all_availability_states(
+    api_client,
+    monkeypatch,
+):
+    clients = tuple(uuid.UUID(int=i) for i in range(101, 106))
+    # Empty sheets are ready; independent sheets may have different paint generations.
+    first = _index(cell_count=2)
+    empty = _index(cell_count=0, paint_spec=replace(CANONICAL_PAINT_SPEC, radius_u=4.0))
+    first_sheet = _stored_sheet(first, {(1, 0): 4.5, (0, 0): 0.0})
+    empty_sheet = _stored_sheet(empty, {})
+    pending_walk = uuid.uuid4()
+    owned = {clients[0]: first.walk_id, clients[1]: empty.walk_id, clients[2]: pending_walk}
+    _install_record_repository(monkeypatch, owned, [empty, first], [first_sheet, empty_sheet])
+    requested = (clients[3], clients[0], clients[2], clients[1], clients[4])
+
+    response = api_client.post(
+        SHEETS_PATH,
+        json={
+            "client_session_ids": [str(value) for value in requested],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == 1
+    items = body["items"]
+    assert [item["client_session_id"] for item in items] == [str(v) for v in requested]
+    assert [item["status"] for item in items] == [
+        "unavailable",
+        "ready",
+        "pending",
+        "ready",
+        "unavailable",
+    ]
+    for item in (items[0], items[4]):
+        assert all(
+            item[key] is None
+            for key in (
+                "walk_id",
+                "analysis_id",
+                "sheet_fingerprint",
+                "sheet",
+            )
+        )
+    assert items[2] == {
+        "client_session_id": str(clients[2]),
+        "walk_id": str(pending_walk),
+        "status": "pending",
+        "analysis_id": None,
+        "sheet_fingerprint": None,
+        "sheet": None,
+    }
+    for item, stored in ((items[1], first_sheet), (items[3], empty_sheet)):
+        assert item["analysis_id"] == str(stored.analysis_id)
+        assert item["sheet_fingerprint"] == cellophane_sheet_fingerprint(item["sheet"])
+        assert item["sheet"] == stored.payload
+    assert items[1]["sheet"]["cols"] == ["q", "r", "occupancy_s", "peak"]
+    assert items[1]["sheet"]["cells"][0] == [0, 0, 0.0, 1.0]
+    assert items[3]["sheet"]["cells"] == []
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [
+        [],
+        ["not-a-uuid"],
+        [str(OWNER_ID), str(OWNER_ID)],
+        [str(uuid.UUID(int=i)) for i in range(401)],
+    ],
+)
+def test_record_sheet_request_rejects_invalid_or_duplicate_ids_before_service(
+    api_client,
+    monkeypatch,
+    ids,
+):
+    query = AsyncMock()
+    monkeypatch.setattr(diary_service, "query_record_sheets", query)
+    response = api_client.post(SHEETS_PATH, json={"client_session_ids": ids})
+    assert response.status_code == 422
+    query.assert_not_awaited()
+
+
+def test_record_sheet_api_requires_member_auth_before_snapshot_query(api_client, monkeypatch):
+    app = api_client.app
+    app.dependency_overrides.pop(next(iter(CurrentAppUser.__metadata__)).dependency)
+
+    async def no_database():
+        yield object()
+
+    app.dependency_overrides[get_session] = no_database
+    query = AsyncMock()
+    monkeypatch.setattr(diary_service, "query_record_sheets", query)
+    response = api_client.post(SHEETS_PATH, json={"client_session_ids": [str(OWNER_ID)]})
+    assert response.status_code == 401
+    query.assert_not_awaited()
+
+
+def test_record_sheet_api_limits_cells_before_loading_any_payload(api_client, monkeypatch):
+    client_id = uuid.uuid4()
+    row = _index(cell_count=diary_service.MAX_RAW_CELLS + 1)
+    _install_record_repository(monkeypatch, {client_id: row.walk_id}, [row], [])
+    payloads = AsyncMock()
+    monkeypatch.setattr(diary_repo, "list_cellophane_sheets", payloads)
+
+    response = api_client.post(SHEETS_PATH, json={"client_session_ids": [str(client_id)]})
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "spatial_diary_raw_cell_limit"
+    payloads.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "sealed_without_sheet",
+        "missing_payload",
+        "fingerprint",
+        "metadata",
+        "identity",
+        "index_count",
+    ],
+)
+def test_record_sheet_api_rejects_corrupt_sealed_original_without_pending_or_fallback(
+    api_client,
+    monkeypatch,
+    damage,
+):
+    client_id = uuid.uuid4()
+    row = _index()
+    stored = _stored_sheet(row, {(0, 0): 1.0})
+    sheets = [stored]
+    if damage == "sealed_without_sheet":
+        row = replace(row, paint_fp=None, cell_count=None)
+        sheets = []
+    elif damage == "missing_payload":
+        sheets = []
+    elif damage == "fingerprint":
+        stored.payload["cells"][0][2] = 9.0
+    elif damage == "metadata":
+        stored.profile = "different profile"
+    elif damage == "identity":
+        stored.payload["walk_id"] = str(uuid.uuid4())
+        stored.sheet_fingerprint = cellophane_sheet_fingerprint(stored.payload)
+    elif damage == "index_count":
+        row = replace(row, cell_count=0)
+    _install_record_repository(monkeypatch, {client_id: row.walk_id}, [row], sheets)
+    logged = Mock()
+    monkeypatch.setattr(diary_router.logger, "exception", logged)
+
+    response = api_client.post(SHEETS_PATH, json={"client_session_ids": [str(client_id)]})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "code": "spatial_diary_capsule_incomplete",
+        "message": "봉인된 산책 원판을 읽을 수 없습니다.",
+    }
+    assert str(row.walk_id) not in response.text
+    logged.assert_called_once()
+
+
+async def test_record_id_lookup_scopes_owner_and_explicit_ids_without_loading_gps():
+    client_id, walk_id = uuid.uuid4(), uuid.uuid4()
+    session = AsyncMock()
+    session.execute.return_value = Mock(all=Mock(return_value=[(client_id, walk_id)]))
+
+    assert await diary_repo.list_owned_record_ids(session, OWNER_ID, (client_id,)) == {
+        client_id: walk_id,
+    }
+    stmt = session.execute.await_args.args[0]
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "walks.app_user_id =" in sql
+    assert "walks.client_session_id IN" in sql
+    assert OWNER_ID in compiled.params.values()
+    assert [client_id] in compiled.params.values()
+    assert "walk_points" not in sql and "walk_pets" not in sql
+    assert not stmt._with_options
+
+
+async def test_record_index_reuses_latest_sealed_selection_without_pet_or_date_reselection():
+    walk_id = uuid.uuid4()
+    session = AsyncMock()
+    session.execute.return_value = Mock(all=Mock(return_value=[]))
+    assert await diary_repo.list_record_capsule_index(session, OWNER_ID, ()) == []
+    session.execute.assert_not_awaited()
+
+    await diary_repo.list_record_capsule_index(session, OWNER_ID, (walk_id,))
+
+    stmt = session.execute.await_args.args[0]
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "walks.app_user_id =" in sql and "walks.id IN" in sql
+    assert OWNER_ID in compiled.params.values()
+    assert [walk_id] in compiled.params.values()
+    assert "walk_pets" not in sql and "timezone" not in sql and "walk_points" not in sql
+    assert "LEFT OUTER JOIN walk_cellophane_sheets" in sql
+    assert "row_number() OVER (PARTITION BY walks.id" in sql
+    assert (
+        "walk_capsules.sealed_at DESC, walk_analyses.derived_at DESC, walk_analyses.id DESC" in sql
+    )
+    assert "walk_cellophane_sheets.derived_at DESC NULLS LAST" in sql
+    assert "walk_cellophane_sheets.paint_fp DESC NULLS LAST" in sql
+    assert "representative_rank =" in sql
+    assert 1 in compiled.params.values()

@@ -26,9 +26,89 @@ class SmokeFailure(Exception):
         self.validation_fields = validation_fields
 
 
-async def cycle(owner):
+async def prepare_backfill(owner, walk_id):
+    """Only this probe's disposable account: emulate missing public collection, then recover."""
+    from sqlalchemy import select
+
+    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.models.walk import Walk
+    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.models.walk_entry_context import WalkEntryContextJob as Job
+    from daengs_backend.services.walk_context_backfill import TAGS, run
+
+    walk_id = uuid.UUID(str(walk_id))
+    saved = {}
+    async with SessionLocal() as db:
+        owned = await db.scalar(
+            select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner).with_for_update()
+        )
+        if owned is None:
+            raise SmokeFailure("synthetic walk ownership mismatch")
+        jobs = list(
+            await db.scalars(
+                select(Job).where(Job.walk_id == walk_id, Job.tag.in_(TAGS)).with_for_update()
+            )
+        )
+        if len(jobs) != 12 or any(j.collection_round != 0 or j.attempts >= 3 for j in jobs):
+            raise SmokeFailure("unexpected synthetic collection state")
+        for job in jobs:
+            job.state, job.attempts = "failed", 3
+            job.lease_token, job.lease_until = None, None
+            raw = {"status": "unavailable", "reason": "synthetic_prior_provider_unavailable"}
+            row = Envelope(
+                id=uuid.uuid4(),
+                job_id=job.id,
+                collection_round=0,
+                attempt=3,
+                created_at=datetime.now(UTC),
+                envelope=raw,
+            )
+            db.add(row)
+            saved[row.id] = raw
+        await db.commit()
+    preview = await run(SessionLocal, walk_ids=[walk_id])
+    applied = await run(
+        SessionLocal, walk_ids=[walk_id], apply=True, expected_plan=preview["plan_digest"]
+    )
+    repeated = await run(SessionLocal, walk_ids=[walk_id])
+    if applied["scheduled_sources"] != 12 or repeated["eligible_sources"] != 0:
+        raise SmokeFailure("backfill did not schedule exactly once")
+    return saved
+
+
+async def verify_backfill(owner, walk_id, saved):
+    from sqlalchemy import select
+
+    from daengs_backend.core.database import SessionLocal
+    from daengs_backend.models.walk import Walk
+    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.services.walk_context_backfill import run
+
+    walk_id = uuid.UUID(str(walk_id))
+    async with SessionLocal() as db:
+        if (
+            await db.scalar(select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner))
+            is None
+        ):
+            raise SmokeFailure("synthetic walk ownership mismatch")
+        kept = list(await db.scalars(select(Envelope).where(Envelope.id.in_(saved))))
+        if len(kept) != 12 or any(e.envelope != saved[e.id] for e in kept):
+            raise SmokeFailure("previous collection history changed")
+    final = await run(SessionLocal, walk_ids=[walk_id])
+    if final["eligible_sources"] or final["skipped"] != {"stored_board": 1}:
+        raise SmokeFailure("stored diary was not protected from backfill")
+    return {
+        "scheduled_sources": 12,
+        "prior_envelopes_preserved": True,
+        "duplicate_request_skipped": True,
+        "stored_board_protected": True,
+    }
+
+
+async def cycle(owner, *, center=None, require_regional=False, backfill=False):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
+    center = center or {"lat": 37.4878, "lng": 127.052}
     points = []
     corners = [
         (-0.0012, -0.0007),
@@ -46,8 +126,8 @@ async def cycle(owner):
                 "client_seq": index,
                 "chain_index": 0,
                 "at": (started + timedelta(seconds=index * 10)).isoformat(),
-                "lat": round(37.4878 + a[0] * (1 - fraction) + b[0] * fraction, 7),
-                "lng": round(127.052 + a[1] * (1 - fraction) + b[1] * fraction, 7),
+                "lat": round(center["lat"] + a[0] * (1 - fraction) + b[0] * fraction, 7),
+                "lng": round(center["lng"] + a[1] * (1 - fraction) + b[1] * fraction, 7),
                 "accuracy_m": 5.0,
                 "is_mock": False,
             }
@@ -151,6 +231,7 @@ async def cycle(owner):
                 },
             )
             entries.append(entry)
+        saved = await prepare_backfill(owner, wid) if backfill else None
         contexts = []
         for _ in range(36):
             contexts = [
@@ -179,6 +260,14 @@ async def cycle(owner):
             for row in statuses
         ):
             raise SmokeFailure("public context not ready through the running worker")
+        if require_regional:
+            for context in contexts:
+                for source in context["sources"]:
+                    if source["tag"] not in {"space.commerce", "space.river"}:
+                        continue
+                    payload = source["envelope"]["payload"]
+                    if payload["catalog_area"]["center"] != center:
+                        raise SmokeFailure("context did not use its managed regional catalog")
         result = await request(
             "POST",
             f"/app/walks/{wid}/storyboard",
@@ -220,7 +309,9 @@ async def cycle(owner):
         generated = sum(s["narration"]["status"] == "generated" for s in scenes)
         if addressed != len(entries) or not generated:
             raise SmokeFailure("dong address or public background missing in diary output")
+        recovery = await verify_backfill(owner, wid, saved) if backfill else None
         return {
+            **({"backfill": recovery} if backfill else {}),
             "source_statuses": statuses,
             "scene_count": len(scenes),
             "generation": result["generation"],
@@ -231,10 +322,11 @@ async def cycle(owner):
             "addressed_scene_count": addressed,
             "generated_background_count": generated,
             "http_requests": requests,
+            "managed_region_verified": require_regional,
         }
 
 
-async def main():
+async def main(*, regional=False, backfill=False):
     owner = uuid.uuid4()
     kakao = -(
         owner.int % (2**62) + 1
@@ -248,8 +340,26 @@ async def main():
                 {"id": owner, "kakao": kakao},
             )
         created = True
-        async with asyncio.timeout(240):
-            result.update(await cycle(owner))
+        async with asyncio.timeout(480 if regional else 240):
+            if regional:
+                from daengs_backend.services.walk_catalog_regions import path_for, region
+
+                # Entire synthetic route stays inside each distinct 1 km cell.
+                cases = []
+                result["regional_cases"] = cases
+                for point in ({"lat": 37.5172, "lng": 127.0473}, {"lat": 37.556, "lng": 126.9238}):
+                    _, center = region(point)
+                    existed = all(
+                        path_for(kind, center).is_file() for kind in ("commerce", "river")
+                    )
+                    cases.append(
+                        {
+                            "catalogs_present_before": existed,
+                            **await cycle(owner, center=center, require_regional=True),
+                        }
+                    )
+            else:
+                result.update(await cycle(owner, backfill=True) if backfill else await cycle(owner))
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001 - never print API bodies, tokens, SQL parameters or user IDs
         result["error_type"] = type(exc).__name__
@@ -278,5 +388,9 @@ async def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", required=True)
-    parser.parse_args()
-    raise SystemExit(asyncio.run(main()))
+    parser.add_argument("--regional", action="store_true")
+    parser.add_argument("--backfill", action="store_true")
+    arguments = parser.parse_args()
+    if arguments.regional and arguments.backfill:
+        parser.error("choose one probe mode")
+    raise SystemExit(asyncio.run(main(regional=arguments.regional, backfill=arguments.backfill)))

@@ -96,7 +96,7 @@ async def test_provider_runs_with_no_session_and_result_keeps_original_anchor(st
     assert state.record.payload == CONTENT
 
 
-@pytest.mark.parametrize("change", ["revision", "delete", "token", "expired", "cancelled"])
+@pytest.mark.parametrize("change", ["revision", "delete", "token", "expired", "cancelled", "round"])
 async def test_late_reply_cannot_attach_to_changed_or_deleted_record(state, change):
     if change == "revision":
         state.record.revision = 2
@@ -106,6 +106,8 @@ async def test_late_reply_cannot_attach_to_changed_or_deleted_record(state, chan
         state.job.lease_token = uuid.uuid4()
     elif change == "expired":
         state.job.lease_until = NOW - timedelta(seconds=1)
+    elif change == "round":
+        state.job.collection_round = 1
     else:
         state.job.state = "cancelled"
     assert not await service.finish(
@@ -131,3 +133,20 @@ async def test_disabled_worker_does_not_open_database(state, monkeypatch):
     monkeypatch.setattr(settings, "walk_entry_context_enabled", False)
     assert await service.process(state.factory) == 0
     state.db.scalar.assert_not_awaited()
+
+
+@pytest.mark.parametrize("attempt,expected", [(1, "pending"), (2, "pending"), (3, "failed")])
+async def test_catalog_wait_keeps_three_attempt_limit_with_longer_download_window(
+    state, attempt, expected
+):
+    from datetime import UTC, datetime
+
+    state.job.attempts = attempt
+    before = datetime.now(UTC)
+    assert await service.finish(
+        state.factory,
+        state.ticket,
+        source.Collected("unavailable", "catalog_preparing", retryable=True),
+    )
+    assert state.job.state == expected and state.job.attempts == attempt
+    assert state.job.available_at >= before + timedelta(seconds=299)

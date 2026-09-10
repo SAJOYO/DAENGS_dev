@@ -75,9 +75,14 @@ async def upload_walk(
     **덮어쓰지 않습니다.** 끝난 기록은 바뀌지 않으므로 다시 온 것은 재시도일 뿐이고,
     좌표를 다시 넣으면 이미 저장한 원본을 흔들 위험만 있습니다.
 
-    강아지는 **내 강아지만** 붙입니다. 남의 pet_id 를 실어 보내도 그 강아지에
-    산책이 붙으면 안 됩니다. 내 것이 아닌 id 는 조용히 뺍니다 — 산책 자체는
-    사용자의 것이라 거절할 이유가 없습니다.
+    강아지는 **내가 돌보는 아이만** 붙입니다 (대표 ∪ 돌보미 — docs/co-care.md §2).
+    남의 pet_id 를 실어 보내도 그 강아지에 산책이 붙으면 안 됩니다. 닿지 못하는 id 는
+    조용히 뺍니다 — 산책 자체는 사용자의 것이라 거절할 이유가 없습니다.
+
+    **여기가 대표 기준이면 공동 돌봄의 하루 요약이 통째로 죽습니다.** 아빠가 맥스를
+    태그한 산책이 아예 안 만들어지므로, `walk.count_for_pet_between` 에서 소유자 조건을
+    뺀 것도 셀 것이 없습니다. 그래서 **쓰기 중 여기 하나만** 구성원 기준입니다 —
+    올라가는 것은 아빠 **자신의** 산책이고 강아지는 그 위의 태그일 뿐입니다.
 
     **아무도 안 붙어도 저장합니다.** 강아지를 등록하기 전에 걸었거나 고르지 않고
     나선 경우인데, 그래도 사람이 걸은 것은 걸은 것입니다.
@@ -92,7 +97,7 @@ async def upload_walk(
             await session.commit()
         return existing, False
 
-    mine = await pet_repo.owned_ids(session, app_user_id, body.pet_ids)
+    mine = await pet_repo.accessible_ids(session, app_user_id, body.pet_ids)
 
     walk = Walk(
         app_user_id=app_user_id,

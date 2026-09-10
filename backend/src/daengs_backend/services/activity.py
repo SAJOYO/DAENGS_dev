@@ -369,6 +369,7 @@ async def territory_summary(db, owner, season_id, pet_id):
         "statistics": row.statistics,
         "score": row.final_score or row.score,
         "score_as_of_ms": (row.final_score or row.score)["last_ms"],
+        "final_rank": row.final_rank,
         "sources": [
             {
                 "period_id": p.id,

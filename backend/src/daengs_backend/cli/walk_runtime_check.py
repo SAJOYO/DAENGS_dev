@@ -14,6 +14,7 @@ from sqlalchemy.pool import NullPool
 from daengs_backend.config import settings
 from daengs_backend.services import (
     walk_area_catalog,
+    walk_catalog_regions,
     walk_commerce_catalog,
     walk_park_catalog,
     walk_river_catalog,
@@ -32,6 +33,7 @@ VERIFIERS = (
     "2026-09-05_walk_storyboards",
     "2026-09-08_walk_entry_contexts",
     "2026-09-09_walk_public_context_commerce",
+    "2026-09-10_walk_context_recollection",
 )
 
 
@@ -47,7 +49,7 @@ def catalogs(point):
         "sha256": park["parks_sha256"],
     }
     for kind, source in (("commerce", walk_commerce_catalog), ("river", walk_river_catalog)):
-        value = walk_area_catalog.read(getattr(settings, f"walk_{kind}_catalog_path"), kind)
+        value = walk_catalog_regions.select(kind, point)
         nearby = source.nearby(value, point)
         result[kind] = {
             "retrieved_at": value["retrieved_at"],
@@ -94,6 +96,9 @@ async def check(args):
 
     flags = {key: getattr(settings, key) for key in FLAGS}
     result["checks"]["flags"] = flags
+    result["checks"]["catalog_refresh_enabled"] = settings.walk_catalog_refresh_enabled
+    if settings.walk_catalog_refresh_enabled and not settings.walk_public_catalog_root:
+        result["errors"]["catalog_refresh"] = "regional_root_missing"
     if not args.allow_disabled and not all(flags.values()):
         result["errors"]["flags"] = "required_flags_disabled"
     present = {key: bool(getattr(settings, key).get_secret_value().strip()) for key in KEYS}

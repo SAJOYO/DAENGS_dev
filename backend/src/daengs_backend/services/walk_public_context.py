@@ -82,6 +82,11 @@ async def collect_public(tag, point, pin=None, *, transport=None):
     except TimeoutError:
         return Collected("unavailable", "provider_timeout", retryable=True, **meta)
     except (ValueError, KeyError, TypeError, OSError, OverflowError):
+        if not address:
+            from daengs_backend.services.walk_catalog_regions import can_prepare
+
+            if can_prepare(point):
+                return Collected("unavailable", "catalog_preparing", retryable=True, **meta)
         return Collected(
             "unavailable", "invalid_address_response" if address else "catalog_not_ready", **meta
         )

@@ -44,8 +44,4 @@ async def prepare(request: PrepareRequest, db: Annotated[AsyncSession, Depends(g
 
 @router.post("/answer")
 async def answer(request: AnswerRequest):
-    try:
-        generator = provider()
-    except HTTPException:
-        generator = None
-    return await compose_answer(request, generator)
+    return await compose_answer(request)

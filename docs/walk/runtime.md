@@ -146,6 +146,18 @@ context·photo·public·commerce 네 migration과 짝 verifier를 순서대로 �
 이 대기 구간만 재시도하도록 수정했다. [Start 재실행](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34425517717)이
 성공해 전용 worker·Beat와 웹의 일기·공공자료 기능을 활성화했다.
 
+최종 [운영 Smoke](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34426967602)는
+배포 커밋 `c4fec1038a0435ca0e48bb617cb97dd44ca21d55`에서 성공했다.
+실제 nginx API → outbox → Beat/worker → Gemini → 저장 결과 재조회 경로를 거쳤다.
+세 기록 모두 주소·상권 `known`, 공원·하천 `partial`이었다. 장면 3개에 동 주소와
+생성 배경이 들어갔고(`model_status=accepted`, `generation=1`), 행동 1개와 메모 2개의
+원문이 보존됐다. 조회 결과는 생성 결과와 같았으며 임시 계정과 연결 자료를 삭제했다.
+
+검증 도구 자체의 오류도 [#398](https://github.com/SAJOYO/DAENGS_dev/pull/398)에서 수정했다.
+첫 오류는 합성 시각의 마이크로초와 GPS 저장 정밀도 차이였고, 두 번째는 배경 문장에
+원문을 중복 요구한 검사였다. 실제 원문 보존 필드를 검사하도록 고쳤다.
+GPS 저장 왕복·원문 누락/변조·임시 계정 삭제 대상 테스트 6개와 Ruff를 통과했다.
+
 로컬 수집·사전 점검 31개, 별도 localhost PostgreSQL의 read-only verifier 2개,
 PowerShell 동작·Compose 렌더·Configure 검사 7개를 통과했다.
 `uv run check`는 Windows 검사를 실행하는 자식 프로세스에만 실행 정책을 지정해 통과했다.

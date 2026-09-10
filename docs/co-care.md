@@ -566,6 +566,33 @@ dict `detail` 은 **이 저장소에 없던 모양**이다 — 지금 라우터�
 
 ---
 
+## 머지 전에 할 일 — 순서가 중요하다
+
+**마이그레이션이 머지보다 먼저다.** 이 변경은 덧붙이기만 하지 않는다 —
+`care_events.app_user_id` 를 `actor_app_user_id` 로 **개명**한다. 그래서 두 순서가 각각
+다른 것을 깨뜨리는데, 넓이가 다르다.
+
+| 순서 | 깨지는 것 |
+| --- | --- |
+| 마이그레이션 먼저 | 지금 도는 backend 가 `app_user_id` 를 SELECT 해서 **케어 로그만** 500 |
+| 머지 먼저 | 새 코드가 `pet_members` · `actor_app_user_id` 를 찾는다. 없으면 `get_accessible` 을 쓰는 **모든 경로**(케어 · 대화 · 보행 · 산책 기록)가 죽는다 |
+
+**`dev` 머지는 곧 자동 배포다** (`deploy.yml` 이 `push: branches: [dev]`). 그러니 순서는:
+
+1. PR 에서 CI 를 한 번 통과시킨다 — `backend-tests.yml` 이 postgres 서비스를 띄워
+   트리거·FK 층(`test_pet_membership_postgres.py`)을 처음으로 실물 검증한다.
+2. Actions 탭에서 **`db-migrate.yml`** 을 돌린다 —
+   `file=2026-09-09_pet_members.sql`, `ref=docs/co-care-design`(**아직 머지 안 된 브랜치도 된다**),
+   `verify=true`. 짝 파일(`verify_2026-09-09_pet_members.sql`)이 적용 직후 스키마를 단언으로
+   검사하고, 틀리면 시끄럽게 실패한다.
+3. 머지한다.
+
+**서버 PC 터미널에서 직접 하지 말 것.** 거기서는 `127.0.0.1` 이 곧 팀 공용 DB 라 테스트의
+loopback 가드가 무의미해지고, `db/migrations/README.md` 의 "서버 PC 터미널의 함정 셋"
+(compose 가 설정 해석에서 죽는 것 · PowerShell 의 `<` · 파이프가 한글 주석을 깨는 것)이 그대로
+기다린다. 같은 내용이 마이그레이션 파일 머리에도 적혀 있다 — 파일 이름을 고르는 사람이
+그 순간 읽는 자리라서다.
+
 ## 열린 것
 
 - **미니룸이 돌보미의 강아지를 세우는가** — §2 의 상한 의미가 여기 달렸다. 앱 결정.

@@ -206,6 +206,8 @@ def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
         "/internal/place/discovery",
         "/internal/place/facility-discovery",
         "/internal/place/facility-discovery/actions",
+        "/internal/place/facility-conversation/prepare",
+        "/internal/place/facility-conversation/answer",
     }
 
 

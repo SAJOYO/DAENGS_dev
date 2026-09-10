@@ -221,7 +221,7 @@ class RAGService:
         )
         self.client = client or generation.load_gemini_answer_client()
         self.medical_terms = list(medical_terms) if medical_terms is not None else (
-            generation.medical_guardrail.load_medical_terms_v2()
+            generation.medical_guardrail.load_serving_medical_terms()
         )
         self.whitelist_terms = list(whitelist_terms) if whitelist_terms is not None else (
             generation.medical_guardrail.load_training_whitelist()

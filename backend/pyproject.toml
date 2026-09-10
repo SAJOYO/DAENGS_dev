@@ -14,6 +14,7 @@ dependencies = [
     "celery>=5.5",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
+    "google-cloud-run>=0.16.1",
     "google-cloud-storage>=2.18",
     "google-genai>=2.18.1",
     "httpx>=0.28.1",
@@ -28,8 +29,10 @@ dependencies = [
     "pgvector>=0.3",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
+    "pyproj>=3.7",
     "pyyaml>=6.0.3",
     "redis>=6.0",
+    "shapely>=2.1",
     "sqlalchemy[asyncio]>=2.0.52",
     "tzdata>=2026.3",
 ]
@@ -39,9 +42,9 @@ dependencies = [
 [project.scripts]
 dev = "daengs_backend.main:dev"
 run = "daengs_backend.main:run"
-# 보행 분석은 **별도 프로세스**입니다 (D-038). backend 앱에 붙지 않으므로 진입점이 따로입니다.
-# compose 의 gait-analysis 서비스가 이것을 부릅니다.
-gait-serve = "daengs_gait.service:main"
+# 저장소 규칙 검사. **3초** 안에 끝나는 것만 들어갑니다 — pytest 가 안 보는 자리
+# (루트 `tools/` 의 마이그레이션 체커)를 봅니다. 느린 것을 넣지 마세요, 이유는 그 파일 첫머리에.
+check = "daengs_backend.cli.check:main"
 # 관리자 계정 INSERT SQL 을 만들어 줍니다. DB 는 건드리지 않습니다.
 seed-admin = "daengs_backend.cli.seed_admin:main"
 # 앱 없이 카카오 id_token 을 받아 우리 검증기로 확인합니다 (개발용).
@@ -84,7 +87,13 @@ agent = [
 # ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 ultralytics
 #   가 다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
 [tool.uv]
-override-dependencies = ["opencv-python; sys_platform == 'never'"]
+# opencv 는 **headless 만** 들어옵니다 — GUI 판(opencv-python · opencv-contrib-python)은 어느 그룹이
+# 끌고 와도 이 override 로 막힙니다. ultralytics(gait) 와 rtmlib(gait-v4) 둘 다 GUI 판을 요구하는데,
+# slim 컨테이너에는 libxcb 가 없어 첫 분석에서 죽습니다 (2026-08-31 실측). 같은 버전·같은 API 입니다.
+override-dependencies = [
+    "opencv-python; sys_platform == 'never'",
+    "opencv-contrib-python; sys_platform == 'never'",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
@@ -155,9 +164,9 @@ ml = [
 # `ml` 과 같은 선(>=2.6)에 묶어 둔다 ② 아래 [tool.uv.sources] 의 인덱스 바인딩이
 # **패키지 단위**라 어느 그룹이 요구하든 리눅스에서 CPU 판을 받는다는 것을 여기서 보이게 한다.
 #
-# ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 `/gait/` 만 503 이 된다** —
-#   다른 API 는 멀쩡해서 로그에 아무 문제도 안 보인다. 이름을 바꾸면
-#   docker-compose.yml 의 gait-analysis `command` 도 같이 고쳐라.
+# ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 gait-worker 가 기동에서 멈춘다** —
+#   `--frozen` 이라 로그에 바로 나오지만, 웹은 멀쩡해서 상태 화면의 보행만 `absent` 로 보인다.
+#   이름을 바꾸면 docker-compose.yml 의 gait-worker `command` 도 같이 고쳐라.
 #
 # ⚠ **`gait-venv` 를 `backend-venv` 와 공유하면 안 된다.** 인자 없는 `uv sync` 는 exact
 #   동기화라 같은 볼륨에 돌리면 서로의 그룹을 지운다 (crawler-worker 주석과 같은 함정).
@@ -200,9 +209,26 @@ screening = [
     "pillow>=10.2",
     "pandas>=2.1",
     "tqdm>=4.66",
+    "huggingface-hub>=0.34",
 ]
 pipeline = [
     "google-cloud-run>=0.16.1",
+]
+# walk_demo v4 엔진(`backend/gait_v4/`, GAIT_ENGINE=v4)의 venv. **`==` 핀 그대로** — 골든
+# (`gait_v4/tests/golden_v4_rear.json`, 0.01px)이 이 조합에서 나왔고 `tests/test_gait_v4_lock.py` 가 지킵니다.
+# `gait` 와 따로 두는 이유: 저쪽은 `>=` 이고 torch·numpy 를 ml·screening 과 공유하는데 여기에 `==` 를
+# 섞으면 남의 그룹 해석까지 못 박힙니다. 5B 에서 inference 가 daengs_gait 로 들어오면 하나로 합칩니다.
+# 기본 그룹이 아니라 `uv sync` 로는 안 깔립니다. compose 의 gait-worker 가 `--only-group gait-v4` 로
+# /opt/gait-v4-venv 를 만들고, 개발 PC 절차는 `backend/gait_v4/DAENGS-NOTE.md`.
+gait-v4 = [
+    "imageio-ffmpeg==0.6.0",
+    "numpy==2.5.2",
+    "onnxruntime==1.29.0",
+    "opencv-contrib-python-headless==5.0.0.93",
+    "opencv-python-headless==5.0.0.93",
+    "rtmlib==0.0.16",
+    "torch==2.13.0",
+    "torchvision==0.28.0",
 ]
 
 [tool.ruff]
@@ -217,11 +243,11 @@ testpaths = ["tests"]
 # (#336) 원래 이 줄이 있던 이유(#224 — `from tools... import` 가 venv 에 안 깔린 패키지를
 # 찾지 못함)는 없어졌지만, 줄을 지우고 돌려 보니 다른 이유로 여전히 필요했다: 여러 테스트가
 # `tests/` 자체를 패키지처럼 써서 서로를 import 한다 —
-# `tests/place/place/discovery/test_facility_actions.py` 가
-# `from tests.place.place.discovery.test_facility import make_service, request` 를,
-# `tests/test_facility_discovery_api.py` 가 `from tests.facility_session_store import
-# MemorySessions` 를, `tests/walk/test_storyboard_observations.py` 가
-# `from tests.walk.test_walk_storyboard_titles import headings` 를 쓴다. `tests/` 에
+# `tests/place/discovery/test_facility_actions.py` 가
+# `from tests.place.support.discovery import make_service, request` 를,
+# `tests/place/api/test_facility_discovery_api.py` 가 `from tests.place.support.session_store import
+# MemorySessions` 를, `tests/walk/storyboard/test_storyboard_observations.py` 가
+# `from tests.walk.support.storyboard import headings` 를 쓴다. `tests/` 에
 # `__init__.py` 가 없어 이것들은 namespace 패키지로만 잡히는데, 그러려면 `backend/` 가
 # sys.path 에 있어야 한다 — 지우면 `ModuleNotFoundError: No module named 'tests'`.
 pythonpath = ["."]

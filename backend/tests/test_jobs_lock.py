@@ -43,3 +43,12 @@ def test_parent_path_is_built_from_project_region_job():
         job="corpus-refresh", execution="e", project="p", region="r",
         list_executions=lambda parent: seen.setdefault("parent", parent) and [])
     assert seen["parent"] == "projects/p/locations/r/jobs/corpus-refresh"
+
+
+def test_pending_execution_counts_as_active():
+    """태스크가 아직 안 뜬 실행은 running_count 가 0 이지만 completion_time 도 없다 — 활성이다 (#325 최종 리뷰)."""
+    pending = SimpleNamespace(name=OTHER, running_count=0, completion_time=None)
+    found = lock.another_execution_running(
+        job="corpus-refresh", execution="corpus-refresh-abc", project="p", region="asia-northeast3",
+        list_executions=lambda parent: [_ex(ME, True), pending])
+    assert found == "corpus-refresh-xyz"

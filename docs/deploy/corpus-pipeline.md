@@ -96,18 +96,28 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 것이라 건드리지 않는다). ⚠ **`torch==X` 로 적으면 이미 깔린 `X+cpu` 가 그것을 만족시켜 조용히
 아무 일도 안 한다** — `X+cu126` 까지 핀하고 `--reinstall-package` 를 주며, 빌드 끝에
 `torch.version.cuda` 를 확인해 아니면 빌드를 실패시킨다. Triton JIT 이 C 컴파일러를 부르므로
-CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. 실측 크기는 두 장 합쳐 약 4.5GB.
+CUDA 스테이지에 `gcc`·`libc6-dev` 도 넣는다. Artifact Registry 실측(2026-09-09, 압축 저장 크기)은 **CPU 2.4GB · CUDA 9.7GB, 합 12.1GB** — CUDA 판은 nvidia-* 런타임 휠 때문에 네 배다.
 roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 간다.
 
 **설정은 환경 변수로만** — `DAENGS_DATA_DIR=/data`, `POSTGRES_IP=<VM 내부 IP>` 와 계정 조각,
 `EMBEDDING_MODEL_KEY`. 비밀번호는 Secret Manager. `.env` 는 이미지에 안 들어간다.
 가드 한계는 잡 인자(`--max-drop`)다 — `runbook.md` §6 참고.
 
-**관리자 트리거** (별도 PR) — `services/crawl.py` 가 `DAENGS_CRAWL_BACKEND=celery|cloudrun` 으로
-갈린다. cloudrun 이면 Jobs API 로 `corpus-refresh` 실행(소스 id 는 잡 인자), 실행 중이면 새로
-안 띄우고 그 실행을 화면에 알린다. 인증은 VM 서비스 계정 + 메타데이터 서버(키 파일 없음).
-상태 페이지의 "크롤 워커 있나" 는 GCP 에서 "잡 실행 중인가" 를 묻는다. 진행 표시는 `crawl_runs`
-폴링 그대로. 관리자 화면에는 "전체" 하나만 노출한다 (집 서버는 크롤에서 멈추지만 GCP 는 적재까지).
+**관리자 트리거** (#326) — `services/crawl.py` 가 `settings.crawl_backend`(`DAENGS_CRAWL_BACKEND`,
+기본 `celery`)로 갈린다. GCP VM 의 `backend/.env` 에만 `cloudrun` 을 두고, 같이 `DAENGS_GCP_PROJECT`
+· `DAENGS_GCP_REGION`(기본 `asia-northeast3`) · `DAENGS_CORPUS_JOB`(기본 `corpus-refresh`) 을 준다.
+cloudrun 이면 Jobs API 로 `corpus-refresh` 실행(소스 id 는 컨테이너 인자 `--sources a b`, 없으면
+due 판정 그대로). **끝나지 않은 실행이 있으면**(pending 포함) 새로 안 띄우고 `AlreadyRunning`
+을 던져 라우터가 202 + `note: "실행 중인 것이 있어 새로 띄우지 않았습니다: <실행 이름>"` 로
+그 실행을 알린다 — 실패가 아니다. Cloud Run API 자체가 죽으면 옛 "브로커 다운"과 같은 503.
+인증은 VM 기본 컴퓨트 서비스 계정 + 메타데이터 서버다(키 파일 없음) — `run.invoker`·`run.viewer`
+가 필요하고 절차는 `infra/gcp/README.md`.
+
+상태 페이지의 "크롤" 항목은 GCP 에서 잡이 있으면 `Cloud Run 잡 corpus-refresh@asia-northeast3`
+로 뜬다. API 가 안 답하면 **`absent` 가 아니라 `down`** 이다 — "여기엔 원래 크롤러가 없다"가
+아니라 "있어야 하는데 안 답한다"이기 때문이다("Cloud Run 잡에 묻지 못했습니다"). 설정 자체가
+비어 있으면 여전히 `absent`. 진행 표시는 `crawl_runs` 폴링 그대로. 관리자 화면에는 "전체"
+하나만 노출한다 (집 서버는 크롤에서 멈추지만 GCP 는 적재까지).
 
 **안 바꾸는 것** — 크롤러·rag 각 단계 내부, 경로 규약, Celery 태스크, 집 서버 compose.
 
@@ -125,7 +135,7 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
 | Secret Manager | `corpus-db-password` · `corpus-law-oc` · `corpus-data-go-kr-key` · `corpus-seoul-open-data-key` | 잡 환경 변수로 주입 |
 | 서비스 계정 | `corpus-pipeline` | 버킷 RW · Secret 읽기 · VPC 이그레스 · **Run 실행 조회**(동시 실행 확인) |
 | VPC 방화벽 | `allow-pg-from-run` | 서울 서브넷 범위 → VM tcp:5432. 인터넷에는 여전히 안 연다 |
-| IAM | VM 기본 서비스 계정에 잡 실행 권한 | 관리자 트리거용 (별도 PR) |
+| IAM | VM 기본 서비스 계정에 잡 실행 권한 | #326 — VM 기본 SA 에 잡 `run.invoker`·`run.viewer` |
 | Monitoring | 잡 실패 → 이메일 | **아직 안 만들었다** — 알림 채널이 없어 `pipeline.sh` 가 건너뛴다. 선택이고, 붙일 때는 `CHANNEL=<알림 채널 id> bash infra/gcp/pipeline.sh` 로 다시 돌리면 정책이 선다 |
 | 예산 알림 | 기존 것 확인 | GPU 잡 폭주 안전판 |
 
@@ -144,7 +154,7 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
 | `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
 | `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
 | 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
-| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| Artifact Registry | 이미지 2장 12.1GB (CPU 2.4 · CUDA 9.7, 2026-09-09 실측) | 약 ₩1,600 (GB당 월 $0.10) |
 | 버킷 | 약 300MB + 버전 | 수백 원 |
 | Scheduler · Secret | | 무료 구간 |
 | **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |
@@ -186,7 +196,7 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
    실행 `corpus-refresh-nrfk7` 3분 40초 성공.** due 소스 0개(전날 16:40 수동 전체 실행이 다 받아서),
    parse·chunk·embed 전부 same, load 9,885 → 9,885. 그래서 `crawl_runs` 에 `trigger='due'` 행은
    없다 — 주기가 돌아오는 날 생긴다. 완료 기준("Scheduler 가 매일 돈다")은 여기서 닫혔다.
-7. (별도 PR) 관리자 콘솔 트리거 → 잡이 뜨고 화면 폴링이 진행을 보여 준다
+7. (#326, 실제 확인은 dev→main 뒤 VM 에서) 관리자 콘솔 트리거 → 잡이 뜨고 화면 폴링이 진행을 보여 준다
 8. 앱 `/life/ask` 로 새 문서가 근거에 잡힌다
 
 **자동 테스트** — 진입점의 단계 조립과 가드 판정은 DB·파일 없이(계획 객체를 주고 중단 여부만).
@@ -200,7 +210,7 @@ roadmap §7-2 "이미지 굽기" 가 파이프라인에 한해 여기서 먼저 
 - **#325 (본문 재작성, 브랜치 유지)** — 파이프라인 잡. 진입점 · 가드 · 동시 실행 확인 · Dockerfile ·
   gcloud 스크립트 · D-062 · 문서. **완료 기준: Scheduler 가 매일 돈다.** backend 는 안 건드리므로
   dev 머지로 끝나고 VM 재배포 없음. 잡은 이미지 push 로 배포.
-- **새 PR** — 관리자 트리거 갈래. `services/crawl.py` 분기 · 상태 페이지 분기 · Google 인증 의존성
+- **#326** — 관리자 트리거 갈래. `services/crawl.py` 분기 · 상태 페이지 분기 · Google 인증 의존성
   (`uv add`) · 관리자 화면 문구 · `docs/console/` 한 절. backend 를 바꾸므로 dev→main 스냅샷과
   VM 재배포를 지난다. #325 가 끝나 잡이 있어야 검증되므로 뒤.
 

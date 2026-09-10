@@ -8,6 +8,7 @@
 `data/raw/` 를 바꾸므로 조회와 같은 문이면 안 됩니다.
 """
 
+import asyncio
 import logging
 from typing import Annotated
 
@@ -72,7 +73,15 @@ async def trigger(
     `KeyError` 를 담습니다 (RAG-044). 시드 목록을 두 곳에서 검사하면 반드시 어긋납니다.
     """
     try:
-        task_id = crawl_service.trigger(body.source_ids)
+        # 동기 클라이언트라 스레드로 — `services/status.py` 의 `_crawl` 과 같은 이유.
+        # cloudrun 갈래는 RPC 두 번(최대 30초씩) + 첫 호출의 클라이언트/ADC 준비까지 겹치면
+        # 최대 60초 가까이 걸릴 수 있어, 이벤트 루프에서 바로 부르면 uvicorn 프로세스 하나뿐인
+        # 워커가 그동안 다른 요청을 전혀 못 받는다 (#326 최종 리뷰).
+        task_id = await asyncio.to_thread(crawl_service.trigger, body.source_ids)
+    except crawl_service.AlreadyRunning as e:
+        # 새로 띄우지 않았지만 실패도 아니다 — 지금 도는 실행을 알려 준다 (#326).
+        return CrawlTriggerAccepted(task_id=e.execution, source_ids=body.source_ids,
+                                    note=f"실행 중인 것이 있어 새로 띄우지 않았습니다: {e.execution}")
     except crawl_service.BrokerUnavailable as e:
         # 500 이 아닙니다 — 앱은 멀쩡하고 워커/브로커가 없는 것이라 사람이 고칠 일입니다.
         logger.warning("크롤 트리거 실패 — %s", e)

@@ -37,6 +37,7 @@ from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
 from daengs_backend.services import request_metrics as metrics_service
 from daengs_backend.services import screening_context as screening_context_service
+from daengs_backend.services import vet_spend_context as vet_spend_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -109,6 +110,12 @@ async def _with_dog_context(
     는다 — 무상태 요청이 DB 를 안 여는 성질(D-048)은 여전히 이 조건에서만, 세션 하나로만 깨진다.
     로그 쪽도 못 채우면 그냥 지나간다: 남의 강아지 · 오늘 기록 없음 · **표가 아직 없음**(#332
     마이그레이션 전) 전부 로그 없이, 이 카드 전과 똑같이 답한다.
+
+    **최근 진료비 요약도 같은 세션에서 읽어 `context["vet_spend"]` 에 얹는다** (#353
+    Task 7). 같은 이유로 같은 세션이다 — `care_log` 를 위해 세션을 하나 더 열지 않는 것과
+    똑같이, 진료비를 위해 세션을 또 하나 열면 요청당 연결이 는다. 못 채워도 그냥 지나간다:
+    남의 강아지 · 확정된 방문 없음 · **표가 아직 없음**(#353 마이그레이션 전) 전부 이
+    카드 전과 똑같이 답한다.
     """
     active_dog_id = context.get("active_dog_id")
     if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
@@ -118,11 +125,16 @@ async def _with_dog_context(
         care_log = await care_log_context_service.resolve(
             session, principal.app_user_id, active_dog_id
         )
+        vet_spend = await vet_spend_context_service.resolve(
+            session, principal.app_user_id, active_dog_id
+        )
     resolved = dict(context)
     if dog is not None:
         resolved["dog"] = dog
     if care_log is not None:
         resolved["care_log"] = care_log
+    if vet_spend is not None:
+        resolved["vet_spend"] = vet_spend
     return resolved
 
 

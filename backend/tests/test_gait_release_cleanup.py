@@ -305,6 +305,8 @@ def test_worker_requests_nonpersistent_pipeline_and_returns_overlay_bytes(
     from daengs_backend.core import storage as storage_module
 
     monkeypatch.setattr(storage_module, "get_storage", lambda: LocalStorage())
+    # 입력 판정(3단계)은 여기 주제가 아닙니다 — 가짜 바이트라 실제 프로브는 실패합니다.
+    monkeypatch.setattr("daengs_gait.intake.prepare_for_analysis", lambda p: p)
 
     result = gait_service._analyze_from_storage("original")
 

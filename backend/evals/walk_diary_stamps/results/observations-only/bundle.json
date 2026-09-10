@@ -1,0 +1,140 @@
+{
+  "format": "walk-diary-bundle-v1",
+  "client_session_id": "cec082bb-40ae-5e96-a2f4-f91c321ac2bd",
+  "input_revision": "c0258ddf2d5af3946ec4fb8406c040305a62c5a4f5fb7942068e6f12e71d81c6",
+  "plan_revision": "b46ea3b0f50216a4a9d71068c473fd485c3dd777b8089f64515bc75cb3aa01e7",
+  "title": "2026.09.09 산책",
+  "title_origin": "system",
+  "model_status": "not_requested",
+  "semantic_status": "not_evaluated",
+  "failure_code": null,
+  "photos_status": "complete",
+  "scenes": [
+    {
+      "id": "stamp:72aa346bcb5528260d0c96767ab6c62346fc7b189e4a9046aaed7cec024a06b3",
+      "order": 1,
+      "core": {
+        "identity": "observation:dwell",
+        "version": "5c8bd353595b66c8f97415e4759ec653dd9c3c267290d7b7e587439e740ba5f1"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:12:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:12:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 12,
+            "chain_index": 0,
+            "at": "2026-09-09T00:12:00Z"
+          }
+        ]
+      },
+      "user_record": null,
+      "observation": {
+        "id": "dwell",
+        "version": "db0ba00e6292c8402899d0ba918c971c01d9f30a44bfad35875562411f6002c0",
+        "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+        "kind": "observed_dwell",
+        "subject": "recording_device",
+        "action_meaning": "not_inferred",
+        "started_at": "2026-09-09T00:12:00Z",
+        "ended_at": "2026-09-09T00:13:30Z",
+        "anchor": {
+          "event_at": "2026-09-09T00:12:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.501,
+            "lng": 127.001
+          },
+          "location_at": "2026-09-09T00:12:00Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 12,
+              "chain_index": 0,
+              "at": "2026-09-09T00:12:00Z"
+            }
+          ]
+        }
+      },
+      "place_reference": [],
+      "narration": {
+        "status": "no_background",
+        "text": null,
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "stamp:52e872c5fba2b7a4a7f8a4740140107b9bea76c239872c556b6697d93048e94e",
+      "order": 2,
+      "core": {
+        "identity": "observation:slow",
+        "version": "973960a161eb558ec699369100bfe660e6313a0d1ecc5b8749ce12dcf980d66d"
+      },
+      "anchor": {
+        "event_at": "2026-09-09T00:32:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.501,
+          "lng": 127.001
+        },
+        "location_at": "2026-09-09T00:32:00Z",
+        "accuracy_m": null,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 32,
+            "chain_index": 0,
+            "at": "2026-09-09T00:32:00Z"
+          }
+        ]
+      },
+      "user_record": null,
+      "observation": {
+        "id": "slow",
+        "version": "f66d7c753e84608c844d222652856b45ff3c1722b34085468d5c1bcc5bb4e7a8",
+        "analysis_id": "b35319e0-c06f-5f5d-84df-f474867c70db",
+        "kind": "observed_slow",
+        "subject": "recording_device",
+        "action_meaning": "not_inferred",
+        "started_at": "2026-09-09T00:32:00Z",
+        "ended_at": "2026-09-09T00:33:00Z",
+        "anchor": {
+          "event_at": "2026-09-09T00:32:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.501,
+            "lng": 127.001
+          },
+          "location_at": "2026-09-09T00:32:00Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 32,
+              "chain_index": 0,
+              "at": "2026-09-09T00:32:00Z"
+            }
+          ]
+        }
+      },
+      "place_reference": [],
+      "narration": {
+        "status": "no_background",
+        "text": null,
+        "evidence_ids": []
+      }
+    }
+  ]
+}

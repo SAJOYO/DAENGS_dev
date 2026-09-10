@@ -34,7 +34,8 @@ Source facts와 typed planning 이후 자연어 발견 기능의 코드·프로�
 - `src/daengs_place/core/config.py` — 지도/route/deeplink 설정은 제거하고 검색·적재 필드만
   유지했다. PR #195부터 Place 내부 discovery가 쓰는 optional Gemini 필드만 추가했으며,
   keyless boot와 기존 공개 검색은 계속 보장한다(파일 docstring 참고).
-- `tests/place/conftest.py` — walk/journey/provider 팩토리를 뺀 발췌
+- `tests/place/support/database.py` — walk/journey/provider 팩토리를 뺀 발췌.
+  최초 이관의 `conftest.py`에서 일반 도구를 분리한 위치이며 DB 동작은 유지한다.
 - `tests/place/test_boundary.py` — geo의 `test_search_closure.py` 번안. geo에서는
   "provider·profile 이 closure 에 없다"를 쟀지만, 여기는 그 코드가 아예 없으므로
   **화이트리스트**(하위는 api/core/geo/place 뿐)와 "daengs_backend 를 모른다"로 잰다

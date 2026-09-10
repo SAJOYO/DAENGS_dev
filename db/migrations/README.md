@@ -47,6 +47,16 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 
 ## ⚠️ 표 일부는 `postgres` 소유다 — `must be owner of table` 의 정체 (2026-09-08, #329)
 
+🔴 **이 절은 2026-09-09 에 반박됐고 아직 못 가렸다.** 사람이 *"daengs 도 슈퍼유저이고 여태 그걸로 했다"*
+고 했다 (#384). 슈퍼유저면 소유권과 무관하게 `ALTER TABLE`·`CREATE INDEX` 가 되므로 아래 서술이
+통째로 낡은 것이 된다. 그날 서버 PC 가 꺼져 있어 확인을 못 했다 — **서버 앞에 서면 두 줄로 갈리고,**
+**맞는 쪽으로 이 절을 고쳐라.** 그때까지는 아래를 사실이 아니라 *2026-09-08 에 그렇게 보였다* 로 읽는다.
+
+```sql
+SELECT usesuper FROM pg_user WHERE usename = current_user;
+SELECT pg_get_userbyid(relowner) FROM pg_class WHERE relname IN ('documents','crawl_runs');
+```
+
 `db-migrate.yml` 은 `-U $POSTGRES_USER` 로 붙는데 그 계정은 **`daengs`** 이고 슈퍼유저가
 아니다. 그런데 서버 DB 의 표 일부는 **`postgres`** 소유다 — `db/init/` 이 볼륨을 처음 만들 때
 그 계정으로 돌았기 때문이다. 나머지는 나중에 `daengs` 가 만들어서 갈렸다.

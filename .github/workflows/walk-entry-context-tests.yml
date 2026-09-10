@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - 'backend/src/daengs_backend/**'
-      - 'backend/tests/test_walk_entr*'
+      - 'backend/src/daengs_walk/**'
+      - 'backend/src/daengs_life/**'
+      - 'backend/tests/walk/**'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -13,7 +15,9 @@ on:
     branches: [dev]
     paths:
       - 'backend/src/daengs_backend/**'
-      - 'backend/tests/test_walk_entr*'
+      - 'backend/src/daengs_walk/**'
+      - 'backend/src/daengs_life/**'
+      - 'backend/tests/walk/**'
       - 'backend/tests/conftest.py'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
@@ -47,4 +51,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
-      - run: uv run pytest -q tests/test_walk_entry_context_db.py tests/test_walk_entry_context.py tests/test_walk_entry_http.py tests/test_walk_entries.py
+      - name: Context DB and entry contracts
+        run: >-
+          uv run pytest -q -rs tests/walk/context
+          tests/walk/entries/test_walk_entry_http.py
+          tests/walk/entries/test_walk_entries.py
+          --junitxml=walk-entry-context-results.xml
+      - name: Require executed checks
+        run: |
+          uv run python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = list(ET.parse("walk-entry-context-results.xml").iter("testcase"))
+          if not cases or any(case.find("skipped") is not None for case in cases):
+              raise SystemExit("Context DB verification had no tests or skipped cases")
+          PY

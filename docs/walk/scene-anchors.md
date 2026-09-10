@@ -45,5 +45,5 @@ v1/v2/v3 요청에는 observation을 제거해 엄격한 파서를 유지한다.
 Ruff 검사와 포맷 검사도 통과했다. 운영 DB와 실제 LLM 호출은 수행하지 않았다.
 
 ```powershell
-uv run --no-sync pytest tests/walk/test_storyboard_observations.py tests/walk/test_walk_storyboard.py tests/walk/test_walk_storyboard_titles.py -q
+uv run --no-sync pytest tests/walk/storyboard/test_storyboard_observations.py tests/walk/storyboard/test_walk_storyboard.py tests/walk/storyboard/test_walk_storyboard_titles.py -q
 ```

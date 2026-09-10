@@ -45,6 +45,50 @@ class WrongStateError(RuntimeError):
     """지금 상태에서 허용되지 않는 전이. 라우터가 409 로 옮깁니다."""
 
 
+class BrokerUnavailable(RuntimeError):
+    """브로커 주소가 없거나 브로커에 묻지 못함. 상태 페이지는 이것을 `absent` 로 읽습니다."""
+
+
+#: 워커가 듣는 큐. `tasks/gait.py` 의 `task_default_queue` 와 같아야 합니다 —
+#: `tests/test_gait_worker_status.py` 가 둘을 대조합니다.
+GAIT_QUEUE = "gait"
+
+
+def gait_workers(timeout_sec: float = 1.0) -> list[str]:
+    """`gait` 큐를 듣고 있는 Celery 워커 이름들. 없으면 빈 목록입니다 (상태 페이지, D-063 4단계).
+
+    옛 `gait-analysis` HTTP 서비스의 `/healthz` 를 대신합니다 — 이제 보행 분석의 실행부는
+    `gait-worker` 하나뿐이라, "살아 있나" 는 그 워커가 큐를 듣고 있나로 묻습니다.
+
+    `crawl_workers` 의 celery 갈래와 같은 모양입니다. `ping()` 이 아니라 `active_queues()` 를
+    쓰는 이유도 같습니다 — 이 브로커에는 크롤러·실시간 워커도 붙어 있어서 ping 은
+    **보행 워커가 아닌 답**을 보행 워커로 읽습니다. 큐 이름으로 걸러야 합니다.
+
+    브로커 주소가 없거나 브로커가 안 답하면 `BrokerUnavailable` 입니다 — 500 이 아니라
+    "이 환경엔 없다" 입니다. **동기입니다** (kombu). 부르는 쪽이 스레드로 돌립니다.
+    """
+    from daengs_backend.config import settings
+
+    if not settings.redis_url:
+        raise BrokerUnavailable("REDIS_URL 이 없다 — backend/.env 를 확인할 것")
+    from celery import Celery
+
+    app = Celery(broker=settings.redis_url)      # 보내기 전용 — 이 프로세스는 워커가 아닙니다
+    try:
+        replies = app.control.inspect(timeout=timeout_sec).active_queues()
+    except Exception as e:                      # 브로커가 죽은 것은 500 이 아니다
+        raise BrokerUnavailable(f"브로커에 묻지 못했다: {type(e).__name__}: {e}") from e
+
+    # 아무도 답하지 않으면 None 입니다 (빈 dict 가 아닙니다).
+    if not replies:
+        return []
+    return sorted(
+        node
+        for node, queues in replies.items()
+        if any(q.get("name") == GAIT_QUEUE for q in queues or [])
+    )
+
+
 async def start_analysis(
     session: AsyncSession, app_user_id: uuid.UUID, req: GaitAnalyzeRequest
 ):
@@ -155,11 +199,15 @@ def _as_compare_record(record: GaitRecord) -> dict:
     `compare_records` 가 실제로 읽는 것만 채웁니다 — 전수 확인한 목록입니다:
     `record_id` · `date` · `quality.status` · `quality.quality_tier` ·
     `quality.recommendation` · `features.summary_for_ui` ·
-    `features.internal_feature_vector` · `gait_filter_version`.
+    `features.internal_feature_vector` · `gait_filter_version` · `pose_model`.
 
     ⚠️ `quality_tier` 는 `quality` **dict 안**에서 읽습니다 (`quality_gate` 가 거기 넣고
        서비스가 통째로 저장합니다). 별도 컬럼도 있지만 그쪽을 쓰면 두 값이 갈릴 수 있어
        저장된 dict 하나만 봅니다.
+
+    `pose_model` 은 기록이 어떤 관절 정의로 만들어졌는지입니다 (D-063). v4 compare 가 자기
+    가드(`pm_a != pm_b`)에서 읽는 키이기도 합니다 — 안 넣으면 그 가드가 기본값 `best_pt`
+    로 늘 통과해 버립니다.
     """
     return {
         "record_id": str(record.id),
@@ -170,6 +218,7 @@ def _as_compare_record(record: GaitRecord) -> dict:
             "internal_feature_vector": record.internal_feature_vector or {},
         },
         "gait_filter_version": record.gait_filter_version,
+        "pose_model": record.pose_model,
     }
 
 
@@ -196,8 +245,12 @@ async def compare(
 ) -> dict:
     """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-058).
 
-    판정·임계값·문구는 `daengs_gait.compare.compare_loaded_records` 그대로입니다 — 여기서는
-    입력을 모아 주고 `_dev_only_*` 만 걷어냅니다.
+    판정·임계값·문구는 각 모델의 비교 함수 그대로입니다 — 여기서는 입력을 모아 주고,
+    **두 기록의 `pose_model` 로 비교 가능 여부**를 가른 뒤, `_dev_only_*` 만 걷어냅니다.
+
+    비교 불가는 오류가 아니라 정상 상태이고, "같은 기록"·"다른 반려견" 과 같은 통로
+    (`CompareError` → 400 + 사유)로 나갑니다. NULL 을 같은 모델로 보지 않습니다 —
+    모델을 모르는 기록끼리는 관절 정의가 같다는 보장이 없습니다.
     """
     if record_id_a == record_id_b:
         raise CompareError("같은 기록끼리는 비교할 수 없습니다.")
@@ -213,10 +266,19 @@ async def compare(
         # 이 서비스는 "같은 아이의 시간 변화"를 보는 것이라서요.
         raise CompareError("서로 다른 반려견의 기록은 비교할 수 없습니다.")
 
+    # 관절 정의 호환성 (D-063). 서버가 지금 어떤 엔진을 돌리는지(`GAIT_ENGINE`)는 보지 않습니다 —
+    # 기록이 무엇으로 만들어졌는지가 기준입니다.
+    if first.pose_model is None or second.pose_model is None:
+        raise CompareError("비교 불가 — 분석 모델 정보가 없는 기록입니다.")
+    if first.pose_model != second.pose_model:
+        raise CompareError("비교 불가 — 서로 다른 분석 모델로 만든 기록입니다.")
+
     past, recent = _order_by_age(first, second)
 
-    # 엔진 선택과 `_dev_only_*` 제거는 `_run_compare` 에 있습니다 (#304).
-    return _run_compare(_as_compare_record(past), _as_compare_record(recent))
+    # 비교 함수 선택과 `_dev_only_*` 제거는 `_run_compare` 에 있습니다.
+    return _run_compare(
+        _as_compare_record(past), _as_compare_record(recent), pose_model=first.pose_model
+    )
 
 
 # ── 정리 (워커/스케줄) ──────────────────────────────────────────────────
@@ -398,6 +460,16 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
             )
             return
 
+        # 계약 검사는 **경고만** 냅니다 (daengs_gait.contract). 여기서 예외를 내면 DONE 이
+        # 못 되고 행이 FAILED/좀비가 되는데, 계약 위반은 사고를 만들 게 아니라 발견할 일입니다.
+        from daengs_gait.contract import check_analysis_record  # 가벼운 모듈 (numpy 없음)
+
+        problems = check_analysis_record(result)
+        if problems:
+            log.warning(
+                "gait.analyze: 엔진 출력이 계약과 어긋남 record_id=%s: %s", record_id, problems
+            )
+
         overlay_data = result.pop("_overlay_bytes", None)
         overlay_key = None
         if overlay_data is not None:
@@ -415,11 +487,16 @@ async def _run_analysis(record_id: uuid.UUID) -> None:
                     log.exception("gait.analyze: 실패한 overlay 정리도 실패 key=%s", overlay_key)
                 record.status = "FAILED"
                 record.failure_reason = str(exc)[:2000]
+                # 엔진은 돌았으므로 어떤 모델이었는지는 안다 — 결과 없이 실패한 경우와 구분.
+                record.pose_model = result.get("pose_model")
                 await session.commit()
                 log.error("gait.analyze overlay 업로드 실패 record_id=%s: %s", record_id, exc)
                 return
 
         record.status = "DONE"
+        # 어떤 pose model / 관절 정의로 만든 기록인가 (D-063). 두 엔진 다 품질 판정 전에
+        # 넣으므로 unavailable 이어도 값이 있다. 검증하지 않고 그대로 저장 — CHECK 도 없다.
+        record.pose_model = result.get("pose_model")
         record.quality_status = result["quality"].get("status")
         # ⚠️ 컬럼 CHECK(good/ok/low)는 엔진 어휘와 같아야 합니다. 2026-09-09 까지 CHECK 가
         #    good/low 뿐이라 20~80 구간(`ok`)의 DONE 커밋이 CheckViolation 으로 죽고 행이
@@ -492,6 +569,9 @@ def _analyze_from_storage(storage_key: str) -> dict:
 
     ⚠️ 저장소가 미설정(none)이면 여기 도달하기 전에 confirm 이 이미 막습니다. gcs 인데
        자격증명이 없으면 download 에서 실패해 FAILED 가 됩니다 — 의도된 명확한 실패입니다.
+
+    순서: 다운로드 → `intake.prepare_for_analysis`(판정) → 엔진 → overlay bytes. 임시 디렉터리는
+    이 함수가 유일하게 소유하고, 판정·변환·overlay 전부 그 안에서만 파일을 만듭니다.
     """
     import tempfile
     from pathlib import Path
@@ -514,17 +594,24 @@ def _analyze_from_storage(storage_key: str) -> dict:
             )
             urlretrieve(url, local)
 
-        if settings.gait_engine == "v4":
-            # walk_demo v4 — 별도 venv 의 서브프로세스 (#304). torch 가 이 프로세스에
-            # 올라오지 않습니다.
-            record = _analyze_with_v4(local)
-        else:
-            from daengs_gait.pipeline import process_video  # 지연 — torch 가 여기서 올라옵니다
+        # 입력 판정 (D-063 3단계): 읽을 수 있으면 원본 그대로, 못 읽을 때만 H.264 로 변환,
+        # 그래도 못 읽으면 VideoDecodeError → 바깥 except 가 FAILED + 사유로 닫습니다.
+        # 변환본은 같은 임시 디렉터리 안에 생기고 원본은 지워지므로 정리는 그대로입니다.
+        from daengs_gait.intake import prepare_for_analysis
 
-            # legacy HTTP 서비스는 JSON·overlay 를 GAIT_DATA_DIR 에 보존하지만, D-043 워커의
-            # 원장은 PostgreSQL/storage 입니다. persist=False 로 task 임시 디렉터리 밖에
-            # worker-side 사본을 만들지 않습니다.
-            record = process_video(local, persist=False)
+        local = prepare_for_analysis(local)
+
+        # 엔진 선택과 실행은 daengs_gait 의 몫입니다 (D-063 2단계). 설정값은 인자로 넘깁니다 —
+        # daengs_gait 는 daengs_backend 를 import 하지 않습니다. legacy 는 그 안에서
+        # torch 를 지연 import 하고, v4 는 별도 venv 의 서브프로세스라 여기엔 안 올라옵니다.
+        from daengs_gait.engines import get_engine
+
+        engine = get_engine(
+            settings.gait_engine,
+            v4_dir=settings.gait_v4_dir,
+            v4_python=settings.gait_v4_python,
+        )
+        record = engine.analyze(local)
 
         # 업로드는 DB 행 잠금을 잡은 _run_analysis 가 합니다. 여기서 먼저 올리면 탈퇴
         # cleanup 과 경합해 새 고아 object 를 만들 수 있습니다.
@@ -567,102 +654,12 @@ def _db_quality_tier(raw: str | None) -> str | None:
     return None
 
 
-# ── walk_demo v4 엔진 (#304) ─────────────────────────────────────────────
+# ── 비교 엔진 선택 (D-058 · D-063 2단계) ───────────────────────────────────
 #
-# `backend/gait_v4/` 는 **자기 venv 를 가진 별도 uv 프로젝트**입니다. 워커 venv 에는
-# 설치되지 않으므로 import 할 수 없고, 그 venv 의 python 을 서브프로세스로 부릅니다.
-# 그래서 얻는 것 — ① 골든이 나온 버전 조합(torch 2.13.0 · numpy 2.5.2 …)을 그대로 두고
-# ② 라이선스 결정 전 가중치가 운영 이미지에 들어가지 않으며 ③ 이 프로세스에 torch 가
-# 안 올라옵니다. 대가는 호출마다 모델 로드 ≈4s 인데, 분석 자체가 분 단위라 무시할 만합니다.
-
-
-def _v4_dir():
-    from pathlib import Path
-
-    from daengs_backend.config import settings
-
-    if settings.gait_v4_dir:
-        return Path(settings.gait_v4_dir)
-    # config.py → daengs_backend → src → backend. 그 밑의 gait_v4.
-    return Path(__file__).resolve().parents[3] / "gait_v4"
-
-
-def _v4_python():
-    import sys
-    from pathlib import Path
-
-    from daengs_backend.config import settings
-
-    if settings.gait_v4_python:
-        exe = Path(settings.gait_v4_python)
-        if not exe.exists():
-            raise RuntimeError(
-                f"GAIT_V4_PYTHON 이 가리키는 python 이 없습니다: {exe} — 컨테이너면 command 의 "
-                "v4 `uv sync` 가 돌았는지 로그를 보세요."
-            )
-        return exe
-    root = _v4_dir()
-    exe = root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    if not exe.exists():
-        raise RuntimeError(
-            f"gait_v4 venv 가 없습니다: {exe} — `cd {root} && uv sync` 를 먼저 하세요."
-        )
-    return exe
-
-
-def _analyze_with_v4(local) -> dict:
-    """`python -m gait_v4 analyze` 를 돌리고 record JSON 을 읽습니다.
-
-    반환 dict 는 legacy `process_video` 와 **같은 키**를 갖습니다 — `quality` ·
-    `features.summary_for_ui` · `features.internal_feature_vector` · `gait_filter_version` ·
-    `video_meta` · `overlay_video`(경로). 그래서 `_run_analysis` 는 엔진을 모릅니다.
-
-    `follow_cam` 은 앱 계약(`GaitAnalyzeRequest`)에 없어 **False 고정**입니다 — legacy 와
-    같이 정지 구간 필터가 켜집니다. 촬영 가이드에서 사용자가 고르게 되면 그때 받습니다.
-    """
-    import json
-    import subprocess
-
-    local = local if hasattr(local, "parent") else __import__("pathlib").Path(local)
-    out = local.parent / "record.json"
-    overlay = local.parent / "overlay.mp4"
-    cmd = [
-        str(_v4_python()),
-        "-m",
-        "gait_v4",
-        "analyze",
-        str(local),
-        "--overlay",
-        str(overlay),
-        "--out",
-        str(out),
-    ]
-    proc = subprocess.run(
-        cmd,
-        cwd=str(_v4_dir()),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=V4_TIMEOUT_SECONDS,
-        check=False,  # 실패는 아래에서 stderr 꼬리를 붙여 우리 예외로 바꿉니다
-    )
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "")[-2000:]
-        raise RuntimeError(f"gait_v4 분석 실패 (exit {proc.returncode}): {tail}")
-    if not out.exists():
-        raise RuntimeError("gait_v4 가 record.json 을 만들지 않았습니다.")
-    record = json.loads(out.read_text(encoding="utf-8"))
-    # quality 가 ok 가 아니면 analyze_video 가 overlay 를 만들지 않습니다 — 키가 없거나
-    # 파일이 없으면 `_analyze_from_storage` 가 overlay 없음으로 처리합니다.
-    if record.get("overlay_video") and not overlay.exists():
-        record["overlay_video"] = None
-    return record
-
-
-#: 60초 영상 ≈58s(CPU) 에 모델 로드 4s. 여유를 크게 둡니다 — 워커의 다른 상한
-#: (Celery soft time limit) 이 있으면 그쪽이 먼저입니다.
-V4_TIMEOUT_SECONDS = 20 * 60
+# 분석 엔진의 실행 배관(v4 서브프로세스 · legacy 지연 import)은 `daengs_gait.engines` 로
+# 옮겼습니다. 비교는 여기 남습니다 — 비교 함수를 고르는 기준이 **서버 설정이 아니라 두
+# 기록의 `pose_model`** 이기 때문입니다. 서버가 v4 로 바뀐 뒤에도 legacy 기록 둘은 legacy
+# 판정으로, 관절 정의가 다른 둘은 비교 불가로 가야 합니다.
 
 
 def _load_v4_compare():
@@ -676,7 +673,10 @@ def _load_v4_compare():
     """
     import importlib.util
 
-    path = _v4_dir() / "gait_v4" / "compare.py"
+    from daengs_backend.config import settings
+    from daengs_gait.engines.v4 import resolve_dir
+
+    path = resolve_dir(settings.gait_v4_dir) / "gait_v4" / "compare.py"
     if not path.exists():
         raise RuntimeError(f"gait_v4 compare 모듈이 없습니다: {path}")
     spec = importlib.util.spec_from_file_location("_daengs_gait_v4_compare", path)
@@ -685,21 +685,27 @@ def _load_v4_compare():
     return module.compare_records
 
 
-def _run_compare(past: dict, recent: dict) -> dict:
-    """엔진에 맞는 비교 함수를 골라 돌리고 `_dev_only_*` 를 걷어냅니다.
+def _run_compare(past: dict, recent: dict, *, pose_model: str) -> dict:
+    """`pose_model` 에 맞는 비교 함수를 골라 돌리고 `_dev_only_*` 를 걷어냅니다.
+
+    호출자(`compare`)가 두 기록의 `pose_model` 이 같고 NULL 이 아님을 이미 확인했습니다.
+    여기서는 그 값으로 판정 코드를 고르기만 합니다 — **`settings.gait_engine` 은 보지
+    않습니다.** 레지스트리(`contract.POSE_MODELS`)에 없는 값은 비교 불가입니다.
 
     `_dev_only_*` 는 **앱에 절대 내보내지 않습니다** — 수백 개의 숫자가 화면에 나오면
     사용자가 그것을 건강 점수로 읽습니다 (API.md 의 노출 금지 규칙). 두 엔진 다 같은
     접두사를 씁니다.
     """
-    from daengs_backend.config import settings
+    from daengs_gait.contract import POSE_MODEL_LEGACY, POSE_MODEL_V4
 
-    if settings.gait_engine == "v4":
+    if pose_model == POSE_MODEL_V4:
         compare_fn = _load_v4_compare()
-    else:
+    elif pose_model == POSE_MODEL_LEGACY:
         # ⚠️ 지연 import — numpy 를 끌고 옵니다. backend 웹 프로세스의 main import 를
         #    가볍게 유지하는 규율(D-021)이고, 비교를 안 부르면 안 올라옵니다.
         from daengs_gait.compare import compare_loaded_records as compare_fn
+    else:
+        raise CompareError(f"비교 불가 — 지원하지 않는 분석 모델입니다: {pose_model}")
 
     result = compare_fn(past, recent)
     return {k: v for k, v in result.items() if not k.startswith("_dev_only_")}

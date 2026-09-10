@@ -19,7 +19,7 @@ from daengs_backend.schemas.territory_claim import (
     SessionResponse,
     SiteResponse,
 )
-from daengs_backend.services import activity, activity_game
+from daengs_backend.services import activity, activity_game, territory_expiry
 from daengs_backend.services import territory_claim as rules
 from daengs_backend.services.activity_core.game_policy import GameError
 
@@ -107,6 +107,7 @@ async def list_sites(db, owner, site_ids):
     await activity_game.acquire(db)
     season = await _season(db)
     now = _now()
+    await territory_expiry.expire_due(db, season, int(now.timestamp() * 1000))
     rows = {row.site_id: row for row in await repo.read_sites(db, site_ids)}
     result = []
     for site_id in dict.fromkeys(site_ids):
@@ -123,6 +124,7 @@ async def list_sites(db, owner, site_ids):
                 protected_until=_protection(
                     row.certification, row.occupied_at, getattr(row, "certified_at", None), season
                 ),
+                expires_at=getattr(row, "expires_at", None),
             )
         result.append(
             SiteResponse(
@@ -180,10 +182,9 @@ async def _rule_site(db, site):
 
 
 async def _save_site(db, row, state, *, game=None, claim=None, event_id=None, at_ms=None):
+    before = await _rule_site(db, row)
     if activity.settings.activity_game_enabled:
-        state = await activity_game.transition(
-            db, await _rule_site(db, row), state, game, claim, event_id, at_ms
-        )
+        state = await activity_game.transition(db, before, state, game, claim, event_id, at_ms)
     row.version = state.version
     if state.occupancy:
         occupied = await repo.occupancy(db, row.site_id)
@@ -200,6 +201,9 @@ async def _save_site(db, row, state, *, game=None, claim=None, event_id=None, at
         occupied.occupied_at = datetime.fromtimestamp(
             state.occupancy.occupied_at_millis / 1000, UTC
         )
+        season = await _season(db)
+        if territory_expiry.enabled(season) and before != state:
+            occupied.expires_at = territory_expiry.deadline(at_ms, season)
 
 
 async def mark(db, owner, body, lookup):
@@ -232,6 +236,7 @@ async def mark(db, owner, body, lookup):
         raise ClaimConflict("ineligible_pet")
     now = _now()
     _fresh(body.observed_at, now)
+    await territory_expiry.expire_due(db, await _season(db), int(now.timestamp() * 1000))
     if body.observed_at < game_session.started_at:
         raise ClaimConflict("before_session")
     from daengs_backend.services.territory import _haversine_m
@@ -256,7 +261,15 @@ async def mark(db, owner, body, lookup):
         encounter_id=str(claim_id),
         at_millis=int(now.timestamp() * 1000),
     )
-    if _is_v2(await _season(db)) and attempt.disposition == rules.Disposition.POLICY_UNDECIDED:
+    season = await _season(db)
+    if (
+        territory_expiry.enabled(season)
+        and attempt.disposition == rules.Disposition.ALREADY_OWNED
+        and state.occupancy.certification == rules.Certification.UNVERIFIED
+    ):
+        state = replace(state, version=state.version + 1)
+        attempt = replace(attempt, expected_site_version=state.version)
+    if _is_v2(season) and attempt.disposition == rules.Disposition.POLICY_UNDECIDED:
         attempt = replace(attempt, disposition=rules.Disposition.PHOTO_REQUIRED)
     claim = TerritoryClaim(
         id=claim_id,
@@ -419,8 +432,9 @@ async def _apply_photo(db, photo, site, claim, game_session):
             return
         attempt = replace(attempt, expected_site_version=challenge.expected_site_version)
         challenge.completed_at = _now()
-    state = await _rule_site(db, site)
     at_ms = int(_now().timestamp() * 1000)
+    await territory_expiry.expire_due(db, await _season(db), at_ms)
+    state = await _rule_site(db, site)
     try:
         updated, resolved = rules.resolve_photo(
             state,
@@ -469,7 +483,10 @@ async def _season(db):
 
 
 def _is_v2(season):
-    return season is not None and season.rules.get("version") == "certified-protection-v2"
+    return season is not None and season.rules.get("version") in {
+        "certified-protection-v2",
+        activity_game.rewards.REWARD_VERSION,
+    }
 
 
 def _protection(certification, occupied_at, certified_at, season):
@@ -500,7 +517,10 @@ async def _check_photo_access(db, owner, claim, game):
     elif site.occupancy:
         if site.occupancy.owner_pet_id == claim.pet_id:
             if site.occupancy.certification == "VERIFIED":
-                reason, action = "already_certified", "ALREADY_CERTIFIED"
+                if territory_expiry.enabled(season):
+                    action = "PHOTO_RENEW"
+                else:
+                    reason, action = "already_certified", "ALREADY_CERTIFIED"
             else:
                 action = "PHOTO_UPGRADE"
         elif site.occupancy.protected_until and now < site.occupancy.protected_until:

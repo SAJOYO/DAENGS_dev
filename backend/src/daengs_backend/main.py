@@ -37,7 +37,10 @@ from daengs_backend.routers import (
     territory,
     territory_claim,
     training,
+    vet_visit,
     walk_entry,
+    walk_entry_v2,
+    walk_photo,
     walk_spatial_diary,
     walk_storyboard,
 )
@@ -187,6 +190,11 @@ app.include_router(pet_member.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
+# 진료비 기록(`/app/vet-visits` · #353) — 영수증 사진에서 읽고, 유저가 확정한
+# 것만 남긴다. 여섯 개 엔드포인트가 CurrentAppUser 로 잠겨 있습니다 — 예외는
+# 사진 bridge 둘(`_bridge/upload`·`_bridge/download`)뿐이고, 그 둘은 추측 불가능한
+# 키 + exclusive=True 한 번뿐인 쓰기로 안전을 대신합니다(라우터 머리말).
+app.include_router(vet_visit.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
@@ -198,7 +206,10 @@ app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
 app.include_router(walk_entry.router)
+app.include_router(walk_entry_v2.capabilities_router)
+app.include_router(walk_entry_v2.router)
 app.include_router(walk_storyboard.router)
+app.include_router(walk_photo.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 app.include_router(territory_claim.router)

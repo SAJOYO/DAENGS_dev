@@ -111,6 +111,14 @@ CRAWL_RUNS_OLD = (
 # 으로 같이 사라진다 — `format_type` 이 `vector(768)` 로 (스키마 없이) 보이려면 확장이
 # search_path 안에 있어야 하므로 `WITH SCHEMA` 를 주지 않는다.
 VECTOR_EXTENSION = 'CREATE EXTENSION IF NOT EXISTS vector;'
+# HNSW 장(2026-09-09)은 **벡터 칸이 있어야** 마이그레이션 자체가 돈다. 위 `DOCUMENTS` 는
+# 일부러 확장에 안 기대는 픽스처라 그 칸이 없어서, 이 한 장만 따로 세운다.
+# 행은 안 넣는다 — 이 장이 만드는 것은 인덱스이고 빈 표에도 선다.
+DOCUMENTS_WITH_EMBEDDING = VECTOR_EXTENSION + (
+    "CREATE TABLE documents("
+    " id bigserial PRIMARY KEY,"
+    " embedding vector(1024));"
+)
 
 # 훈련 RAG 청크 표의 **옛** 모양 — `chunk_id` 가 PK 이던 시절이다. 2026-09-08 마이그레이션이
 # 그 PK 를 복합키로 옮긴다. 픽스처가 옛 모양이어야 마이그레이션이 실제로 할 일이 생긴다.
@@ -201,6 +209,27 @@ def unqualified(sql):
     return sql.replace('public.', '')
 
 
+# pose_model 백필(2026-09-09, D-063)은 **값**을 검사하므로 픽스처에 행이 있어야 한다.
+# 여섯 행이 백필 규칙의 가지 하나씩이다 — v4 관절 / legacy 관절 / 빈 객체 / 두 체계가 섞임 /
+# 어느 집합에도 없는 키 / summary 자체가 NULL. 앞 넷은 DONE, 뒤 둘은 각각 DONE(unavailable)·FAILED.
+# 마이그레이션 **전** 상태라 pose_model 컬럼이 없다 — 컬럼은 마이그레이션이 만든다.
+GAIT_RECORDS_POSE_MODEL_ROWS = (
+    "INSERT INTO gait_records(id, pet_id, status, quality_status, quality_tier, summary_for_ui) VALUES"
+    " ('a0000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"R_Knee\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000002', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'low', '{\"Iliac crest\": {\"x_range\": 0.5}, \"Femorotibial joint\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'unavailable', NULL, '{}'),"
+    " ('a0000000-0000-0000-0000-000000000004', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Iliac crest\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000005', '33333333-3333-3333-3333-333333333333',"
+    "  'DONE', 'ok', 'good', '{\"L_Hip\": {\"x_range\": 0.5}, \"Tail_tip\": {\"x_range\": 0.4}}'),"
+    " ('a0000000-0000-0000-0000-000000000006', '33333333-3333-3333-3333-333333333333',"
+    "  'FAILED', NULL, NULL, NULL);"
+)
+
+
 # 항목은 (날짜, 이름, 픽스처, 테이블, 변조들[, 2회 적용할까]).
 # 마지막 칸은 거의 언제나 True 다 — **멱등은 이 저장소가 마이그레이션에 요구하는 성질**이라
 # (CLAUDE.md: 버전 테이블이 없으니 여러 번 돌려도 안전하게) 기본으로 두 번 적용해 본다.
@@ -209,40 +238,72 @@ def unqualified(sql):
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
-        # 2026-09-09 (co-care, docs/co-care.md) — 공동 돌봄 표 둘 + 트리거 둘 + care_events
-        # 개명. 픽스처는 9/8 의 care_events 마이그레이션을 **그대로** 재사용한다 — 이 마이그레이션이
-        # 옛 app_user_id 를 전제로 RENAME 하므로, 스텁을 손으로 쓰면 그 전제가 갈릴 수 있다.
-        # 트리거를 지우는 변조 둘이 이 항목의 핵심이다 — app_users 는 탈퇴해도 안 지워지므로
-        # FK 로는 절대 정리가 안 돌고, 그 트리거가 유일한 방어선이다.
-        ('2026-09-09', 'pet_members',
-         APP_USERS_WITH_STATUS + PETS_ONLY + prerequisites('2026-09-08_care_events'),
-         'pet_members', [
-            'DROP TABLE pet_invites CASCADE',
-            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pkey',
-            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pet_id_fkey',
-            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_app_user_id_fkey',
-            'ALTER TABLE pet_members ALTER COLUMN joined_at DROP NOT NULL',
-            'DROP INDEX idx_pet_members_app_user',
-            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_token_hash_key',
-            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_pet_id_fkey',
-            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_invited_by_fkey',
-            'DROP INDEX idx_pet_invites_pet',
-            'DROP TRIGGER pet_membership_owner_cleanup ON app_users',
-            'DROP TRIGGER pet_members_not_owner ON pet_members',
-            # 트리거는 붙어 있고 **본문에서 care_events 익명화만** 빠진 모양. 카탈로그에는
-            # "트리거가 무엇을 하는가" 가 안 적힐 것이라, verify 가 prosrc 를 안 보면 이것을
-            # 아무도 안 잡는다 — 그러면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에 영원히 남는다.
-            "CREATE OR REPLACE FUNCTION pet_membership_owner_cleanup() RETURNS trigger"
-            " LANGUAGE plpgsql AS $tamper$ BEGIN IF NEW.status = 'withdrawn' THEN"
-            " DELETE FROM pet_members WHERE app_user_id = NEW.id;"
-            " DELETE FROM pet_invites WHERE invited_by = NEW.id;"
-            " END IF; RETURN NEW; END $tamper$",
-            'ALTER TABLE care_events RENAME COLUMN actor_app_user_id TO app_user_id',
-            'ALTER TABLE care_events ALTER COLUMN actor_app_user_id SET NOT NULL',
-            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey',
-            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey;'
-            ' ALTER TABLE care_events ADD CONSTRAINT care_events_actor_fkey'
-            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+        ('2026-09-09', 'documents_hnsw', DOCUMENTS_WITH_EMBEDDING, 'documents', [
+            # ⓐ 인덱스가 아예 없다 — 전수 스캔으로 돌아간다. **결과는 맞고 느리기만 하다.**
+            'DROP INDEX idx_documents_embedding',
+            # ⓑ 접근 방식을 바꾸는 변조. 이름도 같고 인덱스도 있는데 recall 특성이 다르다 —
+            # `D16` 이 재려는 것이 바로 그 특성이라, 이름만 보는 검사로는 아무 의미가 없다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING ivfflat (embedding vector_cosine_ops)',
+            # ⓒ 연산자 클래스를 바꾸는 변조. 검색은 `<=>`(코사인)로 묻는데 이 인덱스는
+            # `<->` 용이라 **질의가 인덱스를 안 탄다.** 결과는 여전히 맞아서 아무도 안 알려준다 —
+            # `db/indexes.sql` 이 2026-08 부터 같은 경고를 달고 있던 자리다.
+            'DROP INDEX idx_documents_embedding;'
+            ' CREATE INDEX idx_documents_embedding ON documents'
+            ' USING hnsw (embedding vector_l2_ops)',
+        ]),
+        ('2026-09-09', 'walk_photo_manifests', WALKS, 'walk_photo_manifests', [
+            'ALTER TABLE walk_photo_manifests DROP COLUMN publisher_id',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_pkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_manifests_walk_id_fkey',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_revision_positive',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_hash_valid',
+            'ALTER TABLE walk_photo_manifests DROP CONSTRAINT walk_photo_records_bounded',
+        ]),
+        ('2026-09-09', 'walk_entry_pins',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
+         'walk_entry_pins', [
+            'DROP TRIGGER walk_entry_pins_deleted ON walk_entries',
+            'ALTER TABLE walk_entries DISABLE TRIGGER walk_entry_pins_deleted',
+            'DROP TRIGGER walk_entry_pin_live ON walk_entry_pins',
+            'DROP TRIGGER walk_entry_mutation_live ON walk_entry_mutations',
+            'ALTER TABLE walk_entry_pins DROP COLUMN payload',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_pkey',
+            'ALTER TABLE walk_entry_pins DROP CONSTRAINT walk_entry_pins_walk_id_entry_id_fkey',
+            'ALTER TABLE walk_entry_mutations DROP CONSTRAINT walk_entry_mutations_walk_id_entry_id_fkey',
+         ]),
+        ('2026-09-10', 'walk_context_recollection',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP COLUMN collection_round CASCADE',
+            'ALTER TABLE walk_entry_context_envelopes DROP COLUMN collection_round CASCADE',
+            'ALTER TABLE walk_entry_context_jobs DROP COLUMN backfill_policy',
+            'ALTER TABLE walk_entry_context_jobs ALTER COLUMN collection_round DROP DEFAULT',
+            'ALTER TABLE walk_entry_context_envelopes ALTER COLUMN collection_round DROP DEFAULT',
+            'ALTER TABLE walk_entry_context_envelopes ALTER COLUMN collection_round DROP NOT NULL',
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_collection_round_check',
+            'ALTER TABLE walk_entry_context_envelopes DROP CONSTRAINT walk_entry_context_envelopes_round_attempt_key',
+            'ALTER TABLE walk_entry_context_envelopes ADD UNIQUE (job_id, attempt)',
+         ]),
+        ('2026-09-09', 'walk_public_context_commerce',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts', '2026-09-09_walk_public_context'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check',
+            ('ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check;'
+             " ALTER TABLE walk_entry_context_jobs ADD CONSTRAINT walk_entry_context_jobs_tag_check"
+             " CHECK (tag IN ('space.facility','space.park','space.river','environment.weather','space.address'))"),
+         ]),
+        ('2026-09-09', 'walk_public_context',
+         WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8')
+         + prerequisites('2026-09-08_walk_entry_contexts'),
+         'walk_entry_context_jobs', [
+            'ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check',
+            ('ALTER TABLE walk_entry_context_jobs DROP CONSTRAINT walk_entry_context_jobs_tag_check;'
+             " ALTER TABLE walk_entry_context_jobs ADD CONSTRAINT walk_entry_context_jobs_tag_check"
+             " CHECK (tag IN ('space.facility','space.park','space.river','environment.weather'))"),
          ]),
         ('2026-09-08', 'walk_entry_contexts',
          WALKS + (ROOT / 'db/init/19_walk_entries.sql').read_text(encoding='utf-8'),
@@ -360,6 +421,86 @@ CHECKS = (
             'ALTER TABLE care_events ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
             'DROP INDEX idx_care_events_pet_occurred',
         ]),
+        # 2026-09-09 (co-care, docs/co-care.md) — 공동 돌봄 표 둘 + 트리거 둘 + care_events
+        # 개명. 픽스처는 9/8 의 care_events 마이그레이션을 **그대로** 재사용한다 — 이 마이그레이션이
+        # 옛 app_user_id 를 전제로 RENAME 하므로, 스텁을 손으로 쓰면 그 전제가 갈릴 수 있다.
+        # 트리거를 지우는 변조 둘이 이 항목의 핵심이다 — app_users 는 탈퇴해도 안 지워지므로
+        # FK 로는 절대 정리가 안 돌고, 그 트리거가 유일한 방어선이다.
+        ('2026-09-09', 'pet_members',
+         APP_USERS_WITH_STATUS + PETS_ONLY + prerequisites('2026-09-08_care_events'),
+         'pet_members', [
+            'DROP TABLE pet_invites CASCADE',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_pet_id_fkey',
+            'ALTER TABLE pet_members DROP CONSTRAINT pet_members_app_user_id_fkey',
+            'ALTER TABLE pet_members ALTER COLUMN joined_at DROP NOT NULL',
+            'DROP INDEX idx_pet_members_app_user',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_token_hash_key',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_pet_id_fkey',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_invited_by_fkey',
+            'DROP INDEX idx_pet_invites_pet',
+            'DROP TRIGGER pet_membership_owner_cleanup ON app_users',
+            'DROP TRIGGER pet_members_not_owner ON pet_members',
+            # 트리거는 붙어 있고 **본문에서 care_events 익명화만** 빠진 모양. 카탈로그에는
+            # "트리거가 무엇을 하는가" 가 안 적힐 것이라, verify 가 prosrc 를 안 보면 이것을
+            # 아무도 안 잡는다 — 그러면 탈퇴한 돌보미의 id 가 남의 집 케어 로그에 영원히 남는다.
+            "CREATE OR REPLACE FUNCTION pet_membership_owner_cleanup() RETURNS trigger"
+            " LANGUAGE plpgsql AS $tamper$ BEGIN IF NEW.status = 'withdrawn' THEN"
+            " DELETE FROM pet_members WHERE app_user_id = NEW.id;"
+            " DELETE FROM pet_invites WHERE invited_by = NEW.id;"
+            " END IF; RETURN NEW; END $tamper$",
+            'ALTER TABLE care_events RENAME COLUMN actor_app_user_id TO app_user_id',
+            'ALTER TABLE care_events ALTER COLUMN actor_app_user_id SET NOT NULL',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey',
+            'ALTER TABLE care_events DROP CONSTRAINT care_events_actor_fkey;'
+            ' ALTER TABLE care_events ADD CONSTRAINT care_events_actor_fkey'
+            ' FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
+        # 2026-09-09 (#353) — 진료비 기록 둘. **변조 목록의 마지막 하나가 이 항목의 이유다.**
+        # 이 표에서 지켜야 하는 것은 칸의 모양이 아니라 **reason_code 가 닫힌 목록이라는 사실**
+        # 이다. 목록을 통째로 permissive 한 CHECK 으로 갈아 끼우면 이름은 그대로라 ④ 는
+        # 통과하는데, 그때부터 사유가 자유 텍스트가 되어 사유별 누계가 조용히 쪼개진다 —
+        # 그것을 잡는 것이 verify ⑥ 이고, 그 그물이 실제로 걸리는지 여기서 잰다.
+        #
+        # 빈 표에 거는 변조라 CHECK 재검증이 죽지 않는다 (#271 의 NOT VALID 함정이 없다).
+        ('2026-09-09', 'vet_visits', PETS, 'vet_visits', [
+            'ALTER TABLE vet_visits DROP COLUMN raw_ocr_items',
+            'ALTER TABLE vet_visits ALTER COLUMN reason_code TYPE text',
+            # NOT NULL 을 잃는 변조. 유저가 확정 안 한 행이 vet_visits 에 앉을 수 있게 된다.
+            'ALTER TABLE vet_visits ALTER COLUMN reason_code DROP NOT NULL',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_client_event_unique',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_total_krw_range',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_hospital_phone_shape',
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_pet_id_fkey; '
+            'ALTER TABLE vet_visits ADD FOREIGN KEY(pet_id) REFERENCES pets(id)',
+            'DROP INDEX idx_vet_visits_pet_visited',
+            'ALTER TABLE vet_visit_drafts DROP COLUMN extracted',
+            'ALTER TABLE vet_visit_drafts ALTER COLUMN receipt_image_key DROP NOT NULL',
+            'DROP INDEX idx_vet_visit_drafts_created_at',
+            # **초안의 멱등키가 빠지는 변조.** 아무 에러도 안 나고 Gemini 요금만 는다.
+            'ALTER TABLE vet_visit_drafts DROP CONSTRAINT'
+            ' vet_visit_drafts_client_event_unique',
+            'ALTER TABLE vet_visit_drafts DROP COLUMN receipt_sha256',
+            'ALTER TABLE vet_visit_drafts DROP CONSTRAINT'
+            ' vet_visit_drafts_receipt_sha256_shape',
+            'DROP INDEX idx_vet_visit_drafts_user_sha',
+            'ALTER TABLE vet_visits DROP COLUMN is_emergency',
+            'ALTER TABLE vet_visits DROP COLUMN is_oncology',
+            'ALTER TABLE vet_visits ALTER COLUMN is_emergency DROP NOT NULL',
+            # 기본값이 뒤집히는 변조. 아무 에러 없이 **모든 방문이 종양 진료로** 쌓인다.
+            'ALTER TABLE vet_visits ALTER COLUMN is_oncology SET DEFAULT true',
+            # **닫힌 목록이 열리는 변조.** 이름은 살아 있으므로 ④ 로는 안 잡힌다.
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check;'
+            ' ALTER TABLE vet_visits ADD CONSTRAINT vet_visits_reason_code_check'
+            ' CHECK (length(reason_code) > 0)',
+            # **축이 둘로 돌아가는 변조 — ⑦ 만 잡는다.** 목록은 여전히 닫혀 있고
+            # 'cardiac'·'other' 도 살아 있어 ④ 도 ⑥ 도 통과한다. 그런데 'tumor' 가 돌아온
+            # 순간 피부 종괴가 skin 이자 tumor 라, 지키려던 사유별 누계가 조용히 갈린다.
+            'ALTER TABLE vet_visits DROP CONSTRAINT vet_visits_reason_code_check;'
+            ' ALTER TABLE vet_visits ADD CONSTRAINT vet_visits_reason_code_check'
+            " CHECK (reason_code IN ('skin','cardiac','other','tumor'))",
+        ]),
         ('2026-09-07', 'pets_registered', PETS, 'pets', [
             'ALTER TABLE pets DROP COLUMN registered',
             'ALTER TABLE pets ALTER COLUMN registered TYPE text USING registered::text',
@@ -391,6 +532,25 @@ CHECKS = (
         #
         # 픽스처가 없다(''). 이 표는 아무것도 참조하지 않으므로 선행 테이블이 필요 없고,
         # 그 성질 자체를 verify ④ 가 단언한다.
+        # 2026-09-09 (#353) — OCR 학습 이용 동의 두 칸. **마지막 변조가 이 항목의 이유다.**
+        # 다른 변조는 스키마를 깨서 코드가 시끄럽게 죽지만, DEFAULT NOW() 한 줄은 아무것도
+        # 안 깨뜨리면서 **아무도 누른 적 없는 동의를 전 회원에게 만든다.** 그 상태로 학습셋을
+        # 뽑으면 근거 없이 모은 데이터가 되고, 그때는 되돌릴 수 없다.
+        ('2026-09-09', 'ocr_consent', APP_USERS, 'app_users', [
+            'ALTER TABLE app_users DROP COLUMN ocr_consent_at',
+            'ALTER TABLE app_users DROP COLUMN ocr_consent_version',
+            'ALTER TABLE app_users ALTER COLUMN ocr_consent_at TYPE text'
+            ' USING ocr_consent_at::text',
+            'ALTER TABLE app_users DROP CONSTRAINT app_users_ocr_consent_pair',
+            # 미동의를 표현할 수 없게 되는 변조. 값을 먼저 채워야 ALTER 가 안 죽는데,
+            # ⚠ **두 칸을 같이 채워야 한다** — 시각만 채우면 짝 CHECK 이 UPDATE 를
+            #   죽이고, 하네스는 "verifier 가 잡았다"와 "변조가 죽었다"를 stderr 낱말로
+            #   가르므로 그 항목은 아무것도 증명하지 않는다 (2026-09-09 CI 실측).
+            "UPDATE app_users SET ocr_consent_at = NOW(), ocr_consent_version = 'v1';"
+            ' ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET NOT NULL',
+            # **조용히 틀리는 변조 — ③ 만 잡는다.**
+            'ALTER TABLE app_users ALTER COLUMN ocr_consent_at SET DEFAULT NOW()',
+        ]),
         ('2026-09-07', 'request_metrics', '', 'request_metrics', [
             'ALTER TABLE request_metrics DROP COLUMN elapsed_ms',
             'ALTER TABLE request_metrics ALTER COLUMN elapsed_ms TYPE bigint',
@@ -802,6 +962,42 @@ CHECKS = (
             'DROP INDEX ix_territory_claim_photos_claim_id',
             'DROP INDEX territory_claims_pet_idx',
         ]),
+        ('2026-09-10', 'activity_monthly', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims',
+                         '2026-09-06_activity_game'),
+         'activity_monthly_seasons', [
+            'ALTER TABLE activity_accounts DROP COLUMN final_rank',
+            'ALTER TABLE activity_accounts DROP CONSTRAINT activity_final_rank_positive',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_pkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_previous_season_id_key',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_previous_season_id_fkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_season_id_fkey',
+            'ALTER TABLE activity_monthly_seasons DROP CONSTRAINT activity_monthly_seasons_check',
+        ]),
+        ('2026-09-10', 'territory_expiry', PETS + SET_UPDATED_AT
+         + prerequisites('2026-09-03_territory_visits', '2026-09-05_territory_claims'),
+         'territory_renewals', [
+            'ALTER TABLE territory_occupancies DROP COLUMN expires_at',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_pkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_claim_id_fkey',
+            'ALTER TABLE territory_renewals DROP CONSTRAINT territory_renewals_check',
+            'ALTER TABLE territory_renewals ALTER COLUMN contact DROP NOT NULL',
+            'DROP INDEX territory_occupancies_expiry_idx',
+            'DROP INDEX territory_renewals_claim_idx',
+        ]),
+        ('2026-09-10', 'activity_rewards', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
+                         '2026-09-03_territory_visits', '2026-09-05_territory_claims',
+                         '2026-09-06_activity_game'),
+         'activity_base_rewards', [
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_pkey CASCADE',
+            'ALTER TABLE activity_base_rewards DROP CONSTRAINT activity_base_rewards_paid_check',
+            'ALTER TABLE activity_reward_details DROP CONSTRAINT activity_reward_details_pkey',
+            'ALTER TABLE activity_reward_details DROP COLUMN takeover_points',
+            'DROP TRIGGER activity_reward_owner_cleanup ON app_users',
+            'DROP INDEX activity_base_rewards_member',
+        ]),
         ('2026-09-06', 'activity_game', APP_USERS_WITH_STATUS + PETS_ONLY + SET_UPDATED_AT
          + prerequisites('2026-08-31_walks', '2026-09-02_walk_analyses',
                          '2026-09-03_territory_visits', '2026-09-05_territory_claims'),
@@ -825,6 +1021,29 @@ CHECKS = (
             'ALTER TABLE training_rag_chunks ALTER COLUMN chunk_id DROP NOT NULL',
             'ALTER TABLE training_rag_chunks DROP CONSTRAINT training_rag_chunks_document_id_fkey',
             'ALTER TABLE training_rag_chunks ADD UNIQUE (document_id, chunk_index, embedding_model)',
+        ]),
+        # 2026-09-09 (D-063) — pose_model 컬럼 + 관절 키로 판별되는 행만 백필. 픽스처는 09-02 의
+        # 표 + 09-09 tier CHECK 확장 위에 여섯 행(GAIT_RECORDS_POSE_MODEL_ROWS). 변조는 규칙의
+        # 양쪽을 다 민다 — "명확한 행에 틀린 값/NULL" 과 "허용되지 않은 ID". **빈 객체 행에
+        # 허용된 ID 를 넣는 것은 변조가 아니다**(새 분석의 unavailable 기록이 그 모양) — 그
+        # 통과 조건은 backend/tests/test_gait_pose_model.py 가 verify SQL 의 조건을 읽어 지킨다.
+        ('2026-09-09', 'gait_records_pose_model',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + prerequisites('2026-09-02_gait_records', '2026-09-09_gait_quality_tier_ok')
+         + GAIT_RECORDS_POSE_MODEL_ROWS,
+         'gait_records', [
+            'ALTER TABLE gait_records DROP COLUMN pose_model',
+            # 값이 들어갈 만큼 넓게 잡는다 — 좁히면 ALTER 자체가 죽어 verify 가 아니라 변조가
+            # 실패하고, 하네스는 그것을 "못 잡음" 으로 읽는다 (#271 NOT VALID 과 같은 함정).
+            'ALTER TABLE gait_records ALTER COLUMN pose_model TYPE varchar(40)',
+            # AP-10K 관절 행에 legacy 값 — 관절 정의가 다른 기록끼리 비교되게 하는 변조.
+            "UPDATE gait_records SET pose_model = 'yolov8_12kp_best'"
+            " WHERE summary_for_ui ? 'L_Hip' AND NOT summary_for_ui ? 'Iliac crest'",
+            # legacy 관절 행을 NULL 로 — 백필이 안 돈 상태와 같은 모양.
+            "UPDATE gait_records SET pose_model = NULL"
+            " WHERE summary_for_ui ? 'Iliac crest' AND NOT summary_for_ui ? 'L_Hip'",
+            # 레지스트리에 없는 ID. v4 compare 가 키 없을 때 쓰던 옛 기본값이 그대로 들어오는 사고.
+            "UPDATE gait_records SET pose_model = 'best_pt' WHERE summary_for_ui = '{}'::jsonb",
         ]),
 )
 

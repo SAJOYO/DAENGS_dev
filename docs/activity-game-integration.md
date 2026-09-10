@@ -1,5 +1,13 @@
 # 산책·점령 통계와 게임 정책의 DEV 연결
 
+> 2026-09-10 후속: [월간 자동 결산](territory/monthly-seasons.md) — `start-monthly`로 명시적 최초 활성화, 이후 자동 전환과 저장된 `final_rank`.
+
+> 2026-09-10 후속: [72시간 만료·현장 연장](territory/ownership-expiry.md).
+> 첫 시즌의 worker는 각 영역의 실제 만료 시각에서 보유 개수와 점수 구간을 나눈다.
+
+> 2026-09-10 후속: [첫 시즌 회원별 보상](territory/first-season-rewards.md).
+> 새 버전의 기본 20/100 차액·탈취 20·시간당 2/10 정산과 회원 원장은 해당 문서를 따른다.
+
 > 2026-09-08 후속: [인증 우선 정책 v2](certified-territory-v2.md). 아래의 획득 시각 보호·새 산책 필수 규칙은 `draft-2026-09-06` 시즌에 한정한다.
 
 ## 목적과 선행 조건
@@ -169,7 +177,7 @@ Beat 간격은 30초이고 한 배치의 산책/계정 각각 최대 100개를 �
 
 ## 검증과 후속 범위
 
-`tests/test_activity_db.py`는 localhost의 `claims_test` DB 안에서 테스트마다 임의 schema를
+`tests/activity/test_activity_db.py`는 localhost의 `claims_test` DB 안에서 테스트마다 임의 schema를
 만들고 제거한다. 팀 DB 설정으로 fallback하지 않는다. #260과 후속 SQL을 재실행하고 실제
 산책 finalize, 사진 판정, 처리기, API, 삭제 및 시즌 종료를 검증한다.
 `.github/workflows/territory-ownership-tests.yml`은 PostgreSQL 17에서 이를 실행한다.
@@ -185,6 +193,6 @@ Geo commit `454831a`의 `activity_core/{common,sessions,walk,territory}.py`와
 `game/policy.py`를 DEV `services/activity_core/`에 이식했다. 외부 HTTP/DB 의존성은 없다.
 `game_policy.validate_context`의 기존 소유 시각 검증은 시즌 이전의 실제 #260 소유권도
 허용하도록 수정했다. 점수는 활성화 시각부터만 계산한다는 별도 DEV 어댑터 제약과 함께 사용한다.
-이에 대한 10분 경계·소급 점수 방지 테스트는 `tests/test_activity.py`에 있다.
+이에 대한 10분 경계·소급 점수 방지 테스트는 `tests/activity/test_activity.py`에 있다.
 Geo의 JSON snapshot 저장 어댑터는 복사하지 않았다. DEV는 실제 FK와 삭제 계약, 순서 잠금,
 revision 기반 처리 대기로 구현한다. 향후 코어 변경 시 출처 commit과 이 차이를 함께 검토한다.

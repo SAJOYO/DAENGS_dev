@@ -89,7 +89,7 @@ def test_트리거는_202_와_task_id_를_돌려준다(client: TestClient, monke
     monkeypatch.setattr(crawl_service, "trigger", _fake)
     got = client.post("/admin/crawl", json={"source_ids": ["easylaw-pet"]}, headers=_auth())
     assert got.status_code == 202
-    assert got.json() == {"task_id": "task-abc", "source_ids": ["easylaw-pet"]}
+    assert got.json() == {"task_id": "task-abc", "source_ids": ["easylaw-pet"], "note": None}
     assert sent["source_ids"] == ["easylaw-pet"]
 
 

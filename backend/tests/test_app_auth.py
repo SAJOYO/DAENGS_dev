@@ -939,3 +939,89 @@ class TestNickname:
         _login(client)
 
         assert store.app_users[KAKAO_ID].nickname
+
+
+class TestOcrConsent:
+    """영수증 OCR 항목을 진단 추천 모델 학습에 쓰는 데 대한 동의 (docs/vet-visits.md §3).
+
+    원본은 `app_users.ocr_consent_at` / `ocr_consent_version` 이고, 여기서는 그
+    시각·판 대신 앱이 쓸 불리언(`ocr_consent`)만 봅니다 — 시각 그대로를 내보내지
+    않는 이유는 `schemas/app_auth.py` 의 `ocr_consent` 주석에 있습니다.
+    """
+
+    def test_기본은_미동의다(self, client: TestClient) -> None:
+        access = _login(client).json()["access_token"]
+
+        me = client.get(
+            "/auth/app/me", headers={"Authorization": f"Bearer {access}"}
+        ).json()
+
+        assert me["ocr_consent"] is False
+        assert me["ocr_consent_version"] is None
+
+    def test_켜면_시각과_판이_같이_남는다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+
+        res = client.patch("/auth/app/me", json={"ocr_consent": True}, headers=headers)
+
+        assert res.status_code == 200
+        assert res.json()["ocr_consent"] is True
+        assert res.json()["ocr_consent_version"] == app_auth_router.OCR_CONSENT_VERSION
+        row = store.app_users[KAKAO_ID]
+        assert row.ocr_consent_at is not None
+        assert row.ocr_consent_version == app_auth_router.OCR_CONSENT_VERSION
+
+    def test_끄면_둘_다_지워진다(self, client: TestClient, store: Store) -> None:
+        """CHECK `app_users_ocr_consent_pair` 대로 한쪽만 NULL 일 수 없습니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"ocr_consent": True}, headers=headers)
+
+        res = client.patch("/auth/app/me", json={"ocr_consent": False}, headers=headers)
+
+        assert res.status_code == 200
+        assert res.json()["ocr_consent"] is False
+        row = store.app_users[KAKAO_ID]
+        assert row.ocr_consent_at is None
+        assert row.ocr_consent_version is None
+
+    def test_닉네임만_보내면_동의는_그대로다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """`model_fields_set` 회귀 테스트입니다.
+
+        예전 닉네임/이름표처럼, 칸이 늘어나는 순간 안 보낸 칸도 모델에서는
+        기본값(False)이라 "안 보냈다"와 "꺼 달라"가 구분이 안 됩니다. 라우터가
+        `model_fields_set` 을 안 보면 닉네임만 고치려던 요청이 동의를 몰래
+        꺼버립니다 — 사용자가 취소한 적 없는데 취소된 것으로 남는 사고입니다.
+        """
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"ocr_consent": True}, headers=headers)
+
+        client.patch("/auth/app/me", json={"nickname": "네옹"}, headers=headers)
+
+        row = store.app_users[KAKAO_ID]
+        assert row.ocr_consent_at is not None
+        assert row.ocr_consent_version == app_auth_router.OCR_CONSENT_VERSION
+        assert (
+            client.get("/auth/app/me", headers=headers).json()["ocr_consent"] is True
+        )
+
+    def test_다시_동의하면_시각이_새로_찍힌다(
+        self, client: TestClient, store: Store
+    ) -> None:
+        """재동의는 무시하는 no-op 이 아니라, 새 동의 이벤트로 시각을 새로 씁니다."""
+        access = _login(client).json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        client.patch("/auth/app/me", json={"ocr_consent": True}, headers=headers)
+        first = store.app_users[KAKAO_ID].ocr_consent_at
+
+        client.patch("/auth/app/me", json={"ocr_consent": True}, headers=headers)
+
+        second = store.app_users[KAKAO_ID].ocr_consent_at
+        assert second is not None
+        assert second >= first

@@ -299,7 +299,10 @@ def test_summary_reports_runs_separately_and_aggregates() -> None:
         assert ag["latency_ms"]["p95"] == 900.0 and lg["latency_ms"]["max"] == 500.0
         # `general` (#279) 은 표에 자리만 있다 — 러너는 폴백을 안 켜므로 골드에도 예측에도
         # 없어 precision/recall 이 빈 비율(1.0)로 찍힌다.
-        assert set(ag["capabilities"]) == {"training", "life", "walk", "place", "general"}
+        # `vet_contact` 도 마찬가지로 표에 자리만 있다 — 라우터가 고르는 목적지가 아니라
+        # 결정적 어휘 게이트 + 명시적 신호로만 닿아서, 골드에도 예측에도 없어 precision/recall 이
+        # 빈 비율(1.0)로 찍힌다.
+        assert set(ag["capabilities"]) == {"training", "life", "walk", "place", "general", "vet_contact"}
         assert ag["capabilities"]["general"] == {"precision": 1.0, "recall": 1.0}
         assert r["divergence"]["favored"]["langgraph"] == (3 if r["run"] == 2 else 2)
         assert "clarify_07" in r["divergence"]["divergent_case_ids"]

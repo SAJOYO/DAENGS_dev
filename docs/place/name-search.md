@@ -32,10 +32,10 @@
 
 ## 검증 범위
 
-`tests/place/place/test_name_search.py`는 입력 검증, HTTP echo, guard 불변식, 의료/시설 SQL의 조건·바인딩·LIMIT 순서를 검증한다. 실제 DB는 대체한다.
+`tests/place/search/test_name_search.py`는 입력 검증, HTTP echo, guard 불변식, 의료/시설 SQL의 조건·바인딩·LIMIT 순서를 검증한다. 실제 DB는 대체한다.
 
 ```powershell
-uv run --no-sync pytest tests/place/place/test_name_search.py tests/place/place/planning/test_plan.py tests/place/api/test_contract_validation.py tests/place/test_boundary.py -q
+uv run --no-sync pytest tests/place/search/test_name_search.py tests/place/planning/test_plan.py tests/place/api/test_contract_validation.py tests/place/test_boundary.py -q
 ```
 
 이 테스트는 실 PostGIS의 실행 계획/실데이터 적중률 검증을 대신하지 않는다. 배포 전후에 홍대 기준 실제 알려진 이름·0건·특수문자·작은 limit 사례를 확인해야 한다.

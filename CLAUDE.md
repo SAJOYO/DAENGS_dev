@@ -27,13 +27,13 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening**·**gait** 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 · D-038 |
-| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 `gait-analysis` 컨테이너로 따로 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
+| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 Celery `gait-worker` 컨테이너에서만 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). 옛 `gait-analysis` HTTP 서비스는 D-063 4단계에서 제거됐고 nginx `/gait/` 는 410 묘비만 남습니다. compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
 | `backend/src/daengs_place/` | Place 검색과 중립 점령지 읽기 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`·`/territory/sites/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `docs/journey/UPSTREAM.md` — D-039 |
 | `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
 | `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
 | `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
-| `backend/gait_v4/` | 별도 uv 프로젝트입니다 — 의도된 예외이고, 이유는 `backend/gait_v4/DAENGS-NOTE.md`. #304 뒤에 정리합니다 |
+| `backend/gait_v4/` | walk_demo v4 엔진 코드(별도 폴더, 워커가 서브프로세스로 부름). 의존성은 **backend `pyproject.toml` 의 `gait-v4` 그룹**이고 자기 pyproject/lock 은 없습니다 (D-063 5A). 사정은 `backend/gait_v4/DAENGS-NOTE.md`. 5B 에서 `daengs_gait/inference/` 로 옮깁니다 |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
@@ -68,9 +68,10 @@ npm run lint
 
 ```powershell
 uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
+uv run check               # 저장소 규칙 검사 (약 3초) — 머지 전에 무조건
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
-uv run pytest              # 테스트 전체 (backend/tests/, 약 6분)
+uv run pytest              # 테스트 전체 (backend/tests/, 약 9분)
 uv run pytest tests/place  # Place 테스트만
 uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)
@@ -80,6 +81,16 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 
 - **브랜치는 `dev` 가 기본입니다.** `dev` 에 push/merge 하면 self-hosted 러너가 자동 배포합니다.
   `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
+- **머지 전에 `uv run check`. 백엔드를 건드렸으면 `uv run pytest` 까지.**
+  `dev` 머지가 곧 배포라 그 둘이 사실상 마지막 관문입니다. `check` 는 **3초**이고
+  (`pytest` 는 약 9분), 봐 주는 자리가 서로 다릅니다 — `pytest` 는 `testpaths = ["tests"]` 라
+  `backend/tests/` 만 보고, 마이그레이션 규칙 체커는 저장소 루트 `tools/` 에 있어서
+  **`pytest` 를 아무리 돌려도 한 번도 안 돕니다.** 2026-09 에 CI 가 그 자리에서만 12건을
+  잡았는데, 그때는 로컬에서 재현할 방법 자체가 없었습니다.
+  검사 목록은 `daengs_backend/cli/check.py` 한 곳에 있고 `uv run pytest` 도 같은 것을
+  부릅니다(`tests/test_repo_checks.py`) — **거기에 느린 것을 넣지 마세요.** 3초라서 매번
+  돌리는 것이고, `pytest` 와 묶는 순간 이쪽까지 같이 안 돌게 됩니다.
+  `sql` 모드만 예외로 CI 에 남아 있습니다 (`psql` 과 버리는 로컬 Postgres 가 필요합니다).
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **Python 코드는 uv 기본 src 레이아웃**입니다. 팀 소유 패키지는 `backend/src/daengs_*`에 두고

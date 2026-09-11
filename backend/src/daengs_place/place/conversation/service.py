@@ -141,6 +141,10 @@ class ConversationService:
                     action="clarify",
                 )
             now = self.now()
+            if decision.action == "saved_search":
+                from daengs_place.place.conversation.saved_search import prepare_saved_search
+
+                return prepare_saved_search(request, decision.intent, self._unchanged)
             if decision.action == "bookmark":
                 from daengs_place.place.conversation.bookmarks import prepare_bookmark
 

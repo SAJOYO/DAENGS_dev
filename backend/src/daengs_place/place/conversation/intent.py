@@ -53,6 +53,11 @@ class SemanticChanges(PlanningModel):
 
 class Interpretation(PlanningModel):
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
+    search_scope: Literal["keep", "bookmarks", "all_places"] = Field(
+        default="keep",
+        description="후보 집합 변경만 표현한다. 검색 동사나 찜 저장 행위의 부정은 집합 변경이 아니다.",
+    )
+    spatial_scope: Literal["keep", "unbounded"] = "keep"
     feedback: Literal["none", "evaluation", "familiarity", "information_dispute"] = "none"
     bookmark: "BookmarkEdit | None" = None
     changes: SemanticChanges = Field(default_factory=SemanticChanges)

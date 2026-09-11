@@ -179,6 +179,13 @@ async def lookup_bookmarks(db, request: BookmarkLookup) -> BookmarkLookupResult:
                     0  # Consumers must use distance_available, not this placeholder.
                 )
             hits.append(hit)
+    order_bookmark_hits(hits, f)
+    return BookmarkLookupResult(
+        filters=f, distance_available=f.lat is not None, hits=hits, missing_keys=missing
+    )
+
+
+def order_bookmark_hits(hits, f):
     if f.lat is not None:
         hits.sort(
             key=lambda h: (
@@ -189,6 +196,7 @@ async def lookup_bookmarks(db, request: BookmarkLookup) -> BookmarkLookupResult:
                 h.place.key.ref,
             )
         )
-    return BookmarkLookupResult(
-        filters=f, distance_available=f.lat is not None, hits=hits, missing_keys=missing
-    )
+    elif f.parking:
+        # Without an origin there are no distance bands. Preserve saved order within
+        # each group; unknown and false remain visible, after confirmed parking.
+        hits.sort(key=lambda h: h.place.facts.parking is not True)

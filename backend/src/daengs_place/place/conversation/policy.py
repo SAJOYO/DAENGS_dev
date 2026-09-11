@@ -141,6 +141,14 @@ async def decide(planner, request, now):
             }[intent.feedback],
             intent=intent,
         )
+    if intent.search_scope == "bookmarks":
+        return Decision("saved_search", intent=intent)
+    if intent.spatial_scope != "keep":
+        return Decision(
+            "clarify",
+            question="지역 제한 없는 검색은 찜 탭에서 할 수 있어요.",
+            code="unbounded_requires_saved",
+        )
     if intent.bookmark is not None:
         return Decision("bookmark", intent=intent)
     if intent.region_query:

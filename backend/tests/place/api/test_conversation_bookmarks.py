@@ -7,6 +7,23 @@ from tests.place.api.test_conversation import (  # noqa: F401
 from tests.place.support.conversation import place
 
 
+async def test_saved_scope_gateway_does_not_replace_normal_search_or_generate_success(harness):  # noqa: F811
+    client, _, searcher, _, plans, _ = harness
+    before = (await client.post("/app/places/conversation", json=manual_body())).json()
+    plans.append(
+        {"goal": "show", "search_scope": "bookmarks", "changes": {"parking": "required_true"}}
+    )
+    body = {**chat_body(before, "찜한 곳 중 주차 되는 곳만"), "saved_search": "v1"}
+    response = await client.post("/app/places/conversation", json=body)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["receipt"]["saved_search_filters"]["parking"] is False
+    assert result["answer_status"] == "none" and result["answer"] is None
+    assert result["search"] == before["search"] and result["filters"] == before["filters"]
+    assert (await client.post("/app/places/conversation", json=body)).json() == result
+    assert len(searcher.calls) == 1
+
+
 async def test_gateway_negotiates_app_execution_and_recovery_does_not_claim_saved(harness):  # noqa: F811
     client, _, searcher, _, plans, _ = harness
     searcher.rows = [

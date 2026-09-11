@@ -39,10 +39,10 @@
       "k": 0
     },
     "S_invariant": {
-      "point": NaN,
-      "low": NaN,
-      "high": NaN,
-      "n": 0,
+      "point": 0.0,
+      "low": 0.0,
+      "high": 0.6576,
+      "n": 2,
       "k": 0
     },
     "P_ablation": {
@@ -69,10 +69,10 @@
   },
   "inequality": {
     "N": NaN,
-    "S": NaN,
+    "S": 0.0,
     "P": 1.0,
     "holds_N_lt_S": null,
-    "holds_S_lt_P": null,
+    "holds_S_lt_P": true,
     "holds": null,
     "P_minus_N": null,
     "P_minus_N_ci_excludes_zero": null,
@@ -80,7 +80,8 @@
   },
   "items": {
     "responsiveness": 1.857,
-    "no_fabrication": 1.0
+    "no_fabrication": 1.0,
+    "invariance": 1.0
   },
   "items_detail": {
     "responsiveness": {
@@ -95,9 +96,17 @@
     "no_fabrication": {
       "mean": 1.0,
       "max": 1,
-      "n": 7,
+      "n": 9,
       "distribution": {
-        "1": 7
+        "1": 9
+      }
+    },
+    "invariance": {
+      "mean": 1.0,
+      "max": 1,
+      "n": 2,
+      "distribution": {
+        "1": 2
       }
     }
   },
@@ -114,9 +123,17 @@
       "no_fabrication": {
         "mean": 1.0,
         "max": 1,
-        "n": 6,
+        "n": 8,
         "distribution": {
-          "1": 6
+          "1": 8
+        }
+      },
+      "invariance": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
         }
       }
     },
@@ -158,10 +175,28 @@
           "1": 7
         }
       }
+    },
+    "invariant": {
+      "invariance": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
+        }
+      }
     }
   },
   "failures": {
-    "scored_pairs": 7,
+    "scored_pairs": 9,
     "ignored": 0,
     "fabricated": 0,
     "stereotype": 0,
@@ -169,8 +204,8 @@
   },
   "unmeasured": {},
   "coverage": {
-    "total_pairs": 20,
-    "judged": 7,
+    "total_pairs": 22,
+    "judged": 9,
     "skipped_before_judging": {
       "not_answered": 13
     },
@@ -181,21 +216,21 @@
     "position_checked": 0,
     "position_flip_rate": null,
     "abstained": 0,
-    "unmeasured_rate": 0.65
+    "unmeasured_rate": 0.591
   },
   "paraphrase": {
     "pairs": 0,
     "agreement": null
   },
   "cost": {
-    "input_tokens": 14179,
-    "output_tokens": 1937,
-    "pairs": 7,
-    "tokens_per_1000_pairs": 2302286
+    "input_tokens": 17855,
+    "output_tokens": 2360,
+    "pairs": 9,
+    "tokens_per_1000_pairs": 2246111
   },
   "calibration": null,
   "provisional": true,
-  "generated_at": "2026-09-11T08:52:50+00:00",
+  "generated_at": "2026-09-11T08:54:19+00:00",
   "gate": {
     "responsiveness": {
       "passed": false,
@@ -210,5 +245,5 @@
       "reason": "not_calibrated"
     }
   },
-  "note": "시험 ② 오늘 기록 바꿔치기 (benchmark_pf_carelog_v1.yaml). 판정 v2.1a 한 방향, 예산 1.5만에서 7/9 쌍"
+  "note": "시험 ② 오늘 기록 바꿔치기 (benchmark_pf_carelog_v1.yaml). 판정 v2.1a 한 방향"
 }

@@ -211,18 +211,20 @@
   },
   "unmeasured": {},
   "coverage": {
-    "total_pairs": 46,
+    "total_pairs": 28,
     "judged": 22,
     "skipped_before_judging": {
-      "missing_cell": 18,
       "out_of_scope": 4,
       "not_answered": 2
+    },
+    "not_planned": {
+      "noise": 18
     },
     "position_dependent": 0,
     "position_checked": 0,
     "position_flip_rate": null,
     "abstained": 0,
-    "unmeasured_rate": 0.522
+    "unmeasured_rate": 0.214
   },
   "paraphrase": {
     "pairs": 0,
@@ -236,7 +238,7 @@
   },
   "calibration": null,
   "provisional": true,
-  "generated_at": "2026-09-11T08:34:46+00:00",
+  "generated_at": "2026-09-11T08:38:10+00:00",
   "gate": {
     "responsiveness": {
       "passed": false,

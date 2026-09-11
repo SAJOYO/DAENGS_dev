@@ -232,7 +232,26 @@ def drop_fake_adapter_pairs(
 
 
 def unmeasured(meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    skipped = Counter(s["reason"] for s in meta.get("skipped_pairs") or [])
+    """못 잰 비율. **계획에 없던 조건의 쌍은 분모에서 뺀다** — 조건을 골라 모은 실행(2026-09-11 v6 전후 비교는
+    잡음 N 을 일부러 안 모았다)에서 그 쌍까지 세면 미측정이 52% 로 부풀려진다. 판정된 쌍도 없고 셀 없음
+    말고 다른 사유도 없는 조건은 "안 잰 것" 이지 "못 잰 것" 이 아니다. 따로 `not_planned` 로 적는다."""
+    skips = list(meta.get("skipped_pairs") or [])
+
+    def cond(skip: Mapping[str, Any]) -> str | None:
+        parts = str(skip.get("pair_id") or "").split("|")
+        return parts[1] if len(parts) > 1 else None  # 옛 파일·테스트의 짧은 id 는 조건을 모른다
+
+    seen_conditions = {r.get("condition") for r in rows} | {
+        cond(s) for s in skips if s["reason"] != "missing_cell"
+    }
+    not_planned = Counter(
+        cond(s)
+        for s in skips
+        if s["reason"] == "missing_cell" and cond(s) is not None and cond(s) not in seen_conditions
+    )
+    skipped = Counter(
+        s["reason"] for s in skips if not (s["reason"] == "missing_cell" and cond(s) in not_planned)
+    )
     pos = sum(1 for r in rows if r.get("position_dependent"))
     pos_checked = sum(1 for r in rows if r.get("position_dependent") is not None)
     abst = sum(1 for r in rows if r["observation"].get("abstained"))
@@ -241,6 +260,7 @@ def unmeasured(meta: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> di
         "total_pairs": total,
         "judged": len(rows),
         "skipped_before_judging": dict(skipped),
+        "not_planned": dict(not_planned),
         "position_dependent": pos,
         "position_checked": pos_checked,
         "position_flip_rate": round(pos / pos_checked, 3) if pos_checked else None,
@@ -476,6 +496,11 @@ def render_markdown(s: Mapping[str, Any]) -> str:
             f"판정 전 제외 {s['coverage']['skipped_before_judging']} · "
             f"위치 뒤집힘 {s['coverage']['position_dependent']}/{s['coverage']['position_checked']} (양방향 본 쌍 중) · 기권 {s['coverage']['abstained']} → "
             f"미측정 비율 **{s['coverage']['unmeasured_rate']}**"
+            + (
+                f" · 계획에 없던 조건의 쌍 {s['coverage']['not_planned']} 은 분모에서 뺌"
+                if s["coverage"].get("not_planned")
+                else ""
+            )
         ),
         f"- 패러프레이즈 일치: {s['paraphrase']['agreement']} ({s['paraphrase']['pairs']}쌍)",
         f"- 비용: 입력 {s['cost']['input_tokens']:,} / 출력 {s['cost']['output_tokens']:,} 토큰 · 1000쌍당 {s['cost']['tokens_per_1000_pairs']:,}"

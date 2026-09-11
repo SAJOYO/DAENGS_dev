@@ -237,3 +237,24 @@ def test_summary_withholds_items_when_labels_say_kappa_is_low() -> None:
     assert s["provisional"] is True
     assert s["items"]["no_fabrication"] is None  # fabricated 는 전부 0 → 못 잼 → 보류
     assert "no_fabrication" in s["unmeasured"]
+
+
+def test_unmeasured_excludes_conditions_that_were_never_collected() -> None:
+    """조건을 골라 모은 실행: 잡음 쌍이 전부 셀 없음이면 '안 잰 것' 이지 '못 잰 것' 이 아니다."""
+    from daengs_evals.profile_fitness.report import unmeasured
+
+    rows = [
+        {"condition": "contrast", "position_dependent": None, "observation": {"abstained": False}},
+        {"condition": "ablation", "position_dependent": None, "observation": {"abstained": False}},
+    ]
+    meta = {
+        "skipped_pairs": [
+            {"pair_id": "q1|noise|a#0|a#1", "reason": "missing_cell"},
+            {"pair_id": "q2|noise|a#0|a#1", "reason": "missing_cell"},
+            {"pair_id": "q3|contrast|a#0|b#0", "reason": "not_answered"},
+        ]
+    }
+    u = unmeasured(meta, rows)
+    assert u["not_planned"] == {"noise": 2}
+    assert u["skipped_before_judging"] == {"not_answered": 1}
+    assert u["total_pairs"] == 3 and u["unmeasured_rate"] == round(1 / 3, 3)

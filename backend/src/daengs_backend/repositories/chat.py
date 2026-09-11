@@ -156,6 +156,32 @@ async def list_capacity_turns(session: AsyncSession, session_id: uuid.UUID) -> l
     return list(rows)
 
 
+async def list_recent_completed_turns(
+    session: AsyncSession, session_id: uuid.UUID, *, limit: int
+) -> list[ChatTurn]:
+    """Turn Resolver 후보와 대기 되묻기의 원본 (#416 Task 7).
+
+    최신 `limit` 개를 `chat_turns_session_order_idx`(`session_id, created_at, id`)를 그대로
+    타도록 `DESC` 로 가져온 뒤 뒤집는다 — 인덱스 컬럼 순서와 반대 방향 정렬은 인덱스를
+    못 타므로, `ASC LIMIT` 으로 바로 구하지 않는다. 오래된 순으로 돌려주는 것은 Resolver
+    가 후보를 `U1/A1, U2/A2…` 로 번호 매기기 때문이다 — 순서가 뒤집히면 모델이 고른
+    번호가 엉뚱한 turn 에 붙는다.
+
+    `processing_status == 'completed'` 만 보므로, 방금 예약한(아직 `processing`인) turn
+    은 여기 안 걸린다 — 자기 자신을 자기 맥락으로 삼는 사고가 애초에 안 생긴다.
+    """
+    rows = await session.scalars(
+        select(ChatTurn)
+        .where(
+            ChatTurn.session_id == session_id,
+            ChatTurn.processing_status == "completed",
+        )
+        .order_by(ChatTurn.created_at.desc(), ChatTurn.id.desc())
+        .limit(limit)
+    )
+    return list(reversed(rows.all()))
+
+
 async def list_turns(
     session: AsyncSession, session_id: uuid.UUID, *, completed_only: bool = False
 ) -> list[ChatTurn]:

@@ -87,6 +87,12 @@ uv run pytest -q tests/journey
 
 ### 5. 산책 측정·분석
 
+- GPS 고정 정책 재생·계산 조회(#456): `walk/measurement/test_motion_replay.py`는 실제 앱 엔진의
+  기준값과 판정을 대조한다. `walk/api/test_motion_calculation.py`는 인증 후 소유권·완료·손상
+  경계를 검증한다. 공유 백업 완료 검증을 바꾸면 `walk/api/test_walk_motion_contract.py`와
+  명시적 임시 DB 도구 `tools/check_walk_motion_backup.py`까지 확인한다.
+  [실행 명령과 정밀도 범위](../../docs/walk/gps-motion-calculation.md).
+
 - 근거: PR #124, #125, #138–#140, #159, #302.
   경계: `daengs_walk` measurement/evidence/cellophane/capsule와 backend 업로드·finalize·분석 저장.
 - 기본: 측정·격자·분석 직렬화 및 finalize 계약. 저장소 테스트에도 가짜 세션/SQL 구성 검사가

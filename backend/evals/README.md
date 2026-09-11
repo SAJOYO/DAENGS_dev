@@ -8,6 +8,7 @@
 
 | 폴더 | 읽고 쓰는 패키지 | 안에 있는 것 |
 | --- | --- | --- |
+| `diary_slots/` | `tools/run_diary_slots.py` · `daengs_evals.diary_slots_demo` | 파트 슬롯 미리보기의 합성 입력 기반 Gemini 실제 문장·근거·정책 버전과 알려진 한계 |
 | [place_conversation/](place_conversation/README.md) | `daengs_evals.place_conversation` | 시설 검색 대화 23개 명세·실제 출력·구조 비교·검토 기록 |
 | `walk_diary_stamps/` | `tools/preview_diary_stamps.py` | 사용자 기록 중심 스탬프의 합성 입력·선택 사유·읽기용 결과. LLM 호출 없음 |
 | `answer_quality/` | `daengs_evals.answer_quality` | `/life/ask` 답변 품질용 질문·답변(jsonl)·판정(jsonl)·리포트(md) |

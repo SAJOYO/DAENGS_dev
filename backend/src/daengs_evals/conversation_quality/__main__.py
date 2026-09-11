@@ -34,6 +34,7 @@ from pathlib import Path
 
 from daengs_evals.conversation_quality import CASES_V1_PATH
 from daengs_evals.conversation_quality import anchors as anchors_mod
+from daengs_evals.conversation_quality import case_report as case_report_mod
 from daengs_evals.conversation_quality import report as report_mod
 from daengs_evals.conversation_quality.cases import load_cases
 from daengs_evals.conversation_quality.collect import (
@@ -184,6 +185,24 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_report(args: argparse.Namespace) -> int:
+    """케이스별 before/after 표. **판정 파일이 필요 없고 판정기를 안 부른다** —
+    랩 행에서만 뽑으므로 공짜이고, `score` 를 돌리기 전에도 답변을 눈으로 볼 수 있다."""
+    _, before_rows = load_lap(Path(args.before_lap)) if args.before_lap else ({}, [])
+    _, after_rows = load_lap(Path(args.after_lap))
+    text = case_report_mod.render_case_diff(before_rows=before_rows, after_rows=after_rows)
+    print(text)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    # sentinel 이 하나라도 신호를 냈으면 종료 코드로 알린다 — 미측정(None)은 실패가 아니다.
+    signalled = [f for f in case_report_mod.run_sentinels(after_rows).values() if f.ok is False]
+    if signalled:
+        names = " · ".join(f.name for f in signalled)
+        print(f"안전 회귀 신호 {len(signalled)}건: {names}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="daengs_evals.conversation_quality")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -232,6 +251,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_compare.add_argument("--after-judgments", required=True)
     p_compare.add_argument("--out")
     p_compare.set_defaults(func=cmd_compare)
+
+    p_case = sub.add_parser(
+        "case-report", help="케이스별 before/after 표와 안전 회귀 sentinel (판정기 안 부름)"
+    )
+    p_case.add_argument("--after-lap", required=True)
+    p_case.add_argument("--before-lap")
+    p_case.add_argument("--out")
+    p_case.set_defaults(func=cmd_case_report)
 
     return parser
 

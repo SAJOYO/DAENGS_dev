@@ -326,7 +326,9 @@ class VetContactPayload(ContractModel):
         return self
 
 
-CapabilityPayload = TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
+CapabilityPayload = (
+    TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
+)
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
     CapabilityName.LIFE: LifePayload,
@@ -366,9 +368,42 @@ class Handoff(ContractModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
+class ObservationAxis(StrEnum):
+    """되묻기가 사용자에게 물을 수 있는 **관찰 항목**의 닫힌 목록 (#415 · D-068).
+
+    **이것은 강아지의 상태가 아니라 "아직 물어본 항목" 입니다.** `ClarifyRequest.missing_axes`
+    에만 실리고, 어디에서도 반려견의 사실이나 기록으로 저장되지 않습니다 — 값이 `APPETITE`
+    라는 것은 "식욕을 물었다" 는 뜻이지 "식욕에 문제가 있다" 가 아닙니다.
+
+    목록은 `#415` 의 수용 케이스가 실제로 요구하는 **최소**입니다. 앞의 다섯은 승인된 질문
+    문구의 축(식욕 · 활력 · 배변 · 구토/설사 · 호흡)이고, `MOBILITY` 는 그 문구에는 없지만
+    수용 케이스에 있어서 있습니다 — `cq_repeat_after_failure_01` 이 "발을 전다" 입니다.
+    `OTHER` 로 다 밀어 넣지 않으려고 먼저 세운 것이 이 목록입니다.
+
+    **늘리는 것은 의도된 행동이어야 합니다** — `tests/test_orchestration_ask_mode.py` 가 이
+    목록을 그대로 고정합니다. `#416` 의 Turn Resolver 가 이 어휘로 후속 답변을 앞 질문에
+    묶으므로, 값을 더하거나 이름을 바꾸면 그쪽 결합도 같이 봐야 합니다.
+    """
+
+    APPETITE = "APPETITE"
+    ENERGY = "ENERGY"
+    STOOL = "STOOL"
+    VOMIT = "VOMIT"
+    BREATHING = "BREATHING"
+    MOBILITY = "MOBILITY"
+    OTHER = "OTHER"
+
+
 class ClarifyRequest(ContractModel):
     question: str = Field(min_length=1, max_length=500)
+    #: **어떤 종류의 되묻기인가.** 좌표 게이트는 `location.lat` 같은 키를, 관찰 되묻기는
+    #: `observation` 을 넣는다. 두 어휘를 한 목록에 섞지 않으려고 축은 아래 칸에 따로 둔다.
     missing: list[str] = Field(min_length=1)
+    #: **무엇을 물었는가** — 모델이 고른 관찰 항목 1~2개 (#415). 기본값이 비어 있고,
+    #: **코드가 채우는 길은 없다**: 질문 문장이 식욕을 언급했다고 해서 `APPETITE` 를
+    #: 넣어 주지 않는다. 모델이 안 고르면 빈 채로 나가고, `#416` 은 그것을 "축을 모른다"
+    #: 로 읽어야지 "물은 것이 없다" 로 읽으면 안 된다.
+    missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
 
 
 class RoutePlan(ContractModel):
@@ -499,6 +534,7 @@ __all__ = [
     "Handoff",
     "LastVetVisitContext",
     "LifePayload",
+    "ObservationAxis",
     "OrchestratorState",
     "OutcomeDetail",
     "PendingJob",

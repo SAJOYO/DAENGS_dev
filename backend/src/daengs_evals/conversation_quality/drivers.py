@@ -99,11 +99,33 @@ class StatelessDriver:
             "capability": capability,
             "route_plan": _sanitize_route_plan(plan) if plan not in (None, NOT_REACHED) else plan,
             "general_decision": general_decision,
+            # 되묻기의 **구조화된 흔적** (#415). `message` 에도 같은 질문이 들어 있지만,
+            # 리포트가 "무엇을 물었나" 를 한국어에서 다시 파싱하지 않게 따로 싣는다.
+            # `#416` 의 `SessionDriver` 도 이 자리를 그대로 쓴다.
+            "clarify": _sanitize_clarify(response.clarify),
             # `send()` 는 질의 하나만 보낸다 — 이전 턴을 실은 적이 없으므로 이 드라이버가
             # 정직하게 말할 수 있는 값은 늘 빈 리스트다. `collect.py` 는 이 값을 하드코딩하지
             # 않고 여기서 읽는다 — `SessionDriver` 가 이력을 실으면 이 자리만 달라진다.
             "prior_turns_supplied": [],
         }
+
+
+def _sanitize_clarify(clarify: Any) -> dict[str, Any] | None:
+    """`ClarifyRequest` 에서 리포트가 읽는 세 칸만. 없으면 `None`.
+
+    `_sanitize_route_plan` 과 같은 원칙으로 **화이트리스트**다 — 계약이 나중에 칸을 늘려도
+    랩 파일에 뜻하지 않은 값이 실리지 않는다. 질문 문장은 이미 `TurnSnapshot.message` 에
+    있는 것과 같은 텍스트라 새로 새는 정보가 없다.
+    """
+    if clarify is None:
+        return None
+    return {
+        "question": clarify.question,
+        "missing": list(clarify.missing),
+        # `ObservationAxis` 는 `StrEnum` 이라 그대로 두면 JSON 에 값이 실린다. 다만
+        # `json.dumps` 가 아니라 리포트가 문자열로 비교하므로 명시적으로 풀어 둔다.
+        "missing_axes": [str(axis) for axis in clarify.missing_axes],
+    }
 
 
 def _sanitize_route_plan(plan: Any) -> dict[str, Any]:

@@ -499,7 +499,7 @@ def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
         'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
         ' "health_conditions": "신부전 초기", "on_medication": true}'
     ) in prompt
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     # the contract has no field that could carry a drug name into the prompt
     assert "medications" not in DogContext.model_fields
     assert "feeding_times" not in DogContext.model_fields
@@ -509,7 +509,7 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     # v3: the instructions are English like the router policy; the OUTPUT stays Korean
     assert "Write in Korean" in prompt

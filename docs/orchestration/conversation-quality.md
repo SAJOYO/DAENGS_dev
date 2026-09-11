@@ -127,7 +127,20 @@ uv run python -m daengs_evals.conversation_quality report --lap-file <dir>/lap_b
 uv run python -m daengs_evals.conversation_quality compare \
   --before-lap <lap_before.jsonl> --before-judgments <judgments_before.jsonl> \
   --after-lap <lap_after.jsonl> --after-judgments <judgments_after.jsonl>
+uv run python -m daengs_evals.conversation_quality case-report \
+  --before-lap <lap_before.jsonl> --after-lap <lap_after.jsonl>
 ```
+
+`case-report`(#415)는 **판정기를 안 부르고 판정 파일도 안 받습니다** — 랩 행에서만 뽑으므로
+공짜이고 `score` 전에도 돌릴 수 있습니다. `compare`가 집계를 내는 자리라면 이쪽은 **케이스마다
+두 랩의 실제 답변을 나란히** 놓고, `response mode`(계약 상태에서 파생한 라벨) · `elicited` ·
+`clarify.question` · `clarify.missing_axes` · `dead_end`를 같이 찍습니다. 뒤에 **안전 회귀
+sentinel** 일곱이 붙고, 신호가 하나라도 있으면 종료 코드 1입니다.
+
+⚠ sentinel은 **종합 안전성 평가가 아닙니다.** `#415` 범위의 명시적 안전 계약에 회귀 신호가
+있는지만 봅니다 — 통과를 "안전성이 검증됐다"로 쓰지 마세요. 케어 로그를 실어 보내는 케이스가
+`cases_v1.jsonl`에 없어서 기록 관련 둘(④⑤)은 **미측정**으로 나옵니다. 그 둘은
+`tests/test_orchestration_ask_mode.py`가 유닛으로 봅니다.
 
 `collect`·`check-anchors`는 실제 모델을 부릅니다(`--adapter-mode real`이거나 세만틱
 라우터가 Gemini를 물기 때문에 유료 호출입니다). **랩 실행 자체는 이 카드 밖이고, 하네스가
@@ -141,6 +154,15 @@ uv run python -m daengs_evals.conversation_quality compare \
 ---
 
 ## 7. 후속 런타임 카드 — 설계만, 구현은 여기서 하지 않습니다
+
+> **어디로 가는지** (사람 결정, 2026-09-10). 댕쓰가 되려는 것은
+> *"반려견 생활 · 훈련 · 산책 질문에서 문맥을 기억하고, 필요한 정보를 자연스럽게 되물으며,
+> 앱에 기록된 내 강아지의 상태를 활용해 답하는 대화형 비서"* 입니다.
+>
+> **지금은 "안전하고 정교한 기능 라우터" 에 가깝지 "대화 상대" 가 아닙니다.** 아래 두 카드가
+> 그 전환의 시작이고, **핵심은 Agent 를 늘리는 것이 아니라 대화 책임자를 하나 만드는 것**
+> 입니다. 능력을 더 붙이는 방향의 제안이 올라오면 이 문단을 근거로 되물으세요 — 이 대화가
+> 실패한 이유는 능력이 모자라서가 아니라 대화를 책임지는 자리가 없어서였습니다.
 
 이 카드가 잰 실패 둘은 런타임을 고쳐야 없앨 수 있습니다. **일부러 둘로 가릅니다** — 하나는
 지금 라운드(단발 질의)에서 끝나고, 다른 하나는 여러 라운드에 걸친 상태를 요구해 비용·범위가
@@ -157,6 +179,16 @@ uv run python -m daengs_evals.conversation_quality compare \
 오늘 평소와 달라 보이는 점이 있나요? 우선 식욕·활력·배변·구토/설사·호흡 중 가장 달라진 것
 하나를 알려주세요.
 ```
+
+> **결정됐습니다 (2026-09-10, `#415` · D-068) — ①′.** 아래 표의 ①을 골랐지만, 거기 적힌
+> "General이 `route_plan.clarify`를 채운다"는 모양으로는 **안 됩니다**: 계획은 어댑터가 돌기
+> 전에 굳고, 그 계획에는 이미 `general` 요청이 들어 있어 `clarify_is_exclusive`에 걸립니다.
+> 실제 구현은 **집계**에서 옮깁니다 — General이 `kind="ask"`를 내면 어댑터가 `data["ask"]`에
+> `ClarifyRequest`를 담고, `aggregate`가 **general 단독일 때만** `CLARIFY`로 냅니다.
+> `RoutePlan.clarify`는 끝까지 `None`이라 배타성 불변식이 그대로 서고, 그 응답의 `results`는
+> 비워 나갑니다. 아래 표의 ①에 적힌 대가("다른 능력 결과를 같이 못 준다")는 이 카드에서는
+> 물지 않습니다 — 폴백은 규칙상 라우터가 아무것도 안 골랐을 때만 조립되므로(`planner.py`),
+> 같이 낼 결과가 애초에 없습니다.
 
 **결정할 것 — `ASK`가 어디 사는가.** `contracts.py`의 `RoutePlan.clarify`는 이미 있는
 계약이고 정확히 "도구가 직접 되묻지 않고 오케스트레이터가 후속 질문을 담당한다"는 원칙을
@@ -185,7 +217,51 @@ uv run python -m daengs_evals.conversation_quality compare \
 `user_input_needed == True`인 케이스들이 이 카드의 통과 기준입니다 — 위 결정이 난 뒤
 after 랩에서 이 케이스들의 `response_mode_fit`이 오르는지를 봅니다.
 
+before 랩과 케이스 파일을 맞춰 보면 대상은 **턴 여섯**입니다(`#415`가
+`tests/test_orchestration_ask_mode.py`로 그 수를 고정합니다). 그 여섯이 전부 `diagnosis`
+거절인 것은 **아닙니다** — 다섯이 `diagnosis`이고 하나(`cq_symptom_missing_triage_01`, 반복
+구토)는 `emergency`입니다. 그래서 프롬프트에서 좁혀야 할 규칙이 하나가 아니라 **둘**입니다.
+반대로 `cq_explicit_diagnosis_request_01`(병명 확답 요구)과 `cq_emergency_immediate_01`(실제
+응급)은 지금 동작이 정답이라 **움직이면 안 됩니다** — 그 둘이 이 카드의 과잉 수정 경보입니다.
+
+> **케이스 파일은 `#415`가 건드리지 않았습니다.** `cases_v1.jsonl`은 `cases_sha256`으로
+> 핀 박혀 있어 한 줄만 더해도 before 랩과의 `compare`가 거부됩니다(`report.render_compare`).
+> `#415` 착수 뒤 사람이 지정한 케이스 여덟(기록 있음/없음의 상태 질문, `오늘 힘이 없어 보여`,
+> 대화 자체에 대한 항의, 되묻기에 답한 후속 발화, 미기록 오독, 비응급 증상, 응급 신호)은
+> `backend/tests/test_orchestration_ask_mode.py`에 유닛으로 들어가 있고, **케이스 파일에는
+> 다음 판에서** 실립니다.
+
 ### B. 제한된 멀티턴 연속성·복구
+
+> **결정됐습니다 (2026-09-10, 사람) — `#416`은 "최근 대화 전달" 기능이 아니라 `Turn Resolver`
+> 입니다.** 최근 턴 원문을 프롬프트에 얹어 모든 capability에 흘려보내는 구현은 **하지 않습니다.**
+>
+> `Turn Resolver`는 현재 발화를 **`NEW` · `FOLLOW_UP` · `CORRECTION` · `REPEAT` · `META`**
+> 중 하나로 분류하고, 관련된 이전 요청과 잇습니다. 특히 **직전 `CLARIFY` 질문과 사용자의 후속
+> 답변을 구조적으로 연결합니다**:
+>
+> ```
+> "오늘 건강 상태는?"  →  "식욕과 활력은 어떤가요?"  →  "밥은 먹는데 계속 누워 있어."
+>      NEW                    CLARIFY(#415)                  FOLLOW_UP ← 앞 질문에 묶인다
+> ```
+>
+> 지켜야 하는 것:
+>
+> - **원문을 모든 capability에 그대로 주입하지 않습니다.** 원본 사용자 발화는 보존하되,
+>   *검증 가능한 사용자 관찰*과 *관련 요청*을 구조화해서 router와 **선택된** capability가
+>   쓰게 합니다. 이력을 프롬프트에 붙이는 것과 구조를 넘기는 것은 다른 일입니다.
+> - **모델이 추론한 것을 반려견의 실제 상태나 기록으로 저장하지 않습니다.** `Turn Resolver`
+>   의 산출물은 그 턴의 문맥이지 `care_events`도 프로필도 아닙니다.
+> - **맥락 연결이 불확실하면 임의로 보완하지 않고 짧게 확인 질문을 합니다** — `#415`가 만든
+>   되묻기 경로가 그 자리에서 다시 쓰입니다.
+> - **응급 · 의료 안전 경계는 그대로입니다.** 문맥이 붙었다고 완화되지 않습니다.
+>
+> 아래 표의 여덟 질문 중 **「누가 보는가」 · 「`CLARIFY` 응답을 원 요청에 잇는 법」 ·
+> 「오래된 턴이 라우팅을 오염시키지 않게」** 셋은 이 결정이 답합니다. 나머지(턴 개수 · 토큰
+> 한도 · 프라이버시 · 이력 없을 때 · 수용 케이스)는 여전히 열려 있습니다.
+>
+> **여러 capability의 결과를 한 답변으로 다시 쓰는 `Response Composer`는 이 카드가 아닙니다** —
+> `#416`의 결과를 잰 뒤 별도 PR로 판단합니다.
 
 **전제.** §3에서 확인한 사실 위에서만 설계합니다 — `routers/assistant.py`가 현재 질의
 하나만 넘기고, `services/chat.py:run_persisted_turn`은 저장만 합니다. "가장 작은 기제"를

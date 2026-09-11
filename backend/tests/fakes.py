@@ -1116,6 +1116,21 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
         return sorted(rows, key=lambda row: (row.created_at, row.id))
 
+    async def list_recent_completed_turns(session, session_id, *, limit):
+        """진짜와 같은 계약: completed 만, 최신 `limit`개, **오래된 순**으로 반환한다.
+
+        진짜(`repositories/chat.py`)는 `ORDER BY created_at DESC, id DESC LIMIT` 한 뒤
+        뒤집는다 — 여기서도 같은 두 단계(자르고 나서 뒤집기)를 거쳐야, 가짜와 DB 가
+        같은 자리에서 잘라낸다(가장 오래된 것부터 버림)는 것을 이 페이크가 보장한다.
+        """
+        rows = [
+            turn
+            for turn in store.chat_turns
+            if turn.session_id == session_id and turn.processing_status == "completed"
+        ]
+        newest_first = sorted(rows, key=lambda row: (row.created_at, row.id), reverse=True)
+        return list(reversed(newest_first[:limit]))
+
     async def get_turn_by_client_id(session, session_id, client_message_id):
         return next(
             (
@@ -1303,6 +1318,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "get_owned_turn", get_owned_turn)
     monkeypatch.setattr(chat_repo, "list_capacity_turns", list_capacity_turns)
     monkeypatch.setattr(chat_repo, "list_turns", list_turns)
+    monkeypatch.setattr(
+        chat_repo, "list_recent_completed_turns", list_recent_completed_turns
+    )
     monkeypatch.setattr(chat_repo, "add_turn", add_turn)
     monkeypatch.setattr(chat_repo, "complete_turn_if_processing", complete_turn)
     monkeypatch.setattr(chat_repo, "fail_turn_if_processing", fail_turn)

@@ -83,6 +83,7 @@ from daengs_backend.models.territory import (
     VerifiedVisit,
 )
 from daengs_backend.models.territory_bookmark import TerritoryBookmark
+from daengs_backend.models.place_bookmark import PlaceBookmark  # noqa: F401
 from daengs_backend.models.territory_claim import (
     TerritoryClaim,
     TerritoryClaimPhoto,

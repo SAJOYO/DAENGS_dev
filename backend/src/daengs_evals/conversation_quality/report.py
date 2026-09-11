@@ -118,8 +118,11 @@ PINNED_FIELDS: tuple[str, ...] = (
     "general_fallback",
 )
 
-#: 오늘 정답이 0 으로 고정된 두 축 (`transcript.PRIOR_TURNS_REACH_INFERENCE is False`).
-#: 이 둘의 before → after 는 "모델이 좋아졌다"가 아니라 "기능이 생겼다"다.
+#: `before` 랩이 `StatelessDriver` 로 모였을 때만 정답이 0 으로 고정되는 두 축(#416
+#: 이전에는 이 조건이 늘 참이었다 — `SessionDriver` 가 생기기 전에는 다른 드라이버로
+#: `before` 랩을 모을 길이 없었다). `render_compare` 가 이 목록과 `before.driver` 를
+#: 같이 봐서 못박을지 정한다(R25) — 이 축이름 목록만으로는 안 정한다. 이 둘의
+#: before → after 는(못박힌 경우) "모델이 좋아졌다"가 아니라 "기능이 생겼다"다.
 FLOORED_AXES: tuple[str, ...] = ("context_continuity", "repair_success")
 
 #: `LapHeader` 와 `JudgeHeader` 가 **이름이 같은 값**을 각자 따로 적는 세 자리. `collect.py`
@@ -233,6 +236,12 @@ class Summary(BaseModel):
     #: 수집 시점의 `settings.general_fallback` — `LapHeader.general_fallback` 을 그대로
     #: 옮긴다. `PINNED_FIELDS` 참고.
     general_fallback: bool
+    #: `LapHeader.driver` 를 그대로 옮긴다 — `"stateless"` 아니면 `"session"`. **`PINNED_FIELDS`
+    #: 에 안 낀다** — before/after 가 서로 다른 드라이버로 모인 것이 바로 이 카드가 비교하려는
+    #: 대상이다(이전 턴이 추론에 안 닿던 런타임 대 닿는 런타임). `render_compare` 는 이
+    #: 값을(축 이름만이 아니라) 읽어서 `context_continuity`·`repair_success` 를 0 으로
+    #: 못박을지 정한다 (R25).
+    driver: str = "stateless"
     n_turns_total: int
     n_turns_judged: int
     axis_stats: dict[str, AxisStat]
@@ -403,6 +412,9 @@ def summarize(
         anchor_set=str(judge_header.get("anchor_set", "")),
         adapter_mode=str(lap_meta.get("adapter_mode", "")),
         general_fallback=bool(lap_meta.get("general_fallback", False)),
+        # 이 칸이 생기기 전에 얼어붙은 랩은 `"stateless"` 로 읽는다 — 그 랩은 전부
+        # `StatelessDriver` 로 모았으므로 그 기본값이 사실과 맞다 (R25).
+        driver=str(lap_meta.get("driver", "stateless")),
         n_turns_total=n_turns_total,
         n_turns_judged=len(judgments),
         axis_stats=axis_stats,
@@ -625,12 +637,17 @@ def render_compare(*, before: Summary, after: Summary) -> str:
     lines.append("| --- | --- | --- | --- |")
     for axis in AXES:
         b_stat, a_stat = before.axis_stats[axis], after.axis_stats[axis]
-        if axis in FLOORED_AXES:
+        # 못박음은 **축 이름만으로** 걸지 않는다 (R25) — `before.driver` 가 `stateless`
+        # 일 때만 옳다. `before` 랩을 `SessionDriver` 로 모았으면(`#416` 이후로 가능해진
+        # 선택) 이 축도 실제로 이전 턴을 실어 보낸 실측이라, 축 이름만 보고 0 으로 못박으면
+        # 진짜로 측정된 점수 위에 "기능 부재" 를 덮어씌운다.
+        if axis in FLOORED_AXES and before.driver == "stateless":
             before_cell = f"{_FEATURE_ABSENT} ({_fmt_mean(b_stat.mean)})"
             note = (
-                f"{_FEATURE_ABSENT} — 오늘 런타임은 무상태라 이 축의 정답이 0 으로 고정돼"
-                " 있습니다 (`transcript.PRIOR_TURNS_REACH_INFERENCE is False`). after 의"
-                " 숫자는 «모델이 좋아졌다»가 아니라 «기능이 새로 생겼다»는 뜻입니다."
+                f"{_FEATURE_ABSENT} — 이 before 랩은 `StatelessDriver` 로 모았습니다"
+                "(이전 턴을 실어 보내지 않는 런타임입니다) — 이 축의 정답이 0 으로 고정돼"
+                " 있습니다. after 의 숫자는 «모델이 좋아졌다»가 아니라 «기능이 새로 생겼다»"
+                "는 뜻입니다."
             )
         else:
             before_cell = _fmt_mean(b_stat.mean)

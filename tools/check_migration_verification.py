@@ -239,6 +239,20 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-11', 'place_bookmarks', APP_USERS_WITH_STATUS, 'place_bookmarks', [
+            'ALTER TABLE place_bookmarks DROP COLUMN name',
+            'ALTER TABLE place_bookmarks ALTER COLUMN ref TYPE varchar(300)',
+            'ALTER TABLE place_bookmarks ALTER COLUMN name DROP NOT NULL',
+            'ALTER TABLE place_bookmarks ALTER COLUMN created_at DROP DEFAULT',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_pkey',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_app_user_id_fkey',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_source_check',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_ref_check',
+            'DROP TRIGGER place_bookmark_owner_cleanup ON app_users',
+            'ALTER TABLE app_users DISABLE TRIGGER place_bookmark_owner_cleanup',
+            'CREATE OR REPLACE FUNCTION place_bookmark_owner_cleanup() RETURNS trigger'
+            ' LANGUAGE plpgsql AS $f$ BEGIN RETURN NEW; END $f$',
+        ]),
         ('2026-09-10', 'territory_bookmarks', APP_USERS_WITH_STATUS,
          'territory_bookmarks', [
             'ALTER TABLE territory_bookmarks DROP COLUMN created_at',

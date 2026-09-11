@@ -22,10 +22,12 @@ LangGraph 전략이고, `agent/` 가 그 셋을 통째로 대체합니다.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 from daengs_backend.config import OrchestratorKind, settings
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
 
@@ -35,6 +37,12 @@ class Orchestrator(Protocol):
     이 서명이 곧 비교의 좌표계입니다. 넓히고 싶어지면 그 전에 "그 인자를 두 구현이
     같은 뜻으로 쓸 수 있는가"를 물으세요 — 한쪽에만 의미가 있는 인자를 여기 두면
     그 시점부터 두 구현은 나란히 잴 수 없는 다른 서비스가 됩니다.
+
+    `prior_turns`/`pending_clarification` (#416 Task 7): 두 구현 모두 같은 뜻으로
+    받는다 — "이 대화의 완료된 앞 턴들과 아직 안 풀린 되묻기". **Turn Resolver 자체는
+    지금 langgraph 쪽(`AssistantOrchestrationService`)에만 있다** — `agent` 구현은
+    이 둘을 받되 아직 안 쓴다(`orchestration/agent/service.py` 주석 참고). 좌표계를
+    맞추는 것과 두 구현이 같은 기능을 갖는 것은 다른 문제라, 여기서는 전자만 한다.
     """
 
     async def run(
@@ -47,6 +55,8 @@ class Orchestrator(Protocol):
         request_id: str | None = None,
         locale: str = "ko-KR",
         include_route_trace: bool = False,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> AssistantResponse: ...
 
 

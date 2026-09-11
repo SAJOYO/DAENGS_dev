@@ -31,6 +31,7 @@ async def _find_places(
     require_source_ref: bool,
     precise_order: bool = False,
     excluded_source_refs: tuple[str, ...] = (),
+    included_source_refs: tuple[str, ...] | None = None,
 ) -> list[PlaceOut]:
     must = plan.must
     origin = _point(must.lat, must.lng)
@@ -40,8 +41,12 @@ async def _find_places(
     stmt = (
         select(Place, dist, func.ST_Y(geom).label("lat"), func.ST_X(geom).label("lng"))
         .where(Place.active.is_(True))
-        .where(func.ST_DWithin(Place.location, origin, must.radius_m))
     )
+    if included_source_refs is None:
+        stmt = stmt.where(func.ST_DWithin(Place.location, origin, must.radius_m))
+    else:
+        # Bounded identity lookup has no spatial cap; never resolve saved places via a search page.
+        stmt = stmt.where(Place.source_id.in_(included_source_refs))
     if must.kind:
         stmt = stmt.where(Place.kind == must.kind)
     if must.name_query:
@@ -134,6 +139,7 @@ async def find_authoritative_places(
     source: str,
     precise_order: bool = False,
     excluded_source_refs: tuple[str, ...] = (),
+    included_source_refs: tuple[str, ...] | None = None,
 ) -> list[PlaceOut]:
     """Canonical resolver용. 지정 원천과 외부 ref가 모두 있는 의료 행만 반환한다."""
     return await _find_places(
@@ -144,6 +150,7 @@ async def find_authoritative_places(
         require_source_ref=True,
         precise_order=precise_order,
         excluded_source_refs=excluded_source_refs,
+        included_source_refs=included_source_refs,
     )
 
 

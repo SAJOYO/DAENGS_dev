@@ -22,6 +22,7 @@ from daengs_backend.orchestration.contracts import (
     CapabilityRequest,
     CapabilityResult,
     CapabilityStatus,
+    ObservationAxis,
     PrincipalContext,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
@@ -90,6 +91,45 @@ class RecordingResolver:
         if isinstance(self._outcome, Exception):
             raise self._outcome
         return self._outcome
+
+
+def _fixed(
+    relation: TurnRelation, *, referenced: PriorTurn, standalone: str | None = None
+) -> RecordingResolver:
+    """관계를 고정한 가짜 resolver — 앞 turn 하나를 가리키는 판정만 흉내 낸다.
+
+    수용 케이스 2·3·4·6 이 공유하는 모양: `referenced_turn_id`/`referenced_original_request`
+    가 늘 같이 실리고(#416 Task 5 의 `conversation_context_of` 가 이 두 값과
+    `standalone_query` 를 그대로 옮긴다), `pending_clarification_id` 는 없다 — 이 관계들은
+    앞선 완료 turn 을 잇는 것이지 대기 중인 되묻기를 잇는 것이 아니다.
+    """
+    return RecordingResolver(
+        ResolvedTurn(
+            relation=relation,
+            current_query=standalone or referenced.user,
+            referenced_turn_id=referenced.turn_id,
+            referenced_original_request=referenced.user,
+            standalone_query=standalone,
+            resolution_confidence=1.0,
+            context_used=[referenced.turn_id],
+        )
+    )
+
+
+def _fixed_pending(relation: TurnRelation, pending: PendingClarification) -> RecordingResolver:
+    """대기 중인 되묻기에 앵커된 판정을 흉내 낸다 — `pending_clarification_id` 가
+    `pending.turn_id` 와 실제로 같아야 `conversation_context_of` 가 앵커로 본다(R8).
+    다르면(또는 없으면) `pending_question`/`pending_missing_axes` 는 조용히 비워진다 —
+    그래서 이 헬퍼가 그 일치를 대신 보장한다."""
+    return RecordingResolver(
+        ResolvedTurn(
+            relation=relation,
+            current_query=pending.question,
+            pending_clarification_id=pending.turn_id,
+            pending_missing_axes=list(pending.missing_axes),
+            resolution_confidence=1.0,
+        )
+    )
 
 
 class RaisingResolver:
@@ -394,3 +434,173 @@ async def test_router_failure_trace_carries_the_resolved_version() -> None:
     assert response.status is AssistantStatus.FAILED
     assert response.route is not None
     assert response.route.prompt_version == RESOLVED_PROMPT_VERSION
+
+
+# ------------------------------------------------------- 수용 케이스 2·3·4·5·6
+#
+# 여기서부터는 관계를 가짜 resolver 로 고정한 채 "그 관계가 아래에서 무엇을 바꾸는가" 만
+# 본다 — 모델이 관계를 올바르게 판정하는지는 Task 9 의 평가 랩이 잰다. 다섯 테스트 모두
+# `general_sink` 로 `GeneralPayload` 를 가로채, `ConversationContext` 의 어느 필드가
+# 실제로 거기까지 도달했는지를 값으로 비교한다 — `is not None` 은 기본값이 이미 `None`
+# 이 아닌 필드(`relation`)에서는 아무것도 증명하지 못하고(트랩 2), `status is not FAILED`
+# 는 `RecordingAdapter` 가 관계와 무관하게 늘 `CapabilityStatus.OK` 를 내는 이 하네스에서
+# 거의 항상 참이라(트랩 1) 보조 신호로만 남긴다.
+
+
+async def test_follow_up_pronoun_reaches_the_answerer(monkeypatch) -> None:
+    """수용 케이스 2 — '그거 얼마나 자주 해?' 가 앞 요청("심장사상충 예방약 먹여야 해?")에
+    붙는다. `resolver.conversation_context_of` 가 `referenced_original_request` 를 안
+    옮기거나, `service.py` 가 `assemble_route_plan`/시맨틱 라우터에 `resolved=conversation`
+    대신 `None` 을 넘기면 이 assert 가 죽는다 — 필드의 기본값이 `None` 이라 값 자체를
+    비교한다(트랩 2 회피)."""
+    monkeypatch.setattr(settings, "general_fallback", True)
+    prior = _turn("심장사상충 예방약 먹여야 해?", "네, 보통 한 달에 한 번 투여합니다.")
+    captured: dict = {}
+    service = _service_with(
+        resolver=_fixed(
+            TurnRelation.FOLLOW_UP,
+            referenced=prior,
+            standalone="심장사상충 예방약을 얼마나 자주 먹여?",
+        ),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
+    )
+    response = await service.run(
+        query="그거 얼마나 자주 해?",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[prior],
+    )
+    assert response.status is not AssistantStatus.FAILED
+    assert captured["payload"].conversation.referenced_original_request == prior.user
+
+
+async def test_correction_hands_the_corrected_frame_down(monkeypatch) -> None:
+    """수용 케이스 3 — '아니, 산책 말고 밥' 의 정정된 프레임(축 자체가 바뀐 새 질문)이
+    아래로 간다. `service.py`/`conversation_context_of` 가 `standalone_query` 나
+    `referenced_original_request` 대신 원래 turn 의 값을 그대로 흘리면, 또는 `relation`
+    을 CORRECTION 이 아니라 NEW 로 바꿔치기하면 아래 세 assert 중 하나가 죽는다."""
+    monkeypatch.setattr(settings, "general_fallback", True)
+    prior = _turn("산책 얼마나 시켜야 해?", "하루 30분 이상을 권합니다.")
+    captured: dict = {}
+    service = _service_with(
+        resolver=_fixed(
+            TurnRelation.CORRECTION, referenced=prior, standalone="밥을 얼마나 줘야 해?"
+        ),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
+    )
+    response = await service.run(
+        query="아니, 산책 말고 밥",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[prior],
+    )
+    assert response.status is not AssistantStatus.FAILED
+    conversation = captured["payload"].conversation
+    assert conversation.relation is TurnRelation.CORRECTION
+    assert conversation.standalone_query == "밥을 얼마나 줘야 해?"
+    assert conversation.referenced_original_request == "산책 얼마나 시켜야 해?"
+
+
+async def test_repeat_relation_and_its_referenced_turn_reach_the_answerer(
+    monkeypatch,
+) -> None:
+    """수용 케이스 4 — REPEAT 판정과, 그것이 가리키는 앞선 거절이 실제로 answerer 의
+    payload 까지 내려가야 실서비스(Gemini General)가 "같은 요구가 반복됐다" 를 읽고 같은
+    고정 거절을 다시 안 낼 수 있다.
+
+    브리프가 준 `response.message.strip() != prior.assistant.strip()` 비교는 이 하네스
+    에서는 못 쓴다 — `RecordingAdapter` 는 관계와 무관하게 늘 고정 문자열
+    (`"general 답"`) 만 내므로, resolver 를 통째로 지워도(REPEAT 이 NEW 가 돼도) 그 비교는
+    항상 참이라 아무것도 못 잡는다. 그래서 실제 서비스가 REPEAT 을 다르게 답하는 데
+    쓰는 재료 — `relation`과 `referenced_original_request` — 가 payload 까지 도달하는지로
+    바꿔 쟀다: `conversation_context_of` 가 `relation` 을 그대로 안 옮기면 첫 assert 가,
+    `referenced_original_request` 를 안 옮기면 두 번째가 죽는다.
+    """
+    monkeypatch.setattr(settings, "general_fallback", True)
+    prior = _turn(
+        "산책 후 발을 절뚝거려", "정확한 원인은 진단할 수 없어요. 동물병원에 방문해 보세요."
+    )
+    captured: dict = {}
+    service = _service_with(
+        resolver=_fixed(TurnRelation.REPEAT, referenced=prior),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
+    )
+    response = await service.run(
+        query="그러니까 발을 저는 이유가 뭘 수 있는지 알고 싶다고",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[prior],
+    )
+    assert response.status is not AssistantStatus.FAILED
+    conversation = captured["payload"].conversation
+    assert conversation.relation is TurnRelation.REPEAT
+    assert conversation.referenced_original_request == prior.user
+
+
+async def test_follow_up_after_a_clarification_carries_the_asked_axes(monkeypatch) -> None:
+    """수용 케이스 5 — 되묻기 뒤 후속 답변이 원 질문에 붙고, 축은 '물은 것' 으로만 간다.
+
+    `conversation_context_of` 의 앵커 판정(`pending is not None and resolved.
+    pending_clarification_id == pending.turn_id`)을 지우고 무조건 채우거나 무조건 비우면
+    이 assert 들이 죽는다 — `pending_question` 기본값은 `None`, `pending_missing_axes`
+    기본값은 `[]` 라서 둘 다 정확한 값을 비교해야 트랩 2를 피한다(`_fixed_pending` 이
+    `pending_clarification_id=pending.turn_id` 로 실제 앵커를 만든다)."""
+    monkeypatch.setattr(settings, "general_fallback", True)
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE, ObservationAxis.ENERGY],
+    )
+    captured: dict = {}
+    service = _service_with(
+        resolver=_fixed_pending(TurnRelation.FOLLOW_UP, pending),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
+    )
+    response = await service.run(
+        query="밥은 먹는데 계속 누워 있어",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        pending_clarification=pending,
+    )
+    assert response.status is not AssistantStatus.FAILED
+    conversation = captured["payload"].conversation
+    assert conversation is not None
+    assert conversation.pending_question == pending.question
+    assert conversation.pending_missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+
+
+async def test_meta_relation_reaches_the_answerer_instead_of_falling_through(
+    monkeypatch,
+) -> None:
+    """수용 케이스 6 — 대화 자체에 대한 말("그니까 그걸 네가 나한테 물어봐야지")은
+    off_topic 거절로 떨어지면 안 된다.
+
+    `response.status is not AssistantStatus.REFUSED` 단독으로는 못 잰다 — 이 하네스의
+    `RecordingAdapter` 는 관계와 무관하게 늘 `CapabilityStatus.OK` 를 내므로, resolver 를
+    통째로 지워도(META 가 NEW 가 돼도) 그 비교는 항상 참이다(트랩 1, REPEAT 과 같은
+    이유). 대신 META 관계와, 그것이 "무엇에 대한 되물음인지" 를 가리키는 앞선 turn 이
+    실제로 answerer 의 payload 까지 도달하는지로 잰다 — 그래야 실서비스의 General
+    프롬프트가 "질문에 대한 질문" 임을 읽고 off_topic 대신 답할 재료를 받는다.
+    """
+    monkeypatch.setattr(settings, "general_fallback", True)
+    prior = _turn("오늘 건강 상태는 어때?", "증상의 원인이나 병명은 여기서 판단하지 않아요.")
+    captured: dict = {}
+    service = _service_with(
+        resolver=_fixed(TurnRelation.META, referenced=prior),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
+    )
+    response = await service.run(
+        query="그니까 그걸 네가 나한테 물어봐야지",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[prior],
+    )
+    assert response.status is not AssistantStatus.FAILED
+    conversation = captured["payload"].conversation
+    assert conversation.relation is TurnRelation.META
+    assert conversation.referenced_original_request == prior.user

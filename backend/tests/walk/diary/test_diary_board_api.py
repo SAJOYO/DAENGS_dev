@@ -172,7 +172,7 @@ def test_fixed_board_uses_slot_writer_and_hides_private_input(api):
     assert "pin_payload" not in response.text and "owner_id" not in response.text
     assert "background_decisions" not in response.text and "record" not in record["core"]
     state.provider.assert_awaited_once()
-    assert state.row.bundle["format"] == "walk-diary-board-storage-v1"
+    assert state.row.bundle["format"] == "walk-diary-board-storage-v2"
     assert StoredBoard.model_validate(state.row.bundle).bundle == PublishedBoard.model_validate(
         result["bundle"]
     )

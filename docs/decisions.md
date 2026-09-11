@@ -3975,7 +3975,7 @@ NULL 로 만듭니다 — 재가입할 때 같은 사람으로 알아보기 위�
 ## D-068
 ### 실시간 산책·날씨는 Cloud Run 서비스로 뗀다 — 상태는 VM 의 Redis 에 둔다
 
-2026-09-11 · **설계까지 확정, 구현 미착수** (#435). 설계 본문은
+2026-09-11 · **설계·구현·배포 완료** (#435). 설계 본문은
 [`docs/deploy/realtime-service.md`](deploy/realtime-service.md), 논의 경위와 기각 근거는
 [`docs/superpowers/specs/2026-09-11-realtime-cloudrun-design.md`](superpowers/specs/2026-09-11-realtime-cloudrun-design.md)
 에 있습니다. 여기에는 **결정과 되돌리기 비용**만 적습니다.
@@ -4028,17 +4028,25 @@ NULL 로 만듭니다 — 재가입할 때 같은 사람으로 알아보기 위�
   전부 사라집니다. 그 결정을 뒤집는 것이 아니라 **적용 범위가 다릅니다** — 서빙 전체는
   여전히 VM 입니다.
 
-⚠ **접점은 CLAUDE.md 가 말하는 세 줄이 아니라 넷입니다.** `main.py` 둘(등록 · 예열) +
-`adapters/life.py` 셋(`ask` · `walk` · `weather_at`). 오케스트레이션(D-035)이 뒤에
-들어오면서 늘었고 CLAUDE.md 가 그것을 안 받아 적었습니다. **그 문장은 구현 카드에서
-코드와 함께 고칩니다.**
+**접점은 CLAUDE.md 가 말하던 세 줄이 아니라 넷입니다** — `main.py`(등록 · 예열) +
+`adapters/life.py` 셋(`ask` · `walk` · `weather_at`). 오케스트레이션(D-035)이 뒤에 들어오면서
+늘었습니다. **CLAUDE.md 를 이 카드에서 코드와 함께 고쳤습니다.**
 
-⚠ **설계가 성립하려면 아직 확인 안 된 것 둘이 서야 합니다** — Cloud Run **서비스**(잡이
-아니라)에서 Direct VPC egress 가 되는지, 그 인스턴스가 `10.178.0.2:6379` 에 닿는지.
-검증 일곱은 `docs/deploy/realtime-service.md` §7 에 있습니다.
+**2026-09-11 배포 뒤 실측이 설계를 그대로 뒷받침했습니다** (자세한 것은
+`docs/deploy/realtime-service.md` §7):
 
-**되돌리려면**: 구현 전이면 문서 셋을 지우면 됩니다. 구현 후에는
-`DAENGS_REALTIME_URL` 을 비우고 backend 를 다시 만들면 분리 전 경로로 돌아옵니다 —
-그것이 이 설계가 **의도적으로 싸게 만들어 둔 되돌리기**입니다. Cloud Run 서비스와
-시크릿 셋, 방화벽 규칙 하나는 따로 지웁니다.
+- **무인증 호출은 403.** `--no-allow-unauthenticated` 가 그대로 지켜집니다.
+- **Redis 공유가 직접 증명됐습니다.** 부산(새 격자) 호출 전후로 VM Redis 의
+  `rt:budget:datagokr-vilage-fcst:20260911` 카운터가 **6 → 8** 로 늘고 그 격자의 캐시 키가
+  새로 생겼습니다 — Cloud Run 인스턴스와 VM 의 backend 가 **같은 Redis, 같은 일 예산
+  카운터**를 본다는 뜻입니다. **방화벽 규칙(`allow-redis-from-run`)은 만들 필요가 없었습니다**
+  — `default-allow-internal` 이 이미 서브넷을 덮어서, 5432 처럼 명시 규칙을 새로 만들 이유가
+  없습니다(`realtime-service.md` §4).
+- 이미지는 **445MB**(파이프라인 CPU 이미지 2.3GB 대비). 콜드 스타트는 **못 쟀습니다** —
+  배포 직후 헬스체크가 인스턴스를 띄워 격리가 안 됐고, 추정치는 안 적습니다.
+
+**되돌리려면**: `DAENGS_REALTIME_URL` 을 비우고 backend 를 다시 만들면 분리 전 경로로
+돌아옵니다 — 그것이 이 설계가 **의도적으로 싸게 만들어 둔 되돌리기**입니다(runbook
+「실시간 서비스 (GCP)」). Cloud Run 서비스와 시크릿 셋은 `infra/gcp/realtime-teardown.sh` 로
+따로 지웁니다 — 방화벽 규칙은 애초에 없어서 지울 것도 없습니다.
 

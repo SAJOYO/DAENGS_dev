@@ -528,6 +528,91 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 `gcloud run jobs executions cancel <실행 이름> --region=asia-northeast3` 로 취소한 뒤
 다시 누릅니다.
 
+### 실시간 서비스 (GCP)
+
+**언제** — `daengs_life/realtime/`(산책 적합도 · 과거 날씨) 코드를 고쳤을 때, 또는 시크릿을
+새로 넣거나 돌려야 할 때. 설계·검증은 [`realtime-service.md`](realtime-service.md)(D-068),
+여기는 명령 절차만 적는다. 2026-09-11 에 처음 배포했다 — `daengs-realtime`(asia-northeast3).
+
+**배포**
+
+```bash
+PROJECT=daengs bash infra/gcp/realtime.sh
+```
+
+`infra/gcp/pipeline.sh` 와 같은 모양이다 — 이미지 태그는 커밋이 아니라 **입력 파일의 내용
+해시**라, 목록에 없는 파일을 고쳐도 이미지는 안 바뀐다(`backend/pyproject.toml` ·
+`backend/uv.lock` · `backend/README.md` · `backend/src/daengs_life` · `docker/realtime`).
+
+🔴 **시크릿이 비어 있으면 배포 전에 `exit 0` 으로 멈춘다 — 오류가 아니다.** Cloud Run **잡**과
+다르게 **서비스**는 리비전이 트래픽을 받으려면 시크릿이 그 자리에서 해석돼야 해서, 값 없이
+배포하면 리비전이 아예 못 뜬다. 그래서 스크립트가 배포로 넘어가기 전에 버전이 하나라도
+있는지 먼저 확인하고, 없으면 넣으라는 안내만 찍고 멈춘다. 값을 넣은 뒤 스크립트를 다시
+돌리면 된다.
+
+**시크릿 값 넣는 법** — ⚠ **값이 셸 히스토리·화면에 안 남게 파이프로 넣는다.** `realtime.sh` 가
+직접 찍어 주는 형태는 `printf %s '<값>' | gcloud secrets versions add <이름> --data-file=-` 인데,
+값이 **이미 VM 의 `backend/.env`(Kakao·KMA 허브 키) 나 Redis 접속 정보에 있을 때**는 그것을
+로컬 화면에 띄우지 않고 그대로 옮기는 것이 더 안전하다 — 2026-09-11 에 실제로 이렇게 했다:
+
+```bash
+ssh daengs@<VM IP> "grep '^<VM .env 의 키 이름>=' ~/daengs/backend/.env | cut -d= -f2-" \
+  | gcloud secrets versions add <realtime-redis-url|realtime-kakao-key|realtime-kma-hub-key> \
+      --data-file=-
+```
+
+`ssh` 출력이 로컬 셸을 거치지 않고 곧장 `gcloud` 로 들어가므로 값이 화면·히스토리 어디에도
+안 남는다. `DATA_GO_KR_KEY` 는 새로 안 넣는다 — 코퍼스 파이프라인의 `corpus-data-go-kr-key` 를
+그대로 재사용한다(§ 위 "코퍼스 파이프라인 (GCP)").
+
+**검증**
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://daengs-realtime-584617819762.asia-northeast3.run.app/health
+# 무인증 → 403 이 정답 (--no-allow-unauthenticated 가 기본값)
+```
+
+VM 의 backend 계정으로는 메타데이터 서버 ID 토큰으로 200 이 나온다(#326 과 같은 자격증명
+출처, `services/realtime_client.py`). ⚠ **`/healthz` 로 확인하지 말 것** — Cloud Run 앞의 구글
+프런트엔드가 그 경로 하나만 가로채 컨테이너에 안 보내고 자체 404 HTML 을 돌려준다(2026-09-11
+실측). 리비전은 Ready 인데 서비스가 죽은 것처럼 보이는 증상이라 헬스 확인은 반드시 `/health`
+로 한다 — 자세한 것은 `realtime-service.md` §7.
+
+**VM 의 backend 가 이 서비스를 쓰게 켜기**
+
+🔴 **`backend/.env` 에 `DAENGS_REALTIME_URL` 줄을 넣는 것만으로는 안 켜진다.** compose 는
+`backend/.env` 를 컨테이너에 **마운트하지 않고** `env_file` 로 넣고, 그 값은 **컨테이너를 만들
+때** 굳는다. 위 §6 의 평소 배포(`git merge --ff-only`)는 `fastapi dev` 의 **reload** 라 컨테이너를
+다시 만들지 않으므로, 그 경로로는 이 값이 절대 반영되지 않는다. 켜려면 아래를 **일부러**
+돌려야 한다:
+
+```bash
+export GEMINI_API_KEY=...   # 빈 셸에서 up -d 하면 빈 키가 박혀 의미 라우터가 죽는다 (CLAUDE.md)
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d backend
+```
+
+🔴 **지금 VM 은 그 줄이 `.env` 에 들어간 채로 비활성 상태다** — `up -d backend` 를 아직 일부러
+돌리지 않아서, 돌고 있는 컨테이너는 그 변수를 모르고 기존 in-process 경로(`walk`·`weather_at`
+가 같은 프로세스 함수 호출) 그대로다. 2026-09-11 확인: 컨테이너가 그대로 47시간째 돌고 있고
+앱 API 는 계속 200 이다 — 값을 넣었다고 저절로 바뀌지 않는다는 증거다. 실제로 켜려면 위
+`up -d backend` 를 밟아야 한다.
+
+**되돌리기** — `backend/.env` 에서 `DAENGS_REALTIME_URL` 을 지우고(또는 비우고) 같은
+`up -d backend` 를 다시 돌리면 in-process 경로로 돌아온다. Cloud Run 쪽은 그대로 둬도 무해하다
+(VM 이 안 부르면 스케일이 0으로 내려간다).
+
+**teardown** (§8 종료 체크리스트에도 있다):
+
+```bash
+PROJECT=daengs bash infra/gcp/realtime-teardown.sh
+```
+
+`daengs-realtime` 서비스 · 이미지 태그 · 시크릿 셋(`realtime-redis-url`·`realtime-kakao-key`·
+`realtime-kma-hub-key`)을 지운다. `corpus-data-go-kr-key`(코퍼스 파이프라인 것)와 Artifact
+Registry 저장소·서비스 계정은 공유 자원이라 건드리지 않는다. **방화벽 규칙은 원래 안
+만들었으므로 지울 것도 없다** — `default-allow-internal` 이 이미 덮는다(위 "코퍼스 파이프라인
+(GCP)" 와 `realtime-service.md` §4 참고).
+
 ### Life 코퍼스만 동기화 (GCP)
 
 > 🔴 **2026-09-08 부터 실험 기간(~11-17) 동안 이 절을 쓰지 마세요** (D-062). GCP 의 `documents` 는

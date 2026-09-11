@@ -26,6 +26,7 @@ FIXTURE = Path(__file__).parents[1] / "fixtures/gps-motion-backup-v1.json"
     "method,suffix",
     [
         ("GET", "motion-capabilities"),
+        ("GET", "00000000-0000-0000-0000-000000000001/motion-calculation"),
         ("PUT", "00000000-0000-0000-0000-000000000001/motion-backup"),
         ("GET", "00000000-0000-0000-0000-000000000001/motion-backup"),
         ("PUT", "00000000-0000-0000-0000-000000000001/motion-backup/chunks/0"),

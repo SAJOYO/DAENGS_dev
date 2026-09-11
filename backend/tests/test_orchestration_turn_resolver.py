@@ -46,6 +46,22 @@ def test_context_dependent_markers_need_resolution(query: str) -> None:
     assert needs_resolution(query=query, candidates=candidates, pending=None) is True
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "말고기 먹여도 되나요",
+        "또띠아 먹여도 돼?",
+        "강아지가 또 토했어요",
+    ],
+)
+def test_false_positive_substrings_do_not_need_resolution(query: str) -> None:
+    """fix round 1 — `말고기` 의 `말고`, `또띠아`/"또 토했어" 의 `또` 는 새 주제 문장에
+    박힌 부분 문자열일 뿐 앞 turn 을 가리키는 표지가 아니다. 후보가 있어도(=short-circuit
+    없이 정규식이 실제로 돌아도) 걸리면 안 된다."""
+    candidates = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    assert needs_resolution(query=query, candidates=candidates, pending=None) is False
+
+
 def test_pending_clarification_always_needs_resolution() -> None:
     """수용 케이스 5 의 앞 절반 — 되묻기가 대기 중이면 표지가 없어도 이어야 한다."""
     pending = PendingClarification(

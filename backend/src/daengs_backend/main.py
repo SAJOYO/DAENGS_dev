@@ -29,14 +29,22 @@ from daengs_backend.routers import (
     facility_discovery,
     gait,
     health,
+    life_walk,
     metrics,
     pet,
+    pet_member,
     report_admin,
     status,
     territory,
+    territory_bookmark,
+    place_bookmark,
     territory_claim,
+    territory_game,
     training,
+    vet_visit,
     walk_entry,
+    walk_entry_v2,
+    walk_photo,
     walk_spatial_diary,
     walk_storyboard,
 )
@@ -179,9 +187,18 @@ app.include_router(auth.router)
 app.include_router(app_auth.router)
 # 강아지 프로필. 라우터 자체가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(pet.router)
+# 공동 돌봄 초대 · 수락 (docs/co-care.md §3). pet 라우터와 별도 파일인 이유는
+# 수락 경로가 /app/pets/{pet_id}/... 아래가 아니기 때문입니다 — 수락 전에는
+# 그 강아지에 아무 권한이 없어 URL 에 pet_id 를 실으면 안 됩니다.
+app.include_router(pet_member.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
+# 진료비 기록(`/app/vet-visits` · #353) — 영수증 사진에서 읽고, 유저가 확정한
+# 것만 남긴다. 여섯 개 엔드포인트가 CurrentAppUser 로 잠겨 있습니다 — 예외는
+# 사진 bridge 둘(`_bridge/upload`·`_bridge/download`)뿐이고, 그 둘은 추측 불가능한
+# 키 + exclusive=True 한 번뿐인 쓰기로 안전을 대신합니다(라우터 머리말).
+app.include_router(vet_visit.router)
 
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
@@ -193,10 +210,16 @@ app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
 app.include_router(app_walks.router)
 app.include_router(walk_entry.router)
+app.include_router(walk_entry_v2.capabilities_router)
+app.include_router(walk_entry_v2.router)
 app.include_router(walk_storyboard.router)
+app.include_router(walk_photo.router)
 # 산책 중 점령지 촬영 인증. 위치 10m만 동기로 확인하고 사진 판정은 비동기 상태로 둡니다.
 app.include_router(territory.router)
 app.include_router(territory_claim.router)
+app.include_router(territory_game.router)
+app.include_router(territory_bookmark.router)
+app.include_router(place_bookmark.router)
 app.include_router(activity.router)
 
 # 피부 변화 기록 (D-052). **옛 `/screen/v1/screen` 과 다른 경로입니다** —
@@ -269,7 +292,15 @@ app.include_router(screening_router)
 #
 # ⚠ `/training/chat` 과는 **결론이 다릅니다.** 저쪽은 `#25` 가 만든 임시 게이트웨이라
 # 앱 클라이언트가 없어서 관리자 전용으로 좁혔습니다 (`routers/training.py`).
-app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+# 🔴 D-070 — 분리 갈림길. `DAENGS_REALTIME_URL` 이 있으면 이 앱은 **판정을 하지 않고
+# 전달만** 합니다. 인증은 두 갈래에서 **같은 의존성**이라 앱 회원·관리자 판정이 안 갈립니다.
+#
+# 비어 있을 때의 줄은 분리 전과 **글자 그대로 같습니다** — 그래야 되돌리기가 변수 하나가 되고,
+# 개발 PC·개발서버의 기존 동작과 테스트가 안 바뀝니다.
+if settings.realtime_url:
+    app.include_router(life_walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
+else:
+    app.include_router(walk.router, dependencies=[Depends(admin_or_app_user(Perm.READ))])
 
 # 제도·문서형 질의응답. **`/life/walk-conditions` 와 같은 판단입니다** (메모 ⑦) — 인증을 라우터가 아니라
 # 등록 시점에 걸고, 앱 회원과 관리자를 함께 받습니다.

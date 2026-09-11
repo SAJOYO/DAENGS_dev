@@ -72,7 +72,12 @@ def _conflict(exc: screening_service.ScreeningConflictError) -> HTTPException:
     )
 
 
-def _to_response(record: ScreeningRecord, photo_url: str | None = None) -> ScreeningRecordResponse:
+def _to_response(
+    record: ScreeningRecord, photo_url: str | None = None, perms: dict | None = None
+) -> ScreeningRecordResponse:
+    """`perms` 는 `screening_service.annotate` 가 준 한 건 — 안 주면(비워 둘 수 없는
+    필수 필드라) 전부 False/None 입니다."""
+    perms = perms or {}
     return ScreeningRecordResponse(
         record_id=record.id,
         pet_id=record.pet_id,
@@ -81,6 +86,9 @@ def _to_response(record: ScreeningRecord, photo_url: str | None = None) -> Scree
         result=record.result,
         contract_version=record.contract_version,
         photo_url=photo_url,
+        can_confirm=perms.get("can_confirm", False),
+        can_delete=perms.get("can_delete", False),
+        created_by=perms.get("created_by"),
     )
 
 
@@ -134,7 +142,10 @@ async def confirm_record(
         raise _conflict(exc) from None
     except StorageNotConfiguredError as exc:
         raise _storage_unavailable(exc) from None
-    return _to_response(record)
+    perms = (
+        await screening_service.annotate(session, user.app_user_id, [record])
+    ).get(record.id)
+    return _to_response(record, perms=perms)
 
 
 @router.get("/records", response_model=ScreeningListResponse)
@@ -154,7 +165,12 @@ async def list_records(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다."
         ) from None
-    return ScreeningListResponse(records=[_to_response(r) for r in records])
+    # 한 번에 계산합니다 — 행마다 부르면 페이지 크기만큼 왕복합니다
+    # (screening_service.annotate 독스트링, Task 19).
+    perms_by_id = await screening_service.annotate(session, user.app_user_id, records)
+    return ScreeningListResponse(
+        records=[_to_response(r, perms=perms_by_id.get(r.id)) for r in records]
+    )
 
 
 @router.get("/records/{record_id}", response_model=ScreeningRecordResponse)
@@ -170,7 +186,10 @@ async def get_record(
         raise _NOT_FOUND from None
     except StorageNotConfiguredError as exc:
         raise _storage_unavailable(exc) from None
-    return _to_response(record, url)
+    perms = (
+        await screening_service.annotate(session, user.app_user_id, [record])
+    ).get(record.id)
+    return _to_response(record, url, perms=perms)
 
 
 @router.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)

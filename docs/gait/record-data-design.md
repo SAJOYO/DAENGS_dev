@@ -151,12 +151,13 @@ JSONB에 담고 **표준 키는 주석으로 문서화, DB가 강제하지 않�
 | `captured_at` | `date`, nullable | 지금 JSON의 `date`. 사용자 입력, 없을 수 있음 |
 | `analyzed_at` | `timestamptz NOT NULL DEFAULT NOW()` | 지금 JSON의 `created_at` |
 | `status` | `varchar(20) NOT NULL` + CHECK `('ok','unavailable')` | `quality.status` |
-| `quality_tier` | `varchar(10)` + CHECK `('good','low')`, nullable | `status='unavailable'`면 NULL. 목록 화면에서 배지로 쓰려고 승격(quality 안에도 그대로 남김) |
+| `quality_tier` | `varchar(10)` + CHECK `('good','ok','low')`, nullable | `status='unavailable'`면 NULL. 목록 화면에서 배지로 쓰려고 승격(quality 안에도 그대로 남김). **엔진(legacy `quality_gate.py` · v4 `quality.py`)이 내는 어휘와 같아야 한다** — 처음(D-043)엔 `good/low` 둘만 적어서 `ok`(유효 프레임 20~80) 영상의 커밋이 죽었고(2026-09-09), `tests/test_gait_quality_tier_contract.py` 가 두 엔진 소스·SQL·ORM 을 읽어 대조한다 |
 | `quality` | `JSONB NOT NULL` | 나머지 quality 세부 통계 전부 (표준 키는 `src/quality_gate.py` 출력 그대로 문서화) |
 | `summary_for_ui` | `JSONB`, nullable | `status='ok'`일 때만. 이미 UI-safe |
 | `internal_feature_vector` | `JSONB`, nullable | **비교 전용.** API 응답 스키마가 절대 내보내지 않도록 강제 — §5 |
 | `trajectories` | `JSONB`, nullable | 선택 — 필요해지면 |
 | `gait_filter_version` | `text NOT NULL` | 다른 버전끼리 비교 시 경고에 씀 |
+| `pose_model` | `text`, nullable (2026-09-09, D-063) | 기록을 만든 pose model / 관절 정의 ID — `rtmpose_ap10k_ssd`(v4, AP-10K 17) · `yolov8_12kp_best`(legacy 12). **실행 엔진 선택이 아니라 메타데이터**다. 새 분석은 unavailable 이어도 항상 저장. 옛 행은 `summary_for_ui` 관절 키로 명확히 판별될 때만 백필, 아니면 NULL. CHECK 없음 — 정본은 `daengs_gait/contract.py`. **비교는 이 값으로 가른다** (2단계): 둘 다 NOT NULL 이고 같을 때만 그 모델의 비교 함수(`rtmpose_ap10k_ssd` → gait_v4 compare, `yolov8_12kp_best` → `daengs_gait.compare`), 다르거나 한쪽이라도 NULL 이거나 레지스트리에 없으면 `CompareError` → 400 (같은 기록·다른 반려견과 같은 통로). 서버의 `GAIT_ENGINE` 은 비교에 관여하지 않는다 |
 | `video_meta` | `JSONB` | `{resolution, native_fps}` |
 | `original_video_path` | `text NOT NULL` | 파일 저장 영역의 경로/식별자. §3 |
 | `overlay_video_path` | `text`, nullable | `status='ok'`일 때만 |

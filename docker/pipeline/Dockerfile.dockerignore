@@ -1,8 +1,10 @@
+# 빌드 컨텍스트는 저장소 루트다. 이미지에 필요한 것은 **의존성 메타데이터 셋과
+# entrypoint 뿐**이다 — 우리 코드(`backend/src`)와 시드는 이미지에 안 들어가고 런타임에
+# 버킷에서 온다 (#427, docker/pipeline/Dockerfile 머리말).
+#
+# 이것을 안 좁히면 frontend/node_modules 나 data/raw 까지 전부 Cloud Build 로 올라간다.
 *
 !backend/pyproject.toml
 !backend/uv.lock
 !backend/README.md
-!backend/src
-!data/manifests/seed_sources.yaml
 !docker/pipeline/entrypoint.sh
-backend/src/**/__pycache__

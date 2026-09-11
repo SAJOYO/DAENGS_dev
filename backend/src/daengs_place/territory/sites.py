@@ -1,10 +1,31 @@
 """중립 점령지 주변 조회. 점령·방문·인증 상태는 여기서 만들지 않는다."""
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_place.territory.contracts import TerritorySite
+from daengs_place.territory.contracts import TerritorySite, TerritorySiteLocation
 from daengs_place.territory.grid import ACTIVE_SITE_ID_PREFIX
+
+_BY_IDS = text("""
+SELECT site_id, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
+FROM territory_site
+WHERE site_id IN :site_ids AND site_id LIKE :active_site_pattern
+ORDER BY site_id
+""").bindparams(bindparam("site_ids", expanding=True))
+
+
+async def find_by_ids(db, site_ids):
+    rows = (
+        await db.execute(
+            _BY_IDS,
+            {
+                "site_ids": list(dict.fromkeys(site_ids)),
+                "active_site_pattern": f"{ACTIVE_SITE_ID_PREFIX}%",
+            },
+        )
+    ).all()
+    return tuple(TerritorySiteLocation(site_id=r.site_id, lat=r.lat, lng=r.lng) for r in rows)
+
 
 _NEARBY = text("""
 WITH origin AS (

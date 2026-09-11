@@ -30,6 +30,7 @@ from daengs_backend.core.database import (
 )
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import care_log_context as care_log_context_service
@@ -37,6 +38,7 @@ from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
 from daengs_backend.services import request_metrics as metrics_service
 from daengs_backend.services import screening_context as screening_context_service
+from daengs_backend.services import vet_spend_context as vet_spend_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -109,6 +111,12 @@ async def _with_dog_context(
     는다 — 무상태 요청이 DB 를 안 여는 성질(D-048)은 여전히 이 조건에서만, 세션 하나로만 깨진다.
     로그 쪽도 못 채우면 그냥 지나간다: 남의 강아지 · 오늘 기록 없음 · **표가 아직 없음**(#332
     마이그레이션 전) 전부 로그 없이, 이 카드 전과 똑같이 답한다.
+
+    **최근 진료비 요약도 같은 세션에서 읽어 `context["vet_spend"]` 에 얹는다** (#353
+    Task 7). 같은 이유로 같은 세션이다 — `care_log` 를 위해 세션을 하나 더 열지 않는 것과
+    똑같이, 진료비를 위해 세션을 또 하나 열면 요청당 연결이 는다. 못 채워도 그냥 지나간다:
+    남의 강아지 · 확정된 방문 없음 · **표가 아직 없음**(#353 마이그레이션 전) 전부 이
+    카드 전과 똑같이 답한다.
     """
     active_dog_id = context.get("active_dog_id")
     if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
@@ -118,11 +126,16 @@ async def _with_dog_context(
         care_log = await care_log_context_service.resolve(
             session, principal.app_user_id, active_dog_id
         )
+        vet_spend = await vet_spend_context_service.resolve(
+            session, principal.app_user_id, active_dog_id
+        )
     resolved = dict(context)
     if dog is not None:
         resolved["dog"] = dog
     if care_log is not None:
         resolved["care_log"] = care_log
+    if vet_spend is not None:
+        resolved["vet_spend"] = vet_spend
     return resolved
 
 
@@ -271,10 +284,16 @@ async def _dispatch(
         )
     assert body.chat_session_id is not None and body.client_message_id is not None
 
-    async def orchestrate(active_dog_id: str) -> AssistantResponse:
+    async def orchestrate(
+        active_dog_id: str,
+        prior_turns: list[PriorTurn],
+        pending_clarification: PendingClarification | None,
+    ) -> AssistantResponse:
         # 대화의 강아지가 힌트를 이긴다 — 서비스가 세션에서 읽은 pet_id 를 넘겨 준다.
         # 프로필 조회도 그 값으로 한다. 여기서 세션을 여는 것이 안전한 이유는
         # `run_persisted_turn` 이 예약 TX 를 닫고 부르기 때문이다 (그 docstring).
+        # `prior_turns`·`pending_clarification` 은 `run_persisted_turn` 이 예약 TX 안에서
+        # 이미 읽어 넘겨준 것 — 여기서 다시 읽지 않는다(D-048).
         return await service.run(
             query=body.query,
             principal=principal_context,
@@ -282,6 +301,8 @@ async def _dispatch(
                 {**context, "active_dog_id": active_dog_id}, body, principal, session_factory
             ),
             requested_capability=body.requested_capability,
+            prior_turns=prior_turns,
+            pending_clarification=pending_clarification,
             # `include_route_trace` 를 여기서는 **안 넘깁니다.** 저장하는 요청은 바로 위에서
             # 앱 회원으로 좁혀져 있어 어차피 False 이고, 안 넘기는 쪽이 "저장되는 turn 에는
             # 라우팅 메타데이터가 실릴 수 없다"를 코드 모양으로 못박습니다 (#238).

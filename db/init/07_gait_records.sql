@@ -22,6 +22,14 @@ CREATE TABLE IF NOT EXISTS gait_records (
     -- 유도한다 — owner_user_id 를 중복 저장하면 반려견 양도 같은 경우에 어긋난다.
     pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
 
+    -- ⚠ 소유권이 아니라 **업로드한 사람**이다 (Task 19, docs/co-care.md §2). 확정
+    -- (confirm_upload)을 "업로더 본인 또는 대표"로 열기 위해 있다 — 대표만으로 좁히면
+    -- start_analysis 를 구성원(대표∪돌보미)에게 연 것과 어긋나 돌보미가 티켓 발급·업로드는
+    -- 되는데 confirm 에서만 404 를 받는 "반쯤 열린" 상태가 된다. **소유권 칸으로 오해해
+    -- 단순화하지 말 것** — 소유는 여전히 pet_id -> pets.app_user_id 하나뿐이고, 이 칸은
+    -- "그때 누가 올렸는지"만 남긴다. NULL 은 이 칸이 생기기 전의 옛 기록.
+    actor_app_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
+
     -- 파이프라인이 어디까지 갔나. quality_status 와 **다른 축**이다 —
     -- FAILED(워커가 죽음 → 재시도)와 unavailable(영상이 분석 부적합 → 재촬영)은
     -- 사용자 안내가 완전히 다르다 (D-033 이 ABSTAINED≠REFUSED 를 가른 것과 같은 이유).
@@ -31,8 +39,12 @@ CREATE TABLE IF NOT EXISTS gait_records (
     -- 분석해 보니 쓸 만한가. DONE 일 때만 채워진다.
     quality_status VARCHAR(20)
         CHECK (quality_status IN ('ok','unavailable')),
+    -- ⚠ 엔진이 내는 어휘와 **같아야 한다** — legacy(daengs_gait/quality_gate.py)·v4(gait_v4/quality.py)
+    --   둘 다 good(>80) / ok(20~80) / low(<20) 세 단계다. 처음(D-043)에 good/low 둘만 적어서
+    --   20~80 구간 영상의 DONE 커밋이 CheckViolation 으로 죽고 행이 PROCESSING 으로 남았다
+    --   (2026-09-09). tests/test_gait_quality_tier_contract.py 가 두 엔진 소스와 이 CHECK 를 대조한다.
     quality_tier VARCHAR(10)
-        CHECK (quality_tier IN ('good','low')),
+        CHECK (quality_tier IN ('good','ok','low')),
 
     -- 클라우드 저장소 키 (#78). 원본은 presign 발급 때, overlay 는 분석 뒤에 채워진다.
     original_storage_key TEXT,
@@ -50,6 +62,15 @@ CREATE TABLE IF NOT EXISTS gait_records (
 
     -- 판정 로직 버전. 버전이 다른 두 기록을 비교하면 경고를 붙인다.
     gait_filter_version TEXT,
+    -- 어떤 pose model / 관절 정의로 만든 기록인가 (D-063). **실행 엔진 선택이 아니라
+    -- 메타데이터다** — 그 모델이 더는 안 돌아도 옛 기록이 그 모델로 만들어진 사실은 남는다.
+    --   rtmpose_ap10k_ssd  v4 (AP-10K 17 관절)
+    --   yolov8_12kp_best   legacy (12 관절)
+    -- NULL = 판별 불가한 옛 기록, 또는 엔진 결과 없이 FAILED 로 끝난 기록. 값의 정본은
+    -- daengs_gait/contract.py 의 POSE_MODELS 이고, CHECK 로 못 박지 않는다 — 모델이 바뀔
+    -- 때마다 마이그레이션이 필요해지는 것을 피한다. 관절 이름이 다른 기록끼리는 비교하지
+    -- 않는다 (2단계, services/gait.py).
+    pose_model TEXT,
 
     -- 사용자가 준 촬영일. 없을 수 있다 (analyzed 시각과 다르다).
     captured_at DATE,

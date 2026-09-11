@@ -1,0 +1,3621 @@
+[
+  {
+    "id": "PC-X03",
+    "source_case_id": "PC-C05",
+    "source_turn": 2,
+    "schema_version": 1,
+    "title": "수동 추가 한 번 되돌리기",
+    "layer": "context-ablation",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "방금 추가한 것만 취소해줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ]
+        },
+        "review": "수동으로 추가한 음식점만 취소. 근거 없는 추측과 안전한 재질문을 구별한다."
+      }
+    ],
+    "before": {
+      "filters": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "snapshot": {
+        "id": "f278c15f-7ec0-45ad-9cb9-eb2d5c42cad3",
+        "fingerprint": "b4529288a35d9eb14d3826159e2afb2b8e97e25e84b2996c06dd4b91f95e2700",
+        "created_at": "2026-09-10T07:57:05.350945Z",
+        "result": {
+          "applied_state": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe",
+              "restaurant"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "execution_status": "complete",
+          "evaluated_at": "2026-09-10T07:57:05.350945Z",
+          "ranking_version": "distance-band-500-v1",
+          "groups": [
+            {
+              "kind": "cafe",
+              "matched": [
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "f81d"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 A",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 100,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "f81d"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "f81d"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": true,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "a207"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 B",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 200,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "a207"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "a207"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "d94c"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 C",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 300,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "d94c"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "d94c"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": null,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                }
+              ],
+              "uncertain": [],
+              "matched_truncated": false,
+              "uncertain_truncated": false,
+              "total": null
+            },
+            {
+              "kind": "restaurant",
+              "matched": [
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "b036"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 D",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 400,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "b036"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "b036"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": true,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "e572"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 E",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 500,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "e572"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "e572"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": true,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "c468"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 F",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 600,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "c468"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "c468"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": null,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                }
+              ],
+              "uncertain": [],
+              "matched_truncated": false,
+              "uncertain_truncated": false,
+              "total": null
+            }
+          ]
+        },
+        "display_order": [
+          {
+            "source": "test:conversation-eval",
+            "ref": "f81d"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "a207"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "d94c"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "b036"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "e572"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "c468"
+          }
+        ]
+      },
+      "selected": null,
+      "history": [],
+      "pending_question": "",
+      "revision": 2,
+      "pending_proposal": null,
+      "selection_basis": null
+    },
+    "clock": "2026-09-10T07:57:05.350945+00:00",
+    "clues": {
+      "screen": {
+        "places": [
+          {
+            "position": 1,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "f81d"
+            },
+            "name": "평가 장소 A",
+            "kind": "cafe",
+            "distance_m": 100,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": true,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 2,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "a207"
+            },
+            "name": "평가 장소 B",
+            "kind": "cafe",
+            "distance_m": 200,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 3,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "d94c"
+            },
+            "name": "평가 장소 C",
+            "kind": "cafe",
+            "distance_m": 300,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": null,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 4,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "b036"
+            },
+            "name": "평가 장소 D",
+            "kind": "restaurant",
+            "distance_m": 400,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": true,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 5,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "e572"
+            },
+            "name": "평가 장소 E",
+            "kind": "restaurant",
+            "distance_m": 500,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": true,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 6,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "c468"
+            },
+            "name": "평가 장소 F",
+            "kind": "restaurant",
+            "distance_m": 600,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": null,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          }
+        ],
+        "selected_place": null,
+        "displayed_count": 6,
+        "groups": [
+          {
+            "kind": "cafe",
+            "displayed_count": 3,
+            "more_matches_than_displayed": false
+          },
+          {
+            "kind": "restaurant",
+            "displayed_count": 3,
+            "more_matches_than_displayed": false
+          }
+        ],
+        "snapshot_created_at": "2026-09-10T07:57:05.350945+00:00",
+        "snapshot_age_seconds": 0.0,
+        "matches_current_filters": true
+      },
+      "recent_interactions": [
+        {
+          "mode": "manual",
+          "user_query": null,
+          "filters_before": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "filters_after": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe",
+              "restaurant"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "assistant_text": "현재 조건의 장소를 표시했어요."
+        }
+      ]
+    },
+    "source_observation_sha256": "c969554b65b5cd879eb5860da5cc32f82be8bb4a7d2d8787fb7cf91ec29da429",
+    "counterfactual": false
+  },
+  {
+    "id": "PC-X13",
+    "source_case_id": "PC-U09",
+    "source_turn": 2,
+    "schema_version": 1,
+    "title": "더 보기 실패 뒤 명시적 조건 복구",
+    "layer": "context-ablation",
+    "setup": {
+      "candidate_kinds": [
+        "cafe"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null,
+      "fixture": "beyond_top20"
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "그럼 주차 되는 카페만 찾아줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "parking": "required_true",
+          "expected_refs": [
+            "cafe-26"
+          ]
+        },
+        "review": "목록 밖 26번째 후보를 전체 풀에서 찾아야 한다."
+      }
+    ],
+    "before": {
+      "filters": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "snapshot": {
+        "id": "5f6ef16e-b4e0-4f66-8806-e37946794081",
+        "fingerprint": "fcf55a6c3effb4baa8dec67c52b75124b7cd4223595166cd808b2ffc309a35c7",
+        "created_at": "2026-09-10T07:58:17.395729Z",
+        "result": {
+          "applied_state": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "execution_status": "complete",
+          "evaluated_at": "2026-09-10T07:58:17.395729Z",
+          "ranking_version": "distance-band-500-v1",
+          "groups": [
+            {
+              "kind": "cafe",
+              "matched": [
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-1"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-1",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 1,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-1"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-1"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-2"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-2",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 2,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-2"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-2"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-3"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-3",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 3,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-3"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-3"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-4"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-4",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 4,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-4"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-4"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-5"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-5",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 5,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-5"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-5"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-6"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-6",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 6,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-6"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-6"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-7"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-7",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 7,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-7"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-7"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-8"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-8",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 8,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-8"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-8"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-9"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-9",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 9,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-9"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-9"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-10"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-10",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 10,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-10"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-10"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-11"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-11",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 11,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-11"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-11"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-12"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-12",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 12,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-12"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-12"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-13"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-13",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 13,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-13"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-13"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-14"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-14",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 14,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-14"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-14"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-15"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-15",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 15,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-15"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-15"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-16"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-16",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 16,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-16"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-16"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-17"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-17",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 17,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-17"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-17"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-18"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-18",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 18,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-18"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-18"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-19"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-19",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 19,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-19"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-19"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "cafe-20"
+                    },
+                    "aliases": [],
+                    "name": "테스트 cafe-20",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 20,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "cafe-20"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "cafe-20"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                }
+              ],
+              "uncertain": [],
+              "matched_truncated": true,
+              "uncertain_truncated": false,
+              "total": null
+            }
+          ]
+        },
+        "display_order": [
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-1"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-2"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-3"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-4"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-5"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-6"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-7"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-8"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-9"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-10"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-11"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-12"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-13"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-14"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-15"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-16"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-17"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-18"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-19"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "cafe-20"
+          }
+        ]
+      },
+      "selected": null,
+      "history": [
+        {
+          "query": "더 많은 장소 갖고와",
+          "goal": "show",
+          "selected": null
+        }
+      ],
+      "pending_question": "",
+      "revision": 2,
+      "pending_proposal": null,
+      "selection_basis": null
+    },
+    "clock": "2026-09-10T07:58:17.395729+00:00",
+    "clues": {
+      "screen": {
+        "places": [
+          {
+            "position": 1,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-1"
+            },
+            "name": "테스트 cafe-1",
+            "kind": "cafe",
+            "distance_m": 1,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 2,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-2"
+            },
+            "name": "테스트 cafe-2",
+            "kind": "cafe",
+            "distance_m": 2,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 3,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-3"
+            },
+            "name": "테스트 cafe-3",
+            "kind": "cafe",
+            "distance_m": 3,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 4,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-4"
+            },
+            "name": "테스트 cafe-4",
+            "kind": "cafe",
+            "distance_m": 4,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 5,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-5"
+            },
+            "name": "테스트 cafe-5",
+            "kind": "cafe",
+            "distance_m": 5,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 6,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-6"
+            },
+            "name": "테스트 cafe-6",
+            "kind": "cafe",
+            "distance_m": 6,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 7,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-7"
+            },
+            "name": "테스트 cafe-7",
+            "kind": "cafe",
+            "distance_m": 7,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 8,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-8"
+            },
+            "name": "테스트 cafe-8",
+            "kind": "cafe",
+            "distance_m": 8,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 9,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-9"
+            },
+            "name": "테스트 cafe-9",
+            "kind": "cafe",
+            "distance_m": 9,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 10,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-10"
+            },
+            "name": "테스트 cafe-10",
+            "kind": "cafe",
+            "distance_m": 10,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 11,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-11"
+            },
+            "name": "테스트 cafe-11",
+            "kind": "cafe",
+            "distance_m": 11,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 12,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-12"
+            },
+            "name": "테스트 cafe-12",
+            "kind": "cafe",
+            "distance_m": 12,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 13,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-13"
+            },
+            "name": "테스트 cafe-13",
+            "kind": "cafe",
+            "distance_m": 13,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 14,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-14"
+            },
+            "name": "테스트 cafe-14",
+            "kind": "cafe",
+            "distance_m": 14,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 15,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-15"
+            },
+            "name": "테스트 cafe-15",
+            "kind": "cafe",
+            "distance_m": 15,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 16,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-16"
+            },
+            "name": "테스트 cafe-16",
+            "kind": "cafe",
+            "distance_m": 16,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 17,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-17"
+            },
+            "name": "테스트 cafe-17",
+            "kind": "cafe",
+            "distance_m": 17,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 18,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-18"
+            },
+            "name": "테스트 cafe-18",
+            "kind": "cafe",
+            "distance_m": 18,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 19,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-19"
+            },
+            "name": "테스트 cafe-19",
+            "kind": "cafe",
+            "distance_m": 19,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 20,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "cafe-20"
+            },
+            "name": "테스트 cafe-20",
+            "kind": "cafe",
+            "distance_m": 20,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          }
+        ],
+        "selected_place": null,
+        "displayed_count": 20,
+        "groups": [
+          {
+            "kind": "cafe",
+            "displayed_count": 20,
+            "more_matches_than_displayed": true
+          }
+        ],
+        "snapshot_created_at": "2026-09-10T07:58:17.395729+00:00",
+        "snapshot_age_seconds": 0.0,
+        "matches_current_filters": true
+      },
+      "recent_interactions": [
+        {
+          "mode": "chat",
+          "user_query": "더 많은 장소 갖고와",
+          "filters_before": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "filters_after": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "assistant_text": "현재 조건의 장소를 표시했어요."
+        }
+      ]
+    },
+    "source_observation_sha256": "669ba54f11627fd032ff3ecfad6735b7d4074bd3c419414b1a8f67a4e677c877",
+    "counterfactual": false
+  },
+  {
+    "id": "PC-X14",
+    "source_case_id": "PC-C05",
+    "source_turn": 2,
+    "counterfactual_initial_kinds": [
+      "restaurant"
+    ],
+    "expect_override": {
+      "candidate_kinds": [
+        "restaurant"
+      ]
+    },
+    "schema_version": 1,
+    "title": "수동 추가 한 번 되돌리기",
+    "layer": "context-ablation",
+    "setup": {
+      "candidate_kinds": [
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "방금 추가한 것만 취소해줘",
+        "expect": {
+          "candidate_kinds": [
+            "restaurant"
+          ]
+        },
+        "review": "수동으로 추가한 음식점만 취소. 근거 없는 추측과 안전한 재질문을 구별한다."
+      }
+    ],
+    "before": {
+      "filters": {
+        "contract_version": "place-filter-v1",
+        "candidate_kinds": [
+          "cafe",
+          "restaurant"
+        ],
+        "spatial": {
+          "lat": 37.5,
+          "lng": 127.0,
+          "radius_m": 3000
+        },
+        "name_query": "",
+        "hard": {
+          "all": [],
+          "any": []
+        },
+        "preferences": [],
+        "unknown_policy": "exclude",
+        "result_policy": {
+          "limit_per_kind": 20,
+          "uncertain_limit_per_kind": 0
+        },
+        "dogs": []
+      },
+      "snapshot": {
+        "id": "ff40c8c5-4c4b-40b6-b024-bc20870d4ba6",
+        "fingerprint": "b4529288a35d9eb14d3826159e2afb2b8e97e25e84b2996c06dd4b91f95e2700",
+        "created_at": "2026-09-10T07:57:05.350945Z",
+        "result": {
+          "applied_state": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe",
+              "restaurant"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "execution_status": "complete",
+          "evaluated_at": "2026-09-10T07:57:05.350945Z",
+          "ranking_version": "distance-band-500-v1",
+          "groups": [
+            {
+              "kind": "cafe",
+              "matched": [
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "f81d"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 A",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 100,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "f81d"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "f81d"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": true,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "a207"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 B",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 200,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "a207"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "a207"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "d94c"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 C",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 300,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "d94c"
+                      },
+                      "kind": "cafe"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "d94c"
+                        },
+                        "source_category": "cafe",
+                        "kind": "cafe",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": null,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                }
+              ],
+              "uncertain": [],
+              "matched_truncated": false,
+              "uncertain_truncated": false,
+              "total": null
+            },
+            {
+              "kind": "restaurant",
+              "matched": [
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "b036"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 D",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 400,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "b036"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "b036"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": false,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": true,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "e572"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 E",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 500,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "e572"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "e572"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": true,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": false,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                },
+                {
+                  "place": {
+                    "key": {
+                      "source": "test:conversation-eval",
+                      "ref": "c468"
+                    },
+                    "aliases": [],
+                    "name": "평가 장소 F",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                    "distance_m": 600,
+                    "match": {
+                      "source": {
+                        "source": "test:conversation-eval",
+                        "ref": "c468"
+                      },
+                      "kind": "restaurant"
+                    },
+                    "classifications": [
+                      {
+                        "source": {
+                          "source": "test:conversation-eval",
+                          "ref": "c468"
+                        },
+                        "source_category": "restaurant",
+                        "kind": "restaurant",
+                        "mapping_version": "conversation-eval/1",
+                        "as_of": null
+                      }
+                    ],
+                    "facts": {
+                      "address": "테스트 주소",
+                      "phone": null,
+                      "homepage": null,
+                      "hours_text": null,
+                      "closed_days": null,
+                      "parking": null,
+                      "indoor": null,
+                      "outdoor": null,
+                      "pet_access": {
+                        "raw": {},
+                        "allowed": null,
+                        "exclusive": null,
+                        "dog_ok": null,
+                        "size_class": null,
+                        "max_kg": null
+                      },
+                      "restrictions": null,
+                      "medical": null
+                    },
+                    "field_sources": {},
+                    "icon_group": "food"
+                  },
+                  "evaluations": {},
+                  "filter_evaluation": {
+                    "state": "true",
+                    "matched_branch_ids": [],
+                    "atoms": []
+                  }
+                }
+              ],
+              "uncertain": [],
+              "matched_truncated": false,
+              "uncertain_truncated": false,
+              "total": null
+            }
+          ]
+        },
+        "display_order": [
+          {
+            "source": "test:conversation-eval",
+            "ref": "f81d"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "a207"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "d94c"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "b036"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "e572"
+          },
+          {
+            "source": "test:conversation-eval",
+            "ref": "c468"
+          }
+        ]
+      },
+      "selected": null,
+      "history": [],
+      "pending_question": "",
+      "revision": 2,
+      "pending_proposal": null,
+      "selection_basis": null
+    },
+    "clock": "2026-09-10T07:57:05.350945+00:00",
+    "clues": {
+      "screen": {
+        "places": [
+          {
+            "position": 1,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "f81d"
+            },
+            "name": "평가 장소 A",
+            "kind": "cafe",
+            "distance_m": 100,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": true,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 2,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "a207"
+            },
+            "name": "평가 장소 B",
+            "kind": "cafe",
+            "distance_m": 200,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 3,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "d94c"
+            },
+            "name": "평가 장소 C",
+            "kind": "cafe",
+            "distance_m": 300,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": null,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 4,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "b036"
+            },
+            "name": "평가 장소 D",
+            "kind": "restaurant",
+            "distance_m": 400,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": false,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": true,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 5,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "e572"
+            },
+            "name": "평가 장소 E",
+            "kind": "restaurant",
+            "distance_m": 500,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": true,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": false,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          },
+          {
+            "position": 6,
+            "key": {
+              "source": "test:conversation-eval",
+              "ref": "c468"
+            },
+            "name": "평가 장소 F",
+            "kind": "restaurant",
+            "distance_m": 600,
+            "facts": {
+              "address": "테스트 주소",
+              "phone": null,
+              "homepage": null,
+              "hours_text": null,
+              "closed_days": null,
+              "parking": null,
+              "indoor": null,
+              "outdoor": null,
+              "pet_access": {
+                "raw": {},
+                "allowed": null,
+                "exclusive": null,
+                "dog_ok": null,
+                "size_class": null,
+                "max_kg": null
+              },
+              "restrictions": null,
+              "medical": null
+            }
+          }
+        ],
+        "selected_place": null,
+        "displayed_count": 6,
+        "groups": [
+          {
+            "kind": "cafe",
+            "displayed_count": 3,
+            "more_matches_than_displayed": false
+          },
+          {
+            "kind": "restaurant",
+            "displayed_count": 3,
+            "more_matches_than_displayed": false
+          }
+        ],
+        "snapshot_created_at": "2026-09-10T07:57:05.350945+00:00",
+        "snapshot_age_seconds": 0.0,
+        "matches_current_filters": true
+      },
+      "recent_interactions": [
+        {
+          "mode": "manual",
+          "user_query": null,
+          "filters_before": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "restaurant"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "filters_after": {
+            "contract_version": "place-filter-v1",
+            "candidate_kinds": [
+              "cafe",
+              "restaurant"
+            ],
+            "spatial": {
+              "lat": 37.5,
+              "lng": 127.0,
+              "radius_m": 3000
+            },
+            "name_query": "",
+            "hard": {
+              "all": [],
+              "any": []
+            },
+            "preferences": [],
+            "unknown_policy": "exclude",
+            "result_policy": {
+              "limit_per_kind": 20,
+              "uncertain_limit_per_kind": 0
+            },
+            "dogs": []
+          },
+          "assistant_text": "현재 조건의 장소를 표시했어요."
+        }
+      ]
+    },
+    "source_observation_sha256": "c969554b65b5cd879eb5860da5cc32f82be8bb4a7d2d8787fb7cf91ec29da429",
+    "counterfactual": true
+  }
+]

@@ -1,0 +1,62 @@
+-- documents.embedding 에 HNSW 인덱스를 켠다 (RAG-084 · D16 · #384)
+--
+-- `db/indexes.sql` 이 2026-08 부터 이 문장을 들고 있었는데 "적재가 끝난 뒤 수동" 이라고만
+-- 적혀 있어서 **아무도 안 돌렸다.** 2026-09-09 실측으로 `documents` 에는 인덱스가 넷
+-- (`idx_documents_cat` · `_meta` · `_tsv` · `_org`) 있고 embedding 것만 없다.
+--
+-- ⚠️ **혼자 오면 손해다.** `rag load` 가 매번 전 행을 upsert 하던 동안에는 이 인덱스를 켜는
+-- 순간 **매일 그래프를 통째로 갈아 내게 된다.** 짝은 적재 증분화이고 같은 카드(#384)에 있다 —
+-- `load.py` 의 `ON CONFLICT DO UPDATE ... WHERE ... IS DISTINCT FROM`. **코드가 먼저 배포된
+-- 다음에 이 파일을 적용하라.** 순서가 반대면 하루치 재적재가 통째로 인덱스를 간다.
+--   (`db/migrations/README.md` 는 보통 마이그레이션을 **먼저** 적용하라고 한다. 그 규칙은
+--    "없는 컬럼을 SELECT 해서 500 이 난다"를 막는 것이고, 이 장은 컬럼이 아니라 **비용**의
+--    문제라 방향이 반대다.)
+--
+-- ✅ **적용 계정은 2026-09-10 (#427) 에 갈렸다.** 두 DB 가 서로 다르다.
+--
+--   집 서버 — `daengs` 는 **슈퍼유저가 아니고** `documents` 의 소유자는 `postgres` 다.
+--             그래서 `db-migrate.yml`(= 서버 `.env` 의 `$POSTGRES_USER` = `daengs`)로는
+--             **`ERROR: must be owner of table documents`** 로 실패한다 (run 34457746365).
+--             대신 **개발 PC 루트 `.env` 의 `postgres` 자격으로 LAN 을 통해** 적용했다 —
+--             서버 PC 앞에 갈 필요가 없다. 절차는 `db/migrations/README.md`.
+--   GCP    — 이 VM 의 수퍼유저가 `daengs` 다 (`docs/deploy/runbook.md` §3 · §6 ③).
+--             즉 평소의 `-U daengs` 로 그냥 적용된다.
+--
+-- 2026-09-09 에 사람이 *"daengs 도 슈퍼유저"* 라고 한 것은 **집 서버에 대해서는 틀렸다** —
+-- GCP 와 헷갈린 것으로 보인다. 두 DB 의 계정 모양이 다르다는 것이 이 장의 교훈이다.
+--
+-- 소유권을 아예 옮기고 싶으면 (그러면 앞으로 워크플로로 적용된다):
+--
+--   docker exec -i pgvector psql -U postgres -d vectordb -c "ALTER TABLE documents OWNER TO daengs;"
+--
+-- #427 은 그것을 **안 했다** — 권한 모델을 바꾸는 일이라 그 자체로 사람이 정할 몫이다.
+--
+-- ⚠️ **GCP 에서는 serving 코드가 먼저다** (2026-09-10 · #427). `EF_SEARCH = 400` 은
+-- `daengs_life/rag/stages/search.py` 에 있고 VM 은 **`main`** 을 서비스하는데, `main` 에는
+-- 아직 그 줄이 없다(#384 가 `dev` 에만 있다). 코드 없이 인덱스만 켜면 pgvector 기본값 40 으로
+-- 돌아 **최종 recall@8 이 88.5% 로 조용히 떨어진다.** 그래서 GCP 적용은 **dev→main 스냅샷에
+-- 딸려 간다** (`docs/life/roadmap.md` §4 의 「재적재와 GCP 동기화」).
+--
+-- ⚠️ **그 스냅샷에서는 이 장만 `git merge` 뒤에 적용하라.** `docs/deploy/runbook.md` §6 의
+-- 배포 절차는 ③ 마이그레이션 → ④ 워크트리 순서인데, 그 순서의 이유는 *"없는 컬럼을 새 코드가
+-- 친다"* 를 막는 것이다. 이 장은 컬럼이 아니라 **recall** 의 문제라 방향이 반대다 — 먼저 켜면
+-- pull 까지의 몇 분 동안 GCP 검색이 근사인데 `ef_search` 는 40 이다.
+--
+-- ⚠️ **`CONCURRENTLY` 를 안 쓴다.** 빌드 동안 표가 쓰기 잠금에 걸리지만, 이 표에 쓰는 것은
+-- 사람이 돌리는 `rag load` 와 GCP 잡(KST 04:00) 하나뿐이라 그 시간을 피하면 된다.
+-- `CONCURRENTLY` 는 트랜잭션 안에서 못 돌고 실패하면 invalid 인덱스를 남기는데, 그 뒷정리가
+-- 버전 테이블 없는 이 저장소에서 더 비싸다.
+--
+-- ⚠️ **연산자 클래스는 `vector_cosine_ops` 여야 한다.** 검색이 `<=>`(코사인)로 물어서다.
+-- `<->` 나 `<#>` 용으로 만들면 **인덱스가 그냥 안 타고, 결과는 맞고 느려지기만 해서
+-- 아무도 안 알려준다** (`db/indexes.sql` 이 같은 경고를 달고 있다).
+--
+-- ⚠️ **근사 검색이라 기준선이 이동한다.** `hnsw.ef_search` 기본값은 40 인데 검색은 축마다
+-- 후보 100개를 뽑는다(`CANDIDATE_N`) — 그대로 두면 100개를 채우지 못해 recall 이 떨어진다.
+-- 값과 대가는 카드(#384)에서 잰다.
+--
+-- 여러 번 돌려도 안전하다 (`IF NOT EXISTS`).
+
+CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);

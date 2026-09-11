@@ -1,0 +1,5 @@
+{
+  "checked_observations": 147,
+  "changed_results": [],
+  "reason": "Scope accepted.saved_candidate to observed acceptance without a fresh semantic plan. Independent new searches invalidate pending but do not accept it. Original observations are not overwritten."
+}

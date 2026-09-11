@@ -1,0 +1,42 @@
+{
+  "implementation_commit": "c0f526b",
+  "runs": [
+    {
+      "run": "20260910T071812Z-8d374d0-a99782fbb5",
+      "calls": 27,
+      "provider_errors": 0,
+      "counts": {
+        "pass": 24
+      }
+    },
+    {
+      "run": "20260910T072254Z-c0f526b-a4d72fbd89",
+      "calls": 78,
+      "provider_errors": 0,
+      "counts": {
+        "pass": 81,
+        "not_run": 9
+      }
+    },
+    {
+      "run": "20260910T072951Z-c0f526b-6fcc003c80",
+      "calls": 12,
+      "provider_errors": 0,
+      "counts": {
+        "pass": 12
+      }
+    },
+    {
+      "run": "20260910T073143Z-c0f526b-ed0a1faf4f",
+      "calls": 36,
+      "provider_errors": 0,
+      "counts": {
+        "pass": 33
+      }
+    }
+  ],
+  "total_provider_calls": 153,
+  "boundary": "Synthetic places; separate deterministic HTTP/CAS tests. Not a real database or app-device evaluation.",
+  "production_source_hashes_match_final_code": true,
+  "oracle_followup": "oracle-replay.json"
+}

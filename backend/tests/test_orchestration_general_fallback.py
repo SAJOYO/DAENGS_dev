@@ -109,8 +109,17 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
     assert request.timeout_ms is None
     assert built.handoffs == [] and built.clarify is None
     # 좌표가 있어도 payload 로 건너가지 않는다 — 폴백은 Walk·Place 의 질문에 답하지 않는다.
-    assert set(request.payload.model_dump()) == {"question", "dog", "care_log"}
+    assert set(request.payload.model_dump()) == {
+        "question",
+        "dog",
+        "care_log",
+        "vet_spend",
+        "conversation",
+    }
     assert request.payload.care_log is None
+    assert request.payload.vet_spend is None
+    # Resolver 를 거치지 않은 호출(`resolved` 미지정)이라 conversation 도 비어 있다 (#416 Task 5).
+    assert request.payload.conversation is None
 
 
 def test_general_payload_follows_the_life_rule_exactly() -> None:
@@ -498,7 +507,7 @@ def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
         'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
         ' "health_conditions": "신부전 초기", "on_medication": true}'
     ) in prompt
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     # the contract has no field that could carry a drug name into the prompt
     assert "medications" not in DogContext.model_fields
     assert "feeding_times" not in DogContext.model_fields
@@ -508,7 +517,7 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     # v3: the instructions are English like the router policy; the OUTPUT stays Korean
     assert "Write in Korean" in prompt

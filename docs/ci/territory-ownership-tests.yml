@@ -1,0 +1,63 @@
+# The regular all-package suite remains unchanged. This job exercises actual PostgreSQL locks.
+name: territory ownership DB
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_walk/**"
+      - "backend/tests/territory/**"
+      - "backend/tests/activity/**"
+      - "backend/tests/conftest.py"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - "db/**"
+      - ".github/workflows/territory-ownership-tests.yml"
+  push:
+    branches: [dev]
+    paths:
+      - "backend/src/daengs_backend/**"
+      - "backend/src/daengs_walk/**"
+      - "backend/tests/territory/**"
+      - "backend/tests/activity/**"
+      - "backend/tests/conftest.py"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - "db/**"
+      - ".github/workflows/territory-ownership-tests.yml"
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: claims_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d claims_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      TERRITORY_TEST_DATABASE_URL: postgresql+asyncpg://postgres:test-password@127.0.0.1:5432/claims_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      - run: uv run pytest -q -rs tests/territory tests/activity --junitxml=territory-results.xml
+      - name: Require executed checks
+        run: |
+          uv run python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = list(ET.parse("territory-results.xml").iter("testcase"))
+          if not cases or any(case.find("skipped") is not None for case in cases):
+              raise SystemExit("Territory verification had no tests or skipped cases")
+          PY

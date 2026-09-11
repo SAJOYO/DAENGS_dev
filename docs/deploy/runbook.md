@@ -33,6 +33,21 @@
 
 ## 1. VM 셋업
 
+> 🔴 **인스턴스를 새로 만든다면 `--scopes=cloud-platform` 을 빠뜨리지 마세요.**
+>
+> ```bash
+> gcloud compute instances create daengs --zone=asia-northeast3-c \
+>   --scopes=https://www.googleapis.com/auth/cloud-platform \
+>   ...나머지 옵션
+> ```
+>
+> **콘솔에서 만들면 기본 범위가 박힙니다.** 지금 VM 이 그렇게 만들어졌고, 그래서 관리자 콘솔의
+> 크롤 버튼이 IAM 을 맞게 줬는데도 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` 로 안 섰습니다 —
+> 범위는 **만들 때는 자유롭지만 나중에 바꾸려면 인스턴스를 멈춰야** 해서, 2026-09-09 에
+> 운영을 몇 분 내리고 고쳤습니다. 자세한 것은 `infra/gcp/README.md` 의 "IAM 만으로는 안 된다".
+>
+> 아래는 **그렇게 만든 VM 안에서** 하는 일입니다.
+
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER        # 재로그인 필요
@@ -142,7 +157,7 @@ docker compose exec place-db pg_restore -U place -d place --clean --if-exists /t
 #   §4 전에는 인증서가 없어 nginx 가 뜨자마자 죽습니다. Phase 1 은 기본 설정(80/8000)
 #   으로 올리고, §4 발급 후에 gcp 오버레이로 nginx 만 재생성합니다.
 docker compose --profile gait up -d nginx backend place-search journey-service \
-  gait-analysis gait-worker territory-vision-worker
+  gait-worker territory-vision-worker
 
 # ③-1 점령 게임판 — 덤프에는 안 따라옵니다(옛 115u 세대). §6 "점령 게임판 적재 (GCP)"
 #     를 여기서 한 번 밟으세요. 안 하면 지도에 점령지가 하나도 안 뜹니다
@@ -173,8 +188,7 @@ docker run --rm -p 80:80 -v /srv/daengs/letsencrypt:/etc/letsencrypt certbot/cer
   certonly --standalone --agree-tos --register-unsafely-without-email -n \
   -d daengapp.weareithero.cloud -d daengapi.weareithero.cloud
 # 발급 후에야 gcp 오버레이(443, gcp.conf)로 nginx 를 재생성합니다.
-# gait 도 같이 — 오버레이의 cpus 제한이 이때 적용됩니다.
-docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx gait-analysis
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait up -d nginx
 ```
 
 - 이메일 없이 등록하는 이유: Let's Encrypt 는 만료 안내 메일 서비스를 종료했고(2025-06),
@@ -270,6 +284,13 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   git merge --ff-only origin/main
   ```
 
+  ⚠ **예외 한 장 — `2026-09-09_documents_hnsw.sql` 은 ④ 뒤에 적용하세요** (#427 · RAG-086 ⑦).
+  ③ 이 먼저인 이유는 *"없는 컬럼을 새 코드가 친다"* 를 막는 것인데, 그 장은 컬럼이 아니라
+  **recall** 의 문제라 방향이 반대입니다. `EF_SEARCH` 가 없는 코드로 인덱스를 켜면 pgvector
+  기본값 40 이 쓰여 **top-8 이 189질의 중 69개에서 달라집니다**(63.5%만 일치). ④ 로 코드가
+  올라온 뒤에 켜세요. **켜도 빨라지지는 않습니다** — 그 상태에서는 플래너가 인덱스를 고르지
+  않습니다(집 서버 실측). 켜는 목적은 두 DB 를 같은 상태로 두는 것뿐입니다.
+
   ③ 을 ④ 뒤로 미루면 **없는 테이블을 새 코드가 칩니다.** 리로드라 그 사이에 창이 없습니다.
   계정이 `-U daengs` 인 것도 잊기 쉽습니다 — 이 VM 의 수퍼유저는 `postgres` 가 아닙니다(§3).
   버전 테이블이 없어 **무엇을 적용했는지 DB 가 기억하지 않으니** 적용한 파일명은 사람이
@@ -277,12 +298,23 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   쪽이 따라오지 않으므로 두 줄로 적어 둡니다 (roadmap §2-5).
 
   ④ 뒤, 바뀐 종류별 조치:
-  - **백엔드 코드만** → 없음. ④ 로 끝입니다
+  - **백엔드 코드만** → 웹(`backend`)은 리로드라 없음. **단, Celery 워커는 리로드가
+    없습니다** — `backend/src` 가 바뀐 배포는 워커도 재시작합니다 (몇 초, 분석이 돌고
+    있지 않을 때):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
+      restart gait-worker territory-vision-worker
+    docker compose logs --tail 5 gait-worker    # `celery@… ready.` 가 새로 찍히면 끝
+    ```
+
+    2026-09-09(#355) 에 로컬 서버에서 실제로 겪었습니다 — 웹은 새 코드인데 워커가 44시간
+    전 코드로 남아, 같은 영상이 같은 자리에서 다시 죽었습니다. 로그로는 구분이 안 됩니다.
   - **`uv.lock` · compose** → 영향받는 컨테이너 재생성:
 
     ```bash
     docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile gait \
-      up -d --force-recreate backend place-search journey-service gait-analysis gait-worker \
+      up -d --force-recreate backend place-search journey-service gait-worker \
       territory-vision-worker
     ```
 
@@ -356,6 +388,22 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
 설계는 `corpus-pipeline.md`, 리소스 생성은 `infra/gcp/README.md` 입니다. 리소스는 2026-09-08 에
 섰고 **첫 자동 실행은 2026-09-09 04:00 KST** 입니다 (그때까지의 실행은 전부 수동입니다).
 
+🔴 **`daengs_life` 를 고쳤으면 코드를 올려야 합니다** (2026-09-10 · #427 · RAG-086). 잡이 도는
+코드는 **이미지에 없고** `gs://daengs-corpus/code/` 에 있습니다. 올리는 것은 이 한 줄입니다:
+
+```bash
+PROJECT=daengs VM_INTERNAL_IP=<VM 내부 IP> bash infra/gcp/pipeline.sh   # rsync 몇 초. 보통 안 굽습니다
+```
+
+⚠ **이것을 잊으면 잡이 옛 코드로 돕니다** — 잡은 성공으로 끝나고 로그도 깨끗해서 **안 보입니다.**
+확인은 실행 로그 **첫 줄**입니다: `[entrypoint] 코드 <커밋 해시> <업로드 시각>`. `+dirty` 면 커밋
+안 된 워킹 트리를 올린 것입니다. 이미지는 `pyproject.toml`·`uv.lock`·`docker/pipeline/` 이 바뀔
+때만 굽습니다 (`backend/src` 는 이제 태그 입력이 아닙니다).
+
+⚠ **serving 코드는 이 길로 안 갑니다.** `/life/ask` 가 읽는 것은 VM 워크트리(`main`)이므로
+`dev → main` 스냅샷을 지나야 합니다. 잡을 갱신해도 `/life/ask` 의 설정은 안 바뀝니다 —
+`EF_SEARCH` 가 GCP 에 아직 없는 이유가 그것입니다.
+
 **수동 실행**
 
 ```bash
@@ -416,7 +464,7 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 | `corpus-refresh` 매일 1회 | 17분 × 4vCPU/16Gi | 약 ₩5,500 |
 | `corpus-embed-full` 1회 | 11분 L4 (8vCPU/32Gi) | 회당 약 ₩250 |
 | 이미지 빌드 (이미지 입력이 바뀔 때만) | CPU 약 5분 + CUDA 15~23분 | 쌍당 약 ₩350 |
-| Artifact Registry | 이미지 2장 약 4.5GB | 약 ₩700 |
+| Artifact Registry | 이미지 2장 12.1GB (CPU 2.4 · CUDA 9.7, 2026-09-09 실측) | 약 ₩1,600 (GB당 월 $0.10) |
 | 버킷 | 약 300MB + 버전 | 수백 원 |
 | Scheduler · Secret | | 무료 구간 |
 | **첫날 세팅 (1회성)** | 빌드 15회 약 110분 + GPU 57분(그중 43분은 CPU 로 헛돈 것) | 약 ₩5,000 |
@@ -457,6 +505,113 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 10. ⚠️ **`--args` 는 쉼표로 쪼개집니다** (위 "수동 실행"). `--args="--stages,parse,chunk"` 가
     `--stages parse chunk` 가 되므로, 단계·소스 인자는 공백 나열도 받게 되어 있습니다.
     한 인자 안에 쉼표를 넣어 넘길 방법은 없다고 보는 편이 낫습니다.
+
+#### 관리자 콘솔에서
+
+관리자 콘솔의 크롤 버튼은 위 "수동 실행"과 **같은 잡**을 돌립니다 — 소스를 골랐으면
+`--sources a b`, 안 골랐으면 due 판정 그대로(전체, crawl~load). 이미 실행 중인 것이 있으면
+새로 안 띄우고 202 와 함께 `note: "실행 중인 것이 있어 새로 띄우지 않았습니다: <실행 이름>"`
+으로 그 실행을 알려 줍니다 — 실패가 아닙니다.
+
+권한(`run.invoker`·`run.viewer`)과 VM `backend/.env` 네 줄은 `infra/gcp/README.md` "관리자
+트리거 (#326)" 를 보세요. 그 바인딩은 `infra/gcp/pipeline.sh` 가 Scheduler 바인딩 바로 다음에
+같이 줍니다 — teardown 뒤 재배포해도 다시 빠지지 않습니다.
+
+상태 페이지(`/console/status`)의 "크롤" 항목은 GCP 에서 잡이 있으면 "Cloud Run 잡
+`corpus-refresh@asia-northeast3`" 로 뜹니다. Cloud Run API 가 안 답하면(권한이 잘못됐거나
+프로젝트를 잘못 적은 경우) `absent` 가 아니라 `down` 이고 "Cloud Run 잡에 묻지 못했습니다"
+라고 이유가 붙습니다. API 는 멀쩡히 답했는데 잡 자체가 없으면(배포가 안 됐거나
+`DAENGS_CORPUS_JOB` 이름이 틀린 경우) 마찬가지로 `down` 이고 "Cloud Run 잡 ... 이 없습니다"
+라고 붙습니다 — 설정 자체(`DAENGS_GCP_PROJECT`)가 비어 있을 때만 여전히 `absent` 입니다.
+
+실행이 멈춘 채 안 끝나면(최대 3시간 타임아웃) 버튼이 계속 "실행 중" 만 돌려줍니다 —
+`gcloud run jobs executions cancel <실행 이름> --region=asia-northeast3` 로 취소한 뒤
+다시 누릅니다.
+
+### 실시간 서비스 (GCP)
+
+**언제** — `daengs_life/realtime/`(산책 적합도 · 과거 날씨) 코드를 고쳤을 때, 또는 시크릿을
+새로 넣거나 돌려야 할 때. 설계·검증은 [`realtime-service.md`](realtime-service.md)(D-070),
+여기는 명령 절차만 적는다. 2026-09-11 에 처음 배포했다 — `daengs-realtime`(asia-northeast3).
+
+**배포**
+
+```bash
+PROJECT=daengs bash infra/gcp/realtime.sh
+```
+
+`infra/gcp/pipeline.sh` 와 같은 모양이다 — 이미지 태그는 커밋이 아니라 **입력 파일의 내용
+해시**라, 목록에 없는 파일을 고쳐도 이미지는 안 바뀐다(`backend/pyproject.toml` ·
+`backend/uv.lock` · `backend/README.md` · `backend/src/daengs_life` · `docker/realtime`).
+
+🔴 **시크릿이 비어 있으면 배포 전에 `exit 0` 으로 멈춘다 — 오류가 아니다.** Cloud Run **잡**과
+다르게 **서비스**는 리비전이 트래픽을 받으려면 시크릿이 그 자리에서 해석돼야 해서, 값 없이
+배포하면 리비전이 아예 못 뜬다. 그래서 스크립트가 배포로 넘어가기 전에 버전이 하나라도
+있는지 먼저 확인하고, 없으면 넣으라는 안내만 찍고 멈춘다. 값을 넣은 뒤 스크립트를 다시
+돌리면 된다.
+
+**시크릿 값 넣는 법** — ⚠ **값이 셸 히스토리·화면에 안 남게 파이프로 넣는다.** `realtime.sh` 가
+직접 찍어 주는 형태는 `printf %s '<값>' | gcloud secrets versions add <이름> --data-file=-` 인데,
+값이 **이미 VM 의 `backend/.env`(Kakao·KMA 허브 키) 나 Redis 접속 정보에 있을 때**는 그것을
+로컬 화면에 띄우지 않고 그대로 옮기는 것이 더 안전하다 — 2026-09-11 에 실제로 이렇게 했다:
+
+```bash
+ssh daengs@<VM IP> "grep '^<VM .env 의 키 이름>=' ~/daengs/backend/.env | cut -d= -f2-" \
+  | gcloud secrets versions add <realtime-redis-url|realtime-kakao-key|realtime-kma-hub-key> \
+      --data-file=-
+```
+
+`ssh` 출력이 로컬 셸을 거치지 않고 곧장 `gcloud` 로 들어가므로 값이 화면·히스토리 어디에도
+안 남는다. `DATA_GO_KR_KEY` 는 새로 안 넣는다 — 코퍼스 파이프라인의 `corpus-data-go-kr-key` 를
+그대로 재사용한다(§ 위 "코퍼스 파이프라인 (GCP)").
+
+**검증**
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://daengs-realtime-584617819762.asia-northeast3.run.app/health
+# 무인증 → 403 이 정답 (--no-allow-unauthenticated 가 기본값)
+```
+
+VM 의 backend 계정으로는 메타데이터 서버 ID 토큰으로 200 이 나온다(#326 과 같은 자격증명
+출처, `services/realtime_client.py`). ⚠ **`/healthz` 로 확인하지 말 것** — Cloud Run 앞의 구글
+프런트엔드가 그 경로 하나만 가로채 컨테이너에 안 보내고 자체 404 HTML 을 돌려준다(2026-09-11
+실측). 리비전은 Ready 인데 서비스가 죽은 것처럼 보이는 증상이라 헬스 확인은 반드시 `/health`
+로 한다 — 자세한 것은 `realtime-service.md` §7.
+
+**VM 의 backend 가 이 서비스를 쓰게 켜기**
+
+🔴 **`backend/.env` 에 `DAENGS_REALTIME_URL` 줄을 넣는 것만으로는 안 켜진다.** compose 는
+`backend/.env` 를 컨테이너에 **마운트하지 않고** `env_file` 로 넣고, 그 값은 **컨테이너를 만들
+때** 굳는다. 위 §6 의 평소 배포(`git merge --ff-only`)는 `fastapi dev` 의 **reload** 라 컨테이너를
+다시 만들지 않으므로, 그 경로로는 이 값이 절대 반영되지 않는다. 켜려면 아래를 **일부러**
+돌려야 한다:
+
+```bash
+export GEMINI_API_KEY=...   # 빈 셸에서 up -d 하면 빈 키가 박혀 의미 라우터가 죽는다 (CLAUDE.md)
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d backend
+```
+
+🔴 **지금 VM 은 그 줄이 `.env` 에 들어간 채로 비활성 상태다** — `up -d backend` 를 아직 일부러
+돌리지 않아서, 돌고 있는 컨테이너는 그 변수를 모르고 기존 in-process 경로(`walk`·`weather_at`
+가 같은 프로세스 함수 호출) 그대로다. 2026-09-11 확인: 컨테이너가 그대로 47시간째 돌고 있고
+앱 API 는 계속 200 이다 — 값을 넣었다고 저절로 바뀌지 않는다는 증거다. 실제로 켜려면 위
+`up -d backend` 를 밟아야 한다.
+
+**되돌리기** — `backend/.env` 에서 `DAENGS_REALTIME_URL` 을 지우고(또는 비우고) 같은
+`up -d backend` 를 다시 돌리면 in-process 경로로 돌아온다. Cloud Run 쪽은 그대로 둬도 무해하다
+(VM 이 안 부르면 스케일이 0으로 내려간다).
+
+**teardown** (§8 종료 체크리스트에도 있다):
+
+```bash
+PROJECT=daengs bash infra/gcp/realtime-teardown.sh
+```
+
+`daengs-realtime` 서비스 · 이미지 태그 · 시크릿 셋(`realtime-redis-url`·`realtime-kakao-key`·
+`realtime-kma-hub-key`)을 지운다. `corpus-data-go-kr-key`(코퍼스 파이프라인 것)와 Artifact
+Registry 저장소·서비스 계정은 공유 자원이라 건드리지 않는다. **방화벽 규칙은 원래 안
+만들었으므로 지울 것도 없다** — `default-allow-internal` 이 이미 덮는다(위 "코퍼스 파이프라인
+(GCP)" 와 `realtime-service.md` §4 참고).
 
 ### Life 코퍼스만 동기화 (GCP)
 

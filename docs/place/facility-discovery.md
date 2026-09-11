@@ -158,7 +158,7 @@ dev에서 실행할 서비스 검증:
 
 ```powershell
 # backend/
-uv run pytest -q tests/place/place/discovery tests/place/place/intent/test_confirmation.py tests/place/place/intent/test_lenses.py tests/place/api tests/place/test_boundary.py tests/test_facility_discovery_api.py tests/test_main_stays_light.py
+uv run pytest -q tests/place/discovery tests/place/intent/test_confirmation.py tests/place/intent/test_lenses.py tests/place/api tests/place/test_boundary.py tests/place/api/test_facility_discovery_api.py tests/test_main_stays_light.py
 ```
 
 검토 도구의 이동과 실행 안내는

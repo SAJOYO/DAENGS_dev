@@ -15,10 +15,12 @@ from daengs_backend.models.activity import (
     ActivityBonusKey,
     ActivityGameReceipt,
     ActivityHoldingPeriod,
+    ActivityMonthlySeason,
     ActivitySeason,
     ActivitySessionLink,
     ActivityWalkHead,
 )
+from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRewardDetail
 from daengs_backend.models.admin_audit_log import (
     AUDIT_ACCOUNT_CREATED,
     AUDIT_ACCOUNT_PASSWORD_CHANGED,
@@ -62,6 +64,8 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
+from daengs_backend.models.pet_invite import PetInvite
+from daengs_backend.models.pet_member import PetMember
 from daengs_backend.models.refresh_token import RefreshToken
 from daengs_backend.models.request_metrics import (
     PRINCIPAL_KINDS,
@@ -78,12 +82,21 @@ from daengs_backend.models.territory import (
     TerritoryAttempt,
     VerifiedVisit,
 )
+from daengs_backend.models.territory_bookmark import TerritoryBookmark
+from daengs_backend.models.place_bookmark import PlaceBookmark  # noqa: F401
 from daengs_backend.models.territory_claim import (
     TerritoryClaim,
     TerritoryClaimPhoto,
     TerritoryClaimSession,
     TerritoryClaimSite,
     TerritoryOccupancy,
+    TerritoryRenewal,
+)
+from daengs_backend.models.vet_visit import (
+    VET_REASON_CODES,
+    VET_REASON_LABELS,
+    VetVisit,
+    VetVisitDraft,
 )
 from daengs_backend.models.walk import (
     WALK_ANALYSIS_STATES,
@@ -130,11 +143,16 @@ __all__ = [
     "SCREENING_STATUSES",
     "TERRITORY_ATTEMPT_STATUSES",
     "TERRITORY_EVIDENCE_VERSION",
+    "VET_REASON_CODES",
+    "VET_REASON_LABELS",
     "WALK_ANALYSIS_STATES",
     "ActivityAccount",
+    "ActivityBaseReward",
     "ActivityBonusKey",
     "ActivityGameReceipt",
     "ActivityHoldingPeriod",
+    "ActivityMonthlySeason",
+    "ActivityRewardDetail",
     "ActivitySeason",
     "ActivitySessionLink",
     "ActivityWalkHead",
@@ -151,16 +169,22 @@ __all__ = [
     "DogCard",
     "GaitRecord",
     "Pet",
+    "PetInvite",
+    "PetMember",
     "RefreshToken",
     "RequestMetric",
     "ScreeningRecord",
     "TerritoryAttempt",
+    "TerritoryBookmark",
     "TerritoryClaim",
     "TerritoryClaimPhoto",
     "TerritoryClaimSession",
     "TerritoryClaimSite",
     "TerritoryOccupancy",
+    "TerritoryRenewal",
     "VerifiedVisit",
+    "VetVisit",
+    "VetVisitDraft",
     "Walk",
     "WalkAnalysis",
     "WalkCapsule",
@@ -169,4 +193,11 @@ __all__ = [
     "WalkPointChunk",
 ]
 
+from daengs_backend.models.walk_entry import WalkEntry  # noqa: F401
+from daengs_backend.models.walk_entry_context import (  # noqa: F401
+    WalkEntryContextEnvelope,
+    WalkEntryContextJob,
+)
+from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin  # noqa: F401
+from daengs_backend.models.walk_photo import WalkPhotoManifest  # noqa: F401
 from daengs_backend.models.walk_storyboard import WalkStoryboard  # noqa: F401

@@ -53,7 +53,8 @@ export type ScreenStage1 = {
  *   · 확신이 문턱 아래 — **확신 없으면 말하지 않습니다**
  *
  * ⚠️ **이건 `distribution[0]` 이 아닙니다.** 여섯 개 중 하나를 고른 게 아니라
- *    네 묶음(융기·발진 / 표면 변화 / 미란·궤양 / 결절·종괴) 중 하나이고,
+ *    네 묶음(솟아오른 변화 / 피부 표면·색·두께 변화 / 벗겨지거나 패인 상처 /
+ *    깊거나 단단한 혹) 중 하나이고,
  *    `prob` 은 묶음 안 확률을 **더한 값**입니다. D-023 은 그대로입니다 —
  *    6종 이름은 여기 안 들어옵니다.
  *
@@ -64,7 +65,8 @@ export type ScreenStage1 = {
  *    높은 쪽으로 잡아서, 말한 것의 절반이 한 단계 부풀려집니다 (과잉 52.4%).
  */
 export type LesionGroup = {
-  /** 융기·발진 | 표면 변화 | 미란·궤양 | 결절·종괴 */
+  /** 솟아오른 변화 | 피부 표면·색·두께 변화 | 벗겨지거나 패인 상처 | 깊거나 단단한 혹
+   *  (2026-09-10 에 보호자가 알아들을 수 있는 말로 바꿨습니다) */
   name: string;
   /** 묶음 안 확률의 **합** (0~1). */
   prob: number;
@@ -73,17 +75,80 @@ export type LesionGroup = {
   confidence: number;
   /** 화면에 그대로 띄울 문장. */
   text: string;
+  /** ★ 그 묶음이 담는 **라벨 이름** — `구진·플라크·농포·여드름` (2026-09-10).
+   *  `솟아오른 변화` 만 들고 병원에 가면 수의사가 못 알아듣는다. 계열 이름 옆에
+   *  괄호로 띄운다.
+   *  ⚠️ **"1등 병변" 이 아니다.** 순서가 **코드순(A1→A6) 고정**이라 확률과
+   *     무관하고, 단정이 아니라 용어 풀이다. 옛 서버는 안 보낸다. */
+  labels?: string;
+  /** ★ 보호자가 **사진에서 직접 확인할 수 있는** 특징 (2026-09-10).
+   *  이름만으로는 자기 개 사진과 대조가 안 됩니다. 옛 서버는 안 보냅니다. */
+  feature?: string;
+  /** ★ "자세히 보기" 전용 — 수의학적 의미. **본문에 띄우지 마세요.**
+   *  primary/secondary 는 진단 순서의 축이지 보호자에게 뭐라고 부를지의 축이
+   *  아닙니다 (그 축으로 2군을 만들었다가 과잉 88.4% 로 기각). 옛 서버는 안 보냅니다. */
+  detail?: string;
   /** 같이 띄울 단서. 빼지 마세요. */
+  caveat: string;
+};
+
+/**
+ * ★ **계열 네 묶음의 분포** — 막대는 이걸로 그립니다.
+ *
+ * `group`(주장)과 다릅니다. 이건 **분포**라 확신과 무관하게 늘 옵니다 —
+ * 확신이 낮으면 `group` 이 `null` 이 되고 막대만 남습니다.
+ *
+ * ⚠️ 6종을 **자른 게 아니라 더한 것**입니다. 여섯 개가 전부 어딘가에 들어가
+ *    있어 숨기는 게 없습니다 — *"상위 몇 개로 자르지 마라"* 규칙과 다릅니다.
+ */
+export type LesionGroupRow = {
+  /** 솟아오른 변화 | 피부 표면·색·두께 변화 | 벗겨지거나 패인 상처 | 깊거나 단단한 혹 */
+  name: string;
+  prob: number;
+  percent: number;
+};
+
+/**
+ * ★ **"덩어리가 의심됩니다"** — 계약에서 **유일하게 병변 이름을 말하는 자리**입니다.
+ *
+ * 나머지가 전부 "이름을 말하지 마라"(D-023)인데 여기만 예외인 이유는
+ * `config.A6_ALERT_MIN` 에 적혀 있습니다 — 임상 해설이 *"결절·종괴로 오탐하는 건
+ * 상대적으로 안전"* 이라 했고(병원에 가서 확인하면 되니까) **놓치는 쪽이 훨씬
+ * 나쁩니다.** 그래서 문턱을 정밀도가 아니라 **재현율**로 잡았습니다.
+ *
+ * ⚠️ 문턱을 화면에서 다시 재지 마세요. `score`·`threshold` 는 **보여 주기용**이고
+ *    켤지 말지는 서버가 이미 정했습니다. 여기서 다시 재면 앱과 갈라집니다.
+ */
+export type LesionAlert = {
+  /** 지금은 항상 `A6`. */
+  code: string;
+  /** `p(이상) × p(A6)`. `p(A6)` 단독이 **아닙니다.** */
+  score: number;
+  threshold: number;
+  /** 서버가 준 문장을 **그대로** 띄웁니다. */
+  text: string;
+  action: string;
   caveat: string;
 };
 
 export type ScreenStage2 = {
   /** false 면 분포 영역을 **통째로 그리지 않습니다.** */
   shown: boolean;
-  /** 확률 내림차순. **개수가 고정이 아닙니다** (mock 6줄 / release 3줄). */
+  /**
+   * 병변 6종 분포.
+   *
+   * ⚠️ **화면에 안 그립니다** (2026-09-09). 콘솔도 앱과 같은 알갱이로 봅니다 —
+   *    holdout 에서 6종 이름은 커버리지 41.1%, 계열 네 묶음은 66.5% 입니다.
+   *    계약에는 그대로 오므로 언제든 되살릴 수 있고, 여기서는 계약이 오는지
+   *    확인하는 용도로만 들고 있습니다.
+   */
   distribution: LesionRow[];
-  /** ★ 계열. **`null` 이면 안 그립니다** (기본값). */
+  /** ★ 계열 **분포**. 막대는 이걸로 그립니다. 확신과 무관하게 늘 옵니다. */
+  groups?: LesionGroupRow[];
+  /** ★ 계열 **주장** 한 줄. **`null` 이면 안 그립니다** (확신이 낮을 때). */
   group?: LesionGroup | null;
+  /** ★ 덩어리 경보. 안 뜨면 `null`. */
+  alert?: LesionAlert | null;
 };
 
 /** 가이드 프레임 검사 결과. `box` 를 보냈을 때만 옵니다. */
@@ -138,6 +203,12 @@ export type ScreeningHealth = {
   loaded: boolean;
   release_dir: string;
   threshold?: number | null;
+  /** 허깅페이스에서 받는 구성이면 리포 이름. 폴더를 쓰면 `null`. */
+  release_repo?: string | null;
+  release_revision?: string | null;
+  /** 릴리스에 **준비된** 2단계 팔 수. 3 이 아니면 앙상블이 줄어든 것입니다. */
+  stage2_arms_available?: number;
+  stage2_experiments_available?: string[];
 };
 
 /** 정규화 `[x, y, w, h]` (0~1, 원본 사진 기준). */
@@ -154,7 +225,6 @@ export type NormBox = [number, number, number, number];
  */
 const GUIDE_RECOMMEND: [number, number] = [0.28, 0.48];
 const GUIDE_ALLOW: [number, number] = [0.24, 0.56];
-const GUIDE_CENTER_MAX = 0.1;
 
 export type GuideHint = {
   level: "recommend" | "allow" | "out";
@@ -165,7 +235,7 @@ export type GuideHint = {
   centerOff: number;
 };
 
-/** 네모가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
+/** 네모 크기가 밴드 안인가. 서버 `agent.check_guide()` 와 같은 순서로 봅니다. */
 export function guideHint([x, y, w, h]: NormBox): GuideHint {
   const centerOff = Math.max(Math.abs(x + w / 2 - 0.5), Math.abs(y + h / 2 - 0.5));
   const base = { widthFrac: w, centerOff };
@@ -176,9 +246,6 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
   if (w > GUIDE_ALLOW[1]) {
     return { ...base, level: "out", ok: false, reason: "너무 가까워서 주변 피부가 안 보입니다. 조금 더 멀리." };
   }
-  if (centerOff > GUIDE_CENTER_MAX) {
-    return { ...base, level: "out", ok: false, reason: "병변이 화면 가운데에서 벗어났습니다." };
-  }
   if (w < GUIDE_RECOMMEND[0] || w > GUIDE_RECOMMEND[1]) {
     return { ...base, level: "allow", ok: true, reason: "허용 안이지만 권장 밖입니다." };
   }
@@ -187,4 +254,4 @@ export function guideHint([x, y, w, h]: NormBox): GuideHint {
 
 export const GUIDE_BAND_TEXT =
   `권장 가로 ${GUIDE_RECOMMEND[0]}~${GUIDE_RECOMMEND[1]} · ` +
-  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]} · 중심 이탈 ${GUIDE_CENTER_MAX} 이내`;
+  `허용 ${GUIDE_ALLOW[0]}~${GUIDE_ALLOW[1]}`;

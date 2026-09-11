@@ -26,7 +26,7 @@ def unavailable_contexts(selection):
                 }
             ],
         }
-        for anchor in selection["anchors"]
+        for anchor in [*selection["anchors"][:8], *selection.get("entry_anchors", [])[:8]]
     }
 
 
@@ -66,8 +66,12 @@ async def lookup_contexts(selection, *, client=None):
                         if 0 <= distance <= 250:
                             name = str(place["name"])[:100]
                             key = place["key"]
+                            basis = {
+                                "estimated": "추정 위치 기준 · ",
+                                "last_known": "마지막 확인 위치 기준 · ",
+                            }.get(anchor.get("location_basis"), "")
                             facts.append(
-                                f"{LABELS[group['kind']]} {name}의 등록 위치에서 약 {round(distance)}m "
+                                f"{basis}{LABELS[group['kind']]} {name}의 등록 위치에서 약 {round(distance)}m "
                                 f"({str(key['source'])[:40]}:{str(key['ref'])[:80]} · 방문/내부 판정 아님)"
                             )
                     if group.get("truncated"):
@@ -86,4 +90,5 @@ async def lookup_contexts(selection, *, client=None):
             ],
         }
 
-    return dict(await asyncio.gather(*(one(a) for a in selection["anchors"][:8])))
+    anchors = [*selection["anchors"][:8], *selection.get("entry_anchors", [])[:8]]
+    return dict(await asyncio.gather(*(one(a) for a in anchors)))

@@ -29,6 +29,9 @@ async def _find_places(
     only_dog_ok: bool,
     authoritative_source: str | None,
     require_source_ref: bool,
+    precise_order: bool = False,
+    excluded_source_refs: tuple[str, ...] = (),
+    included_source_refs: tuple[str, ...] | None = None,
 ) -> list[PlaceOut]:
     must = plan.must
     origin = _point(must.lat, must.lng)
@@ -38,8 +41,12 @@ async def _find_places(
     stmt = (
         select(Place, dist, func.ST_Y(geom).label("lat"), func.ST_X(geom).label("lng"))
         .where(Place.active.is_(True))
-        .where(func.ST_DWithin(Place.location, origin, must.radius_m))
     )
+    if included_source_refs is None:
+        stmt = stmt.where(func.ST_DWithin(Place.location, origin, must.radius_m))
+    else:
+        # Bounded identity lookup has no spatial cap; never resolve saved places via a search page.
+        stmt = stmt.where(Place.source_id.in_(included_source_refs))
     if must.kind:
         stmt = stmt.where(Place.kind == must.kind)
     if must.name_query:
@@ -49,6 +56,8 @@ async def _find_places(
         stmt = stmt.where(Place.source == authoritative_source)
     if require_source_ref:
         stmt = stmt.where(Place.source_id.is_not(None))
+    if excluded_source_refs:
+        stmt = stmt.where(Place.source_id.notin_(excluded_source_refs))
     # **야간·응급은 거르지 않는다.** 인허가 원천엔 진료 능력이 없어서 이 태그들은 간판 이름
     # 정규식이 전부다 (geo/tagging.py). 실측 2026-08-20, 활성 병원 5,457곳 중
     # night 1곳 · emergency 2곳 — WHERE 로 쓰면 반경 안 결과가 통째로 사라진다.
@@ -64,7 +73,10 @@ async def _find_places(
     # 실측(강남역 5km): 태그 10곳이 전부 들어오면 근접 병원 10곳이 집합에서 밀려난다.
     # '빼지 않는다'는 약속은 집합 단위로 지켜야 한다. 희귀 태그가 fetch 창 밖인 문제
     # (예은, top-12 밖)는 기본 모음/추천 모음 분리에서 두 번째 조회로 푼다 (backlog).
-    stmt = stmt.order_by(dist).limit(fetch)
+    if precise_order and (plan.prefer.tags or must.open_now):
+        raise ValueError("precise medical order supports plain canonical distance search only")
+    stmt = stmt.order_by(dist, Place.source, Place.source_id, Place.id).limit(fetch) \
+        if precise_order else stmt.order_by(dist).limit(fetch)
 
     rows = (await db.execute(stmt)).all()
     out: list[PlaceOut] = []
@@ -93,7 +105,8 @@ async def _find_places(
         ))
     # 선호 부스트는 거리 밴드(500m) 안에서만 순서를 바꾼다 — 결정 #20, geo/ranking.py.
     # 이전에는 prefer_hit 을 계산해 놓고 정렬에 쓰지 않아 `night=true` 가 순서를 안 바꿨다 (#24).
-    out = band_boost_sorted(out, distance_of=lambda p: p.distance_m, boost_of=lambda p: p.boost)
+    if not precise_order:
+        out = band_boost_sorted(out, distance_of=lambda p: p.distance_m, boost_of=lambda p: p.boost)
     if must.open_now:
         # 확정 영업중을 앞으로, 미상은 뒤로 - 빼지는 않는다. 위 밴드 순서는 각 묶음 안에서 유지.
         out.sort(key=lambda p: (p.open_now is not True,))
@@ -124,6 +137,9 @@ async def find_authoritative_places(
     plan: SearchPlan,
     *,
     source: str,
+    precise_order: bool = False,
+    excluded_source_refs: tuple[str, ...] = (),
+    included_source_refs: tuple[str, ...] | None = None,
 ) -> list[PlaceOut]:
     """Canonical resolver용. 지정 원천과 외부 ref가 모두 있는 의료 행만 반환한다."""
     return await _find_places(
@@ -132,6 +148,9 @@ async def find_authoritative_places(
         only_dog_ok=False,
         authoritative_source=source,
         require_source_ref=True,
+        precise_order=precise_order,
+        excluded_source_refs=excluded_source_refs,
+        included_source_refs=included_source_refs,
     )
 
 

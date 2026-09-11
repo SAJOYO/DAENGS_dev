@@ -21,6 +21,12 @@ from daengs_backend.orchestration.contracts import (
     AssistantResponse,
     AssistantStatus,
     CapabilityStatus,
+    ObservationAxis,
+)
+from daengs_backend.orchestration.resolver import (
+    MAX_CANDIDATE_PAIRS,
+    PendingClarification,
+    PriorTurn,
 )
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
@@ -52,7 +58,11 @@ class ChatTurnNotFoundError(Exception):
 
 
 class PetNotOwnedError(Exception):
-    pass
+    """그 아이의 **구성원이 아닙니다** (docs/co-care.md §2).
+
+    이름은 소유를 말하지만 판정은 대표 ∪ 돌보미입니다 — 라우터·앱이 이 이름으로 404 를
+    내고 있어 그대로 둡니다. 판정의 원본은 `chat_repo.get_accessible_pet_id` 입니다.
+    """
 
 
 class AppUserNotActiveError(Exception):
@@ -202,10 +212,62 @@ def public_response_of(response: AssistantResponse) -> dict[str, object]:
     return response.model_dump(mode="json")
 
 
-async def _require_owned_pet(
+def candidates_of(turns: list[ChatTurn]) -> list[PriorTurn]:
+    """완료 turn 을 Resolver 후보로. `failed`·`processing` 은 애초에 안 들어온다.
+
+    호출자(`run_persisted_turn`)가 `list_recent_completed_turns` 로 이미 오래된 순으로
+    돌려준 것을 그대로 옮긴다 — 여기서 순서를 다시 바꾸지 않는다.
+    """
+    return [
+        PriorTurn(turn_id=t.id, user=t.user_content, assistant=t.assistant_content or "")
+        for t in turns
+    ]
+
+
+def pending_clarification_of(turns: list[ChatTurn]) -> PendingClarification | None:
+    """**가장 최근 완료 turn 이 `CLARIFY` 일 때만** 대기다 (스펙 ⑥ 나).
+
+    뒤에 다른 완료 turn 이 있으면 그 되묻기는 답을 받았거나 버려진 것이고, 어느 쪽이든
+    대기가 아니다. 우리 대기는 한 턴짜리라 Place 의 만료·revision 기계가 필요 없다.
+
+    읽는 자리가 `public_response` 인 이유: `public_response_of` 가 `model_dump(mode="json")`
+    라 `clarify.question` · `missing` · `missing_axes` 가 통째로 저장돼 있다. 새 칸도 새
+    테이블도 필요 없다.
+
+    ⚠ **`public_response["results"]` 를 훑지 않는다.** D-068 이 진리표("CLARIFY = 아무것도
+    실행되지 않았음")를 지키려고 되묻기 응답의 `results` 를 **비워서** 내보낸다 — 거기서
+    "어느 능력이 돌았나" 를 알아내려 하면 조용히 빈 손이 된다. `clarify` 가 그 답이다.
+
+    DB 에서 막 읽은 JSON 이라 방어적으로 읽는다 — `clarify` 가 없거나 dict 가 아니거나,
+    `missing_axes` 에 지금은 없는 축 이름이 섞여 있어도 죽지 않는다(#416 이 경고하는 자리).
+    """
+    if not turns:
+        return None
+    last = turns[-1]
+    if last.assistant_status != AssistantStatus.CLARIFY.value:
+        return None
+    clarify = (last.public_response or {}).get("clarify")
+    if not isinstance(clarify, dict):
+        return None
+    question = clarify.get("question")
+    if not isinstance(question, str) or not question.strip():
+        return None
+    axes: list[ObservationAxis] = []
+    for raw in clarify.get("missing_axes") or []:
+        try:
+            axes.append(ObservationAxis(raw))
+        except ValueError:
+            continue  # 목록이 넓어진 뒤의 옛 행 — 축을 모르는 것으로 읽는다
+    missing = [m for m in (clarify.get("missing") or []) if isinstance(m, str)]
+    return PendingClarification(
+        turn_id=last.id, question=question, missing=missing, missing_axes=axes
+    )
+
+
+async def _require_accessible_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> None:
-    if await chat_repo.get_owned_pet_id(session, app_user_id, pet_id) is None:
+    if await chat_repo.get_accessible_pet_id(session, app_user_id, pet_id) is None:
         raise PetNotOwnedError
 
 
@@ -221,7 +283,7 @@ async def _require_owned_session(
 async def list_sessions(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSession]:
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     return await chat_repo.list_active_sessions(
         session, app_user_id, pet_id, MAX_SESSIONS_PER_PET
     )
@@ -234,7 +296,7 @@ async def create_session(
     title: str | None = None,
 ) -> ChatSession:
     """Return the one draft for this owner/pet, creating it without a pet row lock."""
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     existing = await chat_repo.get_draft(session, app_user_id, pet_id)
     if existing is not None:
         return existing
@@ -435,7 +497,7 @@ async def complete_turn(
 
     first_activation = chat_session.last_message_at is None
     if first_activation and (
-        await chat_repo.lock_owned_pet(
+        await chat_repo.lock_accessible_pet(
             session, chat_session.app_user_id, chat_session.pet_id
         )
         is None
@@ -524,8 +586,11 @@ def _reserved_transcript_char_count(turns: list[ChatTurn]) -> int:
 
 
 #: The external call. Receives the session's pet id (as the ``active_dog_id`` the
-#: orchestrator should see) and returns what the user will be shown.
-Orchestrate = Callable[[str], Awaitable[AssistantResponse]]
+#: orchestrator should see), the oldest-first candidate turns for the Turn Resolver, and
+#: any unresolved clarification, and returns what the user will be shown.
+Orchestrate = Callable[
+    [str, list[PriorTurn], PendingClarification | None], Awaitable[AssistantResponse]
+]
 
 #: Expected completion-stage failures that must become an explicit API error. A generated
 #: non-FAILED response is never returned as HTTP 200 unless its identical public response
@@ -606,8 +671,19 @@ async def run_persisted_turn(
             return AssistantResponse.model_validate(turn.public_response)
         turn_id = turn.id
 
+        # 후보와 대기 되묻기는 **여기서** 읽는다 — 아직 예약 TX 가 열려 있는 동안이다.
+        # `orchestrate` 콜백 안에서 늦게 읽으면 그때는 세션이 이미 닫혀 있다(D-048:
+        # 외부 모델 호출 동안 열린 세션·행 잠금 0개). `list_recent_completed_turns` 는
+        # `processing_status == 'completed'` 만 보므로, 방금 예약해 `processing` 인 이
+        # turn 자신은 여기 안 걸린다.
+        recent_turns = await chat_repo.list_recent_completed_turns(
+            reserve_session, session_id, limit=MAX_CANDIDATE_PAIRS
+        )
+        candidates = candidates_of(recent_turns)
+        pending = pending_clarification_of(recent_turns)
+
     try:
-        response = await orchestrate(pet_id)
+        response = await orchestrate(pet_id, candidates, pending)
     except Exception:
         async with session_factory() as failure_session:
             await _close_failed(failure_session, app_user_id, turn_id, "ORCHESTRATION_FAILED")
@@ -834,7 +910,7 @@ async def create_summary(
 async def list_summaries(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[ChatSummary]:
-    await _require_owned_pet(session, app_user_id, pet_id)
+    await _require_accessible_pet(session, app_user_id, pet_id)
     return await chat_repo.list_completed_summaries(session, app_user_id, pet_id)
 
 
@@ -887,6 +963,7 @@ __all__ = [
     "TurnPersistenceError",
     "TurnProcessingError",
     "build_title",
+    "candidates_of",
     "categories_of",
     "complete_summary",
     "complete_turn",
@@ -899,6 +976,7 @@ __all__ = [
     "get_session_with_turns",
     "list_sessions",
     "list_summaries",
+    "pending_clarification_of",
     "public_response_of",
     "reserve_summary",
     "reserve_turn",

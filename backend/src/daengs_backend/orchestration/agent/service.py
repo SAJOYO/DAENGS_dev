@@ -36,6 +36,8 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 # **최상단 import 가 맞습니다.** 지연 import 는 `runtime.py` 의 `agent` 갈래 하나에만
@@ -62,7 +64,12 @@ from daengs_backend.orchestration.contracts import (
 # 구현이 **같아야** 하는 것이다 — 보호가 한쪽에만 있으면 실험 구현이 구멍이 되고,
 # 실패 문구가 갈리면 사용자에게 실패가 두 종류로 보인다. 사본을 만들지 않는다.
 from daengs_backend.orchestration.graph import OrchestrationEngine, _reject_raw_credentials
-from daengs_backend.orchestration.planner import assemble_route_plan, resolve_deterministic_route
+from daengs_backend.orchestration.planner import (
+    assemble_route_plan,
+    resolve_deterministic_route,
+    resolve_emergency_route,
+)
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.semantic import (
     ROUTER_CANDIDATE_COUNT,
     ROUTER_MAX_OUTPUT_TOKENS,
@@ -71,7 +78,7 @@ from daengs_backend.orchestration.semantic import (
     SemanticRoutingDecision,
     routing_metadata,
 )
-from daengs_backend.orchestration.service import _ROUTER_FAILURE_MESSAGE
+from daengs_backend.orchestration.service import _KST, _ROUTER_FAILURE_MESSAGE, _is_night
 from daengs_backend.orchestration.social import build_social_response
 
 # 의미 라우터와 **같은 모델**이어야 한다 (모듈 docstring). 별도 이름을 두는 이유는
@@ -197,7 +204,14 @@ class AgentOrchestrationService:
         request_id: str | None = None,
         locale: str = "ko-KR",
         include_route_trace: bool = False,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> AssistantResponse:
+        # `prior_turns`/`pending_clarification` 은 `Orchestrator` 좌표계를 맞추려고
+        # 받기만 한다 — **Turn Resolver 는 지금 langgraph 전용**이다(`runtime.py`
+        # Protocol 의 docstring). 여기서 쓰기 시작하려면 먼저 두 구현이 같은 뜻으로
+        # 쓸 수 있는지(비교 좌표계가 안 깨지는지)를 따로 결정해야 한다.
+        del prior_turns, pending_clarification
         if locale != "ko-KR":
             raise ValueError("v1 supports locale ko-KR only")
         rid = request_id or str(uuid.uuid4())
@@ -242,11 +256,21 @@ class AgentOrchestrationService:
         locale: str,
         include_route_trace: bool,
     ) -> AssistantResponse:
-        route_plan = resolve_deterministic_route(
-            requested_capability=requested_capability,
+        # 응급은 라우터보다 앞이다 — LangGraph 쪽(`../service.py`)과 같은 자리·같은 이유:
+        # 모델을 태우지 않고, 배타로 끝낸다. `_is_night` 는 그 모듈 것을 그대로 쓴다 — 야간
+        # 경계를 두 곳에 따로 두면 시간이 지나며 갈라진다.
+        route_plan = resolve_emergency_route(
             query=query,
             context=structured_context,
+            requested_capability=requested_capability,
+            at_night=_is_night(datetime.now(tz=_KST)),
         )
+        if route_plan is None:
+            route_plan = resolve_deterministic_route(
+                requested_capability=requested_capability,
+                query=query,
+                context=structured_context,
+            )
         if route_plan is None:
             # 라우터와 같은 자리에서 같은 예외로 — 잘못된 라우팅 메타데이터는 어느
             # 구현에서도 모델에 닿지 않는다.

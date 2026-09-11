@@ -7,12 +7,22 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_place.core.db import get_session
-from daengs_place.territory.contracts import TerritorySitePage
-from daengs_place.territory.sites import find_nearby
+from daengs_place.territory.contracts import TerritorySiteLocations, TerritorySitePage
+from daengs_place.territory.sites import find_by_ids, find_nearby
 
 router = APIRouter(prefix="/territory/sites", tags=["territory-sites"])
 
 MAX_LIMIT = 500
+
+SiteId = Annotated[str, Field(max_length=96, pattern=r"^territory-site:hex-v1:140:-?\d+:-?\d+$")]
+
+
+@router.get("/by-ids", response_model=TerritorySiteLocations)
+async def territory_sites_by_ids(
+    site_ids: Annotated[list[SiteId], Query(min_length=1, max_length=100)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> TerritorySiteLocations:
+    return TerritorySiteLocations(sites=await find_by_ids(db, site_ids))
 
 
 class NearbyTerritorySitesParams(BaseModel):

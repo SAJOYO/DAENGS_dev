@@ -41,6 +41,30 @@ DEFAULT_K = 5
 # 늘려서 잡히는 정답은 없다는 뜻이라, "못 닿는 문항"의 원인 후보에서 이 상수는 빠진다.
 CANDIDATE_N = 100
 
+# HNSW 를 켠 DB 에서 pgvector 가 한 질의에 훑을 후보 수 (RAG-084 ⑦).
+#
+# **기본값 40 을 그대로 두면 조용히 틀린다.** dense 축은 `CANDIDATE_N`(100)까지 뽑는데
+# `ef_search` 가 40 이면 인덱스가 그 100개를 채우지 못한다 — 2026-09-09 실측(189질의):
+#
+#     ef_search   dense recall@100   최종 recall@8   top-8 이 전수 스캔과 같은 질의
+#            40             39.0%           88.5%                    66.7%
+#           100             90.8%           96.7%                    83.1%
+#           200             96.6%           99.0%                    89.9%
+#           400             99.1%           99.8%                    96.3%
+#
+# 400 인 이유는 둘이다. ⓐ recall 이 사실상 전수 스캔과 같아지는 첫 자리이고,
+# ⓑ **그 근처가 플래너가 인덱스를 실제로 고르는 구간**이다 — pgvector 의 비용 추정이
+# `ef_search` 를 따라 커져서 64~200 에서는 전수 스캔이 더 싸 보이고(9,844행 기준 2,255),
+# 300~500 에서 추정이 다시 떨어진다. 코퍼스가 커지면 이 구간이 넓어진다.
+#
+# ⚠ **인덱스가 없으면 이 값은 아무 일도 안 한다** — GUC 만 설정되고 전수 스캔이 정확한
+# 최근접을 낸다. 그래서 인덱스를 켜기 전에 배포해도 안전하다.
+#
+# ⚠ **실패 방향이 안전하다.** 플래너가 인덱스를 안 고르면 결과는 여전히 정확하고 느려질
+# 뿐이다 — 반대로 `ef_search` 가 낮으면 **결과가 조용히 나빠진다.** 그래서 높은 쪽으로 잡는다.
+EF_SEARCH = 400
+
+
 # RRF 상수. RAG-003 제안값 그대로다.
 # **점수가 아니라 순위만 쓰기 때문에** dense 의 코사인과 렉시컬의 ts_rank 가 스케일이 달라도
 # 정규화가 필요 없다.
@@ -512,6 +536,9 @@ def search(query: Query, *, k: int = DEFAULT_K, include_supplementary: bool = Tr
 
     try:
         with conn.cursor() as cur:
+            # HNSW 가 있으면 이 한 줄이 recall 을 정한다 (RAG-084 ⑦). 인덱스가 없으면
+            # 아무 일도 안 한다 — 전수 스캔은 이 값을 안 본다.
+            cur.execute(f"SET hnsw.ef_search = {EF_SEARCH}")
             cur.execute(_SQL.format(filters="\n      ".join(filters),
                                     lex_filters="\n      ".join(lex_filters)), params)
             scanned = [

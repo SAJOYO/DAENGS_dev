@@ -130,6 +130,22 @@ jobs:
           # watchfiles polling이 변경을 놓칠 수 있으므로 backend는 매번 다시 띄웁니다.
           docker compose restart backend
 
+          # Only maintain the explicitly activated Walk runtime. Do not enable it on deploy.
+          $walkWorker = @(docker ps --filter 'name=^/daengs-walk-context-worker$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect Walk worker' }
+          $walkBeat = @(docker ps --filter 'name=^/daengs-walk-context-beat$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect Walk runtime' }
+          if ($walkWorker.Count -gt 0 -and $walkBeat.Count -gt 0) {
+            docker compose --profile walk-diary up -d --no-deps --force-recreate walk-context-worker walk-context-beat
+            if ($LASTEXITCODE -ne 0) { throw 'failed to update Walk runtime' }
+          }
+          $walkCatalog = @(docker ps --filter 'name=^/daengs-walk-catalog-worker$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect Walk catalog worker' }
+          if ($walkCatalog.Count -gt 0) {
+            docker compose --profile walk-diary up -d --no-deps --force-recreate walk-catalog-worker
+            if ($LASTEXITCODE -ne 0) { throw 'failed to update Walk catalog worker' }
+          }
+
           $forceAll = '${{ github.event_name }}' -eq 'workflow_dispatch'
           $changed = @()
           if (-not $forceAll) {

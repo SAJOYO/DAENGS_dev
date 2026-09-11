@@ -19,7 +19,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from daengs_evals.answer_quality.gemini import DEFAULT_TOKEN_BUDGET, TokenLedger
+from daengs_evals.answer_quality.gemini import (
+    DEFAULT_TOKEN_BUDGET,
+    TokenBudgetExceeded,
+    TokenLedger,
+)
 from daengs_evals.answer_quality.provenance import source_provenance, utc_now
 from daengs_evals.calibration.hygiene import require_judge_hygiene
 from daengs_evals.calibration.openai_client import client as openai_client
@@ -77,7 +81,9 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
     path = judgments_path(cells_label, variant)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    real_capabilities = {"general"} if meta.get("adapters") == "fallback-only" else None
+    from daengs_evals.profile_fitness.collect import real_capabilities as _real_caps
+
+    real_capabilities = _real_caps(meta.get("adapters"))
     # 이미 판정한 답은 다시 안 부른다 — 같은 label 의 이전 판정 파일에서 (문장이 같으면 같은 답)
     cache: dict[tuple[str, str], DeferralVerdict] = {}
     if path.exists():
@@ -90,6 +96,7 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
                     )
     rows: list[dict[str, Any]] = []
     judged = 0
+    budget_hit = False
     for c in cells:
         qid = c["question_id"]
         q = questions[qid]
@@ -126,15 +133,22 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
             key = (qid, (c.get("message") or "").strip())
             row["message_key"] = key[1]
             if key not in cache:
-                cache[key] = generate_structured(
-                    model=model,
-                    prompt=build_prompt(question=q.query, answer=c["message"], variant=variant),
-                    schema=DeferralVerdict,
-                    temperature=TEMPERATURE,
-                    ledger=ledger,
-                    cli=cli,
-                    label=row["cell"],
-                )
+                try:
+                    cache[key] = _judge_one(
+                        model=model,
+                        prompt=build_prompt(question=q.query, answer=c["message"], variant=variant),
+                        ledger=ledger,
+                        cli=cli,
+                        label=row["cell"],
+                    )
+                except TokenBudgetExceeded as exc:
+                    # 여기까지의 판정을 **파일에 남기고** 멈춘다 — 2026-09-11 에 예산 초과가 예외로 튀어
+                    # 2만 토큰어치 판정이 통째로 사라졌다. 같은 명령을 다시 돌리면 캐시로 이어서 한다.
+                    log(
+                        f"⚠ {exc} — 지금까지 {judged}건 판정은 파일에 남긴다. 같은 명령으로 이어서 하세요"
+                    )
+                    budget_hit = True
+                    break
                 judged += 1
             verdict = cache[key]
             row["verdict"] = verdict.model_dump(mode="json")
@@ -144,6 +158,50 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
         rows.append(row)
         log(f"  {row['cell']:44s} {move:9s} {row['outcome']}")
 
+    _write_judgments(
+        path,
+        cells_label=cells_label,
+        model=model,
+        variant=variant,
+        hygiene=hygiene,
+        judged=judged,
+        ledger=ledger,
+        rows=rows,
+        partial=budget_hit,
+    )
+    log(
+        f"셀 {len(rows)} · 판정 호출 {judged} · 토큰 {ledger.input_tokens}/{ledger.output_tokens} → {path.name}"
+        + (" (예산에서 멈춤 — 부분)" if budget_hit else "")
+    )
+    return path
+
+
+def _judge_one(
+    *, model: str, prompt: str, ledger: TokenLedger, cli: Any, label: str
+) -> DeferralVerdict:
+    return generate_structured(
+        model=model,
+        prompt=prompt,
+        schema=DeferralVerdict,
+        temperature=TEMPERATURE,
+        ledger=ledger,
+        cli=cli,
+        label=label,
+    )
+
+
+def _write_judgments(
+    path: Path,
+    *,
+    cells_label: str,
+    model: str,
+    variant: str,
+    hygiene: Any,
+    judged: int,
+    ledger: TokenLedger,
+    rows: list[dict[str, Any]],
+    partial: bool,
+) -> None:
     with path.open("w", encoding="utf-8") as h:
         h.write(
             json.dumps(
@@ -155,6 +213,7 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
                     "prompt_version": PROMPT_VERSIONS[variant],
                     "hygiene": hygiene,
                     "unique_answers_judged": judged,
+                    "partial": partial,
                     "tokens": {"input": ledger.input_tokens, "output": ledger.output_tokens},
                     "started_at": utc_now(),
                     "source": source_provenance(),
@@ -165,10 +224,6 @@ def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=pr
         )
         for r in rows:
             h.write(json.dumps(r, ensure_ascii=False) + "\n")
-    log(
-        f"셀 {len(rows)} · 판정 호출 {judged} · 토큰 {ledger.input_tokens}/{ledger.output_tokens} → {path.name}"
-    )
-    return path
 
 
 CONSISTENCY_REPEATS = 3

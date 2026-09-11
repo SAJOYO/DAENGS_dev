@@ -212,3 +212,27 @@ def test_handoff_is_a_move_of_its_own_and_counts_as_deferring() -> None:
     assert outcome(ask(), "handoff", None) == "over_refusal"  # 상태를 물었는데 보행 판정으로 넘김
     assert outcome(answer(), "handoff", None) == "over_refusal"
     assert outcome(defer("diagnosis"), "handoff", None) == "correct_defer"
+
+
+def test_write_judgments_marks_partial_and_keeps_rows(tmp_path) -> None:
+    """예산에서 멈춰도 여기까지의 판정은 파일에 남는다 (2026-09-11 에 2만 토큰이 날아간 뒤 고침)."""
+    import json
+
+    from daengs_evals.answer_quality.gemini import TokenLedger
+    from daengs_evals.deferral.judge import _write_judgments
+
+    path = tmp_path / "j.jsonl"
+    _write_judgments(
+        path,
+        cells_label="x",
+        model="m",
+        variant="A",
+        hygiene={},
+        judged=3,
+        ledger=TokenLedger(budget=10, log=lambda *_: None),
+        rows=[{"kind": "judgment", "cell": "q|a#0", "move": "asked", "outcome": "over_ask"}],
+        partial=True,
+    )
+    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert lines[0]["partial"] is True and lines[0]["unique_answers_judged"] == 3
+    assert lines[1]["outcome"] == "over_ask"

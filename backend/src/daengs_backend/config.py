@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     walk_photo_metadata_enabled: bool = False
     # Opt-in diary bundle; enable only with a client that explicitly requests the new format.
     walk_diary_enabled: bool = False
+    # Experimental endpoint must be enabled independently of published diaries.
+    walk_diary_slots_preview_enabled: bool = False
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은

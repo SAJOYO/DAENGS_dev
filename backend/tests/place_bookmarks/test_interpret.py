@@ -107,13 +107,29 @@ async def test_authenticated_interpret_uses_no_write_or_lookup_and_keeps_member_
         "unnegotiated",
         "mixed",
         "missing_normal",
+        "candidate",
+        "unnegotiated_candidate",
     ],
 )
 async def test_interpret_http_bounds_and_no_identity_forwarding(monkeypatch, case):
     def respond(request):
         assert request.url.path == "/internal/place/bookmarks/interpret"
         assert "authorization" not in request.headers
-        assert set(json.loads(request.content)) == {"query", "filters", "search_policy"}
+        assert set(json.loads(request.content)) == (
+            {"query", "filters", "search_policy", "candidate_pools"}
+            if case == "candidate"
+            else {"query", "filters", "search_policy"}
+        )
+        if case in {"candidate", "unnegotiated_candidate"}:
+            return httpx.Response(
+                200,
+                json={
+                    "action": "search_places",
+                    "message": "",
+                    "search_filters": {},
+                    "search_pool": "new_candidates",
+                },
+            )
         if case == "timeout":
             raise httpx.ReadTimeout("test")
         if case == "bad_filters":
@@ -146,7 +162,14 @@ async def test_interpret_http_bounds_and_no_identity_forwarding(monkeypatch, cas
         lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs),
     )
     lookup = gateway.HttpPlaceBookmarkLookup("http://place")
-    if case == "normal":
+    if case == "candidate":
+        assert (
+            await lookup.interpret("새로운 곳", {}, search_policy="v1", candidate_pools="v1")
+        ).search_pool == "new_candidates"
+    elif case == "unnegotiated_candidate":
+        with pytest.raises(gateway.PlaceLookupUnavailable):
+            await lookup.interpret("새로운 곳", {}, search_policy="v1")
+    elif case == "normal":
         assert (
             await lookup.interpret("찜 제한 풀어", {}, search_policy="v1")
         ).action == "search_places"

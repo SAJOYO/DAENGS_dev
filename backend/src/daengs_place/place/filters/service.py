@@ -129,7 +129,7 @@ async def search_filtered_places(
 ) -> FilterResponse:
     """Execute validated conditions; failures propagate rather than becoming empty results."""
     state = guard_filter_state(state)
-    if len(omitted) > 1320:
+    if len(omitted) > 1640:
         raise ValueError("exploration omission budget exceeded")
     omitted = tuple(PlaceRef.model_validate(key.model_dump()) for key in omitted)
     judged_at = SystemClock().now()

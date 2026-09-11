@@ -1,0 +1,64 @@
+[
+  {
+    "id": "N03",
+    "query": "찜한 곳 빼고 카페 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates",
+      "bookmarks"
+    ],
+    "scope": "unbookmarked"
+  },
+  {
+    "id": "N04",
+    "query": "여기 이미 알아",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity"
+  },
+  {
+    "id": "N05",
+    "query": "여기 이미 알아. 주차 되는 다른 카페 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity",
+    "parking": true
+  },
+  {
+    "id": "N06",
+    "query": "첫 번째 이미 알아. 다음 후보 더 보여줘",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity",
+    "browse": "next"
+  },
+  {
+    "id": "N07",
+    "query": "이미 알고 있는 곳이라고",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "clarify": true,
+    "selected": false
+  },
+  {
+    "id": "N09",
+    "query": "여기 이미 아는 건 아니야",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep"
+  }
+]

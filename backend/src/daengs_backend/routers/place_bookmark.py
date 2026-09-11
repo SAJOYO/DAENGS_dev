@@ -73,6 +73,7 @@ async def interpret(
             request.query,
             request.filters,
             **({"search_policy": request.search_policy} if request.search_policy else {}),
+            **({"candidate_pools": request.candidate_pools} if request.candidate_pools else {}),
         )
     )
 

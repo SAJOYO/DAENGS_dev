@@ -1,0 +1,31 @@
+{
+  "reviewed_at": "2026-09-11",
+  "issue": "For invalid current model plans, the evaluator selected the previous valid model.plans[-1]. intent and meaning fields for those rows are not a trustworthy baseline; provider_calls retain the correct current raw output.",
+  "affected": [
+    [
+      "N04",
+      "all_places"
+    ],
+    [
+      "N04",
+      "new_candidates"
+    ],
+    [
+      "N05",
+      "all_places"
+    ],
+    [
+      "N05",
+      "new_candidates"
+    ],
+    [
+      "N06",
+      "new_candidates"
+    ],
+    [
+      "N07",
+      "new_candidates"
+    ]
+  ],
+  "decision": "Preserve raw observations. Evaluate future runs from current request function arguments. Do not report baseline meaning accuracy."
+}

@@ -4,6 +4,16 @@ on:
   push:
     branches: [dev]
   workflow_dispatch: # Actions 탭에서 수동 실행
+    inputs:
+      operation:
+        description: 'Deploy or prepare the activity runtime while the game is OFF'
+        type: choice
+        options: [Deploy, PrepareActivityOff]
+        default: Deploy
+      expected_deployment_sha:
+        description: 'PrepareActivityOff requires the full SHA already deployed on the server'
+        type: string
+        default: ''
 
 # Runtime stop/recreate must finish before the next deployment begins.
 concurrency:
@@ -16,6 +26,7 @@ env:
 
 jobs:
   deploy:
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Deploy'
     name: 서비스 반영
     # 이 PC 에 등록한 self-hosted 러너에서 실행됩니다.
     runs-on: [self-hosted, Windows, X64]
@@ -199,6 +210,83 @@ jobs:
 
           docker compose ps
           docker compose exec -T nginx nginx -t
+
+  prepare_activity_off:
+    name: 점령 처리기 OFF 준비
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'PrepareActivityOff'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+    steps:
+      # Deliberately no checkout: backend/src is mounted by the live services.
+      - name: 배포 버전과 OFF 확인 후 처리기만 기동
+        env:
+          EXPECTED_DEPLOYMENT_SHA: ${{ inputs.expected_deployment_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_DEPLOYMENT_SHA -notmatch '^[a-fA-F0-9]{40}$') {
+            throw 'A full expected deployment SHA is required'
+          }
+          $deployed = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $deployed -ne $env:EXPECTED_DEPLOYMENT_SHA) {
+            throw 'Server checkout does not match the expected deployment SHA'
+          }
+          git diff --quiet HEAD -- docker-compose.yml backend/src backend/pyproject.toml backend/uv.lock db/migrations
+          if ($LASTEXITCODE -ne 0) { throw 'Deployed runtime files have local changes' }
+
+          # Rendered configuration contains secrets. Never print it or exception details.
+          $rendered = docker compose --profile activity-game config --format json 2>$null
+          if ($LASTEXITCODE -ne 0) { throw 'Compose configuration could not be read' }
+          try { $config = ($rendered -join "`n") | ConvertFrom-Json }
+          catch { throw 'Compose configuration is not valid JSON' }
+          $services = @('backend', 'territory-vision-worker', 'activity-worker', 'activity-beat')
+          foreach ($service in $services) {
+            $vars = $config.services.$service.environment
+            if ($null -eq $vars) { throw "Missing environment for $service" }
+            $flags = @($vars.PSObject.Properties | Where-Object Name -ieq 'DAENGS_ACTIVITY_GAME_ENABLED')
+            foreach ($flag in $flags) {
+              if ([string]$flag.Value -notmatch '^(?i:false|0|off|no|n|f)$') {
+                throw "Game must be explicitly OFF in $service"
+              }
+            }
+            foreach ($key in @('DAENGS_DB_HOST', 'DAENGS_DB_PORT', 'DAENGS_DB_USER', 'DAENGS_DB_PASSWORD', 'DAENGS_DB_NAME', 'REDIS_URL')) {
+              if ([string]::IsNullOrWhiteSpace([string]$vars.$key) -or
+                  $vars.$key -cne $config.services.backend.environment.$key) {
+                throw "Database/broker settings differ for $service"
+              }
+            }
+          }
+          foreach ($service in @('backend', 'territory-vision-worker')) {
+            $flag = docker compose exec -T $service uv run --no-sync python -c 'from daengs_backend.config import settings; print(int(settings.activity_game_enabled))' 2>$null
+            if ($LASTEXITCODE -ne 0 -or ($flag -join '').Trim() -ne '0') {
+              throw "Running $service must report game OFF"
+            }
+          }
+          Write-Host "Preflight passed: deployed=$deployed; all game flags OFF; DB/broker settings match"
+
+          # Only these two opt-in containers change; existing web/photo/DB stay running.
+          docker compose --profile activity-game up -d --no-deps --force-recreate --wait --wait-timeout 240 activity-worker
+          if ($LASTEXITCODE -ne 0) { throw 'Activity worker failed to become healthy' }
+          $reportRaw = docker compose exec -T activity-worker uv run --no-sync python -m daengs_backend.cli.activity_runtime 2>$null
+          if ($LASTEXITCODE -ne 0) { throw 'Activity schema preflight failed' }
+          try { $report = ($reportRaw -join "`n") | ConvertFrom-Json }
+          catch { throw 'Invalid activity preflight report' }
+          if ($report.game_enabled -ne $false -or $report.schema_checks -ne 8 -or $report.active_seasons -ne 0) {
+            throw 'First OFF preparation requires 8 schema checks and no active season'
+          }
+          docker compose --profile activity-game up -d --no-deps --force-recreate --wait --wait-timeout 240 activity-beat
+          if ($LASTEXITCODE -ne 0) { throw 'Activity Beat failed to become healthy' }
+          $heartbeatRaw = docker compose exec -T activity-beat cat /tmp/activity-beat.json 2>$null
+          if ($LASTEXITCODE -ne 0) { throw 'Activity Beat heartbeat could not be read' }
+          try { $heartbeat = ($heartbeatRaw -join "`n") | ConvertFrom-Json }
+          catch { throw 'Invalid activity Beat heartbeat' }
+          if ($heartbeat.state -ne 'disabled') { throw 'Activity Beat must remain disabled' }
+          $summary = "OFF preparation passed: deployed=$deployed; schema_checks=8; active_seasons=0; worker=healthy; beat=healthy/disabled"
+          Write-Host $summary
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $summary
 
   post_deploy_smoke:
     name: 배포 후 공개 경로 확인

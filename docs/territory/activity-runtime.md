@@ -15,6 +15,15 @@ DEV #452는 기존 activity.process를 실행하는 worker와 30초 Beat를 추�
 
 ## 개발 서버에서 OFF 상태로 준비
 
+서버 shell 대신 GitHub **Deploy → Run workflow → PrepareActivityOff**로 같은 준비를 실행할 수 있다.
+`expected_deployment_sha`에는 성공한 최신 배포의 전체 커밋 SHA를 넣는다. 이 작업은 checkout이나
+웹 배포를 하지 않고 현재 서버 파일을 사용한다. 배포 SHA·추적 파일 변경·네 서비스의 OFF 설정과
+DB/Redis 일치·실행 중 웹/사진 워커의 OFF를 확인한 뒤 activity worker→Beat만 기동한다.
+기존 Deploy와 concurrency를 공유하며 기본 push/수동 Deploy 동작은 유지한다.
+최초 준비 전용으로 worker의 8개 스키마 검사와 활성 시즌 0개, Beat disabled heartbeat를 요구한다.
+실패하면 후속 기동을 진행하지 않는다. worker 시작 후 실패했다면 부분 기동이 남을 수 있으므로
+원인을 해결하고 준비 작업을 재실행하거나 아래 두 처리기 중지 명령으로 정리한다.
+
 아래는 **서버 PC의 실제 배포 checkout**에서만 실행한다. 로컬 개발 PC에서 앱 compose를 띄우지 않는다. `.env`/암호화 키·DB·Redis가 기존 서버와 같고 게임 flag가 false인 것을 먼저 확인한다. 이미 있는 서비스를 새 DB로 교체하지 않는다.
 
 ```powershell

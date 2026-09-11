@@ -136,6 +136,9 @@ site version도 증가시켜 늦은 사진 판정이 지난 시즌 소유권을 
 
 ## 적용과 복구 순서
 
+현재 Compose 런타임과 배포 갱신 절차는 [점령 처리기 운영](territory/activity-runtime.md)을 따른다.
+activity-game profile은 명시적으로 준비하며 기본 배포만으로 시작하지 않는다.
+
 운영 접속 정보는 이 문서에 저장하지 않는다. 명령은 검토된 대상 DB에서 담당자가 실행한다.
 
 1. 기존 산책 Analysis/Capsule SQL과 #260 migration/검증을 먼저 완료한다.
@@ -159,7 +162,8 @@ uv run python -m daengs_backend.cli.activity rebuild
 `protection_ms`는 600000 고정이며 JSON은 저장된 시즌의 규칙으로 보존된다.
 
 주기적 처리는 별도 `activity` 큐를 사용한다. 아래 워커와 Beat를 명시적으로 운영하거나
-기존 스케줄러에서 process 명령을 호출한다. 이 PR은 compose/운영 스케줄을 자동 변경하지 않는다.
+기존 스케줄러에서 process 명령을 호출한다. DEV #452 이후에는 위 운영 문서의
+Compose `activity-game` profile을 사용할 수 있다. 일반 배포로는 최초 기동하지 않는다.
 
 ```powershell
 uv run celery -A daengs_backend.tasks.activity:app worker -Q activity --loglevel=INFO

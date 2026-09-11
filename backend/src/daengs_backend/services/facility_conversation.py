@@ -107,6 +107,7 @@ class FacilityConversationService(FacilityDiscoveryService):
                     "visible_order": request.visible_order,
                     "visible_selected": request.visible_selected,
                     "bookmark_commands": request.bookmark_commands,
+                    "saved_search": request.saved_search,
                 },
             )
             prepared = envelope["prepared"]
@@ -122,7 +123,9 @@ class FacilityConversationService(FacilityDiscoveryService):
                 display_order=state["snapshot"]["display_order"] if state["snapshot"] else [],
                 receipt=receipt,
                 answer_status="pending"
-                if request.mode == "chat" and not receipt.get("bookmark_command")
+                if request.mode == "chat"
+                and not receipt.get("bookmark_command")
+                and not receipt.get("saved_search_filters")
                 else "none",
             )
             committed = {

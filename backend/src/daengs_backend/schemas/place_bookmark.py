@@ -43,3 +43,14 @@ class BookmarkSearchResult(BookmarkList):
     distance_available: bool
     hits: list[dict[str, Any]]
     missing_keys: list[BookmarkKey]
+
+
+class BookmarkInterpret(BookmarkSearch):
+    query: str = Field(min_length=1, max_length=1000)
+
+
+class BookmarkInterpretResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["search", "clarify", "explain", "return_search"]
+    message: str
+    filters: dict[str, Any] | None = None

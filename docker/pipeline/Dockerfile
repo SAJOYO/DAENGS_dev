@@ -3,22 +3,33 @@
 #   docker build -f docker/pipeline/Dockerfile -t pipeline:cpu  .
 #   docker build -f docker/pipeline/Dockerfile -t pipeline:cuda --build-arg TORCH=cuda .
 #
-# 빌드 컨텍스트는 **저장소 루트**다 — backend/ 와 data/manifests/seed_sources.yaml 둘 다 필요해서.
-# `docker/pipeline/Dockerfile.dockerignore` 가 그 컨텍스트를 backend/pyproject.toml ·
-# backend/uv.lock · backend/README.md · backend/src · seed_sources.yaml · entrypoint.sh 로만
-# 좁힌다 — 안 그러면 frontend/node_modules 나 data/raw 같은 것까지 전부 올라간다.
+# 🔴 **이 이미지에는 우리 코드가 없다** (#427). 의존성과 모델 가중치만 굽고, `daengs_life` 는
+# 런타임에 버킷(`gs://daengs-corpus/code/`, 잡에 `/data` 로 마운트됨)에서 `/app/src` 로
+# 복사해 `PYTHONPATH` 로 잡는다 — `docker/pipeline/entrypoint.sh` 가 그 일을 한다.
+#
+# **왜 그랬나.** 코드가 이미지에 있으면 태그(= 내용 해시)가 코드마다 바뀌어서, 14MB 짜리
+# `backend/src` 를 고칠 때마다 **CPU 2.3GB + CUDA 9GB 를 다시 굽는다.** 잡이 쓰지도 않는
+# 패키지(`daengs_place` 등)를 고쳐도 똑같이 굽는다. 이제 태그는 `backend/pyproject.toml` ·
+# `backend/uv.lock` · `docker/pipeline/` 만 보므로 **의존성을 바꿀 때만** 굽는다
+# (`infra/gcp/pipeline.sh` 의 `SHA`). 코드 배포는 rsync 몇 초다.
+#
+# ⚠ **대가: 태그가 코드 버전을 안 말한다.** 배포가 `code/VERSION` 에 커밋 해시를 쓰고
+# entrypoint 가 그것을 로그 첫 줄에 찍는 것이 그 자리를 메운다. (옛 태그도 `git ls-files`
+# 해시라 커밋과 1:1 은 아니었다.)
+#
+# 빌드 컨텍스트는 저장소 루트지만 실제로 필요한 것은 `backend/` 의 세 파일과 entrypoint 뿐이고,
+# `docker/pipeline/Dockerfile.dockerignore` 가 컨텍스트를 그것으로만 좁힌다.
 #
 # lock 의 torch 는 리눅스에서 CPU 인덱스로 고정돼 있다 (backend/pyproject.toml [tool.uv.sources]).
 # 서버 backend 컨테이너가 NVIDIA 런타임 10GB 를 받지 않게 한 결정이라 lock 을 안 건드린다.
-# CUDA 판은 **프로젝트 설치(frozen sync)가 끝난 뒤** torch 만 cu126 인덱스에서 덮어쓴다
-# (torchvision 은 이 이미지의 `ml` 그룹에 없다 — 아래 torch-cuda 스테이지 주석 참고) —
-# 순서가 중요하다. `uv sync --frozen` 은 매번 venv 를 lock 상태로 되돌리므로,
-# 덮어쓰기가 그 앞에 있으면 뒤에 오는 frozen sync 가 CPU torch 로 도로 갈아치워
-# 덮어쓴 게 없던 일이 된다(1라운드 리뷰에서 실측). 그래서 스테이지 순서를
-# base(deps) → final 소스 COPY + frozen sync(프로젝트 설치, `torch-cpu`/`torch-cuda` 이전에 끝)
-# → `torch-cpu`(no-op) / `torch-cuda`(cu126 덮어쓰기, frozen sync 없음) → 모델 굽기·entrypoint
-# 순으로 재배치했다. `uv pip` 은 lock 을 안 보므로 이 덮어쓰기 이후로는 frozen sync 를 다시
-# 부르지 않는 한 그대로 남는다.
+# CUDA 판은 **의존성 설치가 끝난 뒤** torch 만 cu126 인덱스에서 덮어쓴다
+# (torchvision 은 이 이미지의 `ml` 그룹에 없다 — 아래 torch-cuda 스테이지 주석 참고).
+#
+# ⚠ **`uv sync --frozen` 은 이 파일에 한 번만 나온다** (base 스테이지). 그것이 규칙이다 —
+# `uv sync --frozen` 은 매번 venv 를 lock 상태로 되돌리므로, torch-cuda 의 cu126 덮어쓰기
+# **뒤에** 한 번이라도 부르면 CPU torch 로 도로 갈아치워 덮어쓴 게 없던 일이 된다
+# (1라운드 리뷰에서 실측). 옛 판은 프로젝트 설치 때문에 sync 가 둘이어서 그 순서를 손으로
+# 지켜야 했는데, 코드를 이미지에서 뺀 뒤로는 **부를 자리가 아예 없다.**
 #
 # 베이스는 `uv:1`(docker/uv/Dockerfile) 을 참조하지 않고 그 레시피를 그대로 인라인한다 —
 # Cloud Build 에는 로컬에서만 구운 `uv:1` 이미지가 없어 `FROM uv:1` 이 "pull access
@@ -42,24 +53,19 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     HF_HOME=/models \
     DAENGS_DATA_DIR=/data \
     DAENGS_WARM_UP_ENCODER=false
+# 런타임에 버킷에서 복사해 온 코드가 여기 선다 (entrypoint.sh). 이미지에는 비어 있다 —
+# 그래서 복사가 실패하면 `python -m` 이 ModuleNotFoundError 로 **크게** 죽는다.
+ENV PYTHONPATH=/app/src
 
-# 의존성만 먼저 — 소스가 바뀌어도 이 레이어는 캐시된다.
-# README.md 도 필요하다 — pyproject.toml 의 readme="README.md" 를 uv 가 빌드 메타데이터로 읽는다
-# (COPY 만 하고 실제 --no-install-project 라 내용은 안 쓰지만, 없으면 sync 가 실패한다).
+# 의존성만 굽는다. README.md 도 필요하다 — pyproject.toml 의 readme="README.md" 를 uv 가
+# 빌드 메타데이터로 읽는다 (`--no-install-project` 라 내용은 안 쓰지만 없으면 sync 가 실패한다).
 # pdf 그룹(PyMuPDF, AGPL)은 서빙 backend 이미지에는 안 들어가지만(RAG-032 ②) 이 이미지는 그 결정이 말하는
 # "오프라인 파이프라인" 그 자체라 들어간다. raw/ 의 PDF 소스가 이것 없이는 전부 FAIL 이다 (2026-09-08 실측).
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --no-install-project --group ml --group pipeline --group pdf
 
-# 프로젝트 자체(엔트리포인트 포함)를 여기서 설치한다 — **이게 이 이미지의 마지막 frozen sync 다.**
-# 이 뒤로는 어느 스테이지도 `uv sync --frozen` 을 다시 부르면 안 된다. 그러면 torch-cuda 의
-# cu126 덮어쓰기가 lock 의 CPU torch 로 되돌아간다(위 헤더 코멘트, 1라운드 리뷰 지적).
-COPY backend/src ./src
-COPY data/manifests/seed_sources.yaml /app/seed_sources.yaml
-RUN uv sync --frozen --group ml --group pipeline --group pdf
-
 FROM base AS torch-cpu
-# lock 그대로 (CPU torch) — frozen sync 를 다시 부르지 않는다.
+# lock 그대로 (CPU torch) — 할 일이 없다.
 
 FROM base AS torch-cuda
 # torch 2.13 의 CUDA 경로는 Triton 커널을 실행 시점에 컴파일한다 — C 컴파일러가 없으면
@@ -94,12 +100,18 @@ RUN set -eux; \
 # 빌드에서 CUDA 판인지 확인한다. 2026-09-08 실측 — 덮어쓰기가 조용히 건너뛰어져 GPU 잡이
 # CPU 로 돌았다. `torch.cuda.is_available()` 은 빌드 시점(Cloud Build 에 GPU 없음)엔 항상
 # False 라 못 쓴다 — `torch.version.cuda` 로 "CUDA 빌드인지"만 본다(실제 GPU 가용성과는 별개).
-RUN uv run --no-sync python -c "import torch, sys; v=torch.__version__; print('torch', v, 'cuda', torch.version.cuda); sys.exit(0 if torch.version.cuda else 1)"
+# ⚠ `uv run` 이 아니라 venv 의 python 을 **직접** 부른다 — 프로젝트를 설치하지 않으므로
+# `uv run` 에 프로젝트 해석을 맡길 이유가 없고, 맡기면 `--no-sync` 를 빼먹는 날 lock 으로
+# 되돌아가 이 덮어쓰기가 사라진다.
+RUN /opt/venv/bin/python -c "import torch, sys; print('torch', torch.__version__, 'cuda', torch.version.cuda); sys.exit(0 if torch.version.cuda else 1)"
 
 FROM torch-${TORCH} AS final
 # 가중치를 굽는다 — 잡이 뜰 때마다 1.2GB 를 받지 않게. 모델 키는 rag/core/config.py 기본값과 같다.
-# frozen sync 는 이 스테이지에서 다시 부르지 않는다 (torch-cuda 의 덮어쓰기를 지키기 위해).
-RUN uv run --no-sync python -c "from sentence_transformers import SentenceTransformer; \
+# ⚠ **이 문자열은 코드의 기본값과 손으로 맞춰 둔 것이다.** 코드가 이미지 밖으로 나가서
+# 여기서 import 해 확인할 수가 없다 (그전에도 `rag/core/config.py` 를 읽지는 않았다).
+# `EMBEDDING_MODEL_KEY` 를 바꾸면 이 줄도 같이 고쳐야 하고, 안 고치면 **잡이 뜰 때마다
+# 1.2GB 를 새로 받는다** — 느려질 뿐 결과는 맞아서 조용하다.
+RUN /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; \
     SentenceTransformer('Qwen/Qwen3-Embedding-0.6B', device='cpu')"
 
 COPY docker/pipeline/entrypoint.sh /entrypoint.sh

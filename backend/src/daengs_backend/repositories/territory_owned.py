@@ -12,7 +12,7 @@ from daengs_backend.models.territory_claim import (
 )
 
 
-async def page(db, owner, season_id, now, pet_id, after, limit):
+def current_sites(season_id, now, *, owner=None, pet_id=None):
     # Open periods identify the season; the current occupancy is the source of truth
     # for possession. Historical attempts and aggregate score counts are not a list.
     current = (
@@ -37,14 +37,23 @@ async def page(db, owner, season_id, now, pet_id, after, limit):
             ActivityHoldingPeriod.ended_ms.is_(None),
             ActivityHoldingPeriod.claim_id == TerritoryOccupancy.claim_id,
             ActivityHoldingPeriod.pet_id == Pet.id,
-            TerritoryClaimSession.app_user_id == owner,
-            Pet.app_user_id == owner,
             # Legacy pre-lease seasons can have null deadlines.
             (TerritoryOccupancy.expires_at.is_(None)) | (TerritoryOccupancy.expires_at > now),
         )
     )
+    if owner is not None:
+        # Preserve the member-owned API scope. Public dog views intentionally include
+        # claims made by a caregiver too; those still belong to the same game pet.
+        current = current.where(
+            Pet.app_user_id == owner, TerritoryClaimSession.app_user_id == owner
+        )
     if pet_id is not None:
         current = current.where(Pet.id == pet_id)
+    return current
+
+
+async def page(db, owner, season_id, now, pet_id, after, limit):
+    current = current_sites(season_id, now, owner=owner, pet_id=pet_id)
     total = await db.scalar(select(func.count()).select_from(current.subquery()))
     if after is not None:
         current = current.where(TerritoryClaimSite.site_id > after)

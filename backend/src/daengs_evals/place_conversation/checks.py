@@ -42,7 +42,16 @@ def assess(case, step, before, prepared, answer, *, accepting_pending=False):
             }
         )
 
-    for key in ("action", "goal", "execution", "code", "returned_count", "filters_changed"):
+    for key in (
+        "action",
+        "goal",
+        "execution",
+        "code",
+        "returned_count",
+        "filters_changed",
+        "browse",
+        "remaining",
+    ):
         if key in expected:
             check(key, getattr(receipt, key), expected[key])
     for key in ("spatial", "dogs", "name_query", "unknown_policy", "result_policy"):
@@ -88,9 +97,19 @@ def assess(case, step, before, prepared, answer, *, accepting_pending=False):
         check("pending.saved", after.pending_proposal is not None, True)
     hits = snapshot_hits(after.snapshot)
     refs = [h.place.key.ref for h in hits]
+    if "excluded_refs" in expected:
+        check(
+            "excluded_refs",
+            sorted(p.key.ref for p in after.exploration.excluded),
+            sorted(expected["excluded_refs"]),
+        )
+    if "new_count" in expected:
+        check("new_count", len(receipt.new_places), expected["new_count"])
     if "min_new_refs" in expected:
         previous_refs = {h.place.key.ref for h in snapshot_hits(before.snapshot)}
-        check("new_results.minimum", len(set(refs) - previous_refs) >= expected["min_new_refs"], True)
+        check(
+            "new_results.minimum", len(set(refs) - previous_refs) >= expected["min_new_refs"], True
+        )
     if "expected_refs" in expected:
         check("expected_refs", sorted(refs), sorted(expected["expected_refs"]))
         check("result_matches_filters", receipt.result_matches_filters, True)

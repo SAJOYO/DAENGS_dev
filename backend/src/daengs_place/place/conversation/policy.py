@@ -144,6 +144,13 @@ async def decide(planner, request, now):
             code="clarification_required",
             question=CLARIFICATIONS.get(intent.unresolved, CLARIFICATIONS["ambiguous"]),
         )
+    if (intent.browse != "current" or intent.place_edit) and (intent.unsupported or revise):
+        return Decision(
+            "clarify",
+            code="exploration_needs_supported_request",
+            question="장소 제외·다음 후보 요청과 확인 대기 조건을 한꺼번에 적용할 수 없어요. 먼저 적용할 요청을 알려주세요.",
+            intent=intent,
+        )
     plan = TurnPlan(
         goal=intent.goal, refresh=intent.refresh, reference_index=intent.reference_index
     )

@@ -47,19 +47,35 @@ docker compose exec -T pgvector psql -U <앱계정> -d vectordb -f - < db/migrat
 
 ## ⚠️ 표 일부는 `postgres` 소유다 — `must be owner of table` 의 정체 (2026-09-08, #329)
 
-🔴 **이 절은 2026-09-09 에 반박됐고 아직 못 가렸다.** 사람이 *"daengs 도 슈퍼유저이고 여태 그걸로 했다"*
-고 했다 (#384). 슈퍼유저면 소유권과 무관하게 `ALTER TABLE`·`CREATE INDEX` 가 되므로 아래 서술이
-통째로 낡은 것이 된다. 그날 서버 PC 가 꺼져 있어 확인을 못 했다 — **서버 앞에 서면 두 줄로 갈리고,**
-**맞는 쪽으로 이 절을 고쳐라.** 그때까지는 아래를 사실이 아니라 *2026-09-08 에 그렇게 보였다* 로 읽는다.
+✅ **2026-09-10 에 갈렸다 — 이 절이 맞다.** 2026-09-09 에 사람이 *"daengs 도 슈퍼유저이고 여태
+그걸로 했다"* 고 해서(#384) 한동안 🔴 로 매달려 있었는데, 그 말이 틀렸다.
+앞의 두 줄은 `RAG-084` ⑩ 이 확인했고, **세 번째 줄은 그것이 열어 둔 물음의 답이다** —
+⑩ 은 *"개발 PC `.env` 의 `POSTGRES_USER` 가 `postgres` 라 `db-migrate.yml` 은 그 계정으로 붙는다
+(서버 `.env` 확인 필요)"* 로 끝났는데, #427 이 워크플로를 실제로 돌려서 **아니라는 것**을 봤다.
+
+| 확인한 것 | 실측 (2026-09-10, 집 서버 `vectordb`) |
+| --- | --- |
+| `daengs` 가 슈퍼유저인가 | **아니다** — `usesuper = false`. `t` 인 것은 `postgres` 뿐이다 (`dog_rag` 도 f) |
+| `documents`·`crawl_runs` 소유자 | 둘 다 **`postgres`** — 아래 「지금 상태」 표가 맞다 |
+| **서버 `.env` 의 `POSTGRES_USER`** | **`daengs`** (#427) — 그래서 `db-migrate.yml` 이 `documents` 에 `ERROR: must be owner of table documents` 로 실패한다 (run `34457746365`) |
+
+⚠️ **GCP 는 반대다.** 그 VM 의 `daengs` 는 **슈퍼유저**이고(`usesuper = t`, 2026-09-10 SSH 실측)
+`docs/deploy/runbook.md` §3 도 *"이 VM 의 수퍼유저는 `postgres` 가 아니다"* 라고 적어 뒀다.
+**같은 이름의 계정이 두 DB 에서 권한이 다르다** — 한쪽에서 됐다고 다른 쪽을 넘겨짚지 마라.
 
 ```sql
 SELECT usesuper FROM pg_user WHERE usename = current_user;
 SELECT pg_get_userbyid(relowner) FROM pg_class WHERE relname IN ('documents','crawl_runs');
 ```
 
-`db-migrate.yml` 은 `-U $POSTGRES_USER` 로 붙는데 그 계정은 **`daengs`** 이고 슈퍼유저가
-아니다. 그런데 서버 DB 의 표 일부는 **`postgres`** 소유다 — `db/init/` 이 볼륨을 처음 만들 때
-그 계정으로 돌았기 때문이다. 나머지는 나중에 `daengs` 가 만들어서 갈렸다.
+`db-migrate.yml` 은 `-U $POSTGRES_USER` 로 붙는데 **서버 compose 의 그 값이 `daengs`** 이고
+슈퍼유저가 아니다. 그런데 서버 DB 의 표 일부는 **`postgres`** 소유다 — `db/init/` 이 볼륨을
+처음 만들 때 그 계정으로 돌았기 때문이다. 나머지는 나중에 `daengs` 가 만들어서 갈렸다.
+
+⚠️ **개발 PC 루트 `.env` 의 `POSTGRES_USER` 는 `postgres` 라서 이 값과 다르다.** 그것을 보고
+*"워크플로도 postgres 로 붙겠지"* 라고 읽으면 위 오류를 만난다 (2026-09-10 에 실제로 그렇게
+읽었다). 워크플로가 보는 것은 **서버의** `.env` 이고, 개발 PC 의 것은 서버 컨테이너에 아무
+영향이 없다.
 
 `ALTER TABLE` 은 소유자만 할 수 있으므로 **그 표를 건드리는 마이그레이션은 워크플로로
 적용되지 않는다.**
@@ -80,13 +96,27 @@ CONTEXT:  SQL statement "ALTER TABLE <표> DROP CONSTRAINT ..."
 | **`postgres`** | **`documents` · `crawl_runs`** — 아직 남아 있다 |
 
 **이 둘을 건드릴 일이 생기면 먼저 옮겨야 한다.** 지금 옮겨 두지 않은 것은 각각 Life RAG ·
-크롤러 쪽 표라 그 카드에서 판단할 몫이기 때문이다.
+크롤러 쪽 표라 그 카드에서 판단할 몫이기 때문이다. **#427 도 옮기지 않고 지나갔다** — 아래
+「소유자 계정으로 직접」이 있어서 그 카드에는 필요가 없었고, 소유권을 옮기는 것은 권한 모델을
+바꾸는 일이라 그 자체로 사람이 정할 몫이다.
+
+### 옮기지 않고 적용하는 법 — **개발 PC 에서 LAN 으로** (2026-09-10 · #427)
+
+`postgres` 의 자격이 **개발 PC 루트 `.env` 의 `POSTGRES_USER`·`POSTGRES_PASSWORD` 에 있다.**
+DB 포트가 일부러 LAN 에 열려 있으므로(CLAUDE.md) **서버 PC 앞에 가지 않고** 적용할 수 있다 —
+`documents` 의 HNSW 인덱스(#427)를 그렇게 적용했다.
+
+이 저장소에는 `psql` 이 없어도 된다. `backend` 의 psycopg 로 붙으면 되고, **파라미터를 안 넘기면
+psycopg3 이 simple query protocol 을 쓰므로 파일 하나에 여러 문장이 있어도 그대로 보낸다** —
+`verify_*.sql` 의 `DO` 블록 + `SELECT` 가 그 모양이다.
+
+⚠️ `DO` 블록 뒤의 `SELECT` 를 읽으려면 **`cur.nextset()` 으로 결과를 넘겨야 한다.** 커서는
+첫 결과(`DO`, 레코드 없음)를 보고 있어서 바로 `fetchall()` 하면
+`the last operation didn't produce records (command status: DO)` 가 난다.
 
 ### 옮기는 법 — 서버 PC 에서
 
-`postgres` 로 붙어야 하는데 그 계정의 비밀번호는 아무도 안 갖고 있을 수 있다(볼륨 최초 생성
-때의 계정). **컨테이너 안에서는 비밀번호 없이 붙는다** — 공식 이미지가 로컬 소켓을 `trust`
-로 두기 때문이다.
+**컨테이너 안에서는 비밀번호 없이 붙는다** — 공식 이미지가 로컬 소켓을 `trust` 로 두기 때문이다.
 
 ```powershell
 docker exec -i pgvector psql -U postgres -d vectordb -c "ALTER TABLE <표> OWNER TO daengs;"

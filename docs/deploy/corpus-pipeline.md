@@ -89,7 +89,15 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 위치를 옮길지는 구현 때.
 
 **이미지** `docker/pipeline/Dockerfile` 하나, 빌드 인자로 CPU/CUDA. 공통은
-`uv sync --frozen --group ml --group pipeline --group pdf` 와 가중치 다운로드(`HF_HOME=/models`, 빌드 때).
+`uv sync --frozen --no-install-project --group ml --group pipeline --group pdf` 와
+가중치 다운로드(`HF_HOME=/models`, 빌드 때).
+
+🔴 **2026-09-10 (#427)부터 이미지에 우리 코드가 없다.** `--no-install-project` 로 **의존성과 가중치만**
+굽고, `daengs_life` 는 버킷(`gs://daengs-corpus/code/`, 잡에 `/data` 로 마운트)에서 런타임에 온다 —
+entrypoint 가 `/app/src` 로 복사하고 `PYTHONPATH` 로 잡아 `python -m daengs_life.jobs.corpus_refresh`
+로 부른다. 그전에는 태그가 `backend/src` 전체의 해시라 **14MB 짜리 코드 한 줄에 11GB 를 다시
+구웠다.** 이제 코드 배포는 rsync 몇 초이고 이미지는 **의존성이 바뀔 때만** 굽는다 (RAG-086 ②).
+덤으로 `uv sync --frozen` 이 파일에 **한 번만** 남아, 아래 cu126 덮어쓰기를 되돌릴 자리가 없어졌다.
 `pdf`(PyMuPDF)가 들어가는 것은 AGPL 격리(RAG-032 ②)가 말하는 **오프라인 파이프라인이 이 잡이기
 때문**이다 — 서빙 이미지에는 계속 안 넣는다. CUDA 변형은 lock 이 리눅스에서 CPU torch 를
 고정하므로 sync 뒤 **torch 만** cu126 인덱스로 덮어쓴다 (torchvision 은 `ml` 이 아니라 `gait` 그룹
@@ -128,7 +136,8 @@ due 판정 그대로). **끝나지 않은 실행이 있으면**(pending 포함) 
 | 리소스 | 이름 | 비고 |
 | --- | --- | --- |
 | Cloud Storage | `daengs-corpus` | 서울 단일 리전. **버전 관리 켬** (잘못된 적재를 되돌리는 유일한 길) |
-| Artifact Registry | `daengs` | `pipeline:cpu-<hash>` · `pipeline:cuda-<hash>`. **`<hash>` 는 git 커밋이 아니라 이미지 입력의 내용 해시**다 — `backend/pyproject.toml`·`uv.lock`·`README.md`·`backend/src`·`data/manifests/seed_sources.yaml`·`docker/pipeline`. 태그가 이미 있으면 빌드를 건너뛰므로, 문서만 바뀐 커밋에서 스크립트를 다시 돌려도 **약 80초**에 끝난다 |
+| Artifact Registry | `daengs` | `pipeline:cpu-<hash>` · `pipeline:cuda-<hash>`. **`<hash>` 는 git 커밋이 아니라 이미지 입력의 내용 해시**다 — `backend/pyproject.toml`·`uv.lock`·`README.md`·`docker/pipeline`. **`backend/src` 와 시드는 2026-09-10(#427)부터 입력이 아니다** — 코드만 고친 배포에서는 빌드가 아예 안 돈다. 태그가 이미 있으면 건너뛰므로 다시 돌려도 **약 80초** |
+| Cloud Storage (코드) | `daengs-corpus` | `code/daengs_life/` · `code/seed_sources.yaml` · `code/VERSION`. **잡이 도는 코드가 여기 있다** (#427). `pipeline.sh` 가 rsync 하고 entrypoint 가 `/app/src` 로 복사한다. 코퍼스와 같은 버킷이지만 **`code/` prefix 안에만** 쓴다 |
 | Cloud Run Job | `corpus-refresh` | 서울(`asia-northeast3`), 4vCPU/16Gi, 타임아웃 3h, **재시도 0** (가드가 막은 것은 사람이 봐야 한다). Direct VPC 이그레스 · 버킷 볼륨 `daengs-corpus` 를 `/data` 로 |
 | Cloud Run Job | `corpus-embed-full` | **asia-southeast1(싱가포르)** — 잡의 L4 지원 리전에 서울·도쿄가 없다. L4 1장 · 8vCPU/32Gi · 인자 `--stages embed --full`. **타임아웃 1h — 이건 GPU 잡의 상한이지 선택이 아니다** (3h 로 만들면 생성이 거부된다). 서울 버킷을 리전 간 마운트(200MB, 비용 무시) |
 | Cloud Scheduler | `corpus-refresh-daily` | `0 4 * * *` Asia/Seoul → `corpus-refresh`. 밀리지 않는다(관리형 cron). 콜드 스타트 1~2분은 상관없음. **첫 자동 실행 2026-09-09 04:00 KST 확인** |

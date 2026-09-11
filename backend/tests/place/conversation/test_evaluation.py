@@ -320,3 +320,45 @@ async def test_new_independent_request_is_not_graded_as_accepting_cancelled_prop
     assert records[1]["status"] == "review_required"
     assert records[1]["prepared"]["state"]["pending_proposal"] is None
     assert not any(c["criterion"] == "accepted.saved_candidate" for c in records[1]["checks"])
+
+
+@pytest.mark.parametrize("next_mode", ["next", "current"])
+async def test_exploration_evaluator_follows_state_and_detects_repeated_first_page(next_mode):
+    case = read_cases(DATA / "exploration.v1.jsonl")[0]
+    fixtures = json.loads((DATA / "fixtures.policy.v1.json").read_text(encoding="utf-8"))
+    plans = iter(
+        [
+            {"goal": "show", "browse": next_mode, "refresh": next_mode == "current"},
+            {"goal": "show", "browse": next_mode, "refresh": next_mode == "current"},
+            {"goal": "show", "changes": {"parking": "required_true"}},
+        ]
+    )
+
+    def respond(request):
+        payload = json.loads(request.content)
+        assert "expected_refs" not in payload["input"]
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "steps": [
+                    {
+                        "type": "function_call",
+                        "name": "propose_facility_turn",
+                        "arguments": next(plans),
+                    }
+                ],
+            },
+        )
+
+    model = ObservedGemini("synthetic-key", "fake", transport=httpx.MockTransport(respond))
+    rows = [r async for r in run_case(case, fixtures, model, 1)]
+    assert rows[1]["before"] == rows[0]["prepared"]["state"]
+    assert rows[2]["before"] == rows[1]["prepared"]["state"]
+    assert rows[2]["returned_refs"] == ["cafe-26"]
+    if next_mode == "next":
+        assert all(r["status"] == "review_required" for r in rows)
+        assert rows[0]["prepared"]["receipt"]["new_places"]
+        assert rows[1]["returned_refs"] == []
+    else:
+        assert rows[0]["status"] == rows[1]["status"] == "fail"

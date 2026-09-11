@@ -2,6 +2,8 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
+| [walk/diary-publication.md](walk/diary-publication.md) | 종료 후 남은 시간 예산·영속 기본 보드·단일 확정과 중단 복구 |
 | [walk/diary-base-board.md](walk/diary-base-board.md) | AI 없이 완성하는 내부 기본 보드 — 사용자 기록·관측·동선 지점·시작/종료와 기존 v1 보존 |
 | [walk/diary-generation.md](walk/diary-generation.md) | 스탬프의 LLM 배경·제목 작성과 기존 생성 예약·완료, 명시적 일기 HTTP 형식 |
 | [walk/diary-observations.md](walk/diary-observations.md) | 확정 동선의 체류·상대 속도 후보 공급, 실제 GPS 앵커와 기록 중심 스탬프 연결 |
@@ -18,7 +20,9 @@
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |
+| [territory/bookmarks-api.md](territory/bookmarks-api.md) | 회원별 점령지 북마크 저장·해제·목록, 20개 한도·중립 장소·탈퇴 정리 |
 | [territory/my-sites-api.md](territory/my-sites-api.md) | 회원 전체·강아지별 현재 점령지 목록, 좌표·페이지 조회와 Place ID 조회 |
+| [territory/public-game-api.md](territory/public-game-api.md) | 현재 시즌 강아지 순위·공개 게임 프로필·현재 점령지·프로필 사진 조회 |
 | [territory/first-season-rewards.md](territory/first-season-rewards.md) | 첫 시즌 회원별 기본 원장·탈취 보너스·시간 정산, DEV 연결과 적용 순서 |
 | [territory/ownership-expiry.md](territory/ownership-expiry.md) | 영역 72시간 만료·현장 연장·정확한 보유 정산, 앱 API와 마이그레이션 |
 | [territory/monthly-seasons.md](territory/monthly-seasons.md) | 명시적 첫 월간 시즌 시작·자동 결산·최종 순위·다음 시즌과 장애 복구 |
@@ -84,6 +88,7 @@
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
 | [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
+| [place/conversation-exploration.md](place/conversation-exploration.md) | 다음 후보·명시적 제외의 세션 상태, SQL·캐시 경계와 연속 평가 |
 | [place/conversation-evaluation.md](place/conversation-evaluation.md) | 시설 검색 LLM 정상·엣지·경합 시나리오, 판정 원칙과 반복 검증 |
 | [place/conversation-corrections-2026-09-10.md](place/conversation-corrections-2026-09-10.md) | 시설 대화 교정·사용자 불만 뒤 재탐색 실험과 구조 연구 |
 | [place/conversation-context-ablation-2026-09-10.md](place/conversation-context-ablation-2026-09-10.md) | 동일 요청에 화면·직전 행동 단서만 추가한 A/B 출력 평가 |

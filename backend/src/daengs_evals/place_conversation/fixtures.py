@@ -68,7 +68,7 @@ class FixtureSearcher:
             )
         self.rows.sort(key=lambda row: (row.distance_m, row.key.source, row.key.ref))
 
-    async def __call__(self, db, state):
+    async def __call__(self, db, state, *, omitted=()):
         assert db is None, "the evaluation must not receive a real database"
         self.calls.append(state)
         groups = []
@@ -76,7 +76,8 @@ class FixtureSearcher:
             matched, uncertain = [], []
             for row in self.rows:
                 if (
-                    row.match.kind != kind
+                    row.key in omitted
+                    or row.match.kind != kind
                     or row.distance_m > state.spatial.radius_m
                     or state.name_query.casefold() not in row.name.casefold()
                 ):

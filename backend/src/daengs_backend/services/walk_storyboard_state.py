@@ -26,14 +26,18 @@ def reusable(row, revision, refresh, now, lease_seconds=LEASE_SECONDS):
     )
 
 
-def reserve(session, walk_id, row, revision, now):
+def reserve(session, walk_id, row, revision, now, *, bundle_format=None, pending_bundle=None):
     generation = (row.generation if row else 0) + 1
     if row is None:
         row = WalkStoryboard(walk_id=walk_id)
         session.add(row)
     row.generation, row.input_revision = generation, revision
     row.status, row.updated_at, row.error_code = "running", now, None
-    row.bundle = None
+    row.bundle = pending_bundle or (
+        {"format": "walk-diary-reservation-v1", "bundle_format": bundle_format}
+        if bundle_format
+        else None
+    )
     return generation
 
 

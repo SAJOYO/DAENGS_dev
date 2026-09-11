@@ -321,6 +321,7 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
         LifeCapabilityAdapter,
         PlaceCapabilityAdapter,
         TrainingCapabilityAdapter,
+        VetContactCapabilityAdapter,
         WalkCapabilityAdapter,
     )
     from daengs_backend.orchestration.contracts import CapabilityName
@@ -333,6 +334,10 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
             CapabilityName.WALK: WalkCapabilityAdapter(),
             CapabilityName.PLACE: PlaceCapabilityAdapter(),
             CapabilityName.GENERAL: _general_recording_adapter(general_sink),
+            # 응급 컨트롤 케이스(cq_emergency_immediate_01)가 실측으로 잡은 구멍 (#446).
+            # 결정론적 게이트로만 들어오고 모델을 안 태우므로 real 모드에서도 recording
+            # 래퍼가 필요 없다 — 진짜 어댑터를 그대로 문다.
+            CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
         }
     if mode == "fake":
         return _fake_adapters()

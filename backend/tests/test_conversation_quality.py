@@ -406,6 +406,25 @@ def test_answered_by_fake_adapter_recognises_fake_driver_regardless_of_capabilit
     assert _answered_by_fake_adapter("fake-driver", "training") is True
 
 
+def test_real_mode_has_an_adapter_for_every_capability():
+    """`cq_emergency_immediate_01` 이 실측으로 잡은 결함 (#446) 의 재발 방지.
+
+    `after_416` 랩에서 라우터가 `vet_contact` 로 보낸 응급 케이스가 `build_adapters`
+    의 `real` 딕셔너리에 없어 "지원하지 않는 기능입니다" 로 죽었다 — 그 케이스는 두
+    컨트롤 중 하나라(과잉교정을 잡는 유일한 자리), 라이브 랩이 우연히 그 경로를 타기
+    전까지는 아무도 몰랐다. 다음에 능력이 하나 더 늘 때 같은 구멍이 조용히 다시
+    생기지 않도록, 여기서 `CapabilityName` 전수를 직접 대조한다.
+    """
+    from daengs_backend.orchestration.contracts import CapabilityName
+    from daengs_evals.conversation_quality.collect import build_adapters
+
+    adapters = build_adapters("real", general_sink={})
+
+    assert adapters is not None
+    missing = [name for name in CapabilityName if name not in adapters]
+    assert not missing, f"real 모드에 어댑터가 없는 능력: {missing}"
+
+
 def test_route_plan_dump_drops_the_dog_profile_payload():
     import json
 

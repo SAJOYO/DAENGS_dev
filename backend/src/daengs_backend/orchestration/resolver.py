@@ -299,6 +299,11 @@ def validate_resolved_turn(
     except (ValidationError, ValueError, TypeError):
         return None
 
+    if decision.relation is TurnRelation.NEW and decision.referenced_index is not None:
+        # NEW 인데 후보를 지목하는 것은 모순된 출력이다 — 조용히 인덱스를 버리지 않고
+        # 통째로 신뢰하지 않는다(R9).
+        return None
+
     referenced: PriorTurn | None = None
     if decision.referenced_index is not None:
         index = decision.referenced_index
@@ -306,19 +311,22 @@ def validate_resolved_turn(
             return None
         referenced = candidates[index - 1]
 
-    anchored_to_pending = pending is not None and referenced is None
+    # 대기 중인 되묻기에 실제로 묶이는지 — relation 검사까지 한 번에 넣어 두 필드가
+    # 서로 다른 조건으로 갈라지지 않게 한다(R8). `relation == NEW` 이면 이 turn 은
+    # 새 turn 으로 읽혀야 하므로 pending 관련 필드는 전부 비운다.
+    anchored_to_pending = (
+        pending is not None
+        and referenced is None
+        and decision.relation is not TurnRelation.NEW
+    )
     return ResolvedTurn(
         relation=decision.relation,
         current_query=query,
         referenced_turn_id=referenced.turn_id if referenced else None,
-        pending_clarification_id=(
-            pending.turn_id
-            if anchored_to_pending and decision.relation is not TurnRelation.NEW
-            else None
-        ),
+        pending_clarification_id=pending.turn_id if anchored_to_pending else None,
         referenced_original_request=referenced.user if referenced else None,
         pending_missing_axes=(
-            list(pending.missing_axes) if anchored_to_pending and pending else []
+            list(pending.missing_axes) if anchored_to_pending else []
         ),
         standalone_query=decision.standalone_query,
         resolution_confidence=decision.resolution_confidence,

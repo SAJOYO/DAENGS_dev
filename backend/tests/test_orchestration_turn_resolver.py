@@ -207,9 +207,12 @@ def test_pending_clarification_block_carries_axes_as_asked_not_observed() -> Non
     )
     prompt = build_turn_resolver_prompt(query="밥은 먹는데 계속 누워 있어", candidates=(), pending=pending)
     assert "PENDING_CLARIFICATION:" in prompt
-    assert "APPETITE" in prompt
-    # 물은 항목이지 관찰된 사실이 아니라는 것을 프롬프트가 직접 말한다.
-    assert "asked" in prompt
+    marker = prompt.index("PENDING_CLARIFICATION:")
+    block = prompt[marker:]
+    assert "APPETITE" in block
+    # 물은 항목이지 관찰된 사실이 아니라는 것을 렌더된 블록 자체가 키 이름으로 말한다
+    # (R10 — `_POLICY` 에도 "asked" 가 나오므로 블록 밖에서 찾으면 항상 통과해 버린다).
+    assert "asked_axes" in block
 
 
 def test_model_may_not_reference_a_turn_outside_the_candidates() -> None:
@@ -244,3 +247,61 @@ def test_referenced_index_becomes_the_real_turn_id() -> None:
 
 def test_malformed_output_is_rejected_without_surfacing_it() -> None:
     assert validate_resolved_turn("not json", query="아무 말", candidates=(), pending=None) is None
+
+
+def test_new_relation_with_a_referenced_index_is_rejected() -> None:
+    """Finding 2 / R9 — NEW 인데 후보를 같이 지목하는 것은 모순된 출력이다.
+
+    인덱스를 조용히 버리지 않고 결과 자체를 신뢰하지 않는다 — 범위 밖 인덱스를
+    거부하는 것과 같은 취급이다.
+    """
+    turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    raw = {
+        "relation": "NEW",
+        "referenced_index": 1,
+        "standalone_query": None,
+        "resolution_confidence": 0.9,
+    }
+    assert validate_resolved_turn(raw, query="산책 코스 추천해줘", candidates=turns, pending=None) is None
+
+
+def test_new_relation_does_not_leak_pending_axes() -> None:
+    """Finding 1 / R8 회귀 — 지목 없는 NEW 는 대기 중인 되묻기의 축을 전혀 들고 있으면
+    안 된다. 예전 코드는 `pending_missing_axes` 만 `anchored_to_pending` 에 걸려 있어서
+    이 경우 `referenced_turn_id`·`pending_clarification_id` 는 비었는데 축만 새 나갔다.
+    """
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE],
+    )
+    raw = {
+        "relation": "NEW",
+        "referenced_index": None,
+        "standalone_query": None,
+        "resolution_confidence": 0.9,
+    }
+    resolved = validate_resolved_turn(raw, query="산책 코스 추천해줘", candidates=(), pending=pending)
+    assert resolved is not None
+    assert resolved.referenced_turn_id is None
+    assert resolved.pending_clarification_id is None
+    assert resolved.pending_missing_axes == []
+
+
+def test_current_query_is_last_with_both_candidates_and_pending() -> None:
+    """R11 — 후보 블록과 대기 되묻기 블록이 둘 다 있어도 CURRENT_QUERY 는 여전히 맨 뒤다."""
+    turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE],
+    )
+    prompt = build_turn_resolver_prompt(
+        query="밥은 먹는데 계속 누워 있어", candidates=turns, pending=pending
+    )
+    candidate_index = prompt.index("CANDIDATE_TURNS:")
+    pending_index = prompt.index("PENDING_CLARIFICATION:")
+    query_index = prompt.index("CURRENT_QUERY:")
+    assert candidate_index < query_index
+    assert pending_index < query_index
+    assert prompt.rstrip().endswith("CURRENT_QUERY: 밥은 먹는데 계속 누워 있어")

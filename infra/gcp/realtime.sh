@@ -14,7 +14,6 @@ REGION=asia-northeast3
 SERVICE=daengs-realtime
 SA_EMAIL="corpus-pipeline@${PROJECT}.iam.gserviceaccount.com"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/daengs/realtime"
-VM_INTERNAL_IP="${VM_INTERNAL_IP:-10.178.0.2}"
 
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"
 
@@ -34,8 +33,34 @@ for s in realtime-redis-url realtime-kakao-key realtime-kma-hub-key; do
     --member="serviceAccount:${SA_EMAIL}" --role=roles/secretmanager.secretAccessor >/dev/null
 done
 # DATA_GO_KR_KEY 는 코퍼스 파이프라인이 이미 만든 시크릿을 그대로 재사용한다 — 새로 안 만든다.
+# 이 바인딩은 `pipeline.sh` 가 이미 걸어 뒀다면 no-op 이지만, **이 스크립트만 단독으로 돈
+# 환경**(예: realtime 서비스를 파이프라인보다 먼저 배포하는 경우)에서는 실제로 필요하다 —
+# corpus-pipeline SA 가 이 시크릿을 읽을 권한을 아직 안 가졌을 수 있어서, 여기서도 건다.
 gcloud secrets add-iam-policy-binding corpus-data-go-kr-key \
   --member="serviceAccount:${SA_EMAIL}" --role=roles/secretmanager.secretAccessor >/dev/null
+
+# ⚠ **여기서 배포로 바로 넘어가지 않는다.** README 의 "값 없이 배포해도 배포 자체는 성공한다"는
+# Cloud Run **잡** 이야기다(Secret 참조가 실행 시점에 읽힌다). 이 스크립트가 배포하는 것은
+# **서비스**라 리비전이 트래픽을 받으려면 시크릿이 그 자리에서 해석돼야 한다 — 값이 없으면
+# 리비전이 아예 못 뜬다. 그래서 배포 전에 버전이 하나라도 있는지 확인한다.
+echo "== 시크릿 값 확인 (서비스는 잡과 달라서 값 없이 배포하면 리비전이 못 뜬다)"
+MISSING=""
+for s in realtime-redis-url realtime-kakao-key realtime-kma-hub-key; do
+  if [ -z "$(gcloud secrets versions list "$s" --limit=1 --format='value(name)')" ]; then
+    MISSING="${MISSING} ${s}"
+  fi
+done
+if [ -n "${MISSING}" ]; then
+  echo
+  echo "아직 값이 없는 시크릿:${MISSING}"
+  echo "값을 넣어라 (셸 히스토리에 안 남게 printf | --data-file=- 로):"
+  for s in ${MISSING}; do
+    echo "  printf %s '<값>' | gcloud secrets versions add ${s} --data-file=-"
+  done
+  echo
+  echo "값을 다 넣은 뒤 이 스크립트를 다시 돌려라 — 아직 배포는 안 갔다(오류 아님, exit 0)."
+  exit 0
+fi
 
 echo "== 이미지 (Cloud Build)"
 if gcloud artifacts docker images describe "${IMAGE_BASE}:${SHA}" >/dev/null 2>&1; then

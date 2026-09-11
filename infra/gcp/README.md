@@ -183,6 +183,55 @@ DAENGS_CORPUS_JOB=corpus-refresh
 `GEMINI_API_KEY` 를 올려야 한다(CLAUDE.md) — 빈 셸에서 `up -d` 를 치면 빈 키가 박혀 의미
 라우터가 죽는다.
 
+## `realtime.sh` — 실시간 산책·날씨 서비스 (D-068)
+
+코퍼스 파이프라인과 별도 스크립트다. `daengs-realtime` Cloud Run **서비스**(잡이 아니다 —
+`min-instances=0` 이라도 리비전은 상시 존재하고, 리비전이 뜨려면 시크릿이 그 자리에서
+해석돼야 한다)를 배포한다. 코드는 `docker/realtime/`, 설계는 `docs/deploy/realtime-cloudrun.md`
+(있다면) 를 본다.
+
+1. **사람** — 시크릿 셋에 값을 넣는다. `realtime.sh` 가 시크릿 자체(빈 값)는 만들지만 값은
+   안 넣는다 — 히스토리에 안 남게 `printf | --data-file=-` 로:
+   ```bash
+   ssh -i ~/.ssh/google_compute_engine daengs@34.64.233.102 \
+     "grep '^REDIS_PASSWORD=' /srv/daengs/.env | cut -d= -f2-"
+   printf %s 'redis://:<위 암호>@10.178.0.2:6379/0' | gcloud secrets versions add realtime-redis-url --data-file=-
+   printf %s '<KAKAO_REST_KEY>' | gcloud secrets versions add realtime-kakao-key --data-file=-
+   printf %s '<KMA_HUB_KEY>'    | gcloud secrets versions add realtime-kma-hub-key --data-file=-
+   ```
+   `KAKAO_REST_KEY`·`KMA_HUB_KEY` 는 VM(또는 개발 PC) 의 `backend/.env` 에 이미 있는 것과 같다.
+   `DATA_GO_KR_KEY` 는 새로 안 만든다 — 코퍼스 파이프라인의 `corpus-data-go-kr-key` 를
+   그대로 재사용한다.
+2. **사람** — 배포:
+   ```bash
+   PROJECT=daengs bash infra/gcp/realtime.sh
+   ```
+   값을 아직 안 넣은 시크릿이 있으면 스크립트가 배포로 안 넘어가고 안내만 찍은 뒤 `exit 0`
+   한다(오류 아님) — 위 1번을 채우고 다시 돌리면 된다. `docker/realtime/` 를 고쳤으면
+   `.gcloudignore` 에도 그 경로가 열려 있는지 먼저 확인한다(`gcloud meta list-files-for-upload`).
+3. **검증**:
+   ```powershell
+   $T = gcloud auth print-identity-token
+   $U = gcloud run services describe daengs-realtime --region=asia-northeast3 --format="value(status.url)"
+   curl.exe -s -o NUL -w "no-auth=%{http_code}`n" "$U/healthz"                       # 403 이어야 함
+   curl.exe -s -H "Authorization: Bearer $T" -o NUL -w "healthz=%{http_code}`n" "$U/healthz"   # 200
+   ```
+4. **VM 의 backend 를 갈림길 반대편으로 넘긴다** — 위 URL 을 VM 의 `backend/.env` 에
+   `DAENGS_REALTIME_URL=…` 로 넣는다. ⚠ **그것만으로는 안 켜진다.** compose 는 `backend/.env`
+   를 컨테이너에 마운트하지 않고 `env_file` 로 넣는데, 그 값은 **컨테이너를 만들 때** 굳는다.
+   runbook §6 의 배포(`git merge --ff-only`)는 `fastapi dev` 의 reload 라 컨테이너를 다시
+   만들지 않으므로 그 경로로는 절대 반영되지 않는다. 켜려면 VM 에서 아래를 **일부러** 돌려야
+   한다(셸에 `GEMINI_API_KEY` 를 먼저 올릴 것 — 안 올리면 빈 키가 박혀 의미 라우터가 죽는다.
+   CLAUDE.md 실측):
+   ```bash
+   export GEMINI_API_KEY=...
+   docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d backend
+   ```
+5. **지울 때** — `PROJECT=daengs bash infra/gcp/realtime-teardown.sh`. 서비스·시크릿 셋(3개)·
+   realtime 이미지 태그를 지운다. Artifact Registry 저장소(`daengs`)와 서비스 계정
+   (`corpus-pipeline@...`)은 코퍼스 파이프라인과 공유하므로 지우지 않는다 — 정말 지우려면
+   `pipeline-teardown.sh` 를 보고 사람이 판단한다.
+
 ## 자주 걸리는 것
 
 - **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가

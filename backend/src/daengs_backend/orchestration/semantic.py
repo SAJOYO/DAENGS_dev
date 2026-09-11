@@ -91,6 +91,7 @@ from langsmith import traceable
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from daengs_backend.config import settings
+from daengs_backend.orchestration.contracts import ConversationContext
 
 PROMPT_VERSION = "semantic-router-ko-v10"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
@@ -244,7 +245,13 @@ def routing_metadata(context: dict[str, Any]) -> dict[str, str]:
     return metadata
 
 
-def build_semantic_router_prompt(*, query: str, context: dict[str, Any]) -> str:
+def build_semantic_router_prompt(
+    *, query: str, context: dict[str, Any], resolved: ConversationContext | None = None
+) -> str:
+    """`resolved` 는 받기만 한다 (#416 Task 5). 아직 프롬프트에 안 실리고 `PROMPT_VERSION`
+    도 안 올린다 — 렌더링은 뒤따르는 카드의 몫이다. 지금 이 자리는 시그니처만 먼저 열어서
+    `_payload_for` 가 만드는 `resolved` 값이 여기까지 끊기지 않고 내려오게 하는 것뿐이다.
+    """
     if not query.strip():
         raise ValueError("query must not be blank")
     metadata = routing_metadata(context)
@@ -369,8 +376,15 @@ class GeminiSemanticRouter:
     def __init__(self, generate: Callable[[str], Awaitable[object]] | None = None) -> None:
         self._generate = generate or _generate_with_gemini
 
-    async def select(self, *, query: str, context: dict[str, Any]) -> SemanticRoutingDecision:
-        prompt = build_semantic_router_prompt(query=query, context=context)
+    async def select(
+        self,
+        *,
+        query: str,
+        context: dict[str, Any],
+        resolved: ConversationContext | None = None,
+    ) -> SemanticRoutingDecision:
+        """`resolved` 는 받아서 프롬프트 빌더로만 넘긴다 — 렌더링은 아직 없다 (#416 Task 5)."""
+        prompt = build_semantic_router_prompt(query=query, context=context, resolved=resolved)
         for _attempt in range(2):  # O-14: retry exactly once, only on schema failure
             try:
                 raw = await _traced_generate(self._generate, prompt)

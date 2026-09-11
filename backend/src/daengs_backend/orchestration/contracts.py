@@ -298,6 +298,10 @@ class GeneralPayload(ContractModel):
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
     vet_spend: VetSpendContext | None = None
+    #: 대화 맥락 (#416). **이력 원문이 아니다** — Turn Resolver(`orchestration/resolver.py`)가
+    #: 만든 제한된 구조화 컨텍스트다. `relation=NEW` 이거나 확신이 낮으면 `None` 이고,
+    #: 그것이 프롬프트를 오늘과 바이트 동일하게 유지하는 방법이다(#416 Task 5).
+    conversation: ConversationContext | None = None
 
 
 class VetContactPayload(ContractModel):

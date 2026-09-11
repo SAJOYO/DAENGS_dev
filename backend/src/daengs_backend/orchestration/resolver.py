@@ -47,6 +47,7 @@ __all__ = [
     "TurnResolutionError",
     "build_candidate_block",
     "build_turn_resolver_prompt",
+    "conversation_context_of",
     "fit_candidates",
     "needs_resolution",
     "new_turn",
@@ -164,6 +165,26 @@ def needs_resolution(
     if not candidates:
         return False
     return _CONTEXT_MARKERS.search(query) is not None
+
+
+def conversation_context_of(resolved: ResolvedTurn | None) -> ConversationContext | None:
+    """`ResolvedTurn` → `ConversationContext` (#416 Task 5). 두 소비자가 같은 변환을 쓴다 —
+    `planner._payload_for` 가 `GeneralPayload.conversation` 을 채울 때, 그리고
+    `service._plan_and_execute` 가 시맨틱 라우터의 (아직 미사용인) `resolved` 인자에
+    넘길 때. 변환이 여기 하나면 둘이 서로 다른 모양을 만들 수 없다.
+
+    `pending_question` 은 늘 `None` 이다 — `ResolvedTurn` 은 `pending_clarification_id`
+    만 들고 있고 되묻기 문장 자체는 호출자의 `PendingClarification` 객체에 있어서, 그
+    텍스트를 잇는 것은 이 변환의 몫이 아니다.
+    """
+    if resolved is None:
+        return None
+    return ConversationContext(
+        relation=resolved.relation,
+        referenced_original_request=resolved.referenced_original_request,
+        standalone_query=resolved.standalone_query,
+        pending_missing_axes=resolved.pending_missing_axes,
+    )
 
 
 def new_turn(query: str) -> ResolvedTurn:

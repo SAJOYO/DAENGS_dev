@@ -51,6 +51,7 @@ from daengs_backend.orchestration.contracts import (
     RouterKind,
 )
 from daengs_backend.orchestration.emergency import is_emergency
+from daengs_backend.orchestration.resolver import ResolvedTurn, conversation_context_of
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -187,6 +188,7 @@ def assemble_route_plan(
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
     general_fallback: bool = False,
+    resolved: ResolvedTurn | None = None,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
 
@@ -199,6 +201,11 @@ def assemble_route_plan(
     frozen router-benchmark runners, which score the *router's* decision — keeps
     building exactly the plan it built before (#279). Production passes
     `settings.general_fallback`.
+
+    `resolved` (#416 Task 5) is the Turn Resolver's verdict, already reduced to "nothing
+    trustworthy" (`None`) by the caller whenever `relation is NEW` or confidence is below
+    the floor — this function only threads it to `_payload_for`, which puts it on
+    `GeneralPayload.conversation` and nowhere else.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     missing = _missing_coordinates(context) if needs_coordinates else []
@@ -242,7 +249,7 @@ def assemble_route_plan(
     for capability in sorted(
         selected, key=lambda name: _EXECUTION_INDEX.get(name, len(_EXECUTION_ORDER))
     ):
-        payload = _payload_for(capability, query=query, context=context)
+        payload = _payload_for(capability, query=query, context=context, resolved=resolved)
         requests.append({"capability": capability, "payload": payload, "timeout_ms": None})
 
     return RoutePlan.model_validate(
@@ -260,13 +267,23 @@ def assemble_route_plan(
     )
 
 
-def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dict[str, Any]:
+def _payload_for(
+    capability: str,
+    *,
+    query: str,
+    context: dict[str, Any],
+    resolved: ResolvedTurn | None = None,
+) -> dict[str, Any]:
     """The payload for one capability. Exhaustive by design — see the module docstring.
 
     Every branch reads only the original query text and the already-validated
     `context.location`. Nothing here is derived from model output, and Place gets the
     user's exact words: `PlacePayload` does not strip whitespace because the Place
     service grounds its own interpretation in literal spans of the original query.
+
+    `resolved` (#416 Task 5) only ever reaches the `general` branch — every other
+    capability payload has no `conversation` field to put it on, and General is the
+    only answerer whose prompt is meant to carry an unresolvable-reference notice.
     """
     if capability in _QUESTION_CAPABILITIES:
         payload: dict[str, Any] = {"question": query}
@@ -305,6 +322,9 @@ def _payload_for(capability: str, *, query: str, context: dict[str, Any]) -> dic
         vet_spend = _vet_spend_context(context)
         if vet_spend is not None:
             payload["vet_spend"] = vet_spend
+        conversation = conversation_context_of(resolved)
+        if conversation is not None:
+            payload["conversation"] = conversation
         return payload
     if capability == "walk":
         location = context["location"]

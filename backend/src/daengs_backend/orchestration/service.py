@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -33,6 +34,16 @@ from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
     resolve_emergency_route,
+)
+from daengs_backend.orchestration.resolver import (
+    RESOLUTION_CONFIDENCE_FLOOR,
+    GeminiTurnResolver,
+    PendingClarification,
+    PriorTurn,
+    ResolvedTurn,
+    TurnRelation,
+    TurnResolutionError,
+    conversation_context_of,
 )
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
@@ -62,9 +73,11 @@ class AssistantOrchestrationService:
         *,
         engine: OrchestrationEngine | None = None,
         semantic_router: GeminiSemanticRouter | None = None,
+        turn_resolver: GeminiTurnResolver | None = None,
     ) -> None:
         self._engine = engine or OrchestrationEngine()
         self._semantic_router = semantic_router or GeminiSemanticRouter()
+        self._turn_resolver = turn_resolver or GeminiTurnResolver()
 
     async def run(
         self,
@@ -76,10 +89,18 @@ class AssistantOrchestrationService:
         request_id: str | None = None,
         locale: str = "ko-KR",
         include_route_trace: bool = False,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> AssistantResponse:
         """Plan, then execute. `include_route_trace` is the caller's answer to "may this
         principal see how the request was routed?" (#238) — the HTTP boundary decides it,
         because permissions are its business, and it defaults to no.
+
+        `prior_turns`/`pending_clarification` (#416 Task 5) feed the Turn Resolver — both
+        default to empty/None so every existing caller (including the HTTP router, which
+        does not thread conversation history yet) keeps behaving exactly as before: no
+        candidates and no pending clarification means the resolver's fast path returns a
+        `NEW` turn without calling any model.
 
         The two responses that never reach the engine get the same trace attached here:
         a social reply and a router failure are exactly the answers whose "no capability
@@ -110,6 +131,8 @@ class AssistantOrchestrationService:
                 rid=rid,
                 locale=locale,
                 include_route_trace=include_route_trace,
+                prior_turns=prior_turns,
+                pending_clarification=pending_clarification,
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
             # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
@@ -127,6 +150,8 @@ class AssistantOrchestrationService:
         rid: str,
         locale: str,
         include_route_trace: bool,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> tuple[AssistantResponse, RoutePlan | None]:
         """계획하고 실행한다. 둘째 반환값은 트레이스 metadata 용 — 엔진에 못 간 두 응답
         (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다."""
@@ -150,10 +175,43 @@ class AssistantOrchestrationService:
                 query=query,
                 context=structured_context,
             )
+        # ── Turn Resolver (#416). 응급·결정론 **뒤**, 시맨틱 라우터 **앞**.
+        # 응급이 앞인 것은 의도다: 응급 경계는 현재 사용자 원문을 직접 검사해야 하고, 이
+        # 판정이 그것을 약하게 만들 수 없다. 결정론이 앞인 것은 명시 신호가 이미 답이기
+        # 때문이다 — 관계를 물을 이유가 없다.
+        resolved: ResolvedTurn | None = None
+        if route_plan is None:
+            try:
+                resolved = await self._turn_resolver.resolve(
+                    query=query, candidates=prior_turns, pending=pending_clarification
+                )
+            except TurnResolutionError as exc:
+                # **답은 나간다.** 이력 기제가 없던 때와 같게 도는 것이 실패 모드다 —
+                # 대화 이어짐이 안 되는 것이 답이 안 나오는 것보다 낫다. 질문 원문은 안
+                # 남긴다 (D-037) — request_id 로 트레이스와 잇는다. 시맨틱 라우터 실패
+                # 로그(아래)와 같은 규칙: 담는 것과 안 담는 것이 같다.
+                LOGGER.warning(
+                    "턴 해소 실패 request_id=%s: %s (원인: %r)",
+                    rid,
+                    exc,
+                    exc.__cause__,
+                )
+                resolved = None
+            else:
+                if (
+                    resolved.relation is TurnRelation.NEW
+                    or resolved.resolution_confidence < RESOLUTION_CONFIDENCE_FLOOR
+                ):
+                    # **CLARIFY 생산자를 셋으로 안 만든다.** 확신이 낮으면 붙임을 버리기만
+                    # 한다 — General 의 기존 ask 경로가 오늘 하던 대로 되묻는다. 넘길 것이
+                    # 없으면 넘기지 않는다: 바이트 동일 보장.
+                    resolved = None
         if route_plan is None:
             try:
                 decision = await self._semantic_router.select(
-                    query=query, context=structured_context
+                    query=query,
+                    context=structured_context,
+                    resolved=conversation_context_of(resolved),
                 )
             except SemanticRoutingError as exc:
                 # 사용자에게는 고정 문구만 나가고 모델의 잘못된 출력은 안 보인다 (O-14).
@@ -196,6 +254,7 @@ class AssistantOrchestrationService:
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
+                resolved=resolved,
             )
         response = await self._engine.run(
             route_plan=route_plan,

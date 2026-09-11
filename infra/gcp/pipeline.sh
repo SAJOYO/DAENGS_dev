@@ -7,6 +7,11 @@
 # VM 이름·존은 기본값이 있다 (`VM_NAME`·`VM_ZONE`). 관리자 트리거가 설 수 있는 상태인지
 # **확인만** 하는 데 쓴다 — 아래 "VM 액세스 범위" 절. `SKIP_SCOPE_CHECK=1` 로 끌 수 있다.
 #
+# 🔴 **이 스크립트가 코드 배포이기도 하다** (#427). `daengs_life` 를 고쳤으면 이것을 다시
+# 돌리는 것이 GCP 에 반영하는 길이다 — 아래 「코드·시드 업로드」가 버킷에 rsync 한다.
+# 이미지는 **의존성이 바뀔 때만** 굽는다(태그가 `pyproject.toml`·`uv.lock`·`docker/pipeline/`
+# 만의 해시라서). 그래서 보통은 빌드 둘이 "이미 있음"으로 넘어가고 rsync 몇 초로 끝난다.
+#
 # 사람이 먼저 할 것 (infra/gcp/README.md): API 켜기 · Secret 값 넣기 · 초기 사본 업로드.
 # `gcloud config set project` 로 사용자의 기본 프로젝트를 바꾸지 않는다 — `CLOUDSDK_CORE_PROJECT`
 # 환경변수를 이 스크립트 프로세스에만 export 한다. 모든 gcloud 명령이 이 변수를 본다.
@@ -30,13 +35,20 @@ REPO="daengs"
 SA="corpus-pipeline"
 SA_EMAIL="${SA}@${PROJECT}.iam.gserviceaccount.com"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/pipeline"
-# 이미지 태그는 커밋이 아니라 **이미지에 들어가는 파일의 내용 해시**다. 커밋마다 굽던 것을
-# (문서·스크립트만 바뀌어도 5~23분씩) backend/·Dockerfile·시드가 바뀔 때만 굽게 한다.
+# 이미지 태그는 커밋이 아니라 **이미지에 들어가는 파일의 내용 해시**다.
 # `git ls-files -s` 는 그 경로들 아래 추적 파일들의 blob id 를 찍고, 그걸 해시한다 —
-# 그 파일들의 커밋된 내용이 바뀔 때만 값이 바뀐다. 커밋되지 않은 수정은 반영되지 않는다 —
-# 커밋된 내용 기준이다.
-SHA="$(git ls-files -s backend/pyproject.toml backend/uv.lock backend/README.md backend/src \
-  data/manifests/seed_sources.yaml docker/pipeline | git hash-object --stdin | cut -c1-7)"
+# 그 파일들의 커밋된 내용이 바뀔 때만 값이 바뀐다. 커밋되지 않은 수정은 반영되지 않는다.
+#
+# 🔴 **입력에 `backend/src` 가 없다** (#427). 우리 코드는 이미지에 안 들어가고 아래
+# 「코드·시드 업로드」가 버킷에 올린다. 그래서 이 해시는 **의존성이 바뀔 때만** 움직이고,
+# 코드만 고친 배포에서는 이미지를 아예 다시 굽지 않는다.
+#
+# 옛 판은 `backend/src` 와 시드까지 넣고 있었다. 그러면 14MB 짜리 코드 한 줄에
+# **CPU 2.3GB + CUDA 9GB 를 다시 굽고**, 잡이 쓰지도 않는 패키지(`daengs_place` 등)를
+# 고쳐도 똑같이 굽는다. 그 비용이 「이미지 재빌드를 안 한다」는 판단(RAG-085 ①)의
+# 근거였고, 판단 대신 원인을 없앴다.
+SHA="$(git ls-files -s backend/pyproject.toml backend/uv.lock backend/README.md docker/pipeline \
+  | git hash-object --stdin | cut -c1-7)"
 
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"
 
@@ -125,6 +137,38 @@ build_image cpu
 # cuda 판은 이 스크립트로 처음 굽는다 — CPU 판만 로컬에서 확인됐다. 실패하면 먼저
 # docker/pipeline/Dockerfile 의 `uv pip install ... cu126` 단계(torch-cuda 스테이지)를 본다.
 build_image cuda
+
+echo "== 코드·시드 업로드 — **이것이 코드 배포다** (#427)"
+# 잡이 도는 코드는 이미지가 아니라 이 prefix 에서 온다. entrypoint 가 `/data/code/` 에서
+# `/app/src` 로 복사해 `PYTHONPATH` 로 잡는다 (docker/pipeline/Dockerfile 머리말).
+#
+# ⚠ **이 단계를 잊으면 잡이 옛 코드로 돈다.** 옛 판에서 *이미지 굽기를 잊으면* 그랬던 것과
+#    같은 실패 모양이라, 그 함정을 배포 스크립트 안으로 들여서 사람이 치는 명령을 하나로 뒀다.
+#
+# ⚠ **버킷은 코퍼스 정본이다.** 그래서 코드는 `code/` prefix 안에만 쓴다 —
+#    `--delete-unmatched-destination-objects` 의 사정거리가 그 안으로 갇힌다.
+#    지운 모듈이 버킷에 남으면 import 는 되는데 아무도 안 부르는 옛 파일이 되고,
+#    그 상태를 알려 주는 것이 없다. 그래서 지우는 쪽을 켠다.
+#
+# `__pycache__`·`.pyc` 는 개발 PC(Windows·다른 CPython)의 산물이라 올리지 않는다.
+CODE_PREFIX="gs://${BUCKET}/code"
+gcloud storage rsync backend/src/daengs_life "${CODE_PREFIX}/daengs_life" \
+  --recursive --delete-unmatched-destination-objects --exclude='.*__pycache__.*,.*\.pyc$'
+gcloud storage cp data/manifests/seed_sources.yaml "${CODE_PREFIX}/seed_sources.yaml"
+
+# 태그가 코드 버전을 안 말하게 된 대가를 메우는 파일 — entrypoint 가 로그 첫 줄에 찍는다.
+# rsync 는 **워킹 트리**를 올리므로 커밋 해시만으로는 부족하다. 더러우면 같이 적는다.
+VERSION_FILE="$(mktemp)"
+DIRTY=""
+if [ -n "$(git status --porcelain backend/src/daengs_life data/manifests/seed_sources.yaml)" ]; then
+  DIRTY="+dirty"
+  echo "   ⚠ 워킹 트리에 커밋 안 된 변경이 있다 — VERSION 에 +dirty 로 남긴다"
+fi
+printf '%s%s %s\n' "$(git rev-parse --short HEAD)" "${DIRTY}" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${VERSION_FILE}"
+gcloud storage cp "${VERSION_FILE}" "${CODE_PREFIX}/VERSION"
+echo "   코드 $(cat "${VERSION_FILE}")"
+rm -f "${VERSION_FILE}"
 
 COMMON_ENV="DAENGS_GCP_PROJECT=${PROJECT},POSTGRES_IP=${VM_INTERNAL_IP},POSTGRES_PORT=5432,POSTGRES_USER=daengs,POSTGRES_DB=vectordb,EMBEDDING_MODEL_KEY=qwen3-embedding-0.6b"
 COMMON_SECRETS="POSTGRES_PASSWORD=corpus-db-password:latest,LAW_OC=corpus-law-oc:latest,DATA_GO_KR_KEY=corpus-data-go-kr-key:latest,SEOUL_OPEN_DATA_KEY=corpus-seoul-open-data-key:latest"

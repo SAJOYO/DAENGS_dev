@@ -365,6 +365,11 @@ export default function AssistantInspect() {
                 <p className="mt-2 text-xs text-sky-800 dark:text-sky-200">
                   빠진 것: {result.clarify.missing.join(" · ")}
                 </p>
+                {result.clarify.missing_axes && result.clarify.missing_axes.length > 0 && (
+                  <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">
+                    물은 관찰 항목: {result.clarify.missing_axes.join(" · ")}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-sky-700 dark:text-sky-300">
                   CLARIFY 는 배타적입니다 — 능력도 핸드오프도 실행되지 않았습니다 (O-8). 같은 요청을 다시 보내도
                   이중 실행·이중 과금이 안 되는 이유가 그것입니다.

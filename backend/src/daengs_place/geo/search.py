@@ -30,6 +30,7 @@ async def _find_places(
     authoritative_source: str | None,
     require_source_ref: bool,
     precise_order: bool = False,
+    excluded_source_refs: tuple[str, ...] = (),
 ) -> list[PlaceOut]:
     must = plan.must
     origin = _point(must.lat, must.lng)
@@ -50,6 +51,8 @@ async def _find_places(
         stmt = stmt.where(Place.source == authoritative_source)
     if require_source_ref:
         stmt = stmt.where(Place.source_id.is_not(None))
+    if excluded_source_refs:
+        stmt = stmt.where(Place.source_id.notin_(excluded_source_refs))
     # **야간·응급은 거르지 않는다.** 인허가 원천엔 진료 능력이 없어서 이 태그들은 간판 이름
     # 정규식이 전부다 (geo/tagging.py). 실측 2026-08-20, 활성 병원 5,457곳 중
     # night 1곳 · emergency 2곳 — WHERE 로 쓰면 반경 안 결과가 통째로 사라진다.
@@ -130,6 +133,7 @@ async def find_authoritative_places(
     *,
     source: str,
     precise_order: bool = False,
+    excluded_source_refs: tuple[str, ...] = (),
 ) -> list[PlaceOut]:
     """Canonical resolver용. 지정 원천과 외부 ref가 모두 있는 의료 행만 반환한다."""
     return await _find_places(
@@ -139,6 +143,7 @@ async def find_authoritative_places(
         authoritative_source=source,
         require_source_ref=True,
         precise_order=precise_order,
+        excluded_source_refs=excluded_source_refs,
     )
 
 

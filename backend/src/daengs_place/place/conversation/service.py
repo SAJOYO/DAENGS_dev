@@ -7,16 +7,19 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from daengs_place.place.conversation.compiler import fingerprint
+from daengs_place.place.conversation.context import edit_exclusions, identity, unique_keys
 from daengs_place.place.conversation.contract import (
     ConversationState,
     DialogueTurn,
     ExecutionReceipt,
+    ExplorationState,
     PreparedTurn,
     PrepareRequest,
     ResultSnapshot,
     SelectionBasis,
     TurnPlan,
 )
+from daengs_place.place.conversation.grounding import browse_scope
 from daengs_place.place.conversation.policy import Decision, base_revision, decide
 from daengs_place.place.conversation.render import selected_facts
 from daengs_place.place.filters.contract import (
@@ -28,6 +31,8 @@ from daengs_place.place.filters.contract import (
 )
 from daengs_place.place.filters.service import search_filtered_places
 from daengs_place.place.search import PlaceSearchGroup, PlaceSearchResponse, _parking_preference_key
+from daengs_place.place.tools.changes import apply_changes
+from daengs_place.place.tools.contract import FilterChanges
 
 CACHE_SECONDS = 300
 
@@ -113,6 +118,11 @@ class ConversationService:
             candidate = manual_filters(request.manual, old)
         elif request.mode == "restore":
             candidate = request.restore_filters
+        elif request.mode == "filters":
+            # Direct UI operation: validate IDs, preserve all other fields, no planner or answer.
+            candidate = apply_changes(
+                old.filters, FilterChanges.model_validate(request.remove_filters.model_dump())
+            )
         else:
             assert old is not None
             try:
@@ -149,8 +159,45 @@ class ConversationService:
                 )
             plan, candidate = decision.plan, decision.candidate
         changed = old is None or fingerprint(old.filters) != fingerprint(candidate)
+        intent = decision.intent
+        browse = browse_scope(request.query, intent)
+        try:
+            excluded, newly_excluded, restored = edit_exclusions(request, intent)
+        except ValueError:
+            return self._unchanged(
+                request,
+                "clarify",
+                "invalid_exploration_target",
+                "현재 목록 또는 제외 목록에서 어느 장소인지 확인해 주세요. 제외는 최대 120곳까지 가능해요.",
+                action="clarify",
+            )
+        exclusion_keys = tuple(p.key for p in excluded)
+        candidate_fingerprint = fingerprint(candidate)
+        presented = ()
+        if old and browse != "restart":
+            if old.exploration.fingerprint == candidate_fingerprint:
+                presented = old.exploration.presented
+            elif old.snapshot and old.snapshot.fingerprint == candidate_fingerprint:
+                # Compatibility with sessions created before exploration state existed.
+                presented = old.snapshot.display_order
+        if browse == "next" and len(presented) + 20 * len(candidate.candidate_kinds) > 1200:
+            return self._unchanged(
+                request,
+                "clarify",
+                "exploration_budget",
+                "한 번의 탐색에서 기록할 수 있는 범위에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
+                action="clarify",
+            )
+        omitted = unique_keys((*exclusion_keys, *(presented if browse == "next" else ())))
         snapshot = old.snapshot if old else None
-        same = snapshot is not None and snapshot.fingerprint == fingerprint(candidate)
+        same = (
+            snapshot is not None
+            and snapshot.fingerprint == candidate_fingerprint
+            and snapshot.exclusions == exclusion_keys
+        )
+        if plan.goal == "show" and plan.reference_index is None and browse == "current":
+            # An empty next page is not an empty full search. Normal show can revisit seen places.
+            same = same and snapshot.omitted == omitted
         fresh = same and 0 <= (now - snapshot.created_at).total_seconds() < CACHE_SECONDS
         execution = "not_run"
         if plan.goal == "explain" and snapshot is None:
@@ -158,16 +205,22 @@ class ConversationService:
                 request, plan.goal, "no_snapshot", "설명할 검색 결과가 아직 없어요."
             )
         needs_results = plan.goal in {"show", "pick_one"}
-        if plan.reference_index is not None and needs_results and (not fresh or plan.refresh):
+        if (
+            plan.reference_index is not None
+            and needs_results
+            and (not fresh or plan.refresh or browse != "current")
+        ):
             return self._unchanged(
                 request,
                 plan.goal,
                 "reference_needs_confirmation",
                 "이전 목록의 장소를 고를지, 새 조건으로 다시 찾을지 알려주세요.",
             )
-        if needs_results and (not fresh or plan.refresh):
+        if needs_results and (not fresh or plan.refresh or browse != "current"):
             try:
-                result = await self.searcher(db, candidate)
+                result = await self.searcher(
+                    db, candidate, **({"omitted": omitted} if omitted else {})
+                )
             except (SQLAlchemyError, TimeoutError):
                 if old is None:
                     raise
@@ -182,6 +235,8 @@ class ConversationService:
             if result.applied_state != candidate:
                 raise RuntimeError("search state mismatch")
             hits = [hit for group in result.groups for hit in group.matched]
+            if any(hit.place.key in omitted for hit in hits):
+                raise RuntimeError("search returned an omitted place")
             hits.sort(
                 key=lambda hit: (
                     _parking_preference_key(hit.place)
@@ -196,6 +251,8 @@ class ConversationService:
                 created_at=now,
                 result=result,
                 display_order=tuple(hit.place.key for hit in hits),
+                exclusions=exclusion_keys,
+                omitted=omitted,
             )
             execution = "searched"
         elif needs_results or plan.goal == "explain":
@@ -286,6 +343,29 @@ class ConversationService:
                 *history,
                 DialogueTurn(query=request.query, goal=plan.goal, selected=selected),
             )[-6:]
+        new_places = ()
+        remaining = "unknown"
+        if needs_results and snapshot:
+            new_places = tuple(
+                key
+                for key in snapshot.display_order
+                if identity(key) not in {identity(p) for p in presented}
+            )
+            presented = unique_keys((*presented, *snapshot.display_order))
+            if len(presented) > 1200:
+                # A current search can refresh results as data changes; never silently drop history.
+                return self._unchanged(
+                    request,
+                    "clarify",
+                    "exploration_budget",
+                    "탐색 기록 한도에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
+                    action="clarify",
+                )
+            remaining = (
+                "more" if any(g.matched_truncated for g in snapshot.result.groups) else "exhausted"
+            )
+        elif old and not changed:
+            presented = old.exploration.presented
         state = ConversationState(
             filters=candidate,
             snapshot=snapshot,
@@ -293,6 +373,11 @@ class ConversationService:
             history=history,
             revision=base_revision(request) + 1,
             selection_basis=selection_basis,
+            exploration=ExplorationState(
+                excluded=excluded,
+                presented=presented,
+                fingerprint=candidate_fingerprint,
+            ),
         )
         receipt = ExecutionReceipt(
             goal=plan.goal,
@@ -309,6 +394,11 @@ class ConversationService:
             facts=facts,
             unsupported=unsupported,
             selection_basis=selection_basis,
+            browse=browse,
+            new_places=new_places,
+            excluded_places=newly_excluded,
+            restored_places=restored,
+            remaining=remaining,
         )
         return PreparedTurn(state=state, receipt=receipt)
 

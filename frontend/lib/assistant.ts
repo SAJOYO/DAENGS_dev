@@ -119,8 +119,32 @@ export type CapabilityResult = {
 
 export type Handoff = { target: string; reason: string };
 
-/** **CLARIFY 는 배타적입니다** (O-8) — 이것이 있으면 능력도 핸드오프도 실행되지 않았습니다. */
-export type ClarifyRequest = { question: string; missing: string[] };
+/**
+ * **CLARIFY 는 배타적입니다** (O-8) — 이것이 있으면 능력도 핸드오프도 실행되지 않았습니다.
+ *
+ * 생산자는 둘입니다 (D-068): 좌표가 없어서 계획 시점에 나는 되묻기와, 미명세 질문에
+ * General 이 답 시점에 내는 되묻기. `missing` 이 그 **종류**를 말하고
+ * (`location.lat` vs `observation`), `missing_axes` 는 관찰 되묻기가 **무엇을 물었는지**를
+ * 말합니다.
+ *
+ * ⚠ `missing_axes` 는 **"아직 물어본 항목"이지 강아지의 상태가 아닙니다.** `APPETITE` 가
+ * 있다는 것은 "식욕을 물었다"는 뜻이지 "식욕에 문제가 있다"가 아닙니다. 비어 있을 수도
+ * 있고, 그건 "물은 것이 없다"가 아니라 "축을 모른다"는 뜻입니다.
+ */
+export type ObservationAxis =
+  | "APPETITE"
+  | "ENERGY"
+  | "STOOL"
+  | "VOMIT"
+  | "BREATHING"
+  | "MOBILITY"
+  | "OTHER";
+
+export type ClarifyRequest = {
+  question: string;
+  missing: string[];
+  missing_axes?: ObservationAxis[];
+};
 
 /**
  * `RouteTrace` — **어느 길로 갔나**. 점검 권한이 있을 때만 옵니다 (#238).

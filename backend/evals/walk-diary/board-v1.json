@@ -1,0 +1,311 @@
+{
+  "format": "walk-diary-board-response-v1",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "generation": 1,
+  "input_revision": "99436b9cc2043f0a1da9e340c3cec7125aa0a068e63b9773f4a97a0d39a7b7e8",
+  "status": "ready",
+  "entry_revisions": {
+    "note": 1,
+    "action": 1
+  },
+  "photos_status": "complete",
+  "photo_manifest": {
+    "publisher_id": "publisher",
+    "revision": 1
+  },
+  "target_scene_count": 5,
+  "preparation_counts": {
+    "target": 5,
+    "user_records": 3,
+    "initial_deficit": 2,
+    "supplemented": 1,
+    "remaining_deficit": 0,
+    "total": 7,
+    "checkpoints": 1,
+    "boundaries": 2,
+    "intermediate_total": 5
+  },
+  "preparation_limits": [],
+  "background_update_available": false,
+  "bundle": {
+    "format": "walk-diary-board-v1",
+    "client_session_id": "00000000-0000-0000-0000-000000000001",
+    "input_revision": "a5bf592fc464aa038f7fd6e2f46e4be60ad5ad67f99c9d6f275eb04d117963ea",
+    "plan_revision": "4dae2c80cf4891dcdee0cbe7b811fef59962eeb2c27ea8238912780c35b67194",
+    "title": "함께 남긴 산책",
+    "model_status": "accepted",
+    "failure_code": null,
+    "scenes": [
+      {
+        "id": "stamp:aac3bcf6134cca52c48cbf36962c3ba690de5287893230e113281f65438a3fc9",
+        "order": 1,
+        "core": {
+          "identity": "boundary:8c4c38640b51726808aff72ef41636c4878052df40f65a207965271498efa1f0",
+          "version": "ee3cea9cd756f14cce71582ecbe0fae1da8041c125ad8aed636042be8f69e0ff"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-09T00:00:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:00:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-09T00:00:00Z"
+            }
+          ]
+        },
+        "title": "산책의 시작",
+        "body": "산책을 시작했다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "start",
+        "place_reference": []
+      },
+      {
+        "id": "stamp:896f0b5b9c5fa663b54b86924f4121a0171af2994ecfd548c9e1f47c0482d10e",
+        "order": 2,
+        "core": {
+          "identity": "checkpoint:1e1245f3718d7861b737b9356c2dfa578af14ab5b83f9f8ee3b213f3577067d3",
+          "version": "6e3c6a33461ed238facb067480e71bf8aff11b06fde87c46ebdfd1b47e3448f2"
+        },
+        "kind": "route_checkpoint",
+        "anchor": {
+          "event_at": "2026-09-09T00:05:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.505396,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:05:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 30,
+              "chain_index": 0,
+              "at": "2026-09-09T00:05:00Z"
+            }
+          ]
+        },
+        "title": "산책길에서",
+        "body": "산책길의 이 지점을 지났다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": {
+          "analysis_id": "00000000-0000-0000-0000-000000000063",
+          "block": 0,
+          "route_m": 600.0078241734026
+        },
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:dcbf6f3e87070c679f3078d2c683c705b30d693b82355674fdb10406db5dd6ab",
+        "order": 3,
+        "core": {
+          "identity": "walk_entry:note",
+          "version": "d296307948ff5ccd3a5b52b2fc2d7fdec74b18be39b0fe1a4f966a914a0e0734"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-09T00:05:00Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:04:55Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "last_known",
+          "source_fixes": []
+        },
+        "title": "남긴 이야기",
+        "body": "등록된 카페가 가까이에 있었다.\n  두부와 사진을 찍었다.\n다음 기록도 남김  ",
+        "user_record": {
+          "kind": "note",
+          "text": "  두부와 사진을 찍었다.\n다음 기록도 남김  "
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:3b353959de3a4a9e9efdf90ab739b5299edaecbbdcf812c0e1bfdc855ec43067",
+        "order": 4,
+        "core": {
+          "identity": "walk_entry:action",
+          "version": "ca4b48ebcfe6479c9fc956cbf9f293b9c345fe31c6512981a1a4d06d5f554abe"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-09T00:07:00Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:04:55Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "last_known",
+          "source_fixes": []
+        },
+        "title": "킁킁",
+        "body": "냄새를 맡았다.",
+        "user_record": {
+          "kind": "behavior",
+          "code": "sniffing",
+          "pet_id": null
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:bdb9d9083590cc438169457446d4f83c678c80b6c47f216da3311ae501ac89af",
+        "order": 5,
+        "core": {
+          "identity": "walk_photo:photo",
+          "version": "3eccf8b2ccf45245647be02b07cf03d9ee4dd618564ecbc5b155c262111a6fe2"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-09T00:09:00Z",
+          "time_basis": "photo_capture",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:04:55Z",
+          "accuracy_m": null,
+          "position_state": "resolved",
+          "method": "last_known",
+          "source_fixes": []
+        },
+        "title": "사진으로 남긴 순간",
+        "body": "사진을 남겼다.",
+        "user_record": {
+          "kind": "photo",
+          "media_ref": "app-private-photo:photo"
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:9b7268c084340d7f22d261f4259f8fb7d2d6841998f40659e8f6a214602b7f60",
+        "order": 6,
+        "core": {
+          "identity": "observation:motion:850beceae17885b3502267c0958e24eede47fbe0aaed6ddd7118f84200a5745a",
+          "version": "6e8c3176265a28b579e903f0d069b2a146d4d0595b6eeaeba25f6c5b31aba329"
+        },
+        "kind": "movement_observation",
+        "anchor": {
+          "event_at": "2026-09-09T00:10:20Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.510792,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:10:20Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 62,
+              "chain_index": 0,
+              "at": "2026-09-09T00:10:20Z"
+            }
+          ]
+        },
+        "title": "잠시 머문 구간",
+        "body": "이 구간에서는 동선이 한곳에 모였다.",
+        "user_record": null,
+        "observation": {
+          "id": "motion:850beceae17885b3502267c0958e24eede47fbe0aaed6ddd7118f84200a5745a",
+          "version": "32565b7554fa07d8e623257fb1b13f57ab98cd913701377adb1f421a1d300105",
+          "analysis_id": "00000000-0000-0000-0000-000000000063",
+          "kind": "observed_dwell",
+          "subject": "recording_device",
+          "action_meaning": "not_inferred",
+          "started_at": "2026-09-09T00:10:00Z",
+          "ended_at": "2026-09-09T00:10:50Z",
+          "anchor": {
+            "event_at": "2026-09-09T00:10:20Z",
+            "time_basis": "route_observation",
+            "point": {
+              "lat": 37.510792,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:10:20Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 62,
+                "chain_index": 0,
+                "at": "2026-09-09T00:10:20Z"
+              }
+            ]
+          }
+        },
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:51d86d75beed7d274d3fa446f5b7e3f245879c3a688f1e6d4f8b4dc0e73e7e76",
+        "order": 7,
+        "core": {
+          "identity": "boundary:bdb5a5c5040c7e88bef0c7e626518175dfcd4b140f8deb764dba1fc4fbfe3298",
+          "version": "0ccba2c566bd905a83e6d0903421b01d7907ce65e64f2916ebde63964fff2306"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-09T00:16:40Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.517087,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:16:40Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 100,
+              "chain_index": 0,
+              "at": "2026-09-09T00:16:40Z"
+            }
+          ]
+        },
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "end",
+        "place_reference": []
+      }
+    ]
+  },
+  "error_code": null
+}

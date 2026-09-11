@@ -8,6 +8,7 @@ from daengs_backend.repositories import walk_entry as entries_repo
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardResponse
+from daengs_backend.services.walk_diary_negotiation import existing_format, guard_old_writer
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
@@ -21,6 +22,7 @@ from daengs_backend.services.walk_storyboard_state import (
 )
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk import analyze_walk
+from daengs_walk.diary_board_output import BOARD_FORMAT
 from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
 from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk
@@ -99,10 +101,14 @@ async def get(
     *,
     target_scene_count=None,
 ):
-    if bundle_format == "walk-diary-bundle-v1":
+    if bundle_format == BOARD_FORMAT:
+        bundle_format, target_scene_count = await existing_format(
+            session, owner, walk_id, target_scene_count
+        )
+    if bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
         from daengs_backend.services.walk_diary_generation import get_diary
 
-        return await get_diary(session, owner, walk_id, target_scene_count)
+        return await get_diary(session, owner, walk_id, target_scene_count, bundle_format)
     walk, _, _, revisions, revision, _ = await source(session, owner, walk_id, bundle_format)
     value = result(walk, await repo.current(session, walk_id), revisions, revision, bundle_format)
     await session.commit()
@@ -112,7 +118,20 @@ async def get(
 async def generate(
     session, owner, walk_id, request, lookup, titles=title_storyboard, *, diary_writer=None
 ):
-    if request.bundle_format == "walk-diary-bundle-v1":
+    if request.bundle_format == BOARD_FORMAT:
+        chosen, target = await existing_format(session, owner, walk_id, request.target_scene_count)
+        request = request.model_copy(
+            update={
+                "bundle_format": chosen,
+                "target_scene_count": target,
+                "expected_photo_manifest": request.expected_photo_manifest
+                if target is not None
+                else None,
+                "refresh": False,
+                "preparation_budget_ms": request.preparation_budget_ms if chosen == BOARD_FORMAT else None,
+            }
+        )
+    if request.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
         from daengs_backend.services.walk_diary_generation import generate_diary
 
         return await generate_diary(session, owner, walk_id, request, writer=diary_writer)
@@ -122,6 +141,7 @@ async def generate(
     if {str(k): v for k, v in request.expected_entries.items()} != revisions:
         raise StoryboardConflict("행동 기록이 변경됐어요. 기록을 다시 동기화해 주세요.")
     row = await repo.current(session, walk_id)
+    guard_old_writer(row)
     now = datetime.now(UTC)
     if reusable(row, revision, request.refresh, now, LEASE_SECONDS):
         value = result(walk, row, revisions, revision, request.bundle_format)

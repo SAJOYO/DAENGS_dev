@@ -25,6 +25,7 @@ from .provider import ObservedGemini
 
 DATA = Path(__file__).resolve().parents[3] / "evals/place_conversation"
 REPO = DATA.parents[2]
+VARIANT = "production-exploration-v1"
 
 
 def write_json(path, data):
@@ -66,7 +67,7 @@ def metadata(cases_path, fixtures_path, model, repeat, ids):
         "model": model,
         "repeat": repeat,
         "case_ids": ids,
-        "variant": "production-policy-v1",
+        "variant": VARIANT,
         "seed": None,
         "boundary": "live Gemini + production prepare/answer + synthetic search; no HTTP/DB",
         "revision_scope": "local turn ordinal, NOT Redis CAS verification",
@@ -83,7 +84,7 @@ async def run_case(case, fixtures, provider, repetition):
             "case_id": case["id"],
             "repetition": repetition,
             "turn": ordinal,
-            "variant": "production-policy-v1",
+            "variant": VARIANT,
             "layer": case["layer"],
             "query": step.get("input"),
             "event": {k: v for k, v in step.items() if k not in {"expect", "review"}},
@@ -283,8 +284,8 @@ def main():
     parser.add_argument("--ids", help="Comma-separated case IDs")
     parser.add_argument(
         "--variant",
-        choices=("production-policy-v1",),
-        default="production-policy-v1",
+        choices=(VARIANT,),
+        default=VARIANT,
     )
     parser.add_argument("--cases", type=Path, default=DATA / "cases.v1.jsonl")
     parser.add_argument("--fixtures", type=Path, default=DATA / "fixtures.v1.json")

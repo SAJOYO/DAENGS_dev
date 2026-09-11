@@ -36,7 +36,8 @@
    `documents` 가 개발 PC 의 `processed/`(= 개발 PC 의 `raw/`) 에서 나온 것이라 **개발 PC raw ↔
    GCP DB 가 이미 한 줄**이다. 2026-09-08 에 올린 실물은 raw **673개** · 로그 **373줄**(마지막
    수집 09-06)이고, 그 위에서 돌린 parse 가 청크 **10,304** — 개발 PC 와 같은 수 — 를 냈다.
-   `processed/` 는 올리지 않는다 — 잡이 만든다. `seed_sources.yaml` 도 올리지 않는다 — 이미지가 넣는다.
+   `processed/` 는 올리지 않는다 — 잡이 만든다. `seed_sources.yaml` 과 `daengs_life` 코드도 손으로
+   올리지 않는다 — **`pipeline.sh`(4번)가 `code/` prefix 에 rsync 한다** (#427, 아래 「코드를 배포할 때」).
    `pipeline.sh` 의 `BUCKET=` 을 다른 이름으로 바꿨다면(버킷 이름 충돌 시) 위 두 줄의
    `gs://daengs-corpus` 도 그 이름으로 바꿔야 한다.
 6. **검증** — `docs/deploy/corpus-pipeline.md` §6 의 2~6. 잡 수동 실행:
@@ -51,15 +52,33 @@
    로그: `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="corpus-refresh"' --limit=200 --format='value(textPayload)'`
 7. 다음 날 `crawl_runs` 에 `trigger='due'` 행이 있으면 끝.
 
-## 이미지를 다시 구울 때
+## 코드를 배포할 때 — **굽지 않는다** (2026-09-10 · #427)
 
-코드가 바뀌면 `pipeline.sh` 를 다시 돌린다 — 태그(`cpu-<hash>`)는 git 커밋 sha 가 아니라
-**이미지에 들어가는 파일들의 내용 해시**다: `backend/pyproject.toml` · `backend/uv.lock` ·
-`backend/README.md` · `backend/src` · `data/manifests/seed_sources.yaml` · `docker/pipeline`.
+🔴 **우리 코드는 이미지에 없다.** `daengs_life` 는 `gs://daengs-corpus/code/` 에 있고 잡이 뜰 때
+entrypoint 가 `/app/src` 로 복사해 `PYTHONPATH` 로 잡는다. 그래서 코드 배포는 **rsync 몇 초**다:
+
+```bash
+PROJECT=daengs VM_INTERNAL_IP=<VM 내부 IP> bash infra/gcp/pipeline.sh
+```
+
+`pipeline.sh` 가 「코드·시드 업로드」 절에서 그것을 한다 — **따로 칠 명령이 없고, 그 자리에 있는
+이유가 그것이다**(rsync 를 잊으면 옛 코드로 돈다. 옛 판에서 *굽기를 잊으면* 그랬던 것과 같은
+실패 모양이다). 이유와 대가는 `docker/pipeline/Dockerfile` 머리말과 `RAG-086` ②.
+
+**확인은 잡 로그 첫 줄이다** — `[entrypoint] 코드 <커밋 해시> <업로드 시각>`. `+dirty` 가 붙어
+있으면 커밋 안 된 워킹 트리를 올린 것이다.
+
+### 이미지를 다시 굽는 경우 — **의존성이 바뀔 때만**
+
+태그(`cpu-<hash>`)는 git 커밋 sha 가 아니라 **이미지에 들어가는 파일들의 내용 해시**다:
+`backend/pyproject.toml` · `backend/uv.lock` · `backend/README.md` · `docker/pipeline`.
+**`backend/src` 와 시드는 이제 입력이 아니다** — 그래서 코드만 고친 배포에서는 빌드가 아예 안 돈다.
 그 경로가 바뀐 뒤에만 새 태그가 나와 다시 굽고 잡 정의가 새 이미지로 update 된다 —
-무관한 커밋(문서·`infra/` 스크립트만)에서 다시 돌리면 이미지는 그대로 재사용되고
-**전체가 약 80초**에 끝난다 (2026-09-08 실측). 빌드가 실제로 도는 경우는 CPU 약 5분,
-CUDA 15~23분이다.
+무관한 커밋에서 다시 돌리면 이미지는 그대로 재사용되고 **전체가 약 80초**에 끝난다
+(2026-09-08 실측). 빌드가 실제로 도는 경우는 CPU 약 5분, CUDA 15~23분이다.
+
+⚠ **태그가 코드 버전을 말해 주지 않는다.** 그 자리를 메우는 것이 `code/VERSION` 과 위의 로그
+첫 줄이다. 어느 코드로 돌았는지 알고 싶으면 **태그가 아니라 실행 로그**를 본다.
 
 `gcloud builds submit .` 이 올리는 파일은 루트 `.gcloudignore` 가 정한다 — 이미지에 안 들어가는
 것을 새로 넣으면 거기도 열어야 한다.

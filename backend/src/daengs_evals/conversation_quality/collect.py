@@ -88,6 +88,14 @@ class LapHeader(BaseModel):
     #: 수집 시점에 `settings.general_fallback` 이 실제로 켜져 있었는지 — 모듈
     #: docstring "`general_fallback` 도 값이 아니라 고정값이다" 참고.
     general_fallback: bool
+    #: 이 랩을 모은 드라이버(`drivers.StatelessDriver.driver_kind` /
+    #: `SessionDriver.driver_kind`). `adapter_mode` 와 같은 자리 — `run_collect` 가
+    #: `getattr(driver, "driver_kind", ...)` 로 읽는다. 기본값이 `"stateless"` 인 것은
+    #: 이 칸이 생기기 전에 얼어붙은 랩(그리고 `FakeDriver` 처럼 이 속성이 아예 없는
+    #: 드라이버 — 그쪽도 `prior_turns_supplied` 가 늘 비어 있어 `stateless` 와 같은
+    #: 사실이다)이 그 기본값으로도 정직하기 때문이다. `report.render_compare` 가 이
+    #: 값으로 `context_continuity`·`repair_success` 를 0 으로 못박을지 정한다 (R25).
+    driver: str = "stateless"
     case_count: int = 0
     started_at: str = ""
     finished_at: str = ""
@@ -226,6 +234,7 @@ def run_collect(
     from daengs_backend.config import settings as backend_settings
 
     adapter_mode = getattr(driver, "adapter_mode", NOT_REACHED)
+    driver_kind = str(getattr(driver, "driver_kind", "stateless"))
     general_fallback = backend_settings.general_fallback
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
@@ -242,6 +251,7 @@ def run_collect(
         anchor_set=anchor_set,
         adapter_mode=str(adapter_mode),
         general_fallback=general_fallback,
+        driver=driver_kind,
         case_count=len(cases),
         started_at=started_at,
         finished_at=finished_at,

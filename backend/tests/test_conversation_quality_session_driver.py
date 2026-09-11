@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 from daengs_evals.conversation_quality.drivers import SessionDriver, StatelessDriver
 from daengs_evals.conversation_quality.transcript import PRIOR_TURNS_REACH_INFERENCE
@@ -33,15 +34,23 @@ class _RecordingOrchestrator:
 
 
 class _ClarifyingOrchestrator:
-    """첫 호출은 `CLARIFY` 로 되묻고, 둘째 호출부터는 `ANSWERED` 로 답한다."""
+    """첫 호출은 `CLARIFY` 로 되묻고, 둘째 호출부터는 `ANSWERED` 로 답한다.
+
+    `_RecordingOrchestrator` 와 같은 이유로 `seen_pending_clarifications` 를 남긴다 —
+    드라이버의 **내부 상태**(`last_pending_question`)만 보면 "계산은 맞게 하고 오케스트레이터
+    에는 안 보낸다" 는 결함을 못 잡는다(R26). `test_session_driver_sends_full_history_…`
+    가 `prior_turns` 에 대해 하는 것과 같은 확인을, `pending_clarification` 에 대해서도 한다.
+    """
 
     def __init__(self) -> None:
         self.calls = 0
+        self.seen_pending_clarifications: list[Any] = []
 
     async def run(
         self, *, query, principal, context, prior_turns=(), pending_clarification=None
     ):
         self.calls += 1
+        self.seen_pending_clarifications.append(pending_clarification)
         if self.calls == 1:
             return SimpleNamespace(
                 status=SimpleNamespace(value="CLARIFY"),
@@ -115,6 +124,29 @@ def test_session_driver_carries_a_pending_clarification_forward() -> None:
     # 답을 받았으니 대기가 비워진다 — 이 assert 가 없으면 "대기를 영영 안 지운다"는
     # 반대쪽 결함(응답 하나가 그다음 모든 턴에 되묻기로 계속 묶이는 것)을 못 잡는다.
     assert driver.last_pending_question is None
+
+
+def test_session_driver_actually_sends_the_pending_clarification_to_the_orchestrator() -> None:
+    """드라이버의 **내부 상태**(`last_pending_question`)만 보면 계산은 맞게 하고 정작
+    오케스트레이터에는 `pending_clarification=None` 을 하드코딩해서 보내도 통과한다(R26).
+    여기서는 오케스트레이터가 **실제로 받은 값**을 잰다.
+
+    무너뜨리는 한 줄: `send()` 의 `pending_clarification=pending_clarification` 을
+    `pending_clarification=None` 으로 하드코딩하면, 위 테스트는 여전히 통과하지만
+    (드라이버 내부 상태는 정상 계산되므로) 이 테스트가 잡는다.
+    """
+    orchestrator = _ClarifyingOrchestrator()
+    driver = SessionDriver(orchestrator, principal=None, adapter_mode="fake")
+    driver.send("오늘 건강 상태는 어때?")
+    # 첫 호출 전에는 대기가 없었다 — 정직하게 `None` 을 보냈어야 한다.
+    assert orchestrator.seen_pending_clarifications[0] is None
+    driver.send("밥은 먹는데 계속 누워 있어")
+    # 둘째 호출에는 첫 응답의 되묻기가 실제로 실려야 한다 — 드라이버가 계산만 하고
+    # 오케스트레이터에는 안 보내는 결함을 여기서 잡는다.
+    forwarded = orchestrator.seen_pending_clarifications[1]
+    assert forwarded is not None
+    assert forwarded.question == "평소와 비교해 식욕에 달라진 점이 있나요?"
+    assert list(forwarded.missing_axes) == ["APPETITE"]
 
 
 def test_session_driver_payload_keys_match_stateless_driver() -> None:

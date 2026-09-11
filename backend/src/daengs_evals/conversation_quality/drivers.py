@@ -65,6 +65,11 @@ class StatelessDriver:
     같은 조립 위에 얹혀도 이 클래스를 안 건드린다.
     """
 
+    #: `run_collect` 가 `LapHeader.driver` 에 그대로 옮긴다(`adapter_mode` 와 같은 자리) —
+    #: `report.render_compare` 가 "이 before 랩이 이전 턴을 실었는지" 를 축 이름만으로
+    #: 짐작하지 않고 여기서 읽게 하려는 것이다 (R25). `SessionDriver.driver_kind` 와 짝.
+    driver_kind = "stateless"
+
     def __init__(
         self,
         orchestrator: Any,
@@ -134,6 +139,12 @@ class SessionDriver:
     버리는 것과 같은 원칙). `PriorTurn.turn_id` 도 랩에는 안 실린다 — 이 프로세스 안에서만
     쓰는 합성 uuid 라 밖에서는 의미가 없다.
     """
+
+    #: `StatelessDriver.driver_kind` 와 짝 — `run_collect` 가 이 값을 `LapHeader.driver` 에
+    #: 그대로 옮긴다. `render_compare` 가 `context_continuity`·`repair_success` 를 0 으로
+    #: 못박는 것은 **before 랩이 `stateless` 일 때뿐**이다(R25) — 이 랩이 이전 턴을 실제로
+    #: 실어 보냈으므로 그 못박음을 걸면 안 된다.
+    driver_kind = "session"
 
     def __init__(
         self,

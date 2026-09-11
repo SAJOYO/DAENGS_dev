@@ -1,0 +1,177 @@
+{
+  "passed": false,
+  "anchor_set": "dev",
+  "anchors_sha256": "08af3cfc31796393ee9750f4afd6e3a0ae093d554919567465c499d2773061d7",
+  "n": 12,
+  "n_passed": 9,
+  "prompt_version": 3,
+  "results": [
+    {
+      "anchor_id": "rmf_ask_specific_02",
+      "axis": "response_mode_fit",
+      "expected": 2,
+      "actual": 2,
+      "passed": true,
+      "observations": [
+        "오늘 아무것도 안 먹고 축 처져 있어",
+        "오늘 유독 기운이 없어 보이는 게 언제부터인가요?"
+      ],
+      "rationale": "사용자 상태만으로는 판단에 필요한 정보가 부족한 상황에서, 어시스턴트는 추가 정보를 묻는 모드를 골랐다. 질문도 \"언제부터\"라는 하나의 작고 구체적인 항목만 물어 사용자가 바로 답할 수 있다. 따라서 정보 상황에 맞는 상호작용 모드를 적절히 선택했다."
+    },
+    {
+      "anchor_id": "rmf_ask_specific_02_mut",
+      "axis": "response_mode_fit",
+      "expected": 1,
+      "actual": 0,
+      "passed": false,
+      "observations": [
+        "오늘 아무것도 안 먹고 축 처져 있어",
+        "식욕, 배변, 활동량, 수면 시간에 변화가 있는지 관찰해 주세요."
+      ],
+      "rationale": "입력이 더 필요한 상황이므로 되묻거나 다음 행동이 가능한 안내가 필요했다. 그러나 답변은 사용자가 바로 답할 수 있는 구체적인 질문을 하지 않았고, 관찰 항목만 나열했다. 기준상 관찰할 항목을 늘어놓는 것은 질문이 아니므로, 필요한 입력을 받는 상호작용 모드로 성공하지 못했다."
+    },
+    {
+      "anchor_id": "rmf_answer_closes_when_needed",
+      "axis": "response_mode_fit",
+      "expected": 0,
+      "actual": 0,
+      "passed": true,
+      "observations": [
+        "\"오늘 아무것도 안 먹고 축 처져 있어\"",
+        "\"반려견 건강 관리에는 규칙적인 식사와 산책이 중요합니다.\""
+      ],
+      "rationale": "사용자는 현재 증상 상황을 말했고, 입력이 더 필요한 경우다. 그런데 답변은 추가로 바로 답할 수 있는 구체적 질문을 하지도 않았고, 지금 상황에 맞는 다음 행동으로 안내하지도 않았다. 대신 일반적인 건강 관리 원칙만 말해 현재 질문을 향한 상호작용 모드를 고르지 못했다."
+    },
+    {
+      "anchor_id": "rmf_needed_true_redirect_right",
+      "axis": "response_mode_fit",
+      "expected": 2,
+      "actual": 1,
+      "passed": false,
+      "observations": [
+        "\"정확히 무슨 병인지 진단해줘. 더 필요하면 다 말해줄게\"",
+        "\"저는 병명을 진단할 수 없어요.\"",
+        "\"가까운 동물병원에 방문해 정확한 진단을 받아보세요.\""
+      ],
+      "rationale": "사용자는 정확한 병명 진단을 요청했고 추가 정보 제공 의사도 밝혔다. 이 상황은 입력이 더 필요한 경우이므로, 여기서 답할 수 없는 진단을 바로 거절하고 적어도 사용자가 바로 답할 수 있는 구체적 추가 질문을 하거나, 돌려보내더라도 다음 행동을 더 구체화할 여지가 있었다. 답변은 다른 곳으로 보내는 모드를 택했지만, 최소한의 안내만 있고 대화 안에서 추가로 할 수 있는 상호작용을 활용하지 않아 절반만 된 경우로 볼 수 있다."
+    },
+    {
+      "anchor_id": "rmf_needed_false_ask_wrong",
+      "axis": "response_mode_fit",
+      "expected": 0,
+      "actual": 0,
+      "passed": true,
+      "observations": [
+        "강아지 산책은 하루에 얼마나 하면 돼?",
+        "[입력이 더 필요했나] 아니오",
+        "구체적으로 어떤 부분이 궁금하신 거예요?"
+      ],
+      "rationale": "사용자는 하루 산책 시간이라는 직접적인 질문을 했고, 추가 입력이 필요하지 않은 상황이다. 그런데 답변은 산책 시간에 대해 바로 답하지 않고 되물었다. 기준상 «아니오»일 때 되묻지 않은 것을 감점하지 말아야 하며, 오히려 물을 것이 없는데 되물으면 사용자를 붙잡는 실패다. 또한 되물음도 '구체적으로 어떤 부분'처럼 크고 막연해 사용자가 바로 답할 수 있는 작고 구체적인 질문 하나에 해당하지 않는다."
+    },
+    {
+      "anchor_id": "ctx_decline_correct",
+      "axis": "context_continuity",
+      "expected": 2,
+      "actual": 2,
+      "passed": true,
+      "observations": [
+        "[주어진 상태] \"breed\": \"보더콜리\"",
+        "[답변] \"발톱은 보통 2~4주에 한 번 깎아 주시면 됩니다.\""
+      ],
+      "rationale": "질문은 반려견 발톱 손질 주기이며, 주어진 상태의 견종 정보(보더콜리)는 이 답을 특별히 바꾸는 정보로 보이지 않습니다. 답변은 일반적인 발톱 관리 주기를 안내했고, 상관없는 견종 정보를 억지로 끼워 넣지도 않았습니다. 앞 턴은 없으므로 이어짐 여부는 평가 대상이 아닙니다. 주어진 상태가 이 답에 영향을 주지 않는 경우, 그것을 쓰지 않고 답한 것은 적절하므로 만점입니다.",
+      "relevant_state_used": false,
+      "state_used_correctly": false,
+      "unsupported_or_superficial_personalization": false
+    },
+    {
+      "anchor_id": "ctx_decline_correct_mut",
+      "axis": "context_continuity",
+      "expected": 0,
+      "actual": 0,
+      "passed": true,
+      "observations": [
+        "[주어진 상태] \"breed\": \"보더콜리\"",
+        "[답변] \"보더콜리는 활동량이 많은 견종이라 발톱 관리가 특히 중요해요.\"",
+        "[답변] \"발톱은 보통 2~4주에 한 번 깎아 주시면 됩니다.\""
+      ],
+      "rationale": "앞 턴은 없으므로 상태만 본다. 이 질문에서 견종 정보는 답을 바꾸는 핵심 정보가 아니다. 그런데 답변은 상태의 \"보더콜리\"를 불러왔지만, 실제 주기는 이어서 누구에게나 적용될 수 있는 일반론인 \"2~4주\"로 제시했다. 즉 상태를 답을 바꾸는 방식으로 쓴 것이 아니라 이름표처럼 붙인 수준의 피상적 개인화다.",
+      "relevant_state_used": false,
+      "state_used_correctly": false,
+      "unsupported_or_superficial_personalization": true
+    },
+    {
+      "anchor_id": "ctx_relevant_state_ignored",
+      "axis": "context_continuity",
+      "expected": 0,
+      "actual": 0,
+      "passed": true,
+      "observations": [
+        "[주어진 상태] \"age_months\": 2",
+        "[답변] \"최대한 빨리 시작하는 것이 좋습니다.\"",
+        "[주어진 상태] \"breed\": \"골든리트리버\""
+      ],
+      "rationale": "이 질문에서는 예방 시작 시점에 나이가 영향을 줄 수 있어 상태 중 \"age_months\": 2는 관련 가능성이 있다. 그러나 답변은 단지 \"최대한 빨리\"라는 일반론만 말할 뿐, 2개월령이라는 값을 근거로 시작 시점을 구체화하거나 달라지게 쓰지 않았다. 견종 정보는 이 답을 바꾸는 핵심 상태로 보이지 않으며, 답변에도 반영되지 않았다. 따라서 관련 상태를 실제로 썼다고 보기 어렵고, 상태를 이름표만 붙여 끼워 넣은 경우는 아니며 지어낸 개인화도 없다.",
+      "relevant_state_used": false,
+      "state_used_correctly": false,
+      "unsupported_or_superficial_personalization": false
+    },
+    {
+      "anchor_id": "ctx_half_used_prior_and_state",
+      "axis": "context_continuity",
+      "expected": 1,
+      "actual": 1,
+      "passed": true,
+      "observations": [
+        "[앞 턴] \"심장사상충 예방약은 보통 한 달에 한 번 투여합니다.\"",
+        "[지금 사용자 발화] \"그럼 그거 언제부터 시작하는 게 좋아?\"",
+        "[주어진 상태] \"\\\"age_months\\\": 2\"",
+        "[답변] \"심장사상충 예방은 최대한 빨리 시작하는 것이 좋습니다.\""
+      ],
+      "rationale": "지금 질문은 앞 턴의 '심장사상충 예방약'을 가리키는 후속 질문이므로 앞 턴은 relevant하며, 답변은 그 대상을 그대로 이어 받아 시작 시점을 답해 앞 턴은 이었다. 또한 시작 시점 질문에서는 나이(2개월)가 답에 영향을 줄 수 있는데, 답변은 이를 전혀 반영하지 않고 누구에게나 적용되는 일반론만 말했다. 견종은 이 답에 영향이 없다. 따라서 영향을 주는 둘 중 앞 턴만 실제로 썼다.",
+      "relevant_state_used": false,
+      "state_used_correctly": false,
+      "unsupported_or_superficial_personalization": false
+    },
+    {
+      "anchor_id": "repair_full_change",
+      "axis": "repair_success",
+      "expected": 2,
+      "actual": 1,
+      "passed": false,
+      "observations": [
+        "사용자: \"우리 동네 산책 코스 알려줘\"",
+        "어시스턴트: \"산책은 하루 두 번이 좋습니다.\"",
+        "사용자: \"그게 아니라 코스를 알려달라고요\"",
+        "그다음 답변: \"동네에 공원이나 산책로가 있다면 그쪽으로 30분 정도 걸어보시는 걸 추천드려요. 주변에 안전한 산책로가 있는지 확인해 보세요.\""
+      ],
+      "rationale": "처음 답변은 산책 빈도를 말해 코스 요청을 다루지 못했다. 사용자가 \"코스를 알려달라\"고 바로잡은 뒤, 다음 답변은 \"공원이나 산책로\"처럼 코스 방향에 관한 내용으로 방향을 틀었다. 다만 여전히 구체적인 코스를 알려주기보다 일반적인 추천에 그쳐, 바로잡은 요청을 부분적으로만 반영했다."
+    },
+    {
+      "anchor_id": "repair_zero_verbatim",
+      "axis": "repair_success",
+      "expected": 0,
+      "actual": 0,
+      "passed": true,
+      "observations": [
+        "사용자: \"우리 동네 산책 코스 알려줘\"",
+        "어시스턴트: \"산책은 하루 두 번이 좋습니다.\"",
+        "사용자: \"그게 아니라 코스를 알려달라고요\"",
+        "그다음 답변: \"산책은 하루 두 번이 좋습니다.\""
+      ],
+      "rationale": "사용자는 앞답변이 요청과 다르다고 바로잡으며 \"코스를 알려달라\"고 했지만, 그다음 답변도 이전과 동일하게 \"산책은 하루 두 번이 좋습니다.\"라고 했다. 바로잡은 대목을 반영한 행동 변화가 없다."
+    },
+    {
+      "anchor_id": "repair_partial_one_of_two",
+      "axis": "repair_success",
+      "expected": 1,
+      "actual": 1,
+      "passed": true,
+      "observations": [
+        "사용자: \"횟수 말고 양이 궁금한 거야. 그리고 하루 두 번이 아니라 세 번 아니야?\"",
+        "직전 답변: \"사료는 보통 아침 저녁 하루 두 번 나눠 주시면 됩니다.\"",
+        "그다음 답변: \"사료 양은 보통 강아지 체중과 사료 종류에 따라 달라지는데 사료 포장지의 급여량 표를 참고하시면 됩니다.\""
+      ],
+      "rationale": "사용자는 횟수보다 양을 물었고, 이전의 '하루 두 번'도 바로잡았다. 다음 답변은 이전과 달리 횟수 설명을 반복하지 않고, 사용자가 집어준 핵심인 '양'에 대해 답했다. 다만 사용자가 함께 바로잡은 '하루 두 번이 아니라 세 번 아니야?'라는 부분은 직접 다루지 않았다. 따라서 일부만 반영한 변화다."
+    }
+  ]
+}

@@ -497,6 +497,10 @@ def test_follow_up_naming_the_pending_clarification_by_index_still_anchors_to_pe
     assert resolved.pending_missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
     assert resolved.referenced_turn_id is None
     assert resolved.context_used == [pending_turn_id]
+    # 되묻기 문장은 이미 `pending_question` 으로 간다 — 여기서도 실으면 같은 문장이
+    # 두 번 나간다(브리프 "안 하는 것"). `referenced = None` 널아웃이 `ResolvedTurn(...)`
+    # 조립 전에 있어야 이 값이 비어 있다.
+    assert resolved.referenced_assistant_answer is None
 
 
 def test_current_query_is_last_with_both_candidates_and_pending() -> None:

@@ -1,13 +1,19 @@
-"""PR #62 리뷰 지적 ②③④⑤ — overlay 인코딩 · 비교 문구 · 저장된 파일명.
+"""PR #62 리뷰 지적 ③④⑤ — overlay 인코딩 · 비교 문구.
 
 **`--group gait` 이 있어야 돕니다** (cv2 · imageio-ffmpeg). 기본 설치에서는 통째로
 skip 됩니다 — pyproject 의 "기본 = 화면과 계약만" 가름을 지키는 자리입니다.
 이벤트 루프 회귀(①)는 모델 없이도 도는 `test_review_fixes.py` 에 있습니다.
+
+D-063 6단계에서 옛 legacy 추론 runtime(`pipeline.py` · `record_store.py`)이 빠지면서
+그 모듈을 통해 보던 것들을 **살아 있는 자리로 옮겼습니다** — 비교 문구(③)는 판정을 실제로
+계산하는 `compare.compare_loaded_records` 를 직접 부릅니다(단언은 그대로). 파일 저장
+경로에 묶여 있던 ②(원본 파일명 영속)는 그 저장소와 함께 사라졌습니다 — 앱이 보는
+`source_file` 은 엔진 기록이 아니라 **DB 행**(`gait_records.source_file`)에서 오고, 그 값은
+분석 티켓을 발급할 때 backend 가 요청에서 받아 넣습니다(`services/gait.create`).
 """
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -19,8 +25,8 @@ imageio_ffmpeg = pytest.importorskip(
 )
 np = pytest.importorskip("numpy")
 
-from daengs_gait import config  # noqa: E402
-from daengs_gait.overlay import OverlayEncodeError, render_overlay_video  # noqa: E402
+from daengs_gait.compare import compare_loaded_records
+from daengs_gait.overlay import OverlayEncodeError, render_overlay_video
 
 
 # --------------------------------------------------------------------------
@@ -136,50 +142,12 @@ def test_overlay_raises_when_no_frames(tmp_path):
         render_overlay_video(bogus, [], tmp_path / "out.mp4")
 
 
-def test_pipeline_omits_overlay_path_when_encoding_fails(tmp_path, monkeypatch):
-    """인코딩이 실패하면 기록이 overlay 를 **있다고 하면 안 됩니다.**
-
-    분 단위가 걸린 추론 결과는 버리지 않되, `overlay_video` 는 비워 둡니다.
-    """
-    import daengs_gait.pipeline as pipeline
-
-    monkeypatch.setattr(config, "RECORDS_DIR", tmp_path / "records")
-    monkeypatch.setattr("daengs_gait.record_store.RECORDS_DIR", tmp_path / "records")
-    monkeypatch.setattr(
-        pipeline, "run_keypoint_inference",
-        lambda p: ([], {"width": 1, "height": 1, "native_fps": 30.0}),
-    )
-    monkeypatch.setattr(pipeline, "check_quality", lambda recs: {"status": "ok"})
-    monkeypatch.setattr(pipeline, "build_trajectories", lambda recs: {})
-    monkeypatch.setattr(pipeline, "build_features", lambda recs: {})
-
-    def boom(*a, **kw):
-        raise OverlayEncodeError("ffmpeg 인코딩 실패 (exit 1)")
-
-    monkeypatch.setattr(pipeline, "render_overlay_video", boom)
-
-    video = tmp_path / "v.mp4"
-    video.write_bytes(b"x")
-    rec = pipeline.process_video(video)
-
-    assert rec["overlay_video"] is None
-    assert "ffmpeg" in rec["overlay_error"]
-    # 추론 결과 자체는 살아 있어야 합니다.
-    assert rec["quality"]["status"] == "ok"
-
-
 # --------------------------------------------------------------------------
-# ③ message_for_ui
+# ③ message_for_ui — 판정을 실제로 계산하는 모듈을 직접 부릅니다
 # --------------------------------------------------------------------------
-@pytest.fixture()
-def records_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "RECORDS_DIR", tmp_path / "records")
-    monkeypatch.setattr("daengs_gait.record_store.RECORDS_DIR", tmp_path / "records")
-    return tmp_path / "records"
-
-
-def _write_record(rid: str, joints: dict) -> None:
-    rec = {
+def _record(rid: str, joints: dict) -> dict:
+    """`compare_loaded_records` 가 읽는 필드만 채운 기록 (파일에서 왔든 DB 에서 왔든 같습니다)."""
+    return {
         "record_id": rid,
         "date": "2026-08-29",
         "quality": {"status": "ok", "quality_tier": "good"},
@@ -189,54 +157,41 @@ def _write_record(rid: str, joints: dict) -> None:
             "internal_feature_vector": {"f0": 1.0, "f1": 2.0},
         },
     }
-    config.RECORDS_DIR.mkdir(parents=True, exist_ok=True)
-    (config.RECORDS_DIR / f"{rid}.json").write_text(
-        json.dumps(rec, ensure_ascii=False), encoding="utf-8"
-    )
 
 
-def test_message_says_no_difference_when_all_joints_similar(records_dir):
+def test_message_says_no_difference_when_all_joints_similar():
     """모든 관절이 '비슷함' 인데 '차이가 관찰됩니다' 가 나가면 안 됩니다."""
-    from daengs_gait.pipeline import compare_records
-
     joints = {"hip": {"x_range": 10.0, "y_range": 10.0}}
-    _write_record("aaaaaaaa", joints)
-    _write_record("bbbbbbbb", joints)
 
-    msg = compare_records("aaaaaaaa", "bbbbbbbb")["message_for_ui"]
+    msg = compare_loaded_records(
+        _record("aaaaaaaa", joints), _record("bbbbbbbb", joints)
+    )["message_for_ui"]
     assert "차이가 관찰됩니다" not in msg
     assert "관찰되지 않았습니다" in msg
 
 
-def test_message_reports_difference_when_a_joint_differs(records_dir):
+def test_message_reports_difference_when_a_joint_differs():
     """실제로 차이가 있으면 그대로 말해야 합니다."""
-    from daengs_gait.pipeline import compare_records
+    a = _record("aaaaaaaa", {"hip": {"x_range": 10.0, "y_range": 10.0}})
+    b = _record("bbbbbbbb", {"hip": {"x_range": 1000.0, "y_range": 10.0}})
 
-    _write_record("aaaaaaaa", {"hip": {"x_range": 10.0, "y_range": 10.0}})
-    _write_record("bbbbbbbb", {"hip": {"x_range": 1000.0, "y_range": 10.0}})
-
-    assert "차이가 관찰됩니다" in compare_records("aaaaaaaa", "bbbbbbbb")["message_for_ui"]
+    assert "차이가 관찰됩니다" in compare_loaded_records(a, b)["message_for_ui"]
 
 
-def test_message_distinguishes_nothing_comparable_from_similar(records_dir):
+def test_message_distinguishes_nothing_comparable_from_similar():
     """비교 가능한 관절이 하나도 없는 것을 '비슷함' 으로 뭉치면 안 됩니다.
 
     데이터가 없는 것을 '변화가 없다' 고 말하게 되는 자리입니다.
     """
-    from daengs_gait.pipeline import compare_records
-
-    _write_record("aaaaaaaa", {})
-    _write_record("bbbbbbbb", {})
-
-    msg = compare_records("aaaaaaaa", "bbbbbbbb")["message_for_ui"]
+    msg = compare_loaded_records(_record("aaaaaaaa", {}), _record("bbbbbbbb", {}))[
+        "message_for_ui"
+    ]
     assert "말할 수 없습니다" in msg
     assert "관찰되지 않았습니다" not in msg
 
 
-def test_message_for_ui_has_no_diagnostic_wording(records_dir):
+def test_message_for_ui_has_no_diagnostic_wording():
     """진단·건강점수처럼 읽히는 낱말이 화면 문구에 들어가면 안 됩니다."""
-    from daengs_gait.pipeline import compare_records
-
     banned = ["정상", "건강", "이상 없", "호전", "악화", "점수", "진단"]
     cases = [
         ({"hip": {"x_range": 10.0, "y_range": 10.0}},
@@ -246,52 +201,8 @@ def test_message_for_ui_has_no_diagnostic_wording(records_dir):
         ({}, {}),
     ]
     for i, (ja, jb) in enumerate(cases):
-        _write_record(f"a{i}aaaaaa", ja)
-        _write_record(f"b{i}bbbbbb", jb)
-        msg = compare_records(f"a{i}aaaaaa", f"b{i}bbbbbb")["message_for_ui"]
+        msg = compare_loaded_records(_record(f"a{i}aaaaaa", ja), _record(f"b{i}bbbbbb", jb))[
+            "message_for_ui"
+        ]
         for word in banned:
             assert word not in msg, f"{msg!r} 에 금지 표현 {word!r}"
-
-
-# --------------------------------------------------------------------------
-# ② 저장된 기록의 파일명
-# --------------------------------------------------------------------------
-def test_original_filename_is_persisted_not_just_returned(records_dir, tmp_path, monkeypatch):
-    """응답과 저장본이 갈라지면 앱이 새로고침할 때 이름이 uuid 로 바뀝니다."""
-    import daengs_gait.pipeline as pipeline
-
-    monkeypatch.setattr(
-        pipeline, "run_keypoint_inference",
-        lambda p: ([], {"width": 1, "height": 1, "native_fps": 30.0}),
-    )
-    monkeypatch.setattr(
-        pipeline, "check_quality",
-        lambda recs: {"status": "unavailable", "recommendation": "재촬영"},
-    )
-
-    saved_as = tmp_path / "3f2a91b7.mp4"
-    saved_as.write_bytes(b"x")
-
-    rec = pipeline.process_video(saved_as, original_filename="walk_0829.mp4")
-
-    assert rec["source_file"] == "walk_0829.mp4"
-    on_disk = json.loads(
-        (records_dir / f"{rec['record_id']}.json").read_text(encoding="utf-8")
-    )
-    # 핵심: 조기 반환(unavailable) 경로에서도 저장본이 같아야 합니다.
-    assert on_disk["source_file"] == "walk_0829.mp4"
-
-
-def test_original_filename_falls_back_to_disk_name(records_dir, tmp_path, monkeypatch):
-    """원본 이름을 못 받으면 예전처럼 디스크 이름으로 떨어져야 합니다."""
-    import daengs_gait.pipeline as pipeline
-
-    monkeypatch.setattr(
-        pipeline, "run_keypoint_inference",
-        lambda p: ([], {"width": 1, "height": 1, "native_fps": 30.0}),
-    )
-    monkeypatch.setattr(pipeline, "check_quality", lambda recs: {"status": "unavailable"})
-    saved_as = tmp_path / "3f2a91b7.mp4"
-    saved_as.write_bytes(b"x")
-
-    assert pipeline.process_video(saved_as)["source_file"] == "3f2a91b7.mp4"

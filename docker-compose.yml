@@ -127,11 +127,11 @@ services:
       GAIT_STORAGE: ${GAIT_STORAGE:-none}
       GAIT_LOCAL_STORAGE_DIR: ${GAIT_LOCAL_STORAGE_DIR:-}
       GAIT_BRIDGE_BASE_URL: ${GAIT_BRIDGE_BASE_URL:-}
-      # 보행 분석 엔진 (#304 · D-063). legacy = daengs_gait.pipeline(best.pt), v4 =
-      # daengs_gait.inference(walk_demo v4). backend 는 v4 의 **비교 함수만** 씁니다 —
-      # `daengs_gait.compare_v4`(numpy 만, 5B 부터 ./backend/src 안). 별도 마운트 없습니다.
-      # 기본 legacy. ssdlite.pt 라이선스(academic/non-commercial) 결정 전 운영에서 바꾸지 마세요.
-      GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
+      # 보행 분석 엔진 (#304 · D-063). **값은 v4 하나입니다** — 옛 legacy 추론 runtime 은
+      # 6단계에서 없앴습니다(옛 legacy **기록**은 그대로 읽고 비교합니다).
+      # backend 는 v4 의 **비교 함수만** 씁니다 — `daengs_gait.compare_v4`(numpy 만,
+      # 5B 부터 ./backend/src 안). 별도 마운트 없습니다.
+      GAIT_ENGINE: ${GAIT_ENGINE:-v4}
       # bridge 업로드 상한(바이트). D-052 로 모든 바이트가 backend 를 지나므로
       # 이게 메모리 방어선입니다. nginx 의 200m 보다 낮게 유지하세요.
       #
@@ -408,14 +408,14 @@ services:
       GAIT_GCS_LOCATION: ${GAIT_GCS_LOCATION:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       TZ: Asia/Seoul
-      # ── 보행 분석 엔진 (#304 · D-063 5B) ──────────────────────────────
-      # v4 면 워커가 **자기 인터프리터**(`/opt/venv/bin/python`)로 `python -m daengs_gait.inference`
+      # ── 보행 분석 엔진 (#304 · D-063 5B·6) ────────────────────────────
+      # 워커가 **자기 인터프리터**(`/opt/venv/bin/python`)로 `python -m daengs_gait.inference`
       # 를 서브프로세스로 부릅니다 (daengs_gait.engines.subprocess_bridge). torch·rtmlib·
       # onnxruntime 은 그 자식에만 올라오고 이 프로세스에는 안 올라옵니다. 별도 venv 는 없습니다.
-      GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
-      # v4 가중치도 **위 GAIT_RELEASE_DIR 한 곳**입니다 — `ssdlite.pt` 와
-      # `rtmpose-m_ap10k/end2end.onnx` 를 거기 두세요. 파일 이름이 달라 legacy 의
-      # `best.pt`·`yolov8n.pt` 와 안 겹칩니다. 옛 `GAIT_V4_WEIGHTS` 는 5B 에서 없앴습니다
+      # **6단계부터 값은 v4 하나** — 없어진 이름을 주면 분석이 FAILED 사유와 함께 멈춥니다.
+      GAIT_ENGINE: ${GAIT_ENGINE:-v4}
+      # 가중치는 **위 GAIT_RELEASE_DIR 한 곳**입니다 — `ssdlite.pt` 와
+      # `rtmpose-m_ap10k/end2end.onnx` 를 거기 두세요. 옛 `GAIT_V4_WEIGHTS` 는 5B 에서 없앴습니다
       # (코드가 `daengs_gait.config.RELEASE_DIR` 하나만 봅니다 — 지우기 전에 서버
       # `/models/release` 의 두 파일을 워커 컨테이너 안에서 크기·sha256 까지 대조했습니다).
     volumes:
@@ -440,8 +440,9 @@ services:
       redis:
         condition: service_healthy
     # backend 와 같은 모양. --frozen 이라 lock 이 pyproject 와 어긋나면 멈춥니다.
-    # `--group gait` 하나 — legacy(ultralytics) 와 v4(rtmlib·onnxruntime) 둘 다 이 그룹입니다
-    # (D-063 5B: 옛 `gait-v4` 그룹·별도 venv 동기화 분기가 없어졌습니다).
+    # `--group gait` 하나 — v4(torch·rtmlib·onnxruntime)가 이 그룹입니다
+    # (D-063 5B: 옛 `gait-v4` 그룹·별도 venv 동기화 분기가 없어졌습니다.
+    #  6단계: legacy 추론 runtime 과 함께 ultralytics 가 이 그룹에서 빠졌습니다).
     # `--concurrency 1`: 분석이 무겁고 GPU 없는 CPU 추론이라 한 번에 하나만 돕니다.
     # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다 — `>` 가 더 깊이 들여쓴 줄바꿈을 살려 두면
     #    sh 가 여러 줄 스크립트를 받아 exec 뒤 인자가 실행되지 않습니다 (#55 의 함정).

@@ -11,7 +11,7 @@
     celery -A daengs_backend.tasks.gait worker --queues gait --concurrency 1
 
 ⚠️ **backend 웹 컨테이너는 이 큐를 먹지 않습니다.** 태스크를 `.delay()` 로 발행만
-   하고, 분석은 gait 그룹(torch·ultralytics)이 설치된 워커에서만 돕니다. 그래서
+   하고, 분석은 gait 그룹(torch·rtmlib·onnxruntime)이 설치된 워커에서만 돕니다. 그래서
    아래 지연 import 가 backend 웹 프로세스에서는 절대 실행되지 않습니다 —
    최상단으로 올리면 기본 설치(backend, gait 그룹 없음)가 ImportError 로 죽습니다.
 

@@ -15,7 +15,7 @@
 
 ```powershell
 cd backend
-uv sync --group gait              # torch·ultralytics·opencv (약 2GB)
+uv sync --group gait              # torch·rtmlib·onnxruntime·opencv (약 2GB)
 $env:GAIT_RELEASE_DIR = "C:\어딘가\release"
 uv run celery -A daengs_backend.tasks.gait worker --queues gait --concurrency 1
 ```
@@ -35,18 +35,20 @@ uv run pytest tests/test_gait_*.py
 
 | 파일 | 엔진 | 역할 | 크기 |
 | --- | --- | --- | --- |
-| `best.pt` | legacy | 반려견 전용 12-keypoint pose (YOLOv8m-pose, nc=1) | 약 50.7MB |
-| `yolov8n.pt` | legacy | crop-assist 용 범용 검출기 (COCO 원본, 파인튜닝 안 함) | 약 6.2MB |
+| ~~`best.pt`~~ | 옛 legacy | 반려견 전용 12-keypoint pose (YOLOv8m-pose, nc=1) | 약 50.7MB |
+| ~~`yolov8n.pt`~~ | 옛 legacy | crop-assist 용 범용 검출기 (COCO 원본, 파인튜닝 안 함) | 약 6.2MB |
 | `ssdlite.pt` | v4 | SuperAnimal-Quadruped ssdlite 검출기 (sha256 `6c550a5f…7160d`). **academic / non-commercial** — 출처·라이선스는 [WEIGHTS_v4.md](WEIGHTS_v4.md) | 약 8.7MB |
 | `rtmpose-m_ap10k/end2end.onnx` | v4 | RTMPose-m AP-10K 관절망 ONNX (sha256 `1cfd1c86…c7f28`, mmpose Apache-2.0). 없으면 첫 실행 때 OpenMMLab 공식 zip 에서 자동 다운로드 | 약 52MB |
 
-네 파일을 **한 폴더**에 넣고 그 폴더를 가리킵니다 — 두 엔진이 같은 `GAIT_RELEASE_DIR` 을
-씁니다(D-063 5B). 파일 이름이 달라 안 겹칩니다:
+⚠️ **위 두 개는 D-063 6단계 뒤로 어떤 코드도 읽지 않습니다** — legacy 추론 runtime 을
+들어내면서 그 경로 상수(`POSE_WEIGHTS`·`DETECTOR_WEIGHTS`)도 같이 없앴습니다. 옛 기록의
+조회·비교는 이 파일들이 없어도 그대로 됩니다(관절 정의는 `contract.py` 가 가집니다).
+**이미 서버·로컬에 있는 파일을 지울 필요는 없고, 이 단계에서 지우지도 않았습니다.**
+
+아래 v4 파일을 **한 폴더**에 넣고 그 폴더를 `GAIT_RELEASE_DIR` 로 가리킵니다:
 
 ```
 release/
-  best.pt
-  yolov8n.pt
   ssdlite.pt
   rtmpose-m_ap10k/
     end2end.onnx
@@ -64,8 +66,8 @@ GAIT_RELEASE_DIR=C:\deploy\daengs\models\gait\release
 > 가중치**입니다. 크기가 비슷해 헷갈리기 쉬우니 가져오지 마세요. production 모델은
 > 프로젝트 시작 이후 한 번도 교체되지 않은 위 두 개뿐입니다.
 
-경로는 환경변수로 각각 덮어쓸 수도 있습니다 (`GAIT_POSE_WEIGHTS`,
-`GAIT_DETECTOR_WEIGHTS`). 원본 walk_demo 는 이 경로를 소스에 하드코딩하고 있었습니다.
+파일별 경로를 따로 덮어쓰는 변수는 없습니다 — `GAIT_RELEASE_DIR` 한 곳입니다.
+(옛 `GAIT_POSE_WEIGHTS`·`GAIT_DETECTOR_WEIGHTS` 는 legacy 추론 runtime 과 함께 없앴습니다.)
 
 ## 서버에서 켜기
 
@@ -158,8 +160,9 @@ compare_v4.py               v4 비교 출력(message_kind·side_summary·conditi
 engines/subprocess_bridge   워커가 sys.executable 로 위 CLI 를 서브프로세스로 부름
 ```
 
-- **켜는 법**: `GAIT_ENGINE=v4` (기본 legacy — `ssdlite.pt` 라이선스 결정 전 운영에서 바꾸지 마세요).
-  별도 설치 없음 — `uv sync --group gait` 하나로 legacy·v4 둘 다 깔립니다.
+- **켜는 법**: 따로 켤 것이 없습니다 — 6단계 뒤로 **`GAIT_ENGINE` 의 값은 `v4` 하나**이고
+  기본값도 그것입니다. 없어진 이름을 주면 `get_engine` 이 예외를 내고 분석이 FAILED 로
+  끝납니다(조용한 폴백 없음). 설치는 `uv sync --group gait` 하나입니다.
 - **골든 조건**: CPU · torch 스레드 1 (`CUDA_VISIBLE_DEVICES=-1` · `GAIT_V4_TORCH_THREADS=1` —
   스레드 수가 0.01px 반올림 경계를 가릅니다). 검사는 `tests/test_gait_v4_golden.py`
   (`GAIT_V4_GOLDEN_VIDEO=<IMG_8628_13.mp4>`; 영상·가중치가 없으면 skip — **로컬 관문에서는 skip 을
@@ -177,18 +180,17 @@ engines/subprocess_bridge   워커가 sys.executable 로 위 CLI 를 서브프�
 
 바꿔야 한다면 **`GAIT_FILTER_VERSION` 을 함께 올리세요.** 같은 영상이라도 이 값이 다르면
 어떤 프레임을 유효로 볼지 기준 자체가 달라져 관절 이동범위가 달라 보입니다 —
-`compare_records` 가 두 기록의 이 값을 대조해 경고를 붙입니다.
+`compare.compare_loaded_records` 가 두 기록의 이 값을 대조해 경고를 붙입니다.
 
 `tests/test_gait_filter.py` 가 값들을 박아 두고 있어, 바꾸면 테스트가 먼저 알려 줍니다.
 
 ## 아직 정하지 않은 것 (TBD)
 
-- **기록을 DB 로 옮길지.** 지금은 `GAIT_DATA_DIR` 아래 JSON 파일입니다(walk_demo 그대로).
-  DAENGS 에는 PostgreSQL + SQLAlchemy 가 있지만, 이 서비스가 DB 를 직접 볼지 아니면
-  `daengs_backend` 가 기록의 주인이 될지가 먼저 정해져야 합니다. 스크리닝이 DB 를 안 보는
-  무상태 서비스인 것과 같은 자리입니다. 역할 분리안·gait record 스키마안·삭제 시 정리
-  범위는 `docs/gait/record-data-design.md` 에 설계만 해 두었습니다 — 이 카드에서
-  실제 테이블·migration 은 만들지 않았습니다.
+- ~~**기록을 DB 로 옮길지.**~~ — **정해졌습니다: `daengs_backend` 가 기록의 주인입니다**
+  (D-043 · D-052, 테이블 `gait_records`). walk_demo 에서 온 파일 저장소(`record_store.py`,
+  `GAIT_DATA_DIR` 아래 JSON)는 D-063 6단계에서 코드째 없앴습니다. 설계 문서는
+  `docs/gait/record-data-design.md`. ⚠️ **서버 `gait-data` 볼륨의 옛 JSON·overlay 는 그대로
+  둡니다** — 그 데이터의 처분은 코드 삭제와 별개 결정입니다.
 - **자동 삭제(보관 기간)는 아직 없습니다.** 사용자가 부르는
   `DELETE /gait/records/{id}` 는 있고 원본·overlay 까지 지웁니다. 하지만 **기간이 지나면
   스스로 지우는 코드는 없습니다** — 보관 정책(동의 문구·기간·탈퇴 시 파기)이 정해져야

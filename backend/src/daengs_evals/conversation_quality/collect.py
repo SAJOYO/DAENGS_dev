@@ -228,8 +228,18 @@ def run_collect(
 ) -> Path:
     """케이스마다 대상 턴을 드라이버에 보내고 랩 파일 하나로 쓴다.
 
-    한 랩 안의 모든 케이스가 같은 `driver` 를 쓴다 — 어댑터 모드는 드라이버를 조립할 때
-    한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row` 가 얹는다).
+    한 랩 안의 모든 케이스가 같은 `driver` **인스턴스**를 쓴다 — 어댑터 모드는 드라이버를
+    조립할 때 한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row`
+    가 얹는다). 인스턴스를 같이 쓰는 것과 **상태를 같이 쓰는 것**은 다른 일이다 — 케이스마다
+    `getattr(driver, "reset_for_new_case", None)` 가 있으면 그것을 불러 케이스 경계를 긋는다.
+    실측(#446) — `SessionDriver` 는 `_history` 를 자기 인스턴스에 쌓기만 할 뿐 "케이스가
+    바뀌었다"를 모른다, 그래서 이 호출 없이 여러 케이스를 먹이면 앞 케이스의 이력이 뒤
+    케이스로 새어(『심장사상충 질문』이 무관한 『구토 질문』을 이어받아 되묻는 식으로) 랩
+    전체의 `prior_turns_supplied` 가 케이스 경계 없이 그냥 누적된다. `FakeDriver` ·
+    `StatelessDriver` 는 이 메서드가 없다 — 둘 다 케이스를 넘어 쌓는 상태가 원래 없으므로
+    없어도 정직하다(`getattr` 의 기본값 `None` 이 그 경우를 그냥 지나친다). **드라이버
+    종류로 분기하지 않는다** — 이 함수는 여전히 `reset_for_new_case` 가 있는지만 보지,
+    어떤 클래스인지는 모른다.
 
     `settings.general_fallback` 은 여기서 늦게 읽는다(함수 안, 이 줄에서만) — 모듈
     최상단에서 읽으면 이 패키지를 import 만 해도 backend 설정이 필요해진다. `FakeDriver`
@@ -242,11 +252,13 @@ def run_collect(
     driver_kind = str(getattr(driver, "driver_kind", "stateless"))
     general_fallback = backend_settings.general_fallback
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    rows = [
-        target_turn_row(case, turn_index, driver)
-        for case in cases
-        for turn_index in case.target_turns
-    ]
+    reset_for_new_case = getattr(driver, "reset_for_new_case", None)
+    rows: list[TurnSnapshot] = []
+    for case in cases:
+        if reset_for_new_case is not None:
+            reset_for_new_case()
+        for turn_index in case.target_turns:
+            rows.append(target_turn_row(case, turn_index, driver))
     finished_at = datetime.now(UTC).isoformat(timespec="seconds")
     header = LapHeader(
         lap=lap,

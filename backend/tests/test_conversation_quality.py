@@ -348,6 +348,108 @@ def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path
     assert row["state_supplied"] == case.state_snapshot  # 재조회가 아니라 그 시점 값
 
 
+def test_run_collect_does_not_leak_session_history_across_cases(tmp_path):
+    """실측(#446) — `run_collect` 이 `SessionDriver` 하나를 케이스 전체에 재사용해서
+    `_history` 가 케이스 경계를 안 가리고 계속 쌓였다. 랩을 다시 읽었을 때
+    `cq_pronoun_geugeo_01`(심장사상충 질문)이 `cq_symptom_missing_triage_01`(구토 질문)의
+    이력을 받아 구토를 되묻는 식으로 나타났다 — 드라이버 내부가 아니라 **랩 행에 적힌
+    `prior_turns_supplied`** 로 이 재발을 잡는다: 한 케이스 안에서만 늘어야 하고, 각
+    케이스의 첫 대상 턴은 항상 `[]` 여야 한다."""
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _RecordingOrchestrator:
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, pending_clarification
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message=f"답: {query}",
+                results=[],
+                clarify=None,
+            )
+
+    case_a = _case(
+        case_id="cq_case_a",
+        turns=[
+            Turn(role="user", text="오늘 건강 상태는 어때?"),
+            Turn(role="assistant", text="원인 판단은 여기서 하지 않아요."),
+            Turn(role="user", text="오늘 힘이 없어 보이는데?"),
+            Turn(role="assistant", text="식욕이나 배변 상태를 관찰해 주세요."),
+        ],
+        target_turns=[1, 3],
+        repair_applicable=False,
+    )
+    case_b = _case(case_id="cq_case_b", target_turns=[1])
+
+    driver = SessionDriver(_RecordingOrchestrator(), principal=None, adapter_mode="fake")
+    out = run_collect(cases=[case_a, case_b], driver=driver, out_dir=tmp_path, lap="bleed")
+    _, rows = load_lap(out)
+
+    by_case: dict[str, list] = {}
+    for row in rows:
+        by_case.setdefault(row["case_id"], []).append(row["prior_turns_supplied"])
+
+    # 케이스 안에서는 그대로 누적된다 — 그것은 SessionDriver 가 하기로 한 일이다.
+    assert by_case["cq_case_a"] == [[], [0]]
+    # 케이스가 바뀌면 완전히 새로 시작한다 — case_a 의 두 턴이 안 넘어온다.
+    assert by_case["cq_case_b"] == [[]]
+
+
+def test_run_collect_does_not_leak_pending_clarification_across_cases(tmp_path):
+    """`SessionDriver.send` 는 `prior_turns` 옆에 `pending_clarification` 도 싣는다 — 같은
+    `_history`/`_pending` 재사용 결함이 이 값도 새게 만들 수 있다(#446). 케이스 A 가
+    `CLARIFY` 로 끝나 대기가 걸린 채 케이스 B 로 넘어갔을 때, 오케스트레이터가 실제로
+    받는 값으로 확인한다 — 드라이버의 `last_pending_question` 만 보면 계산은 맞고 실어
+    보내는 것만 틀린 결함(R26 과 같은 종류)을 놓친다."""
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _ClarifyOnceOrchestrator:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.seen_pending: list = []
+
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, prior_turns
+            self.calls += 1
+            self.seen_pending.append(pending_clarification)
+            if self.calls == 1:
+                return SimpleNamespace(
+                    status=SimpleNamespace(value="CLARIFY"),
+                    message="평소와 비교해 식욕에 달라진 점이 있나요?",
+                    results=[],
+                    clarify=SimpleNamespace(
+                        question="평소와 비교해 식욕에 달라진 점이 있나요?",
+                        missing=["observation"],
+                        missing_axes=["APPETITE"],
+                    ),
+                )
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message="확인했습니다.",
+                results=[],
+                clarify=None,
+            )
+
+    case_a = _case(case_id="cq_case_a")  # target_turns=[1] — 유일한 대상 턴이 CLARIFY 로 끝난다
+    case_b = _case(case_id="cq_case_b")
+
+    orchestrator = _ClarifyOnceOrchestrator()
+    driver = SessionDriver(orchestrator, principal=None, adapter_mode="fake")
+    run_collect(cases=[case_a, case_b], driver=driver, out_dir=tmp_path, lap="pending")
+
+    # case_b 의 (유일한) 호출은 case_a 의 되묻기를 이어받지 않고 깨끗하게 시작해야 한다.
+    assert orchestrator.seen_pending == [None, None]
+
+
 # `collect.py` 가 실제로 어느 provider 를 무는지(Gemini)는
 # `test_every_module_in_the_package_imports_without_backend_settings` 가 이미 잡는다 —
 # 그 테스트는 "이 패키지의 어떤 모듈도 import 만으로는 backend 설정을 안 문다"는 속성을

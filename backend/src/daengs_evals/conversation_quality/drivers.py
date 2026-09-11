@@ -123,10 +123,17 @@ class SessionDriver:
     """이력 기제(#416 Turn Resolver)를 실제로 태운다. `StatelessDriver` **옆**에 둔다.
 
     `send()` 가 지금까지 오간 턴을 `PriorTurn` 후보로 쌓아 `orchestrator.run(...,
-    prior_turns=…, pending_clarification=…)` 로 보낸다 — `services/chat.py` 의
-    `candidates_of` · `pending_clarification_of` 와 같은 모양이지만, 저기는 DB 에서
-    `ChatTurn` 을 읽고 여기는 이 프로세스의 메모리에서 쌓는다(랩 수집은 세션 하나를
-    한 번에 돌 뿐 DB 에 남기지 않는다 — D-037 · D-048, 대화 원문을 로그·랩에 안 남긴다).
+    prior_turns=…, pending_clarification=…)` 로 보낸다 — **여기서 끝나는 유사성이다.**
+    `services/chat.py` 는 `candidates_of` · `pending_clarification_of` 를 부를 때마다
+    `chat_repo.list_turns(session, session_id, …)` 로 DB 에서 **그 세션의** 턴만 읽는다 —
+    대화 하나(`session_id`)가 스코프 그 자체다. 이 클래스는 그 스코프를 모른다: `_history` ·
+    `_pending` 은 이 **드라이버 인스턴스**에 그냥 쌓일 뿐이고, 인스턴스가 몇 개의 대화를
+    나르는지는 이 클래스가 알 방법이 없다(#446) — 한 인스턴스로 케이스 여러 개를 돌리면
+    앞 케이스의 이력이 다음 케이스로 그대로 넘어간다. 케이스 경계를 가르는 것은 이 클래스의
+    일이 아니라 `reset_for_new_case()` 를 부르는 쪽(`collect.run_collect`)의 일이다 — DB 가
+    `session_id` 로 격리해 주는 것을 여기서는 호출자가 대신 해 줘야 한다는 뜻이다.
+    (랩 수집은 세션 하나를 한 번에 돌 뿐 DB 에 남기지 않는다 — D-037 · D-048, 대화 원문을
+    로그·랩에 안 남긴다.)
 
     반환 payload 는 `StatelessDriver` 와 **같은 칸**을 쓴다 — 리포트 · 비교 코드가 드라이버
     종류를 몰라도 되게 하려는 것이다(`collect.target_turn_row` 가 이 계약에 기댄다).
@@ -171,6 +178,19 @@ class SessionDriver:
         #: 테스트 · 사람이 "지금 되묻기가 대기 중인가" 를 텍스트 없이 확인할 자리.
         #: 질문 문장 자체는 `payload["clarify"]["question"]` 에도 있으므로 새 정보는 아니다.
         self.last_pending_question: str | None = None
+
+    def reset_for_new_case(self) -> None:
+        """다음 케이스가 완전히 새 대화라는 뜻으로 이력·대기를 비운다 (#446).
+
+        `services/chat.py` 는 DB 에서 `session_id` 로 걸러 읽으니 이 비우기가 필요 없다 —
+        여기는 메모리에 쌓기만 하는 클래스라 대신 호출자가 경계를 그어야 한다.
+        `collect.run_collect` 가 케이스마다 이 메서드를 부른다(있으면 — `getattr` 로 찾으므로
+        없는 드라이버는 그냥 지나간다). 잊으면 `_history` 가 다음 케이스로 새고, 그 결과가
+        정확히 이 카드가 실측으로 잡은 결함이다: 무관한 케이스의 앞 턴을 이어받아 되묻는다.
+        """
+        self._history = []
+        self._pending = None
+        self.last_pending_question = None
 
     def send(self, query: str) -> dict:
         # 늦게 import — 모듈 최상단에서 물면 이 패키지를 import 만 해도

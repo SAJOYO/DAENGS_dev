@@ -288,6 +288,32 @@ def test_new_relation_does_not_leak_pending_axes() -> None:
     assert resolved.pending_missing_axes == []
 
 
+def test_follow_up_answering_pending_clarification_populates_the_anchor() -> None:
+    """R12 — `test_new_relation_does_not_leak_pending_axes` 의 양성 짝. 사용자가 되묻기에
+    답하는 것이 Turn Resolver 가 존재하는 이유인 경로이므로, `anchored_to_pending` 이
+    반대로 뒤집히거나 더 좁아져도 붉게 실패해야 한다(수용 케이스 5)."""
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing=["observation"],
+        missing_axes=[ObservationAxis.APPETITE, ObservationAxis.ENERGY],
+    )
+    raw = {
+        "relation": "FOLLOW_UP",
+        "referenced_index": None,
+        "standalone_query": "밥은 먹는데 활력이 없어 계속 누워 있음",
+        "resolution_confidence": 0.9,
+    }
+    resolved = validate_resolved_turn(
+        raw, query="밥은 먹는데 계속 누워 있어", candidates=(), pending=pending
+    )
+    assert resolved is not None
+    assert resolved.pending_clarification_id == pending.turn_id
+    assert resolved.pending_missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+    assert resolved.referenced_turn_id is None
+    assert resolved.current_query == "밥은 먹는데 계속 누워 있어"
+
+
 def test_current_query_is_last_with_both_candidates_and_pending() -> None:
     """R11 — 후보 블록과 대기 되묻기 블록이 둘 다 있어도 CURRENT_QUERY 는 여전히 맨 뒤다."""
     turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]

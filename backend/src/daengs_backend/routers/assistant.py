@@ -30,6 +30,7 @@ from daengs_backend.core.database import (
 )
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import care_log_context as care_log_context_service
@@ -283,10 +284,16 @@ async def _dispatch(
         )
     assert body.chat_session_id is not None and body.client_message_id is not None
 
-    async def orchestrate(active_dog_id: str) -> AssistantResponse:
+    async def orchestrate(
+        active_dog_id: str,
+        prior_turns: list[PriorTurn],
+        pending_clarification: PendingClarification | None,
+    ) -> AssistantResponse:
         # 대화의 강아지가 힌트를 이긴다 — 서비스가 세션에서 읽은 pet_id 를 넘겨 준다.
         # 프로필 조회도 그 값으로 한다. 여기서 세션을 여는 것이 안전한 이유는
         # `run_persisted_turn` 이 예약 TX 를 닫고 부르기 때문이다 (그 docstring).
+        # `prior_turns`·`pending_clarification` 은 `run_persisted_turn` 이 예약 TX 안에서
+        # 이미 읽어 넘겨준 것 — 여기서 다시 읽지 않는다(D-048).
         return await service.run(
             query=body.query,
             principal=principal_context,
@@ -294,6 +301,8 @@ async def _dispatch(
                 {**context, "active_dog_id": active_dog_id}, body, principal, session_factory
             ),
             requested_capability=body.requested_capability,
+            prior_turns=prior_turns,
+            pending_clarification=pending_clarification,
             # `include_route_trace` 를 여기서는 **안 넘깁니다.** 저장하는 요청은 바로 위에서
             # 앱 회원으로 좁혀져 있어 어차피 False 이고, 안 넘기는 쪽이 "저장되는 turn 에는
             # 라우팅 메타데이터가 실릴 수 없다"를 코드 모양으로 못박습니다 (#238).

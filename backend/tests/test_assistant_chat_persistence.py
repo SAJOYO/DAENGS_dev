@@ -247,7 +247,9 @@ def test_저장하는_요청에는_라우팅_메타데이터를_넘기지_않는
     got = _post(client, _persisted(draft, uuid.uuid4()), _app())
 
     assert got.status_code == 200
-    assert service.calls[0]["extra"] == {}
+    # `include_route_trace` 는 없다 — 넘기는 kwargs 는 Turn Resolver 배선(#416 Task 7)의
+    # `prior_turns`/`pending_clarification` 뿐이고, 그 둘은 라우팅 메타데이터가 아니다.
+    assert set(service.calls[0]["extra"]) == {"prior_turns", "pending_clarification"}
     (turn,) = store.chat_turns
     assert turn.public_response["route"] is None
     assert got.json()["route"] is None
@@ -323,6 +325,54 @@ def test_sessions_pet_is_what_the_orchestrator_sees(
     draft = _draft(store)
     assert _post(client, _persisted(draft, source="assistant"), _app()).status_code == 200
     assert service.calls[0]["context"] == {"source": "assistant", "active_dog_id": str(PET)}
+
+
+def test_self_reserved_turn_is_excluded_from_candidates(
+    client: TestClient, store: Store, service: FakeService
+) -> None:
+    """방금 예약한(이 요청 자신의) turn 이 자기 맥락으로 안 먹힌다 (#416 Task 7 R23-2).
+
+    한 개의 완료된 이전 turn 만 심어 두고 새 질문을 올리면, 오케스트레이터가 받는 후보는
+    딱 그 이전 turn 하나여야 한다 — 지금 막 예약한(아직 `processing` 인) 이 요청 자신의
+    turn 이 섞여 들어오면 사용자의 현재 질문이 스스로의 맥락으로 쓰이는 사고가 된다.
+    """
+    draft = _draft(store)
+    prior = _seed_turn(store, draft, "completed", uuid.uuid4())
+    prior.user_content = "이전 질문"
+    prior.assistant_content = "이전 답"
+
+    got = _post(client, _persisted(draft), _app())
+    assert got.status_code == 200
+
+    candidates = service.calls[0]["extra"]["prior_turns"]
+    assert [c.turn_id for c in candidates] == [prior.id]
+    assert [c.user for c in candidates] == ["이전 질문"]
+
+
+def test_candidates_are_oldest_first_and_truncation_drops_the_oldest(
+    client: TestClient, store: Store, service: FakeService
+) -> None:
+    """`repositories/chat.py` 의 `reversed(...)` 가 지워지면 `U1/A1` 번호가 전부 뒤집힌다.
+
+    네 개를 심어 `MAX_CANDIDATE_PAIRS`(3)보다 하나 많게 만들면, 잘려나가는 것이 가장
+    **오래된** 것이어야 한다 — 최신 것이 잘리면 대기 되묻기 판정(`turns[-1]`)이 더는
+    "가장 최근 완료 turn"을 보장하지 못한다.
+    """
+    draft = _draft(store)
+    turns = []
+    for i in range(4):
+        turn = _seed_turn(store, draft, "completed", uuid.uuid4())
+        turn.user_content = f"질문{i}"
+        turn.assistant_content = f"답{i}"
+        turns.append(turn)
+
+    got = _post(client, _persisted(draft), _app())
+    assert got.status_code == 200
+
+    candidates = service.calls[0]["extra"]["prior_turns"]
+    # 가장 오래된 질문0 이 잘리고, 남은 셋이 오래된 순으로 온다.
+    assert [c.user for c in candidates] == ["질문1", "질문2", "질문3"]
+    assert [c.turn_id for c in candidates] == [turns[1].id, turns[2].id, turns[3].id]
 
 
 def test_matching_active_dog_id_is_accepted(

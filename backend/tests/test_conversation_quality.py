@@ -233,12 +233,13 @@ def test_repair_applicability_is_per_target_turn_not_per_case():
 # --- 코드 기반 검사 (transcript.py) ---
 
 
-def test_prior_turns_do_not_reach_inference_today():
+def test_prior_turns_now_reach_inference_via_session_driver():
     from daengs_evals.conversation_quality.transcript import PRIOR_TURNS_REACH_INFERENCE
 
-    # 이 상수가 True 로 바뀌는 순간 두 축의 정답이 0 이 아니게 된다.
-    # 런타임이 바뀌면 여기부터 고친다.
-    assert PRIOR_TURNS_REACH_INFERENCE is False
+    # #416 SessionDriver 가 prior_turns/pending_clarification 을 실제로 실어 보내면서
+    # 뒤집혔다 (`test_conversation_quality_session_driver.py` 가 그 드라이버 자체를 잰다).
+    # `StatelessDriver` 로 모은 이전 랩만 여전히 두 축 정답이 0 이다.
+    assert PRIOR_TURNS_REACH_INFERENCE is True
 
 
 def test_repeat_count_counts_identical_assistant_messages():
@@ -1548,6 +1549,82 @@ def test_compare_labels_the_before_column_as_feature_absent_for_floored_axes():
     # 0 -> 1.7 을 "모델이 좋아졌다" 로 읽히게 두지 않는다
     text = render_compare(before=before, after=after)
     assert "기능 부재" in text
+
+
+def test_compare_does_not_floor_a_floored_axis_when_the_before_lap_used_session_driver():
+    """R25 — 못박음은 축 이름만으로 걸리지 않는다. `before` 랩이 `SessionDriver` 로
+    모였으면(#416 이후 가능해진 선택) `context_continuity` 도 실측이다.
+
+    무너뜨리는 한 줄: `render_compare` 의 `if axis in FLOORED_AXES:` 에서
+    `and before.driver == "stateless"` 조건을 빼면(=축 이름만으로 도로 판단하면)
+    이 테스트가 실패한다 — 진짜로 측정된 1.7 이 "기능 부재" 로 덮인다.
+    """
+    from daengs_evals.conversation_quality.report import AxisStat, render_compare
+
+    before = _summary(
+        driver="session",
+        axis_stats=_axis_stats(
+            context_continuity=AxisStat(n=8, mean=1.7, distribution={1: 3, 2: 5})
+        ),
+    )
+    after = _summary(
+        lap="lap2",
+        driver="session",
+        axis_stats=_axis_stats(
+            context_continuity=AxisStat(n=8, mean=1.9, distribution={1: 2, 2: 6})
+        ),
+    )
+    text = render_compare(before=before, after=after)
+    cc_line = next(
+        line for line in text.splitlines() if "context_continuity" in line and "|" in line
+    )
+    assert "기능 부재" not in cc_line
+    assert "1.70" in cc_line
+
+
+def test_compare_still_floors_a_before_lap_with_no_driver_field_as_stateless():
+    """R25 반대 방향 — 이 칸이 생기기 전에 얼어붙은 랩(`driver` 필드 자체가 없는 랩)은
+    `summarize()` 가 `"stateless"` 로 채운다(위 `test_summarize_…driver…` 참고). 그 기본값이
+    여기서도 여전히 못박아야 한다 — 한쪽 방향만 고치고 반대쪽을 깨는 실수를 잡는다.
+
+    무너뜨리는 한 줄: `Summary.driver` 의 기본값을 `"stateless"` 가 아닌 다른 값(또는
+    빈 문자열)으로 바꾸면, 옛 랩이 못박히지 않게 되어 이 테스트가 실패한다.
+    """
+    from daengs_evals.conversation_quality.report import AxisStat, render_compare
+
+    before = _summary(
+        axis_stats=_axis_stats(context_continuity=AxisStat(n=8, mean=0.0, distribution={0: 8}))
+    )
+    assert before.driver == "stateless"  # 명시 안 해도 기본값이 이것이어야 한다
+    after = _summary(
+        lap="lap2",
+        axis_stats=_axis_stats(
+            context_continuity=AxisStat(n=8, mean=1.7, distribution={1: 3, 2: 5})
+        ),
+    )
+    text = render_compare(before=before, after=after)
+    cc_line = next(
+        line for line in text.splitlines() if "context_continuity" in line and "|" in line
+    )
+    assert "기능 부재" in cc_line
+
+
+def test_summarize_defaults_driver_to_stateless_when_the_lap_meta_has_no_driver_field():
+    """`LapHeader.driver` 가 생기기 전에 모은 랩의 meta 행에는 이 키가 아예 없다 —
+    `summarize()` 가 `KeyError` 로 죽거나 임의의 문자열을 만들어 내지 않고 `"stateless"`
+    로 정직하게 채워야 한다(그 랩은 전부 `StatelessDriver` 로 모았으므로 사실과 맞다).
+    """
+    from daengs_evals.conversation_quality.report import summarize
+
+    lap_meta = {"lap": "old", "cases_sha256": "a" * 64, "adapter_mode": "fake"}
+    judge_header = {
+        "judge_model": FAKE_JUDGE_MODEL,
+        "prompt_version": 3,
+        "anchor_set": "dev",
+        "skipped": 0,
+    }
+    summary = summarize(lap_meta=lap_meta, lap_rows=[], judge_header=judge_header, judgments=[])
+    assert summary.driver == "stateless"
 
 
 def test_compare_labels_response_mode_fit_as_a_genuine_before_after_column():

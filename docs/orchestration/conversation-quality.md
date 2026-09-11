@@ -53,27 +53,38 @@ conversation_quality`(코드는 `backend/src/daengs_evals/conversation_quality/`
 넷입니다. 이진 `used_state`를 품질 점수로 쓰면 "일반론 강의에 견종 이름 하나 끼워 넣은 것"이
 상태를 쓴 것으로 잘못 셈해집니다.
 
-## 3. 오늘의 바닥 — `context_continuity`·`repair_success`는 전부 0입니다
+## 3. `context_continuity`·`repair_success` — 더는 바닥이 고정돼 있지 않습니다
 
-`transcript.py`의 한 줄이 이 패키지에서 가장 중요합니다:
+`transcript.py`의 한 줄이 이 패키지에서 가장 중요합니다. 지금 값은:
 
 ```python
-PRIOR_TURNS_REACH_INFERENCE = False
+PRIOR_TURNS_REACH_INFERENCE = True
 ```
 
-`routers/assistant.py:261`가 `service.run(query=body.query, ...)`로 현재 질의 하나만
-넘기고, `services/chat.py:run_persisted_turn`은 턴을 저장만 합니다 — 세션에서 오케스트레이터로
-가는 것은 `active_dog_id`뿐이고, 이전 턴을 다시 읽는 유일한 경로는 같은 `client_message_id`의
-정확한 재생(저장된 `public_response`를 그대로 돌려줌)입니다. 저장은 대화 메모리가 아닙니다.
+`#416`(`docs/superpowers/specs/2026-09-10-assistant-turn-context-design.md`)이 pre-routing
+**Turn Resolver**를 놓으면서 이 값이 뒤집혔습니다. `routers/assistant.py`가 현재 질의 하나만
+넘기고 `services/chat.py:run_persisted_turn`이 저장만 하던 것은 지금도 사실이지만, 그 사이에
+새 자리가 하나 생겼습니다 — `run_persisted_turn`이 예약 TX 안에서 최근 완료 turn 3쌍과 대기
+중인 `CLARIFY`를 읽어 `AssistantOrchestrationService.run`에 `prior_turns`·
+`pending_clarification`으로 넘기고, `orchestration/resolver.py`의 `GeminiTurnResolver`가 그것을
+받아 현재 발화를 `NEW`·`FOLLOW_UP`·`CORRECTION`·`REPEAT`·`META` 중 하나로 가른 뒤 **제한된
+구조화 컨텍스트**(`ResolvedTurn`)를 라우터와 선택된 capability에 넘깁니다. 이력 원문은 거기서
+멈춥니다 — 라우터도 capability도 대화 원문을 직접 보지 않습니다.
 
-그래서 **오늘 런타임의 모든 실제 행에서 `context_continuity`·`repair_success`의 옳은 점수는
-0으로 코드로 확정돼 있습니다.** 이것은 판정기가 낮게 준 것이 아니라 **기능이 없다**는
-뜻이라, 리포트(§5)의 before 열은 이 두 축을 `기능 부재`로 따로 적습니다 — "모델이 나빴다"와
-섞이지 않게. 앞 턴은 드라이버가 실어 보낸 것이 아니라 **케이스 대본**에서 옵니다: 사용자가
-실제로 겪은 대화가 그것이고, 런타임이 그것을 안 실어 보낸 것 자체가 이 카드가 재려는 실패입니다.
+그래서 **이제 이 두 축의 옳은 점수는 코드로 0으로 확정돼 있지 않습니다.** 다만 이 뒤집힘은
+**어느 드라이버로 모았는가에 매여 있습니다** — `StatelessDriver`(턴마다 독립 호출, 세션도
+이력도 없음)로 모은 랩은 여전히 `prior_turns`를 안 실어 보내므로 두 축의 정답이 그대로 0이고,
+`report.py`의 `FLOORED_AXES`가 그 랩을 그렇게 고정해 둡니다 — before 열의 `기능 부재` 라벨은
+"그 랩은 기능을 안 물었다"는 사실이지 "모델이 나빴다"가 아닙니다. `drivers.SessionDriver`로
+모은 랩(`prior_turns`·`pending_clarification`을 실제로 싣는 드라이버)부터 두 축을 판정기가
+실제로 재고, 그 랩의 before 열에는 `기능 부재`가 붙지 않습니다. 어느 드라이버로 모았는지가
+랩 헤더에 남으므로(`SessionDriver` 로 모았다고 자칭한 랩이 실제로는 `prior_turns`를 안 실었는지)
+`render_compare`가 그 값으로 못박습니다.
 
-첫 랩은 그래서 이 두 판정기의 위양성 시험이기도 합니다 — 0이 아닌 판정이 나오면 그것은
-발견이 아니라 판정기의 오류입니다.
+Turn Resolver 자체의 설계·계약·수용 케이스는 이 문서가 아니라 스펙 문서가 정본입니다:
+[`docs/superpowers/specs/2026-09-10-assistant-turn-context-design.md`](../superpowers/specs/2026-09-10-assistant-turn-context-design.md).
+랩 설계(before 랩으로 무엇을 쓰는지, 무엇이 미측정인지)는
+[`backend/evals/conversation_quality/README.md`](../../backend/evals/conversation_quality/README.md)에 있습니다.
 
 ## 4. 숫자는 지표가 아닙니다
 
@@ -231,60 +242,58 @@ before 랩과 케이스 파일을 맞춰 보면 대상은 **턴 여섯**입니�
 > `backend/tests/test_orchestration_ask_mode.py`에 유닛으로 들어가 있고, **케이스 파일에는
 > 다음 판에서** 실립니다.
 
-### B. 제한된 멀티턴 연속성·복구
+### B. 제한된 멀티턴 연속성·복구 — Turn Resolver 로 구현됨
 
-> **결정됐습니다 (2026-09-10, 사람) — `#416`은 "최근 대화 전달" 기능이 아니라 `Turn Resolver`
-> 입니다.** 최근 턴 원문을 프롬프트에 얹어 모든 capability에 흘려보내는 구현은 **하지 않습니다.**
->
-> `Turn Resolver`는 현재 발화를 **`NEW` · `FOLLOW_UP` · `CORRECTION` · `REPEAT` · `META`**
-> 중 하나로 분류하고, 관련된 이전 요청과 잇습니다. 특히 **직전 `CLARIFY` 질문과 사용자의 후속
-> 답변을 구조적으로 연결합니다**:
->
-> ```
-> "오늘 건강 상태는?"  →  "식욕과 활력은 어떤가요?"  →  "밥은 먹는데 계속 누워 있어."
->      NEW                    CLARIFY(#415)                  FOLLOW_UP ← 앞 질문에 묶인다
-> ```
->
-> 지켜야 하는 것:
->
-> - **원문을 모든 capability에 그대로 주입하지 않습니다.** 원본 사용자 발화는 보존하되,
->   *검증 가능한 사용자 관찰*과 *관련 요청*을 구조화해서 router와 **선택된** capability가
->   쓰게 합니다. 이력을 프롬프트에 붙이는 것과 구조를 넘기는 것은 다른 일입니다.
-> - **모델이 추론한 것을 반려견의 실제 상태나 기록으로 저장하지 않습니다.** `Turn Resolver`
->   의 산출물은 그 턴의 문맥이지 `care_events`도 프로필도 아닙니다.
-> - **맥락 연결이 불확실하면 임의로 보완하지 않고 짧게 확인 질문을 합니다** — `#415`가 만든
->   되묻기 경로가 그 자리에서 다시 쓰입니다.
-> - **응급 · 의료 안전 경계는 그대로입니다.** 문맥이 붙었다고 완화되지 않습니다.
->
-> 아래 표의 여덟 질문 중 **「누가 보는가」 · 「`CLARIFY` 응답을 원 요청에 잇는 법」 ·
-> 「오래된 턴이 라우팅을 오염시키지 않게」** 셋은 이 결정이 답합니다. 나머지(턴 개수 · 토큰
-> 한도 · 프라이버시 · 이력 없을 때 · 수용 케이스)는 여전히 열려 있습니다.
->
-> **여러 capability의 결과를 한 답변으로 다시 쓰는 `Response Composer`는 이 카드가 아닙니다** —
-> `#416`의 결과를 잰 뒤 별도 PR로 판단합니다.
+> **구현됐습니다 (`#416`, 2026-09-11).** 이 절이 열어 둔 여덟 질문은 전부 답이 났고, 설계·계약·
+> 배선의 정본은 이 문서가 아니라
+> [`docs/superpowers/specs/2026-09-10-assistant-turn-context-design.md`](../superpowers/specs/2026-09-10-assistant-turn-context-design.md)
+> 입니다. 아래는 그 문서로 넘어가기 전 요약이고, 자세한 것은 링크를 따라가세요.
 
-**전제.** §3에서 확인한 사실 위에서만 설계합니다 — `routers/assistant.py`가 현재 질의
-하나만 넘기고, `services/chat.py:run_persisted_turn`은 저장만 합니다. "가장 작은 기제"를
-찾는 것이 목표이지, 범용 대화 메모리를 짓는 것이 목표가 아닙니다.
+`#416`은 "최근 대화 전달" 기능이 아니라 pre-routing **Turn Resolver**로 구현됐습니다 — 최근
+턴 원문을 프롬프트에 얹어 모든 capability에 흘려보내는 안은 사람이 검토 뒤 버렸습니다(스펙
+§2, 검토한 대안 표). 대신 라우팅 **앞**에 자리 하나(`orchestration/resolver.py`)가 이력을
+읽고, 현재 발화를 `NEW`·`FOLLOW_UP`·`CORRECTION`·`REPEAT`·`META` 다섯 관계 중 하나로 가르고,
+앞 요청이나 대기 중인 `CLARIFY`에 이어 **제한된 구조화 컨텍스트**(`ResolvedTurn`)를 라우터와
+선택된 capability에 넘깁니다. 이력 원문은 거기서 멈춥니다 — 라우터도 capability도 대화 원문을
+직접 못 봅니다.
 
-반드시 정할 것 (구현 전에 팀이 답해야 하는 질문들, 답은 안 적음):
+```
+"오늘 건강 상태는?"  →  "식욕과 활력은 어떤가요?"  →  "밥은 먹는데 계속 누워 있어."
+     NEW                    CLARIFY(#415)                  FOLLOW_UP ← 앞 질문에 묶인다
+```
 
-| 항목 | 질문 |
+여덟 질문이 답이 난 자리(스펙 §4의 번호와 같습니다):
+
+| 항목 | 답 |
 | --- | --- |
-| 이력의 개수·종류 | 몇 턴을 넘기나? user 턴만인가, assistant 답변도 포함하나? 원문 그대로인가 요약인가? |
-| 누가 보는가 | 세만틱 라우터(분류에 이력이 필요한가)? General(자유 응답에 이력이 필요한가)? 전문 능력(Training·Life 등, 대부분 단발 질의로 충분해 보임)? 아니면 질의를 재작성하는 별도 경계 하나(예: "그거 왜 그래?" → "어제 말한 사료 전환 왜 그래?")뿐인가? |
-| 토큰·길이 한도 | 이력을 프롬프트에 얹으면 비용·지연이 늘어난다. 몇 턴 · 몇 토큰에서 자르나? |
-| 프라이버시·로깅 | 이력에 실린 개인정보(견종·병력 등)가 트레이스·로그에 새지 않는 경로가 있어야 한다 — `drivers._sanitize_route_plan`이 이미 `payload`를 버리는 것과 같은 원칙을 추론 경로에도 적용해야 한다 |
-| 이력이 없을 때 | 세션이 없거나(비로그인 무상태 호출), 이력이 비었거나, 첫 턴이면 오늘과 같게 동작해야 한다 — 새 기능이 무이력 경로를 깨면 안 된다 |
-| `CLARIFY` 응답이 원 요청에 잇는 법 | 사용자가 되묻기에 답하면 그 답이 원 질문과 합쳐져야 다음 라운드가 뜻을 안다. 되묻기 자체가 상태가 없으니 이것도 이력의 일부다 — §4-A의 `ASK` 결정과 맞물린다 |
-| 오래된 턴이 라우팅을 오염시키지 않게 | 대화가 주제를 바꾸면(산책 얘기 → 훈련 얘기) 옛 턴이 새 질의의 라우팅을 잘못 끌고 가면 안 된다 — 이력 창을 얼마나 좁히나, 아니면 라우터에 "이 턴은 이전 주제와 무관"을 판정하는 별도 신호를 두나 |
-| 수용 케이스 | 케이스 세트에서 `context_continuity`·`repair_applicable`이 참인 것들(관찰 케이스의 턴 5·7, 정정 뒤 턴들)을 고른다 — 몇 건인지·어느 case_id인지는 구현 착수 시점에 케이스 파일을 다시 읽어 확정한다 |
+| 개수·종류 | 완료 turn **3쌍**, user·assistant 원문 그대로(요약 안 함) — Turn Resolver의 후보군으로만 쓰인다 |
+| 누가 보는가 | **Turn Resolver만** 이력을 본다. 라우터와 선택된 capability는 `ResolvedTurn`의 제한된 결과만 받는다 |
+| 길이 한도 | user 그대로(DB 제약 ≤2,000자) · assistant 400자 절단 · 블록 전체 3,000자, 넘으면 오래된 쌍부터 버림 |
+| 프라이버시·로깅 | `structured_context`와 안 섞고 별도 인자(`prior_turns`)로 받는다. `LOGGER`에는 안 실림(D-037·D-048). `standalone_query`는 사실로 저장 안 함 |
+| 이력 없을 때 | `relation=NEW` **fast path**로 승격 — 맥락 의존 신호가 없으면 모델 호출 자체를 건너뛴다. 프롬프트는 오늘과 바이트 동일 |
+| `CLARIFY` 이음 | 가장 최근 완료 turn의 `assistant_status == 'CLARIFY'`를 대기 중인 되묻기로 읽는다. 새 테이블·새 칸 없음 — `chat_turns.public_response`에 이미 있다 |
+| 오래된 턴 오염 방지 | 후보 블록이 `CURRENT_QUERY:` 앞, 창이 3쌍, `relation=NEW`가 판정으로 끊고, 응급 경계는 Resolver보다 앞(구조적으로 못 덮음) |
+| 수용 케이스 | 5건 → **9건**으로 확장(스펙 §3-⑧) |
 
-**받아들이는 법.** 이 기제가 생기면 `transcript.PRIOR_TURNS_REACH_INFERENCE`를 `True`로
-고치고, 두 축의 기대 정답을 다시 정합니다(§3) — 그 상수 하나가 이 카드 전체와 하네스를
-잇는 자리입니다. `drivers.SessionDriver`를 더해 `StatelessDriver`와 나란히 두되
-`collect.py`·`judge.py`·`report.py`는 손대지 않는 것이 §5가 약속하는 것입니다.
+**`CLARIFY` 생산자는 둘로 유지됩니다.** Turn Resolver는 `CLARIFY`를 만들지 않습니다 — 연결이
+불확실하면 붙임을 버리기만 하고, General의 기존 ask 경로(`#415`, D-068)가 오늘처럼 되묻습니다.
+세 번째 생산자를 만들지 않기로 한 것은 사람 결정입니다 — 열거형(`AssistantStatus`)을 넓히지
+않는다는 D-068의 선택을 그대로 잇습니다.
 
-**이 카드가 하지 않는 것.** 범용 대화 요약·장기 기억·다중 세션 교차 참조는 범위 밖입니다.
-"바로 앞 정정·반복에 반응한다"는 관찰된 실패를 없애는 것이 목표이지, 임의 길이 대화를
-기억하는 어시스턴트를 짓는 것이 아닙니다.
+**Response Composer는 여전히 이 카드가 아닙니다.** 여러 capability 결과를 한 답변으로 다시
+쓰는 자리는 `#416`을 측정한 뒤 별도 PR로 판단합니다.
+
+**받아들이는 법.** `transcript.PRIOR_TURNS_REACH_INFERENCE`가 `True`로 뒤집혔고(§3),
+`drivers.SessionDriver`가 `StatelessDriver` 옆에 더해졌습니다. 스펙 §7 의 시험("이 세
+파일을 고쳐야 한다면 이음매가 샌 것")은 실제로 걸렸고, 눈을 감지 않았습니다 —
+`collect.py`는 `LapHeader.driver`와 `run_collect` 안 두 줄을, `report.py`는
+`Summary.driver`와 `render_compare`의 게이트 하나를 얻었고, `judge.py`는 이 사실을
+설명하는 산문을 얻었습니다. 이것은 이음매 누수가 아니라 의도한 초과입니다 — **어느
+드라이버로 모았는지를 기록**하는 것과 **드라이버 종류에 따라 판정을 분기**하는 것은
+다른 일이고, 금지된 것은 후자뿐입니다. 기록이 없으면 `render_compare`가 진짜로 잰
+점수 위에 "기능 부재"를 덮어씁니다 — `collect.py`·`report.py`의 `driver` 필드 문서
+참고.
+
+**이 카드가 하지 않은 것.** 범용 대화 요약·장기 기억·다중 세션 교차 참조, 반려견 상태·관찰
+사실의 임의 생성·저장, `AssistantStatus`·`CapabilityName` 확장, 무상태 경로의 동작 변경,
+기존 의료·응급 판단 대체 — 전부 스펙 §8과 같습니다.

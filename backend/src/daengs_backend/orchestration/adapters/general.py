@@ -61,6 +61,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ROUTER_TEMPERATURE,
     _gemini_client,
+    render_conversation_context,
 )
 
 # v2 (D-057 ③ⓐ): v1 은 통상 돌봄 기준(급여량 · 음수량)을 institutional · diagnosis 로 사양했다 —
@@ -92,6 +93,11 @@ GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v6-carelog"
 # are present.
 GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v6-vetspend"
 GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v6-carelog-vetspend"
+# `-conv` (#416 Task 6): 대화 맥락이 실릴 때 위 네 상수 각각에 붙는 **다섯 번째 갈래**다.
+# 새 상수를 또 네 개 두지 않고 접미사로 만드는 이유 — 네 조합은 이미 서로 다른 프롬프트
+# 몸을 가리키는데, 맥락 블록은 그 넷 중 어느 것에도 본문을 안 바꾸고 `USER_QUERY:` 앞에
+# 한 블록만 얹는다(있으면). 접미사가 "이 몸에 그 블록이 더해졌다" 를 그대로 읽히게 한다.
+# `general_prompt_version` 이 이 규칙을 한 곳에서 계산한다.
 #: `ClarifyRequest.missing` 이 말하는 것은 **되묻기의 종류**다 — 좌표 게이트의 `location.lat`
 #: 과 같은 목록에 관찰 어휘를 섞지 않으려고 값을 하나로 둔다. **무엇을 물었는지는
 #: `ClarifyRequest.missing_axes` 가 따로 갖는다** (#416 의 결합 지점).
@@ -196,6 +202,27 @@ A question about how the dog is doing today — "오늘 건강 상태는 어때?
 _VET_SPEND_RULE = """VET_RECENT, when present, is what the owner has confirmed about this dog's vet visits: this month's total spend, the visit count in the last 30 days, the most recent visit (date, reason, amount, and the hospital's name/phone if known), and total spend per reason over the last 12 months. Treat it as fact for questions like "how much have I spent on skin issues this year" or "what was that hospital's phone number". Use only the reasons and numbers present; never invent a visit, a reason, or an amount that is not there. Never diagnose, recommend treatment, or judge whether spending is high or normal from it — it is a spending record, not a medical opinion. If the question is not about vet visits or spending, ignore it. When VET_RECENT is absent, say nothing about vet spending or visit history."""
 
 
+def general_prompt_version(payload: GeneralPayload) -> str:
+    """Which of the (now five-shaped) prompt bodies ``build_general_prompt`` returns.
+
+    The base of the name comes from exactly which of ``care_log``/``vet_spend`` are
+    present — unchanged since #353. ``-conv`` is appended, on top of whichever base, only
+    when ``payload.conversation`` rides along (#416 Task 6) — see the constant comment
+    above for why a suffix and not four more constants.
+    """
+    if payload.care_log is not None and payload.vet_spend is not None:
+        version = GENERAL_CARE_LOG_VET_PROMPT_VERSION
+    elif payload.care_log is not None:
+        version = GENERAL_CARE_LOG_PROMPT_VERSION
+    elif payload.vet_spend is not None:
+        version = GENERAL_VET_PROMPT_VERSION
+    else:
+        version = GENERAL_PROMPT_VERSION
+    if payload.conversation is not None:
+        version = f"{version}-conv"
+    return version
+
+
 def build_general_prompt(payload: GeneralPayload) -> str:
     """Assemble the fallback prompt from optional blocks.
 
@@ -210,25 +237,32 @@ def build_general_prompt(payload: GeneralPayload) -> str:
     ``GeneralAnswer.model_json_schema()``, so widening ``kind`` changes all four bodies at
     once. That is why #415 moved all four version strings together rather than only the
     one whose rules it edited.
+
+    ``payload.conversation`` (#416 Task 6) changes nothing about the branch above: when it
+    is ``None`` — today's every call — both branches return exactly the literals they
+    always did. Only when it is present does a ``CONVERSATION:`` block get added,
+    immediately before ``USER_QUERY:``, and only then does the version carry ``-conv``.
     """
     schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
     dog = payload.dog.model_dump(mode="json", exclude_none=True) if payload.dog else {}
 
     if payload.care_log is None and payload.vet_spend is None:
+        if payload.conversation is None:
+            return (
+                f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
+                f"{_SAFETY_PROMPT}\n\n"
+                f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
+                f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
+                f"USER_QUERY: {payload.question}\n"
+            )
         return (
-            f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
+            f"PROMPT_VERSION: {general_prompt_version(payload)}\n\n"
             f"{_SAFETY_PROMPT}\n\n"
             f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
             f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}\n"
+            f"{render_conversation_context(payload.conversation)}\n"
             f"USER_QUERY: {payload.question}\n"
         )
-
-    if payload.care_log is not None and payload.vet_spend is not None:
-        version = GENERAL_CARE_LOG_VET_PROMPT_VERSION
-    elif payload.care_log is not None:
-        version = GENERAL_CARE_LOG_PROMPT_VERSION
-    else:
-        version = GENERAL_VET_PROMPT_VERSION
 
     # Rule paragraphs: safety always, care-log rule before vet-spend rule — that order is
     # what keeps the care-log-only prompt identical to the pre-vet-spend care-log body.
@@ -239,6 +273,8 @@ def build_general_prompt(payload: GeneralPayload) -> str:
         rule_blocks.append(_VET_SPEND_RULE)
 
     # Context lines: DOG_CONTEXT always, CARE_LOG_TODAY before VET_RECENT — same reason.
+    # A CONVERSATION line, when present, goes last: it is the block that must sit
+    # immediately before USER_QUERY.
     context_lines = [f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}"]
     if payload.care_log is not None:
         care_log = payload.care_log.model_dump(mode="json", exclude_none=True)
@@ -250,12 +286,14 @@ def build_general_prompt(payload: GeneralPayload) -> str:
         context_lines.append(
             f"VET_RECENT: {json.dumps(vet_spend, ensure_ascii=False, sort_keys=True)}"
         )
+    if payload.conversation is not None:
+        context_lines.append(render_conversation_context(payload.conversation))
 
     # 인접 리터럴의 암묵적 연결에 기대지 않는다 — `+` 로만 잇는다. 이유는 이 파일이
     # 존재하는 이유와 같다: 나중에 이 두 조각 사이에 표현식 하나가 끼어들면, 암묵적
     # 연결은 구분자를 조용히 빠뜨리지만 명시적 `+` 는 그 자리에서 문법 오류로 걸린다.
     return (
-        f"PROMPT_VERSION: {version}\n\n"
+        f"PROMPT_VERSION: {general_prompt_version(payload)}\n\n"
         + "\n\n".join(rule_blocks)
         + "\n\n"
         + f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
@@ -409,5 +447,6 @@ __all__ = [
     "GeneralCapabilityAdapter",
     "build_general_prompt",
     "general_generation_config",
+    "general_prompt_version",
     "validate_general_answer",
 ]

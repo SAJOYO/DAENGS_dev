@@ -143,6 +143,7 @@ def test_generation_fixes_slots_before_writer_and_keeps_them_private(api, monkey
     ]
     for name in ("slots", "stamps", "evidence", "decisions", "diagnostics", "slot_policy"):
         assert f'"{name}"' not in response.text
+    for name in ("slots", "stamps", "decisions", "diagnostics"):
         assert f'"{name}"' not in json.dumps(state.row.bundle)
 
     # Policy updates must not silently replace an already published diary.

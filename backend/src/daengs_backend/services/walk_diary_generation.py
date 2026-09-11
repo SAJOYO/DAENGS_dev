@@ -208,7 +208,9 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
             else await write(source, writing_input)
         )
         if prepared.board:
-            bundle = store_board(prepared, complete_slot_board(prepared, output), revision)
+            bundle = store_board(
+                prepared, complete_slot_board(prepared, output), revision, writing=output
+            )
         elif (
             output.input_revision != ticket.input_revision
             or output.plan_revision != prepared.prepared.plan.revision()

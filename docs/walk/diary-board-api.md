@@ -12,9 +12,9 @@
    시작·종료는 중간 목표 수 밖의 두 장면이다. GPS가 없으면 위치 없는 카드로 남는다.
 3. 첫 생성에서 현재 기록의 배경 수집이 진행 중이면 아래 유예 정책에 따라 `pending`을
    반환한다. 생성할 때는 기존 스토리보드 행에 예약을 저장하고 트랜잭션을 해제한다.
-4. 기존 일기 writer를 한 번 호출한다. 기존 기록·관측의 AI 배경 서술과 제목을
-   고정된 기본 보드에 옮긴다. 지점·시작/종료에는 기본 문장을 사용한다.
-5. 같은 원본·세대인지 확인한 뒤 완성된 보드 한 개를 저장한다. writer 오류에도
+4. 장면별로 고정한 파트 근거를 slot writer에 전달한다. 원문 앞에 배경 문장을 붙이며
+   근거가 없는 장면은 기본 문장을 유지한다. 모델 호출은 최대 한 번이다.
+5. 같은 원본·세대인지 확인한 뒤 완성 보드와 실제 인용 근거 영수증을 함께 저장한다. writer 오류에도
    기본 보드가 남는다. 취소된 요청은 기존 60초 lease를 통해 복구할 수 있다.
 
 현재 writer의 15초 제한과 기존 클라이언트 생성 시점은 그대로다. 아래 수집 유예는
@@ -74,11 +74,17 @@ private pin payload·owner ID·전체 원천 입력은 공개하지 않는다.
 
 ## 저장과 기존 기록
 
-기존 `walk_storyboards.bundle` JSONB에 `walk-diary-board-storage-v1` receipt를 저장한다.
-완성 보드 해시·원본 revision·생성 revision·선정 결과를 함께 보존한다. 공개된 보드는
+기존 `walk_storyboards.bundle` JSONB에 `walk-diary-board-storage-v2` receipt를 저장한다.
+완성 보드 해시·원본 revision·생성 revision·선정 결과에 더해, 실제 인용 근거와 당시
+슬롯 정책·writer 버전을 내부 `writing_receipt`에 보존한다. 원문 해시와 배경 문장으로
+발행 본문과의 결합을 확인한다. 공개 응답은 계속 `walk-diary-board-v1`이며 이 영수증은
+반환하지 않는다. 자세한 저장 범위는 [파트 슬롯 서비스 연결 3단계](diary-part-slots.md)를 따른다.
+공개된 보드는
 이후 배경 수집, 목표 수, writer 정책 변경만으로 교체하지 않는다. 사용자 원본 기록,
 사진, 핀, 경로가 바뀌면 stale로 판정한다. 별도의 앱 편집본은 원본 입력이 아니다.
 
+기존 storage-v1은 그대로 읽으며 당시 없었던 서술 영수증을 새로 만들지 않는다.
+새 저장값은 v2 읽기를 지원하는 서버가 필요하므로 이전 서버로 롤백할 때 읽기 호환을 유지한다.
 새 형식을 요청해도 이미 저장된 구형 v1/legacy 보드는 **저장된 형식과 목표 수**로
 읽는다. 읽기·기능 협상만으로 새 보드를 만들지 않는다. 새 형식의 POST `refresh`는
 재생성 명령으로 취급하지 않는다. 구형 앱의 생성 요청은 새 보드/생성 예약을
@@ -93,6 +99,7 @@ private pin payload·owner ID·전체 원천 입력은 공개하지 않는다.
 
 - API: `backend/tests/walk/diary/test_diary_board_api.py`
 - 실제 PostgreSQL 저장·lease·삭제: `test_diary_board_db.py`
+- 인용 근거·버전 보존·구형 저장 호환: `test_diary_board_receipt.py`
 - 공유 계약: `backend/evals/walk-diary/board-v1.json`
 - fixture 재생: `test_diary_board_contract.py`와 `support/board_contract.py`
 

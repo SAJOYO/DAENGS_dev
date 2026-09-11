@@ -127,6 +127,7 @@ async def main(dsn):
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             path = f"/app/walks/{walk_id}/motion-backup"
+            calculation_path = f"/app/walks/{walk_id}/motion-calculation"
 
             async def request(method, url, status=200, **kwargs):
                 nonlocal count
@@ -137,6 +138,7 @@ async def main(dsn):
 
             assert not (await request("GET", "/app/walks/motion-capabilities"))["backup_supported"]
             await request("PUT", path, 503, json=manifest)
+            await request("GET", calculation_path, 503)
             async with engine.begin() as conn:
                 pg = (await conn.get_raw_connection()).driver_connection
                 for filename in ["db/migrations/2026-09-11_walk_motion_backup.sql"] * 2 + [
@@ -179,6 +181,7 @@ async def main(dsn):
             ]:
                 await request(method, path + suffix, 404, **({"json": payload} if payload else {}))
             app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = current
+            await request("GET", calculation_path, 409)
             invalid = copy.deepcopy(points[256:])
             invalid[0]["source_epoch"] = "another"
             await request(
@@ -207,7 +210,36 @@ async def main(dsn):
             done = await request("POST", path + "/complete", json=complete)
             assert done["state"] == "complete" and done["calculation_verified"] is False
             assert done == await request("POST", path + "/complete", json=complete)
+            calculation = await request("GET", calculation_path)
+            assert calculation["evidence_fingerprint"] == complete["evidence_fingerprint"]
+            assert calculation["device_result_verified"] is False
+            assert calculation["recording_duration_nanos"] == (
+                manifest["epochs"][0]["ended_elapsed_nanos"]
+                - manifest["epochs"][0]["started_elapsed_nanos"]
+            )
+            app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = lambda: (
+                AppPrincipal(app_user_id=other)
+            )
+            await request("GET", calculation_path, 404)
+            app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = current
             await engine.dispose()  # New connections, no ORM objects reused during restore.
+            assert calculation == await request("GET", calculation_path)
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "UPDATE walk_motion_backups SET evidence_fingerprint=:fp WHERE walk_id=:id"
+                    ),
+                    {"fp": "sha256:" + "0" * 64, "id": walk_id},
+                )
+            await request("GET", calculation_path, 409)
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "UPDATE walk_motion_backups SET evidence_fingerprint=:fp WHERE walk_id=:id"
+                    ),
+                    {"fp": complete["evidence_fingerprint"], "id": walk_id},
+                )
+            assert calculation == await request("GET", calculation_path)
             restored = []
             assert done == await request("GET", path)
             for i in range(2):
@@ -256,11 +288,14 @@ async def main(dsn):
             assert empty_done["state"] == "complete" and empty_done["received_chunks"] == []
             assert empty_done == await request("GET", empty_path)
             await request("GET", empty_path + "/chunks/0", 404)
+            empty_calc = await request("GET", f"/app/walks/{empty_id}/motion-calculation")
+            assert empty_calc["distance_m"] == 0 and empty_calc["segments"] == []
             async with engine.begin() as conn:
                 await conn.execute(text("DELETE FROM app_users WHERE id=:id"), {"id": owner})
                 assert await conn.scalar(text("SELECT count(*) FROM walk_motion_backups")) == 0
                 assert await conn.scalar(text("SELECT count(*) FROM walk_motion_chunks")) == 0
             await request("GET", path, 404)
+            await request("GET", calculation_path, 404)
         # Reuse the registered mutation cases, scoped to this migration. No psql or full SQL suite required.
         spec = importlib.util.spec_from_file_location(
             "migration_check", ROOT / "tools/check_migration_verification.py"

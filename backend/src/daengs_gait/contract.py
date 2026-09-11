@@ -24,7 +24,7 @@ from typing import TypedDict
 # ── pose model 레지스트리 ─────────────────────────────────────────────────────
 #
 # 관절 목록의 원본은 각 엔진의 config 입니다 — legacy `daengs_gait.config.KEYPOINT_NAMES`,
-# v4 `backend/gait_v4/gait_v4/config.py AP10K_NAMES`. tests/test_gait_pose_model.py 가 둘을
+# v4 `daengs_gait/inference/model.py AP10K_NAMES`. tests/test_gait_pose_model.py 가 둘을
 # 읽어 여기와 대조하고, `db/migrations/2026-09-09_gait_records_pose_model.sql` 과
 # 그 verify 의 IN 목록도 같은 테스트가 대조합니다. **한 곳만 고치면 테스트가 빨간 줄을 냅니다.**
 
@@ -32,7 +32,7 @@ from typing import TypedDict
 #: (옛 엔진은 자기 ID 를 낸 적이 없습니다).
 POSE_MODEL_LEGACY = "yolov8_12kp_best"
 #: v4 — SuperAnimal ssdlite 박스 + RTMPose-m AP-10K 17 keypoint (#304). 값은 v4 엔진이
-#: record 에 이미 넣는 `gait_v4.config.MODEL_ID` 그대로입니다.
+#: record 에 이미 넣는 `daengs_gait.inference.model.MODEL_ID` 그대로입니다.
 POSE_MODEL_V4 = "rtmpose_ap10k_ssd"
 
 LEGACY_12KP_JOINTS: frozenset[str] = frozenset(

@@ -24,21 +24,20 @@ from daengs_gait.engines import base, get_engine
 SRC = Path(__file__).resolve().parents[1] / "src" / "daengs_gait"
 
 
-def test_get_engine_v4_passes_settings_as_arguments(tmp_path: Path) -> None:
-    from daengs_gait.engines.v4 import V4Engine
+def test_get_engine_v4_is_the_subprocess_bridge_on_own_interpreter() -> None:
+    """5B: v4 는 별도 venv 가 아니라 워커 자신의 인터프리터로 `daengs_gait.inference` 를
+    서브프로세스로 부릅니다 — 설정으로 받는 것은 timeout 뿐입니다."""
+    from daengs_gait.engines.subprocess_bridge import SubprocessBridgeEngine
 
-    engine = get_engine(
-        "v4", v4_dir=str(tmp_path), v4_python=str(tmp_path / "py"), v4_timeout_seconds=7
-    )
-    assert isinstance(engine, V4Engine)
+    engine = get_engine("v4", v4_timeout_seconds=7)
+    assert isinstance(engine, SubprocessBridgeEngine)
     assert engine.name == "v4"
-    assert engine.root == tmp_path
-    assert engine.configured_python == str(tmp_path / "py")
+    assert engine.python == Path(sys.executable)
     assert engine.timeout_seconds == 7
 
 
 def test_get_engine_v4_default_timeout_is_twenty_minutes() -> None:
-    from daengs_gait.engines.v4 import V4_TIMEOUT_SECONDS
+    from daengs_gait.engines.subprocess_bridge import V4_TIMEOUT_SECONDS
 
     assert get_engine("v4").timeout_seconds == V4_TIMEOUT_SECONDS == 20 * 60
 
@@ -111,8 +110,8 @@ def test_importing_engines_package_stays_light() -> None:
     """
     probe = (
         "import sys; import daengs_gait.engines; "
-        "leaked = [m for m in ('daengs_gait.engines.legacy', 'daengs_gait.engines.v4', "
-        "'daengs_gait.pipeline', 'torch', 'numpy') if m in sys.modules]; "
+        "leaked = [m for m in ('daengs_gait.engines.legacy', 'daengs_gait.engines.subprocess_bridge', "
+        "'daengs_gait.pipeline', 'daengs_gait.inference.pose', 'torch', 'numpy') if m in sys.modules]; "
         "print(','.join(leaked)); sys.exit(1 if leaked else 0)"
     )
     done = subprocess.run(

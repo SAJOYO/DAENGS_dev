@@ -27,8 +27,9 @@ def direction_note(va: float | None, vb: float | None) -> str:
     것을 실측했고, 방향까지 단언하면 진단처럼 읽히기 때문입니다. 그래서 인자 순서를 바꿔도
     같은 답이 나옵니다.
 
-    v4 엔진(`backend/gait_v4/compare.py`)의 같은 이름 함수와 **계산이 동일**합니다 —
-    5B 에서 그쪽이 이 함수를 쓰게 됩니다 (D-063 5C).
+    v4 비교(`daengs_gait.compare_v4`)도 이 함수 **하나**를 씁니다 — 판정 계산은 두 벌이
+    없습니다 (D-063 5C → 5B). 옛 `backend/gait_v4/compare.py` 의 `_direction_note` 와 계산이
+    동일했음은 `tests/test_gait_v4_compare_parity.py` 의 얼린 픽스처가 증명합니다.
     """
     if va is None or vb is None:
         return "비교 불가(한쪽 기록에 없음)"

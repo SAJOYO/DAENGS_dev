@@ -25,9 +25,14 @@ from daengs_backend.services import gait as gait_service
 REPO = Path(__file__).resolve().parents[2]
 INIT_SQL = REPO / "db" / "init" / "07_gait_records.sql"
 MIGRATION_SQL = REPO / "db" / "migrations" / "2026-09-09_gait_quality_tier_ok.sql"
-ENGINE_SOURCES = {
-    "legacy": REPO / "backend" / "src" / "daengs_gait" / "quality_gate.py",
-    "v4": REPO / "backend" / "gait_v4" / "gait_v4" / "quality.py",
+# 5B 부터 두 엔진 다 `daengs_gait.quality_gate.check_quality` 하나를 씁니다 (5C 공통 계산).
+# 그래서 tier 어휘의 정본은 파일 하나이고, 아래 `test_both_engines_call_the_shared_quality_gate`
+# 가 "두 엔진의 분석 경로가 실제로 그 함수를 부른다" 는 사실을 소스에서 잽니다.
+QUALITY_GATE = REPO / "backend" / "src" / "daengs_gait" / "quality_gate.py"
+ENGINE_SOURCES = {"shared": QUALITY_GATE}
+ENGINE_ANALYZE_SOURCES = {
+    "legacy": REPO / "backend" / "src" / "daengs_gait" / "pipeline.py",
+    "v4": REPO / "backend" / "src" / "daengs_gait" / "inference" / "analyze.py",
 }
 
 _CHECK_RE = re.compile(r"CHECK\s*\(\s*quality_tier\s+IN\s*\(([^)]*)\)\s*\)")
@@ -62,13 +67,19 @@ def test_every_tier_the_engine_can_emit_is_allowed_by_the_check(engine: str) -> 
     )
 
 
-def test_engines_agree_on_the_three_tiers() -> None:
-    """legacy 와 v4 가 같은 어휘를 씁니다 — 한쪽만 바뀌면 앱이 모르는 값을 받습니다."""
-    present = {k: _emitted_tiers(p) for k, p in ENGINE_SOURCES.items() if p.exists()}
-    if len(present) < 2:
-        pytest.skip("엔진 소스가 둘 다 있어야 비교")
-    (a, ta), (b, tb) = present.items()
-    assert ta == tb == {"good", "ok", "low"}, f"{a}={sorted(ta)} vs {b}={sorted(tb)}"
+def test_shared_quality_gate_emits_exactly_the_three_tiers() -> None:
+    assert _emitted_tiers(QUALITY_GATE) == {"good", "ok", "low"}
+
+
+@pytest.mark.parametrize("engine", sorted(ENGINE_ANALYZE_SOURCES))
+def test_both_engines_call_the_shared_quality_gate(engine: str) -> None:
+    """legacy 와 v4 가 같은 어휘를 쓰는 이유는 같은 함수를 부르기 때문입니다 (5B). 한쪽이
+    자기 판정을 다시 만들면 여기서 잡힙니다."""
+    text = ENGINE_ANALYZE_SOURCES[engine].read_text(encoding="utf-8")
+    assert re.search(r"from daengs_gait\.quality_gate import .*\bcheck_quality\b", text), (
+        f"{engine} 분석 경로가 daengs_gait.quality_gate.check_quality 를 import 하지 않음"
+    )
+    assert not _TIER_ASSIGN_RE.search(text), f"{engine} 분석 경로가 tier 를 직접 정함"
 
 
 def test_init_sql_migration_orm_and_service_constant_all_agree() -> None:

@@ -252,7 +252,7 @@ COMPARE_DIFF_THRESHOLD = 0.30
 # 이 엔진의 pose model ID (D-063)
 #
 # 기록에 "어떤 관절 정의로 만들어졌나"를 남기는 메타데이터입니다. v4 는 자기 record 에
-# `pose_model`(= gait_v4.config.MODEL_ID) 을 이미 넣는데, 이 엔진은 ID 가 없어서 여기서
+# `pose_model`(= daengs_gait.inference.model.MODEL_ID) 을 이미 넣는데, 이 엔진은 ID 가 없어서 여기서
 # 정합니다. 값의 정본과 관절 집합은 `daengs_gait.contract` 에 있습니다 — 바꾸려면 거기와
 # 백필 SQL 을 같이 바꿔야 하고, 테스트가 셋을 대조합니다.
 # ──────────────────────────────────────────────────────────────────

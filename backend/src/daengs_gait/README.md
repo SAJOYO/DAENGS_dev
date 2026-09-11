@@ -33,17 +33,23 @@ uv run pytest tests/test_gait_*.py
 **저장소에 없습니다.** 원본 walk_demo 에서도 gitignore 대상이라 `git clone` 만으로는
 따라오지 않습니다 — 파일을 직접 받아 두어야 합니다.
 
-| 파일 | 역할 | 크기 |
-| --- | --- | --- |
-| `best.pt` | 반려견 전용 12-keypoint pose (YOLOv8m-pose, nc=1) | 약 50.7MB |
-| `yolov8n.pt` | crop-assist 용 범용 검출기 (COCO 원본, 파인튜닝 안 함) | 약 6.2MB |
+| 파일 | 엔진 | 역할 | 크기 |
+| --- | --- | --- | --- |
+| `best.pt` | legacy | 반려견 전용 12-keypoint pose (YOLOv8m-pose, nc=1) | 약 50.7MB |
+| `yolov8n.pt` | legacy | crop-assist 용 범용 검출기 (COCO 원본, 파인튜닝 안 함) | 약 6.2MB |
+| `ssdlite.pt` | v4 | SuperAnimal-Quadruped ssdlite 검출기 (sha256 `6c550a5f…7160d`). **academic / non-commercial** — 출처·라이선스는 [WEIGHTS_v4.md](WEIGHTS_v4.md) | 약 8.7MB |
+| `rtmpose-m_ap10k/end2end.onnx` | v4 | RTMPose-m AP-10K 관절망 ONNX (sha256 `1cfd1c86…c7f28`, mmpose Apache-2.0). 없으면 첫 실행 때 OpenMMLab 공식 zip 에서 자동 다운로드 | 약 52MB |
 
-두 파일을 한 폴더에 넣고 그 폴더를 가리킵니다:
+네 파일을 **한 폴더**에 넣고 그 폴더를 가리킵니다 — 두 엔진이 같은 `GAIT_RELEASE_DIR` 을
+씁니다(D-063 5B). 파일 이름이 달라 안 겹칩니다:
 
 ```
 release/
   best.pt
   yolov8n.pt
+  ssdlite.pt
+  rtmpose-m_ap10k/
+    end2end.onnx
 ```
 
 ```powershell
@@ -133,6 +139,36 @@ feature vector 121차원 · quality 통계 · trajectory 가 전부 일치했습
 
 옮기지 않은 것: severity(중증도) 실험 전체, Dog-Pose 백본 개선 실험 전체(전부 기각됨),
 실험 가중치 6개, 연구 리포트, 원본 데이터셋, 데모 웹 UI.
+
+## v4 엔진 — walk_demo v4 (ssdlite + RTMPose AP-10K)
+
+walk_demo 에서 확정한 **v4**(SuperAnimal ssdlite 검출기 직접 호출 + RTMPose-m AP-10K 17 관절,
+kp_conf 0.30, 후면 좌/우 x-순서 정렬)를 **DeepLabCut·CUDA 없이 CPU 로** 돌립니다. 원본은
+`YH-KIKI/walk_demo` `experiment/animal-pose-models` `6bbdb73` 의 `port/gait_v4/` 이고, #304 에서
+`backend/gait_v4/` 별도 폴더·별도 venv 로 들어왔다가 D-063 5A(의존성)·5C(계산)·5B(추론·실행)를
+거쳐 이 패키지 안으로 완전히 합쳐졌습니다.
+
+```
+inference/model.py          v4 모델·가중치 경로 상수 (AP10K 관절·스켈레톤·ssdlite/RTMPose 경로)
+inference/ssdlite_detector  torchvision ssdlite 직접 로드 (ImageNet 선정규화 필수 — 빼면 박스 2배)
+inference/pose.py           5fps 샘플 → 박스 → RTMPose ONNX → 좌/우 정렬  (run_pose)
+inference/analyze.py        영상 → record dict — 필터·품질·궤적·feature·overlay 는 **공유 모듈** 호출
+inference/__main__.py       python -m daengs_gait.inference analyze|compare
+compare_v4.py               v4 비교 출력(message_kind·side_summary·condition_flags) — 판정 계산은 compare.direction_note 재사용
+engines/subprocess_bridge   워커가 sys.executable 로 위 CLI 를 서브프로세스로 부름
+```
+
+- **켜는 법**: `GAIT_ENGINE=v4` (기본 legacy — `ssdlite.pt` 라이선스 결정 전 운영에서 바꾸지 마세요).
+  별도 설치 없음 — `uv sync --group gait` 하나로 legacy·v4 둘 다 깔립니다.
+- **골든 조건**: CPU · torch 스레드 1 (`CUDA_VISIBLE_DEVICES=-1` · `GAIT_V4_TORCH_THREADS=1` —
+  스레드 수가 0.01px 반올림 경계를 가릅니다). 검사는 `tests/test_gait_v4_golden.py`
+  (`GAIT_V4_GOLDEN_VIDEO=<IMG_8628_13.mp4>`; 영상·가중치가 없으면 skip — **로컬 관문에서는 skip 을
+  통과로 치지 않습니다**).
+- **손대지 말 것**: `inference/model.py` 의 상수 · `gait` 그룹의 `==` 핀(`tests/test_gait_v4_lock.py`) ·
+  DeepLabCut·CUDA 추가. 바꾸면 walk_demo 골든과 어긋납니다.
+- **알려진 한계**(단일 프레임 극값이 판정을 뒤집을 수 있음 · 원거리 저점수 장면에서 검출기가 배경을
+  잡음 · 골든은 "정답"이 아니라 "현재 출력"): [KNOWN_LIMITATIONS_v4.md](KNOWN_LIMITATIONS_v4.md) —
+  walk_demo 에서 그대로 가져온 문서입니다. 가중치 출처·라이선스·해시: [WEIGHTS_v4.md](WEIGHTS_v4.md).
 
 ## 임계값을 바꿀 때
 

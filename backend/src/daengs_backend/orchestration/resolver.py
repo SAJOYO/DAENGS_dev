@@ -11,11 +11,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from collections.abc import Sequence
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from daengs_backend.orchestration.contracts import (
     ContractModel,
@@ -29,16 +30,20 @@ __all__ = [
     "MAX_CANDIDATE_BLOCK_CHARS",
     "MAX_CANDIDATE_PAIRS",
     "RESOLUTION_CONFIDENCE_FLOOR",
+    "TURN_RESOLVER_MODEL_ID",
+    "TURN_RESOLVER_PROMPT_VERSION",
     "ConversationContext",
     "PendingClarification",
     "PriorTurn",
     "ResolvedTurn",
     "TurnRelation",
     "build_candidate_block",
+    "build_turn_resolver_prompt",
     "fit_candidates",
     "needs_resolution",
     "new_turn",
     "truncate_assistant",
+    "validate_resolved_turn",
 ]
 
 #: 후보로 쓰는 완료 turn 쌍의 수. 가장 긴 수용 케이스가 요구하는 최소가 3이다.
@@ -200,3 +205,123 @@ def build_candidate_block(turns: Sequence[PriorTurn]) -> str:
         lines.append(f"U{index}: {turn.user}")
         lines.append(f"A{index}: {truncate_assistant(turn.assistant)}")
     return "\n".join(lines)
+
+
+#: 모델을 바꾸면 프롬프트도 같이 재검증해야 하므로 하나로 묶어 둔다.
+TURN_RESOLVER_MODEL_ID = "gemini-3.1-flash-lite"
+#: 프롬프트 문구를 바꾸면 올린다 — 로그·eval 이 이 값으로 프롬프트 버전을 구분한다.
+TURN_RESOLVER_PROMPT_VERSION = "turn-resolver-ko-v1"
+
+_POLICY = """You classify how the owner's current message relates to the conversation so far. You do not answer it.
+
+Return exactly one JSON object conforming to the supplied schema.
+
+relation is one of:
+- NEW: the message stands on its own. Choose this whenever the earlier turns are about a different topic. An unrelated earlier turn must not drag the current message toward it.
+- FOLLOW_UP: the message continues an earlier request, or answers PENDING_CLARIFICATION.
+- CORRECTION: the owner is correcting the premise of an earlier request ("아니, 산책 말고 밥").
+- REPEAT: the owner is asking again for something an earlier turn failed to deliver.
+- META: the message is about this conversation itself — a complaint, or telling you what you should have asked. It is not off-topic.
+
+referenced_index names the candidate pair the message attaches to, as the number in U1/A1. Use null when relation is NEW or when the message answers PENDING_CLARIFICATION instead.
+
+standalone_query is the current message rewritten so it can be read alone. It is a working restatement, never a fact about the owner or the dog. Leave it null when relation is NEW.
+
+resolution_confidence is how sure you are of the attachment, 0.0 to 1.0. When the message points at something you cannot identify among the candidates, set a low confidence and say what is unclear in ambiguity. Do not guess an attachment.
+
+PENDING_CLARIFICATION.asked_axes are the items the assistant asked about. They are NOT observations about the dog and NOT facts. An empty list means the axes are unknown, not that nothing was asked."""
+
+
+class _RawResolution(BaseModel):
+    """모델이 돌려주는 원본 JSON 의 스키마. 검증 통과 전에는 신뢰하지 않는다."""
+
+    relation: TurnRelation
+    referenced_index: int | None = None
+    standalone_query: str | None = None
+    resolution_confidence: float = Field(ge=0.0, le=1.0)
+    ambiguity: str | None = None
+
+
+def build_turn_resolver_prompt(
+    *,
+    query: str,
+    candidates: Sequence[PriorTurn],
+    pending: PendingClarification | None,
+) -> str:
+    """`CURRENT_QUERY:` 가 **맨 뒤**다 — Place 실측(2026-09-10, 102건)이 그 배치를 요구한다.
+
+    문맥을 최신 질의 뒤에 두면 모델이 최신 요청 대신 이전 요청에 답하는 퇴행이 관측됐고,
+    맨 뒤로 옮기자 9/9 사례가 고쳐졌다. `semantic.build_semantic_router_prompt` ·
+    `adapters/general.build_general_prompt` 도 같은 이유로 `USER_QUERY:` 를 맨 뒤에 둔다.
+    """
+    if not query.strip():
+        raise ValueError("query must not be blank")
+    schema = json.dumps(_RawResolution.model_json_schema(), ensure_ascii=False, sort_keys=True)
+    parts = [
+        f"PROMPT_VERSION: {TURN_RESOLVER_PROMPT_VERSION}",
+        _POLICY,
+        f"RESOLUTION_JSON_SCHEMA:\n{schema}",
+    ]
+    block = build_candidate_block(candidates)
+    if block:
+        parts.append(f"CANDIDATE_TURNS:\n{block}")
+    if pending is not None:
+        asked = json.dumps(
+            {"question": pending.question, "asked_axes": [str(a) for a in pending.missing_axes]},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        parts.append(f"PENDING_CLARIFICATION: {asked}")
+    parts.append(f"CURRENT_QUERY: {query}")
+    return "\n\n".join(parts) + "\n"
+
+
+def validate_resolved_turn(
+    raw: object,
+    *,
+    query: str,
+    candidates: Sequence[PriorTurn],
+    pending: PendingClarification | None,
+) -> ResolvedTurn | None:
+    """스키마 검증 + **후보 밖 지목 거부**. 잘못된 원본 출력은 밖으로 안 내보낸다 — `None`.
+
+    `current_query` 는 늘 인자로 받은 `query` 원문이다. 모델이 만든 `standalone_query` 로
+    바꿔치지 않는다 — 사용자 원문은 대체 대상이 아니다.
+    """
+    parsed: object = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    try:
+        decision = _RawResolution.model_validate(parsed)
+    except (ValidationError, ValueError, TypeError):
+        return None
+
+    referenced: PriorTurn | None = None
+    if decision.referenced_index is not None:
+        index = decision.referenced_index
+        if not 1 <= index <= len(candidates):
+            return None
+        referenced = candidates[index - 1]
+
+    anchored_to_pending = pending is not None and referenced is None
+    return ResolvedTurn(
+        relation=decision.relation,
+        current_query=query,
+        referenced_turn_id=referenced.turn_id if referenced else None,
+        pending_clarification_id=(
+            pending.turn_id
+            if anchored_to_pending and decision.relation is not TurnRelation.NEW
+            else None
+        ),
+        referenced_original_request=referenced.user if referenced else None,
+        pending_missing_axes=(
+            list(pending.missing_axes) if anchored_to_pending and pending else []
+        ),
+        standalone_query=decision.standalone_query,
+        resolution_confidence=decision.resolution_confidence,
+        ambiguity=decision.ambiguity,
+        context_used=[referenced.turn_id] if referenced else [],
+    )

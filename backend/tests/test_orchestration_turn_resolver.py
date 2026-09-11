@@ -5,15 +5,18 @@ import pytest
 from daengs_backend.orchestration.contracts import ObservationAxis
 from daengs_backend.orchestration.resolver import (
     MAX_ASSISTANT_CHARS,
+    TURN_RESOLVER_PROMPT_VERSION,
     PendingClarification,
     PriorTurn,
     ResolvedTurn,
     TurnRelation,
     build_candidate_block,
+    build_turn_resolver_prompt,
     fit_candidates,
     needs_resolution,
     new_turn,
     truncate_assistant,
+    validate_resolved_turn,
 )
 
 
@@ -185,3 +188,59 @@ def test_block_numbers_pairs_oldest_first_for_reference() -> None:
 
 def test_empty_candidates_render_to_an_empty_block() -> None:
     assert build_candidate_block([]) == ""
+
+
+def test_current_query_is_last_in_the_prompt() -> None:
+    """Place 실측(2026-09-10): 문맥 뒤에 최신 질의를 두면 최신 요청을 놓치는 퇴행이 사라진다."""
+    turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    prompt = build_turn_resolver_prompt(query="그거 얼마나 자주 해?", candidates=turns, pending=None)
+    assert prompt.index("CANDIDATE_TURNS:") < prompt.index("CURRENT_QUERY:")
+    assert prompt.rstrip().endswith("CURRENT_QUERY: 그거 얼마나 자주 해?")
+    assert TURN_RESOLVER_PROMPT_VERSION in prompt
+
+
+def test_pending_clarification_block_carries_axes_as_asked_not_observed() -> None:
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE],
+    )
+    prompt = build_turn_resolver_prompt(query="밥은 먹는데 계속 누워 있어", candidates=(), pending=pending)
+    assert "PENDING_CLARIFICATION:" in prompt
+    assert "APPETITE" in prompt
+    # 물은 항목이지 관찰된 사실이 아니라는 것을 프롬프트가 직접 말한다.
+    assert "asked" in prompt
+
+
+def test_model_may_not_reference_a_turn_outside_the_candidates() -> None:
+    turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    raw = {
+        "relation": "FOLLOW_UP",
+        "referenced_index": 9,
+        "standalone_query": "사료를 얼마나 자주 줘?",
+        "resolution_confidence": 0.9,
+    }
+    assert validate_resolved_turn(raw, query="그거 얼마나 자주 해?", candidates=turns, pending=None) is None
+
+
+def test_referenced_index_becomes_the_real_turn_id() -> None:
+    turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]
+    raw = {
+        "relation": "FOLLOW_UP",
+        "referenced_index": 1,
+        "standalone_query": "사료를 얼마나 자주 줘?",
+        "resolution_confidence": 0.9,
+    }
+    resolved = validate_resolved_turn(
+        raw, query="그거 얼마나 자주 해?", candidates=turns, pending=None
+    )
+    assert resolved is not None
+    assert resolved.referenced_turn_id == turns[0].turn_id
+    assert resolved.referenced_original_request == "사료 추천해줘"
+    assert resolved.context_used == [turns[0].turn_id]
+    # 원문은 모델이 만든 표현으로 대체되지 않는다.
+    assert resolved.current_query == "그거 얼마나 자주 해?"
+
+
+def test_malformed_output_is_rejected_without_surfacing_it() -> None:
+    assert validate_resolved_turn("not json", query="아무 말", candidates=(), pending=None) is None

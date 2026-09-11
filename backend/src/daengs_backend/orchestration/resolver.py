@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -31,8 +30,6 @@ from daengs_backend.orchestration.contracts import (
     TurnRelation,
 )
 from daengs_backend.orchestration.semantic import ROUTER_CANDIDATE_COUNT, ROUTER_TEMPERATURE
-
-LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "MAX_ASSISTANT_CHARS",
@@ -444,11 +441,13 @@ class GeminiTurnResolver:
             raw = await _traced_generate(self._generate, prompt)
         except TurnResolutionError:
             raise
+        # 여기서는 로그를 안 남긴다 — request_id 를 들고 있는 것은 호출자(service.py)뿐이고
+        # D-037 이 질의 원문 로깅을 막는 이상 request_id 없는 로그는 트레이스에 못 묶여
+        # 잡음만 남긴다. 실패 로그는 상위 계층의 몫이다 (semantic.py 의 router 실패도
+        # 같은 이유로 여기서 로깅하지 않고 service.py 가 request_id 와 함께 남긴다).
         except Exception as exc:  # 제공자 예외를 하나의 계약 오류로 좁힌다
-            LOGGER.warning("turn resolution provider call failed: %s", type(exc).__name__)
             raise TurnResolutionError("turn resolution provider failed") from exc
         resolved = validate_resolved_turn(raw, query=query, candidates=fitted, pending=pending)
         if resolved is None:
-            LOGGER.warning("turn resolution output failed schema validation")
             raise TurnResolutionError("turn resolution output failed schema validation")
         return resolved

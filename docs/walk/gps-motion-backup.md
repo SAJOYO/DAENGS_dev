@@ -5,8 +5,9 @@ APP #319가 고정한 측정 정책과 수신 메타데이터를 기존 산책 �
 계산했다는 뜻은 아니며, 모든 상태 응답의 `calculation_verified`는 `false`다.
 기존 raw 업로드·finalize·recording eligibility 보완·v1 행동 핀 경로는 그대로 사용한다.
 
-이 PR은 서버 저장 API와 SQL까지다. Android 전송·재시도·복원 연결과 서버 측정 엔진의
-동일 계산 검증은 후속 작업이다. 머지만으로 앱이 이 API를 호출하지 않는다.
+#449의 범위는 서버 저장 API와 SQL까지다. Android 전송·재시도·복원 연결은
+[APP #325](https://github.com/SAJOYO/DAENGS_APP/pull/325), 서버의 고정 정책 재생 조회는
+[#456 계산 계약](gps-motion-calculation.md)을 참조한다. 백업 영수증은 계속 저장만 증명한다.
 
 ## 호출 순서
 

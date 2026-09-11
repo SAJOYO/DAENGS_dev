@@ -11,10 +11,12 @@ from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.repositories import walk_motion as repo
 from daengs_backend.schemas.walk_motion import (
     BACKUP_VERSION,
+    CALCULATION_VERSION,
     CHUNK_SIZE,
     MAX_EPOCHS,
     MAX_POINTS,
     MotionBackupStatus,
+    MotionCalculation,
     MotionChunkResponse,
     MotionChunkUpload,
     MotionComplete,
@@ -22,6 +24,7 @@ from daengs_backend.schemas.walk_motion import (
 )
 from daengs_backend.services import walk_motion as service
 from daengs_backend.services.walk import WalkNotFoundError
+from daengs_backend.services.walk_motion_calculation import calculate
 from daengs_backend.services.walk_motion_contract import MotionConflict
 
 router = APIRouter(prefix="/app/walks", tags=["walk-motion-backup"])
@@ -42,14 +45,21 @@ async def _call(operation):
 
 @router.get("/motion-capabilities")
 async def capabilities(user: CurrentAppUser, session: Session):
+    available = await repo.available(session)
     return {
         "version": BACKUP_VERSION,
-        "backup_supported": await repo.available(session),
+        "backup_supported": available,
         "calculation_verified": False,
         "chunk_size": CHUNK_SIZE,
         "max_points": MAX_POINTS,
         "max_epochs": MAX_EPOCHS,
+        "calculation_versions": [CALCULATION_VERSION] if available else [],
     }
+
+
+@router.get("/{walk_id}/motion-calculation", response_model=MotionCalculation)
+async def calculation(walk_id: uuid.UUID, user: CurrentAppUser, session: Session):
+    return await _call(calculate(session, user.app_user_id, walk_id))
 
 
 @router.put("/{walk_id}/motion-backup", response_model=MotionBackupStatus)

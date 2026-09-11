@@ -7,7 +7,12 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from daengs_place.place.conversation.compiler import fingerprint
-from daengs_place.place.conversation.context import edit_exclusions, identity, unique_keys
+from daengs_place.place.conversation.context import (
+    current_places,
+    edit_exclusions,
+    identity,
+    unique_keys,
+)
 from daengs_place.place.conversation.contract import (
     ConversationState,
     DialogueTurn,
@@ -136,6 +141,24 @@ class ConversationService:
                     action="clarify",
                 )
             now = self.now()
+            if decision.action == "bookmark":
+                from daengs_place.place.conversation.bookmarks import prepare_bookmark
+
+                return prepare_bookmark(request, decision.intent, self._unchanged)
+            if decision.code == "feedback_no_mutation":
+                current_places(
+                    request
+                )  # Validate the submitted screen before preserving its selection.
+                selected = request.visible_selected or old.selected
+                result = self._unchanged(
+                    request, "explain", decision.code, decision.question, action="explain"
+                )
+                return result.model_copy(
+                    update={
+                        "state": result.state.model_copy(update={"selected": selected}),
+                        "receipt": result.receipt.model_copy(update={"selected": selected}),
+                    }
+                )
             if (
                 decision.pending is not None
                 and decision.action == "execute"

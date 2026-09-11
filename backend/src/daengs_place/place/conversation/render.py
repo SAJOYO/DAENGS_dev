@@ -131,6 +131,8 @@ def fact_sentence(fact):
 
 
 def render_answer(receipt):
+    if receipt.bookmark_command is not None:
+        return "앱에서 찜 처리 결과를 확인해 주세요."
     if receipt.execution == "failed":
         return "검색을 완료하지 못했어요. 기존 조건과 결과를 유지했어요."
     if receipt.question:

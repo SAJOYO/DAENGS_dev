@@ -13,6 +13,7 @@ class ConversationRequest(InputModel):
     session_id: UUID | None = None
     expected_revision: int = Field(default=0, ge=0)
     mode: Literal["manual", "chat", "restore", "filters"]
+    bookmark_commands: Literal["v1"] | None = None
     query: str = Field(default="", max_length=1000)
     manual: dict[str, Any] | None = None
     restore_filters: dict[str, Any] | None = None

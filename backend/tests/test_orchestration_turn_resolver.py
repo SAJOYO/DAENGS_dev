@@ -14,6 +14,7 @@ from daengs_backend.orchestration.resolver import (
     TurnResolutionError,
     build_candidate_block,
     build_turn_resolver_prompt,
+    conversation_context_of,
     fit_candidates,
     needs_resolution,
     new_turn,
@@ -135,6 +136,63 @@ def test_conversation_context_builds_without_importing_resolver() -> None:
 
     context = CC(relation=TR.NEW)
     assert context.relation is TR.NEW
+
+
+def test_conversation_context_of_fills_pending_question_when_anchored() -> None:
+    """R14 — 되묻기에 실제로 답한 turn 은 문장 원문과 축을 둘 다 받는다."""
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE, ObservationAxis.ENERGY],
+    )
+    resolved = ResolvedTurn(
+        relation=TurnRelation.FOLLOW_UP,
+        current_query="밥은 먹는데 계속 누워 있어",
+        pending_clarification_id=pending.turn_id,
+        pending_missing_axes=[ObservationAxis.APPETITE, ObservationAxis.ENERGY],
+        resolution_confidence=0.9,
+    )
+    context = conversation_context_of(resolved, pending)
+    assert context is not None
+    assert context.pending_question == pending.question
+    assert context.pending_missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+
+
+def test_conversation_context_of_ignores_an_unanchored_pending() -> None:
+    """R14 — 같이 넘어온 `pending` 이 이 turn 이 잇는 대상이 아니면 그대로 못 쓴다.
+
+    `pending` 을 받았다는 사실만으로 채우면 Task 3 이 막았던 누수 모양(관계 없는 되묻기가
+    새 turn 에 묻는 것)을 다시 연다.
+    """
+    other_pending = PendingClarification(
+        turn_id=uuid.uuid4(), question="어느 발이 이상한가요?", missing_axes=[ObservationAxis.MOBILITY]
+    )
+    resolved = ResolvedTurn(
+        relation=TurnRelation.FOLLOW_UP,
+        current_query="사료는 얼마나 자주 바꿔야 해?",
+        referenced_turn_id=uuid.uuid4(),
+        resolution_confidence=0.9,
+    )
+    context = conversation_context_of(resolved, other_pending)
+    assert context is not None
+    assert context.pending_question is None
+    assert context.pending_missing_axes == []
+
+
+def test_conversation_context_of_with_no_pending_leaves_the_question_blank() -> None:
+    resolved = ResolvedTurn(
+        relation=TurnRelation.FOLLOW_UP,
+        current_query="그거 얼마나 자주 해?",
+        referenced_turn_id=uuid.uuid4(),
+        resolution_confidence=0.9,
+    )
+    context = conversation_context_of(resolved, None)
+    assert context is not None
+    assert context.pending_question is None
+
+
+def test_conversation_context_of_with_no_resolution_is_none() -> None:
+    assert conversation_context_of(None, None) is None
 
 
 def test_assistant_text_is_truncated_with_an_ellipsis() -> None:

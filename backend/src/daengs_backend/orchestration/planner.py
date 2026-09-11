@@ -47,11 +47,11 @@ from typing import Any
 
 from daengs_backend.orchestration.contracts import (
     SCREENING_HISTORY_LIMIT,
+    ConversationContext,
     RoutePlan,
     RouterKind,
 )
 from daengs_backend.orchestration.emergency import is_emergency
-from daengs_backend.orchestration.resolver import ResolvedTurn, conversation_context_of
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
@@ -188,7 +188,7 @@ def assemble_route_plan(
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
     general_fallback: bool = False,
-    resolved: ResolvedTurn | None = None,
+    resolved: ConversationContext | None = None,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
 
@@ -202,10 +202,12 @@ def assemble_route_plan(
     building exactly the plan it built before (#279). Production passes
     `settings.general_fallback`.
 
-    `resolved` (#416 Task 5) is the Turn Resolver's verdict, already reduced to "nothing
-    trustworthy" (`None`) by the caller whenever `relation is NEW` or confidence is below
-    the floor — this function only threads it to `_payload_for`, which puts it on
-    `GeneralPayload.conversation` and nowhere else.
+    `resolved` (#416 Task 5, R14) is the **already-converted** `ConversationContext` — the
+    caller (`service._plan_and_execute`) is the only layer that holds both the Turn
+    Resolver's `ResolvedTurn` and the `PendingClarification` it may anchor to, so it builds
+    this value once (`resolver.conversation_context_of`) and passes the same object here and
+    to the semantic router. This function does no conversion; it only threads the value to
+    `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     missing = _missing_coordinates(context) if needs_coordinates else []
@@ -272,7 +274,7 @@ def _payload_for(
     *,
     query: str,
     context: dict[str, Any],
-    resolved: ResolvedTurn | None = None,
+    resolved: ConversationContext | None = None,
 ) -> dict[str, Any]:
     """The payload for one capability. Exhaustive by design — see the module docstring.
 
@@ -281,9 +283,12 @@ def _payload_for(
     user's exact words: `PlacePayload` does not strip whitespace because the Place
     service grounds its own interpretation in literal spans of the original query.
 
-    `resolved` (#416 Task 5) only ever reaches the `general` branch — every other
+    `resolved` (#416 Task 5, R14) only ever reaches the `general` branch — every other
     capability payload has no `conversation` field to put it on, and General is the
-    only answerer whose prompt is meant to carry an unresolvable-reference notice.
+    only answerer whose prompt is meant to carry an unresolvable-reference notice. It
+    arrives here already built as a `ConversationContext` (`service._plan_and_execute`
+    converts once, via `resolver.conversation_context_of`); this function assigns it
+    through and does no conversion of its own.
     """
     if capability in _QUESTION_CAPABILITIES:
         payload: dict[str, Any] = {"question": query}
@@ -322,9 +327,8 @@ def _payload_for(
         vet_spend = _vet_spend_context(context)
         if vet_spend is not None:
             payload["vet_spend"] = vet_spend
-        conversation = conversation_context_of(resolved)
-        if conversation is not None:
-            payload["conversation"] = conversation
+        if resolved is not None:
+            payload["conversation"] = resolved
         return payload
     if capability == "walk":
         location = context["location"]

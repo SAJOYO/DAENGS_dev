@@ -167,23 +167,32 @@ def needs_resolution(
     return _CONTEXT_MARKERS.search(query) is not None
 
 
-def conversation_context_of(resolved: ResolvedTurn | None) -> ConversationContext | None:
-    """`ResolvedTurn` → `ConversationContext` (#416 Task 5). 두 소비자가 같은 변환을 쓴다 —
-    `planner._payload_for` 가 `GeneralPayload.conversation` 을 채울 때, 그리고
-    `service._plan_and_execute` 가 시맨틱 라우터의 (아직 미사용인) `resolved` 인자에
-    넘길 때. 변환이 여기 하나면 둘이 서로 다른 모양을 만들 수 없다.
+def conversation_context_of(
+    resolved: ResolvedTurn | None, pending: PendingClarification | None = None
+) -> ConversationContext | None:
+    """`ResolvedTurn` → `ConversationContext` (#416 Task 5, R14 로 고정).
 
-    `pending_question` 은 늘 `None` 이다 — `ResolvedTurn` 은 `pending_clarification_id`
-    만 들고 있고 되묻기 문장 자체는 호출자의 `PendingClarification` 객체에 있어서, 그
-    텍스트를 잇는 것은 이 변환의 몫이 아니다.
+    **딱 한 곳에서만 부른다** — `service._plan_and_execute` 가 저확신 가지가 `resolved` 를
+    결정한 직후에 한 번 만들고, 그 `ConversationContext` 를 시맨틱 라우터와
+    `assemble_route_plan` 양쪽에 **같은 객체**로 넘긴다. `planner.py` 는 더 이상 이 함수를
+    안 부른다 — `ResolvedTurn` 을 들고 있지 않으므로 변환할 수도 없다.
+
+    `pending_question` 은 `pending` 이 **실제로 이 turn 이 잇는 대상일 때만** 채운다 —
+    `pending is not None and resolved.pending_clarification_id == pending.turn_id`.
+    `pending` 을 받았다는 사실만으로 채우면 관계 없는 되묻기의 문장이 새 turn 에 묻는
+    Task 3 이 막았던 누수 모양을 다시 연다. 앵커가 안 맞으면 `pending_missing_axes` 도
+    비운다 — `ResolvedTurn.pending_missing_axes` 는 `validate_resolved_turn` 이 이미 같은
+    앵커 조건으로 채웠거나 비워 뒀으므로(R8) 이 함수는 그 값을 그대로 옮기기만 한다.
     """
     if resolved is None:
         return None
+    anchored = pending is not None and resolved.pending_clarification_id == pending.turn_id
     return ConversationContext(
         relation=resolved.relation,
         referenced_original_request=resolved.referenced_original_request,
         standalone_query=resolved.standalone_query,
-        pending_missing_axes=resolved.pending_missing_axes,
+        pending_question=pending.question if anchored else None,
+        pending_missing_axes=resolved.pending_missing_axes if anchored else [],
     )
 
 

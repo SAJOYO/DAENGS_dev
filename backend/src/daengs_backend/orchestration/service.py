@@ -206,12 +206,17 @@ class AssistantOrchestrationService:
                     # 한다 — General 의 기존 ask 경로가 오늘 하던 대로 되묻는다. 넘길 것이
                     # 없으면 넘기지 않는다: 바이트 동일 보장.
                     resolved = None
+        # **변환은 여기, 딱 한 번** (R14). `ResolvedTurn` 과 `PendingClarification` 을 둘 다
+        # 들고 있는 것은 이 계층뿐이다 — 시맨틱 라우터와 `assemble_route_plan` 양쪽에 같은
+        # `ConversationContext` 객체를 넘겨서, 한쪽만 `pending_question` 을 채우는 식의
+        # 드리프트가 애초에 생길 수 없게 한다.
+        conversation = conversation_context_of(resolved, pending_clarification)
         if route_plan is None:
             try:
                 decision = await self._semantic_router.select(
                     query=query,
                     context=structured_context,
-                    resolved=conversation_context_of(resolved),
+                    resolved=conversation,
                 )
             except SemanticRoutingError as exc:
                 # 사용자에게는 고정 문구만 나가고 모델의 잘못된 출력은 안 보인다 (O-14).
@@ -254,7 +259,7 @@ class AssistantOrchestrationService:
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
-                resolved=resolved,
+                resolved=conversation,
             )
         response = await self._engine.run(
             route_plan=route_plan,

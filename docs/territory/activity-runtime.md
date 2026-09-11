@@ -73,3 +73,16 @@ GCP에는 이 파일이 자동 적용되지 않는다. 내부 checkout/DB를 확
 - `test_runtime_redis.py`: 별도 loopback Redis 컨테이너에서 3개 통과. 실제 due Beat 2개가 메시지 하나를 발행, 잠금 소유권 교체, 실제 Celery worker의 OFF 메시지 수신·DB 미접속을 확인했다. 이 테스트는 `ACTIVITY_RUNTIME_TEST_REDIS=redis://127.0.0.1:<임시포트>/0`을 명시해야 실행되며 공유 Redis 기본 포트 6379를 거부한다.
 - 변경 Python ruff, actionlint(deploy.yml), `git diff --check`, `uv run check`의 세 항목 통과. Windows 검사 프로세스에만 `PSExecutionPolicyPreference=Bypass`, `PYTHONUTF8=1`을 적용했다.
 - 제품 Compose 스택 기동·실제 운영 배포·ON 상태의 실게임·사진 판정·DB 변경은 하지 않았다. 전체 pytest 스위트는 실행하지 않았다.
+
+### OFF 준비 실행 (DEV #453, 2026-09-11 20:04 KST)
+
+- [Deploy 실행 34592137435](https://github.com/SAJOYO/DAENGS_dev/actions/runs/34592137435): 성공.
+  배포 checkout `726e7a20c98d5820670dd32029cdef300274de88`(#452)을 유지한 채 worker·Beat를 처음 기동했다.
+- 서버 사전 검사: 웹·사진 워커·activity 설정 OFF, DB/Redis 설정 일치.
+  worker healthy, 스키마 검사 8개 통과, 활성 시즌 0개, Beat healthy/disabled 확인.
+- 제공받은 개발 DB에 읽기 전용으로 재접속해 verify SQL 8개를 다시 통과했다.
+  시즌·계정·점령·북마크·인증 관련 9개 테이블 건수는 모두 0으로 준비 전과 같고 공개 API health도 정상이다.
+- `test_prepare_off.py`와 `test_runtime_deploy.py` 16개 통과, actionlint·변경 테스트 ruff·공통 검사 통과.
+  SHA 불일치, 파일 변경, 설정/실행 중 flag ON, DB 설정 차이, worker/Beat 실패, 스키마 검사 실패,
+  기존 활성 시즌, disabled가 아닌 heartbeat에서 중단하는 경로를 검증했다.
+- 추가 준비 workflow는 #453 브랜치에서 실행했다. 게임 ON·첫 시즌 생성·GCP 내부 작업은 아직 수행하지 않았다.

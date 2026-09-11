@@ -8,8 +8,8 @@ from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
 from daengs_backend.services.walk_diary_base_board import prepare_saved_base_board
+from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
 from daengs_backend.services.walk_diary_board_storage import read_board, store_board
-from daengs_backend.services.walk_diary_board_writing import complete_board
 from daengs_backend.services.walk_diary_contract import (
     StaleDiaryGeneration,
     bind_generation,
@@ -24,6 +24,7 @@ from daengs_backend.services.walk_diary_publication import (
     settle_expired,
     within_budget,
 )
+from daengs_backend.services.walk_diary_slot_writing import writing_version as slot_writing_version
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
@@ -68,7 +69,7 @@ async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bu
         "plan": prepared.board.plan.revision()
         if prepared.board
         else prepared.prepared.plan.revision(),
-        "writer": writing_version(),
+        "writer": slot_writing_version() if prepared.board else writing_version(),
     }
     if prepared.board:
         revision_parts["slots"] = prepared.board.slots.revision()
@@ -199,18 +200,20 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     await session.commit()  # Release the Walk lock/transaction before the LLM call.
     bundle, failure = None, None
     try:
+        write = writer or (write_board if prepared.board else write_diary)
+        writing_input = prepared.board if prepared.board else prepared.prepared
         output = (
-            await within_budget(writer or write_diary, source, prepared.prepared, deadline)
+            await within_budget(write, source, writing_input, deadline)
             if prepared.board and deadline is not None
-            else await (writer or write_diary)(source, prepared.prepared)
+            else await write(source, writing_input)
         )
-        if (
+        if prepared.board:
+            bundle = store_board(prepared, complete_slot_board(prepared, output), revision)
+        elif (
             output.input_revision != ticket.input_revision
             or output.plan_revision != prepared.prepared.plan.revision()
         ):
             raise ValueError("writer returned another generation's bundle")
-        if prepared.board:
-            bundle = store_board(prepared, complete_board(prepared, output), revision)
         else:
             bundle = store_diary(prepared, output, revision)
     except asyncio.CancelledError:

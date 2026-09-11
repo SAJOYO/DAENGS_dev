@@ -17,6 +17,7 @@ from daengs_backend.schemas.walk_storyboard import (
     StoryboardResponse,
 )
 from daengs_backend.services import walk_storyboard as service
+from daengs_backend.services.walk_diary_board_slot_writing import write_board
 from daengs_backend.services.walk_diary_writing import write_diary
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
@@ -33,8 +34,8 @@ def get_title_generator():
     return title_storyboard
 
 
-def get_diary_writer():
-    return write_diary
+def get_diary_writer(body: StoryboardRequest):
+    return write_board if body.bundle_format == BOARD_FORMAT else write_diary
 
 
 @router.get("/storyboard/capabilities")

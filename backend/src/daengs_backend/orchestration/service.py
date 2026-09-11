@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -34,11 +35,22 @@ from daengs_backend.orchestration.planner import (
     resolve_deterministic_route,
     resolve_emergency_route,
 )
+from daengs_backend.orchestration.resolver import (
+    RESOLUTION_CONFIDENCE_FLOOR,
+    GeminiTurnResolver,
+    PendingClarification,
+    PriorTurn,
+    ResolvedTurn,
+    TurnRelation,
+    TurnResolutionError,
+    conversation_context_of,
+)
 from daengs_backend.orchestration.semantic import (
     PROMPT_VERSION,
     ROUTER_MODEL_ID,
     GeminiSemanticRouter,
     SemanticRoutingError,
+    router_prompt_version,
 )
 from daengs_backend.orchestration.social import build_social_response
 
@@ -62,9 +74,11 @@ class AssistantOrchestrationService:
         *,
         engine: OrchestrationEngine | None = None,
         semantic_router: GeminiSemanticRouter | None = None,
+        turn_resolver: GeminiTurnResolver | None = None,
     ) -> None:
         self._engine = engine or OrchestrationEngine()
         self._semantic_router = semantic_router or GeminiSemanticRouter()
+        self._turn_resolver = turn_resolver or GeminiTurnResolver()
 
     async def run(
         self,
@@ -76,10 +90,18 @@ class AssistantOrchestrationService:
         request_id: str | None = None,
         locale: str = "ko-KR",
         include_route_trace: bool = False,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> AssistantResponse:
         """Plan, then execute. `include_route_trace` is the caller's answer to "may this
         principal see how the request was routed?" (#238) — the HTTP boundary decides it,
         because permissions are its business, and it defaults to no.
+
+        `prior_turns`/`pending_clarification` (#416 Task 5) feed the Turn Resolver — both
+        default to empty/None so every existing caller (including the HTTP router, which
+        does not thread conversation history yet) keeps behaving exactly as before: no
+        candidates and no pending clarification means the resolver's fast path returns a
+        `NEW` turn without calling any model.
 
         The two responses that never reach the engine get the same trace attached here:
         a social reply and a router failure are exactly the answers whose "no capability
@@ -102,7 +124,7 @@ class AssistantOrchestrationService:
             },
             metadata={"principal_kind": principal.kind, "locale": locale},
         ) as run:
-            response, route_plan = await self._plan_and_execute(
+            response, route_plan, resolved_router_version = await self._plan_and_execute(
                 query=query,
                 principal=principal,
                 structured_context=structured_context,
@@ -110,10 +132,14 @@ class AssistantOrchestrationService:
                 rid=rid,
                 locale=locale,
                 include_route_trace=include_route_trace,
+                prior_turns=prior_turns,
+                pending_clarification=pending_clarification,
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
             # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
-            run.add_metadata(_route_metadata(route_plan))
+            run.add_metadata(
+                _route_metadata(route_plan, resolved_router_version=resolved_router_version)
+            )
             run.end(outputs=_trace_outputs(response))
             return response
 
@@ -127,16 +153,15 @@ class AssistantOrchestrationService:
         rid: str,
         locale: str,
         include_route_trace: bool,
-    ) -> tuple[AssistantResponse, RoutePlan | None]:
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
+    ) -> tuple[AssistantResponse, RoutePlan | None, str | None]:
         """계획하고 실행한다. 둘째 반환값은 트레이스 metadata 용 — 엔진에 못 간 두 응답
-        (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다."""
-        semantic_trace = (
-            RouteTrace(
-                router=RouterKind.LLM, model=ROUTER_MODEL_ID, prompt_version=PROMPT_VERSION
-            )
-            if include_route_trace
-            else None
-        )
+        (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다. 셋째 반환값
+        (`resolved_router_version`)도 metadata 용이다 — 실제로 나간 라우터 프롬프트
+        버전을 `_route_metadata` 가 `AssistantResponse.route` 를 거치지 않고 바로 읽게
+        한다. `route` 는 `include_route_trace=False` 인 영속 경로에서 늘 `None` 이라,
+        그것을 거치면 권한 결정 하나로 측정 핀이 틀어진다 (fix wave item 5)."""
         # 응급은 라우터보다 앞이다 — 모델을 태우지 않고, 배타로 끝낸다.
         route_plan = resolve_emergency_route(
             query=query,
@@ -150,10 +175,70 @@ class AssistantOrchestrationService:
                 query=query,
                 context=structured_context,
             )
+        # ── Turn Resolver (#416). 응급·결정론 **뒤**, 시맨틱 라우터 **앞**.
+        # 응급이 앞인 것은 의도다: 응급 경계는 현재 사용자 원문을 직접 검사해야 하고, 이
+        # 판정이 그것을 약하게 만들 수 없다. 결정론이 앞인 것은 명시 신호가 이미 답이기
+        # 때문이다 — 관계를 물을 이유가 없다.
+        resolved: ResolvedTurn | None = None
+        # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
+        # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279 와 같은
+        # 이유, `general_fallback` 이 아래에서 읽히는 자리와 같은 규칙).
+        if route_plan is None and settings.turn_resolver:
+            try:
+                resolved = await self._turn_resolver.resolve(
+                    query=query, candidates=prior_turns, pending=pending_clarification
+                )
+            except TurnResolutionError as exc:
+                # **답은 나간다.** 이력 기제가 없던 때와 같게 도는 것이 실패 모드다 —
+                # 대화 이어짐이 안 되는 것이 답이 안 나오는 것보다 낫다. 질문 원문은 안
+                # 남긴다 (D-037) — request_id 로 트레이스와 잇는다. 시맨틱 라우터 실패
+                # 로그(아래)와 같은 규칙: 담는 것과 안 담는 것이 같다.
+                LOGGER.warning(
+                    "턴 해소 실패 request_id=%s: %s (원인: %r)",
+                    rid,
+                    exc,
+                    exc.__cause__,
+                )
+                resolved = None
+            else:
+                if (
+                    resolved.relation is TurnRelation.NEW
+                    or resolved.resolution_confidence < RESOLUTION_CONFIDENCE_FLOOR
+                ):
+                    # **CLARIFY 생산자를 셋으로 안 만든다.** 확신이 낮으면 붙임을 버리기만
+                    # 한다 — General 의 기존 ask 경로가 오늘 하던 대로 되묻는다. 넘길 것이
+                    # 없으면 넘기지 않는다: 바이트 동일 보장.
+                    resolved = None
+        # **변환은 여기, 딱 한 번** (R14). `ResolvedTurn` 과 `PendingClarification` 을 둘 다
+        # 들고 있는 것은 이 계층뿐이다 — 시맨틱 라우터와 `assemble_route_plan` 양쪽에 같은
+        # `ConversationContext` 객체를 넘겨서, 한쪽만 `pending_question` 을 채우는 식의
+        # 드리프트가 애초에 생길 수 없게 한다.
+        conversation = conversation_context_of(resolved, pending_clarification)
+        # `route_plan` 이 이미 채워져 있으면(응급·결정론) 시맨틱 라우터를 아예 안 거치므로
+        # 프롬프트 버전을 계산할 것이 없다 — `_route_metadata` 도 그 경우 `route_plan`
+        # 가지에서 `route_plan.prompt_version` 을 직접 읽어서 이 `None` 을 안 쓴다.
+        resolved_router_version: str | None = None
         if route_plan is None:
+            # `conversation` 이 여기서야 자리를 잡으므로, 실제로 나갈 라우터 프롬프트의
+            # 버전도 여기서 한 번만 계산한다(Fix round 1, R18) — `RouteTrace` ·
+            # `RoutePlan.prompt_version` · 아래 `_route_metadata` 의 폴백 세 곳이 전부 이
+            # 값을 읽어서, 실제로 `RESOLVED_PROMPT_VERSION` 프롬프트가 나간 turn 이 평가
+            # 랩 행에 평범한 `PROMPT_VERSION` 으로 잘못 적히는 일이 다시 생기지 않는다.
+            resolved_router_version = router_prompt_version(conversation)
+            semantic_trace = (
+                RouteTrace(
+                    router=RouterKind.LLM,
+                    model=ROUTER_MODEL_ID,
+                    prompt_version=resolved_router_version,
+                )
+                if include_route_trace
+                else None
+            )
             try:
                 decision = await self._semantic_router.select(
-                    query=query, context=structured_context
+                    query=query,
+                    context=structured_context,
+                    resolved=conversation,
                 )
             except SemanticRoutingError as exc:
                 # 사용자에게는 고정 문구만 나가고 모델의 잘못된 출력은 안 보인다 (O-14).
@@ -178,6 +263,7 @@ class AssistantOrchestrationService:
                         route=semantic_trace,
                     ),
                     None,
+                    resolved_router_version,
                 )
             if decision.social_intent is not None:
                 # Schema guarantees execute/handoffs are empty here: nothing to plan or run.
@@ -186,6 +272,7 @@ class AssistantOrchestrationService:
                         request_id=rid, intent=decision.social_intent, route=semantic_trace
                     ),
                     None,
+                    resolved_router_version,
                 )
             route_plan = assemble_route_plan(
                 decision,
@@ -193,9 +280,11 @@ class AssistantOrchestrationService:
                 context=structured_context,
                 router=RouterKind.LLM,
                 model=ROUTER_MODEL_ID,
+                prompt_version=resolved_router_version,
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
+                resolved=conversation,
             )
         response = await self._engine.run(
             route_plan=route_plan,
@@ -206,20 +295,32 @@ class AssistantOrchestrationService:
             context=structured_context,
             include_route_trace=include_route_trace,
         )
-        return response, route_plan
+        return response, route_plan, resolved_router_version
 
 
-def _route_metadata(route_plan: RoutePlan | None) -> dict[str, Any]:
+def _route_metadata(
+    route_plan: RoutePlan | None, *, resolved_router_version: str | None
+) -> dict[str, Any]:
     """루트 런 metadata 의 라우팅 키. `graph.py` 의 자식 런과 **같은 키**를 쓴다.
 
     RoutePlan 이 없는 두 응답(스몰토크 · 라우터 실패)은 시맨틱 라우터를 거친 뒤라
     LLM 라우팅으로 적는다 — 결정론 라우팅은 RoutePlan 없이 끝나는 길이 없다.
+
+    `resolved_router_version` 은 그 두 응답을 낳은 `_plan_and_execute` 가 그 자리에서 이미
+    실제로 쓰인 `prompt_version` 을 계산해 둔 값이다(Fix round 1, R18) — 이 함수는 그것을
+    `AssistantResponse.route`(`RouteTrace`) 를 거치지 않고 직접 받는다(fix wave item 5).
+    예전에는 `route` 를 거쳐 갔는데, `route` 는 `include_route_trace=False` 인 영속 경로
+    에서 늘 `None` 이라 그 경로에서는 이 값이 절대 안 실렸다 — 권한 결정 하나가 측정용
+    프롬프트 버전 핀을 틀어지게 만든 것이다. 여기서 `PROMPT_VERSION` 을 다시 하드코딩하면
+    맥락이 실린 turn 도 평범한 버전으로 적힌다. `resolved_router_version` 이 `None` 인
+    것은 시맨틱 라우터를 거치지 않은 경우뿐이고(이 가지에 들어오는 두 응답은 둘 다 거치므로
+    실무에서는 안 생긴다), 그때는 기본값으로 물러난다.
     """
     if route_plan is None:
         return {
             "router": RouterKind.LLM.value,
             "router_model": ROUTER_MODEL_ID,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": resolved_router_version or PROMPT_VERSION,
         }
     return {
         "router": route_plan.router.value,

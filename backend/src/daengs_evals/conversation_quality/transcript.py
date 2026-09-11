@@ -7,8 +7,13 @@
 문장만으로 가려지는지)을 계산해서 `report.summarize` 가 케이스별로 보여줄 수 있게 하는
 자리다. 채점하지 않는다 — 판정 축도 아니다.
 
-`PRIOR_TURNS_REACH_INFERENCE` 는 이 패키지에서 가장 중요한 한 줄이다. 오늘 False 이고,
-그래서 `context_continuity` · `repair_success` 의 정답이 0 으로 확정돼 있다.
+`PRIOR_TURNS_REACH_INFERENCE` 는 이 패키지에서 가장 중요한 한 줄이다. `#416` 이 Turn
+Resolver 를 놓고 `SessionDriver`(`drivers.py`)가 `prior_turns`·`pending_clarification`
+을 실제로 실어 보내면서 True 로 뒤집혔다 — `StatelessDriver` 로 모은 이전 랩(`before`)
+에서는 여전히 False 인 세계를 잰 것이라 그쪽 두 축 정답은 그대로 0 이다(`report.py` 의
+`FLOORED_AXES` 가 그 랩을 그렇게 고정해 둔다). `SessionDriver` 로 모으는 랩부터는 이
+가정이 사라지므로, `context_continuity` · `repair_success` 를 더는 코드로 0 이라
+단정하지 않고 판정기가 실제로 재게 한다.
 """
 
 from __future__ import annotations
@@ -17,10 +22,12 @@ from collections import Counter
 
 from pydantic import BaseModel, ConfigDict
 
-#: `routers/assistant.py` 가 `service.run(query=body.query, ...)` 로 현재 질의만 넘기고
-#: `services/chat.py:run_persisted_turn` 은 저장만 한다. 런타임이 바뀌면 이 상수를 고치고
-#: 두 축의 기대 정답을 다시 정한다. (`tests` 가 이 상수와 리포트 문구를 함께 잡는다.)
-PRIOR_TURNS_REACH_INFERENCE = False
+#: `#416` 으로 `AssistantOrchestrationService.run` 이 `prior_turns`·`pending_clarification`
+#: 을 실제로 받아 `GeminiTurnResolver` 에 넘기게 됐고, `SessionDriver` 가 그 계약대로
+#: 이전 턴을 실어 보낸다 — 그래서 이 런타임을 무는 랩에서는 이전 턴이 추론에 닿는다.
+#: `StatelessDriver` 로 모은(=이전 턴을 안 싣는) 랩만 여전히 두 축의 정답이 0 이다.
+#: (`tests` 가 이 상수와 리포트 문구를 함께 잡는다.)
+PRIOR_TURNS_REACH_INFERENCE = True
 
 
 def _fixed_refusal_texts() -> tuple[str, frozenset[str]]:

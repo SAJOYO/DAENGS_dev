@@ -298,6 +298,10 @@ class GeneralPayload(ContractModel):
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
     vet_spend: VetSpendContext | None = None
+    #: 대화 맥락 (#416). **이력 원문이 아니다** — Turn Resolver(`orchestration/resolver.py`)가
+    #: 만든 제한된 구조화 컨텍스트다. `relation=NEW` 이거나 확신이 낮으면 `None` 이고,
+    #: 그것이 프롬프트를 오늘과 바이트 동일하게 유지하는 방법이다(#416 Task 5).
+    conversation: ConversationContext | None = None
 
 
 class VetContactPayload(ContractModel):
@@ -404,6 +408,43 @@ class ClarifyRequest(ContractModel):
     #: 넣어 주지 않는다. 모델이 안 고르면 빈 채로 나가고, `#416` 은 그것을 "축을 모른다"
     #: 로 읽어야지 "물은 것이 없다" 로 읽으면 안 된다.
     missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
+
+
+class TurnRelation(StrEnum):
+    """현재 발화가 앞 대화와 맺는 관계 (#416).
+
+    **여기 사는 이유는 `ConversationContext` 가 여기 살기 때문이다.** `ConversationContext`
+    는 (나중에) `GeneralPayload` 안에 실리는 계약 타입이라 `contracts.py` 를 벗어날 수
+    없고, 그 필드 `relation` 의 타입인 이 열거형도 같이 따라온다. `AssistantStatus` 등
+    공유 열거형을 "넓히지" 않는다는 규칙과는 다른 이야기다 — 그 규칙은 기존 열거형에
+    값을 추가하지 말라는 것이지, 새 열거형이 이 모듈에 사는 것을 막지 않는다.
+    `orchestration/resolver.py` 가 이 이름을 그대로 재수출해서, `from
+    daengs_backend.orchestration.resolver import TurnRelation` 을 쓰는 기존 코드와 테스트는
+    안 바뀐다.
+    """
+
+    NEW = "NEW"
+    FOLLOW_UP = "FOLLOW_UP"
+    CORRECTION = "CORRECTION"
+    REPEAT = "REPEAT"
+    META = "META"
+
+
+class ConversationContext(ContractModel):
+    """라우터와 선택된 capability 가 보는 **전부**. 이력 원문은 여기 없다 (#416).
+
+    Turn Resolver (`orchestration/resolver.py`) 가 조립해서 내려보낸다.
+    """
+
+    relation: TurnRelation
+    referenced_original_request: str | None = None
+    #: 참조한 턴에서 **비서가 실제로 답한 내용** — 사용자가 뭘 물었는지만으로는 "아까 답을
+    #: 다시 설명해줘" 류를 풀 수 없다는 실사용 실패에서 추가됐다 (followup-answer-text
+    #: brief). `resolver.truncate_assistant` 를 거친 값만 들어온다.
+    referenced_assistant_answer: str | None = None
+    standalone_query: str | None = None
+    pending_question: str | None = None
+    pending_missing_axes: list[ObservationAxis] = Field(default_factory=list)
 
 
 class RoutePlan(ContractModel):
@@ -529,6 +570,7 @@ __all__ = [
     "CapabilityResult",
     "CapabilityStatus",
     "ClarifyRequest",
+    "ConversationContext",
     "ErrorDetail",
     "GeneralPayload",
     "Handoff",
@@ -546,6 +588,7 @@ __all__ = [
     "ScreeningContext",
     "ScreeningHistory",
     "TrainingPayload",
+    "TurnRelation",
     "VetContactPayload",
     "VetSpendContext",
     "WalkPayload",

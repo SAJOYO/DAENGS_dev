@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/gps-motion-backup.md](walk/gps-motion-backup.md) | GPS 측정 정책·수신 메타데이터 분할 백업, 저장 완료 지문과 읽기 계약 |
 | [walk/gps-recording-contract.md](walk/gps-recording-contract.md) | GPS 기록 구분의 업로드·복원·제한된 보완과 행동 핀 검증 계약 |
 | [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
 | [walk/diary-publication.md](walk/diary-publication.md) | 종료 후 남은 시간 예산·영속 기본 보드·단일 확정과 중단 복구 |

@@ -44,6 +44,7 @@ from daengs_backend.routers import (
     vet_visit,
     walk_entry,
     walk_entry_v2,
+    walk_motion,
     walk_photo,
     walk_spatial_diary,
     walk_storyboard,
@@ -208,6 +209,7 @@ app.include_router(dogcard.router)
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**
 app.include_router(gait.router)
 # 산책 기록(`/app/walks`). 라우터가 CurrentAppUser 로 잠겨 있습니다.
+app.include_router(walk_motion.router)
 app.include_router(app_walks.router)
 app.include_router(walk_entry.router)
 app.include_router(walk_entry_v2.capabilities_router)

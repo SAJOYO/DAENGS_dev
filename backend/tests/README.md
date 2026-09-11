@@ -99,6 +99,17 @@ uv run pytest -q tests/walk/measurement/test_walk_measurement.py tests/walk/meas
 uv run pytest -q tests/walk/api/test_walk_api.py tests/walk/api/test_walk_auth.py tests/walk/api/test_walk_chunk.py tests/walk/measurement/test_walk_style.py
 ```
 
+#### GPS 측정 자료 백업 — PR #449
+
+- `uv run pytest -q -rs tests/walk/api/test_walk_motion_contract.py`: 고정 지문, Long/Float 원본,
+  epoch·정책 거부 조건, 실제 앱 라우터의 인증 경계를 검사한다. DB 설정 없이 실행한다.
+- 저장·트랜잭션·SQL 변경 시 `tools/check_walk_motion_backup.py --dsn ...`를 명시적으로 실행한다.
+  실제 HTTP 재전송·복원·소유권·삭제와 이 마이그레이션의 변조 검사를 묶는다.
+  기본 pytest에 DB 요구나 skip을 추가하지 않는다. 임시 DB 생성·종료 명령과 계약은
+  [GPS 측정 백업 문서](../../docs/walk/gps-motion-backup.md)에 있다.
+- 기존 raw/recording/finalize를 바꾸면 `api/test_walk_recording.py`, `api/test_walk_chunk.py`,
+  `api/test_walk_repository.py`, `measurement/test_finalize_contract.py`도 영향 범위에 포함한다.
+
 ### 6. 산책 환경 정보
 
 - 근거: PR #171, #173. 경계: `daengs_life.realtime.weather_at`과 산책 환경 adapter/observation.

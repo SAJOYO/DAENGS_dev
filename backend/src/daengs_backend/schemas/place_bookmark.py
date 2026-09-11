@@ -47,10 +47,12 @@ class BookmarkSearchResult(BookmarkList):
 
 class BookmarkInterpret(BookmarkSearch):
     query: str = Field(min_length=1, max_length=1000)
+    search_policy: Literal["v1"] | None = None
 
 
 class BookmarkInterpretResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["search", "clarify", "explain", "return_search"]
+    action: Literal["search", "clarify", "explain", "return_search", "search_places"]
     message: str
     filters: dict[str, Any] | None = None
+    search_filters: dict[str, Any] | None = None

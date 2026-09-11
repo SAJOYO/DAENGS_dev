@@ -57,11 +57,17 @@ STATIC_INSTRUCTIONS = """시설 검색 요청의 뜻을 해석한다. propose_fa
 current_state가 조건의 원본이다. 언급하지 않은 조건은 changes에서 생략/keep한다.
 query는 최신 요청이며 history보다 우선한다. 클릭 순서로 취향을 추론하지 않는다.
 검색 대상과 공간 범위는 별개다. '찜한 곳 중/찜에서/이 조건으로 찜도 찾아줘'는 search_scope=bookmarks.
-'일반 검색으로 돌아가/찜 말고 주변에서'는 search_scope=all_places. 언급 없으면 keep.
+'찜 여부 상관없이/찜 제한 풀고'는 search_scope=all_places. 언급 없으면 keep.
+'이전 검색으로 돌아가/일반 검색 화면으로 돌아가'는 navigation=restore_search, search_scope=keep.
+화면 복원은 현재 찜 조건을 일반 검색에 적용하는 것과 다르다.
 '찜해줘'는 저장 명령이지 찜 검색 전환이 아니다. 부정·인용 속 범위 변경도 적용하지 않는다.
-'찜하지 말고/저장하지 말고'는 저장 행위만 부정하며 search_scope=keep, bookmark=null이다.
+'찜하지 말고/저장하지 말고'는 forbid_save=true, bookmark=null이다. 검색 대상 언급은 없으므로 search_scope=keep이다.
 예: 찜 탭의 '찜하지 말고 주차 되는 카페만 찾아줘'는 같은 찜 범위를 유지하고 parking=required_true다.
-'찜한 곳 말고 일반 장소에서/일반 검색으로 돌아가'처럼 검색 집합 변경을 명시해야 search_scope=all_places다.
+'찜 여부 상관없이 주차 되는 카페'는 search_scope=all_places와 카페·주차 변경을 함께 표현한다.
+'찜한 곳 빼고'는 search_scope=unbookmarked, '새로운 곳만'은 new_candidates다. 서버가 지원 여부를 판단한다. all_places로 대체하지 않는다.
+search_scope를 바꾸면 search_scope_quote에 집합 변경을 지시한 최신 원문 구절을 그대로 적는다.
+'찜하지 말고 주차 되는 카페'에는 집합 변경 근거가 없으므로 search_scope=keep, search_scope_quote='', forbid_save=true다.
+'찜 여부 상관없이'는 search_scope_quote='찜 여부 상관없이'다. 저장 동사의 부정을 집합 변경 근거로 쓰지 않는다.
 '멀어도 돼/지역 제한 없이/전체 지역의 찜'은 spatial_scope=unbounded. 나머지 조건은 유지한다.
 단순 '찜에서 찾아줘/전체 찜 중 카페'는 공간 범위를 유지한다. '전체'가 장소 집합인지 지역인지 구별한다.
 찜 탭에서 '이거 빼줘'는 찜 해제와 결과 제외가 모호하므로 clarify+unresolved=ambiguous다.

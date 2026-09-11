@@ -143,9 +143,15 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
   `임베딩 모델 불일치` 경고가 그것을 알려 줍니다.
-- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 `main.py` 의 세 줄뿐입니다** —
-  등록 두 줄(`/life/walk-conditions` · `/life/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
-  (`/life/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
+- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 넷입니다** (`main.py` 세 줄이 아닙니다) —
+  `main.py`(등록 두 줄: `/life/walk-conditions` · `/life/ask`, 예열 한 줄) + `orchestration/
+  adapters/life.py` 셋(`_ask_life` · `_walk_life` · `_weather_at_life`). 오케스트레이션(D-035)이
+  뒤에 들어오면서 늘었는데 이 문장이 한동안 안 갱신돼 있었습니다.
+  **`_walk_life` · `_weather_at_life` 둘은 D-070(#435 — 실시간을 Cloud Run 서비스로 떼는 카드)로
+  `DAENGS_REALTIME_URL` 값에 따라 갈리는 갈림길이 됐습니다** — 비어 있으면(개발 PC·개발서버
+  기본) 지금처럼 같은 프로세스 함수 호출이고, 값이 있으면(GCP) `daengs_backend/services/
+  realtime_client.py` 를 거쳐 HTTP 로 나갑니다. 그 이상으로 접점을 늘리지 마세요. D-021 의
+  2단계(`/life/ask` 를 별도 프로세스로)가 싼 이유가 이 접점의 크기입니다. 특히 `rag` 가 읽는
   `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 를 통해서만 닿습니다.
   `daengs.~` 는 프론트, `daengback.~` 는 API 이고 **둘 다 공개 포트는 80 입니다**

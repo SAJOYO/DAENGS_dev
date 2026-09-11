@@ -16,4 +16,6 @@
 !docker/
 !docker/pipeline/
 !docker/pipeline/**
+!docker/realtime/
+!docker/realtime/**
 backend/src/**/__pycache__/

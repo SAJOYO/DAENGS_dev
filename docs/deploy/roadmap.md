@@ -170,6 +170,26 @@ clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였�
 3. **CI/CD** — dev→main 머지 시 빌드·푸시·SSH 배포, **Workload Identity Federation**(키 파일 없는 인증)
 4. **운영 다듬기** — Tailscale(팀원 DB 접속·관리 평면 분리), celery → Cloud Scheduler 검토, 스냅샷 주기화
 
+### 🔵 서빙 일부를 Cloud Run 으로 — 실시간 산책·날씨 (2026-09-11 · #435 · D-070)
+
+**위 목록에 없던 축이 하나 열렸고, 같은 날 구현·배포까지 끝났다.** `daengs_life/realtime/` 을
+**Cloud Run 서비스**로 뗐다 — 설계와 실측은 [`realtime-service.md`](realtime-service.md), 명령
+절차는 `runbook.md` 「실시간 서비스 (GCP)」 절.
+
+**§2 가 Cloud Run 을 기각한 이유 넷 중 셋이 여기서는 해당 없다** (D-042 — 임베딩 상주 · celery
+상주 · 바인드 마운트 · 비용 3배). realtime 은 DB·모델·파일이 없어서 앞의 셋이 사라진다. **그
+결정을 뒤집는 것이 아니라 적용 범위가 다르다** — 서빙 전체는 여전히 VM 이고, 요청도 VM 의
+backend 를 통과한다(인증을 그쪽이 걸기 때문).
+
+2번(이미지 굽기)과 겹치는 자리가 있다 — 이 서비스는 **서빙 컨테이너 중 처음으로 기동 때
+`uv sync` 를 안 하고 구운 이미지로 도는 것**이 된다. 다만 `--only-group realtime` 이라 서빙
+backend 이미지의 선례가 되지는 않는다(그쪽은 `ml` 이 필요하다).
+
+⚠ **11-17 삭제 대상에 하나 더 붙는다** — §8 에 `daengs-realtime` 서비스 · 시크릿 셋.
+**방화벽 규칙은 붙지 않는다** — 2026-09-11 실측으로 `allow-redis-from-run` 은 **만들 필요가
+없었다**(`default-allow-internal` 이 이미 서브넷을 덮는다, `realtime-service.md` §4). teardown
+스크립트(`infra/gcp/realtime-teardown.sh`)는 그래서 방화벽을 건드리지 않는다.
+
 ## 8. 종료 체크리스트 (삭제 시나리오)
 
 ⚠ **정지로는 과금이 계속된다** — 디스크·미연결 고정 IP 는 정지 중에도 청구되고,
@@ -180,5 +200,11 @@ clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였�
    Scheduler · 잡 둘 · 방화벽 규칙 · Artifact Registry · Secret 4개 · 서비스 계정 · 알림 정책을
    지운다. **버킷 `gs://daengs-corpus` 는 일부러 남긴다** — 되돌릴 수 없으므로 마지막에
    따로 `gcloud storage rm -r`. 집 서버는 건드릴 것이 없다(정본이 거기 그대로다)
-3. 앱을 유지한다면 `daengapp`·`daengapi` A 레코드를 집 서버 IP 로 회귀 + 집에서 TLS 재구성 (앱에는 도메인이 박혀 있어 주소는 그대로 산다)
-4. VM 삭제 → 디스크 삭제 확인 → 고정 IP **해제** → 스냅샷 정리 → 예산 화면 ₩0 확인
+3. **실시간 서비스 삭제** (D-070) — `PROJECT=daengs bash infra/gcp/realtime-teardown.sh`.
+   `daengs-realtime` 서비스 · 이미지 태그 · 시크릿 셋(`realtime-redis-url`·`realtime-kakao-key`·
+   `realtime-kma-hub-key`)을 지운다. **방화벽 규칙은 지울 것이 없다** — 애초에 안 만들었다
+   (`default-allow-internal` 이 이미 덮는다, `realtime-service.md` §4). VM 의 `backend/.env` 에
+   남은 `DAENGS_REALTIME_URL` 은 값을 지우고 `up -d backend` 로 다시 만들거나, VM 자체를 지울
+   것이면 그대로 둬도 된다(runbook 「실시간 서비스 (GCP)」)
+4. 앱을 유지한다면 `daengapp`·`daengapi` A 레코드를 집 서버 IP 로 회귀 + 집에서 TLS 재구성 (앱에는 도메인이 박혀 있어 주소는 그대로 산다)
+5. VM 삭제 → 디스크 삭제 확인 → 고정 IP **해제** → 스냅샷 정리 → 예산 화면 ₩0 확인

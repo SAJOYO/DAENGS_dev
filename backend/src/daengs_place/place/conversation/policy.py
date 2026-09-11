@@ -130,6 +130,19 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
+    if intent.feedback != "none":
+        return Decision(
+            "explain",
+            code="feedback_no_mutation",
+            question={
+                "evaluation": "장소 평가는 찜이나 검색 조건에 자동 반영하지 않아요. 남기고 싶으면 찜해 달라고 말해 주세요.",
+                "familiarity": "이미 아는 장소군요. 다른 후보를 보려면 더 보여 달라고 말해 주세요.",
+                "information_dispute": "안내한 정보가 현장과 다를 수 있어요. 지금 자료만으로 이전이나 폐업 여부는 확인할 수 없어요.",
+            }[intent.feedback],
+            intent=intent,
+        )
+    if intent.bookmark is not None:
+        return Decision("bookmark", intent=intent)
     if intent.region_query:
         return Decision(
             "unsupported",

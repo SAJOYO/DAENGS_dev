@@ -105,6 +105,7 @@ class FilterRemoval(PlanningModel):
 
 class PrepareRequest(PlanningModel):
     mode: Literal["manual", "chat", "restore", "filters"]
+    bookmark_commands: Literal["v1"] | None = None
     query: str = Field(default="", max_length=1000)
     manual: PlaceSearchRequest | None = None
     restore_filters: FilterState | None = None
@@ -143,6 +144,12 @@ class PrepareRequest(PlanningModel):
         return self
 
 
+class BookmarkCommand(PlanningModel):
+    key: PlaceRef
+    name: str
+    saved: bool
+
+
 class ExecutionReceipt(PlanningModel):
     goal: str
     execution: Literal["not_run", "reused", "searched", "failed"]
@@ -168,6 +175,8 @@ class ExecutionReceipt(PlanningModel):
     excluded_places: tuple[NamedPlace, ...] = ()
     restored_places: tuple[NamedPlace, ...] = ()
     remaining: Literal["more", "exhausted", "unknown"] = "unknown"
+    # Prepared command only. The member bookmark API has not executed it.
+    bookmark_command: BookmarkCommand | None = None
 
 
 class PreparedTurn(PlanningModel):

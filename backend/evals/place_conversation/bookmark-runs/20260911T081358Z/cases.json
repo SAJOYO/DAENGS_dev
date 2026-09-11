@@ -1,0 +1,67 @@
+[
+  {
+    "id": "B01",
+    "query": "여기 찜해줘",
+    "expect": "save",
+    "ref": "A"
+  },
+  {
+    "id": "B02",
+    "query": "여기 찜 해제해줘",
+    "expect": "remove",
+    "ref": "A"
+  },
+  {
+    "id": "B03",
+    "query": "여기 남겨둬",
+    "expect": "save",
+    "ref": "A"
+  },
+  {
+    "id": "B04",
+    "query": "두 번째 찜해줘",
+    "expect": "save",
+    "ref": "B"
+  },
+  {
+    "id": "B05",
+    "query": "'평가 카페 A'만 찜해줘",
+    "expect": "save",
+    "ref": "A"
+  },
+  {
+    "id": "B06",
+    "query": "여기 괜찮네",
+    "expect": "unchanged"
+  },
+  {
+    "id": "B07",
+    "query": "이미 알고 있는 곳이라고",
+    "expect": "unchanged"
+  },
+  {
+    "id": "B08",
+    "query": "거기 없잖아 씨발!",
+    "expect": "unchanged"
+  },
+  {
+    "id": "B09",
+    "query": "여기 찜하지 말고 다른 곳 보여줘",
+    "expect": "next"
+  },
+  {
+    "id": "B10",
+    "query": "여기 찜해두고 다음 보여줘",
+    "expect": "clarify"
+  },
+  {
+    "id": "B11",
+    "query": "달나라카페 찜해줘",
+    "expect": "clarify"
+  },
+  {
+    "id": "B12",
+    "query": "여기 찜해줘라고 했다고 무조건 저장하면 안 되지",
+    "expect": "unchanged"
+  }
+]

@@ -19,6 +19,7 @@
 | [walk/spatial-diary-api.md](walk/spatial-diary-api.md) | Walk 공간 일기 집계·산책별 봉인 원판 조회 API — 인증·repeatable-read snapshot·원본/가용 상태·운영 상한 |
 | [place/UPSTREAM.md](place/UPSTREAM.md) | Place 운영 정본의 출처·소유권과 Geo 승격 기준점 |
 | [place/bookmarks-api.md](place/bookmarks-api.md) | 회원 시설 찜 저장·전체 키 조회·독립 필터·탈퇴 정리와 앱 적용 순서 |
+| [place/bookmark-commands.md](place/bookmark-commands.md) | 자연어 찜의 준비/실행 경계·앱 완료 결과·충돌 보호와 후속 검색 계획 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |

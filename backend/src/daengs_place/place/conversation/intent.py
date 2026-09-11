@@ -53,6 +53,8 @@ class SemanticChanges(PlanningModel):
 
 class Interpretation(PlanningModel):
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
+    feedback: Literal["none", "evaluation", "familiarity", "information_dispute"] = "none"
+    bookmark: "BookmarkEdit | None" = None
     changes: SemanticChanges = Field(default_factory=SemanticChanges)
     refresh: bool = False
     browse: Literal["current", "next", "restart"] = "current"
@@ -84,6 +86,13 @@ class PlaceEdit(PlanningModel):
     operation: Literal["exclude", "restore"]
     operation_quote: str = Field(min_length=1, max_length=500)
     targets: tuple[PlaceTarget, ...] = Field(min_length=1, max_length=120)
+
+
+class BookmarkEdit(PlanningModel):
+    operation: Literal["save", "remove"]
+    # One explicit command clause, not a model-authored description.
+    operation_quote: str = Field(min_length=1, max_length=500)
+    target: PlaceTarget
 
 
 Interpretation.model_rebuild()

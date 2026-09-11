@@ -50,6 +50,11 @@ def test_life_weather는_관측_원자와_출처를_Walk_계약으로_좁힌다(
     assert got.humidity_pct is not None
     assert got.precipitation_kind == "none"
     assert got.precipitation_mm == 0
+    assert got.temperature.grid == (61, 125)
+    assert got.temperature.requested_at == OBSERVED_AT
+    assert got.temperature.fetched_at == NOW
+    assert got.temperature.observed_at == got.observed_at
+    assert got.temperature.issued_at == got.observed_at
 
 
 @pytest.mark.parametrize(
@@ -131,3 +136,45 @@ def test_실시간_예약분에_닿으면_Walk는_외부_호출_없이_실패로
     assert got.status == "failed"
     assert got.failure_reason is not None and "예약분" in got.failure_reason
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "change", [None, "grid", "time", "source", "unit", "forecast", "duplicate", "missing"]
+)
+def test_temperature_snapshot_is_identical_across_local_and_remote_and_rejects_mismatch(
+    monkeypatch, change
+):
+    from daengs_backend.config import settings
+    from daengs_backend.services import realtime_client
+    from daengs_life.app.dto.weather import WeatherAtRequest
+    from daengs_life.app.services.weather import weather_at
+
+    wire(monkeypatch, ncst())
+    local = life_adapter._weather_at_life(37.4979, 127.0276, OBSERVED_AT)
+    result = weather_at(
+        WeatherAtRequest(lat=37.4979, lon=127.0276, observed_at=OBSERVED_AT),
+        NOW,
+        cache=Cache(MemoryStore()),
+    ).model_dump(mode="json")
+    atom = next(a for a in result["observations"] if a["quantity"] == "temp_c")
+    if change == "grid":
+        result["grid"] = [60, 127]
+    elif change == "time":
+        result["requested_at"] = NOW.isoformat()
+    elif change == "source":
+        atom["source"] = "forecast"
+    elif change == "unit":
+        atom["unit"] = "fahrenheit"
+    elif change == "forecast":
+        atom["valid_at"] = NOW.isoformat()
+    elif change == "duplicate":
+        result["observations"].append(dict(atom))
+    elif change == "missing":
+        result["observations"].remove(atom)
+    monkeypatch.setattr(settings, "realtime_url", "https://rt.example")
+    monkeypatch.setattr(realtime_client, "post_weather_at", lambda *_a, **_k: (200, result))
+    remote = life_adapter._weather_at_life(37.4979, 127.0276, OBSERVED_AT)
+    if change is None:
+        assert remote.temperature == local.temperature
+    else:
+        assert remote.temperature is None

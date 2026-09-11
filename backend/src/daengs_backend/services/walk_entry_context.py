@@ -145,7 +145,8 @@ async def finish(factory, ticket, result):
                 "operation": result.operation
                 or ("/v2/places/search" if job.tag == "space.facility" else None),
                 "retrieved_at": result.retrieved_at,
-                "temporal_basis": "lookup_snapshot" if result.retrieved_at else "unknown",
+                "temporal_basis": result.temporal_basis
+                or ("lookup_snapshot" if result.retrieved_at else "unknown"),
                 "policy_version": job.policy_version,
             },
             "payload": result.payload,

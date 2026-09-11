@@ -13,7 +13,7 @@ Part = Literal["space", "environment", "motion"]
 
 
 class SlotPolicy(DiaryContract):
-    version: Literal["diary-part-slots-v2"] = "diary-part-slots-v2"
+    version: Literal["diary-part-slots-v3"] = "diary-part-slots-v3"
     space_slots: int = Field(default=3, ge=0, le=8)
     environment_slots: int = Field(default=1, ge=0, le=4)
     motion_slots: int = Field(default=1, ge=0, le=4)
@@ -22,6 +22,7 @@ class SlotPolicy(DiaryContract):
     motion_gap_s: float = Field(default=30, ge=0, le=120)
     route_tolerance_m: float = Field(default=30, ge=0, le=100)
     location_age_s: float = Field(default=30, ge=0, le=120)
+    weather_max_age_s: float = Field(default=7200, ge=0, le=7200)
     include_location_reference: bool = True
 
     def capacity(self, part: Part):

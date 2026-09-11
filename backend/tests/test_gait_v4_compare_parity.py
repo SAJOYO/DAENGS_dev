@@ -34,8 +34,23 @@ def _load():
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
+#: 옛 구현에는 없었고 **뒤에 더한** 키. 경로 끝 이름으로 적습니다.
+#:
+#: ⚠️ **여기에 이름을 더하는 것은 "옛 출력과 달라져도 된다"고 선언하는 일입니다.** 값이
+#:    바뀌는 변경은 여기 적어도 통과하지 않습니다 — 이 목록은 *새 키*만 면제합니다.
+#:    지금 하나뿐입니다:
+#:    · `n_unmeasured` — 다리별 "못 잰 관절" 수 (D-063 7단계). 앱이 서버 판정을 쓰려면
+#:      "비교할 관절이 부족함" 갈래를 서버 수로 판단할 수 있어야 해서 더했습니다.
+#:      세기만 하고 `flagged` 규칙에는 안 들어갑니다 (`tests/test_gait_side_summary.py`).
+ADDED_AFTER_PARITY = frozenset({"n_unmeasured"})
+
+
 def _diffs(expected, actual, path="") -> list[str]:
-    """NaN-aware 완전 동일 판정. 다른 곳을 전부 모읍니다."""
+    """NaN-aware 완전 동일 판정. 다른 곳을 전부 모읍니다.
+
+    `ADDED_AFTER_PARITY` 에 적힌 **새 키**만 면제합니다 — 옛 픽스처에 없고 지금 출력에만
+    있는 경우입니다. 반대 방향(옛 키가 사라진 것)과 값의 차이는 그대로 실패입니다.
+    """
     out: list[str] = []
     if isinstance(expected, float) and isinstance(actual, float):
         if math.isnan(expected) and math.isnan(actual):
@@ -45,6 +60,8 @@ def _diffs(expected, actual, path="") -> list[str]:
         return out
     if isinstance(expected, dict) and isinstance(actual, dict):
         for k in sorted(set(expected) | set(actual)):
+            if k not in expected and k in actual and k in ADDED_AFTER_PARITY:
+                continue  # 뒤에 더한 키 — 위 목록 참고
             if k not in expected or k not in actual:
                 out.append(f"{path}.{k}: 한쪽에만 있음 (old={k in expected}, new={k in actual})")
             else:
@@ -74,6 +91,28 @@ def test_compare_v4_matches_old_gait_v4_compare_exactly(case: str) -> None:
     actual = compare_records(data["a"], entry["b"])
     diffs = _diffs(entry["expected"], actual, "compare")
     assert diffs == [], "\n".join(diffs[:20])
+
+
+@pytest.mark.parametrize("case", _cases())
+def test_only_the_listed_keys_were_added_after_parity(case: str) -> None:
+    """면제 목록이 **실제로 늘어난 키와 정확히 같은지** 확인합니다.
+
+    `_diffs` 가 면제해 주는 만큼, 무엇이 면제됐는지를 여기서 되짚습니다 — 면제 목록에
+    이름을 적어 두고 정작 그 키가 안 나오면(또는 다른 자리에 나오면) 여기서 걸립니다.
+    """
+    data = _load()
+    entry = data["cases"][case]
+    actual = compare_records(data["a"], entry["b"])
+
+    def added(expected, got) -> set[str]:
+        out: set[str] = set()
+        if isinstance(expected, dict) and isinstance(got, dict):
+            out |= set(got) - set(expected)
+            for k in set(expected) & set(got):
+                out |= added(expected[k], got[k])
+        return out
+
+    assert added(entry["expected"], actual) <= ADDED_AFTER_PARITY
 
 
 def test_fixture_covers_every_message_kind_and_the_unavailable_paths() -> None:

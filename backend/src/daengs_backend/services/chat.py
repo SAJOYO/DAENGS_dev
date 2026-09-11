@@ -244,7 +244,7 @@ def pending_clarification_of(turns: list[ChatTurn]) -> PendingClarification | No
     if not turns:
         return None
     last = turns[-1]
-    if last.assistant_status != "CLARIFY":
+    if last.assistant_status != AssistantStatus.CLARIFY.value:
         return None
     clarify = (last.public_response or {}).get("clarify")
     if not isinstance(clarify, dict):

@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -63,6 +64,7 @@ from daengs_backend.orchestration.contracts import (
 # 구현이 **같아야** 하는 것이다 — 보호가 한쪽에만 있으면 실험 구현이 구멍이 되고,
 # 실패 문구가 갈리면 사용자에게 실패가 두 종류로 보인다. 사본을 만들지 않는다.
 from daengs_backend.orchestration.graph import OrchestrationEngine, _reject_raw_credentials
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
@@ -202,7 +204,14 @@ class AgentOrchestrationService:
         request_id: str | None = None,
         locale: str = "ko-KR",
         include_route_trace: bool = False,
+        prior_turns: Sequence[PriorTurn] = (),
+        pending_clarification: PendingClarification | None = None,
     ) -> AssistantResponse:
+        # `prior_turns`/`pending_clarification` 은 `Orchestrator` 좌표계를 맞추려고
+        # 받기만 한다 — **Turn Resolver 는 지금 langgraph 전용**이다(`runtime.py`
+        # Protocol 의 docstring). 여기서 쓰기 시작하려면 먼저 두 구현이 같은 뜻으로
+        # 쓸 수 있는지(비교 좌표계가 안 깨지는지)를 따로 결정해야 한다.
+        del prior_turns, pending_clarification
         if locale != "ko-KR":
             raise ValueError("v1 supports locale ko-KR only")
         rid = request_id or str(uuid.uuid4())

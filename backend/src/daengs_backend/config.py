@@ -343,18 +343,21 @@ class Settings(BaseSettings):
     )
 
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
-    # "legacy" = `daengs_gait.pipeline`(ultralytics best.pt, 워커 프로세스 안에서).
-    # "v4"     = `daengs_gait.inference`(walk_demo v4: ssdlite + RTMPose AP-10K). 5B 부터
-    #            코드도 의존성(`gait` 그룹 하나)도 legacy 와 같은 venv 이고, 워커가 자기
-    #            인터프리터(`sys.executable`)로 서브프로세스를 띄웁니다 — 옛 `GAIT_V4_DIR` ·
-    #            `GAIT_V4_PYTHON` · 별도 venv 는 없어졌습니다. 가중치는 legacy 와 같은
-    #            `GAIT_RELEASE_DIR` 폴더입니다(`ssdlite.pt` · `rtmpose-m_ap10k/end2end.onnx`).
-    #            라이선스(ssdlite.pt academic/non-commercial) 결정 전이라 **기본은 legacy**
-    #            입니다. 운영에서 바꾸지 마세요.
+    # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
+    # 워커가 자기 인터프리터(`sys.executable`)로 서브프로세스를 띄우고, 가중치는
+    # `GAIT_RELEASE_DIR` 폴더입니다(`ssdlite.pt` · `rtmpose-m_ap10k/end2end.onnx`).
     #
-    # 두 엔진의 기록은 `gait_records.pose_model` 로 구분되고, 비교는 서버 설정이 아니라
-    # 두 기록의 그 값으로 함수를 고릅니다 (`services/gait._run_compare`).
-    gait_engine: str = Field(default="legacy", validation_alias=AliasChoices("GAIT_ENGINE"))
+    # 옛 `"legacy"` 는 6단계에서 추론 runtime 과 함께 없앴습니다. 그 값을 넣으면
+    # `get_engine` 이 **조용히 넘어가지 않고 예외**를 냅니다 — 잘못 적힌 설정으로 분석이
+    # 도는 것보다 FAILED 사유와 함께 멈추는 편이 낫습니다.
+    #
+    # ⚠️ **기본값이 곧 배포 기본입니다.** env 를 안 주는 환경(새 서버·CI)이 이 값으로
+    #    돌므로 없어진 엔진 이름을 기본값에 두면 분석이 전부 실패합니다.
+    #
+    # 기록의 `gait_records.pose_model` 은 이 설정과 별개입니다 — 옛 legacy 기록은 그대로
+    # 남고, 비교는 서버 설정이 아니라 **두 기록의 그 값**으로 함수를 고릅니다
+    # (`services/gait._run_compare` — legacy↔legacy 비교는 계속 됩니다).
+    gait_engine: str = Field(default="v4", validation_alias=AliasChoices("GAIT_ENGINE"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
     # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. backend 와

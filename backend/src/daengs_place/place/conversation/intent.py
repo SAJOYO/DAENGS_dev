@@ -53,6 +53,28 @@ class SemanticChanges(PlanningModel):
 
 class Interpretation(PlanningModel):
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
+    search_scope: Literal["keep", "bookmarks", "all_places", "unbookmarked", "new_candidates"] = (
+        Field(
+            default="keep",
+            description="후보 집합 변경만 표현한다. 검색 동사나 찜 저장 행위의 부정은 집합 변경이 아니다.",
+        )
+    )
+    search_scope_quote: str = Field(
+        default="",
+        max_length=500,
+        description="검색 대상 집합을 바꾸라는 최신 발화의 원문 구절. 저장 행위의 부정은 근거가 아니며 빈 문자열이다.",
+    )
+    spatial_scope: Literal["keep", "unbounded"] = "keep"
+    navigation: Literal["stay", "restore_search"] = Field(
+        default="stay",
+        description="이전 검색 화면으로 돌아가기만 restore_search. 찜 제한 해제는 검색 변경이다.",
+    )
+    forbid_save: StrictBool = Field(
+        default=False,
+        description="이번 요청에서 저장하지 말라는 뜻. 찜 해제나 검색 집합 변경이 아니다.",
+    )
+    feedback: Literal["none", "evaluation", "familiarity", "information_dispute"] = "none"
+    bookmark: "BookmarkEdit | None" = None
     changes: SemanticChanges = Field(default_factory=SemanticChanges)
     refresh: bool = False
     browse: Literal["current", "next", "restart"] = "current"
@@ -84,6 +106,13 @@ class PlaceEdit(PlanningModel):
     operation: Literal["exclude", "restore"]
     operation_quote: str = Field(min_length=1, max_length=500)
     targets: tuple[PlaceTarget, ...] = Field(min_length=1, max_length=120)
+
+
+class BookmarkEdit(PlanningModel):
+    operation: Literal["save", "remove"]
+    # One explicit command clause, not a model-authored description.
+    operation_quote: str = Field(min_length=1, max_length=500)
+    target: PlaceTarget
 
 
 Interpretation.model_rebuild()

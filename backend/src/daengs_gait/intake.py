@@ -1,7 +1,7 @@
 """영상 입력 판정 — **읽을 수 있으면 원본 그대로, 못 읽을 때만 변환, 그래도 못 읽으면 실패.**
 
 워커(`daengs_backend.services.gait._analyze_from_storage`)가 스토리지에서 받은 파일을 엔진에
-넘기기 **직전**에 부릅니다. 엔진(legacy · v4)은 판정을 모르고 확정된 경로를 받기만 합니다
+넘기기 **직전**에 부릅니다. 엔진은 판정을 모르고 확정된 경로를 받기만 합니다
 (D-063 3단계).
 
 원칙은 8e4a255(2026-09-01)에서 실측으로 정한 것입니다 — 같은 `IMG_8631.mov` 를 원본으로 읽으면
@@ -58,7 +58,7 @@ def probe_decodable(path: Path) -> ProbeResult:
     잘 읽히는데 재인코딩당하고, `.mp4` 가 AV1 이라 **한 장도 못 읽는데** 그대로 통과하던
     것이 그래서였습니다 (2026-08-31 실측).
 
-    분석(`keypoint_infer.extract_records` · v4 `pose._sample_frames`)이 실제로 쓰는 것만 봅니다:
+    분석(`inference.pose._sample_frames`)이 실제로 쓰는 것만 봅니다:
 
       ① `isOpened()`
       ② `width` · `height` 가 둘 다 > 0

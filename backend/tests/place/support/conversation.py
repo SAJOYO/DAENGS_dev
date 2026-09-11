@@ -11,8 +11,8 @@ from daengs_place.place.filters.evaluation import evaluate
 from daengs_place.place.filters.service import FilterGroup, FilterResponse, explain_hit
 
 
-def place(ref, kind="shopping", distance=100, parking=True):
-    source = {"source": "test:facility", "ref": ref}
+def place(ref, kind="shopping", distance=100, parking=True, source="test:facility"):
+    source = {"source": source, "ref": ref}
     return PlaceResult.model_validate(
         {
             "key": source,

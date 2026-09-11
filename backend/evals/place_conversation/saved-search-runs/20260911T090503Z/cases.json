@@ -1,0 +1,17 @@
+[
+  {
+    "id": "S07",
+    "query": "찜하지 말고 주차 되는 카페만 찾아줘",
+    "action": "search",
+    "parking": "required_true",
+    "radius": 3000,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "S08",
+    "query": "일반 검색으로 돌아가",
+    "action": "return_search"
+  }
+]

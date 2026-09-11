@@ -3,7 +3,7 @@
 세 가지를 지킵니다:
 
 1. `get_engine` 이 이름으로 올바른 엔진을 고르고, backend 설정값을 **인자로** 받는다.
-   모르는 이름은 조용히 legacy 로 떨어지지 않고 예외다.
+   모르는 이름은 조용히 다른 엔진으로 떨어지지 않고 예외다 (6단계로 엔진은 v4 하나).
 2. 의존 방향 — `daengs_gait` 소스 어디에도 `daengs_backend` import 가 없다.
 3. 가벼움 — `daengs_gait.engines` 를 import 해도 하위 엔진 모듈·torch 가 딸려 오지 않는다
    (깨끗한 인터프리터에서 봅니다, `test_gait_app_api.py` 의 프로브와 같은 이유).
@@ -42,12 +42,12 @@ def test_get_engine_v4_default_timeout_is_twenty_minutes() -> None:
     assert get_engine("v4").timeout_seconds == V4_TIMEOUT_SECONDS == 20 * 60
 
 
-def test_get_engine_legacy() -> None:
-    from daengs_gait.engines.legacy import LegacyEngine
-
-    engine = get_engine("legacy")
-    assert isinstance(engine, LegacyEngine)
-    assert engine.name == "legacy"
+def test_get_engine_rejects_the_removed_legacy_name() -> None:
+    """6단계에서 legacy **추론 runtime** 을 들어냈습니다. 옛 이름이 남은 설정으로 뜨면
+    조용히 도는 대신 멈춰야 합니다 — 옛 legacy **기록**의 조회·비교는 이것과 무관하게
+    그대로입니다(`contract.POSE_MODEL_LEGACY` · `compare.compare_loaded_records`)."""
+    with pytest.raises(ValueError, match="알 수 없는 보행 엔진"):
+        get_engine("legacy")
 
 
 def test_get_engine_rejects_unknown_name() -> None:
@@ -59,29 +59,9 @@ def test_get_engine_rejects_unknown_name() -> None:
 
 
 def test_engine_names_match_get_engine_branches() -> None:
-    assert set(engines.ENGINE_NAMES) == {"legacy", "v4"}
+    assert set(engines.ENGINE_NAMES) == {"v4"}
     for name in engines.ENGINE_NAMES:
         assert get_engine(name).name == name
-
-
-def test_legacy_engine_lazily_imports_pipeline_and_disables_persist(monkeypatch, tmp_path):
-    """torch 는 `analyze` 를 부를 때만 — 그리고 워커 볼륨에 사본을 남기지 않습니다."""
-    import types
-
-    seen: dict = {}
-
-    def process_video(path, *, persist):
-        seen["path"], seen["persist"] = path, persist
-        return {"quality": {"status": "unavailable"}}
-
-    fake = types.ModuleType("daengs_gait.pipeline")
-    fake.process_video = process_video
-    monkeypatch.setitem(sys.modules, "daengs_gait.pipeline", fake)
-
-    out = get_engine("legacy").analyze(tmp_path / "input.bin")
-
-    assert out["quality"]["status"] == "unavailable"
-    assert seen == {"path": tmp_path / "input.bin", "persist": False}
 
 
 def test_engines_satisfy_the_protocol_shape() -> None:
@@ -110,8 +90,8 @@ def test_importing_engines_package_stays_light() -> None:
     """
     probe = (
         "import sys; import daengs_gait.engines; "
-        "leaked = [m for m in ('daengs_gait.engines.legacy', 'daengs_gait.engines.subprocess_bridge', "
-        "'daengs_gait.pipeline', 'daengs_gait.inference.pose', 'torch', 'numpy') if m in sys.modules]; "
+        "leaked = [m for m in ('daengs_gait.engines.subprocess_bridge', "
+        "'daengs_gait.inference.pose', 'torch', 'numpy') if m in sys.modules]; "
         "print(','.join(leaked)); sys.exit(1 if leaked else 0)"
     )
     done = subprocess.run(

@@ -274,34 +274,43 @@ async def test_processing_completion_cannot_upload_after_cleanup_deleted_row(
     assert storage.uploaded == []
 
 
-def test_worker_requests_nonpersistent_pipeline_and_returns_overlay_bytes(
+def test_worker_keeps_artifacts_in_a_temp_dir_and_returns_overlay_bytes(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    import sys
-    import types
+    """워커는 엔진 산출물을 **자기 임시 디렉터리 안에서만** 만들고, overlay 는 바이트로
+    들고 나온 뒤 그 디렉터리를 지웁니다 — 볼륨에 사본이 남으면 안 됩니다.
 
+    엔진은 대역입니다. 여기서 보는 것은 엔진이 아니라 **워커의 파일 수명**이고,
+    `get_engine` 을 가로채므로 어떤 엔진이 붙든 같은 것을 봅니다 (D-063 6단계 전에는
+    legacy 의 `process_video(persist=False)` 를 대역으로 썼습니다)."""
     source = tmp_path / "source.bin"
     source.write_bytes(b"video")
     artifact_dirs = []
+    asked = []
 
     class LocalStorage:
         def local_path(self, key):
             return source
 
-    def process_video(path, *, persist):
-        assert persist is False
-        artifact_dirs.append(path.parent)
-        overlay = path.parent / "input_overlay.mp4"
-        overlay.write_bytes(b"overlay")
-        return {
-            "record_id": None,
-            "quality": {"status": "ok", "quality_tier": "good"},
-            "overlay_video": str(overlay),
-        }
+    class FakeEngine:
+        name = "fake"
 
-    fake_pipeline = types.ModuleType("daengs_gait.pipeline")
-    fake_pipeline.process_video = process_video
-    monkeypatch.setitem(sys.modules, "daengs_gait.pipeline", fake_pipeline)
+        def analyze(self, path):
+            artifact_dirs.append(path.parent)
+            overlay = path.parent / "input_overlay.mp4"
+            overlay.write_bytes(b"overlay")
+            return {
+                "record_id": None,
+                "quality": {"status": "ok", "quality_tier": "good"},
+                "overlay_video": str(overlay),
+            }
+
+    def fake_get_engine(name, **kw):
+        asked.append(name)
+        return FakeEngine()
+
+    monkeypatch.setattr("daengs_gait.engines.get_engine", fake_get_engine)
+    from daengs_backend.config import settings
     from daengs_backend.core import storage as storage_module
 
     monkeypatch.setattr(storage_module, "get_storage", lambda: LocalStorage())
@@ -310,5 +319,6 @@ def test_worker_requests_nonpersistent_pipeline_and_returns_overlay_bytes(
 
     result = gait_service._analyze_from_storage("original")
 
+    assert asked == [settings.gait_engine]
     assert result["_overlay_bytes"] == b"overlay"
     assert artifact_dirs and not artifact_dirs[0].exists()

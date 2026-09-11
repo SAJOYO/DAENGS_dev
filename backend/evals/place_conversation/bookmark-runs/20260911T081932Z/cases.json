@@ -1,0 +1,14 @@
+[
+  {
+    "id": "B03",
+    "query": "여기 남겨둬",
+    "expect": "save",
+    "ref": "A"
+  },
+  {
+    "id": "B05",
+    "query": "'평가 카페 A'만 찜해줘",
+    "expect": "save",
+    "ref": "A"
+  }
+]

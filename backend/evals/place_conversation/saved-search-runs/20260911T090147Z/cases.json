@@ -1,0 +1,92 @@
+[
+  {
+    "id": "S01",
+    "query": "찜한 곳 중 주차 되는 카페만 보여줘",
+    "action": "search",
+    "parking": "required_true",
+    "radius": 3000,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "S02",
+    "query": "찜한 카페 중 주차 되는 곳 우선으로",
+    "action": "search",
+    "parking": "preferred_true",
+    "radius": 3000,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "S03",
+    "query": "멀어도 돼 지역 제한 없이 찾아줘",
+    "action": "search",
+    "parking": "keep",
+    "radius": null
+  },
+  {
+    "id": "S04",
+    "query": "전체 찜 중 음식점도 같이 보여줘",
+    "action": "search",
+    "parking": "keep",
+    "radius": 3000,
+    "kinds": [
+      "cafe",
+      "restaurant"
+    ]
+  },
+  {
+    "id": "S05",
+    "query": "이거 빼줘",
+    "action": "clarify"
+  },
+  {
+    "id": "S06",
+    "query": "거기 없잖아 씨발!",
+    "action": "explain"
+  },
+  {
+    "id": "S07",
+    "query": "찜하지 말고 주차 되는 카페만 찾아줘",
+    "action": "search",
+    "parking": "required_true",
+    "radius": 3000,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "S08",
+    "query": "일반 검색으로 돌아가",
+    "action": "return_search"
+  },
+  {
+    "id": "S09",
+    "query": "제주에서 조용한 곳 찾아줘",
+    "action": "clarify"
+  },
+  {
+    "id": "S10",
+    "query": "주차 필수라고 했는데 아니 그냥 우선으로 해줘",
+    "action": "search",
+    "parking": "preferred_true",
+    "radius": 3000
+  },
+  {
+    "id": "S11",
+    "query": "전체 지역으로 바꾸지 말고 카페만 보여줘",
+    "action": "search",
+    "parking": "keep",
+    "radius": 3000,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "S12",
+    "query": "여기 찜 해제하고 더 보여줘",
+    "action": "clarify"
+  }
+]

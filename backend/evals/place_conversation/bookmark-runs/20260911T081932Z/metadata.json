@@ -1,0 +1,60 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "repeat": 1,
+  "setup": {
+    "candidate_kinds": [
+      "cafe"
+    ],
+    "origin": {
+      "lat": 37.5,
+      "lng": 127.0
+    },
+    "radius_m": 3000,
+    "name_query": "",
+    "dogs": [],
+    "parking": "none",
+    "selected": "A",
+    "snapshot_age_seconds": 0
+  },
+  "fixtures": {
+    "defaults": {
+      "source": "kcisa",
+      "address": "평가용 가상 주소"
+    },
+    "standard": [
+      {
+        "ref": "A",
+        "name": "평가 카페 A",
+        "kind": "cafe",
+        "parking": true
+      },
+      {
+        "ref": "B",
+        "name": "평가 카페 B",
+        "kind": "cafe",
+        "parking": true
+      },
+      {
+        "ref": "C",
+        "name": "평가 카페 C",
+        "kind": "cafe",
+        "parking": true
+      }
+    ]
+  },
+  "boundary": "real Gemini + production policy; synthetic pool, no member writes",
+  "source_sha256": {
+    "answer.py": "c0c64ba5f55d3e0070f7692c76140656607e914b5adc860b209d22f90107759d",
+    "bookmarks.py": "76d308791ce1c3e05cd4145d89eb7528ccc55741e2a5dc75def67778e7690180",
+    "compiler.py": "cd0f5194dfb914396823f1b895a3fe14780d109f5cb28e47b8d7b07e3035a90e",
+    "context.py": "56ac502bbf3fddabb1adb529f54519c67c634cb628b08fad4578654ab50178fd",
+    "contract.py": "de814a65e36b0709ed7a14f3a4954418685727c5422726cbf48f471a7b4070b1",
+    "grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "intent.py": "4f0afd5cb78bec0557ab3719b893ada1bd27fbdd565b31789e8b506d52344f24",
+    "policy.py": "4a6e7dc4742fea3aefd6584c8e371c7073dd3c896100d4eb6655a21315da1dbc",
+    "render.py": "ae276e5fa56261795fdd884ddb85073fbb8a566c4972a017f2ba1ac02071d049",
+    "service.py": "60234152e31403f9449326eb83ff280d92b1d507e2085e6c7465c82edcda8d8f",
+    "static_tools.py": "bfe2612f10905a85f3e68f56b6089bc17acf177a1e880948dfa2c0ae90b0e246",
+    "__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108"
+  }
+}

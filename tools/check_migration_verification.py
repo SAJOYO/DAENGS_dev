@@ -239,6 +239,21 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-11', 'walk_motion_backup', WALKS, 'walk_motion_backups', [
+            'DROP TABLE walk_motion_chunks',
+            'ALTER TABLE walk_motion_backups DROP COLUMN manifest',
+            'ALTER TABLE walk_motion_backups ALTER COLUMN manifest_fingerprint TYPE text',
+            'ALTER TABLE walk_motion_backups ALTER COLUMN evidence_fingerprint SET NOT NULL',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_backups_walk_id_fkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunks_pkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunks_walk_id_fkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_payload',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_index',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_manifest_hash',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_evidence_hash',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_hash',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_manifest_object',
+        ]),
         ('2026-09-11', 'place_bookmarks', APP_USERS_WITH_STATUS, 'place_bookmarks', [
             'ALTER TABLE place_bookmarks DROP COLUMN name',
             'ALTER TABLE place_bookmarks ALTER COLUMN ref TYPE varchar(300)',

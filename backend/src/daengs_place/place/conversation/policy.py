@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from uuid import uuid4
 
-from daengs_place.place.conversation.compiler import compile_changes, fingerprint
+from daengs_place.place.conversation.compiler import fingerprint
 from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.render import ATTRIBUTES, confirmation
+from daengs_place.place.conversation.search_compilation import compile_search
+from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
 
 PENDING_SECONDS = 300
@@ -130,20 +132,33 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
-    if intent.region_query:
+    directive = resolve_search(intent, "all_places", request.query)
+    if directive.question:
         return Decision(
-            "unsupported",
+            "unsupported" if directive.code == "region_change_unsupported" else "clarify",
+            code=directive.code,
+            question=directive.question,
             intent=intent,
-            code="region_change_unsupported",
-            question="검색 지역 이동은 지도에서 할 수 있어요. 지도를 원하는 지역으로 옮긴 뒤 다시 검색해 주세요.",
         )
-    if intent.unresolved != "none" or intent.goal == "clarify":
+    if directive.navigation:
         return Decision(
-            "clarify",
-            intent=intent,
-            code="clarification_required",
-            question=CLARIFICATIONS.get(intent.unresolved, CLARIFICATIONS["ambiguous"]),
+            "clarify", code="search_already_visible", question="현재 일반 검색 화면이에요."
         )
+    if intent.feedback != "none":
+        return Decision(
+            "explain",
+            code="feedback_no_mutation",
+            question={
+                "evaluation": "장소 평가는 찜이나 검색 조건에 자동 반영하지 않아요. 남기고 싶으면 찜해 달라고 말해 주세요.",
+                "familiarity": "이미 아는 장소군요. 다른 후보를 보려면 더 보여 달라고 말해 주세요.",
+                "information_dispute": "안내한 정보가 현장과 다를 수 있어요. 지금 자료만으로 이전이나 폐업 여부는 확인할 수 없어요.",
+            }[intent.feedback],
+            intent=intent,
+        )
+    if directive.pool == "bookmarks":
+        return Decision("saved_search", intent=intent)
+    if intent.bookmark is not None:
+        return Decision("bookmark", intent=intent)
     if (intent.browse != "current" or intent.place_edit) and (intent.unsupported or revise):
         return Decision(
             "clarify",
@@ -166,7 +181,7 @@ async def decide(planner, request, now):
             code="confirmation_required",
             question=pending.question + " 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
         )
-    candidate = compile_changes(context.previous.filters, intent.changes)
+    candidate = compile_search(context.previous.filters, intent, directive.pool)
     unsupported = (
         tuple(dict.fromkeys((*pending.unsupported, *intent.unsupported)))
         if revise

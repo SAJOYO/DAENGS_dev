@@ -631,7 +631,7 @@ def _analyze_from_storage(storage_key: str) -> dict:
     """스토리지에서 받아 분석하고 overlay bytes 를 메모리로 돌려줍니다 —
     **무거운 것은 전부 여기서 지연 import** (ⓒ).
 
-    이 함수는 gait 그룹(torch·ultralytics)이 설치된 워커에서만 불립니다. backend 웹
+    이 함수는 gait 그룹(torch·rtmlib·onnxruntime)이 설치된 워커에서만 불립니다. backend 웹
     프로세스는 태스크를 발행만 하므로 이 import 에 절대 닿지 않습니다.
 
     ⚠️ 저장소가 미설정(none)이면 여기 도달하기 전에 confirm 이 이미 막습니다. gcs 인데
@@ -669,9 +669,9 @@ def _analyze_from_storage(storage_key: str) -> dict:
         local = prepare_for_analysis(local)
 
         # 엔진 선택과 실행은 daengs_gait 의 몫입니다 (D-063 2단계). 설정값은 인자로 넘깁니다 —
-        # daengs_gait 는 daengs_backend 를 import 하지 않습니다. legacy 는 그 안에서
-        # torch 를 지연 import 하고, v4 는 워커 자신의 인터프리터로 `daengs_gait.inference`
-        # 를 서브프로세스로 부르므로 여기엔 안 올라옵니다 (D-063 5B).
+        # daengs_gait 는 daengs_backend 를 import 하지 않습니다. 엔진은 6단계부터 v4 하나이고,
+        # 워커 자신의 인터프리터로 `daengs_gait.inference` 를 서브프로세스로 부르므로 torch 는
+        # 여기엔 안 올라옵니다 (D-063 5B). 없는 이름을 주면 `get_engine` 이 예외를 냅니다.
         from daengs_gait.engines import get_engine
 
         engine = get_engine(settings.gait_engine)
@@ -688,9 +688,9 @@ def _analyze_from_storage(storage_key: str) -> dict:
 
 
 #: `gait_records.quality_tier` 의 CHECK 가 허용하는 값 (db/init/07_gait_records.sql).
-#: 엔진(legacy `daengs_gait/quality_gate.py` · v4 `gait_v4/quality.py`)이 내는 어휘와
-#: **같아야 합니다** — `tests/test_gait_quality_tier_contract.py` 가 두 엔진 소스와 SQL 을
-#: 실제로 읽어 이 상수까지 대조합니다.
+#: 엔진이 내는 어휘(`daengs_gait/quality_gate.py` 하나 — 5C 공통 계산)와 **같아야 합니다**
+#: — `tests/test_gait_quality_tier_contract.py` 가 분석 경로 소스와 SQL 을 실제로 읽어 이
+#: 상수까지 대조합니다. 옛 legacy 기록의 tier 도 같은 어휘로 저장돼 있습니다.
 DB_QUALITY_TIERS = frozenset({"good", "ok", "low"})
 
 

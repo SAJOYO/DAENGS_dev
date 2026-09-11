@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppMemberTokenOnly
 from daengs_backend.schemas.place_bookmark import (
+    BookmarkInterpret,
+    BookmarkInterpretResult,
     BookmarkKey,
     BookmarkList,
     BookmarkSearch,
@@ -58,6 +60,21 @@ async def search(
 @router.put("", response_model=BookmarkList)
 async def save(key: BookmarkKey, user: CurrentAppMemberTokenOnly, db: Database, lookup: Lookup):
     return await _call(service.save(db, user.app_user_id, key, lookup))
+
+
+@router.post("/interpret", response_model=BookmarkInterpretResult)
+async def interpret(
+    request: BookmarkInterpret, user: CurrentAppMemberTokenOnly, db: Snapshot, lookup: Lookup
+):
+    # Authenticate active membership; only filter meaning crosses the Place boundary.
+    await _call(service.list_saved(db, user.app_user_id))
+    return await _call(
+        lookup.interpret(
+            request.query,
+            request.filters,
+            **({"search_policy": request.search_policy} if request.search_policy else {}),
+        )
+    )
 
 
 @router.delete("", response_model=BookmarkList)

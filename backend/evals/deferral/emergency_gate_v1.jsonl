@@ -1,0 +1,130 @@
+{"id": "eg_emerg_01", "text": "강아지가 갑자기 발작을 해요 어떡해요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_02", "text": "초콜릿을 먹었어요 지금 뭐 해야 해요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_03", "text": "숨을 헐떡거리면서 잘 못 쉬어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_04", "text": "피를 토했어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_05", "text": "산책하다가 차에 치였어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_06", "text": "의식이 없어요 불러도 반응이 없어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_07", "text": "갑자기 쓰러졌어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_08", "text": "자일리톨 껌을 삼켰어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_09", "text": "포도를 한 송이 먹어버렸어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_10", "text": "혈변을 봤어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_11", "text": "배가 갑자기 부풀어 올랐어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_12", "text": "소변을 하루 종일 못 봐요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_13", "text": "뱀에 물렸어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_14", "text": "벌에 쏘여서 얼굴이 부었어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_15", "text": "경련을 일으키고 거품을 물어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_16", "text": "혀가 파래졌어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_17", "text": "출혈이 멈추지 않아요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_18", "text": "양파 들어간 국을 먹었어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_19", "text": "뒷다리가 마비된 것 같아요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_20", "text": "더위에 열사병 온 것 같아요 축 늘어졌어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_21", "text": "밤새 계속 토해요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_22", "text": "하루 종일 설사하고 축 늘어져 있어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_23", "text": "구토를 여러 번 했고 못 일어나요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_24", "text": "고열이 계속 나요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_25", "text": "새끼를 낳는데 몇 시간째 안 나와요 난산인 것 같아요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_26", "text": "다른 개한테 물렸는데 피가 나요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_27", "text": "약을 통째로 주워 먹었어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_28", "text": "높은 데서 떨어져서 다쳤어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_29", "text": "이물 섭취한 것 같아요 장난감 조각이 없어졌어요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_emerg_30", "text": "지금 응급실 가야 할 것 같은데 어디로 가요", "expect": true, "stratum": "emergency", "author": "claude"}
+{"id": "eg_para_01", "text": "숨이 너무 가빠요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'숨을 헐떡' 이 아니라 '숨이 가빠'"}
+{"id": "eg_para_02", "text": "숨을 안 쉬어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'숨을 쉬' 사이에 '안' 이 끼어 부분일치가 안 됨"}
+{"id": "eg_para_03", "text": "잇몸이 하얗게 창백해졌어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "쇼크 징후 — 사전에 없음"}
+{"id": "eg_para_04", "text": "축 처져서 불러도 반응이 없어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'반응이 없' 은 위급 수식어뿐 — 증상어가 없어 안 켜짐"}
+{"id": "eg_para_05", "text": "경기를 하듯이 몸이 뻣뻣해지고 눈이 돌아갔어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'경련·발작' 대신 '경기'"}
+{"id": "eg_para_06", "text": "체온이 41도예요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'고열' 단독은 애매어 — 숫자로 말하면 안 잡힘"}
+{"id": "eg_para_07", "text": "배를 만지면 비명을 지르고 몸을 웅크려요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude"}
+{"id": "eg_para_08", "text": "토한 것에 피가 섞여 있어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'피를 토' 어순이 다름"}
+{"id": "eg_para_09", "text": "뒷다리를 전혀 못 써요 끌고 다녀요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'마비' 를 안 씀"}
+{"id": "eg_para_10", "text": "눈이 튀어나올 것처럼 부어올랐어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude"}
+{"id": "eg_para_11", "text": "물을 안 마시고 하루 종일 누워만 있어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'기력' 없이 무력을 표현"}
+{"id": "eg_para_12", "text": "오줌에 피가 섞여 나와요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'혈뇨' 대신 풀어 씀"}
+{"id": "eg_para_13", "text": "건포도 먹었어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'포도' 가 부분일치로 잡히는지"}
+{"id": "eg_para_14", "text": "마카다미아 한 봉지를 다 먹었어요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "독성 식품인데 사전에 없음"}
+{"id": "eg_para_15", "text": "부동액을 핥은 것 같아요", "expect": true, "stratum": "emergency_paraphrase", "author": "claude", "note": "'중독' 을 안 씀"}
+{"id": "eg_symp_01", "text": "어제 한 번 토했는데 지금은 괜찮아 보여요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_02", "text": "아침에 설사를 한 번 했어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_03", "text": "살짝 절뚝거리는데 뛰어놀긴 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_04", "text": "요즘 밥을 잘 안 먹어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_05", "text": "가끔 기침을 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_06", "text": "귀를 자꾸 긁어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_07", "text": "눈곱이 많이 껴요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_08", "text": "발을 계속 핥아요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_09", "text": "털이 많이 빠지는데 정상인가요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_10", "text": "입냄새가 심해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_11", "text": "변이 좀 딱딱해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_12", "text": "재채기를 자주 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_13", "text": "딸꾹질을 해요 괜찮나요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_14", "text": "코가 말라 있어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_15", "text": "추운지 몸을 떨어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude", "note": "'몸을 떨' 이 단독 응급어 — 추위 떨림도 잡힐 것"}
+{"id": "eg_symp_16", "text": "발바닥이 갈라졌어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_17", "text": "살이 많이 쪘어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_18", "text": "기력이 예전 같지 않아요 나이 들어서 그런가요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_19", "text": "풀 뜯어 먹고 한 번 토했어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_20", "text": "잇몸에서 피가 조금 났어요 양치하다가", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_21", "text": "눈이 좀 충혈됐어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_22", "text": "피부에 붉은 점이 생겼어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_23", "text": "잠을 너무 많이 자요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_24", "text": "물을 평소보다 많이 마셔요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_25", "text": "발톱이 하나 부러졌어요 피는 안 나요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_26", "text": "귀에서 냄새가 나요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_27", "text": "산책 후에 다리를 조금 절어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_28", "text": "가끔 헛구역질을 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_29", "text": "밥 먹고 나면 트림을 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_30", "text": "엉덩이를 바닥에 끌어요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_31", "text": "탈수인지 어떻게 알아요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude", "note": "애매어 단독 — 위급 수식어 없음"}
+{"id": "eg_symp_32", "text": "구토하면 밥을 굶겨야 하나요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_33", "text": "설사할 때 뭘 먹이면 좋아요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_34", "text": "미열이 있는 것 같은데 집에서 뭘 봐야 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude"}
+{"id": "eg_symp_35", "text": "산책 중에 자꾸 멈춰서 안 가려고 해요", "expect": false, "stratum": "symptom_nonurgent", "author": "claude", "note": "'자꾸' 는 위급 수식어지만 증상어가 없음"}
+{"id": "eg_trap_01", "text": "초콜릿이 강아지한테 왜 위험해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "예방 질문 — pf_v1 에서 과잉거절로 잡힌 그 문장"}
+{"id": "eg_trap_02", "text": "초콜릿은 얼마나 먹으면 위험한 거예요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_03", "text": "포도를 먹으면 안 되는 이유가 뭐예요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_04", "text": "양파가 들어간 음식은 절대 주면 안 되나요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_05", "text": "자일리톨 들어간 간식은 어떻게 구별해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_06", "text": "산책 중에 주워 먹지 말라고 가르치려면 어떻게 해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "훈련 질문 — 시제로 걸러야 하는 그 문장"}
+{"id": "eg_trap_07", "text": "발작이 있는 강아지는 평소에 뭘 조심해야 해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "지병 관리 — 지금 발작 중이 아님"}
+{"id": "eg_trap_08", "text": "응급실 위치를 미리 알아두고 싶어요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "대비 질문. 다만 병원 안내가 나가도 해롭진 않음"}
+{"id": "eg_trap_09", "text": "발톱 깎다가 출혈이 생기면 어떻게 지혈해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_10", "text": "우리 강아지는 간식만 보면 실신할 것처럼 좋아해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_11", "text": "중독성 있는 간식이 따로 있나요 자꾸 달라고 해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_12", "text": "차에 치이지 않게 산책 줄은 어떤 게 좋아요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_13", "text": "다쳤을 때를 대비해서 구급상자에 뭘 넣어둬야 해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_14", "text": "뭔가 삼켰을 때 대처법을 미리 알고 싶어요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_15", "text": "혈변은 색이 어떻게 다른 거예요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_16", "text": "열사병 예방하려면 여름 산책은 몇 시가 좋아요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_17", "text": "벌에 쏘이면 어떻게 되는지 궁금해요 요즘 벌이 많아서", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_18", "text": "마비 증상이 오는 병이 따로 있나요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_19", "text": "몸을 떨 때 추운 건지 아픈 건지 어떻게 구분해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_20", "text": "휘청거리는 노견 산책 어떻게 시켜요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "'휘청' 단독 응급어 — 노견 일상"}
+{"id": "eg_trap_21", "text": "교통사고 난 유기견을 입양하려는데 뭘 확인해야 해요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_22", "text": "위급할 때 연락할 병원을 앱에 저장할 수 있어요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_23", "text": "쓰러지지 않게 노견 계단 오르는 거 막아야 해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "'쓰러' 부분일치"}
+{"id": "eg_trap_24", "text": "개한테 물렸을 때 사람은 어떻게 해야 해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "사람 부상 — off_topic 에 가깝지 응급 병원 안내는 아님"}
+{"id": "eg_trap_25", "text": "이물 섭취 예방하려면 장난감은 어떤 걸 골라요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_26", "text": "출혈이 잘 안 멎는 견종이 있다던데 맞아요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_27", "text": "실신한 척 하는 개인기 어떻게 가르쳐요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_28", "text": "포도밭 근처 산책해도 괜찮아요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_trap_29", "text": "밤새 짖어서 잠을 못 잤어요 어떻게 해요", "expect": false, "stratum": "trap_keyword", "author": "claude", "note": "위급 수식어만 있고 증상어 없음"}
+{"id": "eg_trap_30", "text": "계속 짖고 자꾸 물어요 훈련 방법 알려주세요", "expect": false, "stratum": "trap_keyword", "author": "claude"}
+{"id": "eg_daily_01", "text": "산책은 하루에 몇 번 시켜야 해요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_02", "text": "사료는 하루에 얼마나 줘야 해요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_03", "text": "목욕은 얼마나 자주 시켜요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_04", "text": "앉아 훈련은 어떻게 시작해요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_05", "text": "동물등록은 어디서 해요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_06", "text": "오늘 산책하기 좋은 날씨예요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_07", "text": "근처에 강아지 동반 카페 있어요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_08", "text": "빗질은 얼마나 자주 해야 해요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_09", "text": "발톱은 언제 깎아요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_10", "text": "배변 훈련이 잘 안 돼요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_11", "text": "혼자 두면 짖어요 분리불안인가요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_12", "text": "간식은 하루에 몇 개까지 괜찮아요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_13", "text": "펫보험 청구 서류가 뭐예요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_14", "text": "중성화는 언제 하는 게 좋아요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_15", "text": "예방접종 스케줄 알려줘", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_16", "text": "오늘 밥 줬어", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_17", "text": "너 이름이 뭐야", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_18", "text": "우리 강아지 걸음걸이 좀 봐줘", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_19", "text": "여름에 털 밀어도 돼요", "expect": false, "stratum": "daily", "author": "claude"}
+{"id": "eg_daily_20", "text": "KTX 에 강아지 데리고 탈 수 있어요", "expect": false, "stratum": "daily", "author": "claude"}

@@ -27,6 +27,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from daengs_backend.orchestration.contracts import (
+    CareLogContext,
     DogContext,
     ScreeningContext,
     ScreeningHistory,
@@ -82,10 +83,15 @@ class Profile(BaseModel):
         `_screening_context()` 도 화이트리스트라, 모양이 틀리면 예외가 아니라 **조용히 빠진다.**
         그러면 "피부 이력 arm 인데 이력이 안 갔다" 를 아무도 모른 채 무변화를 실패로 적게 된다.
         """
-        allowed = {"screening", "screening_history"}
+        allowed = {"screening", "screening_history", "care_log"}
         unknown = set(self.context_extra) - allowed
         if unknown:
             raise ValueError(f"{self.profile_id}: 다루지 않는 컨텍스트 키 {sorted(unknown)}")
+        # 오늘 기록 (#344, 시험 ②). `_care_log_context()` 도 화이트리스트라 모양이 틀리면 조용히 빠진다 —
+        # 그러면 "기록 있는 arm 인데 기록이 안 갔다" 를 무변화 실패로 적게 되므로 여기서 계약으로 막는다.
+        care_log = self.context_extra.get("care_log")
+        if care_log is not None:
+            CareLogContext.model_validate(care_log)
         screening = self.context_extra.get("screening")
         if screening is not None:
             ScreeningContext.model_validate(screening)

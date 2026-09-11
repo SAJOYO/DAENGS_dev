@@ -1,0 +1,12 @@
+{"question_id": "pf_log_fed_today_01", "query": "오늘 밥 줬어?", "kind": "reactive", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_meal_count_01", "query": "오늘 밥 몇 번 먹었지?", "kind": "reactive", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_walk_today_01", "query": "오늘 산책 시켰나?", "kind": "reactive", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_medication_01", "query": "아침 약 먹였어?", "kind": "reactive", "tier": "coarse", "arms": ["log_empty", "log_fed_twice"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_snack_01", "query": "오늘 간식 줬어?", "kind": "reactive", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_wellness_01", "query": "오늘 건강 상태는 어때?", "kind": "reactive", "tier": "fine", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_last_meal_01", "query": "마지막으로 밥 준 게 몇 시야?", "kind": "reactive", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_more_meal_01", "query": "오늘 밥 더 줘도 돼?", "kind": "reactive", "tier": "fine", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_absent_fed_01", "query": "오늘 밥은 챙겨 줬나?", "kind": "reactive", "tier": "coarse", "arms": ["log_absent", "log_fed_twice"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_absent_wellness_01", "query": "오늘 우리 애 상태 어때 보여?", "kind": "reactive", "tier": "fine", "arms": ["log_absent", "log_empty"], "sensitive_to": ["care_log"], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_inv_nail_01", "query": "발톱은 얼마나 자주 깎아요?", "kind": "invariant", "tier": "coarse", "arms": ["log_fed_twice", "log_empty"], "sensitive_to": [], "paraphrase_of": null, "author": "claude"}
+{"question_id": "pf_log_inv_bath_01", "query": "목욕은 얼마나 자주 시켜요?", "kind": "invariant", "tier": "coarse", "arms": ["log_fed_twice", "log_absent"], "sensitive_to": [], "paraphrase_of": null, "author": "claude"}

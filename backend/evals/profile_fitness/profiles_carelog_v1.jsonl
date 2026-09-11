@@ -1,0 +1,4 @@
+{"profile_id": "log_fed_twice", "label": "오늘 밥 2회·산책 1회 기록", "dog": {"breed": "말티즈", "age_months": 48}, "context_extra": {"care_log": {"day": "2026-09-11", "meal": 2, "medication": 0, "snack": 1, "walk": 1, "last_meal_at": "18:10", "last_snack_at": "15:00"}}, "visible_to": ["general"], "axis": "care_log"}
+{"profile_id": "log_empty", "label": "오늘 기록은 있는데 밥·산책 0회 (약만 1회)", "dog": {"breed": "말티즈", "age_months": 48}, "context_extra": {"care_log": {"day": "2026-09-11", "meal": 0, "medication": 1, "snack": 0, "walk": 0, "last_medication_at": "08:30"}}, "visible_to": ["general"], "axis": "care_log"}
+{"profile_id": "log_absent", "label": "기록 기능 자체를 안 씀 (care_log 없음)", "dog": {"breed": "말티즈", "age_months": 48}, "context_extra": {}, "visible_to": ["general"], "axis": "care_log"}
+{"profile_id": "none", "label": "프로필 없음", "dog": null, "context_extra": {}, "visible_to": ["life", "general"], "axis": "absent"}

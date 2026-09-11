@@ -197,6 +197,9 @@ def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
     assert public == {
         "/health",
         "/health/ready",
+        # 점령지 좌표 일괄 조회 (#418). backend 의 `territory_site_batch_lookup` 이 nginx 의
+        # `location /territory/sites/` 를 거쳐 부르므로 `nearby` 와 같은 공개 표면이다.
+        "/territory/sites/by-ids",
         "/territory/sites/nearby",
         "/v2/places/search",
     }, (

@@ -133,7 +133,7 @@ def test_threshold_boundary_stays_strictly_greater():
     assert direction_note(above, base) == "차이 관찰됨"
 
 
-def test_direction_note_does_not_say_which_way(client, monkeypatch):  # noqa: ARG001
+def test_direction_note_does_not_say_which_way(client, monkeypatch):
     """**늘었는지 줄었는지는 말하지 않습니다.** 표본이 작을 때 관절별 비율이 크게 흩어지는
     것을 실측했고, 방향까지 단언하면 진단처럼 읽힙니다. 그래서 순서를 바꿔도 답이 같습니다."""
     from daengs_gait.compare import direction_note
@@ -235,7 +235,7 @@ def test_compare_never_touches_storage(client, monkeypatch):
 # ── pose_model 호환성 (D-063 2단계) ──────────────────────────────────────
 # 비교 함수는 서버의 GAIT_ENGINE 이 아니라 **두 기록의 pose_model** 로 고릅니다.
 # 아래는 v4 compare 를 대역으로 갈아 끼워 어느 쪽이 불렸는지 봅니다 — 진짜 v4 compare 는
-# test_gait_v4_engine.py 가 파일 로드로 검사합니다.
+# test_gait_v4_engine.py(경로 선택) · test_gait_v4_compare_parity.py(옛 구현과의 동일성)가 검사합니다.
 
 
 def _spy_v4_compare(monkeypatch):

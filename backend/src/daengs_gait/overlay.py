@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 import cv2
@@ -24,28 +25,58 @@ import imageio_ffmpeg
 
 from daengs_gait.config import KP_MIN_CONF, SKELETON_CHAIN, TARGET_FPS
 
-SKELETON_EDGES = list(zip(SKELETON_CHAIN[:-1], SKELETON_CHAIN[1:]))
+SKELETON_EDGES = list(pairwise(SKELETON_CHAIN))
 
 # ⚠️ 추론의 TARGET_FPS 와 같아야 합니다. 다르면 그림과 원본 프레임이 어긋납니다.
 OVERLAY_FPS = TARGET_FPS
 
 
-def _draw_frame(frame, rec):
+def _side_color(name: str):
+    """개 기준 왼쪽=시안, 오른쪽=주황, 정중선/구분 없음=None(BGR). v4(`L_`/`R_`/left/right
+    접두 관절)에서만 값을 내고, legacy 12kp 이름은 전부 None 이라 이 함수가 있어도
+    legacy 출력은 바뀌지 않습니다."""
+    n = name.lower()
+    if name.startswith("L_") or "left" in n:
+        return (200, 190, 40)
+    if name.startswith("R_") or "right" in n:
+        return (40, 140, 245)
+    return None
+
+
+def _draw_frame(frame, rec, *, edges=None, kp_conf=None, priority=None):
+    """엣지·신뢰도 임계값·우선 관절은 **엔진마다 다른 부분**입니다(D-063 5B) — 옛
+    `gait_v4/overlay.py` 의 `_draw_frame` 을 인자로 흡수한 것입니다. 인자를 안 주면
+    (legacy 기본) 출력이 한 글자도 바뀌지 않습니다: `edges` 기본은 `SKELETON_EDGES`
+    (legacy 12 관절 전부를 잇는 체인이라 `drawable` 이 항상 전체 집합과 같고),
+    `priority` 기본은 빈 집합이라 반지름·외곽선이 전부 그대로이며, legacy 관절
+    이름은 `_side_color` 가 전부 None 을 내 색도 그대로입니다."""
+    edges = SKELETON_EDGES if edges is None else edges
+    kp_conf = KP_MIN_CONF if kp_conf is None else kp_conf
+    priority = set(priority or [])
+    # 스켈레톤∪우선 관절만 그립니다 — legacy 는 체인이 12 관절을 전부 지나 이 필터가
+    # 있으나 없으나 같습니다. v4 는 눈·코 등 그리지 않는 관절을 걸러내는 용도입니다.
+    drawable = {n for e in edges for n in e} | priority
     if rec and rec.get("detected") and rec.get("kps"):
         pts = {name: (x, y, c) for name, x, y, c in rec["kps"]}
-        for a, b in SKELETON_EDGES:
-            if (
-                a in pts
-                and b in pts
-                and pts[a][2] >= KP_MIN_CONF
-                and pts[b][2] >= KP_MIN_CONF
-            ):
+        for a, b in edges:
+            if a in pts and b in pts and pts[a][2] >= kp_conf and pts[b][2] >= kp_conf:
                 pa = (int(pts[a][0]), int(pts[a][1]))
                 pb = (int(pts[b][0]), int(pts[b][1]))
-                cv2.line(frame, pa, pb, (0, 200, 255), 2)
+                ca, cb = _side_color(a), _side_color(b)
+                if ca is None and cb is None:
+                    col = (0, 200, 255)
+                elif ca is not None and ca == cb:
+                    col = ca
+                else:
+                    col = (245, 245, 245)
+                cv2.line(frame, pa, pb, col, 2)
         for name, (x, y, c) in pts.items():
-            if c >= KP_MIN_CONF:
-                cv2.circle(frame, (int(x), int(y)), 4, (0, 0, 255), -1)
+            if name in drawable and c >= kp_conf:
+                col = _side_color(name) or (0, 0, 255)
+                r = 6 if name in priority else 4
+                cv2.circle(frame, (int(x), int(y)), r, col, -1)
+                if name in priority:
+                    cv2.circle(frame, (int(x), int(y)), r, (20, 20, 20), 1)
         # 이 프레임이 분석에 쓰였는지, 아니면 왜 빠졌는지를 그대로 적습니다.
         label = (
             "gait_usable" if rec.get("gait_usable") else f"exclude:{rec.get('exclude_reason')}"
@@ -59,7 +90,12 @@ class OverlayEncodeError(RuntimeError):
     """overlay 인코딩이 실패했습니다 — 산출물을 믿으면 안 되는 상태."""
 
 
-def render_overlay_video(video_path, records: list, out_path) -> str:
+def render_overlay_video(video_path, records: list, out_path, model_meta: dict | None = None) -> str:
+    """`model_meta` 를 주면(v4) 그 엔진의 스켈레톤·신뢰도·우선 관절로 그립니다 — 없으면
+    (legacy, 기본) `_draw_frame` 의 기본 인자를 그대로 씁니다(D-063 5B, 5C 의 같은 패턴)."""
+    edges = [tuple(e) for e in model_meta["skeleton"]] if model_meta else None
+    kp_conf = model_meta["kp_conf"] if model_meta else None
+    priority = model_meta["priority"] if model_meta else None
     cap = cv2.VideoCapture(str(video_path))
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
     # 추론과 같은 서브샘플 규칙이어야 프레임 인덱스가 맞습니다.
@@ -104,7 +140,7 @@ def render_overlay_video(video_path, records: list, out_path) -> str:
     broken_pipe = False
     while True:
         if frame_pos % step == 0:
-            frame = _draw_frame(frame, by_fidx.get(fidx))
+            frame = _draw_frame(frame, by_fidx.get(fidx), edges=edges, kp_conf=kp_conf, priority=priority)
             buf = frame.tobytes()
             if len(buf) != expected_nbytes:
                 # 프레임 크기가 도중에 달라지면 이후 전부가 어긋납니다. 조용히 찢어진

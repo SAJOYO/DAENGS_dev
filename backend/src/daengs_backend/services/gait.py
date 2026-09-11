@@ -670,14 +670,11 @@ def _analyze_from_storage(storage_key: str) -> dict:
 
         # 엔진 선택과 실행은 daengs_gait 의 몫입니다 (D-063 2단계). 설정값은 인자로 넘깁니다 —
         # daengs_gait 는 daengs_backend 를 import 하지 않습니다. legacy 는 그 안에서
-        # torch 를 지연 import 하고, v4 는 별도 venv 의 서브프로세스라 여기엔 안 올라옵니다.
+        # torch 를 지연 import 하고, v4 는 워커 자신의 인터프리터로 `daengs_gait.inference`
+        # 를 서브프로세스로 부르므로 여기엔 안 올라옵니다 (D-063 5B).
         from daengs_gait.engines import get_engine
 
-        engine = get_engine(
-            settings.gait_engine,
-            v4_dir=settings.gait_v4_dir,
-            v4_python=settings.gait_v4_python,
-        )
+        engine = get_engine(settings.gait_engine)
         record = engine.analyze(local)
 
         # 업로드는 DB 행 잠금을 잡은 _run_analysis 가 합니다. 여기서 먼저 올리면 탈퇴
@@ -730,26 +727,21 @@ def _db_quality_tier(raw: str | None) -> str | None:
 
 
 def _load_v4_compare():
-    """`gait_v4/compare.py` 를 **파일로** 불러옵니다.
+    """v4 비교 함수 — `daengs_gait.compare_v4.compare_records` (D-063 5B).
 
-    `import gait_v4.compare` 는 안 됩니다 — 패키지 `__init__` 이 `analyze` → `pose` →
-    torch·onnxruntime 을 끌고 오는데 backend 웹 venv 에는 없습니다. compare.py 자체는
-    numpy 만 쓰므로 모듈 하나만 파일에서 로드하면 웹 프로세스에서도 돕니다.
-    판정 로직은 `daengs_gait.compare` 와 같고, `message_kind` · `side_summary` ·
-    `condition_flags` 가 더 있습니다 (walk_demo 계약).
+    5B 전에는 `backend/gait_v4/gait_v4/compare.py` 를 **파일로** 불러왔습니다 — 그 패키지의
+    `__init__` 이 torch·onnxruntime 을 끌고 와서 backend 웹 venv 에서는 import 할 수 없었기
+    때문입니다. 이제 v4 비교는 `daengs_gait.compare_v4` 에 있고 `daengs_gait` 패키지는
+    eager import 가 없어 **평범한 import 로 충분합니다** — 판정 계산은 `daengs_gait.compare.
+    direction_note` 를 재사용하고, `message_kind` · `side_summary` · `condition_flags`
+    (walk_demo 계약)만 더 냅니다. `tests/test_gait_v4_compare_import_boundary.py` 가
+    이 import 로 torch·rtmlib·onnxruntime·cv2 가 따라오지 않음을 지킵니다.
+
+    ⚠️ 지연 import — numpy 를 끌고 옵니다. legacy 쪽(`_run_compare`)과 같은 규율(D-021)입니다.
     """
-    import importlib.util
+    from daengs_gait.compare_v4 import compare_records
 
-    from daengs_backend.config import settings
-    from daengs_gait.engines.v4 import resolve_dir
-
-    path = resolve_dir(settings.gait_v4_dir) / "gait_v4" / "compare.py"
-    if not path.exists():
-        raise RuntimeError(f"gait_v4 compare 모듈이 없습니다: {path}")
-    spec = importlib.util.spec_from_file_location("_daengs_gait_v4_compare", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.compare_records
+    return compare_records
 
 
 def _run_compare(past: dict, recent: dict, *, pose_model: str) -> dict:

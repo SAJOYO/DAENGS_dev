@@ -340,9 +340,9 @@ def test_by_reason_의_잘못된_항목만_버려진다() -> None:
 # ---------------------------------------------------------------- 프롬프트
 
 
-def test_prompt_without_vet_spend_is_byte_identical_to_v4() -> None:
-    """로그·진료비가 없는 요청은 v3 와 글자까지 같다. 로그만 있는 요청은 v4-carelog 와
-    글자까지 같다 — 이 카드가 그 둘을 조금도 바꾸지 않는다.
+def test_prompt_without_vet_spend_keeps_the_base_body_byte_identical() -> None:
+    """진료비가 없는 요청은 기본 본문과, 로그만 있는 요청은 로그 판본과 글자까지 같다 —
+    진료비 블록이 한 칸도 새지 않는다.
 
     **한 자도 안 빠뜨리려고, 기대값을 `_SAFETY_PROMPT`/`_CARE_LOG_RULE`/스키마/컨텍스트
     줄에서 직접 다시 짓는다.** 버전 접두사와 부분 문자열만 보면, 리팩터로 두 판본
@@ -352,7 +352,7 @@ def test_prompt_without_vet_spend_is_byte_identical_to_v4() -> None:
     dog_json = json.dumps({"breed": "퍼그"}, ensure_ascii=False, sort_keys=True)
 
     v3 = build_general_prompt(GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그")))
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     expected_v3 = (
         f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
@@ -369,7 +369,7 @@ def test_prompt_without_vet_spend_is_byte_identical_to_v4() -> None:
                               last_meal_at="18:30", last_medication_at="08:12")
     payload = GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log)
     v4 = build_general_prompt(payload)
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v4-carelog"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v6-carelog"
     care_log_json = json.dumps(
         care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
     )
@@ -405,7 +405,7 @@ def test_prompt_version_flips_when_vet_spend_present() -> None:
     only_vet = build_general_prompt(
         GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), vet_spend=vet_spend)
     )
-    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v5-vetspend"
+    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v6-vetspend"
     expected_only_vet = (
         f"PROMPT_VERSION: {GENERAL_VET_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
@@ -424,7 +424,7 @@ def test_prompt_version_flips_when_vet_spend_present() -> None:
             question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log, vet_spend=vet_spend
         )
     )
-    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v5-carelog-vetspend"
+    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v6-carelog-vetspend"
     care_log_json = json.dumps(
         care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
     )

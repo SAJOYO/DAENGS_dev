@@ -204,20 +204,12 @@ def test_legacy_call_stays_free_of_v4_only_fields(frames, meta):
         assert set(entry) == {"x_range", "y_range"}
 
 
-# ── v4 엔진 설정이 그대로인지 (v4 폴더가 남아 있는 동안) ──────────────────
+# ── v4 엔진 설정이 그대로인지 ─────────────────────────────────────────────
 def test_v4_engine_config_still_matches():
-    """위 상수들은 `gait_v4` 의 `MODEL` 에서 온 값입니다 — 그쪽이 바뀌면 이 parity 가 조용히
-    엉뚱한 것을 비교하게 되므로 여기서 대조합니다. 5B 에서 그 폴더가 없어지면 skip 됩니다."""
-    import sys
-
-    root = Path(__file__).resolve().parent.parent / "gait_v4"
-    if not (root / "gait_v4" / "config.py").exists():
-        pytest.skip("backend/gait_v4 가 이 체크아웃에 없습니다 (5B 뒤)")
-    sys.path.insert(0, str(root))
-    try:
-        from gait_v4.config import MODEL
-    finally:
-        sys.path.remove(str(root))
+    """위 상수들은 v4 의 `MODEL` 에서 온 값입니다 — 그쪽이 바뀌면 이 parity 가 조용히
+    엉뚱한 것을 비교하게 되므로 여기서 대조합니다. 5B 부터 그 정본은
+    `daengs_gait.inference.model` 입니다(가벼운 모듈 — torch 없이 import 됩니다)."""
+    from daengs_gait.inference.model import MODEL
 
     assert MODEL["min_confident_kp"] == V4_MIN_CONFIDENT_KP
     assert (MIN_KP_SPREAD_RATIO_IF_ON := MODEL["spread_check"]) is False

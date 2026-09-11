@@ -17,7 +17,10 @@ REMOVE = r"(?:찜(?:을|에서)?(?:해제해줘|해제해주세요|지워줘|삭
 def grounded_command(request, intent):
     edit = intent.bookmark
     if (
-        intent.changes != SemanticChanges()
+        (intent.forbid_save and edit.operation == "save")
+        or intent.navigation != "stay"
+        or intent.search_scope != "keep"
+        or intent.changes != SemanticChanges()
         or intent.browse != "current"
         or intent.place_edit
         or intent.refresh

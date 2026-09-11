@@ -3,7 +3,8 @@ import pytest
 from daengs_place.place.bookmarks import BookmarkFilters, matches, order_bookmark_hits
 from daengs_place.place.conversation.contract import PrepareRequest
 from daengs_place.place.conversation.intent import Interpretation, SemanticChanges
-from daengs_place.place.conversation.saved_search import compile_saved, plan_saved
+from daengs_place.place.conversation.saved_search import plan_saved
+from daengs_place.place.conversation.search_compilation import compile_saved
 from daengs_place.place.search import _hit
 from tests.place.conversation.test_bookmark_commands import setup
 from tests.place.support.conversation import place
@@ -102,9 +103,9 @@ def test_feedback_does_not_apply_overeager_filter_or_scope_edits(feedback):
     assert result.action == "explain" and result.filters is None
 
 
-def test_return_scope_keeps_search_conditions_and_compound_return_asks():
+def test_screen_restore_is_separate_from_clearing_scope():
     assert (
-        plan_saved(BookmarkFilters(), intent(search_scope="all_places")).action == "return_search"
+        plan_saved(BookmarkFilters(), intent(navigation="restore_search")).action == "return_search"
     )
     assert (
         plan_saved(
@@ -144,7 +145,10 @@ async def test_normal_search_prepares_saved_filters_without_consuming_or_replaci
 ):
     service, planner, searcher, before = await setup()
     planner.next = intent(
-        search_scope="bookmarks", spatial_scope="unbounded", changes={"parking": "required_true"}
+        search_scope="bookmarks",
+        search_scope_quote="찜한 곳 중",
+        spatial_scope="unbounded",
+        changes={"parking": "required_true"},
     )
     result = await service.prepare(
         None,

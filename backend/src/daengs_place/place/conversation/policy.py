@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from uuid import uuid4
 
-from daengs_place.place.conversation.compiler import compile_changes, fingerprint
+from daengs_place.place.conversation.compiler import fingerprint
 from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.render import ATTRIBUTES, confirmation
+from daengs_place.place.conversation.search_compilation import compile_search
+from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
 
 PENDING_SECONDS = 300
@@ -130,6 +132,18 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
+    directive = resolve_search(intent, "all_places", request.query)
+    if directive.question:
+        return Decision(
+            "unsupported" if directive.code == "region_change_unsupported" else "clarify",
+            code=directive.code,
+            question=directive.question,
+            intent=intent,
+        )
+    if directive.navigation:
+        return Decision(
+            "clarify", code="search_already_visible", question="현재 일반 검색 화면이에요."
+        )
     if intent.feedback != "none":
         return Decision(
             "explain",
@@ -141,30 +155,10 @@ async def decide(planner, request, now):
             }[intent.feedback],
             intent=intent,
         )
-    if intent.search_scope == "bookmarks":
+    if directive.pool == "bookmarks":
         return Decision("saved_search", intent=intent)
-    if intent.spatial_scope != "keep":
-        return Decision(
-            "clarify",
-            question="지역 제한 없는 검색은 찜 탭에서 할 수 있어요.",
-            code="unbounded_requires_saved",
-        )
     if intent.bookmark is not None:
         return Decision("bookmark", intent=intent)
-    if intent.region_query:
-        return Decision(
-            "unsupported",
-            intent=intent,
-            code="region_change_unsupported",
-            question="검색 지역 이동은 지도에서 할 수 있어요. 지도를 원하는 지역으로 옮긴 뒤 다시 검색해 주세요.",
-        )
-    if intent.unresolved != "none" or intent.goal == "clarify":
-        return Decision(
-            "clarify",
-            intent=intent,
-            code="clarification_required",
-            question=CLARIFICATIONS.get(intent.unresolved, CLARIFICATIONS["ambiguous"]),
-        )
     if (intent.browse != "current" or intent.place_edit) and (intent.unsupported or revise):
         return Decision(
             "clarify",
@@ -187,7 +181,7 @@ async def decide(planner, request, now):
             code="confirmation_required",
             question=pending.question + " 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
         )
-    candidate = compile_changes(context.previous.filters, intent.changes)
+    candidate = compile_search(context.previous.filters, intent, directive.pool)
     unsupported = (
         tuple(dict.fromkeys((*pending.unsupported, *intent.unsupported)))
         if revise

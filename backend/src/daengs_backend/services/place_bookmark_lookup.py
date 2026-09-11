@@ -20,7 +20,7 @@ class HttpPlaceBookmarkLookup:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
-    async def interpret(self, query, filters):
+    async def interpret(self, query, filters, *, search_policy=None):
         from daengs_backend.schemas.place_bookmark import BookmarkInterpretResult
 
         try:
@@ -29,7 +29,7 @@ class HttpPlaceBookmarkLookup:
                 client.stream(
                     "POST",
                     f"{self.base_url}/internal/place/bookmarks/interpret",
-                    json={"query": query, "filters": filters},
+                    json={"query": query, "filters": filters, "search_policy": search_policy},
                 ) as response,
             ):
                 if response.status_code == 422:
@@ -43,6 +43,10 @@ class HttpPlaceBookmarkLookup:
             result = BookmarkInterpretResult.model_validate_json(body)
             if (result.action == "search") != (result.filters is not None):
                 raise ValueError("invalid saved plan")
+            if (result.action == "search_places") != (result.search_filters is not None):
+                raise ValueError("invalid ordinary search plan")
+            if result.action == "search_places" and search_policy != "v1":
+                raise ValueError("unnegotiated ordinary search")
             return result
         except (httpx.HTTPError, ValueError, TypeError) as exc:
             raise PlaceLookupUnavailable from exc

@@ -5,6 +5,8 @@ DEV #449의 완료된 측정 백업을 APP #319의 `motion-v1` / `motion-measure
 이번 단위는 **서버 계산과 인증된 조회**다. 기존 finalize의 legacy 분석·지도 원판을 교체하거나
 앱 화면이 이 응답을 자동으로 채택하는 변경은 포함하지 않는다. v1 행동 핀은 그대로 사용할 수 있다.
 
+> #457의 [정밀 확장](gps-motion-precision.md)이 있으면 원본 비트로 계산한다. 아래 6자리 한계는 확장 자료가 없는 기록에 해당한다.
+
 ## 호출과 응답
 
 `GET /app/walks/{walk_id}/motion-calculation` — 앱 회원 인증과 산책 소유권이 필요하다.

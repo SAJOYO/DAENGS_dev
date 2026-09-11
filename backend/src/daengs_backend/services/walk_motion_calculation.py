@@ -10,7 +10,7 @@ from daengs_backend.services.walk_motion_engine import replay
 
 async def calculate(session, owner, walk_id):
     try:
-        manifest, raw, observations, fingerprint = await walk_motion.completed_input(
+        manifest, raw, observations, fingerprint, precision_fp = await walk_motion.completed_input(
             session, owner, walk_id
         )
         result = await asyncio.to_thread(replay, manifest, observations, raw)
@@ -22,6 +22,8 @@ async def calculate(session, owner, walk_id):
             config_hash=manifest.policy.config_hash,
             manifest_fingerprint=manifest_digest(manifest),
             evidence_fingerprint=fingerprint,
+            precision_fingerprint=precision_fp,
+            coordinate_basis="device-fix-bits-v1" if precision_fp else "stored-raw-v1-six-decimals",
             **result,
         )
     except MotionConflict:

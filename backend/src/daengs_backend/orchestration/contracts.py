@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    # 순환 임포트 회피 (#416) — `TurnRelation` 은 여전히 `resolver.py` 에 산다
+    # (공유 열거형을 안 넓히는 것과 같은 이유). `resolver.py` 가 이미 이 모듈을
+    # 임포트하므로 여기서 되임포트하면 순환이 생긴다. 타입 검사기용으로만 쓰고,
+    # 런타임 조립은 `resolver.py` 가 `ConversationContext.model_rebuild(...)` 로 마친다.
+    from daengs_backend.orchestration.resolver import TurnRelation
 
 
 class ContractModel(BaseModel):
@@ -406,6 +413,25 @@ class ClarifyRequest(ContractModel):
     missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
 
 
+class ConversationContext(ContractModel):
+    """라우터와 선택된 capability 가 보는 **전부**. 이력 원문은 여기 없다 (#416).
+
+    Turn Resolver (`orchestration/resolver.py`) 가 조립해서 내려보낸다. `relation` 의
+    타입은 `resolver.TurnRelation` 인데, 그 열거형이 여기 있지 않은 이유는 다른 공유
+    열거형(`AssistantStatus` 등)을 안 넓히는 것과 같다 — 순환 임포트도 있다:
+    `resolver.py` 가 이미 `daengs_backend.orchestration.contracts` 를 임포트하므로,
+    이 모듈이 런타임에 `resolver` 를 되임포트하면 순환이 생긴다. `resolver.py` 가
+    자신을 다 읽은 뒤 `ConversationContext.model_rebuild(_types_namespace=...)` 로
+    이 모델의 조립을 마무리한다.
+    """
+
+    relation: TurnRelation
+    referenced_original_request: str | None = None
+    standalone_query: str | None = None
+    pending_question: str | None = None
+    pending_missing_axes: list[ObservationAxis] = Field(default_factory=list)
+
+
 class RoutePlan(ContractModel):
     """The plan itself plus how it was reached.
 
@@ -529,6 +555,7 @@ __all__ = [
     "CapabilityResult",
     "CapabilityStatus",
     "ClarifyRequest",
+    "ConversationContext",
     "ErrorDetail",
     "GeneralPayload",
     "Handoff",

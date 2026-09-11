@@ -1,0 +1,153 @@
+"""현재 발화를 앞 요청에 잇는 자리 (#416).
+
+**이력 원문은 이 파일에서 멈춥니다.** 아래로 내려가는 것은 `ConversationContext` 뿐이고,
+라우터도 capability 도 후보 turn 을 못 봅니다 — 관계 판정이 프롬프트 안에 묻히면 실패가
+관측되지 않기 때문입니다(스펙 §2).
+
+`emergency.py` · `semantic.py` 와 같은 층의 형제입니다. 순서는 **응급 → 결정론 → 여기 →
+시맨틱 라우터**이고, 응급이 앞인 것은 의도입니다: 응급 경계는 현재 사용자 원문을 직접
+검사해야 하고 이 파일의 결과가 그것을 약하게 만들 수 없습니다(스펙 ⑦-4).
+"""
+
+from __future__ import annotations
+
+import re
+import uuid
+from collections.abc import Sequence
+from enum import StrEnum
+
+from pydantic import Field, model_validator
+
+from daengs_backend.orchestration.contracts import (
+    ContractModel,
+    ConversationContext,
+    ObservationAxis,
+)
+
+#: 후보로 쓰는 완료 turn 쌍의 수. 가장 긴 수용 케이스가 요구하는 최소가 3이다.
+#: Task 2 의 `fit_candidates` 가 이 개수 상한과 문자 예산(`MAX_CANDIDATE_BLOCK_CHARS`)을
+#: 함께 적용한다 — 여기서는 상수만 정의하고 아직 아무도 안 부른다.
+MAX_CANDIDATE_PAIRS = 3
+#: 후보의 assistant 원문 상한. DB 상한이 8,000자라 안 자르면 통째로 프롬프트에 온다.
+MAX_ASSISTANT_CHARS = 400
+#: 후보 블록 전체 상한. 한 쌍의 최대치(2,000+400)가 이 아래라 최신 쌍은 늘 남는다.
+MAX_CANDIDATE_BLOCK_CHARS = 3_000
+#: 이 아래면 잇지 않고 되묻는다 (수용 케이스 9).
+RESOLUTION_CONFIDENCE_FLOOR = 0.6
+
+
+class TurnRelation(StrEnum):
+    """현재 발화가 앞 대화와 맺는 관계.
+
+    **`AssistantStatus` 를 안 넓히는 이유와 같은 이유로 이 열거형은 여기 삽니다** — 공유
+    열거형을 넓히면 그것을 열거하는 파일이 전부 범위에 들어옵니다.
+    """
+
+    NEW = "NEW"
+    FOLLOW_UP = "FOLLOW_UP"
+    CORRECTION = "CORRECTION"
+    REPEAT = "REPEAT"
+    META = "META"
+
+
+# `ConversationContext` 는 `contracts.py` 에 산다 (#416) — 나중에 `contracts.GeneralPayload`
+# 가 그것을 참조하게 되는데, 이 파일이 이미 `contracts` 를 임포트하므로 반대 방향으로
+# 두면 순환 임포트가 생긴다. `relation: TurnRelation` 은 `contracts.py` 에서 타입 검사용
+# forward reference 로만 있고, 여기서 실제 타입을 채워 조립을 마무리한다.
+ConversationContext.model_rebuild(_types_namespace={"TurnRelation": TurnRelation})
+
+
+class PriorTurn(ContractModel):
+    """후보 한 쌍. `turn_id` 가 있어야 모델이 지목한 것을 행으로 되돌릴 수 있다."""
+
+    turn_id: uuid.UUID
+    user: str
+    assistant: str
+
+
+class PendingClarification(ContractModel):
+    """대기 중인 되묻기 — 가장 최근 완료 turn 이 `CLARIFY` 일 때만 있다.
+
+    **되묻기는 두 부류다** (PR 본문 ④):
+
+    | 부류 | `missing_axes` | 후속 답변을 어디에 묶나 |
+    | --- | --- | --- |
+    | 관찰 되묻기 | `["APPETITE", …]` | 그 축에 묶는다 |
+    | 맥락 되묻기 | `[]` | 축이 아니라 **가리킨 대상**을 물은 것이다 |
+
+    `missing` 으로는 못 가른다 — General ask 는 늘 `["observation"]` 이다
+    (`GENERAL_ASK_MISSING` 하드코딩). 가르는 것은 `missing_axes` 의 비어 있음뿐이고,
+    비어 있으면 **"축을 모른다"** 이지 "물은 것이 없다" 가 아니다 — 그래서
+    `is_observation_ask` 가 거짓일 때 **축을 지어내면 안 된다.**
+
+    `missing` 을 그래도 들고 다니는 것은 좌표 게이트(`["location.lat"]`)와 General ask 를
+    가리기 위해서다 — 그 둘은 계획 시점과 집계 시점이라 출처가 다르다.
+    """
+
+    turn_id: uuid.UUID
+    question: str
+    missing: list[str] = Field(default_factory=list)
+    missing_axes: list[ObservationAxis] = Field(default_factory=list)
+
+    @property
+    def is_observation_ask(self) -> bool:
+        """축이 있으면 관찰 되묻기. 없으면 맥락 되묻기이거나 축을 모르는 것이고, 둘 다
+        후속 답변을 축에 묶으면 안 된다."""
+        return bool(self.missing_axes)
+
+
+class ResolvedTurn(ContractModel):
+    """판정 결과. `current_query` 는 **절대 대체하지 않는다** — 원문과 출처를 늘 같이 든다."""
+
+    relation: TurnRelation
+    current_query: str = Field(min_length=1)
+    referenced_turn_id: uuid.UUID | None = None
+    pending_clarification_id: uuid.UUID | None = None
+    referenced_original_request: str | None = None
+    pending_missing_axes: list[ObservationAxis] = Field(default_factory=list)
+    #: 모델이 만든 추론용 표현. **사실이 아니다** — 반려견 기록으로 저장하지 않는다.
+    standalone_query: str | None = None
+    resolution_confidence: float = Field(ge=0.0, le=1.0)
+    ambiguity: str | None = None
+    context_used: list[uuid.UUID] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def one_anchor_at_most(self) -> ResolvedTurn:
+        if self.referenced_turn_id is not None and self.pending_clarification_id is not None:
+            raise ValueError("referenced_turn_id and pending_clarification_id are exclusive")
+        return self
+
+
+#: 맥락 의존 신호. 없으면 모델을 안 태운다 — `resolve_emergency_route` ·
+#: `resolve_deterministic_route` 가 이미 모델 앞에서 하는 것과 같은 규칙 기반 선별이다.
+_CONTEXT_MARKERS = re.compile(
+    r"그거|그걸|그것|저거|저걸|걔|아까|방금|말한\s*거|"          # 지시어
+    r"아니(?![요라])|말고|가\s*아니라|이\s*아니라|"                # 정정
+    r"그러니까|그니까|다시|또|했잖아|물어봤|"                      # 반복
+    r"물어봐야|왜\s*안|안\s*물어"                                   # 메타
+)
+
+
+def needs_resolution(
+    *,
+    query: str,
+    candidates: Sequence[PriorTurn],
+    pending: PendingClarification | None,
+) -> bool:
+    """모델을 태울 값이 있나.
+
+    대기 중인 되묻기가 있으면 표지와 무관하게 참이다 — `"밥은 먹는데 계속 누워 있어"` 에는
+    지시어가 없지만 그것이 앞 질문의 답이기 때문이다(수용 케이스 5).
+    """
+    if pending is not None:
+        return True
+    if not candidates:
+        return False
+    return _CONTEXT_MARKERS.search(query) is not None
+
+
+def new_turn(query: str) -> ResolvedTurn:
+    """fast path 의 결과. 아무것도 안 잇고, 아무것도 안 넘긴다."""
+    return ResolvedTurn(
+        relation=TurnRelation.NEW, current_query=query, resolution_confidence=1.0
+    )

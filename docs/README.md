@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/diary-part-slots.md](walk/diary-part-slots.md) | 공간·환경·동선 조건과 스탬프, Gemini 미리보기 API·CLI 워킹 스켈레톤 |
 | [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
 | [walk/diary-publication.md](walk/diary-publication.md) | 종료 후 남은 시간 예산·영속 기본 보드·단일 확정과 중단 복구 |
 | [walk/diary-base-board.md](walk/diary-base-board.md) | AI 없이 완성하는 내부 기본 보드 — 사용자 기록·관측·동선 지점·시작/종료와 기존 v1 보존 |

@@ -326,7 +326,7 @@ General 이 `kind="ask"` 를 내면 `aggregate._general_ask` 가 그것을 `Assi
 | # | 케이스 | 기대 `relation` | 랩 대응 |
 | --- | --- | --- | --- |
 | 1 | 이력 없는 독립 질문 | `NEW` (fast path, 모델 호출 0) | — |
-| 2 | `"그거 얼마나 자주 해?"` 가 앞 요청에 연결 | `FOLLOW_UP` | `cq_pronoun_geugeo_01` |
+| 2 | `"그거 얼마나 자주 해?"` 가 앞 요청에 연결 | `FOLLOW_UP` | `cq_pronoun_geugeo_01` ⚠ |
 | 3 | `"아니, 산책 말고 밥"` | `CORRECTION` | `cq_correction_explicit_01` |
 | 4 | 실패한 답변 뒤 같은 요구 반복 | `REPEAT` | `cq_repeat_after_failure_01` |
 | 5 | #415 가 식욕·활력을 물은 뒤 `"밥은 먹는데 계속 누워 있어"` | `FOLLOW_UP` + `pending_clarification_id` | 신규 |
@@ -343,9 +343,23 @@ General 이 `kind="ask"` 를 내면 `aggregate._general_ask` 가 그것을 `Assi
 - **5** — `missing_axes` 를 관찰로 오해하지 않는지가 여기서 걸립니다 (⑥-3).
 - **6** — `off_topic` 거절로 떨어지지 않는 것이 통과 조건입니다.
 - **8** — 응급이 Resolver 결과에 **약해지지 않는** 것을 봅니다 (⑦-4).
-- **9** — 틀리게 잇느니 되묻습니다. `resolution_confidence` 가 문턱 아래면 `CLARIFY`.
+- **9** — 틀리게 잇느니 되묻습니다. 다만 **Resolver 가 `CLARIFY` 를 만들지 않습니다** —
+  붙임을 버리기만 하면 General 의 기존 ask 경로가 오늘 하던 대로 되묻습니다. `CLARIFY`
+  생산자는 **둘로 유지**됩니다 (PR 본문 ⑦ 의 답). 그 되묻기는 이미 돌고 있습니다 — after_v2
+  랩의 두 지시어 케이스가 바로 그 문장입니다.
 
-`cq_pronoun_akka_01` 은 랩에 남지만 아홉의 대표는 아닙니다 — 2번과 같은 기제입니다.
+`cq_pronoun_akka_01` 은 2번과 같은 기제입니다.
+
+**⚠ 그 둘의 출발선이 `#415` 로 움직였습니다** (PR 본문 ①). before 로 쓸 랩은
+`lap_before.jsonl` 이 아니라 **`after_v2_346cada0/lap_after.jsonl`** 입니다:
+
+| | `#415` 전 | `#415` 후 (출발선) | 이 카드의 목표 |
+| --- | --- | --- | --- |
+| `그거 얼마나 오래 해야 해?` | ANSWERED — **없는 맥락을 지어냄** | CLARIFY — 못 찾겠다고 말함 | **ANSWER** |
+| `아까 말한 거 다시 설명해줘` | ANSWERED | CLARIFY | **ANSWER** |
+
+`#415` 가 「지어내기」를 「모른다고 말하기」로 이미 고쳤습니다. 이 카드가 더할 것은
+**찾아내기**입니다. 그래서 이 둘이 가장 깨끗한 수용 신호입니다 — 개선 방향이 한 칸뿐입니다.
 
 넷(`cq_correction_explicit_01` · `cq_repeat_after_failure_01` ·
 `cq_observed_wellness_repair_01`, 그리고 5번)은 `expected_mode: "ASK"` 라
@@ -393,6 +407,12 @@ turn 은 `processing` 이라 자동으로 빠지고, 정확한 재생은 `orches
 무관합니다.
 
 ## 6. 프롬프트 버전과 기준선
+
+**버전은 조건부로 올립니다** (2026-09-11 수정). 초판은 `v10 → v11` 로 무조건 올린다고
+적었는데, 블록이 조건부라 그러면 버전 문자열 하나가 두 몸(맥락 있음/없음)을 가리켜 랩 헤더의
+핀이 거짓말을 합니다. `general.py` 가 네 조합에 네 상수를 둔 이유가 정확히 그것입니다.
+**기존 상수는 그대로 두고, 맥락이 실릴 때만 접미사가 붙은 값을 씁니다** — 부수 효과로 라우터
+벤치마크 기준선이 문자 그대로 안 움직입니다.
 
 프롬프트 본문이 바뀌는 곳과 **새로 생기는 곳**:
 

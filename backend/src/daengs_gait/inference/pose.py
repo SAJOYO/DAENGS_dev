@@ -1,13 +1,15 @@
-# -*- coding: utf-8 -*-
-"""v4 pose 경로: 5fps 샘플 → ssdlite(direct) 박스 → RTMPose AP-10K ONNX → 후면 좌/우 x-순서 정렬.
+"""v4 pose 경로: 5fps 샘플 → ssdlite(direct) 박스 → RTMPose AP-10K ONNX → 후면 좌/우 x-순서 정렬 (#304).
 
-walk_demo src/gait_demo/pose_backends.py 의 `_sample_frames / _fill_record / _ensure_rtmpose_onnx / _get_rtmpose /
-run_rtmpose_ssd(direct 분기) / _lr_pairs / enforce_lr_by_x / run_pose` 와 src/gait_demo/keypoint_infer.py 의
-`_base_frame_record` 를 로직 변경 없이 옮겼다. DLC 경로(dlc 백엔드)는 이식 대상이 아니라 뺐다.
+record 스키마(프레임별, `daengs_gait.contract.FrameRecord` 와 같은 모양): frame_idx, detected,
+bbox_frac, bbox_center, kps=[(name,x,y,conf),...], n_confident_kp, quality_flags,
+crop_assisted, crop_box, general_detector_conf, det_box, bbox_wh
 
-record 스키마(프레임별): frame_idx, detected, bbox_frac, bbox_center, kps=[(name,x,y,conf),...], n_confident_kp,
-  quality_flags, crop_assisted, crop_box, general_detector_conf, det_box, bbox_wh
+⚠️ **이 모듈은 `daengs_gait.inference` 서브프로세스에서만 import 됩니다** — torch·rtmlib·
+   onnxruntime 을 끌어옵니다.
 """
+
+from __future__ import annotations
+
 import time
 import zipfile
 from pathlib import Path
@@ -16,26 +18,43 @@ from urllib.request import urlretrieve
 import cv2
 import numpy as np
 
-from . import ssdlite_detector
-from .config import (AP10K_NAMES, BLUR_VAR_THRESH, FAR_BBOX_FRAC_THRESH, LR_FIX_MIN_HW, MODEL, MODEL_ID,
-                     NIGHT_BRIGHTNESS_THRESH, RTMPOSE_INPUT_SIZE, RTMPOSE_ONNX, RTMPOSE_ONNX_URL, TARGET_FPS)
+from daengs_gait.config import (
+    BLUR_VAR_THRESH,
+    FAR_BBOX_FRAC_THRESH,
+    NIGHT_BRIGHTNESS_THRESH,
+    TARGET_FPS,
+)
+from daengs_gait.inference import ssdlite_detector
+from daengs_gait.inference.model import (
+    AP10K_NAMES,
+    LR_FIX_MIN_HW,
+    MODEL,
+    MODEL_ID,
+    RTMPOSE_INPUT_SIZE,
+    RTMPOSE_ONNX,
+    RTMPOSE_ONNX_URL,
+)
 
 
 def _sample_frames(video_path):
     """production(extract_records)과 동일 규칙으로 5fps 서브샘플. returns ([(fidx, frame)], meta)"""
     cap = cv2.VideoCapture(str(video_path))
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     step = max(1, round(native_fps / TARGET_FPS))
-    meta = {"native_fps": native_fps, "sample_fps": native_fps / step, "width": width, "height": height,
-            "diag": float(np.hypot(width, height)), "step": step}
+    meta = {
+        "native_fps": native_fps, "sample_fps": native_fps / step, "width": width, "height": height,
+        "diag": float(np.hypot(width, height)), "step": step,
+    }
     frames, fidx, pos = [], 0, 0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
         if pos % step == 0:
-            frames.append((fidx, frame)); fidx += 1
+            frames.append((fidx, frame))
+            fidx += 1
         pos += 1
     cap.release()
     return frames, meta
@@ -73,16 +92,16 @@ def _fill_record(rec, names, xy, conf, box, width, height, kp_conf):
 
 
 # ---------------------------------------------------------------- RTMPose AP-10K
-_rtm_cache = {}
+_rtm_cache: dict = {}
 
 
 def _ensure_rtmpose_onnx() -> Path:
-    """없으면 OpenMMLab 공식 zip 을 받아 end2end.onnx 만 꺼낸다(52 MB)."""
+    """없으면 OpenMMLab 공식 zip 을 받아 end2end.onnx 만 꺼냅니다(52 MB)."""
     if RTMPOSE_ONNX.exists():
         return RTMPOSE_ONNX
     RTMPOSE_ONNX.parent.mkdir(parents=True, exist_ok=True)
     zpath = RTMPOSE_ONNX.parent / "rtmpose-m_ap10k.zip"
-    print(f"[gait_v4] RTMPose ONNX 다운로드: {RTMPOSE_ONNX_URL}", flush=True)
+    print(f"[daengs_gait.inference] RTMPose ONNX 다운로드: {RTMPOSE_ONNX_URL}", flush=True)
     urlretrieve(RTMPOSE_ONNX_URL, zpath)
     with zipfile.ZipFile(zpath) as z:
         member = next(n for n in z.namelist() if n.endswith("end2end.onnx"))
@@ -94,16 +113,21 @@ def _ensure_rtmpose_onnx() -> Path:
 def _get_rtmpose():
     if "model" not in _rtm_cache:
         from rtmlib import RTMPose
-        _rtm_cache["model"] = RTMPose(str(_ensure_rtmpose_onnx()), model_input_size=RTMPOSE_INPUT_SIZE,
-                                      backend="onnxruntime", device="cpu")
+
+        _rtm_cache["model"] = RTMPose(
+            str(_ensure_rtmpose_onnx()), model_input_size=RTMPOSE_INPUT_SIZE,
+            backend="onnxruntime", device="cpu",
+        )
     return _rtm_cache["model"]
 
 
 # ---------------------------------------------------------------- ssdlite(direct) 박스 → RTMPose
 def run_rtmpose_ssd(video_path):
-    m = MODEL; pose = _get_rtmpose()
+    m = MODEL
+    pose = _get_rtmpose()
     frames, meta = _sample_frames(video_path)
-    t_det = time.time(); boxes, confs = {}, {}
+    t_det = time.time()
+    boxes, confs = {}, {}
     for fidx, frame in frames:
         hit = ssdlite_detector.detect(frame)
         if hit is not None:
@@ -128,10 +152,11 @@ def run_rtmpose_ssd(video_path):
     return records, meta
 
 
-# ---------------------------------------------------------------- 좌/우 라벨 정렬 (README §11-3·§11-8)
+# ---------------------------------------------------------------- 좌/우 라벨 정렬
 def _lr_pairs(names):
-    """관절 이름에서 (왼쪽, 오른쪽) 쌍을 찾는다. AP-10K 'L_Hip'↔'R_Hip'."""
-    s = set(names); out = []
+    """관절 이름에서 (왼쪽, 오른쪽) 쌍을 찾습니다. AP-10K 'L_Hip'↔'R_Hip'."""
+    s = set(names)
+    out = []
     for n in names:
         if "left" in n:
             p = n.replace("left", "right")
@@ -145,8 +170,10 @@ def _lr_pairs(names):
 
 
 def enforce_lr_by_x(records, kp_conf, min_hw=LR_FIX_MIN_HW, only_names=None):
-    """후면 프레임(박스 h/w > min_hw)에서 좌/우 쌍의 x 순서를 강제한다(left.x > right.x 면 이름표 교환).
-    record 의 kps 를 제자리에서 고치고 통계를 돌려준다. only_names: 이 이름들 사이의 쌍만."""
+    """후면 프레임(박스 h/w > min_hw)에서 좌/우 쌍의 x 순서를 강제합니다(left.x > right.x 면 이름표 교환).
+
+    record 의 kps 를 제자리에서 고치고 통계를 돌려줍니다. only_names: 이 이름들 사이의 쌍만.
+    """
     pairs = None
     checked = swapped_frames = swapped_pairs = 0
     for rec in records:
@@ -174,9 +201,12 @@ def enforce_lr_by_x(records, kp_conf, min_hw=LR_FIX_MIN_HW, only_names=None):
                 rec["kps"][ri] = (rn,) + tuple(L[1:])
                 hit += 1
         if hit:
-            swapped_frames += 1; swapped_pairs += hit
-    return {"rule": "x-order (rear, bbox h/w>%.1f)" % min_hw, "frames_checked": checked,
-            "frames_swapped": swapped_frames, "pairs_swapped": swapped_pairs}
+            swapped_frames += 1
+            swapped_pairs += hit
+    return {
+        "rule": f"x-order (rear, bbox h/w>{min_hw:.1f})", "frames_checked": checked,
+        "frames_swapped": swapped_frames, "pairs_swapped": swapped_pairs,
+    }
 
 
 # ---------------------------------------------------------------- 진입점

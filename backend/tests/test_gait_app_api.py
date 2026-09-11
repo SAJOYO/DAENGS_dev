@@ -521,11 +521,12 @@ def test_task_module_imports_without_gait_deps():
     probe = (
         "import sys; import daengs_backend.tasks.gait; import daengs_backend.services.gait; "
         "leaked = [m for m in ('daengs_gait.pipeline', 'daengs_gait.engines.legacy', "
-        "'daengs_gait.engines.v4', 'cv2', 'imageio_ffmpeg', 'torch') if m in sys.modules]; "
+        "'daengs_gait.engines.subprocess_bridge', 'daengs_gait.inference.pose', "
+        "'cv2', 'imageio_ffmpeg', 'torch', 'rtmlib', 'onnxruntime') if m in sys.modules]; "
         "print(','.join(leaked)); "
         "sys.exit(1 if leaked else 0)"
     )
-    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=False)
     assert done.returncode == 0, (
         f"태스크 모듈이 끌고 온 것: {done.stdout.strip() or done.stderr.strip()}")
 

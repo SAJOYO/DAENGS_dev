@@ -2,8 +2,8 @@
 
 세 가지를 지킵니다:
 
-1. **계약** — 두 엔진의 실제 출력이 `daengs_gait.contract` 를 만족한다. v4 는 로컬 gait_v4
-   venv 로 실제 영상을 돌린 record.json(픽스처), legacy 는 daengback DB 에 저장된 행 + 이
+1. **계약** — 두 엔진의 실제 출력이 `daengs_gait.contract` 를 만족한다. v4 는 로컬에서
+   실제 영상을 돌린 record.json(픽스처), legacy 는 daengback DB 에 저장된 행 + 이
    엔진이 record 에 넣는 상수. 소스도 정규식으로 읽어 "키를 넣는다" 는 사실을 코드에서 잰다.
 2. **판별 규칙** — 백필 SQL 의 CASE 와 `classify_joint_keys` 가 같은 규칙이고, 두 SQL 파일과
    레지스트리의 관절 집합이 한 글자도 안 다르다. 빈 집합은 어느 모델도 아니다.
@@ -33,8 +33,8 @@ FIXTURES = Path(__file__).parent / "fixtures" / "gait"
 MIGRATION = REPO / "db" / "migrations" / "2026-09-09_gait_records_pose_model.sql"
 VERIFY = REPO / "db" / "migrations" / "verify_2026-09-09_gait_records_pose_model.sql"
 INIT_SQL = REPO / "db" / "init" / "07_gait_records.sql"
-V4_CONFIG = REPO / "backend" / "gait_v4" / "gait_v4" / "config.py"
-V4_ANALYZE = REPO / "backend" / "gait_v4" / "gait_v4" / "analyze.py"
+V4_CONFIG = REPO / "backend" / "src" / "daengs_gait" / "inference" / "model.py"
+V4_ANALYZE = REPO / "backend" / "src" / "daengs_gait" / "inference" / "analyze.py"
 LEGACY_PIPELINE = REPO / "backend" / "src" / "daengs_gait" / "pipeline.py"
 
 
@@ -95,7 +95,7 @@ def test_engines_put_pose_model_into_the_record_in_source() -> None:
     """두 엔진 소스가 `pose_model` 키를 넣는다. v4 는 MODEL_ID, legacy 는 POSE_MODEL_ID."""
     v4 = V4_ANALYZE.read_text(encoding="utf-8")
     assert re.search(r'"pose_model"\s*:\s*MODEL_ID', v4), (
-        "gait_v4/analyze.py 가 pose_model 을 안 넣음"
+        "daengs_gait/inference/analyze.py 가 pose_model 을 안 넣음"
     )
     legacy = LEGACY_PIPELINE.read_text(encoding="utf-8")
     assert re.search(r'"pose_model"\s*:\s*POSE_MODEL_ID', legacy), (
@@ -123,7 +123,7 @@ def test_registry_joint_sets_match_engine_configs() -> None:
 
     v4_cfg = V4_CONFIG.read_text(encoding="utf-8")
     block = re.search(r"AP10K_NAMES\s*=\s*\[(.*?)\]", v4_cfg, re.DOTALL)
-    assert block, "gait_v4/config.py 의 AP10K_NAMES 를 못 읽음"
+    assert block, "daengs_gait/inference/model.py 의 AP10K_NAMES 를 못 읽음"
     names = re.findall(r'"([^"]+)"', block.group(1))
     assert set(names) == contract.AP10K_17_JOINTS and len(names) == 17
     assert contract.POSE_MODELS[contract.POSE_MODEL_V4]["joints"] == names
@@ -343,7 +343,7 @@ async def test_failure_before_engine_result_leaves_pose_model_null(monkeypatch) 
     session = _Session(record)
 
     def boom(key):
-        raise RuntimeError("gait_v4 분석 실패 (exit 1): traceback…")
+        raise RuntimeError("v4 분석 실패 (exit 1): traceback…")
 
     _wire(monkeypatch, session, _Storage(), boom)
 

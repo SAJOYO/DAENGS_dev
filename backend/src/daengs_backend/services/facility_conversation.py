@@ -3,9 +3,10 @@
 import asyncio
 import json
 import time
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
+from sqlalchemy.exc import SQLAlchemyError
 
 from daengs_backend.repositories.facility_sessions import TTL_SECONDS, RedisFacilitySessions
 from daengs_backend.schemas.facility_conversation import ConversationResponse
@@ -61,6 +62,27 @@ class FacilityConversationService(FacilityDiscoveryService):
             raise FacilityDiscoveryError("facility_not_committed")
         return ConversationResponse.model_validate(saved["response"])
 
+    async def bookmark_keys(self, owner):
+        """Read one complete member snapshot. Unavailable is distinct from an empty set."""
+        from daengs_backend.core.database import SessionLocal
+        from daengs_backend.services.place_bookmark import BookmarkMemberNotActive, list_saved
+
+        try:
+            async with asyncio.timeout(5), SessionLocal() as db:
+                page = await list_saved(db, UUID(owner))
+            keys = [item.key.model_dump() for item in page.items]
+            if (
+                page.total_count != len(keys)
+                or len(keys) > 200
+                or len({(k["source"], k["ref"]) for k in keys}) != len(keys)
+            ):
+                return None
+            return keys
+        except BookmarkMemberNotActive as error:
+            raise FacilityDiscoveryError("facility_login_required") from error
+        except (SQLAlchemyError, TimeoutError):
+            return None
+
     async def turn(self, request, owner):
         session_id = request.session_id or self.initial_id(owner, request.client_request_id)
         request_data = request.model_dump(mode="json")
@@ -94,6 +116,12 @@ class FacilityConversationService(FacilityDiscoveryService):
         if not await self._storage("replace", session_id, raw, reservation):
             raise FacilityDiscoveryError("facility_conflict")
         try:
+            source = None
+            if request.source_session_id:
+                _, source = await self.load(request.source_session_id, owner)
+                if source["revision"] != request.source_revision or source["pending"] is not None:
+                    raise FacilityDiscoveryError("facility_conflict")
+            keys = await self.bookmark_keys(owner) if request.candidate_pools == "v1" else None
             envelope = await self.exchange(
                 "prepare",
                 {
@@ -108,15 +136,28 @@ class FacilityConversationService(FacilityDiscoveryService):
                     "visible_selected": request.visible_selected,
                     "bookmark_commands": request.bookmark_commands,
                     "saved_search": request.saved_search,
+                    "candidate_pools": request.candidate_pools,
+                    "restore_pool": request.restore_pool,
+                    "bookmark_keys": keys,
+                    "restore_exploration": source["state"].get("exploration") if source else None,
                 },
             )
             prepared = envelope["prepared"]
             state, receipt = prepared["state"], prepared["receipt"]
+            if source:
+                _, latest_source = await self.load(request.source_session_id, owner)
+                if (
+                    latest_source["revision"] != request.source_revision
+                    or latest_source["pending"] is not None
+                ):
+                    raise FacilityDiscoveryError("facility_conflict")
             revision = saved["revision"] + 1
             response = ConversationResponse(
                 session_id=session_id,
                 revision=revision,
                 client_request_id=request.client_request_id,
+                search_pool=state.get("search_pool", "all_places"),
+                excluded_keys=[p["key"] for p in state.get("exploration", {}).get("excluded", [])],
                 filters=state["filters"],
                 search=envelope["search"],
                 selected=receipt["selected"],

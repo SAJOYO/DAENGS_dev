@@ -1,0 +1,25 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "boundary": "real interpretation + synthetic search; no member/DB/SQL execution",
+  "sha256": {
+    "conversation\\answer.py": "c0c64ba5f55d3e0070f7692c76140656607e914b5adc860b209d22f90107759d",
+    "conversation\\bookmarks.py": "f08a47b5b404e719d2149015d28f9726a7fc5b46dd6108801df6da6e2d247b88",
+    "conversation\\candidates.py": "74767db402cd580f5b654f27c3dc46867ccd0cd821aa2126c409e8fa0f1b5ea6",
+    "conversation\\compiler.py": "33c36020637c94b8a0bbe8caf5938470dab9335bdfca1f35ebfcce95ccd124e2",
+    "conversation\\context.py": "b8784e2d6550c6b1ddc07350ccef8a8b915a2d0f951b3505e0105f58abcd7bc8",
+    "conversation\\contract.py": "22b5d5bf6ed787659bf4b71757a9cdd35ff6bb67ce539c06894c866714adde79",
+    "conversation\\grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "conversation\\intent.py": "0d6b33f14c0b91bc8c630c0e49d779aa5a92bf31812f5cf443bb6cb3b1cff340",
+    "conversation\\policy.py": "e470b2f8d8d47d85d1607735c9a91dd1fc44e9c0de0dc2d4540707bcd4247116",
+    "conversation\\render.py": "9b818861c49a46ce453e8aca3d4621d1b8df2d63a2f69b0af5d10640d8f1af71",
+    "conversation\\saved_search.py": "a5dc45ceb942ad80435bc7d4e1431334cbed11c900dc1612b959dd5d196766c2",
+    "conversation\\search_compilation.py": "ad9bac69a337eeec73ce44004abc1c17566882b8a86f4828c4b075e640c487a1",
+    "conversation\\search_policy.py": "084b03b6e66664208d0ac5fe36e735868a7192bb10a18e135e3367090cabf395",
+    "conversation\\service.py": "8e5235ae3fd9532dc0803a6e21aee0cbddab965a68598a2fdf0aff80860acda4",
+    "conversation\\static_tools.py": "d31e1d515f423e633cd381aba41331640d0a81d2c8cee34c5d028ec754c1e5e5",
+    "conversation\\__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108",
+    "providers\\conversation_gemini.py": "fd910adb53121f9692050fc22b4c0f7acc663c99672ee1b852b17c9a2f762b2a",
+    "providers\\gemini.py": "c329c9a20dc8ba8bb8d079cb384262d649a053f27d3b06364429585a177c1f5b",
+    "providers\\__init__.py": "c7b8047da95ea43b29f9aeb70355bb8c3590b0ad6eba249c4b77356729f874ca"
+  }
+}

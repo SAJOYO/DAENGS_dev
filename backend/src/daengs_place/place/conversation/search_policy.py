@@ -2,11 +2,8 @@
 
 import re
 from dataclasses import dataclass
-from typing import Literal
 
-from daengs_place.place.conversation.intent import Interpretation, SemanticChanges
-
-SearchPool = Literal["all_places", "bookmarks"]
+from daengs_place.place.conversation.intent import Interpretation, SearchPool, SemanticChanges
 
 
 @dataclass(frozen=True)
@@ -18,7 +15,7 @@ class SearchDirective:
 
 
 def resolve_search(
-    intent: Interpretation, current: SearchPool, query: str | None = None
+    intent: Interpretation, current: SearchPool, query: str | None = None, *, candidate_pools=None
 ) -> SearchDirective:
     """No mention means retain the active pool, never infer it from a write."""
     requested = intent.search_scope
@@ -31,7 +28,7 @@ def resolve_search(
             re.search(
                 r"(?:찜한|찜해둔|저장한|저장해둔).*(?:곳|장소|시설|데)|"
                 r"(?:찜|저장)(?:한)?(?:목록|여부|범위|제한|에서|중)|"
-                r"(?:일반|전체|모든)(?:장소|시설|검색)|새로운|새후보|"
+                r"(?:일반|전체|모든)(?:장소|시설|검색)|새로운|새후보|처음보는|안가본|"
                 r"(?:찜|저장)(?:도|만)?(?:찾|보여|봐)|^(?:찜|전체|전부|모두)$",
                 compact,
             )
@@ -54,7 +51,7 @@ def resolve_search(
                 question="검색 범위를 바꾸라는 구절을 확인하지 못했어요. 찜한 곳만 볼지, 찜 여부 없이 볼지 알려주세요.",
                 code="scope_needs_reference",
             )
-    if requested in {"unbookmarked", "new_candidates"}:
+    if requested in {"unbookmarked", "new_candidates"} and candidate_pools != "v1":
         return SearchDirective(
             current,
             question="찜한 곳을 제외하거나 새 후보만 찾는 기능은 아직 준비 중이에요. 현재 조건과 결과를 유지할게요.",
@@ -74,6 +71,7 @@ def resolve_search(
             or intent.spatial_scope != "keep"
             or intent.bookmark
             or intent.place_edit
+            or intent.familiarity
             or intent.browse != "current"
             or intent.refresh
             or intent.region_query
@@ -104,7 +102,7 @@ def resolve_search(
             question="검색 범위 변경과 찜 저장·해제는 따로 요청해 주세요.",
             code="bookmark_with_scope",
         )
-    if intent.spatial_scope == "unbounded" and pool == "all_places":
+    if intent.spatial_scope == "unbounded" and pool != "bookmarks":
         return SearchDirective(
             current,
             question="일반 장소 검색에는 기준 위치와 반경이 필요해요.",

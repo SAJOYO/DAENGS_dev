@@ -1,5 +1,7 @@
 # 검색 집합과 조건 변경 공통화 — 1단계
 
+이 문서는 1단계 구현 기록이다. 새 후보·K 정정·집합 표시의 후속 구현은 [2단계](candidate-pools.md)를 따른다.
+
 서버 [#451](https://github.com/SAJOYO/DAENGS_dev/pull/451), 앱
 [#323](https://github.com/SAJOYO/DAENGS_APP/pull/323).
 2026-09-11, 서버 dev 7dd2fdc와 앱 dev 1f161144에서 착수했다.

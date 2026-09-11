@@ -3,7 +3,7 @@
 import json
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 from sqlalchemy import text
 
 from daengs_place.core.clock import SystemClock
@@ -42,6 +42,14 @@ class BookmarkFilters(BaseModel):
     parking: bool = False
     hard: HardFilters = Field(default_factory=HardFilters)
     dogs: list[PlaceDogSnapshot] = Field(default_factory=list, max_length=20)
+    excluded_keys: list[PlaceRef] = Field(default_factory=list, max_length=120)
+
+    @model_serializer(mode="wrap")
+    def omit_empty_exclusions(self, handler):
+        data = handler(self)
+        if not self.excluded_keys:
+            data.pop("excluded_keys", None)
+        return data
 
     @model_validator(mode="after")
     def valid_scope(self) -> Self:
@@ -91,6 +99,8 @@ def facility_lookup_sql():
 
 
 def matches(place, filters):
+    if place.key in filters.excluded_keys:
+        return False
     if filters.kinds and place.match.kind not in filters.kinds:
         return False
     if filters.name_query.casefold() not in place.name.casefold():

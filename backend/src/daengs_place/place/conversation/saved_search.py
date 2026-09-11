@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from daengs_place.place.bookmarks import BookmarkFilters
+from daengs_place.place.conversation.candidates import explicit_search, grounded_feedback
 from daengs_place.place.conversation.search_compilation import SearchAdapterError, compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState
@@ -15,6 +16,7 @@ class SavedSearchRequest(PlanningModel):
     query: str = Field(min_length=1, max_length=1000)
     filters: BookmarkFilters
     search_policy: Literal["v1"] | None = None
+    candidate_pools: Literal["v1"] | None = None
 
 
 class SavedSearchPlan(PlanningModel):
@@ -22,6 +24,7 @@ class SavedSearchPlan(PlanningModel):
     message: str
     filters: BookmarkFilters | None = None
     search_filters: FilterState | None = None
+    search_pool: Literal["all_places", "unbookmarked", "new_candidates"] = "all_places"
 
     @model_validator(mode="after")
     def valid_payload(self):
@@ -29,19 +32,22 @@ class SavedSearchPlan(PlanningModel):
             raise ValueError("saved filters must match search action")
         if (self.action == "search_places") != (self.search_filters is not None):
             raise ValueError("ordinary filters must match search_places action")
+        if self.action != "search_places" and self.search_pool != "all_places":
+            raise ValueError("candidate pool requires a search action")
         return self
 
 
-def plan_saved(current, intent, *, search_policy=None, query=None):
+def plan_saved(current, intent, *, search_policy=None, query=None, candidate_pools=None):
     def clarify(message):
         return SavedSearchPlan(action="clarify", message=message)
 
-    directive = resolve_search(intent, "bookmarks", query)
+    intent = grounded_feedback(intent, query)
+    directive = resolve_search(intent, "bookmarks", query, candidate_pools=candidate_pools)
     if directive.question:
         return clarify(directive.question)
     if directive.navigation:
         return SavedSearchPlan(action="return_search", message="이전 검색 결과로 돌아갈게요.")
-    if intent.feedback != "none":
+    if intent.feedback != "none" and not explicit_search(intent, query):
         return SavedSearchPlan(
             action="explain",
             message=(
@@ -56,7 +62,7 @@ def plan_saved(current, intent, *, search_policy=None, query=None):
         return clarify(
             "그 조건은 현재 자료로 확인할 수 없어요. 적용할 업종이나 주차 조건을 알려주세요."
         )
-    if directive.pool == "all_places" and search_policy != "v1":
+    if directive.pool != "bookmarks" and search_policy != "v1":
         return clarify("현재 찜 조건으로 일반 장소를 찾으려면 앱을 업데이트해 주세요.")
     if intent.goal not in {"show", "edit_only"} or intent.reference_index is not None:
         return clarify(
@@ -75,8 +81,10 @@ def plan_saved(current, intent, *, search_policy=None, query=None):
         return clarify(
             "함께 적용할 수 없는 조건이거나 기준 위치가 없어요. 업종·반경·필수 조건을 확인해 주세요."
         )
-    if directive.pool == "all_places":
-        return SavedSearchPlan(action="search_places", message="", search_filters=filters)
+    if directive.pool != "bookmarks":
+        return SavedSearchPlan(
+            action="search_places", message="", search_filters=filters, search_pool=directive.pool
+        )
     return SavedSearchPlan(action="search", message="", filters=filters)
 
 
@@ -95,6 +103,22 @@ def prepare_saved_search(request, intent, unchanged):
             action="clarify",
             message="현재 조건 일부는 찜 검색으로 옮길 수 없어요. 찜 탭에서 조건을 확인해 주세요.",
         )
+    if plan.filters and request.previous.exploration.excluded:
+        if request.candidate_pools != "v1":
+            plan = SavedSearchPlan(
+                action="clarify",
+                message="장소 제외를 유지하며 찜에서 찾으려면 앱을 업데이트해 주세요.",
+            )
+        else:
+            plan = plan.model_copy(
+                update={
+                    "filters": plan.filters.model_copy(
+                        update={
+                            "excluded_keys": [p.key for p in request.previous.exploration.excluded],
+                        }
+                    )
+                }
+            )
     result = unchanged(
         request,
         "edit_only" if plan.action == "search" else "clarify",

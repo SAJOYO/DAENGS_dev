@@ -169,6 +169,20 @@ def _answered_by_fake_adapter(adapter_mode: Any, capability: Any) -> Any:
     return NOT_REACHED
 
 
+def _replay_intermediate_turn(
+    case: ConversationCase, user_turn_index: int, driver: ConversationDriver
+) -> None:
+    """대상이 아닌 user 턴도 보낸다 — 이력을 실제로 만드는 것은 이 호출이다 (#446).
+
+    응답은 버린다: 이 턴은 평가 대상이 아니라, 그다음 대상 턴이 볼 이력을 실제로
+    쌓기 위한 것뿐이다. `context` 를 얹는 것까지 `target_turn_row` 와 같다 — 두 함수가
+    갈리는 것은 결과를 `TurnSnapshot` 으로 남기느냐뿐이다.
+    """
+    if hasattr(driver, "context"):
+        driver.context = dict(case.state_snapshot)
+    driver.send(case.turns[user_turn_index].text)
+
+
 def target_turn_row(
     case: ConversationCase, turn_index: int, driver: ConversationDriver
 ) -> TurnSnapshot:
@@ -245,6 +259,27 @@ def run_collect(
     최상단에서 읽으면 이 패키지를 import 만 해도 backend 설정이 필요해진다. `FakeDriver`
     처럼 오케스트레이터를 안 돌리는 이음매를 써도 이 값은 실제 프로세스 설정 그대로
     적힌다 — 무엇을 돌렸는지와 무관하게 "그 순간 스위치가 어느 쪽이었는지"는 항상 사실이다.
+
+    ## 대상 턴 앞이 아니라 케이스 전체를 순서대로 보낸다 (#446)
+
+    `case.turns` 는 인덱스 0 부터 user/assistant 가 번갈아 나온다 — user 턴 *i* 의 응답이
+    assistant 턴 *i+1* 이다. 이 함수는 `max(case.target_turns)` 까지 **모든** user 턴을
+    순서대로 드라이버에 보낸다: *i+1* 이 `target_turns` 에 있으면 그 응답을 행으로 남기고,
+    없으면 보내기만 하고 버린다(`_replay_intermediate_turn`). 대상 바로 앞 user 턴만
+    보내던 이전 코드는 대상들 **사이**의 user 턴을 통째로 건너뛰어, 그 턴이 만들었어야 할
+    이력이 이후 대상에 전혀 안 실렸다 — 대명사("그거")가 가리키는 앞 턴이 사라지거나,
+    관찰 케이스 중간 턴이 이력에서 빠지는 식으로.
+
+    이 재생은 **이력을 나르는 드라이버에만** 적용한다 — `reset_for_new_case` 가 있는지로
+    가른다(케이스 경계를 긋는 자리와 같은 신호: 이 메서드가 있다는 것 자체가 "이 드라이버는
+    호출 사이에 상태를 쌓는다"는 뜻이다). `StatelessDriver`·`FakeDriver` 는 `send()` 가
+    매번 독립이라(#446 스펙 §7) 중간 턴을 더 보내도 다음 대상이 보는 것이 하나도 안
+    바뀐다 — 그런데 `StatelessDriver` 가 무는 `real` 조립에서는 호출 하나하나가 유료
+    모델 호출이라, 아무것도 안 바뀌는 호출을 보태면 비용만 는다. 그래서 이 두 드라이버는
+    옛 경로(대상 바로 앞 user 턴만) 그대로 둔다 — **이미 모은 `before` 랩(`--driver
+    stateless`)이 보낸 것과 이 코드로 다시 모을 `--driver stateless` 랩이 보내는 것이
+    완전히 같다**는 뜻이다. 어느 경로든 **행은 대상 턴 개수만큼만** 나온다 — 재생은
+    무엇을 보내는지만 바꾸고, 무엇을 기록하는지는 안 바꾼다.
     """
     from daengs_backend.config import settings as backend_settings
 
@@ -257,8 +292,18 @@ def run_collect(
     for case in cases:
         if reset_for_new_case is not None:
             reset_for_new_case()
-        for turn_index in case.target_turns:
-            rows.append(target_turn_row(case, turn_index, driver))
+        if reset_for_new_case is not None:
+            # 이력을 나르는 드라이버만 케이스 전체를 순서대로 재생한다 (위 docstring 절 참고).
+            max_target = max(case.target_turns)
+            for user_turn_index in range(0, max_target, 2):
+                assistant_index = user_turn_index + 1
+                if assistant_index in case.target_turns:
+                    rows.append(target_turn_row(case, assistant_index, driver))
+                else:
+                    _replay_intermediate_turn(case, user_turn_index, driver)
+        else:
+            for turn_index in case.target_turns:
+                rows.append(target_turn_row(case, turn_index, driver))
     finished_at = datetime.now(UTC).isoformat(timespec="seconds")
     header = LapHeader(
         lap=lap,

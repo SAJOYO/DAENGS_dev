@@ -15,7 +15,9 @@
 
 ⚠ **엔드포인트를 여기 직접 붙이지 않는다.** `app/main.py` 와 같은 규칙이다 (RAG-027) —
 여기서 하는 일은 앱을 만들고 컨트롤러를 등록하고 수명을 관리하는 것 셋뿐이다. 예외는 아래
-`/healthz` 하나이고, 그것은 도메인이 아니라 Cloud Run 이 컨테이너를 보는 창이다.
+`/health` 하나이고, 그것은 도메인이 아니라 Cloud Run 이 컨테이너를 보는 창이다. **`/healthz`
+가 아니라 `/health`인 이유는 그 함수의 docstring 을 보라** — 구글 프런트엔드가 `/healthz`
+를 가로채 컨테이너까지 안 보낸다 (2026-09-11 실측).
 """
 from __future__ import annotations
 
@@ -60,9 +62,19 @@ def create_app() -> FastAPI:
     app.include_router(walk.router)
     app.include_router(weather.router)
 
-    @app.get("/healthz", tags=["ops"])
-    def healthz() -> dict[str, str]:
+    @app.get("/health", tags=["ops"])
+    def health() -> dict[str, str]:
         """Cloud Run 이 컨테이너를 살아 있다고 볼 자리.
+
+        **`/healthz` 가 아니라 `/health` 다 — 되돌리지 말 것.** Cloud Run 앞의 구글
+        프런트엔드가 정확히 `/healthz` 경로 하나를 가로챈다. 요청이 이 컨테이너에
+        아예 안 닿고 구글의 일반 404 HTML 이 돌아오며, 컨테이너 로그에는 요청 기록조차
+        안 남는다. 2026-09-11 실측(같은 서비스·같은 배포): `/healthz` 는 구글 404, 반면
+        `/health` · `/_healthz` · `/healthzz` · `/livez` · `/readyz` · `/openapi.json` 은
+        전부 이 앱까지 와서 앱이 직접 답했다 — 그래서 예약된 것은 정확히 `/healthz`
+        하나라고 안다. **표에 없는 다른 경로가 안전하다고는 단정하지 않는다** — 잰 것만
+        적는다. 증상이 고약한 이유: 리비전은 Ready 인데 서비스는 죽은 것처럼 보이고,
+        컨테이너 로그에 아무 단서도 안 남는다.
 
         **외부 API 도 Redis 도 부르지 않는다.** 여기서 그것들을 확인하면 기상청이 죽은 날
         컨테이너가 죽은 것으로 취급돼 재기동이 돌고, 그러면 `stale` 로 답할 수 있었던

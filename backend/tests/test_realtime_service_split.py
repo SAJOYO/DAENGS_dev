@@ -51,13 +51,19 @@ def _paths(app: FastAPI) -> set[str]:
 # ---------------------------------------------------------------- realtime 전용 앱
 
 def test_realtime_app_serves_exactly_the_two_realtime_routes() -> None:
-    """`/life/ask` 가 들어오면 RAG 스택이 이미지에 필요해진다 — 그것이 이 단언의 요지다."""
+    """`/life/ask` 가 들어오면 RAG 스택이 이미지에 필요해진다 — 그것이 이 단언의 요지다.
+
+    **`/healthz` 가 아니라는 단언도 여기 있다.** Cloud Run 앞의 구글 프런트엔드가 그
+    경로 하나를 가로채 컨테이너에 안 보낸다(2026-09-11 실측, `realtime_main.py` 의
+    `health()` docstring 참고) — 그래서 헬스 엔드포인트는 `/health` 다.
+    """
     from daengs_life.app.realtime_main import app
 
     paths = _paths(app)
     assert "/life/walk-conditions" in paths
     assert "/weather/at" in paths
     assert "/life/ask" not in paths
+    assert "/healthz" not in paths  # 구글 프런트엔드가 가로챈다 — 위 실측
 
 
 def test_realtime_app_does_not_touch_the_encoder() -> None:

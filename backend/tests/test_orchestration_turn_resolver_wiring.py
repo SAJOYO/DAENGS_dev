@@ -32,7 +32,11 @@ from daengs_backend.orchestration.resolver import (
     TurnRelation,
     TurnResolutionError,
 )
-from daengs_backend.orchestration.semantic import GeminiSemanticRouter
+from daengs_backend.orchestration.semantic import (
+    PROMPT_VERSION,
+    RESOLVED_PROMPT_VERSION,
+    GeminiSemanticRouter,
+)
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
@@ -302,3 +306,91 @@ async def test_turn_resolver_off_skips_it_entirely(monkeypatch) -> None:
     )
     assert resolver.calls == []
     assert response.status is not AssistantStatus.FAILED
+
+
+# ---------------------------------------------------------------- R18 (fix round 1)
+
+
+async def test_resolved_prompt_version_reaches_the_route_plan(monkeypatch) -> None:
+    """R18 — 실제로 `RESOLVED_PROMPT_VERSION` 프롬프트가 나간 turn 은 `RoutePlan.prompt_
+    version`(→ `RouteTrace`, `_route_metadata`) 에도 그 값으로 남아야 한다. 전에는 세 곳
+    모두 `semantic.PROMPT_VERSION` 을 하드코딩해서, 맥락이 실린 turn 도 평범한 `v10` 으로
+    적혔다 — 평가 랩이 잘못된 핀을 신뢰 있는 것처럼 기록하는 사고."""
+    monkeypatch.setattr(settings, "general_fallback", True)
+    referenced = _turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")
+    resolver = RecordingResolver(
+        ResolvedTurn(
+            relation=TurnRelation.FOLLOW_UP,
+            current_query="그거 얼마나 자주 해?",
+            referenced_turn_id=referenced.turn_id,
+            referenced_original_request=referenced.user,
+            resolution_confidence=0.95,
+            context_used=[referenced.turn_id],
+        )
+    )
+    service = _service_with(
+        resolver=resolver, router_outputs=(json.dumps({"execute": [], "handoffs": []}),)
+    )
+    response = await service.run(
+        query="그거 얼마나 자주 해?",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[referenced],
+        include_route_trace=True,
+    )
+    assert response.status is not AssistantStatus.FAILED
+    assert response.route is not None
+    assert response.route.prompt_version == RESOLVED_PROMPT_VERSION
+
+
+async def test_base_prompt_version_reaches_the_route_plan_without_context() -> None:
+    """같은 자리, 맥락이 안 붙는 turn — 오늘과 같은 `PROMPT_VERSION` 이 그대로 적힌다."""
+    resolver = RecordingResolver(
+        ResolvedTurn(
+            relation=TurnRelation.NEW,
+            current_query="산책 중에 짖는 걸 어떻게 고쳐요?",
+            resolution_confidence=1.0,
+        )
+    )
+    service = _service_with(
+        resolver=resolver,
+        router_outputs=(json.dumps({"execute": ["training"], "handoffs": []}),),
+    )
+    response = await service.run(
+        query="산책 중에 짖는 걸 어떻게 고쳐요?",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        include_route_trace=True,
+    )
+    assert response.status is not AssistantStatus.FAILED
+    assert response.route is not None
+    assert response.route.prompt_version == PROMPT_VERSION
+
+
+async def test_router_failure_trace_carries_the_resolved_version() -> None:
+    """라우터 실패 조기 반환도 트레이스를 잃지 않아야 하고(기존 요구), 그 트레이스의
+    버전도 실제로 라우터에 넘어간 `resolved` 를 반영해야 한다 — `semantic_trace` 를
+    `conversation` 이 정해진 뒤로 옮긴 재배치가 조기 반환 경로를 깨지 않았는지 잰다."""
+    referenced = _turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")
+    resolver = RecordingResolver(
+        ResolvedTurn(
+            relation=TurnRelation.FOLLOW_UP,
+            current_query="그거 얼마나 자주 해?",
+            referenced_turn_id=referenced.turn_id,
+            referenced_original_request=referenced.user,
+            resolution_confidence=0.95,
+            context_used=[referenced.turn_id],
+        )
+    )
+    # 스키마에 안 맞는 원답 → 재시도 두 번 다 실패 → SemanticRoutingError.
+    service = _service_with(resolver=resolver, router_outputs=("not json", "still not json"))
+    response = await service.run(
+        query="그거 얼마나 자주 해?",
+        principal=PRINCIPAL,
+        context=dict(SEOUL),
+        prior_turns=[referenced],
+        include_route_trace=True,
+    )
+    assert response.status is AssistantStatus.FAILED
+    assert response.route is not None
+    assert response.route.prompt_version == RESOLVED_PROMPT_VERSION

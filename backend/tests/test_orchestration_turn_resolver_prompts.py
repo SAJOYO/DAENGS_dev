@@ -246,6 +246,41 @@ def test_conv_suffix_applies_on_top_of_every_base_version(
     assert prompt.rstrip().endswith(f"USER_QUERY: {QUERY}")
 
 
+@pytest.mark.parametrize(
+    ("care_log", "vet_spend"),
+    [
+        (None, None),
+        (CARE_LOG, None),
+        (None, VET_SPEND),
+        (CARE_LOG, VET_SPEND),
+    ],
+)
+def test_general_conversation_body_is_the_base_body_with_one_block_inserted(
+    care_log: CareLogContext | None, vet_spend: VetSpendContext | None
+) -> None:
+    """R19 — `general.py` 는 (fix round 1 전) 승인된 기본 본문을 `conversation is None`
+    반환문과 `-conv` 반환문에 **따로** 적는다. 그 둘이 몸에서 갈라지면 한쪽만 고치고
+    다른 쪽을 잊어도 아무 것도 안 걸린다 — `semantic.py` 의
+    `test_resolution_goes_before_the_user_query_and_flips_the_version` 이 이미 쓰는
+    "base 를 버전만 바꾸고 블록 하나만 끼운 것과 같은가" 패턴을 General 의 네 조합
+    전부에 적용한다."""
+    context = _follow_up()
+    base_payload = GeneralPayload(question=QUERY, care_log=care_log, vet_spend=vet_spend)
+    with_conv_payload = GeneralPayload(
+        question=QUERY, care_log=care_log, vet_spend=vet_spend, conversation=context
+    )
+    base_prompt = build_general_prompt(base_payload)
+    with_conv_prompt = build_general_prompt(with_conv_payload)
+    base_version = general_prompt_version(base_payload)
+    conv_version = general_prompt_version(with_conv_payload)
+    assert conv_version == f"{base_version}-conv"
+
+    inserted = with_conv_prompt.replace(f"{render_conversation_context(context)}\n", "", 1)
+    assert inserted == base_prompt.replace(
+        f"PROMPT_VERSION: {base_version}", f"PROMPT_VERSION: {conv_version}", 1
+    )
+
+
 # ---------------------------------------------------------------- render_conversation_context
 
 
@@ -257,9 +292,10 @@ def test_pending_axes_are_labelled_as_asked_not_observed() -> None:
     )
     block = render_conversation_context(resolved)
     assert "APPETITE" in block
-    # "asked" 가 키에 있고 관찰/사실을 뜻하는 단어(observation/observed)가 축 값 옆에
-    # 단독으로 붙어 "관찰됨"으로 읽히지 않는다 — asked_about 로 한정된다.
-    assert "asked" in block
+    # R20 — 여기 있던 `assert "asked" in block` 은 지웠다: `pending_question_previously_
+    # asked_by_the_assistant` 키가 `pending_question is None` 이어도 무조건 나가므로
+    # "asked" 는 항상 참이라 절대 실패할 수 없었다(#416 Task 6 리뷰). 아래 줄만 실패
+    # 가능한 진짜 확인이다 — 축이 그 정확한(오독 방지) 키 아래에 실려 있는지.
     assert '"pending_axes_the_assistant_asked_about_not_dog_observations"' in block
 
 

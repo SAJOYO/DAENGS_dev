@@ -50,6 +50,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     GeminiSemanticRouter,
     SemanticRoutingError,
+    router_prompt_version,
 )
 from daengs_backend.orchestration.social import build_social_response
 
@@ -136,7 +137,7 @@ class AssistantOrchestrationService:
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
             # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
-            run.add_metadata(_route_metadata(route_plan))
+            run.add_metadata(_route_metadata(route_plan, fallback=response.route))
             run.end(outputs=_trace_outputs(response))
             return response
 
@@ -155,13 +156,6 @@ class AssistantOrchestrationService:
     ) -> tuple[AssistantResponse, RoutePlan | None]:
         """계획하고 실행한다. 둘째 반환값은 트레이스 metadata 용 — 엔진에 못 간 두 응답
         (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다."""
-        semantic_trace = (
-            RouteTrace(
-                router=RouterKind.LLM, model=ROUTER_MODEL_ID, prompt_version=PROMPT_VERSION
-            )
-            if include_route_trace
-            else None
-        )
         # 응급은 라우터보다 앞이다 — 모델을 태우지 않고, 배타로 끝낸다.
         route_plan = resolve_emergency_route(
             query=query,
@@ -215,6 +209,21 @@ class AssistantOrchestrationService:
         # 드리프트가 애초에 생길 수 없게 한다.
         conversation = conversation_context_of(resolved, pending_clarification)
         if route_plan is None:
+            # `conversation` 이 여기서야 자리를 잡으므로, 실제로 나갈 라우터 프롬프트의
+            # 버전도 여기서 한 번만 계산한다(Fix round 1, R18) — `RouteTrace` ·
+            # `RoutePlan.prompt_version` · 아래 `_route_metadata` 의 폴백 세 곳이 전부 이
+            # 값을 읽어서, 실제로 `RESOLVED_PROMPT_VERSION` 프롬프트가 나간 turn 이 평가
+            # 랩 행에 평범한 `PROMPT_VERSION` 으로 잘못 적히는 일이 다시 생기지 않는다.
+            resolved_router_version = router_prompt_version(conversation)
+            semantic_trace = (
+                RouteTrace(
+                    router=RouterKind.LLM,
+                    model=ROUTER_MODEL_ID,
+                    prompt_version=resolved_router_version,
+                )
+                if include_route_trace
+                else None
+            )
             try:
                 decision = await self._semantic_router.select(
                     query=query,
@@ -259,6 +268,7 @@ class AssistantOrchestrationService:
                 context=structured_context,
                 router=RouterKind.LLM,
                 model=ROUTER_MODEL_ID,
+                prompt_version=resolved_router_version,
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
@@ -276,17 +286,25 @@ class AssistantOrchestrationService:
         return response, route_plan
 
 
-def _route_metadata(route_plan: RoutePlan | None) -> dict[str, Any]:
+def _route_metadata(route_plan: RoutePlan | None, *, fallback: RouteTrace | None) -> dict[str, Any]:
     """루트 런 metadata 의 라우팅 키. `graph.py` 의 자식 런과 **같은 키**를 쓴다.
 
     RoutePlan 이 없는 두 응답(스몰토크 · 라우터 실패)은 시맨틱 라우터를 거친 뒤라
     LLM 라우팅으로 적는다 — 결정론 라우팅은 RoutePlan 없이 끝나는 길이 없다.
+
+    `fallback` 은 그 두 응답의 `AssistantResponse.route`(`RouteTrace`) 다 — `_plan_and_execute`
+    가 그 자리에서 이미 실제로 쓰인 `prompt_version` 을 계산해 담아 뒀으므로(Fix round 1,
+    R18), 여기서 `PROMPT_VERSION` 을 다시 하드코딩하면 맥락이 실린 turn 도 평범한 버전으로
+    적힌다. `fallback` 이 `None` 인 것은 `include_route_trace=False` 라 애초에 아무것도 안
+    실은 경우뿐이고, 그때는 기본값으로 물러난다.
     """
     if route_plan is None:
         return {
             "router": RouterKind.LLM.value,
-            "router_model": ROUTER_MODEL_ID,
-            "prompt_version": PROMPT_VERSION,
+            "router_model": fallback.model if fallback is not None else ROUTER_MODEL_ID,
+            "prompt_version": (
+                fallback.prompt_version if fallback is not None else PROMPT_VERSION
+            ),
         }
     return {
         "router": route_plan.router.value,

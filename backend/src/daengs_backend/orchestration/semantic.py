@@ -285,6 +285,20 @@ def render_conversation_context(resolved: ConversationContext) -> str:
     )
 
 
+def router_prompt_version(resolved: ConversationContext | None) -> str:
+    """`build_semantic_router_prompt(resolved=...)` 가 실제로 쓸 `PROMPT_VERSION` 값.
+
+    Fix round 1, R18 (#416 Task 6) — 이 계산이 프롬프트 빌더 밖에 따로 있던 것이 사고였다.
+    `service.py` 가 `RouteTrace`·`RoutePlan.prompt_version`·라우트 metadata 세 곳에 각자
+    `PROMPT_VERSION` 을 박아 두고 있어서, 실제로는 `RESOLVED_PROMPT_VERSION` 프롬프트가
+    나간 turn 이 평가 랩 행에 평범한 `v10` 으로 적혔다 — 두 몸을 한 상수가 가리키지 않게
+    하려고 만든 구분이 기록 계층에서 다시 사라진 것이다. 세 자리 모두 이 함수 하나로
+    계산하면, 프롬프트 빌더의 분기와 기록의 분기가 같은 조건(`resolved is None`)에서
+    갈라져 서로 못 어긋난다.
+    """
+    return RESOLVED_PROMPT_VERSION if resolved is not None else PROMPT_VERSION
+
+
 def build_semantic_router_prompt(
     *, query: str, context: dict[str, Any], resolved: ConversationContext | None = None
 ) -> str:
@@ -464,6 +478,7 @@ __all__ = [
     "build_semantic_router_prompt",
     "render_conversation_context",
     "router_generation_config",
+    "router_prompt_version",
     "routing_metadata",
     "validate_semantic_decision",
 ]

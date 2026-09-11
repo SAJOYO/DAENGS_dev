@@ -27,6 +27,8 @@ scene_area_context의 radius_m은 집계 범위다. 시설까지의 거리가 �
 scene_address_reference는 장면의 위치 설명이며, 가까운 시설 후보가 아니다.
 날씨는 관측된 필드만 쓴다. 기온·풍속만으로 맑음, 화창함, 기분, 시원함을 추정하지 않는다.
 지역 관측은 현장에서 느꼈다는 뜻이 아니다. 누락된 필드는 알 수 없다.
+grid_temperature_observation은 기록에 앞선 시각의 해당 격자 기온이다. 관측 시각과 facts의
+interpretation을 따르며 기록 순간에 직접 측정한 기온이나 산책 내내 유지된 기온으로 쓰지 않는다.
 동선은 기록 기기의 관측이다. observed_dwell은 한곳에 모인 동선이며 강아지의 휴식·킁킁을
 뜻하지 않는다. observed_slow/fast는 해당 산책의 다른 이동 구간에 비한 상대 속도다.
 before_scene_motion은 '이 기록에 앞선 구간'의 시간 관계다. 장소 도착·첫 방문을 뜻하지 않는다.

@@ -180,6 +180,13 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
             }:
                 reject(part, saved.id, "unsupported_weather_observation", "unknown")
                 continue
+            if saved.payload and saved.payload.get("format") == "kma-grid-temperature-v1":
+                from daengs_walk.diary_temperature import temperature_candidate
+
+                item = temperature_candidate(saved, anchor, scene_scope, policy, reject)
+                if item is not None:
+                    candidates.append(item)
+                continue
             try:
                 weather = RegionalWeather.model_validate(saved.payload)
             except ValueError:

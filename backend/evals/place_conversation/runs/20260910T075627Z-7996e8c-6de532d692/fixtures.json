@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "description": "평가용 합성 후보 명세. 좌표/거리의 실제 PostGIS 일관성을 검증하는 데이터는 아님.",
+  "standard": [
+    {
+      "ref": "f81d",
+      "kind": "cafe",
+      "name": "평가 장소 A",
+      "distance_m": 100,
+      "parking": true,
+      "exclusive": false
+    },
+    {
+      "ref": "a207",
+      "kind": "cafe",
+      "name": "평가 장소 B",
+      "distance_m": 200,
+      "parking": false,
+      "exclusive": false
+    },
+    {
+      "ref": "d94c",
+      "kind": "cafe",
+      "name": "평가 장소 C",
+      "distance_m": 300,
+      "parking": null,
+      "exclusive": null
+    },
+    {
+      "ref": "b036",
+      "kind": "restaurant",
+      "name": "평가 장소 D",
+      "distance_m": 400,
+      "parking": false,
+      "exclusive": true
+    },
+    {
+      "ref": "e572",
+      "kind": "restaurant",
+      "name": "평가 장소 E",
+      "distance_m": 500,
+      "parking": true,
+      "exclusive": false
+    },
+    {
+      "ref": "c468",
+      "kind": "restaurant",
+      "name": "평가 장소 F",
+      "distance_m": 600,
+      "parking": null,
+      "exclusive": null
+    }
+  ],
+  "defaults": {
+    "source": "test:conversation-eval",
+    "address": "테스트 주소",
+    "snapshot_order": "distance_m 오름차순",
+    "fixture": "standard",
+    "all_other_facts": "미상; 채워 넣거나 추측하지 않음"
+  },
+  "empty_match": {
+    "rows": [
+      {
+        "ref": "cafe-no",
+        "kind": "cafe",
+        "parking": false
+      },
+      {
+        "ref": "cafe-unknown",
+        "kind": "cafe",
+        "parking": null
+      }
+    ],
+    "expected_parking_true_refs": []
+  },
+  "beyond_top20": {
+    "rows": [
+      {
+        "ref": "cafe-1",
+        "kind": "cafe",
+        "distance_m": 1,
+        "parking": false
+      },
+      {
+        "ref": "cafe-2",
+        "kind": "cafe",
+        "distance_m": 2,
+        "parking": false
+      },
+      {
+        "ref": "cafe-3",
+        "kind": "cafe",
+        "distance_m": 3,
+        "parking": false
+      },
+      {
+        "ref": "cafe-4",
+        "kind": "cafe",
+        "distance_m": 4,
+        "parking": false
+      },
+      {
+        "ref": "cafe-5",
+        "kind": "cafe",
+        "distance_m": 5,
+        "parking": false
+      },
+      {
+        "ref": "cafe-6",
+        "kind": "cafe",
+        "distance_m": 6,
+        "parking": false
+      },
+      {
+        "ref": "cafe-7",
+        "kind": "cafe",
+        "distance_m": 7,
+        "parking": false
+      },
+      {
+        "ref": "cafe-8",
+        "kind": "cafe",
+        "distance_m": 8,
+        "parking": false
+      },
+      {
+        "ref": "cafe-9",
+        "kind": "cafe",
+        "distance_m": 9,
+        "parking": false
+      },
+      {
+        "ref": "cafe-10",
+        "kind": "cafe",
+        "distance_m": 10,
+        "parking": false
+      },
+      {
+        "ref": "cafe-11",
+        "kind": "cafe",
+        "distance_m": 11,
+        "parking": false
+      },
+      {
+        "ref": "cafe-12",
+        "kind": "cafe",
+        "distance_m": 12,
+        "parking": false
+      },
+      {
+        "ref": "cafe-13",
+        "kind": "cafe",
+        "distance_m": 13,
+        "parking": false
+      },
+      {
+        "ref": "cafe-14",
+        "kind": "cafe",
+        "distance_m": 14,
+        "parking": false
+      },
+      {
+        "ref": "cafe-15",
+        "kind": "cafe",
+        "distance_m": 15,
+        "parking": false
+      },
+      {
+        "ref": "cafe-16",
+        "kind": "cafe",
+        "distance_m": 16,
+        "parking": false
+      },
+      {
+        "ref": "cafe-17",
+        "kind": "cafe",
+        "distance_m": 17,
+        "parking": false
+      },
+      {
+        "ref": "cafe-18",
+        "kind": "cafe",
+        "distance_m": 18,
+        "parking": false
+      },
+      {
+        "ref": "cafe-19",
+        "kind": "cafe",
+        "distance_m": 19,
+        "parking": false
+      },
+      {
+        "ref": "cafe-20",
+        "kind": "cafe",
+        "distance_m": 20,
+        "parking": false
+      },
+      {
+        "ref": "cafe-21",
+        "kind": "cafe",
+        "distance_m": 21,
+        "parking": false
+      },
+      {
+        "ref": "cafe-22",
+        "kind": "cafe",
+        "distance_m": 22,
+        "parking": false
+      },
+      {
+        "ref": "cafe-23",
+        "kind": "cafe",
+        "distance_m": 23,
+        "parking": false
+      },
+      {
+        "ref": "cafe-24",
+        "kind": "cafe",
+        "distance_m": 24,
+        "parking": false
+      },
+      {
+        "ref": "cafe-25",
+        "kind": "cafe",
+        "distance_m": 25,
+        "parking": false
+      },
+      {
+        "ref": "cafe-26",
+        "kind": "cafe",
+        "distance_m": 26,
+        "parking": true
+      }
+    ],
+    "initial_snapshot_refs": [
+      "cafe-1",
+      "cafe-2",
+      "cafe-3",
+      "cafe-4",
+      "cafe-5",
+      "cafe-6",
+      "cafe-7",
+      "cafe-8",
+      "cafe-9",
+      "cafe-10",
+      "cafe-11",
+      "cafe-12",
+      "cafe-13",
+      "cafe-14",
+      "cafe-15",
+      "cafe-16",
+      "cafe-17",
+      "cafe-18",
+      "cafe-19",
+      "cafe-20"
+    ],
+    "limit_per_kind": 20
+  }
+}

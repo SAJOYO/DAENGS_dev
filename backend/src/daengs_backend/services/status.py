@@ -35,6 +35,7 @@ from daengs_backend.config import settings
 from daengs_backend.core.warm_up import WarmUp, WarmUpPhase
 from daengs_backend.schemas.status import StatusState
 from daengs_backend.services import crawl as crawl_service
+from daengs_backend.services import gait as gait_service
 
 log = logging.getLogger(__name__)
 
@@ -246,9 +247,23 @@ async def _journey() -> tuple[StatusState, str]:
 
 
 async def _gait() -> tuple[StatusState, str]:
-    """gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
-    그래서 `absent` 가 정상이고, 그것이 이 화면에서 `down` 과 갈려야 하는 이유입니다."""
-    return await _probe(settings.gait_service_url, ["/healthz"])
+    """`gait` 큐를 듣는 Celery 워커가 있는지 봅니다 (D-063 4단계 — 옛 `/healthz` 프로브 대체).
+
+    gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038). 그래서 워커가
+    없는 것은 `absent` 가 정상이고, `_crawl` 의 celery 갈래와 같은 규칙입니다 —
+    `BrokerUnavailable`(브로커 없음·불통)도, 답한 워커가 없는 것도 "이 환경엔 원래 없다".
+
+    한계: profile 을 켜 뒀는데 워커만 죽은 경우도 `absent` 로 보입니다. 옛 DNS 기반
+    프로브와 같은 한계라 나빠지진 않습니다 — 갈라야 하면 "이 환경에 보행이 있어야 하는가"
+    를 알려 주는 설정이 먼저입니다 (`crawl_backend` 가 크롤에서 한 역할).
+    """
+    try:
+        workers = await asyncio.to_thread(gait_service.gait_workers, WORKER_PING_SEC)
+    except gait_service.BrokerUnavailable:
+        return StatusState.ABSENT, "이 환경에는 보행 워커가 없습니다 (브로커 없음)."
+    if not workers:
+        return StatusState.ABSENT, "이 환경에는 보행 워커가 떠 있지 않습니다."
+    return StatusState.OK, f"gait-worker {len(workers)}대 — {', '.join(workers)}."
 
 
 async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
@@ -289,18 +304,27 @@ async def _crawl(session: AsyncSession) -> tuple[StatusState, str]:
     # `unavailable` 도 같이 셉니다 — "사람이 고쳐야 하는 것" 이라 `failed` 와 할 일이 같습니다
     # (`db/init` 의 `crawl_runs.status` 주석).
     failed = [r.source_id for r in runs if r.status in ("failed", "unavailable")]
-    running = await crawl_service.running_count(session)
+    # 안 끝난 실행을 **시간으로 가릅니다** (#393 · RAG-085 ③). 예전에는 `running` 이 1건이라도
+    # 있으면 DEGRADED 였는데, 잔존 행은 워커가 죽을 때마다 생기고 **아무도 안 지웁니다**
+    # (지우면 안 됩니다 — `tasks/crawl_runs.py` 참고). 그래서 몇 달 전 행 하나가 화면을 영영
+    # 노랗게 잡고, 진짜 문제가 생겨도 이미 노랑이라 안 보였습니다.
+    active, stale = await crawl_service.running_split(session)
     if settings.crawl_backend == "cloudrun":
         detail = f"Cloud Run 잡 {workers[0]}. {when}. 소스 {len(runs)}개"
     else:
         detail = f"워커 {len(workers)}대. {when}. 소스 {len(runs)}개"
     if failed:
         return StatusState.DEGRADED, f"{detail}, 마지막 실행이 어긋난 소스 {len(failed)}개: {', '.join(failed[:5])}."
-    if running:
-        # 0 이 아니면 "지금 돌고 있거나, 워커가 죽어서 남았거나" 입니다 (`crawl_run.py`).
-        return StatusState.DEGRADED, f"{detail}, 안 끝난 실행 {running}건 — 도는 중이거나 워커가 죽어 남은 것입니다."
+    if stale:
+        # 사람이 볼 것이 있는 쪽을 먼저 말합니다 — 도는 중인 것과 같이 있어도 이 문장이 이깁니다.
+        hours = int(crawl_service.RUNNING_STALE_AFTER.total_seconds() // 3600)
+        return StatusState.DEGRADED, (
+            f"{detail}, 워커가 죽어 남은 실행 {stale}건 — {hours}시간 넘게 `running` 입니다.")
     if last is not None and datetime.now(last.tzinfo) - last > CRAWL_STALE_AFTER:
         return StatusState.DEGRADED, f"{detail}. {CRAWL_STALE_AFTER.days}일 넘게 새 수집이 없습니다."
+    if active:
+        # **도는 중인 것은 정상입니다.** 예전에 이것까지 DEGRADED 로 본 것이 지표를 죽였습니다.
+        return StatusState.OK, f"{detail}, 지금 도는 중 {active}건."
     return StatusState.OK, f"{detail}."
 
 

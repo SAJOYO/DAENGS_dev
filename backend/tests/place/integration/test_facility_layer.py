@@ -18,8 +18,13 @@ from daengs_place.ingest.facility_store import prune_unseen, upsert_rows
 from daengs_place.ingest.kcisa import source_ref
 from daengs_place.ingest.linking import _LINK_CROSS
 from daengs_place.place.facility_resolver import _SEARCH, MEDICAL, _merge
-
-from ..conftest import TEST_ORIGIN, TEST_SOURCE, db_session, place_row, seeded_places
+from tests.place.support.database import (
+    TEST_ORIGIN,
+    TEST_SOURCE,
+    db_session,
+    place_row,
+    seeded_places,
+)
 
 # 동해 한복판 — place 쪽 테스트와 같은 격리 전략(좌표)을 쓴다.
 FAC_SOURCES = ("test:base", "test:newer")

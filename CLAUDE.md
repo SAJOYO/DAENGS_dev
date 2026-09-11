@@ -27,13 +27,13 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
 | `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening**·**gait** 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 · D-038 |
-| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (FastAPI + PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 `gait-analysis` 컨테이너로 따로 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
+| `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (PyTorch/ultralytics). 코드는 backend 프로젝트에 있고 Celery `gait-worker` 컨테이너에서만 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). 옛 `gait-analysis` HTTP 서비스는 D-063 4단계에서 제거됐고 nginx `/gait/` 는 410 묘비만 남습니다. compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
 | `backend/src/daengs_place/` | Place 검색과 중립 점령지 읽기 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`·`/territory/sites/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `docs/journey/UPSTREAM.md` — D-039 |
 | `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
 | `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
 | `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
-| `backend/gait_v4/` | 별도 uv 프로젝트입니다 — 의도된 예외이고, 이유는 `backend/gait_v4/DAENGS-NOTE.md`. #304 뒤에 정리합니다 |
+| `backend/src/daengs_gait/inference/` | walk_demo v4 pose 추론(ssdlite + RTMPose AP-10K). 워커가 **자기 인터프리터로 서브프로세스**(`python -m daengs_gait.inference`)로만 부릅니다 — torch·rtmlib·onnxruntime 은 그 자식에만 올라옵니다. 의존성은 legacy 와 같은 `gait` 그룹 하나, 가중치는 같은 `GAIT_RELEASE_DIR` (D-063 5B — 옛 `backend/gait_v4/` 폴더·`gait-v4` 그룹·별도 venv 는 없어졌습니다) |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
@@ -46,8 +46,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `ecosystem.config.js` | PM2 설정 (프론트) |
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
-| `.github/workflows/backend-tests.yml` | **모든 PR 에서 `uv run pytest` 전체.** `paths` 필터가 없는 것이 의도입니다 — 필터에 안 걸려 검사가 안 돌던 것이 이 파일이 생긴 이유입니다 (#230). `ml`·`gait`·`screening` 그룹은 안 깔고, 그 테스트는 skip 됩니다 |
-| `.github/workflows/{journey,place-search}-tests.yml` | 그 두 서비스 전용. pytest 는 위와 겹치지만 **compose 렌더·nginx 문법 검사·패키지별 ruff** 를 들고 있어 남겨 둡니다 |
+| `docs/ci/` | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 여기로 빠졌습니다** — Actions 무료 한도가 소진돼 2~3초 만에 전부 빨갛게 뜨는데, 실패 이유가 annotation 에만 있어 **진짜 실패와 구별이 안 되기** 때문입니다. GitHub 은 `.github/workflows/` 만 읽으므로 여기 것은 안 돕니다. **그것들이 잡던 것을 이제 사람이 로컬에서 돌립니다 — 목록과 명령이 `docs/ci/README.md` 에 있습니다.** 특히 **버리는 DB 가 필요한 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip). `db/` 나 walk 저장 경로를 건드렸으면 그 절을 보세요 |
 
 도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
 나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).
@@ -68,9 +67,10 @@ npm run lint
 
 ```powershell
 uv sync --extra place      # 전체 로컬 테스트용 .venv 동기화 (Place 전용 의존성 포함)
+uv run check               # 저장소 규칙 검사 (약 3초) — 머지 전에 무조건
 uv run dev                 # 개발 서버 http://127.0.0.1:8000 (reload)
 uv run run                 # 운영 서버 http://0.0.0.0:8000
-uv run pytest              # 테스트 전체 (backend/tests/, 약 6분)
+uv run pytest              # 테스트 전체 (backend/tests/, 약 9분)
 uv run pytest tests/place  # Place 테스트만
 uv run pytest tests/journey # Journey 테스트만
 uv add <패키지>            # 의존성 추가 (pip install 대신)
@@ -80,6 +80,25 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
 
 - **브랜치는 `dev` 가 기본입니다.** `dev` 에 push/merge 하면 self-hosted 러너가 자동 배포합니다.
   `main` 은 릴리즈 스냅샷입니다 — 완성 단위마다 `dev → main` PR 로 올리고, 작업은 하지 않습니다.
+- 🔴 **머지 전 게이트는 이제 전부 로컬입니다** (2026-09-10). Actions 한도가 소진돼
+  PR 마다 돌던 워크플로 일곱을 `docs/ci/` 로 뺐습니다. **`uv run check` · `uv run pytest` ·
+  `npm run lint` 만으로는 부족합니다** — compose 렌더 · `nginx -t` · 패키지별 `ruff`,
+  그리고 **버리는 Postgres 가 있어야만 도는 검사 둘**이 더 있습니다. 마지막 것이 특히
+  위험합니다: **`uv run pytest` 가 그것들을 조용히 건너뛰고 초록으로 통과합니다**
+  (2026-09-10 실측 15건 skip — 서버 DB 를 켜 둬도 skip 입니다). 명령은 전부
+  **`docs/ci/README.md`** 에 있습니다. `db/` 나 walk 저장 경로를 건드렸으면 그것부터 보세요.
+- **머지 전에 `uv run check`. 백엔드를 건드렸으면 `uv run pytest` 까지.**
+  `dev` 머지가 곧 배포라 그 둘이 사실상 마지막 관문입니다. `check` 는 **3초**이고
+  (`pytest` 는 약 9분), 봐 주는 자리가 서로 다릅니다 — `pytest` 는 `testpaths = ["tests"]` 라
+  `backend/tests/` 만 보고, 마이그레이션 규칙 체커는 저장소 루트 `tools/` 에 있어서
+  **`pytest` 를 아무리 돌려도 한 번도 안 돕니다.** 2026-09 에 CI 가 그 자리에서만 12건을
+  잡았는데, 그때는 로컬에서 재현할 방법 자체가 없었습니다.
+  검사 목록은 `daengs_backend/cli/check.py` 한 곳에 있고 `uv run pytest` 도 같은 것을
+  부릅니다(`tests/test_repo_checks.py`) — **거기에 느린 것을 넣지 마세요.** 3초라서 매번
+  돌리는 것이고, `pytest` 와 묶는 순간 이쪽까지 같이 안 돌게 됩니다.
+  `sql` 모드는 여기 없습니다 (`psql` 과 버리는 로컬 Postgres 가 필요합니다) — 예전에는 CI 가
+  돌았는데 **2026-09-10 부터 도는 곳이 없습니다.** `db/` 를 건드렸으면 손으로 돌리세요:
+  명령은 `docs/ci/README.md` 의 「마이그레이션 변조 하네스」 절에 있습니다.
 - **백엔드 의존성은 반드시 `uv add` / `uv remove` 로.** `pyproject.toml` 을 직접 고치면
   `uv.lock` 과 어긋납니다. `uv.lock` 은 커밋합니다.
 - **Python 코드는 uv 기본 src 레이아웃**입니다. 팀 소유 패키지는 `backend/src/daengs_*`에 두고
@@ -124,9 +143,15 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
   `임베딩 모델 불일치` 경고가 그것을 알려 줍니다.
-- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 `main.py` 의 세 줄뿐입니다** —
-  등록 두 줄(`/life/walk-conditions` · `/life/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
-  (`/life/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
+- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 넷입니다** (`main.py` 세 줄이 아닙니다) —
+  `main.py`(등록 두 줄: `/life/walk-conditions` · `/life/ask`, 예열 한 줄) + `orchestration/
+  adapters/life.py` 셋(`_ask_life` · `_walk_life` · `_weather_at_life`). 오케스트레이션(D-035)이
+  뒤에 들어오면서 늘었는데 이 문장이 한동안 안 갱신돼 있었습니다.
+  **`_walk_life` · `_weather_at_life` 둘은 D-070(#435 — 실시간을 Cloud Run 서비스로 떼는 카드)로
+  `DAENGS_REALTIME_URL` 값에 따라 갈리는 갈림길이 됐습니다** — 비어 있으면(개발 PC·개발서버
+  기본) 지금처럼 같은 프로세스 함수 호출이고, 값이 있으면(GCP) `daengs_backend/services/
+  realtime_client.py` 를 거쳐 HTTP 로 나갑니다. 그 이상으로 접점을 늘리지 마세요. D-021 의
+  2단계(`/life/ask` 를 별도 프로세스로)가 싼 이유가 이 접점의 크기입니다. 특히 `rag` 가 읽는
   `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 를 통해서만 닿습니다.
   `daengs.~` 는 프론트, `daengback.~` 는 API 이고 **둘 다 공개 포트는 80 입니다**

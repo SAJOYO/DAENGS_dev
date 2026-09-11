@@ -76,7 +76,6 @@ STAGE2_TAG = "m2.5"         # 2단계 학습 크롭 (STEP 4C 에서 확정)
 #    아무도 모릅니다.
 GUIDE_RECOMMEND = (0.28, 0.48)     # 하락 5% 이내
 GUIDE_ALLOW = (0.24, 0.56)         # 하락 10% 이내
-GUIDE_CENTER_MAX = 0.10            # 화면 중앙에서 이만큼 이내
 
 
 def to_train_space(im):
@@ -107,11 +106,15 @@ def box_to_px(box, w: int, h: int) -> list[float] | None:
 
 
 def check_guide(box) -> dict:
-    """가이드 프레임이 촬영 가이드 밴드 안에 있는가. 추론 **전에** 봅니다.
+    """가이드 프레임의 크기가 촬영 가이드 밴드 안에 있는가. 추론 **전에** 봅니다.
 
     밴드 밖 사진은 모델에 넣지 말고 다시 찍게 하는 게 맞습니다 — 그 구간에서
     성능이 떨어지는 걸 이미 재 뒀는데(STEP 10), 굳이 넣고 나서 틀리는 것보다
     안 넣는 편이 낫습니다.
+
+    프레임의 위치는 검사하지 않습니다. 사진을 고른 뒤 병변은 어디에나 있을 수 있고,
+    이 프레임의 중심이 바로 크롭 중심이 됩니다. 화면 가운데와의 거리는 호환성을 위해
+    meta 에만 남기며, 재촬영 사유가 아닙니다.
 
     Returns:
         {"ok", "reason", "width_frac", "center_off"} — reason 은 보호자에게
@@ -129,8 +132,6 @@ def check_guide(box) -> dict:
         r.update(ok=False, reason="병변이 너무 작게 잡혔습니다. 조금 더 가까이에서 찍어주세요.")
     elif bw > GUIDE_ALLOW[1]:
         r.update(ok=False, reason="너무 가까워서 주변 피부가 안 보입니다. 조금 더 멀리서 찍어주세요.")
-    elif off > GUIDE_CENTER_MAX:
-        r.update(ok=False, reason="병변이 화면 가운데에서 벗어났습니다. 가운데에 오도록 다시 맞춰주세요.")
     return r
 
 
@@ -206,7 +207,7 @@ def lesion_group_dist(probs: list[tuple[str, float]] | None) -> list[dict]:
 
     ⚠️ 묶음표는 `MORPH_GROUP_KEEP_A6` **한 곳**에서만 읽습니다.
     """
-    from daengs_screening.config import MORPH_GROUP_KEEP_A6
+    from daengs_screening.config import GROUP_LABELS, MORPH_GROUP_KEEP_A6
 
     if not probs:
         return []
@@ -216,7 +217,15 @@ def lesion_group_dist(probs: list[tuple[str, float]] | None) -> list[dict]:
         if g is None:
             return []                       # 모르는 코드가 섞이면 안 그립니다
         tot[g] = tot.get(g, 0.0) + float(p)
-    return [{"name": k, "prob": round(v, 4), "percent": round(v * 100, 1)}
+    # ★ `labels` 를 **네 줄 모두에** 싣습니다 (2026-09-11).
+    #   예전에는 병원에서 쓰는 이름이 `group`(주장) 에만 있었습니다. 그러면
+    #   **확신이 낮아 `group` 이 null 인 날** 보호자가 병원에 들고 갈 말이
+    #   하나도 없습니다 — 하필 그때가 막대만 남는 때입니다.
+    #   ⚠️ 이것은 **top1 이 아닙니다.** 네 줄 전부에 같은 방식으로 붙는
+    #      *용어 풀이*이고, 하나를 골라 단정하는 것이 아닙니다. 앱은 이것을
+    #      카드 본문이 아니라 **"자세히 보기" 안에** 둡니다.
+    return [{"name": k, "labels": GROUP_LABELS.get(k, ""),
+             "prob": round(v, 4), "percent": round(v * 100, 1)}
             for k, v in sorted(tot.items(), key=lambda kv: -kv[1])]
 
 
@@ -252,7 +261,7 @@ def a6_alert(probs: list[tuple[str, float]] | None,
             # ⚠️ 앱·콘솔이 이 문장을 **그대로** 띄우게 합니다.
             "text": "덩어리가 의심됩니다.",
             "action": "빠른 진료를 권합니다.",
-            "caveat": "진단이 아닙니다. 덩어리처럼 보이는 다른 병변일 수 있습니다."}
+            "caveat": "진단이 아닙니다. 덩어리처럼 보이는 다른 것일 수 있습니다."}
 
 
 def lesion_group(probs: list[tuple[str, float]] | None,
@@ -273,8 +282,8 @@ def lesion_group(probs: list[tuple[str, float]] | None,
     계열 4군은 **67.9%** 이고, 긴급도 하향 3.7% · A6 오명명 12.5% 로
     두 안전 관문 안입니다.
     """
-    from daengs_screening.config import (DOWNGRADE_BLOCK_MIN, MORPH_GROUP_KEEP_A6,
-                            URGENT_GROUPS)
+    from daengs_screening.config import (DOWNGRADE_BLOCK_MIN, GROUP_DETAIL, GROUP_FEATURE,
+                            GROUP_LABELS, MORPH_GROUP_KEEP_A6, URGENT_GROUPS)
     from daengs_screening.message import GROUP_CONF_MIN, SHOW_GROUP
 
     if not SHOW_GROUP or not probs:
@@ -303,10 +312,24 @@ def lesion_group(probs: list[tuple[str, float]] | None,
             "prob": round(float(p), 4),
             "percent": round(float(p) * 100, 1),
             "confidence": round(float(conf), 4),
-            # ⚠️ 앱·콘솔이 이 문장을 **그대로** 띄우게 합니다. 각자 지어 쓰면
+            # ⚠️ 앱·콘솔이 이 문장들을 **그대로** 띄우게 합니다. 각자 지어 쓰면
             #    표현이 갈리고, 갈리면 한쪽이 단정적으로 읽힙니다.
-            "text": f"모양만 보면 {name} 계열에 가깝습니다.",
-            "caveat": "진단이 아닙니다. 같은 계열 안에서도 원인 질환은 여럿입니다."}
+            # ⚠️ 새 이름은 "…변화 / …혹 / …상처" 로 끝나 **"계열" 을 붙이면 어색**합니다
+            #    ("피부 표면·색·두께 변화 계열에"). 넷 다 받침과 무관하게 조사가
+            #    "에" 라 그대로 이어 붙습니다.
+            "text": f"모양만 보면 {name}에 가깝습니다.",
+            # ★ 그 묶음이 담는 **라벨 이름** (2026-09-10). 화면에 괄호로 붙습니다.
+            #   `솟아오른 변화` 만 들고 병원에 가면 수의사가 못 알아듣습니다.
+            #   ⚠️ "1등 병변" 이 아닙니다 — **순서가 코드순으로 고정**이라
+            #      확률과 무관합니다. 단정이 아니라 용어 풀이입니다.
+            "labels": GROUP_LABELS.get(name, ""),
+            # ★ 보호자가 사진에서 **직접 확인할 수 있는** 특징 (2026-09-10).
+            #   이름만으로는 자기 개 사진과 대조가 안 됩니다.
+            "feature": GROUP_FEATURE.get(name, ""),
+            # ★ "자세히 보기" 전용 — 본문에 띄우지 마세요 (STEP 30 과잉 문제).
+            "detail": GROUP_DETAIL.get(name, ""),
+            "caveat": "진단이 아닙니다. 염증·감염·기생충·알레르기·면역질환 등 "
+                      "여러 원인에서 나타날 수 있어 모양만으로는 원인을 알 수 없어요."}
 
 
 def contract(verdict: str, *, abnormal_p: float | None = None,
@@ -324,17 +347,19 @@ def contract(verdict: str, *, abnormal_p: float | None = None,
         raise ValueError(f"verdict 는 normal/abnormal/retake 중 하나입니다 — {verdict!r}")
 
     HEAD = {
-        "normal": "뚜렷한 피부 병변 소견은 보이지 않습니다.",
+        "normal": "뚜렷한 이상 소견은 보이지 않습니다.",
         "abnormal": "피부에 이상 소견이 보입니다.",
         "retake": "판단이 어려운 사진입니다.",
     }
     BODY = {
-        "normal": ("다만 사진 한 장으로 확인할 수 있는 범위에는 한계가 있습니다. "
+        "normal": ("사진으로 확인할 수 있는 범위에는 한계가 있습니다. "
                    "가려워하거나, 냄새가 나거나, 계속 핥는 등 평소와 다른 행동이 있다면 "
                    "결과와 무관하게 병원에 가보시는 것을 권합니다."),
-        "abnormal": ("어떤 병변인지는 이 사진만으로 판단할 수 없습니다. "
-                     "아래는 모델이 비슷하다고 본 정도이며, 진단이 아닙니다."),
-        "retake": ("병변 부위가 화면 가운데에 오도록, 밝은 곳에서 초점을 맞춰 다시 찍어주세요. "
+        # ⚠️ **짧게 둡니다.** 앱은 계열 문장이 없을 때(확신이 낮아 `group` 이 null)
+        #    이 자리를 이 문장으로 채웁니다 — 그때 긴 면책이 들어가면 카드 아래
+        #    "자세히 보기" 와 같은 말이 두 번이 됩니다.
+        "abnormal": "이 사진만으로 정확하게 알 수 없습니다.",
+        "retake": ("이상한 부위가 잘 보이도록, 밝은 곳에서 초점을 맞춰 다시 찍어주세요. "
                    "털에 가려져 있다면 손으로 살짝 헤쳐 피부가 보이게 해주시면 좋습니다."),
     }
     ACTION = {

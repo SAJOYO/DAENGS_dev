@@ -1,0 +1,92 @@
+{
+  "observed_turns": 12,
+  "reviewed_turns": 12,
+  "turn_statuses": {
+    "pass": 6,
+    "fail": 6
+  },
+  "case_repetitions": [
+    {
+      "case_id": "PC-H01",
+      "variant": "production-baseline",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H01",
+      "variant": "production-baseline",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H01",
+      "variant": "production-baseline",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-baseline",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-baseline",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-H02",
+      "variant": "production-baseline",
+      "repetition": 3,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-baseline",
+      "repetition": 1,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-baseline",
+      "repetition": 2,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H03",
+      "variant": "production-baseline",
+      "repetition": 3,
+      "status": "pass"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-baseline",
+      "repetition": 1,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-baseline",
+      "repetition": 2,
+      "status": "fail"
+    },
+    {
+      "case_id": "PC-H04",
+      "variant": "production-baseline",
+      "repetition": 3,
+      "status": "fail"
+    }
+  ],
+  "provider_calls": 15,
+  "provider_errors": 0,
+  "provider_latency_median_ms": 1795,
+  "reported_usage": {
+    "total_input_tokens": 29581,
+    "total_output_tokens": 963,
+    "total_tokens": 30544
+  },
+  "usage_missing_calls": 0,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

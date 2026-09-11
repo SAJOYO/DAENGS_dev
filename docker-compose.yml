@@ -26,9 +26,12 @@ services:
     networks:
       - daengs-network
     # ports 가 없습니다. 바깥에서는 nginx 의 8000 을 통해서만 닿습니다.
-    env_file:
+    env_file: &walk-context-env
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
       - path: ./backend/.env
+        required: false
+      # Public-source secrets/flags survive checkout in a separate server file.
+      - path: ${WALK_PUBLIC_ENV_FILE:-./backend/.env.walk-public.local}
         required: false
     environment:
       # venv 를 마운트 경로 밖에 둡니다.
@@ -124,8 +127,9 @@ services:
       GAIT_STORAGE: ${GAIT_STORAGE:-none}
       GAIT_LOCAL_STORAGE_DIR: ${GAIT_LOCAL_STORAGE_DIR:-}
       GAIT_BRIDGE_BASE_URL: ${GAIT_BRIDGE_BASE_URL:-}
-      # 보행 분석 엔진 (#304). legacy = daengs_gait(best.pt), v4 = backend/gait_v4(walk_demo).
-      # backend 는 v4 의 **비교 함수만** 씁니다 — 아래 volumes 의 compare.py 마운트와 한 쌍.
+      # 보행 분석 엔진 (#304 · D-063). legacy = daengs_gait.pipeline(best.pt), v4 =
+      # daengs_gait.inference(walk_demo v4). backend 는 v4 의 **비교 함수만** 씁니다 —
+      # `daengs_gait.compare_v4`(numpy 만, 5B 부터 ./backend/src 안). 별도 마운트 없습니다.
       # 기본 legacy. ssdlite.pt 라이선스(academic/non-commercial) 결정 전 운영에서 바꾸지 마세요.
       GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
       # bridge 업로드 상한(바이트). D-052 로 모든 바이트가 backend 를 지나므로
@@ -180,26 +184,22 @@ services:
       - ./backend/README.md:/app/README.md:ro
       - ./backend/src:/app/src
       - backend-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
       - uv-cache:/root/.cache/uv
       # 임베딩 모델 가중치(약 1.2GB)를 컨테이너 밖에 둡니다 (D-021).
       # 없으면 컨테이너를 다시 만들 때마다 통째로 다시 받습니다 — venv 를 볼륨에 둔 것과
       # 같은 이유이고, 여기는 단위가 GB 입니다.
       - hf-cache:/root/.cache/huggingface
-      # 피부 스크리닝 가중치 (D-039). **저장소에 없습니다** — best.pt 가
-      # 163MB / 189MB 라 GitHub 의 파일당 100MB 리밋에 걸립니다. 서버 디스크의
-      # 배포 폴더 **바깥**에 두고 여기로 물립니다. 추론 경로에 쓰기가 없어 :ro 로
-      # 충분하고, 첫 요청 때 올라옵니다 (기동을 막지 않으려고 — service.py).
-      # ⚠️ `SCREENING_RELEASE_REPO` 를 채우면 **이 마운트는 안 씁니다** —
-      #    허깅페이스에서 받아 `hf-cache` 에 둡니다. 되돌릴 때를 위해 남겨 둡니다.
-      - ${SCREENING_RELEASE_DIR:-./_models/release}:/models/release:ro
+      # ⚠️ 피부 스크리닝 가중치 폴더 마운트는 **없앴습니다.** 이제 허깅페이스에서
+      #    받아 위 `hf-cache` 볼륨에 둡니다 (`backend/.env` 의
+      #    `SCREENING_RELEASE_REPO` · `SCREENING_RELEASE_REVISION` · `HF_TOKEN`).
+      #    되살리려면 그 셋을 비우고 `SCREENING_RELEASE_DIR` 을 채우면 됩니다 —
+      #    다만 그때는 이 마운트도 같이 되살려야 합니다.
       # ★ **공용 파일 저장소** (D-052). gait-worker · territory-vision-worker 와 셋이
       #   **공유**합니다. backend 는 bridge 엔드포인트로 여기에 쓰고, 워커들은 같은
       #   경로에서 읽습니다 — 그래서 한 볼륨입니다.
       #   ⚠️ 임시가 아닙니다. 영상·사진 **원본이 여기 남습니다.** 지우지 마세요.
       - gait-bridge:/data/gait-bridge
-      # v4 비교 모듈 (#304). `services/gait._load_v4_compare` 가 이 안의 compare.py 를 **파일로**
-      # 불러옵니다 (numpy 만 씀, torch 없음). 패키지 전체·venv 는 워커에만 있습니다.
-      - ./backend/gait_v4/gait_v4:/app/gait_v4/gait_v4:ro
       # ⬇ GCS 로 **되돌아갈** 때만 엽니다 (서비스 계정 키를 쓸 때).
       #   호스트의 키 파일을 읽기 전용으로 물리고, 위 GOOGLE_APPLICATION_CREDENTIALS 를
       #   `/secrets/gcp-sa.json` 으로 맞춥니다. 배포 폴더 **바깥**에 두세요 — 재배포에
@@ -355,93 +355,6 @@ services:
       retries: 5
       start_period: 10s
 
-  gait-analysis:
-    profiles: ["gait"]
-    # backend 와 같은 uv 베이스 이미지 (docker/uv/Dockerfile).
-    build:
-      context: ./docker/uv
-    image: uv:1
-    container_name: daengs-gait-analysis
-    restart: unless-stopped
-    networks:
-      - daengs-network
-    # ports 가 없습니다. 바깥에서는 nginx 를 통해서만 닿습니다 (D-005).
-    # nginx 의 daengback 블록에 있는 location /gait/ 가 여기로 넘깁니다.
-    #   http://daengback.~/gait/analyze  →  이 컨테이너의 /analyze
-    environment:
-      # backend 와 같은 이유. /app 안에 두면 호스트의 Windows 용 .venv 와 섞입니다.
-      UV_PROJECT_ENVIRONMENT: /opt/venv
-      # 가중치와 데이터 위치를 컨테이너 안 경로로 알려 줍니다.
-      # 코드에는 경로가 박혀 있지 않습니다 (원본 walk_demo 는 하드코딩이었습니다).
-      GAIT_RELEASE_DIR: /models/release
-      GAIT_DATA_DIR: /data
-      # 비어 있으면 애플리케이션 기본값(150MB)을 씁니다. nginx 의 client_max_body_size
-      # (200m, default.conf 의 location /gait/)보다 낮게 유지하세요.
-      GAIT_MAX_UPLOAD_BYTES: ${GAIT_MAX_UPLOAD_BYTES:-}
-    volumes:
-      # 폴더째가 아니라 필요한 것만 (D-004).
-      #
-      # ⚠ **backend 와 같은 파일을 봅니다** (D-038). 소스와 의존성만 backend 로 통합했고
-      #   런타임은 갈라 둔 구조라, crawler-worker 와 같은 모양입니다 — 같은
-      #   pyproject·lock·src 를 마운트하고 **그룹 선택과 venv 볼륨만 다릅니다.**
-      - ./backend/pyproject.toml:/app/pyproject.toml:ro
-      - ./backend/uv.lock:/app/uv.lock:ro
-      # pyproject 의 readme 항목 때문에 패키지 빌드에 필요합니다 (backend 와 같은 이유).
-      - ./backend/README.md:/app/README.md:ro
-      - ./backend/src:/app/src:ro
-      # ★ 가중치. **저장소에 없습니다** — 원본 walk_demo 에서도 gitignore 였습니다.
-      #   best.pt(약 50.7MB, 12kp pose) 와 yolov8n.pt(약 6.2MB, crop-assist) 두 개를
-      #   서버 디스크에 두고 여기로 물립니다. 배포 폴더(releases/<커밋해시>) **바깥**이라
-      #   재배포해도 안 지워집니다 — .env·암호화 키와 같은 취급입니다.
-      #   추론 경로에 파일 쓰기가 없어서 :ro 로 충분합니다.
-      - ${GAIT_RELEASE_DIR:-./backend/_models/release}:/models/release:ro
-      # 분석 기록(JSON) · overlay 영상 · 업로드 원본. 아직 DB 가 아니라 파일입니다
-      # (daengs_gait/README.md 의 TBD). 컨테이너를 다시 만들어도 남아야 합니다.
-      - gait-data:/data
-      # ⚠ **`backend-venv` 가 아닙니다.** backend 는 `--group ml`, 여기는 `--group gait` 로
-      #   동기화하는데, 같은 볼륨에 돌리면 `uv sync` 가 exact 동기화라 서로의 그룹을
-      #   지웁니다 (crawler-worker 가 `crawler-venv` 를 따로 쓰는 것과 같은 이유).
-      - gait-venv:/opt/venv
-      - uv-cache:/root/.cache/uv
-    # backend · crawler-worker 와 같은 모양입니다. --frozen 이라 uv.lock 이 pyproject 와
-    # 어긋나면 여기서 멈춥니다.
-    #
-    # **`--group gait` 하나입니다** (D-038). `--group ml` 을 붙이지 않습니다 — gait 소스가
-    # 쓰는 서드파티는 cv2 · fastapi · imageio_ffmpeg · numpy · pydantic · ultralytics ·
-    # uvicorn 뿐이고, `ml` 의 sentence-transformers · transformers · pyarrow 는 하나도
-    # 안 씁니다. torch 는 ultralytics 가 끌고 오며, 리눅스에서는 pyproject 의
-    # pytorch-cpu 인덱스가 CPU 판을 집습니다 (인덱스 바인딩은 패키지 단위라 그룹과 무관).
-    #
-    # ⚠️ **이 그룹 이름은 backend/pyproject.toml 의 `[dependency-groups] gait` 와 같아야
-    #    합니다.** 어긋나면 `/gait/` 만 503 이 되는데 다른 API 는 멀쩡해서 로그에 아무
-    #    문제도 안 보입니다.
-    #
-    # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다. YAML 의 `>` 는 더 깊이 들여쓴 줄의
-    #    줄바꿈을 살려 둬서, 인자를 보기 좋게 들여쓰면 sh 가 여러 줄짜리 스크립트를 받고
-    #    exec 뒤의 인자가 영영 실행되지 않습니다 (#55 에서 스크리닝이 실제로 겪었습니다).
-    command: >
-      sh -c "uv sync --frozen --group gait &&
-      exec uv run --no-sync gait-serve --host 0.0.0.0 --port 8000"
-
-  # ── 보행 분석 워커 (D-043, 경계 방식 ⓒ) ─────────────────────────────────
-  #
-  # `/app/gait/*`(backend) 가 발행한 **`gait` 큐**를 먹는 Celery 워커입니다. backend 웹은
-  # 태스크를 `.delay()` 로 **발행만** 하고, 무거운 분석(torch·ultralytics)은 여기서만 돕니다 —
-  # `daengs_gait.pipeline` 을 지연 import 하는 곳이 이 프로세스입니다. 그래서 backend 웹
-  # 프로세스는 torch/daengs_gait 를 절대 로드하지 않습니다 (test_main_stays_light 가 지킵니다).
-  # LocalBridge 를 쓰더라도 이 격리는 그대로입니다 — bridge 는 파일 I/O 만 backend 를 지나고,
-  # 분석 자체는 언제나 이 별도 프로세스에서만 돕니다.
-  #
-  # ⚠️ 위 `gait-analysis`(직접 HTTP `/gait/*`)와 **다른 서비스**입니다. 저쪽은 앱이 아직 쓰는
-  #    옛 계약이고(#64 전환 뒤 제거), 이쪽은 새 orchestration 계약의 실행부입니다. 둘 다 같은
-  #    이미지·`--group gait` 라 **gait-venv 를 공유**합니다 — crawler-worker/beat 쌍과 같은
-  #    이유입니다(uv sync 인자가 글자까지 같아 내용이 같고, 어긋나면 기동 로그에 바로 터집니다).
-  #
-  # ⚠️ **gait-bridge 볼륨이 운영 저장소입니다** (D-052). GAIT_STORAGE=local 일 때 backend 가
-  #    bridge 로 받은 영상을 거기 쓰고 이 워커가 같은 볼륨에서 읽습니다. 그래서 이 워커의
-  #    마운트 경로가 backend 와 **글자까지 같아야** 합니다 — 어긋나면 업로드는 되는데
-  #    분석만 FAILED 로 떨어집니다.
-  #    (GCS 로 되돌아가면 워커가 Signed URL 로 직접 받습니다 — services/gait._analyze_from_storage.)
   gait-worker:
     profiles: ["gait"]
     build:
@@ -467,7 +380,7 @@ services:
       DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
       DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
-      # 모델 가중치 위치를 컨테이너 안 경로로 알려 줍니다 (gait-analysis 와 같은 것을 봅니다).
+      # 모델 가중치 위치를 컨테이너 안 경로로 알려 줍니다.
       GAIT_RELEASE_DIR: /models/release
       # 저장소 (D-052). 워커는 backend 와 **같은 gait-bridge 볼륨·같은 경로**를 봐야
       # 파일을 읽습니다.
@@ -495,65 +408,45 @@ services:
       GAIT_GCS_LOCATION: ${GAIT_GCS_LOCATION:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       TZ: Asia/Seoul
-      # ── 보행 분석 엔진 (#304) ──────────────────────────────────────
-      # v4 면 아래 command 가 /app/gait_v4 의 **별도 venv** 를 동기화하고, 워커는 그 python 을
-      # 서브프로세스로 부릅니다 (services/gait._analyze_with_v4). torch 는 이 프로세스에 안 올라옵니다.
+      # ── 보행 분석 엔진 (#304 · D-063 5B) ──────────────────────────────
+      # v4 면 워커가 **자기 인터프리터**(`/opt/venv/bin/python`)로 `python -m daengs_gait.inference`
+      # 를 서브프로세스로 부릅니다 (daengs_gait.engines.subprocess_bridge). torch·rtmlib·
+      # onnxruntime 은 그 자식에만 올라오고 이 프로세스에는 안 올라옵니다. 별도 venv 는 없습니다.
       GAIT_ENGINE: ${GAIT_ENGINE:-legacy}
-      # v4 가중치 위치. legacy 와 **같은 폴더**(GAIT_RELEASE_DIR)를 씁니다 — ssdlite.pt 와
-      # rtmpose-m_ap10k/end2end.onnx 를 거기 두세요. 파일 이름이 달라 legacy 와 안 겹칩니다.
-      GAIT_V4_WEIGHTS: /models/release
-      # 워커가 서브프로세스로 부를 v4 python. 비우면 코드 폴더의 .venv 를 찾는데, 컨테이너에서는
-      # 그 자리가 :ro 라 venv 를 밖에 두고 여기로 알려 줍니다 (아래 volumes 와 command 가 한 쌍).
-      GAIT_V4_PYTHON: /opt/gait-v4-venv/bin/python
+      # v4 가중치도 **위 GAIT_RELEASE_DIR 한 곳**입니다 — `ssdlite.pt` 와
+      # `rtmpose-m_ap10k/end2end.onnx` 를 거기 두세요. 파일 이름이 달라 legacy 의
+      # `best.pt`·`yolov8n.pt` 와 안 겹칩니다. 옛 `GAIT_V4_WEIGHTS` 는 5B 에서 없앴습니다
+      # (코드가 `daengs_gait.config.RELEASE_DIR` 하나만 봅니다 — 지우기 전에 서버
+      # `/models/release` 의 두 파일을 워커 컨테이너 안에서 크기·sha256 까지 대조했습니다).
     volumes:
-      # backend 와 같은 프로젝트 정의를 공유하되 venv 는 gait-analysis 와 함께 gait-venv 를 씁니다.
+      # backend 와 같은 프로젝트 정의를 공유하되 venv 는 `gait-venv`(이 워커 전용)를 씁니다.
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/uv.lock:/app/uv.lock:ro
       - ./backend/README.md:/app/README.md:ro
       - ./backend/src:/app/src:ro
-      # 가중치 (gait-analysis 와 같은 마운트 — best.pt·yolov8n.pt).
+      # 가중치 (best.pt·yolov8n.pt).
       - ${GAIT_RELEASE_DIR:-./backend/_models/release}:/models/release:ro
       # ★ backend 와 **공유**하는 공용 파일 저장소 (D-052). 원본이 여기 남습니다.
       - gait-bridge:/data/gait-bridge
       # ⬇ GCS 로 되돌아갈 때 backend 와 **같이** 엽니다 (위 backend 의 같은 줄 주석 참고).
       # - ${GAIT_GCP_CREDENTIALS_FILE:-./_secrets/gcp-sa.json}:/secrets/gcp-sa.json:ro
-      # gait-analysis 와 **같은 venv** (위 ⚠ 참고 — 인자가 같아 안전합니다).
+      # 이 워커 전용 venv (`--group gait`). 5B 부터 legacy·v4 둘 다 이 venv 하나입니다 —
+      # 옛 v4 전용 venv 볼륨과 v4 코드 폴더 마운트는 없어졌습니다(v4 코드는 ./backend/src 안).
       - gait-venv:/opt/venv
       - uv-cache:/root/.cache/uv
-      # ★ walk_demo v4 (#304). 코드는 읽기 전용, venv 는 **코드 밖** /opt/gait-v4-venv 에 named volume.
-      #   ⚠ 코드 폴더 **안**(/app/gait_v4/.venv)에 물리면 안 됩니다 — :ro 바인드 안에 마운트 지점을
-      #     못 만들어 컨테이너가 아예 안 뜹니다 (`mkdirat …/.venv: read-only file system`, 2026-09-07
-      #     서버 실측). 개발 PC 는 .venv 폴더가 이미 있어 렌더 검사로는 안 잡혔습니다.
-      #   ⚠ `gait-venv` 와 절대 공유하지 마세요 — 두 lock 이 다릅니다 (torch 2.13.0 vs ultralytics 의 것).
-      - ./backend/gait_v4:/app/gait_v4:ro
-      - gait-v4-venv:/opt/gait-v4-venv
     depends_on:
       pgvector:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # backend·gait-analysis 와 같은 모양. --frozen 이라 lock 이 pyproject 와 어긋나면 멈춥니다.
-    # `--group gait` 하나 — torch 는 ultralytics 가 끌고 옵니다 (gait-analysis 와 동일).
+    # backend 와 같은 모양. --frozen 이라 lock 이 pyproject 와 어긋나면 멈춥니다.
+    # `--group gait` 하나 — legacy(ultralytics) 와 v4(rtmlib·onnxruntime) 둘 다 이 그룹입니다
+    # (D-063 5B: 옛 `gait-v4` 그룹·별도 venv 동기화 분기가 없어졌습니다).
     # `--concurrency 1`: 분석이 무겁고 GPU 없는 CPU 추론이라 한 번에 하나만 돕니다.
     # ⚠️ 이어지는 줄을 **첫 줄과 같은 칸**에 맞춥니다 — `>` 가 더 깊이 들여쓴 줄바꿈을 살려 두면
     #    sh 가 여러 줄 스크립트를 받아 exec 뒤 인자가 실행되지 않습니다 (#55 의 함정).
-    #
-    # v4 (#304): GAIT_ENGINE=v4 일 때만 /app/gait_v4 의 venv 를 lock 그대로 동기화합니다.
-    #   · `UV_PROJECT_ENVIRONMENT` 를 **반드시 덮어씁니다** — 위 environment 의 /opt/venv 가 그대로면
-    #     exact 동기화가 gait-venv 의 ultralytics 를 지웁니다. 값은 위 GAIT_V4_PYTHON 의 venv 입니다.
-    #   · `--no-install-project`: 프로젝트 자체는 안 깝니다(setuptools 가 :ro 폴더에 egg-info 를 쓰려다
-    #     실패). `python -m gait_v4` 는 cwd 가 /app/gait_v4 라 패키지를 그냥 찾습니다.
-    #   · opencv 를 **headless 로 바꿉니다** — lock 은 GUI 판(opencv-python)인데 slim 컨테이너에는
-    #     libxcb 가 없어 첫 분석에서 죽습니다 (legacy 가 8/31 에 겪은 것과 같음). 같은 버전·같은 API 라
-    #     골든에 영향 없습니다. pyproject 의 버전은 안 건드립니다.
     command: >
       sh -c "uv sync --frozen --group gait &&
-      if [ \"$$GAIT_ENGINE\" = v4 ]; then
-      cd /app/gait_v4 &&
-      UV_PROJECT_ENVIRONMENT=/opt/gait-v4-venv uv sync --frozen --no-install-project &&
-      VIRTUAL_ENV=/opt/gait-v4-venv uv pip uninstall opencv-python opencv-contrib-python &&
-      VIRTUAL_ENV=/opt/gait-v4-venv uv pip install --no-deps opencv-python-headless==5.0.0.93 opencv-contrib-python-headless==5.0.0.93 &&
-      cd /app; fi &&
       exec uv run --no-sync celery -A daengs_backend.tasks.gait worker
       --loglevel info --concurrency 1 --queues gait"
 
@@ -884,6 +777,102 @@ services:
       exec uv run --no-sync celery -A daengs_life.tasks.celery_app beat
       --loglevel info --schedule /var/lib/celery/beat-schedule"
 
+  # Opt-in: prepare catalogs and verify schema before starting either daemon.
+  # Separate venvs preserve backend's ML packages and avoid concurrent uv sync.
+  walk-context-worker: &walk-context-runtime
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-walk-context-worker
+    profiles: ["walk-diary"]
+    restart: unless-stopped
+    networks: [daengs-network]
+    env_file: *walk-context-env
+    environment: &walk-context-settings
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DAENGS_DB_HOST: pgvector
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
+      DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app worker
+      --hostname=walk-context@%h --pool=solo --concurrency=1 --queues=walk-entry-context --loglevel=WARNING"
+
+  walk-context-beat:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-context-beat
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-beat-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public:ro
+      - walk-context-beat-state:/var/lib/celery
+      - uv-cache:/root/.cache/uv
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app beat
+      --schedule=/var/lib/celery/beat-schedule --loglevel=WARNING"
+
+  # Slow public downloads have their own queue and write access, outside entry leases.
+  walk-catalog-worker:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-catalog-worker
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-catalog-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public
+      - uv-cache:/root/.cache/uv
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.walk_runtime_check --startup &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.walk_entry_context:app worker
+      --hostname=walk-catalog@%h --pool=solo --concurrency=1 --queues=walk-public-catalog --loglevel=WARNING"
+
+  # One-shot operator CLI only; never starts on an ordinary profile up.
+  walk-context-tools:
+    <<: *walk-context-runtime
+    container_name: daengs-walk-context-tools
+    profiles: ["walk-diary-tools"]
+    restart: "no"
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - walk-context-tools-venv:/opt/venv
+      - walk-public-catalogs:/data/walk-public
+      - uv-cache:/root/.cache/uv
+    entrypoint: ["sh", "-c", "uv sync --frozen && exec uv run --no-sync python -m \"$$@\"", "walk-tools"]
+    command: ["daengs_backend.cli.walk_runtime_check", "--allow-disabled", "--lat", "37.4878", "--lng", "127.052"]
+
   # ── pgAdmin (GUI 가 필요할 때만) ─────────────────────────────────────
   #
   # **기본 기동에는 안 뜹니다** — `profiles: ["tools"]` 라 명시해야 올라옵니다:
@@ -920,17 +909,26 @@ volumes:
   pgadmin-data:
   redis-data:
   backend-venv:
+  walk-public-catalogs:
+  walk-context-venv:
+  walk-catalog-venv:
+  walk-context-beat-venv:
+  walk-context-tools-venv:
+  walk-context-beat-state:
   # ⚠ backend-venv 와 나눠 둡니다 — 합치면 크롤러의 `uv sync` 가 backend 의 torch 를
   #   지웁니다 (crawler-worker 주석 참고).
   crawler-venv:
   # Beat 의 마지막 발사 시각. 없으면 재시작 직후 한 번 더 쏠 수 있습니다.
   crawler-beat-state:
+  # legacy·v4 두 엔진이 같이 쓰는 venv (D-063 5B — 옛 `gait-v4-venv` 는 없어졌습니다. 서버에
+  # 남은 그 볼륨은 안 쓰이게 될 뿐이라 지우는 것은 사용자 판단 — `docker volume rm`).
   gait-venv:
-  # walk_demo v4 의 venv (#304). gait-venv 와 lock 이 달라 따로 둡니다.
-  gait-v4-venv:
   territory-vision-venv:
-  # 보행 분석 기록(JSON) · overlay 영상 · 업로드 원본.
+  # 옛 `gait-analysis` HTTP 서비스의 파일 저장소 — 분석 기록(JSON) · overlay 영상 · 업로드 원본.
   # ⚠️ 개인 데이터가 들어갑니다. `docker compose down -v` 로 지워집니다.
+  # ⚠️ **마운트하는 서비스가 이제 없습니다** (D-063 4단계에서 gait-analysis 제거). 그래도 선언을
+  #    지우지 않습니다 — 옛 기록이 아직 들어 있고, 처분(이관·삭제)은 별도 결정입니다. 선언만
+  #    남은 볼륨은 `up -d` 에 아무 영향이 없습니다.
   gait-data:
   # **공용 파일 저장소** (D-043, D-052). backend · gait-worker ·
   # territory-vision-worker 셋이 **공유**합니다. 보행 영상 원본·overlay, 점령지 사진,

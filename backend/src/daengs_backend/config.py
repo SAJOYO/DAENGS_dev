@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # 두 패키지가 같은 env 를 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
     redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
 
+    # 실시간 산책·날씨를 어디서 부르나 (D-070).
+    #
+    # **비어 있으면 지금까지와 똑같다** — 같은 프로세스의 함수를 부른다. 값이 있으면 그
+    # 주소의 Cloud Run 서비스를 HTTP 로 부른다. 개발 PC·개발서버는 비워 두고 GCP VM 의
+    # backend/.env 에만 넣는다.
+    #
+    # **되돌리기가 이 한 줄이다.** 지우고 `docker compose up -d backend` 로 컨테이너를
+    # 다시 만들면 분리 전 경로로 돌아온다 (`env_file` 은 컨테이너를 만들 때 굳는다).
+    realtime_url: str = ""
+
     # 관리자 수동 크롤이 어디로 가나 (#326, D-062 §3). `celery` 는 집 서버(브로커에 태스크),
     # `cloudrun` 은 GCP(Cloud Run Job `corpus-refresh` 를 Jobs API 로 실행 — 크롤부터 적재까지).
     # GCP VM 의 backend/.env 에만 `DAENGS_CRAWL_BACKEND=cloudrun` 을 둔다. 인증은 VM 서비스
@@ -96,6 +106,29 @@ class Settings(BaseSettings):
 
     # Enable on web/worker only after 24_walk_entry_contexts.sql has been applied.
     walk_entry_context_enabled: bool = False
+
+    # Apply 27_walk_public_context.sql before enabling address jobs on web/worker.
+    walk_public_context_enabled: bool = False
+    walk_sgis_key: SecretStr = SecretStr("")
+    walk_sgis_secret: SecretStr = SecretStr("")
+    walk_public_data_key: SecretStr = SecretStr("")
+    walk_park_catalog_path: str = ""
+    # Apply 28_walk_commerce_context.sql first; regional caches refresh separately.
+    walk_area_context_enabled: bool = False
+    walk_commerce_catalog_path: str = ""
+    walk_river_catalog_path: str = ""
+    # Shared read-only regional directory; only the dedicated catalog worker writes it.
+    walk_public_catalog_root: str = ""
+    walk_catalog_refresh_enabled: bool = False
+    walk_catalog_daily_requests: int = Field(default=300, ge=1, le=1000)
+
+    # Apply 25_walk_entry_pins.sql first. Once v2 data exists, keep reads enabled on rollback.
+    walk_entry_v2_enabled: bool = False
+    walk_entry_v2_write_enabled: bool = False
+    # Enable only after 26_walk_photo_manifests.sql. Capability stays off on older DBs.
+    walk_photo_metadata_enabled: bool = False
+    # Opt-in diary bundle; enable only with a client that explicitly requests the new format.
+    walk_diary_enabled: bool = False
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
@@ -153,6 +186,20 @@ class Settings(BaseSettings):
     # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
     general_fallback: bool = Field(
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
+    )
+
+    # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
+    # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
+    # 승인된 기능(Task 1~5)이라 배포 즉시 도는 것이 맞고, 끄는 쪽이 예외 상황(장애
+    # 대응·비용 급증)입니다. 지금은 `prior_turns` 를 threading 하는 호출자가 없어
+    # (Task 7 전) 빈 후보면 fast path 가 모델을 안 태우므로 이 값이 꺼져 있어도 관측되는
+    # 차이가 없습니다 — 그래도 Task 7 이후 되돌릴 수 있는 자리를 배포 전에 먼저 파 둡니다.
+    #
+    # 켜져 있으면(기본) 애매한 발화마다 시맨틱 라우터보다 앞서 Gemini 왕복이 하나 더
+    # 붙습니다. 끄면 `service._plan_and_execute` 가 리졸버를 아예 안 부르고 `resolved
+    # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
+    turn_resolver: bool = Field(
+        default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
     )
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
@@ -289,33 +336,28 @@ class Settings(BaseSettings):
     #
     # nginx 의 `location /app/gait/` client_max_body_size(200m) **보다 낮게** 두세요.
     # 높으면 nginx 가 먼저 끊어서 앱이 우리 413 대신 nginx HTML 을 받습니다.
-    # 이름·기본값은 레거시 gait-analysis 의 GAIT_MAX_UPLOAD_BYTES 와 일부러 같습니다.
+    # 이름·기본값은 옛 gait-analysis HTTP 서비스(D-063 4단계에서 제거)의 것을 그대로 이었습니다.
     gait_max_upload_bytes: int = Field(
         default=150 * 1024 * 1024,
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
 
-    # ── 보행 분석 엔진 (#304) ─────────────────────────────────────────
-    # "legacy" = `daengs_gait`(ultralytics best.pt, 워커 venv 에 설치됨).
-    # "v4"     = `backend/gait_v4/`(walk_demo v4: ssdlite + RTMPose AP-10K). **별도 uv
-    #            프로젝트**라 워커가 그 venv 의 python 을 서브프로세스로 부릅니다 —
-    #            버전이 `==` 로 못 박혀 있고 골든이 그 조합에서 나와서 backend lock 에
-    #            합치지 않습니다. 라이선스(ssdlite.pt academic/non-commercial) 결정 전이라
-    #            **기본은 legacy** 입니다. 운영에서 바꾸지 마세요.
+    # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
+    # "legacy" = `daengs_gait.pipeline`(ultralytics best.pt, 워커 프로세스 안에서).
+    # "v4"     = `daengs_gait.inference`(walk_demo v4: ssdlite + RTMPose AP-10K). 5B 부터
+    #            코드도 의존성(`gait` 그룹 하나)도 legacy 와 같은 venv 이고, 워커가 자기
+    #            인터프리터(`sys.executable`)로 서브프로세스를 띄웁니다 — 옛 `GAIT_V4_DIR` ·
+    #            `GAIT_V4_PYTHON` · 별도 venv 는 없어졌습니다. 가중치는 legacy 와 같은
+    #            `GAIT_RELEASE_DIR` 폴더입니다(`ssdlite.pt` · `rtmpose-m_ap10k/end2end.onnx`).
+    #            라이선스(ssdlite.pt academic/non-commercial) 결정 전이라 **기본은 legacy**
+    #            입니다. 운영에서 바꾸지 마세요.
     #
-    # ⚠️ 두 엔진의 기록은 DB 에서 구분되지 않습니다 (`pose_model` 컬럼 없음,
-    #    `gait_filter_version` 문자열도 같음). 섞이면 관절 정의가 다른 기록끼리 비교됩니다.
-    #    엔진을 바꾸려면 그 결정이 먼저입니다 (#304 컨텍스트 메모).
+    # 두 엔진의 기록은 `gait_records.pose_model` 로 구분되고, 비교는 서버 설정이 아니라
+    # 두 기록의 그 값으로 함수를 고릅니다 (`services/gait._run_compare`).
     gait_engine: str = Field(default="legacy", validation_alias=AliasChoices("GAIT_ENGINE"))
-    # gait_v4 프로젝트 폴더. 그 안의 `.venv` 와 `weights/` 를 씁니다. 비우면 저장소의
-    # `backend/gait_v4` (config.py 기준 상대 경로) 입니다.
-    gait_v4_dir: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_DIR"))
-    # v4 venv 의 python. 비우면 `<gait_v4_dir>/.venv/…/python`. 컨테이너에서는 코드 폴더가 :ro 라
-    # venv 를 /opt 에 두고 이 값으로 알려 줍니다 (compose 의 gait-worker 참고).
-    gait_v4_python: str = Field(default="", validation_alias=AliasChoices("GAIT_V4_PYTHON"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
-    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. 셋 다 backend 와
+    # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. backend 와
     # **다른 컨테이너**라 프로세스 안에서는 알 수 없고, nginx 를 거치지도 않습니다
     # (compose 네트워크 안에서 서비스 이름으로 직접 닿습니다).
     #
@@ -334,9 +376,6 @@ class Settings(BaseSettings):
     #   컨테이너의 주소를 두 이름으로 두면 한쪽만 고치는 날 상태 화면과 실제 호출이
     #   서로 다른 곳을 봅니다.
     journey_service_url: str = "http://journey-service:8000"
-    # gait 는 compose 에서 `profile: gait` 라 **기본으로는 안 뜹니다** (D-038).
-    # 그래서 여기 이름이 있어도 평소에는 `absent` 로 보이는 것이 정상입니다.
-    gait_service_url: str = "http://gait-analysis:8000"
 
     # 조각으로 바뀌기 전에 쓰던 이름입니다 (D-013).
     #

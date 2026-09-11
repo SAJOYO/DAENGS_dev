@@ -246,10 +246,15 @@ def test_건수가_하나도_없으면_care_log_자체가_없다() -> None:
 # ---------------------------------------------------------------- 프롬프트
 
 
-def test_로그가_없으면_v3_와_글자까지_같다() -> None:
-    """D-057 ③ 이 승인한 본문. 84건 쌍대 비교의 대상이 이 프롬프트다."""
+def test_로그가_없으면_기본_본문_그대로다() -> None:
+    """D-057 ③ 이 승인한 본문의 자리. 84건 쌍대 비교의 대상이 이 프롬프트다.
+
+    본문은 #415(D-068)에서 v6 으로 올라갔다 — 되묻기 규칙 한 문단이 붙었고,
+    `GeneralAnswer.kind` 에 `ask` 가 생겨 프롬프트에 박히는 JSON 스키마도 같이
+    달라졌다. **버전 문자열이 함께 움직인 것이 이 테스트가 지키는 것이다** —
+    이름이 그대로인 채 본문만 바뀌면 84건 비교가 가리키는 물건이 사라진다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그")))
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v3"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
     assert prompt.startswith(f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n")
     assert "CARE_LOG" not in prompt
     assert "care log" not in prompt.lower()
@@ -263,7 +268,7 @@ def test_로그가_있으면_블록과_규칙이_붙고_버전이_갈린다() ->
                                 last_meal_at="18:30", last_medication_at="08:12"),
     )
     prompt = build_general_prompt(payload)
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v4-carelog"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v6-carelog"
     assert prompt.startswith(f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n")
     assert (
         'CARE_LOG_TODAY: {"day": "2026-09-08", "last_meal_at": "18:30", "last_medication_at": "08:12",'

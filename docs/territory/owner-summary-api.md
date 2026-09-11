@@ -93,8 +93,8 @@ read-only snapshot 일관성 검증을 추가했다. 전용 PostgreSQL CI가 이
 
 ```powershell
 # backend/에서. DB 테스트는 전용 localhost claims_test만 허용하며 팀 DB로 fallback하지 않는다.
-uv run pytest -q tests/test_territory_owner_summary.py tests/test_territory_ownership_api.py tests/test_activity.py
-uv run pytest -q tests/test_activity_db.py -k 'public_owner or api_owner_scope_validation_pending_and_ready'
+uv run pytest -q tests/territory/ownership/test_territory_owner_summary.py tests/territory/ownership/test_territory_ownership_api.py tests/activity/test_activity.py
+uv run pytest -q tests/activity/test_activity_db.py -k 'public_owner or api_owner_scope_validation_pending_and_ready'
 ```
 
 APP 카드 연결과 실제 운영 두 계정 검증은 후속이다.

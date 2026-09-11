@@ -1,0 +1,168 @@
+[
+  {
+    "schema_version": 1,
+    "title": "지역명과 같은 실제 상호",
+    "layer": "model",
+    "existing_tests": [],
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "invariants": [
+      "정책 보강으로 정상 작업을 막지 않는다."
+    ],
+    "id": "PC-H01",
+    "status": "specified",
+    "steps": [
+      {
+        "expect": {
+          "execution": "searched",
+          "name_query": "제주도",
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "goal": "show"
+        },
+        "action": "chat",
+        "input": "'제주도'라는 이름의 카페 찾아줘"
+      }
+    ],
+    "group": "heldout",
+    "coverage_note": "첫 기준선 관측 뒤 작성, 보강 프롬프트 확정 뒤 처음 실행하는 전이 검사. 원래 평가셋과 합산하지 않음."
+  },
+  {
+    "schema_version": 1,
+    "title": "선택 장소의 확인된 주차 불가",
+    "layer": "model",
+    "existing_tests": [],
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": "cafe-no"
+    },
+    "invariants": [
+      "정책 보강으로 정상 작업을 막지 않는다."
+    ],
+    "id": "PC-H02",
+    "status": "specified",
+    "steps": [
+      {
+        "expect": {
+          "selected": "cafe-no",
+          "answer": "원천 주차 불가 사실을 설명",
+          "filters": "unchanged",
+          "goal": "explain"
+        },
+        "action": "chat",
+        "input": "이 카페 주차 가능해?"
+      }
+    ],
+    "group": "heldout",
+    "coverage_note": "첫 기준선 관측 뒤 작성, 보강 프롬프트 확정 뒤 처음 실행하는 전이 검사. 원래 평가셋과 합산하지 않음."
+  },
+  {
+    "schema_version": 1,
+    "title": "명시적 정정은 질문 없이 반영",
+    "layer": "model",
+    "existing_tests": [],
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "invariants": [
+      "정책 보강으로 정상 작업을 막지 않는다."
+    ],
+    "id": "PC-H03",
+    "status": "specified",
+    "steps": [
+      {
+        "expect": {
+          "execution": "searched",
+          "parking": "required_false",
+          "goal": "show"
+        },
+        "action": "chat",
+        "input": "주차되는 곳만, 아니다 주차 없는 곳만 찾아줘"
+      }
+    ],
+    "group": "heldout",
+    "coverage_note": "첫 기준선 관측 뒤 작성, 보강 프롬프트 확정 뒤 처음 실행하는 전이 검사. 원래 평가셋과 합산하지 않음."
+  },
+  {
+    "schema_version": 1,
+    "title": "반대 배치 OR",
+    "layer": "model",
+    "existing_tests": [],
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "invariants": [
+      "정책 보강으로 정상 작업을 막지 않는다."
+    ],
+    "id": "PC-H04",
+    "status": "specified",
+    "steps": [
+      {
+        "expect": {
+          "expected_refs": [
+            "cafe-no",
+            "restaurant-parking"
+          ],
+          "goal": "show"
+        },
+        "action": "chat",
+        "input": "주차 없는 카페 또는 주차되는 음식점 찾아줘"
+      }
+    ],
+    "group": "heldout",
+    "coverage_note": "첫 기준선 관측 뒤 작성, 보강 프롬프트 확정 뒤 처음 실행하는 전이 검사. 원래 평가셋과 합산하지 않음."
+  }
+]

@@ -8,23 +8,30 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import ChatSession, ChatSummary, ChatTurn, Pet
+from daengs_backend.repositories import pet as pet_repo
 
 
-async def get_owned_pet_id(
+async def get_accessible_pet_id(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> uuid.UUID | None:
+    """그 아이 얘기를 해도 되는가 — **구성원(대표 ∪ 돌보미)이면 됩니다** (docs/co-care.md §2).
+
+    대화 **세션**의 소유는 별개입니다 — `chat_sessions.app_user_id` 가 따로 걸려 있어
+    아빠의 대화가 나에게 새지 않습니다. 여기서 보는 것은 "그 아이를 돌보는 사람인가" 뿐입니다.
+    """
     return await session.scalar(
-        select(Pet.id).where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
+        select(Pet.id).where(Pet.id == pet_id, pet_repo.member_condition(app_user_id))
     )
 
 
-async def lock_owned_pet(
+async def lock_accessible_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> uuid.UUID | None:
+    """같은 판정을 행 잠금까지. 동시에 두 세션을 여는 것을 `pets` 행으로 줄 세웁니다."""
     return await session.scalar(
         select(Pet.id)
-        .where(Pet.id == pet_id, Pet.app_user_id == app_user_id)
-        .with_for_update()
+        .where(Pet.id == pet_id, pet_repo.member_condition(app_user_id))
+        .with_for_update(of=Pet)
     )
 
 
@@ -147,6 +154,37 @@ async def list_capacity_turns(session: AsyncSession, session_id: uuid.UUID) -> l
         .order_by(ChatTurn.created_at, ChatTurn.id)
     )
     return list(rows)
+
+
+async def list_recent_completed_turns(
+    session: AsyncSession, session_id: uuid.UUID, *, limit: int
+) -> list[ChatTurn]:
+    """Turn Resolver 후보와 대기 되묻기의 원본 (#416 Task 7).
+
+    `DESC … LIMIT` 으로 가져오는 이유는 원하는 것이 **최신 `limit` 개**이기 때문이다 —
+    `ASC` 로는 가장 오래된 `limit` 개가 나와 전혀 다른 결과가 된다. (`chat_turns_session_order_idx`
+    는 어느 방향으로 정렬해도 그대로 탄다 — btree 는 역방향 스캔이 정방향과 같은 비용이라,
+    `ORDER BY created_at DESC, id DESC` 도 이 인덱스를 그대로 쓴다.) 잘라낸 뒤에는 뒤집어
+    오래된 순으로 돌려준다 — Resolver 가 후보를 `U1/A1, U2/A2…` 로 번호 매기기 때문이다.
+    순서가 뒤집히면 모델이 고른 번호가 엉뚱한 turn 에 붙는다.
+
+    `processing_status == 'completed'` 만 보므로, 방금 예약한(아직 `processing`인) turn
+    은 여기 안 걸린다 — 자기 자신을 자기 맥락으로 삼는 사고가 애초에 안 생긴다.
+
+    `limit >= 1` 을 전제한다 — 대기 되묻기 판정(`pending_clarification_of`)이 잘림에도
+    불변인 것은 `turns[-1]`(가장 최신 완료 turn)이 어떤 `limit >= 1` 에도 항상 남기
+    때문이다. `limit=0` 을 넘기면 그 전제가 깨져 대기 되묻기가 늘 조용히 사라진다.
+    """
+    rows = await session.scalars(
+        select(ChatTurn)
+        .where(
+            ChatTurn.session_id == session_id,
+            ChatTurn.processing_status == "completed",
+        )
+        .order_by(ChatTurn.created_at.desc(), ChatTurn.id.desc())
+        .limit(limit)
+    )
+    return list(reversed(rows.all()))
 
 
 async def list_turns(

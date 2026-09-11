@@ -18,8 +18,7 @@ from daengs_place.ingest.source_record_store import (
 )
 from daengs_place.place.restriction_map import RESTRICTION_SEMANTICS_VERSION
 from daengs_place.place.source_facts.states import DetailAcquisitionState
-
-from ..conftest import db_session
+from tests.place.support.database import db_session
 
 SOURCE = "test:source_record"
 

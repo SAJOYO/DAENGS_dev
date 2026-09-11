@@ -17,6 +17,7 @@ from daengs_backend.orchestration.adapters import (
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
     TrainingCapabilityAdapter,
+    VetContactCapabilityAdapter,
     WalkCapabilityAdapter,
 )
 from daengs_backend.orchestration.aggregate import aggregate_results
@@ -57,6 +58,8 @@ class OrchestrationEngine:
                 # 플래그(`DAENGS_GENERAL_FALLBACK`)가 꺼져 있으면 planner 가 이 능력을
                 # 계획에 넣지 않으므로 등록만 되고 돌지 않는다 (#279).
                 CapabilityName.GENERAL: GeneralCapabilityAdapter(),
+                # 라우터가 고를 수 없는 능력이다 — `resolve_emergency_route` 만 계획에 넣는다.
+                CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         self.graph = self._build_graph()

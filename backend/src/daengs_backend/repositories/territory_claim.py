@@ -11,6 +11,7 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSite,
     TerritoryOccupancy,
 )
+from daengs_backend.repositories import pet as pet_repo
 
 
 async def session_by_client(db, owner, client_id, *, lock=False):
@@ -31,11 +32,21 @@ async def insert_session(db, **values):
     )
 
 
-async def eligible_pets(db, owner, pet_ids):
+async def eligible_pets(db, member, pet_ids):
+    """점령에 데리고 나갈 수 있는 아이들 — **구성원(대표 ∪ 돌보미)** 기준입니다
+    (docs/co-care.md §2).
+
+    아빠가 걸어서 점령하려면 그 아이에 닿아야 합니다. **점령 결과의 소유는 안 바뀝니다** —
+    `territory_claims.app_user_id` 가 그대로라 아빠가 먹은 땅은 아빠 것입니다 (결정 ①).
+
+    배웅한 아이는 여기서 빠집니다. 기록은 남기되 새로 나가지는 않습니다.
+    """
     return set(
         await db.scalars(
             select(Pet.id).where(
-                Pet.id.in_(pet_ids), Pet.app_user_id == owner, Pet.farewell_on.is_(None)
+                Pet.id.in_(pet_ids),
+                pet_repo.member_condition(member),
+                Pet.farewell_on.is_(None),
             )
         )
     )
@@ -105,6 +116,7 @@ async def read_sites(db, site_ids):
                 TerritoryOccupancy.certification,
                 TerritoryOccupancy.occupied_at,
                 TerritoryOccupancy.certified_at,
+                TerritoryOccupancy.expires_at,
                 Pet.id.label("pet_id"),
                 Pet.name.label("pet_name"),
                 TerritoryClaimSession.app_user_id,

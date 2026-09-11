@@ -1,0 +1,56 @@
+{
+  "query_last": {
+    "pass": 9,
+    "fail": 0
+  },
+  "no_duplicate_past_query": {
+    "pass": 6,
+    "fail": 3
+  },
+  "scope": "Post hoc follow-up on three fixed targets only, not a 14-target re-evaluation.",
+  "provider_totals_across_main_and_followup": {
+    "current-input": {
+      "observations": 42,
+      "provider_calls": 42,
+      "provider_errors": 0,
+      "input_tokens_total": 94554,
+      "output_tokens_total": 1212,
+      "input_tokens_median": 2208.0,
+      "provider_latency_median_ms": 2476.0
+    },
+    "context-input": {
+      "observations": 42,
+      "provider_calls": 42,
+      "provider_errors": 0,
+      "input_tokens_total": 143982,
+      "output_tokens_total": 1269,
+      "input_tokens_median": 2949.0,
+      "provider_latency_median_ms": 3075.0
+    },
+    "query-last": {
+      "observations": 9,
+      "provider_calls": 9,
+      "provider_errors": 0,
+      "input_tokens_total": 39606,
+      "output_tokens_total": 303,
+      "input_tokens_median": 3598,
+      "provider_latency_median_ms": 3443
+    },
+    "no-duplicate-past-query": {
+      "observations": 9,
+      "provider_calls": 9,
+      "provider_errors": 0,
+      "input_tokens_total": 39534,
+      "output_tokens_total": 285,
+      "input_tokens_median": 3592,
+      "provider_latency_median_ms": 2405
+    }
+  },
+  "validation": {
+    "initial_targeted_tests": "14 passed, 0 skipped in 4.57s",
+    "followup_tests": "2 passed, 0 skipped in 10.85s",
+    "unique_tests": 16,
+    "ruff": "new Python files passed",
+    "not_run": "full suite, uv run check, DB/Redis/HTTP concurrency/Android/compose; no production changes or merge"
+  }
+}

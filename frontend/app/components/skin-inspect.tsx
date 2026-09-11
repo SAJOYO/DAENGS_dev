@@ -558,14 +558,35 @@ function ScreenResult({ result, elapsedMs }: { result: ScreenResponse; elapsedMs
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-sm font-medium">{stage2.group.text}</span>
+                {/* ★ 병원에서 쓰는 이름 (2026-09-10). 순서는 코드순 고정이라 확률과 무관. */}
+                {stage2.group.labels && (
+                  <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                    ({stage2.group.labels})
+                  </span>
+                )}
                 <span className="ml-auto text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
                   묶음 {stage2.group.percent.toFixed(1)}% · 확신 {stage2.group.confidence.toFixed(3)}
                 </span>
               </div>
+              {/* ★ 보호자가 사진에서 직접 확인할 수 있는 특징 (2026-09-10).
+                    앱도 같은 문장을 그립니다 — 두 화면이 갈라지면 안 됩니다. */}
+              {stage2.group.feature && (
+                <p className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">
+                  {stage2.group.feature} 같은 모습이 보이는 상태예요.
+                </p>
+              )}
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{stage2.group.caveat}</p>
+              {/* ★ 수의학적 의미 — 콘솔은 의료진용이라 접지 않고 바로 보여줍니다.
+                    ⚠️ 보호자 앱에서는 "자세히 보기" 안에 있습니다 (과잉 분류 문제). */}
+              {stage2.group.detail && (
+                <p className="mt-1 text-[11px] leading-5 text-amber-800 dark:text-amber-300">
+                  수의학적 의미: {stage2.group.detail}
+                </p>
+              )}
               <p className="mt-1 text-[11px] leading-5 text-zinc-500 dark:text-zinc-500">
                 <strong className="font-medium">여섯 개 중 하나를 고른 게 아닙니다.</strong> 네 묶음
-                (융기·발진 / 표면 변화 / 미란·궤양 / 결절·종괴) 중 하나이고, 확률은 묶음 안을 더한 값입니다.
+                (솟아오른 변화 / 피부 표면·색·두께 변화 / 벗겨지거나 패인 상처 / 깊거나 단단한 혹)
+                중 하나이고, 확률은 묶음 안을 더한 값입니다.
                 holdout 에서 이 알갱이는 오답률 20% 안에서 66.5%(하향 방지 규칙 적용)를 말할 수 있었고,
                 6종 이름은 41.1% 였습니다. <strong className="font-medium">앱도 같은 것을 그립니다</strong> —
                 두 화면이 갈라지면 안 됩니다.

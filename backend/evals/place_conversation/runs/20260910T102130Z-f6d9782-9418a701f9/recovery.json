@@ -1,0 +1,8 @@
+{
+  "source_run": "20260910T101455Z-adcf019-de94bda7ca",
+  "source_repetition": 2,
+  "whole_case_replays": ["EX08", "EX09", "EX10"],
+  "attempt": 1,
+  "interval_seconds": 15,
+  "note": "Replay from each case's initial setup, never splice a fabricated result into the failed run. EX09 received HTTP 429 again and remains incomplete."
+}

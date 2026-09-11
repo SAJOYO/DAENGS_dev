@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import inspect                                                   # noqa: E402
 
 from daengs_screening import agent                                            # noqa: E402
-from daengs_screening.config import CLASS_KO, CLASSES                         # noqa: E402
+from daengs_screening.config import CLASS_KO, CLASSES, MORPH_GROUP_KEEP_A6 as _M  # noqa: E402
 
 ok = fail = 0
 
@@ -161,8 +161,8 @@ big = [0.5 - .80 / 2, 0.5 - .80 / 2, .80, .80]
 check("너무 크면 막고 이유를 말함",
       not agent.check_guide(big)["ok"] and "멀리" in agent.check_guide(big)["reason"])
 off = [0.0, 0.0, 0.44, 0.44]
-check("가운데서 벗어나면 막음",
-      not agent.check_guide(off)["ok"] and "가운데" in agent.check_guide(off)["reason"])
+check("화면 가장자리의 병변도 크기가 맞으면 통과",
+      agent.check_guide(off)["ok"])
 check("허용 경계 안쪽(28%)은 통과",
       agent.check_guide([0.5 - .29 / 2, 0.5 - .29 / 2, .29, .29])["ok"])
 
@@ -266,8 +266,8 @@ check("빈 네모는 빈 dict", be.to_perturbation([.5, .5, 0, 0], T) == {})
 check("네모 허용 밴드는 줌 밴드의 역수",
       abs(be.BOX_ALLOW[0] - 1 / be.ZOOM_ALLOW[1]) < 1e-9
       and abs(be.BOX_ALLOW[1] - 1 / be.ZOOM_ALLOW[0]) < 1e-9)
-check("밴드 값이 agent 와 같은 실측에서 옴",
-      be.SHIFT_MAX == agent.GUIDE_CENTER_MAX)
+check("절대 화면 위치는 촬영 밴드 판정에 쓰지 않음",
+      not hasattr(agent, "GUIDE_CENTER_MAX"))
 # ⚠️ 이 두 줄은 STEP 10 밴드(0.59~1.43배)를 단언하고 있었고, `box_error.py` 가
 #    같은 옛 값을 **베껴 두고 있어서 통과했습니다.** 밴드 출처를 `src/robust.py`
 #    하나로 모으자(2026-09-06) 비로소 드러났습니다 — 두 곳이 같이 옛것이면
@@ -431,8 +431,9 @@ _ab.stage2_probs = [("A2", 0.31), ("A3", 0.22)]
 _txt = _msg.compose_screening_message(_ab)
 check("기권이어도 이상 소견을 말함", "이상 소견이 보입니다" in _txt)
 check("기권이어도 재촬영 문구가 안 나옴", "판단이 어려운 사진" not in _txt)
-# A2 는 "표면 변화" 로 묶여 이름이 사라집니다 — 묶음이 보이는지로 봅니다.
-check("기권이어도 분포가 보임", "표면 변화" in _txt)
+# A2 는 묶음으로 흡수돼 이름이 사라집니다 — 묶음이 보이는지로 봅니다.
+# ★ 이름을 손으로 적지 않습니다 (2026-09-10 이름 교체 때 여기가 안 따라오면 거짓 통과).
+check("기권이어도 분포가 보임", _M["A2"] in _txt)
 check("기권이어도 진료를 권함", "수의사 진료를 받아보시기를 권합니다" in _txt)
 check("기권일 때 다시 찍으라고 하지 않음",
       "더 선명하게 다시 찍으면" not in _txt)
@@ -491,6 +492,20 @@ check("확신이 낮으면 group 은 null (주장 안 함)", _s["group"] is None
 check("groups 합이 1 이다", abs(sum(g["prob"] for g in _s["groups"]) - 1) < 1e-6)
 check("★ groups 는 6종을 **더한** 것 (자른 게 아니라)",
       len(_s["distribution"]) == 6 and len(_s["groups"]) == 4)
+
+# ★ 병원에서 쓰는 이름은 **네 줄 전부**에 붙습니다 (2026-09-11).
+#   예전에는 `group`(주장) 에만 있어서, **확신이 낮아 group 이 null 인 날**
+#   보호자가 병원에 들고 갈 말이 하나도 없었습니다 — 하필 그때가 막대만
+#   남는 때입니다. 위 두 줄이 이미 그 상황(group is None)을 만들어 뒀습니다.
+check("★ 확신이 낮아도 네 줄 모두에 병원 이름이 온다",
+      _s["group"] is None and all(g.get("labels") for g in _s["groups"]),
+      detail=str([g.get("labels") for g in _s["groups"]]))
+check("labels 는 묶음마다 다르다 (한 값을 돌려쓰지 않는다)",
+      len({g["labels"] for g in _s["groups"]}) == 4)
+# ⚠️ 이것이 top1 부활이 아님을 못 박습니다 — 네 줄에 **같은 방식으로** 붙고
+#    확률 순서와 무관하게 묶음마다 자기 이름을 답니다.
+check("labels 가 '1등' 에만 붙지 않는다",
+      all(set(g) >= {"name", "labels", "prob", "percent"} for g in _s["groups"]))
 
 print("\n" + "=" * 60)
 print(f" 통과 {ok} / {ok + fail}")

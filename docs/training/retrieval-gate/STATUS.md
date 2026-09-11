@@ -1,6 +1,6 @@
 # STATUS — 안전 게이트 · 검색 품질
 
-마지막 갱신: 2026-08-28
+마지막 갱신: 2026-09-09
 
 ## 지금 상태
 
@@ -46,6 +46,11 @@
   47.4% 기준선과의 비교가 깨진다. 새 대조군은 `gate_pass_controls_v1.jsonl`에 넣는다.
 - `data/guardrail/*.json` — 사람이 확인한 사전이다. 항목을 늘릴 때는 `risk_notes`에
   왜 그 구절인지 같이 적는다. 한 음절 항목은 금지이고, 그 규칙은 테스트가 강제한다.
+  ⚠ **2026-09-09 부터 서빙이 싣는 사전이 둘이다** — `medical_terms_v2.json`(코퍼스 밖)과
+  `medical_terms_v1_curated.json`(코퍼스 안, v1 에서 사람이 승인한 50개). 합치는 곳은
+  `guardrails.medical.load_serving_medical_terms()` 한 군데다. **`medical_terms_v1.json`
+  자체는 서빙에 싣지 마라** — `curation: none` 이라 행동 어휘가 섞여 있고, 통째로 실으면
+  평범한 훈련 질의가 7/7 막힌다. 이유는 `HISTORY.md` 12절, 결정은 `docs/decisions.md` D-064.
 
 ## 환경 메모
 

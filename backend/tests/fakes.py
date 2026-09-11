@@ -23,8 +23,10 @@ from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_member as pet_member_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import screening as screening_repo
+from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.repositories import walk as walk_repo
 
 PASSWORD = "correct-horse-battery-staple"
@@ -70,6 +72,11 @@ class FakeAppUser:
     room_name: str | None = None
     #: 사람 이름. None 이면 아직 발급 전입니다 (서버가 로그인할 때 채웁니다).
     nickname: str | None = None
+    #: OCR 학습 이용 동의 시각. None 이면 미동의입니다 (기본값).
+    ocr_consent_at: datetime | None = None
+    #: 어느 판에 동의했는지. CHECK `app_users_ocr_consent_pair` 대로 위 칸과
+    #: 항상 짝으로 채워지거나 둘 다 None 입니다.
+    ocr_consent_version: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -209,6 +216,12 @@ class Store:
         #: 같은 순서라, "대표를 지우면 먼저 등록한 아이가 승계한다"를 볼 수 있습니다.
         self.pets: list[FakePet] = []
 
+        #: 공동 돌봄의 돌보미. `(pet_id, app_user_id)` 짝입니다 — 대표는 여기 없고
+        #: `FakePet.app_user_id` 가 대표입니다 (docs/co-care.md).
+        self.pet_members: list[tuple[uuid.UUID, uuid.UUID]] = []
+        #: 초대. `install` 이 만드는 `FakeInvite` 를 담습니다.
+        self.pet_invites: list = []
+
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
         #: finalize가 저장한 버전된 분석. 진짜 DB의 walk_analyses 자리입니다.
@@ -217,8 +230,16 @@ class Store:
         #: 케어 로그(밥·약·간식) 행 (#332). **기본은 비어 있습니다** — 비서가 `active_dog_id`
         #: 요청마다 오늘 요약을 읽으므로(#344), 여기 대역이 없으면 관련 없는 테스트가
         #: 진짜 리포지토리를 타서 `FakeSession` 에서 죽습니다. 모양은 `test_care_events.py`
-        #: 의 `FakeCareEvent` 처럼 `app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
+        #: 의 `FakeCareEvent` 처럼 `actor_app_user_id · pet_id · kind · occurred_at · id` 면 됩니다.
         self.care_events: list = []
+
+        #: 확정된 진료비 기록 (#353 Task 7). **기본은 비어 있습니다** — 비서가
+        #: `active_dog_id` 요청마다 최근 진료비 요약을 읽으므로(`services
+        #: .vet_spend_context`), 여기 대역이 없으면 관련 없는 테스트가 진짜
+        #: 리포지토리를 타서 `FakeSession` 에서 죽습니다 — `care_events` 와 같은 이유
+        #: (바로 위 주석). 모양은 `app_user_id · pet_id · reason_code · visited_on ·
+        #: total_krw · hospital_name · hospital_phone · id` 면 됩니다.
+        self.vet_visits: list = []
 
         #: 피부 변화 기록. 사진은 저장소에 있고 여기는 행만 들고 있습니다.
         self.screenings: list = []
@@ -296,6 +317,21 @@ class FakePet:
     photo_pending_key: str | None = None
     photo_pending_content_type: str | None = None
     photo_pending_at: object | None = None
+
+
+@dataclass
+class FakeInvite:
+    """PetInvite 대역. 공동 돌봄 초대 (docs/co-care.md §3)."""
+
+    pet_id: uuid.UUID
+    invited_by: uuid.UUID
+    token_hash: str
+    expires_at: datetime
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    created_at: datetime = field(default_factory=lambda: datetime(2026, 9, 9, tzinfo=UTC))
+    #: 영수증(2026-09-10, #388·#261). `None` 이면 아직 안 쓴 초대입니다.
+    accepted_at: datetime | None = None
+    accepted_by: uuid.UUID | None = None
 
 
 @dataclass
@@ -506,6 +542,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         user = await app_get_by_id(session, app_user_id)
         return user if user is not None and user.status == "active" else None
 
+    async def app_nicknames_by_ids(session, app_user_ids):
+        wanted = set(app_user_ids)
+        return {u.id: u.nickname for u in store.app_users.values() if u.id in wanted}
+
     async def app_is_nickname_taken(session, nickname):
         # 진짜와 같이 **소문자로 접어서** 봅니다 (lower(nickname) UNIQUE 인덱스).
         folded = nickname.lower()
@@ -562,6 +602,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(app_user_repo, "is_nickname_taken", app_is_nickname_taken)
     monkeypatch.setattr(app_user_repo, "search_by_nickname", app_search_by_nickname)
     monkeypatch.setattr(app_user_repo, "list_page", app_list_page)
+    monkeypatch.setattr(app_user_repo, "nicknames_by_ids", app_nicknames_by_ids)
 
     monkeypatch.setattr(admin_user_repo, "get_by_login_id", get_by_login_id)
     monkeypatch.setattr(admin_user_repo, "get_by_id", get_by_id)
@@ -588,6 +629,30 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             None,
         )
 
+    def _member_pet_ids(user_id):
+        return {pid for pid, uid in store.pet_members if uid == user_id}
+
+    async def pet_get_accessible(session, app_user_id, pet_id, *, for_update=False):
+        ids = _member_pet_ids(app_user_id)
+        return next(
+            (
+                p
+                for p in store.pets
+                if p.id == pet_id and (p.app_user_id == app_user_id or p.id in ids)
+            ),
+            None,
+        )
+
+    async def pet_count_accessible(session, app_user_id):
+        ids = _member_pet_ids(app_user_id)
+        return sum(1 for p in store.pets if p.app_user_id == app_user_id or p.id in ids)
+
+    async def pet_get_by_id_for_update(session, pet_id):
+        # 진짜와 같게 **소유자 조건이 없습니다** — 초대 수락처럼 권한 판단 전에
+        # 행을 잠그기만 하는 경로가 씁니다. 가짜에는 동시성이 없어 락 자체는 흉내
+        # 내지 않고, "누구 것이든 id 로 찾는다" 는 뜻만 지킵니다.
+        return next((p for p in store.pets if p.id == pet_id), None)
+
     async def pet_find_by_photo_key(session, storage_key, *, pending):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
         # "backend 가 발급한 키인가" 만 봅니다.
@@ -598,12 +663,34 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         mine = {p.id for p in store.pets if p.app_user_id == app_user_id}
         return mine & set(pet_ids)
 
+    async def pet_accessible_ids(session, app_user_id, pet_ids):
+        # 진짜와 같게 **구성원(대표 ∪ 돌보미)** 입니다 (docs/co-care.md §2).
+        ids = _member_pet_ids(app_user_id)
+        mine = {
+            p.id for p in store.pets if p.app_user_id == app_user_id or p.id in ids
+        }
+        return mine & set(pet_ids)
+
+    async def pet_list_accessible(session, app_user_id):
+        ids = _member_pet_ids(app_user_id)
+        # 진짜는 `created_at, id` 로 정렬합니다. 대역의 `store.pets` 는 등록 순서라
+        # 그 순서가 곧 같은 뜻입니다 (`pet_list_for_owner` 와 같은 규칙).
+        return [
+            p for p in store.pets if p.app_user_id == app_user_id or p.id in ids
+        ]
+
     async def pet_count_for_owner(session, app_user_id):
         return len([p for p in store.pets if p.app_user_id == app_user_id])
 
     async def pet_names_by_ids(session, pet_ids):
         wanted = set(pet_ids)
         return {p.id: p.name for p in store.pets if p.id in wanted}
+
+    async def pet_owners_by_ids(session, pet_ids):
+        # gait·screening 의 can_confirm/can_delete/created_by 가 한 번에 쓰는 대표 맵
+        # (Task 19, docs/co-care.md §2). `pet_names_by_ids` 와 같은 모양.
+        wanted = set(pet_ids)
+        return {p.id: p.app_user_id for p in store.pets if p.id in wanted}
 
     async def pet_count_by_owners(session, app_user_ids):
         # 진짜와 같이 **한 마리도 없는 주인은 키가 아예 없습니다** (GROUP BY 가 행을
@@ -629,6 +716,15 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         # 산책 자체는 남습니다.
         for walk in store.walks:
             walk.pets = [link for link in walk.pets if link.pet_id != pet.id]
+        # `pet_members.pet_id` 의 CASCADE 자리 — 강아지가 사라지면 돌보미 행도 같이
+        # 사라집니다. **여기서는 실제로 돕니다** (탈퇴와 달리 행이 진짜로 지워집니다).
+        store.pet_members = [row for row in store.pet_members if row[0] != pet.id]
+        # `app_users.primary_pet_id` 의 ON DELETE SET NULL 자리. 대표든 돌보미든
+        # 가리키고 있던 사람은 전부 NULL 이 됩니다 — **누구를 대신 세울지는 서비스가
+        # 정합니다.** 이 대역이 없으면 "지운 뒤에 확인하는" 잘못된 구현이 통과합니다.
+        for user in store.app_users.values():
+            if user.primary_pet_id == pet.id:
+                user.primary_pet_id = None
 
     async def pet_delete_all_for_owner(session, app_user_id):
         owned_ids = {pet.id for pet in store.pets if pet.app_user_id == app_user_id}
@@ -645,14 +741,138 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_repo, "list_for_owner_for_update", pet_list_for_owner
     )
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
+    monkeypatch.setattr(pet_repo, "get_accessible", pet_get_accessible)
+    monkeypatch.setattr(pet_repo, "count_accessible", pet_count_accessible)
+    monkeypatch.setattr(pet_repo, "get_by_id_for_update", pet_get_by_id_for_update)
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
+    monkeypatch.setattr(pet_repo, "accessible_ids", pet_accessible_ids)
+    monkeypatch.setattr(pet_repo, "list_accessible", pet_list_accessible)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
     monkeypatch.setattr(pet_repo, "names_by_ids", pet_names_by_ids)
+    monkeypatch.setattr(pet_repo, "owners_by_ids", pet_owners_by_ids)
     monkeypatch.setattr(pet_repo, "add", pet_add)
     monkeypatch.setattr(pet_repo, "delete", pet_delete)
     monkeypatch.setattr(pet_repo, "delete_all_for_owner", pet_delete_all_for_owner)
+
+    # -- pet_members / pet_invites (공동 돌봄, docs/co-care.md §3) ---------
+    async def member_list_members(session, pet_id):
+        return [uid for pid, uid in store.pet_members if pid == pet_id]
+
+    async def member_is_member(session, pet_id, app_user_id):
+        # 진짜와 같게 **대표도 True 입니다** — 구성원은 대표 ∪ 돌보미입니다.
+        owner = next((p.app_user_id for p in store.pets if p.id == pet_id), None)
+        if owner == app_user_id:
+            return True
+        return (pet_id, app_user_id) in store.pet_members
+
+    async def member_members_in(session, pairs):
+        # `member_is_member` 의 목록판 — **대표 여부는 안 봅니다**(진짜와 같습니다,
+        # `pet_owners_by_ids` 가 따로 압니다). `actor_labels` 가 씁니다 (Task 19).
+        wanted = set(pairs)
+        return {row for row in store.pet_members if row in wanted}
+
+    async def member_count_members(session, pet_id):
+        # 진짜와 같게 **대표를 포함해서** 셉니다.
+        return sum(1 for pid, _ in store.pet_members if pid == pet_id) + 1
+
+    def member_add(session, pet_id, app_user_id):
+        # `pet_members` 의 PK `(pet_id, app_user_id)` 를 흉내 냅니다. 진짜 DB 는 flush 에서
+        # IntegrityError 를 냅니다 — `admin_create` 의 `admin_users_login_id_key` 대역과
+        # 같은 요령입니다. 이게 없으면 `accept_invite` 의 `is_member()` 조기 반환이
+        # 지워져도 이 자리가 조용히 중복 행을 쌓아 테스트가 그 회귀를 못 잡습니다.
+        if (pet_id, app_user_id) in store.pet_members:
+            raise IntegrityError("pet_members_pkey", None, Exception())
+        store.pet_members.append((pet_id, app_user_id))
+        return (pet_id, app_user_id)
+
+    async def member_remove(session, pet_id, app_user_id):
+        before = len(store.pet_members)
+        store.pet_members = [
+            row for row in store.pet_members if row != (pet_id, app_user_id)
+        ]
+        return before - len(store.pet_members)
+
+    async def member_get_invite_by_hash(session, token_hash):
+        return next(
+            (i for i in store.pet_invites if i.token_hash == token_hash), None
+        )
+
+    async def member_count_valid_invites(session, pet_id, now):
+        # 수락된(영수증) 행은 뺍니다 — repositories/pet_member.py 의 진짜 쿼리와 같은 규칙.
+        return sum(
+            1
+            for i in store.pet_invites
+            if i.pet_id == pet_id and i.expires_at > now and i.accepted_by is None
+        )
+
+    def member_add_invite(session, *, pet_id, invited_by, token_hash, expires_at):
+        invite = FakeInvite(
+            pet_id=pet_id,
+            invited_by=invited_by,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        store.pet_invites.append(invite)
+        return invite
+
+    async def member_delete_invite(session, invite_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [i for i in store.pet_invites if i.id != invite_id]
+        return before - len(store.pet_invites)
+
+    async def member_delete_expired_invites(session, pet_id, now):
+        before = len(store.pet_invites)
+        store.pet_invites = [
+            i
+            for i in store.pet_invites
+            if not (i.pet_id == pet_id and i.expires_at <= now)
+        ]
+        return before - len(store.pet_invites)
+
+    async def member_delete_invites_for_pet(session, pet_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [i for i in store.pet_invites if i.pet_id != pet_id]
+        return before - len(store.pet_invites)
+
+    async def member_delete_invite_for_pet(session, pet_id, invite_id):
+        before = len(store.pet_invites)
+        store.pet_invites = [
+            i for i in store.pet_invites if not (i.id == invite_id and i.pet_id == pet_id)
+        ]
+        return before - len(store.pet_invites)
+
+    async def member_list_invites(session, pet_id):
+        return sorted(
+            (i for i in store.pet_invites if i.pet_id == pet_id),
+            key=lambda i: (i.created_at, i.id),
+        )
+
+    monkeypatch.setattr(pet_member_repo, "list_members", member_list_members)
+    monkeypatch.setattr(pet_member_repo, "is_member", member_is_member)
+    monkeypatch.setattr(pet_member_repo, "members_in", member_members_in)
+    monkeypatch.setattr(pet_member_repo, "count_members", member_count_members)
+    monkeypatch.setattr(pet_member_repo, "add", member_add)
+    monkeypatch.setattr(pet_member_repo, "remove", member_remove)
+    monkeypatch.setattr(
+        pet_member_repo, "get_invite_by_hash", member_get_invite_by_hash
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "count_valid_invites", member_count_valid_invites
+    )
+    monkeypatch.setattr(pet_member_repo, "add_invite", member_add_invite)
+    monkeypatch.setattr(pet_member_repo, "delete_invite", member_delete_invite)
+    monkeypatch.setattr(
+        pet_member_repo, "delete_expired_invites", member_delete_expired_invites
+    )
+    monkeypatch.setattr(pet_member_repo, "list_invites", member_list_invites)
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invite_for_pet", member_delete_invite_for_pet
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invites_for_pet", member_delete_invites_for_pet
+    )
 
     # D-043 gait 행은 별도 focused tests 가 대역을 넣습니다. 일반 pet/auth 테스트에는
     # 보행 기록이 없으므로 빈 잠금 결과를 돌려 storage 설정과 무관하게 둡니다.
@@ -765,11 +985,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             # naive 시각을 넣은 옛 산책 대역 — 하루 창과 비교할 수 없으면 안 센다.
             return False
 
-    def _care_between(app_user_id, pet_id, start, end):
+    def _care_between(_app_user_id, pet_id, start, end):
+        # 진짜와 같게 **actor 로 안 거릅니다** — 돌봄 기록은 강아지 것이라, 사람으로 거르면
+        # 다른 보호자가 적은 줄만 빠집니다 (docs/co-care.md §2).
         return [
             e for e in store.care_events
-            if e.app_user_id == app_user_id and e.pet_id == pet_id
-            and _in_window(e.occurred_at, start, end)
+            if e.pet_id == pet_id and _in_window(e.occurred_at, start, end)
         ]
 
     async def care_list_between(session, app_user_id, pet_id, start, end):
@@ -784,16 +1005,47 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             counts[e.kind] = counts.get(e.kind, 0) + 1
         return counts
 
-    async def walk_count_for_pet_between(session, app_user_id, pet_id, start, end):
+    async def walk_count_for_pet_between(session, _app_user_id, pet_id, start, end):
+        # 진짜와 같게 **소유자 조건이 없습니다** — 부르는 쪽이 이미 접근 권한을 봤고,
+        # 여기서 다시 사람으로 거르면 다른 보호자의 산책만 빠집니다 (docs/co-care.md §2).
         return sum(
             1 for w in store.walks
-            if w.app_user_id == app_user_id and pet_id in w.pet_ids
-            and _in_window(w.started_at, start, end)
+            if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
         )
 
     monkeypatch.setattr(care_repo, "list_between", care_list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
+
+    # -- vet visits (#353 Task 7) --------------------------------------------
+    # 비서의 최근 진료비 요약(`services/vet_spend_context`)이 `active_dog_id` 요청마다
+    # 읽는 둘. 정렬 규칙은 진짜 리포지토리(최근 먼저)와 같습니다. `test_vet_visits.py` 는
+    # 이 대역을 안 씁니다 — 그 파일은 실제 `select()` 를 해석하는 자기만의 얇은 세션
+    # 대역을 씁니다(그 파일 머리말).
+    def _vet_between(app_user_id, pet_id, start, end):
+        return [
+            v for v in store.vet_visits
+            if v.app_user_id == app_user_id and v.pet_id == pet_id
+            and start <= v.visited_on <= end
+        ]
+
+    async def vet_list_between(session, app_user_id, pet_id, start, end):
+        # 진짜 리포지토리와 같은 순서: visited_on DESC, id ASC. 튜플째로 reverse=True
+        # 하면 id 까지 뒤집혀 같은 날 두 건일 때 순서가 갈린다 — id 오름차순으로 먼저
+        # 정렬한 뒤 visited_on 만 내림차순으로 다시 정렬한다(안정 정렬이라 동률의
+        # 상대 순서가 유지된다).
+        rows = sorted(_vet_between(app_user_id, pet_id, start, end), key=lambda v: v.id)
+        rows.sort(key=lambda v: v.visited_on, reverse=True)
+        return rows
+
+    async def vet_sum_by_reason(session, app_user_id, pet_id, start, end):
+        totals: dict[str, int] = {}
+        for v in _vet_between(app_user_id, pet_id, start, end):
+            totals[v.reason_code] = totals.get(v.reason_code, 0) + v.total_krw
+        return totals
+
+    monkeypatch.setattr(vet_repo, "list_between", vet_list_between)
+    monkeypatch.setattr(vet_repo, "sum_by_reason", vet_sum_by_reason)
 
     # -- chats -------------------------------------------------------------
     def active_sessions(app_user_id, pet_id):
@@ -806,9 +1058,15 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
         return sorted(mine, key=lambda row: (row.last_message_at, row.id), reverse=True)
 
-    async def get_owned_pet_id(session, app_user_id, pet_id):
+    async def get_accessible_pet_id(session, app_user_id, pet_id):
+        # 진짜와 같게 **구성원(대표 ∪ 돌보미)** 입니다 (docs/co-care.md §2).
+        ids = _member_pet_ids(app_user_id)
         return next(
-            (p.id for p in store.pets if p.id == pet_id and p.app_user_id == app_user_id),
+            (
+                p.id
+                for p in store.pets
+                if p.id == pet_id and (p.app_user_id == app_user_id or p.id in ids)
+            ),
             None,
         )
 
@@ -857,6 +1115,21 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             and turn.processing_status in {"processing", "completed"}
         ]
         return sorted(rows, key=lambda row: (row.created_at, row.id))
+
+    async def list_recent_completed_turns(session, session_id, *, limit):
+        """진짜와 같은 계약: completed 만, 최신 `limit`개, **오래된 순**으로 반환한다.
+
+        진짜(`repositories/chat.py`)는 `ORDER BY created_at DESC, id DESC LIMIT` 한 뒤
+        뒤집는다 — 여기서도 같은 두 단계(자르고 나서 뒤집기)를 거쳐야, 가짜와 DB 가
+        같은 자리에서 잘라낸다(가장 오래된 것부터 버림)는 것을 이 페이크가 보장한다.
+        """
+        rows = [
+            turn
+            for turn in store.chat_turns
+            if turn.session_id == session_id and turn.processing_status == "completed"
+        ]
+        newest_first = sorted(rows, key=lambda row: (row.created_at, row.id), reverse=True)
+        return list(reversed(newest_first[:limit]))
 
     async def get_turn_by_client_id(session, session_id, client_message_id):
         return next(
@@ -1031,8 +1304,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         row.last_message_at = store.tick()
         row.agent_categories = categories
 
-    monkeypatch.setattr(chat_repo, "get_owned_pet_id", get_owned_pet_id)
-    monkeypatch.setattr(chat_repo, "lock_owned_pet", get_owned_pet_id)
+    monkeypatch.setattr(chat_repo, "get_accessible_pet_id", get_accessible_pet_id)
+    monkeypatch.setattr(chat_repo, "lock_accessible_pet", get_accessible_pet_id)
     monkeypatch.setattr(chat_repo, "get_owned_session", get_owned_session)
     monkeypatch.setattr(chat_repo, "get_owned_session_for_update", get_owned_session)
     monkeypatch.setattr(chat_repo, "get_draft", get_draft)
@@ -1045,6 +1318,9 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(chat_repo, "get_owned_turn", get_owned_turn)
     monkeypatch.setattr(chat_repo, "list_capacity_turns", list_capacity_turns)
     monkeypatch.setattr(chat_repo, "list_turns", list_turns)
+    monkeypatch.setattr(
+        chat_repo, "list_recent_completed_turns", list_recent_completed_turns
+    )
     monkeypatch.setattr(chat_repo, "add_turn", add_turn)
     monkeypatch.setattr(chat_repo, "complete_turn_if_processing", complete_turn)
     monkeypatch.setattr(chat_repo, "fail_turn_if_processing", fail_turn)
@@ -1104,6 +1380,63 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
         return rows[:limit]
 
+    def _screening_accessible_pet_ids(app_user_id):
+        # `pet_repo.member_condition` 의 대역과 같은 모양입니다 (대표 ∪ 돌보미).
+        return {
+            p.id
+            for p in store.pets
+            if p.app_user_id == app_user_id
+        } | {pid for pid, uid in store.pet_members if uid == app_user_id}
+
+    async def screening_get_accessible(session, app_user_id, record_id):
+        # 진짜와 같게 **창작자이거나, 강아지에 붙었고 내가 그 아이의 구성원**입니다.
+        # `pet_id IS NULL` 인 개인 기록은 아무 구성원 집합에도 안 걸려 창작자만입니다.
+        ids = _screening_accessible_pet_ids(app_user_id)
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id
+                and (r.app_user_id == app_user_id or r.pet_id in ids)
+            ),
+            None,
+        )
+
+    async def screening_list_accessible(
+        session, app_user_id, *, pet_id=None, before=None, limit=50
+    ):
+        ids = _screening_accessible_pet_ids(app_user_id)
+        rows = [
+            r
+            for r in store.screenings
+            if r.app_user_id == app_user_id or r.pet_id in ids
+        ]
+        if pet_id is not None:
+            rows = [r for r in rows if r.pet_id == pet_id]
+        rows.sort(key=lambda r: (r.created_at, r.id), reverse=True)
+        if before is not None:
+            rows = [r for r in rows if (r.created_at, r.id) < (before.created_at, before.id)]
+        return rows[:limit]
+
+    async def screening_get_deletable(session, app_user_id, record_id, *, for_update=False):
+        # 진짜와 같게 **창작자 또는 그 아이의 대표**입니다 — 구성원 전체가 아닙니다
+        # (docs/co-care.md §2, care_event 의 get_deletable 과 같은 모양).
+        def _pet_owner(pet_id):
+            return next((p.app_user_id for p in store.pets if p.id == pet_id), None)
+
+        return next(
+            (
+                r
+                for r in store.screenings
+                if r.id == record_id
+                and (
+                    r.app_user_id == app_user_id
+                    or (r.pet_id is not None and _pet_owner(r.pet_id) == app_user_id)
+                )
+            ),
+            None,
+        )
+
     async def screening_find_by_storage_key(session, storage_key, *, status=None):
         # 진짜와 같게 **소유자 조건이 없습니다** — bridge 는 인증 헤더를 안 받고
         # "backend 가 발급한 키인가" 만 봅니다.
@@ -1130,7 +1463,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(screening_repo, "add", screening_add)
     monkeypatch.setattr(screening_repo, "get_owned", screening_get_owned)
+    monkeypatch.setattr(screening_repo, "get_accessible", screening_get_accessible)
     monkeypatch.setattr(screening_repo, "list_for_owner", screening_list_for_owner)
+    monkeypatch.setattr(screening_repo, "list_accessible", screening_list_accessible)
+    monkeypatch.setattr(screening_repo, "get_deletable", screening_get_deletable)
     monkeypatch.setattr(screening_repo, "find_by_storage_key", screening_find_by_storage_key)
     monkeypatch.setattr(
         screening_repo, "list_for_owner_for_update", screening_list_for_owner_for_update

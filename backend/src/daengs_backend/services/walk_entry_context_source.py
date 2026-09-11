@@ -20,6 +20,8 @@ class Collected:
     payload: dict | None = None
     retrieved_at: str | None = None
     retryable: bool = False
+    provider: str | None = None
+    operation: str | None = None
 
 
 def digest(value):
@@ -79,8 +81,16 @@ def projection(body):
 
 
 async def collect(tag, content, *, client=None):
-    if content.get("location") is None:
+    pin = content.get("pin")
+    if pin and pin["state"] == "provisional":
+        return Collected("not_requested", "pin_not_final")
+    point = pin.get("point") if pin else content.get("location")
+    if point is None:
         return Collected("not_requested", "no_location")
+    if tag in {"space.address", "space.park", "space.commerce", "space.river"}:
+        from daengs_backend.services.walk_public_context import collect_public
+
+        return await collect_public(tag, point, pin)
     if tag != "space.facility":
         return Collected("not_requested", "provider_not_connected")
     if client is None:
@@ -88,7 +98,6 @@ async def collect(tag, content, *, client=None):
             return await collect(tag, content, client=opened)
     captured = datetime.now(UTC).isoformat()
     try:
-        point = content["location"]
         response = await client.post(
             settings.place_search_base_url.rstrip("/") + "/v2/places/search",
             json={
@@ -102,6 +111,10 @@ async def collect(tag, content, *, client=None):
         )
         response.raise_for_status()
         value = projection(response.json())
+        if pin and value.payload is not None:
+            value.payload["location_basis"] = pin["method"]
+            value.payload["uncertainty_m"] = pin.get("uncertainty_m")
+            value.payload["uncertainty_basis"] = pin.get("uncertainty_basis")
         return Collected(value.status, value.reason, value.payload, captured)
     except httpx.HTTPStatusError as exc:
         code = exc.response.status_code

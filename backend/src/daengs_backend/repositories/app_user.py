@@ -8,6 +8,7 @@ commit 은 하지 않습니다. 트랜잭션 경계는 services 가 잡습니다
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, select, tuple_
@@ -24,6 +25,7 @@ __all__ = [
     "get_by_kakao_id",
     "is_nickname_taken",
     "list_page",
+    "nicknames_by_ids",
     "search_by_nickname",
 ]
 
@@ -48,6 +50,21 @@ async def get_active_for_update(
         .with_for_update()
     )
     return await session.scalar(stmt)
+
+
+async def nicknames_by_ids(
+    session: AsyncSession, app_user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, str | None]:
+    """id → 닉네임. **암호화 컬럼이 아니라 평문 `nickname` 이라 그대로 읽습니다.**
+
+    구성원 목록·케어 로그의 `actor` 라벨이 씁니다. 여기는 조회만 하고, "지금도
+    구성원인가"는 부르는 쪽(`services/pet_member.py`)이 따로 검사합니다 — 탈퇴자의
+    새 닉네임이 옛 기록에 새는 것을 막는 규칙이 그 검사입니다.
+    """
+    if not app_user_ids:
+        return {}
+    stmt = select(AppUser.id, AppUser.nickname).where(AppUser.id.in_(list(app_user_ids)))
+    return {row.id: row.nickname for row in await session.execute(stmt)}
 
 
 async def get_by_kakao_id(session: AsyncSession, kakao_id: int) -> AppUser | None:

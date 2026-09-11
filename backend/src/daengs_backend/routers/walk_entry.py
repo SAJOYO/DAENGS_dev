@@ -23,6 +23,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def translate(operation):
+    from daengs_backend.services.walk_entry_v2 import EntryUpgradeRequired
+
     try:
         return await operation
     except service.EntryNotFound:
@@ -31,6 +33,8 @@ async def translate(operation):
         raise HTTPException(409, {"code": "walk_entry_conflict", "message": str(exc)}) from None
     except service.EntryInvalid as exc:
         raise HTTPException(422, str(exc)) from None
+    except EntryUpgradeRequired:
+        raise HTTPException(426, {"code": "walk_entry_upgrade_required"}) from None
 
 
 @router.post("/record-profile/query", response_model=RecordProfileResponse)
@@ -43,7 +47,11 @@ async def record_profile(
 
 
 @router.get("/{walk_id}/entries", response_model=EntryList)
-async def entries(walk_id: uuid.UUID, user: CurrentAppUser, session: Session):
+async def entries(
+    walk_id: uuid.UUID,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_snapshot_session)],
+):
     return EntryList(
         entries=await translate(service.list_entries(session, user.app_user_id, walk_id))
     )

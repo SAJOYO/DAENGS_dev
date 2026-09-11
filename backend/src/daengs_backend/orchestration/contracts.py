@@ -438,6 +438,10 @@ class ConversationContext(ContractModel):
 
     relation: TurnRelation
     referenced_original_request: str | None = None
+    #: 참조한 턴에서 **비서가 실제로 답한 내용** — 사용자가 뭘 물었는지만으로는 "아까 답을
+    #: 다시 설명해줘" 류를 풀 수 없다는 실사용 실패에서 추가됐다 (followup-answer-text
+    #: brief). `resolver.truncate_assistant` 를 거친 값만 들어온다.
+    referenced_assistant_answer: str | None = None
     standalone_query: str | None = None
     pending_question: str | None = None
     pending_missing_axes: list[ObservationAxis] = Field(default_factory=list)

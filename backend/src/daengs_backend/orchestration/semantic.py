@@ -257,8 +257,13 @@ def render_conversation_context(resolved: ConversationContext) -> str:
     바꾸자 고쳐짐), `resolver.build_turn_resolver_prompt` 와 `general.build_general_prompt`
     가 이미 같은 이유로 각자의 질의 줄을 맨 뒤에 둔다.
 
-    두 필드는 이름 자체에 구분을 박아 둔다 — 잘못 읽으면 건강 어시스턴트에서 실제 피해로
+    필드들은 이름 자체에 구분을 박아 둔다 — 잘못 읽으면 건강 어시스턴트에서 실제 피해로
     이어지기 때문이다:
+    - `referenced_original_request` 는 참조한 턴에서 **사용자가 물은 말**이다.
+    - `referenced_turn_the_assistant_actually_answered` 는 그 턴에서 **비서가 실제로
+      답한 내용**이다 (followup-answer-text). 이 둘을 섞으면 안 된다 — "아까 말한 거
+      다시 설명해줘" 가 이력에 반복돼 있으면 사용자가 물은 말만으로는 그 질문 자체가
+      순환해서 무의미해지고, 비서가 실제로 뭐라 답했는지가 있어야 다시 풀어 쓸 수 있다.
     - `standalone_query` 는 모델이 다시 쓴 **작업용 재진술**이다. 사용자가 실제로 한 말은
       `USER_QUERY:` 에만 있으므로, 이 값을 사용자의 발화로 착각하면 안 된다.
     - `pending_missing_axes` 는 어시스턴트가 **물어본** 관찰 항목이지 반려견에게서
@@ -268,6 +273,7 @@ def render_conversation_context(resolved: ConversationContext) -> str:
     payload = {
         "relation": str(resolved.relation),
         "referenced_original_request": resolved.referenced_original_request,
+        "referenced_turn_the_assistant_actually_answered": resolved.referenced_assistant_answer,
         "standalone_query_is_a_model_restatement_not_the_users_words": resolved.standalone_query,
         "pending_question_previously_asked_by_the_assistant": resolved.pending_question,
         "pending_axes_the_assistant_asked_about_not_dog_observations": [

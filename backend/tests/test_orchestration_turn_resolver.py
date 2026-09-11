@@ -195,6 +195,48 @@ def test_conversation_context_of_with_no_resolution_is_none() -> None:
     assert conversation_context_of(None, None) is None
 
 
+def test_conversation_context_of_carries_the_referenced_assistant_answer_verbatim() -> None:
+    """`conversation_context_of` 는 `ResolvedTurn.referenced_assistant_answer` 를 그대로
+    옮기기만 한다 — 이미 `validate_resolved_turn` 이 잘랐으므로 여기서 다시 자르지 않는다.
+    이 필드를 옮기는 줄을 지우면(`referenced_assistant_answer=` 인자를 빠뜨리면) 이 테스트가
+    실패한다."""
+    resolved = ResolvedTurn(
+        relation=TurnRelation.REPEAT,
+        current_query="아까 말한 거 다시 설명해줘",
+        referenced_turn_id=uuid.uuid4(),
+        referenced_original_request="아까 말한 거 다시 설명해줘",
+        referenced_assistant_answer="소형견 저알레르기 사료를 하루 두 번 급여하세요.",
+        resolution_confidence=0.85,
+    )
+    context = conversation_context_of(resolved, None)
+    assert context is not None
+    assert (
+        context.referenced_assistant_answer
+        == "소형견 저알레르기 사료를 하루 두 번 급여하세요."
+    )
+
+
+def test_conversation_context_of_pending_anchor_has_no_referenced_answer() -> None:
+    """수용 케이스 — `relation=NEW` 이거나 대기 되묻기 앵커로 잡힌 turn 은 참조 턴이 없으므로
+    `referenced_assistant_answer` 도 비어 있어야 한다(기존 유출 방지 게이트와 동일). 이
+    필드에 아무 조건 없이 값을 채우면(예: pending.question 을 여기에 잘못 옮기면) 실패한다."""
+    pending = PendingClarification(
+        turn_id=uuid.uuid4(),
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE],
+    )
+    resolved = ResolvedTurn(
+        relation=TurnRelation.FOLLOW_UP,
+        current_query="밥은 먹는데 계속 누워 있어",
+        pending_clarification_id=pending.turn_id,
+        pending_missing_axes=[ObservationAxis.APPETITE],
+        resolution_confidence=0.9,
+    )
+    context = conversation_context_of(resolved, pending)
+    assert context is not None
+    assert context.referenced_assistant_answer is None
+
+
 def test_assistant_text_is_truncated_with_an_ellipsis() -> None:
     long = "가" * 500
     out = truncate_assistant(long)
@@ -303,6 +345,53 @@ def test_referenced_index_becomes_the_real_turn_id() -> None:
     assert resolved.context_used == [turns[0].turn_id]
     # 원문은 모델이 만든 표현으로 대체되지 않는다.
     assert resolved.current_query == "그거 얼마나 자주 해?"
+
+
+def test_referenced_assistant_answer_is_truncated_not_the_raw_db_text() -> None:
+    """followup-answer-text — `"아까 말한 거 다시 설명해줘"` 가 이력에 이미 있는 어지러운
+    케이스(브리프 실측)를 재현한다. `referenced_original_request` 가 "아까 말한 거 다시
+    설명해줘" 로 순환해도, 비서가 실제로 답한 내용이 실리면 General 이 그것을 다시 풀어
+    쓸 수 있다. `PriorTurn.assistant` 는 `fit_candidates` 를 거쳐도 안 잘리므로(DB 상한
+    8,000자) 여기서 400자로 잘라야 한다 — `validate_resolved_turn` 이 `truncate_assistant`
+    를 거치지 않고 `referenced.assistant` 를 그대로 옮기면 이 테스트가 실패한다.
+    """
+    long_answer = "사료는 하루 두 번, 소형견 저알레르기 사료를 추천합니다. " * 20
+    assert len(long_answer) > MAX_ASSISTANT_CHARS
+    turns = [
+        _turn("아까 말한 거 다시 설명해줘", "죄송해요, 무엇을 다시 설명해 드릴까요?"),
+        _turn("우리 강아지 사료 추천해줘. 소형견이고 알레르기가 있어", long_answer),
+        _turn("아까 말한 거 다시 설명해줘", "죄송해요, 무엇을 다시 설명해 드릴까요?"),
+    ]
+    raw = {
+        "relation": "REPEAT",
+        "referenced_index": 2,
+        "standalone_query": "이전 대화에서 언급했던 강아지 사료 추천 내용을 다시 설명해줘",
+        "resolution_confidence": 0.85,
+    }
+    resolved = validate_resolved_turn(
+        raw, query="아까 말한 거 다시 설명해줘", candidates=turns, pending=None
+    )
+    assert resolved is not None
+    assert resolved.referenced_assistant_answer == truncate_assistant(long_answer)
+    assert resolved.referenced_assistant_answer is not None
+    assert len(resolved.referenced_assistant_answer) == MAX_ASSISTANT_CHARS + 1
+    assert resolved.referenced_assistant_answer.endswith("…")
+    # 자른 것이지 원문 전체가 아니다.
+    assert resolved.referenced_assistant_answer != long_answer
+
+
+def test_no_referenced_index_leaves_the_assistant_answer_empty() -> None:
+    """참조가 없으면(REPEAT/FOLLOW_UP 이 아무 후보도 안 짚으면) 답도 비어 있어야 한다 —
+    `validate_resolved_turn` 이 `referenced` 가 `None` 인데도 값을 채우면 이 테스트가
+    실패한다."""
+    resolved = validate_resolved_turn(
+        {"relation": "NEW", "referenced_index": None, "resolution_confidence": 1.0},
+        query="산책 코스 추천해줘",
+        candidates=(),
+        pending=None,
+    )
+    assert resolved is not None
+    assert resolved.referenced_assistant_answer is None
 
 
 def test_malformed_output_is_rejected_without_surfacing_it() -> None:

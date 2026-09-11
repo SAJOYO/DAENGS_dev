@@ -120,6 +120,13 @@ class ResolvedTurn(ContractModel):
     referenced_turn_id: uuid.UUID | None = None
     pending_clarification_id: uuid.UUID | None = None
     referenced_original_request: str | None = None
+    #: 참조한 턴에서 **비서가 실제로 답한 내용** (followup-answer-text brief). 사용자가
+    #: 뭘 물었는지(`referenced_original_request`)만으로는 "아까 답을 다시 풀어써 줘" 류를
+    #: General 이 처음부터 다시 풀 수 없다 — 이력이 어지러우면(같은 질문이 반복되면)
+    #: 참조 원요청 자체가 순환해 무의미해지는 실패가 실사용에서 관측됐다. 반드시
+    #: `truncate_assistant` 를 거친다 — DB 상한이 8,000자라 안 자르면 통째로 프롬프트에
+    #: 실린다.
+    referenced_assistant_answer: str | None = None
     pending_missing_axes: list[ObservationAxis] = Field(default_factory=list)
     #: 모델이 만든 추론용 표현. **사실이 아니다** — 반려견 기록으로 저장하지 않는다.
     standalone_query: str | None = None
@@ -191,6 +198,7 @@ def conversation_context_of(
     return ConversationContext(
         relation=resolved.relation,
         referenced_original_request=resolved.referenced_original_request,
+        referenced_assistant_answer=resolved.referenced_assistant_answer,
         standalone_query=resolved.standalone_query,
         pending_question=pending.question if anchored else None,
         pending_missing_axes=resolved.pending_missing_axes if anchored else [],
@@ -381,6 +389,9 @@ def validate_resolved_turn(
         referenced_turn_id=referenced.turn_id if referenced else None,
         pending_clarification_id=pending.turn_id if anchored_to_pending else None,
         referenced_original_request=referenced.user if referenced else None,
+        referenced_assistant_answer=(
+            truncate_assistant(referenced.assistant) if referenced else None
+        ),
         pending_missing_axes=(
             list(pending.missing_axes) if anchored_to_pending else []
         ),

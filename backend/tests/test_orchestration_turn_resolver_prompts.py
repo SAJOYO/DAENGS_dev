@@ -330,3 +330,39 @@ def test_render_reflects_all_five_fields() -> None:
     assert "산책 말고 사료 급여량 알려줘" in block
     assert "식욕은 어땠나요?" in block
     assert "APPETITE" in block and "ENERGY" in block
+
+
+def test_referenced_assistant_answer_is_rendered_under_a_key_distinct_from_the_users_words() -> (
+    None
+):
+    """followup-answer-text — 참조한 턴에서 **비서가 답한 내용**이 실제로 렌더된다. 키
+    이름이 `referenced_original_request`(사용자 발화)와 헷갈리면 실제 피해로 이어진다는
+    것이 브리프의 요점이므로, 값뿐 아니라 그 값이 실린 키 이름까지 확인한다.
+    `render_conversation_context` 가 `referenced_assistant_answer` 를 payload 조립에서
+    빠뜨리면(혹은 `referenced_original_request` 키 아래에 잘못 실으면) 이 테스트가 실패한다.
+    """
+    resolved = _follow_up(
+        referenced_assistant_answer="소형견 저알레르기 사료를 하루 두 번 급여하세요.",
+    )
+    block = render_conversation_context(resolved)
+    assert '"referenced_turn_the_assistant_actually_answered"' in block
+    assert "소형견 저알레르기 사료를 하루 두 번 급여하세요." in block
+    payload = json.loads(block.split("CONVERSATION: ", 1)[1])
+    assert (
+        payload["referenced_turn_the_assistant_actually_answered"]
+        == "소형견 저알레르기 사료를 하루 두 번 급여하세요."
+    )
+    # 사용자 발화 칸과 값이 섞이지 않는다.
+    assert payload["referenced_original_request"] == "사료 추천해줘"
+
+
+def test_referenced_assistant_answer_absent_renders_as_null_not_dropped() -> None:
+    """참조가 없는 새 주제 turn 은 이 칸이 `null` 로 나가야 한다 — 키 자체가 사라지면
+    General 프롬프트의 "맥락이 없으면 바이트 동일" 불변식과는 별개로, 이 칸을 읽는 규칙이
+    깨진 JSON 구조를 만나게 된다. `render_conversation_context` 의 payload 딕셔너리에서
+    이 키를 빼면 이 테스트가 실패한다."""
+    resolved = ConversationContext(relation=TurnRelation.NEW)
+    block = render_conversation_context(resolved)
+    payload = json.loads(block.split("CONVERSATION: ", 1)[1])
+    assert "referenced_turn_the_assistant_actually_answered" in payload
+    assert payload["referenced_turn_the_assistant_actually_answered"] is None

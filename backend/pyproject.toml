@@ -78,14 +78,14 @@ agent = [
 # **리눅스를 안 적으면 CUDA 판이 온다.** PyPI 의 기본 torch 휠은 NVIDIA 런타임을 동봉하고
 # 있어서, 마커가 win32 뿐이면 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받는다. D-021 로
 # 서버에 torch 가 생기면서 실제로 물리는 자리가 됐다.
-# `ultralytics` 가 `opencv-python`(GUI 빌드)을 **필수 의존성으로** 끌고 옵니다.
-# 그대로 두면 gait 그룹에 GUI 판과 headless 판이 **둘 다** 깔리고, 둘은 같은 `cv2`
-# 네임스페이스를 다퉈서 어느 쪽이 로드될지 설치 순서에 달립니다. GUI 판이 이기면
-# 컨테이너에서 `ImportError: libxcb.so.1` 로 죽습니다.
+# `rtmlib` 이 `opencv-python`(GUI 빌드)을 **필수 의존성으로** 끌고 옵니다 (6단계 전에는
+# `ultralytics` 도 그랬습니다). 그대로 두면 gait 그룹에 GUI 판과 headless 판이 **둘 다**
+# 깔리고, 둘은 같은 `cv2` 네임스페이스를 다퉈서 어느 쪽이 로드될지 설치 순서에 달립니다.
+# GUI 판이 이기면 컨테이너에서 `ImportError: libxcb.so.1` 로 죽습니다.
 #
 # override 로 headless 를 강제합니다 — 이 서비스는 창을 띄우지 않으므로 API 는 같습니다.
-# ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 ultralytics
-#   가 다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
+# ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 rtmlib 이
+#   다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
 [tool.uv]
 # opencv 는 **headless 만** 들어옵니다 — GUI 판(opencv-python · opencv-contrib-python)은 어느 그룹이
 # 끌고 와도 이 override 로 막힙니다. rtmlib 이 GUI 판을 요구하는데 slim 컨테이너에는 libxcb 가

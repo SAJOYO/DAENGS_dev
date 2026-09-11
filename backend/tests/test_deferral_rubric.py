@@ -199,3 +199,16 @@ def test_confusion_has_ask_rates() -> None:
     c = confusion(["correct_answer"] * 4 + ["over_ask"] + ["correct_ask"] * 3 + ["under_ask"] * 2)
     assert c["over_ask_rate"] == 0.2 and c["under_ask_rate"] == 0.4
     assert c["over_refusal_rate"] == 0.0
+
+
+def test_handoff_is_a_move_of_its_own_and_counts_as_deferring() -> None:
+    cell = {
+        "status": "HANDOFF",
+        "capabilities": ["handoff:gait"],
+        "results": [],
+        "message": "보행 영상을 등록해 함께 확인해 볼게요.",
+    }
+    assert move_from_cell(cell, None) == ("handoff", None)
+    assert outcome(ask(), "handoff", None) == "over_refusal"  # 상태를 물었는데 보행 판정으로 넘김
+    assert outcome(answer(), "handoff", None) == "over_refusal"
+    assert outcome(defer("diagnosis"), "handoff", None) == "correct_defer"

@@ -94,6 +94,10 @@ from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import ConversationContext
 
 PROMPT_VERSION = "semantic-router-ko-v10"
+#: 대화 맥락이 실린 프롬프트의 핀 (#416 Task 6). `PROMPT_VERSION` 을 안 올리는 것은 의도다 —
+#: 맥락이 없을 때의 몸이 한 글자도 안 바뀌므로, 같은 상수가 두 몸을 가리키면 랩 헤더의
+#: 핀이 거짓말을 한다. `general.py` 가 네 조합에 네 상수를 둔 것과 같은 이유다.
+RESOLVED_PROMPT_VERSION = "semantic-router-ko-v10-resolved"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이
@@ -245,12 +249,49 @@ def routing_metadata(context: dict[str, Any]) -> dict[str, str]:
     return metadata
 
 
+def render_conversation_context(resolved: ConversationContext) -> str:
+    """`ConversationContext` 를 프롬프트 한 블록으로 렌더한다 (#416 Task 6).
+
+    `USER_QUERY:` 바로 앞에만 놓는다 — 맥락을 질의 뒤에 두면 모델이 최신 요청 대신 이전
+    요청에 답하는 퇴행이 실측됐고(사이드카 서비스, 2026-09-10, 102건 중 문제 9/9 가 배치를
+    바꾸자 고쳐짐), `resolver.build_turn_resolver_prompt` 와 `general.build_general_prompt`
+    가 이미 같은 이유로 각자의 질의 줄을 맨 뒤에 둔다.
+
+    두 필드는 이름 자체에 구분을 박아 둔다 — 잘못 읽으면 건강 어시스턴트에서 실제 피해로
+    이어지기 때문이다:
+    - `standalone_query` 는 모델이 다시 쓴 **작업용 재진술**이다. 사용자가 실제로 한 말은
+      `USER_QUERY:` 에만 있으므로, 이 값을 사용자의 발화로 착각하면 안 된다.
+    - `pending_missing_axes` 는 어시스턴트가 **물어본** 관찰 항목이지 반려견에게서
+      **관찰된** 사실이 아니다 (`resolver.py` 의 `PENDING_CLARIFICATION.asked_axes` 와
+      같은 구분, 같은 이유로 키 이름에 "asked" 를 박는다).
+    """
+    payload = {
+        "relation": str(resolved.relation),
+        "referenced_original_request": resolved.referenced_original_request,
+        "standalone_query_is_a_model_restatement_not_the_users_words": resolved.standalone_query,
+        "pending_question_previously_asked_by_the_assistant": resolved.pending_question,
+        "pending_axes_the_assistant_asked_about_not_dog_observations": [
+            str(axis) for axis in resolved.pending_missing_axes
+        ],
+    }
+    instruction = (
+        "CONVERSATION_INSTRUCTION: Use this block to resolve references and to recognize a "
+        "repeat, a correction, or the answer to a pending question. If the current query is "
+        "a new topic, ignore this block."
+    )
+    return (
+        f"{instruction}\n"
+        f"CONVERSATION: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+    )
+
+
 def build_semantic_router_prompt(
     *, query: str, context: dict[str, Any], resolved: ConversationContext | None = None
 ) -> str:
-    """`resolved` 는 받기만 한다 (#416 Task 5). 아직 프롬프트에 안 실리고 `PROMPT_VERSION`
-    도 안 올린다 — 렌더링은 뒤따르는 카드의 몫이다. 지금 이 자리는 시그니처만 먼저 열어서
-    `_payload_for` 가 만드는 `resolved` 값이 여기까지 끊기지 않고 내려오게 하는 것뿐이다.
+    """`resolved` 가 `None` 이면 오늘의 코드 경로를 그대로 탄다 — 문자열을 재조립하지
+    않는다 (#416 Task 6). 그래서 맥락이 안 실리는 요청의 프롬프트는 `PROMPT_VERSION` 을
+    포함해 오늘과 바이트 단위로 같다. `resolved` 가 있을 때만 `RESOLVED_PROMPT_VERSION` 으로
+    바뀌고 `render_conversation_context` 한 블록이 `USER_QUERY:` 바로 앞에 끼어든다.
     """
     if not query.strip():
         raise ValueError("query must not be blank")
@@ -258,12 +299,22 @@ def build_semantic_router_prompt(
     schema = json.dumps(
         SemanticRoutingDecision.model_json_schema(), ensure_ascii=False, sort_keys=True
     )
+    if resolved is None:
+        return (
+            f"PROMPT_VERSION: {PROMPT_VERSION}\n\n"
+            f"{_POLICY}\n\n"
+            f"SEMANTIC_DECISION_JSON_SCHEMA:\n{schema}\n\n"
+            f"INPUT_LOCALE: ko-KR\n"
+            f"ROUTING_METADATA: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)}\n"
+            f"USER_QUERY: {query}\n"
+        )
     return (
-        f"PROMPT_VERSION: {PROMPT_VERSION}\n\n"
+        f"PROMPT_VERSION: {RESOLVED_PROMPT_VERSION}\n\n"
         f"{_POLICY}\n\n"
         f"SEMANTIC_DECISION_JSON_SCHEMA:\n{schema}\n\n"
         f"INPUT_LOCALE: ko-KR\n"
         f"ROUTING_METADATA: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)}\n"
+        f"{render_conversation_context(resolved)}\n"
         f"USER_QUERY: {query}\n"
     )
 
@@ -383,7 +434,8 @@ class GeminiSemanticRouter:
         context: dict[str, Any],
         resolved: ConversationContext | None = None,
     ) -> SemanticRoutingDecision:
-        """`resolved` 는 받아서 프롬프트 빌더로만 넘긴다 — 렌더링은 아직 없다 (#416 Task 5)."""
+        """`resolved` 는 그대로 프롬프트 빌더에 넘긴다 — 렌더링과 버전 분기는
+        `build_semantic_router_prompt` 가 한다 (#416 Task 6)."""
         prompt = build_semantic_router_prompt(query=query, context=context, resolved=resolved)
         for _attempt in range(2):  # O-14: retry exactly once, only on schema failure
             try:
@@ -400,6 +452,7 @@ class GeminiSemanticRouter:
 
 __all__ = [
     "PROMPT_VERSION",
+    "RESOLVED_PROMPT_VERSION",
     "ROUTER_CANDIDATE_COUNT",
     "ROUTER_MAX_OUTPUT_TOKENS",
     "ROUTER_MODEL_ID",
@@ -409,6 +462,7 @@ __all__ = [
     "SemanticRoutingError",
     "SocialIntent",
     "build_semantic_router_prompt",
+    "render_conversation_context",
     "router_generation_config",
     "routing_metadata",
     "validate_semantic_decision",

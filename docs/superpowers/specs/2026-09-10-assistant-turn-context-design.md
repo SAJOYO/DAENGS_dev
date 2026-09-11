@@ -255,15 +255,34 @@ General 도 같습니다. 이 등식은 D-057 ③ / #344 가 `build_general_prom
 
 ### ⑥ `CLARIFY` 응답을 원 요청에 잇는 법 — 이 카드의 핵심 책임 (교체됨)
 
-초판은 "#415 대기로 공란" 이었습니다. **#415 가 계약을 확정해 더는 공란이 아닙니다.**
-확인한 것 (`origin/feat/assistant-ask-mode`):
+초판은 "#415 대기로 공란" 이었습니다. **#415 가 `dev` 에 머지돼(`ce62f417`, 2026-09-11)
+더는 공란이 아닙니다.** 최종본에서 확인한 것:
 
 - #415 는 §7 카드 A 의 **선택지 ①(`CLARIFY` 재사용)** 로 갔습니다. `AssistantStatus` 는
   안 늘어났습니다 — 새 상태를 처리할 클라이언트 변경이 없습니다.
 - `ClarifyRequest` 에 `missing_axes: list[ObservationAxis]` 가 붙었습니다 (`f0625e49`,
   기본 빈 목록, 최대 2).
-- `ObservationAxis` 는 닫힌 목록(`APPETITE` · `ENERGY` · `STOOL` · `VOMIT` · 호흡 ·
-  `MOBILITY` · `OTHER`)이고 D-068 입니다.
+- `ObservationAxis` 는 닫힌 목록(`APPETITE` · `ENERGY` · `STOOL` · `VOMIT` ·
+  `BREATHING` · `MOBILITY` · `OTHER`)이고 D-068 입니다.
+
+**대조에서 나온 것 둘 — 설계가 바뀝니다.**
+
+**(가) `CLARIFY` 생산자가 둘이고, 우리가 잡을 것은 두 번째입니다.** D-068 이 고른 것은
+§7-A 의 ① 그대로가 아니라 **①′ — 되묻기가 사는 곳은 계획이 아니라 집계**입니다.
+General 이 `kind="ask"` 를 내면 `aggregate._general_ask` 가 그것을 `AssistantStatus.CLARIFY`
+로 옮기고, **`RoutePlan.clarify` 는 끝까지 `None`** 입니다 (배타성 검증기 둘을 그대로 세우려고).
+그래서 `pending_clarification_id` 를 `RoutePlan` 에서 찾으면 **영원히 못 찾습니다.**
+저장된 turn 에서 읽어야 합니다.
+
+**(나) 대기 중인 되묻기는 이미 저장돼 있습니다 — 새 테이블도 새 칸도 필요 없습니다.**
+`chat.public_response_of` 가 `response.model_dump(mode="json")` 이라 `clarify.question` ·
+`missing` · `missing_axes` 가 통째로 `chat_turns.public_response` 에 들어갑니다
+(`ObservationAxis` 는 `StrEnum` 이라 문자열로 직렬화됩니다).
+
+그래서 「미해결 되묻기」의 정의가 **한 줄**입니다: **가장 최근 완료 turn 의
+`assistant_status == 'CLARIFY'`**. 뒤에 다른 완료 turn 이 있으면 그 되묻기는 답을 받았거나
+버려진 것이고, 어느 쪽이든 대기가 아닙니다. Place 의 `pending_proposal` 같은 만료·revision
+기계가 필요 없는 이유가 이것입니다 — 우리 대기는 **한 턴짜리**입니다.
 
 잇는 법:
 
@@ -341,7 +360,9 @@ routers/assistant.py     orchestrate 콜백 시그니처 한 줄
         ▼
 services/chat.py         run_persisted_turn 이 예약 TX 안에서 후보를 읽어 넘김
         │                repositories/chat.py list_recent_completed_turns(limit=3)
-        │                                     get_unresolved_clarification(session_id)
+        │                  └ 미해결 되묻기는 그 목록의 **마지막 행**에서 읽는다
+        │                    (assistant_status=='CLARIFY' → public_response['clarify'])
+        │                    새 쿼리도 새 칸도 없다 — ⑥ (나)
         ▼
 orchestration/
   resolver.py  (신규)    TurnRelation · ResolvedTurn · fast path 규칙
@@ -399,8 +420,8 @@ General 넷을 **같은 `v6` 으로 모으는** 것은 지금 셋(`v3`/`v4`/`v5`
 
 ## 7. 측정 — SessionDriver
 
-`#401` 의 하네스에 얹습니다. `drivers.py` 에 `StatelessDriver` 옆으로 `SessionDriver` 를
-더하고 **`collect.py` · `judge.py` · `report.py` 는 안 고칩니다** — 고쳐야 한다면 그것은
+`#401` 의 하네스에 얹습니다 — **이제 `dev` 에 있습니다** (`f1833972`).
+`drivers.py` 에 `StatelessDriver` 옆으로 `SessionDriver` 를 더하고 **`collect.py` · `judge.py` · `report.py` 는 안 고칩니다** — 고쳐야 한다면 그것은
 이음매가 샜다는 신호입니다 (#401 §5 가 약속하는 것).
 
 같이 뒤집는 것:
@@ -408,6 +429,11 @@ General 넷을 **같은 `v6` 으로 모으는** 것은 지금 셋(`v3`/`v4`/`v5`
 - `transcript.PRIOR_TURNS_REACH_INFERENCE` 를 `True` 로. 그 상수 하나가 두 축의 기대 정답이
   0 이라는 근거였습니다.
 - `#401` 리포트가 before 열에 붙이는 「기능 부재」 라벨.
+
+**#415 가 `SessionDriver` 자리를 미리 깔아 뒀습니다.** `drivers._sanitize_clarify` 의
+docstring 이 "`#416` 의 `SessionDriver` 도 이 자리를 그대로 쓴다" 라고 적고 있고, `send()`
+반환에 `clarify` 칸이 이미 있습니다 — 되묻기를 한국어에서 다시 파싱하지 않는 그 화이트리스트를
+그대로 씁니다.
 
 `relation` 정확도는 판정기 없이 셉니다 — 아홉 케이스의 기대 라벨이 값이라 코드로 맞춰
 봅니다. 판정기가 필요한 것은 두 축뿐입니다.

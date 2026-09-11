@@ -6,10 +6,12 @@ from daengs_backend.orchestration.contracts import ObservationAxis
 from daengs_backend.orchestration.resolver import (
     MAX_ASSISTANT_CHARS,
     TURN_RESOLVER_PROMPT_VERSION,
+    GeminiTurnResolver,
     PendingClarification,
     PriorTurn,
     ResolvedTurn,
     TurnRelation,
+    TurnResolutionError,
     build_candidate_block,
     build_turn_resolver_prompt,
     fit_candidates,
@@ -331,3 +333,83 @@ def test_current_query_is_last_with_both_candidates_and_pending() -> None:
     assert candidate_index < query_index
     assert pending_index < query_index
     assert prompt.rstrip().endswith("CURRENT_QUERY: 밥은 먹는데 계속 누워 있어")
+
+
+async def test_resolver_skips_the_model_entirely_on_the_fast_path() -> None:
+    """수용 케이스 1 — 모델 호출 0회."""
+    calls: list[str] = []
+
+    async def _generate(prompt: str) -> object:
+        calls.append(prompt)
+        raise AssertionError("fast path must not call the model")
+
+    resolver = GeminiTurnResolver(generate=_generate)
+    resolved = await resolver.resolve(query="사료 추천해줘", candidates=(), pending=None)
+    assert resolved.relation is TurnRelation.NEW
+    assert calls == []
+
+
+async def test_resolver_returns_the_validated_decision() -> None:
+    turns = [_turn("심장사상충 예방약 먹여야 해?", "네, 보통 한 달에 한 번 투여합니다.")]
+
+    async def _generate(prompt: str) -> object:
+        return {
+            "relation": "FOLLOW_UP",
+            "referenced_index": 1,
+            "standalone_query": "심장사상충 예방약을 얼마나 자주 먹여?",
+            "resolution_confidence": 0.92,
+        }
+
+    resolver = GeminiTurnResolver(generate=_generate)
+    resolved = await resolver.resolve(query="그거 얼마나 자주 해?", candidates=turns, pending=None)
+    assert resolved.relation is TurnRelation.FOLLOW_UP
+    assert resolved.referenced_turn_id == turns[0].turn_id
+
+
+async def test_provider_failure_raises_the_contracted_error() -> None:
+    async def _generate(prompt: str) -> object:
+        raise TimeoutError("provider down")
+
+    resolver = GeminiTurnResolver(generate=_generate)
+    with pytest.raises(TurnResolutionError):
+        await resolver.resolve(query="그거 얼마나 자주 해?", candidates=[_turn("a", "b")], pending=None)
+
+
+async def test_unparseable_output_raises_the_contracted_error() -> None:
+    async def _generate(prompt: str) -> object:
+        return "{nope"
+
+    resolver = GeminiTurnResolver(generate=_generate)
+    with pytest.raises(TurnResolutionError):
+        await resolver.resolve(query="그거 얼마나 자주 해?", candidates=[_turn("a", "b")], pending=None)
+
+
+async def test_resolver_resolves_indices_against_the_fitted_candidate_list() -> None:
+    """§4 — 인덱스는 원본 리스트가 아니라 fit_candidates 를 거친 리스트에 대해 풀린다.
+
+    MAX_CANDIDATE_PAIRS(3) 를 넘는 후보를 넣으면 오래된 쌍이 잘려 나가고, 프롬프트의
+    U1 은 잘린 뒤 리스트의 첫 항목을 가리킨다. 검증도 같은 fitted 리스트를 써야
+    referenced_turn_id 가 실제로 프롬프트가 보여준 턴을 가리킨다.
+    """
+    turns = [
+        _turn("첫 질문", "첫 답"),
+        _turn("둘째 질문", "둘째 답"),
+        _turn("셋째 질문", "셋째 답"),
+        _turn("넷째 질문", "넷째 답"),
+    ]
+    fitted = fit_candidates(turns)
+    assert fitted == turns[1:]  # 가장 오래된 한 쌍이 잘려 나간다
+
+    async def _generate(prompt: str) -> object:
+        assert "첫 질문" not in prompt
+        return {
+            "relation": "FOLLOW_UP",
+            "referenced_index": 1,
+            "standalone_query": "둘째 질문 이어서",
+            "resolution_confidence": 0.9,
+        }
+
+    resolver = GeminiTurnResolver(generate=_generate)
+    resolved = await resolver.resolve(query="그거 다시 알려줘", candidates=turns, pending=None)
+    assert resolved.referenced_turn_id == fitted[0].turn_id
+    assert resolved.referenced_turn_id != turns[0].turn_id

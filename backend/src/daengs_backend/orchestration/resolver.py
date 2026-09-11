@@ -11,19 +11,28 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from functools import lru_cache
+from typing import Any
 
+from langsmith import traceable
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import (
     ContractModel,
     ConversationContext,
     ObservationAxis,
     TurnRelation,
 )
+from daengs_backend.orchestration.semantic import ROUTER_CANDIDATE_COUNT, ROUTER_TEMPERATURE
+
+LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "MAX_ASSISTANT_CHARS",
@@ -33,10 +42,12 @@ __all__ = [
     "TURN_RESOLVER_MODEL_ID",
     "TURN_RESOLVER_PROMPT_VERSION",
     "ConversationContext",
+    "GeminiTurnResolver",
     "PendingClarification",
     "PriorTurn",
     "ResolvedTurn",
     "TurnRelation",
+    "TurnResolutionError",
     "build_candidate_block",
     "build_turn_resolver_prompt",
     "fit_candidates",
@@ -333,3 +344,111 @@ def validate_resolved_turn(
         ambiguity=decision.ambiguity,
         context_used=[referenced.turn_id] if referenced else [],
     )
+
+
+class TurnResolutionError(Exception):
+    """제공자 실패 또는 스키마 실패. 원본 출력은 절대 밖으로 안 나간다."""
+
+
+@lru_cache(maxsize=1)
+def _gemini_client() -> Any:
+    # google-genai stays a function-local import so importing the resolver never
+    # pulls provider machinery (mirrors semantic.py's lazy-import rule).
+    from google import genai
+    from google.genai import types
+
+    api_key = settings.gemini_api_key.get_secret_value().strip()
+    if not api_key:
+        raise TurnResolutionError("GEMINI_API_KEY is required for the turn resolver")
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=settings.gemini_timeout_ms),
+    )
+
+
+def _turn_resolver_generation_config() -> Any:
+    """The one generation config of the turn resolver.
+
+    Temperature and candidate count are imported from `semantic.py` rather than
+    re-typed here — two implementations spelling the same numbers separately would
+    stop proving they were measured under the same settings.
+    """
+    from google.genai import types
+
+    return types.GenerateContentConfig(
+        temperature=ROUTER_TEMPERATURE,
+        candidate_count=ROUTER_CANDIDATE_COUNT,
+        response_mime_type="application/json",
+        response_json_schema=_RawResolution.model_json_schema(),
+    )
+
+
+async def _generate_with_gemini(prompt: str) -> object:
+    def _call() -> object:
+        response = _gemini_client().models.generate_content(
+            model=TURN_RESOLVER_MODEL_ID,
+            contents=prompt,
+            config=_turn_resolver_generation_config(),
+        )
+        parsed = getattr(response, "parsed", None)
+        return parsed if parsed is not None else getattr(response, "text", None)
+
+    return await asyncio.to_thread(_call)
+
+
+def _trace_resolver_output(raw: object) -> dict[str, Any]:
+    """트레이스에 실을 원답. 스키마 검증 **전**의 값이라 그대로 싣는다.
+
+    `semantic._trace_router_output` 과 같은 가드다 — langsmith 는 트레이싱이 꺼져
+    있어도 `process_outputs` 를 부른다. 사용자 발화·이력 원문은 여기 실리지 않는다 —
+    모델의 원 JSON 판정만 싣는다(D-037, D-048).
+    """
+    from langsmith import utils as ls_utils
+
+    if not ls_utils.tracing_is_enabled():
+        return {}
+    return {"raw": raw}
+
+
+@traceable(
+    run_type="llm",
+    name="turn_resolver",
+    process_inputs=lambda inputs: {"prompt": inputs.get("prompt")},
+    process_outputs=_trace_resolver_output,
+    metadata={"model": TURN_RESOLVER_MODEL_ID, "prompt_version": TURN_RESOLVER_PROMPT_VERSION},
+)
+async def _traced_generate(generate: Callable[[str], Awaitable[object]], prompt: str) -> object:
+    """리졸버의 모델 호출 한 번 = LLM 런 하나. `semantic._traced_generate` 와 같은 이유로
+    주입된 `generate` 를 감싼다 — 테스트가 가짜를 주입해도 런이 같은 자리에 남는다."""
+    return await generate(prompt)
+
+
+class GeminiTurnResolver:
+    """앞 요청과의 관계 판정. fast path 는 모델을 안 부르고, 실패는 하나의 계약 오류로 좁힌다."""
+
+    def __init__(self, generate: Callable[[str], Awaitable[object]] | None = None) -> None:
+        self._generate = generate or _generate_with_gemini
+
+    async def resolve(
+        self,
+        *,
+        query: str,
+        candidates: Sequence[PriorTurn],
+        pending: PendingClarification | None,
+    ) -> ResolvedTurn:
+        fitted = fit_candidates(candidates)
+        if not needs_resolution(query=query, candidates=fitted, pending=pending):
+            return new_turn(query)
+        prompt = build_turn_resolver_prompt(query=query, candidates=fitted, pending=pending)
+        try:
+            raw = await _traced_generate(self._generate, prompt)
+        except TurnResolutionError:
+            raise
+        except Exception as exc:  # 제공자 예외를 하나의 계약 오류로 좁힌다
+            LOGGER.warning("turn resolution provider call failed: %s", type(exc).__name__)
+            raise TurnResolutionError("turn resolution provider failed") from exc
+        resolved = validate_resolved_turn(raw, query=query, candidates=fitted, pending=pending)
+        if resolved is None:
+            LOGGER.warning("turn resolution output failed schema validation")
+            raise TurnResolutionError("turn resolution output failed schema validation")
+        return resolved

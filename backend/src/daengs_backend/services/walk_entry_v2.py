@@ -48,6 +48,7 @@ def capabilities():
         "write_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if writing else []),
         "active_policy_versions": [POLICY] if writing else [],
         "pin_observation_cutoff_supported": enabled,
+        "gps_recording_versions": ["gps-recording-v1"],
         "storyboard_formats": ["walk-storyboard-candidates-v5"] if enabled else [],
         "entry_context_versions": ["walk-entry-context-v2"] if enabled else [],
     }
@@ -105,6 +106,8 @@ def digest(value):
 
 def request_payload(body):
     value = body.model_dump(mode="json")
+    if value.get("recording_evidence_fingerprint") is None:
+        value.pop("recording_evidence_fingerprint", None)
     pin = value.get("pin")
     if isinstance(pin, dict) and pin.get("observation_cutoff_at") is None:
         # Adding an optional field must not invalidate receipts from earlier v2 clients.
@@ -186,6 +189,7 @@ async def write(session, owner, walk_id, entry_id, body):
     replayed = await replay(session, row, body.mutation_id, request_hash)
     if replayed is not None:
         return replayed
+    await validate_recording_receipt(session, walk_id, body.recording_evidence_fingerprint)
     compare_revision(row, body.expected_revision)
     content = body.content
     if not walk.started_at <= content.recorded_at <= walk.ended_at:
@@ -237,6 +241,7 @@ async def finalize_pin(session, owner, walk_id, entry_id, body):
     replayed = await replay(session, row, body.mutation_id, request_hash)
     if replayed is not None:
         return replayed
+    await validate_recording_receipt(session, walk_id, body.recording_evidence_fingerprint)
     compare_revision(row, body.expected_revision)
     sidecar = await repo.pin(session, walk_id, entry_id)
     if sidecar is None:
@@ -248,6 +253,19 @@ async def finalize_pin(session, owner, walk_id, entry_id, body):
     row.revision += 1
     row.mutation_id = body.mutation_id
     return await store(session, row, sidecar, request_hash)
+
+
+async def validate_recording_receipt(session, walk_id, expected):
+    if expected is None:
+        return  # Old outbox bodies and their lifetime mutation receipts remain valid.
+    from daengs_backend.services.walk_chunk import decode_chunk
+    from daengs_backend.services.walk_recording import recording_receipt
+
+    points = [
+        p for chunk in await repo.raw_chunks(session, walk_id) for p in decode_chunk(chunk.payload)
+    ]
+    if recording_receipt(points).evidence_fingerprint != expected:
+        raise EntryInvalid("GPS 기록 근거가 확인한 버전과 다릅니다.")
 
 
 async def remove(session, owner, walk_id, entry_id, expected, mutation_id):

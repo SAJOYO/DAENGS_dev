@@ -233,12 +233,13 @@ def test_repair_applicability_is_per_target_turn_not_per_case():
 # --- 코드 기반 검사 (transcript.py) ---
 
 
-def test_prior_turns_do_not_reach_inference_today():
+def test_prior_turns_now_reach_inference_via_session_driver():
     from daengs_evals.conversation_quality.transcript import PRIOR_TURNS_REACH_INFERENCE
 
-    # 이 상수가 True 로 바뀌는 순간 두 축의 정답이 0 이 아니게 된다.
-    # 런타임이 바뀌면 여기부터 고친다.
-    assert PRIOR_TURNS_REACH_INFERENCE is False
+    # #416 SessionDriver 가 prior_turns/pending_clarification 을 실제로 실어 보내면서
+    # 뒤집혔다 (`test_conversation_quality_session_driver.py` 가 그 드라이버 자체를 잰다).
+    # `StatelessDriver` 로 모은 이전 랩만 여전히 두 축 정답이 0 이다.
+    assert PRIOR_TURNS_REACH_INFERENCE is True
 
 
 def test_repeat_count_counts_identical_assistant_messages():

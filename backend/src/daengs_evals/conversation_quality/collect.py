@@ -2,9 +2,11 @@
 
 `answer_quality/collect.py` 와 같은 모양이다 — meta 행 하나 + 행마다 하나, 어댑터 모드
 (`real` / `fake` / `fallback-only`)도 그 모듈의 것을 그대로 쓴다. 갈리는 것은 하나: 여기서는
-`ConversationDriver` 이음매를 거쳐 보낸다. 지금은 `StatelessDriver` 하나뿐이지만, 이력
-기제가 생겨 `SessionDriver` 가 더해져도 **이 파일은 안 고친다** — 드라이버가 `send()` 뒤에서
-무엇을 하든 `run_collect` 는 모른다.
+`ConversationDriver` 이음매를 거쳐 보낸다. `#416` 이 Turn Resolver 를 놓아 `SessionDriver`
+가 더해졌을 때도 **`target_turn_row` · `run_collect` 는 안 고쳤다** — 그 두 함수는 여전히
+드라이버가 `send()` 뒤에서 무엇을 하는지 모른다. 이 파일이 는 것은 `build_session_driver`
+하나뿐이고(`build_stateless_driver` 와 같은 조립에 클래스만 다르게 문다), 하네스 쪽 함수는
+손대지 않았다.
 
 ## 랩이 반드시 박아 두는 것 (카드 #401)
 
@@ -351,6 +353,40 @@ def build_stateless_driver(mode: AdapterMode) -> Any:
     )
     principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
     return StatelessDriver(
+        orchestrator,
+        principal=principal,
+        adapter_mode=mode,
+        plan_sink=plan_sink,
+        general_sink=general_sink,
+    )
+
+
+def build_session_driver(mode: AdapterMode) -> Any:
+    """`build_stateless_driver` 와 같은 조립에 `SessionDriver` 를 문다 (#416).
+
+    갈리는 것은 드라이버 클래스 하나뿐이다 — 오케스트레이터 · 어댑터 조립은 그대로다,
+    그래야 `PRIOR_TURNS_REACH_INFERENCE` 가 뒤집힌 것 말고는 두 랩이 같은 조건에서
+    갈린다. `run_collect` · `target_turn_row` 는 이 함수를 몰라도 된다 — 어떤 드라이버를
+    받든 `send()` 계약만 지키면 그만이다.
+    """
+    from daengs_backend.orchestration.contracts import PrincipalContext
+    from daengs_backend.orchestration.semantic import GeminiSemanticRouter
+    from daengs_backend.orchestration.service import AssistantOrchestrationService
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+    from daengs_evals.orchestrator_comparison.runner import Meter
+    from daengs_evals.orchestrator_comparison.runner_v2 import (
+        RecordingEngine,
+        _metered_semantic_generate,
+    )
+
+    plan_sink: dict[str, Any] = {"plan": None}
+    general_sink: dict[str, Any] = {"decision": None}
+    orchestrator = AssistantOrchestrationService(
+        engine=RecordingEngine(build_adapters(mode, general_sink), plan_sink),  # type: ignore[arg-type]
+        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(Meter())),
+    )
+    principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
+    return SessionDriver(
         orchestrator,
         principal=principal,
         adapter_mode=mode,

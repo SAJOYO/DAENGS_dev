@@ -2,6 +2,8 @@
 
     uv run python -m daengs_evals.conversation_quality collect --lap lap1 --out-dir <dir> \\
         --adapter-mode fake
+    uv run python -m daengs_evals.conversation_quality collect --lap lap2 --out-dir <dir> \\
+        --adapter-mode fake --driver session   # #416 이력 기제를 태운 랩 (기본은 stateless)
     uv run python -m daengs_evals.conversation_quality check-anchors --anchor-set dev
     uv run python -m daengs_evals.conversation_quality score --lap-file <lap.jsonl>
     uv run python -m daengs_evals.conversation_quality score --lap-file <lap.jsonl> \\
@@ -39,6 +41,7 @@ from daengs_evals.conversation_quality import report as report_mod
 from daengs_evals.conversation_quality.cases import load_cases
 from daengs_evals.conversation_quality.collect import (
     ADAPTER_MODES,
+    build_session_driver,
     build_stateless_driver,
     load_lap,
     run_collect,
@@ -78,6 +81,8 @@ def cmd_collect(args: argparse.Namespace) -> int:
     if args.adapter_mode == "fake-driver":
         n = sum(len(c.target_turns) for c in cases)
         driver = FakeDriver(replies=[args.fake_reply] * n)
+    elif args.driver == "session":
+        driver = build_session_driver(args.adapter_mode)
     else:
         driver = build_stateless_driver(args.adapter_mode)
     path = run_collect(
@@ -214,6 +219,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument(
         "--adapter-mode", choices=(*ADAPTER_MODES, "fake-driver"), default="fake-driver"
     )
+    # 기본값 `stateless` — 기존 명령이 그대로 돈다(#401 랩과 같은 조건). `session` 은
+    # `#416` Turn Resolver 를 실제로 태운다(`SessionDriver`, `drivers.py`). `--adapter-mode
+    # fake-driver` 와는 무관하다 — 그 값이면 오케스트레이터 자체를 안 돌리므로 위에서
+    # `--driver` 를 먼저 걸러낸다.
+    p_collect.add_argument("--driver", choices=("stateless", "session"), default="stateless")
     p_collect.add_argument("--fake-reply", default="(fake)")
     p_collect.add_argument("--judge-model")
     p_collect.add_argument("--anchor-set", default="dev")

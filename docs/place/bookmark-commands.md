@@ -69,7 +69,7 @@ uv run pytest -q tests/place/conversation/test_bookmark_commands.py tests/place/
 
 ## 후속 닫힌 작업
 
-1. **찜 범위 대화 검색:** 검색 대상/공간 범위/조건을 분리한다. 주차 “필수”는
+1. **찜 범위 대화 검색 ([#448](https://github.com/SAJOYO/DAENGS_dev/pull/448)):** [2단계 계약](saved-conversation.md). 검색 대상/공간 범위/조건을 분리한다. 주차 “필수”는
    `hard`, “우선”은 `parking`으로 기존 API에 연결한다. 찜 탭의 대화 진입과
    첫 진입만 조건 승계하는 정책은 이 단계에서 함께 변경한다.
 2. **사전 조회·제안:** 현재 화면을 비우는 controller.refresh가 아닌 읽기 경로를

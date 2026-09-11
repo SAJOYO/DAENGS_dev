@@ -445,6 +445,14 @@ async def test_router_failure_trace_carries_the_resolved_version() -> None:
 # 이 아닌 필드(`relation`)에서는 아무것도 증명하지 못하고(트랩 2), `status is not FAILED`
 # 는 `RecordingAdapter` 가 관계와 무관하게 늘 `CapabilityStatus.OK` 를 내는 이 하네스에서
 # 거의 항상 참이라(트랩 1) 보조 신호로만 남긴다.
+#
+# **커버리지 경계.** FOLLOW_UP(대명사)·CORRECTION·FOLLOW_UP(되묻기 뒤) 세 케이스는
+# 행동까지 핀으로 고정한다. `test_repeat_relation_and_its_referenced_turn_reach_the_answerer`
+# 와 `test_meta_relation_reaches_the_answerer_instead_of_falling_through` 둘은 그렇지 않다
+# — `RecordingAdapter` 가 답변 문구의 차이를 표현할 수 없어서, 이 둘은 "실제 General
+# 프롬프트가 필요로 할 재료(관계·참조 turn)가 도달했다" 까지만 고정한다. REPEAT 이 같은
+# 거절을 반복하지 않는다는 것과 META 가 off_topic 으로 떨어지지 않는다는 것 — 그 행동
+# 결과 자체는 이 저장소의 어떤 유닛 테스트도 아직 안 잰다. Task 9 의 평가 랩이 잰다.
 
 
 async def test_follow_up_pronoun_reaches_the_answerer(monkeypatch) -> None:

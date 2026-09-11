@@ -29,8 +29,8 @@ async def preview_slots(
     session: Annotated[AsyncSession, Depends(get_session)],
     writer: Annotated[Callable, Depends(get_slot_writer)],
 ):
-    if not settings.walk_diary_enabled:
-        raise HTTPException(404, "산책 일기 기능이 꺼져 있습니다.")
+    if not settings.walk_diary_enabled or not settings.walk_diary_slots_preview_enabled:
+        raise HTTPException(404, "산책 일기 미리보기가 꺼져 있습니다.")
     try:
         return await preview_saved_slots(session, user.app_user_id, walk_id, body, writer=writer)
     except LookupError:

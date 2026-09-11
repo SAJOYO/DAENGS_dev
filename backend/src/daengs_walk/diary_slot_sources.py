@@ -5,11 +5,13 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from daengs_walk.diary_background import piece_identity, piece_rank, project_background
+from daengs_walk.diary_background import project_background
 from daengs_walk.diary_board import ObservationCore, RecordCore
 from daengs_walk.diary_input import DiaryContract, Identifier, Instant, Point, digest, material_ref
 from daengs_walk.diary_observations import build_observation_pool
-from daengs_walk.diary_slots import SlotDecision, SlotEvidence
+from daengs_walk.diary_slot_claims import normalize
+from daengs_walk.diary_slot_spatial import spatial_claim
+from daengs_walk.diary_slots import SlotDecision, SlotEvidence, SlotSource
 from daengs_walk.storyboard_input import route_nodes
 from daengs_walk.storyboard_selection import distance
 
@@ -41,16 +43,26 @@ def metres(a, b):
     return distance((a.lat, a.lng), (b.lat, b.lng))
 
 
-def evidence(part, role, source_id, version, identity, facts, rank):
+def evidence(part, role, source_id, version, entity, facts, rank, *, scope, diagnostics=None):
+    entity_key = digest(normalize(entity))
+    claim_scope = digest(normalize([part, role, scope]))
+    assertion = {k: v for k, v in facts.items() if k != "retrieved_at"}
+    if role == "scene_area_context":
+        assertion.pop("source_ref", None)  # Catalog identity is preserved in source provenance.
+    claim_key = digest(normalize([entity_key, claim_scope, assertion]))
     return SlotEvidence(
         id="slot:" + digest([part, role, source_id, version, facts]),
         part=part,
         role=role,
         source_id=source_id,
         source_version=version,
-        identity=identity,
+        entity_key=entity_key,
+        claim_scope=claim_scope,
+        claim_key=claim_key,
+        sources=(SlotSource(source_id=source_id, source_version=version),),
         facts=facts,
         rank=rank,
+        diagnostics=diagnostics or {},
     )
 
 
@@ -71,7 +83,7 @@ def verified_motion(source, route):
 def candidates_for_scene(source, scene, policy, motion, blocks):
     candidates, decisions = [], []
 
-    def reject(part, source_id, reason, eligibility="fail"):
+    def reject(part, source_id, reason, eligibility="fail", **details):
         decisions.append(
             SlotDecision(
                 source_id=source_id,
@@ -79,6 +91,7 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
                 eligibility=eligibility,
                 admission="excluded",
                 reason=reason,
+                details=details,
             )
         )
 
@@ -99,6 +112,7 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
         )
     )
     selected = set(source.selected_background_ids)
+    scene_scope = {"scene_id": scene.id, "anchor": anchor.model_dump(mode="json")}
     for saved in sorted(source.backgrounds, key=lambda b: b.id):
         # Distances supplied for another core cannot migrate to this scene.
         if core is None or saved.target != material_ref(core):
@@ -108,7 +122,18 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
             reject(part, saved.id, saved.reason or saved.status, "unknown")
             continue
         if not fresh:
-            reject(part, saved.id, "scene_location_unavailable_or_stale", "unknown")
+            reject(
+                part,
+                saved.id,
+                "scene_location_unavailable_or_stale",
+                "unknown",
+                actual=abs((anchor.event_at - anchor.location_at).total_seconds())
+                if anchor.location_at
+                else None,
+                limit=policy.location_age_s,
+                unit="seconds",
+                position_state=anchor.position_state,
+            )
             continue
         if part == "space":
             projection = project_background(saved, core)
@@ -118,26 +143,34 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
                 reject(part, saved.id, f"invalid_provider_row:{row}")
             for piece in projection.pieces:
                 facts = piece.facts
-                if "distance_m" in facts and facts["distance_m"] > policy.space_radius_m:
-                    reject(part, saved.id, "outside_space_radius")
+                try:
+                    role, entity, scope, rank = spatial_claim(piece, saved)
+                except ValueError:
+                    reject(
+                        part,
+                        saved.id,
+                        "unsupported_spatial_relation",
+                        "unknown",
+                        schema=piece.schema_version,
+                        reference=facts.get("reference"),
+                    )
                     continue
-                # An area aggregate retains its footprint; radius is not point distance.
-                role = (
-                    "scene_registered_point_distance"
-                    if "distance_m" in facts
-                    else "scene_area_context"
-                    if piece.kind == "space_relation"
-                    else "scene_address_reference"
-                )
+                diagnostics = {"role": role}
+                if role in {"scene_registered_point_distance", "scene_geometry_distance"}:
+                    diagnostics.update(
+                        actual=facts["distance_m"], limit=policy.space_radius_m, unit="m"
+                    )
                 candidates.append(
                     evidence(
                         part,
                         role,
                         saved.id,
                         digest(saved),
-                        str(piece_identity(piece)),
+                        entity,
                         {**facts, "retrieved_at": saved.retrieved_at.isoformat()},
-                        tuple(piece_rank(piece, saved)[:2]),
+                        rank,
+                        scope={**scene_scope, **scope},
+                        diagnostics=diagnostics,
                     )
                 )
         else:
@@ -153,16 +186,39 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
                 reject(part, saved.id, "invalid_weather_payload", "unknown")
                 continue
             if not weather.valid_from <= anchor.event_at < weather.valid_until:
-                reject(part, saved.id, "outside_weather_interval")
+                reject(
+                    part,
+                    saved.id,
+                    "outside_weather_interval",
+                    actual=anchor.event_at.isoformat(),
+                    valid_from=weather.valid_from.isoformat(),
+                    valid_until=weather.valid_until.isoformat(),
+                    interval="[from, until)",
+                )
                 continue
             if (
                 saved.valid_from is not None
                 and not saved.valid_from <= anchor.event_at < saved.valid_until
             ):
-                reject(part, saved.id, "outside_source_interval")
+                reject(
+                    part,
+                    saved.id,
+                    "outside_source_interval",
+                    actual=anchor.event_at.isoformat(),
+                    valid_from=saved.valid_from.isoformat(),
+                    valid_until=saved.valid_until.isoformat(),
+                )
                 continue
-            if metres(anchor.point, weather.area_center) > weather.area_radius_m:
-                reject(part, saved.id, "outside_weather_area")
+            area_distance = metres(anchor.point, weather.area_center)
+            if area_distance > weather.area_radius_m:
+                reject(
+                    part,
+                    saved.id,
+                    "outside_weather_area",
+                    actual=area_distance,
+                    limit=weather.area_radius_m,
+                    unit="m",
+                )
                 continue
             candidates.append(
                 evidence(
@@ -177,6 +233,21 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
                         "retrieved_at": saved.retrieved_at.isoformat(),
                     },
                     (-weather.valid_from.timestamp(), -saved.retrieved_at.timestamp()),
+                    scope={
+                        **scene_scope,
+                        "valid_from": weather.valid_from.isoformat(),
+                        "valid_until": weather.valid_until.isoformat(),
+                        "area_center": weather.area_center.model_dump(),
+                        "area_radius_m": weather.area_radius_m,
+                    },
+                    diagnostics={
+                        "actual": area_distance,
+                        "limit": weather.area_radius_m,
+                        "unit": "m",
+                        "scene_at": anchor.event_at.isoformat(),
+                        "valid_from": weather.valid_from.isoformat(),
+                        "valid_until": weather.valid_until.isoformat(),
+                    },
                 )
             )
 
@@ -204,11 +275,27 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
         if anchor.event_at < item.started_at or gap > policy.motion_gap_s:
             continue
         if len(matching) != 1:
-            reject("motion", item.id, "scene_route_match_unknown", "unknown")
+            reject(
+                "motion",
+                item.id,
+                "scene_route_match_unknown",
+                "unknown",
+                actual=len(matching),
+                expected=1,
+                route_tolerance_m=policy.route_tolerance_m,
+            )
             continue
         nodes = blocks[matching[0]]
         if not nodes[0]["at"] <= item.started_at <= item.ended_at <= nodes[-1]["at"]:
-            reject("motion", item.id, "canonical_continuity_break")
+            reject(
+                "motion",
+                item.id,
+                "canonical_continuity_break",
+                observation_from=item.started_at.isoformat(),
+                observation_until=item.ended_at.isoformat(),
+                block_from=nodes[0]["at"].isoformat(),
+                block_until=nodes[-1]["at"].isoformat(),
+            )
             continue
         role = "scene_motion" if gap <= 0 else "before_scene_motion"
         facts = {
@@ -222,6 +309,12 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
             "continuity_block": matching[0],
             "continuity_basis": "canonical_accepted_segments",
             "analysis_id": item.analysis_id,
+            "interpretation": {
+                "observed_slow": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+                "observed_fast": "해당 산책의 다른 이동 구간보다 상대적으로 빠른 이동 관측. 절대 속도나 달리기 판정이 아님.",
+                "observed_dwell": "기록 기기의 동선이 한곳에 모인 구간. 강아지의 휴식이나 행동 판정이 아님.",
+            }[item.kind],
+            "temporal_relation": "이 기록에 앞선 구간" if gap > 0 else "이 기록 시각을 포함한 구간",
         }
         candidates.append(
             evidence(
@@ -232,6 +325,18 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
                 item.id,
                 facts,
                 (max(0, gap), -facts["duration_s"]),
+                scope={
+                    **scene_scope,
+                    "started_at": item.started_at.isoformat(),
+                    "ended_at": item.ended_at.isoformat(),
+                    "analysis_id": item.analysis_id,
+                },
+                diagnostics={
+                    "actual": max(0, gap),
+                    "limit": policy.motion_gap_s,
+                    "unit": "seconds",
+                    "continuity_block": matching[0],
+                },
             )
         )
     return candidates, decisions

@@ -40,10 +40,20 @@ def render(preview):
             f"{part} {sum(e.part == part for e in stamp.evidence)}"
             for part in ("space", "environment", "motion")
         )
+        diagnostics = "".join(
+            f"<tr><td>{html.escape(d.part)}</td><td>{html.escape(d.reason)}</td>"
+            f"<td>{html.escape(d.eligibility)} / {html.escape(d.admission)}</td>"
+            f"<td><pre>{html.escape(json.dumps(d.details, ensure_ascii=False, indent=2))}</pre></td></tr>"
+            for d in stamp.decisions
+        )
         cards.append(
             f"<article><small>{scene.order:02} / {html.escape(parts)}</small>"
+            f"<small> · 위치 설명 {int(stamp.location_reference is not None)}</small>"
             f"<h2>{html.escape(scene.title)}</h2><p>{html.escape(scene.body)}</p>"
-            f"<details><summary>선정 근거와 제외 사유</summary><pre>"
+            f"<details><summary>판정값과 기준값</summary><div class=scroll><table>"
+            f"<tr><th>파트</th><th>사유</th><th>판정 / 적재</th><th>값과 기준</th></tr>"
+            f"{diagnostics}</table></div></details>"
+            f"<details><summary>원자료 출처와 전체 스탬프</summary><pre>"
             f"{html.escape(stamp.model_dump_json(indent=2))}</pre></details></article>"
         )
     return (
@@ -51,7 +61,9 @@ def render(preview):
         "<style>body{font:17px/1.7 system-ui;max-width:860px;margin:45px auto;background:#f4f5ef;"
         "color:#20352c;padding:0 20px}article{background:white;padding:26px;border-radius:18px;"
         "margin:18px 0}small{color:#557764}p{white-space:pre-wrap}pre{font-size:12px;"
-        "overflow:auto}summary{cursor:pointer}h1{line-height:1.3}</style>"
+        "overflow:auto}summary{cursor:pointer}h1{line-height:1.3}table{border-collapse:collapse;"
+        "font-size:13px}td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left;"
+        "vertical-align:top}.scroll{overflow:auto}td pre{max-width:350px}</style>"
         f"<h1>산책 파트 슬롯 미리보기</h1><p>Gemini: {preview.model_status}"
         f" · {preview.failure_code or '오류 없음'}<br>입력 출처는 함께 저장한 input.json 참고.</p>"
         + "".join(cards)

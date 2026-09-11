@@ -154,6 +154,6 @@ def demo_input():
         selected_background_ids=tuple(b.id for b in backgrounds),
         observations=build_observation_pool(evidence, route).observations,
         scene_policy_version="records-first-v1",
-        writing_policy_version="diary-part-slots-v1",
+        writing_policy_version="diary-part-slots-v2",
     )
     return source, VerifiedBoardRoute(route, evidence), points

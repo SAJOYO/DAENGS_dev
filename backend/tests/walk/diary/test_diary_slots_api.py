@@ -3,12 +3,19 @@
 import uuid
 from unittest.mock import AsyncMock
 
+import pytest
+
 from daengs_backend.config import settings
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.routers import walk_diary_slots as router
 from tests.walk.support.photo_input import WALK
 
 PATH = f"/app/walks/{WALK}/diary-slots/preview"
+
+
+@pytest.fixture(autouse=True)
+def enable_preview(monkeypatch):
+    monkeypatch.setattr(settings, "walk_diary_slots_preview_enabled", True)
 
 
 def wire(api):
@@ -64,3 +71,14 @@ def test_auth_feature_flag_and_client_source_injection(api, monkeypatch):
     client.app.dependency_overrides.pop(CurrentAppUser.__metadata__[0].dependency)
     assert client.post(PATH, json={"target_scene_count": 3}).status_code == 401
     writer.assert_not_awaited()
+
+
+def test_general_diary_flag_does_not_enable_experimental_preview(api, monkeypatch):
+    client, _, db, writer = wire(api)
+    assert settings.walk_diary_enabled
+    assert type(settings).model_fields["walk_diary_slots_preview_enabled"].default is False
+    monkeypatch.setattr(settings, "walk_diary_slots_preview_enabled", False)
+    response = client.post(PATH, json={"target_scene_count": 3})
+    assert response.status_code == 404
+    writer.assert_not_awaited()
+    db.commit.assert_not_awaited()

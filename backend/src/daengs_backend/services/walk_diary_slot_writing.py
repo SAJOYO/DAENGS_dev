@@ -19,11 +19,15 @@ PROMPT = """산책 일기의 배경 문장을 한국어로 쓴다. 입력은 지
 모든 슬롯을 억지로 언급하지 않아도 된다. 쓸 만한 배경이 없으면 빈 문자열과 빈 evidence_ids.
 original은 코드가 뒤에 그대로 붙이므로 되풀이하거나 대신 쓰지 않는다.
 등록 지점과의 거리는 주변에 있다는 근거다. 공원 진입·가게 방문·방향·접근을 뜻하지 않는다.
+scene_geometry_distance는 형상까지의 거리다. 등록 지점이나 산책로·강변까지의 거리로 바꾸지 않는다.
+scene_area_context의 radius_m은 집계 범위다. 시설까지의 거리가 아니다.
+scene_address_reference는 장면의 위치 설명이며, 가까운 시설 후보가 아니다.
 날씨는 관측된 필드만 쓴다. 기온·풍속만으로 맑음, 화창함, 기분, 시원함을 추정하지 않는다.
 지역 관측은 현장에서 느꼈다는 뜻이 아니다. 누락된 필드는 알 수 없다.
 동선은 기록 기기의 관측이다. observed_dwell은 한곳에 모인 동선이며 강아지의 휴식·킁킁을
 뜻하지 않는다. observed_slow/fast는 해당 산책의 다른 이동 구간에 비한 상대 속도다.
-before_scene_motion은 '이 지점에 오기 전'의 구간으로만 쓴다. 현재 장면의 동작으로 바꾸지 않는다.
+before_scene_motion은 '이 기록에 앞선 구간'의 시간 관계다. 장소 도착·첫 방문을 뜻하지 않는다.
+동선 facts의 interpretation과 temporal_relation을 따른다. 상대 저속을 정지·머묾으로 바꾸지 않는다.
 추가 감정·감각·행동·인과관계를 만들지 않는다. 각 문장에 사용한 해당 장면 evidence id를 적는다.
 입력된 모든 scene_id를 정확히 한 번씩 반환한다. JSON {scenes:[{scene_id,background,evidence_ids}]}.
 """
@@ -32,7 +36,7 @@ before_scene_motion은 '이 지점에 오기 전'의 구간으로만 쓴다. 현
 class WrittenScene(DiaryContract):
     scene_id: Identifier
     background: str = Field(max_length=220)
-    evidence_ids: tuple[Identifier, ...] = Field(max_length=16)
+    evidence_ids: tuple[Identifier, ...] = Field(max_length=17)
 
 
 class WrittenScenes(DiaryContract):
@@ -49,11 +53,11 @@ def writing_payload(preview):
                 "original": originals[stamp.scene_id].body,
                 "evidence": [
                     {"id": e.id, "part": e.part, "role": e.role, "facts": e.facts}
-                    for e in stamp.evidence
+                    for e in stamp.materials()
                 ],
             }
             for stamp in preview.stamps
-            if stamp.evidence
+            if stamp.materials()
         ],
     }
 
@@ -96,7 +100,7 @@ def accept_prose(preview, raw):
         if isinstance(raw, str)
         else (WrittenScenes.model_validate(raw))
     )
-    allowed = {s.scene_id: {e.id for e in s.evidence} for s in preview.stamps if s.evidence}
+    allowed = {s.scene_id: {e.id for e in s.materials()} for s in preview.stamps if s.materials()}
     written = {s.scene_id: s for s in response.scenes}
     if len(written) != len(response.scenes) or set(written) != set(allowed):
         raise ValueError("writer changed the scene set")

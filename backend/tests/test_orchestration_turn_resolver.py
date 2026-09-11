@@ -96,3 +96,17 @@ def test_resolved_turn_rejects_two_anchors() -> None:
             pending_clarification_id=uuid.uuid4(),
             resolution_confidence=0.9,
         )
+
+
+def test_conversation_context_builds_without_importing_resolver() -> None:
+    """`ConversationContext` 와 `TurnRelation` 은 `contracts.py` 소유다 (#416) —
+    `resolver` 를 임포트하지 않고 `contracts` 만으로도 완전히 조립돼야 한다. 과거에는
+    `TurnRelation` 이 `resolver.py` 에 있었고 `ConversationContext` 가 `TYPE_CHECKING`
+    forward reference 로 그것을 참조했는데, `resolver` 를 안 거치면 pydantic 이 모델을
+    "미완성" 으로 두고 인스턴스화에서 조용히 실패하는 함정이 있었다. 이 테스트는 그
+    함정이 없다는 것을 증명한다."""
+    from daengs_backend.orchestration.contracts import ConversationContext as CC
+    from daengs_backend.orchestration.contracts import TurnRelation as TR
+
+    context = CC(relation=TR.NEW)
+    assert context.relation is TR.NEW

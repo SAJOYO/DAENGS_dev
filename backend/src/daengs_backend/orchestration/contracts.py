@@ -4,16 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-if TYPE_CHECKING:
-    # 순환 임포트 회피 (#416) — `TurnRelation` 은 여전히 `resolver.py` 에 산다
-    # (공유 열거형을 안 넓히는 것과 같은 이유). `resolver.py` 가 이미 이 모듈을
-    # 임포트하므로 여기서 되임포트하면 순환이 생긴다. 타입 검사기용으로만 쓰고,
-    # 런타임 조립은 `resolver.py` 가 `ConversationContext.model_rebuild(...)` 로 마친다.
-    from daengs_backend.orchestration.resolver import TurnRelation
 
 
 class ContractModel(BaseModel):
@@ -413,16 +406,30 @@ class ClarifyRequest(ContractModel):
     missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
 
 
+class TurnRelation(StrEnum):
+    """현재 발화가 앞 대화와 맺는 관계 (#416).
+
+    **여기 사는 이유는 `ConversationContext` 가 여기 살기 때문이다.** `ConversationContext`
+    는 (나중에) `GeneralPayload` 안에 실리는 계약 타입이라 `contracts.py` 를 벗어날 수
+    없고, 그 필드 `relation` 의 타입인 이 열거형도 같이 따라온다. `AssistantStatus` 등
+    공유 열거형을 "넓히지" 않는다는 규칙과는 다른 이야기다 — 그 규칙은 기존 열거형에
+    값을 추가하지 말라는 것이지, 새 열거형이 이 모듈에 사는 것을 막지 않는다.
+    `orchestration/resolver.py` 가 이 이름을 그대로 재수출해서, `from
+    daengs_backend.orchestration.resolver import TurnRelation` 을 쓰는 기존 코드와 테스트는
+    안 바뀐다.
+    """
+
+    NEW = "NEW"
+    FOLLOW_UP = "FOLLOW_UP"
+    CORRECTION = "CORRECTION"
+    REPEAT = "REPEAT"
+    META = "META"
+
+
 class ConversationContext(ContractModel):
     """라우터와 선택된 capability 가 보는 **전부**. 이력 원문은 여기 없다 (#416).
 
-    Turn Resolver (`orchestration/resolver.py`) 가 조립해서 내려보낸다. `relation` 의
-    타입은 `resolver.TurnRelation` 인데, 그 열거형이 여기 있지 않은 이유는 다른 공유
-    열거형(`AssistantStatus` 등)을 안 넓히는 것과 같다 — 순환 임포트도 있다:
-    `resolver.py` 가 이미 `daengs_backend.orchestration.contracts` 를 임포트하므로,
-    이 모듈이 런타임에 `resolver` 를 되임포트하면 순환이 생긴다. `resolver.py` 가
-    자신을 다 읽은 뒤 `ConversationContext.model_rebuild(_types_namespace=...)` 로
-    이 모델의 조립을 마무리한다.
+    Turn Resolver (`orchestration/resolver.py`) 가 조립해서 내려보낸다.
     """
 
     relation: TurnRelation
@@ -573,6 +580,7 @@ __all__ = [
     "ScreeningContext",
     "ScreeningHistory",
     "TrainingPayload",
+    "TurnRelation",
     "VetContactPayload",
     "VetSpendContext",
     "WalkPayload",

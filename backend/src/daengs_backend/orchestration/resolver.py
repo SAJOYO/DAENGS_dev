@@ -14,7 +14,6 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Sequence
-from enum import StrEnum
 
 from pydantic import Field, model_validator
 
@@ -22,7 +21,22 @@ from daengs_backend.orchestration.contracts import (
     ContractModel,
     ConversationContext,
     ObservationAxis,
+    TurnRelation,
 )
+
+__all__ = [
+    "MAX_ASSISTANT_CHARS",
+    "MAX_CANDIDATE_BLOCK_CHARS",
+    "MAX_CANDIDATE_PAIRS",
+    "RESOLUTION_CONFIDENCE_FLOOR",
+    "ConversationContext",
+    "PendingClarification",
+    "PriorTurn",
+    "ResolvedTurn",
+    "TurnRelation",
+    "needs_resolution",
+    "new_turn",
+]
 
 #: 후보로 쓰는 완료 turn 쌍의 수. 가장 긴 수용 케이스가 요구하는 최소가 3이다.
 #: Task 2 의 `fit_candidates` 가 이 개수 상한과 문자 예산(`MAX_CANDIDATE_BLOCK_CHARS`)을
@@ -35,26 +49,10 @@ MAX_CANDIDATE_BLOCK_CHARS = 3_000
 #: 이 아래면 잇지 않고 되묻는다 (수용 케이스 9).
 RESOLUTION_CONFIDENCE_FLOOR = 0.6
 
-
-class TurnRelation(StrEnum):
-    """현재 발화가 앞 대화와 맺는 관계.
-
-    **`AssistantStatus` 를 안 넓히는 이유와 같은 이유로 이 열거형은 여기 삽니다** — 공유
-    열거형을 넓히면 그것을 열거하는 파일이 전부 범위에 들어옵니다.
-    """
-
-    NEW = "NEW"
-    FOLLOW_UP = "FOLLOW_UP"
-    CORRECTION = "CORRECTION"
-    REPEAT = "REPEAT"
-    META = "META"
-
-
-# `ConversationContext` 는 `contracts.py` 에 산다 (#416) — 나중에 `contracts.GeneralPayload`
-# 가 그것을 참조하게 되는데, 이 파일이 이미 `contracts` 를 임포트하므로 반대 방향으로
-# 두면 순환 임포트가 생긴다. `relation: TurnRelation` 은 `contracts.py` 에서 타입 검사용
-# forward reference 로만 있고, 여기서 실제 타입을 채워 조립을 마무리한다.
-ConversationContext.model_rebuild(_types_namespace={"TurnRelation": TurnRelation})
+# `TurnRelation` 과 `ConversationContext` 는 `contracts.py` 에 산다 (#416) — `ConversationContext`
+# 가 (나중에) `contracts.GeneralPayload` 안에 실리므로 그 필드 타입인 `TurnRelation` 도
+# 같이 그 모듈에 있어야 순환 임포트가 안 생긴다. 여기서는 재수출만 한다 — 기존 코드와
+# 테스트가 `from daengs_backend.orchestration.resolver import TurnRelation` 을 쓰기 때문이다.
 
 
 class PriorTurn(ContractModel):

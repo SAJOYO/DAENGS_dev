@@ -128,7 +128,7 @@ temperature 0 인데도 시맨틱 라우터는 실행마다 다른 capability �
 ### 나머지 — 이미 있는 것을 그대로 씁니다
 
 - **`transcript.PRIOR_TURNS_REACH_INFERENCE = True`** 이므로 `report.FLOORED_AXES`
-  (`context_continuity`·`repair_success`) 는 `before.driver == "session"` 일 때만 0 으로
+  (`context_continuity`·`repair_success`) 는 `before.driver == "stateless"` 일 때만 0 으로
   못박힙니다. `after_v2_346cada0` 은 `StatelessDriver` 로 모인 랩이라 `driver == "stateless"`
   이고, 그 두 축이 `기능 부재` 로 덮입니다 — "품질 개선" 으로 읽지 않습니다
   (`docs/orchestration/conversation-quality.md` §3). Turn Resolver 랩은

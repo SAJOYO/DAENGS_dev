@@ -64,12 +64,12 @@ from daengs_backend.orchestration.contracts import (
 # 구현이 **같아야** 하는 것이다 — 보호가 한쪽에만 있으면 실험 구현이 구멍이 되고,
 # 실패 문구가 갈리면 사용자에게 실패가 두 종류로 보인다. 사본을 만들지 않는다.
 from daengs_backend.orchestration.graph import OrchestrationEngine, _reject_raw_credentials
-from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
     resolve_emergency_route,
 )
+from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.semantic import (
     ROUTER_CANDIDATE_COUNT,
     ROUTER_MAX_OUTPUT_TOKENS,

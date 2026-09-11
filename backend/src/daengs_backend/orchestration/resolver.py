@@ -362,11 +362,19 @@ def validate_resolved_turn(
     # 대기 중인 되묻기에 실제로 묶이는지 — relation 검사까지 한 번에 넣어 두 필드가
     # 서로 다른 조건으로 갈라지지 않게 한다(R8). `relation == NEW` 이면 이 turn 은
     # 새 turn 으로 읽혀야 하므로 pending 관련 필드는 전부 비운다.
-    anchored_to_pending = (
-        pending is not None
-        and referenced is None
-        and decision.relation is not TurnRelation.NEW
+    #
+    # CLARIFY turn 은 `completed` 로 저장되므로(스펙 ⑥) `candidates_of` 가 그것을 후보
+    # 블록에도 넣는다 — 같은 턴이 U{n}/A{n} 과 PENDING_CLARIFICATION 양쪽에 나타난다.
+    # 모델이 그 후보를 **번호로** 지목해도(= `referenced` 가 채워져도) 그것이 가리키는
+    # turn 이 `pending.turn_id` 와 같다면 여전히 대기 중인 되묻기에 대한 답이다 — 두
+    # 번째 갈래가 그 경우를 잡는다. 이 갈래는 `referenced` 를 비우고 pending 필드를
+    # 채우기만 하므로 `one_anchor_at_most` 가 요구하는 "앵커는 최대 하나" 를 어기지
+    # 않고, 원래 더 헐거웠던 첫 갈래(참조 없음)가 놓친 앵커를 되살릴 뿐이다.
+    anchored_to_pending = pending is not None and decision.relation is not TurnRelation.NEW and (
+        referenced is None or referenced.turn_id == pending.turn_id
     )
+    if anchored_to_pending and referenced is not None and referenced.turn_id == pending.turn_id:
+        referenced = None
     return ResolvedTurn(
         relation=decision.relation,
         current_query=query,
@@ -379,7 +387,10 @@ def validate_resolved_turn(
         standalone_query=decision.standalone_query,
         resolution_confidence=decision.resolution_confidence,
         ambiguity=decision.ambiguity,
-        context_used=[referenced.turn_id] if referenced else [],
+        context_used=(
+            [pending.turn_id] if anchored_to_pending
+            else [referenced.turn_id] if referenced else []
+        ),
     )
 
 

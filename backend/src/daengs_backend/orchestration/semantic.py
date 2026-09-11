@@ -97,7 +97,7 @@ PROMPT_VERSION = "semantic-router-ko-v10"
 #: 대화 맥락이 실린 프롬프트의 핀 (#416 Task 6). `PROMPT_VERSION` 을 안 올리는 것은 의도다 —
 #: 맥락이 없을 때의 몸이 한 글자도 안 바뀌므로, 같은 상수가 두 몸을 가리키면 랩 헤더의
 #: 핀이 거짓말을 한다. `general.py` 가 네 조합에 네 상수를 둔 것과 같은 이유다.
-RESOLVED_PROMPT_VERSION = "semantic-router-ko-v10-resolved"
+RESOLVED_PROMPT_VERSION = f"{PROMPT_VERSION}-resolved"
 ROUTER_MODEL_ID = "gemini-3.1-flash-lite"
 
 # 생성 설정. 값은 D-041 이후 한 번도 바뀌지 않았고, 이름을 붙인 이유는 **에이전트 구현이

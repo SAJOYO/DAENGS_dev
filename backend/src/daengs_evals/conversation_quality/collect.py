@@ -3,10 +3,15 @@
 `answer_quality/collect.py` 와 같은 모양이다 — meta 행 하나 + 행마다 하나, 어댑터 모드
 (`real` / `fake` / `fallback-only`)도 그 모듈의 것을 그대로 쓴다. 갈리는 것은 하나: 여기서는
 `ConversationDriver` 이음매를 거쳐 보낸다. `#416` 이 Turn Resolver 를 놓아 `SessionDriver`
-가 더해졌을 때도 **`target_turn_row` · `run_collect` 는 안 고쳤다** — 그 두 함수는 여전히
-드라이버가 `send()` 뒤에서 무엇을 하는지 모른다. 이 파일이 는 것은 `build_session_driver`
-하나뿐이고(`build_stateless_driver` 와 같은 조립에 클래스만 다르게 문다), 하네스 쪽 함수는
-손대지 않았다.
+가 더해졌을 때 이 파일이 새로 얻은 것은 세 가지다 — `build_session_driver`(
+`build_stateless_driver` 와 같은 조립에 클래스만 다르게 문다), `LapHeader.driver`(어느
+드라이버로 모았는지를 헤더에 남긴다), 그리고 `run_collect` 안 두 줄(`driver_kind` 를 읽어
+그 헤더 필드에 적는 것 — `adapter_mode` 를 읽는 자리와 같다). **`target_turn_row` 는 안
+고쳤고, `run_collect` 도 그 두 줄 밖에서는 안 고쳤다** — 두 함수 다 여전히 드라이버가
+`send()` 뒤에서 무엇을 하는지 모른다. 이것은 스펙 §7 이 말하는 "이 파일들을 고쳐야 한다면
+이음매가 샌 것" 의 예외가 아니라 의도한 초과다 — 어느 드라이버로 모았는지를 **기록**하는
+것과 드라이버 종류에 따라 **분기**하는 것은 다른 일이고, 후자만 이음매 누수다. 이 파일은
+전자만 한다; 분기는 `report.py` 가 한다(그쪽 docstring 참고).
 
 ## 랩이 반드시 박아 두는 것 (카드 #401)
 

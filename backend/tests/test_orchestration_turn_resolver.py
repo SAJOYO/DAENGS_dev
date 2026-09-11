@@ -374,6 +374,42 @@ def test_follow_up_answering_pending_clarification_populates_the_anchor() -> Non
     assert resolved.current_query == "밥은 먹는데 계속 누워 있어"
 
 
+def test_follow_up_naming_the_pending_clarification_by_index_still_anchors_to_pending() -> None:
+    """Fix wave item 1. CLARIFY turn 은 `completed` 로 저장되므로 `candidates_of` 가 그것을
+    후보 블록에도 넣는다(스펙 ⑥) — 같은 턴이 U{n}/A{n} 과 PENDING_CLARIFICATION 양쪽에
+    나타난다. 모델이 그 되묻기를 번호로 지목해도(`referenced_index` 를 채워도) 대기 중인
+    되묻기에 대한 답이라는 사실은 바뀌지 않는다 — 그런데 예전 `anchored_to_pending` 은
+    `referenced is None` 을 요구해서 이 경로에서 pending 필드를 전부 놓쳤다."""
+    pending_turn_id = uuid.uuid4()
+    pending = PendingClarification(
+        turn_id=pending_turn_id,
+        question="식욕과 활력 중 어느 쪽이 달라 보이나요?",
+        missing_axes=[ObservationAxis.APPETITE, ObservationAxis.ENERGY],
+    )
+    # 대기 중인 되묻기 자신이 후보 블록에도 나타난다 (CLARIFY 는 completed 로 저장된다).
+    candidates = [
+        PriorTurn(
+            turn_id=pending_turn_id,
+            user="밥은 잘 먹어?",
+            assistant=pending.question,
+        )
+    ]
+    raw = {
+        "relation": "FOLLOW_UP",
+        "referenced_index": 1,  # 모델이 대기 중인 되묻기를 번호로 지목했다.
+        "standalone_query": "밥은 먹는데 활력이 없어 계속 누워 있음",
+        "resolution_confidence": 0.9,
+    }
+    resolved = validate_resolved_turn(
+        raw, query="밥은 먹는데 계속 누워 있어", candidates=candidates, pending=pending
+    )
+    assert resolved is not None
+    assert resolved.pending_clarification_id == pending_turn_id
+    assert resolved.pending_missing_axes == [ObservationAxis.APPETITE, ObservationAxis.ENERGY]
+    assert resolved.referenced_turn_id is None
+    assert resolved.context_used == [pending_turn_id]
+
+
 def test_current_query_is_last_with_both_candidates_and_pending() -> None:
     """R11 — 후보 블록과 대기 되묻기 블록이 둘 다 있어도 CURRENT_QUERY 는 여전히 맨 뒤다."""
     turns = [_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")]

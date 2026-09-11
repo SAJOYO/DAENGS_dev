@@ -124,7 +124,7 @@ class AssistantOrchestrationService:
             },
             metadata={"principal_kind": principal.kind, "locale": locale},
         ) as run:
-            response, route_plan = await self._plan_and_execute(
+            response, route_plan, resolved_router_version = await self._plan_and_execute(
                 query=query,
                 principal=principal,
                 structured_context=structured_context,
@@ -137,7 +137,9 @@ class AssistantOrchestrationService:
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
             # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
-            run.add_metadata(_route_metadata(route_plan, fallback=response.route))
+            run.add_metadata(
+                _route_metadata(route_plan, resolved_router_version=resolved_router_version)
+            )
             run.end(outputs=_trace_outputs(response))
             return response
 
@@ -153,9 +155,13 @@ class AssistantOrchestrationService:
         include_route_trace: bool,
         prior_turns: Sequence[PriorTurn] = (),
         pending_clarification: PendingClarification | None = None,
-    ) -> tuple[AssistantResponse, RoutePlan | None]:
+    ) -> tuple[AssistantResponse, RoutePlan | None, str | None]:
         """계획하고 실행한다. 둘째 반환값은 트레이스 metadata 용 — 엔진에 못 간 두 응답
-        (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다."""
+        (스몰토크 · 라우터 실패)은 RoutePlan 이 없어서 None 이다. 셋째 반환값
+        (`resolved_router_version`)도 metadata 용이다 — 실제로 나간 라우터 프롬프트
+        버전을 `_route_metadata` 가 `AssistantResponse.route` 를 거치지 않고 바로 읽게
+        한다. `route` 는 `include_route_trace=False` 인 영속 경로에서 늘 `None` 이라,
+        그것을 거치면 권한 결정 하나로 측정 핀이 틀어진다 (fix wave item 5)."""
         # 응급은 라우터보다 앞이다 — 모델을 태우지 않고, 배타로 끝낸다.
         route_plan = resolve_emergency_route(
             query=query,
@@ -208,6 +214,10 @@ class AssistantOrchestrationService:
         # `ConversationContext` 객체를 넘겨서, 한쪽만 `pending_question` 을 채우는 식의
         # 드리프트가 애초에 생길 수 없게 한다.
         conversation = conversation_context_of(resolved, pending_clarification)
+        # `route_plan` 이 이미 채워져 있으면(응급·결정론) 시맨틱 라우터를 아예 안 거치므로
+        # 프롬프트 버전을 계산할 것이 없다 — `_route_metadata` 도 그 경우 `route_plan`
+        # 가지에서 `route_plan.prompt_version` 을 직접 읽어서 이 `None` 을 안 쓴다.
+        resolved_router_version: str | None = None
         if route_plan is None:
             # `conversation` 이 여기서야 자리를 잡으므로, 실제로 나갈 라우터 프롬프트의
             # 버전도 여기서 한 번만 계산한다(Fix round 1, R18) — `RouteTrace` ·
@@ -253,6 +263,7 @@ class AssistantOrchestrationService:
                         route=semantic_trace,
                     ),
                     None,
+                    resolved_router_version,
                 )
             if decision.social_intent is not None:
                 # Schema guarantees execute/handoffs are empty here: nothing to plan or run.
@@ -261,6 +272,7 @@ class AssistantOrchestrationService:
                         request_id=rid, intent=decision.social_intent, route=semantic_trace
                     ),
                     None,
+                    resolved_router_version,
                 )
             route_plan = assemble_route_plan(
                 decision,
@@ -283,28 +295,32 @@ class AssistantOrchestrationService:
             context=structured_context,
             include_route_trace=include_route_trace,
         )
-        return response, route_plan
+        return response, route_plan, resolved_router_version
 
 
-def _route_metadata(route_plan: RoutePlan | None, *, fallback: RouteTrace | None) -> dict[str, Any]:
+def _route_metadata(
+    route_plan: RoutePlan | None, *, resolved_router_version: str | None
+) -> dict[str, Any]:
     """루트 런 metadata 의 라우팅 키. `graph.py` 의 자식 런과 **같은 키**를 쓴다.
 
     RoutePlan 이 없는 두 응답(스몰토크 · 라우터 실패)은 시맨틱 라우터를 거친 뒤라
     LLM 라우팅으로 적는다 — 결정론 라우팅은 RoutePlan 없이 끝나는 길이 없다.
 
-    `fallback` 은 그 두 응답의 `AssistantResponse.route`(`RouteTrace`) 다 — `_plan_and_execute`
-    가 그 자리에서 이미 실제로 쓰인 `prompt_version` 을 계산해 담아 뒀으므로(Fix round 1,
-    R18), 여기서 `PROMPT_VERSION` 을 다시 하드코딩하면 맥락이 실린 turn 도 평범한 버전으로
-    적힌다. `fallback` 이 `None` 인 것은 `include_route_trace=False` 라 애초에 아무것도 안
-    실은 경우뿐이고, 그때는 기본값으로 물러난다.
+    `resolved_router_version` 은 그 두 응답을 낳은 `_plan_and_execute` 가 그 자리에서 이미
+    실제로 쓰인 `prompt_version` 을 계산해 둔 값이다(Fix round 1, R18) — 이 함수는 그것을
+    `AssistantResponse.route`(`RouteTrace`) 를 거치지 않고 직접 받는다(fix wave item 5).
+    예전에는 `route` 를 거쳐 갔는데, `route` 는 `include_route_trace=False` 인 영속 경로
+    에서 늘 `None` 이라 그 경로에서는 이 값이 절대 안 실렸다 — 권한 결정 하나가 측정용
+    프롬프트 버전 핀을 틀어지게 만든 것이다. 여기서 `PROMPT_VERSION` 을 다시 하드코딩하면
+    맥락이 실린 turn 도 평범한 버전으로 적힌다. `resolved_router_version` 이 `None` 인
+    것은 시맨틱 라우터를 거치지 않은 경우뿐이고(이 가지에 들어오는 두 응답은 둘 다 거치므로
+    실무에서는 안 생긴다), 그때는 기본값으로 물러난다.
     """
     if route_plan is None:
         return {
             "router": RouterKind.LLM.value,
-            "router_model": fallback.model if fallback is not None else ROUTER_MODEL_ID,
-            "prompt_version": (
-                fallback.prompt_version if fallback is not None else PROMPT_VERSION
-            ),
+            "router_model": ROUTER_MODEL_ID,
+            "prompt_version": resolved_router_version or PROMPT_VERSION,
         }
     return {
         "router": route_plan.router.value,

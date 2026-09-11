@@ -284,8 +284,15 @@ before 랩과 케이스 파일을 맞춰 보면 대상은 **턴 여섯**입니�
 쓰는 자리는 `#416`을 측정한 뒤 별도 PR로 판단합니다.
 
 **받아들이는 법.** `transcript.PRIOR_TURNS_REACH_INFERENCE`가 `True`로 뒤집혔고(§3),
-`drivers.SessionDriver`가 `StatelessDriver` 옆에 더해졌습니다. `collect.py`·`judge.py`·
-`report.py`는 약속대로 손대지 않았습니다.
+`drivers.SessionDriver`가 `StatelessDriver` 옆에 더해졌습니다. 스펙 §7 의 시험("이 세
+파일을 고쳐야 한다면 이음매가 샌 것")은 실제로 걸렸고, 눈을 감지 않았습니다 —
+`collect.py`는 `LapHeader.driver`와 `run_collect` 안 두 줄을, `report.py`는
+`Summary.driver`와 `render_compare`의 게이트 하나를 얻었고, `judge.py`는 이 사실을
+설명하는 산문을 얻었습니다. 이것은 이음매 누수가 아니라 의도한 초과입니다 — **어느
+드라이버로 모았는지를 기록**하는 것과 **드라이버 종류에 따라 판정을 분기**하는 것은
+다른 일이고, 금지된 것은 후자뿐입니다. 기록이 없으면 `render_compare`가 진짜로 잰
+점수 위에 "기능 부재"를 덮어씁니다 — `collect.py`·`report.py`의 `driver` 필드 문서
+참고.
 
 **이 카드가 하지 않은 것.** 범용 대화 요약·장기 기억·다중 세션 교차 참조, 반려견 상태·관찰
 사실의 임의 생성·저장, `AssistantStatus`·`CapabilityName` 확장, 무상태 경로의 동작 변경,

@@ -311,12 +311,22 @@ async def test_high_confidence_follow_up_reaches_the_general_payload(monkeypatch
 # ---------------------------------------------------------------- Resolver 실패
 
 
-async def test_resolution_failure_degrades_to_todays_behaviour() -> None:
-    """Resolver 가 죽어도 답은 나간다 — 이력 기능이 없던 때와 같게 돈다."""
+async def test_resolution_failure_degrades_to_todays_behaviour(monkeypatch) -> None:
+    """Resolver 가 죽어도 답은 나간다 — 이력 기능이 없던 때와 같게 돈다.
+
+    `response.status is not FAILED` 만으로는 헐겁다 — 그 조건은 `conversation` 이 뭐가
+    실렸어도 만족된다. 저확신 가지 테스트(`test_low_confidence_asks_instead_of_guessing`)가
+    이미 하는 것과 같은 단언(`conversation is None`)을 여기도 더해서, Resolver 실패가
+    실제로 "이력 없던 때" 로 내려가는지(맥락을 아무것도 안 실었는지) 확인한다 — 아니면
+    이 테스트는 이름과 달리 거의 무엇이든 통과시킨다. General 의 payload 를 들여다봐야
+    하므로 그 테스트와 같은 모양으로 `execute: []` + `general_fallback=True` 를 쓴다."""
+    monkeypatch.setattr(settings, "general_fallback", True)
     resolver = RecordingResolver(TurnResolutionError("down"))
+    captured: dict = {}
     service = _service_with(
         resolver=resolver,
-        router_outputs=(json.dumps({"execute": ["training"], "handoffs": []}),),
+        router_outputs=(json.dumps({"execute": [], "handoffs": []}),),
+        general_sink=captured,
     )
     response = await service.run(
         query="그거 얼마나 자주 해?",
@@ -325,6 +335,7 @@ async def test_resolution_failure_degrades_to_todays_behaviour() -> None:
         prior_turns=[_turn("사료 추천해줘", "저알레르기 사료를 고려해 보세요.")],
     )
     assert response.status is not AssistantStatus.FAILED
+    assert captured["payload"].conversation is None
 
 
 # ---------------------------------------------------------------- R16 킬 스위치

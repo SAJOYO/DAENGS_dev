@@ -26,6 +26,10 @@ flowchart TD
 `ObservationSource.evidence`는 이미 계산한 canonical 자료를 재사용하기 위한 비공개 필드다.
 `DiaryInput`이나 공개 응답에 전체 GPS 배열을 추가하지 않는다.
 
+현재 `PreparedSavedBaseBoard.slots`에는 장면 선정·조립 직후 적용한 공간·환경·동선
+스탬프도 포함된다. 장면마다 같은 규칙으로 근거를 고정하고 다음 서술 단계에 전달하기 위한
+비공개 준비 자료다. [파트 슬롯의 서비스 연결 범위](diary-part-slots.md#서비스-연결-1단계-장면별-근거-고정)를 따른다.
+
 ## 장면의 중심과 장수
 
 | 중심 종류 | 근거와 보존 규칙 | 장수 정책 |

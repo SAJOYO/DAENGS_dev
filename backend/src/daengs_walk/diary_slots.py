@@ -4,10 +4,10 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
-from daengs_walk.diary_board import BaseBoard, BaseBoardPolicy, BoardScene
+from daengs_walk.diary_board import BaseBoard, BaseBoardPolicy, BoardScene, VerifiedBoardRoute
 from daengs_walk.diary_board_assembly import assemble_base_board
 from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_input import DiaryContract, Digest, Identifier, digest
+from daengs_walk.diary_input import DiaryContract, DiaryInput, Digest, Identifier, digest
 
 Part = Literal["space", "environment", "motion"]
 
@@ -69,6 +69,27 @@ class PartStamp(DiaryContract):
 
     def materials(self):
         return self.evidence + ((self.location_reference,) if self.location_reference else ())
+
+
+class BoardSlotSnapshot(DiaryContract):
+    """Private evidence for one selected board; no prose, persistence or UI contract."""
+
+    client_session_id: Identifier
+    input_revision: Digest
+    plan_revision: Digest
+    policy: SlotPolicy
+    stamps: tuple[PartStamp, ...]
+
+    def revision(self):
+        # The board plan already binds the source revision. Keep the preview-v1
+        # digest stable so the same board/policy/materials have one identity.
+        return digest(
+            {
+                "board": self.plan_revision,
+                "policy": self.policy.model_dump(mode="json"),
+                "stamps": [s.model_dump(mode="json") for s in self.stamps],
+            }
+        )
 
 
 class SlotPreview(DiaryContract):
@@ -175,27 +196,43 @@ def admit(scene_id, candidates, decisions, policy):
     )
 
 
-def prepare_slot_preview(source, policy: SlotPolicy, board_policy: BaseBoardPolicy, *, route=None):
+def prepare_board_slots(
+    source: DiaryInput,
+    board: BaseBoard,
+    policy: SlotPolicy,
+    *,
+    route: VerifiedBoardRoute | None = None,
+) -> BoardSlotSnapshot:
+    """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
 
-    plan = prepare_base_board(source, board_policy, route=route)
-    board = assemble_base_board(source, plan, route=route)
+    if (
+        board.client_session_id != source.client_session_id
+        or board.input_revision != source.revision()
+    ):
+        raise ValueError("part slots require the selected board's source snapshot")
     motion, blocks = verified_motion(source, route)
     stamps = []
     for scene in board.scenes:
         candidates, decisions = candidates_for_scene(source, scene, policy, motion, blocks)
         stamps.append(admit(scene.id, candidates, decisions, policy))
-    revision = digest(
-        {
-            "board": board.plan_revision,
-            "policy": policy.model_dump(mode="json"),
-            "stamps": [s.model_dump(mode="json") for s in stamps],
-        }
+    return BoardSlotSnapshot(
+        client_session_id=board.client_session_id,
+        input_revision=board.input_revision,
+        plan_revision=board.plan_revision,
+        policy=policy,
+        stamps=tuple(stamps),
     )
+
+
+def prepare_slot_preview(source, policy: SlotPolicy, board_policy: BaseBoardPolicy, *, route=None):
+    plan = prepare_base_board(source, board_policy, route=route)
+    board = assemble_base_board(source, plan, route=route)
+    slots = prepare_board_slots(source, board, policy, route=route)
     return SlotPreview(
         policy=policy,
-        revision=revision,
+        revision=slots.revision(),
         base_board=board,
-        stamps=tuple(stamps),
+        stamps=slots.stamps,
         scenes=board.scenes,
     )

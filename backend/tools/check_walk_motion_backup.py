@@ -11,6 +11,7 @@ import copy
 import importlib.util
 import json
 import os
+import struct
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -290,10 +291,126 @@ async def main(dsn):
             await request("GET", empty_path + "/chunks/0", 404)
             empty_calc = await request("GET", f"/app/walks/{empty_id}/motion-calculation")
             assert empty_calc["distance_m"] == 0 and empty_calc["segments"] == []
+            # Additive precision tables can arrive after the base deployment.
+            from daengs_backend.schemas.walk_precision import PrecisionManifest, PrecisionPoint
+            from daengs_backend.services import walk_precision_contract as pc
+
+            assert (await request("GET", "/app/walks/motion-capabilities"))[
+                "precision_versions"
+            ] == []
+            precision_path = f"/app/walks/{walk_id}/motion-precision"
+            await request("GET", precision_path, 503)
+            async with engine.begin() as conn:
+                pg = (await conn.get_raw_connection()).driver_connection
+                for filename in ["db/migrations/2026-09-11_walk_precision_backup.sql"] * 2 + [
+                    "db/init/36_walk_precision_backup.sql",
+                    "db/migrations/verify_2026-09-11_walk_precision_backup.sql",
+                ]:
+                    await pg.execute((ROOT / filename).read_text(encoding="utf-8"))
+            assert (await request("GET", "/app/walks/motion-capabilities"))[
+                "precision_versions"
+            ] == [pc.VERSION]
+            await request("GET", precision_path, 404)
+            for selected_id, selected_raw, base_done in [
+                (walk_id, raw, complete),
+                (empty_id, [], empty_done),
+            ]:
+                cid = (
+                    manifest["client_session_id"] if selected_id == walk_id else str(empty_session)
+                )
+                pm = PrecisionManifest(
+                    client_session_id=cid,
+                    base_evidence_fingerprint=base_done["evidence_fingerprint"],
+                    point_count=len(selected_raw),
+                )
+                pm_hash = pc.manifest_digest(pm)
+                pp = [
+                    PrecisionPoint(
+                        client_seq=i,
+                        lat_bits=struct.pack("!d", float(r.lat) + 1e-8).hex(),
+                        lng_bits=struct.pack("!d", float(r.lng) + 2e-8).hex(),
+                        accuracy_bits=None
+                        if r.accuracy_m is None
+                        else struct.pack("!f", r.accuracy_m).hex(),
+                    )
+                    for i, r in enumerate(selected_raw)
+                ]
+                parts = [pp[i : i + 256] for i in range(0, len(pp), 256)]
+                receipt = {
+                    "manifest_fingerprint": pm_hash,
+                    "evidence_fingerprint": pc.evidence_digest(
+                        pm_hash, [pc.chunk_digest(part) for part in parts]
+                    ),
+                }
+                ppath = f"/app/walks/{selected_id}/motion-precision"
+                cpath = f"/app/walks/{selected_id}/motion-calculation"
+                await request("PUT", ppath, json=pm.model_dump())
+                await request("GET", cpath, 409)
+                if parts:
+                    await request("POST", ppath + "/complete", 409, json=receipt)
+                    await request("GET", ppath + "/chunks/0", 409)
+                    bad = [q.model_dump() for q in parts[0]]
+                    bad[0]["lat_bits"] = "0000000000000000"
+                    await request(
+                        "PUT",
+                        ppath + "/chunks/0",
+                        409,
+                        json={"manifest_fingerprint": pm_hash, "points": bad},
+                    )
+                for i in reversed(range(len(parts))):
+                    body = {
+                        "manifest_fingerprint": pm_hash,
+                        "points": [q.model_dump() for q in parts[i]],
+                    }
+                    replies = await asyncio.gather(
+                        *[request("PUT", ppath + f"/chunks/{i}", json=body) for _ in range(2)]
+                    )
+                    assert replies[0] == replies[1]
+                app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = lambda: (
+                    AppPrincipal(app_user_id=other)
+                )
+                for method, suffix, body in [
+                    ("GET", "", None),
+                    ("PUT", "", pm.model_dump()),
+                    ("POST", "/complete", receipt),
+                    ("GET", "/chunks/0", None),
+                ]:
+                    await request(method, ppath + suffix, 404, **({"json": body} if body else {}))
+                app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = current
+                done = await request("POST", ppath + "/complete", json=receipt)
+                assert done == await request("POST", ppath + "/complete", json=receipt)
+                assert done["state"] == "complete"
+                calc = await request("GET", cpath)
+                assert (
+                    calc["coordinate_basis"] == "device-fix-bits-v1"
+                    and calc["precision_fingerprint"] == receipt["evidence_fingerprint"]
+                )
+                assert calc["device_result_verified"] is False
+                for i, part in enumerate(parts):
+                    assert (await request("GET", ppath + f"/chunks/{i}"))["points"] == [
+                        q.model_dump() for q in part
+                    ]
+                if parts:
+                    changed = [q.model_dump() for q in parts[0]]
+                    changed[0]["lat_bits"] = struct.pack(
+                        "!d", float(selected_raw[0].lat) + 3e-8
+                    ).hex()
+                    await request(
+                        "PUT",
+                        ppath + "/chunks/0",
+                        409,
+                        json={"manifest_fingerprint": pm_hash, "points": changed},
+                    )
+            async with sessions() as session:
+                assert (await session.get(WalkPointChunk, (walk_id, 0))).payload == encode_chunk(
+                    raw
+                )
             async with engine.begin() as conn:
                 await conn.execute(text("DELETE FROM app_users WHERE id=:id"), {"id": owner})
                 assert await conn.scalar(text("SELECT count(*) FROM walk_motion_backups")) == 0
                 assert await conn.scalar(text("SELECT count(*) FROM walk_motion_chunks")) == 0
+                assert await conn.scalar(text("SELECT count(*) FROM walk_precision_backups")) == 0
+                assert await conn.scalar(text("SELECT count(*) FROM walk_precision_chunks")) == 0
             await request("GET", path, 404)
             await request("GET", calculation_path, 404)
         # Reuse the registered mutation cases, scoped to this migration. No psql or full SQL suite required.
@@ -302,29 +419,30 @@ async def main(dsn):
         )
         checks = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(checks)
-        case = next(c for c in checks.CHECKS if c[1] == "walk_motion_backup")
         mutation_count = 0
-        for mutation in ["", "DROP TABLE walk_motion_backups CASCADE", *case[4]]:
-            async with engine.connect() as conn:
-                transaction = await conn.begin()
-                # SQLAlchemy begins lazily; force BEGIN before using the underlying asyncpg connection.
-                await conn.execute(text("SELECT 1"))
-                pg = (await conn.get_raw_connection()).driver_connection
-                if mutation:
-                    await pg.execute(mutation)
-                try:
-                    await pg.execute(
-                        (ROOT / "db/migrations/verify_2026-09-11_walk_motion_backup.sql").read_text(
-                            encoding="utf-8"
+        for name in ("walk_motion_backup", "walk_precision_backup"):
+            case = next(c for c in checks.CHECKS if c[1] == name)
+            for mutation in ["", f"DROP TABLE {name}s CASCADE", *case[4]]:
+                async with engine.connect() as conn:
+                    transaction = await conn.begin()
+                    # SQLAlchemy begins lazily; force BEGIN before using the underlying asyncpg connection.
+                    await conn.execute(text("SELECT 1"))
+                    pg = (await conn.get_raw_connection()).driver_connection
+                    if mutation:
+                        await pg.execute(mutation)
+                    try:
+                        await pg.execute(
+                            (ROOT / f"db/migrations/verify_2026-09-11_{name}.sql").read_text(
+                                encoding="utf-8"
+                            )
                         )
-                    )
-                except Exception:
-                    if not mutation:
-                        raise
-                else:
-                    assert not mutation, f"verifier missed: {mutation}"
-                await transaction.rollback()
-                mutation_count += 1
+                    except Exception:
+                        if not mutation:
+                            raise
+                    else:
+                        assert not mutation, f"verifier missed: {mutation}"
+                    await transaction.rollback()
+                    mutation_count += 1
         print(
             f"GPS backup: {count} HTTP checks, {mutation_count} migration cases; all passed, no skips"
         )

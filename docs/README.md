@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/gps-motion-precision.md](walk/gps-motion-precision.md) | GPS 좌표 원본 비트의 추가 백업·정밀 계산·앱 대조와 적용 순서 |
 | [walk/diary-part-slots.md](walk/diary-part-slots.md) | 공간·환경·동선 조건과 스탬프, Gemini 미리보기 API·CLI 워킹 스켈레톤 |
 | [walk/gps-motion-calculation.md](walk/gps-motion-calculation.md) | 고정 GPS 정책의 서버 재생·계산 조회, 앱 기준값 대조와 원본 좌표 정밀도 한계 |
 | [walk/gps-motion-backup.md](walk/gps-motion-backup.md) | GPS 측정 정책·수신 메타데이터 분할 백업, 저장 완료 지문과 읽기 계약 |

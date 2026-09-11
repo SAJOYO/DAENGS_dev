@@ -24,6 +24,9 @@ from daengs_backend.services.walk_motion_contract import chunk_digest
 
 @pytest.fixture
 def boundary(monkeypatch):
+    from daengs_backend.repositories import walk_precision
+
+    monkeypatch.setattr(walk_precision, "available", AsyncMock(return_value=False))
     case = next(
         c
         for c in json.loads(
@@ -125,6 +128,66 @@ def test_missing_storage_does_not_advertise_calculation(boundary):
     assert response.status_code == 200
     assert response.json()["calculation_versions"] == []
     assert response.json()["backup_supported"] is False
+
+
+@pytest.mark.parametrize(
+    "damage", [None, "collecting", "hash", "missing_chunk", "base", "client", "point"]
+)
+def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, damage):
+    from daengs_backend.repositories import walk_precision as precision
+    from daengs_backend.schemas.walk_precision import PrecisionPoint
+    from daengs_backend.services.walk_precision_contract import chunk_digest as precision_digest
+
+    case = next(
+        c
+        for c in json.loads(
+            (Path(__file__).parents[1] / "fixtures/gps-motion-precision-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )["cases"]
+        if c["name"] == "walking"
+    )
+    row = SimpleNamespace(
+        walk_id=boundary.walk.id,
+        manifest=case["precision_manifest"],
+        manifest_fingerprint=case["precision_manifest_fingerprint"],
+        evidence_fingerprint=case["precision_fingerprint"],
+    )
+    chunks = [
+        SimpleNamespace(
+            chunk_index=0,
+            payload=case["precision_points"],
+            fingerprint=precision_digest(
+                [PrecisionPoint.model_validate(p) for p in case["precision_points"]]
+            ),
+        )
+    ]
+    monkeypatch.setattr(precision, "available", AsyncMock(return_value=True))
+    monkeypatch.setattr(precision, "backup", AsyncMock(return_value=row))
+    monkeypatch.setattr(precision, "chunks", AsyncMock(return_value=chunks))
+    if damage == "collecting":
+        row.evidence_fingerprint = None
+    if damage == "hash":
+        row.evidence_fingerprint = "sha256:" + "0" * 64
+    if damage == "missing_chunk":
+        chunks.clear()
+    if damage == "base":
+        row.manifest["base_evidence_fingerprint"] = "sha256:" + "0" * 64
+    if damage == "client":
+        row.manifest["client_session_id"] = str(uuid.uuid4())
+    if damage == "point":
+        chunks[0].payload[0]["lat_bits"] = "0000000000000000"
+    response = boundary.client.get(boundary.path)
+    assert response.status_code == (409 if damage else 200), response.text
+    if damage is None:
+        data = response.json()
+        assert data["coordinate_basis"] == "device-fix-bits-v1"
+        assert data["precision_fingerprint"] == row.evidence_fingerprint
+        assert data["device_result_verified"] is False
+        assert data["distance_m"] == pytest.approx(
+            case["expected"]["distance_m"], rel=1e-10, abs=1e-7
+        )
+        assert data["segments"] == case["expected"]["segments"]
 
 
 @pytest.mark.parametrize(

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.walk_storyboard import (
+    MAX_PREPARATION_BUDGET_MS,
     BundleFormat,
     DiaryStoryboardResponse,
     StoryboardRequest,
@@ -47,7 +48,7 @@ async def capabilities(user: CurrentAppUser):
         else [],
         "target_scene_count": {"min": 1, "max": 50},
         "photo_manifest_required_if_available": True,
-        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": 10_000}
+        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": MAX_PREPARATION_BUDGET_MS}
         if settings.walk_diary_enabled
         else None,
     }

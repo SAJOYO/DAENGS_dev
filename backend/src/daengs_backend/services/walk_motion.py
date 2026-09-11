@@ -184,7 +184,12 @@ async def completed_input(session, owner, walk_id):
         manifest, raw, points, fingerprint = await _validated_contents(session, walk, row)
         if fingerprint != row.evidence_fingerprint:
             raise MotionConflict("motion_digest_mismatch")
-        return manifest, raw, points, fingerprint
+        from daengs_backend.services.walk_precision import refine_completed
+
+        raw, precision_fp = await refine_completed(
+            session, walk_id, raw, fingerprint, manifest.client_session_id
+        )
+        return manifest, raw, points, fingerprint, precision_fp
     finally:
         # No writes and no lock held while the CPU-only engine runs.
         await session.rollback()

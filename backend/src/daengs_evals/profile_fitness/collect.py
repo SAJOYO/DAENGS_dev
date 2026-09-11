@@ -448,6 +448,7 @@ async def collect(
     retry_failed: bool = False,
     auto_retry: int = 2,
     seed_from: str | None = None,
+    pace: float = 0.0,
     log: Callable[[str], None] = print,
 ) -> Path:
     from daengs_backend.config import settings
@@ -498,6 +499,9 @@ async def collect(
     totals = {"router_in": 0, "router_out": 0, "general_in": 0, "general_out": 0}
     statuses: dict[str, int] = {}
     for i, (q, arm, run) in enumerate(todo, start=1):
+        if pace and i > 1:
+            # 무료 Gemini 키는 모델당 분당 15요청. 셀 하나가 라우터+general 두 번이라 8초 이상 띄운다.
+            await asyncio.sleep(pace)
         row = await run_cell(
             orchestrator,
             q,
@@ -542,6 +546,7 @@ async def collect(
                 retry_failed=True,
                 auto_retry=auto_retry - 1,
                 seed_from=seed_from,
+                pace=pace,
                 log=log,
             )
     return path
@@ -569,6 +574,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--questions", default=str(QUESTIONS_V1_PATH))
     parser.add_argument("--profiles", default=str(PROFILES_V1_PATH))
     parser.add_argument("--limit", type=int, default=None, help="앞에서부터 N 문항만")
+    parser.add_argument(
+        "--pace", type=float, default=0.0, help="셀 사이 쉬는 초. 무료 Gemini 키면 9"
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
         "--seed-from",
@@ -593,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
             questions_path=Path(args.questions),
             profiles_path=Path(args.profiles),
             limit=args.limit,
+            pace=args.pace,
             resume=args.resume,
             retry_failed=args.retry_failed,
             seed_from=args.seed_from,

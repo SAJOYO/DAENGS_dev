@@ -178,6 +178,20 @@ class Settings(BaseSettings):
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
     )
 
+    # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
+    # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
+    # 승인된 기능(Task 1~5)이라 배포 즉시 도는 것이 맞고, 끄는 쪽이 예외 상황(장애
+    # 대응·비용 급증)입니다. 지금은 `prior_turns` 를 threading 하는 호출자가 없어
+    # (Task 7 전) 빈 후보면 fast path 가 모델을 안 태우므로 이 값이 꺼져 있어도 관측되는
+    # 차이가 없습니다 — 그래도 Task 7 이후 되돌릴 수 있는 자리를 배포 전에 먼저 파 둡니다.
+    #
+    # 켜져 있으면(기본) 애매한 발화마다 시맨틱 라우터보다 앞서 Gemini 왕복이 하나 더
+    # 붙습니다. 끄면 `service._plan_and_execute` 가 리졸버를 아예 안 부르고 `resolved
+    # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
+    turn_resolver: bool = Field(
+        default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
+    )
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는

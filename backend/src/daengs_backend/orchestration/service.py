@@ -180,7 +180,10 @@ class AssistantOrchestrationService:
         # 판정이 그것을 약하게 만들 수 없다. 결정론이 앞인 것은 명시 신호가 이미 답이기
         # 때문이다 — 관계를 물을 이유가 없다.
         resolved: ResolvedTurn | None = None
-        if route_plan is None:
+        # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
+        # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279 와 같은
+        # 이유, `general_fallback` 이 아래에서 읽히는 자리와 같은 규칙).
+        if route_plan is None and settings.turn_resolver:
             try:
                 resolved = await self._turn_resolver.resolve(
                     query=query, candidates=prior_turns, pending=pending_clarification

@@ -36,6 +36,7 @@ __all__ = [
     "MAX_CANDIDATE_BLOCK_CHARS",
     "MAX_CANDIDATE_PAIRS",
     "RESOLUTION_CONFIDENCE_FLOOR",
+    "TURN_RESOLVER_MAX_OUTPUT_TOKENS",
     "TURN_RESOLVER_MODEL_ID",
     "TURN_RESOLVER_PROMPT_VERSION",
     "ConversationContext",
@@ -249,6 +250,15 @@ def build_candidate_block(turns: Sequence[PriorTurn]) -> str:
 TURN_RESOLVER_MODEL_ID = "gemini-3.1-flash-lite"
 #: 프롬프트 문구를 바꾸면 올린다 — 로그·eval 이 이 값으로 프롬프트 버전을 구분한다.
 TURN_RESOLVER_PROMPT_VERSION = "turn-resolver-ko-v1"
+#: 출력 상한 (R17, Task 4 에서 미룬 결함 — 이 모듈이 요청 경로에 들어오면서 값을 치른다).
+#: `semantic.ROUTER_MAX_OUTPUT_TOKENS` 의 256 은 그 스키마(열거형·리스트뿐)에는 넉넉하지만
+#: 이 스키마는 다르다 — `standalone_query` 가 `current_query` 를 통째로 다시 쓴 것이고
+#: `current_query` 자체에 하드 캡이 없다(`schemas/assistant.py` 는 `place` 경로에서만
+#: 1,000자를 강제). `ambiguity` 는 한두 문장의 자유 텍스트다. 512 는 한국어 1,000자
+#: 재작성 + 서술 한두 문장 + JSON 골격을 여유 있게 덮으면서도 "무제한" 은 아닌 값으로
+#: 골랐다 — 잘려서 스키마 검증에 떨어지면 `TurnResolutionError` 로 좁혀져 오늘의 동작으로
+#: 내려가므로(이미 만든 안전 경로), 너무 좁게 잡아 실패를 늘리는 쪽보다 이쪽이 안전하다.
+TURN_RESOLVER_MAX_OUTPUT_TOKENS = 512
 
 _POLICY = """You classify how the owner's current message relates to the conversation so far. You do not answer it.
 
@@ -405,6 +415,7 @@ def _turn_resolver_generation_config() -> Any:
     return types.GenerateContentConfig(
         temperature=ROUTER_TEMPERATURE,
         candidate_count=ROUTER_CANDIDATE_COUNT,
+        max_output_tokens=TURN_RESOLVER_MAX_OUTPUT_TOKENS,
         response_mime_type="application/json",
         response_json_schema=_RawResolution.model_json_schema(),
     )

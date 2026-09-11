@@ -790,3 +790,16 @@ async def test_an_empty_ask_never_reaches_the_user() -> None:
     result = await run_adapter(json.dumps({"kind": "ask", "text": "", "question": ASK}))
     assert result.status == CapabilityStatus.ERROR
     assert result.error is not None and result.error.kind == "general_invalid_output"
+
+
+def test_a_general_mechanism_is_allowed_but_this_dogs_cause_is_not() -> None:
+    """승인된 경계를 **답변 쪽에서** 못 박는다 (2026-09-11 정책, 2026-09-12 적용).
+
+    거절 규칙은 "언제 안 답하나" 를 정하지 "답할 때 어디까지 말해도 되나" 를 정하지 않았다.
+    그 빈칸에서 `초록색 구토는 담즙이…` 가 나왔고, 그 문장 자체는 정책 안이다 — 일반적인
+    기전을 조건부로 말한 것이지 이 아이의 원인을 판정한 것이 아니다. 선은 **단정**이다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="초록색 토를 해"))
+    assert "A general mechanism may be explained; this dog's cause may not be named" in prompt
+    assert "Keep every cause sentence hedged" in prompt
+    assert "never write 때문입니다 · 원인은 ~입니다 · ~로 인한 것입니다" in prompt

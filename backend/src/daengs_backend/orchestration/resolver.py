@@ -34,8 +34,11 @@ __all__ = [
     "PriorTurn",
     "ResolvedTurn",
     "TurnRelation",
+    "build_candidate_block",
+    "fit_candidates",
     "needs_resolution",
     "new_turn",
+    "truncate_assistant",
 ]
 
 #: 후보로 쓰는 완료 turn 쌍의 수. 가장 긴 수용 케이스가 요구하는 최소가 3이다.
@@ -155,3 +158,45 @@ def new_turn(query: str) -> ResolvedTurn:
     return ResolvedTurn(
         relation=TurnRelation.NEW, current_query=query, resolution_confidence=1.0
     )
+
+
+def truncate_assistant(text: str) -> str:
+    """`MAX_ASSISTANT_CHARS` 에서 자르고 `…` 를 붙인다. DB 상한은 8,000자다."""
+    if len(text) <= MAX_ASSISTANT_CHARS:
+        return text
+    return text[:MAX_ASSISTANT_CHARS] + "…"
+
+
+def fit_candidates(turns: Sequence[PriorTurn]) -> list[PriorTurn]:
+    """블록 상한과 pair 개수 상한에 맞게 **오래된 쌍부터** 버린다. 최신 쌍은 무조건 남는다.
+
+    한 쌍의 최대치가 user 2,000자 + assistant 400자 = 2,400자로 `MAX_CANDIDATE_BLOCK_CHARS`
+    아래이므로 이 규칙은 늘 만족 가능하다. 세 숫자는 같이 움직여야 한다.
+    """
+    kept: list[PriorTurn] = []
+    total = 0
+    for turn in reversed(list(turns)):
+        # 개수 상한에 이미 도달했으면 그만
+        if len(kept) >= MAX_CANDIDATE_PAIRS:
+            break
+        size = len(turn.user) + len(truncate_assistant(turn.assistant))
+        # 문자 상한을 초과하면 이 쌍을 버리고 그만
+        if kept and total + size > MAX_CANDIDATE_BLOCK_CHARS:
+            break
+        kept.append(turn)
+        total += size
+    return list(reversed(kept))
+
+
+def build_candidate_block(turns: Sequence[PriorTurn]) -> str:
+    """오래된 것부터, 한 줄에 한 발화, 번호를 붙여서.
+
+    **번호가 `referenced_turn_id` 의 근거다** — 모델이 "U1 을 가리킨다" 고 말할 수 있어야
+    서버가 그것을 실제 turn id 로 되돌린다. JSON 이 아닌 것은 따옴표·이스케이프로 토큰이
+    늘기 때문이다.
+    """
+    lines: list[str] = []
+    for index, turn in enumerate(turns, start=1):
+        lines.append(f"U{index}: {turn.user}")
+        lines.append(f"A{index}: {truncate_assistant(turn.assistant)}")
+    return "\n".join(lines)

@@ -4,12 +4,16 @@ import pytest
 
 from daengs_backend.orchestration.contracts import ObservationAxis
 from daengs_backend.orchestration.resolver import (
+    MAX_ASSISTANT_CHARS,
     PendingClarification,
     PriorTurn,
     ResolvedTurn,
     TurnRelation,
+    build_candidate_block,
+    fit_candidates,
     needs_resolution,
     new_turn,
+    truncate_assistant,
 )
 
 
@@ -126,3 +130,58 @@ def test_conversation_context_builds_without_importing_resolver() -> None:
 
     context = CC(relation=TR.NEW)
     assert context.relation is TR.NEW
+
+
+def test_assistant_text_is_truncated_with_an_ellipsis() -> None:
+    long = "가" * 500
+    out = truncate_assistant(long)
+    assert len(out) == MAX_ASSISTANT_CHARS + 1
+    assert out.endswith("…")
+
+
+def test_short_assistant_text_is_untouched() -> None:
+    assert truncate_assistant("네, 맞습니다.") == "네, 맞습니다."
+
+
+def test_oldest_pairs_are_dropped_first_when_the_block_is_too_long() -> None:
+    turns = [_turn("질" + "문" * 1_500, "답" * 400) for _ in range(3)]
+    fitted = fit_candidates(turns)
+    assert len(fitted) < 3
+    assert fitted[-1] is turns[-1]  # 최신 쌍은 무조건 남는다
+
+
+def test_the_newest_pair_always_survives() -> None:
+    """한 쌍의 최대치(2,000+400)가 블록 상한 아래라 이 규칙은 늘 만족 가능하다."""
+    turns = [_turn("질" * 2_000, "답" * 400)]
+    assert fit_candidates(turns) == turns
+
+
+def test_newest_pairs_up_to_max_candidate_pairs_survive() -> None:
+    """pair count 상한을 초과하면 오래된 쌍부터 버린다. 5개를 주고 3개가 남아야 하고,
+    그 3개는 가장 최신의 3개여야 한다."""
+    from daengs_backend.orchestration.resolver import MAX_CANDIDATE_PAIRS
+
+    # 5개의 짧은 쌍 — 문자 예산은 충분하므로 pair count 상한이 결정한다
+    turns = [_turn(f"질문{i}", f"답변{i}") for i in range(5)]
+    fitted = fit_candidates(turns)
+
+    assert len(fitted) == MAX_CANDIDATE_PAIRS
+    # 가장 최신의 3개여야 한다 (index 2, 3, 4)
+    assert fitted == turns[2:5]
+    # 오래된 것부터 유지해야 한다 (oldest-first order)
+    assert fitted[0] is turns[2]
+    assert fitted[1] is turns[3]
+    assert fitted[2] is turns[4]
+
+
+def test_block_numbers_pairs_oldest_first_for_reference() -> None:
+    turns = [_turn("첫 질문", "첫 답"), _turn("둘째 질문", "둘째 답")]
+    block = build_candidate_block(turns)
+    assert "U1: 첫 질문" in block
+    assert "A1: 첫 답" in block
+    assert "U2: 둘째 질문" in block
+    assert block.index("U1:") < block.index("U2:")
+
+
+def test_empty_candidates_render_to_an_empty_block() -> None:
+    assert build_candidate_block([]) == ""

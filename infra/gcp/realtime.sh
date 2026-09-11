@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 실시간 산책·날씨 서비스 배포 (D-068).
+# 실시간 산책·날씨 서비스 배포 (D-070).
 #   PROJECT=daengs bash infra/gcp/realtime.sh
 #
 # ⚠ Git Bash 에서 돌린다. `MSYS_NO_PATHCONV=1` 을 켜지 마라 — gcloud 자체가 깨진다

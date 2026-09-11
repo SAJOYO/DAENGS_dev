@@ -170,7 +170,7 @@ clone)뿐이고 dev 스냅샷 타이밍을 안 기다려도 된다는 이유였�
 3. **CI/CD** — dev→main 머지 시 빌드·푸시·SSH 배포, **Workload Identity Federation**(키 파일 없는 인증)
 4. **운영 다듬기** — Tailscale(팀원 DB 접속·관리 평면 분리), celery → Cloud Scheduler 검토, 스냅샷 주기화
 
-### 🔵 서빙 일부를 Cloud Run 으로 — 실시간 산책·날씨 (2026-09-11 · #435 · D-068)
+### 🔵 서빙 일부를 Cloud Run 으로 — 실시간 산책·날씨 (2026-09-11 · #435 · D-070)
 
 **위 목록에 없던 축이 하나 열렸고, 같은 날 구현·배포까지 끝났다.** `daengs_life/realtime/` 을
 **Cloud Run 서비스**로 뗐다 — 설계와 실측은 [`realtime-service.md`](realtime-service.md), 명령
@@ -200,7 +200,7 @@ backend 이미지의 선례가 되지는 않는다(그쪽은 `ml` 이 필요하�
    Scheduler · 잡 둘 · 방화벽 규칙 · Artifact Registry · Secret 4개 · 서비스 계정 · 알림 정책을
    지운다. **버킷 `gs://daengs-corpus` 는 일부러 남긴다** — 되돌릴 수 없으므로 마지막에
    따로 `gcloud storage rm -r`. 집 서버는 건드릴 것이 없다(정본이 거기 그대로다)
-3. **실시간 서비스 삭제** (D-068) — `PROJECT=daengs bash infra/gcp/realtime-teardown.sh`.
+3. **실시간 서비스 삭제** (D-070) — `PROJECT=daengs bash infra/gcp/realtime-teardown.sh`.
    `daengs-realtime` 서비스 · 이미지 태그 · 시크릿 셋(`realtime-redis-url`·`realtime-kakao-key`·
    `realtime-kma-hub-key`)을 지운다. **방화벽 규칙은 지울 것이 없다** — 애초에 안 만들었다
    (`default-allow-internal` 이 이미 덮는다, `realtime-service.md` §4). VM 의 `backend/.env` 에

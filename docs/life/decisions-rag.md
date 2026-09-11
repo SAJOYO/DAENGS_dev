@@ -10096,7 +10096,7 @@ docstring 이 직접 적어 뒀다: *"워커가 중간에 죽으면 이 행이 `
 `[tool.uv.build-backend] module-name` 이 **아홉** 패키지를 나열하는 제약이 **사라진다**
 (프로젝트를 설치하지 않으므로). 그 제약이 「이미지 내용까지 좁히기」를 막고 있던 것이었다.
 
-> 🔴 **2026-09-11 정정 (#435 · D-068)** — 여기 「여덟」이라고 적었는데 **아홉**이다.
+> 🔴 **2026-09-11 정정 (#435 · D-070)** — 여기 「여덟」이라고 적었는데 **아홉**이다.
 > 실제 목록은 `daengs_backend` · `daengs_evals` · `daengs_gait` · `daengs_journey` ·
 > `daengs_life` · `daengs_place` · `daengs_screening` · `daengs_training` · `daengs_walk`.
 > 세어서 확인했다. 결론(그 제약이 사라진다)은 그대로다 — 개수만 틀렸다.

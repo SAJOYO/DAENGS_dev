@@ -3,7 +3,7 @@
 ```
 상태:        설계 승인됨 (구현 전)
 날짜:        2026-09-11
-카드:        #435 · 결정 번호 D-068
+카드:        #435 · 결정 번호 D-070
 사람 결정:   4건 (아래 §2)
 영향 범위:   daengs_life/realtime + app/{controllers,services,dto}/{walk,weather}
              daengs_backend — 접점 4곳 중 3곳 (ask 는 그대로)
@@ -251,7 +251,7 @@ VPC 도 VM 도 필요 없는 순정 서버리스이고 발표 주장이 가장 �
 | 무엇 | 어디 |
 | --- | --- |
 | 운영 설계 · 배포 플래그 · 검증 일곱 | `docs/deploy/realtime-service.md` |
-| 결정과 되돌리기 비용 | `docs/decisions.md` **D-068** |
+| 결정과 되돌리기 비용 | `docs/decisions.md` **D-070** |
 | 이 카드가 2단계인 이유 | `docs/decisions.md` D-021 · `daengs_backend/main.py:62~78` |
 | 인증을 라우터에 안 넣은 이유 | `daengs_backend/main.py:274~292` · D-018 |
 | Cloud Run 을 기각했던 근거(서빙 전체) | `docs/decisions.md` D-042 |

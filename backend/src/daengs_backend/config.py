@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # 두 패키지가 같은 env 를 각자 읽는 것이 서로를 import 하는 것보다 쌉니다.
     redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
 
-    # 실시간 산책·날씨를 어디서 부르나 (D-068).
+    # 실시간 산책·날씨를 어디서 부르나 (D-070).
     #
     # **비어 있으면 지금까지와 똑같다** — 같은 프로세스의 함수를 부른다. 값이 있으면 그
     # 주소의 Cloud Run 서비스를 HTTP 로 부른다. 개발 PC·개발서버는 비워 두고 GCP VM 의

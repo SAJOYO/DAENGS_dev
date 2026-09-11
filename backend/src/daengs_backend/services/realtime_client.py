@@ -1,4 +1,4 @@
-"""실시간 서비스(Cloud Run)를 부르는 얇은 래퍼 (D-068).
+"""실시간 서비스(Cloud Run)를 부르는 얇은 래퍼 (D-070).
 
 **응답을 해석하지 않는다.** 상태 코드와 JSON 을 그대로 돌려준다 — `/life/walk-conditions`
 는 판정 불가일 때 **503 본문에 응답 전체**를 싣고(`daengs_life` 의 `controllers/walk.py`)

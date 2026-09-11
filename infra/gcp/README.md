@@ -183,7 +183,7 @@ DAENGS_CORPUS_JOB=corpus-refresh
 `GEMINI_API_KEY` 를 올려야 한다(CLAUDE.md) — 빈 셸에서 `up -d` 를 치면 빈 키가 박혀 의미
 라우터가 죽는다.
 
-## `realtime.sh` — 실시간 산책·날씨 서비스 (D-068)
+## `realtime.sh` — 실시간 산책·날씨 서비스 (D-070)
 
 코퍼스 파이프라인과 별도 스크립트다. `daengs-realtime` Cloud Run **서비스**(잡이 아니다 —
 `min-instances=0` 이라도 리비전은 상시 존재하고, 리비전이 뜨려면 시크릿이 그 자리에서
@@ -209,13 +209,41 @@ DAENGS_CORPUS_JOB=corpus-refresh
    값을 아직 안 넣은 시크릿이 있으면 스크립트가 배포로 안 넘어가고 안내만 찍은 뒤 `exit 0`
    한다(오류 아님) — 위 1번을 채우고 다시 돌리면 된다. `docker/realtime/` 를 고쳤으면
    `.gcloudignore` 에도 그 경로가 열려 있는지 먼저 확인한다(`gcloud meta list-files-for-upload`).
-3. **검증**:
+3. **검증** (2026-09-11 실측한 방법 그대로):
+
+   ⚠ **`/healthz` 로 확인하지 마라.** Cloud Run 앞의 구글 프런트엔드가 **그 경로 하나를
+   가로챈다** — 요청이 컨테이너에 안 닿고 구글의 일반 404 HTML 이 오며 **컨테이너 로그에
+   요청 기록조차 안 남는다.** 리비전은 Ready 라서 「서비스가 죽었다」로 오인하기 딱 좋다
+   (실제로 그렇게 오래 헤맸다). 엔드포인트는 `/health` 다.
+
+   ⚠ **개발 PC 의 `gcloud auth print-identity-token` 으로는 200 이 안 나온다.** 사용자
+   계정 토큰은 audience 가 이 서비스 URL 이 아니라서 **미인증으로 취급**된다. 인증된 호출은
+   **VM 에서 메타데이터 서버로** 받은 토큰으로 한다 — 어차피 실제로 부르는 쪽이 VM 이다.
+
    ```powershell
-   $T = gcloud auth print-identity-token
+   # 개발 PC — 인터넷에서 막히는지만 본다
    $U = gcloud run services describe daengs-realtime --region=asia-northeast3 --format="value(status.url)"
-   curl.exe -s -o NUL -w "no-auth=%{http_code}`n" "$U/healthz"                       # 403 이어야 함
-   curl.exe -s -H "Authorization: Bearer $T" -o NUL -w "healthz=%{http_code}`n" "$U/healthz"   # 200
+   curl.exe -s -o NUL -w "no-auth=%{http_code}`n" "$U/health"      # 403 이어야 한다
    ```
+   ```bash
+   # VM — 실제로 부르는 경로. 200 이어야 한다
+   U=<위 URL>
+   T=$(curl -s -H 'Metadata-Flavor: Google' \
+        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=$U")
+   curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $T" "$U/health"
+   # 판정까지 보려면 (실측 1.3초 — 캐시된 격자 / 7.2초 — 새 격자)
+   curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' -H "Authorization: Bearer $T" \
+        "$U/life/walk-conditions?lat=37.4979&lon=127.0276"
+   ```
+
+   **상태가 정말 공유되는지**는 VM 의 Redis 에서 본다 — 이것이 이 설계의 핵심 단언이다:
+   ```bash
+   cd ~/daengs && P=$(grep -m1 '^REDIS_PASSWORD=' .env | cut -d= -f2-)
+   docker compose exec -T redis redis-cli -a "$P" --no-auth-warning --scan --pattern 'rt:*' | head
+   docker compose exec -T redis redis-cli -a "$P" --no-auth-warning GET "rt:budget:datagokr-vilage-fcst:$(date +%Y%m%d)"
+   ```
+   새 좌표로 한 번 부른 **전후**로 그 카운터가 오르고 그 격자 키가 생기면, Cloud Run 이
+   VM 의 Redis 를 쓰고 있는 것이다 (2026-09-11 실측: 부산 좌표로 6 → 8).
 4. **VM 의 backend 를 갈림길 반대편으로 넘긴다** — 위 URL 을 VM 의 `backend/.env` 에
    `DAENGS_REALTIME_URL=…` 로 넣는다. ⚠ **그것만으로는 안 켜진다.** compose 는 `backend/.env`
    를 컨테이너에 마운트하지 않고 `env_file` 로 넣는데, 그 값은 **컨테이너를 만들 때** 굳는다.
@@ -233,6 +261,27 @@ DAENGS_CORPUS_JOB=corpus-refresh
    `pipeline-teardown.sh` 를 보고 사람이 판단한다.
 
 ## 자주 걸리는 것
+
+### Windows 에서 gcloud 에 인자를 넘기는 법 — 셋 다 2026-09-11 에 물렸다
+
+컨테이너 경로(`/opt/venv/bin/python` 같은 것)나 따옴표가 든 인자를 넘길 때 **세 가지가 연달아
+문다.** 하나를 피하면 다음 것에 걸리므로 같이 적어 둔다.
+
+| 무엇 | 증상 | 답 |
+| --- | --- | --- |
+| ① Git Bash 의 경로 변환 | `--command=/bin/sh` 가 컨테이너에 **`C:/Program Files/Git/usr/bin/sh`** 로 들어간다. 컨테이너는 그런 파일이 없어 `Application exec likely failed` 로 죽는데, 그 메시지만 보면 이미지 문제로 읽힌다 | PowerShell 로 부른다 |
+| ② `MSYS_NO_PATHCONV=1` | ①을 막으려고 켜면 **gcloud 자체가 깨진다** — `can't open file 'C:\c\Program Files...gcloud.py'`. gcloud 런처가 자기 경로를 만들 때 그 변수를 같이 맞기 때문이다 | 쓰지 마라. `MSYS2_ARG_CONV_EXCL` 로 **인자 이름만** 빼는 것은 괜찮다(아래 항목) |
+| ③ PowerShell → 네이티브 exe | 큰따옴표가 **사라진다.** `python -c "import socket; s=socket.create_connection((\"10.0.0.1\",6379),5)"` 가 따옴표 없이 도착해 `SyntaxError` 가 난다 | **따옴표를 아예 안 쓰게** 짠다 — 값은 인자로 넘기고 `sys.argv` 로 받는다 |
+
+③의 실제 해법 예 (Cloud Run 잡으로 VPC 연결을 확인할 때 쓴 것):
+
+```powershell
+gcloud run jobs update vpc-probe --region=asia-northeast3 --command=/opt/venv/bin/python `
+  --args='^@^-c@import socket,sys; s=socket.create_connection((sys.argv[1],int(sys.argv[2])),5); s.sendall(bytes([80,73,78,71,13,10])); print(sys.argv[1], sys.argv[2], s.recv(80))@10.178.0.2@6379'
+```
+
+`^@^` 는 gcloud 의 **구분자 지정**이다(기본 구분자인 쉼표가 코드 안에 들어가므로 바꾼다).
+⚠ 구분자로 `|` 를 고르면 셸 파이프와 겹쳐 인자가 잘린다 — 실제로 한 번 잘렸다.
 
 - **`mount_path: should be a valid unix absolute path`** — MSYS 경로 변환. Windows Git Bash 가
   `/data` 같은 인자를 네이티브 exe(gcloud) 에 넘길 때 `C:/Program Files/Git/data` 로 바꿔 버린다.

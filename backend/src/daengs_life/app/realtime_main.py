@@ -1,4 +1,4 @@
-"""realtime 전용 ASGI 앱 — Cloud Run 서비스가 띄우는 것 (D-068).
+"""realtime 전용 ASGI 앱 — Cloud Run 서비스가 띄우는 것 (D-070).
 
 **`app/main.py` 와 왜 갈랐나.** 저쪽은 `/life/ask` 까지 등록한다. 이 이미지에는 `ml`
 그룹(torch)이 없어서 그 import 가 깨질 수 있고, 안 깨져도 **realtime 서비스가 RAG 코드를
@@ -9,7 +9,7 @@
 미리 연다 — 첫 요청에 미루면 Redis 커넥션 수립 시간이 그 요청의 8초 예산(⑤-b)에 얹힌다.
 
 **인증은 여기 없다.** Cloud Run 의 IAM 이 문이고, 로그인 검사는 `daengs_backend` 가 한다
-(D-068 §5 ⓐ). 그래서 이 앱은 `daengs_backend` 를 여전히 **모른다** — 저쪽을 import 하면
+(D-070 §5 ⓐ). 그래서 이 앱은 `daengs_backend` 를 여전히 **모른다** — 저쪽을 import 하면
 의존 방향이 뒤집혀 이 앱과 `python -m daengs_life.realtime walk` CLI 가 그 저장소의 인증
 없이는 못 도는 물건이 된다 (D-018 · RAG-001 원칙 1).
 
@@ -39,7 +39,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
     ⚠ 다만 `get_cache` 가 `lru_cache` 라 **그 판단이 프로세스 생애에 한 번뿐**이다. Redis 가
     늦게 뜨는 환경에서는 그 인스턴스가 끝까지 메모리 캐시로 돈다 — 그러면 일 예산 카운터가
-    이 인스턴스에서만 세어져 D-068 §4 가 기각한 상태가 조용히 재현된다. Cloud Run 로그의
+    이 인스턴스에서만 세어져 D-070 §4 가 기각한 상태가 조용히 재현된다. Cloud Run 로그의
     캐시 저하 경고를 그래서 봐야 한다.
     """
     get_cache()
@@ -55,7 +55,7 @@ def create_app() -> FastAPI:
     )
 
     # **CORS 를 열지 않는다.** 브라우저가 이 서비스를 직접 부르는 일이 없다 — 부르는 것은
-    # `daengs_backend` 하나이고 그것은 서버 대 서버다 (D-068 §5 ⓐ). 여기를 `["*"]` 로 열면
+    # `daengs_backend` 하나이고 그것은 서버 대 서버다 (D-070 §5 ⓐ). 여기를 `["*"]` 로 열면
     # 「인증은 게이트웨이가 한다」와 어긋나는 신호가 코드에 남는다.
 
     # --- 컨트롤러 등록. 새 엔드포인트는 여기 한 줄만 는다 ---

@@ -96,7 +96,7 @@ def _ask_life(
 
 
 def _walk_life(payload: WalkPayload) -> Any:
-    """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-068).
+    """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-070).
 
     **503 을 예외로 올리지 않는다.** 분리 전에 이 자리에 오던 것은 `walk()` 서비스의 반환값
     이고, 그것은 판정 불가에도 예외를 내지 않았다 — 503 을 만드는 것은 그 위의 HTTP
@@ -136,7 +136,7 @@ def _walk_life(payload: WalkPayload) -> Any:
 def _weather_at_life(lat: float, lon: float, observed_at: datetime) -> WalkWeatherObservation:
     """Life의 공개 DTO 경계에서 과거 관측을 읽고 Walk용 값만 남긴다.
 
-    `DAENGS_REALTIME_URL` 이 있으면 그 경계를 HTTP 로 넘는다 (D-068). **아래의 원자 추출은
+    `DAENGS_REALTIME_URL` 이 있으면 그 경계를 HTTP 로 넘는다 (D-070). **아래의 원자 추출은
     한 벌 그대로다** — 두 갈래가 같은 `WeatherAtOut` 을 보기 때문이고, 그래야 분리 때문에
     산책 기록에 박히는 값이 달라지는 일이 없다.
     """

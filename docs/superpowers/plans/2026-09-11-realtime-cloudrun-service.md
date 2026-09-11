@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12 · uv (`--only-group realtime`) · FastAPI/uvicorn · Cloud Run (service) · Direct VPC egress · Secret Manager · Artifact Registry + Cloud Build
 
-**Spec:** [`docs/deploy/realtime-service.md`](../../deploy/realtime-service.md) (운영 설계) · [`docs/superpowers/specs/2026-09-11-realtime-cloudrun-design.md`](../specs/2026-09-11-realtime-cloudrun-design.md) (기각 근거) · 결정 `docs/decisions.md` **D-068** · 카드 **#435**
+**Spec:** [`docs/deploy/realtime-service.md`](../../deploy/realtime-service.md) (운영 설계) · [`docs/superpowers/specs/2026-09-11-realtime-cloudrun-design.md`](../specs/2026-09-11-realtime-cloudrun-design.md) (기각 근거) · 결정 `docs/decisions.md` **D-070** · 카드 **#435**
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@
 - **작업 브랜치는 `docs/realtime-cloudrun-design`** (#435). 새로 파지 않는다.
 - GCP 고정값: 프로젝트 `daengs` · 리전 `asia-northeast3` · VM 사설 IP `10.178.0.2` · 서브넷 `default` (`10.178.0.0/20`) · SA `corpus-pipeline@daengs.iam.gserviceaccount.com` · Artifact Registry `asia-northeast3-docker.pkg.dev/daengs/daengs`
 - **`gcloud` 는 PowerShell 로 부른다.** Git Bash 는 `/opt/...` 같은 컨테이너 경로를 `C:/Program Files/Git/opt/...` 로 바꾸고, `MSYS_NO_PATHCONV=1` 은 gcloud 자체를 깨뜨린다 (둘 다 2026-09-11 실측). PowerShell 에서도 **native 명령에 넘기는 따옴표가 사라지므로** 값은 인자로 넘긴다.
-- **8초 · 30초 예산은 이 작업에서 바꾸지 않는다** (D-068 §8).
+- **8초 · 30초 예산은 이 작업에서 바꾸지 않는다** (D-070 §8).
 
 ## 이미 확인된 전제 (2026-09-11 실측 — 다시 재지 않는다)
 
@@ -67,7 +67,7 @@
 `backend/tests/test_realtime_service_split.py` 를 만든다:
 
 ```python
-"""realtime 전용 앱과 분리 갈림길의 회귀 가드 (D-068).
+"""realtime 전용 앱과 분리 갈림길의 회귀 가드 (D-070).
 
 **왜 파일 하나인가** — 이 셋은 같은 결정의 세 면이다: 앱이 realtime 만 담는가,
 갈림길이 기본값에서 옛 경로로 가는가, 프록시가 503 본문을 안 뭉개는가.
@@ -116,7 +116,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'daengs_life.app.realti
 `backend/src/daengs_life/app/realtime_main.py`:
 
 ```python
-"""realtime 전용 ASGI 앱 — Cloud Run 서비스가 띄우는 것 (D-068).
+"""realtime 전용 ASGI 앱 — Cloud Run 서비스가 띄우는 것 (D-070).
 
 **`app/main.py` 와 왜 갈랐나.** 저쪽은 `/life/ask` 까지 등록한다. 이 이미지에는 `ml`
 그룹(torch)이 없어서 그 import 가 깨질 수 있고, 안 깨져도 **realtime 서비스가 RAG 코드를
@@ -128,7 +128,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'daengs_life.app.realti
 8초 예산(⑤-b)에 얹힌다.
 
 인증은 여기 없다. **Cloud Run 의 IAM 이 문이고**, 로그인 검사는 `daengs_backend` 가 한다
-(D-068 §5). 그래서 이 앱은 `daengs_backend` 를 여전히 모른다 — D-018 의 방향 그대로다.
+(D-070 §5). 그래서 이 앱은 `daengs_backend` 를 여전히 모른다 — D-018 의 방향 그대로다.
 """
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     # CORS 를 열지 않는다. 브라우저가 이 서비스를 직접 부르는 일이 없다 —
-    # 부르는 것은 daengs_backend 하나이고 그것은 서버 대 서버다 (D-068 §5 ⓐ).
+    # 부르는 것은 daengs_backend 하나이고 그것은 서버 대 서버다 (D-070 §5 ⓐ).
     app.include_router(walk.router)
     app.include_router(weather.router)
 
@@ -192,7 +192,7 @@ uv add --group realtime "fastapi[standard]>=0.141.1" "httpx>=0.28.1" "pydantic-s
 그다음 `backend/pyproject.toml` 의 그 블록 **위에** 주석을 손으로 단다 (Edit 도구):
 
 ```toml
-# realtime 서비스(D-068)가 받는 것 전부. **base 의존성을 안 받는다** —
+# realtime 서비스(D-070)가 받는 것 전부. **base 의존성을 안 받는다** —
 # `uv sync --frozen --only-group realtime --no-install-project` 로 깐다.
 #
 # base 를 안 받는 이유 둘. ① base 에는 realtime 이 안 쓰는 것이 스무 개쯤 있고
@@ -223,7 +223,7 @@ Expected: 경로 목록이 나오고 `ImportError` 가 없다. **여기서 터�
 
 ```bash
 git add backend/pyproject.toml backend/uv.lock backend/src/daengs_life/app/realtime_main.py backend/tests/test_realtime_service_split.py
-git commit -m "feat: realtime 전용 ASGI 앱과 realtime 의존성 그룹 (D-068)"
+git commit -m "feat: realtime 전용 ASGI 앱과 realtime 의존성 그룹 (D-070)"
 ```
 
 ---
@@ -242,7 +242,7 @@ git commit -m "feat: realtime 전용 ASGI 앱과 realtime 의존성 그룹 (D-06
 `docker/realtime/Dockerfile`:
 
 ```dockerfile
-# 실시간 산책·날씨 서비스 (D-068) — Cloud Run.
+# 실시간 산책·날씨 서비스 (D-070) — Cloud Run.
 #
 # **파이프라인 이미지와 코드 취급이 반대다.** 저쪽(#427)은 코드를 GCS 에서 받는다 —
 # 하루 한 번 도는 잡이라 기동 비용이 싸고, 코드 배포에서 이미지 굽기를 없애는 것이 값이었다.
@@ -278,7 +278,7 @@ RUN uv sync --frozen --only-group realtime --no-install-project
 COPY backend/src/daengs_life ./src/daengs_life
 
 # `DAENGS_DATA_DIR` 을 주지 않는다. 이미지에 저장소 루트가 없어 `DATA_DIR` 이 스스로
-# None 이 되고, realtime 은 파일을 안 읽으니 그게 맞는 값이다 (D-068 §6-5).
+# None 이 되고, realtime 은 파일을 안 읽으니 그게 맞는 값이다 (D-070 §6-5).
 #
 # 포트는 Cloud Run 이 `PORT` 로 준다. sh 를 거치는 이유가 그 치환이다.
 CMD ["sh", "-c", "exec /opt/venv/bin/uvicorn daengs_life.app.realtime_main:app --host 0.0.0.0 --port ${PORT:-8080}"]
@@ -333,7 +333,7 @@ Expected:
 
 ```bash
 git add docker/realtime/
-git commit -m "build: realtime 서비스 이미지 (D-068)"
+git commit -m "build: realtime 서비스 이미지 (D-070)"
 ```
 
 ---
@@ -357,7 +357,7 @@ git commit -m "build: realtime 서비스 이미지 (D-068)"
 `backend/src/daengs_backend/config.py` 의 `crawl_backend` 선언 **바로 위**에 (Edit 도구):
 
 ```python
-    # 실시간 산책·날씨를 어디서 부르나 (D-068).
+    # 실시간 산책·날씨를 어디서 부르나 (D-070).
     #
     # **비어 있으면 지금까지와 똑같다** — 같은 프로세스의 함수를 부른다. 값이 있으면 그
     # 주소의 Cloud Run 서비스를 HTTP 로 부른다. 개발 PC·개발서버는 비워 두고 GCP VM 의
@@ -426,7 +426,7 @@ Expected: FAIL — `No module named 'daengs_backend.services.realtime_client'`
 `backend/src/daengs_backend/services/realtime_client.py`:
 
 ```python
-"""실시간 서비스(Cloud Run)를 부르는 얇은 래퍼 (D-068).
+"""실시간 서비스(Cloud Run)를 부르는 얇은 래퍼 (D-070).
 
 **응답을 해석하지 않는다.** 상태 코드와 JSON 을 그대로 돌려준다 — `/life/walk-conditions`
 는 판정 불가일 때 **503 본문에 응답 전체**를 싣고(`daengs_life` 의 `controllers/walk.py`)
@@ -502,7 +502,7 @@ Expected: PASS (5건)
 
 ```bash
 git add backend/src/daengs_backend/config.py backend/src/daengs_backend/services/realtime_client.py backend/tests/test_realtime_service_split.py
-git commit -m "feat: 실시간 서비스 HTTP 클라이언트와 realtime_url 설정 (D-068)"
+git commit -m "feat: 실시간 서비스 HTTP 클라이언트와 realtime_url 설정 (D-070)"
 ```
 
 ---
@@ -525,7 +525,7 @@ git commit -m "feat: 실시간 서비스 HTTP 클라이언트와 realtime_url �
 `backend/src/daengs_backend/routers/life_walk.py`:
 
 ```python
-"""`/life/walk-conditions` 프록시 (D-068).
+"""`/life/walk-conditions` 프록시 (D-070).
 
 **`DAENGS_REALTIME_URL` 이 있을 때만 등록된다.** 비어 있으면 `main.py` 가 예전처럼
 `daengs_life` 의 라우터를 그대로 등록하므로, 이 파일은 그 환경에서 아예 안 쓰인다.
@@ -575,7 +575,7 @@ __all__ = ["router"]
 `backend/src/daengs_backend/main.py` 의 `app.include_router(walk.router, dependencies=...)` 한 줄을 (Edit 도구로) 이렇게 바꾼다. **위의 주석 블록은 그대로 두고 아래에 덧붙인다:**
 
 ```python
-# 🔴 D-068 — 분리 갈림길. `DAENGS_REALTIME_URL` 이 있으면 이 앱은 **판정을 하지 않고
+# 🔴 D-070 — 분리 갈림길. `DAENGS_REALTIME_URL` 이 있으면 이 앱은 **판정을 하지 않고
 # 전달만** 합니다. 인증은 두 갈래에서 **같은 의존성**이라 앱 회원·관리자 판정이 안 갈립니다.
 #
 # 비어 있을 때의 줄은 분리 전과 **글자 그대로 같습니다** — 그래야 되돌리기가 변수 하나가 되고,
@@ -617,7 +617,7 @@ from daengs_backend.routers import life_walk
 
 ```python
 def _walk_life(payload: WalkPayload) -> Any:
-    """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-068).
+    """산책 적합도. `DAENGS_REALTIME_URL` 이 있으면 HTTP, 없으면 같은 프로세스 (D-070).
 
     **503 을 예외로 올리지 않는다.** 분리 전에 이 자리에 오던 것은 `walk()` 서비스의 반환값
     이고, 그것은 판정 불가에도 예외를 내지 않았다 — 503 을 만드는 것은 그 위의 HTTP
@@ -663,7 +663,7 @@ def _walk_life(payload: WalkPayload) -> Any:
 def _weather_at_life(lat: float, lon: float, observed_at: datetime) -> WalkWeatherObservation:
     """Life의 공개 DTO 경계에서 과거 관측을 읽고 Walk용 값만 남긴다.
 
-    `DAENGS_REALTIME_URL` 이 있으면 그 경계를 HTTP 로 넘는다 (D-068). **아래의 원자 추출은
+    `DAENGS_REALTIME_URL` 이 있으면 그 경계를 HTTP 로 넘는다 (D-070). **아래의 원자 추출은
     한 벌 그대로다** — 두 갈래가 같은 `WeatherAtOut` 을 보기 때문이고, 그래야 분리 때문에
     산책 기록에 박히는 값이 달라지는 일이 없다.
     """
@@ -766,7 +766,7 @@ Expected: PASS (약 9분, skip 15건은 정상 — 버리는 DB 가 필요한 �
 
 ```bash
 git add backend/src/daengs_backend/ backend/tests/test_realtime_service_split.py
-git commit -m "feat: 실시간 접점 셋을 DAENGS_REALTIME_URL 갈림길로 (D-068)"
+git commit -m "feat: 실시간 접점 셋을 DAENGS_REALTIME_URL 갈림길로 (D-070)"
 ```
 
 ---
@@ -789,7 +789,7 @@ git commit -m "feat: 실시간 접점 셋을 DAENGS_REALTIME_URL 갈림길로 (D
 
 ```bash
 #!/usr/bin/env bash
-# 실시간 산책·날씨 서비스 배포 (D-068).
+# 실시간 산책·날씨 서비스 배포 (D-070).
 #   PROJECT=daengs bash infra/gcp/realtime.sh
 #
 # ⚠ Git Bash 에서 돌린다. `MSYS_NO_PATHCONV=1` 을 켜지 마라 — gcloud 자체가 깨진다
@@ -941,7 +941,7 @@ in-process 경로로 정확히 돌아온 것이다. 확인 후 다시 넣는다.
 
 ```bash
 git add infra/gcp/
-git commit -m "build: 실시간 서비스 배포·삭제 스크립트 (D-068)"
+git commit -m "build: 실시간 서비스 배포·삭제 스크립트 (D-070)"
 ```
 
 ---
@@ -949,7 +949,7 @@ git commit -m "build: 실시간 서비스 배포·삭제 스크립트 (D-068)"
 ## Task 6: 문서에 실측을 반영한다
 
 **Files:**
-- Modify: `docs/deploy/realtime-service.md` · `docs/deploy/runbook.md` · `docs/deploy/roadmap.md` §8 · `docs/decisions.md` D-068 · `CLAUDE.md` · `docs/superpowers/specs/2026-09-11-realtime-cloudrun-design.md`
+- Modify: `docs/deploy/realtime-service.md` · `docs/deploy/runbook.md` · `docs/deploy/roadmap.md` §8 · `docs/decisions.md` D-070 · `CLAUDE.md` · `docs/superpowers/specs/2026-09-11-realtime-cloudrun-design.md`
 
 - [ ] **Step 1: 설계 문서의 🔴/🟡 를 실측으로 바꾼다**
 
@@ -987,7 +987,7 @@ cd backend; uv run check
 
 ```bash
 git add docs/ CLAUDE.md
-git commit -m "docs: 실시간 서비스 분리 실측 반영과 운영 절차 (D-068)"
+git commit -m "docs: 실시간 서비스 분리 실측 반영과 운영 절차 (D-070)"
 git push
 ```
 

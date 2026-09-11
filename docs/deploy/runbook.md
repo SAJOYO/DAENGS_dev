@@ -531,7 +531,7 @@ gcloud run jobs execute corpus-refresh --region=asia-northeast3 --args="--stages
 ### 실시간 서비스 (GCP)
 
 **언제** — `daengs_life/realtime/`(산책 적합도 · 과거 날씨) 코드를 고쳤을 때, 또는 시크릿을
-새로 넣거나 돌려야 할 때. 설계·검증은 [`realtime-service.md`](realtime-service.md)(D-068),
+새로 넣거나 돌려야 할 때. 설계·검증은 [`realtime-service.md`](realtime-service.md)(D-070),
 여기는 명령 절차만 적는다. 2026-09-11 에 처음 배포했다 — `daengs-realtime`(asia-northeast3).
 
 **배포**

@@ -1,4 +1,4 @@
-# 실시간 산책·날씨 서비스 (D-068) — Cloud Run.
+# 실시간 산책·날씨 서비스 (D-070) — Cloud Run.
 #
 # **파이프라인 이미지와 코드 취급이 반대다.** 저쪽(#427)은 코드를 GCS 에서 받는다 —
 # 하루 한 번 도는 잡이라 기동 비용이 싸고, 코드 배포에서 이미지 굽기를 없애는 것이 값이었다.
@@ -34,7 +34,7 @@ RUN uv sync --frozen --only-group realtime --no-install-project
 COPY backend/src/daengs_life ./src/daengs_life
 
 # `DAENGS_DATA_DIR` 을 주지 않는다. 이미지에 저장소 루트가 없어 `DATA_DIR` 이 스스로
-# None 이 되고, realtime 은 파일을 안 읽으니 그게 맞는 값이다 (D-068 §6-5).
+# None 이 되고, realtime 은 파일을 안 읽으니 그게 맞는 값이다 (D-070 §6-5).
 #
 # 포트는 Cloud Run 이 `PORT` 로 준다. sh 를 거치는 이유가 그 치환이다.
 CMD ["sh", "-c", "exec /opt/venv/bin/uvicorn daengs_life.app.realtime_main:app --host 0.0.0.0 --port ${PORT:-8080}"]

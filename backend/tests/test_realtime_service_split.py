@@ -1,4 +1,4 @@
-"""realtime 전용 앱과 분리 갈림길의 회귀 가드 (D-068).
+"""realtime 전용 앱과 분리 갈림길의 회귀 가드 (D-070).
 
 **왜 파일 하나인가** — 이 셋은 같은 결정의 세 면이다: 앱이 realtime 만 담는가, 갈림길이
 기본값에서 옛 경로로 가는가, 프록시가 503 본문을 안 뭉개는가. 따로 두면 하나를 고칠 때
@@ -237,7 +237,7 @@ def test_realtime_branch_registers_with_the_same_auth_as_the_default_branch() ->
     **왜 이 가드가 필요한가** — `test_ask_auth.py` · `tests/walk/api/test_walk_auth.py` 등
     기존 인증 테스트는 전부 `DAENGS_REALTIME_URL` 이 빈 **기본 갈래만** 지난다. 누가 실수로
     `if settings.realtime_url:` 쪽의 `dependencies=` 를 빼먹어도(프록시가 무인증으로
-    등록돼도) 그 테스트들은 하나도 안 깨진다 — D-068 §5 가 명시적으로 기각한 "무인증
+    등록돼도) 그 테스트들은 하나도 안 깨진다 — D-070 §5 가 명시적으로 기각한 "무인증
     공개"(누구나 우리 기상청 키로 하루 예산을 태울 수 있다)가 조용히 재현되는데, 잡아 줄
     것이 없다.
 

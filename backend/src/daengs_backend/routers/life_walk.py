@@ -1,4 +1,4 @@
-"""`/life/walk-conditions` 프록시 (D-068).
+"""`/life/walk-conditions` 프록시 (D-070).
 
 **`DAENGS_REALTIME_URL` 이 있을 때만 등록된다.** 비어 있으면 `main.py` 가 예전처럼
 `daengs_life` 의 라우터를 그대로 등록하므로, 이 파일은 그 환경에서 아예 안 쓰인다.

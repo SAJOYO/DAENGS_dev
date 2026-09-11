@@ -147,7 +147,7 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   `main.py`(등록 두 줄: `/life/walk-conditions` · `/life/ask`, 예열 한 줄) + `orchestration/
   adapters/life.py` 셋(`_ask_life` · `_walk_life` · `_weather_at_life`). 오케스트레이션(D-035)이
   뒤에 들어오면서 늘었는데 이 문장이 한동안 안 갱신돼 있었습니다.
-  **`_walk_life` · `_weather_at_life` 둘은 D-068(#435 — 실시간을 Cloud Run 서비스로 떼는 카드)로
+  **`_walk_life` · `_weather_at_life` 둘은 D-070(#435 — 실시간을 Cloud Run 서비스로 떼는 카드)로
   `DAENGS_REALTIME_URL` 값에 따라 갈리는 갈림길이 됐습니다** — 비어 있으면(개발 PC·개발서버
   기본) 지금처럼 같은 프로세스 함수 호출이고, 값이 있으면(GCP) `daengs_backend/services/
   realtime_client.py` 를 거쳐 HTTP 로 나갑니다. 그 이상으로 접점을 늘리지 마세요. D-021 의

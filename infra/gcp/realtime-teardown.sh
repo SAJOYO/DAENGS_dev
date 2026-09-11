@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 실시간 산책·날씨 서비스 삭제 (D-068).
+# 실시간 산책·날씨 서비스 삭제 (D-070).
 #   PROJECT=daengs bash infra/gcp/realtime-teardown.sh
 #
 # `gcloud config set project` 로 사용자의 기본 프로젝트를 바꾸지 않는다 — `CLOUDSDK_CORE_PROJECT`

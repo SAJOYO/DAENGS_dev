@@ -49,7 +49,12 @@ from daengs_evals.profile_fitness.anchors import (
 from daengs_evals.profile_fitness.collect import cells_path, load_cells
 from daengs_evals.profile_fitness.mutations import MutationCase, build_mutation_cases
 from daengs_evals.profile_fitness.pairs import Pair, build_pairs
-from daengs_evals.profile_fitness.profiles import ASSETS_DIR, load_profiles, profiles_by_id
+from daengs_evals.profile_fitness.profiles import (
+    ASSETS_DIR,
+    Profile,
+    load_profiles,
+    profiles_by_id,
+)
 from daengs_evals.profile_fitness.questions import load_questions
 from daengs_evals.profile_fitness.rubric import (
     PROMPT_VERSIONS,
@@ -66,6 +71,17 @@ Judge = Callable[..., ProfileDiffVerdict]
 CONSISTENCY_REPEATS = 3
 #: 자기일관성 · 위치 편향 시험에 쓰는 쌍 수.
 BIAS_SAMPLE = 8
+
+
+def _judge_profile(profile: Profile) -> dict[str, Any] | None:
+    """판정기가 보는 프로필 = `dog` + `context_extra`(오늘 기록·피부 판정). 둘 다 없으면 None(절제군).
+
+    2026-09-11 시험 ②에서 넓혔다 — 그 전엔 `dog` 만 보여줘서 기록에 따라 갈린 답을 "프로필로 설명 안 됨" 으로
+    적었을 것이다. 프롬프트 문구는 안 바꿨다(버전 유지). PROFILE 블록의 JSON 에 키가 더 실릴 뿐이다.
+    """
+    merged: dict[str, Any] = dict(profile.dog) if profile.dog else {}
+    merged.update(profile.context_extra)
+    return merged or None
 
 
 def _real(meta: Mapping[str, Any]) -> frozenset[str] | None:
@@ -279,8 +295,8 @@ def _attach_profiles(pairs: Iterable[Pair], by_id: Mapping[str, Any]) -> list[Pa
             continue
         a = dict(p.cell_a)
         b = dict(p.cell_b)
-        a["_profile"] = dict(by_id[p.arm_a].dog) if by_id[p.arm_a].dog else None
-        b["_profile"] = dict(by_id[p.arm_b].dog) if by_id[p.arm_b].dog else None
+        a["_profile"] = _judge_profile(by_id[p.arm_a])
+        b["_profile"] = _judge_profile(by_id[p.arm_b])
         out.append(Pair(**{**asdict(p), "cell_a": a, "cell_b": b}))
     return out
 

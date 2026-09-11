@@ -134,6 +134,9 @@ class Pin(StrictModel):
 
 
 class EntryWriteV2(StrictModel):
+    recording_evidence_fingerprint: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
     expected_revision: int = Field(ge=0, strict=True)
     mutation_id: uuid.UUID
     content: ContentV2
@@ -142,6 +145,9 @@ class EntryWriteV2(StrictModel):
 
 
 class PinWrite(StrictModel):
+    recording_evidence_fingerprint: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
     expected_revision: int = Field(ge=1, strict=True)
     expected_pin_revision: int = Field(ge=0, strict=True)
     mutation_id: uuid.UUID

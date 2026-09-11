@@ -169,6 +169,7 @@ def test_optional_cutoff_keeps_pre_extension_receipt_hash(api):
     client, db = api
     request = body()
     old_payload = EntryWriteV2.model_validate(request).model_dump(mode="json")
+    old_payload.pop("recording_evidence_fingerprint")  # Absent from the original wire contract.
     old_payload["pin"].pop("observation_cutoff_at")
     expected = service.digest({"operation": "content", "pin_supplied": True, **old_payload})
     assert client.put(PATH, json=request).status_code == 200
@@ -466,3 +467,38 @@ def test_pin_revision_and_observation_window_are_checked(api):
     located(final["pin"], method="estimated", raw=raw)
     final["pin"]["computed_at"] = (AT + timedelta(seconds=10)).isoformat()
     assert client.put(PATH + "/pin", json=final).status_code == 422
+
+
+@pytest.mark.parametrize("eligible,expected", [(False, 200), (True, 422), (None, 422)])
+def test_cached_only_pin_uses_the_same_candidate_scope_as_app(api, eligible, expected):
+    client, db = api
+    db.points = [raw_point().model_copy(update={"recording_eligible": eligible})]
+    request = body()
+    request["pin"] = completion(request)["pin"]
+    response = client.put(PATH, json=request)
+    assert response.status_code == expected, response.text
+
+
+def test_cached_fix_cannot_certify_a_located_pin_and_mixed_valid_fix_still_matters(api):
+    client, db = api
+    db.points = [raw_point().model_copy(update={"recording_eligible": False})]
+    request = body()
+    located(request["pin"])
+    assert client.put(PATH, json=request).status_code == 422
+    db.points.append(raw_point(1, seconds=-1).model_copy(update={"recording_eligible": True}))
+    request = body()
+    request["pin"] = completion(request)["pin"]
+    assert client.put(PATH, json=request).status_code == 422
+
+
+def test_verified_evidence_fingerprint_is_bound_to_the_frozen_pin_request(api):
+    from daengs_backend.services.walk_recording import recording_receipt
+
+    client, _ = api
+    request = body()
+    request["recording_evidence_fingerprint"] = "sha256:" + "0" * 64
+    assert client.put(PATH, json=request).status_code == 422
+    request["recording_evidence_fingerprint"] = recording_receipt([]).evidence_fingerprint
+    first = client.put(PATH, json=request)
+    assert first.status_code == 200, first.text
+    assert client.put(PATH, json=request).json() == first.json()

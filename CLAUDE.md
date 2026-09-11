@@ -33,7 +33,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`orchestrator_comparison`·`training_quality`·`place_fixtures`). `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
 | `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
 | `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
-| `backend/gait_v4/` | walk_demo v4 엔진 코드(별도 폴더, 워커가 서브프로세스로 부름). 의존성은 **backend `pyproject.toml` 의 `gait-v4` 그룹**이고 자기 pyproject/lock 은 없습니다 (D-063 5A). 사정은 `backend/gait_v4/DAENGS-NOTE.md`. 5B 에서 `daengs_gait/inference/` 로 옮깁니다 |
+| `backend/src/daengs_gait/inference/` | walk_demo v4 pose 추론(ssdlite + RTMPose AP-10K). 워커가 **자기 인터프리터로 서브프로세스**(`python -m daengs_gait.inference`)로만 부릅니다 — torch·rtmlib·onnxruntime 은 그 자식에만 올라옵니다. 의존성은 legacy 와 같은 `gait` 그룹 하나, 가중치는 같은 `GAIT_RELEASE_DIR` (D-063 5B — 옛 `backend/gait_v4/` 폴더·`gait-v4` 그룹·별도 venv 는 없어졌습니다) |
 | `nginx/default.conf` | 리버스 프록시 설정 |
 | `docker-compose.yml` | nginx + backend + pgvector + redis + place-search + place-db + 크롤러 워커·Beat 컨테이너 |
 | `docker/uv/Dockerfile` | uv 를 얹은 공용 베이스 이미지 (`uv:1`). Python 서비스 컨테이너가 씁니다 |
@@ -143,9 +143,15 @@ uv add <패키지>            # 의존성 추가 (pip install 대신)
   모델이면 코사인이 무의미해지는데 **차원이 같아서(1024) 예외가 하나도 안 납니다.**
   `EMBEDDING_MODEL_KEY` 를 바꿨으면 `rag load --model` 로 다시 적재하세요. 기동 로그의
   `임베딩 모델 불일치` 경고가 그것을 알려 줍니다.
-- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 `main.py` 의 세 줄뿐입니다** —
-  등록 두 줄(`/life/walk-conditions` · `/life/ask`)과 예열 한 줄. 그 이상으로 늘리지 마세요. D-021 의 2단계
-  (`/life/ask` 를 별도 프로세스로)가 싼 이유가 그 접점의 크기입니다. 특히 `rag` 가 읽는
+- **`daengs_backend` 가 `daengs_life` 를 부르는 접점은 넷입니다** (`main.py` 세 줄이 아닙니다) —
+  `main.py`(등록 두 줄: `/life/walk-conditions` · `/life/ask`, 예열 한 줄) + `orchestration/
+  adapters/life.py` 셋(`_ask_life` · `_walk_life` · `_weather_at_life`). 오케스트레이션(D-035)이
+  뒤에 들어오면서 늘었는데 이 문장이 한동안 안 갱신돼 있었습니다.
+  **`_walk_life` · `_weather_at_life` 둘은 D-070(#435 — 실시간을 Cloud Run 서비스로 떼는 카드)로
+  `DAENGS_REALTIME_URL` 값에 따라 갈리는 갈림길이 됐습니다** — 비어 있으면(개발 PC·개발서버
+  기본) 지금처럼 같은 프로세스 함수 호출이고, 값이 있으면(GCP) `daengs_backend/services/
+  realtime_client.py` 를 거쳐 HTTP 로 나갑니다. 그 이상으로 접점을 늘리지 마세요. D-021 의
+  2단계(`/life/ask` 를 별도 프로세스로)가 싼 이유가 이 접점의 크기입니다. 특히 `rag` 가 읽는
   `POSTGRES_*` 를 `DAENGS_DB_*` 로 통일하고 싶어지는 자리에서 통일하면 나중에 되돌립니다.
 - **backend 컨테이너는 포트를 열지 않습니다.** 바깥에서는 nginx 를 통해서만 닿습니다.
   `daengs.~` 는 프론트, `daengback.~` 는 API 이고 **둘 다 공개 포트는 80 입니다**

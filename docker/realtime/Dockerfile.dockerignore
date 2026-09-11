@@ -1,0 +1,8 @@
+# 빌드 컨텍스트는 저장소 루트다. 안 좁히면 frontend/node_modules 와 data/raw 까지
+# Cloud Build 로 올라간다.
+*
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/README.md
+!backend/src/daengs_life
+backend/src/daengs_life/**/__pycache__

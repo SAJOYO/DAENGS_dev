@@ -170,9 +170,18 @@ ml = [
 #
 # ⚠ **`gait-venv` 를 `backend-venv` 와 공유하면 안 된다.** 인자 없는 `uv sync` 는 exact
 #   동기화라 같은 볼륨에 돌리면 서로의 그룹을 지운다 (crawler-worker 주석과 같은 함정).
+#
+# **5B 부터 legacy·v4 두 엔진이 이 그룹 하나를 같이 쓴다** (D-063 5B). 옛 `gait-v4` 그룹의
+# `==` 핀(골든이 나온 정확한 조합)이 여기로 들어와 `gait` 를 대체했다 — v4 골든
+# (`backend/tests/test_gait_v4_golden.py`, 0.01px)이 **그 버전 조합에서** 나왔으므로,
+# `torch`·`torchvision`·`numpy`·`opencv-python-headless`·`imageio-ffmpeg` 는 legacy 쪽 여유
+# (`>=`)가 아니라 v4 쪽 정확한 버전(`==`)을 그대로 썼다 (5B 구현 시 실측: 병합해도
+# 기존 lock 대비 버전 변경 0). `onnxruntime`·`rtmlib`·`opencv-contrib-python-headless` 는
+# v4 전용이라 새로 추가됐다.
 gait = [
-    "imageio-ffmpeg>=0.4",       # overlay 인코딩 · 업로드 mp4 변환 (정적 ffmpeg 바이너리)
-    "numpy>=2",
+    "imageio-ffmpeg==0.6.0",       # overlay 인코딩 · 업로드 mp4 변환 (정적 ffmpeg 바이너리)
+    "numpy==2.5.2",
+    "onnxruntime==1.29.0",         # v4 RTMPose ONNX 추론
     # ⚠ **`opencv-python` 이 아니라 `-headless` 입니다.** 전자는 GUI 빌드라 X11 공유
     #   라이브러리(libxcb·libGL 등)를 요구하는데 `python:3.12-slim` 컨테이너에는 없습니다.
     #   **개발 PC(Windows)에서는 절대 안 드러납니다** — 거기선 그 의존성이 필요 없어서
@@ -181,8 +190,11 @@ gait = [
     #   `/healthz` 는 파일 존재만 보고 cv2 를 import 하지 않아 `ready:true` 로 멀쩡히
     #   나옵니다 — 그래서 기동만으로는 알 수 없습니다.
     #   이 서비스는 화면을 띄우지 않으므로 headless 로 충분합니다(API 동일).
-    "opencv-python-headless>=4.8",
-    "torch>=2.6",
+    "opencv-contrib-python-headless==5.0.0.93",  # v4 rtmlib 이 요구 — [tool.uv] override 로 GUI 판은 막힘
+    "opencv-python-headless==5.0.0.93",
+    "rtmlib==0.0.16",              # v4 RTMPose 래퍼
+    "torch==2.13.0",
+    "torchvision==0.28.0",
     "ultralytics>=8.0",
 ]
 # **AGPL 이라 그룹으로 가둔다** (RAG-032 ②). PyMuPDF 는 AGPL-3.0 이고, backend 이미지에
@@ -214,21 +226,30 @@ screening = [
 pipeline = [
     "google-cloud-run>=0.16.1",
 ]
-# walk_demo v4 엔진(`backend/gait_v4/`, GAIT_ENGINE=v4)의 venv. **`==` 핀 그대로** — 골든
-# (`gait_v4/tests/golden_v4_rear.json`, 0.01px)이 이 조합에서 나왔고 `tests/test_gait_v4_lock.py` 가 지킵니다.
-# `gait` 와 따로 두는 이유: 저쪽은 `>=` 이고 torch·numpy 를 ml·screening 과 공유하는데 여기에 `==` 를
-# 섞으면 남의 그룹 해석까지 못 박힙니다. 5B 에서 inference 가 daengs_gait 로 들어오면 하나로 합칩니다.
-# 기본 그룹이 아니라 `uv sync` 로는 안 깔립니다. compose 의 gait-worker 가 `--only-group gait-v4` 로
-# /opt/gait-v4-venv 를 만들고, 개발 PC 절차는 `backend/gait_v4/DAENGS-NOTE.md`.
-gait-v4 = [
-    "imageio-ffmpeg==0.6.0",
-    "numpy==2.5.2",
-    "onnxruntime==1.29.0",
-    "opencv-contrib-python-headless==5.0.0.93",
-    "opencv-python-headless==5.0.0.93",
-    "rtmlib==0.0.16",
-    "torch==2.13.0",
-    "torchvision==0.28.0",
+# 실시간 산책·날씨 서비스(D-070)가 받는 것 전부. **base 의존성을 안 받는다** —
+# `uv sync --frozen --only-group realtime --no-install-project` 로 깐다 (`gait-v4` 와 같은 방식).
+#
+# base 를 안 받는 이유 둘. ① base 에는 realtime 이 안 쓰는 것이 스무 개쯤 있고
+# (sqlalchemy · celery · langgraph · kiwipiepy · shapely · google-genai …) **앞으로 늘어난다.**
+# 다른 팀원이 base 에 무거운 것을 넣으면 이 이미지가 따라 커지는데 **그 사람은 모른다.**
+# ② 그룹으로 적으면 **경계가 기계가 읽는 형태로 남는다** — 지금 "realtime 이 쓰는 것은 여섯"은
+# import 전수 조사 결과일 뿐 어디에도 안 적혀 있었다. `gait` 그룹이 같은 논리로 만들어졌다.
+#
+# ⚠ **`tzdata` 는 코드가 직접 import 하지 않는다.** `zoneinfo.ZoneInfo("Asia/Seoul")` 이
+#   간접적으로 쓴다 — 전수 조사에서 놓치기 쉬운 자리이고, 빠지면 import 는 되는데 시간대
+#   조회에서 터진다.
+# ⚠ **놓친 패키지는 빌드가 아니라 런타임 import 에서 터진다.** 그물이 둘 있다:
+#   `uv sync --only-group realtime` 한 별도 venv 로 앱을 import 해 보는 것과,
+#   이미지를 띄워 실제로 두 엔드포인트를 부르는 것 (docker/realtime/).
+# ⚠ 이름을 바꾸면 `docker/realtime/Dockerfile` 의 `--only-group` 인자도 같이 고쳐라.
+#   `--frozen` 이라 빌드가 바로 죽지만, 그때는 이미 Cloud Build 위다.
+realtime = [
+    "fastapi[standard]>=0.141.1",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "redis>=6.0",
+    "tzdata>=2026.3",
 ]
 
 [tool.ruff]

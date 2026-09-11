@@ -63,15 +63,16 @@ async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bu
         raise StoryboardConflict(
             "일기 원본을 준비할 수 없습니다. 기록 동기화를 확인해 주세요."
         ) from None
-    revision = digest(
-        {
-            "format": bundle_format,
-            "plan": prepared.board.plan.revision()
-            if prepared.board
-            else prepared.prepared.plan.revision(),
-            "writer": writing_version(),
-        }
-    )
+    revision_parts = {
+        "format": bundle_format,
+        "plan": prepared.board.plan.revision()
+        if prepared.board
+        else prepared.prepared.plan.revision(),
+        "writer": writing_version(),
+    }
+    if prepared.board:
+        revision_parts["slots"] = prepared.board.slots.revision()
+    revision = digest(revision_parts)
     return principal, prepared, revision
 
 

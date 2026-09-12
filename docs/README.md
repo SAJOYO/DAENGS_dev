@@ -124,6 +124,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | 파일 | 내용 |
 | --- | --- |
 | [walk/upload-idempotency.md](walk/upload-idempotency.md) | 최초 산책 업로드의 동시 유니크 충돌 복구·회원 경계·원자적 활동 연결 |
+| [walk/finalize-transactions.md](walk/finalize-transactions.md) | 산책 봉인의 잠금 없는 계산·날씨 조회, 최신 입력 재검증과 원자적 저장 |
 | [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |
 | [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
 | [walk/public-context.md](walk/public-context.md) | SGIS 행정동·도시공원 실제 배경 공급, 캐시·배포 순서와 Gemini/앱 검증 |

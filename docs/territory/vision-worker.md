@@ -126,7 +126,7 @@ docker compose exec territory-vision-worker uv run --no-sync celery \
 회귀는 `tests/territory/visits/test_territory_vision_jobs_db.py`, migration 변조 검증은
 `tools/check_migration_verification.py`의 `territory_vision_jobs` 항목에 있다.
 
-## Docker·CI 없는 Windows 검증
+## Docker 엔진·CI 없는 Windows 검증
 
 GitHub Actions나 self-hosted runner 없이 PowerShell 7에서 실행할 수 있다. 서비스 설치
 없이 PostgreSQL과 Redis 실행 파일을 별도 작업 폴더에 풀고, 폐기용 데이터를 loopback의
@@ -202,3 +202,26 @@ uv run check
 뒤 복구를 확인한다. 실제 Beat `Scheduler`에 운영의 사진 복구 항목만 넣어 tick한다.
 lease 만료 시각은 테스트 DB에서 앞당기며, 사진 저장소와 모델은 결정적 대역이다.
 이는 Linux prefork·상주 Beat 프로세스 재시작·실제 VLM·운영 부하 검증을 대체하지 않는다.
+
+### Compose 설정 검사
+
+기존 배포 계약 테스트는 `docker compose config`를 호출한다. 설정 렌더에는 엔진이
+필요하지 않다. [공식 Windows CLI zip](https://download.docker.com/win/static/stable/x86_64/)의
+`docker.exe`만 별도 폴더에 풀고, [Compose 플러그인](https://github.com/docker/compose/releases/tag/v5.5.1)의
+`docker-compose-windows-x86_64.exe`를 그 아래 `cli-plugins/docker-compose.exe`로 둔다.
+서비스를 등록하거나 Docker Desktop을 설치하지 않는다. 실제 검증 버전은 CLI 29.8.0,
+Compose 5.5.1이다. 플러그인 SHA256은
+`a3c0c73033eaede90210345d0cc2233edf4fab8fe0282a91dad8fd8436809d2f`다.
+
+```powershell
+$cliRoot = 'C:\daengs-test-tools\docker-cli'
+@{ cliPluginsExtraDirs = @("$cliRoot\cli-plugins") } | ConvertTo-Json |
+  Set-Content "$cliRoot\config.json" -Encoding utf8NoBOM
+$env:DOCKER_CONFIG = $cliRoot
+$env:PATH = "$cliRoot;" + $env:PATH
+# 엔진 접속이 필요한 동작은 성공할 수 없는 loopback 주소로 고정한다.
+$env:DOCKER_HOST = 'tcp://127.0.0.1:59999'
+uv run pytest -q -rs tests/activity/test_runtime_deploy.py::test_default_services_exclude_activity_and_profile_has_isolated_envs --tb=short
+```
+
+이 검사는 compose 렌더만 확인한다. 이미지 빌드·컨테이너 기동·Linux nginx 실행은 별도다.

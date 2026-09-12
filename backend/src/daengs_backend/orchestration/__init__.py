@@ -13,11 +13,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
-from daengs_backend.orchestration.runtime import (
-    Orchestrator,
-    OrchestratorKind,
-    build_orchestrator,
-)
+from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
 __all__ = [
@@ -29,7 +25,6 @@ __all__ = [
     "CapabilityStatus",
     "OrchestrationEngine",
     "Orchestrator",
-    "OrchestratorKind",
     "RoutePlan",
     "build_orchestrator",
 ]

@@ -23,9 +23,11 @@ class Lookup:
         return TerritorySiteSnapshot(site_id, Decimal("37.5000000"), Decimal("127.0000000"))
 
 
-async def begin(factory, owner, pets, client_id=None):
+async def begin(factory, owner, pets, client_id=None, *, started_at=None):
     client_id = client_id or uuid.uuid4()
-    body = SessionStart(started_at=datetime.now(UTC) - timedelta(minutes=1), pet_ids=pets)
+    if started_at is None:
+        started_at = datetime.now(UTC) - timedelta(minutes=1)
+    body = SessionStart(started_at=started_at, pet_ids=pets)
     async with factory() as db:
         await svc.start_session(db, owner, client_id, body)
     return client_id

@@ -262,14 +262,24 @@ A question about how the dog is doing today — "오늘 건강 상태는 어때?
 # 없는 사유·금액을 지어내지 말라는 것.
 _VET_SPEND_RULE = """VET_RECENT, when present, is what the owner has confirmed about this dog's vet visits: this month's total spend, the visit count in the last 30 days, the most recent visit (date, reason, amount, and the hospital's name/phone if known), and total spend per reason over the last 12 months. Treat it as fact for questions like "how much have I spent on skin issues this year" or "what was that hospital's phone number". Use only the reasons and numbers present; never invent a visit, a reason, or an amount that is not there. Never diagnose, recommend treatment, or judge whether spending is high or normal from it — it is a spending record, not a medical opinion. If the question is not about vet visits or spending, ignore it. When VET_RECENT is absent, say nothing about vet spending or visit history."""
 
+# D-072. `_CARE_LOG_RULE` 과 같은 결이고, 다른 것은 **못 잴 때 무엇을 하느냐** 한 문단이다.
+# 고지 문장은 여기 없다 — 어댑터가 `redirects.DISTANCE_FROM_RECORDED_WALKS_ONLY` 를 붙인다.
+# 모델이 그 문장을 쓰면 판본이 둘이 되고, 그것이 #278 이 막은 것이다.
+_WALK_ACTIVITY_RULE = """WALK_ACTIVITY, when present, is what the app actually recorded for this dog's walks today: how many walks were recorded, how many of those have a finished measurement, the total measured distance in metres, the total measured moving time in seconds, and the clock time the last walk started, as HH:MM in Seoul time. Treat it as fact for questions like "how far did we walk today" or "how long was the walk". Report the distance and the time as they are; round only for readability and never convert a number you were not given. When walk_count is larger than measured_walk_count, say plainly that some recorded walks have no measurement yet and give the total for the ones that do — "3 recorded, 2 measured, 1.2 km" is true and "3 walks, 1.2 km" is not.
+
+Set unmeasured to true when the question asks how far or how long THIS dog moved and WALK_ACTIVITY cannot answer it — it is absent, no walk has a measurement, or the trip the owner is describing is not what was recorded. Never estimate the distance or the time from a route described in words, from place names, from a count of stops, or from how long the owner says the trip took. A sentence explaining why the number is unavailable is added after your answer, so do not write that explanation yourself, do not apologise for it, and do not tell the owner to use a map app. You may still say which parts of a described trip the dog would not have walked at all, such as a stretch travelled by bus or train. When WALK_ACTIVITY is absent, say nothing about a walk record unless you are setting unmeasured."""
+
 
 def general_prompt_version(payload: GeneralPayload) -> str:
     """Which of the (now five-shaped) prompt bodies ``build_general_prompt`` returns.
 
     The base of the name comes from exactly which of ``care_log``/``vet_spend`` are
-    present — unchanged since #353. ``-conv`` is appended, on top of whichever base, only
-    when ``payload.conversation`` rides along (#416 Task 6) — see the constant comment
-    above for why a suffix and not four more constants.
+    present — unchanged since #353. ``-walk`` (D-072 Task 5), then ``-conv`` (#416 Task 6),
+    are appended on top of whichever base, each only when its own payload field rides
+    along — see the constant comments above for why a suffix and not more constants
+    (four for `-conv`, and the same reasoning holds for `-walk`: `care_log`/`vet_spend`/
+    `walk_activity` combine independently, so a dedicated constant per combination would
+    need eight).
     """
     if payload.care_log is not None and payload.vet_spend is not None:
         version = GENERAL_CARE_LOG_VET_PROMPT_VERSION
@@ -279,6 +289,8 @@ def general_prompt_version(payload: GeneralPayload) -> str:
         version = GENERAL_VET_PROMPT_VERSION
     else:
         version = GENERAL_PROMPT_VERSION
+    if payload.walk_activity is not None:
+        version = f"{version}-walk"
     if payload.conversation is not None:
         version = f"{version}-conv"
     return version
@@ -289,10 +301,12 @@ def build_general_prompt(payload: GeneralPayload) -> str:
 
     **The two combinations that predate the vet-spend card are reproduced by the exact
     same literal strings as before** (D-057 ③ / #344) — the ``care_log is None and
-    vet_spend is None`` branch below is untouched code, not a block reconstruction, so the
-    84-pairwise-approved body cannot drift through that refactor. The care-log case *is*
-    assembled from blocks (below), but the assembly is byte-for-byte the same string the
-    old dedicated branch produced — see the block order comment.
+    vet_spend is None`` branch below (now also gated on ``walk_activity is None``, D-072
+    Task 5, since a walk-only payload must reach the assembled path below it) is untouched
+    code, not a block reconstruction, so the 84-pairwise-approved body cannot drift through
+    that refactor. The care-log case *is* assembled from blocks (below), but the assembly
+    is byte-for-byte the same string the old dedicated branch produced — see the block
+    order comment.
 
     What that identity does **not** protect is the schema line: every branch embeds
     ``GeneralAnswer.model_json_schema()``, so widening ``kind`` changes all four bodies at
@@ -307,7 +321,7 @@ def build_general_prompt(payload: GeneralPayload) -> str:
     schema = json.dumps(GeneralAnswer.model_json_schema(), ensure_ascii=False, sort_keys=True)
     dog = payload.dog.model_dump(mode="json", exclude_none=True) if payload.dog else {}
 
-    if payload.care_log is None and payload.vet_spend is None:
+    if payload.care_log is None and payload.vet_spend is None and payload.walk_activity is None:
         if payload.conversation is None:
             return (
                 f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
@@ -332,10 +346,12 @@ def build_general_prompt(payload: GeneralPayload) -> str:
         rule_blocks.append(_CARE_LOG_RULE)
     if payload.vet_spend is not None:
         rule_blocks.append(_VET_SPEND_RULE)
+    if payload.walk_activity is not None:
+        rule_blocks.append(_WALK_ACTIVITY_RULE)
 
-    # Context lines: DOG_CONTEXT always, CARE_LOG_TODAY before VET_RECENT — same reason.
-    # A CONVERSATION line, when present, goes last: it is the block that must sit
-    # immediately before USER_QUERY.
+    # Context lines: DOG_CONTEXT always, CARE_LOG_TODAY before VET_RECENT before
+    # WALK_ACTIVITY — same reason. A CONVERSATION line, when present, goes last: it is
+    # the block that must sit immediately before USER_QUERY.
     context_lines = [f"DOG_CONTEXT: {json.dumps(dog, ensure_ascii=False, sort_keys=True)}"]
     if payload.care_log is not None:
         care_log = payload.care_log.model_dump(mode="json", exclude_none=True)
@@ -346,6 +362,11 @@ def build_general_prompt(payload: GeneralPayload) -> str:
         vet_spend = payload.vet_spend.model_dump(mode="json", exclude_none=True)
         context_lines.append(
             f"VET_RECENT: {json.dumps(vet_spend, ensure_ascii=False, sort_keys=True)}"
+        )
+    if payload.walk_activity is not None:
+        walk_activity = payload.walk_activity.model_dump(mode="json", exclude_none=True)
+        context_lines.append(
+            f"WALK_ACTIVITY: {json.dumps(walk_activity, ensure_ascii=False, sort_keys=True)}"
         )
     if payload.conversation is not None:
         context_lines.append(render_conversation_context(payload.conversation))

@@ -1,0 +1,14 @@
+{"script_id": "al_accumulate_01", "stratum": "accumulate", "turns": ["토해요", "초록색이에요", "밥도 안 먹어요"], "must_close_by": 3, "first_should_ask": false, "author": "claude", "note": "09-12 실사용 루프 그대로 — 구토 + 식욕 부진이 3턴에 모인다"}
+{"script_id": "al_accumulate_02", "stratum": "accumulate", "turns": ["설사를 해요", "기운도 없어 보여요"], "must_close_by": 2, "first_should_ask": false, "author": "claude", "note": "설사 + 기력 저하"}
+{"script_id": "al_accumulate_03", "stratum": "accumulate", "turns": ["요즘 밥을 잘 안 먹어요", "산책 나가면 뒷다리를 절어요"], "must_close_by": 2, "first_should_ask": false, "author": "claude", "note": "식욕 부진 + 파행"}
+{"script_id": "al_accumulate_04", "stratum": "accumulate", "turns": ["아침에 토했어요", "오후에도 또 토했어요", "설사도 조금 했어요"], "must_close_by": 3, "first_should_ask": false, "author": "claude", "note": "구토 반복 뒤 설사 — 2턴까지는 구토 하나뿐"}
+{"script_id": "al_twosigns_01", "stratum": "two_signs_at_once", "turns": ["토하고 설사도 해요"], "must_close_by": 1, "first_should_ask": false, "author": "claude", "note": "첫 턴에 둘 — 되묻기 없이 답해야 한다"}
+{"script_id": "al_twosigns_02", "stratum": "two_signs_at_once", "turns": ["어제부터 밥을 안 먹고 축 처져 있어요"], "must_close_by": 1, "first_should_ask": false, "author": "claude", "note": "식욕 부진 + 기력 저하"}
+{"script_id": "al_twosigns_03", "stratum": "two_signs_at_once", "turns": ["설사하고 다리를 절어요", "병원 가야 할까요?"], "must_close_by": 1, "first_should_ask": false, "author": "claude", "note": "설사 + 파행. 2턴은 이어지는 질문"}
+{"script_id": "al_axes_01", "stratum": "answered_axes", "turns": ["오늘 우리 애 어때 보여?", "밥은 잘 먹고 산책도 평소처럼 잘 했어요"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "물은 항목에 답했다 — 다시 묻지 말고 답"}
+{"script_id": "al_axes_02", "stratum": "answered_axes", "turns": ["요즘 좀 기운이 없어 보여요", "식욕은 괜찮고 대변도 정상이에요. 그냥 잠을 많이 자요"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "기력 저하 하나 + 관찰 답"}
+{"script_id": "al_axes_03", "stratum": "answered_axes", "turns": ["우리 애 상태 좀 봐줘", "특별한 건 없고 평소랑 같아요"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "짧은 답"}
+{"script_id": "al_brief_01", "stratum": "brief_answer", "turns": ["오늘 건강 상태는 어때?", "몰라요 그냥 궁금해서요"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "관찰이 안 나와도 한 번 물었으면 가진 것으로 답"}
+{"script_id": "al_brief_02", "stratum": "brief_answer", "turns": ["애가 좀 이상해요", "딱히 뭐라 말하긴 어려운데 평소보다 조용해요"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "애매한 답"}
+{"script_id": "al_switch_01", "stratum": "topic_switch", "turns": ["오늘 우리 애 어때 보여?", "아 그건 됐고 발톱은 얼마나 자주 깎아요?"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "화제를 바꿨다 — 앞 되묻기를 끌고 오면 안 된다"}
+{"script_id": "al_switch_02", "stratum": "topic_switch", "turns": ["요즘 좀 처져 보여요", "목욕은 얼마나 자주 시켜요?"], "must_close_by": 2, "first_should_ask": true, "author": "claude", "note": "화제 전환"}

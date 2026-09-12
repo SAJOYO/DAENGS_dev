@@ -1,0 +1,27 @@
+# 되묻기 종료 시험 v1 — 사전 등록 (돌리기 전에 동결).
+#
+# 왜 (2026-09-12): dev PR #463 이 실사용 되묻기 루프("토해 → 초록토 → 밥도 안 먹어" 에 같은 질문 셋)를 고쳤다
+# (general-answer-ko-v7: 증상 둘이 모이면 닫기 · 물은 항목 다시 안 묻기 · 한 번 물었으면 답하기 · 빈 되묻기 계약 금지).
+# 팀 기록: "단위 테스트도 평가 랩도 통과했지만 실사용 흐름을 이어서 돌려 보지 않아 루프를 못 봤다".
+# 우리 시험 ③·④ 도 한 턴짜리였다. 이 시험은 첫 턴부터 보내고 서버가 실제로 낸 답을 다음 턴에 넘긴다.
+benchmark_id: ask-loop-v1
+related: [deferral-ask-v1, turn-relation-v1]
+frozen_at: 2026-09-12
+author: gayeoniee + claude
+
+inputs:
+  scripts: evals/ask_loop/scripts_v1.jsonl      # 14 대본 · 30 턴 · 5 층
+scope: {adapters: fallback-only, general_fallback: on, turn_resolver: on, general_prompt: general-answer-ko-v7}
+judge: none                                      # status · 문자열 · 항목 비교. 모델 0회
+generation:
+  router: {model: gemini-3.1-flash-lite, prompt_version: semantic-router-ko-v10}
+  general: {model: gemini-3.1-flash-lite}
+  resolver: {model: gemini-3.1-flash-lite}
+
+gates:
+  closed_on_time_min: 0.85      # 14 중 12. v7 이 고쳤다는 그 자리라 높게 건다
+  never_closed_max: 0            # 끝까지 되묻는 대본은 하나도 없어야 한다 — 09-12 루프의 정의
+  repeated_question_max: 0       # 같은 질문 두 번은 0
+  reasked_axis_max: 0
+  first_ask_min: 0.80            # 되묻어야 하는 첫 턴 7건 중 6 — 되묻기를 없애는 쪽으로 고장 나면 여기서 잡힌다
+budget: {turns: 30, gemini_requests_max: 90}

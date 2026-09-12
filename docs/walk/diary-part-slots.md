@@ -1,5 +1,10 @@
 # 산책 파트 슬롯 미리보기
 
+기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/4b90be1d1ef63b758cfa0d25107a7fc9d3913fa1/docs/explorations/walk/diary/plan.md)
+([GEO #265](https://github.com/rkbuhtig/DAENGS_geo/pull/265))이다.
+아래는 기존 슬롯 선정·배경 작성 구현이다. 장면의 완결성, 시스템 판정용 시간과 작성 입력의
+분리, 표현 선택의 자유를 새 기획에 맞추는 작업은 별도다. 기존 슬롯 수치와 원본 보존은 유지한다.
+
 저장된 DEV 입력 → 기존 기본 보드 선정 → 공간·환경·동선 조건과 용량 →
 장면별 스탬프 → Gemini 배경 서술 → 원문과 조립하는 워킹 스켈레톤이다.
 `POST /app/walks/{walk_id}/diary-slots/preview`에서 실행한다.

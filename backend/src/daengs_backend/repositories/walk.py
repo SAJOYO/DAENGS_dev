@@ -5,6 +5,7 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete, exists, func, select
@@ -12,8 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
 from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
+from daengs_backend.models.activity import ActivityWalkHead
 
 __all__ = [
+    "WalkActivitySums",
+    "activity_for_pet_between",
     "add",
     "add_analysis",
     "delete_all_for_owner",
@@ -138,6 +142,77 @@ async def count_for_pet_between(
         )
     )
     return int(await session.scalar(stmt) or 0)
+
+
+@dataclass(frozen=True)
+class WalkActivitySums:
+    """`activity_for_pet_between` 이 돌려주는 것. 건수와 합계가 **따로**인 이유는
+    `WalkActivityContext` 독스트링에 있다."""
+
+    walk_count: int
+    measured_walk_count: int
+    distance_m: int
+    moving_s: int
+    last_started_at: datetime | None
+
+
+async def activity_for_pet_between(
+    session: AsyncSession,
+    pet_id: uuid.UUID,
+    start: datetime,
+    end: datetime,
+) -> WalkActivitySums:
+    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-072).
+
+    **소유자 조건을 안 겁니다** — `count_for_pet_between` 과 같은 이유입니다(docs/co-care.md
+    §2). 부르는 쪽이 이미 접근 권한을 확인했고, 여기서 사람으로 다시 거르면 다른 보호자가
+    다녀온 산책만 빠집니다.
+
+    **`activity_walk_heads` 를 경유하는 것이 이 함수의 전부입니다.** `walk_analyses` 는 한
+    산책에 여러 세대가 쌓이는 표라(유니크 제약이 6칸), 거기 바로 `SUM` 을 걸면 거리가
+    배로 불어납니다. head 는 `walk_id` 가 PK 라 산책당 정확히 한 행이고, finalize 경로
+    네 곳이 전부 그것을 세웁니다(`services/walk.py`).
+
+    head 가 없는 산책은 **건수에는 들어가고 합계에는 안 들어갑니다.** 봉인이 안 끝난 것을
+    0m 로 더하면 "걸었는데 0km" 가 되고, 건수에서까지 빼면 "안 걸었다" 가 됩니다. 둘 다
+    거짓이라 두 수를 따로 냅니다.
+    """
+    walked = (
+        select(
+            func.count(func.distinct(Walk.id)).label("walk_count"),
+            func.max(Walk.started_at).label("last_started_at"),
+        )
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+    )
+    measured = (
+        select(
+            func.count(func.distinct(Walk.id)).label("measured_walk_count"),
+            func.coalesce(func.sum(WalkAnalysis.moving_distance_m), 0).label("distance_m"),
+            func.coalesce(func.sum(WalkAnalysis.moving_s), 0).label("moving_s"),
+        )
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .join(ActivityWalkHead, ActivityWalkHead.walk_id == Walk.id)
+        .join(WalkAnalysis, WalkAnalysis.id == ActivityWalkHead.analysis_id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+    )
+    walked_row = (await session.execute(walked)).one()
+    measured_row = (await session.execute(measured)).one()
+    return WalkActivitySums(
+        walk_count=int(walked_row.walk_count or 0),
+        measured_walk_count=int(measured_row.measured_walk_count or 0),
+        distance_m=int(measured_row.distance_m or 0),
+        moving_s=int(measured_row.moving_s or 0),
+        last_started_at=walked_row.last_started_at,
+    )
 
 
 async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:

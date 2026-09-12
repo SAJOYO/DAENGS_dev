@@ -107,6 +107,18 @@ DB·Redis 연결이다. 새 환경 변수나 패키지는 없다. 기동은 기�
 4. 아래 상태와 복구 task의 `selected/published/failed` 반환 로그를 확인한다. `failed`는
    broker 오류로 발행하지 못한 행과 배치 중단으로 다음 예약에 남긴 행의 수다.
 
+서버 앞에 없을 때는 기존 `db-migrate.yml`의 `territory_action`으로 `Inspect` → `Pause`를
+실행할 수 있다. `expected_live_sha`에는 실제 배포된 40자리 커밋을 넣는다. 이 경로는
+도구만 `_territory-runtime`에 checkout하며 실행 중인 앱 소스를 교체하지 않는다.
+현재 커밋·소스 변경 여부가 맞지 않으면 컨테이너 조작 전에 중단한다. `Pause`는 사진
+worker 하나만 정상 종료를 기다려 중단하고, 실패 시 `Resume`으로 기존 worker를 복구한다.
+
+SQL은 `territory_action=none`, workflow 실행 ref는 **dev**, SQL의 `ref`는 검증한 PR 커밋으로
+기존 backup·apply·verify 경로를 사용한다. 이때에도 사진 worker가 중단됐는지 먼저 확인한다.
+배포 workflow는 backend·사진 worker 갱신 뒤 crawler-beat를 재시작한다. 배포 성공 후
+`Verify`는 컨테이너 기동 시각·건강 상태, 실제 worker의 복구 task 등록·큐, DB lease 컬럼을
+검사한다. 계정·사진 원본이나 외부 VLM을 호출하지 않고 상태별 건수만 읽는다.
+
 ```sql
 SELECT status, count(*), min(vision_available_at), min(vision_dispatch_after)
 FROM territory_attempts

@@ -1,5 +1,8 @@
 # 시설 대화와 공통 오케스트레이션
 
+후속 리뷰의 인증 갱신·GPS 없는 만료 복구와 내부 용어 차단은
+[응답 표시 정책](response-policy.md)에 구현·검증 기준을 기록했다.
+
 공통 채팅과 시설 화면이 같은 `facility-conversation-v2` 세션을 사용한다. 공통 라우터는
 Place 실행 여부만 고른다. 시설 의도 해석·조건 적용·후보 교체·확인은 기존 시설 실행기가,
 짧은 답변은 커밋된 receipt를 읽는 서버 renderer가 맡는다. 별도 응답 LLM 호출은 없다.
@@ -28,8 +31,9 @@ owner·전체 필터·검색 결과는 요청에서 받지 않는다. 기존 클
 ```
 
 `visible_order`는 발화 시점의 실제 카드 순서다. `visible_selected`는 해당 목록의 선택
-대상이다. 서버는 기존 시설 API와 동일하게 저장 상태와 대조한다. 세션이 있으면 그 검색
-중심을 Place에 사용하며, Walk가 함께 선택되면 별도로 기기 위치가 있어야 한다.
+대상이다. 서버는 기존 시설 API와 동일하게 저장 상태와 대조한다. 기존 검색은
+`FacilitySessionPayload`로 전달해 저장된 검색 중심을 사용하며, 세션이 만료되어도 GPS 없이
+복구 오류를 반환한다. Walk가 함께 선택되면 별도로 기기 위치가 있어야 한다.
 `requested_capability: "place"`를 명시할 수도 있고, 생략하면 공통 의미 라우터가 고른다.
 
 처음 요청할 때는 `client_request_id`와 기기 `location`만 보낸다. 시설 화면과 같은
@@ -96,7 +100,7 @@ Place ASGI 경계를 연결하고 공급자·검색·세션 저장소만 대체�
 차단·관리자 차단·입력 검증·프롬프트 경계를 검사한다. K 교체 회귀는
 `tests/place/conversation/test_candidates.py`에 있다. 운영 Gemini·Redis·DB 실행 검증과는 구분한다.
 
-2026-09-12 검증 결과:
+2026-09-12 초기 연결 단계의 검증 기록:
 
 - 변경한 Python 16개 파일 Ruff check/format, `uv run check` 통과.
 - 전체 `uv run --no-sync pytest -q -rs`: **5,458 passed, 1 failed, 466 skipped, 2 xfailed**.
@@ -114,3 +118,8 @@ Windows 검사는 `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`을 사용했다. 저�
 ```powershell
 uv run --no-sync pytest -q -rs tests/place/api/test_assistant_conversation.py tests/activity/test_runtime_deploy.py tests/walk/context/test_walk_runtime_commands.py
 ```
+
+후속 리뷰 수정 검증: 공통 assistant·오케스트레이션과 시설 API·대화를 합쳐 **898 passed,
+13 skipped**. 마지막 표시 용어 보완 후 시설 API·대화 **183 passed, 1 skipped**를 확인했다.
+skip은 선택 실행기 langchain 미설치, 별도 PostGIS, 실제 모델 호출 opt-in이다.
+변경 Python 13개 Ruff check/format과 `uv run check`도 통과했다.

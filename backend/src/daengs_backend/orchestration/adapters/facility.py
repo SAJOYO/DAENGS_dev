@@ -13,9 +13,11 @@ from daengs_backend.orchestration.contracts import (
     CapabilityResult,
     CapabilityStatus,
     ErrorDetail,
+    FacilitySessionPayload,
     OutcomeDetail,
     PlacePayload,
 )
+from daengs_backend.orchestration.facility_presentation import facility_error_message
 from daengs_backend.schemas.assistant_facility import AssistantFacilityContext
 from daengs_backend.schemas.facility_conversation import (
     ConversationAnswerRequest,
@@ -29,14 +31,6 @@ from daengs_backend.services.facility_discovery import (
     require_active_facility_owner,
 )
 
-_ERROR_MESSAGES = {
-    "facility_login_required": "다시 로그인해 주세요.",
-    "facility_expired": "검색이 만료됐어요. 시설 화면에서 다시 찾아주세요.",
-    "facility_conflict": "검색이 바뀌었어요. 현재 목록에서 다시 말해 주세요.",
-    "facility_pending": "앞선 요청을 처리하고 있어요. 잠시 뒤 다시 시도해 주세요.",
-    "facility_invalid_action": "현재 검색에 적용할 수 없는 요청이에요.",
-}
-
 
 class FacilityCapabilityAdapter:
     capability = CapabilityName.PLACE
@@ -49,8 +43,13 @@ class FacilityCapabilityAdapter:
     async def run(self, request: CapabilityRequest, *, request_id: str) -> CapabilityResult:
         started = time.perf_counter()
         payload = request.payload
-        if not isinstance(payload, PlacePayload):
+        if not isinstance(payload, (PlacePayload, FacilitySessionPayload)):
             raise TypeError("facility execution requires PlacePayload")
+        if (
+            isinstance(payload, FacilitySessionPayload)
+            and payload.facility_session_id != self.view.session_id
+        ):
+            raise ValueError("facility payload must name the bound view")
         try:
             await require_active_facility_owner(UUID(self.owner))
             response = await self._turn(payload)
@@ -69,18 +68,18 @@ class FacilityCapabilityAdapter:
                 status=CapabilityStatus.ERROR,
                 error=ErrorDetail(
                     kind=exc.code,
-                    detail=_ERROR_MESSAGES.get(
-                        exc.code, "요청을 마치지 못했어요. 잠시 뒤 다시 시도해 주세요."
-                    ),
+                    detail=facility_error_message(exc.code),
                 ),
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
         return self._result(response, elapsed_ms=int((time.perf_counter() - started) * 1000))
 
-    async def _turn(self, payload: PlacePayload) -> ConversationResponse:
+    async def _turn(self, payload: PlacePayload | FacilitySessionPayload) -> ConversationResponse:
         view = self.view
         session_id, revision = view.session_id, view.expected_revision
         if session_id is None:
+            if not isinstance(payload, PlacePayload):
+                raise TypeError("a new facility search requires coordinates")
             # Stable bootstrap identity makes a lost first reply recoverable without a session ID.
             seed_id = uuid5(NAMESPACE_URL, f"daengs:assistant:facility:{view.client_request_id}")
             try:

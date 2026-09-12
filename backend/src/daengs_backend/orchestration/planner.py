@@ -208,7 +208,9 @@ def assemble_route_plan(
     `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
-    if "place" in needs_coordinates and "facility_location" in context:
+    if "place" in needs_coordinates and (
+        "facility_session_id" in context or "facility_location" in context
+    ):
         needs_coordinates = needs_coordinates - {"place"}
     missing = _missing_coordinates(context) if needs_coordinates else []
     if missing:
@@ -334,6 +336,8 @@ def _payload_for(
         location = context["location"]
         return {"lat": location["lat"], "lon": location["lon"]}
     if capability == "place":
+        if "facility_session_id" in context:
+            return {"query": query, "facility_session_id": context["facility_session_id"]}
         location = context.get("facility_location", context.get("location"))
         return {"query": query, "lat": location["lat"], "lon": location["lon"]}
     if capability == _VET_CONTACT:

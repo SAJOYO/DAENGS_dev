@@ -1,6 +1,7 @@
 """Render only server-owned scope, source facts and recorded selection provenance."""
 
 from daengs_place.place.conversation.contract import AnswerFact
+from daengs_place.place.conversation.presentation import user_text
 
 KINDS = {
     "hospital": "동물병원",
@@ -109,21 +110,21 @@ def fact_sentence(fact):
         return f"{label} 정보는 없어서 확인이 필요해요."
     if fact.attribute == "parking":
         return (
-            "원천 정보에는 주차 가능으로 나와요."
+            "등록된 정보에는 주차할 수 있다고 나와요."
             if fact.value
-            else "원천 정보에는 주차 불가로 나와요."
+            else "등록된 정보에는 주차할 수 없다고 나와요."
         )
     if fact.attribute == "exclusive":
         return (
-            "원천 정보에는 반려동물 전용으로 나와요."
+            "등록된 정보에는 반려동물 전용으로 나와요."
             if fact.value
-            else "원천 정보에는 반려동물 전용이 아닌 것으로 나와요."
+            else "등록된 정보에는 반려동물 전용이 아니라고 나와요."
         )
     if fact.attribute == "pet_allowed":
         return (
-            "원천 정보에는 반려동물 동반 가능으로 나와요."
+            "등록된 정보에는 반려동물과 함께 갈 수 있다고 나와요."
             if fact.value
-            else "원천 정보에는 반려동물 동반 불가로 나와요."
+            else "등록된 정보에는 반려동물과 함께 갈 수 없다고 나와요."
         )
     if fact.attribute == "distance":
         return f"검색 중심에서 {fact.value}m 거리예요."
@@ -132,12 +133,40 @@ def fact_sentence(fact):
 
 def render_answer(receipt, filters=None):
     text = _render_result(receipt, filters)
+    fallback = _plain_result(receipt)
     if receipt.feedback == "information_dispute" and "현장과 다를" not in text:
         # A correction does not prove closure or relocation. Keep this fact alongside the action.
         if receipt.execution == "failed":
             return "정보가 현장과 다를 수 있어요. 검색을 완료하지 못해 목록은 그대로예요."
-        return "정보가 현장과 다를 수 있어요. " + text
-    return text
+        text = "정보가 현장과 다를 수 있어요. " + text
+        fallback = "정보가 현장과 다를 수 있어요. " + fallback
+    return user_text(text, fallback, limit=300 if receipt.pending_id else 160)
+
+
+def _plain_result(receipt):
+    if receipt.execution == "failed":
+        return "다시 찾지 못했어요. 보던 목록은 그대로예요."
+    if receipt.bookmark_command is not None:
+        return "찜 처리 결과를 확인하고 있어요."
+    if receipt.question:
+        return "원하는 조건을 짧게 나눠서 알려주세요."
+    if receipt.goal == "edit_only":
+        return (
+            "조건을 바꿨고 목록은 그대로예요."
+            if receipt.filters_changed
+            else "이미 적용된 조건이에요."
+        )
+    if receipt.goal == "pick_one" and receipt.selected:
+        return "한 곳 골라뒀어요!"
+    if receipt.goal == "explain":
+        return "장소 정보는 카드에서 확인해 주세요."
+    if receipt.execution == "not_run":
+        return "보던 목록은 그대로예요."
+    return (
+        f"조건에 맞는 {receipt.returned_count}곳 보여드릴게요."
+        if receipt.returned_count
+        else "조건에 맞는 곳을 찾지 못했어요."
+    )
 
 
 def _render_result(receipt, filters):

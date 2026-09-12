@@ -45,7 +45,6 @@ from daengs_backend.services.facility_conversation import (
     FacilityConversationService,
     get_facility_conversation_service,
 )
-from daengs_backend.services.facility_discovery import FacilityDiscoveryError
 
 router = APIRouter(tags=["assistant"])
 
@@ -293,17 +292,12 @@ async def _dispatch(
                 )
             )
         )
+        context["facility_response"] = True
         if body.facility.session_id is not None:
-            try:
-                _, saved = await facility_service.load(body.facility.session_id, owner)
-            except FacilityDiscoveryError:
-                # An expired optional view must not prevent an unrelated capability answering.
-                pass
-            else:
-                if saved["state"] is not None:
-                    spatial = saved["state"]["filters"]["spatial"]
-                    context["facility_location"] = {"lat": spatial["lat"], "lon": spatial["lng"]}
-                    context["facility_view"] = True
+            # The client has a view even when its server copy has expired. Only Place loads
+            # that owner-bound session, so unrelated queries work and expiry reaches recovery.
+            context["facility_session_id"] = str(body.facility.session_id)
+            context["facility_view"] = True
     if not body.persists:
         return await service.run(
             query=body.query,

@@ -574,6 +574,16 @@ class ConversationService:
         pending=None,
         intent=None,
     ):
+        from daengs_place.place.conversation.presentation import user_text_allowed
+
+        if pending is not None and (
+            not user_text_allowed(pending.question, limit=300)
+            or question
+            and not user_text_allowed(question, limit=300)
+        ):
+            pending = None
+            action, code = "clarify", "presentation_requires_rephrase"
+            question = "조건을 짧게 나눠서 알려주세요."
         old = request.previous
         snapshot = old.snapshot
         revision = base_revision(request) + 1

@@ -134,8 +134,8 @@ async def test_manual_edit_invalidates_pending_and_search_failure_keeps_accepted
 @pytest.mark.parametrize(
     "parking,status,phrase",
     [
-        (True, "known", "주차 가능"),
-        (False, "known", "주차 불가"),
+        (True, "known", "주차할 수 있다고"),
+        (False, "known", "주차할 수 없다고"),
         (None, "unknown", "정보는 없어서"),
     ],
 )

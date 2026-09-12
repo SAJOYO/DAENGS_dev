@@ -8,8 +8,9 @@
 현재 참조는 epoch 제어 ID와 원본/유효 시각 분리를 지원하는 `trajectory-contract-v2`다.
 
 이 코드는 `daengs_walk`의 순수 내부 계약이다. 현재 읽기 전용 그림자 서비스가 사용한다.
-기존 motion 입력의 누적 재생·관측/보행 투영은 후속 문서 범위로 구현됐고, 새 보행 판정기와
-HTTP·DB·Room·APP 화면 적용은 남아 있다. 기존 motion-v1과 WalkFacts 계산을 변경하지 않았다.
+기존 motion 입력의 누적 재생·관측/보행 투영은 후속 문서 범위로 구현됐고,
+[후보 HTTP 조회](trajectory-api.md)는 후속 #475에서 구현됐다. 새 보행 판정기·DB·Room·
+새 측정의 APP 화면 적용은 남아 있다. 기존 motion-v1과 WalkFacts 계산을 변경하지 않았다.
 
 | 파일 | 구현 책임 |
 | --- | --- |

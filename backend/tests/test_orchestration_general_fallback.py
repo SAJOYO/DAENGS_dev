@@ -550,16 +550,18 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     assert "off_topic: the question is not about dogs." in prompt
 
 
-def test_medication_boundary_answers_duration_and_dosing_interval_of_a_confirmed_drug() -> None:
-    """D-071: 이미 처방·복용이 **확인된** 약의 기간·투여 간격만 답한다 — 가장 좁은 폭(A).
+def test_medication_boundary_answers_duration_or_interval_without_requiring_confirmation() -> None:
+    """D-071: 약의 기간·투여 간격은 답한다 — **이미 복용 중임을 확인할 것을 요구하지 않는다.**
 
-    #446 의 실물: "심장사상충 예방약 얼마나 오래 해야 해?" 가 medication 거절이었다.
-    프롬프트가 그 축을 husbandry norm 과 같은 결(전형적 범위 + 개체차 + 수의사/라벨이
-    정확한 값의 권위)로 답하도록 허용하는지를 잰다. "schedule" 이 아니라 "dosing interval"
-    로 적어 몇 시에 먹이는지(administration)까지 딸려 오지 않게 한 것도 같이 잰다."""
+    #446 의 실물: "심장사상충 예방약 얼마나 오래 해야 해?" 가 medication 거절이었다. 초판은
+    "이미 복용 중"이 확인돼야 답하도록 게이트를 걸었는데, `DogContext.on_medication` 은
+    이름 없는 `True`/`None` 뿐이라 모델이 그 확인을 할 방법이 없었다 — 그 결과 #446 의
+    동기 사례 자체가 다시 거절로 떨어졌다(리뷰가 잡음). 지금은 확인 여부가 아니라 **질문의
+    형태**(기간·주기 대 시작 여부)로 가른다 — "confirmed already on" 이 프롬프트에 남아
+    있지 않은지도 같이 잰다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
-    assert "duration or dosing interval of a medication the dog is confirmed already on" in prompt
-    assert "is answerable" in prompt
+    assert "duration or dosing interval of a medication is answerable" in prompt
+    assert "confirmed already on" not in prompt
     # 기간·투여 간격 규칙이 husbandry norm 규칙 다음, refuse 목록보다 앞(answering 규칙)에 있다
     husbandry_idx = prompt.index("Ordinary husbandry norms ARE answerable")
     duration_idx = prompt.index("duration or dosing interval of a medication")
@@ -586,10 +588,15 @@ def test_medication_boundary_still_refuses_drug_name_recommendations() -> None:
 
 
 def test_medication_boundary_still_refuses_whether_to_start_a_drug() -> None:
-    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다. 절 전체를 고정한다."""
+    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다. 이 축을 여는 것이 바로 이
+    카드가 열지 않기로 한 것이라, 절 전체(질문 형태로 가르는 문장)를 고정한다 — 단어 하나
+    (`"whether to start one" in ...`)만 보면 (지금은 지운) tiebreak 문장에도 같은 단어가
+    있어서 그 문장을 지워도 우연히 계속 통과했다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
-    assert "whether to start one" in medication_rule
+    assert (
+        "a question about whether to begin one is whether to start one, and refused"
+    ) in medication_rule
 
 
 def test_medication_boundary_still_refuses_administration_instructions() -> None:
@@ -618,17 +625,21 @@ def test_medication_boundary_still_refuses_side_effects_information_not_only_jud
     assert "not drugs" in mechanism_rule and "refused as medication" in mechanism_rule
 
 
-def test_medication_boundary_refuses_as_start_when_not_confirmed_already_on() -> None:
-    """D-071 의 tiebreak: "이미 복용 중"을 모델이 확인할 방법이 없다 — `DogContext.on_medication`
-    은 이름 없는 `True`/`None` 뿐이다. 불명확하면 "새로 시작"으로 취급해 거절하는 쪽으로
-    떨어져야 한다 — 그래야 아직 안 먹이는 사람의 "얼마나 오래 먹여야 해?" 가 시작 여부
-    질문으로 잘못 답변되지 않는다."""
+def test_medication_boundary_is_this_normal_rule_excludes_medication() -> None:
+    """administration 이 거절 목록에 다시 들어오며 husbandry 의 "is this okay / is this
+    normal" 규칙과 충돌이 넓어졌다 — "두 배로 줘도 돼?" 는 그 규칙 형태 그대로의 intake
+    amount 질문이고, "밥이랑 같이 먹여도 돼?" · "쪼개서 줘도 돼?" 는 같은 형태의 behavior
+    질문이다. 그 규칙 자신이 범위를 husbandry 로 좁혀, 약 질문은 여기서 안 걸리고
+    medication 으로 떨어지는지를 잰다 — 원인-단정 규칙(:187)에 이미 적용한 것과 같은
+    수선이다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
-    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
-    assert (
-        "When it is not clear the dog is already on that medication, "
-        "treat the question as whether to start one and refuse"
-    ) in medication_rule
+    is_normal_rule = prompt[
+        prompt.index('A question of the form "is this okay') : prompt.index(
+            "Say you do not know when unsure"
+        )
+    ]
+    assert "not medication" in is_normal_rule
+    assert "refused as medication" in is_normal_rule
 
 
 def test_general_adapter_uses_the_router_model() -> None:

@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy.engine import make_url
 
 from daengs_place.core.config import Settings
@@ -54,15 +55,19 @@ def test_place_gemini_settings_are_optional(monkeypatch):
     assert settings.gemini_timeout_ms == 30_000
 
 
-def test_facility_provider_uses_its_own_model_and_keeps_shared_discovery_model(monkeypatch):
+@pytest.mark.parametrize("model", [None, "facility-model"])
+def test_facility_provider_uses_its_own_model_and_keeps_shared_discovery_model(monkeypatch, model):
     from daengs_place.api import conversation_internal
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("GEMINI_MODEL", "discovery-model")
-    monkeypatch.setenv("FACILITY_CONVERSATION_MODEL", "facility-model")
+    if model is None:
+        monkeypatch.delenv("FACILITY_CONVERSATION_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("FACILITY_CONVERSATION_MODEL", model)
     settings = Settings(_env_file=None)
     monkeypatch.setattr(conversation_internal, "settings", settings)
-    assert conversation_internal.provider().model == "facility-model"
+    assert conversation_internal.provider().model == (model or "gemini-3.1-flash-lite")
     assert settings.gemini_model == "discovery-model"
 
 

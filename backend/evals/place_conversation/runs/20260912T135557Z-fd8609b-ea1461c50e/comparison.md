@@ -1,6 +1,6 @@
 # 시설 개발 세트 — Lite 예비 측정과 Judge 대조
 
-시설 실행과 Judge 모두 `gemini-3.1-flash-lite`다. 운영 `gemini-3-flash-preview`의 기준선이 아니다.
+시설 실행과 Judge 모두 `gemini-3.1-flash-lite`다. **2026-09-13 정정:** 사용자가 확인한 운영 모델도 Flash-Lite다. 이전의 “운영 Flash 기준선이 아니다”라는 설명은 잘못된 모델 전제였다. 아래 관측·판정 숫자는 그대로이며, 원본 `evaluation-plan.json`과 `comparison.json`의 잘못된 운영 모델 해석은 [정정 기록](model-context-correction.json)을 함께 읽는다. 실제 배포 경로 전체를 검증한 결과는 아니다.
 7개 개발 사례·8턴을 한 번 실행했다. 원본 관측은 보존했고, Judge 본 판정 전에 Codex 검토를 별도 파일로 확정했다. Codex 검토는 사람 라벨이 아니다.
 
 코드 검사: {'fail': 3, 'pass': 5}. Judge 대조 사례: 12/12.
@@ -45,7 +45,7 @@ Judge와 Codex 열은 각각 **의도 / 범위 / 결과 설명** 순서다. 결�
 ## 경계와 원본
 
 필터 작업 실패를 결과 설명 축의 실패로도 판정했다면 축을 혼동했는지 확인해야 한다. 요청을 수행하지 못한 것은 의도·범위 축의 실패지만, 되묻기는 검색·변경 완료를 주장하지 않았다. 이 대조는 Codex의 검토 의견이며 사람 교정을 대신하지 않는다.
-운영 모델 재측정, 실제 APP 반영·회원 찜 저장·공통 라우팅·PostGIS 정확도는 이 보고서 범위 밖이다. 선택과 확인 대기가 비어 있는 초기 상태만 사용했다.
+실제 APP 반영·회원 찜 저장·공통 라우팅·PostGIS 정확도는 이 보고서 범위 밖이다. 선택과 확인 대기가 비어 있는 초기 상태만 사용했다. 관측된 제안 실패는 운영에 쓰는 Flash-Lite의 개선 대상이며, Flash로 바꿔 재측정해야 한다는 뜻은 아니다.
 
 - [측정 범위](evaluation-plan.json), [관측 원본](observations.jsonl), [모델·코드·데이터 해시](metadata.json)
 - [Judge 이전 Codex 검토](codex-review.jsonl), [검토 시점·해시](codex-review-metadata.json)

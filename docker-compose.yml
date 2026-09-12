@@ -654,7 +654,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
-      FACILITY_CONVERSATION_MODEL: ${FACILITY_CONVERSATION_MODEL:-gemini-3-flash-preview}
+      FACILITY_CONVERSATION_MODEL: ${FACILITY_CONVERSATION_MODEL:-gemini-3.1-flash-lite}
       TZ: Asia/Seoul
     working_dir: /app
     volumes:

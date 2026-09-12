@@ -2,7 +2,7 @@
 
 시설 입력의 해석과 실행 결과를 검토하는 오프라인 평가기다. 코드는 [place_conversation](../../backend/src/daengs_evals/place_conversation/README.md)에 있으며 실행 명령과 파일 설명은 그 README가 기준이다. 데이터는 [judge 안내](../../backend/evals/place_conversation/judge/README.md)를 따른다.
 
-개발 세트 전체 실행과 Judge 대조 결과는 [시설 개발 세트 예비 평가](conversation-baseline.md)에 있다. 운영 모델의 전체 기준선과 Lite 예비 측정을 구분한다.
+개발 세트 전체 실행과 Judge 대조 결과는 [시설 개발 세트 예비 평가](conversation-baseline.md)에 있다. 사용자 확인에 따른 운영 모델은 Flash-Lite다. 같은 모델의 합성 환경 측정과 실제 배포 경로 전체의 검증을 구분한다.
 
 ## 평가할 것
 
@@ -28,7 +28,7 @@ Judge는 검토 보조다. 앵커 검사만으로 사람과의 일치도를 확�
 
 ## 실행과 재현
 
-기존 시설 `runner.py`·`checks.py`·`report.py`를 확장했다. DEV 공통 오케스트레이션의 `semantic.py`·`resolver.py`와 시설 Judge가 `daengs_backend/core/gemini.py`의 클라이언트 생성 코드를 함께 사용한다. 구조화 출력 설정·검증은 기존 `answer_quality/gemini.py`를 재사용한다. 공유 설정은 `GEMINI_API_KEY`, `GEMINI_TIMEOUT_MS`이며, Judge 모델만 `FACILITY_JUDGE_MODEL`로 선택한다. 기본값은 `gemini-3-flash-preview`다. OpenAI 키는 필요하지 않다.
+기존 시설 `runner.py`·`checks.py`·`report.py`를 확장했다. DEV 공통 오케스트레이션의 `semantic.py`·`resolver.py`와 시설 Judge가 `daengs_backend/core/gemini.py`의 클라이언트 생성 코드를 함께 사용한다. 구조화 출력 설정·검증은 기존 `answer_quality/gemini.py`를 재사용한다. 공유 설정은 `GEMINI_API_KEY`, `GEMINI_TIMEOUT_MS`이며, Judge 모델만 `FACILITY_JUDGE_MODEL`로 선택한다. 기본값은 `gemini-3.1-flash-lite`다. OpenAI 키는 필요하지 않다.
 
 오프라인 Judge가 전체 앱의 DB·암호화 키 설정에 묶이지 않도록 Gemini 키·타임아웃만 읽는 설정을 공통 생성 코드에 둔다. 운영 라우터와 리졸버는 기존 검증된 앱 설정 값을 생성 함수에 전달하며, 라우팅 모델·프롬프트·재시도 정책은 그대로다. Judge 요청에만 SDK 재시도를 1회 시도로 제한해 기존 호출 장부가 모든 시도를 기록한다.
 
@@ -54,7 +54,7 @@ Judge는 검토 보조다. 앵커 검사만으로 사람과의 일치도를 확�
 
 [Gemini 실험 요약](../../backend/evals/place_conversation/runs/20260912T130753Z-670a13a-28eb2ff4c2/gemini-summary.json)과 [판정 보고서](../../backend/evals/place_conversation/runs/20260912T130753Z-670a13a-28eb2ff4c2/judges/gemini-router-v1/report.md)에 실제 결과를 보존했다. 공통 오케스트레이션이 쓰는 `gemini-3.1-flash-lite`를 `--judge-model`로 명시한 실행에서 대조 사례 **12/12**, 관측이 완료된 **3턴의 9개 평가 축 모두 pass**였다. 앵커와 본 판정의 총 21회 호출에 제공자 오류는 없었다. 나머지 3턴의 9개 축은 원본 관측 오류·미실행 때문에 `unmeasured`다. 별도 의미 리뷰는 없으므로 최종 상태는 여전히 `review_required`다.
 
-기본 Judge 모델 `gemini-3-flash-preview`는 먼저 5개 앵커를 정상 판정했지만 이후 HTTP 429로 막혔다. 10초 간격 재실행도 실패했고, 별도 진단 호출에서 하루 무료 요청 한도(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, 당시 값 20)를 확인했다. 이 두 실행의 실패 기록도 보존했다. Lite 결과를 기본 모델의 품질 검증으로 대체하지 않으며, 한도 초기화 후 기본 모델을 검사하려면 새 Judge ID로 앵커부터 시작한다.
+당시 Judge 기본값으로 잘못 선택했던 `gemini-3-flash-preview`는 먼저 5개 앵커를 정상 판정했지만 이후 HTTP 429로 막혔다. 10초 간격 재실행도 실패했고, 별도 진단 호출에서 하루 무료 요청 한도(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, 당시 값 20)를 확인했다. 이 두 실행의 실패 기록도 보존했다. 2026-09-13 사용자 정정에 따라 시설·Judge 기본값을 Flash-Lite로 맞췄다. Flash 한도 기록을 운영 모델의 한도나 Flash 재측정 필요성으로 해석하지 않는다.
 
 ## 결과 설명 축 분리 검증
 

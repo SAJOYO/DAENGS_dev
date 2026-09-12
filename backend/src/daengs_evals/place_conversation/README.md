@@ -47,7 +47,7 @@ uv run python -m daengs_evals.place_conversation.report evals/place_conversation
 
 수집기와 Judge 모두 기존 `GEMINI_API_KEY`를 사용한다. Judge 클라이언트와 타임아웃은 오케스트레이션도 사용하는 [공통 Gemini 생성 코드](../../daengs_backend/core/gemini.py)를 따른다. 타임아웃은 `GEMINI_TIMEOUT_MS`(밀리초, 기본 30000)다. DB·암호화 키 설정 없이 오프라인 평가를 실행할 수 있다.
 
-시설 모델은 `FACILITY_CONVERSATION_MODEL`, Judge 모델은 `FACILITY_JUDGE_MODEL`(기본 `gemini-3-flash-preview`)이다. `--model`, `--judge-model`로 각각 명시할 수도 있다. Judge는 `backend/.env`에서도 설정을 읽는다. `--key-file <파일 또는 .env가 있는 폴더>`는 `GEMINI_API_KEY` 또는 `gemini:` 필드를 읽어 현재 CLI 프로세스에만 전달한다. 키를 복사·출력하지 않는다. 키 자체를 명령행 인자로 넣지 않는다. OpenAI 키는 사용하지 않는다.
+시설 모델은 `FACILITY_CONVERSATION_MODEL`, Judge 모델은 `FACILITY_JUDGE_MODEL`이며 기본값은 둘 다 `gemini-3.1-flash-lite`다. `--model`, `--judge-model`로 각각 명시할 수도 있다. Judge는 `backend/.env`에서도 설정을 읽는다. `--key-file <파일 또는 .env가 있는 폴더>`는 `GEMINI_API_KEY` 또는 `gemini:` 필드를 읽어 현재 CLI 프로세스에만 전달한다. 키를 복사·출력하지 않는다. 키 자체를 명령행 인자로 넣지 않는다. OpenAI 키는 사용하지 않는다.
 
 `runner --live`, `judge check-anchors`, `judge score`는 Gemini 모델 호출을 한다. 보고서·사례 목록·가짜 제공자를 쓰는 단위 테스트는 모델을 호출하지 않는다. 기존 `answer_quality/gemini.py`의 스키마 구성·검증 함수를 재사용하며 [Gemini 구조화 출력](https://ai.google.dev/gemini-api/docs/structured-output)을 받는다. 차단·불완전 응답은 통과가 아닌 호출 오류로 남긴다. 사고 토큰도 사용량에 포함한다.
 

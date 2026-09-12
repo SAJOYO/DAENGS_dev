@@ -33,6 +33,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     ScreeningHistory,
 )
+from daengs_backend.orchestration.facility_presentation import present_facility
 
 _FORBIDDEN_CONTEXT_KEYS = frozenset(
     {"authorization", "jwt", "jwe", "access_token", "refresh_token", "cookie", "cookie_token"}
@@ -48,7 +49,12 @@ class CapabilityAdapter(Protocol):
 class OrchestrationEngine:
     """Sequential v1 execution; no router, persistence, checkpointer, or subgraphs."""
 
-    def __init__(self, adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None,
+        *,
+        place_adapter: CapabilityAdapter | None = None,
+    ) -> None:
         if adapters is None:
             adapters = {
                 CapabilityName.TRAINING: TrainingCapabilityAdapter(),
@@ -62,6 +68,10 @@ class OrchestrationEngine:
                 CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
+        if place_adapter is not None:
+            if place_adapter.capability != CapabilityName.PLACE:
+                raise ValueError("the facility override must implement Place")
+            self._adapters[CapabilityName.PLACE] = place_adapter
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -208,10 +218,13 @@ class OrchestrationEngine:
         # 이력은 **planner 와 같은 화이트리스트**를 지나서 온다 — 답변에 붙는 절이 payload 와
         # 다른 경로로 컨텍스트를 읽으면 좁힘이 두 벌이 된다 (#79 3번).
         history = planner.screening_history(state["context"])
+        plan, results = state["route_plan"], state["results"]
+        if state["context"].get("facility_response"):
+            plan, results = present_facility(plan, results)
         response = aggregate_results(
             request_id=state["request_id"],
-            route_plan=state["route_plan"],
-            results=state["results"],
+            route_plan=plan,
+            results=results,
             include_route_trace=state["include_route_trace"],
             screening_history=ScreeningHistory.model_validate(history) if history else None,
         )

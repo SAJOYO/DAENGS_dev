@@ -27,6 +27,7 @@ from typing import Any, Protocol
 
 from daengs_backend.config import OrchestratorKind, settings
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
@@ -60,7 +61,9 @@ class Orchestrator(Protocol):
     ) -> AssistantResponse: ...
 
 
-def build_orchestrator(kind: OrchestratorKind | None = None) -> Orchestrator:
+def build_orchestrator(
+    kind: OrchestratorKind | None = None, *, engine: OrchestrationEngine | None = None
+) -> Orchestrator:
     """`kind` 가 없으면 `DAENGS_ORCHESTRATOR` 를, 있으면 그것을 따릅니다.
 
     **`kind` 를 인자로 받는 것이 요점입니다.** 모듈 최상단에서 `settings` 를 읽어
@@ -75,13 +78,13 @@ def build_orchestrator(kind: OrchestratorKind | None = None) -> Orchestrator:
     """
     selected = kind or settings.orchestrator
     if selected == "langgraph":
-        return AssistantOrchestrationService()
+        return AssistantOrchestrationService(engine=engine)
     if selected == "agent":
         # LangChain 은 `agent` extra 라 기본 설치에 없습니다. 그래서 이 갈래만
         # 지연 import 입니다 — 최상단에 두면 extra 없이는 backend 가 아예 안 뜹니다.
         from daengs_backend.orchestration.agent import AgentOrchestrationService
 
-        return AgentOrchestrationService()
+        return AgentOrchestrationService(engine=engine)
     raise ValueError(f"알 수 없는 오케스트레이터입니다: {selected!r}")
 
 

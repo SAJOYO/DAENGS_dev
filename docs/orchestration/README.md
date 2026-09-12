@@ -20,6 +20,10 @@ CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
 `place/`)가 원본이고, 여기에는 **능력을 고르고 합치는 규칙**만 둡니다.
 "어떻게 돌리나"는 코드 옆 README 와 루트 [README.md](../../README.md) 입니다.
 
+앱의 공통 채팅에서 같은 시설 세션을 이어 쓰는 선택 계약은
+[시설 대화 연결](../place/assistant-conversation.md)을 따른다. `facility`가 있는 요청의
+Place만 기존 시설 v2 실행기로 연결하며, 다른 capability와 집계 규칙은 공통 구현을 사용한다.
+
 | 파일 | 내용 |
 | --- | --- |
 | [architecture.md](architecture.md) | CURRENT 물리 토폴로지(실행 주체 3개 · 라우팅 · 배포 · 기동 순서) + 구현된 오케스트레이션 v1 지도 — v1 범위 · **능력 준비도 표(단일 원본)** · Training 토폴로지 |

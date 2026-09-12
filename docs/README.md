@@ -128,6 +128,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | --- | --- |
 | [walk/upload-idempotency.md](walk/upload-idempotency.md) | 최초 산책 업로드의 동시 유니크 충돌 복구·회원 경계·원자적 활동 연결 |
 | [walk/finalize-transactions.md](walk/finalize-transactions.md) | 산책 봉인의 잠금 없는 계산·날씨 조회, 최신 입력 재검증과 원자적 저장 |
+| [walk/upload-receipts.md](walk/upload-receipts.md) | 좌표 청크 수신 확인·동일 재전송·충돌 계약, 전체 경로 조회 없는 업로드와 APP 적용 순서 |
 | [walk/activity-summary-queries.md](walk/activity-summary-queries.md) | 산책 활동 요약의 일괄 조회·저장 집계·원본 지문 검증과 기존 데이터 보완 |
 | [walk/entry-service-boundaries.md](walk/entry-service-boundaries.md) | 행동 기록 공통 오류·버전 정책·프로필 계산과 v1/v2·배경 작업의 의존 경계 |
 | [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |

@@ -46,24 +46,39 @@ class GeminiConversation:
 
     async def plan(self, request):
         state = request.previous
+        return await self._plan(
+            {
+                "active_search_pool": state.search_pool,
+                "current_state": canonical(state.filters.model_dump(mode="json")),
+                "history": [turn.model_dump(mode="json") for turn in state.history],
+                "pending_question": state.pending_question,
+                "selected": (request.visible_selected or state.selected).model_dump()
+                if request.visible_selected or state.selected
+                else None,
+                "visible_order": [key.model_dump() for key in request.visible_order],
+                "screen": screen_context(request),
+                "query": request.query,
+            }
+        )
+
+    async def plan_saved(self, request):
+        return await self._plan(
+            {
+                "active_search_pool": "bookmarks",
+                "saved_workspace": True,
+                "current_state": request.filters.model_dump(mode="json"),
+                "query": request.query,
+                "history": [],
+                "screen": {"current_places": [], "excluded_places": []},
+            }
+        )
+
+    async def _plan(self, context):
         result = await self._call(
             {
                 "system_instruction": STATIC_INSTRUCTIONS,
                 "tools": [TURN_TOOL],
-                "input": json.dumps(
-                    {
-                        "current_state": canonical(state.filters.model_dump(mode="json")),
-                        "history": [turn.model_dump(mode="json") for turn in state.history],
-                        "pending_question": state.pending_question,
-                        "selected": (request.visible_selected or state.selected).model_dump()
-                        if request.visible_selected or state.selected
-                        else None,
-                        "visible_order": [key.model_dump() for key in request.visible_order],
-                        "screen": screen_context(request),
-                        "query": request.query,
-                    },
-                    ensure_ascii=False,
-                ),
+                "input": json.dumps(context, ensure_ascii=False),
                 "generation_config": {
                     "temperature": 0,
                     "max_output_tokens": 2500,

@@ -6,8 +6,20 @@ from uuid import uuid4
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
+from daengs_place.place.conversation.candidates import (
+    correct_knowledge,
+    pool_fingerprint,
+    pool_omissions,
+    presentation_fingerprint,
+    replace_known_hits,
+)
 from daengs_place.place.conversation.compiler import fingerprint
-from daengs_place.place.conversation.context import edit_exclusions, identity, unique_keys
+from daengs_place.place.conversation.context import (
+    current_places,
+    edit_exclusions,
+    identity,
+    unique_keys,
+)
 from daengs_place.place.conversation.contract import (
     ConversationState,
     DialogueTurn,
@@ -35,6 +47,24 @@ from daengs_place.place.tools.changes import apply_changes
 from daengs_place.place.tools.contract import FilterChanges
 
 CACHE_SECONDS = 300
+
+
+def snapshot_matches(state, bookmark_keys):
+    snapshot = state.snapshot
+    if snapshot is None or snapshot.fingerprint != fingerprint(state.filters):
+        return False
+    try:
+        basis = pool_fingerprint(
+            state.search_pool, bookmark_keys, state.exploration.known, state.exploration.excluded
+        )
+    except ValueError:
+        return False
+    return snapshot.pool_fingerprint == basis or (
+        not snapshot.pool_fingerprint
+        and state.search_pool == "all_places"
+        and not state.exploration.known
+        and snapshot.exclusions == tuple(p.key for p in state.exploration.excluded)
+    )
 
 
 def snapshot_hits(snapshot):
@@ -114,6 +144,7 @@ class ConversationService:
         now = self.now()
         decision = Decision("execute")
         plan = TurnPlan(goal="show")
+        pool = old.search_pool if old else request.restore_pool
         if request.mode == "manual":
             candidate = manual_filters(request.manual, old)
         elif request.mode == "restore":
@@ -121,8 +152,13 @@ class ConversationService:
         elif request.mode == "filters":
             # Direct UI operation: validate IDs, preserve all other fields, no planner or answer.
             candidate = apply_changes(
-                old.filters, FilterChanges.model_validate(request.remove_filters.model_dump())
+                old.filters,
+                FilterChanges.model_validate(
+                    request.remove_filters.model_dump(exclude={"search_pool"})
+                ),
             )
+            if request.remove_filters.search_pool != "keep":
+                pool = request.remove_filters.search_pool
         else:
             assert old is not None
             try:
@@ -136,6 +172,28 @@ class ConversationService:
                     action="clarify",
                 )
             now = self.now()
+            if decision.action == "saved_search":
+                from daengs_place.place.conversation.saved_search import prepare_saved_search
+
+                return prepare_saved_search(request, decision.intent, self._unchanged)
+            if decision.action == "bookmark":
+                from daengs_place.place.conversation.bookmarks import prepare_bookmark
+
+                return prepare_bookmark(request, decision.intent, self._unchanged)
+            if decision.code == "feedback_no_mutation":
+                current_places(
+                    request
+                )  # Validate the submitted screen before preserving its selection.
+                selected = request.visible_selected or old.selected
+                result = self._unchanged(
+                    request, "explain", decision.code, decision.question, action="explain"
+                )
+                return result.model_copy(
+                    update={
+                        "state": result.state.model_copy(update={"selected": selected}),
+                        "receipt": result.receipt.model_copy(update={"selected": selected}),
+                    }
+                )
             if (
                 decision.pending is not None
                 and decision.action == "execute"
@@ -157,12 +215,22 @@ class ConversationService:
                     pending=decision.pending,
                     intent=decision.intent,
                 )
-            plan, candidate = decision.plan, decision.candidate
-        changed = old is None or fingerprint(old.filters) != fingerprint(candidate)
+            plan, candidate, pool = decision.plan, decision.candidate, decision.pool
+        changed = (
+            old is None
+            or fingerprint(old.filters) != fingerprint(candidate)
+            or old.search_pool != pool
+        )
         intent = decision.intent
         browse = browse_scope(request.query, intent)
         try:
             excluded, newly_excluded, restored = edit_exclusions(request, intent)
+            known, newly_known = correct_knowledge(request, intent)
+            if old is None and request.restore_exploration:
+                known = request.restore_exploration.known
+                excluded = request.restore_exploration.excluded
+            if browse == "restart":
+                known = ()
         except ValueError:
             return self._unchanged(
                 request,
@@ -173,27 +241,81 @@ class ConversationService:
             )
         exclusion_keys = tuple(p.key for p in excluded)
         candidate_fingerprint = fingerprint(candidate)
+        presented_fingerprint = presentation_fingerprint(candidate_fingerprint, pool)
+
+        def retain_knowledge(result):
+            # The factual correction commits independently of replacement-search success.
+            if not newly_known:
+                return result
+            exploration = result.state.exploration.model_copy(update={"known": known})
+            return result.model_copy(
+                update={
+                    "state": result.state.model_copy(update={"exploration": exploration}),
+                    "receipt": result.receipt.model_copy(
+                        update={
+                            "known_places": newly_known,
+                            "feedback": "familiarity",
+                            "result_matches_filters": False
+                            if result.state.search_pool == "new_candidates"
+                            else result.receipt.result_matches_filters,
+                        }
+                    ),
+                }
+            )
+
+        try:
+            if pool in {"unbookmarked", "new_candidates"} and request.candidate_pools != "v1":
+                raise ValueError("client capability required")
+            base_omitted = pool_omissions(pool, request.bookmark_keys, known, excluded)
+            basis = pool_fingerprint(pool, request.bookmark_keys, known, excluded)
+        except ValueError:
+            if old is None:
+                raise
+            return retain_knowledge(
+                self._unchanged(
+                    request,
+                    plan.goal,
+                    "candidate_pool_unavailable",
+                    "찜 목록을 확인하지 못해 새 후보를 찾지 않았어요. 현재 결과를 유지했으니 다시 시도해 주세요.",
+                )
+            )
         presented = ()
+        if (
+            request.restore_exploration
+            and request.restore_exploration.fingerprint == presented_fingerprint
+        ):
+            presented = request.restore_exploration.presented
         if old and browse != "restart":
-            if old.exploration.fingerprint == candidate_fingerprint:
+            if old.exploration.fingerprint == presented_fingerprint:
                 presented = old.exploration.presented
-            elif old.snapshot and old.snapshot.fingerprint == candidate_fingerprint:
+            elif (
+                old.snapshot
+                and old.snapshot.fingerprint == candidate_fingerprint
+                and old.search_pool == pool
+                and not old.exploration.fingerprint
+            ):
                 # Compatibility with sessions created before exploration state existed.
                 presented = old.snapshot.display_order
         if browse == "next" and len(presented) + 20 * len(candidate.candidate_kinds) > 1200:
-            return self._unchanged(
-                request,
-                "clarify",
-                "exploration_budget",
-                "한 번의 탐색에서 기록할 수 있는 범위에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
-                action="clarify",
+            return retain_knowledge(
+                self._unchanged(
+                    request,
+                    "clarify",
+                    "exploration_budget",
+                    "한 번의 탐색에서 기록할 수 있는 범위에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
+                    action="clarify",
+                )
             )
-        omitted = unique_keys((*exclusion_keys, *(presented if browse == "next" else ())))
+        omitted = unique_keys((*base_omitted, *(presented if browse == "next" else ())))
         snapshot = old.snapshot if old else None
         same = (
             snapshot is not None
             and snapshot.fingerprint == candidate_fingerprint
             and snapshot.exclusions == exclusion_keys
+            and (
+                snapshot.pool_fingerprint == basis
+                or (not snapshot.pool_fingerprint and pool == "all_places" and not known)
+            )
         )
         if plan.goal == "show" and plan.reference_index is None and browse == "current":
             # An empty next page is not an empty full search. Normal show can revisit seen places.
@@ -216,24 +338,43 @@ class ConversationService:
                 "reference_needs_confirmation",
                 "이전 목록의 장소를 고를지, 새 조건으로 다시 찾을지 알려주세요.",
             )
+        # A correction to the current fresh new-candidate page replaces only affected cards.
+        replacing = bool(
+            newly_known
+            and pool == "new_candidates"
+            and old
+            and old.search_pool == pool
+            and not changed
+            and browse == "current"
+            and not plan.refresh
+            and snapshot
+            and 0 <= (now - snapshot.created_at).total_seconds() < CACHE_SECONDS
+        )
+        search_omitted = unique_keys((*omitted, *snapshot.display_order)) if replacing else omitted
         if needs_results and (not fresh or plan.refresh or browse != "current"):
             try:
                 result = await self.searcher(
-                    db, candidate, **({"omitted": omitted} if omitted else {})
+                    db, candidate, **({"omitted": search_omitted} if search_omitted else {})
                 )
             except (SQLAlchemyError, TimeoutError):
                 if old is None:
                     raise
-                return self._unchanged(
-                    request,
-                    plan.goal,
-                    "search_failed",
-                    "",
-                    execution="failed",
-                    pending=decision.pending,
+                return retain_knowledge(
+                    self._unchanged(
+                        request,
+                        plan.goal,
+                        "search_failed",
+                        "",
+                        execution="failed",
+                        pending=decision.pending,
+                    )
                 )
             if result.applied_state != candidate:
                 raise RuntimeError("search state mismatch")
+            if replacing:
+                if any(h.place.key in search_omitted for g in result.groups for h in g.matched):
+                    raise RuntimeError("replacement search returned an omitted place")
+                result = replace_known_hits(result, snapshot.result, omitted)
             hits = [hit for group in result.groups for hit in group.matched]
             if any(hit.place.key in omitted for hit in hits):
                 raise RuntimeError("search returned an omitted place")
@@ -248,11 +389,13 @@ class ConversationService:
             snapshot = ResultSnapshot(
                 id=uuid4(),
                 fingerprint=fingerprint(candidate),
-                created_at=now,
+                # Retained facts must not gain another five minutes on every correction.
+                created_at=snapshot.created_at if replacing else now,
                 result=result,
                 display_order=tuple(hit.place.key for hit in hits),
                 exclusions=exclusion_keys,
                 omitted=omitted,
+                pool_fingerprint=basis,
             )
             execution = "searched"
         elif needs_results or plan.goal == "explain":
@@ -337,6 +480,11 @@ class ConversationService:
                 return self._unchanged(
                     request, plan.goal, "no_reference", "어느 장소를 설명할까요?"
                 )
+        if newly_known and plan.goal == "edit_only" and old and not changed and snapshot:
+            snapshot = snapshot.model_copy(update={"pool_fingerprint": basis})
+        if newly_known and plan.goal == "edit_only" and old:
+            selected = request.visible_selected or old.selected
+            selection_basis = old.selection_basis
         history = old.history if old else ()
         if request.mode == "chat":
             history = (
@@ -354,12 +502,14 @@ class ConversationService:
             presented = unique_keys((*presented, *snapshot.display_order))
             if len(presented) > 1200:
                 # A current search can refresh results as data changes; never silently drop history.
-                return self._unchanged(
-                    request,
-                    "clarify",
-                    "exploration_budget",
-                    "탐색 기록 한도에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
-                    action="clarify",
+                return retain_knowledge(
+                    self._unchanged(
+                        request,
+                        "clarify",
+                        "exploration_budget",
+                        "탐색 기록 한도에 도달했어요. 조건을 좁히거나 처음부터 다시 찾아주세요.",
+                        action="clarify",
+                    )
                 )
             remaining = (
                 "more" if any(g.matched_truncated for g in snapshot.result.groups) else "exhausted"
@@ -368,23 +518,32 @@ class ConversationService:
             presented = old.exploration.presented
         state = ConversationState(
             filters=candidate,
+            search_pool=pool,
             snapshot=snapshot,
             selected=selected,
             history=history,
             revision=base_revision(request) + 1,
             selection_basis=selection_basis,
             exploration=ExplorationState(
+                known=known,
                 excluded=excluded,
                 presented=presented,
-                fingerprint=candidate_fingerprint,
+                fingerprint=presented_fingerprint,
             ),
         )
         receipt = ExecutionReceipt(
+            search_pool=pool,
+            known_places=newly_known,
+            feedback=intent.feedback if intent else "none",
             goal=plan.goal,
             execution=execution,
             filters_changed=changed,
             result_matches_filters=snapshot is not None
-            and snapshot.fingerprint == fingerprint(candidate),
+            and snapshot.fingerprint == fingerprint(candidate)
+            and (
+                snapshot.pool_fingerprint == basis
+                or (not snapshot.pool_fingerprint and pool == "all_places" and not known)
+            ),
             returned_count=len(snapshot_hits(snapshot)),
             snapshot_id=snapshot.id if snapshot else None,
             selected=selected,
@@ -436,12 +595,12 @@ class ConversationService:
         return PreparedTurn(
             state=state,
             receipt=ExecutionReceipt(
+                search_pool=old.search_pool,
                 goal=goal,
                 execution=execution,
                 action=action,
                 pending_id=pending.id if pending else None,
-                result_matches_filters=snapshot is not None
-                and snapshot.fingerprint == fingerprint(old.filters),
+                result_matches_filters=snapshot_matches(old, request.bookmark_keys),
                 returned_count=len(snapshot_hits(snapshot)),
                 snapshot_id=snapshot.id if snapshot else None,
                 selected=old.selected,

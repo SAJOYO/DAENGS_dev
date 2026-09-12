@@ -47,6 +47,7 @@ def screen_context(request):
             for i, p in enumerate(places, 1)
         ],
         "selected": selected.model_dump() if selected else None,
+        "known_places": [p.model_dump(mode="json") for p in request.previous.exploration.known],
         "excluded_places": [
             {"index": i, **p.model_dump(mode="json")}
             for i, p in enumerate(request.previous.exploration.excluded, 1)

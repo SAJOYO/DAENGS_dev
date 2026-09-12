@@ -1,0 +1,27 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "interval_seconds": 8.0,
+  "evaluator_sha256": "50cdd985f8835ebe448a2d307f2d96aa336b2107d75ec156bbe478ecc1e121d0",
+  "boundary": "real interpretation + synthetic search; no member/DB/SQL execution",
+  "sha256": {
+    "conversation\\answer.py": "c0c64ba5f55d3e0070f7692c76140656607e914b5adc860b209d22f90107759d",
+    "conversation\\bookmarks.py": "f08a47b5b404e719d2149015d28f9726a7fc5b46dd6108801df6da6e2d247b88",
+    "conversation\\candidates.py": "82699b4c6dd6e97d5864438add3bb6eb87c3e146ccff5669bb98daf186092443",
+    "conversation\\compiler.py": "33c36020637c94b8a0bbe8caf5938470dab9335bdfca1f35ebfcce95ccd124e2",
+    "conversation\\context.py": "b8784e2d6550c6b1ddc07350ccef8a8b915a2d0f951b3505e0105f58abcd7bc8",
+    "conversation\\contract.py": "220da5239f6f6590bf2561a6edb9532d429e4fc694d18cdaf8fd8fcb0e80c7b5",
+    "conversation\\grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "conversation\\intent.py": "9c17e22c630d36fdc7f0bb5e1f16c86cd434c5b17474fba84afcaf9dc96dde36",
+    "conversation\\policy.py": "7df4ff4f927fa0038faa8670431d70679d15b9011b14f5e5ddb3eed5b236589a",
+    "conversation\\render.py": "9b818861c49a46ce453e8aca3d4621d1b8df2d63a2f69b0af5d10640d8f1af71",
+    "conversation\\saved_search.py": "f7321b13622344691e6f97ab767eb06082975dcf0f5079422f76cb5408c00d44",
+    "conversation\\search_compilation.py": "ad9bac69a337eeec73ce44004abc1c17566882b8a86f4828c4b075e640c487a1",
+    "conversation\\search_policy.py": "084b03b6e66664208d0ac5fe36e735868a7192bb10a18e135e3367090cabf395",
+    "conversation\\service.py": "8b7ef851a9ffaab8a8e1a1b589b848eefd1b8ff23d773f7be6a8f36a6e78f5ab",
+    "conversation\\static_tools.py": "c6144c81472fb950d84eb410df9a3a3c08cdc9176a2a9697a0ecf1a3a3bfedc8",
+    "conversation\\__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108",
+    "providers\\conversation_gemini.py": "fd910adb53121f9692050fc22b4c0f7acc663c99672ee1b852b17c9a2f762b2a",
+    "providers\\gemini.py": "c329c9a20dc8ba8bb8d079cb384262d649a053f27d3b06364429585a177c1f5b",
+    "providers\\__init__.py": "c7b8047da95ea43b29f9aeb70355bb8c3590b0ad6eba249c4b77356729f874ca"
+  }
+}

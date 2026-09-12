@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.walk_storyboard import (
+    MAX_PREPARATION_BUDGET_MS,
     BundleFormat,
     DiaryStoryboardResponse,
     StoryboardRequest,
     StoryboardResponse,
 )
 from daengs_backend.services import walk_storyboard as service
+from daengs_backend.services.walk_diary_board_slot_writing import write_board
 from daengs_backend.services.walk_diary_writing import write_diary
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
@@ -32,8 +34,8 @@ def get_title_generator():
     return title_storyboard
 
 
-def get_diary_writer():
-    return write_diary
+def get_diary_writer(body: StoryboardRequest):
+    return write_board if body.bundle_format == BOARD_FORMAT else write_diary
 
 
 @router.get("/storyboard/capabilities")
@@ -46,8 +48,9 @@ async def capabilities(user: CurrentAppUser):
         else [],
         "target_scene_count": {"min": 1, "max": 50},
         "photo_manifest_required_if_available": True,
-        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": 10_000}
-        if settings.walk_diary_enabled else None,
+        "diary_publication": {"format": BOARD_FORMAT, "budget_ms": MAX_PREPARATION_BUDGET_MS}
+        if settings.walk_diary_enabled
+        else None,
     }
 
 

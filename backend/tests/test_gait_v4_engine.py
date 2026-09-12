@@ -40,11 +40,12 @@ V4_RECORD = {
 }
 
 
-def test_default_engine_is_legacy() -> None:
-    """운영에서 아무것도 안 하면 기존 엔진입니다 — 라이선스 결정 전 v4 가 켜지면 안 됩니다."""
+def test_default_engine_is_v4() -> None:
+    """6단계에서 옛 엔진이 없어졌으니 기본값도 같이 옮겨야 합니다 — 안 그러면 `GAIT_ENGINE`
+    을 안 준 배포가 **없는 엔진**을 골라 분석이 전부 FAILED 로 끝납니다."""
     from daengs_backend.config import Settings
 
-    assert Settings.model_fields["gait_engine"].default == "legacy"
+    assert Settings.model_fields["gait_engine"].default == "v4"
 
 
 def test_v4_settings_are_gone() -> None:

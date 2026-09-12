@@ -3,7 +3,7 @@
 import json
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 from sqlalchemy import text
 
 from daengs_place.core.clock import SystemClock
@@ -42,6 +42,14 @@ class BookmarkFilters(BaseModel):
     parking: bool = False
     hard: HardFilters = Field(default_factory=HardFilters)
     dogs: list[PlaceDogSnapshot] = Field(default_factory=list, max_length=20)
+    excluded_keys: list[PlaceRef] = Field(default_factory=list, max_length=120)
+
+    @model_serializer(mode="wrap")
+    def omit_empty_exclusions(self, handler):
+        data = handler(self)
+        if not self.excluded_keys:
+            data.pop("excluded_keys", None)
+        return data
 
     @model_validator(mode="after")
     def valid_scope(self) -> Self:
@@ -91,6 +99,8 @@ def facility_lookup_sql():
 
 
 def matches(place, filters):
+    if place.key in filters.excluded_keys:
+        return False
     if filters.kinds and place.match.kind not in filters.kinds:
         return False
     if filters.name_query.casefold() not in place.name.casefold():
@@ -179,6 +189,13 @@ async def lookup_bookmarks(db, request: BookmarkLookup) -> BookmarkLookupResult:
                     0  # Consumers must use distance_available, not this placeholder.
                 )
             hits.append(hit)
+    order_bookmark_hits(hits, f)
+    return BookmarkLookupResult(
+        filters=f, distance_available=f.lat is not None, hits=hits, missing_keys=missing
+    )
+
+
+def order_bookmark_hits(hits, f):
     if f.lat is not None:
         hits.sort(
             key=lambda h: (
@@ -189,6 +206,7 @@ async def lookup_bookmarks(db, request: BookmarkLookup) -> BookmarkLookupResult:
                 h.place.key.ref,
             )
         )
-    return BookmarkLookupResult(
-        filters=f, distance_available=f.lat is not None, hits=hits, missing_keys=missing
-    )
+    elif f.parking:
+        # Without an origin there are no distance bands. Preserve saved order within
+        # each group; unknown and false remain visible, after confirmed parking.
+        hits.sort(key=lambda h: h.place.facts.parking is not True)

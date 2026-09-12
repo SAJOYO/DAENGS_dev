@@ -1,4 +1,7 @@
-"""Carry the existing writer's background prose into the fixed base-board plan."""
+"""Legacy writer bridge for replaying the existing published-board contract fixture.
+
+New board generations use walk_diary_board_slot_writing instead.
+"""
 
 from daengs_walk.diary_board import VerifiedBoardRoute
 from daengs_walk.diary_board_assembly import assemble_base_board

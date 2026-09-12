@@ -20,6 +20,46 @@ class HttpPlaceBookmarkLookup:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
+    async def interpret(self, query, filters, *, search_policy=None, candidate_pools=None):
+        from daengs_backend.schemas.place_bookmark import BookmarkInterpretResult
+
+        try:
+            async with (
+                httpx.AsyncClient(timeout=35.0) as client,
+                client.stream(
+                    "POST",
+                    f"{self.base_url}/internal/place/bookmarks/interpret",
+                    json={
+                        "query": query,
+                        "filters": filters,
+                        "search_policy": search_policy,
+                        **({"candidate_pools": candidate_pools} if candidate_pools else {}),
+                    },
+                ) as response,
+            ):
+                if response.status_code == 422:
+                    raise PlaceBookmarkInvalidFilters
+                response.raise_for_status()
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > 64000:
+                        raise ValueError("interpretation response too large")
+            result = BookmarkInterpretResult.model_validate_json(body)
+            if (result.action == "search") != (result.filters is not None):
+                raise ValueError("invalid saved plan")
+            if (result.action == "search_places") != (result.search_filters is not None):
+                raise ValueError("invalid ordinary search plan")
+            if result.action == "search_places" and search_policy != "v1":
+                raise ValueError("unnegotiated ordinary search")
+            if result.search_pool != "all_places" and (
+                candidate_pools != "v1" or result.action != "search_places"
+            ):
+                raise ValueError("unnegotiated candidate pool")
+            return result
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            raise PlaceLookupUnavailable from exc
+
     async def lookup(self, keys, filters):
         try:
             async with (

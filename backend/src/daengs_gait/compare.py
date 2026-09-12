@@ -1,10 +1,10 @@
 """두 보행 기록 비교 — **판정만** 있는 모듈 (D-058).
 
 ⚠️ **여기에 무거운 import 를 넣지 마세요.** `numpy` 와 임계값 상수뿐입니다.
-   `pipeline.py` 는 최상단에서 `keypoint_infer`(cv2)·`overlay` 를 끌고 오는데,
-   backend 웹 컨테이너에는 `gait` 그룹(torch·cv2)이 없습니다. 비교를 거기 두면
-   `/app/gait/compare` 가 **ImportError 로 500** 이 납니다 — 계산에 필요 없는
-   의존성 때문에요. 그래서 판정을 이 파일로 떼어 냈습니다.
+   옛 `pipeline.py`(6단계에서 legacy runtime 과 함께 제거)는 최상단에서 추론·overlay 를
+   끌고 왔는데, backend 웹 컨테이너에는 `gait` 그룹(torch·cv2)이 없습니다. 비교를 거기
+   두면 `/app/gait/compare` 가 **ImportError 로 500** 이 납니다 — 계산에 필요 없는
+   의존성 때문에요. 그래서 판정을 이 파일로 떼어 냈고, 지금도 그 경계를 지킵니다.
 
    판정 기준·임계값·문구는 옮기기 전과 **한 글자도 다르지 않습니다.**
 """

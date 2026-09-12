@@ -1,0 +1,711 @@
+{
+  "format": "diary-slots-smoke-v1",
+  "implementation_commit": "b48aa4b47cf7d183cc66af3b0150a11f7349c5d1",
+  "fixture": "daengs_evals.diary_slots_demo.demo_input",
+  "input_origin": "synthetic GPS passed through the DEV canonical motion kernel",
+  "model": "gemini-3.1-flash-lite",
+  "model_status": "accepted",
+  "policy": {
+    "version": "diary-part-slots-v2",
+    "space_slots": 3,
+    "environment_slots": 1,
+    "motion_slots": 1,
+    "total_slots": 8,
+    "space_radius_m": 250.0,
+    "motion_gap_s": 30.0,
+    "route_tolerance_m": 30.0,
+    "location_age_s": 30.0,
+    "include_location_reference": true
+  },
+  "input_revision": "18be92877b68aa342c48a278d835e9c3f5b7019b48dc7261ca79fdba85f57141",
+  "plan_revision": "4504dc545dae70a0431cf4ce82835d62c0e2dd15fba01fa6e69abbca23dee7ee",
+  "writing_revision": "3bc2b442ac6a6ed6f7c7f1e4b318de72575ad970ad5527660157a0c84905ec6f",
+  "scenes": [
+    {
+      "id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+      "order": 1,
+      "body": "산책을 시작했다.",
+      "evidence": [],
+      "location_reference": null,
+      "citations": null
+    },
+    {
+      "id": "stamp:23f582dc3942ca4cbe25c5381a03445a261b64bcd4973b629821a1da3e09469d",
+      "order": 2,
+      "body": "기온 23도, 풍속 2.1m/s인 환경에서 동네공원으로부터 40m 떨어진 지점을 지나고 있다. 해당 구간은 산책 중 상대적으로 느린 속도로 이동 중이다.\n  벤치 옆에서 물을 마셨다.\n",
+      "evidence": [
+        {
+          "id": "slot:0ace1ca8b446c8608cb9a8c352825a55e7dd18dec1052440c1a7228d9c4b9748",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-1",
+          "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60",
+          "entity_key": "99851793960f788f9feb91a0212b06df305cd59d975c98dc60b0dc7bd29d31d4",
+          "claim_scope": "17856d21ec62bc3fb99d3da237a1f295d254d319188b4f02cf3a5a7207e4e5e7",
+          "claim_key": "0352ced1cd869a6917f9f49de660bf51f81d02d47a7e566b5b0c162dacfa7b34",
+          "sources": [
+            {
+              "source_id": "space-1",
+              "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60"
+            }
+          ],
+          "facts": {
+            "name": "동네공원",
+            "query_kind": "leisure",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "park"
+            },
+            "distance_m": 40,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 40,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            40.0
+          ]
+        },
+        {
+          "id": "slot:bf5ca78a06fafb1c7c0f436a3879f2ec5a4c2d18ced7ae1bea77a956e1c84d66",
+          "part": "environment",
+          "role": "regional_observation",
+          "source_id": "environment-1",
+          "source_version": "e947a6269b1cd0f7cf74727d3106600c5cc7cc149a5497c1144c4609adaeff36",
+          "entity_key": "1d4747567575ac38d9abb79586792e9fb0ca14c9e6f0fda28de04cb6a83f4278",
+          "claim_scope": "d466901ef9e6946c2a0687b06a57845f74368b577c663fe980b9fc89ddcb70b4",
+          "claim_key": "3bd27ccf896c8ed1a6dd025d18f5ac730dd3b2a50f869ddbd7a47ff4e2dc9710",
+          "sources": [
+            {
+              "source_id": "environment-1",
+              "source_version": "e947a6269b1cd0f7cf74727d3106600c5cc7cc149a5497c1144c4609adaeff36"
+            }
+          ],
+          "facts": {
+            "format": "regional-weather-v1",
+            "source_ref": "synthetic-weather-0",
+            "area_center": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "area_radius_m": 5000.0,
+            "valid_from": "2026-09-11T08:00:00Z",
+            "valid_until": "2026-09-11T08:03:00Z",
+            "temperature_c": 23.0,
+            "wind_mps": 2.1,
+            "relation": "regional_observation_not_personal_sensation",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "actual": 119.99992083559586,
+            "limit": 5000.0,
+            "unit": "m",
+            "scene_at": "2026-09-11T17:01:20+09:00",
+            "valid_from": "2026-09-11T17:00:00+09:00",
+            "valid_until": "2026-09-11T17:03:00+09:00"
+          },
+          "rank": [
+            -1789113600.0,
+            -1789113930.0
+          ]
+        },
+        {
+          "id": "slot:386cedabfba5ccac3e1b83f89c8fe6a8541d520e095cb2fbbb47fc37e3c0424d",
+          "part": "motion",
+          "role": "scene_motion",
+          "source_id": "motion:cbcbcacd09b4d40ec0ccb8692d7bdf87e2ab944fc6002a57c5593ff849331649",
+          "source_version": "0fee6c0ce38bb0b80ed13c0206d6d1cce3cd8c83266971f22cd809ec40ae51d1",
+          "entity_key": "110e3ec9be00442850ef2fd630650cbcde80f373cc29da11b3e0abfd8ca2c3c3",
+          "claim_scope": "3a66e47a6c95a92ea21f84c4561b8be180757c8726f6b70bda59d06a6401fe14",
+          "claim_key": "22ee4a207d3773a5347e08282fe715071b5504e058039809987da0e866c9e1d0",
+          "sources": [
+            {
+              "source_id": "motion:cbcbcacd09b4d40ec0ccb8692d7bdf87e2ab944fc6002a57c5593ff849331649",
+              "source_version": "0fee6c0ce38bb0b80ed13c0206d6d1cce3cd8c83266971f22cd809ec40ae51d1"
+            }
+          ],
+          "facts": {
+            "kind": "observed_slow",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "started_at": "2026-09-11T17:01:00+09:00",
+            "ended_at": "2026-09-11T17:01:30+09:00",
+            "duration_s": 30.0,
+            "before_scene_s": 0,
+            "continuity_block": 0,
+            "continuity_basis": "canonical_accepted_segments",
+            "analysis_id": "synthetic-slots-demo",
+            "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+            "temporal_relation": "이 기록 시각을 포함한 구간"
+          },
+          "diagnostics": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0
+          },
+          "rank": [
+            0.0,
+            -30.0
+          ]
+        },
+        {
+          "id": "slot:2074ed9640a8395ef3f813d252bf23150de79b1fbc6144a05462c96d8b105084",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-1",
+          "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60",
+          "entity_key": "912367614fe59dbdd542b1667349ffbc36e01d0a06980c63e203b06aa3230cc4",
+          "claim_scope": "17856d21ec62bc3fb99d3da237a1f295d254d319188b4f02cf3a5a7207e4e5e7",
+          "claim_key": "03ac5b29b5bf44d64a0718e9fe4e6800f36b773094cba159c2260dc467620b19",
+          "sources": [
+            {
+              "source_id": "space-1",
+              "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60"
+            }
+          ],
+          "facts": {
+            "name": "골목카페",
+            "query_kind": "cafe",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "cafe"
+            },
+            "distance_m": 110,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 110,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            110.0
+          ]
+        },
+        {
+          "id": "slot:9e57d083a1ecfe0b3b7fce1a88380231b12a15e37e4313e6fdbed4f74c322713",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-1",
+          "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60",
+          "entity_key": "65ed609b8e30e0f29297ba68c37ef9cba5f66a3b1d3f2eac83e15f80aaa531c5",
+          "claim_scope": "17856d21ec62bc3fb99d3da237a1f295d254d319188b4f02cf3a5a7207e4e5e7",
+          "claim_key": "1c3da5d13f1f3798e6e698aa867492fbc4777dcb27c77599af5b42971552dfea",
+          "sources": [
+            {
+              "source_id": "space-1",
+              "source_version": "941e61f9d7d2e8fba219040b74eb868ce7903176e60c5838fc392214505a0c60"
+            }
+          ],
+          "facts": {
+            "name": "작은식당",
+            "query_kind": "restaurant",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "restaurant"
+            },
+            "distance_m": 190,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 190,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            190.0
+          ]
+        }
+      ],
+      "location_reference": null,
+      "citations": [
+        "slot:0ace1ca8b446c8608cb9a8c352825a55e7dd18dec1052440c1a7228d9c4b9748",
+        "slot:bf5ca78a06fafb1c7c0f436a3879f2ec5a4c2d18ced7ae1bea77a956e1c84d66",
+        "slot:386cedabfba5ccac3e1b83f89c8fe6a8541d520e095cb2fbbb47fc37e3c0424d"
+      ]
+    },
+    {
+      "id": "stamp:c69d8c7fab1c7a31473e41bddc0e72ecead1f624ffd74d7b383ce76ba7ff8d9f",
+      "order": 3,
+      "body": "기온 22도, 풍속 2.1m/s인 날씨 속에 동네공원 인근 45m 지점에 머물고 있다. 이동 속도는 산책 중 상대적으로 느린 편이다.\n골목 모퉁이에서 냄새를 맡았다.",
+      "evidence": [
+        {
+          "id": "slot:c68d235cfcfb923a00198c297877663b42d249cb13886366e6aa04d73faea1c6",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-2",
+          "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7",
+          "entity_key": "99851793960f788f9feb91a0212b06df305cd59d975c98dc60b0dc7bd29d31d4",
+          "claim_scope": "bfee367f0c461616c41b650ca29f62343a6b15915cb6af19260d17c3e2bd960b",
+          "claim_key": "5e8ea574742be2259dee2bcc694267cca3f30e1865105496be8d01e77ea47706",
+          "sources": [
+            {
+              "source_id": "space-2",
+              "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7"
+            }
+          ],
+          "facts": {
+            "name": "동네공원",
+            "query_kind": "leisure",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "park"
+            },
+            "distance_m": 45,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 45,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            45.0
+          ]
+        },
+        {
+          "id": "slot:977d10150cd3784cc1d7f3ccabb70b5450754a4ea0663a21a624aad95d2ee313",
+          "part": "environment",
+          "role": "regional_observation",
+          "source_id": "environment-2",
+          "source_version": "51f6287b5b4c9ae6d257b31b4726f6e66ec72f043b8216fd58a25d1c8a9e37e8",
+          "entity_key": "a91c3683dfe010b70478ae0b28bca3fe16a3a2e23dad7937f4fb9cf42faf199a",
+          "claim_scope": "d8f4a7f4fa749ea8f726691161df1745c64ff9f5c3571ce5744781e5be7b500a",
+          "claim_key": "cb7fda7bb9241f3a3a209c86f986319255e39bd6b2a41aaf7653986d7761b7b9",
+          "sources": [
+            {
+              "source_id": "environment-2",
+              "source_version": "51f6287b5b4c9ae6d257b31b4726f6e66ec72f043b8216fd58a25d1c8a9e37e8"
+            }
+          ],
+          "facts": {
+            "format": "regional-weather-v1",
+            "source_ref": "synthetic-weather-180",
+            "area_center": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "area_radius_m": 5000.0,
+            "valid_from": "2026-09-11T08:03:00Z",
+            "valid_until": "2026-09-11T08:05:40Z",
+            "temperature_c": 22.0,
+            "wind_mps": 2.1,
+            "relation": "regional_observation_not_personal_sensation",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "actual": 260.9998278172618,
+            "limit": 5000.0,
+            "unit": "m",
+            "scene_at": "2026-09-11T17:03:00+09:00",
+            "valid_from": "2026-09-11T17:03:00+09:00",
+            "valid_until": "2026-09-11T17:05:40+09:00"
+          },
+          "rank": [
+            -1789113780.0,
+            -1789113930.0
+          ]
+        },
+        {
+          "id": "slot:fe1f4e1421e09821b3ed260ebf5e320d7f83a1c9d9affb267b803bd2986af474",
+          "part": "motion",
+          "role": "scene_motion",
+          "source_id": "motion:2c9e064901ca0dfb52cb8151ab400f2ba3868d69acc38e16d405dc942b46833d",
+          "source_version": "189df2ad04c1d81a1da5406c1be320bad927ee1c22f60adc69dee8eec078a063",
+          "entity_key": "faef03db40e83cc730b2ccb3c097e02958b4bc3766e21835bb0fbb681e5a27db",
+          "claim_scope": "498af160e5af2c1cb8520aaa7666c38b88b36df226072c8e9d53f73a29af92c1",
+          "claim_key": "3478a32b10d604a93249ecc1d12c5112f6d61a61f51977ae8fb98295fa9787c7",
+          "sources": [
+            {
+              "source_id": "motion:2c9e064901ca0dfb52cb8151ab400f2ba3868d69acc38e16d405dc942b46833d",
+              "source_version": "189df2ad04c1d81a1da5406c1be320bad927ee1c22f60adc69dee8eec078a063"
+            }
+          ],
+          "facts": {
+            "kind": "observed_slow",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "started_at": "2026-09-11T17:02:30+09:00",
+            "ended_at": "2026-09-11T17:03:00+09:00",
+            "duration_s": 30.0,
+            "before_scene_s": 0,
+            "continuity_block": 0,
+            "continuity_basis": "canonical_accepted_segments",
+            "analysis_id": "synthetic-slots-demo",
+            "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+            "temporal_relation": "이 기록 시각을 포함한 구간"
+          },
+          "diagnostics": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0
+          },
+          "rank": [
+            0.0,
+            -30.0
+          ]
+        },
+        {
+          "id": "slot:24f138fec3a419e673f64236c5c75758a42470a6cfbb50ce91437557c4ff9dfc",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-2",
+          "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7",
+          "entity_key": "912367614fe59dbdd542b1667349ffbc36e01d0a06980c63e203b06aa3230cc4",
+          "claim_scope": "bfee367f0c461616c41b650ca29f62343a6b15915cb6af19260d17c3e2bd960b",
+          "claim_key": "3033af6249232bb4929a62e22a140ef481163ea915354d6021e59a8dcfea66d3",
+          "sources": [
+            {
+              "source_id": "space-2",
+              "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7"
+            }
+          ],
+          "facts": {
+            "name": "골목카페",
+            "query_kind": "cafe",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "cafe"
+            },
+            "distance_m": 120,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 120,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            120.0
+          ]
+        },
+        {
+          "id": "slot:9481e15e41b5c3a896987d78652e78fb5cafe703a19b18f0825a4a7af466c5f3",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-2",
+          "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7",
+          "entity_key": "65ed609b8e30e0f29297ba68c37ef9cba5f66a3b1d3f2eac83e15f80aaa531c5",
+          "claim_scope": "bfee367f0c461616c41b650ca29f62343a6b15915cb6af19260d17c3e2bd960b",
+          "claim_key": "ef5cfaed2356f5a846f24af4ee781e1bb47550ac25dd95bef9e857e9641c7a54",
+          "sources": [
+            {
+              "source_id": "space-2",
+              "source_version": "f3c3ff0e8f99e6e533a27163c1f10757c478ad69d025fec4de725b9bf36c5ff7"
+            }
+          ],
+          "facts": {
+            "name": "작은식당",
+            "query_kind": "restaurant",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "restaurant"
+            },
+            "distance_m": 190,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 190,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            190.0
+          ]
+        }
+      ],
+      "location_reference": null,
+      "citations": [
+        "slot:c68d235cfcfb923a00198c297877663b42d249cb13886366e6aa04d73faea1c6",
+        "slot:977d10150cd3784cc1d7f3ccabb70b5450754a4ea0663a21a624aad95d2ee313",
+        "slot:fe1f4e1421e09821b3ed260ebf5e320d7f83a1c9d9affb267b803bd2986af474"
+      ]
+    },
+    {
+      "id": "stamp:c2908b6ddbc92a212bafd12168c4dc80a4a752471fc17232b130a70083746148",
+      "order": 4,
+      "body": "기온 22도, 풍속 2.1m/s인 환경에서 동네공원으로부터 50m 떨어진 곳에 위치한다. 앞선 구간에서는 상대적으로 빠른 속도로 이동했다.\n사진을 찍고 다시 걸었다.",
+      "evidence": [
+        {
+          "id": "slot:a183476789bfc64f47763491620fe73d3674d4f4c553a38608f88111dce3e5c7",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-3",
+          "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e",
+          "entity_key": "99851793960f788f9feb91a0212b06df305cd59d975c98dc60b0dc7bd29d31d4",
+          "claim_scope": "b9a5503a8863253dc4d44e498f6f51153d9a1689c64e24169f96bfcddbadae77",
+          "claim_key": "c13c50e3ef979a300d3551ac7a656ab577e13e80cc788a67fc279d86a39258fa",
+          "sources": [
+            {
+              "source_id": "space-3",
+              "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e"
+            }
+          ],
+          "facts": {
+            "name": "동네공원",
+            "query_kind": "leisure",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "park"
+            },
+            "distance_m": 50,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 50,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            50.0
+          ]
+        },
+        {
+          "id": "slot:8545ec8e3dcaea381a894eb1ef9d9423756cc1d75a49d8c9f6ca29cddfe290d1",
+          "part": "environment",
+          "role": "regional_observation",
+          "source_id": "environment-3",
+          "source_version": "3bf7dd167a7f139d1d6aa615ad9cc1f2a5680b1943be5be73cdad01a4bafd7eb",
+          "entity_key": "a91c3683dfe010b70478ae0b28bca3fe16a3a2e23dad7937f4fb9cf42faf199a",
+          "claim_scope": "ac927474bee7f686f47aab46de1412780b4a3fa0570e92f19c031e6454e13cdc",
+          "claim_key": "a8d1b1830378dc882c4fc09d052a77ca3dd4d166e16401c36ea15c7bfc6b828a",
+          "sources": [
+            {
+              "source_id": "environment-3",
+              "source_version": "3bf7dd167a7f139d1d6aa615ad9cc1f2a5680b1943be5be73cdad01a4bafd7eb"
+            }
+          ],
+          "facts": {
+            "format": "regional-weather-v1",
+            "source_ref": "synthetic-weather-180",
+            "area_center": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "area_radius_m": 5000.0,
+            "valid_from": "2026-09-11T08:03:00Z",
+            "valid_until": "2026-09-11T08:05:40Z",
+            "temperature_c": 22.0,
+            "wind_mps": 2.1,
+            "relation": "regional_observation_not_personal_sensation",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "actual": 520.9996562959187,
+            "limit": 5000.0,
+            "unit": "m",
+            "scene_at": "2026-09-11T17:04:40+09:00",
+            "valid_from": "2026-09-11T17:03:00+09:00",
+            "valid_until": "2026-09-11T17:05:40+09:00"
+          },
+          "rank": [
+            -1789113780.0,
+            -1789113930.0
+          ]
+        },
+        {
+          "id": "slot:9e3884d89c2a0ffe6fa51bbc21dd2fa969acbdb134dde5779136aed85a24a2fa",
+          "part": "motion",
+          "role": "before_scene_motion",
+          "source_id": "motion:4fef1f06ca9e9ac5088dc41cad907a168e484fcca964d1f215b18af4ae6b85a8",
+          "source_version": "ba669ff8ef00d0d311bdeaf4912f86fef55ab99be53f1debe593050226ef0603",
+          "entity_key": "9407ea769bd4383e7239f3f943182346cc4aad30e520ef1706fd606a339c712e",
+          "claim_scope": "030df87d63735faafbbc01ced9090e3a11c8c115c50062d1cb33e4bc9f3ae6ec",
+          "claim_key": "09e45c4b7a16eb69b260fe8647d5ea1c7c63c28c95336fc5bb22a9b08e2ab339",
+          "sources": [
+            {
+              "source_id": "motion:4fef1f06ca9e9ac5088dc41cad907a168e484fcca964d1f215b18af4ae6b85a8",
+              "source_version": "ba669ff8ef00d0d311bdeaf4912f86fef55ab99be53f1debe593050226ef0603"
+            }
+          ],
+          "facts": {
+            "kind": "observed_fast",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "started_at": "2026-09-11T17:04:00+09:00",
+            "ended_at": "2026-09-11T17:04:30+09:00",
+            "duration_s": 30.0,
+            "before_scene_s": 10.0,
+            "continuity_block": 0,
+            "continuity_basis": "canonical_accepted_segments",
+            "analysis_id": "synthetic-slots-demo",
+            "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 빠른 이동 관측. 절대 속도나 달리기 판정이 아님.",
+            "temporal_relation": "이 기록에 앞선 구간"
+          },
+          "diagnostics": {
+            "actual": 10.0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0
+          },
+          "rank": [
+            10.0,
+            -30.0
+          ]
+        },
+        {
+          "id": "slot:299ddd728f2678a31d8ec3a9f3a98eff92ce1bf15490bbe8e3124be689b436de",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-3",
+          "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e",
+          "entity_key": "912367614fe59dbdd542b1667349ffbc36e01d0a06980c63e203b06aa3230cc4",
+          "claim_scope": "b9a5503a8863253dc4d44e498f6f51153d9a1689c64e24169f96bfcddbadae77",
+          "claim_key": "fb2c6c9ea6bcc125990c04cd323654644f7c5b181a996c74ae3ce603b1673b3e",
+          "sources": [
+            {
+              "source_id": "space-3",
+              "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e"
+            }
+          ],
+          "facts": {
+            "name": "골목카페",
+            "query_kind": "cafe",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "cafe"
+            },
+            "distance_m": 130,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 130,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            130.0
+          ]
+        },
+        {
+          "id": "slot:e0c744b3cd40906398c313cdd7ce4f99742426bef44d80d3eb3f4b6c7743f605",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source_id": "space-3",
+          "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e",
+          "entity_key": "65ed609b8e30e0f29297ba68c37ef9cba5f66a3b1d3f2eac83e15f80aaa531c5",
+          "claim_scope": "b9a5503a8863253dc4d44e498f6f51153d9a1689c64e24169f96bfcddbadae77",
+          "claim_key": "838b12f28569ab6947046cc91e6abea85f55b5fe2dec90b8879588e5f95d4229",
+          "sources": [
+            {
+              "source_id": "space-3",
+              "source_version": "cde471f0605854c001b4f8eceb4e5d675b18b9220e4d2ddac986119920efa21e"
+            }
+          ],
+          "facts": {
+            "name": "작은식당",
+            "query_kind": "restaurant",
+            "source_ref": {
+              "source": "synthetic",
+              "ref": "restaurant"
+            },
+            "distance_m": 190,
+            "reference": "registered_location",
+            "relation": "distance_only_not_entry_or_visit",
+            "calculation": "server_reported_not_recomputed",
+            "temporal_basis": "lookup_snapshot",
+            "position_method": "observed",
+            "location_basis": "original_location",
+            "coverage": "selected_place_categories_only",
+            "retrieved_at": "2026-09-11T17:05:30+09:00"
+          },
+          "diagnostics": {
+            "role": "scene_registered_point_distance",
+            "actual": 190,
+            "limit": 250,
+            "unit": "m"
+          },
+          "rank": [
+            190.0
+          ]
+        }
+      ],
+      "location_reference": null,
+      "citations": [
+        "slot:a183476789bfc64f47763491620fe73d3674d4f4c553a38608f88111dce3e5c7",
+        "slot:8545ec8e3dcaea381a894eb1ef9d9423756cc1d75a49d8c9f6ca29cddfe290d1",
+        "slot:9e3884d89c2a0ffe6fa51bbc21dd2fa969acbdb134dde5779136aed85a24a2fa"
+      ]
+    },
+    {
+      "id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+      "order": 5,
+      "body": "산책을 마쳤다.",
+      "evidence": [],
+      "location_reference": null,
+      "citations": null
+    }
+  ],
+  "limitations": [
+    "The model still used 머물고 있다 for a relative slow-motion observation. Semantic correctness is not guaranteed by citation validation.",
+    "Weather is synthetic input; the live weather collector is not connected."
+  ]
+}

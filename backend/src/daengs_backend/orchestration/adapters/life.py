@@ -7,8 +7,8 @@ import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import partial
 from datetime import datetime
+from functools import partial
 from typing import Any, Literal, Protocol
 
 from fastapi import HTTPException
@@ -29,6 +29,17 @@ WalkWeatherStatus = Literal["captured", "partial", "unknown", "failed"]
 
 
 @dataclass(frozen=True)
+class WalkTemperatureObservation:
+    requested_at: datetime
+    fetched_at: datetime
+    grid: tuple[int, int]
+    observed_at: datetime
+    issued_at: datetime
+    temperature_c: float
+    provider: str
+
+
+@dataclass(frozen=True)
 class WalkWeatherObservation:
     """Life 내부 계약을 Walk가 소비할 수 있는 원시 환경값으로 좁힌다."""
 
@@ -40,6 +51,7 @@ class WalkWeatherObservation:
     precipitation_kind: WalkPrecipitationKind | None = None
     precipitation_mm: float | None = None
     failure_reason: str | None = None
+    temperature: WalkTemperatureObservation | None = None
 
 
 class WalkWeatherLookup(Protocol):
@@ -184,6 +196,44 @@ def _weather_at_life(lat: float, lon: float, observed_at: datetime) -> WalkWeath
         precipitation_kind=_precipitation_kind(str(precip.value) if precip is not None else None),
         precipitation_mm=_exact_interval(amount),
         failure_reason=_bounded_reason(reason) if result.status == "failed" else None,
+        temperature=_temperature_observation(result, lat, lon, observed_at),
+    )
+
+
+def _temperature_observation(result, lat, lon, requested_at):
+    # This stays inside the existing Life boundary, for both local and HTTP DTOs.
+    from daengs_life.realtime.geo import LatLon, to_grid
+
+    grid = to_grid(LatLon(lat, lon))
+    atoms = [item for item in result.observations if item.quantity == "temp_c"]
+    provider = "kma-vilage-fcst:ncst"
+    if (
+        result.status not in {"captured", "partial"}
+        or result.requested_at != requested_at
+        or result.grid != tuple(grid)
+        or len(atoms) != 1
+        or not any(s.provider == provider and s.outcome == "ok" for s in result.sources)
+    ):
+        return None
+    atom = atoms[0]
+    value = _number(atom, minimum=-90, maximum=60)
+    if (
+        value is None
+        or atom.source != provider
+        or atom.unit != "celsius"
+        or atom.spatial_ref != f"격자 {grid.nx},{grid.ny}"
+        or atom.issued_at != atom.valid_at
+        or not atom.valid_at <= requested_at <= result.fetched_at
+    ):
+        return None
+    return WalkTemperatureObservation(
+        requested_at=requested_at,
+        fetched_at=result.fetched_at,
+        grid=tuple(grid),
+        observed_at=atom.valid_at,
+        issued_at=atom.issued_at,
+        temperature_c=value,
+        provider=provider,
     )
 
 
@@ -246,9 +296,9 @@ def _precipitation_kind(value: str | None) -> WalkPrecipitationKind | None:
         "rain_snow": "mixed",
         "shower": "rain",
         # RT-004 — 초단기 계열의 셋. 세기만 다르고 형태는 위와 같아서 같은 자리로 접는다
-        "drizzle": "rain",              # 5 빗방울
-        "drizzle_snow": "mixed",        # 6 빗방울눈날림
-        "snow_flurry": "snow",          # 7 눈날림
+        "drizzle": "rain",  # 5 빗방울
+        "drizzle_snow": "mixed",  # 6 빗방울눈날림
+        "snow_flurry": "snow",  # 7 눈날림
     }.get(value)
 
 
@@ -283,9 +333,7 @@ class LifeCapabilityAdapter:
                     screening_verdict=screening.verdict if screening else None,
                     screening_days_ago=screening.days_ago if screening else None,
                     screening_history=(
-                        tuple((e.verdict, e.days_ago) for e in history.entries)
-                        if history
-                        else ()
+                        tuple((e.verdict, e.days_ago) for e in history.entries) if history else ()
                     ),
                 )
             )
@@ -388,9 +436,7 @@ def _refusal_data(detail: Any) -> dict[str, Any] | None:
     """
     if not isinstance(detail, dict) or not detail.get("hits"):
         return None
-    return _evidence(
-        detail["hits"], cited=detail.get("cited"), ungrounded=detail.get("ungrounded")
-    )
+    return _evidence(detail["hits"], cited=detail.get("cited"), ungrounded=detail.get("ungrounded"))
 
 
 def _outcome(detail: Any) -> tuple[str | None, str]:

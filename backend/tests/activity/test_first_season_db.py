@@ -13,7 +13,7 @@ from daengs_backend.models.activity_reward import ActivityBaseReward, ActivityRe
 from daengs_backend.services import activity, activity_game, territory_owner
 from daengs_backend.services.activity_core import first_season_policy as first
 from daengs_backend.services.activity_core.game_policy import HOUR_MS, POINT_DENOMINATOR
-from tests.activity.support.actions import mark
+from tests.activity.support.actions import begin, mark
 from tests.activity.support.database import database as activity_database  # noqa: F401
 from tests.territory.certification.test_territory_certified_db import admit, shoot
 from tests.territory.support import ownership as base
@@ -43,7 +43,7 @@ async def start(database, clock, name="first"):
 
 
 async def actor(database, clock, member, pet):
-    session = await base.begin(database, member, [pet])
+    session = await begin(database, clock, member, [pet])
     claim = await mark(database, clock, member, session, pet)
     return member, session, claim
 

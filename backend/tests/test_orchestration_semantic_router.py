@@ -36,7 +36,10 @@ from daengs_backend.orchestration.semantic import (
     build_semantic_router_prompt,
     validate_semantic_decision,
 )
-from daengs_backend.orchestration.service import AssistantOrchestrationService
+from daengs_backend.orchestration.service import (
+    _ROUTER_FAILURE_MESSAGE,
+    AssistantOrchestrationService,
+)
 
 PRINCIPAL = PrincipalContext(subject="test-user", kind="APP_USER")
 LOCATION = {"location": {"lat": 37.5665, "lon": 126.978}}
@@ -262,6 +265,12 @@ async def test_provider_failure_is_a_router_failure_not_clarify() -> None:
     assert response.status == AssistantStatus.FAILED
     assert response.clarify is None
     assert all(not adapter.calls for adapter in adapters.values())
+    # O-14's shared wording. Asserted against the constant, not a typed copy, so that
+    # rewording it moves this test with it. It is deliberately NOT the empty-selection
+    # sentence: a router that died and a router that chose nothing are different answers
+    # (see test_assistant_orchestration_e2e.py's scoped-redirect case).
+    assert response.message == _ROUTER_FAILURE_MESSAGE
+    assert "provider down" not in response.message
 
 
 async def test_router_raises_after_two_invalid_attempts() -> None:

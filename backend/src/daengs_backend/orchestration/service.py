@@ -136,7 +136,7 @@ class AssistantOrchestrationService:
                 pending_clarification=pending_clarification,
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
-            # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
+            # 루트 실행을 같은 쿼리로 거를 수 있게 하는 계약이다.
             run.add_metadata(
                 _route_metadata(route_plan, resolved_router_version=resolved_router_version)
             )

@@ -4379,12 +4379,23 @@ LangChain 에이전트(`agent/`)를 **조건부로** 보존했다. 조건이 둘
    `_POLICY` 와 `agent/service.py` 의 `_SYSTEM_PROMPT` 를 같이 고치는 규칙) — 에이전트
    프롬프트 자체가 없어지므로 규칙도 없어진다.
 2. "CI 가 `--extra agent` 를 깐다"(`backend-tests.yml` 에 붙였던 것) — 보존을 그만두므로
-   같이 뗀다. 참고로 이 저장소에는 지금 `backend-tests.yml` 자체가 없다(GitHub-hosted
-   러너가 이 계정에서 시작되지 않아 옮겨졌다) — 로컬 `uv run pytest` 가 유일한 게이트다.
+   같이 뗀다. 그 파일은 `.github/workflows/` 가 아니라 **`docs/ci/backend-tests.yml`** 에
+   세워 뒀다(`runs-on: ubuntu-latest` 인데 이 팀은 GitHub-hosted 러너를 안 쓴다) — 즉
+   **아무도 실행하지 않는 설정**이고, 로컬 `uv run pytest` 가 유일한 게이트다. 이 PR 이
+   그 파일에서 `--extra agent` 를 뗐다.
 
 **제거 대상**: `daengs_backend/orchestration/agent/`(`service.py`·`tools.py`) ·
 `config.py`/`runtime.py` 의 런타임 스위치(`OrchestratorKind`·`settings.orchestrator`·
 `agent_turn_timeout_ms`·`agent_recursion_limit`) · `pyproject.toml` 의 `agent` extra ·
-`daengs_evals.orchestrator_comparison` 전체와 그 전용 테스트. **`backend/evals/orchestration_router/`
+`daengs_evals.orchestrator_comparison` 전체와 그 전용 테스트
+(`tests/test_orchestration_agent.py` · `tests/test_orchestrator_comparison_v2.py`) ·
+`tests/test_orchestrator_failure_contract.py`. **마지막 것은 이름이 말하는 것보다 넓다** —
+그 파일은 실패 계약을 *두 구현에 나란히* 먹여 재던 자리라, 에이전트가 없으면 그 대조가
+성립하지 않아 같이 지운다. 다만 거기서 LangGraph 쪽에 직접 걸려 있던 성질들은 지우지 않고
+살아 있는 테스트로 옮겼다: 진리표·실행 순서·핸드오프 보존(실패한 실행 포함)은
+`tests/test_orchestration_aggregate.py` 와 `tests/test_orchestration_graph.py`, 엔진 catch-all
+의 예외 문구 가림은 `tests/test_orchestration_graph.py`, 라우터 실패 문구(`_ROUTER_FAILURE_MESSAGE`)
+는 `tests/test_orchestration_semantic_router.py`, 일반 답변 폴백 일가는
+`tests/test_orchestration_general_fallback.py` 다. **`backend/evals/orchestration_router/`
 의 비교 리포트·결과 데이터는 지우지 않는다** — 이 결정의 근거이자 재검토가 필요해졌을 때의
 입력이다. 지우는 것은 코드이지 증거가 아니다.

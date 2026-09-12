@@ -36,6 +36,14 @@ name: DB 마이그레이션 적용
 on:
   workflow_dispatch:
     inputs:
+      territory_action:
+        description: 'Territory worker maintenance; none uses the existing migration path'
+        type: choice
+        options: [none, Inspect, Pause, Resume, Verify]
+        default: none
+      expected_live_sha:
+        description: 'Exact deployed commit required for territory maintenance'
+        type: string
       inspect_walk:
         description: "Read-only Walk runtime inventory; ignores migration inputs"
         required: false
@@ -68,8 +76,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  territory_runtime:
+    if: ${{ inputs.territory_action != '' && inputs.territory_action != 'none' }}
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    env:
+      TERRITORY_ACTION: ${{ inputs.territory_action }}
+      TERRITORY_LIVE_SHA: ${{ inputs.expected_live_sha }}
+    steps:
+      # Isolated tools only: never replace bind-mounted application code before its SQL.
+      - uses: actions/checkout@v5
+        with:
+          path: _territory-runtime
+          clean: false
+      - name: Operate on the exact deployed territory runtime
+        shell: powershell
+        run: |
+          $script = Join-Path $env:GITHUB_WORKSPACE '_territory-runtime/tools/territory-vision-runtime.ps1'
+          & $script -Action $env:TERRITORY_ACTION -LiveRoot $env:GITHUB_WORKSPACE -ExpectedLiveSha $env:TERRITORY_LIVE_SHA
+
   inspect_walk:
-    if: ${{ inputs.inspect_walk }}
+    if: ${{ inputs.inspect_walk && (inputs.territory_action == '' || inputs.territory_action == 'none') }}
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Read inspection tool in an isolated checkout
@@ -99,7 +129,7 @@ jobs:
           }
 
   migrate:
-    if: ${{ !inputs.inspect_walk }}
+    if: ${{ !inputs.inspect_walk && (inputs.territory_action == '' || inputs.territory_action == 'none') }}
     name: ${{ inputs.file }} 적용
     runs-on: [self-hosted, Windows, X64]
     defaults:

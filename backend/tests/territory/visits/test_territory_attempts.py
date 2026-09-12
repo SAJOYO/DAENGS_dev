@@ -8,7 +8,7 @@ import uuid
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
-from threading import Event
+from threading import Event, get_ident
 
 import pytest
 from fastapi.testclient import TestClient
@@ -162,6 +162,32 @@ def _attempt(**overrides) -> TerritoryAttempt:
     }
     values.update(overrides)
     return TerritoryAttempt(**values)
+
+
+async def test_confirm_offloads_storage_and_publishes_after_commit(monkeypatch):
+    session, attempt = FakeSession(), _attempt()
+    request_thread = get_ident()
+    calls = []
+
+    class Storage(FakeStorage):
+        def stat(self, key):
+            assert get_ident() != request_thread
+            calls.append("stat")
+            return super().stat(key)
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    def publish(attempt_id):
+        assert get_ident() != request_thread
+        assert session.commits == 1 and attempt_id == attempt.id
+        calls.append("publish")
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    monkeypatch.setattr(territory_service, "get_storage", Storage)
+    monkeypatch.setattr(territory_service, "_publish_vision_attempt", publish)
+    await territory_service.confirm_upload(session, OWNER, attempt.id)
+    assert calls == ["stat", "publish"]
 
 
 @pytest.fixture()
@@ -446,7 +472,7 @@ async def test_vision_decision_survives_photo_cleanup_failure(monkeypatch):
     )
     assert result.photo_redacted_at is not None
     assert storage.redacted == [(attempt.photo_storage_key, "generation-1")]
-    assert session.commits == 2
+    assert session.commits == 3  # Release the terminal retry's row/game locks before storage I/O.
     assert len([item for item in session.added if item.__class__.__name__ == "VerifiedVisit"]) == 1
 
 

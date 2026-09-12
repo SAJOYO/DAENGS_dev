@@ -48,6 +48,25 @@ class TerritoryAttempt(Base):
     __tablename__ = "territory_attempts"
     __table_args__ = (
         CheckConstraint(
+            "vision_attempts >= 0 AND vision_attempts <= 2",
+            name="territory_vision_attempts_check",
+        ),
+        CheckConstraint(
+            "(vision_lease_token IS NULL AND vision_lease_until IS NULL) OR "
+            "(vision_lease_token IS NOT NULL AND vision_lease_until IS NOT NULL "
+            "AND status = 'VISION_PENDING')",
+            name="territory_vision_lease_check",
+        ),
+        Index(
+            "territory_vision_dispatch_idx",
+            "vision_dispatch_after",
+            "id",
+            postgresql_where=text(
+                "status = 'VISION_PENDING' OR "
+                "(status IN ('VERIFIED','REJECTED','FAILED') AND photo_redacted_at IS NULL)"
+            ),
+        ),
+        CheckConstraint(
             "status IN ('PENDING_UPLOAD','VISION_PENDING','VERIFIED','REJECTED','FAILED')",
             name="territory_attempts_status_check",
         ),
@@ -138,6 +157,17 @@ class TerritoryAttempt(Base):
     vision_model: Mapped[str | None] = mapped_column(Text)
     vision_model_version: Mapped[str | None] = mapped_column(Text)
     decision_reason: Mapped[str | None] = mapped_column(Text)
+
+    vision_lease_token: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    vision_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vision_attempts: Mapped[int] = mapped_column(server_default=text("0"))
+    vision_available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+    vision_dispatch_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+    vision_retry_reason: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

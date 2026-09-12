@@ -50,6 +50,7 @@ async def get_for_decision(
         select(TerritoryAttempt)
         .where(TerritoryAttempt.id == attempt_id)
         .options(selectinload(TerritoryAttempt.verified_visit))
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     return (await session.execute(stmt)).scalar_one_or_none()

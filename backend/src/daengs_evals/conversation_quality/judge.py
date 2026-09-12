@@ -482,7 +482,7 @@ def build_payload(case: ConversationCase, row: Mapping[str, Any], axis: str) -> 
         # 미끄러진다.
         #
         # ⚠ **`user_input_needed` 는 오늘 케이스 세트에서 정답지와 공선(collinear)이다.**
-        #   `cases_v1.jsonl` 16건(D-072 가 13 → 16, (False, ANSWER) 3건 추가)의 분포는
+        #   `cases_v1.jsonl` 16건(D-073 가 13 → 16, (False, ANSWER) 3건 추가)의 분포는
         #   `{(True, ASK): 5, (False, ANSWER): 9, (False, REDIRECT): 2}` 다 —
         #   `need=True` ⟺ `expected_mode=ASK` 가 **5/5**,
         #   `need=False` ⟺ ANSWER·REDIRECT 가 **11/11** 로 **완전히 겹친다.** (이 수는 파일에서

@@ -4,8 +4,10 @@
 [diary-titles.md](diary-titles.md)를 함께 본다.
 사용자 기록 중심의 새 일기 형식과 배경·제목 작성은 [diary-generation.md](diary-generation.md)를 본다.
 자동 장면의 원본 관측 위치를 전달하는 v4는 [scene-anchors.md](scene-anchors.md)를 본다.
-전체 이해 → 장면별 갱신 → 재검토 → 검토본 → 선택적 일기는 geo에서 실험 중이며,
-설계와 구현 범위의 기준은 DAENGS_geo `docs/explorations/walk/diary-storyboard-plan.md`다.
+현재 기획은 [독립 장면과 별도 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/4b90be1d1ef63b758cfa0d25107a7fc9d3913fa1/docs/explorations/walk/diary/plan.md)
+([GEO #265](https://github.com/rkbuhtig/DAENGS_geo/pull/265))을 따른다.
+전체 이해·순차 갱신을 필수로 둔 이전 기획은 폐기했다. 아래는 기존 서버 구현의 설명이며,
+새 작성 입력·서술 경계의 구현 완료를 뜻하지 않는다.
 
 GPS 업로드·finalize와 행동/메모 동기화가 끝나면 app의 기존 WorkManager 작업이
 `POST /app/walks/{walk_id}/storyboard`를 호출한다. 서버는 저장된 GPS chunk를 검증하고

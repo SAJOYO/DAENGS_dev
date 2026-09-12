@@ -984,6 +984,27 @@ CHECKS = (
             # 같은 좌표가 두 곳에 남는데, 옛 verify 는 그것을 SELECT 로 찍기만 했다.
             'CREATE TABLE walk_points(walk_id uuid, client_seq integer)',
         ]),
+        ('2026-09-12', 'territory_vision_jobs', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits'), 'territory_attempts', [
+            'ALTER TABLE territory_attempts DROP COLUMN vision_retry_reason',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts TYPE bigint',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts SET DEFAULT 1',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_available_at DROP NOT NULL',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_dispatch_after DROP DEFAULT',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_lease_token SET NOT NULL',
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_attempts_check',
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (vision_lease_token IS NULL OR vision_lease_until IS NOT NULL)'),
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (TRUE) NOT VALID'),
+            'DROP INDEX territory_vision_dispatch_idx',
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             ' ON territory_attempts(vision_dispatch_after, id)'),
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             " ON territory_attempts(vision_dispatch_after, id) WHERE status='VISION_PENDING'"),
+        ]),
         ('2026-09-03', 'territory_visits', APP_USERS + PETS_ONLY,
          'territory_verified_visits', [
             'ALTER TABLE territory_verified_visits DROP COLUMN evidence_version',

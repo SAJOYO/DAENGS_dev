@@ -18,9 +18,9 @@
 사람이 볼 자리를 고르는 것 — 어느 케이스가 기대와 어긋났는지 골라 사람 검토대에 올리는
 것입니다.
 
-## D-072 — 케이스 13 → 16 (2026-09-12)
+## D-073 — 케이스 13 → 16 (2026-09-12)
 
-D-072(못 재는 이유를 말한다 — 산책 `unmeasured` 마커)가 `cases_v1.jsonl` 끝에 세 줄을
+D-073(못 재는 이유를 말한다 — 산책 `unmeasured` 마커)가 `cases_v1.jsonl` 끝에 세 줄을
 더했습니다. **기존 13줄은 한 글자도 안 건드렸습니다** — 끝에만 더했습니다.
 
 - `cq_distance_recorded_01` — 오늘 산책이 전부 측정된 날. 숫자가 나가고 마커는 안 선다.
@@ -50,7 +50,7 @@ D-072(못 재는 이유를 말한다 — 산책 `unmeasured` 마커)가 `cases_v
 
 **"오늘 기록 0건" 갈래는 이 3건이 재지 않습니다 — 다만 코드는 그 갈래를 엽니다.**
 마커를 세우라는 지시(`_UNMEASURED_RULE`)는 데이터 유무와 무관하게 **항상** 실리므로
-(D-072 "오늘 기록 0건 갈래를 엽니다" 절), 오늘 기록이 0건이어도 고지가 나갑니다.
+(D-073 "오늘 기록 0건 갈래를 엽니다" 절), 오늘 기록이 0건이어도 고지가 나갑니다.
 `cq_distance_described_route_01` 이 그날 산책 기록을 **있게** 만든 것은 그 갈래를
 피하려던 처음 설계의 흔적이고, 지금은 "기록은 있지만 그 경로와 다르다" 를 재는
 케이스로 읽으면 됩니다. 하네스는 0건 갈래도 표현할 수 있으니(`state_snapshot` 에서
@@ -130,8 +130,8 @@ Task 8 의 배선 테스트(`test_repeat_does_not_replay_the_same_fixed_refusal`
 
 ### 응급 대조군은 이 랩에서 못 읽습니다 — 미측정으로 적습니다
 
-하네스에 `vet_contact` 어댑터가 없습니다(`daengs_evals.orchestrator_comparison.runner`
-의 `_fake_adapters`·`collect.py` 의 `build_adapters` 어디에도 없음). 물리면 place-search
+하네스에 `vet_contact` 어댑터가 없습니다(`daengs_evals.eval_harness` 의 `fake_adapters`·
+`collect.py` 의 `build_adapters` 어디에도 없음). 물리면 place-search
 HTTP 의존이 생기는데, 이 카드는 그것을 안 뭅니다. 실측으로 `after_aa512506`·
 `after_v2_346cada0` 두 after 랩 모두 이 케이스에서 `FAILED`("지원하지 않는 기능입니다:
 vet_contact") 로 끝났습니다 — 둘 다 **하네스 구멍이지 회귀가 아닙니다.**

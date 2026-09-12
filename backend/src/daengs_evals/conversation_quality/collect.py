@@ -382,7 +382,7 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
         WalkCapabilityAdapter,
     )
     from daengs_backend.orchestration.contracts import CapabilityName
-    from daengs_evals.orchestrator_comparison.runner import _fake_adapters
+    from daengs_evals.eval_harness import fake_adapters as _fake_adapters
 
     if mode == "real":
         return {
@@ -416,17 +416,13 @@ def build_stateless_driver(mode: AdapterMode) -> Any:
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
     from daengs_evals.conversation_quality.drivers import StatelessDriver
-    from daengs_evals.orchestrator_comparison.runner import Meter
-    from daengs_evals.orchestrator_comparison.runner_v2 import (
-        RecordingEngine,
-        _metered_semantic_generate,
-    )
+    from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
 
     plan_sink: dict[str, Any] = {"plan": None}
     general_sink: dict[str, Any] = {"decision": None}
     orchestrator = AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode, general_sink), plan_sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(Meter())),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(Meter())),
     )
     principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
     return StatelessDriver(
@@ -450,17 +446,13 @@ def build_session_driver(mode: AdapterMode) -> Any:
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
     from daengs_evals.conversation_quality.drivers import SessionDriver
-    from daengs_evals.orchestrator_comparison.runner import Meter
-    from daengs_evals.orchestrator_comparison.runner_v2 import (
-        RecordingEngine,
-        _metered_semantic_generate,
-    )
+    from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
 
     plan_sink: dict[str, Any] = {"plan": None}
     general_sink: dict[str, Any] = {"decision": None}
     orchestrator = AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode, general_sink), plan_sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(Meter())),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(Meter())),
     )
     principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
     return SessionDriver(

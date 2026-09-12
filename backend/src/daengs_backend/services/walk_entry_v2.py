@@ -9,56 +9,26 @@ from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin
 from daengs_backend.repositories import walk_entry as entries
 from daengs_backend.repositories import walk_entry_v2 as repo
 from daengs_backend.schemas.walk_entry_v2 import ContentV2, EntryResponseV2, Tombstone
-from daengs_backend.services.walk_entry import (
+from daengs_backend.services import walk_entry_context
+from daengs_backend.services.walk_entry_errors import (
     EntryConflict,
+    EntryDeleted,
     EntryInvalid,
     EntryNotFound,
-    build_profile,
+    EntryUpgradeRequired,  # noqa: F401 -- compatibility export
+    EntryWritesDisabled,
 )
 from daengs_backend.services.walk_entry_pin import (
-    POLICY,
     validate_new_pin,
     validate_sources,
     validate_transition,
 )
-
-
-class EntryDeleted(Exception):
-    pass
-
-
-class EntryWritesDisabled(Exception):
-    pass
-
-
-class EntryUpgradeRequired(Exception):
-    pass
-
-
-def require_enabled():
-    if not settings.walk_entry_v2_enabled:
-        raise EntryNotFound
-
-
-def capabilities():
-    enabled = settings.walk_entry_v2_enabled
-    writing = enabled and settings.walk_entry_v2_write_enabled
-    return {
-        "read_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if enabled else []),
-        "write_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if writing else []),
-        "active_policy_versions": [POLICY] if writing else [],
-        "pin_observation_cutoff_supported": enabled,
-        "gps_recording_versions": ["gps-recording-v1"],
-        "storyboard_formats": ["walk-storyboard-candidates-v5"] if enabled else [],
-        "entry_context_versions": ["walk-entry-context-v2"] if enabled else [],
-    }
-
-
-async def guard_v1(session, walk_ids, *, entry_id=None):
-    if settings.walk_entry_v2_enabled and await repo.contains_v2(
-        session, walk_ids, entry_id=entry_id
-    ):
-        raise EntryUpgradeRequired
+from daengs_backend.services.walk_entry_policy import (
+    capabilities,  # noqa: F401 -- compatibility export
+    guard_v1,  # noqa: F401 -- compatibility export
+    require_enabled,
+)
+from daengs_backend.services.walk_entry_profile import build_profile
 
 
 def legacy_pin(row):
@@ -160,9 +130,7 @@ async def store(session, row, sidecar, request_hash):
     # Parent before sidecar/receipt; still the same transaction and walk lock.
     await session.flush()
     session.add(sidecar)
-    from daengs_backend.services.walk_entry_context import reserve_pin
-
-    await reserve_pin(session, row, sidecar)
+    await walk_entry_context.reserve_pin(session, row, sidecar)
     value = response(row, sidecar)
     session.add(
         WalkEntryMutation(

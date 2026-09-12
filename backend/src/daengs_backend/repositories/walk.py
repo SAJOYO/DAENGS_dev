@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete, exists, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
 from daengs_backend.models import ActivityWalkHead, Walk, WalkAnalysis, WalkPet, WalkPointChunk
+from daengs_backend.models.walk import WalkCapsule
 
 __all__ = [
     "WalkActivitySums",
@@ -25,7 +27,9 @@ __all__ = [
     "get_analysis_for_input",
     "get_by_client_session",
     "get_owned",
+    "get_owned_for_finalize",
     "get_owned_for_update",
+    "is_client_session_conflict",
     "list_for_owner",
 ]
 
@@ -67,15 +71,10 @@ async def get_owned(
     return await session.scalar(stmt)
 
 
-async def get_owned_for_update(
-    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
-) -> Walk | None:
-    """finalize·append가 공유하는 산책 행 잠금 조회.
-
-    ``analysis_state``는 수동 migration 전 기존 조회를 보호하려고 deferred로
-    매핑했다. 상태 전이를 하는 이 조회에서만 명시적으로 같이 읽는다.
-    """
-    stmt = (
+def _owned_with_inputs(app_user_id: uuid.UUID, walk_id: uuid.UUID):
+    # commit 뒤에도 identity map에 남은 Walk와 관계를 현재 DB 값으로 갱신합니다.
+    # analysis_state는 일반 조회의 migration 호환성을 위해 deferred로 매핑돼 있습니다.
+    return (
         select(Walk)
         .where(Walk.id == walk_id, Walk.app_user_id == app_user_id)
         .options(
@@ -83,9 +82,22 @@ async def get_owned_for_update(
             selectinload(Walk.points),
             selectinload(Walk.pets),
         )
-        .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    return await session.scalar(stmt)
+
+
+async def get_owned_for_finalize(
+    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
+) -> Walk | None:
+    """잠금 없이 봉인 입력과 상태를 읽습니다. 저장 전 잠금 재조회가 필요합니다."""
+    return await session.scalar(_owned_with_inputs(app_user_id, walk_id))
+
+
+async def get_owned_for_update(
+    session: AsyncSession, app_user_id: uuid.UUID, walk_id: uuid.UUID
+) -> Walk | None:
+    """finalize·append의 행 잠금과 최신 상태·좌표·참여견 재조회."""
+    return await session.scalar(_owned_with_inputs(app_user_id, walk_id).with_for_update())
 
 
 async def get_by_client_session(
@@ -215,7 +227,7 @@ async def activity_for_pet_between(
     start: datetime,
     end: datetime,
 ) -> WalkActivitySums:
-    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-072).
+    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-073).
 
     **소유자 조건을 안 겁니다** — `count_for_pet_between` 과 같은 이유입니다(docs/co-care.md
     §2). 부르는 쪽이 이미 접근 권한을 확인했고, 여기서 사람으로 다시 거르면 다른 보호자가
@@ -258,15 +270,12 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
     :returns: 지운 산책 수.
     """
     others = WalkPet.__table__.alias("others")
-    solo = (
-        select(WalkPet.walk_id)
-        .where(
-            WalkPet.pet_id == pet_id,
-            ~exists().where(
-                others.c.walk_id == WalkPet.walk_id,
-                others.c.pet_id != pet_id,
-            ),
-        )
+    solo = select(WalkPet.walk_id).where(
+        WalkPet.pet_id == pet_id,
+        ~exists().where(
+            others.c.walk_id == WalkPet.walk_id,
+            others.c.pet_id != pet_id,
+        ),
     )
     result = await session.execute(delete(Walk).where(Walk.id.in_(solo)))
     return result.rowcount or 0
@@ -278,15 +287,26 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
     ``walk_point_chunks``(또는 아직 이관 전 DB의 ``walk_points``)와 ``walk_pets``는
     모두 ``walks.id ON DELETE CASCADE``라 이 DELETE 한 번에 같이 없어집니다.
     """
-    result = await session.execute(
-        delete(Walk).where(Walk.app_user_id == app_user_id)
-    )
+    result = await session.execute(delete(Walk).where(Walk.app_user_id == app_user_id))
     return result.rowcount or 0
 
 
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk
+
+
+def is_client_session_conflict(error: IntegrityError) -> bool:
+    """asyncpg가 보고한 이 멱등 키의 유니크 충돌만 식별합니다.
+
+    SQLAlchemy의 DBAPI 어댑터가 원래 asyncpg 예외를 cause로 보존합니다.
+    오류 메시지 문자열 대신 SQLSTATE와 실제 제약 이름을 함께 확인합니다.
+    """
+    driver_error = error.orig.__cause__
+    return (
+        getattr(driver_error, "sqlstate", None) == "23505"
+        and getattr(driver_error, "constraint_name", None) == "walks_client_session_unique"
+    )
 
 
 def add_analysis(session: AsyncSession, analysis: WalkAnalysis) -> WalkAnalysis:
@@ -312,10 +332,18 @@ async def get_analysis_for_input(
             WalkAnalysis.input_fingerprint == input_fingerprint,
         )
         .options(selectinload(WalkAnalysis.capsule))
+        .execution_options(populate_existing=True)
         .order_by(WalkAnalysis.derived_at, WalkAnalysis.id)
         .limit(1)
     )
-    return await session.scalar(stmt)
+    analysis = await session.scalar(stmt)
+    if analysis is not None and analysis.capsule is None:
+        # DB에서 삭제됐지만 같은 세션에 남아 있는 Capsule은 재생성 전에 분리합니다.
+        key = WalkCapsule.__mapper__.identity_key_from_primary_key((analysis.id,))
+        stale = session.identity_map.get(key)
+        if stale is not None:
+            session.expunge(stale)
+    return analysis
 
 
 async def existing_chunk_starts(session: AsyncSession, walk_id: uuid.UUID) -> set[int]:

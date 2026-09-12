@@ -46,11 +46,8 @@ from daengs_evals.answer_quality.questions import (
     load_questions,
 )
 from daengs_evals.answer_quality.strata import resolve_strata
-from daengs_evals.orchestrator_comparison.runner import Meter, _fake_adapters
-from daengs_evals.orchestrator_comparison.runner_v2 import (
-    RecordingEngine,
-    _metered_semantic_generate,
-)
+from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
+from daengs_evals.eval_harness import fake_adapters as _fake_adapters
 
 BENCHMARK_ID = "answer-quality-v1"
 CARD = "#277"
@@ -109,7 +106,9 @@ def parse_screening(raw: str | None) -> dict[str, Any] | None:
         return None
     verdict, _, days = raw.partition(":")
     if verdict not in SCREENING_VERDICTS:
-        raise ValueError(f"--screening 의 판정은 {'|'.join(SCREENING_VERDICTS)} 입니다: {verdict!r}")
+        raise ValueError(
+            f"--screening 의 판정은 {'|'.join(SCREENING_VERDICTS)} 입니다: {verdict!r}"
+        )
     if not days.isdigit():
         raise ValueError(f"--screening 의 경과일은 0 이상 정수입니다: {days!r}")
     return {"verdict": verdict, "days_ago": int(days)}
@@ -203,7 +202,7 @@ def build_orchestrator(mode: str, meter: Meter, sink: dict[str, Any]) -> Any:
 
     return AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode), sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(meter)),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(meter)),
     )
 
 

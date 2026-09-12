@@ -944,7 +944,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             analysis.id = uuid.uuid4()
         if analysis.derived_at is None:
             analysis.derived_at = datetime.now(UTC)
-        store.walk_analyses.append(analysis)
+        if analysis not in store.walk_analyses:
+            store.walk_analyses.append(analysis)
         return analysis
 
     async def walk_get_analysis_for_input(session, **identity):
@@ -959,6 +960,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
+    monkeypatch.setattr(walk_repo, "get_owned_for_finalize", walk_get_owned)
     monkeypatch.setattr(walk_repo, "get_owned_for_update", walk_get_owned_for_update)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
 
@@ -1015,7 +1017,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         )
 
     async def walk_activity_for_pet_between(session, pet_id, start, end):
-        # 비서의 오늘 산책 요약(`services/walk_activity_context`, D-072)이 `active_dog_id`
+        # 비서의 오늘 산책 요약(`services/walk_activity_context`, D-073)이 `active_dog_id`
         # 요청마다 읽는 값. **기본은 빈 하루** — `care_events`·`vet_visits` 와 같은 이유로
         # (위 `Store.__init__` 주석), 대역이 없으면 관련 없는 테스트가 진짜 리포지토리를
         # 타서 `FakeSession` 에서 죽는다. 측정 합계(거리·이동 시간·측정 건수)는 이 대역이

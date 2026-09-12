@@ -57,20 +57,10 @@ place = [
     "alembic>=1.19",
     "geoalchemy2>=0.15",
 ]
-# LangChain 에이전트 오케스트레이터 (D-055). `orchestration/agent/` 만 씁니다.
-#
-# **extra 인 것이 요점입니다.** 서버 backend 컨테이너에는 안 깔립니다 — 두 구현을 병존시키는
-# 동안에도 운영 경로의 의존성이 늘지 않게 하려는 것입니다. CI(`backend-tests.yml`)는 D-055 ⑦
-# 부터 깝니다(보존하는 코드를 검사하려고). 그래도 `tests/test_orchestration_agent.py` 는
-# `pytest.importorskip` 으로 감쌉니다 — extra 없는 개발 PC 에서 스위트가 수집 단계에서 죽지
-# 않게 (`ml`·`gait`·`screening` 과 같은 자리).
-#
-# ⚠ 로컬 전체 테스트는 **`uv sync --extra place --extra agent`** 입니다. `--extra agent`
-#   하나만 주면 place 가 빠져 `tests/place` 13개가 수집 단계에서 죽습니다.
-agent = [
-    "langchain>=1.0",
-    "langchain-google-genai>=3.0",
-]
+# 로컬 전체 테스트는 `uv sync --extra place` 입니다. LangChain 에이전트 오케스트레이터
+# (구 `orchestration/agent/`, `agent` extra) 는 D-072 로 지웠습니다 — LangGraph 와 재 본
+# 결과가 정확도 우위 없이 토큰·지연만 약 두 배였고, 승인된 후속 기능 어디에도 "툴 결과를
+# 보고 다음 수를 정하는 선택" 이 필요하지 않았습니다.
 
 # torch 를 플랫폼별로 다른 인덱스에서 받는다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
 # `explicit = true` 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스에서 받는다.

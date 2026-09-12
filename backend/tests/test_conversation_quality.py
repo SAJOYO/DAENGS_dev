@@ -974,7 +974,7 @@ def test_user_input_needed_is_collinear_with_the_answer_key_today():
     # judge.py 가 이 수를 두 자리(모듈 머리말 · build_payload)에 적어 두고 있다. 그 수가
     # 문서의 산출물이라 여기서 못 박는다 — **이 테스트가 깨지면 세트가 바뀐 것이고, 그러면
     # judge.py 의 두 주석을 같이 고쳐야 한다.** 겹침이 깨지는 쪽이 목표다 (anchors.py 의 앵커).
-    # D-072 가 (False, "ANSWER") 3건을 더해 13 → 16 이 됐다 (6 → 9).
+    # D-073 가 (False, "ANSWER") 3건을 더해 13 → 16 이 됐다 (6 → 9).
     assert dist == {(True, "ASK"): 5, (False, "ANSWER"): 9, (False, "REDIRECT"): 2}
     need = [c for c in cases if c.user_input_needed]
     assert len(need) == 5 and all(c.expected_mode == "ASK" for c in need)

@@ -5,9 +5,10 @@
 라우팅·결정론적 RoutePlan 조립·능력 실행·집계는 전부 Card 2B/Card 1 의 것이다
 (`orchestration/service.py` · `planner.py` · `semantic.py` · `graph.py`).
 
-**어느 구현이 답하는지는 여기서 모른다.** `orchestration/runtime.py` 의
-`build_orchestrator()` 가 고르고, 이 파일은 `run(...) -> AssistantResponse` 만
-본다 — LangGraph 와 LangChain 에이전트를 갈아끼우는 자리가 그 한 곳인 이유다.
+**어떤 오케스트레이터 구현인지는 여기서 모른다.** `orchestration/runtime.py` 의
+`build_orchestrator()` 가 만들고, 이 파일은 `run(...) -> AssistantResponse` 만
+본다 — 구현을 갈아끼우는 자리가 그 한 곳인 이유다(D-072 이전에는 LangGraph 와
+LangChain 에이전트가 그 자리에서 갈렸다).
 
 **대화 저장은 이 엔드포인트 하나로 들어온다** (D-048). 본문에 `chat_session_id` 와
 `client_message_id` 가 함께 오면 같은 호출이 그 대화의 turn 으로 남고, 없으면 v0.0.0
@@ -29,7 +30,9 @@ from daengs_backend.core.database import (
     get_metrics_session_factory,
 )
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
+from daengs_backend.orchestration.adapters.facility import FacilityCapabilityAdapter
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
@@ -40,6 +43,10 @@ from daengs_backend.services import request_metrics as metrics_service
 from daengs_backend.services import screening_context as screening_context_service
 from daengs_backend.services import vet_spend_context as vet_spend_context_service
 from daengs_backend.services import walk_activity_context as walk_activity_context_service
+from daengs_backend.services.facility_conversation import (
+    FacilityConversationService,
+    get_facility_conversation_service,
+)
 
 router = APIRouter(tags=["assistant"])
 
@@ -47,9 +54,9 @@ router = APIRouter(tags=["assistant"])
 def get_assistant_orchestration_service() -> Orchestrator:
     """어느 구현이 답할지는 `orchestration/runtime.py` 가 정합니다.
 
-    여기서 `settings.orchestrator` 를 읽지 않는 이유: 이 함수는 **의존성 오버라이드
-    지점**이라 테스트가 이미 갈아끼우고 있습니다. 선택 규칙까지 여기 두면 규칙이
-    두 군데가 됩니다.
+    구현이 LangGraph 하나뿐이어도(D-072) 이 함수를 거치는 이유: 여기가 **의존성 오버라이드
+    지점**이라 테스트가 이미 갈아끼우고 있습니다. 구성 규칙까지 여기 두면 규칙이 두 군데가
+    됩니다.
     """
     return build_orchestrator()
 
@@ -119,7 +126,7 @@ async def _with_dog_context(
     남의 강아지 · 확정된 방문 없음 · **표가 아직 없음**(#353 마이그레이션 전) 전부 이
     카드 전과 똑같이 답한다.
 
-    **오늘의 산책 요약도 같은 세션에서 읽어 `context["walk_activity"]` 에 얹는다** (D-072).
+    **오늘의 산책 요약도 같은 세션에서 읽어 `context["walk_activity"]` 에 얹는다** (D-073).
     조건도 열어야 하는 DB 도 위 둘과 같아서, 세션을 또 하나 열면 이 함수가 애초에 막으려는
     비용(요청당 연결 증가)이 그대로 든다. 못 채워도 그냥 지나간다: 남의 강아지 · 오늘
     기록 없음 · **표가 아직 없음**(`walk_analyses`·`activity_walk_heads` 마이그레이션 전)
@@ -237,11 +244,12 @@ async def query(
     body: AssistantQueryRequest,
     principal: Annotated[Principal | AppPrincipal, Depends(admin_or_app_user(Perm.READ))],
     service: Annotated[Orchestrator, Depends(get_assistant_orchestration_service)],
-    session_factory: Annotated[
-        async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)
-    ],
+    session_factory: Annotated[async_sessionmaker[AsyncSession], Depends(get_chat_session_factory)],
     metrics_factory: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_metrics_session_factory)
+    ],
+    facility_service: Annotated[
+        FacilityConversationService, Depends(get_facility_conversation_service)
     ],
 ) -> AssistantResponse:
     """`AssistantResponse` 를 그대로 돌려준다. FAILED 를 포함해 상태를 재해석하지
@@ -262,7 +270,7 @@ async def query(
     return await metrics_service.measured(
         metrics_factory,
         principal_kind=_principal_context(principal).kind,
-        run=lambda: _dispatch(body, principal, service, session_factory),
+        run=lambda: _dispatch(body, principal, service, session_factory, facility_service),
         ignore=(HTTPException,),
     )
 
@@ -272,6 +280,7 @@ async def _dispatch(
     principal: Principal | AppPrincipal,
     service: Orchestrator,
     session_factory: async_sessionmaker[AsyncSession],
+    facility_service: FacilityConversationService | None = None,
 ) -> AssistantResponse:
     """실제 처리. `query` 에서 뽑아낸 것은 **지표를 재는 자리를 하나로 두려고**서다.
 
@@ -281,6 +290,27 @@ async def _dispatch(
     principal_context = _principal_context(principal)
     include_route_trace = _may_inspect_route(principal)
     context = _structured_context(body)
+    if body.facility is not None:
+        if not isinstance(principal, AppPrincipal):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, {"code": "FACILITY_APP_USER_ONLY"})
+        facility_service = facility_service or get_facility_conversation_service()
+        owner = str(principal.app_user_id)
+        # Request-bound dependencies carry the owner/view, never model payloads or global state.
+        service = build_orchestrator(
+            engine=OrchestrationEngine(
+                place_adapter=FacilityCapabilityAdapter(
+                    owner=owner,
+                    view=body.facility,
+                    service=facility_service,
+                )
+            )
+        )
+        context["facility_response"] = True
+        if body.facility.session_id is not None:
+            # The client has a view even when its server copy has expired. Only Place loads
+            # that owner-bound session, so unrelated queries work and expiry reaches recovery.
+            context["facility_session_id"] = str(body.facility.session_id)
+            context["facility_view"] = True
     if not body.persists:
         return await service.run(
             query=body.query,
@@ -291,9 +321,7 @@ async def _dispatch(
         )
 
     if not isinstance(principal, AppPrincipal):
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, {"code": "CHAT_PERSISTENCE_APP_USER_ONLY"}
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, {"code": "CHAT_PERSISTENCE_APP_USER_ONLY"})
     assert body.chat_session_id is not None and body.client_message_id is not None
 
     async def orchestrate(
@@ -377,9 +405,7 @@ async def _dispatch(
                 "code": "TURN_PERSISTENCE_FAILED",
                 "turn_id": str(exc.turn_id),
                 "persistence_error_code": exc.persistence_error_code,
-                "retry_with_fresh_client_message_id": (
-                    exc.retry_with_fresh_client_message_id
-                ),
+                "retry_with_fresh_client_message_id": (exc.retry_with_fresh_client_message_id),
             },
         ) from None
 

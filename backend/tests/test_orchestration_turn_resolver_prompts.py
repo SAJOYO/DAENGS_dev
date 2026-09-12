@@ -141,7 +141,7 @@ def _independently_reconstructed_prompt(
     care_log: dict[str, object] | None,
     vet_spend: dict[str, object] | None,
 ) -> str:
-    """오늘(D-072 Task 8 이후) `build_general_prompt` 의 조립 규칙을 **이 테스트가 직접**
+    """오늘(D-073 Task 8 이후) `build_general_prompt` 의 조립 규칙을 **이 테스트가 직접**
     다시 짠 것 — 구현을 그대로 불러 비교하면 구현이 통째로 틀려도 자기 자신과는 늘 같다.
     안전 프롬프트·규칙 문단 상수는 이 카드가 건드리지 않는 프로즈라 그대로 가져다 쓰지만,
     줄 순서·구분자·개행은 여기서 독립적으로 다시 쓴다. `_UNMEASURED_RULE` 은 Task 8 부터

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -333,7 +334,7 @@ class GeneralPayload(ContractModel):
     1년간 얼마 썼지" and "그 병원 번호 뭐였지" are general questions, and Life's documents
     do not carry either answer.
 
-    ``walk_activity`` (D-072) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
+    ``walk_activity`` (D-073) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
     이유는 `WalkActivityContext` 독스트링에 있다.
     """
 
@@ -341,7 +342,7 @@ class GeneralPayload(ContractModel):
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
     vet_spend: VetSpendContext | None = None
-    #: 오늘 기록된 산책 (D-072). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
+    #: 오늘 기록된 산책 (D-073). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
     #: Life 의 조례·보조금 문서는 오늘 걸은 거리로 달라지지 않는다. None 이면 프롬프트가
     #: 이 카드 전과 한 글자도 다르지 않다.
     walk_activity: WalkActivityContext | None = None
@@ -377,8 +378,29 @@ class VetContactPayload(ContractModel):
         return self
 
 
+class FacilitySessionPayload(ContractModel):
+    """Continue an owner-bound facility view; coordinates belong to the saved search."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    query: str = Field(min_length=1, max_length=1_000)
+    facility_session_id: UUID
+
+    @field_validator("query")
+    @classmethod
+    def query_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("query must not be blank")
+        return value
+
+
 CapabilityPayload = (
-    TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
+    TrainingPayload
+    | LifePayload
+    | WalkPayload
+    | PlacePayload
+    | FacilitySessionPayload
+    | GeneralPayload
+    | VetContactPayload
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -403,12 +425,23 @@ class CapabilityRequest(ContractModel):
         data = dict(value)
         capability = CapabilityName(data.get("capability"))
         payload_type = _PAYLOAD_TYPES[capability]
+        payload = data.get("payload")
+        if capability == CapabilityName.PLACE and (
+            isinstance(payload, FacilitySessionPayload)
+            or isinstance(payload, dict)
+            and "facility_session_id" in payload
+        ):
+            payload_type = FacilitySessionPayload
         data["payload"] = payload_type.model_validate(data.get("payload"))
         return data
 
     @model_validator(mode="after")
     def payload_matches_capability(self) -> CapabilityRequest:
         expected = _PAYLOAD_TYPES[self.capability]
+        if self.capability == CapabilityName.PLACE and isinstance(
+            self.payload, FacilitySessionPayload
+        ):
+            return self
         if not isinstance(self.payload, expected):
             raise TypeError(f"{self.capability.value} requires {expected.__name__}")
         return self

@@ -126,9 +126,7 @@ def resolve_emergency_route(
 
     return RoutePlan.model_validate(
         {
-            "requests": [
-                {"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}
-            ],
+            "requests": [{"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}],
             "handoffs": [],
             "clarify": None,
             "router": RouterKind.DETERMINISTIC,
@@ -210,6 +208,10 @@ def assemble_route_plan(
     `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
+    if "place" in needs_coordinates and (
+        "facility_session_id" in context or "facility_location" in context
+    ):
+        needs_coordinates = needs_coordinates - {"place"}
     missing = _missing_coordinates(context) if needs_coordinates else []
     if missing:
         # CLARIFY is exclusive (O-8): nothing executes and nothing hands off first.
@@ -327,7 +329,7 @@ def _payload_for(
         vet_spend = _vet_spend_context(context)
         if vet_spend is not None:
             payload["vet_spend"] = vet_spend
-        # 오늘 기록된 산책도 폴백에만 간다 (D-072): "얼마나 걸었어" 는 일반 질문이고,
+        # 오늘 기록된 산책도 폴백에만 간다 (D-073): "얼마나 걸었어" 는 일반 질문이고,
         # Life 의 조례는 그 답을 안 들고 있다.
         walk_activity = _walk_activity_context(context)
         if walk_activity is not None:
@@ -339,7 +341,9 @@ def _payload_for(
         location = context["location"]
         return {"lat": location["lat"], "lon": location["lon"]}
     if capability == "place":
-        location = context["location"]
+        if "facility_session_id" in context:
+            return {"query": query, "facility_session_id": context["facility_session_id"]}
+        location = context.get("facility_location", context.get("location"))
         return {"query": query, "lat": location["lat"], "lon": location["lon"]}
     if capability == _VET_CONTACT:
         # 이 경로로는 오지 않는다 — `resolve_emergency_route` 가 payload 를 직접 만든다.
@@ -426,7 +430,7 @@ def _care_log_context(context: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _walk_activity_context(context: dict[str, Any]) -> dict[str, Any] | None:
-    """오늘 기록된 산책 합계를 읽는다 (D-072). `_care_log_context` 와 같은 규칙 — 모양이
+    """오늘 기록된 산책 합계를 읽는다 (D-073). `_care_log_context` 와 같은 규칙 — 모양이
     틀린 칸은 그 칸만 버리고 요청은 안 버린다. 단, **``last_started_at`` 만 그 규칙을
     받는다.** ``day``·``walk_count``·``measured_walk_count``·``distance_m``·``moving_s``
     는 `WalkActivityContext` 에서 전부 필수라 하나라도 모양이 틀리면(또는

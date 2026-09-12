@@ -1,4 +1,4 @@
-# 기록된 산책과 `unmeasured` 고지 구현 계획 (D-072)
+# 기록된 산책과 `unmeasured` 고지 구현 계획 (D-073)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12 · uv · FastAPI · SQLAlchemy 2.0 async · pydantic v2 · pytest
 
-**Spec:** 이 문서의 「설계 근거」 절이 스펙이다. 상위 결정은 `docs/decisions.md` 의 **D-051 ⑤**(지역명은 좌표가 아니다 · Option B 디스클로저)이고, 이 카드는 그 장치의 **조건부 판본**을 General 에 처음 들이는 것이라 **D-072 로 기록한다**(Task 7).
+**Spec:** 이 문서의 「설계 근거」 절이 스펙이다. 상위 결정은 `docs/decisions.md` 의 **D-051 ⑤**(지역명은 좌표가 아니다 · Option B 디스클로저)이고, 이 카드는 그 장치의 **조건부 판본**을 General 에 처음 들이는 것이라 **D-073 로 기록한다**(Task 7).
 
 ---
 
@@ -74,7 +74,7 @@ backend/tests/
 backend/evals/conversation_quality/
   cases_v1.jsonl                        수정 — 이동량 케이스 3건
 
-docs/decisions.md                       수정 — D-072
+docs/decisions.md                       수정 — D-073
 ```
 
 ---
@@ -102,7 +102,7 @@ Expected: 전부 통과. **실패가 있으면 여기서 멈추고 보고한다*
 - [ ] **Step 3: 빈 착수 커밋과 Draft PR**
 
 ```bash
-git commit --allow-empty -m "chore: 착수 — 기록된 산책과 unmeasured 고지 (D-072)"
+git commit --allow-empty -m "chore: 착수 — 기록된 산책과 unmeasured 고지 (D-073)"
 git push -u origin feat/walk-activity-unmeasured
 ```
 
@@ -126,7 +126,7 @@ PR 본문은 `.github/PULL_REQUEST_TEMPLATE.md` 의 `##` 제목을 **그대로 �
 `backend/tests/test_assistant_walk_activity.py` 를 새로 만든다:
 
 ```python
-"""D-072 — 기록된 산책이 비서 프롬프트까지 가는 길, 그리고 **못 잴 때 무엇을 말하는가**.
+"""D-073 — 기록된 산책이 비서 프롬프트까지 가는 길, 그리고 **못 잴 때 무엇을 말하는가**.
 
 DB 는 안 씁니다. `test_assistant_care_log.py` 와 같은 꼴로 리포지토리를 가짜로 바꿉니다.
 여기서 보는 것은 **규칙**입니다 — 좌표가 한 칸도 안 넘어가는가, 측정 안 된 산책이 합계에
@@ -188,7 +188,7 @@ Expected: FAIL — `ImportError: cannot import name 'DISTANCE_FROM_RECORDED_WALK
 `redirects.py` 의 `VET_CONTACT_CURRENT_LOCATION_FRAME` **아래**에 넣는다:
 
 ```python
-#: 이동 거리를 못 재는 이유 (D-072). **왜 못 하는지까지 말한다** — 댕스는 기록된 산책에서만
+#: 이동 거리를 못 재는 이유 (D-073). **왜 못 하는지까지 말한다** — 댕스는 기록된 산책에서만
 #: 거리를 내고, 그것은 지명을 좌표로 바꾸지 않기로 한 결정(D-051 ⑤)의 결과다. 그 결정을
 #: 이 한 줄이 사용자에게 갚는다. `VET_CONTACT_HOURS_UNKNOWN` 과 같은 성질이다.
 #:
@@ -251,7 +251,7 @@ class WalkActivityContext(ContractModel):
 `GeneralPayload` 에 칸을 더한다 (`vet_spend` 아래, `conversation` 위):
 
 ```python
-    #: 오늘 기록된 산책 (D-072). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
+    #: 오늘 기록된 산책 (D-073). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
     #: Life 의 조례·보조금 문서는 오늘 걸은 거리로 달라지지 않는다. None 이면 프롬프트가
     #: 이 카드 전과 한 글자도 다르지 않다.
     walk_activity: WalkActivityContext | None = None
@@ -260,7 +260,7 @@ class WalkActivityContext(ContractModel):
 `GeneralPayload` 독스트링에 한 문단을 더한다:
 
 ```
-    ``walk_activity`` (D-072) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
+    ``walk_activity`` (D-073) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
     이유는 `WalkActivityContext` 독스트링에 있다.
 ```
 
@@ -286,7 +286,7 @@ Expected: PASS. **`test_capability_names_have_exactly_three_copies_and_they_agre
 git add backend/src/daengs_backend/orchestration/redirects.py \
         backend/src/daengs_backend/orchestration/contracts.py \
         backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: 기록된 산책 계약과 못 잴 때의 고지 문장 (D-072)"
+git commit -m "feat: 기록된 산책 계약과 못 잴 때의 고지 문장 (D-073)"
 ```
 
 ---
@@ -382,7 +382,7 @@ async def activity_for_pet_between(
     start: datetime,
     end: datetime,
 ) -> WalkActivitySums:
-    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-072).
+    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-073).
 
     **소유자 조건을 안 겁니다** — `count_for_pet_between` 과 같은 이유입니다(docs/co-care.md
     §2). 부르는 쪽이 이미 접근 권한을 확인했고, 여기서 사람으로 다시 거르면 다른 보호자가
@@ -470,7 +470,7 @@ async def test_분석_세대가_둘이어도_거리가_배가_되지_않는다(d
 
 ```bash
 git add backend/src/daengs_backend/repositories/walk.py backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: 기록된 산책의 건수와 측정 합계를 head 경유로 읽는다 (D-072)"
+git commit -m "feat: 기록된 산책의 건수와 측정 합계를 head 경유로 읽는다 (D-073)"
 ```
 
 ---
@@ -590,7 +590,7 @@ Expected: FAIL — `ModuleNotFoundError: daengs_backend.services.walk_activity_c
 `services/care_log_context.py`(83줄)를 열어 **구조를 그대로 따른다**: 모듈 독스트링에 "무엇이 안 넘어가는가"를 적고, `uuid.UUID` 변환 실패·`PetNotFoundError`·`SQLAlchemyError` 를 전부 `None` 으로 받고, 아무 값도 없으면 `None` 을 낸다. 날짜 경계는 `care_service.DAY_TIMEZONE`(서울)을 그대로 쓴다 — **두 요약이 다른 하루를 말하면 안 된다.**
 
 ```python
-"""활성 반려견 → 비서가 받아도 되는 오늘의 산책 요약 (D-072).
+"""활성 반려견 → 비서가 받아도 되는 오늘의 산책 요약 (D-073).
 
 `services/care_log_context.py` 의 형제이고 규칙이 같습니다 — **소유권을 확인해 읽고, 좁혀서
 넘기고, 못 채우면 조용히 None**. 넘어가는 모양은 `orchestration.contracts` 의
@@ -621,7 +621,7 @@ Expected: PASS (10개)
 
 ```bash
 git add backend/src/daengs_backend/services/walk_activity_context.py backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: 오늘의 산책 요약 resolver — 빈 날과 DB 오류는 조용히 None (D-072)"
+git commit -m "feat: 오늘의 산책 요약 resolver — 빈 날과 DB 오류는 조용히 None (D-073)"
 ```
 
 ---
@@ -698,7 +698,7 @@ Expected: FAIL — `ImportError: cannot import name '_walk_activity_context'`
 `_payload_for` 의 general 분기에서 `vet_spend` 다음, `conversation` 앞에 세 줄을 더한다:
 
 ```python
-        # 오늘 기록된 산책도 폴백에만 간다 (D-072): "얼마나 걸었어" 는 일반 질문이고,
+        # 오늘 기록된 산책도 폴백에만 간다 (D-073): "얼마나 걸었어" 는 일반 질문이고,
         # Life 의 조례는 그 답을 안 들고 있다.
         walk_activity = _walk_activity_context(context)
         if walk_activity is not None:
@@ -743,7 +743,7 @@ Expected: PASS
 git add backend/src/daengs_backend/routers/assistant.py \
         backend/src/daengs_backend/orchestration/planner.py \
         backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: 오늘의 산책 요약을 General payload 까지 잇는다 (D-072)"
+git commit -m "feat: 오늘의 산책 요약을 General payload 까지 잇는다 (D-073)"
 ```
 
 ---
@@ -808,7 +808,7 @@ Expected: FAIL — 버전이 `general-answer-ko-v8` 로 나온다
 `_VET_SPEND_RULE` 바로 아래에 넣는다. **영문이다** — `_SAFETY_PROMPT`·`_CARE_LOG_RULE` 과 같은 언어여야 한다(v3 의 사람 결정).
 
 ```python
-# D-072. `_CARE_LOG_RULE` 과 같은 결이고, 다른 것은 **못 잴 때 무엇을 하느냐** 한 문단이다.
+# D-073. `_CARE_LOG_RULE` 과 같은 결이고, 다른 것은 **못 잴 때 무엇을 하느냐** 한 문단이다.
 # 고지 문장은 여기 없다 — 어댑터가 `redirects.DISTANCE_FROM_RECORDED_WALKS_ONLY` 를 붙인다.
 # 모델이 그 문장을 쓰면 판본이 둘이 되고, 그것이 #278 이 막은 것이다.
 _WALK_ACTIVITY_RULE = """WALK_ACTIVITY, when present, is what the app actually recorded for this dog's walks today: how many walks were recorded, how many of those have a finished measurement, the total measured distance in metres, the total measured moving time in seconds, and the clock time the last walk started, as HH:MM in Seoul time. Treat it as fact for questions like "how far did we walk today" or "how long was the walk". Report the distance and the time as they are; round only for readability and never convert a number you were not given. When walk_count is larger than measured_walk_count, say plainly that some recorded walks have no measurement yet and give the total for the ones that do — "3 recorded, 2 measured, 1.2 km" is true and "3 walks, 1.2 km" is not.
@@ -857,7 +857,7 @@ Expected: PASS. **`test_assistant_care_log.py` 가 반드시 통과해야 한다
 
 ```bash
 git add backend/src/daengs_backend/orchestration/adapters/general.py backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: WALK_ACTIVITY 규칙과 -walk 접미사 — 경로 추정을 프롬프트에서 막는다 (D-072)"
+git commit -m "feat: WALK_ACTIVITY 규칙과 -walk 접미사 — 경로 추정을 프롬프트에서 막는다 (D-073)"
 ```
 
 ---
@@ -927,7 +927,7 @@ Expected: FAIL — `extra="forbid"` 라 `unmeasured` 가 들어간 입력이 `No
 `GeneralAnswer` 에 (`reason` 위):
 
 ```python
-    #: 이 아이의 이동량(거리·시간)을 물었는데 기록으로 못 답하는 경우 (D-072).
+    #: 이 아이의 이동량(거리·시간)을 물었는데 기록으로 못 답하는 경우 (D-073).
     #: **모델은 이 칸만 세우고, 사용자에게 나가는 문장은 어댑터가 코드에서 붙인다** —
     #: `axes` 와 같은 규칙이고 이유는 #278 이다. 답변일 때만 쓴다.
     unmeasured: Literal[True] | None = None
@@ -972,7 +972,7 @@ Expected: 전부 통과. **여기서 처음으로 전체 스위트를 돌린다*
 git add backend/src/daengs_backend/orchestration/adapters/general.py \
         backend/tests/test_orchestration_general_fallback.py \
         backend/tests/test_assistant_walk_activity.py
-git commit -m "feat: unmeasured 마커 — 못 재는 이유를 고정 문장으로 붙인다 (D-072)"
+git commit -m "feat: unmeasured 마커 — 못 재는 이유를 고정 문장으로 붙인다 (D-073)"
 ```
 
 ---
@@ -999,11 +999,11 @@ git commit -m "feat: unmeasured 마커 — 못 재는 이유를 고정 문장으
 
 - [ ] **Step 2: README 에 분모가 바뀐 것을 적는다**
 
-`backend/evals/conversation_quality/README.md` 에 한 절을 더한다: D-072 로 케이스 3건이 늘었고, **이전 랩들과 직접 비교하려면 그 3건을 빼고 봐야 한다**는 것, 그리고 새 sha256.
+`backend/evals/conversation_quality/README.md` 에 한 절을 더한다: D-073 로 케이스 3건이 늘었고, **이전 랩들과 직접 비교하려면 그 3건을 빼고 봐야 한다**는 것, 그리고 새 sha256.
 
-- [ ] **Step 3: D-072 를 쓴다**
+- [ ] **Step 3: D-073 를 쓴다**
 
-`docs/decisions.md` 끝에 `## D-072` 를 더하고, 맨 위 인덱스 표에도 한 줄 더한다.
+`docs/decisions.md` 끝에 `## D-073` 를 더하고, 맨 위 인덱스 표에도 한 줄 더한다.
 
 제목: **「못 재는 이유를 말한다 — D-051 ⑤ 디스클로저의 조건부 판본」**
 
@@ -1019,13 +1019,13 @@ git commit -m "feat: unmeasured 마커 — 못 재는 이유를 고정 문장으
 ```bash
 git add backend/evals/conversation_quality/cases_v1.jsonl \
         backend/evals/conversation_quality/README.md docs/decisions.md
-git commit -m "docs: D-072 — 못 재는 이유를 말한다, 그리고 누락을 재는 케이스 셋"
+git commit -m "docs: D-073 — 못 재는 이유를 말한다, 그리고 누락을 재는 케이스 셋"
 ```
 
 ---
 
 ## 완료 뒤
 
-- [ ] **유료 랩은 사람 승인 뒤에만.** `conversation_quality` 를 실모델로 돌려 마커 누락률을 재는 것은 이 계획서 밖이다. 승인받고 돌린 뒤 결과를 D-072 에 덧붙인다.
+- [ ] **유료 랩은 사람 승인 뒤에만.** `conversation_quality` 를 실모델로 돌려 마커 누락률을 재는 것은 이 계획서 밖이다. 승인받고 돌린 뒤 결과를 D-073 에 덧붙인다.
 - [ ] **배포는 별개다.** 2026-09-12 기준 서버 체크아웃은 `912e0240`(general v3)로 보이고 `origin/dev` 와 733커밋 차이다. 이 카드를 머지해도 그 격차가 그대로면 사용자에게 안 닿는다. 확인: `docker compose exec backend python -c "from daengs_backend.orchestration.adapters.general import GENERAL_PROMPT_VERSION as v; print(v)"`
 - [ ] `superpowers:finishing-a-development-branch` 로 마무리한다.

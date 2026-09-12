@@ -148,7 +148,7 @@ async def transition(db, before, after, game, claim, event_id, at_ms):
     receipt = await db.get(ActivityGameReceipt, (season.id, event_id))
     policy.require(receipt is None, "unexpected_reapplied_transition")
     pets = {claim.pet_id} | ({uuid.UUID(old.owner_pet_id)} if old else set())
-    accounts = {row.pet_id: row for row in await repo.accounts(db, season.id)}
+    accounts = {row.pet_id: row for row in await repo.accounts_for_pets(db, season.id, pets)}
     calculator = engine(season)
     scores = {
         str(pet): calculator.Score(**accounts[pet].score)

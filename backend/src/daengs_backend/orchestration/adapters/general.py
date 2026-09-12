@@ -35,7 +35,7 @@ timeout, one lazily-built client per process. Generation settings reuse the rout
 constants where they apply; only the output budget is wider, because a short answer plus
 its JSON envelope does not fit in a routing decision's 256 tokens.
 
-``GeneralAnswer.unmeasured`` (D-072, Task 6) is a **marker**, not the fixed sentence itself
+``GeneralAnswer.unmeasured`` (D-073, Task 6) is a **marker**, not the fixed sentence itself
 — the model sets the flag, the adapter's OK path appends
 ``redirects.DISTANCE_FROM_RECORDED_WALKS_ONLY`` after ``answer.text`` (#278: a rejection or
 a boundary sentence is product copy, code writes it, never the model). A marker was chosen
@@ -46,7 +46,7 @@ gluing the sentence onto every answer when records are simply absent would be wr
 more often than right.
 
 Two rule paragraphs instruct the model, and which one rides where changed shape at Task 8.
-``_UNMEASURED_RULE`` (D-072, Task 8) carries the condition for raising the flag — including
+``_UNMEASURED_RULE`` (D-073, Task 8) carries the condition for raising the flag — including
 the D-051 sentence that forbids estimating a distance or time from a route described in
 words, place names, or a stop count — and rides in **every** prompt body, regardless of
 whether ``payload.walk_activity`` is present. That is the fix for a gap Task 5/6 left open:
@@ -55,7 +55,7 @@ when today has zero recorded walks, ``services.walk_activity_context.resolve`` r
 feature") and ``payload.walk_activity`` is absent, which is exactly the case this whole
 card exists to cover (the owner describes a route by mouth and asks the distance, with no
 walk logged that day). Before Task 8, the rule that raises the flag lived only in
-``_WALK_ACTIVITY_RULE`` (D-072, Task 5), which only rides in the ``-walk`` prompt body —
+``_WALK_ACTIVITY_RULE`` (D-073, Task 5), which only rides in the ``-walk`` prompt body —
 so that exact case never saw the rule at all. ``_WALK_ACTIVITY_RULE`` now carries only the
 data-reading half (what WALK_ACTIVITY contains, how to report the two counts) and keeps
 riding only when ``payload.walk_activity is not None`` — so the ``-walk`` suffix on
@@ -125,20 +125,20 @@ from daengs_backend.orchestration.semantic import (
 # #446 의 동기 사례 자체가 거절로 되돌아가는 것을 리뷰가 잡았다 — 질문의 형태(기간이냐
 # 시작이냐)로 가르는 지금 형태로 고쳤다. 본문 글자가 달라졌으니, 그 글자를 승인한 버전
 # 이름도 같이 올린다.
-# v9 (D-072 Task 6, 2026-09-12): `_SAFETY_PROMPT` 의 문장은 **한 글자도** 안 바뀌었다 —
+# v9 (D-073 Task 6, 2026-09-12): `_SAFETY_PROMPT` 의 문장은 **한 글자도** 안 바뀌었다 —
 # 바뀐 것은 `GENERAL_ANSWER_JSON_SCHEMA` 뿐이다. `GeneralAnswer` 에 `unmeasured` 칸이
 # 늘면서 `build_general_prompt` 가 끼워 넣는 `GeneralAnswer.model_json_schema()` 가
 # 네 가지 프롬프트 몸 전부에서 달라졌다 — `kind` 에 `ask` 를 더했던 v6 때와 같은 이유고
 # 같은 결로 네 상수를 한꺼번에 올린다(위 v6 주석). Task 6 시점에는 모델에게 언제
 # `unmeasured` 를 세우라고 시키는 문단이 아직 없었다 — 스키마에 칸만 늘고 모델이 그
 # 칸을 세울 이유가 없었다.
-# v9-walk (D-072 Task 5, 같은 날 — 순서가 계획서와 뒤집혀 Task 6 뒤에 왔다): 그 문단
+# v9-walk (D-073 Task 5, 같은 날 — 순서가 계획서와 뒤집혀 Task 6 뒤에 왔다): 그 문단
 # (`_WALK_ACTIVITY_RULE`)이 여기서 붙는다. `payload.walk_activity is not None` 인
 # 요청, 즉 `general_prompt_version` 이 `-walk` 접미사를 붙이는 판본에서만 실린다 —
 # 그 요청에서는 `unmeasured` 가 실제로 `True` 로 돌아올 수 있다. `walk_activity` 가
 # 없는 요청(위 네 상수의 판본)은 이 문단을 안 보므로 지금도 칸은 있지만 세워질 이유가
 # 없다. **v10 에서 이 전제가 깨진다 — 아래 v10 주석.**
-# v10 (D-072 Task 8, 2026-09-12): v9-walk 가 세운 전제 — "`unmeasured` 는 `-walk` 판본
+# v10 (D-073 Task 8, 2026-09-12): v9-walk 가 세운 전제 — "`unmeasured` 는 `-walk` 판본
 # 에서만 세워질 수 있다" — 가 설계 구멍이었다. 오늘 산책 기록이 0건이면 `resolve` 가
 # `None` 을 내고(`services/walk_activity_context.py`) `payload.walk_activity` 가 없으니
 # `_WALK_ACTIVITY_RULE` 이 안 실려, 이 카드가 정확히 겨냥한 사례(기록 없이 거리를 묻는
@@ -211,7 +211,7 @@ class GeneralAnswer(BaseModel):
     #: `question` 이고, 이 칸은 `#416` 이 후속 답변을 앞 질문에 묶을 때 읽는 기계용 흔적이다.
     axes: list[ObservationAxis] | None = Field(default=None, max_length=2)
     reason: RefusalReason | None = None
-    #: 이 아이의 이동량(거리·시간)을 물었는데 기록으로 못 답하는 경우 (D-072).
+    #: 이 아이의 이동량(거리·시간)을 물었는데 기록으로 못 답하는 경우 (D-073).
     #: **모델은 이 칸만 세우고, 사용자에게 나가는 문장은 어댑터가 코드에서 붙인다** —
     #: `axes` 와 같은 규칙이고 이유는 #278 이다. 답변일 때만 쓴다.
     unmeasured: Literal[True] | None = None
@@ -301,7 +301,7 @@ A question about how the dog is doing today — "오늘 건강 상태는 어때?
 # 없는 사유·금액을 지어내지 말라는 것.
 _VET_SPEND_RULE = """VET_RECENT, when present, is what the owner has confirmed about this dog's vet visits: this month's total spend, the visit count in the last 30 days, the most recent visit (date, reason, amount, and the hospital's name/phone if known), and total spend per reason over the last 12 months. Treat it as fact for questions like "how much have I spent on skin issues this year" or "what was that hospital's phone number". Use only the reasons and numbers present; never invent a visit, a reason, or an amount that is not there. Never diagnose, recommend treatment, or judge whether spending is high or normal from it — it is a spending record, not a medical opinion. If the question is not about vet visits or spending, ignore it. When VET_RECENT is absent, say nothing about vet spending or visit history."""
 
-# D-072 Task 8. 앞 태스크가 드러낸 구멍 — 오늘 산책 기록이 0건이면 `resolve` 가 `None`
+# D-073 Task 8. 앞 태스크가 드러낸 구멍 — 오늘 산책 기록이 0건이면 `resolve` 가 `None`
 # 을 내고 `payload.walk_activity` 가 없으니, `_WALK_ACTIVITY_RULE`(그 존재를 전제하는
 # 규칙)이 안 실려 모델이 `unmeasured` 를 세울 이유를 못 받았다. 이 규칙은 데이터 유무와
 # 무관하게 **항상** 붙는다 — `_SAFETY_PROMPT` 처럼 네 기본 판본 전부에, `-walk` 접미사가
@@ -322,7 +322,7 @@ def general_prompt_version(payload: GeneralPayload) -> str:
     """Which of the (now five-shaped) prompt bodies ``build_general_prompt`` returns.
 
     The base of the name comes from exactly which of ``care_log``/``vet_spend`` are
-    present — unchanged since #353. ``-walk`` (D-072 Task 5), then ``-conv`` (#416 Task 6),
+    present — unchanged since #353. ``-walk`` (D-073 Task 5), then ``-conv`` (#416 Task 6),
     are appended on top of whichever base, each only when its own payload field rides
     along — see the constant comments above for why a suffix and not more constants
     (four for `-conv`, and the same reasoning holds for `-walk`: `care_log`/`vet_spend`/
@@ -347,7 +347,7 @@ def general_prompt_version(payload: GeneralPayload) -> str:
 def build_general_prompt(payload: GeneralPayload) -> str:
     """Assemble the fallback prompt from optional blocks.
 
-    ``_UNMEASURED_RULE`` (D-072 Task 8) rides in **every** body, right after
+    ``_UNMEASURED_RULE`` (D-073 Task 8) rides in **every** body, right after
     ``_SAFETY_PROMPT`` — unlike ``_CARE_LOG_RULE``/``_VET_SPEND_RULE``/``_WALK_ACTIVITY_RULE``,
     it never waits on an optional payload field, because the case it exists for (today has
     no recorded walk activity at all, so ``payload.walk_activity`` is absent) is exactly the
@@ -363,7 +363,7 @@ def build_general_prompt(payload: GeneralPayload) -> str:
     only which lines exist, never their order.
 
     Every branch embeds ``GeneralAnswer.model_json_schema()``, so widening ``kind`` (#415) or
-    widening the model with a new field (D-072 Task 6) changes all four bodies at once —
+    widening the model with a new field (D-073 Task 6) changes all four bodies at once —
     that is why the four version constants always move together (see the version-history
     comment above ``GENERAL_PROMPT_VERSION``).
 

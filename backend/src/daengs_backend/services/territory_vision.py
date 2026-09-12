@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from daengs_backend.config import settings
 from daengs_backend.core.storage import StorageObjectChangedError, get_storage
 from daengs_backend.repositories import territory as territory_repo
+from daengs_backend.services import territory_vision_jobs as jobs
 
 PROMPT_VERSION = "territory-dog-presence-v1"
 SUPPORTED_PHOTO_TYPES = frozenset({"image/jpeg", "image/webp"})
@@ -172,15 +173,7 @@ class GeminiTerritoryVision:
         return TerritoryVisionResult("rejected", "dog_presence_uncertain")
 
 
-@dataclass(frozen=True)
-class _FrozenEvidence:
-    storage_key: str
-    generation: str
-    content_type: str
-    size_bytes: int
-
-
-async def _load_attempt_evidence(attempt_id: uuid.UUID) -> _FrozenEvidence | None:
+async def _load_attempt_evidence(attempt_id: uuid.UUID) -> jobs.VisionLease | None:
     from daengs_backend.core.database import worker_session
     from daengs_backend.services import territory as territory_service
 
@@ -211,16 +204,8 @@ async def _load_attempt_evidence(attempt_id: uuid.UUID) -> _FrozenEvidence | Non
             except Exception as exc:
                 raise TerritoryVisionTransientError("photo_cleanup_unavailable") from exc
             return None
-        if attempt.status != "VISION_PENDING":
-            raise TerritoryVisionPermanentError("vision_attempt_not_ready")
-        if not attempt.photo_object_generation or not attempt.photo_size_bytes:
-            raise TerritoryVisionPermanentError("missing_photo_identity")
-        return _FrozenEvidence(
-            storage_key=attempt.photo_storage_key,
-            generation=attempt.photo_object_generation,
-            content_type=attempt.photo_content_type,
-            size_bytes=attempt.photo_size_bytes,
-        )
+        # claim reloads under a row lock; the unlocked observation above grants no rights.
+        return await jobs.claim(session, attempt_id)
 
 
 async def process_attempt(
@@ -228,13 +213,55 @@ async def process_attempt(
     *,
     classifier: TerritoryVisionPort | None = None,
 ) -> TerritoryVisionResult | None:
-    """한 시도를 읽고 판정해 종결합니다. 중복 전달된 종결 시도는 no-op입니다."""
+    """Lease a pending attempt, do external I/O, then commit only with the same lease."""
     from daengs_backend.core.database import worker_session
-    from daengs_backend.services import territory as territory_service
 
     evidence = await _load_attempt_evidence(attempt_id)
     if evidence is None:
         return None
+    vision = classifier or GeminiTerritoryVision()
+    if evidence.exhausted:
+        await _complete(
+            attempt_id,
+            evidence,
+            vision,
+            decision="failed",
+            reason=evidence.retry_reason or "vision_attempts_exhausted",
+        )
+        return None
+    try:
+        async with asyncio.timeout(max(1, settings.territory_vision_timeout_ms / 1000) + 5):
+            photo = await _read_photo(evidence)
+            result = await vision.classify(photo=photo, content_type=evidence.content_type)
+    except (TerritoryVisionError, TimeoutError) as exc:
+        reason = exc.reason_code if isinstance(exc, TerritoryVisionError) else "vision_timeout"
+        if (
+            isinstance(exc, TerritoryVisionPermanentError)
+            or evidence.attempt_number >= jobs.MAX_ATTEMPTS
+        ):
+            await _complete(attempt_id, evidence, vision, decision="failed", reason=reason)
+            return None
+        async with worker_session() as session:
+            reserved = await jobs.retry(
+                session,
+                attempt_id,
+                evidence,
+                reason=reason,
+                keep_lease=isinstance(exc, TimeoutError),
+            )
+        if reserved:
+            # Celery may accelerate the persisted retry; Beat also finds it if publication fails.
+            raise TerritoryVisionTransientError(reason) from exc
+        return None
+    saved = await _complete(
+        attempt_id, evidence, vision, decision=result.decision, reason=result.reason
+    )
+    return result if saved else None
+
+
+async def _read_photo(evidence):
+    if not evidence.generation or not evidence.size_bytes:
+        raise TerritoryVisionPermanentError("missing_photo_identity")
     try:
         photo = await asyncio.to_thread(
             get_storage().read_bytes,
@@ -250,63 +277,40 @@ async def process_attempt(
         raise TerritoryVisionTransientError("vision_storage_unavailable") from exc
     if len(photo) != evidence.size_bytes:
         raise TerritoryVisionPermanentError("photo_size_changed")
+    return photo
 
-    vision = classifier or GeminiTerritoryVision()
-    result = await vision.classify(photo=photo, content_type=evidence.content_type)
+
+async def _complete(attempt_id, evidence, vision, *, decision, reason):
+    from daengs_backend.core.database import worker_session
+    from daengs_backend.services import territory as territory_service
+
     async with worker_session() as session:
         try:
             await territory_service.record_vision_decision(
                 session,
                 attempt_id,
-                decision=result.decision,
+                decision=decision,
                 model=vision.provider_name,
                 model_version=vision.model_version,
-                reason=result.reason,
+                reason=reason,
+                lease_token=evidence.token,
+                generation=evidence.generation,
             )
         except territory_service.TerritoryAttemptConflictError as exc:
-            # 동시에 전달된 두 작업이 이미 종결한 경우 두 번째 모델 결과로 덮지 않습니다.
-            if exc.code != "vision_decision_conflict":
+            if exc.code not in {"vision_decision_conflict", "vision_lease_lost"}:
                 raise
+            return False
+        except territory_service.TerritoryAttemptNotFoundError:
+            return False  # Account/attempt deletion while the provider was running.
         except StorageObjectChangedError as exc:
             raise TerritoryVisionPermanentError("photo_cleanup_conflict") from exc
         except Exception as exc:
             raise TerritoryVisionTransientError("photo_cleanup_unavailable") from exc
-    return result
-
-
-async def record_failed_attempt(attempt_id: uuid.UUID, *, reason: str) -> None:
-    """재시도 소진/영구 실패를 앱이 polling할 수 있는 FAILED로 종결합니다."""
-    from daengs_backend.core.database import worker_session
-    from daengs_backend.services import territory as territory_service
-
-    # 앞선 처리에서 이미 terminal commit까지 끝내고 사진 정리만 실패했다면, 결과를
-    # FAILED로 바꾸려 하지 않고 같은 terminal decision의 정리만 재개합니다.
-    evidence = await _load_attempt_evidence(attempt_id)
-    if evidence is None:
-        return
-
-    vision = GeminiTerritoryVision()
-    async with worker_session() as session:
-        try:
-            await territory_service.record_vision_decision(
-                session,
-                attempt_id,
-                decision="failed",
-                model=vision.provider_name,
-                model_version=vision.model_version,
-                reason=reason,
-            )
-        except territory_service.TerritoryAttemptConflictError as exc:
-            if exc.code != "vision_decision_conflict":
-                raise
+    return True
 
 
 def process_attempt_sync(attempt_id: str) -> TerritoryVisionResult | None:
     return asyncio.run(process_attempt(uuid.UUID(attempt_id)))
-
-
-def record_failed_attempt_sync(attempt_id: str, *, reason: str) -> None:
-    asyncio.run(record_failed_attempt(uuid.UUID(attempt_id), reason=reason))
 
 
 __all__ = [
@@ -319,6 +323,4 @@ __all__ = [
     "TerritoryVisionTransientError",
     "process_attempt",
     "process_attempt_sync",
-    "record_failed_attempt",
-    "record_failed_attempt_sync",
 ]

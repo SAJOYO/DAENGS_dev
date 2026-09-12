@@ -25,15 +25,58 @@
    `PENDING_UPLOAD` 시도를 만들고 직접 업로드 티켓을 반환합니다.
 3. 앱이 티켓 주소로 JPEG 또는 WebP 사진을 올린 뒤
    `POST /app/territory/attempts/{attempt_id}/confirm`을 호출합니다.
-4. backend는 1~12 MiB 객체의 Content-Type, 크기와 storage generation을 확인·고정하고
-   `VISION_PENDING`으로 바꿉니다. 요청 안에서 사진을 열거나 VLM 응답을 기다리지 않습니다.
-   앱은 티켓의 `upload_headers`를 그대로 보내야 하며, 그 안의 generation-match 조건 때문에
-   이미 올라간 객체를 덮어쓸 수 없습니다.
+4. backend는 0바이트 초과·12 MiB 이하 객체의 크기와 storage generation을 확인·고정하고
+   `VISION_PENDING`으로 바꿉니다. 이미지 해석과 VLM 호출은 워커가 담당합니다.
+   객체 메타데이터에 Content-Type이 있으면 발급 형식과 비교합니다. LocalBridge는 PUT의
+   Content-Type을 검사하며 stat은 MIME 메타데이터를 제공하지 않습니다. 앱은 티켓의
+   `upload_headers`를 그대로 보내야 합니다. GCS는 generation-match 조건으로,
+   LocalBridge는 아래 파일 확정 방식으로 기존 객체 덮어쓰기를 막습니다.
 5. 후속 VLM 워커는 고정된 generation만 읽고 서비스 경계 `record_vision_decision`에 결과를
    기록합니다. 앱은
    `GET /app/territory/attempts/{attempt_id}`로 상태를 조회합니다.
 6. 서비스는 판정 사실을 먼저 DB에 commit한 뒤 원본을 0바이트 tombstone으로 조건부
    치환합니다. 저장소 정리가 실패해도 판정은 남고, 같은 결과 재시도로 정리만 이어집니다.
+
+워커의 처리 lease·재시도 예산은 시도 행에 저장합니다. 큐 미발행·만료된 처리권·미완료
+사진 정리는 기존 Beat가 복구하며, 완료할 때 token과 사진 generation을 확인합니다.
+수명과 SQL 적용 순서는 [사진 워커](vision-worker.md)를 따릅니다.
+
+## LocalBridge 사진 저장 완결성
+
+점령지 PUT의 `write_if_absent()`는 최종 파일과 같은 디렉터리의
+`.capture.jpg.<uuid>.upload`(WebP도 같은 규칙)에 먼저 씁니다. 전체 바이트 수 확인과
+`flush → fsync → close`가 성공한 뒤 `os.link()`로 최종 이름을 공개합니다. 기존 사진이나
+0바이트 tombstone이 있으면 `FileExistsError`를 HTTP 409로 반환합니다. 두 PUT이 겹쳐도
+한 요청만 최종 이름을 만들 수 있으며, confirm과 워커가 읽는 key·generation 계약은 같습니다.
+디스크 쓰기와 동기화는 요청 이벤트 루프 밖의 스레드에서 실행합니다.
+
+쓰기·동기화·닫기·공개가 실패하면 최종 경로는 생기지 않습니다. confirm은
+`photo_not_uploaded`를 반환하고 같은 티켓으로 PUT을 다시 시도할 수 있습니다.
+정상 완료와 예외 모두 해당 요청의 임시 파일을 정리합니다. 정리 자체가 실패하면 경고를
+기록하되 이미 공개한 사진이나 최초 저장 오류는 바꾸지 않습니다.
+
+저장 볼륨은 같은 파일시스템 안의 hard link를 지원해야 합니다. 지원하지 않으면 업로드가
+실패하며, 덮어쓰기·부분 노출이 가능한 복사 방식으로 우회하지 않습니다.
+[`os.link`는 Unix와 Windows에서 제공됩니다](https://docs.python.org/3.12/library/os.html#os.link).
+Windows는 NTFS에서 검증했으며, 모든 볼륨 유형이 지원되는 것은 아닙니다.
+[Windows의 지원 범위](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createhardlinkw#remarks)를
+따릅니다. 임시 파일은 기존 생성 권한과 umask를 그대로 사용합니다.
+
+프로세스가 정리 코드를 실행하지 못하고 종료하면 `.upload` 임시 파일이 남을 수 있습니다.
+공개 전의 임시 파일은 confirm 대상이 아니며 재업로드를 막지 않습니다. 공개 뒤 남은 임시
+이름은 최종 파일과 같은 데이터를 가리키므로 원본을 tombstone으로 바꿀 때 같이 비워집니다.
+공개 전 고아 임시 파일의 자동 수거는 이 변경에 포함하지 않습니다. 수동 정리는 진행 중인
+업로드가 없음을 확인한 유지보수 시점에 해야 합니다. 디렉터리 fsync를 포함한 전원 장애
+내구성, 변경 전부터 존재한 불완전한 최종 파일의 식별·복구도 이번 보장 범위 밖입니다.
+
+회귀 검증은 실제 임시 파일과 HTTP 앱을 사용하고, DB·큐·모델은 대역으로 분리합니다.
+쓰기/부분 쓰기/닫기/동기화/공개 실패 후 재시도, 쓰는 중 confirm 차단, 동시 PUT의 단일 승자,
+프로세스 중단 전후의 최종 파일, 기존 사진·tombstone·generation 보존을 검사합니다.
+
+```powershell
+# backend/ — 2026-09-12 Windows NTFS에서 75 passed. Linux 볼륨에서는 별도 실행 필요.
+uv run pytest -q -rs tests/test_gait_storage.py tests/territory/visits
+```
 
 ## 상태와 사실
 

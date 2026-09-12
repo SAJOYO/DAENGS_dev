@@ -348,6 +348,249 @@ def test_collect_records_the_response_time_snapshot_not_a_later_db_read(tmp_path
     assert row["state_supplied"] == case.state_snapshot  # 재조회가 아니라 그 시점 값
 
 
+def test_run_collect_does_not_leak_session_history_across_cases(tmp_path):
+    """실측(#446) — `run_collect` 이 `SessionDriver` 하나를 케이스 전체에 재사용해서
+    `_history` 가 케이스 경계를 안 가리고 계속 쌓였다. 랩을 다시 읽었을 때
+    `cq_pronoun_geugeo_01`(심장사상충 질문)이 `cq_symptom_missing_triage_01`(구토 질문)의
+    이력을 받아 구토를 되묻는 식으로 나타났다 — 드라이버 내부가 아니라 **랩 행에 적힌
+    `prior_turns_supplied`** 로 이 재발을 잡는다: 한 케이스 안에서만 늘어야 하고, 각
+    케이스의 첫 대상 턴은 항상 `[]` 여야 한다."""
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _RecordingOrchestrator:
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, pending_clarification
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message=f"답: {query}",
+                results=[],
+                clarify=None,
+            )
+
+    case_a = _case(
+        case_id="cq_case_a",
+        turns=[
+            Turn(role="user", text="오늘 건강 상태는 어때?"),
+            Turn(role="assistant", text="원인 판단은 여기서 하지 않아요."),
+            Turn(role="user", text="오늘 힘이 없어 보이는데?"),
+            Turn(role="assistant", text="식욕이나 배변 상태를 관찰해 주세요."),
+        ],
+        target_turns=[1, 3],
+        repair_applicable=False,
+    )
+    case_b = _case(case_id="cq_case_b", target_turns=[1])
+
+    driver = SessionDriver(_RecordingOrchestrator(), principal=None, adapter_mode="fake")
+    out = run_collect(cases=[case_a, case_b], driver=driver, out_dir=tmp_path, lap="bleed")
+    _, rows = load_lap(out)
+
+    by_case: dict[str, list] = {}
+    for row in rows:
+        by_case.setdefault(row["case_id"], []).append(row["prior_turns_supplied"])
+
+    # 케이스 안에서는 그대로 누적된다 — 그것은 SessionDriver 가 하기로 한 일이다.
+    assert by_case["cq_case_a"] == [[], [0]]
+    # 케이스가 바뀌면 완전히 새로 시작한다 — case_a 의 두 턴이 안 넘어온다.
+    assert by_case["cq_case_b"] == [[]]
+
+
+def test_run_collect_does_not_leak_pending_clarification_across_cases(tmp_path):
+    """`SessionDriver.send` 는 `prior_turns` 옆에 `pending_clarification` 도 싣는다 — 같은
+    `_history`/`_pending` 재사용 결함이 이 값도 새게 만들 수 있다(#446). 케이스 A 가
+    `CLARIFY` 로 끝나 대기가 걸린 채 케이스 B 로 넘어갔을 때, 오케스트레이터가 실제로
+    받는 값으로 확인한다 — 드라이버의 `last_pending_question` 만 보면 계산은 맞고 실어
+    보내는 것만 틀린 결함(R26 과 같은 종류)을 놓친다."""
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _ClarifyOnceOrchestrator:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.seen_pending: list = []
+
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, prior_turns
+            self.calls += 1
+            self.seen_pending.append(pending_clarification)
+            if self.calls == 1:
+                return SimpleNamespace(
+                    status=SimpleNamespace(value="CLARIFY"),
+                    message="평소와 비교해 식욕에 달라진 점이 있나요?",
+                    results=[],
+                    clarify=SimpleNamespace(
+                        question="평소와 비교해 식욕에 달라진 점이 있나요?",
+                        missing=["observation"],
+                        missing_axes=["APPETITE"],
+                    ),
+                )
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message="확인했습니다.",
+                results=[],
+                clarify=None,
+            )
+
+    case_a = _case(case_id="cq_case_a")  # target_turns=[1] — 유일한 대상 턴이 CLARIFY 로 끝난다
+    case_b = _case(case_id="cq_case_b")
+
+    orchestrator = _ClarifyOnceOrchestrator()
+    driver = SessionDriver(orchestrator, principal=None, adapter_mode="fake")
+    run_collect(cases=[case_a, case_b], driver=driver, out_dir=tmp_path, lap="pending")
+
+    # case_b 의 (유일한) 호출은 case_a 의 되묻기를 이어받지 않고 깨끗하게 시작해야 한다.
+    assert orchestrator.seen_pending == [None, None]
+
+
+def test_run_collect_replays_a_skipped_intermediate_turn_for_session_driver(tmp_path):
+    """카드 #446 — `run_collect` 이 각 target 바로 앞 user 턴만 보내던 결함.
+
+    `target_turns=[3, 5]` 인 케이스는 턴1(assistant, non-target)의 사용자 턴(턴0)이
+    턴3 의 이력에 실제로 들어가야 한다. 고치기 전에는 턴3 을 보낼 때 드라이버가 이번
+    케이스에서 **한 번도 안 불렸으므로**(턴0 을 건너뛰었다) `prior_turns_supplied` 가
+    `[]` 다 — 실제로는 턴0-1 교환이 이미 있었는데도. 고친 뒤에는 턴0 을 먼저 보내고
+    (기록은 안 하고) 나서 턴2 를 보내 턴3 을 기록하므로 `[0]` 이어야 하고, 턴5 는
+    거기에 턴2-3 교환까지 더해 `[0, 1]` 이어야 한다.
+
+    무너뜨리는 한 줄: `run_collect` 이 `case.target_turns` 만 순회하며 그 바로 앞
+    user 턴만 보내면(고치기 전 코드) `by_target[3] == []`, `by_target[5] == [0]` 로
+    남아 이 테스트가 실패한다.
+    """
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _RecordingOrchestrator:
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, pending_clarification
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message=f"답: {query}",
+                results=[],
+                clarify=None,
+            )
+
+    case = _case(
+        case_id="cq_case_skip",
+        turns=[
+            Turn(role="user", text="심장사상충 예방약은 한 달에 한 번 먹이면 되는거야?"),
+            Turn(role="assistant", text="네, 보통 월 1회입니다."),  # 턴1 — non-target
+            Turn(role="user", text="그거 얼마나 오래 해야 해?"),
+            Turn(role="assistant", text="평생 유지해야 해요."),  # 턴3 — target
+            Turn(role="user", text="비용은 얼마나 들어?"),
+            Turn(role="assistant", text="제품마다 달라요."),  # 턴5 — target
+        ],
+        target_turns=[3, 5],
+        repair_applicable=False,
+    )
+
+    driver = SessionDriver(_RecordingOrchestrator(), principal=None, adapter_mode="fake")
+    out = run_collect(cases=[case], driver=driver, out_dir=tmp_path, lap="replay")
+    _, rows = load_lap(out)
+
+    by_target = {row["turn_index"]: row["prior_turns_supplied"] for row in rows}
+    assert by_target[3] == [0]
+    assert by_target[5] == [0, 1]
+
+
+def test_run_collect_row_count_is_unchanged_by_replay(tmp_path):
+    """행 수는 여전히 target 마다 하나다 — 재생은 무엇을 **보내는지**만 바꾼다 (스펙 §7 경고).
+
+    무너뜨리는 한 줄: 중간 턴도 행으로 기록하면(재생과 기록을 혼동하면) 행 수가
+    target 개수보다 많아져 실패한다.
+    """
+    from types import SimpleNamespace
+
+    from daengs_evals.conversation_quality.collect import load_lap, run_collect
+    from daengs_evals.conversation_quality.drivers import SessionDriver
+
+    class _RecordingOrchestrator:
+        async def run(
+            self, *, query, principal, context, prior_turns=(), pending_clarification=None
+        ):
+            del principal, context, pending_clarification
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message=f"답: {query}",
+                results=[],
+                clarify=None,
+            )
+
+    case = _case(
+        case_id="cq_case_skip_count",
+        turns=[
+            Turn(role="user", text="심장사상충 예방약은 한 달에 한 번 먹이면 되는거야?"),
+            Turn(role="assistant", text="네, 보통 월 1회입니다."),
+            Turn(role="user", text="그거 얼마나 오래 해야 해?"),
+            Turn(role="assistant", text="평생 유지해야 해요."),
+            Turn(role="user", text="비용은 얼마나 들어?"),
+            Turn(role="assistant", text="제품마다 달라요."),
+        ],
+        target_turns=[3, 5],
+        repair_applicable=False,
+    )
+    driver = SessionDriver(_RecordingOrchestrator(), principal=None, adapter_mode="fake")
+    out = run_collect(cases=[case], driver=driver, out_dir=tmp_path, lap="replay_count")
+    _, rows = load_lap(out)
+    assert len(rows) == 2
+
+
+def test_run_collect_replay_does_not_add_extra_calls_for_stateless_driver(tmp_path):
+    """`StatelessDriver` 는 이력이 없다 — 중간 턴을 보내도 그다음 target 이 보는 것은
+    안 바뀌므로, 비용만 드는 호출을 보태지 않는다 (스펙 §7 경고, `before` 랩 비교 가능성).
+
+    무너뜨리는 한 줄: `reset_for_new_case` 유무로 안 가르고 모든 드라이버에 재생을
+    적용하면, `StatelessDriver` 도 중간 턴(턴0)을 보내 호출 수가 3(0,2,4)이 되어
+    이 테스트가 실패한다 — 고치기 전/후 모두 `StatelessDriver` 는 target 개수(2)만
+    호출해야 한다.
+    """
+    from daengs_evals.conversation_quality.collect import run_collect
+    from daengs_evals.conversation_quality.drivers import StatelessDriver
+
+    calls: list[str] = []
+
+    class _CountingOrchestrator:
+        async def run(self, *, query, principal, context):
+            del principal, context
+            calls.append(query)
+            from types import SimpleNamespace
+
+            return SimpleNamespace(
+                status=SimpleNamespace(value="ANSWERED"),
+                message=f"답: {query}",
+                results=[],
+                clarify=None,
+            )
+
+    case = _case(
+        case_id="cq_case_skip_stateless",
+        turns=[
+            Turn(role="user", text="심장사상충 예방약은 한 달에 한 번 먹이면 되는거야?"),
+            Turn(role="assistant", text="네, 보통 월 1회입니다."),
+            Turn(role="user", text="그거 얼마나 오래 해야 해?"),
+            Turn(role="assistant", text="평생 유지해야 해요."),
+            Turn(role="user", text="비용은 얼마나 들어?"),
+            Turn(role="assistant", text="제품마다 달라요."),
+        ],
+        target_turns=[3, 5],
+        repair_applicable=False,
+    )
+    driver = StatelessDriver(_CountingOrchestrator(), principal=None, adapter_mode="fake")
+    run_collect(cases=[case], driver=driver, out_dir=tmp_path, lap="stateless_no_extra")
+    assert calls == ["그거 얼마나 오래 해야 해?", "비용은 얼마나 들어?"]
+
+
 # `collect.py` 가 실제로 어느 provider 를 무는지(Gemini)는
 # `test_every_module_in_the_package_imports_without_backend_settings` 가 이미 잡는다 —
 # 그 테스트는 "이 패키지의 어떤 모듈도 import 만으로는 backend 설정을 안 문다"는 속성을
@@ -404,6 +647,25 @@ def test_answered_by_fake_adapter_recognises_fake_driver_regardless_of_capabilit
     assert _answered_by_fake_adapter("fake-driver", NOT_REACHED) is True
     assert _answered_by_fake_adapter("fake-driver", None) is True
     assert _answered_by_fake_adapter("fake-driver", "training") is True
+
+
+def test_real_mode_has_an_adapter_for_every_capability():
+    """`cq_emergency_immediate_01` 이 실측으로 잡은 결함 (#446) 의 재발 방지.
+
+    `after_416` 랩에서 라우터가 `vet_contact` 로 보낸 응급 케이스가 `build_adapters`
+    의 `real` 딕셔너리에 없어 "지원하지 않는 기능입니다" 로 죽었다 — 그 케이스는 두
+    컨트롤 중 하나라(과잉교정을 잡는 유일한 자리), 라이브 랩이 우연히 그 경로를 타기
+    전까지는 아무도 몰랐다. 다음에 능력이 하나 더 늘 때 같은 구멍이 조용히 다시
+    생기지 않도록, 여기서 `CapabilityName` 전수를 직접 대조한다.
+    """
+    from daengs_backend.orchestration.contracts import CapabilityName
+    from daengs_evals.conversation_quality.collect import build_adapters
+
+    adapters = build_adapters("real", general_sink={})
+
+    assert adapters is not None
+    missing = [name for name in CapabilityName if name not in adapters]
+    assert not missing, f"real 모드에 어댑터가 없는 능력: {missing}"
 
 
 def test_route_plan_dump_drops_the_dog_profile_payload():

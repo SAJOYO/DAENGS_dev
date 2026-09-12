@@ -332,6 +332,25 @@ async def test_existing_data_survives_migration_replay(database, actors):
         assert result.site.version == 1
 
 
+@pytest.mark.parametrize("offset_ms", [5000, 5001])
+async def test_session_start_preserves_future_tolerance(database, actors, monkeypatch, offset_ms):
+    (owner, _), (pet, _, _) = actors
+    now = datetime(2026, 9, 11, 3, tzinfo=UTC)
+    monkeypatch.setattr(svc, "_now", lambda: now)
+    client = uuid.uuid4()
+    started_at = now + timedelta(milliseconds=offset_ms)
+    if offset_ms > 5000:
+        with pytest.raises(svc.ClaimConflict, match="^future_session$"):
+            await begin(database, owner, [pet], client, started_at=started_at)
+        async with database() as db:
+            assert await svc.repo.session_by_client(db, owner, client) is None
+    else:
+        await begin(database, owner, [pet], client, started_at=started_at)
+        async with database() as db:
+            session = await svc.get_session(db, owner, client)
+            assert session.started_at == started_at
+
+
 async def test_session_retry_cannot_change_participants_or_restart_ended_session(database, actors):
     (a, _), (a1, a2, _) = actors
     sa = await begin(database, a, [a1])

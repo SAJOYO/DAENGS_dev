@@ -50,9 +50,10 @@ SDK 는 꺼져 있는" 상태가 생기고, 그건 아무 데도 안 찍히면�
 
 ## 루트는 서비스가, 그래프는 자식이
 
-루트 런은 **오케스트레이션 서비스**(`orchestration/service.py` 의 `assistant_query`,
-`orchestration/agent/service.py` 의 `assistant_query_agent`)가 만듭니다. 그래프
-(`OrchestrationEngine.run`)는 그 아래 자식 `orchestration_engine` 입니다.
+루트 런은 **오케스트레이션 서비스**(`orchestration/service.py` 의 `assistant_query`)가
+만듭니다. 그래프(`OrchestrationEngine.run`)는 그 아래 자식 `orchestration_engine` 입니다.
+(D-072 이전에는 이제는 지워진 `orchestration/agent/service.py` 의 `assistant_query_agent`
+가 같은 자리에서 두 번째 루트 런 이름이었습니다.)
 
 그래프를 루트로 두면 안 되는 이유: 시맨틱 라우터의 Gemini 호출이 그래프 **앞**에서
 돕니다. 라우터가 루트보다 먼저 끝나면 그 LLM 런은 어느 트레이스에도 못 붙고, D-054 가

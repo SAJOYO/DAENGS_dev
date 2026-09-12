@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-12",
+  "purpose": "integration smoke, not independent semantic quality evaluation",
+  "generation_model": "gemini-3-flash-preview",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "scenarios": 5,
+  "planned_turns": 6,
+  "subject_status_counts": {
+    "review_required": 3,
+    "blocked": 2,
+    "not_run": 1
+  },
+  "subject_provider_errors": 2,
+  "judge_status": "blocked_by_authentication",
+  "judge_http_status": 401,
+  "judge_calls": 16,
+  "judge_error_calls": 16,
+  "semantic_judgments": 0,
+  "anchor_cases_at_attempt": 8,
+  "anchor_cases_in_final_implementation": 12,
+  "followup": "401 repeated in the first attempt; final implementation stops further calls after non-retryable 4xx. Regression test verifies 1/0/0 attempts. No retry with the same invalid key.",
+  "member_writes": false,
+  "calibrated": false
+}

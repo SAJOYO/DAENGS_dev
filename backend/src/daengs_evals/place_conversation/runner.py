@@ -276,7 +276,9 @@ def main():
         "--live", action="store_true", help="Make paid Gemini calls. Otherwise list cases."
     )
     parser.add_argument("--key-file", type=Path)
-    parser.add_argument("--model", default="gemini-3.1-flash-lite")
+    from daengs_place.core.config import Settings
+
+    parser.add_argument("--model", default=Settings().facility_conversation_model)
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument(
         "--interval", type=float, default=5, help="Minimum seconds between provider calls"

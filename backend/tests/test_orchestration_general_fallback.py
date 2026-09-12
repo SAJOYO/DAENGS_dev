@@ -13,8 +13,6 @@
   없는 답으로 바꾸는 오선택이 생기고, 그 방향의 실수가 가장 나쁘다.
 - 어댑터는 answer/refuse/프로바이더 실패를 OK/REFUSED/ERROR 로 옮기고, 거절 문구는 모델이
   아니라 코드가 쓴다.
-
-두 구현(LangGraph · 에이전트)의 동치는 `test_orchestrator_failure_contract.py` 가 잰다.
 """
 
 from __future__ import annotations
@@ -54,7 +52,10 @@ from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
 )
-from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
+from daengs_backend.orchestration.redirects import (
+    DISTANCE_FROM_RECORDED_WALKS_ONLY,
+    NO_CAPABILITY_MESSAGE,
+)
 from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ExecuteName,
@@ -114,10 +115,13 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
         "dog",
         "care_log",
         "vet_spend",
+        "walk_activity",
         "conversation",
     }
     assert request.payload.care_log is None
     assert request.payload.vet_spend is None
+    # walk_activity 도 같은 규칙 (D-073) — 이 호출은 산책 기록을 넘기지 않는다.
+    assert request.payload.walk_activity is None
     # Resolver 를 거치지 않은 호출(`resolved` 미지정)이라 conversation 도 비어 있다 (#416 Task 5).
     assert request.payload.conversation is None
 
@@ -401,6 +405,67 @@ async def test_adapter_maps_an_answer_to_ok() -> None:
     assert len(transport.prompts) == 1
 
 
+def test_unmeasured_belongs_to_an_answer_only() -> None:
+    """거절·되묻기는 이 마커를 못 든다 — 계약이 막는다.
+
+    `axes` 가 되묻기에만 붙는 것과 같은 규칙이다. 거절에 붙으면 리다이렉트 문구 뒤에
+    고지가 또 붙어 같은 상황이 두 문장으로 나간다. `ask` 조합도 함께 확인한다 —
+    `shape_matches_kind` 의 `kind == "ask"` 이른 `return self` 보다 이 검사가 앞에
+    있어야 되묻기에 붙은 마커를 잡아낸다.
+    """
+    assert (
+        validate_general_answer(
+            {"kind": "answer", "text": "기록이 없어요.", "reason": None, "unmeasured": True}
+        )
+        is not None
+    )
+    assert (
+        validate_general_answer(
+            {"kind": "refuse", "text": "", "reason": "diagnosis", "unmeasured": True}
+        )
+        is None
+    )
+    assert (
+        validate_general_answer(
+            {
+                "kind": "ask",
+                "text": "오늘은 기록이 없어요.",
+                "question": "오늘 컨디션이 어때 보이나요?",
+                "reason": None,
+                "unmeasured": True,
+            }
+        )
+        is None
+    )
+
+
+async def test_the_adapter_appends_the_fixed_sentence_when_the_marker_is_set() -> None:
+    """문장은 코드가 붙인다 — 모델 산문이 아니다 (#278)."""
+    result, _ = await run_adapter(
+        json.dumps(
+            {
+                "kind": "answer",
+                "text": "버스 구간은 걷지 않으셨어요.",
+                "reason": None,
+                "unmeasured": True,
+            }
+        )
+    )
+    assert result.status == CapabilityStatus.OK
+    assert result.data["answer"].endswith(DISTANCE_FROM_RECORDED_WALKS_ONLY)
+    # 본문은 손대지 않는다 — 무손실
+    assert result.data["answer"].startswith("버스 구간은 걷지 않으셨어요.")
+
+
+async def test_no_marker_means_no_sentence() -> None:
+    """급여량을 물어본 사람에게 산책 고지가 따라붙으면 안 된다 — 마커를 고른 이유 그 자체."""
+    result, _ = await run_adapter(
+        json.dumps({"kind": "answer", "text": "하루 두 번이 보통이에요.", "reason": None})
+    )
+    assert result.status == CapabilityStatus.OK
+    assert DISTANCE_FROM_RECORDED_WALKS_ONLY not in result.data["answer"]
+
+
 @pytest.mark.parametrize(
     ("reason", "fragment"),
     [
@@ -507,7 +572,7 @@ def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
         'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
         ' "health_conditions": "신부전 초기", "on_medication": true}'
     ) in prompt
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
     # the contract has no field that could carry a drug name into the prompt
     assert "medications" not in DogContext.model_fields
     assert "feeding_times" not in DogContext.model_fields
@@ -517,7 +582,7 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     # v3: the instructions are English like the router policy; the OUTPUT stays Korean
     assert "Write in Korean" in prompt
@@ -677,45 +742,6 @@ def test_frozen_evaluator_scores_general_as_a_precision_miss_not_an_invented_cap
     assert result.summary.invented_unsupported_capability_count == 0
     assert result.summary.executable_precision < 1.0
     assert result.summary.executable_recall == 1.0
-
-
-def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback() -> None:
-    """D-055 ⑦ 규칙 1: 라우터 경계를 바꾸면 같은 PR 에서 에이전트 프롬프트도 바꾼다."""
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.service import _SYSTEM_PROMPT
-    from daengs_backend.orchestration.semantic import _POLICY
-
-    assert "explicitly excludes a topic" in _POLICY
-    assert "빠진 쪽 도구는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "일반 답변은 시스템이 붙입니다" in _SYSTEM_PROMPT
-    assert "답할 수 없다고만" not in _SYSTEM_PROMPT
-    # D-057 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
-    assert "answer_generally" in _SYSTEM_PROMPT
-    assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
-    # the same narrowing as the router (D-055 ⑦): separate care question only, doubt → Training
-    assert "**별도의** 돌봄 질문이 있을 때만" in _SYSTEM_PROMPT
-    assert "온전히 답해지는 질문에는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "훈련과 일반 사이가 애매하면 훈련만 부릅니다" in _SYSTEM_PROMPT
-    assert (
-        "반려견과 무관한 요청" in _SYSTEM_PROMPT
-        and "어느\n  도구도 부르지 않습니다" in _SYSTEM_PROMPT
-    )
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    general_tool = next(tool for tool in box.as_tools() if tool.name == "answer_generally")
-    assert general_tool.args == {}  # 인자 없음 — payload 는 planner 가 만든다 (D-051)
-
-
-async def test_agent_toolbox_passes_general_through_like_any_execute_name() -> None:
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    tools = {tool.name: tool for tool in box.as_tools()}
-    await tools["check_walk_conditions"].ainvoke({})
-    await tools["answer_generally"].ainvoke({})
-    assert box.decision() == SemanticRoutingDecision(execute=["walk", "general"])
 
 
 def test_life_payload_and_general_payload_share_the_dog_type() -> None:

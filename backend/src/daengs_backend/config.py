@@ -9,18 +9,6 @@ from sqlalchemy import URL
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
-# `/assistant/query` 를 어느 오케스트레이터가 답하는가.
-#
-# **이 별칭이 config 에 있는 것은 자리를 잘못 잡아서가 아니라 순환 때문입니다.**
-# 임자는 `orchestration/runtime.py` 인데, 거기 두고 config 가 import 하면
-# config → runtime → service → semantic → config 로 한 바퀴 돕니다
-# (`semantic.py` 가 `settings` 를 모듈 최상단에서 읽습니다). 값의 권위가 환경
-# 변수(`DAENGS_ORCHESTRATOR`)에 있으니 정의를 이쪽에 두고, `runtime.py` 가
-# 다시 export 합니다 — 쓰는 쪽은 `orchestration.runtime` 에서 가져오면 됩니다.
-#
-# Literal 인 이유: 오타가 **기동 때** 걸립니다. `str` 이면 첫 요청에서야 터집니다.
-OrchestratorKind = Literal["langgraph", "agent"]
-
 
 class Settings(BaseSettings):
     """환경 변수 / backend/.env 로 덮어쓸 수 있는 설정.
@@ -160,31 +148,12 @@ class Settings(BaseSettings):
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
 
-    # ── 오케스트레이터 구현 선택 ──────────────────────────────────────
-    # LangGraph 는 정해진 워크플로우에 최적화돼 있어, 자유도가 필요한 질의에
-    # LangChain 에이전트가 더 나은지 재 보려고 두 구현을 병존시킵니다.
-    # `orchestration/runtime.py` 의 `build_orchestrator()` 가 이 값을 읽습니다.
-    #
-    # **이건 배포 스위치입니다 — 비교 스위치가 아닙니다.** 두 구현을 나란히 재는
-    # 벤치마크는 이 값을 건드리지 않고 `build_orchestrator(kind)` 로 객체를 둘
-    # 만듭니다. 환경 변수를 토글해 가며 재면 한 프로세스에서 비교가 안 됩니다.
-    #
-    # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
-    orchestrator: OrchestratorKind = "langgraph"
-
-    # 에이전트 한 턴의 예산. **답이 아니라 안전장치입니다** — 에이전트가 루프를 돌아
-    # 비싼 것 자체는 카드 ③이 재야 할 발견이라, 여기서 깎아 결과를 미리 만들지
-    # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
-    agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
-    agent_recursion_limit: int = Field(default=25, gt=0)
-
     # ── 일반 답변 폴백 (#279) ─────────────────────────────────────────
     # 라우터가 전문 능력을 하나도 못 골랐을 때 거절(FAILED) 대신 Gemini 생성 답변
     # (`adapters/general.py`)을 붙일지. **기본값 false 라 켜기 전까지 운영은 지금과
     # 같습니다** — #277 의 판정 결과를 보고 서버 `backend/.env` 한 줄로 켭니다.
     #
-    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙이고,
-    # 두 오케스트레이터 구현(langgraph · agent)이 같은 규칙을 같은 값으로 지납니다.
+    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙입니다.
     # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
     general_fallback: bool = Field(
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")

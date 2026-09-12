@@ -5,6 +5,7 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete, exists, func, select
@@ -12,10 +13,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
-from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
+from daengs_backend.models import ActivityWalkHead, Walk, WalkAnalysis, WalkPet, WalkPointChunk
 from daengs_backend.models.walk import WalkCapsule
 
 __all__ = [
+    "WalkActivitySums",
+    "activity_for_pet_between",
     "add",
     "add_analysis",
     "delete_all_for_owner",
@@ -150,6 +153,109 @@ async def count_for_pet_between(
         )
     )
     return int(await session.scalar(stmt) or 0)
+
+
+@dataclass(frozen=True)
+class WalkActivitySums:
+    """`activity_for_pet_between` 이 돌려주는 것. 건수와 합계가 **따로**인 이유는
+    `WalkActivityContext` 독스트링에 있다."""
+
+    walk_count: int
+    measured_walk_count: int
+    distance_m: int
+    moving_s: int
+    last_started_at: datetime | None
+
+
+def _walked_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
+    """건수·마지막 시작 시각 — head 를 거치지 않는다(측정 여부와 무관하게 전부 센다).
+
+    모듈 수준 함수로 꺼낸 이유는 테스트가 조인 사슬을 컴파일된 SQL 로 직접 보기
+    위해서다(`tests/test_assistant_walk_activity.py`) — `activity_for_pet_between` 의
+    지역 변수였을 때는 그 검증에 손이 안 닿았다.
+    """
+    return (
+        select(
+            # `distinct` 는 순수 방어다. `walk_pets` 의 PK 가 (walk_id, pet_id) 복합이라
+            # 이 조인에서 한 산책이 두 번 나오는 fan-out 은 구조적으로 불가능하다 —
+            # 지워도 결과는 같지만, 나중에 이 쿼리에 조인이 더 붙을 때의 안전판으로 둔다.
+            func.count(func.distinct(Walk.id)).label("walk_count"),
+            func.max(Walk.started_at).label("last_started_at"),
+        )
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+    )
+
+
+def _measured_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
+    """측정 건수·합계 거리·합계 이동 시간 — **반드시 `activity_walk_heads` 를 경유한다.**
+
+    `walk_analyses` 에 `Walk` 를 직접(`WalkAnalysis.walk_id == Walk.id`) 잇지 않는다 —
+    그 표는 한 산책에 여러 계산 세대가 쌓이는 표라(유니크 제약이 6칸), 직결하면 거리가
+    세대 수만큼 불어난다. head 는 `walk_id` 가 PK 라 산책당 정확히 한 행을 가리키므로,
+    `walks → walk_pets → activity_walk_heads → walk_analyses` 로만 잇는다.
+
+    `_walked_stmt` 와 `WHERE` 절이 **동일해야 한다** — 다르면 이 함수가 센 건수가
+    `_walked_stmt` 보다 커질 수 있고, `WalkActivityContext` 의
+    `measured_walk_count <= walk_count` 검증이 런타임에 터진다.
+    """
+    return (
+        select(
+            # 위와 같은 이유로 순수 방어다(`walk_pets` PK 복합 + head 의 walk_id 단일 PK).
+            func.count(func.distinct(Walk.id)).label("measured_walk_count"),
+            func.coalesce(func.sum(WalkAnalysis.moving_distance_m), 0).label("distance_m"),
+            func.coalesce(func.sum(WalkAnalysis.moving_s), 0).label("moving_s"),
+        )
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .join(ActivityWalkHead, ActivityWalkHead.walk_id == Walk.id)
+        .join(WalkAnalysis, WalkAnalysis.id == ActivityWalkHead.analysis_id)
+        .where(
+            WalkPet.pet_id == pet_id,
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+    )
+
+
+async def activity_for_pet_between(
+    session: AsyncSession,
+    pet_id: uuid.UUID,
+    start: datetime,
+    end: datetime,
+) -> WalkActivitySums:
+    """그 아이의 산책 건수와, **측정이 끝난 것만의** 합계 거리·이동 시간 (D-073).
+
+    **소유자 조건을 안 겁니다** — `count_for_pet_between` 과 같은 이유입니다(docs/co-care.md
+    §2). 부르는 쪽이 이미 접근 권한을 확인했고, 여기서 사람으로 다시 거르면 다른 보호자가
+    다녀온 산책만 빠집니다.
+
+    **`activity_walk_heads` 를 경유하는 것이 이 함수의 전부입니다.** `walk_analyses` 는 한
+    산책에 여러 세대가 쌓이는 표라(유니크 제약이 6칸), 거기 바로 `SUM` 을 걸면 거리가
+    배로 불어납니다. head 는 `walk_id` 가 PK 라 산책당 정확히 한 행이고, `services/walk.py`
+    의 `activity.record_walk` 호출 네 곳 중 **분석 결과를 실제로 넘기는 두 곳**
+    (`finalize_walk` 의 재시도 분기·최초 분기)이 그것을 세운다. 나머지 두 곳(첫 업로드·
+    재접속 시 기존 산책 재확인)은 `analysis=None` 으로 불러 `record_walk` 가 head를
+    만들지 않고 `activity_session_links` 연결만 하고 돌아간다 — 좌표만 있고 아직 봉인 전인
+    산책은 애초에 head 가 생길 수 없다는 뜻이다. (`activity_game_enabled` 가 꺼져 있으면
+    네 곳 다 아무것도 하지 않는다.)
+
+    head 가 없는 산책은 **건수에는 들어가고 합계에는 안 들어갑니다.** 봉인이 안 끝난 것을
+    0m 로 더하면 "걸었는데 0km" 가 되고, 건수에서까지 빼면 "안 걸었다" 가 됩니다. 둘 다
+    거짓이라 두 수를 따로 냅니다.
+    """
+    walked_row = (await session.execute(_walked_stmt(pet_id, start, end))).one()
+    measured_row = (await session.execute(_measured_stmt(pet_id, start, end))).one()
+    return WalkActivitySums(
+        walk_count=int(walked_row.walk_count or 0),
+        measured_walk_count=int(measured_row.measured_walk_count or 0),
+        distance_m=int(measured_row.distance_m or 0),
+        moving_s=int(measured_row.moving_s or 0),
+        last_started_at=walked_row.last_started_at,
+    )
 
 
 async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:

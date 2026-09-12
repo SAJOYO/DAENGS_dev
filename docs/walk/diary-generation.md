@@ -1,5 +1,15 @@
 # 산책 일기 배경 작성과 생성 수명주기
 
+후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
+특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
+행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
+지정 공공 API의 실제 필드 분류와 최신 서술 품질은 아직 미검증이다. 아래 기존 구현을 그 완료로 읽지 않는다.
+
+기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)
+([GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266))이다.
+아래는 기존 서버 생성 수명주기와 작성 입력의 구현 기록이다. `session_time`·장면열 전달과
+배경/원본 조립을 새 기획에 맞게 변경한 것은 아니다. 입력 투영·프롬프트·본문 계약 반영은 별도 작업이다.
+
 [Dev #378](https://github.com/SAJOYO/DAENGS_dev/pull/378).
 [스탬프 선택](diary-stamps.md)과 [확정 동선 관측](diary-observations.md)을 기존
 `walk_storyboard` API의 명시적인 새 형식에 연결한다.

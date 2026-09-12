@@ -1,9 +1,18 @@
 # 산책 파트 슬롯 미리보기
 
-고정 장면 비교는 [DEV #474](https://github.com/SAJOYO/DAENGS_dev/pull/474),
-앱 연결은 [APP #328](https://github.com/SAJOYO/DAENGS_APP/pull/328)에 있다.
-장면 중심·시각·위치에 실제 조회 결과를 묶어 같은 슬롯 판정을 거친다.
-작성 입력에는 원문, 중심의 종류와 의미, 한국시간, 전체 장면 순서를 함께 전달한다.
+후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
+특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
+행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
+지정 공공 API의 실제 필드 분류와 최신 서술 품질은 아직 미검증이다. 아래 기존 구현을 그 완료로 읽지 않는다.
+
+기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)
+([GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266))이다.
+아래는 기존 슬롯 선정·배경 작성 구현이다. 장면의 완결성, 시스템 판정용 시간과 작성 입력의
+분리, 표현 선택의 자유를 새 기획에 맞추는 작업은 별도다. 기존 슬롯 수치와 원본 보존은 유지한다.
+
+[DEV #474](https://github.com/SAJOYO/DAENGS_dev/pull/474)의 장면 결합 구조를 재사용해
+상권·공원·토지피복 정규화를 실제 생성 경로에 연결한다. 이전 비교 실험의 작성 지시는
+새 정규화 계약으로 이어받지 않는다.
 
 저장된 DEV 입력 → 기존 기본 보드 선정 → 공간·환경·동선 조건과 용량 →
 장면별 스탬프 → Gemini 배경 서술 → 원문과 조립하는 워킹 스켈레톤이다.

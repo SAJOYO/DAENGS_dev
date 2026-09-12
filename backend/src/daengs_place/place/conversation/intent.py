@@ -9,6 +9,7 @@ from daengs_place.place.name_query import PlaceNameQuery
 from daengs_place.place.planning.contract import PlanningModel
 
 SearchPool = Literal["all_places", "bookmarks", "unbookmarked", "new_candidates"]
+FacilityKind = Literal["facility_action", "facility_state", "needs_input", "out_of_scope"]
 
 Attribute = Literal[
     "parking",
@@ -54,6 +55,11 @@ class SemanticChanges(PlanningModel):
 
 
 class Interpretation(PlanningModel):
+    # None is for deterministic internal callers and historical research replays.
+    # The live provider validates ScopedInterpretation, where these fields are required.
+    kind: FacilityKind | None = None
+    request_quote: str = Field(default="", max_length=1000)
+    state_subject: Literal["place", "filters"] = "place"
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
     search_scope: Literal["keep", "bookmarks", "all_places", "unbookmarked", "new_candidates"] = (
         Field(
@@ -148,6 +154,62 @@ class BookmarkEdit(PlanningModel):
 Interpretation.model_rebuild()
 
 
+class ScopedInterpretation(Interpretation):
+    kind: FacilityKind
+    request_quote: str = Field(max_length=1000)
+
+    @model_validator(mode="after")
+    def bounded_authority(self) -> Self:
+        mutations = (
+            self.changes != SemanticChanges()
+            or self.search_scope != "keep"
+            or self.spatial_scope != "keep"
+            or self.navigation != "stay"
+            or self.bookmark
+            or self.place_edit
+            or self.familiarity
+            or self.refresh
+            or self.browse != "current"
+        )
+        if self.kind == "out_of_scope":
+            if (
+                self.goal != "clarify"
+                or mutations
+                or self.request_quote
+                or self.feedback != "none"
+                or self.reference_index is not None
+                or self.asked_attributes
+                or self.unsupported
+                or self.region_query
+                or self.search_request_quote
+                or self.search_scope_quote
+                or self.forbid_save
+                or self.unresolved != "none"
+                or self.state_subject != "place"
+            ):
+                raise ValueError("out-of-scope input has no facility proposal authority")
+        elif not self.request_quote.strip():
+            raise ValueError("a facility request needs literal evidence")
+        elif self.kind == "facility_state":
+            if (
+                self.goal != "explain"
+                or mutations
+                or self.region_query
+                or self.unresolved != "none"
+            ):
+                raise ValueError("state questions cannot mutate facilities")
+            if self.state_subject == "filters" and (self.asked_attributes or self.reference_index):
+                raise ValueError("filter questions cannot also select a place")
+        elif self.kind == "needs_input":
+            if self.goal != "clarify" or self.unresolved == "none" or mutations:
+                raise ValueError("clarification needs a missing-item code, without mutations")
+        elif self.goal not in {"show", "pick_one", "edit_only"}:
+            raise ValueError("facility action requires an action goal")
+        if self.kind != "facility_state" and self.state_subject != "place":
+            raise ValueError("filter state is read-only")
+        return self
+
+
 class PendingDecision(PlanningModel):
     # A separate tool call cannot manufacture or replace a filter on acceptance.
-    decision: Literal["accept", "reject", "revise", "new_request", "unclear"]
+    decision: Literal["accept", "reject", "revise", "new_request", "unclear", "out_of_scope"]

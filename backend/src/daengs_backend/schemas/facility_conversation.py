@@ -12,7 +12,7 @@ class ConversationRequest(InputModel):
     client_request_id: UUID
     session_id: UUID | None = None
     expected_revision: int = Field(default=0, ge=0)
-    mode: Literal["manual", "chat", "restore", "filters"]
+    mode: Literal["manual", "chat", "restore", "filters", "bootstrap"]
     bookmark_commands: Literal["v1"] | None = None
     saved_search: Literal["v1"] | None = None
     candidate_pools: Literal["v1"] | None = None
@@ -28,6 +28,10 @@ class ConversationRequest(InputModel):
 
     @model_validator(mode="after")
     def required_context(self) -> Self:
+        if self.mode == "bootstrap" and (
+            self.session_id is not None or self.query or self.manual is None
+        ):
+            raise ValueError("bootstrap creates empty search context from manual defaults")
         if (self.source_session_id is None) != (self.source_revision is None):
             raise ValueError("restore source requires session and revision")
         if self.mode != "restore" and (self.source_session_id or self.restore_pool != "all_places"):

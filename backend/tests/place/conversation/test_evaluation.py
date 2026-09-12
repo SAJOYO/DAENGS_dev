@@ -18,6 +18,7 @@ from daengs_place.place.conversation.contract import PrepareRequest, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.service import ConversationService, snapshot_hits
 from daengs_place.place.tools.changes import apply_changes
+from tests.place.support.conversation import scoped_wire
 
 
 def data(case_id):
@@ -207,7 +208,7 @@ async def test_question_gate_blocks_changes_and_retains_original_until_consent()
                     {
                         "type": "function_call",
                         "name": payload["tools"][0]["name"],
-                        "arguments": arguments,
+                        "arguments": scoped_wire(arguments, context["query"]),
                     }
                 ],
             },
@@ -309,7 +310,9 @@ async def test_new_independent_request_is_not_graded_as_accepting_cancelled_prop
                     {
                         "type": "function_call",
                         "name": payload["tools"][0]["name"],
-                        "arguments": next(outputs),
+                        "arguments": scoped_wire(
+                            next(outputs), json.loads(payload["input"])["query"]
+                        ),
                     }
                 ],
             },
@@ -345,7 +348,9 @@ async def test_exploration_evaluator_follows_state_and_detects_repeated_first_pa
                     {
                         "type": "function_call",
                         "name": "propose_facility_turn",
-                        "arguments": next(plans),
+                        "arguments": scoped_wire(
+                            next(plans), json.loads(payload["input"])["query"]
+                        ),
                     }
                 ],
             },

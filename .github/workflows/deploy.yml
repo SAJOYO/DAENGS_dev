@@ -144,6 +144,9 @@ jobs:
           # Recreate both: imports and env_file values must match after deployment.
           docker compose up -d --no-deps --force-recreate --wait --wait-timeout 240 backend territory-vision-worker
           if ($LASTEXITCODE -ne 0) { throw 'failed to update backend and territory vision worker' }
+          # Beat keeps its schedule in memory; reload the new recovery entry after code checkout.
+          docker compose restart crawler-beat
+          if ($LASTEXITCODE -ne 0) { throw 'failed to restart crawler beat' }
           if ($activityActive) {
             docker compose --profile activity-game up -d --no-deps --force-recreate --wait --wait-timeout 240 activity-worker
             if ($LASTEXITCODE -ne 0) { throw 'failed to update activity worker' }

@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete, exists, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
@@ -23,6 +24,7 @@ __all__ = [
     "get_by_client_session",
     "get_owned",
     "get_owned_for_update",
+    "is_client_session_conflict",
     "list_for_owner",
 ]
 
@@ -152,15 +154,12 @@ async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> in
     :returns: 지운 산책 수.
     """
     others = WalkPet.__table__.alias("others")
-    solo = (
-        select(WalkPet.walk_id)
-        .where(
-            WalkPet.pet_id == pet_id,
-            ~exists().where(
-                others.c.walk_id == WalkPet.walk_id,
-                others.c.pet_id != pet_id,
-            ),
-        )
+    solo = select(WalkPet.walk_id).where(
+        WalkPet.pet_id == pet_id,
+        ~exists().where(
+            others.c.walk_id == WalkPet.walk_id,
+            others.c.pet_id != pet_id,
+        ),
     )
     result = await session.execute(delete(Walk).where(Walk.id.in_(solo)))
     return result.rowcount or 0
@@ -172,15 +171,26 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
     ``walk_point_chunks``(또는 아직 이관 전 DB의 ``walk_points``)와 ``walk_pets``는
     모두 ``walks.id ON DELETE CASCADE``라 이 DELETE 한 번에 같이 없어집니다.
     """
-    result = await session.execute(
-        delete(Walk).where(Walk.app_user_id == app_user_id)
-    )
+    result = await session.execute(delete(Walk).where(Walk.app_user_id == app_user_id))
     return result.rowcount or 0
 
 
 def add(session: AsyncSession, walk: Walk) -> Walk:
     session.add(walk)
     return walk
+
+
+def is_client_session_conflict(error: IntegrityError) -> bool:
+    """asyncpg가 보고한 이 멱등 키의 유니크 충돌만 식별합니다.
+
+    SQLAlchemy의 DBAPI 어댑터가 원래 asyncpg 예외를 cause로 보존합니다.
+    오류 메시지 문자열 대신 SQLSTATE와 실제 제약 이름을 함께 확인합니다.
+    """
+    driver_error = error.orig.__cause__
+    return (
+        getattr(driver_error, "sqlstate", None) == "23505"
+        and getattr(driver_error, "constraint_name", None) == "walks_client_session_unique"
+    )
 
 
 def add_analysis(session: AsyncSession, analysis: WalkAnalysis) -> WalkAnalysis:

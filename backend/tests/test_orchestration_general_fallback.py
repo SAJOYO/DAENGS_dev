@@ -550,41 +550,85 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     assert "off_topic: the question is not about dogs." in prompt
 
 
-def test_medication_boundary_answers_duration_and_schedule_of_a_prescribed_drug() -> None:
-    """D-071: 이미 처방·복용 중인 약의 기간·주기는 이제 답한다 — 가장 좁은 폭(A)만 연다.
+def test_medication_boundary_answers_duration_and_dosing_interval_of_a_confirmed_drug() -> None:
+    """D-071: 이미 처방·복용이 **확인된** 약의 기간·투여 간격만 답한다 — 가장 좁은 폭(A).
 
     #446 의 실물: "심장사상충 예방약 얼마나 오래 해야 해?" 가 medication 거절이었다.
     프롬프트가 그 축을 husbandry norm 과 같은 결(전형적 범위 + 개체차 + 수의사/라벨이
-    정확한 값의 권위)로 답하도록 허용하는지를 잰다."""
+    정확한 값의 권위)로 답하도록 허용하는지를 잰다. "schedule" 이 아니라 "dosing interval"
+    로 적어 몇 시에 먹이는지(administration)까지 딸려 오지 않게 한 것도 같이 잰다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
-    assert "duration or schedule of a medication" in prompt
+    assert "duration or dosing interval of a medication the dog is confirmed already on" in prompt
     assert "is answerable" in prompt
-    # 기간·주기 규칙이 husbandry norm 규칙 다음, refuse 목록보다 앞(answering 규칙)에 있다
+    # 기간·투여 간격 규칙이 husbandry norm 규칙 다음, refuse 목록보다 앞(answering 규칙)에 있다
     husbandry_idx = prompt.index("Ordinary husbandry norms ARE answerable")
-    duration_idx = prompt.index("duration or schedule of a medication")
+    duration_idx = prompt.index("duration or dosing interval of a medication")
     refuse_idx = prompt.index('Refuse (kind="refuse") only in these cases')
     assert husbandry_idx < duration_idx < refuse_idx
 
 
 def test_medication_boundary_still_refuses_dosage_questions() -> None:
-    """용량은 A 범위 밖 — 계속 거절이어야 한다."""
+    """용량은 A 범위 밖 — 계속 거절이어야 한다. 단어 하나가 아니라 절 전체를 고정한다 —
+    `medication: dosages.` 로 규칙이 쪼그라들어도 통과하는 단어 단위 단언은 경계를 안 잰다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
-    assert "dosage" in medication_rule
+    assert (
+        "which drug or supplement to give, whether to start one, dosages, "
+        "how to give it (timing, with food, splitting a pill), or side effects"
+    ) in medication_rule
 
 
 def test_medication_boundary_still_refuses_drug_name_recommendations() -> None:
     """무슨 약을 먹일지 이름 추천은 A 범위 밖 — 계속 거절이어야 한다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
-    assert "which drug" in medication_rule or "drug name" in medication_rule
+    assert "which drug or supplement to give" in medication_rule
 
 
 def test_medication_boundary_still_refuses_whether_to_start_a_drug() -> None:
-    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다."""
+    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다. 절 전체를 고정한다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
-    assert "start" in medication_rule
+    assert "whether to start one" in medication_rule
+
+
+def test_medication_boundary_still_refuses_administration_instructions() -> None:
+    """복용 방법(몇 시에 · 밥과 함께 · 쪼개서)은 A 범위 밖 — "duration or schedule" 이었을 때
+    새어 나갔을 축이다. dosing interval 로 좁힌 뒤에도 여기서 막힌다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "how to give it (timing, with food, splitting a pill)" in medication_rule
+
+
+def test_medication_boundary_still_refuses_side_effects_information_not_only_judgment() -> None:
+    """부작용은 판단("이거 부작용이야?")뿐 아니라 정보("흔한 부작용이 뭐야?")도 닫는다 —
+    D-071 이 기각한 B(약 일반 정보, 흔한 부작용 포함)로 새는 자리라 별도로 고정한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert (
+        "side effects — what they are in general, or whether something the owner describes is one"
+    ) in medication_rule
+    # 증상 답변 쪽의 "일반 기전은 설명 가능" 규칙이 약에도 적용된다고 모델이 읽지 않게,
+    # 그 규칙 자신이 범위를 증상으로 좁혀 둔다.
+    mechanism_rule = prompt[
+        prompt.index("A general mechanism may be explained") : prompt.index(
+            "A symptom the owner mentions"
+        )
+    ]
+    assert "not drugs" in mechanism_rule and "refused as medication" in mechanism_rule
+
+
+def test_medication_boundary_refuses_as_start_when_not_confirmed_already_on() -> None:
+    """D-071 의 tiebreak: "이미 복용 중"을 모델이 확인할 방법이 없다 — `DogContext.on_medication`
+    은 이름 없는 `True`/`None` 뿐이다. 불명확하면 "새로 시작"으로 취급해 거절하는 쪽으로
+    떨어져야 한다 — 그래야 아직 안 먹이는 사람의 "얼마나 오래 먹여야 해?" 가 시작 여부
+    질문으로 잘못 답변되지 않는다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert (
+        "When it is not clear the dog is already on that medication, "
+        "treat the question as whether to start one and refuse"
+    ) in medication_rule
 
 
 def test_general_adapter_uses_the_router_model() -> None:

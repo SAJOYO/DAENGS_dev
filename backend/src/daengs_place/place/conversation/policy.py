@@ -13,7 +13,8 @@ from daengs_place.place.conversation.compiler import fingerprint
 from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.presentation import user_text_allowed
-from daengs_place.place.conversation.render import ATTRIBUTES, confirmation
+from daengs_place.place.conversation.render import ATTRIBUTES, confirmation, describe_filters
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
 from daengs_place.place.conversation.search_compilation import compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
@@ -108,6 +109,8 @@ async def decide(planner, request, now):
             and now < pending.expires_at
         )
         decision = await planner.decide_pending(request)
+        if decision.decision == "out_of_scope":
+            return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
         if not valid and decision.decision not in {"new_request", "reject"}:
             # Do not interpret a bare consent as a fresh instruction after expiry.
             return Decision(
@@ -151,6 +154,18 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
+    try:
+        validate_scope(intent, request.query, request.previous)
+    except OutsideFacilityScope:
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "out_of_scope":
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "facility_state" and intent.state_subject == "filters":
+        return Decision(
+            "explain",
+            code="facility_filters",
+            question=f"지금은 {POOL_LABELS[old.search_pool]}에서 {describe_filters(old.filters)} 조건으로 보고 있어요.",
+        )
     intent = grounded_feedback(intent, request.query)
     directive = resolve_search(
         intent, context.previous.search_pool, request.query, candidate_pools=request.candidate_pools

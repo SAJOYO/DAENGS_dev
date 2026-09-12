@@ -6,6 +6,7 @@ from daengs_place.place.conversation.context import current_places
 from daengs_place.place.conversation.contract import BookmarkCommand, NamedPlace
 from daengs_place.place.conversation.grounding import compact, resolve_target
 from daengs_place.place.conversation.intent import SemanticChanges
+from daengs_place.place.conversation.scope import bookmark_clause
 
 SOURCES = {"kcisa", "kto", "public:mois:animal_hospital", "public:mois:animal_pharmacy"}
 # A deliberately bounded *whole request* grammar after removing the literal target.
@@ -32,7 +33,7 @@ def grounded_command(request, intent):
         raise ValueError("bookmark composition is not supported in v1")
     target = edit.target
     # Only the literal name may be quoted. Strip that pair before reference resolution.
-    query = request.query.strip().rstrip(".!~ ")
+    query = bookmark_clause(request.query, intent).strip().rstrip(".!~ ")
     if target.kind == "name":
         for left, right in [("'", "'"), ('"', '"'), ("‘", "’"), ("“", "”")]:
             query = query.replace(left + target.text + right, target.text)

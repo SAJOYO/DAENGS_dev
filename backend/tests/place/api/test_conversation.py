@@ -17,7 +17,7 @@ from daengs_place.main import app as place_app
 from daengs_place.place.conversation.intent import Interpretation as TurnPlan
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
-from tests.place.support.conversation import Searcher, place
+from tests.place.support.conversation import Searcher, place, scoped_wire
 from tests.place.support.session_store import MemorySessions
 
 
@@ -62,6 +62,8 @@ async def harness(monkeypatch):
         tool = payload["tools"][0]["name"]
         assert tool in {"propose_facility_turn", "classify_pending_decision"}
         plan = plans.pop(0) if plans else {"goal": "pick_one"}
+        if tool == "propose_facility_turn":
+            plan = scoped_wire(plan, json.loads(payload["input"])["query"])
         steps = [{"type": "function_call", "name": tool, "arguments": plan}]
         return httpx.Response(200, json={"status": "completed", "steps": steps})
 

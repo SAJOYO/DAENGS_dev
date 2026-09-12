@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from daengs_place.place.bookmarks import BookmarkFilters
 from daengs_place.place.conversation.candidates import explicit_search, grounded_feedback
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
 from daengs_place.place.conversation.search_compilation import SearchAdapterError, compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState
@@ -41,6 +42,16 @@ def plan_saved(current, intent, *, search_policy=None, query=None, candidate_poo
     def clarify(message):
         return SavedSearchPlan(action="clarify", message=message)
 
+    try:
+        validate_scope(intent, query or "")
+    except OutsideFacilityScope:
+        return SavedSearchPlan(action="explain", message=OUT_OF_SCOPE)
+    if intent.kind == "out_of_scope":
+        return SavedSearchPlan(action="explain", message=OUT_OF_SCOPE)
+    if intent.kind == "facility_state" and intent.state_subject == "filters":
+        return SavedSearchPlan(
+            action="explain", message="지금 적용된 찜 조건은 조건 칩에서 볼 수 있어요."
+        )
     intent = grounded_feedback(intent, query)
     directive = resolve_search(intent, "bookmarks", query, candidate_pools=candidate_pools)
     if directive.question:

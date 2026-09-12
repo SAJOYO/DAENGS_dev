@@ -102,6 +102,35 @@ async def test_first_assistant_search_bootstraps_once_and_can_be_recovered(conne
     assert len(calls) == 1
 
 
+async def test_first_outside_request_commits_only_empty_context_and_retries_without_search(
+    connected,
+):
+    from daengs_place.place.conversation.scope import OUT_OF_SCOPE
+
+    client, _, searcher, calls, plans, _ = connected
+    plans.append({"kind": "out_of_scope", "request_quote": "", "goal": "clarify"})
+    body = {
+        "query": "시 써줘",
+        "requested_capability": "place",
+        "location": {"lat": 37.5, "lon": 127.0},
+        "facility": {"client_request_id": str(uuid4())},
+    }
+    first = (await client.post("/assistant/query", json=body)).json()
+    assert first["message"] == OUT_OF_SCOPE
+    assert first["results"][0]["abstention"]["code"] == "facility_out_of_scope"
+    ref = first["results"][0]["data"]["facility"]
+    saved = (
+        await client.post(
+            "/app/places/conversation/recover",
+            json={k: v for k, v in ref.items() if k != "revision"},
+        )
+    ).json()
+    assert saved["search"] is None and saved["display_order"] == []
+    again = (await client.post("/assistant/query", json=body)).json()
+    assert again["results"][0]["data"] == first["results"][0]["data"]
+    assert searcher.calls == [] and len(calls) == 1
+
+
 async def test_stale_revision_and_missing_session_never_reach_facility_model(connected):
     client, _, _, calls, _, _ = connected
     initial = (await client.post("/app/places/conversation", json=manual_body())).json()

@@ -21,7 +21,9 @@ def provider():
     key = settings.gemini_api_key.get_secret_value().strip()
     if not key:
         raise HTTPException(503, detail={"code": "conversation_not_configured"})
-    return GeminiConversation(key, settings.gemini_model, timeout=settings.gemini_timeout_ms / 1000)
+    return GeminiConversation(
+        key, settings.facility_conversation_model, timeout=settings.gemini_timeout_ms / 1000
+    )
 
 
 @router.post("/prepare")

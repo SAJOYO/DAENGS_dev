@@ -10,7 +10,7 @@ Judge가 묻는 것은 “요청대로 움직이고, 실제로 한 일만 짧게
 | --- | --- |
 | [runner.py](runner.py) | 실제 Gemini와 시설 prepare/answer를 실행해 원본 관측 수집. 검색은 합성 fixture |
 | [checks.py](checks.py) | 기대 필터·실행·상태 유지 등 코드로 검증 가능한 조건 검사 |
-| [judge.py](judge.py) | OpenAI Judge 호출, 앵커 검사, 호출 상한, 오류 기록, 재개 CLI |
+| [judge.py](judge.py) | 공통 Gemini 클라이언트로 Judge 호출, 앵커 검사, 호출 상한, 오류 기록, 재개 CLI |
 | [judge_contract.py](judge_contract.py) | 입력·판정·근거 경로·파일 형식 |
 | [judge_rubric.py](judge_rubric.py) | 세 평가 축, 입력 구성, 버전이 있는 프롬프트 |
 | [judge_anchors.py](judge_anchors.py) | 명백한 성공/실패 대조 사례로 Judge 자체 검사 |
@@ -41,11 +41,13 @@ uv run python -m daengs_evals.place_conversation.judge score --run evals/place_c
 uv run python -m daengs_evals.place_conversation.report evals/place_conversation/runs/<실행-ID> --judge-id first
 ```
 
-환경변수는 수집기의 `GEMINI_API_KEY`, Judge의 `OPENAI_API_KEY`를 사용한다. 시설 모델은 `FACILITY_CONVERSATION_MODEL`, Judge 모델은 `OPENAI_JUDGE_MODEL`, Judge 타임아웃은 `OPENAI_TIMEOUT_S`(초, 기본 120)다. `--model`, `--judge-model`로 각각 명시할 수도 있다.
+수집기와 Judge 모두 기존 `GEMINI_API_KEY`를 사용한다. Judge 클라이언트와 타임아웃은 오케스트레이션도 사용하는 [공통 Gemini 생성 코드](../../daengs_backend/core/gemini.py)를 따른다. 타임아웃은 `GEMINI_TIMEOUT_MS`(밀리초, 기본 30000)다. DB·암호화 키 설정 없이 오프라인 평가를 실행할 수 있다.
 
-Judge는 `backend/.env`에서도 설정을 읽는다. 수집기의 Gemini 키는 프로세스 환경변수 또는 `--key-file <파일>`로 준다. Judge에도 `--key-file <파일 또는 .env가 있는 폴더>`를 붙일 수 있다. 이 옵션은 `OPENAI_API_KEY` 또는 이전 파일의 `DAENGS_OPENAI_API_KEY` 필드를 읽으며 키를 복사·출력하지 않는다. 키 자체를 명령행 인자로 넣지 않는다.
+시설 모델은 `FACILITY_CONVERSATION_MODEL`, Judge 모델은 `FACILITY_JUDGE_MODEL`(기본 `gemini-3-flash-preview`)이다. `--model`, `--judge-model`로 각각 명시할 수도 있다. Judge는 `backend/.env`에서도 설정을 읽는다. `--key-file <파일 또는 .env가 있는 폴더>`는 `GEMINI_API_KEY` 또는 `gemini:` 필드를 읽어 현재 CLI 프로세스에만 전달한다. 키를 복사·출력하지 않는다. 키 자체를 명령행 인자로 넣지 않는다. OpenAI 키는 사용하지 않는다.
 
-`runner --live`, `judge check-anchors`, `judge score`는 유료 모델 호출을 한다. 보고서·사례 목록·가짜 제공자를 쓰는 단위 테스트는 모델을 호출하지 않는다. 구조화된 판정은 [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)를 사용하며, 거절·불완전 응답은 통과가 아닌 호출 오류로 남긴다.
+`runner --live`, `judge check-anchors`, `judge score`는 Gemini 모델 호출을 한다. 보고서·사례 목록·가짜 제공자를 쓰는 단위 테스트는 모델을 호출하지 않는다. 기존 `answer_quality/gemini.py`의 스키마 구성·검증 함수를 재사용하며 [Gemini 구조화 출력](https://ai.google.dev/gemini-api/docs/structured-output)을 받는다. 차단·불완전 응답은 통과가 아닌 호출 오류로 남긴다. 사고 토큰도 사용량에 포함한다.
+
+시설 생성과 Judge는 같은 모델 계열이다. 이를 실행 메타데이터에 명시하며 계열이 독립된 교차검증이라고 보고하지 않는다. 세 축별 모델 의견은 기존대로 검토 보조다.
 
 Windows 콘솔에서 한글이 깨지면 실행 전에 `$env:PYTHONUTF8='1'`로 현재 프로세스의 Python 입출력 인코딩을 맞춘다. 결과 파일은 항상 UTF-8이다.
 
@@ -73,6 +75,8 @@ evals/place_conversation/runs/<실행-ID>/
 ## 재개와 버전 변경
 
 중단한 `score`는 같은 명령에 `--resume`을 붙인다. 완료된 축은 재호출하지 않고 호출 오류·상한으로 멈춘 축만 이어간다. `--max-calls`는 해당 Judge 실행 전체의 상한으로 **앵커와 재시도, 완료 기록이 없는 시작 호출까지** 포함한다. 같은 값을 주면 상한은 초기화되지 않는다. 늘릴 경우 명시적으로 더 큰 값을 준다. SDK의 숨은 자동 재시도는 끈다.
+
+`--interval`은 재시도를 포함한 호출 시작 사이의 최소 간격이며 기본 8초다. 분당 요청 제한에는 간격을 늘릴 수 있지만, 하루 요청 한도를 소진한 429는 간격을 늘려도 해결되지 않는다. 이때는 한도 초기화 후 새 Judge ID로 실행한다. 다른 모델을 명시적으로 선택할 때도 앵커부터 새로 검사한다. 최초 오류 기록을 유지하며, Google SDK의 자동 함수 호출은 비활성화한다.
 
 모델·프롬프트·앵커·입력·평가 코드가 바뀌면 새로운 `--judge-id`로 앵커부터 다시 실행한다. 앵커 실패도 새 ID로 재검사하고 이전 결과를 남긴다. 기존 `observations.jsonl`과 `reviews.jsonl`은 Judge가 덮어쓰지 않는다.
 

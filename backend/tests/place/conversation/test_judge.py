@@ -13,10 +13,10 @@ from daengs_evals.place_conversation.judge import (
     ProviderResult,
     check_anchors,
     create_run,
+    gemini_provider,
     judge_directory,
     key_from_file,
     locked,
-    openai_provider,
     read_judgments,
     score,
     verify_run,
@@ -206,7 +206,7 @@ def test_authentication_error_stops_retries_and_remaining_axis_calls(run):
 
 def test_key_file_accepts_old_field_without_copying_or_printing(tmp_path, capsys):
     (tmp_path / ".env").write_text(
-        'DAENGS_OPENAI_API_KEY="test-only"\ngemini: unrelated', encoding="utf-8"
+        'OPENAI_API_KEY="unrelated"\ngemini: test-only', encoding="utf-8"
     )
     assert key_from_file(tmp_path).get_secret_value() == "test-only"
     assert capsys.readouterr().out == ""
@@ -304,59 +304,73 @@ def test_judge_pass_without_explicit_review_stays_review_required(run):
 
 
 def test_provider_uses_structured_output_without_sdk_hidden_retries(monkeypatch):
-    import openai
+    from daengs_backend.core import gemini
 
     captured = {}
     verdict = fake_generate(build_inputs([observation()])[0], "fake").verdict
 
-    def parse(**kwargs):
+    def generate_content(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(status="completed", output_parsed=verdict, usage=None)
+        return SimpleNamespace(
+            candidates=[SimpleNamespace(finish_reason="STOP")],
+            parsed=None,
+            text=verdict.model_dump_json(),
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=3,
+                candidates_token_count=2,
+                thoughts_token_count=5,
+                total_token_count=10,
+            ),
+        )
 
-    def client(**kwargs):
-        captured["client_options"] = kwargs
-        return SimpleNamespace(responses=SimpleNamespace(parse=parse))
+    client = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
 
-    monkeypatch.setattr(openai, "OpenAI", client)
-    generate = openai_provider(JudgeSettings(api_key="test", _env_file=None))
+    monkeypatch.setattr(gemini, "create_client", lambda **_: client)
+    generate = gemini_provider()
     item = build_inputs([observation()])[0]
-    assert generate(item, "fake").verdict == verdict
-    assert captured["client_options"]["max_retries"] == 0
-    assert captured["text_format"] is Verdict and captured["store"] is False
-    assert captured["input"][1]["role"] == "user"
-    assert "ORACLE" not in captured["input"][0]["content"]
+    result = generate(item, "fake")
+    assert result.verdict == verdict
+    assert result.usage == {
+        "input_tokens": 3,
+        "output_tokens": 7,
+        "thinking_tokens": 5,
+        "total_tokens": 10,
+    }
+    assert captured["config"].http_options.retry_options.attempts == 1
+    assert captured["config"].response_json_schema == Verdict.model_json_schema()
+    assert json.loads(captured["contents"]) == item.payload
+    assert "ORACLE" not in captured["config"].system_instruction
 
 
 def test_refusal_or_missing_structure_is_an_error(monkeypatch):
-    import openai
+    from daengs_backend.core import gemini
 
     monkeypatch.setattr(
-        openai,
-        "OpenAI",
+        gemini,
+        "create_client",
         lambda **_: SimpleNamespace(
-            responses=SimpleNamespace(
-                parse=lambda **_: SimpleNamespace(status="completed", output_parsed=None)
-            )
+            models=SimpleNamespace(generate_content=lambda **_: SimpleNamespace(candidates=[]))
         ),
     )
-    generate = openai_provider(JudgeSettings(api_key="test", _env_file=None))
-    with pytest.raises(ValueError, match="refusal"):
+    generate = gemini_provider()
+    with pytest.raises(ValueError, match="blocked"):
         generate(build_inputs([observation()])[0], "fake")
 
 
 def test_settings_match_existing_env_names_without_backend_import(monkeypatch):
-    monkeypatch.setenv("OPENAI_JUDGE_MODEL", "test-pinned-model")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("FACILITY_JUDGE_MODEL", "test-pinned-model")
+    monkeypatch.setenv("OPENAI_JUDGE_MODEL", "unused-model")
     settings = JudgeSettings(_env_file=None)
     assert settings.model == "test-pinned-model"
-    assert settings.api_key.get_secret_value() == "test-key"
+    assert "api_key" not in settings.model_dump()
     result = subprocess.run(
         [
             sys.executable,
             "-c",
             (
-                "import sys; import daengs_evals.place_conversation.judge; "
-                "assert 'daengs_backend.config' not in sys.modules"
+                "import os, sys; os.environ['GEMINI_API_KEY']='test'; "
+                "from daengs_evals.place_conversation.judge import gemini_provider; gemini_provider(); "
+                "assert 'daengs_backend.config' not in sys.modules; assert 'openai' not in sys.modules"
             ),
         ],
         capture_output=True,

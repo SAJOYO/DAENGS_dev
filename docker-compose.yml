@@ -461,11 +461,10 @@ services:
     image: uv:1
     container_name: daengs-territory-vision-worker
     restart: unless-stopped
+    stop_grace_period: 60s
     networks:
       - daengs-network
-    env_file:
-      - path: ./backend/.env
-        required: false
+    env_file: *walk-context-env
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -517,6 +516,80 @@ services:
       sh -c "uv sync --frozen &&
       exec uv run --no-sync celery -A daengs_backend.tasks.territory worker
       --loglevel info --concurrency 2 --queues territory-vision"
+
+  # Explicit preparation only: ordinary deployment never activates this profile.
+  # All game processes read backend/.env; no separate game flag override here.
+  activity-worker: &activity-runtime
+    init: true
+    build:
+      context: ./docker/uv
+    image: uv:1
+    container_name: daengs-activity-worker
+    profiles: ["activity-game"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    networks: [daengs-network]
+    env_file: *walk-context-env
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      DAENGS_DB_HOST: pgvector
+      DAENGS_DB_PORT: 5432
+      DAENGS_DB_USER: ${POSTGRES_USER:-postgres}
+      DAENGS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DAENGS_DB_NAME: ${POSTGRES_DB:-vectordb}
+      TZ: Asia/Seoul
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - activity-worker-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "uv run --no-sync celery -A daengs_backend.tasks.activity:app inspect ping -d activity@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.activity_runtime &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.activity:app worker
+      --hostname=activity@%h --concurrency=1 --queues=activity --loglevel=INFO"
+
+  activity-beat:
+    <<: *activity-runtime
+    container_name: daengs-activity-beat
+    volumes:
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/README.md:/app/README.md:ro
+      - ./backend/src:/app/src:ro
+      - ./db/migrations:/schema-checks:ro
+      - activity-beat-venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      redis:
+        condition: service_healthy
+      activity-worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "uv", "run", "--no-sync", "python", "-m", "daengs_backend.cli.activity_runtime", "--beat-health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    command: >-
+      sh -c "uv sync --frozen &&
+      uv run --no-sync python -m daengs_backend.cli.activity_runtime &&
+      exec uv run --no-sync celery -A daengs_backend.tasks.activity:app beat --loglevel=INFO"
 
   # Place 검색 (D-026, D-027). APP 의 기존 `/v2/places/search` 계약에 연결되어
   # 기본 compose 기동에 포함됩니다. backend 나 반려견 프로필은 선행 조건이 아닙니다.
@@ -905,6 +978,8 @@ networks:
     driver: bridge
 
 volumes:
+  activity-worker-venv:
+  activity-beat-venv:
   pgdata:
   place-pgdata:
   pgadmin-data:

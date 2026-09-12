@@ -1,0 +1,593 @@
+{
+  "scenario": "synthetic_three_records_all_parts",
+  "production_data": false,
+  "provider_calls": 1,
+  "deadline_s": 10,
+  "elapsed_s": 6.203,
+  "writer": {
+    "policy": "diary-slot-writing-v1",
+    "prompt_hash": "a691ff0a6e0bc7fe0adef415c766d6015f037b97a34727871746a1bab0a794df",
+    "model": "gemini-3.1-flash-lite",
+    "timeout_s": 15,
+    "input_bytes": 32000,
+    "scene_limit": 12,
+    "response_bytes": 64000,
+    "output_tokens": 8192
+  },
+  "payload": {
+    "revision": "4504dc545dae70a0431cf4ce82835d62c0e2dd15fba01fa6e69abbca23dee7ee",
+    "scenes": [
+      {
+        "scene_id": "stamp:23f582dc3942ca4cbe25c5381a03445a261b64bcd4973b629821a1da3e09469d",
+        "original": "  벤치 옆에서 물을 마셨다.\n",
+        "evidence": [
+          {
+            "id": "slot:0ace1ca8b446c8608cb9a8c352825a55e7dd18dec1052440c1a7228d9c4b9748",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "동네공원",
+              "query_kind": "leisure",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "park"
+              },
+              "distance_m": 40,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:bf5ca78a06fafb1c7c0f436a3879f2ec5a4c2d18ced7ae1bea77a956e1c84d66",
+            "part": "environment",
+            "role": "regional_observation",
+            "facts": {
+              "format": "regional-weather-v1",
+              "source_ref": "synthetic-weather-0",
+              "area_center": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "area_radius_m": 5000.0,
+              "valid_from": "2026-09-11T08:00:00Z",
+              "valid_until": "2026-09-11T08:03:00Z",
+              "temperature_c": 23.0,
+              "wind_mps": 2.1,
+              "relation": "regional_observation_not_personal_sensation",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:386cedabfba5ccac3e1b83f89c8fe6a8541d520e095cb2fbbb47fc37e3c0424d",
+            "part": "motion",
+            "role": "scene_motion",
+            "facts": {
+              "kind": "observed_slow",
+              "subject": "recording_device",
+              "action_meaning": "not_inferred",
+              "started_at": "2026-09-11T08:01:00+00:00",
+              "ended_at": "2026-09-11T08:01:30+00:00",
+              "duration_s": 30.0,
+              "before_scene_s": 0,
+              "continuity_block": 0,
+              "continuity_basis": "canonical_accepted_segments",
+              "analysis_id": "synthetic-slots-demo",
+              "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+              "temporal_relation": "이 기록 시각을 포함한 구간"
+            }
+          },
+          {
+            "id": "slot:2074ed9640a8395ef3f813d252bf23150de79b1fbc6144a05462c96d8b105084",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "골목카페",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "cafe"
+              },
+              "distance_m": 110,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:9e57d083a1ecfe0b3b7fce1a88380231b12a15e37e4313e6fdbed4f74c322713",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "작은식당",
+              "query_kind": "restaurant",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "restaurant"
+              },
+              "distance_m": 190,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          }
+        ]
+      },
+      {
+        "scene_id": "stamp:c69d8c7fab1c7a31473e41bddc0e72ecead1f624ffd74d7b383ce76ba7ff8d9f",
+        "original": "골목 모퉁이에서 냄새를 맡았다.",
+        "evidence": [
+          {
+            "id": "slot:c68d235cfcfb923a00198c297877663b42d249cb13886366e6aa04d73faea1c6",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "동네공원",
+              "query_kind": "leisure",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "park"
+              },
+              "distance_m": 45,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:977d10150cd3784cc1d7f3ccabb70b5450754a4ea0663a21a624aad95d2ee313",
+            "part": "environment",
+            "role": "regional_observation",
+            "facts": {
+              "format": "regional-weather-v1",
+              "source_ref": "synthetic-weather-180",
+              "area_center": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "area_radius_m": 5000.0,
+              "valid_from": "2026-09-11T08:03:00Z",
+              "valid_until": "2026-09-11T08:05:40Z",
+              "temperature_c": 22.0,
+              "wind_mps": 2.1,
+              "relation": "regional_observation_not_personal_sensation",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:fe1f4e1421e09821b3ed260ebf5e320d7f83a1c9d9affb267b803bd2986af474",
+            "part": "motion",
+            "role": "scene_motion",
+            "facts": {
+              "kind": "observed_slow",
+              "subject": "recording_device",
+              "action_meaning": "not_inferred",
+              "started_at": "2026-09-11T08:02:30+00:00",
+              "ended_at": "2026-09-11T08:03:00+00:00",
+              "duration_s": 30.0,
+              "before_scene_s": 0,
+              "continuity_block": 0,
+              "continuity_basis": "canonical_accepted_segments",
+              "analysis_id": "synthetic-slots-demo",
+              "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+              "temporal_relation": "이 기록 시각을 포함한 구간"
+            }
+          },
+          {
+            "id": "slot:24f138fec3a419e673f64236c5c75758a42470a6cfbb50ce91437557c4ff9dfc",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "골목카페",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "cafe"
+              },
+              "distance_m": 120,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:9481e15e41b5c3a896987d78652e78fb5cafe703a19b18f0825a4a7af466c5f3",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "작은식당",
+              "query_kind": "restaurant",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "restaurant"
+              },
+              "distance_m": 190,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          }
+        ]
+      },
+      {
+        "scene_id": "stamp:c2908b6ddbc92a212bafd12168c4dc80a4a752471fc17232b130a70083746148",
+        "original": "사진을 찍고 다시 걸었다.",
+        "evidence": [
+          {
+            "id": "slot:a183476789bfc64f47763491620fe73d3674d4f4c553a38608f88111dce3e5c7",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "동네공원",
+              "query_kind": "leisure",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "park"
+              },
+              "distance_m": 50,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:8545ec8e3dcaea381a894eb1ef9d9423756cc1d75a49d8c9f6ca29cddfe290d1",
+            "part": "environment",
+            "role": "regional_observation",
+            "facts": {
+              "format": "regional-weather-v1",
+              "source_ref": "synthetic-weather-180",
+              "area_center": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "area_radius_m": 5000.0,
+              "valid_from": "2026-09-11T08:03:00Z",
+              "valid_until": "2026-09-11T08:05:40Z",
+              "temperature_c": 22.0,
+              "wind_mps": 2.1,
+              "relation": "regional_observation_not_personal_sensation",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:9e3884d89c2a0ffe6fa51bbc21dd2fa969acbdb134dde5779136aed85a24a2fa",
+            "part": "motion",
+            "role": "before_scene_motion",
+            "facts": {
+              "kind": "observed_fast",
+              "subject": "recording_device",
+              "action_meaning": "not_inferred",
+              "started_at": "2026-09-11T08:04:00+00:00",
+              "ended_at": "2026-09-11T08:04:30+00:00",
+              "duration_s": 30.0,
+              "before_scene_s": 10.0,
+              "continuity_block": 0,
+              "continuity_basis": "canonical_accepted_segments",
+              "analysis_id": "synthetic-slots-demo",
+              "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 빠른 이동 관측. 절대 속도나 달리기 판정이 아님.",
+              "temporal_relation": "이 기록에 앞선 구간"
+            }
+          },
+          {
+            "id": "slot:299ddd728f2678a31d8ec3a9f3a98eff92ce1bf15490bbe8e3124be689b436de",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "골목카페",
+              "query_kind": "cafe",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "cafe"
+              },
+              "distance_m": 130,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          },
+          {
+            "id": "slot:e0c744b3cd40906398c313cdd7ce4f99742426bef44d80d3eb3f4b6c7743f605",
+            "part": "space",
+            "role": "scene_registered_point_distance",
+            "facts": {
+              "name": "작은식당",
+              "query_kind": "restaurant",
+              "source_ref": {
+                "source": "synthetic",
+                "ref": "restaurant"
+              },
+              "distance_m": 190,
+              "reference": "registered_location",
+              "relation": "distance_only_not_entry_or_visit",
+              "calculation": "server_reported_not_recomputed",
+              "temporal_basis": "lookup_snapshot",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "coverage": "selected_place_categories_only",
+              "retrieved_at": "2026-09-11T08:05:30+00:00"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "receipt": {
+    "slot_revision": "4504dc545dae70a0431cf4ce82835d62c0e2dd15fba01fa6e69abbca23dee7ee",
+    "writer_version": "f955dc81302e054f9f2f195e11613d723c92d9fc53c304c13b68560095729395",
+    "writing": {
+      "scenes": [
+        {
+          "scene_id": "stamp:23f582dc3942ca4cbe25c5381a03445a261b64bcd4973b629821a1da3e09469d",
+          "background": "기온 23도, 풍속 2.1m/s의 환경에서 이동 속도가 다른 구간보다 느렸다. 동네공원으로부터 40m 떨어진 지점이다.",
+          "evidence_ids": [
+            "slot:0ace1ca8b446c8608cb9a8c352825a55e7dd18dec1052440c1a7228d9c4b9748",
+            "slot:bf5ca78a06fafb1c7c0f436a3879f2ec5a4c2d18ced7ae1bea77a956e1c84d66",
+            "slot:386cedabfba5ccac3e1b83f89c8fe6a8541d520e095cb2fbbb47fc37e3c0424d"
+          ]
+        },
+        {
+          "scene_id": "stamp:c69d8c7fab1c7a31473e41bddc0e72ecead1f624ffd74d7b383ce76ba7ff8d9f",
+          "background": "기온 22도, 풍속 2.1m/s의 환경이며 이동 속도가 다른 구간보다 느렸다. 동네공원으로부터 45m 떨어진 지점이다.",
+          "evidence_ids": [
+            "slot:c68d235cfcfb923a00198c297877663b42d249cb13886366e6aa04d73faea1c6",
+            "slot:977d10150cd3784cc1d7f3ccabb70b5450754a4ea0663a21a624aad95d2ee313",
+            "slot:fe1f4e1421e09821b3ed260ebf5e320d7f83a1c9d9affb267b803bd2986af474"
+          ]
+        },
+        {
+          "scene_id": "stamp:c2908b6ddbc92a212bafd12168c4dc80a4a752471fc17232b130a70083746148",
+          "background": "기온 22도, 풍속 2.1m/s의 환경이다. 이 기록에 앞선 구간의 이동 속도가 다른 구간보다 빨랐다.",
+          "evidence_ids": [
+            "slot:8545ec8e3dcaea381a894eb1ef9d9423756cc1d75a49d8c9f6ca29cddfe290d1",
+            "slot:9e3884d89c2a0ffe6fa51bbc21dd2fa969acbdb134dde5779136aed85a24a2fa"
+          ]
+        }
+      ]
+    },
+    "failure_code": null
+  },
+  "published": {
+    "format": "walk-diary-board-v1",
+    "client_session_id": "synthetic-session",
+    "input_revision": "18be92877b68aa342c48a278d835e9c3f5b7019b48dc7261ca79fdba85f57141",
+    "plan_revision": "8c1108924a206d8d4814582d4dca434ad51961fbafca7c6b03f3a452f6af351d",
+    "title": "2026.09.11 산책",
+    "model_status": "accepted",
+    "failure_code": null,
+    "scenes": [
+      {
+        "id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+        "order": 1,
+        "core": {
+          "identity": "boundary:a791fcec227719e60499af65e72ab020cf35b04dd7fcc3f67f7e20f9167a7ee7",
+          "version": "8a7ad8292215ccf42fe653331f75cbadc3c4b0d875a86fa8e678fd0eac885cd8"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-11T08:00:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-11T08:00:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-11T08:00:00Z"
+            }
+          ]
+        },
+        "title": "산책의 시작",
+        "body": "산책을 시작했다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "start",
+        "place_reference": []
+      },
+      {
+        "id": "stamp:23f582dc3942ca4cbe25c5381a03445a261b64bcd4973b629821a1da3e09469d",
+        "order": 2,
+        "core": {
+          "identity": "walk_entry:demo-1",
+          "version": "f403550518df7752dec372db11c2f92db8d3a9deba66a038258eb6bcd4860885"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-11T08:01:20Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.50107918521516,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-11T08:01:20Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 8,
+              "chain_index": 0,
+              "at": "2026-09-11T08:01:20Z"
+            }
+          ]
+        },
+        "title": "남긴 이야기",
+        "body": "기온 23도, 풍속 2.1m/s의 환경에서 이동 속도가 다른 구간보다 느렸다. 동네공원으로부터 40m 떨어진 지점이다.\n  벤치 옆에서 물을 마셨다.\n",
+        "user_record": {
+          "kind": "note",
+          "text": "  벤치 옆에서 물을 마셨다.\n"
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:c69d8c7fab1c7a31473e41bddc0e72ecead1f624ffd74d7b383ce76ba7ff8d9f",
+        "order": 3,
+        "core": {
+          "identity": "walk_entry:demo-2",
+          "version": "e0d5e7c9ff39ff5ca2e9245063a5ce173ed631b2f5cbdbf4b0ab2a744d29e17a"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-11T08:03:00Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.502347227842975,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-11T08:03:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 18,
+              "chain_index": 0,
+              "at": "2026-09-11T08:03:00Z"
+            }
+          ]
+        },
+        "title": "남긴 이야기",
+        "body": "기온 22도, 풍속 2.1m/s의 환경이며 이동 속도가 다른 구간보다 느렸다. 동네공원으로부터 45m 떨어진 지점이다.\n골목 모퉁이에서 냄새를 맡았다.",
+        "user_record": {
+          "kind": "note",
+          "text": "골목 모퉁이에서 냄새를 맡았다."
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:c2908b6ddbc92a212bafd12168c4dc80a4a752471fc17232b130a70083746148",
+        "order": 4,
+        "core": {
+          "identity": "walk_entry:demo-3",
+          "version": "5bb55b4c5cdeee1bc02e4359d0e282a5396e3bd93132c573540cf65291e213a2"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-11T08:04:40Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.504685462475834,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-11T08:04:40Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 28,
+              "chain_index": 0,
+              "at": "2026-09-11T08:04:40Z"
+            }
+          ]
+        },
+        "title": "남긴 이야기",
+        "body": "기온 22도, 풍속 2.1m/s의 환경이다. 이 기록에 앞선 구간의 이동 속도가 다른 구간보다 빨랐다.\n사진을 찍고 다시 걸었다.",
+        "user_record": {
+          "kind": "note",
+          "text": "사진을 찍고 다시 걸었다."
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+        "order": 5,
+        "core": {
+          "identity": "boundary:e55ffd3f399b4bfd64684ec82800b11de6cc21a2b2d2c3836c8bf81c09ec0ce6",
+          "version": "c135fc9889a68823a628865faf2928b936c170fc2b24be39de8a9bc228bce92f"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-11T08:05:30Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.505584783488466,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-11T08:05:30Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 33,
+              "chain_index": 0,
+              "at": "2026-09-11T08:05:30Z"
+            }
+          ]
+        },
+        "title": "산책의 마무리",
+        "body": "산책을 마쳤다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "end",
+        "place_reference": []
+      }
+    ]
+  },
+  "scope": "Real service writer, citation assembly and existing deadline; synthetic domain input, no DB writes.",
+  "previous_attempt": {
+    "provider_calls": 1,
+    "deadline_s": 10,
+    "outcome": "deadline_exceeded",
+    "elapsed_s": null,
+    "note": "The first runner propagated TimeoutError before writing an artifact; no model response was accepted."
+  }
+}

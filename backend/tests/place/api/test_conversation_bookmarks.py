@@ -11,7 +11,12 @@ async def test_saved_scope_gateway_does_not_replace_normal_search_or_generate_su
     client, _, searcher, _, plans, _ = harness
     before = (await client.post("/app/places/conversation", json=manual_body())).json()
     plans.append(
-        {"goal": "show", "search_scope": "bookmarks", "changes": {"parking": "required_true"}}
+        {
+            "goal": "show",
+            "search_scope": "bookmarks",
+            "search_scope_quote": "찜한 곳 중",
+            "changes": {"parking": "required_true"},
+        }
     )
     body = {**chat_body(before, "찜한 곳 중 주차 되는 곳만"), "saved_search": "v1"}
     response = await client.post("/app/places/conversation", json=body)

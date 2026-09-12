@@ -1,0 +1,75 @@
+[
+  {
+    "id": "S07",
+    "query": "찜하지 말고 주차 되는 카페만 찾아줘",
+    "scope": "keep",
+    "forbid_save": true,
+    "parking": "required_true",
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "C02",
+    "query": "찜 여부 상관없이 주차 되는 카페 찾아줘",
+    "scope": "all_places",
+    "parking": "required_true",
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "C03",
+    "query": "찜한 곳 중에서 주차 되는 카페만 찾아줘",
+    "scope": "bookmarks",
+    "parking": "required_true",
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "C04",
+    "query": "이전 검색 화면으로 돌아가",
+    "scope": "keep",
+    "navigation": "restore_search"
+  },
+  {
+    "id": "C05",
+    "query": "찜하지 말고 새로운 카페 찾아줘",
+    "scope": "new_candidates",
+    "forbid_save": true,
+    "kinds": [
+      "cafe"
+    ]
+  },
+  {
+    "id": "C06",
+    "query": "여기 찜 해제해줘",
+    "scope": "keep",
+    "bookmark": "remove"
+  },
+  {
+    "id": "C07",
+    "query": "여기 찜해줘",
+    "scope": "keep",
+    "bookmark": "save"
+  },
+  {
+    "id": "C08",
+    "query": "찜 여부는 그대로 두고 식당도 같이 볼래",
+    "scope": "keep",
+    "kinds": [
+      "restaurant"
+    ],
+    "kind_operation": "add"
+  },
+  {
+    "id": "C09",
+    "query": "찜한 곳에 한정하지 말고 주차 되는 카페 보여줘",
+    "scope": "all_places",
+    "parking": "required_true",
+    "kinds": [
+      "cafe"
+    ]
+  }
+]

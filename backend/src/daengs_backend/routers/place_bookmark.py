@@ -68,7 +68,14 @@ async def interpret(
 ):
     # Authenticate active membership; only filter meaning crosses the Place boundary.
     await _call(service.list_saved(db, user.app_user_id))
-    return await _call(lookup.interpret(request.query, request.filters))
+    return await _call(
+        lookup.interpret(
+            request.query,
+            request.filters,
+            **({"search_policy": request.search_policy} if request.search_policy else {}),
+            **({"candidate_pools": request.candidate_pools} if request.candidate_pools else {}),
+        )
+    )
 
 
 @router.delete("", response_model=BookmarkList)

@@ -18,6 +18,7 @@ from daengs_walk.diary_board import (
 )
 from daengs_walk.diary_board_assembly import assemble_base_board
 from daengs_walk.diary_board_selection import prepare_base_board
+from daengs_walk.diary_slots import BoardSlotSnapshot, SlotPolicy, prepare_board_slots
 
 
 @dataclass(frozen=True)
@@ -25,9 +26,12 @@ class PreparedSavedBaseBoard:
     input: InputAssembly
     plan: PreparedBaseBoard
     board: BaseBoard
+    slots: BoardSlotSnapshot
 
 
-def assemble_saved_base_board(assembled: InputAssembly, policy: BaseBoardPolicy):
+def assemble_saved_base_board(
+    assembled: InputAssembly, policy: BaseBoardPolicy, *, slot_policy: SlotPolicy | None = None
+):
     observation = assembled.observation_source
     route = (
         VerifiedBoardRoute(observation.route, observation.evidence)
@@ -36,14 +40,20 @@ def assemble_saved_base_board(assembled: InputAssembly, policy: BaseBoardPolicy)
     )
     plan = prepare_base_board(assembled.source, policy, route=route)
     board = assemble_base_board(assembled.source, plan, route=route)
-    return PreparedSavedBaseBoard(assembled, plan, board)
+    slots = prepare_board_slots(assembled.source, board, slot_policy or SlotPolicy(), route=route)
+    return PreparedSavedBaseBoard(assembled, plan, board, slots)
 
 
 async def prepare_saved_base_board(
-    session, principal: PrincipalContext, walk_id, policy: BaseBoardPolicy
+    session,
+    principal: PrincipalContext,
+    walk_id,
+    policy: BaseBoardPolicy,
+    *,
+    slot_policy: SlotPolicy | None = None,
 ):
     if principal.kind != "APP_USER":
         raise PermissionError("diary requires its walk owner")
     assembled = await read_input(session, uuid.UUID(principal.subject), walk_id)
     require_owner(principal, assembled.source)
-    return assemble_saved_base_board(assembled, policy)
+    return assemble_saved_base_board(assembled, policy, slot_policy=slot_policy)

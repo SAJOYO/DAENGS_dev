@@ -27,7 +27,13 @@ async def lookup(request: BookmarkLookup, db: Annotated[AsyncSession, Depends(ge
 async def interpret(request: SavedSearchRequest):
     try:
         intent = await provider().plan_saved(request)
-        return plan_saved(request.filters, intent)
+        return plan_saved(
+            request.filters,
+            intent,
+            search_policy=request.search_policy,
+            query=request.query,
+            candidate_pools=request.candidate_pools,
+        )
     except GeminiIntentProposerError as exc:
         raise HTTPException(502, detail={"code": "conversation_provider_failed"}) from exc
     except (TypeError, ValueError):

@@ -1,0 +1,116 @@
+[
+  {
+    "id": "N01",
+    "query": "찜하지 말고 주차 되는 카페만 찾아줘",
+    "pools": [
+      "all_places",
+      "new_candidates",
+      "bookmarks"
+    ],
+    "scope": "keep",
+    "parking": true,
+    "forbid_save": true
+  },
+  {
+    "id": "N02",
+    "query": "찜하지 말고 새로운 카페 찾아줘",
+    "pools": [
+      "all_places",
+      "new_candidates",
+      "bookmarks"
+    ],
+    "scope": "new_candidates",
+    "forbid_save": true
+  },
+  {
+    "id": "N03",
+    "query": "찜한 곳 빼고 카페 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates",
+      "bookmarks"
+    ],
+    "scope": "unbookmarked"
+  },
+  {
+    "id": "N04",
+    "query": "여기 이미 알아",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity"
+  },
+  {
+    "id": "N05",
+    "query": "여기 이미 알아. 주차 되는 다른 카페 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity",
+    "parking": true
+  },
+  {
+    "id": "N06",
+    "query": "첫 번째 이미 알아. 다음 후보 더 보여줘",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "known": true,
+    "feedback": "familiarity",
+    "browse": "next"
+  },
+  {
+    "id": "N07",
+    "query": "이미 알고 있는 곳이라고",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "clarify": true,
+    "selected": false
+  },
+  {
+    "id": "N08",
+    "query": "거기 없잖아 씨발. 주차 되는 카페 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "parking": true,
+    "feedback": "information_dispute"
+  },
+  {
+    "id": "N09",
+    "query": "여기 이미 아는 건 아니야",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep"
+  },
+  {
+    "id": "N10",
+    "query": "이게 니 최선이야?",
+    "pools": [
+      "new_candidates"
+    ],
+    "scope": "keep"
+  },
+  {
+    "id": "N11",
+    "query": "첫 번째 빼고 다른 곳 보여줘",
+    "pools": [
+      "all_places",
+      "new_candidates"
+    ],
+    "scope": "keep",
+    "exclude": true
+  }
+]

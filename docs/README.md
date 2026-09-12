@@ -2,6 +2,9 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/gps-motion-precision.md](walk/gps-motion-precision.md) | GPS 좌표 원본 비트의 추가 백업·정밀 계산·앱 대조와 적용 순서 |
+| [walk/diary-part-slots.md](walk/diary-part-slots.md) | 공간·환경·동선 조건과 스탬프, Gemini 미리보기 API·CLI 워킹 스켈레톤 |
+| [walk/gps-motion-calculation.md](walk/gps-motion-calculation.md) | 고정 GPS 정책의 서버 재생·계산 조회, 앱 기준값 대조와 원본 좌표 정밀도 한계 |
 | [walk/gps-motion-backup.md](walk/gps-motion-backup.md) | GPS 측정 정책·수신 메타데이터 분할 백업, 저장 완료 지문과 읽기 계약 |
 | [walk/gps-recording-contract.md](walk/gps-recording-contract.md) | GPS 기록 구분의 업로드·복원·제한된 보완과 행동 핀 검증 계약 |
 | [walk/diary-board-api.md](walk/diary-board-api.md) | 기본 보드의 API·JSONB 저장, 기존 기록 보존과 앱 공유 계약 |
@@ -22,6 +25,8 @@
 | [place/bookmarks-api.md](place/bookmarks-api.md) | 회원 시설 찜 저장·전체 키 조회·독립 필터·탈퇴 정리와 앱 적용 순서 |
 | [place/bookmark-commands.md](place/bookmark-commands.md) | 자연어 찜의 준비/실행 경계·앱 완료 결과·충돌 보호와 후속 검색 계획 |
 | [place/saved-conversation.md](place/saved-conversation.md) | 찜 범위 대화 검색·조건 공유·탭 보존과 실제 출력 평가 |
+| [place/search-policy.md](place/search-policy.md) | 검색 집합·조건 변경 공통화, 화면 복원 분리와 실제 출력 평가 |
+| [place/candidate-pools.md](place/candidate-pools.md) | 새 후보 B/K/E/P·명시적 정정·앱 연결과 반복 출력 평가 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 점령지 방문 인증 워킹 스켈레톤 — 위치·사진·비동기 판정 상태 계약 |
 | [territory/owner-summary-api.md](territory/owner-summary-api.md) | 선택한 전봇대 주인의 공개 시즌 점수·점령 수, snapshot·앱 연동·준비 상태 |

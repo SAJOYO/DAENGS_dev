@@ -76,13 +76,13 @@ from daengs_backend.orchestration.semantic import (
 # 더한 순간 v3 · v4 · v5 본문의 **글자가 이미 달라졌다.** 버전을 안 올리면 D-057 ③ 이 84건
 # 쌍대 비교로 승인한 이름이 다른 물건을 가리키게 된다. v4 · v5 번호는 건너뛴 것이 아니라
 # 그 계보가 v6 으로 함께 올라간 것이다.
-GENERAL_PROMPT_VERSION = "general-answer-ko-v6"
+GENERAL_PROMPT_VERSION = "general-answer-ko-v7"
 # -carelog (#344): 기본 본문에 CARE_LOG_TODAY 규칙 한 문단과 블록 한 줄이 **더해진** 판본.
 # 오늘 케어 로그가 payload 에 있을 때만 이 판본이 나가고, 없으면 기본 본문이 글자까지 그대로
 # 나간다 — 기본 본문은 D-057 ③ 에서 84건 쌍대 비교 뒤 승인된 계보라, 그 84건(로그 없음)의
 # 프롬프트에 로그 규칙이 새지 않게 하려는 분기다. 버전 문자열이 갈리는 이유는 프롬프트
 # 텍스트가 다르기 때문이다.
-GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v6-carelog"
+GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v7-carelog"
 # -vetspend / -carelog-vetspend (#353 Task 7): confirmed vet-visit spend joins the same
 # fallback, same rule as care log — a rule paragraph plus a context line, added only when
 # the payload carries it. Four combinations of {care_log, vet_spend} exist; the two that
@@ -91,8 +91,8 @@ GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v6-carelog"
 # The other two get their own version strings because their prompt text differs from both —
 # `build_general_prompt` picks the version from exactly which of the two optional blocks
 # are present.
-GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v6-vetspend"
-GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v6-carelog-vetspend"
+GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v7-vetspend"
+GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v7-carelog-vetspend"
 # `-conv` (#416 Task 6): 대화 맥락이 실릴 때 위 네 상수 각각에 붙는 **다섯 번째 갈래**다.
 # 새 상수를 또 네 개 두지 않고 접미사로 만드는 이유 — 네 조합은 이미 서로 다른 프롬프트
 # 몸을 가리키는데, 맥락 블록은 그 넷 중 어느 것에도 본문을 안 바꾸고 `USER_QUERY:` 앞에
@@ -141,6 +141,11 @@ class GeneralAnswer(BaseModel):
             # 비어도 된다: 모델이 안 골랐다는 사실을 코드가 메우지 않는다.
             if self.question is None or not self.question.strip():
                 raise ValueError("an ask needs a question")
+            # 2026-09-12 실사용: 질문 한 문장만 나가는 되묻기가 루프를 만들었다. 물음표를
+            # 단 막다른 길이지 답이 아니다 — 프롬프트로 시키는 것과 계약으로 막는 것은
+            # 다르므로 여기서 떨어뜨린다. 빈 문자열이 허용돼 있던 것이 그 구멍이었다.
+            if not self.text.strip():
+                raise ValueError("an ask must say something before it asks")
             if self.reason is not None:
                 raise ValueError("an ask carries no refusal reason")
             return self
@@ -169,11 +174,16 @@ Rules when answering:
 - Ordinary husbandry norms ARE answerable: feeding frequency and a rough amount range, daily water intake, bathing / brushing / nail-trimming frequency, walking gear, socialization timing, sleep duration. Give the typical range, state that individual variation is large, and add that the feeding table on the food package or the veterinarian is the authority for exact values. These ordinary norms are NOT institutional.
 - A question of the form "is this okay / is this normal" about a behavior or an intake amount is answered with the normal range plus a note to see a veterinarian if it persists or changes sharply. Do not refuse it.
 - Say you do not know when unsure; never invent. Do not assert facts that require a source document (laws, regulations, procedures, fees, deadlines, official programs, statistics).
+- **A general mechanism may be explained; this dog's cause may not be named.** "초록색 구토는 담즙이 섞여 있을 때 나타날 수 있습니다" is allowed — it is a hedged statement about the sign in general. "초록색 구토는 담즙 역류 때문입니다" is not: it attributes THIS dog's symptom to a cause, which is the determination the owner has to go to a veterinarian for. Keep every cause sentence hedged (…일 수 있습니다 / …인 경우가 많습니다) and never write 때문입니다 · 원인은 ~입니다 · ~로 인한 것입니다 about the dog in front of you.
 - A symptom the owner mentions is NOT a request for a diagnosis. Say what can safely be said about it at a general level — what to watch for, what to adjust at home — and add a short note to see a veterinarian if it persists or worsens. Do not close the conversation by sending them to a hospital when the sign is not an emergency.
 - Use DOG_CONTEXT only when the owner asked about it, or when it changes what is safe to advise. Do not sprinkle the breed, the age, or a health condition into an answer to make it look personalized. Never infer how the dog is today from the profile, and never invent facts that are not in it.
 
 Ask back (kind="ask") in this case:
-- ask: the message is about how the dog is doing, or about a symptom, and what the owner actually observed is still missing or too thin to act on. Put the question in question, in Korean. What goes in text depends on why you are asking. **When the message is about how the dog is doing or about a symptom**: when a rule below hands you the owner's records, report those in text; when no rule below hands you any, say in text that there is nothing recorded for today so the records alone cannot tell how the dog is, and add one plain sentence inviting the owner to log meals, walks and medication so that next time you can look at that record together with what they tell you. **Say only what logging actually gives**: the record is something you can read back and take into account. Never promise that a log will let you judge the dog's health, name a condition, or say whether the dog is fine — logging changes what you can see, not what you are allowed to conclude. Keep it to one sentence and do not phrase it as a second question. **When you are asking for any other reason** — the message points at something earlier in the conversation you cannot see, or it is simply unclear — say plainly in text what you are missing and **bring up nothing else**: an unresolved 그거 or 아까 말한 거 is not a question about how the dog is doing, so say only that you cannot see what it refers to.
+- ask: the message is about how the dog is doing, or about a symptom, and what the owner actually observed is still missing or too thin to act on. Put the question in question, in Korean, and **never leave text empty — a question with nothing before it is a dead end wearing a question mark.** What goes in text depends on why you are asking. **When the message names a symptom, text is what you can already say about that symptom** at a general level — what it commonly relates to, what to watch, when it needs a veterinarian — and only then the question. **When the message is about how the dog is doing or about a symptom**: when a rule below hands you the owner's records, report those in text; when no rule below hands you any, say in text that there is nothing recorded for today so the records alone cannot tell how the dog is, and add one plain sentence inviting the owner to log meals, walks and medication so that next time you can look at that record together with what they tell you. **Say only what logging actually gives**: the record is something you can read back and take into account. Never promise that a log will let you judge the dog's health, name a condition, or say whether the dog is fine — logging changes what you can see, not what you are allowed to conclude. Keep it to one sentence and do not phrase it as a second question. **When you are asking for any other reason** — the message points at something earlier in the conversation you cannot see, or it is simply unclear — say plainly in text what you are missing and **bring up nothing else**: an unresolved 그거 or 아까 말한 거 is not a question about how the dog is doing, so say only that you cannot see what it refers to.
+- **Stop asking and answer instead when any of these is true.** Asking again costs the owner time they may not have:
+  (a) The conversation so far names **two or more of 구토 · 설사 · 식욕 부진 · 기력 저하 · 파행** — count what CONVERSATION carries as well as this message, not this message alone. Then do not ask anything back: say briefly what those signs together commonly mean at a general level, what to note down for the visit, and that a veterinarian should see the dog. **This is an answer, not an emergency refusal.**
+  (b) CONVERSATION shows you already asked about an axis and the owner has now spoken to it. Never put an axis from `pending_axes_the_assistant_asked_about_not_dog_observations` into `axes` again — repeating a question you already asked is the worst thing you can do here.
+  (c) You have asked once already in this conversation and the owner answered at all. One question, then answer with what you have.
 - One question per turn. You MAY name several related things inside that one sentence — 식욕 · 활력 · 배변 · 구토/설사 · 호흡 — but ask the owner to start with whatever stands out most. Never demand that they answer every item, and never spread the items across several turns as an intake interview.
 - Ask for what the owner can observe. Never list candidate diseases, and never say the dog is healthy, fine, normal, or lacking anything. Do not recite the observation items when the question is not about the dog's condition.
 - axes belongs to a question about the dog's condition. In axes, name the one or two axes you most need answered, from this closed list: APPETITE, ENERGY, STOOL, VOMIT, BREATHING, MOBILITY, OTHER. The sentence in question may invite more than these; axes is what you are actually waiting on. **Leave axes out entirely when you are not asking about the dog's condition** — an unresolved reference or an unclear request has no axis, and OTHER is not the place to put it. Use OTHER only for an observation that is genuinely none of the six. Nothing downstream will guess an axis for you.

@@ -15,6 +15,8 @@ from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.services import walk_diary_input as reader
 from daengs_backend.services import walk_diary_writing as writer
 from daengs_backend.services import walk_storyboard as legacy
+from daengs_backend.services.walk_diary_base_board import PreparedSavedBaseBoard
+from daengs_backend.services.walk_diary_board_slot_writing import write_board
 from daengs_walk.diary_input import digest
 from tests.walk.support.diary import place_payload, prose
 from tests.walk.support.observations import varied_route
@@ -84,11 +86,26 @@ def api(monkeypatch):
         assert db.commit.await_count >= 1 and state.row.status == "running"
         if state.before_write:
             await state.before_write()
+        if payload["scenes"] and "evidence" in payload["scenes"][0]:
+            return {
+                "scenes": [
+                    {
+                        "scene_id": scene["scene_id"],
+                        "background": "가까이에 등록된 카페가 있었다."
+                        if any(e["part"] == "space" for e in scene["evidence"])
+                        else "이동 구간의 속도에 변화가 있었다.",
+                        "evidence_ids": [scene["evidence"][0]["id"]],
+                    }
+                    for scene in payload["scenes"]
+                ]
+            }
         return prose(payload)
 
     state.provider = AsyncMock(side_effect=generate)
 
     async def write(source, prepared):
+        if isinstance(prepared, PreparedSavedBaseBoard):
+            return await write_board(source, prepared, state.provider)
         return await writer.write_diary(source, prepared, state.provider)
 
     state.writer = AsyncMock(side_effect=write)

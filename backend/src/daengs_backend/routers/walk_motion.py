@@ -9,22 +9,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.repositories import walk_motion as repo
+from daengs_backend.repositories import walk_precision as precision_repo
+from daengs_backend.routers.walk_precision import router as precision_router
 from daengs_backend.schemas.walk_motion import (
     BACKUP_VERSION,
+    CALCULATION_VERSION,
     CHUNK_SIZE,
     MAX_EPOCHS,
     MAX_POINTS,
     MotionBackupStatus,
+    MotionCalculation,
     MotionChunkResponse,
     MotionChunkUpload,
     MotionComplete,
     MotionManifest,
 )
+from daengs_backend.schemas.walk_precision import VERSION as PRECISION_VERSION
 from daengs_backend.services import walk_motion as service
 from daengs_backend.services.walk import WalkNotFoundError
+from daengs_backend.services.walk_motion_calculation import calculate
 from daengs_backend.services.walk_motion_contract import MotionConflict
 
 router = APIRouter(prefix="/app/walks", tags=["walk-motion-backup"])
+router.include_router(precision_router)
 Session = Annotated[AsyncSession, Depends(get_session)]
 ChunkIndex = Annotated[int, Path(ge=0, lt=(MAX_POINTS + CHUNK_SIZE - 1) // CHUNK_SIZE)]
 
@@ -42,14 +49,24 @@ async def _call(operation):
 
 @router.get("/motion-capabilities")
 async def capabilities(user: CurrentAppUser, session: Session):
+    available = await repo.available(session)
     return {
         "version": BACKUP_VERSION,
-        "backup_supported": await repo.available(session),
+        "backup_supported": available,
         "calculation_verified": False,
         "chunk_size": CHUNK_SIZE,
         "max_points": MAX_POINTS,
         "max_epochs": MAX_EPOCHS,
+        "calculation_versions": [CALCULATION_VERSION] if available else [],
+        "precision_versions": [PRECISION_VERSION]
+        if available and await precision_repo.available(session)
+        else [],
     }
+
+
+@router.get("/{walk_id}/motion-calculation", response_model=MotionCalculation)
+async def calculation(walk_id: uuid.UUID, user: CurrentAppUser, session: Session):
+    return await _call(calculate(session, user.app_user_id, walk_id))
 
 
 @router.put("/{walk_id}/motion-backup", response_model=MotionBackupStatus)

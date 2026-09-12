@@ -34,9 +34,10 @@ def test_zero_remaining_budget_publishes_base_without_calling_ai(api):
     )
 
 
-def test_fast_writer_keeps_the_same_core_list_and_publishes_early(api):
+@pytest.mark.parametrize("budget", [10000, 20000])
+def test_fast_writer_keeps_the_same_core_list_and_publishes_early(api, budget):
     client, state, _ = api
-    first = client.post(PATH, json=request(state, preparation_budget_ms=10000)).json()
+    first = client.post(PATH, json=request(state, preparation_budget_ms=budget)).json()
     assert first["status"] == "ready" and first["bundle"]["model_status"] == "accepted"
     assert len(first["bundle"]["scenes"]) == 5
     state.provider.assert_awaited_once()
@@ -108,7 +109,15 @@ async def test_provider_ignoring_cancellation_cannot_delay_or_publish_after_time
         await asyncio.wait_for(late.wait(), 1)
 
 
-@pytest.mark.parametrize("budget", [-1, 10001])
+def test_capability_advertises_the_twenty_second_request_limit(api):
+    client, _, _ = api
+    response = client.get("/app/walks/storyboard/capabilities")
+    assert response.status_code == 200
+    capability = response.json()["diary_publication"]
+    assert capability == {"format": BOARD_FORMAT, "budget_ms": 20000}
+
+
+@pytest.mark.parametrize("budget", [-1, 20001])
 def test_invalid_budget_does_not_start_generation(api, budget):
     client, state, _ = api
     assert client.post(PATH, json=request(state, preparation_budget_ms=budget)).status_code == 422

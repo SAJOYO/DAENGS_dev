@@ -149,34 +149,60 @@ async def upload_chunk(session, owner, walk_id, index, body):
         raise
 
 
+async def _validated_contents(session, walk, row):
+    manifest = MotionManifest.model_validate(row.manifest)
+    validate_manifest(manifest)
+    raw = await _raw(session, walk, manifest)
+    chunks = await repo.chunks(session, walk.id)
+    if [c.chunk_index for c in chunks] != list(range((len(raw) + CHUNK_SIZE - 1) // CHUNK_SIZE)):
+        raise MotionConflict("motion_chunks_incomplete")
+    all_points = []
+    for chunk in chunks:
+        points = [MotionObservation.model_validate(p) for p in chunk.payload]
+        start = chunk.chunk_index * CHUNK_SIZE
+        if [p.client_seq for p in points] != list(
+            range(start, min(start + CHUNK_SIZE, len(raw)))
+        ) or chunk.fingerprint != chunk_digest(points):
+            raise MotionConflict("motion_chunk_corrupt")
+        all_points.extend(points)
+    validate_observations(manifest, all_points, raw)
+    fingerprint = evidence_digest(manifest_digest(manifest), [c.fingerprint for c in chunks])
+    if row.manifest_fingerprint != manifest_digest(manifest):
+        raise MotionConflict("motion_digest_mismatch")
+    return manifest, raw, all_points, fingerprint
+
+
+async def completed_input(session, owner, walk_id):
+    """Detach one coherent, revalidated sealed input under the same Walk lock as backup writes."""
+    try:
+        walk = await _owned(session, owner, walk_id)
+        row = await repo.backup(session, walk_id)
+        if row is None:
+            raise WalkNotFoundError
+        if row.evidence_fingerprint is None:
+            raise MotionConflict("motion_backup_incomplete")
+        manifest, raw, points, fingerprint = await _validated_contents(session, walk, row)
+        if fingerprint != row.evidence_fingerprint:
+            raise MotionConflict("motion_digest_mismatch")
+        from daengs_backend.services.walk_precision import refine_completed
+
+        raw, precision_fp = await refine_completed(
+            session, walk_id, raw, fingerprint, manifest.client_session_id
+        )
+        return manifest, raw, points, fingerprint, precision_fp
+    finally:
+        # No writes and no lock held while the CPU-only engine runs.
+        await session.rollback()
+
+
 async def complete(session, owner, walk_id, body):
     try:
         walk = await _owned(session, owner, walk_id)
         row = await repo.backup(session, walk_id)
         if row is None or row.manifest_fingerprint != body.manifest_fingerprint:
             raise MotionConflict("motion_manifest_mismatch")
-        manifest = MotionManifest.model_validate(row.manifest)
-        validate_manifest(manifest)
-        raw = await _raw(session, walk, manifest)
-        chunks = await repo.chunks(session, walk_id)
-        if [c.chunk_index for c in chunks] != list(
-            range((len(raw) + CHUNK_SIZE - 1) // CHUNK_SIZE)
-        ):
-            raise MotionConflict("motion_chunks_incomplete")
-        all_points = []
-        for chunk in chunks:
-            points = [MotionObservation.model_validate(p) for p in chunk.payload]
-            start = chunk.chunk_index * CHUNK_SIZE
-            if [p.client_seq for p in points] != list(
-                range(start, min(start + CHUNK_SIZE, len(raw)))
-            ) or chunk.fingerprint != chunk_digest(points):
-                raise MotionConflict("motion_chunk_corrupt")
-            all_points.extend(points)
-        validate_observations(manifest, all_points, raw)
-        fingerprint = evidence_digest(manifest_digest(manifest), [c.fingerprint for c in chunks])
-        if fingerprint != body.evidence_fingerprint or row.manifest_fingerprint != manifest_digest(
-            manifest
-        ):
+        _, _, _, fingerprint = await _validated_contents(session, walk, row)
+        if fingerprint != body.evidence_fingerprint:
             raise MotionConflict("motion_digest_mismatch")
         row.evidence_fingerprint = fingerprint
         result = await _status(session, row)

@@ -1,6 +1,7 @@
 """Lossless, bounded backup contract. A storage receipt is not a motion calculation."""
 
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -8,6 +9,7 @@ BACKUP_VERSION = "gps-motion-backup-v1"
 CHUNK_SIZE = 256
 MAX_POINTS = 100_000
 MAX_EPOCHS = 1024
+CALCULATION_VERSION = "gps-motion-calculation-v1"
 Int64 = Annotated[int, Field(strict=True, ge=0, le=2**63 - 1)]
 Seq = Annotated[int, Field(strict=True, ge=0, le=MAX_POINTS)]
 Identity = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")]
@@ -95,3 +97,27 @@ class MotionBackupStatus(MotionWire):
 class MotionChunkResponse(MotionChunkUpload):
     chunk_index: int
     chunk_fingerprint: Digest
+
+
+class MotionCalculation(MotionWire):
+    version: Literal["gps-motion-calculation-v1"] = CALCULATION_VERSION
+    walk_id: UUID
+    client_session_id: str
+    policy_version: Literal["motion-v1"]
+    measurement_version: Literal["motion-measurement-v1"]
+    config_hash: str
+    manifest_fingerprint: Digest
+    evidence_fingerprint: Digest
+    coordinate_basis: Literal["stored-raw-v1-six-decimals", "device-fix-bits-v1"] = (
+        "stored-raw-v1-six-decimals"
+    )
+    precision_fingerprint: Digest | None = None
+    # Only the device performs the cross-runtime comparison; this server has no device receipt.
+    device_result_verified: Literal[False] = False
+    distance_m: float = Field(ge=0, allow_inf_nan=False)
+    recording_duration_nanos: Int64
+    active_duration_millis: Int64
+    point_count: Seq
+    segment_count: Seq
+    segments: list[list[int]]
+    reason_counts: dict[str, int]

@@ -48,6 +48,7 @@ class GeminiConversation:
         state = request.previous
         return await self._plan(
             {
+                "active_search_pool": state.search_pool,
                 "current_state": canonical(state.filters.model_dump(mode="json")),
                 "history": [turn.model_dump(mode="json") for turn in state.history],
                 "pending_question": state.pending_question,

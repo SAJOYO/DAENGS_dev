@@ -131,6 +131,18 @@ def fact_sentence(fact):
 
 
 def render_answer(receipt):
+    from daengs_place.place.conversation.candidates import POOL_LABELS
+
+    prefix = ""
+    if receipt.feedback == "information_dispute":
+        prefix = "안내한 정보가 현장과 다를 수 있어요. 현재 자료만으로 이전이나 폐업 여부를 확인할 수 없어요. "
+    if receipt.known_places:
+        names = "·".join(p.name for p in receipt.known_places[:2])
+        prefix += f"{names}은 이번 탐색에서 이미 아는 곳으로 반영했어요. "
+    return prefix + _render_result(receipt, POOL_LABELS)
+
+
+def _render_result(receipt, pool_labels):
     if receipt.bookmark_command is not None:
         return "앱에서 찜 처리 결과를 확인해 주세요."
     if receipt.execution == "failed":
@@ -160,6 +172,13 @@ def render_answer(receipt):
         else:
             parts.append("이번 조회에서는 현재 조건과 제외를 반영한 후보를 찾지 못했어요.")
         return " ".join(parts)
+    if receipt.known_places and receipt.execution == "not_run" and not receipt.filters_changed:
+        return "현재 목록은 유지했어요. 원하면 다른 새 후보를 찾아볼 수 있어요."
+    if receipt.search_pool in {"unbookmarked", "new_candidates"} and receipt.goal == "show":
+        label = pool_labels[receipt.search_pool]
+        if receipt.returned_count == 0:
+            return f"현재 조건의 {label}를 더 찾지 못했어요. 업종이나 반경을 바꿔볼 수 있어요."
+        return f"현재 조건의 {label} {receipt.returned_count}곳을 표시했어요."
     if receipt.goal == "edit_only":
         return (
             "조건을 변경했어요. 검색 결과는 다시 찾기 전 목록이에요."

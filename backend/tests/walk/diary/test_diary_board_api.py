@@ -11,7 +11,7 @@ from daengs_backend.config import settings
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services import walk_diary_generation as generation
 from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services import walk_diary_writing as writer
+from daengs_backend.services import walk_diary_slot_writing as writer
 from daengs_backend.services.walk_diary_board_storage import StoredBoard
 from daengs_backend.services.walk_diary_generation import generate_diary
 from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
@@ -112,7 +112,9 @@ def test_first_board_does_not_wait_without_active_collection(
     state.writer.assert_awaited_once()
 
 
-@pytest.mark.parametrize("uploaded_at", [None, datetime(2026, 9, 10, 12, tzinfo=UTC).replace(tzinfo=None)])
+@pytest.mark.parametrize(
+    "uploaded_at", [None, datetime(2026, 9, 10, 12, tzinfo=UTC).replace(tzinfo=None)]
+)
 def test_unknown_server_upload_time_does_not_block_first_board(api, clock, uploaded_at):
     client, state, _ = api
     state.walk.created_at = uploaded_at
@@ -153,7 +155,7 @@ def test_deleted_entry_collection_does_not_delay_first_board(api, clock):
     reader.contexts.current.assert_not_awaited()
 
 
-def test_fixed_board_reuses_existing_writer_and_hides_private_input(api):
+def test_fixed_board_uses_slot_writer_and_hides_private_input(api):
     client, state, _ = api
     assert client.get(PATH + QUERY).json()["status"] == "pending"
     response = client.post(PATH, json=request(state))
@@ -170,7 +172,7 @@ def test_fixed_board_reuses_existing_writer_and_hides_private_input(api):
     assert "pin_payload" not in response.text and "owner_id" not in response.text
     assert "background_decisions" not in response.text and "record" not in record["core"]
     state.provider.assert_awaited_once()
-    assert state.row.bundle["format"] == "walk-diary-board-storage-v1"
+    assert state.row.bundle["format"] == "walk-diary-board-storage-v2"
     assert StoredBoard.model_validate(state.row.bundle).bundle == PublishedBoard.model_validate(
         result["bundle"]
     )

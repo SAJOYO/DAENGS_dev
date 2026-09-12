@@ -13,7 +13,7 @@ def stored_format(row):
     kind = raw.get("format")
     if kind in {"walk-diary-reservation-v1", "walk-diary-preparation-v1"}:
         return raw.get("bundle_format")
-    if kind == "walk-diary-board-storage-v1":
+    if kind in {"walk-diary-board-storage-v1", "walk-diary-board-storage-v2"}:
         return BOARD_FORMAT
     if kind == "walk-diary-storage-v1":
         return "walk-diary-bundle-v1"

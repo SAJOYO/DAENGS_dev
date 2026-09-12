@@ -8,6 +8,8 @@ from daengs_place.place.filters.contract import KindList
 from daengs_place.place.name_query import PlaceNameQuery
 from daengs_place.place.planning.contract import PlanningModel
 
+SearchPool = Literal["all_places", "bookmarks", "unbookmarked", "new_candidates"]
+
 Attribute = Literal[
     "parking",
     "exclusive",
@@ -53,12 +55,33 @@ class SemanticChanges(PlanningModel):
 
 class Interpretation(PlanningModel):
     goal: Literal["show", "pick_one", "explain", "edit_only", "clarify"]
-    search_scope: Literal["keep", "bookmarks", "all_places"] = Field(
-        default="keep",
-        description="후보 집합 변경만 표현한다. 검색 동사나 찜 저장 행위의 부정은 집합 변경이 아니다.",
+    search_scope: Literal["keep", "bookmarks", "all_places", "unbookmarked", "new_candidates"] = (
+        Field(
+            default="keep",
+            description="후보 집합 변경만 표현한다. 검색 동사나 찜 저장 행위의 부정은 집합 변경이 아니다.",
+        )
+    )
+    search_scope_quote: str = Field(
+        default="",
+        max_length=500,
+        description="검색 대상 집합을 바꾸라는 최신 발화의 원문 구절. 저장 행위의 부정은 근거가 아니며 빈 문자열이다.",
     )
     spatial_scope: Literal["keep", "unbounded"] = "keep"
+    navigation: Literal["stay", "restore_search"] = Field(
+        default="stay",
+        description="이전 검색 화면으로 돌아가기만 restore_search. 찜 제한 해제는 검색 변경이다.",
+    )
+    forbid_save: StrictBool = Field(
+        default=False,
+        description="이번 요청에서 저장하지 말라는 뜻. 찜 해제나 검색 집합 변경이 아니다.",
+    )
     feedback: Literal["none", "evaluation", "familiarity", "information_dispute"] = "none"
+    search_request_quote: str = Field(
+        default="",
+        max_length=500,
+        description="피드백과 함께 말한 실제 검색·조건 변경 요청의 최신 원문 구절. 불만만 있으면 빈 문자열",
+    )
+    familiarity: "FamiliarityCorrection | None" = None
     bookmark: "BookmarkEdit | None" = None
     changes: SemanticChanges = Field(default_factory=SemanticChanges)
     refresh: bool = False
@@ -72,11 +95,24 @@ class Interpretation(PlanningModel):
         "none", "conflicting_conditions", "missing_target", "unsupported_goal", "ambiguous"
     ] = "none"
 
+    @model_validator(mode="before")
+    @classmethod
+    def derive_feedback(cls, value):
+        if (
+            isinstance(value, dict)
+            and value.get("familiarity")
+            and value.get("feedback", "none") == "none"
+        ):
+            return {**value, "feedback": "familiarity"}
+        return value
+
     @model_validator(mode="after")
     def exploration_goal(self) -> Self:
         if (self.browse != "current" or self.place_edit) and self.goal != "show":
             raise ValueError("exploration edits require show")
-        if self.browse == "restart" and self.place_edit:
+        if self.familiarity is not None and self.feedback not in {"none", "familiarity"}:
+            raise ValueError("conflicting familiarity and feedback")
+        if self.browse == "restart" and (self.place_edit or self.familiarity):
             raise ValueError("restart cannot also edit previous exclusions")
         return self
 
@@ -85,6 +121,15 @@ class PlaceTarget(PlanningModel):
     kind: Literal["name", "selected", "ordinal", "all"]
     # A literal span from the latest query, never a generated key or screen index.
     text: str = Field(min_length=1, max_length=200)
+
+
+class FamiliarityCorrection(PlanningModel):
+    quote: str = Field(
+        min_length=1,
+        max_length=500,
+        description="대상과 이미 안다는 진술을 포함한 최신 원문 절 전체",
+    )
+    targets: tuple[PlaceTarget, ...] = Field(min_length=1, max_length=120)
 
 
 class PlaceEdit(PlanningModel):

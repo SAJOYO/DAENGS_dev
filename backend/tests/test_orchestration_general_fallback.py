@@ -507,7 +507,7 @@ def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
         'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
         ' "health_conditions": "신부전 초기", "on_medication": true}'
     ) in prompt
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v7"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
     # the contract has no field that could carry a drug name into the prompt
     assert "medications" not in DogContext.model_fields
     assert "feeding_times" not in DogContext.model_fields
@@ -517,7 +517,7 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v7"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     # v3: the instructions are English like the router policy; the OUTPUT stays Korean
     assert "Write in Korean" in prompt
@@ -545,10 +545,46 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     assert "facts that require a source document" in prompt
     assert "Ordinary husbandry numbers do NOT belong here" in prompt
     assert "explicitly asks for a disease name" in prompt and "interpret test results" in prompt
-    # medication · emergency · off_topic unchanged
-    assert "drugs, supplements, dosages, or administration" in prompt
+    # emergency · off_topic unchanged; medication narrowed by D-071 (covered separately below)
     assert 'Say nothing beyond "go to a veterinary hospital right now"' in prompt
     assert "off_topic: the question is not about dogs." in prompt
+
+
+def test_medication_boundary_answers_duration_and_schedule_of_a_prescribed_drug() -> None:
+    """D-071: 이미 처방·복용 중인 약의 기간·주기는 이제 답한다 — 가장 좁은 폭(A)만 연다.
+
+    #446 의 실물: "심장사상충 예방약 얼마나 오래 해야 해?" 가 medication 거절이었다.
+    프롬프트가 그 축을 husbandry norm 과 같은 결(전형적 범위 + 개체차 + 수의사/라벨이
+    정확한 값의 권위)로 답하도록 허용하는지를 잰다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "duration or schedule of a medication" in prompt
+    assert "is answerable" in prompt
+    # 기간·주기 규칙이 husbandry norm 규칙 다음, refuse 목록보다 앞(answering 규칙)에 있다
+    husbandry_idx = prompt.index("Ordinary husbandry norms ARE answerable")
+    duration_idx = prompt.index("duration or schedule of a medication")
+    refuse_idx = prompt.index('Refuse (kind="refuse") only in these cases')
+    assert husbandry_idx < duration_idx < refuse_idx
+
+
+def test_medication_boundary_still_refuses_dosage_questions() -> None:
+    """용량은 A 범위 밖 — 계속 거절이어야 한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "dosage" in medication_rule
+
+
+def test_medication_boundary_still_refuses_drug_name_recommendations() -> None:
+    """무슨 약을 먹일지 이름 추천은 A 범위 밖 — 계속 거절이어야 한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "which drug" in medication_rule or "drug name" in medication_rule
+
+
+def test_medication_boundary_still_refuses_whether_to_start_a_drug() -> None:
+    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "start" in medication_rule
 
 
 def test_general_adapter_uses_the_router_model() -> None:

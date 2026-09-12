@@ -203,6 +203,23 @@ uv run check
 lease 만료 시각은 테스트 DB에서 앞당기며, 사진 저장소와 모델은 결정적 대역이다.
 이는 Linux prefork·상주 Beat 프로세스 재시작·실제 VLM·운영 부하 검증을 대체하지 않는다.
 
+전체 pytest의 `tests/place/api/test_territory_site_ids.py`도 같은 `claims_test`를 사용한다.
+그 두 DB 케이스에는 pgvector와 별개인 **PostGIS**가 필요하다. [공식 Windows 배포 안내](https://postgis.net/documentation/getting_started/install_windows/released_versions/)의
+[PG17용 3.6.2 zip](https://download.osgeo.org/postgis/windows/pg17/postgis-bundle-pg17-3.6.2x64.zip)을
+작업 폴더에 풀고, 배포본 README의 폴더 구조에 맞게 확장과 필요한 DLL을 폐기용
+PostgreSQL 폴더에 추가한 뒤 `claims_test`에서 `CREATE EXTENSION postgis`를 실행한다.
+검증한 zip의 SHA256은 `7ba180ee2a352987b9a2f194673652c59483b55852295ccf401dceccd8765425`다.
+기존 PostgreSQL 실행 파일·공용 DLL은 교체하지 않았다.
+
+```powershell
+& "$pgRoot\bin\psql.exe" -h 127.0.0.1 -p 55439 -U postgres -d claims_test `
+  -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis;'
+uv run pytest -q -rs tests/place/api/test_territory_site_ids.py --tb=short
+```
+
+이는 해당 파일의 고유 스키마 검사에 필요한 준비다. Place 전체 통합 테스트에는 별도의
+Place 스키마가 필요하고, 코퍼스·ML 선택 의존성이 필요한 테스트도 각각 준비해야 한다.
+
 ### Compose 설정 검사
 
 기존 배포 계약 테스트는 `docker compose config`를 호출한다. 설정 렌더에는 엔진이

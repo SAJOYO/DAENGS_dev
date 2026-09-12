@@ -2,6 +2,8 @@
 
 시설 입력의 해석과 실행 결과를 검토하는 오프라인 평가기다. 코드는 [place_conversation](../../backend/src/daengs_evals/place_conversation/README.md)에 있으며 실행 명령과 파일 설명은 그 README가 기준이다. 데이터는 [judge 안내](../../backend/evals/place_conversation/judge/README.md)를 따른다.
 
+개발 세트 전체 실행과 Judge 대조 결과는 [시설 개발 세트 예비 평가](conversation-baseline.md)에 있다. 운영 모델의 전체 기준선과 Lite 예비 측정을 구분한다.
+
 ## 평가할 것
 
 | 축 | 목적 |

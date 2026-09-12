@@ -1,0 +1,268 @@
+{
+  "format": "walk-diary-board-response-v1",
+  "session_id": "18be3249-45d2-4aed-9d5f-0765eb317fcc",
+  "generation": 1,
+  "input_revision": "0a8bcc0bdb4e4626f505d936dca9006ac24ad615ba758212841a07632098fdee",
+  "status": "ready",
+  "entry_revisions": {
+    "d0f8eb87-c898-4266-986a-148c4168b347": 2
+  },
+  "photos_status": "not_available",
+  "photo_manifest": null,
+  "target_scene_count": 3,
+  "preparation_counts": {
+    "target": 3,
+    "user_records": 1,
+    "initial_deficit": 2,
+    "supplemented": 2,
+    "remaining_deficit": 0,
+    "total": 5,
+    "checkpoints": 0,
+    "boundaries": 2,
+    "intermediate_total": 3
+  },
+  "preparation_limits": [
+    "photo_metadata_not_available"
+  ],
+  "background_update_available": false,
+  "bundle": {
+    "format": "walk-diary-board-v1",
+    "client_session_id": "18be3249-45d2-4aed-9d5f-0765eb317fcc",
+    "input_revision": "0f821e3303901f7f0a15e3f9011d7cdaae029d053803851d333706cc953b0c9a",
+    "plan_revision": "e36b573a92b7935d9867b554e81db7f9d0390aae5bff9ae0dd6a8982bbb56141",
+    "title": "2026.09.09 산책",
+    "model_status": "accepted",
+    "failure_code": null,
+    "scenes": [
+      {
+        "id": "stamp:ad92e1cec07cbb2eec3f52f6e5f0314b6fe25a64d9f20a87df304b2d6b6bbb45",
+        "order": 1,
+        "core": {
+          "identity": "boundary:8ebf25c86ac7163ad63cc96b7d5af1131a8e63a9bf3a097b696d190987d243e9",
+          "version": "ee3cea9cd756f14cce71582ecbe0fae1da8041c125ad8aed636042be8f69e0ff"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-09T00:00:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:00:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-09T00:00:00Z"
+            }
+          ]
+        },
+        "title": "산책의 시작",
+        "body": "가까이에 등록된 카페가 있었다.\n산책을 시작했다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "start",
+        "place_reference": []
+      },
+      {
+        "id": "stamp:59b487c032e7044b159755c49891522b9c2d0bf69066ba8066f712e5de1cf0c3",
+        "order": 2,
+        "core": {
+          "identity": "walk_entry:d0f8eb87-c898-4266-986a-148c4168b347",
+          "version": "24d0e8240b5fd6a892c16e78feed7d5c8b0987e2ef183fde9b8e613eb6b4ebf9"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-09T00:00:00Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:00:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "legacy",
+          "method": "last_known",
+          "source_fixes": []
+        },
+        "title": "남긴 이야기",
+        "body": "가까이에 등록된 카페가 있었다.\n  있는 그대로\n  ",
+        "user_record": {
+          "kind": "note",
+          "text": "  있는 그대로\n  "
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:b0a9f58e739c85bb7f995d2508d36f15f96c349e4f4442288aa890f513647b71",
+        "order": 3,
+        "core": {
+          "identity": "observation:motion:8d42d5551a056a931664ad369ebc4be9cea41e7138c4ca310b60d3722c008c4d",
+          "version": "d253fd719d8da74102d8b1b5617ffd783f5c146bdb7ec70974c1a5c449f3f218"
+        },
+        "kind": "movement_observation",
+        "anchor": {
+          "event_at": "2026-09-09T00:01:10Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.501079,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:01:10Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 7,
+              "chain_index": 0,
+              "at": "2026-09-09T00:01:10Z"
+            }
+          ]
+        },
+        "title": "잠시 머문 구간",
+        "body": "가까이에 등록된 카페가 있었다.\n이 구간에서는 동선이 한곳에 모였다.",
+        "user_record": null,
+        "observation": {
+          "id": "motion:8d42d5551a056a931664ad369ebc4be9cea41e7138c4ca310b60d3722c008c4d",
+          "version": "3f31a1875e5d86381ff7fda9fc3bfd296a9c981111e90ad56eb6221a3cb3365b",
+          "analysis_id": "00000000-0000-0000-0000-000000000063",
+          "kind": "observed_dwell",
+          "subject": "recording_device",
+          "action_meaning": "not_inferred",
+          "started_at": "2026-09-09T00:01:00Z",
+          "ended_at": "2026-09-09T00:01:30Z",
+          "anchor": {
+            "event_at": "2026-09-09T00:01:10Z",
+            "time_basis": "route_observation",
+            "point": {
+              "lat": 37.501079,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:01:10Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 7,
+                "chain_index": 0,
+                "at": "2026-09-09T00:01:10Z"
+              }
+            ]
+          }
+        },
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:aaf2611ab10343bbb5cdcd63f3c510996eeeb4f8f6181bb68d7af3fb64319f88",
+        "order": 4,
+        "core": {
+          "identity": "observation:motion:39273b4702da4a036b1616a514a89e74a6f68b2d5a2270bcd03435eae8f835c2",
+          "version": "33b4bc505391b0f891cc8242c196196598c9d2fed7679962bbca264f8be5b72c"
+        },
+        "kind": "movement_observation",
+        "anchor": {
+          "event_at": "2026-09-09T00:02:40Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.502221,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:02:40Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 16,
+              "chain_index": 0,
+              "at": "2026-09-09T00:02:40Z"
+            }
+          ]
+        },
+        "title": "천천히 이어진 구간",
+        "body": "가까이에 등록된 카페가 있었다.\n이 구간에서는 산책 중 다른 이동 구간보다 속도가 느려졌다.",
+        "user_record": null,
+        "observation": {
+          "id": "motion:39273b4702da4a036b1616a514a89e74a6f68b2d5a2270bcd03435eae8f835c2",
+          "version": "96aaca48a0ec8d2014f6ae4210eb5163e16cacfe48c8aef02c9ec2496b8d6472",
+          "analysis_id": "00000000-0000-0000-0000-000000000063",
+          "kind": "observed_slow",
+          "subject": "recording_device",
+          "action_meaning": "not_inferred",
+          "started_at": "2026-09-09T00:02:30Z",
+          "ended_at": "2026-09-09T00:03:00Z",
+          "anchor": {
+            "event_at": "2026-09-09T00:02:40Z",
+            "time_basis": "route_observation",
+            "point": {
+              "lat": 37.502221,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:02:40Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 16,
+                "chain_index": 0,
+                "at": "2026-09-09T00:02:40Z"
+              }
+            ]
+          }
+        },
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": []
+      },
+      {
+        "id": "stamp:d9e504fb4acaa71ebedcb736a6aac965623d7a019330839a11b0ade552a5cc6f",
+        "order": 5,
+        "core": {
+          "identity": "boundary:2c07177a933bc0bcbf6ca2890d7fdd751347f574f8bed57f51b95c196336c35e",
+          "version": "6ab073fb1755202c374877a6004947e5658ce082ce507aaef93705895ea96589"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-09T00:05:30Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.505585,
+            "lng": 127.0
+          },
+          "location_at": "2026-09-09T00:05:30Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 33,
+              "chain_index": 0,
+              "at": "2026-09-09T00:05:30Z"
+            }
+          ]
+        },
+        "title": "산책의 마무리",
+        "body": "가까이에 등록된 카페가 있었다.\n산책을 마쳤다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "end",
+        "place_reference": []
+      }
+    ]
+  },
+  "error_code": null
+}

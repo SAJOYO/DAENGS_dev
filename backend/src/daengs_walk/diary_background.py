@@ -19,6 +19,10 @@ class Projection:
 
 
 def project_background(saved: SavedBackground, core) -> Projection:
+    if saved.provider == "kakao-local":
+        from daengs_walk.diary_kakao_background import project_kakao_background
+
+        return project_kakao_background(saved, core)
     if saved.provider in {"sgis", "data-go-kr-parks", "data-go-kr-commerce", "egis-rivers"}:
         from daengs_walk.diary_public_background import project_public_background
 

@@ -112,11 +112,24 @@ def admit(scene_id, candidates, decisions, policy):
     Total capacity is round-robin over each part's ranked queue (space/env/motion).
     This is a visible budget tie-break, not a required mix or cross-part score.
     """
-    from daengs_walk.diary_slot_claims import resolve_claims, spatial_order
+    from daengs_walk.diary_slot_claims import SPATIAL_ORDER, resolve_claims, spatial_order
 
     candidates = resolve_claims(candidates, decisions)
     applicable = []
     for item in candidates:
+        if item.part == "space" and item.role not in (*SPATIAL_ORDER, "scene_address_reference"):
+            decisions.append(
+                SlotDecision(
+                    source_id=item.source_id,
+                    evidence_id=item.id,
+                    part="space",
+                    eligibility="unknown",
+                    admission="excluded",
+                    reason="unsupported_spatial_relation",
+                    details={"role": item.role},
+                )
+            )
+            continue
         # Resolve incompatible claims first, even if one of their distances is
         # outside the requested radius. Filtering it first could hide a conflict.
         if item.role in {"scene_registered_point_distance", "scene_geometry_distance"} and (
@@ -203,6 +216,7 @@ def prepare_board_slots(
     policy: SlotPolicy,
     *,
     route: VerifiedBoardRoute | None = None,
+    scene_backgrounds=None,
 ) -> BoardSlotSnapshot:
     """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
@@ -212,10 +226,17 @@ def prepare_board_slots(
         or board.input_revision != source.revision()
     ):
         raise ValueError("part slots require the selected board's source snapshot")
+    extra = (
+        scene_backgrounds.validate_board(board).backgrounds if scene_backgrounds is not None else ()
+    )
+    if {b.id for b in extra} & {b.id for b in source.backgrounds}:
+        raise ValueError("collected and stored background IDs overlap")
     motion, blocks = verified_motion(source, route)
     stamps = []
     for scene in board.scenes:
-        candidates, decisions = candidates_for_scene(source, scene, policy, motion, blocks)
+        candidates, decisions = candidates_for_scene(
+            source, scene, policy, motion, blocks, extra_backgrounds=extra
+        )
         stamps.append(admit(scene.id, candidates, decisions, policy))
     return BoardSlotSnapshot(
         client_session_id=board.client_session_id,

@@ -2,12 +2,13 @@
 
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from daengs_backend.services.walk_diary_board_provenance import writing_receipt
 from daengs_walk.diary_board_output import PublishedBoard
 from daengs_walk.diary_board_receipt import StoredSlotWriting
 from daengs_walk.diary_input import DiaryContract, Digest, digest
+from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
 
 STORAGE_FORMAT = "walk-diary-board-storage-v2"
 
@@ -32,9 +33,17 @@ class StoredBoard(LegacyStoredBoard):
     format: Literal["walk-diary-board-storage-v2"] = STORAGE_FORMAT
     writing_receipt: StoredSlotWriting
     writing_receipt_sha256: Digest
+    scene_backgrounds: SceneBackgroundSnapshot | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    scene_backgrounds_sha256: Digest | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def intact_writing(self):
+        if self.scene_backgrounds_sha256 != (
+            digest(self.scene_backgrounds) if self.scene_backgrounds is not None else None
+        ):
+            raise ValueError("stored scene backgrounds changed without their receipt")
         if digest(self.writing_receipt) != self.writing_receipt_sha256:
             raise ValueError("stored writing changed without its receipt")
         self.writing_receipt.require_bundle(self.bundle, self.generation_revision)
@@ -75,6 +84,12 @@ def store_board(prepared, bundle, revision, *, writing=None):
         bundle=bundle,
         writing_receipt=receipt,
         writing_receipt_sha256=digest(receipt),
+        scene_backgrounds=prepared.board.scene_backgrounds,
+        scene_backgrounds_sha256=(
+            digest(prepared.board.scene_backgrounds)
+            if prepared.board.scene_backgrounds is not None
+            else None
+        ),
         preparation_counts=plan.counts,
         preparation_limits=plan.limits,
     ).model_dump(mode="json")

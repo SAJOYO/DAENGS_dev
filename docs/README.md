@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/space-normalization.md](walk/space-normalization.md) | 상권·공원·피복의 유한 사전, 원자료 보존·장면 결합·실제 발행·APP 저장 연결 |
 | [산책 장면·일기 기획](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md) · [GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266) | 개별 장면 우선·별도 전체 일기 생성의 기획 기준. 아래 구현 문서와 적용 상태를 구별 |
 | [장면 서술 기획 경위·인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md) | 대화 전개·장면/행동 서술·특별한 순간·슬롯/API·실험 실패·실제 출력 40개·다음 작업. 최신 기획 채택과 구현 미반영을 구별 |
 | [walk/trajectory-api.md](walk/trajectory-api.md) | 동선 검증 후보 조회 — 소유권·명시적 버전·기대 측정 ID·원본 시각·전체 응답 무결성 |

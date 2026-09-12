@@ -11,6 +11,9 @@ PURE_MODULES = {
     "hex_grid.py",
     "measurement.py",
     "observation.py",
+    "trajectory.py",
+    "trajectory_selection.py",
+    "trajectory_view.py",
 }
 PRODUCT_PACKAGES = {
     "daengs_walk",

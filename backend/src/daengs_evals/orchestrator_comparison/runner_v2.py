@@ -52,10 +52,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
-import importlib.metadata
 import json
 import statistics
-import subprocess
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -68,10 +66,13 @@ from daengs_backend.orchestration.contracts import (
     PrincipalContext,
     RoutePlan,
 )
-from daengs_backend.orchestration.graph import CapabilityAdapter, OrchestrationEngine
 from daengs_evals import BACKEND_DIR
+from daengs_evals.eval_harness import Meter, RecordingEngine
+from daengs_evals.eval_harness import dirty_tracked_files as _dirty_tracked_files
+from daengs_evals.eval_harness import git as _git
+from daengs_evals.eval_harness import metered_semantic_generate as _metered_semantic_generate
+from daengs_evals.eval_harness import package_version as _package_version
 from daengs_evals.orchestrator_comparison.runner import (
-    Meter,
     _agent_usage_callback,
     _explicit_signal_case_ids,
     _fake_adapters,
@@ -149,54 +150,12 @@ def execution_order(run: int, index: int) -> tuple[str, str]:
 
 # ---------------------------------------------------------------------------
 # 구현 둘 — 한 프로세스, 객체 둘. 실제로 쓰인 RoutePlan 은 엔진에서 잡는다
+#
+# `RecordingEngine` 과 `_metered_semantic_generate` 는 `daengs_evals.eval_harness` 로
+# 옮겼다(#464, D-072 — 위 import) — 둘 다 이 비교를 몰랐다. v1(`runner.py`) 의
+# 같은 이름 함수는 설정을 숫자로 다시 적어 여기 것과 시그니처·동작이 다르다 — 그쪽은
+# 손대지 않았다.
 # ---------------------------------------------------------------------------
-
-
-class RecordingEngine(OrchestrationEngine):
-    """엔진에 닿은 RoutePlan 을 `sink["plan"]` 에 남긴다 (모듈 docstring)."""
-
-    def __init__(
-        self, adapters: Mapping[CapabilityName, CapabilityAdapter], sink: dict[str, Any]
-    ) -> None:
-        super().__init__(adapters)
-        self._sink = sink
-
-    async def run(self, *, route_plan: RoutePlan, **kwargs: Any) -> Any:  # type: ignore[override]
-        self._sink["plan"] = route_plan
-        return await super().run(route_plan=route_plan, **kwargs)
-
-
-def _metered_semantic_generate(meter: Meter, client: Any = None) -> Callable[[str], Any]:
-    """LangGraph 의 의미 라우터 호출을 재는 transport.
-
-    `semantic._generate_with_gemini` 는 응답 객체를 버려 `usage_metadata` 가 남지 않으므로
-    여기서 같은 호출을 하되 사용량을 센다. 생성 설정은 `router_generation_config()` **그
-    객체**다 — v1 은 숫자를 다시 적었고, 그러면 운영과 벤치마크가 조용히 갈릴 수 있다.
-    """
-    from daengs_backend.orchestration.semantic import (
-        ROUTER_MODEL_ID,
-        _gemini_client,
-        router_generation_config,
-    )
-
-    async def generate(prompt: str) -> object:
-        def _call() -> object:
-            response = (client or _gemini_client()).models.generate_content(
-                model=ROUTER_MODEL_ID,
-                contents=prompt,
-                config=router_generation_config(),
-            )
-            usage = getattr(response, "usage_metadata", None)
-            meter.add(
-                input_tokens=getattr(usage, "prompt_token_count", None),
-                output_tokens=getattr(usage, "candidates_token_count", None),
-            )
-            parsed = getattr(response, "parsed", None)
-            return parsed if parsed is not None else getattr(response, "text", None)
-
-        return await asyncio.to_thread(_call)
-
-    return generate
 
 
 def build_pair(meters: dict[str, Meter], sink: dict[str, Any]) -> dict[str, Any]:
@@ -352,29 +311,11 @@ async def run_repetition(
 
 # ---------------------------------------------------------------------------
 # 출처 · 설정 — 결과 파일이 "무엇을 쟀나" 를 스스로 말하게
+#
+# `_git` · `_dirty_tracked_files` · `_package_version` 은 `daengs_evals.eval_harness`
+# 로 옮겼다(#464, D-072 — 위 import). git/패키지 버전 조회는 이 비교와 무관한 범용
+# 도구였다.
 # ---------------------------------------------------------------------------
-
-
-def _git(*args: str, strip: bool = True) -> str:
-    try:
-        output = subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=True, cwd=BACKEND_DIR
-        ).stdout
-    except Exception:  # noqa: BLE001 - git 이 없다고 벤치마크를 멈추지 않는다
-        return "unknown"
-    return output.strip() if strip else output
-
-
-def _dirty_tracked_files() -> list[str]:
-    """추적 파일의 변경만. 이 러너가 새로 만드는 결과 파일(untracked)은 dirty 가 아니다.
-
-    porcelain 행은 `XY 경로` 라 앞 공백이 뜻을 가진다 — 통째로 strip 하면 첫 행의 경로가
-    한 글자 잘린다. 그래서 strip 없이 받아 행마다 자른다.
-    """
-    status = _git("status", "--porcelain", "--untracked-files=no", strip=False)
-    if status == "unknown":
-        return ["unknown"]
-    return [line[3:] for line in status.splitlines() if line.strip()]
 
 
 def source_provenance() -> dict[str, Any]:
@@ -391,13 +332,6 @@ def source_provenance() -> dict[str, Any]:
         ),
         "packages": {name: _package_version(name) for name in RELEVANT_PACKAGES},
     }
-
-
-def _package_version(name: str) -> str:
-    try:
-        return importlib.metadata.version(name)
-    except importlib.metadata.PackageNotFoundError:
-        return "not installed"
 
 
 def controlled_settings() -> dict[str, Any]:

@@ -59,7 +59,7 @@ class StatelessDriver:
     `context_continuity` · `repair_success` 가 0 인 것은 판정기의 발견이지 드라이버의
     결함이 아니다.
 
-    `plan_sink` · `general_sink` 는 `orchestrator_comparison.runner_v2.RecordingEngine` 과
+    `plan_sink` · `general_sink` 는 `daengs_evals.eval_harness.RecordingEngine` 과
     같은 자리 — 엔진 · 어댑터에 닿은 값을 얕게 가로챈다. 둘 다 `collect.py` 가 오케스트레이터를
     조립하며 만들어 넘긴다. 이 드라이버는 그 조립 방법을 모른다 — 그래야 `SessionDriver` 가
     같은 조립 위에 얹혀도 이 클래스를 안 건드린다.

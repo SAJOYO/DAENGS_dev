@@ -64,14 +64,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from daengs_backend.orchestration.contracts import (
-    CapabilityName,
-    CapabilityRequest,
-    CapabilityResult,
-    CapabilityStatus,
     PrincipalContext,
     RoutePlan,
 )
 from daengs_evals import EVALS_DIR
+from daengs_evals.eval_harness import Meter
+from daengs_evals.eval_harness import fake_adapters as _fake_adapters
 from daengs_evals.router_benchmark.evaluate import evaluate_benchmark
 from daengs_evals.router_benchmark.schemas import (
     AttemptValidation,
@@ -98,64 +96,15 @@ _PRINCIPAL = PrincipalContext(subject="comparison-runner", kind="ADMIN")
 
 
 # ---------------------------------------------------------------------------
-# 가짜 어댑터 — 재는 것은 능력 선택이지 도메인 답이 아니다 (카드 ⑦)
+# 가짜 어댑터 · 계량 — `daengs_evals.eval_harness` 로 옮겼다 (#464, D-072).
+#
+# 둘 다 이 비교를 전혀 모르는 범용 기계였고, `answer_quality`·`conversation_quality`
+# 가 (비공개 심볼로) 이미 재사용하고 있었다. 이 패키지는 일회성이라 지울 예정이므로
+# (모듈 docstring), 그 둘이 안 부서지게 기계는 옮기고 여기서는 이름만 다시 문다(위 import).
+# `turns` 가 이 카드(v1)의 핵심 숫자인 이유 — 에이전트는 루프를 돌아서 토큰이 턴 수에
+# 비례한다. 두 구현의 비용 차이가 어디서 오는지 그 숫자가 말한다. LangGraph 는 의미
+# 라우터 호출 1회(스키마 실패 시 2회)다.
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class FakeAdapter:
-    """즉시 OK 를 돌려준다. 그래서 남는 시간이 곧 오케스트레이션 시간이다."""
-
-    capability: CapabilityName
-
-    async def run(self, request: CapabilityRequest, *, request_id: str) -> CapabilityResult:
-        return CapabilityResult(
-            capability=self.capability,
-            status=CapabilityStatus.OK,
-            data={"answer": f"(가짜 {self.capability.value} 어댑터)"},
-            elapsed_ms=0,
-        )
-
-
-def _fake_adapters() -> dict[CapabilityName, FakeAdapter]:
-    return {name: FakeAdapter(capability=name) for name in CapabilityName}
-
-
-# ---------------------------------------------------------------------------
-# 계량 — 비용·지연을 in-process 로 (카드 ②: 트레이싱 인프라가 필요 없다)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class Meter:
-    """한 케이스의 모델 사용량. `turns` 가 이 카드의 핵심 숫자다.
-
-    에이전트는 루프를 돌아서 토큰이 턴 수에 비례한다 — 두 구현의 비용 차이가 어디서
-    오는지 이 숫자가 말한다. LangGraph 는 의미 라우터 호출 1회(스키마 실패 시 2회)다.
-    """
-
-    turns: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-
-    def reset(self) -> None:
-        self.turns = 0
-        self.input_tokens = 0
-        self.output_tokens = 0
-
-    def add(self, *, input_tokens: int | None, output_tokens: int | None) -> None:
-        self.turns += 1
-        self.input_tokens += int(input_tokens or 0)
-        self.output_tokens += int(output_tokens or 0)
-
-    def observation(self, latency_ms: float) -> PerformanceObservation:
-        total = self.input_tokens + self.output_tokens
-        return PerformanceObservation(
-            latency_ms=latency_ms,
-            input_tokens=self.input_tokens or None,
-            output_tokens=self.output_tokens or None,
-            total_tokens=total or None,
-        )
 
 
 def _metered_semantic_generate(meter: Meter):
@@ -350,8 +299,7 @@ async def run_all(cases: list[GoldCase]) -> dict[str, list[CaseRun]]:
             print(
                 f"  [{index:>3}/{len(cases)}] {case.case_id:<24} {name:<10} "
                 f"{marker} status={run.status:<9} turns={run.turns} "
-                f"{run.performance.latency_ms:.0f}ms"
-                + (f"  {run.error}" if run.error else "")
+                f"{run.performance.latency_ms:.0f}ms" + (f"  {run.error}" if run.error else "")
             )
     return runs
 
@@ -379,9 +327,7 @@ def _explicit_signal_case_ids(cases: list[GoldCase]) -> set[str]:
     }
 
 
-def _divergence(
-    cases: list[GoldCase], runs: dict[str, list[CaseRun]]
-) -> dict[str, Any]:
+def _divergence(cases: list[GoldCase], runs: dict[str, list[CaseRun]]) -> dict[str, Any]:
     """두 구현이 **의미상** 갈린 케이스만 추린다.
 
     `RoutePlan` 을 그대로 비교하면 안 된다 — `model`·`prompt_version` 이 구현마다
@@ -397,8 +343,7 @@ def _divergence(
 
     gold_by_id = {case.case_id: case for case in cases}
     plans = {
-        name: {run.case_id: run.attempt.plan for run in runs[name]}
-        for name in IMPLEMENTATIONS
+        name: {run.case_id: run.attempt.plan for run in runs[name]} for name in IMPLEMENTATIONS
     }
 
     rows: list[dict[str, Any]] = []
@@ -412,8 +357,7 @@ def _divergence(
         gold_clarifies = gold_by_id[case.case_id].gold_route_plan.clarify is not None
         losers = [n for n in IMPLEMENTATIONS if not matches[n]]
         contract = gold_clarifies and any(
-            (plans[n][case.case_id] is not None and plans[n][case.case_id].requests)
-            for n in losers
+            (plans[n][case.case_id] is not None and plans[n][case.case_id].requests) for n in losers
         )
         if contract:
             contract_ids.append(case.case_id)
@@ -444,9 +388,7 @@ def _divergence(
     }
 
 
-def build_summary(
-    cases: list[GoldCase], runs: dict[str, list[CaseRun]]
-) -> dict[str, Any]:
+def build_summary(cases: list[GoldCase], runs: dict[str, list[CaseRun]]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "benchmark_id": "orchestrator-comparison-v1",
         "card": "#252",
@@ -488,9 +430,7 @@ def build_summary(
                 "max": round(max(latencies), 1) if latencies else None,
             },
             "runner_errors": [
-                {"case_id": run.case_id, "error": run.error}
-                for run in case_runs
-                if run.error
+                {"case_id": run.case_id, "error": run.error} for run in case_runs if run.error
             ],
         }
     return summary
@@ -552,9 +492,7 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         f"{impls[name]['llm_turns']['total']} (평균 {impls[name]['llm_turns']['mean']})"
         for name in IMPLEMENTATIONS
     )
-    latency_row = " | ".join(
-        f"{impls[name]['latency_ms']['mean']}" for name in IMPLEMENTATIONS
-    )
+    latency_row = " | ".join(f"{impls[name]['latency_ms']['mean']}" for name in IMPLEMENTATIONS)
 
     div = summary["divergence"]
     div_rows = [

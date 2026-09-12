@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, or_, select
+from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet, PetMember
@@ -16,6 +16,7 @@ from daengs_backend.models import Pet, PetMember
 __all__ = [
     "accessible_ids",
     "add",
+    "by_ids",
     "count_accessible",
     "count_by_owners",
     "count_for_owner",
@@ -23,6 +24,7 @@ __all__ = [
     "delete_all_for_owner",
     "get_accessible",
     "get_by_id_for_update",
+    "get_many_for_update",
     "get_owned",
     "list_accessible",
     "list_for_owner",
@@ -132,9 +134,49 @@ async def count_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> int
     """**미니룸에 서는 아이 수.** 상한 검사가 이것을 씁니다 (docs/co-care.md §2).
 
     `count_for_owner` 와 다릅니다 — 저건 파기·소유 판단용이고 이건 화면 용량입니다.
+
+    **`pets` 행이 아니라 논리 강아지를 셉니다** (MVP 결정 §4). 같은 실제 강아지를 A 와 B 가
+    각자 등록해 연결했으면 행은 둘이지만 방에는 한 마리만 섭니다 — 행으로 세면 연결한
+    사람만 자리를 두 칸 먹습니다.
+
+    `COALESCE(identity_id, id)` 라 **연결 안 된 행은 자기 id 가 그룹 키**입니다. 그래서
+    연결이 하나도 없는 계정의 숫자는 이 변경 전과 정확히 같습니다 (backfill 이 없는 이유).
+
+    ⚠️ 이 수를 세는 쪽은 **사용자 행을 먼저 잠가야 합니다** — 서로 다른 pet 을 겨냥한 동시
+    요청이 각자 다른 pet 행만 잠그면 둘 다 상한을 통과합니다
+    (`services/pet_identity.py::lock_user`).
     """
-    stmt = select(func.count()).select_from(Pet).where(member_condition(app_user_id))
+    stmt = (
+        select(func.count(distinct(func.coalesce(Pet.identity_id, Pet.id))))
+        .select_from(Pet)
+        .where(member_condition(app_user_id))
+    )
     return int(await session.scalar(stmt) or 0)
+
+
+async def get_many_for_update(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, Pet]:
+    """여러 행을 **id 오름차순으로** 잠급니다. 묶음 수락이 씁니다.
+
+    ⚠️ **정렬이 이 함수의 전부입니다.** 두 사람이 같은 두 강아지를 서로 반대 순서로 잡으면
+    데드락입니다 — 묶음 초대는 한 요청이 여러 pet 행을 잠그므로 그 상황이 실제로 생깁니다.
+    `ORDER BY id` 로 모두가 같은 순서를 쓰게 만듭니다.
+
+    소유자 조건이 없습니다 — `get_by_id_for_update` 의 목록판이고, 권한 판단은 부르는
+    쪽(services)이 합니다.
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return {}
+    stmt = (
+        select(Pet)
+        .where(Pet.id.in_(set(pet_ids)))
+        .order_by(Pet.id)
+        .with_for_update()
+    )
+    return {pet.id: pet for pet in await session.scalars(stmt)}
 
 
 async def owned_ids(
@@ -215,6 +257,25 @@ async def count_by_owners(
         .group_by(Pet.app_user_id)
     )
     return {owner: count for owner, count in (await session.execute(stmt)).all()}
+
+
+async def by_ids(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, Pet]:
+    """id → 행 전체. **소유자 조건이 없습니다** — 권한은 부르는 쪽이 이미 정한 뒤입니다.
+
+    논리 연결의 공통 행(`pet_identities.owner_pet_id`)을 읽는 자리가 씁니다
+    (`services/pet_identity.py`). 그 행은 그룹 구성원에게 이미 보이는 행이라 여기서 다시
+    거르지 않고, 대신 **부르는 쪽이 그룹 id 를 거쳐서만** 이 함수에 닿게 해 둡니다.
+
+    잠그지 않습니다 — 잠글 일이 있으면 `get_many_for_update` 입니다.
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return {}
+    stmt = select(Pet).where(Pet.id.in_(set(pet_ids)))
+    return {pet.id: pet for pet in await session.scalars(stmt)}
 
 
 async def owners_by_ids(

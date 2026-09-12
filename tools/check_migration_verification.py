@@ -537,6 +537,40 @@ CHECKS = (
             ' ALTER TABLE pet_invites ADD CONSTRAINT pet_invites_accepted_by_fkey'
             ' FOREIGN KEY (accepted_by) REFERENCES app_users(id) ON DELETE CASCADE',
          ]),
+        # 2026-09-12 (co-care 논리 강아지 — 다중 초대 MVP) — pet_identities 표와
+        # pets.identity_id 한 칸. 픽스처는 pets 스텁뿐이다(앞선 마이그레이션에 안 기댄다).
+        #
+        # **변조 둘이 이 항목의 이유다.**
+        #  · `pets.identity_id` 의 FK 를 SET NULL → CASCADE 로 바꾸는 것 — 그룹 행 하나가
+        #    사라질 때 사람들의 강아지와 기록이 통째로 딸려 간다. 논리 연결의 전제("물리
+        #    병합을 하지 않는다")가 이 한 칸에 걸려 있다.
+        #  · `pets_identity_one_per_user` 에서 WHERE 를 떼 전체 UNIQUE 로 바꾸는 것 —
+        #    이름이 그대로라 카탈로그를 이름으로만 보면 통과한다. 그런데 부분이 아니면
+        #    뜻이 달라지고, 반대로 UNIQUE 자체를 잃으면 기존 강아지 하나를 초대 강아지
+        #    두 마리에 연결하는 것을 DB 가 더 이상 막지 못한다.
+        ('2026-09-12', 'pet_identities', PETS, 'pet_identities', [
+            'ALTER TABLE pets DROP COLUMN identity_id',
+            'DROP INDEX pets_identity_one_per_user',
+            'DROP INDEX idx_pets_identity',
+            'DROP INDEX pet_identities_owner_pet',
+            'ALTER TABLE pet_identities ALTER COLUMN owner_pet_id DROP NOT NULL',
+            # 부분 UNIQUE 가 전체 UNIQUE 로. 이름은 그대로다.
+            'DROP INDEX pets_identity_one_per_user;'
+            ' CREATE UNIQUE INDEX pets_identity_one_per_user'
+            ' ON pets (identity_id, app_user_id)',
+            # UNIQUE 를 잃고 평범한 인덱스가 됨. 역시 이름은 그대로다.
+            'DROP INDEX pets_identity_one_per_user;'
+            ' CREATE INDEX pets_identity_one_per_user'
+            ' ON pets (identity_id, app_user_id) WHERE identity_id IS NOT NULL',
+            'ALTER TABLE pets DROP CONSTRAINT pets_identity_id_fkey',
+            'ALTER TABLE pets DROP CONSTRAINT pets_identity_id_fkey;'
+            ' ALTER TABLE pets ADD CONSTRAINT pets_identity_id_fkey'
+            ' FOREIGN KEY (identity_id) REFERENCES pet_identities(id) ON DELETE CASCADE',
+            'ALTER TABLE pet_identities DROP CONSTRAINT pet_identities_owner_pet_id_fkey',
+            'ALTER TABLE pet_identities DROP CONSTRAINT pet_identities_owner_pet_id_fkey;'
+            ' ALTER TABLE pet_identities ADD CONSTRAINT pet_identities_owner_pet_id_fkey'
+            ' FOREIGN KEY (owner_pet_id) REFERENCES pets(id) ON DELETE SET NULL',
+         ]),
         # 2026-09-10 (co-care 보행 확정 — "반쯤 열린" 돌보미 업로드, docs/co-care.md §2,
         # #388 · #261) — gait_records 에 actor_app_user_id(업로더) 한 칸. 픽스처는 9/2
         # gait_records + 9/9 tier CHECK 확장을 그대로 재사용한다(그래야 대상 표가 이미

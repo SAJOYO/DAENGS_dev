@@ -23,6 +23,7 @@ from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import dogcard as card_repo
 from daengs_backend.repositories import gait_record as gait_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_identity as identity_repo
 from daengs_backend.repositories import pet_member as pet_member_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import screening as screening_repo
@@ -222,6 +223,9 @@ class Store:
         self.pet_members: list[tuple[uuid.UUID, uuid.UUID]] = []
         #: 초대. `install` 이 만드는 `FakeInvite` 를 담습니다.
         self.pet_invites: list = []
+        #: 논리 강아지 그룹 (`FakeIdentity`). 기본은 비어 있습니다 — 연결이 생길 때만
+        #: 늘고, 그때까지 모든 `FakePet.identity_id` 는 None 입니다.
+        self.pet_identities: list[FakeIdentity] = []
 
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
@@ -303,6 +307,10 @@ class FakePet:
     farewell_on: object | None = None
     updated_at: object | None = None
 
+    #: 논리 강아지 그룹 (MVP 결정 §3). **None 이면 연결 안 된 보통 강아지**입니다 —
+    #: 기존 테스트가 이 칸을 모르고도 그대로 도는 이유입니다.
+    identity_id: uuid.UUID | None = None
+
     # 돌봄 (#331). None 은 '모름'입니다.
     feeding_style: str | None = None
     feeding_times: list[str] | None = None
@@ -318,6 +326,18 @@ class FakePet:
     photo_pending_key: str | None = None
     photo_pending_content_type: str | None = None
     photo_pending_at: object | None = None
+
+
+@dataclass
+class FakeIdentity:
+    """PetIdentity 대역. 여러 `FakePet` 이 같은 실제 강아지임을 나타냅니다.
+
+    **앵커(`owner_pet_id`)가 그룹 주보호자입니다** — 사람 id 를 따로 안 들고 있는 것이
+    진짜와 같습니다 (`models/pet_identity.py`).
+    """
+
+    owner_pet_id: uuid.UUID
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
 
 
 @dataclass
@@ -645,8 +665,25 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         )
 
     async def pet_count_accessible(session, app_user_id):
+        # 진짜와 같게 **논리 강아지**를 셉니다 (MVP 결정 §4) —
+        # `COUNT(DISTINCT COALESCE(identity_id, id))`. 연결이 없으면 행 수와 같습니다.
         ids = _member_pet_ids(app_user_id)
-        return sum(1 for p in store.pets if p.app_user_id == app_user_id or p.id in ids)
+        keys = {
+            p.identity_id or p.id
+            for p in store.pets
+            if p.app_user_id == app_user_id or p.id in ids
+        }
+        return len(keys)
+
+    async def pet_by_ids(session, pet_ids):
+        wanted = set(pet_ids)
+        return {p.id: p for p in store.pets if p.id in wanted}
+
+    async def pet_get_many_for_update(session, pet_ids):
+        # 진짜는 `ORDER BY id` 로 잠급니다. 가짜에는 동시성이 없어 잠금은 흉내 내지 않고,
+        # "여러 행을 id 로 한 번에 찾는다" 는 뜻만 지킵니다.
+        wanted = set(pet_ids)
+        return {p.id: p for p in store.pets if p.id in wanted}
 
     async def pet_get_by_id_for_update(session, pet_id):
         # 진짜와 같게 **소유자 조건이 없습니다** — 초대 수락처럼 권한 판단 전에
@@ -726,6 +763,30 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         for user in store.app_users.values():
             if user.primary_pet_id == pet.id:
                 user.primary_pet_id = None
+        _cascade_identity_anchor({pet.id})
+
+    def _cascade_identity_anchor(deleted_pet_ids):
+        """`pet_identities.owner_pet_id` 의 ON DELETE CASCADE + `pets.identity_id` 의
+        SET NULL 자리.
+
+        앵커 행이 지워지면 그룹 행이 사라지고, 그 그룹을 가리키던 **남은 pet 행은
+        독립 강아지로 되돌아갑니다** — 행도 기록도 안 지워지는 것이 논리 연결의 전제라
+        이 대역이 없으면 "그룹은 없는데 identity_id 는 남은" 상태를 테스트가 못 잡습니다.
+        """
+        orphaned = [
+            identity
+            for identity in store.pet_identities
+            if identity.owner_pet_id in deleted_pet_ids
+        ]
+        if not orphaned:
+            return
+        gone = {identity.id for identity in orphaned}
+        store.pet_identities = [
+            identity for identity in store.pet_identities if identity.id not in gone
+        ]
+        for pet in store.pets:
+            if pet.identity_id in gone:
+                pet.identity_id = None
 
     async def pet_delete_all_for_owner(session, app_user_id):
         owned_ids = {pet.id for pet in store.pets if pet.app_user_id == app_user_id}
@@ -735,7 +796,51 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         for user in store.app_users.values():
             if user.primary_pet_id in owned_ids:
                 user.primary_pet_id = None
+        store.pet_members = [row for row in store.pet_members if row[0] not in owned_ids]
+        _cascade_identity_anchor(owned_ids)
         return len(owned_ids)
+
+    # -- pet_identities (논리 강아지) ---------------------------------------
+    def identity_add(session, owner_pet_id):
+        identity = FakeIdentity(owner_pet_id=owner_pet_id)
+        store.pet_identities.append(identity)
+        return identity
+
+    async def identity_get_many(session, identity_ids):
+        wanted = set(identity_ids)
+        return {i.id: i for i in store.pet_identities if i.id in wanted}
+
+    async def identity_pets_for(session, identity_id):
+        return [p for p in store.pets if p.identity_id == identity_id]
+
+    async def identity_pet_ids_for(session, identity_id):
+        return [p.id for p in store.pets if p.identity_id == identity_id]
+
+    async def identity_count_pets(session, identity_id):
+        return sum(1 for p in store.pets if p.identity_id == identity_id)
+
+    async def identity_guardian_ids(session, identity_id):
+        # 진짜와 같게 **중복 제거된 사용자 집합**입니다 (대표 ∪ 돌보미). 행별로 세면
+        # 연결할 때마다 그룹 인원이 상한을 넘어 늘어납니다 (MVP 결정 §4).
+        group = {p.id for p in store.pets if p.identity_id == identity_id}
+        owners = {p.app_user_id for p in store.pets if p.id in group}
+        carers = {uid for pid, uid in store.pet_members if pid in group}
+        return owners | carers
+
+    async def identity_delete(session, identity_id):
+        before = len(store.pet_identities)
+        store.pet_identities = [
+            i for i in store.pet_identities if i.id != identity_id
+        ]
+        return before - len(store.pet_identities)
+
+    monkeypatch.setattr(identity_repo, "add", identity_add)
+    monkeypatch.setattr(identity_repo, "get_many", identity_get_many)
+    monkeypatch.setattr(identity_repo, "pets_for", identity_pets_for)
+    monkeypatch.setattr(identity_repo, "pet_ids_for", identity_pet_ids_for)
+    monkeypatch.setattr(identity_repo, "count_pets", identity_count_pets)
+    monkeypatch.setattr(identity_repo, "guardian_ids", identity_guardian_ids)
+    monkeypatch.setattr(identity_repo, "delete", identity_delete)
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)
     monkeypatch.setattr(
@@ -744,6 +849,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "get_owned", pet_get_owned)
     monkeypatch.setattr(pet_repo, "get_accessible", pet_get_accessible)
     monkeypatch.setattr(pet_repo, "count_accessible", pet_count_accessible)
+    monkeypatch.setattr(pet_repo, "by_ids", pet_by_ids)
+    monkeypatch.setattr(pet_repo, "get_many_for_update", pet_get_many_for_update)
     monkeypatch.setattr(pet_repo, "get_by_id_for_update", pet_get_by_id_for_update)
     monkeypatch.setattr(pet_repo, "find_by_photo_key", pet_find_by_photo_key)
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)

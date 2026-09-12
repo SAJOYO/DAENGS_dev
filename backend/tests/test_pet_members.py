@@ -178,8 +178,10 @@ async def test_carer_sees_the_dog_in_the_pet_list(store: Store, pet: FakePet):
     상태가 됩니다 (docs/co-care.md §2).
     """
     store.pet_members.append((pet.id, CARER))
-    pets, _primary = await pet_service.list_pets(None, CARER)
-    assert [p.id for p in pets] == [pet.id]
+    # `list_pets` 는 논리 강아지당 카드 한 장(`PetView`)을 돌려줍니다 (MVP 결정 §4) —
+    # 연결이 없으면 `display` 가 곧 그 행입니다.
+    views, _primary = await pet_service.list_pets(None, CARER)
+    assert [v.display.id for v in views] == [pet.id]
 
     outsider, _ = await pet_service.list_pets(None, STRANGER)
     assert outsider == []

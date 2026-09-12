@@ -150,6 +150,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
 | [territory/claim-foundation.md](territory/claim-foundation.md) | 공유 점유 모델과 상태 전이의 1단계 설계 |
 | [territory/ownership-api.md](territory/ownership-api.md) | 온라인 점유 저장·API·동시성 및 배포 계약 |
+| [territory/account-query-scope.md](territory/account-query-scope.md) | 일반 점령 계정의 대상 강아지 조회와 시즌 전체 정산 경계 |
 | [territory/vision-worker.md](territory/vision-worker.md) | 방문 사진의 비동기 판정·재시도와 점유 연결 경계 |
 
 중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와

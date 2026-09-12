@@ -149,6 +149,19 @@ async def accounts(db, season_id):
     )
 
 
+async def accounts_for_pets(db, season_id, pet_ids):
+    """Only accounts affected by one ownership transition; an empty set reads none."""
+    if not pet_ids:
+        return []
+    return list(
+        await db.scalars(
+            select(ActivityAccount).where(
+                ActivityAccount.season_id == season_id, ActivityAccount.pet_id.in_(pet_ids)
+            )
+        )
+    )
+
+
 async def periods(db, season_id, pet_id=None):
     query = select(ActivityHoldingPeriod).where(ActivityHoldingPeriod.season_id == season_id)
     if pet_id is not None:

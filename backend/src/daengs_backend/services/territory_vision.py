@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from daengs_backend.config import settings
 from daengs_backend.core.storage import StorageObjectChangedError, get_storage
+from daengs_backend.models.territory import PHOTO_CLEANUP_BLOCKED_REASON
 from daengs_backend.repositories import territory as territory_repo
 from daengs_backend.services import territory_vision_jobs as jobs
 
@@ -183,7 +184,10 @@ async def _load_attempt_evidence(attempt_id: uuid.UUID) -> jobs.VisionLease | No
         if attempt is None:
             return None
         if attempt.status in {"VERIFIED", "REJECTED", "FAILED"}:
-            if attempt.photo_redacted_at is not None:
+            if (
+                attempt.photo_redacted_at is not None
+                or attempt.vision_retry_reason == PHOTO_CLEANUP_BLOCKED_REASON
+            ):
                 return None
             decision = {
                 "VERIFIED": "verified",

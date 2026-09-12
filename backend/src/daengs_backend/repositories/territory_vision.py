@@ -2,6 +2,7 @@
 
 from sqlalchemy import and_, or_, select
 
+from daengs_backend.models.territory import PHOTO_CLEANUP_BLOCKED_REASON
 from daengs_backend.models.territory import TerritoryAttempt as Attempt
 
 TERMINAL = ("VERIFIED", "REJECTED", "FAILED")
@@ -23,7 +24,11 @@ async def due_dispatches(session, now, *, limit):
             .where(
                 or_(
                     Attempt.status == "VISION_PENDING",
-                    and_(Attempt.status.in_(TERMINAL), Attempt.photo_redacted_at.is_(None)),
+                    and_(
+                        Attempt.status.in_(TERMINAL),
+                        Attempt.photo_redacted_at.is_(None),
+                        Attempt.vision_retry_reason.is_distinct_from(PHOTO_CLEANUP_BLOCKED_REASON),
+                    ),
                 ),
                 Attempt.vision_available_at <= now,
                 Attempt.vision_dispatch_after <= now,

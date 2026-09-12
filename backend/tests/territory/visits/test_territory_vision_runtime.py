@@ -22,7 +22,11 @@ from sqlalchemy import func, select, text
 
 from daengs_backend.config import settings
 from daengs_backend.core.storage import StoredObject
-from daengs_backend.models.territory import TerritoryAttempt, VerifiedVisit
+from daengs_backend.models.territory import (
+    PHOTO_CLEANUP_BLOCKED_REASON,
+    TerritoryAttempt,
+    VerifiedVisit,
+)
 from daengs_backend.services import territory
 
 
@@ -183,6 +187,49 @@ async def runtime(database, actors, monkeypatch, tmp_path):
             redis.delete(*keys)
         redis.close()
         app.close()
+
+
+async def test_blocked_cleanup_survives_worker_restart_and_resumes_only_explicitly(
+    runtime, database
+):
+    rt = runtime
+    key = str(rt.attempt_id)
+    async with database() as db:
+        row = await db.get(TerritoryAttempt, rt.attempt_id)
+        row.status = "FAILED"
+        row.vision_model = row.vision_model_version = "test"
+        row.vision_retry_reason = PHOTO_CLEANUP_BLOCKED_REASON
+        await db.commit()
+    for _ in range(2):
+        worker = await rt.start()
+        duplicate = rt.app.send_task("territory.verify_photo", args=[key])
+        await eventually(duplicate.ready)
+        assert duplicate.successful()
+        recovery = rt.app.send_task("territory.recover_photos")
+        await eventually(recovery.ready)
+        assert recovery.successful() and recovery.get(timeout=1)["selected"] == 0
+        saved = await rt.saved()
+        assert saved.photo_redacted_at is None
+        assert saved.vision_retry_reason == PHOTO_CLEANUP_BLOCKED_REASON
+        worker.kill()
+        await asyncio.to_thread(worker.wait, timeout=15)
+    async with database() as db:
+        assert await territory.resume_photo_cleanup(
+            db, rt.attempt_id, expected_generation="runtime-generation"
+        )
+    await rt.start()
+    recovery = rt.app.send_task("territory.recover_photos")
+    await eventually(recovery.ready)
+    assert recovery.successful() and recovery.get(timeout=1)["published"] == 1
+
+    async def cleaned():
+        saved = await rt.saved()
+        return saved if saved.photo_redacted_at else None
+
+    saved = await eventually(cleaned)
+    assert saved.status == "FAILED" and saved.vision_attempts == 0
+    assert saved.vision_retry_reason is None
+    assert rt.redis.get(rt.prefix + "calls:" + key) is None
 
 
 async def test_two_workers_ack_duplicate_without_a_second_model_call(runtime, database):

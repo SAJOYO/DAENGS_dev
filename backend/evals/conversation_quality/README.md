@@ -18,6 +18,52 @@
 사람이 볼 자리를 고르는 것 — 어느 케이스가 기대와 어긋났는지 골라 사람 검토대에 올리는
 것입니다.
 
+## D-072 — 케이스 13 → 16 (2026-09-12)
+
+D-072(못 재는 이유를 말한다 — 산책 `unmeasured` 마커)가 `cases_v1.jsonl` 끝에 세 줄을
+더했습니다. **기존 13줄은 한 글자도 안 건드렸습니다** — 끝에만 더했습니다.
+
+- `cq_distance_recorded_01` — 오늘 산책이 전부 측정된 날. 숫자가 나가고 마커는 안 선다.
+- `cq_distance_partially_measured_01` — 3건 중 2건만 측정된 날. 측정된 합계와 미측정
+  건수를 갈라 말해야 한다.
+- `cq_distance_described_route_01` — 스크린샷 사례: 대중교통이 섞인 경로를 말로 설명하고
+  거리를 묻는다. 그날 산책 기록이 있지만 그 경로와 일치하지 않아 `unmeasured` 가 서야 한다.
+
+**이전 랩과 직접 비교하려면 이 3건을 빼고 봐야 합니다** — 분모가 13에서 16으로 바뀌었기
+때문입니다. `daengs_evals.conversation_quality.cases.file_sha256`(LF 정규화 해시 —
+`answer_quality` 의 바이트 해시와 다릅니다)로 잰 값:
+
+| 파일 | sha256 |
+| --- | --- |
+| 이전 (13줄) | `d41e0d41d3332a8fb6431a5bd90aaf92afe0e809a0bb1eec3f73cab647ab0079` |
+| 이후 (16줄) | `cfdb0dc0857a809c28356ea157b65b15f9e9e9c99407ec340a4722ebf30fe56c` |
+
+`report.PINNED_FIELDS` 가 `cases_sha256` 을 대조하므로, 이 3건이 있는 랩과 없는 랩은
+`compare`/`case-report` 가 값이 다르다는 이유로 비교를 거부합니다 — 의도된 동작입니다.
+
+**하네스가 산책 기록 유무를 표현할 수 있는가 — 표현할 수 있습니다.** `drivers.py` 가
+`case.state_snapshot` 을 그대로 `driver.context` 에 얹고 `orchestrator.run(context=...)`
+로 넘기며, `planner._walk_activity_context` 는 DB 를 거치지 않고 `context["walk_activity"]`
+를 그대로 읽습니다(`care_log`·`dog` 와 같은 자리). 그래서 케이스는 `state_snapshot`
+에 `walk_activity` 딕셔너리를 넣으면 "그날 기록 있음" 을, 그 키를 아예 빼면 "그날
+기록 0건" 을 표현할 수 있습니다.
+
+**알려진 한계 — "오늘 기록 0건" 갈래는 이 3건이 재지 않습니다.** `_WALK_ACTIVITY_RULE`
+이 모델에게 `unmeasured` 를 세우라고 시키는 문단은 `payload.walk_activity is not None`
+일 때만(`-walk` 프롬프트 본문에서만) 실립니다. 그런데 오늘 기록이 0건이면
+`services.walk_activity_context.resolve` 가 `None` 을 내고(빈 기록은 "안 걸었다" 가
+아니라 "이 기능을 안 쓴다" 일 수 있어서입니다), `payload.walk_activity` 가 없으니 그
+문단 자체가 안 실립니다 — 모델은 `unmeasured` 를 세울 지시를 못 받고, 고지도 안
+붙습니다. **스크린샷의 상황이 그날 산책 기록이 하나도 없는 경우라면 이 갈래에 걸립니다.**
+`cq_distance_described_route_01` 은 그래서 일부러 그날 산책 기록을 **있게** 만들어
+"기록은 있지만 그 경로와 다르다" 로 회피합니다 — 그렇지 않으면 오늘 기록 0건일 때는
+구조적으로 통과할 수 없는 케이스가 됩니다. 이 갈래를 여는 방법과 그 값은
+`docs/decisions.md` D-072 "알려진 한계" 절에 적었습니다. 하네스는 이 갈래를
+표현할 **수 있지만**(`state_snapshot` 에서 `walk_activity` 를 그냥 빼면 됩니다),
+이 세트는 그것을 별도 케이스로 추가하지 않았습니다 — 카드가 v1 에서 그 갈래를 열지
+않기로 했으므로, "오늘은 실패하는 것이 정상" 인 케이스를 지금 추가하면 통과·실패의
+기준이 없는 채로 매 랩마다 빨갛게 뜨기만 합니다.
+
 ## Turn Resolver 랩 설계 (`#416`) — 설계만, 돌리지 않습니다
 
 아래는 `#416`(Turn Resolver, `docs/superpowers/specs/2026-09-10-assistant-turn-context-design.md`)

@@ -5,7 +5,7 @@ from pathlib import Path
 from .judge_contract import AXES, Axis, Contract, Decision, JudgeInput, TurnKey, read_jsonl
 
 DEFAULT_ANCHORS = (
-    Path(__file__).resolve().parents[3] / "evals/place_conversation/judge/anchors.v1.jsonl"
+    Path(__file__).resolve().parents[3] / "evals/place_conversation/judge/anchors.v3.jsonl"
 )
 
 

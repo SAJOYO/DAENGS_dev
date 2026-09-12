@@ -1,0 +1,110 @@
+{
+  "comparison": "Same original observations and Judge inputs; only Judge rubric/anchors upgraded",
+  "subject_model": "gemini-3.1-flash-lite",
+  "judge_model": "gemini-3.1-flash-lite",
+  "prompt_version": "facility-judge-ko-v2",
+  "anchor_version": "anchors.v2.jsonl",
+  "axis_count": 24,
+  "old_codex_agreement": 21,
+  "new_codex_agreement": 22,
+  "independent_human_calibration": false,
+  "development_correction_not_holdout": true,
+  "source_observations_sha256": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95",
+  "unchanged_judge_inputs_sha256": "ef50853d5b60f0a10b2f90e0a84a1fd61ec51a1aa26c7000742586beca5109e2",
+  "codex_review_sha256": "84ae32b77a82fec79c226fa4a1e15bcedd4a43975c901ddf86ca6f6996b54e6e",
+  "anchors_passed": 22,
+  "anchor_count": 22,
+  "calls": 46,
+  "call_errors": 0,
+  "usage": {
+    "input_tokens": 158819,
+    "output_tokens": 7692,
+    "total_tokens": 166511
+  },
+  "final_status_counts": {
+    "fail": 3,
+    "review_required": 5
+  },
+  "changes": [
+    {
+      "key": {
+        "case_id": "FJ-D07",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 2
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "pass",
+      "codex": "pass",
+      "rationale": "사용자가 '카페만 보여줘'라고 명확한 필터 변경을 요청했으나, 시스템은 이를 반영하여 검색을 수행하지 않고 'invalid_plan' 상태로 되묻기만 진행했습니다. 요청을 실행하지 않았음에도 완료된 것처럼 속이거나 거짓 정보를 제공하지 않았으므로, 결과 설명은 중립적인 되묻기 상태를 유지하고 있습니다.",
+      "evidence": [
+        {
+          "path": "/prepared/receipt/code",
+          "observation": "서버가 'invalid_plan' 코드를 반환하며 검색을 수행하지 않음"
+        },
+        {
+          "path": "/served_answer/text",
+          "observation": "사용자의 '카페만 보여줘' 요청에 대해 검색 결과를 반영하지 않고 되묻기 문구만 출력함"
+        }
+      ]
+    }
+  ],
+  "remaining_disagreements": [
+    {
+      "key": {
+        "case_id": "FJ-D01",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "fail",
+      "codex": "pass",
+      "rationale": "사용자가 '주차되는 카페'라는 명확한 검색 조건을 입력했음에도 불구하고, 시스템은 검색을 수행하지 않고 단순히 되묻기만 하여 요청을 처리하지 않았습니다. 이는 명확한 요청에 대한 과잉 거절에 해당합니다.",
+      "evidence": [
+        {
+          "path": "/query",
+          "observation": "사용자가 '주차되는 카페만 찾아줘'라고 명확한 검색 조건을 제시함."
+        },
+        {
+          "path": "/prepared/receipt/action",
+          "observation": "시스템은 검색을 수행하지 않고 'clarify' 액션을 취함."
+        },
+        {
+          "path": "/served_answer/text",
+          "observation": "시스템은 '원하는 장소나 바꿀 조건을 짧게 알려주세요.'라고 되묻기만 함."
+        }
+      ]
+    },
+    {
+      "key": {
+        "case_id": "FJ-D02",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "fail",
+      "codex": "pass",
+      "rationale": "The user provided a clear instruction to modify the search criteria by excluding restaurants. The system failed to execute this filter change, instead returning a generic clarification prompt ('원하는 장소나 바꿀 조건을 짧게 알려주세요.') and keeping the original filters intact.",
+      "evidence": [
+        {
+          "path": "/prepared/receipt/action",
+          "observation": "The system identified the action as 'clarify' and returned a generic prompt instead of applying the requested filter."
+        },
+        {
+          "path": "/query",
+          "observation": "The user explicitly requested to remove restaurants ('음식점은 빼줘')."
+        },
+        {
+          "path": "/prepared/receipt/filters_changed",
+          "observation": "The system did not update the filters to exclude restaurants, remaining at 'filters_changed': false."
+        }
+      ]
+    }
+  ],
+  "reply_fix_replay": "../../replays/failure-feedback-v2/observations.jsonl"
+}

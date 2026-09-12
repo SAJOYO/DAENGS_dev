@@ -12,7 +12,7 @@ from daengs_place.place.conversation.intent import ScopedInterpretation
 from daengs_place.place.conversation.presentation import user_text_allowed
 from daengs_place.place.conversation.render import render_answer
 from daengs_place.place.conversation.saved_search import plan_saved
-from daengs_place.place.conversation.scope import OUT_OF_SCOPE
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, PROCESSING_FAILED
 from daengs_place.place.conversation.service import ConversationService
 from daengs_place.place.providers.conversation_gemini import GeminiConversation
 from tests.place.conversation.test_policy import chat, offer
@@ -45,6 +45,48 @@ async def test_outside_keeps_semantic_state_and_only_advances_protocol_revision(
     assert result.receipt.code == "facility_out_of_scope"
     assert render_answer(result.receipt, result.state.filters) == OUT_OF_SCOPE
     assert user_text_allowed(OUT_OF_SCOPE)
+
+
+async def test_invalid_proposal_keeps_selection_history_and_valid_pending_proposal():
+    service, _, searcher, _, pending = await offer()
+
+    class InvalidProposal:
+        async def decide_pending(self, request):
+            raise ValueError("invalid model proposal")
+
+    service.planner = InvalidProposal()
+    before = pending.state.model_copy(update={"selected": pending.state.snapshot.display_order[0]})
+    result = await chat(service, before, "카페만 보여줘")
+    assert result.receipt.code == "invalid_plan"
+    assert result.receipt.question == PROCESSING_FAILED
+    assert render_answer(result.receipt, result.state.filters) == PROCESSING_FAILED
+    assert result.state.model_dump(exclude={"revision", "pending_proposal"}) == before.model_dump(
+        exclude={"revision", "pending_proposal"}
+    )
+    assert result.state.pending_proposal.model_dump(
+        exclude={"revision"}
+    ) == before.pending_proposal.model_dump(exclude={"revision"})
+    assert result.state.pending_proposal.revision == result.state.revision == before.revision + 1
+    assert len(searcher.calls) == 1
+
+
+@pytest.mark.parametrize("unresolved", ["missing_target", "ambiguous", "conflicting_conditions"])
+async def test_genuine_missing_input_still_asks_without_mutating_filters(unresolved):
+    query = "그 장소 조건은 바꿔줘"
+    plan = ScopedInterpretation(
+        kind="needs_input",
+        request_quote=query,
+        goal="clarify",
+        unresolved=unresolved,
+    )
+    service, searcher, before = await initial(Planner(plan))
+    result = await chat(service, before.state, query)
+    assert result.receipt.code == "clarification_required"
+    assert result.receipt.question and result.receipt.question != PROCESSING_FAILED
+    assert render_answer(result.receipt, result.state.filters) == result.receipt.question
+    assert result.state.filters == before.state.filters
+    assert result.state.snapshot == before.state.snapshot
+    assert result.receipt.execution == "not_run" and len(searcher.calls) == 1
 
 
 async def test_outside_during_consent_keeps_exact_proposal_deadline_and_can_accept_later():

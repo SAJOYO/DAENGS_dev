@@ -1,0 +1,30 @@
+{
+  "created_at": "2026-09-12T14:27:11.475099+00:00",
+  "code_sha": "ab477ff9abdb0deb83549e284a97355bcbb0c37d",
+  "dirty": true,
+  "source_observations_sha256": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95",
+  "source_hashes": {
+    "src\\daengs_place\\place\\conversation\\__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108",
+    "src\\daengs_place\\place\\conversation\\answer.py": "567941436f474c90dbf77fccafb727550f68c91a96a583abe1272264aca76030",
+    "src\\daengs_place\\place\\conversation\\bookmarks.py": "c348b204479350d659285921cc4f04791a8a32a018e2224ae8dea947fd1dc54a",
+    "src\\daengs_place\\place\\conversation\\candidates.py": "82699b4c6dd6e97d5864438add3bb6eb87c3e146ccff5669bb98daf186092443",
+    "src\\daengs_place\\place\\conversation\\compiler.py": "33c36020637c94b8a0bbe8caf5938470dab9335bdfca1f35ebfcce95ccd124e2",
+    "src\\daengs_place\\place\\conversation\\context.py": "b8784e2d6550c6b1ddc07350ccef8a8b915a2d0f951b3505e0105f58abcd7bc8",
+    "src\\daengs_place\\place\\conversation\\contract.py": "17a06274b08f5840d2f9f4119e864ac6540c92ca4e9231f52db4dd8d10cdc275",
+    "src\\daengs_place\\place\\conversation\\grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "src\\daengs_place\\place\\conversation\\intent.py": "505eb94d860e575c7c7e6baca49a98be4497eaed0c78200225d99a96d2460927",
+    "src\\daengs_place\\place\\conversation\\policy.py": "4e8f64eaeebc26f34ebbaac119cbb1b60f2bf7503fde0f542e25f6e51123dc60",
+    "src\\daengs_place\\place\\conversation\\presentation.py": "e8df436dcdbe61eb97dc36353f41233466af3fbc55858722019d842d698eab04",
+    "src\\daengs_place\\place\\conversation\\render.py": "9dc74527f61be3f11d73aaa8349cc5d34d759f4b80c08c409f90262e69d487dc",
+    "src\\daengs_place\\place\\conversation\\saved_search.py": "90abb3cce8b088aa1bc7ddf0b5cd08f0fc4ea798d2fc0d58f5e71d636253a929",
+    "src\\daengs_place\\place\\conversation\\scope.py": "a9b785e665473261a088138614bcb98cf3c932475030cbcba27991f458664bcb",
+    "src\\daengs_place\\place\\conversation\\search_compilation.py": "ad9bac69a337eeec73ce44004abc1c17566882b8a86f4828c4b075e640c487a1",
+    "src\\daengs_place\\place\\conversation\\search_policy.py": "084b03b6e66664208d0ac5fe36e735868a7192bb10a18e135e3367090cabf395",
+    "src\\daengs_place\\place\\conversation\\service.py": "297437f4f6ccf191464805b5adf9a298853c93a28a06e1bac8984bd5cbf9e1ca",
+    "src\\daengs_place\\place\\conversation\\static_tools.py": "ba2758d72902011dda3dda9931d0a7cbac4c030a0faebb4f90dd55bf3ed581c4"
+  },
+  "replayed_turns": 3,
+  "live_model_calls": 0,
+  "state_changed_by_feedback_fix": false,
+  "execution_failures_still_fail": 3
+}

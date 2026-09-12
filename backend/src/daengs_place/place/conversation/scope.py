@@ -5,7 +5,7 @@ import re
 from daengs_place.place.conversation.intent import ScopedInterpretation
 
 OUT_OF_SCOPE = "멍, 그건 잘 몰라요. 장소 찾는 건 맡겨줘요 🐾"
-INVALID_REQUEST = "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+PROCESSING_FAILED = "앗, 요청을 처리하지 못했어요. 다시 시도해 주세요 🐾"
 PRESERVE_CODES = frozenset(
     {"facility_out_of_scope", "invalid_plan", "facility_scope_unclear", "facility_filters"}
 )

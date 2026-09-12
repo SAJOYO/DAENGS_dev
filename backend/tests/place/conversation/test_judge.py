@@ -67,7 +67,7 @@ def fake_generate(item, model):
     status = expected.get(item.key.case_id, "pass")
     return ProviderResult(
         verdict=Verdict(
-            evidence=[Evidence(path="/query", observation="fixture observation")],
+            evidence=[Evidence(path="/served_answer/text", observation="fixture observation")],
             rationale="Deterministic test provider, not a semantic experiment.",
             status=status,
         ),
@@ -95,6 +95,9 @@ def test_inputs_hide_oracles_provider_credentials_and_other_repetitions():
     assert current.payload["previous_turns"][0]["query"] == first["query"]
     faithfulness = next(i for i in rows if i.axis == "result_faithfulness")
     assert "plans" not in faithfulness.payload
+    assert "query" not in faithfulness.payload and "previous_turns" not in faithfulness.payload
+    assert faithfulness.payload["before"]["filters"] == first["before"]["filters"]
+    assert faithfulness.payload["served_answer"] == first["served_answer"]
     assert first["before"]["history"]  # projection never edits source
 
 
@@ -155,7 +158,7 @@ def test_budget_counts_anchors_retries_and_resume_without_recalling_completed(ru
     assert calls.count() == anchor_count + 1
     statuses = [r.status for r in read_judgments(directory).values()]
     assert statuses == ["judged", "budget_exhausted"]
-    expanded = Calls(directory, fake_generate, "fake-judge", 20, retries=0)
+    expanded = Calls(directory, fake_generate, "fake-judge", anchor_count + 3, retries=0)
     score(directory, expanded, resume=True)
     assert expanded.count() == anchor_count + 3
     assert all(r.status == "judged" for r in read_judgments(directory).values())

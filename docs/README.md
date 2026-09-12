@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/trajectory-contracts.md](walk/trajectory-contracts.md) | 동선 최종 집계 소유권·위치 없는 시간·측정 비교/조회 전환의 순수 계약과 합성 검증 |
 | [walk/gps-motion-precision.md](walk/gps-motion-precision.md) | GPS 좌표 원본 비트의 추가 백업·정밀 계산·앱 대조와 적용 순서 |
 | [walk/diary-part-slots.md](walk/diary-part-slots.md) | 공간·환경·동선 조건과 스탬프, Gemini 미리보기 API·CLI 워킹 스켈레톤 |
 | [walk/gps-motion-calculation.md](walk/gps-motion-calculation.md) | 고정 GPS 정책의 서버 재생·계산 조회, 앱 기준값 대조와 원본 좌표 정밀도 한계 |

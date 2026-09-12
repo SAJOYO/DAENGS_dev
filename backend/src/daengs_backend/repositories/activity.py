@@ -1,8 +1,9 @@
 """Queries/locks only. Services own policy decisions, mutations and commit."""
 
 from datetime import UTC, datetime
+from itertools import batched
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import Text, cast, delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload, undefer
 
@@ -19,7 +20,9 @@ from daengs_backend.models.territory_claim import (
     TerritoryClaimSite,
     TerritoryOccupancy,
 )
-from daengs_backend.models.walk import Walk, WalkAnalysis
+from daengs_backend.models.walk import Walk, WalkAnalysis, WalkCapsule, WalkPet
+
+READ_BATCH_SIZE = 500
 
 
 async def remove_owner(db, owner):
@@ -79,18 +82,20 @@ async def pending_accounts(db, limit):
     )
 
 
-async def walks_in_window(db, owner, from_ms, to_ms):
-    return list(
-        await db.scalars(
-            select(Walk)
-            .where(
-                Walk.app_user_id == owner,
-                Walk.ended_at >= datetime.fromtimestamp(from_ms / 1000, UTC),
-                Walk.ended_at < datetime.fromtimestamp(to_ms / 1000, UTC),
-            )
-            .options(selectinload(Walk.pets))
+async def walks_in_window(db, owner, from_ms, to_ms, pet_id=None):
+    query = (
+        select(Walk)
+        .where(
+            Walk.app_user_id == owner,
+            Walk.ended_at >= datetime.fromtimestamp(from_ms / 1000, UTC),
+            Walk.ended_at < datetime.fromtimestamp(to_ms / 1000, UTC),
         )
+        .options(selectinload(Walk.pets), undefer(Walk.analysis_state))
+        .execution_options(populate_existing=True)
     )
+    if pet_id is not None:
+        query = query.where(Walk.pets.any(WalkPet.pet_id == pet_id))
+    return list(await db.scalars(query))
 
 
 async def requeue(db):
@@ -195,6 +200,87 @@ async def walk_analysis(db, walk_id, analysis_id):
         .options(selectinload(WalkAnalysis.capsule))
     )
     return walk, analysis
+
+
+async def walk_heads(db, walk_ids):
+    rows = {}
+    for batch in batched(walk_ids, READ_BATCH_SIZE):
+        selected = await db.scalars(
+            select(ActivityWalkHead)
+            .where(ActivityWalkHead.walk_id.in_(batch))
+            .execution_options(populate_existing=True)
+        )
+        rows.update((row.walk_id, row) for row in selected)
+    return rows
+
+
+def _analysis_source_fingerprint():
+    # Include every input inspected by decode_analysis_model, plus source/seal identity.
+    # PostgreSQL hashes JSONB locally so summary reads do not transfer large payloads.
+    payload = func.jsonb_build_array(
+        WalkAnalysis.id,
+        WalkAnalysis.walk_id,
+        WalkAnalysis.input_fingerprint,
+        WalkAnalysis.point_count,
+        WalkAnalysis.terminal_client_seq,
+        WalkAnalysis.facts_record_version,
+        WalkAnalysis.calculation_version,
+        WalkAnalysis.receipt_version,
+        WalkAnalysis.observation_version,
+        WalkAnalysis.moving_distance_m,
+        WalkAnalysis.moving_s,
+        WalkAnalysis.stop_count,
+        WalkAnalysis.facts,
+        WalkAnalysis.measurement_receipt,
+        WalkAnalysis.motion_events,
+        WalkAnalysis.micro_observations,
+        WalkCapsule.analysis_id,
+        WalkCapsule.capsule_version,
+    )
+    return func.encode(func.sha256(func.convert_to(cast(payload, Text), "UTF8")), "hex")
+
+
+async def analysis_references(db, analysis_ids):
+    rows = {}
+    for batch in batched(analysis_ids, READ_BATCH_SIZE):
+        selected = await db.execute(
+            select(
+                WalkAnalysis.id,
+                WalkAnalysis.walk_id,
+                WalkAnalysis.input_fingerprint,
+                WalkAnalysis.facts_record_version,
+                WalkAnalysis.calculation_version,
+                WalkAnalysis.receipt_version,
+                WalkCapsule.capsule_version,
+                WalkAnalysis.moving_distance_m,
+                WalkAnalysis.moving_s,
+                WalkAnalysis.stop_count,
+                WalkAnalysis.facts["stop_s"].as_integer().label("stop_s"),
+                WalkAnalysis.measurement_receipt["canonical_segment_time_s"]
+                .as_float()
+                .label("observed_s"),
+                WalkAnalysis.facts["evidence_origin"].as_string().label("evidence_origin"),
+                _analysis_source_fingerprint().label("source_fingerprint"),
+            )
+            .outerjoin(WalkCapsule, WalkCapsule.analysis_id == WalkAnalysis.id)
+            .where(WalkAnalysis.id.in_(batch))
+        )
+        rows.update((row.id, row) for row in selected)
+    return rows
+
+
+async def analyses_by_ids(db, analysis_ids):
+    """Batch fallback for legacy/stale projections; callers verify each analysis's walk."""
+    rows = {}
+    for batch in batched(analysis_ids, READ_BATCH_SIZE):
+        selected = await db.scalars(
+            select(WalkAnalysis)
+            .where(WalkAnalysis.id.in_(batch))
+            .options(selectinload(WalkAnalysis.capsule))
+            .execution_options(populate_existing=True)
+        )
+        rows.update((row.id, row) for row in selected)
+    return rows
 
 
 async def pending_walks(db, limit):

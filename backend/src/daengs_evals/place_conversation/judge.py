@@ -39,7 +39,7 @@ class JudgeSettings(BaseSettings):
         env_file_encoding="utf-8",
         populate_by_name=True,
     )
-    model: str = Field(default="gemini-3-flash-preview", validation_alias="FACILITY_JUDGE_MODEL")
+    model: str = Field(default="gemini-3.1-flash-lite", validation_alias="FACILITY_JUDGE_MODEL")
 
 
 class ProviderResult(Contract):

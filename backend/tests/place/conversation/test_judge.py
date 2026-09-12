@@ -361,6 +361,8 @@ def test_refusal_or_missing_structure_is_an_error(monkeypatch):
 
 
 def test_settings_match_existing_env_names_without_backend_import(monkeypatch):
+    monkeypatch.delenv("FACILITY_JUDGE_MODEL", raising=False)
+    assert JudgeSettings(_env_file=None).model == "gemini-3.1-flash-lite"
     monkeypatch.setenv("FACILITY_JUDGE_MODEL", "test-pinned-model")
     monkeypatch.setenv("OPENAI_JUDGE_MODEL", "unused-model")
     settings = JudgeSettings(_env_file=None)

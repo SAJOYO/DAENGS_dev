@@ -41,6 +41,7 @@ from daengs_backend.orchestration.contracts import (
 from daengs_backend.orchestration.planner import _payload_for
 from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.repositories.walk import WalkActivitySums
 from daengs_backend.routers import assistant as assistant_router
 from daengs_backend.services import care_event as care_service
 from daengs_backend.services import care_log_context
@@ -101,9 +102,17 @@ def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     async def count_walks(session, app_user_id, pet_id, start, end):
         return sum(1 for at in cs.walk_starts.get(pet_id, []) if start <= at < end)
 
+    async def activity_for_pet_between(session, pet_id, start, end):
+        # D-072(Task 4) 뒤로 `_with_dog_context` 가 이 함수도 같은 세션에서 부른다.
+        # 이 파일의 `FakeSession` 은 `execute` 가 없어 실제 리포지토리 구현이 그대로
+        # 실행되면 AttributeError 로 죽는다 — 이 파일은 케어 로그를 보는 자리라 산책
+        # 요약은 관심사가 아니므로 빈 하루로 답해 그 경로만 건드리지 않는다.
+        return WalkActivitySums(0, 0, 0, 0, None)
+
     monkeypatch.setattr(care_repo, "list_between", list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", count_walks)
+    monkeypatch.setattr(walk_repo, "activity_for_pet_between", activity_for_pet_between)
     return cs
 
 

@@ -39,6 +39,7 @@ from daengs_backend.services import dog_context as dog_context_service
 from daengs_backend.services import request_metrics as metrics_service
 from daengs_backend.services import screening_context as screening_context_service
 from daengs_backend.services import vet_spend_context as vet_spend_context_service
+from daengs_backend.services import walk_activity_context as walk_activity_context_service
 
 router = APIRouter(tags=["assistant"])
 
@@ -117,6 +118,12 @@ async def _with_dog_context(
     똑같이, 진료비를 위해 세션을 또 하나 열면 요청당 연결이 는다. 못 채워도 그냥 지나간다:
     남의 강아지 · 확정된 방문 없음 · **표가 아직 없음**(#353 마이그레이션 전) 전부 이
     카드 전과 똑같이 답한다.
+
+    **오늘의 산책 요약도 같은 세션에서 읽어 `context["walk_activity"]` 에 얹는다** (D-072).
+    조건도 열어야 하는 DB 도 위 둘과 같아서, 세션을 또 하나 열면 이 함수가 애초에 막으려는
+    비용(요청당 연결 증가)이 그대로 든다. 못 채워도 그냥 지나간다: 남의 강아지 · 오늘
+    기록 없음 · **표가 아직 없음**(`walk_analyses`·`activity_walk_heads` 마이그레이션 전)
+    전부 이 카드 전과 똑같이 답한다.
     """
     active_dog_id = context.get("active_dog_id")
     if not isinstance(principal, AppPrincipal) or not isinstance(active_dog_id, str):
@@ -129,6 +136,9 @@ async def _with_dog_context(
         vet_spend = await vet_spend_context_service.resolve(
             session, principal.app_user_id, active_dog_id
         )
+        walk_activity = await walk_activity_context_service.resolve(
+            session, principal.app_user_id, active_dog_id
+        )
     resolved = dict(context)
     if dog is not None:
         resolved["dog"] = dog
@@ -136,6 +146,8 @@ async def _with_dog_context(
         resolved["care_log"] = care_log
     if vet_spend is not None:
         resolved["vet_spend"] = vet_spend
+    if walk_activity is not None:
+        resolved["walk_activity"] = walk_activity
     return resolved
 
 

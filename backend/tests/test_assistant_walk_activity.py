@@ -11,15 +11,27 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from fakes import FakeAdmin, FakeAppUser, FakePet, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, Store, install
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import OperationalError
 
-from daengs_backend.orchestration.contracts import GeneralPayload, WalkActivityContext
+from daengs_backend.core.subject import SubjectType
+from daengs_backend.core.token import create_access_token
+from daengs_backend.main import app
+from daengs_backend.orchestration.adapters.general import build_general_prompt
+from daengs_backend.orchestration.contracts import (
+    AssistantResponse,
+    AssistantStatus,
+    GeneralPayload,
+    WalkActivityContext,
+)
+from daengs_backend.orchestration.planner import _payload_for, _walk_activity_context
 from daengs_backend.orchestration.redirects import DISTANCE_FROM_RECORDED_WALKS_ONLY
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.repositories.walk import WalkActivitySums, _measured_stmt, _walked_stmt
+from daengs_backend.routers import assistant as assistant_router
 from daengs_backend.services import walk_activity_context
 
 
@@ -245,3 +257,155 @@ async def test_하루_경계는_서울_자정이고_tz_aware(pet, walks, monkeyp
     assert seen["end"] == datetime(2026, 9, 13, 0, 0, tzinfo=SEOUL)
     assert seen["start"].tzinfo is not None
     assert seen["end"].tzinfo is not None
+
+
+# ---------------------------------------------------------------- Task 4: planner 배선
+#
+# `_walk_activity_context` 는 `_care_log_context` 의 화이트리스트 복사기와 같은 자리다 —
+# 모양이 틀린 칸은 그 칸만 버리고 요청은 안 버린다.
+
+
+def test_planner_drops_a_malformed_field_not_the_request() -> None:
+    """`_care_log_context` 와 같은 규칙 — 모양이 틀린 칸은 그 칸만 버린다."""
+    assert _walk_activity_context({"walk_activity": "not a mapping"}) is None
+    assert _walk_activity_context({}) is None
+    resolved = _walk_activity_context({
+        "walk_activity": {
+            "day": "2026-09-12", "walk_count": 2, "measured_walk_count": 1,
+            "distance_m": 1_200, "moving_s": 900, "last_started_at": "8:30",  # 잘못된 시각
+        }
+    })
+    assert resolved is not None
+    assert "last_started_at" not in resolved  # 그 칸만 빠진다
+    assert resolved["walk_count"] == 2
+    assert resolved["measured_walk_count"] == 1
+    assert resolved["distance_m"] == 1_200
+    assert resolved["moving_s"] == 900
+
+
+def test_planner_rejects_the_whole_block_when_a_required_field_is_malformed() -> None:
+    """`last_started_at` 만 선택이다 — 나머지 필수 칸이 틀리면 그 칸만이 아니라 블록 전체가
+    빠진다. `_care_log_context` 가 건수를 하나도 못 읽으면 블록째 버리는 것과 같은 자리다."""
+    assert _walk_activity_context({"walk_activity": {
+        "day": "2026-09-12", "walk_count": "두 번", "measured_walk_count": 1,
+        "distance_m": 1_200, "moving_s": 900,
+    }}) is None
+    # measured_walk_count 가 walk_count 를 넘는 조합도 통째로 버린다 —
+    # `WalkActivityContext` 의 검증기가 런타임에 터지게 두지 않는다.
+    assert _walk_activity_context({"walk_activity": {
+        "day": "2026-09-12", "walk_count": 1, "measured_walk_count": 2,
+        "distance_m": 1_200, "moving_s": 900,
+    }}) is None
+
+
+def test_life_never_receives_the_walk_summary() -> None:
+    """폴백에만 간다 — `care_log` 와 같다. planner 가 Life payload 에 안 얹는지 본다."""
+    context = {
+        "walk_activity": {
+            "day": "2026-09-12", "walk_count": 1, "measured_walk_count": 1,
+            "distance_m": 1_200, "moving_s": 900,
+        }
+    }
+    # `_payload_for` 는 capability 뒤가 전부 키워드 전용이다 (planner.py:272)
+    assert "walk_activity" not in _payload_for("life", query="q", context=context)
+    assert "walk_activity" in _payload_for("general", query="q", context=context)
+
+
+def test_a_request_without_a_record_builds_the_same_prompt_as_before() -> None:
+    """**이 카드의 가장 중요한 테스트.** 기록이 없는 요청의 프롬프트가 바이트로 같아야 한다.
+
+    `tests/test_assistant_care_log.py` 가 v3 본문에 대해 하는 것과 같은 자리다 —
+    D-057 ③ 의 승인 계보가 여기 걸려 있다 (Global Constraint 4).
+
+    **이 태스크 시점에서 이 단언은 아무것도 증명하지 않는다** — `build_general_prompt`
+    는 아직 `walk_activity` 를 읽지 않으므로(다음 태스크 몫), payload 에 값을 실어도
+    `WALK_ACTIVITY` 문자열이 나올 자리 자체가 코드에 없다. 지금 통과하는 이유는
+    "배선이 안전하다" 가 아니라 "아직 배선이 없다" 다. 그래도 지금 넣어 두는 것은
+    다음 태스크가 그 블록을 더할 때 이 테스트가 지킴이가 되기 때문이다.
+    """
+    payload = GeneralPayload(question="밥은 하루에 몇 번 줘야 해?")
+    assert "WALK_ACTIVITY" not in build_general_prompt(payload)
+
+
+# ---------------------------------------------------------------- Task 4: HTTP 배선
+
+
+class _Factory:
+    def __init__(self) -> None:
+        self.opened = 0
+
+    def __call__(self):
+        owner = self
+
+        class Context:
+            async def __aenter__(self):
+                owner.opened += 1
+                return FakeSession()
+
+            async def __aexit__(self, *args):
+                return None
+
+        return Context()
+
+
+class _FakeService:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def run(self, *, query, principal, context=None, **extra) -> AssistantResponse:
+        self.calls.append({"query": query, "context": context})
+        return AssistantResponse(
+            request_id="test-request", status=AssistantStatus.ANSWERED,
+            message="답변입니다", results=[], handoffs=[], clarify=None,
+        )
+
+
+@pytest.fixture
+def factory() -> _Factory:
+    return _Factory()
+
+
+@pytest.fixture
+def service() -> _FakeService:
+    return _FakeService()
+
+
+@pytest.fixture
+def client(store: Store, walks, factory: _Factory, service: _FakeService):
+    app.dependency_overrides[assistant_router.get_assistant_orchestration_service] = lambda: service
+    app.dependency_overrides[assistant_router.get_chat_session_factory] = lambda: factory
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _post(client: TestClient, body: dict, subject: uuid.UUID = OWNER, kind=SubjectType.APP):
+    token = create_access_token(subject, kind)
+    return client.post("/assistant/query", json=body, headers={"Authorization": f"Bearer {token}"})
+
+
+def test_활성_강아지가_있으면_오늘_산책_요약이_컨텍스트에_실린다(client, pet, walks, factory, service) -> None:
+    """라우터는 `today` 를 안 넘기므로 **실제 시계**로 잰다 — 그래서 기록도 지금 걸로 만든다.
+
+    세션은 **프로필·케어 로그·진료비 조회와 같은 하나**다(`_with_dog_context`). 산책 요약을
+    위해 세션을 하나 더 열면 그 함수가 막으려는 비용이 그대로 든다."""
+    walks["sums"] = WalkActivitySums(
+        walk_count=2, measured_walk_count=1, distance_m=1_200, moving_s=900,
+        last_started_at=None,
+    )
+    got = _post(client, {"query": "오늘 얼마나 걸었어?", "active_dog_id": str(pet.id)})
+    assert got.status_code == 200
+    assert factory.opened == 1
+    context = service.calls[0]["context"]
+    assert context["walk_activity"]["walk_count"] == 2
+    assert context["walk_activity"]["measured_walk_count"] == 1
+    assert context["walk_activity"]["distance_m"] == 1_200
+    assert "lat" not in context["walk_activity"] and "lon" not in context["walk_activity"]
+
+
+def test_기록이_없으면_컨텍스트에_안_실린다(client, pet, walks, service) -> None:
+    got = _post(client, {"query": "오늘 얼마나 걸었어?", "active_dog_id": str(pet.id)})
+    assert got.status_code == 200
+    assert "walk_activity" not in service.calls[0]["context"]

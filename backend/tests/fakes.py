@@ -28,6 +28,7 @@ from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import screening as screening_repo
 from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.repositories.walk import WalkActivitySums
 
 PASSWORD = "correct-horse-battery-staple"
 IP = "192.168.0.31"
@@ -1013,9 +1014,28 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
         )
 
+    async def walk_activity_for_pet_between(session, pet_id, start, end):
+        # 비서의 오늘 산책 요약(`services/walk_activity_context`, D-072)이 `active_dog_id`
+        # 요청마다 읽는 값. **기본은 빈 하루** — `care_events`·`vet_visits` 와 같은 이유로
+        # (위 `Store.__init__` 주석), 대역이 없으면 관련 없는 테스트가 진짜 리포지토리를
+        # 타서 `FakeSession` 에서 죽는다. 측정 합계(거리·이동 시간·측정 건수)는 이 대역이
+        # 흉내 내지 않는다 — 그 조합을 보는 테스트는 `test_assistant_walk_activity.py` 가
+        # `walk_repo.activity_for_pet_between` 자체를 자기 파일 안에서 다시 monkeypatch
+        # 해 직접 다룬다(`care_repo`/`walk_repo` 대역을 이 파일들이 덮어 쓰는 것과 같은 꼴).
+        starts = [
+            w.started_at for w in store.walks
+            if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
+        ]
+        return WalkActivitySums(
+            walk_count=len(starts), measured_walk_count=0,
+            distance_m=0, moving_s=0,
+            last_started_at=max(starts) if starts else None,
+        )
+
     monkeypatch.setattr(care_repo, "list_between", care_list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
     monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
+    monkeypatch.setattr(walk_repo, "activity_for_pet_between", walk_activity_for_pet_between)
 
     # -- vet visits (#353 Task 7) --------------------------------------------
     # 비서의 최근 진료비 요약(`services/vet_spend_context`)이 `active_dog_id` 요청마다

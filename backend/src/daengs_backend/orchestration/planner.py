@@ -329,6 +329,11 @@ def _payload_for(
         vet_spend = _vet_spend_context(context)
         if vet_spend is not None:
             payload["vet_spend"] = vet_spend
+        # 오늘 기록된 산책도 폴백에만 간다 (D-073): "얼마나 걸었어" 는 일반 질문이고,
+        # Life 의 조례는 그 답을 안 들고 있다.
+        walk_activity = _walk_activity_context(context)
+        if walk_activity is not None:
+            payload["walk_activity"] = walk_activity
         if resolved is not None:
             payload["conversation"] = resolved
         return payload
@@ -421,6 +426,59 @@ def _care_log_context(context: dict[str, Any]) -> dict[str, Any] | None:
             resolved[key] = clock
     if not any(kind in resolved for kind in _CARE_LOG_COUNTS):
         return None
+    return resolved
+
+
+def _walk_activity_context(context: dict[str, Any]) -> dict[str, Any] | None:
+    """오늘 기록된 산책 합계를 읽는다 (D-073). `_care_log_context` 와 같은 규칙 — 모양이
+    틀린 칸은 그 칸만 버리고 요청은 안 버린다. 단, **``last_started_at`` 만 그 규칙을
+    받는다.** ``day``·``walk_count``·``measured_walk_count``·``distance_m``·``moving_s``
+    는 `WalkActivityContext` 에서 전부 필수라 하나라도 모양이 틀리면(또는
+    ``measured_walk_count`` 가 ``walk_count`` 를 넘으면) 그 칸만 빼는 것이 아니라 블록
+    전체를 버린다 — 안 그러면 `WalkActivityContext` 의 검증기가 런타임에 터진다.
+
+    캐어 로그와 같은 이유로 좌표는 여기서도 안 읽는다: `WalkActivityContext` 자체가 좌표
+    칸을 안 갖고 있어(위 계약 독스트링), 있어도 버려질 값이라 아예 옮기지 않는다.
+
+    caller 는 `routers/assistant.py` `_with_dog_context` 이고, 이미 소유권을 확인해 읽고
+    하루를 합계로 좁혔다 (`services/walk_activity_context`).
+    """
+    walk_activity = context.get("walk_activity")
+    if not isinstance(walk_activity, Mapping):
+        return None
+    day = walk_activity.get("day")
+    if not isinstance(day, str) or not _CARE_LOG_DAY.match(day):
+        return None
+    walk_count = walk_activity.get("walk_count")
+    measured_walk_count = walk_activity.get("measured_walk_count")
+    distance_m = walk_activity.get("distance_m")
+    moving_s = walk_activity.get("moving_s")
+    if (
+        not isinstance(walk_count, int)
+        or isinstance(walk_count, bool)
+        or not 0 <= walk_count <= 200
+        or not isinstance(measured_walk_count, int)
+        or isinstance(measured_walk_count, bool)
+        or not 0 <= measured_walk_count <= 200
+        or measured_walk_count > walk_count
+        or not isinstance(distance_m, int)
+        or isinstance(distance_m, bool)
+        or not 0 <= distance_m <= 500_000
+        or not isinstance(moving_s, int)
+        or isinstance(moving_s, bool)
+        or not 0 <= moving_s <= 86_400
+    ):
+        return None
+    resolved: dict[str, Any] = {
+        "day": day,
+        "walk_count": walk_count,
+        "measured_walk_count": measured_walk_count,
+        "distance_m": distance_m,
+        "moving_s": moving_s,
+    }
+    last_started_at = walk_activity.get("last_started_at")
+    if isinstance(last_started_at, str) and _CARE_LOG_CLOCK.match(last_started_at):
+        resolved["last_started_at"] = last_started_at
     return resolved
 
 

@@ -60,7 +60,20 @@ VET_CONTACT_LOCATION_UNKNOWN = "현재 위치를 알 수 없어 가까운 병원
 #: Place 의 같은 고지와 **같은 문자열**이다. 두 능력이 위치를 다르게 부르면 안 된다.
 VET_CONTACT_CURRENT_LOCATION_FRAME = "현재 기기 위치를 기준으로"
 
+#: 이동 거리를 못 재는 이유 (D-073). **왜 못 하는지까지 말한다** — 댕스는 기록된 산책에서만
+#: 거리를 내고, 그것은 지명을 좌표로 바꾸지 않기로 한 결정(D-051 ⑤)의 결과다. 그 결정을
+#: 이 한 줄이 사용자에게 갚는다. `VET_CONTACT_HOURS_UNKNOWN` 과 같은 성질이다.
+#:
+#: **조건은 `GeneralAnswer.unmeasured` 다.** Place · vet_contact 의 고지가 무조건인 것은
+#: 능력 자체가 범위여서인데, General 은 catch-all 이라 깎을 범위가 없다. 대신 누락률을
+#: `evals/conversation_quality` 가 잰다 — 재지 않는 조건부 고지는 D-051 이 거부한 것이다.
+DISTANCE_FROM_RECORDED_WALKS_ONLY = (
+    "이동 거리와 시간은 앱에 기록된 산책에서만 계산해요. "
+    "말씀해 주신 경로는 기록에 없어서 재어 드릴 수 없어요."
+)
+
 __all__ = [
+    "DISTANCE_FROM_RECORDED_WALKS_ONLY",
     "NO_CAPABILITY_MESSAGE",
     "SCOPED_REDIRECT_MESSAGES",
     "VET_CONTACT_CALL_FIRST",

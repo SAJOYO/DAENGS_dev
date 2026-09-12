@@ -5,10 +5,10 @@ on:
     branches: [dev]
   workflow_dispatch: # Actions 탭에서 수동 실행
 
-# 배포가 겹치지 않도록. 새 배포가 오면 진행 중인 건 취소합니다.
+# Runtime stop/recreate must finish before the next deployment begins.
 concurrency:
   group: deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   DEPLOY_ROOT: 'C:\deploy\daengs'
@@ -123,12 +123,33 @@ jobs:
 
       - name: Compose 서비스 기동 / 변경 서비스 재시작·재생성
         run: |
+          # Snapshot before up: a stopped runtime must stay stopped on deployment.
+          $activityWorker = @(docker ps --filter 'name=^/daengs-activity-worker$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect activity worker' }
+          $activityBeat = @(docker ps --filter 'name=^/daengs-activity-beat$' --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to inspect activity beat' }
+          if (($activityWorker.Count -gt 0) -ne ($activityBeat.Count -gt 0)) {
+            throw 'Activity runtime is incomplete; explicitly start or stop both services first'
+          }
+          $activityActive = $activityWorker.Count -gt 0
+          if ($activityActive) {
+            docker compose --profile activity-game stop activity-beat activity-worker
+            if ($LASTEXITCODE -ne 0) { throw 'failed to pause activity runtime' }
+          }
+
           # 새 서비스는 올리되, 이미 떠 있는 컨테이너를 매번 전부 끊지는 않습니다.
           docker compose up -d
+          if ($LASTEXITCODE -ne 0) { throw 'failed to start compose services' }
 
-          # checkout이 bind mount 아래 파일을 한꺼번에 바꿀 때 Windows Docker의
-          # watchfiles polling이 변경을 놓칠 수 있으므로 backend는 매번 다시 띄웁니다.
-          docker compose restart backend
+          # Recreate both: imports and env_file values must match after deployment.
+          docker compose up -d --no-deps --force-recreate --wait --wait-timeout 240 backend territory-vision-worker
+          if ($LASTEXITCODE -ne 0) { throw 'failed to update backend and territory vision worker' }
+          if ($activityActive) {
+            docker compose --profile activity-game up -d --no-deps --force-recreate --wait --wait-timeout 240 activity-worker
+            if ($LASTEXITCODE -ne 0) { throw 'failed to update activity worker' }
+            docker compose --profile activity-game up -d --no-deps --force-recreate --wait --wait-timeout 240 activity-beat
+            if ($LASTEXITCODE -ne 0) { throw 'failed to update activity beat' }
+          }
 
           # Only maintain the explicitly activated Walk runtime. Do not enable it on deploy.
           $walkWorker = @(docker ps --filter 'name=^/daengs-walk-context-worker$' --format '{{.Names}}')

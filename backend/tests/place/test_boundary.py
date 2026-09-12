@@ -212,6 +212,7 @@ def test_search_app_serves_public_health_and_validation_without_db_or_any_key():
         "/internal/place/facility-conversation/prepare",
         "/internal/place/facility-conversation/answer",
         "/internal/place/bookmarks/lookup",
+        "/internal/place/bookmarks/interpret",
     }
 
 

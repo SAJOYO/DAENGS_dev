@@ -30,8 +30,16 @@ def atom(capability, value):
 
 
 def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterState:
+    candidate = FilterState.model_validate(
+        compile_filter_data(current.model_dump(mode="json"), changes)
+    )
+    return current if fingerprint(current) == fingerprint(candidate) else candidate
+
+
+def compile_filter_data(current: dict, changes: SemanticChanges, *, max_kinds=6) -> dict:
+    """Shared facet algebra; each search capability validates its own final envelope."""
     if (
-        current.hard.any
+        current["hard"]["any"]
         and changes.alternatives is not None
         and (changes.parking != "keep" or changes.exclusive != "keep")
         and changes.kinds is None
@@ -39,9 +47,9 @@ def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterSta
         # A facet edit and complete expression replacement have different authority.
         # Reject ambiguous double writes instead of erasing unrelated branch-local facts.
         raise ValueError("facet edit and OR replacement must be requested separately")
-    data = canonical(current.model_dump(mode="json"))
+    data = canonical(current)
     # Keep candidate/display order as selected by the user, not canonical sort order.
-    kinds = list(current.candidate_kinds)
+    kinds = list(current["candidate_kinds"])
     if edit := changes.kinds:
         requested = list(dict.fromkeys(edit.values))
         if edit.operation == "set":
@@ -50,11 +58,11 @@ def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterSta
             kinds = list(dict.fromkeys([*kinds, *requested]))
         else:
             kinds = [kind for kind in kinds if kind not in requested]
-    if not kinds or len(kinds) > 6:
+    if not kinds or len(kinds) > max_kinds:
         raise ValueError("invalid category scope")
     data["candidate_kinds"] = kinds
     hard = data["hard"]
-    if set(kinds) != set(current.candidate_kinds):
+    if set(kinds) != set(current["candidate_kinds"]):
         hard["all"] = [a for a in hard["all"] if a["capability"] != "purpose.kind"]
         # A replacement category has no unambiguous mapping onto old branch-local facts.
         if hard["any"] and changes.alternatives is None:
@@ -64,7 +72,7 @@ def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterSta
             scope = preference["scope_kinds"]
             scope = (
                 kinds
-                if set(scope) == set(current.candidate_kinds)
+                if set(scope) == set(current["candidate_kinds"])
                 else [k for k in scope if k in kinds]
             )
             if scope:
@@ -131,6 +139,5 @@ def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterSta
     ]
     data["preferences"] = [identify(p, "prefer") for p in data["preferences"]]
     # Preserve dog snapshots byte-for-byte, including their order.
-    data["dogs"] = [dog.model_dump(mode="json") for dog in current.dogs]
-    candidate = FilterState.model_validate(data)
-    return current if fingerprint(current) == fingerprint(candidate) else candidate
+    data["dogs"] = current["dogs"]
+    return data

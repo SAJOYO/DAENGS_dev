@@ -520,8 +520,8 @@ def test_task_module_imports_without_gait_deps():
 
     probe = (
         "import sys; import daengs_backend.tasks.gait; import daengs_backend.services.gait; "
-        "leaked = [m for m in ('daengs_gait.pipeline', 'daengs_gait.engines.legacy', "
-        "'daengs_gait.engines.subprocess_bridge', 'daengs_gait.inference.pose', "
+        "leaked = [m for m in ('daengs_gait.engines.subprocess_bridge', "
+        "'daengs_gait.inference.pose', 'daengs_gait.inference.analyze', "
         "'cv2', 'imageio_ffmpeg', 'torch', 'rtmlib', 'onnxruntime') if m in sys.modules]; "
         "print(','.join(leaked)); "
         "sys.exit(1 if leaked else 0)"

@@ -254,7 +254,7 @@ def test_로그가_없으면_기본_본문_그대로다() -> None:
     달라졌다. **버전 문자열이 함께 움직인 것이 이 테스트가 지키는 것이다** —
     이름이 그대로인 채 본문만 바뀌면 84건 비교가 가리키는 물건이 사라진다."""
     prompt = build_general_prompt(GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그")))
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
     assert prompt.startswith(f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n")
     assert "CARE_LOG" not in prompt
     assert "care log" not in prompt.lower()
@@ -268,7 +268,7 @@ def test_로그가_있으면_블록과_규칙이_붙고_버전이_갈린다() ->
                                 last_meal_at="18:30", last_medication_at="08:12"),
     )
     prompt = build_general_prompt(payload)
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v6-carelog"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v8-carelog"
     assert prompt.startswith(f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n")
     assert (
         'CARE_LOG_TODAY: {"day": "2026-09-08", "last_meal_at": "18:30", "last_medication_at": "08:12",'

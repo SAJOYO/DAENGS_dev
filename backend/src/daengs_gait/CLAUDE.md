@@ -12,12 +12,19 @@
 - **접점은 한 방향, 함수 안에서만입니다** (D-043 ⓒ · D-063). `daengs_backend` 가
   `daengs_gait` 를 부르는 자리는 워커의 `engines.get_engine(...)`(엔진 선택·실행)과 웹의
   `compare`·`contract`(비교·계약) 뿐이고, 전부 **함수 안 지연 import** 입니다. backend
-  설정값(`GAIT_ENGINE` — 5B 뒤로는 이것 하나입니다)은 인자로 넘어옵니다 — **`daengs_gait` 는 `daengs_backend`
+  설정값(`GAIT_ENGINE` — 5B 뒤로는 이것 하나이고, 6단계 뒤로 값은 `v4` 하나입니다)은 인자로 넘어옵니다 — **`daengs_gait` 는 `daengs_backend`
   를 import 하지 않습니다** (`tests/test_gait_engines.py` 가 소스를 훑어 지킵니다). 접점을
   늘려야 할 것 같으면 D-063 을 먼저 다시 보세요.
 - **`engines/` 는 가벼워야 합니다.** `engines/__init__` 은 하위 모듈을 `get_engine` 안에서만
-  import 합니다. `legacy.py` 가 `pipeline`(torch)을, `subprocess_bridge.py` 가 v4 서브프로세스를
-  다룹니다 — 둘 다 워커에서만 실행됩니다.
+  import 합니다. 지금 엔진은 **v4 하나**이고 `subprocess_bridge.py` 가 서브프로세스를 다룹니다
+  — 워커에서만 실행됩니다. 옛 legacy 추론 runtime(`legacy.py`·`pipeline.py`·`keypoint_infer.py`·
+  `crop_assist.py`·`record_store.py`)은 D-063 6단계에서 제거했습니다. **고르는 자리는 남겨
+  뒀습니다** — 모르는 이름은 조용히 폴백하지 않고 예외입니다.
+- **옛 legacy 기록은 그대로 삽니다.** 추론 runtime 이 없어진 것과 옛 기록을 읽는 것은 다른
+  문제입니다. 판별은 `contract.POSE_MODEL_LEGACY`·`POSE_MODELS`·`classify_joint_keys`,
+  비교는 `compare.compare_loaded_records` 가 계속 담당합니다 (`contract.py` 는 `config.py` 를
+  import 하지 않습니다 — 그래서 runtime 제거의 영향을 안 받습니다).
+  `tests/test_gait_legacy_runtime_removed.py` 가 양쪽(참조 0 · 옛 기록 회귀)을 같이 지킵니다.
 - **v4 pose 추론은 `inference/` 이고 자식 프로세스 전용입니다** (D-063 5B). `subprocess_bridge`
   가 워커 자신의 인터프리터(`sys.executable`)로 `python -m daengs_gait.inference analyze …` 를
   띄웁니다 — torch·rtmlib·onnxruntime 은 그 자식에만 올라옵니다. `inference/__init__.py` 는
@@ -48,8 +55,8 @@
   `prepare_for_analysis` 로 부르고, 엔진은 판정을 모릅니다. `cv2`·`imageio_ffmpeg` 는 함수
   안에서만 import — 모듈 import 는 가볍습니다.
 - `daengs_backend` 의 MVC2 계층 규칙(D-011)이 여기에는 걸려 있지 않습니다. 평평합니다.
-- **의존성은 `backend/pyproject.toml` 의 `gait` 그룹 하나**입니다 — legacy(ultralytics)와
-  v4(rtmlib·onnxruntime) 둘 다. `ml` 그룹과 겹치지 않습니다 — gait 는 sentence-transformers ·
+- **의존성은 `backend/pyproject.toml` 의 `gait` 그룹 하나**입니다 — v4(torch·rtmlib·
+  onnxruntime). `ultralytics` 는 6단계에서 빠졌습니다. `ml` 그룹과 겹치지 않습니다 — gait 는 sentence-transformers ·
   transformers · pyarrow 를 안 씁니다. v4 골든이 나온 조합(torch 2.13.0 · numpy 2.5.2 …)은
   `==` 핀으로 이 그룹에 있고 `tests/test_gait_v4_lock.py` 가 지킵니다 — 올리려면 골든을
   다시 만드는 결정이 먼저입니다. (D-063 5A 가 옛 `backend/gait_v4/` 의 자기 lock 을 `gait-v4`
@@ -63,7 +70,7 @@
 - **`config.py` 의 임계값을 임의로 바꾸지 마세요.** 전부 walk_demo 에서 실측으로
   정해진 값이고, 결과를 보기 전에 고정하고 사후 조정하지 않는다는 원칙으로 잡혔습니다.
   바꾸면 **`GAIT_FILTER_VERSION` 도 함께 올려야 합니다** — 안 올리면 옛 기록과 새 기록이
-  같은 기준인 척 비교됩니다 (`pipeline.compare_records` 가 이 값으로 경고를 붙입니다).
+  같은 기준인 척 비교됩니다 (`compare.compare_loaded_records` 가 이 값으로 경고를 붙입니다).
   `backend/tests/test_gait_filter.py` 가 값들을 박아 두고 있습니다.
 - **`_dev_only_*` 와 `internal_feature_vector` 를 사용자에게 보이는 응답으로 승격하지
   마세요.** 이건 빠뜨린 게 아니라 일부러 가둬 둔 것입니다. 수백 개의 숫자가 화면에
@@ -75,9 +82,11 @@
 - **가중치를 커밋하지 마세요.** 최상단 `.gitignore` 가 `*.pt` 를 막고 있습니다(D-038 로
   이관하면서 폴더별 규칙을 전역으로 올렸습니다). 그런데 더 흔한 실수는 walk_demo 쪽
   `models/experimental/*.pt` (6개, **미채택 실험 가중치**)를 production 과 헷갈려
-  가져오는 것입니다. **production 은 `best.pt`(50.7MB) 와 `yolov8n.pt`(6.2MB) 둘뿐입니다.**
+  가져오는 것입니다. **지금 코드가 읽는 것은 `ssdlite.pt` 와 `rtmpose-m_ap10k/end2end.onnx`
+  둘뿐입니다** — 옛 `best.pt`·`yolov8n.pt` 는 6단계 뒤로 읽는 코드가 없습니다(파일을 지우라는
+  뜻은 아닙니다).
 - **`daengs_gait` 의 모듈을 `daengs_backend` 쪽에서 최상단 import 하지 마세요.**
-  torch·ultralytics·opencv 가 `gait` 그룹에만 있어서, 기본 설치(`uv sync`)의 backend 가
+  torch·rtmlib·onnxruntime·opencv 가 `gait` 그룹에만 있어서, 기본 설치(`uv sync`)의 backend 가
   ImportError 로 죽습니다.
 
 ## 조용히 틀리는 자리

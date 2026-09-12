@@ -78,18 +78,18 @@ agent = [
 # **리눅스를 안 적으면 CUDA 판이 온다.** PyPI 의 기본 torch 휠은 NVIDIA 런타임을 동봉하고
 # 있어서, 마커가 win32 뿐이면 컨테이너가 GPU 를 안 쓰는데도 수 GB 를 받는다. D-021 로
 # 서버에 torch 가 생기면서 실제로 물리는 자리가 됐다.
-# `ultralytics` 가 `opencv-python`(GUI 빌드)을 **필수 의존성으로** 끌고 옵니다.
-# 그대로 두면 gait 그룹에 GUI 판과 headless 판이 **둘 다** 깔리고, 둘은 같은 `cv2`
-# 네임스페이스를 다퉈서 어느 쪽이 로드될지 설치 순서에 달립니다. GUI 판이 이기면
-# 컨테이너에서 `ImportError: libxcb.so.1` 로 죽습니다.
+# `rtmlib` 이 `opencv-python`(GUI 빌드)을 **필수 의존성으로** 끌고 옵니다 (6단계 전에는
+# `ultralytics` 도 그랬습니다). 그대로 두면 gait 그룹에 GUI 판과 headless 판이 **둘 다**
+# 깔리고, 둘은 같은 `cv2` 네임스페이스를 다퉈서 어느 쪽이 로드될지 설치 순서에 달립니다.
+# GUI 판이 이기면 컨테이너에서 `ImportError: libxcb.so.1` 로 죽습니다.
 #
 # override 로 headless 를 강제합니다 — 이 서비스는 창을 띄우지 않으므로 API 는 같습니다.
-# ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 ultralytics
-#   가 다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
+# ⚠ **`gait` 그룹의 `opencv-python-headless` 선언만 지우면 안 됩니다.** 그러면 rtmlib 이
+#   다시 GUI 판을 끌고 옵니다. 이 override 와 그 선언이 한 쌍입니다.
 [tool.uv]
 # opencv 는 **headless 만** 들어옵니다 — GUI 판(opencv-python · opencv-contrib-python)은 어느 그룹이
-# 끌고 와도 이 override 로 막힙니다. ultralytics(gait) 와 rtmlib(gait-v4) 둘 다 GUI 판을 요구하는데,
-# slim 컨테이너에는 libxcb 가 없어 첫 분석에서 죽습니다 (2026-08-31 실측). 같은 버전·같은 API 입니다.
+# 끌고 와도 이 override 로 막힙니다. rtmlib 이 GUI 판을 요구하는데 slim 컨테이너에는 libxcb 가
+# 없어 첫 분석에서 죽습니다 (2026-08-31 실측). 같은 버전·같은 API 입니다.
 override-dependencies = [
     "opencv-python; sys_platform == 'never'",
     "opencv-contrib-python; sys_platform == 'never'",
@@ -155,14 +155,18 @@ ml = [
 # 보행 분석(D-038). **`ml` 과 겹치지 않는 독립 그룹**이다 — gait 컨테이너는
 # `uv sync --frozen --group gait` 하나만 돌린다.
 #
-# `ml` 을 같이 붙이지 않는 이유: gait 소스의 서드파티 import 를 전수 조사하면
-# cv2 · fastapi · imageio_ffmpeg · numpy · pydantic · ultralytics · uvicorn 뿐이고,
-# `ml` 의 sentence-transformers · transformers · pyarrow 는 **하나도 쓰지 않는다.**
+# `ml` 을 같이 붙이지 않는 이유: gait 소스가 쓰는 서드파티는 cv2 · imageio_ffmpeg ·
+# numpy · onnxruntime · rtmlib · torch · torchvision 뿐이고, `ml` 의
+# sentence-transformers · transformers · pyarrow 는 **하나도 쓰지 않는다.**
 # 붙이면 gait 컨테이너가 임베딩 모델 스택을 통째로 더 받는다.
 #
-# torch 를 명시하는 이유는 두 가지다. ① ultralytics 가 어차피 끌고 오지만 버전을
-# `ml` 과 같은 선(>=2.6)에 묶어 둔다 ② 아래 [tool.uv.sources] 의 인덱스 바인딩이
-# **패키지 단위**라 어느 그룹이 요구하든 리눅스에서 CPU 판을 받는다는 것을 여기서 보이게 한다.
+# torch 를 명시하는 이유: 아래 [tool.uv.sources] 의 인덱스 바인딩이 **패키지 단위**라,
+# 어느 그룹이 요구하든 리눅스에서 CPU 판을 받는다는 것을 여기서 보이게 한다.
+#
+# **6단계에서 `ultralytics` 가 빠졌다** (D-063 6단계). legacy 추론 runtime
+# (`pipeline`·`keypoint_infer`·`crop_assist`)을 지우면서 그것을 쓰던 유일한 두 모듈이
+# 없어졌다. 옛 legacy **기록**은 그대로 읽고 비교한다 — 없어진 것은 새 legacy 분석을
+# 실행하는 능력뿐이라 의존성이 필요 없다.
 #
 # ⚠ **compose 의 `uv sync` 인자와 이 이름이 어긋나면 gait-worker 가 기동에서 멈춘다** —
 #   `--frozen` 이라 로그에 바로 나오지만, 웹은 멀쩡해서 상태 화면의 보행만 `absent` 로 보인다.
@@ -195,7 +199,6 @@ gait = [
     "rtmlib==0.0.16",              # v4 RTMPose 래퍼
     "torch==2.13.0",
     "torchvision==0.28.0",
-    "ultralytics>=8.0",
 ]
 # **AGPL 이라 그룹으로 가둔다** (RAG-032 ②). PyMuPDF 는 AGPL-3.0 이고, backend 이미지에
 # 들어가면 서비스 전체가 그 조건을 안게 된다. 이 그룹은 **오프라인 파이프라인 전용**이다 —

@@ -4,14 +4,16 @@ from typing import Literal
 
 from pydantic import model_validator
 
+from daengs_backend.services.walk_diary_board_provenance import writing_receipt
 from daengs_walk.diary_board_output import PublishedBoard
+from daengs_walk.diary_board_receipt import StoredSlotWriting
 from daengs_walk.diary_input import DiaryContract, Digest, digest
 
-STORAGE_FORMAT = "walk-diary-board-storage-v1"
+STORAGE_FORMAT = "walk-diary-board-storage-v2"
 
 
-class StoredBoard(DiaryContract):
-    format: Literal["walk-diary-board-storage-v1"] = STORAGE_FORMAT
+class LegacyStoredBoard(DiaryContract):
+    format: Literal["walk-diary-board-storage-v1"] = "walk-diary-board-storage-v1"
     generation_revision: Digest
     source_revision: Digest
     bundle_sha256: Digest
@@ -26,6 +28,25 @@ class StoredBoard(DiaryContract):
         return self
 
 
+class StoredBoard(LegacyStoredBoard):
+    format: Literal["walk-diary-board-storage-v2"] = STORAGE_FORMAT
+    writing_receipt: StoredSlotWriting
+    writing_receipt_sha256: Digest
+
+    @model_validator(mode="after")
+    def intact_writing(self):
+        if digest(self.writing_receipt) != self.writing_receipt_sha256:
+            raise ValueError("stored writing changed without its receipt")
+        self.writing_receipt.require_bundle(self.bundle, self.generation_revision)
+        return self
+
+
+def load_board(raw):
+    if isinstance(raw, dict) and raw.get("format") == "walk-diary-board-storage-v1":
+        return LegacyStoredBoard.model_validate(raw)
+    return StoredBoard.model_validate(raw)
+
+
 def source_revision(prepared):
     source = prepared.input.source.model_copy(
         update={"backgrounds": (), "selected_background_ids": ()}
@@ -37,7 +58,7 @@ def source_revision(prepared):
     return source.revision()
 
 
-def store_board(prepared, bundle, revision):
+def store_board(prepared, bundle, revision, *, writing=None):
     bundle = PublishedBoard.model_validate(bundle)
     source, plan = prepared.input.source, prepared.board.plan
     if (
@@ -46,18 +67,21 @@ def store_board(prepared, bundle, revision):
         or bundle.plan_revision != plan.revision()
     ):
         raise ValueError("stored board binding mismatch")
+    receipt = writing_receipt(prepared, bundle, revision, writing)
     return StoredBoard(
         generation_revision=revision,
         source_revision=source_revision(prepared),
         bundle_sha256=digest(bundle),
         bundle=bundle,
+        writing_receipt=receipt,
+        writing_receipt_sha256=digest(receipt),
         preparation_counts=plan.counts,
         preparation_limits=plan.limits,
     ).model_dump(mode="json")
 
 
 def read_board(prepared, row, revision):
-    stored = StoredBoard.model_validate(row.bundle)
+    stored = load_board(row.bundle)
     if (
         stored.generation_revision != row.input_revision
         or stored.bundle.client_session_id != prepared.input.source.client_session_id

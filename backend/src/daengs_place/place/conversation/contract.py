@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from daengs_place.place.contracts import PlaceRef
-from daengs_place.place.conversation.intent import Attribute, UnsupportedAttribute
+from daengs_place.place.conversation.intent import Attribute, SearchPool, UnsupportedAttribute
 from daengs_place.place.filters.contract import FilterState, Identifier
 from daengs_place.place.filters.service import FilterResponse
 from daengs_place.place.planning.contract import PlanningModel
@@ -38,7 +38,8 @@ class ResultSnapshot(PlanningModel):
     result: FilterResponse
     display_order: tuple[PlaceRef, ...]
     exclusions: tuple[PlaceRef, ...] = Field(default=(), max_length=120)
-    omitted: tuple[PlaceRef, ...] = Field(default=(), max_length=1320)
+    omitted: tuple[PlaceRef, ...] = Field(default=(), max_length=1640)
+    pool_fingerprint: str = ""
 
 
 class NamedPlace(PlanningModel):
@@ -47,6 +48,7 @@ class NamedPlace(PlanningModel):
 
 
 class ExplorationState(PlanningModel):
+    known: tuple[NamedPlace, ...] = Field(default=(), max_length=120)
     excluded: tuple[NamedPlace, ...] = Field(default=(), max_length=120)
     presented: tuple[PlaceRef, ...] = Field(default=(), max_length=1200)
     fingerprint: str = ""
@@ -62,6 +64,8 @@ class PendingChange(PlanningModel):
     id: UUID
     revision: int = Field(ge=1)
     base_fingerprint: str
+    pool: SearchPool = "all_places"
+    base_pool: SearchPool = "all_places"
     original_query: str = Field(max_length=1000)
     question: str = Field(max_length=1000)
     candidate: FilterState
@@ -86,6 +90,7 @@ class AnswerFact(PlanningModel):
 
 
 class ConversationState(PlanningModel):
+    search_pool: SearchPool = "all_places"
     filters: FilterState
     snapshot: ResultSnapshot | None = None
     selected: PlaceRef | None = None
@@ -98,6 +103,7 @@ class ConversationState(PlanningModel):
 
 
 class FilterRemoval(PlanningModel):
+    search_pool: Literal["keep", "all_places", "unbookmarked", "new_candidates"] = "keep"
     # Deliberately narrower than model-proposed edits. Empty means search current filters.
     remove_all: tuple[Identifier, ...] = Field(default=(), max_length=8)
     remove_any: tuple[Identifier, ...] = Field(default=(), max_length=4)
@@ -105,6 +111,13 @@ class FilterRemoval(PlanningModel):
 
 class PrepareRequest(PlanningModel):
     mode: Literal["manual", "chat", "restore", "filters"]
+    saved_search: Literal["v1"] | None = None
+    candidate_pools: Literal["v1"] | None = None
+    restore_pool: SearchPool = "all_places"
+    # Owner gateway reads a complete member snapshot; clients cannot supply these.
+    bookmark_keys: tuple[PlaceRef, ...] | None = Field(None, max_length=200)
+    restore_exploration: ExplorationState | None = None
+    bookmark_commands: Literal["v1"] | None = None
     query: str = Field(default="", max_length=1000)
     manual: PlaceSearchRequest | None = None
     restore_filters: FilterState | None = None
@@ -134,7 +147,11 @@ class PrepareRequest(PlanningModel):
             policy = self.restore_filters.result_policy
             if policy.limit_per_kind > 20 or policy.uncertain_limit_per_kind != 0:
                 raise ValueError("restore must respect the conversation result budget")
-        elif self.restore_filters is not None:
+        elif (
+            self.restore_filters is not None
+            or self.restore_exploration is not None
+            or self.restore_pool != "all_places"
+        ):
             raise ValueError("saved filters require restore mode")
         if self.mode == "manual" and self.manual is None:
             raise ValueError("manual search requires filters")
@@ -143,7 +160,16 @@ class PrepareRequest(PlanningModel):
         return self
 
 
+class BookmarkCommand(PlanningModel):
+    key: PlaceRef
+    name: str
+    saved: bool
+
+
 class ExecutionReceipt(PlanningModel):
+    search_pool: SearchPool = "all_places"
+    known_places: tuple[NamedPlace, ...] = ()
+    feedback: str = "none"
     goal: str
     execution: Literal["not_run", "reused", "searched", "failed"]
     filters_changed: bool = False
@@ -168,6 +194,9 @@ class ExecutionReceipt(PlanningModel):
     excluded_places: tuple[NamedPlace, ...] = ()
     restored_places: tuple[NamedPlace, ...] = ()
     remaining: Literal["more", "exhausted", "unknown"] = "unknown"
+    # Prepared command only. The member bookmark API has not executed it.
+    bookmark_command: BookmarkCommand | None = None
+    saved_search_filters: dict | None = None
 
 
 class PreparedTurn(PlanningModel):

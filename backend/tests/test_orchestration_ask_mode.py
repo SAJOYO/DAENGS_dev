@@ -104,11 +104,12 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
     general 은 `answer`). 턴이 답해졌는지는 `AssistantStatus` 가 말한다.
     """
     result = await run_adapter(
-        json.dumps({"kind": "ask", "text": "", "question": f"  {ASK} ", "reason": None})
+        json.dumps({"kind": "ask", "text": GROUNDED, "question": f"  {ASK} ", "reason": None})
     )
     assert result.status == CapabilityStatus.OK
     assert result.data == {
-        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []}
+        "answer": GROUNDED,
+        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []},
     }
     assert result.capability == CapabilityName.GENERAL and result.elapsed_ms >= 0
 
@@ -116,7 +117,7 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
 async def test_adapter_rejects_an_ask_that_the_clarify_contract_cannot_hold() -> None:
     """`ClarifyRequest.question` 은 500자다. 어댑터가 그 자리에서 걸러야 집계가 안 터진다."""
     result = await run_adapter(
-        json.dumps({"kind": "ask", "text": "", "question": "가" * 501, "reason": None})
+        json.dumps({"kind": "ask", "text": GROUNDED, "question": "가" * 501, "reason": None})
     )
     assert result.status == CapabilityStatus.ERROR
     assert result.error is not None and result.error.kind == "general_invalid_output"
@@ -240,7 +241,7 @@ def test_the_ask_never_touches_the_route_plan() -> None:
 # ── 프롬프트: 무엇을 되묻고 무엇은 안 되묻나 ─────────────────────────
 
 
-def test_prompt_versions_move_with_the_schema_to_v6() -> None:
+def test_prompt_versions_move_with_the_body() -> None:
     """**`kind` 를 넓히면 v3 본문이 조용히 바뀐다.**
 
     `build_general_prompt` 는 `GeneralAnswer.model_json_schema()` 를 v3 리터럴 가지에도
@@ -248,10 +249,10 @@ def test_prompt_versions_move_with_the_schema_to_v6() -> None:
     D-057 ③ 이 84건 쌍대 비교로 승인한 본문이 같은 이름으로 다른 물건이 된다. 네 조합의
     버전을 함께 올리는 것이 그 드리프트를 막는 유일한 자리다.
     """
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v6"
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v6-carelog"
-    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v6-vetspend"
-    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v6-carelog-vetspend"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v8"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v8-carelog"
+    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v8-vetspend"
+    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v8-carelog-vetspend"
 
 
 def test_prompt_allows_related_axes_in_one_question_but_not_an_intake_interview() -> None:
@@ -323,6 +324,7 @@ def test_the_acceptance_set_is_the_six_turns_the_before_lap_closed() -> None:
 # `오늘 건강 상태는 어때?` 는 그 규칙이 말하는 "오늘 밥 줬나" 가 아니기 때문이다.
 # 사람 결정: **기록은 사실대로 말하고, 판단은 안 붙이고, 못 채우는 칸만 되묻는다.**
 
+GROUNDED = "구토는 여러 이유로 생길 수 있어요."
 SUMMARY = "오늘 밥 2번 먹었고(마지막 18:30) 산책도 1번 다녀왔네요. 투약 기록은 아직 없어요."
 
 
@@ -334,8 +336,8 @@ def test_an_ask_carries_the_question_apart_from_what_it_can_already_say() -> Non
     """
     ok = validate_general_answer({"kind": "ask", "text": SUMMARY, "question": ASK, "reason": None})
     assert ok is not None and ok.question == ASK and ok.text == SUMMARY
-    # 기록이 없으면 말할 것이 없다 — 질문만 나간다.
-    assert validate_general_answer({"kind": "ask", "text": "", "question": ASK, "reason": None})
+    # 2026-09-12: 빈 `text` 는 이제 계약이 막는다 — 질문만 나가는 되묻기가 루프를 만들었다.
+    assert validate_general_answer({"kind": "ask", "text": "", "question": ASK}) is None
     # 질문 없는 되묻기는 되묻기가 아니다.
     assert validate_general_answer({"kind": "ask", "text": SUMMARY, "reason": None}) is None
     # 답과 거절은 질문 칸을 쓰지 않는다.
@@ -590,7 +592,7 @@ def test_the_model_names_the_axes_and_the_code_never_fills_them_in() -> None:
     """**코드가 임의로 보완하지 않는다.** 모델이 축을 안 냈으면 빈 채로 나간다 —
     "질문이 식욕을 언급했으니 APPETITE 를 넣자" 같은 추론을 코드가 하지 않는다."""
     answer = validate_general_answer(
-        {"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY"]}
+        {"kind": "ask", "text": GROUNDED, "question": ASK, "axes": ["APPETITE", "ENERGY"]}
     )
     assert answer is not None and answer.axes == [
         ObservationAxis.APPETITE,
@@ -599,7 +601,12 @@ def test_the_model_names_the_axes_and_the_code_never_fills_them_in() -> None:
     # 세 개는 스키마가 막는다.
     assert (
         validate_general_answer(
-            {"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY", "STOOL"]}
+            {
+                "kind": "ask",
+                "text": GROUNDED,
+                "question": ASK,
+                "axes": ["APPETITE", "ENERGY", "STOOL"],
+            }
         )
         is None
     )
@@ -609,14 +616,17 @@ def test_the_model_names_the_axes_and_the_code_never_fills_them_in() -> None:
 
 async def test_the_axes_reach_the_clarify_verbatim() -> None:
     result = await run_adapter(
-        json.dumps({"kind": "ask", "text": "", "question": ASK, "axes": ["APPETITE", "ENERGY"]})
+        json.dumps(
+            {"kind": "ask", "text": GROUNDED, "question": ASK, "axes": ["APPETITE", "ENERGY"]}
+        )
     )
     assert result.data == {
+        "answer": GROUNDED,
         "ask": {
             "question": ASK,
             "missing": [GENERAL_ASK_MISSING],
             "missing_axes": ["APPETITE", "ENERGY"],
-        }
+        },
     }
     response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
     assert response.clarify is not None
@@ -624,7 +634,7 @@ async def test_the_axes_reach_the_clarify_verbatim() -> None:
 
 
 async def test_an_ask_without_axes_stays_empty() -> None:
-    result = await run_adapter(json.dumps({"kind": "ask", "text": "", "question": ASK}))
+    result = await run_adapter(json.dumps({"kind": "ask", "text": GROUNDED, "question": ASK}))
     response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])
     assert response.clarify is not None and response.clarify.missing_axes == []
 
@@ -716,3 +726,80 @@ def test_no_records_invites_logging_without_promising_a_verdict() -> None:
     assert "Never promise that a log will let you judge the dog's health" in prompt
     assert "logging changes what you can see, not what you are allowed to conclude" in prompt
     assert "do not phrase it as a second question" in prompt
+
+
+# ── 무한 되묻기 (2026-09-12, 실사용 화면) ─────────────────────────────
+#
+# 배포 뒤 실제 대화에서 되묻기가 **루프**가 됐다:
+#
+#   토해              → 구토 외에 식욕이나 활력, 배변 상태 등 …
+#   초록토            → 구토 외에 식욕이나 활력, 배변 상태 등 …   (같은 문장)
+#   밥도안먹어        → 구토 외에 식욕이나 활력, 배변 상태 등 …   (같은 문장)
+#   토하고 밥을 안먹고 기운이없어 → 배변 상태나 호흡 등 …        (또 물음)
+#
+# 세 가지가 겹쳤다. ① `never spread the items across several turns as an intake
+# interview` 는 **이전 턴을 못 보는 모델에게 지킬 수 없는 규칙**이라 장식이었다(#416 몫).
+# ② 되묻기가 질문 한 문장만 들고 나가 예전의 거절과 똑같은 막다른 길이 됐다.
+# ③ 구토·식욕 부진·기력 저하가 **겹쳤는데도** 계속 물었다 — 과잉 거절을 고치려고 넣은
+# "구토·설사·파행·식욕 저하는 응급 목록이 아니다" 가 겹침의 에스컬레이션까지 막았다.
+
+
+def test_two_signs_at_once_close_the_conversation_instead_of_asking_again() -> None:
+    """사람 결정 (2026-09-12): **둘 이상 겹치면 되묻지 않고 진료로 닫는다.**
+
+    한 개일 때는 되묻기를 유지합니다(같은 결정). 둘이 겹치는 순간부터 더 묻는 것은
+    보호자에게 없는 시간을 쓰게 하는 일입니다. 응급 거절이 아니라 **답변**입니다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="토하고 밥을 안먹고 기운이없어"))
+    assert "two or more of 구토 · 설사 · 식욕 부진 · 기력 저하 · 파행" in prompt
+    assert "do not ask anything back" in prompt
+    assert "This is an answer, not an emergency refusal" in prompt
+
+
+def test_an_ask_may_never_go_out_empty_handed() -> None:
+    """**질문 한 문장뿐인 되묻기는 물음표를 단 막다른 길입니다.**
+
+    화면의 모든 응답이 그랬습니다 — 구토에 대해 지금 말할 수 있는 것이 있는데도
+    아무것도 안 싣고 물었습니다. 승인된 정책은 "비응급 증상에는 일반적인 관찰·관리
+    안내와 필요한 후속 질문" 인데 후속 질문만 나갔습니다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="토해"))
+    assert "never leave text empty" in prompt
+    assert "a question with nothing before it is a dead end wearing a question mark" in prompt
+    assert "text is what you can already say about that symptom" in prompt
+
+
+def test_the_contract_refuses_an_ask_with_no_content() -> None:
+    """프롬프트로 시키는 것과 **계약으로 막는 것**은 다릅니다. 빈 되묻기는 스키마에서
+    떨어져야 모델이 그 모양을 못 냅니다 — 지금까지는 빈 문자열이 허용돼 있었습니다."""
+    assert (
+        validate_general_answer({"kind": "ask", "text": "", "question": ASK, "reason": None})
+        is None
+    )
+    assert (
+        validate_general_answer({"kind": "ask", "text": "   ", "question": ASK, "reason": None})
+        is None
+    )
+    assert (
+        validate_general_answer({"kind": "ask", "text": SUMMARY, "question": ASK, "reason": None})
+        is not None
+    )
+
+
+async def test_an_empty_ask_never_reaches_the_user() -> None:
+    result = await run_adapter(json.dumps({"kind": "ask", "text": "", "question": ASK}))
+    assert result.status == CapabilityStatus.ERROR
+    assert result.error is not None and result.error.kind == "general_invalid_output"
+
+
+def test_a_general_mechanism_is_allowed_but_this_dogs_cause_is_not() -> None:
+    """승인된 경계를 **답변 쪽에서** 못 박는다 (2026-09-11 정책, 2026-09-12 적용).
+
+    거절 규칙은 "언제 안 답하나" 를 정하지 "답할 때 어디까지 말해도 되나" 를 정하지 않았다.
+    그 빈칸에서 `초록색 구토는 담즙이…` 가 나왔고, 그 문장 자체는 정책 안이다 — 일반적인
+    기전을 조건부로 말한 것이지 이 아이의 원인을 판정한 것이 아니다. 선은 **단정**이다.
+    """
+    prompt = build_general_prompt(GeneralPayload(question="초록색 토를 해"))
+    assert "A general mechanism may be explained; this dog's cause may not be named" in prompt
+    assert "Keep every cause sentence hedged" in prompt
+    assert "never write 때문입니다 · 원인은 ~입니다 · ~로 인한 것입니다" in prompt

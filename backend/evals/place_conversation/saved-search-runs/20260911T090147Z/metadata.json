@@ -1,0 +1,22 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "boundary": "real Gemini + production compilation; no member API or database",
+  "sha256": {
+    "conversation\\answer.py": "c0c64ba5f55d3e0070f7692c76140656607e914b5adc860b209d22f90107759d",
+    "conversation\\bookmarks.py": "62c2869aea8d6e53e25574fd4bf8f3d716d5378e7c908ce0abcc78600898e13c",
+    "conversation\\compiler.py": "33c36020637c94b8a0bbe8caf5938470dab9335bdfca1f35ebfcce95ccd124e2",
+    "conversation\\context.py": "56ac502bbf3fddabb1adb529f54519c67c634cb628b08fad4578654ab50178fd",
+    "conversation\\contract.py": "8f935108d616d0391cd290bd7753b3488a27bfc00fc0c6acb918be4a07c32ea4",
+    "conversation\\grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "conversation\\intent.py": "892382d913ca1a60095be4001ba0f9f69d1350578456fda90a5fc47868c2db6b",
+    "conversation\\policy.py": "12d0dc1b65347ff2d7aaa4a7df04141584520fe7ce5f54f0a24c247ea80097f8",
+    "conversation\\render.py": "768b7ab5bc3a1229065c3dae6d44e99c749eca489bc415cbe37235140fea63a3",
+    "conversation\\saved_search.py": "f45597e09641e72137eaf02d1200326659ebe1c0a817d7117e1538d08e38520f",
+    "conversation\\service.py": "99bc219be0f0816cb39dda57c60a3c1f5f1c54d63f14c467ca9056f308d3f510",
+    "conversation\\static_tools.py": "cfe840760ce344e7d8baf5de6a2031faf44319687399b4472f50ded3b1ddf75a",
+    "conversation\\__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108",
+    "providers\\conversation_gemini.py": "baeaa10e3b7424304ebd9c6cd2a095e531573eb280ecd7bbc46682e8e5cc5fa6",
+    "providers\\gemini.py": "c329c9a20dc8ba8bb8d079cb384262d649a053f27d3b06364429585a177c1f5b",
+    "providers\\__init__.py": "c7b8047da95ea43b29f9aeb70355bb8c3590b0ad6eba249c4b77356729f874ca"
+  }
+}

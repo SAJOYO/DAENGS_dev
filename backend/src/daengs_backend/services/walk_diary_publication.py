@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 
 from daengs_backend.services.walk_diary_board_storage import (
-    StoredBoard,
+    load_board,
     source_revision,
     store_board,
 )
@@ -44,7 +44,7 @@ def settle_expired(prepared, row, now=None):
     now = now or datetime.now(UTC)
     if now < datetime.fromisoformat(raw["deadline_at"]):
         return False
-    receipt = StoredBoard.model_validate(raw["fallback"])
+    receipt = load_board(raw["fallback"])
     if (
         receipt.generation_revision != row.input_revision
         or receipt.bundle.client_session_id != prepared.input.source.client_session_id

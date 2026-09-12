@@ -2,9 +2,12 @@
 
 세 가지를 지킵니다:
 
-1. **계약** — 두 엔진의 실제 출력이 `daengs_gait.contract` 를 만족한다. v4 는 로컬에서
-   실제 영상을 돌린 record.json(픽스처), legacy 는 daengback DB 에 저장된 행 + 이
-   엔진이 record 에 넣는 상수. 소스도 정규식으로 읽어 "키를 넣는다" 는 사실을 코드에서 잰다.
+1. **계약** — 엔진 출력이 `daengs_gait.contract` 를 만족한다. v4 는 로컬에서 실제 영상을
+   돌린 record.json(픽스처)이고, 소스도 정규식으로 읽어 "키를 넣는다" 는 사실을 코드에서
+   잰다. legacy 는 daengback DB 에 저장된 행(픽스처) + 레지스트리 상수 —
+   **6단계에서 legacy 추론 runtime 이 빠진 뒤로 legacy 쪽 원본은 `contract` 하나다**
+   (`config.POSE_MODEL_ID` 는 참조가 0 이 되어 같이 없앴습니다). 옛 기록의 판별·계약은
+   그것과 무관하게 그대로다.
 2. **판별 규칙** — 백필 SQL 의 CASE 와 `classify_joint_keys` 가 같은 규칙이고, 두 SQL 파일과
    레지스트리의 관절 집합이 한 글자도 안 다르다. 빈 집합은 어느 모델도 아니다.
 3. **저장** — 워커가 DONE 이면 항상 `pose_model` 을 넣고(unavailable 이어도), 엔진 결과가
@@ -35,7 +38,6 @@ VERIFY = REPO / "db" / "migrations" / "verify_2026-09-09_gait_records_pose_model
 INIT_SQL = REPO / "db" / "init" / "07_gait_records.sql"
 V4_CONFIG = REPO / "backend" / "src" / "daengs_gait" / "inference" / "model.py"
 V4_ANALYZE = REPO / "backend" / "src" / "daengs_gait" / "inference" / "analyze.py"
-LEGACY_PIPELINE = REPO / "backend" / "src" / "daengs_gait" / "pipeline.py"
 
 
 def _fixture(name: str) -> dict:
@@ -77,9 +79,11 @@ def test_v4_unavailable_output_still_carries_pose_model() -> None:
 
 
 def test_legacy_stored_record_plus_engine_constant_satisfies_contract() -> None:
-    """daengback 에 저장된 legacy 행(2026-09-02) + 이 엔진이 record 에 넣는 상수."""
+    """daengback 에 저장된 legacy 행(2026-09-02) + 레지스트리의 legacy 식별자.
+
+    추론 runtime 이 없어져도(6단계) **옛 기록은 그대로 계약을 만족해야 합니다.**"""
     stored = _fixture("legacy_db_row.json")
-    record = _stored_row_as_engine_record(stored, gait_config.POSE_MODEL_ID)
+    record = _stored_row_as_engine_record(stored, contract.POSE_MODEL_LEGACY)
     assert contract.check_analysis_record(record) == []
     assert set(stored["summary_for_ui"]) <= contract.LEGACY_12KP_JOINTS
 
@@ -91,15 +95,15 @@ def test_v4_stored_record_matches_engine_output_shape() -> None:
     assert contract.check_analysis_record(record) == []
 
 
-def test_engines_put_pose_model_into_the_record_in_source() -> None:
-    """두 엔진 소스가 `pose_model` 키를 넣는다. v4 는 MODEL_ID, legacy 는 POSE_MODEL_ID."""
+def test_engine_puts_pose_model_into_the_record_in_source() -> None:
+    """살아 있는 엔진 소스가 `pose_model` 키를 넣는다 (v4 는 MODEL_ID).
+
+    legacy 쪽 같은 검사는 `pipeline.py` 와 함께 없어졌습니다 — 새 legacy 분석을 만드는
+    코드가 더는 없기 때문입니다. 옛 기록이 가진 값의 검사는 아래 레지스트리·저장 쪽에
+    그대로 남습니다."""
     v4 = V4_ANALYZE.read_text(encoding="utf-8")
     assert re.search(r'"pose_model"\s*:\s*MODEL_ID', v4), (
         "daengs_gait/inference/analyze.py 가 pose_model 을 안 넣음"
-    )
-    legacy = LEGACY_PIPELINE.read_text(encoding="utf-8")
-    assert re.search(r'"pose_model"\s*:\s*POSE_MODEL_ID', legacy), (
-        "pipeline.process_video 가 pose_model 을 안 넣음"
     )
 
 
@@ -107,7 +111,10 @@ def test_registry_ids_match_engine_sources() -> None:
     v4_cfg = V4_CONFIG.read_text(encoding="utf-8")
     m = re.search(r'^MODEL_ID\s*=\s*"([^"]+)"', v4_cfg, re.MULTILINE)
     assert m and m.group(1) == contract.POSE_MODEL_V4
-    assert gait_config.POSE_MODEL_ID == contract.POSE_MODEL_LEGACY
+    # legacy 식별자는 **옛 DB 행에 이미 박혀 있는 문자열**입니다. 추론 runtime 이
+    # 없어져도(6단계) 이 값이 바뀌면 옛 기록의 판별이 통째로 어긋납니다 — 그래서
+    # 리터럴로 못 박습니다. 픽스처 `legacy_db_row.json` 이 같은 값을 씁니다.
+    assert contract.POSE_MODEL_LEGACY == "yolov8_12kp_best"
     assert set(contract.POSE_MODELS) == {contract.POSE_MODEL_V4, contract.POSE_MODEL_LEGACY}
 
 
@@ -327,7 +334,9 @@ async def test_unavailable_record_still_stores_pose_model(monkeypatch) -> None:
 async def test_legacy_record_stores_legacy_id(monkeypatch) -> None:
     record = _Record()
     session = _Session(record)
-    result = _stored_row_as_engine_record(_fixture("legacy_db_row.json"), gait_config.POSE_MODEL_ID)
+    result = _stored_row_as_engine_record(
+        _fixture("legacy_db_row.json"), contract.POSE_MODEL_LEGACY
+    )
     result["_overlay_bytes"] = None
     _wire(monkeypatch, session, _Storage(), lambda key: result)
 

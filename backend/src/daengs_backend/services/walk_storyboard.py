@@ -10,6 +10,8 @@ from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardResponse
 from daengs_backend.services.walk_diary_negotiation import existing_format, guard_old_writer
 from daengs_backend.services.walk_entry import response as entry_response
+from daengs_backend.services.walk_entry_errors import EntryUpgradeRequired
+from daengs_backend.services.walk_entry_policy import guard_v1
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
 from daengs_backend.services.walk_storyboard_state import (
@@ -36,7 +38,6 @@ async def source(session, owner, walk_id, bundle_format="walk-storyboard-candida
     if walk is None:
         raise StoryboardNotFound
     from daengs_backend.config import settings
-    from daengs_backend.services.walk_entry_v2 import EntryUpgradeRequired, guard_v1
 
     pin_aware = bundle_format == "walk-storyboard-candidates-v5"
     if pin_aware and not settings.walk_entry_v2_enabled:
@@ -128,7 +129,9 @@ async def generate(
                 if target is not None
                 else None,
                 "refresh": False,
-                "preparation_budget_ms": request.preparation_budget_ms if chosen == BOARD_FORMAT else None,
+                "preparation_budget_ms": request.preparation_budget_ms
+                if chosen == BOARD_FORMAT
+                else None,
             }
         )
     if request.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:

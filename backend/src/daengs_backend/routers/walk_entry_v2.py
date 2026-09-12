@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.routers.walk_entry import translate as translate_entry
+from daengs_backend.routers.walk_entry_errors import translate as translate_entry
 from daengs_backend.schemas.walk_entry import RecordProfileQuery
 from daengs_backend.schemas.walk_entry_context import EntryContexts
 from daengs_backend.schemas.walk_entry_v2 import (

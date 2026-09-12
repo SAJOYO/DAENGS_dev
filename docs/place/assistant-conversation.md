@@ -95,3 +95,22 @@ revision 필드가 없다. 저장된 옛 대화를 읽는 것만으로 지도를
 Place ASGI 경계를 연결하고 공급자·검색·세션 저장소만 대체한다. 동일 세션·재시도·타 회원
 차단·관리자 차단·입력 검증·프롬프트 경계를 검사한다. K 교체 회귀는
 `tests/place/conversation/test_candidates.py`에 있다. 운영 Gemini·Redis·DB 실행 검증과는 구분한다.
+
+2026-09-12 검증 결과:
+
+- 변경한 Python 16개 파일 Ruff check/format, `uv run check` 통과.
+- 전체 `uv run --no-sync pytest -q -rs`: **5,458 passed, 1 failed, 466 skipped, 2 xfailed**.
+  실패는 시설 코드가 아닌 `test_runtime_deploy`의 Docker CLI 부재였다.
+- Docker/Compose CLI를 준비한 뒤 해당 파일·CLI 부재로 skip된 Walk 명령 검사·최종 시설
+  공통 API 검사를 함께 재실행해 **29 passed, 실패·skip 0**을 확인했다. 전체 실행의 실패를
+  숨기거나 테스트를 skip 처리하지 않았다. 서버 컨테이너는 기동하지 않았다.
+- 466 skipped에는 별도 로컬 DB·Redis 및 선택 의존성이 필요한 검사가 포함된다.
+  전체 검사를 모두 실행했다는 뜻으로 합산하지 않는다. 실제 배포 환경 검증은 남아 있다.
+
+Windows 검사는 `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`을 사용했다. 저장소 검사에서
+만드는 PowerShell 파일은 해당 검사 프로세스에만 실행을 허용해 검증했으며 시스템 정책을
+영구 변경하지 않았다. 재검사 명령은 다음과 같다.
+
+```powershell
+uv run --no-sync pytest -q -rs tests/place/api/test_assistant_conversation.py tests/activity/test_runtime_deploy.py tests/walk/context/test_walk_runtime_commands.py
+```

@@ -17,13 +17,13 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import walk_motion as repo
 from daengs_backend.routers.walk_motion import router
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.schemas.walk_motion import MotionObservation
+from daengs_backend.schemas.walk_motion import CHUNK_SIZE, MotionObservation
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_motion_contract import chunk_digest
 
 
 @pytest.fixture
-def boundary(monkeypatch):
+def boundary(monkeypatch, request):
     from daengs_backend.repositories import walk_precision
 
     monkeypatch.setattr(walk_precision, "available", AsyncMock(return_value=False))
@@ -32,7 +32,7 @@ def boundary(monkeypatch):
         for c in json.loads(
             (Path(__file__).parents[1] / "fixtures/gps-motion-replay-v1.json").read_text()
         )["cases"]
-        if c["name"] == "walking"
+        if c["name"] == getattr(request, "param", "walking")
     )
     case = copy.deepcopy(case)
     owner, walk_id = uuid.uuid4(), uuid.uuid4()
@@ -51,15 +51,27 @@ def boundary(monkeypatch):
     )
     chunks = [
         SimpleNamespace(
-            chunk_index=0,
-            payload=case["points"],
-            fingerprint=chunk_digest([MotionObservation.model_validate(p) for p in case["points"]]),
+            chunk_index=start // CHUNK_SIZE,
+            payload=case["points"][start : start + CHUNK_SIZE],
+            fingerprint=chunk_digest(
+                [
+                    MotionObservation.model_validate(p)
+                    for p in case["points"][start : start + CHUNK_SIZE]
+                ]
+            ),
         )
+        for start in range(0, len(case["points"]), CHUNK_SIZE)
     ]
     raw = [
         SimpleNamespace(
-            payload=encode_chunk([WalkPointUpload.model_validate(p) for p in case["raw_points"]])
+            payload=encode_chunk(
+                [
+                    WalkPointUpload.model_validate(p)
+                    for p in case["raw_points"][start : start + CHUNK_SIZE]
+                ]
+            )
         )
+        for start in range(0, len(case["raw_points"]), CHUNK_SIZE)
     ]
     session = SimpleNamespace(
         rollback=AsyncMock(),
@@ -95,6 +107,8 @@ def boundary(monkeypatch):
             available=available,
             backup=backup,
             expected=case["expected"],
+            source=case,
+            owner=owner,
         )
 
 
@@ -133,7 +147,8 @@ def test_missing_storage_does_not_advertise_calculation(boundary):
 @pytest.mark.parametrize(
     "damage", [None, "collecting", "hash", "missing_chunk", "base", "client", "point"]
 )
-def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, damage):
+@pytest.mark.parametrize("calculation", ["motion", "trajectory"])
+def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, damage, calculation):
     from daengs_backend.repositories import walk_precision as precision
     from daengs_backend.schemas.walk_precision import PrecisionPoint
     from daengs_backend.services.walk_precision_contract import chunk_digest as precision_digest
@@ -177,10 +192,23 @@ def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, dam
         row.manifest["client_session_id"] = str(uuid.uuid4())
     if damage == "point":
         chunks[0].payload[0]["lat_bits"] = "0000000000000000"
-    response = boundary.client.get(boundary.path)
+    path = boundary.path
+    if calculation == "trajectory":
+        path = path.replace("motion-calculation", "trajectory-calculation")
+        path += "?version=walk-trajectory-calculation-v1"
+    response = boundary.client.get(path)
     assert response.status_code == (409 if damage else 200), response.text
     if damage is None:
         data = response.json()
+        if calculation == "trajectory":
+            key = data["measurement"]["key"]
+            assert key["coordinate_basis"] == "device-fix-bits-v1"
+            assert key["precision_fingerprint"] == row.evidence_fingerprint[7:]
+            assert data["metrics"]["walking_distance_m"] == pytest.approx(
+                case["expected"]["distance_m"], rel=1e-10, abs=1e-7
+            )
+            assert data["device_result_verified"] is False
+            return
         assert data["coordinate_basis"] == "device-fix-bits-v1"
         assert data["precision_fingerprint"] == row.evidence_fingerprint
         assert data["device_result_verified"] is False
@@ -208,7 +236,8 @@ def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, dam
         ("not_finalized", 409),
     ],
 )
-def test_unverified_inputs_never_return_a_calculated_success(boundary, damage, status):
+@pytest.mark.parametrize("calculation", ["motion", "trajectory"])
+def test_unverified_inputs_never_return_a_calculated_success(boundary, damage, status, calculation):
     b = boundary
     if damage == "schema":
         b.available.return_value = False
@@ -236,7 +265,11 @@ def test_unverified_inputs_never_return_a_calculated_success(boundary, damage, s
         b.walk.ended_at = datetime(2020, 1, 1, tzinfo=UTC)
     elif damage == "not_finalized":
         b.walk.analysis_state = "raw_uploaded"
-    response = b.client.get(b.path)
+    path = b.path
+    if calculation == "trajectory":
+        path = path.replace("motion-calculation", "trajectory-calculation")
+        path += "?version=walk-trajectory-calculation-v1"
+    response = b.client.get(path)
     assert response.status_code == status, response.text
     b.session.rollback.assert_awaited_once()
     b.session.commit.assert_not_awaited()

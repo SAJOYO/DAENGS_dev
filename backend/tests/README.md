@@ -87,6 +87,11 @@ uv run pytest -q tests/journey
 
 ### 5. 산책 측정·분석
 
+- 동선 검증 후보 조회(#475): `walk/api/test_trajectory_calculation.py`는 32개 기준 기록을
+  실제 라우터로 직렬화해 소유권·원본 시각·구간·경계·거리·무결성을 확인한다.
+  `test_motion_calculation.py`의 완료/손상/정밀 백업 경계는 두 계산 endpoint에 공통 적용한다.
+  [조회 계약과 실행 범위](../../docs/walk/trajectory-api.md). API는 검증 후보이며 활성 결과를 갱신하지 않는다.
+
 - GPS 고정 정책 재생·계산 조회(#456): `walk/measurement/test_motion_replay.py`는 실제 앱 엔진의
   기준값과 판정을 대조한다. `walk/api/test_motion_calculation.py`는 인증 후 소유권·완료·손상
   경계를 검증한다. 공유 백업 완료 검증을 바꾸면 `walk/api/test_walk_motion_contract.py`와

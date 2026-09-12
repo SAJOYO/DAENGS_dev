@@ -32,11 +32,23 @@ CREATE TABLE IF NOT EXISTS territory_attempts (
     vision_model_version TEXT,
     decision_reason TEXT,
 
+    vision_lease_token UUID,
+    vision_lease_until TIMESTAMPTZ,
+    vision_attempts INTEGER NOT NULL DEFAULT 0,
+    vision_available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    vision_dispatch_after TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    vision_retry_reason TEXT,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT territory_attempts_status_check CHECK (
         status IN ('PENDING_UPLOAD','VISION_PENDING','VERIFIED','REJECTED','FAILED')
+    ),
+    CONSTRAINT territory_vision_attempts_check CHECK (vision_attempts >= 0 AND vision_attempts <= 2),
+    CONSTRAINT territory_vision_lease_check CHECK (
+        (vision_lease_token IS NULL AND vision_lease_until IS NULL)
+        OR (vision_lease_token IS NOT NULL AND vision_lease_until IS NOT NULL AND status = 'VISION_PENDING')
     ),
     CONSTRAINT territory_attempts_capture_coordinate_range CHECK (
         capture_lat BETWEEN -90 AND 90 AND capture_lng BETWEEN -180 AND 180
@@ -80,6 +92,10 @@ CREATE INDEX IF NOT EXISTS territory_attempts_owner_created_idx
     ON territory_attempts (app_user_id, created_at);
 CREATE INDEX IF NOT EXISTS territory_attempts_session_idx
     ON territory_attempts (app_user_id, client_session_id);
+CREATE INDEX IF NOT EXISTS territory_vision_dispatch_idx
+    ON territory_attempts (vision_dispatch_after, id)
+    WHERE status = 'VISION_PENDING'
+       OR (status IN ('VERIFIED','REJECTED','FAILED') AND photo_redacted_at IS NULL);
 
 CREATE TABLE IF NOT EXISTS territory_verified_visits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

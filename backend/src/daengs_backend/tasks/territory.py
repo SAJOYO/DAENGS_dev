@@ -6,6 +6,7 @@ Gemini를 호출합니다. 앱은 DB 상태를 polling하므로 Celery result ba
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 from celery import Celery
@@ -22,11 +23,14 @@ app.conf.task_default_queue = QUEUE_NAME
 app.conf.task_acks_late = True
 app.conf.task_reject_on_worker_lost = True
 app.conf.worker_prefetch_multiplier = 1
+app.conf.broker_connection_timeout = 5
+app.conf.broker_transport_options = {"socket_timeout": 5, "socket_connect_timeout": 5}
+app.conf.task_publish_retry = False
 
 
 @app.task(name="territory.verify_photo", bind=True, max_retries=MAX_RETRIES)
 def verify_photo(self, attempt_id: str) -> None:
-    """사진 판정. 기술 실패만 2초 뒤 한 번 재시도하고 반드시 DB 상태로 끝냅니다."""
+    """Fast retry delivery; model budget and failure completion belong to the DB lease."""
     from daengs_backend.services import territory_vision
 
     try:
@@ -34,9 +38,14 @@ def verify_photo(self, attempt_id: str) -> None:
     except territory_vision.TerritoryVisionTransientError as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=2) from exc
-        territory_vision.record_failed_attempt_sync(attempt_id, reason=exc.reason_code)
-    except territory_vision.TerritoryVisionPermanentError as exc:
-        territory_vision.record_failed_attempt_sync(attempt_id, reason=exc.reason_code)
+        # The persisted retry/expired lease is still discoverable by recovery.
 
 
-__all__ = ["MAX_RETRIES", "QUEUE_NAME", "app", "verify_photo"]
+@app.task(name="territory.recover_photos")
+def recover_photos():
+    from daengs_backend.services.territory_vision_jobs import recover_pending
+
+    return asyncio.run(recover_pending())
+
+
+__all__ = ["MAX_RETRIES", "QUEUE_NAME", "app", "recover_photos", "verify_photo"]

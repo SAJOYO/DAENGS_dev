@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from datetime import UTC, datetime
@@ -234,11 +235,11 @@ async def confirm_upload(
     if attempt.status == "VISION_PENDING":
         # SELECT FOR UPDATE 잠금을 broker I/O 전에 풉니다. 중복 태스크는 워커가 멱등 처리합니다.
         await session.commit()
-        _publish_vision_attempt(attempt.id)
+        await asyncio.to_thread(_publish_vision_attempt, attempt.id)
         return attempt, False
     if attempt.status != "PENDING_UPLOAD":
         return attempt, False
-    stored = get_storage().stat(attempt.photo_storage_key)
+    stored = await asyncio.to_thread(get_storage().stat, attempt.photo_storage_key)
     if stored is None:
         raise TerritoryAttemptConflictError(
             "photo_not_uploaded",
@@ -259,8 +260,10 @@ async def confirm_upload(
     attempt.photo_size_bytes = stored.size_bytes
     attempt.status = "VISION_PENDING"
     attempt.updated_at = datetime.now(UTC)
+    attempt.vision_available_at = attempt.updated_at
+    attempt.vision_dispatch_after = attempt.updated_at
     await session.commit()
-    _publish_vision_attempt(attempt.id)
+    await asyncio.to_thread(_publish_vision_attempt, attempt.id)
     return attempt, True
 
 
@@ -272,6 +275,8 @@ async def record_vision_decision(
     model: str,
     model_version: str,
     reason: str | None = None,
+    lease_token: uuid.UUID | None = None,
+    generation: str | None = None,
 ) -> TerritoryAttempt:
     """비동기 VLM 결과를 반영하는 유일한 경계.
 
@@ -289,6 +294,14 @@ async def record_vision_decision(
     if attempt is None:
         raise TerritoryAttemptNotFoundError
 
+    if lease_token is not None or attempt.vision_lease_token is not None:
+        from daengs_backend.services.territory_vision_jobs import owns_lease
+
+        if not owns_lease(attempt, lease_token, generation, datetime.now(UTC)):
+            raise TerritoryAttemptConflictError(
+                "vision_lease_lost", "사진 처리권이 만료되었습니다."
+            )
+
     target_status = {
         "verified": "VERIFIED",
         "rejected": "REJECTED",
@@ -301,6 +314,7 @@ async def record_vision_decision(
                 "이미 확정된 사진 판정을 다른 결과로 바꿀 수 없습니다.",
             )
         if attempt.photo_redacted_at is None:
+            await session.commit()
             await _redact_decided_photo(session, attempt)
         return attempt
     if attempt.status != "VISION_PENDING":
@@ -314,6 +328,8 @@ async def record_vision_decision(
     attempt.vision_model = model
     attempt.vision_model_version = model_version
     attempt.decision_reason = reason
+    attempt.vision_lease_token = attempt.vision_lease_until = None
+    attempt.vision_retry_reason = None
     attempt.updated_at = now
     if decision == "verified":
         visit = VerifiedVisit(
@@ -342,7 +358,7 @@ async def _redact_decided_photo(
     generation = attempt.photo_object_generation
     if not generation:
         raise RuntimeError("confirm된 사진 generation이 없습니다.")
-    get_storage().redact(attempt.photo_storage_key, generation=generation)
+    await asyncio.to_thread(get_storage().redact, attempt.photo_storage_key, generation=generation)
     now = datetime.now(UTC)
     attempt.photo_redacted_at = now
     attempt.updated_at = now

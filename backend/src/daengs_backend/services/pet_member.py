@@ -90,6 +90,43 @@ class NotAMemberError(Exception):
     """승계 대상이 돌보미가 아닙니다. 승계와 초대를 한 번에 하지 않습니다."""
 
 
+class LinkedOwnerTransferError(Exception):
+    """**연결된 그룹에서, 대상이 이미 자기 행을 가진 경우의 승계입니다.**
+
+    지금 승계는 앵커 행의 `pets.app_user_id` 를 대상으로 옮깁니다. 그런데 대상이 같은
+    그룹에 이미 자기 행을 갖고 있으면 그 순간 한 사람이 한 그룹에 행 둘을 갖게 되어
+    `pets_identity_one_per_user` 부분 UNIQUE 를 위반합니다 — **막지 않으면 500 입니다**
+    (일회용 PostgreSQL 로 재현했습니다).
+
+    제대로 지원하려면 행 소유를 옮기는 대신 `pet_identities.owner_pet_id` 를 대상의 행으로
+    **옮겨야** 합니다. 그건 승계의 의미를 둘로 가르는 제품 결정이라 MVP 에서 하지 않고,
+    여기서 **명시적으로 막습니다**. 라우터가 409 로 바꿉니다.
+
+    우회로: 대상을 내보냈다가(연결이 같이 풀립니다) 다시 초대하면 연결 없이 참여합니다.
+    """
+
+    def __init__(self, pet_name: str) -> None:
+        self.pet_name = pet_name
+        super().__init__(pet_name)
+
+
+class LinkSelectionRequiredError(Exception):
+    """**묶음인데 강아지별 연결 선택이 안 왔습니다** (MVP 결정 §2).
+
+    토큰만 보내는 옛 계약은 "전부 연결 없이 참여" 라는 뜻입니다. 한 마리 초대에서는 그것이
+    유일한 선택지라 맞지만, **여러 마리 묶음에서는 사용자가 고를 것이 있는데 구 앱이 그
+    화면을 못 그립니다.** 그대로 통과시키면 사용자가 모르는 사이에 전부 새 강아지로
+    들어와 목록이 늘고, 되돌리려면 하나씩 나가야 합니다.
+
+    그래서 **묶음이 두 마리 이상이면 모든 항목의 선택값을 요구**합니다. 라우터가 409 로
+    바꾸고 `detail.code = "link_selection_required"` 와 빠진 `pet_id` 들을 같이 냅니다.
+    """
+
+    def __init__(self, missing: list[uuid.UUID]) -> None:
+        self.missing = missing
+        super().__init__(", ".join(str(i) for i in missing))
+
+
 async def create_invite(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> tuple[PetInvite, str]:
@@ -292,8 +329,12 @@ class InvalidLinkRequestError(Exception):
     """요청 자체가 앞뒤가 안 맞습니다 — 초대에 없는 `pet_id`, 또는 같은 연결 대상을 두 번.
 
     라우터가 422 로 바꿉니다. 409(상태 충돌)와 가르는 이유는 이쪽이 **서버 상태와
-    무관하게** 틀린 요청이기 때문입니다.
+    무관하게** 틀린 요청이기 때문입니다. `code` 는 앱이 문구를 가르는 기계용 값입니다.
     """
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -347,16 +388,38 @@ async def _bundle_rows(session: AsyncSession, invite: PetInvite):
     return rows
 
 
-def _validate_link_request(links: dict, bundle_ids: set) -> None:
-    """요청 안에서만 판정할 수 있는 것 둘. **서버 상태를 안 봅니다** — 그래서 422 입니다."""
-    if set(links) - bundle_ids:
-        raise InvalidLinkRequestError("초대에 없는 강아지가 요청에 있습니다.")
+def _validate_link_request(links: dict, bundle_ids: list) -> None:
+    """요청이 이 묶음과 앞뒤가 맞는지. **아무것도 쓰기 전에** 봅니다.
+
+    | 무엇 | 코드 | 상태 |
+    | --- | --- | --- |
+    | 초대에 없는 `pet_id` | `unknown_invited_pet` | 422 |
+    | 같은 연결 대상을 두 번 | `duplicate_link_target` | 422 |
+    | **묶음인데 선택이 빠짐** | `link_selection_required` | 409 |
+
+    앞 둘은 서버 상태와 무관하게 틀린 요청이라 422 이고, 마지막은 **이 초대가 묶음이라서**
+    생기는 조건이라 409 입니다 (`LinkSelectionRequiredError` 독스트링).
+    """
+    unknown = set(links) - set(bundle_ids)
+    if unknown:
+        raise InvalidLinkRequestError(
+            "unknown_invited_pet", "초대에 없는 강아지가 요청에 있습니다."
+        )
 
     targets = [target for target in links.values() if target is not None]
     if len(set(targets)) != len(targets):
         # 기존 강아지 하나를 초대 강아지 둘에 연결하는 것. DB 의
         # `pets_identity_one_per_user` 가 마지막 방어지만, 여기서 걸러야 이유를 말해 줍니다.
-        raise InvalidLinkRequestError("같은 강아지를 두 번 연결할 수 없습니다.")
+        raise InvalidLinkRequestError(
+            "duplicate_link_target", "같은 강아지를 두 번 연결할 수 없습니다."
+        )
+
+    # **한 마리 묶음은 토큰만으로도 됩니다** — 고를 것이 하나뿐이고, 그것이 구 앱의
+    # 계약입니다 (MVP 결정 §9). 두 마리부터는 전부 골라야 합니다.
+    if len(bundle_ids) > 1:
+        missing = [pet_id for pet_id in bundle_ids if pet_id not in links]
+        if missing:
+            raise LinkSelectionRequiredError(missing)
 
 
 async def _receipt(session: AsyncSession, invite: PetInvite) -> "AcceptOutcome":
@@ -481,7 +544,7 @@ async def accept_invite(
         raise InviteBundleChangedError
 
     # 6. 요청 형식.
-    _validate_link_request(links, set(bundle_ids))
+    _validate_link_request(links, bundle_ids)
 
     joined = 0
     items: list[AcceptedPet] = []
@@ -745,6 +808,17 @@ async def transfer_owner(
     if not await member_repo.is_member(session, pet_id, new_owner_id):
         raise NotAMemberError
 
+    # ⚠️ **연결된 그룹에서 대상이 이미 자기 행을 갖고 있으면 막습니다.** 아래 ① 이 앵커
+    #    행의 소유를 대상으로 옮기는데, 그러면 한 사람이 한 그룹에 행 둘을 갖게 되어
+    #    `pets_identity_one_per_user` 부분 UNIQUE 를 위반합니다 — 안 막으면 500 입니다.
+    #    (일회용 PostgreSQL 로 재현: duplicate key value violates unique constraint.)
+    #    제대로 지원하려면 행 소유가 아니라 `owner_pet_id` 를 옮겨야 하는데, 그건 승계의
+    #    의미를 둘로 가르는 제품 결정이라 MVP 에서 하지 않습니다.
+    if pet.identity_id is not None and await identity_repo.pet_of_user(
+        session, pet.identity_id, new_owner_id
+    ):
+        raise LinkedOwnerTransferError(pet.name)
+
     # 승계는 새 대표의 **소유**를 늘립니다. 미니룸 상한은 소유 기준이 아니지만
     # (`count_accessible`), 이 검사만은 소유로 봅니다 — 방에 선 아이 수는 안 변하고
     # (그 아이는 이미 새 대표의 방에 서 있습니다) 늘어나는 것은 소유뿐이기 때문입니다.
@@ -859,6 +933,8 @@ __all__ = [
     "InviteLimitError",
     "InviteNotFoundError",
     "InvitePreview",
+    "LinkSelectionRequiredError",
+    "LinkedOwnerTransferError",
     "MemberLimitError",
     "NotAMemberError",
     "NotAllowedError",
@@ -867,12 +943,12 @@ __all__ = [
     "accept_invite",
     "actor_label",
     "actor_labels",
-    "group_actor_label",
     "bundle_pet_ids",
     "cancel_invite",
     "cancel_invite_bundle",
     "create_invite",
     "create_invite_bundle",
+    "group_actor_label",
     "list_invites",
     "list_members",
     "list_my_invites",

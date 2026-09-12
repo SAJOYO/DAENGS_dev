@@ -125,7 +125,12 @@ class InviteAccept(BaseModel):
 
     @model_validator(mode="after")
     def _one_choice_per_pet(self) -> Self:
-        """같은 초대 강아지에 두 번 선택할 수 없습니다."""
+        """같은 초대 강아지에 두 번 선택할 수 없습니다.
+
+        **서비스의 `_validate_link_request` 보다 앞섭니다** — 여기서 걸리면 pydantic 의
+        422 가 나가고, 그 뒤의 검증들은 dict `detail` 에 `code` 를 싣습니다. 모양이 다른
+        것은 이 하나가 **요청을 dict 로 접기도 전에** 걸리는 자리라서입니다.
+        """
         pet_ids = [link.pet_id for link in self.links]
         if len(set(pet_ids)) != len(pet_ids):
             raise ValueError("같은 강아지에 대해 연결 선택이 두 번 왔습니다.")

@@ -294,7 +294,21 @@ async def accept_invite(
     except member_service.InviteBundleChangedError:
         raise HTTPException(status.HTTP_410_GONE, _INVITE_BUNDLE_CHANGED) from None
     except member_service.InvalidLinkRequestError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"code": exc.code, "message": str(exc)},
+        ) from None
+    except member_service.LinkSelectionRequiredError as exc:
+        # **구 앱이 묶음을 조용히 수락하는 것을 막는 자리입니다** (MVP 결정 §2).
+        # 토큰만 보내는 옛 계약은 한 마리 묶음에서만 통과합니다.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "link_selection_required",
+                "message": "이 초대에는 아이가 여러 마리예요. 앱을 업데이트해 주세요.",
+                "missing_pet_ids": [str(i) for i in exc.missing],
+            },
+        ) from None
     except member_service.LinkNotAllowedError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -382,6 +396,20 @@ async def transfer_owner(
     except member_service.NotAMemberError:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "먼저 초대해서 보호자로 참여시키세요."
+        ) from None
+    except member_service.LinkedOwnerTransferError as exc:
+        # 연결된 그룹에서 대상이 이미 자기 행을 가진 경우. 막지 않으면 부분 UNIQUE 위반
+        # 으로 500 입니다 (`LinkedOwnerTransferError` 독스트링).
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "linked_owner_transfer_unsupported",
+                "message": (
+                    f"이 아이와 연결된 보호자에게는 아직 대표를 넘길 수 없어요 ({exc.pet_name}). "
+                    "먼저 내보낸 뒤 다시 초대해 주세요."
+                ),
+                "pet_name": exc.pet_name,
+            },
         ) from None
     except member_service.PetLimitError:
         raise HTTPException(

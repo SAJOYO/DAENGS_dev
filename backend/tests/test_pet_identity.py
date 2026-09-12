@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.routers import pet as pet_router
+from daengs_backend.routers import pet_member as pet_member_router
 from daengs_backend.schemas.pet import PetUpsert
 from daengs_backend.services import dog_context
 from daengs_backend.services import pet as pet_service
@@ -57,6 +58,7 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 def client_as(app_user_id: uuid.UUID) -> TestClient:
     app = FastAPI()
     app.include_router(pet_router.router)
+    app.include_router(pet_member_router.router)
     app.dependency_overrides[
         next(iter(CurrentAppUser.__metadata__)).dependency
     ] = lambda: AppPrincipal(app_user_id=app_user_id)
@@ -384,3 +386,67 @@ async def test_group_pet_ids_는_연결_안_된_아이에서_자기_하나다(st
     solo = FakePet(app_user_id=A, name="혼자", breed="믹스")
     store.pets.append(solo)
     assert await identity_service.group_pet_ids_of(None, solo) == [solo.id]
+
+
+# ── 승계와 부분 UNIQUE ─────────────────────────────────────────────────────
+
+
+async def test_연결된_보호자에게_승계하면_409_다(store: Store, linked):
+    """**500 이 아니라 409 여야 합니다.**
+
+    승계는 앵커 행의 `pets.app_user_id` 를 대상으로 옮깁니다. 그런데 B 는 이 그룹에 이미
+    자기 행(202)을 갖고 있어서, 101 까지 B 것이 되면 한 사람이 한 그룹에 행 둘을 갖게 되어
+    `pets_identity_one_per_user` 부분 UNIQUE 를 위반합니다 — 일회용 PostgreSQL 에서
+    `duplicate key value violates unique constraint` 로 재현했습니다.
+    """
+    a_pet, _b = linked
+    res = client_as(A).post(
+        f"/app/pets/{a_pet.id}/owner", json={"app_user_id": str(B)}
+    )
+    assert res.status_code == 409
+    assert res.json()["detail"]["code"] == "linked_owner_transfer_unsupported"
+
+
+async def test_승계가_막히면_아무것도_안_바뀐다(store: Store, linked):
+    a_pet, b_pet = linked
+    client_as(A).post(f"/app/pets/{a_pet.id}/owner", json={"app_user_id": str(B)})
+
+    assert a_pet.app_user_id == A
+    assert b_pet.app_user_id == B
+    assert a_pet.identity_id == b_pet.identity_id
+    identity = next(i for i in store.pet_identities if i.id == a_pet.identity_id)
+    assert identity.owner_pet_id == a_pet.id
+    assert store.pet_members == [(a_pet.id, B)]
+
+
+async def test_연결_안_한_공동_보호자에게는_승계된다(store: Store):
+    """기존 흐름은 그대로 돕니다 — 대상이 그룹에 자기 행이 없으면 충돌할 것이 없습니다."""
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="믹스")
+    b_pet = FakePet(app_user_id=B, name="롱롱씨", breed="믹스")
+    identity = FakeIdentity(owner_pet_id=a_pet.id)
+    a_pet.identity_id = b_pet.identity_id = identity.id
+    store.pets += [a_pet, b_pet]
+    store.pet_identities.append(identity)
+
+    carer = uuid.uuid4()  # 연결 없이 참여한 사람
+    store.pet_members += [(a_pet.id, B), (a_pet.id, carer)]
+
+    res = client_as(A).post(
+        f"/app/pets/{a_pet.id}/owner", json={"app_user_id": str(carer)}
+    )
+    assert res.status_code == 200
+    assert a_pet.app_user_id == carer
+    assert (a_pet.id, A) in store.pet_members
+    # 앵커는 그대로라 그룹 주보호자가 새 대표로 따라갑니다.
+    assert identity.owner_pet_id == a_pet.id
+
+
+async def test_연결_안_된_아이의_승계는_그대로다(store: Store):
+    solo = FakePet(app_user_id=A, name="혼자", breed="믹스")
+    store.pets.append(solo)
+    store.pet_members.append((solo.id, B))
+
+    res = client_as(A).post(f"/app/pets/{solo.id}/owner", json={"app_user_id": str(B)})
+    assert res.status_code == 200
+    assert solo.app_user_id == B
+    assert (solo.id, A) in store.pet_members

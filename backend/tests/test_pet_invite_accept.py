@@ -82,6 +82,15 @@ def accept(user: uuid.UUID, token: str, links: list[dict] | None = None):
     return client_as(user).post("/app/pet-invites/accept", json=body)
 
 
+def _all_join(pets: list[FakePet]) -> list[dict]:
+    """묶음의 모든 항목을 "연결 없이 참여" 로 고른 선택값.
+
+    두 마리 이상 묶음은 **모든 항목의 선택값**이 와야 합니다 (MVP 결정 §2) — 토큰만 보내는
+    옛 계약으로는 못 받습니다.
+    """
+    return [{"pet_id": str(p.id), "link_to_pet_id": None} for p in pets]
+
+
 # ── 구 앱 호환 ─────────────────────────────────────────────────────────────
 
 
@@ -98,10 +107,107 @@ async def test_links_없는_요청은_전부_연결_없이_참여다(store: Stor
 
 async def test_최상위_앵커는_앵커_항목과_같다(store: Store, invited):
     token = issue([invited[0].id, invited[1].id])
-    body = accept(GUEST, token).json()
+    body = accept(GUEST, token, _all_join(invited)).json()
     anchor = next(p for p in body["pets"] if p["invited_pet_id"] == str(invited[0].id))
     assert body["pet_id"] == anchor["display_pet_id"]
     assert body["name"] == anchor["name"]
+
+
+# ── 구 앱이 **다중** 초대를 받았을 때 ─────────────────────────────────────
+#
+# 토큰만 보내는 옛 계약은 "전부 연결 없이 참여" 라는 뜻입니다. 한 마리 초대에서는 그것이
+# 유일한 선택지라 맞지만, 여러 마리 묶음에서는 사용자가 고를 것이 있는데 구 앱이 그 화면을
+# 못 그립니다 — 그대로 통과시키면 모르는 사이에 전부 새 강아지로 들어옵니다.
+
+
+async def test_구_앱이_묶음을_토큰만으로_수락하면_409(store: Store, invited):
+    res = accept(GUEST, issue([invited[0].id, invited[1].id]))
+    assert res.status_code == 409
+    detail = res.json()["detail"]
+    assert detail["code"] == "link_selection_required"
+    assert set(detail["missing_pet_ids"]) == {str(invited[0].id), str(invited[1].id)}
+
+
+async def test_묶음을_토큰만으로_수락하면_아무_변경도_없다(store: Store, invited):
+    token = issue([invited[0].id, invited[1].id])
+    accept(GUEST, token)
+    assert store.pet_members == []
+    assert store.pet_invites[0].accepted_by is None
+    assert all(p.identity_id is None for p in store.pets)
+
+
+async def test_선택이_일부만_와도_409(store: Store, invited):
+    """빠진 항목을 알려 줍니다 — 새 앱이 무엇을 더 보내야 하는지 알 수 있게."""
+    res = accept(
+        GUEST,
+        issue([invited[0].id, invited[1].id]),
+        [{"pet_id": str(invited[0].id), "link_to_pet_id": None}],
+    )
+    assert res.status_code == 409
+    assert res.json()["detail"]["missing_pet_ids"] == [str(invited[1].id)]
+
+
+async def test_전부_연결_없이_라고_명시하면_통과한다(store: Store, invited):
+    """`link_to_pet_id: null` 도 **선택**입니다 — 빠진 것과 다릅니다."""
+    res = accept(
+        GUEST,
+        issue([invited[0].id, invited[1].id]),
+        [
+            {"pet_id": str(invited[0].id), "link_to_pet_id": None},
+            {"pet_id": str(invited[1].id), "link_to_pet_id": None},
+        ],
+    )
+    assert res.status_code == 200
+    assert {p["result"] for p in res.json()["pets"]} == {"joined"}
+
+
+async def test_한_마리_묶음은_토큰만으로도_된다(store: Store, invited):
+    """구 앱 호환의 경계 — 고를 것이 하나뿐이라 옛 계약이 그대로 맞습니다 (MVP 결정 §9)."""
+    assert accept(GUEST, issue([invited[0].id])).status_code == 200
+
+
+async def test_자식_줄_없는_옛_초대도_토큰만으로_된다(store: Store, invited):
+    """배포 창의 옛 초대는 앵커 하나짜리 묶음이라 위와 같습니다."""
+    token = "옛토큰2"
+    store.pet_invites.append(
+        FakeInvite(
+            pet_id=invited[0].id,
+            invited_by=OWNER,
+            token_hash=hash_refresh_token(token),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+    )
+    assert accept(GUEST, token).status_code == 200
+
+
+async def test_초대에_없는_아이를_보내면_422_에_code_가_실린다(store: Store, invited):
+    res = accept(
+        GUEST,
+        issue([invited[0].id, invited[1].id]),
+        [
+            {"pet_id": str(invited[0].id), "link_to_pet_id": None},
+            {"pet_id": str(uuid.uuid4()), "link_to_pet_id": None},
+        ],
+    )
+    assert res.status_code == 422
+    assert res.json()["detail"]["code"] == "unknown_invited_pet"
+    assert store.pet_members == []
+
+
+async def test_같은_대상을_두_번_연결하면_422_에_code_가_실린다(store: Store, invited):
+    mine = FakePet(app_user_id=GUEST, name="내아이", breed="믹스")
+    store.pets.append(mine)
+    res = accept(
+        GUEST,
+        issue([invited[0].id, invited[1].id]),
+        [
+            {"pet_id": str(invited[0].id), "link_to_pet_id": str(mine.id)},
+            {"pet_id": str(invited[1].id), "link_to_pet_id": str(mine.id)},
+        ],
+    )
+    assert res.status_code == 422
+    assert res.json()["detail"]["code"] == "duplicate_link_target"
+    assert mine.identity_id is None
 
 
 # ── 묶음 수락 ──────────────────────────────────────────────────────────────
@@ -152,7 +258,7 @@ async def test_연결하면_그룹_주보호자는_초대한_쪽이다(store: St
 
 async def test_이미_구성원인_항목은_충족으로_지나간다(store: Store, invited):
     store.pet_members.append((invited[0].id, GUEST))
-    res = accept(GUEST, issue([invited[0].id, invited[1].id]))
+    res = accept(GUEST, issue([invited[0].id, invited[1].id]), _all_join(invited))
     results = {p["invited_pet_id"]: p["result"] for p in res.json()["pets"]}
     assert results[str(invited[0].id)] == "already_member"
     assert results[str(invited[1].id)] == "joined"
@@ -166,7 +272,7 @@ async def test_내가_대표인_항목이_섞이면_나머지는_진행된다(st
     invited[1].app_user_id = GUEST
     store.pet_invites[0].invited_by = OWNER
 
-    res = accept(GUEST, token)
+    res = accept(GUEST, token, _all_join(invited))
     # 주보호자가 바뀌었으므로 묶음 전체가 410 입니다 — 이것이 묶음 불변성입니다.
     assert res.status_code == 410
 
@@ -375,7 +481,9 @@ async def test_강아지가_지워지면_수락도_410(store: Store, invited):
         if not (r.invite_id == invite_id and r.pet_id == invited[1].id)
     ]
 
-    assert accept(GUEST, token).status_code == 410
+    # 구성 변경이 **선택 검사보다 먼저** 걸려야 합니다 — 구성이 깨진 묶음에 대고
+    # "선택을 더 보내라" 고 하면 앱이 영영 못 고칩니다.
+    assert accept(GUEST, token, _all_join(invited)).status_code == 410
     assert store.pet_members == []
 
 
@@ -447,7 +555,9 @@ async def test_묶음_전체를_반영한_뒤_상한을_본다(store: Store, inv
 
     session = FakeSession(store)
     with pytest.raises(member_service.PetLimitError):
-        await member_service.accept_invite(session, GUEST, token)
+        await member_service.accept_invite(
+            session, GUEST, token, {invited[0].id: None, invited[1].id: None}
+        )
     assert session.commits == 0
     assert store.pet_invites[0].accepted_by is None
 

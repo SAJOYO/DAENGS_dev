@@ -20,6 +20,7 @@ __all__ = [
     "get_many",
     "guardian_ids",
     "pet_ids_for",
+    "pet_of_user",
     "pets_for",
 ]
 
@@ -93,6 +94,21 @@ async def guardian_ids(session: AsyncSession, identity_id: uuid.UUID) -> set[uui
         .where(Pet.identity_id == identity_id)
     )
     return set(await session.scalars(owners.union(carers)))
+
+
+async def pet_of_user(
+    session: AsyncSession, identity_id: uuid.UUID, app_user_id: uuid.UUID
+) -> Pet | None:
+    """그 그룹 안에서 **그 사람이 대표인 행**. 없으면 None.
+
+    `pets_identity_one_per_user` 부분 UNIQUE 가 "한 사람은 한 그룹에 행 하나" 를 보장하므로
+    많아야 하나입니다. 승계가 이것을 봅니다 — 대상이 이미 자기 행을 갖고 있는데 앵커 행의
+    소유까지 넘기면 그 UNIQUE 를 위반해 500 이 납니다.
+    """
+    stmt = select(Pet).where(
+        Pet.identity_id == identity_id, Pet.app_user_id == app_user_id
+    )
+    return await session.scalar(stmt)
 
 
 async def delete(session: AsyncSession, identity_id: uuid.UUID) -> int:

@@ -289,8 +289,8 @@ __all__ = [
     "MedicationConflictError",
     "day_bounds",
     "day_summary",
-    "group_ids_for",
     "delete_event",
+    "group_ids_for",
     "list_events",
     "record",
 ]

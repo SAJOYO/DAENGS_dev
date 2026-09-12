@@ -858,6 +858,18 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         carers = {uid for pid, uid in store.pet_members if pid in group}
         return owners | carers
 
+    async def identity_pet_of_user(session, identity_id, app_user_id):
+        # 진짜와 같게 **많아야 하나**입니다 — `pets_identity_one_per_user` 부분 UNIQUE 가
+        # "한 사람은 한 그룹에 행 하나" 를 보장합니다.
+        return next(
+            (
+                p
+                for p in store.pets
+                if p.identity_id == identity_id and p.app_user_id == app_user_id
+            ),
+            None,
+        )
+
     async def identity_delete(session, identity_id):
         before = len(store.pet_identities)
         store.pet_identities = [
@@ -871,6 +883,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(identity_repo, "pet_ids_for", identity_pet_ids_for)
     monkeypatch.setattr(identity_repo, "count_pets", identity_count_pets)
     monkeypatch.setattr(identity_repo, "guardian_ids", identity_guardian_ids)
+    monkeypatch.setattr(identity_repo, "pet_of_user", identity_pet_of_user)
     monkeypatch.setattr(identity_repo, "delete", identity_delete)
 
     monkeypatch.setattr(pet_repo, "list_for_owner", pet_list_for_owner)

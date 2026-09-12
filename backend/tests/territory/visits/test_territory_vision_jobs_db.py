@@ -123,7 +123,7 @@ async def test_confirm_publish_failure_recovers_without_app_retry(
     assert (await row(database, attempt_id)).status == "VISION_PENDING"
     published = []
     result = await jobs.recover_pending(factory=database, publish=published.append)
-    assert result == {"selected": 1, "published": 1, "failed": 0}
+    assert result == {"selected": 1, "attempted": 1, "published": 1, "failed": 0, "deferred": 0}
     assert published == [attempt_id]
     classifier = Classifier()
     await vision.process_attempt(attempt_id, classifier=classifier)
@@ -360,8 +360,10 @@ async def test_recovery_reservation_is_bounded_and_survives_publish_failure(data
 
     assert await jobs.recover_pending(factory=database, publish=unavailable) == {
         "selected": 1,
+        "attempted": 1,
         "published": 0,
         "failed": 1,
+        "deferred": 0,
     }
     assert (await jobs.recover_pending(factory=database, publish=unavailable))["selected"] == 0
     await make_due(database, attempt_id)

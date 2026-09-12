@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import json
 import os
 import socket
 import subprocess
@@ -9,6 +10,7 @@ import sys
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
@@ -147,6 +149,16 @@ async def runtime(database, actors, monkeypatch, tmp_path):
         finally:
             scheduler.close()
 
+    def recovery_events():
+        records = []
+        marker = '{"event": "territory_vision_recovery"'
+        for log in logs:
+            for line in Path(log.name).read_text(encoding="utf-8", errors="replace").splitlines():
+                offset = line.find(marker)
+                if offset >= 0:
+                    records.append(json.loads(line[offset:]))
+        return records
+
     try:
         yield SimpleNamespace(
             app=app,
@@ -157,6 +169,7 @@ async def runtime(database, actors, monkeypatch, tmp_path):
             saved=saved,
             completed=completed,
             tick=tick,
+            recovery_events=recovery_events,
         )
     finally:
         for worker in workers:
@@ -232,6 +245,11 @@ async def test_broker_connection_failure_is_recovered_by_beat_without_reconfirm(
     row = await eventually(rt.completed)
     assert row.vision_attempts == 1
     assert rt.redis.get(rt.prefix + "calls:" + str(rt.attempt_id)) == "1"
+    events = await eventually(
+        lambda: rt.recovery_events() if len(rt.recovery_events()) >= 2 else None
+    )
+    assert events[-1]["phase"] == "finished" and events[-1]["published"] == 1
+    assert events[-1]["failed"] == events[-1]["deferred"] == 0
 
 
 async def test_killed_worker_is_recovered_after_lease_expiry(runtime, database):
@@ -259,3 +277,31 @@ async def test_killed_worker_is_recovered_after_lease_expiry(runtime, database):
     row = await eventually(rt.completed)
     assert row.vision_attempts == 2 and row.vision_lease_token is None
     assert rt.redis.get(rt.prefix + "calls:" + key) == "2"
+
+
+async def test_empty_recovery_logs_are_visible_in_actual_celery_worker(runtime, database):
+    rt = runtime
+    async with database() as db:
+        row = await db.get(TerritoryAttempt, rt.attempt_id)
+        row.vision_available_at = datetime.now(UTC) + timedelta(days=1)
+        await db.commit()
+    await rt.start()
+    result = rt.app.send_task("territory.recover_photos")
+    await eventually(result.ready)
+    assert result.successful()
+    assert result.get(timeout=1) == {
+        "selected": 0,
+        "attempted": 0,
+        "published": 0,
+        "failed": 0,
+        "deferred": 0,
+    }
+    events = await eventually(
+        lambda: rt.recovery_events() if len(rt.recovery_events()) >= 2 else None
+    )
+    assert [event["phase"] for event in events] == ["started", "finished"]
+    assert events[0]["run_id"] == events[1]["run_id"]
+    assert events[1]["unconfirmed"] == 0
+    assert events[1]["elapsed_ms"] >= 0
+    assert str(rt.attempt_id) not in json.dumps(events)
+    assert rt.redis.get(rt.prefix + "calls:" + str(rt.attempt_id)) is None

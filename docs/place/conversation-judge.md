@@ -24,7 +24,11 @@ Judge는 검토 보조다. 앵커 검사만으로 사람과의 일치도를 확�
 
 ## 실행과 재현
 
-기존 시설 `runner.py`·`checks.py`·`report.py`를 확장했다. 공통 대화 Judge의 모델 핀·앵커 검사·설정·지연 API 생성 방식을 따르되 시설 전용 루브릭과 출력 계약을 사용한다. 공유 설정 이름은 `OPENAI_API_KEY`, `OPENAI_JUDGE_MODEL`, `OPENAI_TIMEOUT_S`다.
+기존 시설 `runner.py`·`checks.py`·`report.py`를 확장했다. DEV 공통 오케스트레이션의 `semantic.py`·`resolver.py`와 시설 Judge가 `daengs_backend/core/gemini.py`의 클라이언트 생성 코드를 함께 사용한다. 구조화 출력 설정·검증은 기존 `answer_quality/gemini.py`를 재사용한다. 공유 설정은 `GEMINI_API_KEY`, `GEMINI_TIMEOUT_MS`이며, Judge 모델만 `FACILITY_JUDGE_MODEL`로 선택한다. 기본값은 `gemini-3-flash-preview`다. OpenAI 키는 필요하지 않다.
+
+오프라인 Judge가 전체 앱의 DB·암호화 키 설정에 묶이지 않도록 Gemini 키·타임아웃만 읽는 설정을 공통 생성 코드에 둔다. 운영 라우터와 리졸버는 기존 검증된 앱 설정 값을 생성 함수에 전달하며, 라우팅 모델·프롬프트·재시도 정책은 그대로다. Judge 요청에만 SDK 재시도를 1회 시도로 제한해 기존 호출 장부가 모든 시도를 기록한다.
+
+시설 생성과 Judge는 같은 계열이므로 계열 독립성을 주장하지 않는다. 해당 사실은 메타데이터에 남기며, 사람의 기준과 일치도를 확인하기 전까지 검토 보조로 사용한다.
 
 각 판정 실행은 별도 폴더에 입력·호출·결과·설정·해시를 보존한다. 모델·프롬프트·관측·앵커·평가 코드가 달라지면 새 실행이 필요하다. 동일 설정에서는 완료된 축을 제외하고 재개할 수 있다. 호출 상한은 앵커·재시도까지 포함하고, 최초 오류와 사용량을 남긴다. API SDK의 숨은 재시도는 사용하지 않는다.
 
@@ -38,4 +42,12 @@ Judge는 검토 보조다. 앵커 검사만으로 사람과의 일치도를 확�
 
 [실제 연결 시도 기록](../../backend/evals/place_conversation/runs/20260912T130753Z-670a13a-28eb2ff4c2/smoke-summary.json)은 5개 사례·6턴이다. Gemini 시설 실행 3턴의 관측을 얻었고 제공자 오류 2턴·선행 오류로 미실행 1턴을 구분했다. OpenAI Judge는 제공된 키의 HTTP 401로 앵커 단계에서 막혀 **실제 의미 판정은 0건**이다. Judge 품질이 검증됐다는 결과로 읽지 않는다.
 
-최초 구현은 같은 인증 오류를 16회 기록했다. 이를 계기로 재시도 불가 4xx가 나오면 같은 실행의 추가 호출을 중단하도록 보완했다. 회귀 검사는 세 축의 시도 횟수가 1/0/0이 되는지 확인한다. 오류 기록은 그대로 보존했고 같은 키로 재호출하지 않았다. 당시 앵커는 8개였으며 최종 대조 세트는 12개다. 유효한 키로 새 Judge 실행을 만들어 앵커와 실제 판정을 확인하는 일이 남아 있다.
+최초 구현은 같은 인증 오류를 16회 기록했다. 이를 계기로 재시도 불가 4xx가 나오면 같은 실행의 추가 호출을 중단하도록 보완했다. 회귀 검사는 세 축의 시도 횟수가 1/0/0이 되는지 확인한다. 오류 기록은 그대로 보존했고 같은 키로 재호출하지 않았다. 당시 앵커는 8개였으며 현재 대조 세트는 12개다. 이후 사용자의 운영 방식 확인에 따라 별도 OpenAI 연결을 제거하고 기존 Gemini 키·공통 생성 코드로 정정했다. 위 인증 오류는 이 정정 전 기록이다.
+
+## Gemini 연결 정정 검증
+
+공통 클라이언트·시설 Judge·의미 라우터·턴 리졸버·기존 answer-quality 평가기의 관련 테스트 **134개가 통과**했다. Ruff와 `uv run check`도 통과했다. 별도 프로세스에서 DB·암호화 설정과 OpenAI 모듈을 불러오지 않고 기존 Gemini 키만으로 Judge 클라이언트를 생성하는 것도 확인했다.
+
+[Gemini 실험 요약](../../backend/evals/place_conversation/runs/20260912T130753Z-670a13a-28eb2ff4c2/gemini-summary.json)과 [판정 보고서](../../backend/evals/place_conversation/runs/20260912T130753Z-670a13a-28eb2ff4c2/judges/gemini-router-v1/report.md)에 실제 결과를 보존했다. 공통 오케스트레이션이 쓰는 `gemini-3.1-flash-lite`를 `--judge-model`로 명시한 실행에서 대조 사례 **12/12**, 관측이 완료된 **3턴의 9개 평가 축 모두 pass**였다. 앵커와 본 판정의 총 21회 호출에 제공자 오류는 없었다. 나머지 3턴의 9개 축은 원본 관측 오류·미실행 때문에 `unmeasured`다. 별도 의미 리뷰는 없으므로 최종 상태는 여전히 `review_required`다.
+
+기본 Judge 모델 `gemini-3-flash-preview`는 먼저 5개 앵커를 정상 판정했지만 이후 HTTP 429로 막혔다. 10초 간격 재실행도 실패했고, 별도 진단 호출에서 하루 무료 요청 한도(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, 당시 값 20)를 확인했다. 이 두 실행의 실패 기록도 보존했다. Lite 결과를 기본 모델의 품질 검증으로 대체하지 않으며, 한도 초기화 후 기본 모델을 검사하려면 새 Judge ID로 앵커부터 시작한다.

@@ -1,0 +1,87 @@
+{
+  "purpose": "Gemini connection and control-case smoke check; not quality calibration or release approval",
+  "source_observations": "Existing 5 cases / 6 turns: 3 completed, 2 provider-blocked, 1 not run after predecessor failure",
+  "provider": "Gemini through shared core.gemini client construction; OpenAI not required",
+  "family_independent_from_subject": false,
+  "runs": {
+    "gemini-shared-v1": {
+      "judge_model": "gemini-3-flash-preview",
+      "anchor_passed": false,
+      "anchor_count": 12,
+      "anchors_passed_count": 5,
+      "axis_counts": {
+        "intent_alignment.not_run": 6,
+        "scope_fit.not_run": 6,
+        "result_faithfulness.not_run": 6
+      },
+      "expected_axis_rows": 18,
+      "calls_started": 22,
+      "call_errors": 17,
+      "unfinished_calls": 0,
+      "usage_missing_calls": 17,
+      "usage": {
+        "input_tokens": 3465,
+        "output_tokens": 2410,
+        "thinking_tokens": 1676,
+        "total_tokens": 5875
+      },
+      "http_errors": {
+        "429": 17
+      }
+    },
+    "gemini-paced-v1": {
+      "judge_model": "gemini-3-flash-preview",
+      "anchor_passed": false,
+      "anchor_count": 12,
+      "anchors_passed_count": 0,
+      "axis_counts": {
+        "intent_alignment.not_run": 6,
+        "scope_fit.not_run": 6,
+        "result_faithfulness.not_run": 6
+      },
+      "expected_axis_rows": 18,
+      "calls_started": 24,
+      "call_errors": 24,
+      "unfinished_calls": 0,
+      "usage_missing_calls": 24,
+      "usage": {},
+      "http_errors": {
+        "429": 24
+      }
+    },
+    "gemini-router-v1": {
+      "judge_model": "gemini-3.1-flash-lite",
+      "anchor_passed": true,
+      "anchor_count": 12,
+      "anchors_passed_count": 12,
+      "axis_counts": {
+        "intent_alignment.pass": 3,
+        "scope_fit.pass": 3,
+        "result_faithfulness.pass": 3,
+        "intent_alignment.unmeasured": 3,
+        "scope_fit.unmeasured": 3,
+        "result_faithfulness.unmeasured": 3
+      },
+      "expected_axis_rows": 18,
+      "calls_started": 21,
+      "call_errors": 0,
+      "unfinished_calls": 0,
+      "usage_missing_calls": 0,
+      "usage": {
+        "input_tokens": 57909,
+        "output_tokens": 3666,
+        "total_tokens": 61575
+      },
+      "http_errors": {}
+    }
+  },
+  "quota_diagnostic": {
+    "separate_requests_not_in_judge_ledger": 1,
+    "http_status": 429,
+    "model": "gemini-3-flash-preview",
+    "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+    "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+    "quotaValue": "20",
+    "note": "Only quota identifiers retained from one separate diagnostic request; spacing cannot restore daily quota. Lite was selected explicitly for a new anchor check, not by automatic fallback."
+  }
+}

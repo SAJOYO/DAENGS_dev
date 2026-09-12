@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 import time
 from collections.abc import Callable
@@ -31,16 +32,14 @@ from .judge_rubric import PROMPT_VERSION, build_inputs, prompt
 
 
 class JudgeSettings(BaseSettings):
-    # Same env contract as the other judges; no import of the backend app/DB settings.
+    # Only the evaluator model is local. Key/client/timeout belong to orchestration.
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[3] / ".env",
         extra="ignore",
         env_file_encoding="utf-8",
         populate_by_name=True,
     )
-    api_key: SecretStr = Field(default=SecretStr(""), validation_alias="OPENAI_API_KEY")
-    model: str = Field(default="gpt-5.4-2026-03-05", validation_alias="OPENAI_JUDGE_MODEL")
-    timeout_s: float = Field(default=120, gt=0, validation_alias="OPENAI_TIMEOUT_S")
+    model: str = Field(default="gemini-3-flash-preview", validation_alias="FACILITY_JUDGE_MODEL")
 
 
 class ProviderResult(Contract):
@@ -48,35 +47,49 @@ class ProviderResult(Contract):
     usage: dict[str, int] = Field(default_factory=dict)
 
 
-def openai_provider(settings: JudgeSettings) -> Callable:
-    from openai import OpenAI
+def gemini_provider() -> Callable:
+    from google.genai import types
 
-    if not settings.api_key.get_secret_value().strip():
-        raise ValueError("OPENAI_API_KEY is required for live judging")
-    client = OpenAI(
-        api_key=settings.api_key.get_secret_value(),
-        timeout=settings.timeout_s,
-        max_retries=0,  # All attempts must be visible to our call ledger and budget.
+    from daengs_backend.core.gemini import GeminiClientSettings, create_client
+    from daengs_evals.answer_quality.gemini import generation_config, parse_structured
+
+    configured = GeminiClientSettings()
+    client = create_client(
+        api_key=configured.api_key.get_secret_value(), timeout_ms=configured.timeout_ms
     )
 
     def generate(item: JudgeInput, model: str) -> ProviderResult:
-        response = client.responses.parse(
+        config = generation_config(schema=Verdict, temperature=0, max_output_tokens=4096)
+        config.system_instruction = prompt(item.axis)
+        config.automatic_function_calling = types.AutomaticFunctionCallingConfig(disable=True)
+        # Override retries for this request only; do not mutate the shared client.
+        config.http_options = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
+        response = client.models.generate_content(
             model=model,
-            input=[
-                {"role": "system", "content": prompt(item.axis)},
-                {"role": "user", "content": json.dumps(item.payload, ensure_ascii=False)},
-            ],
-            text_format=Verdict,
-            temperature=0,
-            max_output_tokens=2200,
-            store=False,
+            contents=json.dumps(item.payload, ensure_ascii=False),
+            config=config,
         )
-        if response.status != "completed" or response.output_parsed is None:
-            raise ValueError("judge returned refusal or incomplete structured output")
-        usage = response.usage
+        candidates = getattr(response, "candidates", None) or []
+        if len(candidates) != 1 or str(candidates[0].finish_reason).split(".")[-1] != "STOP":
+            raise ValueError("judge returned blocked or incomplete output")
+        raw = getattr(response, "parsed", None)
+        parsed = parse_structured(raw if raw is not None else response.text, Verdict)
+        if parsed is None:
+            raise ValueError("judge returned invalid structured output")
+        usage = getattr(response, "usage_metadata", None)
+        input_tokens = int(getattr(usage, "prompt_token_count", None) or 0)
+        thoughts = int(getattr(usage, "thoughts_token_count", None) or 0)
+        output_tokens = int(getattr(usage, "candidates_token_count", None) or 0) + thoughts
         return ProviderResult(
-            verdict=response.output_parsed,
-            usage={k: getattr(usage, k) for k in ("input_tokens", "output_tokens", "total_tokens")}
+            verdict=parsed,
+            usage={
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "thinking_tokens": thoughts,
+                "total_tokens": int(
+                    getattr(usage, "total_token_count", None) or (input_tokens + output_tokens)
+                ),
+            }
             if usage
             else {},
         )
@@ -88,11 +101,11 @@ def key_from_file(path: Path) -> SecretStr:
     if path.is_dir():
         path = path / ".env"
     match = re.search(
-        r"(?im)^\s*(?:OPENAI_API_KEY|DAENGS_OPENAI_API_KEY)\s*[:=]\s*(\S+)",
+        r"(?im)^\s*(?:GEMINI_API_KEY|gemini)\s*[:=]\s*(\S+)",
         path.read_text(encoding="utf-8-sig"),
     )
     if not match:
-        raise ValueError("OpenAI key field missing in key file")
+        raise ValueError("Gemini key field missing in key file")
     return SecretStr(match.group(1).strip("\"'"))
 
 
@@ -122,15 +135,24 @@ def manifest(run: Path, model: str, anchors: Path) -> dict:
     return {
         "schema_version": 1,
         "judge_model": model,
+        "provider": "gemini; shared orchestration client",
+        "family_independent_from_subject": False,
         "prompt_version": PROMPT_VERSION,
         "prompts_sha256": digest({axis: prompt(axis) for axis in AXES}),
         "verdict_schema_sha256": digest(Verdict.model_json_schema()),
         "implementation_sha256": digest(
-            {p.name: file_hash(p) for p in Path(__file__).parent.glob("judge*.py")}
+            {
+                p.relative_to(Path(__file__).parents[2]).as_posix(): file_hash(p)
+                for p in [
+                    *Path(__file__).parent.glob("judge*.py"),
+                    Path(__file__).parents[2] / "daengs_backend/core/gemini.py",
+                    Path(__file__).parents[1] / "answer_quality/gemini.py",
+                ]
+            }
         ),
         "source_hashes": {name: file_hash(run / name) for name in required},
         "anchors_sha256": file_hash(anchors),
-        "generation": {"temperature": 0, "max_output_tokens": 2200, "store": False},
+        "generation": {"temperature": 0, "max_output_tokens": 4096, "sdk_attempts": 1},
         "boundary": "server prepare/answer; synthetic search; no APP/member write evidence",
         "purpose": "review assistance, not calibrated quality or release approval",
     }
@@ -188,13 +210,15 @@ class Calls:
         max_calls: int,
         retries: int = 1,
         retry_delay: float = 1,
+        interval: float = 0,
     ):
-        if max_calls < 1 or not 0 <= retries <= 2:
+        if max_calls < 1 or not 0 <= retries <= 2 or interval < 0:
             raise ValueError("positive call cap and 0..2 retries required")
         self.path = directory / "calls.jsonl"
         self.generate, self.model = generate, model
         self.max_calls, self.retries, self.retry_delay = max_calls, retries, retry_delay
         self.fatal_error = None
+        self.interval, self.last_started = interval, 0.0
 
     def records(self) -> list[dict]:
         return read_jsonl(self.path) if self.path.exists() else []
@@ -220,6 +244,8 @@ class Calls:
                     reason="judge-run call cap includes anchors and retries",
                 )
             call_id = uuid4().hex
+            time.sleep(max(0, self.interval - (time.monotonic() - self.last_started)))
+            self.last_started = time.monotonic()
             started = time.perf_counter()
             append_jsonl(
                 self.path,
@@ -231,6 +257,7 @@ class Calls:
                     "axis": item.axis,
                     "input_sha256": hashed,
                     "at": datetime.now(UTC).isoformat(),
+                    "min_interval_seconds": self.interval,
                 },
             )
             attempted += 1
@@ -246,11 +273,11 @@ class Calls:
                         "event": "finished",
                         "call_id": call_id,
                         "error_type": error_type,
-                        "http_status": getattr(error, "status_code", None),
+                        "http_status": getattr(error, "status_code", getattr(error, "code", None)),
                         "latency_ms": round((time.perf_counter() - started) * 1000),
                     },
                 )
-                http_status = getattr(error, "status_code", None)
+                http_status = getattr(error, "status_code", getattr(error, "code", None))
                 if (
                     isinstance(http_status, int)
                     and 400 <= http_status < 500
@@ -346,24 +373,29 @@ def main():
     parser.add_argument("--anchors", type=Path, default=DEFAULT_ANCHORS)
     parser.add_argument("--judge-model")
     parser.add_argument(
-        "--key-file", type=Path, help="Read a named OpenAI key field; never copy or log it"
+        "--key-file", type=Path, help="Read a named Gemini key field into this process only"
     )
     parser.add_argument("--max-calls", type=int, default=100)
     parser.add_argument("--retries", type=int, default=1)
+    parser.add_argument(
+        "--interval", type=float, default=8, help="Minimum seconds between calls, including retries"
+    )
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     settings = JudgeSettings()
     if args.key_file:
-        settings = settings.model_copy(update={"api_key": key_from_file(args.key_file)})
+        os.environ["GEMINI_API_KEY"] = key_from_file(args.key_file).get_secret_value()
     model = args.judge_model or settings.model
-    generate = openai_provider(settings)
+    generate = gemini_provider()
     if args.command == "check-anchors":
         directory = create_run(args.run, args.judge_id, model, args.anchors)
     else:
         directory = judge_directory(args.run, args.judge_id)
     with locked(directory):
         verify_run(args.run, directory, model, args.anchors)
-        calls = Calls(directory, generate, model, args.max_calls, args.retries)
+        calls = Calls(
+            directory, generate, model, args.max_calls, args.retries, interval=args.interval
+        )
         if args.command == "check-anchors":
             result = check_anchors(directory, args.anchors, calls)
             print(json.dumps({"directory": str(directory), "passed": result["passed"]}))

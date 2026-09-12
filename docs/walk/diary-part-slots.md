@@ -1,5 +1,8 @@
 # 산책 파트 슬롯 미리보기
 
+현재 작성 계약은 [장면과 선택적 행동](scene-writing.md)이다. 아래의 배경 덧붙이기 비교 기록은
+이전 실험이며, 일반 장면의 신규 생성은 구조화한 장면·행동 입력에서 완결된 본문을 받는다.
+
 후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
 특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
 행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.

@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |
 | [walk/space-normalization.md](walk/space-normalization.md) | 상권·공원·피복의 유한 사전, 원자료 보존·장면 결합·실제 발행·APP 저장 연결 |

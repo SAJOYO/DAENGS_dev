@@ -165,11 +165,10 @@ def test_writer_keeps_original_and_local_materials_without_global_scene_sequence
     slots = prepare_board_slots(source, preview.base_board, SlotPolicy(), route=route)
     payload = slot_payload(preview.base_board, slots)
     assert "scene_sequence" not in payload
-    originals = {s.id: s.body for s in preview.base_board.scenes}
     for item in payload["scenes"]:
-        assert item["original"] == originals[item["scene_id"]]
+        assert "original" not in item
         assert "center" not in item and "anchor" not in item
-        assert item["evidence"]
+        assert any(item["scene"].values())
     assert source.owner_id not in json.dumps(payload)
 
 

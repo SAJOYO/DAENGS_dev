@@ -52,10 +52,11 @@ async def test_grid_temperature_joins_space_and_motion_without_rewriting_origina
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "앞선 지역 관측에서 기온은 22.5도였다."
+                    "text": "앞선 지역 관측에서 기온은 22.5도였다."
                     if s["scene_id"] == stamp.scene_id
                     else "",
                     "evidence_ids": [e.id] if s["scene_id"] == stamp.scene_id else [],
+                    "action_id": None,
                 }
                 for s in payload["scenes"]
             ]

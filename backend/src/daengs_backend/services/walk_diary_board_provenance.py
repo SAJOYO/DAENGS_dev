@@ -5,6 +5,7 @@ from daengs_backend.services.walk_diary_slot_writing import SlotWritingResult, w
 from daengs_walk.diary_board_output import publish_board
 from daengs_walk.diary_board_receipt import CitedEvidence, StoredSceneWriting, StoredSlotWriting
 from daengs_walk.diary_input import digest
+from daengs_walk.diary_scene_input import preserve_original
 
 
 def writing_receipt(prepared, bundle, revision, output=None):
@@ -37,7 +38,15 @@ def writing_receipt(prepared, bundle, revision, output=None):
             StoredSceneWriting(
                 scene_id=stamp.scene_id,
                 original_body_sha256=digest(originals[stamp.scene_id].body),
-                background=prose.background.strip() if prose else "",
+                background=prose.text.strip() if prose else "",
+                composition=(
+                    "replace"
+                    if prose
+                    and prose.text.strip()
+                    and not preserve_original(originals[stamp.scene_id])
+                    else "prepend"
+                ),
+                action_id=prose.action_id if prose else None,
                 evidence=tuple(
                     CitedEvidence(
                         id=available[ref].id,

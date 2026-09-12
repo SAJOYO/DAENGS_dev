@@ -85,10 +85,9 @@ async def test_collected_temperature_reaches_writer_and_is_frozen_after_source_r
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "이 지역의 기온 관측값은 22.5도였다.",
-                    "evidence_ids": [
-                        next(e["id"] for e in s["evidence"] if e["part"] == "environment")
-                    ],
+                    "text": "이 지역의 기온 관측값은 22.5도였다.",
+                    "evidence_ids": [s["scene"]["environment"][0]["id"]],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]

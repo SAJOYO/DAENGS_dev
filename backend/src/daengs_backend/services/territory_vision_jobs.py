@@ -1,6 +1,9 @@
 """Durable attempts, fenced leases and recovery publication for territory photos."""
 
 import asyncio
+import json
+import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,6 +15,7 @@ MAX_ATTEMPTS = 2
 RETRY_SECONDS = 2
 DISPATCH_SECONDS = 30
 DISPATCH_LIMIT = 100
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -94,22 +98,64 @@ async def recover_pending(*, factory=None, publish=None):
 
     factory = factory or worker_session
     publish = publish or _publish_vision_attempt
-    async with factory() as session:
-        now = datetime.now(UTC)
-        rows = await repo.due_dispatches(session, now, limit=DISPATCH_LIMIT)
-        ids = [row.id for row in rows]
-        for row in rows:
-            # A crash or broker failure here is recovered after this finite reservation.
-            row.vision_dispatch_after = now + timedelta(seconds=DISPATCH_SECONDS)
-        await session.commit()
-    published = 0
-    for attempt_id in ids:
-        try:
-            await asyncio.to_thread(publish, attempt_id)
-        except TerritoryVisionQueueUnavailable:
-            # The broker is shared: do not occupy a worker for 100 sequential connection timeouts.
-            # Every unpublished ID remains eligible after its finite reservation.
-            break
-        else:
-            published += 1
-    return {"selected": len(ids), "published": published, "failed": len(ids) - published}
+    run_id = str(uuid.uuid4())
+    started = time.perf_counter()
+    counts = {"selected": 0, "attempted": 0, "published": 0, "failed": 0, "deferred": 0}
+    stage = "reserve"
+
+    def emit(phase, *, error_type=None):
+        # Explicit JSON survives the existing Celery formatter. Never include exception text,
+        # attempt IDs, photo keys, lease tokens, provider output or connection values.
+        event = {
+            "event": "territory_vision_recovery",
+            "version": 1,
+            "run_id": run_id,
+            "phase": phase,
+            "at": datetime.now(UTC).isoformat(),
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
+            "stage": stage,
+            **counts,
+            "unconfirmed": counts["attempted"] - counts["published"] - counts["failed"],
+        }
+        if error_type:
+            event["error_type"] = error_type
+        level = logging.WARNING if error_type or phase == "cancelled" else logging.INFO
+        LOGGER.log(level, json.dumps(event, ensure_ascii=True))
+
+    emit("started")
+    try:
+        async with factory() as session:
+            now = datetime.now(UTC)
+            rows = await repo.due_dispatches(session, now, limit=DISPATCH_LIMIT)
+            ids = [row.id for row in rows]
+            for row in rows:
+                # A crash or broker failure here is recovered after this finite reservation.
+                row.vision_dispatch_after = now + timedelta(seconds=DISPATCH_SECONDS)
+            await session.commit()
+            counts["selected"] = counts["deferred"] = len(ids)
+        stage = "publish"
+        failure_type = None
+        for attempt_id in ids:
+            counts["attempted"] += 1
+            counts["deferred"] -= 1
+            try:
+                await asyncio.to_thread(publish, attempt_id)
+            except TerritoryVisionQueueUnavailable as exc:
+                counts["failed"] += 1
+                failure_type = type(exc).__name__
+                # Keep finite reservations; stop before more shared-broker timeouts.
+                break
+            except Exception:
+                counts["failed"] += 1
+                raise
+            else:
+                counts["published"] += 1
+        emit("finished", error_type=failure_type)
+        return counts
+    except asyncio.CancelledError:
+        # An in-flight to_thread publisher can still finish; its delivery is unconfirmed.
+        emit("cancelled")
+        raise
+    except Exception as exc:
+        emit("failed", error_type=type(exc).__name__)
+        raise

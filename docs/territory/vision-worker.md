@@ -104,8 +104,8 @@ DB·Redis 연결이다. 새 환경 변수나 패키지는 없다. 기동은 기�
    빈 DB의 원본은 `db/init/08_territory_visits.sql`이다.
 3. 웹 backend와 사진 worker를 신형 코드로 기동하고, 기존 `crawler-beat`도 재시작해
    스케줄을 반영한다. migration 없이 신형 ORM을 올리면 없는 컬럼 조회로 실패한다.
-4. 아래 상태와 복구 task의 `selected/published/failed` 반환 로그를 확인한다. `failed`는
-   broker 오류로 발행하지 못한 행과 배치 중단으로 다음 예약에 남긴 행의 수다.
+4. [상태 집계와 복구 실행 로그](vision-observability.md)를 확인한다. 복구 반환의 `failed`는
+   발행 함수에서 예외를 받은 수이고, 배치 중단 후 시도하지 않은 수는 `deferred`로 분리한다.
 
 서버 앞에 없을 때는 기존 `db-migrate.yml`의 `territory_action`으로 `Inspect` → `Pause`를
 실행할 수 있다. `expected_live_sha`에는 실제 배포된 40자리 커밋을 넣는다. 이 경로는
@@ -117,7 +117,7 @@ SQL은 `territory_action=none`, workflow 실행 ref는 **dev**, SQL의 `ref`는 
 기존 backup·apply·verify 경로를 사용한다. 이때에도 사진 worker가 중단됐는지 먼저 확인한다.
 배포 workflow는 backend·사진 worker 갱신 뒤 crawler-beat를 재시작한다. 배포 성공 후
 `Verify`는 컨테이너 기동 시각·건강 상태, 실제 worker의 복구 task 등록·큐, DB lease 컬럼을
-검사한다. 계정·사진 원본이나 외부 VLM을 호출하지 않고 상태별 건수만 읽는다.
+검사한다. 계정·사진 원본이나 외부 VLM을 호출하지 않고 상태별 건수와 읽기 전용 backlog를 읽는다.
 
 ```sql
 SELECT status, count(*), min(vision_available_at), min(vision_dispatch_after)
@@ -183,7 +183,7 @@ $redisProcess = Start-Process "$redisRoot\redis-server.exe" -ArgumentList 'test-
 
 다음 명령은 DEV의 `backend/`에서 실행한다. 테스트는 DB에 고유 스키마, Redis에 고유
 키 접두사를 사용하고 종료 시 자기 프로세스·스키마·키를 정리한다. Redis 환경 변수를
-생략하면 runtime 3건이 skip되므로 `-rs` 결과를 확인한다.
+생략하면 runtime 4건이 skip되므로 `-rs` 결과를 확인한다.
 
 ```powershell
 $env:PYTHONUTF8 = '1'
@@ -211,7 +211,7 @@ uv run check
 
 `test_territory_vision_runtime.py`는 실제 Redis·PostgreSQL·별도 Celery `solo` 프로세스로
 중복 전달, 실제 broker 연결 거부 뒤 재confirm 없는 복구, 모델 대기 중 worker 강제 종료
-뒤 복구를 확인한다. 실제 Beat `Scheduler`에 운영의 사진 복구 항목만 넣어 tick한다.
+뒤 복구와 0건 처리의 실제 JSON 로그를 확인한다. 실제 Beat `Scheduler`에 운영의 사진 복구 항목만 넣어 tick한다.
 lease 만료 시각은 테스트 DB에서 앞당기며, 사진 저장소와 모델은 결정적 대역이다.
 이는 Linux prefork·상주 Beat 프로세스 재시작·실제 VLM·운영 부하 검증을 대체하지 않는다.
 

@@ -109,7 +109,11 @@ def test_probe_requires_schema_and_actual_worker_registration(
     spec.loader.exec_module(probe)
 
     async def inventory():
-        return {"lease_columns_present": columns, "attempt_counts": []}
+        return {
+            "lease_columns_present": columns,
+            "attempt_counts": [],
+            "backlog": {"pending_count": 100, "expired_lease_count": 99} if columns else None,
+        }
 
     monkeypatch.setattr(probe, "database_inventory", inventory)
     monkeypatch.setenv("HOSTNAME", "runtime-test")
@@ -126,6 +130,7 @@ def test_probe_requires_schema_and_actual_worker_registration(
     monkeypatch.setattr(probe.app.control, "inspect", inspector)
     result = probe.inventory()
     assert result["ready"] is bool(columns and queue and registered and len(registered) == 2)
+    assert result["backlog"] is not None if columns else result["backlog"] is None
 
 
 def test_workflow_uses_isolated_checkout_and_excludes_migration():

@@ -1,7 +1,12 @@
 # 산책 파트 슬롯 미리보기
 
-기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/4b90be1d1ef63b758cfa0d25107a7fc9d3913fa1/docs/explorations/walk/diary/plan.md)
-([GEO #265](https://github.com/rkbuhtig/DAENGS_geo/pull/265))이다.
+후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
+특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
+행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
+지정 공공 API의 실제 필드 분류와 최신 서술 품질은 아직 미검증이다. 아래 기존 구현을 그 완료로 읽지 않는다.
+
+기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)
+([GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266))이다.
 아래는 기존 슬롯 선정·배경 작성 구현이다. 장면의 완결성, 시스템 판정용 시간과 작성 입력의
 분리, 표현 선택의 자유를 새 기획에 맞추는 작업은 별도다. 기존 슬롯 수치와 원본 보존은 유지한다.
 

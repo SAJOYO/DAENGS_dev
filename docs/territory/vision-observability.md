@@ -103,6 +103,7 @@ uv run pytest -q -rs --tb=short `
   tests/territory/visits/test_territory_vision_runtime.py -k 'not test_guarded_commands'
 ```
 
+2026-09-12, 구현 `d782802`에 최신 dev `01f0ae5`를 통합한 `4116a5d`에서 위 범위를 재검증했다.
 선택한 6개 파일의 62개 테스트가 Windows·Python 3.12·PostgreSQL 17.11·Redis 8.2.9에서 통과했다.
 실패·오류·skip은 0개이며, 변경 없는 PowerShell 컨테이너 제어 대역 48건은 명시적으로 선택에서 제외했다.
 DB 스냅샷·동시 변경·행 잠금 중 조회·migration 전 컬럼 부족·구형 코드 의존성 없는 점검,

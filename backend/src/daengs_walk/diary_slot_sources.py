@@ -7,7 +7,7 @@ from pydantic import Field, model_validator
 
 from daengs_walk.diary_background import project_background
 from daengs_walk.diary_board import ObservationCore, RecordCore
-from daengs_walk.diary_input import DiaryContract, Identifier, Instant, Point, digest, material_ref
+from daengs_walk.diary_input import DiaryContract, Identifier, Instant, Point, digest
 from daengs_walk.diary_observations import build_observation_pool
 from daengs_walk.diary_slot_claims import normalize
 from daengs_walk.diary_slot_spatial import spatial_claim
@@ -80,7 +80,7 @@ def verified_motion(source, route):
     return source.observations, blocks
 
 
-def candidates_for_scene(source, scene, policy, motion, blocks):
+def candidates_for_scene(source, scene, policy, motion, blocks, *, extra_backgrounds=()):
     candidates, decisions = [], []
 
     def reject(part, source_id, reason, eligibility="fail", **details):
@@ -101,7 +101,7 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
         if isinstance(scene.core, RecordCore)
         else scene.core.observation
         if isinstance(scene.core, ObservationCore)
-        else None
+        else scene.core
     )
     located = anchor.point is not None and anchor.position_state != "provisional"
     fresh = located and (
@@ -111,11 +111,13 @@ def candidates_for_scene(source, scene, policy, motion, blocks):
             and abs((anchor.event_at - anchor.location_at).total_seconds()) <= policy.location_age_s
         )
     )
-    selected = set(source.selected_background_ids)
+    selected = set(source.selected_background_ids) | {
+        b.id for b in extra_backgrounds if b.status in {"known", "partial"}
+    }
     scene_scope = {"scene_id": scene.id, "anchor": anchor.model_dump(mode="json")}
-    for saved in sorted(source.backgrounds, key=lambda b: b.id):
+    for saved in sorted((*source.backgrounds, *extra_backgrounds), key=lambda b: b.id):
         # Distances supplied for another core cannot migrate to this scene.
-        if core is None or saved.target != material_ref(core):
+        if saved.target != scene.core_ref:
             continue
         part = "environment" if saved.tags == ("environment",) else "space"
         if saved.id not in selected or saved.status not in {"known", "partial"}:

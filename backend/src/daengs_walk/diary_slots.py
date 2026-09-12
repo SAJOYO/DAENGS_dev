@@ -203,6 +203,7 @@ def prepare_board_slots(
     policy: SlotPolicy,
     *,
     route: VerifiedBoardRoute | None = None,
+    scene_backgrounds=None,
 ) -> BoardSlotSnapshot:
     """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
@@ -212,10 +213,17 @@ def prepare_board_slots(
         or board.input_revision != source.revision()
     ):
         raise ValueError("part slots require the selected board's source snapshot")
+    extra = (
+        scene_backgrounds.validate_board(board).backgrounds if scene_backgrounds is not None else ()
+    )
+    if {b.id for b in extra} & {b.id for b in source.backgrounds}:
+        raise ValueError("collected and stored background IDs overlap")
     motion, blocks = verified_motion(source, route)
     stamps = []
     for scene in board.scenes:
-        candidates, decisions = candidates_for_scene(source, scene, policy, motion, blocks)
+        candidates, decisions = candidates_for_scene(
+            source, scene, policy, motion, blocks, extra_backgrounds=extra
+        )
         stamps.append(admit(scene.id, candidates, decisions, policy))
     return BoardSlotSnapshot(
         client_session_id=board.client_session_id,

@@ -10,6 +10,7 @@ class SlotPreviewRequest(DiaryContract):
     target_scene_count: int = Field(ge=1, le=50)
     policy: SlotPolicy = Field(default_factory=SlotPolicy)
     generate: bool = True
+    collect_backgrounds: bool = False
 
 
 class SlotPreviewResponse(DiaryContract):

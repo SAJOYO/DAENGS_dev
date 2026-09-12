@@ -4,6 +4,8 @@ from daengs_walk.diary_input import digest
 
 ROLES = {
     ("place-nearby-v1", "registered_location"): "scene_registered_point_distance",
+    ("kakao-place-nearby-v1", "registered_location"): "scene_registered_point_distance",
+    ("kakao-address-v1", "coordinate_reverse_geocoded_legal_dong"): "scene_address_reference",
     ("public-park-nearby-v1", "registered_park_point"): "scene_registered_point_distance",
     ("public-river-nearby-v1", "egis_river_polygon"): "scene_geometry_distance",
     ("public-commerce-nearby-v1", "registered_business_composition"): "scene_area_context",

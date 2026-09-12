@@ -125,3 +125,80 @@ docker compose exec territory-vision-worker uv run --no-sync celery \
 실제 배포·운영 SQL 실행과 외부 모델 부하는 구현 검증과 별도다. 이 변경의 PostgreSQL
 회귀는 `tests/territory/visits/test_territory_vision_jobs_db.py`, migration 변조 검증은
 `tools/check_migration_verification.py`의 `territory_vision_jobs` 항목에 있다.
+
+## Docker·CI 없는 Windows 검증
+
+GitHub Actions나 self-hosted runner 없이 PowerShell 7에서 실행할 수 있다. 서비스 설치
+없이 PostgreSQL과 Redis 실행 파일을 별도 작업 폴더에 풀고, 폐기용 데이터를 loopback의
+비기본 포트에만 연다. 팀 DB·Redis 연결값이나 서버용 compose 설정을 사용하지 않는다.
+
+2026-09-12 검증에 사용한 파일은 아래와 같다. Redis와 pgvector는 커뮤니티 Windows
+빌드이며 운영 Linux 이미지와 같은 바이너리는 아니다. 두 zip은 다운로드 뒤 GitHub
+release asset의 SHA256과 비교했다. pgvector의 `lib/vector.dll`과 `share/extension/*`를
+**폐기용 PostgreSQL 배포 폴더**의 같은 경로에 복사한다.
+
+| 구성 | 다운로드 | SHA256 |
+| --- | --- | --- |
+| PostgreSQL 17.11 x64 | [EDB zip 배포](https://www.enterprisedb.com/download-postgresql-binaries) | 배포본별 확인 |
+| Redis 8.2.9 MSYS2, 서비스 없는 zip | [release](https://github.com/redis-windows/redis-windows/releases/tag/8.2.9) | `dcff676e861a4ae0a9854556239398e77a7469c9379af64a4a76798d166d1aa0` |
+| pgvector 0.8.6 / PG17 | [release](https://github.com/andreiramani/pgvector_pgsql_windows/releases/tag/0.8.6_17) | `420388e9e9f05d92f06d6967ce8772483629b27a66ca9255925fa0fdd445438e` |
+
+서로 다른 PostgreSQL Windows 배포본의 확장이 호환된다고 가정하지 않는다. 실제
+`CREATE EXTENSION vector`가 성공해야 전체 migration 검사를 실행할 수 있다.
+
+```powershell
+# 아래 세 경로는 자신이 압축을 푼 폴더와 새 폐기용 데이터 폴더로 설정한다.
+$pgRoot = 'C:\daengs-test-tools\pgsql'
+$redisRoot = 'C:\daengs-test-tools\Redis-8.2.9-Windows-x64-msys2'
+$testData = 'C:\daengs-test-tools\photo-pgdata'
+
+# initdb/createdb는 처음 한 번만 실행. trust는 아래 loopback 전용 폐기 DB에만 사용한다.
+& "$pgRoot\bin\initdb.exe" -D $testData -U postgres -A trust --encoding=UTF8 --locale=C
+& "$pgRoot\bin\pg_ctl.exe" -D $testData -l "$testData.log" -o '-h 127.0.0.1 -p 55439' -w start
+& "$pgRoot\bin\createdb.exe" -h 127.0.0.1 -p 55439 -U postgres claims_test
+
+@'
+bind 127.0.0.1
+protected-mode yes
+port 56379
+save ""
+appendonly no
+'@ | Set-Content "$redisRoot\test-local.conf" -Encoding utf8NoBOM
+$redisProcess = Start-Process "$redisRoot\redis-server.exe" -ArgumentList 'test-local.conf' `
+  -WorkingDirectory $redisRoot -WindowStyle Hidden -PassThru
+& "$redisRoot\redis-cli.exe" -h 127.0.0.1 -p 56379 ping
+```
+
+다음 명령은 DEV의 `backend/`에서 실행한다. 테스트는 DB에 고유 스키마, Redis에 고유
+키 접두사를 사용하고 종료 시 자기 프로세스·스키마·키를 정리한다. Redis 환경 변수를
+생략하면 runtime 3건이 skip되므로 `-rs` 결과를 확인한다.
+
+```powershell
+$env:PYTHONUTF8 = '1'
+$env:TERRITORY_TEST_DATABASE_URL = 'postgresql+asyncpg://postgres@127.0.0.1:55439/claims_test'
+$env:TERRITORY_RUNTIME_TEST_REDIS = 'redis://127.0.0.1:56379/15'
+uv run pytest -q -rs tests/territory/visits tests/territory/ownership tests/territory/certification --tb=short
+uv run pytest -q -rs tests/activity/test_vision_lease_db.py --tb=short
+
+$env:PATH = "$pgRoot\bin;" + $env:PATH
+$env:PGHOST = '127.0.0.1'
+$env:PGPORT = '55439'
+$env:PGUSER = 'postgres'
+$env:PGDATABASE = 'claims_test'
+$env:PGCLIENTENCODING = 'UTF8'
+uv run python ../tools/check_migration_verification.py sql
+
+# check가 호출하는 Windows PowerShell 5.1의 실행 정책만 현재 프로세스에서 설정한다.
+$env:PSExecutionPolicyPreference = 'Bypass'
+uv run check
+
+# 검증 후 직접 시작한 폐기용 프로세스만 종료한다.
+& "$redisRoot\redis-cli.exe" -h 127.0.0.1 -p 56379 shutdown nosave
+& "$pgRoot\bin\pg_ctl.exe" -D $testData -m fast -w stop
+```
+
+`test_territory_vision_runtime.py`는 실제 Redis·PostgreSQL·별도 Celery `solo` 프로세스로
+중복 전달, 실제 broker 연결 거부 뒤 재confirm 없는 복구, 모델 대기 중 worker 강제 종료
+뒤 복구를 확인한다. 실제 Beat `Scheduler`에 운영의 사진 복구 항목만 넣어 tick한다.
+lease 만료 시각은 테스트 DB에서 앞당기며, 사진 저장소와 모델은 결정적 대역이다.
+이는 Linux prefork·상주 Beat 프로세스 재시작·실제 VLM·운영 부하 검증을 대체하지 않는다.

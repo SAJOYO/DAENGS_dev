@@ -114,10 +114,13 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
         "dog",
         "care_log",
         "vet_spend",
+        "walk_activity",
         "conversation",
     }
     assert request.payload.care_log is None
     assert request.payload.vet_spend is None
+    # walk_activity 도 같은 규칙 (D-072) — 이 호출은 산책 기록을 넘기지 않는다.
+    assert request.payload.walk_activity is None
     # Resolver 를 거치지 않은 호출(`resolved` 미지정)이라 conversation 도 비어 있다 (#416 Task 5).
     assert request.payload.conversation is None
 

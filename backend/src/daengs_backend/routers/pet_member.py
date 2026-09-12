@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.pet_member import (
+    AcceptedPetOut,
     InviteAccept,
+    InviteAcceptResponse,
     InviteBundleCreate,
     InviteBundleCreated,
     InviteBundleListResponse,
@@ -250,18 +252,60 @@ async def preview_invite(
     )
 
 
-@router.post("/pet-invites/accept", status_code=status.HTTP_200_OK)
-async def accept_invite(body: InviteAccept, user: CurrentAppUser, session: Session) -> dict:
-    """초대 수락. **같은 링크를 두 번 눌러도 200 입니다.**
+@router.post(
+    "/pet-invites/accept",
+    response_model=InviteAcceptResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def accept_invite(
+    body: InviteAccept, user: CurrentAppUser, session: Session
+) -> InviteAcceptResponse:
+    """묶음 **전체** 수락. **같은 링크를 두 번 눌러도 200 입니다.**
 
     경로에 `pet_id` 가 없는 것이 의도입니다 — 수락 전에는 그 강아지에 아무 권한이 없습니다.
+
+    `links` 는 선택 필드라, 구 앱의 `{"token": ...}` 요청은 **전부 "연결 없이 참여"** 로
+    지금까지와 똑같이 동작합니다. 응답의 최상위 `pet_id`·`name` 도 구 앱 호환 앵커로
+    그대로 남습니다.
+
+    **하나라도 실패하면 아무 변경도 남지 않습니다** — 부분 수락은 구조적으로 없습니다.
+
+    | 코드 | 언제 |
+    | --- | --- |
+    | 200 | 수락 · 같은 사람의 재시도(영수증) · 이미 구성원 |
+    | 404 | 없는 토큰 · 남이 이미 쓴 토큰 · **연결 대상이 내 것이 아님** |
+    | 410 | 만료 · 묶음 구성 변경(삭제·대표 변경·배웅) |
+    | 409 | 이미 대표 · 보호자 상한 · 마릿수 상한 · **부적격 연결** |
+    | 422 | 초대에 없는 pet id · 요청 안 중복 |
     """
+    links = {link.pet_id: link.link_to_pet_id for link in body.links}
     try:
-        pet = await member_service.accept_invite(session, user.app_user_id, body.token)
+        outcome = await member_service.accept_invite(
+            session, user.app_user_id, body.token, links
+        )
     except member_service.InviteNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _INVITE_NOT_FOUND) from None
+    except PetNotFoundError:
+        # 연결 대상이 내 것이 아닙니다. **409 가 아니라 404 인 것이 의도** —
+        # 409 면 그 id 가 존재한다는 사실이 샙니다.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
     except member_service.InviteExpiredError:
         raise HTTPException(status.HTTP_410_GONE, _INVITE_EXPIRED) from None
+    except member_service.InviteBundleChangedError:
+        raise HTTPException(status.HTTP_410_GONE, _INVITE_BUNDLE_CHANGED) from None
+    except member_service.InvalidLinkRequestError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+    except member_service.LinkNotAllowedError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "link_not_allowed",
+                "message": "선택한 아이는 연결할 수 없어요.",
+                "pet_id": str(exc.pet_id),
+                "link_to_pet_id": str(exc.link_to_pet_id),
+                "reason": exc.reason,
+            },
+        ) from None
     except member_service.AlreadyOwnerError:
         raise HTTPException(status.HTTP_409_CONFLICT, "이미 이 아이의 대표입니다.") from None
     except member_service.MemberLimitError:
@@ -273,7 +317,19 @@ async def accept_invite(body: InviteAccept, user: CurrentAppUser, session: Sessi
         raise HTTPException(
             status.HTTP_409_CONFLICT, "돌보는 아이가 너무 많습니다."
         ) from None
-    return {"pet_id": str(pet.id), "name": pet.name}
+    return InviteAcceptResponse(
+        pet_id=outcome.anchor.display_pet_id,
+        name=outcome.anchor.name,
+        pets=[
+            AcceptedPetOut(
+                invited_pet_id=item.invited_pet_id,
+                display_pet_id=item.display_pet_id,
+                name=item.name,
+                result=item.result,
+            )
+            for item in outcome.pets
+        ],
+    )
 
 
 @router.get("/pets/{pet_id}/members", response_model=MemberListResponse)
@@ -295,6 +351,8 @@ async def remove_member(
         await member_service.remove_member(session, user.app_user_id, pet_id, target_id)
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except identity_service.NotGroupOwnerError as exc:
+        raise _not_group_owner(exc) from None
     except member_service.CannotRemoveOwnerError:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -317,6 +375,8 @@ async def transfer_owner(
         )
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
+    except identity_service.NotGroupOwnerError as exc:
+        raise _not_group_owner(exc) from None
     except member_service.AlreadyOwnerError:
         raise HTTPException(status.HTTP_409_CONFLICT, "이미 이 아이의 대표입니다.") from None
     except member_service.NotAMemberError:

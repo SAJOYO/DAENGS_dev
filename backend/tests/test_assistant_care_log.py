@@ -12,6 +12,7 @@ DB 오류가 전부 조용히 None 인가, Life 는 안 받는가, 그리고 이
 """
 
 import uuid
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -81,29 +82,49 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 def care(monkeypatch: pytest.MonkeyPatch) -> CareStore:
     cs = CareStore()
 
-    def _between(app_user_id, pet_id, start, end):
+    # 조회 셋은 이제 **pet id 묶음**을 받습니다 (MVP 결정 §7) — 논리 연결된 아이의
+    # 기록이 여러 `pet_id` 에 갈려 있어도 한 마리로 합쳐 읽기 위해서입니다.
+    def _between(app_user_id, pet_ids, start, end):
+        wanted = set(pet_ids)
         return [
             e for e in cs.events
-            if e.app_user_id == app_user_id and e.pet_id == pet_id
+            if e.app_user_id == app_user_id and e.pet_id in wanted
             and start <= e.occurred_at < end
         ]
 
-    async def list_between(session, app_user_id, pet_id, start, end):
-        return sorted(_between(app_user_id, pet_id, start, end),
+    async def list_between(session, app_user_id, pet_ids, start, end):
+        return sorted(_between(app_user_id, pet_ids, start, end),
                       key=lambda e: (e.occurred_at, e.id), reverse=True)
 
-    async def count_by_kind(session, app_user_id, pet_id, start, end):
+    async def count_by_kind(session, app_user_id, pet_ids, start, end):
         counts: dict[str, int] = {}
-        for e in _between(app_user_id, pet_id, start, end):
+        for e in _between(app_user_id, pet_ids, start, end):
             counts[e.kind] = counts.get(e.kind, 0) + 1
         return counts
 
-    async def count_walks(session, app_user_id, pet_id, start, end):
-        return sum(1 for at in cs.walk_starts.get(pet_id, []) if start <= at < end)
+    async def count_walks(session, app_user_id, pet_ids, start, end):
+        return sum(
+            1
+            for pet_id in set(pet_ids)
+            for at in cs.walk_starts.get(pet_id, [])
+            if start <= at < end
+        )
 
     monkeypatch.setattr(care_repo, "list_between", list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
+
+    async def list_walks(session, pet_ids, start, end):
+        # 하루 요약은 이제 산책을 **행으로** 읽습니다 — 누가 다녀왔는지를 같이 보여 주기
+        # 위해서입니다 (MVP 결정 §7). `walk` 수는 이 목록의 길이입니다.
+        return [
+            SimpleNamespace(id=uuid.uuid4(), started_at=at, app_user_id=OWNER)
+            for pet_id in set(pet_ids)
+            for at in cs.walk_starts.get(pet_id, [])
+            if start <= at < end
+        ]
+
     monkeypatch.setattr(walk_repo, "count_for_pet_between", count_walks)
+    monkeypatch.setattr(walk_repo, "list_for_pets_between", list_walks)
     return cs
 
 

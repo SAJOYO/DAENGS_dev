@@ -1236,35 +1236,46 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             # naive 시각을 넣은 옛 산책 대역 — 하루 창과 비교할 수 없으면 안 센다.
             return False
 
-    def _care_between(_app_user_id, pet_id, start, end):
+    def _ids(pet_ids):
+        """진짜가 `pet_id IN (...)` 로 받는 묶음 (MVP 결정 §7). 한 개만 줘도 돌게 둡니다 —
+        이 파일 밖의 테스트가 옛 모양으로 직접 부르는 자리가 있습니다."""
+        if isinstance(pet_ids, uuid.UUID):
+            return {pet_ids}
+        return set(pet_ids)
+
+    def _care_between(_app_user_id, pet_ids, start, end):
         # 진짜와 같게 **actor 로 안 거릅니다** — 돌봄 기록은 강아지 것이라, 사람으로 거르면
         # 다른 보호자가 적은 줄만 빠집니다 (docs/co-care.md §2).
+        wanted = _ids(pet_ids)
         return [
             e for e in store.care_events
-            if e.pet_id == pet_id and _in_window(e.occurred_at, start, end)
+            if e.pet_id in wanted and _in_window(e.occurred_at, start, end)
         ]
 
-    async def care_list_between(session, app_user_id, pet_id, start, end):
+    async def care_list_between(session, app_user_id, pet_ids, start, end):
         return sorted(
-            _care_between(app_user_id, pet_id, start, end),
+            _care_between(app_user_id, pet_ids, start, end),
             key=lambda e: (e.occurred_at, e.id), reverse=True,
         )
 
-    async def care_count_by_kind(session, app_user_id, pet_id, start, end):
+    async def care_count_by_kind(session, app_user_id, pet_ids, start, end):
         counts: dict[str, int] = {}
-        for e in _care_between(app_user_id, pet_id, start, end):
+        for e in _care_between(app_user_id, pet_ids, start, end):
             counts[e.kind] = counts.get(e.kind, 0) + 1
         return counts
 
-    async def walk_count_for_pet_between(session, _app_user_id, pet_id, start, end):
+    async def walk_count_for_pet_between(session, _app_user_id, pet_ids, start, end):
         # 진짜와 같게 **소유자 조건이 없습니다** — 부르는 쪽이 이미 접근 권한을 봤고,
         # 여기서 다시 사람으로 거르면 다른 보호자의 산책만 빠집니다 (docs/co-care.md §2).
+        # 진짜는 `COUNT(DISTINCT Walk.id)` 라 그룹의 두 아이가 같은 산책에 태그돼도 한 번만
+        # 셉니다 — 여기서도 산책 단위로 셉니다.
+        wanted = _ids(pet_ids)
         return sum(
             1 for w in store.walks
-            if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
+            if wanted & set(w.pet_ids) and _in_window(w.started_at, start, end)
         )
 
-    async def walk_activity_for_pet_between(session, pet_id, start, end):
+    async def walk_activity_for_pet_between(session, pet_ids, start, end):
         # 비서의 오늘 산책 요약(`services/walk_activity_context`, D-073)이 `active_dog_id`
         # 요청마다 읽는 값. **기본은 빈 하루** — `care_events`·`vet_visits` 와 같은 이유로
         # (위 `Store.__init__` 주석), 대역이 없으면 관련 없는 테스트가 진짜 리포지토리를
@@ -1272,9 +1283,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         # 흉내 내지 않는다 — 그 조합을 보는 테스트는 `test_assistant_walk_activity.py` 가
         # `walk_repo.activity_for_pet_between` 자체를 자기 파일 안에서 다시 monkeypatch
         # 해 직접 다룬다(`care_repo`/`walk_repo` 대역을 이 파일들이 덮어 쓰는 것과 같은 꼴).
+        wanted = _ids(pet_ids)
         starts = [
             w.started_at for w in store.walks
-            if pet_id in w.pet_ids and _in_window(w.started_at, start, end)
+            if wanted & set(w.pet_ids) and _in_window(w.started_at, start, end)
         ]
         return WalkActivitySums(
             walk_count=len(starts), measured_walk_count=0,
@@ -1284,7 +1296,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(care_repo, "list_between", care_list_between)
     monkeypatch.setattr(care_repo, "count_by_kind", care_count_by_kind)
+    async def walk_list_for_pets_between(session, pet_ids, start, end):
+        # 진짜와 같게 **산책 단위**로 한 번씩만 (`distinct`), 시작 시각 순입니다.
+        wanted = _ids(pet_ids)
+        return sorted(
+            (
+                w for w in store.walks
+                if wanted & set(w.pet_ids) and _in_window(w.started_at, start, end)
+            ),
+            key=lambda w: (w.started_at, str(w.id)),
+        )
+
     monkeypatch.setattr(walk_repo, "count_for_pet_between", walk_count_for_pet_between)
+    monkeypatch.setattr(walk_repo, "list_for_pets_between", walk_list_for_pets_between)
     monkeypatch.setattr(walk_repo, "activity_for_pet_between", walk_activity_for_pet_between)
 
     # -- vet visits (#353 Task 7) --------------------------------------------

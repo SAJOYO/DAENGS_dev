@@ -16,6 +16,7 @@ from daengs_backend.core.token import generate_refresh_token, hash_refresh_token
 from daengs_backend.models import Pet, PetInvite
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_identity as identity_repo
 from daengs_backend.repositories import pet_member as member_repo
 from daengs_backend.schemas.pet_member import MemberOut
 from daengs_backend.services import pet_identity as identity_service
@@ -263,82 +264,303 @@ async def preview_invite(
     )
 
 
-async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: str) -> Pet:
-    """초대 수락. 검증 순서는 docs/co-care.md § 3 의 표와 같습니다.
+#: 항목별 수락 결과. 앱이 화면 문구를 이 값으로 가릅니다 (MVP 결정 §8).
+ACCEPT_LINKED = "linked"
+ACCEPT_JOINED = "joined"
+ACCEPT_ALREADY_MEMBER = "already_member"
+ACCEPT_ALREADY_OWNER = "already_owner"
 
-    **수락은 더 이상 초대 행을 지우지 않습니다** (2026-09-10, #388 · #261). 대신
-    `accepted_at`/`accepted_by` 를 채워 영수증으로 남깁니다 — 응답을 못 받은 재시도가
-    행이 사라져 404 를 받으면, 이미 다른 강아지를 돌보는 사람은 그것이 "이번 요청이
-    실패했다" 인지 "이미 성공했는데 응답만 못 받았다" 인지 구별할 방법이 없었습니다.
-    영수증이 있으면 **같은 토큰 + 같은 사람**은 그대로 같은 `{pet_id, name}` 을 다시
-    받고, **다른 사람**은 여전히 404 입니다(그 토큰이 존재했다는 사실 자체를 안 새게).
 
-    ⚠️ 영수증 분기는 그 사이 다른 일(탈퇴·내보내기)이 있었는지 다시 확인하지 않습니다 —
-    "응답을 못 받은 재시도" 는 거의 곧바로 다시 오는 것을 전제하기 때문입니다. 그 사이
-    실제로 나간 사람을 되살리고 싶으면 새 초대를 받아야 합니다.
+class LinkNotAllowedError(Exception):
+    """앱이 고른 연결 대상이 후보 조건을 안 지킵니다 (MVP 결정 §2).
+
+    **서버가 다시 봅니다** — 미리보기가 후보를 내려 줬다고 그 목록을 믿으면, 그 사이
+    상태가 바뀌었거나 앱이 임의의 id 를 넣은 것을 못 잡습니다.
+
+    `reason` 은 앱이 문구를 가르는 기계용 값입니다. **남의 pet id 는 여기 안 옵니다** —
+    그건 404 입니다(존재를 확인해 주지 않습니다).
     """
+
+    def __init__(self, pet_id, link_to_pet_id, reason: str) -> None:
+        self.pet_id = pet_id
+        self.link_to_pet_id = link_to_pet_id
+        self.reason = reason
+        super().__init__(reason)
+
+
+class InvalidLinkRequestError(Exception):
+    """요청 자체가 앞뒤가 안 맞습니다 — 초대에 없는 `pet_id`, 또는 같은 연결 대상을 두 번.
+
+    라우터가 422 로 바꿉니다. 409(상태 충돌)와 가르는 이유는 이쪽이 **서버 상태와
+    무관하게** 틀린 요청이기 때문입니다.
+    """
+
+
+@dataclass(frozen=True)
+class AcceptedPet:
+    """수락 결과 한 줄 (MVP 결정 §8).
+
+    `invited_pet_id` 와 `display_pet_id` 를 **반드시 갈라 둡니다** — 연결했으면 이후 앱이
+    쓸 id 는 초대에 담겼던 아이가 아니라 **받는 사람 자신의 행**입니다. 하나로 뭉치면
+    B 가 A 의 행에 케어를 기록하게 됩니다.
+    """
+
+    #: 초대 묶음에 담겨 있던 원본 pet 행.
+    invited_pet_id: uuid.UUID
+    #: 받는 사람 화면과 **이후 요청**에 쓸 pet 행. 연결 안 했으면 위와 같습니다.
+    display_pet_id: uuid.UUID
+    #: 표시용 행의 이름.
+    name: str
+    #: `linked` · `joined` · `already_member` · `already_owner`
+    result: str
+
+
+@dataclass(frozen=True)
+class AcceptOutcome:
+    """묶음 하나의 수락 결과 전부."""
+
+    #: 구 앱 호환 앵커 — 최상위 `pet_id`·`name` 이 여기서 나옵니다.
+    anchor: AcceptedPet
+    pets: list[AcceptedPet]
+
+
+class _AnchorRow:
+    """자식 줄이 없는 옛 초대의 영수증을 그릴 때만 쓰는 최소 대역."""
+
+    def __init__(self, pet_id: uuid.UUID) -> None:
+        self.pet_id = pet_id
+        self.linked_pet_id: uuid.UUID | None = None
+
+
+async def _bundle_rows(session: AsyncSession, invite: PetInvite):
+    """묶음 줄을 **없으면 만들어서** 돌려줍니다.
+
+    마이그레이션이 서버보다 먼저 나가는 창(MVP 결정 §9)에서 옛 코드가 만든 초대에는 자식
+    줄이 없습니다. 그 줄이 없으면 `linked_pet_id` 영수증을 쓸 자리도 없어, 연결해서
+    수락한 뒤의 재시도가 그때의 매핑을 복원하지 못합니다 — 그래서 여기서 채웁니다.
+    """
+    rows = await member_repo.list_bundle(session, invite.id)
+    if rows:
+        return rows
+    rows = member_repo.add_invite_pets(session, invite.id, [invite.pet_id])
+    await session.flush()
+    return rows
+
+
+def _validate_link_request(links: dict, bundle_ids: set) -> None:
+    """요청 안에서만 판정할 수 있는 것 둘. **서버 상태를 안 봅니다** — 그래서 422 입니다."""
+    if set(links) - bundle_ids:
+        raise InvalidLinkRequestError("초대에 없는 강아지가 요청에 있습니다.")
+
+    targets = [target for target in links.values() if target is not None]
+    if len(set(targets)) != len(targets):
+        # 기존 강아지 하나를 초대 강아지 둘에 연결하는 것. DB 의
+        # `pets_identity_one_per_user` 가 마지막 방어지만, 여기서 걸러야 이유를 말해 줍니다.
+        raise InvalidLinkRequestError("같은 강아지를 두 번 연결할 수 없습니다.")
+
+
+async def _receipt(session: AsyncSession, invite: PetInvite) -> "AcceptOutcome":
+    """영수증으로 그때의 응답을 **그대로** 재구성합니다.
+
+    강아지별 매핑이 `pet_invite_pets.linked_pet_id` 에 남아 있어, 묶음이어도 항목마다 같은
+    `display_pet_id` 를 돌려줍니다. 새로 아무것도 확인하지 않습니다 — "응답을 못 받은
+    재시도" 는 거의 곧바로 다시 오는 것을 전제합니다.
+    """
+    rows = await member_repo.list_bundle(session, invite.id) or [_AnchorRow(invite.pet_id)]
+    display_ids = [row.linked_pet_id or row.pet_id for row in rows]
+    pets = await pet_repo.by_ids(session, display_ids)
+    items = []
+    for row in rows:
+        display_id = row.linked_pet_id or row.pet_id
+        found = pets.get(display_id)
+        items.append(
+            AcceptedPet(
+                invited_pet_id=row.pet_id,
+                display_pet_id=display_id,
+                name=found.name if found is not None else "",
+                result=ACCEPT_LINKED if row.linked_pet_id else ACCEPT_JOINED,
+            )
+        )
+    anchor = next((i for i in items if i.invited_pet_id == invite.pet_id), items[0])
+    return AcceptOutcome(anchor=anchor, pets=items)
+
+
+async def _group_guardian_count(
+    session: AsyncSession, pet: Pet, joiner_id: uuid.UUID
+) -> int:
+    """이 사람이 들어온 **뒤**의 그룹 보호자 수 (중복 제거).
+
+    연결 안 된 아이는 `대표 + 돌보미` 이고, 연결된 아이는 그룹 전체의 합집합입니다 —
+    그래야 "한 논리 강아지의 보호자 최대 5명" 이 성립합니다 (MVP 결정 §4). pet 행별로
+    세면 연결할 때마다 그룹 인원이 상한을 넘어 늘어납니다.
+    """
+    if pet.identity_id is not None:
+        guardians = await identity_repo.guardian_ids(session, pet.identity_id)
+    else:
+        guardians = {pet.app_user_id, *await member_repo.list_members(session, pet.id)}
+    return len(guardians | {joiner_id})
+
+
+async def _require_link_candidate(session: AsyncSession, invited_pet_id, target: Pet) -> None:
+    """연결 대상이 후보 조건을 지키는지 **서버가 다시 봅니다** (MVP 결정 §8).
+
+    소유권(내 행인가)은 부르는 쪽이 이미 봤습니다 — 그건 404 라 여기 안 옵니다.
+    """
+    if target.identity_id is not None:
+        raise LinkNotAllowedError(invited_pet_id, target.id, "already_linked")
+    if target.farewell_on is not None:
+        raise LinkNotAllowedError(invited_pet_id, target.id, "farewelled")
+    if await member_repo.list_members(session, target.id):
+        # 남의 기록이 이미 얹힌 아이입니다. 연결하면 그 공동 보호자의 케어·산책이
+        # 동의 없이 새 그룹에 공개됩니다.
+        raise LinkNotAllowedError(invited_pet_id, target.id, "has_other_carers")
+
+
+async def accept_invite(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    token: str,
+    links: dict | None = None,
+) -> "AcceptOutcome":
+    """묶음 **전체**를 한 번에 수락합니다 (MVP 결정 §2 · §8).
+
+    **하나라도 실패하면 아무 변경도 남지 않습니다.** `session.commit()` 이 함수당 한 번이라
+    예외가 나면 트랜잭션이 통째로 롤백됩니다 — 부분 수락이 구조적으로 불가능합니다.
+
+    `links` 는 `{초대에 담긴 pet_id: 내 기존 pet_id}` 입니다. **선택 사항**이라 없으면 전부
+    "연결 없이 참여" 이고, 그것이 구 앱 요청과 정확히 같은 동작입니다.
+
+    검증 순서와 이유:
+
+    1. **사용자 행을 먼저 잠급니다** — 마릿수 상한을 세는 단위가 사람입니다.
+    2. 초대 강아지 ∪ 연결 대상을 **id 오름차순으로** 잠급니다. 한 요청이 여러 행을
+       잠그므로 순서를 고정하지 않으면 데드락입니다.
+    3. 만료 → 410 (행 삭제). 영수증이든 아니든 수명은 `expires_at` 까지입니다.
+    4. **영수증** → 같은 사람이면 그때의 매핑을 그대로 200, 다른 사람이면 404.
+    5. 묶음 구성 변경 → 410. **남은 강아지만 부분 수락하지 않습니다.**
+    6. 요청 형식(초대에 없는 id · 연결 대상 중복) → 422
+    7. 연결 대상의 **소유권 재검증** → 남의 것이면 404 (존재를 확인해 주지 않습니다)
+    8. 연결 후보 조건 → 409 + `reason`
+    9. 그룹 보호자 합집합 상한 → 409
+    10. 수락 **후** 논리 강아지 수 → 409
+
+    ⚠️ 영수증 분기는 그 사이 다른 일(탈퇴·내보내기)이 있었는지 다시 확인하지 않습니다.
+    며칠 뒤에 같은 토큰으로 다시 들어오고 싶으면 새 초대를 받아야 합니다.
+    """
+    links = dict(links or {})
+
     invite = await member_repo.get_invite_by_hash(session, hash_refresh_token(token))
     if invite is None:
         raise InviteNotFoundError
 
-    # ⚠️ pets 행을 잠급니다. 동시 수락이 상한을 넘기지 못하게 하고, 아래 검사가
-    #    동시 승계와 경쟁하지 않게 합니다.
-    pet = await pet_repo.get_by_id_for_update(session, invite.pet_id)
-    if pet is None:  # pragma: no cover — FK 가 CASCADE 라 강아지 없이 초대만 남을 수 없습니다
-        raise InviteNotFoundError
+    # 1. 사람 단위 직렬화. `create_pet`·`create_invite_bundle` 과 같은 이유입니다.
+    await identity_service.lock_user(session, app_user_id)
+
+    rows = await _bundle_rows(session, invite)
+    bundle_ids = [row.pet_id for row in rows]
+
+    # 2. 초대 강아지 ∪ 연결 대상을 한 번에, id 순으로.
+    locked = await pet_repo.get_many_for_update(
+        session, [*bundle_ids, *[t for t in links.values() if t is not None]]
+    )
 
     now = datetime.now(UTC)
     if invite.expires_at <= now:
-        # 영수증이든 아니든 수명은 expires_at 까지입니다 — 지나면 지웁니다.
         await member_repo.delete_invite(session, invite.id)
         await session.commit()
         raise InviteExpiredError
 
+    # 4. 영수증 — 새로 아무것도 확인하지 않습니다.
     if invite.accepted_by is not None:
-        # 이미 쓴 토큰입니다. **같은 사람이면 그때의 응답을 그대로 돌려줍니다** — 새로
-        # 아무것도 확인하지 않습니다(위 docstring 참고). 다른 사람이면 "없는 토큰" 과
-        # 똑같은 404 입니다 — 그래야 그 토큰이 한 번이라도 유효했다는 사실이 안 샙니다.
         if invite.accepted_by == app_user_id:
-            return pet
+            return await _receipt(session, invite)
         raise InviteNotFoundError
 
-    if invite.invited_by != pet.app_user_id:
-        # 그새 대표가 바뀌었습니다. 옛 대표가 뿌린 링크는 죽습니다.
-        raise InviteExpiredError
+    # 5. 묶음 구성이 그대로인가.
+    if len(rows) != invite.pet_count or any(pid not in locked for pid in bundle_ids):
+        raise InviteBundleChangedError
 
-    if pet.app_user_id == app_user_id:
+    # 6. 요청 형식.
+    _validate_link_request(links, set(bundle_ids))
+
+    joined = 0
+    items: list[AcceptedPet] = []
+    for row in rows:
+        pet = locked[row.pet_id]
+        common = await identity_service.common_of(session, pet)
+
+        # 그새 주보호자가 바뀌었거나 배웅했습니다. 묶음 전체가 무효입니다.
+        if invite.invited_by != common.app_user_id or common.farewell_on is not None:
+            raise InviteBundleChangedError
+
+        if pet.app_user_id == app_user_id:
+            items.append(AcceptedPet(row.pet_id, pet.id, pet.name, ACCEPT_ALREADY_OWNER))
+            continue
+
+        if await member_repo.is_member(session, pet.id, app_user_id):
+            # 이미 충족된 항목입니다. 동시 수락에서 진 쪽도 여기로 옵니다 — 아래에서
+            # 영수증을 채우므로 다음 재시도는 빠른 경로(4)로 들어옵니다.
+            items.append(
+                AcceptedPet(
+                    row.pet_id,
+                    row.linked_pet_id or pet.id,
+                    pet.name,
+                    ACCEPT_ALREADY_MEMBER,
+                )
+            )
+            continue
+
+        # 9. 그룹 보호자는 **합집합**으로 셉니다.
+        if await _group_guardian_count(session, pet, app_user_id) > MAX_MEMBERS_PER_PET:
+            raise MemberLimitError
+
+        target_id = links.get(row.pet_id)
+        if target_id is None:
+            member_repo.add(session, pet.id, app_user_id)
+            joined += 1
+            items.append(AcceptedPet(row.pet_id, pet.id, pet.name, ACCEPT_JOINED))
+            continue
+
+        target = locked.get(target_id)
+        # 7. **IDOR 방어.** 남의 id 는 404 입니다 — 409 면 그 id 가 존재한다는 것이 샙니다.
+        if target is None or target.app_user_id != app_user_id:
+            raise PetNotFoundError
+        await _require_link_candidate(session, row.pet_id, target)
+
+        member_repo.add(session, pet.id, app_user_id)
+        await identity_service.link(session, pet, target)
+        row.linked_pet_id = target.id
+        items.append(AcceptedPet(row.pet_id, target.id, target.name, ACCEPT_LINKED))
+
+    # 묶음 **전부**가 "이미 내 아이" 면 할 일이 하나도 없습니다 → 409.
+    #
+    # 항목이 섞여 있을 때는 `already_owner` 를 **충족된 항목**으로 보고 나머지를 진행하는
+    # 것이 제품 규칙입니다 (MVP 결정 §2). 그런데 한 마리 초대에서 그 하나가 내 아이면
+    # 결과가 "아무 일도 안 일어난 200" 이 되어, 구 앱이 "수락 성공" 을 그립니다 — 옛 계약의
+    # 409("이미 이 아이의 대표입니다")가 그 자리에 있던 이유입니다 (MVP 결정 §9).
+    # 그래서 **전부 그럴 때만** 409 로 두어 두 규칙을 다 지킵니다.
+    if items and all(item.result == ACCEPT_ALREADY_OWNER for item in items):
         raise AlreadyOwnerError
 
-    if await member_repo.is_member(session, pet.id, app_user_id):
-        # 멱등입니다 — 동시 수락에서 진 쪽이 여기로 옵니다(docs/co-care.md § 3 의 행 7).
-        # 이 함수 안에서 딱 한 번 읽은 `invite` 객체라 위 `accepted_by` 분기는 못 봤을
-        # 수 있습니다(이긴 쪽이 그새 커밋했더라도 이 객체는 그 값을 다시 읽지 않습니다) —
-        # 그래서 여기서도 영수증을 채웁니다. 이래야 이 사람이 **다음** 재시도부터는
-        # 바로 위 분기(빠른 경로)로 들어옵니다.
-        invite.accepted_at = now
-        invite.accepted_by = app_user_id
-        await session.commit()
-        return pet
-
-    if await member_repo.count_members(session, pet.id) >= MAX_MEMBERS_PER_PET:
-        raise MemberLimitError
-
-    if await pet_repo.count_accessible(session, app_user_id) >= MAX_PETS_PER_USER:
+    # 10. 수락 **후** 논리 강아지 수. 연결한 것은 안 늘어나므로 `joined` 만 셉니다.
+    if await pet_repo.count_accessible(session, app_user_id) + joined > MAX_PETS_PER_USER:
         raise PetLimitError
 
-    member_repo.add(session, pet.id, app_user_id)
     invite.accepted_at = now
     invite.accepted_by = app_user_id
 
     # 등록한 강아지가 없던 사람은 첫 수락에서 대표 강아지를 얻습니다 —
     # 없으면 앱 첫 화면이 빕니다 (`services/pet.py` 의 등록 경로와 같은 규칙).
     user = await app_user_repo.get_by_id(session, app_user_id)
-    if user is not None and user.primary_pet_id is None:
-        user.primary_pet_id = pet.id
+    if user is not None and user.primary_pet_id is None and items:
+        user.primary_pet_id = items[0].display_pet_id
 
     await session.commit()
-    log.info("공동 돌봄 참여 (pet=%s, user=%s)", pet.id, app_user_id)
-    return pet
+    log.info(
+        "공동 돌봄 참여 (invite=%s, user=%s, pets=%d)", invite.id, app_user_id, len(items)
+    )
+    anchor = next((i for i in items if i.invited_pet_id == invite.pet_id), items[0])
+    return AcceptOutcome(anchor=anchor, pets=items)
 
 
 async def list_invites(
@@ -455,16 +677,34 @@ async def remove_member(
     pet_id: uuid.UUID,
     target_id: uuid.UUID,
 ) -> None:
-    """내보내기(대표) 또는 나가기(본인). 같은 경로입니다."""
+    """내보내기(그룹 주보호자) 또는 나가기(본인). 같은 경로입니다.
+
+    ⚠️ **멤버십과 논리 연결을 한 트랜잭션에서 같이 정리합니다** (MVP 결정 §6).
+    멤버십만 지우고 연결이 남으면, 나간 사람의 pet 행이 그룹에 그대로 있어 케어·산책
+    공동 조회로 **남의 집 기록을 계속 읽습니다.** 둘이 갈라지는 순간이 있으면 안 됩니다.
+
+    내보내기는 **그룹 주보호자만** 합니다 — 연결된 아이에서 행 대표라는 것만으로 남을
+    내보내면, 그룹의 주인이 아닌 사람이 그룹 구성을 바꾸게 됩니다.
+    """
     pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
     if target_id == pet.app_user_id:
         raise CannotRemoveOwnerError
-    if app_user_id != pet.app_user_id and app_user_id != target_id:
-        raise NotAllowedError
+
+    common = await identity_service.common_of(session, pet)
+    if app_user_id != target_id:
+        # 남을 내보내는 것은 그룹 주보호자만. 행 대표이기만 한 사람은 409 입니다.
+        if app_user_id != pet.app_user_id:
+            raise NotAllowedError
+        if common.app_user_id != app_user_id:
+            raise identity_service.NotGroupOwnerError(common.name)
 
     await member_repo.remove(session, pet_id, target_id)
+
+    # 나간 사람의 행을 그룹에서 뗍니다. 혼자 남은 그룹은 `prune` 이 정리합니다.
+    if pet.identity_id is not None:
+        await identity_service.detach_user(session, pet.identity_id, target_id)
 
     # ⚠️ `primary_pet_id` 의 FK 는 ON DELETE SET NULL 이지만 **강아지 행은 안 지워지므로
     #    안 돕니다.** 여기서 명시로 비웁니다 — 안 그러면 접근 못 하는 아이를 가리킵니다.
@@ -492,6 +732,10 @@ async def transfer_owner(
     pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
     if pet is None:
         raise PetNotFoundError
+    # 연결된 아이의 승계는 **그룹 주보호자만** 합니다 (MVP 결정 §6). 비그룹주보호자의
+    # 행은 그 그룹에 돌보미가 없어 아래 `NotAMemberError` 로도 막히지만, 이유가 "돌보미가
+    # 아니다" 로 나가면 앱이 엉뚱한 안내를 그립니다 — 여기서 먼저 정확한 이유를 냅니다.
+    await identity_service.require_group_owner(session, app_user_id, pet)
     if new_owner_id == pet.app_user_id:
         # 대표가 자기 자신을 지목했습니다. `is_member` 는 대표도 True 로 치므로 이 검사가
         # 없으면 아래를 그대로 통과해 무의미한 UPDATE 뒤 `member_repo.add(self)` 에서
@@ -533,6 +777,33 @@ async def actor_label(
         return None
     names = await app_user_repo.nicknames_by_ids(session, [app_user_id])
     return names.get(app_user_id)
+
+
+async def group_actor_label(
+    session: AsyncSession,
+    pet_ids: list[uuid.UUID],
+    app_user_id: uuid.UUID | None,
+) -> str | None:
+    """`actor_label` 의 **논리 그룹판** (MVP 결정 §7).
+
+    왜 그냥 `actor_label` 로 안 되나 — 그것은 `pet_id` **하나**의 구성원인지를 봅니다.
+    연결된 그룹에서는 A 가 자기 행(101)의 대표이고 B 가 자기 행(202)의 대표인데, **A 는
+    202 의 구성원이 아닙니다.** 그래서 B 의 화면(202 기준)에서 A 가 적은 기록의 이름이
+    통째로 비어 "이전 보호자" 로 그려집니다 — 같은 집 사람인데도요.
+
+    그룹 안의 **어느 행에든** 구성원이면 이름을 냅니다. 연결이 없으면 `pet_ids` 가 하나라
+    `actor_label` 과 정확히 같습니다.
+
+    표시 규칙 자체는 그대로입니다 — **지금도** 구성원일 때만 이름이 나고, 탈퇴·내보내기로
+    나간 사람은 여전히 `None` 입니다 (docs/co-care.md §3).
+    """
+    if app_user_id is None:
+        return None
+    for pet_id in pet_ids:
+        if await member_repo.is_member(session, pet_id, app_user_id):
+            names = await app_user_repo.nicknames_by_ids(session, [app_user_id])
+            return names.get(app_user_id)
+    return None
 
 
 async def actor_labels(
@@ -596,6 +867,7 @@ __all__ = [
     "accept_invite",
     "actor_label",
     "actor_labels",
+    "group_actor_label",
     "bundle_pet_ids",
     "cancel_invite",
     "cancel_invite_bundle",

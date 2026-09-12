@@ -101,10 +101,67 @@ class InvitePreviewResponse(BaseModel):
     link_candidates: list[InvitePetBrief]
 
 
+class InviteLink(BaseModel):
+    """초대에 담긴 아이 하나를 **내 기존 아이와 잇겠다**는 선택 (MVP 결정 §2).
+
+    `link_to_pet_id` 가 `null` 이면 "연결 없이 참여" 입니다 — 항목을 아예 빼는 것과 같습니다.
+    """
+
+    pet_id: uuid.UUID
+    link_to_pet_id: uuid.UUID | None = None
+
+
 class InviteAccept(BaseModel):
     #: 초대 링크에 실린 토큰. `pet_id` 를 안 받는 것이 의도입니다 — 수락 전에는 그 강아지에
     #: 아무 권한이 없어서, URL·본문에 실으면 남의 강아지 id 를 넣어 보는 자리가 생깁니다.
     token: str = Field(min_length=1, max_length=200)
+
+    #: 강아지별 연결 선택. **선택 필드입니다** — 없으면 전부 "연결 없이 참여" 이고, 그것이
+    #: 구 앱 요청(`{"token": ...}`)과 정확히 같은 동작입니다.
+    #:
+    #: ⚠️ 여기 실린 id 는 **서버가 다시 검증합니다.** 미리보기가 후보를 내려 줬다는 것만으로
+    #: 믿으면, 그 사이 상태가 바뀌었거나 앱이 임의의 id 를 넣은 것을 못 잡습니다.
+    links: list[InviteLink] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def _one_choice_per_pet(self) -> Self:
+        """같은 초대 강아지에 두 번 선택할 수 없습니다."""
+        pet_ids = [link.pet_id for link in self.links]
+        if len(set(pet_ids)) != len(pet_ids):
+            raise ValueError("같은 강아지에 대해 연결 선택이 두 번 왔습니다.")
+        return self
+
+
+class AcceptedPetOut(BaseModel):
+    """수락 결과 한 줄 (MVP 결정 §8).
+
+    **`invited_pet_id` 와 `display_pet_id` 를 갈라 둡니다.** 연결했으면 이후 케어·산책
+    요청에 쓸 id 는 초대에 담겼던 아이가 아니라 **내 기존 아이**입니다 — 하나로 뭉치면
+    받는 사람이 초대한 사람의 행에 기록을 쓰게 됩니다.
+    """
+
+    #: 초대 묶음에 담겨 있던 원본 pet 행.
+    invited_pet_id: uuid.UUID
+    #: 내 화면과 **이후 요청**에 쓸 pet 행. 연결 안 했으면 위와 같습니다.
+    display_pet_id: uuid.UUID
+    name: str
+    #: `linked` · `joined` · `already_member` · `already_owner`
+    result: str
+
+
+class InviteAcceptResponse(BaseModel):
+    """묶음 수락 결과.
+
+    최상위 `pet_id`·`name` 은 **구 앱 호환 앵커**입니다 — 옛 계약이 그 두 키를 읽으므로
+    지우지 않습니다. 한 마리 초대에서는 `pets[0]` 과 같은 값입니다. **새 앱은 항목별
+    `display_pet_id` 를 쓰고 수락 뒤 목록을 새로고침합니다.**
+    """
+
+    #: 구 앱 호환 앵커. 앵커 항목의 `display_pet_id` 입니다.
+    pet_id: uuid.UUID
+    #: 구 앱 호환 앵커. 앵커 항목의 이름입니다.
+    name: str
+    pets: list[AcceptedPetOut]
 
 
 class MemberOut(BaseModel):
@@ -148,12 +205,15 @@ class InviteListResponse(BaseModel):
 
 
 __all__ = [
+    "AcceptedPetOut",
     "InviteAccept",
+    "InviteAcceptResponse",
     "InviteBundleCreate",
     "InviteBundleCreated",
     "InviteBundleListResponse",
     "InviteBundleOut",
     "InviteCreated",
+    "InviteLink",
     "InviteListResponse",
     "InviteOut",
     "InvitePetBrief",

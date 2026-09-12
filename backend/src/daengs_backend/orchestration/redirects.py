@@ -23,7 +23,7 @@ RefusalReason = Literal["diagnosis", "medication", "emergency", "institutional",
 
 SCOPED_REDIRECT_MESSAGES: dict[RefusalReason, str] = {
     "diagnosis": "증상의 원인이나 병명은 여기서 판단하지 않아요. 가까운 동물병원에서 진료를 받아 보세요.",
-    "medication": "약이나 영양제, 용량은 여기서 안내하지 않아요. 수의사에게 확인해 주세요.",
+    "medication": "어떤 약을 먹일지, 용량, 복용 방법, 부작용은 여기서 안내하지 않아요. 수의사에게 확인해 주세요.",
     "emergency": "응급 상황으로 보여요. 지금 바로 동물병원으로 가세요.",
     "institutional": (
         "제도·법령·요금·기한 같은 사실은 근거와 함께 답하는 제도 정보 기능에 물어봐 주세요."

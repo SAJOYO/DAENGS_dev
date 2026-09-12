@@ -4,7 +4,9 @@ This is the capability the planner assembles when the router selected nothing �
 questions that until now ended as "실행하거나 안내할 수 있는 기능이 없습니다". It answers
 without evidence, so the whole design is about what it is **not allowed** to say:
 
-- No diagnosis, no medication or dosage, no emergency handling beyond "go to a vet now".
+- No diagnosis, no drug name recommendations, no dosages, no administration instructions, no
+  side-effect information or judgment, no emergency handling beyond "go to a vet now" — how
+  long or how often an existing medication is given is answerable (D-071).
 - No claims about laws, fees, deadlines, or numbers — those need evidence, and the
   assistant's institutional-information capability (Life) is where evidence lives.
 - Questions unrelated to dogs are politely declined.
@@ -76,13 +78,23 @@ from daengs_backend.orchestration.semantic import (
 # 더한 순간 v3 · v4 · v5 본문의 **글자가 이미 달라졌다.** 버전을 안 올리면 D-057 ③ 이 84건
 # 쌍대 비교로 승인한 이름이 다른 물건을 가리키게 된다. v4 · v5 번호는 건너뛴 것이 아니라
 # 그 계보가 v6 으로 함께 올라간 것이다.
-GENERAL_PROMPT_VERSION = "general-answer-ko-v7"
+# v7 (D-068 후속, 2026-09-12): 되묻기가 멈추지 않던 것을 고쳤다 — 증상 둘 이상이 모이면
+# 되묻지 않고 답으로 닫고, 되묻기는 빈 `text` 를 계약으로 막는다. 같은 판본에 원인 단정
+# 금지 문장(초록 구토 예시)도 더해졌다 — "일반 기전은 설명, 이 아이 원인 단정은 금지".
+# v8 (D-071, 2026-09-12 개정): medication 거절이 좁아졌다 — 약의 기간·투여 간격(이미
+# 복용 중인지와 무관하게, 질문이 "언제까지/얼마나 자주"인지로 가른다)은 husbandry norm 과
+# 같은 결로 답하고, 이름·용량·복용 방법·새로 시작할지 여부·부작용(정보·판단 모두)은 그대로
+# 막는다. 초판은 "이미 복용 중"을 확인해야만 답하게 했다가, 그 확인은 모델이 할 수 없어서
+# #446 의 동기 사례 자체가 거절로 되돌아가는 것을 리뷰가 잡았다 — 질문의 형태(기간이냐
+# 시작이냐)로 가르는 지금 형태로 고쳤다. 본문 글자가 달라졌으니, 그 글자를 승인한 버전
+# 이름도 같이 올린다.
+GENERAL_PROMPT_VERSION = "general-answer-ko-v8"
 # -carelog (#344): 기본 본문에 CARE_LOG_TODAY 규칙 한 문단과 블록 한 줄이 **더해진** 판본.
 # 오늘 케어 로그가 payload 에 있을 때만 이 판본이 나가고, 없으면 기본 본문이 글자까지 그대로
 # 나간다 — 기본 본문은 D-057 ③ 에서 84건 쌍대 비교 뒤 승인된 계보라, 그 84건(로그 없음)의
 # 프롬프트에 로그 규칙이 새지 않게 하려는 분기다. 버전 문자열이 갈리는 이유는 프롬프트
 # 텍스트가 다르기 때문이다.
-GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v7-carelog"
+GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v8-carelog"
 # -vetspend / -carelog-vetspend (#353 Task 7): confirmed vet-visit spend joins the same
 # fallback, same rule as care log — a rule paragraph plus a context line, added only when
 # the payload carries it. Four combinations of {care_log, vet_spend} exist; the two that
@@ -91,8 +103,8 @@ GENERAL_CARE_LOG_PROMPT_VERSION = "general-answer-ko-v7-carelog"
 # The other two get their own version strings because their prompt text differs from both —
 # `build_general_prompt` picks the version from exactly which of the two optional blocks
 # are present.
-GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v7-vetspend"
-GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v7-carelog-vetspend"
+GENERAL_VET_PROMPT_VERSION = "general-answer-ko-v8-vetspend"
+GENERAL_CARE_LOG_VET_PROMPT_VERSION = "general-answer-ko-v8-carelog-vetspend"
 # `-conv` (#416 Task 6): 대화 맥락이 실릴 때 위 네 상수 각각에 붙는 **다섯 번째 갈래**다.
 # 새 상수를 또 네 개 두지 않고 접미사로 만드는 이유 — 네 조합은 이미 서로 다른 프롬프트
 # 몸을 가리키는데, 맥락 블록은 그 넷 중 어느 것에도 본문을 안 바꾸고 `USER_QUERY:` 앞에
@@ -172,9 +184,10 @@ Output exactly one JSON object conforming to the supplied schema. If kind is "an
 Rules when answering:
 - Write in Korean, briefly (3 to 5 sentences). Answer what can be said safely at a common-sense level: general dog care, habits, gear, and everyday routines.
 - Ordinary husbandry norms ARE answerable: feeding frequency and a rough amount range, daily water intake, bathing / brushing / nail-trimming frequency, walking gear, socialization timing, sleep duration. Give the typical range, state that individual variation is large, and add that the feeding table on the food package or the veterinarian is the authority for exact values. These ordinary norms are NOT institutional.
-- A question of the form "is this okay / is this normal" about a behavior or an intake amount is answered with the normal range plus a note to see a veterinarian if it persists or changes sharply. Do not refuse it.
+- The duration or dosing interval of a medication is answerable the same way: give the typical length or interval for that kind of medication, state that individual variation is large, and add that the prescribing veterinarian or the package insert is the authority for exact values. This covers duration and dosing interval only — which drug to give, whether to start one, the dosage, how to give it (timing, with food, splitting a pill), and side effects stay refused as medication.
+- A question of the form "is this okay / is this normal" about a behavior or an intake amount is answered with the normal range plus a note to see a veterinarian if it persists or changes sharply. Do not refuse it. This rule is about husbandry, not medication — the same question about a drug ("두 배로 줘도 돼?", "밥이랑 같이 먹여도 돼?") is refused as medication, not answered here.
 - Say you do not know when unsure; never invent. Do not assert facts that require a source document (laws, regulations, procedures, fees, deadlines, official programs, statistics).
-- **A general mechanism may be explained; this dog's cause may not be named.** "초록색 구토는 담즙이 섞여 있을 때 나타날 수 있습니다" is allowed — it is a hedged statement about the sign in general. "초록색 구토는 담즙 역류 때문입니다" is not: it attributes THIS dog's symptom to a cause, which is the determination the owner has to go to a veterinarian for. Keep every cause sentence hedged (…일 수 있습니다 / …인 경우가 많습니다) and never write 때문입니다 · 원인은 ~입니다 · ~로 인한 것입니다 about the dog in front of you.
+- **A general mechanism may be explained; this dog's cause may not be named.** "초록색 구토는 담즙이 섞여 있을 때 나타날 수 있습니다" is allowed — it is a hedged statement about the sign in general. "초록색 구토는 담즙 역류 때문입니다" is not: it attributes THIS dog's symptom to a cause, which is the determination the owner has to go to a veterinarian for. Keep every cause sentence hedged (…일 수 있습니다 / …인 경우가 많습니다) and never write 때문입니다 · 원인은 ~입니다 · ~로 인한 것입니다 about the dog in front of you. This rule is about symptoms, not drugs — how a medication works is refused as medication, not explained as a general mechanism.
 - A symptom the owner mentions is NOT a request for a diagnosis. Say what can safely be said about it at a general level — what to watch for, what to adjust at home — and add a short note to see a veterinarian if it persists or worsens. Do not close the conversation by sending them to a hospital when the sign is not an emergency.
 - Use DOG_CONTEXT only when the owner asked about it, or when it changes what is safe to advise. Do not sprinkle the breed, the age, or a health condition into an answer to make it look personalized. Never infer how the dog is today from the profile, and never invent facts that are not in it.
 
@@ -191,7 +204,7 @@ Ask back (kind="ask") in this case:
 
 Refuse (kind="refuse") only in these cases:
 - diagnosis: the user explicitly asks for a disease name, asks to determine the cause of a symptom, or asks to interpret test results. "Is this okay / is this normal" is NOT diagnosis. Mentioning a symptom is NOT asking for a diagnosis either — only an explicit request for a disease name, for the cause, or for a test reading is. A question about how the dog is doing that names no observation is an ask, not a diagnosis refusal.
-- medication: questions about drugs, supplements, dosages, or administration.
+- medication: questions about which drug or supplement to give, whether to start one, dosages, how to give it (timing, with food, splitting a pill), or side effects — what they are in general, or whether something the owner describes is one. A question about how long or how often an existing medication is given is NOT medication — see the answerable rule above; a question about whether to begin one is whether to start one, and refused.
 - emergency: questions about handling an emergency such as poisoning, breathing difficulty, bleeding, seizures, or loss of consciousness. Say nothing beyond "go to a veterinary hospital right now". Vomiting, diarrhea, limping, and appetite loss are not on this list — they are ask or answer.
 - institutional: facts that require a source document, such as laws, regulations, administrative procedures, fees, deadlines, or official support programs. The assistant's institutional-information capability answers those. Ordinary husbandry numbers do NOT belong here.
 - off_topic: the question is not about dogs. Check this first: a request that is not about dogs at all is off_topic even when it mentions money, schedules, or procedures. A message about this conversation itself — a complaint, a correction, or the owner telling you to ask them something — is NOT off_topic: ask what they want to know about their dog.
@@ -201,7 +214,9 @@ reason is one of the five values above, and null when kind is "answer" or "ask".
 
 # 로그가 있을 때만 붙는 규칙 (#344). 로그가 무엇인지, 무엇을 해도 되고 무엇은 안 되는지.
 # "did I / has it been done today" 류에 쓰라는 것과, 로그에 없는 용량·일정을 지어내지 말라는 것.
-# 약 이름은 로그에도 DOG_CONTEXT 에도 없으므로 기본 본문의 medication 거절은 그대로 선다.
+# 약 이름은 로그에도 DOG_CONTEXT 에도 없으므로 이름 · 용량 · 복용 방법 거절은 그대로 선다.
+# D-071 로 연 것은 기간 · 투여 간격뿐인데 로그에는 그 값도 없다 — 로그 규칙이 답할 수 있는
+# 폭은 안 늘었다.
 _CARE_LOG_RULE = """CARE_LOG_TODAY, when present, is what the owner has already logged for this dog today: counts per kind (meal, medication, snack, walk) and the last time each was logged, as HH:MM in Seoul time. Treat it as fact for questions like "did I feed / medicate / walk today", "has the morning medication been given", or "how many meals so far". You may say what was logged and when, and note plainly when a kind has no entry today.
 
 A question about how the dog is doing today — "오늘 건강 상태는 어때?", "오늘 컨디션 어때?" — is also a question this log speaks to. Report what is recorded and what is not, briefly, always framed as 기록상 / 기록에는 (what the record says), and then ask what the owner observed. **A missing entry means the record has no entry. It does NOT mean the dog did not eat, was not walked, or was not medicated, and it does NOT mean anything is wrong** — say that the record has none, never that it did not happen. Never infer a dose, a schedule, or whether more is needed from it, and never call the dog healthy, fine, normal, unwell, or lacking from it — the log records what happened, not how the dog is. Ignore the log only when the question has nothing to do with this dog's day. When CARE_LOG_TODAY is absent, say nothing about a log."""

@@ -91,8 +91,8 @@ Task 8 의 배선 테스트(`test_repeat_does_not_replay_the_same_fixed_refusal`
 
 ### 응급 대조군은 이 랩에서 못 읽습니다 — 미측정으로 적습니다
 
-하네스에 `vet_contact` 어댑터가 없습니다(`daengs_evals.orchestrator_comparison.runner`
-의 `_fake_adapters`·`collect.py` 의 `build_adapters` 어디에도 없음). 물리면 place-search
+하네스에 `vet_contact` 어댑터가 없습니다(`daengs_evals.eval_harness` 의 `fake_adapters`·
+`collect.py` 의 `build_adapters` 어디에도 없음). 물리면 place-search
 HTTP 의존이 생기는데, 이 카드는 그것을 안 뭅니다. 실측으로 `after_aa512506`·
 `after_v2_346cada0` 두 after 랩 모두 이 케이스에서 `FAILED`("지원하지 않는 기능입니다:
 vet_contact") 로 끝났습니다 — 둘 다 **하네스 구멍이지 회귀가 아닙니다.**

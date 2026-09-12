@@ -38,6 +38,18 @@ are separate axes.
 
 ## Orchestrator comparison (D-055)
 
+> **The code named in this section no longer exists (D-072, 2026-09-12).** The LangChain agent,
+> `src/daengs_evals/orchestrator_comparison/` (including `runner_v2.py`), and
+> `tests/test_orchestrator_failure_contract.py` were removed once LangGraph was confirmed as the
+> only supported runtime. **The data below is untouched** — it is the evidence that decision was
+> made from, and the starting point for any revisit under D-072's condition. To read the code that
+> produced it, check out commit `5d745235` (the state just before the removal). A revisit would
+> restore the runner from there rather than reconstructing it; the LangGraph-side properties that
+> `test_orchestrator_failure_contract.py` pinned now live in `tests/test_orchestration_graph.py`,
+> `tests/test_orchestration_aggregate.py`, `tests/test_orchestration_general_fallback.py`, and
+> `tests/test_orchestration_semantic_router.py`.
+
+
 `comparison_v1_*` (#252) fed the same 80 gold cases to the LangGraph planner-first path and the
 LangChain agent, scored both with the frozen evaluator, and recorded that it had measured **two
 different CLARIFY contracts**: three of its five divergences were contract differences, not

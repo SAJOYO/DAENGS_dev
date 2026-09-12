@@ -5,16 +5,19 @@
 코드는 `backend/src/daengs_backend/orchestration/` (`contracts.py` · `planner.py` ·
 `semantic.py` · `aggregate.py` · `graph.py` · `runtime.py` · `adapters/`) 에 있습니다.
 
-**오케스트레이터 구현은 둘입니다** (D-055). LangGraph 는 정해진 워크플로우에 최적화돼
-있어, 자유도가 필요한 질의에 LangChain 에이전트가 나은지 재 보려고 병존시킵니다.
-고르는 곳은 `runtime.py` 의 `build_orchestrator()` 하나이고 (`routers/assistant.py` 는
-`run(...) -> AssistantResponse` 만 봅니다), 운영값은 `DAENGS_ORCHESTRATOR=langgraph`
-입니다. 에이전트 코드는 `agent/`(`service.py` · `tools.py`)이고 `agent` extra 를 씁니다 —
-CI 와 서버 backend 컨테이너에는 **안 깔립니다.**
+**오케스트레이터 구현은 LangGraph 하나입니다** (D-072, D-055 개정). 한때 자유도가 필요한
+질의에 LangChain 에이전트가 나은지 재 보려고 둘을 병존시켰지만(D-055), 비교 v2 는
+정확도 우위를 못 보였고 토큰·지연은 에이전트가 약 두 배였으며, 승인된 후속 기능
+어디에도 "툴 결과를 보고 다음 수를 정하는 선택" 이 필요하지 않아 그 조건이 끝내 채워지지
+않았습니다. 그래서 LangGraph 를 유일한 지원 런타임으로 확정하고 `agent/` 와 `agent`
+extra 를 지웠습니다. 만드는 곳은 `runtime.py` 의 `build_orchestrator()` 하나이고
+(`routers/assistant.py` 는 `run(...) -> AssistantResponse` 만 봅니다), 두 번째 구현이
+다시 필요해지면(D-072 재검토 조건) 그 자리 하나만 고치면 됩니다. 비교 근거(리포트·결과
+데이터)는 `backend/evals/orchestration_router/` 에 그대로 남아 있습니다.
 
-`contracts.py` · `adapters/` · `aggregate.py` 는 **두 구현이 함께 씁니다** — 복사하면 두
-결과를 나란히 놓을 좌표계가 사라집니다. 갈리는 것은 "능력을 어떻게 고르고 언제
-멈추는가"뿐입니다. 자세한 것은 D-055.
+`contracts.py` · `adapters/` · `aggregate.py` 는 `planner.py` · `semantic.py` · `graph.py`
+와 이미 한 몸입니다 — 지킬 두 번째 구현이 없어도 계약 하나·집계 진리표 하나로 두는 이유는
+그대로 유효합니다. 자세한 것은 D-055 · D-072.
 
 각 능력이 **무엇을 왜 그렇게 답하는가**는 그 유닛 폴더(`life/` · `training/` · `gait/` ·
 `place/`)가 원본이고, 여기에는 **능력을 고르고 합치는 규칙**만 둡니다.
@@ -37,7 +40,7 @@ Place만 기존 시설 v2 실행기로 연결하며, 다른 capability와 집계
 `backend/src/daengs_evals/router_benchmark/` 입니다.
 
 **결정 기록은 두 갈래입니다.** 공통·인프라 결정 `D-` 는 [../decisions.md](../decisions.md)
-(오케스트레이션 관련은 D-030 · D-033~D-037 · D-041), 라우팅 자체의 사람 결정 `O-` 는
+(오케스트레이션 관련은 D-030 · D-033~D-037 · D-041 · D-055 · D-072), 라우팅 자체의 사람 결정 `O-` 는
 [routing.md](routing.md) §6. 계약의 권위는 이 문서들과 실제
 `backend/src/daengs_backend/orchestration/contracts.py` 가 함께 가집니다 — 어긋난 자리를
 발견하면 어느 쪽이 맞는지부터 정하고 양쪽을 같이 고칩니다.

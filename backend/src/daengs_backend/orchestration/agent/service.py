@@ -76,6 +76,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ROUTER_TEMPERATURE,
     SemanticRoutingDecision,
+    render_facility_context,
     routing_metadata,
 )
 from daengs_backend.orchestration.service import _KST, _ROUTER_FAILURE_MESSAGE, _is_night
@@ -169,6 +170,7 @@ def build_agent_user_message(*, query: str, context: dict[str, Any]) -> str:
     metadata = routing_metadata(context)
     return (
         f"ROUTING_METADATA: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)}\n"
+        f"{render_facility_context(context)}"
         f"USER_QUERY: {query}"
     )
 

@@ -188,9 +188,9 @@ async def decide(planner, request, now):
             "explain",
             code="feedback_no_mutation",
             question={
-                "evaluation": "장소 평가는 찜이나 검색 조건에 자동 반영하지 않아요. 남기고 싶으면 찜해 달라고 말해 주세요.",
-                "familiarity": "어느 장소를 이미 알고 계세요? 장소를 선택하거나 이름·목록 번호를 알려주세요.",
-                "information_dispute": "안내한 정보가 현장과 다를 수 있어요. 지금 자료만으로 이전이나 폐업 여부는 확인할 수 없어요.",
+                "evaluation": "말씀은 들었어요. 조건과 목록은 그대로 둘게요.",
+                "familiarity": "어느 곳을 이미 알고 계세요?",
+                "information_dispute": "정보가 현장과 다를 수 있어요. 이전이나 폐업 여부는 아직 확인할 수 없어요.",
             }[intent.feedback],
             intent=intent,
         )

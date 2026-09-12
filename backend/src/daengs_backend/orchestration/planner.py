@@ -126,9 +126,7 @@ def resolve_emergency_route(
 
     return RoutePlan.model_validate(
         {
-            "requests": [
-                {"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}
-            ],
+            "requests": [{"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}],
             "handoffs": [],
             "clarify": None,
             "router": RouterKind.DETERMINISTIC,
@@ -210,6 +208,8 @@ def assemble_route_plan(
     `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
+    if "place" in needs_coordinates and "facility_location" in context:
+        needs_coordinates = needs_coordinates - {"place"}
     missing = _missing_coordinates(context) if needs_coordinates else []
     if missing:
         # CLARIFY is exclusive (O-8): nothing executes and nothing hands off first.
@@ -334,7 +334,7 @@ def _payload_for(
         location = context["location"]
         return {"lat": location["lat"], "lon": location["lon"]}
     if capability == "place":
-        location = context["location"]
+        location = context.get("facility_location", context.get("location"))
         return {"query": query, "lat": location["lat"], "lon": location["lon"]}
     if capability == _VET_CONTACT:
         # 이 경로로는 오지 않는다 — `resolve_emergency_route` 가 payload 를 직접 만든다.

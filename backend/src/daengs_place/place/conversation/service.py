@@ -348,6 +348,7 @@ class ConversationService:
             and browse == "current"
             and not plan.refresh
             and snapshot
+            and snapshot_matches(old, request.bookmark_keys)
             and 0 <= (now - snapshot.created_at).total_seconds() < CACHE_SECONDS
         )
         search_omitted = unique_keys((*omitted, *snapshot.display_order)) if replacing else omitted

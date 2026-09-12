@@ -48,7 +48,12 @@ class CapabilityAdapter(Protocol):
 class OrchestrationEngine:
     """Sequential v1 execution; no router, persistence, checkpointer, or subgraphs."""
 
-    def __init__(self, adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None,
+        *,
+        place_adapter: CapabilityAdapter | None = None,
+    ) -> None:
         if adapters is None:
             adapters = {
                 CapabilityName.TRAINING: TrainingCapabilityAdapter(),
@@ -62,6 +67,10 @@ class OrchestrationEngine:
                 CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
+        if place_adapter is not None:
+            if place_adapter.capability != CapabilityName.PLACE:
+                raise ValueError("the facility override must implement Place")
+            self._adapters[CapabilityName.PLACE] = place_adapter
         self.graph = self._build_graph()
 
     def _build_graph(self):

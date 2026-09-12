@@ -5,9 +5,10 @@
 라우팅·결정론적 RoutePlan 조립·능력 실행·집계는 전부 Card 2B/Card 1 의 것이다
 (`orchestration/service.py` · `planner.py` · `semantic.py` · `graph.py`).
 
-**어느 구현이 답하는지는 여기서 모른다.** `orchestration/runtime.py` 의
-`build_orchestrator()` 가 고르고, 이 파일은 `run(...) -> AssistantResponse` 만
-본다 — LangGraph 와 LangChain 에이전트를 갈아끼우는 자리가 그 한 곳인 이유다.
+**어떤 오케스트레이터 구현인지는 여기서 모른다.** `orchestration/runtime.py` 의
+`build_orchestrator()` 가 만들고, 이 파일은 `run(...) -> AssistantResponse` 만
+본다 — 구현을 갈아끼우는 자리가 그 한 곳인 이유다(D-072 이전에는 LangGraph 와
+LangChain 에이전트가 그 자리에서 갈렸다).
 
 **대화 저장은 이 엔드포인트 하나로 들어온다** (D-048). 본문에 `chat_session_id` 와
 `client_message_id` 가 함께 오면 같은 호출이 그 대화의 turn 으로 남고, 없으면 v0.0.0

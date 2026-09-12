@@ -13,8 +13,6 @@
   없는 답으로 바꾸는 오선택이 생기고, 그 방향의 실수가 가장 나쁘다.
 - 어댑터는 answer/refuse/프로바이더 실패를 OK/REFUSED/ERROR 로 옮기고, 거절 문구는 모델이
   아니라 코드가 쓴다.
-
-두 구현(LangGraph · 에이전트)의 동치는 `test_orchestrator_failure_contract.py` 가 잰다.
 """
 
 from __future__ import annotations
@@ -677,45 +675,6 @@ def test_frozen_evaluator_scores_general_as_a_precision_miss_not_an_invented_cap
     assert result.summary.invented_unsupported_capability_count == 0
     assert result.summary.executable_precision < 1.0
     assert result.summary.executable_recall == 1.0
-
-
-def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback() -> None:
-    """D-055 ⑦ 규칙 1: 라우터 경계를 바꾸면 같은 PR 에서 에이전트 프롬프트도 바꾼다."""
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.service import _SYSTEM_PROMPT
-    from daengs_backend.orchestration.semantic import _POLICY
-
-    assert "explicitly excludes a topic" in _POLICY
-    assert "빠진 쪽 도구는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "일반 답변은 시스템이 붙입니다" in _SYSTEM_PROMPT
-    assert "답할 수 없다고만" not in _SYSTEM_PROMPT
-    # D-057 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
-    assert "answer_generally" in _SYSTEM_PROMPT
-    assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
-    # the same narrowing as the router (D-055 ⑦): separate care question only, doubt → Training
-    assert "**별도의** 돌봄 질문이 있을 때만" in _SYSTEM_PROMPT
-    assert "온전히 답해지는 질문에는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "훈련과 일반 사이가 애매하면 훈련만 부릅니다" in _SYSTEM_PROMPT
-    assert (
-        "반려견과 무관한 요청" in _SYSTEM_PROMPT
-        and "어느\n  도구도 부르지 않습니다" in _SYSTEM_PROMPT
-    )
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    general_tool = next(tool for tool in box.as_tools() if tool.name == "answer_generally")
-    assert general_tool.args == {}  # 인자 없음 — payload 는 planner 가 만든다 (D-051)
-
-
-async def test_agent_toolbox_passes_general_through_like_any_execute_name() -> None:
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    tools = {tool.name: tool for tool in box.as_tools()}
-    await tools["check_walk_conditions"].ainvoke({})
-    await tools["answer_generally"].ainvoke({})
-    assert box.decision() == SemanticRoutingDecision(execute=["walk", "general"])
 
 
 def test_life_payload_and_general_payload_share_the_dog_type() -> None:

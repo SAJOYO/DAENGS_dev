@@ -2,6 +2,7 @@
 
 시설은 지도·조건·카드를 조작하고, 대화는 실제로 한 행동을 짧게 알린다. 응답을 다시 쓰는
 LLM 호출은 추가하지 않는다. 연결 계약은 [assistant-conversation.md](assistant-conversation.md)를 따른다.
+시설 밖 입력의 강아지 문구·실행 제한·이력 및 확인 대기 보존은 [시설 범위 정책](scope-guardrails.md)을 따른다.
 
 ## 표시 경계
 

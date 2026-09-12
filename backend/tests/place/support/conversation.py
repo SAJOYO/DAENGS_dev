@@ -76,6 +76,25 @@ class Planner:
         return self.next
 
 
+def scoped_wire(plan, query):
+    """Adapt existing semantic fixtures to today's provider wire, never production output."""
+    if "decision" in plan or "kind" in plan:
+        return plan
+    plan = dict(plan)
+    if plan.get("familiarity"):
+        plan["goal"] = "show"
+    goal = plan.get("goal")
+    return {
+        **plan,
+        "kind": "facility_state"
+        if goal == "explain"
+        else "needs_input"
+        if goal == "clarify"
+        else "facility_action",
+        "request_quote": query,
+    }
+
+
 def manual(previous=None, **changes):
     return PrepareRequest(
         mode="manual",

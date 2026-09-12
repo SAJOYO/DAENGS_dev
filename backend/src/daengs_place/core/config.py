@@ -12,7 +12,10 @@ from sqlalchemy import URL, make_url
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="DAENGS_", extra="ignore", populate_by_name=True,
+        env_file=".env",
+        env_prefix="DAENGS_",
+        extra="ignore",
+        populate_by_name=True,
     )
 
     # 로컬·CI의 기존 한 줄 설정은 유지하되, compose는 아래 조각을 넘긴다. 비밀번호를
@@ -46,12 +49,12 @@ class Settings(BaseSettings):
         )
 
     # 행정안전부 동물병원/동물약국 인허가 데이터 (data.go.kr) — 배치 전용
-    data_go_kr_service_key: str = ""       # 일반(Decoding) 인증키 권장
+    data_go_kr_service_key: str = ""  # 일반(Decoding) 인증키 권장
     mois_page_size: int = Field(100, ge=1, le=100)
     mois_sync_overlap_days: int = Field(3, ge=0, le=30)
 
     # 한국관광공사 반려동물 동반여행 (KorPetTourService2) — 기반층 두 번째 원천, 배치 전용
-    kto_service_key: str = ""              # 일반(Decoding) 인증키
+    kto_service_key: str = ""  # 일반(Decoding) 인증키
     kto_page_size: int = Field(100, ge=1, le=1000)
 
     # Place 내부 discovery 전용. 키가 비어도 앱 import·health·기존 검색은 정상이어야 한다.
@@ -70,6 +73,13 @@ class Settings(BaseSettings):
         gt=0,
         le=120_000,
         validation_alias=AliasChoices("GEMINI_TIMEOUT_MS"),
+    )
+    # Facility proposals require scope, literal evidence and condition preservation together.
+    # Kept separate from discovery and the shared router's model selection.
+    facility_conversation_model: str = Field(
+        default="gemini-3-flash-preview",
+        min_length=1,
+        validation_alias=AliasChoices("FACILITY_CONVERSATION_MODEL"),
     )
 
 

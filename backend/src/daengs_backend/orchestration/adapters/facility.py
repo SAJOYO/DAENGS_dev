@@ -92,7 +92,7 @@ class FacilityCapabilityAdapter:
                 seed = await self.service.turn(
                     ConversationRequest(
                         client_request_id=seed_id,
-                        mode="manual",
+                        mode="bootstrap",
                         candidate_pools="v1",
                         manual={
                             "lat": payload.lat,
@@ -159,7 +159,12 @@ class FacilityCapabilityAdapter:
             else CapabilityStatus.OK,
             data=data,
             error=ErrorDetail(kind="facility_search_failed", detail=answer) if failed else None,
-            abstention=OutcomeDetail(code="facility_needs_input", message=answer)
+            abstention=OutcomeDetail(
+                code="facility_out_of_scope"
+                if receipt.get("code") == "facility_out_of_scope"
+                else "facility_needs_input",
+                message=answer,
+            )
             if uncertain and not failed
             else None,
             elapsed_ms=elapsed_ms,

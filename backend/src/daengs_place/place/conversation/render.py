@@ -144,6 +144,8 @@ def render_answer(receipt, filters=None):
 
 
 def _plain_result(receipt):
+    if receipt.code == "facility_filters":
+        return "지금 적용된 조건은 조건 칩에서 볼 수 있어요."
     if receipt.execution == "failed":
         return "다시 찾지 못했어요. 보던 목록은 그대로예요."
     if receipt.bookmark_command is not None:

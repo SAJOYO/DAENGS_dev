@@ -7,6 +7,7 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_walk.diary_route_normalize import main
+from daengs_walk.diary_scene_input import scene_materials
 from tests.walk.support.diary_generation import PATH, body
 from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.route_patterns import scenarios
@@ -33,7 +34,7 @@ def test_enabled_patterns_reach_writer_storage_and_reopen_without_regeneration(a
     projected = [
         e["facts"]
         for s in payload["scenes"]
-        for e in s["evidence"]
+        for e in scene_materials(s)
         if "경로 형태" in e["facts"].get("material", {})
     ]
     assert projected and all(

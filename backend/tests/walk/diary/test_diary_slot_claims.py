@@ -46,7 +46,7 @@ async def test_point_geometry_area_and_address_do_not_share_a_numeric_rank(tmp_p
     single = preview(core, backgrounds, space_slots=1, total_slots=1).stamps[1]
     assert single.evidence[0].role == "scene_registered_point_distance"
     assert single.location_reference is not None
-    assert len(writing_payload(result)["scenes"][0]["evidence"]) == 4
+    assert len(writing_payload(result)["scenes"][0]["scene"]["where"]) == 4
 
 
 async def test_location_reference_can_be_cited_and_disabled():
@@ -61,8 +61,9 @@ async def test_location_reference_can_be_cited_and_disabled():
             "scenes": [
                 {
                     "scene_id": stamp.scene_id,
-                    "background": "역삼1동에서 남긴 기록이다.",
+                    "text": "역삼1동에서 남긴 기록이다.",
                     "evidence_ids": [stamp.location_reference.id],
+                    "action_id": None,
                 }
             ]
         }

@@ -9,6 +9,7 @@ from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, 
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board import BaseBoardPolicy
 from daengs_walk.diary_input import DiaryInput, digest
+from daengs_walk.diary_scene_input import scene_materials
 from daengs_walk.diary_slots import SlotPolicy, prepare_slot_preview
 from daengs_walk.diary_stamps import StampPolicy
 
@@ -109,8 +110,9 @@ async def test_writer_keeps_originals_and_never_changes_slots():
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "주변에 공원이 있었다.",
-                    "evidence_ids": [s["evidence"][0]["id"]],
+                    "text": "주변에 공원이 있었다.",
+                    "evidence_ids": [scene_materials(s)[0]["id"]],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]
@@ -127,15 +129,16 @@ async def test_writer_keeps_originals_and_never_changes_slots():
 async def test_cross_scene_citation_and_provider_failure_keep_base_board():
     preview = prepare()
     payload = writing_payload(preview)
-    foreign = payload["scenes"][1]["evidence"][0]["id"]
+    foreign = scene_materials(payload["scenes"][1])[0]["id"]
 
     async def invalid(*args):
         return {
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "공원 주변이었다.",
+                    "text": "공원 주변이었다.",
                     "evidence_ids": [foreign],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]

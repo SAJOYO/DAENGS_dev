@@ -23,6 +23,7 @@ from daengs_walk.diary_observations import build_observation_pool
 from daengs_walk.diary_route_geometry import RoutePatternPolicy, extract_route_patterns
 from daengs_walk.diary_route_normalize import build_patterns
 from daengs_walk.diary_route_patterns import RoutePatternMaterial
+from daengs_walk.diary_scene_input import scene_materials
 from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots, prepare_slot_preview
 from daengs_walk.evidence import analyze_walk
 from tests.walk.support.base_board import policy as board_policy
@@ -180,7 +181,10 @@ def test_pattern_scene_without_action_pin_and_writer_projection_keep_only_meanin
     board_slots = prepare_board_slots(source, value.base_board, value.policy, route=verified)
     payload = slot_payload(value.base_board, board_slots)
     facts = [
-        e["facts"] for s in payload["scenes"] for e in s["evidence"] if "material" in e["facts"]
+        e["facts"]
+        for s in payload["scenes"]
+        for e in scene_materials(s)
+        if "material" in e["facts"]
     ]
     assert facts and any("경로 형태" in f["material"] for f in facts)
     for f in facts:

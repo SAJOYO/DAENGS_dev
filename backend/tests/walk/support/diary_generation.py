@@ -18,6 +18,7 @@ from daengs_backend.services import walk_storyboard as legacy
 from daengs_backend.services.walk_diary_base_board import PreparedSavedBaseBoard
 from daengs_backend.services.walk_diary_board_slot_writing import write_board
 from daengs_walk.diary_input import digest
+from daengs_walk.diary_scene_input import scene_materials
 from tests.walk.support.diary import place_payload, prose
 from tests.walk.support.observations import varied_route
 from tests.walk.support.photo_input import OWNER, WALK, context_envelope, entry
@@ -86,15 +87,16 @@ def api(monkeypatch):
         assert db.commit.await_count >= 1 and state.row.status == "running"
         if state.before_write:
             await state.before_write()
-        if payload["scenes"] and "evidence" in payload["scenes"][0]:
+        if payload.get("format") == "scene-and-optional-action-v1":
             return {
                 "scenes": [
                     {
                         "scene_id": scene["scene_id"],
-                        "background": "가까이에 등록된 카페가 있었다."
-                        if any(e["part"] == "space" for e in scene["evidence"])
+                        "text": "가까이에 등록된 카페가 있었다."
+                        if scene["scene"]["where"]
                         else "이동 구간의 속도에 변화가 있었다.",
-                        "evidence_ids": [scene["evidence"][0]["id"]],
+                        "evidence_ids": [e["id"] for e in scene_materials(scene)[:1]],
+                        "action_id": scene["action"]["id"] if scene["action"] else None,
                     }
                     for scene in payload["scenes"]
                 ]

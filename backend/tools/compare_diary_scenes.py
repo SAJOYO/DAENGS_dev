@@ -177,7 +177,7 @@ def comparison_result(request, snapshot_hash, board, slots, receipt, captured):
         items.append(
             {
                 "id": app_scene["id"],
-                "background": prose.background.strip() if prose else "",
+                "background": prose.text.strip() if prose else "",
                 "evidence_ids": list(prose.evidence_ids) if prose else [],
                 "coverage": coverage,
                 "evidence": [{"id": e.id, "description": describe(e)} for e in stamp.materials()],

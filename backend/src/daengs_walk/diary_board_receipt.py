@@ -1,5 +1,7 @@
 """Historical cited facts, independent of today's selection and writing policies."""
 
+from typing import Literal
+
 from pydantic import Field, JsonValue, model_validator
 
 from daengs_walk.diary_input import DiaryContract, Digest, Identifier, digest
@@ -19,15 +21,22 @@ class StoredSceneWriting(DiaryContract):
     original_body_sha256: Digest
     background: str = Field(max_length=220)
     evidence: tuple[CitedEvidence, ...] = Field(max_length=17)
+    # Preserve old JSON bytes/hashes. The historical field holds the generated text.
+    composition: Literal["prepend", "replace"] = Field(
+        default="prepend", exclude_if=lambda v: v == "prepend"
+    )
+    action_id: Identifier | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def cited(self):
         if len({e.id for e in self.evidence}) != len(self.evidence):
             raise ValueError("duplicate stored citation")
         if self.background != self.background.strip() or bool(self.background) != bool(
-            self.evidence
+            self.evidence or self.action_id
         ):
             raise ValueError("stored prose requires its citations")
+        if self.composition == "replace" and not self.background:
+            raise ValueError("replacement requires generated text")
         return self
 
 
@@ -61,11 +70,16 @@ class StoredSlotWriting(DiaryContract):
         ):
             raise ValueError("stored writing belongs to another board/generation")
         for saved, scene in zip(self.scenes, bundle.scenes, strict=True):
-            prefix = saved.background + "\n" if saved.background else ""
-            if (
-                not scene.body.startswith(prefix)
-                or digest(scene.body[len(prefix) :]) != saved.original_body_sha256
-            ):
+            if saved.composition == "replace":
+                matches = scene.body == saved.background
+            else:
+                prefix = saved.background + "\n" if saved.background else ""
+                matches = scene.body.startswith(prefix) and (
+                    digest(scene.body[len(prefix) :]) == saved.original_body_sha256
+                )
+            if not matches:
                 raise ValueError("stored prose and original body no longer compose this scene")
-            if bundle.model_status != "accepted" and saved.evidence:
+            if saved.action_id and saved.action_id != "action:" + digest(scene.core):
+                raise ValueError("stored action belongs to another scene core")
+            if bundle.model_status != "accepted" and (saved.evidence or saved.action_id):
                 raise ValueError("unwritten board cannot claim AI citations")

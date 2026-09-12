@@ -29,6 +29,7 @@ from daengs_backend.services.walk_diary_publication import (
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_input import digest
+from daengs_walk.diary_scene_input import scene_materials
 from tests.walk.support.base_board import policy
 
 
@@ -44,8 +45,9 @@ async def saved():
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "주변에 등록된 공원이 있었다.",
-                    "evidence_ids": [s["evidence"][0]["id"]],
+                    "text": "주변에 등록된 공원이 있었다.",
+                    "evidence_ids": [scene_materials(s)[0]["id"]],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]

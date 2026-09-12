@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.services.walk_diary_contract import require_owner
 from daengs_backend.services.walk_diary_input import InputAssembly, read_input
+from daengs_backend.services.walk_diary_route_policy import configured_route_patterns
 from daengs_walk.diary_board import (
     BaseBoard,
     BaseBoardPolicy,
@@ -60,7 +61,10 @@ def assemble_saved_base_board(
     )
     plan = prepare_base_board(assembled.source, policy, route=route)
     board = assemble_base_board(assembled.source, plan, route=route)
-    slots = prepare_board_slots(assembled.source, board, slot_policy or SlotPolicy(), route=route)
+    chosen_policy = (
+        slot_policy if slot_policy is not None else configured_route_patterns(SlotPolicy())
+    )
+    slots = prepare_board_slots(assembled.source, board, chosen_policy, route=route)
     return PreparedSavedBaseBoard(assembled, plan, board, slots)
 
 

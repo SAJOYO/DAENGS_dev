@@ -88,6 +88,10 @@ def space_candidates(saved, anchor, scene_scope, policy, reject):
 
 def writing_facts(item):
     """Keep application relations; internal geometry/counts never become prose instructions."""
+    if item.facts.get("format") == "route-pattern-material-v1":
+        return {
+            key: item.facts[key] for key in ("material", "relation", "subject", "action_meaning")
+        }
     if item.facts.get("format") != "space-material-v1":
         return item.facts
     return {key: item.facts[key] for key in ("material", "relation", "temporal_basis")}

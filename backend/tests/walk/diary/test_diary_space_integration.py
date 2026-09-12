@@ -76,9 +76,11 @@ def public_collector(monkeypatch):
     return collect
 
 
+@pytest.mark.parametrize("route_patterns", [False, True])
 async def test_same_collected_snapshot_has_same_preview_and_generation_stamps(
-    monkeypatch, public_collector
+    monkeypatch, public_collector, route_patterns
 ):
+    monkeypatch.setattr(settings, "walk_diary_route_patterns_enabled", route_patterns)
     assembled, _, _ = saved_case()
     base = assemble_saved_base_board(assembled, policy(3))
     collected = await public_collector(base.board)
@@ -98,6 +100,12 @@ async def test_same_collected_snapshot_has_same_preview_and_generation_stamps(
     )
     assert response.preview.revision == bound.slots.revision()
     assert response.preview.stamps == bound.slots.stamps
+    if route_patterns:
+        assert any(
+            e.facts.get("format") == "route-pattern-material-v1"
+            for stamp in bound.slots.stamps
+            for e in stamp.evidence
+        )
     payload = slot_payload(bound.board, bound.slots)
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "음식점·카페 중심" in serialized

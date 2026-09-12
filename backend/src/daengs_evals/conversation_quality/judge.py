@@ -482,9 +482,10 @@ def build_payload(case: ConversationCase, row: Mapping[str, Any], axis: str) -> 
         # 미끄러진다.
         #
         # ⚠ **`user_input_needed` 는 오늘 케이스 세트에서 정답지와 공선(collinear)이다.**
-        #   `cases_v1.jsonl` 13건의 분포는 `{(True, ASK): 5, (False, ANSWER): 6,
-        #   (False, REDIRECT): 2}` 다 — `need=True` ⟺ `expected_mode=ASK` 가 **5/5**,
-        #   `need=False` ⟺ ANSWER·REDIRECT 가 **8/8** 로 **완전히 겹친다.** (이 수는 파일에서
+        #   `cases_v1.jsonl` 16건(D-072 가 13 → 16, (False, ANSWER) 3건 추가)의 분포는
+        #   `{(True, ASK): 5, (False, ANSWER): 9, (False, REDIRECT): 2}` 다 —
+        #   `need=True` ⟺ `expected_mode=ASK` 가 **5/5**,
+        #   `need=False` ⟺ ANSWER·REDIRECT 가 **11/11** 로 **완전히 겹친다.** (이 수는 파일에서
         #   직접 센 것이다. 세트를 늘리면 여기부터 다시 세라 — 겹침이 깨지는 것이 목표다.)
         #   프롬프트가 이 비트를 0 점 규칙으로
         #   양방향에 쓰므로, 이 세트만으로는 판정기가 답변을 재는지 이 비트를 되읽는지 갈리지

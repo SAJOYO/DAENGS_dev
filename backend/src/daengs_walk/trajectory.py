@@ -25,7 +25,14 @@ class SourceRef(Contract):
     session_id: Identifier
     source_epoch: Identifier
     clock_epoch_id: Identifier
-    ingress_seq: int = Field(ge=0)
+    ingress_seq: int | None = Field(default=None, ge=0)
+    control_kind: Literal["epoch_start", "epoch_end"] | None = None
+
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        if (self.ingress_seq is None) != (self.control_kind is not None):
+            raise ValueError("source reference is an ingress record or an epoch control")
+        return self
 
 
 class SourceRange(Contract):
@@ -43,6 +50,25 @@ class JournalEvent(Contract):
     ref: SourceRef
     kind: Literal["start", "observation", "pause", "resume", "loss", "end"]
     elapsed_ns: int | None = Field(default=None, ge=0)
+    original_elapsed_ns: int | None = Field(default=None, ge=0)
+    time_reasons: tuple[Identifier, ...] = ()
+
+    @model_validator(mode="after")
+    def control_identity(self) -> Self:
+        expected = {
+            "start": "epoch_start",
+            "resume": "epoch_start",
+            "pause": "epoch_end",
+            "end": "epoch_end",
+        }
+        if self.ref.control_kind is not None and self.ref.control_kind != expected.get(self.kind):
+            raise ValueError("epoch control reference does not match event kind")
+        if self.original_elapsed_ns is not None and self.elapsed_ns not in (
+            None,
+            self.original_elapsed_ns,
+        ):
+            raise ValueError("timeline cannot rewrite an original sample time")
+        return self
 
 
 class PointAssessment(Contract):
@@ -59,6 +85,8 @@ class EvidenceJournal(Contract):
         if self.events[0].kind != "start" or self.events[-1].kind != "end":
             raise ValueError("sealed journal requires start and end controls")
         session = self.events[0].ref.session_id
+        if len({e.ref for e in self.events}) != len(self.events):
+            raise ValueError("journal source references must be unique")
         sequences: dict[str, int] = {}
         clocks: dict[str, int] = {}
         seen_sources: set[str] = set()
@@ -69,7 +97,9 @@ class EvidenceJournal(Contract):
             ref = event.ref
             if ref.session_id != session:
                 raise ValueError("journal crosses sessions")
-            if ref.ingress_seq <= sequences.get(ref.source_epoch, -1):
+            if ref.ingress_seq is not None and ref.ingress_seq <= sequences.get(
+                ref.source_epoch, -1
+            ):
                 raise ValueError("source sequence must increase, including controls")
             if previous is not None:
                 if ref.source_epoch != previous.source_epoch and ref.source_epoch in seen_sources:
@@ -93,7 +123,8 @@ class EvidenceJournal(Contract):
                 if not paused:
                     raise ValueError("resume requires pause")
                 paused = False
-            sequences[ref.source_epoch] = ref.ingress_seq
+            if ref.ingress_seq is not None:
+                sequences[ref.source_epoch] = ref.ingress_seq
             seen_sources.add(ref.source_epoch)
             seen_clocks.add(ref.clock_epoch_id)
             previous = ref

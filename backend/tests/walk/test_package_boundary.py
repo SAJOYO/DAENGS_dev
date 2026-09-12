@@ -12,6 +12,7 @@ PURE_MODULES = {
     "measurement.py",
     "observation.py",
     "trajectory.py",
+    "trajectory_projection.py",
     "trajectory_selection.py",
     "trajectory_view.py",
 }

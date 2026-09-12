@@ -30,7 +30,7 @@ class WalkScope(Contract):
 
 
 class MeasurementKey(Contract):
-    schema_version: Literal["trajectory-contract-v1"] = "trajectory-contract-v1"
+    schema_version: Literal["trajectory-contract-v2"] = "trajectory-contract-v2"
     input_fingerprint: Digest
     journal_fingerprint: Digest
     clock_mapping_version: Identifier

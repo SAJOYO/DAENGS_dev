@@ -121,6 +121,7 @@ class Settings(BaseSettings):
     walk_diary_slots_preview_enabled: bool = False
     # Public normalization is independent of the legacy entry-context job schema.
     walk_diary_space_enabled: bool = False
+    walk_diary_route_patterns_enabled: bool = False
     walk_diary_space_radius_m: int = Field(default=1000, ge=1, le=3000)
     walk_land_cover_layer: str = Field(
         default="EGIS:lv3_2025y", pattern=r"^EGIS:lv3_[a-zA-Z0-9_-]+$"

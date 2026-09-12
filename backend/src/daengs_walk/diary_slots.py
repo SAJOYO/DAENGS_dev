@@ -8,6 +8,7 @@ from daengs_walk.diary_board import BaseBoard, BaseBoardPolicy, BoardScene, Veri
 from daengs_walk.diary_board_assembly import assemble_base_board
 from daengs_walk.diary_board_selection import prepare_base_board
 from daengs_walk.diary_input import DiaryContract, DiaryInput, Digest, Identifier, digest
+from daengs_walk.diary_route_patterns import RoutePatternBindingPolicy
 
 Part = Literal["space", "environment", "motion"]
 
@@ -24,6 +25,9 @@ class SlotPolicy(DiaryContract):
     location_age_s: float = Field(default=30, ge=0, le=120)
     weather_max_age_s: float = Field(default=7200, ge=0, le=7200)
     include_location_reference: bool = True
+    route_patterns: RoutePatternBindingPolicy | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     def capacity(self, part: Part):
         return getattr(self, part + "_slots")
@@ -232,11 +236,20 @@ def prepare_board_slots(
     if {b.id for b in extra} & {b.id for b in source.backgrounds}:
         raise ValueError("collected and stored background IDs overlap")
     motion, blocks = verified_motion(source, route)
+    patterns = None
+    if policy.route_patterns is not None:
+        from daengs_walk.diary_route_slots import prepare_route_patterns
+
+        patterns = prepare_route_patterns(source, route, policy.route_patterns)
     stamps = []
     for scene in board.scenes:
         candidates, decisions = candidates_for_scene(
             source, scene, policy, motion, blocks, extra_backgrounds=extra
         )
+        if policy.route_patterns is not None:
+            from daengs_walk.diary_route_slots import pattern_candidates
+
+            candidates.extend(pattern_candidates(scene, patterns, policy, decisions))
         stamps.append(admit(scene.id, candidates, decisions, policy))
     return BoardSlotSnapshot(
         client_session_id=board.client_session_id,

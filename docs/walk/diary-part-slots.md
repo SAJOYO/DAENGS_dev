@@ -4,6 +4,8 @@
 특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
 행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
 [상권·공원·피복 정규화](space-normalization.md)는 실제 저장 응답으로 이식 동등성을 확인했다.
+[동선 패턴 정규화](route-patterns.md)는 직선·방향 전환·되짚기·국소 체류를 같은 장면 슬롯 경로에
+연결한다. `policy.route_patterns` 또는 서버 설정으로 활성화하며, 기존 동선 용량은 유지한다.
 최신 서술 품질은 별도 검증 대상이다.
 
 기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)

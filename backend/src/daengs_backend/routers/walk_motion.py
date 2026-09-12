@@ -11,6 +11,7 @@ from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.repositories import walk_motion as repo
 from daengs_backend.repositories import walk_precision as precision_repo
 from daengs_backend.routers.walk_precision import router as precision_router
+from daengs_backend.routers.walk_trajectory import router as trajectory_router
 from daengs_backend.schemas.walk_motion import (
     BACKUP_VERSION,
     CALCULATION_VERSION,
@@ -32,6 +33,7 @@ from daengs_backend.services.walk_motion_contract import MotionConflict
 
 router = APIRouter(prefix="/app/walks", tags=["walk-motion-backup"])
 router.include_router(precision_router)
+router.include_router(trajectory_router)
 Session = Annotated[AsyncSession, Depends(get_session)]
 ChunkIndex = Annotated[int, Path(ge=0, lt=(MAX_POINTS + CHUNK_SIZE - 1) // CHUNK_SIZE)]
 

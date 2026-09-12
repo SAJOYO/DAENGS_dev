@@ -1,7 +1,7 @@
 """업로드된 좌표 chunk를 하나의 봉인 가능한 산책 증거열로 검증한다.
 
-DB 행 잠금과 저장은 후속 application service의 책임이다. 이 모듈은 이미 잠긴 Walk에
-속한 chunk들을 받아 다음 세 경계를 한 번에 닫는다.
+DB 행 잠금과 저장은 application service의 책임이다. 읽기 스냅샷과 잠금 후 재검증에서
+같은 순수 검증을 사용해 다음 세 경계를 한 번에 닫는다.
 
 1. chunk metadata가 실제 payload를 설명하는가
 2. 여러 chunk가 0부터 terminal까지 겹침과 누락 없이 이어지는가

@@ -26,6 +26,7 @@ provider 는 **서버의 도커 볼륨으로 확정**(D-052, 2026-09-04). GCS �
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -192,9 +193,7 @@ def build_screening_photo_key(
     return f"screening/{app_user_id}/{record_id}/photo{suffix}"
 
 
-def build_vet_receipt_key(
-    app_user_id: uuid.UUID, draft_id: uuid.UUID, *, content_type: str
-) -> str:
+def build_vet_receipt_key(app_user_id: uuid.UUID, draft_id: uuid.UUID, *, content_type: str) -> str:
     """영수증 사진의 키. `build_screening_photo_key` 와 같은 규칙입니다 —
     **draft_id 가 uuid 라 추측이 안 됩니다** (bridge 는 "키를 아는 것이 자격").
 
@@ -376,11 +375,31 @@ class LocalBridgeStorage:
         p.write_bytes(data)
 
     def write_if_absent(self, storage_key: str, data: bytes) -> None:
-        """territory bridge의 create-only PUT. 같은 티켓으로 덮어쓰지 못합니다."""
+        """완성된 사진만 공개하는 territory bridge의 create-only PUT.
+
+        같은 디렉터리의 임시 파일을 쓰고 flush/fsync/close가 모두 성공한 뒤
+        hard link로 최종 이름을 만듭니다. link는 이미 있는 사진·tombstone을
+        덮어쓰지 않으며, confirm은 쓰는 중인 임시 파일을 볼 수 없습니다.
+        저장 볼륨은 hard link를 지원해야 합니다. 실패 시 복사로 우회하지 않습니다.
+        """
         p = self._path(storage_key)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("xb") as stream:
-            stream.write(data)
+        temporary = p.with_name(f".{p.name}.{uuid.uuid4().hex}.upload")
+        # 생성에 성공한 우리 임시 파일만 정리합니다.
+        stream = temporary.open("xb")
+        try:
+            with stream:
+                if stream.write(data) != len(data):
+                    raise OSError("사진 전체를 저장하지 못했습니다.")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary, p)
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                # 공개된 최종 파일을 되돌리거나 최초 저장 오류를 가리지 않습니다.
+                log.warning("점령지 사진 임시 파일 정리 실패: %s", temporary, exc_info=True)
 
     @contextmanager
     def open_write(self, storage_key: str, *, exclusive: bool = False):
@@ -396,7 +415,7 @@ class LocalBridgeStorage:
            그 모양은 `redact()` 의 tombstone 과 구별되지 않습니다.
 
         `exclusive=True` 면 이미 있는 키에 `FileExistsError` 입니다
-        (`write_if_absent` 의 스트리밍 판).
+        (최종 경로를 바로 열므로 `write_if_absent`의 원자적 공개 계약과는 다릅니다).
         """
         p = self._path(storage_key)
         p.parent.mkdir(parents=True, exist_ok=True)

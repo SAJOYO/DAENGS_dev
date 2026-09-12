@@ -224,7 +224,9 @@ class AssistantOrchestrationService:
             # `RoutePlan.prompt_version` · 아래 `_route_metadata` 의 폴백 세 곳이 전부 이
             # 값을 읽어서, 실제로 `RESOLVED_PROMPT_VERSION` 프롬프트가 나간 turn 이 평가
             # 랩 행에 평범한 `PROMPT_VERSION` 으로 잘못 적히는 일이 다시 생기지 않는다.
-            resolved_router_version = router_prompt_version(conversation)
+            resolved_router_version = router_prompt_version(
+                conversation, facility_view=structured_context.get("facility_view") is True
+            )
             semantic_trace = (
                 RouteTrace(
                     router=RouterKind.LLM,

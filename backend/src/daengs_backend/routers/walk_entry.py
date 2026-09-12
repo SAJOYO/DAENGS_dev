@@ -3,11 +3,12 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
+from daengs_backend.routers.walk_entry_errors import translate
 from daengs_backend.schemas.walk_entry import (
     EntryList,
     EntryResponse,
@@ -20,21 +21,6 @@ from daengs_backend.services import walk_entry as service
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-
-
-async def translate(operation):
-    from daengs_backend.services.walk_entry_v2 import EntryUpgradeRequired
-
-    try:
-        return await operation
-    except service.EntryNotFound:
-        raise HTTPException(404, "산책 또는 강아지를 찾을 수 없습니다.") from None
-    except service.EntryConflict as exc:
-        raise HTTPException(409, {"code": "walk_entry_conflict", "message": str(exc)}) from None
-    except service.EntryInvalid as exc:
-        raise HTTPException(422, str(exc)) from None
-    except EntryUpgradeRequired:
-        raise HTTPException(426, {"code": "walk_entry_upgrade_required"}) from None
 
 
 @router.post("/record-profile/query", response_model=RecordProfileResponse)

@@ -1,0 +1,80 @@
+{
+  "format": "trajectory-contract-fixtures-v1",
+  "provenance": "Synthetic adjudicated intervals, not captured GPS or a production speed policy.",
+  "cases": [
+    {
+      "name": "outlier_bypass",
+      "events": [
+        {"id": "start", "kind": "start", "ns": 0},
+        {"id": "B", "kind": "observation", "ns": 1000000000},
+        {"id": "X", "kind": "observation", "ns": 2000000000},
+        {"id": "C", "kind": "observation", "ns": 3000000000},
+        {"id": "D", "kind": "observation", "ns": 4000000000},
+        {"id": "end", "kind": "end", "ns": 5000000000}
+      ],
+      "intervals": [
+        {"start": "start", "end": "B", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["first_fix_pending"]},
+        {"start": "B", "end": "X", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 80, "reentry_basis": "usable_pair", "reasons": ["initial_candidate"]},
+        {"start": "X", "end": "C", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 70, "reasons": ["initial_candidate"]},
+        {"start": "C", "end": "D", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 5, "reasons": ["walking"]},
+        {"start": "D", "end": "end", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["last_fix_to_end"]}
+      ],
+      "replacement": {"start": "B", "end": "C", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 10, "reentry_basis": "usable_pair", "reassessment_basis": "B_C_time_distance_and_skipped_X_reviewed", "reasons": ["outlier_bypass"]},
+      "expected": {"initial_distance_m": 155, "final_distance_m": 15, "known_duration_ns": 5000000000, "superseded_distance_m": 150}
+    },
+    {
+      "name": "first_fix_after_three_minutes",
+      "events": [
+        {"id": "start", "kind": "start", "ns": 0},
+        {"id": "A", "kind": "observation", "ns": 180000000000},
+        {"id": "B", "kind": "observation", "ns": 190000000000},
+        {"id": "end", "kind": "end", "ns": 200000000000}
+      ],
+      "intervals": [
+        {"start": "start", "end": "A", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["first_fix_pending"]},
+        {"start": "A", "end": "B", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 12, "reentry_basis": "usable_pair", "reasons": ["walking"]},
+        {"start": "B", "end": "end", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["last_fix_to_end"]}
+      ]
+    },
+    {
+      "name": "walking_excluded_gap_still_restart",
+      "events": [
+        {"id": "start", "kind": "start", "ns": 0},
+        {"id": "A", "kind": "observation", "ns": 1000000000},
+        {"id": "B", "kind": "observation", "ns": 11000000000},
+        {"id": "C", "kind": "observation", "ns": 21000000000},
+        {"id": "loss", "kind": "loss", "ns": 22000000000},
+        {"id": "D", "kind": "observation", "ns": 42000000000},
+        {"id": "E", "kind": "observation", "ns": 52000000000},
+        {"id": "F", "kind": "observation", "ns": 62000000000},
+        {"id": "end", "kind": "end", "ns": 63000000000}
+      ],
+      "intervals": [
+        {"start": "start", "end": "A", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["first_fix_pending"]},
+        {"start": "A", "end": "B", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 12, "reentry_basis": "usable_pair", "reasons": ["walking"]},
+        {"start": "B", "end": "C", "continuity": "connected", "walking_use": "excluded", "activity": "moving", "measured_displacement_m": 120, "reasons": ["walking_speed_limit"]},
+        {"start": "C", "end": "loss", "continuity": "broken", "walking_use": "excluded", "reasons": ["recording_loss"]},
+        {"start": "loss", "end": "D", "continuity": "broken", "walking_use": "unresolved", "reasons": ["recording_loss"]},
+        {"start": "D", "end": "E", "continuity": "connected", "walking_use": "included", "activity": "still", "reentry_basis": "stable_reentry_pair", "reasons": ["observed_still"]},
+        {"start": "E", "end": "F", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 8, "reasons": ["walking"]},
+        {"start": "F", "end": "end", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["last_fix_to_end"]}
+      ]
+    },
+    {
+      "name": "unknown_epoch_duration",
+      "events": [
+        {"id": "start", "kind": "start", "ns": 100000000000},
+        {"id": "A", "kind": "observation", "ns": 110000000000},
+        {"id": "B", "kind": "observation", "ns": 1000000000, "epoch": "boot2"},
+        {"id": "C", "kind": "observation", "ns": 11000000000, "epoch": "boot2"},
+        {"id": "end", "kind": "end", "ns": 12000000000, "epoch": "boot2"}
+      ],
+      "intervals": [
+        {"start": "start", "end": "A", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["first_fix_pending"]},
+        {"start": "A", "end": "B", "continuity": "broken", "walking_use": "unresolved", "reasons": ["unknown_epoch_duration"]},
+        {"start": "B", "end": "C", "continuity": "connected", "walking_use": "included", "activity": "moving", "walking_distance_m": 10, "reentry_basis": "new_epoch_usable_pair", "reasons": ["walking"]},
+        {"start": "C", "end": "end", "continuity": "unresolved", "walking_use": "excluded", "reasons": ["last_fix_to_end"]}
+      ]
+    }
+  ]
+}

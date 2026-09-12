@@ -27,6 +27,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
+from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 
@@ -54,14 +55,18 @@ class Orchestrator(Protocol):
     ) -> AssistantResponse: ...
 
 
-def build_orchestrator() -> Orchestrator:
+def build_orchestrator(*, engine: OrchestrationEngine | None = None) -> Orchestrator:
     """LangGraph 구현을 만듭니다. 요청마다(또는 호출마다) 새 인스턴스입니다.
 
     한때 `kind` 인자를 받아 비교 벤치마크가 같은 프로세스에서 두 구현을 나란히 세웠지만,
     비교가 끝나 에이전트 구현이 지워지면서(D-072) 그 인자도 같이 없앴습니다 — 고를 것이
     하나뿐이면 고르는 인자는 죽은 코드입니다.
+
+    **`engine` 은 남습니다.** 시설 대화(`routers/assistant.py`)가 요청에 묶인
+    `FacilityCapabilityAdapter` 를 실은 엔진을 여기로 넣습니다 — 구현을 고르는 인자가
+    아니라 요청마다 다른 의존성을 주입하는 자리라, D-072 와 무관합니다.
     """
-    return AssistantOrchestrationService()
+    return AssistantOrchestrationService(engine=engine)
 
 
 __all__ = ["Orchestrator", "build_orchestrator"]

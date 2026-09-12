@@ -943,7 +943,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             analysis.id = uuid.uuid4()
         if analysis.derived_at is None:
             analysis.derived_at = datetime.now(UTC)
-        store.walk_analyses.append(analysis)
+        if analysis not in store.walk_analyses:
+            store.walk_analyses.append(analysis)
         return analysis
 
     async def walk_get_analysis_for_input(session, **identity):
@@ -958,6 +959,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
 
     monkeypatch.setattr(walk_repo, "list_for_owner", walk_list_for_owner)
     monkeypatch.setattr(walk_repo, "get_owned", walk_get_owned)
+    monkeypatch.setattr(walk_repo, "get_owned_for_finalize", walk_get_owned)
     monkeypatch.setattr(walk_repo, "get_owned_for_update", walk_get_owned_for_update)
     monkeypatch.setattr(walk_repo, "get_by_client_session", walk_get_by_client_session)
 

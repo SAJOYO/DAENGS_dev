@@ -32,6 +32,7 @@
 | [place/assistant-conversation.md](place/assistant-conversation.md) | 시설 v2 공통 오케스트레이션 연결·짧은 행동 응답·APP 출시 적용 순서 |
 | [place/response-policy.md](place/response-policy.md) | 시설 내부 용어 차단·행동별 말투·만료 복구·인증 갱신 정책 |
 | [place/scope-guardrails.md](place/scope-guardrails.md) | 시설 범위 판정·강아지 문구·무동작 상태 보존과 실제 모델 실험 |
+| [place/conversation-judge.md](place/conversation-judge.md) | 시설 전용 LLM Judge — 의도·범위·실행 설명 검토와 코드 폴더 README |
 | [place/search-policy.md](place/search-policy.md) | 검색 집합·조건 변경 공통화, 화면 복원 분리와 실제 출력 평가 |
 | [place/candidate-pools.md](place/candidate-pools.md) | 새 후보 B/K/E/P·명시적 정정·앱 연결과 반복 출력 평가 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |

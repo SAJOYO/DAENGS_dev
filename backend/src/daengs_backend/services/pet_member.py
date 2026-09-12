@@ -7,6 +7,7 @@
 import logging
 import uuid
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import pet_member as member_repo
 from daengs_backend.schemas.pet_member import MemberOut
+from daengs_backend.services import pet_identity as identity_service
 from daengs_backend.services.pet import MAX_PETS_PER_USER, PetNotFoundError
 
 log = logging.getLogger(__name__)
@@ -55,7 +57,24 @@ class PetLimitError(Exception):
 
 
 class InviteLimitError(Exception):
-    """유효 초대 상한."""
+    """유효 초대 상한. **묶음 단위이고 사람 기준입니다** (MVP 결정 §2) — 강아지 수와
+    무관하게 묶음 하나가 자리 하나입니다."""
+
+
+class InviteBundleChangedError(Exception):
+    """묶음 구성이 바뀌었습니다 — 강아지가 지워졌거나, 대표가 바뀌었거나, 배웅됐습니다.
+
+    **남은 강아지만 부분 수락하지 않습니다** (MVP 결정 §2 "묶음 불변성"). 받는 사람이
+    미리보기에서 본 것과 다른 것을 받게 되기 때문입니다. 라우터가 410 으로 바꿉니다.
+    """
+
+
+class PetFarewelledError(Exception):
+    """배웅한 아이는 초대에도 연결 후보에도 못 넣습니다 (MVP 결정 §4 최소 안전안)."""
+
+    def __init__(self, pet_name: str) -> None:
+        self.pet_name = pet_name
+        super().__init__(pet_name)
 
 
 class CannotRemoveOwnerError(Exception):
@@ -73,31 +92,175 @@ class NotAMemberError(Exception):
 async def create_invite(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> tuple[PetInvite, str]:
-    """**대표만.** 평문 토큰은 이 반환값에만 있고 DB 에는 해시만 남습니다.
+    """한 마리 초대 — 구 경로 `POST /app/pets/{pet_id}/invites` 전용입니다.
+
+    묶음 하나짜리로 만듭니다. 새 경로와 **같은 규칙·같은 상한**을 지나므로, 구 앱이
+    만든 초대도 새 앱이 만든 것과 구별 없이 다뤄집니다.
 
     :returns: (초대 행, 평문 토큰)
     """
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
-    if pet is None:
-        raise PetNotFoundError
+    invite, token, _pet_ids = await create_invite_bundle(session, app_user_id, [pet_id])
+    return invite, token
+
+
+async def create_invite_bundle(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_ids: list[uuid.UUID]
+) -> tuple[PetInvite, str, list[uuid.UUID]]:
+    """**강아지 여러 마리를 토큰 하나에** 담습니다 (MVP 결정 §2).
+
+    평문 토큰은 이 반환값에만 있고 DB 에는 해시만 남습니다.
+
+    검증 순서와 이유:
+
+    1. **사용자 행을 먼저 잠급니다** — 활성 묶음 수를 세는 단위가 사람이라, 동시 요청을
+       pet 잠금으로는 직렬화할 수 없습니다.
+    2. 강아지를 **id 오름차순으로** 잠급니다 — 묶음 하나가 여러 행을 잠그므로, 순서를
+       고정하지 않으면 두 요청이 서로를 기다리는 데드락이 생깁니다.
+    3. 각 아이마다 **행 대표 + 그룹 주보호자**를 봅니다. 연결된 아이를 공동 보호자가
+       초대하면 그 그룹에 사람을 마음대로 들이게 됩니다.
+    4. **배웅한 아이는 못 넣습니다** — 배웅 상태를 그룹 공통으로 옮기는 것은 후속이라,
+       그때까지는 애초에 초대에 안 들어가는 것이 안전합니다.
+    5. 활성 묶음 상한은 **사람당** 입니다. 강아지당으로 세면 "묶음 하나 = 활성 하나" 가
+       깨집니다 (`count_valid_invites_for_inviter` 독스트링).
+
+    **앵커는 `pet_ids[0]`** 입니다. `pet_invites.pet_id` 가 NOT NULL 로 남아 있고 승계·
+    만료 청소가 그 칸을 보므로, 묶음이어도 대표 한 마리를 골라 둡니다.
+
+    :returns: (초대 행, 평문 토큰, 담긴 pet id 들)
+    """
+    # 1. 사람 단위 직렬화. `create_pet` 과 같은 이유입니다.
+    await identity_service.lock_user(session, app_user_id)
+
+    # 2~4. 잠그면서 검증합니다.
+    for pet_id in sorted(pet_ids):
+        pet = await pet_repo.get_owned(session, app_user_id, pet_id, for_update=True)
+        if pet is None:
+            raise PetNotFoundError
+        await identity_service.require_group_owner(session, app_user_id, pet)
+        if pet.farewell_on is not None:
+            raise PetFarewelledError(pet.name)
 
     now = datetime.now(UTC)
     # 아무도 안 누른 만료건이 영원히 쌓이는 것을 여기서 막습니다.
-    await member_repo.delete_expired_invites(session, pet_id, now)
+    await member_repo.delete_expired_invites_for_inviter(session, app_user_id, now)
 
-    if await member_repo.count_valid_invites(session, pet_id, now) >= MAX_ACTIVE_INVITES:
+    # 5. 사람당 상한.
+    if (
+        await member_repo.count_valid_invites_for_inviter(session, app_user_id, now)
+        >= MAX_ACTIVE_INVITES
+    ):
         raise InviteLimitError
 
     token = generate_refresh_token()
     invite = member_repo.add_invite(
         session,
-        pet_id=pet_id,
+        pet_id=pet_ids[0],
         invited_by=app_user_id,
         token_hash=hash_refresh_token(token),
         expires_at=now + INVITE_TTL,
+        pet_count=len(pet_ids),
     )
+    # 자식 줄에 `invite.id` 가 필요합니다. DB 기본값을 미리 받아 옵니다.
+    await session.flush()
+    member_repo.add_invite_pets(session, invite.id, pet_ids)
+
     await session.commit()
-    return invite, token
+    return invite, token, list(pet_ids)
+
+
+async def bundle_pet_ids(
+    session: AsyncSession, invite: PetInvite
+) -> tuple[list[uuid.UUID], bool]:
+    """묶음에 담긴 pet id 들과 **구성이 바뀌었는지**.
+
+    `pet_invite_pets.pet_id` 가 CASCADE 라 강아지가 지워지면 자식 줄이 조용히 사라집니다.
+    그래서 남은 줄 수를 `pet_invites.pet_count` 와 견줘 구성 변경을 알아냅니다 — 안 보면
+    남은 강아지만 **부분 수락**되는데, 그것이 제품이 금지한 동작입니다.
+
+    ⚠️ **자식 줄이 하나도 없으면 바뀐 것이 아니라 옛 초대입니다.** 마이그레이션이 서버보다
+    먼저 나가는 창(MVP 결정 §9)에서 옛 코드가 만든 초대에는 자식 줄이 없습니다 — 그때는
+    앵커 하나짜리 묶음으로 봅니다.
+
+    ⚠️ **앵커 자체가 지워지면 초대 행이 통째로 사라집니다** (`pet_invites.pet_id` 의
+    CASCADE). 그 토큰은 여기 오지 못하고 404 입니다 — 410 이 아닙니다. 구성 변경 중 이
+    한 가지만 응답이 다릅니다.
+
+    :returns: (pet id 들, 구성이 바뀌었나)
+    """
+    rows = await member_repo.list_bundle(session, invite.id)
+    if not rows:
+        return [invite.pet_id], False
+    return [row.pet_id for row in rows], len(rows) != invite.pet_count
+
+
+@dataclass(frozen=True)
+class InvitePreview:
+    """수락 전에 보여 줄 것. **건강정보는 없습니다** (MVP 결정 §8).
+
+    아직 구성원이 아닌 사람에게 지병·상시 복용약을 내보이면, 토큰 하나로 남의 집 의료
+    정보를 읽는 자리가 됩니다. 이름·견종·사진 있음 여부까지가 "이 아이가 맞나" 를 사람이
+    판단하는 데 필요한 전부입니다.
+    """
+
+    invited_by_nickname: str | None
+    expires_at: datetime
+    #: (pet, 이미 구성원인가)
+    pets: list[tuple[Pet, bool]]
+    #: 내가 고를 수 있는 기존 강아지들.
+    link_candidates: list[Pet]
+
+
+async def preview_invite(
+    session: AsyncSession, app_user_id: uuid.UUID, token: str
+) -> InvitePreview:
+    """수락 전 미리보기 + 연결 후보 (MVP 결정 §8).
+
+    **하나의 응답인 이유** — 앱 화면이 "강아지 목록 + 각 줄의 연결 드롭다운" 한 장이라,
+    나누면 왕복 두 번에 두 응답의 정합성을 앱이 맞춰야 합니다.
+
+    **읽기만 합니다.** 만료건을 여기서 지우지 않습니다 — 지우면 그 뒤의 `accept` 재시도가
+    404 를 받아 "만료" 와 "없는 토큰" 이 뭉개집니다. 청소는 수락과 새 초대 발급이 합니다.
+
+    검증은 수락과 **같은 순서**입니다. 미리보기가 통과한 것이 수락에서 막히면 사용자가
+    이유를 알 길이 없기 때문입니다.
+    """
+    invite = await member_repo.get_invite_by_hash(session, hash_refresh_token(token))
+    if invite is None:
+        raise InviteNotFoundError
+
+    if invite.expires_at <= datetime.now(UTC):
+        raise InviteExpiredError
+
+    if invite.accepted_by is not None and invite.accepted_by != app_user_id:
+        # 다른 사람이 이미 쓴 토큰. 존재했다는 사실 자체를 안 새게 404 입니다.
+        raise InviteNotFoundError
+
+    pet_ids, changed = await bundle_pet_ids(session, invite)
+    if changed:
+        raise InviteBundleChangedError
+
+    found = await pet_repo.by_ids(session, pet_ids)
+    if len(found) != len(pet_ids):
+        # 자식 줄은 남았는데 강아지가 없는 경우는 FK CASCADE 상 나올 수 없지만,
+        # 나오면 부분 수락이 되므로 묶음 전체를 무효로 봅니다.
+        raise InviteBundleChangedError
+
+    pets: list[tuple[Pet, bool]] = []
+    for pet_id in pet_ids:
+        pet = found[pet_id]
+        common = await identity_service.common_of(session, pet)
+        if invite.invited_by != common.app_user_id or common.farewell_on is not None:
+            # 그새 주보호자가 바뀌었거나 배웅했습니다. 묶음 전체가 무효입니다.
+            raise InviteBundleChangedError
+        pets.append((pet, await member_repo.is_member(session, pet.id, app_user_id)))
+
+    names = await app_user_repo.nicknames_by_ids(session, [invite.invited_by])
+    return InvitePreview(
+        invited_by_nickname=names.get(invite.invited_by),
+        expires_at=invite.expires_at,
+        pets=pets,
+        link_candidates=await pet_repo.list_link_candidates(session, app_user_id),
+    )
 
 
 async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: str) -> Pet:
@@ -181,26 +344,82 @@ async def accept_invite(session: AsyncSession, app_user_id: uuid.UUID, token: st
 async def list_invites(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[PetInvite]:
-    """그 아이의 초대 전부, 만든 순서대로. **대표만** — 평문 토큰이 발급 응답에 한 번만
-    나오므로, 나중에 그 초대를 찾아 취소하려면 이 목록이 유일한 길입니다. 해시도 토큰도
-    안 돌려줍니다(라우터의 `InviteOut` 이 그 둘을 아예 담지 않습니다).
+    """**그 아이가 낀 묶음** 전부, 만든 순서대로 — 구 경로용입니다.
+
+    **그룹 주보호자만.** 평문 토큰이 발급 응답에 한 번만 나오므로, 나중에 그 초대를 찾아
+    취소하려면 이 목록이 유일한 길입니다. 해시도 토큰도 안 돌려줍니다(`InviteOut` 이 그
+    둘을 아예 담지 않습니다).
+
+    앵커가 아닌 아이로도 찾힙니다 — 묶음에 담긴 아이는 전부 그 묶음을 볼 수 있어야
+    대표가 취소할 수 있습니다.
     """
     pet = await pet_repo.get_owned(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
-    return await member_repo.list_invites(session, pet_id)
+    await identity_service.require_group_owner(session, app_user_id, pet)
+    return await member_repo.list_invites_with_pet(session, pet_id)
+
+
+async def list_my_invites(
+    session: AsyncSession, app_user_id: uuid.UUID
+) -> tuple[list[PetInvite], dict[uuid.UUID, list[uuid.UUID]], dict[uuid.UUID, str]]:
+    """**내가 보낸 묶음 전부** — 신설 경로 `GET /app/pet-invites` 입니다.
+
+    강아지별 목록(구 경로)만 있으면 앱이 마릿수만큼 왕복해야 하고, 묶음이 어느 아이의
+    목록에 속하는지도 애매합니다. 초대의 주체가 강아지가 아니라 **사람**이 되면서 사용자
+    단위 목록이 자연스러운 자리가 됐습니다.
+
+    담긴 강아지 이름까지 한 번에 돌려줍니다 — 그래야 앱이 "맥스·코코를 부른 링크" 를 그릴
+    수 있습니다. 쿼리는 초대 수와 무관하게 셋입니다(목록 · 묶음 · 이름).
+
+    :returns: (초대들, invite_id → pet id 들, pet_id → 이름)
+    """
+    invites = await member_repo.list_invites_for_inviter(session, app_user_id)
+    bundles = await member_repo.list_bundles(session, [i.id for i in invites])
+    # 자식 줄이 없는 옛 초대는 앵커 하나짜리로 봅니다 (`bundle_pet_ids` 와 같은 규칙).
+    for invite in invites:
+        bundles.setdefault(invite.id, [invite.pet_id])
+    names = await pet_repo.names_by_ids(
+        session, [pet_id for ids in bundles.values() for pet_id in ids]
+    )
+    return invites, bundles, names
 
 
 async def cancel_invite(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID, invite_id: uuid.UUID
 ) -> None:
-    """초대 취소. **대표만.** 돌보미·제3자는 강아지가 안 보이므로 404, 남의 강아지의
-    초대 id 를 넣어도 404 — `delete_invite_for_pet` 이 `pet_id` 까지 같이 걸기 때문입니다.
+    """초대 취소 — 구 경로용. **묶음 전체가 사라집니다** (MVP 결정 §2).
+
+    **그룹 주보호자만.** 돌보미·제3자는 강아지가 안 보이므로 404 이고, 연결된 아이의
+    비그룹주보호자는 409 입니다. 남의 강아지의 초대 id 를 넣어도 404 —
+    `delete_invite_for_inviter` 가 초대한 사람까지 같이 걸기 때문입니다.
+
+    `pet_id` 는 권한을 보는 데 **그리고 URL 의 두 id 가 짝인지 확인하는 데** 씁니다 —
+    그 아이가 담기지 않은 묶음이면 404 입니다. 묶음에서 그 아이만 빼는 일은 없습니다.
     """
     pet = await pet_repo.get_owned(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
-    deleted = await member_repo.delete_invite_for_pet(session, pet_id, invite_id)
+    await identity_service.require_group_owner(session, app_user_id, pet)
+
+    deleted = await member_repo.delete_invite_with_pet(
+        session, app_user_id, pet_id, invite_id
+    )
+    if deleted == 0:
+        raise InviteNotFoundError
+    await session.commit()
+
+
+async def cancel_invite_bundle(
+    session: AsyncSession, app_user_id: uuid.UUID, invite_id: uuid.UUID
+) -> None:
+    """묶음 취소 — 신설 경로 `DELETE /app/pet-invites/{invite_id}`.
+
+    **초대한 사람만.** 없는 id·남의 초대·이미 없는 것이 전부 같은 404 라 정보가 안 샙니다.
+    이미 수락된(영수증) 초대도 지울 수 있습니다 — 취소는 "이 행을 없앤다" 는 뜻일 뿐입니다.
+    자식 줄은 FK CASCADE 가 같이 지웁니다.
+    """
+    deleted = await member_repo.delete_invite_for_inviter(session, app_user_id, invite_id)
     if deleted == 0:
         raise InviteNotFoundError
     await session.commit()
@@ -364,20 +583,28 @@ __all__ = [
     "MAX_MEMBERS_PER_PET",
     "AlreadyOwnerError",
     "CannotRemoveOwnerError",
+    "InviteBundleChangedError",
     "InviteExpiredError",
     "InviteLimitError",
     "InviteNotFoundError",
+    "InvitePreview",
     "MemberLimitError",
     "NotAMemberError",
     "NotAllowedError",
+    "PetFarewelledError",
     "PetLimitError",
     "accept_invite",
     "actor_label",
     "actor_labels",
+    "bundle_pet_ids",
     "cancel_invite",
+    "cancel_invite_bundle",
     "create_invite",
+    "create_invite_bundle",
     "list_invites",
     "list_members",
+    "list_my_invites",
+    "preview_invite",
     "remove_member",
     "transfer_owner",
 ]

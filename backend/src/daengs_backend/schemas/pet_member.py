@@ -5,8 +5,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class InviteCreated(BaseModel):
@@ -16,6 +17,88 @@ class InviteCreated(BaseModel):
     pet_id: uuid.UUID
     token: str
     expires_at: datetime
+
+
+class InviteBundleCreate(BaseModel):
+    """**여러 마리를 토큰 하나에** (`POST /app/pet-invites`, MVP 결정 §2).
+
+    상한은 한 사람이 돌볼 수 있는 마릿수와 같습니다 — 그보다 많이 담아 봐야 받는 쪽이
+    수락에서 409 를 받습니다. 여기서 먼저 막아 두면 앱이 이유를 화면에서 압니다.
+    """
+
+    pet_ids: list[uuid.UUID] = Field(min_length=1, max_length=5)
+
+    @model_validator(mode="after")
+    def _no_duplicates(self) -> Self:
+        """같은 아이를 두 번 담을 수 없습니다. DB 의 `pet_invite_pets` PK 도 같은 것을
+        막지만, 여기서 걸러야 422 로 이유를 말해 줄 수 있습니다 — DB 까지 가면 500 입니다."""
+        if len(set(self.pet_ids)) != len(self.pet_ids):
+            raise ValueError("같은 강아지를 두 번 담을 수 없습니다.")
+        return self
+
+
+class InviteBundleCreated(BaseModel):
+    """**평문 토큰은 여기서 한 번만 나옵니다.** 서버는 해시만 들고 있어 다시 못 보여 줍니다."""
+
+    id: uuid.UUID
+    pet_ids: list[uuid.UUID]
+    token: str
+    expires_at: datetime
+
+
+class InviteBundleOut(BaseModel):
+    """`GET /app/pet-invites` 의 항목 하나. **토큰도 해시도 담지 않습니다.**"""
+
+    id: uuid.UUID
+    #: 담긴 강아지들. 앱이 "맥스·코코를 부른 링크" 로 그립니다.
+    pets: list["InvitePetBrief"]
+    expires_at: datetime
+    created_at: datetime
+    #: `None` 이면 아직 아무도 안 눌렀습니다.
+    accepted_at: datetime | None
+
+
+class InvitePetBrief(BaseModel):
+    """초대 목록·미리보기에 실리는 강아지 한 마리.
+
+    **건강정보가 없습니다** (MVP 결정 §8) — 수락 전에는 구성원이 아니라, 토큰 하나로 남의
+    집 지병·복약을 읽는 자리를 만들면 안 됩니다.
+    """
+
+    pet_id: uuid.UUID
+    name: str
+    breed: str | None = None
+    has_photo: bool = False
+
+
+class InviteBundleListResponse(BaseModel):
+    invites: list[InviteBundleOut]
+
+
+class InvitePreviewRequest(BaseModel):
+    """미리보기 요청. **body 로 받습니다** — 토큰을 URL 에 실으면 nginx access log·Referer·
+    브라우저 히스토리에 평문이 남습니다 (수락이 body 로 받는 것과 같은 이유)."""
+
+    token: str = Field(min_length=1, max_length=200)
+
+
+class InvitePreviewPet(InvitePetBrief):
+    #: 이미 이 아이의 구성원인가. true 면 수락해도 그 아이는 "이미 충족" 으로 지나갑니다.
+    already_member: bool = False
+
+
+class InvitePreviewResponse(BaseModel):
+    """수락 화면이 한 번에 그릴 것 (MVP 결정 §8).
+
+    연결 후보를 따로 부르지 않는 이유는 화면이 "강아지 목록 + 각 줄의 연결 드롭다운" 한
+    장이어서입니다 — 나누면 두 응답의 정합성을 앱이 맞춰야 합니다.
+    """
+
+    invited_by_nickname: str | None
+    expires_at: datetime
+    pets: list[InvitePreviewPet]
+    #: 내가 고를 수 있는 기존 강아지. 조건은 `pet_repo.list_link_candidates` 에 있습니다.
+    link_candidates: list[InvitePetBrief]
 
 
 class InviteAccept(BaseModel):
@@ -66,9 +149,17 @@ class InviteListResponse(BaseModel):
 
 __all__ = [
     "InviteAccept",
+    "InviteBundleCreate",
+    "InviteBundleCreated",
+    "InviteBundleListResponse",
+    "InviteBundleOut",
     "InviteCreated",
     "InviteListResponse",
     "InviteOut",
+    "InvitePetBrief",
+    "InvitePreviewPet",
+    "InvitePreviewRequest",
+    "InvitePreviewResponse",
     "MemberListResponse",
     "MemberOut",
     "OwnerTransfer",

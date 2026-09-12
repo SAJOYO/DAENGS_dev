@@ -29,6 +29,7 @@ __all__ = [
     "list_accessible",
     "list_for_owner",
     "list_for_owner_for_update",
+    "list_link_candidates",
     "member_condition",
     "names_by_ids",
     "owned_ids",
@@ -215,6 +216,43 @@ async def accessible_ids(
         return set()
     stmt = select(Pet.id).where(member_condition(app_user_id), Pet.id.in_(pet_ids))
     return set(await session.scalars(stmt))
+
+
+async def list_link_candidates(
+    session: AsyncSession, app_user_id: uuid.UUID
+) -> list[Pet]:
+    """**기존 강아지 연결 후보** — 초대 미리보기가 내려 줍니다 (MVP 결정 §2).
+
+    네 조건을 한 쿼리로 겁니다:
+
+    1. 내가 **행 대표**다 (`app_user_id`)
+    2. **다른 공동 보호자가 없다** (`pet_members` 에 줄이 없다)
+    3. **다른 논리 강아지에 연결되지 않았다** (`identity_id IS NULL`)
+    4. **배웅한 아이가 아니다** (`farewell_on IS NULL`)
+
+    요청 안에서의 중복(같은 후보를 초대 강아지 둘에 고르는 것)은 여기서 못 봅니다 —
+    그것은 서비스가 요청 단위로 보고, DB 의 마지막 방어는 `pets_identity_one_per_user`
+    부분 UNIQUE 입니다.
+
+    **2번이 이 목록의 핵심입니다.** 남의 기록이 이미 얹혀 있는 아이를 연결하면, 그
+    공동 보호자의 케어·산책이 동의 없이 새 그룹에 공개됩니다. 지금 저장소에 "최초
+    등록자" 칸이 없어(MVP 결정 §2) `대표 + 공동 보호자 없음` 을 "혼자 관리하던 아이"의
+    근사 조건으로 씁니다 — 승계로 대표가 된 아이는 옛 대표가 돌보미로 남으므로 2번에
+    걸려 자동으로 빠집니다.
+    """
+    stmt = (
+        select(Pet)
+        .where(
+            Pet.app_user_id == app_user_id,
+            Pet.identity_id.is_(None),
+            Pet.farewell_on.is_(None),
+            ~select(PetMember.pet_id)
+            .where(PetMember.pet_id == Pet.id)
+            .exists(),
+        )
+        .order_by(Pet.created_at, Pet.id)
+    )
+    return list(await session.scalars(stmt))
 
 
 async def list_accessible(session: AsyncSession, app_user_id: uuid.UUID) -> list[Pet]:

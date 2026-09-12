@@ -226,6 +226,8 @@ class Store:
         #: 논리 강아지 그룹 (`FakeIdentity`). 기본은 비어 있습니다 — 연결이 생길 때만
         #: 늘고, 그때까지 모든 `FakePet.identity_id` 는 None 입니다.
         self.pet_identities: list[FakeIdentity] = []
+        #: 초대 묶음에 담긴 강아지 줄 (`FakeInvitePet`).
+        self.pet_invite_pets: list[FakeInvitePet] = []
 
         #: 올라온 산책. 목록은 최근 순이라 진짜 리포지토리가 정렬해서 줍니다.
         self.walks: list[FakeWalk] = []
@@ -353,6 +355,22 @@ class FakeInvite:
     #: 영수증(2026-09-10, #388·#261). `None` 이면 아직 안 쓴 초대입니다.
     accepted_at: datetime | None = None
     accepted_by: uuid.UUID | None = None
+
+    #: 묶음의 **원래** 마릿수 (다중 초대 MVP). 자식 줄 수와 다르면 구성이 바뀐 것입니다.
+    pet_count: int = 1
+
+
+@dataclass
+class FakeInvitePet:
+    """PetInvitePet 대역 — 묶음에 담긴 강아지 한 줄.
+
+    `linked_pet_id` 는 수락 때 채웁니다. **영수증의 일부**라, 재시도가 그때의 강아지별
+    연결 결과를 복원하는 근거입니다.
+    """
+
+    invite_id: uuid.UUID
+    pet_id: uuid.UUID
+    linked_pet_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -709,6 +727,19 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         }
         return mine & set(pet_ids)
 
+    async def pet_list_link_candidates(session, app_user_id):
+        # 진짜와 같은 네 조건입니다 (MVP 결정 §2): 내가 행 대표 · 다른 공동 보호자 없음 ·
+        # 다른 그룹에 연결 안 됨 · 배웅 안 함.
+        carer_pet_ids = {pid for pid, _uid in store.pet_members}
+        return [
+            p
+            for p in store.pets
+            if p.app_user_id == app_user_id
+            and p.identity_id is None
+            and p.farewell_on is None
+            and p.id not in carer_pet_ids
+        ]
+
     async def pet_list_accessible(session, app_user_id):
         ids = _member_pet_ids(app_user_id)
         # 진짜는 `created_at, id` 로 정렬합니다. 대역의 `store.pets` 는 등록 순서라
@@ -856,6 +887,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_repo, "owned_ids", pet_owned_ids)
     monkeypatch.setattr(pet_repo, "accessible_ids", pet_accessible_ids)
     monkeypatch.setattr(pet_repo, "list_accessible", pet_list_accessible)
+    monkeypatch.setattr(pet_repo, "list_link_candidates", pet_list_link_candidates)
     monkeypatch.setattr(pet_repo, "count_for_owner", pet_count_for_owner)
     monkeypatch.setattr(pet_repo, "count_by_owners", pet_count_by_owners)
     monkeypatch.setattr(pet_repo, "names_by_ids", pet_names_by_ids)
@@ -915,15 +947,99 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             if i.pet_id == pet_id and i.expires_at > now and i.accepted_by is None
         )
 
-    def member_add_invite(session, *, pet_id, invited_by, token_hash, expires_at):
+    def member_add_invite(
+        session, *, pet_id, invited_by, token_hash, expires_at, pet_count=1
+    ):
         invite = FakeInvite(
             pet_id=pet_id,
             invited_by=invited_by,
             token_hash=token_hash,
             expires_at=expires_at,
+            pet_count=pet_count,
         )
         store.pet_invites.append(invite)
         return invite
+
+    # -- 초대 묶음 (다중 초대) -------------------------------------------
+    def member_add_invite_pets(session, invite_id, pet_ids):
+        rows = [FakeInvitePet(invite_id=invite_id, pet_id=pet_id) for pet_id in pet_ids]
+        store.pet_invite_pets += rows
+        return rows
+
+    async def member_list_bundle(session, invite_id):
+        return sorted(
+            (r for r in store.pet_invite_pets if r.invite_id == invite_id),
+            key=lambda r: str(r.pet_id),
+        )
+
+    async def member_list_bundles(session, invite_ids):
+        wanted = set(invite_ids)
+        bundles: dict = {}
+        for row in sorted(store.pet_invite_pets, key=lambda r: str(r.pet_id)):
+            if row.invite_id in wanted:
+                bundles.setdefault(row.invite_id, []).append(row.pet_id)
+        return bundles
+
+    async def member_count_valid_invites_for_inviter(session, invited_by, now):
+        # 진짜와 같게 **사람 기준**이고 수락된 영수증은 뺍니다 (MVP 결정 §2).
+        return sum(
+            1
+            for i in store.pet_invites
+            if i.invited_by == invited_by
+            and i.expires_at > now
+            and i.accepted_by is None
+        )
+
+    async def member_list_invites_for_inviter(session, invited_by):
+        return [i for i in store.pet_invites if i.invited_by == invited_by]
+
+    async def member_list_invites_with_pet(session, pet_id):
+        # 자식 줄로도, 앵커로도 찾힙니다 — 자식 줄이 아직 없는 옛 초대 때문입니다.
+        with_child = {r.invite_id for r in store.pet_invite_pets if r.pet_id == pet_id}
+        return [
+            i for i in store.pet_invites if i.pet_id == pet_id or i.id in with_child
+        ]
+
+    def _drop_invites(gone):
+        """초대가 사라지면 자식 줄도 같이 — `pet_invite_pets.invite_id` 의 CASCADE 자리."""
+        store.pet_invite_pets = [
+            r for r in store.pet_invite_pets if r.invite_id not in gone
+        ]
+
+    async def member_delete_invite_for_inviter(session, invited_by, invite_id):
+        gone = {
+            i.id
+            for i in store.pet_invites
+            if i.id == invite_id and i.invited_by == invited_by
+        }
+        store.pet_invites = [i for i in store.pet_invites if i.id not in gone]
+        _drop_invites(gone)
+        return len(gone)
+
+    async def member_delete_invite_with_pet(session, invited_by, pet_id, invite_id):
+        # 진짜와 같게 **앵커이거나 담긴 아이일 때만** 지웁니다 — URL 의 두 id 가 짝인지
+        # DB 에 묻는 자리입니다.
+        with_child = {r.invite_id for r in store.pet_invite_pets if r.pet_id == pet_id}
+        gone = {
+            i.id
+            for i in store.pet_invites
+            if i.id == invite_id
+            and i.invited_by == invited_by
+            and (i.pet_id == pet_id or i.id in with_child)
+        }
+        store.pet_invites = [i for i in store.pet_invites if i.id not in gone]
+        _drop_invites(gone)
+        return len(gone)
+
+    async def member_delete_expired_invites_for_inviter(session, invited_by, now):
+        gone = {
+            i.id
+            for i in store.pet_invites
+            if i.invited_by == invited_by and i.expires_at <= now
+        }
+        store.pet_invites = [i for i in store.pet_invites if i.id not in gone]
+        _drop_invites(gone)
+        return len(gone)
 
     async def member_delete_invite(session, invite_id):
         before = len(store.pet_invites)
@@ -975,6 +1091,31 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         pet_member_repo, "delete_expired_invites", member_delete_expired_invites
     )
     monkeypatch.setattr(pet_member_repo, "list_invites", member_list_invites)
+    monkeypatch.setattr(pet_member_repo, "add_invite_pets", member_add_invite_pets)
+    monkeypatch.setattr(pet_member_repo, "list_bundle", member_list_bundle)
+    monkeypatch.setattr(pet_member_repo, "list_bundles", member_list_bundles)
+    monkeypatch.setattr(
+        pet_member_repo,
+        "count_valid_invites_for_inviter",
+        member_count_valid_invites_for_inviter,
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "list_invites_for_inviter", member_list_invites_for_inviter
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "list_invites_with_pet", member_list_invites_with_pet
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invite_for_inviter", member_delete_invite_for_inviter
+    )
+    monkeypatch.setattr(
+        pet_member_repo, "delete_invite_with_pet", member_delete_invite_with_pet
+    )
+    monkeypatch.setattr(
+        pet_member_repo,
+        "delete_expired_invites_for_inviter",
+        member_delete_expired_invites_for_inviter,
+    )
     monkeypatch.setattr(
         pet_member_repo, "delete_invite_for_pet", member_delete_invite_for_pet
     )

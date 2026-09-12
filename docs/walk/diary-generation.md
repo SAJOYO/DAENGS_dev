@@ -1,5 +1,10 @@
 # 산책 일기 배경 작성과 생성 수명주기
 
+기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/4b90be1d1ef63b758cfa0d25107a7fc9d3913fa1/docs/explorations/walk/diary/plan.md)
+([GEO #265](https://github.com/rkbuhtig/DAENGS_geo/pull/265))이다.
+아래는 기존 서버 생성 수명주기와 작성 입력의 구현 기록이다. `session_time`·장면열 전달과
+배경/원본 조립을 새 기획에 맞게 변경한 것은 아니다. 입력 투영·프롬프트·본문 계약 반영은 별도 작업이다.
+
 [Dev #378](https://github.com/SAJOYO/DAENGS_dev/pull/378).
 [스탬프 선택](diary-stamps.md)과 [확정 동선 관측](diary-observations.md)을 기존
 `walk_storyboard` API의 명시적인 새 형식에 연결한다.

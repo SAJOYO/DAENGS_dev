@@ -2,6 +2,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/trajectory-api.md](walk/trajectory-api.md) | 동선 검증 후보 조회 — 소유권·명시적 버전·기대 측정 ID·원본 시각·전체 응답 무결성 |
 | [walk/trajectory-contracts.md](walk/trajectory-contracts.md) | 동선 최종 집계 소유권·위치 없는 시간·측정 비교/조회 전환의 순수 계약과 합성 검증 |
 | [walk/trajectory-shadow.md](walk/trajectory-shadow.md) | 기존 motion/precision 입력의 누적 원장·관측/보행 투영과 읽기 전용 진단 도구 |
 | [walk/gps-motion-precision.md](walk/gps-motion-precision.md) | GPS 좌표 원본 비트의 추가 백업·정밀 계산·앱 대조와 적용 순서 |

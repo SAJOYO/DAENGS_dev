@@ -7,6 +7,7 @@
 import uuid
 from datetime import UTC, datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Walk, WalkAnalysis, WalkPet, WalkPointChunk
@@ -70,7 +71,8 @@ async def upload_walk(
 
     앱은 네트워크가 끊기면 다음에 다시 올립니다(지하철에 들어가면 그렇습니다).
     그때 같은 산책이 두 건이 되면 안 되므로 기기가 준 `client_session_id` 로 먼저
-    찾아봅니다. DB 에도 UNIQUE 가 걸려 있어 경쟁이 나도 두 건은 안 생깁니다.
+    찾아봅니다. 동시에 처음 올려 UNIQUE 충돌이 나면 rollback 뒤 먼저 저장된
+    산책을 다시 읽어 같은 상세 응답을 돌려줍니다. 다른 제약 오류는 그대로 전달합니다.
 
     **덮어쓰지 않습니다.** 끝난 기록은 바뀌지 않으므로 다시 온 것은 재시도일 뿐이고,
     좌표를 다시 넣으면 이미 저장한 원본을 흔들 위험만 있습니다.
@@ -92,10 +94,7 @@ async def upload_walk(
     await activity_game.acquire(session)
     existing = await walk_repo.get_by_client_session(session, app_user_id, body.client_session_id)
     if existing is not None:
-        await activity.record_walk(session, existing)
-        if activity.settings.activity_game_enabled:
-            await session.commit()
-        return existing, False
+        return await _return_existing_upload(session, existing)
 
     mine = await pet_repo.accessible_ids(session, app_user_id, body.pet_ids)
 
@@ -114,12 +113,33 @@ async def upload_walk(
     # 좌표는 **묶음 하나**로 담는다. 앱이 2,000점씩 끊어 보내므로 요청 하나가
     # 곧 묶음 하나다 (`WalkSync.POINTS_PER_REQUEST`).
     walk.points = [_chunk(body.points)] if body.points else []
-    walk_repo.add(session, walk)
-    if activity.settings.activity_game_enabled:
-        await session.flush()
-        await activity.record_walk(session, walk)
-    await session.commit()
+    try:
+        walk_repo.add(session, walk)
+        if activity.settings.activity_game_enabled:
+            await session.flush()
+            await activity.record_walk(session, walk)
+        await session.commit()
+    except IntegrityError as error:
+        await session.rollback()
+        if not walk_repo.is_client_session_conflict(error):
+            raise
+        # rollback은 게임 잠금과 그 안의 시즌/만료 반영도 되돌립니다.
+        await activity_game.acquire(session)
+        existing = await walk_repo.get_by_client_session(
+            session, app_user_id, body.client_session_id
+        )
+        if existing is None:
+            # 충돌 후 삭제됐을 수도 있습니다. 없는 행을 성공으로 응답하지 않습니다.
+            raise
+        return await _return_existing_upload(session, existing)
     return walk, True
+
+
+async def _return_existing_upload(session: AsyncSession, walk: Walk) -> tuple[Walk, bool]:
+    await activity.record_walk(session, walk)
+    if activity.settings.activity_game_enabled:
+        await session.commit()
+    return walk, False
 
 
 async def append_points(

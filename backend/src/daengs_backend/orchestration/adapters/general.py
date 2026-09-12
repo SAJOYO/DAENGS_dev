@@ -43,11 +43,15 @@ over checking ``payload.walk_activity is None`` directly because the model alrea
 from the prompt's rule, *whether the question was actually about distance/time* — the
 payload alone cannot tell "no activity today" from "not asked about activity at all", and
 gluing the sentence onto every answer when records are simply absent would be wrong far
-more often than right. This task only opens the field; nothing sets it yet, because the
-prompt (a later task) is what actually instructs the model to raise it — until then
-``unmeasured`` never comes back ``True`` and no visible behavior changes. **To revert**:
-replace the ``if answer.unmeasured:`` check in ``GeneralCapabilityAdapter.run`` with
-``if payload.walk_activity is None:`` — one line, and the marker field can stay unused.
+more often than right. ``_WALK_ACTIVITY_RULE`` (D-072, Task 5) is what actually instructs
+the model to raise the flag, and it only ever rides in the ``-walk`` prompt body — that
+is, when ``payload.walk_activity is not None``. So ``unmeasured`` can come back ``True``
+starting with this task, but only for requests that carry a walk-activity summary at all;
+a request with no ``walk_activity`` never sees the rule and the field stays unused for it,
+exactly as before this task. **To revert this task**: delete ``_WALK_ACTIVITY_RULE`` and
+the three call sites that add it (``rule_blocks``, ``context_lines``, the ``-walk`` suffix
+in ``general_prompt_version``) — the marker field and the adapter's OK-path branch predate
+this task and stay.
 """
 
 from __future__ import annotations
@@ -110,9 +114,15 @@ from daengs_backend.orchestration.semantic import (
 # 바뀐 것은 `GENERAL_ANSWER_JSON_SCHEMA` 뿐이다. `GeneralAnswer` 에 `unmeasured` 칸이
 # 늘면서 `build_general_prompt` 가 끼워 넣는 `GeneralAnswer.model_json_schema()` 가
 # 네 가지 프롬프트 몸 전부에서 달라졌다 — `kind` 에 `ask` 를 더했던 v6 때와 같은 이유고
-# 같은 결로 네 상수를 한꺼번에 올린다(위 v6 주석). 모델에게 언제 `unmeasured` 를 세우라고
-# 시키는 문단은 이 판본에 없다 — 그것은 다음 카드(Task 5)의 몫이라, 지금은 스키마에
-# 칸만 늘고 모델이 그 칸을 세울 이유가 없다.
+# 같은 결로 네 상수를 한꺼번에 올린다(위 v6 주석). Task 6 시점에는 모델에게 언제
+# `unmeasured` 를 세우라고 시키는 문단이 아직 없었다 — 스키마에 칸만 늘고 모델이 그
+# 칸을 세울 이유가 없었다.
+# v9-walk (D-072 Task 5, 같은 날 — 순서가 계획서와 뒤집혀 Task 6 뒤에 왔다): 그 문단
+# (`_WALK_ACTIVITY_RULE`)이 여기서 붙는다. `payload.walk_activity is not None` 인
+# 요청, 즉 `general_prompt_version` 이 `-walk` 접미사를 붙이는 판본에서만 실린다 —
+# 그 요청에서는 `unmeasured` 가 실제로 `True` 로 돌아올 수 있다. `walk_activity` 가
+# 없는 요청(위 네 상수의 판본)은 이 문단을 안 보므로 지금도 칸은 있지만 세워질 이유가
+# 없다.
 # D-057 ③ 의 84건 쌍대 비교 승인은 **지시문 텍스트**(`_SAFETY_PROMPT` 등 규칙 문단)에 걸린
 # 것이지 스키마 블록에 걸린 것이 아니다 — v6 · v9 처럼 지시문이 안 바뀌고 스키마만 바뀌어
 # 버전이 오르는 것은 그 계보를 끊지 않는다. 계보가 끊기는 것은 규칙 문단의 글자가 바뀔 때뿐이다.

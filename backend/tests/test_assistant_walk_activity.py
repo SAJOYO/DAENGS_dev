@@ -420,8 +420,13 @@ def test_기록이_없으면_컨텍스트에_안_실린다(client, pet, walks, s
 
 
 def test_walk_suffix_sits_between_the_base_and_conv() -> None:
-    """순서를 고정한다 — `<base>` → `-walk` → `-conv` (Global Constraint 5)."""
+    """순서를 고정한다 — `<base>` → `-walk` → `-conv` (Global Constraint 5).
+
+    `conversation` 없이 `-walk` 만 확인하면 이름이 약속한 "`-conv` **앞**" 을 실제로는
+    안 잰다 — `conversation` 을 같이 실어 `-walk-conv` 순서까지 단언한다.
+    """
     from daengs_backend.orchestration.adapters.general import general_prompt_version
+    from daengs_backend.orchestration.contracts import ConversationContext, TurnRelation
 
     activity = WalkActivityContext(
         day="2026-09-12", walk_count=1, measured_walk_count=1,
@@ -430,6 +435,12 @@ def test_walk_suffix_sits_between_the_base_and_conv() -> None:
     assert general_prompt_version(
         GeneralPayload(question="q", walk_activity=activity)
     ) == "general-answer-ko-v9-walk"
+    assert general_prompt_version(
+        GeneralPayload(
+            question="q", walk_activity=activity,
+            conversation=ConversationContext(relation=TurnRelation.NEW),
+        )
+    ) == "general-answer-ko-v9-walk-conv"
 
 
 def test_the_rule_forbids_estimating_from_a_described_route() -> None:
@@ -455,8 +466,15 @@ def test_the_rule_makes_the_two_counts_speakable() -> None:
 
 
 def test_conversation_block_still_sits_immediately_before_user_query() -> None:
-    """`walk_activity` 와 `conversation` 이 함께 있어도 CONVERSATION 은 USER_QUERY 바로 앞이다."""
+    """`walk_activity` 와 `conversation` 이 함께 있어도 CONVERSATION 은 USER_QUERY 바로 앞이다.
+
+    `a < b < c` 는 순서만 잰다 — 사이에 다른 블록이 끼어들어도 통과해 버린다. 여기서
+    지키려는 것은 "WALK_ACTIVITY 줄과 USER_QUERY 줄 사이에는 CONVERSATION 블록 말고는
+    아무것도 없다" 이므로, 그 사이 텍스트를 `render_conversation_context` 가 내는 값과
+    글자 단위로 비교한다.
+    """
     from daengs_backend.orchestration.contracts import ConversationContext, TurnRelation
+    from daengs_backend.orchestration.semantic import render_conversation_context
 
     activity = WalkActivityContext(
         day="2026-09-12", walk_count=1, measured_walk_count=1,
@@ -466,10 +484,8 @@ def test_conversation_block_still_sits_immediately_before_user_query() -> None:
     prompt = build_general_prompt(
         GeneralPayload(question="q", walk_activity=activity, conversation=conversation)
     )
-    # `_SAFETY_PROMPT` 본문에 이미 "CONVERSATION" 이라는 낱말이 산문으로 들어 있으므로
-    # (증상 묶음 규칙, `general.py` 의 감정 라우터 규칙과 같은 결) 실제 컨텍스트 블록의
-    # 마커인 `"CONVERSATION:"` 로 찾는다 — `render_conversation_context` 가 내는 접두사다.
-    conversation_idx = prompt.index("CONVERSATION_INSTRUCTION:")
-    user_query_idx = prompt.index("USER_QUERY:")
     walk_idx = prompt.index("WALK_ACTIVITY:")
-    assert walk_idx < conversation_idx < user_query_idx
+    user_query_idx = prompt.index("USER_QUERY:")
+    walk_line_end = prompt.index("\n", walk_idx) + 1
+    between = prompt[walk_line_end:user_query_idx]
+    assert between == render_conversation_context(conversation) + "\n"

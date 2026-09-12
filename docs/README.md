@@ -161,6 +161,7 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | [territory/account-query-scope.md](territory/account-query-scope.md) | 일반 점령 계정의 대상 강아지 조회와 시즌 전체 정산 경계 |
 | [territory/vision-worker.md](territory/vision-worker.md) | 방문 사진 처리 lease·DB 재시도·Beat 복구 발행과 판정/점유 원자성, Docker 엔진·CI 없는 Windows 검증 |
 | [territory/vision-observability.md](territory/vision-observability.md) | 읽기 전용 사진 backlog·만료/소진 구분·복구 실행별 JSON 로그와 발행 실패/미시도 분리 |
+| [territory/photo-cleanup-conflicts.md](territory/photo-cleanup-conflicts.md) | 영구적인 사진 정리 충돌의 자동 재발행 중단·관측·원본 확인 후 명시적 재개 |
 
 중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
 `VerifiedVisit`과 공유 점유는 backend가 소유합니다. 점유 계약과 후속 정책은

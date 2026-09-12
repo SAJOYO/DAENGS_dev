@@ -20,8 +20,9 @@
    한 차례 재시도 뒤 `FAILED`로 기록한다. 앱은 기존 단건 GET을 polling한다.
 6. 게임 공통 잠금 → 시도 행 잠금 순서로 token·기한·generation을 재검사한다. 현재 처리권이
    있을 때 판정·방문 사실·연결 점유를 함께 commit하고 lease를 해제한다.
-7. 잠금을 푼 뒤 원본을 0바이트 tombstone으로 치환한다. 정리 실패도 주기적 재발행으로
-   복구하며 이미 저장한 결과를 재사용한다.
+7. 잠금을 푼 뒤 원본을 0바이트 tombstone으로 치환한다. 일시적인 정리 실패는 주기적
+   재발행으로 복구한다. 원본 누락·generation 충돌은 DB에 조치 필요 상태를 남기고
+   [명시적 정리 재개](photo-cleanup-conflicts.md)까지 자동 발행을 멈춘다. 판정 결과는 유지한다.
 
 ```mermaid
 flowchart TD
@@ -34,6 +35,8 @@ flowchart TD
     E --> F[게임 → 시도 잠금<br/>token·기한·generation 검사]
     F --> D[판정·방문 사실·점유 commit]
     D --> X[잠금 없이 사진 정리]
+    X -->|원본 누락·generation 충돌| H[정리 중단 상태 저장<br/>자동 발행·중복 요청 제외]
+    H -->|원본 확인 후 명시적 재개| R
     E -->|재시도 가능한 실패| T[현재 token 확인<br/>2초 후 재시도 예약·lease 해제]
     T --> Q
     T --> R
@@ -50,6 +53,9 @@ flowchart TD
   token 없는 내부 호출로도 종결할 수 없다.
 - 이미 종결된 행은 결과를 바꾸지 않으며, 미완료 사진 정리만 재개한다. cleanup에는
   모델 시도 횟수를 추가하지 않는다. 저장소의 generation 충돌도 다른 객체를 지우지 않는다.
+- 종결 행의 `vision_retry_reason=photo_cleanup_conflict`는 조치 필요 정리다. 자동 복구
+  조회와 이미 큐에 남은 중복 전달이 모두 건너뛴다. 외부 정리 후 행을 다시 잠가 결과를
+  저장하므로 늦은 실패가 정리 완료·원본 변경·명시적 재개를 덮어쓰지 않는다.
 - broker 발행 실패 시 confirm은 503을 반환하지만 DB는 `VISION_PENDING`으로 남는다.
   앱 재호출 없이도 `territory.recover_photos`가 복구한다. 복구는 `SKIP LOCKED`로 최대
   100개를 골라 30초 뒤까지 발행을 예약하고 commit한 다음 큐를 호출한다. broker 실패 시
@@ -66,7 +72,7 @@ flowchart TD
 | `vision_attempts` | 처리권을 얻은 횟수, 최대 2. 모델 호출 전 중단도 이 예산을 소비 |
 | `vision_available_at` | 기술 실패 뒤 다음 처리를 허용하는 시각 |
 | `vision_dispatch_after` | 복구 발행의 다음 허용 시각. worker의 즉시 전달 처리를 막지는 않음 |
-| `vision_retry_reason` | 재시도 중 보관하는 정제된 실패 코드 |
+| `vision_retry_reason` | pending의 정제된 실패 코드. 미정리 종결 행에서는 `photo_cleanup_conflict`가 명시적 재개 필요 상태 |
 
 두 번째 처리도 중단돼 lease가 만료되면 모델을 다시 호출하지 않고 `FAILED`로 종결한다.
 유효한 판정을 저장한 뒤 정리만 실패한 경우에는 결과를 유지한다. 새 메시지·Celery retry

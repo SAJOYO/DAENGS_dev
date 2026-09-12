@@ -5,7 +5,9 @@
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +28,7 @@ from daengs_backend.services import activity, activity_game
 from daengs_backend.services.walk_analysis import build_analysis_models
 from daengs_backend.services.walk_capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_backend.services.walk_finalize import PreparedWalkEvidence, prepare_finalized_walk
 from daengs_walk import (
     WalkEvidencePoint,
     analyze_walk,
@@ -183,6 +185,31 @@ async def append_points(
         raise
 
 
+@dataclass(frozen=True)
+class _FinalizeSnapshot:
+    walk_id: uuid.UUID
+    started_at: datetime
+    ended_at: datetime
+    weather_code: int | None
+    is_day: bool | None
+    temperature_c: Decimal | None
+    pet_ids: tuple[uuid.UUID, ...]
+    prepared: PreparedWalkEvidence
+
+    @classmethod
+    def capture(cls, walk: Walk, prepared: PreparedWalkEvidence) -> "_FinalizeSnapshot":
+        return cls(
+            walk_id=walk.id,
+            started_at=walk.started_at,
+            ended_at=walk.ended_at,
+            weather_code=walk.weather_code,
+            is_day=walk.is_day,
+            temperature_c=walk.temperature_c,
+            pet_ids=tuple(sorted(walk.pet_ids)),
+            prepared=prepared,
+        )
+
+
 async def finalize_walk(
     session: AsyncSession,
     app_user_id: uuid.UUID,
@@ -190,12 +217,45 @@ async def finalize_walk(
     manifest: WalkFinalizeRequest,
     weather_lookup: WalkWeatherLookup | None = None,
 ) -> tuple[WalkAnalysis, bool]:
-    """완전한 좌표열을 계산하고 분석·sheet·봉인 상태를 한 번에 commit한다.
+    """불변 입력의 계산·날씨 조회 후 최신 입력을 잠그고 원자적으로 봉인한다.
 
-    같은 finalize를 다시 부르면 이미 저장된 같은 identity를 돌려준다.
-    append와 같은 Walk 행을 잠그므로 두 요청이 동시에 입력을 바꾸지 못한다.
+    외부 조회 중에는 트랜잭션을 유지하지 않습니다. 재조회에서 입력 변경을 거절하고,
+    다른 finalize가 먼저 완료했으면 그 분석을 그대로 돌려줍니다.
     """
     try:
+        walk = await walk_repo.get_owned_for_finalize(session, app_user_id, walk_id)
+        if walk is None:
+            raise WalkNotFoundError
+        prepared = prepare_finalized_walk(walk.points, manifest)
+        if walk.analysis_state not in {"collecting", "derived"}:
+            raise WalkStateConflictError(
+                "walk_state_invalid",
+                f"알 수 없는 산책 봉인 상태입니다: {walk.analysis_state!r}",
+            )
+        snapshot = _FinalizeSnapshot.capture(walk, prepared)
+        already_derived = walk.analysis_state == "derived"
+        await session.commit()  # 읽기 트랜잭션 종료. 아래 계산·외부 호출에는 ORM을 넘기지 않는다.
+
+        analysis = None
+        weather = None
+        if not already_derived:
+            evidence = analyze_walk(
+                snapshot.walk_id,
+                snapshot.started_at,
+                snapshot.ended_at,
+                snapshot.prepared.points,
+            )
+            analysis = build_analysis_models(
+                snapshot.prepared, evidence, build_cellophane(evidence)
+            )
+            anchor = select_context_anchor(
+                evidence.accepted_points,
+                started_at=snapshot.started_at,
+                ended_at=snapshot.ended_at,
+            )
+            weather = await _lookup_context_weather(weather_lookup, anchor)
+
+        # 게임 공통 잠금 → Walk 행 잠금 순서를 유지한다. 시즌/만료 반영도 이 트랜잭션이다.
         await activity_game.acquire(session)
         walk = await walk_repo.get_owned_for_update(session, app_user_id, walk_id)
         if walk is None:
@@ -203,31 +263,7 @@ async def finalize_walk(
 
         prepared = prepare_finalized_walk(walk.points, manifest)
         if walk.analysis_state == "derived":
-            existing = await walk_repo.get_analysis_for_input(
-                session,
-                walk_id=walk.id,
-                input_fingerprint=prepared.input_fingerprint,
-            )
-            if existing is None:
-                raise WalkStateConflictError(
-                    "finalized_analysis_not_found",
-                    "봉인 상태와 저장된 분석 결과가 맞지 않습니다.",
-                )
-            if existing.capsule is None:
-                # Capsule migration을 먼저 적용하고 코드를 배포하는 사이에도 이전
-                # 프로세스가 finalize할 수 있다. 그 짧은 창에 생긴 Analysis는 같은
-                # Walk 행 잠금 안에서 당시 메타데이터로 한 번만 복구한다.
-                _attach_capsule(
-                    walk,
-                    existing,
-                    sealed_at=existing.derived_at,
-                    provider="legacy_walk_metadata_v1",
-                    context_version=1,
-                )
-                await session.flush()
-            await activity.record_walk(session, walk, existing)
-            await session.commit()  # 필요하면 legacy seal을 복구하고 멱등 응답한다.
-            return existing, False
+            return await _reuse_finalized_walk(session, walk, prepared)
 
         if walk.analysis_state != "collecting":
             raise WalkStateConflictError(
@@ -235,23 +271,11 @@ async def finalize_walk(
                 f"알 수 없는 산책 봉인 상태입니다: {walk.analysis_state!r}",
             )
 
-        evidence = analyze_walk(
-            walk.id,
-            walk.started_at,
-            walk.ended_at,
-            prepared.points,
-        )
-        anchor = select_context_anchor(
-            evidence.accepted_points,
-            started_at=walk.started_at,
-            ended_at=walk.ended_at,
-        )
-        weather = await _lookup_context_weather(weather_lookup, anchor)
-        analysis = build_analysis_models(
-            prepared,
-            evidence,
-            build_cellophane(evidence),
-        )
+        if analysis is None or _FinalizeSnapshot.capture(walk, prepared) != snapshot:
+            raise WalkStateConflictError(
+                "walk_input_changed",
+                "산책 기록이 변경되었습니다. 최신 기록으로 다시 시도해 주세요.",
+            )
         _attach_capsule(
             walk,
             analysis,
@@ -268,6 +292,33 @@ async def finalize_walk(
     except Exception:
         await session.rollback()
         raise
+
+
+async def _reuse_finalized_walk(
+    session: AsyncSession, walk: Walk, prepared: PreparedWalkEvidence
+) -> tuple[WalkAnalysis, bool]:
+    """Walk 잠금 안에서 같은 분석을 재사용하고 누락된 legacy Capsule만 복구한다."""
+    existing = await walk_repo.get_analysis_for_input(
+        session, walk_id=walk.id, input_fingerprint=prepared.input_fingerprint
+    )
+    if existing is None:
+        raise WalkStateConflictError(
+            "finalized_analysis_not_found", "봉인 상태와 저장된 분석 결과가 맞지 않습니다."
+        )
+    if existing.capsule is None:
+        _attach_capsule(
+            walk,
+            existing,
+            sealed_at=existing.derived_at,
+            provider="legacy_walk_metadata_v1",
+            context_version=1,
+        )
+        # 기존 Analysis의 backref만으로는 새 Capsule이 session에 등록되지 않습니다.
+        walk_repo.add_analysis(session, existing)
+        await session.flush()
+    await activity.record_walk(session, walk, existing)
+    await session.commit()
+    return existing, False
 
 
 def _attach_capsule(

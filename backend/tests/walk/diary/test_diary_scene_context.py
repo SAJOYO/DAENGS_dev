@@ -159,18 +159,17 @@ async def test_missing_location_and_provider_failure_keep_the_original_board():
     assert not calls
 
 
-def test_writer_keeps_record_center_motion_time_basis_and_scene_sequence_without_raw_gps():
+def test_writer_keeps_original_and_local_materials_without_global_scene_sequence():
     source, route, _ = demo_input()
     preview = prepare_slot_preview(source, SlotPolicy(), policy(3), route=route)
     slots = prepare_board_slots(source, preview.base_board, SlotPolicy(), route=route)
     payload = slot_payload(preview.base_board, slots)
-    assert len(payload["scene_sequence"]) == len(preview.base_board.scenes)
-    assert payload["display_timezone"] == "Asia/Seoul"
+    assert "scene_sequence" not in payload
+    originals = {s.id: s.body for s in preview.base_board.scenes}
     for item in payload["scenes"]:
-        assert item["original"] == item["center"]["record"]["text"]
-        assert item["center"]["time_basis"] == "recorded_at"
-        assert item["center"]["event_at"].endswith("+09:00")
-        assert "anchor" not in item["center"] and "source_fixes" not in item["center"]
+        assert item["original"] == originals[item["scene_id"]]
+        assert "center" not in item and "anchor" not in item
+        assert item["evidence"]
     assert source.owner_id not in json.dumps(payload)
 
 

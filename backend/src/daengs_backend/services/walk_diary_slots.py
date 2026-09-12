@@ -3,18 +3,10 @@
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewResponse
 from daengs_backend.services.walk_diary_input import read_input
 from daengs_backend.services.walk_diary_slot_writing import write_slot_preview
+from daengs_backend.services.walk_diary_space_collection import configured_collection
 from daengs_walk.diary_board import BaseBoardPolicy, VerifiedBoardRoute
 from daengs_walk.diary_slots import prepare_board_slots, prepare_slot_preview
 from daengs_walk.diary_stamps import StampPolicy
-
-
-async def configured_collection(board):
-    from daengs_backend.config import settings
-    from daengs_backend.services.walk_diary_scene_collection import collect_scene_backgrounds
-
-    return await collect_scene_backgrounds(
-        board, place_api=settings.place_search_base_url, kakao_key=settings.kakao_rest_api_key or ""
-    )
 
 
 async def preview_saved_slots(

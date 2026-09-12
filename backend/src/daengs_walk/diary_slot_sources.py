@@ -115,11 +115,22 @@ def candidates_for_scene(source, scene, policy, motion, blocks, *, extra_backgro
         b.id for b in extra_backgrounds if b.status in {"known", "partial"}
     }
     scene_scope = {"scene_id": scene.id, "anchor": anchor.model_dump(mode="json")}
+    normalized_scene = any(
+        b.target == scene.core_ref and b.payload_schema == "space-materials-v1"
+        for b in extra_backgrounds
+    )
     for saved in sorted((*source.backgrounds, *extra_backgrounds), key=lambda b: b.id):
         # Distances supplied for another core cannot migrate to this scene.
         if saved.target != scene.core_ref:
             continue
         part = "environment" if saved.tags == ("environment",) else "space"
+        if normalized_scene and saved.payload_schema in {
+            "public-commerce-nearby-v1",
+            "public-park-nearby-v1",
+            "public-river-nearby-v1",
+        }:
+            reject(part, saved.id, "replaced_by_normalization_input")
+            continue
         if saved.id not in selected or saved.status not in {"known", "partial"}:
             reject(part, saved.id, saved.reason or saved.status, "unknown")
             continue
@@ -138,6 +149,11 @@ def candidates_for_scene(source, scene, policy, motion, blocks, *, extra_backgro
             )
             continue
         if part == "space":
+            if saved.payload_schema == "space-materials-v1":
+                from daengs_walk.diary_space_slots import space_candidates
+
+                candidates.extend(space_candidates(saved, anchor, scene_scope, policy, reject))
+                continue
             projection = project_background(saved, core)
             if projection.reason:
                 reject(part, saved.id, projection.reason, "unknown")

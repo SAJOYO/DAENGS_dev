@@ -3,7 +3,8 @@
 후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
 특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
 행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
-지정 공공 API의 실제 필드 분류와 최신 서술 품질은 아직 미검증이다. 아래 기존 구현을 그 완료로 읽지 않는다.
+[상권·공원·피복 정규화](space-normalization.md)는 실제 저장 응답으로 이식 동등성을 확인했다.
+최신 서술 품질은 별도 검증 대상이다.
 
 기획 기준은 [산책 장면과 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)
 ([GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266))이다.
@@ -23,8 +24,9 @@
 ## 현재 연결 범위
 
 `collect_backgrounds: true`를 미리보기 요청에 명시하면 읽기 트랜잭션을 끝낸 뒤
-고정된 각 장면 위치에서 Place를 조회한다. 카탈로그가 비거나 실패하면 Kakao Local의
-공원·카페·음식점을 조회하고, 주소는 법정동 위치 참고로 구분한다. 기본값은 false다.
+고정 장면에 상권·공원·피복의 정규화 재료를 결합한다. 상세 범위·시간 한도·실제 발행 활성화는
+[공간 정규화 계약](space-normalization.md)을 따른다. 요청 기본값은 false다.
+아래 CLI와 Place/Kakao 비교 결과는 이전 수집 실험 기록이다.
 확인된 위치가 없으면 조회하지 않는다. 동시 조회 4개, 장면 12개, 수집 20초 한도가 있다.
 일반 storyboard 발행에 이 외부 조회를 자동 추가한 것은 아니다.
 

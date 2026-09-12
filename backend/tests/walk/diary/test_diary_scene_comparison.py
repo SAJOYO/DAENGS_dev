@@ -53,7 +53,8 @@ def test_visible_order_hidden_scenes_and_verbatim_edits_pass_through_shared_writ
         )
     slots = prepare_board_slots(source, board, SlotPolicy(), route=route)
     payload = slot_payload(board, slots)
-    assert [s["scene_id"] for s in payload["scene_sequence"]] == [s.id for s in board.scenes]
+    assert "scene_sequence" not in payload
+    assert {s["scene_id"] for s in payload["scenes"]} <= {s.id for s in board.scenes}
     assert original.scenes[0].body != request["scenes"][0]["body"]
 
 

@@ -52,7 +52,7 @@ def can_prepare(point):
     return True
 
 
-def select(kind, point):
+def select(kind, point, *, radius_m=None):
     """Prefer the managed region; a still-valid legacy snapshot is a rollout fallback."""
     paths = []
     if settings.walk_public_catalog_root:
@@ -60,7 +60,7 @@ def select(kind, point):
     legacy = getattr(settings, f"walk_{kind}_catalog_path")
     if legacy:
         paths.append(Path(legacy))
-    radius = 125 if kind == "commerce" else 250
+    radius = radius_m if radius_m is not None else (125 if kind == "commerce" else 250)
     outside = False
     for path in paths:
         try:

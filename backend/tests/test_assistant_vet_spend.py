@@ -37,6 +37,7 @@ from daengs_backend.orchestration.adapters.general import (
     GeneralAnswer,
     _CARE_LOG_RULE,
     _SAFETY_PROMPT,
+    _UNMEASURED_RULE,
     _VET_SPEND_RULE,
     build_general_prompt,
 )
@@ -352,10 +353,11 @@ def test_prompt_without_vet_spend_keeps_the_base_body_byte_identical() -> None:
     dog_json = json.dumps({"breed": "퍼그"}, ensure_ascii=False, sort_keys=True)
 
     v3 = build_general_prompt(GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그")))
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v9"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
     expected_v3 = (
         f"PROMPT_VERSION: {GENERAL_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
+        f"{_UNMEASURED_RULE}\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
         f"DOG_CONTEXT: {dog_json}\n"
         f"USER_QUERY: {QUERY}\n"
@@ -369,13 +371,14 @@ def test_prompt_without_vet_spend_keeps_the_base_body_byte_identical() -> None:
                               last_meal_at="18:30", last_medication_at="08:12")
     payload = GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log)
     v4 = build_general_prompt(payload)
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v9-carelog"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v10-carelog"
     care_log_json = json.dumps(
         care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
     )
     expected_v4 = (
         f"PROMPT_VERSION: {GENERAL_CARE_LOG_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
+        f"{_UNMEASURED_RULE}\n\n"
         f"{_CARE_LOG_RULE}\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
         f"DOG_CONTEXT: {dog_json}\n"
@@ -405,10 +408,11 @@ def test_prompt_version_flips_when_vet_spend_present() -> None:
     only_vet = build_general_prompt(
         GeneralPayload(question=QUERY, dog=DogContext(breed="퍼그"), vet_spend=vet_spend)
     )
-    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v9-vetspend"
+    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v10-vetspend"
     expected_only_vet = (
         f"PROMPT_VERSION: {GENERAL_VET_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
+        f"{_UNMEASURED_RULE}\n\n"
         f"{_VET_SPEND_RULE}\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"
         f"DOG_CONTEXT: {dog_json}\n"
@@ -424,13 +428,14 @@ def test_prompt_version_flips_when_vet_spend_present() -> None:
             question=QUERY, dog=DogContext(breed="퍼그"), care_log=care_log, vet_spend=vet_spend
         )
     )
-    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v9-carelog-vetspend"
+    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v10-carelog-vetspend"
     care_log_json = json.dumps(
         care_log.model_dump(mode="json", exclude_none=True), ensure_ascii=False, sort_keys=True
     )
     expected_both = (
         f"PROMPT_VERSION: {GENERAL_CARE_LOG_VET_PROMPT_VERSION}\n\n"
         f"{_SAFETY_PROMPT}\n\n"
+        f"{_UNMEASURED_RULE}\n\n"
         f"{_CARE_LOG_RULE}\n\n"
         f"{_VET_SPEND_RULE}\n\n"
         f"GENERAL_ANSWER_JSON_SCHEMA:\n{schema}\n\n"

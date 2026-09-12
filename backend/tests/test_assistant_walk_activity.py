@@ -434,13 +434,13 @@ def test_walk_suffix_sits_between_the_base_and_conv() -> None:
     )
     assert general_prompt_version(
         GeneralPayload(question="q", walk_activity=activity)
-    ) == "general-answer-ko-v9-walk"
+    ) == "general-answer-ko-v10-walk"
     assert general_prompt_version(
         GeneralPayload(
             question="q", walk_activity=activity,
             conversation=ConversationContext(relation=TurnRelation.NEW),
         )
-    ) == "general-answer-ko-v9-walk-conv"
+    ) == "general-answer-ko-v10-walk-conv"
 
 
 def test_the_rule_forbids_estimating_from_a_described_route() -> None:
@@ -489,3 +489,22 @@ def test_conversation_block_still_sits_immediately_before_user_query() -> None:
     walk_line_end = prompt.index("\n", walk_idx) + 1
     between = prompt[walk_line_end:user_query_idx]
     assert between == render_conversation_context(conversation) + "\n"
+
+
+# ---------------------------------------------------------------- Task 8: unmeasured 규칙은
+# 기록이 0건(`walk_activity is None`)이어도 항상 붙는다 — 이 카드의 존재 이유.
+
+
+def test_기록이_0건이어도_unmeasured_지시문이_붙는다() -> None:
+    """이 카드가 메우는 구멍 — 지금까지는 `_WALK_ACTIVITY_RULE` 이 `payload.walk_activity
+    is not None` 일 때만 실려서, 오늘 산책 기록이 하나도 없는 요청(`resolve` 가 `None`
+    을 낸 바로 그 경우)은 모델이 `unmeasured` 를 세울 이유를 프롬프트에서 아예 못 받았다.
+    `_UNMEASURED_RULE` 은 데이터 유무와 무관하게 항상 붙어야 한다 — 이 테스트가 실패하는
+    것을 먼저 본 뒤 구현한다."""
+    prompt = build_general_prompt(GeneralPayload(question="나루 얼마나 걸었어?"))
+    assert "WALK_ACTIVITY:" not in prompt
+    # 스키마 블록 자체에는 이 문장이 없다 — `unmeasured` 필드에 `description` 을 안 달아서다.
+    assert "Never estimate the distance or the time from a route described in words" in prompt
+    assert "from place names" in prompt
+    # D-051 을 지키는 핵심 문장 — 말로 설명한 경로/지명으로 추정하지 말라는 것.
+    assert "do not tell the owner to use a map app" in prompt

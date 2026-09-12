@@ -249,10 +249,10 @@ def test_prompt_versions_move_with_the_body() -> None:
     D-057 ③ 이 84건 쌍대 비교로 승인한 본문이 같은 이름으로 다른 물건이 된다. 네 조합의
     버전을 함께 올리는 것이 그 드리프트를 막는 유일한 자리다.
     """
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v9"
-    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v9-carelog"
-    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v9-vetspend"
-    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v9-carelog-vetspend"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
+    assert GENERAL_CARE_LOG_PROMPT_VERSION == "general-answer-ko-v10-carelog"
+    assert GENERAL_VET_PROMPT_VERSION == "general-answer-ko-v10-vetspend"
+    assert GENERAL_CARE_LOG_VET_PROMPT_VERSION == "general-answer-ko-v10-carelog-vetspend"
 
 
 def test_prompt_allows_related_axes_in_one_question_but_not_an_intake_interview() -> None:

@@ -1,0 +1,145 @@
+{
+  "label": "al_v1",
+  "general_prompt": "general-answer-ko-v7",
+  "n": 8,
+  "measured": 3,
+  "results": {
+    "never_closed": 2,
+    "closed_on_time": 1,
+    "failed": 5
+  },
+  "closed_on_time": {
+    "point": 0.3333,
+    "low": 0.0615,
+    "high": 0.7923,
+    "n": 3
+  },
+  "strata": {
+    "accumulate": {
+      "n": 2,
+      "closed_on_time": 1,
+      "rate": {
+        "point": 0.5,
+        "low": 0.0945,
+        "high": 0.9055,
+        "n": 2
+      },
+      "results": {
+        "never_closed": 1,
+        "closed_on_time": 1,
+        "failed": 2
+      }
+    },
+    "two_signs_at_once": {
+      "n": 1,
+      "closed_on_time": 0,
+      "rate": {
+        "point": 0.0,
+        "low": 0.0,
+        "high": 0.7935,
+        "n": 1
+      },
+      "results": {
+        "failed": 2,
+        "never_closed": 1
+      }
+    },
+    "answered_axes": {
+      "n": 0,
+      "closed_on_time": 0,
+      "rate": null,
+      "results": {
+        "failed": 1
+      }
+    }
+  },
+  "flags": {
+    "reasked_axis": 1
+  },
+  "first_ask": {
+    "ok": 0,
+    "n": 0
+  },
+  "problems": [
+    {
+      "script_id": "al_accumulate_01",
+      "stratum": "accumulate",
+      "must_close_by": 3,
+      "result": "never_closed",
+      "asks": 2,
+      "repeated_question": false,
+      "reasked_axis": true,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "토해요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "반려견이 구토를 하면 횟수와 양상, 구토물의 색깔 등을 주의 깊게 살펴봐야 합니다. 현재 기록된 오늘의 식사나 활동 정보가 없어 상태를 파악하기 어려우니, 평소 식사나 산책 등을 기록해 주시면 다음번에 함께 확인해 드릴 수 있습니다.\n\n구토 외에 식욕이나 활력, 배변 등 다른 부분에 변화가 있는지 가장 눈에 띄는 것부터 말씀해 주시겠어요?",
+          "question": "구토 외에 식욕이나 활력, 배변 등 다른 부분에 변화가 있는지 가장 눈에 띄는 것부터 말씀해 주시겠어요?",
+          "missing_axes": [
+            "VOMIT",
+            "APPETITE"
+          ]
+        },
+        {
+          "user": "초록색이에요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "FOLLOW_UP",
+          "message": "초록색 구토물은 담즙이 섞여 있을 때 나타날 수 있습니다. 구토가 지속되거나 횟수가 잦아진다면 정확한 원인 파악을 위해 동물병원에 내원하여 진료를 받아보시는 것이 좋습니다. 평소와 다른 증상이 계속된다면 구토의 양상과 횟수를 기록해 두었다가 수의사에게 전달해 주세요.",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "밥도 안 먹어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "현재 반려견의 상태에 대해 기록된 정보가 없어 식사량 변화만으로는 정확한 상황을 파악하기 어렵습니다. 평소 식사, 산책, 투약 기록을 남겨주시면 다음번에 더 자세히 살펴볼 수 있습니다. 식욕 부진과 함께 다른 증상이 있는지 확인이 필요합니다.\n\n식욕 부진 외에 활력이 떨어지거나 구토, 설사, 배변 문제 등 눈에 띄는 다른 증상이 있는지 말씀해 주시겠어요?",
+          "question": "식욕 부진 외에 활력이 떨어지거나 구토, 설사, 배변 문제 등 눈에 띄는 다른 증상이 있는지 말씀해 주시겠어요?",
+          "missing_axes": [
+            "APPETITE",
+            "ENERGY"
+          ]
+        }
+      ]
+    },
+    {
+      "script_id": "al_twosigns_02",
+      "stratum": "two_signs_at_once",
+      "must_close_by": 1,
+      "result": "never_closed",
+      "asks": 1,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "어제부터 밥을 안 먹고 축 처져 있어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "식욕 부진과 기력 저하가 함께 나타날 때는 반려견의 상태를 주의 깊게 살펴야 합니다. 현재 기록된 오늘의 식사나 활동 정보가 없어 구체적인 상황을 파악하기 어려우니, 평소 식사량이나 산책 기록을 남겨주시면 다음번에 함께 확인해 드릴 수 있습니다.\n\n식욕과 활력 외에 구토, 설사, 배변 상태 등 다른 변화가 있는지, 가장 눈에 띄는 증상부터 말씀해 주시겠어요",
+          "question": "식욕과 활력 외에 구토, 설사, 배변 상태 등 다른 변화가 있는지, 가장 눈에 띄는 증상부터 말씀해 주시겠어요?",
+          "missing_axes": [
+            "APPETITE",
+            "ENERGY"
+          ]
+        }
+      ]
+    }
+  ],
+  "tokens": {
+    "resolver_in": 3083,
+    "resolver_out": 203,
+    "router_in": 15874,
+    "router_out": 303,
+    "general_in": 20612,
+    "general_out": 1148
+  },
+  "generated_at": "2026-09-12T03:34:29+00:00"
+}

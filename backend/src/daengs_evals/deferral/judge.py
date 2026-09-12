@@ -65,10 +65,20 @@ def _resolve_expectations(cells_label: str, questions_path: Path) -> Path:
     p = expectations_path(cells_label)
     if p.exists():
         return p
-    # 같은 질문 파일을 쓰는 다른 label 의 기대를 빌린다 (pf_v1 → pf_v1_1 처럼)
+    # 같은 질문 파일을 쓰는 다른 label 의 기대를 빌린다 (pf_v1 → pf_v1_1, pf_v6_sub18 → pf_v7_sub18 처럼).
+    # 2026-09-12 까지는 글롭의 **첫 파일**을 돌려줘서 pf_v7_sub18 이 pf_ask_v1 의 기대를 받아 40셀이 전부
+    # "라벨 없음" 으로 적혔다 — 질문 id 를 실제로 덮는 파일만 고른다.
+    wanted = {q.question_id for q in load_questions(questions_path)}
+    best: tuple[int, Path] | None = None
     for cand in sorted(ASSETS_DIR.glob("expectations_*.jsonl")):
-        return cand
-    raise FileNotFoundError(f"기대 라벨이 없다: {p.name}")
+        covered = len(wanted & set(load_expectations(cand)))
+        if covered and (best is None or covered > best[0]):
+            best = (covered, cand)
+    if best is None:
+        raise FileNotFoundError(
+            f"기대 라벨이 없다: {p.name} (질문 {len(wanted)}개를 덮는 기대 파일이 없다)"
+        )
+    return best[1]
 
 
 def run_score(*, cells_label: str, model: str, variant: str, budget: int, log=print) -> Path:

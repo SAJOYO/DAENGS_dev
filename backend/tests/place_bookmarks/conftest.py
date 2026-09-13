@@ -62,6 +62,8 @@ async def database():
             for path in [
                 "db/init/03_auth.sql",
                 "db/init/05_pets.sql",
+                # Pet 매퍼가 `identity_id` 를 들고 있습니다 (공동 돌봄 논리 연결).
+                "db/init/25_pet_identities.sql",
                 "db/migrations/2026-09-11_place_bookmarks.sql",
                 "db/migrations/verify_2026-09-11_place_bookmarks.sql",
             ]:

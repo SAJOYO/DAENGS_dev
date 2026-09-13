@@ -69,10 +69,16 @@ def _consume(task):
 
 
 async def within_budget(write, source, prepared, deadline):
+    from daengs_backend.services.walk_diary_deadline import publication_deadline
+
     remaining = (deadline - datetime.now(UTC)).total_seconds()
     if remaining <= 0:
         raise TimeoutError
-    task = asyncio.create_task(write(source, prepared))
+    token = publication_deadline.set(deadline)
+    try:
+        task = asyncio.create_task(write(source, prepared))
+    finally:
+        publication_deadline.reset(token)
     try:
         done, _ = await asyncio.wait({task}, timeout=remaining)
         if not done or datetime.now(UTC) >= deadline:

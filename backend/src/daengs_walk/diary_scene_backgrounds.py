@@ -45,7 +45,7 @@ class SceneBackgroundTarget(DiaryContract):
 class SceneBackgroundSnapshot(DiaryContract):
     board_revision: Digest
     targets: tuple[SceneBackgroundTarget, ...] = Field(max_length=602)
-    backgrounds: tuple[SavedBackground, ...] = Field(default=(), max_length=2000)
+    backgrounds: tuple[SavedBackground, ...] = Field(default=(), max_length=2408)
 
     def validate_board(self, board):
         value = SceneBackgroundSnapshot.model_validate(self.model_dump(mode="json"))

@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from daengs_backend.services.walk_diary_board_provenance import writing_receipt
+from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
 from daengs_walk.diary_board_output import PublishedBoard
 from daengs_walk.diary_board_receipt import StoredSlotWriting
 from daengs_walk.diary_input import DiaryContract, Digest, digest
@@ -31,7 +32,7 @@ class LegacyStoredBoard(DiaryContract):
 
 class StoredBoard(LegacyStoredBoard):
     format: Literal["walk-diary-board-storage-v2"] = STORAGE_FORMAT
-    writing_receipt: StoredSlotWriting
+    writing_receipt: StoredSlotWriting | StoredCardWriting
     writing_receipt_sha256: Digest
     scene_backgrounds: SceneBackgroundSnapshot | None = Field(
         default=None, exclude_if=lambda v: v is None

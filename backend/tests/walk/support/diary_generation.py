@@ -62,6 +62,10 @@ def api(monkeypatch):
         reader.storyboards, "latest_analysis", AsyncMock(side_effect=lambda *a: state.analysis)
     )
     monkeypatch.setattr(reader.entries, "entries", AsyncMock(side_effect=lambda *a: state.entries))
+    monkeypatch.setattr(
+        reader.pets, "accessible_ids", AsyncMock(side_effect=lambda *a: set(state.walk.pet_ids))
+    )
+    monkeypatch.setattr(reader.pets, "names_by_ids", AsyncMock(return_value={}))
     monkeypatch.setattr(reader.photos, "current", AsyncMock(side_effect=lambda *a: state.photo))
     monkeypatch.setattr(
         reader.contexts,
@@ -78,6 +82,7 @@ def api(monkeypatch):
     monkeypatch.setattr(legacy.repo, "current", AsyncMock(side_effect=lambda *a: state.row))
     monkeypatch.setattr(legacy.repo, "reference_walks", AsyncMock(return_value=[]))
     monkeypatch.setattr(settings, "walk_diary_enabled", True)
+    monkeypatch.setattr(settings, "walk_diary_space_enabled", False)
     monkeypatch.setattr(settings, "walk_entry_v2_enabled", False)
     monkeypatch.setattr(settings, "walk_photo_metadata_enabled", True)
     monkeypatch.setattr(settings, "walk_entry_context_enabled", True)

@@ -9,6 +9,19 @@ from daengs_walk.diary_scene_input import preserve_original
 
 
 def writing_receipt(prepared, bundle, revision, output=None):
+    from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
+    from daengs_backend.services.walk_diary_card_writing import CardWritingResult
+    from daengs_backend.services.walk_diary_card_writing import writing_version as card_version
+
+    if isinstance(output, CardWritingResult):
+        expected = complete_slot_board(prepared, output)
+        if expected != bundle:
+            raise ValueError("stored board differs from the adopted card result")
+        receipt = StoredCardWriting(
+            generation_revision=revision, writer=card_version(), result=output
+        )
+        receipt.require_bundle(bundle, revision)
+        return receipt
     base = prepared.board
     if output is None:
         if bundle.model_status == "accepted":

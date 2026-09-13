@@ -1,19 +1,15 @@
-"""Production card DAG: prepare space || write actions -> freeze bodies -> title batch.
+"""Diary writing strategies, response validation and immutable card projections.
 
 No writer reads another body's draft. Only the title strategy sees adopted bodies.
 The existing generation lease owns publication; this module cannot publish or retry it.
 """
 
-import asyncio
 import json
-from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import Field, JsonValue
 
-from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
 from daengs_backend.services.walk_diary_card_prompts import PROMPTS
-from daengs_backend.services.walk_diary_deadline import publication_deadline
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_card_narrative import CardNarrative, CardPart, content_revision
 from daengs_walk.diary_input import DiaryContract, Digest, Identifier, digest
@@ -27,7 +23,6 @@ MAX_CARDS = 12
 MAX_INPUT_BYTES = 32_000
 TIMEOUT_SECONDS = 15.0
 TITLE_RESERVE_SECONDS = 3.0
-_late_tasks = set()
 LAND_WORDS = {
     "도로": "길",
     "자연초지": "풀밭",
@@ -45,7 +40,7 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "independent-card-writing-v1",
+        "policy": "shared-orchestration-card-writing-v2",
         "model": MODEL,
         "prompts": {key: digest(value) for key, value in PROMPTS.items()},
         "timeout_s": TIMEOUT_SECONDS,
@@ -88,6 +83,7 @@ class WritingJob(DiaryContract):
     evidence: dict[str, JsonValue] = Field(default_factory=dict)
     # Only accepted output is retained; failures never persist raw provider errors.
     accepted: dict[str, JsonValue] | None = None
+    reused: bool = Field(default=False, exclude_if=lambda value: not value)
     failure_code: Literal["provider_failed", "invalid_response", "budget_exceeded"] | None = None
 
 
@@ -234,59 +230,31 @@ async def generate_card_prose(stage, payload, schema):
         return response.text
 
 
-def discard(task):
-    if task.done():
-        if not task.cancelled():
-            task.exception()
-        return
-    _late_tasks.add(task)
-
-    def consume(done):
-        _late_tasks.discard(done)
-        if not done.cancelled():
-            done.exception()
-
-    task.add_done_callback(consume)
-    task.cancel()
-
-
-async def until(awaitable, deadline):
-    """A cancellation-resistant provider has no authority after this cutoff."""
-    if asyncio.get_running_loop().time() >= deadline:
-        awaitable.close()
-        raise TimeoutError
-    task = asyncio.create_task(awaitable)
-    try:
-        left = max(0, deadline - asyncio.get_running_loop().time())
-        done, _ = await asyncio.wait({task}, timeout=left)
-        if not done or asyncio.get_running_loop().time() >= deadline:
-            raise TimeoutError
-        return task.result()
-    finally:
-        discard(task)
-
-
-async def execute(item, generate, semaphore, deadline):
+def validate_output(item, raw):
     schema = {"space": SpaceProse, "action": ActionProse, "title": CardTitles}[item.stage]
-
-    async def call():
-        async with semaphore:
-            return await generate(item.stage, item.request, schema.model_json_schema())
-
-    try:
-        if len(json.dumps(item.request, ensure_ascii=False).encode()) > MAX_INPUT_BYTES:
-            raise TimeoutError
-        raw = await until(call(), deadline)
-    except TimeoutError:
-        return item.model_copy(update={"failure_code": "budget_exceeded"})
-    except Exception:  # noqa: BLE001 - provider exception text must not enter storage
-        return item.model_copy(update={"failure_code": "provider_failed"})
     try:
         if isinstance(raw, str):
             if len(raw.encode()) > 64_000:
                 raise ValueError("response exceeds budget")
             raw = json.loads(raw)
-        output = schema.model_validate(raw)
+        if item.stage == "title":
+            if not isinstance(raw, dict) or set(raw) != {"titles"}:
+                raise ValueError("invalid title envelope")
+            entries = raw["titles"]
+            if not isinstance(entries, (list, tuple)) or len(entries) > MAX_CARDS:
+                raise ValueError("invalid title batch")
+            parsed, counts = [], {}
+            for entry in entries:
+                if isinstance(entry, dict) and isinstance(entry.get("card_id"), str):
+                    key = entry["card_id"]
+                    counts[key] = counts.get(key, 0) + 1
+                try:
+                    parsed.append(CardTitle.model_validate(entry))
+                except (ValueError, TypeError):
+                    continue
+            output = CardTitles(titles=tuple(t for t in parsed if counts[t.card_id] == 1))
+        else:
+            output = schema.model_validate(raw)
         if item.stage != "title":
             if (
                 output.card_id != item.request["card_id"]
@@ -309,11 +277,19 @@ async def execute(item, generate, semaphore, deadline):
                     raise ValueError("companion name leaked into space")
         else:
             expected = {c["card_id"]: c["content_revision"] for c in item.request["cards"]}
-            if len({t.card_id for t in output.titles}) != len(output.titles) or any(
-                expected.get(t.card_id) != t.content_revision or not t.text.strip()
-                for t in output.titles
-            ):
-                raise ValueError("title changed card identity/content")
+            # A readable batch is adopted per card; an invalid sibling cannot erase good titles.
+            counts = {}
+            for title in output.titles:
+                counts[title.card_id] = counts.get(title.card_id, 0) + 1
+            output = CardTitles(
+                titles=tuple(
+                    t
+                    for t in output.titles
+                    if counts[t.card_id] == 1
+                    and expected.get(t.card_id) == t.content_revision
+                    and t.text.strip()
+                )
+            )
         return item.model_copy(update={"accepted": output.model_dump(mode="json")})
     except (ValueError, TypeError, KeyError):
         return item.model_copy(update={"failure_code": "invalid_response"})
@@ -371,7 +347,6 @@ def frozen_card(scene, stamp, space_result, action_result):
         [p.model_dump(mode="json") for p in places],
         space.model_dump(mode="json"),
         [a.model_dump(mode="json") for a in actions],
-        original,
     )
     narrative = CardNarrative(
         content_revision=revision,
@@ -387,128 +362,12 @@ def frozen_card(scene, stamp, space_result, action_result):
 
 
 async def write_cards(source, base, *, generate=None, collector=None):
-    generate = generate or generate_card_prose
-    if source.revision() != base.board.input_revision:
-        raise ValueError("card writer requires its prepared source")
-    loop = asyncio.get_running_loop()
-    budget = TIMEOUT_SECONDS
-    outer = publication_deadline.get()
-    if outer:
-        budget = min(budget, max(0, (outer - datetime.now(UTC)).total_seconds() - 0.15))
-    end = loop.time() + budget
-    bodies_end = end - min(TITLE_RESERVE_SECONDS, max(0, budget / 3))
-    semaphore = asyncio.Semaphore(4)
-    cache = {
-        j.request_revision: j
-        for raw in base.cached_jobs
-        if (j := WritingJob.model_validate(raw)).accepted
-    }
+    """Existing diary API entry; orchestration owns planning and execution."""
+    from daengs_backend.orchestration.runtime import build_diary_orchestrator
 
-    async def run(item, deadline):
-        previous = cache.get(item.request_revision)
-        if previous and previous.stage == item.stage and previous.request == item.request:
-            # Rebind current evidence/provenance; cached prose is never an extra model input.
-            return item.model_copy(update={"accepted": previous.accepted})
-        return await execute(item, generate, semaphore, deadline)
-
-    actions = {s.id: action_job(base, s) for s in base.board.scenes}
-    tasks = {
-        key: asyncio.create_task(run(item, bodies_end)) for key, item in actions.items() if item
-    }
-    prepared = base
-    collection = None
-    try:
-        if collector:
-            try:
-                collection = await until(collector(base.board), min(bodies_end, loop.time() + 4.5))
-                prepared = with_scene_backgrounds(base, collection)
-            except (TimeoutError, ValueError):
-                collection = None
-            except Exception:  # noqa: BLE001 - collection failure does not cancel action writing
-                collection = None
-        space_inputs = [
-            space_job(prepared, s, stamp)
-            for s, stamp in zip(prepared.board.scenes, prepared.slots.stamps, strict=True)
-        ]
-        space_results = await asyncio.gather(*(run(item, bodies_end) for item in space_inputs))
-        action_results = {key: await task for key, task in tasks.items()}
-        for key, item in actions.items():
-            if item and key not in action_results:
-                action_results[key] = item.model_copy(update={"failure_code": "budget_exceeded"})
-    finally:
-        for task in tasks.values():
-            discard(task)
-    public = publish_board(prepared.board, prepared.plan)
-    cards = [
-        frozen_card(scene, stamp, written, action_results.get(scene.id))
-        for scene, stamp, written in zip(
-            public.scenes, prepared.slots.stamps, space_results, strict=True
-        )
-    ]
-    jobs = [*space_results, *action_results.values()]
-    title_inputs = [
-        job(
-            "title",
-            {
-                "cards": [
-                    {
-                        "card_id": c.id,
-                        "content_revision": c.writing.content_revision,
-                        "space": c.writing.space.model_dump(mode="json"),
-                        "actions": [a.model_dump(mode="json") for a in c.writing.actions],
-                        "place_reference": [p.model_dump(mode="json") for p in c.place_reference],
-                        "event_at": c.anchor.event_at.isoformat(),
-                    }
-                    for c in cards[start : start + MAX_CARDS]
-                ]
-            },
-        )
-        for start in range(0, len(cards), MAX_CARDS)
-    ]
-    title_results = await asyncio.gather(*(run(item, end) for item in title_inputs))
-    jobs.extend(title_results)
-    titles = {
-        t["card_id"]: t
-        for result in title_results
-        if result.accepted
-        for t in result.accepted["titles"]
-    }
-    cards = [
-        c.model_copy(
-            update={
-                "title": titles[c.id]["text"].strip(),
-                "writing": c.writing.model_copy(update={"title_origin": "generated"}),
-            }
-        )
-        if c.id in titles
-        else c
-        for c in cards
-    ]
-    accepted = any(
-        c.writing.title_origin == "generated"
-        or c.writing.space.origin == "generated"
-        or any(a.origin == "generated" for a in c.writing.actions)
-        for c in cards
-    )
-    bundle = PublishedBoard.model_validate(
-        {
-            **public.model_dump(mode="json"),
-            "scenes": [c.model_dump(mode="json") for c in cards],
-            "model_status": "accepted" if accepted else "unavailable",
-            "failure_code": None
-            if accepted
-            else next((j.failure_code for j in jobs if j.failure_code), "provider_failed"),
-        }
-    )
-    return CardWritingResult(
-        input_revision=source.revision(),
-        plan_revision=prepared.plan.revision(),
-        slot_revision=prepared.slots.revision(),
-        writer_version=digest(writing_version()),
-        bundle=bundle,
-        jobs=tuple(jobs),
-        scene_backgrounds=collection,
-    )
+    return await build_diary_orchestrator(
+        generate=generate or generate_card_prose, collector=collector
+    ).run(source, base)
 
 
 def complete_cards(prepared, output):

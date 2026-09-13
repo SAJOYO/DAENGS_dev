@@ -43,6 +43,6 @@ class CardNarrative(DiaryContract):
         return "\n".join(p for p in parts if p)
 
 
-def content_revision(scene_id, anchor, places, space, actions, original_text):
-    """Title excluded; changing only the title cannot trigger a revision loop."""
-    return digest([scene_id, anchor, places, space, actions, original_text])
+def content_revision(scene_id, anchor, places, space, actions):
+    """Only title dependencies; preserved notes belong to the publication source revision."""
+    return digest([scene_id, anchor, places, space, actions])

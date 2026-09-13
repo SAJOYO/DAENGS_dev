@@ -1,0 +1,117 @@
+"""사진 한 장 → 달 카드 한 장. 틀 읽기 → 사진 축소 → 엔진(강아지 교체) → 제목 얹기 → 검수(유사도 1~5) → 유사도가 기준 미만이면 한 번 더 → 둘 중 점수 높은 쪽."""
+
+from __future__ import annotations
+
+import io
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+
+from PIL import Image
+
+from daengs_backend.config import settings
+from daengs_backend.services.cardimage import catalog
+from daengs_backend.services.cardimage import photo as photo_mod
+from daengs_backend.services.cardimage import title as title_mod
+from daengs_backend.services.cardimage.engine import (
+    CardImageEngine,
+    EngineError,
+    GeminiCardImageEngine,
+    build_prompt,
+)
+from daengs_backend.services.cardimage.judge import (
+    CardJudge,
+    GeminiCardJudge,
+    JudgeError,
+    JudgeResult,
+)
+
+log = logging.getLogger(__name__)
+
+SUBTITLES = {4: "APRIL SPECIAL"}  # 틀에 구워진 부제. 4월만 실험으로 검증됐다(catalog.py 의 scene 주석과 같은 이유) —
+# 다른 달을 열려면(=scene 을 채우고 DAENGS_CARDIMAGE_MONTHS 에 넣으려면) 여기에도 부제를 같이 넣어야 한다.
+# require_open 이 scene 없는 달을 먼저 막아 주므로 지금은 KeyError 가 날 수 없지만, 조용히 죽지 않도록
+# 아래 generate_card 에서 .get() 으로 꺼내 없으면 CardImageUnavailable 로 소리 내어 실패한다.
+
+
+class CardImageUnavailable(Exception):
+    """키가 없거나 틀 파일이 없다 — 설정 문제라 503."""
+
+
+@dataclass
+class GeneratedCard:
+    png: bytes
+    judge: JudgeResult | None
+    attempts: int
+    month: int
+    title: str
+
+
+def default_engine() -> CardImageEngine:
+    """설정에서 실제 엔진을 만든다. 전역 `settings.gemini_api_key` 로 대체하지 않는다 —
+    카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
+    return GeminiCardImageEngine(
+        api_key=settings.cardimage_gemini_api_key.get_secret_value(), model=settings.cardimage_model,
+        size=settings.cardimage_size, timeout_ms=settings.cardimage_timeout_ms,
+    )
+
+
+def default_judge() -> CardJudge:
+    return GeminiCardJudge(
+        api_key=settings.cardimage_gemini_api_key.get_secret_value(), model=settings.cardimage_judge_model,
+        timeout_ms=settings.cardimage_timeout_ms,
+    )
+
+
+def _load_template(month: int, base_dir: Path) -> bytes:
+    p = catalog.template_path(month, base_dir)
+    if not p.exists():
+        raise CardImageUnavailable(f"틀 파일이 없습니다: {p}")
+    buf = io.BytesIO()
+    Image.open(p).convert("RGB").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: bytes, photo_jpeg: bytes,
+             prompt: str, text: str, font: Path) -> tuple[bytes, JudgeResult | None]:
+    try:
+        raw = engine.generate(template_png=template, photo_jpeg=photo_jpeg, prompt=prompt)
+    except EngineError as exc:
+        if exc.code == "no_key":
+            raise CardImageUnavailable(exc.detail) from exc
+        raise
+    card = title_mod.draw_title(Image.open(io.BytesIO(raw)).convert("RGB"), text, font)
+    out = io.BytesIO()
+    card.save(out, "PNG")
+    png = out.getvalue()
+    if judge is None:
+        return png, None
+    try:
+        return png, judge.judge(photo_jpeg=photo_jpeg, card_png=png)
+    except JudgeError as exc:
+        # 검수 실패는 치명적이지 않다 — 이번 한 장을 점수 없이 그대로 돌려준다(재시도하지 않는다).
+        log.warning("cardimage judge failed, accepting card without score: %s", exc)
+        return png, None
+
+
+def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str, engine: CardImageEngine,
+                  judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int) -> GeneratedCard:
+    card_meta = catalog.require_open(month, open_months)
+    photo_jpeg = photo_mod.prepare_photo(photo, content_type)
+    template = _load_template(month, base_dir)
+    font = catalog.font_path(base_dir)
+    if not font.exists():
+        raise CardImageUnavailable(f"글꼴이 없습니다: {font}")
+    subtitle = SUBTITLES.get(month)
+    if subtitle is None:
+        raise CardImageUnavailable(f"부제가 없는 달: {month}")
+    prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=subtitle)
+    text = title_mod.title_text(card_meta.card_name, dog_name)
+
+    png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text, font=font)
+    if j1 is None or j1.likeness >= judge_min:
+        return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text)
+    png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text, font=font)
+    if j2 is not None and j2.likeness > j1.likeness:
+        return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text)
+    return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text)

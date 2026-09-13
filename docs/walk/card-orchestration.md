@@ -1,5 +1,7 @@
 # 실제 산책 카드 작성 경로
 
+남은 공간 관계·슬롯 정책·실제 서술 검증과 그 대화 경위는 [산책 일기: 대화의 경위와 남은 기획](diary-remaining-plan.md)을 따른다. 아래 실행 연결 완료를 전체 일기 기획의 완료로 해석하지 않는다.
+
 `POST /app/walks/{walk_id}/storyboard`의 `walk-diary-board-v1` 작성기는 DEV `orchestration/runtime.py:build_diary_orchestrator`를 통해 일기 LangGraph를 실행한다. 기존 어시스턴트 LangGraph와 **같은 `execution.py:JobExecutor`**를 사용한다. APP의 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`가 이 응답을 소비한다. 별도 실험 서버나 일기 저장 테이블은 없다.
 
 ```mermaid

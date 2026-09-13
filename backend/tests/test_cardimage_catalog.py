@@ -28,6 +28,11 @@ def test_closed_month_raises():
     assert catalog.require_open(4, frozenset({4})).month == 4
 
 
+def test_month_with_empty_scene_is_not_open_even_if_listed():
+    with pytest.raises(catalog.MonthNotOpenError):
+        catalog.require_open(1, frozenset({1}))   # 틀은 있지만 무대 묘사가 비어 있다
+
+
 def test_all_twelve_months_have_templates_in_repo():
     base = Path(__file__).resolve().parents[2] / "cardimage"
     for m in range(1, 13):

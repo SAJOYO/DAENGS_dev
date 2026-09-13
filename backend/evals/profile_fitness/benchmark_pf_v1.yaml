@@ -1,0 +1,78 @@
+# 개체 적합성 v1 — 사전 등록 (돌리기 전에 적는다. 결과를 보고 여기를 고치지 않는다)
+#
+# `evals/orchestration_router/benchmark_v1.yaml` 과 같은 자리. 고쳐야 할 이유가 생기면 사유를
+# 적고 benchmark_id 를 올린다 — v1 은 그대로 둔다.
+benchmark_id: profile-fitness-v1
+frozen_at: 2026-09-09
+author: gayeoniee + claude
+
+# ── 재는 것 ─────────────────────────────────────────────────────────
+target: POST /assistant/query 최종 답변 (message)
+scope:
+  capability: general            # v1 은 general 만. Life 는 실서버(pgvector·Redis) 필요 → 미측정
+  adapters: fallback-only
+  general_fallback: on           # 끄면 일상 질문이 전부 FAILED (실측 2026-09-09)
+  life_temperature: 0.0
+  training: 측정 대상 아님        # TrainingPayload = {question} — 계약 테스트로 못 박음
+
+# ── 입력 동결 ───────────────────────────────────────────────────────
+inputs:
+  questions: evals/profile_fitness/questions_pf_v1.jsonl   # 36 + 패러프레이즈 8
+  profiles: evals/profile_fitness/profiles_v1.jsonl        # 합성 11
+  # sha256 은 수집기가 cells meta 에 적는다 — 여기 값과 다르면 다른 실험이다
+  questions_sha256: e88c705060569b60106fdecfa52eb4297b56041ea4b5d7d118a83b4f46d58e9e
+  profiles_sha256: 061c04495434e6e5c2112422aa52b27cd4b06604fe85a212cca3d70b523b6c73
+
+# ── 모델 ────────────────────────────────────────────────────────────
+generation:
+  router: {model: gemini-3.1-flash-lite, prompt_version: semantic-router-ko-v10}
+  general: {model: gemini-3.1-flash-lite, prompt_version: general-answer-ko-v3}
+judge:
+  model: gpt-5.4-2026-03-05     # 날짜 핀. 생성(google)과 계열 분리
+  prompt_versions: {A: profile-fitness-diff-ko-v1a, B: profile-fitness-diff-ko-v1b}
+  temperature: 0.0
+  both_orders: true              # (A,B)·(B,A). changed 가 뒤집히면 position_dependent → 점수 제외
+  abstention: confidence == low  # 점수 제외, 사람 큐. 기권율은 보고
+
+# ── 판정기 검증 (2층) — 전부 통과해야 점수를 쓴다 ─────────────────
+judge_gates:
+  anchors_dev: all_pass          # 프롬프트 고칠 때마다
+  anchors_holdout: all_pass      # 프롬프트 버전당 한 번. 파일이 있으면 재실행 거부
+  mutations: all_pass            # verbose · mention_only · reorder → changed 0 / inject_record → fabricated 1 / inject_stereotype → stereotype 1
+  self_consistency_min: 0.95     # 같은 쌍 3회, changed · fabricated 일치
+  position_flip_max: 0.05
+  variant_agreement_min: 0.80    # A/B 관찰 일치율 (부분표본 30)
+  kappa_min: 0.60                # 사람 라벨 40 + 반복 10. 이진: Cohen κ, responsiveness: 가중 κ
+  kappa_min_labels: 30
+  kappa_min_marginal: 3          # 한 범주가 이보다 적으면 "못 잼" (미달과 다른 사유)
+
+# ── 지표 검증 (3층) — 정답을 아는 조건 ────────────────────────────
+metric_gates:
+  inequality: N < S < P          # 잡음 < 법령(invariant) < 절제(없음 vs 있음)
+  noise_changed_max: 0.10        # N. 같은 프로필 두 번 — 이보다 크면 잡음을 개인화로 세는 것
+  ablation_changed_min: 0.60     # P. reactive 에서 프로필 없음 vs 있음
+  ablation_minus_noise_ci_excludes_zero: true   # 문항 단위 부트스트랩 95% CI
+  invariant_changed_max: 0.30    # S. 법령류에서 강아지 따라 흔들리면 over_personalized
+  paraphrase_agreement_min: 0.75 # 같은 뜻 다른 문장 8쌍의 changed 일치
+  unmeasured_max: 0.05           # 판정 실패 · 기권 · 위치 뒤집힘 · 범위 밖 합계
+
+# ── 표본 ────────────────────────────────────────────────────────────
+sample:
+  reactive: 18   # coarse 10 · fine 8
+  invariant: 10
+  probe: 8
+  paraphrase: 8
+  power_note: 변화율 0.2 vs 0.6, α 0.05, 검정력 0.8 → 군당 약 24 (stats.sample_size_two_props). 36 으로 잡았다
+
+# ── 어떤 오류가 더 싫은가 (항목별 재현율 · 정밀도를 따로 낸다) ───
+error_priority:
+  fabricated: recall        # 놓치면 사용자가 믿는다
+  stereotype: recall
+  responsiveness: precision # 과잉 탐지는 차별점을 부풀린다
+
+# ── 하지 않는 것 ───────────────────────────────────────────────────
+not_doing:
+  - 판정기 파인튜닝 (라벨을 검증에만 쓴다)
+  - 판정기 앙상블 평균 (불일치는 사람 큐로)
+  - 종합 점수 하나로 합치기
+  - 다중 턴 (서버 v1 이 무상태)

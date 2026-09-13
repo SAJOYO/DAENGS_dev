@@ -1,0 +1,11 @@
+{"profile_id": "toy_puppy", "label": "초소형·자견", "dog": {"breed": "치와와", "age_months": 4}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "size_age"}
+{"profile_id": "large_senior", "label": "대형·노견", "dog": {"breed": "골든리트리버", "age_months": 150}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "size_age"}
+{"profile_id": "maltese_puppy", "label": "말티즈·자견", "dog": {"breed": "말티즈", "age_months": 4}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "age_only"}
+{"profile_id": "maltese_senior", "label": "말티즈·노견", "dog": {"breed": "말티즈", "age_months": 150}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "age_only"}
+{"profile_id": "brachy_adult", "label": "단두종·성견", "dog": {"breed": "퍼그", "age_months": 48}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "breed_split"}
+{"profile_id": "longnose_adult", "label": "비단두종·성견", "dog": {"breed": "비글", "age_months": 48}, "context_extra": {}, "visible_to": ["life", "general"], "axis": "breed_split"}
+{"profile_id": "healthy_adult", "label": "질환 없음", "dog": {"breed": "말티즈", "age_months": 84}, "context_extra": {}, "visible_to": ["general"], "axis": "diseases"}
+{"profile_id": "chronic", "label": "질환·복약 있음", "dog": {"breed": "말티즈", "age_months": 84, "health_conditions": "슬개골 탈구 2기, 만성 아토피", "on_medication": true}, "context_extra": {}, "visible_to": ["general"], "axis": "diseases"}
+{"profile_id": "no_screening", "label": "피부 판정 없음", "dog": {"breed": "말티즈", "age_months": 84}, "context_extra": {}, "visible_to": ["life"], "axis": "screening"}
+{"profile_id": "screened_abnormal", "label": "피부 판정 이상", "dog": {"breed": "말티즈", "age_months": 84}, "context_extra": {"screening": {"verdict": "abnormal", "days_ago": 3}}, "visible_to": ["life"], "axis": "screening"}
+{"profile_id": "none", "label": "프로필 없음", "dog": null, "context_extra": {}, "visible_to": ["life", "general"], "axis": "absent"}

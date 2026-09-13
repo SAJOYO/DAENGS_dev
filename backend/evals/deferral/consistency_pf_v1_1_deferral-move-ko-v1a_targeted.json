@@ -1,0 +1,78 @@
+{
+  "cells_label": "pf_v1_1",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "deferral-move-ko-v1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "repeats": 3,
+  "sample": 3,
+  "consistency_rate": 0.6666666666666666,
+  "results": [
+    {
+      "question_id": "pf_probe_weight_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "적정 체중 판단 기준(갈비뼈, 허리 라인)을 실제로 설명해 답했고, 추가로 사료 가이드·수의사 상담을 권했다.",
+        "적정 체중 판단 기준(갈비뼈, 허리 라인)을 실제로 설명해 답했고, 추가로 사료 가이드·수의사 상담을 권했다.",
+        "적정 체중 판단 기준(갈비뼈, 허리 라인)을 실제로 설명해 답했고, 추가로 사료 가이드·수의사 상담을 권했다."
+      ]
+    },
+    {
+      "question_id": "pf_probe_breed_recall_01",
+      "moves": [
+        "deferred",
+        "deferred",
+        "deferred"
+      ],
+      "consistent": true,
+      "notes": [
+        "질문에 대한 품종 정보를 직접 제공하지 않았고, 외형 특징이나 입양 기록 확인을 권하는 식으로만 넘겼습니다.",
+        "질문에 대한 품종 정보를 실제로 제공하지 않았고, 외형 특징이나 입양 기록을 확인하라고만 안내했습니다.",
+        "질문한 견종을 직접 알려주지 못했고, 외형 특징이나 입양 기록을 확인하라고만 안내했다."
+      ]
+    },
+    {
+      "question_id": "pf_appetite_drop_02",
+      "moves": [
+        "deferred",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": false,
+      "notes": [
+        "사용자의 핵심 질문(병원에 갈지 기다려도 될지)에 대해 구체적인 관찰 기준이나 가정 내 대처 없이, 지속되면/심해지면 수의사 진료를 권하는 넘김 중심의 답변이다.",
+        "식욕 저하가 있을 수 있다는 일반 설명과 '며칠간 지속되거나 심해지면 진료'라는 조건부 판단을 제시해 일부 답했고, 동시에 수의사 방문을 권유했다.",
+        "식욕 저하가 지속되면 진료가 좋다는 실질적 판단을 주면서 수의사 방문을 권했다."
+      ]
+    }
+  ],
+  "tokens": {
+    "input": 6144,
+    "output": 808
+  },
+  "checked_at": "2026-09-09T03:34:25+00:00",
+  "source": {
+    "source_sha": "3d12a2ac1a274b95b87d4d13c877334877f3c232",
+    "source_dirty_files": [
+      "backend/evals/profile_fitness/report_pf_pf_v1_1.md",
+      "backend/evals/profile_fitness/summary_pf_pf_v1_1.json",
+      "backend/src/daengs_evals/deferral/judge.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

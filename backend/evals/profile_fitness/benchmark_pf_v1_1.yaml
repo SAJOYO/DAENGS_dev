@@ -1,0 +1,69 @@
+# 개체 적합성 v1.1 — 사전 등록. v1 을 돌린 뒤 **두 가지 이유로** 올렸다. v1 은 기록으로 남긴다.
+#
+# 왜 v1.1 인가 (2026-09-09, v1 전체 채점 결과를 보고):
+#   ① 판정기에 중요도 규칙이 없었다. 같은 권고에 주의 문장 하나가 붙은 것이 changed 로 잡혀
+#      위치 뒤집힘 13% (기준 5%), invariant 질문 S = 100% (P 80% 보다 높아 부등식이 깨짐).
+#      뒤집힌 7쌍의 판정 메모가 전부 "핵심 조언은 같다 / 부가 문장이 있다" 모양이었다.
+#      → 프롬프트 v2: 사용자가 따를 행동이 달라질 때만 changed.
+#   ② invariant 로 넣은 질문 셋이 invariant 가 아니었다. 장난감 소재는 슬개골 탈구가 있으면 갈리는 게
+#      맞고(좋은 개인화), 다른 강아지 인사법은 자견 사회화 시기에 갈린다. 초콜릿은 서버가 응급으로
+#      거절해(과잉거절 — 축 B 사례) 측정 자체가 안 됐다.
+#      → 둘은 reactive 로, 초콜릿은 "사료 그릇 재질" 로 교체.
+#   v1 의 결과(N 0% · P 80% [58, 92] · P−N +0.80 [0.60, 0.95] · 날조 0/45)는 v1 리포트에 그대로 있다.
+benchmark_id: profile-fitness-v1.1
+supersedes: profile-fitness-v1
+frozen_at: 2026-09-09
+author: gayeoniee + claude
+
+target: POST /assistant/query 최종 답변 (message)
+scope:
+  capability: general
+  adapters: fallback-only
+  general_fallback: on
+  life_temperature: 0.0
+  training: 측정 대상 아님
+
+inputs:
+  questions: evals/profile_fitness/questions_pf_v1_1.jsonl   # reactive 28 · invariant 8 · probe 8 (패러프레이즈 8 포함)
+  profiles: evals/profile_fitness/profiles_v1.jsonl          # v1 과 같다
+  questions_sha256: c79dc1c0d689384a76fe4d236f46780b4b18faa81e8f5553038a8951776f87ed   # 수집 전에 채운다
+  profiles_sha256: 061c04495434e6e5c2112422aa52b27cd4b06604fe85a212cca3d70b523b6c73
+
+generation:
+  router: {model: gemini-3.1-flash-lite, prompt_version: semantic-router-ko-v10}
+  general: {model: gemini-3.1-flash-lite, prompt_version: general-answer-ko-v3}
+judge:
+  model: gpt-5.4-2026-03-05
+  prompt_versions: {A: profile-fitness-diff-ko-v2a, B: profile-fitness-diff-ko-v2b}
+  temperature: 0.0
+  both_orders: true
+  abstention: confidence == low
+  materiality_rule: 사용자가 따를 행동(횟수·양·방법·금지·병원 여부)이 달라질 때만 changed. 주의 문장 하나·호명·문체는 아니다
+
+# 임계값은 v1 과 같다 — 결과를 보고 낮추지 않았다
+judge_gates:
+  anchors_dev: all_pass
+  anchors_holdout: all_pass          # v2 용 새 5개. v1 홀드아웃은 retired (한 번 썼다)
+  mutations: all_pass
+  self_consistency_min: 0.95
+  position_flip_max: 0.05
+  variant_agreement_min: 0.80
+  kappa_min: 0.60
+  kappa_min_labels: 30
+  kappa_min_marginal: 3
+metric_gates:
+  inequality: N < S < P
+  noise_changed_max: 0.10
+  ablation_changed_min: 0.60
+  ablation_minus_noise_ci_excludes_zero: true
+  invariant_changed_max: 0.30
+  paraphrase_agreement_min: 0.75
+  unmeasured_max: 0.05               # v1 은 라우터 일시 실패 22% → 재시도 2회로 전부 복구. 수집기가 자동으로 두 번 재시도한다
+
+sample: {reactive: 20, invariant: 8, probe: 8, paraphrase: 8}
+error_priority: {fabricated: recall, stereotype: recall, responsiveness: precision}
+not_doing:
+  - 판정기 파인튜닝
+  - 판정기 앙상블 평균
+  - 종합 점수 하나로 합치기
+  - 다중 턴

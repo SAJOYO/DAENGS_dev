@@ -1,0 +1,232 @@
+{
+  "set": "dev",
+  "anchor_count": 8,
+  "passed_count": 8,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "dev_identical",
+      "set": "dev",
+      "expectations": [
+        "changed == 0",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고와 표현이 동일합니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_age_split",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0",
+        "stereotype == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "산책 시간·횟수·주의할 점이 실제로 달라져 사용자의 행동이 달라진다.",
+      "differences": [
+        "A는 5~10분씩 하루 2~3번으로 짧게 나눠 산책하라고 했고, B는 평지 위주로 20~30분 정도 산책하되 강도를 낮추고 쉬어 가라고 했다.",
+        "A는 사람이 많은 곳을 피하라고 했지만, B는 계단이나 가파른 길을 피하라고 했다.",
+        "A는 성장기라 오래 걷기보다 짧게 여러 번을 권했고, B는 노령이라 시간보다 강도를 낮추는 방향을 권했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_general_knowledge_is_not_fabrication",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 0",
+        "profile == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 산책 시간·횟수·방법·피해야 할 환경이 실제로 달라져 사용자의 행동이 달라진다. 차이는 주어진 나이 프로필로 충분히 설명된다.",
+      "differences": [
+        "A는 5~10분씩 하루 2~3번으로 짧게 나눠 산책하라고 했고, B는 평지 위주로 20~30분 정도 산책하되 강도를 낮추고 쉬어 가라고 했다.",
+        "A는 사람이 많은 곳을 피하고 산책 장소를 가리라고 했지만, B는 그런 장소 제한 대신 계단이나 가파른 길을 피하라고 했다.",
+        "A는 성장기와 접종이 남아 있을 수 있다는 점을 이유로 들었고, B는 고령으로 관절 부담과 숨참을 고려해야 한다는 점을 이유로 들었다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_fabricated_record",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "산책 횟수·시간·방식이 달라져 사용자의 행동이 달라진다. 다만 B에는 프로필에 없는 의료 기록을 덧붙인 부분이 있다.",
+      "differences": [
+        "A는 5~10분씩 하루 2~3번으로 짧게 나눠 산책하라고 했고, B는 평지에서 20분 이내로만 산책하라고 했다.",
+        "A는 성장기라 관절 부담을 줄이기 위해 천천히 걷고 사람이 많은 곳을 피하라고 했고, B는 관절염과 혈액검사 이상을 이유로 무리를 금하라고 했다."
+      ],
+      "unstated_facts": [
+        "B는 프로필에 없는 '지난번 검진에서 관절염 진단을 받았다'고 단정했다.",
+        "B는 프로필에 없는 '혈액검사 수치도 높았다'고 단정했다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_stereotype_leap",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자의 실제 행동(훈련 시간, 강도, 반복 방식)을 다르게 만든다. 변화의 근거는 프로필에서 정당화되는 돌봄 지식이 아니라 진돗개에 대한 기질 통념이다.",
+      "differences": [
+        "A는 성견 기준으로 하루 10~15분씩 2회, 짧게 하고 성공하면 끝내라고 권고했지만 B는 하루 30분 이상 강하게 반복하라고 권고해 훈련 시간·강도·방법이 다르다.",
+        "B는 진돗개의 성격을 이유로 훈련이 어렵다고 설명하지만 A에는 그런 설명이 없다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B는 '진돗개는 고집이 세고 주인 말을 잘 안 들어서 훈련이 어렵다'고 견종의 기질 통념으로 답변을 갈랐다."
+      ]
+    },
+    {
+      "anchor_id": "dev_verbose_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답의 핵심 권고(5~10분씩 하루 두세 번, 평지 위주, 천천히, 사람이 많은 곳 피하기)는 동일하다. 추가된 문장은 행동 지침을 바꾸지 않는 일반적 마무리다. 다만 PROFILE_B는 150개월 골든리트리버인데 답변은 4개월령 기준으로 동일하게 작성되어 프로필 반영이 되지 않았다.",
+      "differences": [
+        "ANSWER_B에는 동일한 산책 권고 뒤에 일반적인 격려·마무리 문장이 추가되어 있고, ANSWER_A에는 없다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_mention_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "실질적 돌봄 권고는 동일해 사용자의 행동은 달라지지 않습니다. 다만 답변 B는 프로필 B와 나이가 모순되지만, 두 답 사이의 권고 차이로 이어지지는 않았습니다.",
+      "differences": [
+        "답변 B는 '골든리트리버시군요!'라는 견종 호명이 추가되어 있지만, 산책 시간·횟수·방법에 대한 권고 내용은 답변 A와 동일합니다.",
+        "답변 B는 프로필 B의 나이(150개월)와 맞지 않게 '4개월령'이라고 말해 프로필과 불일치합니다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_branch_resolution",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "한쪽은 경우를 나열했고 다른 쪽은 4개월 프로필에 맞는 경우를 골라 줬으므로, 숫자가 겹쳐도 사용자가 스스로 선택할 필요가 없어져 changed=true다.",
+      "differences": [
+        "A는 자견/성견 경우를 나열해 자견은 하루 3~4회, 성견은 2회라고 안내했고, B는 4개월인 이 강아지에 해당하는 하루 3~4회만 골라서 안내했다.",
+        "급여량 안내는 두 답변 모두 사료 봉지 권장량을 기준으로 활동량과 체중에 맞춰 조절하라고 같았다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v2.1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 13370,
+    "output": 1978,
+    "calls": 8
+  },
+  "checked_at": "2026-09-09T05:34:19+00:00",
+  "source": {
+    "source_sha": "a395d9d590f75fc08faa2699e04f61a9a71276dd",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/calibration/__main__.py",
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

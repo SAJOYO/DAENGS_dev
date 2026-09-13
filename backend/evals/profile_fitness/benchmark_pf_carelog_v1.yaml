@@ -1,0 +1,38 @@
+# 시험 ② 오늘 기록 바꿔치기 — 사전 등록 (수집 전에 동결).
+#
+# 왜 (2026-09-11): dev #344 · D-068 이 오늘 케어 로그(밥·투약·간식·산책 건수와 마지막 시각)를 general 프롬프트에
+# 싣는다. 시험 ①과 같은 방식으로 "같은 질문, 기록만 바꿔서" 답이 따라오는지 본다. 기대는 D-068 의 사람 결정 그대로:
+#   기록 있음 → "기록상 2번" 처럼 기록을 말한다.  기록 0 → "기록에 없다" 라고만 한다 — **"안 줬다"·"안 먹었다" 는 금지**.
+#   care_log 자체가 없음(기능 안 씀) → 기록을 언급하지 않는다.  건강·괜찮다·정상 같은 판단은 어느 쪽으로도 안 붙인다.
+# 판정기 v2.1 의 changed/profile 로 "기록에 따라 답이 달라졌나" 를 재고, 금지 표현은 코드로 센다.
+benchmark_id: profile-fitness-carelog-v1
+related: profile-fitness-v6-sub18
+frozen_at: 2026-09-11
+author: gayeoniee + claude
+
+inputs:
+  questions: evals/profile_fitness/questions_pf_carelog_v1.jsonl   # reactive 10 (기록에 갈려야) · invariant 2 (발톱·목욕 — 기록과 무관)
+  profiles: evals/profile_fitness/profiles_carelog_v1.jsonl        # log_fed_twice · log_empty · log_absent · none
+  questions_sha256: 9084fca6749ffc455343bc6b7d8d987e197b9456e596a90861a9473d15560879
+  profiles_sha256: 7528342de6900002159a47659e614716a6531dccb9c2e010f0e7f1afe94261a3
+scope: {capability: general, adapters: fallback-only, general_fallback: on, conditions: [contrast, ablation]}
+generation:
+  general: {model: gemini-3.1-flash-lite, prompt_version: general-answer-ko-v6-carelog}   # 기록이 실리면 -carelog 판본이 나간다
+judge:
+  model: gpt-5.4-2026-03-05
+  prompt_versions: {A: profile-fitness-diff-ko-v2.1a}
+  both_orders: false
+  note: 판정기가 보는 "프로필" 에 care_log 가 포함된다 — 프롬프트의 PROFILE 블록은 context 전체를 싣는다
+forbidden_phrases_code_check:            # 기록 0 arm 의 답에서 코드로 센다 (판정기 아님)
+  - 안 줬
+  - 안 먹었
+  - 안 먹였
+  - 안 시켰
+  - 건강합니다
+  - 정상입니다
+  - 괜찮습니다
+metric_gates:
+  contrast_changed_min: 0.80             # 기록 있음 vs 0 — 답이 달라져야
+  invariant_changed_max: 0.30
+  forbidden_phrase_max: 0
+budget: {cells: 36, pairs: 22, judge_tokens_max: 30000}

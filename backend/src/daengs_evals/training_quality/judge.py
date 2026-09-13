@@ -56,6 +56,7 @@ judge 위생 — #305 를 그대로 잇는다 (D-060 ①)
 judge 는 오히려 **엄한 쪽으로** 틀렸다. 그 카드가 뽑은 뿌리가 *"재는 자 없이 판단했다"* 다.
 그래서 이 모듈의 앵커는 **의견이 아니라 확인 가능한 사실**로만 짓는다 (`anchors.py`).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -63,8 +64,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-VERSION = 1          # 판정 파일 스키마
-PROMPT_VERSION = 2   # 프롬프트. **고치면 올리고 재캘리브레이션한다** (RAG-007)
+VERSION = 1  # 판정 파일 스키마
+PROMPT_VERSION = 2  # 프롬프트. **고치면 올리고 재캘리브레이션한다** (RAG-007)
 #
 # v2 (2026-09-07): 첫 실제 랩(`lap1`)이 오탐 하나를 드러냈다. `t18` — *"장난감을 항상 옆에 두는
 # 게 좋은가요?"* 에 답변이 *"아니요, 좋지 않습니다"* 로 시작했는데 judge 가 **그 한 마디를
@@ -149,8 +150,8 @@ class Verdict(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    supported: list[str]      # 자료로 뒷받침되는 주장
-    unsupported: list[str]    # 자료에 없는 주장 — 이 축의 산출물
+    supported: list[str]  # 자료로 뒷받침되는 주장
+    unsupported: list[str]  # 자료에 없는 주장 — 이 축의 산출물
     rationale: str
     grounded: bool
 

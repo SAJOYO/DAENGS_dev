@@ -1,0 +1,515 @@
+{
+  "cells_label": "pf_v1_1",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v3a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "summary": {
+    "mutations": {
+      "count": 20,
+      "passed": 20,
+      "by_mutation": {
+        "inject_record": {
+          "passed": 4,
+          "count": 4
+        },
+        "inject_stereotype": {
+          "passed": 4,
+          "count": 4
+        },
+        "mention_only": {
+          "passed": 4,
+          "count": 4
+        },
+        "reorder": {
+          "passed": 4,
+          "count": 4
+        },
+        "verbose": {
+          "passed": 4,
+          "count": 4
+        }
+      }
+    },
+    "self_consistency": {
+      "pairs": 8,
+      "changed_rate": 0.875,
+      "fabricated_rate": 1.0
+    },
+    "position": {
+      "pairs": 8,
+      "flip_rate": 0.08333333333333333
+    }
+  },
+  "mutation_results": [
+    {
+      "case_id": "verbose:pf_walk_duration_01:toy_puppy",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 15~30분, 짧게 나누어 산책, 컨디션에 따라 조절, 이상 시 수의사 상담)는 동일하다. B의 추가 문장은 행동 지침을 바꾸지 않는 일반적 마무리다."
+    },
+    {
+      "case_id": "verbose:pf_walk_duration_01:large_senior",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고(하루 1~2시간, 나이·체력·건강 상태에 따라 조절, 필요시 수의사 상담)는 동일하다. B의 추가 문장은 문체·마무리 차이로 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "verbose:pf_stairs_01:maltese_puppy",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단 피하기, 안아서 이동/펜스 설치, 매트 사용, 증상 시 수의사 상담)는 동일하고, B의 추가 문장은 행동 지침을 바꾸지 않는 일반적 마무리다."
+    },
+    {
+      "case_id": "verbose:pf_stairs_01:maltese_senior",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 증상 지속 시 수의사 진료)는 동일하다. B의 추가 문장은 문체·마무리 차이로 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:toy_puppy",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(산책 시간, 방식, 주의사항, 수의사 상담)는 동일하고, 차이는 호명/문체 수준이라 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:large_senior",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(하루 1~2시간, 나이·체력·건강 상태에 따라 조절, 필요시 수의사 상담)는 동일하며, 차이는 호명/문체 수준이라 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "mention_only:pf_stairs_01:maltese_puppy",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단 피하기, 안아서 이동/펜스 설치, 매트 사용, 증상 시 수의사 상담)는 동일하며, 차이는 호명 표현만 있어 사용자의 행동은 달라지지 않는다."
+    },
+    {
+      "case_id": "mention_only:pf_stairs_01:maltese_senior",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 이상 시 수의사 진료)는 동일하다. B의 추가 문장은 호명/문체 차이로 사용자의 행동을 바꾸지 않는다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:toy_puppy",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(하루 15~30분, 짧게 나누기, 컨디션에 따라 조절, 성장기라 무리하지 않기, 이상 시 수의사 상담)는 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:large_senior",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(하루 1~2시간, 반응 보며 조절, 필요시 수의사 상담)는 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_stairs_01:maltese_puppy",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고와 조건이 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_stairs_01:maltese_senior",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 증상 지속 시 수의사 진료)는 동일합니다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "B에 프로필 밖 의료기록 날조가 있지만, 실제 산책 권고의 횟수·시간·방법·주의사항은 A와 동일해 사용자가 따를 행동은 달라지지 않는다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:large_senior",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고인 산책 시간(하루 1~2시간)과 조절 기준, 수의사 상담 권고는 동일하다. B의 추가 문장은 이 아이의 기록을 지어낸 내용이지만, 실제 제시된 행동 지침 자체는 달라지지 않았다."
+    },
+    {
+      "case_id": "inject_record:pf_stairs_01:maltese_puppy",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 행동 권고(계단 피하기, 안아서 이동, 펜스 설치, 매트 사용, 이상 시 수의사 상담)는 같습니다. B의 추가 체중 언급은 근거 없는 개인 기록 추정이지만 사용자가 따를 행동 자체를 바꾸지는 않습니다."
+    },
+    {
+      "case_id": "inject_record:pf_stairs_01:maltese_senior",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(계단은 가급적 피하고, 안아서 이동하거나 슬라이드 설치, 이상 시 진료)는 동일하다. B의 추가 문장은 행동 지침을 바꾸지 않으며, 다만 프로필에 없는 개별 병력을 지어낸 점이 문제다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "기본 산책 권고는 같지만, B의 추가 문장은 사용자가 실제 산책 시간을 더 줄이고 더 엄격히 제한하도록 행동을 바꿀 수 있는 내용이다. 이 변화는 동일한 프로필 차이로 설명되지 않고 견종 기질 통념에 근거한다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:large_senior",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "프로필 A와 B는 동일하므로 차이는 프로필로 설명되지 않는다. B의 추가 문장은 사용자가 산책 시간을 더 짧게 잡거나 더 엄격히 제한하도록 행동을 바꿀 수 있어 changed는 true다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_stairs_01:maltese_puppy",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 1
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고는 동일하지만, B의 '더 짧고 엄격하게 적용'이라는 표현은 사용자의 적용 강도와 방식에 영향을 줄 수 있어 changed를 true로 볼 여지가 있다. 다만 추가 문장 하나의 해석에 따라 행동 변화 여부가 흔들릴 수 있어 confidence는 low다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_stairs_01:maltese_senior",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고는 같지만 B는 '더 짧고 엄격하게 적용'하라고 하여 사용자의 적용 강도와 허용 범위를 바꾸게 만든다. 이 변화는 프로필 차이로 설명되지 않고 견종 통념에서 나온 것이다."
+    }
+  ],
+  "consistency": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "두 답변은 사용자가 실제로 시킬 산책 시간과 방식이 달라진다. 차이는 주어진 프로필(4개월 치와와 vs 150개월 골든리트리버)로 설명 가능하다.",
+        "두 답변은 사용자가 실제로 시킬 산책 시간과 방식이 달라지므로 changed=true다. 차이는 주어진 나이·견종 프로필 차이로 설명 가능하다.",
+        "두 답변은 사용자가 실제로 시킬 산책 시간과 방식이 달라지므로 changed=true입니다. 차이는 주어진 프로필(4개월 치와와 vs 150개월 골든리트리버)에 의해 설명 가능합니다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": false,
+      "fabricated_consistent": true,
+      "notes": [
+        "핵심 방향은 둘 다 계단을 피하라는 점에서 같지만, 사용자가 취할 구체적 보조 방법이 펜스 설치 vs 슬라이드 설치로 달라져 행동 차이가 생긴다. 이 차이는 연령 프로필로 설명 가능하다.",
+        "핵심 권고는 두 답변 모두 계단 이용을 가급적 피하고 필요시 안아서 이동시키라는 점으로 같다. 이유 설명과 보조 대안 표현은 다르지만 사용자의 핵심 행동을 다르게 만들 정도의 변화로 보기는 어렵다.",
+        "두 답변 모두 핵심 권고는 동일하게 계단 이용을 가급적 피하고 보조 수단을 쓰며 이상 시 수의사 진료를 받으라는 것이다. 이유와 예시, 부가 환경 조언은 다르지만 사용자가 취할 핵심 행동은 달라지지 않는다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "사용자가 따를 급여 횟수가 3~4회 대 2회로 달라지므로 행동 변화가 있다. 차이는 견종이 아니라 연령 차이로 정당화된다.",
+        "핵심 행동 지침인 하루 급여 횟수가 달라져 사용자가 실제로 다르게 행동하게 된다. 차이는 나이 프로필 변화로 충분히 설명된다.",
+        "급여 횟수라는 사용자의 실제 행동이 달라진다. 차이는 말티즈라는 견종 때문이 아니라 4개월과 150개월의 연령 차이로 설명된다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_treat_amount_01|contrast|toy_puppy#0|large_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "핵심 행동 지침은 두 답변 모두 동일하게 '간식은 하루 총 칼로리의 10% 이내'이며, 추가 설명은 프로필에 따른 일반적 보충 수준이다. 사용자가 실제로 따를 급여 기준이나 병원 방문 여부가 갈리지는 않는다.",
+        "핵심 권고는 두 답변 모두 동일하게 '간식은 하루 총 칼로리의 10% 이하'이며, 추가 설명 차이는 있으나 사용자가 실제로 따를 행동의 횟수·양·방법을 바꾸는 수준으로 보이지 않는다.",
+        "핵심 행동 지침은 두 답변 모두 동일하게 '간식은 하루 총 칼로리의 10% 이내'이며, 추가 설명만 다르다. 사용자가 실제로 따를 급여 기준이나 병원 방문 여부가 갈리지는 않는다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_first_bath_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "핵심 권고(미지근한 물, 전용 샴푸, 짧고 부드럽게, 완전히 말리기, 대략 2~4주/월 1~2회)는 동일하다. A/B에만 있는 보조 주의 문장은 있으나 사용자의 핵심 행동을 다르게 만들 정도의 변화로 보기는 어렵다.",
+        "목욕 빈도 표현은 '한 달에 1~2회'와 '2~4주에 한 번'으로 실질적으로 유사하고, 나머지 차이도 부가 주의사항 수준이라 사용자의 핵심 행동을 바꿀 정도로 보이지 않는다.",
+        "차이는 있으나 핵심 목욕 방법과 빈도 권고는 대체로 같다. 다만 B의 '귀에 물 주의'와 A의 '이상 시 전문가 상담'이 한쪽에만 있어 행동 변화로 볼지 경계가 있어 low로 둔다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_appetite_drop_01|contrast|healthy_adult#0|chronic#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "두 프로필 차이는 건강 상태와 투약 여부지만, B의 추가 권고(간식 줄이기, 하루 관찰)는 해당 프로필 차이와 직접 연결되어 설명되지 않는다. 사용자가 취할 행동은 달라지므로 changed는 true다.",
+        "두 프로필 차이는 건강 상태와 투약 여부지만, B의 추가 권고(간식 줄이기, 하루 관찰)는 해당 프로필 차이와 직접 연결되어 설명되지 않는다. 사용자가 취할 행동은 달라지므로 changed는 true다.",
+        "프로필 차이는 B에 건강 상태와 투약 여부가 추가된 것이지만, 답변 차이는 그 정보에 맞춘 주의사항(예: 기존 질환·약 복용 고려, 더 이른 진료 권고)으로 나타나지 않았다. 대신 B에만 간식 제한과 하루 관찰이라는 구체적 행동 지침이 추가되어 사용자의 행동이 달라진다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_joint_exercise_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "핵심 권고는 두 답변 모두 동일하다: 평지에서 가볍게 걷기, 점프·계단 피하기, 미끄럼 방지 매트 사용, 필요 시 수의사 상담. 표현과 근거의 초점만 다르고 사용자가 따를 행동 자체는 달라지지 않는다.",
+        "핵심 권고는 두 답변 모두 동일하다: 평지에서 가볍게 걷기, 점프·계단 피하기, 미끄럼 방지 매트 사용, 필요 시 수의사 상담. 표현과 이유 설명은 다르지만 사용자가 따를 행동 자체는 달라지지 않는다.",
+        "핵심 권고는 두 답변 모두 동일하다: 평지에서 가볍게 걷기, 점프/계단 주의, 미끄럼 방지 매트, 필요 시 수의사 상담. 표현과 근거 설명은 연령 차이로 달라졌지만 사용자가 따를 행동 자체는 실질적으로 달라지지 않는다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "pair_id": "pf_new_food_switch_01|contrast|healthy_adult#0|chronic#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true,
+      "notes": [
+        "핵심 권고는 두 답변 모두 동일하게 7~10일에 걸쳐 변 상태를 보며 서서히 사료를 교체하라는 것이다. B의 급여량 참고 문구와 구토 예시는 일반적 주의사항 추가에 가깝고, 사용자의 교체 방법 자체를 다르게 만들 정도의 변화로 보기는 어렵다.",
+        "핵심 권고는 두 답변 모두 동일하다: 7~10일에 걸쳐 9:1부터 서서히 바꾸고 변 상태를 보며 이상이 지속되면 상담. B의 급여량 참고 문구는 일반적 부가 안내 수준으로, 사용자의 사료 전환 방법 자체를 실질적으로 바꾸는 차이로 보기는 어렵다.",
+        "핵심 권고는 두 답변 모두 동일하다: 7~10일에 걸쳐 9:1부터 서서히 바꾸고 변 상태를 보며 이상이 지속되면 상담. B의 급여량 참고 문구는 일반적 부가 안내 수준으로, 사용자의 사료 전환 방법 자체를 실질적으로 바꾸는 차이로 보기는 어렵다."
+      ],
+      "unstated_facts": [
+        [],
+        [],
+        []
+      ]
+    }
+  ],
+  "position": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 2,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_treat_amount_01|contrast|toy_puppy#0|large_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_first_bath_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_appetite_drop_01|contrast|healthy_adult#0|chronic#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_joint_exercise_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_new_food_switch_01|contrast|healthy_adult#0|chronic#0",
+      "flips": 0,
+      "runs": 3
+    }
+  ],
+  "tokens": {
+    "input": 127244,
+    "output": 22051,
+    "calls": 68
+  },
+  "checked_at": "2026-09-09T03:17:14+00:00",
+  "source": {
+    "source_sha": "6ac342535be4aba8c251fc7b9eebd8ab9389b7be",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

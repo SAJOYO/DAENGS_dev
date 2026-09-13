@@ -1,0 +1,53 @@
+# 개체 적합성 — Life 경로 v1. 사전 등록 (채점 전에 동결).
+#
+# 왜 따로 재는가 (2026-09-09): v1·v1.1 은 general 어댑터만 진짜였고 Life 는 가짜 자리표시라 "미측정" 이었다.
+# 팀 DB 비밀번호가 생겨 Life RAG(documents 9,844행 · pgvector · Qwen3-Embedding-0.6B) 를 이 PC 에서
+# 직접 돌릴 수 있게 됐다. Life 는 견종·나이만 프로필로 받는다 — 질환은 안 본다.
+# 질문은 라우터가 life 로 보내는 제도·보험·이동 질문. 대부분이 invariant(강아지가 누구든 같은 답) 이라
+# 이 실험의 주 산출물은 **특이도 S** 표본이다. reactive 는 나이·크기에 갈리는 4개(보험 가입 연령 · 기내 반입 ·
+# 등록 시기 · 사료 단계) 뿐이라 P 는 잠정치로만 읽는다.
+benchmark_id: profile-fitness-life-v1
+related: profile-fitness-v1.1
+frozen_at: 2026-09-09
+author: gayeoniee + claude
+
+target: POST /assistant/query 최종 답변 (message)
+scope:
+  capability: life (+ general 폴백)
+  adapters: life                      # general + 진짜 Life. training·walk·place 는 가짜 → 범위 밖
+  general_fallback: on
+  life_temperature: 0.0
+  life_tokens: 미계량                  # daengs_life 자체 Gemini 클라이언트를 타서 장부에 안 잡힌다
+
+inputs:
+  questions: evals/profile_fitness/questions_pf_life_v1.jsonl   # invariant 8 · reactive 4
+  profiles: evals/profile_fitness/profiles_v1.jsonl
+  questions_sha256: 1802f67ff7dd6241e97dfe34869448d7d9ce9593072d1959ac05a04787523f43
+  profiles_sha256: 061c04495434e6e5c2112422aa52b27cd4b06604fe85a212cca3d70b523b6c73
+
+generation:
+  router: {model: gemini-3.1-flash-lite, prompt_version: semantic-router-ko-v10}
+  life: {model: gemini-3.1-flash-lite, rag: documents@192.168.0.22, embedding: qwen3-embedding-0.6b}
+judge:
+  model: gpt-5.4-2026-03-05
+  prompt_versions: {A: profile-fitness-diff-ko-v2.1a, B: profile-fitness-diff-ko-v2.1b}
+  temperature: 0.0
+  both_orders: false                  # 예산(5만 토큰) — 위치 뒤집힘은 v1.1 에서 이미 쟀다(11%)
+  abstention: confidence == low
+
+# 임계값은 v1.1 과 같다. Life 가 인용 문구를 그대로 쓰는 경향이 있어 S 가 더 낮게 나올 것으로 예상하지만 기준은 안 바꾼다.
+judge_gates:
+  anchors_dev: all_pass
+  anchors_holdout: all_pass
+  kappa_min: 0.60
+metric_gates:
+  inequality: N < S < P
+  noise_changed_max: 0.10
+  ablation_changed_min: 0.60           # reactive 4개뿐 — 잠정
+  invariant_changed_max: 0.30
+  unmeasured_max: 0.05
+
+sample: {reactive: 4, invariant: 8}
+not_doing:
+  - 질환 프로필 (Life 계약상 안 받는다)
+  - 양쪽 순서 판정

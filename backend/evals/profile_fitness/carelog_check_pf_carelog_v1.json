@@ -1,0 +1,24 @@
+{
+  "checked": {
+    "log_empty": 9,
+    "log_absent": 2
+  },
+  "violations": [
+    {
+      "cell": "pf_log_absent_fed_01|log_absent#0",
+      "arm": "log_absent",
+      "phrases": [
+        "기록"
+      ],
+      "excerpt": "오늘 기록된 식사 정보가 없어 강아지의 상태를 확인하기 어렵습니다. 평소 식사나 산책, 투약 기록을 남겨주시면 다음번에 함께 확인하며 도움을 드릴 수 있습니다.\n\n현재 강아지의 식욕이나 활력 등 평소와 다른 점이 있는지 가장 눈에 띄는 것부터 말씀해 주시겠어요? 현재 강아지의 식욕이나 "
+    }
+  ],
+  "violation_count": {
+    "log_empty": 0,
+    "log_absent": 1
+  },
+  "logged_arm_mentions_record": {
+    "n": 11,
+    "mentions": 10
+  }
+}

@@ -29,7 +29,11 @@ class FakeEngine:
 
 
 class FakeJudge:
-    def __init__(self, scores: list[int] | None = None, error: Exception | None = None) -> None:
+    """`scores` 항목은 점수(`int`)거나, 그 회차에서 그대로 raise 할 `Exception` 이어도 된다
+    (예: `FakeJudge([2, JudgeError("boom")])` 로 "두 번째 검수만 실패"를 흉내낸다).
+    `error` 는 매 호출마다 실패하는 옛 방식 그대로 남겨 둔다."""
+
+    def __init__(self, scores: list[int | Exception] | None = None, error: Exception | None = None) -> None:
         self.scores = scores or [5]
         self.error = error
         self.calls: int = 0
@@ -39,4 +43,6 @@ class FakeJudge:
         if self.error:
             raise self.error
         s = self.scores[min(self.calls - 1, len(self.scores) - 1)]
+        if isinstance(s, Exception):
+            raise s
         return JudgeResult(likeness=s, text_ok=True, avatar_ok=True, note="fake")

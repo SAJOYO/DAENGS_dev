@@ -74,6 +74,8 @@ def _load_template(month: int, base_dir: Path) -> bytes:
 
 def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: bytes, photo_jpeg: bytes,
              prompt: str, text: str, font: Path) -> tuple[bytes, JudgeResult | None]:
+    """한 번의 생성 시도: 엔진 호출 → 제목 얹기 → (있으면) 검수. 검수가 없거나 실패해도
+    카드 자체는 만들어 돌려준다 — 점수는 `None` 이 될 뿐 이 함수가 실패하지는 않는다."""
     try:
         raw = engine.generate(template_png=template, photo_jpeg=photo_jpeg, prompt=prompt)
     except EngineError as exc:
@@ -96,6 +98,9 @@ def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: byte
 
 def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str, engine: CardImageEngine,
                   judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int) -> GeneratedCard:
+    """사진 한 장으로 달 카드 한 장을 만든다. 검수 점수가 `judge_min` 미만이면 한 번 더 만들어
+    보고 둘 중 점수 높은 쪽을 돌려준다(동점이면 첫 번째). 검수가 없거나 실패하면 재시도 없이
+    그 한 장을 그대로 돌려준다."""
     card_meta = catalog.require_open(month, open_months)
     photo_jpeg = photo_mod.prepare_photo(photo, content_type)
     template = _load_template(month, base_dir)

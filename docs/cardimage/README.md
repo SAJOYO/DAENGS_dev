@@ -59,6 +59,7 @@
 | 출력 크기 | **2K** (Gemini 2:3 → 1696×2528, 카드 994×1582 에 확대 없이 맞춤) | 1K 는 1.25배 확대가 필요. 2K 닮음 3장 중 2장 OK, 1K 와 차이 없음 (09-14) |
 | 글자 | **이름·제목은 AI 가 아니라 Pillow 가 그린다** (`backend/tools/cardimage_title.py`). 제목 형식 `BLOSSOM <이름>`. 왼쪽 정렬 x=268, 대문자 띠의 세로 중심은 **검은 제목판의 중심(y=99)** 과 일치, 검은 판의 기울어진 오른쪽 경계 안에서 길면 축소. 은색 그라데이션+외곽선+그림자 | 사용자 결정 09-14. 한글 깨짐·글꼴 불일치·길이 문제 회피. 원본 픽셀을 재서 맞춤 |
 | 글꼴 | **Noto Serif KR 가변, Black** 하나로 영문·한글 — `cardimage/fonts/NotoSerifKR.ttf` (OFL). 바꾸려면 파일 교체 | 사용자 선택 09-14. 후보 비교는 `cardimage/out/_title_test/_font_variants.png` |
+| 글꼴 후보 (영문 전용, 미채택) | 사용자가 적어 둔 후보: [ITC Novarese Bold](https://freefonts.co/fonts/itc-novarese-bold) · [ITC Korinna Extra Bold](https://freefonts.co/fonts/itc-korinna-extra-bold). 영문만 있어 한글은 KR 글꼴과 섞어 써야 함(`--font-latin` 자리) | 사용자 09-14 "후보로만 적어 둬, 지금은 받은 것 그대로". ⚠ ITC 계열은 원래 Monotype 상용 글꼴이라 그 사이트의 "free" 가 재배포·상업 사용을 허락하는지 **라이선스를 확인한 뒤** 써야 한다 |
 | 틀 | `cardimage/4_blossom_template.webp` 채택. 배지 `26APR` 은 틀에 구워 둠(연도 고정) | 사용자 결정 09-14 — "내년까지 생각 안 해도 됨". 원본 `4_blossom.webp` 도 그대로 둔다 |
 | 키 | 카드 생성용 Gemini 키는 채팅용과 **다른 GCP 프로젝트**, 결제 계정은 하나 | 프로젝트 단위로 지출 상한·사용량이 갈리기 때문 (research §결제) |
 | 이름 | `NEO` 를 코드·변수·문서 이름에 쓰지 않는다 | 네오는 참조 카드 강아지 이름 |

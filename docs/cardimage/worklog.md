@@ -94,6 +94,13 @@ Nano Banana 2 쪽 실험은 여기서 **끝**. 총 16장 약 $1.25. 남은 것�
 - 세 번째 판 (00:48, $0.10) — **두 번째 판의 raw 2K 에서 검은 띠만 잘라낸 것을 입력**으로, "배지 글자를 `APRIL SPECIAL` 글자 높이로, 배지는 그만큼 좁히고, 경계를 옮겨 제목판을 늘려라" 한 가지만 시킴(`--step badge`): `cardimage/out/0914_004818__blank_v2_2Kcrop_badge_2K_1.png`. **셋 다 됨** — 글자 작아짐, 배지 좁아짐, 제목판이 약 x=745 → 790 까지 늘어 이름 칸 약 490 → 545px. 나머지 픽셀 그대로(재생성 두 겹인데 눈으로 차이 없음). 교훈: 도형 배치는 **한 번에 한 가지만, 기준(다른 글자 높이)을 주고** 시키면 된다.
 - **사용자 결정 (00:50):** ① 세 번째 판을 틀로 채택 → `cardimage/4_blossom_template.webp` (q92), 2K 원출력은 `cardimage/raw/`(폴더만 추적) ② 제목은 `BLOSSOM <이름>` ③ 배지 `26APR` 은 틀에 구운 채로 둔다, 연도는 내년까지 생각 안 함. 원본 `4_blossom.webp` 는 지우지 않는다.
 
+### 11장 틀 만들기 (09-14 01:40~01:55) — 약 $2.2
+
+`cardimage_make_templates.py` 가 `headers.json` 을 읽어 카드마다 blank → badge 두 단계를 이어서 돌렸다 (4월 제외 11장, 22호출).
+결과는 `cardimage/out/templates/<stem>_blank.png` / `<stem>_badge.png` (+ `_badge_raw2k.png`), 비교표 `_sheet.png`(원본/blank/badge 머리띠).
+배지는 `26JAN`…`26DEC`. **사람 확인 전** — 채택은 사용자가 보고 정한다. 확인 포인트: 검은 띠 유지, 배지 글자 크기, 제목판 확장, 강아지·아바타·아래판 불변.
+`backend/.env.example` 에 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 항목이 없던 것을 사용자가 지적 → 추가.
+
 ### 글자 얹기 테스트 (09-14 00:55) — AI 없음
 
 `backend/tools/cardimage_title.py` 로 채택한 틀에 `BLOSSOM NEO` · `BLOSSOM 네오` · `BLOSSOM neeeeeeo` 를 얹음 (`cardimage/out/_title_test/`).

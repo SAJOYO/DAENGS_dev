@@ -101,20 +101,35 @@ def split_runs(text: str) -> list[tuple[str, str]]:
     return runs
 
 
+PLATE_CENTER_Y = 99  # 검은 제목판 y 53~145 의 중심
+
+
 def layout(text: str, fonts: Fonts) -> tuple[list[Run], int]:
-    """대문자 높이를 줄여 가며 오른쪽 경계 안에 들어가는 배치를 찾는다. (runs, cap)"""
+    """대문자 높이를 줄여 가며 오른쪽 경계 안에 들어가는 배치를 찾고, 글자 덩어리(잉크)의 세로 중심을
+    판 중심에 맞춘다. (runs, cap)
+
+    대문자 띠가 아니라 잉크 기준인 이유: 소문자만 있는 이름은 대문자 띠의 아래 절반에만 글자가 있어
+    띠 기준으로 맞추면 처져 보인다 (사용자 09-14 "neeeeeeo 가 아래로 처진다").
+    """
     cap = CAP_HEIGHT
     while True:
         runs: list[Run] = []
         x = LEFT_X
+        ink_top, ink_bot = 10**9, -(10**9)
         for kind, s in split_runs(text):
             f = fonts.latin(fonts.size_for_cap("latin", cap)) if kind == "latin" else fonts.kr(fonts.size_for_cap("kr", cap))
             ascent, _ = f.getmetrics()
-            runs.append(Run(s, f, x, BASELINE_Y - ascent))
+            y = BASELINE_Y - ascent
+            _, t, _, b = f.getbbox(s)
+            ink_top, ink_bot = min(ink_top, y + t), max(ink_bot, y + b)
+            runs.append(Run(s, f, x, y))
             x += round(f.getlength(s))
         right = x + STROKE_W
         limit = plate_right_edge(BASELINE_Y + 10) - RIGHT_MARGIN
         if right <= limit or cap <= MIN_CAP:
+            shift = round(PLATE_CENTER_Y - (ink_top + ink_bot) / 2)
+            for r in runs:
+                r.y += shift
             return runs, cap
         cap -= 1
 
@@ -162,7 +177,10 @@ def main() -> None:
     ap.add_argument("--font-latin", default=None, help="영문만 다른 글꼴로 그리려면 (Noto Serif Display 등). 기본은 KR 로 통일")
     ap.add_argument("--out", type=Path, default=CARDIMAGE / "out" / "_title_test")
     ap.add_argument("--compare", type=Path, default=CARDIMAGE / "4_blossom.webp", help="머리띠 비교표에 넣을 원본")
+    ap.add_argument("--keep-case", action="store_true", help="영문 이름을 대문자로 바꾸지 않는다 (기본은 카드 양식대로 대문자)")
     args = ap.parse_args()
+    if not args.keep_case:
+        args.titles = [t.upper() for t in args.titles]  # 한글은 upper() 에 영향 없음
 
     fonts = Fonts(str(args.font_kr), args.font_latin)
     card = Image.open(args.template).convert("RGB")

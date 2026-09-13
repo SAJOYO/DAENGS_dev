@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from PIL import Image
 
 from daengs_backend.services.cardimage import engine
@@ -30,3 +32,51 @@ def test_gemini_engine_without_key_raises_no_key():
         assert err.code == "no_key"
     else:
         raise AssertionError("expected EngineError")
+
+
+def test_extract_image_bytes_no_candidates_raises_no_image():
+    resp = SimpleNamespace(candidates=[])
+    try:
+        engine._extract_image_bytes(resp)
+    except engine.EngineError as err:
+        assert err.code == "no_image"
+    else:
+        raise AssertionError("expected EngineError")
+
+
+def test_extract_image_bytes_none_candidates_raises_no_image():
+    resp = SimpleNamespace(candidates=None)
+    try:
+        engine._extract_image_bytes(resp)
+    except engine.EngineError as err:
+        assert err.code == "no_image"
+    else:
+        raise AssertionError("expected EngineError")
+
+
+def test_extract_image_bytes_content_none_raises_no_image():
+    resp = SimpleNamespace(candidates=[SimpleNamespace(content=None)])
+    try:
+        engine._extract_image_bytes(resp)
+    except engine.EngineError as err:
+        assert err.code == "no_image"
+    else:
+        raise AssertionError("expected EngineError")
+
+
+def test_extract_image_bytes_text_only_raises_no_image_with_text():
+    part = SimpleNamespace(inline_data=None, text="Sorry, I can't do that")
+    resp = SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))])
+    try:
+        engine._extract_image_bytes(resp)
+    except engine.EngineError as err:
+        assert err.code == "no_image"
+        assert "Sorry, I can't do that" in err.detail
+    else:
+        raise AssertionError("expected EngineError")
+
+
+def test_extract_image_bytes_returns_inline_data():
+    part = SimpleNamespace(inline_data=SimpleNamespace(data=b"PNGDATA"), text=None)
+    resp = SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))])
+    assert engine._extract_image_bytes(resp) == b"PNGDATA"

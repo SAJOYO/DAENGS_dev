@@ -65,12 +65,21 @@ COMMENT ON COLUMN pets.identity_id IS
     'NULL 이면 연결 안 된 보통 강아지. 같은 값이면 같은 실제 강아지다';
 
 -- ---------------------------------------------------------------------
--- 되돌리기 (데이터 손실 없음 — 연결 관계만 사라진다)
+-- 되돌리기 — 🔴 **무손실이 아니다.**
 --
 --   DROP INDEX IF EXISTS pets_identity_one_per_user;
 --   DROP INDEX IF EXISTS idx_pets_identity;
 --   ALTER TABLE pets DROP COLUMN IF EXISTS identity_id;
 --   DROP TABLE IF EXISTS pet_identities;
 --
--- 기존 pet 행과 케어·산책 기록은 한 줄도 안 건드렸으므로 그대로 남는다.
+-- 기존 pet 행과 케어·산책 기록은 한 줄도 안 건드렸으므로 그대로 남는다. 그러나
+-- **연결 관계 자체는 이 표와 이 칸에만 있다.** 기능이 한 번이라도 쓰인 뒤에 지우면
+-- 사용자가 맺은 연결이 전부 사라지고, 되살리려면 사람이 다시 초대·수락해야 한다.
+-- 적용 전으로 돌아가는 것이 아니라 **적용 후 생긴 것을 버리는 것**이다.
+--
+-- 지워야 한다면 그 전에 따로 떠 둔다:
+--   pg_dump -Fc -t pet_identities -t pets <db> > before-drop.dump
+--
+-- 되돌리기의 1순위는 이것이 아니라 **코드 롤백(스키마 유지)** 이다. 자세한 것과
+-- 그때 같이 되돌아가는 규칙들은 docs/co-care.md 의 "롤백" 절에 있다.
 -- ---------------------------------------------------------------------

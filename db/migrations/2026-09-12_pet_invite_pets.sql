@@ -81,11 +81,23 @@ COMMENT ON COLUMN pet_invites.pet_count IS
     '묶음의 원래 마릿수. 자식 줄 수와 다르면 구성이 바뀐 것이라 수락을 410 으로 막는다';
 
 -- ---------------------------------------------------------------------
--- 되돌리기 (데이터 손실 없음 — 묶음과 영수증 매핑만 사라진다)
+-- 되돌리기 — 🔴 **무손실이 아니다.**
 --
 --   ALTER TABLE pet_invites DROP CONSTRAINT IF EXISTS pet_invites_pet_count_check;
 --   ALTER TABLE pet_invites DROP COLUMN IF EXISTS pet_count;
 --   DROP TABLE IF EXISTS pet_invite_pets;
 --
--- `pet_invites.pet_id` 가 앵커로 남아 있어 기존 단일 초대는 그대로 동작한다.
+-- `pet_invites.pet_id` 가 앵커로 남아 있어 **한 마리 초대**는 그대로 동작한다.
+-- 사라지는 것은 그 다음이다:
+--   · 묶음 구성 — 두 마리 이상이 담긴 초대는 앵커 한 마리로 쪼그라든다.
+--     아직 수락 안 된 묶음 링크는 나머지 강아지를 잃은 채로 살아 있게 된다.
+--   · `linked_pet_id` 영수증 — 재시도가 그때의 강아지별 연결 매핑을 복원하지 못한다.
+--   · `pet_count` — 구성이 바뀌었는지 볼 근거가 없어져 **부분 수락을 막을 수단이
+--     사라진다.** 묶음을 막던 409 link_selection_required 도 같이 없어진다.
+--
+-- 지워야 한다면 그 전에 따로 떠 둔다:
+--   pg_dump -Fc -t pet_invite_pets -t pet_invites <db> > before-drop.dump
+--
+-- 되돌리기의 1순위는 이것이 아니라 **코드 롤백(스키마 유지)** 이다. 자세한 것과
+-- 그때 같이 되돌아가는 규칙들은 docs/co-care.md 의 "롤백" 절에 있다.
 -- ---------------------------------------------------------------------

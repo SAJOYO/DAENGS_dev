@@ -990,6 +990,77 @@ COUNT(DISTINCT COALESCE(pets.identity_id, pets.id))
 200** 을 낸다. 사용자가 연결을 골랐는데 연결 없이 참여된다. 그래서 앱은 **미리보기 성공을 새
 계약 사용의 전제**로 삼고, 404 면 단일 흐름으로 폴백해야 한다.
 
+### 롤백 — 🔴 "표시만 퇴행" 이 아니다
+
+되돌리는 길이 둘인데, **둘 다 대가가 있다.** 어느 쪽도 "적용 전으로 돌아간다" 가 아니다.
+
+#### 길 ① 코드 롤백 + 스키마 유지 (1순위)
+
+서버만 옛 코드로 되돌리고 새 표·새 칸은 남긴다. 데이터는 안 지워진다 — 그 점에서 길 ② 보다
+낫고, 그래서 1순위다. 옛 코드가 새 스키마에서 도는 것 자체는 배포 순서가 이미 요구하는
+성질이라 확인됐다(일회용 PostgreSQL 에서 옛 코드의 초대 생성이 `pet_count DEFAULT 1` 로
+그대로 도는 것을 실측).
+
+**그런데 규칙이 함께 되돌아간다.** 아래는 코드를 읽어 정리한 것이고, 실제로 옛 코드를 새
+스키마 위에서 돌려 본 범위는 **초대 생성 하나뿐**이다 — 나머지는 **미검증**이다.
+
+| 되돌아가는 규칙 | 무슨 일이 생기나 |
+| --- | --- |
+| **묶음 수락이 부분 수락이 된다** | 옛 `accept_invite` 는 `pet_invite_pets` 를 모르고 `invite.pet_id` **하나만** 본다. 두 마리 묶음 토큰이 오면 **앵커만 참여시키고 `accepted_by` 를 찍는다.** 그 토큰은 그대로 소진돼, 나중에 새 코드로 돌아와도 영수증 경로가 앵커만 돌려준다 — **나머지 아이는 영영 안 들어온다.** 이번 MVP 가 구조적으로 금지한 바로 그 동작이다 |
+| **`link_selection_required` 가드가 사라진다** | 구 앱이 토큰만 보내는 것을 막던 409 가 없어진다. 위와 같은 일이 조용히 일어난다 |
+| **그룹 관리 가드가 사라진다** | 옛 `update_pet`·`delete_pet` 에는 `is_group_owner` 개념이 없다. 연결된 행의 **견종·생일·건강정보를 각자 고칠 수 있게 되어 그룹 공통 정보가 갈라진다.** 다시 새 코드로 올리면 앵커 값만 보이므로, 그 사이 남이 고친 값은 **조용히 안 보이게 된다**(지워지지는 않는다) |
+| **상한이 물리 행 기준으로 돌아간다** | 옛 `count_accessible` 은 `pets` 행을 센다. 연결한 사람은 5마리 상한을 두 칸 먹고, 상한에 걸려 새 등록이 막힐 수 있다 |
+| **목록이 다시 두 장이 된다** | 접기가 없어져 같은 아이가 카드 두 장으로 보인다. 이것만이 "표시 퇴행" 이다 |
+| **`PATCH /app/pets/{id}/display` 가 404** | 새 앱이 이름 수정에 실패한다 |
+| **케어·산책 공동 조회가 좁아진다** | 그룹으로 보이던 남의 행 기록이 안 보인다. 기록은 남아 있다 |
+
+**그래서 코드 롤백을 하려면 초대 링크부터 끊어야 한다.** 살아 있는 묶음 초대를 남긴 채
+롤백하면 위 첫 줄이 실제로 일어난다. 롤백 전에 활성 묶음을 지우는 것이 안전하다:
+
+```sql
+-- 두 마리 이상 묶음 중 아직 수락 안 된 것만. 앵커 한 마리짜리는 옛 코드도 정상 처리한다.
+DELETE FROM pet_invites WHERE pet_count > 1 AND accepted_by IS NULL;
+```
+
+#### 길 ② 스키마까지 DROP (최후)
+
+```sql
+ALTER TABLE pet_invites DROP CONSTRAINT IF EXISTS pet_invites_pet_count_check;
+ALTER TABLE pet_invites DROP COLUMN IF EXISTS pet_count;
+DROP TABLE IF EXISTS pet_invite_pets;
+DROP INDEX IF EXISTS pets_identity_one_per_user;
+DROP INDEX IF EXISTS idx_pets_identity;
+ALTER TABLE pets DROP COLUMN IF EXISTS identity_id;
+DROP TABLE IF EXISTS pet_identities;
+```
+
+**무손실이 아니다.** 기능이 한 번이라도 쓰인 뒤라면 그 뒤에 생긴 것이 새 표·새 칸에만 있다:
+
+- `pet_identities` · `pets.identity_id` → **사용자가 맺은 연결 전부.** 되살리려면 사람이 다시
+  초대·수락해야 한다.
+- `pet_invite_pets` → 묶음 구성과 `linked_pet_id` **영수증**. 재시도가 그때의 강아지별 매핑을
+  복원하지 못한다.
+- `pet_invites.pet_count` → 구성 변경 감지 근거.
+
+**안 사라지는 것**: `pets` 행, `pet_members` 구성원, 13개 표의 `pet_id` 기록. 물리 병합을 안
+한 이유가 이것이다 — 되돌려도 **사람과 기록은 남는다.** 하지만 "손실 0" 은 아니다.
+
+지워야 한다면 그 전에 따로 떠 둔다:
+
+```bash
+pg_dump -Fc -t pet_identities -t pet_invite_pets -t pets -t pet_invites <db> > before-drop.dump
+```
+
+#### 아직 검증하지 않은 것
+
+- 옛 코드로 **묶음 토큰을 실제로 수락**시켜 위 첫 줄을 재현해 보지 않았다. 코드를 읽은
+  판단이다.
+- 옛 코드로 **연결된 행을 수정·삭제**해 그룹 공통 정보가 갈라지는 것을 재현해 보지 않았다.
+- 길 ② 의 DROP 을 실제로 돌려 보지 않았다(돌리면 그 DB 의 연결이 사라지므로, 필요하면
+  일회용 DB 에서 따로 본다).
+
+**롤백을 실제로 하게 되면 그 전에 위 셋을 일회용 DB 에서 먼저 재현하고 절차를 확정한다.**
+
 ### 고도화로 남긴 것
 
 - 공동 보호자의 공식 건강정보 **변경 요청**과 주보호자 승인 (`변경 요청 → 확인 → 반영`)

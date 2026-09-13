@@ -69,4 +69,11 @@ def build_orchestrator(*, engine: OrchestrationEngine | None = None) -> Orchestr
     return AssistantOrchestrationService(engine=engine)
 
 
-__all__ = ["Orchestrator", "build_orchestrator"]
+def build_diary_orchestrator(*, generate, collector=None):
+    """Diary graph uses the shared executor without entering chat semantic routing."""
+    from daengs_backend.orchestration.diary import DiaryOrchestrationService
+
+    return DiaryOrchestrationService(generate=generate, collector=collector)
+
+
+__all__ = ["Orchestrator", "build_diary_orchestrator", "build_orchestrator"]

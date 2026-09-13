@@ -142,6 +142,57 @@ async def test_action_edit_does_not_change_space_request():
     provider = AsyncMock(side_effect=prose)
     await writing.write_cards(cached.input.source, cached, generate=provider)
     assert [c.args[0] for c in provider.call_args_list] == ["action", "title"]
+    # The title request includes only the changed card, not the unchanged siblings.
+    assert [c["card_id"] for c in provider.call_args_list[-1].args[1]["cards"]] == [target.id]
+
+
+async def test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note():
+    from daengs_walk.diary_input import UserRecord, material_ref
+
+    base = prepared_case().board
+    previous = await writing.write_cards(base.input.source, base, generate=prose)
+    raw = base.input.source.model_dump(mode="json")
+    note = next(r for r in raw["records"] if r["content"]["kind"] == "note")
+    note["content"]["text"] = "수정한 원문 그대로"
+    note["ref"]["version"] = str(int(note["ref"]["version"]) + 1)
+    updated_ref = material_ref(UserRecord.model_validate(note)).model_dump(mode="json")
+    for background in raw["backgrounds"]:
+        if background["target"]["identity"] == updated_ref["identity"]:
+            background["target"] = updated_ref
+    after = assemble_saved_base_board(
+        replace(base.input, source=DiaryInput.model_validate(raw)), policy(3)
+    )
+    after = replace(after, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
+    provider = AsyncMock(side_effect=prose)
+    result = await writing.write_cards(after.input.source, after, generate=provider)
+    provider.assert_not_awaited()
+    assert any(c.writing.original_text == "수정한 원문 그대로" for c in result.bundle.scenes)
+
+
+async def test_diary_and_existing_assistant_use_the_same_executor(monkeypatch):
+    from daengs_backend.orchestration.contracts import CapabilityName, CapabilityStatus
+    from daengs_backend.orchestration.execution import JobExecutor
+    from daengs_backend.orchestration.graph import OrchestrationEngine
+    from tests.test_orchestration_graph import FakeAdapter, plan, request, result, run
+
+    calls = []
+    original = JobExecutor.run
+
+    async def spy(self, job_id, invoke, **kwargs):
+        calls.append(job_id)
+        return await original(self, job_id, invoke, **kwargs)
+
+    monkeypatch.setattr(JobExecutor, "run", spy)
+    base = prepared()
+    await writing.write_cards(base.input.source, base, generate=prose)
+    assert any(c.startswith("space:") for c in calls)
+    assert any(c.startswith("action:") for c in calls)
+    assert any(c.startswith("title:") for c in calls)
+    calls.clear()
+    cap = CapabilityName.WALK
+    adapter = FakeAdapter(cap, result(cap, CapabilityStatus.OK))
+    await run(OrchestrationEngine({cap: adapter}), plan(request(cap)))
+    assert calls == ["request-1:0:walk"]
 
 
 async def test_note_is_preserved_and_not_sent_even_to_title():
@@ -163,6 +214,30 @@ async def test_note_is_preserved_and_not_sent_even_to_title():
         load_board(stored)
 
 
+async def test_previous_public_card_hashes_remain_readable():
+    from daengs_walk.diary_board_output import PublishedBoard
+
+    # v1 hashes included original text; the stored public shape must remain readable.
+    base = prepared_case().board
+    result = await writing.write_cards(base.input.source, base, generate=prose)
+    raw = result.bundle.model_dump(mode="json")
+    for card in raw["scenes"]:
+        parts = card["writing"]
+        legacy = digest(
+            [
+                card["id"],
+                card["anchor"],
+                card["place_reference"],
+                parts["space"],
+                parts["actions"],
+                parts["original_text"],
+            ]
+        )
+        parts["content_revision"] = parts["title_based_on_content_revision"] = legacy
+    assert PublishedBoard.model_validate(raw).model_dump(mode="json") == raw
+    assert "reused" not in writing.job("title", {"cards": []}).model_dump(mode="json")
+
+
 async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
     from copy import deepcopy
 
@@ -177,12 +252,25 @@ async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
     base = assemble_saved_base_board(
         replace(base.input, source=DiaryInput.model_validate(raw)), policy(3)
     )
-    provider = AsyncMock(side_effect=prose)
+    active = peak = 0
+
+    async def delayed_prose(stage, payload, schema):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.001)
+            return await prose(stage, payload, schema)
+        finally:
+            active -= 1
+
+    provider = AsyncMock(side_effect=delayed_prose)
     result = await writing.write_cards(base.input.source, base, generate=provider)
     assert len(result.bundle.scenes) > 12
     titles = [c.args[1]["cards"] for c in provider.call_args_list if c.args[0] == "title"]
     assert len(titles) == 2 and all(len(batch) <= 12 for batch in titles)
     assert all(c.writing.title_origin == "generated" for c in result.bundle.scenes)
+    assert peak == 4 and active == 0
 
 
 async def test_wrong_title_revision_keeps_adopted_action():
@@ -195,12 +283,59 @@ async def test_wrong_title_revision_keeps_adopted_action():
         return value
 
     result = await writing.write_cards(base.input.source, base, generate=generate)
-    assert all(c.writing.title_origin == "fallback" for c in result.bundle.scenes)
+    assert sum(c.writing.title_origin == "fallback" for c in result.bundle.scenes) == 1
+    assert (
+        sum(c.writing.title_origin == "generated" for c in result.bundle.scenes)
+        == len(result.bundle.scenes) - 1
+    )
     assert any(
         c.writing.actions[0].origin == "generated"
         for c in result.bundle.scenes
         if c.writing.actions
     )
+
+
+@pytest.mark.parametrize("damage", ["missing", "malformed", "duplicate", "truncated"])
+async def test_title_batch_adopts_valid_siblings_only(damage):
+    base = prepared()
+
+    async def generate(stage, payload, schema):
+        value = await prose(stage, payload, schema)
+        if stage == "title":
+            if damage == "missing":
+                value["titles"].pop()
+            elif damage == "malformed":
+                value["titles"][0]["text"] = None
+            elif damage == "duplicate":
+                value["titles"].append(dict(value["titles"][0]))
+            else:
+                return '{"titles": ['
+        return value
+
+    result = await writing.write_cards(base.input.source, base, generate=generate)
+    failed = sum(c.writing.title_origin == "fallback" for c in result.bundle.scenes)
+    assert failed == (len(result.bundle.scenes) if damage == "truncated" else 1)
+    assert all(c.writing.space.text for c in result.bundle.scenes)
+
+
+def test_source_edit_during_actual_title_job_cannot_publish_old_card(api, monkeypatch):
+    client, state, _ = api
+    client.app.dependency_overrides.pop(router.get_diary_writer)
+
+    async def generate(stage, payload, schema):
+        if stage == "title":
+            state.entries[0].revision += 1
+            state.entries[0].payload["note"] = "제목 작성 중 수정한 원문"
+        return await prose(stage, payload, schema)
+
+    monkeypatch.setattr(writing, "generate_card_prose", generate)
+    monkeypatch.setattr(collection, "configured_collection", AsyncMock(side_effect=OSError))
+    request = body(state, bundle_format="walk-diary-board-v1", preparation_budget_ms=20000)
+    response = client.post(PATH, json=request)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "stale"
+    assert response.json()["bundle"] is None
+    assert state.row.status != "ready"
 
 
 @pytest.mark.parametrize("failure", ["title", "action", "space"])

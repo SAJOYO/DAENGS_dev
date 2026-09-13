@@ -1,6 +1,6 @@
 # 실제 산책 카드 작성 경로
 
-`POST /app/walks/{walk_id}/storyboard`의 `walk-diary-board-v1` 작성기는 공간·행동·제목 작업을 실행한다. APP의 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`가 이 응답을 소비한다. 별도 실험 서버나 일기 저장 테이블은 없다.
+`POST /app/walks/{walk_id}/storyboard`의 `walk-diary-board-v1` 작성기는 DEV `orchestration/runtime.py:build_diary_orchestrator`를 통해 일기 LangGraph를 실행한다. 기존 어시스턴트 LangGraph와 **같은 `execution.py:JobExecutor`**를 사용한다. APP의 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`가 이 응답을 소비한다. 별도 실험 서버나 일기 저장 테이블은 없다.
 
 ```mermaid
 flowchart TD
@@ -29,7 +29,9 @@ flowchart TD
 | 소유권과 입력 읽기, 접근 가능한 동행 이름 | `walk_diary_input.py:read_input` |
 | 예약·공통 공개 마감·원본 변경 검사 | `walk_diary_generation.py:generate_diary`, `walk_diary_publication.py:within_budget` |
 | 실제 보드 작성 진입점 | `walk_diary_board_slot_writing.py:write_board` |
-| 작업 분기·병행 실행·본문 고정·제목 묶음 | `walk_diary_card_writing.py:write_cards` |
+| 런타임 진입과 일기 그래프 | `orchestration/runtime.py:build_diary_orchestrator`, `orchestration/diary.py` |
+| 채팅·일기가 공유하는 제한 실행·시간 초과·오류 격리 | `orchestration/execution.py:JobExecutor` |
+| 작성용 입력·응답 검증·카드 부분 투영 | `walk_diary_card_writing.py` |
 | 공간/행동/제목의 개별 작성 지시 | `walk_diary_card_prompts.py` |
 | SGIS·공원·상권·EGIS 수집 | `walk_diary_space_collection.py:configured_collection` |
 | 원래 SGIS 변환·선정 | `walk_sgis.py`, `diary_public_background.py`, `diary_slots.py` |
@@ -37,6 +39,22 @@ flowchart TD
 | 독립 작업의 요청·채택 결과 저장 | `walk_diary_card_receipt.py`, `walk_diary_board_storage.py` |
 
 제목의 문체·단어 선택 정책은 제목 전략의 책임이다. 오케스트레이터는 제목만 받아 카드 ID와 내용 버전을 검사하며, 본문 수정 권한을 주지 않는다. 제목은 세션 전체 제목이 아닌 **각 카드의 `title`**이다.
+
+## 기존 오케스트레이션과의 연결
+
+기존 `OrchestrationEngine._execute_requests`도 `JobExecutor.run`을 호출한다. 채팅은 기존 순차 실행·capability 계약·집계 진리표를 유지한다. 일기는 같은 실행 계층 위에 `space || actions → freeze_card_content → titles → assemble` 그래프를 두고, 실행 동시성을 4로 제한한다. 자료 조회는 작성 슬롯을 점유하지 않으므로 SGIS가 늦어도 행동은 실행된다.
+
+일기 작업을 기존 산책 적합도 `walk`로 등록하거나 `AssistantResponse`로 포장하지 않는다. 자연어 의미 라우터는 호출하지 않는다. 일기 그래프의 입력은 저장된 산책과 준비된 보드이며, 출력은 기존 일기 영수증이다. `walk_diary_card_writing.write_cards`에는 독립 실행 루프가 없고 런타임 호출만 남는다.
+
+발행 서비스가 예약을 저장한 뒤 그 마감을 `within_budget`으로 전달한다. 그래프는 남은 시간에서 본문·제목·최종 반환 여유를 나눠 사용하며 대기열 진입이나 개별 호출 때 시계를 다시 시작하지 않는다. 실행 계층은 늦은 값을 채택하지 않고, 최종 원본·생성 시도 확인과 저장 권한은 계속 기존 발행 서비스에 있다. 그래프에는 별도 DB·발행 큐·체크포인터가 없다.
+
+동시성 제한은 채택을 기다리는 작업 기준이다. 취소를 무시하는 공급자가 실행 슬롯을 계속 점유해 후속 작업을 막지는 않는다. 이미 전송한 외부 요청의 물리적 종료까지 보장하는 것은 아니며, 그 실행 상한은 기존 공급자 타임아웃이 담당한다.
+
+`freeze_card_content`는 성공 결과와 필요한 기본 표현, 그때의 위치 정보를 선택해 카드별 내용을 고정한다. 제목 노드는 이 카드 목록만 읽으며 본문과 위치를 갱신하지 않는다. 작성 입력 고정·본문 고정·공개 확정은 서로 다른 단계다.
+
+제목의 재사용 키는 카드별 입력에서 만든다. 같은 묶음의 다른 행동핀이 바뀌어도 나머지 카드 제목은 재사용한다. 실제 생성 요청은 미확보 제목만 최대 12개씩 묶는다. 읽을 수 있는 응답의 누락·잘못된 버전·중복 ID·잘못된 제목은 해당 카드만 기본 제목으로 처리한다. JSON 전체를 읽을 수 없으면 그 묶음은 기본 제목으로 마무리한다.
+
+`content_revision`은 제목이 읽는 공간·행동·위치·기록 기준을 나타내고 별도 보존 원문은 제외한다. 원문 변경의 공개 정합성은 기존 source revision이 검사한다. 원문까지 해시에 넣었던 이전 저장본도 그대로 읽는다. 저장 작업 영수증의 `reused: true`는 모델을 다시 호출하지 않은 결과이며, 실제 요청 묶음과 혼동하지 않도록 구분한다.
 
 ## 요청 경계
 

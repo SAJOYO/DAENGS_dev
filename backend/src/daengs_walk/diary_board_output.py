@@ -73,9 +73,23 @@ class PublishedBoardScene(DiaryContract):
                 [p.model_dump(mode="json") for p in self.place_reference],
                 writing.space.model_dump(mode="json"),
                 [a.model_dump(mode="json") for a in writing.actions],
-                writing.original_text,
             )
-            if writing.body() != self.body or revision != writing.content_revision:
+            # Previously saved v1 cards included notes in the title dependency hash.
+            # Read them unchanged; new generations hash only the actual title inputs.
+            legacy_revision = digest(
+                [
+                    self.id,
+                    self.anchor.model_dump(mode="json"),
+                    [p.model_dump(mode="json") for p in self.place_reference],
+                    writing.space.model_dump(mode="json"),
+                    [a.model_dump(mode="json") for a in writing.actions],
+                    writing.original_text,
+                ]
+            )
+            if writing.body() != self.body or writing.content_revision not in {
+                revision,
+                legacy_revision,
+            }:
                 raise ValueError("card body differs from its adopted parts")
             behavior = self.user_record is not None and self.user_record.kind == "behavior"
             if bool(writing.actions) != behavior:

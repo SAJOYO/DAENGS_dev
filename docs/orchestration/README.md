@@ -48,4 +48,7 @@ Place만 기존 시설 v2 실행기로 연결하며, 다른 capability와 집계
 **산책 일기 이관**의 입력·장면 계약은 도메인 소유인
 [../walk/diary-contract.md](../walk/diary-contract.md)에 있습니다. 현재 Walk adapter의
 산책 조건 판단을 바꾸지 않고, 기존 `walk_storyboard` 생성 수명주기에 붙이는 접점을 정의합니다.
-새 capability 등록이나 운영 호출 연결까지 끝난 상태는 아닙니다.
+일기 작성은 `runtime.build_diary_orchestrator()` → `diary.py` LangGraph로 연결됩니다.
+채팅 `graph.py`와 일기 그래프가 `execution.py:JobExecutor`를 공유합니다. 기존 산책 조건
+capability나 채팅 응답 계약을 일기로 바꾸지 않습니다. 본문 고정·조건부 행동·제목 배치와
+기존 발행 서비스의 권한은 [카드 오케스트레이션](../walk/card-orchestration.md)을 따릅니다.

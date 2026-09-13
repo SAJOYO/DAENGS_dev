@@ -11,6 +11,7 @@ from daengs_walk.diary_board import (
     ObservationCore,
     RecordCore,
 )
+from daengs_walk.diary_card_narrative import CardNarrative, content_revision
 from daengs_walk.diary_input import (
     Anchor,
     DiaryContract,
@@ -19,6 +20,7 @@ from daengs_walk.diary_input import (
     MaterialRef,
     MovementObservation,
     RecordContent,
+    digest,
 )
 from daengs_walk.diary_output import BackgroundPiece
 
@@ -45,6 +47,7 @@ class PublishedBoardScene(DiaryContract):
     checkpoint: RouteCheckpoint | None = None
     boundary: Literal["start", "end"] | None = None
     place_reference: tuple[BackgroundPiece, ...] = ()
+    writing: CardNarrative | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def matching_core(self):
@@ -56,6 +59,33 @@ class PublishedBoardScene(DiaryContract):
         }
         if {k for k, v in values.items() if v is not None} != {self.kind}:
             raise ValueError("public scene must carry exactly its declared core")
+        if self.writing:
+            writing = self.writing
+            if (
+                self.user_record
+                and self.user_record.kind == "note"
+                and writing.original_text != self.user_record.text
+            ):
+                raise ValueError("card changed the original note")
+            revision = content_revision(
+                self.id,
+                self.anchor.model_dump(mode="json"),
+                [p.model_dump(mode="json") for p in self.place_reference],
+                writing.space.model_dump(mode="json"),
+                [a.model_dump(mode="json") for a in writing.actions],
+                writing.original_text,
+            )
+            if writing.body() != self.body or revision != writing.content_revision:
+                raise ValueError("card body differs from its adopted parts")
+            behavior = self.user_record is not None and self.user_record.kind == "behavior"
+            if bool(writing.actions) != behavior:
+                raise ValueError("action writing requires a behavior pin")
+            for action in writing.actions:
+                if (
+                    action.action_id != "action:" + digest(self.core)
+                    or action.actor_id != self.user_record.pet_id
+                ):
+                    raise ValueError("action actor/core changed")
         return self
 
 

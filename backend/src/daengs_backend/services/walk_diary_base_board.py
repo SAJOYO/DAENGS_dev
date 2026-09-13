@@ -30,6 +30,7 @@ class PreparedSavedBaseBoard:
     board: BaseBoard
     slots: BoardSlotSnapshot
     scene_backgrounds: SceneBackgroundSnapshot | None = None
+    cached_jobs: tuple[dict, ...] = ()
 
 
 def with_scene_backgrounds(prepared, snapshot):

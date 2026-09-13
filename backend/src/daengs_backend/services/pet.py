@@ -554,13 +554,27 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
 
 
 async def set_primary(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> AppUser:
-    """대표를 바꿉니다. **내 강아지인지 여기서 확인합니다.**
+    """대표 강아지를 바꿉니다. **구성원이면 됩니다 — 소유가 아닙니다.**
 
-    FK 는 "존재하는 pets 행"까지만 보장하고 그게 내 것인지는 안 봅니다
+    대표 강아지는 그 아이의 권한이 아니라 **내 계정의 표시 기본값**입니다
+    (`app_users.primary_pet_id`, 05_pets.sql 주석). 계정마다 한 칸이라 내가 무엇을
+    고르든 다른 보호자의 화면은 안 바뀝니다.
+
+    **그래서 `get_owned` 가 아니라 `get_accessible` 입니다.** 소유로 재면 연결 없이
+    참여한 돌보미가 자기 대표를 못 고릅니다 — 그 사람의 목록에서 `display` 는 대표의
+    행이라(`identity_service.views_for`) `get_owned` 가 늘 `None` 입니다. 정작 수락
+    경로는 첫 참여자의 `primary_pet_id` 에 그 행 id 를 **이미 넣고 있어서**
+    (`pet_member.accept_invite`), 서버가 자동으로 세워 준 값을 사용자가 손으로는 못
+    고르는 상태였습니다.
+
+    FK 는 "존재하는 pets 행"까지만 보장하고 그게 접근 가능한지는 안 봅니다
     (05_pets.sql 주석). 그래서 이 검사를 빠뜨리면 남의 강아지를 내 대표로 세울 수
-    있습니다.
+    있습니다 — 구성원 조건은 여전히 필요합니다.
+
+    나가거나 내보내진 뒤에는 `pet_member.remove_member` 가 이 값을 비웁니다. FK 의
+    `ON DELETE SET NULL` 은 강아지 행이 안 지워지므로 안 돕니다.
     """
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
 

@@ -115,8 +115,10 @@ async def test_carer_can_read_profile_but_not_edit(store: Store, pet: FakePet):
     body = PetUpsert(name="바뀐이름", breed="믹스")
     with pytest.raises(pet_service.PetNotFoundError):
         await pet_service.update_pet(None, CARER, pet.id, body)
-    with pytest.raises(pet_service.PetNotFoundError):
-        await pet_service.set_primary(None, CARER, pet.id)
+
+    # **대표 강아지 고르기는 여기 없습니다.** 그것은 그 아이의 권한이 아니라 내 계정의
+    # 표시 기본값이라(`app_users.primary_pet_id`) 돌보미도 고를 수 있습니다 —
+    # `test_pet_identity.py` 의 「대표 강아지 선택」 절이 그쪽을 봅니다.
 
 
 async def test_stranger_cannot_read_photo(store: Store, pet: FakePet):

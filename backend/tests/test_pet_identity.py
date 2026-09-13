@@ -450,3 +450,107 @@ async def test_연결_안_된_아이의_승계는_그대로다(store: Store):
     assert res.status_code == 200
     assert solo.app_user_id == B
     assert (solo.id, A) in store.pet_members
+
+
+# ── 대표 강아지 선택 ────────────────────────────────────────────────────────
+#
+# **대표 강아지는 그룹 관리 권한이 아니라 내 계정의 표시 기본값입니다.**
+# `app_users.primary_pet_id` 에 계정마다 한 칸이라 내가 무엇을 고르든 다른 보호자의
+# 화면은 안 바뀝니다. 그래서 `set_primary` 는 소유가 아니라 구성원으로 잽니다.
+
+
+def _user(store: Store, app_user_id: uuid.UUID):
+    return next(u for u in store.app_users.values() if u.id == app_user_id)
+
+
+def _primary_of(store: Store, app_user_id: uuid.UUID):
+    return _user(store, app_user_id).primary_pet_id
+
+
+async def test_연결된_공동보호자가_자기_행을_대표로_세운다(store: Store, linked):
+    """B 의 목록에서 그 카드의 `id` 는 B 의 행이다 — 소유로 재도 통과하던 경우."""
+    _a_pet, b_pet = linked
+
+    res = client_as(B).put("/app/pets/primary", json={"pet_id": str(b_pet.id)})
+
+    assert res.status_code == 204
+    assert _primary_of(store, B) == b_pet.id
+
+
+async def test_연결_없이_참여한_돌보미도_대표로_세운다(store: Store):
+    """**이것이 소유로 재면 막히던 경우다.**
+
+    연결 없이 참여하면 자기 행이 없어서, 목록의 그 카드는 대표의 행을 그대로 보여
+    준다(`views_for`). 앱은 그 `id` 를 보내는데 `get_owned` 로 재면 늘 404 였다 —
+    정작 수락 경로는 첫 참여자의 대표를 그 행으로 **이미** 세우고 있었다.
+    """
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    store.pets.append(a_pet)
+    store.pet_members.append((a_pet.id, B))
+
+    res = client_as(B).put("/app/pets/primary", json={"pet_id": str(a_pet.id)})
+
+    assert res.status_code == 204
+    assert _primary_of(store, B) == a_pet.id
+
+
+async def test_남의_대표는_안_바뀐다(store: Store):
+    """계정마다 한 칸이라는 것을 값으로 확인한다."""
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    a_other = FakePet(app_user_id=A, name="둘째", breed="믹스")
+    store.pets += [a_pet, a_other]
+    store.pet_members.append((a_pet.id, B))
+    _user(store, A).primary_pet_id = a_other.id
+
+    assert client_as(B).put(
+        "/app/pets/primary", json={"pet_id": str(a_pet.id)}
+    ).status_code == 204
+
+    assert _primary_of(store, B) == a_pet.id
+    assert _primary_of(store, A) == a_other.id, "A 의 대표는 그대로여야 한다"
+
+
+async def test_구성원이_아니면_404(store: Store):
+    """**403 이 아니라 404 다** — 403 은 그 id 가 존재한다는 것을 알려 준다."""
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    store.pets.append(a_pet)  # STRANGER 는 구성원이 아니다
+
+    res = client_as(STRANGER).put("/app/pets/primary", json={"pet_id": str(a_pet.id)})
+
+    assert res.status_code == 404
+    assert _primary_of(store, A) is None, "남의 대표도 안 세워져야 한다"
+
+
+async def test_내보내진_뒤에는_대표로_못_세운다(store: Store):
+    """멤버십이 사라지면 접근도 사라진다. 이미 세워 둔 값은 내보내기가 비운다."""
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    store.pets.append(a_pet)
+    store.pet_members.append((a_pet.id, B))
+    assert client_as(B).put(
+        "/app/pets/primary", json={"pet_id": str(a_pet.id)}
+    ).status_code == 204
+
+    assert client_as(A).delete(
+        f"/app/pets/{a_pet.id}/members/{B}"
+    ).status_code == 204
+
+    assert _primary_of(store, B) is None, "내보내면 접근 못 하는 아이를 가리키면 안 된다"
+    assert client_as(B).put(
+        "/app/pets/primary", json={"pet_id": str(a_pet.id)}
+    ).status_code == 404
+
+
+async def test_나간_뒤에도_대표로_못_세운다(store: Store):
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    store.pets.append(a_pet)
+    store.pet_members.append((a_pet.id, B))
+    assert client_as(B).put(
+        "/app/pets/primary", json={"pet_id": str(a_pet.id)}
+    ).status_code == 204
+
+    assert client_as(B).delete(f"/app/pets/{a_pet.id}/members/{B}").status_code == 204
+
+    assert _primary_of(store, B) is None
+    assert client_as(B).put(
+        "/app/pets/primary", json={"pet_id": str(a_pet.id)}
+    ).status_code == 404

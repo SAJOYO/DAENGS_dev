@@ -1,8 +1,15 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy import URL
 
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
@@ -193,6 +200,41 @@ class Settings(BaseSettings):
     gemini_timeout_ms: int = Field(
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
+
+    # ── 도감 카드 생성 (#496, docs/cardimage/) ─────────────────────────
+    # 채팅용 gemini_api_key 와 **다른 GCP 프로젝트** 키입니다 (지출 상한·사용량이 프로젝트
+    # 단위라 이미지 생성이 채팅 예산을 먹지 않게). 비면 GEMINI_API_KEY 로 떨어지지 **않고**
+    # /admin/cardimage·/app/ai-cards 가 503 입니다 — 앱은 뜹니다.
+    cardimage_gemini_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DAENGS_CARDIMAGE_GEMINI_API_KEY")
+    )
+    # Nano Banana 2. 실험 16장 「됨」(worklog 09-14). 세대가 바뀌면 이 한 줄.
+    cardimage_model: str = Field(default="gemini-3.1-flash-image", validation_alias=AliasChoices("DAENGS_CARDIMAGE_MODEL"))
+    # 2K 여야 카드(994×1582)에 확대 없이 맞습니다. 1K 는 1.25배 확대.
+    cardimage_size: str = Field(default="2K", validation_alias=AliasChoices("DAENGS_CARDIMAGE_SIZE"))
+    cardimage_timeout_ms: int = Field(default=120_000, validation_alias=AliasChoices("DAENGS_CARDIMAGE_TIMEOUT_MS"))
+    # 틀 12장·글꼴이 있는 폴더. 개발 PC 는 저장소의 cardimage/, 컨테이너는 /cardimage (compose 마운트).
+    cardimage_dir: Path = Field(default=Path("cardimage"), validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"))
+    # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
+    #
+    # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로
+    #   디코드하려 합니다 — frozenset[int] 는 "복합 타입"이라 CSV 문자열("4, 9,12")을
+    #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
+    #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
+    cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
+        default=frozenset({4}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+    )
+    # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
+    cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
+    # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
+    cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
+
+    @field_validator("cardimage_months", mode="before")
+    @classmethod
+    def _parse_months(cls, v):
+        if isinstance(v, str):
+            return frozenset(int(x) for x in v.split(",") if x.strip())
+        return v
 
     # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
     # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은

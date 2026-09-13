@@ -32,7 +32,8 @@
 5/5, 29초, PNG 2.5MB (`cardimage/out/_service_check/`). **남은 것:** 사용자가 콘솔 화면에서
 눈으로 확인(관리자 로그인 정보가 로컬에 없어 넘김 — 진행자 결정), draft 해제·머지, 배포 시
 서버 `backend/.env` 에 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 를 넣고 `docker compose up -d
-backend`(의존성·마운트 변경이라 재생성 필요). 상세 진행은 `worklog.md` 09-14 절.
+backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `location /api/admin/cardimage/`(300s)가
+추가돼 자동 배포의 `nginx -t` 후 reload 로 반영된다. 상세 진행은 `worklog.md` 09-14 절.
 
 **09-14 02:25 세션 종료 시점 (0단계, 실험 마감):** 아래 상태에서 멈췄었다. 9월 틀의 Pillow 배지 합성은 사용자가 거부("구려") → 도구 삭제, 모델이 그린 판 그대로. 합성 방식(art 모드·배지 합성)은 두 번 거부됐으니 **다시 제안하지 말 것.**
 

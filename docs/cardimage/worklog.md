@@ -47,6 +47,8 @@ Task 1~9·11 을 순서대로 실행했다 (Task 10 제외 — 사용자 결정 
 - **콘솔 브라우저 확인은 사용자에게 넘김** (Task 9 뒤) — 관리자 로그인 정보가 로컬에 없다.
   HTTP 계층은 `test_cardimage_admin_api`(8 tests)로, 파이프라인은 아래 실호출로 확인했다.
 
+**최종 브랜치 리뷰(전체 diff, 가장 높은 모델)와 수정 묶음 (`3e93f4d`):** Critical 0. Important 둘을 고쳤다 — ① **nginx `/api/` 블록의 `proxy_read_timeout 60s`** 가 20~60초짜리 생성(재시도면 두 배)을 504 로 끊고 돈은 그대로 나가는 문제 → `location /api/admin/cardimage/` 블록을 따로 두어 300s (계획의 빈틈 — 배포 영향에 nginx 가 없었다) ② 모델이 준 바이트를 이미지로 여는 두 줄이 오류 매핑 밖이라 손상 출력이 500 으로 새던 것 → `EngineError("no_image")`. 같은 묶음에 공백 이름 400(`bad_name`)과 죽은 상수 `TITLE_PLATE` 삭제. 전체 `uv run pytest`: 5942 passed · 526 skipped · 1 failed(territory 사진 저장소 동시 쓰기 테스트 — 이 브랜치 미변경 영역, 단독 3/3 통과, 부하 flaky). 미룬 것: 손상된 틀·글꼴 → 500, `bad_length` 테스트, 글꼴 재로드, `to_thread` 기본 executor(앱에 열 때 세마포어), `daengback.~` `location /` 60s(Task 10 때).
+
 **실호출 확인 1회:** 사진 `_03`(정면, 4월, 이름 "네오") → 유사도 검수 5/5, `text_ok`·`avatar_ok`
 통과, `attempts` 1, 28.8초, PNG 2.5MB. `cardimage/out/_service_check/service_check_1.png`.
 비용 약 $0.10(생성) + 검수. Next 개발 서버는 `next.config.ts` 의 rewrites 로 `/api/:path*` 를

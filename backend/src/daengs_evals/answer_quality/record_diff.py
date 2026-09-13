@@ -14,6 +14,7 @@ Life 상태/코드/본문/인용 · Walk/Place 상태** 를 칸별로 맞대고,
 `plan` 의 `model` · `prompt_version` · `router` 는 뺀다 — 그것이 다른 것은 이미 meta 행이 말한다.
 Walk 는 실시간 날씨라 원래 안 맞고(#318 함정 3), 보고만 한다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -55,7 +56,7 @@ def _life_text(result: Mapping[str, Any] | None) -> str | None:
 def _life_code(result: Mapping[str, Any] | None) -> str | None:
     if not result:
         return None
-    return ((result.get("refusal") or result.get("abstention") or {}).get("code"))
+    return (result.get("refusal") or result.get("abstention") or {}).get("code")
 
 
 def _labels(result: Mapping[str, Any] | None) -> list[str | None]:
@@ -74,18 +75,34 @@ def _capabilities(row: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def _status_of(row: Mapping[str, Any], capability: str) -> str | None:
-    return next((r["status"] for r in row.get("results") or [] if r["capability"] == capability), None)
+    return next(
+        (r["status"] for r in row.get("results") or [] if r["capability"] == capability), None
+    )
 
 
-FIELDS = ("plan", "capabilities", "top_status", "life_status", "life_code",
-          "life_text", "life_text_normalized", "life_citations", "refusal_evidence",
-          "walk_status", "place_status")
+FIELDS = (
+    "plan",
+    "capabilities",
+    "top_status",
+    "life_status",
+    "life_code",
+    "life_text",
+    "life_text_normalized",
+    "life_citations",
+    "refusal_evidence",
+    "walk_status",
+    "place_status",
+)
 ROUTING_FIELDS = ("plan", "capabilities", "top_status")
 LIFE_FIELDS = ("life_status", "life_code", "life_text", "life_citations")
 
 
-def diff(a: Mapping[str, dict[str, Any]], b: Mapping[str, dict[str, Any]],
-         *, exclude_styles: tuple[str, ...] = ()) -> dict[str, Any]:
+def diff(
+    a: Mapping[str, dict[str, Any]],
+    b: Mapping[str, dict[str, Any]],
+    *,
+    exclude_styles: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """문항마다 칸별로 맞댄다. 두 수집의 문항 집합이 다르면 그것부터 적는다."""
     only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
     counts: Counter[str] = Counter()
@@ -110,11 +127,13 @@ def diff(a: Mapping[str, dict[str, Any]], b: Mapping[str, dict[str, Any]],
             # OK 답변의 인용 라벨. **거절의 인용은 여기서 안 센다** — RAG-077 이전 수집은 거절에
             # `data` 가 없어 그 칸은 설계상 다르다. 그 차이는 `refusal_evidence` 로 따로 보고한다
             "life_citations": (
-                (la or {}).get("status") != "OK" or (lb or {}).get("status") != "OK"
+                (la or {}).get("status") != "OK"
+                or (lb or {}).get("status") != "OK"
                 or _labels(la) == _labels(lb)
             ),
             "refusal_evidence": (
-                (la or {}).get("status") != "REFUSED" or (lb or {}).get("status") != "REFUSED"
+                (la or {}).get("status") != "REFUSED"
+                or (lb or {}).get("status") != "REFUSED"
                 or bool(_labels(la)) == bool(_labels(lb))
             ),
             "walk_status": _status_of(ra, "walk") == _status_of(rb, "walk"),
@@ -140,10 +159,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--a", required=True, help="라벨 (answers_<label>.jsonl)")
     parser.add_argument("--b", required=True)
     parser.add_argument("--dir", type=Path, default=DEFAULT_DIR)
-    parser.add_argument("--exclude-style", action="append", default=[],
-                        help="비교에서 뺄 문체 (예: multi_intent). 여러 번 줄 수 있다")
-    parser.add_argument("--assert-life", action="store_true",
-                        help="Life 축(상태·코드·본문·인용)이 하나라도 다르면 exit 1")
+    parser.add_argument(
+        "--exclude-style",
+        action="append",
+        default=[],
+        help="비교에서 뺄 문체 (예: multi_intent). 여러 번 줄 수 있다",
+    )
+    parser.add_argument(
+        "--assert-life",
+        action="store_true",
+        help="Life 축(상태·코드·본문·인용)이 하나라도 다르면 exit 1",
+    )
     parser.add_argument("--json", action="store_true", help="표 대신 JSON")
     args = parser.parse_args(argv)
 
@@ -155,8 +181,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"{args.a} ↔ {args.b}: 비교 {result['compared']}문항"
-              + (f" · 한쪽에만 {result['only_a'] + result['only_b']}" if result["only_a"] or result["only_b"] else ""))
+        print(
+            f"{args.a} ↔ {args.b}: 비교 {result['compared']}문항"
+            + (
+                f" · 한쪽에만 {result['only_a'] + result['only_b']}"
+                if result["only_a"] or result["only_b"]
+                else ""
+            )
+        )
         print("| 칸 | 다른 문항 수 | 문항 |")
         print("| --- | --- | --- |")
         for field in FIELDS:

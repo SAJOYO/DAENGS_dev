@@ -7,7 +7,15 @@ from datetime import UTC, datetime
 from daengs_backend.schemas.walk_entry import EntryContent
 
 
-def build_profile(spec, walks, rows, *, content_type=EntryContent):
+def build_profile(spec, walks, rows, *, content_type=EntryContent, pet_ids=None):
+    """기록 프로필.
+
+    `pet_ids` 는 **논리 연결된 그룹 전체**입니다 (MVP 결정 §7). 산책만 그룹으로 넓히고
+    여기를 `spec.pet_id` 하나로 두면, 같은 실제 강아지인데 **다른 행에 태그된 기록이
+    통째로 빠집니다** — 산책은 늘었는데 행동 수는 그대로인 이상한 프로필이 됩니다.
+    안 주면 그 아이 하나라 지금까지와 같습니다.
+    """
+    wanted = set(pet_ids or [spec.pet_id])
     behaviors = {
         code: {"entry_count": 0, "walks_with_entries": 0}
         for code in ("sniffing", "excretion", "barking")
@@ -24,7 +32,7 @@ def build_profile(spec, walks, rows, *, content_type=EntryContent):
         if content.pet_id is None:
             unassigned += 1
             continue
-        if content.pet_id != spec.pet_id:
+        if content.pet_id not in wanted:
             continue
         code = content.behavior_code
         behaviors[code]["entry_count"] += 1

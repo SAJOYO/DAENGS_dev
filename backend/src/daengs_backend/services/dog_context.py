@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.services import pet_identity as identity_service
 
 __all__ = ["BREED_LABELS", "age_months", "breed_label", "resolve"]
 
@@ -111,14 +112,23 @@ async def resolve(
     **구성원 기준인 이유**는 같은 요청의 채팅 쪽(`repositories/chat.py`)이 이미 구성원까지
     열려 있어서입니다 (docs/co-care.md §2). 여기만 대표 기준으로 남기면 돌보미의 답변에서
     지병·복약이 조용히 빠집니다 — 아무 오류도 안 나고 답만 나빠집니다.
+
+    **논리 연결된 아이는 그룹 주보호자의 행에서 읽습니다** (MVP 결정 §5). 공식 건강정보의
+    주인은 한 명이고, 공동 보호자는 그것을 바꿀 수 없습니다 — 그런데 여기서 각자 행을
+    읽으면 **같은 강아지에 대해 사람마다 다른 지병·복약으로 답하게** 됩니다. 비서가 쓰는
+    것은 언제나 승인된 공식 정보 하나여야 합니다.
+
+    이름·사진은 여기 안 옵니다(비서 프롬프트가 안 씁니다). 그래서 투영의 갈림이 안 보입니다 —
+    연결 안 된 아이는 `common_of` 가 자기 행을 그대로 돌려주므로 동작이 안 바뀝니다.
     """
     try:
         pet_id = uuid.UUID(active_dog_id)
     except (ValueError, AttributeError, TypeError):
         return None
-    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
-    if pet is None:
+    accessible = await pet_repo.get_accessible(session, app_user_id, pet_id)
+    if accessible is None:
         return None
+    pet = await identity_service.common_of(session, accessible)
     resolved: dict[str, object] = {}
     label = breed_label(pet.breed)
     if label is not None:

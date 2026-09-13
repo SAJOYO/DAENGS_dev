@@ -8,6 +8,7 @@ DB 는 쓰지 않습니다. 강아지는 `fakes.install` 이 바꿔치기한 `pe
 """
 
 import uuid
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -99,37 +100,48 @@ def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
             None,
         )
 
-    def _between(_app_user_id, pet_id, start, end):
+    def _between(_app_user_id, pet_ids, start, end):
         # 진짜와 같게 **actor 로 안 거릅니다** — 기록의 주인은 강아지입니다 (docs/co-care.md §2).
+        # **pet id 묶음**을 받습니다 (MVP 결정 §7) — 논리 연결된 아이의 기록이 여러
+        # `pet_id` 에 갈려 있어도 한 마리로 합쳐 읽습니다.
+        wanted = set(pet_ids)
         return [
             e for e in cs.events
-            if e.pet_id == pet_id and start <= e.occurred_at < end
+            if e.pet_id in wanted and start <= e.occurred_at < end
         ]
 
-    async def list_between(session, app_user_id, pet_id, start, end):
+    async def list_between(session, app_user_id, pet_ids, start, end):
         return sorted(
-            _between(app_user_id, pet_id, start, end),
+            _between(app_user_id, pet_ids, start, end),
             key=lambda e: (-e.occurred_at.timestamp(), str(e.id)),
         )
 
-    async def count_by_kind(session, app_user_id, pet_id, start, end):
+    async def count_by_kind(session, app_user_id, pet_ids, start, end):
         counts: dict[str, int] = {}
-        for e in _between(app_user_id, pet_id, start, end):
+        for e in _between(app_user_id, pet_ids, start, end):
             counts[e.kind] = counts.get(e.kind, 0) + 1
         return counts
 
     async def delete(session, event):
         cs.events = [e for e in cs.events if e.id != event.id]
 
-    async def count_walks(session, app_user_id, pet_id, start, end):
-        return sum(1 for t in cs.walk_starts.get(pet_id, []) if start <= t < end)
+    async def count_walks(session, app_user_id, pet_ids, start, end):
+        return sum(
+            1
+            for pet_id in set(pet_ids)
+            for t in cs.walk_starts.get(pet_id, [])
+            if start <= t < end
+        )
 
-    async def list_kind_between(session, pet_id, kind, start, end):
+    async def list_kind_between(session, pet_ids, kind, start, end):
         # 진짜와 같게 최근 먼저입니다 — 약 중복 확인이 conflicts[0] 을 "가장 최근" 으로 씁니다.
+        # **묶음을 받습니다** — 약 중복 확인 창이 논리 그룹 전체를 봐야 교대 경계의 중복
+        # 투약이 걸립니다 (MVP 결정 §7).
+        wanted = set(pet_ids)
         return sorted(
             (
                 e for e in cs.events
-                if e.pet_id == pet_id and e.kind == kind and start <= e.occurred_at <= end
+                if e.pet_id in wanted and e.kind == kind and start <= e.occurred_at <= end
             ),
             key=lambda e: e.occurred_at,
             reverse=True,
@@ -142,7 +154,19 @@ def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
     monkeypatch.setattr(care_repo, "count_by_kind", count_by_kind)
     monkeypatch.setattr(care_repo, "delete", delete)
     monkeypatch.setattr(care_repo, "list_kind_between", list_kind_between)
+
+    async def list_walks(session, pet_ids, start, end):
+        # 하루 요약은 이제 산책을 **행으로** 읽습니다 — 누가 다녀왔는지를 같이 보여 주기
+        # 위해서입니다 (MVP 결정 §7). `walk` 수는 이 목록의 길이입니다.
+        return [
+            SimpleNamespace(id=uuid.uuid4(), started_at=at, app_user_id=OWNER)
+            for pet_id in set(pet_ids)
+            for at in cs.walk_starts.get(pet_id, [])
+            if start <= at < end
+        ]
+
     monkeypatch.setattr(walk_repo, "count_for_pet_between", count_walks)
+    monkeypatch.setattr(walk_repo, "list_for_pets_between", list_walks)
     return cs
 
 

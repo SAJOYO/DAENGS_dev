@@ -63,6 +63,8 @@ async def database():
             await sql_file(db, "db/init/03_auth.sql")
             # The current AppUser mapper also includes columns installed by pets init.
             await sql_file(db, "db/init/05_pets.sql")
+            # Pet 매퍼가 `identity_id` 를 들고 있습니다 (공동 돌봄 논리 연결).
+            await sql_file(db, "db/init/25_pet_identities.sql")
             await sql_file(db, MIGRATION)
             await sql_file(db, VERIFY)
             await db.commit()

@@ -84,6 +84,10 @@ def api(monkeypatch):
         service.entries, "entries", AsyncMock(side_effect=lambda s, ws: list(db.rows.values()))
     )
     monkeypatch.setattr(service.entries, "profile_walks", AsyncMock(return_value=[walk]))
+    # 연결 안 된 아이는 자기 하나가 그룹입니다 (MVP 결정 §7).
+    monkeypatch.setattr(
+        service.entries, "pet_group_ids", AsyncMock(return_value=[PET])
+    )
     monkeypatch.setattr(
         service.entries,
         "pet_is_accessible",

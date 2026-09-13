@@ -4,6 +4,7 @@
 | --- | --- |
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
 | [walk/card-orchestration.md](walk/card-orchestration.md) | 실제 API의 SGIS·EGIS 준비, 독립 공간·조건부 행동·카드 제목 작업과 APP 저장 연결 |
+| [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화에서 방향이 바뀐 이유와 남은 공간 관계·슬롯 적재/퇴거·실제 서술/APP 검증의 순서·완료 기준 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |

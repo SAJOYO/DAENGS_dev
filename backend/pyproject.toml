@@ -27,6 +27,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.30",
     "opentelemetry-sdk>=1.30",
     "pgvector>=0.3",
+    "pillow>=10.2",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
     "pyproj>=3.7",

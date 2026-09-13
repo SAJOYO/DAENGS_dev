@@ -39,3 +39,20 @@ def test_rejects_undecodable():
     with pytest.raises(photo.PhotoError) as e:
         photo.prepare_photo(b"not an image", "image/png")
     assert e.value.code == "undecodable"
+
+
+def test_rejects_decompression_bomb():
+    # 단색이라 압축은 잘 되지만(파일은 작다) 선언된 화소 수는 MAX_PIXELS 를 넘는다.
+    buf = io.BytesIO()
+    Image.new("RGB", (9000, 9000), (200, 120, 80)).save(buf, "PNG")
+    with pytest.raises(photo.PhotoError) as e:
+        photo.prepare_photo(buf.getvalue(), "image/png")
+    assert e.value.code == "too_large"
+
+
+def test_flattens_transparency_onto_white():
+    buf = io.BytesIO()
+    Image.new("RGBA", (10, 10), (0, 0, 0, 0)).save(buf, "PNG")  # 완전 투명, RGB 는 검정
+    out = photo.prepare_photo(buf.getvalue(), "image/png")
+    r, g, b = Image.open(io.BytesIO(out)).convert("RGB").getpixel((5, 5))
+    assert r >= 250 and g >= 250 and b >= 250

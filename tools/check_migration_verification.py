@@ -239,6 +239,28 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-13', 'walk_measurements', 'CREATE TABLE walks(id uuid PRIMARY KEY);', 'walk_measurements', [
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN input_key CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_hash CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_pkey CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_walk_id_measurement_id_fkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_pkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_walk_id_fkey CASCADE',
+        ]),
         ('2026-09-11', 'walk_precision_backup', "CREATE TABLE walk_motion_backups(walk_id uuid PRIMARY KEY);", 'walk_precision_backups', [
             'DROP TABLE walk_precision_chunks',
             'ALTER TABLE walk_precision_backups DROP COLUMN manifest',

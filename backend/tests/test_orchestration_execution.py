@@ -49,6 +49,7 @@ async def test_queue_wait_uses_original_deadline_and_never_starts_expired_call()
 
 async def test_cancellation_resistant_provider_cannot_extend_deadline_or_return_late_value():
     release, finished = asyncio.Event(), asyncio.Event()
+    executor = JobExecutor()
 
     async def stubborn():
         try:
@@ -59,9 +60,15 @@ async def test_cancellation_resistant_provider_cannot_extend_deadline_or_return_
         return "too late"
 
     try:
-        result = await asyncio.wait_for(JobExecutor().run("late", stubborn, timeout_ms=15), 1)
+        result = await asyncio.wait_for(executor.run("late", stubborn, timeout_ms=15), 1)
         assert result.status == "timeout" and result.value is None
         assert not finished.is_set()
+
+        async def next_job():
+            return "next"
+
+        next_result = await asyncio.wait_for(executor.run("next", next_job), 1)
+        assert next_result.value == "next" and not finished.is_set()
     finally:
         release.set()
         await asyncio.wait_for(finished.wait(), 1)

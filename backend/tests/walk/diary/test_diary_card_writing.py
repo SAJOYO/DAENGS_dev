@@ -252,12 +252,25 @@ async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
     base = assemble_saved_base_board(
         replace(base.input, source=DiaryInput.model_validate(raw)), policy(3)
     )
-    provider = AsyncMock(side_effect=prose)
+    active = peak = 0
+
+    async def delayed_prose(stage, payload, schema):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.001)
+            return await prose(stage, payload, schema)
+        finally:
+            active -= 1
+
+    provider = AsyncMock(side_effect=delayed_prose)
     result = await writing.write_cards(base.input.source, base, generate=provider)
     assert len(result.bundle.scenes) > 12
     titles = [c.args[1]["cards"] for c in provider.call_args_list if c.args[0] == "title"]
     assert len(titles) == 2 and all(len(batch) <= 12 for batch in titles)
     assert all(c.writing.title_origin == "generated" for c in result.bundle.scenes)
+    assert peak == 4 and active == 0
 
 
 async def test_wrong_title_revision_keeps_adopted_action():

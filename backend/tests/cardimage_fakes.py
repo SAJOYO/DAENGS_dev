@@ -32,7 +32,7 @@ class FakeJudge:
     def __init__(self, scores: list[int] | None = None, error: Exception | None = None) -> None:
         self.scores = scores or [5]
         self.error = error
-        self.calls = 0
+        self.calls: int = 0
 
     def judge(self, *, photo_jpeg: bytes, card_png: bytes) -> JudgeResult:
         self.calls += 1

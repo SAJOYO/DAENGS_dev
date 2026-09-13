@@ -34,13 +34,28 @@ class CardJudge(Protocol):
 
 
 def parse_judge_json(text: str) -> JudgeResult:
+    """모델 응답을 엄격하게 파싱한다. `bool("false")`, `int(4.7)`, `int("4")` 처럼 조용히
+    형변환하면 모델이 이상한 값(문자열·실수·다른 타입)을 줘도 통과해 버려 검수가 검수 노릇을
+    못 한다 — 이 모듈은 애초에 망가진 응답을 잡으려고 있으므로, 관대함이 존재 이유를 갉아먹는다.
+    그래서 `likeness` 는 `bool` 이 아닌 진짜 `int`(1..5), `text_ok`/`avatar_ok` 는 진짜 `bool` 만
+    받고, 최상위가 JSON 객체가 아니어도 거절한다."""
     try:
         d = json.loads(text)
-        likeness = int(d["likeness"])
-        text_ok, avatar_ok = bool(d["text_ok"]), bool(d["avatar_ok"])
-        note = str(d.get("note", ""))[:200]
-    except (ValueError, KeyError, TypeError) as exc:
+    except ValueError as exc:
         raise JudgeError(f"검수 응답을 읽을 수 없습니다: {text[:80]!r}") from exc
+    if not isinstance(d, dict):
+        raise JudgeError(f"검수 응답이 JSON 객체가 아닙니다: {text[:80]!r}")
+    try:
+        likeness = d["likeness"]
+        text_ok = d["text_ok"]
+        avatar_ok = d["avatar_ok"]
+        note = str(d.get("note", ""))[:200]
+    except (KeyError, TypeError) as exc:
+        raise JudgeError(f"검수 응답에 필드가 없습니다: {text[:80]!r}") from exc
+    if not isinstance(likeness, int) or isinstance(likeness, bool):
+        raise JudgeError(f"likeness 가 정수가 아닙니다: {likeness!r}")
+    if not isinstance(text_ok, bool) or not isinstance(avatar_ok, bool):
+        raise JudgeError(f"text_ok/avatar_ok 가 불리언이 아닙니다: {text_ok!r}, {avatar_ok!r}")
     if not 1 <= likeness <= 5:
         raise JudgeError(f"likeness 범위 밖: {likeness}")
     return JudgeResult(likeness=likeness, text_ok=text_ok, avatar_ok=avatar_ok, note=note)

@@ -25,3 +25,28 @@ def test_parse_rejects_non_json():
 
 def test_prompt_asks_for_json_only():
     assert '"likeness"' in judge.PROMPT and "JSON" in judge.PROMPT
+
+
+def test_parse_rejects_string_bool_for_text_ok():
+    with pytest.raises(judge.JudgeError):
+        judge.parse_judge_json('{"likeness": 4, "text_ok": "false", "avatar_ok": true, "note": ""}')
+
+
+def test_parse_rejects_float_likeness():
+    with pytest.raises(judge.JudgeError):
+        judge.parse_judge_json('{"likeness": 4.0, "text_ok": true, "avatar_ok": true, "note": ""}')
+
+
+def test_parse_rejects_string_likeness():
+    with pytest.raises(judge.JudgeError):
+        judge.parse_judge_json('{"likeness": "4", "text_ok": true, "avatar_ok": true, "note": ""}')
+
+
+def test_parse_rejects_bool_likeness():
+    with pytest.raises(judge.JudgeError):
+        judge.parse_judge_json('{"likeness": true, "text_ok": true, "avatar_ok": true, "note": ""}')
+
+
+def test_parse_rejects_top_level_list():
+    with pytest.raises(judge.JudgeError):
+        judge.parse_judge_json('[{"likeness": 4, "text_ok": true, "avatar_ok": true, "note": ""}]')

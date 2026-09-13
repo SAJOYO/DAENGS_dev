@@ -69,9 +69,13 @@ async def _read_body(request: Request) -> bytes:
 async def generate(
     request: Request,
     _admin: Annotated[Principal, Depends(_INSPECT)],
+    dog_name: Annotated[str, Query(min_length=1, max_length=40)],
     month: Annotated[int, Query(ge=1, le=12)] = 4,
-    dog_name: Annotated[str, Query(min_length=1, max_length=40)] = "",
 ) -> CardImageResponse:
+    if not dog_name.strip():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail={"code": "bad_name", "message": "강아지 이름이 비어 있습니다"}
+        )
     body = await _read_body(request)
     # 헤더가 없으면 빈 문자열을 그대로 넘긴다 — `prepare_photo` 가 허용 MIME 밖으로 보고
     # `PhotoError("bad_mime")` 를 내면 아래에서 400 으로 바뀐다. `ALLOWED_MIME` 이 소문자

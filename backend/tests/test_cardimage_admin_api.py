@@ -155,6 +155,27 @@ def test_streamed_too_large_is_413_without_declared_length(client: TestClient) -
     assert r.json()["detail"]["code"] == "too_large"
 
 
+def test_whitespace_only_dog_name_is_400_with_code(client: TestClient) -> None:
+    r = client.post(
+        "/admin/cardimage/generate",
+        params={"month": 4, "dog_name": "   "},
+        content=_photo(),
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "bad_name"
+
+
+def test_missing_dog_name_is_422(client: TestClient) -> None:
+    r = client.post(
+        "/admin/cardimage/generate",
+        params={"month": 4},
+        content=_photo(),
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert r.status_code == 422
+
+
 def test_viewer_lacks_search_inspect_is_403(monkeypatch: pytest.MonkeyPatch) -> None:
     """`VIEWER` 는 `search:inspect` 가 없다 (core/deps.py 의 ROLE_PERMISSIONS) — 403."""
     client = _client(monkeypatch, role="VIEWER")

@@ -6,7 +6,7 @@ from __future__ import annotations
 import io
 from typing import Protocol
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 CARD_SIZE = (994, 1582)
 
@@ -83,6 +83,20 @@ def _extract_image_bytes(resp: object) -> bytes:
     raise EngineError("no_image", detail)
 
 
+def _decode_and_fit(image_bytes: bytes, *, pad: int, padded_width: int) -> bytes:
+    """모델이 돌려준 바이트를 카드 크기로 디코드·리사이즈한다. 모델이 이미지가 아닌 바이트를
+    주면(안전 차단 회피 문구를 실은 텍스트가 `inline_data` 로 온 경우 등) `Image.open` 이
+    `UnidentifiedImageError` 를, 잘린 데이터는 `save` 단계에서 `OSError` 를 낼 수 있다 —
+    둘 다 `EngineError("no_image", ...)` 하나로 모아 라우터가 이미 아는 코드만 보게 한다."""
+    try:
+        gen = Image.open(io.BytesIO(image_bytes))
+        out = io.BytesIO()
+        fit_to_card(gen, pad=pad, card_size=CARD_SIZE, padded_width=padded_width).save(out, "PNG")
+        return out.getvalue()
+    except (UnidentifiedImageError, OSError) as exc:
+        raise EngineError("no_image", f"모델 출력이 이미지가 아닙니다: {exc}") from exc
+
+
 class GeminiCardImageEngine:
     """Nano Banana 2(`gemini-3.1-flash-image`) 로 강아지를 교체하는 실제 엔진. `google.genai` 는
     `generate()` 안에서만 import 한다 — 이 모듈을 불러오는 것만으로 SDK 가 딸려오지 않게
@@ -118,7 +132,4 @@ class GeminiCardImageEngine:
         except Exception as exc:  # SDK 예외 계층이 넓다 — 코드 하나로 모은다
             raise EngineError("upstream", f"이미지 모델 호출 실패: {exc}") from exc
         image_bytes = _extract_image_bytes(resp)
-        gen = Image.open(io.BytesIO(image_bytes))
-        out = io.BytesIO()
-        fit_to_card(gen, pad=pad, card_size=CARD_SIZE, padded_width=padded.width).save(out, "PNG")
-        return out.getvalue()
+        return _decode_and_fit(image_bytes, pad=pad, padded_width=padded.width)

@@ -1,3 +1,4 @@
+import io
 from types import SimpleNamespace
 
 from PIL import Image
@@ -80,3 +81,21 @@ def test_extract_image_bytes_returns_inline_data():
     part = SimpleNamespace(inline_data=SimpleNamespace(data=b"PNGDATA"), text=None)
     resp = SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))])
     assert engine._extract_image_bytes(resp) == b"PNGDATA"
+
+
+def test_decode_and_fit_garbage_bytes_raises_no_image():
+    try:
+        engine._decode_and_fit(b"not a png", pad=30, padded_width=1054)
+    except engine.EngineError as err:
+        assert err.code == "no_image"
+    else:
+        raise AssertionError("expected EngineError")
+
+
+def test_decode_and_fit_valid_png_returns_card_size():
+    buf = io.BytesIO()
+    Image.new("RGB", (1696, 2528), (0, 255, 0)).save(buf, "PNG")
+    out = engine._decode_and_fit(buf.getvalue(), pad=30, padded_width=1054)
+    img = Image.open(io.BytesIO(out))
+    assert img.size == (994, 1582)
+    assert img.format == "PNG"

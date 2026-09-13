@@ -22,14 +22,6 @@ STROKE, STROKE_W = (22, 22, 30), 3
 SHADOW, SHADOW_DY = (0, 0, 0, 150), 3
 MAX_NAME = 40
 
-TITLE_PLATE = {
-    "left_x": LEFT_X,
-    "center_y": PLATE_CENTER_Y,
-    "cap_height": CAP_HEIGHT,
-    "right_margin": RIGHT_MARGIN,
-    "edge": ((65, 791), (135, 758)),
-}
-
 
 def title_text(card_name: str, dog_name: str) -> str:
     name = " ".join(dog_name.split())[:MAX_NAME]

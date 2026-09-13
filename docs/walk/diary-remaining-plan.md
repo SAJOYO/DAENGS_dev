@@ -6,6 +6,8 @@
 
 현재 실행 구조의 정본은 [카드 오케스트레이션](card-orchestration.md)이다. 이 문서는 그 구조를 다시 설계하는 문서가 아니라, 그 위에서 남은 공간 해석·슬롯 정책·서술 검증을 진행하기 위한 기획과 인계 기록이다. 사용자 요청은 문서화이며 아래 미완료 항목을 이번에 구현했다는 뜻이 아니다.
 
+**코드를 수정하기 전에는 [9절: 실제 호출 경로와 혼동 방지](#handoff-paths)를 확인한다.** 기본 작성기·미리보기·과거 형식·저장본 읽기는 같은 경로가 아니다. 파일 이름이나 대역을 넣은 테스트 하나만으로 현재 서비스 연결을 판단하지 않도록 분기 조건과 확인 방법을 기록했다.
+
 ## 1. 사용자가 만들고 싶은 기능
 
 산책을 마친 보호자가 지도를 보며 기록을 열었을 때, **어느 동네의 어떤 공간에서 남긴 기록인지 알 수 있고, 행동을 남긴 곳에는 실제 행동이 별도로 붙어 있는 일기**를 만드는 것이 목표다. 이름과 거리가 붙은 주변 시설 목록만으로는 그 장소가 어떤 공간인지 알기 어렵다.
@@ -257,6 +259,8 @@
 
 ## 7. 다음 담당자가 처음 끝낼 단위
 
+착수 전 [9절의 경로 확인](#handoff-paths)을 먼저 끝낸다. R1·R2의 실험 결과가 기본 작성 요청까지 전달되는지 확인할 기준이다.
+
 첫 완료 단위는 **기존 수변 세 지점에서 현재 위치·하천·주변 풀밭의 관계를 실제로 구성하고, 같은 사실을 전달하는 방식의 차이가 공간 문장에 반영되는지 확인하는 것**이다. R1과 R2를 먼저 묶어 진행한다.
 
 그 결과를 가지고 R3의 동선 재생에서 맥락 유지와 관계 갱신을 확인한다. 날씨는 기존 정책으로 별도 비교하고, 마지막에는 동일한 실제 서비스 경로로 APP에서 읽는다. 전국 전 범주·영속 공간 기억·제목 문체·전체 산책 요약을 첫 실험의 완료 조건으로 한꺼번에 넣지 않는다.
@@ -283,3 +287,146 @@
 - [DEV #499](https://github.com/SAJOYO/DAENGS_dev/pull/499), [APP #392](https://github.com/SAJOYO/DAENGS_APP/pull/392): 공통 실행 연결과 실제 API 응답을 소비한 앱 계약 검증. 외부 공급자/모델 대역 테스트를 실제 문장 품질 실험으로 읽지 않는다.
 
 2절의 수변·관계·페르소나 실험 경위는 사용자가 이 대화에 제공한 설명과 리뷰를 정리한 것이다. 원시 실험 파일을 전부 새로 검증했다는 뜻이 아니다. 후속 실행에서 원본을 확인하면 실행 참조를 추가하고, 재현되지 않거나 자료가 없는 부분은 그 상태를 그대로 남긴다.
+
+<a id="handoff-paths"></a>
+
+## 9. 실제 호출 경로와 혼동 방지 — 후속 담당자의 착수 기준
+
+이 절은 2026-09-14에 DEV `bc23d9aa32de5c2d3ee4a2434c6138adf1094ec0`, APP `802604d1fcf4d6bd3cc20aec2079ea9720745265`의 코드를 대조해 보완했다. 앞선 대화의 실험 설명을 옮긴 2절과 달리, 아래 경로·분기는 이 커밋에서 직접 읽은 내용이다. **이번 보완은 문서 검증이며 실제 공급자·LLM 호출이나 운영 서버 실행을 다시 수행한 기록이 아니다.** 이후 커밋에서 분기가 바뀌면 호출자부터 다시 확인한다.
+
+### 9.1 작업하면서 혼동했던 네 지점
+
+| 혼동 지점 | 왜 잘못 판단하기 쉬웠는가 | 현재 확인한 경계와 후속 작업의 기준 |
+| --- | --- | --- |
+| 기존 오케스트레이션과 일기 발행 | 기존 API·예약·저장을 사용하면 기존 오케스트레이션까지 사용한다고 설명하기 쉬웠다. 실제로는 다른 책임이다. | 일기 그래프와 어시스턴트 그래프가 공통 `JobExecutor` 구현을 호출한다. 발행 권한은 기존 일기 서비스가 갖는다. 9.3의 양쪽 호출자와 공유 실행 테스트를 확인한다. |
+| 기본 작성기와 실험·호환 작성기 | `slot`이라는 파일명, 과거 결합 작성 문서, `generate` 주입 테스트가 함께 남아 있다. 이름이 같은 진입 함수도 인자에 따라 다른 작성기로 들어간다. | 요청 형식 → 라우터 의존성 → 저장 형식 협상 → 발행 재사용 여부 → 실제 작성 호출 순으로 추적한다. 9.2의 분기표를 기준으로 검증 범위를 적는다. |
+| 공간 후보의 적격성과 하나의 장면 선정 | 공원·상권·피복이 각각 유효하다는 사실을, 세 재료를 동등하게 나열해야 한다는 뜻으로 읽기 쉬웠다. | 후보를 사용할 수 있는지와 어떤 관계로 장면을 구성할지는 다른 판단이다. 피복을 해석의 바탕으로 삼는 후속 기획을 후보 유효성의 강제 종속 규칙으로 바꾸지 않는다. 9.5 참고. |
+| SGIS 정규화와 APP 표시 | 화면에 동만 보이는 것을 원자료에서 시가 사라진 것으로 오해했다. 새 정규화 함수를 만들면 기존 의미까지 달라질 수 있다. | 기존 투영은 `sido`, `sigungu`, `dong`을 보존한다. APP 표시 추출은 `dong`을 읽는다. 9.4의 원자료 → 정규화 → 표시를 각각 확인한다. |
+
+후속 담당자는 이 혼동을 해결하려고 새 작성기·주소 정규화·별도 실험 파이프라인을 먼저 만들지 않는다. **기존 코드에서 어느 단계가 문제인지 확인한 뒤 그 접점을 수정한다.**
+
+### 9.2 기본 작성·미리보기·호환 경로를 구별하는 방법
+
+현재 기본 카드 작성이 실제로 실행되는 경로는 다음과 같다. 일기 기능이 켜져 있고, 보드 형식이 선택되어 새 작성이 필요한 경우를 그린 것이다. 이미 공개된 결과나 진행 중 예약을 반환하는 요청은 작성 호출까지 내려가지 않는다.
+
+```text
+APP WalkDiarySync: capabilities의 제공 형식 선택
+  → POST /app/walks/{walk_id}/storyboard
+  → routers/walk_storyboard.get_diary_writer
+      요청이 walk-diary-board-v1이면 write_board 선택
+  → services/walk_storyboard.generate
+      existing_format으로 기존 저장 형식 보존
+  → walk_diary_generation.generate_diary
+      원본/사진 버전 확인 → 기존 결과/예약 확인
+      새 작성 필요 시 예약 저장·commit → 예약된 예산 안에서 실행
+  → walk_diary_board_slot_writing.write_board(source, base)
+      generate 인자를 따로 넣지 않는 기본 호출
+  → walk_diary_card_writing.write_cards
+  → orchestration/runtime.build_diary_orchestrator
+  → orchestration/diary.DiaryOrchestrationService.run
+      공간·조건부 행동 → 본문 고정 → 제목 → 코드 조립
+  → 기존 완료·원본 재확인·저장/발행
+  → APP ServerDiaryBoard → 기존 저장·읽기
+```
+
+첫 확인 파일은 [라우터](../../backend/src/daengs_backend/routers/walk_storyboard.py), [서비스 분기](../../backend/src/daengs_backend/services/walk_storyboard.py), [저장 형식 협상](../../backend/src/daengs_backend/services/walk_diary_negotiation.py), [생성·발행 서비스](../../backend/src/daengs_backend/services/walk_diary_generation.py)다. 작성기부터 읽고 진입 조건을 역으로 가정하지 않는다.
+
+| 경우 | 실제 선택 조건·진입점 | 실행되는 것 / 증명할 수 없는 것 |
+| --- | --- | --- |
+| 기본 카드 새 작성 | `walk-diary-board-v1`, 기존 형식 보존·재사용 판정 후 실제 새 작성, `write_board`에 `generate` 미주입 | `write_cards → build_diary_orchestrator`로 공간·행동·제목 작업 실행. 이름에 `slot`이 남아 있어도 기본 실행은 독립 카드 작성이다. |
+| 명시적 과거 일기 형식 | POST 요청 `walk-diary-bundle-v1` | 라우터가 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
+| 슬롯 미리보기 | POST `/app/walks/{walk_id}/diary-slots/preview`, `walk_diary_enabled`와 `walk_diary_slots_preview_enabled` 모두 활성 | `preview_saved_slots → write_slot_preview → write_slot_stamps`. 공개 storyboard의 생성·발행 경로와 별개다. 여기서 좋은 결과가 나와도 기본 카드 작성에 적용됐다는 증거는 아니다. |
+| 기존 슬롯 계약의 테스트 주입 | `write_board(source, base, generate=대역)` 또는 같은 세 번째 위치 인자 | `write_slot_stamps`로 분기한다. **기본 작성기에 대역만 넣었다고 생각해도 실행 전략 자체가 달라진다.** |
+| 이미 저장된 결과·진행 중 예약 | `generate_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
+| 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
+
+관련 구현: [기본 진입 함수와 명시적 주입 분기](../../backend/src/daengs_backend/services/walk_diary_board_slot_writing.py), [카드 작성 전략](../../backend/src/daengs_backend/services/walk_diary_card_writing.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary_writing.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary_slot_writing.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary_board_storage.py).
+
+**형식 협상에는 두 단계가 있다.** [APP의 WalkDiarySync](https://github.com/SAJOYO/DAENGS_APP/blob/802604d1fcf4d6bd3cc20aec2079ea9720745265/app/src/main/java/com/daengs/app/walk/sync/WalkDiarySync.kt)는 capabilities에 보드가 있으면 보드를, 없으면 과거 일기 형식을 선택하고 둘 다 없으면 legacy 경로를 검토한다. DEV의 `existing_format`은 보드 요청에서도 기존 일기 bundle이나 candidates 저장 형식을 보존할 수 있다. 따라서 APP가 보드를 선호한다는 사실과 특정 저장 산책에서 새 카드 작성기가 실행됐다는 사실은 다르다. 요청 형식만 기록하지 말고 반환 형식·저장 상태·실제 호출도 함께 남긴다.
+
+또 `walk-diary-board-v1`은 공개 보드 형식이고, `walk-diary-board-storage-v1/v2`는 서버 내부 저장 형식이다. 저장 v2의 `writing_receipt`도 `StoredSlotWriting | StoredCardWriting`으로 구별된다. **공개 형식, 저장 형식, 작성 영수증 종류를 하나의 버전 번호로 읽지 않는다.** `complete_slot_board` 역시 `CardWritingResult`일 때 `complete_cards`, 그 외에는 기존 슬롯 조립으로 분기한다.
+
+### 9.3 기존 오케스트레이션과 발행의 연결을 확인할 위치
+
+| 책임 | 코드에서 확인할 연결 |
+| --- | --- |
+| 기존 어시스턴트 실행 | [runtime.py](../../backend/src/daengs_backend/orchestration/runtime.py)의 `build_orchestrator`와 [graph.py](../../backend/src/daengs_backend/orchestration/graph.py)의 `_execute_requests → JobExecutor` |
+| 일기 실행 | 같은 `runtime.py`의 `build_diary_orchestrator` → [diary.py](../../backend/src/daengs_backend/orchestration/diary.py)의 공간·행동 합류 그래프 → 같은 [execution.py](../../backend/src/daengs_backend/orchestration/execution.py)의 `JobExecutor` |
+| 생성 예약·최종 공개 | [walk_diary_generation.py](../../backend/src/daengs_backend/services/walk_diary_generation.py), [walk_diary_publication.py](../../backend/src/daengs_backend/services/walk_diary_publication.py)의 기존 예약·마감·원본 재확인·채택 |
+
+공유하는 것은 **작업 실행 구현**이다. 어시스턴트와 일기가 한 그래프나 한 전역 세마포어를 공유한다는 뜻은 아니다. 현재 어시스턴트는 `JobExecutor(concurrency=1)`, 일기 실행은 모델 작업에 `concurrency=4`를 사용하며 자료 수집용 실행기는 별도로 둔다. 이 수치를 전체 서버의 전역 동시 호출 상한으로 설명하지 않는다.
+
+일기는 기존 채팅의 의미 라우터나 응답 형식을 거치지 않는다. 기존 `walk` capability를 일기 생성 기능이라고 오해하지도 않는다. 일기 작업의 의존성은 이미 정해져 있고, 발행 예약에서 얻은 예산 안에서 실행된다. 공간과 행동 결과를 다시 섞는 최종 본문 작성기는 없다.
+
+`JobExecutor`를 쓴다고 발행 권한이 그쪽으로 이동하지 않는다. 입력 고정, 채택 본문 고정, 최종 공개를 구별하고 사용자 원본·편집 검사와 늦은 결과 채택 방지는 기존 발행 흐름에서 확인한다. 실행 취소와 외부 제공자 요청의 물리적 종료도 같은 보장이 아니다.
+
+### 9.4 SGIS의 ‘시’는 원래 정규화에 있다
+
+기존 [walk_sgis.py](../../backend/src/daengs_backend/services/walk_sgis.py)의 응답을 [diary_public_background.py](../../backend/src/daengs_walk/diary_public_background.py)가 다음과 같이 투영한다. 새로 추가한 주소 규칙이 아니라 기존 매핑이다.
+
+| SGIS 원자료 | 정규화된 `facts` | 의미 |
+| --- | --- | --- |
+| `sido_nm` | `sido` | 시도 명칭 |
+| `sgg_nm` | `sigungu` | 시군구 명칭 |
+| `emdong_nm` | `dong` | 행정동 명칭 |
+
+투영은 `sgis-dong-v1`과 `address_type=administrative_dong`을 확인하며 행정 코드로 `source_ref`도 남긴다. ‘시’에 해당하는 명칭을 임의의 새 `city` 필드로 만들거나 이름에서 접미사를 지워 재정의할 이유가 없다.
+
+반면 APP [ServerDiaryBoard.kt](https://github.com/SAJOYO/DAENGS_APP/blob/802604d1fcf4d6bd3cc20aec2079ea9720745265/app/src/main/java/com/daengs/app/walk/diary/ServerDiaryBoard.kt)와 과거 형식의 [ServerDiaryBundle.kt](https://github.com/SAJOYO/DAENGS_APP/blob/802604d1fcf4d6bd3cc20aec2079ea9720745265/app/src/main/java/com/daengs/app/walk/diary/ServerDiaryBundle.kt)는 위치 표시 추출에서 `facts.optString("dong")`을 사용한다. **원자료에 있는가 → 정규화에 보존됐는가 → 작성 요청에 들어갔는가 → 화면이 무엇을 골라 표시하는가**를 따로 확인해야 한다. 동만 표시된 화면은 시도·시군구가 정규화에서 빠졌다는 증거가 아니다.
+
+후속 주소 문제가 생기면 원자료 응답과 `place_reference.facts`, 실제 작성 요청, 저장 카드, APP 표시값을 같은 기록 기준으로 대조한다. SGIS 조회 실패 상태와 조회 경로 자체의 누락도 구별한다. 이 보완에서 화면의 위치 표시 정책을 변경한 것은 아니다.
+
+### 9.5 공간 적격성은 장면 구성의 완료 조건이 아니다
+
+확인할 구현은 [수집](../../backend/src/daengs_backend/services/walk_diary_space_collection.py), [재료 정규화](../../backend/src/daengs_walk/diary_space_materials.py), [적용 정책](../../backend/src/daengs_walk/diary_space_policy.py), [슬롯](../../backend/src/daengs_walk/diary_space_slots.py)이다. 먼저 각 자료의 범위·위치·가용 상태를 보고 사용할 수 있는 후보를 만든다. 이 단계에서 피복 조회가 실패했다고 독립적으로 유효한 공원 자료까지 거짓이 되지는 않는다.
+
+그다음 남은 기획은 현재 지면과 주변 피복으로 공간 맥락을 해석하고, 실제로 확인한 대상·관계가 그 맥락을 구체화하도록 선정하는 것이다. 공원·상권이 각각 적격이어도 둘을 반드시 본문에 쓰거나 같은 비중으로 나열할 필요는 없다. 반대로 ‘수변’이라는 해석만으로 가까운 공원을 같은 수변공원에 소속시킬 수도 없다.
+
+특히 현재 `walk_diary_space_collection`의 기본 수집은 SGIS·공원·상권·피복 조회를 다루며 **전국 하천 형상 명명과 주변 풀밭의 국소 관계 계산을 모두 자동 연결한 수집기는 아니다.** EGIS 피복의 WMS 지점 조회가 연결됐다는 사실로 R1의 하천·풀밭 관계까지 완성됐다고 보고하지 않는다. GEO 실험 재료와 DEV 기본 수집에서 실제 확보한 재료를 구별한다.
+
+R1·R2에서는 후보 적격성 검사와 장면의 대상·관계 선택을 각각 기록한다. 이 구별이 없으면 기존 정책 문서의 ‘공급자 간 강제 종속 없음’을 이유로 다시 평면 나열로 돌아가거나, 반대로 피복 결측 때문에 확보된 자료를 전부 버리게 된다.
+
+### 9.6 다음 담당자의 확인 절차와 테스트 범위
+
+1. 현재 DEV·APP 커밋과 해당 저장 산책의 요청/반환 형식을 기록한다. 기능 설정, 기존 공개본·예약 여부를 확인한다. 재현을 위해 사용자 공개본을 지우지 말고 통제된 테스트 산책을 사용한다.
+2. 9.2의 라우터 의존성과 실제 작성 호출을 추적한다. `get_diary_writer`를 통째로 대역으로 바꾸거나 `write_board(generate=...)`를 사용한 테스트를 기본 그래프 검증으로 세지 않는다.
+3. 같은 기록의 SGIS 원자료·정규화, EGIS 확보 범위, 공간/행동 요청, 채택 본문, 제목 입력, 저장 카드와 APP 읽기를 대조한다. 재사용과 새 생성, 실제 API와 대역 응답을 표시한다.
+4. 수정한 책임에 해당하는 아래 테스트를 실행하고 결과·skip·미검증 범위를 남긴다. 이 문서 보완 자체에서는 아래 런타임 테스트를 재실행하지 않았다.
+
+DEV의 [test_diary_card_writing.py](../../backend/tests/walk/diary/test_diary_card_writing.py)에서 우선 볼 테스트는 다음과 같다.
+
+| 테스트 | 확인하는 경계 |
+| --- | --- |
+| `test_actual_http_writer_publishes_once_and_exports_app_contract` | 라우터의 기본 작성기 대역을 제거하고 실제 HTTP 작성 경로를 통과한다. 모델 함수·수집기는 대역이며 DB/저장소도 테스트 fixture이므로 운영 DB·실제 모델 성공 증거는 아니다. |
+| `test_diary_and_existing_assistant_use_the_same_executor` | 일기와 기존 어시스턴트 양쪽이 같은 실행 구현을 사용하는지 확인한다. |
+| `test_sgis_and_egis_follow_actual_normalizers_into_request_and_card` | 공급자 대역 응답이 실제 정규화를 거쳐 요청과 카드까지 들어가는지 확인한다. |
+| `test_action_starts_while_space_collection_is_blocked` | 공간 수집 대기가 준비된 행동 작업을 막지 않는지 확인한다. |
+| `test_action_edit_does_not_change_space_request` | 행동 수정이 공간 요청의 의존성에 섞이지 않는지 확인한다. |
+| `test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note` | 원문 보존과 생성 재사용을 구별한다. |
+| `test_title_batch_adopts_valid_siblings_only`, `test_source_edit_during_actual_title_job_cannot_publish_old_card` | 제목 일부 실패의 격리와 생성 도중 원본 변경의 발행 방지를 확인한다. |
+
+실제 기본 요청 테스트는 `writing.generate_card_prose`와 `collection.configured_collection`을 교체한다. 이것이 `write_board`의 세 번째 인자를 넣어 과거 전략으로 바꾸는 것과 다른 점이다. 기존 [test_diary_board_slot_writing.py](../../backend/tests/walk/diary/test_diary_board_slot_writing.py)는 명시적 슬롯 계약의 검증으로, [test_diary_slots_api.py](../../backend/tests/walk/diary/test_diary_slots_api.py)는 미리보기 검증으로 읽는다.
+
+아래 명령은 DEV의 `backend/`에서 실행하는 후속 검증 예시다. 수정 범위에 따라 필요한 묶음만 고른다.
+
+```powershell
+# 실제 기본 진입과 공통 실행 연결을 먼저 확인
+uv run pytest -q tests/walk/diary/test_diary_card_writing.py -k "actual_http_writer or same_executor or actual_normalizers"
+
+# 독립 작성·발행 경계를 수정한 경우
+uv run pytest -q tests/walk/diary/test_diary_card_writing.py tests/walk/diary/test_diary_publication.py
+
+# 과거 슬롯 계약·미리보기를 수정한 경우
+uv run pytest -q tests/walk/diary/test_diary_board_slot_writing.py tests/walk/diary/test_diary_slots_api.py
+
+# 공통 실행기를 수정한 경우 기존 어시스턴트 회귀도 확인
+uv run pytest -q tests/test_orchestration_graph.py
+```
+
+APP 응답·보존 계약을 수정한다면 `PublishedCardWritingTest`, `WalkDiarySpacePersistenceTest`, `WalkDiaryReaderTest`를 확인한다. 단위 테스트가 소비한 서버 응답 fixture의 출처와 버전도 확인한다. APP 루트에서 실행하는 예시는 다음과 같다.
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest --tests "*PublishedCardWritingTest" --tests "*WalkDiarySpacePersistenceTest" --tests "*WalkDiaryReaderTest"
+```
+
+테스트 통과 보고에는 **어느 진입점이 실행됐고 어디에 대역이 들어갔는지**를 함께 적는다. 이 확인 뒤에 남는 실제 수변 의미·문장 품질·실기기 공개 경험은 R1~R5의 별도 검증이다. 오케스트레이션 연결 테스트가 그 기획을 대신 완료하지 않는다.

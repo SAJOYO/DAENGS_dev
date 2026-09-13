@@ -13,7 +13,8 @@ DB 는 쓰지 않습니다 (`test_care_events.py` 와 같은 규칙).
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from fakes import (
@@ -39,8 +40,28 @@ B = uuid.uuid4()  # 연결한 공동 보호자
 A_KAKAO = 5001
 B_KAKAO = 5002
 
-SEOUL_MORNING = datetime(2026, 9, 12, 0, 30, tzinfo=UTC)  # 서울 09:30
-SEOUL_EVENING = datetime(2026, 9, 12, 10, 30, tzinfo=UTC)  # 서울 19:30
+# ⚠️ **오늘 날짜로 만듭니다 — 고정 날짜를 박으면 안 됩니다.**
+#
+# 여기서 재는 것은 `GET /app/care-events/today` 이고, 서버는 「오늘」을 서울 자정
+# 경계로 정합니다(`care_event.DAY_TIMEZONE`). 처음에는 `2026-09-12` 를 박아 뒀는데
+# 그날이 지나자 아홉 건이 한꺼번에 깨졌습니다 — 합산이 전부 0 이 되어 마치 그룹
+# 조회가 고장 난 것처럼 보였습니다.
+#
+# **미래로 잡아도 안 됩니다.** `CareEventCreate` 가 지금보다 10분 넘게 뒤인
+# `occurred_at` 을 422 로 막습니다. 그래서 둘 다 **오늘 서울 안이면서 지금보다 과거**로
+# 둡니다. 약 중복 확인 창을 재는 테스트는 두 기록에 **같은 시각**을 쓰므로 둘 사이
+# 간격에 기대는 검사는 없습니다.
+_SEOUL = ZoneInfo("Asia/Seoul")
+_NOW = datetime.now(UTC)
+_SEOUL_MIDNIGHT = datetime.combine(
+    _NOW.astimezone(_SEOUL).date(), time(0, 1), tzinfo=_SEOUL
+).astimezone(UTC)
+
+SEOUL_EVENING = _NOW - timedelta(minutes=1)
+SEOUL_MORNING = max(_SEOUL_MIDNIGHT, _NOW - timedelta(hours=2))
+
+#: 위 두 시각이 속한 **서울 날짜**. `.date()` 는 UTC 날짜라 자정 근처에서 하루 어긋납니다.
+SEOUL_DAY = SEOUL_MORNING.astimezone(_SEOUL).date()
 
 
 @dataclass
@@ -357,7 +378,7 @@ async def test_day_summary_가_그룹_id_로_읽는다(store: Store, linked):
     store.care_events.append(
         FakeCareEvent(pet_id=a_pet.id, kind="meal", occurred_at=SEOUL_MORNING)
     )
-    summary = await care_service.day_summary(None, B, b_pet.id, day=SEOUL_MORNING.date())
+    summary = await care_service.day_summary(None, B, b_pet.id, day=SEOUL_DAY)
     assert summary.counts.get("meal") == 1
 
 

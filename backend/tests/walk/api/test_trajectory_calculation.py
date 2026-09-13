@@ -158,9 +158,12 @@ def test_calculation_and_serialization_run_off_event_loop_after_rollback(boundar
 
 
 @pytest.mark.parametrize("available", [True, False])
-def test_capability_is_explicit_and_releases_read_transaction(boundary, available):
+def test_capability_is_explicit_and_releases_read_transaction(boundary, available, monkeypatch):
     b = boundary
     b.available.return_value = available
+    from daengs_backend.repositories import walk_measurement
+
+    monkeypatch.setattr(walk_measurement, "available", AsyncMock(return_value=False))
     response = b.client.get("/app/walks/trajectory-capabilities")
     assert response.status_code == 200
     data = response.json()

@@ -3,6 +3,55 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-14 — 1단계 구현 (에이전트 실행, Task 1~9·11)
+
+`docs/cardimage/plan-2026-09-14-phase1.md` 를 승인받아 subagent-driven-development 로
+Task 1~9·11 을 순서대로 실행했다 (Task 10 제외 — 사용자 결정 09-14). 매 Task 마다 구현자→
+리뷰어→수정 라운드를 돌렸고 판정·근거는 `progress.md`(ledger)에 있다.
+
+**Task 별 요약:**
+
+- Task 1 — 도감 카드 설정값(`DAENGS_CARDIMAGE_*`)과 틀 폴더 컨테이너 마운트 (`f72995a`, fix `971c9a8`)
+- Task 2 — 달마다 틀 파일·카드명·무대 묘사를 한 곳에 모은 catalog, 빈 무대는 허용 목록에 있어도 거부 (`ab3f859`, fix `123cd25`)
+- Task 3 — 업로드 사진 검증·앱과 같은 크기로 리사이즈 (`9fd96c0`, fix `b9eb9c9`)
+- Task 4 — 제목 얹기를 실험 도구에서 서비스로 이관 (`4d834ed`, 리뷰 클린)
+- Task 5 — 강아지 교체 엔진을 Protocol 뒤에 두고 Nano Banana 2 구현 이관 (`73de7bc`, fix `4acb8df`)
+- Task 6 — 생성된 카드가 그 강아지인지 묻는 검수 (`adfa930`, fix `b3ff6d6`)
+- Task 7 — 생성 파이프라인 — 유사도가 모자라면 한 번 더 만든다 (`28cef2e`, fix `0c8c1d9`)
+- Task 8 — 관리자 API `POST /admin/cardimage/generate` (`e08d5ee`, fix `6a40070`)
+- Task 9 — 콘솔 「기능 / 검색 점검」에 「도감 카드 생성」 갈래 (`130a4ea`, 리뷰 클린)
+- Task 11 — 이 절 + `docs/decisions.md` D-074 + `docs/console/roadmap.md` · `CLAUDE.md` 갱신 (이 커밋)
+
+**구현 중 내려진 판단(ledger 의 Ruling):**
+
+- **Pillow 는 기본 의존성으로 승격** (Task 3) — 계획이 전제한 것과 달리 Pillow 가 `screening`
+  그룹에만 있었는데, `services/cardimage` 가 backend 본체(main.py 라우터)에 들어가 import
+  시점에 필요해졌다. `uv add pillow` 로 올렸다 — `uv.lock` 이 바뀌어 배포 때 backend 재생성이
+  필요하다(어차피 필요한 재생성).
+- **`cardimage_dir` 기본값을 절대 경로로** (Task 8) — `"cardimage"` 상대 경로는 CWD 에 따라
+  갈려서 `backend/` 에서 `uv run dev` 하면 틀을 못 찾았다(Task 1 결함). `Path(config.py).parents[3]
+  /"cardimage"` 로 바꿔 개발 PC 는 저장소 루트, 컨테이너(`/app/src/…`)는 `/cardimage` 가 되어
+  compose 마운트 경로와 일치시켰다.
+- **압축 폭탄·투명 배경 처리** (Task 3) — 선언 크기 상한을 검사하지 않으면
+  `DecompressionBombError` 가 그대로 새 나가고, 알파 채널이 있는 사진은 검정으로 뭉개졌다.
+  선언 크기 상한 검사와 흰 배경 합성을 둘 다 넣었다.
+- **검수 응답은 엄격 타입** (Task 6) — `bool()`/`int()` 로 느슨하게 강제하면 검수가
+  검수로서 의미가 없어진다. JSON 원래 타입일 때만 받고 아니면 `JudgeError`.
+- **엔진 응답 파싱 방어** (Task 5) — 모델이 빈 응답이나 안전 차단 응답을 주면 `EngineError`
+  밖의 예외가 새 나갔다. 응답 파싱을 감싸 전부 `EngineError` 로 나가게 했다.
+- **스트리밍 413** (Task 8) — MIME 대소문자를 안 가리던 것과, 본문을 통째로 버퍼링한 뒤
+  크기를 검사하던 것(gait 의 스트리밍 상한 패턴과 다름) 둘 다 고쳤다 — `.lower()` 비교 +
+  스트리밍 도중 상한 검사.
+- **Task 10 은 실행하지 않음** — 사용자 결정 09-14. 앱에 카드를 어떻게 얹을지(표시 계약)는
+  이 카드에서 안 연다.
+- **콘솔 브라우저 확인은 사용자에게 넘김** (Task 9 뒤) — 관리자 로그인 정보가 로컬에 없다.
+  HTTP 계층은 `test_cardimage_admin_api`(8 tests)로, 파이프라인은 아래 실호출로 확인했다.
+
+**실호출 확인 1회:** 사진 `_03`(정면, 4월, 이름 "네오") → 유사도 검수 5/5, `text_ok`·`avatar_ok`
+통과, `attempts` 1, 28.8초, PNG 2.5MB. `cardimage/out/_service_check/service_check_1.png`.
+비용 약 $0.10(생성) + 검수. Next 개발 서버는 `next.config.ts` 의 rewrites 로 `/api/:path*` 를
+backend 로 넘긴다.
+
 ## 2026-09-13 밤 — 실험 1번 (Nano Banana 2, 원본 사진, art 모드, 1K)
 
 `cardimage/out/0913_234757_gemini-3.1-flash-image_art_1K_1.png` (합성) · `_raw.png` (모델 출력 896×1200). 첫 호출, 약 $0.07.

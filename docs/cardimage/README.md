@@ -20,9 +20,21 @@
 - 앱에 이미 있는 사진 카드 경로(폰 안 누끼로 강아지를 오려 카드 얼굴창에 끼우는 것 — `DAENGS_APP` `ui/dogcard/Cutout.kt`, `docs/card-holes.md`)는 **그대로 두고**, 이것은 별도 경로다.
 - 엔진은 ComfyUI 로 못 박지 않는다. 브랜치 이름에 comfyui 가 남아 있는 것은 카드를 열 때의 짐작이다.
 
-## 지금 상태 (2026-09-13 밤)
+## 지금 상태 (2026-09-14, 1단계 구현 완료)
 
-**09-14 02:25 세션 종료 시점:** 아래 상태에서 멈춤. 9월 틀의 Pillow 배지 합성은 사용자가 거부("구려") → 도구 삭제, 모델이 그린 판 그대로. 합성 방식(art 모드·배지 합성)은 두 번 거부됐으니 **다시 제안하지 말 것.**
+**1단계 서비스 구현 완료 (09-14, 에이전트 실행 Task 1~9·11).** `backend/src/daengs_backend/services/cardimage/`
+(catalog · photo · title · engine · judge · generate) 가 파이프라인을 갖췄고, `POST
+/admin/cardimage/generate`(search:inspect) 로 열렸다. 콘솔 「기능 / 검색 점검」에 「도감 카드
+생성」 갈래가 붙었다(`/console/search` 탭 5). 설정은 `DAENGS_CARDIMAGE_*`(`config.py`), compose 가
+`cardimage/` 를 컨테이너에 마운트한다. 엔진 결정은 `docs/decisions.md` D-074.
+
+실호출로 파이프라인 자체는 확인했다 — 사진 한 장(`_03`, 4월, 이름 "네오")으로 유사도 검수
+5/5, 29초, PNG 2.5MB (`cardimage/out/_service_check/`). **남은 것:** 사용자가 콘솔 화면에서
+눈으로 확인(관리자 로그인 정보가 로컬에 없어 넘김 — 진행자 결정), draft 해제·머지, 배포 시
+서버 `backend/.env` 에 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 를 넣고 `docker compose up -d
+backend`(의존성·마운트 변경이라 재생성 필요). 상세 진행은 `worklog.md` 09-14 절.
+
+**09-14 02:25 세션 종료 시점 (0단계, 실험 마감):** 아래 상태에서 멈췄었다. 9월 틀의 Pillow 배지 합성은 사용자가 거부("구려") → 도구 삭제, 모델이 그린 판 그대로. 합성 방식(art 모드·배지 합성)은 두 번 거부됐으니 **다시 제안하지 말 것.**
 
 **틀 12장 채택 (09-14 01:55):** `cardimage/N_<이름>_template.webp` ×12, 제목 `<카드명> <이름>` 은 Pillow 로 (`cardimage_title.py`, 글꼴 KR Black, 검은 판 중심 정렬, 영문 대문자). "fal 전에 할 것"(12장 틀)은 끝났고 **다음은 fal 의 Qwen-Image-Edit-2511 비교**(크레딧 필요) 또는 1단계 서비스 설계.
 
@@ -45,6 +57,8 @@
 | `cardimage/test/*.jpg` | 실제 강아지 사진 13장 (3000×4000, 4~6MB, 카카오톡 원본). **일부러 원본 화질** — 사용자가 폰 원본을 그대로 넣는 상황 | 폴더만 커밋(`.gitkeep`), 내용은 `.gitignore`. 실제 개 사진이라 커밋 금지 |
 | `cardimage/out/` | 실험 산출물. 결과 PNG 옆에 같은 이름 `.json`(모델·크기·프롬프트), 모델 원출력 `_raw.png` | 폴더만 커밋, 내용은 `.gitignore` |
 | `backend/tools/cardimage_try.py` | 0단계 실험 스크립트 (full 모드만). `uv run --with pillow python tools/cardimage_try.py` | 커밋 |
+| `backend/src/daengs_backend/services/cardimage/` | **1단계 서비스** — catalog(틀·무대)·photo(검증·리사이즈)·title(Pillow 제목)·engine(Nano Banana 2 어댑터)·judge(닮음 검수)·generate(파이프라인). 라우터는 `POST /admin/cardimage/generate` | 커밋 |
+| `docs/cardimage/plan-2026-09-14-phase1.md` | 1단계 구현 계획 (Task 1~11) | 커밋 |
 | `docs/cardimage/` | 이 폴더 | 커밋 |
 
 `data/` 에 넣지 않는다 — 거기는 RAG 코퍼스 자리라 `.gitignore` 규칙과 `DAENGS_DATA_DIR` 이 얽힌다.

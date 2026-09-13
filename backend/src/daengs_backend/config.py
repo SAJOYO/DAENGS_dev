@@ -213,8 +213,16 @@ class Settings(BaseSettings):
     # 2K 여야 카드(994×1582)에 확대 없이 맞습니다. 1K 는 1.25배 확대.
     cardimage_size: str = Field(default="2K", validation_alias=AliasChoices("DAENGS_CARDIMAGE_SIZE"))
     cardimage_timeout_ms: int = Field(default=120_000, validation_alias=AliasChoices("DAENGS_CARDIMAGE_TIMEOUT_MS"))
-    # 틀 12장·글꼴이 있는 폴더. 개발 PC 는 저장소의 cardimage/, 컨테이너는 /cardimage (compose 마운트).
-    cardimage_dir: Path = Field(default=Path("cardimage"), validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"))
+    # 틀 12장·글꼴이 있는 폴더. 기본값을 상대 경로("cardimage")로 두면 CWD 에 따라 갈려서
+    # `uv run dev` 를 backend/ 에서 돌리면 못 찾는다(#496 리뷰에서 실측). 그래서 이 파일
+    # 위치에서 절대 경로로 계산한다 — 개발 PC 는 `backend/src/daengs_backend/config.py` 라
+    # parents[3] 가 저장소 루트라 `<repo>/cardimage`, 컨테이너는 `/app/src/daengs_backend/
+    # config.py` 라 parents[3] 가 `/` 라서 `/cardimage`(compose 마운트와 같은 자리). 둘 다
+    # 맞아떨어지므로 `DAENGS_CARDIMAGE_DIR` 환경 변수는 이제 belt-and-braces 다.
+    cardimage_dir: Path = Field(
+        default=Path(__file__).resolve().parents[3] / "cardimage",
+        validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"),
+    )
     # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
     #
     # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로

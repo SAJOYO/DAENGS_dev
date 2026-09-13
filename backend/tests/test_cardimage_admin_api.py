@@ -9,7 +9,6 @@
 import base64
 import io
 import uuid
-from pathlib import Path
 
 import pytest
 from cardimage_fakes import FakeEngine, FakeJudge
@@ -17,15 +16,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from daengs_backend.config import settings
 from daengs_backend.core.deps import Principal, current_admin
 from daengs_backend.routers import admin_cardimage
 from daengs_backend.services.cardimage import engine as engine_mod
-
-#: 틀 12장·글꼴이 있는 실제 폴더. `settings.cardimage_dir` 기본값("cardimage")은 저장소
-#: 루트 기준이라, backend/ 를 cwd 로 도는 pytest 에서는 그대로 두면 못 찾는다
-#: (`test_cardimage_generate.py` 와 같은 계산).
-CARDIMAGE = Path(__file__).resolve().parents[2] / "cardimage"
+from daengs_backend.services.cardimage.photo import MAX_PHOTO_BYTES
 
 
 def _photo() -> bytes:
@@ -44,7 +38,8 @@ def _client(monkeypatch: pytest.MonkeyPatch, *, role: str = "ADMIN") -> TestClie
         return principal
 
     app.dependency_overrides[current_admin] = _fake_admin
-    monkeypatch.setattr(settings, "cardimage_dir", CARDIMAGE)
+    # `settings.cardimage_dir` 는 이제 config.py 에서 저장소 절대 경로로 계산되므로
+    # (#496 리뷰) 여기서 더 손댈 필요가 없다 — 실제 틀 폴더를 그대로 쓴다.
     monkeypatch.setattr(admin_cardimage, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(admin_cardimage, "default_judge", lambda: FakeJudge([4]))
     return TestClient(app, raise_server_exceptions=False)
@@ -68,6 +63,17 @@ def test_generate_returns_png_and_judge(client: TestClient) -> None:
     assert body["judge"]["likeness"] == 4
     assert body["attempts"] == 1
     assert Image.open(io.BytesIO(base64.b64decode(body["png_base64"]))).size == (994, 1582)
+
+
+def test_mixed_case_content_type_is_accepted(client: TestClient) -> None:
+    """`ALLOWED_MIME` 은 소문자 집합이다 — `.lower()` 없이는 이 헤더가 걸러진다."""
+    r = client.post(
+        "/admin/cardimage/generate",
+        params={"month": 4, "dog_name": "네오"},
+        content=_photo(),
+        headers={"Content-Type": "Image/JPEG"},
+    )
+    assert r.status_code == 200, r.text
 
 
 def test_closed_month_is_404(client: TestClient) -> None:
@@ -115,6 +121,38 @@ def test_no_key_is_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
         headers={"Content-Type": "image/jpeg"},
     )
     assert r.status_code == 503
+
+
+def test_declared_too_large_is_413_before_reading_body(client: TestClient) -> None:
+    """일반 `bytes` 본문은 `Content-Length` 가 실려 온다 — 그 값만으로 즉시 끊는다."""
+    body = b"a" * (MAX_PHOTO_BYTES + 1)
+    r = client.post(
+        "/admin/cardimage/generate",
+        params={"month": 4, "dog_name": "x"},
+        content=body,
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "too_large"
+
+
+def test_streamed_too_large_is_413_without_declared_length(client: TestClient) -> None:
+    """제너레이터로 보내면 `Content-Length` 가 안 실린다 — 청크 누적 검사(스트리밍 갈래)를
+    실제로 거치는지는 이 테스트로만 확인된다. httpx 의 `TestClient` 가 제너레이터 본문을
+    받아 ASGI 로 여러 청크에 걸쳐 넘겨준다는 것은 별도로 확인했다."""
+
+    def _chunks():
+        yield b"a" * MAX_PHOTO_BYTES
+        yield b"a"
+
+    r = client.post(
+        "/admin/cardimage/generate",
+        params={"month": 4, "dog_name": "x"},
+        content=_chunks(),
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "too_large"
 
 
 def test_viewer_lacks_search_inspect_is_403(monkeypatch: pytest.MonkeyPatch) -> None:

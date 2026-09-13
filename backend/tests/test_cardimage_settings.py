@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from daengs_backend.config import Settings
 
 
@@ -13,7 +11,11 @@ def test_cardimage_defaults(monkeypatch):
     assert s.cardimage_judge_min == 3
     assert s.cardimage_months == frozenset({4})
     assert s.cardimage_gemini_api_key.get_secret_value() == ""
-    assert s.cardimage_dir == Path("cardimage")
+    # 절대 경로다(#496 리뷰) — CWD 에 따라 갈리지 않는다. 이 체크아웃에는 진짜 틀이
+    # 있으므로 `uv run dev` 를 backend/ 에서 돌려도 못 찾는 일이 없어야 한다.
+    assert s.cardimage_dir.is_absolute()
+    assert s.cardimage_dir.name == "cardimage"
+    assert (s.cardimage_dir / "4_blossom_template.webp").exists()
 
 
 def test_cardimage_months_parses_csv(monkeypatch):

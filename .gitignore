@@ -256,6 +256,9 @@ cardimage/test/*
 !cardimage/test/.gitkeep
 cardimage/out/*
 !cardimage/out/.gitkeep
+# raw/ 는 채택한 틀의 2K 원출력 보관용 (PNG 수 MB). 폴더만 추적.
+cardimage/raw/*
+!cardimage/raw/.gitkeep
 # 참조 카드 12장은 WebP q92 로 커밋한다 (33MB → 6MB, 09-14). PNG 원본은 로컬·gohome 에만.
 cardimage/*.png
 

@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-13",
+  "method": "Archived GEO geometry/support/pivot/quality comparison; ref IDs, axis and run/rejection namespaces renamed. Canonical analysis and file I/O excluded from normalization timing. No LLM call.",
+  "samples": [
+    {
+      "sample": "phone-1",
+      "fix_count": 363,
+      "geometry_equivalent": true,
+      "canonical_quality_equivalent": true,
+      "cases": {
+        "straight_run": 6,
+        "turn_right": 1,
+        "turn_left": 2,
+        "local_stay": 2
+      },
+      "pattern_runs": 4,
+      "quality_rejections": 31,
+      "normalize_seconds": 0.0147,
+      "archived_geo_sha256": "56d488c5e917aef1f2750b804547b273e6be45518c464913eb3027b29547d1fd"
+    },
+    {
+      "sample": "phone-2",
+      "fix_count": 174,
+      "geometry_equivalent": true,
+      "canonical_quality_equivalent": true,
+      "cases": {
+        "straight_run": 1
+      },
+      "pattern_runs": 4,
+      "quality_rejections": 3,
+      "normalize_seconds": 0.0061,
+      "archived_geo_sha256": "67f4c8c7d380639c5a8831e60730405c5a5aea5900f143ca5c9d4368f54c9c4b"
+    }
+  ]
+}

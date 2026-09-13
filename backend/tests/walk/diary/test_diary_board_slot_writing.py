@@ -19,6 +19,7 @@ from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
 from daengs_backend.services.walk_diary_publication import within_budget
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board_output import BOARD_FORMAT
+from daengs_walk.diary_scene_input import scene_materials
 from daengs_walk.diary_slots import SlotPolicy
 from tests.walk.support.base_board import policy
 from tests.walk.support.diary_generation import PATH, body
@@ -37,15 +38,16 @@ def prose(payload):
         "scenes": [
             {
                 "scene_id": s["scene_id"],
-                "background": "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다.",
-                "evidence_ids": [e["id"] for e in s["evidence"]],
+                "text": "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다.",
+                "evidence_ids": [e["id"] for e in scene_materials(s)],
+                "action_id": s["action"]["id"] if s["action"] else None,
             }
             for s in payload["scenes"]
         ]
     }
 
 
-async def test_all_parts_reach_writer_and_only_prose_is_added():
+async def test_scene_parts_reach_writer_and_core_is_preserved():
     prepared = prepared_case()
     base = prepared.board
     before = base.slots.model_dump(mode="json")
@@ -56,8 +58,8 @@ async def test_all_parts_reach_writer_and_only_prose_is_added():
     assert published.model_status == "accepted"
     assert len(payload["scenes"]) == 3
     for scene in payload["scenes"]:
-        assert {e["part"] for e in scene["evidence"]} == {"space", "environment", "motion"}
-        assert all(set(e) == {"id", "part", "role", "facts"} for e in scene["evidence"])
+        assert set(scene["scene"]) == {"where", "environment", "route_pattern"}
+        assert all(set(e) == {"id", "role", "facts"} for e in scene_materials(scene))
     assert len(published.scenes) == len(base.board.scenes) == 5
     for actual, original in zip(published.scenes, base.board.scenes, strict=True):
         assert (actual.id, actual.order, actual.anchor, actual.core, actual.title) == (
@@ -67,7 +69,10 @@ async def test_all_parts_reach_writer_and_only_prose_is_added():
             original.core_ref,
             original.title,
         )
-        assert actual.body.endswith(original.body)
+        if original.core.kind == "user_record" and original.core.record.content.kind == "note":
+            assert actual.body.endswith(original.body)
+        elif any(s["scene_id"] == actual.id for s in payload["scenes"]):
+            assert actual.body == "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다."
     assert base.slots.model_dump(mode="json") == before
     provider.assert_awaited_once()
 
@@ -84,7 +89,7 @@ async def test_invalid_prose_preserves_every_original(change):
     elif change == "original":
         raw["scenes"][0]["original"] = "모델이 바꾼 원문"
     else:
-        raw["scenes"][0]["background"] = "가" * 221
+        raw["scenes"][0]["text"] = "가" * 221
     output = await write_board(prepared.input.source, base, AsyncMock(return_value=raw))
     assert output.failure_code == "invalid_response"
     published = complete_slot_board(prepared, output)
@@ -136,7 +141,7 @@ def test_real_router_selects_slot_writer_without_changing_request_body(api, monk
     response = client.post(PATH, json=body(state, bundle_format=BOARD_FORMAT))
     assert response.status_code == 200, response.text
     assert response.json()["bundle"]["model_status"] == "accepted"
-    assert "evidence" in state.provider.call_args.args[0]["scenes"][0]
+    assert "scene" in state.provider.call_args.args[0]["scenes"][0]
     state.provider.assert_awaited_once()
 
 

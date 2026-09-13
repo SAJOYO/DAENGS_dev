@@ -1,6 +1,25 @@
+import pytest
+
 from daengs_place.place.conversation.contract import ExecutionReceipt
 from daengs_place.place.conversation.render import render_answer
+from daengs_place.place.conversation.scope import PROCESSING_FAILED
 from tests.place.conversation.test_policy import chat, offer
+
+
+@pytest.mark.parametrize(
+    "question", ["원하는 장소나 바꿀 조건을 짧게 알려주세요.", "receipt 오류", ""]
+)
+def test_invalid_proposal_never_turns_into_a_missing_input_question(question):
+    receipt = ExecutionReceipt(
+        goal="clarify",
+        execution="not_run",
+        code="invalid_plan",
+        question=question,
+        result_matches_filters=True,
+        returned_count=2,
+    )
+    assert render_answer(receipt) == PROCESSING_FAILED
+    assert receipt.execution == "not_run" and not receipt.filters_changed
 
 
 def test_internal_place_label_is_not_printed_and_selection_is_still_reported():

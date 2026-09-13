@@ -27,7 +27,7 @@ async def test_real_gemini_plans_and_answers_against_synthetic_candidates():
     assert key, "GEMINI_API_KEY is required (value is never printed)"
 
     model = GeminiConversation(
-        key, config.get("FACILITY_CONVERSATION_MODEL") or "gemini-3-flash-preview"
+        key, config.get("FACILITY_CONVERSATION_MODEL") or "gemini-3.1-flash-lite"
     )
     searcher = Searcher()
     service = ConversationService(model, searcher=searcher)

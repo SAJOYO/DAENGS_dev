@@ -1,0 +1,19 @@
+{
+  "evaluation_kind": "lite preliminary development measurement; not production-model baseline",
+  "scope": "development suite only, one repetition; synthetic search + server prepare/answer",
+  "expected_cases": 7,
+  "expected_turns": 8,
+  "production_facility_model": "gemini-3-flash-preview",
+  "subject_model": "gemini-3.1-flash-lite",
+  "judge_model": "gemini-3.1-flash-lite",
+  "model_choice_reason": "Production model daily free-tier quota was exhausted in the preceding run; explicitly use Lite for preliminary measurement, without changing runtime configuration.",
+  "production_baseline_status": "not_measured_pending_quota_reset",
+  "subject_and_judge_same_model": true,
+  "human_review_status": "pending; Codex review is an agent opinion",
+  "code_sha": "fd8609b5a0540ded5f43071a3f92fe65c17d3e71",
+  "observations_sha256": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95",
+  "cases_sha256": "415dffb97ae44025cd4692020e76e5ebbe5600963103a606b523de4ba5407f24",
+  "holdout_used": false,
+  "runtime_changes": false,
+  "next_scope": "Review findings before any prompt/contract change; evaluate runtime model separately when available"
+}

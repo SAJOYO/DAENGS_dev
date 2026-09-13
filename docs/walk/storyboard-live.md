@@ -1,11 +1,16 @@
 # 실제 산책 → 장면 분석 → app 검토
 
+후속 사용자 결정과 그 경위는 **[장면 서술 상세 인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md)**를 읽는다.
+특별한 순간은 기록마다 별도 장면이며 AI가 자유 서술 본문에 관여하지 않고 공간·환경만 보조한다.
+행동 핀은 가까운 시선으로 담으며 어디서·누가·무엇을·어떻게·환경 α를 구별한다.
+지정 공공 API의 실제 필드 분류와 최신 서술 품질은 아직 미검증이다. 아래 기존 구현을 그 완료로 읽지 않는다.
+
 아래는 현재 서버의 규칙 기반 관측 분석 구현을 설명한다. v3의 대표/장면 제목 생성은
 [diary-titles.md](diary-titles.md)를 함께 본다.
 사용자 기록 중심의 새 일기 형식과 배경·제목 작성은 [diary-generation.md](diary-generation.md)를 본다.
 자동 장면의 원본 관측 위치를 전달하는 v4는 [scene-anchors.md](scene-anchors.md)를 본다.
-현재 기획은 [독립 장면과 별도 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/4b90be1d1ef63b758cfa0d25107a7fc9d3913fa1/docs/explorations/walk/diary/plan.md)
-([GEO #265](https://github.com/rkbuhtig/DAENGS_geo/pull/265))을 따른다.
+현재 기획은 [독립 장면과 별도 일기 생성](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md)
+([GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266))을 따른다.
 전체 이해·순차 갱신을 필수로 둔 이전 기획은 폐기했다. 아래는 기존 서버 구현의 설명이며,
 새 작성 입력·서술 경계의 구현 완료를 뜻하지 않는다.
 

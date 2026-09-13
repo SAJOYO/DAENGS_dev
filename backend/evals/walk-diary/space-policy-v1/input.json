@@ -1,0 +1,244 @@
+{
+  "policy": {
+    "park_radius_m": 100
+  },
+  "points": [
+    {
+      "seq": 0,
+      "at": "2026-09-01T00:00:00+00:00",
+      "point": {
+        "lat": 37.487,
+        "lng": 127.052
+      }
+    },
+    {
+      "seq": 1,
+      "at": "2026-09-01T00:00:01+00:00",
+      "point": {
+        "lat": 37.487,
+        "lng": 127.0537000591752
+      }
+    },
+    {
+      "seq": 2,
+      "at": "2026-09-01T00:00:02+00:00",
+      "point": {
+        "lat": 37.487,
+        "lng": 127.05710017752557
+      }
+    },
+    {
+      "seq": 3,
+      "at": "2026-09-01T00:00:03+00:00",
+      "point": {
+        "lat": 37.487,
+        "lng": 127.05823355030903
+      }
+    },
+    {
+      "seq": 4,
+      "at": "2026-09-01T00:00:04+00:00",
+      "point": null
+    },
+    {
+      "seq": 5,
+      "at": "2026-09-01T00:00:05+00:00",
+      "point": {
+        "lat": 37.487,
+        "lng": 127.052
+      }
+    }
+  ],
+  "batches": [
+    {
+      "id": "synthetic-area",
+      "available_seq": 0,
+      "materials": {
+        "format": "space-materials-v1",
+        "dictionary_version": "b15c4f74fe05843b5e56a1954a95b4374ebfba0274261e3eb6b3f842eb37a08c",
+        "point": {
+          "lat": 37.487,
+          "lng": 127.052
+        },
+        "policy": {
+          "sparse_max_shops": 5,
+          "dominant_min_shops": 10,
+          "dominant_share": 0.4,
+          "dominant_gap": 0.15,
+          "cluster_rms_radius_ratio": 0.25
+        },
+        "materials": [
+          {
+            "id": "space:315b5e5b00e6d0072c7a44d88f1d7a734dab6cb80e9075dee458022324ea8730",
+            "source": "commerce",
+            "case_ids": [
+              "commerce:clustered",
+              "commerce:food"
+            ],
+            "material": {
+              "분포": "등록 상가가 모인 구간",
+              "업종구성": "음식점·카페 중심"
+            },
+            "scope": {
+              "kind": "query_circle",
+              "point": {
+                "lat": 37.487,
+                "lng": 127.052
+              },
+              "radius_m": 500.0
+            },
+            "support": {
+              "registered_count": 12,
+              "response_rows": 12,
+              "unique_response_shops": 12,
+              "outside_radius_count": 0,
+              "groups": {
+                "food": 12
+              },
+              "registered_sites": 12,
+              "spread_rms_m": 3.452,
+              "nearest_registered_point_m": 350.0,
+              "centroid_distance_m": 355.5,
+              "source_ids": [
+                "0",
+                "1",
+                "10",
+                "11",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9"
+              ],
+              "source_hash": "22db1aae8298cd08e6d6e4f92045c159d378c53fa9904f6f5a80461f84d9a5fd",
+              "reference_month": null,
+              "beverage_count": 0,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              }
+            }
+          },
+          {
+            "id": "space:434119c639db25d1aaafcd4941cf446d5f887221d38a353a771cc6511373912c",
+            "source": "land_cover",
+            "case_ids": [
+              "land_cover:131"
+            ],
+            "material": {
+              "피복": "상업·업무시설"
+            },
+            "scope": {
+              "kind": "feature_at_query",
+              "query_point": {
+                "lat": 37.487,
+                "lng": 127.052
+              },
+              "distance_m": 0,
+              "crs": "OGC:CRS84",
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      127.04746650886618,
+                      37.483402713576325
+                    ],
+                    [
+                      127.05653349113383,
+                      37.483402713576325
+                    ],
+                    [
+                      127.05653349113383,
+                      37.49059728642368
+                    ],
+                    [
+                      127.04746650886618,
+                      37.49059728642368
+                    ],
+                    [
+                      127.04746650886618,
+                      37.483402713576325
+                    ]
+                  ]
+                ]
+              }
+            },
+            "support": {
+              "source_id": "lv3_2025y.test",
+              "layer": "EGIS:lv3_2025y",
+              "image_date": null
+            }
+          },
+          {
+            "id": "space:72f3a2795c83d295c488e4da4e0f40b3b2927d6b737b0bdf9d50dee9bb29e3f7",
+            "source": "park",
+            "case_ids": [
+              "park:근린공원"
+            ],
+            "material": {
+              "공원명": "공원 1",
+              "공원종류": "근린공원"
+            },
+            "scope": {
+              "kind": "registered_point",
+              "point": {
+                "lat": 37.487,
+                "lng": 127.052
+              },
+              "query_point": {
+                "lat": 37.487,
+                "lng": 127.052
+              },
+              "distance_m": 0.0,
+              "query_radius_m": 500.0
+            },
+            "support": {
+              "source_id": "1",
+              "source_complete": true,
+              "area_m2": null,
+              "reference_dates": []
+            }
+          },
+          {
+            "id": "space:75603a910a2910b91140c0344b73d87312d3022cbd9cd1ee611c57e9e20413a8",
+            "source": "park",
+            "case_ids": [
+              "park:근린공원"
+            ],
+            "material": {
+              "공원명": "공원 2",
+              "공원종류": "근린공원"
+            },
+            "scope": {
+              "kind": "registered_point",
+              "point": {
+                "lat": 37.487,
+                "lng": 127.05222667455669
+              },
+              "query_point": {
+                "lat": 37.487,
+                "lng": 127.052
+              },
+              "distance_m": 20.0,
+              "query_radius_m": 500.0
+            },
+            "support": {
+              "source_id": "2",
+              "source_complete": true,
+              "area_m2": null,
+              "reference_dates": []
+            }
+          }
+        ],
+        "audit": []
+      }
+    }
+  ]
+}

@@ -8,7 +8,7 @@ from datetime import timedelta
 
 from sqlalchemy import event, func, select, text
 
-from daengs_backend.models.territory import TerritoryAttempt
+from daengs_backend.models.territory import PHOTO_CLEANUP_BLOCKED_REASON, TerritoryAttempt
 from daengs_backend.repositories import territory_vision as repo
 from daengs_backend.services import territory_vision_jobs as jobs
 from tests.territory.support.paths import REPO
@@ -56,6 +56,7 @@ def probe_module():
 
 async def test_empty_backlog_is_zero_with_unknown_oldest_age(database):
     assert probe_module().MAX_ATTEMPTS == jobs.MAX_ATTEMPTS
+    assert probe_module().PHOTO_CLEANUP_BLOCKED_REASON == PHOTO_CLEANUP_BLOCKED_REASON
     async with database() as db:
         snapshot = await probe_module().backlog_snapshot(db, max_attempts=jobs.MAX_ATTEMPTS)
     assert snapshot.pop("checked_at")
@@ -119,6 +120,7 @@ async def test_aggregate_matches_dispatch_rules_and_lease_boundaries(database, a
             "exhausted_awaiting_completion_count": 3,
             "pending_dispatch_due_count": 4,
             "cleanup_pending_count": 3,
+            "cleanup_blocked_count": 0,
             "cleanup_dispatch_due_count": 2,
             "dispatch_due_count": 6,
             "oldest_pending_created_age_seconds": 600.0,
@@ -128,6 +130,38 @@ async def test_aggregate_matches_dispatch_rules_and_lease_boundaries(database, a
         assert len(selected) == snapshot["dispatch_due_count"]
         assert all(str(row.id) not in json.dumps(snapshot) for row in rows)
         assert "private" not in json.dumps(snapshot)
+
+
+async def test_blocked_cleanup_is_visible_but_never_counted_as_dispatch_due(database, actors):
+    async with database() as db:
+        now = await db.scalar(select(func.current_timestamp()))
+        rows = [
+            attempt(
+                actors[0][0], now, status=status, vision_retry_reason=PHOTO_CLEANUP_BLOCKED_REASON
+            )
+            for status in repo.TERMINAL
+        ]
+        rows += [
+            attempt(actors[0][0], now, status="FAILED"),
+            attempt(actors[0][0], now, status="FAILED", vision_retry_reason="storage_unavailable"),
+            attempt(
+                actors[0][0],
+                now,
+                status="FAILED",
+                photo_redacted_at=now,
+                vision_retry_reason=PHOTO_CLEANUP_BLOCKED_REASON,
+            ),
+            attempt(actors[0][0], now),
+        ]
+        db.add_all(rows)
+        await db.flush()
+        snapshot = await probe_module().backlog_snapshot(db)
+        assert snapshot["cleanup_pending_count"] == 5
+        assert snapshot["cleanup_blocked_count"] == 3
+        assert snapshot["cleanup_dispatch_due_count"] == 2
+        assert snapshot["dispatch_due_count"] == 3
+        selected = await repo.due_dispatches(db, now, limit=100)
+        assert {row.id for row in selected} == {rows[i].id for i in (3, 4, 6)}
 
 
 async def test_probe_uses_read_only_snapshot_and_does_not_change_or_lock_attempts(database, actors):

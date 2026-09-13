@@ -219,8 +219,9 @@ async def cited_prose(payload, schema):
         "scenes": [
             {
                 "scene_id": s["scene_id"],
-                "background": "가까이에 등록된 공원이 있었다.",
-                "evidence_ids": [s["evidence"][0]["id"]],
+                "text": "가까이에 등록된 공원이 있었다.",
+                "evidence_ids": [s["scene"]["where"][0]["id"]],
+                "action_id": s["action"]["id"] if s["action"] else None,
             }
             for s in payload["scenes"]
         ]

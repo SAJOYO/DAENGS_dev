@@ -24,6 +24,7 @@ LEASE_COLUMNS = {
 # Persisted budget in territory_attempts_vision_attempts_check, paired with the worker in tests.
 # This script is copied alone into the live worker, which may still run an older code revision.
 MAX_ATTEMPTS = 2
+PHOTO_CLEANUP_BLOCKED_REASON = "photo_cleanup_conflict"
 
 
 async def backlog_snapshot(connection, *, max_attempts=MAX_ATTEMPTS):
@@ -35,9 +36,12 @@ async def backlog_snapshot(connection, *, max_attempts=MAX_ATTEMPTS):
                        status IN ('VERIFIED', 'REJECTED', 'FAILED')
                            AND photo_redacted_at IS NULL AS cleanup,
                        vision_lease_until, vision_attempts, created_at,
+                       vision_retry_reason = :cleanup_blocked_reason AS cleanup_blocked,
                        vision_available_at <= CURRENT_TIMESTAMP
                            AND vision_dispatch_after <= CURRENT_TIMESTAMP
                            AND (vision_lease_until IS NULL OR vision_lease_until <= CURRENT_TIMESTAMP)
+                           AND (status = 'VISION_PENDING'
+                               OR vision_retry_reason IS DISTINCT FROM :cleanup_blocked_reason)
                            AS due
                 FROM territory_attempts
                 WHERE status = 'VISION_PENDING'
@@ -54,6 +58,7 @@ async def backlog_snapshot(connection, *, max_attempts=MAX_ATTEMPTS):
                        AS exhausted_awaiting_completion_count,
                    count(*) FILTER (WHERE pending AND due) AS pending_dispatch_due_count,
                    count(*) FILTER (WHERE cleanup) AS cleanup_pending_count,
+                   count(*) FILTER (WHERE cleanup AND cleanup_blocked) AS cleanup_blocked_count,
                    count(*) FILTER (WHERE cleanup AND due) AS cleanup_dispatch_due_count,
                    count(*) FILTER (WHERE due) AS dispatch_due_count,
                    CASE WHEN min(created_at) FILTER (WHERE pending) IS NOT NULL
@@ -62,7 +67,7 @@ async def backlog_snapshot(connection, *, max_attempts=MAX_ATTEMPTS):
                         ELSE NULL END AS oldest_pending_created_age_seconds
             FROM candidates
         """),
-        {"max_attempts": max_attempts},
+        {"max_attempts": max_attempts, "cleanup_blocked_reason": PHOTO_CLEANUP_BLOCKED_REASON},
     )
     snapshot = dict(result.mappings().one())
     snapshot["checked_at"] = snapshot["checked_at"].isoformat()

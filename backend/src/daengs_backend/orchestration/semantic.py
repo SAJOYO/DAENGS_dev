@@ -374,15 +374,14 @@ def validate_semantic_decision(raw: object) -> SemanticRoutingDecision | None:
 def _gemini_client() -> Any:
     # google-genai stays a function-local import so importing the router never
     # pulls provider machinery (mirrors the lazy-import rule for heavy stacks).
-    from google import genai
-    from google.genai import types
+    from daengs_backend.core.gemini import create_client
 
     api_key = settings.gemini_api_key.get_secret_value().strip()
     if not api_key:
         raise SemanticRoutingError("GEMINI_API_KEY is required for the semantic router")
-    return genai.Client(
+    return create_client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=settings.gemini_timeout_ms),
+        timeout_ms=settings.gemini_timeout_ms,
     )
 
 

@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     walk_diary_enabled: bool = False
     # Experimental endpoint must be enabled independently of published diaries.
     walk_diary_slots_preview_enabled: bool = False
+    # Public normalization is independent of the legacy entry-context job schema.
+    walk_diary_space_enabled: bool = False
+    walk_diary_route_patterns_enabled: bool = False
+    walk_diary_space_radius_m: int = Field(default=1000, ge=1, le=3000)
+    walk_land_cover_layer: str = Field(
+        default="EGIS:lv3_2025y", pattern=r"^EGIS:lv3_[a-zA-Z0-9_-]+$"
+    )
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
@@ -169,9 +176,7 @@ class Settings(BaseSettings):
     # 켜져 있으면(기본) 애매한 발화마다 시맨틱 라우터보다 앞서 Gemini 왕복이 하나 더
     # 붙습니다. 끄면 `service._plan_and_execute` 가 리졸버를 아예 안 부르고 `resolved
     # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
-    turn_resolver: bool = Field(
-        default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
-    )
+    turn_resolver: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER"))
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이

@@ -19,13 +19,15 @@
 | `expired_lease_count` | pending 중 처리 예약 기한이 기준 시각 이하인 수; 예약이 없던 행은 제외 |
 | `exhausted_awaiting_completion_count` | pending 중 유효한 예약이 없고 DB 처리 횟수 2회를 사용한 수 |
 | `pending_dispatch_due_count` | pending 중 현재 재발행 조건을 충족한 수 |
-| `cleanup_pending_count` | 판정이 종결됐고 `photo_redacted_at`이 비어 있는 수 |
-| `cleanup_dispatch_due_count` | 정리가 남은 종결 시도 중 현재 재발행 조건을 충족한 수 |
+| `cleanup_pending_count` | 판정이 종결됐고 `photo_redacted_at`이 비어 있는 전체 수; 조치 필요 건도 포함 |
+| `cleanup_blocked_count` | 정리 대기 중 `vision_retry_reason=photo_cleanup_conflict`로 중단된 수 |
+| `cleanup_dispatch_due_count` | 정리가 남은 종결 시도 중 조치 필요 건을 제외하고 현재 재발행 조건을 충족한 수 |
 | `dispatch_due_count` | 위 두 재발행 대상 수의 합 |
 | `oldest_pending_created_age_seconds` | pending 중 가장 오래된 `created_at`부터 기준 시각까지 초; pending이 없으면 null |
 
 재발행 조건은 `vision_available_at`과 `vision_dispatch_after`가 모두 기준 시각 이하이고,
-처리 예약이 없거나 만료된 경우다. 이 숫자는 배치 상한·다른 트랜잭션의 행 잠금 적용 전의
+처리 예약이 없거나 만료된 경우다. 종결 행의 `photo_cleanup_conflict`는 제외한다.
+이 숫자는 배치 상한·다른 트랜잭션의 행 잠금 적용 전의
 후보 수이며 실제 `SKIP LOCKED` 조회가 이번에 선택할 개수와 다를 수 있다.
 
 세부 지표는 서로 겹친다. 예를 들어 예약이 만료되고 횟수도 소진된 시도는 만료·소진·재발행
@@ -44,6 +46,9 @@ lease 컬럼이 부족하면 `backlog:null`, `lease_columns_present:false`로 �
 점검 스크립트는 기존 유지보수 명령이 단독으로 실행 중 worker에 복사한다. 새 서비스/저장소
 helper에 의존하지 않아 이전 worker 소스에서도 기존 컬럼을 검사할 수 있다. 처리 예산 상수는
 DB의 2회 제약 및 worker와 짝 테스트로 대조한다.
+`cleanup_blocked_count`의 제외 정책은 수정된 worker를 배포해야 실제 발행에도 적용된다.
+구형 worker에 점검 스크립트만 복사한 경우에도 집계는 새 정책으로 계산하지만, 구형 worker는
+중단 상태를 무시할 수 있다. `ready:true`는 이 정책의 코드 버전까지 증명하지 않는다.
 
 ## 복구 로그
 
@@ -85,7 +90,8 @@ Beat 중단·큐 장애·worker 중단·로그 유실 중 어느 원인인지 �
 2. pending의 나이가 늘고 재발행 후보가 남아 있다면 같은 시간대의 worker 복구 로그를 찾는다.
 3. 최근 실행의 `failed/deferred`가 있으면 발행 장애 여부를, 시작만 있으면 실행 중단 또는 로그
    누락 여부를 확인한다. 완료 로그는 있지만 pending이 유지되면 유효한 예약·만료·소진 상태를 함께 본다.
-4. 사진 데이터나 게임 상태를 수정하는 조치는 이 읽기 전용 점검의 일부가 아니다.
+4. `cleanup_blocked_count`가 있으면 [원본 확인과 명시적 정리 재개](photo-cleanup-conflicts.md)를
+   따른다. 사진 데이터나 게임 상태를 수정하는 조치는 이 읽기 전용 점검의 일부가 아니다.
 
 서버 운영 셸에서는 기존 `docker compose logs --tail=100 territory-vision-worker`로 로그를 본다.
 현재 Windows 개발 환경의 검증은 [휴대용 PostgreSQL·Redis 준비](vision-worker.md#docker-엔진ci-없는-windows-검증)

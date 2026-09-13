@@ -130,6 +130,7 @@ module-name = [
 
 [dependency-groups]
 dev = [
+    "numpy>=2.5.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.6",

@@ -373,6 +373,7 @@ place = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "numpy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -462,6 +463,7 @@ provides-extras = ["place"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "numpy", specifier = ">=2.5.2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "ruff", specifier = ">=0.6" },

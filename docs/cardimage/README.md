@@ -22,7 +22,7 @@
 
 ## 지금 상태 (2026-09-13 밤)
 
-**틀 채택 (09-14 00:50):** `cardimage/4_blossom_template.webp`. 제목 `BLOSSOM <이름>` 은 Pillow 로. 다음은 사용자가 말한 "fal 전에 할 것" 또는 fal 비교.
+**틀 12장 채택 (09-14 01:55):** `cardimage/N_<이름>_template.webp` ×12, 제목 `<카드명> <이름>` 은 Pillow 로 (`cardimage_title.py`, 글꼴 KR Black, 검은 판 중심 정렬, 영문 대문자). "fal 전에 할 것"(12장 틀)은 끝났고 **다음은 fal 의 Qwen-Image-Edit-2511 비교**(크레딧 필요) 또는 1단계 서비스 설계.
 
 **0단계 — Nano Banana 2 쪽 끝. 판정 「됨」** (full 모드, 총 16장 약 $1.25, art 모드 7장은 09-14 폐기). 고친 프롬프트 full 7장: 닮음 5/7(실패는 2K 편차 1 + 엎드린 옆모습 사진 1), 글자 9/9, 아바타 9/9, 목줄 0/7, 매트 7/7. 서비스 조건은 **2K · 닮음 심판+재시도 · 정면 사진 안내**. 상세는 `worklog.md`. **남은 것은 6번 — Qwen-Image-Edit-2511 비교 (fal 크레딧 필요).** 사용자가 "fal 전에 할 것이 하나 있다"고 함 (09-14) — 내용 미정.
 
@@ -36,9 +36,10 @@
 | 경로 | 무엇 | git |
 | --- | --- | --- |
 | `cardimage/1_new_year.webp` … `12_santa.webp` | 참조 카드 12장 (994×1582, **WebP q92**, 장당 약 0.5MB). 크림 푸들 "네오"가 주인공. 출처 `gohome/neo` 의 PNG | **커밋** (09-14). PNG 원본(장당 2.75MB)은 `.gitignore` 로 빼서 로컬에만. q92 는 원본 대비 PSNR 37~38 dB 로 눈·모델 입력 모두 구분 불가 |
-| `cardimage/4_blossom_template.webp` | **채택한 4월 틀** (09-14). 제목판은 검은 띠만 남기고 글자 없음, 배지는 `26APR` 로 구워짐(연도 고정, 사용자 결정), 배지가 좁아진 만큼 제목판이 늘어 이름 칸 약 545px. 사용자 카드는 이 틀 + 사진 → 강아지 교체 → `BLOSSOM <이름>` 을 Pillow 로 얹기 | 커밋 |
+| `cardimage/N_<이름>_template.webp` ×12 | **채택한 틀 12장** (4월 09-14 00:50, 나머지 11장 01:55). 제목판은 검은 띠만 남기고 글자 없음, 배지는 `26JAN`…`26DEC` 로 구워짐(연도 고정). 사용자 카드는 틀 + 사진 → 강아지 교체 → `<카드명> <이름>` 을 Pillow 로 얹기. ⚠ 11장은 ②단계(배지 줄이기·제목판 늘리기)가 절반쯤만 먹었는데 **사용자가 "그대로 쓴다"고 결정**(9월만 한 번 더, 거의 안 변함). 달마다 제목판 오른쪽 끝이 713~769 로 달라 `cardimage_title.py` 의 경계 상수(4월 값)를 **달별로 재야 한다** — 1단계 항목 | 커밋 |
 | `cardimage/fonts/NotoSerifKR.ttf` · `OFL-NotoSerifKR.txt` | 제목 글꼴(가변, 24MB)과 라이선스 | 커밋 |
-| `cardimage/raw/4_blossom_template_2K.png` | 위 틀의 2K 원출력(검은 띠 제거, 약 1612×2528). 더 큰 카드가 필요해질 때 | 폴더만 커밋(`.gitkeep`), 내용은 `.gitignore` |
+| `cardimage/raw/<stem>_template_2K.png` ×12 | 위 틀들의 2K 원출력(검은 띠 제거, 약 1612×2528). 더 큰 카드가 필요해질 때 | 폴더만 커밋(`.gitkeep`), 내용은 `.gitignore` |
+| `cardimage/headers.json` | 카드 12장의 원본 제목·배지·부제 (`cardimage_read_headers.py` 산출) | 커밋 |
 | `cardimage/test/*.jpg` | 실제 강아지 사진 13장 (3000×4000, 4~6MB, 카카오톡 원본). **일부러 원본 화질** — 사용자가 폰 원본을 그대로 넣는 상황 | 폴더만 커밋(`.gitkeep`), 내용은 `.gitignore`. 실제 개 사진이라 커밋 금지 |
 | `cardimage/out/` | 실험 산출물. 결과 PNG 옆에 같은 이름 `.json`(모델·크기·프롬프트), 모델 원출력 `_raw.png` | 폴더만 커밋, 내용은 `.gitignore` |
 | `backend/tools/cardimage_try.py` | 0단계 실험 스크립트 (full 모드만). `uv run --with pillow python tools/cardimage_try.py` | 커밋 |
@@ -60,7 +61,7 @@
 | 글자 | **이름·제목은 AI 가 아니라 Pillow 가 그린다** (`backend/tools/cardimage_title.py`). 제목 형식 `BLOSSOM <이름>`. 왼쪽 정렬 x=268, 대문자 띠의 세로 중심은 **검은 제목판의 중심(y=99)** 과 일치, 검은 판의 기울어진 오른쪽 경계 안에서 길면 축소. 은색 그라데이션+외곽선+그림자 | 사용자 결정 09-14. 한글 깨짐·글꼴 불일치·길이 문제 회피. 원본 픽셀을 재서 맞춤 |
 | 글꼴 | **Noto Serif KR 가변, Black** 하나로 영문·한글 — `cardimage/fonts/NotoSerifKR.ttf` (OFL). 바꾸려면 파일 교체 | 사용자 선택 09-14. 후보 비교는 `cardimage/out/_title_test/_font_variants.png` |
 | 글꼴 후보 (영문 전용, 미채택) | 사용자가 적어 둔 후보: [ITC Novarese Bold](https://freefonts.co/fonts/itc-novarese-bold) · [ITC Korinna Extra Bold](https://freefonts.co/fonts/itc-korinna-extra-bold). 영문만 있어 한글은 KR 글꼴과 섞어 써야 함(`--font-latin` 자리) | 사용자 09-14 "후보로만 적어 둬, 지금은 받은 것 그대로". ⚠ ITC 계열은 원래 Monotype 상용 글꼴이라 그 사이트의 "free" 가 재배포·상업 사용을 허락하는지 **라이선스를 확인한 뒤** 써야 한다 |
-| 틀 | `cardimage/4_blossom_template.webp` 채택. 배지 `26APR` 은 틀에 구워 둠(연도 고정) | 사용자 결정 09-14 — "내년까지 생각 안 해도 됨". 원본 `4_blossom.webp` 도 그대로 둔다 |
+| 틀 | `cardimage/N_<이름>_template.webp` 12장 채택. 배지 `26JAN`…`26DEC` 는 틀에 구워 둠(연도 고정) | 사용자 결정 09-14 — "내년까지 생각 안 해도 됨", "11장은 그대로 쓴다". 원본 `N_<이름>.webp` 도 그대로 둔다 |
 | 키 | 카드 생성용 Gemini 키는 채팅용과 **다른 GCP 프로젝트**, 결제 계정은 하나 | 프로젝트 단위로 지출 상한·사용량이 갈리기 때문 (research §결제) |
 | 이름 | `NEO` 를 코드·변수·문서 이름에 쓰지 않는다 | 네오는 참조 카드 강아지 이름 |
 

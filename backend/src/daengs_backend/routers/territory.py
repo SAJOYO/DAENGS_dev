@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Annotated
 
@@ -182,7 +183,7 @@ async def _bridge_upload(session: Session, storage_key: str, request: Request) -
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "빈 사진은 업로드할 수 없습니다.")
     try:
-        storage.write_if_absent(storage_key, bytes(data))
+        await asyncio.to_thread(storage.write_if_absent, storage_key, bytes(data))
     except FileExistsError:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

@@ -13,8 +13,6 @@
   없는 답으로 바꾸는 오선택이 생기고, 그 방향의 실수가 가장 나쁘다.
 - 어댑터는 answer/refuse/프로바이더 실패를 OK/REFUSED/ERROR 로 옮기고, 거절 문구는 모델이
   아니라 코드가 쓴다.
-
-두 구현(LangGraph · 에이전트)의 동치는 `test_orchestrator_failure_contract.py` 가 잰다.
 """
 
 from __future__ import annotations
@@ -54,7 +52,10 @@ from daengs_backend.orchestration.planner import (
     assemble_route_plan,
     resolve_deterministic_route,
 )
-from daengs_backend.orchestration.redirects import NO_CAPABILITY_MESSAGE
+from daengs_backend.orchestration.redirects import (
+    DISTANCE_FROM_RECORDED_WALKS_ONLY,
+    NO_CAPABILITY_MESSAGE,
+)
 from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ExecuteName,
@@ -114,10 +115,13 @@ def test_flag_on_empty_decision_assembles_exactly_one_general_request() -> None:
         "dog",
         "care_log",
         "vet_spend",
+        "walk_activity",
         "conversation",
     }
     assert request.payload.care_log is None
     assert request.payload.vet_spend is None
+    # walk_activity 도 같은 규칙 (D-073) — 이 호출은 산책 기록을 넘기지 않는다.
+    assert request.payload.walk_activity is None
     # Resolver 를 거치지 않은 호출(`resolved` 미지정)이라 conversation 도 비어 있다 (#416 Task 5).
     assert request.payload.conversation is None
 
@@ -401,6 +405,67 @@ async def test_adapter_maps_an_answer_to_ok() -> None:
     assert len(transport.prompts) == 1
 
 
+def test_unmeasured_belongs_to_an_answer_only() -> None:
+    """거절·되묻기는 이 마커를 못 든다 — 계약이 막는다.
+
+    `axes` 가 되묻기에만 붙는 것과 같은 규칙이다. 거절에 붙으면 리다이렉트 문구 뒤에
+    고지가 또 붙어 같은 상황이 두 문장으로 나간다. `ask` 조합도 함께 확인한다 —
+    `shape_matches_kind` 의 `kind == "ask"` 이른 `return self` 보다 이 검사가 앞에
+    있어야 되묻기에 붙은 마커를 잡아낸다.
+    """
+    assert (
+        validate_general_answer(
+            {"kind": "answer", "text": "기록이 없어요.", "reason": None, "unmeasured": True}
+        )
+        is not None
+    )
+    assert (
+        validate_general_answer(
+            {"kind": "refuse", "text": "", "reason": "diagnosis", "unmeasured": True}
+        )
+        is None
+    )
+    assert (
+        validate_general_answer(
+            {
+                "kind": "ask",
+                "text": "오늘은 기록이 없어요.",
+                "question": "오늘 컨디션이 어때 보이나요?",
+                "reason": None,
+                "unmeasured": True,
+            }
+        )
+        is None
+    )
+
+
+async def test_the_adapter_appends_the_fixed_sentence_when_the_marker_is_set() -> None:
+    """문장은 코드가 붙인다 — 모델 산문이 아니다 (#278)."""
+    result, _ = await run_adapter(
+        json.dumps(
+            {
+                "kind": "answer",
+                "text": "버스 구간은 걷지 않으셨어요.",
+                "reason": None,
+                "unmeasured": True,
+            }
+        )
+    )
+    assert result.status == CapabilityStatus.OK
+    assert result.data["answer"].endswith(DISTANCE_FROM_RECORDED_WALKS_ONLY)
+    # 본문은 손대지 않는다 — 무손실
+    assert result.data["answer"].startswith("버스 구간은 걷지 않으셨어요.")
+
+
+async def test_no_marker_means_no_sentence() -> None:
+    """급여량을 물어본 사람에게 산책 고지가 따라붙으면 안 된다 — 마커를 고른 이유 그 자체."""
+    result, _ = await run_adapter(
+        json.dumps({"kind": "answer", "text": "하루 두 번이 보통이에요.", "reason": None})
+    )
+    assert result.status == CapabilityStatus.OK
+    assert DISTANCE_FROM_RECORDED_WALKS_ONLY not in result.data["answer"]
+
+
 @pytest.mark.parametrize(
     ("reason", "fragment"),
     [
@@ -507,7 +572,7 @@ def test_general_prompt_carries_the_care_facts_but_never_a_drug_name() -> None:
         'DOG_CONTEXT: {"breed": "푸들", "feeding_style": "scheduled",'
         ' "health_conditions": "신부전 초기", "on_medication": true}'
     ) in prompt
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v7"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
     # the contract has no field that could carry a drug name into the prompt
     assert "medications" not in DogContext.model_fields
     assert "feeding_times" not in DogContext.model_fields
@@ -517,7 +582,7 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     """D-057 ③ⓐ: v1 refused feeding-amount / water-intake norms as institutional or
     diagnosis (#277: 7 of 15 general_care). v2 names those norms answerable with a hedge,
     makes institutional document-backed facts only, and diagnosis explicit requests only."""
-    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v7"
+    assert GENERAL_PROMPT_VERSION == "general-answer-ko-v10"
     prompt = build_general_prompt(GeneralPayload(question=QUERY))
     # v3: the instructions are English like the router policy; the OUTPUT stays Korean
     assert "Write in Korean" in prompt
@@ -545,10 +610,101 @@ def test_safety_prompt_v2_answers_husbandry_norms_and_narrows_the_refusals() -> 
     assert "facts that require a source document" in prompt
     assert "Ordinary husbandry numbers do NOT belong here" in prompt
     assert "explicitly asks for a disease name" in prompt and "interpret test results" in prompt
-    # medication · emergency · off_topic unchanged
-    assert "drugs, supplements, dosages, or administration" in prompt
+    # emergency · off_topic unchanged; medication narrowed by D-071 (covered separately below)
     assert 'Say nothing beyond "go to a veterinary hospital right now"' in prompt
     assert "off_topic: the question is not about dogs." in prompt
+
+
+def test_medication_boundary_answers_duration_or_interval_without_requiring_confirmation() -> None:
+    """D-071: 약의 기간·투여 간격은 답한다 — **이미 복용 중임을 확인할 것을 요구하지 않는다.**
+
+    #446 의 실물: "심장사상충 예방약 얼마나 오래 해야 해?" 가 medication 거절이었다. 초판은
+    "이미 복용 중"이 확인돼야 답하도록 게이트를 걸었는데, `DogContext.on_medication` 은
+    이름 없는 `True`/`None` 뿐이라 모델이 그 확인을 할 방법이 없었다 — 그 결과 #446 의
+    동기 사례 자체가 다시 거절로 떨어졌다(리뷰가 잡음). 지금은 확인 여부가 아니라 **질문의
+    형태**(기간·주기 대 시작 여부)로 가른다 — "confirmed already on" 이 프롬프트에 남아
+    있지 않은지도 같이 잰다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    assert "duration or dosing interval of a medication is answerable" in prompt
+    assert "confirmed already on" not in prompt
+    # 기간·투여 간격 규칙이 husbandry norm 규칙 다음, refuse 목록보다 앞(answering 규칙)에 있다
+    husbandry_idx = prompt.index("Ordinary husbandry norms ARE answerable")
+    duration_idx = prompt.index("duration or dosing interval of a medication")
+    refuse_idx = prompt.index('Refuse (kind="refuse") only in these cases')
+    assert husbandry_idx < duration_idx < refuse_idx
+
+
+def test_medication_boundary_still_refuses_dosage_questions() -> None:
+    """용량은 A 범위 밖 — 계속 거절이어야 한다. 단어 하나가 아니라 절 전체를 고정한다 —
+    `medication: dosages.` 로 규칙이 쪼그라들어도 통과하는 단어 단위 단언은 경계를 안 잰다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert (
+        "which drug or supplement to give, whether to start one, dosages, "
+        "how to give it (timing, with food, splitting a pill), or side effects"
+    ) in medication_rule
+
+
+def test_medication_boundary_still_refuses_drug_name_recommendations() -> None:
+    """무슨 약을 먹일지 이름 추천은 A 범위 밖 — 계속 거절이어야 한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "which drug or supplement to give" in medication_rule
+
+
+def test_medication_boundary_still_refuses_whether_to_start_a_drug() -> None:
+    """새로 시작할지 여부는 A 범위 밖 — 계속 거절이어야 한다. 이 축을 여는 것이 바로 이
+    카드가 열지 않기로 한 것이라, 절 전체(질문 형태로 가르는 문장)를 고정한다 — 단어 하나
+    (`"whether to start one" in ...`)만 보면 (지금은 지운) tiebreak 문장에도 같은 단어가
+    있어서 그 문장을 지워도 우연히 계속 통과했다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert (
+        "a question about whether to begin one is whether to start one, and refused"
+    ) in medication_rule
+
+
+def test_medication_boundary_still_refuses_administration_instructions() -> None:
+    """복용 방법(몇 시에 · 밥과 함께 · 쪼개서)은 A 범위 밖 — "duration or schedule" 이었을 때
+    새어 나갔을 축이다. dosing interval 로 좁힌 뒤에도 여기서 막힌다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert "how to give it (timing, with food, splitting a pill)" in medication_rule
+
+
+def test_medication_boundary_still_refuses_side_effects_information_not_only_judgment() -> None:
+    """부작용은 판단("이거 부작용이야?")뿐 아니라 정보("흔한 부작용이 뭐야?")도 닫는다 —
+    D-071 이 기각한 B(약 일반 정보, 흔한 부작용 포함)로 새는 자리라 별도로 고정한다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    medication_rule = prompt[prompt.index("- medication:") : prompt.index("- emergency:")]
+    assert (
+        "side effects — what they are in general, or whether something the owner describes is one"
+    ) in medication_rule
+    # 증상 답변 쪽의 "일반 기전은 설명 가능" 규칙이 약에도 적용된다고 모델이 읽지 않게,
+    # 그 규칙 자신이 범위를 증상으로 좁혀 둔다.
+    mechanism_rule = prompt[
+        prompt.index("A general mechanism may be explained") : prompt.index(
+            "A symptom the owner mentions"
+        )
+    ]
+    assert "not drugs" in mechanism_rule and "refused as medication" in mechanism_rule
+
+
+def test_medication_boundary_is_this_normal_rule_excludes_medication() -> None:
+    """administration 이 거절 목록에 다시 들어오며 husbandry 의 "is this okay / is this
+    normal" 규칙과 충돌이 넓어졌다 — "두 배로 줘도 돼?" 는 그 규칙 형태 그대로의 intake
+    amount 질문이고, "밥이랑 같이 먹여도 돼?" · "쪼개서 줘도 돼?" 는 같은 형태의 behavior
+    질문이다. 그 규칙 자신이 범위를 husbandry 로 좁혀, 약 질문은 여기서 안 걸리고
+    medication 으로 떨어지는지를 잰다 — 원인-단정 규칙(:187)에 이미 적용한 것과 같은
+    수선이다."""
+    prompt = build_general_prompt(GeneralPayload(question=QUERY))
+    is_normal_rule = prompt[
+        prompt.index('A question of the form "is this okay') : prompt.index(
+            "Say you do not know when unsure"
+        )
+    ]
+    assert "not medication" in is_normal_rule
+    assert "refused as medication" in is_normal_rule
 
 
 def test_general_adapter_uses_the_router_model() -> None:
@@ -586,45 +742,6 @@ def test_frozen_evaluator_scores_general_as_a_precision_miss_not_an_invented_cap
     assert result.summary.invented_unsupported_capability_count == 0
     assert result.summary.executable_precision < 1.0
     assert result.summary.executable_recall == 1.0
-
-
-def test_agent_prompt_mirrors_the_router_boundary_and_hands_off_to_the_fallback() -> None:
-    """D-055 ⑦ 규칙 1: 라우터 경계를 바꾸면 같은 PR 에서 에이전트 프롬프트도 바꾼다."""
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.service import _SYSTEM_PROMPT
-    from daengs_backend.orchestration.semantic import _POLICY
-
-    assert "explicitly excludes a topic" in _POLICY
-    assert "빠진 쪽 도구는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "일반 답변은 시스템이 붙입니다" in _SYSTEM_PROMPT
-    assert "답할 수 없다고만" not in _SYSTEM_PROMPT
-    # D-057 ①: 라우터 v9 의 `general` 목적지를 `answer_generally` 로 거울 — 더해서, 대신은 아니다.
-    assert "answer_generally" in _SYSTEM_PROMPT
-    assert "**더해** 부르고 대신하지 않으며" in _SYSTEM_PROMPT
-    # the same narrowing as the router (D-055 ⑦): separate care question only, doubt → Training
-    assert "**별도의** 돌봄 질문이 있을 때만" in _SYSTEM_PROMPT
-    assert "온전히 답해지는 질문에는 부르지 않습니다" in _SYSTEM_PROMPT
-    assert "훈련과 일반 사이가 애매하면 훈련만 부릅니다" in _SYSTEM_PROMPT
-    assert (
-        "반려견과 무관한 요청" in _SYSTEM_PROMPT
-        and "어느\n  도구도 부르지 않습니다" in _SYSTEM_PROMPT
-    )
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    general_tool = next(tool for tool in box.as_tools() if tool.name == "answer_generally")
-    assert general_tool.args == {}  # 인자 없음 — payload 는 planner 가 만든다 (D-051)
-
-
-async def test_agent_toolbox_passes_general_through_like_any_execute_name() -> None:
-    pytest.importorskip("langchain")
-    from daengs_backend.orchestration.agent.tools import CapabilityToolbox
-
-    box = CapabilityToolbox()
-    tools = {tool.name: tool for tool in box.as_tools()}
-    await tools["check_walk_conditions"].ainvoke({})
-    await tools["answer_generally"].ainvoke({})
-    assert box.decision() == SemanticRoutingDecision(execute=["walk", "general"])
 
 
 def test_life_payload_and_general_payload_share_the_dog_type() -> None:

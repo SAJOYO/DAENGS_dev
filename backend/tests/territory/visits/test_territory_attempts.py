@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import datetime
+import os
 import uuid
 from decimal import Decimal
+from hashlib import sha256
+from pathlib import Path
+from threading import Event, get_ident
 
 import pytest
 from fastapi.testclient import TestClient
@@ -158,6 +162,32 @@ def _attempt(**overrides) -> TerritoryAttempt:
     }
     values.update(overrides)
     return TerritoryAttempt(**values)
+
+
+async def test_confirm_offloads_storage_and_publishes_after_commit(monkeypatch):
+    session, attempt = FakeSession(), _attempt()
+    request_thread = get_ident()
+    calls = []
+
+    class Storage(FakeStorage):
+        def stat(self, key):
+            assert get_ident() != request_thread
+            calls.append("stat")
+            return super().stat(key)
+
+    async def owned(*args, **kwargs):
+        return attempt
+
+    def publish(attempt_id):
+        assert get_ident() != request_thread
+        assert session.commits == 1 and attempt_id == attempt.id
+        calls.append("publish")
+
+    monkeypatch.setattr(territory_repo, "get_owned", owned)
+    monkeypatch.setattr(territory_service, "get_storage", Storage)
+    monkeypatch.setattr(territory_service, "_publish_vision_attempt", publish)
+    await territory_service.confirm_upload(session, OWNER, attempt.id)
+    assert calls == ["stat", "publish"]
 
 
 @pytest.fixture()
@@ -442,7 +472,7 @@ async def test_vision_decision_survives_photo_cleanup_failure(monkeypatch):
     )
     assert result.photo_redacted_at is not None
     assert storage.redacted == [(attempt.photo_storage_key, "generation-1")]
-    assert session.commits == 2
+    assert session.commits == 3  # Release the terminal retry's row/game locks before storage I/O.
     assert len([item for item in session.added if item.__class__.__name__ == "VerifiedVisit"]) == 1
 
 
@@ -480,6 +510,130 @@ def test_local_bridge_accepts_only_issued_matching_small_photo(client, monkeypat
         headers={"Content-Type": "image/webp"},
     )
     assert wrong_type.status_code == 415
+
+
+def test_failed_bridge_upload_can_be_retried_then_confirmed(client, monkeypatch, tmp_path):
+    from daengs_backend.routers import territory as territory_router
+
+    storage = LocalBridgeStorage(str(tmp_path))
+    attempt = _attempt()
+    key = attempt.photo_storage_key
+    photo = b"complete jpeg bytes"
+
+    async def found(*args, **kwargs):
+        return attempt
+
+    def failed_sync(*args):
+        raise OSError("injected disk sync failure")
+
+    monkeypatch.setattr(territory_router, "_local_bridge", lambda: storage)
+    monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+    monkeypatch.setattr(territory_repo, "find_pending_by_storage_key", found)
+    monkeypatch.setattr(territory_repo, "get_owned", found)
+    upload_url = f"/app/territory/attempts/_bridge/upload/{key}"
+    confirm_url = f"/app/territory/attempts/{attempt.id}/confirm"
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", failed_sync)
+        # TestClient exposes the underlying exception for an unhandled HTTP 500.
+        with pytest.raises(OSError, match="injected disk sync failure"):
+            client.put(upload_url, content=photo, headers={"Content-Type": "image/jpeg"})
+
+    missing = client.post(confirm_url)
+    assert missing.status_code == 409
+    assert missing.json()["detail"]["code"] == "photo_not_uploaded"
+    assert attempt.status == "PENDING_UPLOAD"
+    assert client.fake_session.commits == 0
+    assert client.published_vision_attempts == []
+
+    retry = client.put(upload_url, content=photo, headers={"Content-Type": "image/jpeg"})
+    assert retry.status_code == 200
+    confirmed = client.post(confirm_url)
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "VISION_PENDING"
+    assert attempt.photo_size_bytes == len(photo)
+    assert attempt.photo_object_generation == sha256(photo).hexdigest()
+    assert client.published_vision_attempts == [attempt.id]
+
+
+async def test_confirm_during_bridge_write_cannot_see_partial_photo(client, monkeypatch, tmp_path):
+    import asyncio
+
+    import httpx
+
+    from daengs_backend.routers import territory as territory_router
+
+    storage = LocalBridgeStorage(str(tmp_path))
+    attempt = _attempt()
+    key = attempt.photo_storage_key
+    photo = b"complete jpeg bytes"
+    started = Event()
+    resume = Event()
+    original_open = Path.open
+
+    class PausedStream:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.stream.close()
+
+        def write(self, data):
+            written = self.stream.write(data[:4])
+            self.stream.flush()
+            started.set()
+            if not resume.wait(timeout=5):
+                raise TimeoutError("confirm could not proceed while the photo was being written")
+            return written + self.stream.write(data[4:])
+
+    def paused_open(path, mode="r", *args, **kwargs):
+        stream = original_open(path, mode, *args, **kwargs)
+        return PausedStream(stream) if mode == "xb" else stream
+
+    async def found(*args, **kwargs):
+        return attempt
+
+    monkeypatch.setattr(territory_router, "_local_bridge", lambda: storage)
+    monkeypatch.setattr(territory_service, "get_storage", lambda: storage)
+    monkeypatch.setattr(territory_repo, "find_pending_by_storage_key", found)
+    monkeypatch.setattr(territory_repo, "get_owned", found)
+    monkeypatch.setattr(Path, "open", paused_open)
+    # Both requests share one event loop. Disk I/O must leave this loop free.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as http:
+        uploading = asyncio.create_task(
+            http.put(
+                f"/app/territory/attempts/_bridge/upload/{key}",
+                content=photo,
+                headers={"Content-Type": "image/jpeg"},
+            )
+        )
+        try:
+            assert await asyncio.to_thread(started.wait, 5)
+            assert not uploading.done()
+            response = await http.post(f"/app/territory/attempts/{attempt.id}/confirm")
+            assert response.status_code == 409
+            assert response.json()["detail"]["code"] == "photo_not_uploaded"
+            assert attempt.status == "PENDING_UPLOAD"
+            assert client.fake_session.commits == 0
+            assert client.published_vision_attempts == []
+        finally:
+            resume.set()
+            uploaded = await uploading
+        assert uploaded.status_code == 200
+        response = await http.post(f"/app/territory/attempts/{attempt.id}/confirm")
+        assert response.status_code == 200
+        assert response.json()["status"] == "VISION_PENDING"
+        assert attempt.photo_object_generation == sha256(photo).hexdigest()
+        assert attempt.photo_size_bytes == len(photo)
+        assert client.published_vision_attempts == [attempt.id]
 
 
 async def test_http_site_lookup_uses_server_coordinates(monkeypatch):

@@ -111,6 +111,23 @@ async def test_familiarity_and_explicit_condition_apply_together():
     assert result.state.search_pool == "new_candidates"
 
 
+async def test_known_correction_after_edit_only_does_not_keep_cards_from_old_filters():
+    service, searcher = setup()
+    searcher.rows = [place(str(i), kind="cafe", source="kcisa", parking=i >= 20) for i in range(40)]
+    old = await new_page(service, await initial(service))
+    changed = await chat(
+        service, old, "주차 조건만 넣어줘", goal="edit_only", changes={"parking": "required_true"}
+    )
+    assert not changed.receipt.result_matches_filters
+    assert refs(changed) == refs(old)
+    corrected = await chat(
+        service, changed, "첫 번째 이미 알아", feedback="familiarity", familiarity=knowledge()
+    )
+    assert corrected.receipt.result_matches_filters
+    assert refs(corrected) == [str(i) for i in range(20, 40)]
+    assert corrected.state.exploration.known[0].key.ref == "0"
+
+
 async def test_known_survives_manual_condition_changes_and_only_affects_new_pool():
     service, _ = setup()
     old = await initial(service)

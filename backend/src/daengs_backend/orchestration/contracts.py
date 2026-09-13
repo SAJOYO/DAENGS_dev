@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -130,6 +131,46 @@ class CareLogContext(ContractModel):
     last_meal_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_medication_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_snack_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+
+
+class WalkActivityContext(ContractModel):
+    """오늘 앱이 **실제로 기록한** 산책: 건수, 그중 측정이 끝난 건수, 그 합계 거리와 이동 시간.
+
+    `CareLogContext` 의 형제이고 규칙이 같다 — 소유권을 확인해 읽고, 좁혀서 넘기고, 없으면
+    None. 다른 것은 **무엇을 빼느냐**다.
+
+    **좌표가 한 칸도 없다.** 위경도 · 폴리라인 · 지점 목록이 여기 있으면 D-051 이 "지명은
+    좌표가 아니다" 로 막아 둔 것을 뒷문으로 여는 셈이 된다 — 모델이 경로를 받으면 그것으로
+    다른 경로를 추정한다. 답 문장에 필요한 것은 합계뿐이다.
+
+    **`walk_count` 와 `measured_walk_count` 가 따로인 것이 요점이다.** 한 산책에 분석 행이
+    여러 개 달릴 수 있고(`walk_analyses` 의 유니크 제약이 6칸이다), 봉인이 안 끝난 산책도
+    있다. 합계는 **측정이 끝난 것만** 더한 값이고, 둘이 다르면 답이 그 사실을 말한다 —
+    "3건 중 2건만 계산됐어요" 는 참이지만 "3건에 1.2km" 는 거짓이다.
+
+    **거리를 km 로 미리 나누지 않는다.** 반올림은 답을 쓰는 자리에서 하고, 계약은 원값을
+    나른다. `CareLogContext` 가 시각을 타임스탬프가 아니라 `HH:MM` 로 나르는 것과 반대
+    방향처럼 보이지만 이유는 같다 — 소비자가 필요로 하는 모양으로만 준다.
+
+    기록이 하나도 없는 날은 여기 안 온다(resolver 가 None 을 낸다): 빈 기록은 "안 걸었다"
+    가 아니라 "이 기능을 안 쓴다" 일 수 있고, 프롬프트가 둘 중 어느 쪽도 말하면 안 된다.
+    """
+
+    day: date
+    walk_count: int = Field(ge=0, le=200)
+    measured_walk_count: int = Field(ge=0, le=200)
+    #: 측정이 끝난 산책의 합계 거리(m). 하루 500km 를 넘는 값은 기록이 아니라 사고다.
+    distance_m: int = Field(ge=0, le=500_000)
+    #: 같은 산책들의 합계 이동 시간(s). 하루를 넘을 수 없다.
+    moving_s: int = Field(ge=0, le=86_400)
+    #: 마지막 산책이 시작된 시각. `CareLogContext` 와 같은 `HH:MM`(서울)이고 타임스탬프가 아니다.
+    last_started_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+
+    @model_validator(mode="after")
+    def measured_never_exceeds_recorded(self) -> WalkActivityContext:
+        if self.measured_walk_count > self.walk_count:
+            raise ValueError("measured_walk_count cannot exceed walk_count")
+        return self
 
 
 class LastVetVisitContext(ContractModel):
@@ -292,12 +333,19 @@ class GeneralPayload(ContractModel):
     ``vet_spend`` (#353 Task 7) is the same rule applied to confirmed vet visits: "피부로
     1년간 얼마 썼지" and "그 병원 번호 뭐였지" are general questions, and Life's documents
     do not carry either answer.
+
+    ``walk_activity`` (D-073) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
+    이유는 `WalkActivityContext` 독스트링에 있다.
     """
 
     question: str = Field(min_length=1, max_length=1_000)
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
     vet_spend: VetSpendContext | None = None
+    #: 오늘 기록된 산책 (D-073). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
+    #: Life 의 조례·보조금 문서는 오늘 걸은 거리로 달라지지 않는다. None 이면 프롬프트가
+    #: 이 카드 전과 한 글자도 다르지 않다.
+    walk_activity: WalkActivityContext | None = None
     #: 대화 맥락 (#416). **이력 원문이 아니다** — Turn Resolver(`orchestration/resolver.py`)가
     #: 만든 제한된 구조화 컨텍스트다. `relation=NEW` 이거나 확신이 낮으면 `None` 이고,
     #: 그것이 프롬프트를 오늘과 바이트 동일하게 유지하는 방법이다(#416 Task 5).
@@ -330,8 +378,29 @@ class VetContactPayload(ContractModel):
         return self
 
 
+class FacilitySessionPayload(ContractModel):
+    """Continue an owner-bound facility view; coordinates belong to the saved search."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    query: str = Field(min_length=1, max_length=1_000)
+    facility_session_id: UUID
+
+    @field_validator("query")
+    @classmethod
+    def query_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("query must not be blank")
+        return value
+
+
 CapabilityPayload = (
-    TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
+    TrainingPayload
+    | LifePayload
+    | WalkPayload
+    | PlacePayload
+    | FacilitySessionPayload
+    | GeneralPayload
+    | VetContactPayload
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -356,12 +425,23 @@ class CapabilityRequest(ContractModel):
         data = dict(value)
         capability = CapabilityName(data.get("capability"))
         payload_type = _PAYLOAD_TYPES[capability]
+        payload = data.get("payload")
+        if capability == CapabilityName.PLACE and (
+            isinstance(payload, FacilitySessionPayload)
+            or isinstance(payload, dict)
+            and "facility_session_id" in payload
+        ):
+            payload_type = FacilitySessionPayload
         data["payload"] = payload_type.model_validate(data.get("payload"))
         return data
 
     @model_validator(mode="after")
     def payload_matches_capability(self) -> CapabilityRequest:
         expected = _PAYLOAD_TYPES[self.capability]
+        if self.capability == CapabilityName.PLACE and isinstance(
+            self.payload, FacilitySessionPayload
+        ):
+            return self
         if not isinstance(self.payload, expected):
             raise TypeError(f"{self.capability.value} requires {expected.__name__}")
         return self
@@ -591,5 +671,6 @@ __all__ = [
     "TurnRelation",
     "VetContactPayload",
     "VetSpendContext",
+    "WalkActivityContext",
     "WalkPayload",
 ]

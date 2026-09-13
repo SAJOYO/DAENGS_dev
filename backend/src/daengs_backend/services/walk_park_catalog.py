@@ -54,6 +54,9 @@ def parse_page(body):
 
 async def refresh_catalog(transport, key, path):
     """At most 60 calls; publish atomically only after every page has been received."""
+    from daengs_backend.services.walk_space_catalog_input import retain_page, retained_fields
+
+    retained = []
     total, raw_rows, receipts = None, [], []
     for page in range(1, 61):
         body = await get_json(
@@ -67,6 +70,7 @@ async def refresh_catalog(transport, key, path):
             },
         )
         rows, count = parse_page(body)
+        retained.append(retain_page(body, "park"))
         if total is None:
             total = count
         if count != total or (not rows and len(raw_rows) < total):
@@ -109,6 +113,7 @@ async def refresh_catalog(transport, key, path):
         "rejected_reasons": dict(rejected_reasons),
         "parks": parks,
         "parks_sha256": digest(parks),
+        **retained_fields(retained),
     }
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

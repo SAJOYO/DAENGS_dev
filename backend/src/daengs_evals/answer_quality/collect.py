@@ -46,11 +46,8 @@ from daengs_evals.answer_quality.questions import (
     load_questions,
 )
 from daengs_evals.answer_quality.strata import resolve_strata
-from daengs_evals.orchestrator_comparison.runner import Meter, _fake_adapters
-from daengs_evals.orchestrator_comparison.runner_v2 import (
-    RecordingEngine,
-    _metered_semantic_generate,
-)
+from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
+from daengs_evals.eval_harness import fake_adapters as _fake_adapters
 
 BENCHMARK_ID = "answer-quality-v1"
 CARD = "#277"
@@ -205,7 +202,7 @@ def build_orchestrator(mode: str, meter: Meter, sink: dict[str, Any]) -> Any:
 
     return AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode), sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(meter)),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(meter)),
     )
 
 

@@ -34,6 +34,7 @@ from daengs_place.place.conversation.contract import (
 from daengs_place.place.conversation.grounding import browse_scope
 from daengs_place.place.conversation.policy import Decision, base_revision, decide
 from daengs_place.place.conversation.render import selected_facts
+from daengs_place.place.conversation.scope import PRESERVE_CODES, PROCESSING_FAILED
 from daengs_place.place.filters.contract import (
     Branch,
     FilterState,
@@ -145,6 +146,18 @@ class ConversationService:
         decision = Decision("execute")
         plan = TurnPlan(goal="show")
         pool = old.search_pool if old else request.restore_pool
+        if request.mode == "bootstrap":
+            # Seed only coordinates/default conditions. No candidate search before scope is known.
+            return PreparedTurn(
+                state=ConversationState(filters=manual_filters(request.manual), revision=1),
+                receipt=ExecutionReceipt(
+                    goal="edit_only",
+                    execution="not_run",
+                    result_matches_filters=False,
+                    returned_count=0,
+                    code="facility_bootstrap",
+                ),
+            )
         if request.mode == "manual":
             candidate = manual_filters(request.manual, old)
         elif request.mode == "restore":
@@ -168,10 +181,18 @@ class ConversationService:
                     request,
                     "clarify",
                     "invalid_plan",
-                    "조건을 적용할 수 없어요. 바꾸려는 조건을 구체적으로 알려주세요.",
+                    PROCESSING_FAILED,
                     action="clarify",
                 )
             now = self.now()
+            if decision.code in PRESERVE_CODES:
+                return self._unchanged(
+                    request,
+                    "explain" if decision.code == "facility_filters" else "clarify",
+                    decision.code,
+                    decision.question,
+                    action=decision.action,
+                )
             if decision.action == "saved_search":
                 from daengs_place.place.conversation.saved_search import prepare_saved_search
 
@@ -348,6 +369,7 @@ class ConversationService:
             and browse == "current"
             and not plan.refresh
             and snapshot
+            and snapshot_matches(old, request.bookmark_keys)
             and 0 <= (now - snapshot.created_at).total_seconds() < CACHE_SECONDS
         )
         search_omitted = unique_keys((*omitted, *snapshot.display_order)) if replacing else omitted
@@ -561,8 +583,8 @@ class ConversationService:
         )
         return PreparedTurn(state=state, receipt=receipt)
 
-    @staticmethod
     def _unchanged(
+        self,
         request,
         goal,
         code,
@@ -573,20 +595,49 @@ class ConversationService:
         pending=None,
         intent=None,
     ):
+        from daengs_place.place.conversation.presentation import user_text_allowed
+
+        preserve = code in PRESERVE_CODES
+        if preserve:
+            old = request.previous
+            pending = old.pending_proposal
+            if pending and not (
+                pending.revision == base_revision(request)
+                and pending.base_fingerprint == fingerprint(old.filters)
+                and pending.base_pool == old.search_pool
+                and self.now() < pending.expires_at
+                and user_text_allowed(pending.question, limit=300)
+            ):
+                pending = None
+        if pending is not None and (
+            not user_text_allowed(pending.question, limit=300)
+            or not preserve
+            and question
+            and not user_text_allowed(question, limit=300)
+        ):
+            pending = None
+            action, code = "clarify", "presentation_requires_rephrase"
+            question = "조건을 짧게 나눠서 알려주세요."
         old = request.previous
         snapshot = old.snapshot
         revision = base_revision(request) + 1
         if pending is not None:
             pending = pending.model_copy(update={"revision": revision})
         history = old.history
-        if request.mode == "chat":
+        if request.mode == "chat" and not preserve:
             history = (
                 *history,
                 DialogueTurn(query=request.query, goal=goal, selected=old.selected),
             )[-6:]
         state = old.model_copy(
             update={
-                "pending_question": question[:200],
+                "pending_question": (
+                    old.pending_question
+                    if preserve and (pending or not old.pending_proposal)
+                    else ""
+                    if preserve
+                    else question[:200]
+                ),
                 "pending_proposal": pending,
                 "revision": revision,
                 "history": history,

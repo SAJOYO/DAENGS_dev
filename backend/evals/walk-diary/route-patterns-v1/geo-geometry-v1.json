@@ -1,0 +1,1272 @@
+{
+  "straight": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 24,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:02:00+00:00",
+          "window_s": 120.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.00001798643212,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 118.34,
+          "max_deviation_m": 3.07,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 25,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 24,
+        "source_fix_count": 25,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.00001798643212,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 24,
+            "lat": 36.999997446209,
+            "lng": 130.0013323790123
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 25,
+      "accepted": 25,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 25
+    }
+  },
+  "right": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 18,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:30+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.000008993216056,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 89.96,
+          "max_deviation_m": 1.02,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 18,
+          "to_seq": 36,
+          "started_at": "2026-09-08T06:01:30+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 18,
+          "at": "2026-09-08T06:01:30+00:00",
+          "lat": 37.000818017738126,
+          "lng": 130.00000042825502,
+          "route_offset_m": 92.844
+        },
+        "metrics": {
+          "displacement_m": 89.89,
+          "max_deviation_m": 1.89,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 36,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00",
+          "window_s": 180.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 18,
+          "at": "2026-09-08T06:01:30+00:00",
+          "lat": 37.000818017738126,
+          "lng": 130.00000042825502,
+          "route_offset_m": 92.844
+        },
+        "metrics": {
+          "direction": "right",
+          "signed_angle_deg": -90.05,
+          "incoming_m": 89.96,
+          "outgoing_m": 89.89,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 37,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 36,
+        "source_fix_count": 37,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.000008993216056,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 18,
+            "lat": 37.000818017738126,
+            "lng": 130.00000042825502
+          },
+          {
+            "client_seq": 36,
+            "lat": 37.000816952583776,
+            "lng": 130.0010126094954
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 37,
+      "accepted": 37,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 37
+    }
+  },
+  "left": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 18,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:30+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.000008993216056,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 89.96,
+          "max_deviation_m": 1.02,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 18,
+          "to_seq": 36,
+          "started_at": "2026-09-08T06:01:30+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 18,
+          "at": "2026-09-08T06:01:30+00:00",
+          "lat": 37.000818017738126,
+          "lng": 130.00000042825502,
+          "route_offset_m": 92.844
+        },
+        "metrics": {
+          "displacement_m": 90.11,
+          "max_deviation_m": 1.89,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 36,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00",
+          "window_s": 180.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 18,
+          "at": "2026-09-08T06:01:30+00:00",
+          "lat": 37.000818017738126,
+          "lng": 130.00000042825502,
+          "route_offset_m": 92.844
+        },
+        "metrics": {
+          "direction": "left",
+          "signed_angle_deg": 90.1,
+          "incoming_m": 89.96,
+          "outgoing_m": 90.11,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 37,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 36,
+        "source_fix_count": 37,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.000008993216056,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 18,
+            "lat": 37.000818017738126,
+            "lng": 130.00000042825502
+          },
+          {
+            "client_seq": 36,
+            "lat": 37.000816952583776,
+            "lng": 129.99898567872376
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 37,
+      "accepted": 37,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 37
+    }
+  },
+  "stay": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "local_stay",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 18,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:30+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 14,
+          "at": "2026-09-08T06:01:10+00:00",
+          "lat": 36.999999140671484,
+          "lng": 130.00000707336054,
+          "route_offset_m": 25.648
+        },
+        "metrics": {
+          "bounding_diagonal_m": 5.63,
+          "observed_duration_s": 90.0,
+          "coarse_progress_mps": 0.219
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 18,
+        "source_fix_count": 19,
+        "vertices": [
+          {
+            "client_seq": 14,
+            "lat": 36.999999140671484,
+            "lng": 130.00000707336054
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 19,
+      "accepted": 19,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 19
+    }
+  },
+  "pause_turn": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 17,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:25+00:00",
+          "window_s": 85.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.000008993216056,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 84.82,
+          "max_deviation_m": 1.69,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 18,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "local_stay",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 15,
+          "to_seq": 32,
+          "started_at": "2026-09-08T06:01:15+00:00",
+          "ended_at": "2026-09-08T06:02:40+00:00",
+          "window_s": 85.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 17,
+          "at": "2026-09-08T06:01:25+00:00",
+          "lat": 37.00077174778847,
+          "lng": 130.00000836065988,
+          "route_offset_m": 87.651
+        },
+        "metrics": {
+          "bounding_diagonal_m": 19.03,
+          "observed_duration_s": 85.0,
+          "coarse_progress_mps": 0.363
+        },
+        "quality": {
+          "fix_count": 18,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 17,
+          "to_seq": 48,
+          "started_at": "2026-09-08T06:01:25+00:00",
+          "ended_at": "2026-09-08T06:04:00+00:00",
+          "window_s": 155.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 17,
+          "at": "2026-09-08T06:01:25+00:00",
+          "lat": 37.00077174778847,
+          "lng": 130.00000836065988,
+          "route_offset_m": 87.651
+        },
+        "metrics": {
+          "displacement_m": 90.23,
+          "max_deviation_m": 5.41,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 32,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 48,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:04:00+00:00",
+          "window_s": 240.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 17,
+          "at": "2026-09-08T06:01:25+00:00",
+          "lat": 37.00077174778847,
+          "lng": 130.00000836065988,
+          "route_offset_m": 87.651
+        },
+        "metrics": {
+          "direction": "right",
+          "signed_angle_deg": -87.45,
+          "incoming_m": 84.82,
+          "outgoing_m": 90.23,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 49,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 48,
+        "source_fix_count": 49,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.000008993216056,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 17,
+            "lat": 37.00077174778847,
+            "lng": 130.00000836065988
+          },
+          {
+            "client_seq": 48,
+            "lat": 37.0008007588275,
+            "lng": 130.00102373749462
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 49,
+      "accepted": 49,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 49
+    }
+  },
+  "out_back": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 24,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:02:00+00:00",
+          "window_s": 120.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.000008993216056,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 118.86,
+          "max_deviation_m": 1.76,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 25,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "retrace",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 24,
+          "to_seq": 40,
+          "started_at": "2026-09-08T06:02:00+00:00",
+          "ended_at": "2026-09-08T06:03:20+00:00",
+          "window_s": 80.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 24,
+          "at": "2026-09-08T06:02:00+00:00",
+          "lat": 37.0010779090316,
+          "lng": 129.9999905459156,
+          "route_offset_m": 122.849
+        },
+        "metrics": {
+          "previous_from_seq": 0,
+          "previous_to_seq": 24,
+          "return_displacement_m": 79.14,
+          "max_distance_to_previous_leg_m": 1.5,
+          "corridor_m": 10.0
+        },
+        "quality": {
+          "fix_count": 17,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 24,
+          "to_seq": 40,
+          "started_at": "2026-09-08T06:02:00+00:00",
+          "ended_at": "2026-09-08T06:03:20+00:00",
+          "window_s": 80.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 24,
+          "at": "2026-09-08T06:02:00+00:00",
+          "lat": 37.0010779090316,
+          "lng": 129.9999905459156,
+          "route_offset_m": 122.849
+        },
+        "metrics": {
+          "displacement_m": 79.14,
+          "max_deviation_m": 1.35,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 17,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 40,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:03:20+00:00",
+          "window_s": 200.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 24,
+          "at": "2026-09-08T06:02:00+00:00",
+          "lat": 37.0010779090316,
+          "lng": 129.9999905459156,
+          "route_offset_m": 122.849
+        },
+        "metrics": {
+          "direction": "reverse",
+          "signed_angle_deg": -179.49,
+          "incoming_m": 118.86,
+          "outgoing_m": 79.14,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 41,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 40,
+        "source_fix_count": 41,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.000008993216056,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 24,
+            "lat": 37.0010779090316,
+            "lng": 129.9999905459156
+          },
+          {
+            "client_seq": 40,
+            "lat": 37.00036624079188,
+            "lng": 130.00000473107806
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 41,
+      "accepted": 41,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 41
+    }
+  },
+  "parallel": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 24,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:02:00+00:00",
+          "window_s": 120.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.0,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 120.0,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 25,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 31,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:02:35+00:00",
+          "window_s": 155.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 24,
+          "at": "2026-09-08T06:02:00+00:00",
+          "lat": 37.001079185927104,
+          "lng": 130.0,
+          "route_offset_m": 120.0
+        },
+        "metrics": {
+          "direction": "right",
+          "signed_angle_deg": -90.0,
+          "incoming_m": 120.0,
+          "outgoing_m": 35.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 32,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 31,
+          "to_seq": 55,
+          "started_at": "2026-09-08T06:02:35+00:00",
+          "ended_at": "2026-09-08T06:04:35+00:00",
+          "window_s": 120.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 31,
+          "at": "2026-09-08T06:02:35+00:00",
+          "lat": 37.001079185927104,
+          "lng": 130.00039412542782,
+          "route_offset_m": 155.0
+        },
+        "metrics": {
+          "displacement_m": 120.0,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 25,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "turn",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 24,
+          "to_seq": 55,
+          "started_at": "2026-09-08T06:02:00+00:00",
+          "ended_at": "2026-09-08T06:04:35+00:00",
+          "window_s": 155.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 31,
+          "at": "2026-09-08T06:02:35+00:00",
+          "lat": 37.001079185927104,
+          "lng": 130.00039412542782,
+          "route_offset_m": 155.0
+        },
+        "metrics": {
+          "direction": "right",
+          "signed_angle_deg": -90.0,
+          "incoming_m": 35.0,
+          "outgoing_m": 120.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 32,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 55,
+        "source_fix_count": 56,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 24,
+            "lat": 37.001079185927104,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 31,
+            "lat": 37.001079185927104,
+            "lng": 130.00039412542782
+          },
+          {
+            "client_seq": 55,
+            "lat": 37.0,
+            "lng": 130.00039412542782
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 56,
+      "accepted": 56,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 56
+    }
+  },
+  "shallow": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 18,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:30+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.0,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 90.0,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 18,
+          "to_seq": 36,
+          "started_at": "2026-09-08T06:01:30+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 18,
+          "at": "2026-09-08T06:01:30+00:00",
+          "lat": 37.00080938944533,
+          "lng": 130.0,
+          "route_offset_m": 90.0
+        },
+        "metrics": {
+          "displacement_m": 93.15,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 36,
+        "source_fix_count": 37,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 18,
+            "lat": 37.00080938944533,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 36,
+            "lat": 37.00161877889065,
+            "lng": 130.00027025743623
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 37,
+      "accepted": 37,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 37
+    }
+  },
+  "short": {
+    "materials": [],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 6,
+        "source_fix_count": 7,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 3,
+            "lat": 37.00013489824089,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 6,
+            "lat": 37.00013489824089,
+            "lng": 130.00016891089763
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 7,
+      "accepted": 7,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 0,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 7
+    }
+  },
+  "gap": {
+    "materials": [
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 0,
+          "how_run_index": 0,
+          "from_seq": 0,
+          "to_seq": 18,
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:01:30+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 0,
+          "at": "2026-09-08T06:00:00+00:00",
+          "lat": 37.0,
+          "lng": 130.0,
+          "route_offset_m": 0.0
+        },
+        "metrics": {
+          "displacement_m": 90.0,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      },
+      {
+        "axis": "how",
+        "kind": "straight_run",
+        "status": "candidate",
+        "subject": "recording_device",
+        "support": {
+          "chain_index": 1,
+          "how_run_index": 1,
+          "from_seq": 42,
+          "to_seq": 60,
+          "started_at": "2026-09-08T06:03:30+00:00",
+          "ended_at": "2026-09-08T06:05:00+00:00",
+          "window_s": 90.0,
+          "time_meaning": "observed_support_window"
+        },
+        "anchor": {
+          "client_seq": 42,
+          "at": "2026-09-08T06:03:30+00:00",
+          "lat": 37.00080938944533,
+          "lng": 130.0,
+          "route_offset_m": 90.0
+        },
+        "metrics": {
+          "displacement_m": 90.0,
+          "max_deviation_m": 0.0,
+          "tolerance_m": 8.0
+        },
+        "quality": {
+          "fix_count": 19,
+          "accuracy_p50_m": 5.0,
+          "unknown_accuracy_count": 0
+        }
+      }
+    ],
+    "shape_runs": [
+      {
+        "chain_index": 0,
+        "how_run_index": 0,
+        "tolerance_m": 8.0,
+        "from_seq": 0,
+        "to_seq": 18,
+        "source_fix_count": 19,
+        "vertices": [
+          {
+            "client_seq": 0,
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 18,
+            "lat": 37.00080938944533,
+            "lng": 130.0
+          }
+        ]
+      },
+      {
+        "chain_index": 1,
+        "how_run_index": 1,
+        "tolerance_m": 8.0,
+        "from_seq": 42,
+        "to_seq": 60,
+        "source_fix_count": 19,
+        "vertices": [
+          {
+            "client_seq": 42,
+            "lat": 37.00080938944533,
+            "lng": 130.0
+          },
+          {
+            "client_seq": 60,
+            "lat": 37.00080938944533,
+            "lng": 130.00101346538582
+          }
+        ]
+      }
+    ],
+    "quality_audit": [],
+    "canonical_quality": {
+      "received": 38,
+      "accepted": 38,
+      "rejected_low_accuracy": 0,
+      "rejected_out_of_order": 0,
+      "rejected_before_start": 0,
+      "rejected_after_end": 0,
+      "unknown_accuracy": 0,
+      "jump_breaks": 0,
+      "gap_breaks": 1,
+      "explicit_breaks": 0,
+      "dropped_at_capacity": 0,
+      "mock_fixes": 38
+    }
+  }
+}

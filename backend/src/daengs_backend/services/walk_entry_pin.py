@@ -5,7 +5,7 @@ from decimal import Decimal
 from daengs_backend.repositories import walk_entry_v2 as repo
 from daengs_backend.schemas.walk_entry_v2 import ContentV2, Pin
 from daengs_backend.services.walk_chunk import decode_chunk
-from daengs_backend.services.walk_entry import EntryInvalid
+from daengs_backend.services.walk_entry_errors import EntryConflict, EntryInvalid
 
 POLICY = "action-pin-policy-v1"
 ALGORITHM = "action-pin-local-v1"
@@ -92,8 +92,6 @@ def validate_new_pin(content, pin):
 
 
 def validate_transition(previous, incoming: Pin, expected_pin_revision, actual_pin_revision):
-    from daengs_backend.services.walk_entry import EntryConflict
-
     if (
         expected_pin_revision != actual_pin_revision
         or previous is None

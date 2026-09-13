@@ -239,6 +239,28 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-13', 'walk_measurements', 'CREATE TABLE walks(id uuid PRIMARY KEY);', 'walk_measurements', [
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN input_key CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_hash CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_pkey CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_walk_id_measurement_id_fkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_pkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_walk_id_fkey CASCADE',
+        ]),
         ('2026-09-11', 'walk_precision_backup', "CREATE TABLE walk_motion_backups(walk_id uuid PRIMARY KEY);", 'walk_precision_backups', [
             'DROP TABLE walk_precision_chunks',
             'ALTER TABLE walk_precision_backups DROP COLUMN manifest',
@@ -983,6 +1005,27 @@ CHECKS = (
             # **옛 표를 되살리는 변조 — 이 항목의 이유다.** 옮기기만 하고 DROP 을 빠뜨리면
             # 같은 좌표가 두 곳에 남는데, 옛 verify 는 그것을 SELECT 로 찍기만 했다.
             'CREATE TABLE walk_points(walk_id uuid, client_seq integer)',
+        ]),
+        ('2026-09-12', 'territory_vision_jobs', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits'), 'territory_attempts', [
+            'ALTER TABLE territory_attempts DROP COLUMN vision_retry_reason',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts TYPE bigint',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts SET DEFAULT 1',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_available_at DROP NOT NULL',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_dispatch_after DROP DEFAULT',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_lease_token SET NOT NULL',
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_attempts_check',
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (vision_lease_token IS NULL OR vision_lease_until IS NOT NULL)'),
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (TRUE) NOT VALID'),
+            'DROP INDEX territory_vision_dispatch_idx',
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             ' ON territory_attempts(vision_dispatch_after, id)'),
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             " ON territory_attempts(vision_dispatch_after, id) WHERE status='VISION_PENDING'"),
         ]),
         ('2026-09-03', 'territory_visits', APP_USERS + PETS_ONLY,
          'territory_verified_visits', [

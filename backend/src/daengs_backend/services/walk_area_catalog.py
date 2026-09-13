@@ -49,7 +49,9 @@ def covers(catalog, point, radius):
     )
 
 
-async def pages(transport, endpoint, key, query, *, max_pages=30, identity_field=None):
+async def pages(
+    transport, endpoint, key, query, *, max_pages=30, identity_field=None, page_sink=None
+):
     """No partial publication on a missing/repeated/changed page or exhausted budget."""
     result, hashes, total = [], [], None
     seen_pages, seen_ids = set(), set()
@@ -104,6 +106,8 @@ async def pages(transport, endpoint, key, query, *, max_pages=30, identity_field
         seen_pages.add(signature)
         seen_ids.update(page_ids)
         hashes.append(digest(rows))  # Preserve receipts of the actual ordered response rows.
+        if page_sink is not None:
+            page_sink(root)
         result.extend(rows)
         if len(result) == total:
             return result, hashes

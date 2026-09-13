@@ -1,15 +1,19 @@
 """Opt-in diary branch of the existing WalkStoryboard lifecycle; no second queue/table."""
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-from daengs_backend.services.walk_diary_base_board import prepare_saved_base_board
+from daengs_backend.services.walk_diary_base_board import (
+    prepare_saved_base_board,
+    with_scene_backgrounds,
+)
 from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
-from daengs_backend.services.walk_diary_board_storage import read_board, store_board
+from daengs_backend.services.walk_diary_board_storage import load_board, read_board, store_board
 from daengs_backend.services.walk_diary_contract import (
     StaleDiaryGeneration,
     bind_generation,
@@ -25,6 +29,7 @@ from daengs_backend.services.walk_diary_publication import (
     within_budget,
 )
 from daengs_backend.services.walk_diary_slot_writing import writing_version as slot_writing_version
+from daengs_backend.services.walk_diary_space_collection import configured_collection
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
@@ -64,6 +69,10 @@ async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bu
         raise StoryboardConflict(
             "일기 원본을 준비할 수 없습니다. 기록 동기화를 확인해 주세요."
         ) from None
+    return principal, prepared, generation_revision(prepared, bundle_format)
+
+
+def generation_revision(prepared, bundle_format):
     revision_parts = {
         "format": bundle_format,
         "plan": prepared.board.plan.revision()
@@ -73,8 +82,22 @@ async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bu
     }
     if prepared.board:
         revision_parts["slots"] = prepared.board.slots.revision()
-    revision = digest(revision_parts)
-    return principal, prepared, revision
+    return digest(revision_parts)
+
+
+def apply_backgrounds(prepared, collected):
+    return replace(prepared, board=with_scene_backgrounds(prepared.board, collected))
+
+
+def restore_backgrounds(prepared, row):
+    if prepared.board and row is not None and row.status == "ready":
+        try:
+            collected = getattr(load_board(row.bundle), "scene_backgrounds", None)
+            if collected is not None:
+                return apply_backgrounds(prepared, collected)
+        except ValueError:
+            pass  # The normal read path validates damaged or changed source snapshots.
+    return prepared
 
 
 def revisions(source):
@@ -120,6 +143,8 @@ def result(prepared, row, revision):
 async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):
     _, prepared, revision = await snapshot(session, owner, walk_id, target, bundle_format)
     row = await repo.current(session, walk_id)
+    prepared = restore_backgrounds(prepared, row)
+    revision = generation_revision(prepared, bundle_format)
     if prepared.board:
         settle_expired(prepared, row)
     value = result(prepared, row, revision)
@@ -127,7 +152,7 @@ async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-b
     return value
 
 
-async def generate_diary(session, owner, walk_id, request, *, writer=None):
+async def generate_diary(session, owner, walk_id, request, *, writer=None, collector=None):
     started = datetime.now(UTC)
     deadline = (
         started + timedelta(milliseconds=request.preparation_budget_ms)
@@ -143,6 +168,8 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     if request.expected_photo_manifest != source.photo_manifest:
         raise StoryboardConflict("사진 목록이 변경됐어요. 승인된 사진 버전을 확인해 주세요.")
     row = await repo.current(session, walk_id)
+    prepared = restore_backgrounds(prepared, row)
+    revision = generation_revision(prepared, request.bundle_format)
     if not prepared.board:
         guard_old_writer(row)
     else:
@@ -185,6 +212,48 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     ):
         await session.commit()
         return value
+    collected = None
+    if prepared.board and settings.walk_diary_space_enabled:
+        selected_board = prepared.board.board
+        await session.commit()  # Public acquisition must never hold the Walk lock.
+        remaining = (deadline - datetime.now(UTC)).total_seconds() if deadline else 4.5
+        if remaining > 0:
+            try:
+                async with asyncio.timeout(min(4.5, remaining)):
+                    collected = await (collector or configured_collection)(selected_board)
+            except TimeoutError:
+                pass  # A bounded first publication can still use its original base materials.
+        principal, prepared, revision = await snapshot(
+            session, owner, walk_id, request.target_scene_count, request.bundle_format
+        )
+        source = prepared.input.source
+        if collected is not None:
+            try:
+                prepared = apply_backgrounds(prepared, collected)
+            except ValueError:
+                raise StoryboardConflict(
+                    "조회 중 산책 장면이 변경됐어요. 다시 생성해 주세요."
+                ) from None
+            revision = generation_revision(prepared, request.bundle_format)
+        if {str(k): v for k, v in request.expected_entries.items()} != revisions(
+            source
+        ) or request.expected_photo_manifest != source.photo_manifest:
+            raise StoryboardConflict("조회 중 산책 원본이 변경됐어요. 다시 동기화해 주세요.")
+        row = await repo.current(session, walk_id)
+        now = datetime.now(UTC)
+        settle_expired(prepared, row, now)
+        value = result(prepared, row, revision)
+        if (value.status == "ready" and not request.refresh) or (
+            row is not None
+            and row.status == "running"
+            and (
+                row.updated_at > now - timedelta(seconds=LEASE_SECONDS)
+                or preparation(row) is not None
+                and now < datetime.fromisoformat(preparation(row)["deadline_at"])
+            )
+        ):
+            await session.commit()
+            return value
     generation = reserve(
         session,
         walk_id,
@@ -238,6 +307,12 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None):
     principal, latest, latest_revision = await snapshot(
         session, owner, walk_id, request.target_scene_count, request.bundle_format
     )
+    if collected is not None and latest.board:
+        try:
+            latest = apply_backgrounds(latest, collected)
+            latest_revision = generation_revision(latest, request.bundle_format)
+        except ValueError:
+            pass  # A source change invalidates the generation; never rebind its collection.
     current = await repo.current(session, walk_id)
     if latest.board:
         settle_expired(latest, current)

@@ -136,7 +136,7 @@ class AssistantOrchestrationService:
                 pending_clarification=pending_clarification,
             )
             # 라우팅 종류는 돌고 나서야 안다. 자식(그래프)의 metadata 와 같은 키다 —
-            # 두 구현(`agent/service.py`)의 루트를 같은 쿼리로 거르는 계약.
+            # 루트 실행을 같은 쿼리로 거를 수 있게 하는 계약이다.
             run.add_metadata(
                 _route_metadata(route_plan, resolved_router_version=resolved_router_version)
             )
@@ -224,7 +224,9 @@ class AssistantOrchestrationService:
             # `RoutePlan.prompt_version` · 아래 `_route_metadata` 의 폴백 세 곳이 전부 이
             # 값을 읽어서, 실제로 `RESOLVED_PROMPT_VERSION` 프롬프트가 나간 turn 이 평가
             # 랩 행에 평범한 `PROMPT_VERSION` 으로 잘못 적히는 일이 다시 생기지 않는다.
-            resolved_router_version = router_prompt_version(conversation)
+            resolved_router_version = router_prompt_version(
+                conversation, facility_view=structured_context.get("facility_view") is True
+            )
             semantic_trace = (
                 RouteTrace(
                     router=RouterKind.LLM,

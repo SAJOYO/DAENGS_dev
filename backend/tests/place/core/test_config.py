@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy.engine import make_url
 
 from daengs_place.core.config import Settings
@@ -54,6 +55,22 @@ def test_place_gemini_settings_are_optional(monkeypatch):
     assert settings.gemini_timeout_ms == 30_000
 
 
+@pytest.mark.parametrize("model", [None, "facility-model"])
+def test_facility_provider_uses_its_own_model_and_keeps_shared_discovery_model(monkeypatch, model):
+    from daengs_place.api import conversation_internal
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "discovery-model")
+    if model is None:
+        monkeypatch.delenv("FACILITY_CONVERSATION_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("FACILITY_CONVERSATION_MODEL", model)
+    settings = Settings(_env_file=None)
+    monkeypatch.setattr(conversation_internal, "settings", settings)
+    assert conversation_internal.provider().model == (model or "gemini-3.1-flash-lite")
+    assert settings.gemini_model == "discovery-model"
+
+
 def test_place_database_url_has_its_own_environment_name(monkeypatch):
     """CI 는 `DAENGS_PLACE_DATABASE_URL` 로 준다 (#346).
 
@@ -62,7 +79,9 @@ def test_place_database_url_has_its_own_environment_name(monkeypatch):
     순간 place 테스트가 죽는다 — 이름을 place 전용으로 갈라 두 설정이 같은 변수를 안 본다.
     """
     monkeypatch.delenv("DAENGS_DATABASE_URL", raising=False)
-    monkeypatch.setenv("DAENGS_PLACE_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5544/test_place")
+    monkeypatch.setenv(
+        "DAENGS_PLACE_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5544/test_place"
+    )
 
     settings = Settings(_env_file=None)
 
@@ -73,7 +92,9 @@ def test_place_database_url_has_its_own_environment_name(monkeypatch):
 def test_place_database_url_still_accepts_the_upstream_name(monkeypatch):
     """로컬 한 줄 설정과 상류(UPSTREAM.md)는 `DAENGS_DATABASE_URL` 을 쓴다 — 그대로 받는다."""
     monkeypatch.delenv("DAENGS_PLACE_DATABASE_URL", raising=False)
-    monkeypatch.setenv("DAENGS_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5545/legacy_place")
+    monkeypatch.setenv(
+        "DAENGS_DATABASE_URL", "postgresql+asyncpg://ci:ci@localhost:5545/legacy_place"
+    )
 
     settings = Settings(_env_file=None)
 

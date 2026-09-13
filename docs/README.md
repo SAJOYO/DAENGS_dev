@@ -2,6 +2,16 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
+| [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
+| [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
+| [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |
+| [walk/space-normalization.md](walk/space-normalization.md) | 상권·공원·피복의 유한 사전, 원자료 보존·장면 결합·실제 발행·APP 저장 연결 |
+| [산책 장면·일기 기획](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/plan.md) · [GEO #266](https://github.com/rkbuhtig/DAENGS_geo/pull/266) | 개별 장면 우선·별도 전체 일기 생성의 기획 기준. 아래 구현 문서와 적용 상태를 구별 |
+| [장면 서술 기획 경위·인계](https://github.com/rkbuhtig/DAENGS_geo/blob/2345c5b3d2b24f5754f55b802aab59905b807eb9/docs/explorations/walk/diary/narrative-design/README.md) | 대화 전개·장면/행동 서술·특별한 순간·슬롯/API·실험 실패·실제 출력 40개·다음 작업. 최신 기획 채택과 구현 미반영을 구별 |
+| [walk/trajectory-api.md](walk/trajectory-api.md) | 동선 검증 후보 조회 — 소유권·명시적 버전·기대 측정 ID·원본 시각·전체 응답 무결성 |
+| [walk/trajectory-contracts.md](walk/trajectory-contracts.md) | 동선 최종 집계 소유권·위치 없는 시간·측정 비교/조회 전환의 순수 계약과 합성 검증 |
+| [walk/trajectory-shadow.md](walk/trajectory-shadow.md) | 기존 motion/precision 입력의 누적 원장·관측/보행 투영과 읽기 전용 진단 도구 |
 | [walk/gps-motion-precision.md](walk/gps-motion-precision.md) | GPS 좌표 원본 비트의 추가 백업·정밀 계산·앱 대조와 적용 순서 |
 | [walk/diary-part-slots.md](walk/diary-part-slots.md) | 공간·환경·동선 조건과 스탬프, Gemini 미리보기 API·CLI 워킹 스켈레톤 |
 | [walk/gps-motion-calculation.md](walk/gps-motion-calculation.md) | 고정 GPS 정책의 서버 재생·계산 조회, 앱 기준값 대조와 원본 좌표 정밀도 한계 |
@@ -25,6 +35,11 @@
 | [place/bookmarks-api.md](place/bookmarks-api.md) | 회원 시설 찜 저장·전체 키 조회·독립 필터·탈퇴 정리와 앱 적용 순서 |
 | [place/bookmark-commands.md](place/bookmark-commands.md) | 자연어 찜의 준비/실행 경계·앱 완료 결과·충돌 보호와 후속 검색 계획 |
 | [place/saved-conversation.md](place/saved-conversation.md) | 찜 범위 대화 검색·조건 공유·탭 보존과 실제 출력 평가 |
+| [place/assistant-conversation.md](place/assistant-conversation.md) | 시설 v2 공통 오케스트레이션 연결·짧은 행동 응답·APP 출시 적용 순서 |
+| [place/response-policy.md](place/response-policy.md) | 시설 내부 용어 차단·행동별 말투·만료 복구·인증 갱신 정책 |
+| [place/scope-guardrails.md](place/scope-guardrails.md) | 시설 범위 판정·강아지 문구·무동작 상태 보존과 실제 모델 실험 |
+| [place/conversation-judge.md](place/conversation-judge.md) | 시설 전용 LLM Judge — 의도·범위·실행 설명 검토와 코드 폴더 README |
+| [place/conversation-baseline.md](place/conversation-baseline.md) | 시설 개발 7개 사례·8턴의 Lite 예비 평가 — 실제 행동과 Judge 대조, 제안 오류·평가 축 혼동 |
 | [place/search-policy.md](place/search-policy.md) | 검색 집합·조건 변경 공통화, 화면 복원 분리와 실제 출력 평가 |
 | [place/candidate-pools.md](place/candidate-pools.md) | 새 후보 B/K/E/P·명시적 정정·앱 연결과 반복 출력 평가 |
 | [journey/README.md](journey/README.md) | Journey 서비스의 역할·소유 범위와 실행 문서 안내 |
@@ -123,6 +138,11 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/upload-idempotency.md](walk/upload-idempotency.md) | 최초 산책 업로드의 동시 유니크 충돌 복구·회원 경계·원자적 활동 연결 |
+| [walk/finalize-transactions.md](walk/finalize-transactions.md) | 산책 봉인의 잠금 없는 계산·날씨 조회, 최신 입력 재검증과 원자적 저장 |
+| [walk/upload-receipts.md](walk/upload-receipts.md) | 좌표 청크 수신 확인·동일 재전송·충돌 계약, 전체 경로 조회 없는 업로드와 APP 적용 순서 |
+| [walk/activity-summary-queries.md](walk/activity-summary-queries.md) | 산책 활동 요약의 일괄 조회·저장 집계·원본 지문 검증과 기존 데이터 보완 |
+| [walk/entry-service-boundaries.md](walk/entry-service-boundaries.md) | 행동 기록 공통 오류·버전 정책·프로필 계산과 v1/v2·배경 작업의 의존 경계 |
 | [walk/entries-and-record-profile.md](walk/entries-and-record-profile.md) | 행동·메모 기록의 동기화 계약과 산책 기록 프로필 |
 | [walk/entry-contexts.md](walk/entry-contexts.md) | 행동·글 원본에 연결한 주변 정보 봉투 저장·비동기 수집과 활성화 절차 |
 | [walk/public-context.md](walk/public-context.md) | SGIS 행정동·도시공원 실제 배경 공급, 캐시·배포 순서와 Gemini/앱 검증 |
@@ -146,7 +166,10 @@ Dog/Owner Profile, 산책 기록을 소유하지 않습니다.
 | [territory/visit-attestation.md](territory/visit-attestation.md) | 인앱 촬영 시도, 10m 위치 판정, 사진 업로드와 비동기 판정 상태 계약 |
 | [territory/claim-foundation.md](territory/claim-foundation.md) | 공유 점유 모델과 상태 전이의 1단계 설계 |
 | [territory/ownership-api.md](territory/ownership-api.md) | 온라인 점유 저장·API·동시성 및 배포 계약 |
-| [territory/vision-worker.md](territory/vision-worker.md) | 방문 사진의 비동기 판정·재시도와 점유 연결 경계 |
+| [territory/account-query-scope.md](territory/account-query-scope.md) | 일반 점령 계정의 대상 강아지 조회와 시즌 전체 정산 경계 |
+| [territory/vision-worker.md](territory/vision-worker.md) | 방문 사진 처리 lease·DB 재시도·Beat 복구 발행과 판정/점유 원자성, Docker 엔진·CI 없는 Windows 검증 |
+| [territory/vision-observability.md](territory/vision-observability.md) | 읽기 전용 사진 backlog·만료/소진 구분·복구 실행별 JSON 로그와 발행 실패/미시도 분리 |
+| [territory/photo-cleanup-conflicts.md](territory/photo-cleanup-conflicts.md) | 영구적인 사진 정리 충돌의 자동 재발행 중단·관측·원본 확인 후 명시적 재개 |
 
 중립 게임판과 점령지 좌표 읽기는 Place가 소유하고, 회원별 촬영 시도와
 `VerifiedVisit`과 공유 점유는 backend가 소유합니다. 점유 계약과 후속 정책은

@@ -1,0 +1,51 @@
+{
+  "observed_turns": 6,
+  "reviewed_turns": 0,
+  "turn_statuses": {
+    "review_required": 3,
+    "blocked": 2,
+    "not_run": 1
+  },
+  "case_repetitions": [
+    {
+      "case_id": "FJ-D01",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "review_required"
+    },
+    {
+      "case_id": "FJ-D03",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "review_required"
+    },
+    {
+      "case_id": "FJ-D07",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "FJ-H01",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "blocked"
+    },
+    {
+      "case_id": "FJ-H02",
+      "variant": "production-exploration-v1",
+      "repetition": 1,
+      "status": "review_required"
+    }
+  ],
+  "provider_calls": 5,
+  "provider_errors": 2,
+  "provider_latency_median_ms": 3390,
+  "reported_usage": {
+    "total_input_tokens": 18595,
+    "total_output_tokens": 184,
+    "total_tokens": 19896
+  },
+  "usage_missing_calls": 2,
+  "latency_note": "provider latency excludes evaluator pacing; per-turn latency includes it"
+}

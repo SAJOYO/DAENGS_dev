@@ -32,6 +32,8 @@ def client(monkeypatch):
     monkeypatch.setattr(repo, "entries", AsyncMock(side_effect=lambda s, ws: list(rows.values())))
     monkeypatch.setattr(repo, "pet_is_accessible", AsyncMock(side_effect=lambda s, o, p: p == PET))
     monkeypatch.setattr(repo, "profile_walks", AsyncMock(return_value=[walk]))
+    # 연결 안 된 아이는 자기 하나가 그룹입니다 (MVP 결정 §7).
+    monkeypatch.setattr(repo, "pet_group_ids", AsyncMock(return_value=[PET]))
     app = FastAPI()
     app.include_router(router.router)
     app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = lambda: AppPrincipal(

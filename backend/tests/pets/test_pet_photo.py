@@ -13,7 +13,7 @@ import asyncio
 import uuid
 
 import pytest
-from fakes import FakePet, Store
+from fakes import FakeAppUser, FakePet, Store
 from fastapi.testclient import TestClient
 
 from daengs_backend.core import storage as storage_module
@@ -311,3 +311,69 @@ def test_저장소가_꺼져_있어도_사진_없는_아이는_지울_수_있다
     막히면 안 됩니다."""
     monkeypatch.setattr(pet_service, "get_storage", NotConfiguredStorage)
     assert client.delete(f"/app/pets/{pet.id}").status_code == 204
+
+
+# ── 연결된 그룹에서의 사진 (공동 돌봄) ──────────────────────────────────────
+#
+# **사진은 보호자마다 자기 값입니다.** 이름과 같은 규칙이라 그룹 주보호자가 아니어도
+# 자기 행의 사진을 걸 수 있어야 합니다 — 공통 정보를 바꾸는 전체 PUT·삭제와 다릅니다.
+# 그 성질이 `get_owned` 하나에만 기대고 있어서, 연결된 상태에서 실제로 그런지를 봅니다.
+
+
+@pytest.fixture
+def linked_pair(store: Store):
+    """A(그룹 주보호자)의 행과 B(연결한 공동 보호자)의 행. B 는 A 행의 돌보미이기도 합니다."""
+    from fakes import FakeIdentity
+
+    b_user = uuid.uuid4()
+    store.add_app_user(FakeAppUser(kakao_id=2, id=b_user))
+    a_pet = FakePet(app_user_id=OWNER, name="롱이씨", breed="dog_pug")
+    b_pet = FakePet(app_user_id=b_user, name="롱롱씨", breed="dog_beagle")
+    identity = FakeIdentity(owner_pet_id=a_pet.id)
+    a_pet.identity_id = identity.id
+    b_pet.identity_id = identity.id
+    store.pets += [a_pet, b_pet]
+    store.pet_identities.append(identity)
+    store.pet_members.append((a_pet.id, b_user))
+    return a_pet, b_pet, b_user
+
+
+def test_연결된_공동보호자도_자기_행_사진을_건다(store, storage, linked_pair) -> None:
+    """티켓 → PUT → confirm 한 바퀴가 그룹 주보호자가 아니어도 돌아야 합니다."""
+    _a_pet, b_pet, b_user = linked_pair
+    as_b = make_client(b_user)
+
+    key = _round_trip(as_b, b_pet.id)
+
+    assert storage.local_path(key).read_bytes() == b"jpeg-bytes"
+    assert b_pet.photo_storage_key == key
+
+
+def test_연결된_공동보호자가_자기_행_사진을_지운다(store, storage, linked_pair) -> None:
+    _a_pet, b_pet, b_user = linked_pair
+    as_b = make_client(b_user)
+    _round_trip(as_b, b_pet.id)
+
+    assert as_b.delete(f"/app/pets/{b_pet.id}/photo").status_code == 204
+    assert b_pet.photo_storage_key is None
+
+
+def test_사진은_그룹_주보호자의_행을_안_건드린다(store, storage, linked_pair) -> None:
+    """**공통 정보가 아닙니다.** B 가 자기 사진을 걸어도 A 의 사진은 그대로여야 합니다."""
+    a_pet, b_pet, b_user = linked_pair
+    a_pet.photo_storage_key = "pets/a/profile/fixed.jpg"
+
+    _round_trip(make_client(b_user), b_pet.id)
+
+    assert a_pet.photo_storage_key == "pets/a/profile/fixed.jpg"
+    assert b_pet.photo_storage_key != a_pet.photo_storage_key
+
+
+def test_연결돼도_남의_행_사진은_못_건다(store, storage, linked_pair) -> None:
+    """B 는 A 행의 **돌보미**지만 사진은 행 소유자만 겁니다 — 읽기 권한과 다릅니다."""
+    a_pet, _b_pet, b_user = linked_pair
+    as_b = make_client(b_user)
+
+    assert as_b.post(f"/app/pets/{a_pet.id}/photo").status_code == 404
+    assert as_b.post(f"/app/pets/{a_pet.id}/photo/confirm").status_code == 404
+    assert as_b.delete(f"/app/pets/{a_pet.id}/photo").status_code == 404

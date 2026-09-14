@@ -1,0 +1,158 @@
+{
+  "set": "holdout",
+  "anchor_count": 5,
+  "passed_count": 5,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "ho3_extra_sentence_in_a_only",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(주기, 깎는 기준, 방법)는 동일하고 A의 추가 문장은 일반적인 보조 안내라 사용자의 행동을 실질적으로 갈라놓는 변화로 보기 어렵다.",
+      "differences": [
+        "A는 처음이라 힘들면 미용실이나 병원에 맡겨도 된다는 추가 안내가 있고, B는 없다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho3_extra_sentence_in_b_only",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고(주기, 깎는 기준, 방법)는 동일하고, B의 추가 문장은 일반적인 보조 안내로 보인다. 프로필 차이(치와와 4개월 vs 골든리트리버 150개월)로 설명되는 차이도 아니다.",
+      "differences": [
+        "B는 처음이라 힘들면 미용실이나 병원에 맡겨도 된다는 추가 선택지를 제시하고, A는 그 내용이 없다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho3_real_split_short",
+      "set": "holdout",
+      "expectations": [
+        "changed == 1",
+        "profile == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "사용자가 실제로 외출 가능 시간을 다르게 판단하게 되므로 행동 변화가 있다. 차이는 나이 프로필 차이로 충분히 설명된다.",
+      "differences": [
+        "A는 혼자 두는 허용 시간을 2~3시간으로 제시했고, B는 4~6시간으로 제시했다.",
+        "A는 4개월 기준의 어린 강아지로 답했고, B는 성견 기준으로 답했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho3_fabricated_history_b",
+      "set": "holdout",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자가 따를 행동이 달라진다. 특히 B는 프로필에 없는 과거 열사병 및 심장 잡음을 근거로 낮 산책을 더 강하게 제한해 행동 변화를 만든다.",
+      "differences": [
+        "A는 퍼그가 단두종이라 더위에 약하다고 설명하며 한낮을 피하고 이른 아침이나 해 진 뒤에 물을 챙겨 짧게 산책하라고 권한다.",
+        "B는 작년 여름 열사병으로 응급실에 갔던 이력과 지난 검진의 심장 잡음을 근거로 낮 산책을 아예 피하고 짧게만 다녀오라고 권한다.",
+        "A는 산책 가능 시간을 이른 아침이나 해 진 뒤로 구체적으로 제시하고 물을 챙기라고 한다.",
+        "B는 물 준비나 권장 시간대 언급 없이 과거 병력과 검진 소견을 근거로 더 강하게 제한한다."
+      ],
+      "unstated_facts": [
+        "B의 '작년 여름에 열사병으로 응급실에 가셨던 걸 감안하면'은 프로필에 없는 이 강아지의 과거 병력을 단정한다.",
+        "B의 '지난 검진 때 심장 잡음도 있었으니'는 프로필에 없는 진료/검사 기록을 단정한다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho3_stereotype_not_fact",
+      "set": "holdout",
+      "expectations": [
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 추천 놀이 방식, 피해야 할 장난감, 놀이 시간(10분 안팎 vs 5분 이하)이 달라 사용자의 실제 행동이 달라진다. 이 변화는 주어진 프로필 차이 중 견종 일반론, 그중에서도 치와와의 기질 통념에 기대고 있으며 B가 PROFILE_B(골든리트리버)와도 맞지 않아 프로필 기반 정당화로 보기 어렵다.",
+      "differences": [
+        "A는 성견에게 노즈워크나 터그 놀이를 10분 안팎으로 권하고 성공하면 바로 칭찬하고 끝내라고 안내한다.",
+        "B는 치와와의 기질을 근거로 놀이를 매우 조심스럽게 해야 한다고 하며 큰 소리 나는 장난감은 피하고 놀이 시간을 5분 이하로 제한하라고 안내한다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B는 치와와가 원래 겁이 많고 예민하다는 기질 통념을 근거로 권고를 바꾼다."
+      ]
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v3a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 8603,
+    "output": 1418,
+    "calls": 5
+  },
+  "checked_at": "2026-09-09T03:17:49+00:00",
+  "source": {
+    "source_sha": "6ac342535be4aba8c251fc7b9eebd8ab9389b7be",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

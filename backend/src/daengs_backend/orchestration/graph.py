@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import time
 import uuid
 from collections.abc import Mapping
 from typing import Protocol, cast
@@ -33,6 +31,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     ScreeningHistory,
 )
+from daengs_backend.orchestration.execution import JobExecutor
 from daengs_backend.orchestration.facility_presentation import present_facility
 
 _FORBIDDEN_CONTEXT_KEYS = frozenset(
@@ -164,7 +163,8 @@ class OrchestrationEngine:
 
     async def _execute_requests(self, state: OrchestratorState) -> dict:
         results: list[CapabilityResult] = []
-        for request in state["route_plan"].requests:
+        executor = JobExecutor(concurrency=1)
+        for index, request in enumerate(state["route_plan"].requests):
             adapter = self._adapters.get(request.capability)
             if adapter is None:
                 results.append(
@@ -179,18 +179,16 @@ class OrchestrationEngine:
                     )
                 )
                 continue
-            started = time.perf_counter()
-            try:
-                pending = adapter.run(request, request_id=state["request_id"])
-                if request.timeout_ms is None:
-                    result = await pending
-                else:
-                    # This is a response deadline, not hard cancellation: blocking
-                    # asyncio.to_thread() work may continue. Domain/provider timeouts
-                    # remain the execution bound, so retry policy must allow for a
-                    # timed-out invocation that is still completing.
-                    result = await asyncio.wait_for(pending, timeout=request.timeout_ms / 1_000)
-            except TimeoutError:
+            outcome = await executor.run(
+                f"{state['request_id']}:{index}:{request.capability.value}",
+                lambda adapter=adapter, request=request: adapter.run(
+                    request, request_id=state["request_id"]
+                ),
+                timeout_ms=request.timeout_ms,
+            )
+            if outcome.status == "ok":
+                result = outcome.value
+            elif outcome.status == "timeout":
                 result = CapabilityResult(
                     capability=request.capability,
                     status=CapabilityStatus.TIMEOUT,
@@ -198,17 +196,17 @@ class OrchestrationEngine:
                         kind="orchestration_timeout",
                         detail="기능 실행 시간이 초과됐습니다.",
                     ),
-                    elapsed_ms=int((time.perf_counter() - started) * 1_000),
+                    elapsed_ms=outcome.elapsed_ms,
                 )
-            except Exception as exc:  # noqa: BLE001 - contain one adapter's unexpected failure
+            else:
                 result = CapabilityResult(
                     capability=request.capability,
                     status=CapabilityStatus.ERROR,
                     error=ErrorDetail(
-                        kind=type(exc).__name__,
+                        kind=outcome.error_kind,
                         detail="기능 실행 중 예기치 않은 오류가 발생했습니다.",
                     ),
-                    elapsed_ms=int((time.perf_counter() - started) * 1_000),
+                    elapsed_ms=outcome.elapsed_ms,
                 )
             results.append(result)
         return {"results": results}

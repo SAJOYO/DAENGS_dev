@@ -155,7 +155,7 @@ TOPICS: tuple[Topic, ...] = (
     Topic(
         "life_insurance",
         "펫보험 약관 — 보장 범위와 면책(가입 전 질병 · 대기 기간 · 특정 질환), 자기부담금과 보상 비율, "
-        "갱신 · 가입 나이 제한, 청구 서류. **증상을 곁들여 물어도 된다**(\"피부가 빨간데 보험 되나요\") — "
+        '갱신 · 가입 나이 제한, 청구 서류. **증상을 곁들여 물어도 된다**("피부가 빨간데 보험 되나요") — '
         "묻는 것은 보장 여부이지 진단이 아니다",
         "specialized",
         question_set="life",
@@ -165,7 +165,7 @@ TOPICS: tuple[Topic, ...] = (
         "life_food",
         "음식 · 사료 제도와 안내 — 먹여도 되는 음식과 안 되는 음식(초콜릿 · 포도 · 양파 · 자일리톨), "
         "사료 구입 요령과 표시 사항(성분 · 유통기한 · 등록 표시), 사료 관련 법령 · 고시. "
-        "\"먹여도 되나요\" 는 여기이고 \"먹었어요\" 는 응급이다",
+        '"먹여도 되나요" 는 여기이고 "먹었어요" 는 응급이다',
         "specialized",
         question_set="life",
         expected_life_status="OK",
@@ -272,6 +272,8 @@ def strata_for_set(question_set: QuestionSet) -> tuple[Stratum, ...]:
     따지는 자리(질문 생성 · 동결 파일 검사)만 이 함수를 씁니다.
     """
     return tuple(s for s in STRATA if s.topic.question_set == question_set)
+
+
 TOPICS_BY_NAME: dict[str, Topic] = {topic.name: topic for topic in TOPICS}
 STYLES_BY_NAME: dict[str, Style] = {style.name: style for style in STYLES}
 

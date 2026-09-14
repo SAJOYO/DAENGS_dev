@@ -10,6 +10,7 @@ from datetime import datetime
 from uuid import UUID
 
 from daengs_backend.config import settings
+from daengs_backend.repositories import pet as pets
 from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_entry as entries
 from daengs_backend.repositories import walk_entry_context as contexts
@@ -45,6 +46,7 @@ class InputAssembly:
     # Readiness is server-side metadata, not part of the diary source/revision.
     uploaded_at: datetime | None = None
     context_pending: bool = False
+    pet_names: tuple[tuple[str, str], ...] = ()
 
 
 def entry_anchor(event_at, location, raw_pin=None):
@@ -326,6 +328,9 @@ async def read_input(session, owner, walk_id):
             )
             envelopes.extend(r.envelope for r in latest.values())
     analysis = await storyboards.latest_analysis(session, walk_id)
+    # The walk owner has already been checked. Limit names to currently accessible companions.
+    accessible = await pets.accessible_ids(session, owner, walk.pet_ids)
+    names = await pets.names_by_ids(session, tuple(accessible))
     return replace(
         assemble_input(
             walk,
@@ -338,4 +343,5 @@ async def read_input(session, owner, walk_id):
         ),
         uploaded_at=getattr(walk, "created_at", None),
         context_pending=context_pending,
+        pet_names=tuple(sorted((str(key), value) for key, value in names.items())),
     )

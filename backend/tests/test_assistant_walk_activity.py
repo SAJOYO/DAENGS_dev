@@ -111,8 +111,10 @@ def test_measured_stmt_joins_through_the_head_never_walk_analyses_directly() -> 
     start = datetime(2026, 9, 12, tzinfo=UTC)
     end = start + timedelta(days=1)
 
-    walked_sql = _compiled(_walked_stmt(pet_id, start, end))
-    measured_sql = _compiled(_measured_stmt(pet_id, start, end))
+    # 두 구문은 이제 **pet id 묶음**을 받습니다 (MVP 결정 §7). 조인 사슬을 재는 것이
+    # 이 테스트의 목적이라 한 마리짜리 묶음으로 넘깁니다.
+    walked_sql = _compiled(_walked_stmt([pet_id], start, end))
+    measured_sql = _compiled(_measured_stmt([pet_id], start, end))
 
     # 1) activity_walk_heads 를 walks.id 로 잇는 조인이 있다
     assert "join activity_walk_heads on activity_walk_heads.walk_id = walks.id" in measured_sql
@@ -173,7 +175,7 @@ def walks(monkeypatch: pytest.MonkeyPatch) -> dict[str, WalkActivitySums]:
     """`activity_for_pet_between` 을 가짜로 바꾼다 — care_log 테스트의 `care` 와 같은 꼴."""
     box = {"sums": WalkActivitySums(0, 0, 0, 0, None)}
 
-    async def activity_for_pet_between(session, pet_id, start, end):
+    async def activity_for_pet_between(session, pet_ids, start, end):
         return box["sums"]
 
     monkeypatch.setattr(walk_repo, "activity_for_pet_between", activity_for_pet_between)
@@ -244,7 +246,7 @@ async def test_하루_경계는_서울_자정이고_tz_aware(pet, walks, monkeyp
     두 요약이 한 프롬프트에서 서로 다른 하루를 말하지 않는다 (`care_service.DAY_TIMEZONE`)."""
     seen: dict[str, object] = {}
 
-    async def activity_for_pet_between(session, pet_id, start, end):
+    async def activity_for_pet_between(session, pet_ids, start, end):
         seen["start"] = start
         seen["end"] = end
         return WalkActivitySums(0, 0, 0, 0, None)

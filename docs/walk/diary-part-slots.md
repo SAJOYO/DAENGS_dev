@@ -206,8 +206,10 @@ Content-Type: application/json
 
 ### 서비스 연결 2단계: 고정 근거로 서술
 
-기본 보드 요청은 `write_board(source, PreparedSavedBaseBoard)`로 연결된다. 구형
-`walk-diary-bundle-v1`은 기존 writer를 사용한다. 기본 보드에서는 이전의 제한된 배경 목록을
+이 절은 구형 슬롯 작성 계약을 설명한다. 2026-09-14 #504에서 진입점을
+`write_legacy_slot_board(source, PreparedSavedBaseBoard, generate=...)`로 명시했다.
+기본 보드 요청의 `write_board`는 모델 대역을 주입해도 [카드 그래프](card-orchestration.md)를 실행한다.
+구형 `walk-diary-bundle-v1`은 기존 bundle writer를 사용한다. 구형 슬롯 보드에서는 이전의 제한된 배경 목록을
 재선정하지 않고 `slots.stamps`의 근거와 해당 장면의 원문만 전달한다. 선정 사유·순위·
 진단값은 모델 입력에도 포함하지 않는다.
 

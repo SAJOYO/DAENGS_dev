@@ -14,6 +14,8 @@ from daengs_backend.services.walk_diary_base_board import (
 )
 from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
 from daengs_backend.services.walk_diary_board_storage import load_board, read_board, store_board
+from daengs_backend.services.walk_diary_card_writing import CardWritingResult
+from daengs_backend.services.walk_diary_card_writing import writing_version as slot_writing_version
 from daengs_backend.services.walk_diary_contract import (
     StaleDiaryGeneration,
     bind_generation,
@@ -28,8 +30,6 @@ from daengs_backend.services.walk_diary_publication import (
     settle_expired,
     within_budget,
 )
-from daengs_backend.services.walk_diary_slot_writing import writing_version as slot_writing_version
-from daengs_backend.services.walk_diary_space_collection import configured_collection
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
@@ -81,7 +81,10 @@ def generation_revision(prepared, bundle_format):
         "writer": slot_writing_version() if prepared.board else writing_version(),
     }
     if prepared.board:
-        revision_parts["slots"] = prepared.board.slots.revision()
+        # Provider snapshots are acquired after reservation and frozen in the receipt.
+        # Generation identity follows saved input/selection/policy, not future lookup values.
+        revision_parts["slots"] = prepared.board.slots.policy.model_dump(mode="json")
+        revision_parts["companions"] = prepared.input.pet_names
     return digest(revision_parts)
 
 
@@ -152,7 +155,13 @@ async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-b
     return value
 
 
-async def generate_diary(session, owner, walk_id, request, *, writer=None, collector=None):
+async def generate_diary(session, owner, walk_id, request, *, writer=None, legacy_collector=None):
+    """Publish with the negotiated writer.
+
+    legacy_collector explicitly opts historical writers into pre-reservation collection.
+    Card providers/collection belong to write_board, which runs after reservation;
+    wrapping a writer alone never changes collection timing.
+    """
     started = datetime.now(UTC)
     deadline = (
         started + timedelta(milliseconds=request.preparation_budget_ms)
@@ -213,14 +222,14 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, colle
         await session.commit()
         return value
     collected = None
-    if prepared.board and settings.walk_diary_space_enabled:
+    if prepared.board and settings.walk_diary_space_enabled and legacy_collector is not None:
         selected_board = prepared.board.board
         await session.commit()  # Public acquisition must never hold the Walk lock.
         remaining = (deadline - datetime.now(UTC)).total_seconds() if deadline else 4.5
         if remaining > 0:
             try:
                 async with asyncio.timeout(min(4.5, remaining)):
-                    collected = await (collector or configured_collection)(selected_board)
+                    collected = await legacy_collector(selected_board)
             except TimeoutError:
                 pass  # A bounded first publication can still use its original base materials.
         principal, prepared, revision = await snapshot(
@@ -254,6 +263,19 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, colle
         ):
             await session.commit()
             return value
+    if prepared.board and row is not None and row.status == "ready":
+        try:
+            receipt = getattr(load_board(row.bundle), "writing_receipt", None)
+            if hasattr(receipt, "result"):
+                prepared = replace(
+                    prepared,
+                    board=replace(
+                        prepared.board,
+                        cached_jobs=tuple(j.model_dump(mode="json") for j in receipt.result.jobs),
+                    ),
+                )
+        except ValueError:
+            pass  # A damaged historical receipt is not a writing cache.
     generation = reserve(
         session,
         walk_id,
@@ -277,6 +299,9 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, colle
             else await write(source, writing_input)
         )
         if prepared.board:
+            if isinstance(output, CardWritingResult) and output.scene_backgrounds is not None:
+                collected = output.scene_backgrounds
+                prepared = apply_backgrounds(prepared, collected)
             bundle = store_board(
                 prepared, complete_slot_board(prepared, output), revision, writing=output
             )

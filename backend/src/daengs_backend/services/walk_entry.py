@@ -102,9 +102,17 @@ async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
 
 
 async def profile(session, owner, spec: RecordProfileQuery):
+    """그 아이의 기록 프로필.
+
+    **논리 연결된 그룹 전체의 산책**을 읽습니다 (MVP 결정 §7). 프로필은 **강아지의 행동
+    요약**이지 사람의 성과가 아니므로(docs/co-care.md §2 결정 ①), 같은 실제 강아지의
+    산책이 두 `pet_id` 에 갈려 있으면 합쳐서 봐야 합니다. 연결이 없으면 그 아이 하나라
+    지금까지와 같습니다.
+    """
     if not await repo.pet_is_accessible(session, owner, spec.pet_id):
         raise EntryNotFound
-    walks = await repo.profile_walks(session, owner, spec)
+    group_ids = await repo.pet_group_ids(session, spec.pet_id)
+    walks = await repo.profile_walks(session, owner, spec, group_ids)
     await guard_v1(session, [w.id for w in walks])
     rows = await repo.entries(session, [w.id for w in walks])
-    return build_profile(spec, walks, rows)
+    return build_profile(spec, walks, rows, pet_ids=group_ids)

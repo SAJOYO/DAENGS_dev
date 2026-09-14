@@ -134,6 +134,23 @@ class Pet(Base):
     #: 것이고, 배웅은 있었던 일을 적어 두는 것입니다. 행을 안 지우고 이 날짜만 채웁니다.
     farewell_on: Mapped[date | None] = mapped_column(Date)
 
+    # ── 논리 강아지 (공동 돌봄 다중 초대) ───────────────────────────────
+    #: 같은 실제 강아지를 가리키는 그룹. **NULL 이면 연결 안 된 보통 강아지입니다.**
+    #:
+    #: 여러 사람이 각자 등록한 pet 행을 "같은 아이" 로 잇는 관계입니다 — 행을 합치거나
+    #: 기록을 옮기지 않습니다 (docs/co-care.md). 이름·사진은 각 행의 것을 쓰고, 견종·
+    #: 생일·지병 같은 공통 정보와 배웅 상태는 그룹의 `owner_pet_id` 행에서 읽습니다
+    #: (`services/pet_identity.py::project`).
+    #:
+    #: 마릿수 상한이 `COUNT(DISTINCT COALESCE(identity_id, id))` 라, NULL 인 행은
+    #: 자기 id 가 그룹 키가 되어 연결 이전과 같은 수를 셉니다.
+    #:
+    #: ⚠️ FK 는 `ON DELETE SET NULL` 입니다. CASCADE 로 바꾸면 그룹 행 하나가 사라질 때
+    #: 사람들의 강아지와 기록이 통째로 딸려 갑니다 — 논리 연결의 전제가 깨집니다.
+    identity_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("pet_identities.id", ondelete="SET NULL"), nullable=True
+    )
+
     # ── 돌봄 (#331) ────────────────────────────────────────────────────
     #: 급식 방식. None 은 '모름'입니다.
     feeding_style: Mapped[str | None] = mapped_column(String(10))

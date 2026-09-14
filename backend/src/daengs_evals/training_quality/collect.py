@@ -30,6 +30,7 @@
 헤더 한 줄 뒤에 문항마다 한 줄(JSONL). `decision` 을 같이 적는 이유는 판정기가 `ANSWER` 만
 채점하기 때문이고(D-060 ⑤), `gate` 를 적는 이유는 나중에 게이트의 자와 견주기 위해서다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -99,8 +100,9 @@ def chunk_rows(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def collect_one(service: Any, recorder: RecordingRetriever, qid: str, question: str,
-                top_k: int = 4) -> dict[str, Any]:
+def collect_one(
+    service: Any, recorder: RecordingRetriever, qid: str, question: str, top_k: int = 4
+) -> dict[str, Any]:
     """문항 하나 → 덤프 행 하나.
 
     예외를 삼키지 않는다 — 한 문항이 터지면 그 랩은 불완전하고, 그것을 조용히 넘기면

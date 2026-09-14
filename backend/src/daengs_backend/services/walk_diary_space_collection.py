@@ -14,7 +14,9 @@ import httpx
 from daengs_backend.services import walk_area_catalog, walk_catalog_regions, walk_park_catalog
 from daengs_backend.services.walk_commerce_catalog import ENDPOINT as COMMERCE_ENDPOINT
 from daengs_backend.services.walk_public_http import get_json
+from daengs_backend.services.walk_sgis import sgis
 from daengs_backend.services.walk_space_catalog_input import normalization_input, retain_page
+from daengs_walk.diary_board import RecordCore
 from daengs_walk.diary_input import SavedBackground, digest
 from daengs_walk.diary_scene_backgrounds import (
     SceneBackgroundSnapshot,
@@ -68,6 +70,10 @@ async def collect_spaces(
     land_layer="EGIS:lv3_2025y",
     transport=None,
     timeout_s=COLLECTION_SECONDS,
+    sgis_key="",
+    sgis_secret="",
+    include_sgis=False,
+    include_spaces=True,
 ):
     if transport is None:
         async with httpx.AsyncHTTPTransport() as owned:
@@ -79,6 +85,10 @@ async def collect_spaces(
                 land_layer=land_layer,
                 transport=owned,
                 timeout_s=timeout_s,
+                sgis_key=sgis_key,
+                sgis_secret=sgis_secret,
+                include_sgis=include_sgis,
+                include_spaces=include_spaces,
             )
     targets = scene_background_targets(board)
     points = {
@@ -88,12 +98,21 @@ async def collect_spaces(
     }
     results = {}
     semaphore = asyncio.Semaphore(4)
+    kinds = (*(("sgis",) if include_sgis else ()), "commerce", "park", "land_cover")
 
     async def acquire(key, point, kind):
         try:
             async with semaphore:
                 at = datetime.now(UTC)
                 query = point.model_dump()
+                if kind == "sgis":
+                    if not sgis_key or not sgis_secret:
+                        raise ValueError("sgis unavailable")
+                    row, retrieved = await sgis.address(transport, sgis_key, sgis_secret, query)
+                    results[(key, kind)] = (row, datetime.fromisoformat(retrieved))
+                    return
+                if not include_spaces:
+                    raise ValueError("spatial source disabled")
                 if kind == "land_cover":
                     response = await get_json(
                         transport, LAND_ENDPOINT, land_parameters(query, land_layer)
@@ -128,13 +147,12 @@ async def collect_spaces(
         except Exception:  # noqa: BLE001 - URLs/credentials/paths never enter saved diagnostics
             results[(key, kind)] = (None, None)
 
-    tasks = []
-    if len(board.scenes) <= MAX_SCENES:
-        tasks = [
-            asyncio.create_task(acquire(key, point, kind))
-            for key, point in points.items()
-            for kind in ("commerce", "park", "land_cover")
-        ]
+    selected_points = dict(list(points.items())[:MAX_SCENES])
+    tasks = [
+        asyncio.create_task(acquire(key, point, kind))
+        for key, point in selected_points.items()
+        for kind in kinds
+    ]
     try:
         if tasks:
             await asyncio.wait(tasks, timeout=timeout_s)
@@ -146,7 +164,7 @@ async def collect_spaces(
             await asyncio.gather(*tasks, return_exceptions=True)
     backgrounds = []
     for target in targets:
-        for kind in ("commerce", "park", "land_cover"):
+        for kind in kinds:
             key = (digest(target.anchor.point), kind)
             value, at = results.get(key, (None, None))
             unlocated = target.anchor.point is None or target.anchor.position_state == "provisional"
@@ -154,12 +172,32 @@ async def collect_spaces(
                 "scene_location_unavailable"
                 if unlocated
                 else "scene_limit"
-                if len(board.scenes) > MAX_SCENES
+                if key[0] not in selected_points
                 else "collection_timeout"
                 if key not in results
                 else "source_unavailable"
             )
-            payload = value.model_dump(mode="json") if value is not None else None
+            if kind == "sgis":
+                scene = next(s for s in board.scenes if s.id == target.scene_id)
+                pin = scene.core.record.pin_payload if isinstance(scene.core, RecordCore) else None
+                payload = (
+                    {
+                        "format": "sgis-dong-v1",
+                        "address_type": "administrative_dong",
+                        "address": value,
+                        "query_point": target.anchor.point.model_dump(mode="json"),
+                        "location_basis": pin["method"] if pin else "original_location",
+                        **(
+                            {k: pin.get(k) for k in ("uncertainty_m", "uncertainty_basis")}
+                            if pin
+                            else {}
+                        ),
+                    }
+                    if value is not None
+                    else None
+                )
+            else:
+                payload = value.model_dump(mode="json") if value is not None else None
             backgrounds.append(
                 SavedBackground(
                     id="normalized:"
@@ -167,9 +205,13 @@ async def collect_spaces(
                         [target.scene_id, target.core_ref.model_dump(mode="json"), kind, payload]
                     ),
                     target=target.core_ref,
-                    provider="public-normalized-" + kind,
-                    payload_schema="space-materials-v1",
-                    policy_version="space-normalization-v1",
+                    provider="sgis" if kind == "sgis" else "public-normalized-" + kind,
+                    payload_schema="walk-entry-context-v1"
+                    if kind == "sgis"
+                    else "space-materials-v1",
+                    policy_version="walk-entry-context-v1"
+                    if kind == "sgis"
+                    else "space-normalization-v1",
                     query_point=target.anchor.point,
                     tags=("space",),
                     status=(
@@ -202,4 +244,8 @@ async def configured_collection(board):
         park_catalog=settings.walk_park_catalog_path,
         radius_m=settings.walk_diary_space_radius_m,
         land_layer=settings.walk_land_cover_layer,
+        sgis_key=settings.walk_sgis_key.get_secret_value().strip(),
+        sgis_secret=settings.walk_sgis_secret.get_secret_value().strip(),
+        include_sgis=True,
+        include_spaces=settings.walk_diary_space_enabled,
     )

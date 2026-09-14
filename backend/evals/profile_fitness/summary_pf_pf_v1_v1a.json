@@ -1,0 +1,270 @@
+{
+  "label": "pf_v1",
+  "judge": {
+    "model": "gpt-5.4-2026-03-05",
+    "variant": "A",
+    "prompt_version": "profile-fitness-diff-ko-v1a",
+    "hygiene": {
+      "judge_model": "gpt-5.4-2026-03-05",
+      "judge_family": "openai",
+      "generation_families": "google"
+    }
+  },
+  "generation": {
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "general": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "general-answer-ko-v3"
+    }
+  },
+  "anchor_record": {
+    "file": "anchor_check_dev_gpt-5.4-2026-03-05_A.json",
+    "passed_count": 7,
+    "anchor_count": 7,
+    "checked_at": "2026-09-09T02:06:21+00:00"
+  },
+  "rates": {
+    "N_noise": {
+      "point": 0.0,
+      "low": 0.0,
+      "high": 0.1015,
+      "n": 34,
+      "k": 0
+    },
+    "S_invariant": {
+      "point": 1.0,
+      "low": 0.5101,
+      "high": 1.0,
+      "n": 4,
+      "k": 4
+    },
+    "P_ablation": {
+      "point": 0.8,
+      "low": 0.584,
+      "high": 0.9193,
+      "n": 20,
+      "k": 16
+    },
+    "reactive_contrast": {
+      "point": 0.9444,
+      "low": 0.7424,
+      "high": 0.9901,
+      "n": 18,
+      "k": 17
+    },
+    "probe_fabricated": {
+      "point": 0.0,
+      "low": 0.0,
+      "high": 0.5615,
+      "n": 3,
+      "k": 0
+    }
+  },
+  "inequality": {
+    "N": 0.0,
+    "S": 1.0,
+    "P": 0.8,
+    "holds_N_lt_S": true,
+    "holds_S_lt_P": false,
+    "holds": false,
+    "P_minus_N": {
+      "point": 0.8,
+      "low": 0.6,
+      "high": 0.95,
+      "n": 20
+    },
+    "P_minus_N_ci_excludes_zero": true,
+    "paired_questions": 20
+  },
+  "items": {
+    "responsiveness": 1.658,
+    "no_fabrication": 1.0,
+    "invariance": 0.0
+  },
+  "items_detail": {
+    "responsiveness": {
+      "mean": 1.658,
+      "max": 2,
+      "n": 38,
+      "distribution": {
+        "2": 30,
+        "1": 3,
+        "0": 5
+      }
+    },
+    "no_fabrication": {
+      "mean": 1.0,
+      "max": 1,
+      "n": 45,
+      "distribution": {
+        "1": 45
+      }
+    },
+    "invariance": {
+      "mean": 0.0,
+      "max": 1,
+      "n": 4,
+      "distribution": {
+        "0": 4
+      }
+    }
+  },
+  "items_by_tier": {
+    "coarse": {
+      "responsiveness": {
+        "mean": 1.857,
+        "max": 2,
+        "n": 21,
+        "distribution": {
+          "2": 19,
+          "1": 1,
+          "0": 1
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 26,
+        "distribution": {
+          "1": 26
+        }
+      },
+      "invariance": {
+        "mean": 0.0,
+        "max": 1,
+        "n": 3,
+        "distribution": {
+          "0": 3
+        }
+      }
+    },
+    "fine": {
+      "responsiveness": {
+        "mean": 1.412,
+        "max": 2,
+        "n": 17,
+        "distribution": {
+          "2": 11,
+          "0": 4,
+          "1": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 19,
+        "distribution": {
+          "1": 19
+        }
+      },
+      "invariance": {
+        "mean": 0.0,
+        "max": 1,
+        "n": 1,
+        "distribution": {
+          "0": 1
+        }
+      }
+    }
+  },
+  "items_by_kind": {
+    "reactive": {
+      "responsiveness": {
+        "mean": 1.658,
+        "max": 2,
+        "n": 38,
+        "distribution": {
+          "2": 30,
+          "1": 3,
+          "0": 5
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 38,
+        "distribution": {
+          "1": 38
+        }
+      }
+    },
+    "invariant": {
+      "invariance": {
+        "mean": 0.0,
+        "max": 1,
+        "n": 4,
+        "distribution": {
+          "0": 4
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 4,
+        "distribution": {
+          "1": 4
+        }
+      }
+    },
+    "probe": {
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 3,
+        "distribution": {
+          "1": 3
+        }
+      }
+    }
+  },
+  "failures": {
+    "scored_pairs": 45,
+    "ignored": 5,
+    "fabricated": 0,
+    "stereotype": 2,
+    "over_personalized": 2
+  },
+  "unmeasured": {},
+  "coverage": {
+    "total_pairs": 151,
+    "judged": 90,
+    "skipped_before_judging": {
+      "not_answered": 50,
+      "out_of_scope": 11
+    },
+    "position_dependent": 11,
+    "abstained": 0,
+    "unmeasured_rate": 0.477
+  },
+  "paraphrase": {
+    "pairs": 18,
+    "agreement": 0.889
+  },
+  "cost": {
+    "input_tokens": 266176,
+    "output_tokens": 31940,
+    "pairs": 90,
+    "tokens_per_1000_pairs": 3312400
+  },
+  "calibration": null,
+  "provisional": true,
+  "generated_at": "2026-09-09T02:42:42+00:00",
+  "gate": {
+    "responsiveness": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "invariance": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "no_fabrication": {
+      "passed": false,
+      "reason": "not_calibrated"
+    }
+  },
+  "note": "v1a 전(前) 기록 — 프롬프트 v2 · 질문 v1.1 로 가기 전 상태"
+}

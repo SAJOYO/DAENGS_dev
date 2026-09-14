@@ -1,0 +1,267 @@
+{
+  "axis": "profile_fitness",
+  "label": "pf_v1_1",
+  "labeler": "hong",
+  "n_labels": 57,
+  "n_repeats": 10,
+  "kappa_by_block": {
+    "random": {
+      "changed": {
+        "kappa": 0.47391304347826085,
+        "n": 44,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 25,
+            "0": 19
+          },
+          "judge": {
+            "1": 30,
+            "0": 14
+          }
+        }
+      },
+      "profile": {
+        "kappa": 0.7727272727272727,
+        "n": 44,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "0": 21,
+            "1": 23
+          },
+          "judge": {
+            "1": 22,
+            "0": 22
+          }
+        }
+      },
+      "fabricated": {
+        "kappa": null,
+        "n": 44,
+        "undefined": "single_category",
+        "marginals": {
+          "human": {
+            "0": 44
+          },
+          "judge": {
+            "0": 44
+          }
+        }
+      },
+      "stereotype": {
+        "kappa": 0.0,
+        "n": 44,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "0": 43,
+            "1": 1
+          },
+          "judge": {
+            "0": 44
+          }
+        }
+      },
+      "responsiveness": {
+        "kappa": 0.5955555555555555,
+        "n": 35,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 2,
+            "2": 21,
+            "0": 12
+          },
+          "judge": {
+            "2": 20,
+            "0": 10,
+            "1": 5
+          }
+        }
+      }
+    },
+    "contradiction": {
+      "changed": {
+        "kappa": -0.23529411764705882,
+        "n": 12,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 8,
+            "0": 4
+          },
+          "judge": {
+            "1": 7,
+            "0": 5
+          }
+        }
+      },
+      "profile": {
+        "kappa": 0.21052631578947378,
+        "n": 12,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 7,
+            "0": 5
+          },
+          "judge": {
+            "1": 4,
+            "0": 8
+          }
+        }
+      },
+      "fabricated": {
+        "kappa": null,
+        "n": 12,
+        "undefined": "single_category",
+        "marginals": {
+          "human": {
+            "0": 12
+          },
+          "judge": {
+            "0": 12
+          }
+        }
+      },
+      "stereotype": {
+        "kappa": 1.0,
+        "n": 12,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "0": 10,
+            "1": 2
+          },
+          "judge": {
+            "0": 10,
+            "1": 2
+          }
+        }
+      },
+      "responsiveness": {
+        "kappa": -0.06382978723404253,
+        "n": 10,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "2": 6,
+            "1": 1,
+            "0": 3
+          },
+          "judge": {
+            "2": 4,
+            "1": 3,
+            "0": 3
+          }
+        }
+      }
+    },
+    "all": {
+      "changed": {
+        "kappa": 0.31799729364005414,
+        "n": 56,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 33,
+            "0": 23
+          },
+          "judge": {
+            "1": 37,
+            "0": 19
+          }
+        }
+      },
+      "profile": {
+        "kappa": 0.6446700507614213,
+        "n": 56,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "1": 30,
+            "0": 26
+          },
+          "judge": {
+            "1": 26,
+            "0": 30
+          }
+        }
+      },
+      "fabricated": {
+        "kappa": null,
+        "n": 56,
+        "undefined": "single_category",
+        "marginals": {
+          "human": {
+            "0": 56
+          },
+          "judge": {
+            "0": 56
+          }
+        }
+      },
+      "stereotype": {
+        "kappa": 0.7910447761194024,
+        "n": 56,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "0": 53,
+            "1": 3
+          },
+          "judge": {
+            "0": 54,
+            "1": 2
+          }
+        }
+      },
+      "responsiveness": {
+        "kappa": 0.4462279293739968,
+        "n": 45,
+        "undefined": null,
+        "marginals": {
+          "human": {
+            "2": 27,
+            "1": 3,
+            "0": 15
+          },
+          "judge": {
+            "2": 24,
+            "1": 8,
+            "0": 13
+          }
+        }
+      }
+    }
+  },
+  "intra_rater": {
+    "changed": {
+      "kappa": 0.782608695652174,
+      "n": 10,
+      "undefined": null
+    },
+    "profile": {
+      "kappa": 0.782608695652174,
+      "n": 10,
+      "undefined": null
+    },
+    "fabricated": {
+      "kappa": null,
+      "n": 10,
+      "undefined": "single_category"
+    },
+    "stereotype": {
+      "kappa": -0.11111111111111124,
+      "n": 10,
+      "undefined": null
+    },
+    "responsiveness": {
+      "kappa": 0.7826086956521738,
+      "n": 10,
+      "undefined": null
+    }
+  },
+  "note": "'all' 은 합산이며 모집단 추정이 아니다. 발표는 random 블록 κ 를 쓰고 contradiction 은 약한 자리의 지도다."
+}

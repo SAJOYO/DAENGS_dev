@@ -46,9 +46,31 @@ CREATE TABLE IF NOT EXISTS pet_invites (
     -- SET NULL 은 care_events.actor_app_user_id 와 같은 이유다 — 영수증은 행을 지우지
     -- 않고 사람만 비운다. app_users 는 탈퇴해도 행이 안 지워지므로(위 "함정") 이 SET NULL
     -- 은 실질적으로 거의 안 돈다.
-    accepted_by UUID REFERENCES app_users(id) ON DELETE SET NULL
+    accepted_by UUID REFERENCES app_users(id) ON DELETE SET NULL,
+
+    -- 묶음에 원래 몇 마리가 있었나 (다중 초대 MVP). **묶음 불변성이 이 칸에 걸려 있다** —
+    -- pet_invite_pets.pet_id 가 CASCADE 라 강아지가 지워지면 자식 줄이 조용히 사라지는데,
+    -- 그러면 남은 강아지만으로 부분 수락이 된다. 수락할 때 자식 수와 견줘 다르면 묶음
+    -- 전체를 410 으로 막는다. 기본값 1 은 마이그레이션 쪽과 같은 이유다(옛 코드 호환).
+    pet_count SMALLINT NOT NULL DEFAULT 1,
+    CONSTRAINT pet_invites_pet_count_check CHECK (pet_count >= 1)
 );
 CREATE INDEX IF NOT EXISTS idx_pet_invites_pet ON pet_invites (pet_id);
+
+-- 초대 하나에 담긴 강아지들. `pet_invites.pet_id` 는 **앵커**로 남는다 — 승계·만료 청소·
+-- 활성 수 세기와 구 앱의 `GET /app/pets/{pet_id}/invites` 가 그 칸을 본다.
+CREATE TABLE IF NOT EXISTS pet_invite_pets (
+    invite_id UUID NOT NULL REFERENCES pet_invites(id) ON DELETE CASCADE,
+    pet_id    UUID NOT NULL REFERENCES pets(id)        ON DELETE CASCADE,
+
+    -- 수락 때 이 강아지를 받는 사람의 **어느 pet 행에 연결했는지**. NULL 이면 연결 없이
+    -- 참여다. **영수증의 일부다** — 응답을 못 받은 재시도에 그때의 매핑을 복원한다.
+    -- SET NULL 인 이유는 accepted_by 와 같다(영수증은 사람만 비운다).
+    linked_pet_id UUID REFERENCES pets(id) ON DELETE SET NULL,
+
+    PRIMARY KEY (invite_id, pet_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pet_invite_pets_pet ON pet_invite_pets (pet_id);
 
 -- ① app_users 는 탈퇴해도 살아남으므로 FK 로는 절대 안 지워진다.
 --   21_activity_game.sql 의 activity_owner_cleanup 과 같은 선례다.
@@ -89,3 +111,5 @@ FOR EACH ROW EXECUTE FUNCTION pet_members_not_owner();
 
 COMMENT ON TABLE pet_members IS
     '공동 돌봄의 돌보미. 대표는 pets.app_user_id 에 있다 (docs/co-care.md)';
+COMMENT ON TABLE pet_invite_pets IS
+    '초대 묶음에 담긴 강아지와 수락 때의 연결 결과 (docs/co-care.md)';

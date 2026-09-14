@@ -13,7 +13,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CHAR, DateTime, ForeignKey, Uuid, text
+from sqlalchemy import CHAR, DateTime, ForeignKey, SmallInteger, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from daengs_backend.models.base import Base
@@ -35,6 +35,18 @@ class PetInvite(Base):
     )
 
     token_hash: Mapped[str] = mapped_column(CHAR(64), unique=True)
+
+    #: 묶음에 **원래** 몇 마리가 있었나 (다중 초대 MVP, MVP 결정 §2).
+    #:
+    #: `pet_invite_pets.pet_id` 가 CASCADE 라 강아지가 지워지면 자식 줄이 조용히
+    #: 사라집니다. 그러면 남은 강아지만으로 **부분 수락**이 되는데, 그것이 바로 제품이
+    #: 금지한 동작입니다. 수락할 때 자식 수와 이 값을 견줘 다르면 묶음 전체를 410 으로
+    #: 무효화합니다 — "하나라도 무효면 전부" 가 원자성 규칙과 같은 결입니다.
+    #:
+    #: 기본값 1 은 **배포 창** 때문입니다 — 마이그레이션이 서버보다 먼저 나가므로
+    #: (MVP 결정 §9) 그 사이 옛 코드가 이 칸 없이 INSERT 합니다. 옛 코드는 한 마리
+    #: 초대만 만드니 1 이 정확합니다.
+    pet_count: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

@@ -11,7 +11,7 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.services import walk_entry_context
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
+from daengs_backend.services.walk_diary_board_slot_writing import write_legacy_slot_board
 from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
 from daengs_life.app import deps
 from daengs_life.realtime.cache import Cache, MemoryStore
@@ -94,7 +94,7 @@ async def test_collected_temperature_reaches_writer_and_is_frozen_after_source_r
         }
 
     async def writer(source, base):
-        return await write_board(source, base, prose)
+        return await write_legacy_slot_board(source, base, prose)
 
     async with factory() as db:
         first = await generate_diary(

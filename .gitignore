@@ -307,3 +307,6 @@ _data/
 # curl 로 손 시험할 때 생기는 것들 — 세션 쿠키가 들어갑니다 (#314 에서 실수로 커밋될 뻔했음)
 cookies.txt
 query_body.json
+
+# 실사용 대화로 만든 사람 라벨 — 답변 원문이 들어가므로 커밋하지 않는다 (D-037). 합성 답변 라벨은 human_labels/ 에 그대로 둔다
+backend/evals/calibration/human_labels/real/

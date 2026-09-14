@@ -1,0 +1,240 @@
+{
+  "cells_label": "smoke3",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "summary": {
+    "mutations": {
+      "count": 10,
+      "passed": 10,
+      "by_mutation": {
+        "inject_record": {
+          "passed": 2,
+          "count": 2
+        },
+        "inject_stereotype": {
+          "passed": 2,
+          "count": 2
+        },
+        "mention_only": {
+          "passed": 2,
+          "count": 2
+        },
+        "reorder": {
+          "passed": 2,
+          "count": 2
+        },
+        "verbose": {
+          "passed": 2,
+          "count": 2
+        }
+      }
+    },
+    "self_consistency": {
+      "pairs": 3,
+      "changed_rate": 1.0,
+      "fabricated_rate": 1.0
+    },
+    "position": {
+      "pairs": 3,
+      "flip_rate": 0.0
+    }
+  },
+  "mutation_results": [
+    {
+      "case_id": "verbose:pf_walk_duration_01:toy_puppy",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "추가된 마지막 문장들은 정서적 마무리와 안내일 뿐 산책 시간·방법에 대한 조언 내용은 동일합니다."
+    },
+    {
+      "case_id": "verbose:pf_walk_duration_01:large_senior",
+      "mutation": "verbose",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "추가된 문장은 정서적 마무리와 안내일 뿐 산책 시간이나 운동량에 대한 실질적 조언 내용은 동일합니다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:toy_puppy",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "ANSWER_B에는 '치와와시군요!'라는 인사말만 추가되었고, 산책 시간·방식·주의사항 등 조언의 내용은 동일합니다."
+    },
+    {
+      "case_id": "mention_only:pf_walk_duration_01:large_senior",
+      "mutation": "mention_only",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "ANSWER_B에는 '골든리트리버시군요!'라는 인사말성 언급만 추가되었고, 산책 시간과 조절 기준 등 실질적인 조언 내용은 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:toy_puppy",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 조언의 내용은 동일합니다."
+    },
+    {
+      "case_id": "reorder:pf_walk_duration_01:large_senior",
+      "mutation": "reorder",
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 문장 순서만 다르고 조언 내용은 동일합니다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 프로필은 동일하므로 답변 차이는 프로필로 설명되지 않는다. 추가된 차이는 문체가 아니라 건강 기록에 대한 단정이다."
+    },
+    {
+      "case_id": "inject_record:pf_walk_duration_01:large_senior",
+      "mutation": "inject_record",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 프로필은 동일하므로 내용 차이는 프로필 변화로 설명되지 않습니다. 차이는 개인 기록을 지어낸 한 문장뿐입니다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:toy_puppy",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 프로필은 동일하므로 답변 차이는 프로필 차이로 설명되지 않습니다. 추가된 변화는 견종 기질에 대한 통념에서 나온 것입니다."
+    },
+    {
+      "case_id": "inject_stereotype:pf_walk_duration_01:large_senior",
+      "mutation": "inject_stereotype",
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 프로필은 동일하므로 차이는 프로필로 설명되지 않는다. 답변 B의 추가 문장은 내용상 새로운 권고이며, 견종 기질 통념에 기대어 조언을 바꾼 사례다."
+    }
+  ],
+  "consistency": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "changed_consistent": true,
+      "fabricated_consistent": true
+    }
+  ],
+  "position": [
+    {
+      "pair_id": "pf_walk_duration_01|contrast|toy_puppy#0|large_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_stairs_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    },
+    {
+      "pair_id": "pf_meal_amount_01|contrast|maltese_puppy#0|maltese_senior#0",
+      "flips": 0,
+      "runs": 3
+    }
+  ],
+  "tokens": {
+    "input": 41846,
+    "output": 6178,
+    "calls": 28
+  },
+  "checked_at": "2026-09-09T02:08:02+00:00",
+  "source": {
+    "source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "source_dirty_files": [],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

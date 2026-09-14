@@ -1,10 +1,8 @@
 """Explicit card and historical slot entries; share the existing board projection."""
 
-from daengs_backend.services.walk_diary_card_writing import (
-    CardWritingResult,
-    complete_cards,
-    write_cards,
-)
+from daengs_backend.services.walk_diary_card_assembly import complete_cards
+from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
+from daengs_backend.services.walk_diary_card_writing import write_cards
 from daengs_backend.services.walk_diary_slot_writing import (
     assemble_slot_writing,
     generate_slot_prose,

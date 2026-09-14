@@ -9,9 +9,9 @@ from daengs_walk.diary_scene_input import preserve_original
 
 
 def writing_receipt(prepared, bundle, revision, output=None):
+    from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
+    from daengs_backend.services.walk_diary_card_policy import writing_version as card_version
     from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
-    from daengs_backend.services.walk_diary_card_writing import CardWritingResult
-    from daengs_backend.services.walk_diary_card_writing import writing_version as card_version
 
     if isinstance(output, CardWritingResult):
         expected = complete_slot_board(prepared, output)

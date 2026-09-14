@@ -1,0 +1,46 @@
+{
+  "source_commit": "e718e08e2076cd4a72516445ffa648d6da5736d0",
+  "description": "Pre-D fixed inputs, provider responses and collection clock; no live services.",
+  "policy": "4e15f6a83842852ab855cdec9e1c5f03e85e6eebb4e11e9629d324ff199757e5",
+  "schemas": {
+    "SpaceProse": "28faa15c3bce462b82df994d126ce13ab0b7ca42d45e30543874d647e3434f4b",
+    "ActionProse": "e9f67e48884815592941206f1706f5dedda4ac357b154fe583954fe9a1db7e75",
+    "CardTitle": "9d4e5f26c54ad5c3b6d1e377dbd5a980869b26b6a1ca689e7a2a20fb9e96fc48",
+    "CardTitles": "e1a016d9c0a21ce6d8581dd5c09431134c9692aa3302b07a62aa504415d319ee",
+    "WritingJob": "df9eab0eebefe0ce435993338e040913b36d0446099dc1be9b3a41ded10e2606",
+    "CardWritingResult": "8d19a77ef170805d1ccd1c8c03e7e3c9fe4d9d8d777e3cec0fb786981b3518c8",
+    "StoredCardWriting": "ce9fd7b1c1a9caf3fa3e5f5e59c38eddcd19c532e31a9ad308943adb5b040a7c",
+    "LegacyStoredBoard": "7b694973a696adee5fa9c22a19ca2857e332dce40897f012da6a9abc8bd3e443",
+    "StoredBoard": "3559c7c9f4eabd48aa156535e58b042c9d43431e2ce4e7cb8e7f61301f5fde40"
+  },
+  "cases": {
+    "card": {
+      "public": "1a2fd2fc32e9d8dc1c488a099cfc81eb43ff621763ac7416f4f76014a22c01ca",
+      "stored": "f69df06f42bfd82cf95330bd590a1d0b439e27b4ce211a9492496ad8ed60b97c",
+      "response": "080951f20ac301e3fe5d572ce36c320025c40268e98d0c5ee77e68af115b7f07"
+    },
+    "cached": {
+      "public": "1a2fd2fc32e9d8dc1c488a099cfc81eb43ff621763ac7416f4f76014a22c01ca",
+      "stored": "21222ba83bdccb49f1065da4756c4df99331d2d9a22496a2fcb5ee5005904180",
+      "response": "080951f20ac301e3fe5d572ce36c320025c40268e98d0c5ee77e68af115b7f07"
+    },
+    "provider_failed": {
+      "public": "bbdc947b7a3e4db8e5a41a696d0c5427837270ae869782064859ebeb9b314e34",
+      "stored": "73d77b7e3a7a21e93a9bf1d935d77fddb5fbbf656b78bc931c9e929192321375",
+      "response": "f442b6e4cadc902aec08856cb2688195d96462b2b759199d23aad7cc5bf8229e"
+    },
+    "base": {
+      "public": "4a3d2699e982cf480645f4d2345834cbb6d771dee0211009cff0ff6031d738a5",
+      "stored": "1c8152b5ddcaa4e7f3888d77838db5e7d9d770369c9f72469bd308b8a46fd1ae",
+      "response": "8a6cd81c2890bb7f7f2d66374356d0ea998707692b67b33b713c673a265110fb"
+    },
+    "legacy_slot": {
+      "public": "af3138f30b2b3e76ea5752b4f5adb94a3e8e855fe7431bd74ec16cdf2d0b27a9",
+      "stored": "d0f78f52569679c27ffa9dd8d782a259cb0e1920454ba46c3b404af124fd27ab",
+      "response": "7dafe82a01700f508ede126880a38b09a0e7576107f0777e4d68a7024185cc81"
+    },
+    "legacy_v1": {
+      "stored": "689e1a20c1505991af6f1608a4abd994fff032560182a735842bd468cb6c7a44"
+    }
+  }
+}

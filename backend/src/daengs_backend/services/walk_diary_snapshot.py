@@ -10,7 +10,7 @@ from daengs_backend.services.walk_diary_base_board import (
     with_scene_backgrounds,
 )
 from daengs_backend.services.walk_diary_board_storage import load_board, read_board
-from daengs_backend.services.walk_diary_card_writing import writing_version as slot_writing_version
+from daengs_backend.services.walk_diary_card_policy import writing_version as slot_writing_version
 from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary, prepare_saved_diary
 from daengs_backend.services.walk_diary_storage import read_diary
 from daengs_backend.services.walk_diary_writing import writing_version

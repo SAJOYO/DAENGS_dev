@@ -37,7 +37,12 @@ flowchart TD
 | 실제 보드 작성 진입점 | `walk_diary_board_slot_writing.py:write_board` |
 | 런타임 진입과 일기 그래프 | `orchestration/runtime.py:build_diary_orchestrator`, `orchestration/diary.py` |
 | 채팅·일기가 공유하는 제한 실행·시간 초과·오류 격리 | `orchestration/execution.py:JobExecutor` |
-| 작성용 입력·응답 검증·카드 부분 투영 | `walk_diary_card_writing.py` |
+| 작성 결과·작업·공급자 응답의 데이터 계약 | `walk_diary_card_contracts.py` |
+| 현재 모델·예산·버전 지문 | `walk_diary_card_policy.py` |
+| 작성용 작업 입력·응답 검증 | `walk_diary_card_jobs.py` |
+| 채택한 카드 부분 조립·완료 검증 | `walk_diary_card_assembly.py` |
+| Gemini 전송 | `walk_diary_card_provider.py:generate_card_prose` |
+| 그래프 호출·기존 import 호환 | `walk_diary_card_writing.py:write_cards` |
 | 공간/행동/제목의 개별 작성 지시 | `walk_diary_card_prompts.py` |
 | SGIS·공원·상권·EGIS 수집 | `walk_diary_space_collection.py:configured_collection` |
 | 원래 SGIS 변환·선정 | `walk_sgis.py`, `diary_public_background.py`, `diary_slots.py` |
@@ -51,6 +56,16 @@ flowchart TD
 기존 `OrchestrationEngine._execute_requests`도 `JobExecutor.run`을 호출한다. 채팅은 기존 순차 실행·capability 계약·집계 진리표를 유지한다. 일기는 같은 실행 계층 위에 `space || actions → freeze_card_content → titles → assemble` 그래프를 두고, 실행 동시성을 4로 제한한다. 자료 조회는 작성 슬롯을 점유하지 않으므로 SGIS가 늦어도 행동은 실행된다.
 
 일기 작업을 기존 산책 적합도 `walk`로 등록하거나 `AssistantResponse`로 포장하지 않는다. 자연어 의미 라우터는 호출하지 않는다. 일기 그래프의 입력은 저장된 산책과 준비된 보드이며, 출력은 기존 일기 영수증이다. `walk_diary_card_writing.write_cards`에는 독립 실행 루프가 없고 런타임 호출만 남는다.
+
+### 저장 판독과 작성 실행의 의존 방향 (#507)
+
+`write_cards → runtime → orchestration/diary`가 실행 입구다. 그래프는 계약·정책·작업·조립 모듈을 직접 사용하고 `walk_diary_card_writing`이나 모델 provider를 역참조하지 않는다. 공급자 함수는 입구에서 주입한다. 기존 `walk_diary_card_writing`의 공개 계약·함수 import는 새 모듈과 **동일한 객체**를 재노출한다.
+
+`walk_diary_board_storage.load_board/read_board → walk_diary_card_receipt → walk_diary_card_contracts`는 작성 실행과 별개다. reader는 저장된 writer 지문과 근거로 영수증을 검증하며 현재 모델·프롬프트를 불러오지 않는다. 새 영수증을 만드는 `store_board`만 호출 시 `walk_diary_board_provenance`를 가져온다. 과거 슬롯 영수증과 저장 v1/v2 판독은 유지한다. 과거 bundle의 정책 비교·영수증 보완은 기존 `walk_diary_storage` 책임 그대로다.
+
+2026-09-14, #507은 변경 전 dev `e718e08`에서 고정 원본·SGIS/공간 조회 시각·외부 대역으로 기준을 캡처했다. [기준 해시](../../backend/evals/walk-diary/writing-boundary-v1.json)와 [회귀 검사](../../backend/tests/walk/diary/test_diary_writing_boundaries.py)는 정상 카드, 캐시 재사용, 공급자 실패, 기본 보드, 슬롯 영수증, 저장 v1의 공개/저장 JSON 및 응답과 9개 스키마를 대조한다. `reused=false` 등 생략 필드와 과거 해시도 그대로 비교하므로 실패 시 기준을 자동 교체하지 않는다.
+
+별도 Python 프로세스의 import 차단 검사는 reader에 현재 정책·작성기·그래프·모델 SDK가 필요 없고, 그래프가 작성 입구/provider를 참조하지 않는지 확인한다. 실제 읽기와 변조 거부까지 검사하며, 테스트 프로세스에 미리 import된 모듈 때문에 통과하는 것을 허용하지 않는다.
 
 발행 서비스가 예약을 저장한 뒤 그 마감을 `within_budget`으로 전달한다. 그래프는 남은 시간에서 본문·제목·최종 반환 여유를 나눠 사용하며 대기열 진입이나 개별 호출 때 시계를 다시 시작하지 않는다. 실행 계층은 늦은 값을 채택하지 않고, 최종 원본·생성 시도 확인과 저장 권한은 계속 기존 발행 서비스에 있다. 그래프에는 별도 DB·발행 큐·체크포인터가 없다.
 

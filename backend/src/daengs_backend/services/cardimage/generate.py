@@ -68,7 +68,7 @@ def _load_template(month: int, base_dir: Path) -> bytes:
 
 
 def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: bytes, photo_jpeg: bytes,
-             prompt: str, text: str, font: Path, edge: title_mod.Edge) -> tuple[bytes, JudgeResult | None]:
+             prompt: str, text: str, font: Path, plate: title_mod.Plate) -> tuple[bytes, JudgeResult | None]:
     """한 번의 생성 시도: 엔진 호출 → 제목 얹기 → (있으면) 검수. 검수가 없거나 실패해도
     카드 자체는 만들어 돌려준다 — 점수는 `None` 이 될 뿐 이 함수가 실패하지는 않는다."""
     try:
@@ -77,7 +77,7 @@ def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: byte
         if exc.code == "no_key":
             raise CardImageUnavailable(exc.detail) from exc
         raise
-    card = title_mod.draw_title(Image.open(io.BytesIO(raw)).convert("RGB"), text, font, edge=edge)
+    card = title_mod.draw_title(Image.open(io.BytesIO(raw)).convert("RGB"), text, font, plate=plate)
     out = io.BytesIO()
     card.save(out, "PNG")
     png = out.getvalue()
@@ -108,14 +108,14 @@ def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str,
     prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=card_meta.subtitle,
                           outfit=card_meta.outfit)
     text = title_mod.title_text(card_meta.card_name, dog_name)
-    edge = card_meta.plate_edge
+    plate = card_meta.plate
 
     png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, edge=edge)
+                        font=font, plate=plate)
     if j1 is None or j1.likeness >= judge_min:
         return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text)
     png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, edge=edge)
+                        font=font, plate=plate)
     if j2 is not None and j2.likeness > j1.likeness:
         return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text)
     return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text)

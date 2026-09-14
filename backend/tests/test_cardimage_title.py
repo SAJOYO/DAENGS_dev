@@ -40,6 +40,26 @@ def test_long_name_stays_left_of_badge_boundary():
     assert cols.max() <= 758 + 20   # 기울어진 경계(아래쪽 758)에 여백 14 를 둔 선 안
 
 
+def _ink_center_y(out: Image.Image, ref: Image.Image, plate: title.Plate) -> float:
+    """틀과 달라진 밝은 픽셀(우리가 찍은 글자)의 세로 중심."""
+    a = np.asarray(out).astype(int)
+    r = np.asarray(ref).astype(int)
+    y0, y1 = plate.center_y - 60, plate.center_y + 60
+    bright = (a[y0:y1, 250:800].min(axis=2) > 200) & (r[y0:y1, 250:800].min(axis=2) <= 200)
+    rows = np.where(bright.any(axis=1))[0] + y0
+    return (rows.min() + rows.max()) / 2
+
+
+def test_september_plate_centers_text_higher_than_april():
+    """9월 판은 4월보다 11px 위(y 40~135 vs 53~145, 09-14 실측)라 글자도 그만큼 위에 찍혀야 한다."""
+    sep = Image.open(CARDIMAGE / "9_harvest_moon_template.webp").convert("RGB")
+    sep_plate = title.Plate(center_y=88, edge=((65, 750), (135, 709)))
+    apr_c = _ink_center_y(title.draw_title(_template(), "CHUSEOK 네오", FONT), _template(), title.APRIL_PLATE)
+    sep_c = _ink_center_y(title.draw_title(sep, "CHUSEOK 네오", FONT, plate=sep_plate), sep, sep_plate)
+    assert abs(apr_c - 99) <= 4 and abs(sep_c - 88) <= 4
+    assert 8 <= apr_c - sep_c <= 14
+
+
 def test_input_is_not_mutated():
     src = _template()
     before = np.asarray(src).copy()

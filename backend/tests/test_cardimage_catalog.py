@@ -32,12 +32,15 @@ def test_september_card_is_openable_with_hanbok_outfit_and_own_edge():
     c = catalog.require_open(9, frozenset({4, 9}))
     assert c.card_name == "CHUSEOK" and c.badge == "26SEP" and c.subtitle == "SEPTEMBER SPECIAL"
     assert "hanbok" in c.outfit and "songpyeon" in c.scene
-    assert c.plate_edge != catalog.APRIL_PLATE_EDGE and c.plate_edge[0][1] < catalog.APRIL_PLATE_EDGE[0][1]
+    # 9월 판은 4월보다 위에 있고(중심 88 < 99) 좁다(오른쪽 경계 750 < 791). 왼쪽 시작은 같다.
+    assert c.plate.center_y < catalog.APRIL_PLATE.center_y
+    assert c.plate.edge[0][1] < catalog.APRIL_PLATE.edge[0][1]
+    assert c.plate.left_x == catalog.APRIL_PLATE.left_x
 
 
-def test_april_uses_default_outfit_and_edge():
+def test_april_uses_default_outfit_and_plate():
     c = catalog.get(4)
-    assert c.outfit == catalog.NO_OUTFIT and c.plate_edge == catalog.APRIL_PLATE_EDGE and c.subtitle == "APRIL SPECIAL"
+    assert c.outfit == catalog.NO_OUTFIT and c.plate == catalog.APRIL_PLATE and c.subtitle == "APRIL SPECIAL"
 
 
 def test_month_with_empty_scene_is_not_open_even_if_listed():

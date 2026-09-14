@@ -5,13 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from daengs_backend.services.cardimage.title import APRIL_PLATE, Plate
+
 
 class MonthNotOpenError(Exception):
     """틀은 있지만 설정(DAENGS_CARDIMAGE_MONTHS)으로 잠긴 달. 라우터가 404 로 바꾼다."""
 
 
-#: 4월 틀의 검은 제목판 오른쪽 경계 — (y, x) 두 점을 잇는 기울어진 선. 배지와 맞닿는 선이라 달마다 다르다.
-APRIL_PLATE_EDGE: tuple[tuple[int, int], tuple[int, int]] = ((65, 791), (135, 758))
+#: 9월 틀의 검은 제목판 — 4월보다 11px 위에 있다(y 40~135, 4월은 53~145) 그리고 약 40px 좁다.
+#: 09-14 실측: 세로는 x=270~640 다섯 열 모두 중심 87.5~88.0, 오른쪽 경계 y65→x750 · y100→731 · y135→709.
+SEPTEMBER_PLATE = Plate(center_y=88, edge=((65, 750), (135, 709)))
 
 #: 4월처럼 강아지가 아무것도 안 입는 달의 의상 문장. 사진의 목줄·리드줄이 카드로 옮겨 오는 것을 막는다.
 NO_OUTFIT = (
@@ -29,11 +32,11 @@ class MonthCard:
     scene: str       # 프롬프트에 넣는 무대 묘사. "" 이면 프롬프트를 못 만들어 열 수 없다
     subtitle: str = ""             # 틀에 구워진 부제. 프롬프트가 "그대로 두라"고 가리킨다
     outfit: str = NO_OUTFIT        # 의상 문장. 한복 같은 옷이 있는 달은 "이미지 1 의 옷 그대로" 로 바꾼다
-    plate_edge: tuple[tuple[int, int], tuple[int, int]] = APRIL_PLATE_EDGE  # 제목판 오른쪽 경계 (달마다 잰다)
+    plate: Plate = APRIL_PLATE     # 제목판 기하 — 세로 중심·오른쪽 경계 (달마다 틀에서 잰다)
 
 
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
-# 무대(소품·매트·배경)와 의상을 같은 식으로 적고, 제목판 경계를 재고, 실험으로 검증한 뒤
+# 무대(소품·매트·배경)와 의상을 같은 식으로 적고, 제목판(세로 중심·오른쪽 경계)을 재고, 실험으로 검증한 뒤
 # DAENGS_CARDIMAGE_MONTHS 에 넣는다.
 _CARDS: dict[int, MonthCard] = {
     1: MonthCard(1, "1_new_year", "NEW YEAR", "26JAN", "", "JANUARY SPECIAL"),
@@ -59,7 +62,7 @@ _CARDS: dict[int, MonthCard] = {
         "The dog must wear exactly the same hanbok as the dog in image 1 (cream jacket with floral pattern, "
         "sage-green ribbon, coral-pink skirt with gold flowers and the tassel ornament) and hold the same tray of "
         "songpyeon. Do not carry over any accessories from image 2 — no collar, no leash, no harness.",
-        ((65, 750), (135, 709)),  # 09-14 잰 값: y=65→x750, y=100→731, y=135→709
+        SEPTEMBER_PLATE,
     ),
     10: MonthCard(10, "10_ghost", "GHOST", "26OCT", "", "OCTOBER SPECIAL"),
     11: MonthCard(11, "11_thanks", "THANKS", "26NOV", "", "NOVEMBER SPECIAL"),

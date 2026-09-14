@@ -13,6 +13,7 @@
   - `subtitle` — 달별 부제(`SEPTEMBER SPECIAL`)를 catalog 로 옮기고 `generate.SUBTITLES` 표는 지웠다. 부제가 빈 달은 `CardImageUnavailable`.
   - `outfit` — 4월 문장 "아무것도 안 입는다, 목줄·하네스·옷 금지"가 9월 틀(한복 + 송편 쟁반)과 충돌한다. 9월은 "이미지 1 의 개와 **같은 한복**을 입고 같은 쟁반을 든다, 이미지 2 의 목줄·하네스는 금지". `build_prompt(..., outfit=)` 로 문장 통째 주입.
   - `plate_edge` — 9월 제목판 오른쪽 경계를 픽셀로 쟀다: y65→750, y100→731, y135→709. 4월(791→758)보다 약 40px 좁다. `title.draw_title(..., edge=)`.
+  - → **세로 중심도 달랐다.** 사용자가 콘솔에서 9월 카드를 보고 "제목 위치가 또 틀리다"고 지적. 틀을 다시 재니 9월 판은 y 40~135(중심 88), 4월은 53~145(중심 99) — 11px 차이인데 중심 y 가 공용 상수였다. `title.Plate(center_y, edge, left_x=252)` 로 묶어 `MonthCard.plate` 로 달마다 갖게 했다(`APRIL_PLATE` · `SEPTEMBER_PLATE`). 왼쪽 끝은 두 틀이 같아(226·228) x=252 공용. `tools/cardimage_title.py --month 9` 로 미리 볼 수 있다. 확인 그림 `cardimage/out/_title_test/sep/_before_after.png`.
   - 카드명은 `HARVEST MOON` 이 판에 안 들어가 축소돼 사용자가 **`CHUSEOK`** 으로 바꿨다. 배지 `26SEP` 는 틀에 이미 구워져 있다.
   - `cardimage_months` 기본값 `{4, 9}`, `.env.example` 주석도. 콘솔 탭에 `<select>`(4월 · BLOSSOM / 9월 · CHUSEOK), 버튼 글자가 고른 달을 따라간다.
   - 실호출 1회: `_03` 사진 → `CHUSEOK 네오`, 유사도 5/5, `text_ok`·`avatar_ok` 통과, 29.8초, 한복·쟁반 유지. `cardimage/out/_service_check/service_check_sep_1.png`.
@@ -20,7 +21,7 @@
 
 - **사진 상한 8 → 20 MiB** — 사용자가 콘솔에서 9월을 시도하자 413 이 났다(로그). 상한이 프로필 사진 값(8 MiB)이었는데 `cardimage/test/` 의 실제 폰 사진 13장 중 3장이 9.7~10.2MB 다 — "테스트 사진은 사용자가 보통 넣는 상황"이 전제였으니 상한을 다른 nginx 블록과 같은 20 MiB 로(`photo.MAX_PHOTO_BYTES`, nginx `client_max_body_size 20m`). 픽셀 상한 6000만은 그대로라 디코드 폭탄 방어는 유지.
 
-**다음 달을 열 때 하는 일(체크리스트):** ① `catalog.py` 에 `scene`·`subtitle`, 틀 강아지가 뭔가 입었으면 `outfit`, ② 제목판 오른쪽 경계 세 점 재서 `plate_edge`(`backend/tools/cardimage_title.py` 로 미리보기), ③ 실호출 1장, ④ `cardimage_months` 기본값과 콘솔 `MONTHS` 표, ⑤ 카드명이 길면 사용자와 짧은 이름 상의.
+**다음 달을 열 때 하는 일(체크리스트):** ① `catalog.py` 에 `scene`·`subtitle`, 틀 강아지가 뭔가 입었으면 `outfit`, ② 제목판을 재서 `title.Plate` — 세로 범위(중심 y)와 오른쪽 경계 세 점, 왼쪽 끝이 226 근처인지(`backend/tools/cardimage_title.py --month N` 으로 미리보기), ③ 실호출 1장, ④ `cardimage_months` 기본값과 콘솔 `MONTHS` 표, ⑤ 카드명이 길면 사용자와 짧은 이름 상의.
 
 ## 2026-09-14 — 1단계 구현 (에이전트 실행, Task 1~9·11)
 

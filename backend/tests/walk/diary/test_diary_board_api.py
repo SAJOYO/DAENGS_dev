@@ -8,14 +8,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.config import settings
+from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services import walk_diary_generation as generation
 from daengs_backend.services import walk_diary_input as reader
 from daengs_backend.services import walk_diary_slot_writing as writer
+from daengs_backend.services import walk_diary_writing as bundle_writer
 from daengs_backend.services.walk_diary_board_storage import StoredBoard
 from daengs_backend.services.walk_diary_generation import generate_diary
 from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
-from tests.walk.support.diary_generation import PATH, body
+from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.photo_input import OWNER, WALK
 
@@ -208,8 +210,55 @@ def test_saved_v1_is_read_without_conversion_or_generation(api):
     state.provider.assert_awaited_once()
 
 
+@pytest.mark.parametrize("requested_format", [BOARD_FORMAT, FORMAT])
+@pytest.mark.parametrize("edit_source", [False, True])
+def test_default_router_uses_saved_bundle_writer_after_negotiation(
+    api, monkeypatch, requested_format, edit_source
+):
+    client, state, _ = api
+    client.app.dependency_overrides.pop(router.get_diary_writer)
+    # The model callable is bound as a Python default. Replace only that external
+    # boundary; keep the router, negotiation, preparation and both writers real.
+    monkeypatch.setattr(bundle_writer.write_diary, "__defaults__", (state.provider,))
+    first_response = client.post(PATH, json=body(state))
+    assert first_response.status_code == 200, first_response.text
+    first = first_response.json()
+    assert first["status"] == "ready" and first["bundle"]["model_status"] == "accepted"
+    saved = deepcopy(state.row.bundle)
+    if edit_source:
+        state.entries[0].revision += 1
+        state.entries[0].payload["note"] = "  수정한 원문\n그대로 보존  "
+        state.envelope["target"]["revision"] = state.entries[0].revision
+
+    response = client.post(PATH, json=body(state, bundle_format=requested_format))
+    assert response.status_code == 200, response.text
+    value = response.json()
+    assert value["status"] == "ready", value
+    assert value["format"] == "walk-diary-response-v1"
+    assert value["bundle"]["format"] == FORMAT
+    assert value["bundle"]["model_status"] == "accepted"
+    assert value["generation"] == first["generation"] + int(edit_source)
+    assert value["entry_revisions"] == {str(e.id): e.revision for e in state.entries}
+    assert state.row.bundle["format"] == "walk-diary-storage-v1"
+    assert state.row.bundle["bundle"] == value["bundle"]
+    if edit_source:
+        assert value["input_revision"] != first["input_revision"]
+        original = next(s["user_record"] for s in value["bundle"]["scenes"] if s["user_record"])
+        assert original["text"] == state.entries[0].payload["note"]
+    else:
+        assert value == first and state.row.bundle == saved
+    assert state.provider.await_count == 1 + int(edit_source)
+    for call in state.provider.await_args_list:
+        payload, schema = call.args
+        assert "background_dictionary" in payload and "scenes" in payload
+        assert isinstance(schema, dict)
+    state.writer.assert_not_awaited()
+    state.lookup.assert_not_awaited()
+
+
 def test_saved_legacy_is_returned_in_its_original_format(api):
     client, state, _ = api
+    client.app.dependency_overrides.pop(router.get_diary_writer)
     first = client.post(
         PATH,
         json={

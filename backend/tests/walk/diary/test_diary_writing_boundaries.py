@@ -3,9 +3,11 @@
 import json
 import subprocess
 import sys
+from copy import deepcopy
 
 import pytest
 
+from daengs_walk.diary_input import digest
 from tests.walk.support.paths import REPO
 from tests.walk.support.writing_boundary import fingerprints, fixed_cases
 
@@ -20,7 +22,20 @@ def test_fixed_public_storage_schema_and_hashes_match_before_refactor(cases):
         (REPO / "backend/evals/walk-diary/writing-boundary-v1.json").read_text(encoding="utf-8")
     )
     expected = {key: golden[key] for key in ("policy", "schemas", "cases")}
-    assert fingerprints(cases) == expected
+    actual = fingerprints(cases)
+    # #511 adds optional diagnostics for degraded collection only. Compare every old
+    # schema field and all six complete serialized records against the unchanged golden.
+    for name, schema in cases["schemas"].items():
+        old = deepcopy(schema)
+        for model in [old, *old.get("$defs", {}).values()]:
+            properties = model.get("properties", {})
+            if "collection_receipt" in properties:
+                assert "collection_receipt" not in model.get("required", [])
+                assert properties["collection_receipt"]["default"] is None
+                properties.pop("collection_receipt")
+        old.get("$defs", {}).pop("CollectionReceipt", None)
+        actual["schemas"][name] = digest(old)
+    assert actual == expected
 
 
 def test_stored_board_reader_is_independent_of_writer_runtime(cases):

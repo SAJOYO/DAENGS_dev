@@ -17,7 +17,7 @@ from daengs_backend.services import walk_diary_card_assembly as assembly
 from daengs_backend.services import walk_diary_card_contracts as contracts
 from daengs_backend.services import walk_diary_card_jobs as card_jobs
 from daengs_backend.services import walk_diary_card_policy as policy
-from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
+from daengs_backend.services.walk_diary_collection_application import collect_for_writing
 from daengs_backend.services.walk_diary_deadline import publication_deadline
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_input import digest
@@ -28,6 +28,7 @@ class DiaryState(TypedDict, total=False):
     base: Any
     prepared: Any
     collection: Any
+    collection_receipt: Any
     space_results: list
     action_results: dict
     cards: list
@@ -136,27 +137,31 @@ class _DiaryRun:
         return {"action_results": {r.request["card_id"]: r for r in results}}
 
     async def space(self, state):
-        base, collection = state["base"], None
+        base, receipt = state["base"], None
         prepared = base
         if self.collector:
-
-            async def collect():
-                value = await self.collector(base.board)
-                return value, with_scene_backgrounds(base, value)
-
-            outcome = await self.collection_executor.run(
-                "diary:space_collection",
-                collect,
-                deadline=min(self.bodies_end, asyncio.get_running_loop().time() + 4.5),
+            prepared, receipt = await collect_for_writing(
+                base,
+                self.collector,
+                self.collection_executor,
+                min(self.bodies_end, asyncio.get_running_loop().time() + 4.5),
             )
-            if outcome.status == "ok":
-                collection, prepared = outcome.value
         inputs = [
             card_jobs.space_job(prepared, s, stamp)
             for s, stamp in zip(prepared.board.scenes, prepared.slots.stamps, strict=True)
         ]
         results = await asyncio.gather(*(self.execute(j, self.bodies_end) for j in inputs))
-        return {"prepared": prepared, "collection": collection, "space_results": results}
+        return {
+            "prepared": prepared,
+            "collection": prepared.scene_backgrounds if self.collector else None,
+            # Successful acquisition is already preserved in scene_backgrounds. Add a
+            # diagnostic receipt only for degraded runs, leaving historical bytes intact.
+            "collection_receipt": receipt
+            if receipt
+            and (receipt.status != "completed" or receipt.application_status != "applied")
+            else None,
+            "space_results": results,
+        }
 
     async def freeze(self, state):
         prepared = state["prepared"]
@@ -249,5 +254,6 @@ class _DiaryRun:
                 bundle=bundle,
                 jobs=tuple(jobs),
                 scene_backgrounds=state["collection"],
+                collection_receipt=state["collection_receipt"],
             )
         }

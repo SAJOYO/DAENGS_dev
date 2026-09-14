@@ -46,6 +46,16 @@ class WritingJob(DiaryContract):
     failure_code: Literal["provider_failed", "invalid_response", "budget_exceeded"] | None = None
 
 
+class CollectionReceipt(DiaryContract):
+    """Acquired inputs survive projection failures; no provider exceptions or credentials."""
+
+    snapshot: SceneBackgroundSnapshot
+    status: Literal["completed", "timeout", "error"]
+    failure_code: Literal["collector_failed", "invalid_snapshot"] | None = None
+    application_status: Literal["applied", "partial", "failed"] = "applied"
+    application_failures: tuple[Identifier, ...] = Field(default=(), max_length=2408)
+
+
 class CardWritingResult(DiaryContract):
     format: Literal["diary-card-writing-v1"] = "diary-card-writing-v1"
     input_revision: Digest
@@ -55,3 +65,6 @@ class CardWritingResult(DiaryContract):
     bundle: PublishedBoard
     jobs: tuple[WritingJob, ...]
     scene_backgrounds: SceneBackgroundSnapshot | None = None
+    collection_receipt: CollectionReceipt | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )

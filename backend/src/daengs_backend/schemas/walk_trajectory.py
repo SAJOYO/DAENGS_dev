@@ -5,9 +5,10 @@ from uuid import UUID
 
 from pydantic import Field
 
-from daengs_walk.trajectory import Contract, LedgerMetrics, SourceRef
+from daengs_walk.trajectory import Contract, LedgerMetrics
 from daengs_walk.trajectory_projection import (
     PathSection,
+    SourceWallTime,
     TrajectoryBoundaries,
     TrajectoryLocation,
 )
@@ -24,12 +25,6 @@ class ObservationPolicyInfo(Contract):
     version: Literal["motion-shadow-observed-v1"]
     max_gap_seconds: float = Field(gt=0)
     max_edge_m: float = Field(gt=0)
-
-
-class SourceWallTime(Contract):
-    ref: SourceRef
-    # Descriptive original clock readings, never a duration or cross-epoch mapping.
-    original_wall_time_millis: int
 
 
 class TrajectoryCalculation(Contract):

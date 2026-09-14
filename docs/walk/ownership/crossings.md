@@ -1,6 +1,6 @@
 # 영역 간 직접 import 판단표
 
-기준 `4d7407f6 + #524 stage 3`. Python 소스에서 서로 다른 소유 영역으로 연결되는 직접 import와 같은 측정 영역 안의 계산/응답 결합 C1을 기록한다. [부채별 실제 수정 범위](README.md)를 함께 읽는다.
+기준 `018a9ce7 + #526 stage 4`. Python 소스에서 서로 다른 소유 영역으로 연결되는 직접 import를 기록한다. 같은 측정 영역 안의 계산/응답 결합 C1은 #526에서 제거되어 행에서 빠졌다. [부채별 실제 수정 범위](README.md)를 함께 읽는다.
 
 `retain-interface`는 현재의 기능 소비/계층 관계를 보존한다는 뜻이다. 해당 모듈의 모든 함수나 비공개 구현을 영구적인 공개 API로 승인하지 않는다. `change`도 기능 제거가 아니라 명시한 경계 변경이다.
 
@@ -271,7 +271,7 @@
 | [backend/src/daengs_backend/services/walk_measurement.py](../../../backend/src/daengs_backend/services/walk_measurement.py) | [backend/src/daengs_backend/services/walk.py](../../../backend/src/daengs_backend/services/walk.py) | retain-interface | — |
 | [backend/src/daengs_backend/services/walk_measurement.py](../../../backend/src/daengs_backend/services/walk_measurement.py) | [backend/src/daengs_backend/services/walk_motion.py](../../../backend/src/daengs_backend/services/walk_motion.py) | retain-interface | — |
 | [backend/src/daengs_backend/services/walk_measurement.py](../../../backend/src/daengs_backend/services/walk_measurement.py) | [backend/src/daengs_backend/services/walk_motion_contract.py](../../../backend/src/daengs_backend/services/walk_motion_contract.py) | retain-interface | — |
-| [backend/src/daengs_backend/services/walk_measurement.py](../../../backend/src/daengs_backend/services/walk_measurement.py) | [backend/src/daengs_backend/services/walk_trajectory.py](../../../backend/src/daengs_backend/services/walk_trajectory.py) | change | C1 |
+| [backend/src/daengs_backend/services/walk_measurement_projection.py](../../../backend/src/daengs_backend/services/walk_measurement_projection.py) | [backend/src/daengs_backend/services/walk_motion_contract.py](../../../backend/src/daengs_backend/services/walk_motion_contract.py) | retain-interface | — |
 | [backend/src/daengs_backend/services/walk_motion.py](../../../backend/src/daengs_backend/services/walk_motion.py) | [backend/src/daengs_backend/repositories/__init__.py](../../../backend/src/daengs_backend/repositories/__init__.py) | retain-interface | — |
 | [backend/src/daengs_backend/services/walk_motion_calculation.py](../../../backend/src/daengs_backend/services/walk_motion_calculation.py) | [backend/src/daengs_backend/schemas/walk_motion.py](../../../backend/src/daengs_backend/schemas/walk_motion.py) | retain-interface | — |
 | [backend/src/daengs_backend/services/walk_motion_calculation.py](../../../backend/src/daengs_backend/services/walk_motion_calculation.py) | [backend/src/daengs_backend/services/__init__.py](../../../backend/src/daengs_backend/services/__init__.py) | retain-interface | — |

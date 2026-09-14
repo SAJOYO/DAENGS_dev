@@ -16,9 +16,9 @@ from daengs_backend.schemas.walk_measurement import (
     RoutePage,
     RoutePoint,
 )
-from daengs_backend.schemas.walk_trajectory import TrajectoryCalculation
-from daengs_backend.services import walk_motion, walk_trajectory
+from daengs_backend.services import walk_motion
 from daengs_backend.services.walk import WalkNotFoundError
+from daengs_backend.services.walk_measurement_projection import project as project_measurement
 from daengs_backend.services.walk_motion import MotionUnavailable
 from daengs_backend.services.walk_motion_contract import MotionConflict
 from daengs_walk.trajectory_view import digest
@@ -34,9 +34,7 @@ def input_key(base, precision):
 
 
 def project(inputs, owner, walk_id):
-    result = TrajectoryCalculation.model_validate_json(
-        walk_trajectory._project(*inputs, owner=owner, walk_id=walk_id, expected=None)
-    )
+    result = project_measurement(*inputs, owner=owner)
     ledger = result.measurement.ledger
     locations = {p.ref: p for p in result.locations}
     times = {p.ref: p for p in result.wall_times}

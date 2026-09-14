@@ -1,5 +1,5 @@
 {
-  "baseline": "4d7407f6 + #524 stage 3",
+  "baseline": "018a9ce7 + #526 stage 4",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -2640,7 +2640,7 @@
       "layer": "schemas",
       "scope_reason": "core",
       "disposition": "retain",
-      "rationale": "증거 계산·동선 투영·측정 저장 및 조회. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.",
+      "rationale": "불변 측정 요약과 경로 페이지 저장/전송 계약. 원본 시각 계약은 공통 투영에서 소비.",
       "debts": [],
       "related_owners": []
     },
@@ -3687,13 +3687,23 @@
       "owner": "measurement",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "동선 비공개 함수/응답 JSON 의존 제거; 공통 투영으로 요약과 페이지 생성.",
-      "debts": [
-        "C1"
-      ],
+      "disposition": "retain",
+      "rationale": "공통 투영 자료형에서 측정 요약·경로 페이지를 직접 조립하고 기존 트랜잭션으로 발행. 조회 서비스/응답 JSON 역참조 없음.",
+      "debts": [],
       "related_owners": [
         "integration",
+        "recording"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "owner": "measurement",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "검증된 입력의 공통 계산·최종 ledger·원본 시각 투영. 조회 응답과 측정 저장 조립을 소유하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
         "recording"
       ]
     },
@@ -3937,11 +3947,9 @@
       "owner": "measurement",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "검증된 공통 투영 결과와 HTTP 응답 조립/직렬화를 분리; 계산/직렬화 off-lock 유지.",
-      "debts": [
-        "C1"
-      ],
+      "disposition": "retain",
+      "rationale": "공통 투영 결과에서 후보 조회 응답을 조립·직렬화. 기존 입력 검증·예외·off-loop 경계 유지.",
+      "debts": [],
       "related_owners": [
         "integration",
         "recording"
@@ -4812,7 +4820,7 @@
       "layer": "domain",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
+      "rationale": "최종 구간 소유권 기반 경로·경계와 원본 시각 공통 계약. 조회 전용 스키마에 의존하지 않음.",
       "debts": [],
       "related_owners": []
     },
@@ -6176,6 +6184,16 @@
       "related_owners": []
     },
     {
+      "path": "backend/tests/walk/fixtures/measurement-projection-v1.json",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "측정 투영 경계 회귀 및 변경 전 018a9ce7의 조회/저장 바이트·ID 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
+      "related_owners": []
+    },
+    {
       "path": "backend/tests/walk/fixtures/provider-contracts-v1.json",
       "owner": "verification",
       "layer": "support",
@@ -6355,6 +6373,19 @@
       "disposition": "retain",
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
+      "related_owners": [
+        "measurement",
+        "recording"
+      ]
+    },
+    {
+      "path": "backend/tests/walk/measurement/test_projection_boundary.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "측정 투영 경계 회귀 및 변경 전 018a9ce7의 조회/저장 바이트·ID 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
       "related_owners": [
         "measurement",
         "recording"
@@ -8353,10 +8384,6 @@
     ],
     [
       "backend/src/daengs_backend/schemas/walk_measurement.py",
-      "backend/src/daengs_backend/schemas/walk_trajectory.py"
-    ],
-    [
-      "backend/src/daengs_backend/schemas/walk_measurement.py",
       "backend/src/daengs_walk/trajectory.py"
     ],
     [
@@ -9869,15 +9896,15 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_measurement.py",
-      "backend/src/daengs_backend/schemas/walk_trajectory.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_measurement.py",
       "backend/src/daengs_backend/services/__init__.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_measurement.py",
       "backend/src/daengs_backend/services/walk.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_measurement.py",
+      "backend/src/daengs_backend/services/walk_measurement_projection.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_measurement.py",
@@ -9889,10 +9916,26 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_measurement.py",
-      "backend/src/daengs_backend/services/walk_trajectory.py"
+      "backend/src/daengs_walk/trajectory_view.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_measurement.py",
+      "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "backend/src/daengs_backend/services/walk_motion_contract.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "backend/src/daengs_backend/services/walk_trajectory_shadow.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "backend/src/daengs_walk/trajectory.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "backend/src/daengs_walk/trajectory_projection.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_measurement_projection.py",
       "backend/src/daengs_walk/trajectory_view.py"
     ],
     [
@@ -10209,15 +10252,15 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_trajectory.py",
+      "backend/src/daengs_backend/services/walk_measurement_projection.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_trajectory.py",
       "backend/src/daengs_backend/services/walk_motion.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_trajectory.py",
       "backend/src/daengs_backend/services/walk_motion_contract.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_trajectory.py",
-      "backend/src/daengs_backend/services/walk_trajectory_shadow.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_trajectory_shadow.py",
@@ -13316,6 +13359,46 @@
       "backend/src/daengs_backend/services/walk_motion_engine.py"
     ],
     [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/schemas/walk.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/schemas/walk_measurement.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/schemas/walk_motion.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/schemas/walk_precision.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/schemas/walk_trajectory.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/services/walk_measurement.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/services/walk_measurement_projection.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/services/walk_motion_contract.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/services/walk_precision_contract.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_projection_boundary.py",
+      "backend/src/daengs_backend/services/walk_trajectory.py"
+    ],
+    [
       "backend/tests/walk/measurement/test_stored_measurement.py",
       "backend/src/daengs_backend/schemas/walk.py"
     ],
@@ -16045,11 +16128,11 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_measurement.py",
-      "to": "backend/src/daengs_backend/services/walk_trajectory.py",
-      "decision": "change",
-      "debt": "C1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "from": "backend/src/daengs_backend/services/walk_measurement_projection.py",
+      "to": "backend/src/daengs_backend/services/walk_motion_contract.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "검증된 공통 투영 결과와 원본 시각 계약의 소비 관계. 조회/저장 형식은 각 소비자가 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_motion.py",
@@ -16760,6 +16843,7 @@
     "A2",
     "D1",
     "D2",
-    "D3"
+    "D3",
+    "C1"
   ]
 }

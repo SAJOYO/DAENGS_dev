@@ -1,0 +1,21 @@
+{
+  "sequence": 41,
+  "endpoint": "https://api.mcee.go.kr/geoserver/wms",
+  "parameters": {
+    "SERVICE": "WMS",
+    "VERSION": "1.3.0",
+    "REQUEST": "GetFeatureInfo",
+    "LAYERS": "EGIS:lv3_2025y",
+    "QUERY_LAYERS": "EGIS:lv3_2025y",
+    "CRS": "EPSG:3857",
+    "BBOX": "14141376.70125924,4505303.746466199,14141496.70125924,4505423.746466199",
+    "WIDTH": "101",
+    "HEIGHT": "101",
+    "I": "50",
+    "J": "50",
+    "INFO_FORMAT": "application/json",
+    "FEATURE_COUNT": "10"
+  },
+  "started_at": "2026-09-14T03:04:30.805493+00:00",
+  "elapsed_s": 1.594
+}

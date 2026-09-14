@@ -1,0 +1,83 @@
+{
+  "cache_key": "rt-snapshot:kma-vilage-fcst:ncst:61,125:202609141000",
+  "entry": {
+    "payload": {
+      "dataType": "JSON",
+      "items": {
+        "item": [
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "PTY",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "0"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "REH",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "67"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "RN1",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "0"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "T1H",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "24.2"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "UUU",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "-0.5"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "VEC",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "99"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "VVV",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "0.1"
+          },
+          {
+            "baseDate": "20260914",
+            "baseTime": "1000",
+            "category": "WSD",
+            "nx": 61,
+            "ny": 125,
+            "obsrValue": "0.6"
+          }
+        ]
+      },
+      "pageNo": 1,
+      "numOfRows": 10,
+      "totalCount": 8
+    },
+    "fetched_at": "2026-09-14T12:04:33.068932+09:00",
+    "failure_kind": null,
+    "reason": null
+  },
+  "note": "Actual KMA response body retained by the existing Life transport/cache"
+}

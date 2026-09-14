@@ -8,7 +8,7 @@
 
 | 폴더 | 읽고 쓰는 패키지 | 안에 있는 것 |
 | --- | --- | --- |
-| [diary_route_scenario/](diary_route_scenario/README.md) | tools/run_diary_route_scenario.py · tools/run_diary_final_titles.py | 실제 양재 경로·토지피복 위의 가상 산책 8장면, 카드 그래프 원문 2회, 전체 본문을 읽고 장면 제목을 갱신하는 실험과 지도·근거 뷰어 |
+| [diary_route_scenario/](diary_route_scenario/README.md) | tools/run_diary_route_scenario.py · tools/run_diary_public_scenario.py · tools/run_diary_final_titles.py | 실제 양재 경로 위의 가상 산책 8장면, 공공자료 5종의 실제 수집·선정·모델 입력·인용 비교, 장면 제목 갱신과 지도 뷰어 |
 | `diary_slots/` | `tools/run_diary_slots.py` · `daengs_evals.diary_slots_demo` | 파트 슬롯 미리보기·서비스 writer의 합성 입력 기반 Gemini 실제 문장·근거·정책 버전, 실제 기온 수집 시도와 알려진 한계 |
 | [place_conversation/](place_conversation/README.md) | `daengs_evals.place_conversation` | 시설 검색 대화 23개 명세·실제 출력·구조 비교·검토 기록 |
 | `walk_diary_stamps/` | `tools/preview_diary_stamps.py` | 사용자 기록 중심 스탬프의 합성 입력·선택 사유·읽기용 결과. LLM 호출 없음 |

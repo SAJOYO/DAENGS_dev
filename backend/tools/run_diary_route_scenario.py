@@ -46,6 +46,9 @@ def configure(path):
         "GOOGLE_API_KEY",
         "DAENGS_DATA_GO_KR_SERVICE_KEY",
         "DATA_GO_KR_KEY",
+        "DAENGS_WALK_PUBLIC_DATA_KEY",
+        "DAENGS_WALK_SGIS_KEY",
+        "DAENGS_WALK_SGIS_SECRET",
     }
     if path:
         for line in path.read_text(encoding="utf-8-sig").splitlines():
@@ -61,8 +64,13 @@ def configure(path):
     if values.get("GEMINI_API_KEY") or values.get("GOOGLE_API_KEY"):
         os.environ["GEMINI_API_KEY"] = values.get("GEMINI_API_KEY") or values["GOOGLE_API_KEY"]
     public_key = unquote(
-        values.get("DATA_GO_KR_KEY") or values.get("DAENGS_DATA_GO_KR_SERVICE_KEY", "")
+        values.get("DAENGS_WALK_PUBLIC_DATA_KEY")
+        or values.get("DATA_GO_KR_KEY")
+        or values.get("DAENGS_DATA_GO_KR_SERVICE_KEY", "")
     )
+    for name in ("DAENGS_WALK_SGIS_KEY", "DAENGS_WALK_SGIS_SECRET"):
+        if name in values:
+            os.environ[name] = values[name]
     os.environ.update(
         {
             "DATA_GO_KR_KEY": public_key,
@@ -315,6 +323,8 @@ def render(directory, *, destination=None, whole_title=None, scene_titles=None):
         data["whole_title"] = whole_title
     if scene_titles is not None:
         data["scene_titles"] = scene_titles
+    if (directory / "source-lineage.json").exists():
+        data["source_lineage"] = read(directory / "source-lineage.json")
 
     # Huge source geometry belongs in the lossless JSON archive, not a browser
     # disclosure. Summaries are view-only and cannot feed the writer or verifier.

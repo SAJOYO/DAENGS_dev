@@ -319,6 +319,9 @@ def test_canonical_order_covers_every_execute_name() -> None:
         # `vet_contact` 는 맨 끝이고 라우터의 목적지가 아니다 — 결정적 어휘 게이트와
         # 명시적 신호로만 닿는다.
         "vet_contact",
+        # `care_log` (D-075) 도 라우터 목적지가 아니다. 순서에서 뒤인 것은 실행 순서가
+        # 아니라 선언 순서다 — 이 능력은 배타로 단독 실행되므로 같이 정렬될 일이 없다.
+        "care_log",
     ]
 
 

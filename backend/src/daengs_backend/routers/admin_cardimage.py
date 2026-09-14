@@ -13,18 +13,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from daengs_backend.config import settings
 from daengs_backend.core.deps import Perm, Principal, require
 from daengs_backend.schemas.cardimage import CardImageResponse, JudgeOut
-from daengs_backend.services.cardimage import (
-    CardImageUnavailable,
-    default_engine,
-    default_judge,
-    generate_card,
-)
-from daengs_backend.services.cardimage.catalog import MonthNotOpenError
-from daengs_backend.services.cardimage.engine import EngineError
-from daengs_backend.services.cardimage.photo import MAX_PHOTO_BYTES, PhotoError
+from daengs_backend.services import ai_card_engine
+from daengs_backend.services.ai_card_engine import default_engine, default_judge
+from daengs_cardimage import CardImageUnavailable
+from daengs_cardimage.catalog import MonthNotOpenError
+from daengs_cardimage.engine import EngineError
+from daengs_cardimage.photo import MAX_PHOTO_BYTES, PhotoError
 
 router = APIRouter(prefix="/admin/cardimage", tags=["admin-cardimage"])
 # `require(...)` 는 부를 때마다 새 함수를 만든다 — 라우터와 테스트가 같은 dependency_overrides
@@ -86,16 +82,13 @@ async def generate(
         # Gemini SDK 는 동기 호출이라(20~60초) 이벤트 루프를 막지 않도록 스레드로 뺀다
         # (services/chat_summary.py 의 `_call` 과 같은 방식).
         card = await asyncio.to_thread(
-            generate_card,
+            ai_card_engine.generate,
             photo=body,
             content_type=content_type,
             month=month,
             dog_name=dog_name,
             engine=default_engine(),
             judge=default_judge(),
-            base_dir=settings.cardimage_dir,
-            open_months=settings.cardimage_months,
-            judge_min=settings.cardimage_judge_min,
         )
     except PhotoError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail={"code": exc.code, "message": exc.detail}) from None

@@ -18,8 +18,8 @@ from PIL import Image
 
 from daengs_backend.core.deps import Principal, current_admin
 from daengs_backend.routers import admin_cardimage
-from daengs_backend.services.cardimage import engine as engine_mod
-from daengs_backend.services.cardimage.photo import MAX_PHOTO_BYTES
+from daengs_cardimage import engine as engine_mod
+from daengs_cardimage.photo import MAX_PHOTO_BYTES
 
 
 def _photo() -> bytes:

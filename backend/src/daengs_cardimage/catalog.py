@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from daengs_backend.services.cardimage.title import APRIL_PLATE, Plate
+from daengs_cardimage.title import APRIL_PLATE, Plate
 
 
 class MonthNotOpenError(Exception):

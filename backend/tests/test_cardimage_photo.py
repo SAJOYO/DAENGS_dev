@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from daengs_backend.services.cardimage import photo
+from daengs_cardimage import photo
 
 
 def _jpeg(w: int, h: int) -> bytes:

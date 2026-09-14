@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.models import VET_REASON_LABELS
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
+from daengs_backend.services.care_event import DAY_TIMEZONE
 
 log = logging.getLogger(__name__)
 
@@ -62,13 +64,15 @@ async def resolve(
 
     id 가 UUID 가 아니거나 남의 강아지면 조용히 None 입니다 — 소유권은
     `pet_repo.get_owned` 가 쿼리 조건으로 묶고 있어 남의 id 로는 못 읽습니다. `today` 는
-    테스트가 시계를 고정하는 자리이고, 안 주면 오늘입니다.
+    테스트가 시계를 고정하는 자리이고, 안 주면 **KST 의 오늘**입니다 — `visited_on` 은
+    영수증에 찍힌 한국 날짜라, UTC 의 오늘로 자르면 KST 00:00~09:00 사이에는 오늘 찍은
+    영수증이 `today` 보다 뒤가 되어 마지막 방문에서 빠집니다 (`_window` 와 같은 이유).
     """
     try:
         pet_id = uuid.UUID(active_dog_id)
     except (ValueError, AttributeError, TypeError):
         return None
-    today = today or datetime.now(UTC).date()
+    today = today or datetime.now(ZoneInfo(DAY_TIMEZONE)).date()
 
     try:
         pet = await pet_repo.get_owned(session, app_user_id, pet_id)

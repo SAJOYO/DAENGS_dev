@@ -168,12 +168,16 @@ async def list_visits(
     start: Annotated[date | None, Query(alias="from")] = None,
     end: Annotated[date | None, Query(alias="to")] = None,
 ) -> VetVisitListResponse:
-    """기간 조회, 최근 먼저. 안 보내면 최근 1년이고, 한 번에 5년까지다.
+    """기간 조회, 최근 먼저. 안 보내면 최근 1년이고, **기간 상한은 없다** —
+    `from=0001-01-01` 이 저장소의 [전체] 다.
+
+    **`from`/`to` 로 더 옛날도 볼 수 있다** — 기본 창이 감춘 건수가 `older_count` 로
+    같이 오므로, 앱은 그 값이 0 이 아닐 때만 "언제 이후만 보입니다" 를 띄우면 된다.
 
     내 강아지가 아니면 404 다.
     """
     try:
-        visits, start_, end_ = await vet_service.list_visits(
+        visits, start_, end_, older = await vet_service.list_visits(
             session, user.app_user_id, pet_id, start=start, end=end
         )
     except vet_service.VetVisitNotFoundError:
@@ -181,7 +185,11 @@ async def list_visits(
     except vet_service.VetRangeError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
     return VetVisitListResponse(
-        pet_id=pet_id, start=start_, end=end_, visits=[_to_response(v) for v in visits]
+        pet_id=pet_id,
+        start=start_,
+        end=end_,
+        visits=[_to_response(v) for v in visits],
+        older_count=older,
     )
 
 
@@ -232,7 +240,8 @@ async def confirm_draft(
     """유저가 [확인] 을 누른 순간. **`vet_visits` 에 행이 생기는 유일한 자리다.**
 
     항목(`raw_ocr_items`)은 이 본문에 없다 — 초안에서만 읽는다(docs §3). 내 초안이
-    아니면 404 다.
+    아니면 404 다. **미래 날짜는 422 다** — 목록의 `end` 는 늘 오늘이라, 미래로
+    확정된 기록은 저장은 되는데 어떤 창으로도 안 잡힌다 (`VetVisitDateError`).
     """
     req = vet_service.ConfirmDraftRequest(
         client_event_id=body.client_event_id,
@@ -250,6 +259,8 @@ async def confirm_draft(
         visit = await vet_service.confirm_draft(session, user.app_user_id, draft_id, req)
     except vet_service.VetVisitNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND) from None
+    except vet_service.VetVisitDateError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
     return _to_response(visit)
 
 

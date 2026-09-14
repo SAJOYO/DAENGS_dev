@@ -136,6 +136,26 @@ async def _resolve(pet_id: uuid.UUID | str, *, today: date = TODAY):
 # ---------------------------------------------------------------- 좁힘
 
 
+async def test_today_는_UTC_가_아니라_KST_다(pet, vet, monkeypatch) -> None:
+    """`visited_on` 은 영수증에 찍힌 한국 날짜다. UTC 의 오늘로 자르면 KST 00:00~09:00
+    사이에 오늘 다녀온 병원이 마지막 방문에서 빠지고, 매달 1일 아침에는 이번 달 합계가
+    지난달로 잡힌다 (`services/vet_visit.today_kst` 와 같은 이유)."""
+
+    class _FrozenClock:
+        _AT = datetime(2026, 9, 12, 23, 30, tzinfo=UTC)  # KST 로는 9/13 08:30
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls._AT if tz is None else cls._AT.astimezone(tz)
+
+    monkeypatch.setattr(vet_spend_context, "datetime", _FrozenClock)
+    vet.visits.append(FakeVetVisit(OWNER, pet.id, "skin", date(2026, 9, 13), 80_000))
+
+    out = await vet_spend_context.resolve(object(), OWNER, str(pet.id))
+    assert out is not None
+    assert out["last_visit"]["date"] == "2026-09-13"
+
+
 async def test_이번_달_합계와_최근_30일_건수와_마지막_방문을_넘긴다(pet, vet) -> None:
     vet.visits += [
         FakeVetVisit(OWNER, pet.id, "skin", date(2026, 9, 2), 80_000,

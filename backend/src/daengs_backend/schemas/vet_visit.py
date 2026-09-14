@@ -146,6 +146,9 @@ class VetVisitListResponse(BaseModel):
     start: date
     end: date
     visits: list[VetVisitResponse]
+    #: `start` 보다 오래된 기록 수. 0 이 아니면 앱이 "`start` 이후만 보입니다" 를
+    #: 띄우고 날짜를 고르게 한다 — 창 밖의 기록이 사라진 것처럼 보이지 않게.
+    older_count: int
 
 
 __all__ = [

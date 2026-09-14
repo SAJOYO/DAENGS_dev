@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.services import vet_receipt
+from daengs_backend.services.care_event import DAY_TIMEZONE
 from daengs_backend.services.vet_receipt import ReceiptExtraction, ReceiptExtractionFailed
 
 log = logging.getLogger(__name__)
@@ -68,15 +70,39 @@ class VetVisitConflictError(Exception):
 
 
 class VetRangeError(ValueError):
-    """조회 창이 뒤집혔거나 상한을 넘었다. 라우터가 422 로 바꾼다 (`care_event.
-    CareRangeError` 와 같은 자리)."""
+    """조회 창이 뒤집혔다. 라우터가 422 로 바꾼다 (`care_event.CareRangeError` 와
+    같은 자리). **기간 상한으로는 안 뜬다** — 상한이 없다 (`DEFAULT_RANGE` 주석)."""
 
 
-#: 기간 조회의 상한. "피부로 1년간 얼마 썼나" 가 실제 질문이라 (docs 머리말),
-#: 케어 로그(31일)보다 훨씬 넉넉하게 둔다.
-MAX_RANGE = timedelta(days=366 * 5)
-#: 안 보내면 최근 1년.
+class VetVisitDateError(ValueError):
+    """`visited_on` 이 미래다. 라우터가 422 로 바꾼다.
+
+    **확정을 막는 이유는 목록이 미래를 안 보여 주기 때문이다.** `_window` 의 `end` 는
+    아무리 늘려도 오늘이라, 미래 날짜로 확정된 기록은 저장은 되는데 어떤 조회 창으로도
+    안 잡힌다 — 유저에게는 "확인을 눌렀는데 저장소에 없다" 로 보이고, 재인식하면
+    `possible_duplicate` 만 뜬다(그쪽은 창이 없다). 저장 뒤에 못 고치느니 확인 화면에서
+    되돌려 주는 쪽이 싸다.
+    """
+
+
+#: 안 보내면 최근 1년. **상한은 없다** — 저장소의 [전체] 가 그것을 요구한다.
+#: 예전에는 5년 상한이 있었는데, 그러면 "전체"를 앱이 창을 쪼개 여러 번 불러야 하고
+#: 쪼개는 코드는 경계에서 한 건씩 흘린다. 상한을 없애도 되는 이유는 이 조회가
+#: `(pet_id, visited_on DESC)` 인덱스를 타고 **아이 한 마리의 병원 방문**만 세기
+#: 때문이다 — 연 2~6건이라 평생을 다 읽어도 수십 줄이다.
 DEFAULT_RANGE = timedelta(days=366)
+#: 확정이 허용하는 미래 쪽 여유. **시차 때문에 0 이 아니다** — 기기가 KST 보다 앞선
+#: 시간대(최대 UTC+14)에 있으면 거기서 오늘 받은 영수증이 KST 로는 내일이다.
+FUTURE_GRACE = timedelta(days=1)
+
+
+def today_kst() -> date:
+    """**UTC 가 아니라 KST 의 오늘이다.** `visited_on` 은 영수증에 찍힌 한국 날짜인데
+    `datetime.now(UTC).date()` 는 KST 00:00~09:00 사이에 어제를 낸다. 그 9시간 동안
+    오늘 찍은 영수증이 목록의 `end` 보다 뒤가 되어, 확정은 됐는데 저장소에서 사라진다
+    (테스터 제보, 2026-09-13). 하루의 경계는 `care_event.DAY_TIMEZONE` 이 원본이다.
+    """
+    return datetime.now(ZoneInfo(DAY_TIMEZONE)).date()
 
 
 @dataclass(frozen=True)
@@ -384,6 +410,11 @@ async def confirm_draft(
     if existing is not None:
         return existing
 
+    if body.visited_on > today_kst() + FUTURE_GRACE:
+        # 멱등키 조회 **뒤**다 — 이미 확정된 재시도는 통과해야 하고, 날짜 판단은
+        # 새 행을 만들 때만 한다.
+        raise VetVisitDateError("영수증 날짜는 오늘보다 뒤일 수 없습니다.")
+
     draft = await vet_repo.get_draft_owned(session, app_user_id, draft_id)
     if draft is None:
         raise VetVisitNotFoundError
@@ -425,13 +456,15 @@ async def confirm_draft(
 
 
 def _window(start: date | None, end: date | None) -> tuple[date, date]:
-    """조회 창. 안 보낸 쪽을 채우고 상한을 본다 (`care_event._window` 와 같은 자리)."""
-    end = end or datetime.now(UTC).date()
+    """조회 창. 안 보낸 쪽을 채운다 (`care_event._window` 와 같은 자리).
+
+    **기간 상한은 안 본다** (`DEFAULT_RANGE` 주석) — `from=0001-01-01` 도 정당한
+    요청이고, 그것이 저장소의 [전체] 다.
+    """
+    end = end or today_kst()
     start = start or end - DEFAULT_RANGE
     if end < start:
         raise VetRangeError("to 는 from 보다 뒤여야 합니다.")
-    if end - start > MAX_RANGE:
-        raise VetRangeError(f"조회 기간은 {MAX_RANGE.days}일까지입니다.")
     return start, end
 
 
@@ -442,12 +475,20 @@ async def list_visits(
     *,
     start: date | None = None,
     end: date | None = None,
-) -> tuple[list[VetVisit], date, date]:
+) -> tuple[list[VetVisit], date, date, int]:
     """기간 조회, 최근 먼저. 창을 같이 돌려주는 이유는 기본값을 앱이 되짚어 볼 수
-    있게 하려는 것이다 (`care_event.list_events` 와 같은 자리)."""
+    있게 하려는 것이다 (`care_event.list_events` 와 같은 자리).
+
+    **`start` 보다 오래된 기록 수도 같이 낸다.** 기본 창이 최근 1년이라 묵은 영수증은
+    확정해도 이 목록에 안 뜨는데, 그 사실이 화면 어디에도 안 적혀 있으면 유저에게는
+    기록이 사라진 것으로 보인다 (테스터 제보, 2026-09-13). 건수가 0 이 아닐 때만
+    "언제 이후만 보입니다" 를 띄우면 평소 화면은 안 빡빡해진다.
+    """
     await _owned_pet(session, app_user_id, pet_id)
     start, end = _window(start, end)
-    return await vet_repo.list_between(session, app_user_id, pet_id, start, end), start, end
+    visits = await vet_repo.list_between(session, app_user_id, pet_id, start, end)
+    older = await vet_repo.count_before(session, app_user_id, pet_id, start)
+    return visits, start, end, older
 
 
 async def delete_visit(session: AsyncSession, app_user_id: uuid.UUID, visit_id: uuid.UUID) -> None:
@@ -465,7 +506,7 @@ async def delete_visit(session: AsyncSession, app_user_id: uuid.UUID, visit_id: 
 __all__ = [
     "DEFAULT_RANGE",
     "DRAFT_TTL",
-    "MAX_RANGE",
+    "FUTURE_GRACE",
     "MAX_RECEIPT_BYTES",
     "SWEEP_LIMIT",
     "VET_RECEIPT_BRIDGE_DOWNLOAD_PATH",
@@ -476,6 +517,7 @@ __all__ = [
     "StartDraftRequest",
     "VetRangeError",
     "VetVisitConflictError",
+    "VetVisitDateError",
     "VetVisitNotFoundError",
     "confirm_draft",
     "content_type_from_key",
@@ -484,4 +526,5 @@ __all__ = [
     "list_visits",
     "reason_options",
     "start_draft",
+    "today_kst",
 ]

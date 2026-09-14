@@ -7,23 +7,25 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services.walk_diary_base_board import (
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.model_input import normalize
+from daengs_backend.services.walk_diary.preparation.board import (
     assemble_saved_base_board,
     with_scene_backgrounds,
 )
-from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_llm import normalize
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_walk.diary_activity import activity_projection, movement_uses
-from daengs_walk.diary_board import VerifiedBoardRoute
-from daengs_walk.diary_board_selection import observed_anchor
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_movement import MovementPolicy, pace_claims, phases_for, prepare_movement
-from daengs_walk.diary_observations import build_observation_pool
-from daengs_walk.diary_slots import SlotPolicy
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
+from daengs_backend.services.walk_diary.storage.board import load_board, store_board
+from daengs_backend.services.walk_diary.writing import jobs as activity_jobs
+from daengs_walk.diary.board.activity import activity_projection, movement_uses
+from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.route.movement import pace_claims, phases_for, prepare_movement
+from daengs_walk.diary.route.movement_policy import MovementPolicy
+from daengs_walk.diary.route.observations import build_observation_pool
+from daengs_walk.diary.selection.board import observed_anchor
 from daengs_walk.evidence import analyze_walk
 from tests.walk.diary.test_diary_route_patterns import input_case
 from tests.walk.support.base_board import policy as board_policy
@@ -173,8 +175,8 @@ def test_revisited_coordinates_bind_to_different_times_and_notes_receive_movemen
     base, _ = prepared(note=True)
     notes = [s for s in base.board.scenes if s.core.kind == "user_record"]
     assert notes
-    requests = [writing.action_job(base, s) for s in base.board.scenes]
-    note_job = writing.action_job(base, notes[0])
+    requests = [activity_jobs.action_job(base, s) for s in base.board.scenes]
+    note_job = activity_jobs.action_job(base, notes[0])
     assert note_job.request["action"] is None and note_job.request["movement"]
     for job in filter(None, requests):
         for item in job.request["movement"]:
@@ -249,7 +251,7 @@ def test_gap_keeps_behavior_without_assigning_a_cross_gap_movement():
         slot_policy=base.slots.policy,
     )
     scene = next(s for s in updated.board.scenes if s.core.kind == "user_record")
-    job = writing.action_job(updated, scene)
+    job = activity_jobs.action_job(updated, scene)
     assert job.request["action"] and not job.request.get("movement")
     assert any(
         d.reason == "movement_visit_match_unknown"
@@ -260,7 +262,7 @@ def test_gap_keeps_behavior_without_assigning_a_cross_gap_movement():
 
 
 async def test_delayed_space_preserves_frozen_motion_with_tight_total_budget(monkeypatch):
-    from daengs_walk import diary_movement
+    from daengs_walk.diary.route import movement as diary_movement
     from tests.walk.diary.test_diary_card_writing import collect_with_sgis
 
     base, _ = prepared()
@@ -284,11 +286,11 @@ def test_path_citation_cannot_suppress_a_pace_observation():
     from datetime import datetime, timedelta
     from types import SimpleNamespace
 
-    from daengs_walk.diary_activity import covers_observation
+    from daengs_walk.diary.board.activity import covers_observation
 
     base, _ = prepared()
     scene = next(s for s in base.board.scenes if s.core.kind == "user_record")
-    request = writing.action_job(base, scene).request
+    request = activity_jobs.action_job(base, scene).request
     uses = movement_uses(request)
     pace = next(u for u in uses if u["meaning"] == "relative_slow")
     at = datetime.fromisoformat(request["event_at"])
@@ -329,7 +331,7 @@ def test_equal_coordinates_on_outward_and_return_visits_get_different_progress()
     visits = [s for s in changed.board.scenes if s.core.kind == "user_record"]
     assert visits[0].anchor.point == visits[1].anchor.point
     meanings = [
-        {u["meaning"] for u in movement_uses(writing.action_job(changed, s).request)}
+        {u["meaning"] for u in movement_uses(activity_jobs.action_job(changed, s).request)}
         for s in visits
     ]
     assert "retrace" not in meanings[0] and "retrace" in meanings[1]
@@ -341,7 +343,7 @@ def test_missing_baseline_keeps_supported_path_without_normal_pace():
     assert catalog.baseline["baseline_mps"] is None
     assert catalog.baseline["excluded_seconds"] > 0
     assert catalog.claims and all(c["kind"] == "path" for c in catalog.claims)
-    job = writing.action_job(base, base.board.scenes[0])
+    job = activity_jobs.action_job(base, base.board.scenes[0])
     wire = normalize("action", job.request).payload
     assert all(not p["pace"] and p["path"] for p in wire["movement"]["phases"])
     assert "정상" not in json.dumps(wire, ensure_ascii=False)

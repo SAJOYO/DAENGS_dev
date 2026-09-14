@@ -10,19 +10,23 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_base_board import (
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.preparation.board import (
     assemble_saved_base_board,
     with_scene_backgrounds,
 )
-from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_walk.diary_board_output import PublishedBoard
-from daengs_walk.diary_card_narrative import CURRENT_OBSERVATION_TEXT
-from daengs_walk.diary_input import DiaryInput, digest
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.storage.board import load_board, store_board
+from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
+from daengs_backend.services.walk_diary.writing import assembly as activity_assembly
+from daengs_backend.services.walk_diary.writing import assembly as diary_assembly
+from daengs_backend.services.walk_diary.writing import jobs as diary_jobs
+from daengs_backend.services.walk_diary.writing import policy as diary_policy
+from daengs_walk.diary.board.output import PublishedBoard
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.narrative import CURRENT_OBSERVATION_TEXT
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prose
 from tests.walk.support.base_board import policy
 from tests.walk.support.diary import observation, source
@@ -88,7 +92,7 @@ async def test_confirmed_observation_survives_space_success_or_failure(kind, exp
             assert "observation" not in other.writing.model_dump(mode="json")
     bound = with_scene_backgrounds(base, result.scene_backgrounds)
     prepared_value = PreparedWalkDiary(base.input, base.plan.intermediate, bound)
-    writing.complete_cards(prepared_value, result)
+    diary_assembly.complete_cards(prepared_value, result)
     stored = store_board(
         prepared_value, result.bundle, digest("observation-generation"), writing=result
     )
@@ -138,7 +142,7 @@ async def test_historical_card_without_observation_part_is_read_unchanged(legacy
     assert PublishedBoard.model_validate(raw).model_dump(mode="json") == raw
     # Historical reading is allowed; a new completion must preserve the observation.
     with pytest.raises(ValueError, match="confirmed observation|adopted jobs|accepted jobs"):
-        writing.complete_cards(
+        activity_assembly.complete_cards(
             PreparedWalkDiary(base.input, base.plan.intermediate, base),
             result.model_copy(update={"bundle": PublishedBoard.model_validate(raw)}),
         )
@@ -174,10 +178,10 @@ async def test_title_receipt_must_read_the_adopted_observation():
     payload.pop("request_revision")
     card = next(c for c in payload["cards"] if "observation" in c)
     card.pop("observation")
-    jobs[index] = writing.job("title", payload).model_copy(update={"accepted": old.accepted})
+    jobs[index] = diary_jobs.job("title", payload).model_copy(update={"accepted": old.accepted})
     changed = result.model_copy(update={"jobs": tuple(jobs)})
     receipt = StoredCardWriting(
-        generation_revision=digest("test"), writer=writing.writing_version(), result=changed
+        generation_revision=digest("test"), writer=diary_policy.writing_version(), result=changed
     )
     with pytest.raises(ValueError, match="adopted card bodies"):
         receipt.require_bundle(result.bundle, digest("test"))

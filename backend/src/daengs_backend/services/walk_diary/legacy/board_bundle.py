@@ -1,0 +1,46 @@
+"""Legacy writer bridge for replaying the existing published-board contract fixture.
+
+New board generations use walk_diary.runtime instead.
+"""
+
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.board.output import publish_board
+from daengs_walk.diary.contracts.output import DiaryBundle, WritingReceipt
+
+
+def complete_board(prepared, output):
+    output = DiaryBundle.model_validate(output)
+    source, base = prepared.input.source, prepared.board
+    if (
+        output.input_revision != source.revision()
+        or output.plan_revision != prepared.prepared.plan.revision()
+    ):
+        raise ValueError("writer returned another plan's bundle")
+    observation = prepared.input.observation_source
+    route = (
+        VerifiedBoardRoute(observation.route, observation.evidence)
+        if observation and observation.evidence
+        else None
+    )
+    receipt = None
+    if output.model_status == "accepted":
+        receipt = WritingReceipt(
+            plan_revision=base.plan.revision(),
+            writing={
+                "title": output.title,
+                "scenes": [
+                    {
+                        "scene_id": s.id,
+                        "text": s.narration.text,
+                        "evidence_ids": s.narration.evidence_ids,
+                    }
+                    for s in output.scenes
+                    if s.narration.status in {"generated", "omitted"}
+                ],
+            },
+        )
+    board = assemble_base_board(
+        source, base.plan, route=route, receipt=receipt, failure_code=output.failure_code
+    )
+    return publish_board(board, base.plan)

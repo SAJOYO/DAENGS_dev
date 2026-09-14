@@ -44,7 +44,7 @@ flowchart TD
 
 ## LLM에 전달하는 재료
 
-`daengs_walk.diary_writing.prepare_writing()`이 확정된 선택·투영을 검증한 뒤 만든다.
+`daengs_walk.diary.legacy.writing.prepare_writing()`이 확정된 선택·투영을 검증한 뒤 만든다.
 
 | 필드 | 역할 |
 | --- | --- |

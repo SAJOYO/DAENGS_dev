@@ -11,12 +11,12 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.services import walk_entry_context
-from daengs_backend.services.walk_diary_board_slot_writing import write_legacy_slot_board
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
 from daengs_life.app import deps
 from daengs_life.realtime.cache import Cache, MemoryStore
 from daengs_life.realtime.providers import kma_vilage_fcst
-from daengs_walk.diary_board_output import BOARD_FORMAT
+from daengs_walk.diary.board.output import BOARD_FORMAT
 from tests.walk.diary.test_diary_board_db import board_database, spec  # noqa: F401
 from tests.walk.support.entry_v2 import AT, ENTRY, OWNER, WALK
 from tests.walk.support.photo_input import entry

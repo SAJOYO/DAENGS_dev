@@ -101,8 +101,8 @@ def distance(a, b):
 def scenario(route, start):
     from daengs_walk import analyze_walk
     from daengs_walk.contracts import WalkEvidencePoint
-    from daengs_walk.diary_input import DiaryInput, RouteVersion, UserRecord, digest
-    from daengs_walk.diary_observations import build_observation_pool
+    from daengs_walk.diary.contracts.input import DiaryInput, RouteVersion, UserRecord, digest
+    from daengs_walk.diary.route.observations import build_observation_pool
 
     vertices = [route["polyline"][0]]
     for point in route["polyline"][1:]:
@@ -220,14 +220,14 @@ def scenario(route, start):
 
 
 def prepare(raw):
-    from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-    from daengs_backend.services.walk_diary_input import InputAssembly
-    from daengs_backend.services.walk_diary_observations import ObservationSource
+    from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+    from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+    from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
     from daengs_walk import analyze_walk
     from daengs_walk.contracts import WalkEvidencePoint
-    from daengs_walk.diary_board import BaseBoardPolicy
-    from daengs_walk.diary_input import DiaryInput, digest
-    from daengs_walk.diary_observations import build_observation_pool
+    from daengs_walk.diary.board.models import BaseBoardPolicy
+    from daengs_walk.diary.contracts.input import DiaryInput, digest
+    from daengs_walk.diary.route.observations import build_observation_pool
 
     source = DiaryInput.model_validate(raw["source"])
     points = tuple(WalkEvidencePoint.model_validate(p) for p in raw["points"])
@@ -246,9 +246,9 @@ def prepare(raw):
 
 
 async def acquire(base, public_key):
-    from daengs_backend.services.walk_diary_space_collection import collect_spaces
+    from daengs_backend.services.walk_diary.collection.service import collect_spaces
     from daengs_backend.services.walk_weather_context import collect_temperature
-    from daengs_walk.diary_input import SavedBackground, digest
+    from daengs_walk.diary.contracts.input import SavedBackground, digest
 
     # Keep default 4 s public collection. Weather normally arrives through entry context;
     # the lab explicitly collects it for every selected scene outside the writer deadline.
@@ -292,9 +292,8 @@ async def acquire(base, public_key):
 
 
 async def generate(base, snapshot, prepared_input=False):
-    from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-    from daengs_backend.services.walk_diary_board_slot_writing import write_board
-    from daengs_backend.services.walk_diary_card_writing import write_cards
+    from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
+    from daengs_backend.services.walk_diary.runtime import write_board, write_cards
 
     if prepared_input:
         # Lab quality pass: source acquisition AND slot preparation precede the
@@ -331,7 +330,7 @@ def render(directory, *, destination=None, whole_title=None, scene_titles=None):
     # Huge source geometry belongs in the lossless JSON archive, not a browser
     # disclosure. Summaries are view-only and cannot feed the writer or verifier.
     def compact(value):
-        from daengs_walk.diary_input import digest
+        from daengs_walk.diary.contracts.input import digest
 
         if isinstance(value, list) and len(value) > 80:
             return {
@@ -363,9 +362,10 @@ def render(directory, *, destination=None, whole_title=None, scene_titles=None):
 def verify(directory):
     from types import SimpleNamespace
 
-    from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-    from daengs_backend.services.walk_diary_card_writing import CardWritingResult, complete_cards
-    from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+    from daengs_backend.services.walk_diary.contracts import CardWritingResult
+    from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
+    from daengs_backend.services.walk_diary.writing.assembly import complete_cards
+    from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
 
     raw, run = read(directory / "input.json"), read(directory / "run.json")
     base = prepare(raw)
@@ -451,8 +451,8 @@ async def main():
             flush=True,
         )
     else:
-        from daengs_backend.services.walk_diary_card_writing import writing_version
-        from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+        from daengs_backend.services.walk_diary.writing.policy import writing_version
+        from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
 
         if any((directory / name).exists() for name in ("result.json", "result.json.gz")):
             parser.error("result exists; use a new run directory for another generation")

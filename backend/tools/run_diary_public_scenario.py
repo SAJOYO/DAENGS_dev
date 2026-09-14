@@ -13,7 +13,7 @@ from urllib.parse import quote
 import httpx
 from run_diary_route_scenario import configure, dump, generate, prepare, read, render, scenario
 
-from daengs_walk.diary_input import SavedBackground, digest
+from daengs_walk.diary.contracts.input import SavedBackground, digest
 
 
 class RecordingTransport(httpx.AsyncBaseTransport):
@@ -138,8 +138,8 @@ async def main():
     os.environ["DAENGS_WALK_PUBLIC_CATALOG_ROOT"] = ""
     os.environ["DAENGS_WALK_COMMERCE_CATALOG_PATH"] = str(args.catalog_dir / "commerce.json")
     from daengs_backend.services import walk_area_catalog, walk_commerce_catalog, walk_park_catalog
-    from daengs_backend.services.walk_diary_card_writing import writing_version
-    from daengs_backend.services.walk_diary_space_collection import collect_spaces
+    from daengs_backend.services.walk_diary.collection.service import collect_spaces
+    from daengs_backend.services.walk_diary.writing.policy import writing_version
     from daengs_backend.services.walk_weather_context import collect_temperature
     from daengs_life.app.deps import get_cache
     from daengs_life.realtime.cache import MemoryStore

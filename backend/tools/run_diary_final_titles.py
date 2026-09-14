@@ -11,8 +11,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 from run_diary_route_scenario import configure, dump, read, render
 
-from daengs_backend.services.walk_diary_llm import VERSION, normalize
-from daengs_walk.diary_input import digest
+from daengs_backend.services.walk_diary.model_input import VERSION, normalize
+from daengs_walk.diary.contracts.input import digest
 
 MODEL = "gemini-3.1-flash-lite"
 WALK_PROMPT = """완성된 산책 일기의 모든 장면을 시간순으로 읽고, 전체 산책을 대표하는 제목 하나를 한국어로 작성한다.

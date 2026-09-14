@@ -5,14 +5,16 @@ from unittest.mock import Mock
 
 import pytest
 
-from daengs_backend.services import walk_diary_base_board as service
-from daengs_backend.services import walk_diary_snapshot as snapshots
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
+from daengs_backend.services.walk_diary.lifecycle import snapshot as snapshots
+from daengs_backend.services.walk_diary.preparation import board as service
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots, prepare_slot_preview
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.slots.service import prepare_board_slots
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.photo_input import OWNER, WALK

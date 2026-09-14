@@ -136,18 +136,27 @@ GPS 단절 양쪽의 6초를 합쳐 12초로 만들지는 않는다.
 
 | 경계 | 구현 |
 | --- | --- |
-| 원 동선·속도 구간 계산 | `diary_movement.py` |
-| 장면 연결·통합 슬롯 | `diary_movement_slots.py`, `diary_slots.py` |
-| 짧은 입력·세부 근거·관측 중복 | `diary_activity.py` |
-| 실제 작업·원문·전체 제목 | `walk_diary_card_writing.py`, `orchestration/diary.py` |
-| 전송·복원 | `walk_diary_llm.py`, `walk_diary_llm_materials.py` |
-| 저장·읽기 검사 | `diary_card_narrative.py`, `diary_board_output.py`, `walk_diary_card_receipt.py` |
+| 원 동선·속도 구간 계산 | `diary/route/movement.py`, `diary/route/movement_policy.py` |
+| 장면 연결·통합 슬롯 | `diary/slots/movement.py`, `diary/slots/service.py` |
+| 짧은 입력·세부 근거·관측 중복 | `diary/board/activity.py` |
+| 실제 작업·원문·전체 제목 | `walk_diary/writing/jobs.py`, `writing/assembly.py`, `orchestration/diary.py` |
+| 전송·복원 | `walk_diary/model_input.py`, `walk_diary/model_materials.py` |
+| 저장·읽기 검사 | `diary/contracts/narrative.py`, `diary/board/output.py`, `walk_diary/storage/card_receipt.py` |
 
-관련 14개 테스트 파일에서 서로 다른 185개 사례를 선별 실행해 통과했다.
+표는 #512·#514 리팩토링을 합친 현재 경로다. 이동 정책·슬롯 자료형·작성 실행은 분리하며
+과거 저장 판독에 현재 프롬프트나 모델 SDK를 가져오지 않는다.
+
+초기 구현 `2998a93b`에서는 관련 14개 테스트 파일의 서로 다른 185개 사례를 선별 실행해 통과했다.
 마지막 회전 시각·진단 기록 변경 뒤 활동/경로 연결 사례를 다시 확인했다.
 임계값과 단절, 재방문, 메모·행동, 실제 wire 누락 차단, 인용 실패,
 늦은 공간 수집, 원문 길이, 저장·재조회·재사용·전체 제목 의존성을 포함한다.
 외부 공급자와 DB 경계는 대역이다. 전체 저장소 스위트와 운영 DB·앱 실행은 하지 않았다.
+
+후속 충돌 해결에서는 `081aa0ba`의 서비스/도메인 패키지와 수집·캐시 수정을 합쳤다.
+관련 18개 파일의 서로 다른 233개 사례가 통과했다(97 + 19 + 116, 운영 점검 실패 1개 수정 후 통과).
+예전 고정 표본은 별도 원본 커밋에서 기존 golden과 대조하여 확보했고, 과거/현재 표본의
+판독 격리를 함께 확인했다. 새 패키지로 8장면을 오프라인 재생한 슬롯·결과·저장 JSON과
+요약은 아래 `activity-offline-03`과 모두 일치했다. 외부 호출은 0회다.
 
 [activity-offline-03](../../backend/evals/diary_route_scenario/activity-offline-03/summary.json)는
 이전에 수집한 `public-02` 공공자료와 가상 GPS를 재생한 결과다.

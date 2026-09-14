@@ -11,7 +11,7 @@ from urllib.parse import unquote
 from pyproj import Transformer
 
 from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 
 FORWARD = Transformer.from_crs(4326, 5179, always_xy=True)
 REVERSE = Transformer.from_crs(5179, 4326, always_xy=True)

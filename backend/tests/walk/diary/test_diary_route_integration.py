@@ -6,8 +6,8 @@ import sys
 import pytest
 
 from daengs_backend.config import settings
-from daengs_walk.diary_route_normalize import main
-from daengs_walk.diary_scene_input import scene_materials
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.cli.route_normalize import main
 from tests.walk.support.diary_generation import PATH, body
 from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.route_patterns import scenarios

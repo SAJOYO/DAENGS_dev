@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from daengs_walk.diary_input import DiaryContract, Instant, Point
+from daengs_walk.diary.contracts.input import DiaryContract, Instant, Point
 
 
 class PhotoMetadata(DiaryContract):

@@ -38,12 +38,12 @@ async def placeholder(stage, payload, schema):
 
 
 async def replay(source, output):
-    from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-    from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-    from daengs_backend.services.walk_diary_card_writing import write_cards
-    from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-    from daengs_walk.diary_input import digest
-    from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+    from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
+    from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+    from daengs_backend.services.walk_diary.runtime import write_cards
+    from daengs_backend.services.walk_diary.storage.board import load_board, store_board
+    from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+    from daengs_walk.diary.contracts.input import digest
 
     raw = read(source / "input.json")
     base = prepare(raw)

@@ -10,9 +10,9 @@ from uuid import UUID
 import pytest
 
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services import walk_diary_space_collection as collection
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.preparation import input as reader
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prose
 from tests.walk.support.diary_generation import PATH, body
 

@@ -7,14 +7,16 @@ import httpx
 import pytest
 
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
-from daengs_backend.services import walk_diary_slots as service
-from daengs_backend.services.walk_diary_scene_collection import collect_scene_backgrounds
-from daengs_backend.services.walk_diary_slot_writing import slot_payload, write_slot_stamps
+from daengs_backend.services.walk_diary import preview as service
+from daengs_backend.services.walk_diary.collection.comparison import collect_scene_backgrounds
+from daengs_backend.services.walk_diary.legacy.slots import slot_payload, write_slot_stamps
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_kakao_background import project_kakao_background
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots, prepare_slot_preview
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.slots.service import prepare_board_slots
+from daengs_walk.diary.space.kakao import project_kakao_background
 from tests.walk.support.base_board import policy, saved_case
 
 

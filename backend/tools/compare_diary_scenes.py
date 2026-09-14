@@ -16,8 +16,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services.walk_diary_scene_collection import collect_scene_backgrounds
-from daengs_backend.services.walk_diary_slot_writing import (
+from daengs_backend.services.walk_diary.collection.comparison import collect_scene_backgrounds
+from daengs_backend.services.walk_diary.legacy.slots import (
     MODEL,
     PROMPT,
     generate_slot_prose,
@@ -28,14 +28,20 @@ from daengs_backend.services.walk_diary_slot_writing import (
 from daengs_backend.services.walk_finalize import walk_input_fingerprint
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint
-from daengs_walk.diary_board import BaseBoard, BaseBoardPolicy, BoardScene, VerifiedBoardRoute
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_output import PublishedBoardScene, publish_board
-from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.models import (
+    BaseBoard,
+    BaseBoardPolicy,
+    BoardScene,
+    VerifiedBoardRoute,
+)
+from daengs_walk.diary.board.output import PublishedBoardScene, publish_board
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.board import prepare_base_board
+from daengs_walk.diary.selection.stamps import StampPolicy
+from daengs_walk.diary.slots.service import prepare_board_slots
 
 
 def read_keys(path):

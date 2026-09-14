@@ -4,11 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_walk.diary_board_receipt import StoredSceneWriting
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_scene_input import scene_materials
-from daengs_walk.diary_slots import SlotPolicy, prepare_slot_preview
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slot_receipt import StoredSceneWriting
+from daengs_walk.diary.contracts.slots import SlotPolicy
 from tests.walk.diary.test_diary_route_patterns import input_case
 from tests.walk.support.base_board import policy
 

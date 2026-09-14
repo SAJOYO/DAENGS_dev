@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
 from daengs_walk.contracts import WalkEvidencePoint
-from daengs_walk.diary_route_normalize import RoutePatternSource
+from daengs_walk.diary.cli.route_normalize import RoutePatternSource
 
 START = datetime(2026, 9, 8, 6, tzinfo=UTC)
 ORIGIN = (37.0, 130.0)  # Synthetic geometry, not a real person's walk.

@@ -10,10 +10,11 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import SecretStr
 
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
-from daengs_backend.services.walk_diary_llm import normalize
-from daengs_backend.services.walk_diary_llm_materials import location, material
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.model_input import normalize
+from daengs_backend.services.walk_diary.model_materials import location, material
+from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
+from daengs_backend.services.walk_diary.writing import policy as activity_policy
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prepared, prose
 
 
@@ -213,7 +214,7 @@ async def test_model_request_receipt_is_bound_to_internal_dependencies():
         base.input.source, base, generate=AsyncMock(side_effect=prose)
     )
     receipt = StoredCardWriting(
-        generation_revision="a" * 64, writer=writing.writing_version(), result=result
+        generation_revision="a" * 64, writer=activity_policy.writing_version(), result=result
     )
     raw = receipt.model_dump(mode="json")
     raw["result"]["jobs"][0]["llm_request"]["extra"] = "not actually sent"

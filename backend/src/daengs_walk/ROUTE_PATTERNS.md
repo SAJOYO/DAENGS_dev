@@ -4,8 +4,8 @@ DEV `backend/`에서 실행한다. API·LLM 없이 저장 GPS를 canonical 커�
 직선·방향 전환·되짚기·국소 체류의 유한한 의미 재료를 만든다.
 
 ```powershell
-uv run python -m daengs_walk.diary_route_normalize --list-cases
-uv run python -m daengs_walk.diary_route_normalize --input <manifest.json> --output <new-result.json>
+uv run python -m daengs_walk.diary.cli.route_normalize --list-cases
+uv run python -m daengs_walk.diary.cli.route_normalize --input <manifest.json> --output <new-result.json>
 uv run pytest -q tests/walk/diary/test_diary_route_patterns.py tests/walk/diary/test_diary_route_integration.py
 ```
 

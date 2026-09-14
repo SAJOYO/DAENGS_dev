@@ -12,13 +12,13 @@ from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services import walk_diary_writing as writer
 from daengs_backend.services import walk_storyboard as legacy
-from daengs_backend.services.walk_diary_base_board import PreparedSavedBaseBoard
-from daengs_backend.services.walk_diary_board_slot_writing import write_legacy_slot_board
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_scene_input import scene_materials
+from daengs_backend.services.walk_diary.legacy import bundle as writer
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.preparation import input as reader
+from daengs_backend.services.walk_diary.preparation.board import PreparedSavedBaseBoard
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.diary import place_payload, prose
 from tests.walk.support.observations import varied_route
 from tests.walk.support.photo_input import OWNER, WALK, context_envelope, entry

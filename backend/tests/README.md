@@ -272,6 +272,11 @@ Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 �
 
 ## Place 정리
 
+신규 네이티브 시설 명령 경계는 `place/commands/`에 있다. 필터 변경·카드 선택 구분,
+상세 조회의 상태 보존, 버전 충돌·중복 실행·제안 자체 수락 차단·취소 후 재개와
+로컬 실험 HTTP를 검증한다. 합성 검색·대역 모델·메모리 저장소만 사용하며 실행 명령은
+`uv run --no-sync pytest -q tests/place/commands`다. 실제 모델과 운영 저장소 검증은 별도다.
+
 `origin/dev`의 `2fe6afc`에서 시작해 테스트 파일 35개를 이동했다. `place/place/` 중복 경로를
 없애고 검색·자연어 검색의 각 단계와 API 테스트를 다음처럼 배치했다.
 

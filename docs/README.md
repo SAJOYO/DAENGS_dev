@@ -122,6 +122,7 @@
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
 | [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
+| [place/native-tool-conversation.md](place/native-tool-conversation.md) | 네이티브 함수 호출 첫 실행 경로: 필터·검색과 카드 선택 구분, 생성 답변·별도 UI·로컬 실험과 남은 운영 연결 |
 | [place/conversation-exploration.md](place/conversation-exploration.md) | 다음 후보·명시적 제외의 세션 상태, SQL·캐시 경계와 연속 평가 |
 | [place/conversation-evaluation.md](place/conversation-evaluation.md) | 시설 검색 LLM 정상·엣지·경합 시나리오, 판정 원칙과 반복 검증 |
 | [place/conversation-corrections-2026-09-10.md](place/conversation-corrections-2026-09-10.md) | 시설 대화 교정·사용자 불만 뒤 재탐색 실험과 구조 연구 |

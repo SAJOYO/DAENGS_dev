@@ -44,6 +44,11 @@ async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeyp
         replace(base.input, source=DiaryInput.model_validate(source)), policy(3)
     )
     output = await write_cards(base.input.source, base, generate=prose)
+    assert any(
+        a.action_id is None and a.movement_ids
+        for scene in output.bundle.scenes
+        for a in scene.writing.actions
+    )
     value = PreparedWalkDiary(base.input, base.plan.intermediate, base)
     revision = digest("probe-generation")
     stored = store_board(value, output.bundle, revision, writing=output)

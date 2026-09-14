@@ -1,0 +1,25 @@
+{
+  "park": {
+    "total": 18202,
+    "valid": 16167,
+    "rejected": 2035,
+    "sha256": "85ac16283cefe70c501333da876ac7dce907bdc26739d36a660fb86fced68eab"
+  },
+  "commerce": {
+    "area": {
+      "center": {
+        "lat": 37.47302049692402,
+        "lng": 127.03576989052328
+      },
+      "radius_m": 2000
+    },
+    "valid": 11935,
+    "rejected": 0,
+    "sha256": "67ed484c43b72f60677c39146d2fc4ec843a1937abda54bb1eaad1d4fd26f3d4"
+  },
+  "elapsed_s": 0.297,
+  "reused": true,
+  "park_retrieved_at": "2026-09-14T03:04:24.922046+00:00",
+  "commerce_retrieved_at": "2026-09-14T03:04:27.953620+00:00",
+  "timing_scope": "Real catalog preparation before scene acquisition and writer deadline"
+}

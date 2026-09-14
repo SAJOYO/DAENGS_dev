@@ -10,6 +10,7 @@ from daengs_backend.services.walk_diary.contracts import (
     WritingJob,
 )
 from daengs_backend.services.walk_diary.writing import policy
+from daengs_walk.diary.board.activity import movement_uses
 from daengs_walk.diary.board.scene_input import action_anchor
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.slots.space import writing_facts
@@ -18,7 +19,11 @@ from daengs_walk.diary.slots.space import writing_facts
 def job(stage, payload):
     # Only this strategy's actual dependencies belong in its revision, never the whole board.
     revision = digest(
-        {"strategy": digest(policy.PROMPTS[stage]), "model": policy.MODEL, "input": payload}
+        {
+            "strategy": policy.writing_version()["prompts"][stage],
+            "model": policy.MODEL,
+            "input": payload,
+        }
     )
     return WritingJob(
         stage=stage, request_revision=revision, request={**payload, "request_revision": revision}
@@ -35,22 +40,37 @@ def common_context(base):
     }
 
 
-def action_job(base, scene):
+def action_job(base, scene, stamp=None):
+    """The persisted stage name stays action; its responsibility is card activity."""
     anchor = action_anchor(scene)
-    if anchor is None:
+    stamp = stamp or next(s for s in base.slots.stamps if s.scene_id == scene.id)
+    movement = [
+        {"id": e.id, "facts": e.facts} for e in stamp.evidence if e.role == "scene_movement"
+    ]
+    if anchor is None and not movement:
         return None
-    pet_id = scene.core.record.content.pet_id
+    pet_id = scene.core.record.content.pet_id if anchor else None
     if pet_id is not None and pet_id not in base.input.source.pet_ids:
         raise ValueError("action actor is outside this walk")
     actor = {"id": pet_id, "name": dict(base.input.pet_names).get(pet_id)}
-    return job(
+    value = job(
         "action",
         {
             "card_id": scene.id,
             "event_at": scene.anchor.event_at.isoformat(),
             "walk_context": common_context(base),
-            "action": {**anchor, "actor": actor},
+            "action": {**anchor, "actor": actor} if anchor else None,
+            **({"movement": movement} if movement else {}),
         },
+    )
+    return value.model_copy(
+        update={
+            "evidence": {
+                e.id: e.model_dump(mode="json")
+                for e in stamp.evidence
+                if e.role == "scene_movement"
+            }
+        }
     )
 
 
@@ -120,6 +140,46 @@ def space_job(base, scene, stamp):
     return value.model_copy(update={"evidence": evidence})
 
 
+def title_jobs(cards):
+    context = [
+        {
+            "card_id": c.id,
+            "order": c.order,
+            "event_at": c.anchor.event_at.isoformat(),
+            "body": c.body,
+            "location": [p.model_dump(mode="json") for p in c.place_reference],
+        }
+        for c in cards
+    ]
+    payloads = [
+        {
+            "card_id": c.id,
+            "content_revision": c.writing.content_revision,
+            "space": c.writing.space.model_dump(mode="json"),
+            "actions": [a.model_dump(mode="json") for a in c.writing.actions],
+            "place_reference": [p.model_dump(mode="json") for p in c.place_reference],
+            "event_at": c.anchor.event_at.isoformat(),
+            **(
+                {"observation": c.writing.observation.model_dump(mode="json")}
+                if c.writing.observation
+                else {}
+            ),
+        }
+        for c in cards
+    ]
+    return [
+        job(
+            "title",
+            {
+                "cards": payloads[i : i + policy.MAX_CARDS],
+                "context": context,
+                "context_revision": digest(context),
+            },
+        )
+        for i in range(0, len(payloads), policy.MAX_CARDS)
+    ]
+
+
 def validate_output(item, raw):
     schema = {"space": SpaceProse, "action": ActionProse, "title": CardTitles}[item.stage]
     try:
@@ -152,7 +212,15 @@ def validate_output(item, raw):
             ):
                 raise ValueError("writing result belongs to another request")
             if item.stage == "action":
-                if output.action_id != item.request["action"]["id"] or not output.text.strip():
+                action = item.request.get("action")
+                refs = set(output.movement_ids)
+                if (
+                    output.action_id != (action["id"] if action else None)
+                    or not output.text.strip()
+                    or len(refs) != len(output.movement_ids)
+                    or not refs <= {u["id"] for u in movement_uses(item.request)}
+                    or (not action and not refs)
+                ):
                     raise ValueError("action changed")
             else:
                 refs = set(output.evidence_ids)

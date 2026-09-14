@@ -79,6 +79,8 @@ def admit(scene_id, candidates, decisions, policy):
                 queue.append(item)
             pending.append((item, admission, reason))
     ordered = [queue[i] for i in range(8) for queue in queues.values() if i < len(queue)]
+    if policy.movement is not None:
+        ordered = queues["motion"] + [c for c in ordered if c.part != "motion"]
     kept = ordered[: policy.total_slots]
     kept_ids = {item.id for item in kept}
     for item, admission, reason in pending:

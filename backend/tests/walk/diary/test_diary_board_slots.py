@@ -22,7 +22,7 @@ from tests.walk.support.photo_input import OWNER, WALK
 
 def test_saved_board_prepares_all_parts_once_and_matches_preview(monkeypatch):
     source, route, _ = demo_input()
-    preview = prepare_slot_preview(source, SlotPolicy(), policy(3), route=route)
+    preview = prepare_slot_preview(source, SlotPolicy(movement={}), policy(3), route=route)
     assembled = InputAssembly(source, (), ObservationSource(route.version, evidence=route.evidence))
     selector = Mock(wraps=service.prepare_base_board)
     monkeypatch.setattr(service, "prepare_base_board", selector)

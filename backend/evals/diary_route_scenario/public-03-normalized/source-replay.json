@@ -1,0 +1,6 @@
+{
+  "source_run": "public-02",
+  "input_revision": "6d713480f69d669aeb0594feff5a0d1644aaf97af5154e7251bb0c384bf2af62",
+  "background_revision": "34c6ec2dc371c1b6b17801850f614ef790c86231b05dab394f1b5f5c3b5584dd",
+  "note": "Actual public API snapshots reused unchanged. No public API reacquisition; fresh Gemini requests through current normalization."
+}

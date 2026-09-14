@@ -112,7 +112,11 @@ def test_pending_context_does_not_block_action_or_first_publication(
     assert action_started.is_set() and collection_started.is_set()
     assert collection_cancelled.is_set() == (space_result == "timeout")
     collector.assert_awaited_once()
-    action = next(c for c in value["bundle"]["scenes"] if c["writing"]["actions"])
+    action = next(
+        c
+        for c in value["bundle"]["scenes"]
+        if c["writing"]["actions"] and c["writing"]["actions"][0]["action_id"]
+    )
     assert action["writing"]["actions"][0]["origin"] == "generated"
     assert "보리가 냄새를 맡았다." in action["body"]
     assert action["writing"]["space"]["origin"] == (

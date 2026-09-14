@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-09-14T03:36:20.238323+00:00",
+  "elapsed_s": 9.109,
+  "writer": {
+    "policy": "shared-orchestration-card-writing-v4",
+    "input_policy": "diary-prose-input-v1",
+    "observation_text": {
+      "observed_dwell": "이 구간에서는 동선이 한곳에 모였다.",
+      "observed_slow": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 느려졌다.",
+      "observed_fast": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 빨라졌다."
+    },
+    "model": "gemini-3.1-flash-lite",
+    "prompts": {
+      "space": "8264a3b8404a6795e36ee8a3d27139320ce30e35dbbee35dc3034c8497c548ec",
+      "action": "eed1cc92ebfa139660f66da2419a37808449c926e8c53a85f07e55dcbf582a95",
+      "title": "50308e2e29bcf5ee41ae2bc747d245a29c00e78acd577b703948cdcbc19ca0a7"
+    },
+    "timeout_s": 15.0,
+    "title_reserve_s": 3.0,
+    "card_limit": 12,
+    "input_bytes": 32000,
+    "concurrency": 4,
+    "land_words": {
+      "도로": "길",
+      "자연초지": "풀밭",
+      "기타초지": "풀밭",
+      "하천": "물길",
+      "해양수": "바다",
+      "활엽수림": "숲",
+      "침엽수림": "숲",
+      "혼효림": "숲",
+      "내륙습지": "습지",
+      "호소": "호수·저수지",
+      "기타나지": "드러난 땅"
+    }
+  },
+  "acquisition": "frozen before generation; not live publication timing",
+  "collection_adopted": false,
+  "prepared_input": true,
+  "backgrounds_in_writing_input": true,
+  "jobs": {
+    "space:accepted": 8,
+    "action:accepted": 1,
+    "title:accepted": 1
+  },
+  "provenance": {
+    "route": "TMAP pedestrian API; real provider route, not a recorded walk",
+    "gps_time_speed_notes_behavior_pet": "simulated",
+    "map": "OpenStreetMap; display only, not LLM evidence"
+  }
+}

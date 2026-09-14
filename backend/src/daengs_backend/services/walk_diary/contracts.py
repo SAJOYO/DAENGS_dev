@@ -21,8 +21,9 @@ class SpaceProse(DiaryContract):
 class ActionProse(DiaryContract):
     card_id: Identifier
     request_revision: Digest
-    text: str = Field(min_length=1, max_length=140)
-    action_id: Identifier
+    text: str = Field(min_length=1, max_length=220)
+    action_id: Identifier | None = None
+    movement_ids: tuple[Identifier, ...] = Field(default=(), exclude_if=lambda v: not v)
 
 
 class CardTitle(DiaryContract):
@@ -39,11 +40,15 @@ class WritingJob(DiaryContract):
     stage: Literal["space", "action", "title"]
     request_revision: Digest
     request: dict[str, JsonValue]
+    # Exact model contents, distinct from the internal cache/publication dependencies.
+    llm_request: dict[str, JsonValue] | None = Field(default=None, exclude_if=lambda v: v is None)
     evidence: dict[str, JsonValue] = Field(default_factory=dict)
     # Only accepted output is retained; failures never persist raw provider errors.
     accepted: dict[str, JsonValue] | None = None
     reused: bool = Field(default=False, exclude_if=lambda value: not value)
-    failure_code: Literal["provider_failed", "invalid_response", "budget_exceeded"] | None = None
+    failure_code: (
+        Literal["provider_failed", "invalid_response", "invalid_input", "budget_exceeded"] | None
+    ) = None
 
 
 class CollectionReceipt(DiaryContract):

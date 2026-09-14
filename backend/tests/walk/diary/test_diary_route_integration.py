@@ -27,19 +27,19 @@ def test_enabled_patterns_reach_writer_storage_and_reopen_without_regeneration(a
         e
         for s in receipt["scenes"]
         for e in s["evidence"]
-        if e["facts"].get("format") == "route-pattern-material-v1"
+        if e["facts"].get("format") == "diary-movement-material-v1"
     ]
-    assert patterns and all(e["facts"]["case_id"] == "straight_run" for e in patterns)
+    assert patterns and all(
+        {c["meaning"] for c in e["facts"]["claims"]} == {"straight_run"} for e in patterns
+    )
     payload = state.provider.call_args.args[0]
     projected = [
         e["facts"]
         for s in payload["scenes"]
         for e in scene_materials(s)
-        if "경로 형태" in e["facts"].get("material", {})
+        if "movement" in e["facts"]
     ]
-    assert projected and all(
-        set(f) == {"material", "relation", "subject", "action_meaning"} for f in projected
-    )
+    assert projected and all(set(f) == {"movement", "subject", "action_meaning"} for f in projected)
     query = "?bundle_format=walk-diary-board-v1&target_scene_count=3"
     assert client.get(PATH + query).json() == result
     assert client.post(PATH, json=request).json() == result

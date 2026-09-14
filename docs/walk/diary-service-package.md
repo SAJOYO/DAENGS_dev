@@ -12,6 +12,7 @@
 | `api.py` | 기존 storyboard 서비스와 미리보기 라우터가 사용하는 생성·조회·협상·미리보기 진입점 |
 | `runtime.py` | 기본 `write_board`·`write_cards`, 모델과 수집기를 기존 `build_diary_orchestrator`에 주입 |
 | `contracts.py` | 저장 판독에서도 사용하는 작성 결과 데이터 계약. 설정·실행·소유권 검사 의존성 없음 |
+| `model_input.py`·`model_materials.py` | #508의 허용 필드 투영·짧은 참조 복원 계약. 저장 판독에서도 사용하며 현재 작성 정책·모델 SDK를 import하지 않음 |
 | `guard.py`·`deadline.py` | 준비/공개가 공유하는 소유권·생성 검사와 요청 마감 |
 | `preparation/` | 저장 입력·관측 검증·기본 보드 준비. 예약·발행·모델 호출 없음 |
 | `lifecycle/` | 생성 예약 commit → 외부 작성 → 원본 재확인·완료 commit, GET 복구와 형식 협상 |
@@ -48,6 +49,10 @@ storyboard 서비스 / 미리보기 라우터
 `storage.provenance`가 당시 정책과 채택 결과를 대조한다. 과거 bundle의 정책 비교와 bare
 bundle 영수증 보완은 `storage.bundle`의 기존 동작으로 유지하며, 정책 비교 시점에는 과거
 writer 정책을 사용한다. 이를 현재 보드의 순수 판독 보장과 혼동하지 않는다.
+
+#508을 합칠 때 통합 이동의 계약·작업·정책·조립도 위 책임별 모듈에 배치했다.
+평면 작성기나 import shim은 복원하지 않았다. 전체 맥락 제목의 현재 모델/프롬프트 검사와
+#511 수집 진행·부분 적용 처리를 함께 유지한다. 기획 정책은 [활동 서술](diary-activity.md)을 따른다.
 
 기본 `runtime.write_board`는 과거 작성기를 import하지 않는다. `legacy.board_slots`는
 `write_legacy_slot_board`와 슬롯 결과 완료만 맡는다. 생성 서비스는 결과 종류에 따라 현재

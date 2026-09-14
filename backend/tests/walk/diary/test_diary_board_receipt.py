@@ -94,7 +94,7 @@ def test_only_cited_facts_are_frozen_with_original_and_versions(saved):
             assert evidence.facts == selected[evidence.id].facts
             assert evidence.sources == selected[evidence.id].sources
             assert set(evidence.model_dump()) == {"id", "part", "role", "facts", "sources"}
-    assert sum(len(s.evidence) for s in receipt.scenes) == 3
+    assert sum(len(s.evidence) for s in receipt.scenes) == 5  # Movement also supports boundaries.
     assert sum(len(s.materials()) for s in prepared.board.slots.stamps) > 3
     receipt.require_bundle(stored.bundle, revision)
 

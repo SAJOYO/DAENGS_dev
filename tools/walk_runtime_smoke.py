@@ -138,7 +138,8 @@ async def card_publication(request, owner, walk_id, entries, notes):
         any(s.writing and s.writing.original_text == note for s in scenes) for note in notes
     ):
         raise SmokeFailure("card changed an original note")
-    if sum(len(s.writing.actions) for s in scenes if s.writing) != 1:
+    # The activity part can now describe movement without a recorded behavior pin.
+    if sum(a.action_id is not None for s in scenes if s.writing for a in s.writing.actions) != 1:
         raise SmokeFailure("card lost the synthetic behavior")
     async with engine.connect() as connection:
         raw = await connection.scalar(

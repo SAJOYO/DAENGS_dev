@@ -52,31 +52,35 @@ def edit_note(base):
     )
 
 
-@pytest.mark.parametrize("single_titles", [False, True])
+@pytest.mark.parametrize("reused_batch", [False, True])
+@pytest.mark.parametrize("edit_original", [False, True])
 @pytest.mark.parametrize("change", ["unchanged", "title_prompt", "model", "space_prompt"])
-async def test_cached_titles_follow_their_own_policy(monkeypatch, single_titles, change):
+async def test_cached_titles_follow_their_own_policy(
+    monkeypatch, reused_batch, edit_original, change
+):
     base = prepared_case().board
     previous = await writing.write_cards(base.input.source, base, generate=prose)
-    if single_titles:
+    if reused_batch:
         cached = replace(base, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
         unused = AsyncMock(side_effect=AssertionError("same policy must reuse all jobs"))
         previous = await writing.write_cards(base.input.source, cached, generate=unused)
         unused.assert_not_awaited()
-        assert all(len(j.request["cards"]) == 1 for j in previous.jobs if j.stage == "title")
+        assert all(j.reused and j.request["context"] for j in previous.jobs if j.stage == "title")
     else:
         assert any(len(j.request["cards"]) > 1 for j in previous.jobs if j.stage == "title")
-    after = edit_note(base)
+    after = edit_note(base) if edit_original else base
     after = replace(after, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
     change_policy(monkeypatch, change)
     provider = AsyncMock(side_effect=new_prose)
     result = await writing.write_cards(after.input.source, after, generate=provider)
     stages = [call.args[0] for call in provider.call_args_list]
-    changed_title = change in {"title_prompt", "model"}
+    changed_title = edit_original or change in {"title_prompt", "model"}
     assert stages.count("title") == int(changed_title)
     assert stages.count("space") == (
         len(base.board.scenes) if change in {"model", "space_prompt"} else 0
     )
-    assert any(c.writing.original_text == "수정한 원문 그대로" for c in result.bundle.scenes)
+    if edit_original:
+        assert any(c.writing.original_text == "수정한 원문 그대로" for c in result.bundle.scenes)
     if changed_title:
         assert all(c.title == "새 정책으로 작성한 제목" for c in result.bundle.scenes)
         assert all(not j.reused for j in result.jobs if j.stage == "title")

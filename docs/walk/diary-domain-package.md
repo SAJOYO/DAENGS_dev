@@ -33,6 +33,12 @@ backend 수집 → 고정된 배경 자료
 import하지 않는다. `cli`만 명시적인 파일 입출력을 가지며 나머지 도메인은 이를 참조하지 않는다.
 `spatial_diary.py`와 산책 측정 코어는 별도 책임을 유지한다.
 
+#508의 새 통합 이동은 `route/movement.py`에서 원 구간을 계산하고
+`slots/movement.py`에서 장면에 연결한다. `route/movement_policy.py`는 계산 의존성 없는
+정책 값이며 `contracts/slots.py`가 이를 사용한다. 작성 투영·구간별 근거는
+`board/activity.py`에 둔다. 경로 계산은 공통 `route.binding.verified_route`를 사용하여
+슬롯 실행기를 역참조하지 않는다. 아래 #514의 정책 보존 기록과 #508의 의도적 정책 변경을 구별한다.
+
 ## 단순 이동 외에 끊은 의존성
 
 - `contracts.slots`의 슬롯 정책·자료·스냅샷은 슬롯 실행기와 별개다. 과거 슬롯 영수증도

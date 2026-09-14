@@ -1,5 +1,6 @@
 """Stored readers and fixed pre-refactor wire contracts must survive writer extraction."""
 
+import gzip
 import json
 import subprocess
 import sys
@@ -17,7 +18,16 @@ async def cases(monkeypatch):
     return await fixed_cases(monkeypatch)
 
 
-def test_fixed_public_storage_schema_and_hashes_match_before_refactor(cases):
+@pytest.fixture
+def historical_cases():
+    # Captured with fixed fake providers on 081aa0ba and checked against the unchanged
+    # #507 golden before copying here. New activity policy intentionally changes output.
+    path = REPO / "backend/evals/walk-diary/writing-boundary-records-v1.json.gz"
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def test_fixed_public_storage_schema_and_hashes_match_before_refactor(historical_cases):
+    cases = historical_cases
     golden = json.loads(
         (REPO / "backend/evals/walk-diary/writing-boundary-v1.json").read_text(encoding="utf-8")
     )
@@ -38,7 +48,9 @@ def test_fixed_public_storage_schema_and_hashes_match_before_refactor(cases):
     assert actual == expected
 
 
-def test_stored_board_reader_is_independent_of_writer_runtime(cases):
+@pytest.mark.parametrize("generation", ["historical", "current"])
+def test_stored_board_reader_is_independent_of_writer_runtime(cases, historical_cases, generation):
+    cases = historical_cases if generation == "historical" else cases
     # A fresh interpreter cannot hide a dependency behind already imported test modules.
     script = """
 import importlib.abc

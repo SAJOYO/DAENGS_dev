@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import JsonValue, model_validator
 
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
+from daengs_backend.services.walk_diary.model_input import VERSION, normalize
+from daengs_walk.diary.board.activity import covers_observation, movement_uses
 from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
 
 
@@ -34,6 +36,12 @@ class StoredCardWriting(DiaryContract):
                 raise ValueError("stored job request changed")
             if item.accepted and item.failure_code:
                 raise ValueError("failed job cannot carry accepted output")
+            if (
+                self.writer.get("input_policy") == VERSION
+                and item.llm_request is not None
+                and item.llm_request != normalize(item.stage, item.request).payload
+            ):
+                raise ValueError("stored model input changed")
         return self
 
     def require_bundle(self, bundle, generation_revision):
@@ -67,12 +75,23 @@ class StoredCardWriting(DiaryContract):
             for action in parts.actions:
                 result = actions[scene.id]
                 source = result.request["action"]
-                if action.action_id != source["id"] or action.actor_id != source["actor"]["id"]:
+                if (
+                    action.action_id != (source["id"] if source else None)
+                    or action.actor_id != (source["actor"]["id"] if source else None)
+                    or not set(action.movement_ids)
+                    <= {u["id"] for u in movement_uses(result.request)}
+                ):
                     raise ValueError("stored actor changed")
                 if action.origin == "generated" and (
-                    not result.accepted or action.text != result.accepted["text"].strip()
+                    not result.accepted
+                    or action.text != result.accepted["text"].strip()
+                    or action.movement_ids != tuple(result.accepted.get("movement_ids", ()))
                 ):
                     raise ValueError("action differs from its accepted job")
+                if parts.observation_in_activity != covers_observation(
+                    result.request, action.movement_ids, scene.observation
+                ):
+                    raise ValueError("observation suppression differs from cited pace")
             title = titles.get(scene.id)
             if parts.title_origin == "generated" and (
                 not title
@@ -91,3 +110,19 @@ class StoredCardWriting(DiaryContract):
                 != (parts.observation.model_dump(mode="json") if parts.observation else None)
             ):
                 raise ValueError("title did not read the adopted card bodies")
+        for job in title_jobs:
+            if "context" in job.request:
+                expected = [
+                    {
+                        "card_id": c.id,
+                        "order": c.order,
+                        "event_at": c.anchor.event_at.isoformat(),
+                        "body": c.body,
+                        "location": [p.model_dump(mode="json") for p in c.place_reference],
+                    }
+                    for c in bundle.scenes
+                ]
+                if job.request["context"] != expected or job.request["context_revision"] != digest(
+                    expected
+                ):
+                    raise ValueError("title did not read the whole frozen board")

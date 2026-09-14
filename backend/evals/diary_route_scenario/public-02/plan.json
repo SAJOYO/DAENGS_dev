@@ -1,0 +1,465 @@
+{
+  "format": "walk-diary-base-plan-v1",
+  "input_revision": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+  "route_revision": "29386467bd9a236ff291258fced2782e997024494395e2c593a1f8f1443e390a",
+  "policy": {
+    "version": "records-route-boundaries-v1",
+    "intermediate": {
+      "version": "records-first-v1",
+      "target_scene_count": 6,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "separation_m": 100.0,
+    "record_route_tolerance_m": 30.0
+  },
+  "intermediate": {
+    "format": "walk-diary-prepared-v1",
+    "policy": {
+      "version": "records-first-v1",
+      "target_scene_count": 6,
+      "separation_s": 20.0,
+      "place_slots": 1,
+      "space_slots": 3,
+      "environment_slots": 1,
+      "time_slots": 1
+    },
+    "plan": {
+      "format": "walk-diary-plan-v1",
+      "input_revision": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+      "target_scene_count": 6,
+      "preparation_policy": {
+        "version": "records-first-v1",
+        "target_scene_count": 6,
+        "separation_s": 20.0,
+        "place_slots": 1,
+        "space_slots": 3,
+        "environment_slots": 1,
+        "time_slots": 1
+      },
+      "scenes": [
+        {
+          "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "core": {
+            "identity": "walk_entry:scenario-record-1",
+            "version": "9432ad2ef8da73cf70a24780ad06bcf3e3a95d6a3cfe0a49e473cfd3719e94c3"
+          },
+          "background": []
+        },
+        {
+          "id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+          "core": {
+            "identity": "walk_entry:scenario-record-2",
+            "version": "64524d4d37ff0e231fa7ec8cd0d4087faf23c8890ba204ea915edfe17b5eb307"
+          },
+          "background": []
+        },
+        {
+          "id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+          "core": {
+            "identity": "walk_entry:scenario-record-3",
+            "version": "030864664559690b7fbf3a0b710a05cd5614b9d311bd00fdb6bfefee6e1357e6"
+          },
+          "background": []
+        }
+      ]
+    },
+    "core_decisions": [
+      {
+        "material": {
+          "identity": "walk_entry:scenario-record-1",
+          "version": "9432ad2ef8da73cf70a24780ad06bcf3e3a95d6a3cfe0a49e473cfd3719e94c3"
+        },
+        "reason": "user_record"
+      },
+      {
+        "material": {
+          "identity": "walk_entry:scenario-record-2",
+          "version": "64524d4d37ff0e231fa7ec8cd0d4087faf23c8890ba204ea915edfe17b5eb307"
+        },
+        "reason": "user_record"
+      },
+      {
+        "material": {
+          "identity": "walk_entry:scenario-record-3",
+          "version": "030864664559690b7fbf3a0b710a05cd5614b9d311bd00fdb6bfefee6e1357e6"
+        },
+        "reason": "user_record"
+      },
+      {
+        "material": {
+          "identity": "observation:motion:5de2630762dbb3746323ec1e04d83624bcd6ee6f2e1da479246d2122001b69d3",
+          "version": "f607d1719ec947d9fdfe1b997da1699ecaa41f0c94ba46ca9757679b9a183a5f"
+        },
+        "reason": "near_user_record_time"
+      },
+      {
+        "material": {
+          "identity": "observation:motion:002ff61ef569b87a2efa1b9bad96805aac806a171dc9a2ddc0e054f07ede9d0e",
+          "version": "9db5f172a132f68780bd4a781f7c01cc8e0bc8a505ac96a2dfd5cde8315132e0"
+        },
+        "reason": "near_user_record_time"
+      },
+      {
+        "material": {
+          "identity": "observation:motion:c2a0c9140683153ad5c8a2d36530a27722f03fcc8adaafed749764fe326b1155",
+          "version": "f6e086d10ebffdac4f27e1cb89068c74560f4b0bf76ca741285877d0cc8e15f8"
+        },
+        "reason": "near_user_record_time"
+      },
+      {
+        "material": {
+          "identity": "observation:motion:2f8671b4831548ffe52b807797efeecf29642dbf72d4abb1a5fef1b93bdfaf23",
+          "version": "bbdec6cb0a91d6e30ad3a7c554290e01d747f8bb04e2606351f61a193ef7c44c"
+        },
+        "reason": "near_user_record_time"
+      }
+    ],
+    "background_decisions": [],
+    "counts": {
+      "target": 6,
+      "user_records": 3,
+      "initial_deficit": 3,
+      "supplemented": 0,
+      "remaining_deficit": 3,
+      "total": 3
+    },
+    "limits": [
+      "photo_metadata_not_available"
+    ]
+  },
+  "stamps": [
+    {
+      "id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+      "core_ref": {
+        "identity": "boundary:17d3324c4619032bd2d1cafa294c1ebdcc380677559f5598be3265f1fa769156",
+        "version": "bacb911cd48e0f97b0e94c62fbbd18dd96d32ce2250d3c13f7181d2eadd6a533"
+      },
+      "core": {
+        "kind": "session_boundary",
+        "boundary": "start",
+        "anchor": {
+          "event_at": "2026-09-14T01:04:20Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-14T01:04:20Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-14T01:04:20Z"
+            }
+          ]
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+      "core_ref": {
+        "identity": "walk_entry:scenario-record-1",
+        "version": "9432ad2ef8da73cf70a24780ad06bcf3e3a95d6a3cfe0a49e473cfd3719e94c3"
+      },
+      "core": {
+        "kind": "user_record",
+        "record": {
+          "ref": {
+            "store": "walk_entry",
+            "id": "scenario-record-1",
+            "version": "1",
+            "version_kind": "revision",
+            "pin_revision": null
+          },
+          "deleted": false,
+          "content": {
+            "kind": "behavior",
+            "code": "sniffing",
+            "pet_id": "scenario-pet"
+          },
+          "anchor": {
+            "event_at": "2026-09-14T01:10:00Z",
+            "time_basis": "recorded_at",
+            "point": {
+              "lat": 37.47333149207589,
+              "lng": 127.03729634665666
+            },
+            "location_at": "2026-09-14T01:10:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 34,
+                "chain_index": 0,
+                "at": "2026-09-14T01:10:00Z"
+              }
+            ]
+          },
+          "pin_payload": null
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+      "core_ref": {
+        "identity": "checkpoint:2a3d1f813e11e569fcafa38c9f6102f81449133570dd4c244f4a81aaba6768e6",
+        "version": "f9277260e7453d95275288168135c4ac403e3fbb12db872435e9cc482d4b6434"
+      },
+      "core": {
+        "kind": "route_checkpoint",
+        "route": {
+          "status": "ready",
+          "analysis_id": "simulated-tmap-route",
+          "input_fingerprint": "132572c05415c1401378100dd58cb15618046bf7cec2bc374058ba6e3b9888d9",
+          "calculation_version": 4,
+          "reason": null
+        },
+        "block": 0,
+        "route_m": 644.5826381817194,
+        "anchor": {
+          "event_at": "2026-09-14T01:15:50Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47385678898773,
+            "lng": 127.03468728149925
+          },
+          "location_at": "2026-09-14T01:15:50Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 69,
+              "chain_index": 0,
+              "at": "2026-09-14T01:15:50Z"
+            }
+          ]
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+      "core_ref": {
+        "identity": "walk_entry:scenario-record-2",
+        "version": "64524d4d37ff0e231fa7ec8cd0d4087faf23c8890ba204ea915edfe17b5eb307"
+      },
+      "core": {
+        "kind": "user_record",
+        "record": {
+          "ref": {
+            "store": "walk_entry",
+            "id": "scenario-record-2",
+            "version": "1",
+            "version_kind": "revision",
+            "pin_revision": null
+          },
+          "deleted": false,
+          "content": {
+            "kind": "note",
+            "text": "여기서 물을 마시고, 왔던 길로 돌아가기로 했다."
+          },
+          "anchor": {
+            "event_at": "2026-09-14T01:21:00Z",
+            "time_basis": "recorded_at",
+            "point": {
+              "lat": 37.47500470463684,
+              "lng": 127.03294776700642
+            },
+            "location_at": "2026-09-14T01:21:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 100,
+                "chain_index": 0,
+                "at": "2026-09-14T01:21:00Z"
+              }
+            ]
+          },
+          "pin_payload": null
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:e0669aa583712f22b365166e98641b791cd0c140739c0164eb0914273fe5a3ec",
+      "core_ref": {
+        "identity": "checkpoint:e3e2926adaebcbf46d34b25c8d77ffb8d0bdafe3f4e7d2da9004aad7cd8d11b0",
+        "version": "df94e98ac114d322bd177b6f59f65d5c95dea24370668025c48969de6d53dd27"
+      },
+      "core": {
+        "kind": "route_checkpoint",
+        "route": {
+          "status": "ready",
+          "analysis_id": "simulated-tmap-route",
+          "input_fingerprint": "132572c05415c1401378100dd58cb15618046bf7cec2bc374058ba6e3b9888d9",
+          "calculation_version": 4,
+          "reason": null
+        },
+        "block": 0,
+        "route_m": 1159.1760992865957,
+        "anchor": {
+          "event_at": "2026-09-14T01:24:50Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47408511016569,
+            "lng": 127.03306961024494
+          },
+          "location_at": "2026-09-14T01:24:50Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 123,
+              "chain_index": 0,
+              "at": "2026-09-14T01:24:50Z"
+            }
+          ]
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:0a18e6f64a40f0c299df4202957d6cad39d215c334bae957be4a3c2bbe9a0320",
+      "core_ref": {
+        "identity": "checkpoint:61192798457bef22ec33cc376f23aeb35403867aa629ffa0b068a75369a5a1a4",
+        "version": "3564c2e883621f0daae52ed9af41eae512464c6acb72d43fab3a18ef9d54c4eb"
+      },
+      "core": {
+        "kind": "route_checkpoint",
+        "route": {
+          "status": "ready",
+          "analysis_id": "simulated-tmap-route",
+          "input_fingerprint": "132572c05415c1401378100dd58cb15618046bf7cec2bc374058ba6e3b9888d9",
+          "calculation_version": 4,
+          "reason": null
+        },
+        "block": 0,
+        "route_m": 1341.193345468448,
+        "anchor": {
+          "event_at": "2026-09-14T01:27:20Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47391663162882,
+            "lng": 127.03502658573123
+          },
+          "location_at": "2026-09-14T01:27:20Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 138,
+              "chain_index": 0,
+              "at": "2026-09-14T01:27:20Z"
+            }
+          ]
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+      "core_ref": {
+        "identity": "walk_entry:scenario-record-3",
+        "version": "030864664559690b7fbf3a0b710a05cd5614b9d311bd00fdb6bfefee6e1357e6"
+      },
+      "core": {
+        "kind": "user_record",
+        "record": {
+          "ref": {
+            "store": "walk_entry",
+            "id": "scenario-record-3",
+            "version": "1",
+            "version_kind": "revision",
+            "pin_revision": null
+          },
+          "deleted": false,
+          "content": {
+            "kind": "note",
+            "text": "돌아오는 길에 사진 대신 짧게 기록을 남겼다."
+          },
+          "anchor": {
+            "event_at": "2026-09-14T01:32:00Z",
+            "time_basis": "recorded_at",
+            "point": {
+              "lat": 37.47279100978833,
+              "lng": 127.03741709514955
+            },
+            "location_at": "2026-09-14T01:32:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 166,
+                "chain_index": 0,
+                "at": "2026-09-14T01:32:00Z"
+              }
+            ]
+          },
+          "pin_payload": null
+        }
+      },
+      "background": []
+    },
+    {
+      "id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+      "core_ref": {
+        "identity": "boundary:f4ee34e2979f59b7669ec4038b7255d0dee564438797ecefa726066dc73bf1ee",
+        "version": "36f8a0eb85f04beb0d6196e5eb7bd7ce75e60c26fe03fd309cdb2a8f3d029a1a"
+      },
+      "core": {
+        "kind": "session_boundary",
+        "boundary": "end",
+        "anchor": {
+          "event_at": "2026-09-14T01:35:50Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-14T01:35:50Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 189,
+              "chain_index": 0,
+              "at": "2026-09-14T01:35:50Z"
+            }
+          ]
+        }
+      },
+      "background": []
+    }
+  ],
+  "counts": {
+    "target": 6,
+    "user_records": 3,
+    "initial_deficit": 3,
+    "supplemented": 0,
+    "remaining_deficit": 0,
+    "total": 8,
+    "checkpoints": 3,
+    "boundaries": 2,
+    "intermediate_total": 6
+  },
+  "limits": [
+    "photo_metadata_not_available"
+  ]
+}

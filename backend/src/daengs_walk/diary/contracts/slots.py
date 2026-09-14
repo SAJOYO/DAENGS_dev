@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, JsonValue
 
 from daengs_walk.diary.contracts.input import DiaryContract, Digest, Identifier, digest
+from daengs_walk.diary.route.movement_policy import MovementPolicy
 from daengs_walk.diary.route.patterns import RoutePatternBindingPolicy
 
 Part = Literal["space", "environment", "motion"]
@@ -22,6 +23,7 @@ class SlotPolicy(DiaryContract):
     location_age_s: float = Field(default=30, ge=0, le=120)
     weather_max_age_s: float = Field(default=7200, ge=0, le=7200)
     include_location_reference: bool = True
+    movement: MovementPolicy | None = Field(default=None, exclude_if=lambda v: v is None)
     route_patterns: RoutePatternBindingPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

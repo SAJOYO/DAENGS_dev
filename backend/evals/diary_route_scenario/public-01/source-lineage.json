@@ -1,0 +1,455 @@
+{
+  "note": "Model citation is recorded attribution, not proof of semantic grounding",
+  "scenes": [
+    {
+      "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+      "order": 1,
+      "body": "서울특별시 서초구 양재2동의 풀밭 위를 걷습니다. 주변에는 여러 업종의 상가가 산재해 있습니다.",
+      "space_origin": "generated",
+      "selected": [
+        {
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:4deeb845057a1ec8000afbe5b6b1e7562ddac91e210eccfaceb14f8d2a17f2d2",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:3533368ad484f3498ccfd4e426444238f53360d1cafa870be049f5085879d493",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "material_id": "material:f24ddd3a471cb278ed3a960a0f13a67b9322e4c348a500e732d3db732d7a9687",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "material_id": "material:64a6a7f7f8a28ef915c38bcf4269b7641773307d9f28da04c68c1a31d3db5d7b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "model_cited": [
+        {
+          "material_id": "material:64a6a7f7f8a28ef915c38bcf4269b7641773307d9f28da04c68c1a31d3db5d7b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        },
+        {
+          "material_id": "material:f24ddd3a471cb278ed3a960a0f13a67b9322e4c348a500e732d3db732d7a9687",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        }
+      ]
+    },
+    {
+      "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+      "order": 2,
+      "body": "서울특별시 서초구 양재2동의 길을 따라 걷는다. 주변에는 여러 업종의 상가가 산재해 있다.\n보리가 냄새를 맡았다.",
+      "space_origin": "generated",
+      "selected": [
+        {
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "part": "motion",
+          "role": "scene_motion",
+          "source": "motion:c2a0c9140683153ad5c8a2d36530a27722f03fcc8adaafed749764fe326b1155"
+        },
+        {
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:9e7dfb8af4c1a0d12498fe7aeac6799bc507f482a92675e90f6b8bf7dd547ab6",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:97f357d862cc87fd6efeceb06ec66d29a23ed904d01edbf606db012cf7e549fc",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "material_id": "material:e2ef2474ee368c960a3b03e3d3f268a22b09c40aaa435f6c8ce3c5e8badd2a83",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "material_id": "material:e399eec55d93097c9395e4c384c2d0ab488fc467b4967ded4dbbc05d73175b5f",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "model_cited": [
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        },
+        {
+          "material_id": "material:e2ef2474ee368c960a3b03e3d3f268a22b09c40aaa435f6c8ce3c5e8badd2a83",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "material_id": "material:e399eec55d93097c9395e4c384c2d0ab488fc467b4967ded4dbbc05d73175b5f",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        }
+      ]
+    },
+    {
+      "scene_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+      "order": 3,
+      "body": "서울특별시 서초구 양재1동의 여러 상가가 모여 있는 길을 따라 걸었습니다. 근처에는 바우뫼 근린공원과 종열 어린이공원이 자리하고 있습니다.",
+      "space_origin": "generated",
+      "selected": [
+        {
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:064dddd1f465c6d921408fb952deaf50ae1ccc4133d75c19855bb4e1cd34f938",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:0d713d1acfd57edd4165896af175b8ee26fb50f5b5487694b4119844ea8534b7",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "material_id": "material:dd16f99ce7ff690c155053f0bb86e71344e79e3586b75f311994ec4b0fc64a3b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:c1f654c9cb5e95edf81fc8a924bee6811d9b7c01ad9f76527fc70cad25e2b752",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:2a2f0579ca92f88fffc38ee0ecfb3e6af036f8ff7fae9f85ec2c711ba61be97c",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "model_cited": [
+        {
+          "material_id": "material:2a2f0579ca92f88fffc38ee0ecfb3e6af036f8ff7fae9f85ec2c711ba61be97c",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        },
+        {
+          "material_id": "material:064dddd1f465c6d921408fb952deaf50ae1ccc4133d75c19855bb4e1cd34f938",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:c1f654c9cb5e95edf81fc8a924bee6811d9b7c01ad9f76527fc70cad25e2b752",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:dd16f99ce7ff690c155053f0bb86e71344e79e3586b75f311994ec4b0fc64a3b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        }
+      ]
+    },
+    {
+      "scene_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+      "order": 4,
+      "body": "산책 중 기록한 장소다.\n여기서 물을 마시고, 왔던 길로 돌아가기로 했다.",
+      "space_origin": "fallback",
+      "selected": [
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "part": "motion",
+          "role": "scene_motion",
+          "source": "motion:5de2630762dbb3746323ec1e04d83624bcd6ee6f2e1da479246d2122001b69d3"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:bdabbf189d2bdf97fa48d3bafefc235e97209788bdeabd407c9bb5a3bf97db70",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "model_cited": []
+    },
+    {
+      "scene_id": "stamp:e0669aa583712f22b365166e98641b791cd0c140739c0164eb0914273fe5a3ec",
+      "order": 5,
+      "body": "산책 중 기록한 장소다.",
+      "space_origin": "fallback",
+      "selected": [
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:763925ae604eda4a0e49221ece7f958df123002962aa77a6050fcb858d923853",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "model_cited": []
+    },
+    {
+      "scene_id": "stamp:0a18e6f64a40f0c299df4202957d6cad39d215c334bae957be4a3c2bbe9a0320",
+      "order": 6,
+      "body": "산책 중 기록한 장소다.",
+      "space_origin": "fallback",
+      "selected": [
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:9e239f2d2331289fadbdd331a7c07b9702cba07ef48b138a22fb9fd0291ab660",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "model_cited": []
+    },
+    {
+      "scene_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+      "order": 7,
+      "body": "산책 중 기록한 장소다.\n돌아오는 길에 사진 대신 짧게 기록을 남겼다.",
+      "space_origin": "fallback",
+      "selected": [
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:64314b5485aae85b7702be0e036fd74896e9dce441a9468b3d1e3b360948f0e3",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        }
+      ],
+      "model_cited": []
+    },
+    {
+      "scene_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+      "order": 8,
+      "body": "서울특별시 서초구 양재2동의 풀밭 위를 걷고 있다. 주변에는 마방 근린공원이 자리하며 다양한 업종의 상가가 분포해 있다.",
+      "space_origin": "generated",
+      "selected": [
+        {
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "writer_input": [
+        {
+          "material_id": "material:4deeb845057a1ec8000afbe5b6b1e7562ddac91e210eccfaceb14f8d2a17f2d2",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:9083cde21e5245b33774295d7399b2b6fa6a0b05187d7405cb349c41516c9d9c",
+          "part": "environment",
+          "role": "grid_temperature_observation",
+          "source": "weather-observation"
+        },
+        {
+          "material_id": "material:f24ddd3a471cb278ed3a960a0f13a67b9322e4c348a500e732d3db732d7a9687",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        },
+        {
+          "material_id": "material:64a6a7f7f8a28ef915c38bcf4269b7641773307d9f28da04c68c1a31d3db5d7b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        }
+      ],
+      "model_cited": [
+        {
+          "material_id": "material:4deeb845057a1ec8000afbe5b6b1e7562ddac91e210eccfaceb14f8d2a17f2d2",
+          "part": "space",
+          "role": "scene_registered_point_distance",
+          "source": "public-normalized-park"
+        },
+        {
+          "material_id": "material:64a6a7f7f8a28ef915c38bcf4269b7641773307d9f28da04c68c1a31d3db5d7b",
+          "part": "space",
+          "role": "scene_area_context",
+          "source": "public-normalized-commerce"
+        },
+        {
+          "material_id": "material:84306e18f1170b2a1716bc570a98a43db2b0ee3d9ffc51014675e931b6f3c17f",
+          "part": "space",
+          "role": "scene_address_reference",
+          "source": "sgis"
+        },
+        {
+          "material_id": "material:f24ddd3a471cb278ed3a960a0f13a67b9322e4c348a500e732d3db732d7a9687",
+          "part": "space",
+          "role": "scene_geometry_distance",
+          "source": "public-normalized-land_cover"
+        }
+      ]
+    }
+  ]
+}

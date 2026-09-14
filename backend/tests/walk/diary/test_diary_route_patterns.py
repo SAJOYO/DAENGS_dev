@@ -230,10 +230,12 @@ async def test_configured_preview_and_actual_preparation_use_same_policy_and_sta
     assert result.preview.policy.route_patterns is not None
     assert result.preview.stamps == saved.slots.stamps
     assert result.preview.revision == saved.slots.revision()
-    assert pattern_evidence(pin_stamp(result.preview))
+    movement = next(e for e in pin_stamp(result.preview).evidence if e.role == "scene_movement")
+    assert "turn_right" in {c["meaning"] for c in movement.facts["claims"]}
 
 
 def test_old_slot_policy_serializes_without_new_null_field():
     raw = SlotPolicy().model_dump(mode="json")
     assert "route_patterns" not in raw
+    assert "movement" not in raw
     assert raw == SlotPolicy.model_validate(raw).model_dump(mode="json")

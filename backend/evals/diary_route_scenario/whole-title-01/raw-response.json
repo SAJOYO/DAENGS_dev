@@ -1,0 +1,22 @@
+{
+  "text": "{\n  \"input_revision\": \"165cdb7b3d29a8087e9d749980ff9e5882c934a6f8d1b9b83ed73f2247877c1c\",\n  \"title\": \"풀밭과 숲길을 따라 보리와 함께한 산책\"\n}",
+  "model_version": "gemini-3.1-flash-lite",
+  "usage": {
+    "cache_tokens_details": null,
+    "cached_content_token_count": null,
+    "candidates_token_count": 94,
+    "candidates_tokens_details": null,
+    "prompt_token_count": 1169,
+    "prompt_tokens_details": [
+      {
+        "modality": "TEXT",
+        "token_count": 1169
+      }
+    ],
+    "thoughts_token_count": null,
+    "tool_use_prompt_token_count": null,
+    "tool_use_prompt_tokens_details": null,
+    "total_token_count": 1263,
+    "traffic_type": null
+  }
+}

@@ -52,18 +52,30 @@ async def prose(stage, payload, schema):
         return {
             "titles": [
                 {
-                    "card_id": c["card_id"],
-                    "content_revision": c["content_revision"],
+                    "id": c["id"],
                     "text": "산책길에서 남긴 기록",
                 }
                 for c in reversed(payload["cards"])
             ]
         }
-    result = {"card_id": payload["card_id"], "request_revision": payload["request_revision"]}
     if stage == "action":
-        return {**result, "action_id": payload["action"]["id"], "text": "보리가 냄새를 맡았다."}
+        if "movement" in payload:
+            refs = [
+                f["id"]
+                for p in payload["movement"]["phases"]
+                for k in ("path", "pace")
+                for f in p[k]
+            ]
+            action = payload.get("recorded_action")
+            if action:
+                refs.append(action["id"])
+            return {
+                "text": "보리가 냄새를 맡았다." if action else "이 구간의 이동을 기록했다.",
+                "evidence_ids": refs,
+            }
+        return {"text": "보리가 냄새를 맡았다."}
     refs = [m["id"] for m in payload["materials"]]
-    return {**result, "text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
+    return {"text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
 
 
 @pytest.mark.parametrize("has_pin", [False, True])
@@ -73,23 +85,30 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
     result = await writing.write_cards(base.input.source, base, generate=provider)
     calls = provider.call_args_list
     assert sum(c.args[0] == "space" for c in calls) == len(base.board.scenes)
-    assert sum(c.args[0] == "action" for c in calls) == int(has_pin)
+    assert sum(c.args[0] == "action" for c in calls) == len(base.board.scenes)
     assert calls[-1].args[0] == "title"
     for call in calls:
         stage, payload, _ = call.args
         if stage == "space":
             assert "action" not in payload and "original_text" not in payload
-            assert set(payload["sources"]) == {"sgis", "egis", "environment"}
-            assert all(m["role"] != "scene_route_pattern" for m in payload["materials"])
+            assert set(payload) == {"materials"}
         if stage == "action":
-            assert payload["action"]["actor"] == {"id": "pet-bori", "name": "보리"}
+            assert payload["movement"]["phases"]
+            if payload.get("recorded_action"):
+                assert payload["recorded_action"] == {
+                    "id": "a1",
+                    "actor": "보리",
+                    "action": "냄새 맡기",
+                    "at_s": 0,
+                }
             assert not {"materials", "anchor", "place_reference", "space"} & payload.keys()
     assert all("보리" not in c.writing.space.text for c in result.bundle.scenes)
-    assert sum(bool(c.writing.actions) for c in result.bundle.scenes) == int(has_pin)
-    titles = calls[-1].args[1]["cards"]
+    assert all(c.writing.actions for c in result.bundle.scenes)
+    assert sum(bool(c.writing.actions[0].action_id) for c in result.bundle.scenes) == int(has_pin)
+    titles = calls[-1].args[1]["context"]
     for card, sent in zip(result.bundle.scenes, titles, strict=True):
-        assert sent["space"] == card.writing.space.model_dump(mode="json")
-        assert sent["content_revision"] == card.writing.content_revision
+        assert sent["body"] == card.body
+        assert "content_revision" not in sent
         assert "original_text" not in sent
 
 
@@ -143,11 +162,11 @@ async def test_action_edit_does_not_change_space_request():
     provider = AsyncMock(side_effect=prose)
     await writing.write_cards(cached.input.source, cached, generate=provider)
     assert [c.args[0] for c in provider.call_args_list] == ["action", "title"]
-    # The title request includes only the changed card, not the unchanged siblings.
-    assert [c["card_id"] for c in provider.call_args_list[-1].args[1]["cards"]] == [target.id]
+    # All titles read the changed whole-board context after one action is regenerated.
+    assert len(provider.call_args_list[-1].args[1]["cards"]) == len(base.board.scenes)
 
 
-async def test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note():
+async def test_note_edit_reuses_bodies_and_refreshes_whole_board_titles():
     from daengs_walk.diary.contracts.input import UserRecord, material_ref
 
     base = prepared_case().board
@@ -161,12 +180,14 @@ async def test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note():
         if background["target"]["identity"] == updated_ref["identity"]:
             background["target"] = updated_ref
     after = assemble_saved_base_board(
-        replace(base.input, source=DiaryInput.model_validate(raw)), policy(3)
+        replace(base.input, source=DiaryInput.model_validate(raw)),
+        policy(3),
+        slot_policy=base.slots.policy,
     )
     after = replace(after, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
     provider = AsyncMock(side_effect=prose)
     result = await writing.write_cards(after.input.source, after, generate=provider)
-    provider.assert_not_awaited()
+    assert [c.args[0] for c in provider.call_args_list] == ["title"]
     assert any(c.writing.original_text == "수정한 원문 그대로" for c in result.bundle.scenes)
 
 
@@ -196,7 +217,7 @@ async def test_diary_and_existing_assistant_use_the_same_executor(monkeypatch):
     assert calls == ["request-1:0:walk"]
 
 
-async def test_note_is_preserved_and_not_sent_even_to_title():
+async def test_note_is_preserved_and_only_final_titles_read_it():
     base = prepared_case().board
     provider = AsyncMock(side_effect=prose)
     result = await writing.write_cards(base.input.source, base, generate=provider)
@@ -206,6 +227,11 @@ async def test_note_is_preserved_and_not_sent_even_to_title():
             assert all(
                 original.body not in json.dumps(c.args[1], ensure_ascii=False)
                 for c in provider.call_args_list
+                if c.args[0] != "title"
+            )
+            assert any(
+                c["body"].endswith(original.body)
+                for c in provider.call_args_list[-1].args[1]["context"]
             )
     prepared_value = PreparedWalkDiary(base.input, base.plan.intermediate, base)
     stored = store_board(prepared_value, result.bundle, digest("test-generation"), writing=result)
@@ -224,6 +250,7 @@ async def test_previous_public_card_hashes_remain_readable():
     raw = result.bundle.model_dump(mode="json")
     for card in raw["scenes"]:
         parts = card["writing"]
+        parts["format"] = "diary-card-narrative-v1"
         legacy = digest(
             [
                 card["id"],
@@ -274,13 +301,13 @@ async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
     assert peak == 4 and active == 0
 
 
-async def test_wrong_title_revision_keeps_adopted_action():
+async def test_unknown_title_alias_keeps_adopted_action():
     base = prepared()
 
     async def generate(stage, payload, schema):
         value = await prose(stage, payload, schema)
         if stage == "title":
-            value["titles"][0]["content_revision"] = digest("wrong-body")
+            value["titles"][0]["id"] = "c999"
         return value
 
     result = await writing.write_cards(base.input.source, base, generate=generate)
@@ -316,7 +343,7 @@ async def test_title_batch_adopts_valid_siblings_only(damage):
     result = await writing.write_cards(base.input.source, base, generate=generate)
     failed = sum(c.writing.title_origin == "fallback" for c in result.bundle.scenes)
     assert failed == (len(result.bundle.scenes) if damage == "truncated" else 1)
-    assert all(c.writing.space.text for c in result.bundle.scenes)
+    assert all(c.body and c.writing.actions for c in result.bundle.scenes)
 
 
 def test_source_edit_during_actual_title_job_cannot_publish_old_card(api, monkeypatch):
@@ -482,7 +509,13 @@ def test_actual_http_writer_publishes_once_and_exports_app_contract(api, monkeyp
     assert value["status"] == "ready", value
     assert value["bundle"]["model_status"] == "accepted", state.row.bundle
     assert all(s["writing"]["title_origin"] == "generated" for s in value["bundle"]["scenes"])
-    assert sum(bool(s["writing"]["actions"]) for s in value["bundle"]["scenes"]) == 1
+    assert (
+        sum(
+            bool(s["writing"]["actions"] and s["writing"]["actions"][0]["action_id"])
+            for s in value["bundle"]["scenes"]
+        )
+        == 1
+    )
     assert (
         client.get(PATH + "?bundle_format=walk-diary-board-v1&target_scene_count=3").json() == value
     )

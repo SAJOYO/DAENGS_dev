@@ -14,7 +14,10 @@ from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, W
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services import walk_diary_slot_writing as writing
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
+from daengs_backend.services.walk_diary_board_slot_writing import (
+    write_board,
+    write_legacy_slot_board,
+)
 from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_walk.diary_board_output import BOARD_FORMAT
@@ -240,7 +243,7 @@ async def test_cited_facts_round_trip_and_survive_context_loss_without_regenerat
     async def write(source, base):
         nonlocal calls
         calls += 1
-        return await write_board(source, base, cited_prose)
+        return await write_legacy_slot_board(source, base, cited_prose)
 
     request = spec(expected_entries={str(ENTRY): 1})
     async with factory() as db:
@@ -279,7 +282,7 @@ async def test_late_cited_result_cannot_replace_new_original_and_its_receipt(
                 if wait:
                     entered.set()
                     await release.wait()
-                return await write_board(source, base, cited_prose)
+                return await write_legacy_slot_board(source, base, cited_prose)
 
             return await generate_diary(db, OWNER, WALK, request, writer=write)
 

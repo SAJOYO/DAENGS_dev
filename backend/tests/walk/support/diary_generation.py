@@ -16,7 +16,7 @@ from daengs_backend.services import walk_diary_input as reader
 from daengs_backend.services import walk_diary_writing as writer
 from daengs_backend.services import walk_storyboard as legacy
 from daengs_backend.services.walk_diary_base_board import PreparedSavedBaseBoard
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
+from daengs_backend.services.walk_diary_board_slot_writing import write_legacy_slot_board
 from daengs_walk.diary_input import digest
 from daengs_walk.diary_scene_input import scene_materials
 from tests.walk.support.diary import place_payload, prose
@@ -112,7 +112,7 @@ def api(monkeypatch):
 
     async def write(source, prepared):
         if isinstance(prepared, PreparedSavedBaseBoard):
-            return await write_board(source, prepared, state.provider)
+            return await write_legacy_slot_board(source, prepared, state.provider)
         return await writer.write_diary(source, prepared, state.provider)
 
     state.writer = AsyncMock(side_effect=write)

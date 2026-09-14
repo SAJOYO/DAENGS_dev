@@ -294,12 +294,15 @@
 
 이 절은 2026-09-14에 DEV `bc23d9aa32de5c2d3ee4a2434c6138adf1094ec0`, APP `802604d1fcf4d6bd3cc20aec2079ea9720745265`의 코드를 대조해 보완했다. 앞선 대화의 실험 설명을 옮긴 2절과 달리, 아래 경로·분기는 이 커밋에서 직접 읽은 내용이다. **이번 보완은 문서 검증이며 실제 공급자·LLM 호출이나 운영 서버 실행을 다시 수행한 기록이 아니다.** 이후 커밋에서 분기가 바뀌면 호출자부터 다시 확인한다.
 
+2026-09-14 #502의 협상 후 기본 작성기 선택과 #504의 진입점 분리를 9.1·9.2·9.6에 반영했다.
+기준은 #502 머지 커밋 `8acbe29385f684195ff450bc21ee14ef0e6a57cf` 위의 #504 코드·타겟 회귀이며, 외부 모델·배포 실측과는 구별한다.
+
 ### 9.1 작업하면서 혼동했던 네 지점
 
 | 혼동 지점 | 왜 잘못 판단하기 쉬웠는가 | 현재 확인한 경계와 후속 작업의 기준 |
 | --- | --- | --- |
 | 기존 오케스트레이션과 일기 발행 | 기존 API·예약·저장을 사용하면 기존 오케스트레이션까지 사용한다고 설명하기 쉬웠다. 실제로는 다른 책임이다. | 일기 그래프와 어시스턴트 그래프가 공통 `JobExecutor` 구현을 호출한다. 발행 권한은 기존 일기 서비스가 갖는다. 9.3의 양쪽 호출자와 공유 실행 테스트를 확인한다. |
-| 기본 작성기와 실험·호환 작성기 | `slot`이라는 파일명, 과거 결합 작성 문서, `generate` 주입 테스트가 함께 남아 있다. 이름이 같은 진입 함수도 인자에 따라 다른 작성기로 들어간다. | 요청 형식 → 라우터 의존성 → 저장 형식 협상 → 발행 재사용 여부 → 실제 작성 호출 순으로 추적한다. 9.2의 분기표를 기준으로 검증 범위를 적는다. |
+| 기본 작성기와 실험·호환 작성기 | `slot`이라는 파일명, 과거 결합 작성 문서, `generate` 주입 테스트가 함께 남아 있었다. #504 전에는 인자에 따라 다른 작성기로 들어갔다. | 현재는 카드 `write_board`와 구형 `write_legacy_slot_board`로 구별한다. 요청 형식 → 저장 형식 협상 → 발행 재사용 여부 → 실제 작성 호출을 추적한다. 9.2의 분기표를 기준으로 검증 범위를 적는다. |
 | 공간 후보의 적격성과 하나의 장면 선정 | 공원·상권·피복이 각각 유효하다는 사실을, 세 재료를 동등하게 나열해야 한다는 뜻으로 읽기 쉬웠다. | 후보를 사용할 수 있는지와 어떤 관계로 장면을 구성할지는 다른 판단이다. 피복을 해석의 바탕으로 삼는 후속 기획을 후보 유효성의 강제 종속 규칙으로 바꾸지 않는다. 9.5 참고. |
 | SGIS 정규화와 APP 표시 | 화면에 동만 보이는 것을 원자료에서 시가 사라진 것으로 오해했다. 새 정규화 함수를 만들면 기존 의미까지 달라질 수 있다. | 기존 투영은 `sido`, `sigungu`, `dong`을 보존한다. APP 표시 추출은 `dong`을 읽는다. 9.4의 원자료 → 정규화 → 표시를 각각 확인한다. |
 
@@ -313,14 +316,14 @@
 APP WalkDiarySync: capabilities의 제공 형식 선택
   → POST /app/walks/{walk_id}/storyboard
   → routers/walk_storyboard.get_diary_writer
-      요청이 walk-diary-board-v1이면 write_board 선택
+      기본값 None: 작성기 선택을 협상 이후로 위임
   → services/walk_storyboard.generate
       existing_format으로 기존 저장 형식 보존
   → walk_diary_generation.generate_diary
-      원본/사진 버전 확인 → 기존 결과/예약 확인
+      협상된 형식의 입력 준비 → 원본/사진 버전 확인 → 기존 결과/예약 확인
       새 작성 필요 시 예약 저장·commit → 예약된 예산 안에서 실행
   → walk_diary_board_slot_writing.write_board(source, base)
-      generate 인자를 따로 넣지 않는 기본 호출
+      generate·collector 주입 여부와 무관하게 카드 그래프 실행
   → walk_diary_card_writing.write_cards
   → orchestration/runtime.build_diary_orchestrator
   → orchestration/diary.DiaryOrchestrationService.run
@@ -333,10 +336,10 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 
 | 경우 | 실제 선택 조건·진입점 | 실행되는 것 / 증명할 수 없는 것 |
 | --- | --- | --- |
-| 기본 카드 새 작성 | `walk-diary-board-v1`, 기존 형식 보존·재사용 판정 후 실제 새 작성, `write_board`에 `generate` 미주입 | `write_cards → build_diary_orchestrator`로 공간·행동·제목 작업 실행. 이름에 `slot`이 남아 있어도 기본 실행은 독립 카드 작성이다. |
-| 명시적 과거 일기 형식 | POST 요청 `walk-diary-bundle-v1` | 라우터가 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
+| 기본 카드 새 작성 | 협상된 `walk-diary-board-v1`, 재사용 판정 후 새 작성, `write_board` | `generate(stage, payload, schema)`·`collector(board)`를 키워드로 주입해도 `write_cards → build_diary_orchestrator`를 실행한다. 수집은 예약 commit 이후 그래프에서 수행한다. |
+| 과거 일기 형식 | POST의 `walk-diary-bundle-v1` 또는 board 요청에서 기존 bundle로 협상 | 생성 서비스가 준비 형식에 따라 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
 | 슬롯 미리보기 | POST `/app/walks/{walk_id}/diary-slots/preview`, `walk_diary_enabled`와 `walk_diary_slots_preview_enabled` 모두 활성 | `preview_saved_slots → write_slot_preview → write_slot_stamps`. 공개 storyboard의 생성·발행 경로와 별개다. 여기서 좋은 결과가 나와도 기본 카드 작성에 적용됐다는 증거는 아니다. |
-| 기존 슬롯 계약의 테스트 주입 | `write_board(source, base, generate=대역)` 또는 같은 세 번째 위치 인자 | `write_slot_stamps`로 분기한다. **기본 작성기에 대역만 넣었다고 생각해도 실행 전략 자체가 달라진다.** |
+| 기존 슬롯 계약의 명시적 작성 | `write_legacy_slot_board(source, base, generate=대역)` | `generate(payload, schema)`를 쓰는 `write_slot_stamps` 계약을 유지한다. 예약 전 수집이 필요하면 생성 서비스에 `legacy_collector`를 명시한다. writer 래핑만으로 수집 시점이 바뀌지 않는다. |
 | 이미 저장된 결과·진행 중 예약 | `generate_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
 | 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
 
@@ -389,7 +392,7 @@ R1·R2에서는 후보 적격성 검사와 장면의 대상·관계 선택을 �
 ### 9.6 다음 담당자의 확인 절차와 테스트 범위
 
 1. 현재 DEV·APP 커밋과 해당 저장 산책의 요청/반환 형식을 기록한다. 기능 설정, 기존 공개본·예약 여부를 확인한다. 재현을 위해 사용자 공개본을 지우지 말고 통제된 테스트 산책을 사용한다.
-2. 9.2의 라우터 의존성과 실제 작성 호출을 추적한다. `get_diary_writer`를 통째로 대역으로 바꾸거나 `write_board(generate=...)`를 사용한 테스트를 기본 그래프 검증으로 세지 않는다.
+2. 9.2의 라우터 의존성과 실제 작성 호출을 추적한다. `get_diary_writer`가 완성 결과를 돌려주는 대역이면 기본 그래프 검증으로 세지 않는다. `write_board(generate=..., collector=...)`는 외부 의존성만 교체하고 카드 그래프를 실행한다. 구형 슬롯 검증은 `write_legacy_slot_board`로 명시한다.
 3. 같은 기록의 SGIS 원자료·정규화, EGIS 확보 범위, 공간/행동 요청, 채택 본문, 제목 입력, 저장 카드와 APP 읽기를 대조한다. 재사용과 새 생성, 실제 API와 대역 응답을 표시한다.
 4. 수정한 책임에 해당하는 아래 테스트를 실행하고 결과·skip·미검증 범위를 남긴다. 이 문서 보완 자체에서는 아래 런타임 테스트를 재실행하지 않았다.
 
@@ -405,7 +408,7 @@ DEV의 [test_diary_card_writing.py](../../backend/tests/walk/diary/test_diary_ca
 | `test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note` | 원문 보존과 생성 재사용을 구별한다. |
 | `test_title_batch_adopts_valid_siblings_only`, `test_source_edit_during_actual_title_job_cannot_publish_old_card` | 제목 일부 실패의 격리와 생성 도중 원본 변경의 발행 방지를 확인한다. |
 
-실제 기본 요청 테스트는 `writing.generate_card_prose`와 `collection.configured_collection`을 교체한다. 이것이 `write_board`의 세 번째 인자를 넣어 과거 전략으로 바꾸는 것과 다른 점이다. 기존 [test_diary_board_slot_writing.py](../../backend/tests/walk/diary/test_diary_board_slot_writing.py)는 명시적 슬롯 계약의 검증으로, [test_diary_slots_api.py](../../backend/tests/walk/diary/test_diary_slots_api.py)는 미리보기 검증으로 읽는다.
+실제 기본 요청 테스트는 `writing.generate_card_prose`와 `collection.configured_collection`을 교체한다. [test_diary_writer_entrypoints.py](../../backend/tests/walk/diary/test_diary_writer_entrypoints.py)는 명시적 모델·수집 주입과 기본·직접·partial·래퍼 호출에서 같은 카드 전략, 예약 후 단일 수집, 수집 실패 격리를 확인한다. 기존 [test_diary_board_slot_writing.py](../../backend/tests/walk/diary/test_diary_board_slot_writing.py)는 명시적 구형 슬롯 계약의 검증으로, [test_diary_slots_api.py](../../backend/tests/walk/diary/test_diary_slots_api.py)는 미리보기 검증으로 읽는다.
 
 아래 명령은 DEV의 `backend/`에서 실행하는 후속 검증 예시다. 수정 범위에 따라 필요한 묶음만 고른다.
 

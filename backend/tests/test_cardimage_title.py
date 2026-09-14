@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from daengs_backend.services.cardimage import title
+from daengs_backend.services.cardimage import catalog, title
 
 CARDIMAGE = Path(__file__).resolve().parents[2] / "cardimage"
 FONT = CARDIMAGE / "fonts" / "NotoSerifKR.ttf"
@@ -53,11 +53,34 @@ def _ink_center_y(out: Image.Image, ref: Image.Image, plate: title.Plate) -> flo
 def test_september_plate_centers_text_higher_than_april():
     """9월 판은 4월보다 11px 위(y 40~135 vs 53~145, 09-14 실측)라 글자도 그만큼 위에 찍혀야 한다."""
     sep = Image.open(CARDIMAGE / "9_harvest_moon_template.webp").convert("RGB")
-    sep_plate = title.Plate(center_y=88, edge=((65, 750), (135, 709)))
+    sep_plate = catalog.SEPTEMBER_PLATE
     apr_c = _ink_center_y(title.draw_title(_template(), "CHUSEOK 네오", FONT), _template(), title.APRIL_PLATE)
     sep_c = _ink_center_y(title.draw_title(sep, "CHUSEOK 네오", FONT, plate=sep_plate), sep, sep_plate)
     assert abs(apr_c - 99) <= 4 and abs(sep_c - 88) <= 4
     assert 8 <= apr_c - sep_c <= 14
+
+
+def test_template_plate_top_is_found_where_measured():
+    assert title._plate_shift(_template(), title.APRIL_PLATE) == 0
+    sep = Image.open(CARDIMAGE / "9_harvest_moon_template.webp").convert("RGB")
+    assert title._plate_shift(sep, catalog.SEPTEMBER_PLATE) == 0
+
+
+def test_text_follows_plate_drawn_higher_than_template():
+    """모델 출력은 판이 틀보다 4~5px 위에 그려진다(09-14 실측). 카드를 통째로 6px 올린
+    가짜 출력에 얹으면 글자도 6px 위에 찍혀야 한다."""
+    tpl = _template()
+    shifted = Image.new("RGB", tpl.size, (0, 0, 0))
+    shifted.paste(tpl.crop((0, 6, tpl.width, tpl.height)), (0, 0))
+    assert title._plate_shift(shifted, title.APRIL_PLATE) == -6
+    base_c = _ink_center_y(title.draw_title(tpl, "BLOSSOM 네오", FONT), tpl, title.APRIL_PLATE)
+    moved_c = _ink_center_y(title.draw_title(shifted, "BLOSSOM 네오", FONT), shifted, title.APRIL_PLATE)
+    assert base_c - moved_c == 6
+
+
+def test_unrecognisable_plate_falls_back_to_template_center():
+    blank = Image.new("RGB", (994, 1582), (255, 255, 255))
+    assert title._plate_shift(blank, title.APRIL_PLATE) == 0
 
 
 def test_input_is_not_mutated():

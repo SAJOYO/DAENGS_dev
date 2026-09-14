@@ -14,7 +14,7 @@ class MonthNotOpenError(Exception):
 
 #: 9월 틀의 검은 제목판 — 4월보다 11px 위에 있다(y 40~135, 4월은 53~145) 그리고 약 40px 좁다.
 #: 09-14 실측: 세로는 x=270~640 다섯 열 모두 중심 87.5~88.0, 오른쪽 경계 y65→x750 · y100→731 · y135→709.
-SEPTEMBER_PLATE = Plate(center_y=88, edge=((65, 750), (135, 709)))
+SEPTEMBER_PLATE = Plate(center_y=88, edge=((65, 750), (135, 709)), top_y=40)
 
 #: 4월처럼 강아지가 아무것도 안 입는 달의 의상 문장. 사진의 목줄·리드줄이 카드로 옮겨 오는 것을 막는다.
 NO_OUTFIT = (

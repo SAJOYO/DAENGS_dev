@@ -68,6 +68,8 @@ def is_core(path):
                     "walk_records",
                     "walk_photos",
                     "walk_session",
+                    "walk_metrics",
+                    "walk_views",
                 )
             )
             or path.endswith("/orchestration/diary.py")

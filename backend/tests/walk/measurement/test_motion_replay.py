@@ -8,7 +8,7 @@ import pytest
 
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services.walk_motion_engine import replay
+from daengs_backend.services.walk_metrics.motion_engine import replay
 from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
 from daengs_backend.services.walk_session.motion_contract import (
     chunk_digest,

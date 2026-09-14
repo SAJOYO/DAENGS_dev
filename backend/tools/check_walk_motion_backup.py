@@ -411,7 +411,7 @@ async def main(dsn):
                 # A persisted input is served without rerunning the CPU engine.
                 from unittest.mock import patch
 
-                from daengs_backend.services import walk_measurement as measurement_service
+                from daengs_backend.services.walk_metrics import measurement as measurement_service
 
                 with patch.object(
                     measurement_service, "project", side_effect=AssertionError("recomputed")
@@ -474,7 +474,7 @@ async def main(dsn):
             import threading
             from unittest.mock import patch
 
-            from daengs_backend.services import walk_measurement as measurement_service
+            from daengs_backend.services.walk_metrics import measurement as measurement_service
 
             async with engine.begin() as conn:
                 await conn.execute(

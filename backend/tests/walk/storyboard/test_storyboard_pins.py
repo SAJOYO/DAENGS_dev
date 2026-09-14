@@ -13,8 +13,8 @@ import pytest
 from daengs_backend.config import settings
 from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.repositories import walk_entry_v2 as pins
-from daengs_backend.services.walk_storyboard_context import lookup_contexts
-from daengs_backend.services.walk_storyboard_titles import title_storyboard
+from daengs_backend.services.walk_legacy.context import lookup_contexts
+from daengs_backend.services.walk_legacy.titles import title_storyboard
 from daengs_walk.storyboard import StoryboardBundleV5
 from tests.walk.support.storyboard import ENTRY, PATH, START, router
 

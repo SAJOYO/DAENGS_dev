@@ -113,7 +113,7 @@ def boundary(monkeypatch, request):
 
 
 def test_calculation_detaches_before_cpu_work_and_preserves_backup_contract(boundary, monkeypatch):
-    from daengs_backend.services import walk_motion_calculation as service
+    from daengs_backend.services.walk_metrics import motion_calculation as service
 
     original = service.replay
 

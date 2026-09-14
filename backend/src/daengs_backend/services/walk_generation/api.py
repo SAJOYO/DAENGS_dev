@@ -5,7 +5,7 @@ from daengs_walk.diary.board.output import BOARD_FORMAT
 
 
 async def _default_titles(bundle):
-    from daengs_backend.services.walk_storyboard_titles import title_storyboard
+    from daengs_backend.services.walk_legacy.titles import title_storyboard
 
     return await title_storyboard(bundle)
 

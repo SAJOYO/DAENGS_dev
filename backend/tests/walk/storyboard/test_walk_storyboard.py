@@ -14,9 +14,9 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.services.walk_legacy import storyboard as service
+from daengs_backend.services.walk_legacy.context import lookup_contexts
 from daengs_backend.services.walk_session.chunk import encode_chunk
 from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
-from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from tests.walk.support.paths import WALK_FIXTURES
 from tests.walk.support.storyboard import ENTRY, OWNER, PATH, SESSION, START, WALK
 
@@ -79,7 +79,7 @@ def test_pinless_real_observations_generate_and_cache(live):
 
 
 def test_v3_title_is_saved_once_and_legacy_reads_do_not_regenerate(live):
-    from daengs_backend.services.walk_storyboard_titles import title_storyboard
+    from daengs_backend.services.walk_legacy.titles import title_storyboard
     from tests.walk.support.storyboard import headings
 
     client, state, _ = live
@@ -104,7 +104,7 @@ def test_v3_title_is_saved_once_and_legacy_reads_do_not_regenerate(live):
 
 
 def test_v3_title_failure_cached_until_refresh_and_late_title_cannot_publish(live):
-    from daengs_backend.services.walk_storyboard_titles import title_storyboard
+    from daengs_backend.services.walk_legacy.titles import title_storyboard
 
     client, state, _ = live
     generated = AsyncMock(side_effect=ValueError("unavailable"))

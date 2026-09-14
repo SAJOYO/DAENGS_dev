@@ -2,11 +2,13 @@
 
 from datetime import datetime
 
+from daengs_walk.diary.board.activity_materials import PATH_TEXT, compose_activity
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.route.patterns import PATTERN_CASES
 
 MEANINGS = {
     **{key: next(iter(value.values())) for key, value in PATTERN_CASES.items()},
+    **{key: value for key, value in PATH_TEXT.items() if key not in PATTERN_CASES},
     "relative_slow": "이번 산책의 기준 속도보다 상대적으로 느린 이동",
     "relative_fast": "이번 산책의 기준 속도보다 상대적으로 빠른 이동",
 }
@@ -53,33 +55,7 @@ def movement_uses(request):
 
 
 def activity_projection(request):
-    uses = movement_uses(request)
-    phases, refs = {}, {}
-    for index, use in enumerate(uses, 1):
-        key = f"m{index}"
-        refs[key] = use["id"]
-        span = (use["from_s"], use["to_s"])
-        phase = phases.setdefault(
-            span, {"from_s": span[0], "to_s": span[1], "path": [], "pace": []}
-        )
-        phase[use["kind"] if use["kind"] == "path" else "pace"].append(
-            {
-                "id": key,
-                "meaning": MEANINGS[use["meaning"]],
-                **({"at_s": use["at_s"]} if "at_s" in use else {}),
-            }
-        )
-    payload = {"movement": {"phases": list(phases.values())}}
-    action = request.get("action")
-    if action:
-        refs["a1"] = action["id"]
-        payload["recorded_action"] = {
-            "id": "a1",
-            "actor": action["actor"].get("name"),
-            "action": action["material"]["무엇을"],
-            "at_s": 0,
-        }
-    return payload, refs
+    return compose_activity(movement_uses(request), request.get("action"))
 
 
 def require_activity_transfer(request, payload, references):
@@ -105,7 +81,7 @@ def activity_fallback(request):
             "straight_run": 4,
         }
         paths = sorted(
-            (u for u in chosen if u["kind"] == "path"), key=lambda u: order[u["meaning"]]
+            (u for u in chosen if u["kind"] == "path"), key=lambda u: order.get(u["meaning"], 2)
         )
         paces = [u for u in chosen if u["kind"] == "pace"]
         selected = paths[:1] + paces[:1]

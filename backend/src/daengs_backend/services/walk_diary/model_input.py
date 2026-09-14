@@ -9,7 +9,7 @@ from daengs_backend.services.walk_diary.model_materials import location, materia
 from daengs_walk.diary.board.activity import activity_projection
 from daengs_walk.diary.contracts.input import DiaryContract
 
-VERSION = "diary-prose-input-v3"
+VERSION = "diary-prose-input-v4"
 
 
 class SpaceAnswer(DiaryContract):
@@ -122,7 +122,14 @@ class ModelRequest:
                     **result,
                     "action_id": action["id"] if action else None,
                     "text": answer.text,
-                    "movement_ids": [self.references[k] for k in answer.evidence_ids if k != "a1"],
+                    "movement_ids": sorted(
+                        {
+                            ref
+                            for k in answer.evidence_ids
+                            if k != "a1"
+                            for ref in self.references[k]
+                        }
+                    ),
                 }
             answer = ActionAnswer.model_validate(raw)
             return {**result, "action_id": self.internal["action"]["id"], "text": answer.text}

@@ -22,9 +22,9 @@ async def placeholder(stage, payload, schema):
         if "movement" in payload:
             refs = [
                 f["id"]
-                for p in payload["movement"]["phases"]
-                for k in ("path", "pace")
-                for f in p[k]
+                for p in payload["movement"]["materials"]
+                for f in [p, *p.get("changes", [])]
+                if "id" in f
             ]
             if payload.get("recorded_action"):
                 refs.append(payload["recorded_action"]["id"])

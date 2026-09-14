@@ -62,9 +62,9 @@ async def prose(stage, payload, schema):
         if "movement" in payload:
             refs = [
                 f["id"]
-                for p in payload["movement"]["phases"]
-                for k in ("path", "pace")
-                for f in p[k]
+                for p in payload["movement"]["materials"]
+                for f in [p, *p.get("changes", [])]
+                if "id" in f
             ]
             action = payload.get("recorded_action")
             if action:
@@ -93,13 +93,14 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
             assert "action" not in payload and "original_text" not in payload
             assert set(payload) == {"materials"}
         if stage == "action":
-            assert payload["movement"]["phases"]
+            assert payload["movement"]["materials"]
             if payload.get("recorded_action"):
-                assert payload["recorded_action"] == {
+                assert {
+                    k: v for k, v in payload["recorded_action"].items() if k != "connections"
+                } == {
                     "id": "a1",
                     "actor": "보리",
                     "action": "냄새 맡기",
-                    "at_s": 0,
                 }
             assert not {"materials", "anchor", "place_reference", "space"} & payload.keys()
     assert all("보리" not in c.writing.space.text for c in result.bundle.scenes)

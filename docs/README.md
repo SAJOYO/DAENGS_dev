@@ -8,6 +8,7 @@
 | [walk/diary-service-package.md](walk/diary-service-package.md) | 일기 서비스 진입점·책임별 패키지·의존 경계와 이전 파일 이동표 |
 | [walk/diary-domain-package.md](walk/diary-domain-package.md) | 일기 기획 규칙의 책임·의존 경계, 장면 선정·공간 해석·슬롯 적용과 이전 파일 이동표 |
 | [walk/diary-activity.md](walk/diary-activity.md) | 동선·속도를 합친 활동 슬롯과 정규화·저장·전체 맥락 제목, 정책 선택의 이유 |
+| [walk/diary-movement-materials.md](walk/diary-movement-materials.md) | #520 굽이·회전·되짚기 조건과 카드별 의미 조립, 숫자 없는 활동 입력 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |

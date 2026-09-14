@@ -77,8 +77,8 @@ async def provider(stage, payload, schema):
         return {"titles": [{"id": c["id"], "text": "돌아오는 길의 기록"} for c in payload["cards"]]}
     if stage == "action":
         if "movement" in payload:
-            phases = payload["movement"]["phases"]
-            refs = [f["id"] for p in phases for k in ("path", "pace") for f in p[k]]
+            materials = payload["movement"]["materials"]
+            refs = [f["id"] for p in materials for f in [p, *p.get("changes", [])] if "id" in f]
             if payload.get("recorded_action"):
                 refs.append(payload["recorded_action"]["id"])
             return {"text": "이 기록 무렵의 동선을 남겼다.", "evidence_ids": refs}
@@ -149,7 +149,7 @@ def test_turn_pivot_does_not_inherit_pace_before_the_turn():
     phases = phases_for(claims, 0, 30)
     assert phases == [
         {"start_s": 0, "end_s": 10, "claims": ["slow"]},
-        {"start_s": 10, "end_s": 30, "claims": ["turn"]},
+        {"start_s": 20, "end_s": 30, "claims": ["turn"]},
     ]
     request = {
         "movement": [
@@ -165,10 +165,11 @@ def test_turn_pivot_does_not_inherit_pace_before_the_turn():
         ]
     }
     wire, _ = activity_projection(request)
-    first, second = wire["movement"]["phases"]
-    assert not first["path"] and first["pace"]
-    assert not second["pace"]
-    assert second["path"][0]["at_s"] == 0
+    first, second = wire["movement"]["materials"]
+    assert "느리게" in first["changes"][0]["meaning"]
+    assert "느림" not in second["meaning"]
+    assert second["occurrence"] == "한 번의 방향 전환"
+    assert "at_s" not in json.dumps(wire)
 
 
 def test_revisited_coordinates_bind_to_different_times_and_notes_receive_movement():
@@ -200,7 +201,18 @@ async def test_real_request_result_storage_and_whole_titles(pin, note):
         assert len(job.request["movement"]) == 1
         wire = json.dumps(job.llm_request, ensure_ascii=False)
         assert not any(
-            k in wire for k in ("baseline_mps", "source_revision", "lat", "lng", "diagnostics")
+            f'"{k}":' in wire
+            for k in (
+                "baseline_mps",
+                "source_revision",
+                "lat",
+                "lng",
+                "diagnostics",
+                "from_s",
+                "to_s",
+                "at_s",
+                "phases",
+            )
         )
     titles = [j for j in result.jobs if j.stage == "title"]
     assert len(titles) == 1
@@ -226,7 +238,7 @@ async def test_missing_selected_movement_fails_before_external_call(monkeypatch)
     def damaged(stage, request):
         model = original(stage, request)
         if stage == "action" and request.get("movement"):
-            model.payload["movement"]["phases"] = []
+            model.payload["movement"]["materials"] = []
         return model
 
     monkeypatch.setattr(diary, "normalize", damaged)
@@ -345,7 +357,7 @@ def test_missing_baseline_keeps_supported_path_without_normal_pace():
     assert catalog.claims and all(c["kind"] == "path" for c in catalog.claims)
     job = activity_jobs.action_job(base, base.board.scenes[0])
     wire = normalize("action", job.request).payload
-    assert all(not p["pace"] and p["path"] for p in wire["movement"]["phases"])
+    assert all(not p["changes"] and p["meaning"] for p in wire["movement"]["materials"])
     assert "정상" not in json.dumps(wire, ensure_ascii=False)
 
 

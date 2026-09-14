@@ -1,5 +1,8 @@
 # 산책 파트 슬롯 미리보기
 
+2026-09-14 #508 후속: 신규 기본 작성은 [동선·속도 통합 활동](diary-activity.md)을 적용한다.
+아래 미리보기와 과거 비교 기록을 현재 카드 작성기의 적용 범위로 해석하지 않는다.
+
 현재 작성 계약은 [장면과 선택적 행동](scene-writing.md)이다. 아래의 배경 덧붙이기 비교 기록은
 이전 실험이며, 일반 장면의 신규 생성은 구조화한 장면·행동 입력에서 완결된 본문을 받는다.
 
@@ -206,8 +209,10 @@ Content-Type: application/json
 
 ### 서비스 연결 2단계: 고정 근거로 서술
 
-기본 보드 요청은 `write_board(source, PreparedSavedBaseBoard)`로 연결된다. 구형
-`walk-diary-bundle-v1`은 기존 writer를 사용한다. 기본 보드에서는 이전의 제한된 배경 목록을
+이 절은 구형 슬롯 작성 계약을 설명한다. 2026-09-14 #504에서 진입점을
+`write_legacy_slot_board(source, PreparedSavedBaseBoard, generate=...)`로 명시했다.
+기본 보드 요청의 `write_board`는 모델 대역을 주입해도 [카드 그래프](card-orchestration.md)를 실행한다.
+구형 `walk-diary-bundle-v1`은 기존 bundle writer를 사용한다. 구형 슬롯 보드에서는 이전의 제한된 배경 목록을
 재선정하지 않고 `slots.stamps`의 근거와 해당 장면의 원문만 전달한다. 선정 사유·순위·
 진단값은 모델 입력에도 포함하지 않는다.
 

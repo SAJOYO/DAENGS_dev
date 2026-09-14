@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import delete, text
@@ -13,12 +14,13 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_slot_writing as writing
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.legacy import slots as writing
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.runtime import write_board
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.diary import place_payload
 from tests.walk.support.entry_v2 import AT, ENTRY, OWNER, WALK
 from tests.walk.support.paths import REPO
@@ -40,6 +42,46 @@ def spec(**updates):
     return StoryboardRequest.model_validate(
         {"bundle_format": BOARD_FORMAT, "expected_entries": {}, "target_scene_count": 3, **updates}
     )
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_legacy_collection_rechecks_concurrent_reservation(
+    board_database, monkeypatch, cancelled
+):
+    factory = board_database
+    monkeypatch.setattr(settings, "walk_diary_space_enabled", True)
+    outer_writer = AsyncMock(side_effect=AssertionError("another request already reserved"))
+    other_writer = AsyncMock(
+        side_effect=asyncio.CancelledError() if cancelled else RuntimeError("provider unavailable")
+    )
+    async with factory() as db:
+
+        async def collect(_board):
+            assert not db.in_transaction()
+            # A second connection must be able to acquire the Walk lock and reserve
+            # while legacy acquisition is in flight, before the outer writer starts.
+            async with factory() as other:
+                if cancelled:
+                    with pytest.raises(asyncio.CancelledError):
+                        await generate_diary(other, OWNER, WALK, spec(), writer=other_writer)
+                else:
+                    completed = await generate_diary(
+                        other, OWNER, WALK, spec(), writer=other_writer
+                    )
+                    assert completed.status == "ready"
+
+        collected = AsyncMock(side_effect=collect)
+        response = await generate_diary(
+            db, OWNER, WALK, spec(), writer=outer_writer, legacy_collector=collected
+        )
+        assert not db.in_transaction()
+    assert response.status == ("running" if cancelled else "ready")
+    assert response.generation == 1
+    outer_writer.assert_not_awaited()
+    other_writer.assert_awaited_once()
+    collected.assert_awaited_once()
+    async with factory() as db:
+        assert await get_diary(db, OWNER, WALK, 3, BOARD_FORMAT) == response
 
 
 async def test_receipt_survives_connection_policy_change_and_owner_deletion(
@@ -240,7 +282,7 @@ async def test_cited_facts_round_trip_and_survive_context_loss_without_regenerat
     async def write(source, base):
         nonlocal calls
         calls += 1
-        return await write_board(source, base, cited_prose)
+        return await write_legacy_slot_board(source, base, cited_prose)
 
     request = spec(expected_entries={str(ENTRY): 1})
     async with factory() as db:
@@ -279,7 +321,7 @@ async def test_late_cited_result_cannot_replace_new_original_and_its_receipt(
                 if wait:
                     entered.set()
                     await release.wait()
-                return await write_board(source, base, cited_prose)
+                return await write_legacy_slot_board(source, base, cited_prose)
 
             return await generate_diary(db, OWNER, WALK, request, writer=write)
 

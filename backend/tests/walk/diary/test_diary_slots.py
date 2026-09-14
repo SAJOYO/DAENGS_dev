@@ -5,13 +5,14 @@ from datetime import timedelta
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, writing_payload
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_scene_input import scene_materials
-from daengs_walk.diary_slots import SlotPolicy, prepare_slot_preview
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
 
 
 def prepare(source=None, route=None, **policy):
@@ -81,7 +82,7 @@ def test_no_route_means_no_motion_and_no_other_scene_background():
 
 
 def test_motion_cannot_bridge_a_removed_canonical_segment():
-    from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
+    from daengs_walk.diary.slots.sources import candidates_for_scene, verified_motion
 
     source, route, _ = demo_input()
     preview = prepare(source, route)

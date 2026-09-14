@@ -1,0 +1,13 @@
+{
+  "sequence": 1,
+  "endpoint": "https://sgisapi.mods.go.kr/OpenAPI3/auth/authentication.json",
+  "parameters": {},
+  "started_at": "2026-09-14T03:06:25.048045+00:00",
+  "http_status": 200,
+  "response": {
+    "errCd": 0,
+    "auth_body_omitted": true
+  },
+  "response_sha256": "998b1e79e09b987dd575fc81401355a0308d9dd62318599a8ddb91516af1c903",
+  "elapsed_s": 0.781
+}

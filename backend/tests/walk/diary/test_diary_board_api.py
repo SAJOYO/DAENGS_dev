@@ -2,20 +2,24 @@
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from daengs_backend.config import settings
+from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_generation as generation
-from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services.walk_diary_board_storage import StoredBoard
-from daengs_backend.services.walk_diary_generation import generate_diary
-from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
-from tests.walk.support.diary_generation import PATH, body
+from daengs_backend.services.walk_diary import api as diary_api
+from daengs_backend.services.walk_diary.legacy import bundle as bundle_writer
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.lifecycle import generation
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.preparation import input as reader
+from daengs_backend.services.walk_diary.storage.board import StoredBoard
+from daengs_walk.diary.board.output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
+from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.photo_input import OWNER, WALK
 
@@ -33,8 +37,17 @@ def clock(monkeypatch):
     return value
 
 
+@pytest.fixture
+def legacy_context_wait(monkeypatch):
+    # Opt in at the public service boundary now used by HTTP, not its private implementation.
+    monkeypatch.setattr(
+        diary_api, "generate_diary", partial(diary_api.generate_diary, legacy_context_wait=True)
+    )
+
+
 @pytest.mark.parametrize("job_state", ["pending", "running"])
-def test_first_board_waits_without_reservation_then_uses_completed_context(api, clock, job_state):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_board_waits_without_reservation_then_uses_completed_context(api, clock, job_state):
     client, state, db = api
     state.walk.created_at = clock.now  # The recorded walk happened yesterday, before this upload.
     background, state.envelope = state.envelope, None
@@ -65,7 +78,8 @@ def test_first_board_waits_without_reservation_then_uses_completed_context(api, 
     state.provider.assert_awaited_once()
 
 
-def test_stalled_collection_stops_waiting_exactly_ten_minutes_after_server_upload(api, clock):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_wait_ends_exactly_ten_minutes_after_server_upload(api, clock):
     client, state, _ = api
     uploaded_at = clock.now
     state.walk.created_at = uploaded_at
@@ -99,7 +113,8 @@ def test_stalled_collection_stops_waiting_exactly_ten_minutes_after_server_uploa
     ],
     ids=["no-jobs", "completed", "failed", "cancelled", "disabled"],
 )
-def test_first_board_does_not_wait_without_active_collection(
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_board_does_not_wait_without_active_collection(
     api, clock, monkeypatch, enabled, job_states
 ):
     client, state, _ = api
@@ -115,7 +130,8 @@ def test_first_board_does_not_wait_without_active_collection(
 @pytest.mark.parametrize(
     "uploaded_at", [None, datetime(2026, 9, 10, 12, tzinfo=UTC).replace(tzinfo=None)]
 )
-def test_unknown_server_upload_time_does_not_block_first_board(api, clock, uploaded_at):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_unknown_server_upload_time_does_not_block_legacy_board(api, clock, uploaded_at):
     client, state, _ = api
     state.walk.created_at = uploaded_at
     state.envelope = None
@@ -143,7 +159,8 @@ def test_published_board_is_preserved_when_current_context_is_pending(api, clock
     state.writer.assert_awaited_once()
 
 
-def test_deleted_entry_collection_does_not_delay_first_board(api, clock):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_deleted_entry_collection_does_not_delay_legacy_board(api, clock):
     client, state, _ = api
     state.walk.created_at = clock.now
     state.envelope = None
@@ -194,7 +211,7 @@ def test_no_action_ordinary_route_reaches_api_as_checkpoints_not_fake_observatio
         "session_boundary",
     ]
     assert all(s["body"] for s in result["bundle"]["scenes"])
-    state.provider.assert_not_awaited()
+    state.provider.assert_awaited_once()  # Ordinary path shape is usable without speed outliers.
 
 
 def test_saved_v1_is_read_without_conversion_or_generation(api):
@@ -208,8 +225,55 @@ def test_saved_v1_is_read_without_conversion_or_generation(api):
     state.provider.assert_awaited_once()
 
 
+@pytest.mark.parametrize("requested_format", [BOARD_FORMAT, FORMAT])
+@pytest.mark.parametrize("edit_source", [False, True])
+def test_default_router_uses_saved_bundle_writer_after_negotiation(
+    api, monkeypatch, requested_format, edit_source
+):
+    client, state, _ = api
+    client.app.dependency_overrides.pop(router.get_diary_writer)
+    # The model callable is bound as a Python default. Replace only that external
+    # boundary; keep the router, negotiation, preparation and both writers real.
+    monkeypatch.setattr(bundle_writer.write_diary, "__defaults__", (state.provider,))
+    first_response = client.post(PATH, json=body(state))
+    assert first_response.status_code == 200, first_response.text
+    first = first_response.json()
+    assert first["status"] == "ready" and first["bundle"]["model_status"] == "accepted"
+    saved = deepcopy(state.row.bundle)
+    if edit_source:
+        state.entries[0].revision += 1
+        state.entries[0].payload["note"] = "  수정한 원문\n그대로 보존  "
+        state.envelope["target"]["revision"] = state.entries[0].revision
+
+    response = client.post(PATH, json=body(state, bundle_format=requested_format))
+    assert response.status_code == 200, response.text
+    value = response.json()
+    assert value["status"] == "ready", value
+    assert value["format"] == "walk-diary-response-v1"
+    assert value["bundle"]["format"] == FORMAT
+    assert value["bundle"]["model_status"] == "accepted"
+    assert value["generation"] == first["generation"] + int(edit_source)
+    assert value["entry_revisions"] == {str(e.id): e.revision for e in state.entries}
+    assert state.row.bundle["format"] == "walk-diary-storage-v1"
+    assert state.row.bundle["bundle"] == value["bundle"]
+    if edit_source:
+        assert value["input_revision"] != first["input_revision"]
+        original = next(s["user_record"] for s in value["bundle"]["scenes"] if s["user_record"])
+        assert original["text"] == state.entries[0].payload["note"]
+    else:
+        assert value == first and state.row.bundle == saved
+    assert state.provider.await_count == 1 + int(edit_source)
+    for call in state.provider.await_args_list:
+        payload, schema = call.args
+        assert "background_dictionary" in payload and "scenes" in payload
+        assert isinstance(schema, dict)
+    state.writer.assert_not_awaited()
+    state.lookup.assert_not_awaited()
+
+
 def test_saved_legacy_is_returned_in_its_original_format(api):
     client, state, _ = api
+    client.app.dependency_overrides.pop(router.get_diary_writer)
     first = client.post(
         PATH,
         json={

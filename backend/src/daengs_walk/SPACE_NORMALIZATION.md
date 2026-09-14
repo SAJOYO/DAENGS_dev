@@ -3,8 +3,8 @@
 실행 위치는 DEV의 `backend/`다. GEO·APP 코드 import, API 호출, LLM 없이 저장 응답을 재생할 수 있다.
 
 ```powershell
-uv run python -m daengs_walk.diary_space_normalize --list-cases
-uv run python -m daengs_walk.diary_space_normalize --input <manifest.json> --output <new-result.json>
+uv run python -m daengs_walk.diary.cli.space_normalize --list-cases
+uv run python -m daengs_walk.diary.cli.space_normalize --input <manifest.json> --output <new-result.json>
 uv run pytest -q tests/walk/diary/test_diary_space_materials.py tests/walk/diary/test_diary_space_integration.py
 ```
 
@@ -19,9 +19,9 @@ manifest의 `point`는 `{lat, lng}`. `commerce`와 `park`는 `query_point`, 명�
 ## 공간 적용 정책·스냅샷 재생
 
 ```powershell
-uv run python -m daengs_walk.diary_space_replay --list-policy --park-radius-m 250
-uv run python -m daengs_walk.diary_space_replay --input evals/walk-diary/space-policy-v1/input.json --output <new-result.json>
-uv run python -m daengs_walk.diary_space_replay --input <manifest.json> --park-radius-m 500 --output <another-new-result.json>
+uv run python -m daengs_walk.diary.cli.space_replay --list-policy --park-radius-m 250
+uv run python -m daengs_walk.diary.cli.space_replay --input evals/walk-diary/space-policy-v1/input.json --output <new-result.json>
+uv run python -m daengs_walk.diary.cli.space_replay --input <manifest.json> --park-radius-m 500 --output <another-new-result.json>
 uv run pytest -q tests/walk/diary/test_diary_space_memory.py
 ```
 

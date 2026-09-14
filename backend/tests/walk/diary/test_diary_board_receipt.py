@@ -7,29 +7,32 @@ from types import SimpleNamespace
 
 import pytest
 
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
-from daengs_backend.services.walk_diary_board_storage import (
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.legacy.board_slots import (
+    complete_slot_board,
+    write_legacy_slot_board,
+)
+from daengs_backend.services.walk_diary.lifecycle.negotiation import guard_old_writer
+from daengs_backend.services.walk_diary.lifecycle.publication import (
+    fallback,
+    publication_reservation,
+    settle_expired,
+)
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
+from daengs_backend.services.walk_diary.storage.board import (
     LegacyStoredBoard,
     StoredBoard,
     load_board,
     read_board,
     store_board,
 )
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_negotiation import guard_old_writer
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_backend.services.walk_diary_publication import (
-    fallback,
-    publication_reservation,
-    settle_expired,
-)
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_scene_input import scene_materials
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.base_board import policy
 
 
@@ -53,7 +56,7 @@ async def saved():
             ]
         }
 
-    output = await write_board(source, base, generate)
+    output = await write_legacy_slot_board(source, base, generate)
     bundle = complete_slot_board(prepared, output)
     revision = digest("generation-one")
     stored = store_board(prepared, bundle, revision, writing=output)
@@ -91,7 +94,7 @@ def test_only_cited_facts_are_frozen_with_original_and_versions(saved):
             assert evidence.facts == selected[evidence.id].facts
             assert evidence.sources == selected[evidence.id].sources
             assert set(evidence.model_dump()) == {"id", "part", "role", "facts", "sources"}
-    assert sum(len(s.evidence) for s in receipt.scenes) == 3
+    assert sum(len(s.evidence) for s in receipt.scenes) == 5  # Movement also supports boundaries.
     assert sum(len(s.materials()) for s in prepared.board.slots.stamps) > 3
     receipt.require_bundle(stored.bundle, revision)
 

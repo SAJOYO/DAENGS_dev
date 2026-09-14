@@ -24,7 +24,7 @@ flowchart TD
 ```
 
 서비스 어댑터는 `walk_diary_observations.prepare_observation_source()`,
-순수 공급자는 `daengs_walk.diary_observations.build_observation_pool()`이다.
+순수 공급자는 `daengs_walk.diary.route.observations.build_observation_pool()`이다.
 기존 `route_nodes()`와 `session_speed_baseline()`을 추출해 양쪽에서 재사용한다.
 옛 선택기의 과거 산책 비교·경로 빈 구간 채우기·사용자 행동 선택은 새 공급자가 호출하지 않는다.
 

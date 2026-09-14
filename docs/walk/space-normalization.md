@@ -1,6 +1,6 @@
 # 산책 공간 재료 정규화
 
-정규화의 실행 정본은 DEV의 `daengs_walk.diary_space_*`다. GEO의 케이스 사전과
+정규화의 실행 정본은 DEV의 `daengs_walk.diary.space`다. GEO의 케이스 사전과
 판정 의미를 이식했다. APP은 서버 결과를 수신·저장·표시한다.
 공간은 API, 동선 패턴은 GPS, 행동은 선택적 행동핀 앵커다. 행동핀 없는 장면도 유지한다.
 GPS 재료의 실제 연결은 [동선 패턴 정규화](route-patterns.md)를 따른다.

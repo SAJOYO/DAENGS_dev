@@ -8,7 +8,7 @@ from daengs_backend.repositories import walk_entry as entries_repo
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardResponse
-from daengs_backend.services.walk_diary_negotiation import existing_format, guard_old_writer
+from daengs_backend.services.walk_diary.api import existing_format, guard_old_writer
 from daengs_backend.services.walk_entry import response as entry_response
 from daengs_backend.services.walk_entry_errors import EntryUpgradeRequired
 from daengs_backend.services.walk_entry_policy import guard_v1
@@ -24,7 +24,7 @@ from daengs_backend.services.walk_storyboard_state import (
 )
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk import analyze_walk
-from daengs_walk.diary_board_output import BOARD_FORMAT
+from daengs_walk.diary.board.output import BOARD_FORMAT
 from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
 from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk
@@ -107,7 +107,7 @@ async def get(
             session, owner, walk_id, target_scene_count
         )
     if bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
-        from daengs_backend.services.walk_diary_generation import get_diary
+        from daengs_backend.services.walk_diary.api import get_diary
 
         return await get_diary(session, owner, walk_id, target_scene_count, bundle_format)
     walk, _, _, revisions, revision, _ = await source(session, owner, walk_id, bundle_format)
@@ -135,7 +135,7 @@ async def generate(
             }
         )
     if request.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
-        from daengs_backend.services.walk_diary_generation import generate_diary
+        from daengs_backend.services.walk_diary.api import generate_diary
 
         return await generate_diary(session, owner, walk_id, request, writer=diary_writer)
     walk, analysis, entries, revisions, revision, history = await source(

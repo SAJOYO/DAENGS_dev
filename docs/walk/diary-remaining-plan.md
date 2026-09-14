@@ -1,5 +1,14 @@
 # 산책 일기: 대화의 경위와 남은 기획
 
+**후속 구현 — 2026-09-14 #508:** 동선·속도 통합 슬롯, 행동핀 없는 활동 작성,
+LLM 전용 정규화, 모든 본문을 읽는 장면별 제목을 기본 카드 경로에 연결했다.
+[결정 이유와 구현 범위](diary-activity.md)를 따른다. 아래 2026-09-13 대화·남은 기획은
+당시 기준을 보존한다. 실제 LLM 품질·배포·실기기 검증의 완료를 뜻하지 않는다.
+
+#512·#514의 패키징으로 바뀐 현재 경로는 [서비스](diary-service-package.md)와
+[기획 규칙](diary-domain-package.md)의 이동표·의존 경계를
+따른다. 아래 과거 커밋의 호출 경위·제품 결정은 보존하며 장면 정책을 변경한 작업은 아니다.
+
 이 문서는 **왜 지금 구조가 되었고, 무엇을 더 확인해야 산책 일기 기획이 완성되는지**를 설명한다. 다음 담당자는 남은 작업 표만 보고 구현을 시작하지 말고 1~5절의 문제와 결정 이유를 먼저 읽는다.
 
 작성 기준은 2026-09-13의 사용자 대화와 DEV `b1a5f8d4`다. 이 기준의 `dev`에는 [#498](https://github.com/SAJOYO/DAENGS_dev/pull/498)의 카드 작성 경로와 [#499](https://github.com/SAJOYO/DAENGS_dev/pull/499)의 공통 오케스트레이션 연결이 머지되어 있다. **코드 머지는 운영 서버 배포·실기기 실행·실제 LLM 품질 검증과 다르다.** 이 문서는 그 세 가지의 완료를 선언하지 않는다.
@@ -267,11 +276,11 @@
 
 반대로 앞에서 완료한 조건부 행동 호출·공통 실행 연결을 다시 ‘앞으로 분리할 것’이라고 쓰지도 않는다. 후속 구현은 기존 접점을 사용한다.
 
-- 입력/공간 수집: `walk_diary_input.py`, `walk_diary_space_collection.py`, 기존 SGIS·피복 정규화.
-- 공간 후보·적용 실험: `daengs_walk.diary_space_*`, 기존 `prepare_board_slots` 경로.
-- 작성용 재료·검증: `walk_diary_card_writing.py`, 문체/역할은 `walk_diary_card_prompts.py`.
+- 입력/공간 수집: `walk_diary/preparation/input.py`, `walk_diary/collection/service.py`, 기존 SGIS·피복 정규화.
+- 공간 후보·적용 실험: `daengs_walk.diary.space`, `daengs_walk.diary.slots`, 기존 `prepare_board_slots` 경로.
+- 작성용 재료·검증: `walk_diary/writing/jobs.py`, 계약은 `walk_diary/contracts.py`, 조립은 `walk_diary/writing/assembly.py`(#507). 현재 모델·예산은 `walk_diary/writing/policy.py`, 전송은 `walk_diary/writing/provider.py`, 문체/역할은 기존 `walk_diary/writing/prompts.py`다. `walk_diary/runtime.py`는 그래프 호출과 기존 import 호환을 유지한다.
 - 실행: `orchestration/runtime.py`, `diary.py`, 기존 채팅과 공유하는 `execution.py`.
-- 발행/보존: 기존 `walk_diary_generation.py`, `walk_diary_publication.py`, 카드 영수증과 저장 경로.
+- 발행/보존: `walk_diary/lifecycle/generation.py`가 `walk_diary/lifecycle/snapshot.py`의 준비·응답과 `walk_diary/lifecycle/reservation.py`의 예약·완료를 연결한다(#506). 공개 마감은 기존 `walk_diary/lifecycle/publication.py`, 저장은 기존 카드 영수증과 저장 경로를 유지한다.
 - APP: 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`.
 
 코드 이름을 재사용했다는 것만으로 관계 선정을 완성했다고 보고하지 않는다. **이번 표본에서 어떤 재료를 얻었고, 왜 그 관계를 사용할 수 있으며, 실제로 어떤 문장이 나왔는지**를 보여주는 것이 다음 완료 보고의 중심이다.
@@ -294,12 +303,15 @@
 
 이 절은 2026-09-14에 DEV `bc23d9aa32de5c2d3ee4a2434c6138adf1094ec0`, APP `802604d1fcf4d6bd3cc20aec2079ea9720745265`의 코드를 대조해 보완했다. 앞선 대화의 실험 설명을 옮긴 2절과 달리, 아래 경로·분기는 이 커밋에서 직접 읽은 내용이다. **이번 보완은 문서 검증이며 실제 공급자·LLM 호출이나 운영 서버 실행을 다시 수행한 기록이 아니다.** 이후 커밋에서 분기가 바뀌면 호출자부터 다시 확인한다.
 
+2026-09-14 #502의 협상 후 기본 작성기 선택과 #504의 진입점 분리를 9.1·9.2·9.6에 반영했다.
+기준은 #502 머지 커밋 `8acbe29385f684195ff450bc21ee14ef0e6a57cf` 위의 #504 코드·타겟 회귀이며, 외부 모델·배포 실측과는 구별한다.
+
 ### 9.1 작업하면서 혼동했던 네 지점
 
 | 혼동 지점 | 왜 잘못 판단하기 쉬웠는가 | 현재 확인한 경계와 후속 작업의 기준 |
 | --- | --- | --- |
 | 기존 오케스트레이션과 일기 발행 | 기존 API·예약·저장을 사용하면 기존 오케스트레이션까지 사용한다고 설명하기 쉬웠다. 실제로는 다른 책임이다. | 일기 그래프와 어시스턴트 그래프가 공통 `JobExecutor` 구현을 호출한다. 발행 권한은 기존 일기 서비스가 갖는다. 9.3의 양쪽 호출자와 공유 실행 테스트를 확인한다. |
-| 기본 작성기와 실험·호환 작성기 | `slot`이라는 파일명, 과거 결합 작성 문서, `generate` 주입 테스트가 함께 남아 있다. 이름이 같은 진입 함수도 인자에 따라 다른 작성기로 들어간다. | 요청 형식 → 라우터 의존성 → 저장 형식 협상 → 발행 재사용 여부 → 실제 작성 호출 순으로 추적한다. 9.2의 분기표를 기준으로 검증 범위를 적는다. |
+| 기본 작성기와 실험·호환 작성기 | `slot`이라는 파일명, 과거 결합 작성 문서, `generate` 주입 테스트가 함께 남아 있었다. #504 전에는 인자에 따라 다른 작성기로 들어갔다. | 현재는 카드 `write_board`와 구형 `write_legacy_slot_board`로 구별한다. 요청 형식 → 저장 형식 협상 → 발행 재사용 여부 → 실제 작성 호출을 추적한다. 9.2의 분기표를 기준으로 검증 범위를 적는다. |
 | 공간 후보의 적격성과 하나의 장면 선정 | 공원·상권·피복이 각각 유효하다는 사실을, 세 재료를 동등하게 나열해야 한다는 뜻으로 읽기 쉬웠다. | 후보를 사용할 수 있는지와 어떤 관계로 장면을 구성할지는 다른 판단이다. 피복을 해석의 바탕으로 삼는 후속 기획을 후보 유효성의 강제 종속 규칙으로 바꾸지 않는다. 9.5 참고. |
 | SGIS 정규화와 APP 표시 | 화면에 동만 보이는 것을 원자료에서 시가 사라진 것으로 오해했다. 새 정규화 함수를 만들면 기존 의미까지 달라질 수 있다. | 기존 투영은 `sido`, `sigungu`, `dong`을 보존한다. APP 표시 추출은 `dong`을 읽는다. 9.4의 원자료 → 정규화 → 표시를 각각 확인한다. |
 
@@ -313,34 +325,39 @@
 APP WalkDiarySync: capabilities의 제공 형식 선택
   → POST /app/walks/{walk_id}/storyboard
   → routers/walk_storyboard.get_diary_writer
-      요청이 walk-diary-board-v1이면 write_board 선택
+      기본값 None: 작성기 선택을 협상 이후로 위임
   → services/walk_storyboard.generate
       existing_format으로 기존 저장 형식 보존
-  → walk_diary_generation.generate_diary
-      원본/사진 버전 확인 → 기존 결과/예약 확인
-      새 작성 필요 시 예약 저장·commit → 예약된 예산 안에서 실행
-  → walk_diary_board_slot_writing.write_board(source, base)
-      generate 인자를 따로 넣지 않는 기본 호출
-  → walk_diary_card_writing.write_cards
+  → walk_diary.lifecycle.generation.generate_diary
+  → walk_diary.lifecycle.reservation.reserve_diary
+      협상된 형식의 입력 준비 → 원본/사진 버전 확인 → 기존 결과/예약 확인
+      새 작성 필요 시 기존 context_pending을 기다리지 않고 예약 저장·commit
+      → 예약된 예산 안에서 실행 (#505)
+  → walk_diary.runtime.write_board(source, base)
+      generate·collector 주입 여부와 무관하게 카드 그래프 실행
+  → walk_diary.runtime.write_cards
   → orchestration/runtime.build_diary_orchestrator
   → orchestration/diary.DiaryOrchestrationService.run
       공간·조건부 행동 → 본문 고정 → 제목 → 코드 조립
-  → 기존 완료·원본 재확인·저장/발행
+  → walk_diary.lifecycle.reservation.complete_diary
+      원본 재확인 → 만료 발행·generation 확인 → 기존 완료·저장/발행
   → APP ServerDiaryBoard → 기존 저장·읽기
 ```
 
-첫 확인 파일은 [라우터](../../backend/src/daengs_backend/routers/walk_storyboard.py), [서비스 분기](../../backend/src/daengs_backend/services/walk_storyboard.py), [저장 형식 협상](../../backend/src/daengs_backend/services/walk_diary_negotiation.py), [생성·발행 서비스](../../backend/src/daengs_backend/services/walk_diary_generation.py)다. 작성기부터 읽고 진입 조건을 역으로 가정하지 않는다.
+첫 확인 파일은 [라우터](../../backend/src/daengs_backend/routers/walk_storyboard.py), [서비스 분기](../../backend/src/daengs_backend/services/walk_storyboard.py), [저장 형식 협상](../../backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py), [생성·발행 서비스](../../backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py)다. 작성기부터 읽고 진입 조건을 역으로 가정하지 않는다.
 
 | 경우 | 실제 선택 조건·진입점 | 실행되는 것 / 증명할 수 없는 것 |
 | --- | --- | --- |
-| 기본 카드 새 작성 | `walk-diary-board-v1`, 기존 형식 보존·재사용 판정 후 실제 새 작성, `write_board`에 `generate` 미주입 | `write_cards → build_diary_orchestrator`로 공간·행동·제목 작업 실행. 이름에 `slot`이 남아 있어도 기본 실행은 독립 카드 작성이다. |
-| 명시적 과거 일기 형식 | POST 요청 `walk-diary-bundle-v1` | 라우터가 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
+| 기본 카드 새 작성 | 협상된 `walk-diary-board-v1`, 재사용 판정 후 새 작성, `write_board` | `generate(stage, payload, schema)`·`collector(board)`를 키워드로 주입해도 `write_cards → build_diary_orchestrator`를 실행한다. 수집은 예약 commit 이후 그래프에서 수행한다. |
+| 과거 일기 형식 | POST의 `walk-diary-bundle-v1` 또는 board 요청에서 기존 bundle로 협상 | 생성 서비스가 준비 형식에 따라 `walk_diary.legacy.bundle.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
 | 슬롯 미리보기 | POST `/app/walks/{walk_id}/diary-slots/preview`, `walk_diary_enabled`와 `walk_diary_slots_preview_enabled` 모두 활성 | `preview_saved_slots → write_slot_preview → write_slot_stamps`. 공개 storyboard의 생성·발행 경로와 별개다. 여기서 좋은 결과가 나와도 기본 카드 작성에 적용됐다는 증거는 아니다. |
-| 기존 슬롯 계약의 테스트 주입 | `write_board(source, base, generate=대역)` 또는 같은 세 번째 위치 인자 | `write_slot_stamps`로 분기한다. **기본 작성기에 대역만 넣었다고 생각해도 실행 전략 자체가 달라진다.** |
-| 이미 저장된 결과·진행 중 예약 | `generate_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
-| 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
+| 기존 슬롯 계약의 명시적 작성 | `write_legacy_slot_board(source, base, generate=대역)` | `generate(payload, schema)`를 쓰는 `write_slot_stamps` 계약을 유지한다. 예약 전 수집은 `legacy_collector`, 기존 context job 완료 유예는 `legacy_context_wait=True`로 각각 명시한다. writer 래핑만으로 수집·대기가 활성화되지 않는다. |
+| 이미 저장된 결과·진행 중 예약 | `reserve_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. GET의 만료 복구와 과거 영수증 보완도 commit한다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
+| 과거 저장 영수증 읽기 | `walk_diary.storage.board.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
 
-관련 구현: [기본 진입 함수와 명시적 주입 분기](../../backend/src/daengs_backend/services/walk_diary_board_slot_writing.py), [카드 작성 전략](../../backend/src/daengs_backend/services/walk_diary_card_writing.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary_writing.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary_slot_writing.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary_board_storage.py).
+관련 구현: [기본 진입 함수](../../backend/src/daengs_backend/services/walk_diary/runtime.py)와 [과거 슬롯 진입](../../backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py), [작업 입력·응답 검증](../../backend/src/daengs_backend/services/walk_diary/writing/jobs.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary/legacy/bundle.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary/legacy/slots.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary/storage/board.py).
+
+#507 이후 저장 카드 영수증은 작성 입구 대신 `walk_diary.contracts`만 참조한다. 현재 그래프·모델 없이도 과거 저장본을 검증하는 경계와 변경 전후 표본은 [실제 카드 작성 경로](card-orchestration.md)의 저장 판독 절을 따른다.
 
 **형식 협상에는 두 단계가 있다.** [APP의 WalkDiarySync](https://github.com/SAJOYO/DAENGS_APP/blob/802604d1fcf4d6bd3cc20aec2079ea9720745265/app/src/main/java/com/daengs/app/walk/sync/WalkDiarySync.kt)는 capabilities에 보드가 있으면 보드를, 없으면 과거 일기 형식을 선택하고 둘 다 없으면 legacy 경로를 검토한다. DEV의 `existing_format`은 보드 요청에서도 기존 일기 bundle이나 candidates 저장 형식을 보존할 수 있다. 따라서 APP가 보드를 선호한다는 사실과 특정 저장 산책에서 새 카드 작성기가 실행됐다는 사실은 다르다. 요청 형식만 기록하지 말고 반환 형식·저장 상태·실제 호출도 함께 남긴다.
 
@@ -352,7 +369,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 | --- | --- |
 | 기존 어시스턴트 실행 | [runtime.py](../../backend/src/daengs_backend/orchestration/runtime.py)의 `build_orchestrator`와 [graph.py](../../backend/src/daengs_backend/orchestration/graph.py)의 `_execute_requests → JobExecutor` |
 | 일기 실행 | 같은 `runtime.py`의 `build_diary_orchestrator` → [diary.py](../../backend/src/daengs_backend/orchestration/diary.py)의 공간·행동 합류 그래프 → 같은 [execution.py](../../backend/src/daengs_backend/orchestration/execution.py)의 `JobExecutor` |
-| 생성 예약·최종 공개 | [walk_diary_generation.py](../../backend/src/daengs_backend/services/walk_diary_generation.py), [walk_diary_publication.py](../../backend/src/daengs_backend/services/walk_diary_publication.py)의 기존 예약·마감·원본 재확인·채택 |
+| 생성 예약·최종 공개 | [walk_diary.lifecycle.reservation.py](../../backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py)의 예약·원본 재확인·채택, [walk_diary.lifecycle.generation.py](../../backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py)의 작성·GET 연결, [walk_diary.lifecycle.publication.py](../../backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py)의 기존 마감 |
 
 공유하는 것은 **작업 실행 구현**이다. 어시스턴트와 일기가 한 그래프나 한 전역 세마포어를 공유한다는 뜻은 아니다. 현재 어시스턴트는 `JobExecutor(concurrency=1)`, 일기 실행은 모델 작업에 `concurrency=4`를 사용하며 자료 수집용 실행기는 별도로 둔다. 이 수치를 전체 서버의 전역 동시 호출 상한으로 설명하지 않는다.
 
@@ -362,7 +379,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 
 ### 9.4 SGIS의 ‘시’는 원래 정규화에 있다
 
-기존 [walk_sgis.py](../../backend/src/daengs_backend/services/walk_sgis.py)의 응답을 [diary_public_background.py](../../backend/src/daengs_walk/diary_public_background.py)가 다음과 같이 투영한다. 새로 추가한 주소 규칙이 아니라 기존 매핑이다.
+기존 [walk_sgis.py](../../backend/src/daengs_backend/services/walk_sgis.py)의 응답을 [diary_public_background.py](../../backend/src/daengs_walk/diary/space/public.py)가 다음과 같이 투영한다. 새로 추가한 주소 규칙이 아니라 기존 매핑이다.
 
 | SGIS 원자료 | 정규화된 `facts` | 의미 |
 | --- | --- | --- |
@@ -378,18 +395,18 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 
 ### 9.5 공간 적격성은 장면 구성의 완료 조건이 아니다
 
-확인할 구현은 [수집](../../backend/src/daengs_backend/services/walk_diary_space_collection.py), [재료 정규화](../../backend/src/daengs_walk/diary_space_materials.py), [적용 정책](../../backend/src/daengs_walk/diary_space_policy.py), [슬롯](../../backend/src/daengs_walk/diary_space_slots.py)이다. 먼저 각 자료의 범위·위치·가용 상태를 보고 사용할 수 있는 후보를 만든다. 이 단계에서 피복 조회가 실패했다고 독립적으로 유효한 공원 자료까지 거짓이 되지는 않는다.
+확인할 구현은 [수집](../../backend/src/daengs_backend/services/walk_diary/collection/service.py), [재료 정규화](../../backend/src/daengs_walk/diary/space/materials.py), [적용 정책](../../backend/src/daengs_walk/diary/space/policy.py), [슬롯](../../backend/src/daengs_walk/diary/slots/space.py)이다. 먼저 각 자료의 범위·위치·가용 상태를 보고 사용할 수 있는 후보를 만든다. 이 단계에서 피복 조회가 실패했다고 독립적으로 유효한 공원 자료까지 거짓이 되지는 않는다.
 
 그다음 남은 기획은 현재 지면과 주변 피복으로 공간 맥락을 해석하고, 실제로 확인한 대상·관계가 그 맥락을 구체화하도록 선정하는 것이다. 공원·상권이 각각 적격이어도 둘을 반드시 본문에 쓰거나 같은 비중으로 나열할 필요는 없다. 반대로 ‘수변’이라는 해석만으로 가까운 공원을 같은 수변공원에 소속시킬 수도 없다.
 
-특히 현재 `walk_diary_space_collection`의 기본 수집은 SGIS·공원·상권·피복 조회를 다루며 **전국 하천 형상 명명과 주변 풀밭의 국소 관계 계산을 모두 자동 연결한 수집기는 아니다.** EGIS 피복의 WMS 지점 조회가 연결됐다는 사실로 R1의 하천·풀밭 관계까지 완성됐다고 보고하지 않는다. GEO 실험 재료와 DEV 기본 수집에서 실제 확보한 재료를 구별한다.
+특히 현재 `walk_diary.collection.service`의 기본 수집은 SGIS·공원·상권·피복 조회를 다루며 **전국 하천 형상 명명과 주변 풀밭의 국소 관계 계산을 모두 자동 연결한 수집기는 아니다.** EGIS 피복의 WMS 지점 조회가 연결됐다는 사실로 R1의 하천·풀밭 관계까지 완성됐다고 보고하지 않는다. GEO 실험 재료와 DEV 기본 수집에서 실제 확보한 재료를 구별한다.
 
 R1·R2에서는 후보 적격성 검사와 장면의 대상·관계 선택을 각각 기록한다. 이 구별이 없으면 기존 정책 문서의 ‘공급자 간 강제 종속 없음’을 이유로 다시 평면 나열로 돌아가거나, 반대로 피복 결측 때문에 확보된 자료를 전부 버리게 된다.
 
 ### 9.6 다음 담당자의 확인 절차와 테스트 범위
 
 1. 현재 DEV·APP 커밋과 해당 저장 산책의 요청/반환 형식을 기록한다. 기능 설정, 기존 공개본·예약 여부를 확인한다. 재현을 위해 사용자 공개본을 지우지 말고 통제된 테스트 산책을 사용한다.
-2. 9.2의 라우터 의존성과 실제 작성 호출을 추적한다. `get_diary_writer`를 통째로 대역으로 바꾸거나 `write_board(generate=...)`를 사용한 테스트를 기본 그래프 검증으로 세지 않는다.
+2. 9.2의 라우터 의존성과 실제 작성 호출을 추적한다. `get_diary_writer`가 완성 결과를 돌려주는 대역이면 기본 그래프 검증으로 세지 않는다. `write_board(generate=..., collector=...)`는 외부 의존성만 교체하고 카드 그래프를 실행한다. 구형 슬롯 검증은 `write_legacy_slot_board`로 명시한다.
 3. 같은 기록의 SGIS 원자료·정규화, EGIS 확보 범위, 공간/행동 요청, 채택 본문, 제목 입력, 저장 카드와 APP 읽기를 대조한다. 재사용과 새 생성, 실제 API와 대역 응답을 표시한다.
 4. 수정한 책임에 해당하는 아래 테스트를 실행하고 결과·skip·미검증 범위를 남긴다. 이 문서 보완 자체에서는 아래 런타임 테스트를 재실행하지 않았다.
 
@@ -401,11 +418,12 @@ DEV의 [test_diary_card_writing.py](../../backend/tests/walk/diary/test_diary_ca
 | `test_diary_and_existing_assistant_use_the_same_executor` | 일기와 기존 어시스턴트 양쪽이 같은 실행 구현을 사용하는지 확인한다. |
 | `test_sgis_and_egis_follow_actual_normalizers_into_request_and_card` | 공급자 대역 응답이 실제 정규화를 거쳐 요청과 카드까지 들어가는지 확인한다. |
 | `test_action_starts_while_space_collection_is_blocked` | 공간 수집 대기가 준비된 행동 작업을 막지 않는지 확인한다. |
+| `test_pending_context_does_not_block_action_or_first_publication` (#505) | 기본 HTTP 최초 요청에서 기존 context job이 pending/running이어도 행동 작성이 시작되고, 공간 성공·실패·시간 초과 뒤 발행과 늦은 배경 도착 시 기존 공개본 보존을 확인한다. |
 | `test_action_edit_does_not_change_space_request` | 행동 수정이 공간 요청의 의존성에 섞이지 않는지 확인한다. |
 | `test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note` | 원문 보존과 생성 재사용을 구별한다. |
 | `test_title_batch_adopts_valid_siblings_only`, `test_source_edit_during_actual_title_job_cannot_publish_old_card` | 제목 일부 실패의 격리와 생성 도중 원본 변경의 발행 방지를 확인한다. |
 
-실제 기본 요청 테스트는 `writing.generate_card_prose`와 `collection.configured_collection`을 교체한다. 이것이 `write_board`의 세 번째 인자를 넣어 과거 전략으로 바꾸는 것과 다른 점이다. 기존 [test_diary_board_slot_writing.py](../../backend/tests/walk/diary/test_diary_board_slot_writing.py)는 명시적 슬롯 계약의 검증으로, [test_diary_slots_api.py](../../backend/tests/walk/diary/test_diary_slots_api.py)는 미리보기 검증으로 읽는다.
+실제 기본 요청 테스트는 `writing.generate_card_prose`와 `collection.configured_collection`을 교체한다. [test_diary_writer_entrypoints.py](../../backend/tests/walk/diary/test_diary_writer_entrypoints.py)는 명시적 모델·수집 주입과 기본·직접·partial·래퍼 호출에서 같은 카드 전략, 예약 후 단일 수집, 수집 실패 격리를 확인한다. 기존 [test_diary_board_slot_writing.py](../../backend/tests/walk/diary/test_diary_board_slot_writing.py)는 명시적 구형 슬롯 계약의 검증으로, [test_diary_slots_api.py](../../backend/tests/walk/diary/test_diary_slots_api.py)는 미리보기 검증으로 읽는다.
 
 아래 명령은 DEV의 `backend/`에서 실행하는 후속 검증 예시다. 수정 범위에 따라 필요한 묶음만 고른다.
 

@@ -5,6 +5,9 @@
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
 | [walk/card-orchestration.md](walk/card-orchestration.md) | 실제 API의 SGIS·EGIS 준비, 독립 공간·조건부 행동·카드 제목 작업과 APP 저장 연결 |
 | [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화 경위·남은 기획·완료 기준, 실제 작성/미리보기/호환 분기와 SGIS·공간 선정·공통 실행의 혼동 방지 |
+| [walk/diary-service-package.md](walk/diary-service-package.md) | 일기 서비스 진입점·책임별 패키지·의존 경계와 이전 파일 이동표 |
+| [walk/diary-domain-package.md](walk/diary-domain-package.md) | 일기 기획 규칙의 책임·의존 경계, 장면 선정·공간 해석·슬롯 적용과 이전 파일 이동표 |
+| [walk/diary-activity.md](walk/diary-activity.md) | 동선·속도를 합친 활동 슬롯과 정규화·저장·전체 맥락 제목, 정책 선택의 이유 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |
@@ -27,6 +30,7 @@
 | [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |
 | [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
+| [cardimage/README.md](cardimage/README.md) | 사용자 강아지 사진으로 도감 4월 카드 만들기 (#496) — 세션 인수인계: 상태 · 파일 위치 · 정해진 것 · 실험 순서. 조사는 `research-*.md`, 진행은 `worklog.md` |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [co-care.md](co-care.md) | 공동 돌봄 설계 — 한 강아지를 여러 보호자가. `pet_members` · 대표/돌보미 · 초대·승계·탈퇴 · 약 중복 확인. **`app_users` 는 탈퇴해도 안 지워진다**는 함정이 이 문서 전체를 관통한다 |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |

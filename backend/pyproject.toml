@@ -27,6 +27,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.30",
     "opentelemetry-sdk>=1.30",
     "pgvector>=0.3",
+    "pillow>=10.2",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
     "pyproj>=3.7",
@@ -129,6 +130,7 @@ module-name = [
 
 [dependency-groups]
 dev = [
+    "numpy>=2.5.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.6",

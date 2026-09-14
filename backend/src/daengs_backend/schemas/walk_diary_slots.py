@@ -2,8 +2,9 @@
 
 from pydantic import Field
 
-from daengs_walk.diary_input import DiaryContract
-from daengs_walk.diary_slots import SlotPolicy, SlotPreview
+from daengs_walk.diary.board.preview import SlotPreview
+from daengs_walk.diary.contracts.input import DiaryContract
+from daengs_walk.diary.contracts.slots import SlotPolicy
 
 
 class SlotPreviewRequest(DiaryContract):

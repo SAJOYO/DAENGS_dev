@@ -10,21 +10,23 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
-from daengs_backend.services import walk_diary_slots as preview_service
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_slot_writing import slot_payload
+from daengs_backend.services.walk_diary import preview as preview_service
+from daengs_backend.services.walk_diary.legacy.slots import slot_payload
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board import VerifiedBoardRoute
-from daengs_walk.diary_board_selection import observed_anchor
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_observations import build_observation_pool
-from daengs_walk.diary_route_geometry import RoutePatternPolicy, extract_route_patterns
-from daengs_walk.diary_route_normalize import build_patterns
-from daengs_walk.diary_route_patterns import RoutePatternMaterial
-from daengs_walk.diary_scene_input import scene_materials
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots, prepare_slot_preview
+from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.cli.route_normalize import build_patterns
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.route.geometry import RoutePatternPolicy, extract_route_patterns
+from daengs_walk.diary.route.observations import build_observation_pool
+from daengs_walk.diary.route.patterns import RoutePatternMaterial
+from daengs_walk.diary.selection.board import observed_anchor
+from daengs_walk.diary.slots.service import prepare_board_slots
 from daengs_walk.evidence import analyze_walk
 from tests.walk.support.base_board import policy as board_policy
 from tests.walk.support.route_patterns import scenarios
@@ -228,10 +230,12 @@ async def test_configured_preview_and_actual_preparation_use_same_policy_and_sta
     assert result.preview.policy.route_patterns is not None
     assert result.preview.stamps == saved.slots.stamps
     assert result.preview.revision == saved.slots.revision()
-    assert pattern_evidence(pin_stamp(result.preview))
+    movement = next(e for e in pin_stamp(result.preview).evidence if e.role == "scene_movement")
+    assert "turn_right" in {c["meaning"] for c in movement.facts["claims"]}
 
 
 def test_old_slot_policy_serializes_without_new_null_field():
     raw = SlotPolicy().model_dump(mode="json")
     assert "route_patterns" not in raw
+    assert "movement" not in raw
     assert raw == SlotPolicy.model_validate(raw).model_dump(mode="json")

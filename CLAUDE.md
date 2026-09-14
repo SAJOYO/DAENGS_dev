@@ -47,6 +47,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
 | `docs/ci/` | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 여기로 빠졌습니다** — Actions 무료 한도가 소진돼 2~3초 만에 전부 빨갛게 뜨는데, 실패 이유가 annotation 에만 있어 **진짜 실패와 구별이 안 되기** 때문입니다. GitHub 은 `.github/workflows/` 만 읽으므로 여기 것은 안 돕니다. **그것들이 잡던 것을 이제 사람이 로컬에서 돌립니다 — 목록과 명령이 `docs/ci/README.md` 에 있습니다.** 특히 **버리는 DB 가 필요한 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip). `db/` 나 walk 저장 경로를 건드렸으면 그 절을 보세요 |
+| `cardimage/` | 도감 카드 AI 생성(#496)의 자산 — 참조 카드 12장·글자 없는 틀 12장·글꼴(OFL). backend 는 `DAENGS_CARDIMAGE_DIR`(기본: 이 폴더, 컨테이너는 compose 마운트 `/cardimage`)로 읽는다. `test/`(실제 강아지 사진)·`out/`·`raw/` 는 내용 미추적. 인수인계는 `docs/cardimage/` |
 
 도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
 나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).

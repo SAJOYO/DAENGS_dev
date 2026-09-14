@@ -21,7 +21,7 @@ flowchart LR
   H -. 후속 .-> J[배경 서술과 제목 작성]
 ```
 
-`daengs_walk.diary_stamps.prepare_stamps(source, policy)`는 DB·HTTP·LLM에 접근하지 않는다.
+`daengs_walk.diary.selection.stamps.prepare_stamps(source, policy)`는 DB·HTTP·LLM에 접근하지 않는다.
 `services.walk_diary_prepare.prepare_saved_diary(session, principal, walk_id, policy)`는
 기존 소유권/입력 읽기를 재사용한다. DB 트랜잭션은 호출자가 소유하며 이 함수는 commit이나
 generation 예약을 하지 않는다. 결과의 `input.source`가 기존 `bind_generation`과

@@ -7,7 +7,7 @@ from daengs_backend.models.walk_photo import WalkPhotoManifest
 from daengs_backend.repositories import walk_entry as walks
 from daengs_backend.repositories import walk_photo as repo
 from daengs_backend.schemas.walk_photo import PhotoManifestResponse, PhotoManifestWrite, PhotoRecord
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 
 
 class PhotoNotFound(LookupError):

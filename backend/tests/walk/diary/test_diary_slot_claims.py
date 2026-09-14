@@ -5,14 +5,16 @@ from runpy import run_path
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, writing_payload
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
 from daengs_backend.services.walk_public_context import collect_public
-from daengs_walk.diary_background import project_background
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_slot_sources import evidence
-from daengs_walk.diary_slot_spatial import spatial_claim
-from daengs_walk.diary_slots import SlotPolicy, admit, prepare_slot_preview
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
+from daengs_walk.diary.slots.admission import admit
+from daengs_walk.diary.slots.sources import evidence
+from daengs_walk.diary.slots.spatial import spatial_claim
+from daengs_walk.diary.space.projection import project_background
 from tests.walk.context.test_walk_area_context import POINT, enabled, saved
 from tests.walk.diary.test_diary_public_background import public
 from tests.walk.support.diary import nearby, place_payload, record, with_backgrounds

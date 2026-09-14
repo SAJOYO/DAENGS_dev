@@ -3,9 +3,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
-from daengs_walk.diary_input import PhotoManifestRef
-from daengs_walk.diary_output import DiaryBundle
+from daengs_walk.diary.board.output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
+from daengs_walk.diary.contracts.input import PhotoManifestRef
+from daengs_walk.diary.contracts.output import DiaryBundle
 from daengs_walk.storyboard import (
     StoryboardBundle,
     StoryboardBundleV2,

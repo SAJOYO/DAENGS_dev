@@ -13,11 +13,15 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.orchestration.execution import JobExecutor
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-from daengs_backend.services.walk_diary_deadline import publication_deadline
-from daengs_walk.diary_board_output import PublishedBoard, publish_board
-from daengs_walk.diary_input import digest
+from daengs_backend.services.walk_diary import contracts
+from daengs_backend.services.walk_diary.collection.application import collect_for_writing
+from daengs_backend.services.walk_diary.deadline import publication_deadline
+from daengs_backend.services.walk_diary.model_input import normalize
+from daengs_backend.services.walk_diary.writing import assembly, policy
+from daengs_backend.services.walk_diary.writing import jobs as card_jobs
+from daengs_walk.diary.board.activity import require_activity_transfer
+from daengs_walk.diary.board.output import PublishedBoard, publish_board
+from daengs_walk.diary.contracts.input import digest
 
 
 class DiaryState(TypedDict, total=False):
@@ -25,11 +29,12 @@ class DiaryState(TypedDict, total=False):
     base: Any
     prepared: Any
     collection: Any
+    collection_receipt: Any
     space_results: list
     action_results: dict
     cards: list
     jobs: list
-    result: writing.CardWritingResult
+    result: contracts.CardWritingResult
 
 
 class DiaryOrchestrationService:
@@ -56,31 +61,25 @@ class _DiaryRun:
         # Collection must not occupy the LLM slots needed by ready action jobs.
         self.collection_executor = JobExecutor()
         loop = asyncio.get_running_loop()
-        budget = writing.TIMEOUT_SECONDS
+        budget = policy.TIMEOUT_SECONDS
         outer = publication_deadline.get()
         if outer is not None:
             budget = min(budget, max(0, (outer - datetime.now(UTC)).total_seconds() - 0.15))
         self.end = loop.time() + budget
-        self.bodies_end = self.end - min(writing.TITLE_RESERVE_SECONDS, max(0, budget / 3))
+        self.bodies_end = self.end - min(policy.TITLE_RESERVE_SECONDS, max(0, budget / 3))
         self.cache = {}
-        self.title_cache = {}
         for raw in base.cached_jobs:
-            previous = writing.WritingJob.model_validate(raw)
+            previous = contracts.WritingJob.model_validate(raw)
             if not previous.accepted:
                 continue
-            previous = writing.validate_output(previous, previous.accepted)
+            # Reuse only requests made under this model and strategy, including whole-board titles.
+            payload = {k: v for k, v in previous.request.items() if k != "request_revision"}
+            if previous.request_revision != card_jobs.job(previous.stage, payload).request_revision:
+                continue
+            previous = card_jobs.validate_output(previous, previous.accepted)
             if previous.failure_code:
                 continue
             self.cache[previous.request_revision] = previous
-            if previous.stage == "title":
-                titles = {t["card_id"]: t for t in previous.accepted["titles"]}
-                for card in previous.request["cards"]:
-                    if card["card_id"] in titles:
-                        single = writing.job("title", {"cards": [card]})
-                        self.title_cache[single.request_revision] = (
-                            single.request,
-                            titles[card["card_id"]],
-                        )
         builder = StateGraph(DiaryState)
         builder.add_node("space", self.space)
         builder.add_node("actions", self.actions)
@@ -98,17 +97,30 @@ class _DiaryRun:
     async def execute(self, item, deadline):
         previous = self.cache.get(item.request_revision)
         if previous and previous.stage == item.stage and previous.request == item.request:
-            return item.model_copy(update={"accepted": previous.accepted, "reused": True})
-        if len(json.dumps(item.request, ensure_ascii=False).encode()) > writing.MAX_INPUT_BYTES:
+            return item.model_copy(
+                update={
+                    "accepted": previous.accepted,
+                    "reused": True,
+                    "llm_request": previous.llm_request,
+                }
+            )
+        try:
+            model = normalize(item.stage, item.request)
+            if item.stage == "action" and item.request.get("movement"):
+                require_activity_transfer(item.request, model.payload, model.references)
+        except (ValueError, KeyError, TypeError):
+            return item.model_copy(update={"failure_code": "invalid_input"})
+        if len(json.dumps(model.payload, ensure_ascii=False).encode()) > policy.MAX_INPUT_BYTES:
             return item.model_copy(update={"failure_code": "budget_exceeded"})
-        schema = {
-            "space": writing.SpaceProse,
-            "action": writing.ActionProse,
-            "title": writing.CardTitles,
-        }[item.stage]
+
+        async def invoke():
+            nonlocal item
+            item = item.model_copy(update={"llm_request": model.payload})
+            return await self.generate(item.stage, model.payload, model.schema)
+
         outcome = await self.executor.run(
             f"{item.stage}:{item.request_revision}",
-            lambda: self.generate(item.stage, item.request, schema.model_json_schema()),
+            invoke,
             deadline=deadline,
         )
         if outcome.status != "ok":
@@ -119,42 +131,50 @@ class _DiaryRun:
                     )
                 }
             )
-        return writing.validate_output(item, outcome.value)
+        try:
+            restored = model.restore(outcome.value)
+        except (ValueError, TypeError, KeyError):
+            return item.model_copy(update={"failure_code": "invalid_response"})
+        return card_jobs.validate_output(item, restored)
 
     async def actions(self, state):
         base = state["base"]
-        jobs = [j for s in base.board.scenes if (j := writing.action_job(base, s)) is not None]
+        jobs = [j for s in base.board.scenes if (j := card_jobs.action_job(base, s)) is not None]
         results = await asyncio.gather(*(self.execute(j, self.bodies_end) for j in jobs))
         return {"action_results": {r.request["card_id"]: r for r in results}}
 
     async def space(self, state):
-        base, collection = state["base"], None
+        base, receipt = state["base"], None
         prepared = base
         if self.collector:
-
-            async def collect():
-                value = await self.collector(base.board)
-                return value, with_scene_backgrounds(base, value)
-
-            outcome = await self.collection_executor.run(
-                "diary:space_collection",
-                collect,
-                deadline=min(self.bodies_end, asyncio.get_running_loop().time() + 4.5),
+            prepared, receipt = await collect_for_writing(
+                base,
+                self.collector,
+                self.collection_executor,
+                min(self.bodies_end, asyncio.get_running_loop().time() + 4.5),
             )
-            if outcome.status == "ok":
-                collection, prepared = outcome.value
         inputs = [
-            writing.space_job(prepared, s, stamp)
+            card_jobs.space_job(prepared, s, stamp)
             for s, stamp in zip(prepared.board.scenes, prepared.slots.stamps, strict=True)
         ]
         results = await asyncio.gather(*(self.execute(j, self.bodies_end) for j in inputs))
-        return {"prepared": prepared, "collection": collection, "space_results": results}
+        return {
+            "prepared": prepared,
+            "collection": prepared.scene_backgrounds if self.collector else None,
+            # Successful acquisition is already preserved in scene_backgrounds. Add a
+            # diagnostic receipt only for degraded runs, leaving historical bytes intact.
+            "collection_receipt": receipt
+            if receipt
+            and (receipt.status != "completed" or receipt.application_status != "applied")
+            else None,
+            "space_results": results,
+        }
 
     async def freeze(self, state):
         prepared = state["prepared"]
         public = publish_board(prepared.board, prepared.plan)
         cards = [
-            writing.frozen_card(s, stamp, result, state["action_results"].get(s.id))
+            assembly.frozen_card(s, stamp, result, state["action_results"].get(s.id))
             for s, stamp, result in zip(
                 public.scenes, prepared.slots.stamps, state["space_results"], strict=True
             )
@@ -165,35 +185,8 @@ class _DiaryRun:
         }
 
     async def titles(self, state):
-        # Batch transport does not make one card depend on another card's title.
-        missing, results = [], []
-        for card in state["cards"]:
-            payload = {
-                "card_id": card.id,
-                "content_revision": card.writing.content_revision,
-                "space": card.writing.space.model_dump(mode="json"),
-                "actions": [a.model_dump(mode="json") for a in card.writing.actions],
-                "place_reference": [p.model_dump(mode="json") for p in card.place_reference],
-                "event_at": card.anchor.event_at.isoformat(),
-            }
-            item = writing.job("title", {"cards": [payload]})
-            previous = self.title_cache.get(item.request_revision)
-            if previous and previous[0] == item.request:
-                results.append(
-                    item.model_copy(
-                        update={
-                            "accepted": {"titles": [previous[1]]},
-                            "reused": True,
-                        }
-                    )
-                )
-            else:
-                missing.append(payload)
-        batches = [
-            writing.job("title", {"cards": missing[i : i + writing.MAX_CARDS]})
-            for i in range(0, len(missing), writing.MAX_CARDS)
-        ]
-        results.extend(await asyncio.gather(*(self.execute(j, self.end) for j in batches)))
+        batches = card_jobs.title_jobs(state["cards"])
+        results = await asyncio.gather(*(self.execute(j, self.end) for j in batches))
         titles = {t["card_id"]: t for r in results if r.accepted for t in r.accepted["titles"]}
         cards = [
             c.model_copy(
@@ -224,17 +217,26 @@ class _DiaryRun:
                 "model_status": "accepted" if accepted else "unavailable",
                 "failure_code": None
                 if accepted
-                else next((j.failure_code for j in jobs if j.failure_code), "provider_failed"),
+                else next(
+                    (
+                        j.failure_code
+                        for j in jobs
+                        if j.failure_code
+                        in {"provider_failed", "invalid_response", "budget_exceeded"}
+                    ),
+                    "provider_failed",
+                ),
             }
         )
         return {
-            "result": writing.CardWritingResult(
+            "result": contracts.CardWritingResult(
                 input_revision=state["source"].revision(),
                 plan_revision=prepared.plan.revision(),
                 slot_revision=prepared.slots.revision(),
-                writer_version=digest(writing.writing_version()),
+                writer_version=digest(policy.writing_version()),
                 bundle=bundle,
                 jobs=tuple(jobs),
                 scene_backgrounds=state["collection"],
+                collection_receipt=state["collection_receipt"],
             )
         }

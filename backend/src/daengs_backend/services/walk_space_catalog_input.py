@@ -7,8 +7,8 @@ This is a second read path, not a reconstruction from lossy nearby summaries.
 from copy import deepcopy
 
 from daengs_backend.services import walk_area_catalog as catalog
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_space_materials import AreaInput
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.space.materials import AreaInput
 
 FIELDS = {
     "commerce": ("bizesId", "lat", "lon", "indsLclsCd", "indsMclsCd"),

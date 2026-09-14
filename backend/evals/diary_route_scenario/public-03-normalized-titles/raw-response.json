@@ -1,0 +1,22 @@
+{
+  "text": "{\n  \"titles\": [\n    {\n      \"id\": \"c1\",\n      \"text\": \"양재2동 상가 밀집 지역에서 시작하는 산책\"\n    },\n    {\n      \"id\": \"c2\",\n      \"text\": \"마방 근린공원 인근 상가 길에서 냄새 맡는 보리\"\n    },\n    {\n      \"id\": \"c3\",\n      \"text\": \"바우뫼 근린공원 근처 숲길 산책\"\n    },\n    {\n      \"id\": \"c4\",\n      \"text\": \"종열 어린이공원 인근 풀밭에서 휴식과 반환점\"\n    },\n    {\n      \"id\": \"c5\",\n      \"text\": \"종열 어린이공원 주변을 지나며 되돌아가는 길\"\n    },\n    {\n      \"id\": \"c6\",\n      \"text\": \"바우뫼 근린공원 인근 상가 구간 통과\"\n    },\n    {\n      \"id\": \"c7\",\n      \"text\": \"마방 근린공원 근처 풀밭을 지나며 남기는 기록\"\n    },\n    {\n      \"id\": \"c8\",\n      \"text\": \"마방 근린공원 인근 상가 구간을 끝으로 산책 종료\"\n    }\n  ]\n}",
+  "model_version": "gemini-3.1-flash-lite",
+  "usage": {
+    "cache_tokens_details": null,
+    "cached_content_token_count": null,
+    "candidates_token_count": 316,
+    "candidates_tokens_details": null,
+    "prompt_token_count": 1011,
+    "prompt_tokens_details": [
+      {
+        "modality": "TEXT",
+        "token_count": 1011
+      }
+    ],
+    "thoughts_token_count": null,
+    "tool_use_prompt_token_count": null,
+    "tool_use_prompt_tokens_details": null,
+    "total_token_count": 1327,
+    "traffic_type": null
+  }
+}

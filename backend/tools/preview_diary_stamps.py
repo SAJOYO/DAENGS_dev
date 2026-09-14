@@ -10,9 +10,9 @@ import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from daengs_walk.diary_input import DiaryInput
-from daengs_walk.diary_output import assemble_diary
-from daengs_walk.diary_stamps import StampPolicy, prepare_stamps
+from daengs_walk.diary.contracts.input import DiaryInput
+from daengs_walk.diary.contracts.output import assemble_diary
+from daengs_walk.diary.selection.stamps import StampPolicy, prepare_stamps
 
 
 def cell(value):

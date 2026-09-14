@@ -8,9 +8,9 @@ from copy import deepcopy
 import pytest
 from pydantic import ValidationError
 
-from daengs_walk.diary_space_cases import CASES
-from daengs_walk.diary_space_materials import SpaceMaterial, normalize_spaces
-from daengs_walk.diary_space_normalize import load_input
+from daengs_walk.diary.cli.space_normalize import load_input
+from daengs_walk.diary.space.cases import CASES
+from daengs_walk.diary.space.materials import SpaceMaterial, normalize_spaces
 
 POINT = {"lat": 37.487, "lng": 127.052}
 

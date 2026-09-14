@@ -304,13 +304,17 @@ async def generate(base, snapshot, prepared_input=False):
     return result, prepared
 
 
-def render(directory):
+def render(directory, *, destination=None, whole_title=None, scene_titles=None):
     """Render frozen output without importing backend configuration or calling providers."""
     template = Path(__file__).with_name("diary_route_scenario.html").read_text(encoding="utf-8")
     data = {
         name: read(directory / f"{name}.json")
         for name in ("input", "result", "slots", "backgrounds", "run", "map")
     }
+    if whole_title is not None:
+        data["whole_title"] = whole_title
+    if scene_titles is not None:
+        data["scene_titles"] = scene_titles
 
     # Huge source geometry belongs in the lossless JSON archive, not a browser
     # disclosure. Summaries are view-only and cannot feed the writer or verifier.
@@ -339,7 +343,7 @@ def render(directory):
         ]
     }
     embedded = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
-    (directory / "preview.html").write_text(
+    (destination or directory / "preview.html").write_text(
         template.replace("__SCENARIO_JSON__", embedded), encoding="utf-8"
     )
 

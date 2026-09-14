@@ -64,16 +64,22 @@ footer{max-width:1320px;padding:0 36px 40px;margin:auto;color:var(--muted);font-
 </section>
 <section aria-label="시간순 산책 일기"><div class="reading-head"><span id="date"></span><span>생성 문장 원문</span></div><div id="cards"></div></section>
 </main>
-<footer>이 페이지는 실험 뷰어다. 실제로 산책한 기록은 아니며, 카드 내용을 잇기 위한 추가 LLM 호출이나 수동 문장 수정은 하지 않았다.
+<footer><span id="footer-note">이 페이지는 실험 뷰어다. 실제로 산책한 기록은 아니며, 카드 내용을 잇기 위한 추가 LLM 호출이나 수동 문장 수정은 하지 않았다.</span>
 <details><summary>실행 조건 · 자료 범위</summary><div class="debug" id="run"></div></details></footer>
 <script type="application/json" id="data">__SCENARIO_JSON__</script>
 <script>
 const d=JSON.parse(document.getElementById('data').textContent);
 const cards=d.result.bundle.scenes, points=d.input.points;
+const revisedTitles=new Map((d.scene_titles?.accepted.titles??[]).map(t=>[t.scene_id,t.title]));
+const displayTitle=(card,i)=>revisedTitles.get(card.id)??(d.whole_title?'장면 '+String(i+1).padStart(2,'0'):card.title);
+if(d.whole_title){document.querySelector('h1').textContent=d.whole_title.accepted.title;document.title=d.whole_title.accepted.title;document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / WHOLE TITLE';}
+if(d.whole_title){document.querySelector('header > p').textContent='기존 장면 8개의 본문과 보호자 메모를 시간순으로 모두 읽고, 마지막에 산책 제목 하나를 생성했다. 본문은 이전 실험 그대로다.';document.getElementById('footer-note').textContent='가상 산책 실험이다. 본문을 다시 쓰지 않고 전체 제목만 Gemini로 한 번 추가 생성했다. 위 제목은 이 실험의 실제 응답이다.';}
+if(d.scene_titles){document.querySelector('h1').textContent='양재 산책, 장면 제목을 다시 읽다';document.title='양재 산책 · 장면 제목 갱신';document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / FINAL SCENE TITLES';document.querySelector('header > p').textContent='완성된 모든 장면의 본문과 보호자 메모를 시간순으로 읽고, 마지막에 각 장면의 제목을 갱신했다. 본문은 이전 실험 그대로다.';document.getElementById('footer-note').textContent='가상 산책 실험이다. Gemini 추가 호출 한 번으로 장면별 제목을 갱신했다. 카드 제목은 실제 응답이며 페이지 위의 큰 제목은 뷰어 안내용이다.';}
 const el=(tag,text,parent,cls)=>{const e=document.createElement(tag);if(text!==null)e.textContent=text;if(cls)e.className=cls;if(parent)parent.append(e);return e};
 const formatTime=t=>new Date(t).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
 const start=new Date(d.input.source.started_at),end=new Date(d.input.source.ended_at);
-document.getElementById('run-label').textContent=d.run.prepared_input?'현재: 자료·슬롯을 먼저 준비한 실행':'현재: 수집 자료가 작성 입력에 채택되지 않은 실행';
+document.getElementById('run-label').textContent=d.whole_title?'현재: 전체 본문을 읽고 산책 제목 하나 생성':d.run.prepared_input?'현재: 자료·슬롯을 먼저 준비한 실행':'현재: 수집 자료가 작성 입력에 채택되지 않은 실행';
+if(d.scene_titles)document.getElementById('run-label').textContent='현재: 전체 본문을 읽고 각 장면 제목 갱신';
 document.getElementById('date').textContent=start.toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric'})+' · '+formatTime(start)+'–'+formatTime(end);
 for(const [n,label] of [[(d.input.one_way_geometry_m*2/1000).toFixed(2)+' km','가상 이동'],[Math.round((end-start)/60000)+'분','산책 시간'],[cards.length+'개','서브일기']]){
 const x=el('div',null,document.getElementById('stats'));el('strong',n,x);el('span',label,x)}
@@ -85,7 +91,7 @@ const article=el('article',null,document.getElementById('cards'));article.id='ca
 const top=el('div',null,article,'card-top');el('span',String(i+1).padStart(2,'0'),top,'number');
 el('span',formatTime(card.anchor.event_at)+' · '+(card.boundary==='start'?'출발':card.boundary==='end'?'도착':kinds[card.kind]),top);
 const show=el('button','지도에서 보기 ↗',top);show.onclick=()=>{select(i,false);if(innerWidth<850)document.querySelector('.map-panel').scrollIntoView({behavior:'smooth'})};
-el('h2',card.title,article);
+el('h2',displayTitle(card,i),article);
 const w=card.writing;
 if(w){el('p',[w.observation?.text,w.space.text,...w.actions.map(a=>a.text)].filter(Boolean).join('\n'),article,'prose');
 if(w.original_text){const note=el('div',null,article,'note');el('small','보호자 메모 · 가상 입력',note);el('span',w.original_text,note)}}
@@ -97,7 +103,8 @@ const sources=d.backgrounds.backgrounds.filter(b=>b.target.identity===card.core.
 el('h3','좌표와 실제 카드 입력',debug);
 el('p',card.anchor.point.lat.toFixed(6)+', '+card.anchor.point.lng.toFixed(6)+' · '+card.kind,debug);
 el('p',['space','environment','motion'].map(p=>p+' '+materials.filter(e=>e.part===p).length).join(' · '),debug);
-el('p','공간 문장: '+w?.space.origin+' / 제목: '+w?.title_origin,debug);
+el('p','공간 문장: '+w?.space.origin+' / 제목: '+(d.scene_titles?'전체 본문을 읽은 후 generated':w?.title_origin),debug);
+if(d.scene_titles){el('p','갱신 전 제목: '+card.title,debug);el('p','갱신 후 제목: '+displayTitle(card,i),debug)}
 el('p','동선 슬롯은 공간 프롬프트에 전달되지 않는다. 움직임 카드의 핵심 설명은 코드가 보존한다.',debug);
 el('h3','자료 상태',debug);const ul=el('ul',null,debug);
 for(const s of sources)el('li',s.provider+' · '+s.status+(s.reason?' / '+s.reason:''),ul);
@@ -128,13 +135,13 @@ const progress=shape('path',{d:'',class:'progress'});
 for(const label of d.map.labels){const [x,y]=xy(label);if(x>35&&x<665&&y>40&&y<570){const text=shape('text',{x,y});text.textContent=label.name}}
 cards.forEach((card,i)=>{
 const [x,y]=xy(card.anchor.point),dx=i<cards.length/2?-22:24,dy=card.boundary==='end'?19:-17;
-const g=shape('g',{class:'marker',tabindex:0,role:'button','aria-label':(i+1)+'번 '+card.title});
+const g=shape('g',{class:'marker',tabindex:0,role:'button','aria-label':(i+1)+'번 '+displayTitle(card,i)});
 shape('line',{x1:x,y1:y,x2:x+dx,y2:y+dy,stroke:'#5e7755','stroke-width':1.5},g);
 shape('circle',{cx:x+dx,cy:y+dy,r:15},g);const text=shape('text',{x:x+dx,y:y+dy+4},g);text.textContent=i+1;
 g.onclick=()=>select(i,true);g.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(i,true)}};markerNodes.push(g)});
 function select(i,scroll){selected=i;bodyNodes.forEach((e,n)=>e.classList.toggle('selected',n===i));markerNodes.forEach((e,n)=>e.classList.toggle('active',n===i));
 const card=cards[i],at=new Date(card.anchor.event_at).getTime();progress.setAttribute('d',line(points.filter(p=>new Date(p.at).getTime()<=at)));
-document.getElementById('current-title').textContent=String(i+1).padStart(2,'0')+' / '+card.title;
+document.getElementById('current-title').textContent=d.whole_title?displayTitle(card,i):String(i+1).padStart(2,'0')+' / '+displayTitle(card,i);
 document.getElementById('current-time').textContent=formatTime(card.anchor.event_at)+' · '+(i===cards.length-1?'출발 지점으로 돌아온 가상 경로':'시간순으로 길을 따라 읽기');
 document.getElementById('prev').disabled=i===0;document.getElementById('next').disabled=i===cards.length-1;
 if(scroll)bodyNodes[i].scrollIntoView({behavior:'smooth',block:'nearest'})}
@@ -145,7 +152,10 @@ const run=document.getElementById('run');el('p',d.run.prepared_input?'자료·�
 el('p','OSM 지도와 TMAP 경로의 장소 이름은 작성 재료에 넣지 않았다. 수집 성공은 슬롯 채택이나 문장 사용과 별도로 확인한다.',run);
 const sourceCounts={};for(const b of d.backgrounds.backgrounds){const k=b.provider+' / '+b.status;sourceCounts[k]=(sourceCounts[k]||0)+1}
 el('pre',JSON.stringify(sourceCounts,null,2),run);
-el('pre',JSON.stringify(d.run,null,2),run);select(0,false);
+el('pre',JSON.stringify(d.run,null,2),run);
+if(d.whole_title){el('h3','전체 제목 생성 요청과 응답',run);el('pre',JSON.stringify(d.whole_title,null,2),run)}
+if(d.scene_titles){el('h3','장면 제목 갱신 요청과 응답',run);el('pre',JSON.stringify(d.scene_titles,null,2),run)}
+select(0,false);
 </script>
 </body>
 </html>

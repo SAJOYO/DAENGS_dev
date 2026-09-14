@@ -3,10 +3,13 @@
 2026-09-14, DEV 기준 **154cc610**, PR #508. 운영 코드·프롬프트·슬롯 정책은 변경하지 않았다.
 실제 지리 자료 위에 가상 산책을 얹고 현재 카드 오케스트레이션으로 생성 실험을 두 번 했다.
 각 실행은 공간 8개·행동 1개·제목 묶음 1개, 총 10개 Gemini 작성 작업이다.
+후속 scene-titles-01은 두 번째 실행의 모든 본문을 함께 읽고 장면별 제목 8개를 한 번에 갱신했다.
+별도의 whole-title-01은 같은 본문에서 전체 산책 제목 하나를 생성한 부가 실험이다.
 **카드 생성은 연결됐다. 그러나 현재 출력만으로 자연스러운 한 편의 산책 이야기가 된다고 보기는 어렵다.**
 
 ## 바로 보기
 
+- [전체 본문을 읽고 각 장면 제목 갱신](scene-titles-01/preview.html) · [문장 원문](scene-titles-01/diary.md)
 - [자료와 슬롯을 먼저 준비한 결과](yangjae-02/preview.html) · [문장 원문](yangjae-02/diary.md)
 - [첫 수집 연결 실행](yangjae-01/preview.html) · [문장 원문](yangjae-01/diary.md)
 - 지도 번호·이전/다음 버튼으로 위치를 볼 수 있다. 근거·조건·모델 요청은 접힌 개발자 영역에 있다.
@@ -72,13 +75,81 @@ EGIS는 기존 수집기의 https://api.mcee.go.kr/geoserver/wms / EGIS:lv3_2025
    공간 프롬프트에는 이미 행동·신체·시야를 쓰지 말라는 조건이 있지만 실제 출력은 경계를 지키지 못했다.
    근거 ID 반환만으로 문장 의미까지 검증됐다고 보면 안 된다.
 
+## 모든 장면을 읽은 뒤 장면별 제목 갱신: scene-titles-01
+
+완성된 본문 8개와 보호자 메모, 시각·순서, 기존 선정기의 출발/종료 역할을 하나의 요청에 넣었다.
+Gemini는 전체 흐름을 읽고 **각 장면의 제목 8개**를 반환한다. 장면을 따로 호출하거나 본문을 다시 쓰지 않는다.
+예전 제목과 뷰어의 사람이 붙인 제목은 입력에서 제외했다.
+
+| 장면 | 실제 새 제목 |
+| --- | --- |
+| 1 | 넓은 풀밭에서 시작하는 산책 |
+| 2 | 길을 따라 냄새를 맡으며 걷는 보리 |
+| 3 | 울창한 숲길을 지나며 |
+| 4 | 풀밭에서 물을 마시고 돌아갈 준비 |
+| 5 | 주변을 둘러보며 걷는 길 |
+| 6 | 길을 따라 이어지는 발걸음 |
+| 7 | 풀밭을 지나며 남기는 기록 |
+| 8 | 풀밭을 지나며 마치는 산책 |
+
+Gemini gemini-3.1-flash-lite, temperature 0, 후보 1개, 추가 호출 1회, 측정 3.438초다.
+[요청과 설정](scene-titles-01/request.json), [원응답](scene-titles-01/raw-response.json),
+[채택 결과](scene-titles-01/scene-titles.json)에 입력과 출력 전체를 남겼다.
+같은 장면 ID·순서를 빠짐없이 한 번씩 반환했는지 확인하고 뷰어의 제목만 갱신했다.
+기존 yangjae-02 결과와 본문은 보존하며 갱신 전 제목은 접힌 개발자 영역에서 비교할 수 있다.
+
+제목을 이어 읽으면 시작·중간 기록·마무리가 더 구별된다. 이 차이는 전체 본문을 읽은 효과뿐 아니라
+새 프롬프트, 원문 메모와 출발/종료 역할을 포함한 입력 변화가 함께 만든 결과다.
+출발/종료를 AI가 전체 동선에서 추론한 성과로 계산하면 안 된다.
+또한 “울창한”, “주변을 둘러보며”처럼 이전 본문의 근거 밖 표현이 제목에도 이어졌다.
+이 단계는 제목 편집이며 원자료에 대한 재검증은 아니다. 동선·속도 통합이나 운영 마감 연결은 아직 하지 않았다.
+
+~~~powershell
+uv run --no-sync python -X utf8 tools/run_diary_final_titles.py --source-run evals/diary_route_scenario/yangjae-02 --output evals/diary_route_scenario/scene-titles-01 --replay
+~~~
+
+--replay는 LLM 없이 응답 형식·장면 ID/순서·본문 입력·원본 결과 해시를 확인한 뒤 화면을 다시 조립한다.
+새 생성은 --replay를 빼고 --env-file <provider-env-path>와 새 출력 폴더를 지정한다.
+기본 범위는 scenes이며 운영 카드 작성기의 제목 단계는 변경하지 않았다.
+
+## 별도 전체 제목 실험: whole-title-01
+
+결과는 **“풀밭과 숲길을 따라 보리와 함께한 산책”**이다.
+yangjae-02의 완성된 8개 본문과 보호자 메모를 시간순으로 읽히고 전체 산책 제목 하나를 생성했다.
+기존 장면별 제목과 사람이 붙인 뷰어 제목은 요청에서 제외했다. 본문·순서·기존 결과 파일은 바꾸지 않았다.
+화면에서는 장면별 생성 제목 대신 장면 번호를 표시한다.
+
+기존 그래프도 본문 생성 뒤 제목을 요청했다. 이번 차이는 호출 순서를 뒤집는 것이 아니라,
+각 카드를 독립적으로 요약하던 작업을 **완성된 일기 전체의 제목 하나를 만드는 작업**으로 바꾼 것이다.
+실험용 도구에만 새 프롬프트를 두었으며 운영 제목 작성기는 변경하지 않았다.
+
+- Gemini gemini-3.1-flash-lite, temperature 0, 후보 1개, 추가 호출 1회, 측정 1.5초.
+- [요청과 설정](whole-title-01/request.json), [실제 응답](whole-title-01/raw-response.json), [채택 결과](whole-title-01/whole-title.json)을 보존했다.
+- 제목이 산책 전체를 대표하는 형태로 읽히지만, 메모에 있는 물 마시기·귀로의 특징은 담지 않았다.
+- 새 프롬프트는 “관측”을 금지하지 않았다. 다만 출력 범위·프롬프트·메모 포함 여부가 함께 바뀌었으므로,
+  제목 표현의 변화가 전체 장면을 읽은 효과만이라고 단정할 수 없다.
+- 기존 본문의 반복과 근거 밖 표현은 그대로다. 동선·속도를 합친 서술 입력은 아직 구현하지 않았다.
+
+재생은 저장된 제목과 입력 본문·순서의 결속 및 원래 결과의 해시를 확인한 뒤 HTML을 조립한다.
+LLM을 다시 호출하지 않는다.
+
+~~~powershell
+uv run --no-sync python -X utf8 tools/run_diary_final_titles.py --scope walk --source-run evals/diary_route_scenario/yangjae-02 --output evals/diary_route_scenario/whole-title-01 --replay
+~~~
+
+새 실험은 다른 출력 폴더와 키 파일을 지정한다. 기존 채택 결과가 있으면 덮어쓰지 않는다.
+
+~~~powershell
+uv run --no-sync python -X utf8 tools/run_diary_final_titles.py --scope walk --source-run evals/diary_route_scenario/yangjae-02 --output evals/diary_route_scenario/whole-title-new --env-file <provider-env-path>
+~~~
+
 ## 다음 논의의 출발점
 
 이 8개를 기준으로 **출발/중간/종료의 서술 역할, 같은 공간 재등장, 공간 분류가 허용하는 표현 범위**를 정하자.
 출발·종료는 이미 코드가 가진 사실이다. 왕복/재방문은 좌표·시간 관계로 따로 판정해야 하며 LLM에게 추측시키지 않는다.
 선택된 장면의 동선 슬롯을 실제 문장에 사용할지도 명시적으로 결정할 필요가 있다.
 슬롯 선정은 룰로 유지하면서 검증된 관계만 작성 입력에 더하는 작은 비교가 가능하다.
-이 PR은 그 정책이나 프롬프트를 바꾸지 않고 비교할 결과를 남기는 범위다.
+이 PR은 운영 정책이나 프롬프트를 바꾸지 않고 비교할 결과와 실험 도구를 남기는 범위다.
 
 ## 재현
 
@@ -113,6 +184,10 @@ uv run --no-sync python tools/run_diary_route_scenario.py generate --prepared-in
 
 - 두 결과의 GPS 재생, 장면·원자료 버전 결속, 원문/관측 핵심 보존, 슬롯 재생 확인.
 - 새 Python 도구 Ruff 통과. 브라우저의 지도·카드·다음 장면 전환·접힌 개발자 영역 확인.
+- whole-title-01 오프라인 재생, 제목 도구와 렌더 도구 Ruff check/format --check 통과.
+  브라우저에서 전체 제목과 장면 번호 표시, 기존 본문·메모 유지 확인.
+- scene-titles-01 오프라인 재생, 변경 Python 도구 Ruff check/format --check 통과.
+  브라우저에서 장면 8개의 갱신 제목·지도 선택 제목·기존 본문·메모 유지 확인.
 - 전체 pytest 미실행: 운영 코드 변경 없는 도구·결과 추가이며 검사를 재생 경계로 제한했다.
 - uv run check는 마이그레이션 이름/짝 검사 후 Windows 검사에서 실패했다.
   현재 PC의 PowerShell 정책이 기존 validate.ps1을 차단했다. 정책이나 관련 코드를 바꾸지 않았다.

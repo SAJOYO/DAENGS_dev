@@ -27,7 +27,8 @@ from tests.walk.support.base_board import policy
 from tests.walk.support.paths import REPO
 
 
-async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeypatch):
+@pytest.mark.parametrize("outcome", ["accepted", "budget", "stale"])
+async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeypatch, outcome):
     spec = importlib.util.spec_from_file_location(
         "walk_card_smoke_test", REPO / "tools/walk_runtime_smoke.py"
     )
@@ -56,6 +57,14 @@ async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeyp
         bundle=stored, input_revision=revision, status="ready", generation=1, error_code=None
     )
     response = publication_result(value, row, revision).model_dump(mode="json")
+    if outcome == "budget":
+        response["bundle"]["model_status"] = "unavailable"
+        response["bundle"]["failure_code"] = "budget_exceeded"
+        for scene in response["bundle"]["scenes"]:
+            scene["writing"] = None
+        stored = {**stored, "bundle": response["bundle"]}
+    elif outcome == "stale":
+        response.update(status="stale", bundle=None)
     connection = AsyncMock()
     connection.scalar.return_value = stored
     context = AsyncMock()
@@ -64,6 +73,31 @@ async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeyp
     request = AsyncMock(return_value=response)
     notes = [note["content"]["text"]]
     owner, walk = uuid.uuid4(), uuid.uuid4()
+    before = {"walk": "w", "entries": "e", "photos": None, "backgrounds": "b"}
+    after = {
+        **before,
+        "row": {
+            "bundle": stored,
+            "status": row.status,
+            "input_revision": revision,
+            "generation": 1,
+        },
+    }
+    if outcome == "stale":
+        after["backgrounds"] = "changed"
+    monkeypatch.setattr(module, "probe_snapshot", AsyncMock(side_effect=[before, after]))
+    if outcome != "accepted":
+        with pytest.raises(module.SmokeFailure) as caught:
+            await module.card_publication(request, owner, walk, [], notes)
+        diagnosis = caught.value.diagnostics
+        assert diagnosis["stored_or_reserved"]["notes_in_record"] == [True]
+        assert diagnosis["input_changed"]["backgrounds"] is (outcome == "stale")
+        if outcome == "budget":
+            assert diagnosis["failure_code"] == "budget_exceeded"
+            assert diagnosis["response"]["writing_count"] == 0
+        encoded = json.dumps(diagnosis, ensure_ascii=False)
+        assert notes[0] not in encoded and str(owner) not in encoded and revision not in encoded
+        return
     result = await module.card_publication(request, owner, walk, [], notes)
     assert result["receipt_valid"] and result["original_action_preserved"]
     assert result["original_notes_preserved"] and result["model_status"] == "accepted"

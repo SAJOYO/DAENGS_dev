@@ -4,16 +4,16 @@ import argparse
 import asyncio
 import json
 import logging
+import time
 import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from sqlalchemy import text
-
 from daengs_backend.core.database import engine
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.core.token import create_access_token
+from sqlalchemy import text
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -21,7 +21,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class SmokeFailure(Exception):
     """Only predefined messages; never constructed from external responses."""
 
-    def __init__(self, message, *, request_number=None, validation_fields=None, diagnostics=None):
+    def __init__(
+        self, message, *, request_number=None, validation_fields=None, diagnostics=None
+    ):
         super().__init__(message)
         self.request_number = request_number
         self.validation_fields = validation_fields
@@ -30,33 +32,43 @@ class SmokeFailure(Exception):
 
 async def prepare_backfill(owner, walk_id):
     """Only this probe's disposable account: emulate missing public collection, then recover."""
-    from sqlalchemy import select
-
     from daengs_backend.core.database import SessionLocal
     from daengs_backend.models.walk import Walk
-    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.models.walk_entry_context import (
+        WalkEntryContextEnvelope as Envelope,
+    )
     from daengs_backend.models.walk_entry_context import WalkEntryContextJob as Job
     from daengs_backend.services.walk_context_backfill import TAGS, run
+    from sqlalchemy import select
 
     walk_id = uuid.UUID(str(walk_id))
     saved = {}
     async with SessionLocal() as db:
         owned = await db.scalar(
-            select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner).with_for_update()
+            select(Walk.id)
+            .where(Walk.id == walk_id, Walk.app_user_id == owner)
+            .with_for_update()
         )
         if owned is None:
             raise SmokeFailure("synthetic walk ownership mismatch")
         jobs = list(
             await db.scalars(
-                select(Job).where(Job.walk_id == walk_id, Job.tag.in_(TAGS)).with_for_update()
+                select(Job)
+                .where(Job.walk_id == walk_id, Job.tag.in_(TAGS))
+                .with_for_update()
             )
         )
-        if len(jobs) != 12 or any(j.collection_round != 0 or j.attempts >= 3 for j in jobs):
+        if len(jobs) != 12 or any(
+            j.collection_round != 0 or j.attempts >= 3 for j in jobs
+        ):
             raise SmokeFailure("unexpected synthetic collection state")
         for job in jobs:
             job.state, job.attempts = "failed", 3
             job.lease_token, job.lease_until = None, None
-            raw = {"status": "unavailable", "reason": "synthetic_prior_provider_unavailable"}
+            raw = {
+                "status": "unavailable",
+                "reason": "synthetic_prior_provider_unavailable",
+            }
             row = Envelope(
                 id=uuid.uuid4(),
                 job_id=job.id,
@@ -70,7 +82,10 @@ async def prepare_backfill(owner, walk_id):
         await db.commit()
     preview = await run(SessionLocal, walk_ids=[walk_id])
     applied = await run(
-        SessionLocal, walk_ids=[walk_id], apply=True, expected_plan=preview["plan_digest"]
+        SessionLocal,
+        walk_ids=[walk_id],
+        apply=True,
+        expected_plan=preview["plan_digest"],
     )
     repeated = await run(SessionLocal, walk_ids=[walk_id])
     if applied["scheduled_sources"] != 12 or repeated["eligible_sources"] != 0:
@@ -79,17 +94,20 @@ async def prepare_backfill(owner, walk_id):
 
 
 async def verify_backfill(owner, walk_id, saved):
-    from sqlalchemy import select
-
     from daengs_backend.core.database import SessionLocal
     from daengs_backend.models.walk import Walk
-    from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope as Envelope
+    from daengs_backend.models.walk_entry_context import (
+        WalkEntryContextEnvelope as Envelope,
+    )
     from daengs_backend.services.walk_context_backfill import run
+    from sqlalchemy import select
 
     walk_id = uuid.UUID(str(walk_id))
     async with SessionLocal() as db:
         if (
-            await db.scalar(select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner))
+            await db.scalar(
+                select(Walk.id).where(Walk.id == walk_id, Walk.app_user_id == owner)
+            )
             is None
         ):
             raise SmokeFailure("synthetic walk ownership mismatch")
@@ -107,6 +125,86 @@ async def verify_backfill(owner, walk_id, saved):
     }
 
 
+async def probe_snapshot(owner, walk_id):
+    """Read only this probe's walk; fingerprints remain in memory, never in logs."""
+    async with engine.connect() as connection:
+        return await connection.scalar(
+            text("""SELECT jsonb_build_object(
+                'row', (SELECT to_jsonb(s) FROM walk_storyboards s WHERE s.walk_id=w.id),
+                'walk', md5(to_jsonb(w)::text),
+                'entries', (SELECT md5(COALESCE(jsonb_agg(to_jsonb(e) ORDER BY e.id)::text,''))
+                    FROM walk_entries e WHERE e.walk_id=w.id),
+                'photos', (SELECT md5(to_jsonb(p)::text) FROM walk_photo_manifests p WHERE p.walk_id=w.id),
+                'backgrounds', (SELECT md5(COALESCE(jsonb_agg(to_jsonb(e) ORDER BY e.id)::text,''))
+                    FROM walk_entry_context_envelopes e JOIN walk_entry_context_jobs j ON j.id=e.job_id
+                    WHERE j.walk_id=w.id))
+                FROM walks w WHERE w.id=:walk AND w.app_user_id=:owner"""),
+            {"walk": uuid.UUID(str(walk_id)), "owner": owner},
+        )
+
+
+def board_diagnostics(response, before, after, notes, elapsed):
+    """Only statuses, counts and equality checks; never text, hashes or identifiers."""
+    row = (after or {}).get("row") or {}
+    raw = row.get("bundle") or {}
+    reserved = raw.get("fallback") or raw
+    public = response.get("bundle") or {}
+
+    def contents(board):
+        scenes = board.get("scenes") or []
+        return {
+            "scene_count": len(scenes),
+            "writing_count": sum(s.get("writing") is not None for s in scenes),
+            "notes_in_record": [
+                any((s.get("user_record") or {}).get("text") == n for s in scenes)
+                for n in notes
+            ],
+            "notes_in_body": [any(s.get("body") == n for s in scenes) for n in notes],
+            "notes_in_writing": [
+                any((s.get("writing") or {}).get("original_text") == n for s in scenes)
+                for n in notes
+            ],
+        }
+
+    deadline = raw.get("deadline_at")
+    receipt = reserved.get("writing_receipt") or {}
+    return {
+        "status": response.get("status"),
+        "error_code": response.get("error_code"),
+        "post_ms": round(elapsed * 1000),
+        "budget_ms": 20000,
+        "model_status": public.get("model_status"),
+        "failure_code": public.get("failure_code"),
+        "response": contents(public),
+        "stored_status": row.get("status"),
+        "storage_format": raw.get("format"),
+        "stored_model_status": (reserved.get("bundle") or {}).get("model_status"),
+        "stored_failure_code": (reserved.get("bundle") or {}).get("failure_code"),
+        "stored_or_reserved": contents(reserved.get("bundle") or {}),
+        "deadline_passed": datetime.now(UTC) >= datetime.fromisoformat(deadline)
+        if deadline
+        else None,
+        "response_revision_matches_stored": response.get("input_revision")
+        == row.get("input_revision"),
+        "generation_matches_stored": response.get("generation")
+        == row.get("generation"),
+        "input_changed": {
+            k: (before or {}).get(k) != (after or {}).get(k)
+            for k in ("walk", "entries", "photos", "backgrounds")
+        },
+        "scene_backgrounds_saved": reserved.get("scene_backgrounds") is not None,
+        "writing_result_present": isinstance(receipt.get("result"), dict),
+        "job_statuses": [
+            {
+                "stage": j.get("stage"),
+                "accepted": bool(j.get("accepted")),
+                "failure": j.get("failure_code"),
+            }
+            for j in (receipt.get("result") or {}).get("jobs", [])
+        ],
+    }
+
+
 async def card_publication(request, owner, walk_id, entries, notes):
     """Exercise the running card graph; export only this probe's synthetic public response."""
     from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
@@ -119,15 +217,22 @@ async def card_publication(request, owner, walk_id, entries, notes):
         "target_scene_count": 5,
         "preparation_budget_ms": 20000,
     }
+    before = await probe_snapshot(owner, walk_id)
+    started = time.monotonic()
     result = await request("POST", path, body)
+    elapsed = time.monotonic() - started
+    after = await probe_snapshot(owner, walk_id)
+    diagnosis = board_diagnostics(result, before, after, notes, elapsed)
     parsed = DiaryStoryboardResponse.model_validate(result)
     if parsed.status != "ready" or parsed.bundle is None:
         raise SmokeFailure(
             "card graph did not publish a ready board",
-            diagnostics={"status": parsed.status, "error_code": parsed.error_code},
+            diagnostics=diagnosis,
         )
     if (
-        await request("GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5")
+        await request(
+            "GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5"
+        )
         != result
     ):
         raise SmokeFailure("card readback differs")
@@ -135,12 +240,21 @@ async def card_publication(request, owner, walk_id, entries, notes):
         raise SmokeFailure("repeated card request differs")
     scenes = parsed.bundle.scenes
     if not all(
-        any(s.writing and s.writing.original_text == note for s in scenes) for note in notes
+        any(s.writing and s.writing.original_text == note for s in scenes)
+        for note in notes
     ):
-        raise SmokeFailure("card changed an original note")
+        raise SmokeFailure("card changed an original note", diagnostics=diagnosis)
     # The activity part can now describe movement without a recorded behavior pin.
-    if sum(a.action_id is not None for s in scenes if s.writing for a in s.writing.actions) != 1:
-        raise SmokeFailure("card lost the synthetic behavior")
+    if (
+        sum(
+            a.action_id is not None
+            for s in scenes
+            if s.writing
+            for a in s.writing.actions
+        )
+        != 1
+    ):
+        raise SmokeFailure("card lost the synthetic behavior", diagnostics=diagnosis)
     async with engine.connect() as connection:
         raw = await connection.scalar(
             text(
@@ -154,7 +268,10 @@ async def card_publication(request, owner, walk_id, entries, notes):
         raise SmokeFailure("card receipt is missing or differs from publication")
     receipt = stored.writing_receipt
     background_counts = (
-        Counter((b.provider, b.status, b.reason) for b in stored.scene_backgrounds.backgrounds)
+        Counter(
+            (b.provider, b.status, b.reason)
+            for b in stored.scene_backgrounds.backgrounds
+        )
         if stored.scene_backgrounds is not None
         else Counter()
     )
@@ -170,7 +287,9 @@ async def card_publication(request, owner, walk_id, entries, notes):
         "original_notes_preserved": True,
         "original_action_preserved": True,
         "receipt_valid": True,
-        "space_origins": dict(Counter(s.writing.space.origin for s in scenes if s.writing)),
+        "space_origins": dict(
+            Counter(s.writing.space.origin for s in scenes if s.writing)
+        ),
         "scene_backgrounds_saved": stored.scene_backgrounds is not None,
         "background_statuses": [
             {"provider": provider, "status": status, "reason": reason, "count": count}
@@ -187,11 +306,15 @@ async def card_publication(request, owner, walk_id, entries, notes):
         ],
     }
     if parsed.bundle.model_status != "accepted":
-        raise SmokeFailure("card graph did not publish accepted writing", diagnostics=diagnostics)
+        raise SmokeFailure(
+            "card graph did not publish accepted writing", diagnostics=diagnostics
+        )
     return {**diagnostics, "synthetic_response": result}
 
 
-async def cycle(owner, *, center=None, require_regional=False, backfill=False, card=False):
+async def cycle(
+    owner, *, center=None, require_regional=False, backfill=False, card=False
+):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
     center = center or {"lat": 37.4878, "lng": 127.052}
@@ -212,8 +335,12 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                 "client_seq": index,
                 "chain_index": 0,
                 "at": (started + timedelta(seconds=index * 10)).isoformat(),
-                "lat": round(center["lat"] + a[0] * (1 - fraction) + b[0] * fraction, 7),
-                "lng": round(center["lng"] + a[1] * (1 - fraction) + b[1] * fraction, 7),
+                "lat": round(
+                    center["lat"] + a[0] * (1 - fraction) + b[0] * fraction, 7
+                ),
+                "lng": round(
+                    center["lng"] + a[1] * (1 - fraction) + b[1] * fraction, 7
+                ),
                 "accuracy_m": 5.0,
                 "is_mock": False,
             }
@@ -228,7 +355,10 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                 method,
                 path,
                 json=body,
-                headers={"Authorization": "Bearer " + create_access_token(owner, SubjectType.APP)},
+                headers={
+                    "Authorization": "Bearer "
+                    + create_access_token(owner, SubjectType.APP)
+                },
             )
             if response.status_code >= 300:
                 fields = []
@@ -245,7 +375,10 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                                     v
                                     for v in loc
                                     if isinstance(v, int)
-                                    or (isinstance(v, str) and v.replace("_", "").isalpha())
+                                    or (
+                                        isinstance(v, str)
+                                        and v.replace("_", "").isalpha()
+                                    )
                                 ]
                             )
                 raise SmokeFailure(
@@ -273,7 +406,10 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
             {"expected_point_count": 121, "terminal_client_seq": 120},
         )
         entries = []
-        notes = ["검증 산책에서 잠시 멈춰 물을 마셨다.", "검증 산책을 마치고 돌아가는 길이었다."]
+        notes = [
+            "검증 산책에서 잠시 멈춰 물을 마셨다.",
+            "검증 산책을 마치고 돌아가는 길이었다.",
+        ]
         for index, seq in enumerate((20, 50, 90)):
             p = points[seq]
             content = {
@@ -287,7 +423,9 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                 },
             }
             content.update(
-                {"behavior_code": "sniffing"} if index == 0 else {"note": notes[index - 1]}
+                {"behavior_code": "sniffing"}
+                if index == 0
+                else {"note": notes[index - 1]}
             )
             pin = None
             if index == 0:
@@ -301,7 +439,9 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                     "resolve_by": p["at"],
                     "policy_version": "action-pin-policy-v1",
                     "algorithm_version": "action-pin-local-v1",
-                    "source_refs": [{"client_seq": seq, "chain_index": 0, "at": p["at"]}],
+                    "source_refs": [
+                        {"client_seq": seq, "chain_index": 0, "at": p["at"]}
+                    ],
                     "uncertainty_m": 5.0,
                     "uncertainty_basis": "provider_accuracy",
                     "reason": "direct_fix",
@@ -323,12 +463,17 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
         contexts = []
         for _ in range(36):
             contexts = [
-                await request("GET", f"/app/v2/walks/{wid}/entries/{entry['id']}/contexts")
+                await request(
+                    "GET", f"/app/v2/walks/{wid}/entries/{entry['id']}/contexts"
+                )
                 for entry in entries
             ]
             if all(
                 len(c["sources"]) == 6
-                and all(s["state"] in {"completed", "failed", "cancelled"} for s in c["sources"])
+                and all(
+                    s["state"] in {"completed", "failed", "cancelled"}
+                    for s in c["sources"]
+                )
                 for c in contexts
             ):
                 break
@@ -355,7 +500,9 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
                         continue
                     payload = source["envelope"]["payload"]
                     if payload["catalog_area"]["center"] != center:
-                        raise SmokeFailure("context did not use its managed regional catalog")
+                        raise SmokeFailure(
+                            "context did not use its managed regional catalog"
+                        )
         result = await request(
             "POST",
             f"/app/walks/{wid}/storyboard",
@@ -378,7 +525,9 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
         scenes = result["bundle"]["scenes"]
         # The app assembles one editable body from narration + user_record. Requiring the
         # writer to repeat original notes in narration would contradict that contract.
-        records = {s["core"]["identity"]: s["user_record"] for s in scenes if s["user_record"]}
+        records = {
+            s["core"]["identity"]: s["user_record"] for s in scenes if s["user_record"]
+        }
         for entry, note in zip(entries[1:], notes, strict=True):
             record = records.get("walk_entry:" + entry["id"], {})
             if record.get("kind") != "note" or record.get("text") != note:
@@ -396,7 +545,9 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False, c
         )
         generated = sum(s["narration"]["status"] == "generated" for s in scenes)
         if addressed != len(entries) or not generated:
-            raise SmokeFailure("dong address or public background missing in diary output")
+            raise SmokeFailure(
+                "dong address or public background missing in diary output"
+            )
         recovery = await verify_backfill(owner, wid, saved) if backfill else None
         return {
             **({"backfill": recovery} if backfill else {}),
@@ -430,15 +581,22 @@ async def main(*, regional=False, backfill=False):
         created = True
         async with asyncio.timeout(480 if regional else 240):
             if regional:
-                from daengs_backend.services.walk_catalog_regions import path_for, region
+                from daengs_backend.services.walk_catalog_regions import (
+                    path_for,
+                    region,
+                )
 
                 # Entire synthetic route stays inside each distinct 1 km cell.
                 cases = []
                 result["regional_cases"] = cases
-                for point in ({"lat": 37.5172, "lng": 127.0473}, {"lat": 37.556, "lng": 126.9238}):
+                for point in (
+                    {"lat": 37.5172, "lng": 127.0473},
+                    {"lat": 37.556, "lng": 126.9238},
+                ):
                     _, center = region(point)
                     existed = all(
-                        path_for(kind, center).is_file() for kind in ("commerce", "river")
+                        path_for(kind, center).is_file()
+                        for kind in ("commerce", "river")
                     )
                     cases.append(
                         {
@@ -448,7 +606,9 @@ async def main(*, regional=False, backfill=False):
                     )
             else:
                 result.update(
-                    await cycle(owner, backfill=True) if backfill else await cycle(owner, card=True)
+                    await cycle(owner, backfill=True)
+                    if backfill
+                    else await cycle(owner, card=True)
                 )
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001 - never print API bodies, tokens, SQL parameters or user IDs
@@ -485,4 +645,6 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     if arguments.regional and arguments.backfill:
         parser.error("choose one probe mode")
-    raise SystemExit(asyncio.run(main(regional=arguments.regional, backfill=arguments.backfill)))
+    raise SystemExit(
+        asyncio.run(main(regional=arguments.regional, backfill=arguments.backfill))
+    )

@@ -6,6 +6,7 @@ the stamp. Never extend a recorded instant into the duration or cause of behavio
 
 from datetime import datetime
 
+from daengs_walk.diary.board.narration import narration_context
 from daengs_walk.diary.board.scene_input import ACTION_MEANINGS
 from daengs_walk.diary.contracts.input import digest
 
@@ -101,6 +102,9 @@ def project_action(request):
         }
     }
     refs = {"a1": action["id"]}
+    context = narration_context(request.get("walk_context"))
+    if context is not None:
+        payload["narration"] = context
     uses = context_uses(request)
     kinds = {u["meaning"] for u in uses}
     shape_keys = kinds & SHAPE_TEXT.keys()

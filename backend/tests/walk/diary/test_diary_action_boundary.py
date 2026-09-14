@@ -73,7 +73,7 @@ def test_only_pin_phase_and_simultaneous_features_reach_the_writer():
     request = jobs.action_job(base, scene).request
     original = deepcopy(request)
     wire = normalize("action", request)
-    assert set(wire.payload) == {"recorded_action", "movement_context"}
+    assert set(wire.payload) == {"recorded_action", "movement_context", "narration"}
     assert wire.payload["recorded_action"]["id"] == "a1"
     assert wire.payload["movement_context"]["id"] == "m1"
     assert "느린" in wire.payload["movement_context"]["meaning"]

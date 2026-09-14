@@ -1,0 +1,504 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>보호자 시점으로 읽는 산책</title>
+<style>body{margin:0;background:#f4f3ef;color:#26372d;font-family:system-ui,sans-serif}
+main{max-width:1120px;margin:auto;padding:40px 24px}header p{line-height:1.8;color:#56645d}
+h2{font-size:19px;margin-top:36px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+article{background:white;border:1px solid #d9ded6;border-radius:14px;padding:24px}
+h3{font-size:13px;color:#3c6652}article p{font-size:19px;line-height:1.9;white-space:pre-wrap}
+.action{border-left:3px solid #78a889;padding-left:14px}details{margin-top:18px}
+summary{cursor:pointer;color:#65736a;font-size:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+@media(max-width:720px){.pair{grid-template-columns:1fr}}</style><main><header>
+<h1>보호자 시점으로 읽는 산책</h1><p>같은 공간·행동 재료에 보호자 시점과 실제 동행을 연결했다.
+왼쪽은 저장된 이전 문장 그대로, 오른쪽은 바뀐 입력과 작성 예시를 적용한 Gemini 결과다.
+행동은 핀이 있는 두 번째 장면에만 붙였다.</p>
+<p>공공자료는 실제 저장 응답이며 GPS·행동·메모는 합성 시나리오다.
+제목은 비교용 장면 이름이다. 입력 맥락과 프롬프트를 함께 바꾼 비교다.</p><p>새 Gemini 요청 7회 · 공공 API·제목 재호출 0회</p></header><section><h2>01 · 풀밭 배경</h2><div class="pair"><article><h3>이전 · 공간 + 행동</h3><p>양재2동의 공원 옆 풀밭을 지나갔다.</p></article><article><h3>보호자 시점 적용</h3><p>보리와 함께 양재2동의 풀밭을 걸었다. 산책하던 곳 근처에는 공원이 있었다.</p></article></div><details><summary>개발자용 · 입력과 조립 결과</summary><pre>{
+  &quot;space_actual_supply&quot;: {
+    &quot;version&quot;: &quot;diary-space-details-v2&quot;,
+    &quot;initial_input&quot;: {
+      &quot;materials&quot;: [
+        {
+          &quot;id&quot;: &quot;m1&quot;,
+          &quot;temperature_c&quot;: 24.2,
+          &quot;observation_age_s&quot;: 260.0,
+          &quot;relation&quot;: &quot;기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님&quot;,
+          &quot;role&quot;: &quot;regional_environment&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m4&quot;,
+          &quot;material&quot;: {
+            &quot;dong&quot;: &quot;양재2동&quot;
+          },
+          &quot;relation&quot;: &quot;기록 위치의 동 이름&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;location_label&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m5&quot;,
+          &quot;material&quot;: {
+            &quot;피복&quot;: &quot;풀밭&quot;
+          },
+          &quot;relation&quot;: &quot;이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;point_land_cover&quot;
+        }
+      ],
+      &quot;available_details&quot;: [
+        {
+          &quot;id&quot;: &quot;m2&quot;,
+          &quot;topic&quot;: &quot;주변 공원&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m3&quot;,
+          &quot;topic&quot;: &quot;주변 업종 분포&quot;
+        }
+      ],
+      &quot;narration&quot;: {
+        &quot;narrator&quot;: &quot;이 산책을 기록한 보호자(나)&quot;,
+        &quot;companions&quot;: [
+          {
+            &quot;name&quot;: &quot;보리&quot;
+          }
+        ],
+        &quot;scope&quot;: &quot;현재 장면&quot;
+      }
+    },
+    &quot;model_calls&quot;: 2,
+    &quot;tool_calls&quot;: [
+      {
+        &quot;name&quot;: &quot;get_space_details&quot;,
+        &quot;arguments&quot;: {
+          &quot;material_ids&quot;: [
+            &quot;m2&quot;
+          ]
+        },
+        &quot;result&quot;: {
+          &quot;status&quot;: &quot;ok&quot;,
+          &quot;materials&quot;: [
+            {
+              &quot;id&quot;: &quot;m2&quot;,
+              &quot;material&quot;: {
+                &quot;배경&quot;: &quot;공원&quot;
+              },
+              &quot;relation&quot;: &quot;근처에 공원이 있음. 경계·내부·방문 여부는 미확인&quot;,
+              &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+              &quot;role&quot;: &quot;spatial_relation&quot;
+            }
+          ]
+        }
+      }
+    ],
+    &quot;public_api_calls&quot;: 0
+  },
+  &quot;action_input&quot;: null,
+  &quot;assembled&quot;: {
+    &quot;id&quot;: &quot;stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc&quot;,
+    &quot;order&quot;: 1,
+    &quot;core&quot;: {
+      &quot;identity&quot;: &quot;boundary:17d3324c4619032bd2d1cafa294c1ebdcc380677559f5598be3265f1fa769156&quot;,
+      &quot;version&quot;: &quot;bacb911cd48e0f97b0e94c62fbbd18dd96d32ce2250d3c13f7181d2eadd6a533&quot;
+    },
+    &quot;kind&quot;: &quot;session_boundary&quot;,
+    &quot;anchor&quot;: {
+      &quot;event_at&quot;: &quot;2026-09-14T01:04:20Z&quot;,
+      &quot;time_basis&quot;: &quot;route_observation&quot;,
+      &quot;point&quot;: {
+        &quot;lat&quot;: 37.470589119054424,
+        &quot;lng&quot;: 127.03785721894909
+      },
+      &quot;location_at&quot;: &quot;2026-09-14T01:04:20Z&quot;,
+      &quot;accuracy_m&quot;: 5.0,
+      &quot;position_state&quot;: &quot;resolved&quot;,
+      &quot;method&quot;: &quot;observed&quot;,
+      &quot;source_fixes&quot;: [
+        {
+          &quot;client_seq&quot;: 0,
+          &quot;chain_index&quot;: 0,
+          &quot;at&quot;: &quot;2026-09-14T01:04:20Z&quot;
+        }
+      ]
+    },
+    &quot;title&quot;: &quot;산책의 시작&quot;,
+    &quot;body&quot;: &quot;보리와 함께 양재2동의 풀밭을 걸었다. 산책하던 곳 근처에는 공원이 있었다.&quot;,
+    &quot;user_record&quot;: null,
+    &quot;observation&quot;: null,
+    &quot;checkpoint&quot;: null,
+    &quot;boundary&quot;: &quot;start&quot;,
+    &quot;place_reference&quot;: [
+      {
+        &quot;id&quot;: &quot;slot:e34f1614eb4078921823731a04721f97299a993f65784017ece38e37d7f7b173&quot;,
+        &quot;background_id&quot;: &quot;normalized:7dbd8166b702a2360ebda6a0f69b43fbe1176dff44906c1ddcbdd72a5f73ded1&quot;,
+        &quot;kind&quot;: &quot;place_reference&quot;,
+        &quot;schema_version&quot;: &quot;sgis-dong-v1&quot;,
+        &quot;facts&quot;: {
+          &quot;dong&quot;: &quot;양재2동&quot;,
+          &quot;sido&quot;: &quot;서울특별시&quot;,
+          &quot;sigungu&quot;: &quot;서초구&quot;,
+          &quot;address_type&quot;: &quot;administrative_dong&quot;,
+          &quot;source_ref&quot;: {
+            &quot;source&quot;: &quot;sgis&quot;,
+            &quot;ref&quot;: &quot;11:220:670&quot;
+          },
+          &quot;reference&quot;: &quot;coordinate_reverse_geocoded_dong&quot;,
+          &quot;position_method&quot;: &quot;observed&quot;,
+          &quot;location_basis&quot;: &quot;original_location&quot;,
+          &quot;temporal_basis&quot;: &quot;lookup_snapshot&quot;,
+          &quot;retrieved_at&quot;: &quot;2026-09-14T03:06:26.921341+00:00&quot;
+        }
+      }
+    ],
+    &quot;writing&quot;: {
+      &quot;format&quot;: &quot;diary-card-narrative-v2&quot;,
+      &quot;content_revision&quot;: &quot;99e330af61292bf42ff4808d2a9fc334ef2f8a22f3654ceb5fae5863d7d2fafb&quot;,
+      &quot;space&quot;: {
+        &quot;text&quot;: &quot;보리와 함께 양재2동의 풀밭을 걸었다. 산책하던 곳 근처에는 공원이 있었다.&quot;,
+        &quot;origin&quot;: &quot;generated&quot;,
+        &quot;action_id&quot;: null,
+        &quot;actor_id&quot;: null
+      },
+      &quot;actions&quot;: [],
+      &quot;original_text&quot;: null,
+      &quot;title_origin&quot;: &quot;fallback&quot;,
+      &quot;title_based_on_content_revision&quot;: &quot;99e330af61292bf42ff4808d2a9fc334ef2f8a22f3654ceb5fae5863d7d2fafb&quot;
+    }
+  }
+}</pre></details></section><section><h2>02 · 길 배경</h2><div class="pair"><article><h3>이전 · 공간 + 행동</h3><p>양재2동의 길을 따라 걸었다. 근처에 공원이 자리했다.</p><p class="action">보리는 상대적으로 느린 걸음으로 곧게 이동하던 중 잠시 멈춰 서서 냄새를 맡았다.</p></article><article><h3>보호자 시점 적용</h3><p>보리와 함께 양재2동의 길을 걸었다. 산책하던 곳 가까이에 공원이 있었다.</p><p class="action">산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.</p></article></div><details><summary>개발자용 · 입력과 조립 결과</summary><pre>{
+  &quot;space_actual_supply&quot;: {
+    &quot;version&quot;: &quot;diary-space-details-v2&quot;,
+    &quot;initial_input&quot;: {
+      &quot;materials&quot;: [
+        {
+          &quot;id&quot;: &quot;m1&quot;,
+          &quot;material&quot;: {
+            &quot;dong&quot;: &quot;양재2동&quot;
+          },
+          &quot;relation&quot;: &quot;기록 위치의 동 이름&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;location_label&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m2&quot;,
+          &quot;temperature_c&quot;: 24.2,
+          &quot;observation_age_s&quot;: 600.0,
+          &quot;relation&quot;: &quot;기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님&quot;,
+          &quot;role&quot;: &quot;regional_environment&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m4&quot;,
+          &quot;material&quot;: {
+            &quot;피복&quot;: &quot;길&quot;
+          },
+          &quot;relation&quot;: &quot;이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;point_land_cover&quot;
+        }
+      ],
+      &quot;available_details&quot;: [
+        {
+          &quot;id&quot;: &quot;m3&quot;,
+          &quot;topic&quot;: &quot;주변 공원&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m5&quot;,
+          &quot;topic&quot;: &quot;주변 업종 분포&quot;
+        }
+      ],
+      &quot;narration&quot;: {
+        &quot;narrator&quot;: &quot;이 산책을 기록한 보호자(나)&quot;,
+        &quot;companions&quot;: [
+          {
+            &quot;name&quot;: &quot;보리&quot;
+          }
+        ],
+        &quot;scope&quot;: &quot;현재 장면&quot;
+      }
+    },
+    &quot;model_calls&quot;: 2,
+    &quot;tool_calls&quot;: [
+      {
+        &quot;name&quot;: &quot;get_space_details&quot;,
+        &quot;arguments&quot;: {
+          &quot;material_ids&quot;: [
+            &quot;m3&quot;
+          ]
+        },
+        &quot;result&quot;: {
+          &quot;status&quot;: &quot;ok&quot;,
+          &quot;materials&quot;: [
+            {
+              &quot;id&quot;: &quot;m3&quot;,
+              &quot;material&quot;: {
+                &quot;배경&quot;: &quot;공원&quot;
+              },
+              &quot;relation&quot;: &quot;근처에 공원이 있음. 경계·내부·방문 여부는 미확인&quot;,
+              &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+              &quot;role&quot;: &quot;spatial_relation&quot;
+            }
+          ]
+        }
+      }
+    ],
+    &quot;public_api_calls&quot;: 0
+  },
+  &quot;action_input&quot;: {
+    &quot;recorded_action&quot;: {
+      &quot;id&quot;: &quot;a1&quot;,
+      &quot;actor&quot;: &quot;보리&quot;,
+      &quot;action&quot;: &quot;냄새 맡기&quot;
+    },
+    &quot;narration&quot;: {
+      &quot;narrator&quot;: &quot;이 산책을 기록한 보호자(나)&quot;,
+      &quot;companions&quot;: [
+        {
+          &quot;name&quot;: &quot;보리&quot;
+        }
+      ],
+      &quot;scope&quot;: &quot;현재 장면&quot;
+    },
+    &quot;movement_context&quot;: {
+      &quot;id&quot;: &quot;m1&quot;,
+      &quot;meaning&quot;: &quot;대체로 곧게 이동. 그 시각의 걸음은 이번 산책의 다른 이동 구간보다 상대적으로 느린 걸음&quot;,
+      &quot;relation&quot;: &quot;행동이 기록된 시각의 산책 이동. 행동의 지속 구간이나 원인은 아님&quot;
+    }
+  },
+  &quot;assembled&quot;: {
+    &quot;id&quot;: &quot;stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc&quot;,
+    &quot;order&quot;: 2,
+    &quot;core&quot;: {
+      &quot;identity&quot;: &quot;walk_entry:scenario-record-1&quot;,
+      &quot;version&quot;: &quot;9432ad2ef8da73cf70a24780ad06bcf3e3a95d6a3cfe0a49e473cfd3719e94c3&quot;
+    },
+    &quot;kind&quot;: &quot;user_record&quot;,
+    &quot;anchor&quot;: {
+      &quot;event_at&quot;: &quot;2026-09-14T01:10:00Z&quot;,
+      &quot;time_basis&quot;: &quot;recorded_at&quot;,
+      &quot;point&quot;: {
+        &quot;lat&quot;: 37.47333149207589,
+        &quot;lng&quot;: 127.03729634665666
+      },
+      &quot;location_at&quot;: &quot;2026-09-14T01:10:00Z&quot;,
+      &quot;accuracy_m&quot;: 5.0,
+      &quot;position_state&quot;: &quot;resolved&quot;,
+      &quot;method&quot;: &quot;observed&quot;,
+      &quot;source_fixes&quot;: [
+        {
+          &quot;client_seq&quot;: 34,
+          &quot;chain_index&quot;: 0,
+          &quot;at&quot;: &quot;2026-09-14T01:10:00Z&quot;
+        }
+      ]
+    },
+    &quot;title&quot;: &quot;킁킁&quot;,
+    &quot;body&quot;: &quot;보리와 함께 양재2동의 길을 걸었다. 산책하던 곳 가까이에 공원이 있었다.\n산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.&quot;,
+    &quot;user_record&quot;: {
+      &quot;kind&quot;: &quot;behavior&quot;,
+      &quot;code&quot;: &quot;sniffing&quot;,
+      &quot;pet_id&quot;: &quot;scenario-pet&quot;
+    },
+    &quot;observation&quot;: null,
+    &quot;checkpoint&quot;: null,
+    &quot;boundary&quot;: null,
+    &quot;place_reference&quot;: [
+      {
+        &quot;id&quot;: &quot;slot:5148750eecec29c760d15e6f8134c38866e9eac25d7a86423663ee159a338110&quot;,
+        &quot;background_id&quot;: &quot;normalized:426cfe9a942deda5cf4ccad832aa0ee36544a104a2d30b1f1bee16b20a38efd3&quot;,
+        &quot;kind&quot;: &quot;place_reference&quot;,
+        &quot;schema_version&quot;: &quot;sgis-dong-v1&quot;,
+        &quot;facts&quot;: {
+          &quot;dong&quot;: &quot;양재2동&quot;,
+          &quot;sido&quot;: &quot;서울특별시&quot;,
+          &quot;sigungu&quot;: &quot;서초구&quot;,
+          &quot;address_type&quot;: &quot;administrative_dong&quot;,
+          &quot;source_ref&quot;: {
+            &quot;source&quot;: &quot;sgis&quot;,
+            &quot;ref&quot;: &quot;11:220:670&quot;
+          },
+          &quot;reference&quot;: &quot;coordinate_reverse_geocoded_dong&quot;,
+          &quot;position_method&quot;: &quot;observed&quot;,
+          &quot;location_basis&quot;: &quot;original_location&quot;,
+          &quot;temporal_basis&quot;: &quot;lookup_snapshot&quot;,
+          &quot;retrieved_at&quot;: &quot;2026-09-14T03:06:27.035009+00:00&quot;
+        }
+      }
+    ],
+    &quot;writing&quot;: {
+      &quot;format&quot;: &quot;diary-card-narrative-v2&quot;,
+      &quot;content_revision&quot;: &quot;0f1f91e5af3cdcfc8c194de4ad968a01eda572396937a0db20d5b33ed3b58b1f&quot;,
+      &quot;space&quot;: {
+        &quot;text&quot;: &quot;보리와 함께 양재2동의 길을 걸었다. 산책하던 곳 가까이에 공원이 있었다.&quot;,
+        &quot;origin&quot;: &quot;generated&quot;,
+        &quot;action_id&quot;: null,
+        &quot;actor_id&quot;: null
+      },
+      &quot;actions&quot;: [
+        {
+          &quot;text&quot;: &quot;산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.&quot;,
+          &quot;origin&quot;: &quot;generated&quot;,
+          &quot;action_id&quot;: &quot;action:25422e04000b44bc68418cbcfdcd5cf508cbfdfa3853cd77cc87bdc7338892c1&quot;,
+          &quot;actor_id&quot;: &quot;scenario-pet&quot;,
+          &quot;movement_ids&quot;: [
+            &quot;movement-use:9add837274812f015d71707e79b19b60a4dec49553222c301abc65f1c84aeef9&quot;,
+            &quot;movement-use:f65ff9fb71f0af8fcf0dc4f7027210de139026894654e1daba72db55d6c34dcb&quot;
+          ]
+        }
+      ],
+      &quot;original_text&quot;: null,
+      &quot;title_origin&quot;: &quot;fallback&quot;,
+      &quot;title_based_on_content_revision&quot;: &quot;0f1f91e5af3cdcfc8c194de4ad968a01eda572396937a0db20d5b33ed3b58b1f&quot;
+    }
+  }
+}</pre></details></section><section><h2>03 · 숲 배경</h2><div class="pair"><article><h3>이전 · 공간 + 행동</h3><p>양재1동의 공원과 숲이 어우러진 길을 따라 걸었다.</p></article><article><h3>보호자 시점 적용</h3><p>보리와 함께 산책하던 곳은 양재1동이었다. 근처에 공원이 있었고 숲이 자리하고 있었다.</p></article></div><details><summary>개발자용 · 입력과 조립 결과</summary><pre>{
+  &quot;space_actual_supply&quot;: {
+    &quot;version&quot;: &quot;diary-space-details-v2&quot;,
+    &quot;initial_input&quot;: {
+      &quot;materials&quot;: [
+        {
+          &quot;id&quot;: &quot;m2&quot;,
+          &quot;temperature_c&quot;: 24.2,
+          &quot;observation_age_s&quot;: 950.0,
+          &quot;relation&quot;: &quot;기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님&quot;,
+          &quot;role&quot;: &quot;regional_environment&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m3&quot;,
+          &quot;material&quot;: {
+            &quot;dong&quot;: &quot;양재1동&quot;
+          },
+          &quot;relation&quot;: &quot;기록 위치의 동 이름&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;location_label&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m5&quot;,
+          &quot;material&quot;: {
+            &quot;피복&quot;: &quot;숲&quot;
+          },
+          &quot;relation&quot;: &quot;이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인&quot;,
+          &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+          &quot;role&quot;: &quot;point_land_cover&quot;
+        }
+      ],
+      &quot;available_details&quot;: [
+        {
+          &quot;id&quot;: &quot;m1&quot;,
+          &quot;topic&quot;: &quot;주변 공원&quot;
+        },
+        {
+          &quot;id&quot;: &quot;m4&quot;,
+          &quot;topic&quot;: &quot;주변 업종 분포&quot;
+        }
+      ],
+      &quot;narration&quot;: {
+        &quot;narrator&quot;: &quot;이 산책을 기록한 보호자(나)&quot;,
+        &quot;companions&quot;: [
+          {
+            &quot;name&quot;: &quot;보리&quot;
+          }
+        ],
+        &quot;scope&quot;: &quot;현재 장면&quot;
+      }
+    },
+    &quot;model_calls&quot;: 2,
+    &quot;tool_calls&quot;: [
+      {
+        &quot;name&quot;: &quot;get_space_details&quot;,
+        &quot;arguments&quot;: {
+          &quot;material_ids&quot;: [
+            &quot;m1&quot;
+          ]
+        },
+        &quot;result&quot;: {
+          &quot;status&quot;: &quot;ok&quot;,
+          &quot;materials&quot;: [
+            {
+              &quot;id&quot;: &quot;m1&quot;,
+              &quot;material&quot;: {
+                &quot;배경&quot;: &quot;공원&quot;
+              },
+              &quot;relation&quot;: &quot;근처에 공원이 있음. 경계·내부·방문 여부는 미확인&quot;,
+              &quot;time_meaning&quot;: &quot;조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인&quot;,
+              &quot;role&quot;: &quot;spatial_relation&quot;
+            }
+          ]
+        }
+      }
+    ],
+    &quot;public_api_calls&quot;: 0
+  },
+  &quot;action_input&quot;: null,
+  &quot;assembled&quot;: {
+    &quot;id&quot;: &quot;stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927&quot;,
+    &quot;order&quot;: 3,
+    &quot;core&quot;: {
+      &quot;identity&quot;: &quot;checkpoint:2a3d1f813e11e569fcafa38c9f6102f81449133570dd4c244f4a81aaba6768e6&quot;,
+      &quot;version&quot;: &quot;f9277260e7453d95275288168135c4ac403e3fbb12db872435e9cc482d4b6434&quot;
+    },
+    &quot;kind&quot;: &quot;route_checkpoint&quot;,
+    &quot;anchor&quot;: {
+      &quot;event_at&quot;: &quot;2026-09-14T01:15:50Z&quot;,
+      &quot;time_basis&quot;: &quot;route_observation&quot;,
+      &quot;point&quot;: {
+        &quot;lat&quot;: 37.47385678898773,
+        &quot;lng&quot;: 127.03468728149925
+      },
+      &quot;location_at&quot;: &quot;2026-09-14T01:15:50Z&quot;,
+      &quot;accuracy_m&quot;: 5.0,
+      &quot;position_state&quot;: &quot;resolved&quot;,
+      &quot;method&quot;: &quot;observed&quot;,
+      &quot;source_fixes&quot;: [
+        {
+          &quot;client_seq&quot;: 69,
+          &quot;chain_index&quot;: 0,
+          &quot;at&quot;: &quot;2026-09-14T01:15:50Z&quot;
+        }
+      ]
+    },
+    &quot;title&quot;: &quot;산책길에서&quot;,
+    &quot;body&quot;: &quot;보리와 함께 산책하던 곳은 양재1동이었다. 근처에 공원이 있었고 숲이 자리하고 있었다.&quot;,
+    &quot;user_record&quot;: null,
+    &quot;observation&quot;: null,
+    &quot;checkpoint&quot;: {
+      &quot;analysis_id&quot;: &quot;simulated-tmap-route&quot;,
+      &quot;block&quot;: 0,
+      &quot;route_m&quot;: 644.5826381817194
+    },
+    &quot;boundary&quot;: null,
+    &quot;place_reference&quot;: [
+      {
+        &quot;id&quot;: &quot;slot:037cce047758942ce82c7c5438094988af711644c1fd27a4e1a7499d897220b8&quot;,
+        &quot;background_id&quot;: &quot;normalized:93b3360fbeacca626c6e673a018d33572c6ac497afd88794ca330b96a720b536&quot;,
+        &quot;kind&quot;: &quot;place_reference&quot;,
+        &quot;schema_version&quot;: &quot;sgis-dong-v1&quot;,
+        &quot;facts&quot;: {
+          &quot;dong&quot;: &quot;양재1동&quot;,
+          &quot;sido&quot;: &quot;서울특별시&quot;,
+          &quot;sigungu&quot;: &quot;서초구&quot;,
+          &quot;address_type&quot;: &quot;administrative_dong&quot;,
+          &quot;source_ref&quot;: {
+            &quot;source&quot;: &quot;sgis&quot;,
+            &quot;ref&quot;: &quot;11:220:660&quot;
+          },
+          &quot;reference&quot;: &quot;coordinate_reverse_geocoded_dong&quot;,
+          &quot;position_method&quot;: &quot;observed&quot;,
+          &quot;location_basis&quot;: &quot;original_location&quot;,
+          &quot;temporal_basis&quot;: &quot;lookup_snapshot&quot;,
+          &quot;retrieved_at&quot;: &quot;2026-09-14T03:06:28.276574+00:00&quot;
+        }
+      }
+    ],
+    &quot;writing&quot;: {
+      &quot;format&quot;: &quot;diary-card-narrative-v2&quot;,
+      &quot;content_revision&quot;: &quot;187ba099eeefb7153edad6ddc0b1058f5ea267d7a1ae3a243c6c9cde175e355b&quot;,
+      &quot;space&quot;: {
+        &quot;text&quot;: &quot;보리와 함께 산책하던 곳은 양재1동이었다. 근처에 공원이 있었고 숲이 자리하고 있었다.&quot;,
+        &quot;origin&quot;: &quot;generated&quot;,
+        &quot;action_id&quot;: null,
+        &quot;actor_id&quot;: null
+      },
+      &quot;actions&quot;: [],
+      &quot;original_text&quot;: null,
+      &quot;title_origin&quot;: &quot;fallback&quot;,
+      &quot;title_based_on_content_revision&quot;: &quot;187ba099eeefb7153edad6ddc0b1058f5ea267d7a1ae3a243c6c9cde175e355b&quot;
+    }
+  }
+}</pre></details></section></main></html>

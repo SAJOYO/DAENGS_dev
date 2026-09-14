@@ -10,6 +10,7 @@ from typing import Literal
 from daengs_backend.services.walk_diary.model_input import normalize
 from daengs_backend.services.walk_diary.writing import policy
 from daengs_walk.diary.board.action_context import pin_movement
+from daengs_walk.diary.board.narration import VERSION as NARRATION_VERSION
 from daengs_walk.diary.board.scene_input import action_anchor
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.slots.space import writing_facts
@@ -45,6 +46,7 @@ def _resolve(base, card_id):
 def _common_context(base):
     names = dict(base.input.pet_names)
     return {
+        "narration_version": NARRATION_VERSION,
         "record_kind": "guardian_walk_diary",
         "companions": [
             {"id": pet_id, "name": names.get(pet_id)} for pet_id in base.input.source.pet_ids

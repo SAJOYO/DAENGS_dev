@@ -147,4 +147,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         for stage in ("space", "action")
         if card[stage] is not None
     }
+    for payload in actual.values():
+        assert payload.pop("narration") == {
+            "narrator": "이 산책을 기록한 보호자(나)",
+            "companions": [{"name": "보리"}],
+            "scope": "현재 장면",
+        }
+    # v6 fixtures stay unchanged; only shared narration is new, never slot facts.
     assert actual == expected

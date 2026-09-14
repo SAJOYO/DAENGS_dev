@@ -6,7 +6,7 @@ from pydantic import JsonValue, model_validator
 
 from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
-from daengs_backend.services.walk_diary.model_input import VERSION, normalize
+from daengs_backend.services.walk_diary.model_input import READABLE_INPUT_VERSIONS, normalize
 from daengs_walk.diary.board.action_context import require_scene_action
 from daengs_walk.diary.board.activity import covers_observation, movement_uses
 from daengs_walk.diary.board.title_context import CONTENT_BASIS, title_context, title_revision
@@ -40,7 +40,7 @@ class StoredCardWriting(DiaryContract):
             if item.accepted and item.failure_code:
                 raise ValueError("failed job cannot carry accepted output")
             if (
-                self.writer.get("input_policy") == VERSION
+                self.writer.get("input_policy") in READABLE_INPUT_VERSIONS
                 and item.llm_request is not None
                 and item.llm_request != normalize(item.stage, item.request).payload
             ):
@@ -70,7 +70,7 @@ class StoredCardWriting(DiaryContract):
         spaces = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "space"}
         actions = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "action"}
         title_jobs = [j for j in self.result.jobs if j.stage == "title"]
-        independent = self.writer.get("input_policy") == "diary-prose-input-v6"
+        independent = self.writer.get("input_policy") in READABLE_INPUT_VERSIONS
         if len(spaces) != len(bundle.scenes) or len(spaces) + len(actions) + len(title_jobs) != len(
             self.result.jobs
         ):

@@ -3,7 +3,8 @@
 from copy import deepcopy
 
 NAME = "get_space_details"
-VERSION = "diary-space-details-v1"
+LEGACY_VERSION = "diary-space-details-v1"
+VERSION = "diary-space-details-v2"
 CORE_ROLES = ("location_label", "point_land_cover", "regional_environment")
 MAX_DETAILS = 2
 MAX_MODEL_CALLS = 2
@@ -14,7 +15,11 @@ available_details는 조회 후보이며 아직 본문의 근거가 아니다.
 공원과 피복이 함께 있어도 같은 공간·내부·방문 관계로 합치지 않는다."""
 
 
-def initial_input(payload):
+def initial_input(payload, *, version=VERSION):
+    if version not in {LEGACY_VERSION, VERSION} or (
+        version == LEGACY_VERSION and "narration" in payload
+    ):
+        raise ValueError("space tool version does not support this context")
     core, available = [], []
     for item in payload["materials"]:
         if item["role"] in CORE_ROLES:
@@ -28,7 +33,11 @@ def initial_input(payload):
                 else "주변 공간 관계"
             )
             available.append({"id": item["id"], "topic": topic})
-    return {"materials": core, **({"available_details": available} if available else {})}
+    return {
+        "materials": core,
+        **({"available_details": available} if available else {}),
+        **({"narration": deepcopy(payload["narration"])} if "narration" in payload else {}),
+    }
 
 
 def declaration(payload):
@@ -79,8 +88,8 @@ def validate_trace(payload, trace):
         not isinstance(trace, dict)
         or set(trace)
         != {"version", "initial_input", "model_calls", "tool_calls", "public_api_calls"}
-        or trace["version"] != VERSION
-        or trace["initial_input"] != initial_input(payload)
+        or trace["version"] not in {LEGACY_VERSION, VERSION}
+        or trace["initial_input"] != initial_input(payload, version=trace["version"])
         or type(trace["model_calls"]) is not int
         or not 1 <= trace["model_calls"] <= MAX_MODEL_CALLS
         or trace["public_api_calls"] != 0

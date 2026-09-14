@@ -2,6 +2,7 @@
 
 from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.contracts import MAX_CARDS
+from daengs_backend.services.walk_diary.model_input import LEGACY_VERSION
 from daengs_backend.services.walk_diary.model_input import VERSION as INPUT_VERSION
 from daengs_backend.services.walk_diary.writing.prompts import PROMPTS
 from daengs_walk.diary.contracts.input import digest
@@ -36,7 +37,7 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v8",
+        "policy": "shared-orchestration-card-writing-v9",
         "input_policy": INPUT_VERSION,
         "observation_text": CURRENT_OBSERVATION_TEXT,
         "legacy_observation_text": OBSERVATION_TEXT,
@@ -45,7 +46,8 @@ def writing_version():
             key: digest(
                 [value, INPUT_VERSION, space_details.VERSION, space_details.INSTRUCTION]
                 if key == "space"
-                else [value, INPUT_VERSION]
+                # The title projection/prompt is unchanged; its cache follows its body inputs.
+                else [value, LEGACY_VERSION if key == "title" else INPUT_VERSION]
             )
             for key, value in PROMPTS.items()
         },

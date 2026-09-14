@@ -86,7 +86,8 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
         stage, payload, _ = call.args
         if stage == "space":
             assert "action" not in payload and "original_text" not in payload
-            assert set(payload) == {"materials"}
+            assert set(payload) == {"materials", "narration"}
+            assert payload["narration"]["companions"] == [{"name": "보리"}]
         if stage == "action":
             assert payload["recorded_action"]
             if payload.get("recorded_action"):

@@ -8,9 +8,12 @@ from pydantic import Field
 from daengs_backend.services.walk_diary.model_materials import location, material
 from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import activity_projection
+from daengs_walk.diary.board.narration import narration_context
 from daengs_walk.diary.contracts.input import DiaryContract
 
-VERSION = "diary-prose-input-v6"
+LEGACY_VERSION = "diary-prose-input-v6"
+VERSION = "diary-prose-input-v7"
+READABLE_INPUT_VERSIONS = (LEGACY_VERSION, VERSION)
 
 
 class SpaceAnswer(DiaryContract):
@@ -218,4 +221,8 @@ def normalize(stage, request):
         payload = {"scenes": scenes}
     else:
         raise ValueError("unsupported diary writer stage")
+    if stage in {"space", "action"}:
+        context = narration_context(request.get("walk_context"))
+        if context is not None:
+            payload["narration"] = context
     return ModelRequest(stage, payload, request, references)

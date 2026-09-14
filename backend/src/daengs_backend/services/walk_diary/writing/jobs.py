@@ -15,6 +15,7 @@ from daengs_backend.services.walk_diary.writing import policy
 from daengs_backend.services.walk_diary.writing.context import get_action_context, get_space_context
 from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import movement_uses
+from daengs_walk.diary.board.narration import narration_context
 from daengs_walk.diary.board.title_context import (
     CONTENT_BASIS,
     generated_body,
@@ -152,7 +153,9 @@ def validate_output(item, raw):
                         model.payload, model.references, item.tool_trace, output.evidence_ids
                     )
                 names = [c["name"] for c in item.request["walk_context"]["companions"] if c["name"]]
-                if any(name in output.text for name in names):
+                if narration_context(item.request.get("walk_context")) is None and any(
+                    name in output.text for name in names
+                ):
                     raise ValueError("companion name leaked into space")
         else:
             expected = {c["card_id"]: c["content_revision"] for c in item.request["cards"]}

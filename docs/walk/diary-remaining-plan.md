@@ -269,7 +269,7 @@
 
 - 입력/공간 수집: `walk_diary_input.py`, `walk_diary_space_collection.py`, 기존 SGIS·피복 정규화.
 - 공간 후보·적용 실험: `daengs_walk.diary_space_*`, 기존 `prepare_board_slots` 경로.
-- 작성용 재료·검증: `walk_diary_card_writing.py`, 문체/역할은 `walk_diary_card_prompts.py`.
+- 작성용 재료·검증: `walk_diary_card_jobs.py`, 계약은 `walk_diary_card_contracts.py`, 조립은 `walk_diary_card_assembly.py`(#507). 현재 모델·예산은 `walk_diary_card_policy.py`, 전송은 `walk_diary_card_provider.py`, 문체/역할은 기존 `walk_diary_card_prompts.py`다. `walk_diary_card_writing.py`는 그래프 호출과 기존 import 호환을 유지한다.
 - 실행: `orchestration/runtime.py`, `diary.py`, 기존 채팅과 공유하는 `execution.py`.
 - 발행/보존: `walk_diary_generation.py`가 `walk_diary_snapshot.py`의 준비·응답과 `walk_diary_lifecycle.py`의 예약·완료를 연결한다(#506). 공개 마감은 기존 `walk_diary_publication.py`, 저장은 기존 카드 영수증과 저장 경로를 유지한다.
 - APP: 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`.
@@ -345,7 +345,9 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 | 이미 저장된 결과·진행 중 예약 | `reserve_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. GET의 만료 복구와 과거 영수증 보완도 commit한다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
 | 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
 
-관련 구현: [기본 진입 함수와 명시적 주입 분기](../../backend/src/daengs_backend/services/walk_diary_board_slot_writing.py), [카드 작성 전략](../../backend/src/daengs_backend/services/walk_diary_card_writing.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary_writing.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary_slot_writing.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary_board_storage.py).
+관련 구현: [기본 진입 함수와 명시적 주입 분기](../../backend/src/daengs_backend/services/walk_diary_board_slot_writing.py), [카드 작성 입구](../../backend/src/daengs_backend/services/walk_diary_card_writing.py), [작업 입력·응답 검증](../../backend/src/daengs_backend/services/walk_diary_card_jobs.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary_writing.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary_slot_writing.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary_board_storage.py).
+
+#507 이후 저장 카드 영수증은 작성 입구 대신 `walk_diary_card_contracts`만 참조한다. 현재 그래프·모델 없이도 과거 저장본을 검증하는 경계와 변경 전후 표본은 [실제 카드 작성 경로](card-orchestration.md)의 저장 판독 절을 따른다.
 
 **형식 협상에는 두 단계가 있다.** [APP의 WalkDiarySync](https://github.com/SAJOYO/DAENGS_APP/blob/802604d1fcf4d6bd3cc20aec2079ea9720745265/app/src/main/java/com/daengs/app/walk/sync/WalkDiarySync.kt)는 capabilities에 보드가 있으면 보드를, 없으면 과거 일기 형식을 선택하고 둘 다 없으면 legacy 경로를 검토한다. DEV의 `existing_format`은 보드 요청에서도 기존 일기 bundle이나 candidates 저장 형식을 보존할 수 있다. 따라서 APP가 보드를 선호한다는 사실과 특정 저장 산책에서 새 카드 작성기가 실행됐다는 사실은 다르다. 요청 형식만 기록하지 말고 반환 형식·저장 상태·실제 호출도 함께 남긴다.
 

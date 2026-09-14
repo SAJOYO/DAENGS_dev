@@ -7,7 +7,7 @@ from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
 from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
 from daengs_backend.services.walk_diary_board_storage import store_board
-from daengs_backend.services.walk_diary_card_writing import CardWritingResult
+from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
 from daengs_backend.services.walk_diary_lifecycle import complete_diary, reserve_diary
 from daengs_backend.services.walk_diary_publication import (
     fallback,

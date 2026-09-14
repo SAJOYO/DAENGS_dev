@@ -43,8 +43,8 @@ function chips(filters, container, changes = {}) {
   container.replaceChildren(...values.map(([key, text]) => node('span', text, `chip${changes[key] ? ' updated' : ''}`)));
 }
 
-function render(data, changes = {}) {
-  if (current && data.ui.revision < current.ui.revision) return;
+function render(data, changes = {}, notice) {
+  if (current && data.ui.revision < current.ui.revision) return false;
   current = data;
   $('#boundary').textContent = data.boundary;
   $('#model').textContent = `${data.model} · 실험 화면의 수동 조작과 같은 명령 계층 · 회원 찜·운영 Redis 미연결`;
@@ -67,6 +67,7 @@ function render(data, changes = {}) {
     displayedRevision = ui.revision;
     chips(ui.filters, $('#filters'), changes);
     $('#changes').textContent = '';
+    $('#result-notice').textContent = '';
     $('#places').replaceChildren();
     ui.cards.forEach((place, index) => {
       const card = node('article', '', `place${ui.selected_ref === place.ref ? ' selected' : ''}`);
@@ -89,15 +90,24 @@ function render(data, changes = {}) {
     }));
   }
   if (Object.keys(changes).length) {
+    // Polling may have rendered this revision before the chat response arrived.
+    chips(ui.filters, $('#filters'), changes);
     const names = {kinds: '업종 변경', required: '필수 조건 변경', preferred: '우선 조건 변경', radius_m: '검색 반경 변경', name_query: '이름 조건 변경', selection: '장소 선택', excluded: '제외 상태 변경', known: '아는 장소 반영', any_of: '대안 조건 변경'};
     $('#changes').textContent = Object.keys(changes).map((key) => names[key] || key).join(' · ');
   }
+  if (notice !== undefined) $('#result-notice').textContent = notice;
   $('#proposal').hidden = !ui.pending_proposal;
   if (ui.pending_proposal) {
     chips(ui.pending_proposal.filters, $('#proposed-filters'));
     $('#accept').textContent = ui.pending_proposal.apply_to === 'filters_only' ? '조건만 변경' : '이 조건으로 검색';
     $('#unavailable').textContent = ui.pending_proposal.unavailable.length ? `확인할 수 없는 조건: ${ui.pending_proposal.unavailable.join(', ')}` : '아직 적용되지 않은 제안이에요.';
   }
+  return true;
+}
+
+function resultNotice(results) {
+  return results.some((result) => result.code === 'no_more_candidates')
+    ? '아직 안 보여준 후보는 더 없어요. 보고 있던 장소는 그대로 유지했어요.' : '';
 }
 
 async function command(name, arguments_, formEdit = false) {
@@ -105,8 +115,9 @@ async function command(name, arguments_, formEdit = false) {
   manualBusy = true;
   try {
     const data = await api('/api/command', {request_id: crypto.randomUUID(), expected_revision: current.ui.revision, name, arguments: arguments_});
+    if (data.ui.revision < current.ui.revision) return;
     if (formEdit && ['applied', 'unchanged', 'empty'].includes(data.command.status)) manualDirty.clear();
-    render(data, data.command.changes);
+    render(data, data.command.changes, resultNotice([data.command]));
     if (['failed', 'conflict', 'unsupported'].includes(data.command.status)) $('#changes').textContent = '화면이 바뀌었거나 요청을 적용하지 못했어요.';
   } catch (error) { $('#changes').textContent = error.message; }
   finally { manualBusy = false; }
@@ -129,9 +140,10 @@ async function send(request, retry = false) {
     const data = await api('/api/chat', request);
     const turn = data.turn;
     lastTurn = turn;
-    const changes = Object.assign({}, ...turn.executions.map((execution) => execution.result.changes));
-    render(data, changes);
-    chips(data.ui.filters, $('#filters'), changes);
+    const results = turn.executions.map((execution) => execution.result);
+    const isCurrentTurn = turn.revision === data.ui.revision;
+    const changes = isCurrentTurn ? Object.assign({}, ...results.map((result) => result.changes)) : {};
+    render(data, changes, isCurrentTurn ? resultNotice(results) : undefined);
     $('#executions').textContent = JSON.stringify(turn.executions, null, 2);
     $('#latency').textContent = `${((turn.latency_ms || 0) / 1000).toFixed(1)}초 · 모델 ${turn.model_calls}회`;
     $('#raw-trace').hidden = true;

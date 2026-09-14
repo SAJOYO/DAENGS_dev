@@ -31,11 +31,14 @@ uv run --no-sync python -m daengs_evals.facility_tools.playground --key-file C:\
 
 모델 요청 실패 시 이미 변경된 카드와 조건은 유지된다. `응답 이어받기`는 같은 요청 ID로
 기록된 함수 결과 이후부터 재개한다. 새 요청으로 재검색하는 동작과 다르다.
+`다른 후보 보기`에서 추가 후보가 없으면 현재 카드·선택을 유지하고 결과 영역에 별도로 알린다.
+새 조건으로 검색한 결과가 0개인 경우에는 빈 목록을 표시한다.
 
 검증은 새 명령·대화·실험 HTTP 경계만 선택한다.
 
 ```powershell
 uv run --no-sync pytest -q tests/place/commands
+node --test tests/place/commands/web.test.cjs
 uv run --no-sync ruff check src/daengs_place/place/commands src/daengs_backend/services/facility_tools src/daengs_evals/facility_tools tests/place/commands
 ```
 
@@ -47,6 +50,10 @@ uv run --no-sync ruff check src/daengs_place/place/commands src/daengs_backend/s
 `2`는 아는 장소 기록 1턴이다. 생략하면 13턴을 모두 실행한다.
 출력 파일의 상위 디렉터리는 먼저 준비해야 한다. 자동 판정은 화면 상태와 도구 실행이며,
 말풍선의 사실성·자연스러움은 기록을 별도로 읽고 판단해야 한다.
+평가 버전 2는 조회의 대상·속성·성공 상태·반환 사실, 제안의 구체적 조건과 확정 상태 보존까지 검사한다.
+`answer_factuality=manual_review_required`는 자동 판정 통과와 별개다. 실패가 있으면 종료 코드 1을 반환한다.
+429 등 provider 오류와 의도 판정 실패를 구분해서 읽고, 앞선 턴이 실패한 연속 시나리오는 후속 턴도 영향을 받는다.
+Windows 콘솔에서 이모지 출력이 실패하면 실행 전에 `$env:PYTHONIOENCODING = 'utf-8'`을 설정한다.
 
 ```powershell
 uv run --no-sync python -m daengs_evals.facility_tools.evaluate --key-file C:\path\to\.env --scenario 0 --output evals/facility-tools-basic.json

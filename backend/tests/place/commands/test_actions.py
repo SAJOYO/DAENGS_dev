@@ -4,7 +4,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
+from daengs_place.place.commands.contract import FacilityState
 from daengs_place.place.commands.view import context, references
+from daengs_place.place.filters.contract import FilterState
 
 
 async def execute(port, name, args, command_id=None):
@@ -61,9 +63,14 @@ async def test_same_conditions_are_success_not_failure(workspace):
 
 
 async def test_empty_search_is_not_failed(workspace):
+    await execute(workspace, "select_place", {"place_ref": next(iter(references(workspace.state)))})
+    before = workspace.state
     r = await execute(workspace, "search_places", {"name_query": "존재하지않는시설"})
     assert r.status == "empty"
     assert r.state.filters.name_query == "존재하지않는시설"
+    assert not references(r.state) and r.state.selected is None
+    assert r.state.snapshot_id != before.snapshot_id
+    assert r.data["visible_count"] == 0
 
 
 async def test_failed_search_does_not_commit_filters_or_results(workspace):
@@ -78,13 +85,35 @@ async def test_failed_search_does_not_commit_filters_or_results(workspace):
     assert workspace.state == before
 
 
-async def test_next_never_repeats_presented_places(workspace):
+async def test_exhausted_next_preserves_snapshot_selection_and_refs(workspace):
+    await execute(workspace, "select_place", {"place_ref": next(iter(references(workspace.state)))})
     before = workspace.state
-    r = await execute(workspace, "next_places", {})
-    assert r.status == "empty"
-    assert r.state.filters == before.filters
-    assert not references(r.state)
-    assert r.state.presented == before.presented
+    for _ in range(2):
+        r = await execute(workspace, "next_places", {})
+        assert r.status == "unchanged" and r.code == "no_more_candidates"
+        assert r.state == before and references(r.state) == references(before)
+        assert r.changes == {}
+        assert r.data == {"visible_count": 6, "new_count": 0, "more": False}
+
+
+async def test_next_replaces_with_unseen_candidates_until_exhausted(workspace):
+    filters = workspace.state.filters.model_dump()
+    filters["result_policy"]["limit_per_kind"] = 1
+    workspace.state = FacilityState(filters=FilterState.model_validate(filters))
+    first = await execute(workspace, "search_places", {})
+    assert len(references(first.state)) == 2
+    seen = {p.key for p in references(first.state).values()}
+    for _ in range(2):
+        before = workspace.state
+        r = await execute(workspace, "next_places", {})
+        keys = {p.key for p in references(r.state).values()}
+        assert keys and not seen.intersection(keys)
+        assert r.state.snapshot_id != before.snapshot_id
+        assert r.data["visible_count"] == r.data["new_count"] == 2
+        seen.update(keys)
+    assert len(seen) == 6
+    before = workspace.state
+    assert (await execute(workspace, "next_places", {})).state == before
 
 
 async def test_old_place_ref_cannot_select_new_second_place(workspace):

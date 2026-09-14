@@ -12,7 +12,7 @@ from daengs_place.place.commands.contract import (
     NamedReference,
     Proposal,
 )
-from daengs_place.place.commands.view import references, state_changes
+from daengs_place.place.commands.view import places, references, state_changes
 from daengs_place.place.conversation.compiler import compile_changes, fingerprint
 from daengs_place.place.filters.service import search_filtered_places
 
@@ -169,6 +169,14 @@ class FacilityCommands:
         keys = [h.place.key for g in found.groups for h in g.matched]
         if len(keys) != len(set(keys)) or any(k in omitted for k in keys):
             raise RuntimeError("search returned duplicate or omitted results")
+        if next_page and not keys:
+            # Exhausting unseen candidates does not invalidate the visible snapshot.
+            return result(
+                "unchanged",
+                state,
+                code="no_more_candidates",
+                data={"visible_count": len(places(state)), "new_count": 0, "more": False},
+            )
         after = changed(
             state,
             filters=candidate,
@@ -183,7 +191,11 @@ class FacilityCommands:
             "applied" if keys else "empty",
             state,
             after,
-            data={"count": len(keys), "more": any(g.matched_truncated for g in found.groups)},
+            data={
+                "visible_count": len(keys),
+                "new_count": len(keys) if next_page else None,
+                "more": any(g.matched_truncated for g in found.groups),
+            },
         )
 
     @staticmethod

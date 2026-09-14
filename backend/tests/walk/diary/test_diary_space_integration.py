@@ -105,8 +105,9 @@ async def test_same_collected_snapshot_has_same_preview_and_generation_stamps(
     assert response.preview.revision == bound.slots.revision()
     assert response.preview.stamps == bound.slots.stamps
     if route_patterns:
+        # Route patterns are folded into movement claims when movement is configured (#508).
         assert any(
-            e.facts.get("format") == "route-pattern-material-v1"
+            e.facts.get("format") == "diary-movement-material-v1"
             for stamp in bound.slots.stamps
             for e in stamp.evidence
         )
@@ -245,7 +246,9 @@ async def test_unknown_spatial_role_is_explicitly_excluded(public_collector):
     assembled, _, _ = saved_case()
     base = assemble_saved_base_board(assembled, policy(3))
     bound = with_scene_backgrounds(base, await public_collector(base.board))
-    item = bound.slots.stamps[0].evidence[0].model_copy(update={"role": "unwired_role"})
+    # Movement evidence is admitted first (#508); the role check applies to space evidence.
+    space = next(e for e in bound.slots.stamps[0].evidence if e.part == "space")
+    item = space.model_copy(update={"role": "unwired_role"})
     stamp = admit("scene", [item], [], SlotPolicy())
     assert not stamp.evidence
     assert stamp.decisions[0].reason == "unsupported_spatial_relation"

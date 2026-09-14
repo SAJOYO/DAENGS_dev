@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-LEFT_X = 268
+LEFT_X = 252  # 원본 제목은 268 에서 시작했지만 사용자가 16px 왼쪽을 골랐다 (09-14, `_left_x_variants.png` 3번)
 PLATE_CENTER_Y = 99          # 검은 제목판 y 53~145 의 중심 (사용자 09-14: 판 중심 정렬)
 CAP_HEIGHT = 48
 RIGHT_MARGIN = 14

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DAENGS · 시설 도구 대화</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><p class="eyebrow">DAENGS / FUNCTION CALLING</p><h1>어디로 가볼까? <span>🐾</span></h1>
+    <p id="boundary">연결 확인 중</p></div>
+    <span class="badge">도구 호출 실험</span>
+  </header>
+  <main>
+    <section class="panel chat-panel">
+      <h2>함께 찾아보기</h2>
+      <div id="messages" aria-live="polite"></div>
+      <div class="examples" id="examples">
+        <button>주차되는 카페만 보여줘</button><button>음식점도 추가해줘</button>
+        <button>주차는 상관없어</button><button>두 번째는 주차 돼?</button>
+        <button>조용하고 주차되는 카페 찾아줘</button><button>다른 곳 보여줘</button>
+      </div>
+      <form id="chat">
+        <label for="query">원하는 장소를 말해줘</label>
+        <div class="compose"><textarea id="query" rows="2" maxlength="1000" required placeholder="예: 주차 가능한 카페만 찾아줘"></textarea>
+        <button id="send" type="submit">보내기 ↗</button></div>
+      </form>
+      <p id="status" role="status">Enter로 전송 · Shift+Enter로 줄바꿈</p>
+      <button id="retry" hidden>응답 이어받기</button>
+    </section>
+    <section class="panel results-panel">
+      <div class="title-row"><h2>지금 찾는 조건</h2><span id="count"></span></div>
+      <div id="filters" class="chips"></div>
+      <div class="manual-controls">
+        <label>업종<select id="category"><option value="both">카페 + 음식점</option><option value="cafe">카페</option><option value="restaurant">음식점</option><option value="hospital">동물병원</option><option value="pharmacy">동물약국</option><option value="current" disabled>현재 업종 조합</option></select></label>
+        <label>주차<select id="parking"><option value="clear">상관없음</option><option value="required">필수</option><option value="forbidden">불가인 곳</option><option value="preferred">가능한 곳 우선</option></select></label>
+        <button id="manual">조건 변경·검색</button>
+      </div>
+      <p id="changes" class="changes" role="status"></p>
+      <p id="outdated" class="notice" hidden>조건만 바뀌었어요. 아래 카드는 이전 검색 결과예요.</p>
+      <section id="proposal" class="proposal" hidden>
+        <h3>이 조건으로 바꿔볼까?</h3><div id="proposed-filters" class="chips"></div>
+        <p id="unavailable"></p>
+        <button id="accept">이 조건으로 검색</button><button id="reject">취소</button>
+      </section>
+      <div id="places" class="places"></div>
+      <div class="result-actions"><button id="next">다른 후보 보기</button><button id="refresh">현재 조건으로 검색</button></div>
+      <details id="excluded"><summary>제외한 장소</summary><div id="excluded-list"></div></details>
+      <p class="fixture-note">장소 A–F는 합성 데이터예요. 운영 장소 DB와 회원 찜은 연결하지 않았어요.</p>
+    </section>
+  </main>
+  <section class="diagnostics">
+    <details><summary>개발자 보기 · 호출과 상태 확인 <span id="latency"></span></summary>
+      <p id="model"></p>
+      <details><summary id="prompt-title">시스템 지침</summary><pre id="prompt"></pre></details>
+      <details><summary id="tools-title">사용 가능한 도구</summary><pre id="tools"></pre></details>
+      <details open><summary>이번 턴의 실제 도구 실행</summary><pre id="executions">아직 실행한 도구가 없어요.</pre></details>
+      <button id="load-trace">모델 요청·응답 원문 보기</button><pre id="raw-trace" hidden></pre>
+    </details>
+  </section>
+</body>
+</html>

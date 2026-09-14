@@ -4,7 +4,37 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .diary_input import DiaryContract, Digest, Identifier, digest
+from .diary_input import DiaryContract, Digest, Identifier, MaterialRef, digest
+
+# The same confirmed observation wording is used by the base board and new cards.
+# Keep these v1 meanings stable for already published observation parts.
+OBSERVATION_TEXT = {
+    "observed_dwell": "이 구간에서는 동선이 한곳에 모였다.",
+    "observed_slow": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 느려졌다.",
+    "observed_fast": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 빨라졌다.",
+}
+
+
+class CardObservation(DiaryContract):
+    core: MaterialRef
+    kind: Literal["observed_dwell", "observed_slow", "observed_fast"]
+    subject: Literal["recording_device"] = "recording_device"
+    action_meaning: Literal["not_inferred"] = "not_inferred"
+    text: str = Field(min_length=1, max_length=220)
+
+    @model_validator(mode="after")
+    def confirmed_wording(self):
+        if self.text != OBSERVATION_TEXT[self.kind]:
+            raise ValueError("observation prose differs from its confirmed meaning")
+        return self
+
+
+def observation_content(core, observation):
+    if observation is None:
+        return None
+    return CardObservation(
+        core=core, kind=observation.kind, text=OBSERVATION_TEXT[observation.kind]
+    )
 
 
 class CardPart(DiaryContract):
@@ -17,6 +47,7 @@ class CardPart(DiaryContract):
 class CardNarrative(DiaryContract):
     format: Literal["diary-card-narrative-v1"] = "diary-card-narrative-v1"
     content_revision: Digest
+    observation: CardObservation | None = Field(default=None, exclude_if=lambda v: v is None)
     space: CardPart
     actions: tuple[CardPart, ...] = Field(max_length=1)
     original_text: str | None = Field(default=None, max_length=2000)
@@ -37,12 +68,19 @@ class CardNarrative(DiaryContract):
 
     def body(self):
         # Never trim or paraphrase the original note, including its leading/trailing whitespace.
-        parts = [self.space.text, *(a.text for a in self.actions)]
+        parts = [
+            *([self.observation.text] if self.observation else []),
+            self.space.text,
+            *(a.text for a in self.actions),
+        ]
         if self.original_text is not None:
             parts.append(self.original_text)
         return "\n".join(p for p in parts if p)
 
 
-def content_revision(scene_id, anchor, places, space, actions):
+def content_revision(scene_id, anchor, places, space, actions, observation=None):
     """Only title dependencies; preserved notes belong to the publication source revision."""
-    return digest([scene_id, anchor, places, space, actions])
+    parts = [scene_id, anchor, places, space, actions]
+    if observation is not None:
+        parts.append(observation)
+    return digest(parts)

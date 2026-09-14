@@ -226,8 +226,8 @@ async def finalize_pin(session, owner, walk_id, entry_id, body):
 async def validate_recording_receipt(session, walk_id, expected):
     if expected is None:
         return  # Old outbox bodies and their lifetime mutation receipts remain valid.
-    from daengs_backend.services.walk_chunk import decode_chunk
-    from daengs_backend.services.walk_recording import recording_receipt
+    from daengs_backend.services.walk_session.chunk import decode_chunk
+    from daengs_backend.services.walk_session.recording import recording_receipt
 
     points = [
         p for chunk in await repo.raw_chunks(session, walk_id) for p in decode_chunk(chunk.payload)

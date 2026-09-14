@@ -180,7 +180,7 @@ async def test_repeatable_read_list_does_not_mix_before_and_after_commit(databas
 
 async def test_raw_chunk_reference_uses_persisted_precision(database):
     from daengs_backend.models.walk import WalkPointChunk
-    from daengs_backend.services.walk_chunk import encode_chunk
+    from daengs_backend.services.walk_session.chunk import encode_chunk
     from tests.walk.support.entry_v2 import located, pin, raw_point
 
     raw = raw_point(lat=37.5000004)

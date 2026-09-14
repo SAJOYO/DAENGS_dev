@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload
 from daengs_backend.services.walk_analysis import build_analysis_models
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import prepare_finalized_walk
 from daengs_walk import analyze_walk, build_cellophane
 from tests.walk.support.photo_input import AT, OWNER, SESSION, WALK
 

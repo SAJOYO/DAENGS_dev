@@ -14,14 +14,14 @@ from typing import Literal
 from pydantic import Field
 
 from daengs_backend.schemas.walk_motion import CHUNK_SIZE, MotionManifest, MotionObservation
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
-from daengs_backend.services.walk_motion_contract import (
+from daengs_backend.services.walk_motion_engine import Point, replay
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
+from daengs_backend.services.walk_session.motion_contract import (
     MotionConflict,
     chunk_digest,
     evidence_digest,
     manifest_digest,
 )
-from daengs_backend.services.walk_motion_engine import Point, replay
 from daengs_walk.trajectory import (
     Contract,
     EvidenceJournal,
@@ -393,7 +393,7 @@ def replay_shadow(
 
 
 async def calculate_shadow(session, owner, walk_id) -> ShadowResult:
-    from daengs_backend.services.walk_motion import completed_input
+    from daengs_backend.services.walk_session.motion import completed_input
 
     manifest, raw, observations, fingerprint, precision_fp = await completed_input(
         session, owner, walk_id

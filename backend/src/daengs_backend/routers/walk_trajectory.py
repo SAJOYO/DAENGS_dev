@@ -25,9 +25,9 @@ from daengs_backend.schemas.walk_trajectory import (
 )
 from daengs_backend.services import walk_measurement as measurements
 from daengs_backend.services import walk_trajectory as service
-from daengs_backend.services.walk import WalkNotFoundError
-from daengs_backend.services.walk_motion import MotionUnavailable
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session.errors import WalkNotFoundError
+from daengs_backend.services.walk_session.motion import MotionUnavailable
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 
 router = APIRouter(tags=["walk-trajectory"])
 Session = Annotated[AsyncSession, Depends(get_session)]

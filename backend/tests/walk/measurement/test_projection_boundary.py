@@ -20,8 +20,8 @@ from daengs_backend.schemas.walk_trajectory import TrajectoryCalculation
 from daengs_backend.services import walk_measurement as storage
 from daengs_backend.services import walk_measurement_projection as projection
 from daengs_backend.services import walk_trajectory as query
-from daengs_backend.services.walk_motion_contract import MotionConflict
-from daengs_backend.services.walk_precision_contract import refine_points
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
+from daengs_backend.services.walk_session.precision_contract import refine_points
 from tests.walk.measurement.test_stored_measurement import FIXTURES, OWNER, WALK
 
 FROZEN = json.loads((FIXTURES / "measurement-projection-v1.json").read_text())

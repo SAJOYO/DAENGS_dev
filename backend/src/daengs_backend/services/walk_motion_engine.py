@@ -11,7 +11,10 @@ from collections import Counter, deque
 from dataclasses import dataclass
 
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services.walk_motion_contract import validate_manifest, validate_observations
+from daengs_backend.services.walk_session.motion_contract import (
+    validate_manifest,
+    validate_observations,
+)
 
 
 def _float32(value):

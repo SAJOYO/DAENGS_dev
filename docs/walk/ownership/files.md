@@ -1,6 +1,6 @@
 # 파일별 소유권 목록
 
-기준 `159067b7 + #531 stage 7`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
+기준 `a8284218 + #532 stage 8`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
 
 소유 영역은 최종 폴더 이름이 아니다. `split` 파일은 주 소유 영역과 분리할 책임을 함께 기록한다. `integration`은 파일 전체 이관 대상이 아니다.
 
@@ -22,15 +22,26 @@
 | [backend/src/daengs_backend/schemas/walk_motion.py](../../../backend/src/daengs_backend/schemas/walk_motion.py) | schemas | retain | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/schemas/walk_precision.py](../../../backend/src/daengs_backend/schemas/walk_precision.py) | schemas | retain | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/schemas/walk_upload_receipt.py](../../../backend/src/daengs_backend/schemas/walk_upload_receipt.py) | schemas | retain | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
-| [backend/src/daengs_backend/services/walk.py](../../../backend/src/daengs_backend/services/walk.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_chunk.py](../../../backend/src/daengs_backend/services/walk_chunk.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_finalize.py](../../../backend/src/daengs_backend/services/walk_finalize.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_motion.py](../../../backend/src/daengs_backend/services/walk_motion.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_motion_contract.py](../../../backend/src/daengs_backend/services/walk_motion_contract.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_precision.py](../../../backend/src/daengs_backend/services/walk_precision.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_precision_contract.py](../../../backend/src/daengs_backend/services/walk_precision_contract.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_recording.py](../../../backend/src/daengs_backend/services/walk_recording.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_backend/services/walk_upload_receipt.py](../../../backend/src/daengs_backend/services/walk_upload_receipt.py) | services | repackage | 산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
+| [backend/src/daengs_backend/services/walk.py](../../../backend/src/daengs_backend/services/walk.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_chunk.py](../../../backend/src/daengs_backend/services/walk_chunk.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_finalize.py](../../../backend/src/daengs_backend/services/walk_finalize.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_motion.py](../../../backend/src/daengs_backend/services/walk_motion.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_motion_contract.py](../../../backend/src/daengs_backend/services/walk_motion_contract.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_precision.py](../../../backend/src/daengs_backend/services/walk_precision.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_precision_contract.py](../../../backend/src/daengs_backend/services/walk_precision_contract.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_recording.py](../../../backend/src/daengs_backend/services/walk_recording.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
+| [backend/src/daengs_backend/services/walk_session/__init__.py](../../../backend/src/daengs_backend/services/walk_session/__init__.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/chunk.py](../../../backend/src/daengs_backend/services/walk_session/chunk.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/errors.py](../../../backend/src/daengs_backend/services/walk_session/errors.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/finalize.py](../../../backend/src/daengs_backend/services/walk_session/finalize.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/lifecycle.py](../../../backend/src/daengs_backend/services/walk_session/lifecycle.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/motion.py](../../../backend/src/daengs_backend/services/walk_session/motion.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/motion_contract.py](../../../backend/src/daengs_backend/services/walk_session/motion_contract.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/precision.py](../../../backend/src/daengs_backend/services/walk_session/precision.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/precision_contract.py](../../../backend/src/daengs_backend/services/walk_session/precision_contract.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/recording.py](../../../backend/src/daengs_backend/services/walk_session/recording.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_session/upload_receipt.py](../../../backend/src/daengs_backend/services/walk_session/upload_receipt.py) | services | retain | 원본 청크/지문·기록 보완·업로드/수신 확인·불변 백업·봉인 중 명시된 책임. 공통 오류는 봉인 실행을 로딩하지 않음.  |
+| [backend/src/daengs_backend/services/walk_upload_receipt.py](../../../backend/src/daengs_backend/services/walk_upload_receipt.py) | services | retain | 기존 공개 이름의 지연 호환. 실제 구현/공통 예외는 walk_session 소유; 공개 대상은 session-package.json 참조.  |
 
 ## measurement: 증거 계산·동선 투영·측정 저장 및 조회
 
@@ -622,6 +633,7 @@
 | [backend/tests/test_pet_membership_postgres.py](../../../backend/tests/test_pet_membership_postgres.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/api/conftest.py](../../../backend/tests/walk/api/conftest.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/api/test_motion_calculation.py](../../../backend/tests/walk/api/test_motion_calculation.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/api/test_session_package.py](../../../backend/tests/walk/api/test_session_package.py) | support | retain | 원본/백업의 봉인·일기 없는 독립 import, 순수 계약 의존 방향 및 9개 기존 경로의 공개 객체 동일성 검증.  |
 | [backend/tests/walk/api/test_trajectory_calculation.py](../../../backend/tests/walk/api/test_trajectory_calculation.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/api/test_walk_api.py](../../../backend/tests/walk/api/test_walk_api.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/api/test_walk_auth.py](../../../backend/tests/walk/api/test_walk_auth.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |

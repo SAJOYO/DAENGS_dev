@@ -3,9 +3,9 @@
 import asyncio
 
 from daengs_backend.schemas.walk_motion import MotionCalculation
-from daengs_backend.services import walk_motion
-from daengs_backend.services.walk_motion_contract import MotionConflict, manifest_digest
 from daengs_backend.services.walk_motion_engine import replay
+from daengs_backend.services.walk_session import motion as walk_motion
+from daengs_backend.services.walk_session.motion_contract import MotionConflict, manifest_digest
 
 
 async def calculate(session, owner, walk_id):

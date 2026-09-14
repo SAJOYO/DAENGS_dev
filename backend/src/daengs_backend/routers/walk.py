@@ -35,11 +35,11 @@ from daengs_backend.schemas.walk import (
 )
 from daengs_backend.schemas.walk_style import WalkStylePolicy
 from daengs_backend.schemas.walk_upload_receipt import WalkUploadReceipt
-from daengs_backend.services import walk as walk_service
-from daengs_backend.services import walk_upload_receipt as receipt_service
-from daengs_backend.services.walk_chunk import decode_chunk
-from daengs_backend.services.walk_finalize import FinalizeInputError
-from daengs_backend.services.walk_recording import (
+from daengs_backend.services.walk_session import lifecycle as walk_service
+from daengs_backend.services.walk_session import upload_receipt as receipt_service
+from daengs_backend.services.walk_session.chunk import decode_chunk
+from daengs_backend.services.walk_session.finalize import FinalizeInputError
+from daengs_backend.services.walk_session.recording import (
     RecordingConflict,
     recording_receipt,
     repair_recording,

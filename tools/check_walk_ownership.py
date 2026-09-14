@@ -67,6 +67,7 @@ def is_core(path):
                     "walk_background",
                     "walk_records",
                     "walk_photos",
+                    "walk_session",
                 )
             )
             or path.endswith("/orchestration/diary.py")

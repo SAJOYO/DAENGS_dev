@@ -26,10 +26,10 @@ from daengs_backend.schemas.walk_motion import (
     MotionManifest,
 )
 from daengs_backend.schemas.walk_precision import VERSION as PRECISION_VERSION
-from daengs_backend.services import walk_motion as service
-from daengs_backend.services.walk import WalkNotFoundError
 from daengs_backend.services.walk_motion_calculation import calculate
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session import motion as service
+from daengs_backend.services.walk_session.errors import WalkNotFoundError
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 
 router = APIRouter(prefix="/app/walks", tags=["walk-motion-backup"])
 router.include_router(precision_router)

@@ -10,6 +10,8 @@
 
 **Spec:** `docs/cardimage/spec-2026-09-14-app-ai-cards.md` (반드시 같이 읽는다) · PR #537
 
+> **구현 중 바뀐 것 (2026-09-15):** 정리 기준 시각은 `created_at` 이 아니라 생성 차례를 얻은 시각 `updated_at` 이고(`expire_generating(..., stale_before=)`), 차례를 얻을 때 행을 다시 확인한다. 업로드 중 사용자 행을 잠그지 않도록 POST 는 `CurrentAppMemberTokenOnly` 로 받고 서비스가 잠근다. 실패한 유료 호출은 하루 5번까지. 결정은 D-076, 경위는 `worklog.md`.
+
 ## Global Constraints
 
 - `daengs_cardimage` 는 `daengs_backend`·`fastapi`·`sqlalchemy`·`starlette`·`pydantic_settings` 를 import 하지 않는다.

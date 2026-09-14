@@ -13,14 +13,16 @@ import pytest
 from cardimage_fakes import FakeEngine, FakeJudge
 from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import SecretStr
 
 from daengs_backend.config import settings
 from daengs_backend.core import storage as storage_module
-from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.core.deps import AppPrincipal, current_app_member_token_only, current_app_user
 from daengs_backend.core.storage import LocalBridgeStorage
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.routers import ai_card as ai_card_router
 from daengs_backend.services import ai_card as service
 from daengs_backend.services import ai_card_engine
@@ -76,9 +78,10 @@ def jobs(monkeypatch: pytest.MonkeyPatch) -> Iterator[list]:
 def client(store: Store, storage: LocalBridgeStorage, jobs: list) -> TestClient:
     app = FastAPI()
     app.include_router(ai_card_router.router)
-    app.dependency_overrides[next(iter(CurrentAppUser.__metadata__)).dependency] = lambda: AppPrincipal(
-        app_user_id=OWNER
-    )
+    principal = AppPrincipal(app_user_id=OWNER)
+    app.dependency_overrides[current_app_user] = lambda: principal
+    # POST 는 토큰만 보는 문이다 — active 확인은 서비스가 가짜 `get_active_for_update` 로 한다.
+    app.dependency_overrides[current_app_member_token_only] = lambda: principal
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -183,6 +186,45 @@ def test_delete_is_204_then_404(client: TestClient, jobs: list) -> None:
     _run_all(jobs)
     assert client.delete(f"/app/ai-cards/{card_id}").status_code == 204
     assert client.get(f"/app/ai-cards/{card_id}").status_code == 404
+
+
+def _dependency_names(route: APIRoute) -> set[str]:
+    names: set[str] = set()
+    stack = [route.dependant]
+    while stack:
+        dependant = stack.pop()
+        if dependant.call is not None:
+            names.add(getattr(dependant.call, "__name__", repr(dependant.call)))
+        stack.extend(dependant.dependencies)
+    return names
+
+
+def _route(path: str, method: str) -> APIRoute:
+    for route in ai_card_router.router.routes:
+        if isinstance(route, APIRoute) and route.path == path and method in route.methods:
+            return route
+    raise AssertionError(f"route not found: {method} {path}")
+
+
+def test_post_uses_token_only_auth() -> None:
+    """`CurrentAppUser` 로 되돌리면 20MB 본문을 받는 동안 `app_users FOR UPDATE` 를 쥔다."""
+    names = _dependency_names(_route("/app/ai-cards", "POST"))
+    assert "current_app_member_token_only" in names
+    assert "current_app_user" not in names
+    # 본문이 없는 짧은 요청은 그대로 요청 경계에서 active 를 본다.
+    for path, method in [("/app/ai-cards", "GET"), ("/app/ai-cards/{card_id}", "GET"), ("/app/ai-cards/{card_id}", "DELETE")]:
+        assert "current_app_user" in _dependency_names(_route(path, method)), (path, method)
+
+
+def test_withdrawn_user_is_401(client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _not_active(session, app_user_id):
+        return None
+
+    monkeypatch.setattr(app_user_repo, "get_active_for_update", _not_active)
+    r = _post(client)
+    assert r.status_code == 401
+    assert r.json()["detail"] == {"code": "not_active", "message": "다시 로그인해 주세요."}
+    assert store.ai_cards == [] and jobs == []
 
 
 def test_bridge_unknown_key_is_404(client: TestClient) -> None:

@@ -4,8 +4,10 @@
 (`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1). 카드를 몇 장·어떤 조건으로 줄지(제품 규칙)가 정해지면
 **`check_quota` 를 통째로 바꿉니다.** 부르는 쪽(`services/ai_card.py`)은 두 예외만 압니다.
 
-실패(`failed`)는 세지 않습니다 — 한도가 1장이라 실패 한 번으로 그날 기회가 사라지면 안 되고,
-연타는 동시 1장이 막습니다. 전체 지출의 바닥은 카드 생성 키의 별도 GCP 프로젝트 지출 상한입니다.
+실패(`failed`)는 하루 `ready` 한도에 세지 않습니다 — 한도가 1장이라 실패 한 번으로 그날 기회가
+사라지면 안 되고, 연타는 동시 1장이 막습니다. 다만 **모델 호출까지 간 실패**(`PAID_FAILURE_CODES`)는
+돈이 나갔으므로 따로 하루 `MAX_PAID_FAILURES_PER_DAY` 번까지만 받습니다. 전체 지출의 바닥은 카드
+생성 키의 별도 GCP 프로젝트 지출 상한입니다.
 """
 
 from __future__ import annotations
@@ -20,6 +22,12 @@ from daengs_backend.config import settings
 from daengs_backend.repositories import ai_card as ai_card_repo
 
 KST = ZoneInfo("Asia/Seoul")
+
+# 모델 호출까지 가서(돈이 나간 뒤) 실패한 코드와 그 하루 상한. 테스트 단계 안전장치입니다 —
+# 제품 규칙이 정해지면 `check_quota` 와 같이 바뀝니다. 설정값으로 빼지 않습니다.
+# `interrupted`·`internal`·`unavailable` 은 세지 않습니다.
+PAID_FAILURE_CODES = frozenset({"upstream", "no_image", "storage"})
+MAX_PAID_FAILURES_PER_DAY = 5
 
 
 class AiCardBusyError(Exception):
@@ -55,7 +63,12 @@ async def check_quota(
     )
     if await ai_card_repo.has_generating(session, app_user_id):
         raise AiCardBusyError
-    if daily_limit and await ai_card_repo.count_ready_since(
-        session, app_user_id, kst_day_start(now)
-    ) >= daily_limit:
+    day_start = kst_day_start(now)
+    if daily_limit and await ai_card_repo.count_ready_since(session, app_user_id, day_start) >= daily_limit:
+        raise AiCardLimitError
+    # `daily_limit == 0`(무제한)이어도 적용합니다 — 실패는 완성 카드 한도와 따로 셉니다.
+    if (
+        await ai_card_repo.count_failed_since(session, app_user_id, day_start, PAID_FAILURE_CODES)
+        >= MAX_PAID_FAILURES_PER_DAY
+    ):
         raise AiCardLimitError

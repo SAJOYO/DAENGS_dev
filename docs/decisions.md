@@ -4720,11 +4720,11 @@ DB 에 남습니다** — `evals/conversation_quality` 에 기록 진술·걱정
 **실행은 backend 프로세스 안 백그라운드** (Celery 아님). 새 컨테이너·큐 없이 개발서버와 GCP 가 똑같이
 돈다. 생성 차례를 얻은 시각(`updated_at`)부터 `4 × cardimage_timeout_ms + 60초`(기본 9분)가 지나면
 조회 때 `failed`/`interrupted` 가 된다. 차례를 얻을 때 행을 다시 확인해, 그사이 지워졌거나 정리된
-카드에는 모델 호출을 하지 않는다. **워커로 옮길 조건:** ⓐ `interrupted` 가 실제로 보일 때 ⓑ 동시
+카드에는 모델 호출을 하지 않는다. POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) 사진을 다 받은 뒤에 서비스가 사용자 행을 잠근다 — 20MB 업로드 동안 잠금·연결을 쥐지 않기 위해서다. **워커로 옮길 조건:** ⓐ `interrupted` 가 실제로 보일 때 ⓑ 동시
 생성이 backend 응답을 느리게 만들 때 ⓒ 서버가 자동 재시도해야 할 때.
 
 **한도는 테스트 단계용.** 사용자별 동시 1장(DB 부분 UNIQUE) + KST 하루 `ready` N장
-(`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1). 실패는 세지 않는다. 카드를 몇 장·어떤 조건으로 줄지는 정하지
+(`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1). 실패는 세지 않는다. 모델 호출까지 간 실패(upstream·no_image·storage)는 하루 5번까지만 받는다 — 한도가 완성 카드만 세서 실패가 무제한이던 구멍을 막는 테스트 단계 안전장치다. 카드를 몇 장·어떤 조건으로 줄지는 정하지
 않았고, 정해지면 `services/ai_card_quota.py::check_quota` 를 통째로 바꾼다.
 
 **이미지는 994×1582(5:8) 그대로** 주고 `width`·`height` 를 싣는다. 3:4 로 자르지 않는다 — 앱 표시는

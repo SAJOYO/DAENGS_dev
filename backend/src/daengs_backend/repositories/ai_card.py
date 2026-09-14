@@ -54,6 +54,19 @@ async def count_ready_since(session: AsyncSession, app_user_id: uuid.UUID, since
     return int(await session.scalar(stmt) or 0)
 
 
+async def count_failed_since(
+    session: AsyncSession, app_user_id: uuid.UUID, since: datetime, codes: frozenset[str]
+) -> int:
+    """`since` 이후 만든 카드 중 `error_code` 가 `codes` 인 `failed` 수. 어떤 코드를 셀지는 한도가 정합니다."""
+    stmt = select(func.count()).where(
+        AiCard.app_user_id == app_user_id,
+        AiCard.status == "failed",
+        AiCard.error_code.in_(sorted(codes)),
+        AiCard.created_at >= since,
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
 async def expire_generating(
     session: AsyncSession, app_user_id: uuid.UUID, *, stale_before: datetime, now: datetime
 ) -> int:

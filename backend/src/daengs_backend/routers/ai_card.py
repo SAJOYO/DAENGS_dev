@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
-from daengs_backend.core.deps import CurrentAppUser
+from daengs_backend.core.deps import CurrentAppMemberTokenOnly, CurrentAppUser
 from daengs_backend.core.storage import StorageNotConfiguredError
 from daengs_backend.models import AiCard
 from daengs_backend.repositories import ai_card as ai_card_repo
@@ -66,13 +66,18 @@ def _to_response(card: AiCard, image_url: str | None = None) -> AiCardResponse:
 @router.post("", response_model=AiCardResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_card(
     request: Request,
-    user: CurrentAppUser,
+    user: CurrentAppMemberTokenOnly,
     session: Session,
     month: Annotated[int, Query(ge=1, le=12)],
     dog_name: Annotated[str, Query(min_length=1, max_length=40)],
     dog_id: uuid.UUID | None = None,
 ) -> AiCardResponse:
-    """사진 한 장으로 카드 만들기를 **시작합니다.** 끝나면 `GET /{id}` 가 `ready` 를 줍니다."""
+    """사진 한 장으로 카드 만들기를 **시작합니다.** 끝나면 `GET /{id}` 가 `ready` 를 줍니다.
+
+    인증은 **토큰만** 봅니다 (`CurrentAppMemberTokenOnly`) — `CurrentAppUser` 는 요청 세션에서
+    `app_users FOR UPDATE` 를 먼저 잡아, 최대 20MB 본문을 받는 동안 잠금과 연결을 쥐게 됩니다.
+    active 확인은 본문을 다 받고 사진을 준비한 뒤 서비스가 같은 잠금으로 합니다.
+    """
     if not dog_name.strip():
         raise _error(status.HTTP_400_BAD_REQUEST, "bad_name", "강아지 이름이 비어 있습니다.")
     body = await read_limited_body(request, MAX_PHOTO_BYTES)
@@ -89,6 +94,9 @@ async def create_card(
         )
     except PhotoError as exc:
         raise _error(status.HTTP_400_BAD_REQUEST, exc.code, exc.detail) from None
+    except ai_card_service.AiCardUserNotActiveError:
+        # `current_app_user` 와 같은 문장 — 앱이 재로그인으로 알아듣는 자리입니다.
+        raise _error(status.HTTP_401_UNAUTHORIZED, "not_active", "다시 로그인해 주세요.") from None
     except MonthNotOpenError:
         raise _error(status.HTTP_404_NOT_FOUND, "month_closed", "지금은 만들 수 없는 달이에요.") from None
     except ai_card_service.AiCardNotFoundError:

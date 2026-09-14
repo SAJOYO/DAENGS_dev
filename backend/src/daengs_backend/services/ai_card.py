@@ -1,7 +1,9 @@
 """앱 사용자 AI 도감 카드의 규칙. 트랜잭션 경계도 여기입니다 (`/app/ai-cards/*`, #537, D-076).
 
-**비동기입니다.** `start` 는 돈이 나가기 전에 거를 수 있는 것(닫힌 달·키·저장소·남의 강아지·
-사진·한도)을 전부 동기로 거른 뒤 행을 `generating` 으로 커밋하고 바로 돌아갑니다. 생성은 같은
+**비동기입니다.** `start` 는 돈이 나가기 전에 거를 수 있는 것(닫힌 달·키·저장소·사진·탈퇴·
+남의 강아지·한도)을 전부 동기로 거른 뒤 행을 `generating` 으로 커밋하고 바로 돌아갑니다.
+POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) **사진을 다 받은 뒤** `start` 가 사용자 행을
+잠급니다 — 잠금 → 한도 → INSERT → commit 이 짧은 한 트랜잭션입니다. 생성은 같은
 backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 **새 세션으로** 행을 `ready`/`failed`
 로 바꿉니다.
 
@@ -40,6 +42,7 @@ from daengs_backend.core.storage import (
 )
 from daengs_backend.models import AiCard
 from daengs_backend.repositories import ai_card as ai_card_repo
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.services import ai_card_engine
 from daengs_backend.services.ai_card_quota import AiCardBusyError, check_quota, stale_after
@@ -60,11 +63,22 @@ _session_factory = SessionLocal
 _tasks: set[asyncio.Task] = set()
 
 #: 이벤트 루프마다 하나의 세마포어. 루프 밖에서 만들면 다른 루프에서 쓸 때 깨집니다.
-_slots: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = weakref.WeakKeyDictionary()
+_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = weakref.WeakKeyDictionary()
+
+#: 저장하는 제목의 최대 길이 — `ai_cards.title` 이 VARCHAR(80) 입니다.
+_TITLE_MAX = 80
 
 
 class AiCardNotFoundError(Exception):
     """내 카드(또는 내가 돌보는 강아지)가 아니거나 없습니다. **남의 것일 때도 이 예외입니다.**"""
+
+
+class AiCardUserNotActiveError(Exception):
+    """토큰은 맞지만 회원이 이제 active 가 아닙니다(탈퇴 등). 라우터가 401 `not_active` 로 바꿉니다.
+
+    POST 가 `CurrentAppMemberTokenOnly` 라 요청 경계에서 active 를 안 봅니다 — `start` 가 사진을
+    다 받은 뒤 잠그며 확인합니다 (`core/deps.py::current_app_member_token_only`).
+    """
 
 
 def _slot() -> asyncio.Semaphore:
@@ -93,12 +107,18 @@ async def start(
     now: datetime | None = None,
 ) -> AiCard:
     name = " ".join(dog_name.split())
+    # ── DB 전: 설정·사진. 여기서 걸리면 잠금도 연결도 안 잡습니다.
     meta = ai_card_engine.ready_check(month)
     if isinstance(get_storage(), NotConfiguredStorage):
         raise StorageNotConfiguredError("AI 카드 저장소가 설정되지 않았습니다 (GAIT_STORAGE)")
+    photo_jpeg = await asyncio.to_thread(prepare_photo, photo, content_type)
+
+    # ── 짧은 한 트랜잭션: 사용자 잠금 → 강아지 → 한도 → INSERT → commit.
+    # 잠금이 **이 세션의 첫 문장**입니다 — 탈퇴와 직렬화되고, 업로드 동안에는 잡지 않습니다.
+    if await app_user_repo.get_active_for_update(session, app_user_id) is None:
+        raise AiCardUserNotActiveError
     if dog_id is not None and await pet_repo.get_accessible(session, app_user_id, dog_id) is None:
         raise AiCardNotFoundError
-    photo_jpeg = await asyncio.to_thread(prepare_photo, photo, content_type)
 
     now = now or datetime.now(UTC)
     await check_quota(session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit)
@@ -109,7 +129,8 @@ async def start(
         dog_id=dog_id,
         month=month,
         dog_name=name,
-        title=title_text(meta.card_name, name),
+        # `str.upper()` 는 글자 수를 늘릴 수 있습니다(ß → SS) — 40자 이름도 80자를 넘길 수 있어 자릅니다.
+        title=title_text(meta.card_name, name)[:_TITLE_MAX],
         status="generating",
         created_at=now,
         updated_at=now,
@@ -117,10 +138,13 @@ async def start(
     try:
         ai_card_repo.add(session, card)
         await session.commit()
-    except IntegrityError:
-        # 한도 검사를 둘 다 통과한 동시 요청 — `idx_ai_cards_one_generating` 이 막았습니다.
+    except IntegrityError as exc:
         await session.rollback()
-        raise AiCardBusyError from None
+        detail = str(exc.orig) if exc.orig is not None else str(exc)
+        if "idx_ai_cards_one_generating" in detail:
+            # 한도 검사를 둘 다 통과한 동시 요청 — 부분 UNIQUE 가 막았습니다. 다른 제약 위반은 그대로 올립니다.
+            raise AiCardBusyError from None
+        raise
 
     _spawn(_run(card.id, app_user_id, photo_jpeg, month, name))
     return card
@@ -198,12 +222,22 @@ async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, mo
             key = build_ai_card_key(app_user_id, card_id)
             try:
                 stored = await asyncio.to_thread(_store_png, key, generated.png)
-            except Exception as exc:
-                log.exception("AI 카드 저장 실패 (card=%s): %s", card_id, exc)
+            except Exception:
+                log.exception("AI 카드 저장 실패 (card=%s)", card_id)
                 await _finish_failed(card_id, "storage")
                 return
 
-            await _finish_ready(card_id, key, stored, generated)
+            try:
+                await _finish_ready(card_id, key, stored, generated)
+            except Exception:
+                # 객체는 저장됐는데 행을 못 바꿨습니다. 키를 아는 곳이 여기뿐이라 지우지 않으면 영구 고아입니다.
+                # 행은 `generating` 으로 남고 정리 기준이 지나면 `interrupted` 가 됩니다.
+                log.exception("AI 카드 완료 기록 실패 — 저장한 객체를 지웁니다 (card=%s)", card_id)
+                try:
+                    await asyncio.to_thread(get_storage().delete, key)
+                except Exception:
+                    log.exception("AI 카드 고아 객체 삭제도 실패했습니다 (card=%s, key=%s)", card_id, key)
+                return
     except Exception:
         log.exception("AI 카드 백그라운드 작업이 정리 중에 실패했습니다 (card=%s)", card_id)
 

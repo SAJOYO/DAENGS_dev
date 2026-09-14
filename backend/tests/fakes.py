@@ -1855,7 +1855,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         if card.status == "generating" and any(
             c.app_user_id == card.app_user_id and c.status == "generating" for c in store.ai_cards
         ):
-            raise IntegrityError("idx_ai_cards_one_generating", None, Exception("duplicate"))
+            # 진짜 드라이버 예외 문구에도 제약 이름이 들어 있습니다 — 서비스가 `exc.orig` 에서 그 이름을 봅니다.
+            raise IntegrityError(
+                "idx_ai_cards_one_generating", None, Exception("duplicate key idx_ai_cards_one_generating")
+            )
         now = datetime.now(UTC)
         if card.created_at is None:
             card.created_at = now
@@ -1884,6 +1887,16 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             1
             for c in store.ai_cards
             if c.app_user_id == app_user_id and c.status == "ready" and c.created_at >= since
+        )
+
+    async def ai_card_count_failed_since(session, app_user_id, since, codes):
+        return sum(
+            1
+            for c in store.ai_cards
+            if c.app_user_id == app_user_id
+            and c.status == "failed"
+            and c.error_code in codes
+            and c.created_at >= since
         )
 
     async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
@@ -1918,6 +1931,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "list_for_owner", ai_card_list_for_owner)
     monkeypatch.setattr(ai_card_repo, "has_generating", ai_card_has_generating)
     monkeypatch.setattr(ai_card_repo, "count_ready_since", ai_card_count_ready_since)
+    monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
     monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)
     monkeypatch.setattr(ai_card_repo, "find_ready_by_storage_key", ai_card_find_ready_by_storage_key)
     monkeypatch.setattr(ai_card_repo, "list_for_owner_for_update", ai_card_list_for_owner_for_update)

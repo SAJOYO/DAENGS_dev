@@ -29,11 +29,16 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
 
 
 def _card(
-    status: str, created_at: datetime, owner: uuid.UUID = OWNER, *, updated_at: datetime | None = None
+    status: str,
+    created_at: datetime,
+    owner: uuid.UUID = OWNER,
+    *,
+    updated_at: datetime | None = None,
+    error_code: str = "upstream",
 ) -> AiCard:
     return AiCard(
         id=uuid.uuid4(), app_user_id=owner, month=4, dog_name="네오", title="BLOSSOM 네오",
-        status=status, error_code="upstream" if status == "failed" else None,
+        status=status, error_code=error_code if status == "failed" else None,
         created_at=created_at, updated_at=updated_at if updated_at is not None else created_at,
     )
 
@@ -101,6 +106,38 @@ def test_ready_yesterday_kst_does_not_count(store: Store) -> None:
 def test_failed_does_not_count(store: Store) -> None:
     store.ai_cards.append(_card("failed", NOW - timedelta(hours=1)))
     _check()
+
+
+def _failures(store: Store, n: int, code: str = "upstream", at: datetime = NOW - timedelta(hours=1)) -> None:
+    for _ in range(n):
+        store.ai_cards.append(_card("failed", at, error_code=code))
+
+
+def test_five_paid_failures_today_hit_limit(store: Store) -> None:
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY)
+    with pytest.raises(quota.AiCardLimitError):
+        _check()
+
+
+def test_four_paid_failures_today_are_ok(store: Store) -> None:
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY - 1)
+    _check()
+
+
+def test_interrupted_failures_do_not_count(store: Store) -> None:
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, code="interrupted")
+    _check()
+
+
+def test_paid_failures_yesterday_kst_do_not_count(store: Store) -> None:
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, at=datetime(2026, 9, 13, 14, 59, tzinfo=UTC))  # KST 13일 23:59
+    _check()
+
+
+def test_paid_failure_cap_applies_even_when_unlimited(store: Store) -> None:
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, code="no_image")
+    with pytest.raises(quota.AiCardLimitError):
+        _check(limit=0)
 
 
 def test_zero_limit_is_unlimited(store: Store) -> None:

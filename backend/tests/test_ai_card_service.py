@@ -16,11 +16,18 @@ from cardimage_fakes import FakeEngine, FakeJudge
 from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, Store, install
 from PIL import Image
 from pydantic import SecretStr
+from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.config import settings
 from daengs_backend.core import storage as storage_module
-from daengs_backend.core.storage import LocalBridgeStorage, NotConfiguredStorage, StorageNotConfiguredError
+from daengs_backend.core.storage import (
+    LocalBridgeStorage,
+    NotConfiguredStorage,
+    StorageNotConfiguredError,
+)
 from daengs_backend.models import AiCard
+from daengs_backend.repositories import ai_card as ai_card_repo
+from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.services import ai_card as service
 from daengs_backend.services import ai_card_engine
 from daengs_backend.services import ai_card_quota as quota
@@ -28,6 +35,7 @@ from daengs_cardimage import CardImageUnavailable
 from daengs_cardimage.catalog import MonthNotOpenError
 from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import PhotoError
+from daengs_cardimage.title import title_text
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
@@ -84,9 +92,21 @@ def _photo() -> bytes:
 
 
 def _start(**kw) -> AiCard:
-    args = dict(photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오", dog_id=None)
+    args = {"photo": _photo(), "content_type": "image/jpeg", "month": 4, "dog_name": "네오", "dog_id": None}
     args.update(kw)
     return asyncio.run(service.start(FakeSession(), OWNER, **args))
+
+
+class _SideEffectEngine(FakeEngine):
+    """엔진 호출(돈이 나가는 자리) **도중에** 무언가를 하는 엔진 — `_claim_slot` 뒤·`_finish_ready` 앞."""
+
+    def __init__(self, side_effect) -> None:
+        super().__init__()
+        self.side_effect = side_effect
+
+    def generate(self, **kw) -> bytes:
+        self.side_effect()
+        return super().generate(**kw)
 
 
 def _run_all(jobs: list) -> None:
@@ -142,6 +162,90 @@ def test_row_deleted_before_slot_never_calls_engine(store, storage, jobs, monkey
     _run_all(jobs)
     assert engine.calls == []
     assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_row_deleted_mid_generation_leaves_no_object(store, storage, jobs, monkeypatch) -> None:
+    """차례를 얻은 뒤 생성 중에 행이 지워지면 `_finish_ready` 가 방금 쓴 객체를 지운다."""
+    card = _start()
+    engine = _SideEffectEngine(lambda: store.ai_cards.remove(card))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    _run_all(jobs)
+    assert len(engine.calls) == 1  # 차례는 얻었다 — 삭제는 엔진 호출 중에 일어났다
+    assert store.ai_cards == []
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_row_expired_mid_generation_leaves_no_object_and_keeps_failed(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """생성 중에 정리 기준이 지나 실패로 덮였으면 객체를 지우고 실패를 그대로 둔다."""
+    card = _start()
+
+    def expire() -> None:
+        card.status, card.error_code = "failed", "interrupted"
+
+    engine = _SideEffectEngine(expire)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    _run_all(jobs)
+    assert len(engine.calls) == 1
+    assert card.status == "failed" and card.error_code == "interrupted"
+    assert card.storage_key is None
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_claim_slot_stamps_updated_at_before_generation(store, jobs, monkeypatch) -> None:
+    """정리 기준은 차례를 얻은 시각부터 — `_claim_slot` 이 엔진 호출 **전에** `updated_at` 을 찍는다."""
+    card = _start()
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    card.updated_at = old
+    seen: list[datetime] = []
+    engine = _SideEffectEngine(lambda: seen.append(card.updated_at))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    _run_all(jobs)
+    assert len(seen) == 1 and seen[0] > old
+
+
+def test_finish_ready_db_failure_removes_stored_object(store, storage, jobs, monkeypatch) -> None:
+    """객체를 저장한 뒤 완료 기록이 실패하면 고아를 남기지 않는다 (키를 아는 곳이 거기뿐)."""
+    card = _start()
+
+    async def _boom(*a, **kw):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(service, "_finish_ready", _boom)
+    _run_all(jobs)
+    assert card.status == "generating"  # 정리 기준이 지나면 interrupted 가 된다
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_withdrawn_user_creates_no_row(store, jobs, monkeypatch) -> None:
+    async def _not_active(session, app_user_id):
+        return None
+
+    monkeypatch.setattr(app_user_repo, "get_active_for_update", _not_active)
+    with pytest.raises(service.AiCardUserNotActiveError):
+        _start()
+    assert store.ai_cards == [] and jobs == []
+
+
+def test_bad_photo_is_rejected_before_touching_the_db(store, jobs, monkeypatch) -> None:
+    """사진은 사용자 잠금보다 먼저 — 잘못된 본문으로는 잠금·연결을 잡지 않는다."""
+    locks: list = []
+
+    async def _lock(session, app_user_id):
+        locks.append(app_user_id)
+
+    monkeypatch.setattr(app_user_repo, "get_active_for_update", _lock)
+    with pytest.raises(PhotoError):
+        _start(photo=b"nope")
+    assert locks == []
+
+
+def test_long_uppercased_title_is_clamped(store, jobs) -> None:
+    """`ß`.upper() 는 `SS` — 40자 이름의 제목이 VARCHAR(80) 을 넘지 않게 자른다."""
+    name = "ß" * 40
+    assert len(title_text("BLOSSOM", name)) > 80  # 자르지 않으면 넘친다
+    assert len(_start(dog_name=name).title) <= 80
 
 
 def test_failed_card_does_not_use_up_daily_limit(store, jobs, monkeypatch) -> None:
@@ -211,6 +315,18 @@ def test_unique_index_race_is_busy(store, jobs, monkeypatch) -> None:
     with pytest.raises(quota.AiCardBusyError):
         _start()
     assert len(store.ai_cards) == 1
+
+
+def test_other_integrity_error_is_not_busy(store, jobs, monkeypatch) -> None:
+    """부분 UNIQUE 가 아닌 제약 위반(예: FK)은 409 로 삼키지 않고 그대로 올린다."""
+
+    def _fk_violation(session, card):
+        raise IntegrityError("ai_cards_dog_id_fkey", None, Exception("violates foreign key ai_cards_dog_id_fkey"))
+
+    monkeypatch.setattr(ai_card_repo, "add", _fk_violation)
+    with pytest.raises(IntegrityError):
+        _start()
+    assert jobs == []
 
 
 def test_ready_card_uses_up_daily_limit(store, jobs) -> None:

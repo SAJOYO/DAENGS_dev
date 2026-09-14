@@ -77,6 +77,8 @@ class AiCard(Base):
     error_code: Mapped[str | None] = mapped_column(String(32))
 
     storage_key: Mapped[str | None] = mapped_column(String(200))
+    # local 저장소는 64자 hex sha256 을 쓰고 `ai_cards_ready_set` 이 이 칸을 요구합니다 —
+    # 더 긴 generation 을 쓰는 저장소는 칸부터 넓히세요.
     generation: Mapped[str | None] = mapped_column(String(64))
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     width: Mapped[int | None] = mapped_column(SmallInteger)

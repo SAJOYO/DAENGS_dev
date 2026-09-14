@@ -8,6 +8,7 @@ from daengs_walk.diary_board import BaseBoard, BaseBoardPolicy, BoardScene, Veri
 from daengs_walk.diary_board_assembly import assemble_base_board
 from daengs_walk.diary_board_selection import prepare_base_board
 from daengs_walk.diary_input import DiaryContract, DiaryInput, Digest, Identifier, digest
+from daengs_walk.diary_movement import MovementPolicy
 from daengs_walk.diary_route_patterns import RoutePatternBindingPolicy
 
 Part = Literal["space", "environment", "motion"]
@@ -25,6 +26,7 @@ class SlotPolicy(DiaryContract):
     location_age_s: float = Field(default=30, ge=0, le=120)
     weather_max_age_s: float = Field(default=7200, ge=0, le=7200)
     include_location_reference: bool = True
+    movement: MovementPolicy | None = Field(default=None, exclude_if=lambda v: v is None)
     route_patterns: RoutePatternBindingPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -186,6 +188,8 @@ def admit(scene_id, candidates, decisions, policy):
                 queue.append(item)
             pending.append((item, admission, reason))
     ordered = [queue[i] for i in range(8) for queue in queues.values() if i < len(queue)]
+    if policy.movement is not None:
+        ordered = queues["motion"] + [c for c in ordered if c.part != "motion"]
     kept = ordered[: policy.total_slots]
     kept_ids = {item.id for item in kept}
     for item, admission, reason in pending:
@@ -221,6 +225,7 @@ def prepare_board_slots(
     *,
     route: VerifiedBoardRoute | None = None,
     scene_backgrounds=None,
+    frozen_motion: BoardSlotSnapshot | None = None,
 ) -> BoardSlotSnapshot:
     """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
@@ -236,17 +241,46 @@ def prepare_board_slots(
     if {b.id for b in extra} & {b.id for b in source.backgrounds}:
         raise ValueError("collected and stored background IDs overlap")
     motion, blocks = verified_motion(source, route)
+    movement = None
+    if frozen_motion is not None and (
+        frozen_motion.input_revision != source.revision()
+        or frozen_motion.plan_revision != board.plan_revision
+        or frozen_motion.policy != policy
+    ):
+        raise ValueError("frozen movement belongs to another preparation")
+    if policy.movement is not None and frozen_motion is None:
+        from daengs_walk.diary_movement import prepare_movement
+
+        movement = prepare_movement(source, route, policy.movement, policy.route_patterns)
     patterns = None
-    if policy.route_patterns is not None:
+    if policy.route_patterns is not None and policy.movement is None:
         from daengs_walk.diary_route_slots import prepare_route_patterns
 
         patterns = prepare_route_patterns(source, route, policy.route_patterns)
     stamps = []
     for scene in board.scenes:
         candidates, decisions = candidates_for_scene(
-            source, scene, policy, motion, blocks, extra_backgrounds=extra
+            source,
+            scene,
+            policy,
+            motion if policy.movement is None else (),
+            blocks,
+            extra_backgrounds=extra,
         )
-        if policy.route_patterns is not None:
+        if policy.movement is not None:
+            if frozen_motion is not None:
+                prior = next(s for s in frozen_motion.stamps if s.scene_id == scene.id)
+                candidates.extend(e for e in prior.evidence if e.part == "motion")
+                decisions.extend(
+                    d for d in prior.decisions if d.part == "motion" and d.admission != "kept"
+                )
+            else:
+                from daengs_walk.diary_movement_slots import movement_candidates
+
+                candidates.extend(
+                    movement_candidates(scene, board.scenes, movement, policy, decisions)
+                )
+        elif policy.route_patterns is not None:
             from daengs_walk.diary_route_slots import pattern_candidates
 
             candidates.extend(pattern_candidates(scene, patterns, policy, decisions))

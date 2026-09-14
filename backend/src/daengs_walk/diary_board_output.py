@@ -62,7 +62,7 @@ class PublishedBoardScene(DiaryContract):
         if self.writing:
             writing = self.writing
             if writing.observation is not None and writing.observation != observation_content(
-                self.core, self.observation
+                self.core, self.observation, modern=writing.format == "diary-card-narrative-v2"
             ):
                 raise ValueError("card observation differs from its source core")
             if (
@@ -78,9 +78,12 @@ class PublishedBoardScene(DiaryContract):
                 writing.space.model_dump(mode="json"),
                 [a.model_dump(mode="json") for a in writing.actions],
                 writing.observation.model_dump(mode="json") if writing.observation else None,
+                original_text=writing.original_text,
+                modern=writing.format == "diary-card-narrative-v2",
+                observation_in_activity=writing.observation_in_activity,
             )
-            # Previously saved v1 cards included notes in the title dependency hash.
-            # Read them unchanged; new generations hash only the actual title inputs.
+            # Some saved v1 cards included notes in their hash; accept them unchanged.
+            # V2 binds originals explicitly as part of the whole-title context.
             legacy_revision = digest(
                 [
                     self.id,
@@ -92,14 +95,18 @@ class PublishedBoardScene(DiaryContract):
                 ]
             )
             allowed = {revision}
-            if writing.observation is None:
+            if writing.observation is None and writing.format == "diary-card-narrative-v1":
                 allowed.add(legacy_revision)
             if writing.body() != self.body or writing.content_revision not in allowed:
                 raise ValueError("card body differs from its adopted parts")
             behavior = self.user_record is not None and self.user_record.kind == "behavior"
-            if bool(writing.actions) != behavior:
+            if any(a.action_id for a in writing.actions) != behavior:
                 raise ValueError("action writing requires a behavior pin")
             for action in writing.actions:
+                if action.action_id is None:
+                    if action.actor_id is not None or not action.movement_ids:
+                        raise ValueError("movement-only activity cannot invent an actor")
+                    continue
                 if (
                     action.action_id != "action:" + digest(self.core)
                     or action.actor_id != self.user_record.pet_id

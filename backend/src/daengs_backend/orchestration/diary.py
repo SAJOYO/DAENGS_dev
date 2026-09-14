@@ -17,6 +17,7 @@ from daengs_backend.services import walk_diary_card_writing as writing
 from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
 from daengs_backend.services.walk_diary_deadline import publication_deadline
 from daengs_backend.services.walk_diary_llm import normalize
+from daengs_walk.diary_activity import require_activity_transfer
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_input import digest
 
@@ -64,7 +65,6 @@ class _DiaryRun:
         self.end = loop.time() + budget
         self.bodies_end = self.end - min(writing.TITLE_RESERVE_SECONDS, max(0, budget / 3))
         self.cache = {}
-        self.title_cache = {}
         for raw in base.cached_jobs:
             previous = writing.WritingJob.model_validate(raw)
             if not previous.accepted:
@@ -73,15 +73,6 @@ class _DiaryRun:
             if previous.failure_code:
                 continue
             self.cache[previous.request_revision] = previous
-            if previous.stage == "title":
-                titles = {t["card_id"]: t for t in previous.accepted["titles"]}
-                for card in previous.request["cards"]:
-                    if card["card_id"] in titles:
-                        single = writing.job("title", {"cards": [card]})
-                        self.title_cache[single.request_revision] = (
-                            single.request,
-                            titles[card["card_id"]],
-                        )
         builder = StateGraph(DiaryState)
         builder.add_node("space", self.space)
         builder.add_node("actions", self.actions)
@@ -106,7 +97,12 @@ class _DiaryRun:
                     "llm_request": previous.llm_request,
                 }
             )
-        model = normalize(item.stage, item.request)
+        try:
+            model = normalize(item.stage, item.request)
+            if item.stage == "action" and item.request.get("movement"):
+                require_activity_transfer(item.request, model.payload, model.references)
+        except (ValueError, KeyError, TypeError):
+            return item.model_copy(update={"failure_code": "invalid_input"})
         if len(json.dumps(model.payload, ensure_ascii=False).encode()) > writing.MAX_INPUT_BYTES:
             return item.model_copy(update={"failure_code": "budget_exceeded"})
 
@@ -178,40 +174,8 @@ class _DiaryRun:
         }
 
     async def titles(self, state):
-        # Batch transport does not make one card depend on another card's title.
-        missing, results = [], []
-        for card in state["cards"]:
-            payload = {
-                "card_id": card.id,
-                "content_revision": card.writing.content_revision,
-                "space": card.writing.space.model_dump(mode="json"),
-                "actions": [a.model_dump(mode="json") for a in card.writing.actions],
-                "place_reference": [p.model_dump(mode="json") for p in card.place_reference],
-                "event_at": card.anchor.event_at.isoformat(),
-                **(
-                    {"observation": card.writing.observation.model_dump(mode="json")}
-                    if card.writing.observation
-                    else {}
-                ),
-            }
-            item = writing.job("title", {"cards": [payload]})
-            previous = self.title_cache.get(item.request_revision)
-            if previous and previous[0] == item.request:
-                results.append(
-                    item.model_copy(
-                        update={
-                            "accepted": {"titles": [previous[1]]},
-                            "reused": True,
-                        }
-                    )
-                )
-            else:
-                missing.append(payload)
-        batches = [
-            writing.job("title", {"cards": missing[i : i + writing.MAX_CARDS]})
-            for i in range(0, len(missing), writing.MAX_CARDS)
-        ]
-        results.extend(await asyncio.gather(*(self.execute(j, self.end) for j in batches)))
+        batches = writing.title_jobs(state["cards"])
+        results = await asyncio.gather(*(self.execute(j, self.end) for j in batches))
         titles = {t["card_id"]: t for r in results if r.accepted for t in r.accepted["titles"]}
         cards = [
             c.model_copy(
@@ -242,7 +206,15 @@ class _DiaryRun:
                 "model_status": "accepted" if accepted else "unavailable",
                 "failure_code": None
                 if accepted
-                else next((j.failure_code for j in jobs if j.failure_code), "provider_failed"),
+                else next(
+                    (
+                        j.failure_code
+                        for j in jobs
+                        if j.failure_code
+                        in {"provider_failed", "invalid_response", "budget_exceeded"}
+                    ),
+                    "provider_failed",
+                ),
             }
         )
         return {

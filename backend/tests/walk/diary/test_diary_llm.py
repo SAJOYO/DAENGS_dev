@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from daengs_backend.services import walk_diary_card_writing as writing
 from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
 from daengs_backend.services.walk_diary_llm import normalize
-from daengs_backend.services.walk_diary_llm_materials import material
+from daengs_backend.services.walk_diary_llm_materials import location, material
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prepared, prose
 
 
@@ -50,7 +50,12 @@ def test_real_public_materials_keep_meaning_and_drop_all_provenance():
     assert "24.2" in text and "격자" in text and "토지피복" in text and "등록 지점" in text
     for source, sent in zip(job["request"]["materials"], values, strict=True):
         if "material" in source["facts"]:
-            assert sent["material"] == source["facts"]["material"]
+            if sent["role"] == "area_statistics":
+                assert sent["material"]["업종구성"] == source["facts"]["material"]["업종구성"]
+                assert "구간" not in str(sent["material"])
+                assert "조회영역_등록분포" in sent["material"]
+            else:
+                assert sent["material"] == source["facts"]["material"]
     assert job == before
     assert len(text.encode()) < len(json.dumps(job["request"], ensure_ascii=False).encode()) / 2
 
@@ -66,6 +71,39 @@ def test_future_metadata_is_not_implicitly_promoted_to_prose():
             if isinstance(item["facts"].get(key), dict):
                 item["facts"][key]["private_metadata"] = "must stay internal"
     assert normalize("space", dirty).payload == clean
+
+
+def test_space_and_title_location_send_only_dong():
+    facts = {
+        "dong": "양재1동",
+        "sido": "서울특별시",
+        "sigungu": "서초구",
+        "address": "서울특별시 서초구 양재1동",
+        "address_type": "administrative_dong",
+    }
+    assert location(facts) == {"dong": "양재1동"}
+    value = material({"role": "scene_address_reference", "facts": facts})
+    assert value["material"] == {"dong": "양재1동"}
+    for job in public_result()["jobs"]:
+        if job["stage"] == "space":
+            request = normalize("space", job["request"]).payload
+            assert "서울특별시" not in json.dumps(request, ensure_ascii=False)
+            assert "서초구" not in json.dumps(request, ensure_ascii=False)
+        elif job["stage"] == "title":
+            for card in normalize("title", job["request"]).payload["cards"]:
+                assert all(set(place) == {"dong"} for place in card["location"])
+
+
+@pytest.mark.parametrize("dong", [None, "", "   ", 1])
+def test_missing_dong_never_falls_back_to_full_address(dong):
+    item = {
+        "id": "address-1",
+        "role": "scene_address_reference",
+        "facts": {"dong": dong, "address": "서울특별시 서초구 양재1동", "sido": "서울특별시"},
+    }
+    assert material(item) is None
+    model = normalize("space", {"materials": [item]})
+    assert model.payload == {"materials": []} and not model.references
 
 
 @pytest.mark.parametrize("refs", [["m999"], ["m1", "m1"], ["material:foreign"]])
@@ -127,7 +165,13 @@ async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
 
     async def generate_content(*, model, contents, config):
         payload = json.loads(contents)
-        stage = "title" if "cards" in payload else "action" if "actor" in payload else "space"
+        stage = (
+            "title"
+            if "cards" in payload
+            else "action"
+            if {"actor", "movement"} & payload.keys()
+            else "space"
+        )
         sent.append(payload)
         assert not {"card_id", "request_revision", "anchor", "evidence"} & payload.keys()
         assert "request_revision" not in json.dumps(config.response_json_schema)

@@ -7,16 +7,41 @@ def fields(value, names):
 
 
 def location(facts):
-    return fields(facts, ("dong", "sido", "sigungu", "address", "address_type"))
+    # Display policy: a confirmed dong only. Never fall back to a full address.
+    dong = facts.get("dong")
+    return {"dong": dong.strip()} if isinstance(dong, str) and dong.strip() else {}
 
 
 def material(item):
+    result = _material(item)
+    if result is None:
+        return None
+    relation = item["facts"].get("relation", {})
+    kind = relation.get("kind") if isinstance(relation, dict) else None
+    role = item["role"]
+    result["role"] = (
+        "location_label"
+        if role == "scene_address_reference"
+        else "point_land_cover"
+        if kind == "land_cover_at_query_point"
+        else "area_statistics"
+        if role == "scene_area_context"
+        else "regional_environment"
+        if role in {"regional_observation", "grid_temperature_observation"}
+        else "spatial_relation"
+    )
+    return result
+
+
+def _material(item):
     facts, role = item["facts"], item["role"]
     relation = facts.get("relation")
     relation = relation if isinstance(relation, dict) else {}
     kind = relation.get("kind")
     if role == "scene_address_reference":
-        result = {"material": location(facts), "relation": "기록 위치의 행정·주소 참조"}
+        if not (dong := location(facts)):
+            return None
+        result = {"material": dong, "relation": "기록 위치의 동 이름"}
     elif role == "grid_temperature_observation":
         return {
             **fields(facts, ("temperature_c", "observation_age_s")),
@@ -46,9 +71,17 @@ def material(item):
             **fields(relation, ("distance_m",)),
         }
     elif kind == "registered_distribution_in_query_circle":
+        distribution = {
+            "등록 상가가 적은 구간": "등록 지점이 적음",
+            "등록 상가가 모인 구간": "등록 지점이 모여 있음",
+            "등록 상가가 산재한 구간": "등록 지점이 흩어져 있음",
+        }.get(facts.get("material", {}).get("분포"))
         result = {
-            "material": fields(facts.get("material", {}), ("분포", "업종구성")),
-            "relation": "조회 원 안의 등록 상가 분포. 영업·방문·혼잡 여부는 미확인",
+            "material": {
+                **fields(facts.get("material", {}), ("업종구성",)),
+                **({"조회영역_등록분포": distribution} if distribution else {}),
+            },
+            "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
             **fields(relation, ("radius_m", "nearest_registered_point_m")),
         }
     elif role == "scene_registered_point_distance":

@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from pydantic import Field
 
 from daengs_backend.services.walk_diary_llm_materials import location, material
+from daengs_walk.diary_activity import activity_projection
 from daengs_walk.diary_input import DiaryContract
 
-VERSION = "diary-prose-input-v1"
+VERSION = "diary-prose-input-v3"
 
 
 class SpaceAnswer(DiaryContract):
@@ -18,6 +19,11 @@ class SpaceAnswer(DiaryContract):
 
 class ActionAnswer(DiaryContract):
     text: str = Field(min_length=1, max_length=140)
+
+
+class ActivityAnswer(DiaryContract):
+    text: str = Field(min_length=1, max_length=220)
+    evidence_ids: tuple[str, ...]
 
 
 class TitleAnswer(DiaryContract):
@@ -46,6 +52,8 @@ class ModelRequest:
 
     @property
     def schema(self):
+        if self.stage == "action" and self.internal.get("movement"):
+            return ActivityAnswer.model_json_schema()
         return {
             "space": SpaceAnswer,
             "action": ActionAnswer,
@@ -102,6 +110,20 @@ class ModelRequest:
             return {"titles": titles}
         result = {k: self.internal[k] for k in ("card_id", "request_revision")}
         if self.stage == "action":
+            if self.internal.get("movement"):
+                answer = ActivityAnswer.model_validate(raw)
+                refs = set(answer.evidence_ids)
+                if len(refs) != len(answer.evidence_ids) or not refs <= self.references.keys():
+                    raise ValueError("unknown or duplicate activity citation")
+                action = self.internal.get("action")
+                if action and "a1" not in refs:
+                    raise ValueError("activity omitted recorded action")
+                return {
+                    **result,
+                    "action_id": action["id"] if action else None,
+                    "text": answer.text,
+                    "movement_ids": [self.references[k] for k in answer.evidence_ids if k != "a1"],
+                }
             answer = ActionAnswer.model_validate(raw)
             return {**result, "action_id": self.internal["action"]["id"], "text": answer.text}
         answer = SpaceAnswer.model_validate(raw)
@@ -122,23 +144,33 @@ def normalize(stage, request):
     if stage == "space":
         materials = []
         for index, item in enumerate(request["materials"], 1):
+            projected = material(item)
+            if projected is None:
+                continue
             key = f"m{index}"
             references[key] = item["id"]
-            materials.append({"id": key, **material(item)})
+            materials.append({"id": key, **projected})
         payload = {"materials": materials}
     elif stage == "action":
-        action = request["action"]
-        payload = {"actor": action["actor"].get("name"), "action": action["material"]["무엇을"]}
+        if request.get("movement"):
+            payload, references = activity_projection(request)
+        else:
+            action = request["action"]
+            payload = {"actor": action["actor"].get("name"), "action": action["material"]["무엇을"]}
     elif stage == "title":
         cards = []
+        context = request.get("context", [])
+        aliases = {c["card_id"]: f"c{i}" for i, c in enumerate(context, 1)}
         for index, card in enumerate(request["cards"], 1):
-            key = f"c{index}"
+            key = aliases.get(card["card_id"], f"c{index}")
             references[key] = card
             value = {
                 "id": key,
                 "space": card["space"]["text"],
                 "actions": [a["text"] for a in card["actions"]],
-                "location": [location(p["facts"]) for p in card["place_reference"]],
+                "location": [
+                    value for p in card["place_reference"] if (value := location(p["facts"]))
+                ],
             }
             if card.get("observation"):
                 value["observation"] = {
@@ -147,6 +179,19 @@ def normalize(stage, request):
                 }
             cards.append(value)
         payload = {"cards": cards}
+        if context:
+            # Bodies occur once, in the whole-board context. Targets only need aliases.
+            payload["cards"] = [{"id": c["id"]} for c in cards]
+            payload["context"] = [
+                {
+                    "id": aliases[c["card_id"]],
+                    "order": c["order"],
+                    "event_at": c["event_at"],
+                    "body": c["body"],
+                    "location": [value for p in c["location"] if (value := location(p["facts"]))],
+                }
+                for c in context
+            ]
     elif stage in {"scene_titles", "whole_title"}:
         scenes = []
         for index, scene in enumerate(request["scenes"], 1):

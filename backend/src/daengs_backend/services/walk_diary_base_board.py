@@ -47,6 +47,7 @@ def with_scene_backgrounds(prepared, snapshot):
         prepared.slots.policy,
         route=route,
         scene_backgrounds=snapshot,
+        frozen_motion=prepared.slots if prepared.slots.policy.movement is not None else None,
     )
     return replace(prepared, slots=slots, scene_backgrounds=snapshot)
 

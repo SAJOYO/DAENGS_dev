@@ -11,8 +11,10 @@ from pydantic import Field, JsonValue
 
 from daengs_backend.services.walk_diary_card_prompts import PROMPTS
 from daengs_backend.services.walk_diary_llm import VERSION as INPUT_VERSION
+from daengs_walk.diary_activity import activity_fallback, covers_observation, movement_uses
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_card_narrative import (
+    CURRENT_OBSERVATION_TEXT,
     OBSERVATION_TEXT,
     CardNarrative,
     CardPart,
@@ -47,9 +49,10 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v4",
+        "policy": "shared-orchestration-card-writing-v5",
         "input_policy": INPUT_VERSION,
-        "observation_text": OBSERVATION_TEXT,
+        "observation_text": CURRENT_OBSERVATION_TEXT,
+        "legacy_observation_text": OBSERVATION_TEXT,
         "model": MODEL,
         "prompts": {key: digest([value, INPUT_VERSION]) for key, value in PROMPTS.items()},
         "timeout_s": TIMEOUT_SECONDS,
@@ -71,8 +74,9 @@ class SpaceProse(DiaryContract):
 class ActionProse(DiaryContract):
     card_id: Identifier
     request_revision: Digest
-    text: str = Field(min_length=1, max_length=140)
-    action_id: Identifier
+    text: str = Field(min_length=1, max_length=220)
+    action_id: Identifier | None = None
+    movement_ids: tuple[Identifier, ...] = Field(default=(), exclude_if=lambda v: not v)
 
 
 class CardTitle(DiaryContract):
@@ -95,7 +99,9 @@ class WritingJob(DiaryContract):
     # Only accepted output is retained; failures never persist raw provider errors.
     accepted: dict[str, JsonValue] | None = None
     reused: bool = Field(default=False, exclude_if=lambda value: not value)
-    failure_code: Literal["provider_failed", "invalid_response", "budget_exceeded"] | None = None
+    failure_code: (
+        Literal["provider_failed", "invalid_response", "invalid_input", "budget_exceeded"] | None
+    ) = None
 
 
 class CardWritingResult(DiaryContract):
@@ -129,22 +135,37 @@ def common_context(base):
     }
 
 
-def action_job(base, scene):
+def action_job(base, scene, stamp=None):
+    """The persisted stage name stays action; its responsibility is card activity."""
     anchor = action_anchor(scene)
-    if anchor is None:
+    stamp = stamp or next(s for s in base.slots.stamps if s.scene_id == scene.id)
+    movement = [
+        {"id": e.id, "facts": e.facts} for e in stamp.evidence if e.role == "scene_movement"
+    ]
+    if anchor is None and not movement:
         return None
-    pet_id = scene.core.record.content.pet_id
+    pet_id = scene.core.record.content.pet_id if anchor else None
     if pet_id is not None and pet_id not in base.input.source.pet_ids:
         raise ValueError("action actor is outside this walk")
     actor = {"id": pet_id, "name": dict(base.input.pet_names).get(pet_id)}
-    return job(
+    value = job(
         "action",
         {
             "card_id": scene.id,
             "event_at": scene.anchor.event_at.isoformat(),
             "walk_context": common_context(base),
-            "action": {**anchor, "actor": actor},
+            "action": {**anchor, "actor": actor} if anchor else None,
+            **({"movement": movement} if movement else {}),
         },
+    )
+    return value.model_copy(
+        update={
+            "evidence": {
+                e.id: e.model_dump(mode="json")
+                for e in stamp.evidence
+                if e.role == "scene_movement"
+            }
+        }
     )
 
 
@@ -212,6 +233,46 @@ def space_job(base, scene, stamp):
     return value.model_copy(update={"evidence": evidence})
 
 
+def title_jobs(cards):
+    context = [
+        {
+            "card_id": c.id,
+            "order": c.order,
+            "event_at": c.anchor.event_at.isoformat(),
+            "body": c.body,
+            "location": [p.model_dump(mode="json") for p in c.place_reference],
+        }
+        for c in cards
+    ]
+    payloads = [
+        {
+            "card_id": c.id,
+            "content_revision": c.writing.content_revision,
+            "space": c.writing.space.model_dump(mode="json"),
+            "actions": [a.model_dump(mode="json") for a in c.writing.actions],
+            "place_reference": [p.model_dump(mode="json") for p in c.place_reference],
+            "event_at": c.anchor.event_at.isoformat(),
+            **(
+                {"observation": c.writing.observation.model_dump(mode="json")}
+                if c.writing.observation
+                else {}
+            ),
+        }
+        for c in cards
+    ]
+    return [
+        job(
+            "title",
+            {
+                "cards": payloads[i : i + MAX_CARDS],
+                "context": context,
+                "context_revision": digest(context),
+            },
+        )
+        for i in range(0, len(payloads), MAX_CARDS)
+    ]
+
+
 async def generate_card_prose(stage, payload, schema):
     from google import genai
     from google.genai import types
@@ -275,7 +336,15 @@ def validate_output(item, raw):
             ):
                 raise ValueError("writing result belongs to another request")
             if item.stage == "action":
-                if output.action_id != item.request["action"]["id"] or not output.text.strip():
+                action = item.request.get("action")
+                refs = set(output.movement_ids)
+                if (
+                    output.action_id != (action["id"] if action else None)
+                    or not output.text.strip()
+                    or len(refs) != len(output.movement_ids)
+                    or not refs <= {u["id"] for u in movement_uses(item.request)}
+                    or (not action and not refs)
+                ):
                     raise ValueError("action changed")
             else:
                 refs = set(output.evidence_ids)
@@ -325,7 +394,7 @@ def places_for(stamp, previous):
 
 
 def frozen_card(scene, stamp, space_result, action_result):
-    observation = observation_content(scene.core, scene.observation)
+    observation = observation_content(scene.core, scene.observation, modern=True)
     places = places_for(stamp, scene.place_reference)
     dong = next((p.facts.get("dong") for p in places if p.facts.get("dong")), None)
     default = (
@@ -333,6 +402,8 @@ def frozen_card(scene, stamp, space_result, action_result):
         if dong
         else ("산책 중 기록한 장소다." if scene.anchor.point else "위치 정보가 없는 산책 기록이다.")
     )
+    if action_result or (scene.user_record and scene.user_record.kind in {"note", "photo"}):
+        default = ""
     generated = space_result.accepted if space_result else None
     space = CardPart(
         text=generated["text"].strip() if generated and generated["text"].strip() else default,
@@ -342,19 +413,32 @@ def frozen_card(scene, stamp, space_result, action_result):
     if action_result:
         record = action_result.request["action"]
         accepted = action_result.accepted
+        fallback, fallback_refs = activity_fallback(action_result.request)
         actions = (
             CardPart(
-                text=accepted["text"].strip()
-                if accepted
-                else f"{record['material']['무엇을']} 행동을 기록했다.",
+                text=accepted["text"].strip() if accepted else fallback,
                 origin="generated" if accepted else "fallback",
-                action_id=record["id"],
-                actor_id=record["actor"]["id"],
+                action_id=record["id"] if record else None,
+                actor_id=record["actor"]["id"] if record else None,
+                movement_ids=tuple(accepted.get("movement_ids", ())) if accepted else fallback_refs,
             ),
         )
     original = (
         scene.body if scene.user_record and scene.user_record.kind in {"note", "photo"} else None
     )
+    observation_in_activity = bool(
+        action_result
+        and actions
+        and covers_observation(action_result.request, actions[0].movement_ids, scene.observation)
+    )
+    # APP's existing reader accepts 2400 characters. Never trim the user's original.
+    prospective = [space.text, *(a.text for a in actions)]
+    if observation and not observation_in_activity:
+        prospective.append(observation.text)
+    if original is not None:
+        prospective.append(original)
+    if len("\n".join(p for p in prospective if p)) > 2400:
+        space = CardPart(text="", origin="fallback")
     revision = content_revision(
         scene.id,
         scene.anchor.model_dump(mode="json"),
@@ -362,13 +446,18 @@ def frozen_card(scene, stamp, space_result, action_result):
         space.model_dump(mode="json"),
         [a.model_dump(mode="json") for a in actions],
         observation.model_dump(mode="json") if observation else None,
+        original_text=original,
+        modern=True,
+        observation_in_activity=observation_in_activity,
     )
     narrative = CardNarrative(
+        format="diary-card-narrative-v2",
         content_revision=revision,
         observation=observation,
         space=space,
         actions=actions,
         original_text=original,
+        observation_in_activity=observation_in_activity,
         title_origin="fallback",
         title_based_on_content_revision=revision,
     )
@@ -410,6 +499,28 @@ def complete_cards(prepared, output):
         )
         if new.writing is None or new.writing.original_text != expected_original:
             raise ValueError("writer changed original text")
-        if new.writing.observation != observation_content(old.core, old.observation):
+        if new.writing.observation != observation_content(old.core, old.observation, modern=True):
             raise ValueError("writer changed the confirmed observation")
+        internal = next(s for s in base.board.scenes if s.id == old.id)
+        stamp = next(s for s in base.slots.stamps if s.scene_id == old.id)
+        expected_action = action_job(base, internal, stamp)
+        actual_action = next(
+            (j for j in value.jobs if j.stage == "action" and j.request["card_id"] == old.id), None
+        )
+        if (expected_action is None) != (actual_action is None) or (
+            expected_action is not None
+            and (
+                expected_action.request != actual_action.request
+                or expected_action.evidence != actual_action.evidence
+            )
+        ):
+            raise ValueError("activity did not consume the frozen movement stamp")
+        space_job_result = next(
+            j for j in value.jobs if j.stage == "space" and j.request["card_id"] == old.id
+        )
+        rebuilt = frozen_card(old, stamp, space_job_result, actual_action)
+        if rebuilt.writing.model_dump(exclude={"title_origin"}) != new.writing.model_dump(
+            exclude={"title_origin"}
+        ):
+            raise ValueError("activity parts differ from their accepted jobs")
     return value.bundle

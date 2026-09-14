@@ -153,5 +153,10 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             "companions": [{"name": "보리"}],
             "scope": "현재 장면",
         }
-    # v6 fixtures stay unchanged; only shared narration is new, never slot facts.
+        if "materials" in payload:
+            scene = payload.pop("space_scene")
+            assert {b["material_id"] for b in scene["bindings"]} == {
+                m["id"] for m in payload["materials"]
+            }
+    # Historical facts stay unchanged; narration and scene interpretation are explicit additions.
     assert actual == expected

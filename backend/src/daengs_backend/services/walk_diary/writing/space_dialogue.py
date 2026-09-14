@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.model_input import SpaceAnswer
+from daengs_walk.diary.board.space_scene import require_background_citation
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ async def write_space(payload, send):
     initial = space_details.initial_input(seed)
     declaration = space_details.declaration(seed)
     trace = {
-        "version": space_details.VERSION,
+        "version": space_details.version_for(seed),
         "initial_input": initial,
         "model_calls": 0,
         "tool_calls": [],
@@ -90,6 +91,7 @@ async def write_space(payload, send):
                 or bool(answer.text.strip()) != bool(refs)
             ):
                 raise ValueError("space cited unread material")
+            require_background_citation(seed.get("space_scene"), refs, answer.text)
             return ProseGeneration(answer.model_dump(mode="json"), deepcopy(trace))
         raise ValueError("space tool round limit")
     except (ValueError, KeyError, TypeError):

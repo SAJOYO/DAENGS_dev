@@ -9,11 +9,13 @@ from daengs_backend.services.walk_diary.model_materials import location, materia
 from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import activity_projection
 from daengs_walk.diary.board.narration import narration_context
+from daengs_walk.diary.board.space_scene import project_scene
 from daengs_walk.diary.contracts.input import DiaryContract
 
 LEGACY_VERSION = "diary-prose-input-v6"
-VERSION = "diary-prose-input-v7"
-READABLE_INPUT_VERSIONS = (LEGACY_VERSION, VERSION)
+NARRATION_INPUT_VERSION = "diary-prose-input-v7"
+VERSION = "diary-prose-input-v8"
+READABLE_INPUT_VERSIONS = (LEGACY_VERSION, NARRATION_INPUT_VERSION, VERSION)
 
 
 class SpaceAnswer(DiaryContract):
@@ -162,6 +164,10 @@ def normalize(stage, request):
             references[key] = item["id"]
             materials.append({"id": key, **projected})
         payload = {"materials": materials}
+        if "space_scene" in request:
+            payload["space_scene"] = project_scene(
+                request["materials"], request["space_scene"], {v: k for k, v in references.items()}
+            )
     elif stage == "action":
         require_action(request)
         if request.get("movement"):

@@ -12,6 +12,7 @@ from daengs_backend.services.walk_diary.writing import policy
 from daengs_walk.diary.board.action_context import pin_movement
 from daengs_walk.diary.board.narration import VERSION as NARRATION_VERSION
 from daengs_walk.diary.board.scene_input import action_anchor
+from daengs_walk.diary.board.space_scene import compile_scene
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.slots.space import writing_facts
 
@@ -116,10 +117,6 @@ def get_space_context(base, card_id):
         matching = [b for b in backgrounds if b.provider in providers]
         return "known" if available else (matching[-1].status if matching else "unavailable")
 
-    def ground(material):
-        relation = material["facts"].get("relation")
-        return isinstance(relation, dict) and relation.get("kind") == "land_cover_at_query_point"
-
     value = WritingContext(
         "space",
         {
@@ -137,17 +134,7 @@ def get_space_context(base, card_id):
                 else "unavailable",
             },
             "materials": materials,
-            "scene_structure": {
-                "current_ground": [m["id"] for m in materials if ground(m)],
-                "administrative_location": [
-                    m["id"] for m in materials if m["role"] == "scene_address_reference"
-                ],
-                "local_details": [
-                    m["id"]
-                    for m in materials
-                    if m["role"] != "scene_address_reference" and not ground(m)
-                ],
-            },
+            "space_scene": compile_scene(materials),
         },
     )
     return replace(value, evidence=evidence)

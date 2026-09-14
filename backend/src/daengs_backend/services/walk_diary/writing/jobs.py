@@ -16,6 +16,7 @@ from daengs_backend.services.walk_diary.writing.context import get_action_contex
 from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import movement_uses
 from daengs_walk.diary.board.narration import narration_context
+from daengs_walk.diary.board.space_scene import require_background_citation
 from daengs_walk.diary.board.title_context import (
     CONTENT_BASIS,
     generated_body,
@@ -152,6 +153,9 @@ def validate_output(item, raw):
                     space_details.validate_citations(
                         model.payload, model.references, item.tool_trace, output.evidence_ids
                     )
+                require_background_citation(
+                    item.request.get("space_scene"), output.evidence_ids, output.text
+                )
                 names = [c["name"] for c in item.request["walk_context"]["companions"] if c["name"]]
                 if narration_context(item.request.get("walk_context")) is None and any(
                     name in output.text for name in names

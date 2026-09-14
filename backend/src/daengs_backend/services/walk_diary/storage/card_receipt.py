@@ -9,6 +9,7 @@ from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_backend.services.walk_diary.model_input import READABLE_INPUT_VERSIONS, normalize
 from daengs_walk.diary.board.action_context import require_scene_action
 from daengs_walk.diary.board.activity import covers_observation, movement_uses
+from daengs_walk.diary.board.space_scene import require_background_citation
 from daengs_walk.diary.board.title_context import CONTENT_BASIS, title_context, title_revision
 from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
 
@@ -39,6 +40,12 @@ class StoredCardWriting(DiaryContract):
                 raise ValueError("stored job request changed")
             if item.accepted and item.failure_code:
                 raise ValueError("failed job cannot carry accepted output")
+            if item.accepted and item.stage == "space":
+                require_background_citation(
+                    item.request.get("space_scene"),
+                    item.accepted["evidence_ids"],
+                    item.accepted["text"],
+                )
             if (
                 self.writer.get("input_policy") in READABLE_INPUT_VERSIONS
                 and item.llm_request is not None

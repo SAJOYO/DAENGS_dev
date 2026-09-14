@@ -70,6 +70,13 @@ async def prose(stage, payload, schema):
             }
         return {"text": "보리가 냄새를 맡았다."}
     refs = [m["id"] for m in payload["materials"]]
+    if "space_scene" in payload:
+        descriptive = {
+            b["material_id"]
+            for b in payload["space_scene"]["bindings"]
+            if b["purpose"] != "location_context"
+        }
+        refs = [ref for ref in refs if ref in descriptive]
     return {"text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
 
 
@@ -86,7 +93,7 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
         stage, payload, _ = call.args
         if stage == "space":
             assert "action" not in payload and "original_text" not in payload
-            assert set(payload) == {"materials", "narration"}
+            assert set(payload) == {"materials", "narration", "space_scene"}
             assert payload["narration"]["companions"] == [{"name": "보리"}]
         if stage == "action":
             assert payload["recorded_action"]
@@ -451,7 +458,7 @@ async def test_sgis_and_egis_follow_actual_normalizers_into_request_and_card(mon
         if call.stage == "space":
             assert call.request["sources"]["sgis"] == "known"
             assert call.request["sources"]["egis"] == "known"
-            assert call.request["scene_structure"]["current_ground"]
+            assert call.request["space_scene"]["background"]["basis_ids"]
     for card in result.bundle.scenes:
         assert card.place_reference[0].facts["dong"] == "도곡1동"
         assert card.place_reference[0].facts["sido"] == "서울특별시"

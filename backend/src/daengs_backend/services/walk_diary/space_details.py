@@ -2,25 +2,44 @@
 
 from copy import deepcopy
 
+from daengs_walk.diary.board.space_scene import scene_fragment
+
 NAME = "get_space_details"
 LEGACY_VERSION = "diary-space-details-v1"
-VERSION = "diary-space-details-v2"
+NARRATION_VERSION = "diary-space-details-v2"
+VERSION = "diary-space-details-v3"
 CORE_ROLES = ("location_label", "point_land_cover", "regional_environment")
 MAX_DETAILS = 2
 MAX_MODEL_CALLS = 2
-INSTRUCTION = """기본 materials만으로 충분하면 바로 작성한다.
+INSTRUCTION = """기본 제공 여부는 서술 우선순위가 아니다. space_scene의 설명 역할과 관계를 따른다.
+기본 materials만으로 충분하면 바로 작성한다.
 available_details는 조회 후보이며 아직 본문의 근거가 아니다.
 필요한 주변 배경만 get_space_details로 한 번에 최대 2개 확인할 수 있다.
-반환된 materials의 관계 범위 안에서 골라 쓰며, 조회하지 않은 후보는 인용하지 않는다.
+후보의 purpose·subject·scope·relation으로 무엇을 설명하는 자료인지 판단한다.
+반환된 materials와 space_scene 조각을 함께 읽고, 조회하지 않은 후보는 인용하지 않는다.
 공원과 피복이 함께 있어도 같은 공간·내부·방문 관계로 합치지 않는다."""
 
 
-def initial_input(payload, *, version=VERSION):
-    if version not in {LEGACY_VERSION, VERSION} or (
-        version == LEGACY_VERSION and "narration" in payload
+def version_for(payload):
+    return (
+        VERSION
+        if "space_scene" in payload
+        else NARRATION_VERSION
+        if "narration" in payload
+        else LEGACY_VERSION
+    )
+
+
+def initial_input(payload, *, version=None):
+    version = version or version_for(payload)
+    if (
+        version not in {LEGACY_VERSION, NARRATION_VERSION, VERSION}
+        or (version == LEGACY_VERSION and "narration" in payload)
+        or (version == VERSION) != ("space_scene" in payload)
     ):
         raise ValueError("space tool version does not support this context")
     core, available = [], []
+    bindings = {b["material_id"]: b for b in payload.get("space_scene", {}).get("bindings", [])}
     for item in payload["materials"]:
         if item["role"] in CORE_ROLES:
             core.append(deepcopy(item))
@@ -32,11 +51,17 @@ def initial_input(payload, *, version=VERSION):
                 if item["role"] == "area_statistics"
                 else "주변 공간 관계"
             )
-            available.append({"id": item["id"], "topic": topic})
+            guide = {k: v for k, v in bindings.get(item["id"], {}).items() if k != "material_id"}
+            available.append({"id": item["id"], "topic": topic, **guide})
     return {
         "materials": core,
         **({"available_details": available} if available else {}),
         **({"narration": deepcopy(payload["narration"])} if "narration" in payload else {}),
+        **(
+            {"space_scene": scene_fragment(payload["space_scene"], [m["id"] for m in core])}
+            if "space_scene" in payload
+            else {}
+        ),
     }
 
 
@@ -79,7 +104,15 @@ def lookup(payload, arguments):
         or len(ids) != len(set(ids))
     ):
         return {"status": "invalid_arguments"}
-    return {"status": "ok", "materials": [deepcopy(candidates[ref]) for ref in ids]}
+    return {
+        "status": "ok",
+        "materials": [deepcopy(candidates[ref]) for ref in ids],
+        **(
+            {"space_scene": scene_fragment(payload["space_scene"], ids)}
+            if "space_scene" in payload
+            else {}
+        ),
+    }
 
 
 def validate_trace(payload, trace):
@@ -88,7 +121,7 @@ def validate_trace(payload, trace):
         not isinstance(trace, dict)
         or set(trace)
         != {"version", "initial_input", "model_calls", "tool_calls", "public_api_calls"}
-        or trace["version"] not in {LEGACY_VERSION, VERSION}
+        or trace["version"] not in {LEGACY_VERSION, NARRATION_VERSION, VERSION}
         or trace["initial_input"] != initial_input(payload, version=trace["version"])
         or type(trace["model_calls"]) is not int
         or not 1 <= trace["model_calls"] <= MAX_MODEL_CALLS

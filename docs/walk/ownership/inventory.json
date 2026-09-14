@@ -1,5 +1,5 @@
 {
-  "baseline": "8e3d1589",
+  "baseline": "390ddd0c + #521 stage 1",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -2629,11 +2629,9 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "사진 메타데이터 동기화·재시도·삭제 기록. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.",
-      "debts": [
-        "B3"
-      ],
+      "debts": [],
       "related_owners": [
-        "diary"
+        "shared_contracts"
       ]
     },
     {
@@ -2870,11 +2868,9 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
-      "debts": [
-        "B3"
-      ],
+      "debts": [],
       "related_owners": [
-        "diary"
+        "shared_contracts"
       ]
     },
     {
@@ -3000,6 +2996,20 @@
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
       "debts": [],
       "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "owner": "diary",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "보존된 카탈로그의 hash/coverage 확인 후 일기 AreaInput으로 변환하는 수집 어댑터.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "background",
+        "integration",
+        "shared_contracts"
+      ]
     },
     {
       "path": "backend/src/daengs_backend/services/walk_diary/collection/comparison.py",
@@ -3645,11 +3655,9 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
-      "debts": [
-        "B3"
-      ],
+      "debts": [],
       "related_owners": [
-        "diary"
+        "shared_contracts"
       ]
     },
     {
@@ -3658,14 +3666,12 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "사진 요청 해시는 일기 digest 대신 결과가 같은 공용 정규 직렬화 사용.",
-      "debts": [
-        "B3"
-      ],
+      "rationale": "사진 manifest CAS·재시도·삭제 기록 소유. 공용 v1 hash 계약 소비.",
+      "debts": [],
       "related_owners": [
-        "diary",
         "integration",
-        "records"
+        "records",
+        "shared_contracts"
       ]
     },
     {
@@ -3732,12 +3738,10 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
-      "debts": [
-        "B3"
-      ],
+      "debts": [],
       "related_owners": [
-        "diary",
-        "integration"
+        "integration",
+        "shared_contracts"
       ]
     },
     {
@@ -3755,15 +3759,11 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "원본 페이지 보존은 카탈로그 소유, AreaInput 변환은 일기 수집 어댑터로 분리.",
-      "debts": [
-        "B1",
-        "B3"
-      ],
+      "disposition": "retain",
+      "rationale": "원본 페이지/metadata와 malformed/conflicting 행의 필드 보존 및 hash. 일기 변환은 collection.catalog 소유.",
+      "debts": [],
       "related_owners": [
-        "diary",
-        "integration"
+        "shared_contracts"
       ]
     },
     {
@@ -3890,13 +3890,11 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "관측 자료형/좌표를 일기 슬롯 모듈에서 가져오는 의존을 공급 계약으로 전환.",
-      "debts": [
-        "B2"
-      ],
+      "rationale": "기록 시각의 기온 관측 수집. 공급 계약으로 검증하며 일기 채택 정책과 독립.",
+      "debts": [],
       "related_owners": [
-        "diary",
-        "integration"
+        "integration",
+        "shared_contracts"
       ]
     },
     {
@@ -4168,12 +4166,9 @@
       "owner": "diary",
       "layer": "domain",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "digest와 실제 공용 값의 계약 추출 범위를 확인; DiaryInput과 일기 검증은 유지.",
-      "debts": [
-        "B3",
-        "B2"
-      ],
+      "disposition": "retain",
+      "rationale": "일기 입력/검증 계약. 공용 값의 기존 import 이름은 같은 객체를 재노출.",
+      "debts": [],
       "related_owners": [
         "shared_contracts"
       ]
@@ -4472,12 +4467,12 @@
       "owner": "diary",
       "layer": "domain",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "GridTemperature 관측 계약은 공용 공급 영역, 장면 채택 temperature_candidate는 일기 소유.",
-      "debts": [
-        "B2"
-      ],
-      "related_owners": []
+      "disposition": "retain",
+      "rationale": "공급 관측을 소비하는 일기 장면 채택 정책. 기존 관측 타입 이름은 같은 객체를 재노출.",
+      "debts": [],
+      "related_owners": [
+        "background"
+      ]
     },
     {
       "path": "backend/src/daengs_walk/diary/space/__init__.py",
@@ -4546,9 +4541,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "B1"
-      ],
+      "debts": [],
       "related_owners": []
     },
     {
@@ -4729,6 +4722,28 @@
       "rationale": "증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
       "debts": [],
       "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_walk/value_contracts.py",
+      "owner": "shared_contracts",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "동일 snapshot 값/정규 JSON hash 계약. 측정 좌표와 GPS fingerprint는 독립 계약 유지.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_walk/weather.py",
+      "owner": "background",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "역사적 격자 기온 관측과 시각/위치 출처 검증. 장면 채택 정책 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "shared_contracts"
+      ]
     },
     {
       "path": "backend/tests/activity/test_activity.py",
@@ -5037,6 +5052,31 @@
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
       "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/context/test_provider_contract_boundaries.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
+      "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
+      "related_owners": [
+        "background",
+        "diary",
+        "photos",
+        "shared_contracts"
+      ]
     },
     {
       "path": "backend/tests/walk/context/test_walk_area_context.py",
@@ -5972,6 +6012,16 @@
       "disposition": "retain",
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
+      "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/fixtures/provider-contracts-v1.json",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
       "related_owners": []
     },
     {
@@ -8109,7 +8159,7 @@
     ],
     [
       "backend/src/daengs_backend/schemas/walk_photo.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/schemas/walk_precision.py",
@@ -8293,7 +8343,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_area_catalog.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_area_context.py",
@@ -8468,6 +8518,22 @@
       "backend/src/daengs_backend/services/walk_diary/preparation/board.py"
     ],
     [
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "backend/src/daengs_backend/services/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "backend/src/daengs_backend/services/walk_area_catalog.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "backend/src/daengs_walk/diary/space/materials.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
       "backend/src/daengs_backend/services/walk_diary/collection/comparison.py",
       "backend/src/daengs_walk/diary/board/backgrounds.py"
     ],
@@ -8502,6 +8568,10 @@
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
       "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
@@ -9561,7 +9631,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_photo.py",
@@ -9589,7 +9659,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_photo.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_precision.py",
@@ -9717,7 +9787,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_sgis.py",
@@ -9725,19 +9795,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "backend/src/daengs_walk/diary/space/materials.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -9989,11 +10047,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_walk/diary/slots/temperature.py"
+      "backend/src/daengs_walk/weather.py"
     ],
     [
       "backend/src/daengs_backend/tasks/walk_entry_context.py",
@@ -10245,7 +10303,7 @@
     ],
     [
       "backend/src/daengs_walk/diary/contracts/input.py",
-      "backend/src/daengs_walk/contracts.py"
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_walk/diary/contracts/narrative.py",
@@ -10588,6 +10646,10 @@
       "backend/src/daengs_walk/diary/slots/sources.py"
     ],
     [
+      "backend/src/daengs_walk/diary/slots/temperature.py",
+      "backend/src/daengs_walk/weather.py"
+    ],
+    [
       "backend/src/daengs_walk/diary/space/area.py",
       "backend/src/daengs_walk/diary/contracts/input.py"
     ],
@@ -10742,6 +10804,14 @@
     [
       "backend/src/daengs_walk/trajectory_view.py",
       "backend/src/daengs_walk/trajectory.py"
+    ],
+    [
+      "backend/src/daengs_walk/value_contracts.py",
+      "backend/src/daengs_walk/contracts.py"
+    ],
+    [
+      "backend/src/daengs_walk/weather.py",
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/tests/activity/test_activity.py",
@@ -11018,6 +11088,26 @@
     [
       "backend/tests/walk/conftest.py",
       "backend/src/daengs_walk/__init__.py"
+    ],
+    [
+      "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "backend/src/daengs_backend/schemas/walk_photo.py"
+    ],
+    [
+      "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "backend/src/daengs_walk/diary/slots/temperature.py"
+    ],
+    [
+      "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/tests/walk/context/test_provider_contract_compatibility.py",
+      "backend/src/daengs_walk/weather.py"
     ],
     [
       "backend/tests/walk/context/test_walk_area_context.py",
@@ -12362,6 +12452,10 @@
     [
       "backend/tests/walk/diary/test_diary_space_integration.py",
       "backend/src/daengs_backend/services/walk_diary/collection/__init__.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_space_integration.py",
+      "backend/src/daengs_backend/services/walk_diary/collection/catalog.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_space_integration.py",
@@ -14412,10 +14506,10 @@
     },
     {
       "from": "backend/src/daengs_backend/schemas/walk_photo.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/schemas/walk_storyboard.py",
@@ -14594,10 +14688,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_area_catalog.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_area_context.py",
@@ -14682,6 +14776,27 @@
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "to": "backend/src/daengs_backend/services/__init__.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_area_catalog.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
@@ -15434,10 +15549,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_photo.py",
@@ -15462,10 +15577,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_photo.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_precision.py",
@@ -15511,31 +15626,17 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "to": "backend/src/daengs_walk/diary/space/materials.py",
-      "decision": "change",
-      "debt": "B1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -15805,17 +15906,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_weather_context.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
-      "decision": "change",
-      "debt": "B2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_weather_context.py",
-      "to": "backend/src/daengs_walk/diary/slots/temperature.py",
-      "decision": "change",
-      "debt": "B2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/tasks/walk_entry_context.py",
@@ -16015,10 +16109,10 @@
     },
     {
       "from": "backend/src/daengs_walk/diary/contracts/input.py",
-      "to": "backend/src/daengs_walk/contracts.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/legacy/writing.py",
@@ -16119,6 +16213,13 @@
       "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
     },
     {
+      "from": "backend/src/daengs_walk/diary/slots/temperature.py",
+      "to": "backend/src/daengs_walk/weather.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
+    },
+    {
       "from": "backend/src/daengs_walk/evidence.py",
       "to": "backend/src/daengs_walk/contracts.py",
       "decision": "retain-interface",
@@ -16173,6 +16274,18 @@
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+    },
+    {
+      "from": "backend/src/daengs_walk/weather.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     }
+  ],
+  "resolved_debts": [
+    "B1",
+    "B2",
+    "B3"
   ]
 }

@@ -5,10 +5,10 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from daengs_walk.diary.contracts.input import DiaryContract, Instant, Point
+from daengs_walk.value_contracts import Instant, Point, ValueContract
 
 
-class PhotoMetadata(DiaryContract):
+class PhotoMetadata(ValueContract):
     id: uuid.UUID
     captured_at: Instant
     location_captured_at: Instant
@@ -22,7 +22,7 @@ class PhotoMetadata(DiaryContract):
         return self
 
 
-class PhotoManifestWrite(DiaryContract):
+class PhotoManifestWrite(ValueContract):
     format: Literal["walk-photo-metadata-v1"] = "walk-photo-metadata-v1"
     publisher_id: uuid.UUID
     revision: int = Field(ge=1, le=2_147_483_647)
@@ -38,7 +38,7 @@ class PhotoManifestWrite(DiaryContract):
         return self
 
 
-class PhotoRecord(DiaryContract):
+class PhotoRecord(ValueContract):
     id: uuid.UUID
     revision: int = Field(ge=1)
     content: PhotoMetadata | None
@@ -50,7 +50,7 @@ class PhotoRecord(DiaryContract):
         return self
 
 
-class PhotoManifestResponse(DiaryContract):
+class PhotoManifestResponse(ValueContract):
     format: Literal["walk-photo-metadata-v1"] = "walk-photo-metadata-v1"
     client_session_id: uuid.UUID
     status: Literal["complete", "not_available"]

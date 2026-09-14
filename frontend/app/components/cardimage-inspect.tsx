@@ -140,12 +140,23 @@ export default function CardImageInspect() {
 
         {result && (
           <article className="flex flex-wrap gap-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`data:image/png;base64,${result.png_base64}`}
-              alt={result.title}
-              className="w-72 rounded shadow"
-            />
+            <div className="flex flex-col items-start gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`data:image/png;base64,${result.png_base64}`}
+                alt={result.title}
+                className="w-72 rounded shadow"
+              />
+              {/* 서버에 저장하지 않는 경로라(#496, 앱 저장 경로는 후속 카드) 내려받기는 여기서만 된다.
+                  data: URL 을 download 속성으로 — 원본 994×1582 PNG 그대로. */}
+              <a
+                href={`data:image/png;base64,${result.png_base64}`}
+                download={`${result.title.replace(/\s+/g, "_")}.png`}
+                className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              >
+                PNG 저장
+              </a>
+            </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt className="text-zinc-500 dark:text-zinc-400">제목</dt>
               <dd>{result.title}</dd>

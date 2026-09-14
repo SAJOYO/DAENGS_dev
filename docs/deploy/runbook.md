@@ -128,6 +128,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | 항목 | GCP 값 |
 | --- | --- |
 | `DAENGS_CORS_ORIGINS` | `https://daengapp.weareithero.cloud` (프론트 도메인 — Phase 2 에서) |
+| `DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS` | 공동 돌봄 초대 링크의 Android App Links 검증(`/.well-known/assetlinks.json`)에 실리는 **앱 서명 인증서 SHA-256**. JSON 배열. 비밀이 아닙니다(그 파일로 공개됩니다). ⚠️ **2026-09-14 현재 전달받은 값 `F3:1E:B4:EE:79:99:10:47:24:75:CC:E2:F4:75:B9:43:2E:7F:77:43:7D:AE:4D:DB:C8:BF:61:54:53:1E:8C:0B` 은 앱 저장소의 업로드 키(`keystore/upload.jks`, alias `daengs-upload`)와 같은 지문입니다** — `keytool -list -v` 로 대조. 앱은 Play App Signing 을 쓰므로(앱 README "출시용 업로드 키") 스토어 설치본은 이 키가 아니라 구글이 보관하는 앱 서명 키로 서명돼 있고, 이 값만으로는 **스토어 설치본의 App Links 가 검증되지 않습니다**(링크가 웹 안내로 떨어질 뿐 막히지는 않음). 넣기 전에 Play Console → 릴리스 → 설정 → 앱 서명의 **「앱 서명 키 인증서」** SHA-256 을 확인해 그 값을 넣고, 업로드 키 지문은 로컬 릴리스 빌드 검증용으로 같이 넣어도 됩니다: `["<앱 서명 키 SHA-256>","F3:1E:B4:EE:79:99:10:47:24:75:CC:E2:F4:75:B9:43:2E:7F:77:43:7D:AE:4D:DB:C8:BF:61:54:53:1E:8C:0B"]`. 모양이 틀리면 backend 가 안 뜹니다(부팅 검증). 바꾼 뒤 `docker compose up -d --force-recreate backend`, 기기 확인은 `adb shell pm get-app-links com.daengs.app` |
 
 임베딩 모델(hf-cache 1.2GB)은 옮기지 않습니다 — 첫 기동 때 자동 다운로드.
 `EMBEDDING_MODEL_KEY` 는 바꾸지 마세요 (코퍼스와 어긋나면 차원이 같아 조용히 틀립니다).

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -15,6 +16,10 @@ from sqlalchemy import URL
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+# `keytool -list -v` 가 찍는 SHA-256 인증서 지문 모양 — 대문자 16진수 32쌍, 콜론 구분.
+# `assetlinks.json` 의 `sha256_cert_fingerprints` 도 이 모양이다.
+_SHA256_FINGERPRINT = re.compile(r"^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$")
 
 
 class Settings(BaseSettings):
@@ -369,16 +374,35 @@ class Settings(BaseSettings):
     )
 
     # 공동 돌봄 초대 웹 안내(`/invite`)가 여는 `/.well-known/assetlinks.json` 의
-    # 서명 지문. **Android App Links 검증에 쓰는 값이지 업로드 키가 아닙니다** — Play
-    # App Signing 을 쓰는 앱은 우리가 올리는 키(`daengs.uploadKeyStore`)와 실제 서명
-    # 키가 다릅니다. Play Console → 릴리스 → 설정 → 앱 서명에서만 진짜 값을 볼 수
-    # 있고, 레포·로컬 키스토어에서는 못 뽑습니다.
+    # 서명 지문. **Android App Links 검증에 쓰는 값입니다.** Play App Signing 을 쓰는
+    # 앱은 우리가 올리는 업로드 키(`daengs.uploadKeyStore`)와 스토어가 배포하는 앱의
+    # 서명 키가 **다릅니다** — 스토어 설치본을 열려면 Play Console → 릴리스 → 설정 →
+    # 앱 서명의 「앱 서명 키 인증서」 SHA-256 이 들어가야 합니다. 업로드 키 지문을 같이
+    # 넣어도 됩니다(업로드 키로 서명한 로컬 릴리스 빌드가 그것으로 검증됩니다) —
+    # 배열이라 둘 다 넣을 수 있습니다.
     #
     # ⚠️ **비어 있으면 App Links 검증이 그냥 실패합니다** — 일부러 그렇게 둡니다.
     #    가짜 지문을 넣느니 검증이 안 되는 채로(=링크가 웹 안내로 떨어지는 채로) 배포하는
-    #    편이 낫습니다. 담당자가 Play Console 에서 실제 지문을 확인하면 채웁니다.
-    #    값은 JSON 배열입니다: DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…"]
+    #    편이 낫습니다. 값은 JSON 배열입니다:
+    #    DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…(32쌍)"]
+    #    파일은 `backend/.env` 입니다 — 최상단 `.env` 는 compose 용이라 backend 가 안 읽습니다.
+    #
+    # 모양이 틀리면(32쌍의 콜론 구분 16진수가 아니면) **부팅에서 막습니다** — 오타 난
+    # 지문은 검증만 조용히 실패해서 원인이 안 보이기 때문입니다. 소문자는 대문자로 맞춥니다.
     play_signing_sha256_fingerprints: list[str] = Field(default_factory=list)
+
+    @field_validator("play_signing_sha256_fingerprints")
+    @classmethod
+    def _sha256_fingerprints(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in values:
+            value = raw.strip().upper()
+            if not _SHA256_FINGERPRINT.fullmatch(value):
+                raise ValueError(
+                    "SHA-256 인증서 지문 모양이 아닙니다 — 'AA:BB:…' 꼴 16진수 32쌍이어야 합니다"
+                )
+            cleaned.append(value)
+        return cleaned
 
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
     # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).

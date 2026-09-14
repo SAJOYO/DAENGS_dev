@@ -27,6 +27,11 @@ _PLAY_STORE_URL = f"https://play.google.com/store/apps/details?id={_APP_PACKAGE}
 _INVITE_HOST = "daengapi.weareithero.cloud"
 _INVITE_PATH = "/invite"
 
+# 「앱에서 초대 열기」가 토큰을 싣는 Intent extra 이름. 앱 쪽 `InviteLink.WEB_FALLBACK_EXTRA`
+# 와 반드시 같다 — 갈라지면 앱이 열리기는 하는데 토큰을 못 찾아 빈 붙여넣기 화면이 뜬다.
+# 토큰을 URL(쿼리·경로)에 두지 않으려고 extra 로 싣는다 — 아래 페이지 스크립트 주석 참고.
+_WEB_FALLBACK_EXTRA = "com.daengs.app.extra.INVITE_TOKEN"
+
 _INVITE_HTML = f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -176,7 +181,11 @@ _INVITE_HTML = f"""<!doctype html>
     <strong>설치를 막 마쳤다면</strong><br>
     스토어의 "열기"만으로는 이 초대가 이어지지 않아요. <strong>카카오톡의 초대 메시지를
     다시 눌러</strong> 이 페이지로 돌아온 뒤 위의 "이미 설치했나요? 앱에서 초대 열기"를
-    눌러 주세요.
+    눌러 주세요.<br><br>
+    <strong>앱이 열리지 않나요?</strong><br>
+    카카오톡 안에서 연 화면에서는 버튼으로 앱이 안 열릴 수 있어요. 그때는 "초대 링크
+    복사"로 링크를 복사한 뒤, 댕스 앱의 <strong>내 화면 → 받은 초대 링크 넣기</strong>에
+    붙여넣어 주세요.
   </div>
 </main>
 
@@ -208,22 +217,29 @@ _INVITE_HTML = f"""<!doctype html>
   var fullLink = "https://{_INVITE_HOST}{_INVITE_PATH}#" + token;
   fullLinkEl.textContent = fullLink;
 
-  // "이미 설치했나요? 앱에서 초대 열기" — Chrome 의 intent:// 로 패키지를 못박아 연다.
-  // assetlinks.json 검증(App Links)과 무관하게, 설치돼 있으면 그냥 연다.
+  // "이미 설치했나요? 앱에서 초대 열기" — Chrome 의 intent:// 문법으로 패키지를 못박아
+  // 연다 (https://developer.chrome.com/docs/android/intents).
   //
-  // ⚠️ intent:// 는 `#Intent;...;end` 를 자기 문법으로 쓰기 때문에 진짜 URL
-  // 프래그먼트(토큰)를 실을 자리가 없다 — 그래서 이 버튼에서만, 쿼리(`?t=`)에 태운다.
+  // ⚠️ 토큰은 URL 이 아니라 Intent extra(`S.<이름>=`)에 싣는다. intent:// 는
+  // `#Intent;...;end` 를 자기 문법으로 쓰기 때문에 진짜 URL 프래그먼트(토큰)를 실을
+  // 자리가 없고, 쿼리·경로에 두면 토큰이 URL 의 일부가 된다. extra 로 실으면 데이터
+  // URI 는 토큰 없는 `https://…/invite` 그대로라 앱의 intent-filter 와 맞고, 앱은
+  // 그 이름의 extra 에서만 토큰을 읽는다. Chrome 이 앱에 안 넘기는 extra 는
+  // browser_fallback_url 하나뿐이다(같은 문서).
+  //
   // 네트워크로는 안 나간다: intent:// 는 브라우저가 로컬에서 안드로이드 Intent 로
-  // 바꾸는 문자열일 뿐이고, 리졸브에 실패했을 때만 별도의 (토큰 없는)
-  // S.browser_fallback_url 로 실제 요청이 나간다.
+  // 바꾸는 문자열일 뿐이고, 리졸브에 실패했을 때만(앱이 없을 때) 별도의 **토큰 없는**
+  // S.browser_fallback_url(스토어)로 실제 요청이 나간다.
   //
-  // ⚠️ Chrome(과 그 기반 브라우저)에서만 통한다. 카카오톡 인앱 브라우저 등 WebView
-  // 기반은 intent:// 를 못 알아들을 수 있다 — 그때는 이 버튼이 조용히 아무 일도
-  // 안 한다. 그래서 복사·직접 보기 경로를 늘 같이 보여 준다.
+  // ⚠️ 열린다고 단정하지 않는다. Chrome(과 그 기반 브라우저)이 사용자 제스처 안에서만
+  // 처리하고, 카카오톡 인앱 브라우저 같은 WebView 는 이 문법을 아예 못 알아들을 수
+  // 있다 — 그때는 이 버튼이 조용히 아무 일도 안 한다. 그래서 복사·직접 보기 경로를
+  // 늘 같이 보여 주고, 아래 안내도 그 길을 말한다.
   openAppBtn.addEventListener("click", function () {{
     var fallback = encodeURIComponent("{_PLAY_STORE_URL}");
-    var intentUrl = "intent://{_INVITE_HOST}{_INVITE_PATH}?t=" + encodeURIComponent(token) +
-      "#Intent;scheme=https;package={_APP_PACKAGE};S.browser_fallback_url=" + fallback + ";end";
+    var intentUrl = "intent://{_INVITE_HOST}{_INVITE_PATH}#Intent;scheme=https;package={_APP_PACKAGE};" +
+      "S.{_WEB_FALLBACK_EXTRA}=" + encodeURIComponent(token) +
+      ";S.browser_fallback_url=" + fallback + ";end";
     window.location.href = intentUrl;
   }});
 
@@ -258,9 +274,14 @@ async def invite_web() -> HTMLResponse:
 
 @router.get("/.well-known/assetlinks.json")
 async def assetlinks() -> JSONResponse:
-    """Android App Links 검증. `PLAY_SIGNING_SHA256_FINGERPRINTS` 가 비어 있으면 빈
-    배열을 준다 — **검증은 그냥 실패하고, 링크는 이 웹 페이지로 떨어진다.** 가짜
+    """Android App Links 검증. `DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS` 가 비어 있으면
+    빈 배열을 준다 — **검증은 그냥 실패하고, 링크는 이 웹 페이지로 떨어진다.** 가짜
     지문을 채워 넣지 않는다 (`config.py` 의 설정 주석 참고).
+
+    ⚠️ 이 응답 하나로 "열린다"가 되지 않는다 — 안드로이드가 **설치 시점에** 이 파일을
+    받아 APK 의 서명 지문과 대조해야 하고, 그 지문이 스토어 배포본의 서명(Play App
+    Signing 키)이어야 한다. 검증 상태는 기기에서 `adb shell pm get-app-links
+    com.daengs.app` 으로 본다.
     """
     if not settings.play_signing_sha256_fingerprints:
         return JSONResponse(content=[])

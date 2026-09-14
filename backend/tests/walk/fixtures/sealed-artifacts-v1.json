@@ -1,0 +1,10 @@
+{
+  "baseline": "284695e1",
+  "hashes": {
+    "analysis": "8114775ac05f24b3550837ed79595810210e8c70c28919e94df1887d7aa0d62e",
+    "sheet": "ca3079d7b75460980eec603ca26aae57268be5a214957ece154f1b668a532da7",
+    "capsule_weather": "835898f013ef10d3c056735230c11b6412b4bde87a7828672252ece87c3d6274",
+    "capsule_unknown": "14e187af638e1e289ef66f1e0aad2cbd157ec8943957a506b63450fcdaee4868"
+  },
+  "sheet_fingerprint": "sha256:ca3079d7b75460980eec603ca26aae57268be5a214957ece154f1b668a532da7"
+}

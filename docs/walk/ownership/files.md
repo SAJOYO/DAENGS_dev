@@ -1,6 +1,6 @@
 # 파일별 소유권 목록
 
-기준 `018a9ce7 + #526 stage 4`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
+기준 `284695e1 + #529 stage 5`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
 
 소유 영역은 최종 폴더 이름이 아니다. `split` 파일은 주 소유 영역과 분리할 책임을 함께 기록한다. `integration`은 파일 전체 이관 대상이 아니다.
 
@@ -42,7 +42,7 @@
 | [backend/src/daengs_backend/schemas/walk_measurement.py](../../../backend/src/daengs_backend/schemas/walk_measurement.py) | schemas | retain | 불변 측정 요약과 경로 페이지 저장/전송 계약. 원본 시각 계약은 공통 투영에서 소비.  |
 | [backend/src/daengs_backend/schemas/walk_style.py](../../../backend/src/daengs_backend/schemas/walk_style.py) | schemas | retain | 증거 계산·동선 투영·측정 저장 및 조회. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/schemas/walk_trajectory.py](../../../backend/src/daengs_backend/schemas/walk_trajectory.py) | schemas | retain | 증거 계산·동선 투영·측정 저장 및 조회. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
-| [backend/src/daengs_backend/services/walk_analysis.py](../../../backend/src/daengs_backend/services/walk_analysis.py) | services | split | 측정 모델 변환과 봉인 셀로판 직렬화가 함께 있음. 후속 재배치에서 생성 산출물 경계 명시. E1 |
+| [backend/src/daengs_backend/services/walk_analysis.py](../../../backend/src/daengs_backend/services/walk_analysis.py) | services | retain | 측정 분석 JSONB/ORM 조립·복원. 과거 산출물 함수 이름만 지연 호환하며 읽기 경로는 산출물을 로딩하지 않음.  |
 | [backend/src/daengs_backend/services/walk_measurement.py](../../../backend/src/daengs_backend/services/walk_measurement.py) | services | retain | 공통 투영 자료형에서 측정 요약·경로 페이지를 직접 조립하고 기존 트랜잭션으로 발행. 조회 서비스/응답 JSON 역참조 없음.  |
 | [backend/src/daengs_backend/services/walk_measurement_projection.py](../../../backend/src/daengs_backend/services/walk_measurement_projection.py) | services | retain | 검증된 입력의 공통 계산·최종 ledger·원본 시각 투영. 조회 응답과 측정 저장 조립을 소유하지 않음.  |
 | [backend/src/daengs_backend/services/walk_motion_calculation.py](../../../backend/src/daengs_backend/services/walk_motion_calculation.py) | services | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
@@ -50,7 +50,7 @@
 | [backend/src/daengs_backend/services/walk_style.py](../../../backend/src/daengs_backend/services/walk_style.py) | services | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
 | [backend/src/daengs_backend/services/walk_trajectory.py](../../../backend/src/daengs_backend/services/walk_trajectory.py) | services | retain | 공통 투영 결과에서 후보 조회 응답을 조립·직렬화. 기존 입력 검증·예외·off-loop 경계 유지.  |
 | [backend/src/daengs_backend/services/walk_trajectory_shadow.py](../../../backend/src/daengs_backend/services/walk_trajectory_shadow.py) | services | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_walk/evidence.py](../../../backend/src/daengs_walk/evidence.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존. E2 |
+| [backend/src/daengs_walk/evidence.py](../../../backend/src/daengs_walk/evidence.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/facts.py](../../../backend/src/daengs_walk/facts.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/measurement.py](../../../backend/src/daengs_walk/measurement.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/observation.py](../../../backend/src/daengs_walk/observation.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
@@ -67,9 +67,13 @@
 
 | 파일 | 현재 계층 | 처리 | 근거 / 후속 부채 |
 | --- | --- | --- | --- |
-| [backend/src/daengs_backend/services/walk_capsule.py](../../../backend/src/daengs_backend/services/walk_capsule.py) | services | repackage | 한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_walk/capsule.py](../../../backend/src/daengs_walk/capsule.py) | domain | repackage | 한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존. E2 |
-| [backend/src/daengs_walk/cellophane.py](../../../backend/src/daengs_walk/cellophane.py) | domain | repackage | 한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존. E2 |
+| [backend/src/daengs_backend/services/walk_artifacts/__init__.py](../../../backend/src/daengs_backend/services/walk_artifacts/__init__.py) | services | retain | 한 산책의 봉인 산출물 저장 어댑터 패키지. 트랜잭션은 원본 기록 서비스 소유.  |
+| [backend/src/daengs_backend/services/walk_artifacts/api.py](../../../backend/src/daengs_backend/services/walk_artifacts/api.py) | services | retain | 측정 분석과 셀로판 identity 검증 후 ORM graph 조립. 계산·잠금·commit 소유하지 않음.  |
+| [backend/src/daengs_backend/services/walk_artifacts/capsule.py](../../../backend/src/daengs_backend/services/walk_artifacts/capsule.py) | services | retain | 측정 분석 identity에 묶인 1:1 캡슐 저장/복원 어댑터.  |
+| [backend/src/daengs_backend/services/walk_artifacts/cellophane.py](../../../backend/src/daengs_backend/services/walk_artifacts/cellophane.py) | services | retain | 셀로판 v1 codec·fingerprint·ORM 저장/복원 어댑터. 측정 분석 조립과 공간 집계 미포함.  |
+| [backend/src/daengs_backend/services/walk_capsule.py](../../../backend/src/daengs_backend/services/walk_capsule.py) | services | repackage | 기존 캡슐 함수 import 호환. 구현/자료형 객체는 walk_artifacts.capsule 소유.  |
+| [backend/src/daengs_walk/capsule.py](../../../backend/src/daengs_walk/capsule.py) | domain | repackage | 한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
+| [backend/src/daengs_walk/cellophane.py](../../../backend/src/daengs_walk/cellophane.py) | domain | repackage | 한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 
 ## spatial_view: 봉인 산출물의 개별 조회·여러 산책 공간 집계
 
@@ -79,7 +83,7 @@
 | [backend/src/daengs_backend/routers/walk_spatial_diary.py](../../../backend/src/daengs_backend/routers/walk_spatial_diary.py) | routers | retain | 봉인 산출물의 개별 조회·여러 산책 공간 집계. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/schemas/walk_spatial_diary.py](../../../backend/src/daengs_backend/schemas/walk_spatial_diary.py) | schemas | retain | 봉인 산출물의 개별 조회·여러 산책 공간 집계. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/services/walk_spatial_diary.py](../../../backend/src/daengs_backend/services/walk_spatial_diary.py) | services | repackage | 봉인 산출물의 개별 조회·여러 산책 공간 집계. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
-| [backend/src/daengs_walk/spatial_diary.py](../../../backend/src/daengs_walk/spatial_diary.py) | domain | repackage | 봉인 산출물의 개별 조회·여러 산책 공간 집계. 후속 배치는 소유권 기준이며 계산/버전은 보존. E2 |
+| [backend/src/daengs_walk/spatial_diary.py](../../../backend/src/daengs_walk/spatial_diary.py) | domain | repackage | 봉인 산출물의 개별 조회·여러 산책 공간 집계. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 
 ## records: 사용자 메모·행동 핀의 원본/수정/삭제/버전 계약
 
@@ -277,7 +281,7 @@
 
 | 파일 | 현재 계층 | 처리 | 근거 / 후속 부채 |
 | --- | --- | --- | --- |
-| [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | domain | retain | 소비자에 종속되지 않는 값·좌표·정규 직렬화 계약. 후속 배치는 소유권 기준이며 계산/버전은 보존. E2 |
+| [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | domain | retain | 소비자에 종속되지 않는 값·좌표·정규 직렬화 계약. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/hex_grid.py](../../../backend/src/daengs_walk/hex_grid.py) | domain | retain | 소비자에 종속되지 않는 값·좌표·정규 직렬화 계약. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/value_contracts.py](../../../backend/src/daengs_walk/value_contracts.py) | domain | retain | 동일 snapshot 값/정규 JSON hash 계약. 측정 좌표와 GPS fingerprint는 독립 계약 유지.  |
 
@@ -321,7 +325,7 @@
 | [backend/src/daengs_backend/services/walk_generation/__init__.py](../../../backend/src/daengs_backend/services/walk_generation/__init__.py) | services | retain | 형식 협상과 공통 생성 상태의 소유 영역; 별도 런타임 없음.  |
 | [backend/src/daengs_backend/services/walk_generation/api.py](../../../backend/src/daengs_backend/services/walk_generation/api.py) | services | retain | 저장 형식 협상 후 현재/과거 실행 진입을 선택; 기존 URL과 요청 보존.  |
 | [backend/src/daengs_backend/services/walk_storyboard.py](../../../backend/src/daengs_backend/services/walk_storyboard.py) | services | retain | 기존 URL 호출자의 호환 import. 실행/협상 구현은 walk_generation.api 소유.  |
-| [backend/src/daengs_walk/__init__.py](../../../backend/src/daengs_walk/__init__.py) | domain | repackage | 최상위 import가 측정·캡슐·셀로판·공간 집계를 함께 로딩함. 명시 진입/호환 공개 이름 검토. E2 |
+| [backend/src/daengs_walk/__init__.py](../../../backend/src/daengs_walk/__init__.py) | domain | repackage | 11개 기존 공개 이름을 소유 모듈의 같은 객체로 지연 제공. 전체 기능 일괄 로딩 없음. 제품 호출자는 소유 모듈 직접 소비.  |
 | [db/init/06_walks.sql](../../../db/init/06_walks.sql) | support | integration | 저장/HTTP/UI/운영 접점만 범위에 포함. 파일 전체의 기능을 산책이나 일기로 이관하지 않음.  |
 | [db/init/08_territory_visits.sql](../../../db/init/08_territory_visits.sql) | support | integration | 저장/HTTP/UI/운영 접점만 범위에 포함. 파일 전체의 기능을 산책이나 일기로 이관하지 않음.  |
 | [db/init/19_walk_entries.sql](../../../db/init/19_walk_entries.sql) | support | integration | 저장/HTTP/UI/운영 접점만 범위에 포함. 파일 전체의 기능을 산책이나 일기로 이관하지 않음.  |
@@ -686,6 +690,7 @@
 | [backend/tests/walk/fixtures/measurement-projection-v1.json](../../../backend/tests/walk/fixtures/measurement-projection-v1.json) | support | retain | 측정 투영 경계 회귀 및 변경 전 018a9ce7의 조회/저장 바이트·ID 고정 표본.  |
 | [backend/tests/walk/fixtures/provider-contracts-v1.json](../../../backend/tests/walk/fixtures/provider-contracts-v1.json) | support | retain | 공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.  |
 | [backend/tests/walk/fixtures/route-boundary-v1.json](../../../backend/tests/walk/fixtures/route-boundary-v1.json) | support | retain | 경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.  |
+| [backend/tests/walk/fixtures/sealed-artifacts-v1.json](../../../backend/tests/walk/fixtures/sealed-artifacts-v1.json) | support | retain | 봉인 산출물/공개 import 경계 회귀 및 변경 전 284695e1의 저장 payload 고정 표본.  |
 | [backend/tests/walk/fixtures/spatial-diary-view-promotion-v1.json](../../../backend/tests/walk/fixtures/spatial-diary-view-promotion-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/trajectory-contract-v1.json](../../../backend/tests/walk/fixtures/trajectory-contract-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/v2-after.json](../../../backend/tests/walk/fixtures/v2-after.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
@@ -696,6 +701,7 @@
 | [backend/tests/walk/fixtures/walk-measurement-long-input-v1.json](../../../backend/tests/walk/fixtures/walk-measurement-long-input-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/walk-measurement-long-v1.json](../../../backend/tests/walk/fixtures/walk-measurement-long-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/walk-measurement-v1.json](../../../backend/tests/walk/fixtures/walk-measurement-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/measurement/test_artifact_boundaries.py](../../../backend/tests/walk/measurement/test_artifact_boundaries.py) | support | retain | 봉인 산출물/공개 import 경계 회귀 및 변경 전 284695e1의 저장 payload 고정 표본.  |
 | [backend/tests/walk/measurement/test_cellophane.py](../../../backend/tests/walk/measurement/test_cellophane.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/measurement/test_finalize_contract.py](../../../backend/tests/walk/measurement/test_finalize_contract.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/measurement/test_hex_grid.py](../../../backend/tests/walk/measurement/test_hex_grid.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |

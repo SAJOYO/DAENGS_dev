@@ -1,5 +1,5 @@
 {
-  "baseline": "018a9ce7 + #526 stage 4",
+  "baseline": "284695e1 + #529 stage 5",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -2861,7 +2861,8 @@
       "related_owners": [
         "integration",
         "measurement",
-        "sealed_artifacts"
+        "sealed_artifacts",
+        "shared_contracts"
       ]
     },
     {
@@ -2881,13 +2882,10 @@
       "owner": "measurement",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "측정 모델 변환과 봉인 셀로판 직렬화가 함께 있음. 후속 재배치에서 생성 산출물 경계 명시.",
-      "debts": [
-        "E1"
-      ],
+      "disposition": "retain",
+      "rationale": "측정 분석 JSONB/ORM 조립·복원. 과거 산출물 함수 이름만 지연 호환하며 읽기 경로는 산출물을 로딩하지 않음.",
+      "debts": [],
       "related_owners": [
-        "integration",
         "recording",
         "shared_contracts"
       ]
@@ -2917,16 +2915,61 @@
       ]
     },
     {
+      "path": "backend/src/daengs_backend/services/walk_artifacts/__init__.py",
+      "owner": "sealed_artifacts",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "한 산책의 봉인 산출물 저장 어댑터 패키지. 트랜잭션은 원본 기록 서비스 소유.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "owner": "sealed_artifacts",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "측정 분석과 셀로판 identity 검증 후 ORM graph 조립. 계산·잠금·commit 소유하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "measurement",
+        "recording"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_artifacts/capsule.py",
+      "owner": "sealed_artifacts",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "측정 분석 identity에 묶인 1:1 캡슐 저장/복원 어댑터.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "recording"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_artifacts/cellophane.py",
+      "owner": "sealed_artifacts",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "셀로판 v1 codec·fingerprint·ORM 저장/복원 어댑터. 측정 분석 조립과 공간 집계 미포함.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "recording"
+      ]
+    },
+    {
       "path": "backend/src/daengs_backend/services/walk_capsule.py",
       "owner": "sealed_artifacts",
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "rationale": "기존 캡슐 함수 import 호환. 구현/자료형 객체는 walk_artifacts.capsule 소유.",
       "debts": [],
-      "related_owners": [
-        "recording"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_catalog_refresh.py",
@@ -3345,7 +3388,6 @@
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
       "debts": [],
       "related_owners": [
-        "integration",
         "measurement",
         "recording",
         "shared_contracts"
@@ -3620,7 +3662,7 @@
       "rationale": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션. 후속 소유 영역별 서비스 패키지 재배치 대상.",
       "debts": [],
       "related_owners": [
-        "integration"
+        "shared_contracts"
       ]
     },
     {
@@ -3678,6 +3720,7 @@
         "diary",
         "generation_state",
         "integration",
+        "measurement",
         "recording",
         "records"
       ]
@@ -3882,7 +3925,6 @@
       "debts": [],
       "related_owners": [
         "integration",
-        "measurement",
         "sealed_artifacts"
       ]
     },
@@ -4014,7 +4056,7 @@
       "debts": [],
       "related_owners": [
         "diary",
-        "integration",
+        "measurement",
         "shared_contracts"
       ]
     },
@@ -4028,9 +4070,9 @@
       "debts": [],
       "related_owners": [
         "diary",
-        "integration",
         "measurement",
-        "recording"
+        "recording",
+        "sealed_artifacts"
       ]
     },
     {
@@ -4039,16 +4081,9 @@
       "layer": "domain",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "최상위 import가 측정·캡슐·셀로판·공간 집계를 함께 로딩함. 명시 진입/호환 공개 이름 검토.",
-      "debts": [
-        "E2"
-      ],
-      "related_owners": [
-        "measurement",
-        "sealed_artifacts",
-        "shared_contracts",
-        "spatial_view"
-      ]
+      "rationale": "11개 기존 공개 이름을 소유 모듈의 같은 객체로 지연 제공. 전체 기능 일괄 로딩 없음. 제품 호출자는 소유 모듈 직접 소비.",
+      "debts": [],
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_walk/capsule.py",
@@ -4057,9 +4092,7 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
-      "debts": [
-        "E2"
-      ],
+      "debts": [],
       "related_owners": [
         "shared_contracts"
       ]
@@ -4071,9 +4104,7 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "한 산책의 캡슐·셀로판 산출물 생성/복원. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
-      "debts": [
-        "E2"
-      ],
+      "debts": [],
       "related_owners": [
         "measurement",
         "shared_contracts"
@@ -4086,9 +4117,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "소비자에 종속되지 않는 값·좌표·정규 직렬화 계약. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
-      "debts": [
-        "E2"
-      ],
+      "debts": [],
       "related_owners": []
     },
     {
@@ -4662,9 +4691,7 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
-      "debts": [
-        "E2"
-      ],
+      "debts": [],
       "related_owners": [
         "shared_contracts"
       ]
@@ -4762,9 +4789,7 @@
       "scope_reason": "core",
       "disposition": "repackage",
       "rationale": "봉인 산출물의 개별 조회·여러 산책 공간 집계. 후속 배치는 소유권 기준이며 계산/버전은 보존.",
-      "debts": [
-        "E2"
-      ],
+      "debts": [],
       "related_owners": [
         "sealed_artifacts",
         "shared_contracts"
@@ -6214,6 +6239,16 @@
       "related_owners": []
     },
     {
+      "path": "backend/tests/walk/fixtures/sealed-artifacts-v1.json",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "봉인 산출물/공개 import 경계 회귀 및 변경 전 284695e1의 저장 payload 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
+      "related_owners": []
+    },
+    {
       "path": "backend/tests/walk/fixtures/spatial-diary-view-promotion-v1.json",
       "owner": "verification",
       "layer": "support",
@@ -6312,6 +6347,20 @@
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
       "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "봉인 산출물/공개 import 경계 회귀 및 변경 전 284695e1의 저장 payload 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
+      "related_owners": [
+        "integration",
+        "measurement",
+        "sealed_artifacts"
+      ]
     },
     {
       "path": "backend/tests/walk/measurement/test_cellophane.py",
@@ -8512,11 +8561,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk.py",
-      "backend/src/daengs_backend/services/walk_analysis.py"
+      "backend/src/daengs_backend/services/walk_artifacts/api.py"
     ],
     [
       "backend/src/daengs_backend/services/walk.py",
-      "backend/src/daengs_backend/services/walk_capsule.py"
+      "backend/src/daengs_backend/services/walk_artifacts/capsule.py"
     ],
     [
       "backend/src/daengs_backend/services/walk.py",
@@ -8528,7 +8577,19 @@
     ],
     [
       "backend/src/daengs_backend/services/walk.py",
-      "backend/src/daengs_walk/__init__.py"
+      "backend/src/daengs_walk/capsule.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk.py",
+      "backend/src/daengs_walk/cellophane.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk.py",
+      "backend/src/daengs_walk/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk.py",
+      "backend/src/daengs_walk/evidence.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_activity_context.py",
@@ -8564,11 +8625,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_analysis.py",
-      "backend/src/daengs_walk/__init__.py"
+      "backend/src/daengs_walk/contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_analysis.py",
-      "backend/src/daengs_walk/contracts.py"
+      "backend/src/daengs_walk/evidence.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_area_catalog.py",
@@ -8607,12 +8668,48 @@
       "backend/src/daengs_backend/services/walk_river_catalog.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_capsule.py",
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "backend/src/daengs_backend/models/walk.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_capsule.py",
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "backend/src/daengs_backend/services/walk_analysis.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "backend/src/daengs_backend/services/walk_artifacts/cellophane.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "backend/src/daengs_backend/services/walk_finalize.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "backend/src/daengs_walk/cellophane.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "backend/src/daengs_walk/evidence.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/capsule.py",
+      "backend/src/daengs_backend/models/walk.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/capsule.py",
       "backend/src/daengs_walk/capsule.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/cellophane.py",
+      "backend/src/daengs_backend/models/walk.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_artifacts/cellophane.py",
+      "backend/src/daengs_walk/cellophane.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_capsule.py",
+      "backend/src/daengs_backend/services/walk_artifacts/capsule.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_catalog_refresh.py",
@@ -9300,10 +9397,6 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/preparation/observations.py",
-      "backend/src/daengs_walk/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/preparation/observations.py",
       "backend/src/daengs_walk/contracts.py"
     ],
     [
@@ -9760,7 +9853,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_finalize.py",
-      "backend/src/daengs_walk/__init__.py"
+      "backend/src/daengs_walk/contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_generation/api.py",
@@ -9856,7 +9949,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
-      "backend/src/daengs_walk/__init__.py"
+      "backend/src/daengs_walk/evidence.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
@@ -10200,7 +10293,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_spatial_diary.py",
-      "backend/src/daengs_backend/services/walk_analysis.py"
+      "backend/src/daengs_backend/services/walk_artifacts/cellophane.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -10372,10 +10465,6 @@
     ],
     [
       "backend/src/daengs_evals/diary_slots_demo.py",
-      "backend/src/daengs_walk/__init__.py"
-    ],
-    [
-      "backend/src/daengs_evals/diary_slots_demo.py",
       "backend/src/daengs_walk/contracts.py"
     ],
     [
@@ -10391,12 +10480,16 @@
       "backend/src/daengs_walk/diary/route/observations.py"
     ],
     [
+      "backend/src/daengs_evals/diary_slots_demo.py",
+      "backend/src/daengs_walk/evidence.py"
+    ],
+    [
       "backend/src/daengs_evals/walk_base_board.py",
       "backend/src/daengs_backend/schemas/walk.py"
     ],
     [
       "backend/src/daengs_evals/walk_base_board.py",
-      "backend/src/daengs_backend/services/walk_analysis.py"
+      "backend/src/daengs_backend/services/walk_artifacts/api.py"
     ],
     [
       "backend/src/daengs_evals/walk_base_board.py",
@@ -10420,7 +10513,7 @@
     ],
     [
       "backend/src/daengs_evals/walk_base_board.py",
-      "backend/src/daengs_walk/__init__.py"
+      "backend/src/daengs_walk/cellophane.py"
     ],
     [
       "backend/src/daengs_evals/walk_base_board.py",
@@ -10431,24 +10524,8 @@
       "backend/src/daengs_walk/diary/selection/stamps.py"
     ],
     [
-      "backend/src/daengs_walk/__init__.py",
-      "backend/src/daengs_walk/capsule.py"
-    ],
-    [
-      "backend/src/daengs_walk/__init__.py",
-      "backend/src/daengs_walk/cellophane.py"
-    ],
-    [
-      "backend/src/daengs_walk/__init__.py",
-      "backend/src/daengs_walk/contracts.py"
-    ],
-    [
-      "backend/src/daengs_walk/__init__.py",
+      "backend/src/daengs_evals/walk_base_board.py",
       "backend/src/daengs_walk/evidence.py"
-    ],
-    [
-      "backend/src/daengs_walk/__init__.py",
-      "backend/src/daengs_walk/spatial_diary.py"
     ],
     [
       "backend/src/daengs_walk/capsule.py",
@@ -13283,6 +13360,34 @@
       "backend/src/daengs_walk/observation.py"
     ],
     [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_analysis.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_artifacts/__init__.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_artifacts/api.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_artifacts/capsule.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_artifacts/cellophane.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_backend/services/walk_capsule.py"
+    ],
+    [
+      "backend/tests/walk/measurement/test_artifact_boundaries.py",
+      "backend/src/daengs_walk/__init__.py"
+    ],
+    [
       "backend/tests/walk/measurement/test_cellophane.py",
       "backend/src/daengs_walk/__init__.py"
     ],
@@ -15142,24 +15247,45 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk.py",
-      "to": "backend/src/daengs_backend/services/walk_analysis.py",
+      "to": "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk.py",
-      "to": "backend/src/daengs_backend/services/walk_capsule.py",
+      "to": "backend/src/daengs_backend/services/walk_artifacts/capsule.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk.py",
-      "to": "backend/src/daengs_walk/__init__.py",
+      "to": "backend/src/daengs_walk/capsule.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk.py",
+      "to": "backend/src/daengs_walk/cellophane.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk.py",
+      "to": "backend/src/daengs_walk/contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk.py",
+      "to": "backend/src/daengs_walk/evidence.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_activity_context.py",
@@ -15178,13 +15304,6 @@
     {
       "from": "backend/src/daengs_backend/services/walk_analysis.py",
       "to": "backend/src/daengs_backend/services/walk_finalize.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_analysis.py",
-      "to": "backend/src/daengs_walk/__init__.py",
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
@@ -15218,11 +15337,46 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_capsule.py",
+      "from": "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "to": "backend/src/daengs_backend/models/walk.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "to": "backend/src/daengs_backend/services/walk_analysis.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "to": "backend/src/daengs_backend/services/walk_finalize.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_artifacts/api.py",
+      "to": "backend/src/daengs_walk/evidence.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_artifacts/capsule.py",
+      "to": "backend/src/daengs_backend/models/walk.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_artifacts/cellophane.py",
+      "to": "backend/src/daengs_backend/models/walk.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_catalog_refresh.py",
@@ -15723,13 +15877,6 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/preparation/observations.py",
-      "to": "backend/src/daengs_walk/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_diary/preparation/observations.py",
       "to": "backend/src/daengs_walk/contracts.py",
       "decision": "retain-interface",
       "debt": null,
@@ -15933,10 +16080,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_finalize.py",
-      "to": "backend/src/daengs_walk/__init__.py",
+      "to": "backend/src/daengs_walk/contracts.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_generation/api.py",
@@ -16073,10 +16220,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
-      "to": "backend/src/daengs_walk/__init__.py",
+      "to": "backend/src/daengs_walk/evidence.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_measurement.py",
@@ -16297,10 +16444,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_spatial_diary.py",
-      "to": "backend/src/daengs_backend/services/walk_analysis.py",
+      "to": "backend/src/daengs_backend/services/walk_artifacts/cellophane.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -16451,13 +16598,6 @@
     },
     {
       "from": "backend/src/daengs_evals/diary_slots_demo.py",
-      "to": "backend/src/daengs_walk/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_evals/diary_slots_demo.py",
       "to": "backend/src/daengs_walk/contracts.py",
       "decision": "retain-interface",
       "debt": null,
@@ -16485,6 +16625,13 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
+      "from": "backend/src/daengs_evals/diary_slots_demo.py",
+      "to": "backend/src/daengs_walk/evidence.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
+    },
+    {
       "from": "backend/src/daengs_evals/walk_base_board.py",
       "to": "backend/src/daengs_backend/schemas/walk.py",
       "decision": "retain-interface",
@@ -16493,10 +16640,10 @@
     },
     {
       "from": "backend/src/daengs_evals/walk_base_board.py",
-      "to": "backend/src/daengs_backend/services/walk_analysis.py",
+      "to": "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_evals/walk_base_board.py",
@@ -16535,10 +16682,10 @@
     },
     {
       "from": "backend/src/daengs_evals/walk_base_board.py",
-      "to": "backend/src/daengs_walk/__init__.py",
+      "to": "backend/src/daengs_walk/cellophane.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_evals/walk_base_board.py",
@@ -16555,39 +16702,11 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_walk/__init__.py",
-      "to": "backend/src/daengs_walk/capsule.py",
-      "decision": "change",
-      "debt": "E2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_walk/__init__.py",
-      "to": "backend/src/daengs_walk/cellophane.py",
-      "decision": "change",
-      "debt": "E2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_walk/__init__.py",
-      "to": "backend/src/daengs_walk/contracts.py",
-      "decision": "change",
-      "debt": "E2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_walk/__init__.py",
+      "from": "backend/src/daengs_evals/walk_base_board.py",
       "to": "backend/src/daengs_walk/evidence.py",
-      "decision": "change",
-      "debt": "E2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_walk/__init__.py",
-      "to": "backend/src/daengs_walk/spatial_diary.py",
-      "decision": "change",
-      "debt": "E2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
       "from": "backend/src/daengs_walk/capsule.py",
@@ -16844,6 +16963,8 @@
     "D1",
     "D2",
     "D3",
-    "C1"
+    "C1",
+    "E1",
+    "E2"
   ]
 }

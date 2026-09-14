@@ -1,23 +1,10 @@
-"""산책 측정과 공간 일기를 조립하는 제품 기능 패키지.
+"""Walk domain compatibility exports.
 
-현재 공개 표면은 DB와 HTTP를 모르는 측정 커널이다. 패키지 전체를 별도 런타임으로
-격리하지는 않는다. 이후 응용부는 Place·Journey 능력을 소비할 수 있지만, 그 구현과
-데이터 저장소를 복제하거나 우회하지 않는다 (D-045).
+Use contracts/evidence for measurement, cellophane/capsule for sealed outputs,
+and spatial_diary for queries. Importing the package does not load these owners.
 """
 
-from daengs_walk.capsule import (
-    WalkCapsuleArtifacts,
-    build_walk_capsule,
-    select_context_anchor,
-)
-from daengs_walk.cellophane import Cellophane, build_cellophane
-from daengs_walk.contracts import WalkEvidencePoint
-from daengs_walk.evidence import WalkEvidenceBundle, analyze_walk
-from daengs_walk.spatial_diary import (
-    SpatialDiaryViewSpec,
-    aggregate_spatial_field,
-    context_facets,
-)
+from importlib import import_module
 
 __all__ = [
     "Cellophane",
@@ -32,3 +19,29 @@ __all__ = [
     "context_facets",
     "select_context_anchor",
 ]
+
+_EXPORTS = {
+    "WalkCapsuleArtifacts": "daengs_walk.capsule",
+    "build_walk_capsule": "daengs_walk.capsule",
+    "select_context_anchor": "daengs_walk.capsule",
+    "Cellophane": "daengs_walk.cellophane",
+    "build_cellophane": "daengs_walk.cellophane",
+    "WalkEvidencePoint": "daengs_walk.contracts",
+    "WalkEvidenceBundle": "daengs_walk.evidence",
+    "analyze_walk": "daengs_walk.evidence",
+    "SpatialDiaryViewSpec": "daengs_walk.spatial_diary",
+    "aggregate_spatial_field": "daengs_walk.spatial_diary",
+    "context_facets": "daengs_walk.spatial_diary",
+}
+
+
+def __getattr__(name):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(_EXPORTS[name]), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

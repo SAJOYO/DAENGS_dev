@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.models import WalkCellophaneSheet
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk_spatial_diary as diary_repo
-from daengs_backend.services.walk_analysis import decode_stored_cellophane
+from daengs_backend.services.walk_artifacts.cellophane import decode_stored_cellophane
 from daengs_walk.capsule import CAPSULE_VERSION, TrailContextSnapshot
 from daengs_walk.cellophane import CANONICAL_PAINT_SPEC, Cellophane, PaintSpec
 from daengs_walk.spatial_diary import (

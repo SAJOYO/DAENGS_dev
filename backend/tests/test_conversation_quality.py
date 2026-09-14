@@ -657,14 +657,37 @@ def test_real_mode_has_an_adapter_for_every_capability():
     컨트롤 중 하나라(과잉교정을 잡는 유일한 자리), 라이브 랩이 우연히 그 경로를 타기
     전까지는 아무도 몰랐다. 다음에 능력이 하나 더 늘 때 같은 구멍이 조용히 다시
     생기지 않도록, 여기서 `CapabilityName` 전수를 직접 대조한다.
+
+    **예외가 하나 있고, 예외인 이유까지 같이 단언한다** — `care_log` (D-075). 아래 주석.
     """
+    from datetime import UTC, datetime
+
     from daengs_backend.orchestration.contracts import CapabilityName
+    from daengs_backend.orchestration.planner import resolve_care_log_route
     from daengs_evals.conversation_quality.collect import build_adapters
 
     adapters = build_adapters("real", general_sink={})
 
     assert adapters is not None
-    missing = [name for name in CapabilityName if name not in adapters]
+    # `care_log` (D-075) 는 **이 하네스가 계획할 수 없는 능력**이라 빠진다. 다른 빠짐과 달리
+    # 구멍이 아니다: 쓰기 어댑터는 `app_user_id` 와 세션을 들고 요청마다 만들어지고
+    # (`adapters/care_log.py`), 그것을 넣는 곳이 `context["care_log_writable"]` 를 세우는
+    # 곳과 같은 `if` 다 (`routers/assistant.py`). 하네스는 그 키를 안 보내므로 제안이 안
+    # 나가고, 제안이 없으면 승낙할 것도 없어 쓰기가 계획에 못 들어온다.
+    #
+    # **그 이유를 여기서 같이 단언한다** — 안 하면 이 예외가 "귀찮아서 뺀 것" 과 구별되지
+    # 않고, `care_log_writable` 이 어느 하네스에 실리는 날 #446 이 그대로 재발한다.
+    plan = resolve_care_log_route(
+        query="방금 밥 먹였어",
+        context={"dog": {"breed": "퍼그"}},  # 하네스가 보내는 모양 (ask_loop/collect.py)
+        now=datetime.now(UTC),
+        care_log_write=True,
+    )
+    assert plan is not None and plan.clarify is None, "하네스 컨텍스트로는 제안이 나오면 안 된다"
+    assert [h.target for h in plan.handoffs] == ["care_log"], "제안 대신 화면 안내로 떨어진다"
+
+    expected = set(CapabilityName) - {CapabilityName.CARE_LOG}
+    missing = [name for name in expected if name not in adapters]
     assert not missing, f"real 모드에 어댑터가 없는 능력: {missing}"
 
 

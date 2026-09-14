@@ -1,7 +1,7 @@
 """Bind supplied route evidence to a diary snapshot before any interpretation."""
 
 from daengs_walk.diary.contracts.input import digest
-from daengs_walk.storyboard_input import route_nodes
+from daengs_walk.route.nodes import route_nodes
 
 
 def verified_route(source, route):

@@ -7,6 +7,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from daengs_walk.route.geometry import distance, uncovered
+from daengs_walk.route.pace import PacePolicy
+from daengs_walk.route.pace import movement_candidates as calculate_candidates
+from daengs_walk.route.pace import session_speed_baseline as calculate_baseline
+
 
 class SelectionPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -23,75 +28,16 @@ class ReferenceWalk(BaseModel):
     median_speed_mps: float = Field(gt=0, le=10)
 
 
+# The supported priority storyboard owns these values independently of diary.
+STORYBOARD_PACE = PacePolicy(slow_ratio=0.5, fast_ratio=1.75, minimum_seconds=20)
+
+
 def movement_candidates(nodes, baseline, reason):
-    if not baseline:
-        return []
-    groups, group, previous = [], [], None
-    for n in nodes:
-        speed = n.get("speed")
-        direction = (
-            "slow"
-            if speed is not None and speed < baseline * 0.5
-            else "fast"
-            if speed is not None and speed > baseline * 1.75
-            else None
-        )
-        key = (n["block"], direction)
-        if not direction or key != previous:
-            if group:
-                groups.append(group)
-            group = []
-        if direction:
-            group.append(n)
-        previous = key
-    if group:
-        groups.append(group)
-    candidates = []
-    for group in groups:
-        duration = sum(n["duration_s"] for n in group)
-        if duration < 20:
-            continue
-        middle = (group[0]["start_s"] + group[-1]["elapsed_s"]) / 2
-        candidate = dict(min(group, key=lambda n: abs(n["elapsed_s"] - middle)))
-        speed = sum(n["speed"] * n["duration_s"] for n in group) / duration
-        candidate.update(
-            reason=reason,
-            score=abs(speed - baseline) * duration,
-            movement={
-                "start_s": group[0]["start_s"],
-                "end_s": group[-1]["elapsed_s"],
-                "baseline_mps": baseline,
-                "mean_mps": speed,
-            },
-        )
-        candidates.append(candidate)
-    return sorted(candidates, key=lambda c: (-c["score"], c["elapsed_s"]))
-
-
-def uncovered(nodes, selected, radius):
-    gaps = []
-    for block in sorted({n["block"] for n in nodes}):
-        subset = [n for n in nodes if n["block"] == block]
-        start, end = subset[0]["route_m"], subset[-1]["route_m"]
-        cursor = start
-        for chosen in sorted(
-            (c for c in selected if c["block"] == block), key=lambda c: c["route_m"]
-        ):
-            left, right = (
-                max(start, chosen["route_m"] - radius),
-                min(end, chosen["route_m"] + radius),
-            )
-            if left > cursor:
-                gaps.append({"block": block, "start_m": cursor, "end_m": left})
-            cursor = max(cursor, right)
-        if cursor < end:
-            gaps.append({"block": block, "start_m": cursor, "end_m": end})
-    return sorted(gaps, key=lambda g: (-(g["end_m"] - g["start_m"]), g["block"], g["start_m"]))
+    return calculate_candidates(nodes, baseline, reason, policy=STORYBOARD_PACE)
 
 
 def session_speed_baseline(nodes):
-    speeds = [n["speed"] for n in nodes if n.get("speed", 0) >= 0.5]
-    return statistics.median(speeds) if len(speeds) >= 5 else None
+    return calculate_baseline(nodes, minimum_speed=0.5, minimum_samples=5)
 
 
 def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, started_at):
@@ -251,14 +197,3 @@ def select_nodes(nodes, entries, policy, references, *, session_id, pet_id, star
             "median_speed_mps": baseline,
         },
     }
-
-
-def distance(a, b):
-    import math
-
-    la, lb = math.radians(a[0]), math.radians(b[0])
-    h = (
-        math.sin((lb - la) / 2) ** 2
-        + math.cos(la) * math.cos(lb) * math.sin(math.radians(b[1] - a[1]) / 2) ** 2
-    )
-    return 12742000 * math.asin(min(1, math.sqrt(h)))

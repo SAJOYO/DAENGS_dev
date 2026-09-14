@@ -1,5 +1,5 @@
 {
-  "baseline": "390ddd0c + #521 stage 1",
+  "baseline": "f6ac5819 + #522 stage 2",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -4252,11 +4252,9 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "A1"
-      ],
+      "debts": [],
       "related_owners": [
-        "legacy"
+        "measurement"
       ]
     },
     {
@@ -4279,12 +4277,9 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "A1",
-        "A2"
-      ],
+      "debts": [],
       "related_owners": [
-        "legacy"
+        "measurement"
       ]
     },
     {
@@ -4304,12 +4299,8 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "A1",
-        "A2"
-      ],
+      "debts": [],
       "related_owners": [
-        "legacy",
         "measurement"
       ]
     },
@@ -4340,11 +4331,9 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "A2"
-      ],
+      "debts": [],
       "related_owners": [
-        "legacy"
+        "measurement"
       ]
     },
     {
@@ -4434,12 +4423,9 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "A1",
-        "A2"
-      ],
+      "debts": [],
       "related_owners": [
-        "legacy"
+        "measurement"
       ]
     },
     {
@@ -4635,6 +4621,46 @@
       ]
     },
     {
+      "path": "backend/src/daengs_walk/route/__init__.py",
+      "owner": "measurement",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_walk/route/geometry.py",
+      "owner": "measurement",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_walk/route/nodes.py",
+      "owner": "measurement",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_walk/route/pace.py",
+      "owner": "measurement",
+      "layer": "domain",
+      "disposition": "retain",
+      "rationale": "연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
       "path": "backend/src/daengs_walk/spatial_diary.py",
       "owner": "spatial_view",
       "layer": "domain",
@@ -4664,24 +4690,24 @@
       "owner": "legacy",
       "layer": "domain",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "연속 경로 구성은 공통 계산으로 추출; 과거 입력/선정 연결은 호환 영역에 유지.",
-      "debts": [
-        "A1"
-      ],
-      "related_owners": []
+      "disposition": "retain",
+      "rationale": "과거 기록 투영/scene_inputs 소유. 연속 경로는 공통 route.nodes를 소비하며 기존 route_nodes 이름 유지.",
+      "debts": [],
+      "related_owners": [
+        "measurement"
+      ]
     },
     {
       "path": "backend/src/daengs_walk/storyboard_selection.py",
       "owner": "legacy",
       "layer": "domain",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "거리/빈 구간 계산과 상대 속도 정책을 분리; 과거 select_nodes는 호환 영역에 유지.",
-      "debts": [
-        "A2"
-      ],
-      "related_owners": []
+      "disposition": "retain",
+      "rationale": "과거 우선순위 선정 및 속도 정책 소유. 공통 route 계산을 소비하며 기존 함수 시그니처 보존.",
+      "debts": [],
+      "related_owners": [
+        "measurement"
+      ]
     },
     {
       "path": "backend/src/daengs_walk/trajectory.py",
@@ -5822,6 +5848,21 @@
       ]
     },
     {
+      "path": "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
+      "related_owners": [
+        "diary",
+        "integration",
+        "legacy",
+        "measurement"
+      ]
+    },
+    {
       "path": "backend/tests/walk/diary/test_spatial_diary.py",
       "owner": "verification",
       "layer": "support",
@@ -6020,6 +6061,16 @@
       "layer": "support",
       "disposition": "retain",
       "rationale": "공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
+      "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/fixtures/route-boundary-v1.json",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.",
       "debts": [],
       "scope_reason": "verification-assets",
       "related_owners": []
@@ -6566,6 +6617,20 @@
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
       "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/support/route_contracts.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
+      "related_owners": [
+        "diary",
+        "legacy",
+        "measurement"
+      ]
     },
     {
       "path": "backend/tests/walk/support/route_patterns.py",
@@ -10347,7 +10412,7 @@
     ],
     [
       "backend/src/daengs_walk/diary/route/binding.py",
-      "backend/src/daengs_walk/storyboard_input.py"
+      "backend/src/daengs_walk/route/nodes.py"
     ],
     [
       "backend/src/daengs_walk/diary/route/geometry.py",
@@ -10375,11 +10440,11 @@
     ],
     [
       "backend/src/daengs_walk/diary/route/movement.py",
-      "backend/src/daengs_walk/storyboard_input.py"
+      "backend/src/daengs_walk/route/nodes.py"
     ],
     [
       "backend/src/daengs_walk/diary/route/movement.py",
-      "backend/src/daengs_walk/storyboard_selection.py"
+      "backend/src/daengs_walk/route/pace.py"
     ],
     [
       "backend/src/daengs_walk/diary/route/movement_policy.py",
@@ -10399,11 +10464,11 @@
     ],
     [
       "backend/src/daengs_walk/diary/route/observations.py",
-      "backend/src/daengs_walk/storyboard_input.py"
+      "backend/src/daengs_walk/route/nodes.py"
     ],
     [
       "backend/src/daengs_walk/diary/route/observations.py",
-      "backend/src/daengs_walk/storyboard_selection.py"
+      "backend/src/daengs_walk/route/pace.py"
     ],
     [
       "backend/src/daengs_walk/diary/route/patterns.py",
@@ -10431,7 +10496,7 @@
     ],
     [
       "backend/src/daengs_walk/diary/selection/board.py",
-      "backend/src/daengs_walk/storyboard_selection.py"
+      "backend/src/daengs_walk/route/geometry.py"
     ],
     [
       "backend/src/daengs_walk/diary/selection/stamps.py",
@@ -10607,11 +10672,11 @@
     ],
     [
       "backend/src/daengs_walk/diary/slots/sources.py",
-      "backend/src/daengs_walk/storyboard_input.py"
+      "backend/src/daengs_walk/route/geometry.py"
     ],
     [
       "backend/src/daengs_walk/diary/slots/sources.py",
-      "backend/src/daengs_walk/storyboard_selection.py"
+      "backend/src/daengs_walk/route/nodes.py"
     ],
     [
       "backend/src/daengs_walk/diary/slots/space.py",
@@ -10791,7 +10856,19 @@
     ],
     [
       "backend/src/daengs_walk/storyboard_input.py",
+      "backend/src/daengs_walk/route/nodes.py"
+    ],
+    [
+      "backend/src/daengs_walk/storyboard_input.py",
       "backend/src/daengs_walk/storyboard_selection.py"
+    ],
+    [
+      "backend/src/daengs_walk/storyboard_selection.py",
+      "backend/src/daengs_walk/route/geometry.py"
+    ],
+    [
+      "backend/src/daengs_walk/storyboard_selection.py",
+      "backend/src/daengs_walk/route/pace.py"
     ],
     [
       "backend/src/daengs_walk/trajectory_projection.py",
@@ -12726,6 +12803,30 @@
       "backend/src/daengs_walk/diary/contracts/input.py"
     ],
     [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/__init__.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/diary/route/movement.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/diary/route/movement_policy.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/diary/route/observations.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/route/pace.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_route_calculation_boundary.py",
+      "backend/src/daengs_walk/storyboard_selection.py"
+    ],
+    [
       "backend/tests/walk/diary/test_spatial_diary.py",
       "backend/src/daengs_walk/capsule.py"
     ],
@@ -13380,6 +13481,42 @@
     [
       "backend/tests/walk/support/photo_input.py",
       "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/board/models.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/route/movement.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/route/movement_policy.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/route/observations.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/selection/board.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/diary/selection/stamps.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/evidence.py"
+    ],
+    [
+      "backend/tests/walk/support/route_contracts.py",
+      "backend/src/daengs_walk/storyboard_input.py"
     ],
     [
       "backend/tests/walk/support/route_patterns.py",
@@ -16130,10 +16267,10 @@
     },
     {
       "from": "backend/src/daengs_walk/diary/route/binding.py",
-      "to": "backend/src/daengs_walk/storyboard_input.py",
-      "decision": "change",
-      "debt": "A1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/nodes.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/route/geometry.py",
@@ -16151,17 +16288,17 @@
     },
     {
       "from": "backend/src/daengs_walk/diary/route/movement.py",
-      "to": "backend/src/daengs_walk/storyboard_input.py",
-      "decision": "change",
-      "debt": "A1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/nodes.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/route/movement.py",
-      "to": "backend/src/daengs_walk/storyboard_selection.py",
-      "decision": "change",
-      "debt": "A2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/pace.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/route/observations.py",
@@ -16179,38 +16316,38 @@
     },
     {
       "from": "backend/src/daengs_walk/diary/route/observations.py",
-      "to": "backend/src/daengs_walk/storyboard_input.py",
-      "decision": "change",
-      "debt": "A1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/nodes.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/route/observations.py",
-      "to": "backend/src/daengs_walk/storyboard_selection.py",
-      "decision": "change",
-      "debt": "A2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/pace.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/selection/board.py",
-      "to": "backend/src/daengs_walk/storyboard_selection.py",
-      "decision": "change",
-      "debt": "A2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/geometry.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/slots/sources.py",
-      "to": "backend/src/daengs_walk/storyboard_input.py",
-      "decision": "change",
-      "debt": "A1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/geometry.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/slots/sources.py",
-      "to": "backend/src/daengs_walk/storyboard_selection.py",
-      "decision": "change",
-      "debt": "A2",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_walk/route/nodes.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
     },
     {
       "from": "backend/src/daengs_walk/diary/slots/temperature.py",
@@ -16276,6 +16413,27 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
+      "from": "backend/src/daengs_walk/storyboard_input.py",
+      "to": "backend/src/daengs_walk/route/nodes.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
+    },
+    {
+      "from": "backend/src/daengs_walk/storyboard_selection.py",
+      "to": "backend/src/daengs_walk/route/geometry.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
+    },
+    {
+      "from": "backend/src/daengs_walk/storyboard_selection.py",
+      "to": "backend/src/daengs_walk/route/pace.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "현재/과거가 공통 경로 계산을 소비한다. 속도/장면 정책은 각 소비자가 소유한다."
+    },
+    {
       "from": "backend/src/daengs_walk/weather.py",
       "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
@@ -16286,6 +16444,8 @@
   "resolved_debts": [
     "B1",
     "B2",
-    "B3"
+    "B3",
+    "A1",
+    "A2"
   ]
 }

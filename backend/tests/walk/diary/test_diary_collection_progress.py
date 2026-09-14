@@ -9,14 +9,14 @@ import httpx
 import pytest
 
 from daengs_backend.orchestration.execution import JobExecutor
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_collection_application as application
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-from daengs_backend.services.walk_diary_collection_progress import active_collection
-from daengs_backend.services.walk_diary_deadline import publication_deadline
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import application
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.collection.progress import active_collection
+from daengs_backend.services.walk_diary.deadline import publication_deadline
+from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.storage.board import load_board, store_board
 from daengs_walk.diary_input import digest
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prepared, prose
 from tests.walk.diary.test_diary_space_integration import public_response
@@ -169,7 +169,7 @@ async def test_concurrent_walks_do_not_share_progress_or_snapshots():
     source = first.input.source.model_copy(
         update={"client_session_id": "another-synthetic-session"}
     )
-    from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
+    from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
     from tests.walk.support.base_board import policy
 
     second = assemble_saved_base_board(replace(first.input, source=source), policy(3))

@@ -9,12 +9,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services.walk_diary_contract import require_owner
-from daengs_backend.services.walk_diary_input import InputAssembly, read_input
+from daengs_backend.services.walk_diary.guard import require_owner
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly, read_input
 from daengs_walk.diary_stamps import PreparedDiary, StampPolicy, prepare_stamps
 
 if TYPE_CHECKING:
-    from daengs_backend.services.walk_diary_base_board import PreparedSavedBaseBoard
+    from daengs_backend.services.walk_diary.preparation.board import PreparedSavedBaseBoard
 
 
 @dataclass(frozen=True)

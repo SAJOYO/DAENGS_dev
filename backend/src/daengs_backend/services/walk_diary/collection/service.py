@@ -14,8 +14,8 @@ import httpx
 from daengs_backend.orchestration.execution import discard
 from daengs_backend.services import walk_area_catalog, walk_catalog_regions, walk_park_catalog
 from daengs_backend.services.walk_commerce_catalog import ENDPOINT as COMMERCE_ENDPOINT
-from daengs_backend.services.walk_diary_collection_progress import collection_progress
-from daengs_backend.services.walk_diary_space_snapshot import source_background
+from daengs_backend.services.walk_diary.collection.progress import collection_progress
+from daengs_backend.services.walk_diary.collection.snapshot import source_background
 from daengs_backend.services.walk_public_http import get_json
 from daengs_backend.services.walk_sgis import sgis
 from daengs_backend.services.walk_space_catalog_input import normalization_input, retain_page

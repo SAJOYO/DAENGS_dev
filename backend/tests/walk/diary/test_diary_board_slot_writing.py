@@ -9,17 +9,17 @@ import pytest
 
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_slot_writing import (
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.legacy.board_slots import (
     complete_slot_board,
     write_legacy_slot_board,
 )
-from daengs_backend.services.walk_diary_generation import generate_diary
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_backend.services.walk_diary_publication import within_budget
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.lifecycle.publication import within_budget
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board_output import BOARD_FORMAT
 from daengs_walk.diary_scene_input import scene_materials

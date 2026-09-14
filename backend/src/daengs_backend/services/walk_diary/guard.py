@@ -1,9 +1,4 @@
-"""Diary boundary for the existing walk generation service, not a new orchestrator.
-
-walk_diary_generation supplies a verified PrincipalContext and an ownership-checked
-snapshot, reserves through the shared storyboard row transitions, and calls the
-completion guard under the same Walk lock used by walk_storyboard.generate.
-"""
+"""Ownership and generation guards for preparation and publication."""
 
 from pydantic import Field
 

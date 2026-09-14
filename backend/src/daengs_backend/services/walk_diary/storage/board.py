@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
+from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
 from daengs_walk.diary_board_output import PublishedBoard
 from daengs_walk.diary_board_receipt import StoredSlotWriting
 from daengs_walk.diary_input import DiaryContract, Digest, digest
@@ -69,7 +69,7 @@ def source_revision(prepared):
 
 def store_board(prepared, bundle, revision, *, writing=None):
     # Receipt creation needs current writing policy; archived readers only need contracts.
-    from daengs_backend.services.walk_diary_board_provenance import writing_receipt
+    from daengs_backend.services.walk_diary.storage.provenance import writing_receipt
 
     bundle = PublishedBoard.model_validate(bundle)
     source, plan = prepared.input.source, prepared.board.plan

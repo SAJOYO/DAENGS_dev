@@ -14,12 +14,10 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_slot_writing as writing
-from daengs_backend.services.walk_diary_board_slot_writing import (
-    write_board,
-    write_legacy_slot_board,
-)
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.legacy import slots as writing
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.runtime import write_board
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_walk.diary_board_output import BOARD_FORMAT
 from daengs_walk.diary_input import digest

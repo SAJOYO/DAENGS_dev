@@ -11,14 +11,9 @@ from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest, SlotPreviewResponse
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview
-from daengs_backend.services.walk_diary_slots import preview_saved_slots
+from daengs_backend.services.walk_diary.api import get_slot_writer, preview_saved_slots
 
 router = APIRouter(prefix="/app/walks", tags=["walk-diary-preview"])
-
-
-def get_slot_writer():
-    return write_slot_preview
 
 
 @router.post("/{walk_id}/diary-slots/preview", response_model=SlotPreviewResponse)

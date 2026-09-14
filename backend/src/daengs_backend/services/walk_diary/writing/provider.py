@@ -2,7 +2,7 @@
 
 import json
 
-from daengs_backend.services import walk_diary_card_policy as policy
+from daengs_backend.services.walk_diary.writing import policy
 
 
 async def generate_card_prose(stage, payload, schema):

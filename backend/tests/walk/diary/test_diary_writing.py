@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services import walk_diary_writing as writer
+from daengs_backend.services.walk_diary.legacy import bundle as writer
 from daengs_walk.diary_output import assemble_diary
 from daengs_walk.diary_stamps import StampPolicy, prepare_stamps
 from daengs_walk.diary_writing import prepare_writing

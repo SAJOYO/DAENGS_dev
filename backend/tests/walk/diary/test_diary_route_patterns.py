@@ -10,11 +10,11 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
-from daengs_backend.services import walk_diary_slots as preview_service
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_slot_writing import slot_payload
+from daengs_backend.services.walk_diary import preview as preview_service
+from daengs_backend.services.walk_diary.legacy.slots import slot_payload
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board import VerifiedBoardRoute
 from daengs_walk.diary_board_selection import observed_anchor

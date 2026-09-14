@@ -5,15 +5,20 @@ from dataclasses import replace
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-from daengs_backend.services.walk_diary_base_board import (
+from daengs_backend.services.walk_diary.legacy.bundle import writing_version
+from daengs_backend.services.walk_diary.preparation.board import (
     prepare_saved_base_board,
     with_scene_backgrounds,
 )
-from daengs_backend.services.walk_diary_board_storage import load_board, read_board
-from daengs_backend.services.walk_diary_card_policy import writing_version as slot_writing_version
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary, prepare_saved_diary
-from daengs_backend.services.walk_diary_storage import read_diary
-from daengs_backend.services.walk_diary_writing import writing_version
+from daengs_backend.services.walk_diary.preparation.diary import (
+    PreparedWalkDiary,
+    prepare_saved_diary,
+)
+from daengs_backend.services.walk_diary.storage.board import load_board, read_board
+from daengs_backend.services.walk_diary.storage.bundle import read_diary
+from daengs_backend.services.walk_diary.writing.policy import (
+    writing_version as slot_writing_version,
+)
 from daengs_backend.services.walk_storyboard_state import (
     StoryboardConflict,
     StoryboardNotFound,

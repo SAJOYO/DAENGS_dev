@@ -9,9 +9,9 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services.walk_diary_observations import prepare_observation_source
-from daengs_backend.services.walk_diary_prepare import prepare_saved_diary
+from daengs_backend.services.walk_diary.preparation import input as reader
+from daengs_backend.services.walk_diary.preparation.diary import prepare_saved_diary
+from daengs_backend.services.walk_diary.preparation.observations import prepare_observation_source
 from daengs_walk.diary_observations import MAX_OBSERVATIONS
 from daengs_walk.diary_output import assemble_diary
 from daengs_walk.diary_stamps import StampPolicy, prepare_stamps

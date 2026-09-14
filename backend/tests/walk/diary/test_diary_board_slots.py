@@ -5,10 +5,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from daengs_backend.services import walk_diary_base_board as service
-from daengs_backend.services import walk_diary_snapshot as snapshots
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
+from daengs_backend.services.walk_diary.lifecycle import snapshot as snapshots
+from daengs_backend.services.walk_diary.preparation import board as service
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board_output import BOARD_FORMAT
 from daengs_walk.diary_input import digest

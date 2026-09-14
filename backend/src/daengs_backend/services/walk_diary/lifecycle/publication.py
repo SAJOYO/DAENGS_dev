@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 
-from daengs_backend.services.walk_diary_board_storage import (
+from daengs_backend.services.walk_diary.storage.board import (
     load_board,
     source_revision,
     store_board,
@@ -69,7 +69,7 @@ def _consume(task):
 
 
 async def within_budget(write, source, prepared, deadline):
-    from daengs_backend.services.walk_diary_deadline import publication_deadline
+    from daengs_backend.services.walk_diary.deadline import publication_deadline
 
     remaining = (deadline - datetime.now(UTC)).total_seconds()
     if remaining <= 0:

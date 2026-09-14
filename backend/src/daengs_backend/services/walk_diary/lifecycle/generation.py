@@ -5,24 +5,26 @@ from datetime import UTC, datetime, timedelta
 
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
-from daengs_backend.services.walk_diary_board_storage import store_board
-from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
-from daengs_backend.services.walk_diary_lifecycle import complete_diary, reserve_diary
-from daengs_backend.services.walk_diary_publication import (
+from daengs_backend.services.walk_diary.contracts import CardWritingResult
+from daengs_backend.services.walk_diary.legacy.board_slots import complete_slot_board
+from daengs_backend.services.walk_diary.legacy.bundle import write_diary
+from daengs_backend.services.walk_diary.lifecycle.publication import (
     fallback,
     settle_expired,
     within_budget,
 )
-from daengs_backend.services.walk_diary_snapshot import (
+from daengs_backend.services.walk_diary.lifecycle.reservation import complete_diary, reserve_diary
+from daengs_backend.services.walk_diary.lifecycle.snapshot import (
     apply_backgrounds,
     generation_revision,
     restore_backgrounds,
     result,
     snapshot,
 )
-from daengs_backend.services.walk_diary_storage import store_diary
-from daengs_backend.services.walk_diary_writing import write_diary
+from daengs_backend.services.walk_diary.runtime import write_board
+from daengs_backend.services.walk_diary.storage.board import store_board
+from daengs_backend.services.walk_diary.storage.bundle import store_diary
+from daengs_backend.services.walk_diary.writing.assembly import complete_cards
 from daengs_walk.diary_board_output import publish_board
 
 
@@ -90,9 +92,12 @@ async def generate_diary(
             if isinstance(output, CardWritingResult) and output.scene_backgrounds is not None:
                 collected = output.scene_backgrounds
                 prepared = apply_backgrounds(prepared, collected)
-            bundle = store_board(
-                prepared, complete_slot_board(prepared, output), revision, writing=output
+            completed = (
+                complete_cards(prepared, output)
+                if isinstance(output, CardWritingResult)
+                else complete_slot_board(prepared, output)
             )
+            bundle = store_board(prepared, completed, revision, writing=output)
         elif (
             output.input_revision != ticket.input_revision
             or output.plan_revision != prepared.prepared.plan.revision()

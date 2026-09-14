@@ -9,7 +9,7 @@ import uuid
 from functools import partial
 from pathlib import Path
 
-from daengs_backend.services.walk_diary_slot_writing import generate_slot_prose, write_slot_preview
+from daengs_backend.services.walk_diary.legacy.slots import generate_slot_prose, write_slot_preview
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint

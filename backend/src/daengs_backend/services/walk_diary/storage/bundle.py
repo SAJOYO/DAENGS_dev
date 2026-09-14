@@ -9,7 +9,6 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from daengs_backend.services.walk_diary_writing import writing_version
 from daengs_walk.diary_input import DiaryContract, Digest, digest
 from daengs_walk.diary_output import DiaryBundle
 
@@ -37,6 +36,8 @@ def source_revision(prepared):
 
 
 def policy_revision(prepared):
+    from daengs_backend.services.walk_diary.legacy.bundle import writing_version
+
     return digest(
         {
             "preparation": prepared.prepared.policy.model_dump(mode="json"),

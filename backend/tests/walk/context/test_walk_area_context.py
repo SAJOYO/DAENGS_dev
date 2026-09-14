@@ -14,7 +14,7 @@ from daengs_backend.config import settings
 from daengs_backend.services import walk_area_catalog as catalog
 from daengs_backend.services import walk_commerce_catalog as commerce
 from daengs_backend.services import walk_river_catalog as river
-from daengs_backend.services.walk_diary_writing import write_diary
+from daengs_backend.services.walk_diary.legacy.bundle import write_diary
 from daengs_backend.services.walk_public_context import collect_public
 from daengs_backend.services.walk_public_http import PublicSourceError
 from daengs_walk.diary_background import project_background

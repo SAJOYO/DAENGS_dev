@@ -8,21 +8,19 @@ from datetime import datetime, timedelta
 from daengs_backend.config import settings
 from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-from daengs_backend.services.walk_diary_board_storage import load_board
-from daengs_backend.services.walk_diary_contract import (
+from daengs_backend.services.walk_diary.guard import (
     GenerationTicket,
     StaleDiaryGeneration,
     bind_generation,
     require_current,
 )
-from daengs_backend.services.walk_diary_negotiation import guard_old_writer
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_backend.services.walk_diary_publication import (
+from daengs_backend.services.walk_diary.lifecycle.negotiation import guard_old_writer
+from daengs_backend.services.walk_diary.lifecycle.publication import (
     preparation,
     publication_reservation,
     settle_expired,
 )
-from daengs_backend.services.walk_diary_snapshot import (
+from daengs_backend.services.walk_diary.lifecycle.snapshot import (
     apply_backgrounds,
     generation_revision,
     restore_backgrounds,
@@ -30,6 +28,8 @@ from daengs_backend.services.walk_diary_snapshot import (
     revisions,
     snapshot,
 )
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.storage.board import load_board
 from daengs_backend.services.walk_storyboard_state import (
     LEASE_SECONDS,
     StoryboardConflict,

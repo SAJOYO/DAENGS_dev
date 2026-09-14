@@ -6,24 +6,26 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_space_collection as collection
 from daengs_backend.services import walk_sgis
-from daengs_backend.services.walk_diary_base_board import (
-    assemble_saved_base_board,
-    with_scene_backgrounds,
-)
-from daengs_backend.services.walk_diary_board_slot_writing import (
+from daengs_backend.services.walk_diary import contracts as diary_contracts
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.legacy.board_slots import (
     complete_slot_board,
     write_legacy_slot_board,
 )
-from daengs_backend.services.walk_diary_board_storage import (
+from daengs_backend.services.walk_diary.lifecycle.snapshot import generation_revision, result
+from daengs_backend.services.walk_diary.preparation.board import (
+    assemble_saved_base_board,
+    with_scene_backgrounds,
+)
+from daengs_backend.services.walk_diary.storage.board import (
     LegacyStoredBoard,
     StoredBoard,
     store_board,
 )
-from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
-from daengs_backend.services.walk_diary_snapshot import generation_revision, result
+from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
+from daengs_backend.services.walk_diary.writing import policy as diary_policy
 from daengs_backend.services.walk_sgis import SgisSource
 from daengs_walk.diary_board_output import BOARD_FORMAT, publish_board
 from daengs_walk.diary_input import digest
@@ -95,19 +97,19 @@ async def fixed_cases(monkeypatch):
         ).model_dump(mode="json")
     }
     models = (
-        writing.SpaceProse,
-        writing.ActionProse,
-        writing.CardTitle,
-        writing.CardTitles,
-        writing.WritingJob,
-        writing.CardWritingResult,
+        diary_contracts.SpaceProse,
+        diary_contracts.ActionProse,
+        diary_contracts.CardTitle,
+        diary_contracts.CardTitles,
+        diary_contracts.WritingJob,
+        diary_contracts.CardWritingResult,
         StoredCardWriting,
         LegacyStoredBoard,
         StoredBoard,
     )
     return {
         "source": prepared.input.source.model_dump(mode="json"),
-        "policy": writing.writing_version(),
+        "policy": diary_policy.writing_version(),
         "schemas": {model.__name__: model.model_json_schema() for model in models},
         "cases": cases,
     }

@@ -1,7 +1,7 @@
 """Freeze adopted card bodies and validate completed cards against prepared input."""
 
-from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
-from daengs_backend.services.walk_diary_card_policy import writing_version
+from daengs_backend.services.walk_diary.contracts import CardWritingResult
+from daengs_backend.services.walk_diary.writing.policy import writing_version
 from daengs_walk.diary_board_output import publish_board
 from daengs_walk.diary_card_narrative import (
     CardNarrative,

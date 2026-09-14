@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services import walk_diary_slot_writing as writer
+from daengs_backend.services.walk_diary.legacy import slots as writer
 from daengs_walk.diary_board_receipt import StoredSceneWriting
 from daengs_walk.diary_input import DiaryInput, digest
 from daengs_walk.diary_scene_input import scene_materials

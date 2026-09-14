@@ -11,12 +11,13 @@ import pytest
 from daengs_backend.config import settings
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_generation as generation
-from daengs_backend.services import walk_diary_input as reader
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services import walk_diary_writing as bundle_writer
-from daengs_backend.services.walk_diary_board_storage import StoredBoard
-from daengs_backend.services.walk_diary_generation import generate_diary
+from daengs_backend.services.walk_diary import api as diary_api
+from daengs_backend.services.walk_diary.legacy import bundle as bundle_writer
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.lifecycle import generation
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.preparation import input as reader
+from daengs_backend.services.walk_diary.storage.board import StoredBoard
 from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
 from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.observations import stored, uploaded
@@ -38,9 +39,9 @@ def clock(monkeypatch):
 
 @pytest.fixture
 def legacy_context_wait(monkeypatch):
-    # Only historical wait tests opt in. Normal HTTP tests use the default service.
+    # Opt in at the public service boundary now used by HTTP, not its private implementation.
     monkeypatch.setattr(
-        generation, "generate_diary", partial(generate_diary, legacy_context_wait=True)
+        diary_api, "generate_diary", partial(diary_api.generate_diary, legacy_context_wait=True)
     )
 
 

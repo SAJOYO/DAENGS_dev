@@ -5,10 +5,10 @@ from copy import deepcopy
 import pytest
 
 from daengs_backend.models.walk_storyboard import WalkStoryboard
-from daengs_backend.services import walk_diary_collection_application as application
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
-from daengs_backend.services.walk_diary_board_storage import load_board
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.collection import application
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.runtime import write_board
+from daengs_backend.services.walk_diary.storage.board import load_board
 from daengs_walk.diary_board_output import BOARD_FORMAT
 from tests.walk.diary.test_diary_board_db import (
     board_database,  # noqa: F401 -- shared disposable database fixture

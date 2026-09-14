@@ -10,14 +10,14 @@ import pytest
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_generation as generation
-from daengs_backend.services import walk_diary_slots as preview_service
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_base_board import (
+from daengs_backend.services.walk_diary import preview as preview_service
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.legacy.slots import slot_payload
+from daengs_backend.services.walk_diary.lifecycle import generation
+from daengs_backend.services.walk_diary.preparation.board import (
     assemble_saved_base_board,
     with_scene_backgrounds,
 )
-from daengs_backend.services.walk_diary_slot_writing import slot_payload
 from daengs_backend.services.walk_space_catalog_input import (
     normalization_input,
     retain_page,

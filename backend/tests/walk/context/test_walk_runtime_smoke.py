@@ -14,13 +14,13 @@ import pytest
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkUpload
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2
-from daengs_backend.services import walk_entry_pin
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_diary.lifecycle.snapshot import result as publication_result
 from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
 from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
 from daengs_backend.services.walk_diary.runtime import write_cards
 from daengs_backend.services.walk_diary.storage.board import store_board
+from daengs_backend.services.walk_records import pins as walk_entry_pin
 from daengs_walk.diary.contracts.input import DiaryInput, digest
 from tests.walk.diary.test_diary_card_writing import prepared, prose
 from tests.walk.support.base_board import policy

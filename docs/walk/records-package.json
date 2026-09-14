@@ -1,0 +1,112 @@
+{
+  "baseline": "159067b7",
+  "compatibility": {
+    "walk_entry": {
+      "reserve": "daengs_backend.services.walk_records.context",
+      "EntryConflict": "daengs_backend.services.walk_records.errors",
+      "EntryInvalid": "daengs_backend.services.walk_records.errors",
+      "EntryNotFound": "daengs_backend.services.walk_records.errors",
+      "guard_v1": "daengs_backend.services.walk_records.policy",
+      "build_profile": "daengs_backend.services.walk_records.profile",
+      "response": "daengs_backend.services.walk_records.v1",
+      "list_entries": "daengs_backend.services.walk_records.v1",
+      "apply_change": "daengs_backend.services.walk_records.v1",
+      "write": "daengs_backend.services.walk_records.v1",
+      "remove": "daengs_backend.services.walk_records.v1",
+      "profile": "daengs_backend.services.walk_records.v1"
+    },
+    "walk_entry_v2": {
+      "EntryConflict": "daengs_backend.services.walk_records.errors",
+      "EntryDeleted": "daengs_backend.services.walk_records.errors",
+      "EntryInvalid": "daengs_backend.services.walk_records.errors",
+      "EntryNotFound": "daengs_backend.services.walk_records.errors",
+      "EntryUpgradeRequired": "daengs_backend.services.walk_records.errors",
+      "EntryWritesDisabled": "daengs_backend.services.walk_records.errors",
+      "validate_new_pin": "daengs_backend.services.walk_records.pins",
+      "validate_sources": "daengs_backend.services.walk_records.pins",
+      "validate_transition": "daengs_backend.services.walk_records.pins",
+      "capabilities": "daengs_backend.services.walk_records.policy",
+      "guard_v1": "daengs_backend.services.walk_records.policy",
+      "require_enabled": "daengs_backend.services.walk_records.policy",
+      "build_profile": "daengs_backend.services.walk_records.profile",
+      "legacy_pin": "daengs_backend.services.walk_records.v2",
+      "response": "daengs_backend.services.walk_records.v2",
+      "digest": "daengs_backend.services.walk_records.v2",
+      "request_payload": "daengs_backend.services.walk_records.v2",
+      "list_entries": "daengs_backend.services.walk_records.v2",
+      "locked": "daengs_backend.services.walk_records.v2",
+      "replay": "daengs_backend.services.walk_records.v2",
+      "compare_revision": "daengs_backend.services.walk_records.v2",
+      "store": "daengs_backend.services.walk_records.v2",
+      "write": "daengs_backend.services.walk_records.v2",
+      "finalize_pin": "daengs_backend.services.walk_records.v2",
+      "validate_recording_receipt": "daengs_backend.services.walk_records.v2",
+      "remove": "daengs_backend.services.walk_records.v2",
+      "profile": "daengs_backend.services.walk_records.v2"
+    },
+    "walk_entry_errors": {
+      "EntryNotFound": "daengs_backend.services.walk_records.errors",
+      "EntryConflict": "daengs_backend.services.walk_records.errors",
+      "EntryInvalid": "daengs_backend.services.walk_records.errors",
+      "EntryDeleted": "daengs_backend.services.walk_records.errors",
+      "EntryWritesDisabled": "daengs_backend.services.walk_records.errors",
+      "EntryUpgradeRequired": "daengs_backend.services.walk_records.errors"
+    },
+    "walk_entry_pin": {
+      "EntryConflict": "daengs_backend.services.walk_records.errors",
+      "EntryInvalid": "daengs_backend.services.walk_records.errors",
+      "POLICY": "daengs_backend.services.walk_records.pins",
+      "ALGORITHM": "daengs_backend.services.walk_records.pins",
+      "same_point": "daengs_backend.services.walk_records.pins",
+      "validate_sources": "daengs_backend.services.walk_records.pins",
+      "validate_new_pin": "daengs_backend.services.walk_records.pins",
+      "validate_transition": "daengs_backend.services.walk_records.pins"
+    },
+    "walk_entry_policy": {
+      "EntryNotFound": "daengs_backend.services.walk_records.errors",
+      "EntryUpgradeRequired": "daengs_backend.services.walk_records.errors",
+      "POLICY": "daengs_backend.services.walk_records.pins",
+      "require_enabled": "daengs_backend.services.walk_records.policy",
+      "capabilities": "daengs_backend.services.walk_records.policy",
+      "guard_v1": "daengs_backend.services.walk_records.policy"
+    },
+    "walk_entry_profile": {
+      "build_profile": "daengs_backend.services.walk_records.profile"
+    },
+    "walk_entry_context": {
+      "EntryNotFound": "daengs_backend.services.walk_records.errors",
+      "guard_v1": "daengs_backend.services.walk_records.policy",
+      "require_enabled": "daengs_backend.services.walk_records.policy",
+      "reserve": "daengs_backend.services.walk_records.context",
+      "reserve_pin": "daengs_backend.services.walk_records.context",
+      "read": "daengs_backend.services.walk_records.context",
+      "take": "daengs_backend.services.walk_records.context",
+      "finish": "daengs_backend.services.walk_records.context",
+      "process": "daengs_backend.services.walk_records.context"
+    },
+    "walk_context_backfill": {
+      "BACKFILL_POLICY": "daengs_backend.services.walk_records.backfill",
+      "TAGS": "daengs_backend.services.walk_records.backfill",
+      "USABLE": "daengs_backend.services.walk_records.backfill",
+      "MISSING": "daengs_backend.services.walk_records.backfill",
+      "MAX_SOURCES": "daengs_backend.services.walk_records.backfill",
+      "StaleBackfillPlan": "daengs_backend.services.walk_records.backfill",
+      "enabled": "daengs_backend.services.walk_records.backfill",
+      "location_reason": "daengs_backend.services.walk_records.backfill",
+      "disposition": "daengs_backend.services.walk_records.backfill",
+      "build_plan": "daengs_backend.services.walk_records.backfill",
+      "run": "daengs_backend.services.walk_records.backfill"
+    },
+    "walk_photo": {
+      "PhotoNotFound": "daengs_backend.services.walk_photos.api",
+      "PhotoConflict": "daengs_backend.services.walk_photos.api",
+      "PhotoInvalid": "daengs_backend.services.walk_photos.api",
+      "capabilities": "daengs_backend.services.walk_photos.api",
+      "owned": "daengs_backend.services.walk_photos.api",
+      "response": "daengs_backend.services.walk_photos.api",
+      "transition": "daengs_backend.services.walk_photos.api",
+      "get": "daengs_backend.services.walk_photos.api",
+      "put": "daengs_backend.services.walk_photos.api"
+    }
+  }
+}

@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from daengs_backend.schemas.walk_entry import EntryContent, EntryWrite, RecordProfileQuery
-from daengs_backend.services import walk_entry as service
+from daengs_backend.services.walk_records import v1 as service
 
 NOW = datetime(2026, 9, 5, tzinfo=UTC)
 

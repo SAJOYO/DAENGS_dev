@@ -55,19 +55,15 @@ async def pet_group_ids(session: AsyncSession, pet_id: uuid.UUID) -> list[uuid.U
 
     연결 안 된 아이는 `[pet_id]` 하나라 지금까지와 같습니다.
 
-    ⚠️ **권한을 안 봅니다** — 부르는 쪽(`services/walk_entry.py::profile`)이 바로 앞에서
+    ⚠️ **권한을 안 봅니다** — 부르는 쪽(`services/walk_records/v1.py::profile`)이 바로 앞에서
     `pet_is_accessible` 로 확인한 뒤입니다. 이 함수만 따로 부르지 마세요.
 
     같은 층에 두는 이유는 `profile` 이 쓰는 조회를 한 모듈에 모아 두기 위해서입니다 —
     테스트가 이 모듈을 통째로 대역으로 바꿉니다.
     """
-    group = select(Pet.identity_id).where(
-        Pet.id == pet_id, Pet.identity_id.is_not(None)
-    )
+    group = select(Pet.identity_id).where(Pet.id == pet_id, Pet.identity_id.is_not(None))
     rows = list(
-        await session.scalars(
-            select(Pet.id).where(Pet.identity_id.in_(group)).order_by(Pet.id)
-        )
+        await session.scalars(select(Pet.id).where(Pet.identity_id.in_(group)).order_by(Pet.id))
     )
     return rows or [pet_id]
 
@@ -81,7 +77,7 @@ async def profile_walks(
     """그 아이가 나간 산책 전부 — **소유자 조건을 걸지 않습니다**
     (`walk.count_for_pet_between` 과 같은 판단, docs/co-care.md §2).
 
-    부르는 쪽(`services/walk_entry.py::profile`)이 이미 `pet_is_accessible` 로 구성원인지를
+    부르는 쪽(`services/walk_records/v1.py::profile`)이 이미 `pet_is_accessible` 로 구성원인지를
     확인한 뒤라, 여기서 다시 사람으로 거르면 **돌보미가 200 을 받으면서 내용은 빈**
     모양이 됩니다 — 예전에는 게이트가 대표만이라 404 였으므로, 게이트만 열고 이곳을
     그대로 두면 "기록이 없다" 로 조용히 바뀌는 것이 더 나쁘습니다.

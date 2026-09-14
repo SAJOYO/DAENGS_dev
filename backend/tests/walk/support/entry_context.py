@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_entry_context as service
 from daengs_backend.services import walk_entry_context_source as source
+from daengs_backend.services.walk_records import context as service
 
 NOW = datetime.now(UTC)
 

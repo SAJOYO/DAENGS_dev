@@ -11,18 +11,16 @@ from datetime import UTC, datetime
 
 import httpx
 
+from daengs_backend.orchestration.execution import discard
 from daengs_backend.services import walk_area_catalog, walk_catalog_regions, walk_park_catalog
 from daengs_backend.services.walk_commerce_catalog import ENDPOINT as COMMERCE_ENDPOINT
+from daengs_backend.services.walk_diary_collection_progress import collection_progress
+from daengs_backend.services.walk_diary_space_snapshot import source_background
 from daengs_backend.services.walk_public_http import get_json
 from daengs_backend.services.walk_sgis import sgis
 from daengs_backend.services.walk_space_catalog_input import normalization_input, retain_page
-from daengs_walk.diary_board import RecordCore
-from daengs_walk.diary_input import SavedBackground, digest
-from daengs_walk.diary_scene_backgrounds import (
-    SceneBackgroundSnapshot,
-    board_background_revision,
-    scene_background_targets,
-)
+from daengs_walk.diary_input import digest
+from daengs_walk.diary_scene_backgrounds import scene_background_targets
 from daengs_walk.diary_space_materials import SpaceInput, normalize_spaces
 
 LAND_ENDPOINT = "https://api.mcee.go.kr/geoserver/wms"
@@ -96,20 +94,46 @@ async def collect_spaces(
         for t in targets
         if t.anchor.point is not None and t.anchor.position_state != "provisional"
     }
-    results = {}
-    semaphore = asyncio.Semaphore(4)
     kinds = (*(("sgis",) if include_sgis else ()), "commerce", "park", "land_cover")
+    # One lane per source, at most four active calls. A slow WMS cannot occupy address slots.
+    lanes = {kind: asyncio.Semaphore(1) for kind in kinds}
+    progress = collection_progress(board, timeout_s)
+    selected_points = dict(list(points.items())[:MAX_SCENES])
+    scenes = {scene.id: scene for scene in board.scenes}
+    grouped = {}
+    for target in targets:
+        grouped.setdefault(digest(target.anchor.point), []).append(target)
+
+    def backgrounds(key, kind, value=None, at=None, reason="source_unavailable"):
+        return tuple(
+            source_background(t, scenes[t.scene_id], kind, value, at, reason) for t in grouped[key]
+        )
+
+    for key in grouped:
+        for kind in kinds:
+            pending = backgrounds(
+                key,
+                kind,
+                reason="scene_limit" if key not in selected_points else "collection_not_started",
+            )
+            progress.expect((key, kind), pending)
+            if key not in selected_points:
+                progress.finish((key, kind), pending)
 
     async def acquire(key, point, kind):
         try:
-            async with semaphore:
+            async with lanes[kind]:
+                if not progress.start((key, kind)):
+                    return
                 at = datetime.now(UTC)
                 query = point.model_dump()
                 if kind == "sgis":
                     if not sgis_key or not sgis_secret:
                         raise ValueError("sgis unavailable")
                     row, retrieved = await sgis.address(transport, sgis_key, sgis_secret, query)
-                    results[(key, kind)] = (row, datetime.fromisoformat(retrieved))
+                    progress.finish(
+                        (key, kind), backgrounds(key, kind, row, datetime.fromisoformat(retrieved))
+                    )
                     return
                 if not include_spaces:
                     raise ValueError("spatial source disabled")
@@ -141,13 +165,12 @@ async def collect_spaces(
                 value = value.model_copy(
                     update={"audit": tuple(a for a in value.audit if a["source"] == kind)}
                 )
-                results[(key, kind)] = (value, at)
+                progress.finish((key, kind), backgrounds(key, kind, value, at))
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - URLs/credentials/paths never enter saved diagnostics
-            results[(key, kind)] = (None, None)
+            progress.finish((key, kind), backgrounds(key, kind))
 
-    selected_points = dict(list(points.items())[:MAX_SCENES])
     tasks = [
         asyncio.create_task(acquire(key, point, kind))
         for key, point in selected_points.items()
@@ -155,84 +178,13 @@ async def collect_spaces(
     ]
     try:
         if tasks:
-            await asyncio.wait(tasks, timeout=timeout_s)
+            remaining = max(0, progress.deadline - asyncio.get_running_loop().time())
+            await asyncio.wait(tasks, timeout=min(timeout_s, remaining))
+        # Commit the snapshot before cancellation/transport cleanup. Late providers have no write access.
+        return progress.freeze()
     finally:
         for task in tasks:
-            if not task.done():
-                task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-    backgrounds = []
-    for target in targets:
-        for kind in kinds:
-            key = (digest(target.anchor.point), kind)
-            value, at = results.get(key, (None, None))
-            unlocated = target.anchor.point is None or target.anchor.position_state == "provisional"
-            reason = (
-                "scene_location_unavailable"
-                if unlocated
-                else "scene_limit"
-                if key[0] not in selected_points
-                else "collection_timeout"
-                if key not in results
-                else "source_unavailable"
-            )
-            if kind == "sgis":
-                scene = next(s for s in board.scenes if s.id == target.scene_id)
-                pin = scene.core.record.pin_payload if isinstance(scene.core, RecordCore) else None
-                payload = (
-                    {
-                        "format": "sgis-dong-v1",
-                        "address_type": "administrative_dong",
-                        "address": value,
-                        "query_point": target.anchor.point.model_dump(mode="json"),
-                        "location_basis": pin["method"] if pin else "original_location",
-                        **(
-                            {k: pin.get(k) for k in ("uncertainty_m", "uncertainty_basis")}
-                            if pin
-                            else {}
-                        ),
-                    }
-                    if value is not None
-                    else None
-                )
-            else:
-                payload = value.model_dump(mode="json") if value is not None else None
-            backgrounds.append(
-                SavedBackground(
-                    id="normalized:"
-                    + digest(
-                        [target.scene_id, target.core_ref.model_dump(mode="json"), kind, payload]
-                    ),
-                    target=target.core_ref,
-                    provider="sgis" if kind == "sgis" else "public-normalized-" + kind,
-                    payload_schema="walk-entry-context-v1"
-                    if kind == "sgis"
-                    else "space-materials-v1",
-                    policy_version="walk-entry-context-v1"
-                    if kind == "sgis"
-                    else "space-normalization-v1",
-                    query_point=target.anchor.point,
-                    tags=("space",),
-                    status=(
-                        "known"
-                        if value is not None
-                        else "not_requested"
-                        if unlocated
-                        else "unavailable"
-                    ),
-                    reason=None if value is not None else reason,
-                    retrieved_at=at,
-                    temporal_basis="lookup_snapshot",
-                    payload=payload,
-                    payload_sha256=digest(payload) if payload is not None else None,
-                )
-            )
-    return SceneBackgroundSnapshot(
-        board_revision=board_background_revision(board),
-        targets=targets,
-        backgrounds=tuple(backgrounds),
-    )
+            discard(task)
 
 
 async def configured_collection(board):

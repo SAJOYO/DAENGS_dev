@@ -7,7 +7,7 @@ It does not build a query response, serialize JSON or publish a measurement.
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 from daengs_backend.services.walk_trajectory_shadow import (
     ObservedConnectionPolicy,
     backup_fingerprint,

@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from daengs_backend.repositories import walk_entry_v2 as repo
 from daengs_backend.schemas.walk_entry_v2 import ContentV2, Pin
-from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.services.walk_records.errors import EntryConflict, EntryInvalid
+from daengs_backend.services.walk_session.chunk import decode_chunk
 
 POLICY = "action-pin-policy-v1"
 ALGORITHM = "action-pin-local-v1"

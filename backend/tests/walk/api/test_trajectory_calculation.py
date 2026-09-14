@@ -16,7 +16,7 @@ from daengs_backend.repositories import walk_precision
 from daengs_backend.schemas.walk_precision import PrecisionPoint
 from daengs_backend.schemas.walk_trajectory import MAX_POINTS, VERSION, TrajectoryCalculation
 from daengs_backend.services import walk_trajectory as service
-from daengs_backend.services.walk_precision_contract import chunk_digest as precision_digest
+from daengs_backend.services.walk_session.precision_contract import chunk_digest as precision_digest
 from daengs_walk.trajectory_projection import boundaries, path_sections
 from tests.walk.api import test_motion_calculation as motion_tests
 

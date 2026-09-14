@@ -12,7 +12,7 @@ from daengs_backend.schemas.walk_measurement import RoutePage
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
 from daengs_backend.schemas.walk_precision import PrecisionPoint
 from daengs_backend.services.walk_measurement import project
-from daengs_backend.services.walk_precision_contract import refine_points
+from daengs_backend.services.walk_session.precision_contract import refine_points
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 CASES = json.loads((FIXTURES / "gps-motion-precision-v1.json").read_text(encoding="utf-8"))["cases"]

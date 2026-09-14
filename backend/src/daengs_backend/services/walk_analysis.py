@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from daengs_backend.models.walk import WalkAnalysis
-from daengs_backend.services.walk_finalize import PreparedWalkEvidence
+from daengs_backend.services.walk_session.finalize import PreparedWalkEvidence
 from daengs_walk.contracts import (
     MICRO_OBSERVATION_VERSION,
     CanonicalWalkFacts,

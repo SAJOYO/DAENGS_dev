@@ -26,7 +26,7 @@ from daengs_backend.services.walk_analysis import (
     decode_stored_cellophane,
     encode_cellophane,
 )
-from daengs_backend.services.walk_finalize import PreparedWalkEvidence
+from daengs_backend.services.walk_session.finalize import PreparedWalkEvidence
 from daengs_walk import WalkEvidencePoint, analyze_walk, build_cellophane
 from tests.walk.support.paths import REPO as REPO_ROOT
 

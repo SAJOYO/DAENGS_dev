@@ -3,9 +3,9 @@
 import asyncio
 
 from daengs_backend.schemas.walk_trajectory import MAX_POINTS, TrajectoryCalculation
-from daengs_backend.services import walk_motion
 from daengs_backend.services.walk_measurement_projection import project
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session import motion as walk_motion
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 
 
 def _project(manifest, raw, observations, fingerprint, precision_fp, *, owner, walk_id, expected):

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services.walk_motion_contract import (
+from daengs_backend.services.walk_session.motion_contract import (
     MotionConflict,
     chunk_digest,
     evidence_digest,

@@ -16,11 +16,11 @@ from daengs_backend.schemas.walk_measurement import (
     RoutePage,
     RoutePoint,
 )
-from daengs_backend.services import walk_motion
-from daengs_backend.services.walk import WalkNotFoundError
 from daengs_backend.services.walk_measurement_projection import project as project_measurement
-from daengs_backend.services.walk_motion import MotionUnavailable
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session import motion as walk_motion
+from daengs_backend.services.walk_session.errors import WalkNotFoundError
+from daengs_backend.services.walk_session.motion import MotionUnavailable
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 from daengs_walk.trajectory_view import digest
 
 

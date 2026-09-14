@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import (
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import (
     FinalizeInputError,
     prepare_finalized_walk,
     walk_input_fingerprint,

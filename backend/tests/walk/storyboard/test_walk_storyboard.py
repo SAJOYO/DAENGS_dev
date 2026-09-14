@@ -13,9 +13,9 @@ from daengs_backend.core.database import get_session
 from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
 from daengs_backend.services.walk_legacy import storyboard as service
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from tests.walk.support.paths import WALK_FIXTURES
 from tests.walk.support.storyboard import ENTRY, OWNER, PATH, SESSION, START, WALK
@@ -318,7 +318,7 @@ async def test_place_lookup_projects_factual_source_not_a_visit():
 
 def test_history_uses_observed_speed_and_retains_reference_sources(live):
     from daengs_backend.schemas.walk import WalkFinalizeRequest
-    from daengs_backend.services.walk_finalize import prepare_finalized_walk
+    from daengs_backend.services.walk_session.finalize import prepare_finalized_walk
     from daengs_walk import analyze_walk
     from daengs_walk.storyboard import build_storyboard
     from daengs_walk.storyboard_input import scene_inputs

@@ -251,6 +251,11 @@ class Settings(BaseSettings):
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
     # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
     cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
+    # 앱 사용자 하루 생성 한도 (KST 하루, `ready` 만 셈). 0 이면 한도 없음. 테스트 단계라 1 이고,
+    # 제품 규칙이 정해지면 `services/ai_card_quota.py` 의 함수를 통째로 바꿉니다 (D-076).
+    cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
+    # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
+    cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
 
     @field_validator("cardimage_months", mode="before")
     @classmethod

@@ -229,15 +229,20 @@ async def card_publication(request, owner, walk_id, entries, notes):
             "card graph did not publish a ready board",
             diagnostics=diagnosis,
         )
-    if (
-        await request(
-            "GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5"
+    readback = await request(
+        "GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5"
+    )
+    if readback != result:
+        latest = await probe_snapshot(owner, walk_id)
+        diagnosis["readback"] = board_diagnostics(readback, after, latest, notes, 0)
+        raise SmokeFailure("card readback differs", diagnostics=diagnosis)
+    repeated = await request("POST", path, body)
+    if repeated != result:
+        latest = await probe_snapshot(owner, walk_id)
+        diagnosis["repeated_post"] = board_diagnostics(
+            repeated, after, latest, notes, 0
         )
-        != result
-    ):
-        raise SmokeFailure("card readback differs")
-    if await request("POST", path, body) != result:
-        raise SmokeFailure("repeated card request differs")
+        raise SmokeFailure("repeated card request differs", diagnostics=diagnosis)
     scenes = parsed.bundle.scenes
     if parsed.bundle.model_status != "accepted":
         raise SmokeFailure(

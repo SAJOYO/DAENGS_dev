@@ -27,7 +27,7 @@ from tests.walk.support.base_board import policy
 from tests.walk.support.paths import REPO
 
 
-@pytest.mark.parametrize("outcome", ["accepted", "budget", "stale"])
+@pytest.mark.parametrize("outcome", ["accepted", "budget", "stale", "readback", "repeat"])
 async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeypatch, outcome):
     spec = importlib.util.spec_from_file_location(
         "walk_card_smoke_test", REPO / "tools/walk_runtime_smoke.py"
@@ -86,12 +86,22 @@ async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeyp
     if outcome == "stale":
         after["backgrounds"] = "changed"
     monkeypatch.setattr(module, "probe_snapshot", AsyncMock(side_effect=[before, after]))
+    if outcome in {"readback", "repeat"}:
+        changed = {**response, "status": "stale", "bundle": None}
+        request.side_effect = (
+            [response, changed] if outcome == "readback" else [response, response, changed]
+        )
+        module.probe_snapshot.side_effect = [before, after, after]
     if outcome != "accepted":
         with pytest.raises(module.SmokeFailure) as caught:
             await module.card_publication(request, owner, walk, [], notes)
         diagnosis = caught.value.diagnostics
         assert diagnosis["stored_or_reserved"]["notes_in_record"] == [True]
         assert diagnosis["input_changed"]["backgrounds"] is (outcome == "stale")
+        if outcome in {"readback", "repeat"}:
+            key = "readback" if outcome == "readback" else "repeated_post"
+            assert diagnosis[key]["status"] == "stale"
+            assert diagnosis["status"] == "ready"
         if outcome == "budget":
             assert diagnosis["failure_code"] == "budget_exceeded"
             assert diagnosis["response"]["writing_count"] == 0

@@ -353,6 +353,28 @@ class PhaseTrace:
 
         return measured
 
+    def wrap_sync(self, function, label):
+        def measured(*args, **kwargs):
+            started = time.monotonic()
+            event = {
+                "phase": label,
+                "start_ms": round((started - self.started) * 1000),
+                "status": "running",
+            }
+            self.events.append(event)
+            try:
+                result = function(*args, **kwargs)
+                event["status"] = "ok"
+                return result
+            except BaseException as exc:
+                event["status"] = "error"
+                event["error_type"] = type(exc).__name__
+                raise
+            finally:
+                event["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+
+        return measured
+
 
 async def profiled_card_publication(owner, walk_id, entries, notes):
     # Instrument only this disposable process, never the serving web worker.
@@ -362,14 +384,37 @@ async def profiled_card_publication(owner, walk_id, entries, notes):
     from daengs_backend.orchestration import diary
     from daengs_backend.routers.walk_storyboard import router
     from daengs_backend.services.walk_diary import runtime
-    from daengs_backend.services.walk_diary.lifecycle import generation
+    from daengs_backend.services.walk_diary.collection import application, service
+    from daengs_backend.services.walk_diary.lifecycle import (
+        generation,
+        reservation,
+        strategy,
+    )
     from fastapi import FastAPI
 
     app = FastAPI()
     app.include_router(router)
     trace = PhaseTrace()
     with ExitStack() as stack:
+        for target, name in [
+            (application, "apply_collection"),
+            (generation, "apply_backgrounds"),
+            (reservation, "apply_backgrounds"),
+            (reservation, "require_current"),
+            (strategy, "_cards"),
+        ]:
+            stack.enter_context(
+                patch.object(
+                    target,
+                    name,
+                    trace.wrap_sync(
+                        getattr(target, name),
+                        target.__name__.rsplit(".", 1)[-1] + "." + name,
+                    ),
+                )
+            )
         targets = [
+            (service, "configured_collection"),
             (diary, "collect_for_writing"),
             (runtime, "generate_card_prose"),
             (generation, "reserve_diary"),

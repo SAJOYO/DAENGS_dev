@@ -309,3 +309,28 @@ async def test_phase_trace_preserves_outcome_without_logging_payload(outcome):
     assert trace.events[0]["status"] == outcome
     assert trace.events[0]["elapsed_ms"] >= 0
     assert "private-payload" not in json.dumps(trace.events)
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_sync_phase_trace_preserves_result_and_error(fails):
+    spec = importlib.util.spec_from_file_location(
+        "walk_sync_phase_test", REPO / "tools/walk_runtime_smoke.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    trace = module.PhaseTrace()
+    sentinel = object()
+
+    def operation():
+        if fails:
+            raise ValueError("private-source")
+        return sentinel
+
+    wrapped = trace.wrap_sync(operation, "apply")
+    if fails:
+        with pytest.raises(ValueError):
+            wrapped()
+    else:
+        assert wrapped() is sentinel
+    assert trace.events[0]["status"] == ("error" if fails else "ok")
+    assert "private-source" not in json.dumps(trace.events)

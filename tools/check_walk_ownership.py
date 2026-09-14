@@ -57,7 +57,10 @@ def is_core(path):
         return (
             Path(path).stem == "walk"
             or Path(path).stem.startswith("walk_")
-            or "/services/walk_diary/" in path
+            or any(
+                f"/services/{package}/" in path
+                for package in ("walk_diary", "walk_generation", "walk_legacy")
+            )
             or path.endswith("/orchestration/diary.py")
         )
     return False
@@ -125,7 +128,12 @@ def problems(manifest, scope, edges):
             issues.append("missing owner/rationale: " + record["path"])
         if record.get("scope_reason") != scope.get(record["path"]):
             issues.append("scope reason changed: " + record["path"])
-        if record.get("disposition") not in {"retain", "repackage", "split", "integration"}:
+        if record.get("disposition") not in {
+            "retain",
+            "repackage",
+            "split",
+            "integration",
+        }:
             issues.append("missing disposition: " + record["path"])
     recorded = {tuple(e) for e in manifest["imports"]}
     observed = {tuple(e) for e in edges}
@@ -185,7 +193,10 @@ def self_test():
     assert problems(manifest, scope, [["b.py", "a.py"]])
     damaged = {**manifest, "files": [*manifest["files"], manifest["files"][0]]}
     assert problems(damaged, scope, manifest["imports"])
-    damaged = {**manifest, "files": [{**r, "owner": "unknown"} for r in manifest["files"]]}
+    damaged = {
+        **manifest,
+        "files": [{**r, "owner": "unknown"} for r in manifest["files"]],
+    }
     assert problems(damaged, scope, manifest["imports"])
     broken = {
         **manifest,

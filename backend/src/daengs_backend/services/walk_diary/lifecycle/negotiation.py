@@ -2,7 +2,7 @@
 
 from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_storyboard as repo
-from daengs_backend.services.walk_storyboard_state import StoryboardConflict, StoryboardNotFound
+from daengs_backend.services.walk_generation.state import StoryboardConflict, StoryboardNotFound
 from daengs_walk.diary.board.output import BOARD_FORMAT
 
 

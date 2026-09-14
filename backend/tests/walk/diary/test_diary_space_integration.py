@@ -200,7 +200,7 @@ async def test_legacy_generation_persists_normalization_and_reopens_without_coll
         OWNER,
         WALK,
         StoryboardRequest.model_validate(request),
-        writer=state.writer,
+        writer=state.slot_writer,
         legacy_collector=spy,
     )
     result = response.model_dump(mode="json")
@@ -235,7 +235,7 @@ async def test_source_edit_during_legacy_collection_does_not_reserve_or_publish(
             OWNER,
             WALK,
             StoryboardRequest.model_validate(body(state, bundle_format="walk-diary-board-v1")),
-            writer=state.writer,
+            writer=state.slot_writer,
             legacy_collector=collect,
         )
     assert state.row is None

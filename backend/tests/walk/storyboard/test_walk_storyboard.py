@@ -13,9 +13,9 @@ from daengs_backend.core.database import get_session
 from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import walk_input_fingerprint
+from daengs_backend.services.walk_legacy import storyboard as service
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from tests.walk.support.paths import WALK_FIXTURES
 from tests.walk.support.storyboard import ENTRY, OWNER, PATH, SESSION, START, WALK

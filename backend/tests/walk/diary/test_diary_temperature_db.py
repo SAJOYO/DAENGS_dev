@@ -11,6 +11,7 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.services import walk_entry_context
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
 from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
 from daengs_life.app import deps
@@ -98,7 +99,11 @@ async def test_collected_temperature_reaches_writer_and_is_frozen_after_source_r
 
     async with factory() as db:
         first = await generate_diary(
-            db, OWNER, WALK, spec(expected_entries={str(ENTRY): 1}), writer=writer
+            db,
+            OWNER,
+            WALK,
+            spec(expected_entries={str(ENTRY): 1}),
+            writer=legacy_slot_writer(writer),
         )
         assert first.bundle.model_status == "accepted"
         saved = deepcopy((await db.get(WalkStoryboard, WALK)).bundle)

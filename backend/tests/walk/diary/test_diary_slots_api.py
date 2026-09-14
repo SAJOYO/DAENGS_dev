@@ -26,7 +26,8 @@ def wire(api):
     async def write(preview):
         assert db.commit.await_count == 1  # Walk/user read locks released before external work.
         assert state.row is None  # No generation reservation or publication.
-        assert preview.stamps[1].evidence[0].part == "space"
+        # Movement evidence is admitted first (#508); collected space must still reach the writer.
+        assert any(e.part == "space" for e in preview.stamps[1].evidence)
         return preview
 
     writer = AsyncMock(side_effect=write)

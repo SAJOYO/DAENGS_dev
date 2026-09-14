@@ -79,7 +79,7 @@ def test_mixed_case_content_type_is_accepted(client: TestClient) -> None:
 def test_closed_month_is_404(client: TestClient) -> None:
     r = client.post(
         "/admin/cardimage/generate",
-        params={"month": 9, "dog_name": "x"},
+        params={"month": 12, "dog_name": "x"},   # 12월은 틀만 있고 아직 안 열렸다 (열린 달: 4·9)
         content=_photo(),
         headers={"Content-Type": "image/jpeg"},
     )

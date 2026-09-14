@@ -14,7 +14,8 @@ LEFT_X = 252  # 원본 제목은 268 에서 시작했지만 사용자가 16px �
 PLATE_CENTER_Y = 99          # 검은 제목판 y 53~145 의 중심 (사용자 09-14: 판 중심 정렬)
 CAP_HEIGHT = 48
 RIGHT_MARGIN = 14
-_EDGE_Y0, _EDGE_X0, _EDGE_Y1, _EDGE_X1 = 65, 791, 135, 758  # 판 오른쪽 경계(배지와의 기울어진 선)
+#: 4월 틀의 판 오른쪽 경계(배지와의 기울어진 선) — 기본값. 달마다 다르므로 `draw_title(..., edge=)` 로 받는다.
+DEFAULT_EDGE: tuple[tuple[int, int], tuple[int, int]] = ((65, 791), (135, 758))
 MIN_CAP = 20
 KR_WEIGHT = "Black"
 FILL_TOP, FILL_BOTTOM = (252, 252, 252), (200, 202, 208)
@@ -28,9 +29,13 @@ def title_text(card_name: str, dog_name: str) -> str:
     return f"{card_name} {name.upper()}".strip()   # 한글은 upper() 에 영향 없음
 
 
-def _plate_right_edge(y: float) -> float:
-    t = (y - _EDGE_Y0) / (_EDGE_Y1 - _EDGE_Y0)
-    return _EDGE_X0 + t * (_EDGE_X1 - _EDGE_X0)
+Edge = tuple[tuple[int, int], tuple[int, int]]
+
+
+def _plate_right_edge(y: float, edge: Edge) -> float:
+    (y0, x0), (y1, x1) = edge
+    t = (y - y0) / (y1 - y0)
+    return x0 + t * (x1 - x0)
 
 
 def _font(path: Path, size: int) -> ImageFont.FreeTypeFont:
@@ -55,7 +60,7 @@ class _Run:
     y: int
 
 
-def _layout(text: str, font_path: Path) -> list[_Run]:
+def _layout(text: str, font_path: Path, edge: Edge) -> list[_Run]:
     cap = CAP_HEIGHT
     while True:
         f = _font(font_path, _size_for_cap(font_path, cap))
@@ -64,15 +69,16 @@ def _layout(text: str, font_path: Path) -> list[_Run]:
         y = baseline - ascent
         _, t, r, b = f.getbbox(text)
         right = LEFT_X + r + STROKE_W
-        limit = _plate_right_edge(baseline + 10) - RIGHT_MARGIN
+        limit = _plate_right_edge(baseline + 10, edge) - RIGHT_MARGIN
         if right <= limit or cap <= MIN_CAP:
             shift = round(PLATE_CENTER_Y - (y + t + y + b) / 2)   # 잉크 중심을 판 중심에
             return [_Run(text, f, LEFT_X, y + shift)]
         cap -= 1
 
 
-def draw_title(card: Image.Image, text: str, font_path: Path) -> Image.Image:
-    runs = _layout(text, font_path)
+def draw_title(card: Image.Image, text: str, font_path: Path, *, edge: Edge = DEFAULT_EDGE) -> Image.Image:
+    """`edge` 는 그 달 틀의 제목판 오른쪽 경계(catalog.MonthCard.plate_edge). 기본값은 4월."""
+    runs = _layout(text, font_path, edge)
     base = card.convert("RGBA")
     W, H = base.size
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))

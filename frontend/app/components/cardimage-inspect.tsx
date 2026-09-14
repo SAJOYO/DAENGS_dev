@@ -5,7 +5,7 @@ import { useState } from "react";
 import { apiFetch } from "../../lib/api";
 
 /**
- * 「도감 카드 생성」 갈래 — 사진 한 장 + 이름으로 4월 카드를 만들어 본다 (#496).
+ * 「도감 카드 생성」 갈래 — 사진 한 장 + 이름으로 달 카드(4월 BLOSSOM · 9월 CHUSEOK)를 만들어 본다 (#496).
  *
  * `POST /admin/cardimage/generate`(`search:inspect`). 저장하지 않습니다. 한 번에
  * $0.10~0.20 이 나가서 화면에 그 말을 적습니다. 응답은 base64 PNG 라 그대로
@@ -39,9 +39,16 @@ function messageOf(body: unknown, status: number): string {
   return `HTTP ${status}`;
 }
 
+/** 열린 달. 백엔드 `DAENGS_CARDIMAGE_MONTHS` 기본값과 같다 — 닫힌 달을 보내면 404 라 여기서 고르게 한다. */
+const MONTHS: Array<{ month: number; label: string }> = [
+  { month: 4, label: "4월 · BLOSSOM" },
+  { month: 9, label: "9월 · CHUSEOK" },
+];
+
 export default function CardImageInspect() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
+  const [month, setMonth] = useState<number>(4);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -52,7 +59,7 @@ export default function CardImageInspect() {
     setError(null);
     setResult(null);
     try {
-      const q = new URLSearchParams({ month: "4", dog_name: name.trim() });
+      const q = new URLSearchParams({ month: String(month), dog_name: name.trim() });
       const res = await apiFetch(`/api/admin/cardimage/generate?${q}`, {
         method: "POST",
         body: file,
@@ -86,7 +93,7 @@ export default function CardImageInspect() {
             <code className="text-base font-normal text-zinc-500">POST /admin/cardimage/generate</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            강아지 사진 한 장과 이름을 넣으면 4월 카드(BLOSSOM)를 만듭니다. 정면·귀가 보이는 사진이 잘 됩니다.
+            강아지 사진 한 장과 이름을 넣으면 고른 달의 카드를 만듭니다. 정면·귀가 보이는 사진이 잘 됩니다.
             한 번에 <strong className="font-medium">약 $0.10~0.20</strong> 이 나갑니다 (유사도가 모자라면 한 번
             더 만듭니다).
           </p>
@@ -106,6 +113,22 @@ export default function CardImageInspect() {
             className="min-w-0 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm disabled:cursor-wait disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:file:bg-zinc-800"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="cardimage-month">
+          달
+          <select
+            id="cardimage-month"
+            value={month}
+            disabled={busy}
+            onChange={(event) => setMonth(Number(event.target.value))}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-violet-500 focus:ring-2 disabled:cursor-wait disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            {MONTHS.map((m) => (
+              <option key={m.month} value={m.month}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm" htmlFor="cardimage-name">
           강아지 이름
           <input
@@ -124,7 +147,7 @@ export default function CardImageInspect() {
           disabled={busy || !file || !name.trim()}
           className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         >
-          {busy ? "만드는 중… (20~60초)" : "4월 카드 만들기"}
+          {busy ? "만드는 중… (20~60초)" : `${month}월 카드 만들기`}
         </button>
       </div>
 

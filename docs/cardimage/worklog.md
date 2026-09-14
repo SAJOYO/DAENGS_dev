@@ -3,6 +3,23 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-14 오후 — 콘솔 확인 뒤 다듬기 · 9월 추가
+
+사용자가 콘솔(`uv run dev` + `npm run dev`)에서 4월 카드를 직접 만들어 "잘 나온다"고 확인했다. 그 자리에서 세 가지를 더 했다.
+
+- **PNG 저장** 버튼 (`75d086c1`) — 서버에 저장하지 않는 경로라 `data:` URL 을 `download` 로. 파일명 `BLOSSOM_네오.png`.
+- **제목 x=252** (`86090cb4`) — 원본 268 이 오른쪽으로 치우쳐 보여 244/252/260 세 장을 만들어(`cardimage/out/_title_test/_left_x_variants.png`) 사용자가 252 를 골랐다.
+- **9월 카드** — "9월까지만 하나 더". 4월과 다른 점이 셋이라 `catalog.MonthCard` 에 필드를 뺐다:
+  - `subtitle` — 달별 부제(`SEPTEMBER SPECIAL`)를 catalog 로 옮기고 `generate.SUBTITLES` 표는 지웠다. 부제가 빈 달은 `CardImageUnavailable`.
+  - `outfit` — 4월 문장 "아무것도 안 입는다, 목줄·하네스·옷 금지"가 9월 틀(한복 + 송편 쟁반)과 충돌한다. 9월은 "이미지 1 의 개와 **같은 한복**을 입고 같은 쟁반을 든다, 이미지 2 의 목줄·하네스는 금지". `build_prompt(..., outfit=)` 로 문장 통째 주입.
+  - `plate_edge` — 9월 제목판 오른쪽 경계를 픽셀로 쟀다: y65→750, y100→731, y135→709. 4월(791→758)보다 약 40px 좁다. `title.draw_title(..., edge=)`.
+  - 카드명은 `HARVEST MOON` 이 판에 안 들어가 축소돼 사용자가 **`CHUSEOK`** 으로 바꿨다. 배지 `26SEP` 는 틀에 이미 구워져 있다.
+  - `cardimage_months` 기본값 `{4, 9}`, `.env.example` 주석도. 콘솔 탭에 `<select>`(4월 · BLOSSOM / 9월 · CHUSEOK), 버튼 글자가 고른 달을 따라간다.
+  - 실호출 1회: `_03` 사진 → `CHUSEOK 네오`, 유사도 5/5, `text_ok`·`avatar_ok` 통과, 29.8초, 한복·쟁반 유지. `cardimage/out/_service_check/service_check_sep_1.png`.
+  - 테스트 67개 통과(달별 outfit 문장·edge·9월 틀 전송 검증 추가; "닫힌 달 404" 테스트는 12월로 바꿈), ruff · `uv run check` · `npm run lint` · `tsc` 통과.
+
+**다음 달을 열 때 하는 일(체크리스트):** ① `catalog.py` 에 `scene`·`subtitle`, 틀 강아지가 뭔가 입었으면 `outfit`, ② 제목판 오른쪽 경계 세 점 재서 `plate_edge`(`backend/tools/cardimage_title.py` 로 미리보기), ③ 실호출 1장, ④ `cardimage_months` 기본값과 콘솔 `MONTHS` 표, ⑤ 카드명이 길면 사용자와 짧은 이름 상의.
+
 ## 2026-09-14 — 1단계 구현 (에이전트 실행, Task 1~9·11)
 
 `docs/cardimage/plan-2026-09-14-phase1.md` 를 승인받아 subagent-driven-development 로

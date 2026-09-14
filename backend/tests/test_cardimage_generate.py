@@ -35,6 +35,21 @@ def test_happy_path_one_attempt_titled_output():
     assert Image.open(io.BytesIO(eng.calls[0]["photo"])).size == (1200, 1600)   # 1600 으로 줄여 보냈다
 
 
+def test_september_uses_its_own_template_outfit_and_title():
+    eng, jd = FakeEngine(), FakeJudge([5])
+    out = generate.generate_card(
+        photo=_photo(), content_type="image/jpeg", month=9, dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4, 9}), judge_min=3,
+    )
+    assert out.month == 9 and out.title == "CHUSEOK 네오"
+    prompt = eng.calls[0]["prompt"]
+    assert "26SEP" in prompt and "SEPTEMBER SPECIAL" in prompt and "hanbok" in prompt
+    assert "wears nothing" not in prompt          # 9월은 한복을 입는다 — 4월 문장이 섞이면 안 된다
+    sent_template = Image.open(io.BytesIO(eng.calls[0]["template"]))
+    ref = Image.open(CARDIMAGE / "9_harvest_moon_template.webp").convert("RGB")
+    assert sent_template.size == ref.size and sent_template.getpixel((500, 800)) == ref.getpixel((500, 800))
+
+
 def test_low_likeness_retries_once_and_keeps_better():
     eng, jd = FakeEngine([png(color=(1, 1, 1)), png(color=(2, 2, 2))]), FakeJudge([2, 4])
     out = _run(eng, jd)

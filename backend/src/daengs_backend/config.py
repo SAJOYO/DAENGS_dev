@@ -230,7 +230,7 @@ class Settings(BaseSettings):
     #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
     #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
     cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
-        default=frozenset({4}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+        default=frozenset({4, 9}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
     )
     # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))

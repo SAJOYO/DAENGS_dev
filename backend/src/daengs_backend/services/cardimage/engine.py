@@ -24,14 +24,15 @@ class CardImageEngine(Protocol):
         ...
 
 
-def build_prompt(*, scene: str, badge: str, subtitle: str) -> str:
+def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str) -> str:
+    """달마다 다른 것은 무대(scene)·배지·부제·의상(outfit)뿐이다. 의상 문장은 catalog 가 준다 —
+    4월은 "아무것도 안 입는다", 9월은 "이미지 1 의 한복·쟁반 그대로"."""
     return (
         "Image 1 is a collectible trading card. Image 2 is a photo of a real dog.\n\n"
         "Edit image 1 so that the dog in the main illustration is replaced by the dog from image 2 — same breed, "
         "same fur color, fur length and texture, same ear shape and color, same muzzle length, same eye color and "
         "facial markings. Also replace the small circular portrait in the top-left badge with the face of the same dog "
-        "from image 2. Do not carry over any accessories from image 2 — no collar, no leash, no harness, no clothing; "
-        "the dog wears nothing, exactly like the dog in image 1.\n\n"
+        f"from image 2. {outfit}\n\n"
         f"Everything else must stay pixel-identical: {scene}, the background, the holographic border, the empty dark "
         f'title plate at the top (leave it empty — do not write anything on it), the badge "{badge}", the text '
         f'"{subtitle}", the bottom panel with all its text, stars and icons. Do not add, remove or alter any text. '

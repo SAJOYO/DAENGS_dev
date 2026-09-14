@@ -28,11 +28,6 @@ from daengs_backend.services.cardimage.judge import (
 
 log = logging.getLogger(__name__)
 
-SUBTITLES = {4: "APRIL SPECIAL"}  # 틀에 구워진 부제. 4월만 실험으로 검증됐다(catalog.py 의 scene 주석과 같은 이유) —
-# 다른 달을 열려면(=scene 을 채우고 DAENGS_CARDIMAGE_MONTHS 에 넣으려면) 여기에도 부제를 같이 넣어야 한다.
-# require_open 이 scene 없는 달을 먼저 막아 주므로 지금은 KeyError 가 날 수 없지만, 조용히 죽지 않도록
-# 아래 generate_card 에서 .get() 으로 꺼내 없으면 CardImageUnavailable 로 소리 내어 실패한다.
-
 
 class CardImageUnavailable(Exception):
     """키가 없거나 틀 파일이 없다 — 설정 문제라 503."""
@@ -73,7 +68,7 @@ def _load_template(month: int, base_dir: Path) -> bytes:
 
 
 def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: bytes, photo_jpeg: bytes,
-             prompt: str, text: str, font: Path) -> tuple[bytes, JudgeResult | None]:
+             prompt: str, text: str, font: Path, edge: title_mod.Edge) -> tuple[bytes, JudgeResult | None]:
     """한 번의 생성 시도: 엔진 호출 → 제목 얹기 → (있으면) 검수. 검수가 없거나 실패해도
     카드 자체는 만들어 돌려준다 — 점수는 `None` 이 될 뿐 이 함수가 실패하지는 않는다."""
     try:
@@ -82,7 +77,7 @@ def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: byte
         if exc.code == "no_key":
             raise CardImageUnavailable(exc.detail) from exc
         raise
-    card = title_mod.draw_title(Image.open(io.BytesIO(raw)).convert("RGB"), text, font)
+    card = title_mod.draw_title(Image.open(io.BytesIO(raw)).convert("RGB"), text, font, edge=edge)
     out = io.BytesIO()
     card.save(out, "PNG")
     png = out.getvalue()
@@ -107,16 +102,20 @@ def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str,
     font = catalog.font_path(base_dir)
     if not font.exists():
         raise CardImageUnavailable(f"글꼴이 없습니다: {font}")
-    subtitle = SUBTITLES.get(month)
-    if subtitle is None:
+    if not card_meta.subtitle:
+        # require_open 이 scene 없는 달을 먼저 막지만, 부제만 빠진 채 열리면 여기서 소리 내어 실패한다.
         raise CardImageUnavailable(f"부제가 없는 달: {month}")
-    prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=subtitle)
+    prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=card_meta.subtitle,
+                          outfit=card_meta.outfit)
     text = title_mod.title_text(card_meta.card_name, dog_name)
+    edge = card_meta.plate_edge
 
-    png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text, font=font)
+    png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
+                        font=font, edge=edge)
     if j1 is None or j1.likeness >= judge_min:
         return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text)
-    png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text, font=font)
+    png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
+                        font=font, edge=edge)
     if j2 is not None and j2.likeness > j1.likeness:
         return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text)
     return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text)

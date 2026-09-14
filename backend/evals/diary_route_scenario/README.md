@@ -158,7 +158,14 @@ uv run --no-sync python -X utf8 tools/run_diary_final_titles.py --scope walk --s
 uv run --no-sync python -X utf8 tools/run_diary_final_titles.py --scope walk --source-run evals/diary_route_scenario/yangjae-02 --output evals/diary_route_scenario/whole-title-new --env-file <provider-env-path>
 ~~~
 
-## 다음 논의의 출발점
+## 후속 공간 작성 비교 (2026-09-14)
+
+[space-tools-gemini-01](space-tools-gemini-01/README.md)은 저장된 공공자료의 풀밭·길·숲
+3장면을 기존 일괄 공급과 선택적 상세 조회로 비교한 결과다. 실제 Gemini 9회,
+추가 공공 API 0회. 공급·조회는 동작했으나 공간 문장에 이동 표현과 근거 없는 관계가
+남아 서술 품질 개선을 확인하지 못했다. 전체 일기·행동·제목의 재생성은 하지 않았다.
+
+## 다음 논의의 출발점 (초기 실험 당시)
 
 이 8개를 기준으로 **출발/중간/종료의 서술 역할, 같은 공간 재등장, 공간 분류가 허용하는 표현 범위**를 정하자.
 출발·종료는 이미 코드가 가진 사실이다. 왕복/재방문은 좌표·시간 관계로 따로 판정해야 하며 LLM에게 추측시키지 않는다.

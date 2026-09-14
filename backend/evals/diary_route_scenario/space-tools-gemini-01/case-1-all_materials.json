@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "variant": "all_materials",
+  "started_at": "2026-09-14T10:31:25.860859+00:00",
+  "requests": [
+    {
+      "status": "returned",
+      "elapsed_s": 1.031,
+      "usage": {
+        "candidates_token_count": 38,
+        "prompt_token_count": 823,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 823
+          }
+        ],
+        "total_token_count": 861
+      },
+      "answer_text": "{\"text\": \"양재2동의 풀밭을 지나 공원 근처를 걸었다.\", \"evidence_ids\": [\"m2\", \"m4\", \"m5\"]}"
+    }
+  ],
+  "public_api_calls": 0,
+  "answer": {
+    "text": "양재2동의 풀밭을 지나 공원 근처를 걸었다.",
+    "evidence_ids": [
+      "m2",
+      "m4",
+      "m5"
+    ]
+  },
+  "elapsed_s": 1.265
+}

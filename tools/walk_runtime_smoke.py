@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -20,10 +21,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class SmokeFailure(Exception):
     """Only predefined messages; never constructed from external responses."""
 
-    def __init__(self, message, *, request_number=None, validation_fields=None):
+    def __init__(self, message, *, request_number=None, validation_fields=None, diagnostics=None):
         super().__init__(message)
         self.request_number = request_number
         self.validation_fields = validation_fields
+        self.diagnostics = diagnostics
 
 
 async def prepare_backfill(owner, walk_id):
@@ -105,7 +107,90 @@ async def verify_backfill(owner, walk_id, saved):
     }
 
 
-async def cycle(owner, *, center=None, require_regional=False, backfill=False):
+async def card_publication(request, owner, walk_id, entries, notes):
+    """Exercise the running card graph; export only this probe's synthetic public response."""
+    from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
+    from daengs_backend.services.walk_diary_board_storage import load_board
+
+    path = f"/app/walks/{walk_id}/storyboard"
+    body = {
+        "expected_entries": {e["id"]: e["revision"] for e in entries},
+        "bundle_format": "walk-diary-board-v1",
+        "target_scene_count": 5,
+        "preparation_budget_ms": 20000,
+    }
+    result = await request("POST", path, body)
+    parsed = DiaryStoryboardResponse.model_validate(result)
+    if parsed.status != "ready" or parsed.bundle is None:
+        raise SmokeFailure(
+            "card graph did not publish a ready board",
+            diagnostics={"status": parsed.status, "error_code": parsed.error_code},
+        )
+    if (
+        await request("GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5")
+        != result
+    ):
+        raise SmokeFailure("card readback differs")
+    if await request("POST", path, body) != result:
+        raise SmokeFailure("repeated card request differs")
+    scenes = parsed.bundle.scenes
+    if not all(
+        any(s.writing and s.writing.original_text == note for s in scenes) for note in notes
+    ):
+        raise SmokeFailure("card changed an original note")
+    if sum(len(s.writing.actions) for s in scenes if s.writing) != 1:
+        raise SmokeFailure("card lost the synthetic behavior")
+    async with engine.connect() as connection:
+        raw = await connection.scalar(
+            text(
+                "SELECT s.bundle FROM walk_storyboards s JOIN walks w ON w.id=s.walk_id "
+                "WHERE w.id=:walk AND w.app_user_id=:owner"
+            ),
+            {"walk": uuid.UUID(str(walk_id)), "owner": owner},
+        )
+    stored = load_board(raw)
+    if stored.bundle != parsed.bundle or not hasattr(stored.writing_receipt, "result"):
+        raise SmokeFailure("card receipt is missing or differs from publication")
+    receipt = stored.writing_receipt
+    background_counts = (
+        Counter((b.provider, b.status, b.reason) for b in stored.scene_backgrounds.backgrounds)
+        if stored.scene_backgrounds is not None
+        else Counter()
+    )
+    diagnostics = {
+        "card_graph": True,
+        "model": receipt.writer["model"],
+        "scene_count": len(scenes),
+        "generation": parsed.generation,
+        "model_status": parsed.bundle.model_status,
+        "failure_code": parsed.bundle.failure_code,
+        "same_readback": True,
+        "same_repeated_post": True,
+        "original_notes_preserved": True,
+        "original_action_preserved": True,
+        "receipt_valid": True,
+        "space_origins": dict(Counter(s.writing.space.origin for s in scenes if s.writing)),
+        "scene_backgrounds_saved": stored.scene_backgrounds is not None,
+        "background_statuses": [
+            {"provider": provider, "status": status, "reason": reason, "count": count}
+            for (provider, status, reason), count in background_counts.items()
+        ],
+        "jobs": [
+            {
+                "stage": j.stage,
+                "accepted": bool(j.accepted),
+                "failure": j.failure_code,
+                "reused": j.reused,
+            }
+            for j in receipt.result.jobs
+        ],
+    }
+    if parsed.bundle.model_status != "accepted":
+        raise SmokeFailure("card graph did not publish accepted writing", diagnostics=diagnostics)
+    return {**diagnostics, "synthetic_response": result}
+
+
+async def cycle(owner, *, center=None, require_regional=False, backfill=False, card=False):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
     center = center or {"lat": 37.4878, "lng": 127.052}
@@ -231,6 +316,8 @@ async def cycle(owner, *, center=None, require_regional=False, backfill=False):
                 },
             )
             entries.append(entry)
+        if card:
+            return await card_publication(request, owner, wid, entries, notes)
         saved = await prepare_backfill(owner, wid) if backfill else None
         contexts = []
         for _ in range(36):
@@ -359,7 +446,9 @@ async def main(*, regional=False, backfill=False):
                         }
                     )
             else:
-                result.update(await cycle(owner, backfill=True) if backfill else await cycle(owner))
+                result.update(
+                    await cycle(owner, backfill=True) if backfill else await cycle(owner, card=True)
+                )
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001 - never print API bodies, tokens, SQL parameters or user IDs
         result["error_type"] = type(exc).__name__
@@ -368,6 +457,8 @@ async def main(*, regional=False, backfill=False):
             result["reason"] = str(exc)
             result["request_number"] = exc.request_number
             result["validation_fields"] = exc.validation_fields
+            if exc.diagnostics is not None:
+                result["diagnostics"] = exc.diagnostics
     finally:
         try:
             if created:

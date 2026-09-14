@@ -31,7 +31,9 @@ flowchart TD
 | 책임 | 코드 |
 | --- | --- |
 | 소유권과 입력 읽기, 접근 가능한 동행 이름 | `walk_diary_input.py:read_input` |
-| 예약·공통 공개 마감·원본 변경 검사 | `walk_diary_generation.py:generate_diary`, `walk_diary_publication.py:within_budget` |
+| 입력 준비·생성 버전·저장 응답 복원 | `walk_diary_snapshot.py:snapshot`, `generation_revision`, `result` |
+| 예약·재사용·완료 시 원본 변경 검사 | `walk_diary_lifecycle.py:reserve_diary`, `complete_diary` |
+| GET 복구·외부 작성·공통 공개 마감 | `walk_diary_generation.py:get_diary`, `generate_diary`, `walk_diary_publication.py:within_budget` |
 | 실제 보드 작성 진입점 | `walk_diary_board_slot_writing.py:write_board` |
 | 런타임 진입과 일기 그래프 | `orchestration/runtime.py:build_diary_orchestrator`, `orchestration/diary.py` |
 | 채팅·일기가 공유하는 제한 실행·시간 초과·오류 격리 | `orchestration/execution.py:JobExecutor` |
@@ -72,6 +74,12 @@ SGIS는 기존 `sido / sigungu / dong` 정규화를 재사용한다. **APP 표�
 EGIS는 기존 WMS 좌표 피복 조회가 기본 경로에 포함된다(`walk_diary_space_enabled` 기본값 true, 명시적 false는 유지). 기술 분류와 출처는 보존하고 작성용 투영에서 도로→길, 자연/기타초지→풀밭, 하천→물길 등의 일상 어휘를 적용한다. 날씨는 기존 저장 관측의 시간·위치 적격성을 통과한 경우에만 사용한다.
 
 ## 실행·재사용·공개
+
+생성 수명주기는 #506에서 준비·응답(`walk_diary_snapshot`), 예약·완료(`walk_diary_lifecycle`), GET·외부 작성(`walk_diary_generation`)으로 분리했다. `reserve_diary`는 재사용 응답을 commit하고 반환하거나, 새 예약을 commit한 뒤 `ReservedDiary`로 준비 입력·revision·ticket·수집 스냅샷을 반환한다. 작성기는 이 경계 뒤에서 실행되며, `complete_diary`는 원본을 새로 읽고 만료 발행·generation·원본 revision을 확인한 뒤 완료와 응답을 commit한다. 작성 중 ORM 생성 행을 전달하지 않는다.
+
+GET은 상태 변경을 포함한다. 마감이 지난 예약은 저장된 기본 보드로 완료하고, 원본이 일치하는 과거 bare bundle은 reader가 영수증을 보완할 수 있으므로 `result` 뒤의 commit을 유지한다. 원본이 바뀌면 옛 기본 보드를 발행하지 않으며, GET이 먼저 완료했거나 다른 요청이 새 generation을 예약했으면 늦은 작성 결과로 덮어쓰지 않는다. 요청 시작 시각·마감과 각 판정의 시계 조회 순서는 그대로다.
+
+`legacy_collector`를 명시한 호환 경로는 수집 전에 첫 transaction을 commit하고, 수집 뒤 원본·기존 결과·예약을 다시 확인한다. 기본 카드 수집은 예약 뒤 그래프 안에서 실행한다. 2026-09-14, #506의 선별 pytest와 독립 PostgreSQL 연결 검증은 취소 후 GET 복구, 영수증 보완의 commit, 늦은 결과 차단, 수집 중 다른 요청의 예약/완료 재사용을 확인한다.
 
 하나의 공개 마감 안에서 작업을 제한적으로 병행한다. 본문 작성에 내부 마감을 두고 제목 시간을 남긴다. 각 작업의 실패/시간 초과는 해당 부분의 기본 결과로 끝내고, 성공한 다른 부분을 버리지 않는다. 취소를 무시한 늦은 공급자 응답에도 발행 권한은 없다.
 

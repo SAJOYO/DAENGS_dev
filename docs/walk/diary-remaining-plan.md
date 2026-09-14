@@ -271,7 +271,7 @@
 - 공간 후보·적용 실험: `daengs_walk.diary_space_*`, 기존 `prepare_board_slots` 경로.
 - 작성용 재료·검증: `walk_diary_card_writing.py`, 문체/역할은 `walk_diary_card_prompts.py`.
 - 실행: `orchestration/runtime.py`, `diary.py`, 기존 채팅과 공유하는 `execution.py`.
-- 발행/보존: 기존 `walk_diary_generation.py`, `walk_diary_publication.py`, 카드 영수증과 저장 경로.
+- 발행/보존: `walk_diary_generation.py`가 `walk_diary_snapshot.py`의 준비·응답과 `walk_diary_lifecycle.py`의 예약·완료를 연결한다(#506). 공개 마감은 기존 `walk_diary_publication.py`, 저장은 기존 카드 영수증과 저장 경로를 유지한다.
 - APP: 기존 `WalkDiarySync → ServerDiaryBoard → Room → WalkDiaryReader`.
 
 코드 이름을 재사용했다는 것만으로 관계 선정을 완성했다고 보고하지 않는다. **이번 표본에서 어떤 재료를 얻었고, 왜 그 관계를 사용할 수 있으며, 실제로 어떤 문장이 나왔는지**를 보여주는 것이 다음 완료 보고의 중심이다.
@@ -320,6 +320,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
   → services/walk_storyboard.generate
       existing_format으로 기존 저장 형식 보존
   → walk_diary_generation.generate_diary
+  → walk_diary_lifecycle.reserve_diary
       협상된 형식의 입력 준비 → 원본/사진 버전 확인 → 기존 결과/예약 확인
       새 작성 필요 시 기존 context_pending을 기다리지 않고 예약 저장·commit
       → 예약된 예산 안에서 실행 (#505)
@@ -329,7 +330,8 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
   → orchestration/runtime.build_diary_orchestrator
   → orchestration/diary.DiaryOrchestrationService.run
       공간·조건부 행동 → 본문 고정 → 제목 → 코드 조립
-  → 기존 완료·원본 재확인·저장/발행
+  → walk_diary_lifecycle.complete_diary
+      원본 재확인 → 만료 발행·generation 확인 → 기존 완료·저장/발행
   → APP ServerDiaryBoard → 기존 저장·읽기
 ```
 
@@ -341,7 +343,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 | 과거 일기 형식 | POST의 `walk-diary-bundle-v1` 또는 board 요청에서 기존 bundle로 협상 | 생성 서비스가 준비 형식에 따라 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
 | 슬롯 미리보기 | POST `/app/walks/{walk_id}/diary-slots/preview`, `walk_diary_enabled`와 `walk_diary_slots_preview_enabled` 모두 활성 | `preview_saved_slots → write_slot_preview → write_slot_stamps`. 공개 storyboard의 생성·발행 경로와 별개다. 여기서 좋은 결과가 나와도 기본 카드 작성에 적용됐다는 증거는 아니다. |
 | 기존 슬롯 계약의 명시적 작성 | `write_legacy_slot_board(source, base, generate=대역)` | `generate(payload, schema)`를 쓰는 `write_slot_stamps` 계약을 유지한다. 예약 전 수집은 `legacy_collector`, 기존 context job 완료 유예는 `legacy_context_wait=True`로 각각 명시한다. writer 래핑만으로 수집·대기가 활성화되지 않는다. |
-| 이미 저장된 결과·진행 중 예약 | `generate_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
+| 이미 저장된 결과·진행 중 예약 | `reserve_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. GET의 만료 복구와 과거 영수증 보완도 commit한다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
 | 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
 
 관련 구현: [기본 진입 함수와 명시적 주입 분기](../../backend/src/daengs_backend/services/walk_diary_board_slot_writing.py), [카드 작성 전략](../../backend/src/daengs_backend/services/walk_diary_card_writing.py), [과거 일기 작성](../../backend/src/daengs_backend/services/walk_diary_writing.py), [미리보기 라우터](../../backend/src/daengs_backend/routers/walk_diary_slots.py), [슬롯 작성](../../backend/src/daengs_backend/services/walk_diary_slot_writing.py), [저장 형식 판독](../../backend/src/daengs_backend/services/walk_diary_board_storage.py).
@@ -356,7 +358,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 | --- | --- |
 | 기존 어시스턴트 실행 | [runtime.py](../../backend/src/daengs_backend/orchestration/runtime.py)의 `build_orchestrator`와 [graph.py](../../backend/src/daengs_backend/orchestration/graph.py)의 `_execute_requests → JobExecutor` |
 | 일기 실행 | 같은 `runtime.py`의 `build_diary_orchestrator` → [diary.py](../../backend/src/daengs_backend/orchestration/diary.py)의 공간·행동 합류 그래프 → 같은 [execution.py](../../backend/src/daengs_backend/orchestration/execution.py)의 `JobExecutor` |
-| 생성 예약·최종 공개 | [walk_diary_generation.py](../../backend/src/daengs_backend/services/walk_diary_generation.py), [walk_diary_publication.py](../../backend/src/daengs_backend/services/walk_diary_publication.py)의 기존 예약·마감·원본 재확인·채택 |
+| 생성 예약·최종 공개 | [walk_diary_lifecycle.py](../../backend/src/daengs_backend/services/walk_diary_lifecycle.py)의 예약·원본 재확인·채택, [walk_diary_generation.py](../../backend/src/daengs_backend/services/walk_diary_generation.py)의 작성·GET 연결, [walk_diary_publication.py](../../backend/src/daengs_backend/services/walk_diary_publication.py)의 기존 마감 |
 
 공유하는 것은 **작업 실행 구현**이다. 어시스턴트와 일기가 한 그래프나 한 전역 세마포어를 공유한다는 뜻은 아니다. 현재 어시스턴트는 `JobExecutor(concurrency=1)`, 일기 실행은 모델 작업에 `concurrency=4`를 사용하며 자료 수집용 실행기는 별도로 둔다. 이 수치를 전체 서버의 전역 동시 호출 상한으로 설명하지 않는다.
 

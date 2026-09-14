@@ -9,6 +9,7 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
+from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services import walk_diary_generation as generation
 from daengs_backend.services import walk_diary_slots as preview_service
 from daengs_backend.services import walk_diary_space_collection as collection
@@ -22,11 +23,13 @@ from daengs_backend.services.walk_space_catalog_input import (
     retain_page,
     retained_fields,
 )
+from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_walk.diary_slots import SlotPolicy, admit
 from daengs_walk.diary_space_materials import AreaInput, normalize_spaces
 from tests.walk.diary.test_diary_space_materials import POINT, area, page, park, shop
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary_generation import PATH, body
+from tests.walk.support.photo_input import OWNER, WALK
 
 
 def public_response(request):
@@ -177,7 +180,7 @@ async def test_collection_timeout_keeps_finished_sources(monkeypatch, public_col
     assert any(s.status == "known" and s.provider.endswith("park") for s in collected.backgrounds)
 
 
-def test_http_generation_persists_normalization_and_reopens_without_collection(
+async def test_legacy_generation_persists_normalization_and_reopens_without_collection(
     api, monkeypatch, public_collector
 ):
     client, state, db = api
@@ -189,11 +192,16 @@ def test_http_generation_persists_normalization_and_reopens_without_collection(
         return await public_collector(board)
 
     spy = AsyncMock(side_effect=collect)
-    monkeypatch.setattr(generation, "configured_collection", spy)
     request = body(state, bundle_format="walk-diary-board-v1")
-    response = client.post(PATH, json=request)
-    assert response.status_code == 200, response.text
-    result = response.json()
+    response = await generation.generate_diary(
+        db,
+        OWNER,
+        WALK,
+        StoryboardRequest.model_validate(request),
+        writer=state.writer,
+        legacy_collector=spy,
+    )
+    result = response.model_dump(mode="json")
     assert result["status"] == "ready" and result["bundle"]["model_status"] == "accepted"
     assert state.row.bundle["scene_backgrounds"]
     receipt = state.row.bundle["writing_receipt"]
@@ -208,10 +216,10 @@ def test_http_generation_persists_normalization_and_reopens_without_collection(
     spy.assert_awaited_once()
 
 
-def test_source_edit_during_collection_does_not_reserve_or_publish(
+async def test_source_edit_during_legacy_collection_does_not_reserve_or_publish(
     api, monkeypatch, public_collector
 ):
-    client, state, _ = api
+    _, state, db = api
     monkeypatch.setattr(settings, "walk_diary_space_enabled", True)
 
     async def collect(board):
@@ -219,10 +227,17 @@ def test_source_edit_during_collection_does_not_reserve_or_publish(
         state.entries[0].revision += 1
         return snapshot
 
-    monkeypatch.setattr(generation, "configured_collection", collect)
-    response = client.post(PATH, json=body(state, bundle_format="walk-diary-board-v1"))
-    assert response.status_code == 409
+    with pytest.raises(StoryboardConflict):
+        await generation.generate_diary(
+            db,
+            OWNER,
+            WALK,
+            StoryboardRequest.model_validate(body(state, bundle_format="walk-diary-board-v1")),
+            writer=state.writer,
+            legacy_collector=collect,
+        )
     assert state.row is None
+    state.writer.assert_not_awaited()
 
 
 async def test_unknown_spatial_role_is_explicitly_excluded(public_collector):

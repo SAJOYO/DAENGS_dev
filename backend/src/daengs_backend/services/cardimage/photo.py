@@ -6,7 +6,10 @@ import io
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-MAX_PHOTO_BYTES = 8 * 1024 * 1024
+# 폰 원본 JPEG 이 그대로 온다는 가정이다 — `cardimage/test/` 의 실제 사진 13장 중 3장이 9.7~10.2MB 라
+# 프로필 사진 상한(8 MiB, `services/pet.py`)으로는 413 이 났다(09-14 콘솔 실측). nginx 의
+# `/api/admin/cardimage/` 블록 `client_max_body_size` 와 같은 값이어야 한다.
+MAX_PHOTO_BYTES = 20 * 1024 * 1024
 # 폰 원본 화소는 대개 5000만 이하다. 압축이 잘 먹는 단색·PNG 는 파일 바이트가 작아도
 # 픽셀 수는 커서(압축 폭탄) 디코드 때 메모리를 크게 먹을 수 있다. 어차피 아래에서
 # max_side 로 줄이므로, 바이트 크기와 별개로 여유를 둔 6000만 화소에서 막는다.

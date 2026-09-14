@@ -18,6 +18,8 @@
   - 실호출 1회: `_03` 사진 → `CHUSEOK 네오`, 유사도 5/5, `text_ok`·`avatar_ok` 통과, 29.8초, 한복·쟁반 유지. `cardimage/out/_service_check/service_check_sep_1.png`.
   - 테스트 67개 통과(달별 outfit 문장·edge·9월 틀 전송 검증 추가; "닫힌 달 404" 테스트는 12월로 바꿈), ruff · `uv run check` · `npm run lint` · `tsc` 통과.
 
+- **사진 상한 8 → 20 MiB** — 사용자가 콘솔에서 9월을 시도하자 413 이 났다(로그). 상한이 프로필 사진 값(8 MiB)이었는데 `cardimage/test/` 의 실제 폰 사진 13장 중 3장이 9.7~10.2MB 다 — "테스트 사진은 사용자가 보통 넣는 상황"이 전제였으니 상한을 다른 nginx 블록과 같은 20 MiB 로(`photo.MAX_PHOTO_BYTES`, nginx `client_max_body_size 20m`). 픽셀 상한 6000만은 그대로라 디코드 폭탄 방어는 유지.
+
 **다음 달을 열 때 하는 일(체크리스트):** ① `catalog.py` 에 `scene`·`subtitle`, 틀 강아지가 뭔가 입었으면 `outfit`, ② 제목판 오른쪽 경계 세 점 재서 `plate_edge`(`backend/tools/cardimage_title.py` 로 미리보기), ③ 실호출 1장, ④ `cardimage_months` 기본값과 콘솔 `MONTHS` 표, ⑤ 카드명이 길면 사용자와 짧은 이름 상의.
 
 ## 2026-09-14 — 1단계 구현 (에이전트 실행, Task 1~9·11)

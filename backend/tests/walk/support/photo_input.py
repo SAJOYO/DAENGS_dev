@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from daengs_backend.schemas.walk_photo import PhotoManifestWrite
-from daengs_backend.services import walk_photo as service
+from daengs_backend.services.walk_photos import api as service
 from daengs_walk.diary.contracts.input import digest
 
 OWNER, WALK, SESSION, PUBLISHER, PHOTO, ENTRY = [uuid.uuid4() for _ in range(6)]

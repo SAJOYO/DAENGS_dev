@@ -10,7 +10,7 @@ from sqlalchemy import func, select, text
 from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2, PinWrite
-from daengs_backend.services import walk_entry_v2 as service
+from daengs_backend.services.walk_records import v2 as service
 from tests.walk.support.entry_v2 import OWNER, WALK, body, completion
 
 

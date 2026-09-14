@@ -1,32 +1,25 @@
-"""Version availability and legacy access policy shared by readers and writers."""
+"""Historical public names; implementation belongs to the records/photo owner package."""
 
-from daengs_backend.config import settings
-from daengs_backend.repositories import walk_entry_v2 as repo
-from daengs_backend.services.walk_entry_errors import EntryNotFound, EntryUpgradeRequired
-from daengs_backend.services.walk_entry_pin import POLICY
+from importlib import import_module
 
-
-def require_enabled():
-    if not settings.walk_entry_v2_enabled:
-        raise EntryNotFound
-
-
-def capabilities():
-    enabled = settings.walk_entry_v2_enabled
-    writing = enabled and settings.walk_entry_v2_write_enabled
-    return {
-        "read_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if enabled else []),
-        "write_versions": ["walk-entry-v1"] + (["walk-entry-v2"] if writing else []),
-        "active_policy_versions": [POLICY] if writing else [],
-        "pin_observation_cutoff_supported": enabled,
-        "gps_recording_versions": ["gps-recording-v1"],
-        "storyboard_formats": ["walk-storyboard-candidates-v5"] if enabled else [],
-        "entry_context_versions": ["walk-entry-context-v2"] if enabled else [],
-    }
+_EXPORTS = {
+    "EntryNotFound": "daengs_backend.services.walk_records.errors",
+    "EntryUpgradeRequired": "daengs_backend.services.walk_records.errors",
+    "POLICY": "daengs_backend.services.walk_records.pins",
+    "require_enabled": "daengs_backend.services.walk_records.policy",
+    "capabilities": "daengs_backend.services.walk_records.policy",
+    "guard_v1": "daengs_backend.services.walk_records.policy",
+}
+__all__ = list(_EXPORTS)
 
 
-async def guard_v1(session, walk_ids, *, entry_id=None):
-    if settings.walk_entry_v2_enabled and await repo.contains_v2(
-        session, walk_ids, entry_id=entry_id
-    ):
-        raise EntryUpgradeRequired
+def __getattr__(name):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(_EXPORTS[name]), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

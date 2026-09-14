@@ -42,7 +42,7 @@ def test_all_owned_photo_and_background_sources_have_no_diary_imports():
         "daengs_walk.value_contracts",
         "daengs_walk.weather",
         "daengs_backend.schemas.walk_photo",
-        "daengs_backend.services.walk_photo",
+        "daengs_backend.services.walk_photos.api",
         "daengs_backend.services.walk_background.providers.weather",
         "daengs_backend.services.walk_background.catalogs.retention",
         "daengs_backend.services.walk_background.catalogs.area",

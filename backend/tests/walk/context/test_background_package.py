@@ -25,7 +25,13 @@ def test_provider_and_contract_modules_do_not_import_coordinators():
                 imports.extend(n.name for n in node.names)
         assert not any(
             "walk_diary" in n
-            or n.startswith(("daengs_walk.diary", "daengs_backend.services.walk_entry"))
+            or n.startswith(
+                (
+                    "daengs_walk.diary",
+                    "daengs_backend.services.walk_records",
+                    "daengs_backend.services.walk_entry",
+                )
+            )
             for n in imports
         ), path
         if path.parent.name == "providers" or path.name == "contracts.py":
@@ -59,7 +65,7 @@ def test_supplier_imports_work_with_coordinators_blocked(module):
 import tests.conftest
 class Guard:
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.startswith(('daengs_backend.services.walk_background.collection','daengs_backend.services.walk_entry_context','daengs_backend.services.walk_diary','daengs_walk.diary')):
+        if fullname.startswith(('daengs_backend.services.walk_background.collection','daengs_backend.services.walk_records','daengs_backend.services.walk_entry_context','daengs_backend.services.walk_diary','daengs_walk.diary')):
             raise AssertionError(fullname)
 sys.meta_path.insert(0, Guard())
 importlib.import_module(sys.argv[1])

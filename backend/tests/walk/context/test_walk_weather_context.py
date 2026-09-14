@@ -11,9 +11,9 @@ from daengs_backend.orchestration.adapters.life import (
     WalkTemperatureObservation,
     WalkWeatherObservation,
 )
-from daengs_backend.services import walk_entry_context as worker
 from daengs_backend.services import walk_entry_context_source as source
 from daengs_backend.services.walk_background.providers import weather
+from daengs_backend.services.walk_records import context as worker
 from tests.walk.support.entry_context import CONTENT, NOW
 
 

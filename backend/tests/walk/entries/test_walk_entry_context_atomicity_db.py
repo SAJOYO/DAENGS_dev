@@ -12,7 +12,8 @@ from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin
 from daengs_backend.repositories import walk_entry_context as jobs
 from daengs_backend.schemas.walk_entry import EntryWrite
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2
-from daengs_backend.services import walk_entry, walk_entry_v2
+from daengs_backend.services.walk_records import v1 as walk_entry
+from daengs_backend.services.walk_records import v2 as walk_entry_v2
 from tests.walk.support.entry_v2 import AT, OWNER, WALK
 
 

@@ -29,7 +29,7 @@ app.conf.update(
 @app.task(name="walk_entry_context.process")
 def process():
     from daengs_backend.core.database import worker_session
-    from daengs_backend.services.walk_entry_context import process as run
+    from daengs_backend.services.walk_records.context import process as run
 
     return asyncio.run(run(worker_session))
 

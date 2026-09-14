@@ -9,9 +9,6 @@ from daengs_backend.repositories import walk_storyboard as repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest
 from daengs_backend.schemas.walk_legacy import StoryboardResponse
 from daengs_backend.services.walk_diary.api import guard_old_writer
-from daengs_backend.services.walk_entry import response as entry_response
-from daengs_backend.services.walk_entry_errors import EntryUpgradeRequired
-from daengs_backend.services.walk_entry_policy import guard_v1
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_backend.services.walk_generation.state import (
     LEASE_SECONDS,
@@ -21,6 +18,9 @@ from daengs_backend.services.walk_generation.state import (
     reserve,
     reusable,
 )
+from daengs_backend.services.walk_records.errors import EntryUpgradeRequired
+from daengs_backend.services.walk_records.policy import guard_v1
+from daengs_backend.services.walk_records.v1 import response as entry_response
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk.evidence import analyze_walk
@@ -55,7 +55,7 @@ async def source(session, owner, walk_id, bundle_format="walk-storyboard-candida
         raise StoryboardConflict("이번 장면 계약은 최대 200개 기록을 지원합니다.")
     if pin_aware:
         from daengs_backend.repositories import walk_entry_v2 as pins_repo
-        from daengs_backend.services.walk_entry_v2 import response
+        from daengs_backend.services.walk_records.v2 import response
 
         pins = {p.entry_id: p for p in await pins_repo.pins(session, [walk_id])}
         entries = [response(r, pins.get(r.id)) for r in rows]

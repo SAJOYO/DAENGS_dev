@@ -16,16 +16,23 @@ import pytest
 #: loopback 기본값. 두 가드가 같은 값을 봐야 하므로 한 곳에 둔다.
 _DEFAULT_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/vectordb"
 
+#: 첫 연결 실패의 skip 사유 (#519). 못 붙는 PC 에서 테스트마다 3초씩 기다리지 않게 한다.
+_unreachable: str | None = None
+
 
 def _postgres_or_skip():
+    global _unreachable
     dsn = os.environ.get("DAENGS_TEST_DATABASE_URL", _DEFAULT_DSN)
     parsed = urlparse(dsn)
     if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
         pytest.fail("공동 돌봄 증명은 loopback 이 아닌 DB 를 거부한다")
+    if _unreachable is not None:
+        pytest.skip(_unreachable)
     try:
         conn = psycopg.connect(dsn, connect_timeout=3)
     except psycopg.Error as exc:
-        pytest.skip(f"로컬 PostgreSQL 없음: {type(exc).__name__}")
+        _unreachable = f"로컬 PostgreSQL 없음: {type(exc).__name__}"
+        pytest.skip(_unreachable)
     with conn.cursor() as cur:
         cur.execute("SELECT to_regclass('public.pet_members'), to_regclass('public.pet_invites')")
         if any(v is None for v in cur.fetchone()):

@@ -11,12 +11,11 @@ from shapely.geometry import box, mapping
 from shapely.ops import transform
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_area_catalog as catalog
-from daengs_backend.services import walk_commerce_catalog as commerce
-from daengs_backend.services import walk_river_catalog as river
+from daengs_backend.services.walk_background.catalogs import area as catalog
+from daengs_backend.services.walk_background.catalogs import commerce, river
+from daengs_backend.services.walk_background.http import PublicSourceError
+from daengs_backend.services.walk_background.providers.public import collect_public
 from daengs_backend.services.walk_diary.legacy.bundle import write_diary
-from daengs_backend.services.walk_public_context import collect_public
-from daengs_backend.services.walk_public_http import PublicSourceError
 from daengs_walk.diary.contracts.input import SavedBackground, digest, material_ref
 from daengs_walk.diary.legacy.writing import prepare_writing
 from daengs_walk.diary.selection.stamps import StampPolicy, prepare_stamps

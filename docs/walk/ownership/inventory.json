@@ -1,5 +1,5 @@
 {
-  "baseline": "284695e1 + #529 stage 5",
+  "baseline": "70a07371 + #530 stage 6",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -2895,24 +2895,20 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "shared_contracts"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_area_context.py",
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_artifacts/__init__.py",
@@ -2962,6 +2958,207 @@
       ]
     },
     {
+      "path": "backend/src/daengs_backend/services/walk_background/__init__.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "shared_contracts"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "shared_contracts"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/retention.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "shared_contracts"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "shared_contracts"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/collection.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/contracts.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/http.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/__init__.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/facility.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/sgis.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "owner": "background",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "배경 공급 패키지의 계약·수집·공급자·카탈로그 소유 모듈. 기록 outbox와 일기 해석은 포함하지 않음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "integration",
+        "shared_contracts"
+      ]
+    },
+    {
       "path": "backend/src/daengs_backend/services/walk_capsule.py",
       "owner": "sealed_artifacts",
       "layer": "services",
@@ -2976,24 +3173,20 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_catalog_regions.py",
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_chunk.py",
@@ -3010,12 +3203,10 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_context_backfill.py",
@@ -3023,7 +3214,7 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "rationale": "기록별 재수집 선택·예약과 CAS를 조정. 공급 계약과 카탈로그를 소비하며 기록 outbox와 함께 다음 단계에서 배치.",
       "debts": [],
       "related_owners": [
         "integration"
@@ -3081,7 +3272,6 @@
       "scope_reason": "core",
       "related_owners": [
         "background",
-        "integration",
         "shared_contracts"
       ]
     },
@@ -3574,7 +3764,7 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "rationale": "기록 outbox 예약·claim·늦은 결과 저장을 조정. 공급 결과 계약/선택은 walk_background를 소비하며 기록 트랜잭션과 함께 다음 단계에서 배치.",
       "debts": [],
       "related_owners": [
         "integration",
@@ -3587,12 +3777,10 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_entry_errors.py",
@@ -3802,12 +3990,10 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "shared_contracts"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_photo.py",
@@ -3850,20 +4036,18 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_public_http.py",
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
       "related_owners": []
     },
@@ -3885,21 +4069,18 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration",
-        "shared_contracts"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_sgis.py",
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "관측·카탈로그 보존/공급·갱신·기록별 수집 작업. 후속 소유 영역별 서비스 패키지 재배치 대상.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
       "related_owners": []
     },
@@ -3909,11 +4090,9 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "retain",
-      "rationale": "원본 페이지/metadata와 malformed/conflicting 행의 필드 보존 및 hash. 일기 변환은 collection.catalog 소유.",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "shared_contracts"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -4026,13 +4205,10 @@
       "owner": "background",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "repackage",
-      "rationale": "기록 시각의 기온 관측 수집. 공급 계약으로 검증하며 일기 채택 정책과 독립.",
+      "disposition": "retain",
+      "rationale": "기존 공개 이름의 지연 import 호환만 유지. 실제 구현은 walk_background 소유; 명시된 이름/대상은 background-package.json 참조.",
       "debts": [],
-      "related_owners": [
-        "integration",
-        "shared_contracts"
-      ]
+      "related_owners": []
     },
     {
       "path": "backend/src/daengs_backend/tasks/walk_entry_context.py",
@@ -5197,6 +5373,16 @@
       "disposition": "retain",
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
+      "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/context/test_background_package.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "배경 역방향 의존 차단, 공급자 단독 import, 13개 기존 경로의 동일 객체 호환 검증.",
+      "debts": [],
+      "scope_reason": "verification-assets",
       "related_owners": []
     },
     {
@@ -7657,19 +7843,19 @@
     ],
     [
       "backend/src/daengs_backend/cli/walk_area_catalog.py",
-      "backend/src/daengs_backend/services/__init__.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_area_catalog.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_area_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_area_catalog.py",
-      "backend/src/daengs_backend/services/walk_river_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/http.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_context_backfill.py",
@@ -7685,11 +7871,11 @@
     ],
     [
       "backend/src/daengs_backend/cli/walk_park_catalog.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_park_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
+      "backend/src/daengs_backend/services/walk_background/http.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
@@ -7697,31 +7883,31 @@
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/__init__.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_river_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py"
     ],
     [
       "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
     ],
     [
       "backend/src/daengs_backend/main.py",
@@ -8632,42 +8818,6 @@
       "backend/src/daengs_walk/evidence.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_area_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_catalog.py",
-      "backend/src/daengs_walk/value_contracts.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/config.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_river_catalog.py"
-    ],
-    [
       "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "backend/src/daengs_backend/models/walk.py"
     ],
@@ -8708,88 +8858,228 @@
       "backend/src/daengs_walk/cellophane.py"
     ],
     [
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/retention.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/retention.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/repositories/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/repositories/walk_catalog_demand.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/retention.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/collection.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/collection.py",
+      "backend/src/daengs_backend/services/walk_background/providers/facility.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/collection.py",
+      "backend/src/daengs_backend/services/walk_background/providers/public.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/collection.py",
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/facility.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/facility.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/providers/area.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "backend/src/daengs_backend/orchestration/adapters/life.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "backend/src/daengs_walk/value_contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "backend/src/daengs_walk/weather.py"
+    ],
+    [
       "backend/src/daengs_backend/services/walk_capsule.py",
       "backend/src/daengs_backend/services/walk_artifacts/capsule.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/config.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/repositories/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/repositories/walk_catalog_demand.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_river_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_regions.py",
-      "backend/src/daengs_backend/config.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_regions.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_regions.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_catalog_regions.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
       "backend/src/daengs_backend/services/walk_chunk.py",
       "backend/src/daengs_backend/schemas/walk.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_context_backfill.py",
@@ -8809,15 +9099,15 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_context_backfill.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_context_backfill.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_context_backfill.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/api.py",
@@ -8853,11 +9143,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
-      "backend/src/daengs_backend/services/__init__.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
@@ -8889,19 +9179,35 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/__init__.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/retention.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
@@ -8914,22 +9220,6 @@
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
       "backend/src/daengs_backend/services/walk_diary/collection/snapshot.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/collection/service.py",
@@ -9717,7 +10007,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_entry_context.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
+      "backend/src/daengs_backend/services/walk_background/collection.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_entry_context.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_entry_context.py",
@@ -9726,18 +10020,6 @@
     [
       "backend/src/daengs_backend/services/walk_entry_context.py",
       "backend/src/daengs_backend/services/walk_entry_policy.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_entry_context_source.py",
-      "backend/src/daengs_backend/config.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_entry_context_source.py",
-      "backend/src/daengs_backend/services/walk_public_context.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_entry_context_source.py",
-      "backend/src/daengs_backend/services/walk_weather_context.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_entry_pin.py",
@@ -10100,18 +10382,6 @@
       "backend/src/daengs_backend/services/walk_motion_contract.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "backend/src/daengs_walk/value_contracts.py"
-    ],
-    [
       "backend/src/daengs_backend/services/walk_photo.py",
       "backend/src/daengs_backend/config.py"
     ],
@@ -10196,34 +10466,6 @@
       "backend/src/daengs_backend/services/walk_motion_contract.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/config.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_area_context.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
-    ],
-    [
       "backend/src/daengs_backend/services/walk_recording.py",
       "backend/src/daengs_backend/repositories/__init__.py"
     ],
@@ -10250,30 +10492,6 @@
     [
       "backend/src/daengs_backend/services/walk_recording.py",
       "backend/src/daengs_backend/services/walk_finalize.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "backend/src/daengs_backend/services/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "backend/src/daengs_walk/value_contracts.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_sgis.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -10436,28 +10654,12 @@
       "backend/src/daengs_backend/services/walk_chunk.py"
     ],
     [
-      "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_backend/orchestration/adapters/life.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_walk/value_contracts.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_weather_context.py",
-      "backend/src/daengs_walk/weather.py"
-    ],
-    [
       "backend/src/daengs_backend/tasks/walk_entry_context.py",
       "backend/src/daengs_backend/core/database.py"
     ],
     [
       "backend/src/daengs_backend/tasks/walk_entry_context.py",
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py"
     ],
     [
       "backend/src/daengs_backend/tasks/walk_entry_context.py",
@@ -11509,27 +11711,31 @@
     ],
     [
       "backend/tests/walk/context/test_walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/tests/walk/context/test_walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_area_context.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_area_context.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/river.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_area_context.py",
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_area_context.py",
+      "backend/src/daengs_backend/services/walk_background/providers/public.py"
     ],
     [
       "backend/tests/walk/context/test_walk_area_context.py",
       "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py"
-    ],
-    [
-      "backend/tests/walk/context/test_walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_public_context.py"
-    ],
-    [
-      "backend/tests/walk/context/test_walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
-    ],
-    [
-      "backend/tests/walk/context/test_walk_area_context.py",
-      "backend/src/daengs_backend/services/walk_river_catalog.py"
     ],
     [
       "backend/tests/walk/context/test_walk_area_context.py",
@@ -11569,35 +11775,39 @@
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_demand_db.py",
-      "backend/src/daengs_backend/services/walk_entry_context.py"
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_demand_db.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
+      "backend/src/daengs_backend/services/walk_entry_context.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_redis.py",
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_catalog_refresh.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_catalog_regions.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_public_context.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/regions.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
+      "backend/src/daengs_backend/services/walk_background/http.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_catalog_refresh.py",
+      "backend/src/daengs_backend/services/walk_background/providers/public.py"
     ],
     [
       "backend/tests/walk/context/test_walk_catalog_refresh.py",
@@ -11633,15 +11843,15 @@
     ],
     [
       "backend/tests/walk/context/test_walk_context_backfill_db.py",
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_context_backfill_db.py",
       "backend/src/daengs_backend/services/walk_context_backfill.py"
     ],
     [
       "backend/tests/walk/context/test_walk_context_backfill_db.py",
       "backend/src/daengs_backend/services/walk_entry_context.py"
-    ],
-    [
-      "backend/tests/walk/context/test_walk_context_backfill_db.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
     ],
     [
       "backend/tests/walk/context/test_walk_entry_context.py",
@@ -11665,11 +11875,11 @@
     ],
     [
       "backend/tests/walk/context/test_walk_entry_context_db.py",
-      "backend/src/daengs_backend/services/walk_entry_context.py"
+      "backend/src/daengs_backend/services/walk_background/contracts.py"
     ],
     [
       "backend/tests/walk/context/test_walk_entry_context_db.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
+      "backend/src/daengs_backend/services/walk_entry_context.py"
     ],
     [
       "backend/tests/walk/context/test_walk_entry_pin_context.py",
@@ -11685,23 +11895,27 @@
     ],
     [
       "backend/tests/walk/context/test_walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_entry_context_source.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
     ],
     [
       "backend/tests/walk/context/test_walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/collection.py"
     ],
     [
       "backend/tests/walk/context/test_walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_public_context.py"
+      "backend/src/daengs_backend/services/walk_background/http.py"
     ],
     [
       "backend/tests/walk/context/test_walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_public_http.py"
+      "backend/src/daengs_backend/services/walk_background/providers/__init__.py"
     ],
     [
       "backend/tests/walk/context/test_walk_public_context.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
+      "backend/src/daengs_backend/services/walk_background/providers/public.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_public_context.py",
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
     ],
     [
       "backend/tests/walk/context/test_walk_runtime_check.py",
@@ -11753,15 +11967,19 @@
     ],
     [
       "backend/tests/walk/context/test_walk_weather_context.py",
+      "backend/src/daengs_backend/services/walk_background/providers/__init__.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_weather_context.py",
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py"
+    ],
+    [
+      "backend/tests/walk/context/test_walk_weather_context.py",
       "backend/src/daengs_backend/services/walk_entry_context.py"
     ],
     [
       "backend/tests/walk/context/test_walk_weather_context.py",
       "backend/src/daengs_backend/services/walk_entry_context_source.py"
-    ],
-    [
-      "backend/tests/walk/context/test_walk_weather_context.py",
-      "backend/src/daengs_backend/services/walk_weather_context.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_activity.py",
@@ -12185,6 +12403,10 @@
     ],
     [
       "backend/tests/walk/diary/test_diary_card_writing.py",
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_card_writing.py",
       "backend/src/daengs_backend/services/walk_diary/__init__.py"
     ],
     [
@@ -12234,10 +12456,6 @@
     [
       "backend/tests/walk/diary/test_diary_card_writing.py",
       "backend/src/daengs_backend/services/walk_diary/writing/jobs.py"
-    ],
-    [
-      "backend/tests/walk/diary/test_diary_card_writing.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_card_writing.py",
@@ -12765,11 +12983,11 @@
     ],
     [
       "backend/tests/walk/diary/test_diary_slot_claims.py",
-      "backend/src/daengs_backend/services/walk_diary/legacy/slots.py"
+      "backend/src/daengs_backend/services/walk_background/providers/public.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_slot_claims.py",
-      "backend/src/daengs_backend/services/walk_public_context.py"
+      "backend/src/daengs_backend/services/walk_diary/legacy/slots.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_slot_claims.py",
@@ -12849,6 +13067,10 @@
     ],
     [
       "backend/tests/walk/diary/test_diary_space_integration.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/retention.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_space_integration.py",
       "backend/src/daengs_backend/services/walk_diary/__init__.py"
     ],
     [
@@ -12882,10 +13104,6 @@
     [
       "backend/tests/walk/diary/test_diary_space_integration.py",
       "backend/src/daengs_backend/services/walk_diary/preview.py"
-    ],
-    [
-      "backend/tests/walk/diary/test_diary_space_integration.py",
-      "backend/src/daengs_backend/services/walk_space_catalog_input.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_space_integration.py",
@@ -14005,6 +14223,14 @@
     ],
     [
       "backend/tests/walk/support/writing_boundary.py",
+      "backend/src/daengs_backend/services/walk_background/providers/__init__.py"
+    ],
+    [
+      "backend/tests/walk/support/writing_boundary.py",
+      "backend/src/daengs_backend/services/walk_background/providers/sgis.py"
+    ],
+    [
+      "backend/tests/walk/support/writing_boundary.py",
       "backend/src/daengs_backend/services/walk_diary/__init__.py"
     ],
     [
@@ -14050,10 +14276,6 @@
     [
       "backend/tests/walk/support/writing_boundary.py",
       "backend/src/daengs_backend/services/walk_diary/writing/policy.py"
-    ],
-    [
-      "backend/tests/walk/support/writing_boundary.py",
-      "backend/src/daengs_backend/services/walk_sgis.py"
     ],
     [
       "backend/tests/walk/support/writing_boundary.py",
@@ -14233,11 +14455,23 @@
     ],
     [
       "backend/tools/run_diary_public_scenario.py",
-      "backend/src/daengs_backend/services/walk_area_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py"
     ],
     [
       "backend/tools/run_diary_public_scenario.py",
-      "backend/src/daengs_backend/services/walk_commerce_catalog.py"
+      "backend/src/daengs_backend/services/walk_background/catalogs/area.py"
+    ],
+    [
+      "backend/tools/run_diary_public_scenario.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py"
+    ],
+    [
+      "backend/tools/run_diary_public_scenario.py",
+      "backend/src/daengs_backend/services/walk_background/catalogs/park.py"
+    ],
+    [
+      "backend/tools/run_diary_public_scenario.py",
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py"
     ],
     [
       "backend/tools/run_diary_public_scenario.py",
@@ -14249,15 +14483,11 @@
     ],
     [
       "backend/tools/run_diary_public_scenario.py",
-      "backend/src/daengs_backend/services/walk_park_catalog.py"
-    ],
-    [
-      "backend/tools/run_diary_public_scenario.py",
-      "backend/src/daengs_backend/services/walk_weather_context.py"
-    ],
-    [
-      "backend/tools/run_diary_public_scenario.py",
       "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/tools/run_diary_route_scenario.py",
+      "backend/src/daengs_backend/services/walk_background/providers/weather.py"
     ],
     [
       "backend/tools/run_diary_route_scenario.py",
@@ -14290,10 +14520,6 @@
     [
       "backend/tools/run_diary_route_scenario.py",
       "backend/src/daengs_backend/services/walk_diary/writing/policy.py"
-    ],
-    [
-      "backend/tools/run_diary_route_scenario.py",
-      "backend/src/daengs_backend/services/walk_weather_context.py"
     ],
     [
       "backend/tools/run_diary_route_scenario.py",
@@ -14385,13 +14611,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/cli/walk_area_catalog.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
       "from": "backend/src/daengs_backend/cli/walk_context_backfill.py",
       "to": "backend/src/daengs_backend/core/database.py",
       "decision": "retain-interface",
@@ -14414,52 +14633,52 @@
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_area_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_catalog_regions.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_commerce_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_park_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_river_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/cli/walk_runtime_check.py",
-      "to": "backend/src/daengs_backend/services/walk_sgis.py",
+      "to": "backend/src/daengs_backend/services/walk_background/providers/sgis.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/main.py",
@@ -15316,27 +15535,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_area_catalog.py",
-      "to": "backend/src/daengs_walk/value_contracts.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_area_context.py",
-      "to": "backend/src/daengs_backend/config.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_area_context.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
       "from": "backend/src/daengs_backend/services/walk_artifacts/api.py",
       "to": "backend/src/daengs_backend/models/walk.py",
       "decision": "retain-interface",
@@ -15379,46 +15577,88 @@
       "reason": "소유 모듈을 통한 계산/봉인 산출물 소비 또는 기존 이름의 명시 호환. 산출물 생성과 공간 조회의 책임을 합치지 않는다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_catalog_refresh.py",
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
       "to": "backend/src/daengs_backend/config.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_catalog_refresh.py",
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/refresh.py",
       "to": "backend/src/daengs_backend/repositories/__init__.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_catalog_refresh.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_catalog_regions.py",
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
       "to": "backend/src/daengs_backend/config.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_catalog_regions.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/retention.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_commerce_catalog.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "from": "backend/src/daengs_backend/services/walk_background/catalogs/river.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/providers/area.py",
+      "to": "backend/src/daengs_backend/config.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/providers/facility.py",
+      "to": "backend/src/daengs_backend/config.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/providers/public.py",
+      "to": "backend/src/daengs_backend/config.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "to": "backend/src/daengs_backend/orchestration/adapters/life.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_background/providers/weather.py",
+      "to": "backend/src/daengs_walk/value_contracts.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_context_backfill.py",
@@ -15443,17 +15683,17 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
-      "to": "backend/src/daengs_backend/services/walk_area_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/catalog.py",
@@ -15478,59 +15718,59 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/__init__.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_area_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/area.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_catalog_regions.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/commerce.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_commerce_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/park.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_park_catalog.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/regions.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_public_http.py",
+      "to": "backend/src/daengs_backend/services/walk_background/catalogs/retention.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_sgis.py",
+      "to": "backend/src/daengs_backend/services/walk_background/http.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/collection/service.py",
-      "to": "backend/src/daengs_backend/services/walk_space_catalog_input.py",
+      "to": "backend/src/daengs_backend/services/walk_background/providers/sgis.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "배경 원본 공급/공통 값 계약을 소유 모듈에서 소비하거나 작업자·CLI에서 갱신을 조정. 일기 해석과 기록 트랜잭션은 공급자에 포함하지 않음."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/guard.py",
@@ -16002,13 +16242,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_entry_context_source.py",
-      "to": "backend/src/daengs_backend/config.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
       "from": "backend/src/daengs_backend/services/walk_entry_pin.py",
       "to": "backend/src/daengs_backend/repositories/__init__.py",
       "decision": "retain-interface",
@@ -16331,13 +16564,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_park_catalog.py",
-      "to": "backend/src/daengs_walk/value_contracts.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
-    },
-    {
       "from": "backend/src/daengs_backend/services/walk_photo.py",
       "to": "backend/src/daengs_backend/config.py",
       "decision": "retain-interface",
@@ -16380,13 +16606,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_public_context.py",
-      "to": "backend/src/daengs_backend/config.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
       "from": "backend/src/daengs_backend/services/walk_recording.py",
       "to": "backend/src/daengs_backend/repositories/__init__.py",
       "decision": "retain-interface",
@@ -16399,27 +16618,6 @@
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "to": "backend/src/daengs_backend/services/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_river_catalog.py",
-      "to": "backend/src/daengs_walk/value_contracts.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_space_catalog_input.py",
-      "to": "backend/src/daengs_walk/value_contracts.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_spatial_diary.py",
@@ -16574,20 +16772,6 @@
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_weather_context.py",
-      "to": "backend/src/daengs_backend/orchestration/adapters/life.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_weather_context.py",
-      "to": "backend/src/daengs_walk/value_contracts.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "독립 공급/공용 값 계약을 소비하거나 일기 수집 어댑터가 공급을 조립한다."
     },
     {
       "from": "backend/src/daengs_backend/tasks/walk_entry_context.py",

@@ -13,7 +13,7 @@ from daengs_backend.orchestration.adapters.life import (
 )
 from daengs_backend.services import walk_entry_context as worker
 from daengs_backend.services import walk_entry_context_source as source
-from daengs_backend.services import walk_weather_context as weather
+from daengs_backend.services.walk_background.providers import weather
 from tests.walk.support.entry_context import CONTENT, NOW
 
 

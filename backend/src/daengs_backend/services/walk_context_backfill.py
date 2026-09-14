@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 from daengs_backend.config import settings
 from daengs_backend.repositories import walk_context_backfill as repo
 from daengs_backend.repositories.walk_entry_context import PIN_POLICY, POLICY
-from daengs_backend.services.walk_area_catalog import area
-from daengs_backend.services.walk_catalog_regions import automatic_ready
-from daengs_backend.services.walk_entry_context_source import digest
+from daengs_backend.services.walk_background.catalogs.area import area
+from daengs_backend.services.walk_background.catalogs.regions import automatic_ready
+from daengs_backend.services.walk_background.contracts import digest
 
 BACKFILL_POLICY = "walk-public-missing-v1"
 TAGS = ("space.address", "space.commerce", "space.park", "space.river")

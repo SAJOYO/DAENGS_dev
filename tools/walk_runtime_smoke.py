@@ -21,10 +21,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class SmokeFailure(Exception):
     """Only predefined messages; never constructed from external responses."""
 
-    def __init__(self, message, *, request_number=None, validation_fields=None):
+    def __init__(self, message, *, request_number=None, validation_fields=None, diagnostics=None):
         super().__init__(message)
         self.request_number = request_number
         self.validation_fields = validation_fields
+        self.diagnostics = diagnostics
 
 
 async def prepare_backfill(owner, walk_id):
@@ -120,8 +121,11 @@ async def card_publication(request, owner, walk_id, entries, notes):
     }
     result = await request("POST", path, body)
     parsed = DiaryStoryboardResponse.model_validate(result)
-    if parsed.status != "ready" or parsed.bundle.model_status != "accepted":
-        raise SmokeFailure("card graph did not publish accepted writing")
+    if parsed.status != "ready" or parsed.bundle is None:
+        raise SmokeFailure(
+            "card graph did not publish a ready board",
+            diagnostics={"status": parsed.status, "error_code": parsed.error_code},
+        )
     if (
         await request("GET", path + "?bundle_format=walk-diary-board-v1&target_scene_count=5")
         != result
@@ -153,12 +157,13 @@ async def card_publication(request, owner, walk_id, entries, notes):
         if stored.scene_backgrounds is not None
         else Counter()
     )
-    return {
+    diagnostics = {
         "card_graph": True,
         "model": receipt.writer["model"],
         "scene_count": len(scenes),
         "generation": parsed.generation,
         "model_status": parsed.bundle.model_status,
+        "failure_code": parsed.bundle.failure_code,
         "same_readback": True,
         "same_repeated_post": True,
         "original_notes_preserved": True,
@@ -179,8 +184,10 @@ async def card_publication(request, owner, walk_id, entries, notes):
             }
             for j in receipt.result.jobs
         ],
-        "synthetic_response": result,
     }
+    if parsed.bundle.model_status != "accepted":
+        raise SmokeFailure("card graph did not publish accepted writing", diagnostics=diagnostics)
+    return {**diagnostics, "synthetic_response": result}
 
 
 async def cycle(owner, *, center=None, require_regional=False, backfill=False, card=False):
@@ -450,6 +457,8 @@ async def main(*, regional=False, backfill=False):
             result["reason"] = str(exc)
             result["request_number"] = exc.request_number
             result["validation_fields"] = exc.validation_fields
+            if exc.diagnostics is not None:
+                result["diagnostics"] = exc.diagnostics
     finally:
         try:
             if created:

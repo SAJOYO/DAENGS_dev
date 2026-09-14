@@ -6,7 +6,9 @@ from pydantic import JsonValue, model_validator
 
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_backend.services.walk_diary.model_input import VERSION, normalize
+from daengs_walk.diary.board.action_context import require_scene_action
 from daengs_walk.diary.board.activity import covers_observation, movement_uses
+from daengs_walk.diary.board.title_context import CONTENT_BASIS, title_context, title_revision
 from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
 
 
@@ -55,6 +57,7 @@ class StoredCardWriting(DiaryContract):
         spaces = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "space"}
         actions = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "action"}
         title_jobs = [j for j in self.result.jobs if j.stage == "title"]
+        independent = self.writer.get("input_policy") == "diary-prose-input-v6"
         if len(spaces) != len(bundle.scenes) or len(spaces) + len(actions) + len(title_jobs) != len(
             self.result.jobs
         ):
@@ -74,6 +77,8 @@ class StoredCardWriting(DiaryContract):
                 raise ValueError("action job and behavior pin differ")
             for action in parts.actions:
                 result = actions[scene.id]
+                if independent:
+                    require_scene_action(scene, result.request)
                 source = result.request["action"]
                 if (
                     action.action_id != (source["id"] if source else None)
@@ -93,15 +98,18 @@ class StoredCardWriting(DiaryContract):
                 ):
                     raise ValueError("observation suppression differs from cited pace")
             title = titles.get(scene.id)
+            expected_title_revision = (
+                title_revision(scene) if independent else parts.content_revision
+            )
             if parts.title_origin == "generated" and (
                 not title
                 or title["text"].strip() != scene.title
-                or title["content_revision"] != parts.content_revision
+                or title["content_revision"] != expected_title_revision
             ):
                 raise ValueError("title differs from its accepted job")
             supplied = title_inputs.get(scene.id)
             if supplied and (
-                supplied["content_revision"] != parts.content_revision
+                supplied["content_revision"] != expected_title_revision
                 or supplied["space"] != parts.space.model_dump(mode="json")
                 or supplied["actions"] != [a.model_dump(mode="json") for a in parts.actions]
                 or supplied["place_reference"]
@@ -122,6 +130,10 @@ class StoredCardWriting(DiaryContract):
                     }
                     for c in bundle.scenes
                 ]
+                if independent:
+                    if job.request.get("content_basis") != CONTENT_BASIS:
+                        raise ValueError("title must exclude independent user notes")
+                    expected = title_context(bundle.scenes)
                 if job.request["context"] != expected or job.request["context_revision"] != digest(
                     expected
                 ):

@@ -10,13 +10,22 @@ from daengs_backend.services.walk_diary.contracts import (
     WritingJob,
 )
 from daengs_backend.services.walk_diary.writing import policy
+from daengs_walk.diary.board.action_context import pin_movement, require_action
 from daengs_walk.diary.board.activity import movement_uses
 from daengs_walk.diary.board.scene_input import action_anchor
+from daengs_walk.diary.board.title_context import (
+    CONTENT_BASIS,
+    generated_body,
+    title_context,
+    title_revision,
+)
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.slots.space import writing_facts
 
 
 def job(stage, payload):
+    if stage == "action":
+        require_action(payload)
     # Only this strategy's actual dependencies belong in its revision, never the whole board.
     revision = digest(
         {
@@ -41,14 +50,14 @@ def common_context(base):
 
 
 def action_job(base, scene, stamp=None):
-    """The persisted stage name stays action; its responsibility is card activity."""
+    """Only a live behavior pin can create an action job; movement cannot open one."""
     anchor = action_anchor(scene)
-    stamp = stamp or next(s for s in base.slots.stamps if s.scene_id == scene.id)
-    movement = [
-        {"id": e.id, "facts": e.facts} for e in stamp.evidence if e.role == "scene_movement"
-    ]
-    if anchor is None and not movement:
+    if anchor is None:
         return None
+    stamp = stamp or next(s for s in base.slots.stamps if s.scene_id == scene.id)
+    movement = pin_movement(
+        [{"id": e.id, "facts": e.facts} for e in stamp.evidence if e.role == "scene_movement"]
+    )
     pet_id = scene.core.record.content.pet_id if anchor else None
     if pet_id is not None and pet_id not in base.input.source.pet_ids:
         raise ValueError("action actor is outside this walk")
@@ -141,20 +150,11 @@ def space_job(base, scene, stamp):
 
 
 def title_jobs(cards):
-    context = [
-        {
-            "card_id": c.id,
-            "order": c.order,
-            "event_at": c.anchor.event_at.isoformat(),
-            "body": c.body,
-            "location": [p.model_dump(mode="json") for p in c.place_reference],
-        }
-        for c in cards
-    ]
+    context = title_context(cards)
     payloads = [
         {
             "card_id": c.id,
-            "content_revision": c.writing.content_revision,
+            "content_revision": title_revision(c),
             "space": c.writing.space.model_dump(mode="json"),
             "actions": [a.model_dump(mode="json") for a in c.writing.actions],
             "place_reference": [p.model_dump(mode="json") for p in c.place_reference],
@@ -166,12 +166,14 @@ def title_jobs(cards):
             ),
         }
         for c in cards
+        if generated_body(c).strip()
     ]
     return [
         job(
             "title",
             {
                 "cards": payloads[i : i + policy.MAX_CARDS],
+                "content_basis": CONTENT_BASIS,
                 "context": context,
                 "context_revision": digest(context),
             },
@@ -212,7 +214,7 @@ def validate_output(item, raw):
             ):
                 raise ValueError("writing result belongs to another request")
             if item.stage == "action":
-                action = item.request.get("action")
+                action = require_action(item.request)
                 refs = set(output.movement_ids)
                 if (
                     output.action_id != (action["id"] if action else None)

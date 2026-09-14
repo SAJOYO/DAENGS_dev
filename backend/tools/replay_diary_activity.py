@@ -19,13 +19,8 @@ async def placeholder(stage, payload, schema):
             "titles": [{"id": c["id"], "text": f"연결 확인 · {c['id']}"} for c in payload["cards"]]
         }
     if stage == "action":
-        if "movement" in payload:
-            refs = [
-                f["id"]
-                for p in payload["movement"]["phases"]
-                for k in ("path", "pace")
-                for f in p[k]
-            ]
+        if "recorded_action" in payload:
+            refs = [payload["movement_context"]["id"]] if "movement_context" in payload else []
             if payload.get("recorded_action"):
                 refs.append(payload["recorded_action"]["id"])
             return {"text": "[오프라인 고정 응답] 활동 작성 연결 확인.", "evidence_ids": refs}

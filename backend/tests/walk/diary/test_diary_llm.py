@@ -48,13 +48,17 @@ def test_real_public_materials_keep_meaning_and_drop_all_provenance():
         "coordinates",
     ):
         assert key not in text
-    assert "24.2" in text and "격자" in text and "토지피복" in text and "등록 지점" in text
+    assert "24.2" in text and "격자" in text and "배경 유형" in text and "근처에 공원" in text
     for source, sent in zip(job["request"]["materials"], values, strict=True):
         if "material" in source["facts"]:
             if sent["role"] == "area_statistics":
                 assert sent["material"]["업종구성"] == source["facts"]["material"]["업종구성"]
                 assert "구간" not in str(sent["material"])
                 assert "조회영역_등록분포" in sent["material"]
+            elif (
+                source["facts"].get("relation", {}).get("kind") == "registered_park_point_distance"
+            ):
+                assert sent["material"] == {"배경": "공원"}
             else:
                 assert sent["material"] == source["facts"]["material"]
     assert job == before
@@ -170,7 +174,7 @@ async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
             "title"
             if "cards" in payload
             else "action"
-            if {"actor", "movement"} & payload.keys()
+            if {"actor", "recorded_action"} & payload.keys()
             else "space"
         )
         sent.append(payload)

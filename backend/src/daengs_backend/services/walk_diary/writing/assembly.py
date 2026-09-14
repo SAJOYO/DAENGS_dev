@@ -3,6 +3,7 @@
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_backend.services.walk_diary.writing.jobs import action_job
 from daengs_backend.services.walk_diary.writing.policy import writing_version
+from daengs_walk.diary.board.action_context import require_scene_action
 from daengs_walk.diary.board.activity import activity_fallback, covers_observation
 from daengs_walk.diary.board.output import publish_board
 from daengs_walk.diary.contracts.input import digest
@@ -32,6 +33,8 @@ def places_for(stamp, previous):
 
 
 def frozen_card(scene, stamp, space_result, action_result):
+    if action_result is not None:
+        require_scene_action(scene, action_result.request)
     observation = observation_content(scene.core, scene.observation, modern=True)
     places = places_for(stamp, scene.place_reference)
     dong = next((p.facts.get("dong") for p in places if p.facts.get("dong")), None)

@@ -10,7 +10,8 @@
 | [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화 경위·남은 기획·완료 기준, 실제 작성/미리보기/호환 분기와 SGIS·공간 선정·공통 실행의 혼동 방지 |
 | [walk/diary-service-package.md](walk/diary-service-package.md) | 일기 서비스 진입점·책임별 패키지·의존 경계와 이전 파일 이동표 |
 | [walk/diary-domain-package.md](walk/diary-domain-package.md) | 일기 기획 규칙의 책임·의존 경계, 장면 선정·공간 해석·슬롯 적용과 이전 파일 이동표 |
-| [walk/diary-activity.md](walk/diary-activity.md) | 동선·속도를 합친 활동 슬롯과 정규화·저장·전체 맥락 제목, 정책 선택의 이유 |
+| [walk/diary-action-boundary.md](walk/diary-action-boundary.md) | 행동 핀만 행동 작성을 여는 경계, 핀 시각의 이동 맥락 1개, 메모의 생성·제목 의존성 분리 (#527) |
+| [walk/diary-activity.md](walk/diary-activity.md) | #508의 과거 구현 기록. 이동 분석은 유지하며 행동 생성·제목 입력 규칙은 #527로 대체 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |

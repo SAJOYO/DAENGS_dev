@@ -35,7 +35,7 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v5",
+        "policy": "shared-orchestration-card-writing-v7",
         "input_policy": INPUT_VERSION,
         "observation_text": CURRENT_OBSERVATION_TEXT,
         "legacy_observation_text": OBSERVATION_TEXT,

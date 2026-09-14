@@ -62,13 +62,15 @@ def _material(item):
     elif kind == "land_cover_at_query_point":
         result = {
             "material": fields(facts.get("material", {}), ("피복",)),
-            "relation": "기록 좌표의 지도상 토지피복 분류. 현장 풍경·식생의 밀도는 미확인",
+            "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
         }
-    elif kind == "registered_park_point_distance":
+    elif kind == "registered_park_point_distance" or (
+        role == "scene_registered_point_distance"
+        and facts.get("reference") == "registered_park_point"
+    ):
         result = {
-            "material": fields(facts.get("material", {}), ("공원명", "공원종류")),
-            "relation": "공원 등록 지점까지의 거리. 경계·내부·방문 여부는 미확인",
-            **fields(relation, ("distance_m",)),
+            "material": {"배경": "공원"},
+            "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
         }
     elif kind == "registered_distribution_in_query_circle":
         distribution = {

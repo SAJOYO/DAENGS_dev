@@ -92,12 +92,31 @@ _KIND_PATTERNS: dict[CareLogKind, re.Pattern[str]] = {
         r"(?<![가-힣])약(?:을|은|도|만|이|과|이랑|랑|하고|까지|부터|요)?(?![가-힣])"
         r"|투약|알약|물약|안약|가루약|처방약|한약|구충|심장사상충|항생제|진통제|영양제|유산균"
     ),
-    CareLogKind.SNACK: re.compile(r"간식|츄르|트릿|개껌|덴탈|육포|저키|비스켓|비스킷"),
+    CareLogKind.SNACK: re.compile(r"간식|까까|츄르|트릿|개껌|덴탈|육포|저키|비스켓|비스킷"),
     # `캔` 한 글자는 일부러 없습니다 — `사료`·`습식` 이 이미 덮고, 한 글자는 `캔슬` 같은
     # 말에 걸립니다. `급여` 는 남겨 두지만 사람의 월급을 뜻할 수도 있는 말이라, 위의 `약`
     # 처럼 좁혀야 할 날이 오면 같은 방식을 씁니다.
-    CareLogKind.MEAL: re.compile(r"밥|사료|식사|끼니|습식|화식|자연식|급여"),
+    CareLogKind.MEAL: re.compile(r"밥|사료|식사|끼니|습식|화식|자연식|급여|맘마"),
 }
+
+#: 끼니를 **시각으로** 부르는 말. `_KIND_PATTERNS` 와 **동급이 아닙니다** — 명시 어휘가
+#: 하나도 없을 때만 밥으로 읽는 약한 신호입니다 (`kind_of`).
+#:
+#: ⚠️ **동급으로 넣으면 세 군데가 깨집니다** (실측):
+#: `"아침에 약 먹였어"` → 밥·약 둘이 잡혀 None (투약 기록이 안 됨) ·
+#: `"아침 간식 줬어"` → 같은 이유로 None ·
+#: `"아침에 목욕했어"` → 목욕이 밥으로 기록됨.
+#: 앞의 둘은 이미 되던 것을 깨는 회귀이고, 뒤는 하지 않은 급여를 적는 오탐입니다.
+_MEAL_TIME = re.compile(r"아침|점심|저녁")
+
+#: 시각 낱말을 밥으로 읽어 주는 **동사 조건**. `_DID_IT` 보다 좁습니다 — 주거나 먹인
+#: 동사만이고, 일반적인 `했어`·`완료` 는 **일부러 없습니다.**
+#:
+#: `"아침에 목욕했어"` · `"아침 청소 다 했어"` 가 이 좁힘을 만들었습니다. `했어` 까지 받으면
+#: 시각 낱말이 붙은 모든 집안일이 밥 기록 제안이 됩니다 — 시각은 "무엇을" 을 말하지 않으므로,
+#: 그 자리를 메우는 것은 동사여야 합니다.
+_GAVE = re.compile(r"먹였|먹임|먹이고|줬|줫|줘써|주었|드렸|챙겼|급여")
+
 
 #: 승낙. **거절이 먼저 걸립니다** (`confirmation_of`) — `"아니 응 그거 말고"` 는 승낙이 아닙니다.
 #:
@@ -189,7 +208,11 @@ def is_care_log_statement(query: str) -> bool:
         return False
     if not _DID_IT.search(query):
         return False
-    return any(pattern.search(query) for pattern in _KIND_PATTERNS.values())
+    if any(pattern.search(query) for pattern in _KIND_PATTERNS.values()):
+        return True
+    # 명시 어휘가 없어도 `"아침 줬어"` 는 진술이다 — 단, 준 동사가 있을 때만
+    # (`_GAVE`). `"아침에 목욕했어"` 가 여기로 안 들어오는 것이 그 조건의 이유다.
+    return bool(_MEAL_TIME.search(query) and _GAVE.search(query))
 
 
 def kind_of(query: str) -> CareLogKind | None:
@@ -198,11 +221,24 @@ def kind_of(query: str) -> CareLogKind | None:
     `"밥이랑 약 먹였어"` 는 None 입니다 — 두 줄을 자동으로 쓰지 않습니다. 한 번의 확인으로
     두 기록을 만들면 사용자가 승낙한 것과 들어간 것이 달라지고, 되돌리려면 기록 화면에서
     둘을 따로 지워야 합니다. 그런 발화는 기록 화면이 답입니다.
+
+    **두 층입니다.** 명시 어휘(`_KIND_PATTERNS`)를 먼저 보고, 하나도 없을 때만 시각
+    낱말(`_MEAL_TIME` + `_GAVE`)을 밥으로 읽습니다. 순서가 이래야 `"아침에 약 먹였어"` 가
+    투약으로 남습니다 — 동급으로 두면 밥·약 둘이 잡혀 아무것도 기록되지 않습니다
+    (`_MEAL_TIME` 주석의 실측 셋).
+
+    시각 낱말이 **둘 이상**이면 None 입니다 (`"아침이랑 저녁 다 줬어"`) — 끼니가 둘이라는
+    뜻이고, 위와 같은 이유로 한 번의 확인이 두 줄을 만들지 않습니다.
     """
     matched = [kind for kind, pattern in _KIND_PATTERNS.items() if pattern.search(query)]
-    if len(matched) != 1:
-        return None
-    return matched[0]
+    if len(matched) == 1:
+        return matched[0]
+    if matched:
+        return None  # 명시 어휘가 둘 이상 — 시각 낱말로 구하지 않는다
+    times = set(_MEAL_TIME.findall(query))
+    if len(times) == 1 and _GAVE.search(query):
+        return CareLogKind.MEAL
+    return None
 
 
 def confirmation_of(query: str) -> Literal["affirm", "decline", "unrelated"]:

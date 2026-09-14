@@ -109,6 +109,67 @@ def test_kind_lexicon_reads_one_kind_only() -> None:
 
 
 @pytest.mark.parametrize(
+    ("query", "kind"),
+    [
+        ("맘마 줬어", CareLogKind.MEAL),
+        ("까까 줬어", CareLogKind.SNACK),
+    ],
+)
+def test_baby_talk_is_in_the_lexicon(query: str, kind: CareLogKind) -> None:
+    """사용자가 실제로 쓰는 말이 어휘의 원천이다 (2026-09-14 사람 요청).
+
+    처음 어휘는 `밥`·`사료`·`간식` 같은 표준어만 있었다. `맘마`·`까까` 는 명사이고 다른
+    뜻이 없어 오탐 위험이 낮다 — 골드 세트 훑기에서 늘어난 오탐이 0건이다.
+    """
+    assert gate.is_care_log_statement(query) is True
+    assert gate.kind_of(query) is kind
+
+
+@pytest.mark.parametrize("query", ["아침 줬어", "점심 줬어", "저녁 줬어", "아침 먹였어"])
+def test_a_meal_time_alone_reads_as_a_meal(query: str) -> None:
+    """`"아침 줬어"` — 무엇을 줬는지를 **시각**으로만 말하는 꼴 (2026-09-14 사람 요청)."""
+    assert gate.is_care_log_statement(query) is True
+    assert gate.kind_of(query) is CareLogKind.MEAL
+
+
+@pytest.mark.parametrize(
+    ("query", "kind", "why"),
+    [
+        ("아침에 약 먹였어", CareLogKind.MEDICATION, "명시 어휘가 시각 낱말을 이긴다"),
+        ("아침 간식 줬어", CareLogKind.SNACK, "같은 이유"),
+        ("아침 밥 줬어", CareLogKind.MEAL, "둘 다 밥이라 충돌이 아니다"),
+    ],
+)
+def test_an_explicit_kind_beats_a_meal_time(
+    query: str, kind: CareLogKind, why: str
+) -> None:
+    """**시각 낱말은 동급이 아니라 약한 신호다** (`_MEAL_TIME`).
+
+    동급으로 넣었을 때 앞의 둘이 `None` 이 됐다 — 밥·약 두 종류가 잡혀서다. 즉 이미 되던
+    투약·간식 기록이 시각 낱말 하나 때문에 **안 되는** 회귀였다.
+    """
+    assert gate.kind_of(query) is kind, why
+
+
+@pytest.mark.parametrize(
+    ("query", "why"),
+    [
+        ("아침에 목욕했어", "시각 낱말 + 일반 동사는 급여가 아니다"),
+        ("아침 청소 다 했어", "같은 이유 — 시각은 '무엇을' 을 말하지 않는다"),
+    ],
+)
+def test_a_meal_time_needs_a_giving_verb(query: str, why: str) -> None:
+    """`했어` 까지 받으면 시각 낱말이 붙은 **모든 집안일**이 밥 기록 제안이 된다 (`_GAVE`)."""
+    assert gate.is_care_log_statement(query) is False, why
+    assert gate.kind_of(query) is None, why
+
+
+def test_two_meal_times_are_two_meals_so_nothing_is_written() -> None:
+    """`"아침이랑 저녁 다 줬어"` — 끼니가 둘이다. 한 번의 확인이 두 줄을 만들지 않는다."""
+    assert gate.kind_of("아침이랑 저녁 다 줬어") is None
+
+
+@pytest.mark.parametrize(
     "query",
     [
         "예약했어",

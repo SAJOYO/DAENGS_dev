@@ -11,6 +11,7 @@
 | [walk/diary-service-package.md](walk/diary-service-package.md) | 일기 서비스 진입점·책임별 패키지·의존 경계와 이전 파일 이동표 |
 | [walk/diary-domain-package.md](walk/diary-domain-package.md) | 일기 기획 규칙의 책임·의존 경계, 장면 선정·공간 해석·슬롯 적용과 이전 파일 이동표 |
 | [walk/diary-action-boundary.md](walk/diary-action-boundary.md) | 행동 핀만 행동 작성을 여는 경계, 핀 시각의 이동 맥락 1개, 메모의 생성·제목 의존성 분리 (#527) |
+| [walk/diary-writing-context.md](walk/diary-writing-context.md) | 서비스·실험 공통 공간/행동 근거 조회와 생성 없는 입력 확인 도구 (#520 후속 2단계) |
 | [walk/diary-movement-materials.md](walk/diary-movement-materials.md) | #520 형상 판별 확장과 핀 시각 맥락 연결. 과거 서술 입력·실험의 폐기 이유 |
 | [walk/diary-activity.md](walk/diary-activity.md) | #508의 과거 구현 기록. 이동 분석은 유지하며 행동 생성·제목 입력 규칙은 #527로 대체 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |

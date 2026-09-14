@@ -10,9 +10,9 @@ from daengs_backend.services.walk_diary.contracts import (
     WritingJob,
 )
 from daengs_backend.services.walk_diary.writing import policy
-from daengs_walk.diary.board.action_context import pin_movement, require_action
+from daengs_backend.services.walk_diary.writing.context import get_action_context, get_space_context
+from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import movement_uses
-from daengs_walk.diary.board.scene_input import action_anchor
 from daengs_walk.diary.board.title_context import (
     CONTENT_BASIS,
     generated_body,
@@ -20,7 +20,6 @@ from daengs_walk.diary.board.title_context import (
     title_revision,
 )
 from daengs_walk.diary.contracts.input import digest
-from daengs_walk.diary.slots.space import writing_facts
 
 
 def job(stage, payload):
@@ -39,114 +38,25 @@ def job(stage, payload):
     )
 
 
-def common_context(base):
-    names = dict(base.input.pet_names)
-    return {
-        "record_kind": "guardian_walk_diary",
-        "companions": [
-            {"id": pet_id, "name": names.get(pet_id)} for pet_id in base.input.source.pet_ids
-        ],
-    }
+def _require_selected(base, scene, stamp):
+    if scene not in base.board.scenes or (
+        stamp is not None and (stamp.scene_id != scene.id or stamp not in base.slots.stamps)
+    ):
+        raise ValueError("writing job requires the selected scene and stamp")
 
 
 def action_job(base, scene, stamp=None):
-    """Only a live behavior pin can create an action job; movement cannot open one."""
-    anchor = action_anchor(scene)
-    if anchor is None:
+    _require_selected(base, scene, stamp)
+    context = get_action_context(base, scene.id)
+    if context is None:
         return None
-    stamp = stamp or next(s for s in base.slots.stamps if s.scene_id == scene.id)
-    movement = pin_movement(
-        [{"id": e.id, "facts": e.facts} for e in stamp.evidence if e.role == "scene_movement"]
-    )
-    pet_id = scene.core.record.content.pet_id if anchor else None
-    if pet_id is not None and pet_id not in base.input.source.pet_ids:
-        raise ValueError("action actor is outside this walk")
-    actor = {"id": pet_id, "name": dict(base.input.pet_names).get(pet_id)}
-    value = job(
-        "action",
-        {
-            "card_id": scene.id,
-            "event_at": scene.anchor.event_at.isoformat(),
-            "walk_context": common_context(base),
-            "action": {**anchor, "actor": actor} if anchor else None,
-            **({"movement": movement} if movement else {}),
-        },
-    )
-    return value.model_copy(
-        update={
-            "evidence": {
-                e.id: e.model_dump(mode="json")
-                for e in stamp.evidence
-                if e.role == "scene_movement"
-            }
-        }
-    )
+    return job(context.stage, context.request).model_copy(update={"evidence": context.evidence})
 
 
 def space_job(base, scene, stamp):
-    # Motion/actor/notes are not spatial observations. They stay in their source records.
-    materials, evidence = [], {}
-    for e in stamp.materials():
-        if e.part not in {"space", "environment"}:
-            continue
-        facts = {k: v for k, v in writing_facts(e).items() if k != "retrieved_at"}
-        if e.facts.get("source") == "land_cover" and isinstance(facts.get("material"), dict):
-            facts["material"] = {
-                k: policy.LAND_WORDS.get(v, v) for k, v in facts["material"].items()
-            }
-        identity = "material:" + digest([e.role, facts])
-        materials.append({"id": identity, "role": e.role, "facts": facts})
-        evidence[identity] = e.model_dump(mode="json")
-    materials.sort(key=lambda material: material["id"])
-    known = {e.role for e in stamp.materials()}
-    backgrounds = [
-        b
-        for b in (
-            *base.input.source.backgrounds,
-            *(base.scene_backgrounds.backgrounds if base.scene_backgrounds else ()),
-        )
-        if b.target == scene.core_ref
-    ]
-
-    def state(providers, available):
-        matching = [b for b in backgrounds if b.provider in providers]
-        return "known" if available else (matching[-1].status if matching else "unavailable")
-
-    def ground(material):
-        relation = material["facts"].get("relation")
-        return isinstance(relation, dict) and relation.get("kind") == "land_cover_at_query_point"
-
-    value = job(
-        "space",
-        {
-            "card_id": scene.id,
-            "walk_context": common_context(base),
-            "anchor": scene.anchor.model_dump(mode="json"),
-            "sources": {
-                "sgis": state({"sgis"}, "scene_address_reference" in known),
-                "egis": state(
-                    {"public-normalized-land_cover"},
-                    any(e.facts.get("source") == "land_cover" for e in stamp.materials()),
-                ),
-                "environment": "known"
-                if any(e.part == "environment" for e in stamp.materials())
-                else "unavailable",
-            },
-            "materials": materials,
-            "scene_structure": {
-                "current_ground": [m["id"] for m in materials if ground(m)],
-                "administrative_location": [
-                    m["id"] for m in materials if m["role"] == "scene_address_reference"
-                ],
-                "local_details": [
-                    m["id"]
-                    for m in materials
-                    if m["role"] != "scene_address_reference" and not ground(m)
-                ],
-            },
-        },
-    )
-    return value.model_copy(update={"evidence": evidence})
+    _require_selected(base, scene, stamp)
+    context = get_space_context(base, scene.id)
+    return job(context.stage, context.request).model_copy(update={"evidence": context.evidence})
 
 
 def title_jobs(cards):

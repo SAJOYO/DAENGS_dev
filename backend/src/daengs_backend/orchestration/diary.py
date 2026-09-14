@@ -71,6 +71,11 @@ class _DiaryRun:
             previous = contracts.WritingJob.model_validate(raw)
             if not previous.accepted:
                 continue
+            # Validate the original batch before deriving current per-card title keys.
+            # Otherwise old titles acquire a new model/prompt fingerprint without a call.
+            payload = {k: v for k, v in previous.request.items() if k != "request_revision"}
+            if previous.request_revision != card_jobs.job(previous.stage, payload).request_revision:
+                continue
             previous = card_jobs.validate_output(previous, previous.accepted)
             if previous.failure_code:
                 continue

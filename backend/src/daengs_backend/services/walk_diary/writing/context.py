@@ -86,12 +86,13 @@ def get_action_context(base, card_id):
     )
 
 
-def get_space_context(base, card_id):
+def get_space_context(base, card_id, *, eligible_materials=None):
     """Read admitted space/environment facts for one card, without acquisition or writing."""
     scene, stamp = _resolve(base, card_id)
+    selected = stamp.materials() if eligible_materials is None else tuple(eligible_materials)
     # Motion/actor/notes are not spatial observations. They stay in their source records.
     materials, evidence = [], {}
-    for e in stamp.materials():
+    for e in selected:
         if e.part not in {"space", "environment"}:
             continue
         facts = {k: v for k, v in writing_facts(e).items() if k != "retrieved_at"}
@@ -103,7 +104,7 @@ def get_space_context(base, card_id):
         materials.append({"id": identity, "role": e.role, "facts": facts})
         evidence[identity] = e.model_dump(mode="json")
     materials.sort(key=lambda material: material["id"])
-    known = {e.role for e in stamp.materials()}
+    known = {e.role for e in selected}
     backgrounds = [
         b
         for b in (
@@ -127,10 +128,10 @@ def get_space_context(base, card_id):
                 "sgis": state({"sgis"}, "scene_address_reference" in known),
                 "egis": state(
                     {"public-normalized-land_cover"},
-                    any(e.facts.get("source") == "land_cover" for e in stamp.materials()),
+                    any(e.facts.get("source") == "land_cover" for e in selected),
                 ),
                 "environment": "known"
-                if any(e.part == "environment" for e in stamp.materials())
+                if any(e.part == "environment" for e in selected)
                 else "unavailable",
             },
             "materials": materials,

@@ -17,6 +17,7 @@ def prepare_board_slots(
     route: VerifiedBoardRoute | None = None,
     scene_backgrounds=None,
     frozen_motion: BoardSlotSnapshot | None = None,
+    eligible_frames: dict | None = None,
 ) -> BoardSlotSnapshot:
     """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary.slots.sources import candidates_for_scene, verified_motion
@@ -75,7 +76,10 @@ def prepare_board_slots(
             from daengs_walk.diary.slots.route import pattern_candidates
 
             candidates.extend(pattern_candidates(scene, patterns, policy, decisions))
-        stamps.append(admit(scene.id, candidates, decisions, policy))
+        frame = [] if eligible_frames is not None else None
+        stamps.append(admit(scene.id, candidates, decisions, policy, eligible_out=frame))
+        if eligible_frames is not None:
+            eligible_frames[scene.id] = tuple(frame)
     return BoardSlotSnapshot(
         client_session_id=board.client_session_id,
         input_revision=board.input_revision,

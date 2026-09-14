@@ -20,7 +20,7 @@ from typing import Any, Literal, Protocol
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload
 from daengs_backend.services.walk_chunk import decode_chunk
-from daengs_walk import WalkEvidencePoint
+from daengs_walk.contracts import WalkEvidencePoint
 
 INPUT_FINGERPRINT_VERSION = 1
 _COORD_PLACES = Decimal("0.000001")

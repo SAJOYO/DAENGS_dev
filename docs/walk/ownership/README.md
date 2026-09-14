@@ -1,23 +1,24 @@
 # 산책 기능의 소유권과 의존 경계 — 0단계
 
-0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `018a9ce7` 위의 #526(4단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
+0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `284695e1` 위의 #529(5단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
 이 문서는 **남은 구조 변경의 범위를 고정하는 조사 결과**이며 리팩토링 전체 완료 선언이 아니다.
 0단계는 조사만 수행했다. 1단계는 B1·B2·B3의 공급 계약/일기 어댑터를 분리하며 DB·공개 계약·정책은 유지한다.
 
 ## 먼저 읽을 결과
 
-- [파일별 소유권 표](files.md): 범위 내 683개 파일, 소유 영역·현재 계층·처리·근거·부채.
-- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역 관계 366개. 측정 내부 계산/조회 결합 C1은 제거됐다.
-- [기계 판독 목록](inventory.json): 위 파일 목록, 1,667개 직접 로컬 import 관계, 판단과 관련 영역.
+- [파일별 소유권 표](files.md): 범위 내 689개 파일, 소유 영역·현재 계층·처리·근거·부채.
+- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역 관계 368개. 측정 내부 계산/조회 결합 C1은 제거됐다.
+- [기계 판독 목록](inventory.json): 위 파일 목록, 1,681개 직접 로컬 import 관계, 판단과 관련 영역.
 - [범위 재검사 도구](../../../tools/check_walk_ownership.py): 새 파일·삭제·import 변경·미분류 판단 검출.
 
-범위에 속한 **핵심 Python 232개**, 직접 import 접점 160개, 검증 자산 225개,
+범위에 속한 **핵심 Python 236개**, 직접 import 접점 161개, 검증 자산 226개,
 SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구 4개, 명시한 통합 접점 2개다.
-각 파일은 발견 사유 하나로만 집계한다. 683개를 모두 제품 구현 파일이라고 세지 않는다.
+각 파일은 발견 사유 하나로만 집계한다. 689개를 모두 제품 구현 파일이라고 세지 않는다.
 서비스 루트의 `walk.py`·`walk_*.py` **46개는 모두 포함**했다.
 
-366개 관계 중 5개는 명시한 후속 경계 변경 대상, 361개는 기능 소비·계층 조립·공통 계약
-관계를 보존하는 대상으로 분류했다. 이는 코드의 결함 개수나 필요한 PR 개수가 아니다.
+368개 관계는 기능 소비·계층 조립·공통 계약을 보존하는 대상으로 분류했다.
+0단계에서 선언한 부채 A1/A2·B1/B2/B3·C1·D1/D2/D3·E1/E2는 각 단계에서 구현·직접 검증했다.
+이 범위에서 미해결로 기록된 항목은 0개지만, 모든 산책 기능의 품질/실환경 검증 완료를 뜻하지 않는다. 이는 코드의 결함 개수나 필요한 PR 개수가 아니다.
 동일 원인의 여러 import가 별도 행으로 기록된다. `retain-interface`는 **현재의 기능 소비
 관계를 유지**한다는 뜻이며 비공개 함수까지 영구적인 API로 승인하지 않는다.
 
@@ -26,7 +27,7 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 파일 이름만으로 완료를 판단하지 않도록 다음 합집합을 사용한다.
 
 1. 추적 중인 `backend/src/daengs_walk/**/*.py` 전부.
-2. backend의 모든 계층에서 `walk.py`·`walk_*.py`, `services/walk_diary/**`·`walk_generation/**`·`walk_legacy/**`,
+2. backend의 모든 계층에서 `walk.py`·`walk_*.py`, `services/walk_diary/**`·`walk_generation/**`·`walk_legacy/**`·`walk_artifacts/**`,
    일기 그래프 `orchestration/diary.py`. 활동·어시스턴트의 `walk` 접점도 포함한다.
 3. 위 핵심 코드가 직접 import하는 로컬 파일과, 핵심 코드를 직접 import하는 모든 로컬
    Python 호출자. 함수 내부·상대 import·별칭·TYPE_CHECKING import도 포함한다.
@@ -72,7 +73,7 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 ## 제거할 결합과 보존할 계약
 
-B1·B2·B3은 **#521**, A1·A2는 **#522**, D1·D2·D3은 **#524**, C1은 **#526에서 구현·직접 검증**했다. E1·E2는 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
+B1·B2·B3은 **#521**, A1·A2는 **#522**, D1·D2·D3은 **#524**, C1은 **#526**, E1·E2는 **#529에서 구현·직접 검증**했다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
 
 | ID / 단계 | 정리 전 결합 / 근거 | 변경 방향 | 반드시 보존할 것 |
 | --- | --- | --- | --- |
@@ -85,8 +86,8 @@ B1·B2·B3은 **#521**, A1·A2는 **#522**, D1·D2·D3은 **#524**, C1은 **#526
 | D2 / 3 · #524 구현 | `services.walk_storyboard`·`schemas.walk_storyboard`의 현재/과거 분기 | HTTP 협상 진입과 과거 실행/응답 소유권을 분리 | 기존 URL·지원 format·협상 결과·공개 JSON. **같은 board format에도 현재/과거 슬롯 경로가 있으므로 format만으로 전략을 결정하지 않음** |
 | D3 / 3 · #524 구현 | `walk_storyboard_state`의 `reusable/reserve/complete` | 공통 생성 상태로 이름/소유권 명시; 모델·DAO 계층과 공유 행 유지 | generation/input revision/lease 비교, 원본 재확인, 중복/늦은 결과 차단. 현재/과거 상태 복제 금지 |
 | C1 / 4 · #526 구현 | `walk_measurement.project` → `walk_trajectory._project` → JSON → `TrajectoryCalculation` 재파싱 | 검증된 공통 투영 결과 → 조회 응답 직렬화 / 측정 요약·페이지 조립으로 분리 | measurement ID·응답 바이트·페이지 hash·원본 시각·정밀도·순서·예외 계약, 계산/직렬화의 off-lock 실행 |
-| E1 / 5 | `walk_analysis`가 측정 모델과 셀로판 직렬화를 함께 제공 | 실제 사용자를 기준으로 한 산책의 산출물 생성/저장 어댑터 경계 정리 | WalkAnalysis와 capsule의 1:1 바인딩·cellophane 봉인 형식·복원 검증. DB 분할/스키마 변경 없음 |
-| E2 / 5 | `daengs_walk.__init__`에서 측정·capsule·cellophane·spatial_diary를 함께 import | 소유 영역의 명시 진입과 기존 공개 이름 호환 범위 정의 | 공유 타입 객체와 기존 사용자 import의 호환, 불필요한 제품 기능의 암묵 로딩 점검 |
+| E1 / 5 · #529 구현 | `walk_analysis`가 측정 모델과 셀로판 직렬화를 함께 제공 | 실제 사용자를 기준으로 한 산책의 산출물 생성/저장 어댑터 경계 정리 | WalkAnalysis와 capsule의 1:1 바인딩·cellophane 봉인 형식·복원 검증. DB 분할/스키마 변경 없음 |
+| E2 / 5 · #529 구현 | `daengs_walk.__init__`에서 측정·capsule·cellophane·spatial_diary를 함께 import | 소유 영역의 명시 진입과 기존 공개 이름 호환 범위 정의 | 공유 타입 객체와 기존 사용자 import의 호환, 불필요한 제품 기능의 암묵 로딩 점검 |
 
 공용 계약 추출에도 기존 저장 계약의 의미가 다르면 **독립 버전을 유지**한다. 예를 들어
 사진 요청 hash와 원본 GPS fingerprint가 둘 다 SHA-256이라고 같은 직렬화로 바꾸지 않는다.
@@ -195,7 +196,7 @@ DB 검사는 `docs/ci/README.md`의 **폐기용 loopback DB**를 사용하며 sk
 지속 시간·기준 속도 표본 수·block 단절, 소비자 간 정책 변경 격리를 확인했다.
 Ruff check/format, 저장소 규칙 검사, 소유권 목록 검사도 통과했다. 이번 단계는 순수 계산의
 의존성 변경이므로 DB/전체 스위트/실환경 공급자·모델·실기기 검증은 실행하지 않았다.
-생성·호환(D1/D2/D3), 측정 투영(C1), 산출물/공개 패키지 경계(E1/E2)는 미완료다.
+2단계 완료 당시 생성·호환(D1/D2/D3), 측정 투영(C1), 산출물/공개 패키지 경계(E1/E2)는 미완료였다.
 
 ## 3단계 구현·검증 기록 (#524)
 
@@ -237,7 +238,7 @@ Ruff check/format, 저장소 규칙 검사, 소유권 목록 검사도 통과했
 현재/과거 작성과 저장본 판독, HTTP schema hash(`4d7407f6` 고정 표본), 중복/취소/마감과
 늦은 결과 보호, 배경 보존·새 사진 입력 이후 덮어쓰기 차단을 확인했다. Ruff, 저장소 규칙,
 목록 재검사/자체 검증도 통과했다. 전체 스위트·실환경 공급자/모델·실기기 검증은 실행하지
-않았다. **C1(측정 투영), E1/E2(산출물/공개 패키지 경계)는 미완료**다.
+않았다. **3단계 완료 당시 C1(측정 투영), E1/E2(산출물/공개 패키지 경계)는 미완료**였다.
 
 ## 4단계 구현·검증 기록 (#526)
 
@@ -271,7 +272,63 @@ uv run --no-sync pytest -q tests/walk/measurement/test_projection_boundary.py te
 이 단계는 계산·자료형 의존성 변경이고 SQL/DAO/저장 트랜잭션은 수정하지 않았다.
 Ruff check/format(변경 Python 7개), 저장소 규칙 검사 3개, 소유권 목록 검사/자체 검증도 통과했다.
 실제 DB·전체 스위트·실환경 공급자/모델·APP/실기기 검증은 실행하지 않았다.
-**E1/E2(봉인 산출물/공개 패키지 경계)는 미완료**다.
+**4단계 완료 당시 E1/E2(봉인 산출물/공개 패키지 경계)는 미완료**였다.
+
+## 5단계 구현·검증 기록 (#529)
+
+- `walk_analysis`는 측정 분석의 JSONB/ORM 조립·복원을 소유한다. 새
+  `build_analysis_model`은 셀로판이나 캡슐을 만들지 않는다.
+- `walk_artifacts.cellophane`은 기존 v1 codec·fingerprint·ORM 자식 생성/복원,
+  `walk_artifacts.capsule`은 분석 identity에 묶인 1:1 캡슐 저장/복원을 소유한다.
+  `walk_artifacts.api.build_analysis_models`가 분석과 원판의 identity/시각을 검증해
+  함께 조립한다. 원본 봉인 서비스의 잠금·외부 날씨 호출·원본 재확인·commit/rollback은 유지했다.
+- 공간 조회는 셀로판 복원 어댑터를 직접 참조한다. 분석을 읽기 위해 원판 codec을
+  함께 로딩하거나, 원판을 읽기 위해 분석 저장기를 로딩하지 않는다.
+- 도메인 명시 진입은 `contracts`/`evidence`(측정), `cellophane`/`capsule`(봉인 산출물),
+  `spatial_diary`(조회)다. 제품/평가 코드의 기존 루트 export 소비를 실제 소유 모듈로 바꿨다.
+  `daengs_walk`의 기존 `__all__` 11개는 지연 export로 보존하며 새 객체를 만들지 않는다.
+  `from daengs_walk import *`와 기존 함수/자료형 객체 identity도 검증한다.
+- `walk_analysis`의 기존 셀로판 함수와 `build_analysis_models`는 지연 호환 이름,
+  `walk_capsule`은 기존 캡슐 함수 재노출이다. 구현은 새 어댑터에 하나만 존재한다.
+  `walk_artifacts/**`는 목록 검사의 핵심 범위에 추가했다.
+
+### import 목록 밖의 호환 경로
+
+`import_module`로 지연 제공하는 export는 정적 import 행에 나타나지 않는다.
+루트의 `_EXPORTS`(11개 이름 → 위 5개 소유 모듈)와 `walk_analysis._COMPAT`
+(셀로판 상수/codec 6개 → `walk_artifacts.cellophane`, 조립 함수 → `walk_artifacts.api`)가
+그 명시 목록이다. 이를 의존성 제거로 숨기지 않는다. 제품 호출자는 호환 경로를 사용하지
+않으며, 새 인터프리터의 금지 모듈 로딩 검사와 동일 객체 검사가 실제 경계를 확인한다.
+
+### 검증 결과와 한계
+
+변경 전 `284695e1`에서 분석·셀로판·날씨 포함 캡슐·날씨 미상 캡슐의 payload 해시와
+원판 fingerprint를 `sealed-artifacts-v1.json`에 고정한 뒤 변경 후 일치를 확인했다.
+빈 산책 원판, 잘못된 identity/시각, 변조된 metadata/fingerprint, 저장본 복원은 기존
+검사를 유지했다. 전체 스위트·실환경 공급자/모델·APP/실기기 검증은 실행하지 않았다.
+
+backend에서 아래 명령으로 **140 passed, skip 0**을 확인했다.
+
+```powershell
+uv run --no-sync pytest -q tests/walk/measurement/test_artifact_boundaries.py tests/walk/measurement/test_walk_analysis_storage.py tests/walk/measurement/test_cellophane.py tests/walk/measurement/test_walk_capsule.py tests/walk/measurement/test_finalize_contract.py tests/walk/diary/test_spatial_diary.py tests/walk/diary/test_spatial_diary_query.py tests/walk/diary/test_diary_service_package.py tests/walk/storyboard/test_storyboard_observations.py
+```
+
+폐기용 PostgreSQL 17 (`127.0.0.1:55432/claims_test`)에
+`TERRITORY_TEST_DATABASE_URL`을 지정하고 아래 명령으로 **44 passed, skip 0**을 확인했다.
+봉인/게임 잠금 해제, 경쟁 요청 재사용, 늦은 날씨 결과 차단, 캡슐 복구와 활동 요약 조회를
+실제 SQL로 검증했다. 테스트 컨테이너는 종료했다.
+
+```powershell
+uv run --no-sync pytest -q -rs tests/walk/api/test_walk_finalize_db.py tests/activity/test_walk_summary_queries_db.py
+```
+
+변경 Python 16개 Ruff check/format, 저장소 규칙 검사 3개와 소유권 목록/자체 검증도 통과했다.
+
+현재 일기 생성과 과거 생성/저장본 읽기의 실행 기록은 3단계, 측정 투영 바이트는 4단계,
+봉인 산출물과 공개 import는 이 단계 기록을 각각 따른다. 이 단계에서 이전 테스트 전체를
+다시 실행한 것으로 합산하지 않는다. 선언한 의존성 부채 정리의 완료와 모든 walk 파일의
+폴더 재배치, 전체 기능/실환경 검증 완료는 서로 다르다. 서비스 루트 46개 파일은 목록의
+소유권/남긴 이유를 기준으로 판단한다.
 
 ## 재검사와 완료 기준
 
@@ -284,7 +341,7 @@ uv run --no-project --python 3.12 python tools/check_walk_ownership.py --self-te
 
 검사는 추적 파일을 다시 발견하여 누락·삭제·소유권 미지정·중복·새/사라진 import·판단표
 누락을 실패로 돌린다. 목록 자동 갱신 옵션은 없다. 다음 PR에서 변화를 검토한 뒤 JSON과
-읽기용 두 표를 함께 갱신한다. 현재 미완료 부채는 `change`로 남아 있어 검사 통과가 해결을
+읽기용 두 표를 함께 갱신한다. 추후 미완료 부채가 생기면 `change`로 남겨야 하며 검사 통과 자체가 해결을
 뜻하지 않는다. 자체 검증은 메모리에서 누락/새 import/잘못된 소유권 등을 주입한다.
 
 **0단계 완료 조건:** 선언 범위 내 파일 누락/미분류 0, 실제 직접 import 목록 재현,

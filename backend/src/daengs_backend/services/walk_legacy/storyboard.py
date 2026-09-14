@@ -23,7 +23,7 @@ from daengs_backend.services.walk_generation.state import (
 )
 from daengs_backend.services.walk_storyboard_context import unavailable_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
-from daengs_walk import analyze_walk
+from daengs_walk.evidence import analyze_walk
 from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
 from daengs_walk.storyboard_input import scene_inputs
 from daengs_walk.storyboard_selection import ReferenceWalk

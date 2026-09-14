@@ -25,17 +25,14 @@ from daengs_backend.schemas.walk import (
     WalkUpload,
 )
 from daengs_backend.services import activity, activity_game
-from daengs_backend.services.walk_analysis import build_analysis_models
-from daengs_backend.services.walk_capsule import build_capsule_model
+from daengs_backend.services.walk_artifacts.api import build_analysis_models
+from daengs_backend.services.walk_artifacts.capsule import build_capsule_model
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import PreparedWalkEvidence, prepare_finalized_walk
-from daengs_walk import (
-    WalkEvidencePoint,
-    analyze_walk,
-    build_cellophane,
-    build_walk_capsule,
-    select_context_anchor,
-)
+from daengs_walk.capsule import build_walk_capsule, select_context_anchor
+from daengs_walk.cellophane import build_cellophane
+from daengs_walk.contracts import WalkEvidencePoint
+from daengs_walk.evidence import analyze_walk
 
 
 class WalkNotFoundError(Exception):

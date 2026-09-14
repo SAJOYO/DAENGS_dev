@@ -38,12 +38,22 @@ async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-b
     return value
 
 
-async def generate_diary(session, owner, walk_id, request, *, writer=None, legacy_collector=None):
+async def generate_diary(
+    session,
+    owner,
+    walk_id,
+    request,
+    *,
+    writer=None,
+    legacy_collector=None,
+    legacy_context_wait=False,
+):
     """Publish with the negotiated writer.
 
     legacy_collector explicitly opts historical writers into pre-reservation collection.
     Card providers/collection belong to write_board, which runs after reservation;
-    wrapping a writer alone never changes collection timing.
+    wrapping a writer alone never changes collection timing. The historical entry-context
+    grace period is opt-in via legacy_context_wait, independently of provider injection.
     """
     started = datetime.now(UTC)
     deadline = (
@@ -60,6 +70,7 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, legac
         deadline=deadline,
         clock=lambda: datetime.now(UTC),
         legacy_collector=legacy_collector,
+        legacy_context_wait=legacy_context_wait,
     )
     if isinstance(reservation, DiaryStoryboardResponse):
         return reservation

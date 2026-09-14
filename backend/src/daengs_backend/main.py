@@ -17,6 +17,7 @@ from daengs_backend.routers import (
     activity,
     admin_account,
     admin_audit,
+    admin_cardimage,
     app_auth,
     app_report,
     app_user_admin,
@@ -205,6 +206,8 @@ app.include_router(vet_visit.router)
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
 app.include_router(dogcard.router)
+# 콘솔의 「도감 카드 생성」 탭이 부르는 점검 경로 (#496) — 저장하지 않는다.
+app.include_router(admin_cardimage.router)
 # 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
 # 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**

@@ -322,7 +322,8 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
   → walk_diary_generation.generate_diary
   → walk_diary_lifecycle.reserve_diary
       협상된 형식의 입력 준비 → 원본/사진 버전 확인 → 기존 결과/예약 확인
-      새 작성 필요 시 예약 저장·commit → 예약된 예산 안에서 실행
+      새 작성 필요 시 기존 context_pending을 기다리지 않고 예약 저장·commit
+      → 예약된 예산 안에서 실행 (#505)
   → walk_diary_board_slot_writing.write_board(source, base)
       generate·collector 주입 여부와 무관하게 카드 그래프 실행
   → walk_diary_card_writing.write_cards
@@ -341,7 +342,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 | 기본 카드 새 작성 | 협상된 `walk-diary-board-v1`, 재사용 판정 후 새 작성, `write_board` | `generate(stage, payload, schema)`·`collector(board)`를 키워드로 주입해도 `write_cards → build_diary_orchestrator`를 실행한다. 수집은 예약 commit 이후 그래프에서 수행한다. |
 | 과거 일기 형식 | POST의 `walk-diary-bundle-v1` 또는 board 요청에서 기존 bundle로 협상 | 생성 서비스가 준비 형식에 따라 `walk_diary_writing.write_diary`를 선택한다. 과거 형식 작성은 아직 지원 경로이며 단순한 죽은 코드나 읽기 전용 코드로 취급하지 않는다. |
 | 슬롯 미리보기 | POST `/app/walks/{walk_id}/diary-slots/preview`, `walk_diary_enabled`와 `walk_diary_slots_preview_enabled` 모두 활성 | `preview_saved_slots → write_slot_preview → write_slot_stamps`. 공개 storyboard의 생성·발행 경로와 별개다. 여기서 좋은 결과가 나와도 기본 카드 작성에 적용됐다는 증거는 아니다. |
-| 기존 슬롯 계약의 명시적 작성 | `write_legacy_slot_board(source, base, generate=대역)` | `generate(payload, schema)`를 쓰는 `write_slot_stamps` 계약을 유지한다. 예약 전 수집이 필요하면 생성 서비스에 `legacy_collector`를 명시한다. writer 래핑만으로 수집 시점이 바뀌지 않는다. |
+| 기존 슬롯 계약의 명시적 작성 | `write_legacy_slot_board(source, base, generate=대역)` | `generate(payload, schema)`를 쓰는 `write_slot_stamps` 계약을 유지한다. 예약 전 수집은 `legacy_collector`, 기존 context job 완료 유예는 `legacy_context_wait=True`로 각각 명시한다. writer 래핑만으로 수집·대기가 활성화되지 않는다. |
 | 이미 저장된 결과·진행 중 예약 | `reserve_diary`의 ready/running 재사용 분기, 기존 공개본 GET | 새 모델 호출 없이 기존 상태·결과를 반환할 수 있다. GET의 만료 복구와 과거 영수증 보완도 commit한다. 응답을 받았다는 사실만으로 새 프롬프트 실행을 주장하지 않는다. |
 | 과거 저장 영수증 읽기 | `walk_diary_board_storage.load_board`, 저장 v1/v2와 영수증 종류 판독 | 저장 결과의 검증·복원이다. 과거 영수증을 읽었다고 과거 모델을 재호출한 것은 아니다. |
 
@@ -408,6 +409,7 @@ DEV의 [test_diary_card_writing.py](../../backend/tests/walk/diary/test_diary_ca
 | `test_diary_and_existing_assistant_use_the_same_executor` | 일기와 기존 어시스턴트 양쪽이 같은 실행 구현을 사용하는지 확인한다. |
 | `test_sgis_and_egis_follow_actual_normalizers_into_request_and_card` | 공급자 대역 응답이 실제 정규화를 거쳐 요청과 카드까지 들어가는지 확인한다. |
 | `test_action_starts_while_space_collection_is_blocked` | 공간 수집 대기가 준비된 행동 작업을 막지 않는지 확인한다. |
+| `test_pending_context_does_not_block_action_or_first_publication` (#505) | 기본 HTTP 최초 요청에서 기존 context job이 pending/running이어도 행동 작성이 시작되고, 공간 성공·실패·시간 초과 뒤 발행과 늦은 배경 도착 시 기존 공개본 보존을 확인한다. |
 | `test_action_edit_does_not_change_space_request` | 행동 수정이 공간 요청의 의존성에 섞이지 않는지 확인한다. |
 | `test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note` | 원문 보존과 생성 재사용을 구별한다. |
 | `test_title_batch_adopts_valid_siblings_only`, `test_source_edit_during_actual_title_job_cannot_publish_old_card` | 제목 일부 실패의 격리와 생성 도중 원본 변경의 발행 방지를 확인한다. |

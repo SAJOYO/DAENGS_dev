@@ -63,11 +63,13 @@ async def reserve_diary(
     deadline: datetime | None,
     clock: Callable[[], datetime],
     legacy_collector=None,
+    legacy_context_wait=False,
 ) -> ReservedDiary | DiaryStoryboardResponse:
     """Reuse/settle an existing publication or commit a new generation before writing.
 
     The explicitly selected legacy collector runs after releasing the first transaction;
     its result must be checked against freshly read input before reserving.
+    Only legacy_context_wait opts into waiting for existing entry-context jobs.
     """
     principal, prepared, revision = await snapshot(
         session, owner, walk_id, request.target_scene_count, request.bundle_format
@@ -89,6 +91,7 @@ async def reserve_diary(
     uploaded_at = prepared.input.uploaded_at
     if (
         prepared.board
+        and legacy_context_wait
         and row is None
         and settings.walk_entry_context_enabled
         and prepared.input.context_pending
@@ -96,9 +99,10 @@ async def reserve_diary(
         and uploaded_at.utcoffset() is not None
         and now < uploaded_at + FIRST_BOARD_CONTEXT_GRACE
     ):
-        # The existing client retries pending responses. Do not spend a generation or
-        # hold the Walk lock while collection runs. A stalled worker cannot extend the
-        # deadline: it is fixed to server upload time, not attempts or retry timestamps.
+        # Only explicit historical callers wait here; the default card graph owns its
+        # bounded collection and must be free to start ready actions immediately.
+        # Do not spend a generation or hold the Walk lock while collection runs.
+        # The grace is fixed to server upload time, never attempts or retry timestamps.
         await session.commit()
         return value
     # A new-format client cannot take over another format's live generation lease.

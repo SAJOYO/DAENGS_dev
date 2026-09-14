@@ -1,5 +1,8 @@
 # 문서
 
+산책 기능 전체의 후속 구조 정리 범위는 [소유권·의존 경계 조사](walk/ownership/README.md)를
+따릅니다. 기존 일기 패키징의 완료와 산책 전체 경계 정리의 완료를 구분합니다.
+
 | 파일 | 내용 |
 | --- | --- |
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |

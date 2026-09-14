@@ -713,25 +713,50 @@ async def cancel_invite_bundle(
 async def list_members(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
 ) -> list[MemberOut]:
-    """대표를 맨 앞에, 그다음 돌보미를 참여 순으로. **구성원만 볼 수 있습니다.**"""
+    """대표를 맨 앞에, 그다음 돌보미를 참여 순으로. **구성원만 볼 수 있습니다.**
+
+    연결된 강아지는 **논리 그룹 전체**의 보호자를 한 사람당 한 번씩 돌려줍니다 (MVP 결정 §4).
+    요청한 행 하나만 보면, 기존 강아지와 연결한 공동 보호자는 자기 카드 id(= 자기 행)로
+    부르므로 **자기 자신만 대표로** 뜨고 그룹 주보호자와 다른 보호자가 사라집니다.
+
+    대표(`is_owner`)는 행 대표가 아니라 **그룹 주보호자**(공통 행의 대표)입니다 —
+    `routers/pet.py` 의 `is_group_owner` 와 같은 정의입니다. 목록을 볼 수 있다고 관리
+    권한이 생기지는 않습니다 — 내보내기·승계·초대는 각자 `require_group_owner` 를 지납니다.
+    """
     pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
 
-    carer_ids = await member_repo.list_members(session, pet_id)
-    names = await app_user_repo.nicknames_by_ids(session, [pet.app_user_id, *carer_ids])
-    out = [
+    common = await identity_service.common_of(session, pet)
+    rows = [pet]
+    if pet.identity_id is not None:
+        group = await identity_repo.pets_for(session, pet.identity_id)
+        if group:
+            # 그룹 주보호자의 행을 맨 앞에, 나머지는 등록 순서대로.
+            rows = [common, *(p for p in group if p.id != common.id)]
+
+    ordered: list[uuid.UUID] = [common.app_user_id]
+    for row in rows:
+        ordered.append(row.app_user_id)
+        ordered += await member_repo.list_members(session, row.id)
+    # 한 사람이 그룹 안에서 자기 행의 대표이면서 주보호자 행의 돌보미일 수 있습니다
+    # (연결 수락이 둘을 같이 만듭니다). 처음 나온 자리만 남깁니다.
+    guardians = list(dict.fromkeys(ordered))
+
+    # 그룹으로 넓힌 명단은 **부른 사람이 그 명단에 있을 때만** 냅니다. 행 접근이 통과했으면
+    # 늘 참이지만, 행 판정과 그룹 판정이 어긋나는 날 남의 그룹 명단이 새지 않게 둡니다.
+    if app_user_id not in guardians:
+        raise PetNotFoundError
+
+    names = await app_user_repo.nicknames_by_ids(session, guardians)
+    return [
         MemberOut(
-            app_user_id=pet.app_user_id,
-            nickname=names.get(pet.app_user_id),
-            is_owner=True,
+            app_user_id=uid,
+            nickname=names.get(uid),
+            is_owner=uid == common.app_user_id,
         )
+        for uid in guardians
     ]
-    out += [
-        MemberOut(app_user_id=cid, nickname=names.get(cid), is_owner=False)
-        for cid in carer_ids
-    ]
-    return out
 
 
 async def remove_member(

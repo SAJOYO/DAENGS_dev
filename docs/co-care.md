@@ -328,7 +328,7 @@ D-052 가 점령지 사진에 대해 지적한 문제("저장소에는 FK 가 �
 | `POST /app/pets/{pet_id}/invites` | 대표 |
 | `GET /app/pets/{pet_id}/invites` | 대표 |
 | `DELETE /app/pets/{pet_id}/invites/{id}` | 대표 |
-| `GET /app/pets/{pet_id}/members` | 구성원 |
+| `GET /app/pets/{pet_id}/members` | 구성원 — 연결된 강아지는 **논리 그룹 전체** 보호자를 한 사람당 한 번씩, 대표(`is_owner`)는 **그룹 주보호자**. 조회만 넓고 관리 권한은 그대로 |
 | `POST /app/pet-invites/accept` | 로그인 사용자 |
 | `DELETE /app/pets/{pet_id}/members/{user_id}` | 대표 또는 본인 |
 | `POST /app/pets/{pet_id}/owner` | 대표 |

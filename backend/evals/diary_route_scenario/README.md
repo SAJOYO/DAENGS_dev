@@ -1,6 +1,10 @@
 # 양재 왕복 산책: 카드 8개를 이어 읽는 실험
 
-**현재 #508 후속 구현:** [동선·속도 통합 활동](../../../docs/walk/diary-activity.md)을
+**#520 실제 서술 확인:** [movement-gemini-01](movement-gemini-01/preview.html) ·
+[입력 대조 리뷰](movement-gemini-01/REVIEW.md). 공원 고유명 제거 후 공간·활동 16개 응답 채택,
+제목 배치 실패로 기본 제목 유지. 임의 가속·산책 종료·나열식 서술이 남아 품질 완료는 아니다.
+
+**#508 당시 후속 구현:** [동선·속도 통합 활동](../../../docs/walk/diary-activity.md)을
 기본 작성 경로에 연결했다. [오프라인 연결 화면](activity-offline-03/preview.html)과
 [결과 요약](activity-offline-03/summary.json)은 저장 공공자료를 재생한 8개 카드다.
 외부 호출은 0회이며 본문·제목은 고정 대역이다. Gemini 출력 품질을 뜻하지 않는다.

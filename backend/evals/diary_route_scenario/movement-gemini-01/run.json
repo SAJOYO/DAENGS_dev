@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-09-14T08:18:26.747473+00:00",
+  "elapsed_s": 13.125,
+  "writer": {
+    "policy": "shared-orchestration-card-writing-v6",
+    "input_policy": "diary-prose-input-v5",
+    "observation_text": {
+      "observed_dwell": "이 구간에서는 동선이 한곳에 모였다.",
+      "observed_slow": "이 구간에서는 산책 중 다른 이동 구간보다 상대적으로 느린 이동이 관측됐다.",
+      "observed_fast": "이 구간에서는 산책 중 다른 이동 구간보다 상대적으로 빠른 이동이 관측됐다."
+    },
+    "legacy_observation_text": {
+      "observed_dwell": "이 구간에서는 동선이 한곳에 모였다.",
+      "observed_slow": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 느려졌다.",
+      "observed_fast": "이 구간에서는 산책 중 다른 이동 구간보다 속도가 빨라졌다."
+    },
+    "model": "gemini-3.1-flash-lite",
+    "prompts": {
+      "space": "5e67c5a943795d521e4c4da982608aeaa3696efc98d17b0b432b9e9718330dc9",
+      "action": "071d669584f49c640e0064dc5b9bf65f0be6507f19436c2ba450e2b0e4827fa4",
+      "title": "1cea5cabd8fef3119113976f72e63cb8208e87dc0ca2d74d959b7a689fbc27c8"
+    },
+    "timeout_s": 15.0,
+    "title_reserve_s": 3.0,
+    "card_limit": 12,
+    "input_bytes": 32000,
+    "concurrency": 4,
+    "land_words": {
+      "도로": "길",
+      "자연초지": "풀밭",
+      "기타초지": "풀밭",
+      "하천": "물길",
+      "해양수": "바다",
+      "활엽수림": "숲",
+      "침엽수림": "숲",
+      "혼효림": "숲",
+      "내륙습지": "습지",
+      "호소": "호수·저수지",
+      "기타나지": "드러난 땅"
+    }
+  },
+  "acquisition": "frozen before generation; not live publication timing",
+  "collection_adopted": false,
+  "prepared_input": true,
+  "backgrounds_in_writing_input": true,
+  "jobs": {
+    "space:accepted": 8,
+    "action:accepted": 8,
+    "title:provider_failed": 1
+  },
+  "provenance": {
+    "route": "TMAP pedestrian API; real provider route, not a recorded walk",
+    "gps_time_speed_notes_behavior_pet": "simulated",
+    "map": "OpenStreetMap; display only, not LLM evidence"
+  }
+}

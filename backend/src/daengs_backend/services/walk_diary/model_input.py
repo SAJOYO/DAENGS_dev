@@ -9,7 +9,7 @@ from daengs_backend.services.walk_diary.model_materials import location, materia
 from daengs_walk.diary.board.activity import activity_projection
 from daengs_walk.diary.contracts.input import DiaryContract
 
-VERSION = "diary-prose-input-v4"
+VERSION = "diary-prose-input-v5"
 
 
 class SpaceAnswer(DiaryContract):

@@ -86,10 +86,15 @@ BEGIN
 
     -- 인덱스 셋. 부분 UNIQUE 둘은 `WHERE` 가 빠지면 조용히 틀린다 —
     -- one_generating 은 카드를 평생 한 장만 만들게 되고, storage_key 는 생성 중인 카드가 둘일 수 없게 된다.
+    -- ⚠️ one_generating 의 predicate 는 'generating' 만 쓰면 안 된다 — 그 낱말이 인덱스
+    --    **이름**(idx_ai_cards_one_generating) 에도 들어 있어서, WHERE 가 통째로 빠진
+    --    정의에서도 position() 이 이름 쪽에서 매치해 거짓으로 통과한다. PG17 이 WHERE 를
+    --    `((status)::text = 'generating'::text)` 로 렌더링하는 것을 이용해 `'::text` 까지
+    --    포함시켜 이름 문자열과 겹치지 않게 한다.
     FOR item IN SELECT * FROM (VALUES
         ('idx_ai_cards_owner_created', 'false', NULL),
         ('idx_ai_cards_storage_key', 'true', 'storage_key IS NOT NULL'),
-        ('idx_ai_cards_one_generating', 'true', 'generating')
+        ('idx_ai_cards_one_generating', 'true', '''generating''::text')
     ) AS expected(index_name, unique_wanted, predicate) LOOP
         definition := NULL;
         SELECT pg_get_indexdef(i.indexrelid) INTO definition

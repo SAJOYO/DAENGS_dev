@@ -330,6 +330,12 @@ async def _dispatch(
             )
         )
     if not body.persists:
+        # **무상태 요청은 케어 기록을 쓸 수 없습니다** (D-075) — 여기서 `pending_clarification`
+        # 을 안 넘기는 것이 그 이유입니다. 쓰기를 여는 유일한 조건이 "앞 턴의 제안에 승낙"
+        # 이고(`planner.resolve_care_log_write`), 대기 제안은 저장된 turn 에서만 읽힙니다
+        # (`chat.pending_clarification_of`). 대화가 없으면 승낙할 제안도 없으므로,
+        # 무상태 점검 요청에 `"네"` 를 보내도 아무 일이 안 일어납니다. 의도한 성질입니다:
+        # 콘솔 점검이나 평가 랩이 남의 강아지 로그에 행을 남길 길이 없습니다.
         return await service.run(
             query=body.query,
             principal=principal_context,

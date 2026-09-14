@@ -1,6 +1,8 @@
 """Changing provider dependencies or wrapping a writer must not select another strategy."""
 
+from datetime import UTC, datetime
 from functools import partial
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -87,6 +89,8 @@ def test_wrapping_current_writer_keeps_one_collection_after_reservation(
 ):
     client, state, db = api
     collect_spaces = collection.collect_spaces
+    state.walk.created_at = datetime.now(UTC)
+    state.context_jobs[state.entries[0].id] = [SimpleNamespace(state="running")]
     monkeypatch.setattr(settings, "walk_diary_space_enabled", True)
     client.app.dependency_overrides.pop(router.get_diary_writer)
 

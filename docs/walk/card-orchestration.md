@@ -96,7 +96,19 @@ EGIS는 기존 WMS 좌표 피복 조회가 기본 경로에 포함된다(`walk_d
 `test_diary_observation_content.py::test_http_observation_meaning_is_published_once_and_exports_app_contract`가
 기본 HTTP 작성·발행·GET·재요청을 통과한 응답을 출력했다. DB/공급자/모델은 대역이며,
 APP의 `diary-observation-card-v1.json`과 같은 바이트다. 기존 표본도 그대로 남긴다.
-새 그래프 앞의 `context_pending` 대기는 이 작업에서 변경하지 않았다.
+관측 보존 작업에서는 `context_pending` 대기를 유지했고, 뒤이은 #505에서 아래처럼 분리했다.
+
+## 최초 요청의 그래프 진입 — #505
+
+기존 entry-context job이 `pending/running`이라는 이유로 기본 카드 작성을 미루지 않는다.
+원본 확인·기존 발행/예약 재사용 검사 후 예약을 저장하고 commit한 뒤 그래프에 들어간다.
+공간 조회가 미완료여도 준비된 행동을 실행하며, 공간 작업은 기존 본문 마감으로 제한한다.
+늦게 끝난 entry-context 작업에는 이미 발행된 내용을 교체할 권한이 없다.
+
+이전 10분 유예가 필요한 내부 호환 호출만 `legacy_context_wait=True`를 명시한다.
+모델 주입·writer 직접 전달·partial·래퍼로 대기를 추론하지 않으며, `legacy_collector`도
+유예를 자동 활성화하지 않는다. 공개 요청/응답과 APP은 변경하지 않는다.
+세부 조건은 [보드 API의 첫 생성 정책](diary-board-api.md#첫-생성과-기존-배경-수집--505)을 따른다.
 
 ## 실행·재사용·공개
 

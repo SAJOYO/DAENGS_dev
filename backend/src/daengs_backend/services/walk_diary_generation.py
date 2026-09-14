@@ -155,12 +155,22 @@ async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-b
     return value
 
 
-async def generate_diary(session, owner, walk_id, request, *, writer=None, legacy_collector=None):
+async def generate_diary(
+    session,
+    owner,
+    walk_id,
+    request,
+    *,
+    writer=None,
+    legacy_collector=None,
+    legacy_context_wait=False,
+):
     """Publish with the negotiated writer.
 
     legacy_collector explicitly opts historical writers into pre-reservation collection.
     Card providers/collection belong to write_board, which runs after reservation;
-    wrapping a writer alone never changes collection timing.
+    wrapping a writer alone never changes collection timing. The historical entry-context
+    grace period is opt-in via legacy_context_wait, independently of provider injection.
     """
     started = datetime.now(UTC)
     deadline = (
@@ -188,6 +198,7 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, legac
     uploaded_at = prepared.input.uploaded_at
     if (
         prepared.board
+        and legacy_context_wait
         and row is None
         and settings.walk_entry_context_enabled
         and prepared.input.context_pending
@@ -195,9 +206,10 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, legac
         and uploaded_at.utcoffset() is not None
         and now < uploaded_at + FIRST_BOARD_CONTEXT_GRACE
     ):
-        # The existing client retries pending responses. Do not spend a generation or
-        # hold the Walk lock while collection runs. A stalled worker cannot extend the
-        # deadline: it is fixed to server upload time, not attempts or retry timestamps.
+        # Only explicit historical callers wait here; the default card graph owns its
+        # bounded collection and must be free to start ready actions immediately.
+        # Do not spend a generation or hold the Walk lock while collection runs.
+        # The grace is fixed to server upload time, never attempts or retry timestamps.
         await session.commit()
         return value
     # A new-format client cannot take over another format's live generation lease.

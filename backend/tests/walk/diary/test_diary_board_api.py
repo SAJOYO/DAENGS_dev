@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -35,8 +36,17 @@ def clock(monkeypatch):
     return value
 
 
+@pytest.fixture
+def legacy_context_wait(monkeypatch):
+    # Only historical wait tests opt in. Normal HTTP tests use the default service.
+    monkeypatch.setattr(
+        generation, "generate_diary", partial(generate_diary, legacy_context_wait=True)
+    )
+
+
 @pytest.mark.parametrize("job_state", ["pending", "running"])
-def test_first_board_waits_without_reservation_then_uses_completed_context(api, clock, job_state):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_board_waits_without_reservation_then_uses_completed_context(api, clock, job_state):
     client, state, db = api
     state.walk.created_at = clock.now  # The recorded walk happened yesterday, before this upload.
     background, state.envelope = state.envelope, None
@@ -67,7 +77,8 @@ def test_first_board_waits_without_reservation_then_uses_completed_context(api, 
     state.provider.assert_awaited_once()
 
 
-def test_stalled_collection_stops_waiting_exactly_ten_minutes_after_server_upload(api, clock):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_wait_ends_exactly_ten_minutes_after_server_upload(api, clock):
     client, state, _ = api
     uploaded_at = clock.now
     state.walk.created_at = uploaded_at
@@ -101,7 +112,8 @@ def test_stalled_collection_stops_waiting_exactly_ten_minutes_after_server_uploa
     ],
     ids=["no-jobs", "completed", "failed", "cancelled", "disabled"],
 )
-def test_first_board_does_not_wait_without_active_collection(
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_legacy_board_does_not_wait_without_active_collection(
     api, clock, monkeypatch, enabled, job_states
 ):
     client, state, _ = api
@@ -117,7 +129,8 @@ def test_first_board_does_not_wait_without_active_collection(
 @pytest.mark.parametrize(
     "uploaded_at", [None, datetime(2026, 9, 10, 12, tzinfo=UTC).replace(tzinfo=None)]
 )
-def test_unknown_server_upload_time_does_not_block_first_board(api, clock, uploaded_at):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_unknown_server_upload_time_does_not_block_legacy_board(api, clock, uploaded_at):
     client, state, _ = api
     state.walk.created_at = uploaded_at
     state.envelope = None
@@ -145,7 +158,8 @@ def test_published_board_is_preserved_when_current_context_is_pending(api, clock
     state.writer.assert_awaited_once()
 
 
-def test_deleted_entry_collection_does_not_delay_first_board(api, clock):
+@pytest.mark.usefixtures("legacy_context_wait")
+def test_deleted_entry_collection_does_not_delay_legacy_board(api, clock):
     client, state, _ = api
     state.walk.created_at = clock.now
     state.envelope = None

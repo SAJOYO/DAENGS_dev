@@ -13,7 +13,7 @@
 | [walk/diary-action-boundary.md](walk/diary-action-boundary.md) | 행동 핀만 행동 작성을 여는 경계, 핀 시각의 이동 맥락 1개, 메모의 생성·제목 의존성 분리 (#527) |
 | [walk/diary-writing-context.md](walk/diary-writing-context.md) | 서비스·실험 공통 공간/행동 근거 조회와 생성 없는 입력 확인 도구 (#520 후속 2단계) |
 | [walk/diary-space-tools.md](walk/diary-space-tools.md) | 공간 작성기의 선택적 상세 도구·최대 2회 모델 왕복·열람 근거 인용·실행 기록 (#520 후속 3단계) |
-| [walk/diary-space-comparison.md](walk/diary-space-comparison.md) | 저장 공공자료 3장면의 실제 Gemini 일괄/선택적 공급 비교, 호출량과 서술 한계 (#520 후속 4단계) |
+| [walk/diary-space-comparison.md](walk/diary-space-comparison.md) | 저장 공공자료 3장면의 실제 Gemini 공급 방식 비교와 행동 핀 서술 추가, 호출량과 서술 한계 (#520) |
 | [walk/diary-movement-materials.md](walk/diary-movement-materials.md) | #520 형상 판별 확장과 핀 시각 맥락 연결. 과거 서술 입력·실험의 폐기 이유 |
 | [walk/diary-activity.md](walk/diary-activity.md) | #508의 과거 구현 기록. 이동 분석은 유지하며 행동 생성·제목 입력 규칙은 #527로 대체 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |

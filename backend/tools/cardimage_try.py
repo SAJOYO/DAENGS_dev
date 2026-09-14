@@ -125,7 +125,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=CARDIMAGE / "out")
     args = ap.parse_args()
 
-    photo_path = (args.photo or sorted((CARDIMAGE / "test").glob("*.jpg"))[0]).resolve()
+    photo_path = (args.photo or min((CARDIMAGE / "test").glob("*.jpg"))).resolve()
     card_path = args.card.resolve()
     card = Image.open(card_path).convert("RGB")
     photo = load_photo(photo_path, args.photo_max)
@@ -134,7 +134,7 @@ def main() -> None:
     api_key = read_env_key()
     source, pad = pad_to_2_3(card)
 
-    stamp = dt.datetime.now().strftime("%m%d_%H%M%S")
+    stamp = dt.datetime.now().astimezone().strftime("%m%d_%H%M%S")   # 파일명용 로컬 시각
     for i in range(args.n):
         gen, note = gemini_edit(args.model, PROMPT, source, photo, args.size, api_key)
         final = gen.convert("RGB").resize(source.size, Image.LANCZOS).crop((pad, 0, pad + card.width, card.height))

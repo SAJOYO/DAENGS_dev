@@ -21,10 +21,9 @@ import json
 import re
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
-
 from cardimage_blank_title import make
 from cardimage_try import CARDIMAGE
+from PIL import Image, ImageDraw, ImageFont
 
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 OUT = CARDIMAGE / "out" / "templates"

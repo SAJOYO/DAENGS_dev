@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
-
-from PIL import Image
 
 from cardimage_try import CARDIMAGE, png_bytes, read_env_key
+from PIL import Image
 
 MODEL = "gemini-3.1-flash-lite"
 PROMPT = """This is a collectible trading card. Read the three pieces of text in the header at the top and return JSON only:

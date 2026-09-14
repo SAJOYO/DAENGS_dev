@@ -24,9 +24,8 @@ import datetime as dt
 import json
 from pathlib import Path
 
+from cardimage_try import CARDIMAGE, gemini_edit, pad_to_2_3, read_env_key
 from PIL import Image
-
-from cardimage_try import CARDIMAGE, ROOT, gemini_edit, pad_to_2_3, read_env_key
 
 PROMPT_BLANK = """Image 1 is a collectible trading card. Image 2 is the same card again (ignore it).
 
@@ -77,7 +76,7 @@ def make(card_path: Path, step: str, *, title: str, badge: str, new_badge: str, 
         final = final.resize(CARD_SIZE, Image.LANCZOS)
     raw2k = crop_bars_from_raw(gen.convert("RGB"), card.width, card.height)
 
-    stamp = dt.datetime.now().strftime("%m%d_%H%M%S")
+    stamp = dt.datetime.now().astimezone().strftime("%m%d_%H%M%S")   # 파일명용 로컬 시각
     name = f"{stamp}_{tag or card_path.stem}_{step}_{size}"
     final_p, raw_p = out / f"{name}.png", out / f"{name}_raw2k.png"
     final.save(final_p)

@@ -1,0 +1,216 @@
+{
+  "client_session_id": "scenario-session",
+  "input_revision": "da7a7b3890e6b5eb66848e500ecbb60fefe361908432daa0e3f3a7614b7993a6",
+  "plan_revision": "fcd743d5d8f2f716f9bb9a18eba1e6cf65bb4b172c40d2b0b0b64d7dd71a4e79",
+  "policy": {
+    "version": "diary-part-slots-v3",
+    "space_slots": 3,
+    "environment_slots": 1,
+    "motion_slots": 1,
+    "total_slots": 8,
+    "space_radius_m": 250.0,
+    "motion_gap_s": 30.0,
+    "route_tolerance_m": 30.0,
+    "location_age_s": 30.0,
+    "weather_max_age_s": 7200.0,
+    "include_location_reference": true
+  },
+  "stamps": [
+    {
+      "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+      "evidence": [
+        {
+          "id": "slot:1ab3e174b57afcf5d96d50f8b1ef34af46c4b2d9c71ee0a115fa3394a59ad2c6",
+          "part": "motion",
+          "role": "scene_motion",
+          "source_id": "motion:c2a0c9140683153ad5c8a2d36530a27722f03fcc8adaafed749764fe326b1155",
+          "source_version": "301e5b9d1ea27fae7dd7a602bd7c21b83cfbe29297527709ce6207dab87b3d2b",
+          "entity_key": "785bfd8a9e148ff084af86243172b9b25d496d4c2781af807208ce7626c7be75",
+          "claim_scope": "d17c98855e3c1f9504d3891880d9032aff8b999c67a5a5916840c89343275f21",
+          "claim_key": "25c1a61447487b034e324993de11bd0a74f817759064ef78fa091117b90e7a21",
+          "sources": [
+            {
+              "source_id": "motion:c2a0c9140683153ad5c8a2d36530a27722f03fcc8adaafed749764fe326b1155",
+              "source_version": "301e5b9d1ea27fae7dd7a602bd7c21b83cfbe29297527709ce6207dab87b3d2b"
+            }
+          ],
+          "facts": {
+            "kind": "observed_slow",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "started_at": "2026-09-13T23:49:05+00:00",
+            "ended_at": "2026-09-13T23:52:45+00:00",
+            "duration_s": 220.0,
+            "before_scene_s": 0,
+            "continuity_block": 0,
+            "continuity_basis": "canonical_accepted_segments",
+            "analysis_id": "simulated-tmap-route",
+            "interpretation": "해당 산책의 다른 이동 구간보다 상대적으로 느린 이동 관측. 정지를 뜻하지 않음.",
+            "temporal_relation": "이 기록 시각을 포함한 구간"
+          },
+          "diagnostics": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0
+          },
+          "rank": [
+            0.0,
+            -220.0
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "source_id": "motion:c2a0c9140683153ad5c8a2d36530a27722f03fcc8adaafed749764fe326b1155",
+          "evidence_id": "slot:1ab3e174b57afcf5d96d50f8b1ef34af46c4b2d9c71ee0a115fa3394a59ad2c6",
+          "part": "motion",
+          "eligibility": "pass",
+          "admission": "kept",
+          "reason": "applicable",
+          "details": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0,
+            "part_limit": 1,
+            "total_limit": 8
+          }
+        },
+        {
+          "source_id": "motion:002ff61ef569b87a2efa1b9bad96805aac806a171dc9a2ddc0e054f07ede9d0e",
+          "evidence_id": "slot:2298b3446c1ee20f03009b06561c369c8d31ac58437e9f5a606d19bcc8687b59",
+          "part": "motion",
+          "eligibility": "pass",
+          "admission": "part_capacity",
+          "reason": "part_budget",
+          "details": {
+            "actual": 10.0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0,
+            "part_limit": 1,
+            "total_limit": 8
+          }
+        }
+      ],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+      "evidence": [
+        {
+          "id": "slot:68d49eb8eac6876cc23872af0b698d862bf10822065b282880292c5d80e6caeb",
+          "part": "motion",
+          "role": "scene_motion",
+          "source_id": "motion:5de2630762dbb3746323ec1e04d83624bcd6ee6f2e1da479246d2122001b69d3",
+          "source_version": "0f7e27748918957b85bfe0cc13440b0dca2deba28762cbdf534330f80b38c7e0",
+          "entity_key": "e025c2a6f904f5aac7901beb4f8ab374e6a46fc9724ac4b2b244bc235a223fa6",
+          "claim_scope": "04a69d500974deea7790ec76dd988ba5bb8f91f1d5239c5d385b71bad3b7134c",
+          "claim_key": "26be8a8fe2ead8c6352bed9f2fabbfca209023a4510c75763a19bec48eae31bb",
+          "sources": [
+            {
+              "source_id": "motion:5de2630762dbb3746323ec1e04d83624bcd6ee6f2e1da479246d2122001b69d3",
+              "source_version": "0f7e27748918957b85bfe0cc13440b0dca2deba28762cbdf534330f80b38c7e0"
+            }
+          ],
+          "facts": {
+            "kind": "observed_dwell",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "started_at": "2026-09-14T00:01:45+00:00",
+            "ended_at": "2026-09-14T00:02:55+00:00",
+            "duration_s": 70.0,
+            "before_scene_s": 0,
+            "continuity_block": 0,
+            "continuity_basis": "canonical_accepted_segments",
+            "analysis_id": "simulated-tmap-route",
+            "interpretation": "기록 기기의 동선이 한곳에 모인 구간. 강아지의 휴식이나 행동 판정이 아님.",
+            "temporal_relation": "이 기록 시각을 포함한 구간"
+          },
+          "diagnostics": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0
+          },
+          "rank": [
+            0.0,
+            -70.0
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "source_id": "motion:5de2630762dbb3746323ec1e04d83624bcd6ee6f2e1da479246d2122001b69d3",
+          "evidence_id": "slot:68d49eb8eac6876cc23872af0b698d862bf10822065b282880292c5d80e6caeb",
+          "part": "motion",
+          "eligibility": "pass",
+          "admission": "kept",
+          "reason": "applicable",
+          "details": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0,
+            "part_limit": 1,
+            "total_limit": 8
+          }
+        },
+        {
+          "source_id": "motion:2f8671b4831548ffe52b807797efeecf29642dbf72d4abb1a5fef1b93bdfaf23",
+          "evidence_id": "slot:e7a75c2b9cfa0c16f608681fd4db4e1c22ed1a9ac94cc849004d8a63eb3ed33a",
+          "part": "motion",
+          "eligibility": "pass",
+          "admission": "part_capacity",
+          "reason": "part_budget",
+          "details": {
+            "actual": 0,
+            "limit": 30,
+            "unit": "seconds",
+            "continuity_block": 0,
+            "part_limit": 1,
+            "total_limit": 8
+          }
+        }
+      ],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    },
+    {
+      "scene_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+      "evidence": [],
+      "decisions": [],
+      "location_reference": null
+    }
+  ]
+}

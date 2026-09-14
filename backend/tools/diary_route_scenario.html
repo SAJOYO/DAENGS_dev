@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>양재 산책 · 서브일기 시나리오</title>
+<style>
+:root{--ink:#233e32;--muted:#6a756b;--paper:#f4f2e9;--line:#dcded2;--green:#3d624a}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.7 "Malgun Gothic",system-ui,sans-serif}
+header{max-width:1320px;margin:auto;padding:38px 36px 22px}.eyebrow{font-size:12px;letter-spacing:.16em;color:var(--green);font-weight:bold}
+h1{font-size:36px;letter-spacing:-.055em;line-height:1.3;margin:12px 0}header p{color:var(--muted);margin:10px 0;max-width:850px}
+.badge{display:inline-block;background:#e3e9db;border-radius:20px;padding:3px 12px;font-size:12px;margin-right:6px}
+.run-links{font-size:13px;margin-top:14px;color:var(--muted)}.run-links a{color:var(--green);margin-right:16px}
+.stats{display:flex;gap:30px;border-top:1px solid var(--line);padding-top:18px;margin-top:20px}.stats strong{font-size:23px}.stats span{font-size:13px;color:var(--muted);margin-left:7px}
+main{max-width:1320px;margin:auto;padding:0 36px 60px;display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,.9fr);gap:32px;align-items:start}
+.map-panel{position:sticky;top:18px;background:#e5ebdc;border:1px solid #cbd5c1;border-radius:24px;overflow:hidden}
+.map-heading{display:flex;justify-content:space-between;padding:20px 24px 0;font-size:14px}.map-heading span{color:var(--muted)}
+svg{display:block;width:100%;height:auto;max-height:68vh}svg text{font-family:inherit;paint-order:stroke;stroke:#edf1e7;stroke-width:4px;stroke-linejoin:round;font-size:13px;fill:#64725b}
+svg .road{fill:none;stroke:#fffdf7;stroke-width:7;stroke-linecap:round}svg .path{fill:none;stroke:#b8c6ab;stroke-width:2}
+svg .park{fill:#cedcbf;stroke:#becfaf;stroke-width:1}svg .water{fill:#c1dae1;stroke:#a7c8d4;stroke-width:2}
+svg .river{fill:none;stroke:#b3d2dc;stroke-width:12}svg .route{fill:none;stroke:#517e5a;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+svg .progress{stroke:#b46642;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+svg .marker{cursor:pointer}svg .marker circle{fill:#fdfcf7;stroke:#3e634a;stroke-width:2}
+svg .marker text{stroke:none;fill:#304d38;font-size:12px;text-anchor:middle;font-weight:bold}
+svg .marker.active circle{fill:#a35739;stroke:#fff;stroke-width:3}svg .marker.active text{fill:white}
+.map-caption{background:#f9faf3;padding:16px 24px;border-top:1px solid #d5ddce}
+.map-caption strong{display:block;font-size:17px}.map-caption small{color:var(--muted);display:block}
+.controls{display:flex;gap:8px;margin-top:12px;align-items:center}button{font:inherit;font-size:13px;border:1px solid #bdcbb5;border-radius:8px;padding:6px 12px;background:transparent;color:var(--ink);cursor:pointer}
+button:disabled{opacity:.35;cursor:default}.attribution{font-size:11px;line-height:1.6;color:var(--muted);padding:12px 24px}.attribution a{color:inherit}
+.reading-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:14px;color:var(--muted)}
+article{background:#fffef9;border:1px solid var(--line);border-radius:18px;margin-bottom:18px;padding:26px;scroll-margin-top:22px}
+article.selected{border-color:#9dac91;box-shadow:0 4px 24px #3149290a}
+.card-top{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}
+.number{display:inline-grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#e6ecdf;font-weight:bold;color:var(--green)}
+.card-top button{margin-left:auto;border:0;font-size:12px;padding:0;color:var(--green)}
+h2{font-size:23px;line-height:1.5;letter-spacing:-.045em;margin:15px 0 13px}
+.prose{white-space:pre-wrap;margin:0;font-size:16px;line-height:1.95}
+.note{white-space:pre-wrap;background:#f5f2e7;border-left:2px solid #d4c9a7;margin:16px 0 0;padding:12px 16px;font-size:15px}
+.note small{display:block;font-size:11px;color:#817861;margin-bottom:4px}
+details{border-top:1px solid #e7e8df;margin-top:20px;padding-top:12px}summary{font-size:12px;color:#75806e;cursor:pointer}
+.debug{font-size:12px;color:#53634d}.debug pre{overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all;font-size:11px;background:#f1f3eb;padding:12px}
+.debug h3{font-size:13px;margin:18px 0 6px}.debug ul{padding-left:20px}
+footer{max-width:1320px;padding:0 36px 40px;margin:auto;color:var(--muted);font-size:13px}
+:focus-visible{outline:3px solid #c28b48;outline-offset:4px}
+@media(max-width:850px){header{padding:25px 20px 18px}h1{font-size:29px}main{display:block;padding:0 20px 30px}.map-panel{position:relative;top:0;margin-bottom:24px}svg{max-height:470px}.stats{gap:20px}.stats strong{font-size:19px}article{padding:22px}footer{padding:0 20px 30px}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">DAENGS · WALK DIARY LAB / 01</div>
+<h1>보리와, 다시 돌아오는 길</h1>
+<p>매헌시민의숲 주변 → 양재천로 → 되돌아오는 길. 실제 보행 경로 위에 가상 산책을 재생하고, 현재 작성기가 만든 카드를 시간순으로 읽어본다.</p>
+<span class="badge">실제 경로 · 토지피복 조회</span><span class="badge">가상 이동 · 행동 · 메모</span>
+<nav class="run-links" aria-label="두 실행 비교"><a href="../yangjae-02/preview.html">자료 준비 후 서술 결과</a><a href="../yangjae-01/preview.html">첫 수집 연결 실행</a><span id="run-label"></span></nav>
+<div class="stats" id="stats"></div>
+</header>
+<main>
+<section class="map-panel" aria-label="산책 동선">
+<div class="map-heading"><strong>한 걸음씩 따라가기</strong><span>번호를 눌러 장면 보기</span></div>
+<svg id="map" viewBox="0 0 700 610" role="img" aria-label="실제 경로와 선정된 장면 좌표"></svg>
+<div class="map-caption"><strong id="current-title"></strong><small id="current-time"></small>
+<div class="controls"><button id="prev">← 이전</button><button id="next">다음 →</button><button id="read-card">이 카드 읽기</button></div></div>
+<div class="attribution">지도 © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors · ODbL</a><br>경로: TMAP 보행 API. 왕복 경로가 겹치므로 번호는 좌표에서 조금 띄워 표시했다.</div>
+</section>
+<section aria-label="시간순 산책 일기"><div class="reading-head"><span id="date"></span><span>생성 문장 원문</span></div><div id="cards"></div></section>
+</main>
+<footer>이 페이지는 실험 뷰어다. 실제로 산책한 기록은 아니며, 카드 내용을 잇기 위한 추가 LLM 호출이나 수동 문장 수정은 하지 않았다.
+<details><summary>실행 조건 · 자료 범위</summary><div class="debug" id="run"></div></details></footer>
+<script type="application/json" id="data">__SCENARIO_JSON__</script>
+<script>
+const d=JSON.parse(document.getElementById('data').textContent);
+const cards=d.result.bundle.scenes, points=d.input.points;
+const el=(tag,text,parent,cls)=>{const e=document.createElement(tag);if(text!==null)e.textContent=text;if(cls)e.className=cls;if(parent)parent.append(e);return e};
+const formatTime=t=>new Date(t).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+const start=new Date(d.input.source.started_at),end=new Date(d.input.source.ended_at);
+document.getElementById('run-label').textContent=d.run.prepared_input?'현재: 자료·슬롯을 먼저 준비한 실행':'현재: 수집 자료가 작성 입력에 채택되지 않은 실행';
+document.getElementById('date').textContent=start.toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric'})+' · '+formatTime(start)+'–'+formatTime(end);
+for(const [n,label] of [[(d.input.one_way_geometry_m*2/1000).toFixed(2)+' km','가상 이동'],[Math.round((end-start)/60000)+'분','산책 시간'],[cards.length+'개','서브일기']]){
+const x=el('div',null,document.getElementById('stats'));el('strong',n,x);el('span',label,x)}
+const kinds={user_record:'기록',movement_observation:'움직임',route_checkpoint:'길 위의 한 장면',session_boundary:'산책'};
+const bodyNodes=[], markerNodes=[];
+let selected=0;
+cards.forEach((card,i)=>{
+const article=el('article',null,document.getElementById('cards'));article.id='card-'+i;bodyNodes.push(article);
+const top=el('div',null,article,'card-top');el('span',String(i+1).padStart(2,'0'),top,'number');
+el('span',formatTime(card.anchor.event_at)+' · '+(card.boundary==='start'?'출발':card.boundary==='end'?'도착':kinds[card.kind]),top);
+const show=el('button','지도에서 보기 ↗',top);show.onclick=()=>{select(i,false);if(innerWidth<850)document.querySelector('.map-panel').scrollIntoView({behavior:'smooth'})};
+el('h2',card.title,article);
+const w=card.writing;
+if(w){el('p',[w.observation?.text,w.space.text,...w.actions.map(a=>a.text)].filter(Boolean).join('\n'),article,'prose');
+if(w.original_text){const note=el('div',null,article,'note');el('small','보호자 메모 · 가상 입력',note);el('span',w.original_text,note)}}
+else el('p',card.body,article,'prose');
+const details=el('details',null,article);el('summary','개발자 보기 · 근거와 작성 경로',details);const debug=el('div',null,details,'debug');
+const stamp=d.slots.stamps.find(s=>s.scene_id===card.id);
+const materials=stamp?[...stamp.evidence,...(stamp.location_reference?[stamp.location_reference]:[])]:[];
+const sources=d.backgrounds.backgrounds.filter(b=>b.target.identity===card.core.identity);
+el('h3','좌표와 실제 카드 입력',debug);
+el('p',card.anchor.point.lat.toFixed(6)+', '+card.anchor.point.lng.toFixed(6)+' · '+card.kind,debug);
+el('p',['space','environment','motion'].map(p=>p+' '+materials.filter(e=>e.part===p).length).join(' · '),debug);
+el('p','공간 문장: '+w?.space.origin+' / 제목: '+w?.title_origin,debug);
+el('p','동선 슬롯은 공간 프롬프트에 전달되지 않는다. 움직임 카드의 핵심 설명은 코드가 보존한다.',debug);
+el('h3','자료 상태',debug);const ul=el('ul',null,debug);
+for(const s of sources)el('li',s.provider+' · '+s.status+(s.reason?' / '+s.reason:''),ul);
+el('p',d.run.backgrounds_in_writing_input===false||(!d.run.prepared_input&&!d.run.collection_adopted)?'주의: 수집 결과가 이 실행의 작성 입력에는 채택되지 않았다.':'수집 자료가 슬롯 계산에 사용됐다.',debug);
+el('h3','이전 장면과의 선택 변화',debug);
+const previous=i?d.slots.stamps.find(s=>s.scene_id===cards[i-1].id):null;
+const keys=new Set(previous?.evidence.map(e=>e.entity_key+':'+e.role)||[]);
+const current=new Set(stamp?.evidence.map(e=>e.entity_key+':'+e.role)||[]);
+el('p','이전 장면과 공통 '+[...current].filter(k=>keys.has(k)).length+' · 현재에만 '+[...current].filter(k=>!keys.has(k)).length+' · 이전에만 '+[...keys].filter(k=>!current.has(k)).length,debug);
+el('p','장면별 계산 결과의 비교다. 영속 슬롯의 교체 이력을 뜻하지 않는다.',debug);
+el('h3','근거 · 적용 조건 · 탈락 사유',debug);el('p','긴 형상 좌표 배열은 항목 수와 해시로 축약했다. 원본은 JSON/GZIP 보관 파일에 있다.',debug);el('pre',JSON.stringify(stamp,null,2),debug);
+el('h3','해당 카드의 LLM 요청과 채택 결과',debug);
+const jobs=d.result.jobs.filter(j=>j.request.card_id===card.id||j.request.cards?.some(c=>c.card_id===card.id));
+el('pre',JSON.stringify(jobs.map(j=>j.stage!=='title'?j:{...j,request:{...j.request,cards:j.request.cards.filter(c=>c.card_id===card.id)},accepted:j.accepted?{titles:j.accepted.titles.filter(c=>c.card_id===card.id)}:null}),null,2),debug);
+});
+const svg=document.getElementById('map'), ns='http://www.w3.org/2000/svg';
+function shape(tag,attrs,parent=svg){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);parent.append(e);return e}
+const lats=points.map(p=>p.lat),lngs=points.map(p=>p.lng);
+const minLat=Math.min(...lats)-.00055,maxLat=Math.max(...lats)+.00055,minLng=Math.min(...lngs)-.0009,maxLng=Math.max(...lngs)+.0009;
+const xspan=(maxLng-minLng)*Math.cos(minLat*Math.PI/180),yspan=maxLat-minLat;
+const scale=Math.min(620/xspan,530/yspan),ox=(700-xspan*scale)/2,oy=(610-yspan*scale)/2;
+const xy=p=>[ox+(p.lng-minLng)*Math.cos(minLat*Math.PI/180)*scale,610-oy-(p.lat-minLat)*scale];
+const line=ps=>ps.map((p,i)=>(i?'L':'M')+xy(p).map(n=>n.toFixed(1)).join(',')).join(' ');
+for(const type of ['park','water','river','road','path']){
+for(const feature of d.map.features.filter(f=>f.kind===type))shape('path',{d:line(feature.points)+(feature.closed?'Z':''),class:type})}
+shape('path',{d:line(points),class:'route'});
+const progress=shape('path',{d:'',class:'progress'});
+for(const label of d.map.labels){const [x,y]=xy(label);if(x>35&&x<665&&y>40&&y<570){const text=shape('text',{x,y});text.textContent=label.name}}
+cards.forEach((card,i)=>{
+const [x,y]=xy(card.anchor.point),dx=i<cards.length/2?-22:24,dy=card.boundary==='end'?19:-17;
+const g=shape('g',{class:'marker',tabindex:0,role:'button','aria-label':(i+1)+'번 '+card.title});
+shape('line',{x1:x,y1:y,x2:x+dx,y2:y+dy,stroke:'#5e7755','stroke-width':1.5},g);
+shape('circle',{cx:x+dx,cy:y+dy,r:15},g);const text=shape('text',{x:x+dx,y:y+dy+4},g);text.textContent=i+1;
+g.onclick=()=>select(i,true);g.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(i,true)}};markerNodes.push(g)});
+function select(i,scroll){selected=i;bodyNodes.forEach((e,n)=>e.classList.toggle('selected',n===i));markerNodes.forEach((e,n)=>e.classList.toggle('active',n===i));
+const card=cards[i],at=new Date(card.anchor.event_at).getTime();progress.setAttribute('d',line(points.filter(p=>new Date(p.at).getTime()<=at)));
+document.getElementById('current-title').textContent=String(i+1).padStart(2,'0')+' / '+card.title;
+document.getElementById('current-time').textContent=formatTime(card.anchor.event_at)+' · '+(i===cards.length-1?'출발 지점으로 돌아온 가상 경로':'시간순으로 길을 따라 읽기');
+document.getElementById('prev').disabled=i===0;document.getElementById('next').disabled=i===cards.length-1;
+if(scroll)bodyNodes[i].scrollIntoView({behavior:'smooth',block:'nearest'})}
+document.getElementById('prev').onclick=()=>select(selected-1,false);
+document.getElementById('next').onclick=()=>select(selected+1,false);
+document.getElementById('read-card').onclick=()=>bodyNodes[selected].scrollIntoView({behavior:'smooth'});
+const run=document.getElementById('run');el('p',d.run.prepared_input?'자료·슬롯 계산을 먼저 끝낸 품질 실험. 현재 카드 그래프와 기본 15초 제한을 사용했다.':'수집 스냅샷을 현재 카드 그래프에 전달한 첫 실행.',run);
+el('p','OSM 지도와 TMAP 경로의 장소 이름은 작성 재료에 넣지 않았다. 수집 성공은 슬롯 채택이나 문장 사용과 별도로 확인한다.',run);
+const sourceCounts={};for(const b of d.backgrounds.backgrounds){const k=b.provider+' / '+b.status;sourceCounts[k]=(sourceCounts[k]||0)+1}
+el('pre',JSON.stringify(sourceCounts,null,2),run);
+el('pre',JSON.stringify(d.run,null,2),run);select(0,false);
+</script>
+</body>
+</html>

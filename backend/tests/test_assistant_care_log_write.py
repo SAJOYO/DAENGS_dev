@@ -82,6 +82,9 @@ def test_record_statements_are_recognized(query: str) -> None:
         ("오늘 밥 잘 먹었나 궁금한데 사료를 바꿔볼까 싶기도 하고 양도 좀 줄여야 할까", "길다"),
         ("산책 갔다 왔어", "산책은 walks 가 진실이라 종류에 없다"),
         ("방금 줬어", "무엇을 줬는지가 없다"),
+        # 아래 둘은 골드 세트 훑기 테스트가 **실제로 잡은** 오탐이다.
+        ("밥은 잘 먹고 산책도 평소처럼 잘 했어요", "기록이 아니라 되묻기에 답하는 상태 보고다"),
+        ("사료 포장지의 권장량을 참고하라고 했다", "남의 말을 옮긴 것이다"),
     ],
 )
 def test_non_statements_are_rejected(query: str, why: str) -> None:
@@ -378,18 +381,23 @@ def events(store: Store, monkeypatch: pytest.MonkeyPatch) -> list[FakeCareEvent]
             None,
         )
 
-    async def list_kind_between(session, pet_id, kind, start, end):
+    async def list_kind_between(session, pet_ids, kind, start, end):
+        # **`pet_ids` 는 묶음이다** (MVP 결정 §7) — 같은 실제 강아지를 두 사람이 각자
+        # 등록해 연결하면 약 중복 창이 그룹 전체를 봐야 한다. 여기 대역이 단일 id 를
+        # 비교하고 있었더니 창이 아무것도 못 찾아 **중복 투약이 그냥 기록됐다** — 이 파일의
+        # 중복 테스트가 그것을 잡았다. `test_care_events.py` 의 대역과 같은 모양으로 둔다.
+        wanted = set(pet_ids)
         return sorted(
             (
                 e
                 for e in rows
-                if e.pet_id == pet_id and e.kind == kind and start <= e.occurred_at <= end
+                if e.pet_id in wanted and e.kind == kind and start <= e.occurred_at <= end
             ),
             key=lambda e: e.occurred_at,
             reverse=True,
         )
 
-    async def count_walks(session, app_user_id, pet_id, start, end):
+    async def count_walks(session, app_user_id, pet_ids, start, end):
         return 0
 
     monkeypatch.setattr(care_repo, "add", add)
@@ -711,21 +719,43 @@ def _eval_strings() -> list[tuple[str, str]]:
     return found
 
 
+#: 골드 세트에서 게이트가 **맞게** 잡는 발화. 이것 말고는 하나도 걸리면 안 된다.
+#:
+#: `"오늘 밥 줬어"` 는 실제로 기록 진술이다 — 골드 전체에서 유일한 참 양성이고, 거기 있는
+#: 이유는 응급 어휘 게이트의 **음성 대조군**(`expect: false`)이기 때문이다. 그 eval 은
+#: `is_emergency` 만 부르므로 이쪽 게이트가 그 측정을 바꾸지 않는다.
+_EXPECTED_GOLD_HITS = {"오늘 밥 줬어"}
+
+
 def test_the_gate_hijacks_nothing_in_the_frozen_eval_sets() -> None:
-    """**골드 세트의 어떤 발화도 이 게이트로 빠지지 않는다** (D-075 「오탐은 쟀습니다」).
+    """**골드 세트에서 게이트가 가로채는 것은 참 양성 하나뿐이다** (D-075 「오탐은 쟀습니다」).
 
     이것이 "이 카드는 어떤 벤치마크 행도 바꾸지 않는다" 의 근거다. `answer_quality` 수집기는
     실제로 `AssistantOrchestrationService` 를 지나므로 이 게이트가 그 경로에 있고, 한 건이라도
-    걸리면 그 140문항의 라우팅이 조용히 달라진다.
+    잘못 걸리면 그 문항들의 라우팅이 조용히 달라진다.
 
-    2026-09-14 기준 **391,634건 / 0건**. **이 숫자가 재현율을 말하지는 않는다** — 골드가 전부
-    질문이라 기록 진술이 애초에 없다 (D-075 의 같은 절). 여기서 재는 것은 오탐뿐이다.
+    2026-09-14 기준 **460,660건 / 1건**(위 참 양성). **이 숫자가 재현율을 말하지는 않는다** —
+    골드는 거의 전부 질문이라 기록 진술이 애초에 없다. 여기서 재는 것은 오탐뿐이다.
 
-    걸린 발화가 생겼다면 둘 중 하나다: 골드에 기록 진술이 새로 들어왔거나(그러면 이 목록에
-    넣고 기대를 고친다), 어휘가 느슨해졌다(그러면 어휘를 좁힌다).
+    **이 테스트는 실제로 결함 셋을 잡았다** (그래서 남겨 둔다):
+    ① `주차 제약만…`·`보험 약관 확인했어` → `약` 어휘를 "못 쓸 글자를 빼는" 방식에서
+       "앞뒤에 한글이 붙으면 약이 아니다" 로 뒤집었다.
+    ② `"밥은 잘 먹고 산책도 평소처럼 잘 했어요"` → 되묻기에 **답하는** 발화였다. 상태 보고
+       표지(`잘 먹`·`평소`·`산책` …)를 막는 줄이 여기서 나왔다.
+    ③ 평가 판정문(`"…참고하라고 했다"`) → 남의 말 옮기기 표지를 막았다.
+
+    새로 걸린 발화가 생겼다면 둘 중 하나다: 골드에 기록 진술이 새로 들어왔거나(그러면
+    `_EXPECTED_GOLD_HITS` 에 넣는다), 어휘가 느슨해졌다(그러면 어휘를 좁힌다).
     """
     texts = _eval_strings()
     # 세트가 통째로 안 읽히면 0건이 "통과" 로 보인다 — 먼저 읽혔는지를 못박는다.
     assert len(texts) > 50_000, f"골드 세트를 못 읽었다: {len(texts)}건"
-    caught = [(name, text) for name, text in texts if gate.is_care_log_statement(text)]
-    assert caught == [], f"골드 텍스트가 케어 기록 게이트로 빠진다: {caught[:5]}"
+    caught = {
+        (name, text)
+        for name, text in texts
+        if gate.is_care_log_statement(text) and text not in _EXPECTED_GOLD_HITS
+    }
+    assert caught == set(), f"골드 텍스트가 케어 기록 게이트로 빠진다: {sorted(caught)[:5]}"
+    # 참 양성이 사라졌다면 어휘가 과하게 좁아진 것이다 — 그쪽도 회귀다.
+    found = {text for _, text in texts if gate.is_care_log_statement(text)}
+    assert found == _EXPECTED_GOLD_HITS, f"참 양성이 바뀌었다: {found}"

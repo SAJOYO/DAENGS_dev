@@ -34,6 +34,7 @@ from daengs_backend.routers import (
     metrics,
     pet,
     pet_member,
+    pet_walks,
     report_admin,
     status,
     territory,
@@ -194,6 +195,8 @@ app.include_router(pet.router)
 # 수락 경로가 /app/pets/{pet_id}/... 아래가 아니기 때문입니다 — 수락 전에는
 # 그 강아지에 아무 권한이 없어 URL 에 pet_id 를 실으면 안 됩니다.
 app.include_router(pet_member.router)
+# 산책 기록 공동 조회(`/app/pets/{pet_id}/walks`) — 읽기만. 쓰기·개인 목록은 `/app/walks` 그대로.
+app.include_router(pet_walks.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)

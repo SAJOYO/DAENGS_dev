@@ -1,6 +1,6 @@
 """Convert retained catalog observations into diary normalization inputs."""
 
-from daengs_backend.services import walk_area_catalog as catalog
+from daengs_backend.services.walk_background.catalogs import area as catalog
 from daengs_walk.diary.space.materials import AreaInput
 from daengs_walk.value_contracts import digest
 

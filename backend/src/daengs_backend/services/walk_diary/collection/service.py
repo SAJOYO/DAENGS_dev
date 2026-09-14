@@ -12,14 +12,16 @@ from datetime import UTC, datetime
 import httpx
 
 from daengs_backend.orchestration.execution import discard
-from daengs_backend.services import walk_area_catalog, walk_catalog_regions, walk_park_catalog
-from daengs_backend.services.walk_commerce_catalog import ENDPOINT as COMMERCE_ENDPOINT
+from daengs_backend.services.walk_background.catalogs import area as walk_area_catalog
+from daengs_backend.services.walk_background.catalogs import park as walk_park_catalog
+from daengs_backend.services.walk_background.catalogs import regions as walk_catalog_regions
+from daengs_backend.services.walk_background.catalogs.commerce import ENDPOINT as COMMERCE_ENDPOINT
+from daengs_backend.services.walk_background.catalogs.retention import retain_page
+from daengs_backend.services.walk_background.http import get_json
+from daengs_backend.services.walk_background.providers.sgis import sgis
 from daengs_backend.services.walk_diary.collection.catalog import normalization_input
 from daengs_backend.services.walk_diary.collection.progress import collection_progress
 from daengs_backend.services.walk_diary.collection.snapshot import source_background
-from daengs_backend.services.walk_public_http import get_json
-from daengs_backend.services.walk_sgis import sgis
-from daengs_backend.services.walk_space_catalog_input import retain_page
 from daengs_walk.diary.board.backgrounds import scene_background_targets
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.space.materials import SpaceInput, normalize_spaces

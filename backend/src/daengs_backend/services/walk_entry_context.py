@@ -11,7 +11,8 @@ from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope
 from daengs_backend.repositories import walk_entry as entries
 from daengs_backend.repositories import walk_entry_context as repo
 from daengs_backend.repositories import walk_entry_v2 as pins
-from daengs_backend.services.walk_entry_context_source import collect, digest
+from daengs_backend.services.walk_background.collection import collect
+from daengs_backend.services.walk_background.contracts import digest
 from daengs_backend.services.walk_entry_errors import EntryNotFound
 from daengs_backend.services.walk_entry_policy import guard_v1, require_enabled
 

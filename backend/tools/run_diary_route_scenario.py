@@ -246,8 +246,8 @@ def prepare(raw):
 
 
 async def acquire(base, public_key):
+    from daengs_backend.services.walk_background.providers.weather import collect_temperature
     from daengs_backend.services.walk_diary.collection.service import collect_spaces
-    from daengs_backend.services.walk_weather_context import collect_temperature
     from daengs_walk.diary.contracts.input import SavedBackground, digest
 
     # Keep default 4 s public collection. Weather normally arrives through entry context;

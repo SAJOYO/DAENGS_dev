@@ -19,7 +19,7 @@ from daengs_backend.repositories import walk_catalog_demand as demand
 from daengs_backend.repositories import walk_entry_context as queue
 from daengs_backend.services import walk_context_backfill as backfill
 from daengs_backend.services import walk_entry_context as context
-from daengs_backend.services.walk_entry_context_source import Collected
+from daengs_backend.services.walk_background.contracts import Collected
 from tests.walk.context.test_walk_catalog_demand_db import catalog_database  # noqa: F401
 from tests.walk.context.test_walk_entry_context_db import database as local_database  # noqa: F401
 from tests.walk.context.test_walk_entry_context_db import seed

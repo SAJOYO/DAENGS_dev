@@ -12,14 +12,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from daengs_backend.config import settings
-from daengs_backend.services import (
-    walk_area_catalog,
-    walk_catalog_regions,
-    walk_commerce_catalog,
-    walk_park_catalog,
-    walk_river_catalog,
-)
-from daengs_backend.services.walk_sgis import sgis
+from daengs_backend.services.walk_background.catalogs import area as walk_area_catalog
+from daengs_backend.services.walk_background.catalogs import commerce as walk_commerce_catalog
+from daengs_backend.services.walk_background.catalogs import park as walk_park_catalog
+from daengs_backend.services.walk_background.catalogs import regions as walk_catalog_regions
+from daengs_backend.services.walk_background.catalogs import river as walk_river_catalog
+from daengs_backend.services.walk_background.providers.sgis import sgis
 
 FLAGS = (
     "walk_entry_context_enabled",

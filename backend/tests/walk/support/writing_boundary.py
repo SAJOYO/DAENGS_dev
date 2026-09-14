@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_sgis
+from daengs_backend.services.walk_background.providers import sgis as walk_sgis
+from daengs_backend.services.walk_background.providers.sgis import SgisSource
 from daengs_backend.services.walk_diary import contracts as diary_contracts
 from daengs_backend.services.walk_diary import runtime as writing
 from daengs_backend.services.walk_diary.collection import service as collection
@@ -26,7 +27,6 @@ from daengs_backend.services.walk_diary.storage.board import (
 )
 from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
 from daengs_backend.services.walk_diary.writing import policy as diary_policy
-from daengs_backend.services.walk_sgis import SgisSource
 from daengs_walk.diary.board.output import BOARD_FORMAT, publish_board
 from daengs_walk.diary.contracts.input import digest
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case

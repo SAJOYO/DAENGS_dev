@@ -2,6 +2,7 @@
 
 import json
 
+from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.contracts import (
     ActionProse,
     CardTitle,
@@ -9,6 +10,7 @@ from daengs_backend.services.walk_diary.contracts import (
     SpaceProse,
     WritingJob,
 )
+from daengs_backend.services.walk_diary.model_input import normalize
 from daengs_backend.services.walk_diary.writing import policy
 from daengs_backend.services.walk_diary.writing.context import get_action_context, get_space_context
 from daengs_walk.diary.board.action_context import require_action
@@ -95,6 +97,8 @@ def title_jobs(cards):
 def validate_output(item, raw):
     schema = {"space": SpaceProse, "action": ActionProse, "title": CardTitles}[item.stage]
     try:
+        if item.tool_trace is not None and item.stage != "space":
+            raise ValueError("space tools belong only to the space writer")
         if isinstance(raw, str):
             if len(raw.encode()) > 64_000:
                 raise ValueError("response exceeds budget")
@@ -142,6 +146,11 @@ def validate_output(item, raw):
                     or bool(output.text.strip()) != bool(refs)
                 ):
                     raise ValueError("space citation changed")
+                if item.tool_trace is not None:
+                    model = normalize("space", item.request)
+                    space_details.validate_citations(
+                        model.payload, model.references, item.tool_trace, output.evidence_ids
+                    )
                 names = [c["name"] for c in item.request["walk_context"]["companions"] if c["name"]]
                 if any(name in output.text for name in names):
                     raise ValueError("companion name leaked into space")

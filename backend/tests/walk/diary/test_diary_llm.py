@@ -202,13 +202,14 @@ def test_legacy_relations_are_kept_without_provider_objects(role, facts, meaning
 
 async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
     from google import genai
+    from google.genai import types
 
     from daengs_backend.config import settings
 
     sent = []
 
     async def generate_content(*, model, contents, config):
-        payload = json.loads(contents)
+        payload = json.loads(contents if isinstance(contents, str) else contents[0].parts[0].text)
         stage = (
             "title"
             if "cards" in payload
@@ -219,7 +220,16 @@ async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
         sent.append(payload)
         assert not {"card_id", "request_revision", "anchor", "evidence"} & payload.keys()
         assert "request_revision" not in json.dumps(config.response_json_schema)
-        return SimpleNamespace(text=json.dumps(await prose(stage, payload, {})))
+        text = json.dumps(await prose(stage, payload, {}))
+        if stage == "space":
+            return types.GenerateContentResponse(
+                candidates=[
+                    types.Candidate(
+                        content=types.Content(role="model", parts=[types.Part(text=text)])
+                    )
+                ]
+            )
+        return SimpleNamespace(text=text)
 
     class Client:
         def __init__(self, **_):
@@ -237,7 +247,9 @@ async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
     base = prepared()
     result = await writing.write_cards(base.input.source, base, collector=collect_with_sgis)
     assert all(j.failure_code is None for j in result.jobs)
-    assert sorted(map(str, sent)) == sorted(str(j.llm_request) for j in result.jobs)
+    assert sorted(map(str, sent)) == sorted(
+        str(j.tool_trace["initial_input"] if j.tool_trace else j.llm_request) for j in result.jobs
+    )
     for job in result.jobs:
         if job.stage == "space" and job.accepted["evidence_ids"]:
             assert all(key in job.evidence for key in job.accepted["evidence_ids"])

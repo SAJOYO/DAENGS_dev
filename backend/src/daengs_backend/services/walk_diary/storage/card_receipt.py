@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import JsonValue, model_validator
 
+from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_backend.services.walk_diary.model_input import VERSION, normalize
 from daengs_walk.diary.board.action_context import require_scene_action
@@ -44,6 +45,18 @@ class StoredCardWriting(DiaryContract):
                 and item.llm_request != normalize(item.stage, item.request).payload
             ):
                 raise ValueError("stored model input changed")
+            if item.tool_trace is not None:
+                if item.stage != "space":
+                    raise ValueError("stored space tools belong only to space writing")
+                model = normalize("space", item.request)
+                space_details.validate_trace(model.payload, item.tool_trace)
+                if item.accepted:
+                    space_details.validate_citations(
+                        model.payload,
+                        model.references,
+                        item.tool_trace,
+                        item.accepted["evidence_ids"],
+                    )
         return self
 
     def require_bundle(self, bundle, generation_revision):

@@ -1,5 +1,6 @@
 """Current writing policy; readers do not import this module."""
 
+from daengs_backend.services.walk_diary import space_details
 from daengs_backend.services.walk_diary.contracts import MAX_CARDS
 from daengs_backend.services.walk_diary.model_input import VERSION as INPUT_VERSION
 from daengs_backend.services.walk_diary.writing.prompts import PROMPTS
@@ -35,12 +36,25 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v7",
+        "policy": "shared-orchestration-card-writing-v8",
         "input_policy": INPUT_VERSION,
         "observation_text": CURRENT_OBSERVATION_TEXT,
         "legacy_observation_text": OBSERVATION_TEXT,
         "model": MODEL,
-        "prompts": {key: digest([value, INPUT_VERSION]) for key, value in PROMPTS.items()},
+        "prompts": {
+            key: digest(
+                [value, INPUT_VERSION, space_details.VERSION, space_details.INSTRUCTION]
+                if key == "space"
+                else [value, INPUT_VERSION]
+            )
+            for key, value in PROMPTS.items()
+        },
+        "space_details": {
+            "version": space_details.VERSION,
+            "max_model_calls": space_details.MAX_MODEL_CALLS,
+            "max_tool_calls": 1,
+            "max_details": space_details.MAX_DETAILS,
+        },
         "timeout_s": TIMEOUT_SECONDS,
         "title_reserve_s": TITLE_RESERVE_SECONDS,
         "card_limit": MAX_CARDS,

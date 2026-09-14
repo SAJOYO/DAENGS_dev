@@ -12,6 +12,7 @@ from run_diary_route_scenario import configure, dump, prepare, read
 
 
 def preview(source, output):
+    from daengs_backend.services.walk_diary import space_details
     from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
     from daengs_backend.services.walk_diary.writing.context import (
         get_action_context,
@@ -31,6 +32,8 @@ def preview(source, output):
             {
                 "card_id": scene.id,
                 "space": space.llm_input,
+                "space_initial_input": space_details.initial_input(space.llm_input),
+                "space_tool": space_details.declaration(space.llm_input),
                 "action": action.llm_input if action is not None else None,
             }
         )

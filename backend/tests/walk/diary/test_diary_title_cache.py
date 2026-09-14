@@ -15,7 +15,7 @@ from daengs_backend.services.walk_diary.storage.board import load_board, store_b
 from daengs_backend.services.walk_diary.writing import policy
 from daengs_walk.diary.contracts.input import DiaryInput, UserRecord, digest, material_ref
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
-from tests.walk.diary.test_diary_card_writing import prose
+from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prose
 from tests.walk.support.base_board import policy as board_policy
 from tests.walk.support.diary_generation import PATH, body
 
@@ -74,7 +74,8 @@ async def test_cached_titles_follow_their_own_policy(
     provider = AsyncMock(side_effect=new_prose)
     result = await writing.write_cards(after.input.source, after, generate=provider)
     stages = [call.args[0] for call in provider.call_args_list]
-    changed_title = edit_original or change in {"title_prompt", "model"}
+    # Independent note edits must not invalidate generated body/title inputs.
+    changed_title = change in {"title_prompt", "model"}
     assert stages.count("title") == int(changed_title)
     assert stages.count("space") == (
         len(base.board.scenes) if change in {"model", "space_prompt"} else 0
@@ -123,7 +124,7 @@ def test_http_keeps_publication_but_new_source_uses_new_title_policy(api, monkey
     client.app.dependency_overrides.pop(router.get_diary_writer)
     monkeypatch.setattr(writing, "generate_card_prose", AsyncMock(side_effect=prose))
     monkeypatch.setattr(
-        collection, "configured_collection", AsyncMock(side_effect=OSError("synthetic outage"))
+        collection, "configured_collection", AsyncMock(side_effect=collect_with_sgis)
     )
     request = body(state, bundle_format="walk-diary-board-v1", preparation_budget_ms=20000)
     response = client.post(PATH, json=request)

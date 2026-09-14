@@ -74,7 +74,11 @@ class _DiaryRun:
                 continue
             # Reuse only requests made under this model and strategy, including whole-board titles.
             payload = {k: v for k, v in previous.request.items() if k != "request_revision"}
-            if previous.request_revision != card_jobs.job(previous.stage, payload).request_revision:
+            try:
+                current = card_jobs.job(previous.stage, payload)
+            except (ValueError, KeyError, TypeError):
+                continue
+            if previous.request_revision != current.request_revision:
                 continue
             previous = card_jobs.validate_output(previous, previous.accepted)
             if previous.failure_code:
@@ -95,8 +99,19 @@ class _DiaryRun:
         self.graph = builder.compile()
 
     async def execute(self, item, deadline):
+        try:
+            model = normalize(item.stage, item.request)
+            if item.stage == "action" and item.request.get("movement"):
+                require_activity_transfer(item.request, model.payload, model.references)
+        except (ValueError, KeyError, TypeError):
+            return item.model_copy(update={"failure_code": "invalid_input"})
         previous = self.cache.get(item.request_revision)
-        if previous and previous.stage == item.stage and previous.request == item.request:
+        if (
+            previous
+            and previous.stage == item.stage
+            and previous.request == item.request
+            and previous.llm_request == model.payload
+        ):
             return item.model_copy(
                 update={
                     "accepted": previous.accepted,
@@ -104,12 +119,6 @@ class _DiaryRun:
                     "llm_request": previous.llm_request,
                 }
             )
-        try:
-            model = normalize(item.stage, item.request)
-            if item.stage == "action" and item.request.get("movement"):
-                require_activity_transfer(item.request, model.payload, model.references)
-        except (ValueError, KeyError, TypeError):
-            return item.model_copy(update={"failure_code": "invalid_input"})
         if len(json.dumps(model.payload, ensure_ascii=False).encode()) > policy.MAX_INPUT_BYTES:
             return item.model_copy(update={"failure_code": "budget_exceeded"})
 

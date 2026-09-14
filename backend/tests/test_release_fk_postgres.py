@@ -14,8 +14,12 @@ from urllib.parse import urlparse
 import psycopg
 import pytest
 
+#: First connection failure's skip reason (#519) — don't wait 3 seconds again per test.
+_unreachable: str | None = None
+
 
 def _postgres_or_skip():
+    global _unreachable
     dsn = os.environ.get(
         "DAENGS_TEST_DATABASE_URL",
         "postgresql://postgres:postgres@127.0.0.1:5432/vectordb",
@@ -23,10 +27,13 @@ def _postgres_or_skip():
     parsed = urlparse(dsn)
     if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
         pytest.fail("FK proof refuses a non-loopback PostgreSQL database")
+    if _unreachable is not None:
+        pytest.skip(_unreachable)
     try:
         conn = psycopg.connect(dsn, connect_timeout=3)
     except psycopg.Error as exc:
-        pytest.skip(f"local PostgreSQL unavailable: {type(exc).__name__}")
+        _unreachable = f"local PostgreSQL unavailable: {type(exc).__name__}"
+        pytest.skip(_unreachable)
 
     with conn.cursor() as cur:
         cur.execute(

@@ -1,4 +1,4 @@
-"""Geometry contrasts and card-scoped composition, without model or public API calls."""
+"""Geometry contrasts and pin-time consumption, without model or public API calls."""
 
 import gzip
 import json
@@ -104,7 +104,7 @@ def test_sparse_turn_does_not_claim_a_corner_or_curve():
     assert "curve_left" not in found and "turn_left" not in found
 
 
-def request(start=0, end=100, slow_start=80, slow_end=100, *, action=False):
+def request(start=0, end=100, slow_start=80, slow_end=100, *, action=True):
     claims = [
         {"id": "curve", "kind": "path", "meaning": "curve_right", "start_s": 0, "end_s": 100},
         {"id": "return", "kind": "path", "meaning": "retrace", "start_s": 0, "end_s": 100},
@@ -130,29 +130,32 @@ def request(start=0, end=100, slow_start=80, slow_end=100, *, action=False):
                 },
             }
         ],
-        "action": {"id": "pin", "actor": {"name": "보리"}, "material": {"무엇을": "냄새 맡기"}}
+        "action": {
+            "id": "pin",
+            "kind": "sniffing",
+            "actor": {"name": "보리"},
+            "material": {"무엇을": "냄새 맡기"},
+        }
         if action
         else None,
     }
 
 
-def test_card_projection_preserves_full_partial_and_outside_pace():
+def test_projection_uses_pin_time_not_card_extent_or_past_pace():
     full, _ = activity_projection(request())
     part, _ = activity_projection(request(80, 100))
     before, _ = activity_projection(request(0, 70))
-    f = full["movement"]["materials"]
-    assert len(f) == 1 and "오른쪽" in f[0]["meaning"] and "역순" in f[0]["meaning"]
-    assert f[0]["changes"][0]["scope"] == "이 이동의 끝부분"
-    p = part["movement"]["materials"][0]
-    assert p["extent"] == "원래 이동의 끝부분"
-    assert p["changes"][0]["scope"] == "이 이동 전체"
-    assert not before["movement"]["materials"][0]["changes"]
+    assert full == part
+    f = full["movement_context"]
+    assert "오른쪽" in f["meaning"] and "되짚" in f["meaning"] and "느린" in f["meaning"]
+    assert "movement_context" not in before
     middle, _ = activity_projection(request(slow_start=80, slow_end=90))
-    assert middle["movement"]["materials"][0]["changes"][0]["scope"] == "이 이동 중간의 일부 구간"
+    assert "느린" not in middle["movement_context"]["meaning"]
 
 
-def test_pace_changes_do_not_duplicate_the_persistent_flow():
+def test_earlier_pace_change_does_not_enter_pin_context():
     raw = request()
+    original, _ = activity_projection(raw)
     facts = raw["movement"][0]["facts"]
     facts["claims"].append(
         {
@@ -165,8 +168,7 @@ def test_pace_changes_do_not_duplicate_the_persistent_flow():
     )
     facts["phases"] = phases_for(facts["claims"], 0, 100)
     wire, _ = activity_projection(raw)
-    values = wire["movement"]["materials"]
-    assert len(values) == 1 and len(values[0]["changes"]) == 2
+    assert wire == original
 
 
 def test_actual_wire_has_no_numeric_analysis_and_restores_composed_citations():
@@ -185,25 +187,24 @@ def test_actual_wire_has_no_numeric_analysis_and_restores_composed_citations():
         "10초",
     ):
         assert forbidden not in text
-    material = model.payload["movement"]["materials"][0]
+    material = model.payload["movement_context"]
     flow = model.restore(
         {
-            "text": "굽은 구간을 되짚었다. 보리의 냄새 맡기 기록을 남겼다.",
-            "evidence_ids": [material["id"], "a1"],
+            "text": "보리의 냄새 맡기를 기록했다.",
+            "evidence_ids": ["a1"],
         }
     )
     pace_ids = {u["id"] for u in movement_uses(raw) if u["kind"] == "pace"}
     assert not set(flow["movement_ids"]) & pace_ids
-    change = material["changes"][0]["id"]
     combined = model.restore(
         {
-            "text": "끝부분은 비교적 천천히 되짚었다. 보리의 냄새 맡기 기록을 남겼다.",
-            "evidence_ids": [material["id"], change, "a1"],
+            "text": "굽은 구간을 천천히 되짚던 무렵 보리의 냄새 맡기를 기록했다.",
+            "evidence_ids": [material["id"], "a1"],
         }
     )
     assert pace_ids <= set(combined["movement_ids"])
     assert len(combined["movement_ids"]) == len(set(combined["movement_ids"]))
-    assert model.payload["recorded_action"]["connections"][0]["movement_id"] == change
+    assert set(model.payload) == {"recorded_action", "movement_context"}
 
 
 def test_behavior_content_does_not_change_gps_analysis_or_movement_identity():
@@ -212,15 +213,16 @@ def test_behavior_content_does_not_change_gps_analysis_or_movement_identity():
     changed = base.input.source.model_copy(update={"records": ()})
     after = prepare_movement(changed, verified, MovementPolicy())
     assert before == after
-    without = request()
+    without = request(action=False)
     with_pin = deepcopy(without)
     with_pin["action"] = request(action=True)["action"]
-    assert (
-        activity_projection(without)[0]["movement"] == activity_projection(with_pin)[0]["movement"]
-    )
+    assert movement_uses(without) == movement_uses(with_pin)
+    with pytest.raises(ValueError, match="behavior pin required"):
+        activity_projection(without)
+    assert activity_projection(with_pin)[0]["movement_context"]
 
 
-def test_continuous_flow_is_split_by_a_distinct_turn_event_in_chronological_order():
+def test_turn_only_enters_context_at_its_event_time():
     raw = request(slow_start=80)
     facts = raw["movement"][0]["facts"]
     facts["claims"] = [
@@ -236,15 +238,21 @@ def test_continuous_flow_is_split_by_a_distinct_turn_event_in_chronological_orde
     ]
     facts["phases"] = phases_for(facts["claims"], 0, 100)
     wire, _ = activity_projection(raw)
-    meanings = [m["meaning"] for m in wire["movement"]["materials"]]
-    assert meanings == ["대체로 곧게 이동", "오른쪽으로 방향을 꺾음", "대체로 곧게 이동"]
+    assert wire["movement_context"]["meaning"] == "대체로 곧게 이동"
+    facts["scene_at_s"] = 50
+    at_turn, _ = activity_projection(raw)
+    assert "오른쪽" in at_turn["movement_context"]["meaning"]
+    assert "곧게" not in at_turn["movement_context"]["meaning"]
 
 
-def test_old_v3_activity_receipt_remains_readable_with_original_input():
+@pytest.mark.parametrize(
+    "sample", ["activity-offline-03", "movement-materials-03", "movement-gemini-01"]
+)
+def test_old_activity_receipts_remain_readable_with_original_input(sample):
     from daengs_backend.services.walk_diary.storage.board import load_board
     from tests.walk.support.paths import REPO
 
-    path = REPO / "backend/evals/diary_route_scenario/activity-offline-03/stored.json.gz"
+    path = REPO / "backend/evals/diary_route_scenario" / sample / "stored.json.gz"
     raw = json.loads(gzip.decompress(path.read_bytes()))
     loaded = load_board(raw)
     assert len(loaded.bundle.scenes) == 8

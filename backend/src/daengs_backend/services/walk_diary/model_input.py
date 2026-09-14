@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pydantic import Field
 
 from daengs_backend.services.walk_diary.model_materials import location, material
+from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import activity_projection
 from daengs_walk.diary.contracts.input import DiaryContract
 
-VERSION = "diary-prose-input-v5"
+VERSION = "diary-prose-input-v6"
 
 
 class SpaceAnswer(DiaryContract):
@@ -159,6 +160,7 @@ def normalize(stage, request):
             materials.append({"id": key, **projected})
         payload = {"materials": materials}
     elif stage == "action":
+        require_action(request)
         if request.get("movement"):
             payload, references = activity_projection(request)
         else:

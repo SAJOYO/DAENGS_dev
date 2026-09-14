@@ -8,7 +8,7 @@ from daengs_backend.services.walk_diary.storage.board import (
     source_revision,
     store_board,
 )
-from daengs_backend.services.walk_storyboard_state import complete
+from daengs_backend.services.walk_generation.state import complete
 from daengs_walk.diary.board.output import BOARD_FORMAT, publish_board
 
 FORMAT = "walk-diary-preparation-v1"

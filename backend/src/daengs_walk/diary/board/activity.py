@@ -2,13 +2,13 @@
 
 from datetime import datetime
 
-from daengs_walk.diary.board.activity_materials import PATH_TEXT, compose_activity
+from daengs_walk.diary.board.action_context import SHAPE_TEXT
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.route.patterns import PATTERN_CASES
 
 MEANINGS = {
     **{key: next(iter(value.values())) for key, value in PATTERN_CASES.items()},
-    **{key: value for key, value in PATH_TEXT.items() if key not in PATTERN_CASES},
+    **{key: value for key, value in SHAPE_TEXT.items() if key not in PATTERN_CASES},
     "relative_slow": "이번 산책의 기준 속도보다 상대적으로 느린 이동",
     "relative_fast": "이번 산책의 기준 속도보다 상대적으로 빠른 이동",
 }
@@ -55,56 +55,25 @@ def movement_uses(request):
 
 
 def activity_projection(request):
-    return compose_activity(movement_uses(request), request.get("action"))
+    from daengs_walk.diary.board.action_context import project_action
+
+    return project_action(request)
 
 
 def require_activity_transfer(request, payload, references):
-    """Invocation guard: admission and actual request must cover the same claims."""
+    """Invocation guard: the actual request must match the pin-scoped projection."""
     expected, refs = activity_projection(request)
     if payload != expected or references != refs:
         raise ValueError("selected movement lost at model boundary")
 
 
 def activity_fallback(request):
-    uses = movement_uses(request)
-    # Fallback describes one nearest phase, without merging pace across its boundaries.
-    if uses:
-        spans = {(u["from_s"], u["to_s"]) for u in uses}
-        span = min(spans, key=lambda s: (max(s[0], -s[1], 0), s))
-        chosen = [u for u in uses if (u["from_s"], u["to_s"]) == span]
-        order = {
-            "retrace": 0,
-            "turn_reverse": 1,
-            "turn_left": 2,
-            "turn_right": 2,
-            "local_stay": 3,
-            "straight_run": 4,
-        }
-        paths = sorted(
-            (u for u in chosen if u["kind"] == "path"), key=lambda u: order.get(u["meaning"], 2)
-        )
-        paces = [u for u in chosen if u["kind"] == "pace"]
-        selected = paths[:1] + paces[:1]
-        when = (
-            "이 기록에 앞선 구간"
-            if span[1] <= 0
-            else ("이 기록 이후 구간" if span[0] >= 0 else "이 기록 무렵의 구간")
-        )
-        text = (
-            when + "에서는 " + ", ".join(MEANINGS[u["meaning"]] for u in selected) + "이 관측됐다."
-        )
-    else:
-        selected, text = [], ""
-    action = request.get("action")
-    if action:
-        name = action["actor"].get("name")
-        text += (
-            ("\n" if text else "")
-            + (f"{name}의 " if name else "")
-            + action["material"]["무엇을"]
-            + " 행동을 기록했다."
-        )
-    return text, tuple(u["id"] for u in selected)
+    from daengs_walk.diary.board.action_context import require_action
+
+    action = require_action(request)
+    name = action["actor"].get("name")
+    text = (f"{name}의 " if name else "") + action["material"]["무엇을"] + " 행동을 기록했다."
+    return text, ()
 
 
 def covers_observation(request, used_ids, observation):

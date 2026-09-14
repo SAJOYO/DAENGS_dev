@@ -4,10 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 from daengs_backend.repositories import walk_storyboard as repo
-from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-from daengs_backend.services.walk_diary.contracts import CardWritingResult
-from daengs_backend.services.walk_diary.legacy.board_slots import complete_slot_board
-from daengs_backend.services.walk_diary.legacy.bundle import write_diary
+from daengs_backend.schemas.walk_diary import DiaryStoryboardResponse
 from daengs_backend.services.walk_diary.lifecycle.publication import (
     fallback,
     settle_expired,
@@ -21,10 +18,8 @@ from daengs_backend.services.walk_diary.lifecycle.snapshot import (
     result,
     snapshot,
 )
-from daengs_backend.services.walk_diary.runtime import write_board
+from daengs_backend.services.walk_diary.lifecycle.strategy import select_strategy
 from daengs_backend.services.walk_diary.storage.board import store_board
-from daengs_backend.services.walk_diary.storage.bundle import store_diary
-from daengs_backend.services.walk_diary.writing.assembly import complete_cards
 from daengs_walk.diary.board.output import publish_board
 
 
@@ -57,6 +52,7 @@ async def generate_diary(
     wrapping a writer alone never changes collection timing. The historical entry-context
     grace period is opt-in via legacy_context_wait, independently of provider injection.
     """
+    strategy = select_strategy(request.bundle_format, writer)
     started = datetime.now(UTC)
     deadline = (
         started + timedelta(milliseconds=request.preparation_budget_ms)
@@ -81,30 +77,18 @@ async def generate_diary(
     collected = reservation.collected
     bundle, failure = None, None
     try:
-        write = writer or (write_board if prepared.board else write_diary)
+        write = strategy.write
         writing_input = prepared.board if prepared.board else prepared.prepared
         output = (
             await within_budget(write, source, writing_input, deadline)
             if prepared.board and deadline is not None
             else await write(source, writing_input)
         )
-        if prepared.board:
-            if isinstance(output, CardWritingResult) and output.scene_backgrounds is not None:
-                collected = output.scene_backgrounds
-                prepared = apply_backgrounds(prepared, collected)
-            completed = (
-                complete_cards(prepared, output)
-                if isinstance(output, CardWritingResult)
-                else complete_slot_board(prepared, output)
-            )
-            bundle = store_board(prepared, completed, revision, writing=output)
-        elif (
-            output.input_revision != ticket.input_revision
-            or output.plan_revision != prepared.prepared.plan.revision()
-        ):
-            raise ValueError("writer returned another generation's bundle")
-        else:
-            bundle = store_diary(prepared, output, revision)
+        strategy.validate(output)
+        if strategy.collects_backgrounds and output.scene_backgrounds is not None:
+            collected = output.scene_backgrounds
+            prepared = apply_backgrounds(prepared, collected)
+        bundle = strategy.finish(prepared, output, revision, ticket)
     except asyncio.CancelledError:
         raise  # New publications retain their deadline/base; older requests retain the lease.
     except TimeoutError:

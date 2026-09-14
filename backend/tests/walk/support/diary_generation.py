@@ -11,8 +11,9 @@ from fastapi.testclient import TestClient
 from daengs_backend.config import settings
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
+from daengs_backend.repositories import walk_storyboard as generation_repo
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_storyboard as legacy
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
 from daengs_backend.services.walk_diary.legacy import bundle as writer
 from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
 from daengs_backend.services.walk_diary.preparation import input as reader
@@ -79,8 +80,8 @@ def api(monkeypatch):
             )
         ),
     )
-    monkeypatch.setattr(legacy.repo, "current", AsyncMock(side_effect=lambda *a: state.row))
-    monkeypatch.setattr(legacy.repo, "reference_walks", AsyncMock(return_value=[]))
+    monkeypatch.setattr(generation_repo, "current", AsyncMock(side_effect=lambda *a: state.row))
+    monkeypatch.setattr(generation_repo, "reference_walks", AsyncMock(return_value=[]))
     monkeypatch.setattr(settings, "walk_diary_enabled", True)
     monkeypatch.setattr(settings, "walk_diary_space_enabled", False)
     monkeypatch.setattr(settings, "walk_entry_v2_enabled", False)
@@ -116,13 +117,14 @@ def api(monkeypatch):
         return await writer.write_diary(source, prepared, state.provider)
 
     state.writer = AsyncMock(side_effect=write)
+    state.slot_writer = legacy_slot_writer(state.writer)
     app = FastAPI()
     app.include_router(router.router)
     app.dependency_overrides[get_session] = lambda: db
     app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = lambda: AppPrincipal(
         app_user_id=OWNER
     )
-    app.dependency_overrides[router.get_diary_writer] = lambda: state.writer
+    app.dependency_overrides[router.get_diary_writer] = lambda: state.slot_writer
     state.lookup = AsyncMock(return_value={})
     app.dependency_overrides[router.get_context_lookup] = lambda: state.lookup
     app.dependency_overrides[router.get_title_generator] = lambda: AsyncMock(

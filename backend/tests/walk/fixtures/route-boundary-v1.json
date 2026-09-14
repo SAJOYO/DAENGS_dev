@@ -1,0 +1,104 @@
+{
+  "baseline": "d9b1b2da",
+  "cases": {
+    "straight": {
+      "nodes": "a20158ae9ac7b9d476d5e42945424a9fbde3594014af78a1aebda765a6f3f081",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "771c1be8e26704cec31993e6cf5a52d41091bdea5004222e3a49b983f1a12214",
+      "movement": "ca9bc04a197d0128daf4573f6e01c1974e19c5ff47a62c3b02a55ffb6f6a3544",
+      "storyboard": "86f98756645847442507595491aef76f93b3156c57bbd4fa69a72c7c9eb59a87"
+    },
+    "right": {
+      "nodes": "e9d84b6da0cac0d99d468efe5b426d37e203cf17eec2ef1b6f162901c8ce90fa",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "a781fef5f8007ca40c68d5ec90a91630a6fa982e6172c11625fa4096c21f972f",
+      "movement": "1e89aac6da0534e9e210e10793ecb2c5aec8ab114f8ca49a1b507d1285340439",
+      "storyboard": "399b4691e3aef064f4b8517692bfa3f02be564bb1ff6f80615f52d8bd317eb70"
+    },
+    "left": {
+      "nodes": "7c92337242c3c80415c35ee475c8dacf3baeee6176983332a08b206cd3ff637d",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "dca3f29f70d6b4250bf7958f555febc0e5c9c5db6d82544e6a125d3d107e6836",
+      "movement": "4b49a75b8547d6145448d7ab156a93a259fda0f888ee93accfc6d7cfe1022c29",
+      "storyboard": "db9687d8388089ad0da9db4bac7add13370e918e456d85ae6c7f57cbbe91a544"
+    },
+    "stay": {
+      "nodes": "5a182ff4f3816387efab612e04ba664974d5687902aa1907796c461a25e497c3",
+      "observations": "93f2de294ddc1587140eacaf12fe300062e20b3b1f2d1dd2cf1416b35916d32c",
+      "observation_ids": [
+        "motion:6939fa79eccfd50484de0ea9403846788e797603456c8e3a692ab64120363d10",
+        "motion:b9ff07901e4aa950632ae21387779d57278ddaf970ea9c15bce6e02429c917ea"
+      ],
+      "board": "ed8defeee3006305b85407d0cca8e3ba8a99566509894d04ad069af9fab4f736",
+      "movement": "9cf5f56da59c831d2ed381181cd06de5e5d2c7dd005eed3caaab432f39498b54",
+      "storyboard": "92038e76dd03c334318e19c79a4ccc1206f6cd1e3ba6a431fa7a3643a6c9918c"
+    },
+    "pause_turn": {
+      "nodes": "a4880eb120deb375b31f1113c5f13a7c36610a15f0bac1e21c78e1e039ff963a",
+      "observations": "e57b98d779a62fd9713c2b375aa3b7d27eb0b1ad5c071e3077a2ea2a4a352425",
+      "observation_ids": [
+        "motion:361d0bacfb99096e54163dfa9ce1ae0a51921566698f60ae1b8f525b33cef0e8",
+        "motion:67c9fecc5c6d2d4a19b8a36559af16c078a11706e875929c844b414a30f632e3"
+      ],
+      "board": "5e99e032ccadb50a447990935f89b52a1ecb3c5876651925a5a6aaeef2aaa778",
+      "movement": "306f1b110c51af5fa41c599d6191ccaf61eac8150364a6574310f342c1467fba",
+      "storyboard": "571d76deb7e79fecf926d982c15a5281b9f5be5269f7728d71d483c78d6c9dcf"
+    },
+    "out_back": {
+      "nodes": "995d2ee3b8308fa70e26377ef38b81be8ef9f58e7f9f6216d6f67a2c1844314c",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "0eb11210b397e30c462305dbd5975790acc6632b6e4e436edd7f7927fcf7b422",
+      "movement": "7c2630f2dee4c231836f7df4c27fbec7d573685043ef0a2737d7ac78a9e14df7",
+      "storyboard": "a983f6e81e8c552740a6f51f7a8c11fb3c7f83dc7e097083f055da5218def9c8"
+    },
+    "parallel": {
+      "nodes": "9ea819c959b02dc09fce7fef988dc97ab997c9e84217a72c84c532302f7e9fae",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "197da7e4a8250b1abaca0ec6921a336c212e451082d98a0815a049c87580555e",
+      "movement": "164d6a02a5d49dca907322f2b6892dc458974ae4f9c5e57222bc4696710176f8",
+      "storyboard": "8719799cf2c784009f9b9c714fa1b7e6fad6248274b6853099be9fc837c770f8"
+    },
+    "shallow": {
+      "nodes": "49b3f89483ca10715e79c9bd95f15efc458c1b710d7a56eca87da7a118c632ec",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "071f408dfd3c3576523891c7257e89597b249337445541431b2caa57fb4e3bd4",
+      "movement": "6b26a9aa77d3df853921d26aca1be952b107d0b08db8607ffc61b74d1c6da7c0",
+      "storyboard": "a370b025f26f9d1f603c38f4b0327d093ae803099e66142a8c1faa28d87b2646"
+    },
+    "short": {
+      "nodes": "d47948ddd90f1afaba2a0d36bab4dd535b36266d776f5189adde07a71c7b4281",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "2a17ba7ec3964c3a99a212ed44050f8fe2dd5c812d84ab04e356633a1985f657",
+      "movement": "9c4c9dcbb86e0ed2ed218bd9764461ec927851f54c5ca68d9efd3794570213e4",
+      "storyboard": "e8b7dded15546d54fec7b8de8db5654c72d523da6c92a114c39a2b12256ef270"
+    },
+    "gap": {
+      "nodes": "5b3d52028caf7e5454d30ab400731a53751a105918d57980c35f08ee831be512",
+      "observations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "observation_ids": [],
+      "board": "f283e09b860b33f465f0f52f6b029cd847560bdfebaf9b384d8689b07d22933d",
+      "movement": "c8914bb8ae156a0d01cffc3ebee4fb534af6e6889b096a171ee410548b7b646c",
+      "storyboard": "162ff24db62f4d2e326ce65b2e66a58624b5e19b1574d50537976034858b1d5f"
+    },
+    "varied_pace": {
+      "nodes": "1baf24f7afa9364c13d8ef1b4b9cd12ffa756818b39a318967f1ce09923121fa",
+      "observations": "8356a8cc8b23723bfadfe4b671e0e13cb60c39a25120b4ecf98b92e3a0a69873",
+      "observation_ids": [
+        "motion:0b9a305ff83e630ba7c30fd4992d2d0622d38a23475c21798e6f402bd0a4f499",
+        "motion:581e552da2202fac8a69bdda7cdf4dc36d9f86cac133ab04e1768a17017ab7b0",
+        "motion:9cb337a923f65e8fc3d62d918222e3c567103c83bd09a1f2f58fdf12a20a1434",
+        "motion:bb4f7524c82563647d5c821db4685cef2b64c4a2537b7e0b6d1f7a618931187c"
+      ],
+      "board": "e395bec2a762e2ebdc10f6aa811aaab0c461e6c43bdacc2d061a823d4710b141",
+      "movement": "826f8a30be362ae4e5e2b39b0c55fb3a4431f859b1b668b1dd6c99a507ebeee3",
+      "storyboard": "cefe141b205e14d77ac3d5df1442284f00a56fc26815050d4ddda41c5dd37a5e"
+    }
+  }
+}

@@ -6,9 +6,7 @@ This is a second read path, not a reconstruction from lossy nearby summaries.
 
 from copy import deepcopy
 
-from daengs_backend.services import walk_area_catalog as catalog
-from daengs_walk.diary.contracts.input import digest
-from daengs_walk.diary.space.materials import AreaInput
+from daengs_walk.value_contracts import digest
 
 FIELDS = {
     "commerce": ("bizesId", "lat", "lon", "indsLclsCd", "indsMclsCd"),
@@ -34,12 +32,3 @@ def retain_page(raw, kind):
 
 def retained_fields(pages):
     return {"normalization_pages": pages, "normalization_sha256": digest(pages)}
-
-
-def normalization_input(value, kind, point, radius_m):
-    pages = value["normalization_pages"]
-    if digest(pages) != value["normalization_sha256"]:
-        raise ValueError("normalization catalog hash mismatch")
-    if kind == "commerce" and not catalog.covers(value, point, radius_m):
-        raise ValueError("normalization footprint is outside catalog coverage")
-    return AreaInput(query_point=point, radius_m=radius_m, pages=pages)
